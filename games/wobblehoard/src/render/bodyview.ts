@@ -38,6 +38,10 @@ export class BodyView {
   readonly fp: Footprint = { cx: 0, cz: 0, rx: 0.5, rz: 0.5, lowY: 0, compression: 0, stretch: 0 };
   /** Extra pool light (capsule tell, merge charge) 0..1 added by the ceremonies. */
   extraPool = 0;
+  /** 0..1: how far that extra pool light leans toward the TIER colour (a ceremony burst lights the table in the tell, not the body's own pool hue). */
+  extraPoolTell = 0;
+  private poolTellNow = 0;
+  private readonly poolBase: [number, number, number] = [0, 0, 0];
   /**
    * The view's OWN clock (seconds since it was created). Every time-phased idle effect (blink, breathing, core pulse, aurora,
    * thin-film drift, orbiting motes / satellites, glitter twinkle, pool caustics) reads this, never the stage's global time, so
@@ -84,8 +88,10 @@ export class BodyView {
 
   /** The floor light pool: the body's own pool colour, tinted toward the tier colour from Uncommon up ("faint tinted light pool"). */
   private applyPoolColour(): void {
-    const p = this.palette.pool, t = this.style.tell, k = this.style.poolTint;
-    this.decals.setColor([p[0] + (t[0] - p[0]) * k, p[1] + (t[1] - p[1]) * k, p[2] + (t[2] - p[2]) * k]);
+    const p = this.palette.pool, t = this.style.tell, k = this.style.poolTint, b = this.poolBase;
+    b[0] = p[0] + (t[0] - p[0]) * k; b[1] = p[1] + (t[1] - p[1]) * k; b[2] = p[2] + (t[2] - p[2]) * k;
+    this.decals.setColor(b);
+    this.poolTellNow = 0;
     // Epic+ caustic ring: mostly the tier colour (Mythic: a cool white prism tint), a little of the body's pool
     const rc = this.style.prism ? [0.75, 0.85, 1.0] : t;
     this.decals.setRingColor([rc[0] * 0.8 + p[0] * 0.2, rc[1] * 0.8 + p[1] * 0.2, rc[2] * 0.8 + p[2] * 0.2]);
@@ -152,6 +158,12 @@ export class BodyView {
     const rate = Math.min(this.sqRate, m.compressionRate);
     this.face.update(dt, time, pointer, camera, this.smComp, m.fingers > 0 || m.grabbed ? Math.max(0, rate) : rate);
     this.fx.update(dt, time, body);
+    const tell = Math.min(1, Math.max(0, this.extraPoolTell)) * Math.min(1, this.extraPool * 2);
+    if (tell !== this.poolTellNow) {   // the ceremony light on the table, in the tier colour (no allocation: the setter copies)
+      this.poolTellNow = tell;
+      const b = this.poolBase, t = this.style.tell;
+      this.decals.setColorRGB(b[0] + (t[0] - b[0]) * tell, b[1] + (t[1] - b[1]) * tell, b[2] + (t[2] - b[2]) * tell);
+    }
     this.decals.update(dt, time, fp, floatT, this.style, this.calm, this.extraPool);
     this.rarity.update(dt, time, body, fp.rx, fp.rz, floatT);
   }

@@ -12,7 +12,7 @@
 //
 // The same code runs live and in an OfflineAudioContext (the probe renders it), like every other voice.
 import { clamp } from '../core/rng.ts';
-import { Bag, bubble, dbToGain, fin, makeRng, rr, type Rng } from './dsp.ts';
+import { Bag, bubble, dbToGain, fin, harmonicWave, makeRng, rr, type Rng } from './dsp.ts';
 
 type Ctx = BaseAudioContext;
 
@@ -42,33 +42,59 @@ export const DUCK_DB = -9;
 export const DUCK_ATTACK_TC = 0.12;
 export const DUCK_RELEASE_TC = 0.5;
 /**
- * Room for the effects (round-3 fix). Every one-shot effect dips the music by ROOM_DB from the moment it is called until its
- * own end, then the music comes back (release tc ROOM_RELEASE_TC: within 1 dB about 0.55 s after the effect). Measured
- * before: with only the slow ceremony/squish duck, 25 of 330 effect placements over 6 minutes of music stood less than
- * 8 dB above the music in their own bands (a soft toss 5 dB UNDER the pads, a poke 3.4 dB and a pop 0.6 dB over a
- * coinciding mallet). The dip is fast (attack tc 2 ms) so even a 45 ms pop gets it, and it starts ROOM_LEAD_S before the
- * effect (the engine schedules every effect that far ahead of the call). Its own gain node: it never fights the slow duck.
+ * Room for the effects: a sidechain-style dip keyed by EVERY effect voice (round-3 fix). Each one-shot dips the music by
+ * its ROOM_KINDS depth from the moment it is called until its own end time, then the music comes back (ROOM_RELEASE_TC:
+ * within 1 dB about 1 s after the effect); the held squish and strand dip by a depth that follows their own level, frame
+ * by frame (makeRoom holds). Why: with only the slow ceremony/squish duck, 25 of 330 effect placements over 6 minutes of
+ * music stood less than 8 dB above the music in their own bands (a soft toss 5 dB UNDER the pads, a poke 3.4 dB and a
+ * pop 0.6 dB over a coinciding mallet), and over each effect's loudest 20 ms frames most soft and medium effects were
+ * within 0-7 LU (K-weighted) of the music. The dip is fast (attack tc 3 ms, starting ROOM_LEAD_S before the effect, which
+ * the engine schedules that far ahead of the call) so even a 45 ms pop gets it; it runs on its own gain node and never
+ * fights the slow duck (the two multiply).
  */
-export const ROOM_DB = -9;
-export const ROOM_ATTACK_TC = 0.002;
-export const ROOM_RELEASE_TC = 0.3;
+export const ROOM_DB = -12;
+/** The squishies' low bodies (land, bump, release, lift) get a deeper dip: their energy sits at 60-300 Hz where the ear is
+ *  least sensitive, so for the same K-weighted margin they are the ones a listener loses first (A-weighted). */
+export const ROOM_BODY_DB = -15;
+export const ROOM_ATTACK_TC = 0.003;
+export const ROOM_RELEASE_TC = 0.4;
 /** = the engine's effect LOOKAHEAD: an effect called at t starts at t + ROOM_LEAD_S, the dip starts at t. */
 export const ROOM_LEAD_S = 0.004;
 export const ROOM_MAX_HOLD_S = 4;
-/** Which effects make room, and how deep (dB). The engine and the offline mix renders both read this table. The held
- *  squish keeps the slow duck (SQUISH_DUCK_RATE); the ceremony voices keep the slow duck (capsule beats get both). */
+/** Which one-shots make room, and how deep (dB). The engine and the offline mix renders both read this table (and
+ *  roomDb() below). The ceremony voices (reveal, merge) keep the slow duck; capsule beats get both. */
 export const ROOM_KINDS: Readonly<Record<string, number>> = {
-  poke: ROOM_DB, release: ROOM_DB, land: ROOM_DB, pop: ROOM_DB, blend: ROOM_DB, meterFull: ROOM_DB, capsule: ROOM_DB,
-  bump: ROOM_DB, lift: ROOM_DB, toss: ROOM_DB, strandSnap: ROOM_DB,
+  poke: ROOM_DB, pop: ROOM_DB, blend: ROOM_DB, meterFull: ROOM_DB, capsule: ROOM_DB, toss: ROOM_DB, strandSnap: ROOM_DB,
+  release: ROOM_BODY_DB, land: ROOM_BODY_DB, bump: ROOM_BODY_DB, lift: ROOM_BODY_DB,
 };
+/** Held voices: each update holds its dip this long (so a rubbing squish that dips and swells frame by frame keeps the
+ *  deepest dip of the last HELD_ROOM_HOLD_S instead of tremoloing the music). */
+export const HELD_ROOM_HOLD_S = 0.25;
+/** The held squish dips fully from this |rate| (1/s) on (its squelch is then within ~10 dB of its max), proportionally below. */
+export const SQUISH_ROOM_RATE = 0.7;
+/** The held strand dips fully from this tension on, proportionally below. */
+export const STRAND_ROOM_T = 0.35;
+/**
+ * The dip (dB) an effect asks for. `musicGainDb` is the music volume's gain above its default (chain.ts musicGain at the
+ * player's setting; 0 at the default, +6 dB at 1): the dip deepens by it, so with the slider up the music under an effect
+ * is never louder than at the default level (the effects stay in front whatever the slider says).
+ */
+export function roomDb(kind: string, musicGainDb = 0): number | null {
+  const d = ROOM_KINDS[kind];
+  return d === undefined ? null : d - Math.max(0, fin(musicGainDb, 0));
+}
+export function squishRoomDb(rate: number, musicGainDb = 0): number {
+  const a = clamp((Math.abs(fin(rate, 0)) - 0.04) / (SQUISH_ROOM_RATE - 0.04), 0, 1);
+  return a * (ROOM_DB - Math.max(0, fin(musicGainDb, 0)));
+}
+export function strandRoomDb(tension: number, musicGainDb = 0): number {
+  const a = clamp(fin(tension, 0) / STRAND_ROOM_T, 0, 1);
+  return a * (ROOM_DB - Math.max(0, fin(musicGainDb, 0)));
+}
 /** At most this many bars in a row without a mallet note (a long rest reads as the music having stopped). */
 export const MAX_REST_BARS = 2;
 /** Music volume 0..1 relative to master; 0.45 is the designed level (see chain.ts musicGain). */
 export const MUSIC_DEFAULT = 0.45;
-/** The music ducks while a held squish is loud: |rate| (1/s) at or above this (its squelch is then within ~10 dB of its max). */
-export const SQUISH_DUCK_RATE = 0.7;
-/** ... and stays ducked this long after the last loud update (each update extends it). */
-export const SQUISH_DUCK_HOLD_S = 0.3;
 /** Mallet register (MIDI): A4 .. D6, 440 .. 1175 Hz. Nothing in the score goes below D4 (294 Hz): the 60-290 Hz region
  *  belongs to the squishies' bodies (poke, land, bump, lift, release), which must stand >= 8 dB above the music. */
 export const MEL_LO = 69;
@@ -76,18 +102,20 @@ export const MEL_HI = 86;
 /** Where the melody likes to sit (F5); it is pulled back toward here near the edges of the register. */
 const MEL_HOME = 77;
 
-/* Session levels (linear, before the chain's music gain). Calibrated with the probe for a long-term RMS of about
- * -28.5 dBFS at music 0.45 / master 1. Round-3 fix: the pad was the strongest and the only continuous component, sitting
- * where the ear is most sensitive; it is now 5 dB lower and the sparse mallet carries more of the level. */
-const PAD_LEVEL = dbToGain(-33);
-const MALLET_LEVEL = dbToGain(-14);
-const BUBBLE_LEVEL = dbToGain(-23);
-/** The music's bubbles settle upward by this much (the game's bubbles chirp ~30%; a tuned note needs far less) ... */
-const BUBBLE_RISE = 0.03;
-/** ... and start this fraction of the rise below the note, so the pitch heard (between the energy-weighted pitch and the
- *  spectral peak of the little chirp) is the scored note. Measured: spectral peak +10..+17 cents, energy-weighted -8..-13
- *  cents for A5..D7; with the earlier rise 0.05 aimed AT the note they were +59..+80 and +33..+38 cents (sharp). */
-const BUBBLE_AIM = 0.65;
+/* Session levels (linear, before the chain's music gain), calibrated with the probe for a long-term RMS of about -29 dBFS
+ * at music 0.45 / master 1 (the -30..-24 band, near its quiet end). Round-3 fix: the pad was the strongest and the only
+ * continuous component, sitting where the ear is most sensitive (the first version: pad RMS 3-5 dB above the mallets, a
+ * steady three-line chord in every spectrogram). Now the pad is darker (sines, no triangles), each of its tones breathes
+ * on its own (so the full chord is rare) and it sits about 6 dB under the sparse mallet, which carries the level. */
+const PAD_LEVEL = dbToGain(-30.8);
+const MALLET_LEVEL = dbToGain(-9.5);
+const BUBBLE_LEVEL = dbToGain(-18.5);
+/** The music's bubbles settle upward by only 1% (17 cents; the game's bubbles chirp ~30%: a tuned note cannot) ... */
+const BUBBLE_RISE = 0.01;
+/** ... and start this fraction of the rise below the note, so the pitch lands on the scored note. Measured (A5..D7,
+ *  probe check): energy-weighted pitch -4 cents, spectral peak +4 cents. The first version glided +5% from the note and
+ *  sounded +33..+38 cents sharp (energy-weighted) / +59..+80 cents at the spectral peak. */
+const BUBBLE_AIM = 0.6;
 const BUBBLE_SOFT = 2.2;
 /** Each mallet note repeats once, 3/4 beat later, this loud (-11 dB), darker (no x3.98 partial) and on the other side. */
 const ECHO_LEVEL = 0.28;
@@ -316,31 +344,27 @@ export class Composer {
 /* ───────────────────────────── instruments ───────────────────────────── */
 
 /**
- * Pad: the field's three tones, each a sine with a quieter triangle partner (0.4) detuned so the pair beats SLOWLY
- * (0.12-0.3 Hz, a different rate per tone, so the beats never line up into a pulse; depth about +/-3 dB), all drifting a
- * few cents on a slow LFO, through two low-pass stages (~1.1 kHz, 24 dB/oct: the triangle's upper harmonics stay soft)
- * whose cutoff breathes +/-16% on a 15-20 s cycle, with a slow +/-18% level swell. Fades in with a time constant of 1.2 s
- * from `t`, starts fading out (tc 1.3 s) 0.6 s before `endT`, and its sources stop 8 s later.
+ * Pad: the field's three tones, each a soft sine (a whisper of 2nd and 3rd harmonic for warmth) with a quieter sine partner
+ * (0.4) detuned so the pair beats SLOWLY (0.12-0.3 Hz, a different rate per tone), all drifting a few cents on a slow LFO,
+ * through one gentle low-pass (900 Hz). Each tone BREATHES on its own seeded schedule: it swells to its peak (rise 1.8-3.5
+ * s, hold 1-4.5 s), sinks back to a floor (fall 2.5-4.5 s; the root keeps -9 dB, the middle -13, the top -16) and rests
+ * there 0.5-5 s, so at any moment one, two or three tones are up and the chord's colour keeps moving. The whole chord fades
+ * in with a time constant of 1.2 s from `t`, starts fading out (tc 1.3 s) 0.6 s before `endT`, and its sources stop 8 s
+ * later.
  */
+const PAD_FLOOR = [dbToGain(-9), dbToGain(-13), dbToGain(-16)];
 function padChord(ctx: Ctx, dest: AudioNode, t: number, endT: number, field: Field, seed: number, pr: number): { bag: Bag; end: number } {
   const r = makeRng(seed);
   const bag = new Bag(ctx, dest, 'pad', 0);
   const relT = Math.max(t + 1, endT - 0.6);
   const stopT = relT + 8;
-  const lp = bag.biquad('lowpass', 1100, 0.55);
-  const lp2 = bag.biquad('lowpass', 1100, 0.55);
+  const lp = bag.biquad('lowpass', 900, 0.5);
   const amp = bag.gain(0);
-  const breath = bag.gain(1);
-  lp.connect(lp2); lp2.connect(amp); amp.connect(breath); breath.connect(bag.head);
-  const lfoF = bag.osc('sine', rr(r, 0.05, 0.068), t, stopT);
-  const lfoFd = bag.gain(260);            // cents on the cutoff (+/-16%)
-  lfoF.connect(lfoFd); lfoFd.connect(lp.detune); lfoFd.connect(lp2.detune);
-  const lfoA = bag.osc('sine', rr(r, 0.07, 0.11), t, stopT);
-  const lfoAd = bag.gain(0.18);
-  lfoA.connect(lfoAd); lfoAd.connect(breath.gain);
+  lp.connect(amp); amp.connect(bag.head);
   const drift = bag.osc('sine', rr(r, 0.08, 0.14), t, stopT);
   const driftD = bag.gain(3.5);           // cents
   drift.connect(driftD);
+  const wave = harmonicWave(ctx, 'pad', [1, 0.06, 0.02]);
   // the top tone carries the pad; the lower ones (which reach down toward the squishies' 2nd harmonics) are softer
   const lv = [0.5, 0.7, 1];
   for (let k = 0; k < field.pad.length; k++) {
@@ -348,12 +372,23 @@ function padChord(ctx: Ctx, dest: AudioNode, t: number, endT: number, field: Fie
     const g = bag.gain(0.62 * lv[k]);
     const beatHz = rr(r, 0.12, 0.3);
     const cents = 1200 * Math.log2(1 + beatHz / f);
-    for (const [type, det, lvl] of [['sine', 0, 1], ['triangle', cents, 0.4]] as const) {
-      const o = bag.osc(type, f, t, stopT);
+    for (const [det, lvl] of [[0, 1], [cents, 0.4]] as const) {
+      const o = bag.osc('sine', f, t, stopT);
+      o.setPeriodicWave(wave);
       o.detune.value = det;
       driftD.connect(o.detune);
       const og = bag.gain(lvl);
       o.connect(og); og.connect(g);
+    }
+    // this tone's breaths
+    const fl = PAD_FLOOR[k] ?? PAD_FLOOR[2];
+    g.gain.setValueAtTime(0.62 * lv[k] * fl, t);
+    let u = t + rr(r, 0, 1.2) + 0.9 * k;
+    for (let guard = 0; guard < 40 && u < relT; guard++) {
+      const rise = rr(r, 1.8, 3.5), hold = rr(r, 1, 4.5), fall = rr(r, 2.5, 4.5), gap = rr(r, 0.5, 5);
+      g.gain.setTargetAtTime(0.62 * lv[k] * rr(r, 0.75, 1), u, rise / 3);
+      g.gain.setTargetAtTime(0.62 * lv[k] * fl, u + rise + hold, fall / 3);
+      u += rise + hold + fall + gap;
     }
     g.connect(lp);
   }
@@ -474,8 +509,9 @@ export class MusicBed {
   private ducked = false;
   private duckUntil = -Infinity;
   private roomUntil = -Infinity;
-  private roomGain = 1;
   private roomFrom = 0;
+  private holds: { until: number; g: number }[] = [];
+  private roomPlan: { t: number; g: number; tc: number }[] = [];
   private fastUsed = false;
   private stoppedAt = Infinity;
   private endT = Infinity;
@@ -518,7 +554,8 @@ export class MusicBed {
   get stopped(): boolean { return this.stoppedAt < Infinity; }
   /** Context time at which a stopped session is silent (Infinity while playing). */
   get endTime(): number { return this.endT; }
-  get isDucked(): boolean { return this.ducked; }
+  /** True while the slow (ceremony) duck holds or an effect's room dip is active (the dip's recovery included). */
+  get isDucked(): boolean { return this.ducked || this.ctx.currentTime < this.roomUntil; }
   /** True while an effect's room dip holds (until its effect ends; the recovery follows). */
   roomedAt(t: number): boolean { return t < this.roomUntil; }
 
@@ -613,26 +650,46 @@ export class MusicBed {
   }
 
   /**
-   * Make room for an effect: dip by `db` (default ROOM_DB) from `from` (fast, tc ROOM_ATTACK_TC) until `until`, then
-   * recover (tc ROOM_RELEASE_TC). Overlapping calls extend the hold and keep the deepest dip. Deterministic for a given
-   * sequence of calls (live and offline renders agree): the only cancellation removes the pending recovery of the hold
-   * being extended, and setTargetAtTime always starts from the current value, so the gain never jumps.
+   * Make room for an effect (a sidechain-style dip keyed by the effect voices): dip by `db` (<= 0) from `from` until
+   * `until`, then recover. Every call is a "hold" {until, gain}; the session keeps the active holds and plans the gain as a
+   * staircase: the deepest active hold, then, when it ends, the deepest of the rest, ..., then 1. Going down uses the
+   * fast ROOM_ATTACK_TC, coming back ROOM_RELEASE_TC. So a held voice that calls this every frame with a depth that
+   * follows its own level (squish, strand) gets a dip that follows it, and a soft call never cuts a deeper one short.
+   * Calls must come in time order (live: currentTime; offline: scripted); the only cancellation is of this node's own
+   * future plan at `from`, and setTargetAtTime always starts from the current value, so the gain never jumps.
    */
   makeRoom(from: number, until: number, db: number = ROOM_DB): void {
     if (this.freed) return;
     const a = Math.max(0, fin(from, 0), this.roomFrom);
+    const g = dbToGain(clamp(fin(db, ROOM_DB), -30, 0));
+    if (!(g < 0.995)) return;
     const b = Math.min(Math.max(a + 0.02, fin(until, a)), a + ROOM_MAX_HOLD_S);
-    const g = dbToGain(clamp(fin(db, ROOM_DB), -24, 0));
-    const held = a < this.roomUntil;
-    const tg = held ? Math.min(g, this.roomGain) : g;
-    const end = held ? Math.max(b, this.roomUntil) : b;
+    // drop expired holds and holds the new one covers; a call an existing hold already covers changes nothing
+    this.holds = this.holds.filter((h) => h.until > a && !(h.g >= g && h.until <= b));
+    if (this.holds.some((h) => h.g <= g && h.until >= b)) return;
+    this.holds.push({ until: b, g });
+    // the staircase from `a`
+    const plan: { t: number; g: number; tc: number }[] = [];
+    let cur = { t: 0, g: 1, tc: ROOM_RELEASE_TC };
+    for (const s of this.roomPlan) if (s.t <= a) cur = s;
+    let t = a, act = this.holds, prevG = cur.g;
+    while (act.length) {
+      let m = Infinity;
+      for (const h of act) m = Math.min(m, h.g);
+      let tn = t;
+      for (const h of act) if (h.g === m) tn = Math.max(tn, h.until);
+      const tc = plan.length === 0 && m === cur.g ? cur.tc : m < prevG ? ROOM_ATTACK_TC : ROOM_RELEASE_TC;
+      plan.push({ t, g: m, tc });
+      prevG = m; t = tn;
+      act = act.filter((h) => h.until > tn);
+    }
+    plan.push({ t, g: 1, tc: ROOM_RELEASE_TC });
     try {
       const p = this.roomG.gain;
       p.cancelScheduledValues(a);
-      p.setTargetAtTime(tg, a, ROOM_ATTACK_TC);
-      p.setTargetAtTime(1, end, ROOM_RELEASE_TC);
+      for (const s of plan) p.setTargetAtTime(s.g, s.t, s.tc);
     } catch { /* closed context */ }
-    this.roomUntil = end; this.roomGain = tg; this.roomFrom = a;
+    this.roomPlan = plan; this.roomFrom = a; this.roomUntil = t;
   }
 
   /** Raised-cosine fade to exact silence over `fadeS` from `at`, then nothing more is scheduled. Returns the silent time. */

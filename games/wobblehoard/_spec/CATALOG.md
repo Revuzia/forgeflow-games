@@ -30,20 +30,22 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | E Dough | Mochi Dough | Bounce Putty | 2 | 2 | 1 | 1 | 1 | 0 | 7 |
 | F Rubber | Firm Silicone | Pop Dome | 2 | 1 | 1 | 2 | 0 | 0 | 6 |
 
-| Family | Touch feel (one line) | Species | Tiers it appears in |
-|---|---|---|---|
-| Slow-Rise Foam (`slowrise`) | Sinks in like a sponge, then creeps back up over several seconds; light, dry, no bounce, a little crunch of air. | Capnap, Drowsel, Somnuff | Uncommon, Rare, Legendary |
-| Marshmallow Puff (`marshmallow`) | Featherlight and powdery; squashes flat with almost no push-back and puffs up again in a second. | Wisplet, Cushlet, Acornel, Hushpuff, Selenuff | Common, Uncommon, Rare, Epic |
-| Mochi Dough (`mochidough`) | Soft, heavy dough: it stretches, keeps a thumb-print for a few seconds, then slowly smooths itself out. | Crimpo, Thumbly, Knubby, Pastrel | Common, Uncommon, Epic |
-| Jelly Gel (`jellygel`) | Glossy, translucent and bouncy: squashes without losing volume, bulges around your finger, wobbles for a while. | Dollop, Plumpet, Nuzzo, Spirelo, Ambrosel | Common, Uncommon, Rare, Legendary |
-| Liquid Core (`waterfill`) | A thin skin around a sloshing liquid: it bulges where you do not press and keeps swaying after you let go. | Puddlo, Glubbin, Swishel, Petalop, Tidelume | Common, Uncommon, Rare, Legendary |
-| Bounce Putty (`putty`) | Firm with no bounce when you poke it fast, flows like taffy when you lean on it, and keeps the dent you leave. | Kneadle, Thudge, Fossilo | Uncommon, Rare, Legendary |
-| Sticky Stretch (`stickystretch`) | Clingy and stretchy: it grabs your fingertip, pulls into long thin strings, then snaps back with a tack. | Twangle, Tadpolo, Zingle, Taffelin, Skeinara | Common, Uncommon, Rare, Epic, Mythic |
-| Slime Goo (`slimegoo`) | A wet, sticky glob: it oozes after every squeeze, drips into strings and takes ages to pull itself together. | Wrigglo, Gloopsy, Cindergoo, Glimglop | Uncommon, Rare, Epic, Legendary |
-| Firm Silicone (`firmsilicone`) | Dense, grippy rubber: pushes back hard, snaps back instantly and keeps rebounding. | Sproink, Hooplet, Caromel | Common, Uncommon, Epic |
-| Pop Dome (`popdome`) | A stiff silicone dome that resists, then gives under a firm press and springs straight back. *Planned, not built yet: the bistable snap: past a threshold the dome pops and flips inside out, then flips back (SQUISHY_SCIENCE.md 3.9; the family's `snap` number specifies it, the physics solver does not build it yet).* | Dimpla, Diademo, Flipdome | Common, Rare, Epic |
-| Gummy Jelly (`gummy`) | Firm and chewy: a quick, slightly sticky spring-back with very little wobble, like candy. | Chunkle, Munchip, Sproutle, Marigel, Prismelo | Common, Uncommon, Rare, Mythic |
-| Bead Squeeze (`beadsqueeze`) | A bag of tiny beads: it yields, rearranges with a crunch, firms up as it jams, and stays a little lumpy. | Crumbit, Granulo, Burrbin, Rattlebead, Constello | Common, Uncommon, Rare, Epic, Mythic |
+| Family | Touch feel (one line) | Clearest body (translucency cap) | Species | Tiers it appears in |
+|---|---|---|---|---|
+| Slow-Rise Foam (`slowrise`) | Sinks in like a sponge, then creeps back up over several seconds; light, dry, no bounce, a little crunch of air. | at most 0.30 | Capnap, Slumbrel, Somnuff | Uncommon, Rare, Legendary |
+| Marshmallow Puff (`marshmallow`) | Featherlight and powdery; squashes flat with almost no push-back and puffs up again in a second. | at most 0.40 | Wisplet, Cushlet, Acornel, Hushpuff, Selenuff | Common, Uncommon, Rare, Epic |
+| Mochi Dough (`mochidough`) | Soft, heavy dough: it stretches, keeps a thumb-print for a few seconds, then slowly smooths itself out. | at most 0.45 | Crimpo, Thumbly, Knubby, Pastrel | Common, Uncommon, Epic |
+| Jelly Gel (`jellygel`) | Glossy, translucent and bouncy: squashes without losing volume, bulges around your finger, wobbles for a while. | can be clear (no cap) | Dollop, Plumpet, Nuzzo, Spirelo, Ambrosel | Common, Uncommon, Rare, Legendary |
+| Liquid Core (`waterfill`) | A thin skin around a sloshing liquid: it bulges where you do not press and keeps swaying after you let go. | can be clear (no cap) | Puddlo, Glugbean, Swishel, Petalop, Tidelume | Common, Uncommon, Rare, Legendary |
+| Bounce Putty (`putty`) | Firm with no bounce when you poke it fast, flows like taffy when you lean on it, and keeps the dent you leave. | at most 0.30 | Kneadle, Thudge, Fossilo | Uncommon, Rare, Legendary |
+| Sticky Stretch (`stickystretch`) | Clingy and stretchy: it grabs your fingertip, pulls into long thin strings, then snaps back with a tack. | can be clear (no cap) | Twangle, Tadpolo, Zingle, Taffelin, Skeinara | Common, Uncommon, Rare, Epic, Mythic |
+| Slime Goo (`slimegoo`) | A wet, sticky glob: it oozes after every squeeze, drips into strings and takes ages to pull itself together. | can be clear (no cap) | Wrigglo, Gloopsy, Cindergoo, Glimglop | Uncommon, Rare, Epic, Legendary |
+| Firm Silicone (`firmsilicone`) | Dense, grippy rubber: pushes back hard, snaps back instantly and keeps rebounding. | can be clear (no cap) | Boingle, Hooplet, Caromel | Common, Uncommon, Epic |
+| Pop Dome (`popdome`) | A stiff silicone dome that resists, then gives under a firm press and springs straight back. *Planned, not built yet: the bistable snap: past a threshold the dome pops and flips inside out, then flips back (SQUISHY_SCIENCE.md 3.9; the family's `snap` number specifies it, the physics solver does not build it yet).* | can be clear (no cap) | Dimpla, Diademo, Flipdome | Common, Rare, Epic |
+| Gummy Jelly (`gummy`) | Firm and chewy: a quick, slightly sticky spring-back with very little wobble, like candy. | can be clear (no cap) | Chunkle, Munchip, Sproutle, Marigel, Prismelo | Common, Uncommon, Rare, Mythic |
+| Bead Squeeze (`beadsqueeze`) | A bag of tiny beads: it yields, rearranges with a crunch, firms up as it jams, and stays a little lumpy. | at most 0.50 | Crumbit, Granulo, Burrbin, Rattlebead, Constello | Common, Uncommon, Rare, Epic, Mythic |
+
+**Opaque families keep an opaque body.** `resolveMaterial` (`src/data/materials.ts`) passes the genome's translucency, gloss, core glow and glitter through, then caps translucency for the families that are opaque in the hand (`lookBounds`): Slow-Rise Foam 0.30 (open-cell PU foam under a painted skin: every cell wall scatters, so light fades within millimetres; only the rim and the core light may soften it); Marshmallow Puff 0.40 (aerated gelatin-sugar foam: the cell walls are a clear gel (subsurface 0.35 against the PU foam 0.15), so thin edges glow a little, but a puff never reads through); Mochi Dough 0.45 (a semi-clear TPR mochi skin over an opaque dough or flour fill: at most a milky body, never glass); Bounce Putty 0.30 (filled, pigmented silicone-borate bouncing putty: opaque in the hand; its oil-slick gloss carries the rarity); Bead Squeeze 0.50 (a packed bed of beads scatters light like crushed ice or sugar (each bead may be clear, the bed is not): it glows from inside, but nothing reads through it). Every species of these families sits under its cap with its whole cosmetic band (no instance is ever clipped) and shows its tier through core glow, glitter and gloss instead of a see-through body.
 
 ## The roster
 
@@ -53,7 +55,7 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | 1 | **Plumpet** | Common | Jelly Gel (jelly) | squeeze | plump upright egg | <span style="color:#c247ab">&#9632;</span> `#c247ab` | <span style="color:#d58d1e">&#9632;</span> `#d58d1e` | Plump as an egg and bright as an orchid. Squeeze it and it bounces right back. |
 | 2 | **Twangle** | Common | Sticky Stretch (jelly) | pull | tall teardrop with a pointed top | <span style="color:#a59d07">&#9632;</span> `#a59d07` | <span style="color:#d58d1e">&#9632;</span> `#d58d1e` | A mustard-gold drop with a pointy top. Pull the tip and let go: it answers with a twang. |
 | 3 | **Puddlo** | Common | Liquid Core (fill) | poke | wide flat pancake | <span style="color:#2b8892">&#9632;</span> `#2b8892` | <span style="color:#a5a606">&#9632;</span> `#a5a606` | A deep teal puddle that never spills. Poke the middle and the whole thing sloshes. |
-| 4 | **Glubbin** | Common | Liquid Core (fill) | squeeze | bean with a dip along the top | <span style="color:#ca7965">&#9632;</span> `#ca7965` | <span style="color:#c89506">&#9632;</span> `#c89506` | A terracotta bean full of water. It goes glub when you squeeze and wobbles for ages. |
+| 4 | **Glugbean** | Common | Liquid Core (fill) | squeeze | bean with a dip along the top | <span style="color:#ca7965">&#9632;</span> `#ca7965` | <span style="color:#c89506">&#9632;</span> `#c89506` | A terracotta bean full of water. It goes glug when you squeeze and wobbles for ages. |
 | 5 | **Crumbit** | Common | Bead Squeeze (fill) | squeeze | pear, wide at the base | <span style="color:#c5a46b">&#9632;</span> `#c5a46b` | <span style="color:#9aa91e">&#9632;</span> `#9aa91e` | A sandy pear stuffed with tiny beads. Squeeze it and it crunches into a new shape. |
 | 6 | **Chunkle** | Common | Gummy Jelly (chew) | squeeze | tall rounded rectangle, a standing pillow | <span style="color:#f64f43">&#9632;</span> `#f64f43` | <span style="color:#c89506">&#9632;</span> `#c89506` | A tomato-red chewy pillow with a very serious face. Soft corners, firm heart. |
 | 7 | **Munchip** | Common | Gummy Jelly (chew) | poke | soft heart facing you | <span style="color:#1e9f6d">&#9632;</span> `#1e9f6d` | <span style="color:#c89506">&#9632;</span> `#c89506` | A leaf-green gummy heart. It springs right back as if nothing happened. |
@@ -61,7 +63,7 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | 9 | **Cushlet** | Common | Marshmallow Puff (foam) | squeeze | chunky cube with rounded corners | <span style="color:#98717c">&#9632;</span> `#98717c` | <span style="color:#c89506">&#9632;</span> `#c89506` | A dusty-mauve cube of foam, soft as a cushion. It sighs a little when squeezed. |
 | 10 | **Crimpo** | Common | Mochi Dough (dough) | pull | half-moon dumpling with a crimped seam | <span style="color:#ddbb23">&#9632;</span> `#ddbb23` | <span style="color:#e5820d">&#9632;</span> `#e5820d` | A toast-gold dumpling with a crimped edge. It stretches, then slowly settles back. |
 | 11 | **Thumbly** | Common | Mochi Dough (dough) | poke | wide face with chubby cheeks and a thumb dimple | <span style="color:#fc9496">&#9632;</span> `#fc9496` | <span style="color:#c89506">&#9632;</span> `#c89506` | A salmon-pink face with chubby cheeks. Press a thumb in and the dent smooths out slowly. |
-| 12 | **Sproink** | Common | Firm Silicone (rubber) | poke | rounded bullet pointing at you | <span style="color:#67c3a3">&#9632;</span> `#67c3a3` | <span style="color:#c89506">&#9632;</span> `#c89506` | A rubbery seafoam bullet that stares straight at you. Poke it and it boings back. |
+| 12 | **Boingle** | Common | Firm Silicone (rubber) | poke | rounded bullet pointing at you | <span style="color:#67c3a3">&#9632;</span> `#67c3a3` | <span style="color:#c89506">&#9632;</span> `#c89506` | A rubbery seafoam bullet that stares straight at you. Poke it and it boings back. |
 | 13 | **Dimpla** | Common | Pop Dome (rubber) | poke | wide button dome | <span style="color:#85a679">&#9632;</span> `#85a679` | <span style="color:#c89506">&#9632;</span> `#c89506` | A sage-green button dome. Press the middle and feel it push back. |
 | 14 | **Nuzzo** | Uncommon | Jelly Gel (jelly) | squeeze | round body with two round ears | <span style="color:#5bbef3">&#9632;</span> `#5bbef3` | <span style="color:#05b4bb">&#9632;</span> `#05b4bb` | A sky-blue jelly with round ears. It nudges into your palm and stays there. |
 | 15 | **Tadpolo** | Uncommon | Sticky Stretch (jelly) | pull | tadpole: round body with a long knobbed tail | <span style="color:#04bb5c">&#9632;</span> `#04bb5c` | <span style="color:#05b4bb">&#9632;</span> `#05b4bb` | An emerald drop with a long knobbed tail. Stretch the tail and it flicks back. |
@@ -81,7 +83,7 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | 29 | **Marigel** | Rare | Gummy Jelly (chew) | poke | round flower, eight petals around the face | <span style="color:#fc6c41">&#9632;</span> `#fc6c41` | <span style="color:#b47efb">&#9632;</span> `#b47efb` | A marigold gummy flower with chewy petals around a glowing heart. |
 | 30 | **Gloopsy** | Rare | Slime Goo (chew) | pull | three-lobed blob with drips at the back | <span style="color:#20a2aa">&#9632;</span> `#20a2aa` | <span style="color:#ab83fb">&#9632;</span> `#ab83fb` | A bright teal goo with three lobes and drippy feet. It stretches into silky strings. |
 | 31 | **Hushpuff** | Rare | Marshmallow Puff (foam) | squeeze | fluffy body with ears, cheeks and a tuft | <span style="color:#666494">&#9632;</span> `#666494` | <span style="color:#d866f1">&#9632;</span> `#d866f1` | A dusky grey-violet puff with tufted ears. Squeeze it gently: it hushes the room. |
-| 32 | **Drowsel** | Rare | Slow-Rise Foam (foam) | squeeze | snail: shell on the back, head up front | <span style="color:#bb95e0">&#9632;</span> `#bb95e0` | <span style="color:#7e96fc">&#9632;</span> `#7e96fc` | A lilac snail with a swirl for a shell. It sinks under your hand and rises slowly. |
+| 32 | **Slumbrel** | Rare | Slow-Rise Foam (foam) | squeeze | snail: shell on the back, head up front | <span style="color:#bb95e0">&#9632;</span> `#bb95e0` | <span style="color:#7e96fc">&#9632;</span> `#7e96fc` | A lilac snail with a swirl for a shell. It sinks under your hand and rises slowly. |
 | 33 | **Thudge** | Rare | Bounce Putty (dough) | squeeze | boulder with four uneven lumps | <span style="color:#a8535a">&#9632;</span> `#a8535a` | <span style="color:#b17ffd">&#9632;</span> `#b17ffd` | A brick-rose boulder of putty. It lands with a thud and keeps the dent you leave. |
 | 34 | **Diademo** | Rare | Pop Dome (rubber) | poke | low dome wearing a five-point crown | <span style="color:#15b4e0">&#9632;</span> `#15b4e0` | <span style="color:#b17ffd">&#9632;</span> `#b17ffd` | An azure dome wearing a tiny crown. It resists, resists, then gives under your thumb. |
 | 35 | **Taffelin** | Epic | Sticky Stretch (jelly) | pull | long comet: a tail sweeping up the back, side fins and cheeks | <span style="color:#ca1863">&#9632;</span> `#ca1863` | <span style="color:#fe6932">&#9632;</span> `#fe6932` | A crimson comet with a tail that sweeps up its back. Stretch it long and it hums. |
@@ -102,83 +104,83 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 
 ### Common (14)
 
-| idx | Name | Family | Look numbers (core glow / glitter / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
+| idx | Name | Family | Look numbers (core glow / glitter / gloss / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
 |---|---|---|---|---|---|---|
-| 0 | Dollop | Jelly Gel | 0.80 / 0.30 / 0.78 / plain  / dot / 0.50 | 3 / 0.82 / 1.92 | Flipdome 0.10 | Ambrosel 0.052 |
-| 1 | Plumpet | Jelly Gel | 0.30 / 0.00 / 0.55 / plain  / oval / 0.55 | 0 / 1.04 / 2.30 | Cushlet 0.11 | Zingle 0.074 |
-| 2 | Twangle | Sticky Stretch | 0.28 / 0.00 / 0.50 / plain  / wide / 0.40 | 2 / 0.66 / 2.75 | Cindergoo 0.11 | Dimpla 0.089 |
-| 3 | Puddlo | Liquid Core | 0.20 / 0.00 / 0.45 / plain  / sleepy / 0.70 | 0 / 0.94 / 1.00 | Hooplet 0.13 | Swishel 0.053 |
-| 4 | Glubbin | Liquid Core | 0.30 / 0.00 / 0.55 / plain  / oval / 0.45 | 2 / 0.87 / 1.38 | Wrigglo 0.11 | Cindergoo 0.085 |
-| 5 | Crumbit | Bead Squeeze | 0.25 / 0.00 / 0.50 / plain  / wide / 0.50 | 2 / 1.08 / 2.98 | Plumpet 0.17 | Wisplet 0.086 |
-| 6 | Chunkle | Gummy Jelly | 0.25 / 0.00 / 0.60 / plain  / dot / 0.50 | 2 / 1.03 / 2.78 | Marigel 0.15 | Marigel 0.057 |
-| 7 | Munchip | Gummy Jelly | 0.30 / 0.00 / 0.65 / plain  / oval / 0.45 | 2 / 0.68 / 1.94 | Nuzzo 0.12 | Gloopsy 0.090 |
-| 8 | Wisplet | Marshmallow Puff | 0.15 / 0.00 / 0.50 / plain  / sleepy / 0.60 | 2 / 0.86 / 1.56 | Pastrel 0.11 | Glubbin 0.086 |
-| 9 | Cushlet | Marshmallow Puff | 0.15 / 0.00 / 0.45 / plain  / sleepy / 0.70 | 4 / 1.30 / 1.92 | Plumpet 0.11 | Thudge 0.078 |
-| 10 | Crimpo | Mochi Dough | 0.30 / 0.00 / 0.40 / plain  / dot / 0.55 | 2 / 0.99 / 1.58 | Wrigglo 0.10 | Ambrosel 0.056 |
-| 11 | Thumbly | Mochi Dough | 0.30 / 0.00 / 0.45 / plain  / oval / 0.50 | 2 / 1.31 / 1.67 | Glubbin 0.14 | Wisplet 0.090 |
-| 12 | Sproink | Firm Silicone | 0.30 / 0.00 / 0.35 / plain  / wide / 0.40 | 1 / 0.87 / 1.60 | Tadpolo 0.12 | Wrigglo 0.062 |
-| 13 | Dimpla | Pop Dome | 0.25 / 0.00 / 0.45 / plain  / dot / 0.35 | 1 / 1.01 / 1.58 | Dollop 0.11 | Sproink 0.082 |
+| 0 | Dollop | Jelly Gel | 0.80 / 0.30 / 0.88 / 0.78 / plain  / dot / 0.50 | 3 / 0.82 / 1.92 | Flipdome 0.10 | Ambrosel 0.052 |
+| 1 | Plumpet | Jelly Gel | 0.30 / 0.00 / 0.75 / 0.55 / plain  / oval / 0.55 | 0 / 1.04 / 2.30 | Cushlet 0.11 | Zingle 0.074 |
+| 2 | Twangle | Sticky Stretch | 0.28 / 0.00 / 0.70 / 0.50 / plain  / wide / 0.40 | 2 / 0.66 / 2.75 | Cindergoo 0.11 | Dimpla 0.089 |
+| 3 | Puddlo | Liquid Core | 0.20 / 0.00 / 0.85 / 0.45 / plain  / sleepy / 0.70 | 0 / 0.94 / 1.00 | Hooplet 0.13 | Swishel 0.053 |
+| 4 | Glugbean | Liquid Core | 0.30 / 0.00 / 0.80 / 0.55 / plain  / oval / 0.45 | 2 / 0.87 / 1.38 | Wrigglo 0.11 | Cindergoo 0.085 |
+| 5 | Crumbit | Bead Squeeze | 0.25 / 0.00 / 0.40 / 0.30 (cap 0.50) / plain  / wide / 0.50 | 2 / 1.08 / 2.98 | Plumpet 0.17 | Wisplet 0.086 |
+| 6 | Chunkle | Gummy Jelly | 0.25 / 0.00 / 0.70 / 0.60 / plain  / dot / 0.50 | 2 / 1.03 / 2.78 | Marigel 0.15 | Marigel 0.057 |
+| 7 | Munchip | Gummy Jelly | 0.30 / 0.00 / 0.65 / 0.65 / plain  / oval / 0.45 | 2 / 0.68 / 1.94 | Nuzzo 0.12 | Gloopsy 0.090 |
+| 8 | Wisplet | Marshmallow Puff | 0.15 / 0.00 / 0.30 / 0.20 (cap 0.40) / plain  / sleepy / 0.60 | 2 / 0.86 / 1.56 | Pastrel 0.11 | Glugbean 0.086 |
+| 9 | Cushlet | Marshmallow Puff | 0.15 / 0.00 / 0.30 / 0.18 (cap 0.40) / plain  / sleepy / 0.70 | 4 / 1.30 / 1.92 | Plumpet 0.11 | Thudge 0.078 |
+| 10 | Crimpo | Mochi Dough | 0.30 / 0.00 / 0.30 / 0.26 (cap 0.45) / plain  / dot / 0.55 | 2 / 0.99 / 1.58 | Wrigglo 0.10 | Ambrosel 0.056 |
+| 11 | Thumbly | Mochi Dough | 0.30 / 0.00 / 0.35 / 0.28 (cap 0.45) / plain  / oval / 0.50 | 2 / 1.31 / 1.67 | Glugbean 0.14 | Wisplet 0.090 |
+| 12 | Boingle | Firm Silicone | 0.30 / 0.00 / 0.55 / 0.35 / plain  / wide / 0.40 | 1 / 0.87 / 1.60 | Tadpolo 0.12 | Wrigglo 0.062 |
+| 13 | Dimpla | Pop Dome | 0.25 / 0.00 / 0.70 / 0.45 / plain  / dot / 0.35 | 1 / 1.01 / 1.58 | Dollop 0.11 | Boingle 0.082 |
 
 ### Uncommon (11)
 
-| idx | Name | Family | Look numbers (core glow / glitter / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
+| idx | Name | Family | Look numbers (core glow / glitter / gloss / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
 |---|---|---|---|---|---|---|
-| 14 | Nuzzo | Jelly Gel | 0.52 / 0.20 / 0.70 / plain  / oval / 0.35 | 1 / 1.06 / 2.09 | Hushpuff 0.10 | Diademo 0.054 |
-| 15 | Tadpolo | Sticky Stretch | 0.50 / 0.18 / 0.55 / plain  / dot / 0.45 | 2 / 0.84 / 1.82 | Taffelin 0.10 | Munchip 0.093 |
-| 16 | Swishel | Liquid Core | 0.58 / 0.25 / 0.70 / plain  / sleepy / 0.60 | 1 / 0.81 / 1.54 | Dollop 0.15 | Puddlo 0.053 |
-| 17 | Granulo | Bead Squeeze | 0.50 / 0.30 / 0.55 / plain  / wide / 0.40 | 3 / 0.62 / 2.45 | Marigel 0.11 | Caromel 0.080 |
-| 18 | Sproutle | Gummy Jelly | 0.55 / 0.20 / 0.75 / plain  / oval / 0.50 | 1 / 0.91 / 2.28 | Diademo 0.11 | Caromel 0.073 |
-| 19 | Wrigglo | Slime Goo | 0.55 / 0.25 / 0.70 / plain  / dot / 0.60 | 2 / 0.67 / 1.38 | Crimpo 0.10 | Gloopsy 0.061 |
-| 20 | Acornel | Marshmallow Puff | 0.45 / 0.15 / 0.50 / plain  / sleepy / 0.45 | 2 / 1.19 / 2.64 | Spirelo 0.11 | Selenuff 0.071 |
-| 21 | Capnap | Slow-Rise Foam | 0.50 / 0.10 / 0.45 / plain  / sleepy / 0.55 | 3 / 0.61 / 1.29 | Dimpla 0.16 | Selenuff 0.075 |
-| 22 | Knubby | Mochi Dough | 0.45 / 0.10 / 0.50 / plain  / dot / 0.50 | 2 / 0.83 / 2.00 | Plumpet 0.13 | Pastrel 0.094 |
-| 23 | Kneadle | Bounce Putty | 0.50 / 0.20 / 0.55 / plain  / oval / 0.50 | 2 / 0.96 / 1.82 | Thudge 0.13 | Hushpuff 0.059 |
-| 24 | Hooplet | Firm Silicone | 0.55 / 0.25 / 0.50 / plain  / wide / 0.45 | 2 / 0.85 / 1.14 | Dimpla 0.11 | Petalop 0.056 |
+| 14 | Nuzzo | Jelly Gel | 0.52 / 0.20 / 0.80 / 0.70 / plain  / oval / 0.35 | 1 / 1.06 / 2.09 | Hushpuff 0.10 | Diademo 0.054 |
+| 15 | Tadpolo | Sticky Stretch | 0.50 / 0.18 / 0.75 / 0.55 / plain  / dot / 0.45 | 2 / 0.84 / 1.82 | Taffelin 0.10 | Munchip 0.093 |
+| 16 | Swishel | Liquid Core | 0.58 / 0.25 / 0.90 / 0.70 / plain  / sleepy / 0.60 | 1 / 0.81 / 1.54 | Dollop 0.15 | Puddlo 0.053 |
+| 17 | Granulo | Bead Squeeze | 0.50 / 0.30 / 0.45 / 0.34 (cap 0.50) / plain  / wide / 0.40 | 3 / 0.62 / 2.45 | Marigel 0.11 | Caromel 0.080 |
+| 18 | Sproutle | Gummy Jelly | 0.55 / 0.20 / 0.75 / 0.75 / plain  / oval / 0.50 | 1 / 0.91 / 2.28 | Diademo 0.11 | Caromel 0.073 |
+| 19 | Wrigglo | Slime Goo | 0.55 / 0.25 / 0.95 / 0.70 / plain  / dot / 0.60 | 2 / 0.67 / 1.38 | Crimpo 0.10 | Gloopsy 0.061 |
+| 20 | Acornel | Marshmallow Puff | 0.45 / 0.15 / 0.30 / 0.24 (cap 0.40) / plain  / sleepy / 0.45 | 2 / 1.19 / 2.64 | Spirelo 0.11 | Selenuff 0.071 |
+| 21 | Capnap | Slow-Rise Foam | 0.50 / 0.10 / 0.35 / 0.15 (cap 0.30) / plain  / sleepy / 0.55 | 3 / 0.61 / 1.29 | Dimpla 0.16 | Selenuff 0.075 |
+| 22 | Knubby | Mochi Dough | 0.45 / 0.10 / 0.35 / 0.32 (cap 0.45) / plain  / dot / 0.50 | 2 / 0.83 / 2.00 | Plumpet 0.13 | Pastrel 0.094 |
+| 23 | Kneadle | Bounce Putty | 0.50 / 0.20 / 0.60 / 0.15 (cap 0.30) / plain  / oval / 0.50 | 2 / 0.96 / 1.82 | Thudge 0.13 | Hushpuff 0.059 |
+| 24 | Hooplet | Firm Silicone | 0.55 / 0.25 / 0.70 / 0.50 / plain  / wide / 0.45 | 2 / 0.85 / 1.14 | Dimpla 0.11 | Petalop 0.056 |
 
 ### Rare (10)
 
-| idx | Name | Family | Look numbers (core glow / glitter / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
+| idx | Name | Family | Look numbers (core glow / glitter / gloss / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
 |---|---|---|---|---|---|---|
-| 25 | Spirelo | Jelly Gel | 0.68 / 0.35 / 0.80 / speckle 0.35 / wide / 0.50 | 2 / 0.92 / 2.65 | Acornel 0.11 | Burrbin 0.086 |
-| 26 | Zingle | Sticky Stretch | 0.70 / 0.40 / 0.70 / swirl 0.50 / oval / 0.45 | 3 / 1.10 / 2.52 | Skeinara 0.10 | Plumpet 0.074 |
-| 27 | Petalop | Liquid Core | 0.72 / 0.40 / 0.85 / speckle 0.30 / sleepy / 0.55 | 2 / 0.74 / 2.29 | Granulo 0.14 | Hooplet 0.056 |
-| 28 | Burrbin | Bead Squeeze | 0.70 / 0.45 / 0.65 / speckle 0.60 / wide / 0.50 | 5 / 1.23 / 2.25 | Flipdome 0.10 | Capnap 0.083 |
-| 29 | Marigel | Gummy Jelly | 0.68 / 0.35 / 0.85 / swirl 0.40 / oval / 0.40 | 4 / 0.63 / 2.41 | Granulo 0.11 | Chunkle 0.057 |
-| 30 | Gloopsy | Slime Goo | 0.72 / 0.45 / 0.80 / swirl 0.50 / dot / 0.55 | 3 / 1.13 / 2.08 | Nuzzo 0.10 | Wrigglo 0.061 |
-| 31 | Hushpuff | Marshmallow Puff | 0.66 / 0.30 / 0.60 / speckle 0.40 / sleepy / 0.65 | 3 / 1.35 / 2.19 | Nuzzo 0.10 | Kneadle 0.059 |
-| 32 | Drowsel | Slow-Rise Foam | 0.65 / 0.20 / 0.60 / swirl 0.55 / sleepy / 0.60 | 2 / 1.20 / 2.15 | Hushpuff 0.12 | Acornel 0.092 |
-| 33 | Thudge | Bounce Putty | 0.68 / 0.30 / 0.60 / speckle 0.60 / oval / 0.60 | 4 / 1.21 / 1.89 | Caromel 0.12 | Fossilo 0.067 |
-| 34 | Diademo | Pop Dome | 0.72 / 0.40 / 0.70 / bands 0.50 / wide / 0.40 | 3 / 1.27 / 2.24 | Sproutle 0.11 | Nuzzo 0.054 |
+| 25 | Spirelo | Jelly Gel | 0.68 / 0.35 / 0.85 / 0.80 / speckle 0.35 / wide / 0.50 | 2 / 0.92 / 2.65 | Acornel 0.11 | Burrbin 0.086 |
+| 26 | Zingle | Sticky Stretch | 0.70 / 0.40 / 0.80 / 0.70 / swirl 0.50 / oval / 0.45 | 3 / 1.10 / 2.52 | Skeinara 0.10 | Plumpet 0.074 |
+| 27 | Petalop | Liquid Core | 0.72 / 0.40 / 0.90 / 0.85 / speckle 0.30 / sleepy / 0.55 | 2 / 0.74 / 2.29 | Granulo 0.14 | Hooplet 0.056 |
+| 28 | Burrbin | Bead Squeeze | 0.70 / 0.45 / 0.50 / 0.38 (cap 0.50) / speckle 0.60 / wide / 0.50 | 5 / 1.23 / 2.25 | Flipdome 0.10 | Capnap 0.083 |
+| 29 | Marigel | Gummy Jelly | 0.68 / 0.35 / 0.80 / 0.85 / swirl 0.40 / oval / 0.40 | 4 / 0.63 / 2.41 | Granulo 0.11 | Chunkle 0.057 |
+| 30 | Gloopsy | Slime Goo | 0.72 / 0.45 / 0.96 / 0.80 / swirl 0.50 / dot / 0.55 | 3 / 1.13 / 2.08 | Nuzzo 0.10 | Wrigglo 0.061 |
+| 31 | Hushpuff | Marshmallow Puff | 0.66 / 0.30 / 0.35 / 0.28 (cap 0.40) / speckle 0.40 / sleepy / 0.65 | 3 / 1.35 / 2.19 | Nuzzo 0.10 | Kneadle 0.059 |
+| 32 | Slumbrel | Slow-Rise Foam | 0.65 / 0.20 / 0.40 / 0.19 (cap 0.30) / swirl 0.55 / sleepy / 0.60 | 2 / 1.20 / 2.15 | Hushpuff 0.12 | Acornel 0.092 |
+| 33 | Thudge | Bounce Putty | 0.68 / 0.30 / 0.70 / 0.19 (cap 0.30) / speckle 0.60 / oval / 0.60 | 4 / 1.21 / 1.89 | Caromel 0.12 | Fossilo 0.067 |
+| 34 | Diademo | Pop Dome | 0.72 / 0.40 / 0.85 / 0.70 / bands 0.50 / wide / 0.40 | 3 / 1.27 / 2.24 | Sproutle 0.11 | Nuzzo 0.054 |
 
 ### Epic (7)
 
-| idx | Name | Family | Look numbers (core glow / glitter / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
+| idx | Name | Family | Look numbers (core glow / glitter / gloss / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
 |---|---|---|---|---|---|---|
-| 35 | Taffelin | Sticky Stretch | 0.84 / 0.55 / 0.85 / swirl 0.60 / oval / 0.50 | 3 / 1.19 / 2.03 | Tidelume 0.10 | Glimglop 0.055 |
-| 36 | Rattlebead | Bead Squeeze | 0.80 / 0.60 / 0.80 / bands 0.70 / wide / 0.50 | 4 / 0.97 / 2.42 | Somnuff 0.11 | Marigel 0.061 |
-| 37 | Cindergoo | Slime Goo | 0.88 / 0.60 / 0.85 / swirl 0.50 / dot / 0.55 | 4 / 0.87 / 2.62 | Twangle 0.11 | Chunkle 0.060 |
-| 38 | Selenuff | Marshmallow Puff | 0.82 / 0.65 / 0.75 / swirl 0.60 / sleepy / 0.60 | 3 / 1.00 / 2.29 | Nuzzo 0.11 | Acornel 0.071 |
-| 39 | Pastrel | Mochi Dough | 0.80 / 0.50 / 0.70 / bands 0.65 / oval / 0.55 | 3 / 0.84 / 1.38 | Crimpo 0.10 | Fossilo 0.064 |
-| 40 | Flipdome | Pop Dome | 0.85 / 0.55 / 0.80 / bands 0.70 / wide / 0.45 | 3 / 1.26 / 2.22 | Burrbin 0.10 | Munchip 0.106 |
-| 41 | Caromel | Firm Silicone | 0.82 / 0.50 / 0.75 / swirl 0.60 / wide / 0.45 | 3 / 1.14 / 2.02 | Thudge 0.12 | Sproutle 0.073 |
+| 35 | Taffelin | Sticky Stretch | 0.84 / 0.55 / 0.85 / 0.85 / swirl 0.60 / oval / 0.50 | 3 / 1.19 / 2.03 | Tidelume 0.10 | Glimglop 0.055 |
+| 36 | Rattlebead | Bead Squeeze | 0.80 / 0.60 / 0.60 / 0.41 (cap 0.50) / bands 0.70 / wide / 0.50 | 4 / 0.97 / 2.42 | Somnuff 0.11 | Marigel 0.061 |
+| 37 | Cindergoo | Slime Goo | 0.88 / 0.60 / 0.97 / 0.85 / swirl 0.50 / dot / 0.55 | 4 / 0.87 / 2.62 | Twangle 0.11 | Chunkle 0.060 |
+| 38 | Selenuff | Marshmallow Puff | 0.82 / 0.65 / 0.40 / 0.33 (cap 0.40) / swirl 0.60 / sleepy / 0.60 | 3 / 1.00 / 2.29 | Nuzzo 0.11 | Acornel 0.071 |
+| 39 | Pastrel | Mochi Dough | 0.80 / 0.50 / 0.40 / 0.38 (cap 0.45) / bands 0.65 / oval / 0.55 | 3 / 0.84 / 1.38 | Crimpo 0.10 | Fossilo 0.064 |
+| 40 | Flipdome | Pop Dome | 0.85 / 0.55 / 0.85 / 0.80 / bands 0.70 / wide / 0.45 | 3 / 1.26 / 2.22 | Burrbin 0.10 | Munchip 0.106 |
+| 41 | Caromel | Firm Silicone | 0.82 / 0.50 / 0.70 / 0.75 / swirl 0.60 / wide / 0.45 | 3 / 1.14 / 2.02 | Thudge 0.12 | Sproutle 0.073 |
 
 ### Legendary (5)
 
-| idx | Name | Family | Look numbers (core glow / glitter / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
+| idx | Name | Family | Look numbers (core glow / glitter / gloss / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
 |---|---|---|---|---|---|---|
-| 42 | Ambrosel | Jelly Gel | 0.94 / 0.80 / 0.90 / swirl 0.70 / oval / 0.60 | 4 / 1.27 / 2.71 | Constello 0.10 | Dollop 0.052 |
-| 43 | Tidelume | Liquid Core | 0.95 / 0.85 / 0.95 / bands 0.60 / sleepy / 0.65 | 3 / 1.14 / 2.18 | Taffelin 0.10 | Sproink 0.106 |
-| 44 | Glimglop | Slime Goo | 0.96 / 0.85 / 0.90 / swirl 0.80 / dot / 0.60 | 4 / 1.37 / 2.58 | Somnuff 0.12 | Taffelin 0.055 |
-| 45 | Somnuff | Slow-Rise Foam | 0.92 / 0.70 / 0.80 / swirl 0.60 / sleepy / 0.70 | 4 / 1.49 / 2.67 | Rattlebead 0.11 | Zingle 0.078 |
-| 46 | Fossilo | Bounce Putty | 0.90 / 0.70 / 0.70 / swirl 0.80 / oval / 0.65 | 5 / 1.24 / 2.56 | Burrbin 0.11 | Pastrel 0.064 |
+| 42 | Ambrosel | Jelly Gel | 0.94 / 0.80 / 0.95 / 0.90 / swirl 0.70 / oval / 0.60 | 4 / 1.27 / 2.71 | Constello 0.10 | Dollop 0.052 |
+| 43 | Tidelume | Liquid Core | 0.95 / 0.85 / 0.97 / 0.95 / bands 0.60 / sleepy / 0.65 | 3 / 1.14 / 2.18 | Taffelin 0.10 | Boingle 0.106 |
+| 44 | Glimglop | Slime Goo | 0.96 / 0.85 / 0.98 / 0.90 / swirl 0.80 / dot / 0.60 | 4 / 1.37 / 2.58 | Somnuff 0.12 | Taffelin 0.055 |
+| 45 | Somnuff | Slow-Rise Foam | 0.92 / 0.70 / 0.50 / 0.23 (cap 0.30) / swirl 0.60 / sleepy / 0.70 | 4 / 1.49 / 2.67 | Rattlebead 0.11 | Zingle 0.078 |
+| 46 | Fossilo | Bounce Putty | 0.90 / 0.70 / 0.85 / 0.23 (cap 0.30) / swirl 0.80 / oval / 0.65 | 5 / 1.24 / 2.56 | Burrbin 0.11 | Pastrel 0.064 |
 
 ### Mythic (3)
 
-| idx | Name | Family | Look numbers (core glow / glitter / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
+| idx | Name | Family | Look numbers (core glow / glitter / gloss / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
 |---|---|---|---|---|---|---|
-| 47 | Skeinara | Sticky Stretch | 1.00 / 1.00 / 0.95 / swirl 0.80 / oval / 0.65 | 5 / 1.14 / 2.34 | Zingle 0.10 | Selenuff 0.072 |
-| 48 | Constello | Bead Squeeze | 1.00 / 1.00 / 0.95 / speckle 0.95 / wide / 0.70 | 5 / 1.29 / 2.51 | Prismelo 0.09 | Hooplet 0.091 |
-| 49 | Prismelo | Gummy Jelly | 1.00 / 1.00 / 0.95 / bands 0.90 / oval / 0.60 | 5 / 1.34 / 2.74 | Constello 0.09 | Nuzzo 0.058 |
+| 47 | Skeinara | Sticky Stretch | 1.00 / 1.00 / 0.98 / 0.95 / swirl 0.80 / oval / 0.65 | 5 / 1.14 / 2.34 | Zingle 0.10 | Selenuff 0.072 |
+| 48 | Constello | Bead Squeeze | 1.00 / 1.00 / 0.90 / 0.43 (cap 0.50) / speckle 0.95 / wide / 0.70 | 5 / 1.29 / 2.51 | Prismelo 0.09 | Hooplet 0.091 |
+| 49 | Prismelo | Gummy Jelly | 1.00 / 1.00 / 0.98 / 0.95 / bands 0.90 / oval / 0.60 | 5 / 1.34 / 2.74 | Constello 0.09 | Nuzzo 0.058 |
 
 ## Feel of each family (physics scores 0 to 1, from `src/data/materials.ts`)
 

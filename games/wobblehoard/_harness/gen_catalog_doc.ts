@@ -61,13 +61,16 @@ export function renderCatalogDoc(): string {
     out.push(`| ${l.letter} ${l.name} | ${familyName(l.everyday)} | ${familyName(l.signature)} | ${row.join(' | ')} | ${row.reduce((a, b) => a + b, 0)} |`);
   }
   out.push('');
-  out.push('| Family | Touch feel (one line) | Species | Tiers it appears in |');
-  out.push('|---|---|---|---|');
+  out.push('| Family | Touch feel (one line) | Clearest body (translucency cap) | Species | Tiers it appears in |');
+  out.push('|---|---|---|---|---|');
   for (const f of MATERIAL_FAMILY_IDS) {
     const sp = CATALOG.filter((d) => d.family === f);
-    const pl = MATERIAL_FAMILIES[f].planned;
-    out.push(`| ${familyName(f)} (\`${f}\`) | ${esc(MATERIAL_FAMILIES[f].blurb)}${pl ? ` *Planned, not built yet: ${esc(pl.feature)}.*` : ''} | ${sp.map((d) => d.name).join(', ')} | ${[...new Set(sp.map((d) => TIER_NAMES[d.tier]))].join(', ')} |`);
+    const pl = MATERIAL_FAMILIES[f].planned, lb = MATERIAL_FAMILIES[f].lookBounds;
+    out.push(`| ${familyName(f)} (\`${f}\`) | ${esc(MATERIAL_FAMILIES[f].blurb)}${pl ? ` *Planned, not built yet: ${esc(pl.feature)}.*` : ''} | ${lb ? `at most ${f2(lb.translucencyMax)}` : 'can be clear (no cap)'} | ${sp.map((d) => d.name).join(', ')} | ${[...new Set(sp.map((d) => TIER_NAMES[d.tier]))].join(', ')} |`);
   }
+  out.push('');
+  const capped = MATERIAL_FAMILY_IDS.filter((f) => MATERIAL_FAMILIES[f].lookBounds);
+  out.push(`**Opaque families keep an opaque body.** \`resolveMaterial\` (\`src/data/materials.ts\`) passes the genome's translucency, gloss, core glow and glitter through, then caps translucency for the families that are opaque in the hand (\`lookBounds\`): ${capped.map((f) => `${familyName(f)} ${f2(MATERIAL_FAMILIES[f].lookBounds!.translucencyMax)} (${esc(MATERIAL_FAMILIES[f].lookBounds!.why)})`).join('; ')}. Every species of these families sits under its cap with its whole cosmetic band (no instance is ever clipped) and shows its tier through core glow, glitter and gloss instead of a see-through body.`);
   out.push('');
 
   out.push('## The roster');
@@ -82,14 +85,14 @@ export function renderCatalogDoc(): string {
   for (const t of TIERS) {
     out.push(`### ${TIER_NAMES[t]} (${TIER_SPECIES_COUNTS[tierIndex(t)]})`);
     out.push('');
-    out.push('| idx | Name | Family | Look numbers (core glow / glitter / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |');
+    out.push('| idx | Name | Family | Look numbers (core glow / glitter / gloss / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |');
     out.push('|---|---|---|---|---|---|---|');
     for (const d of CATALOG.filter((x) => x.tier === t)) {
       const i = d.idx;
       let bs = 9, bn = '', bc = 9, cn = '';
       for (const o of CATALOG) { if (o.idx === i) continue; const sd = shapeDistance(d.shape, o.shape); if (sd < bs) { bs = sd; bn = o.name; } const cd = dE(labs[i], labs[o.idx]); if (cd < bc) { bc = cd; cn = o.name; } }
       const b = shapeBounds(d.shape);
-      out.push(`| ${d.idx} | ${d.name} | ${familyName(d.family)} | ${f2(d.look.coreGlow)} / ${f2(d.look.glitter)} / ${f2(d.look.translucency)} / ${d.look.pattern} ${d.look.pattern === 'plain' ? '' : f2(d.look.speckle)} / ${d.look.eyeStyle} / ${f2(d.look.size)} | ${d.shape.features.length + (d.shape.swirl ? 1 : 0)} / ${f2(shapeVolumeRatio(d.shape))} / ${f2(b.height)} | ${bn} ${f2(bs)} | ${cn} ${bc.toFixed(3)} |`);
+      out.push(`| ${d.idx} | ${d.name} | ${familyName(d.family)} | ${f2(d.look.coreGlow)} / ${f2(d.look.glitter)} / ${f2(d.look.gloss)} / ${f2(d.look.translucency)}${MATERIAL_FAMILIES[d.family].lookBounds ? ` (cap ${f2(MATERIAL_FAMILIES[d.family].lookBounds!.translucencyMax)})` : ''} / ${d.look.pattern} ${d.look.pattern === 'plain' ? '' : f2(d.look.speckle)} / ${d.look.eyeStyle} / ${f2(d.look.size)} | ${d.shape.features.length + (d.shape.swirl ? 1 : 0)} / ${f2(shapeVolumeRatio(d.shape))} / ${f2(b.height)} | ${bn} ${f2(bs)} | ${cn} ${bc.toFixed(3)} |`);
     }
     out.push('');
   }

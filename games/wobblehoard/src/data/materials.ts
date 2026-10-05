@@ -2,8 +2,10 @@
 //
 // A FAMILY is a material (slow-rise foam, jelly gel, putty ...). A GENOME instance picks a position inside a bounded band
 // around its family's PHYSICS (firmer / bouncier / stretchier / bigger), never a different character. The LOOK fields the genome
-// carries (translucency, gloss, coreGlow, glitter) are the catalog's per-tier rarity layer and pass through resolveMaterial unchanged;
-// the family adds only the surface fields a genome does not have (see MaterialLook).
+// carries (translucency, gloss, coreGlow, glitter) are the catalog's per-tier rarity layer and pass through resolveMaterial, with one
+// physical limit applied after the pass-through: a family that is opaque in the hand (foam, marshmallow, dough, putty, packed beads)
+// caps translucency (LookBounds), so a high-tier species of such a family shows its tier through core glow, glitter and gloss rather
+// than through a see-through body. The family adds the surface fields a genome does not have (see MaterialLook).
 // Research, the maths of every axis and the solver mapping are in _spec/SQUISHY_SCIENCE.md. Units match src/physics/params.ts
 // (smOmega rad/s, edgeAlphaT in XPBD alpha-tilde units, intDamp 1/s, maxPull in rest radii) so PHYS can adopt `solver` as is.
 //
@@ -117,13 +119,14 @@ export const PHYSICS_AXES: readonly AxisSpec[] = [
 /**
  * Visual numbers of a family (RENDER lane). ONE SOURCE OF TRUTH per field:
  *   * translucency, gloss, coreGlow, glitter are carried by the GENOME (the catalog sets them per species and per tier: that is where
- *     the rarity lives, DESIGN 5.3). resolveMaterial passes the genome's values through unchanged; the family numbers below for these
- *     four fields are the family's CHARACTER REFERENCE: the fallback when a genome lacks the field, and what the catalog author and
- *     probe_catalog.ts use to judge which families may carry a high-tier body (an opaque foam hides an inner light).
+ *     the rarity lives, DESIGN 5.3). resolveMaterial passes the genome's values through, then applies the family's LookBounds (only
+ *     translucency is bounded, and only for the opaque families); the family numbers below for these four fields are the family's
+ *     CHARACTER REFERENCE: the fallback when a genome lacks the field, and what the catalog author and probe_catalog.ts use to judge
+ *     which families may carry a high-tier body (an opaque foam hides an inner light).
  *   * roughness, subsurface, fuzz, grain, thickness, blush, stretchPale are not in the genome: the family supplies them as they are.
  */
 export interface MaterialLook {
-  /** 0..1 typical translucency of the material (1 = glassy). Reference / fallback only: genome.translucency is what is drawn. */
+  /** 0..1 typical translucency of the material (1 = glassy). Reference / fallback only: genome.translucency (capped by LookBounds) is what is drawn. */
   translucency: number;
   /** 0..0.4 half-width of the material's natural translucency band (reference). */
   translucencySpan: number;
@@ -162,6 +165,22 @@ export const LOOK_FIELDS: readonly FieldSpec[] = [
   { key: 'thickness', min: 0.2, max: 1.6 }, { key: 'blush', min: 0, max: 1 },
   { key: 'stretchPale', min: 0, max: 1 }, { key: 'coreGlow', min: 0, max: 1.5 }, { key: 'glitter', min: 0, max: 1.5 },
 ];
+
+/**
+ * Physical limits a family puts on the genome's look, applied by resolveMaterial AFTER the pass-through (the catalog's rarity layer
+ * may not make a material do what it cannot do in the hand). Only translucency is bounded, and only for the families that are opaque
+ * or frosted in the hand; the reasons are in SQUISHY_SCIENCE.md section 4. A Rare-and-up species of a bounded family shows its tier
+ * through coreGlow, glitter and gloss (plus the render lane's rim, aura and sparkle), which stay unbounded. A family without bounds
+ * (gel, liquid, sticky stretch, slime, gummy, silicone, dome: all can be cast water-clear) passes translucency through unchanged.
+ * Invariants (probe_materials.ts): translucencyMax lies in 0..1 and at or above the family's own natural band (translucency +
+ * translucencySpan), so a bound only removes the catalog's stylised excess, never part of the material's real range.
+ */
+export interface LookBounds {
+  /** 0..1. Highest translucency the material can show, whatever the genome says. */
+  translucencyMax: number;
+  /** One line: why the material cannot be clearer than that (printed in _spec/CATALOG.md). */
+  why: string;
+}
 
 /* ───────────────────────────────────────────── sound ───────────────────────────────────────────── */
 
@@ -210,6 +229,8 @@ export interface MaterialFamily {
   blurb: string;
   physics: MaterialParams;
   look: MaterialLook;
+  /** Physical limits on the genome's look (see LookBounds). Absent = the family can be as clear as the genome asks. */
+  lookBounds?: LookBounds;
   sound: MaterialSound;
   /**
    * A behaviour the family is SPECIFIED to have (its numbers may already describe it) but the physics does not build yet. No blurb or
@@ -251,6 +272,7 @@ export const MATERIAL_FAMILIES: Record<MaterialFamilyId, MaterialFamily> = {
     blurb: 'Sinks in like a sponge, then creeps back up over several seconds; light, dry, no bounce, a little crunch of air.',
     physics: P(20, 38, 0.55, 1.45, 0.9, 2.0, 0.5, 0, 60, 18, 40, 16, 0.22, 0.20, 1.0, 0.70, 0.10, 0, 0, 3, 0.4, 0.35, 0),
     look: L(0.04, 0.04, 0.35, 0.15, 0.7, 0.15, 0.35, 0.55, 0.3, 0.1, 0.1, 0.15, 0),
+    lookBounds: { translucencyMax: 0.3, why: 'open-cell PU foam under a painted skin: every cell wall scatters, so light fades within millimetres; only the rim and the core light may soften it' },
     sound: S(0.25, 0.3, 1.0, 3800, 0.8, 0.1, 0.95, 0.1, 0.95, 0.05, -3),
   },
   marshmallow: {
@@ -258,6 +280,7 @@ export const MATERIAL_FAMILIES: Record<MaterialFamilyId, MaterialFamily> = {
     blurb: 'Featherlight and powdery; squashes flat with almost no push-back and puffs up again in a second.',
     physics: P(13, 28, 0.35, 0.28, 0.35, 0.5, 0.25, 0, 60, 12, 34, 8, 0.35, 0.28, 1.3, 0.75, 0.20, 0.1, 0, 3, 0.4, 0.10, 0),
     look: L(0.05, 0.05, 0.08, 0.06, 0.95, 0.35, 0.8, 0.3, 0.3, 0.15, 0.1, 0.1, 0),
+    lookBounds: { translucencyMax: 0.4, why: 'aerated gelatin-sugar foam: the cell walls are a clear gel (subsurface 0.35 against the PU foam 0.15), so thin edges glow a little, but a puff never reads through' },
     sound: S(0.2, 0.3, 0.9, 4800, 0.9, 0.05, 0.55, 0.15, 1.0, 0, -4.5),
   },
   mochidough: {
@@ -265,6 +288,7 @@ export const MATERIAL_FAMILIES: Record<MaterialFamilyId, MaterialFamily> = {
     blurb: 'Soft, heavy dough: it stretches, keeps a thumb-print for a few seconds, then slowly smooths itself out.',
     physics: P(14, 150, 0.05, 0.3, 0.1, 3.0, 0.45, 0.045, 2.5, 16, 40, 14, 0.55, 0.50, 2.1, 0.80, 0.30, 0.15, 0, 3, 0.4, 0.10, 0),
     look: L(0.18, 0.12, 0.2, 0.15, 0.85, 0.55, 0.55, 0.5, 0.8, 0.35, 0.45, 0.4, 0.1),
+    lookBounds: { translucencyMax: 0.45, why: 'a semi-clear TPR mochi skin over an opaque dough or flour fill: at most a milky body, never glass' },
     sound: S(0.5, 0.8, 2.5, 1500, 0.35, 0.35, 0.1, 0.35, 0.85, 0, -2),
   },
   jellygel: {
@@ -286,6 +310,7 @@ export const MATERIAL_FAMILIES: Record<MaterialFamilyId, MaterialFamily> = {
     blurb: 'Firm with no bounce when you poke it fast, flows like taffy when you lean on it, and keeps the dent you leave.',
     physics: P(12, 300, 0, 0.1, 0.05, 5.0, 0.5, 0.07, 40, 12, 30, 28, 0.60, 0.45, 2.3, 0.70, 0.20, 0.3, 0, 3, 0.4, 0, 0),
     look: L(0.08, 0.08, 0.55, 0.15, 0.45, 0.2, 0.1, 0.1, 0.5, 0.2, 0.25, 0.25, 0.2),
+    lookBounds: { translucencyMax: 0.3, why: 'filled, pigmented silicone-borate bouncing putty: opaque in the hand; its oil-slick gloss carries the rarity' },
     sound: S(0.45, 1.2, 3.5, 700, 0.2, 0.3, 0, 0.25, 0.75, 0.1, -1.5),
   },
   stickystretch: {
@@ -331,13 +356,19 @@ export const MATERIAL_FAMILIES: Record<MaterialFamilyId, MaterialFamily> = {
     id: 'beadsqueeze', name: 'Bead Squeeze',
     blurb: 'A bag of tiny beads: it yields, rearranges with a crunch, firms up as it jams, and stays a little lumpy.',
     physics: P(15, 36, 0.18, 0.5, 0.3, 2.0, 0.25, 0.05, 2.5, 14, 36, 16, 0.40, 0.35, 1.4, 0.65, 0, 0, 0.2, 3.5, 0.35, 0.85, 0),
-    look: L(0.5, 0.3, 0.5, 0.3, 0.3, 0.3, 0, 0.9, 1.0, 0.25, 0.2, 0.5, 1.2),
+    look: L(0.35, 0.15, 0.5, 0.3, 0.3, 0.3, 0, 0.9, 1.0, 0.25, 0.2, 0.5, 1.2),
+    lookBounds: { translucencyMax: 0.5, why: 'a packed bed of beads scatters light like crushed ice or sugar (each bead may be clear, the bed is not): it glows from inside, but nothing reads through it' },
     sound: S(2.4, 0.3, 0.7, 5400, 1.0, 0, 0, 0, 0.9, 0, -2),
   },
 };
 
 /** The same table as an ordered array (roster order). */
 export const MATERIAL_LIST: readonly MaterialFamily[] = MATERIAL_FAMILY_IDS.map((id) => MATERIAL_FAMILIES[id]);
+
+/** Highest translucency a family can show (its LookBounds; 1 = unbounded). An unknown id answers for the fallback gel family (1). */
+export function translucencyMaxOf(familyId: string): number {
+  return isMaterialFamilyId(familyId) ? (MATERIAL_FAMILIES[familyId].lookBounds?.translucencyMax ?? 1) : 1;
+}
 
 /* ─────────────────────────────────── derived numbers, distance, feel ─────────────────────────────────── */
 
@@ -454,8 +485,9 @@ export interface SolverMaterial {
 }
 
 /**
- * The look numbers a consumer draws with. translucency, gloss, coreGlow and glitter are the GENOME's own values (the catalog's per-tier
- * rarity layer, never overridden by the family); the other seven come from the family.
+ * The look numbers a consumer draws with. gloss, coreGlow and glitter are the GENOME's own values (the catalog's per-tier rarity layer,
+ * never overridden by the family); translucency is the genome's value capped by the family's LookBounds (an opaque material stays
+ * opaque); the other seven come from the family.
  */
 export interface ResolvedLook {
   translucency: number; gloss: number; roughness: number; subsurface: number; fuzz: number; grain: number;
@@ -513,8 +545,10 @@ function modulate(b: MaterialParams, f: number, bo: number, s: number, z: number
  * Family x genome -> concrete numbers for physics, render and audio. Total (never throws, any family id, any half-built genome),
  * deterministic (no randomness, no clock) and monotone: raising firmness never lowers smOmega or volOmega, never raises
  * volBleedMax or edgeAlphaT; raising bounce never raises intDamp; raising stretch never lowers maxPull; and so on.
- * Look: the genome's translucency, gloss, coreGlow and glitter pass through unchanged (clamped to 0..1); a field the genome lacks
- * (missing or not finite) falls back to the family's reference value. The family supplies the surface fields the genome does not carry.
+ * Look: the genome's translucency, gloss, coreGlow and glitter pass through (clamped to 0..1); a field the genome lacks (missing or
+ * not finite) falls back to the family's reference value. AFTER that the family's LookBounds apply: translucency is capped at
+ * translucencyMax (opaque families only; the cap is monotone, so a clearer genome never resolves murkier). The family supplies the
+ * surface fields the genome does not carry.
  */
 export function resolveMaterial(familyId: string, genome: Genome): ResolvedMaterial {
   const known = isMaterialFamilyId(familyId);
@@ -527,7 +561,7 @@ export function resolveMaterial(familyId: string, genome: Genome): ResolvedMater
   const fl = fam.look;
   const own = (v: unknown, fallback: number): number => clamp(num(v, fallback), 0, 1);
   const look: ResolvedLook = {
-    translucency: own(g.translucency, fl.translucency),
+    translucency: Math.min(fam.lookBounds?.translucencyMax ?? 1, own(g.translucency, fl.translucency)),
     gloss: own(g.gloss, fl.gloss),
     roughness: fl.roughness, subsurface: fl.subsurface, fuzz: fl.fuzz, grain: fl.grain, thickness: fl.thickness,
     blush: fl.blush, stretchPale: fl.stretchPale,

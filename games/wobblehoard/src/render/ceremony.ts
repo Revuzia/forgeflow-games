@@ -19,7 +19,7 @@ import type { BodyView } from './bodyview.ts';
 import type { Capsule } from './capsule.ts';
 import { FlashGovernor, rampEnvelope } from './flash.ts';
 import { linearToSrgb, genomePalette, type Rgb } from './oklch.ts';
-import type { Particles } from './particles.ts';
+import type { EmitSpec, Particles } from './particles.ts';
 import { LightPillar, PrismDome, TIER_STYLES, spectrum, tierIndex, type TierStyle } from './rarity.ts';
 import type { ScreenFx } from './screenfx.ts';
 
@@ -72,6 +72,13 @@ const MERGE_FRAMING = 1.12;
 const POP = { x0: -0.2, v0: 6.0 }, POP_CALM = { x0: -0.1, v0: 2.8 };
 /** How fast the merge result rises from the burst (m/s): ~0.15 above the pad before it lands (calm: a small lift). */
 const HOP_VY = 1.7, HOP_VY_CALM = 0.9;
+/**
+ * The merge result at the burst carries on the charged ball's light: the TIER tell glows through it and is released within 0.5 s, and
+ * the parents' lineage colour swirls through as a lighter accent fading over 0.9 s (a heavy or long mix of two far-apart hues, e.g. a
+ * coral tell or a pink parent over a green result, read as khaki mud).
+ */
+const TELL_AT_BURST = [0.55, 0.58, 0.62, 0.66, 0.7, 0.74];
+const MIX_AT_BURST = 0.25;
 
 const smooth = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
@@ -379,7 +386,7 @@ export class CapsuleRun extends Run {
     if (t >= burstAt && !this.burst) this.doBurst();
     if (this.burst) {
       // time-scale dip (physics and particles only)
-      const [dipScale, dipLen] = DIP[i];
+      const dipScale = DIP[i][0], dipLen = DIP[i][1];
       if (dipLen > 0 && !this.calm) {   // calm: no slow-motion at all (not even for the result's hop)
         const a = t - burstAt;
         const w = smooth(0, 0.04, a) * (1 - smooth(dipLen, dipLen + 0.09, a));
@@ -448,7 +455,7 @@ export class CapsuleRun extends Run {
     const u = v.mats.uniforms;
     u.uTierAmt.value = Math.max(0, (0.26 + 0.02 * this.style.index) * (1 - d.age / 0.9));
     u.uTierCol.value.setRGB(this.style.tell[0], this.style.tell[1], this.style.tell[2], THREE.LinearSRGBColorSpace);
-    v.extraPool = Math.max(0, 0.5 * (1 - d.age / 1.2));
+    v.extraPool = Math.max(0, 0.5 * (1 - d.age / 1.2)); v.extraPoolTell = 1;
   }
 
   protected finalize(skipped: boolean): void {
@@ -464,7 +471,7 @@ export class CapsuleRun extends Run {
     v.setVisible(true);
     v.proxy.setOffset(0, 0, 0); v.proxy.scale = 1; v.proxy.popFrom(0, 0);
     if (skipped || !this.drop.landed) v.proxy.inner.reset();
-    v.rarity.strength = 1; v.extraPool = 0; v.core.boost = 0;
+    v.rarity.strength = 1; v.extraPool = 0; v.extraPoolTell = 0; v.core.boost = 0;
     v.mats.uniforms.uTierAmt.value = 0; v.mats.uniforms.uMixAmt.value = 0;
     host.makePrimary(v);
     host.screen.setLight(0, 0, 0, 0);
@@ -487,6 +494,7 @@ export class MergeRun extends Run {
   private burst = false;
   private drop = { y: 0, vy: 0, landed: false, age: 0, hopped: false };
   private moteAcc = 0;
+  private readonly moteSpec: EmitSpec = { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, life: 0.55, size: 0.02, kind: 0, r: 1, g: 1, b: 1, a: 0.9, attract: 1, spin: 6, drag: 0.6, grav: 0, fade: 1 };
   private sparkled = false;
   private fadeIn = 0;
   private readonly mixCol: Rgb;
@@ -602,7 +610,7 @@ export class MergeRun extends Run {
       const u = ball.mats.uniforms;
       u.uTierCol.value.setRGB(tellOk ? st.tell[0] : 1, tellOk ? st.tell[1] : 0.88, tellOk ? st.tell[2] : 0.68, THREE.LinearSRGBColorSpace);
       u.uTierAmt.value = 0.95 * p2 * p2 * (3 - 2 * p2);          // the light drifts toward the result tier colour
-      ball.extraPool = 0.5 * p2;
+      ball.extraPool = 0.5 * p2; ball.extraPoolTell = tellOk ? p2 : 0;
       // motes spiral inward
       const P = host.particles;
       P.ax = this.ballCx; P.ay = this.ballCy; P.az = this.ballCz; P.attractK = 24;
@@ -614,7 +622,13 @@ export class MergeRun extends Run {
         const col = st.prism ? spectrum(this.rng(), this.tmp) : st.tell;
         const w = p2;
         const mixr = this.mixCol[0] * (1 - w) + (st.prism ? col[0] : st.tell[0]) * w, mixg = this.mixCol[1] * (1 - w) + (st.prism ? col[1] : st.tell[1]) * w, mixb = this.mixCol[2] * (1 - w) + (st.prism ? col[2] : st.tell[2]) * w;
-        P.emit({ x: this.ballCx + Math.cos(a) * R, y: this.ballCy + (this.rng() - 0.4) * 0.6 * sc, z: this.ballCz + Math.sin(a) * R, vx: -Math.sin(a) * 1.4, vz: Math.cos(a) * 1.4, life: 0.55, size: (0.02 + 0.018 * this.rng()) * sc, kind: this.rng() < 0.4 ? 2 : 0, r: 0.35 + mixr * 1.4, g: 0.35 + mixg * 1.4, b: 0.35 + mixb * 1.4, a: 0.9, attract: 1, spin: 6, drag: 0.6, fade: 1 });
+        // one reused spec (this runs every frame of the charge: no per-mote object); same RNG call order as the literal it replaces
+        const e = this.moteSpec;
+        e.x = this.ballCx + Math.cos(a) * R; e.y = this.ballCy + (this.rng() - 0.4) * 0.6 * sc; e.z = this.ballCz + Math.sin(a) * R;
+        e.vx = -Math.sin(a) * 1.4; e.vz = Math.cos(a) * 1.4;
+        e.size = (0.02 + 0.018 * this.rng()) * sc; e.kind = this.rng() < 0.4 ? 2 : 0;
+        e.r = 0.35 + mixr * 1.4; e.g = 0.35 + mixg * 1.4; e.b = 0.35 + mixb * 1.4;
+        P.emit(e);
       }
       if (this.pillar) { const pp = smooth(b.t3 - 0.8 * this.ks, b.t3, t); this.pillar.set(this.ballCx, this.ballCz, 0.25, 3.2, st.tell, 0.3 * pp); }
       if (this.dome) this.dome.set(this.ballCx, this.ballCz, 0.7, 0.9, 0.8 * smooth(0, 1, p2), t);
@@ -622,7 +636,7 @@ export class MergeRun extends Run {
     // ---- T3 burst ----
     if (t >= b.t3 && !this.burst) this.doBurst();
     if (this.burst) {
-      const [dipScale, dipLen] = DIP[i];
+      const dipScale = DIP[i][0], dipLen = DIP[i][1];
       if (dipLen > 0 && !this.calm) {   // calm: no slow-motion at all (not even for the result's hop)
         const a = t - b.t3;
         ts = 1 - (1 - dipScale) * smooth(0, 0.04, a) * (1 - smooth(dipLen, dipLen + 0.09, a));
@@ -671,8 +685,9 @@ export class MergeRun extends Run {
     if (v.proxy.native.burst) v.proxy.burstOpen(this.calm ? 0.45 : 1); else v.proxy.popFrom(pop.x0, pop.v0);
     const mix = v.mats.uniforms;
     mix.uMixCol.value.setRGB(this.mixCol[0], this.mixCol[1], this.mixCol[2], THREE.LinearSRGBColorSpace);
-    mix.uMixAmt.value = 0.45;
-    mix.uTierAmt.value = 0.95;
+    mix.uMixAmt.value = MIX_AT_BURST;
+    mix.uTierAmt.value = TELL_AT_BURST[i];
+    v.extraPoolTell = 1;
     this.drop = { y: 0, vy: this.calm ? HOP_VY_CALM : HOP_VY, landed: false, age: 0, hopped: true };
     this.rings.push(...this.ringSchedule(this.b.t3));
     this.burstParticles(0, this.ballCy, 0, v.scale, v);
@@ -702,8 +717,9 @@ export class MergeRun extends Run {
     }
     this.fadeIn = Math.min(1, this.fadeIn + realDt / 0.3);   // the result's tier FX arrive UNDER the burst light, so the scene only dims after the flash
     v.rarity.strength = smooth(0, 1, this.fadeIn);
-    u.uTierAmt.value = Math.max(0, (0.32 + 0.025 * this.style.index) * (1 - d.age / 0.9));
-    u.uMixAmt.value = Math.max(0, 0.45 * (1 - d.age / 1.5));
+    const fall = 1 - smooth(0, 0.5, d.age);   // the tell is RELEASED by the burst (rings, pool, motes carry it on); the body is its own colour by ~0.5 s
+    u.uTierAmt.value = TELL_AT_BURST[this.style.index] * fall;
+    u.uMixAmt.value = MIX_AT_BURST * (1 - smooth(0, 0.9, d.age));
     v.extraPool = Math.max(0, 1.0 * (1 - d.age / 1.2));
     v.core.boost = Math.max(0, 0.5 * (1 - d.age / 0.7));
   }
@@ -721,7 +737,7 @@ export class MergeRun extends Run {
     v.setVisible(true);
     v.proxy.setOffset(0, 0, 0); v.proxy.scale = 1; v.proxy.popFrom(0, 0);
     if (skipped || !this.drop.landed) v.proxy.inner.reset();
-    v.rarity.strength = 1; v.extraPool = 0; v.core.boost = 0;
+    v.rarity.strength = 1; v.extraPool = 0; v.extraPoolTell = 0; v.core.boost = 0;
     v.mats.uniforms.uTierAmt.value = 0; v.mats.uniforms.uMixAmt.value = 0;
     host.makePrimary(v);
     host.screen.setLight(0, 0, 0, 0);

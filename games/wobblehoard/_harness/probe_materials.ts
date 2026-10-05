@@ -5,6 +5,7 @@
 import {
   DEFAULT_FAMILY_ID, LOOK_FIELDS, MATERIAL_FAMILIES, MATERIAL_FAMILY_IDS, MATERIAL_LIST, NOMINAL_SUBSTEP_S, PHYSICS_AXES, SOUND_FIELDS,
   applyMaterial, dentHoldDepth, effectivePoisson, feelOf, isMaterialFamilyId, materialDistance, materialVector, normalizeAxis, recoverySeconds95, resolveMaterial,
+  translucencyMaxOf,
 } from '../src/data/materials.ts';
 import type { MaterialFamily, MaterialFamilyId, MaterialParams, PhysicsKey, ResolvedMaterial, ScaleKey } from '../src/data/materials.ts';
 import { makeStarterGenome, randomGenome } from '../src/core/genome.ts';
@@ -142,18 +143,42 @@ check('hue, seed, pattern, eyes and glitter do not change physics or solver numb
 }
 
 // look: ONE source of truth per field. The genome's translucency / gloss / coreGlow / glitter (the catalog's per-tier rarity layer) are what
-// a consumer draws; the family supplies only the surface fields a genome lacks, and its four reference numbers are the fallback.
+// a consumer draws, except that a family that is opaque in the hand caps translucency AFTER the pass-through (LookBounds); the family supplies
+// only the surface fields a genome lacks, and its four reference numbers are the fallback.
 {
-  const PASS = ['translucency', 'gloss', 'coreGlow', 'glitter'] as const;
+  // the caps: exactly the families that are opaque or frosted in the hand, each at or above the family's own natural band (a cap only removes
+  // stylised excess), in 0..1, with a reason; the families that can be cast clear have none
+  const OPAQUE: readonly MaterialFamilyId[] = ['slowrise', 'marshmallow', 'mochidough', 'putty', 'beadsqueeze'];
+  const capOk = MATERIAL_FAMILY_IDS.every((id) => {
+    const b = MATERIAL_FAMILIES[id].lookBounds, l = MATERIAL_FAMILIES[id].look;
+    if (!OPAQUE.includes(id)) return b === undefined && translucencyMaxOf(id) === 1;
+    return !!b && b.translucencyMax > 0 && b.translucencyMax < 1 && l.translucency + l.translucencySpan <= b.translucencyMax + 1e-9 && b.why.length > 20 && translucencyMaxOf(id) === b.translucencyMax;
+  });
+  check(`look caps: exactly the opaque families are capped (${OPAQUE.map((id) => `${id} ${translucencyMaxOf(id).toFixed(2)}`).join(', ')}), each cap in 0..1, at or above the family's own natural band (reference + span), with a reason; clear families uncapped; unknown ids answer 1`,
+    capOk && translucencyMaxOf('nope') === 1 && translucencyMaxOf('__proto__') === 1,
+    OPAQUE.map((id) => `${id} natural top ${(MATERIAL_FAMILIES[id].look.translucency + MATERIAL_FAMILIES[id].look.translucencySpan).toFixed(2)}`).join(', '));
+  const PASS = ['gloss', 'coreGlow', 'glitter'] as const;
   const SURFACE = ['roughness', 'subsurface', 'fuzz', 'grain', 'thickness', 'blush', 'stretchPale'] as const;
-  let passOk = true, surfOk = true, n = 0, firstBad = '';
+  let passOk = true, capApplied = true, surfOk = true, n = 0, firstBad = '', clipped = 0;
   const gs: Genome[] = [...CATALOG.map((d) => speciesTemplateGenome(d.id)), ...CATALOG.map((d) => speciesBaseGenome(d.id, 99)), ...Array.from({ length: 300 }, (_, i) => randomGenome(i + 1))];
   for (const g of gs) for (const id of MATERIAL_FAMILY_IDS) {
     const r = resolveMaterial(id, g); n++;
     for (const k of PASS) if (r.look[k] !== Math.min(1, Math.max(0, g[k]))) { passOk = false; firstBad ||= `${id}/${g.species}.${k}: ${r.look[k]} vs genome ${g[k]}`; }
+    const t = Math.min(1, Math.max(0, g.translucency)), cap = translucencyMaxOf(id);
+    if (r.look.translucency !== Math.min(cap, t)) { capApplied = false; firstBad ||= `${id}/${g.species}.translucency: ${r.look.translucency} vs min(${cap}, ${t})`; }
+    if (t > cap) clipped++;
     for (const k of SURFACE) if (r.look[k] !== MATERIAL_FAMILIES[id].look[k]) surfOk = false;
   }
-  check(`look pass-through: resolved translucency / gloss / coreGlow / glitter equal the genome's own values for ${n} (genome, family) pairs (no family override of the rarity layer)`, passOk, firstBad);
+  check(`look pass-through: resolved gloss / coreGlow / glitter equal the genome's own values for ${n} (genome, family) pairs (no family override of the rarity layer)`, passOk, firstBad);
+  check(`look cap: resolved translucency = min(family cap, genome translucency) for the same ${n} pairs (the genome's value whenever it is under the cap; ${clipped} pairs clipped, all of them a genome resolved under a family it does not belong to or a random genome)`, capApplied, firstBad);
+  {
+    // the cap never bites on the catalog's own species (their bases sit under it with the whole band; probe_catalog checks every instance)
+    const bit = CATALOG.filter((d) => speciesTemplateGenome(d.id).translucency > translucencyMaxOf(d.family) || speciesBaseGenome(d.id, 99).translucency > translucencyMaxOf(d.family)).map((d) => d.id);
+    check('the cap never bites on a catalog species in its own family (template and an instance)', bit.length === 0, bit.join(' '));
+    const ask = withG({ translucency: 1 });
+    check('an opaque material stays opaque: a genome asking for translucency 1 resolves to the cap (slow-rise foam 0.30, marshmallow 0.40, putty 0.30) and to 1 in the clear gel',
+      resolveMaterial('slowrise', ask).look.translucency === 0.3 && resolveMaterial('marshmallow', ask).look.translucency === 0.4 && resolveMaterial('putty', ask).look.translucency === 0.3 && resolveMaterial('jellygel', ask).look.translucency === 1);
+  }
   check('look: the family supplies roughness, subsurface, fuzz, grain, thickness, blush and stretch-pale unchanged', surfOk);
   const half = { species: 'dollop', firmness: 0.5 } as unknown as Genome;
   const fb = MATERIAL_FAMILY_IDS.every((id) => { const r = resolveMaterial(id, half).look, f = MATERIAL_FAMILIES[id].look; return r.translucency === f.translucency && r.gloss === f.gloss && r.coreGlow === Math.min(1, 0.5 * f.coreGlow) && r.glitter === Math.min(1, 0.5 * f.glitter); });

@@ -66,9 +66,11 @@ export interface SoftParams {
    *  happens, so the rest pose and every interaction near the centre are untouched. Beyond it, ramping in over `matRamp` metres, the
    *  body's outward horizontal speed is braked at `matBrake` 1/s and the body glides back toward the dead zone at up to `matGlide` m/s (never under 10% of it, so it arrives and stops).
    *  Both act on the WHOLE body alike (a uniform velocity change, a rigid translation), so nothing deforms and the table friction never
-   *  sees it; both are off while a finger, a grab or the pinned feet hold the body, and in float mode (which has its hover spring).
-   *  Past `matRim` metres the outward speed is removed outright and the glide is 4x faster: a hard bound for hostile input (a 12 m/s nudge
-   *  every frame), never reached by a single nudge. matBrake = matGlide = 0 (and matRim huge) disables it (the probe compares).
+   *  sees it; both are off while something holds the body (a fingertip touching it, a grab, the pinned feet) and in float mode (which has
+   *  its hover spring). Past `matRim` metres the outward speed is removed outright and the glide is 4x faster: a hard bound for hostile
+   *  input (a 12 m/s nudge every frame), never reached by a single nudge; it also acts while a finger is down but its tip touches nothing
+   *  (the body was shoved out from under it: a finger that is merely down holds nothing, and without this a nudge carried the body 5.5 m).
+   *  matBrake = matGlide = 0 (and matRim huge) disables it (the probe compares).
    *  Not genome-dependent. */
   matR0: number; matRamp: number; matBrake: number; matGlide: number; matRim: number;
   /** THIN-PART STRUTS (struts.ts, softbody.ts strutPass): chords through the inside of the thin floppy parts (the swirl-peak), so the skin
@@ -125,11 +127,13 @@ export function deriveParams(genome: Genome): SoftParams {
     // tuned (probe 'mat corral' rows): a 12 m/s nudge (the nudge() clamp) carried the body 3-6.6 m and ten 4 m/s shoves 9 m with no corral;
     // these keep the worst case inside ~2.5 m and bring a body back from 2.5 m to the dead zone in a few seconds
     matR0: 0.6, matRamp: 0.6, matBrake: 6, matGlide: 0.35, matRim: 2.5,
-    // tuned (probe 'hard side shove' row, physview peak_shove): without struts a pressure-1 shove 6 cm under the tip of a soft peak collapsed
-    // its walls (edges at 29% of their length) and the apex folded 138-150 degrees as it whipped over; strutMin 0.85..0.95 all fix it
-    // (worst 111..115), 0.9 is the middle. strutPer 3 / strutMaxR 0.5 / strutCos 0.2 give 115 struts at detail 3 (461 at detail 4) and leave
-    // the flop of the starter (28.4% R) unchanged; strutTau 0.5 = the upper half of the floppy zone (the cone itself, not its base, which must
-    // bend).
+    // tuned (probe 'hard side shove' and 'dense press matrix' rows, physview peak_shove): without struts a pressure-1 shove 6 cm under the tip
+    // of a soft peak collapsed its walls (edges at 29% of their length) and the apex folded 138-150 degrees as it whipped over, and a hold or
+    // a rub at the peak base of a soft genome folded 116-132 degrees; strutMin 0.85..0.95 all fix the shove (worst 111..115 at detail 3),
+    // 0.9 is the middle. strutPer: 3 left the detail-4 shove at 116 degrees, 4 at 114, 5 at 112 (169 struts at detail 3, 733 at detail 4).
+    // strutCos 0.4 (only steep chords) let the soft shove fold again (173 degrees): the chords across the cone are the shallow ones.
+    // strutTau 0.5 = the upper half of the floppy zone (the cone itself, not its base, which must bend). The flop of the starter's peak under
+    // the gate's side poke is 31.5% R with them (28.4% without).
     strutTau: 0.5, strutMaxR: 0.5, strutPer: 5, strutCos: 0.2, strutMin: 0.9, strutAlphaT: 0.05,
   };
 }

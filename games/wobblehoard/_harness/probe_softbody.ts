@@ -18,6 +18,9 @@
 // shape's own maximum is 50.4 degrees (detail 3), 180 means a flap folded flat onto itself. Gated: fold at rest after every press of
 // the matrix, fold peak during it, the peak coming back to its rest height, the fuzz's settled bodies, and the fingertip kinematics
 // (a tip must move continuously when a pinch starts or ends, and never go below the table).
+// Round 4 (physics repair, 2026-10-05): a dense press matrix (48 points x tap / hold / rub x 3 genomes) with the same fold limits, and
+// the mat corral bound in the hostile fuzz (a body that nothing holds never moves outward past the rim). Both failed on the code before
+// the repair (132 deg / 7 frames over 120; 1.14 m), as did the hard side shove row (138 deg).
 //
 // Definitions the contract leaves open (all printed in the table):
 //   * "hard release": a finger presses the dome shoulder (and, separately, the swirl-peak) at pressure 1 for 1.0 s, then
@@ -587,6 +590,56 @@ function foldSubsteps(spec: FoldSpec): SubFoldResult {
   return res;
 }
 
+// ------------------------------------------------------------------------------------------------ round-4 regression checks (physics repair)
+// The dense press matrix the independent verifier asked for: 48 contact points spread over the whole upper surface and the flanks (a
+// Fibonacci spiral of directions down to 20 degrees under the equator; the ray comes from 4 R out and aims at the body centre), each pressed
+// as a tap, a hold and a rub (fingerMove swept 0.6 R back and forth across the contact), on the starter and on the two soft genome corners
+// that still folded at the start of the repair (f0b0s0 small and f0b0s1 large: 132 degrees and 6 frames over 120 under a rub at the peak
+// base). Same fold meter as the matrix above.
+interface DenseSpec { label: string; genome: Genome; mode: 'tap' | 'hold' | 'rub'; dir: V3 }
+function denseSpecs(starter: Genome): DenseSpec[] {
+  const G: Array<[string, Genome]> = [['starter', starter], ['f0b0s0z0', quantizeGenome({ ...starter, firmness: 0, bounce: 0, stretch: 0, size: 0 })],
+    ['f0b0s1z1', quantizeGenome({ ...starter, firmness: 0, bounce: 0, stretch: 1, size: 1 })]];
+  const dirs: V3[] = [];
+  const golden = Math.PI * (3 - Math.sqrt(5)), npts = 48;
+  for (let k = 0; dirs.length < npts; k++) {
+    const y = 1 - ((k + 0.5) / (npts * 1.6)) * 2, rr = Math.sqrt(1 - y * y), a = k * golden;
+    dirs.push(v3(rr * Math.cos(a), y, rr * Math.sin(a)));
+  }
+  const out: DenseSpec[] = [];
+  for (const [gn, g] of G) for (const mode of ['tap', 'hold', 'rub'] as const) dirs.forEach((d, i) => out.push({ label: `${gn}/${mode}/p${i} (${d.x.toFixed(2)}, ${d.y.toFixed(2)}, ${d.z.toFixed(2)})`, genome: g, mode, dir: d }));
+  return out;
+}
+function densePress(spec: DenseSpec): FoldResult {
+  const b = new SoftBody(spec.genome);
+  const m = makeFoldMeter(b);
+  settle(b, 0.5);
+  const R = b.restRadius, c = b.center, d = spec.dir;
+  const dir = v3(-d.x, -d.y, -d.z);
+  const hit = b.raycast(v3(c.x + d.x * 4 * R, c.y + d.y * 4 * R, c.z + d.z * 4 * R), dir);
+  const res: FoldResult = { label: spec.label, missed: !hit, worst: 0, f90: 0, f120: 0, restWorst: 0, restN90: 0, restInward: 0, topErr: 0 };
+  if (!hit) return res;
+  b.fingerDown(0, { point: hit.point, normal: hit.normal, dir });
+  let tx = -dir.z, tz = dir.x;
+  const tl = Math.hypot(tx, tz);
+  if (tl < 1e-6) { tx = 1; tz = 0; } else { tx /= tl; tz /= tl; }
+  const T = spec.mode === 'tap' ? 2.5 : spec.mode === 'hold' ? 3.5 : 3, tUp = spec.mode === 'tap' ? 0.12 : spec.mode === 'hold' ? 1.1 : 0.9;
+  let up = false;
+  for (let s = 0, t = 0; t < T; s++) {
+    if (!up) b.fingerPressure(0, spec.mode === 'hold' ? Math.min(1, t / 0.9) : 0.6);
+    if (spec.mode === 'rub' && !up && t > 0.15) { const k = Math.sin(((t - 0.15) * 2 * Math.PI) / 0.75) * 0.6 * R; b.fingerMove(0, v3(hit.point.x + tx * k, hit.point.y, hit.point.z + tz * k)); }
+    if (!up && t >= tUp) { up = true; b.fingerUp(0); }
+    b.step(DT); t = (s + 1) * DT;
+    const f = foldOf(b, m);
+    if (f.worst > res.worst) res.worst = f.worst;
+    if (f.worst > 90) res.f90++;
+    if (f.worst > 120) res.f120++;
+  }
+  const f = foldOf(b, m);
+  res.restWorst = f.worst; res.restN90 = f.n90; res.restInward = f.inward;
+  return res;
+}
+
 /** A short scripted session: hashes at checkpoints and every event (kind, finger, intensity) in order. */
 function sessionLog(b: SoftBody): { hashes: number[]; events: string[] } {
   const hashes: number[] = [], events: string[] = [], buf: SoftEvent[] = [];
@@ -869,7 +922,7 @@ function corralRun(spec: CorralSpec): CorralResult {
   return { label: spec.label, kind: spec.kind, max, end: Math.hypot(b.center.x, b.center.z), stopMm: mm * 1000, shapePct: shapeFit(b) * 100, finite };
 }
 
-interface HostileResult { label: string; steps: number; fails: string[]; hashes: number[]; events: number; maxTable: number; maxAny: number; settleT: number; settledVol: number; flipped: number; shapePct: number }
+interface HostileResult { label: string; steps: number; fails: string[]; hashes: number[]; events: number; maxTable: number; maxAny: number; settleT: number; settledVol: number; flipped: number; shapePct: number; freeOut: number; freeAt: string }
 /**
  * The independent verifier's hostile fuzz (was _harness/verify_phys_fuzz.ts): an extreme genome (firmness, bounce, stretch, size each 0 or 1),
  * 0..3 random calls per frame: fingers anywhere (also off the body, zero direction), pressure jumps incl. -3 and 7, moves onto the OTHER
@@ -892,6 +945,10 @@ function hostileRun(idx: number, steps: number): HostileResult {
   const lastPt: V3[] = [v3(0, R, 0), v3(0, R, 0)];
   const lastEv = new Map<string, { t: number; dt: number }>();
   let clock = 0, curDt = 0, events = 0, maxTable = 0, maxAny = 0;
+  // the mat corral bound, from the public side: while NOTHING holds the body (gravity on, no grab and none for pinHold + 0.1 s, so no pinned
+  // feet; no fingertip with a vertex on or in it) its centre may not move outward past max(rim, where it was let go)
+  let lastHeld = -1e9, freeFrom = -1, freeOut = -1e9, freeAt = '';
+  const rimR = b.params.matRim, pinHold = b.params.pinHold;
   const rayAtBody = (): { point: V3; normal: V3; dir: V3 } | null => {
     const c = b.center, u = unit(), o = v3(c.x + u.x * 3 * R, c.y + u.y * 3 * R, c.z + u.z * 3 * R), j = 0.35 * R;
     const t = v3(c.x + (rng() - 0.5) * j, c.y + (rng() - 0.5) * j, c.z + (rng() - 0.5) * j);
@@ -909,6 +966,20 @@ function hostileRun(idx: number, steps: number): HostileResult {
     if (minY(b) < -0.01 * R) { fail(`table penetration ${(-minY(b) / R * 100).toFixed(2)}% R @${where}`); return false; }
     const d = Math.hypot(b.center.x, b.center.z);
     maxAny = Math.max(maxAny, d); if (b.gravity) maxTable = Math.max(maxTable, d);
+    let touched = false;
+    for (const id of [0, 1] as const) {
+      const tp = b.tip(id);
+      if (!tp) continue;
+      const r2 = (tp.r + 0.002) * (tp.r + 0.002);
+      for (let i = 0; i < P.length && !touched; i += 3) if ((P[i] - tp.x) ** 2 + (P[i + 1] - tp.y) ** 2 + (P[i + 2] - tp.z) ** 2 <= r2) touched = true;
+    }
+    if (m.grabbed) lastHeld = clock;
+    if (!b.gravity || touched || clock - lastHeld < pinHold + 0.1) freeFrom = -1;
+    else {
+      if (freeFrom < 0) freeFrom = d;
+      const out = d - Math.max(rimR, freeFrom);
+      if (out > freeOut) { freeOut = out; freeAt = `${where}: ${d.toFixed(2)} m, let go at ${freeFrom.toFixed(2)} m`; }
+    }
     return true;
   };
   let ok = true;
@@ -962,7 +1033,7 @@ function hostileRun(idx: number, steps: number): HostileResult {
     b.fingerUp(0); b.fingerUp(1); b.grabRelease(0); b.grabRelease(1); b.gravity = true;
     let quiet = 0;
     for (let i = 0, t = 0; i < 8 * 60; i++) {
-      b.step(DT); t += DT;
+      b.step(DT); t += DT; clock += DT;
       if (!check(`settle ${t.toFixed(2)} s`)) { ok = false; break; }
       if (b.metrics.kinetic < 0.02) { if (quiet === 0) settleT = t; quiet++; } else { quiet = 0; settleT = -1; }
     }
@@ -978,7 +1049,7 @@ function hostileRun(idx: number, steps: number): HostileResult {
     }
   }
   hashes.push(b.stateHash());
-  return { label, steps, fails, hashes, events, maxTable, maxAny, settleT, settledVol, flipped, shapePct };
+  return { label, steps, fails, hashes, events, maxTable, maxAny, settleT, settledVol, flipped, shapePct, freeOut, freeAt };
 }
 
 /** Triangles whose normal turned > 120 degrees from its rest normal (after the best-fit rotation is removed). */
@@ -1196,9 +1267,11 @@ function pressReaction(starter: Genome): { restPress: number; restReact: number;
 // ------------------------------------------------------------------------------------------------ worker pool
 
 type Job = { type: 'squeeze'; spec: SqueezeSpec } | { type: 'fuzz'; index: number; nEvents: number } | { type: 'fold'; spec: FoldSpec }
-  | { type: 'fold2'; spec: FoldSpec } | { type: 'foldsub'; spec: FoldSpec } | { type: 'corral'; spec: CorralSpec } | { type: 'hostile'; index: number; steps: number; replay: boolean };
+  | { type: 'fold2'; spec: FoldSpec } | { type: 'foldsub'; spec: FoldSpec } | { type: 'corral'; spec: CorralSpec } | { type: 'hostile'; index: number; steps: number; replay: boolean }
+  | { type: 'dense'; spec: DenseSpec };
 type JobResult = { type: 'squeeze'; res: SqueezeResult } | { type: 'fuzz'; res: { stats: FuzzStats; hash: number } } | { type: 'fold'; res: FoldResult }
-  | { type: 'fold2'; res: FoldResult } | { type: 'foldsub'; res: SubFoldResult } | { type: 'corral'; res: CorralResult } | { type: 'hostile'; res: HostileResult; replayHashes: number[] | null };
+  | { type: 'fold2'; res: FoldResult } | { type: 'foldsub'; res: SubFoldResult } | { type: 'corral'; res: CorralResult } | { type: 'hostile'; res: HostileResult; replayHashes: number[] | null }
+  | { type: 'dense'; res: FoldResult };
 function runJob(j: Job): JobResult {
   switch (j.type) {
     case 'squeeze': return { type: 'squeeze', res: hardRelease(j.spec) };
@@ -1208,6 +1281,7 @@ function runJob(j: Job): JobResult {
     case 'foldsub': return { type: 'foldsub', res: foldSubsteps(j.spec) };
     case 'corral': return { type: 'corral', res: corralRun(j.spec) };
     case 'hostile': return { type: 'hostile', res: hostileRun(j.index, j.steps), replayHashes: j.replay ? hostileRun(j.index, j.steps).hashes : null };
+    case 'dense': return { type: 'dense', res: densePress(j.spec) };
   }
 }
 
@@ -1572,6 +1646,8 @@ async function main(): Promise<void> {
       }
     }
     for (let i = 0; i < 16; i++) jobs.push({ type: 'hostile', index: i, steps: HOSTILE_STEPS, replay: i % 4 === 0 });
+    // round 4: the dense press matrix (48 points x tap / hold / rub x 3 genomes)
+    for (const spec of denseSpecs(starter)) jobs.push({ type: 'dense', spec });
     const t1 = performance.now();
     const results = await runPool(jobs, nWorkers);
     const secs = (performance.now() - t1) / 1000;
@@ -1647,6 +1723,10 @@ async function main(): Promise<void> {
       const sb = results.filter((r): r is Extract<JobResult, { type: 'foldsub' }> => r.type === 'foldsub').map((r) => r.res);
       const wsb = sb.reduce((a, c) => (c.worst > a.worst ? c : a));
       add('G1', `fold at SUBSTEP resolution (every 1/360 s, not just the frames a renderer samples) for the ${sb.length} presses that folded or crushed the peak (${wsb.label}; its frame-sampled worst ${f2(wsb.frameWorst, 0)} deg)`, `${f2(wsb.worst, 0)} deg, ${sb.reduce((a, c) => a + c.sub120, 0)} substeps over 120 deg`, '<= 120 deg, 0', wsb.worst <= 120 && sb.every((r) => r.sub120 === 0 && !r.missed));
+      const dn = results.filter((r): r is Extract<JobResult, { type: 'dense' }> => r.type === 'dense').map((r) => r.res);
+      const wdn = dn.reduce((a, c) => (c.worst > a.worst ? c : a)), ldn = dn.reduce((a, c) => (c.f120 > a.f120 ? c : a)), rdn = dn.reduce((a, c) => (c.restWorst > a.restWorst ? c : a));
+      add('G1', `dense press matrix (${dn.length} presses: 48 points over the upper surface and the flanks x tap / hold / rub x the starter and the soft corners f0b0s0z0, f0b0s1z1; was 132 deg and 7 frames over 120 at the start of the repair, all at the peak base): sharpest crease (${wdn.label}), frames over 120 deg (most in one press: ${ldn.label}), missed rays`, `${f2(wdn.worst, 0)} deg, ${dn.reduce((a, c) => a + c.f120, 0)} frames (max ${ldn.f120}), ${dn.filter((r) => r.missed).length} missed`, '<= 115 deg, 0 frames, 0', wdn.worst <= 115 && dn.every((r) => r.f120 === 0 && !r.missed));
+      add('G1', `dense press matrix: left at rest after the lift (${rdn.label}); edges over 90 deg, inward triangles`, `${f2(rdn.restWorst, 0)} deg, ${dn.reduce((a, c) => a + c.restN90, 0)}, ${dn.reduce((a, c) => a + c.restInward, 0)}`, `<= ${FOLD_REST_MAX} deg, 0, 0`, rdn.restWorst <= FOLD_REST_MAX && dn.every((r) => r.restN90 === 0 && r.restInward === 0));
       const cr = results.filter((r): r is Extract<JobResult, { type: 'corral' }> => r.type === 'corral').map((r) => r.res);
       const one = cr.filter((r) => r.kind !== 'hammer'), ham = cr.filter((r) => r.kind === 'hammer');
       const wo = one.reduce((a, c) => (c.max > a.max ? c : a)), wh = ham.reduce((a, c) => (c.max > a.max ? c : a));
@@ -1659,7 +1739,9 @@ async function main(): Promise<void> {
       const det = ho.filter((r) => r.replayHashes).every((r) => r.replayHashes!.length === r.res.hashes.length && r.replayHashes!.every((h, i) => h === r.res.hashes[i]));
       add('G1', `hostile fuzz (the independent verifier's, was verify_phys_fuzz.ts): 16 extreme genomes x ${HOSTILE_STEPS} frames, fingers anywhere, pressure flicker, crossing fingers, far grabs, nudges up to 1e6, dt in {0, 0.5, 5, 1/240..1/10}; ${ho.reduce((a, c) => a + c.res.events, 0)} events checked; every frame finite, not inverted, not under the table, valid events, no spam; settles, volume, no flipped triangle, shape`, hf.length ? hf.slice(0, 4).join('; ') : `0 failures (slowest settle ${f2(Math.max(...ho.map((r) => r.res.settleT)), 2)} s, worst shape ${f2(Math.max(...ho.map((r) => r.res.shapePct)), 2)} % R)`, '0 failures', hf.length === 0);
       add('G1', 'hostile fuzz determinism: 4 genomes replayed -> identical stateHash at every checkpoint', `${det}`, 'true', det);
-      add('info', 'hostile fuzz: farthest horizontal centre excursion on the table / in any mode (float mode is unchanged by the corral and has no rim)', `${f2(Math.max(...ho.map((r) => r.res.maxTable)), 2)} m / ${f2(Math.max(...ho.map((r) => r.res.maxAny)), 2)} m`, '(information)', true);
+      add('info', 'hostile fuzz: farthest horizontal centre excursion on the table / in any mode (float mode is unchanged by the corral and has no rim; a grab, the pinned feet or a fingertip touching the body may hold it anywhere)', `${f2(Math.max(...ho.map((r) => r.res.maxTable)), 2)} m / ${f2(Math.max(...ho.map((r) => r.res.maxAny)), 2)} m`, '(information)', true);
+      const wf = ho.reduce((a, c) => (c.res.freeOut > a.res.freeOut ? c : a));
+      add('G1', `hostile fuzz, mat corral: while NOTHING holds the body (gravity on, no grab or pinned feet, no fingertip touching it) its centre never moves outward past the 2.5 m rim or past where it was let go, whichever is farther (${wf.res.label} ${wf.res.freeAt}; was 1.14 m: a finger that was down but no longer touching the shoved body switched the corral off)`, `${f2(Math.max(0, wf.res.freeOut) * 1000, 0)} mm`, '<= 50 mm', wf.res.freeOut <= 0.05);
     }
 
     let st = emptyStats();

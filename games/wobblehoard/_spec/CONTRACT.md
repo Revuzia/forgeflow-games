@@ -315,9 +315,12 @@ While a lane's collaborators are unfinished, code against `src/contracts.ts` and
   style; `decodeGenome` accepts only the exact string `encodeGenome` writes (no alias spellings); `canonicalGenome` validates a genome from outside.
   Genomes compare with `genomeEquals` (equal canonical forms), never with `JSON.stringify`.
 * `src/data/materials.ts`, `src/data/shapes.ts`: the 12 material families and the rest-shape language (4.2). **One source per look field:**
-  `resolveMaterial(family, genome).look` passes the genome's translucency, gloss, coreGlow and glitter through unchanged (the species look in
-  `catalog.ts`, so the tier ordering of DESIGN 5.3 holds in what the renderer gets; `probe_catalog.ts` checks the resolved tier means); the family
-  supplies only the surface fields a genome does not carry (roughness, subsurface, fuzz, grain, thickness, blush, stretchPale).
+  `resolveMaterial(family, genome).look` passes the genome's translucency, gloss, coreGlow and glitter through (the species look in
+  `catalog.ts`, so the tier ordering of DESIGN 5.3 holds in what the renderer gets), then caps translucency at the family's
+  `lookBounds.translucencyMax` (`translucencyMaxOf(family)`: physically opaque families such as slow-rise foam, marshmallow, putty, mochi dough and
+  bead squeeze stay frosted; their tier shows through core glow, glitter and gloss, and `probe_catalog.ts` checks those tier means per family). The
+  family supplies only the surface fields a genome does not carry (roughness, subsurface, fuzz, grain, thickness, blush, stretchPale). The renderer
+  must draw from the resolved look (or apply the same cap) and must not add per-tier translucency beyond the cap: not yet done in src/render (open).
 * `src/data/palette.ts`: genome to body and core colour (OKLCH formulas); `src/render/oklch.ts` must draw with exactly these. `probe_catalog.ts`
   compares the two every run and reports a drift as SEAM-DRIFT; it fails the run only with `WH_STRICT_SEAMS=1` (integration runs), because the fix
   belongs to the render lane.

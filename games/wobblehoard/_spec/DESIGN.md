@@ -219,8 +219,8 @@ Tier is never colour-only: each also has a **gem shape**, a **text label** and a
 | Tier | Body material | Core and inner light | Aura and floor light | Sparkle | Idle motion | UI gem and frame |
 |---|---|---|---|---|---|---|
 | **Common** | Plain jelly, matte-gloss, one hue | Dim core | Plain contact shadow | None | Blink, breathe | Circle, cream frame |
-| **Uncommon** | A little more translucency | Warm core | Faint tinted light pool | A few glitter flecks inside | Blink, breathe | Diamond, lagoon frame |
-| **Rare** | Deeper transmission, rim glow, speckle or swirl layer | Visible glowing "seed" core | Soft rim halo | Moderate glitter | Core pulses slowly (under 0.5 Hz) | Hexagon, dusk-violet frame |
+| **Uncommon** | A little more translucency (clear-capable families; opaque families: a touch more gloss) | Warm core | Faint tinted light pool | A few glitter flecks inside | Blink, breathe | Diamond, lagoon frame |
+| **Rare** | Deeper transmission (clear-capable families; opaque families stay frosted under their family cap), rim glow, speckle or swirl layer | Visible glowing "seed" core | Soft rim halo | Moderate glitter | Core pulses slowly (under 0.5 Hz) | Hexagon, dusk-violet frame |
 | **Epic** | Two-tone gradient body, stronger pressure blush | Bloom on the core | 3 to 5 slow orbiting motes; caustic ring on the table | Glitter drifts upward | Motes trail when it moves | Four-point star, ember-coral frame |
 | **Legendary** | Slow **aurora** gradient moving inside the body | Bright core, faint light pillar on idle | Ring on the table pulses at 0.25 Hz | Dense glitter, short spark trail | Settles with a visible wobble ring | Six-point star, sodium-amber frame |
 | **Mythic** | **Thin-film iridescence** (hue shifts with view angle) | Prism core | Soft light dome; small orbiting satellite sphere(s) | Constellation of fixed star points inside | Own idle hum (audio), slow breathing glow | Eight-point prism, slowly rotating frame |

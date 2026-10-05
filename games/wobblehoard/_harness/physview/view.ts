@@ -2,7 +2,8 @@
 // (cyan = compressed, red = stretched), a dim wireframe ghost of the rest shape, the table, and the finger-tip spheres.
 // It is driven by a scripted scenario from the URL (?scn=<name>, see SCENARIOS: side_poke, hold_squash, pull_lobe, peak_flop, float_shove,
 // pinch, the fold regressions top_peak_poke / top_peak_hold / hold_close / peak_rest_close / pinch_stagger / peak_shove / hold_shoulder,
-// the close-ups tap_close / press_close (?px=), edge_low, edge_rim, fast_tap1, fast_tap3, rub, pull_far, pull_peak and mat_nudge)
+// the close-ups tap_close / press_close (?px=), edge_low, edge_rim, fast_tap1, fast_tap3, rub, pull_far, pull_peak and mat_nudge,
+// and the peak-region gestures rub_peak / pinch_peak / tip_tap)
 // and steps the sim with a FIXED dt of 1/60 s (no wall clock), so the filmstrips are reproducible.
 // Extra URL params: ?p=<json SoftParams override> ?f=<json FINGER override> ?g=<genome seed or g1.code> ?gf= ?gb= ?gs= ?gz= (firmness, bounce,
 // stretch, size overrides) ?detail=<3|4> ?px=<press x offset for hold_squash / hold_close / peak_rest_close / tap_close / press_close>
@@ -299,6 +300,46 @@ const SCENARIOS: Record<string, Scenario> = {
       if (t >= 0.4 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(0.3 + PX, 3, 0), v3(0, -1, 0)); }
       if (c.n.down && !c.n.up) b.fingerPressure(0, clamp01((t - 0.4) / 0.9));
       if (t >= 1.4 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
+  // ---- round 4 (physics repair): the peak region under the gestures the dense press matrix of probe_softbody covers ----
+  // a rub across the base of the swirl-peak: pressed from above at x=-0.2, dragged through the peak to x=+0.3 and back, up at 1.5 s
+  rub_peak: {
+    title: 'rub across the peak base: press at x=-0.2 (0.30 s, pressure 0.6), drag to x=+0.3 and back (0.5-1.3 s), up at 1.5 s',
+    frames: [0.35, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.35, 1.55, 1.9],
+    camDist: 2.2, camTarget: [0.05, 0.75, 0], yawDeg: 24, pitchDeg: 22,
+    tick(t, b, c) {
+      if (t >= 0.3 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(-0.2, 3, 0), v3(0, -1, 0)); }
+      if (c.n.down && !c.n.up) {
+        b.fingerPressure(0, 0.6);
+        if (t >= 0.5) { const k = t < 0.9 ? (t - 0.5) / 0.4 : Math.max(0, 1 - (t - 0.9) / 0.4); const h = b.raycast(v3(-0.2 + 0.5 * k, 3, 0), v3(0, -1, 0)); if (h) b.fingerMove(0, h.point); }
+      }
+      if (t >= 1.5 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
+  // a pinch AT the swirl-peak: two fingers from -x and +x, 8 cm under the tip (scaled with the body), ramp 0.4 s, release 1.2 s
+  pinch_peak: {
+    title: 'pinch at the swirl-peak (two fingers 8 cm under the tip, ramp from 0.30 s, release 1.20 s)',
+    frames: [0.32, 0.38, 0.45, 0.55, 0.7, 0.9, 1.15, 1.22, 1.28, 1.36, 1.5, 1.9],
+    camDist: 2.2, camTarget: [0.05, 0.75, 0], yawDeg: 24, pitchDeg: 18,
+    tick(t, b, c) {
+      const y = 0.94 * b.restRadius / 0.5125;
+      if (t >= 0.3 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(-3, y, 0), v3(1, 0, 0)); touch(b, 1, v3(3, y, 0), v3(-1, 0, 0)); }
+      if (c.n.down && !c.n.up) { const p = clamp01((t - 0.3) / 0.4) * 0.9; b.fingerPressure(0, p); b.fingerPressure(1, p); }
+      if (t >= 1.2 && !c.n.up) { c.n.up = 1; b.fingerUp(0); b.fingerUp(1); }
+    },
+  },
+  // the very tip of the peak, from straight above (the tip leans to x ~ 0.04): a tap, then a fast double tap 0.12 s apart
+  tip_tap: {
+    title: 'taps on the very tip (x=0.04): one at 0.30 s (pressure 0.6, 0.12 s), a double tap at 1.0 / 1.12 s (pressure 1, 50 ms each)',
+    frames: [0.3, 0.33, 0.37, 0.42, 0.5, 0.7, 1.0, 1.03, 1.08, 1.13, 1.2, 1.6],
+    camDist: 2.0, camTarget: [0.05, 0.8, 0], yawDeg: 24, pitchDeg: 22,
+    tick(t, b, c) {
+      const tap = (key: string, t0: number, len: number, p: number): void => {
+        if (t >= t0 && !c.n[key]) { c.n[key] = 1; touch(b, 0, v3(0.04, 3, 0), v3(0, -1, 0)); b.fingerPressure(0, p); }
+        if (c.n[key] === 1 && t >= t0 + len) { c.n[key] = 2; b.fingerUp(0); }
+      };
+      tap('a', 0.3, 0.12, 0.6); tap('b', 1.0, 0.049, 1); tap('c', 1.12, 0.049, 1);
     },
   },
 };

@@ -7,22 +7,27 @@
 //   1. NEVER reorder, delete or reuse an entry. A species that must disappear stays here with its idx.
 //   2. New species are APPENDED at the end (idx = previous length, max MAX_SPECIES_IDX), in any tier, together with their CATALOG entry.
 //   3. The id (slug) of an existing entry is frozen once anything outside this repository stores it (a save, a server row, a trade).
-//      The one pre-release exception (2026-10, before any save or server row held a catalog species): the language-safety review
-//      (see _harness/probe_catalog.ts section 7) gave new slugs and names to idx 15 (Flickum -> Tadpolo), idx 18 (Peakum -> Sproutle),
-//      idx 20 (Fluffnut -> Acornel) and idx 36 (Maracon -> Rattlebead). Their idx bytes did not change, so every share string ever
-//      written still decodes to the same position. A slug also salts speciesBaseGenome (catalog.ts), so the rename re-rolled those four
-//      species' (seed -> genome) mapping; nothing stored a (species, seed) pair yet. After launch a rename needs a legacy-id alias in
-//      getSpecies() AND must keep the old salt, or every stored instance of that species would change look.
-//   4. _harness/probe_catalog.ts holds a locked copy of this list (IDX_LOCK) and pins a few share strings byte for byte.
+//      The one pre-release exception (2026-10, before any save or server row held a catalog species), made in two batches:
+//        a. the language-safety review (see _harness/probe_catalog.ts section 7) gave new slugs and names to idx 15 (Flickum -> Tadpolo),
+//           idx 18 (Peakum -> Sproutle), idx 20 (Fluffnut -> Acornel) and idx 36 (Maracon -> Rattlebead);
+//        b. the originality screen against the FULL official Pokemon list (all 1025 species, _harness/data/deny_pokemon.json; 2026-10-05)
+//           gave new slugs and names to idx 4 (Glubbin -> Glugbean: one letter from Grubbin), idx 12 (Sproink -> Boingle: one letter
+//           from Spoink) and idx 32 (Drowsel -> Slumbrel: read aloud, one sound from Drowzee).
+//      Their idx bytes did not change, so every share string ever written still decodes to the same position. A slug also salts
+//      speciesBaseGenome (catalog.ts), so each rename re-rolled that species' (seed -> genome) mapping; nothing stored a (species, seed)
+//      pair yet. After launch a rename needs a legacy-id alias in getSpecies() AND must keep the old salt, or every stored instance of
+//      that species would change look.
+//   4. _harness/probe_catalog.ts holds a locked copy of this list (IDX_LOCK) and pins a few share strings byte for byte (including one
+//      for every renamed idx).
 
 /** Species ids in IDX ORDER. APPEND ONLY. Position = idx = the byte stored in share strings. */
 export const SPECIES = [
   // common (0..13)
-  'dollop', 'plumpet', 'twangle', 'puddlo', 'glubbin', 'crumbit', 'chunkle', 'munchip', 'wisplet', 'cushlet', 'crimpo', 'thumbly', 'sproink', 'dimpla',
+  'dollop', 'plumpet', 'twangle', 'puddlo', 'glugbean', 'crumbit', 'chunkle', 'munchip', 'wisplet', 'cushlet', 'crimpo', 'thumbly', 'boingle', 'dimpla',
   // uncommon (14..24)
   'nuzzo', 'tadpolo', 'swishel', 'granulo', 'sproutle', 'wrigglo', 'acornel', 'capnap', 'knubby', 'kneadle', 'hooplet',
   // rare (25..34)
-  'spirelo', 'zingle', 'petalop', 'burrbin', 'marigel', 'gloopsy', 'hushpuff', 'drowsel', 'thudge', 'diademo',
+  'spirelo', 'zingle', 'petalop', 'burrbin', 'marigel', 'gloopsy', 'hushpuff', 'slumbrel', 'thudge', 'diademo',
   // epic (35..41)
   'taffelin', 'rattlebead', 'cindergoo', 'selenuff', 'pastrel', 'flipdome', 'caromel',
   // legendary (42..46)

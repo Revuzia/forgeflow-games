@@ -14,6 +14,8 @@
 //   * Meter full: h = dropCapsule({ onLand }) (calm: it fades in where it stands, no drop). Tap / hold test with h.hitTest(cssX, cssY);
 //     while the finger holds it, h.setSqueeze(holdSeconds / 0.5) (0 on cancel); at 1 (or on a tap) fetch the result, then
 //     playCapsuleReveal({ result, createBody, capsule: h }, { onBeat }). The reveal continues the squeeze; the tier tell appears at 'crack'.
+//     From then on the reveal OWNS that capsule: h reads as opening (screenPoint() null, hitTest false, setSqueeze / wobble / remove
+//     ignored) and the reveal disposes it at its end; a dropCapsule() during a reveal (the next meter-full) makes an independent capsule.
 //   * Merge: playMergeCeremony({ parents (MERGE_COST of them, 2 or 3), result, createBody }, { onBeat }). Every visible body is hidden
 //     at the start (the parents are new stage-owned bodies) and removed at the end.
 //   * Both: beats arrive through hooks.onBeat(beat, { t, tier }) in time order. handle.duration is the planned length; handle.skip() (after
@@ -22,7 +24,10 @@
 //     handle.resultBody is the primary body (primaryBodyId() === handle.resultBodyId); the stage has stopped stepping it, so the shell
 //     adopts it as its play body: step it, raycast it, send fingers to it (its render offset is 0, its physics origin is the world origin).
 //     Do NOT setBody() it (that would rebuild its view and drop its tier styling).
-//   * setCalmEffects(on): call before starting a ceremony (a running one keeps the mode it started with).
+//   * setCalmEffects(on): call before starting a ceremony (a running one keeps its timing, camera and particle choices; the flash governor
+//     switches at once, so turning calm ON mid-ceremony also refuses that ceremony's remaining screen ramp and rings: the safe direction).
+//   * Framing: a merge frames the pad 12% wider than the play view while it runs (eased in over the slide, eased back during T4) so the
+//     1.25x spring-open never leaves the frame; calm keeps the play framing and cuts to the result's framing at the burst.
 import * as THREE from 'three';
 import type {
   AddBodyOpts, CapsuleHandle, CapsuleRevealSpec, CeremonyHandle, CeremonyHooks, FxKind, MergeCeremonySpec, QualityTier, SoftBodyLike,
@@ -62,6 +67,7 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo>, RoundTwo {
 }
 
 const TARGET_Y = 0.42;
+const farFirst = (a: BodyView, b: BodyView): number => b.sortDepth - a.sortDepth;
 
 export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
@@ -126,7 +132,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   let revealCap: Capsule | null = null; // the capsule a running reveal took over (opening; owned by the ceremony until it releases it)
   let capsuleId = 0;
 
-  const primary = (): BodyView | null => views.find((v) => v.id === primaryId) ?? null;
+  const primary = (): BodyView | null => { for (const v of views) if (v.id === primaryId) return v; return null; };
   const fitDistance = (): number => camScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect));
 
   /** Where the meter-full capsule lands: beside the primary body when the frame is wide enough to show it whole, else in front of it. */
@@ -348,7 +354,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       depthOrder.length = 0;
       for (const v of views) if (v.visible) depthOrder.push(v);
       for (const v of depthOrder) { const c = v.proxy.center; v.sortDepth = (camera.position.x - c.x) ** 2 + (camera.position.y - c.y) ** 2 + (camera.position.z - c.z) ** 2; }
-      depthOrder.sort((a, b) => b.sortDepth - a.sortDepth);
+      depthOrder.sort(farFirst);
       for (let i = 0; i < depthOrder.length; i++) depthOrder[i].jelly.mesh.renderOrder = 10 + Math.min(0.99, i * 0.01);
       capsule?.update(d * ts, time);
       revealCap?.update(d * ts, time);

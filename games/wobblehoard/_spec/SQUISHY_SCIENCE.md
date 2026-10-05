@@ -263,7 +263,8 @@ penetration, 0 safety resets. Cost per `step(1/60)`, p50 on this container (plai
 
 These tables are copied by hand, not generated: no generator exists. On 2026-10-05 every number in them (506 cells, the computed `nu_eff`, `hold` and
 `recovery95` columns excluded) and every family blurb was compared against `MATERIAL_FAMILIES`: all numbers matched; two blurbs (putty, popdome) had drifted and were
-corrected to the code's text. Numbers are design values in the units of section 3 (`smOmega` etc. are the **ratio basis**: only their ratios to the gel go to the solver). `nu_eff` is heuristic.
+corrected to the code's text. Later the same day the opacity fix added the `cap` column of the visual table and moved the bead squeeze's translucency reference
+(0.5 +/- 0.3 to 0.35 +/- 0.15); both were copied from the code. Numbers are design values in the units of section 3 (`smOmega` etc. are the **ratio basis**: only their ratios to the gel go to the solver). `nu_eff` is heuristic.
 
 **Stiffness and volume**
 
@@ -318,27 +319,49 @@ corrected to the code's text. Numbers are design values in the units of section 
 
 **Visual signature** (RENDER). At rest foam and marshmallow are matte and opaque with sheen at grazing angles; gel, liquid, slime and gummy are glassy with a deep subsurface
 colour; pressed: gel/gummy blush warm where compressed (`blush`) and go pale and clear where stretched (`stretchPale`), foam and putty barely change.
-**What `resolveMaterial` does with these columns (since the 2026-10-05 CORE audit fix):** the genome's translucency, gloss, coreGlow and glitter pass
-through unchanged, so the species look in `catalog.ts` is the one source for them and the tier ordering of DESIGN 5.3 holds in the resolved values
-(`probe_catalog.ts` checks it). The translucency and gloss centre +/- span, `core x` and `glitter x` are reference values: the fallback for a genome
-that lacks the field (centre; 0.5 x the multiplier) and the family character that `probe_materials.ts` checks. The other columns are what the
-family adds. Consequence, not yet resolved in design: the catalog's foam, marshmallow and putty species carry translucency 0.45 to 0.80, so the
-"matte and opaque" foam look described above is not what the resolved values give (the renderer does not read `resolveMaterial` yet).
+**What `resolveMaterial` does with these columns:** the genome's translucency, gloss, coreGlow and glitter pass through (since the 2026-10-05 CORE
+audit fix), so the species look in `catalog.ts` is the one source for them and the tier ordering of DESIGN 5.3 holds in the resolved values
+(`probe_catalog.ts` checks it); AFTER the pass-through the family's translucency **cap** applies (`lookBounds.translucencyMax`, the `cap` column; since
+the 2026-10-05 opacity fix). The translucency and gloss centre +/- span, `core x` and `glitter x` are reference values: the fallback for a genome that
+lacks the field (centre; 0.5 x the multiplier) and the family character that `probe_materials.ts` checks. The other columns are what the family adds.
 
-| family | translucency | gloss | rough | subsurface | fuzz | grain | thick | blush | stretchPale | core x | glitter x |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| slowrise | 0.04 +/- 0.04 | 0.35 +/- 0.15 | 0.7 | 0.15 | 0.35 | 0.55 | 0.3 | 0.1 | 0.1 | 0.15 | 0 |
-| marshmallow | 0.05 +/- 0.05 | 0.08 +/- 0.06 | 0.95 | 0.35 | 0.8 | 0.3 | 0.3 | 0.15 | 0.1 | 0.1 | 0 |
-| mochidough | 0.18 +/- 0.12 | 0.2 +/- 0.15 | 0.85 | 0.55 | 0.55 | 0.5 | 0.8 | 0.35 | 0.45 | 0.4 | 0.1 |
-| jellygel | 0.82 +/- 0.18 | 0.88 +/- 0.12 | 0.08 | 0.7 | 0 | 0 | 1 | 0.85 | 0.75 | 1 | 1 |
-| waterfill | 0.93 +/- 0.07 | 0.95 +/- 0.05 | 0.04 | 0.35 | 0 | 0 | 1.4 | 0.45 | 0.3 | 0.9 | 1.4 |
-| putty | 0.08 +/- 0.08 | 0.55 +/- 0.15 | 0.45 | 0.2 | 0.1 | 0.1 | 0.5 | 0.2 | 0.25 | 0.25 | 0.2 |
-| stickystretch | 0.6 +/- 0.25 | 0.78 +/- 0.15 | 0.12 | 0.6 | 0.05 | 0 | 0.9 | 0.6 | 0.9 | 0.8 | 0.7 |
-| slimegoo | 0.7 +/- 0.25 | 0.96 +/- 0.04 | 0.03 | 0.8 | 0 | 0 | 1.1 | 0.5 | 0.8 | 0.8 | 1.3 |
-| firmsilicone | 0.25 +/- 0.2 | 0.45 +/- 0.2 | 0.35 | 0.4 | 0.05 | 0.1 | 0.6 | 0.3 | 0.3 | 0.5 | 0.3 |
-| popdome | 0.35 +/- 0.2 | 0.7 +/- 0.2 | 0.2 | 0.25 | 0 | 0 | 0.4 | 0.15 | 0.1 | 0.6 | 0.2 |
-| gummy | 0.9 +/- 0.1 | 0.8 +/- 0.15 | 0.15 | 0.85 | 0 | 0 | 1.2 | 0.8 | 0.6 | 0.9 | 0.5 |
-| beadsqueeze | 0.5 +/- 0.3 | 0.5 +/- 0.3 | 0.3 | 0.3 | 0 | 0.9 | 1 | 0.25 | 0.2 | 0.5 | 1.2 |
+**The foam translucency tension is resolved** (2026-10-05). It was: the catalog's foam, marshmallow and putty species carried translucency 0.45 to
+0.80, so the "matte and opaque" foam look described above was not what the resolved values gave. The fix has three parts:
+1. **A cap for the families that are opaque or frosted in the hand**, chosen from the make-up in section 1 (the optics are [GK]): slow-rise foam
+   **0.30** (open-cell PU under a painted skin [S2][S26]: every cell wall scatters, light fades within millimetres); marshmallow **0.40** (an aerated
+   gelatin-sugar foam [S10]: the cell walls are a clear gel, subsurface 0.35 against the PU foam's 0.15, so thin edges glow a little more); bounce
+   putty **0.30** (filled, pigmented silicone-borate [S5]); mochi dough **0.45** (a semi-clear TPR skin [S4] over an opaque dough or flour fill
+   [S13]: a milky body at most); bead squeeze **0.50** (a packed bed of beads [S17] scatters like crushed ice or sugar: each bead may be clear, the
+   bed is not; its reference band moved from 0.5 +/- 0.3 to 0.35 +/- 0.15 so that the family's own band sits under its cap). Every cap is at or
+   above the family's natural band (reference + span), so it removes only the catalog's stylised excess. Gel, liquid, sticky stretch, slime,
+   gummy, firm silicone and pop dome have no cap: each can be cast water-clear.
+2. **The 20 catalog species of those families sit under their caps with their whole cosmetic band** (base + 0.06 <= cap): slow-rise 0.15 to 0.23,
+   marshmallow 0.18 to 0.33, putty 0.15 to 0.23, mochi dough 0.26 to 0.38, beads 0.30 to 0.43, still rising a little with tier inside each family.
+   No catalog instance is ever clipped (`probe_catalog.ts` checks 200 instances of each), so `_spec/CATALOG.md` prints the drawn numbers; the cap
+   guards genomes from elsewhere (random genomes, a share string carrying another family's look).
+3. **Their tier shows in core glow, glitter and gloss instead of a see-through body**: `probe_catalog.ts` checks that inside each capped family the
+   mean resolved coreGlow and glitter rise strictly with tier and gloss never falls (pooled over the capped families: coreGlow 0.23 / 0.48 / 0.67 /
+   0.81 / 0.91 / 1.00, glitter 0.00 / 0.17 / 0.31 / 0.58 / 0.70 / 1.00, Common to Mythic), and that translucency still rises strictly with tier in the
+   families that can be clear (0.54 / 0.65 / 0.78 / 0.81 / 0.92 / 0.95). The render lane's rim, aura and sparkle (DESIGN 5.3) carry the rest.
+
+Still open, on the render side: the renderer reads `genome.translucency` directly (not `resolveMaterial`), adds a per-tier `translucencyAdd`
+(`src/render/rarity.ts`, up to +0.2) and floors transmission at 0.62 (`src/render/material.ts`), so it does not honour the cap yet. Since the catalog
+bases now sit under the caps, only the per-tier add and the floor stand between the data and an opaque foam on screen.
+
+| family | translucency | cap | gloss | rough | subsurface | fuzz | grain | thick | blush | stretchPale | core x | glitter x |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| slowrise | 0.04 +/- 0.04 | 0.3 | 0.35 +/- 0.15 | 0.7 | 0.15 | 0.35 | 0.55 | 0.3 | 0.1 | 0.1 | 0.15 | 0 |
+| marshmallow | 0.05 +/- 0.05 | 0.4 | 0.08 +/- 0.06 | 0.95 | 0.35 | 0.8 | 0.3 | 0.3 | 0.15 | 0.1 | 0.1 | 0 |
+| mochidough | 0.18 +/- 0.12 | 0.45 | 0.2 +/- 0.15 | 0.85 | 0.55 | 0.55 | 0.5 | 0.8 | 0.35 | 0.45 | 0.4 | 0.1 |
+| jellygel | 0.82 +/- 0.18 | - | 0.88 +/- 0.12 | 0.08 | 0.7 | 0 | 0 | 1 | 0.85 | 0.75 | 1 | 1 |
+| waterfill | 0.93 +/- 0.07 | - | 0.95 +/- 0.05 | 0.04 | 0.35 | 0 | 0 | 1.4 | 0.45 | 0.3 | 0.9 | 1.4 |
+| putty | 0.08 +/- 0.08 | 0.3 | 0.55 +/- 0.15 | 0.45 | 0.2 | 0.1 | 0.1 | 0.5 | 0.2 | 0.25 | 0.25 | 0.2 |
+| stickystretch | 0.6 +/- 0.25 | - | 0.78 +/- 0.15 | 0.12 | 0.6 | 0.05 | 0 | 0.9 | 0.6 | 0.9 | 0.8 | 0.7 |
+| slimegoo | 0.7 +/- 0.25 | - | 0.96 +/- 0.04 | 0.03 | 0.8 | 0 | 0 | 1.1 | 0.5 | 0.8 | 0.8 | 1.3 |
+| firmsilicone | 0.25 +/- 0.2 | - | 0.45 +/- 0.2 | 0.35 | 0.4 | 0.05 | 0.1 | 0.6 | 0.3 | 0.3 | 0.5 | 0.3 |
+| popdome | 0.35 +/- 0.2 | - | 0.7 +/- 0.2 | 0.2 | 0.25 | 0 | 0 | 0.4 | 0.15 | 0.1 | 0.6 | 0.2 |
+| gummy | 0.9 +/- 0.1 | - | 0.8 +/- 0.15 | 0.15 | 0.85 | 0 | 0 | 1.2 | 0.8 | 0.6 | 0.9 | 0.5 |
+| beadsqueeze | 0.35 +/- 0.15 | 0.5 | 0.5 +/- 0.3 | 0.3 | 0.3 | 0 | 0.9 | 1 | 0.25 | 0.2 | 0.5 | 1.2 |
 
 **Audio signature** (AUDIO). Numbers are BEFORE `pitchRatio(genome)` (the audio lane still scales bubble radii and frequencies by it; do not apply size twice). Bubbles are Minnaert
 resonators, f0 ~ 3.26 / r Hz with r in metres [GK; `voices.ts` uses it], so 1 mm ~ 3.3 kHz. `bubbleRate` multiplies the squish voice's Poisson rate (~ 70/s at full speed in `voices.ts`);
@@ -385,12 +408,15 @@ The family fixes the character, the genome moves the instance inside a band. Neu
 | bounce | intDamp, affDamp, speedDamp x1.6..0.625 (bouncier = less damping); sound `ring` x0.75..1.25 | |
 | stretch | maxPull x0.8..1.25; edgeSoftStrain x0.8..1.25; edgeAlphaT x0.77..1.3 | |
 | size | airReturnTau x0.8..1.25 (longer air path in a bigger body: diffusion would give size^2, we use size^1 to keep the band tight); sloshHz x1.12..0.89 | audio pitch (pitchRatio) |
-| translucency, gloss, coreGlow, glitter | `look.*` = the genome's own value (the species look), unchanged; the family value is only the fallback for a missing field (section 4) | the tier ordering of DESIGN 5.3 |
+| gloss, coreGlow, glitter | `look.*` = the genome's own value (the species look), unchanged; the family value is only the fallback for a missing field (section 4) | the tier ordering of DESIGN 5.3 |
+| translucency | `look.translucency` = the genome's own value, then capped at the family's `lookBounds.translucencyMax` (slow-rise 0.30, marshmallow 0.40, mochi dough 0.45, putty 0.30, beads 0.50; no cap elsewhere); the family value is the fallback for a missing field | an opaque material turning see-through; a clearer genome never resolves murkier (monotone) |
 | hue, seed, pattern, eyes | nothing (probe checks the physics is identical) | |
 
 Checked by the probe: monotone sweeps for every family over three backgrounds; "firmer genome never softer" (slow-rise foam at firmness 0 -> 1: smOmega 16 -> 25); all 16 extreme genome
 corners x 12 families and 1000 random genomes stay nearest to their own family; every axis within x1.6 of base; resolved values finite and in range for 12000 (genome, family) pairs and
-hostile genomes (NaN, Infinity, strings, undefined); bad family ids (`'__proto__'`, `'constructor'`, `123`, `{}` ...) fall back to `jellygel` without throwing.
+hostile genomes (NaN, Infinity, strings, undefined); bad family ids (`'__proto__'`, `'constructor'`, `123`, `{}` ...) fall back to `jellygel` without throwing;
+gloss, coreGlow and glitter equal the genome's for 4800 (genome, family) pairs and translucency equals min(cap, genome); exactly the five opaque families are capped,
+each cap at or above the family's natural band; the cap never bites on a catalog species in its own family.
 Margin warning: the worst corner genome moves a family 0.111 (RMS, normalised) from its base while the closest pair (jellygel / gummy) is 0.131 apart, so the bands are near their limit; do not widen them without first moving those two apart.
 
 ## 6. Priority, cost and risks

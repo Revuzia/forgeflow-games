@@ -12,8 +12,8 @@
 //   frame dt jitter beyond the clamp. Inside a substep, in this order:
 //     fingers/grabs advance -> mat corral (table only, outside its dead zone) -> predict (gravity, or the float-mode hover
 //     spring) -> global shape matching -> local Laplacian shape memory -> enclosed-volume constraint -> edge distance
-//     constraints -> hinge barrier -> grab attachments -> collisions (fingertip spheres, then the table) -> contact fold limit
-//     -> v = dx/H -> internal-velocity damping, drag, self-righting.
+//     constraints -> hinge barrier -> thin-part struts -> grab attachments -> collisions (fingertip spheres, then the table) ->
+//     contact fold limit -> v = dx/H -> internal-velocity damping, drag, self-righting.
 //   * edge distance (compliance from genome.stretch, hardening past a strain limit): the skin.
 //   * ONE global enclosed-volume constraint V = 1/6 sum p_a.(p_b x p_c) = V0 with an XPBD multiplier. Blocked particles
 //     (inside a fingertip's reach, touching the table) get zero inverse mass in it, so the pressure is absorbed by the
@@ -62,8 +62,14 @@
 //     (3) The hinge barrier and the contact fold limit above are bending-like terms the recipe lists only as optional ("weak local
 //         bending if needed").
 //     (4) MAT CORRAL (matCorral, params.matR0 ...): on the table, outside a 0.6 m dead zone, the body's outward speed is braked and
-//         it glides back (rigidly: it never deforms), so a hard nudge cannot send it off the 3.5 m play-mat. Off while a finger, a
-//         grab or the pinned feet hold it, and in float mode; inside the dead zone it does nothing at all.
+//         it glides back (rigidly: it never deforms), so a hard nudge cannot send it off the 3.5 m play-mat. Off while a fingertip
+//         touching it, a grab or the pinned feet hold it (only its 2.5 m rim acts while a finger is down but touches nothing), and in
+//         float mode; inside the dead zone it does nothing at all.
+//     (5) THIN-PART STRUTS (struts.ts, strutPass): the skin has nothing inside it, and the swirl-peak has almost no volume of its own, so
+//         nothing held its walls apart: a fingertip wider than the peak pressed one wall onto the other and the apex folded (130-180
+//         degrees between neighbouring triangles as it whipped over). One-sided chords through the inside of the peak stand in for the
+//         jelly there: they only resist being shortened, so the peak still bends, stretches and flops freely.
+//     (6) The fingertip's speed cap scales with the mesh resolution (tipSpeed): the same travel per edge length on every mesh.
 // Units: metres-ish; mass per particle ~1 (tributary area, mean 1).
 import type { Genome } from '../core/genome.ts';
 import { clamp, mulberry32 } from '../core/rng.ts';
@@ -779,6 +785,8 @@ export class SoftBody implements SoftBodyLike {
     w.gravity = false; w.nudge({ x: 0.5, y: 0.3, z: -0.2 }); frame();                                // float, shove
     w.gravity = true; w.airSub = 8; w.vcy = -2; frame();                                             // land
     w.nudge({ x: 9, y: 0, z: 3 }); for (let i = 0; i < 8; i++) frame();                              // mat corral (outside the dead zone)
+    w.fingerDown(1, { point: { x: w.center.x + 3 * R, y: 0.5 * R, z: w.center.z }, normal: { x: 0, y: 0, z: -1 }, dir: { x: 0, y: 0, z: 1 } });
+    w.fingerPressure(1, 1); frame(); frame(); w.fingerUp(1); frame();                               // ... with a finger down that touches nothing
     // 2) a mixed workout until the optimiser has compiled it all
     for (let k = 0; k < 4; k++) {
       top(0, k & 1 ? -0.3 : 0.2); for (let i = 0; i < F; i++) frame();
@@ -938,17 +946,17 @@ export class SoftBody implements SoftBodyLike {
    * and a rigid translation of X, before the prediction: the substep's velocity (XP - X) / H and the table friction never see the
    * translation, so the body does not deform). The centre and its velocity are measured here from X and V (a nudge() since the last
    * substep is already in V), only once the caller's cheap test on the last substep's centre (10% margin) says the body may be outside
-   * the dead zone. A pure
-   * function of the state: deterministic.
+   * the dead zone. `rimOnly` (a finger is down but its tip touches nothing): only the rim bound acts. A pure function of the state:
+   * deterministic.
    */
-  private matCorral(): void {
+  private matCorral(rimOnly: boolean): void {
     const p = this.p;
     const n = this.n, X = this.X, V = this.V, M = this.M;
     let sx = 0, sz = 0, svx = 0, svz = 0;
     for (let i = 0; i < n; i++) { const m = M[i], i3 = i * 3; sx += m * X[i3]; sz += m * X[i3 + 2]; svx += m * V[i3]; svz += m * V[i3 + 2]; }
     const im = 1 / this.Mtot, cx = sx * im, cz = sz * im;
     const r = Math.sqrt(cx * cx + cz * cz);
-    if (!(r > p.matR0)) return;
+    if (!(r > p.matR0) || (rimOnly && !(r >= p.matRim))) return;
     const ux = cx / r, uz = cz / r, rim = r >= p.matRim, w = rim ? 1 : smooth01((r - p.matR0) / Math.max(1e-6, p.matRamp));
     const vr = (svx * ux + svz * uz) * im;
     const dv = vr > 0 ? -(rim ? 1 : Math.min(1, p.matBrake * w * H)) * vr : 0;
@@ -1104,9 +1112,13 @@ export class SoftBody implements SoftBodyLike {
     const f0 = this.fingers[0], f1 = this.fingers[1];
     const nFingers = (f0.down ? 1 : 0) + (f1.down ? 1 : 0);
     const grabbing = this.grabs[0].active || this.grabs[1].active;
-    // (the cheap dead-zone test on the last substep's centre is done here, inline, so the call only happens outside it)
-    if (this.gravityOn && !grabbing && this.pinCount === 0 && !f0.down && !f0.retracting && !f1.down && !f1.retracting
-      && this.cx * this.cx + this.cz * this.cz > this.p.matR0 * this.p.matR0 * 0.81) this.matCorral();
+    // MAT CORRAL (the cheap dead-zone test on the last substep's centre is done here, inline, so the call only happens outside it): off while
+    // something HOLDS the body (a grab, the pinned feet, a fingertip touching it); while a finger is down but its tip touches nothing (the
+    // body was shoved out from under it) only the rim acts, so a nudge cannot carry the body off the mat past a finger that is merely down
+    if (this.gravityOn && !grabbing && this.pinCount === 0 && this.cx * this.cx + this.cz * this.cz > this.p.matR0 * this.p.matR0 * 0.81) {
+      const a0 = f0.down || f0.retracting, a1 = f1.down || f1.retracting;
+      if (!(a0 && f0.touching) && !(a1 && f1.touching)) this.matCorral(a0 || a1);
+    }
 
     // ---- external acceleration + predict
     // SUPPORTED-BODY GRAVITY. With one XPBD pass per substep a soft network cannot carry the weight of 640 particles

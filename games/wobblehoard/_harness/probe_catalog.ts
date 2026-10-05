@@ -8,6 +8,8 @@
 // drift there is reported as SEAM-DRIFT and fails the run only with WH_STRICT_SEAMS=1 (integration runs), because the fix belongs to
 // whichever side moved.
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import {
   CATALOG, SPECIES, SPECIES_BY_ID, SPECIES_BY_TIER, LANES, SIGNATURE_BIAS, PATTERN_SPECKLE_FLOOR, speciesBaseGenome, speciesTemplateGenome, tierOf, familyOf, tierIndexOf, speciesIdx, getSpecies, isSpeciesId,
 } from '../src/data/catalog.ts';
@@ -15,7 +17,7 @@ import type { SpeciesDef, SpeciesId, LaneId } from '../src/data/catalog.ts';
 import {
   SHAPE_R_MIN, SHAPE_R_MAX, SHAPE_MIN_WIDTH, evalShape, shapeVolumeRatio, shapeBounds, shapeSlope, shapeDistance, forEachDirection, DOLLOP_RECIPE,
 } from '../src/data/shapes.ts';
-import { MATERIAL_FAMILY_IDS, MATERIAL_FAMILIES, MATERIAL_LIST, isMaterialFamilyId, materialDistance, resolveMaterial } from '../src/data/materials.ts';
+import { MATERIAL_FAMILY_IDS, MATERIAL_FAMILIES, MATERIAL_LIST, isMaterialFamilyId, materialDistance, resolveMaterial, translucencyMaxOf } from '../src/data/materials.ts';
 import { TIERS, TIER_SPECIES_COUNTS, TOTAL_SPECIES, TIER_ODDS, TIER_NAMES, TIER_ODDS_PERCENT, TIER_STYLE, TIER_STYLES, oddsPerSpecies, oddsLabel, nextTier, tierFromIndex, isTierId } from '../src/core/rarity.ts';
 import { quantizeGenome, encodeGenome, decodeGenome, genomeEquals, makeStarterGenome, randomGenome } from '../src/core/genome.ts';
 import type { Genome } from '../src/core/genome.ts';
@@ -49,11 +51,12 @@ const T = {
 
 /* ───────────────────────────── the locked registry (append-only!) ───────────────────────────── */
 // When a species is APPENDED to SPECIES, append its id here in the same commit. Existing positions must never change.
-// (idx 15, 18, 20 and 36 were re-slugged once, before launch, by the language-safety review: see src/data/species.ts rule 3.)
+// (Re-slugged once, before launch, see src/data/species.ts rule 3: idx 15, 18, 20 and 36 by the language-safety review; idx 4, 12 and 32
+// by the originality screen against the full Pokemon list.)
 const IDX_LOCK: readonly string[] = [
-  'dollop', 'plumpet', 'twangle', 'puddlo', 'glubbin', 'crumbit', 'chunkle', 'munchip', 'wisplet', 'cushlet', 'crimpo', 'thumbly', 'sproink', 'dimpla',
+  'dollop', 'plumpet', 'twangle', 'puddlo', 'glugbean', 'crumbit', 'chunkle', 'munchip', 'wisplet', 'cushlet', 'crimpo', 'thumbly', 'boingle', 'dimpla',
   'nuzzo', 'tadpolo', 'swishel', 'granulo', 'sproutle', 'wrigglo', 'acornel', 'capnap', 'knubby', 'kneadle', 'hooplet',
-  'spirelo', 'zingle', 'petalop', 'burrbin', 'marigel', 'gloopsy', 'hushpuff', 'drowsel', 'thudge', 'diademo',
+  'spirelo', 'zingle', 'petalop', 'burrbin', 'marigel', 'gloopsy', 'hushpuff', 'slumbrel', 'thudge', 'diademo',
   'taffelin', 'rattlebead', 'cindergoo', 'selenuff', 'pastrel', 'flipdome', 'caromel',
   'ambrosel', 'tidelume', 'glimglop', 'somnuff', 'fossilo',
   'skeinara', 'constello', 'prismelo',
@@ -71,9 +74,20 @@ const centreGenome = (d: SpeciesDef): Genome => speciesTemplateGenome(d.id);
 const bodyLab = (g: Genome): [number, number, number] => paletteBodyLab(g);
 
 /* ───────────────────────────── originality + language safety ───────────────────────────── */
-// Real brands, characters, toy lines, games and trademarks (and the original 151 Pokemon + common later ones). Lowercase, letters only after
-// normalisation (spaces and hyphens are removed). A species NAME or ID, or any word of a BLURB, fails if it equals, contains (term of 6+ letters)
-// or sits within edit distance 1 of any entry; short entries (4-5 letters) must be within edit distance 1 of the WHOLE name; 3 letters: equal only.
+// Real brands, characters, toy lines, games and trademarks, in two kinds of list. Lowercase, letters only after normalisation (spaces,
+// hyphens, punctuation and accents are removed).
+//   CURATED (inline below): toys, games, characters, brands, 40 Neopets species and the 190 best-known Pokemon (the original 151 + common
+//     later ones). Hand-picked: a kid would recognise a near-respelling of any of them even in a sentence.
+//   WIDE (generated from a named source, never hand-edited; _harness/data/): EVERY official English Pokemon species name (deny_pokemon.json:
+//     National Pokedex 1..1025, generations 1-9, from PokeAPI), the main Digimon, all 55 Neopets species and the six Moshi Monsters
+//     (deny_creatures.json).
+// A species NAME or ID is screened against BOTH kinds with every rule: it fails if it equals an entry, contains it (entry of 5+ letters)
+// or sits within edit distance 1 of it, as SPELLED or as READ ALOUD (spoken() below: "Drowsel" reads "drowsel", one sound from "Drowzee"
+// read "drowsee"); an entry of 4 letters only counts against the WHOLE name (or its sound), 3 letters or fewer: equal only.
+// BLURBS and the other prose are English: a word fails by edit distance 1 against the CURATED lists (as before), by whole-word equality
+// against the WIDE lists, and the letters-only text fails if it contains any entry of 8+ letters. The wide lists are mostly coined from
+// English words one letter away (Flittle / little, Swellow / swallow, Starly / starry, Nymble / nimble, Vullaby / lullaby, Palmon /
+// salmon), so edit distance 1 in prose would reject plain English; a NAME is what a trademark protects, and names get every rule.
 const DENY_TOYS = ['squishmallow', 'squishmallows', 'jellycat', 'labubu', 'smiski', 'funko', 'funkopop', 'sanrio', 'tamagotchi', 'popit', 'playdoh', 'needoh', 'orbeez', 'sillyputty', 'thinkingputty', 'kineticsand', 'floam',
   'lego', 'duplo', 'barbie', 'hotwheels', 'transformers', 'furby', 'beaniebabies', 'mattel', 'hasbro', 'fisherprice', 'playmobil', 'bratz', 'lolsurprise', 'shopkins', 'lalaloopsy', 'littlestpetshop', 'mylittlepony',
   'pollypocket', 'carebears', 'cabbagepatch', 'teddyruxpin', 'buildabear', 'webkinz', 'neopets', 'slinky', 'rubikscube', 'nerf', 'monchhichi', 'sylvanian', 'calicocritters', 'pusheen', 'molang', 'rilakkuma',
@@ -103,9 +117,24 @@ const DENY_CHARACTERS = ['disney', 'pixar', 'marvel', 'dccomics', 'mickey', 'min
 const DENY_BRANDS = ['google', 'apple', 'samsung', 'tesla', 'nike', 'adidas', 'haribo', 'skittles', 'starburst', 'twizzlers', 'jollyrancher', 'tootsie', 'snickers', 'kitkat', 'oreo', 'nutella', 'pringles', 'doritos', 'cheetos', 'hersheys',
   'twix', 'reeses', 'fanta', 'pepsi', 'cocacola', 'nestle', 'pillsbury', 'doughboy', 'hushpuppies', 'kleenex', 'tupperware', 'velcro', 'lavalamp', 'ikea', 'amazon', 'netflix', 'spotify',
   'youtube', 'tiktok', 'instagram', 'snapchat', 'discord', 'twitch', 'xbox', 'playstation', 'atari', 'sega', 'fluffernutter', 'marshmallowfluff'];
-const DENY_ALL = [...DENY_TOYS, ...DENY_GAMES, ...DENY_NEOPETS, ...DENY_POKEMON, ...DENY_CHARACTERS, ...DENY_BRANDS];
-const norm = (s: string): string => s.toLowerCase().replace(/[^a-z]/g, '');
-const DENY = [...new Set(DENY_ALL.map(norm))].filter((x) => x.length >= 2);
+const norm = (s: string): string => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z]/g, '');
+const DENY_CURATED = [...new Set([...DENY_TOYS, ...DENY_GAMES, ...DENY_NEOPETS, ...DENY_POKEMON, ...DENY_CHARACTERS, ...DENY_BRANDS].map(norm))].filter((x) => x.length >= 2);
+// the WIDE lists, read from their generated files (sources and dates inside each file)
+const HARNESS_DIR = dirname(fileURLToPath(import.meta.url));
+interface NameList { source?: string; count: number; names: string[] }
+const POKEMON_FILE = JSON.parse(readFileSync(resolve(HARNESS_DIR, 'data/deny_pokemon.json'), 'utf8')) as NameList & { species: number; multiword: string[] };
+const CREATURES_FILE = JSON.parse(readFileSync(resolve(HARNESS_DIR, 'data/deny_creatures.json'), 'utf8')) as Record<'digimon' | 'neopets' | 'moshi', NameList>;
+const DENY_POKEMON_ALL: readonly string[] = POKEMON_FILE.names;
+const DENY_DIGIMON: readonly string[] = CREATURES_FILE.digimon.names, DENY_NEOPETS_ALL: readonly string[] = CREATURES_FILE.neopets.names, DENY_MOSHI: readonly string[] = CREATURES_FILE.moshi.names;
+const DENY_WIDE = [...new Set([...DENY_POKEMON_ALL, ...DENY_DIGIMON, ...DENY_NEOPETS_ALL, ...DENY_MOSHI].map(norm))].filter((x) => x.length >= 2);
+/** Wide-list entries that are themselves everyday English words (a Neopet called Buzz, a Moshi Monster called Poppet, the Digimon Daemon):
+ *  screened in NAMES with every rule, never in prose ("a little buzz" is English). */
+const WIDE_NAME_ONLY = new Set(['buzz', 'bruce', 'chia', 'koi', 'lenny', 'techo', 'poppet', 'daemon']);
+const WIDE_PROSE = new Set(DENY_WIDE.filter((t) => !WIDE_NAME_ONLY.has(t)));
+/** Every entry (names are screened against all of them). */
+const DENY = [...new Set([...DENY_CURATED, ...DENY_WIDE])];
+/** The same entries as they sound (spoken() is defined with the language gate below; function declarations are hoisted). */
+const DENY_SPOKEN = DENY.map((t) => spoken(t));
 
 /** Edit distance <= 1 (substitution, insertion or deletion). */
 function within1(a: string, b: string): boolean {
@@ -120,26 +149,31 @@ function within1(a: string, b: string): boolean {
   }
   return edits + (la - i) + (lb - j) <= 1;
 }
-/** Why `word` (a species name or id, one whole token) is too close to a real name, or '' if it is fine. */
+/** Why `word` (a species name or id, one whole token) is too close to a real name, as spelled or as read aloud, or '' if it is fine. */
 function denyReason(word: string): string {
-  const w = norm(word);
-  for (const t of DENY) {
-    if (t.length <= 3) { if (w === t) return `equals "${t}"`; continue; }
-    if (t.length >= 6 && w.includes(t)) return `contains "${t}"`;
-    if (t.length === 5 && w.includes(t)) return `contains "${t}"`;
+  const w = norm(word), sw = spoken(w);
+  for (let k = 0; k < DENY.length; k++) {
+    const t = DENY[k], st = DENY_SPOKEN[k];
+    if (t.length <= 3) { if (w === t) return `equals "${t}"`; if (sw === st) return `read aloud, equals "${t}"`; continue; }
+    if (t.length >= 5 && w.includes(t)) return `contains "${t}"`;
     if (within1(w, t)) return `within edit distance 1 of "${t}"`;
+    if (st.length >= 5 && sw.includes(st)) return `read aloud, contains "${t}" ("${sw}" holds "${st}")`;
+    if (within1(sw, st)) return `read aloud, within one sound of "${t}" ("${sw}" ~ "${st}")`;
   }
   return '';
 }
-// Ordinary English words that merely resemble a denylist entry (Pokemon "Goldeen" vs "golden"): allowed inside BLURBS only, never as a name.
-const ORDINARY_WORDS = new Set(['golden', 'wobble', 'wobbles', 'twenty']); // golden~Goldeen, wobble~Sobble, twenty~Tweety: everyday English
-/** The same for a blurb: word by word, plus long phrases against the letters-only text. */
+// Ordinary English words that merely resemble a CURATED entry (Pokemon "Goldeen" vs "golden"): allowed inside prose only, never as a name.
+// golden~Goldeen, wobble~Sobble, twenty~Tweety, mitten~Litten: everyday English
+const ORDINARY_WORDS = new Set(['golden', 'wobble', 'wobbles', 'twenty', 'mitten', 'kitten']);
+/** The same for prose (a blurb, tag, silhouette, family or task text): long entries against the letters-only text, then word by word
+ *  (edit distance 1 against the CURATED lists, whole-word equality against the WIDE lists; see the rules above DENY_TOYS). */
 function denyReasonText(text: string): string {
   const flat = norm(text);
-  for (const t of DENY) if (t.length >= 8 && flat.includes(t)) return `contains "${t}"`;
+  for (const t of DENY) if (t.length >= 8 && !WIDE_NAME_ONLY.has(t) && flat.includes(t)) return `contains "${t}"`;
   for (const raw of text.toLowerCase().split(/[^a-z]+/)) {
     if (raw.length < 4 || ORDINARY_WORDS.has(raw)) continue;
-    for (const t of DENY) { if (t.length <= 3) continue; if (within1(raw, t) && !(raw.length <= 5 && t.length <= 5 && raw !== t)) return `word "${raw}" ~ "${t}"`; }
+    if (WIDE_PROSE.has(raw)) return `word "${raw}" is a listed name`;
+    for (const t of DENY_CURATED) { if (t.length <= 3) continue; if (within1(raw, t) && !(raw.length <= 5 && t.length <= 5 && raw !== t)) return `word "${raw}" ~ "${t}"`; }
   }
   return '';
 }
@@ -152,7 +186,9 @@ const DENY_COMPOUND = ['fluffer nutter', 'marshmallow fluff', 'silly putty', 'th
   'peppa pig', 'paw patrol', 'sponge bob', 'hush puppies', 'kit kat', 'jelly cat', 'squish mallow', 'slime rancher', 'animal crossing', 'baby yoda', 'mr potato head',
   'huggy wuggy', 'kissy missy', 'poppy playtime', 'fall guys', 'candy crush', 'angry birds', 'among us', 'adopt me', 'my melody', 'tuxedo sam', 'moshi monsters',
   'lol surprise', 'little tikes', 'teddy ruxpin', 'buzz lightyear', 'winnie the pooh', 'peter rabbit', 'tom and jerry', 'bugs bunny', 'scooby doo', 'charlie brown',
-  'play foam', 'little twin stars', 'sylvanian families', 'calico critters', 'thomas the tank', 'baby shark'];
+  'play foam', 'little twin stars', 'sylvanian families', 'calico critters', 'thomas the tank', 'baby shark',
+  // every two-word official Pokemon name (Mr. Mime, Tapu Koko, Iron Moth, Roaring Moon ...), from the generated list
+  ...POKEMON_FILE.multiword];
 /** Why `word` (a name or id) runs a multi-word brand's word starts together, or ''. */
 function compoundReason(word: string): string {
   const w = norm(word);
@@ -311,15 +347,17 @@ check('IDX_LOCK: existing positions never change (append-only)', IDX_LOCK.every(
   CATALOG.length > IDX_LOCK.length ? `${CATALOG.length - IDX_LOCK.length} appended since the lock: append them to IDX_LOCK` : '');
 check('IDX_LOCK covers every species (append new ones to the lock)', CATALOG.length === IDX_LOCK.length);
 // The wire format, pinned end to end: these literal share strings were written once (the starter genome with its species byte set to
-// 0 / 7 / 15 / 18 / 20 / 36 / 47 / 49) and must decode to these species forever. A reorder, a deleted entry or a slug change in SPECIES fails here.
+// 0 / 4 / 7 / 12 / 15 / 18 / 20 / 32 / 36 / 47 / 49: the ends of the list and every idx whose slug was changed before launch) and must decode to
+// these species forever. A reorder, a deleted entry or a slug change in SPECIES fails here.
 {
   const WIRE: Array<[string, string]> = [
-    ['g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'dollop'], ['g1.AQcAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'munchip'], ['g1.AQ8AAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'tadpolo'],
-    ['g1.ARIAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'sproutle'], ['g1.ARQAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'acornel'],
+    ['g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'dollop'], ['g1.AQQAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'glugbean'], ['g1.AQcAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'munchip'],
+    ['g1.AQwAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'boingle'], ['g1.AQ8AAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'tadpolo'],
+    ['g1.ARIAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'sproutle'], ['g1.ARQAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'acornel'], ['g1.ASAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'slumbrel'],
     ['g1.ASQAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'rattlebead'], ['g1.AS8AAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'skeinara'], ['g1.ATEAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'prismelo'],
   ];
   const got = WIRE.map(([code]) => decodeGenome(code)?.species ?? 'null');
-  check('pinned share strings decode to their species (idx byte 0/7/15/18/20/36/47/49 -> dollop/munchip/tadpolo/sproutle/acornel/rattlebead/skeinara/prismelo) and re-encode to the same text',
+  check('pinned share strings decode to their species (idx byte 0/4/7/12/15/18/20/32/36/47/49 -> dollop/glugbean/munchip/boingle/tadpolo/sproutle/acornel/slumbrel/rattlebead/skeinara/prismelo) and re-encode to the same text',
     WIRE.every(([code, id], i) => got[i] === id && encodeGenome(decodeGenome(code) as Genome) === code), got.join(' '));
 }
 check('lookup is safe against hostile ids', getSpecies('__proto__') === undefined && getSpecies('constructor') === undefined && getSpecies(7) === undefined && !isSpeciesId('toString') && SPECIES_BY_ID['dollop'].idx === 0);
@@ -393,7 +431,7 @@ check('each tier shelf is varied in feel: distinct families Common>=9 Uncommon>=
 const opaque = (f: string): boolean => MATERIAL_FAMILIES[f as keyof typeof MATERIAL_FAMILIES].look.translucency < 0.2;
 const opaqueByTier = TIERS.map((t) => CATALOG.filter((d) => d.tier === t && opaque(d.family)).length);
 check('opaque-bodied families (foam, marshmallow, dough, putty hide inner light): at most 2 Epic, 2 Legendary, 0 Mythic', opaqueByTier[3] <= 2 && opaqueByTier[4] <= 2 && opaqueByTier[5] === 0, `Epic ${opaqueByTier[3]} Legendary ${opaqueByTier[4]} Mythic ${opaqueByTier[5]}`);
-check('Mythic families are translucent and glow (look translucency >= 0.25, coreGlow multiplier >= 0.5)', CATALOG.filter((d) => d.tier === 'mythic').every((d) => MATERIAL_FAMILIES[d.family].look.translucency >= 0.25 && MATERIAL_FAMILIES[d.family].look.coreGlow >= 0.5));
+check('Mythic families are translucent and glow (look translucency >= 0.25, coreGlow multiplier >= 0.5, translucency cap, if any, >= 0.5)', CATALOG.filter((d) => d.tier === 'mythic').every((d) => MATERIAL_FAMILIES[d.family].look.translucency >= 0.25 && MATERIAL_FAMILIES[d.family].look.coreGlow >= 0.5 && translucencyMaxOf(d.family) >= 0.5));
 
 /* ═══════════════════════════════════ 4. shapes ═══════════════════════════════════ */
 header('4. rest shapes: star-convex, resolvable, bounded, distinct');
@@ -497,16 +535,58 @@ check('palette has range: lightness spans at least 0.2 and chroma at least 0.12 
 const byTier = (f: (d: SpeciesDef) => number): number[] => TIERS.map((_, t) => mean(CATALOG.filter((d) => tierIndexOf(d.id) === t).map(f)));
 // "Rarity is in the material" is judged on the RESOLVED look: resolveMaterial(family, the species' template genome).look, the numbers a
 // consumer draws with (src/data/materials.ts passes the genome's translucency / gloss / coreGlow / glitter through, so the family can never
-// flatten a tier's look). The raw catalog means are printed next to them.
+// flatten a tier's look; the one exception is the translucency CAP of the families that are opaque in the hand, LookBounds). The raw
+// catalog means are printed next to them. Families that can be clear show their tier in translucency too; the capped (opaque) families keep
+// an opaque body and show their tier in core glow, glitter and gloss, so for them those three carry the check instead of translucency.
 const resolved = (d: SpeciesDef): ReturnType<typeof resolveMaterial>['look'] => resolveMaterial(d.family, centreGenome(d)).look;
+const capped = (d: SpeciesDef): boolean => translucencyMaxOf(d.family) < 1;
 const glow = byTier((d) => resolved(d).coreGlow), glit = byTier((d) => resolved(d).glitter), trans = byTier((d) => resolved(d).translucency), chroma = byTier((d) => d.look.chroma);
 const rawGlow = byTier((d) => d.look.coreGlow), rawTrans = byTier((d) => d.look.translucency);
+/** Mean of f over the species `pick` keeps, per tier index (NaN for a tier with none). */
+const byTierOf = (pick: (d: SpeciesDef) => boolean, f: (d: SpeciesDef) => number): number[] => TIERS.map((_, t) => { const a = CATALOG.filter((d) => pick(d) && tierIndexOf(d.id) === t).map(f); return a.length ? mean(a) : NaN; });
+const present = (a: number[]): number[] => a.filter((x) => !Number.isNaN(x));
+const rising = (a: number[], strict: boolean): boolean => present(a).every((g, i, b) => i === 0 || (strict ? g > b[i - 1] : g >= b[i - 1] - 1e-9));
+const clearTrans = byTierOf((d) => !capped(d), (d) => resolved(d).translucency);
+const opGlow = byTierOf(capped, (d) => resolved(d).coreGlow), opGlit = byTierOf(capped, (d) => resolved(d).glitter), opGloss = byTierOf(capped, (d) => resolved(d).gloss);
+const fmt = (a: number[]): string => a.map((x) => (Number.isNaN(x) ? ' -- ' : f2(x))).join(' ');
 console.log(`tier means (resolved)  coreGlow ${glow.map(f2).join(' ')} | glitter ${glit.map(f2).join(' ')} | translucency ${trans.map(f2).join(' ')} | chroma ${chroma.map(f2).join(' ')}`);
 console.log(`tier means (raw catalog) coreGlow ${rawGlow.map(f2).join(' ')} | translucency ${rawTrans.map(f2).join(' ')}`);
+console.log(`tier means, families that can be clear: translucency ${fmt(clearTrans)}`);
+console.log(`tier means, capped (opaque) families:   coreGlow ${fmt(opGlow)} | glitter ${fmt(opGlit)} | gloss ${fmt(opGloss)} | translucency ${fmt(byTierOf(capped, (d) => resolved(d).translucency))}`);
 check('rarity is in the material: mean RESOLVED coreGlow rises strictly with tier', glow.every((g, i) => i === 0 || g > glow[i - 1]));
 check('rarity is in the material: mean RESOLVED glitter rises strictly with tier', glit.every((g, i) => i === 0 || g > glit[i - 1]));
-check('rarity is in the material: mean RESOLVED translucency never falls with tier', trans.every((g, i) => i === 0 || g >= trans[i - 1] - 1e-9));
-check('resolution keeps every species\' own look: resolved translucency / gloss / coreGlow / glitter equal the template genome\'s (no family override)',
+check('rarity is in the material (families that can be clear: gel, liquid, sticky, slime, gummy, silicone, dome): mean RESOLVED translucency rises strictly with tier', rising(clearTrans, true), fmt(clearTrans));
+check('rarity is in the material (capped, opaque families pooled): mean RESOLVED coreGlow and glitter rise strictly with tier', rising(opGlow, true) && rising(opGlit, true), `coreGlow ${fmt(opGlow)} | glitter ${fmt(opGlit)}`);
+{
+  // inside each capped family, tier by tier: an opaque body shows its tier in glow, sparkle and gloss
+  const bad: string[] = [], rows: string[] = [];
+  for (const f of MATERIAL_FAMILY_IDS.filter((x) => translucencyMaxOf(x) < 1)) {
+    const inF = (d: SpeciesDef): boolean => d.family === f;
+    const g = byTierOf(inF, (d) => resolved(d).coreGlow), gl = byTierOf(inF, (d) => resolved(d).glitter), gs = byTierOf(inF, (d) => resolved(d).gloss);
+    if (!rising(g, true) || !rising(gl, true) || !rising(gs, false)) bad.push(f);
+    rows.push(`${f} glow ${present(g).map(f2).join('<')} glitter ${present(gl).map(f2).join('<')} gloss ${present(gs).map(f2).join('<=')}`);
+  }
+  check('rarity is in the material (inside EACH capped family: slow-rise foam, marshmallow, mochi dough, putty, beads): mean RESOLVED coreGlow and glitter rise strictly with tier and gloss never falls',
+    bad.length === 0, bad.length ? `fails: ${bad.join(' ')}` : rows.join('; '));
+}
+{
+  // opaque stays opaque, and the catalog shows the truth: every base sits under its family cap with the whole cosmetic band, so no catalog
+  // instance is ever clipped (the cap guards genomes from elsewhere: random genomes, hostile share strings)
+  const over: string[] = []; let worst = -1, worstAt = '';
+  for (const d of CATALOG) {
+    const cap = translucencyMaxOf(d.family);
+    if (cap >= 1) continue;
+    if (d.look.translucency + d.bands.translucency > cap + 1e-9) over.push(`${d.id} ${f2(d.look.translucency)}+${f2(d.bands.translucency)} > ${f2(cap)}`);
+    for (let s = 0; s < 200; s++) {
+      const g = speciesBaseGenome(d.id, Math.imul(s + 1, 0x9e3779b1) >>> 0), r = resolveMaterial(d.family, g).look.translucency;
+      if (g.translucency > cap + 1e-9 || r !== g.translucency) over.push(`${d.id}@${s} genome ${f3(g.translucency)} resolved ${f3(r)} cap ${f2(cap)}`);
+      if (g.translucency - cap > worst) { worst = g.translucency - cap; worstAt = d.id; }
+    }
+  }
+  check(`opaque stays opaque: every capped species' base translucency + its band is under the family cap, and none of its 200 instances needs the clip (${CATALOG.filter(capped).length} species)`,
+    over.length === 0, over.length ? over.slice(0, 4).join(' | ') : `closest to a cap: ${worstAt} ${f3(-worst)} under`);
+}
+check('resolution keeps every species\' own look: resolved translucency / gloss / coreGlow / glitter equal the template genome\'s (no family override; no cap bites on a catalog species)',
   CATALOG.every((d) => { const g = centreGenome(d), r = resolved(d); return r.translucency === g.translucency && r.gloss === g.gloss && r.coreGlow === g.coreGlow && r.glitter === g.glitter; }));
 check('rarity is in the colour: mean chroma never falls with tier', chroma.every((g, i) => i === 0 || g >= chroma[i - 1] - 1e-9));
 check('Common has no sparkle beyond the starter (glitter <= 0.3)', CATALOG.filter((d) => d.tier === 'common').every((d) => d.look.glitter <= 0.3));
@@ -604,22 +684,49 @@ const KEYS = ['chroma', 'lightness', 'coreGlow', 'translucency', 'gloss', 'firmn
 
 /* ═══════════════════════════════════ 7. originality and language safety ═══════════════════════════════════ */
 header('7. originality gate and language safety');
-check(`denylist has at least 200 distinct real names (${DENY.length})`, DENY.length >= 200);
+check(`denylist has at least 1500 distinct real names (${DENY.length}: ${DENY_CURATED.length} curated, ${DENY_WIDE.length} from the generated lists, ${DENY_CURATED.length + DENY_WIDE.length - DENY.length} in both)`, DENY.length >= 1500);
+{
+  const clean = (a: readonly string[]): boolean => a.every((x, i) => /^[a-z]+$/.test(x) && (i === 0 || a[i - 1] < x)); // lowercase letters, sorted, no duplicates
+  const GENS = ['bulbasaur', 'chikorita', 'treecko', 'turtwig', 'snivy', 'chespin', 'rowlet', 'grookey', 'sprigatito', 'pecharunt'];
+  check(`the Pokemon list is the full official one: ${POKEMON_FILE.species} species (National Pokedex 1..1025), ${DENY_POKEMON_ALL.length} distinct letters-only names, sorted, lowercase, with the first of every generation 1-9 and the last (${GENS.join(', ')})`,
+    POKEMON_FILE.species >= 1025 && DENY_POKEMON_ALL.length === POKEMON_FILE.count && DENY_POKEMON_ALL.length >= 1020 && clean(DENY_POKEMON_ALL) && GENS.every((x) => DENY_POKEMON_ALL.includes(x)) && POKEMON_FILE.multiword.length >= 20);
+  const typo = DENY_POKEMON.filter((x) => !DENY_POKEMON_ALL.includes(x));
+  check('every hand-curated Pokemon name is an official one (the curated list has no typo)', typo.length === 0, typo.join(' '));
+  check(`the other creature lists are complete and clean: ${DENY_DIGIMON.length} Digimon (>= 200), all ${DENY_NEOPETS_ALL.length} Neopets species (55, the curated 40 among them), the ${DENY_MOSHI.length} Moshi Monsters (6)`,
+    DENY_DIGIMON.length >= 200 && DENY_NEOPETS_ALL.length === 55 && DENY_MOSHI.length === 6 && [DENY_DIGIMON, DENY_NEOPETS_ALL, DENY_MOSHI].every(clean) && DENY_NEOPETS.every((x) => DENY_NEOPETS_ALL.includes(x))
+    && ['agumon', 'gabumon', 'patamon', 'guilmon', 'veemon'].every((x) => DENY_DIGIMON.includes(x)) && ['katsuma', 'poppet', 'zommer'].every((x) => DENY_MOSHI.includes(x)));
+}
 check('denylist covers the required families (squishmallow, jellycat, labubu, smiski, funko, sanrio, pokemon, nintendo/mario/kirby/zelda, plort/largo, adopt me, neopets, tamagotchi, pop it, play-doh, nee-doh, orbeez, silly putty, lego, minecraft, roblox)',
   ['squishmallow', 'jellycat', 'labubu', 'smiski', 'funko', 'sanrio', 'hellokitty', 'pokemon', 'pikachu', 'nintendo', 'mario', 'kirby', 'zelda', 'plort', 'largo', 'adoptme', 'neopets', 'tamagotchi', 'popit', 'playdoh', 'needoh', 'orbeez', 'sillyputty', 'lego', 'minecraft', 'roblox'].every((x) => DENY.includes(x)));
 check('denylist includes the original 151 Pokemon (bulbasaur .. mew)', ['bulbasaur', 'charizard', 'pikachu', 'jigglypuff', 'snorlax', 'eevee', 'mewtwo', 'mew', 'psyduck', 'gengar', 'magikarp'].every((x) => DENY.includes(x)) && DENY_POKEMON.length >= 190);
 let origOk = true; const origMsg: string[] = [];
 for (const d of CATALOG) {
-  const r1 = denyReason(d.name), r2 = denyReason(d.id), r3 = denyReasonText(d.blurb), r4 = compoundReason(d.name) || compoundReason(d.id);
+  const r1 = denyReason(d.name), r2 = denyReason(d.id), r3 = [d.blurb, d.silhouette, ...d.tags].map(denyReasonText).find((x) => x) ?? '', r4 = compoundReason(d.name) || compoundReason(d.id);
   if (r1 || r2 || r3 || r4) { origOk = false; origMsg.push(`${d.id}: ${r1 || r2 || r3 || r4}`); }
 }
-check('no species name, id or blurb contains or is within edit distance 1 of a real brand, character, toy line or game, or runs a multi-word brand together', origOk, origMsg.join(' | '));
+check(`no species name or id contains, sits within edit distance 1 of, or SOUNDS within one edit of a real brand, character, toy line, game or creature (${DENY.length} names incl. all ${DENY_POKEMON_ALL.length} Pokemon) or runs a multi-word brand together; no blurb, tag or silhouette names one`, origOk, origMsg.join(' | '));
 // the gate itself must bite: known bad examples are caught, innocent words are not
 check('the gate catches known near-misses (Squirmle~Squirtle, Dumplo~Duplo, Prongo~Pongo, Pikachi, Squishmellow, Labubo, Plortz, Kirbi, Funkoo)', ['Squirmle', 'Pikachi', 'Squishmellow', 'Labubo', 'Plortz', 'Kirbi', 'Funkoo', 'Jellycats', 'Mariooo', 'Dumplo', 'Prongo'].every((n) => denyReason(n) !== ''));
 check('the multi-word brand rule bites (Fluffnut ~ Fluffer Nutter, Sillyputt, Hellokit, Jellycato, Peppapigs, Kitkatto) and spares look-alikes (Jellycap, Hushpuff, Caromel, Constello)',
   ['Fluffnut', 'Sillyputt', 'Hellokit', 'Jellycato', 'Peppapigs', 'Kitkatto'].every((n) => compoundReason(n) !== '') && ['Jellycap', 'Hushpuff', 'Caromel', 'Constello', 'Dollop'].every((n) => compoundReason(n) === ''),
   ['Fluffnut', 'Jellycap'].map((n) => `${n}: ${compoundReason(n) || 'ok'}`).join('; '));
 check('the gate does not cry wolf on innocent words (Dollop, Gloopsy, Munchip, Plumpet, Jelly, Squish)', ['Dollop', 'Gloopsy', 'Munchip', 'Plumpet', 'Jelly', 'Squish'].every((n) => denyReason(n) === ''));
+{
+  // the full list and the read-aloud rule bite: the three names they retired (src/data/species.ts rule 3b), a later-generation name spelled
+  // around (Phidough reads "fidough"), and names from the other creature lists
+  const RETIRED = ['Glubbin', 'Sproink', 'Drowsel'], MORE = ['Phidough', 'Pecharunts', 'Sprigatitto', 'Litwik', 'Gabumon', 'Guilmonn', 'Kougrah', 'Katsumah', 'Zommerr'];
+  const missed = [...RETIRED, ...MORE].filter((n) => denyReason(n) === '');
+  check(`the full lists and the read-aloud rule bite: the retired ${RETIRED.join(' / ')} (Grubbin, Spoink, and Drowzee read aloud) and ${MORE.join(', ')} are rejected`, missed.length === 0,
+    missed.length ? `missed ${missed.join(' ')}` : [...RETIRED, 'Phidough'].map((n) => `${n}: ${denyReason(n)}`).join('; '));
+  const WORDS = ['Pebble', 'Muffin', 'Noodle', 'Pudding', 'Biscuit', 'Bubble', 'Cuddle', 'Dimple', 'Jellybean', 'Gumdrop', 'Snuggle', 'Marble']; // ('Wobble' is out: one letter from Sobble)
+  const wolf = WORDS.filter((n) => denyReason(n) !== '');
+  check(`... and still does not cry wolf on everyday words used as names (${WORDS.join(', ')})`, wolf.length === 0, wolf.map((n) => `${n}: ${denyReason(n)}`).join(' | '));
+  // prose: English one letter from a coined creature name passes; the creature name itself does not
+  const PROSE_OK = 'A little kitten in mittens hums a lullaby, nimble as a salmon, under a starry sky; the beads rustle and glimmer like a flamingo, a minor buzz of koi.';
+  const PROSE_BAD = ['It glows like Fidough.', 'A friend for Agumon.', 'Squeeze it like a Pikachu.', 'Shaped like a Pikachuu.'];
+  check('prose screening spares English words one letter from a creature name (little~Flittle, kitten~Litten, starry~Starly, lullaby~Vullaby, salmon~Palmon, buzz, koi ...) and rejects the names themselves (Fidough, Agumon, Pikachu) and a respelled famous one (Pikachuu)',
+    denyReasonText(PROSE_OK) === '' && PROSE_BAD.every((t) => denyReasonText(t) !== ''), `${denyReasonText(PROSE_OK) || 'ok'}; ${PROSE_BAD.map((t) => denyReasonText(t) || 'MISSED').join('; ')}`);
+}
 
 // language safety over EVERY player-facing or design-facing string the data layer owns
 const LANG_COVERAGE = ['es', 'pt', 'fr', 'it', 'de', 'nl', 'tl', 'net', 'en'];
@@ -635,7 +742,10 @@ for (const d of CATALOG) {
 check(`language safety (${SAFE_LANGS.length} language lists, substring + sound-alike edit distance 1 + spoken roots): no unsafe species name, id, blurb, tag or silhouette text`, safeOk, safeMsg.join(' | '));
 {
   const other: Array<[string, string]> = [];
-  for (const f of MATERIAL_LIST) other.push([`family ${f.id} name`, f.name], [`family ${f.id} blurb`, f.blurb]);
+  for (const f of MATERIAL_LIST) {
+    other.push([`family ${f.id} name`, f.name], [`family ${f.id} blurb`, f.blurb]);
+    if (f.lookBounds) other.push([`family ${f.id} look bound`, f.lookBounds.why]);
+  }
   for (const l of LANES) other.push([`lane ${l.id}`, l.name]);
   for (const t of TIERS) other.push([`tier ${t}`, TIER_NAMES[t]]);
   for (const t of TASK_DEFS) other.push([`task ${t.id}`, t.text]);

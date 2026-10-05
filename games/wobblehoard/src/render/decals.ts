@@ -107,7 +107,8 @@ export class Decals {
     this.pool.frustumCulled = false;
   }
 
-  setColor(c: Rgb): void { this.poolMat.uniforms.uColor.value.setRGB(c[0], c[1], c[2], THREE.LinearSRGBColorSpace); }
+  setColor(c: Rgb): void { this.setColorRGB(c[0], c[1], c[2]); }
+  setColorRGB(r: number, g: number, b: number): void { this.poolMat.uniforms.uColor.value.setRGB(r, g, b, THREE.LinearSRGBColorSpace); }
   setRingColor(c: Rgb): void { this.poolMat.uniforms.uRingCol.value.setRGB(c[0], c[1], c[2], THREE.LinearSRGBColorSpace); }
   setVisible(v: boolean): void { this.shadow.visible = v; this.pool.visible = v; }
 

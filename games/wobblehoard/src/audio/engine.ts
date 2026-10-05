@@ -4,17 +4,18 @@
 //  - Polyphony is capped (MAX_VOICES live groups; the oldest one-shot is stolen with a 20 ms fade), every node is
 //    disconnected on 'ended', and a 0.5 s housekeeping timer reaps anything whose 'ended' never arrived.
 //  - Round 3: a generative music bed (music.ts) runs in "sessions" with their own small polyphony (MAX_LIVE_NOTES), pumped
-//    LOOKAHEAD_S ahead by a TICK_MS timer that only runs while music plays; it ducks itself under ceremonies and a loud held
-//    squish. New interaction voices bump / lift / toss / strand (interact.ts); bump is rate-limited, strand is held.
+//    LOOKAHEAD_S ahead by a TICK_MS timer that only runs while music plays; it ducks itself (slowly) under the ceremonies and
+//    makes room (a fast dip, music.ts ROOM_*) under every effect voice, the held squish and strand by their own level.
+//    New interaction voices bump / lift / toss / strand (interact.ts); bump is rate-limited, strand is held.
 import type { SquishAudio, AudioSettings, SquishVoiceHandle, TierName } from '../contracts.ts';
 import { clamp } from '../core/rng.ts';
 import { c01, fin, liveNodeCount, makeRng, noiseBuffer, type VoiceGroup } from './dsp.ts';
-import { createMasterChain, type MasterChain } from './chain.ts';
+import { createMasterChain, musicGain, type MasterChain } from './chain.ts';
 import { blend, land, poke, pop, release, squish, type SquishVoice } from './voices.ts';
 import { TIERS, capsuleBurst, crack, grab, meterFull, mergeStart, mythicDuck, reveal, tierIdx, type MergeVoice } from './ceremony.ts';
 import {
-  Composer, FADE_OUT_S, LOOKAHEAD_S as MUSIC_LOOKAHEAD_S, MUSIC_DEFAULT, MusicBed, PAUSE_FADE_S, SQUISH_DUCK_HOLD_S,
-  SQUISH_DUCK_RATE, TICK_MS,
+  Composer, FADE_OUT_S, HELD_ROOM_HOLD_S, LOOKAHEAD_S as MUSIC_LOOKAHEAD_S, MUSIC_DEFAULT, MusicBed, PAUSE_FADE_S, TICK_MS,
+  roomDb, squishRoomDb, strandRoomDb,
 } from './music.ts';
 import { BumpLimiter, bump, lift, strand, strandSnap, toss, type StrandVoice } from './interact.ts';
 
@@ -82,6 +83,9 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
   let lastMusicStart = -1e9;
   let pendingStart = false;
   let pauseToken = 0;
+  let suspendTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The latest end of a ceremony duck (context time): a session that starts before it is ducked from its first note. */
+  let duckHoldUntil = -Infinity;
   const mstat = { ticks: 0, tickMsTotal: 0, tickMsMax: 0, notes: 0, dropped: 0, maxLive: 0 };
   /** The last 128 tick costs (ms): detailStats() reports their p99 and max (the cumulative max also counts JIT warm-up). */
   const tickRing = new Float64Array(128);
@@ -134,6 +138,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
         try {
           const t0 = ctx.currentTime + 0.03;
           musicInst = new MusicBed(ctx, chain.music, composer, t0);
+          if (duckHoldUntil > t0) musicInst.duckSpan(t0, duckHoldUntil);   // started (unmuted, resumed) during a ceremony
           musicInst.advance(t0 + MUSIC_LOOKAHEAD_S);
           started.music++;
         } catch { musicInst = null; dropped++; }
@@ -160,10 +165,38 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
     mstat.ticks++; mstat.tickMsTotal += ms; mstat.tickMsMax = Math.max(mstat.tickMsMax, ms);
   }
 
-  /** Duck the music (DUCK_DB, smooth) from now until `until` (context time); later calls extend it. No-op without music. */
+  /** Duck the music (DUCK_DB, smooth) from now until `until` (context time); later calls extend it. A session that starts
+   *  before `until` (music switched on, unmuted or resumed mid-ceremony) is ducked from its start. */
   function musicDuck(until: number): void {
+    if (!ctx) return;
+    const u = fin(until, 0);
+    if (u > duckHoldUntil) duckHoldUntil = u;
+    if (!musicInst) return;
+    try { musicInst.duckSpan(ctx.currentTime, u); } catch { /* ignore */ }
+  }
+
+  /** The music volume's gain above its default (dB, >= 0): room dips deepen by it (music.ts roomDb). */
+  const musicBoostDb = (): number => Math.max(0, 20 * Math.log10(Math.max(musicGain(settings.music), 1e-6)));
+
+  /** Make room for a one-shot effect of `kind` that ends at `end` (context time). No-op without music. */
+  function musicRoom(kind: string, end: number): void {
     if (!musicInst || !ctx) return;
-    try { musicInst.duckSpan(ctx.currentTime, until); } catch { /* ignore */ }
+    const db = roomDb(kind, musicBoostDb());
+    if (db === null) return;
+    try { musicInst.makeRoom(ctx.currentTime, end, db); } catch { /* ignore */ }
+  }
+
+  /** A held voice's per-update dip (depth from its own level), held HELD_ROOM_HOLD_S. */
+  function musicRoomHeld(db: number): void {
+    if (!musicInst || !ctx || !(db < -0.05)) return;
+    const t = ctx.currentTime;
+    try { musicInst.makeRoom(t, t + HELD_ROOM_HOLD_S, db); } catch { /* ignore */ }
+  }
+
+  /** register() + make room for it in the music. */
+  function registerFx(g: VoiceGroup, kind: string): void {
+    register(g);
+    musicRoom(kind, g.endTime);
   }
 
   function prune(): void {
@@ -319,10 +352,10 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       const a = accept('poke');
       if (!a) return;
       try {
-        register(poke(a.c, chain!.boost, a.c.currentTime + LOOKAHEAD, {
+        registerFx(poke(a.c, chain!.boost, a.c.currentTime + LOOKAHEAD, {
           rng: makeRng(a.seed), jitter: a.jitter, intensity: c01(p?.intensity, 0.5),
           pitch: clamp(fin(p?.pitch, 1), 0.5, 2), pan: clamp(fin(p?.pan, 0), -1, 1),
-        }));
+        }), 'poke');
       } catch { dropped++; }
     },
 
@@ -344,8 +377,8 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
             const now = a.c.currentTime;
             const at = typeof atTime === 'number' && Number.isFinite(atTime) ? clamp(atTime, now, now + 0.25) : undefined;
             v.update(q, at);
-            // a loud held squish ducks the music (each loud update extends the hold; the tick releases it smoothly)
-            if (musicInst && Math.abs(fin(q.rate, 0)) >= SQUISH_DUCK_RATE && v.alive && !v.dying) musicDuck(now + SQUISH_DUCK_HOLD_S);
+            // the held squish makes room in the music by its own level (|rate|), frame by frame
+            if (musicInst && v.alive && !v.dying) musicRoomHeld(squishRoomDb(fin(q.rate, 0), musicBoostDb()));
           } catch { /* never throw into the render loop */ }
         },
         end(fadeS) {
@@ -358,10 +391,10 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       const a = accept('release');
       if (!a) return;
       try {
-        register(release(a.c, chain!.boost, a.c.currentTime + LOOKAHEAD, {
+        registerFx(release(a.c, chain!.boost, a.c.currentTime + LOOKAHEAD, {
           rng: makeRng(a.seed), jitter: a.jitter, compression: c01(p?.compression, 0.5),
           pitch: clamp(fin(p?.pitch, 1), 0.5, 2), pan: clamp(fin(p?.pan, 0), -1, 1),
-        }));
+        }), 'release');
       } catch { dropped++; }
     },
 
@@ -369,9 +402,9 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       const a = accept('land');
       if (!a) return;
       try {
-        register(land(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
+        registerFx(land(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
           rng: makeRng(a.seed), jitter: a.jitter, intensity: c01(p?.intensity, 0.5), pitch: clamp(fin(p?.pitch, 1), 0.5, 2),
-        }));
+        }), 'land');
       } catch { dropped++; }
     },
 
@@ -379,10 +412,10 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       const a = accept('pop');
       if (!a) return;
       try {
-        register(pop(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
+        registerFx(pop(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
           rng: makeRng(a.seed), jitter: a.jitter, size: c01(p?.size, 0.5),
           pitch: clamp(fin(p?.pitch, 1), 0.5, 2), pan: clamp(fin(p?.pan, 0), -1, 1),
-        }));
+        }), 'pop');
       } catch { dropped++; }
     },
 
@@ -393,7 +426,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
         const v = blend(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
           rng: makeRng(a.seed), jitter: a.jitter, count: fin(p?.count, 3), durationS: fin(p?.durationS, 2.2),
         });
-        register(v);
+        registerFx(v, 'blend');
         return { stop() { try { v.stop(); } catch { /* ignore */ } } };
       } catch { dropped++; return { stop() { /* failed to start */ } }; }
     },
@@ -402,9 +435,9 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       const a = accept('meterFull');
       if (!a) return;
       try {
-        register(meterFull(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
+        registerFx(meterFull(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
           rng: makeRng(a.seed), jitter: a.jitter, quiet: p?.quiet === true, pitch: clamp(fin(p?.pitch, 1), 0.5, 2),
-        }));
+        }), 'meterFull');
       } catch { dropped++; }
     },
 
@@ -427,7 +460,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
         if (beat === 'grab') g = grab(a.c, chain!.plain, t0, { ...base, progress: c01(p.progress, 0) });
         else if (beat === 'crack') g = crack(a.c, chain!.plain, t0, base);
         else g = capsuleBurst(a.c, chain!.plain, t0, { ...base, tier: asTier(p.tier) });
-        register(g);
+        registerFx(g, 'capsule');
         musicDuck(g.endTime);
       } catch { dropped++; }
     },
@@ -511,9 +544,9 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       const a = accept('bump');
       if (!a) return;
       try {
-        register(bump(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
+        registerFx(bump(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
           rng: makeRng(a.seed), jitter: a.jitter, intensity: I, pitch: clamp(fin(p?.pitch, 1), 0.5, 2), pan: clamp(fin(p?.pan, 0), -1, 1),
-        }));
+        }), 'bump');
       } catch { dropped++; }
     },
 
@@ -521,9 +554,9 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       const a = accept('lift');
       if (!a) return;
       try {
-        register(lift(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
+        registerFx(lift(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
           rng: makeRng(a.seed), jitter: a.jitter, pitch: clamp(fin(p?.pitch, 1), 0.5, 2), pan: clamp(fin(p?.pan, 0), -1, 1),
-        }));
+        }), 'lift');
       } catch { dropped++; }
     },
 
@@ -531,9 +564,9 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       const a = accept('toss');
       if (!a) return;
       try {
-        register(toss(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
+        registerFx(toss(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
           rng: makeRng(a.seed), jitter: a.jitter, speed: c01(p?.speed, 0.5), pan: clamp(fin(p?.pan, 0), -1, 1),
-        }));
+        }), 'toss');
       } catch { dropped++; }
     },
 
@@ -546,9 +579,9 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
         const a = accept('strandSnap');
         if (!a) return;
         try {
-          register(strandSnap(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
+          registerFx(strandSnap(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
             rng: makeRng(a.seed), jitter: a.jitter, tension: T, pitch: clamp(fin(p.pitch, 1), 0.5, 2), pan,
-          }));
+          }), 'strandSnap');
         } catch { dropped++; }
         return;
       }
@@ -574,6 +607,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       }
       lastStrandUpd = perfS();
       try { v.update({ tension: T, pan }); } catch { /* never throw into the render loop */ }
+      musicRoomHeld(strandRoomDb(T, musicBoostDb()));
     },
 
     detailStats() {
@@ -624,17 +658,27 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       const token = ++pauseToken;
       if (paused) {
         pumped.length = 0;
-        const fading = !!musicInst;
-        syncMusic();                    // a playing music session fades out over PAUSE_FADE_S
+        syncMusic();                    // a playing music session retires with the short PAUSE_FADE_S fade
+        // every session still fading out (this one, or a 1.4 s music-off/mute fade) is made silent within PAUSE_FADE_S,
+        // and the context is suspended only after that: a second setPaused(true) (visibilitychange + pagehide/blur) can
+        // neither skip the fade nor shorten a pending suspend
+        const t = c.currentTime;
+        let silentAt = t;
+        for (const m of retiring) { try { silentAt = Math.max(silentAt, m.fastStop(t + 0.005, PAUSE_FADE_S)); } catch { /* closed */ } }
         const suspend = (): void => {
+          suspendTimer = null;
           if (token !== pauseToken || !paused || disposed) return;
-          freeAll();                    // 'ended' events do not arrive while suspended: disconnect now
+          freeAll();                    // 'ended' events do not arrive while suspended: stop and disconnect now
           freeMusic();
           c.suspend().catch(() => { /* already suspended or closed */ });
         };
-        if (fading) { killAll(0.03); setTimeout(suspend, (PAUSE_FADE_S + 0.03) * 1000); }
-        else suspend();
+        if (suspendTimer) { clearTimeout(suspendTimer); suspendTimer = null; }
+        if (silentAt > t + 0.001) {
+          killAll(0.03);
+          suspendTimer = setTimeout(suspend, (silentAt - t + 0.03) * 1000);
+        } else suspend();
       } else {
+        if (suspendTimer) { clearTimeout(suspendTimer); suspendTimer = null; }
         c.resume().then(() => { if (token === pauseToken) syncMusic(); }).catch(() => { /* needs a gesture: unlock() will retry */ });
       }
     },
@@ -645,6 +689,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       if (timer) { clearInterval(timer); timer = null; }
       if (pumpTimer) { clearInterval(pumpTimer); pumpTimer = null; }
       if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+      if (suspendTimer) { clearTimeout(suspendTimer); suspendTimer = null; }
       pumped.length = 0;
       freeAll();
       freeMusic();

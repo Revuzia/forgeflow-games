@@ -1,0 +1,48 @@
+{
+  "about": "Main character and species names of three more large creature franchises, for the originality gate in _harness/probe_catalog.ts (names: every rule; prose: whole-word equality and long-term containment). Lowercase, letters only, sorted. Regenerate from the sources; never hand-edit a list without its source.",
+  "fetched": "2026-10-05",
+  "digimon": {
+    "source": "https://digimon-api.vercel.app/api/digimon (209 Digimon of the first two anime series) plus the headline partners of the later series, each confirmed to exist on digi-api.com or digimon.fandom.com: Guilmon, Renamon, Terriermon, Lopmon, Impmon, Gaomon, Lalamon, Falcomon, Shoutmon, Tailmon, Piyomon, Gummymon, Veemon, Calumon, Agunimon, Lobomon, Kazemon, Kumamon, Kokomon",
+    "count": 228,
+    "names": [
+      "aeroveedramon", "agumon", "agunimon", "airdramon", "akatorimon", "andromon", "angemon", "angewomon", "ankylomon", "apocalymon", "aquillamon",
+      "armadillomon", "azulongmon", "babamon", "baihumon", "bakemon", "betamon", "birdramon", "biyomon", "blossomon", "bluemeramon", "boltmon", "botamon",
+      "bucchiemon", "bukamon", "calumon", "candlemon", "centarumon", "cherrymon", "chibomon", "chuumon", "cyberdramon", "daemon", "darktyrannomon",
+      "datamon", "demidevimon", "demiveemon", "deramon", "devidramon", "devimon", "digitamamon", "dinobeemon", "divermon", "dokugumon", "drimogemon",
+      "elecmon", "etemon", "extyrannomon", "exveemon", "falcomon", "flamedramon", "flarerizamon", "floramon", "flymon", "frigimon", "gabumon", "gaomon",
+      "garbagemon", "garudamon", "garurumon", "gatomon", "gazimon", "gekomon", "geremon", "gesomon", "gigadramon", "gizamon", "goldramon", "gomamon",
+      "gorillamon", "gotsumon", "grankuwagamon", "greymon", "guardromon", "guilmon", "gummymon", "hagurumon", "halsemon", "hanumon", "hawkmon",
+      "herculeskabuterimon", "icemon", "ikkakumon", "imperialdramon", "impmon", "jijimon", "kabuterimon", "kazemon", "kingetemon", "kiwimon",
+      "kokatorimon", "kokomon", "kokuwamon", "koromon", "kumamon", "kunemon", "kuwagamon", "ladydevimon", "lalamon", "leomon", "lillymon", "lobomon",
+      "lopmon", "machinedramon", "magnaangemon", "magnadramon", "magnamon", "mamemon", "mammothmon", "marineangemon", "megadramon", "megakabuterimon",
+      "megaseadramon", "mekanorimon", "meramon", "metaletemon", "metalgarurumon", "metalgreymon", "metalseadramon", "metaltyrannomon", "meteormon",
+      "milleniummon", "modokibetamon", "mojyamon", "mokumon", "monochromon", "monzaemon", "motimon", "muchomon", "mushroomon", "musyamon", "myotismon",
+      "nanimon", "nefertimon", "numemon", "nyaromon", "ogremon", "omnimon", "otamamon", "pabumon", "pagumon", "paildramon", "palmon", "parrotmon",
+      "patamon", "pegasusmon", "penguinmon", "phantomon", "phoenixmon", "piddomon", "piedmon", "piximon", "piyomon", "platinumsukamon", "plesiomon",
+      "poromon", "poyomon", "psychemon", "pumpkinmon", "punimon", "puppetmon", "pururumon", "raidramon", "raremon", "redvegiemon", "renamon",
+      "revolvermon", "rosemon", "saberdramon", "saberleomon", "salamon", "scorpiomon", "seadramon", "seraphimon", "sethmon", "shakkoumon", "shellmon",
+      "shogungekomon", "shoutmon", "shurimon", "silphymon", "skullgreymon", "skullmeramon", "skullsatamon", "snimon", "snowagumon", "soulmon", "starmon",
+      "stegomon", "stingmon", "submarimon", "sukamon", "syakomon", "tailmon", "tanemon", "tankmon", "tentomon", "terriermon", "thunderballmon", "togemon",
+      "tokomon", "toucanmon", "tsubumon", "tsukaimon", "tsunomon", "tuskmon", "tyrannomon", "unimon", "upamon", "vademon", "valkyrimon", "veedramon",
+      "veemon", "vegiemon", "venommyotismon", "vermilimon", "vikemon", "vilemon", "wargreymon", "warumonzaemon", "weregarurumon", "whamon", "wizardmon",
+      "wormmon", "yokomon", "yuramon", "zhuqiaomon", "zudomon"
+    ]
+  },
+  "neopets": {
+    "source": "the 55 Neopets species; 54 confirmed as links on https://neopets.fandom.com/wiki/Neopet (Jubjub is spelled JubJub there)",
+    "count": 55,
+    "names": [
+      "acara", "aisha", "blumaroo", "bori", "bruce", "buzz", "chia", "chomby", "cybunny", "draik", "elephante", "eyrie", "flotsam", "gelert", "gnorbu",
+      "grarrl", "grundo", "hissi", "ixi", "jetsam", "jubjub", "kacheek", "kau", "kiko", "koi", "korbat", "kougra", "krawk", "kyrii", "lenny", "lupe",
+      "lutari", "meerca", "moehog", "mynci", "nimmo", "ogrin", "peophin", "poogle", "pteri", "quiggle", "ruki", "scorchio", "shoyru", "skeith", "techo",
+      "tonu", "tuskaninny", "uni", "usul", "vandagyre", "wocky", "xweetok", "yurble", "zafara"
+    ]
+  },
+  "moshi": {
+    "source": "the six Moshi Monsters pet species, confirmed by https://moshimonsters.fandom.com Category:Monsters. The 270-odd Moshlings are NOT listed: most are ordinary English words or first names (Honey, Sparkle, Waffles, Truffle, Glob, Gurgle, Wallop ...), which would make the gate reject plain English.",
+    "count": 6,
+    "names": [
+      "diavlo", "furi", "katsuma", "luvli", "poppet", "zommer"
+    ]
+  }
+}

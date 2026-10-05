@@ -30,18 +30,25 @@
 //        dough   E     mochidough           putty                 2 2 1 1 1 0
 //        rubber  F     firmsilicone         popdome               2 1 1 2 0 0
 //   Letters differ from the example mapping in DESIGN 5.2 on purpose: the three columns that hold a Mythic (A, B, C) are the jelly,
-//   fill and chew lanes, because a Mythic's inner light and iridescence need a translucent body; opaque foam and dough lanes stop at
-//   Epic/Legendary. The six lanes cover every example family named in DESIGN 5.2 (foam, mochi/dough, jelly, liquid-filled, slime, putty).
+//   fill and chew lanes, because a Mythic's inner light and iridescence need a body light can enter (clear gel and gummy; the fill
+//   lane's Mythic is a bead squeeze, frosted rather than clear: its family caps translucency at 0.5); the opaque foam and dough lanes
+//   stop at Epic/Legendary. The six lanes cover every example family named in DESIGN 5.2 (foam, mochi/dough, jelly, liquid-filled,
+//   slime, putty).
 //
-// Tier language shows in the data itself, not only in the label (DESIGN 5.3): coreGlow, glitter, translucency, patterning and the
-// number of features in the silhouette all rise with tier, and the inner-light hue (coreHue) is the tier's tell colour (cream,
-// lagoon, dusk violet, ember coral, sodium amber; Mythic cycles), with body hues kept within the +-110 degrees the renderer allows
-// between body and core, so the stored coreHue is the hue that is actually drawn. These genome numbers ARE the drawn values:
-// src/data/materials.ts resolveMaterial passes translucency, gloss, coreGlow and glitter through unchanged (the family only adds the
-// surface fields a genome does not carry), so the rarity stays in the material.
+// Tier language shows in the data itself, not only in the label (DESIGN 5.3): coreGlow, glitter, patterning and the number of
+// features in the silhouette all rise with tier, and the inner-light hue (coreHue) is the tier's tell colour (cream, lagoon, dusk
+// violet, ember coral, sodium amber; Mythic cycles), with body hues kept within the +-110 degrees the renderer allows between body
+// and core, so the stored coreHue is the hue that is actually drawn. Translucency rises with tier in the families that can be clear
+// (gel, liquid, sticky, slime, gummy, silicone, dome). The families that are opaque in the hand (slow-rise foam, marshmallow, mochi
+// dough, putty, packed beads) have a translucency CAP (materials.ts LookBounds: 0.30 / 0.40 / 0.45 / 0.30 / 0.50): their species sit
+// under it with the whole cosmetic band (base + 0.06 <= cap), keep a small rise inside the family, and show their tier through core
+// glow, glitter and gloss instead of a see-through body. These genome numbers ARE the drawn values: src/data/materials.ts
+// resolveMaterial passes translucency, gloss, coreGlow and glitter through (the cap never bites on a catalog instance; it guards
+// genomes from elsewhere), and the family only adds the surface fields a genome does not carry, so the rarity stays in the material.
 //
-// ORIGINALITY AND LANGUAGE SAFETY: every name, blurb and palette below is invented for this game. probe_catalog.ts runs a 200+ word
-// denylist of real brands, characters, toy lines and games (edit distance 1 and multi-word brand prefixes included) and a MULTILINGUAL
+// ORIGINALITY AND LANGUAGE SAFETY: every name, blurb and palette below is invented for this game. probe_catalog.ts runs a denylist of
+// about 1600 real names (brands, characters, toy lines, games, every official Pokemon species name, the main Digimon, all Neopets
+// species and the Moshi Monsters; containment, edit distance 1 as spelled AND as read aloud, multi-word brand prefixes) and a MULTILINGUAL
 // language-safety gate (English, Spanish, Portuguese, French, Italian, German, Dutch, Tagalog and internet slang; substring and
 // sound-alike edit-distance-1 matching) over every name, id, blurb, tag and silhouette line. Names are read aloud by players of every
 // language, so a name is judged by how it SOUNDS, not only by how it is spelled.
@@ -149,7 +156,7 @@ const SHAPES: Record<SpeciesId, ShapeRecipe> = {
   plumpet: shape([0.95, 1.15, 0.95], []),
   twangle: shape([0.72, 1.1, 0.72], [B([0, 1, 0], 0.6, 0.42), D([0, -1, 0], 0.1, 0.7)]),
   puddlo: shape([1.45, 0.5, 1.3], []),
-  glubbin: shape([1.25, 0.8, 0.8], [D([0, 1, 0], 0.4, 0.8), B([1, -0.2, 0.15], 0.25, 0.6, true)]),
+  glugbean: shape([1.25, 0.8, 0.8], [D([0, 1, 0], 0.4, 0.8), B([1, -0.2, 0.15], 0.25, 0.6, true)]),
   crumbit: shape([0.75, 1.1, 0.75], [B([0, -1, 0.05], 0.6, 1.0), B([0, 1, 0], 0.1, 0.4)]),
   chunkle: shape([0.8, 1.2, 0.65], [B([1, 1, 0], 0.4, 0.6, true), B([1, -1, 0], 0.4, 0.6, true)]),
   munchip: shape([1.0, 0.9, 0.62], [D([0, 1, 0], 0.45, 0.45), B([0.65, 0.75, 0], 0.45, 0.55, true)]),
@@ -157,7 +164,7 @@ const SHAPES: Record<SpeciesId, ShapeRecipe> = {
   cushlet: shape([0.75, 0.78, 0.75], [B([1, 1, 1], 0.7, 0.55, true), B([1, -1, 1], 0.7, 0.55, true), B([1, 1, -1], 0.7, 0.55, true), B([1, -1, -1], 0.7, 0.55, true)]),
   crimpo: shape([1.3, 0.68, 0.78], [R([0, 1, 0], [1, 0, 0], 0.3, 0.36, 1.3), B([1, -0.15, 0], 0.3, 0.5, true)]),
   thumbly: shape([1.1, 0.85, 0.95], [B([0.8, -0.2, 0.45], 0.65, 0.55, true), D([0, 1, 0.25], 0.1, 0.4)]),
-  sproink: shape([0.78, 0.8, 1.3], [B([0, 0.2, -1], 0.2, 0.5)]),
+  boingle: shape([0.78, 0.8, 1.3], [B([0, 0.2, -1], 0.2, 0.5)]),
   dimpla: shape([1.2, 0.62, 1.2], [B([0, 1, 0], 0.55, 0.7)]),
   // ── uncommon ──
   nuzzo: shape([0.95, 0.9, 0.95], [B([0.75, 0.65, -0.05], 0.8, 0.42, true)]),
@@ -179,7 +186,7 @@ const SHAPES: Record<SpeciesId, ShapeRecipe> = {
   marigel: shape([0.8, 0.8, 0.5], [B([0.383, 0.924, 0], 0.6, 0.36, true), B([0.924, 0.383, 0], 0.6, 0.36, true), B([0.924, -0.383, 0], 0.6, 0.36, true), B([0.383, -0.924, 0], 0.6, 0.36, true)]),
   gloopsy: shape([1.0, 0.8, 0.9], [B([0.8, 0.6, 0], 0.6, 0.5, true), B([0, 1, 0], 0.55, 0.5), B([0.6, -0.3, -0.8], 0.4, 0.4, true)]),
   hushpuff: shape([1.0, 0.9, 0.95], [B([0.8, 0.65, -0.15], 0.7, 0.45, true), B([0.9, -0.2, 0.4], 0.4, 0.5, true), B([0, 1, -0.1], 0.4, 0.4)]),
-  drowsel: shape([1.2, 0.75, 0.85], [B([-0.35, 0.8, -0.2], 0.95, 0.7), B([0.95, 0.3, 0.2], 0.4, 0.45)]),
+  slumbrel: shape([1.2, 0.75, 0.85], [B([-0.35, 0.8, -0.2], 0.95, 0.7), B([0.95, 0.3, 0.2], 0.4, 0.45)]),
   thudge: shape([1.1, 0.85, 1.0], [B([-0.7, 0.6, 0], 0.5, 0.5), B([0.6, 0.7, -0.5], 0.45, 0.5), B([0.2, 0.1, -1], 0.45, 0.45), D([0.5, 0.3, 0.9], 0.12, 0.5)]),
   diademo: shape([1.05, 0.7, 1.05], [B([0, 1, 0], 1.0, 0.4), B([0.6, 0.8, 0], 0.9, 0.38, true), B([0.35, 0.8, -0.55], 0.85, 0.38, true)]),
   // ── epic ──
@@ -233,16 +240,16 @@ const RAW: readonly DefIn[] = [
     tags: ['flat', 'wide', 'liquid'],
   },
   {
-    id: 'glubbin', name: 'Glubbin', tier: 'common', family: 'waterfill', lane: 'fill', signature: 'squeeze',
-    silhouette: 'bean with a dip along the top', shape: SHAPES.glubbin,
+    id: 'glugbean', name: 'Glugbean', tier: 'common', family: 'waterfill', lane: 'fill', signature: 'squeeze',
+    silhouette: 'bean with a dip along the top', shape: SHAPES.glugbean,
     look: look({ hue: 7, chroma: 0.38, lightness: 0.37, coreHue: 56, coreGlow: 0.3, translucency: 0.55, gloss: 0.8, firmness: 0.35, bounce: 0.65, stretch: 0.55, size: 0.45, eyeStyle: 'oval' }),
-    blurb: 'A terracotta bean full of water. It goes glub when you squeeze and wobbles for ages.',
+    blurb: 'A terracotta bean full of water. It goes glug when you squeeze and wobbles for ages.',
     tags: ['bean', 'liquid', 'long'],
   },
   {
     id: 'crumbit', name: 'Crumbit', tier: 'common', family: 'beadsqueeze', lane: 'fill', signature: 'squeeze',
     silhouette: 'pear, wide at the base', shape: SHAPES.crumbit,
-    look: look({ hue: 53, chroma: 0.27, lightness: 0.5, coreHue: 88, coreGlow: 0.25, translucency: 0.5, gloss: 0.4, firmness: 0.5, bounce: 0.4, stretch: 0.4, size: 0.5, eyeStyle: 'wide', eyeSize: 0.55 }),
+    look: look({ hue: 53, chroma: 0.27, lightness: 0.5, coreHue: 88, coreGlow: 0.25, translucency: 0.3, gloss: 0.4, firmness: 0.5, bounce: 0.4, stretch: 0.4, size: 0.5, eyeStyle: 'wide', eyeSize: 0.55 }),
     blurb: 'A sandy pear stuffed with tiny beads. Squeeze it and it crunches into a new shape.',
     tags: ['pear', 'beads', 'crunchy'],
   },
@@ -263,34 +270,34 @@ const RAW: readonly DefIn[] = [
   {
     id: 'wisplet', name: 'Wisplet', tier: 'common', family: 'marshmallow', lane: 'foam', signature: 'squeeze',
     silhouette: 'low cloud of three puffs', shape: SHAPES.wisplet,
-    look: look({ hue: 342, chroma: 0.13, lightness: 0.51, coreHue: 56, coreGlow: 0.15, translucency: 0.5, gloss: 0.3, firmness: 0.3, bounce: 0.35, stretch: 0.45, size: 0.6, eyeStyle: 'sleepy', eyeHeight: 0.42 }),
+    look: look({ hue: 342, chroma: 0.13, lightness: 0.51, coreHue: 56, coreGlow: 0.15, translucency: 0.2, gloss: 0.3, firmness: 0.3, bounce: 0.35, stretch: 0.45, size: 0.6, eyeStyle: 'sleepy', eyeHeight: 0.42 }),
     blurb: 'A tiny ash-rose cloud. It squashes flat and puffs back up in a blink.',
     tags: ['cloud', 'puffy', 'soft'],
   },
   {
     id: 'cushlet', name: 'Cushlet', tier: 'common', family: 'marshmallow', lane: 'foam', signature: 'squeeze',
     silhouette: 'chunky cube with rounded corners', shape: SHAPES.cushlet,
-    look: look({ hue: 332, chroma: 0.11, lightness: 0.21, coreHue: 56, coreGlow: 0.15, translucency: 0.45, gloss: 0.3, firmness: 0.3, bounce: 0.3, stretch: 0.4, size: 0.7, eyeStyle: 'sleepy', eyeSpacing: 0.6 }),
+    look: look({ hue: 332, chroma: 0.11, lightness: 0.21, coreHue: 56, coreGlow: 0.15, translucency: 0.18, gloss: 0.3, firmness: 0.3, bounce: 0.3, stretch: 0.4, size: 0.7, eyeStyle: 'sleepy', eyeSpacing: 0.6 }),
     blurb: 'A dusty-mauve cube of foam, soft as a cushion. It sighs a little when squeezed.',
     tags: ['block', 'cube', 'soft'],
   },
   {
     id: 'crimpo', name: 'Crimpo', tier: 'common', family: 'mochidough', lane: 'dough', signature: 'pull',
     silhouette: 'half-moon dumpling with a crimped seam', shape: SHAPES.crimpo,
-    look: look({ hue: 67, chroma: 0.63, lightness: 0.62, coreHue: 32, coreGlow: 0.3, translucency: 0.4, gloss: 0.3, firmness: 0.4, bounce: 0.3, stretch: 0.6, size: 0.55, eyeStyle: 'dot', eyeSpacing: 0.55 }),
+    look: look({ hue: 67, chroma: 0.63, lightness: 0.62, coreHue: 32, coreGlow: 0.3, translucency: 0.26, gloss: 0.3, firmness: 0.4, bounce: 0.3, stretch: 0.6, size: 0.55, eyeStyle: 'dot', eyeSpacing: 0.55 }),
     blurb: 'A toast-gold dumpling with a crimped edge. It stretches, then slowly settles back.',
     tags: ['dumpling', 'halfmoon', 'doughy'],
   },
   {
     id: 'thumbly', name: 'Thumbly', tier: 'common', family: 'mochidough', lane: 'dough', signature: 'poke',
     silhouette: 'wide face with chubby cheeks and a thumb dimple', shape: SHAPES.thumbly,
-    look: look({ hue: 351, chroma: 0.48, lightness: 0.64, coreHue: 56, coreGlow: 0.3, translucency: 0.45, gloss: 0.35, firmness: 0.45, bounce: 0.35, stretch: 0.55, size: 0.5, eyeStyle: 'oval', eyeSize: 0.55 }),
+    look: look({ hue: 351, chroma: 0.48, lightness: 0.64, coreHue: 56, coreGlow: 0.3, translucency: 0.28, gloss: 0.35, firmness: 0.45, bounce: 0.35, stretch: 0.55, size: 0.5, eyeStyle: 'oval', eyeSize: 0.55 }),
     blurb: 'A salmon-pink face with chubby cheeks. Press a thumb in and the dent smooths out slowly.',
     tags: ['cheeks', 'wide', 'doughy'],
   },
   {
-    id: 'sproink', name: 'Sproink', tier: 'common', family: 'firmsilicone', lane: 'rubber', signature: 'poke',
-    silhouette: 'rounded bullet pointing at you', shape: SHAPES.sproink,
+    id: 'boingle', name: 'Boingle', tier: 'common', family: 'firmsilicone', lane: 'rubber', signature: 'poke',
+    silhouette: 'rounded bullet pointing at you', shape: SHAPES.boingle,
     look: look({ hue: 141, chroma: 0.35, lightness: 0.58, coreHue: 56, coreGlow: 0.3, translucency: 0.35, gloss: 0.55, firmness: 0.75, bounce: 0.85, stretch: 0.3, size: 0.4, eyeStyle: 'wide', eyeSize: 0.5 }),
     blurb: 'A rubbery seafoam bullet that stares straight at you. Poke it and it boings back.',
     tags: ['bullet', 'long', 'rubbery', 'bouncy'],
@@ -329,7 +336,7 @@ const RAW: readonly DefIn[] = [
     id: 'granulo', name: 'Granulo', tier: 'uncommon', family: 'beadsqueeze', lane: 'fill', signature: 'squeeze',
     silhouette: 'chunky five-point star facing you',
     shape: SHAPES.granulo,
-    look: look({ hue: 71, chroma: 0.82, lightness: 0.86, coreHue: 166, coreGlow: 0.5, translucency: 0.55, gloss: 0.45, firmness: 0.5, bounce: 0.4, stretch: 0.45, size: 0.4, glitter: 0.3, eyeStyle: 'wide', eyeSpacing: 0.4 }),
+    look: look({ hue: 71, chroma: 0.82, lightness: 0.86, coreHue: 166, coreGlow: 0.5, translucency: 0.34, gloss: 0.45, firmness: 0.5, bounce: 0.4, stretch: 0.45, size: 0.4, glitter: 0.3, eyeStyle: 'wide', eyeSpacing: 0.4 }),
     bands: { chroma: 0.02, lightness: 0.015 },
     blurb: 'A sunshine-yellow star stuffed with beads. Every point gives a crunchy crackle.',
     tags: ['star', 'beads', 'lobed'],
@@ -351,28 +358,28 @@ const RAW: readonly DefIn[] = [
   {
     id: 'acornel', name: 'Acornel', tier: 'uncommon', family: 'marshmallow', lane: 'foam', signature: 'squeeze',
     silhouette: 'wide acorn: broad cap and a tall stem', shape: SHAPES.acornel,
-    look: look({ hue: 256, chroma: 0.49, lightness: 0.36, coreHue: 172, coreGlow: 0.45, translucency: 0.5, gloss: 0.3, firmness: 0.3, bounce: 0.3, stretch: 0.5, size: 0.45, glitter: 0.15, eyeStyle: 'sleepy', eyeHeight: 0.46 }),
+    look: look({ hue: 256, chroma: 0.49, lightness: 0.36, coreHue: 172, coreGlow: 0.45, translucency: 0.24, gloss: 0.3, firmness: 0.3, bounce: 0.3, stretch: 0.5, size: 0.45, glitter: 0.15, eyeStyle: 'sleepy', eyeHeight: 0.46 }),
     blurb: 'A periwinkle puff with a wide cap and a tall stem. Featherlight and a little shy.',
     tags: ['acorn', 'capped', 'puffy'],
   },
   {
     id: 'capnap', name: 'Capnap', tier: 'uncommon', family: 'slowrise', lane: 'foam', signature: 'squeeze',
     silhouette: 'mushroom: wide cap on a narrow stalk', shape: SHAPES.capnap,
-    look: look({ hue: 258, chroma: 0.61, lightness: 0.04, coreHue: 172, coreGlow: 0.5, translucency: 0.45, gloss: 0.35, firmness: 0.35, bounce: 0.2, stretch: 0.4, size: 0.55, glitter: 0.1, eyeStyle: 'sleepy', eyeSize: 0.55, eyeHeight: 0.42 }),
+    look: look({ hue: 258, chroma: 0.61, lightness: 0.04, coreHue: 172, coreGlow: 0.5, translucency: 0.15, gloss: 0.35, firmness: 0.35, bounce: 0.2, stretch: 0.4, size: 0.55, glitter: 0.1, eyeStyle: 'sleepy', eyeSize: 0.55, eyeHeight: 0.42 }),
     blurb: 'A sleepy indigo mushroom cap. Press it down and it takes its time to rise.',
     tags: ['mushroom', 'capped', 'slow'],
   },
   {
     id: 'knubby', name: 'Knubby', tier: 'uncommon', family: 'mochidough', lane: 'dough', signature: 'poke',
     silhouette: 'mitten: one big thumb-lump on the side', shape: SHAPES.knubby,
-    look: look({ hue: 79, chroma: 0.38, lightness: 0.09, coreHue: 172, coreGlow: 0.45, translucency: 0.5, gloss: 0.35, firmness: 0.45, bounce: 0.35, stretch: 0.55, size: 0.5, glitter: 0.1, eyeStyle: 'dot', eyeHeight: 0.6 }),
+    look: look({ hue: 79, chroma: 0.38, lightness: 0.09, coreHue: 172, coreGlow: 0.45, translucency: 0.32, gloss: 0.35, firmness: 0.45, bounce: 0.35, stretch: 0.55, size: 0.5, glitter: 0.1, eyeStyle: 'dot', eyeHeight: 0.6 }),
     blurb: 'A khaki dough glove with one big thumb. Poke the thumb and the whole glove nods.',
     tags: ['mitten', 'thumb', 'doughy'],
   },
   {
     id: 'kneadle', name: 'Kneadle', tier: 'uncommon', family: 'putty', lane: 'dough', signature: 'squeeze',
     silhouette: 'lumpy loaf with one shoulder up and one dimple', shape: SHAPES.kneadle,
-    look: look({ hue: 228, chroma: 0.17, lightness: 0.17, coreHue: 172, coreGlow: 0.5, translucency: 0.55, gloss: 0.6, firmness: 0.5, bounce: 0.25, stretch: 0.5, size: 0.5, glitter: 0.2, eyeStyle: 'oval', eyeSpacing: 0.55 }),
+    look: look({ hue: 228, chroma: 0.17, lightness: 0.17, coreHue: 172, coreGlow: 0.5, translucency: 0.15, gloss: 0.6, firmness: 0.5, bounce: 0.25, stretch: 0.5, size: 0.5, glitter: 0.2, eyeStyle: 'oval', eyeSpacing: 0.55 }),
     blurb: 'Slate-blue putty in a lumpy loaf. It keeps every fingerprint and flows like taffy.',
     tags: ['lumpy', 'putty', 'dent'],
   },
@@ -410,7 +417,7 @@ const RAW: readonly DefIn[] = [
     id: 'burrbin', name: 'Burrbin', tier: 'rare', family: 'beadsqueeze', lane: 'fill', signature: 'squeeze',
     silhouette: 'round burr with ten blunt studs',
     shape: SHAPES.burrbin,
-    look: look({ hue: 290, chroma: 0.58, lightness: 0.06, coreHue: 255, coreGlow: 0.7, translucency: 0.65, gloss: 0.5, firmness: 0.55, bounce: 0.4, stretch: 0.35, size: 0.5, glitter: 0.45, speckle: 0.6, pattern: 'speckle', eyeStyle: 'wide', eyeSize: 0.6 }),
+    look: look({ hue: 290, chroma: 0.58, lightness: 0.06, coreHue: 255, coreGlow: 0.7, translucency: 0.38, gloss: 0.5, firmness: 0.55, bounce: 0.4, stretch: 0.35, size: 0.5, glitter: 0.45, speckle: 0.6, pattern: 'speckle', eyeStyle: 'wide', eyeSize: 0.6 }),
     blurb: 'A plum burr covered in blunt little studs. It crackles when squeezed.',
     tags: ['spiky', 'studs', 'beads'],
   },
@@ -431,21 +438,21 @@ const RAW: readonly DefIn[] = [
   {
     id: 'hushpuff', name: 'Hushpuff', tier: 'rare', family: 'marshmallow', lane: 'foam', signature: 'squeeze',
     silhouette: 'fluffy body with ears, cheeks and a tuft', shape: SHAPES.hushpuff,
-    look: look({ hue: 257, chroma: 0.22, lightness: 0.06, coreHue: 292, coreGlow: 0.66, translucency: 0.6, gloss: 0.35, firmness: 0.25, bounce: 0.3, stretch: 0.5, size: 0.65, glitter: 0.3, speckle: 0.4, pattern: 'speckle', eyeStyle: 'sleepy', eyeSize: 0.55, eyeHeight: 0.44 }),
+    look: look({ hue: 257, chroma: 0.22, lightness: 0.06, coreHue: 292, coreGlow: 0.66, translucency: 0.28, gloss: 0.35, firmness: 0.25, bounce: 0.3, stretch: 0.5, size: 0.65, glitter: 0.3, speckle: 0.4, pattern: 'speckle', eyeStyle: 'sleepy', eyeSize: 0.55, eyeHeight: 0.44 }),
     blurb: 'A dusky grey-violet puff with tufted ears. Squeeze it gently: it hushes the room.',
     tags: ['eared', 'cheeks', 'fluffy', 'tufted'],
   },
   {
-    id: 'drowsel', name: 'Drowsel', tier: 'rare', family: 'slowrise', lane: 'foam', signature: 'squeeze',
-    silhouette: 'snail: shell on the back, head up front', shape: SHAPES.drowsel,
-    look: look({ hue: 279, chroma: 0.41, lightness: 0.54, coreHue: 244, coreGlow: 0.65, translucency: 0.6, gloss: 0.4, firmness: 0.3, bounce: 0.2, stretch: 0.4, size: 0.6, glitter: 0.2, speckle: 0.55, pattern: 'swirl', eyeStyle: 'sleepy', eyeSpacing: 0.4, eyeHeight: 0.5 }),
+    id: 'slumbrel', name: 'Slumbrel', tier: 'rare', family: 'slowrise', lane: 'foam', signature: 'squeeze',
+    silhouette: 'snail: shell on the back, head up front', shape: SHAPES.slumbrel,
+    look: look({ hue: 279, chroma: 0.41, lightness: 0.54, coreHue: 244, coreGlow: 0.65, translucency: 0.19, gloss: 0.4, firmness: 0.3, bounce: 0.2, stretch: 0.4, size: 0.6, glitter: 0.2, speckle: 0.55, pattern: 'swirl', eyeStyle: 'sleepy', eyeSpacing: 0.4, eyeHeight: 0.5 }),
     blurb: 'A lilac snail with a swirl for a shell. It sinks under your hand and rises slowly.',
     tags: ['snail', 'shell', 'slow'],
   },
   {
     id: 'thudge', name: 'Thudge', tier: 'rare', family: 'putty', lane: 'dough', signature: 'squeeze',
     silhouette: 'boulder with four uneven lumps', shape: SHAPES.thudge,
-    look: look({ hue: 348, chroma: 0.41, lightness: 0.11, coreHue: 272, coreGlow: 0.68, translucency: 0.6, gloss: 0.7, firmness: 0.55, bounce: 0.2, stretch: 0.35, size: 0.6, glitter: 0.3, speckle: 0.6, pattern: 'speckle', eyeStyle: 'oval', eyeSize: 0.6 }),
+    look: look({ hue: 348, chroma: 0.41, lightness: 0.11, coreHue: 272, coreGlow: 0.68, translucency: 0.19, gloss: 0.7, firmness: 0.55, bounce: 0.2, stretch: 0.35, size: 0.6, glitter: 0.3, speckle: 0.6, pattern: 'speckle', eyeStyle: 'oval', eyeSize: 0.6 }),
     blurb: 'A brick-rose boulder of putty. It lands with a thud and keeps the dent you leave.',
     tags: ['lumpy', 'boulder', 'putty'],
   },
@@ -468,7 +475,7 @@ const RAW: readonly DefIn[] = [
   {
     id: 'rattlebead', name: 'Rattlebead', tier: 'epic', family: 'beadsqueeze', lane: 'fill', signature: 'squeeze',
     silhouette: 'round rattle with a top knob, side nubs and a back tail', shape: SHAPES.rattlebead,
-    look: look({ hue: 28, chroma: 0.82, lightness: 0.49, coreHue: 353, coreGlow: 0.8, translucency: 0.8, gloss: 0.6, firmness: 0.5, bounce: 0.5, stretch: 0.4, size: 0.5, glitter: 0.6, speckle: 0.7, pattern: 'bands', eyeStyle: 'wide', eyeSize: 0.6 }),
+    look: look({ hue: 28, chroma: 0.82, lightness: 0.49, coreHue: 353, coreGlow: 0.8, translucency: 0.41, gloss: 0.6, firmness: 0.5, bounce: 0.5, stretch: 0.4, size: 0.5, glitter: 0.6, speckle: 0.7, pattern: 'bands', eyeStyle: 'wide', eyeSize: 0.6 }),
     blurb: 'An amber rattle ball with stripes. Each squeeze shakes out a hundred tiny beads of sound.',
     tags: ['rattle', 'knobbed', 'beads', 'striped'],
   },
@@ -482,14 +489,14 @@ const RAW: readonly DefIn[] = [
   {
     id: 'selenuff', name: 'Selenuff', tier: 'epic', family: 'marshmallow', lane: 'foam', signature: 'squeeze',
     silhouette: 'crescent moon: two big curled horns around a dip', shape: SHAPES.selenuff,
-    look: look({ hue: 254, chroma: 0.64, lightness: 0.21, coreHue: 349, coreGlow: 0.82, translucency: 0.75, gloss: 0.4, firmness: 0.3, bounce: 0.4, stretch: 0.55, size: 0.6, glitter: 0.65, speckle: 0.6, pattern: 'swirl', eyeStyle: 'sleepy', eyeHeight: 0.46 }),
+    look: look({ hue: 254, chroma: 0.64, lightness: 0.21, coreHue: 349, coreGlow: 0.82, translucency: 0.33, gloss: 0.4, firmness: 0.3, bounce: 0.4, stretch: 0.55, size: 0.6, glitter: 0.65, speckle: 0.6, pattern: 'swirl', eyeStyle: 'sleepy', eyeHeight: 0.46 }),
     blurb: 'A moon-violet puff with two curled horns. It hums a lullaby when you squeeze it.',
     tags: ['crescent', 'horned', 'fluffy', 'glowing'],
   },
   {
     id: 'pastrel', name: 'Pastrel', tier: 'epic', family: 'mochidough', lane: 'dough', signature: 'pull',
     silhouette: 'croissant arch with curled ends and a seam', shape: SHAPES.pastrel,
-    look: look({ hue: 34, chroma: 0.67, lightness: 0.11, coreHue: 359, coreGlow: 0.8, translucency: 0.7, gloss: 0.4, firmness: 0.4, bounce: 0.4, stretch: 0.6, size: 0.55, glitter: 0.5, speckle: 0.65, pattern: 'bands', eyeStyle: 'oval', eyeSpacing: 0.55 }),
+    look: look({ hue: 34, chroma: 0.67, lightness: 0.11, coreHue: 359, coreGlow: 0.8, translucency: 0.38, gloss: 0.4, firmness: 0.4, bounce: 0.4, stretch: 0.6, size: 0.55, glitter: 0.5, speckle: 0.65, pattern: 'bands', eyeStyle: 'oval', eyeSpacing: 0.55 }),
     blurb: 'A toasted-bronze pastry arch, warm to hold. Pull an end and flaky bands ripple past.',
     tags: ['arch', 'curled', 'doughy', 'striped'],
   },
@@ -533,14 +540,14 @@ const RAW: readonly DefIn[] = [
   {
     id: 'somnuff', name: 'Somnuff', tier: 'legendary', family: 'slowrise', lane: 'foam', signature: 'squeeze',
     silhouette: 'drooping side-ears, top tuft, back tail and a crest', shape: SHAPES.somnuff,
-    look: look({ hue: 298, chroma: 0.92, lightness: 0.41, coreHue: 33, coreGlow: 0.92, translucency: 0.8, gloss: 0.5, firmness: 0.3, bounce: 0.25, stretch: 0.45, size: 0.7, glitter: 0.7, speckle: 0.6, pattern: 'swirl', eyeStyle: 'sleepy', eyeSize: 0.6, eyeHeight: 0.48 }),
+    look: look({ hue: 298, chroma: 0.92, lightness: 0.41, coreHue: 33, coreGlow: 0.92, translucency: 0.23, gloss: 0.5, firmness: 0.3, bounce: 0.25, stretch: 0.45, size: 0.7, glitter: 0.7, speckle: 0.6, pattern: 'swirl', eyeStyle: 'sleepy', eyeSize: 0.6, eyeHeight: 0.48 }),
     blurb: 'An orchid dream-cloud, always half asleep. It sinks into your hands and rises slowly.',
     tags: ['eared', 'tailed', 'crested', 'dreamy'],
   },
   {
     id: 'fossilo', name: 'Fossilo', tier: 'legendary', family: 'putty', lane: 'dough', signature: 'squeeze',
     silhouette: 'ridged boulder with one tall horn and two shoulder lumps', shape: SHAPES.fossilo,
-    look: look({ hue: 11, chroma: 0.62, lightness: 0.12, coreHue: 46, coreGlow: 0.9, translucency: 0.7, gloss: 0.85, firmness: 0.55, bounce: 0.2, stretch: 0.4, size: 0.65, glitter: 0.7, speckle: 0.8, pattern: 'swirl', eyeStyle: 'oval', eyeSpacing: 0.5 }),
+    look: look({ hue: 11, chroma: 0.62, lightness: 0.12, coreHue: 46, coreGlow: 0.9, translucency: 0.23, gloss: 0.85, firmness: 0.55, bounce: 0.2, stretch: 0.4, size: 0.65, glitter: 0.7, speckle: 0.8, pattern: 'swirl', eyeStyle: 'oval', eyeSpacing: 0.5 }),
     blurb: 'A copper oil-slick putty that keeps every dent you give it. Each thumbprint stays.',
     tags: ['horned', 'lumpy', 'ridged', 'putty'],
   },
@@ -557,7 +564,7 @@ const RAW: readonly DefIn[] = [
   {
     id: 'constello', name: 'Constello', tier: 'mythic', family: 'beadsqueeze', lane: 'fill', signature: 'squeeze',
     silhouette: 'crowned orb ringed with seven star points', shape: SHAPES.constello,
-    look: look({ hue: 239, chroma: 0.99, lightness: 0.09, coreHue: 159, coreGlow: 1.0, translucency: 0.95, gloss: 0.9, firmness: 0.5, bounce: 0.55, stretch: 0.45, size: 0.7, glitter: 1.0, speckle: 0.95, pattern: 'speckle', eyeStyle: 'wide', eyeSize: 0.6, eyeSpacing: 0.5 }),
+    look: look({ hue: 239, chroma: 0.99, lightness: 0.09, coreHue: 159, coreGlow: 1.0, translucency: 0.43, gloss: 0.9, firmness: 0.5, bounce: 0.55, stretch: 0.45, size: 0.7, glitter: 1.0, speckle: 0.95, pattern: 'speckle', eyeStyle: 'wide', eyeSize: 0.6, eyeSpacing: 0.5 }),
     bands: { chroma: 0.02, lightness: 0.02 },
     blurb: 'A midnight sack of beads where every grain is a star. It rustles like night waves.',
     tags: ['crowned', 'starry', 'iridescent', 'beads'],
