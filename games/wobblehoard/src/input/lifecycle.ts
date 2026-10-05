@@ -5,15 +5,19 @@
 //    call or app switch: so any later gesture re-tries unlock() while the context is not running (cheap, idempotent).
 import type { Game as App } from '../shell/game.ts';
 
-export function attachLifecycle(app: Pick<App, 'setHidden' | 'input' | 'unlockAudio' | 'profile'>): () => void {
+export function attachLifecycle(app: Pick<App, 'setHidden' | 'input' | 'unlockAudio' | 'profile' | 'collection'>): () => void {
   const off: Array<() => void> = [];
   const on = (t: EventTarget, type: string, fn: (e: Event) => void, opts?: AddEventListenerOptions | boolean): void => {
     t.addEventListener(type, fn, opts);
     off.push(() => t.removeEventListener(type, fn, opts));
   };
   const sync = (): void => { app.setHidden(document.visibilityState === 'hidden'); };
-  on(document, 'visibilitychange', () => { sync(); if (document.visibilityState === 'hidden') app.profile.flush(); else app.unlockAudio(); });
-  on(window, 'pagehide', () => { app.profile.flush(); app.setHidden(true); });
+  // saves: write now when the page may go away; fold in another tab's change when this one comes back (COLLECTION 5.4 two tabs)
+  const flush = (): void => { try { app.profile.flush(); } catch { /* ignore */ } try { app.collection.flush(); } catch { /* ignore */ } };
+  const refresh = (): void => { try { app.profile.sync?.(); } catch { /* ignore */ } try { app.collection.sync(); } catch { /* ignore */ } };
+  on(document, 'visibilitychange', () => { sync(); if (document.visibilityState === 'hidden') flush(); else { app.unlockAudio(); refresh(); } });
+  on(window, 'pagehide', () => { flush(); app.setHidden(true); });
+  on(window, 'focus', () => refresh());
   on(window, 'pageshow', () => { sync(); });
   on(document, 'freeze', () => app.setHidden(true));
   on(document, 'resume', () => sync());

@@ -1,7 +1,7 @@
 // DEV ONLY: window.__WH__ (DebugHook, contracts.ts) + the sound-lab API + the shell's dev extras. Never in a production bundle:
 // src/shell/boot.ts imports this module dynamically behind `import.meta.env.DEV` (so Vite drops it from `vite build`), and the node probes
 // reach it through src/app.ts. Audit findings 6 / 20: this hook is scripted input, which must not ship once the meter pays squish points.
-import type { DebugHook, SoftMetrics, TierName } from '../contracts.ts';
+import type { DebugHook, SoftEvent, SoftMetrics, TierName } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { decodeGenome, encodeGenome, genomeFromParam, pitchRatio } from '../core/genome.ts';
 import { MERGE_COST } from '../core/merge.ts';
@@ -19,11 +19,12 @@ export interface LabApi {
 
 /** The shell's dev extras on window.__WH__ (the harness drives the capsule loop and the merge entry with them). */
 export interface ShellDevApi {
-  /** meter reading + capsule table state */
-  meter(): { fill: number; credits: number; resting: boolean; doneToday: boolean; tableFull: boolean; offline: boolean; onTable: boolean; opening: boolean; holding: boolean; source: string };
-  /** add capsule credits directly (practice fallback only) */
+  /** meter reading + capsule table state + where the meter comes from */
+  meter(): { fill: number; credits: number; resting: boolean; doneToday: boolean; tableFull: boolean; offline: boolean; onTable: boolean; opening: boolean; holding: boolean; ledger: string; load: string };
+  /** earn `credits` capsules through the REAL meter path, accelerated (see fill); false when the clock cannot be accelerated */
   grant(credits: number): boolean;
-  /** run the real meter with accelerated pokes until the ring reaches `fill` (practice fallback only) */
+  /** run the REAL meter (collection.feed -> meter.ts) with synthetic pokes 2 s apart on a clock pushed ahead of the wall clock, until the
+   *  ring reaches `fill` or a capsule is earned; false when the clock cannot be accelerated */
   fill(fill: number): boolean;
   /** where the capsule stands, 0..1 over the canvas (like pointerDown) + its radius in CSS px; null while falling / absent */
   capsuleScreen(): { x: number; y: number; rPx: number } | null;
@@ -49,7 +50,11 @@ export type ShellDebugHook = DebugHook & { shell: ShellDevApi };
 
 export interface DebugOptions {
   postShot?: (name: string, dataUrl: string) => Promise<{ ok: boolean; path?: string }>;
+  /** the dev clock skew the collection's epoch clock adds (boot.ts / app.ts pass `now: () => Date.now() + skew.ms`): the meter accelerator */
+  skew?: { ms: number };
 }
+
+const POKE: SoftEvent = { kind: 'poke', at: { x: 0, y: 0.5, z: 0.5 }, normal: { x: 0, y: 0, z: 1 }, intensity: 0.5, heldFor: 0, finger: 0 };
 
 export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: ShellDebugHook; lab: LabApi } {
   const { audio } = game;
@@ -104,10 +109,27 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
   const shell: ShellDevApi = {
     meter() {
       const m = game.capsules.reading;
-      return { ...m, onTable: game.capsules.onTable, opening: game.capsules.opening, holding: game.capsules.holding, source: game.collection.source };
+      return { ...m, onTable: game.capsules.onTable, opening: game.capsules.opening, holding: game.capsules.holding, ledger: game.hoard.ledger, load: game.hoard.storage().load };
     },
-    grant(n) { if (!game.collection.devGrant) return false; game.collection.devGrant(n); return true; },
-    fill(f) { if (!game.collection.devFill) return false; game.collection.devFill(f); return true; },
+    grant(n) {
+      if (!o.skew) return false;
+      const target = game.collection.meter().credits + Math.max(0, Math.floor(n));
+      for (let k = 0; k < n && game.collection.meter().credits < target && !game.collection.meter().tableFull; k++) shell.fill(1);
+      return true;
+    },
+    fill(f) {
+      const skew = o.skew;
+      if (!skew) return false;
+      const goal = Math.min(1, Math.max(0, f));
+      const c0 = game.collection.meter().credits;
+      for (let i = 0; i < 600; i++) {
+        const m = game.collection.meter();
+        if (m.credits > c0 || m.tableFull || m.fill >= goal) break;
+        skew.ms += 2000;   // 2 s between pokes: full freshness, under the 40 SP/min valve
+        game.collection.feed(POKE, Date.now() + skew.ms);
+      }
+      return true;
+    },
     capsuleScreen() {
       const s = game.capsules.screenPoint();
       return s ? { x: s.x / vp().w, y: s.y / vp().h, rPx: s.r } : null;

@@ -108,6 +108,7 @@ const smooth01 = (x: number): number => { const t = x < 0 ? 0 : x > 1 ? 1 : x; r
 export function createGestures(host: GestureHost, emit: (a: GestureAction) => void, config: Partial<GestureConfig> = {}): Gestures {
   const cfg: GestureConfig = { ...DEFAULT_GESTURE_CONFIG, ...config };
   const ptrs = new Map<number, Ptr>();
+  let tickT = 0;
   let pinch: { a: number; b: number; dist: number } | null = null;
 
   const slotFree = (s: Slot): boolean => { for (const p of ptrs.values()) if (p.kind === 'body' && p.slot === s) return false; return true; };
@@ -118,7 +119,8 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
     return p.mode === 'rub' ? Math.min(v, cfg.rubMaxPressure) : v;
   }
 
-  /** hold detection + pressure ramp for one body pointer at time t */
+  /** hold detection + pressure ramp for one body pointer at time t (tickEach: the same at tickT, for the per-frame Map.forEach) */
+  const tickEach = (p: Ptr): void => { tickBody(p, tickT); };
   function tickBody(p: Ptr, t: number): void {
     if (p.kind !== 'body' || p.mode === 'pull') return;
     if (t < p.tLast) t = p.tLast; else p.tLast = t;
@@ -273,8 +275,9 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
     },
 
     update(t) {
-      if (!Number.isFinite(t)) return;
-      for (const p of ptrs.values()) tickBody(p, t);
+      if (!Number.isFinite(t) || ptrs.size === 0) return;
+      tickT = t;
+      ptrs.forEach(tickEach);   // Map.forEach with a bound callback: no iterator object per frame
     },
 
     wheel(deltaPx) {

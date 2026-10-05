@@ -1,7 +1,8 @@
 # WOBBLEHOARD — sound design and measurements
 
 **Nobody has listened to any of this yet, including the round-3 music bed and its fix (the room dips, the breathing pad,
-the louder strand, the retuned bubbles).** The machine that built it has no speakers and no human ears were involved.
+the louder strand, the retuned bubbles) and the audio-4 fix (the music held down while you play instead of pumping, the
+slow-onset dips, the 12 ms clear-the-way delay, the strand's corrected AM, the unlock retry).** The machine that built it has no speakers and no human ears were involved.
 Every claim below is a measurement (levels, durations, pitch trajectories, spectrograms viewed as images) or a design
 intent. "Sounds soft/wet/cute" is **unverified**; the checklists at the end are for the first person who plugs in
 headphones. Treat the numbers as "the synthesis does what the design says", not as "it sounds good".
@@ -22,8 +23,9 @@ downloaded or copied waveforms; the designs are ours and are not modelled on any
 | `src/audio/music.ts` | round 3: the generative music bed. `Composer` (pure, seeded score) + `MusicBed` (one playing session: lookahead scheduler, pad, felt mallet with its own echo, bubble graces, duck, fades) |
 | `src/audio/interact.ts` | round 3: `bump`, `BumpLimiter`, `lift`, `toss`, `strand` (held), `strandSnap` |
 | `_harness/probe_audio.mjs` | gate G2 + sanity + engine stress (Chromium). `node _harness/probe_audio.mjs` (add `--voices=poke,pop` to iterate; `--no-engine` skips the ~2 min live part, `--no-ceremony` skips the round-2 gates, `--skip-voices` skips round 1, `--no-round3` skips round 3, `--only3` runs only round 3; a full run takes ~10 min) |
+| `_harness/audioview/engine_offline.js`, `play_scenarios.mjs`, `room_checks.mjs` | audio-4 fix: the REAL engine (`createAudio()`) run on an OfflineAudioContext with its timers locked to the audio clock (adapted from the independent audio-3 verifier's driver), seeded play scenarios (continuous, sparse, bursts, isolated placements) and the gates on them: pumping, isolated separation, the exposed gate, the clear-the-way latency |
 | `_harness/audioview/` | `index.html` sound lab (live engine, buttons/sliders, ceremony controls; round 3: music toggle + volume, bump/lift/toss, hold-to-stretch strand), `view.js` offline render API (voices, full ceremonies, duck; round 3: `renderMusic`, `renderMix`, `simulateMusic`, `composeOnly`, `bumpLimiterRun`), `engine_tests.js`, `engine_tests3.js` (round-3 live engine), `ceremony_checks.mjs` (round-2 gates), `music_checks.mjs` (round-3 gates), `analysis.mjs` (FFT, metrics, pitch tracker, spectral peaks/spread, PNG/WAV writers) |
-| `_harness/_renders/` (gitignored) | per voice: `<v>.wav`, `<v>.png` spectrogram, `<v>_min/_max.wav`, `<v>_pitch0.80/1.25.wav`; `all_voices.wav` (every voice in order, 0.5 s apart); `report.json`, `engine_report.json`; round 2: `reveal_<tier>.png/.wav`, `reveal_mythic_v0..2`, `ceremony_capsule_<tier>`, `ceremony_merge_<tier>`, `merge_charge_*`, `meterFull`, `capsule_*`; round 3: `music_seed1_90s.wav`, `music_seed2_90s.wav`, `music_seed1_30s.png`, `music_seed2_30s.png`, `music_startstop.png`, `music_duck.png`, `mix.wav/.png`, `bump/lift/toss/strand/strandSnap.wav/.png`, `strand_orphan.png`, `round3_voices.wav`, `engine_report3.json`; round-3 fix: `mix_sweep.wav/.png` (music + effects at random pitch and timing), `mix_sweep_music.png` (the music stem with its room dips), `music_room.png`, `strand_real.png` (the strand alone at realistic call rates) |
+| `_harness/_renders/` (gitignored) | per voice: `<v>.wav`, `<v>.png` spectrogram, `<v>_min/_max.wav`, `<v>_pitch0.80/1.25.wav`; `all_voices.wav` (every voice in order, 0.5 s apart); `report.json`, `engine_report.json`; round 2: `reveal_<tier>.png/.wav`, `reveal_mythic_v0..2`, `ceremony_capsule_<tier>`, `ceremony_merge_<tier>`, `merge_charge_*`, `meterFull`, `capsule_*`; round 3: `music_seed1_90s.wav`, `music_seed2_90s.wav`, `music_seed1_30s.png`, `music_seed2_30s.png`, `music_startstop.png`, `music_duck.png`, `mix.wav/.png`, `bump/lift/toss/strand/strandSnap.wav/.png`, `strand_orphan.png`, `round3_voices.wav`, `engine_report3.json`; round-3 fix: `mix_sweep.wav/.png` (music + effects at random pitch and timing), `mix_sweep_music.png` (the music stem with its room dips), `music_room.png`, `strand_real.png` (the strand alone at realistic call rates); audio-4 fix: `room_sparse_music.png` (the music stem under sparse play, real engine), `room_sparse_mix.wav`, `room_bursts_mix.wav` (master output of sparse / burst play with the music), `room_sparse_gain.csv` (the music's gain over the music alone, 50 ms frames) |
 
 ## Master chain
 
@@ -61,7 +63,11 @@ voices -> [boost gain (poke/squish/release) | plain gain (land/pop/blend, ceremo
   one-sample silent buffer (iOS) synchronously in the call, before anything is awaited (round-3 audit fix: the buffer used
   to start only after awaiting `resume()`, i.e. after the gesture had ended; a probe check simulates a context that starts
   suspended), never awaits `resume()` for longer than 1.2 s (it can stay pending without a gesture), and is idempotent and
-  concurrency-safe (one context, ever).
+  concurrency-safe (one context, ever). Audio-4 fix: a call that arrives while an earlier `unlock()` is still pending gets the
+  same promise but, if the context is not running, calls `resume()` and starts the silent buffer again, synchronously, inside
+  its own gesture. Before, `lifecycle.ts`'s `unlockAudio()` on `visibilitychange` (not a gesture) left a pending promise, and a
+  tap within the next 1.2 s got that promise with no `resume()` inside the tap: on iOS the context stayed suspended until a
+  later trigger kicked it (probe, with a mock context that only resumes inside a "gesture").
 * **iOS audio session (round-3 audit fix, a decision):** where `navigator.audioSession` exists (Safari 16.4+), the engine
   sets its `type` to `'playback'` when it creates the context with sound on, and to `'ambient'` while muted (back to
   `'playback'` on unmute). With `'playback'` the hardware ringer switch does not silence the game (sound is one of the
@@ -89,8 +95,8 @@ voices -> [boost gain (poke/squish/release) | plain gain (land/pop/blend, ceremo
   (reads only the newest `elapsed` samples of the analyser's 0.68 s ring; returns `NaN` if any NaN reaches the output).
   `started[kind]` counts accepted triggers, including ones swallowed by mute.
 * Round 2 additions: voices have a stealing `priority` (one-shots 0 < held squish 1 < reveal/merge 2), so a flurry of pokes
-  never steals a ceremony voice; a live `mergeStart` schedules only its first 0.12 s of squelch/tick layers (0.5 s before
-  the round-3 audit fix) and an 80 ms build pump (running only while something is pending) schedules the rest 0.5 s ahead;
+  never steals a ceremony voice; a live `mergeStart` schedules only its first 0.2 s of squelch/tick layers (0.5 s before
+  the round-3 audit fix; `MERGE_FIRST_SLICE_S` in engine.ts) and an 80 ms build pump (running only while something is pending) schedules the rest 0.5 s ahead;
   round-3 audit fix: the same pump now also builds a `blend`'s bubble stream, clinks and flourish (only the first 0.5 s is
   built in the call) and the notes, ladder, sparkle and shimmer of a `reveal` or merge `burst` that start more than 0.6 s
   after the call (`Bag.defer`: the random draws stay in the call, so a live voice is the same sound as its offline render;
@@ -445,30 +451,63 @@ carry about equal energy, the pad's spread over time (it breathes and fills rest
   its field has more than a second left. Offline, the probe calls `advance` once for the whole render; both give the same
   samples (checked, below).
 
-### Room for the effects (round-3 fix): the music steps back under every effect
+### Room for the effects (round-3 fix, re-shaped by the audio-4 fix): the music steps back while you play
 
 * **Who asks.** Every effect one-shot (poke, release, land, pop, blend, meterFull, capsule beats, bump, lift, toss,
-  strandSnap) asks for a dip from the moment it is called until its own end time plus a 0.8 s tail. The held squish asks
-  every update, by its own level: no dip below |rate| 0.15 /s (the squelch is then 40 dB under its maximum), the full dip
-  from 0.7 /s, in proportion (dB) between; each update holds 0.25 s. The held strand asks the same way by tension (full
-  from 0.35). Reveal and merge keep the slow -9 dB duck (capsule beats get both). The rule lives in `music.ts`
-  (`roomDb`, `squishRoomDb`, `strandRoomDb`, `ROOM_*`), and the offline mix renders use the same functions.
+  strandSnap) asks for a dip from the moment it is called (or from its onset, below) until **4.5 s after its own end**
+  (`ROOM_TAIL_S`, the activity hold; it was 0.8 s). The held squish asks every update, by its own level: no dip below
+  |rate| 0.15 /s (the squelch is then 40 dB under its maximum), the full dip from 0.7 /s, in proportion (dB) between. The
+  held strand asks the same way by tension: no dip below 0.15, full from 0.5 (audio-4 fix; was 0..0.35), going down with a
+  40 ms time constant. Each held update holds 0.25 s plus the same 4.5 s activity hold (requests are rounded: depth down to
+  0.5 dB, end up to a 0.25 s grid, so a voice updated every frame re-plans a few times a second). Reveal and merge keep the
+  slow -9 dB duck (capsule beats get both). The rule lives in `music.ts` (`oneShotRoom`, `squishRoom`, `strandRoom`,
+  `roomClearDelay`, `ROOM_*`); the engine and the offline mix renders call the same functions.
 * **How deep.** The melody (mallets, echoes, bubbles: tonal transients in the effects' own band, the part that most often
   covers a soft effect) dips 24 dB, the pad 0.72 of that in dB (17.3 dB), so a soft dark carpet stays under the play. With
-  the music slider above 0.45 the dip deepens by the music's extra gain (at 1: 30 dB / 21.6 dB), so the music under an
-  effect is never louder than at the default level.
-* **How fast.** Attack time constant 1.5 ms for the melody (a note already ringing is the masker to remove), 6 ms for the
-  pad (a sustained chord cut in 1.5 ms showed a splatter stripe at every dip onset in the spectrogram), starting 4 ms
-  before the effect (the engine schedules every effect that far ahead of the call). Recovery: time constant 0.6 s for the
-  melody, 0.9 s for the pad (back within 1 dB about 1.9 s after the hold ends, at most ~1 dB per 20 ms).
-* **Holds stack as a staircase** (`MusicBed.makeRoom`): the deepest active hold wins; when it ends the next deepest takes
-  over (a soft call never cuts a deeper one short); then the music comes back. So a player tapping about once a second
-  keeps the music steadily under instead of pumping it at the tap rate, and the music returns about 2 s after the last
-  effect. Calls come in time order and the only cancellation is of the room nodes' own future plan, so the gain never
-  jumps.
-* **What it means for a listener (not heard yet):** while you play, the melody effectively rests and a quiet pad stays;
-  when you stop, the music swells back within ~2 s. Whether that reads as "the music breathes with me" or as pumping is
-  the first thing to check by ear.
+  the music slider above 0.45 the dip deepens by the music's extra gain (at 1: 30 dB / 21.6 dB), so the music under an effect
+  is never louder than at the default level. (Unchanged by the audio-4 fix.)
+* **How fast down.** Attack time constant 1.5 ms for the melody (a note already ringing is the masker to remove), 6 ms for
+  the pad (a sustained chord cut in 1.5 ms showed a splatter stripe at every dip onset in the spectrogram), starting 4 ms
+  before the effect (the engine schedules every effect that far ahead of the call).
+  * *Slow-onset voices wait (audio-4 fix).* A voice may declare `onset`: when it starts to be heard (within ~20 dB of its
+    loudest). The lift declares its peel time minus 15 ms (its peel ticks stay more than 20 dB under the suction "thwop"
+    that follows 50-80 ms later), the blend 90 ms (its motor spools up); their dip starts 5 ms before that instead of at
+    the call. The toss declares none: its whoosh is audible from 30-60 ms but loud only from 70-115 ms, and a soft toss is
+    hardly louder than the undipped pad in its own band (800-1600 Hz), so every later dip that was tried broke the in-band
+    gate on isolated tosses (4.4-6.7 dB, gate 8).
+  * *A fast effect onto music that is up waits 12 ms (audio-4 fix).* When the music's room level is above -6 dB (nobody
+    has played for ~6 s), a poke, release, land, pop, bump, snap, meterFull or capsule beat starts 16 ms after its call
+    instead of 4 ms (`ROOM_CLEAR_S`), so the dip has already removed a mallet note that was ringing when it was called.
+    Before, a soft pop landing ~25 ms after a note began measured 8.4 LU over its loudest 20 ms frames: the frames that
+    straddle its onset still held the undipped note (no causal dip can remove what was heard before the call). During play
+    the music is already down and effects keep the 4 ms lookahead; slow-onset voices never wait. **Cost: the first tap after
+    a rest sounds 12 ms later than the others** (probe: 16.0 / 4.0 / 4.0 ms for music up / down / off).
+* **How it comes back (audio-4 fix).** After the last hold the music returns **dB-linearly** (a fade: 24 dB in 2.0 s on the
+  melody, 17.3 dB in 2.0 s on the pad, `ROOM_RETURN_S`), built from 0.2 s `setTargetAtTime` steps toward that line (setTarget
+  only, so a later re-plan can take over anywhere without a jump). It was an exponential release (time constants 0.6 / 0.9 s),
+  which from -17 dB gains ~6 dB in its first 0.25 s: a rebound. Back within 1 dB about 6.5-6.8 s after the last effect ends.
+* **Holds stack as a staircase** (`MusicBed.makeRoom`): at every moment the deepest active hold wins; when it ends the next
+  deepest takes over (a soft call never cuts a deeper one short); then the music returns. Calls come in time order, the only
+  cancellation is of the room nodes' own future plan (and whatever a same-time request had planned at that instant is
+  re-stated, so two requests in one audio quantum can never cancel each other's dip), so the gain never jumps.
+* **What it means for a listener (not heard yet):** while you play, at any pace, the melody effectively rests (-24 dB) and a
+  quiet pad (-17 dB) stays; it no longer comes and goes between taps. Rest for about 4.5 s and the music fades back in over
+  2 s. Whether that reads as "the music makes way while I play" or as "the music goes away while I play" is the first thing
+  to check by ear.
+
+**Why this design (measured, music stem against the same music alone, the independent audio-3 verifier's scenarios and
+metrics, engine seed 11, 60 s of play):**
+
+| | sparse play (0.53 /s): gain std, 1 s loudness change p90 | play in bursts (5 s on / 5 s off) | isolated effects |
+|---|---|---|---|
+| round 3 (0.8 s tail, 0.6 / 0.9 s exponential release) | 7.64 dB, 20.2 LU | 8.41 dB, 16.8 LU | worst K 8.4 LU (a pop on a ringing note) |
+| verifier's variant C (3 s tail, 1.0 / 1.5 s release) | 2.65 dB, 6.7 LU | 4.97 dB, 10.9 LU | not measured |
+| pad-only activity hold (the melody keeps 0.8 s) | 3.24 dB, 12.4 LU | 4.75 dB, 13.5 LU | not measured |
+| **chosen: 4.5 s activity hold on both layers, 2 s dB-linear return** | **2.09 dB, 6.0 LU** | **2.23 dB, 6.3 LU** | **see "What was measured (audio-4)"** |
+
+The music alone changes by 9.8 LU (p90) per second on its own (its phrasing). Holding only the pad let the melody's notes pop
+back between effects over a dipped pad, which swung the stem as much as before in bursts. The 4.5 s hold is what bridges the
+5 s pauses of burst play; a shorter one (variant C's 3 s) let the music swell back into most of them.
 
 ### The music: engine behaviour
 
@@ -498,6 +537,14 @@ strand: the scripted 1.45 s stretch + snap; the strand alone: the realistic stre
 | strand (held) | (round-3 fix) the strand's own mode struck directly: a squeak carrier (sine + a whisper of 2nd harmonic, +/-12 cents tremble at 5-7 Hz) at `(1100+2100*T)*pitch` Hz, amplitude-pulsed by a stick-slip pulse train (cosine-phase pulse wave) at `(38+170*T^1.4)*pitch` Hz whose rate wobbles +/-70 and +/-35 cents (irregular slips); pulse depth 0.95 at T = 0 (separate creaks) -> 0.5 at T = 1 (a gritty continuous squeak); a band-pass (Q 2.6) and a low-pass at 2.2x follow the carrier; level `T^0.75 * (0.5 + 0.5 * motion)`, motion = |dT/dt| one-pole smoothed (60 ms), updates on the same audio-clock step merged | alone: -13.2 (with the snap: -7.2) | -23.0 (stretch + snap) | 1.37 s of the 1.45 s gesture + snap | alone, 12 seeds: -13.3 .. -13.1; with snap: -7.8 .. -5.6 |
 | strandSnap | a 2-3 ms band-passed click (1.9 kHz), a round blip 1.15-1.3 kHz chirping up x1.6, a recoil flick 1.6-1.85 kHz falling to x0.5, then 1-3 tiny bubbles 0.7-1.6 mm (2-4.6 kHz) | -12.5 | -24.7 | 85 ms | -15.5 .. -10.4 (tension 0..1) |
 
+* **Strand AM (audio-4 fix).** The stick-slip AM is `a(t) = base + mod * pulse(t)` and was meant to span `(1 - depth) .. 1`.
+  The slip pulse (a normalised cosine-harmonic wave) has its own minimum at -0.136, not 0, and the first version set
+  `base = 1 - depth`, so at depth 0.95 (tension 0) the gain swung -0.064 .. 0.886: a faint phase-inverted carrier between the
+  slips and every slip 1 dB short. Now `base = 1 - d - d * min / (1 - min)` (`interact.ts strandAm`), checked on the real
+  slip wave: 0.050 .. 1.000 at depth 0.95, 0.250 .. 1.000 at 0.75, 0.500 .. 1.000 at 0.5. The level was NOT re-calibrated,
+  so the strand is a little louder than the round-3 numbers in the table: a realistic stretch peaks at -12.4 .. -12.5 dBFS
+  (was -13.2), held still at 0.8 -24.5 dBFS RMS (was -25.8), at 0.2 -37.5 (was -39.7); live, stretch -12.5 dBFS peak, a held
+  0.8 -16.1 dBFS peak (was -16.6).
 * Measured (same seed, parameter extremes): bump intensity 0 -> 1 = -17.0 -> -5.8 dBFS peak, spectral centroid 146 -> 348 Hz;
   toss speed 0.1 -> 1 = -16.2 -> -7.4 dBFS, centroid 1082 -> 2855 Hz, its own -20 dB span 230 -> 130 ms; strand held still at
   tension 0.2 vs 0.8 = -39.7 -> -25.8 dBFS RMS (first version: -58.8 -> -47.3), resonance 1560 -> 2852 Hz; within one stretch
@@ -524,6 +571,9 @@ strand: the scripted 1.45 s stretch + snap; the strand alone: the realistic stre
   update and its nodes freed; live, the voice is gone 0.8 s after the last call.
 
 ### What was measured (round 3)
+
+(The round-3 numbers as they were measured then. Where the audio-4 fix changed the design or the numbers, "What was measured
+(audio-4 fix)" below has the current ones.)
 
 `node _harness/probe_audio.mjs --only3` runs just this round (offline gates + live engine, ~16 min on a loaded container);
 `--no-round3` skips it; a full run does rounds 1-3. Last full run: **554 of 555 checks pass (372 round-1/2 + 183 round-3). The one failure is the load-sensitive live playout check of the 9 s realistic session (1 audio fallback event over 9.0 s played, with the container at a load average of ~18 from other lanes); it passed (0 events) in the full run before (which failed only on two of my own new checks, corrected since: see known issues) and in a round-3-only run of the same final code right after (`--only3`: **183/183**, 0 fallback events)**. Numbers below are from that run unless
@@ -614,6 +664,75 @@ builds nothing more; a held squish updated four times per audio step makes exact
 * **A glide and a tuning do not mix.** A 5% chirp starting on the note reads 33-80 cents sharp depending on the measure;
   the two measures only agree within +/-10 cents when the glide itself is that small.
 
+### What was measured (audio-4 fix)
+
+The independent audio-3 verifier failed round 3 on one major and five minors; its scripts (a real-engine offline driver,
+seeded play scenarios, pumping and placement analyses) were reproduced first (identical numbers on the round-3 code) and
+then turned into permanent probe checks (`room_checks.mjs`, run inside `--only3` and the full run; `--only-room` alone takes
+~4 min). Before = the round-3 code, after = this code; same scenarios, same seeds.
+
+**1. Pumping (major).** The music stem against the same music with no play (engine seed 11, 60 s of play then 16 s of rest).
+"Cycles" = the verifier's dip-and-swell count (the gain recovers >= 6 dB and is cut again >= 6 dB); "1 s change" = the change
+of the music's momentary loudness (400 ms windows) over 1 s; the music alone measures 3.7 LU (median) / 9.8 LU (p90).
+
+| scenario | before: cycles/min (median swing), gain std, 1 s change p50 / p90 | after | gate (new) |
+|---|---|---|---|
+| sparse (one gesture, then a 1-4 s rest; 0.53 /s) | 23 (19.3 dB), 7.64 dB, 9.6 / 20.2 LU | 9 (6.7 dB), 2.09 dB, 2.5 / 6.0 LU | std <= 3 dB, p90 <= music alone |
+| bursts (5 s on at 3.5-5 /s, 5 s off) | 11 (19.1 dB), 8.41 dB, 3.7 / 16.8 LU | 11 (8.4 dB), 2.23 dB, 2.6 / 6.3 LU | same |
+| dense (3-6 interactions /s) | 10 (8.4 dB), 2.67 dB, 2.7 / 6.4 LU | 9 (6.7 dB), 2.14 dB, 2.5 / 6.0 LU | same |
+
+The remaining 9-11 "cycles" a minute are not gain changes: with the dip held constant, the stem's level over the music alone
+moves between -17 dB (pad alone sounding) and -24 dB (a mallet note sounding) as the melody comes and goes; the round-3 dense
+scenario, which also never came back up, showed the same 9-10 a minute. During play the gain's 95th percentile is now
+-17.3 dB (sparse) / -17.1 dB (bursts) against -0.7 / -0.1 dB before (the music used to come all the way back between
+gestures). After play stops the music is back within 1 dB 6.5-6.7 s after the last effect ends (gate <= 8 s).
+
+**2-4. Separation.** Isolated placements are the hard case now: with a 4.5 s activity hold almost every effect in the
+verifier's placement set (rests of 0.3-3.7 s) and in the round-3 probe's sweep (0.15-4 s) lands on music that is already
+down. So the probe now also places effects 8-9.5 s apart, each onto music at full level, through the real engine (3 seeds x
+240 s; the scratch runs below used 4 seeds x 240 s with different scenario seeds):
+
+| | before: in-band / K / A worst (count under 8 dB / 10 LU / 10 dB) | after |
+|---|---|---|
+| isolated, music 0.45 (128 placements) | 13.9 dB / **8.4 LU** (a pop ~25 ms after a mallet note began) / 3.9 dB (0 / 1 / 9) | 16.4 dB / 13.7 LU / 10.5 dB (0 / 0 / 0) |
+| isolated, music 1 (17) | 18.1 dB / **5.0 LU** / 0.7 dB (0 / 3 / 6) | 21.5 dB / 13.8 LU / 9.8 dB (0 / 0 / 1) |
+| verifier's placements, music 0.45 (266, mostly onto dipped music) | 12.9 dB / 10.0 LU / 1.3 dB (0 / 0 / 6) | 12.9 dB / 12.6 LU / 1.3 dB (0 / 0 / 5) |
+| verifier's placements, music 1 (43) | 13.7 dB / **2.8 LU** (a release at c 0.24 on a ringing note) / 1.9 dB (0 / 1 / 4) | 16.5 dB / 13.5 LU / 8.6 dB (0 / 0 / 1) |
+| round-3 probe sweep (renderMix, 190 placements) | 12.4 dB / 11.7 LU / 3.8 dB (0 / 0 / 8) | 12.4 dB / 16.1 LU / 6.9 dB (0 / 0 / 3) |
+| round-3 probe sweep at music 1 (67) | 11.8 dB / 9.2 LU (0 / 1 / -) | 11.8 dB / 12.1 LU (0 / 0 / -) |
+
+The K-weighted shortfalls before were all one mechanism: a mallet note that began 20-30 ms before a short effect was called
+sat, undipped, in the 20 ms frames that straddle the effect's onset. The 12 ms clear-the-way delay for fast effects onto
+music that is up (above) removed them; at music volume 1 the worst is now 13.5-14.9 LU (finding 4).
+
+**3. The exposed gate** (how long the music is already >= 8 dB down before the effect is within 10 dB of its own peak;
+measured against the music alone, isolated placements; median / max in ms; the probe gates <= 40 ms for the fast one-shots,
+the lift and the strand, and reports the rest):
+
+| kind | before | after |
+|---|---|---|
+| lift | 67.5 / 80 | 15 / 20 |
+| strand | 37.5 / 105 | 0 / 0 |
+| blend | 115 / 175 | 27.5 / 87.5 |
+| fast one-shots (poke, pop, land, bump, release, snap) | 0-5 / 7.5 | 5-12.5 / 17.5 (the music now clears 12 ms before them) |
+| toss | 82.5 / 102.5 | unchanged (dip at the call, see "Room for the effects") |
+| squish | 50 / 100 | unchanged (its in-band margin, 13-19 dB isolated, is the thinnest; its loudest bubble comes at a random moment) |
+
+The verifier's own exposure measure compares with the 300 ms before the call, which also fires when a note simply decays;
+on its placement set it still reports up to 50 ms (a lift), 123 ms (a strand, a squish) for effects that met music already
+dipped by an earlier effect; against the music alone those are 0.
+
+**5. Unlock retry.** Mock iOS context (starts suspended, `resume()` settles only inside a "gesture"): an `unlock()` 300 ms after
+a gesture-less one: before, 0 `resume()` and 0 silent buffers inside the tap and the context stayed suspended; after, 1 and 1
+inside the tap, and it runs.
+
+**2. Strand AM.** At depth 0.95 / 0.75 / 0.5 the gain now spans 0.050..1.000 / 0.250..1.000 / 0.500..1.000 (before
+-0.064..0.886 / 0.160..0.910 / 0.440..0.940); levels in "Interaction voices".
+
+**The room dip itself** (probe, section "music room dip"): melody -24.00 dB and pad -17.28 dB while held, the pad within 1 dB
+of its depth 33 ms after the call; back within 1 dB 1.90 s after the hold ends (before 1.88 s), at most 0.32 dB per 20 ms
+(before 1.04: the old exponential release's first jump), untouched outside (0.000 dB); staircase -17.3 / -4.3 / -0.00 dB.
+
 ## What a human should listen for (first listen)
 
 Play `_harness/_renders/all_voices.wav` (poke, squish, release, land, pop, blend, 0.5 s apart) and the `_min` / `_max` /
@@ -681,9 +800,12 @@ snap), or use the round-3 row of the sound lab (music toggle and slider, Bump, L
 - [ ] **Bubbles in the music**: they now settle only 1% (in tune). Do they still read as a wink to the squishies' bubbles,
       or have they become plain "plinks"?
 - [ ] **The room dips (the main question)**: under every effect the melody drops 24 dB in ~2 ms and the pad 17 dB in ~20 ms;
-      the music comes back ~2 s after the last effect. Does that feel like the music breathing with you, or like pumping /
-      the music cutting out? Is the quick drop of a ringing mallet note ever heard as a click or a chopped note? While you
-      play continuously, is the soft pad left underneath enough to still feel "music is on"?
+      audio-4 fix: the music now STAYS down while you play at any pace (until 4.5 s after the last effect) and then fades
+      back in over 2 s. Play `room_sparse_mix.wav` (a gesture every 1-4 s) and `room_bursts_mix.wav` (5 s on, 5 s off) from
+      `_harness/_renders/`: is it steady, or do you still hear it come and go? Does the music "making way" feel natural or
+      like it has been switched off while you play? Does the 2 s return after a rest feel like a gentle fade-in or a swell?
+      Is the quick drop of a ringing mallet note ever heard as a click or a chopped note? Is the soft pad left underneath
+      enough to still feel "music is on"? Does the first tap after a rest feel any later than the others (it is, by 12 ms)?
 - [ ] **Balance**: with the music at the default (0.45), are the softest effects (a 0.2 poke, a 0.15 bump, a 0.15 toss) clearly
       in front? Is the music too loud or too quiet when nobody plays? At the slider's top (music 1)?
 - [ ] **Ceremony duck**: under a capsule/reveal/merge the music dips 9 dB (slowly) and comes back in ~0.9 s. Smooth?
@@ -713,14 +835,15 @@ snap), or use the round-3 row of the sound lab (music toggle and slider, Bump, L
 * Round 2: the Rare merge ceremony peaks at -3.8 dBFS at the burst (tier-up ladder + bells + noise transient); still 2.8 dB under the ceiling, but it is the hottest thing in the lane.
 * Round 2: under a storm of 500 ceremony triggers per second (the leak test, about 17x anything a player can do) the playout stats reported 737 fallback events over 16 s; realistic
   ceremonies measured 0. The same caveat as before: the null audio sink of headless Chromium says nothing about phones.
-* Round 2 (corrected in round 3): `mergeStart` schedules its first 0.12 s of squelch/ticks in the call and the 80 ms pump the rest, 0.5 s ahead. A main thread stalled for longer than that leaves a GAP in both the squelch and the ticks (only the pre-scheduled hum continues; the old text said the ticks continue, which was wrong). Round-3 audit fix: after a stall the missed slices are skipped instead of being piled onto "now" with start times in the past (probe: a 1.2 s busy-wait mid-charge, then 0 sources started late). The same holds for every pumped voice (blend, reveal, burst): late pieces are dropped.
+* Round 2 (corrected in round 3): `mergeStart` schedules its first 0.2 s of squelch/ticks in the call (`MERGE_FIRST_SLICE_S` in engine.ts; this text said 0.12 s until the audio-4 fix, which did not match the code) and the 80 ms pump the rest, 0.5 s ahead. A main thread stalled for longer than that leaves a GAP in both the squelch and the ticks (only the pre-scheduled hum continues; the old text said the ticks continue, which was wrong). Round-3 audit fix: after a stall the missed slices are skipped instead of being piled onto "now" with start times in the past (probe: a 1.2 s busy-wait mid-charge, then 0 sources started late). The same holds for every pumped voice (blend, reveal, burst): late pieces are dropped.
 * Round 2 spectral "peak count" and "spread" are definitions I made up to quantify "richer" and "wider"; they are monotone by construction of the design, not evidence that listeners will hear richness.
 * In-flight bubbles on a context that is closed or suspended keep their (already disconnected) nodes until the page releases
   them; the bookkeeping counter shows 2 nodes after the dispose test. They are not connected to anything.
 * Round 3: **still unheard**, like everything else, including the round-3 fix. The music's "mood" and the feel of the room
   dips are entirely unverified; the rules were chosen on paper and checked only for what can be measured.
 * Round 3: **the room dips are a strong design choice**: while the player keeps playing, the melody is effectively silent
-  (-24 dB) and only a soft pad (-17 dB) remains; the music swells back ~2 s after the last effect. That is what clears every
+  (-24 dB) and only a soft pad (-17 dB) remains; since the audio-4 fix it stays that way through pauses of up to 4.5 s and
+  fades back over 2 s after that (before: ~2 s after every effect, which pumped in casual play). That is what clears every
   effect in every placement; it may also read as pumping or as the music "going away" during play. Shallower dips fail the
   measured requirements (at -12/-12 dB with 0.3 s release: K-weighted worst 1.0 LU, the strand aside; at -14/-18 with no
   tail: 7.9 LU for a soft toss under a mallet).
@@ -728,9 +851,13 @@ snap), or use the round-3 row of the sound lab (music toggle and slider, Bump, L
   last full run 8 of 190 placements, worst 3.8 dB (a 0.2 poke, the engine's seed, pitch 0.80); 8 of 190 under 10 dB; the scratch sweep: 8 of 354, worst 3.6 dB): a 0.2 poke or a 0.15 bump landing
   within a few ms of a mallet attack that had already started before the effect was called. Over the rest of the effect the
   same placements are 10-15 dB clear. No causal dip can remove a note that began before the effect; A-weighting also
-  discounts their 60-300 Hz bodies by 10-20 dB. K-weighting (the gate) passes everywhere.
+  discounts their 60-300 Hz bodies by 10-20 dB. K-weighting (the gate) passes everywhere. (Audio-4 fix: the 12 ms
+  clear-the-way delay for fast effects onto music that is up removes most of this: isolated placements now measure A-weighted
+  >= 10.5 dB at the default volume, the round-3 sweep 3 of 190 under 10 dB, worst 6.9 dB.)
 * Round 3: at music volume 1 (+6 dB, the slider's top) the dips deepen by 6 dB and in-band separation holds (>= 8 dB), but
   K-weighted 1 of 67 placements falls under 10 LU (worst 9.2 LU: a 0.3 land, the same kind of onset collision with a 6 dB louder pre-onset note).
+  (Audio-4 fix: the verifier then found 2.8 LU (a soft release on a ringing note) and the new isolated test 5.0 LU (a bump);
+  with the 12 ms clear-the-way delay they measure 13.5 and 13.8 LU, and the sweep 12.1 LU, 0 of 67 under 10.)
 * Round 3: the loudness check is my own definition (K- and A-weighted level of the effect over the music, summed over the
   effect's own loudest 20 ms frames, within 10 dB of its loudest). EBU short-term loudness (3 s) would dilute a 45 ms pop to
   nothing; a 100 ms window caps short effects because it includes undipped music before the onset. Gating every placement
@@ -775,3 +902,33 @@ snap), or use the round-3 row of the sound lab (music toggle and slider, Bump, L
 * Round 3: pieces of a pumped voice (blend, reveal, burst, merge charge) that a stalled main thread made late are dropped, so
   a stall longer than ~0.4-0.5 s during a reveal loses some of its later notes (the old all-at-once build lost nothing but
   cost up to 137 nodes in one call).
+* Audio-4 fix: **still unheard.** The fix was chosen and tuned on measurements only (the verifier's pumping metrics, separation
+  and exposure on rendered stems). Whether the held-down music feels like "making way" or like "switched off while I play",
+  and whether the 2 s fade back after a 4.5 s rest feels natural, is unverified.
+* Audio-4 fix: **during any play the music is a quiet pad**: the melody sits 24 dB down (inaudible), the pad 17 dB down, for as
+  long as the player keeps interacting at least every ~4.5 s. That is the price of no pumping with dips deep enough for every
+  isolated placement; shallower dips failed separation in round 3, and a pad-only hold (the melody coming back between
+  effects) measured almost as much swing as before in burst play (std 4.75 dB, 1 s change p90 13.5 LU).
+* Audio-4 fix: **the toss and the squish keep their early dip**, so the exposed-gate target (<= 40 ms) is NOT met for them:
+  toss median 82 ms / max ~100 ms, squish median 50 / max ~100-140 ms (the probe reports them, ungated). The toss's whoosh is
+  audible (within 20 dB of its peak) from 30-60 ms but within 10 dB only from 70-115 ms, and a soft toss is about as loud as
+  the undipped pad in its own band: every later dip tried (from 0.1 x its length, or with a soft -6/-7.5 dB first stage) broke
+  the in-band gate on an isolated soft toss (4.4-6.7 dB, gate 8). The squish's loudness is a random bubble stream; its
+  in-band margin on isolated squeezes (13-19 dB) is the thinnest of all, so its dip was not delayed either. The blend still
+  exceeds 40 ms in some placements (max 87.5 ms; its loudest frame is often the late flourish), reported, not gated.
+* Audio-4 fix: **the first fast effect after a rest sounds 12 ms later** than the others (16 ms after its call instead of 4,
+  only while the music is up; never with the music off or during play). Nobody has judged whether that is noticeable on a
+  touch screen.
+* Audio-4 fix: the strand's dip now starts later (tension 0.15, full at 0.5, 40 ms attack): its K-weighted margin on isolated
+  stretches dropped from ~21 to ~11-15 LU (gate 10); its in-band margin stays above 20 dB.
+* Audio-4 fix: the strand AM correction made the strand slightly louder (realistic stretch -12.4 dBFS peak instead of -13.2,
+  held 0.8 -24.5 dBFS RMS instead of -25.8, held 0.2 -37.5 instead of -39.7); the level was not re-calibrated.
+* Audio-4 fix: the pumping gates rest on three synthetic scenarios (the verifier's generators, one engine seed): real players
+  will differ. The "cycles per minute" figure counts the melody/pad balance moving inside a constant dip (see the measured
+  section), so it is reported, not gated; the gates are the gain's standard deviation and the 1 s loudness change.
+* Audio-4 fix: the round-3 probe's renderMix sweep and the verifier's placement set now mostly test music that is already
+  down (their rests are shorter than the 4.5 s hold); the isolated real-engine placements (`room_checks.mjs`) are the real
+  separation test. The real-engine driver fakes the engine's timers and locks them to the audio clock (`engine_offline.js`):
+  it tests the engine's logic, not a browser's timer jitter.
+* Audio-4 fix: the unlock retry is tested only with a mock context (headless Chromium starts contexts running); never on an
+  iPhone.

@@ -642,11 +642,11 @@ export async function round3Checks(env) {
     const ea = envelope(padP.x, 0.02), eb = envelope(padR.x, 0.02);
     const gdb = eb.map((p, i) => ({ t: p.t, db: p.db - ea[i].db }));
     const rec = gdb.find((p) => p.t > T + 0.8 && p.db >= -1);
-    // ("outside" = before the dip, and from 6 s after the hold: 6.7 of the pad's 0.9 s recovery time constants)
+    // ("outside" = before the dip, and from 6 s after the hold, when the return is long over)
     const outside = Math.max(...gdb.filter((p) => p.t < T - 0.05 || p.t > T + 0.8 + 6).map((p) => Math.abs(p.db)));
     const smooth = Math.max(...gdb.slice(1).map((p, i) => Math.abs(p.db - gdb[i].db)).filter((v, i) => gdb[i].t > T + 0.05 && gdb[i].t < T + 4));
     check(g, 'attack: the pad within 1 dB of its depth <= 40 ms after the call (the melody\'s is faster: 1.5 ms time constant)', att && att.t <= 0.04, att ? `${(att.t * 1000).toFixed(0)} ms` : 'never', '<= 40 ms');
-    // (an exponential return from -14 dB with a 0.6 s time constant starts at ~1.2 dB per 20 ms: a swell, no jump)
+    // (audio-4 fix: the return is dB-linear, ROOM_RETURN_S for the full depth: about 0.2 dB per 20 ms on the pad)
     check(g, 'recovery after the hold ends: back within 1 dB 0.6..2.5 s later, a swell (<= 1.5 dB per 20 ms), untouched outside (< 0.05 dB)', rec && rec.t - (T + 0.8) >= 0.6 && rec.t - (T + 0.8) <= 2.5 && smooth <= 1.5 && outside < 0.05, `${rec ? f2(rec.t - T - 0.8) : 'never'} s, largest step ${f2(smooth)} dB / 20 ms, outside ${f3(outside)} dB`, '0.6..2.5 s, <= 1.5, < 0.05');
     const full = dec(await ev('renderMusic', { ...base })), fullR = dec(await ev('renderMusic', { ...base, rooms }));
     const sa = stepIn(full.x, T - 0.05, T + 3), sb = stepIn(fullR.x, T - 0.05, T + 3);
@@ -658,8 +658,20 @@ export async function round3Checks(env) {
     const padS = dec(await ev('renderMusic', { ...base, layers: { pad: 1, mallet: 0 }, rooms: stairs }));
     const deep = gainDb(padP.x, padS.x, T2 + 0.1, T2 + 0.3), mid = gainDb(padP.x, padS.x, T2 + 2.6, T2 + 3.5), after = gainDb(padP.x, padS.x, T2 + 8, T2 + 9);
     check(g, 'overlapping dips stack as a staircase: the deepest active hold wins, then (once it ends) the next, then none', Math.abs(deep - PD) <= 1.5 && Math.abs(mid - (-6 * K.ROOM_PAD_SHARE)) <= 1 && Math.abs(after) < 0.3, `pad ${f1(deep)} dB (deep), ${f1(mid)} dB (shallow), ${f2(after)} dB after`, `${f1(PD)}, ${f1(-6 * K.ROOM_PAD_SHARE)}, 0`);
-    const rule = await page.evaluate(async () => { const M = await import('/src/audio/music.ts'); return { poke: M.roomDb('poke'), poke6: M.roomDb('poke', 6), reveal: M.roomDb('reveal'), sq01: M.squishRoomDb(0.1), sq07: M.squishRoomDb(0.7), sq2: M.squishRoomDb(-2), st0: M.strandRoomDb(0), st035: M.strandRoomDb(0.35), st1: M.strandRoomDb(1, 6), kinds: Object.keys(M.ROOM_KINDS) }; });
-    check(g, 'the rule: every effect one-shot makes room (ceremony reveal/merge keep the slow duck); squish by |rate| (none <= 0.15/s, full >= 0.7/s), strand by tension (full >= 0.35); the dip deepens by the music volume above its default', rule.poke === RD && rule.poke6 === RD - 6 && rule.reveal === null && rule.sq01 === 0 && rule.sq07 === RD && rule.sq2 === RD && rule.st0 === 0 && rule.st035 === RD && rule.st1 === RD - 6 && ['poke', 'release', 'land', 'pop', 'bump', 'lift', 'toss', 'strandSnap', 'capsule', 'meterFull', 'blend'].every((k) => rule.kinds.includes(k)), JSON.stringify({ ...rule, kinds: rule.kinds.join(',') }), 'as declared');
+    const rule = await page.evaluate(async () => {
+      const M = await import('/src/audio/music.ts');
+      const one = M.oneShotRoom('poke', 10, 10.004, 10.3), slow = M.oneShotRoom('lift', 10, 10.004, 10.3, 0.06), none = M.oneShotRoom('reveal', 10, 10.004, 11);
+      return {
+        poke: M.roomDb('poke'), poke6: M.roomDb('poke', 6), reveal: M.roomDb('reveal'),
+        sqLo: M.squishRoomDb(M.SQUISH_ROOM_MIN_RATE - 0.05), sqHi: M.squishRoomDb(M.SQUISH_ROOM_RATE), sqNeg: M.squishRoomDb(-2),
+        stLo: M.strandRoomDb(M.STRAND_ROOM_MIN_T), stHi: M.strandRoomDb(M.STRAND_ROOM_T), st1: M.strandRoomDb(1, 6), kinds: Object.keys(M.ROOM_KINDS),
+        one: one.length === 1 && one[0].from === 10 && one[0].at === 10 && Math.abs(one[0].until - (10.3 + M.ROOM_TAIL_S)) < 1e-9 && one[0].db === M.ROOM_DB,
+        slow: slow.length === 1 && Math.abs(slow[0].at - (10.004 + 0.06 - M.ROOM_RISE_LEAD_S)) < 1e-9 && slow[0].from === 10, none: none.length === 0,
+        held: (() => { const q = M.squishRoom(5, 2); return !!q && q.db === M.ROOM_DB && q.until >= 5 + M.HELD_ROOM_HOLD_S + M.ROOM_TAIL_S && M.squishRoom(5, 0.05) === null; })(),
+        clear: M.roomClearDelay('poke', 0) === M.ROOM_CLEAR_S && M.roomClearDelay('poke', -20) === 0 && M.roomClearDelay('toss', 0) === 0,
+      };
+    });
+    check(g, 'the rule: every effect one-shot makes room until ROOM_TAIL_S after its end (ceremony reveal/merge keep the slow duck), a slow-onset voice from its onset; squish by |rate|, strand by tension, both held HELD_ROOM_HOLD_S + ROOM_TAIL_S; the dip deepens by the music volume above its default; a fast effect onto music that is up waits ROOM_CLEAR_S', rule.poke === RD && rule.poke6 === RD - 6 && rule.reveal === null && rule.sqLo === 0 && rule.sqHi === RD && rule.sqNeg === RD && rule.stLo === 0 && rule.stHi === RD && rule.st1 === RD - 6 && rule.one && rule.slow && rule.none && rule.held && rule.clear && ['poke', 'release', 'land', 'pop', 'bump', 'lift', 'toss', 'strandSnap', 'capsule', 'meterFull', 'blend'].every((k) => rule.kinds.includes(k)), JSON.stringify({ ...rule, kinds: rule.kinds.join(',') }), 'as declared');
     writeFileSync(resolve(OUT, 'music_room.png'), spectrogramPng(cut(fullR.x, T - 3, T + 5), SR, { title: `MUSIC ROOM DIP (MELODY ${RD} DB, PAD ${f1(PD)} DB) AT ${f1(T)} S, SHOWN ${f1(T - 3)}-${f1(T + 5)} S`, win: 4096, width: 1100, fMin: 40, fMax: 12000, marks: [{ t: 3, label: 'DIP' }, { t: 3.8, label: 'HOLD ENDS' }] }));
     info.music.room = { dMel, dPad, attackS: att && att.t, recoveryS: rec && rec.t - T - 0.8, smooth, deep, mid, after };
   }
@@ -788,6 +800,12 @@ export async function round3Checks(env) {
     const r0 = await render({ voice: 'strand', script: 'real', pattern: { hz: 30, jitter: 0.3, quantum: 128 / SR }, seed: 35 });
     writeFileSync(resolve(OUT, 'strand_real.png'), spectrogramPng(cut(r0.x, r0.t0, r0.n / SR), SR, { title: 'STRAND ALONE, REALISTIC CALLS (30 HZ, 30% JITTER, AUDIO-CLOCK GRID)', win: 1024, width: 900, fMin: 40, fMax: 14000, marks: r0.script.marks }));
     info.voices.strandReal = { rows, seeds: [lo, hi], hold: [h2, h8] };
+    // audio-4 fix: the stick-slip AM mapped the slip pulse onto (1 - d) .. 1 only on paper. The pulse wave's own minimum is
+    // not -1 (about -0.136 of its peak), and am.gain = 1 - d left the gain swinging -0.064 .. 0.886 at d = 0.95: a small
+    // phase-inverted carrier between the slips and 1 dB short at each slip. Checked on the real slip PeriodicWave.
+    const am = await ev('strandAmRange', { depths: [0.95, 0.75, 0.5] });
+    check(g, 'stick-slip AM spans exactly (1 - depth) .. 1 at depth 0.95 / 0.75 / 0.5 (the slip wave\'s own minimum accounted for: no phase-inverted residual between slips)', am.every((q) => Math.abs(q.lo - (1 - q.depth)) <= 0.01 && Math.abs(q.hi - 1) <= 0.01), am.map((q) => `d ${q.depth}: ${f3(q.lo)}..${f3(q.hi)} (first version ${f3(q.oldLo)}..${f3(q.oldHi)})`).join('; ') + `; slip wave min ${f3(am[0].pwMin)}`, '(1 - d)..1 +/- 0.01');
+    info.voices.strandAm = am;
   }
   {
     const g = 'bump rate limit (pure)';

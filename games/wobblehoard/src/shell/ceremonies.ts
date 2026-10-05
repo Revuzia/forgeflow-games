@@ -119,7 +119,10 @@ export function createCeremonies(d: CeremonyDeps): Ceremonies {
       const calm = d.calm();
       const info: RevealInfo = { kind: 'capsule', item, speciesName: speciesName(item.genome), tierUp: false, skipped: false };
       let shown = false, burst = false, preroll = false;
-      const quick = !item.isNew && (item.tier === 'common' || (d.fastOpen() && item.tier === 'uncommon'));
+      // DESIGN 6.1: a repeat Common is always the 0.8 s quick pop ("repeat Commons never hold the player"); Fast open adds repeat Uncommons.
+      // The collection's own eligibility (OpenOk.quick: a repeat Common or Uncommon) gates it when it is given.
+      const repeatLow = item.quickEligible ?? (!item.isNew && (item.tier === 'common' || item.tier === 'uncommon'));
+      const quick = repeatLow && (item.tier === 'common' || d.fastOpen());
       const rare = item.tier !== 'common' && item.tier !== 'uncommon';
       const mv = mythicVariant(item.genome);
       const onBeat = (beat: CeremonyBeat, at: { t: number }): void => {

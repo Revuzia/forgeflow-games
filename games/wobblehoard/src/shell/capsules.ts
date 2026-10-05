@@ -1,7 +1,7 @@
 // The capsule table (COLLECTION 9.4, DESIGN 6.2 / 6.3, render handover STAGE_API_FOR_SHELL 3-4).
 //
-//   * Credits come from the collection port. When they go UP: audio.meterFull({ quiet: mid-squeeze }), haptic [10], the HUD ring pulse,
-//     and (if no capsule stands on the table) stage.dropCapsule({ onLand: haptic [18] }). The stage keeps ONE capsule on the table
+//   * Credits come from the collection port. On its 'capsule' event (a capsule became ready): audio.meterFull({ quiet: mid-squeeze }),
+//     haptic [10], the HUD ring pulse, and (if no capsule stands on the table) stage.dropCapsule({ onLand: haptic [18] }). The stage keeps ONE capsule on the table
 //     ("another dropCapsule() replaces an unopened capsule"), so the queue of up to 5 is the HUD count; the next one drops when the
 //     current one has been opened.
 //   * Hold to open: a press that hits the landed capsule (CapsuleHandle.hitTest, CSS px) belongs to the capsule, not to the gestures.
@@ -14,7 +14,7 @@ import type { CapsuleHandle, SquishAudio, StageLike } from '../contracts.ts';
 import type { Haptics } from '../input/haptics.ts';
 import { CAPSULE_LAND_HAPTIC, METER_FULL_HAPTIC } from '../input/haptics.ts';
 import type { Ceremonies } from './ceremonies.ts';
-import type { MeterReading, ShellCollection } from './collectionPort.ts';
+import type { CapsuleOutcome, MeterReading, ShellCollection } from './collectionPort.ts';
 
 export const HOLD_TO_OPEN_MS = 500;
 const TAP_MS = 250;
@@ -34,6 +34,8 @@ export interface CapsuleUi {
 export interface Capsules {
   /** re-read the collection's meter (call on collection.onChange and after a ceremony) */
   sync(): void;
+  /** stop listening to the collection */
+  dispose(): void;
   readonly reading: MeterReading;
   /** a capsule stands on the table and can be held */
   readonly onTable: boolean;
@@ -92,7 +94,7 @@ export function createCapsules(d: CapsulesDeps): Capsules {
     hold = null;
     try { c?.setSqueeze(1); } catch { /* gone */ }
     waitSince = d.now(); lastWobble = waitSince; saidStill = false;
-    let r;
+    let r: CapsuleOutcome;
     try { r = await d.collection.openCapsule(); } catch (e) { d.report(e); r = { ok: false as const, error: 'exception', message: 'Something went wrong. Reload and try again.' }; }
     waitSince = -1;
     if (!r.ok) {
@@ -110,15 +112,17 @@ export function createCapsules(d: CapsulesDeps): Capsules {
     dropIfNeeded();
   }
 
+  /** the collection's 'capsule' event: the meter-full cue (DESIGN 6.2); the drop follows in sync() (onChange comes right after) */
+  function ready(n: number): void {
+    try { d.audio.meterFull?.({ quiet: d.bodyContact() }); } catch (e) { d.report(e); }
+    try { d.haptics.pattern?.(METER_FULL_HAPTIC); } catch { /* optional */ }
+    d.ui.ready(n);
+  }
+  const offEvent = d.collection.onEvent((e) => { if (e.type === 'capsule') ready(e.credits); });
+
   function sync(): void {
     reading = safeRead();
-    const next = reading.credits;
-    if (next > credits) {
-      try { d.audio.meterFull?.({ quiet: d.bodyContact() }); } catch (e) { d.report(e); }
-      try { d.haptics.pattern?.(METER_FULL_HAPTIC); } catch { /* optional */ }
-      d.ui.ready(next);
-    }
-    credits = next;
+    credits = reading.credits;
     if (credits <= 0 && cap && !opening) { try { cap.remove(); } catch { /* gone */ } cap = null; }
     d.ui.meter(reading);
     dropIfNeeded();
@@ -126,6 +130,7 @@ export function createCapsules(d: CapsulesDeps): Capsules {
 
   return {
     sync,
+    dispose() { offEvent(); },
     get reading() { return reading; },
     get onTable() { return !!cap && cap.landed; },
     get opening() { return opening; },

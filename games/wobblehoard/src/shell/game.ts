@@ -11,7 +11,7 @@
 //   feedback.ts      SoftEvent -> audio / haptics / shake / FX; held voices; round-3 play-mat voices
 //   feel.ts          feel constants + the body CALIBRATION (audit finding 5)
 //   settingsCtl.ts   settings (persisted / session / resolved) applied with change detection
-//   collectionPort.ts the shell's port to the collection (+ adaptCollection); practiceFallback.ts until src/collection lands
+//   collectionPort.ts the shell's port to the collection (src/collection) and adaptCollection
 //   capsules.ts      meter-full cue, the table queue, hold-to-open, the DOM twin
 //   ceremonies.ts    reveal + merge on the stage, beat -> sound / haptics, skip gate, result adoption
 //   game.ts          this file: phases, the frame, the input port, lifecycle (hidden / context loss / covered), listeners
@@ -40,13 +40,15 @@ import { createCeremonies, speciesName } from './ceremonies.ts';
 import type { GestureClock } from './clock.ts';
 import { createGestureClock, createSimTimers } from './clock.ts';
 import type { ItemView, MergeParentView, MeterReading, ShellCollection } from './collectionPort.ts';
+import { adaptCollection } from './collectionPort.ts';
+import type { Collection } from '../collection/index.ts';
+import { createCollection } from '../collection/index.ts';
 import type { Driver } from './driver.ts';
 import { createDriver } from './driver.ts';
 import type { Feedback } from './feedback.ts';
 import { createFeedback } from './feedback.ts';
 import { TUNING } from './feel.ts';
 import { createLoop } from './loop.ts';
-import { createPracticeFallback } from './practiceFallback.ts';
 import type { SettingsController } from './settingsCtl.ts';
 import { createSettingsController } from './settingsCtl.ts';
 
@@ -110,8 +112,9 @@ export interface GameDeps {
   caf?: (id: number) => void;
   onFatal?: (err: unknown) => void;
   profile?: ProfileStore;
-  /** the collection port (src/collection through adaptCollection). Default: the in-shell practice fallback. */
-  collection?: ShellCollection;
+  /** The collection module (src/collection createCollection). Default: one built here on `storage` (the practice ledger), sharing the
+   *  profile's starter id. boot.ts builds it itself so the profile and the collection share one cross-tab storage subscription. */
+  collection?: Collection;
 }
 
 export interface ShellEvents {
@@ -125,6 +128,8 @@ export interface ShellEvents {
   message: (text: string) => void;
   ceremony: (e: { type: 'start'; kind: 'capsule' | 'merge' } | { type: 'reveal' | 'end'; info: RevealInfo }) => void;
   paused: (reasons: readonly PauseReason[]) => void;
+  /** a polite status line from the collection (table full, resting, done for today, a save problem) */
+  notice: (text: string) => void;
 }
 
 /** What the HUD shows: the catalog species name (audit finding 19), the tier, and a nickname only when the item has one. */
@@ -153,7 +158,10 @@ export interface Game {
   readonly pauseReasons: readonly PauseReason[];
   readonly fps: number;
   readonly viewport: { w: number; h: number };
+  /** the shell's port to the collection (meter, capsules, merge results) */
   readonly collection: ShellCollection;
+  /** SHELL-2b seam: the full collection module (stacks, items, previewMerge / merge, hearts, prefs, restock, tasks) */
+  readonly hoard: Collection;
   readonly capsules: Capsules;
   readonly ceremonies: Ceremonies;
   readonly clock: GestureClock;
@@ -220,14 +228,16 @@ export function createGame(deps: GameDeps): Game {
   const instance = profile.profile.instance;
 
   // ---- listeners ----
-  const L: { [K in keyof ShellEvents]: Set<ShellEvents[K]> } = {
-    interaction: new Set(), settings: new Set(), identity: new Set(), mute: new Set(), phase: new Set(), meter: new Set(),
-    capsuleReady: new Set(), message: new Set(), ceremony: new Set(), paused: new Set(),
+  // listener lists are arrays, copied on write: emitting iterates a stable snapshot without allocating one
+  const L: { [K in keyof ShellEvents]: Array<ShellEvents[K]> } = {
+    interaction: [], settings: [], identity: [], mute: [], phase: [], meter: [],
+    capsuleReady: [], message: [], ceremony: [], paused: [], notice: [],
   };
   const emit = <K extends keyof ShellEvents>(k: K, ...a: Parameters<ShellEvents[K]>): void => {
-    for (const f of [...L[k]]) { try { (f as (...x: unknown[]) => void)(...a); } catch (e) { report(e); } }
+    const fs = L[k];
+    for (let i = 0; i < fs.length; i++) { try { (fs[i] as (...x: unknown[]) => void)(...a); } catch (e) { report(e); } }
   };
-  const stepHooks = new Set<(dt: number, t: number) => void>();
+  let stepHooks: Array<(dt: number, t: number) => void> = [];   // an array (copy-on-write): iterating a Set allocates an iterator per frame
   const releaseHooks = new Set<() => void>();
 
   // ---- modules: construct in dependency order; a failure part-way disposes what was built (audit finding 7) ----
@@ -306,12 +316,13 @@ export function createGame(deps: GameDeps): Game {
   styleTier(stage, bodies.identity.tier);
 
   // ---- the collection port, the ceremonies, the capsule table ----
-  const collection: ShellCollection = deps.collection ?? createPracticeFallback({ owned: [genome0.species] });
+  const hoard: Collection = deps.collection ?? createCollection({ storage, profile: profile.profile, now: epochNow });
+  const collection: ShellCollection = adaptCollection(hoard);
   const ceremonies: Ceremonies = createCeremonies({
     stage, audio, haptics, bodies, createBody: deps.createBody, now: () => clock.now(),
     calm: () => S().calm, skipAnimations: () => S().skipAnimations, fastOpen: () => S().fastOpen,
     beforeStart: () => releaseEverything(),
-    markSeen: (ids) => { try { collection.markSeen?.(ids); } catch (e) { report(e); } },
+    markSeen: (ids) => { try { collection.markSeen(ids); } catch (e) { report(e); } },
     ui: {
       start: (kind) => emit('ceremony', { type: 'start', kind }),
       reveal: (info) => emit('ceremony', { type: 'reveal', info }),
@@ -330,6 +341,7 @@ export function createGame(deps: GameDeps): Game {
     report,
   });
   const offCollection = collection.onChange(() => capsules.sync());
+  const offEvents = collection.onEvent((e) => { if (e.type === 'notice') emit('notice', e.text); else if (e.type === 'external') capsules.sync(); });
 
   // ---------------------------------------------------------------- release / lifecycle
   function releaseEverything(): void {
@@ -383,7 +395,7 @@ export function createGame(deps: GameDeps): Game {
     timers.run(simTime);
     feedback.update(dt);
     capsules.update();
-    for (const f of stepHooks) { try { f(dt, simTime); } catch (e) { report(e); } }
+    for (let i = 0; i < stepHooks.length; i++) { try { stepHooks[i](dt, simTime); } catch (e) { report(e); } }
   }
 
   function present(dt: number): void {
@@ -515,6 +527,7 @@ export function createGame(deps: GameDeps): Game {
     get fps() { return fpsEma; },
     get viewport() { return viewport; },
     get collection() { return collection; },
+    get hoard() { return hoard; },
     get capsules() { return capsules; },
     get ceremonies() { return ceremonies; },
     get clock() { return clock; },
@@ -573,8 +586,12 @@ export function createGame(deps: GameDeps): Game {
     pause() { clock.pause(); },
     resume() { if (!clock.paused) return; clock.resume(); lastTs = null; },
     releaseEverything,
-    on(type, fn) { (L[type] as Set<typeof fn>).add(fn); return () => { (L[type] as Set<typeof fn>).delete(fn); }; },
-    onStep(fn) { stepHooks.add(fn); return () => { stepHooks.delete(fn); }; },
+    on(type, fn) {
+      const lists = L as { [K in keyof ShellEvents]: unknown[] };
+      lists[type] = lists[type].concat(fn);
+      return () => { lists[type] = lists[type].filter((f) => f !== fn); };
+    },
+    onStep(fn) { stepHooks = stepHooks.concat(fn); return () => { stepHooks = stepHooks.filter((f) => f !== fn); }; },
     onRelease(fn) { releaseHooks.add(fn); return () => { releaseHooks.delete(fn); }; },
     stageUpdate(dt, render) {
       frameInput.time = simTime;
@@ -590,10 +607,10 @@ export function createGame(deps: GameDeps): Game {
       loop.stop();
       try { ceremonies.abort(); } catch (e) { report(e); }
       releaseEverything();
-      try { offCollection(); collection.dispose?.(); } catch (e) { report(e); }
+      try { offCollection(); offEvents(); capsules.dispose(); collection.flush(); collection.dispose(); } catch (e) { report(e); }
       try { profile.dispose(); } catch (e) { report(e); }
-      for (const k of Object.keys(L) as Array<keyof ShellEvents>) L[k].clear();
-      stepHooks.clear(); releaseHooks.clear();
+      for (const k of Object.keys(L) as Array<keyof ShellEvents>) L[k] = [];
+      stepHooks = []; releaseHooks.clear();
       try { stage.dispose(); } catch { /* ignore */ }
       try { audio.dispose?.(); } catch { /* ignore */ }
     },

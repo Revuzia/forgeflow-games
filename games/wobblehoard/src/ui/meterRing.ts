@@ -4,6 +4,7 @@
 //     table full, offline.
 //   * At a new capsule: ONE pulse (400 ms, ease-out, single, never repeating); none under Calm effects or reduced motion.
 //   * Capsule button: "Open a capsule (3 waiting)" for assistive tech, "Open" + the count on screen; the 3D capsule is never the only way.
+import { COPY } from '../collection/copy.ts';
 import { h } from './dom.ts';
 
 export interface MeterView {
@@ -25,11 +26,12 @@ export interface MeterRing {
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const R = 23, C = 2 * Math.PI * R;
 
+/** The one line under the ring (the collection's copy, COLLECTION 9.7 / 9.9). */
 export function stateLine(m: MeterView): string {
-  if (m.offline) return 'Waiting for connection';
-  if (m.tableFull) return 'Table full: open one to keep going.';
-  if (m.doneToday) return 'They’ll be ready tomorrow';
-  if (m.resting) return 'Squishies are resting, filling slowly';
+  if (m.offline) return COPY.waiting;
+  if (m.tableFull) return COPY.tableFull;
+  if (m.doneToday) return COPY.doneToday;
+  if (m.resting) return COPY.resting;
   return '';
 }
 

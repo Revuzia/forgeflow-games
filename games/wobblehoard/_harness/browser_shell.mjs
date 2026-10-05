@@ -91,14 +91,28 @@ async function wake(page, { touch = false } = {}) {
 async function shot(page, name) { await page.screenshot({ path: resolve(SHOTS, name + '.png'), timeout: 240000, caret: 'hide' }); }
 /** deterministic: pause the rAF loop and advance the sim (and the stage) by `seconds` in 1/60 steps, rendering once at the end */
 const stepSim = (page, seconds) => page.evaluate((s) => { window.__WH__.step(1 / 60, Math.round(s * 60)); }, seconds);
-/** step in slices until fn(state) holds (or `max` seconds pass); returns the sim seconds it took, or -1 */
+/** step in slices until fn(state) holds (or `max` seconds pass); returns the sim seconds it took, or -1. Each slice yields a task, so the
+ *  promise continuations the shell runs between frames (a ceremony's `await handle.done` -> adopt the result) happen as they do live. */
 async function stepUntil(page, fnSrc, max = 8, slice = 0.1) {
-  return page.evaluate(([src, mx, sl]) => {
+  return page.evaluate(async ([src, mx, sl]) => {
     const fn = new Function('wh', `return (${src})(wh);`);
     let t = 0;
-    while (t <= mx + 1e-9) { if (fn(window.__WH__)) return t; window.__WH__.step(1 / 60, Math.round(sl * 60)); t += sl; }
+    while (t <= mx + 1e-9) {
+      if (fn(window.__WH__)) return t;
+      window.__WH__.step(1 / 60, Math.max(1, Math.round(sl * 60)));
+      t += sl;
+      await new Promise((r) => setTimeout(r, 0));
+    }
     return -1;
   }, [fnSrc, max, slice]);
+}
+/** the capsule DOM twin, clicked like a person would (Playwright waits until it is visible, enabled and still); its state on failure */
+async function clickOpen(page) {
+  try { await page.click('.capsule-btn', { timeout: 15000 }); return true; } catch (e) {
+    const st = await page.evaluate(() => { const b = document.querySelector('.capsule-btn'); const r = b.getBoundingClientRect(); const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return { hidden: b.hidden, disabled: b.disabled, rect: [r.x, r.y, r.width, r.height], top: top ? top.className || top.tagName : null, meter: window.__WH__.shell.meter(), cer: window.__WH__.shell.ceremony() }; });
+    check('the capsule button can be clicked', false, JSON.stringify(st));
+    return false;
+  }
 }
 
 // events: the debug ring has no ids, so "new" = not in the set of JSON strings seen before
@@ -551,7 +565,8 @@ async function main() {
 
     // ------------------------------------------------------------------------------------------------
     // the capsule loop (round 2): meter ring -> meter full -> capsule drop -> hold to open -> reveal -> result adopted
-    // The meter is accelerated through the dev-only hook (shell.fill runs the REAL meter.ts path with pokes on a fast clock); the sim is
+    // The meter is accelerated through the dev-only hook (shell.fill feeds the REAL collection -> meter.ts path with pokes on a clock pushed
+    // ahead of the wall clock: collection.feed anchors any ms clock to that epoch clock); the sim is
     // stepped deterministically (SwiftShader renders a 1280x800 frame in ~0.3 s on this shared machine).
     // ------------------------------------------------------------------------------------------------
     let C = null;
@@ -561,7 +576,7 @@ async function main() {
       const { page } = C;
       await wake(page);
       const m0 = await meter(page);
-      check('meter: the practice fallback feeds the ring (source fallback until src/collection lands), empty at start', m0.source === 'fallback' && m0.credits === 0 && m0.fill === 0, JSON.stringify(m0));
+      check('meter: the collection module (practice ledger, a fresh v2 save) feeds the ring, empty at start', m0.ledger === 'practice' && ['fresh', 'migrated'].includes(m0.load) && m0.credits === 0 && m0.fill === 0, JSON.stringify(m0));
       // real touches move the ring (poke -> 0.8 SP of the first 30)
       const B = await body(page); const vp = page.viewportSize();
       await page.mouse.click(B.x * vp.width, B.y * vp.height - 20);
@@ -654,7 +669,7 @@ async function main() {
       const { page } = C;
       await page.evaluate(() => { window.__WH__.pause(); window.__WH__.shell.grant(1); });
       await stepUntil(page, `(wh) => wh.shell.meter().onTable`, 4, 0.1);
-      await page.click('.capsule-btn');                     // the DOM twin
+      if (!(await clickOpen(page))) return;                  // the DOM twin
       await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
       check('skip setup: the DOM twin opened a capsule (reveal running)', (await page.evaluate(() => window.__WH__.shell.ceremony())).kind === 'capsule');
       await stepSim(page, 0.2);
@@ -694,11 +709,13 @@ async function main() {
       await page.keyboard.press('Escape'); await sleep(300);
       const info = await page.evaluate(() => ({ s: window.__WH__.state().settings, stage: window.__WH__.shell.stageInfo(), body: document.body.dataset.calm }));
       check('calm: the switch reaches the stage (setCalmEffects: stage calm on) and the page (no pulses)', info.s.calm === true && info.stage?.calm === true && info.body === 'true', JSON.stringify({ calm: info.s.calm, stage: info.stage?.calm, body: info.body }));
+      // a capsule left waiting by an earlier section would hide the fade-in: open it first
+      while ((await meter(page)).credits > 0) { await page.evaluate(() => window.__WH__.pause()); await stepUntil(page, `(wh) => wh.shell.meter().onTable`, 2, 0.05); if (!(await clickOpen(page))) return; await page.evaluate(() => new Promise((r) => setTimeout(r, 50))); await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true)); await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null`, 2, 0.05); await page.evaluate(() => window.__WH__.setSetting('skipAnimations', false)); }
       await page.evaluate(() => { window.__WH__.pause(); window.__WH__.shell.grant(1); });
       const pulse = await page.evaluate(() => document.querySelector('.meter').classList.contains('pulse'));
       const landedAt = await stepUntil(page, `(wh) => wh.shell.meter().onTable`, 2, 0.05);
       check('calm: no ring pulse; the capsule fades in where it stands (tappable after ~0.45 s, no drop)', !pulse && landedAt >= 0.3 && landedAt <= 0.7, `pulse ${pulse}, landed after ${landedAt.toFixed(2)} s`);
-      await page.click('.capsule-btn');
+      if (!(await clickOpen(page))) return;
       await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
       const cer = await page.evaluate(() => window.__WH__.shell.ceremony());
       const budgets = [0.8, 1.6, 2.0, 2.6, 3.2, 3.9, 4.5].map((b) => b * 0.65);
@@ -711,7 +728,7 @@ async function main() {
       // Skip animations: straight to the reveal frame
       await page.evaluate(() => { window.__WH__.setSetting('skipAnimations', true); window.__WH__.shell.grant(1); });
       await stepUntil(page, `(wh) => wh.shell.meter().onTable`, 2, 0.05);
-      await page.click('.capsule-btn');
+      if (!(await clickOpen(page))) return;
       await page.evaluate(() => new Promise((r) => setTimeout(r, 50)));
       const endAt = await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null`, 1, 1 / 60);
       check('Skip animations: the reveal jumps to its final frame at once (ends within the 120 ms crossfade), the plate shows', endAt >= 0 && endAt <= 0.2 && await page.evaluate(() => document.querySelector('.plate').dataset.show === 'true'), `ended after ${endAt.toFixed(3)} s`);

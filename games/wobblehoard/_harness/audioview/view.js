@@ -9,6 +9,7 @@ import * as M from '/src/audio/music.ts';
 import * as I3 from '/src/audio/interact.ts';
 import { runEngineTests } from './engine_tests.js';
 import { runEngineTests3 } from './engine_tests3.js';
+import { runEngineOffline } from './engine_offline.js';
 
 export const SR = 48000;
 const BOOSTED = new Set(['poke', 'squish', 'release']);   // everything else (incl. all ceremony voices) goes to the plain bus
@@ -305,8 +306,10 @@ function composeOnly(seed, bars) {
 /**
  * Music + a play sequence through ONE chain. spec: { seed, secs, music: bool, effects: bool, musicVolume, events: [{ at,
  * voice, params, pitch, script, pattern }] }. With music on, the music makes room for every effect by the ENGINE's own rule
- * (music.ts roomDb / squishRoomDb / strandRoomDb, ROOM_LEAD_S, ROOM_TAIL_S, HELD_ROOM_HOLD_S, the same deepening for a music
- * volume above the default), so the music stem here is exactly the music inside the live mix. Returns the effect spans.
+ * (music.ts oneShotRoom / squishRoom / strandRoom / roomClearDelay, the same deepening for a music volume above the
+ * default), so the music stem here is exactly the music inside the live mix. `at` is when the effect starts sounding; its
+ * call is ROOM_LEAD_S earlier, and ROOM_CLEAR_S earlier still for a fast effect that arrives while the music is up (the
+ * engine delays such an effect by that much). Returns the effect spans.
  */
 async function renderMix(spec) {
   const sr = SR, secs = spec.secs ?? 20;
@@ -318,11 +321,14 @@ async function renderMix(spec) {
   const comp = new M.Composer(spec.seed ?? 1);
   const bed = spec.music ? new M.MusicBed(ctx, chain.music, comp, 0.05, {}) : null;
   if (bed) bed.advance(secs + 1);
-  const spans = [], rooms = [];
-  const oneShot = (kind, at, end) => { const db = M.roomDb(kind, gdb); if (db !== null) rooms.push({ from: at - M.ROOM_LEAD_S, until: end + M.ROOM_TAIL_S, db }); };
-  const held = (t, db) => { if (db < -0.05) rooms.push({ from: t - M.ROOM_LEAD_S, until: t - M.ROOM_LEAD_S + M.HELD_ROOM_HOLD_S, db }); };
+  const spans = [], asks = [];
+  const oneShot = (kind, at, g) => asks.push({ t: at - M.ROOM_LEAD_S, kind, at, end: g.endTime, onset: g.onset ?? 0 });
+  const held = (t, req) => asks.push({ t: t - M.ROOM_LEAD_S, req });
   let k = 0;
   const fx = spec.effects !== false;
+  // with effects off, a voice is still built (on a scratch context) for its end time and onset, so the music stem gets
+  // exactly the room the mix gets
+  const build = (fn, out, t, base) => { if (fx) return fn(ctx, out, t, base); const scratch = new OfflineAudioContext(1, 128, sr); return fn(scratch, scratch.destination, t, base); };
   for (const e of spec.events ?? []) {
     const rng = D.makeRng(1000 + k++);
     const base = { rng, pitch: e.pitch ?? 1, pan: 0, ...(e.params || {}) };
@@ -331,44 +337,70 @@ async function renderMix(spec) {
     if (e.voice === 'squish') {
       const sc = squishScript(e.script ?? 'prl');
       const v = fx ? squish(ctx, out, t, base) : null;
-      for (const q of sc.events) { if (v) v.update({ compression: q.compression, rate: q.rate }, t + q.t); held(t + q.t, M.squishRoomDb(q.rate, gdb)); }
+      for (const q of sc.events) { if (v) v.update({ compression: q.compression, rate: q.rate }, t + q.t); held(t + q.t, (u) => M.squishRoom(u, q.rate, gdb)); }
       if (v) v.end(0.08, t + sc.endAt);
       spans.push({ voice: 'squish', tag: e.tag ?? 'squish', at: t, end: t + sc.endAt + 0.1, pitch: base.pitch });
     } else if (e.voice === 'strand') {
       // the strand alone (pattern = realistic call times) and, unless snap === false, its snap right after the last call
       const sc = strandScript(e.script ?? 'real', e.pattern);
       const v = fx ? I3.strand(ctx, out, t, base) : null;
-      for (const q of sc.events) { if (v) v.update({ tension: q.tension }, t + q.t); held(t + q.t, M.strandRoomDb(q.tension, gdb)); }
+      for (const q of sc.events) { if (v) v.update({ tension: q.tension }, t + q.t); held(t + q.t, (u) => M.strandRoom(u, q.tension, gdb)); }
       const last = sc.events[sc.events.length - 1].t;
       spans.push({ voice: 'strand', tag: e.tag ?? 'strand', at: t, end: t + last, pitch: base.pitch });
       if (e.snap !== false) {
         const ts = t + last + 0.016;
         if (v) v.end(0.03, ts);
-        const sp = { ...base, rng: D.makeRng(77 + k), tension: 0.9 };
-        let end;
-        if (fx) end = I3.strandSnap(ctx, out, ts, sp).endTime;
-        else { const scratch = new OfflineAudioContext(1, 128, sr); end = I3.strandSnap(scratch, scratch.destination, ts, sp).endTime; }
-        spans.push({ voice: 'strandSnap', tag: 'snap(strand)', at: ts, end, pitch: base.pitch });
-        oneShot('strandSnap', ts, end);
+        const g = build(I3.strandSnap, out, ts, { ...base, rng: D.makeRng(77 + k), tension: 0.9 });
+        spans.push({ voice: 'strandSnap', tag: 'snap(strand)', at: ts, end: g.endTime, pitch: base.pitch });
+        oneShot('strandSnap', ts, g);
       }
     } else {
       const fn = { poke, release, land, pop, bump: I3.bump, lift: I3.lift, toss: I3.toss, strandSnap: I3.strandSnap }[e.voice];
-      // the voice is built in both stems' renders only when effects are on; its end time comes from a throwaway build on a
-      // scratch context otherwise (so the music stem gets exactly the same room)
-      let end;
-      if (fx) end = fn(ctx, out, t, base).endTime;
-      else { const scratch = new OfflineAudioContext(1, 128, sr); end = fn(scratch, scratch.destination, t, base).endTime; }
-      spans.push({ voice: e.voice, tag: e.tag ?? e.voice, at: t, end, pitch: base.pitch });
-      oneShot(e.voice, t, end);
+      const g = build(fn, out, t, base);
+      spans.push({ voice: e.voice, tag: e.tag ?? e.voice, at: t, end: g.endTime, pitch: base.pitch });
+      oneShot(e.voice, t, g);
     }
   }
+  let nRooms = 0;
   if (bed) {
-    rooms.sort((a, b) => a.from - b.from);
-    for (const q of rooms) bed.makeRoom(q.from, q.until, q.db);
+    asks.sort((a, b) => a.t - b.t);
+    const ask = (r) => { if (r) { bed.makeRoom(r.from, r.until, r.db, { at: r.at, atk: r.atk }); nRooms++; } };
+    for (const q of asks) {
+      if (q.req) { ask(q.req(q.t)); continue; }
+      // the engine's call time: a fast effect onto music that is up was called ROOM_CLEAR_S earlier (engine.ts accept)
+      const call = q.t - M.roomClearDelay(q.kind, bed.roomLevelAt(q.t - M.ROOM_CLEAR_S));
+      for (const r of M.oneShotRoom(q.kind, call, q.at, q.end, q.onset, gdb)) ask(r);
+    }
     bed.pollDuck(secs + 1);
   }
   const buf = await ctx.startRendering();
-  return { sr, n: buf.length, channels: [b64(buf.getChannelData(0))], t0: 0, endTime: secs, spans, rooms: rooms.length };
+  return { sr, n: buf.length, channels: [b64(buf.getChannelData(0))], t0: 0, endTime: secs, spans, rooms: nRooms };
+}
+
+/** The strand's stick-slip AM path alone (interact.ts strandAm + the real slip PeriodicWave): a constant carrier of 1 through
+ *  the `am` gain whose gain is driven by the slip oscillator, as in the voice. Returns the min / max of the resulting gain
+ *  a(t) for each depth: it must span exactly (1 - depth) .. 1 (audio-4 fix). */
+async function strandAmRange(spec) {
+  const out = [];
+  for (const depth of spec.depths) {
+    const ctx = new OfflineAudioContext(1, 4800, SR);
+    const pw = D.pulseWave(ctx, 'slip', I3.SLIP_PULSE);
+    const g = I3.strandAm(depth, pw.min);
+    const one = ctx.createConstantSource(); one.offset.value = 1;
+    const slip = ctx.createOscillator(); slip.setPeriodicWave(pw.wave); slip.frequency.value = 50;
+    const am = ctx.createGain(); am.gain.value = g.base;
+    const mod = ctx.createGain(); mod.gain.value = g.mod;
+    slip.connect(mod); mod.connect(am.gain); one.connect(am); am.connect(ctx.destination);
+    one.start(0); slip.start(0);
+    const b = await ctx.startRendering();
+    const x = b.getChannelData(0);
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 480; i < x.length; i++) { lo = Math.min(lo, x[i]); hi = Math.max(hi, x[i]); }
+    // the same arithmetic with the first version's mapping (am.gain = 1 - depth), for the report
+    const span = 1 - pw.min;
+    out.push({ depth, lo, hi, pwMin: pw.min, oldLo: 1 - depth + (depth / span) * pw.min, oldHi: 1 - depth + depth / span });
+  }
+  return out;
 }
 
 /** The music's tuned bubbles (music.ts musicBubble) alone, one render per MIDI note: the pitch check. */
@@ -442,15 +474,16 @@ function bumpLimiterRun(calls) {
   return { out: calls.map((c) => ({ t: c.t, in: c.intensity, out: L.admit(c.intensity, c.t) })), throttled: L.throttled };
 }
 
-window.AV = { ready: true, SR, renderVoice, renderCeremony, renderDuck, runEngineTests, runEngineTests3, renderMusic, renderMix, renderMusicBubbles, simulateMusic, composeOnly, bumpLimiterRun, consts: {
+window.AV = { ready: true, SR, renderVoice, renderCeremony, renderDuck, runEngineTests, runEngineTests3, runEngineOffline, renderMusic, renderMix, renderMusicBubbles, simulateMusic, composeOnly, bumpLimiterRun, strandAmRange, consts: {
   TIERS: C.TIERS, CAPSULE_BUDGET_S: C.CAPSULE_BUDGET_S, MERGE_BUDGET_S: C.MERGE_BUDGET_S, PRE_ROLL_S: C.PRE_ROLL_S, REVEAL_DEFAULT_S: C.REVEAL_DEFAULT_S,
   MERGE_CHARGE_S: C.MERGE_CHARGE_S, MERGE_BURST_S: C.MERGE_BURST_S, BURST_GAP_S: C.BURST_GAP_S, CALM_SCALE: C.CALM_SCALE, MYTHIC_MOTIFS: C.MYTHIC_MOTIFS,
 }, musicConsts: {
   BPM: M.MUSIC_BPM, BEAT_S: M.BEAT_S, BAR_S: M.BAR_S, SLOT_S: M.SLOT_S, SWING: M.SWING, MAX_LIVE_NOTES: M.MAX_LIVE_NOTES, LOOKAHEAD_S: M.LOOKAHEAD_S, TICK_MS: M.TICK_MS,
   FADE_IN_S: M.FADE_IN_S, FADE_OUT_S: M.FADE_OUT_S, PAUSE_FADE_S: M.PAUSE_FADE_S, FIRST_NOTE_S: M.FIRST_NOTE_S, DUCK_DB: M.DUCK_DB, DUCK_ATTACK_TC: M.DUCK_ATTACK_TC, DUCK_RELEASE_TC: M.DUCK_RELEASE_TC,
   ECHO_S: M.ECHO_S, MUSIC_DEFAULT: M.MUSIC_DEFAULT, MEL_LO: M.MEL_LO, MEL_HI: M.MEL_HI,
-  ROOM_DB: M.ROOM_DB, ROOM_PAD_SHARE: M.ROOM_PAD_SHARE, ROOM_ATTACK_TC: M.ROOM_ATTACK_TC, ROOM_PAD_ATTACK_TC: M.ROOM_PAD_ATTACK_TC, ROOM_RELEASE_TC: M.ROOM_RELEASE_TC, ROOM_PAD_RELEASE_TC: M.ROOM_PAD_RELEASE_TC,
+  ROOM_DB: M.ROOM_DB, ROOM_PAD_SHARE: M.ROOM_PAD_SHARE, ROOM_ATTACK_TC: M.ROOM_ATTACK_TC, ROOM_PAD_ATTACK_TC: M.ROOM_PAD_ATTACK_TC, ROOM_RETURN_S: M.ROOM_RETURN_S, ROOM_STEP_S: M.ROOM_STEP_S, ROOM_CLEAR_S: M.ROOM_CLEAR_S,
   ROOM_LEAD_S: M.ROOM_LEAD_S, ROOM_TAIL_S: M.ROOM_TAIL_S, HELD_ROOM_HOLD_S: M.HELD_ROOM_HOLD_S, ROOM_KINDS: M.ROOM_KINDS,
+  SQUISH_ROOM_RATE: M.SQUISH_ROOM_RATE, SQUISH_ROOM_MIN_RATE: M.SQUISH_ROOM_MIN_RATE, STRAND_ROOM_T: M.STRAND_ROOM_T, STRAND_ROOM_MIN_T: M.STRAND_ROOM_MIN_T,
   FIELDS: M.FIELDS, FIELD_NEXT: M.FIELD_NEXT, FIELD_BARS: M.FIELD_BARS,
 }, limiterConsts: { MIN_INTENSITY: I3.BumpLimiter.MIN_INTENSITY, MIN_GAP_S: I3.BumpLimiter.MIN_GAP_S, CAPACITY: I3.BumpLimiter.CAPACITY, REFILL_PER_S: I3.BumpLimiter.REFILL_PER_S, RECENT_S: I3.BumpLimiter.RECENT_S },
   strandConsts: { SILENCE_S: I3.STRAND_SILENCE_S, STOP_S: I3.STRAND_STOP_S } };

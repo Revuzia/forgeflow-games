@@ -18,6 +18,8 @@ export type { LabApi } from './shell/debugHook.ts';
 
 export interface AppDeps extends GameDeps {
   postShot?: (name: string, dataUrl: string) => Promise<{ ok: boolean; path?: string }>;
+  /** with a caller-built `collection`: the skew its epoch clock adds (the dev meter accelerator pushes it); without one, app.ts makes it */
+  devSkew?: { ms: number };
 }
 
 export interface App extends Game {
@@ -31,8 +33,11 @@ export interface App extends Game {
 }
 
 export function createApp(deps: AppDeps): App {
-  const game = createGame(deps);
-  const { debug, lab } = createDebugTools(game, { postShot: deps.postShot });
+  // the dev meter accelerator pushes the collection's epoch clock ahead (debugHook.ts fill / grant); a caller's own clock is kept under it
+  const skew = { ms: 0 };
+  const base = deps.epochNow ?? (() => Date.now());
+  const game = createGame({ ...deps, epochNow: () => base() + skew.ms });
+  const { debug, lab } = createDebugTools(game, { postShot: deps.postShot, skew: deps.collection ? deps.devSkew : skew });
   const nameOf = (g: Genome): string => (genomeEquals(g, game.instance.genome) ? game.instance.name : nameForGenome(g));
   // the Game object's getters must keep working: extend it in place rather than copying (a spread would freeze the getters' values)
   return Object.defineProperties(game, {

@@ -78,7 +78,7 @@ export function harmonicWave(ctx: Ctx, key: string, h: number[]): PeriodicWave {
  * narrow pulse train (all harmonics peak together once per period). Also returns the normalised wave's minimum (WebAudio
  * normalises the peak to 1), so a caller can map it onto a 0..1 amplitude-modulation range.
  */
-export function pulseWave(ctx: Ctx, key: string, h: number[]): { wave: PeriodicWave; min: number } {
+export function pulseWave(ctx: Ctx, key: string, h: readonly number[]): { wave: PeriodicWave; min: number } {
   const c = cacheOf(ctx);
   const k = 'pulse:' + key;
   let w = c.waves.get(k);
@@ -115,6 +115,9 @@ export interface VoiceGroup {
   kill(fadeS?: number, atTime?: number): void;
   /** Voices built with a lookahead: build what starts before `until` (the engine's pump). True when nothing is left. */
   advance?(until: number): boolean;
+  /** Slow-onset voices (audio-4 fix): seconds from the voice's start until it starts to be heard (within about 20 dB of its
+   *  loudest). The music's room dip waits for it (music.ts oneShotRoom); absent or 0 for a fast onset. */
+  readonly onset?: number;
   /** Disconnect everything NOW (no fade). Used when the context is suspended and 'ended' events will not arrive. */
   free(): void;
 }
@@ -127,6 +130,8 @@ export class Bag implements VoiceGroup {
   readonly head: GainNode;
   endTime = Infinity;
   priority = 0;
+  /** See VoiceGroup.onset. */
+  onset = 0;
   alive = true;
   /** Present when the group is panned (always for held voices, whose pan is live-updatable). */
   panner: StereoPannerNode | null = null;

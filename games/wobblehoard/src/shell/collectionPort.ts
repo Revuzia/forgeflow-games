@@ -1,30 +1,34 @@
-// The shell's port to the collection (COLLECTION.md 3.4 `Collection`, built in src/collection/** by the collection lane).
-// The shell codes against THIS small interface only; `adaptCollection` maps the collection module onto it, and the in-shell practice
-// fallback (practiceFallback.ts) implements it until src/collection/index.ts lands.
+// The shell's port to the collection (src/collection, COLLECTION.md 3.4). The shell's own modules (capsules.ts, ceremonies.ts, game.ts)
+// code against THIS small interface only; adaptCollection maps the collection module onto it. SHELL-2b's Hoard and merge pad use the
+// full `Collection` (game.hoard) for stacks, previews and hearts, and hand a merge result to game.playMerge.
 //
 // What the shell needs, and nothing more:
 //   meter()        the HUD ring (COLLECTION 9.7): fill 0..1, credits (unopened capsules), and the four states
 //   onChange(fn)   any of the above changed (the shell re-reads meter(); it never polls)
-//   feed(ev, tMs)  every SoftEvent the frame loop drains, with an EPOCH ms time (meter.ts reads epoch times)
+//   onEvent(fn)    transitions: a capsule is ready (the meter-full cue), table full / resting / done for today (announced once),
+//                  the save started or stopped failing, another tab changed the Hoard
+//   feed(ev, tMs)  every SoftEvent the frame loop drains (any ms clock: the collection anchors it to the epoch)
 //   openCapsule()  RESULT FIRST (COLLECTION 10): the item is decided and stored before any animation starts
-//   merge(...)     optional; SHELL-2b's merge pad calls it, then hands the result to the ceremony controller
-//   markSeen(ids)  optional; the unseen dot clears after a reveal
+//   merge(...)     MERGE 7: the result (and the consumed parents) before the ceremony
+//   markSeen(ids)  the unseen dot clears after a reveal
+//   flush / sync   lifecycle: write on pagehide, fold in another tab's change on focus
+//   loadNotice()   what to tell the player about how the shelf was loaded (copy.ts), or null
 import type { SoftEvent, TierName } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
-import { decodeGenome } from '../core/genome.ts';
 import { TIERS } from '../core/rarity.ts';
-import { tierOfGenome } from './bodies.ts';
+import { COPY, loadStatusCopy, saveStateCopy } from '../collection/copy.ts';
+import type { Collection, CollectionEvent, HoardItem, MergeOk, OpenOk } from '../collection/index.ts';
 
 export interface MeterReading {
   /** 0..1 toward the next capsule */
   fill: number;
-  /** capsules earned and not opened yet (the table queue, at most 5: COLLECTION C-5) */
+  /** capsules earned and not opened yet (play + task) */
   credits: number;
   /** daily rate 25%: "Squishies are resting, filling slowly" */
   resting: boolean;
   /** the 12-a-day hard stop: "They'll be ready tomorrow" */
   doneToday: boolean;
-  /** 5 unopened: "Table full: open one to keep going" */
+  /** 5 unopened play capsules: "Table full: open one to keep going" */
   tableFull: boolean;
   /** signed in but no connection: "Waiting for connection" */
   offline: boolean;
@@ -36,9 +40,11 @@ export interface ItemView {
   tier: TierName;
   /** first copy of this species in the active ledger */
   isNew: boolean;
-  /** copies of this species after this item arrived (for the "x2" spare chip) */
+  /** copies of this species after this item arrived (for the "x2 spare" chip) */
   copies: number;
   nickname: string | null;
+  /** the collection's own "may quick-pop" (a repeat Common or Uncommon); undefined = the shell decides from isNew and tier */
+  quickEligible?: boolean;
 }
 
 export type CapsuleOutcome = ({ ok: true } & ItemView) | { ok: false; error: string; message: string };
@@ -46,84 +52,73 @@ export type CapsuleOutcome = ({ ok: true } & ItemView) | { ok: false; error: str
 export interface MergeParentView { genome: Genome; tier: TierName }
 export type MergeOutcome = ({ ok: true; tierUp: boolean; parents: MergeParentView[] } & ItemView) | { ok: false; error: string; message: string };
 
+export type PortEvent =
+  | { type: 'capsule'; credits: number }
+  | { type: 'notice'; text: string }       // table full / resting / done for today / a save problem: a polite announcement
+  | { type: 'external' };                  // another tab changed the Hoard
+
 export interface ShellCollection {
-  /** 'collection' = src/collection (practice or real ledger); 'fallback' = the in-shell stopgap */
-  readonly source: 'collection' | 'fallback';
   meter(): MeterReading;
   onChange(fn: () => void): () => void;
+  onEvent(fn: (e: PortEvent) => void): () => void;
   feed(ev: SoftEvent, tMs: number): void;
   openCapsule(): Promise<CapsuleOutcome>;
-  merge?(ids: string[], digest: string): Promise<MergeOutcome>;
-  markSeen?(ids: string[]): void;
-  dispose?(): void;
-  /** DEV ONLY (the harness accelerates the meter with it); absent from a real ledger */
-  devGrant?(credits: number): void;
-  /** DEV ONLY: run the real meter path with accelerated pokes until the ring reaches `fill` (or a capsule is earned) */
-  devFill?(fill: number): void;
+  merge(ids: string[], digest: string): Promise<MergeOutcome>;
+  markSeen(ids: string[]): void;
+  flush(): void;
+  sync(): void;
+  /** the boot-time storage notice (a recovered or newer shelf, no storage), or null */
+  loadNotice(): string | null;
+  dispose(): void;
 }
 
-/* ───────────────────────── the collection module, as COLLECTION.md 3.4 / 10 sketches it (subject to change: adapt here only) ───────────────────────── */
+const tierName = (i: number): TierName => (TIERS[i] ?? 'common') as TierName;
 
-/** Server-shaped replies (COLLECTION 10, MERGE 7): snake_case, genome as a g1. code, tier as an index. */
-interface OpenResultLike { ok: boolean; error?: string; message?: string; item_id?: string; itemId?: string; genome_code?: string; genomeCode?: string; genome?: Genome; tier_idx?: number; tierIdx?: number; tier?: string; is_new?: boolean; isNew?: boolean; copies?: number; nickname?: string | null; tier_up?: boolean; tierUp?: boolean }
-export interface CollectionLike {
-  meter(): Partial<MeterReading> & { fill: number };
-  onChange(fn: () => void): () => void;
-  feed(ev: SoftEvent, tMs: number): void;
-  openCapsule(): Promise<OpenResultLike>;
-  merge?(ids: string[], digest: string): Promise<OpenResultLike>;
-  markSeen?(ids: string[]): unknown;
-  items?(ledger?: 'real' | 'practice'): Array<{ id: string; genome: Genome }>;
-  dispose?(): void;
-}
+const itemView = (r: { item_id: string; tier_idx: number; is_new: boolean; copies: number; item: HoardItem }, quick?: boolean): ItemView =>
+  ({ itemId: r.item_id, genome: r.item.genome, tier: tierName(r.tier_idx), isNew: r.is_new, copies: r.copies, nickname: null, quickEligible: quick });
 
-const tierName = (r: OpenResultLike): TierName => {
-  if (typeof r.tier === 'string' && (TIERS as readonly string[]).includes(r.tier)) return r.tier as TierName;
-  const i = typeof r.tier_idx === 'number' ? r.tier_idx : typeof r.tierIdx === 'number' ? r.tierIdx : 0;
-  return (TIERS[i] ?? 'common') as TierName;
-};
-
-function toItem(r: OpenResultLike): ItemView | null {
-  const code = r.genome_code ?? r.genomeCode;
-  const genome = r.genome ?? (typeof code === 'string' ? decodeGenome(code) : null);
-  const itemId = r.item_id ?? r.itemId;
-  if (!genome || typeof itemId !== 'string') return null;
-  const isNew = !!(r.is_new ?? r.isNew);
-  return { itemId, genome, tier: tierName(r), isNew, copies: typeof r.copies === 'number' ? r.copies : isNew ? 1 : 2, nickname: r.nickname ?? null };
-}
-
-const refusal = (r: OpenResultLike | null, fallback: string): { ok: false; error: string; message: string } =>
-  ({ ok: false, error: r?.error ?? 'bad_reply', message: r?.message ?? fallback });
-
-/** Map the collection module (COLLECTION 3.4) onto the shell port. Never throws; a malformed reply becomes a refusal. */
-export function adaptCollection(c: CollectionLike): ShellCollection {
+/** Map the collection module onto the shell port. Never throws; a malformed or failed call becomes a refusal with player copy. */
+export function adaptCollection(c: Collection): ShellCollection {
   return {
-    source: 'collection',
     meter() {
       const m = c.meter();
-      return { fill: m.fill, credits: m.credits ?? 0, resting: !!m.resting, doneToday: !!m.doneToday, tableFull: !!m.tableFull, offline: !!m.offline };
+      return { fill: m.fill, credits: m.credits, resting: m.resting, doneToday: m.doneToday, tableFull: m.tableFull, offline: m.offline };
     },
     onChange: (fn) => c.onChange(fn),
+    onEvent(fn) {
+      return c.onEvent((e: CollectionEvent) => {
+        switch (e.type) {
+          case 'capsule': fn({ type: 'capsule', credits: e.credits }); break;
+          case 'table-full': fn({ type: 'notice', text: COPY.tableFull }); break;
+          case 'resting': fn({ type: 'notice', text: COPY.resting }); break;
+          case 'done-today': fn({ type: 'notice', text: COPY.doneToday }); break;
+          case 'storage': { const t = saveStateCopy(e.report.save); if (t) fn({ type: 'notice', text: t }); break; }
+          case 'external': fn({ type: 'external' }); break;
+        }
+      });
+    },
     feed: (ev, t) => c.feed(ev, t),
     async openCapsule() {
-      let r: OpenResultLike | null = null;
-      try { r = await c.openCapsule(); } catch { return refusal(null, 'Something went wrong. Reload and try again.'); }
-      if (!r || !r.ok) return refusal(r, 'That one fizzled. Keep squishing.');
-      const item = toItem(r);
-      return item ? { ok: true, ...item } : refusal(r, 'Something went wrong. Reload and try again.');
+      try {
+        const r = await c.openCapsule();
+        if (!r.ok) return { ok: false, error: r.error, message: r.message ?? COPY.noCapsule };
+        const ok = r as OpenOk;
+        return { ok: true, ...itemView(ok, ok.quick) };
+      } catch { return { ok: false, error: 'exception', message: COPY.somethingWrong }; }
     },
-    merge: c.merge ? async (ids, digest) => {
-      let r: OpenResultLike | null = null;
-      try { r = await c.merge!(ids, digest); } catch { return refusal(null, 'Something went wrong. Reload and try again.'); }
-      if (!r || !r.ok) return refusal(r, 'That merge did not go through.');
-      const item = toItem(r);
-      if (!item) return refusal(r, 'Something went wrong. Reload and try again.');
-      const all = c.items?.() ?? [];
-      const parents = ids.map((id) => all.find((x) => x.id === id)).filter((x): x is { id: string; genome: Genome } => !!x)
-        .map((x) => ({ genome: x.genome, tier: tierOfGenome(x.genome) }));
-      return { ok: true, ...item, tierUp: !!(r.tier_up ?? r.tierUp), parents };
-    } : undefined,
-    markSeen: c.markSeen ? (ids) => { void c.markSeen!(ids); } : undefined,
-    dispose: c.dispose ? () => c.dispose!() : undefined,
+    async merge(ids, digest) {
+      try {
+        const r = await c.merge(ids, digest);
+        if (!r.ok) return { ok: false, error: r.error, message: r.message ?? COPY.somethingWrong };
+        const ok = r as MergeOk;
+        // the consumed copies are already gone from items(): the result carries them (MergeOk.parents)
+        return { ok: true, ...itemView(ok), tierUp: ok.tier_up, parents: ok.parents.map((p) => ({ genome: p.genome, tier: p.tier as TierName })) };
+      } catch { return { ok: false, error: 'exception', message: COPY.somethingWrong }; }
+    },
+    markSeen(ids) { void c.markSeen(ids).catch(() => { /* a failed mark only leaves the dot */ }); },
+    flush: () => c.flush(),
+    sync: () => c.sync(),
+    loadNotice: () => loadStatusCopy(c.storage().load),
+    dispose: () => c.dispose(),
   };
 }

@@ -13,7 +13,7 @@ import { SETTINGS_KEY, defaultSettings, loadSettings, memoryStorage, resolveSett
 import { speciesBaseGenome, tierOf } from '../../src/data/catalog.ts';
 import { KEY_POINTER_ID, attachKeyboard } from '../../src/input/keyboard.ts';
 import { CALIBRATION, pressDirection } from '../../src/shell/feel.ts';
-import { createPracticeFallback, interactionOf, TABLE_MAX } from '../../src/shell/practiceFallback.ts';
+import { createCollection, WH_QUEUE_MAX } from '../../src/collection/index.ts';
 import { SKIP_GATE_MS } from '../../src/shell/ceremonies.ts';
 import { createMockWorld, recorder } from '../mocks.ts';
 import type { MockWorld } from '../mocks.ts';
@@ -108,12 +108,15 @@ function upgrade(w: MockWorld): { log: ReturnType<typeof recorder>; runs: FakeRu
 }
 
 interface Rig { w: MockWorld; app: App; fake: ReturnType<typeof upgrade> }
-function rig(o: { storage?: ReturnType<typeof memoryStorage> | null; env?: { vibrate: boolean; reducedMotion: boolean }; round2?: boolean; fallbackRandom?: () => number } = {}): Rig {
+function rig(o: { storage?: ReturnType<typeof memoryStorage> | null; env?: { vibrate: boolean; reducedMotion: boolean }; round2?: boolean; random?: () => number } = {}): Rig {
   const w = createMockWorld({ storage: o.storage ?? null });
   if (o.env) w.deps.env = o.env;
   const fake = o.round2 === false ? { log: recorder(), runs: [], capsule: null } : upgrade(w);
-  const collection = createPracticeFallback({ random: o.fallbackRandom ?? (() => 0.01), owned: ['dollop'] });
-  const app = createApp({ ...w.deps, collection, epochNow: () => 1_700_000_000_000 + w.clock.t });
+  // the REAL collection module (practice ledger, in memory), on the mock clock + a dev skew the meter accelerator pushes ahead
+  const devSkew = { ms: 0 };
+  const now = (): number => 1_700_000_000_000 + w.clock.t + devSkew.ms;
+  const collection = createCollection({ storage: o.storage ?? null, profile: null, now, random: o.random ?? (() => 0.4) });
+  const app = createApp({ ...w.deps, collection, devSkew, epochNow: now });
   app.resize(800, 600, 1);
   app.setPhase('play');
   return { w, app, fake };
@@ -245,18 +248,18 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
 
 /* ───────────────────────── 4. capsule loop with the fake round-2 stage ───────────────────────── */
 {
-  const r = rig({ fallbackRandom: (() => { const q = [0.5, 0.2, 0.3]; let i = 0; return () => q[i++ % q.length]; })() });
+  const r = rig();
   // credits arrive (dev grant) while a finger squishes: the plink is quiet
   const c = r.app.input.screenCentre()!;
   r.app.input.pointerDown({ id: 1, x: c.x, y: c.y, t: r.w.clock.t });
   run(r, 300);
-  r.app.collection.devGrant!(1);
+  r.app.debug.shell.grant(1);
   const mf = r.fake.log.of('meterFull');
   check('meter full: audio.meterFull({ quiet: true }) mid-squish, one stage.dropCapsule()', mf.length === 1 && (mf[0].args[0] as { quiet: boolean }).quiet === true && r.fake.log.count('dropCapsule') === 1);
   r.app.input.pointerUp({ id: 1, x: c.x, y: c.y, t: r.w.clock.t });
   run(r, 300);
   await settle(r);
-  r.app.collection.devGrant!(2);
+  r.app.debug.shell.grant(2);
   check('queue: more credits do not replace the capsule on the table (one dropCapsule), the reading counts 3', r.fake.log.count('dropCapsule') === 1 && r.app.capsules.reading.credits === 3);
   // hold to open: a press on the capsule belongs to the capsule (no body finger), squeeze rises, capsuleBeat grab
   const fd0 = r.w.body.rec.count('fingerDown');
@@ -419,20 +422,20 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   run(r, 300);
 }
 
-/* ───────────────────────── 8. meter mapping and the table cap (fallback, until src/collection lands) ───────────────────────── */
+/* ───────────────────────── 8. the collection module through the port: meter feed, events, table cap ───────────────────────── */
 {
-  const ev = (kind: SoftEvent['kind'], intensity = 0.5, heldFor = 0): SoftEvent => ({ kind, at: { x: 0, y: 0, z: 0 }, normal: { x: 0, y: 1, z: 0 }, intensity, heldFor, finger: 0 });
-  const m = [interactionOf(ev('poke'), 1), interactionOf(ev('release', 0.3, 0.39), 2), interactionOf(ev('release', 0.3, 0.4), 3), interactionOf(ev('snap', 0.2), 4), interactionOf(ev('land'), 5), interactionOf(ev('press'), 6)];
-  check('meter feed (DESIGN 5.4): poke -> poke; release held < 0.4 s -> nothing; >= 0.4 s -> squeeze(heldFor); snap -> pull(intensity); land / press -> nothing',
-    m[0]?.kind === 'poke' && m[1] === null && m[2]?.kind === 'squeeze' && m[2].amount === 0.4 && m[3]?.kind === 'pull' && m[3].amount === 0.2 && m[4] === null && m[5] === null);
-  const f = createPracticeFallback({ random: () => 0.1 });
-  let t = 1_700_000_000_000;
-  for (let i = 0; i < 40; i++) { t += 2000; f.feed(ev('poke'), t); }
-  check('fallback meter: 40 pokes 2 s apart earn the first capsule (30 SP ramp)', f.meter().credits === 1, JSON.stringify(f.meter()));
-  f.devGrant!(10);
-  const before = f.meter();
-  for (let i = 0; i < 20; i++) { t += 2000; f.feed(ev('poke'), t); }
-  check(`fallback meter: at ${TABLE_MAX} unopened capsules the table is full and touches are not paid (COLLECTION C-5)`, before.credits === TABLE_MAX && before.tableFull && f.meter().credits === TABLE_MAX);
+  const r = rig();
+  const notices: string[] = [];
+  r.app.on('notice', (t) => notices.push(t));
+  const c = r.app.input.screenCentre()!;
+  for (let i = 0; i < 3; i++) { r.app.input.pointerDown({ id: 40 + i, x: c.x, y: c.y, t: r.w.clock.t }); run(r, 60); r.app.input.pointerUp({ id: 40 + i, x: c.x, y: c.y, t: r.w.clock.t }); run(r, 1200); }
+  check('feed: real pokes through the frame loop move the collection\'s practice meter (collection.feed with the drained SoftEvents)', r.app.collection.meter().fill > 0, JSON.stringify(r.app.collection.meter()));
+  r.app.debug.shell.grant(WH_QUEUE_MAX + 2);
+  const m = r.app.collection.meter();
+  check(`table cap: at ${WH_QUEUE_MAX} play capsules the table is full, the ring stays full and "Table full" is announced once (COLLECTION C-5, 9.7)`,
+    m.credits === WH_QUEUE_MAX && m.tableFull && notices.filter((t) => /Table full/.test(t)).length === 1, JSON.stringify({ m, notices }));
+  check('table full: one capsule on the table, one meter-full plink per capsule earned', r.fake.log.count('dropCapsule') === 1 && r.fake.log.count('meterFull') === WH_QUEUE_MAX, `drops ${r.fake.log.count('dropCapsule')}, plinks ${r.fake.log.count('meterFull')}`);
+  check('the starter ghost keeps the shell\'s starter id (the collection was given no profile here: its own starter)', r.app.hoard.items().length === 1 && r.app.hoard.items()[0].species === 'dollop');
 }
 
 /* ───────────────────────── 9. keyboard focus rules (audit findings 12, 13) ───────────────────────── */

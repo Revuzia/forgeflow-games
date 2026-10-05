@@ -1,6 +1,8 @@
 // WOBBLEHOARD audio probe (gate G2 + extra sanity + engine stress).
 //   node _harness/probe_audio.mjs [--voices=poke,pop] [--no-engine] [--port=5363]
 //   round 3 (music bed + interaction voices): --no-round3 skips it, --only3 runs only it (offline + its live engine part)
+//   audio-4 (the music's room under play, through the real engine run offline): part of round 3; --no-room skips it,
+//   --only-room runs only it
 // Renders every voice offline in Chromium (OfflineAudioContext, 48 kHz) through the SAME master chain the game uses,
 // analyses the samples in Node, writes WAV + spectrogram PNG per voice to _harness/_renders/ (gitignored), prints a table
 // and exits 1 on any failed check. Nobody on the build machine can listen: every number here is a measurement.
@@ -12,13 +14,15 @@ import {
 } from './audioview/analysis.mjs';
 import { ceremonyChecks } from './audioview/ceremony_checks.mjs';
 import { round3Checks } from './audioview/music_checks.mjs';
+import { roomChecks } from './audioview/room_checks.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => { const [k, v] = a.slice(2).split('='); return [k, v ?? true]; }));
 const PORT = Number(args.port ?? 5363);
 const OUT = resolve(ROOT, '_harness', '_renders');
 mkdirSync(OUT, { recursive: true });
 const only = args.voices ? String(args.voices).split(',') : null;
-const only3 = !!args.only3;
+const onlyRoom = !!args['only-room'];
+const only3 = !!args.only3 || onlyRoom;
 
 /* ───────────────────────── checks bookkeeping ───────────────────────── */
 const checks = [];
@@ -370,10 +374,18 @@ async function main() {
       try {
         await page.goto(`${vite.url}_harness/audioview/index.html`);
         await page.waitForFunction(() => window.AV && window.AV.ready, null, { timeout: 60000 });
-        extra.round3 = await round3Checks({ page, check, OUT });
+        if (!onlyRoom) extra.round3 = await round3Checks({ page, check, OUT });
       } catch (e) { check('round 3', 'round-3 offline gates ran', false, String(e && e.stack || e), 'no exception'); }
     }
-    if (!args['no-engine'] && !only && !args['no-round3']) {
+    if (!only && !args['no-round3'] && !args['no-room']) {
+      try {
+        // audio-4: pumping, isolated separation and the exposed gate through the REAL engine run offline (fresh page)
+        await page.goto(`${vite.url}_harness/audioview/index.html`);
+        await page.waitForFunction(() => window.AV && window.AV.ready, null, { timeout: 60000 });
+        extra.room = await roomChecks({ page, check, OUT });
+      } catch (e) { check('room under play', 'audio-4 room checks ran', false, String(e && e.stack || e), 'no exception'); }
+    }
+    if (!args['no-engine'] && !only && !args['no-round3'] && !onlyRoom) {
       try {
         // round 3 live engine: music bed + interaction voices, on a fresh page (clean counters)
         await page.goto(`${vite.url}_harness/audioview/index.html`);

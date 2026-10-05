@@ -563,6 +563,9 @@ export function blend(ctx: Ctx, out: AudioNode, t0: number, p: BlendParams): Ble
     free: () => bag.free(),
     stop: () => bag.kill(0.15),
     advance: (until) => bag.advanceDeferred(until),
+    // the motor spools up: heard (within 20 dB of its loudest) ~0.09 s after the start, within 10 dB ~0.23 s (probe); the
+    // music's full dip waits for the first
+    onset: 0.09,
   };
   return handle;
 }

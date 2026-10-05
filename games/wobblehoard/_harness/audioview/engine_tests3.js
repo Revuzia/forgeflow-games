@@ -97,12 +97,16 @@ export async function runEngineTests3() {
       await sleep(2000 + 1500);
       const dAfter = audio.detailStats().music.ducked;
       const h = audio.squishStart({});
-      let dSq = false;
+      let dSq = false, dHold = false;
       for (let i = 0; i < 40; i++) { h.update({ compression: 0.5, rate: 2 }); await sleep(16); if (i === 30) dSq = audio.detailStats().music.ducked; }
-      for (let i = 0; i < 40; i++) { h.update({ compression: 0.5, rate: 0.1 }); await sleep(16); }
+      // audio-4 fix: the music stays down for the activity hold (HELD_ROOM_HOLD_S + ROOM_TAIL_S) after the squish was last
+      // loud, then lets go (the return itself is not "ducked")
+      const quietS = M.HELD_ROOM_HOLD_S + M.ROOM_TAIL_S + 0.6;
+      const tq = performance.now();
+      while (performance.now() - tq < quietS * 1000) { h.update({ compression: 0.5, rate: 0.1 }); await sleep(16); if (!dHold && performance.now() - tq > 1000) dHold = audio.detailStats().music.ducked; }
       const dQuiet = audio.detailStats().music.ducked;
       h.end(0.05);
-      check('music ducks under a reveal and recovers after it; ducks under a loud held squish (rate 2) and recovers when it goes quiet (rate 0.1)', dRev && !dAfter && dSq && !dQuiet, `reveal ${dRev} -> ${dAfter}; squish loud ${dSq}, quiet ${dQuiet}`, 'true, false, true, false');
+      check(`music ducks under a reveal and recovers after it; ducks under a loud held squish (rate 2), stays down 1 s into a quiet spell (rate 0.1: the activity hold) and lets go ${quietS.toFixed(1)} s into it`, dRev && !dAfter && dSq && dHold && !dQuiet, `reveal ${dRev} -> ${dAfter}; squish loud ${dSq}, quiet 1 s ${dHold}, quiet ${quietS.toFixed(1)} s ${dQuiet}`, 'true, false, true, true, false');
       await sleep(500);
     }
 
@@ -322,8 +326,12 @@ async function fixChecks(check, tr, info) {
     await sleep(40);
     const during = a.detailStats().music.ducked;
     await sleep(2600);
+    const held = a.detailStats().music.ducked;
+    await sleep((M.ROOM_TAIL_S - 2.6 + 0.9) * 1000);
     const after = a.detailStats().music.ducked;
-    check('room: a poke makes the music dip at once (fast duck keyed by the effect) and it comes back about 2 s later', !before && during && !after, `before ${before}, 40 ms after the poke ${during}, 2.6 s later ${after}`, 'false, true, false');
+    // audio-4 fix: the dip is held ROOM_TAIL_S after the effect (the activity hold: casual play no longer pumps the music),
+    // then the music returns (dB-linear, ROOM_RETURN_S)
+    check(`room: a poke makes the music dip at once (fast duck keyed by the effect), it is still down 2.6 s later (activity hold) and lets go ~${M.ROOM_TAIL_S} s after the poke`, !before && during && held && !after, `before ${before}, 40 ms after the poke ${during}, 2.6 s later ${held}, ${(M.ROOM_TAIL_S + 0.94).toFixed(1)} s later ${after}`, 'false, true, true, false');
     // a session that starts during a ceremony is ducked under it from its first note
     a.setMusic({ on: false });
     await sleep(1800);
@@ -427,6 +435,40 @@ async function fixChecks(check, tr, info) {
     const a = createAudio({ seed: 408 });
     try { const p = a.unlock(); syncCount = silent; await p; state = a.stats().state; } finally { B.start = ob; window.AudioContext = OrigAC; }
     check('unlock() on a context that starts suspended (iOS): the one-sample silent buffer is started synchronously inside the call (inside the user gesture), not after awaiting resume()', syncCount === 1 && state === 'running', `${syncCount} started before unlock() returned; state after ${state}`, '1, running');
+    a.dispose();
+  }
+
+  /* audio-4 fix: unlock() while an earlier unlock is still pending. lifecycle.ts calls unlockAudio() on visibilitychange,
+     outside a user gesture; on iOS that resume() stays pending. A tap within the next 1.2 s used to get the same in-flight
+     promise with no resume() and no silent buffer inside its gesture, so the context stayed suspended. Mock: the context
+     starts 'suspended' and resume() only ever settles when called inside a "gesture". */
+  {
+    const B = AudioBufferSourceNode.prototype, ob = B.start;
+    let silent = 0, resumes = 0, gesture = false;
+    B.start = function (...args) { if (this.buffer && this.buffer.length === 1) silent++; return ob.apply(this, args); };
+    const OrigAC = window.AudioContext;
+    window.AudioContext = class extends OrigAC {
+      constructor(...args) {
+        super(...args);
+        let resumed = false;
+        Object.defineProperty(this, 'state', { configurable: true, get: () => (resumed ? 'running' : 'suspended') });
+        const r = OrigAC.prototype.resume.bind(this);
+        this.resume = () => { resumes++; return gesture ? r().then(() => { resumed = true; }) : new Promise(() => { /* no gesture: pending for ever */ }); };
+      }
+    };
+    const a = createAudio({ seed: 414 });
+    const res = {};
+    try {
+      const p1 = a.unlock();                                    // visibilitychange: no gesture
+      await sleep(300);
+      const r0 = resumes, s0 = silent;
+      gesture = true; const p2 = a.unlock(); gesture = false;   // the player's tap 300 ms later, inside its gesture
+      res.inGestureResumes = resumes - r0; res.inGestureSilent = silent - s0;
+      await Promise.race([p2, sleep(2000)]);
+      res.state = a.stats().state;
+      res.same = p1 === p2;
+    } finally { B.start = ob; window.AudioContext = OrigAC; }
+    check('unlock() while an earlier, gesture-less unlock() is pending (iOS mock): the tap calls resume() and starts the silent buffer again inside its own gesture, and the context runs', res.inGestureResumes === 1 && res.inGestureSilent === 1 && res.state === 'running', `inside the tap: ${res.inGestureResumes} resume(), ${res.inGestureSilent} silent buffer; state after ${res.state}`, '1, 1, running');
     a.dispose();
   }
 

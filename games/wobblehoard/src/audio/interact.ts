@@ -168,6 +168,9 @@ export function lift(ctx: Ctx, out: AudioNode, t0: number, p: LiftParams): Voice
   endT = Math.max(endT, bubble(ctx, bag.head, tw + rr(r, 0.015, 0.035), rr(r, 0.0025, 0.004) / pr, A * 0.45, 0.5));
   o.stop(Math.max(endT, tw + 0.16));          // outlives the bubble and the air (see bump)
   bag.endTime = Math.max(endT, tw + 0.16) + 0.02;
+  // the peel ticks stay > 20 dB under the thwop (K-weighted): the voice is heard when the thwop comes, so the music's dip
+  // waits for it (music.ts oneShotRoom), starting 15 ms early so the thwop's first moments already find the music down
+  bag.onset = Math.max(0, peel - 0.015);
   return bag;
 }
 
@@ -222,7 +225,18 @@ export interface StrandVoice extends VoiceGroup {
 export const STRAND_SILENCE_S = 0.15;
 export const STRAND_STOP_S = 0.6;
 /** Stick-slip pulse shape (cosine harmonics of the slip rate): a soft, narrow strike once per slip. */
-const SLIP_PULSE = [1, 0.92, 0.78, 0.6, 0.42, 0.27, 0.15, 0.07];
+export const SLIP_PULSE: readonly number[] = [1, 0.92, 0.78, 0.6, 0.42, 0.27, 0.15, 0.07];
+/**
+ * The strand's stick-slip AM: a(t) = base + mod * pulse(t), with the (normalised) slip pulse in [min, 1]. Depth d maps the
+ * pulse onto (1 - d) .. 1 exactly. Audio-4 fix: the first version set base = 1 - d, which ignores that the pulse's minimum
+ * is not 0 (about -0.136 of its peak): a(t) then swung from 1 - d - d * 0.12 (below zero at d = 0.95: a phase-inverted
+ * carrier between the slips) to 1 - d * 0.12 (1 dB short at each slip).
+ */
+export function strandAm(depth: number, min: number): { base: number; mod: number } {
+  const d = clamp(fin(depth, 0.5), 0, 1);
+  const span = 1 - Math.min(fin(min, 0), 0.99);
+  return { base: 1 - d - (d * Math.min(fin(min, 0), 0.99)) / span, mod: d / span };
+}
 
 /**
  * The held strand (round-3 fix: the first version passed one weak high harmonic of a low saw through a narrow band-pass and
@@ -255,8 +269,7 @@ export function strand(ctx: Ctx, out: AudioNode, t0: number, p: VoiceBase): Stra
   const j1 = bag.osc('sine', rr(r, 3.7, 4.9), t), j1d = bag.gain(70);
   const j2 = bag.osc('sine', rr(r, 10.5, 12.5), t), j2d = bag.gain(35);
   j1.connect(j1d); j1d.connect(slip.detune); j2.connect(j2d); j2d.connect(slip.detune);
-  // amplitude a(t) = base + mod * pulse(t), with pulse in [pw.min, 1]: depth d maps the pulse onto (1 - d) .. 1
-  const span = 1 - pw.min;
+  // amplitude a(t) = base + mod * pulse(t), with pulse in [pw.min, 1]: depth d maps the pulse onto (1 - d) .. 1 (strandAm)
   const am = bag.gain(0), mod = bag.gain(0);
   slip.connect(mod); mod.connect(am.gain);
   const bp = bag.biquad('bandpass', f0, 2.6);
@@ -297,8 +310,9 @@ export function strand(ctx: Ctx, out: AudioNode, t0: number, p: VoiceBase): Stra
       car.frequency.setTargetAtTime(fres, tt, 0.03);
       bp.frequency.setTargetAtTime(fres, tt, 0.03);
       lp.frequency.setTargetAtTime(Math.min(fres * 2.2, 16000), tt, 0.03);
-      am.gain.setTargetAtTime(1 - depth, tt, 0.03);
-      mod.gain.setTargetAtTime(depth / span, tt, 0.03);
+      const g = strandAm(depth, pw.min);
+      am.gain.setTargetAtTime(g.base, tt, 0.03);
+      mod.gain.setTargetAtTime(g.mod, tt, 0.03);
       const level = T < 0.02 ? 0 : A * Math.pow(T, 0.75) * (0.5 + 0.5 * motion);
       env.gain.cancelScheduledValues(tt);
       env.gain.setTargetAtTime(level, tt, 0.025);

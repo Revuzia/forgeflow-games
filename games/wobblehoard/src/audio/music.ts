@@ -42,15 +42,21 @@ export const DUCK_DB = -9;
 export const DUCK_ATTACK_TC = 0.12;
 export const DUCK_RELEASE_TC = 0.5;
 /**
- * Room for the effects: a sidechain-style dip keyed by EVERY effect voice (round-3 fix). Each one-shot dips the music by
- * its ROOM_KINDS depth from the moment it is called until its own end time, then the music comes back (ROOM_RELEASE_TC:
- * within 1 dB about 1 s after the effect); the held squish and strand dip by a depth that follows their own level, frame
- * by frame (makeRoom holds). Why: with only the slow ceremony/squish duck, 25 of 330 effect placements over 6 minutes of
- * music stood less than 8 dB above the music in their own bands (a soft toss 5 dB UNDER the pads, a poke 3.4 dB and a
- * pop 0.6 dB over a coinciding mallet), and over each effect's loudest 20 ms frames most soft and medium effects were
- * within 0-7 LU (K-weighted) of the music. The dip is fast (attack tc 3 ms, starting ROOM_LEAD_S before the effect, which
- * the engine schedules that far ahead of the call) so even a 45 ms pop gets it; it runs on its own gain node and never
- * fights the slow duck (the two multiply).
+ * Room for the effects: a sidechain-style dip keyed by EVERY effect voice (round-3 fix; re-shaped by the audio-4 fix). Each
+ * one-shot asks the music to step back from the moment it is called until ROOM_TAIL_S after its own end; the held squish
+ * and strand ask frame by frame, by a depth that follows their own level. Why the dip: with only the slow ceremony/squish
+ * duck, 25 of 330 effect placements over 6 minutes of music stood less than 8 dB above the music in their own bands (a soft
+ * toss 5 dB UNDER the pads, a poke 3.4 dB and a pop 0.6 dB over a coinciding mallet), and over each effect's loudest 20 ms
+ * frames most soft and medium effects were within 0-7 LU (K-weighted) of the music.
+ * Why the long hold and the slow, dB-linear return (audio-4 fix): with a 0.8 s tail and a 0.6 / 0.9 s exponential release,
+ * casual play (a gesture every 1-4 s) dipped and swelled the music ~23 times a minute by ~19 dB (measured on the music stem
+ * against the music alone: gain std 7.6 dB, 1 s loudness change p90 20 LU against 9.8 for the music alone): it pumped. Now
+ * the music stays down while the player is active (an activity hold of ROOM_TAIL_S after every effect) and fades back once
+ * they rest. Holding only the pad (the melody keeping a short hold) was measured too and still swung (std 3.2 / 4.8 dB in
+ * sparse / burst play, 1 s loudness change p90 12-14 LU): the melody's notes popped back between effects.
+ * The dip is fast (melody attack time constant 1.5 ms, pad 6 ms, starting ROOM_LEAD_S before the effect, which the engine
+ * schedules that far ahead of the call) so even a 45 ms pop gets it. It runs on its own gain nodes and never fights the slow
+ * ceremony duck (they multiply).
  */
 export const ROOM_DB = -24;
 /** The dip is split: the melody (mallets, their echoes, the bubbles: tonal transients in the effects' own 0.4-2.4 kHz band,
@@ -62,33 +68,65 @@ export const ROOM_ATTACK_TC = 0.0015;
 /** ... the pad's is gentle: a sustained chord cut in a few ms would itself be heard as a gate (seen as a vertical splatter
  *  stripe at every dip onset in the music stem's spectrogram). */
 export const ROOM_PAD_ATTACK_TC = 0.006;
-/** Slow enough that a tap every second keeps the music down instead of pumping it up and down (within 1 dB about 1.4 s
- *  after the last effect ends). */
-export const ROOM_RELEASE_TC = 0.6;
-/** The pad comes back more slowly still: from its deeper dip, a faster return would swell by > 1.5 dB per 20 ms at first. */
-export const ROOM_PAD_RELEASE_TC = 0.9;
 /** = the engine's effect LOOKAHEAD: an effect called at t starts at t + ROOM_LEAD_S, the dip starts at t. */
 export const ROOM_LEAD_S = 0.004;
-/** Each dip holds this long after its effect ends before recovering, so a player tapping every second keeps the music
- *  steadily under (no pumping at the tap rate); it comes back ~2 s after the last effect. */
-export const ROOM_TAIL_S = 0.8;
-export const ROOM_MAX_HOLD_S = 5;
+/** The activity hold (audio-4 fix; was a 0.8 s tail): every effect keeps the music down until this long after its own end.
+ *  Casual play (rests of 1-4 s) and play in bursts (5 s on, 5 s off) then keep it steadily under instead of pumping it, and
+ *  it starts to come back once the player has rested this long. */
+export const ROOM_TAIL_S = 4.5;
+/** The return after the last hold: dB-linear (a fade, not a rebound: an exponential release from -17 dB gained ~6 dB in its
+ *  first 0.25 s), a full return from ROOM_DB taking this long; the pad, dipped ROOM_PAD_SHARE as deep, moves in step. The
+ *  music is back within 1 dB about ROOM_TAIL_S + 2.1 s after the last effect ends. */
+export const ROOM_RETURN_S = 2.0;
+/** The return is built from short setTargetAtTime steps toward the dB-linear schedule (setTarget only, so a later re-plan
+ *  can take over anywhere without a jump): one every ROOM_STEP_S, time constant ROOM_STEP_TC. */
+export const ROOM_STEP_S = 0.2;
+const ROOM_STEP_TC = 0.12;
+const ROOM_RETURN_DB_PER_S = -ROOM_DB / ROOM_RETURN_S;
+/** Safety cap of one hold (an 8 s blend + its flourish + the tail fit). */
+export const ROOM_MAX_HOLD_S = 15;
+/** Slow-onset voices (audio-4 fix): a lift's suction "thwop" comes 50-80 ms after its peel ticks (which stay > 20 dB under
+ *  it), a blend's motor needs ~90 ms to spool up into earshot. A dip at the call left the music already gone 60-80 ms
+ *  (lift) and 100+ ms (blend) before the effect was there. Such a voice declares `onset` (VoiceGroup: when it starts to be
+ *  heard, within ~20 dB of its loudest) and the dip starts ROOM_RISE_LEAD_S before that instead of at the call. The toss
+ *  declares none: its whoosh is audible (within 20 dB) from 30-60 ms but loud only from 70-115 ms, and a soft toss is
+ *  barely louder than the undipped pad in its own band, so any later dip broke the in-band gate (measured 4-7 dB). */
+export const ROOM_RISE_LEAD_S = 0.005;
+/** A fast effect that arrives while the music is up (its room level above ROOM_CLEAR_ABOVE_DB) starts ROOM_CLEAR_S later
+ *  than the engine's usual lookahead (audio-4 fix), so the dip has already cleared a mallet note that was ringing when the
+ *  effect was called: before, a soft pop landing 25 ms after a note began measured 8.4 LU over its loudest 20 ms frames
+ *  (the frames that straddle its onset still held the undipped note; no causal dip can remove what was heard before the
+ *  call). While the music is already stepped back (any play in the last ROOM_TAIL_S) effects keep the usual lookahead, and
+ *  slow-onset voices never wait. The cost: the first fast effect after a rest sounds 12 ms later. */
+export const ROOM_CLEAR_S = 0.012;
+export const ROOM_CLEAR_ABOVE_DB = -6;
+export const ROOM_CLEAR_KINDS: ReadonlySet<string> = new Set(['poke', 'release', 'land', 'pop', 'bump', 'strandSnap', 'meterFull', 'capsule']);
+/** The extra start delay (s) of an effect of `kind` when the music's room level is `roomLevelDb` (MusicBed.roomLevelAt). */
+export function roomClearDelay(kind: string, roomLevelDb: number): number {
+  return ROOM_CLEAR_KINDS.has(kind) && fin(roomLevelDb, 0) > ROOM_CLEAR_ABOVE_DB ? ROOM_CLEAR_S : 0;
+}
 /** Which one-shots make room, and how deep (dB). The engine and the offline mix renders both read this table (and
- *  roomDb() below). The ceremony voices (reveal, merge) keep the slow duck; capsule beats get both. */
+ *  roomDb() / oneShotRoom() below). The ceremony voices (reveal, merge) keep the slow duck; capsule beats get both. */
 export const ROOM_KINDS: Readonly<Record<string, number>> = {
   poke: ROOM_DB, pop: ROOM_DB, blend: ROOM_DB, meterFull: ROOM_DB, capsule: ROOM_DB, strandSnap: ROOM_DB,
   release: ROOM_DB, land: ROOM_DB, bump: ROOM_DB, lift: ROOM_DB, toss: ROOM_DB,
 };
-/** Held voices: each update holds its dip this long (so a rubbing squish that dips and swells frame by frame keeps the
- *  deepest dip of the last HELD_ROOM_HOLD_S instead of tremoloing the music). No ROOM_TAIL_S here: the one-shot that ends a
- *  gesture (release, snap) brings its own. */
+/** Held voices: each update holds its depth this long plus the activity tail ROOM_TAIL_S (so a rubbing squish that dips
+ *  and swells frame by frame keeps the deepest dip instead of tremoloing the music). Held requests are rounded (depth down
+ *  to 0.5 dB, end up to HELD_ROOM_GRID_S) so a voice updated every frame re-plans the dip a few times a second, not 60. */
 export const HELD_ROOM_HOLD_S = 0.25;
-/** The held squish dips fully from this |rate| (1/s) on (its squelch is then within ~10 dB of its max), not at all below
- *  SQUISH_ROOM_MIN_RATE (the squelch is then 40 dB under its max: inaudible), in proportion (dB) between. */
+const HELD_ROOM_GRID_S = 0.25;
+/** The held squish dips fully from this |rate| (1/s) on, not at all below SQUISH_ROOM_MIN_RATE (the squelch is then 40 dB
+ *  under its max: inaudible), in proportion (dB) between, with the melody's fast attack (its in-band margin on isolated
+ *  squeezes is the thinnest of all, ~10 dB: a later dip would cost it). */
 export const SQUISH_ROOM_RATE = 0.7;
 export const SQUISH_ROOM_MIN_RATE = 0.15;
-/** The held strand dips fully from this tension on, proportionally below. */
-export const STRAND_ROOM_T = 0.35;
+/** The held strand dips fully from STRAND_ROOM_T on, not at all below STRAND_ROOM_MIN_T, in proportion (dB) between, going
+ *  down with STRAND_ROOM_TC (audio-4 fix; was 0..0.35 with the fast attack: the music was gone 100-300 ms before a strand
+ *  pulled out slowly was loud; its own band, 1.1-3.2 kHz, is far above the music's, so the later dip costs little). */
+export const STRAND_ROOM_T = 0.5;
+export const STRAND_ROOM_MIN_T = 0.15;
+export const STRAND_ROOM_TC = 0.04;
 /**
  * The dip (dB) an effect asks for. `musicGainDb` is the music volume's gain above its default (chain.ts musicGain at the
  * player's setting; 0 at the default, +6 dB at 1): the dip deepens by it, so with the slider up the music under an effect
@@ -103,8 +141,36 @@ export function squishRoomDb(rate: number, musicGainDb = 0): number {
   return a * (ROOM_DB - Math.max(0, fin(musicGainDb, 0)));
 }
 export function strandRoomDb(tension: number, musicGainDb = 0): number {
-  const a = clamp(fin(tension, 0) / STRAND_ROOM_T, 0, 1);
+  const a = clamp((fin(tension, 0) - STRAND_ROOM_MIN_T) / (STRAND_ROOM_T - STRAND_ROOM_MIN_T), 0, 1);
   return a * (ROOM_DB - Math.max(0, fin(musicGainDb, 0)));
+}
+/** One request for room (MusicBed.makeRoom): planned at the call time `from`, the dip itself from `at` (>= from) until
+ *  `until`, `db` deep, going down with time constant `atk` (melody; the pad never faster than ROOM_PAD_ATTACK_TC). */
+export interface RoomRequest { from: number; at: number; until: number; db: number; atk: number }
+/**
+ * What a one-shot of `kind` asks for (the engine and the offline mix renders both use this): called at `callT`, sounding
+ * from `startT` to `endT`; `onset` (s, 0 for a fast onset) is when the voice starts to be heard (VoiceGroup.onset). Empty
+ * for kinds that do not make room.
+ */
+export function oneShotRoom(kind: string, callT: number, startT: number, endT: number, onset = 0, musicGainDb = 0): RoomRequest[] {
+  const db = roomDb(kind, musicGainDb);
+  if (db === null) return [];
+  const o = Math.max(0, fin(onset, 0));
+  const at = o > 0 ? Math.max(callT, fin(startT, callT) + o - ROOM_RISE_LEAD_S) : callT;
+  return [{ from: callT, at, until: fin(endT, callT) + ROOM_TAIL_S, db, atk: ROOM_ATTACK_TC }];
+}
+function heldRoom(t: number, db: number, atk: number): RoomRequest | null {
+  const d = fin(db, 0);
+  if (!(d < -0.05)) return null;
+  return { from: t, at: t, until: Math.ceil((t + HELD_ROOM_HOLD_S + ROOM_TAIL_S) / HELD_ROOM_GRID_S) * HELD_ROOM_GRID_S, db: Math.floor(d * 2) / 2, atk };
+}
+/** What one update of the held squish at `t` asks for (by its |rate|), or null for none. */
+export function squishRoom(t: number, rate: number, musicGainDb = 0): RoomRequest | null {
+  return heldRoom(t, squishRoomDb(rate, musicGainDb), ROOM_ATTACK_TC);
+}
+/** What one update of the held strand at `t` asks for (by its tension), or null for none. */
+export function strandRoom(t: number, tension: number, musicGainDb = 0): RoomRequest | null {
+  return heldRoom(t, strandRoomDb(tension, musicGainDb), STRAND_ROOM_TC);
 }
 /** At most this many bars in a row without a mallet note (a long rest reads as the music having stopped). */
 export const MAX_REST_BARS = 2;
@@ -489,6 +555,12 @@ export interface MusicLogEntry {
   dropped?: 'cap' | 'late';
 }
 
+/** A room hold (makeRoom): the dip `db` (melody scale) from `at` until `until`, going down with time constant `atk`. */
+interface RoomHold { at: number; until: number; db: number; atk: number }
+/** One piece of the planned room level: from `t` the level is `db` (rate 0: a step, time constant `tc`), or it returns
+ *  dB-linearly from `db` toward `to` at `rate` dB/s. */
+interface RoomSeg { t: number; db: number; to: number; rate: number; tc: number }
+
 interface Pending { t: number; kind: 'pad' | 'mallet' | 'bubble'; midi: number; field: number; vel: number; pan: number; seed: number; end: number }
 
 const curve = (from: number, to: number, n = 33): Float32Array<ArrayBuffer> => {
@@ -532,10 +604,10 @@ export class MusicBed {
   private first = true;
   private ducked = false;
   private duckUntil = -Infinity;
-  private roomUntil = -Infinity;
   private roomFrom = 0;
-  private holds: { until: number; g: number }[] = [];
-  private roomPlan: { t: number; g: number; tc: number }[] = [];
+  /** Active room holds (dB, melody scale) and the planned level schedule (see makeRoom). */
+  private holds: RoomHold[] = [];
+  private roomSegs: RoomSeg[] = [];
   private fastUsed = false;
   private stoppedAt = Infinity;
   private endT = Infinity;
@@ -584,11 +656,19 @@ export class MusicBed {
   get endTime(): number { return this.endT; }
   /** True while the slow (ceremony) duck holds or an effect's room dip of more than 1 dB is requested right now. */
   get isDucked(): boolean { return this.ducked || this.roomTargetAt(this.ctx.currentTime) < 0.891; }
-  /** The room dip's planned target gain at time t (1 = none; the recovery toward 1 counts as none). */
+  /** The gain an effect's room hold asks for at time t (1 = none; the return after the last hold counts as none). */
   roomTargetAt(t: number): number {
-    let g = 1;
-    for (const s of this.roomPlan) if (s.t <= t) g = s.g;
-    return t < this.roomUntil ? g : 1;
+    let d = 0;
+    for (const h of this.holds) if (h.at <= t && h.until > t) d = Math.min(d, h.db);
+    return dbToGain(d);
+  }
+  /** The planned room level (dB, melody scale) at time t: the schedule the gain nodes follow (they lag it by a few ms on
+   *  the way down and by about one ROOM_STEP_S on the way back). */
+  roomLevelAt(t: number): number {
+    let s: RoomSeg | null = null;
+    for (const q of this.roomSegs) { if (q.t <= t) s = q; else break; }
+    if (!s) return 0;
+    return s.rate > 0 ? Math.min(s.to, s.db + s.rate * (t - s.t)) : s.db;
   }
 
   /** Sounding note groups at time t (pads, mallets and bubbles whose span covers t). */
@@ -689,49 +769,78 @@ export class MusicBed {
   }
 
   /**
-   * Make room for an effect (a sidechain-style dip keyed by the effect voices): dip by `db` (<= 0) from `from` until
-   * `until`, then recover. Every call is a "hold" {until, gain}; the session keeps the active holds and plans the gain as a
-   * staircase: the deepest active hold, then, when it ends, the deepest of the rest, ..., then 1. Going down uses the
-   * fast ROOM_ATTACK_TC, coming back ROOM_RELEASE_TC. So a held voice that calls this every frame with a depth that
-   * follows its own level (squish, strand) gets a dip that follows it, and a soft call never cuts a deeper one short.
-   * Calls must come in time order (live: currentTime; offline: scripted); the only cancellation is of this node's own
-   * future plan at `from`, and setTargetAtTime always starts from the current value, so the gain never jumps.
+   * Make room for an effect (a sidechain-style dip keyed by the effect voices): dip by `db` (<= 0, melody scale; the pad
+   * takes ROOM_PAD_SHARE of it in dB) from `opts.at` (default `from`) until `until`, going down with time constant
+   * `opts.atk` (default ROOM_ATTACK_TC). `from` is when the request is made (the plan is re-built from there); calls must
+   * come in that order (live: currentTime; offline: scripted). Every call is a "hold"; the session keeps the active holds
+   * and plans the level as a staircase: at every moment the deepest active hold wins (a soft call never cuts a deeper one
+   * short); going down follows the hold's attack, going back up is a dB-linear return (ROOM_RETURN_S for the full depth)
+   * built from short setTargetAtTime steps. Only this node's own future plan (from `from`) is ever cancelled and
+   * setTargetAtTime always starts from the current value, so the gain never jumps.
    */
-  makeRoom(from: number, until: number, db: number = ROOM_DB): void {
+  makeRoom(from: number, until: number, db: number = ROOM_DB, opts: { at?: number; atk?: number } = {}): void {
     if (this.freed) return;
     const a = Math.max(0, fin(from, 0), this.roomFrom);
-    const g = dbToGain(clamp(fin(db, ROOM_DB), -30, 0));
-    if (!(g < 0.995)) return;
-    const b = Math.min(Math.max(a + 0.02, fin(until, a)), a + ROOM_MAX_HOLD_S);
+    const d = clamp(fin(db, ROOM_DB), -30, 0);
+    if (!(d < -0.05)) return;
+    const at = Math.max(a, fin(opts.at, a));
+    const b = Math.min(Math.max(at + 0.02, fin(until, at)), at + ROOM_MAX_HOLD_S);
+    const atk = clamp(fin(opts.atk, ROOM_ATTACK_TC), 0.0005, 0.25);
     // drop expired holds and holds the new one covers; a call an existing hold already covers changes nothing
-    this.holds = this.holds.filter((h) => h.until > a && !(h.g >= g && h.until <= b));
-    if (this.holds.some((h) => h.g <= g && h.until >= b)) return;
-    this.holds.push({ until: b, g });
-    // the staircase from `a`
-    const plan: { t: number; g: number; tc: number }[] = [];
-    let cur = { t: 0, g: 1, tc: ROOM_RELEASE_TC };
-    for (const s of this.roomPlan) if (s.t <= a) cur = s;
-    let t = a, act = this.holds, prevG = cur.g;
-    while (act.length) {
-      let m = Infinity;
-      for (const h of act) m = Math.min(m, h.g);
-      let tn = t;
-      for (const h of act) if (h.g === m) tn = Math.max(tn, h.until);
-      const tc = plan.length === 0 && m === cur.g ? cur.tc : m < prevG ? ROOM_ATTACK_TC : ROOM_RELEASE_TC;
-      plan.push({ t, g: m, tc });
-      prevG = m; t = tn;
-      act = act.filter((h) => h.until > tn);
+    this.holds = this.holds.filter((h) => h.until > a && !(h.db >= d && h.at >= at && h.until <= b));
+    if (this.holds.some((h) => h.db <= d && h.at <= at && h.until >= b)) return;
+    this.holds.push({ at, until: b, db: d, atk });
+    this.roomFrom = a;
+    this.planRoom(a);
+  }
+
+  /** Re-plan the room level from `a` on, from the active holds and the level the previous plan had reached at `a`. */
+  private planRoom(a: number): void {
+    const pts = [a];
+    for (const h of this.holds) { if (h.at > a) pts.push(h.at); if (h.until > a) pts.push(h.until); }
+    pts.sort((p, q) => p - q);
+    const ts = pts.filter((t, i) => i === 0 || t - pts[i - 1] > 1e-6);
+    const want = (t: number): { db: number; atk: number } => {
+      let db = 0, atk = ROOM_ATTACK_TC;
+      for (const h of this.holds) if (h.at <= t + 1e-9 && h.until > t + 1e-9 && (h.db < db || (h.db === db && h.atk < atk))) { db = h.db; atk = h.atk; }
+      return { db, atk };
+    };
+    // the state at `a` comes from the plan strictly before it: cancelScheduledValues(a) also removes events AT `a` (a second
+    // request in the same call, e.g. a slow-onset voice's soft first stage), so whatever holds at `a` is emitted again
+    let prev: RoomSeg | null = null;
+    for (const q of this.roomSegs) { if (q.t < a) prev = q; else break; }
+    let lvl = !prev ? 0 : prev.rate > 0 ? Math.min(prev.to, prev.db + prev.rate * (a - prev.t)) : prev.db;
+    const returning = !!prev && prev.rate > 0 && lvl < prev.to - 0.01;
+    const out: RoomSeg[] = [];
+    for (let i = 0; i < ts.length; i++) {
+      const t = ts[i], next = i + 1 < ts.length ? ts[i + 1] : Infinity;
+      const w = want(t);
+      if (w.db < lvl - 0.01) { out.push({ t, db: w.db, to: w.db, rate: 0, tc: w.atk }); lvl = w.db; }
+      else if (w.db > lvl + 0.01) { out.push({ t, db: lvl, to: w.db, rate: ROOM_RETURN_DB_PER_S, tc: ROOM_STEP_TC }); lvl = Math.min(w.db, lvl + ROOM_RETURN_DB_PER_S * (next - t)); }
+      else if (i === 0 && returning) out.push({ t, db: lvl, to: lvl, rate: 0, tc: ROOM_STEP_TC });   // a return in progress stops here
+      else if (i === 0 && prev && lvl < -0.01) out.push({ t, db: lvl, to: lvl, rate: 0, tc: prev.tc });  // re-state the level held at `a`
     }
-    plan.push({ t, g: 1, tc: ROOM_RELEASE_TC });
     try {
       const pm = this.roomMel.gain, pp = this.roomPad.gain;
       pm.cancelScheduledValues(a); pp.cancelScheduledValues(a);
-      for (const s of plan) {
-        pm.setTargetAtTime(s.g, s.t, s.tc);
-        pp.setTargetAtTime(Math.pow(s.g, ROOM_PAD_SHARE), s.t, s.tc === ROOM_ATTACK_TC ? ROOM_PAD_ATTACK_TC : ROOM_PAD_RELEASE_TC);
+      for (let i = 0; i < out.length; i++) {
+        const s = out[i], end = i + 1 < out.length ? out[i + 1].t : Infinity;
+        if (s.rate === 0) {
+          pm.setTargetAtTime(dbToGain(s.db), s.t, s.tc);
+          pp.setTargetAtTime(dbToGain(s.db * ROOM_PAD_SHARE), s.t, Math.max(s.tc, ROOM_PAD_ATTACK_TC));
+          continue;
+        }
+        for (let k = 0; k < 400; k++) {
+          const tk = s.t + k * ROOM_STEP_S;
+          if (tk >= end - 1e-9) break;
+          const d = Math.min(s.to, s.db + s.rate * (k + 1) * ROOM_STEP_S);
+          pm.setTargetAtTime(dbToGain(d), tk, s.tc);
+          pp.setTargetAtTime(dbToGain(d * ROOM_PAD_SHARE), tk, s.tc);
+          if (d >= s.to) break;
+        }
       }
     } catch { /* closed context */ }
-    this.roomPlan = plan; this.roomFrom = a; this.roomUntil = t;
+    this.roomSegs = [...(prev ? [prev] : []), ...out];
   }
 
   /** Raised-cosine fade to exact silence over `fadeS` from `at`, then nothing more is scheduled. Returns the silent time. */

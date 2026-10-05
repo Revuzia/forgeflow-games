@@ -1,9 +1,12 @@
 // The name plate of a reveal (DESIGN 6.3 B3 / 6.4 T4): it slides in at the 'reveal' beat with the species name, the tier gem and label,
 // and a NEW badge or an "x2 spare" chip; a merge that moved up adds TIER UP. It is also the plain reveal card when the stage has no
-// round-2 ceremonies (the result is never hidden). Calm / reduced motion: a fade, no slide.
+// round-2 ceremonies (the result is never hidden). Calm / reduced motion: a fade, no slide. It stays until hide(): the HUD binding hides it
+// on the next interaction or PLATE_MS of game time after it showed (game time: a hidden tab or a paused frame loop does not eat it).
 import type { TierName } from '../contracts.ts';
 import { h } from './dom.ts';
 import { gemSvg, setGem, tierLabel } from './gem.ts';
+
+export const PLATE_MS = 3600;
 
 export interface RevealPlateInfo { species: string; tier: TierName; isNew: boolean; copies: number; tierUp: boolean; nickname: string | null }
 
@@ -31,7 +34,6 @@ export function createRevealPlate(root: HTMLElement): RevealPlate {
     banner, h('div', { class: 'plate-row' }, chip), name, h('p', { class: 'plate-tierline' }, gem, tier), nick);
   root.append(el);
   let shown = false;
-  let timer = 0;
   return {
     el,
     show(i) {
@@ -46,11 +48,9 @@ export function createRevealPlate(root: HTMLElement): RevealPlate {
       el.dataset.tier = i.tier;
       el.dataset.show = 'true';
       shown = true;
-      clearTimeout(timer);
-      timer = window.setTimeout(() => { el.dataset.show = 'false'; shown = false; }, 3600);
     },
-    hide() { clearTimeout(timer); el.dataset.show = 'false'; shown = false; },
+    hide() { el.dataset.show = 'false'; shown = false; },
     get shown() { return shown; },
-    destroy() { clearTimeout(timer); el.remove(); },
+    destroy() { el.remove(); },
   };
 }
