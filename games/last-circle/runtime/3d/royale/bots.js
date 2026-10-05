@@ -922,6 +922,26 @@ function act(W, b, dt) {
 }
 
 const MOVING_STATES = { LOOT: 1, ROTATE: 1, PUSH: 1, WANDER: 1, HUNT: 1, FLEE: 1, SUPPLY: 1, CLOSEIN: 1 };
+/** (T-tick-actors B4) findExit stops at the FIRST open-sky cell past the door, and
+ *  the movers count "arrived" at 1.6-3 m (path shift 1.6, actMove 3, actLoot 1.8):
+ *  a bot in a hut corner was told it had arrived while still inside the doorway,
+ *  re-planned straight at its far goal and walked back into the corner (deepwood
+ *  seed 23 s12, 6 episodes). Carry the escape on 3 m past the exit cell, along
+ *  the last leg, when that spot is standable. */
+function extendExit(W, a, ex) {
+  const n = ex.length, last = ex[n - 1];
+  const px = n > 1 ? ex[n - 2].x : a.pos.x, pz = n > 1 ? ex[n - 2].z : a.pos.z;
+  let dx = last.x - px, dz = last.z - pz;
+  const L = Math.sqrt(dx * dx + dz * dz);
+  if (L < 1e-3) return ex;
+  dx /= L; dz /= L;
+  for (let k = 3; k >= 1; k--) {
+    const x = last.x + dx * k, z = last.z + dz * k;
+    const s = standAt(W, x, z, last.y != null ? last.y : a.pos.y);
+    if (s === s) { ex.push({ x, z, y: s }); return ex; }
+  }
+  return ex;
+}
 function breakOut(W, b) {
   const a = b.actor, bb = b.bb;
   bb.breaks = (bb.breaks || 0) + 1;
@@ -932,6 +952,7 @@ function breakOut(W, b) {
   }
   const ex = findExit(W, a.pos.x, a.pos.y, a.pos.z, 6);
   if (ex && ex.length) {
+    extendExit(W, a, ex);
     const last = ex[ex.length - 1];
     bb.path = ex; bb.pathGoal = { x: last.x, z: last.z };
     bb.moveTo = { x: last.x, z: last.z };
@@ -1232,6 +1253,9 @@ function navWalk(W) {
     const s = NF[0];
     if (h - s > NAV_DROP_MAX) return false;
     if (navWall(ci)) return false;
+    // (T-tick-actors B1) a DROP is walked off at the OLD feet height: a slab edge in
+    // that band (the floor above a stair ramp) blocks the capsule before it falls
+    if (s < h) { NF[0] = h; const blk = navWall(ci); NF[0] = s; if (blk) return false; }
     if (s < h && !navSwim) drop += h - s;
     if (navWetPt) wet += stepM;
     swim = navSwim;
@@ -1266,19 +1290,19 @@ function navOct(ci, tci) {
  * window edge. When the goal cannot be reached, the path to the closed node that
  * got nearest to it is returned if that is real progress (>= 3 cells closer).
  */
-function navSearch(W, sx, sy, sz, tx, tz, ty, mode, minDist, off) {
+function navSearch(W, sx, sy, sz, tx, tz, ty, mode, minDist, off, offZ) {
   // `off` shifts the whole grid by a fraction of a cell (the bot stays inside the
   // centre cell). See findPath: a 1.5 m grid with the 0.3 m wall margin leaves a
   // 1.4 m doorway an 0.8 m free band, which a grid row hits only about half the
   // time; the half-cell-shifted retry always has a row inside it.
-  const o = off || 0;
-  navPrepare(W, sx + o, sz + o);
+  const o = off || 0, oz = offZ === undefined ? o : offZ;
+  navPrepare(W, sx + o, sz + oz);
   const S = GRID_R * NAV_N + GRID_R;
   const sc = navCellOf(sx, sz);
   NF[4] = sx; NF[5] = sz; NF[6] = sy + NAV_STEP_UP;
   navSupport(W, sc < 0 ? S : sc);
   let sh = NF[0];
-  if (o) {
+  if (o || oz) {
     // walk from the feet to the centre cell first; if that is walled, no search
     NF[8] = sx; NF[9] = sz; NF[10] = sh; NF[11] = navCellX(S); NF[12] = navCellZ(S);
     if (!navWalk(W)) return null;
@@ -1384,13 +1408,23 @@ function navRoofed(x, z, h, ci) {
 function findPath(W, sx, sy, sz, tx, tz, ty) {
   const p = navSearch(W, sx, sy, sz, tx, tz, ty, 0, 0, 0);
   if (p && !p.partial) return p;
-  const q = navSearch(W, sx, sy, sz, tx, tz, ty, 0, 0, NAV_HALF);
-  if (q && (!p || !q.partial)) return q;
-  return p || q;
+  let best = p;
+  // (T-tick-actors B3) the half-cell shift in ALL four diagonal directions: from a
+  // bot standing in a room corner the (+,+) shift put the centre cell inside the
+  // wall, the walk-to-centre failed and both searches returned null (measured:
+  // deepwood seed 13 s25, ashgrid seed 12 s24 - 1.4 m doors, nav null, 6 episodes)
+  for (let k = 0; k < 4; k++) {
+    const q = navSearch(W, sx, sy, sz, tx, tz, ty, 0, 0, k & 1 ? -NAV_HALF : NAV_HALF, k & 2 ? -NAV_HALF : NAV_HALF);
+    if (q && !q.partial) return q;
+    if (q && !best) best = q;
+  }
+  return best;
 }
 /** Nearest reachable spot OUTSIDE (on open ground, no roof) at least minDist away. */
 function findExit(W, sx, sy, sz, minDist) {
-  return navSearch(W, sx, sy, sz, 0, 0, null, 1, minDist || 4, 0) || navSearch(W, sx, sy, sz, 0, 0, null, 1, minDist || 4, NAV_HALF);
+  let e = navSearch(W, sx, sy, sz, 0, 0, null, 1, minDist || 4, 0);
+  for (let k = 0; !e && k < 4; k++) e = navSearch(W, sx, sy, sz, 0, 0, null, 1, minDist || 4, k & 1 ? -NAV_HALF : NAV_HALF, k & 2 ? -NAV_HALF : NAV_HALF);
+  return e;
 }
 const NAV_HALF = CELL * 0.5 - 0.01;
 /** Test hook for the lane probes: the live pathfinder, read-only. */
@@ -1450,7 +1484,10 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
   // Drop the plan when the caller's goal has moved well away from the one the
   // path was computed for (a re-planned rotation, a moving target).
   if (bb.path && bb.pathGoal && hyp(tx - bb.pathGoal.x, tz - bb.pathGoal.z) > 8) { bb.path = null; bb.pathGoal = null; }
-  if (bb.path && bb.path.length && hyp(bb.path[0].x - a.pos.x, bb.path[0].z - a.pos.z) < 1.6) bb.path.shift();
+  // (T-tick-actors B2) a waypoint is reached on ITS floor: horizontal distance alone
+  // consumed the ground-floor waypoint of a stair descent while the bot was upstairs
+  if (bb.path && bb.path.length && hyp(bb.path[0].x - a.pos.x, bb.path[0].z - a.pos.z) < 1.6 &&
+      !(bb.path[0].y != null && a.pos.y - bb.path[0].y > 1.5)) bb.path.shift();
   if (bb.path && !bb.path.length) { bb.path = null; bb.pathGoal = null; }
   const gx = bb.path ? bb.path[0].x : tx, gz = bb.path ? bb.path[0].z : tz;
   let want = Math.atan2(-(gx - a.pos.x), -(gz - a.pos.z));
@@ -1522,6 +1559,7 @@ function moveToward(W, b, tx, tz, dt, sprint, ty) {
         // the ground below that the bot could never reach — audit S7).
         const ex = findExit(W, a.pos.x, a.pos.y, a.pos.z, 3);
         if (ex && ex.length) {
+          extendExit(W, a, ex);
           const last = ex[ex.length - 1];
           bb.path = ex; bb.pathGoal = { x: last.x, z: last.z };
           bb.moveTo = { x: last.x, z: last.z };
