@@ -10,8 +10,9 @@ Usage:
   python pipeline/deploy_game.py --game-dir games/001-tropical-fury --slug tropical-fury
 
 Flow:
-  0. Refuse a SOURCE folder: a root index.html that loads a TypeScript module (a Vite game's own
-     folder) is not deployable. Build it (`npm run build`) and pass --game-dir <game>/dist.
+  0. Refuse a SOURCE folder: a root index.html that loads a TypeScript module, or a vite.config.*
+     with no root index.html (a Vite game's own folder), is not deployable. Build it (`npm run build`)
+     and pass --game-dir <game>/dist.
   1. Upload new/changed files in game-dir to R2 bucket forgeflow-games/{slug}/ — every
      other file first, then the root index.html, then the root game_meta.json LAST. A
      critical failure (for an unhashed game: any runtime/**/*.js) aborts before
@@ -262,8 +263,13 @@ def _entry_script_refs(game_dir):
 # dev server can run. Uploaded as-is, the CDN serves main.ts with no JavaScript MIME type and bare imports ('three')
 # cannot resolve, so the page never starts, and every source file under src/ ships publicly. The deployable thing is the
 # build output (`npm run build` -> <game>/dist). No browser runs TypeScript, so a root entry that loads a .ts module is
-# never deployable: refuse it and print the right command.
+# never deployable: refuse it and print the right command. Same for a Vite project whose web root is a SUBFOLDER
+# (dyefield, hit-parade: vite.config.ts at the game root, index.html in runtime/): with no root index.html it is not a
+# game at all, and uploading it would publish runtime/src/** and PATCH the live portal row with default metadata
+# (its game_meta.json sits in runtime/public/). A folder that HAS a root index.html loading built JS (neon-veil ships
+# its prebuilt bundle beside a vite.config.ts) is not affected.
 _SOURCE_MODULE_SUFFIXES = (".ts", ".tsx", ".mts", ".cts")
+_VITE_CONFIG_NAMES = ("vite.config.ts", "vite.config.js", "vite.config.mjs", "vite.config.mts", "vite.config.cjs", "vite.config.cts")
 
 
 def source_entry_refs(game_dir):
@@ -278,17 +284,23 @@ def source_entry_refs(game_dir):
 
 def source_folder_refusal(game_dir, slug):
     """None if game_dir is deployable; otherwise the message explaining why not and what to run instead."""
-    refs = source_entry_refs(game_dir)
-    if not refs:
+    gd = Path(game_dir)
+    refs = source_entry_refs(gd)
+    vite_cfg = next((n for n in _VITE_CONFIG_NAMES if (gd / n).is_file()), None)
+    if refs:
+        why = f"index.html loads {refs[0]}, so this is a source folder (Vite), not a build"
+    elif vite_cfg and not (gd / "index.html").exists():
+        why = f"{vite_cfg} with no index.html at the root, so this is a Vite source project (web root in a subfolder), not a build"
+    else:
         return None
-    game_dir = Path(game_dir).resolve()
+    game_dir = gd.resolve()
     try:
         rel = game_dir.relative_to(ROOT).as_posix()
     except ValueError:
         rel = game_dir.as_posix()
     back = "/".join(".." for _ in Path(rel).parts) if not Path(rel).is_absolute() else str(ROOT)
-    return (f"REFUSED: {rel}/index.html loads {refs[0]}, so this is a source folder (Vite), not a build.\n"
-            f"  Uploaded as-is the page never starts (no browser runs TypeScript) and the source tree would be published.\n"
+    return (f"REFUSED: {rel}/{why}.\n"
+            f"  Uploaded as-is the game would not start (no browser runs TypeScript) and the source tree would be published.\n"
             f"  Build it, then deploy the build output (run from the repo root):\n"
             f"    cd {rel} && npm ci && npm run build && cd {back}\n"
             f"    python pipeline/deploy_game.py --game-dir {rel}/dist --slug {slug} --dry-run   # check the upload plan\n"

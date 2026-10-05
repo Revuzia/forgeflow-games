@@ -27,17 +27,24 @@ uniform vec3 uZenith; uniform vec3 uInk; uniform vec3 uPlum; uniform vec3 uHoriz
 uniform vec3 uGlowWarm; uniform vec3 uGlowCool;
 uniform vec3 uBase; uniform vec3 uWarm;
 uniform float uGroundY; uniform float uFogNear; uniform float uFogFar;
-vec3 whSky(vec3 d) {
-  float e = max(d.y, 0.0);
+// the dusk glow on the horizon, by azimuth (warm toward the key light's side, a cool hint opposite)
+vec3 whGlow(vec3 d) {
+  vec2 az = normalize(vec2(d.x, d.z) + vec2(1e-5));
+  return uGlowWarm * pow(max(dot(az, normalize(vec2(0.3, -0.95))), 0.0), 7.0) + uGlowCool * pow(max(dot(az, normalize(vec2(-0.75, -0.6))), 0.0), 6.0);
+}
+// the sky WITHOUT the glow (the ground haze below the horizon fogs toward this at e = 0)
+vec3 whSkyBase(float e) {
   vec3 c = mix(uHorizon, uPlum, smoothstep(0.0, 0.2, e));
   c = mix(c, uInk, smoothstep(0.12, 0.6, e));
-  c = mix(c, uZenith, smoothstep(0.55, 1.0, e));
-  // every term is flat (zero slope) at e = 0, like the haze below the horizon: the horizon is C1, never a visible line
-  float up = smoothstep(0.0, 0.07, e) * (1.0 - smoothstep(0.09, 0.5, e));
-  vec2 az = normalize(vec2(d.x, d.z) + vec2(1e-5));
-  c += uGlowWarm * pow(max(dot(az, normalize(vec2(0.3, -0.95))), 0.0), 7.0) * up;
-  c += uGlowCool * pow(max(dot(az, normalize(vec2(-0.75, -0.6))), 0.0), 6.0) * up;
-  return c;
+  return mix(c, uZenith, smoothstep(0.55, 1.0, e));
+}
+// The glow PEAKS at the horizon and fades both ways: upward over ~26 degrees, downward into the ground haze over ~9 degrees, each with
+// zero slope at the horizon (C1). It used to RISE from 0 over the first 4 degrees above the horizon, and at the default pitch the frame
+// top cuts the sky right inside that rise: a lighter band across the top of the frame. Now the frame top is never lighter than the
+// horizon below it, at any pitch, zoom or aspect ratio.
+vec3 whSky(vec3 d) {
+  float e = max(d.y, 0.0);
+  return whSkyBase(e) + whGlow(d) * (1.0 - smoothstep(0.0, 0.45, e));
 }
 `;
 const SKY_FRAG = /* glsl */`
@@ -60,8 +67,7 @@ void main() {
     float dep = -d.y;
     float fog = 1.0 - smoothstep(0.0, 0.34, dep);
     fog *= 1.0 - 0.5 * smoothstep(0.0, 0.34, dep);
-    vec3 horizon = whSky(normalize(vec3(d.x, 0.0, d.z)));
-    vec3 gcol = mix(ground, horizon, fog);
+    vec3 gcol = mix(ground, whSkyBase(0.0), fog) + whGlow(d) * (1.0 - smoothstep(0.0, 0.16, dep));
     col = mix(gcol, sky, smoothstep(-0.003, 0.004, d.y));
   }
   gl_FragColor = vec4(col, 1.0);
@@ -192,7 +198,7 @@ export class Table {
     const skyU = {
       uZenith: { value: new THREE.Color(0x0a0818) }, uInk: { value: new THREE.Color(PALETTE.ink) }, uPlum: { value: new THREE.Color(PALETTE.plum) },
       uHorizon: { value: new THREE.Color(PALETTE.dusk).multiplyScalar(0.62) },
-      uGlowWarm: { value: new THREE.Color(PALETTE.amber).multiplyScalar(0.14) }, uGlowCool: { value: new THREE.Color(PALETTE.lagoon).multiplyScalar(0.03) },
+      uGlowWarm: { value: new THREE.Color(PALETTE.amber).multiplyScalar(0.075) }, uGlowCool: { value: new THREE.Color(PALETTE.lagoon).multiplyScalar(0.02) },
       uBase: { value: new THREE.Color(0x140e2a) }, uWarm: { value: new THREE.Color(PALETTE.amber).multiplyScalar(0.012) },
       uGroundY: { value: GROUND_Y }, uFogNear: { value: 4 }, uFogFar: { value: 26 },
     };

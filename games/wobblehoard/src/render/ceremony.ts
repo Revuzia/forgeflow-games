@@ -61,6 +61,17 @@ const DIP: [number, number][] = [[1, 0], [1, 0], [1, 0], [0.6, 0.25], [0.5, 0.35
 const FLASH_AMP = [0.1, 0.12, 0.15, 0.18, 0.2, 0.23];
 const KICK = [0, 0.08, 0.16, 0.28, 0.42, 0.55];   // merge burst camera kick (stage.shake units)
 const LEAK = [0.45, 0.6, 0.8, 1.0, 1.15, 1.2];    // crack light strength
+/**
+ * Merge framing: the whole ceremony is framed this much WIDER than the play view (eased in while the parents slide to the pad, eased
+ * back to the result's own framing during T4), so the burst (the result springs open to 1.25x and rises) stays inside the frame on a
+ * 16:10 desktop as well as on a portrait phone. Not a 6.3 camera move: the push / arc of the escalation table are layered on top of it.
+ * Calm mode keeps the play framing (no camera moves at all) and pops the result more gently instead.
+ */
+const MERGE_FRAMING = 1.12;
+/** The T3 spring-open of the puppet: pre-compressed to 0.8x, overshoots to 1.25x (DESIGN 6.4), settles; calm: 0.9x -> 1.12x. */
+const POP = { x0: -0.2, v0: 6.0 }, POP_CALM = { x0: -0.1, v0: 2.8 };
+/** How fast the merge result rises from the burst (m/s): ~0.15 above the pad before it lands (calm: a small lift). */
+const HOP_VY = 1.7, HOP_VY_CALM = 0.9;
 
 const smooth = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
@@ -76,9 +87,13 @@ export interface CeremonyHost {
   allViews(): BodyView[];
   removeView(v: BodyView): void;
   makePrimary(v: BodyView): void;
-  capsule(): Capsule | null;
-  ensureCapsule(): Capsule;
-  discardCapsule(): void;
+  /**
+   * Hand the current capsule (or a new one standing at the pad, when none is out) to the reveal: from now on the reveal owns it, its
+   * CapsuleHandle reads as "opening" (screenPoint null, squeeze / remove ignored) and a new dropCapsule() makes an independent one.
+   */
+  takeCapsule(): Capsule;
+  /** The reveal is done with its capsule: remove and dispose it. */
+  releaseCapsule(c: Capsule): void;
   /** Add world-space scene objects (dome, pillar) owned by a run; removed with removeFromScene. */
   addToScene(o: THREE.Object3D): void;
   removeFromScene(o: THREE.Object3D): void;
@@ -300,7 +315,7 @@ export class CapsuleRun extends Run {
     const P = PREROLL_S[i] * ks;
     const b0 = 0.35 * ks, b1 = 0.3 * ks + P, b2 = 0.35 * ks;
     this.tb = { b0, b1, b2, b3: D - (b0 + b1 + b2), burstAt: b0 + b1, revealAt: b0 + b1 + b2 };
-    this.cap = host.capsule() ?? host.ensureCapsule();
+    this.cap = host.takeCapsule();
     if (!this.cap.landed && this.cap.group.visible === false) this.cap.placeStanding(0, 0.25);
     this.sq0 = this.cap.squeezeAmount;
     this.others = host.allViews().filter((v) => v.visible);
@@ -401,7 +416,7 @@ export class CapsuleRun extends Run {
     this.drop = { y: 0.3, vy: 0.6, bounces: 0, landed: false, age: 0 };
     v.proxy.setOffset(this.cx, this.drop.y, this.cz);
     v.proxy.scale = 0.55;
-    host.setFraming(v.scale);
+    host.setFraming(v.scale, this.calm);   // calm: no camera moves, the framing cuts to the result under the burst instead of easing
     this.burstParticles(this.cx, 0.4, this.cz, v.scale, v);
     this.startRamp();
     void i;
@@ -440,7 +455,7 @@ export class CapsuleRun extends Run {
     const host = this.host;
     host.particles.attractK = 0; host.particles.clear();
     host.cameraFx.dist = 1; host.cameraFx.yaw = 0; host.cameraFx.pitch = 0;
-    this.cap.hide(); host.discardCapsule();
+    this.cap.hide(); host.releaseCapsule(this.cap);
     if (this.pillar) { host.removeFromScene(this.pillar.mesh); this.pillar.dispose(); }
     if (this.dome) { host.removeFromScene(this.dome.mesh); this.dome.dispose(); }
     if (this.keep) for (const o of this.others) o.proxy.offset.x = this.asideX * o.scale;
@@ -525,6 +540,10 @@ export class MergeRun extends Run {
     this.resultView = host.createOwned(spec.result.genome, spec.createBody, tier);
     this.resultView.setVisible(false);
     this.resultView.rarity.strength = 0;
+    // the ceremony framing (see MERGE_FRAMING): eased in while the parents slide to the pad; calm keeps the play framing
+    let fr = this.resultView.scale;
+    for (const p of this.parents) fr = Math.max(fr, p.scale);
+    if (!this.calm) host.setFraming(MERGE_FRAMING * fr);
     this.beat('press');
   }
 
@@ -627,7 +646,10 @@ export class MergeRun extends Run {
         }
       }
     }
-    if (t >= b.t4) this.beat('reveal');
+    if (t >= b.t4 && !this.fired.has('reveal')) {
+      this.beat('reveal');
+      if (!this.calm && this.resultView) host.setFraming(this.resultView.scale);   // back to the play framing by the end of T4
+    }
     this.camera(b.t3, 0.45 * this.ks + 0.2, this.duration, 0.3 * b.a4);
     return ts;
   }
@@ -643,14 +665,15 @@ export class MergeRun extends Run {
     const v = this.resultView as BodyView;
     v.setVisible(true);
     v.proxy.setOffset(0, 0, 0); v.proxy.scale = 1;
-    host.setFraming(v.scale);
-    // springs open: overshoots ~1.25x, then settles (native burstOpen, or the proxy's puppet spring)
-    if (v.proxy.native.burst) v.proxy.burstOpen(1); else v.proxy.popFrom(-0.2, 7.2);
+    if (this.calm) host.setFraming(v.scale, true);   // calm: no camera moves; the framing cuts to the result under the burst
+    // springs open: overshoots to 1.25x, then settles (native burstOpen, or the proxy's puppet spring); calm: a gentler pop
+    const pop = this.calm ? POP_CALM : POP;
+    if (v.proxy.native.burst) v.proxy.burstOpen(this.calm ? 0.45 : 1); else v.proxy.popFrom(pop.x0, pop.v0);
     const mix = v.mats.uniforms;
     mix.uMixCol.value.setRGB(this.mixCol[0], this.mixCol[1], this.mixCol[2], THREE.LinearSRGBColorSpace);
     mix.uMixAmt.value = 0.45;
     mix.uTierAmt.value = 0.95;
-    this.drop = { y: 0, vy: 2.4, landed: false, age: 0, hopped: true };
+    this.drop = { y: 0, vy: this.calm ? HOP_VY_CALM : HOP_VY, landed: false, age: 0, hopped: true };
     this.rings.push(...this.ringSchedule(this.b.t3));
     this.burstParticles(0, this.ballCy, 0, v.scale, v);
     this.startRamp();

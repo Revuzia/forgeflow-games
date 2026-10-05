@@ -75,6 +75,7 @@ import { buildRest, meshVolume, physicsGenome } from './shape.ts';
 import { deriveParams, EVENT_MIN_GAP_S, FINGER, GRAVITY, H, MAX_DT, MAX_SUBSTEPS } from './params.ts';
 import type { SoftParams } from './params.ts';
 import { extractRotation, rayMesh } from './mathx.ts';
+import { buildStruts } from './struts.ts';
 
 /** Kinematic fingertip (ids 0 and 1). */
 class Finger {
@@ -253,12 +254,9 @@ export class SoftBody implements SoftBodyLike {
   private readonly LQ: Float64Array;        // rest Laplacian offsets q_i - mean(q_nbrs)
   private readonly invH: Float64Array;      // 1 / mean rest edge length around each vertex (crease detection scale)
   private readonly volAlphaT: number;       // volume compliance (alpha tilde)
-  private readonly partCount: number;       // thin parts (connected regions of floppy >= partTau)
-  private readonly partVS: Int32Array; private readonly partV: Int32Array; private readonly partW: Float64Array;
-  private readonly partTS: Int32Array; private readonly partT: Int32Array;
-  private readonly partBS: Int32Array; private readonly partB: Int32Array;
-  private readonly partV6: Float64Array; private readonly partAlpha: Float64Array; private readonly partAx: Float64Array; private readonly partH: Float64Array; private readonly partApex: Int32Array;
-  private readonly ns: number; private readonly S3: Int32Array; private readonly SL: Float64Array; private readonly SW: Float64Array;
+  private readonly ns: number;              // thin-part struts (struts.ts): count, endpoints (pre-multiplied by 3), rest lengths, inverse-mass sums
+  private readonly S3: Int32Array; private readonly SL: Float64Array; private readonly SW: Float64Array;
+  private readonly tipSpeed: number;        // FINGER.maxSpeed scaled to the mesh resolution (see updateFingers)
   private readonly smK: number;             // shape-matching position gain per substep
   private readonly bendK: number;           // Laplacian gain per substep
   private readonly dampInt: number;         // local (non-affine) internal velocity damping fraction per substep
@@ -447,105 +445,16 @@ export class SoftBody implements SoftBodyLike {
     this.dampQ = this.p.intDamp2 * H;
     this.dragF = 1 - Math.exp(-this.p.drag * H);
     this.volAlphaT = this.p.volKappa * this.volumeScale(rest.restLocal);
+    // The fingertip's speed cap is a per-substep travel limit in disguise: at FINGER.maxSpeed the tip moves 15 mm per substep, ~40% of an edge of
+    // the swirl-peak at detail 3. On a finer mesh (detail 4: half the edge length) the same travel is ~80% of an edge, and the skin under a
+    // hard shove could not follow it (adjacent triangles crushed onto the sphere at 125-145 degrees). So the cap scales with the edge length
+    // (1 / sqrt of the vertex count, detail 3 = 1, never above 1): the same travel per edge on every mesh, detail 3 unchanged.
+    this.tipSpeed = FINGER.maxSpeed * Math.min(1, Math.sqrt(642 / n));
     {
-      // thin parts: connected regions of vertices with floppy >= partTau, closed by a cap at their boundary-loop centroid
-      const tau = this.p.partTau, fl = rest.floppy, inR = (v: number): boolean => fl[v] >= tau;
-      const comp = new Int32Array(n).fill(-1);
-      let nc = 0;
-      for (let s0 = 0; s0 < n; s0++) {
-        if (!inR(s0) || comp[s0] >= 0) continue;
-        const stack = [s0]; comp[s0] = nc;
-        while (stack.length) { const v = stack.pop()!; for (let j = this.nbrStart[v]; j < this.nbrStart[v + 1]; j++) { const u = this.nbrIdx[j]; if (inR(u) && comp[u] < 0) { comp[u] = nc; stack.push(u); } } }
-        nc++;
-      }
-      const vs: number[][] = [], ws: number[][] = [], ts: number[][] = [], bs: number[][] = [];
-      const v6s: number[] = [], als: number[] = [], axs: number[] = [], hs: number[] = [], aps: number[] = [];
-      for (let k = 0; k < nc; k++) {
-        const T: number[] = [];
-        for (let t = 0; t < this.nt; t++) { const a = mesh.tris[t * 3], b = mesh.tris[t * 3 + 1], c = mesh.tris[t * 3 + 2]; if (comp[a] === k && comp[b] === k && comp[c] === k) T.push(a, b, c); }
-        if (T.length < 9) continue;
-        const ec = new Map<number, number>();
-        for (let t = 0; t < T.length; t += 3) for (let e = 0; e < 3; e++) { const a = T[t + e], b = T[t + ((e + 1) % 3)]; const key = a < b ? a * 1048576 + b : b * 1048576 + a; ec.set(key, (ec.get(key) ?? 0) + 1); }
-        const bset = new Set<number>();
-        for (const [key, c] of ec) if (c === 1) { bset.add(Math.floor(key / 1048576)); bset.add(key % 1048576); }
-        if (bset.size < 3) continue;
-        const vset = new Set<number>(T);
-        const V: number[] = [], W: number[] = [];
-        for (const v of vset) { V.push(v * 3); W.push(bset.has(v) ? 0 : this.invM[v]); }
-        const B = [...bset].map((v) => v * 3);
-        // rest volume and scale
-        let mx = 0, my = 0, mz = 0;
-        for (const b3 of B) { mx += Q[b3]; my += Q[b3 + 1]; mz += Q[b3 + 2]; }
-        mx /= B.length; my /= B.length; mz /= B.length;
-        const g = new Float64Array(n * 3);
-        let v6 = 0;
-        for (let t = 0; t < T.length; t += 3) {
-          const a = T[t] * 3, b = T[t + 1] * 3, c = T[t + 2] * 3;
-          const ax = Q[a] - mx, ay = Q[a + 1] - my, az = Q[a + 2] - mz, bx = Q[b] - mx, by = Q[b + 1] - my, bz = Q[b + 2] - mz, cx = Q[c] - mx, cy = Q[c + 1] - my, cz = Q[c + 2] - mz;
-          const bcx = by * cz - bz * cy, bcy = bz * cx - bx * cz, bcz = bx * cy - by * cx;
-          v6 += ax * bcx + ay * bcy + az * bcz;
-          g[a] += bcx; g[a + 1] += bcy; g[a + 2] += bcz;
-          g[b] += cy * az - cz * ay; g[b + 1] += cz * ax - cx * az; g[b + 2] += cx * ay - cy * ax;
-          g[c] += ay * bz - az * by; g[c + 1] += az * bx - ax * bz; g[c + 2] += ax * by - ay * bx;
-        }
-        if (!(v6 > 0)) continue;
-        let S0 = 0;
-        for (let j = 0; j < V.length; j++) { const i3 = V[j]; S0 += W[j] * (g[i3] * g[i3] + g[i3 + 1] * g[i3 + 1] + g[i3 + 2] * g[i3 + 2]); }
-        S0 /= v6 * v6;
-        let ax = 0, ay = 0, az = 0;
-        for (const i3 of V) { ax += Q[i3] - mx; ay += Q[i3 + 1] - my; az += Q[i3 + 2] - mz; }
-        const al = Math.hypot(ax, ay, az) || 1;
-        axs.push(ax / al, ay / al, az / al);
-        let apex = V[0], ad = -1;
-        for (const i3 of V) { const d = Math.hypot(Q[i3] - mx, Q[i3 + 1] - my, Q[i3 + 2] - mz); if (d > ad) { ad = d; apex = i3; } }
-        hs.push(this.p.partTrans === 3 ? ad : al / V.length); aps.push(apex);
-        vs.push(V); ws.push(W); ts.push(T.map((v) => v * 3)); bs.push(B); v6s.push(v6); als.push(this.p.partVolKappa * S0);
-      }
-      const flat = (a: number[][]): [Int32Array, Int32Array] => { const st = new Int32Array(a.length + 1); for (let k = 0; k < a.length; k++) st[k + 1] = st[k] + a[k].length; return [st, Int32Array.from(a.flat())]; };
-      this.partCount = vs.length;
-      [this.partVS, this.partV] = flat(vs); this.partW = Float64Array.from(ws.flat());
-      [this.partTS, this.partT] = flat(ts); [this.partBS, this.partB] = flat(bs);
-      this.partV6 = Float64Array.from(v6s); this.partAlpha = Float64Array.from(als); this.partAx = Float64Array.from(axs); this.partH = Float64Array.from(hs); this.partApex = Int32Array.from(aps);
-    }
-    {
-      // struts across thin floppy parts: from each vertex with floppy >= strutTau, inward along its rest normal to the opposite wall;
-      // kept when that wall is closer than strutMaxR rest radii (a thin part, not the body)
-      const tau = this.p.strutTau, lmax = this.p.strutMaxR * rest.restRadius, tris = mesh.tris;
-      const vn = new Float64Array(n * 3);
-      for (let t = 0; t < this.nt; t++) {
-        const a = tris[t * 3] * 3, b = tris[t * 3 + 1] * 3, c = tris[t * 3 + 2] * 3;
-        const ux = Q[b] - Q[a], uy = Q[b + 1] - Q[a + 1], uz = Q[b + 2] - Q[a + 2], wx = Q[c] - Q[a], wy = Q[c + 1] - Q[a + 1], wz = Q[c + 2] - Q[a + 2];
-        const nx = uy * wz - uz * wy, ny = uz * wx - ux * wz, nz = ux * wy - uy * wx;
-        for (const v of [a, b, c]) { vn[v] += nx; vn[v + 1] += ny; vn[v + 2] += nz; }
-      }
-      const pairs = new Map<number, number>();
-      for (let i = 0; i < n; i++) {
-        if (rest.floppy[i] < tau) continue;
-        const i3 = i * 3, l = Math.hypot(vn[i3], vn[i3 + 1], vn[i3 + 2]) || 1;
-        const dx = -vn[i3] / l, dy = -vn[i3 + 1] / l, dz = -vn[i3 + 2] / l;
-        let best = Infinity, bv = -1;
-        for (let t = 0; t < this.nt; t++) {
-          const a = tris[t * 3], b = tris[t * 3 + 1], c = tris[t * 3 + 2];
-          if (a === i || b === i || c === i) continue;
-          const a3 = a * 3, b3 = b * 3, c3 = c * 3;
-          const e1x = Q[b3] - Q[a3], e1y = Q[b3 + 1] - Q[a3 + 1], e1z = Q[b3 + 2] - Q[a3 + 2], e2x = Q[c3] - Q[a3], e2y = Q[c3 + 1] - Q[a3 + 1], e2z = Q[c3 + 2] - Q[a3 + 2];
-          const px = dy * e2z - dz * e2y, py = dz * e2x - dx * e2z, pz = dx * e2y - dy * e2x;
-          const det = e1x * px + e1y * py + e1z * pz;
-          if (Math.abs(det) < 1e-14) continue;
-          const inv = 1 / det, tx = Q[i3] - Q[a3], ty = Q[i3 + 1] - Q[a3 + 1], tz = Q[i3 + 2] - Q[a3 + 2];
-          const u = (tx * px + ty * py + tz * pz) * inv; if (u < 0 || u > 1) continue;
-          const qx = ty * e1z - tz * e1y, qy = tz * e1x - tx * e1z, qz = tx * e1y - ty * e1x;
-          const v = (dx * qx + dy * qy + dz * qz) * inv; if (v < 0 || u + v > 1) continue;
-          const tt = (e2x * qx + e2y * qy + e2z * qz) * inv; if (tt <= 1e-9 || tt >= best) continue;
-          best = tt; const w0 = 1 - u - v; bv = w0 >= u && w0 >= v ? a : u >= v ? b : c;
-        }
-        if (bv < 0 || best > lmax) continue;
-        const key = i < bv ? i * 1048576 + bv : bv * 1048576 + i;
-        pairs.set(key, Math.hypot(Q[i3] - Q[bv * 3], Q[i3 + 1] - Q[bv * 3 + 1], Q[i3 + 2] - Q[bv * 3 + 2]));
-      }
-      this.ns = pairs.size; this.S3 = new Int32Array(this.ns * 2); this.SL = new Float64Array(this.ns); this.SW = new Float64Array(this.ns);
-      let k = 0;
-      for (const [key, L] of pairs) { const a = Math.floor(key / 1048576), b = key % 1048576; this.S3[k * 2] = a * 3; this.S3[k * 2 + 1] = b * 3; this.SL[k] = L; this.SW[k] = this.invM[a] + this.invM[b]; k++; }
+      // thin-part struts: chords through the inside of the swirl-peak (struts.ts)
+      const st = buildStruts(rest.restLocal, mesh, rest.floppy, this.p.strutTau, this.p.strutMaxR * rest.restRadius, Math.round(this.p.strutPer), this.p.strutCos);
+      this.ns = st.count; this.S3 = st.ends3; this.SL = st.rest; this.SW = new Float64Array(this.ns);
+      for (let k = 0; k < this.ns; k++) this.SW[k] = this.invM[st.ends3[k * 2] / 3] + this.invM[st.ends3[k * 2 + 1] / 3];
     }
     const seed = typeof opts.seed === 'number' && Number.isFinite(opts.seed) ? opts.seed : physicsGenome(genome).seed;
     this.seedPhase = mulberry32(seed >>> 0)() * Math.PI * 2;
@@ -993,8 +902,9 @@ export class SoftBody implements SoftBodyLike {
         f.share += (want - f.share) * (1 - Math.exp(-(want < f.share ? FINGER.shareIn : FINGER.shareOut) * H));
         const acc = w * w * (f.target - f.depth) - 2 * w * f.depthV;
         f.depthV += acc * H;
-        // the tip never moves faster than FINGER.maxSpeed into the body (a full-pressure tap would ram the skin at ~6 m/s, 17 mm per substep)
-        const vcap = FINGER.maxSpeed / Math.max(1e-6, f.depthMax);
+        // the tip never moves faster than FINGER.maxSpeed into the body (a full-pressure tap would ram the skin at ~6 m/s, 17 mm per substep),
+        // scaled to the mesh resolution (this.tipSpeed)
+        const vcap = this.tipSpeed / Math.max(1e-6, f.depthMax);
         if (f.depthV > vcap) f.depthV = vcap; else if (f.depthV < -vcap) f.depthV = -vcap;
         f.depth += f.depthV * H;
         if (f.depth < 0) { f.depth = 0; f.depthV = 0; } else if (f.depth > 1) { f.depth = 1; f.depthV = 0; }
@@ -1050,71 +960,11 @@ export class SoftBody implements SoftBodyLike {
     this.vcx += dvx; this.vcz += dvz;
   }
 
-  /** THIN-PART VOLUME (see params.partVolMin): one XPBD projection per thin part, only while it is crushed below the bound. */
-  private partVolume(r00: number, r01: number, r02: number, r10: number, r11: number, r12: number, r20: number, r21: number, r22: number): void {
-    const XP = this.XP, G = this.GRAD, lo = this.p.partVolMin, tr = this.p.partTrans;
-    const VS = this.partVS, PV = this.partV, PW = this.partW, TS = this.partTS, PT = this.partT, BS = this.partBS, PB = this.partB;
-    for (let k = 0; k < this.partCount; k++) {
-      let mx = 0, my = 0, mz = 0;
-      const b0 = BS[k], b1 = BS[k + 1];
-      for (let j = b0; j < b1; j++) { const i3 = PB[j]; mx += XP[i3]; my += XP[i3 + 1]; mz += XP[i3 + 2]; }
-      const ib = 1 / (b1 - b0);
-      mx *= ib; my *= ib; mz *= ib;
-      const v0 = VS[k], v1 = VS[k + 1];
-      for (let j = v0; j < v1; j++) { const i3 = PV[j]; G[i3] = 0; G[i3 + 1] = 0; G[i3 + 2] = 0; }
-      let vol6 = 0;
-      for (let j = TS[k], e = TS[k + 1]; j < e; j += 3) {
-        const a = PT[j], b = PT[j + 1], c = PT[j + 2];
-        const ax = XP[a] - mx, ay = XP[a + 1] - my, az = XP[a + 2] - mz;
-        const bx = XP[b] - mx, by = XP[b + 1] - my, bz = XP[b + 2] - mz;
-        const cx = XP[c] - mx, cy = XP[c + 1] - my, cz = XP[c + 2] - mz;
-        const bcx = by * cz - bz * cy, bcy = bz * cx - bx * cz, bcz = bx * cy - by * cx;
-        vol6 += ax * bcx + ay * bcy + az * bcz;
-        G[a] += bcx; G[a + 1] += bcy; G[a + 2] += bcz;
-        G[b] += cy * az - cz * ay; G[b + 1] += cz * ax - cx * az; G[b + 2] += cx * ay - cy * ax;
-        G[c] += ay * bz - az * by; G[c + 1] += az * bx - ax * bz; G[c + 2] += ax * by - ay * bx;
-      }
-      const v6 = this.partV6[k];
-      let lo2 = lo;
-      if (tr === 3) {
-        const a3 = this.partApex[k];
-        const h = Math.sqrt((XP[a3] - mx) ** 2 + (XP[a3 + 1] - my) ** 2 + (XP[a3 + 2] - mz) ** 2);
-        lo2 = lo * Math.min(1, h / this.partH[k]);
-      }
-      if (tr === 2) {
-        // the target follows the part's axial height (centroid above the cap): squashed ALONG its axis a part pushes its material into the body
-        let sx = 0, sy = 0, sz = 0;
-        for (let j = v0; j < v1; j++) { const i3 = PV[j]; sx += XP[i3]; sy += XP[i3 + 1]; sz += XP[i3 + 2]; }
-        const iv = 1 / (v1 - v0);
-        const h = Math.sqrt((sx * iv - mx) ** 2 + (sy * iv - my) ** 2 + (sz * iv - mz) ** 2);
-        lo2 = lo * Math.min(1, h / this.partH[k]);
-      }
-      let C = vol6 / v6 - lo2;
-      if (C >= 0) continue;
-      if (C < -this.p.partVolCap) C = -this.p.partVolCap;
-      // a finger pressing ALONG the part's axis drives its material into the body through its base: no part volume then
-      let gate = 1;
-      if (tr === 1) {
-        const px = this.partAx[k * 3], py = this.partAx[k * 3 + 1], pz = this.partAx[k * 3 + 2];
-        const ux = r00 * px + r01 * py + r02 * pz, uy = r10 * px + r11 * py + r12 * pz, uz = r20 * px + r21 * py + r22 * pz;
-        for (let f = 0; f < 2; f++) {
-          const fi = this.fingers[f];
-          if (!fi.down && !fi.retracting) continue;
-          const c = fi.dx * ux + fi.dy * uy + fi.dz * uz, s2 = 1 - c * c;
-          let gg = (s2 - 0.25) / 0.5; gg = gg <= 0 ? 0 : gg >= 1 ? 1 : gg * gg * (3 - 2 * gg);
-          if (gg < gate) gate = gg;
-        }
-        if (gate <= 0) continue;
-      }
-      let S = 0;
-      for (let j = v0; j < v1; j++) { const i3 = PV[j]; S += PW[j] * (G[i3] * G[i3] + G[i3 + 1] * G[i3 + 1] + G[i3 + 2] * G[i3 + 2]); }
-      S /= v6 * v6;
-      const sc = gate * (-C / (S + this.partAlpha[k])) / v6;
-      for (let j = v0; j < v1; j++) { const i3 = PV[j], s = sc * PW[j]; XP[i3] += G[i3] * s; XP[i3 + 1] += G[i3 + 1] * s; XP[i3 + 2] += G[i3 + 2] * s; }
-    }
-  }
-
-  /** Struts across thin parts (experimental): one-sided minimum length, one Gauss-Seidel pass on XP. */
+  /**
+   * THIN-PART STRUTS (struts.ts): chords through the inside of the swirl-peak, one-sided. A strut shorter than params.strutMin of its rest
+   * length is pushed back out to it (XPBD, compliance params.strutAlphaT, one Gauss-Seidel pass on XP); a longer one does nothing, so the
+   * peak still bends, stretches and flops freely and only its walls are kept from collapsing onto each other.
+   */
   private strutPass(): void {
     const XP = this.XP, invM = this.invM, S3 = this.S3, SL = this.SL, SW = this.SW, lim = this.p.strutMin, aS = this.p.strutAlphaT;
     for (let h = 0; h < this.ns; h++) {
@@ -1393,9 +1243,6 @@ export class SoftBody implements SoftBodyLike {
       }
     }
 
-    // ---- thin-part volume (one-sided): a thin floppy part (the swirl-peak) may not be crushed below partVolMin of its own volume
-    if (this.partCount > 0 && this.p.partVolMin > 0) this.partVolume(r00, r01, r02, r10, r11, r12, r20, r21, r22);
-
     // ---- edge distance constraints (Gauss-Seidel, 1 pass)
     {
       const E3 = this.E3, EL = this.EL, ES = this.ESOFT, EWA = this.EWA, EWB = this.EWB, EWS = this.EWS, ne = this.ne;
@@ -1415,6 +1262,7 @@ export class SoftBody implements SoftBodyLike {
 
     // ---- hinge barrier: the two vertices opposite an interior edge must not be pressed together (that is a flap folded onto itself)
     if (this.p.hingeLimit > 0) this.hingePass();
+    // ---- thin-part struts: the walls of the swirl-peak are not pressed onto each other (one-sided, see strutPass)
     if (this.ns > 0 && this.p.strutMin > 0) this.strutPass();
 
     // ---- grab attachments (applied after the internal constraints so the user's hand wins within the substep)

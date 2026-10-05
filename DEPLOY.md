@@ -56,7 +56,10 @@ python pipeline/deploy_game.py --game-dir games/<slug>/dist --slug <slug>
   before deploying; without it the row gets default metadata.
 - Never deploy the game folder itself, and `upload_game.py` cannot deploy a
   Vite game: `deploy_game.py` (which `upload_game.py` calls) refuses any folder
-  whose root `index.html` loads a `.ts` module and prints the commands above.
+  whose root `index.html` loads a `.ts` module, or that has a `vite.config.*`
+  but no root `index.html` (Vite root in `runtime/`), and prints the commands
+  above. A built `dist/`, and a game that ships a prebuilt bundle from its
+  root (neon-veil), deploy exactly as before.
 - A game may wrap this in `npm run deploy` (wobblehoard does: check, build,
   then deploy `dist`; `npm run deploy:dry` builds and prints the plan only).
 

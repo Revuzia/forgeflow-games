@@ -122,7 +122,8 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   const depthOrder: BodyView[] = [];   // reused every frame (no allocation): visible views, far to near
   let primaryId: number | null = null;
   let nextId = 1;
-  let capsule: Capsule | null = null;
+  let capsule: Capsule | null = null;   // the meter-full capsule out on the table (the shell's CapsuleHandle points at it)
+  let revealCap: Capsule | null = null; // the capsule a running reveal took over (opening; owned by the ceremony until it releases it)
   let capsuleId = 0;
 
   const primary = (): BodyView | null => views.find((v) => v.id === primaryId) ?? null;
@@ -164,6 +165,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     if (primaryId === v.id) { primaryId = views.length ? views[0].id : null; }
   }
   function discardCapsule(): void { if (capsule) { capsule.dispose(); capsule = null; } }
+  function discardRevealCapsule(): void { if (revealCap) { revealCap.dispose(); revealCap = null; } }
 
   function applyTier(t: QualityTier): void {
     tier = t;
@@ -173,6 +175,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     applySize();
     for (const v of views) v.applyQuality(spec);
     capsule?.applyTier(!spec.transmission);
+    revealCap?.applyTier(!spec.transmission);
     governor.resetWindow(24);
   }
 
@@ -222,15 +225,19 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     removeView,
     makePrimary(v) { primaryId = v.id; v.owned = false; bodyScale = v.scale; framing = null; },
     setFraming(scale, snap) { framing = scale; if (snap) camScale = scale ?? bodyScale; },
-    capsule: () => capsule,
-    ensureCapsule() {
-      if (!capsule) { capsule = new Capsule(hub, quad, !TIERS[tier].transmission); capsule.placeStanding(0, 0.25); scene.add(capsule.group); capsuleId++; }
-      return capsule;
+    takeCapsule() {
+      discardRevealCapsule();
+      let c = capsule;
+      if (!c) { c = new Capsule(hub, quad, !TIERS[tier].transmission); c.placeStanding(0, 0.25); scene.add(c.group); capsuleId++; }
+      capsule = null;
+      revealCap = c;
+      return c;
     },
-    discardCapsule,
+    releaseCapsule(c) { if (revealCap === c) discardRevealCapsule(); else if (capsule === c) discardCapsule(); },
     addToScene: (o) => { scene.add(o); },
     removeFromScene: (o) => { scene.remove(o); },
     crossfade(seconds) {
+      if (disposed || lost) return;            // nothing to snapshot (dispose / a lost context): the jump is a plain cut
       renderer.render(scene, camera);          // the current state, into the framebuffer we are about to snapshot
       screen.beginCrossfade(renderer, seconds);
     },
@@ -344,6 +351,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       depthOrder.sort((a, b) => b.sortDepth - a.sortDepth);
       for (let i = 0; i < depthOrder.length; i++) depthOrder[i].jelly.mesh.renderOrder = 10 + Math.min(0.99, i * 0.01);
       capsule?.update(d * ts, time);
+      revealCap?.update(d * ts, time);
       particles.update(d * ts, time);
       screen.update(d);
     },
@@ -402,7 +410,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       canvas.removeEventListener('webglcontextlost', onLost, false);
       canvas.removeEventListener('webglcontextrestored', onRestored, false);
       while (views.length) removeView(views[views.length - 1]);
-      discardCapsule();
+      discardCapsule(); discardRevealCapsule();
       table.dispose(); quad.dispose(); screen.dispose(); particles.dispose();
       hub.dispose();
       renderer.dispose();
@@ -434,7 +442,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
         fineVertices: p?.jelly.fineCount ?? 0, tier: governor.tier, mode: governor.mode, fx: p?.fx.counts ?? null, contextLost: lost,
         pixelRatio: renderer.getPixelRatio(), drawingBuffer: [canvas.width, canvas.height] as [number, number],
         eyeLook: p ? Array.from(p.face.lookOut) : null,
-        bodies: views.length, primary: primaryId, ceremony: director.active, particles: particles.count, calm, screenLight: screen.lightAlpha, capsule: !!capsule, cameraFx,
+        bodies: views.length, primary: primaryId, ceremony: director.active, particles: particles.count, calm, screenLight: screen.lightAlpha, capsule: !!capsule || !!revealCap, cameraFx,
         particlesDropped: particles.dropped, camScale,
       };
     },

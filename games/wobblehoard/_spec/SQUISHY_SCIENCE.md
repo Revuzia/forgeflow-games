@@ -259,9 +259,11 @@ Rotation- and translation-free shape error against the rest shape, in rest radii
 Fuzz (48 runs x 400 random events: fingers, pinch, grabs, nudges, dt 1/240..1/10, random genomes): 0 non-finite, 0 inverted volume, 0 table
 penetration, 0 safety resets. Cost per `step(1/60)`, p50 on this container (plain solver 1.38 ms): jelly +0.04, foam +0.14, putty +0.27, sticky +0.04, liquid +0.06 ms (noisy).
 
-## 4. The families (generated from `src/data/materials.ts`)
+## 4. The families (transcribed from `src/data/materials.ts`; the code wins)
 
-Numbers are design values in the units of section 3 (`smOmega` etc. are the **ratio basis**: only their ratios to the gel go to the solver). `nu_eff` is heuristic.
+These tables are copied by hand, not generated: no generator exists. On 2026-10-05 every number in them (506 cells, the computed `nu_eff`, `hold` and
+`recovery95` columns excluded) and every family blurb was compared against `MATERIAL_FAMILIES`: all numbers matched; two blurbs (putty, popdome) had drifted and were
+corrected to the code's text. Numbers are design values in the units of section 3 (`smOmega` etc. are the **ratio basis**: only their ratios to the gel go to the solver). `nu_eff` is heuristic.
 
 **Stiffness and volume**
 
@@ -316,7 +318,12 @@ Numbers are design values in the units of section 3 (`smOmega` etc. are the **ra
 
 **Visual signature** (RENDER). At rest foam and marshmallow are matte and opaque with sheen at grazing angles; gel, liquid, slime and gummy are glassy with a deep subsurface
 colour; pressed: gel/gummy blush warm where compressed (`blush`) and go pale and clear where stretched (`stretchPale`), foam and putty barely change.
-Genome translucency and gloss move inside the +/- span only; coreGlow and glitter are the genome values times the multiplier.
+**What `resolveMaterial` does with these columns (since the 2026-10-05 CORE audit fix):** the genome's translucency, gloss, coreGlow and glitter pass
+through unchanged, so the species look in `catalog.ts` is the one source for them and the tier ordering of DESIGN 5.3 holds in the resolved values
+(`probe_catalog.ts` checks it). The translucency and gloss centre +/- span, `core x` and `glitter x` are reference values: the fallback for a genome
+that lacks the field (centre; 0.5 x the multiplier) and the family character that `probe_materials.ts` checks. The other columns are what the
+family adds. Consequence, not yet resolved in design: the catalog's foam, marshmallow and putty species carry translucency 0.45 to 0.80, so the
+"matte and opaque" foam look described above is not what the resolved values give (the renderer does not read `resolveMaterial` yet).
 
 | family | translucency | gloss | rough | subsurface | fuzz | grain | thick | blush | stretchPale | core x | glitter x |
 |---|---|---|---|---|---|---|---|---|---|---|---|
@@ -359,11 +366,12 @@ resonators, f0 ~ 3.26 / r Hz with r in metres [GK; `voices.ts` uses it], so 1 mm
 - **mochidough** Soft, heavy dough: it stretches, keeps a thumb-print for a few seconds, then slowly smooths itself out.
 - **jellygel** Glossy, translucent and bouncy: squashes without losing volume, bulges around your finger, wobbles for a while.
 - **waterfill** A thin skin around a sloshing liquid: it bulges where you do not press and keeps swaying after you let go.
-- **putty** Firm and dead when you poke it fast, flows like taffy when you lean on it, and keeps the dent you leave.
+- **putty** Firm with no bounce when you poke it fast, flows like taffy when you lean on it, and keeps the dent you leave.
 - **stickystretch** Clingy and stretchy: it grabs your fingertip, pulls into long thin strings, then snaps back with a tack.
 - **slimegoo** A wet, sticky glob: it oozes after every squeeze, drips into strings and takes ages to pull itself together.
 - **firmsilicone** Dense, grippy rubber: pushes back hard, snaps back instantly and keeps rebounding.
-- **popdome** A stiff silicone dome that resists, then suddenly gives with a pop and flips inside out.
+- **popdome** A stiff silicone dome that resists, then gives under a firm press and springs straight back. (The pop and flip of 3.9 are planned, not
+  built: `materials.ts` keeps them in the family's `planned` note, and `probe_catalog.ts` refuses any blurb that promises them before they ship.)
 - **gummy** Firm and chewy: a quick, slightly sticky spring-back with very little wobble, like candy.
 - **beadsqueeze** A bag of tiny beads: it yields, rearranges with a crunch, firms up as it jams, and stays a little lumpy.
 
@@ -377,8 +385,7 @@ The family fixes the character, the genome moves the instance inside a band. Neu
 | bounce | intDamp, affDamp, speedDamp x1.6..0.625 (bouncier = less damping); sound `ring` x0.75..1.25 | |
 | stretch | maxPull x0.8..1.25; edgeSoftStrain x0.8..1.25; edgeAlphaT x0.77..1.3 | |
 | size | airReturnTau x0.8..1.25 (longer air path in a bigger body: diffusion would give size^2, we use size^1 to keep the band tight); sloshHz x1.12..0.89 | audio pitch (pitchRatio) |
-| translucency, gloss | `look.translucency` / `look.gloss` = centre +/- span x (2g - 1) | foam stays opaque, gel stays glassy |
-| coreGlow, glitter | times the family multiplier | |
+| translucency, gloss, coreGlow, glitter | `look.*` = the genome's own value (the species look), unchanged; the family value is only the fallback for a missing field (section 4) | the tier ordering of DESIGN 5.3 |
 | hue, seed, pattern, eyes | nothing (probe checks the physics is identical) | |
 
 Checked by the probe: monotone sweeps for every family over three backgrounds; "firmer genome never softer" (slow-rise foam at firmness 0 -> 1: smOmega 16 -> 25); all 16 extreme genome
@@ -408,7 +415,7 @@ Margin warning: the worst corner genome moves a family 0.111 (RMS, normalised) f
 3. **Budget**: the plain solver is already 1.4-1.6 ms mean here against the 2.0 ms gate; the features add 0.05-0.3 ms. Update memory once per frame.
 4. **No felt force** with kinematic fingers (3.6). **Resolved in the contract:** `SoftMetrics.reaction?: number` (0..1, normalised summed finger-projection
    correction, smoothed) was added to `src/contracts.ts` as an optional round-2 member, next to `press?`. PHYS's rewrite now fills both
-   (`src/physics/softbody.ts` at checkpoint `fc60963`, 2026-10-05; that rewrite is in progress and its gate was not re-run for them). Consumers still treat
+   (`src/physics/softbody.ts` at checkpoints `fc60963` and `f14d3b8`, 2026-10-05; that rewrite is in progress and its gate was not re-run for them). Consumers still treat
    `undefined` as 0, because the members stay optional in the contract.
 5. **Rotation extraction uses Q**, so a large plastic dent slightly biases R; clamp via `memMax`. Not measured.
 6. **Tack and slosh are numerically tested, not seen**; both need a screenshot pass. Tack touches finger retract behaviour.

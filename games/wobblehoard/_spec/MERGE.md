@@ -19,7 +19,7 @@ Rules and numbers: [`DESIGN.md`](DESIGN.md) 5.6 (the merge rules), 5.9 (supply a
 6. **Safety UX from DESIGN:** hold 0.5 s (release early cancels, nothing sent), exact odds, a last-copy warning, hearted items protected, output locked 24 hours (cannot trade or merge), at most 10 merges a day.
 7. **Tidy-up** (the only descendant of the six-input blender) is up to 10 independent atomic merges chosen by the client, each with its own sub-key, stopping at the first refusal, sharing the daily cap.
 8. **Provenance:** every output stores `origin: 'blend'` and `parents`; the consumed items stay in the table with `consumed_at`; the ledger carries the draws, the odds basis, the pity before and the odds digest.
-9. **Flipping `MERGE_COST` to 3** is one line in the game plus **seven edit sites in one probe file**, a config row and a host redeploy; a mismatch between host and database aborts loudly [V]. Full checklist in section 8.
+9. **Flipping `MERGE_COST` to 3** is, in the game, **one source line plus `node _harness/gen_catalog_doc.ts`** (`probe_economy.ts` needs no edits: it builds every selection from the constant and replays its merge section at the other cost on every run); on the server, a config row and a host redeploy; a mismatch between host and database aborts loudly [V]. Full checklist in section 8.
 10. **One database function, `wh__commit_merge`,** writes merges. Players cannot call it; only the host (service role) can.
 11. **Merge never replaces trade:** DESIGN 5.8 shows merge-only routes cost about as much as waiting for the drop for Rare and above.
 12. **Unverified:** the UI, the ceremony wiring, the real-Supabase behaviour.
@@ -146,7 +146,7 @@ All of 5.6: inputs, output tier rule, finished row always tiers up, pity 4 per i
 |---|---|---|
 | `u1` | the tier-up roll: `tierUp = u1 < odds.pEff` where `pEff` is the table chance, or 1 if the row is finished or pity is due | `mergeDrawCore` |
 | `u2` | the species inside the output tier, by weight (1, or 1.5 for a species the player does not own): `pickWeighted(weights, total, u2)` | `mergeDrawCore` |
-| `u3` | the genome seed: `floor(u3 * 2^32)`; the genome is `speciesBaseGenome(species, seed)` with the parents' hue and pattern mixed in by `lineageGenome` | `rollMerge` |
+| `u3` | the genome seed: `floor(u3 * 2^32)`; the genome is `speciesBaseGenome(species, seed)` with a bounded hue tint toward the parents by `lineageGenome` (it stays recognisably its own species; a parent's pattern is kept only in a same-tier merge between patterned species: DESIGN 5.6) | `rollMerge` |
 
 `rollMerge` validates the selection **before** drawing anything and refuses with `{ ok: false, error }` and **zero draws consumed** [V: a refused roll left the random stream untouched]. Pity: the counter of the *input* tier resets on a tier-up and grows by one on a dud (capped at 255); the commit stores the returned `pityAfter` array.
 
@@ -222,23 +222,25 @@ collection.markSeen([r.item_id]);
 * **The ceremony needs the result up front** (`MergeCeremonySpec.result`), so it cannot start before the answer. That is why the order is hold, call, answer, ceremony, and why the wait (section 3.1 step 6) is plain pad glow.
 * **Skip:** `handle.skip()` jumps to the final frame with the 120 ms crossfade and fires the remaining beats; the output is placed either way.
 * **Feature detection:** `playMergeCeremony`, `mergeStart`, `duck` are optional members; if absent, show the result card (species, tier gem, NEW, TIER UP, lineage swatches) with no animation.
-* **Parents count:** `parents.length` is `MERGE_COST` (2 or 3). The render lane clamps to 2 or 3 parents [R: `ceremony.ts` line 436]; see section 8.
+* **Parents count:** `parents.length` is `MERGE_COST` (2 or 3). The render lane clamps to 2 or 3 parents [R: `src/render/ceremony.ts`, `Math.max(2, Math.min(3, spec.parents.length))`]; see section 8.
 
 ## 8. Flipping `MERGE_COST` from 2 to 3 safely
 
 **The owner's rule** (DESIGN 5.6): earning a squishy takes 3 minutes or more of effort, so merge cost is 2; at about 1.5 minutes or less it would be 3. At the chosen meter (100 SP, 3.1 to 3.8 minutes a capsule) the answer is 2, and the sim shows M = 3 fails the "a mergeable set in the first one or two sessions" target (first mergeable set 36.6 minutes against 10.4; 8% and 27% have one by 12 and 25 minutes against 57% and 91%). **The meter rate and M are a pair: 100 SP and M = 2.** Flip only if a real playtest measures the effort per capsule at 1.5 minutes or less, or the owner changes the meter too.
 
-**Checklist (each item was checked in a scratch copy of the game with `MERGE_COST = 3`; the repository was not modified):**
+**In the game it is one source line plus one generator:** set `MERGE_COST` to 3 in `src/core/merge.ts`, then run `node _harness/gen_catalog_doc.ts` (the generated `_spec/CATALOG.md` prints the cost, and `probe_catalog.ts` fails until it is regenerated). **`probe_economy.ts` needs no edits.** Everything else is server-side (rows 6 and 10), prose (row 5) and UI copy (row 7).
+
+**Checklist (re-run on 2026-10-05 in a scratch copy of the game at checkpoint `f14d3b8`, with `MERGE_COST = 3`; the repository was not modified):**
 
 | # | Change | Detail | Checked |
 |---|---|---|---|
 | 1 | `src/core/merge.ts` | `export const MERGE_COST = 3;` The probe enforces that it is defined once, as a single literal. | [V] |
-| 2 | `_harness/probe_economy.ts`: **7 edit sites** | With the constant changed alone the probe fails 3 checks and then **crashes** with a `TypeError` at the first hard-coded pair. Sites (text anchors; lines at the time of writing): the pin `check('MERGE_COST is 2 ...', MERGE_COST === 2)` (line 292); the invalid-selection check with two-element literals `[ids(0)[0], ids(0)[1]]`, `[ids(0)[0], 'nope']`, `[null, null]` (lines 303 and 304); the `{species, genome}` input check built from a two-element array sliced to `MERGE_COST` (line 307); the finished-row loop `owned[id] = 2` (line 349); the pity case `{ [ids(1)[3]]: 2 }` (line 392); the lineage test with exactly two parents and `owned: { ...: 2 }` (line 441). Replace the literals by `MERGE_COST`-sized arrays (`Array.from({ length: MERGE_COST }, ...)`) and `owned = MERGE_COST`; change the pin. **After those edits the probe passed 98 of 98 at M = 3** (the unedited probe passes 98 of 98 at M = 2). | [V] |
-| 3 | `probe_catalog.ts`, `probe_genome.ts` | Pass unchanged at M = 3. `probe_app.ts` needs `three` and could not be run in my scratch copy; run it. | [V] / [U] |
-| 4 | `_harness/sim_economy.ts` | Reads the constant. It ran at M = 3 (`--quick --days 120`, 2 minutes) and printed `MERGE_COST=3`. Re-run the full sim (about 6 minutes) and **re-quote DESIGN 5.6 to 5.11** before telling anyone the economy is unchanged: DESIGN's M = 3 column already shows the direction (first mergeable set 36.6 minutes). | [V] ran, results not re-quoted |
-| 5 | `_spec/DESIGN.md` 5.6 heading, tables and prose; `_spec/CATALOG.md` | The heading says "MERGE_COST = 2"; CATALOG.md is generated: `node _harness/gen_catalog_doc.ts`. | [R] |
+| 2 | `_harness/probe_economy.ts`: **no edits** | It builds every selection from the constant (`MERGE_COST`-sized inputs and ownership), accepts a cost of 2 or 3, and on **every** run replays its whole merge section at the other legal cost through the explicit `cost` argument, so the flip is rehearsed continuously. With only the constant changed: **138 of 138** passed (merge section at cost 3, rehearsal at cost 2). The old guard `inputsOf(...).length === MERGE_COST`, true by construction, is gone; the pin now reads the source (`MERGE_COST` defined exactly once, as a literal, in `merge.ts`). | [V] |
+| 3 | `probe_catalog.ts`, `probe_genome.ts`, `probe_materials.ts`, `npx tsc` | With only the constant changed, `probe_catalog.ts` fails exactly one check: `CATALOG.md` no longer matches its generator (the line "Merge cost is **2**"). After `node _harness/gen_catalog_doc.ts`: `probe_catalog` 121 of 121, `probe_genome` 25 of 25, `probe_materials` 46 of 46, `tsc` clean. Not run in the scratch copy: `probe_app.ts`, `probe_gestures.ts`, `probe_softbody.ts` (shell and physics; they do not read the merge cost). | [V] |
+| 4 | `_harness/sim_economy.ts` | Reads the constant (its `--M 3` run overrides it). Re-run the full sim (about 6 minutes) and **re-quote DESIGN 5.6 to 5.11** before telling anyone the economy is unchanged: DESIGN's M = 3 column already shows the direction (first mergeable set 36.6 minutes). Not re-run at M = 3 in full on 2026-10-05. | [U] |
+| 5 | `_spec/DESIGN.md` 5.6 heading, tables and prose; `_spec/CATALOG.md` | The DESIGN heading and prose say "MERGE_COST = 2" (edit by hand); `CATALOG.md` is generated (row 3). | [R] |
 | 6 | Database | `update public.wh_config set value = '3' where key = 'merge_cost';` **and** redeploy the host with the new vendored `merge.ts` (the vendor probe fails if they differ). The commit function aborts (`wh_cost_mismatch`) if host and database disagree, so a half-done flip fails loudly instead of corrupting anything. | [V: host 3 against database 2 aborted; the check is symmetric by construction] |
-| 7 | Client copy | Never write "two" or "2" for the cost in UI text: derive it (`MERGE_COST`) in `copy.ts`: pad slot count, the "hold to merge" help, tutorial lines, the Tidy-up rule `mergeable >= MERGE_COST`, empty-state text. The odds themselves do not depend on the cost (`previewMerge` at cost 2 and 3 differ only in `cost`, `usesLastCopy` and the not-enough-copies error: probe line 465 [R]). | [R] |
+| 7 | Client copy | Never write "two" or "2" for the cost in UI text: derive it (`MERGE_COST`) in `copy.ts`: pad slot count, the "hold to merge" help, tutorial lines, the Tidy-up rule `mergeable >= MERGE_COST`, empty-state text. The odds themselves do not depend on the cost (the cost enters `previewMerge` only through the input count, `usesLastCopy` and the not-enough-copies error [R: `resolveInputs` and `formatPreview` in `merge.ts`]; `probe_economy.ts` runs its exact-odds checks at both costs on every run [V]). | [R] |
 | 8 | Ceremony | `MergeCeremonySpec.parents` is documented "2 or 3" and `ceremony.ts` clamps to 2..3 [R]. **Look at a 3-parent ceremony on a real device**; I did not. | [U] |
 | 9 | Tidy-up | Each merge consumes 3 items: the same 10-a-day cap now removes up to 30 items a day. Decide whether the cap stays 10 (it counts merges). | [U] |
 | 10 | In-flight state | Merges are atomic and nothing persists mid-merge, so there is nothing to migrate. Existing items are unaffected. Old clients still showing "2" would be wrong: the vendored client bundle and the host must ship together; the host's `cost` check refuses a stale host, and a stale client's request fails with `wrong_count` (it sends 2 ids). | [V] / by construction |
@@ -264,11 +266,11 @@ Tier-up chance Common 30%, Uncommon 25%, Rare 20%, Epic 15%, Legendary 10%; a fi
 | R9c | A forged pending merge in storage (with item ids) is never sent after a reload; only `wh_op_status` with the key | COLLECTION C11 | to build |
 | R10 | A bad host roll (wrong tier, same species, species byte mismatch) is rejected loudly and nothing changes; a cost mismatch aborts | SQL T11 | [V] |
 | R11 | Every merge result is a legal tier move; conservation view empty afterwards | host suite | [V] |
-| R12 | Distribution: tier-up rates, pity ceiling of 4 duds, finished row always up | `probe_economy.ts` (existing, 300 000 rolls per case) | [V] 98/98 at M = 2 (unedited) and at M = 3 (after the edits) |
+| R12 | Distribution: tier-up rates, pity ceiling of 4 duds, finished row always up | `probe_economy.ts` (existing, 300 000 rolls per case) | [V] 138/138 on 2026-10-05 at M = 2 (with the cost-3 rehearsal), and 138/138 in a scratch copy at M = 3 with no probe edit |
 | R13 | Client preview equals the server's preview for the same state (same digest) | probe with the shared `oddsDigest` | to build |
 | R14 | Receive lock: a received or merge-made item cannot be merged or traded for 24 hours | SQL T1, T14 | [V] |
 | R15 | UI: the pad, odds panel, last-copy modal, hold, cap and lock states; keyboard and screen reader; the ceremony call order (result first) with a fake stage | browser harness | to build |
-| R16 | The flip checklist (section 8) run as a script in CI against a scratch copy | script | to build |
+| R16 | The flip checklist (section 8) run as a script in CI against a scratch copy | `probe_economy.ts` already replays the merge rules at the other cost on every run; a whole-tree scratch flip (constant, generator, all probes) as a CI script | partly built (the probe rehearsal); the CI script: to build |
 
 ## 11. Work breakdown (rough, one engineer [U])
 
@@ -288,7 +290,7 @@ Tier-up chance Common 30%, Uncommon 25%, Rare 20%, Epic 15%, Legendary 10%; a fi
 * The 2026-10-05 revisions ran on a scratch PostgreSQL only: the hashed Tidy-up sub-keys through the host suite (R9b [V]); the keys-only pending merge is client behaviour and waits for the client (R9c, COLLECTION C11).
 * **[U]** typical server latency (a few hundred milliseconds), the 1.2 s and 8 s thresholds in 3.1, M-4 and M-5 (Tidy-up defaults and its ceremony), the 5-minute auto-retry window.
 * **[R]** the render lane's ceremony supports 2 to 3 parents by its source; I did not see it run.
-* The flip checklist was produced from a copy of the game as it stood on 2026-10-02; other lanes were editing `src` at the time. Re-run the scratch flip when someone actually flips.
+* The flip checklist was first produced from a copy of the game as it stood on 2026-10-02 and re-run on 2026-10-05 against checkpoint `f14d3b8` (rows 1 to 3); other lanes were editing `src/physics` and `src/render` at the time. Re-run the scratch flip when someone actually flips.
 * The sim was not re-run at M = 3 in full; DESIGN's M = 3 column is quoted, not re-derived.
 * Owner decision: whether the merge cap stays at 10 when `MERGE_COST` is 3 (item 9), and whether Tidy-up should protect Rare and above by default (M-4).
 

@@ -47,9 +47,11 @@ Lanes never edit each other's files. A lane that needs a change in another lane'
 * TypeScript `strict`, `erasableSyntaxOnly` (no `enum`, no `namespace`, no constructor parameter properties) so files run
   under plain `node` type-stripping. **Relative imports carry the `.ts` extension.** `import type` for types (`verbatimModuleSyntax`).
 * No dependencies beyond `three`. No third-party assets of any kind: no audio files, textures, models, fonts, HDRIs.
-  Everything is procedural. (The only binary in the folder is the cover `public/thumbnail.png`, rendered from the game itself.)
+  Everything is procedural. (The only binary the folder may hold is the cover `public/thumbnail.png`, to be rendered from the game itself; it does
+  not exist yet, so a deploy today would let `pipeline/deploy_game.py` generate a cover from `game_meta.json`'s `art_direction` instead.)
 * `src/physics/**`, `src/core/**` and `src/data/**` import nothing from `three` or the DOM, and never call `Math.random()` or `Date.now()`.
-  Randomness goes through `src/core/rng.ts` or an **injected random function** (`drops.ts` and `merge.ts` accept one; the server passes a CSPRNG).
+  (The only reads of a clock or a random source are injectable defaults: `newInstance`'s default `id` and `now` in `genome.ts`, and `save.ts`'s default
+  `now`; a deterministic caller passes its own.) Randomness goes through `src/core/rng.ts` or an **injected random function** (`drops.ts` and `merge.ts` accept one; the server passes a CSPRNG).
   Physics: same genome + same seed + same input script = identical `stateHash()`.
 * Hot loops use typed arrays and allocate nothing per step. The physics step budget is gate G1p (section 6).
 * UI strings are plain English, short, and original. No reference to any other game, brand or character.
@@ -90,8 +92,8 @@ Lanes never edit each other's files. A lane that needs a change in another lane'
 
 ### 4.2 Round 2 (in progress)
 
-All of these are declared in `src/contracts.ts` (optional members) or come from `src/data/**`. At checkpoint `fc60963` (2026-10-05 06:37 UTC)
-`src/physics/softbody.ts` fills `metrics.press` and `metrics.reaction`; the material families, the species rest shapes, the ceremony drivers and the
+All of these are declared in `src/contracts.ts` (optional members) or come from `src/data/**`. At checkpoints `fc60963` (2026-10-05 06:37 UTC) and
+`f14d3b8` (15:24 UTC) `src/physics/softbody.ts` fills `metrics.press` and `metrics.reaction`; the material families, the species rest shapes, the ceremony drivers and the
 per-family band are not in it yet (the rewrite is in progress and its gate has not been re-run on those parts).
 
 * **Material families.** The body applies the family of the genome's species (`familyOf(species)` in `src/data/catalog.ts`) through
@@ -103,7 +105,7 @@ per-family band are not in it yet (the rewrite is in progress and its gate has n
 * **Metrics** `press?` (deepest single-finger indentation, 0..1) and `reaction?` (normalised summed finger-projection correction, a firmness
   signal for audio and haptics). Consumers treat `undefined` as 0.
 * **Ceremony drivers** `setFold?(t)`, `moveTo?(p, stiffness)`, `tremble?(amp)`, `burstOpen?(strength)` for the merge ceremony and the capsule
-  reveal. The renderer feature-detects them and falls back to a procedural puppet when absent (it does at checkpoint `fc60963`).
+  reveal. The renderer feature-detects them and falls back to a procedural puppet when absent (it does at checkpoints `fc60963` and `f14d3b8`).
 * **Stage B (planned, NEXT_STEPS section 4):** several bodies on the mat with body-to-body contact, pick-up and toss, long pulls, tack strands.
   These need new contract members; none is declared yet.
 
@@ -179,7 +181,7 @@ NEXT_STEPS.md section 1 (and the audio numbers in SOUND.md).
 
 | Gate | Lane | Check | Pass | Status |
 |---|---|---|---|---|
-| G0 | all | `npx tsc --noEmit -p tsconfig.json`, `npm run build` | clean for the whole tree; `dist/` < 1.2 MB total (three tree-shaken) | Built |
+| G0 | all | `npx tsc --noEmit -p tsconfig.json`, `npm run build` | clean for the whole tree; `dist/` < 1.2 MB total (three tree-shaken); `vite build` itself fails over the budget (`vite.config.ts`) | Built (822 KB on 2026-10-05) |
 | G1 | PHYS | `node _harness/probe_softbody.ts` | volume inside the **per-family band of 4.3** under max squeeze and back to 1 +/- 0.015 in time; shape back within 3% of rest radius RMS (rotation and translation removed) 4 s or less after release (Jelly Gel; other families 4.3); settles (kinetic < 0.02) in 5 s or less; underdamped (2 or more visible height oscillations after a hard release, `bounce` high) with decay time constant 0.5-2.0 s; the peak flops (peak tip displaces 25% restRadius or more under a side poke); no local skin fold left after any press; fuzz: 200 runs x 1500 random events, dt in [1/240, 1/10] -> 0 NaN, 0 mesh inversions, 0 table penetrations > 1% restRadius; determinism: identical `stateHash` for identical scripts; float mode: stays within 1.5 m of origin and returns to hover after a shove | Slice built; per-family band in progress |
 | G1p | PHYS | perf in node | mean `step()` 2.0 ms or less and p99 5 ms or less at detail 3 on this container; no per-step allocation | Built |
 | G2 | AUDIO | `node _harness/probe_audio.mjs` (Chromium OfflineAudioContext) | every voice: peak -20..-1 dBFS, abs DC < 0.01, no sample jump > 0.25 at start/end, tail < -60 dB by the end, non-silent for its minimum duration, two renders with different pitch/seed differ by 3% or more in dominant frequency; round-2 ceremony and engine checks and round-3 music checks as listed in SOUND.md | Rounds 1-2 built; round 3 in progress |
@@ -288,8 +290,13 @@ answering on that port. Playwright is not a package dependency: `pw.mjs` resolve
 | `node _harness/browser_shell.mjs [--quick] [--port=5365] [--only=a,b]` | G3 shell, G4, G6 (`_harness/_reports/shell.json`, `_shots/shell/`) |
 | `node _harness/sim_economy.ts [--quick] [--n 5000] [--long 450]` | the economy sim (DESIGN 5.0; the full run takes about 5 minutes) |
 | `node _harness/gen_catalog_doc.ts` | regenerates `_spec/CATALOG.md` |
+| `npm run probe:physics-film`, `probe:audio`, `probe:render`, `probe:shell` | the four browser harnesses above with no arguments (`browser_physics.mjs`, `probe_audio.mjs`, `browser_render.mjs`, `browser_shell.mjs`); `npm run probe:browser` runs audio, render and shell in turn. Arguments pass through after `--` (for example `npm run probe:shell -- --quick`) |
+| `npm run deploy:dry` / `npm run deploy` | build, then `python ../../pipeline/deploy_game.py --game-dir dist --slug wobblehoard` with `--dry-run` (prints the upload plan) / for real (after `npm run check`). **Deploying is the owner's step; lanes never run `deploy`.** `deploy_game.py` refuses the game folder itself (its `index.html` loads `.ts`): only `dist/` is deployable (`DEPLOY.md`, Vite games) |
 
 Screenshots go to `_shots/` (gitignored), reports to `_harness/_reports/` (gitignored), audio renders to `_harness/_renders/` (gitignored).
+They arrive through the dev and preview servers' `POST /__shot/<name>` and `POST /__report/<name>` (`vite.config.ts`; never part of a build), which
+answer only same-origin requests to a loopback host: a request whose `Origin` is another site or port, or whose `Sec-Fetch-Site` is not
+`same-origin`, gets 403 and writes nothing. Harness pages served by the same server and Node scripts (no `Origin`) are unaffected.
 While a lane's collaborators are unfinished, code against `src/contracts.ts` and a local stub (`_harness/mocks.ts`); never edit another lane's files.
 
 ## 11. Core economy and data contract (CORE; built)
@@ -304,8 +311,13 @@ While a lane's collaborators are unfinished, code against `src/contracts.ts` and
 * `src/core/merge.ts`: `MERGE_COST = 2` (one literal, read by everything), `previewMerge` (exact odds, no randomness), `rollMerge` (exactly three draws
   in a fixed order; a refused selection consumes none).
 * `src/core/genome.ts` (shared): the `g1.` share string (26 bytes, species index in one byte; hostile input decodes to `null`), quantisation,
-  `SquishyInstance`. Genomes compare with `genomeEquals`, never with `JSON.stringify`.
-* `src/data/materials.ts`, `src/data/shapes.ts`: the 12 material families and the rest-shape language (4.2).
+  `SquishyInstance`. The string is **canonical**: `encodeGenome` quantises first and throws a `RangeError` for an unknown species, pattern or eye
+  style; `decodeGenome` accepts only the exact string `encodeGenome` writes (no alias spellings); `canonicalGenome` validates a genome from outside.
+  Genomes compare with `genomeEquals` (equal canonical forms), never with `JSON.stringify`.
+* `src/data/materials.ts`, `src/data/shapes.ts`: the 12 material families and the rest-shape language (4.2). **One source per look field:**
+  `resolveMaterial(family, genome).look` passes the genome's translucency, gloss, coreGlow and glitter through unchanged (the species look in
+  `catalog.ts`, so the tier ordering of DESIGN 5.3 holds in what the renderer gets; `probe_catalog.ts` checks the resolved tier means); the family
+  supplies only the surface fields a genome does not carry (roughness, subsurface, fuzz, grain, thickness, blush, stretchPale).
 * `src/data/palette.ts`: genome to body and core colour (OKLCH formulas); `src/render/oklch.ts` must draw with exactly these. `probe_catalog.ts`
   compares the two every run and reports a drift as SEAM-DRIFT; it fails the run only with `WH_STRICT_SEAMS=1` (integration runs), because the fix
   belongs to the render lane.

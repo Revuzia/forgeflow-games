@@ -125,7 +125,8 @@ price (build cost 1). The paid-gacha row is shown only to explain what we refuse
 **One saved run is the source of every [sim] number** in this file, in TRADE.md, MERGE.md and NEXT_STEPS.md: `node _harness/sim_economy.ts` with no
 flags (5000 players, 60-day and 450-day horizons, seed `0x5eed1234`, `MERGE_COST=2`), run on **2026-10-05** under Node 22.22.0, first against the game
 logic of commit `7869499` (290 s, 297 lines), then again the same day against checkpoint `fc60963`, after the CORE lane's audit fixes and a species
-rename had changed `src/core`, `src/data` and the sim itself (342 s): **the two outputs are byte-identical**. **Re-quote check:** the SHA-256 of the
+rename had changed `src/core`, `src/data` and the sim itself (342 s), and a third time after checkpoint `f14d3b8` (the four pre-launch renames;
+430 s): **the outputs are byte-identical**. **Re-quote check:** the SHA-256 of the
 output without its last line (the wall-clock "(elapsed ...)" line) is
 `855b4a6369bf5dc6d1e564c09c187694fd79eed01197282ccdcb498bfeb151a2`;
 `node _harness/sim_economy.ts | grep -v '^(elapsed' | sha256sum` must print the same value, and if it does not, the logic or the sim changed and every
@@ -300,7 +301,7 @@ Revisit only after a real playtest shows trading is too weak (the knob exists in
 | **Finished row** | If you own every species of the input tier, **the merge always tiers up** (to a random species of the next tier). Merges are never wasted on a complete row. |
 | Pity | After **4 merges in a row from the same tier without a tier-up, the next one tiers up** (so never more than 4 duds in a row). The counter is per input tier, so it cannot be banked on cheap fodder and spent on a Legendary pair. |
 | Species roll | Random inside the output tier, **never the input species**; species you do not own are weighted **x1.5** (mild). No "guaranteed new species" rule (it added nothing once finished rows tier up, [sim F vs G]). |
-| Look of the result | Species template mixed with the inputs' hue and pattern (circular mean, jitter): the lineage colours are visible. `origin = { kind: 'blend', parents: [idA, idB] }`. |
+| Look of the result | A normal instance of the result species, **tinted** toward the circular mean of the inputs' hues (a few degrees of jitter), but only as far as it stays recognisably its own species: at most 0.04 OKLab from the species' centre colour and nearer it than any other same-tier species. A parent's pattern is kept only in a same-tier merge into a patterned (Rare and up) species; a tier-up never borrows one, so every Rare-and-up result keeps its tier's pattern layer. Core hue, speckle, glitter and the rest are the species template's. `lineageGenome` in `src/core/merge.ts`; `probe_economy.ts` checks both bounds over random merges with real parents. `origin = { kind: 'blend', parents: [idA, idB] }`. |
 | Variants and colourways | **None in v1.** Every instance's genome is already unique. Rare colourway variants per species (an idea from reference clip A) are **open owner decision D-15** in NEXT_STEPS: they add a collecting dimension and change the economy, so the sim must be re-run before any decision. A cosmetic "Prism" colourway (same tier for trade parity) is a possible season addition. |
 | Bulk N-input merge | A true multi-input blender (the clip's six) is **deferred**; only the capped Tidy-up below exists in v1. |
 | Safety | **Hold to merge** 0.5 s (release early cancels, nothing consumed). **Preview** shows exact tier odds and how many species you still lack in the output and next tier. A warning appears if it uses your **last copy**. **Hearted** squishies are protected. Output **locked 24 h** (cannot trade or merge). Daily cap **10 merges**. |
@@ -538,7 +539,7 @@ Timings below are for a **Common result (2.2 s total)**; higher tiers lengthen *
 | **T4 Reveal** | 1.5 to 2.2 s | New squishy rises from the burst and lands; name plate; **NEW** or **spare**; a **TIER UP** banner (+0.4 s accent) if it moved up | tier motif | tier pattern |
 
 Escalation by result tier uses the same table as 6.3 (particles, rings, camera, time-scale), plus: **tier-up merges** add a rising ladder glissando on T3 and a banner;
-the **lineage colours** of the two parents remain visible in the new body's hue and pattern for the reveal.
+the **lineage tint** of the two parents stays visible in the new body's hue (bounded so the result still reads as its own species, 5.6) for the reveal.
 
 ### 6.5 Sound design by tier (synthesised, original; voices go in `src/audio/voices.ts`)
 
@@ -585,9 +586,9 @@ Status of these seams on 2026-10-05; the module status table is NEXT_STEPS secti
 
 | Seam | In the code on 2026-10-05 | What the economy needs |
 |---|---|---|
-| `Genome.species` (`src/core/genome.ts`) | `SPECIES` is the 50-entry list owned by `src/data/catalog.ts` (imported by `genome.ts`); the share string stores the species **index in one byte**; an unknown index decodes to `null` (`probe_genome.ts`) | Done: 50 ids. Stays **append-only** forever (never reorder or reuse an index; up to 256). Tier and family are **not** in `Genome`; they come from the catalog by species. |
-| `Genome` numeric traits | quantised to 1/255, `seed` uint32 cosmetic | Capsule genome = species template with jitter; merge genome = template mixed with the two parents (circular mean of hue and coreHue). Every instance stays visually unique. |
-| Share string `g1.` | lossless, 38 chars, hostile input returns `null` | **Look-only.** Never a claim ticket for ownership; trade, merge and board accept item ids, not strings. A decoded string is a "ghost" you can view, not own. |
+| `Genome.species` (`src/core/genome.ts`) | `SPECIES` is the 50-entry list in the leaf module `src/data/species.ts`, imported by both `genome.ts` and `src/data/catalog.ts` (no import cycle between them); the share string stores the species **index in one byte**; an unknown index decodes to `null` (`probe_genome.ts`) | Done: 50 ids. Stays **append-only** forever (never reorder or reuse an index; up to 256). Tier and family are **not** in `Genome`; they come from the catalog by species. |
+| `Genome` numeric traits | quantised to 1/255, `seed` uint32 cosmetic | Capsule genome = species template with jitter; merge genome = the result species' template with a bounded hue tint toward the parents (`lineageGenome`, 5.6). Every instance stays visually unique. |
+| Share string `g1.` | lossless, 38 chars, **canonical** (`encodeGenome` quantises first and refuses an unknown species, pattern or eye style; `decodeGenome` refuses alias spellings, so one genome has exactly one string), hostile input returns `null` | **Look-only.** Never a claim ticket for ownership; trade, merge and board accept item ids, not strings. A decoded string is a "ghost" you can view, not own. |
 | `SquishyInstance.id` | `crypto.randomUUID()` default | Owned items get a **server-minted** id (unique constraint, never reused). Client ids are local-ghost only. |
 | `SquishyInstance.origin` | `{ kind: 'starter' \| 'drop' \| 'task' \| 'blend' \| 'trade'; parents? }` | **Immutable creation record.** `drop` = capsule, `task`, `blend` = merge output (keep the string, avoid touching the frozen type), `parents` = the 2 consumed ids. `trade` is **not written** (provenance of ownership is `tradeCount` plus the ledger). Add `'restock'` as an optional additive later. |
 | `SquishyInstance.tradeCount` | `0` at birth | **Server increments only**, never the client; shown as "traded Nx". |
@@ -675,5 +676,5 @@ Why server mint comes before trade: a forgeable local inventory makes every Myth
 | 9 | **Merge preview honesty and last-copy mistakes.** | Regret erodes trust. | Hold-to-confirm, last-copy warning, hearts (5.6), the odds digest (MERGE M-1). |
 | 10 | **Art cost.** 15 of 50 species are Epic or above with tier FX. | Time. | FX are per-tier presets, not per-species. |
 | 11 | **Trade fuel for Mythics.** Only 3 species; a swap needs a spare of the *other* Mythic. | Mythic swaps are rare events. | Intended. Check in the first month of data. |
-| 12 | **Physics lane must emit the touches the meter reads** (`release.heldFor`, `snap.intensity` threshold). | The 3.1 min figure assumes the micro-model's timings. | Done in the contract (2026-10-05): gate **G4m** (CONTRACT section 6) checks that real mouse and touch input produce the `SoftEvent`s the meter maps to touches. It runs once the shell wires the meter (planned); until then it is not run. |
+| 12 | **Physics lane must emit the touches the meter reads** (`release.heldFor`, `snap.intensity` threshold). | The 3.1 min figure assumes the micro-model's timings. | Done in the contract (2026-10-05): gate **G4m** (CONTRACT section 6) checks that real mouse and touch input produce the `SoftEvent`s the meter maps to touches. It runs once the shell wires the meter (planned); until then it is not run. Meanwhile `probe_economy.ts` (section 2b, informative) prints what the current body gives on scripted pulls: on 2026-10-05 a pull to 1.5 x the rest radius gave snap intensity 0.31 and 2.2 x gave 0.41, against the 0.35 full-pay threshold, so the threshold is **provisional** (`meter.ts`) until physics round 2 lands and it is set from measured gestures (then re-run the sim). |
 | 13 | **Sources.** All research is [S] except Apple's guidelines. | Some claims may have drifted. | Re-verify 3.1 and 3.2 once a network without the egress block is available. |
