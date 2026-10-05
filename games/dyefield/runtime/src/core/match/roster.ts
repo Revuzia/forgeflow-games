@@ -28,6 +28,15 @@ export function parseBotSkill(raw: string | null | undefined, fallback: BotSkill
 
 export interface RosterEntry { id: number; name: string; team: TeamId; kit: string; bot: boolean; skill: BotSkill }
 
+/** CHANGED(STATS-INTEGRATION) (owner decision 6): each runner's bot tier from the roster, indexed by runner id — the shape
+ *  BotDirector's `skill` argument takes. game.ts built the director without one, so every bot played SWELL whatever tier
+ *  the player picked. Pure (THREE-free): the node probe checks the plumbing with it. */
+export function botSkills(roster: readonly RosterEntry[]): BotSkill[] {
+  const out: BotSkill[] = [];
+  for (const r of roster) out[r.id] = r.skill;
+  return out;
+}
+
 /** Original name pool: coastal / harbor words. Short, readable on a name tag, distinct first letters where possible. */
 export const NAME_POOL: readonly string[] = [
   'Brine', 'Pip', 'Marlo', 'Tully', 'Sable', 'Wren', 'Dune', 'Quill', 'Skerry', 'Fathom',

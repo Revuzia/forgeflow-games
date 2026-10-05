@@ -61,6 +61,19 @@
 //       slate gets rule + washoutVictory(result, runners).
 //       FFA SPAWNS (S3 / S5): 'spawn' → the site's drop-in marker (GameParts.drops, view/mapview.ts) in the runner's crew +
 //       a minimap ping; markers hold through the countdown, clear on PLAY AGAIN.
+//   * CHANGED(ONLINE) (CONTRACT_ONLINE §O5, §O10, §O12.2): an online match session is the same Game with a GameNet attached
+//     (attachNet; net/session.ts). The local runner is Game.me (MatchConfig.localPid; 0 offline — every offline path and
+//     hash unchanged). With a net: simStep builds the local intent exactly as offline and hands it to the net (the host
+//     steps the real world, a client predicts its own runner on the container world), drainEvents takes the net's events,
+//     each frame the net interpolates the remote runners first; there is no pause online (pause() → the online menu card
+//     through hooks.netMenu, the local intent neutral while it is up; a lost pointer lock never pauses); the sim runs
+//     from 'ready' on (the host's countdown does not wait for a click); a host migration swaps the world (adoptWorld).
+//   * CHANGED(STATS) (CONTRACT_STATS §S10.1) + the bot-tier fix: three optional GameHooks — matchBegin (a MATCH world was created:
+//     the constructor, and restart() after it builds the next world), simEvents (each frame's drained events, read-only) and
+//     matchAbandon (a world discarded before its horn: restart / dispose) — feed the stats facade (stats/index.ts). The
+//     BotDirector is now built with botSkills(roster) (a tier per runner id) at BOTH call sites: it used to be built without a
+//     skill, so every bot played SWELL whatever BREEZE / SWELL / STORM was picked. __DF__.match() reads back rosterTiers /
+//     botTiers. No sim input changes: the node probes build their own directors (and pass the skill), their hashes hold.
 //   * review fixes (2026-09-30, view / input only — core and every determinism hash untouched):
 //       A-A1 airSpecial(): a SPECIAL press (key tap or touch tap) made in the AIR with a FULL meter is held for the human as
 //       a level request until the sim can start it — the landing tick (C2 "mid-air = not yet") — or AIR_SPECIAL_TICKS
@@ -82,7 +95,7 @@ import type { MinimapRaster } from './core/paint/minimap.ts';
 import type { PhysicsWorld, Rapier } from './core/physics.ts';
 import { MatchWorld } from './core/match/world.ts';
 import type { SimEvent } from './core/match/events.ts';
-import type { RosterEntry, BotSkill } from './core/match/roster.ts';
+import { botSkills, type RosterEntry, type BotSkill } from './core/match/roster.ts';
 import { BotDirector } from './core/bots/director.ts';
 import type { NavGraph } from './core/bots/nav.ts';
 import type { Runner } from './core/runner.ts';
@@ -104,6 +117,7 @@ import type { AudioFrame, GameAudio, ListenerPose } from './audio/index.ts';
 import type { Input } from './input.ts';
 import type { TouchControls } from './touch/controls.ts';
 import { aimAssist, type AimAssistFoe } from './touch/aimassist.ts';
+import type { GameNet } from './net/session.ts';
 
 export type Phase = 'boot' | 'loading' | 'ready' | 'play' | 'paused' | 'menu' | 'error';
 
@@ -138,6 +152,12 @@ export interface MatchConfig {
   mode?: MatchMode;
   /** CONTRACT_WASHOUT W4: 'turf' (default: the most floor wins) or 'washout' (the most credited washes wins) */
   rule?: MatchRule;
+  /** CHANGED(ONLINE): the online roster (every member's MatchWorld is built from the same one); offline: unset */
+  roster?: RosterEntry[];
+  /** CHANGED(ONLINE): the local runner's id (0 offline) */
+  localPid?: number;
+  /** CHANGED(ONLINE): an online match session (no pause, no PLAY AGAIN restart) */
+  online?: boolean;
 }
 
 export type GameMode = 'lobby' | 'match';
@@ -158,6 +178,15 @@ export interface GameHooks {
   look?(): { sens: number; invertY: boolean };
   /** CONTRACT_MOBILE M3: the AIM ASSIST setting (touch mode only; default on) */
   assist?(): boolean;
+  /** CHANGED(ONLINE): the online match menu card (ESC / PAUSE / blur / back open it; the match runs on) */
+  netMenu?(on: boolean): void;
+  /** CHANGED(STATS) (CONTRACT_STATS §S10.1): a MATCH world was created (the constructor, and restart() after it builds the
+   *  next world); never for the lobby */
+  matchBegin?(w: MatchWorld, cfg: Readonly<MatchConfig>, matchNo: number): void;
+  /** CHANGED(STATS): this frame's drained sim events, match sessions only. READ-ONLY: copy what you need, never keep `events` */
+  simEvents?(events: readonly SimEvent[], w: MatchWorld): void;
+  /** CHANGED(STATS): a match world is being discarded before its horn (dispose: QUIT MATCH / LOBBY / error; restart before the end) */
+  matchAbandon?(w: MatchWorld, why: 'dispose' | 'restart'): void;
 }
 
 export interface GameParts {
@@ -210,6 +239,7 @@ export interface GameSettings {
 export type LoggedEvent = SimEvent & { tick: number };
 
 const EVENT_LOG = 512;
+/** the human's runner id offline (CHANGED(ONLINE): Game.me — MatchConfig.localPid online) */
 const HUMAN = 0;
 /** review fix A-A1: how long the human's mid-air SPECIAL press is held for the landing (1.5 s in whole ticks: longer than
  *  any walk, slog or slick jump — a walk jump is ~0.83 s — and still bounded, so a long fall never fires a stale press) */
@@ -277,6 +307,18 @@ export class Game {
   readonly p: GameParts;
   readonly settings: GameSettings;
   readonly mode: GameMode;
+  /** CHANGED(ONLINE): the local human's runner id (0 offline) */
+  readonly me: number;
+  /** CHANGED(ONLINE): the online session driving this match (null offline) */
+  net: GameNet | null = null;
+  /** CHANGED(ONLINE): the online menu card is up (the local intent is neutral; the match runs on) */
+  netMenuOn = false;
+  /** CHANGED(ONLINE), read-back: mean sim ms per tick (EWMA) — the lobby's measures this device's host capacity (hello.simMs) */
+  simMs = 0;
+  /** CHANGED(ONLINE), dev ?renderfps: render at most every this many ms (0 = every frame); the sim is unaffected */
+  renderEveryMs = 0;
+  private lastRenderAt = -1e9;
+  private readonly netLocal: PlayerIntent = emptyIntent();
   world: MatchWorld;
   director: BotDirector;
   physics: PhysicsWorld;
@@ -383,6 +425,7 @@ export class Game {
   constructor(parts: GameParts, settings: Partial<GameSettings> = {}) {
     this.p = parts;
     this.mode = parts.mode ?? 'match';
+    this.me = this.mode === 'match' ? (parts.config.localPid ?? HUMAN) : HUMAN;
     this.matchMode = this.mode === 'match' && parts.config.mode === 'ffa' ? 'ffa' : 'teams';
     this.rule = this.mode === 'match' && parts.config.rule === 'washout' ? 'washout' : 'turf';
     this.settings = { quality: settings.quality ?? parts.rig.adaptive().quality };
@@ -391,29 +434,32 @@ export class Game {
       this.intents.push(emptyIntent());
       this.seen.push(this.mode === 'lobby');
       const r = parts.roster[i];
-      this.crests.push({ id: r.id, name: r.name, team: r.team, alive: true, respawnIn: 0, special: 0, you: r.id === HUMAN });
+      this.crests.push({ id: r.id, name: r.name, team: r.team, alive: true, respawnIn: 0, special: 0, you: r.id === this.me });
       this.dots.push({ x: 0, z: 0, team: r.team, show: false });
       this.fireType.push(kitFireType(r.kit));
       this.range.push(chargeRange(r.kit));
       this.launchSeen.push(0);
-      if (i !== HUMAN) this.foeBuf.push({ x: 0, y: 0, z: 0, visible: false });
+      if (i !== this.me) this.foeBuf.push({ x: 0, y: 0, z: 0, visible: false });
     }
-    this.assistRange = kitRange(parts.roster[HUMAN]?.kit ?? parts.config.kit);
+    this.assistRange = kitRange(parts.roster[this.me]?.kit ?? parts.config.kit);
     {
-      const kitId = parts.roster[HUMAN]?.kit ?? parts.config.kit;
+      const kitId = parts.roster[this.me]?.kit ?? parts.config.kit;
       const spId = WEAPONS.kits.find((k) => k.id === kitId)?.special;
       this.specialName = WEAPONS.specials.find((s) => s.id === spId)?.name ?? '';
     }
     this.world = this.makeWorld();
-    this.director = new BotDirector(this.world, parts.nav, parts.config.seed ^ 0x9e3779b9);
-    this.juiceCtx = { me: HUMAN, runners: this.world.runners, cam: parts.cam };
+    // CHANGED(STATS-INTEGRATION) (owner decision 6): the director takes each bot's tier from the roster. It was built
+    // without a skill, so every bot was SWELL whatever BREEZE / SWELL / STORM was picked.
+    this.director = new BotDirector(this.world, parts.nav, parts.config.seed ^ 0x9e3779b9, botSkills(parts.roster));
+    if (this.mode === 'match') parts.hooks?.matchBegin?.(this.world, parts.config, this.matchNo);   // CHANGED(STATS) §S10.1
+    this.juiceCtx = { me: this.me, runners: this.world.runners, cam: parts.cam };
     this.audioFrame = {
-      listener: this.listener, runners: this.world.runners, me: HUMAN, map: parts.def.id,
+      listener: this.listener, runners: this.world.runners, me: this.me, map: parts.def.id,
       phase: this.world.phase, timeLeft: this.world.timeLeft, countdown: this.world.countdown,
       projectiles: this.world.projectiles, conveyors: parts.geo.features?.conveyors,
     };
     this.frameOpts = {
-      alpha: 1, camera: parts.cam.camera, viewerTeam: this.humanTeam, viewerId: HUMAN, seen: this.seenFn, width: 1, height: 1, winner: null,
+      alpha: 1, camera: parts.cam.camera, viewerTeam: this.humanTeam, viewerId: this.me, seen: this.seenFn, width: 1, height: 1, winner: null,
       mistRange: this.world.mistRange,
     };
     this.hudFrame = {
@@ -431,7 +477,7 @@ export class Game {
 
     const { input, hud, canvas } = parts;
     // C1: NEEDLE-GLINT aims through a scope-like zoom, every other kit the regular one
-    parts.cam.aimZoom = this.fireType[HUMAN] === 'charge' ? AIM.scopeFovMul : AIM.fovMul;
+    parts.cam.aimZoom = this.fireType[this.me] === 'charge' ? AIM.scopeFovMul : AIM.fovMul;
     this.hudMatch();
     this.offs.push(input.onUi((a) => {
       if (a === 'debug') hud.toggleDebug();
@@ -444,8 +490,8 @@ export class Game {
         parts.app.lockSuccesses++;
         this.lockedThisPlay = true;
         if ((this.phase === 'ready' || this.phase === 'paused') && input.mode !== 'touch') this.enterPlay('pointerlock');
-      } else if (this.phase === 'play' && this.lockedThisPlay && !this.matchOver && input.mode !== 'touch') {
-        this.pause('pointer lock lost');        // CONTRACT_MOBILE M4: a lost lock never pauses in touch mode
+      } else if (this.phase === 'play' && this.lockedThisPlay && !this.matchOver && input.mode !== 'touch' && !this.net) {
+        this.pause('pointer lock lost');        // CONTRACT_MOBILE M4: a lost lock never pauses in touch mode; CHANGED(ONLINE): nor online
       }
     };
     const onLockErr = (): void => { if (!this.disposed) this.lockFailed(this.lockReq, 'pointerlockerror'); };
@@ -512,11 +558,31 @@ export class Game {
   get phase(): Phase { return this.p.app.phase; }
   private set phase(v: Phase) { this.p.app.phase = v; }
   get matchOver(): boolean { return this.world.phase === 'ended'; }
-  get human(): Runner { return this.world.runners[HUMAN]; }
-  get humanTeam(): TeamId { return this.p.roster[HUMAN]?.team ?? 1; }
+  get human(): Runner { return this.world.runners[this.me]; }
+  get humanTeam(): TeamId { return this.p.roster[this.me]?.team ?? 1; }
   get isLobby(): boolean { return this.mode === 'lobby'; }
   /** the sim advances: a match in play, or the lobby behind the menus */
-  private get running(): boolean { return this.mode === 'lobby' ? this.phase === 'menu' : this.phase === 'play'; }
+  private get running(): boolean {
+    if (this.mode === 'lobby') return this.phase === 'menu';
+    if (this.net) return this.phase === 'play' || this.phase === 'ready' || this.phase === 'paused';   // CHANGED(ONLINE)
+    return this.phase === 'play';
+  }
+
+  /** CHANGED(ONLINE): run this match through an online session (net/session.ts) */
+  attachNet(net: GameNet): void {
+    this.net = net;
+    if (net.world !== this.world) this.adoptWorld(net.world);
+  }
+
+  /** CHANGED(ONLINE): a host migration rebuilt the world (§O6.3): the views, juice and audio read the new runners. The
+   *  painter, the court and the views are kept (never restart(): it resets the painter). */
+  adoptWorld(w: MatchWorld): void {
+    if (w === this.world) return;
+    this.world = w;
+    this.juiceCtx.runners = w.runners;
+    this.audioFrame.runners = w.runners;
+    this.audioFrame.projectiles = w.projectiles;
+  }
 
   private makeWorld(): MatchWorld {
     const p = this.p;
@@ -614,6 +680,7 @@ export class Game {
     for (const f of this.offs) { try { f(); } catch { /* ignore */ } }
     this.offs.length = 0;
     if (this.mode === 'match') dropBackTrap();   // A-A6: QUIT / LOBBY — no stale trap entry under the lobby
+    if (this.mode === 'match' && this.world.phase !== 'ended') this.p.hooks?.matchAbandon?.(this.world, 'dispose');   // CHANGED(STATS) §S10.1
     this.releaseWorld(this.world);
     if (this.victoryShown) this.p.hooks?.victory?.(null);
     if (this.mode === 'lobby' && this.savedFov > 0) {
@@ -738,6 +805,7 @@ export class Game {
 
   pause(reason = 'api'): void {
     if (this.mode === 'lobby' || this.phase !== 'play') return;
+    if (this.net) { this.netMenu(true); return; }           // CHANGED(ONLINE): no pause online (§O10)
     this.phase = 'paused';
     this.acc = 0;
     this.p.input.live = false;
@@ -748,7 +816,19 @@ export class Game {
     if (document.pointerLockElement === this.p.canvas) document.exitPointerLock();
   }
 
+  /** CHANGED(ONLINE): the online menu card up / down — the match runs on; the local intent is neutral while it is up */
+  netMenu(on: boolean): void {
+    if (on === this.netMenuOn) return;
+    this.netMenuOn = on;
+    this.p.input.live = !on;
+    this.p.input.releaseAll();
+    if (on && document.pointerLockElement === this.p.canvas) document.exitPointerLock();
+    this.p.hooks?.netMenu?.(on);
+    if (!on && this.phase === 'play' && this.p.input.mode !== 'touch' && document.pointerLockElement !== this.p.canvas) this.requestLock();
+  }
+
   resume(): void {
+    if (this.net && this.netMenuOn) { this.netMenu(false); return; }   // CHANGED(ONLINE)
     if (this.phase !== 'paused') return;
     // CONTRACT_MOBILE M4: RESUME in touch mode is the tap itself (no lock); a touch-started match resumed with the
     // mouse (a hybrid device switched back) asks for the lock like a CLICK TO PLAY
@@ -760,10 +840,12 @@ export class Game {
 
   /** PLAY AGAIN: a fresh match on the same map (the lobby restarts its own round the same way). */
   restart(): void {
+    if (this.net && this.mode === 'match') return;          // CHANGED(ONLINE): a rematch is a new online session
     const p = this.p;
     p.painter.reset();
     p.paint.rebuildAll();
     p.minimap.rebuild();
+    if (this.mode === 'match' && this.world.phase !== 'ended') p.hooks?.matchAbandon?.(this.world, 'restart');   // CHANGED(STATS) §S10.1
     this.releaseWorld(this.world);
     if (this.mode === 'lobby') this.lobbyRounds++;
     this.world = this.makeWorld();
@@ -771,8 +853,9 @@ export class Game {
     this.audioFrame.runners = this.world.runners;
     this.audioFrame.projectiles = this.world.projectiles;
     p.juice?.reset();
-    this.director = new BotDirector(this.world, p.nav, (p.config.seed + this.matchNo * 7919) ^ 0x9e3779b9);
+    this.director = new BotDirector(this.world, p.nav, (p.config.seed + this.matchNo * 7919) ^ 0x9e3779b9, botSkills(p.roster));   // CHANGED(STATS-INTEGRATION): the roster's tiers
     this.matchNo++;
+    if (this.mode === 'match') p.hooks?.matchBegin?.(this.world, p.config, this.matchNo);   // CHANGED(STATS) §S10.1
     this.tick = 0;
     this.acc = 0;
     this.endT = -1;
@@ -807,9 +890,32 @@ export class Game {
   simStep(): boolean {
     if (!this.running || this.stepping) return false;
     this.stepping = true;
+    if (this.net) {
+      // CHANGED(ONLINE): the local intent exactly as offline (neutral before play / with the menu card up), then the net
+      try {
+        const { input, cam } = this.p;
+        const me = this.netLocal;
+        if (this.phase === 'play' && !this.netMenuOn) {
+          input.intent(cam.yaw, cam.pitch, me);
+          this.airSpecial(me);
+          me.hasAim = this.aimOk;
+          me.aimX = this.aim.x; me.aimY = this.aim.y; me.aimZ = this.aim.z;
+        } else {
+          me.moveX = 0; me.moveZ = 0; me.jump = false; me.fire = false; me.slick = false; me.sub = false; me.special = false;
+          me.yaw = cam.yaw; me.pitch = cam.pitch;
+        }
+        const t0 = performance.now();
+        if (this.net.tick(this.intents, me, t0)) this.tick++;
+        this.simMs += (performance.now() - t0 - this.simMs) * 0.05;
+      } finally {
+        this.stepping = false;
+      }
+      return true;
+    }
+    const tSim = performance.now();
     try {
       const { input, cam, config } = this.p;
-      const me = this.intents[HUMAN];
+      const me = this.intents[this.me];
       let brush = false;
       if (this.mode === 'match') {
         input.intent(cam.yaw, cam.pitch, me);
@@ -826,6 +932,7 @@ export class Game {
     } finally {
       this.stepping = false;
     }
+    this.simMs += (performance.now() - tSim - this.simMs) * 0.05;   // CHANGED(ONLINE) read-back (no effect on the sim)
     return true;
   }
 
@@ -935,6 +1042,7 @@ export class Game {
       this.acc = 0;
       if (this.mode === 'match') { p.input.takeMouse(); p.input.takeTouchLook(); }
     }
+    if (this.net) this.net.frame(dt, now);                  // CHANGED(ONLINE): remote runners + the events due
     this.drainEvents();
     this.springLaunches();
     // visuals (water, dye sparkle, idle animation) stay alive behind the CLICK TO PLAY card and
@@ -945,7 +1053,14 @@ export class Game {
     this.matchFlow(vdt);
     this.aimFrame();
     this.touchFrame();
-    this.render(vdt, alpha);
+    // CHANGED(ONLINE): the local runner's visual error offset around the render; ?renderfps (dev) throttles the render
+    // only (sim and net run every frame) for multi-client browser tests
+    if (this.renderEveryMs <= 0 || now - this.lastRenderAt >= this.renderEveryMs) {
+      this.lastRenderAt = now;
+      this.net?.shift(1);
+      this.render(vdt, alpha);
+      this.net?.shift(-1);
+    }
     this.sound(vdt);
     p.hooks?.frame?.(dt);
   }
@@ -1049,7 +1164,7 @@ export class Game {
       const rs = this.world.runners;
       let k = 0;
       for (let i = 0; i < rs.length; i++) {
-        if (i === HUMAN) continue;
+        if (i === this.me) continue;
         const r = rs[i];
         const f = this.foeBuf[k++];
         if (!f) break;
@@ -1127,12 +1242,14 @@ export class Game {
   private drainEvents(): void {
     const out = this.drained;
     out.length = 0;
-    this.world.drainEvents(out);
+    if (this.net) this.net.drain(out);                      // CHANGED(ONLINE): the host's tick events / a client's record stream
+    else this.world.drainEvents(out);
     if (!out.length) return;
     const { fx, players, hud, cam } = this.p;
     const rs = this.world.runners;
     const lobby = this.mode === 'lobby';
-    const me = lobby ? -1 : HUMAN;
+    const me = lobby ? -1 : this.me;
+    if (!lobby) this.p.hooks?.simEvents?.(out, this.world);        // CHANGED(STATS) §S10.1: read-only; the stats facade guards itself
     // juice: trauma shake (per kit / by damage / near slams, pops, washes), hit markers, the damage vignette
     // + arc. It owns every screen shake and hit marker: the old cam.shake writes and HUD marks are gone.
     if (!lobby) this.p.juice?.onEvents(out, this.juiceCtx);
@@ -1279,7 +1396,7 @@ export class Game {
       const lh = Math.hypot(sp.launch[0], sp.launch[2]);
       this.p.fx.springSplash(sp.x, sp.y, sp.z, Math.max(0.6, sp.r), lh > 1e-3 ? sp.launch[0] / lh : 0, lh > 1e-3 ? sp.launch[2] / lh : 0);
       this.counts.springLaunch = (this.counts.springLaunch ?? 0) + 1;
-      if (i === HUMAN && this.mode === 'match') this.p.juice?.trauma(0.2, 0.35);
+      if (i === this.me && this.mode === 'match') this.p.juice?.trauma(0.2, 0.35);
     }
   }
 
@@ -1293,6 +1410,7 @@ export class Game {
     }
     if (this.endT < 0) this.endT = 0;
     this.endT += dt;
+    if (this.net && !this.world.result && this.endT < 5) return;   // CHANGED(ONLINE): the slate is the host's result
     if (!this.victoryShown && this.endT >= 1.6) {
       this.victoryShown = true;
       const res = this.world.result ?? { ...this.p.painter.coverage(), winner: 0 as TeamId };
@@ -1303,7 +1421,7 @@ export class Game {
       // + every runner's W / D, built by the slate module's washoutVictory); TURF passes neither (its slate is unchanged)
       const vi: VictoryInfo = {
         sun: res.sun, gulf: res.gulf, neutral: res.neutral, winner: res.winner, ...(ffa ? { ffa } : {}),
-        ...(this.rule === 'washout' ? { rule: 'washout' as const, washout: washoutVictory(this.world.result ?? {}, this.world.runners, HUMAN) } : {}),
+        ...(this.rule === 'washout' ? { rule: 'washout' as const, washout: washoutVictory(this.world.result ?? {}, this.world.runners, this.me) } : {}),
       };
       this.p.hud.showVictory(vi, () => this.playAgain(), hooks?.lobby ? () => hooks.lobby?.() : undefined);
       hooks?.victory?.(this.p.hud.slates.victoryEl);
@@ -1331,10 +1449,10 @@ export class Game {
     const res = w.result;
     const rs = w.runners;
     const standings = res?.standings?.length
-      ? res.standings.map((s) => ({ team: s.crew, name: s.name, share: s.share, you: s.pid === HUMAN }))
+      ? res.standings.map((s) => ({ team: s.crew, name: s.name, share: s.share, you: s.pid === this.me }))
       : (() => {
         const sh = this.p.painter.coverageByTeam(this.shareBuf);
-        return rs.map((r) => ({ team: r.team, name: r.name, share: sh[r.team] ?? 0, you: r.id === HUMAN }))
+        return rs.map((r) => ({ team: r.team, name: r.name, share: sh[r.team] ?? 0, you: r.id === this.me }))
           .sort((a, b) => (b.share - a.share) || (a.team - b.team));
       })();
     let winners: number[];
@@ -1403,11 +1521,11 @@ export class Game {
     fo.height = p.canvas.clientHeight || window.innerHeight;
     fo.winner = w.phase === 'ended' && w.result ? w.result.winner : null;
     p.players.update(dt, w.runners, fo);
-    const f = p.players.frame(HUMAN);
+    const f = p.players.frame(this.me);
     if (lobby) {
       this.lobbyCamera(dt);
     } else {
-      this.feet.x = f.x; this.feet.y = f.y + p.players.dropOffset(HUMAN); this.feet.z = f.z;
+      this.feet.x = f.x; this.feet.y = f.y + p.players.dropOffset(this.me); this.feet.z = f.z;
       p.cam.slickTarget = me.alive && me.slickForm ? 1 : 0;
       p.cam.update(dt, this.feet, this.physics);
       this.focus.set(f.x, f.y + 0.6, f.z);
@@ -1454,7 +1572,7 @@ export class Game {
       const d = this.dots[i];
       const fr = p.players.frame(i);
       d.x = fr.x; d.z = fr.z;
-      d.show = i !== HUMAN && r.alive && (r.team === me.team || this.seen[i] === true);
+      d.show = i !== this.me && r.alive && (r.team === me.team || this.seen[i] === true);
     }
     p.hud.update(dt, hf, () => this.debugInfo());
     this.hudExtras(me);
@@ -1542,6 +1660,8 @@ export class Game {
       // CONTRACT_FFA F3: the match mode, the crews in play (world.crews, ascending) and the weighted share per crew id
       // (index 0 = neutral; teams mode fills 1 / 2)
       matchMode: this.matchMode, crews: [...w.crews], coverageByTeam: Array.from(this.p.painter.coverageByTeam()),
+      // CHANGED(STATS-INTEGRATION) read-back: the roster's bot tiers vs the tiers the director's brains actually play
+      rosterTiers: this.p.roster.map((r) => (r.bot ? r.skill : null)), botTiers: this.director.tiers(),
       // CONTRACT_WASHOUT W10: the rule, the live scores per crew id, the limit it plays to and how it ended
       rule: w.rule, limit: w.limit, scores: [...w.scores()], endedBy: w.endedBy,
       runners: w.runners.map((r) => ({
@@ -1583,7 +1703,7 @@ export class Game {
     const me = this.human;
     const st = p.rig.stats();
     const ad = p.rig.adaptive();
-    const rv = p.players.view(HUMAN);
+    const rv = p.players.view(this.me);
     const alive = this.world.runners.filter((r) => r.alive).length;
     return {
       coverage: p.painter.coverage(), tank: me.tank, mapId: p.def.id, fps: this.fps, state: me.state, grounded: me.grounded,

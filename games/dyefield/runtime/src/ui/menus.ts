@@ -37,6 +37,12 @@
 // CONTRACT_CONTROLS C1: AIM (RMB by default) is a remappable action (SETTINGS lists it after FIRE); the MOUSE card adds AIM
 // SENSITIVITY (0.3–1.2 × while aiming) and TOGGLE AIM (off = hold, the default); the legends read LOOK (mouse) · AIM (RMB)
 // · JELLY CHARGE (E); in touch mode the right-side drag is LOOK and the AIM button (a scope) zooms.
+// CONTRACT_ONLINE §O4.1 / §O11.2 (CHANGED(ONLINE) to CONTRACT_P6_11 §20's title stack): PLAY ONLINE sits beside PLAY, in the
+// stack's first row — a beside-not-below tile keeps ↓ from PLAY landing on LOADOUT (menus.py's keyboard and pad legs) and
+// keeps the stack inside the 667 × 375 phone (a sixth full row would run ~32 px off its bottom). It calls hooks.online()
+// (main.ts lazy-loads net/ui and opens the PLAY ONLINE screens); without that hook, or without WebSocket +
+// CompressionStream, the tile shows disabled and a press explains why. returnFromOnline() brings the title back with
+// the tile focused. No net/** code is imported here (§O10: the offline boot path loads none of it).
 
 import { WEAPONS, playableMaps, teamById, TEAMS_RAW, type MapDef } from '../core/data.ts';
 import type { TeamId } from '../core/types.ts';
@@ -77,7 +83,16 @@ export const HOW_TITLE_WASHOUT = 'MOST WASHES WINS';
 const HOW_NOTE = 'Floors count most; walls count a little.';
 const HOW_NOTE_WASHOUT = 'A tie on washes goes to the side with more turf.';
 const HOW_NOTE_WASHOUT_FFA = 'A tie on washes goes to whoever was washed less, then to more turf.';
-export const MENU_LABELS = ['PLAY', 'LOADOUT', 'SETTINGS', 'HOW TO PLAY', 'CREDITS'] as const;
+export const MENU_LABELS = ['PLAY', 'PLAY ONLINE', 'LOADOUT', 'SETTINGS', 'HOW TO PLAY', 'CREDITS'] as const;
+/** CONTRACT_ONLINE §O4.1: the PLAY ONLINE tile's reasons when it cannot open */
+export const ONLINE_UNSUPPORTED = 'Your browser can’t play online';
+export const ONLINE_UNAVAILABLE = 'Online play is coming soon';
+/** §O4.1: online needs WebSocket + CompressionStream (inline: menus.ts imports nothing from net/**) */
+const onlineSupported = (): boolean => {
+  try { return typeof WebSocket === 'function' && typeof (globalThis as { CompressionStream?: unknown }).CompressionStream === 'function'; } catch { return false; }
+};
+const ONLINE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.2" fill="none" stroke="currentColor" stroke-width="2.4"/>'
+  + '<path d="M2.8 12h18.4M12 2.8c3 3.2 3 15.2 0 18.4M12 2.8c-3 3.2-3 15.2 0 18.4" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>';
 /** CONTRACT_MOBILE M8: the SETTINGS group (touch mode, or ?touch=1) and M4: the HOW TO PLAY panel */
 export const TOUCH_GROUP = 'TOUCH CONTROLS';
 /** CONTRACT_MOBILE M4: the FULLSCREEN toggles (title corner + pause card) */
@@ -159,7 +174,13 @@ const FS_ENTER = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M
 const FS_EXIT = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M20 9h-5V4M15 20v-5h5M4 15h5v5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const PHONE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="3" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="7" cy="12" r="1.9" fill="currentColor"/><circle cx="17" cy="12" r="1.9" fill="currentColor"/></svg>';
 
-export type Screen = 'title' | 'loadout' | 'play' | 'settings' | 'howto' | 'credits' | 'pause';
+/** CHANGED(STATS) (CONTRACT_STATS §S10.3): the CAREER pill's trophy glyph */
+const CAREER_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h10v5.2a5 5 0 0 1-10 0V3.5Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/>'
+  + '<path d="M7 5.5H3.8c0 3 1.3 4.7 3.5 5M17 5.5h3.2c0 3-1.3 4.7-3.5 5M12 13.7v3.6M8 20.5h8M9 17.3h6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+/** CHANGED(STATS): the CAREER screen body Menus is handed (stats/ui/career_panel.ts); refresh() runs when the screen opens */
+export interface CareerScreen { el: HTMLElement; refresh(): void; summary(): string }
+
+export type Screen = 'title' | 'loadout' | 'play' | 'settings' | 'howto' | 'credits' | 'career' | 'pause';
 export type UiSound = 'hover' | 'click' | 'back' | 'start';
 
 export interface StartSelection {
@@ -190,6 +211,9 @@ export interface MenuHooks {
   sound?(s: UiSound): void;
   /** the gamepad Start button while no menu is up (main pauses the match) */
   padStart?(): void;
+  /** CONTRACT_ONLINE §O11.2: PLAY ONLINE (a user gesture). main.ts lazy-loads net/ui and opens the online screens;
+   *  absent → the tile shows disabled */
+  online?(): void;
 }
 
 /** remappable actions, in the order the SETTINGS list shows them */
@@ -281,8 +305,14 @@ export class Menus {
   private readonly profName: HTMLElement;
   private readonly profCrew: HTMLElement;
   private readonly profMark: HTMLElement;
+  /** CHANGED(STATS): the CAREER screen body (null: no stats module — the pill and the screen are not built) */
+  private readonly career: CareerScreen | null;
   private readonly kitCard: HTMLElement;
   private readonly modeText: HTMLElement;
+  /** CONTRACT_ONLINE §O4.1: the PLAY ONLINE tile beside PLAY, and the note a press on a disabled tile shows */
+  private readonly onlineTile: HTMLButtonElement;
+  private readonly onlineWhy: HTMLElement;
+  private onlineWhyT = 0;
   /** HOW TO PLAY panel 1's rule line: HOW_RULE (teams, unchanged) / HOW_RULE_FFA, by the profile's mode (WASHOUT:
    *  HOW_RULE_WASHOUT), its title and its second line */
   private howRule: HTMLElement | null = null;
@@ -348,7 +378,8 @@ export class Menus {
   private offs: Array<() => void> = [];
   private dragOff: (() => void) | null = null;
 
-  constructor(host: HTMLElement, o: { hooks: MenuHooks; settings: SettingsStore; profile: ProfileStore; input: Input }) {
+  constructor(host: HTMLElement, o: { hooks: MenuHooks; settings: SettingsStore; profile: ProfileStore; input: Input; career?: CareerScreen }) {
+    this.career = o.career ?? null;
     this.hooks = o.hooks;
     this.settings = o.settings;
     this.profile = o.profile;
@@ -374,6 +405,25 @@ export class Menus {
     brand.append(wm, mode);
     const stack = el('nav', 'dfm-stack');
     stack.setAttribute('aria-label', 'Main menu');
+    // CONTRACT_ONLINE §O4.1: the PLAY ONLINE tile ("PLAY" over "ONLINE"; .lbl reads "PLAY ONLINE") + its why-not note
+    this.onlineTile = btn('dfm-item dfm-item-online', '');
+    this.onlineTile.id = 'dfm-play-online';
+    this.onlineTile.dataset.group = 'stack';
+    const olbl = el('span', 'lbl');
+    const l1 = el('span', 'l1');
+    l1.append(svgEl(ONLINE_ICON, 'oico'), document.createTextNode('PLAY '));
+    olbl.append(l1, el('span', 'l2', 'ONLINE'));
+    this.onlineTile.append(olbl);
+    this.onlineWhy = el('span', 'dfm-online-why');
+    this.onlineWhy.id = 'dfm-online-why';
+    this.onlineWhy.setAttribute('role', 'status');
+    this.onlineWhy.hidden = true;
+    this.onlineTile.addEventListener('click', () => {
+      const why = this.onlineBlocked();
+      if (why) { this.sound('back'); this.explainOnline(why); return; }
+      this.sound('click');
+      this.hooks.online?.();
+    });
     const items: Array<[string, () => void]> = [
       ['PLAY', () => this.open('play')],
       ['LOADOUT', () => this.open('loadout')],
@@ -388,7 +438,12 @@ export class Menus {
       if (i === 0) b.dataset.default = '';
       b.append(el('span', 'chev', '▶'), el('span', 'lbl', label));
       b.addEventListener('click', () => { this.sound('click'); fn(); });
-      stack.append(b);
+      if (i === 0) {
+        // CONTRACT_ONLINE §O4.1: PLAY ONLINE beside PLAY (the header comment says why beside, not below)
+        const row = el('div', 'dfm-playrow');
+        row.append(b, this.onlineTile, this.onlineWhy);
+        stack.append(row);
+      } else stack.append(b);
     });
     // profile card + FULLSCREEN toggle (top right). CONTRACT_MOBILE M6: they share one flex row with the brand
     // (.dfm-titlebar), so at any width the corner wraps below the wordmark instead of covering it (the 1.1.0 / 1.2.0
@@ -402,7 +457,18 @@ export class Menus {
     prof.append(this.profMark, pt);
     const corner = el('div', 'dfm-corner');
     const cornerRow = el('div', 'dfm-corner-row');
-    cornerRow.append(prof, this.fsButton('dfm-fs-title', true));
+    // CHANGED(STATS) (CONTRACT_STATS §S10.3): the CAREER pill sits between the profile card and FULLSCREEN — not a sixth
+    // main-stack item (menus.py asserts the stack and the profile card's text), a corner button
+    cornerRow.append(prof);
+    if (this.career) {
+      const cb = btn('dfm-career', '');
+      cb.id = 'dfm-career';
+      cb.setAttribute('aria-label', 'Career');
+      cb.append(svgEl(CAREER_ICON, 'cico'), el('span', 'lbl', 'CAREER'));
+      cb.addEventListener('click', () => { this.sound('click'); this.open('career'); });
+      cornerRow.append(cb);
+    }
+    cornerRow.append(this.fsButton('dfm-fs-title', true));
     corner.append(cornerRow);
     const titlebar = el('div', 'dfm-titlebar');
     titlebar.append(brand, corner);
@@ -779,6 +845,12 @@ export class Menus {
     cc.append(grid);
     cr.append(cc);
 
+    // ── CAREER (CHANGED(STATS), CONTRACT_STATS §S10.3): the stats module's panel under the usual header (BACK / ESC / pad B) ──
+    if (this.career) {
+      const car = this.mkScreen('career');
+      car.append(el('div', 'dfm-scrim full'), this.header('CAREER', ''), this.career.el);
+    }
+
     // ── PAUSE ─────────────────────────────────────────────
     const pause = this.mkScreen('pause');
     pause.classList.add('df-pause');
@@ -1069,6 +1141,37 @@ export class Menus {
     if (homeScreenTip()) markHomeTipShown();       // M9 once per device: counted when a tip is actually on screen (B-F5)
   }
 
+  /** CONTRACT_ONLINE §O11.2: the online screens closed (their BACK) — the title again, PLAY ONLINE focused */
+  returnFromOnline(): void {
+    this.showTitle();
+    if (!this.onlineBlocked()) this.focus(this.onlineTile, false);
+  }
+
+  /** why PLAY ONLINE cannot open ('' = it can): no WebSocket / CompressionStream, or no online hook wired */
+  private onlineBlocked(): string {
+    if (!onlineSupported()) return ONLINE_UNSUPPORTED;
+    if (!this.hooks.online) return ONLINE_UNAVAILABLE;
+    return '';
+  }
+
+  /** the PLAY ONLINE tile's disabled look + its reason (tooltip / description); it stays focusable so a press can say why */
+  private syncOnlineTile(): void {
+    const why = this.onlineBlocked();
+    const t = this.onlineTile;
+    t.classList.toggle('off', !!why);
+    t.setAttribute('aria-disabled', String(!!why));
+    t.title = why;
+    if (why) t.setAttribute('aria-description', why); else t.removeAttribute('aria-description');
+  }
+
+  /** a press on the disabled tile: the reason beside it for 3 s */
+  private explainOnline(why: string): void {
+    this.onlineWhy.textContent = why;
+    this.onlineWhy.hidden = false;
+    clearTimeout(this.onlineWhyT);
+    this.onlineWhyT = window.setTimeout(() => { this.onlineWhy.hidden = true; }, 3000);
+  }
+
   /** the in-match pause card (msg: e.g. a refused pointer lock) */
   showPause(msg = ''): void {
     this.context = 'pause';
@@ -1138,13 +1241,14 @@ export class Menus {
     this.root.dataset.screen = s;
     this.bindMannequin(s === 'loadout');
     this.refresh();
+    if (s === 'career') { try { this.career?.refresh(); } catch (e) { console.warn('[dyefield] career refresh', e); } }   // CHANGED(STATS)
     this.renderHints();
     const scr = this.screens.get(s)!;
     // focus: a screen's default, or (coming back) the item that opened the child
     let target: HTMLElement | null = null;
     if (prev && (s === 'title' || s === 'pause')) {
       const from = prev === 'play' ? 'dfm-play' : prev === 'loadout' ? 'dfm-loadout' : prev === 'settings' ? (s === 'pause' ? 'df-p-settings' : 'dfm-settings')
-        : prev === 'howto' ? (s === 'pause' ? 'df-p-howto' : 'dfm-how-to-play') : prev === 'credits' ? 'dfm-credits' : '';
+        : prev === 'howto' ? (s === 'pause' ? 'df-p-howto' : 'dfm-how-to-play') : prev === 'credits' ? 'dfm-credits' : prev === 'career' ? 'dfm-career' : '';
       target = from ? scr.querySelector<HTMLElement>(`#${from}`) : null;
     }
     if (!target && s === 'loadout') target = this.kitTiles.get(this.profile.get().kit) ?? null;
@@ -1312,6 +1416,7 @@ export class Menus {
     this.renderLegend();
     for (const [e, a] of this.howKeys) this.fillKey(e, a);
     this.renderTouchArt();
+    this.syncOnlineTile();
   }
 
   private chip(icon: string, text: string): HTMLElement {
@@ -1743,11 +1848,14 @@ export class Menus {
       // CONTRACT_MOBILE read-back: the input mode the menus show, the TOUCH CONTROLS group, the FULLSCREEN toggles, the tip
       touch: this.touch, touchGroup: !this.touchGroup.hidden, hints: !this.hints.hidden,
       fullscreen: { enabled: Fullscreen.enabled(), active: Fullscreen.active() }, homeTip: this.tips.some((t) => !t.hidden),
+      // CONTRACT_ONLINE §O4.1: the PLAY ONLINE tile (enabled = the hook is wired and the browser can; why = its reason)
+      online: { enabled: !this.onlineBlocked(), why: this.onlineBlocked(), note: this.onlineWhy.hidden ? '' : this.onlineWhy.textContent },
     };
   }
 
   dispose(): void {
     this.endCapture();
+    clearTimeout(this.onlineWhyT);
     for (const f of this.offs) f();
     this.offs = [];
     this.bindMannequin(false);

@@ -46,6 +46,18 @@
 // map GLB feeds both parsers; A-A9 a screen wake lock (touch) through the match session; A-A6 the START gesture pushes
 // the back-button trap entry (game.ts owns the popstate pause).
 
+// CHANGED(ONLINE) (CONTRACT_ONLINE §O10 / §O11.2 / §O12.2): PLAY ONLINE (MenuHooks.online) and a ?room= link lazy-load
+// net/online.ts (the OnlineApi, the LOBBY-UI screens + overlays, the driver, window.__NET__) through a dynamic import():
+// the offline boot path imports none of net/**. An online match is a match session whose MatchConfig carries the room's
+// roster and the local runner id (startSession builds the same MatchWorld on every member; the HUD's "you" is that
+// runner); loadOnlineMatch swaps the session like START does. QUIT MATCH in an online match leaves the room. The Game's
+// netMenu / victory hooks route to the online overlays.
+
+// CHANGED(STATS) (CONTRACT_STATS §S10): createStats() builds the career + achievement toast + portal bridge client (the only
+// stats module main.ts imports); hooks.matchBegin / simEvents / matchAbandon feed it (offline: the human is runner 0; online:
+// net/online.ts hands over its OnlineMatchInfo and finalizes the record itself through stats.onlineEnd). Menus gets the CAREER
+// screen body (menus option `career`, a corner pill beside the profile card). ?dev=1 without ?statsdev=1 switches stats off.
+
 /// <reference types="vite/client" />
 
 import '@fontsource/lilita-one/400.css';
@@ -89,6 +101,8 @@ import { Input, type InputMode } from './input.ts';
 import { TouchControls, type TouchOptions } from './touch/controls.ts';
 import { Game, armBackTrap, type AppStatus, type GameHooks, type GameMode, type MatchConfig } from './game.ts';
 import { installTestSurface, type AppHandles } from './testsurface.ts';
+import type { OnlineController, OnlineSessionParts } from './net/online.ts';
+import { createStats } from './stats/index.ts';
 
 /** CONTRACT_MOBILE M8 settings → the overlay's options */
 function touchOptions(s: Readonly<Settings>): TouchOptions {
@@ -184,7 +198,7 @@ async function fetchMapBytes(def: MapDef, onProgress: (f: number) => void): Prom
   return out.buffer;
 }
 
-export const VERSION = 'dyefield-1.4.0';
+export const VERSION = 'dyefield-1.5.0';
 
 declare global {
   interface Window {
@@ -194,6 +208,12 @@ declare global {
 }
 
 const params = new URLSearchParams(location.search);
+/**
+ * ONLINE (CONTRACT_ONLINE) is ON by default (owner 2026-10-05: "get that play online button working"). Kill switch:
+ * ?online=0 on the URL, or a build with VITE_DF_ONLINE=0. Off, PLAY ONLINE is the disabled "coming soon" tile and a
+ * ?room= link does nothing. (A relay outage never blocks the game: the online screens offer PLAY VS BOTS.)
+ */
+const ONLINE_ENABLED = params.get('online') !== '0' && import.meta.env.VITE_DF_ONLINE !== '0';
 // CONTRACT_WASHOUT W4: ?rule=washout|turf is a deep-link key too (index.html's static-card script mirrors this list)
 const DEEP_KEYS = ['map', 'kit', 'bots', 'seed', 'matchSeconds', 'preset', 'autostart', 'brush', 'crew', 'mode', 'rule'];
 /** a harness / share link straight into a match (no lobby) */
@@ -464,8 +484,10 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
   const renderer = rig.renderer;
   const def = arena.def;
   report(NaN, 'Loading the tide-runners…');
-  const roster = mode === 'lobby' ? lobbyRoster(config.seed) : matchRoster(config);
-  const humanTeam = roster[0]?.team ?? 1;
+  // CHANGED(ONLINE): an online match brings the room's roster and the local runner id (0 offline)
+  const roster = mode === 'lobby' ? lobbyRoster(config.seed) : (config.roster ?? matchRoster(config));
+  const me = mode === 'match' ? (config.localPid ?? 0) : 0;
+  const humanTeam = roster[me]?.team ?? 1;
   /** CONTRACT_FFA F3: the match mode of this session (the lobby backdrop is always teams) */
   const matchMode: MatchMode = mode === 'match' && config.mode === 'ffa' ? 'ffa' : 'teams';
   // a clean court for every session; the dye shader + the minimap raster take the mode's palette (an arena may be
@@ -507,7 +529,7 @@ async function startSession(S: Shared, arena: Arena, mode: GameMode, config: Mat
   };
   // CONTRACT_CONTROLS C3 / WASHOUT W5: the HUD's motion (special shake, "+1", PROTECTED shimmer, aim vignette) follows
   // SETTINGS → REDUCE MOTION (live below, applySettings), not only the OS preference
-  const hud = new Hud(uiRoot, { team: humanTeam, minimap: arena.minimap, specialName, roster, youId: 0, kit: hudKit, mode: matchMode,
+  const hud = new Hud(uiRoot, { team: humanTeam, minimap: arena.minimap, specialName, roster, youId: me, kit: hudKit, mode: matchMode,
     reduceMotion: st.reduceMotion });
   hud.slates.setLegend(S.menus.legend());
   hud.setTouchMode(input.mode === 'touch');     // CONTRACT_MOBILE M4 platform prompts
@@ -610,6 +632,8 @@ async function boot(): Promise<void> {
   let arena: Arena | null = null;
   let session: Session | null = null;
   let busy = false;
+  /** CHANGED(ONLINE): the lazy online controller (null until PLAY ONLINE / a ?room= link) */
+  let onlineCtl: OnlineController | null = null;
   let qualityOverride: RenderQuality | null = null;
   const effectiveQuality = (): RenderQuality => qualityOverride ?? settings.get().quality;
   let S: Shared | null = null;
@@ -684,6 +708,13 @@ async function boot(): Promise<void> {
     const canvas = document.getElementById('game') as HTMLCanvasElement | null;
     if (!canvas) throw new Error('#game canvas missing from index.html');
     const uiRoot = document.getElementById('ui') ?? document.body;
+
+    // CHANGED(STATS) (CONTRACT_STATS §S10.2): the career, the achievement toast and the portal bridge. ?dev=1 without
+    // ?statsdev=1 → stats are off for the session (the CAREER panel still shows the stored career). Every hook below is
+    // wrapped by the facade: a stats bug can never stop a frame.
+    const stats = createStats({ uiRoot, version: VERSION, dev: app.dev, statsDev: params.get('statsdev') === '1',
+      reduceMotion: () => settings.get().reduceMotion, sound: (s) => audio.ui(s) });
+    stats.start();
 
     // CONTRACT_MOBILE M1: the input method is known BEFORE the WebGL context exists (M7 antialias + touch profile)
     const input = new Input(canvas, settings.get().bindings);
@@ -772,9 +803,23 @@ async function boot(): Promise<void> {
         S!.menus.update(dt);
         fpsTick(dt);
       },
-      victory: (el) => { S!.menus.extraScope = el; },
+      victory: (el) => { S!.menus.extraScope = el; onlineCtl?.victory(el); },   // CHANGED(ONLINE): REMATCH / PLAY AGAIN / LEAVE
+      netMenu: (on) => onlineCtl?.netMenu(on),               // CHANGED(ONLINE): the match menu card (no pause online)
       look: () => ({ sens: settings.get().sensitivity, invertY: settings.get().invertY }),
       assist: () => settings.get().aimAssist,
+      // CHANGED(STATS) (§S10.1 / §S10.2): the per-match record. Offline: the human is runner 0. Online: the online layer hands
+      // over its OnlineMatchInfo (kit / skill / localPid / role) and finalizes the record itself (stats.onlineEnd at the
+      // host's `end` / a void / a drop); an online match without that info (never expected) records nothing.
+      matchBegin: (w, cfg) => {
+        if (cfg.online) {
+          const info = onlineCtl?.beginInfo(w) ?? null;
+          if (info) stats.matchBegin(w, info);
+          return;
+        }
+        stats.matchBegin(w, { kit: w.runners[0]?.kit ?? cfg.kit, skill: cfg.skill, online: null, localPid: 0 });
+      },
+      simEvents: (ev, w) => stats.events(ev, w),
+      matchAbandon: (w, why) => stats.matchAbandon(w, why),
     };
 
     /** the play card's gesture: unlock audio; touch mode also goes full screen + landscape (M4) */
@@ -853,7 +898,7 @@ async function boot(): Promise<void> {
       }
     };
 
-    const toLobby = async (): Promise<void> => {
+    const toLobby = async (online = false): Promise<void> => {
       if (busy || !S || contextLost) return;
       busy = true;
       keepAwake(false);                           // A-A9: the menus may let the phone sleep again
@@ -878,7 +923,7 @@ async function boot(): Promise<void> {
         if (contextLost) return;                  // B-F1: the reset card stays
         app.phase = 'menu';
         app.startedBy = null;
-        S.menus.showTitle();
+        if (!online) S.menus.showTitle();         // CHANGED(ONLINE): back from an online match the online screens stay up
         bootUi.hide();
         audio.playMusic('lobby');                 // resets the match's world loops; the harbour ambience returns
       } catch (e) {
@@ -892,10 +937,12 @@ async function boot(): Promise<void> {
     // UI sounds (hover / click / back / start): the UI bus is never ducked or paused; a click also unlocks
     const menus = new Menus(uiRoot, {
       settings, profile, input,
+      career: stats.career,                       // CHANGED(STATS) §S10.3: the CAREER screen body
       hooks: {
         start: (sel) => { void startMatch(sel); },
         resume: () => app.game?.resume(),
-        quitMatch: () => { void toLobby(); },
+        quitMatch: () => { if (onlineCtl?.inMatch()) onlineCtl.leaveMatch(); else void toLobby(); },   // CHANGED(ONLINE)
+        online: ONLINE_ENABLED ? () => { void openOnline(); } : undefined,     // CHANGED(ONLINE): PLAY ONLINE (net/** lazy-loads here); off = the tile reads "coming soon"
         padStart: () => { const g = app.game; if (g && !g.isLobby && app.phase === 'play' && !g.matchOver) g.pause('pad'); },
         sound: (s) => audio.ui(s),
       },
@@ -903,6 +950,63 @@ async function boot(): Promise<void> {
     S = { canvas, uiRoot, rig, cam, loader, rapier, hero, kitArt, input, settings, profile, audio, boot: bootUi, menus, kits: new Map(), mannequin: null, fpsEl,
       quality: effectiveQuality };
     const shared = S;
+
+    // ── CHANGED(ONLINE): an online match's session (the room's roster / seed / map; play begins at once) ──
+    const loadOnlineMatch = async (cfg: MatchConfig, mapId: string, presetName: string): Promise<OnlineSessionParts> => {
+      while (busy) await nextFrame();
+      busy = true;
+      try {
+        if (input.mode === 'touch') keepAwake(true);
+        const def = mapById(mapId);
+        shared.menus.hideAll();
+        bootUi.setMode(cfg.mode === 'ffa' ? 'ffa' : 'teams', cfg.rule === 'washout' ? 'washout' : 'turf');
+        bootUi.showLoading(`Loading ${def.name}…`, { name: def.name, thumb: MAP_THUMBS[def.id] ?? null });
+        app.phase = 'loading';
+        arenaF = 0;
+        await nextFrame();
+        session?.dispose();
+        session = null;
+        const { name: pname } = presetOf(def, def.id === 'pier18' ? presetName : null);
+        const key = `${def.id}:${pname}`;
+        if (!arena || arena.key !== key) {
+          arena?.dispose();
+          arena = null;
+          arena = await loadArena(shared, def.id, pname, report);
+        } else report(1);
+        session = await startSession(shared, arena, 'match', cfg, hooks, report);
+        app.phase = 'ready';
+        const g = session.game;
+        const began = input.mode === 'touch' ? (!rotate?.shown && g.beginTouch()) : g.beginWithLock();
+        if (!began) bootUi.showPlay(playClick(g));
+        const a = arena, ss = session;
+        return { game: g, arena: a, players: ss.players, hud: ss.hud };
+      } finally {
+        busy = false;
+      }
+    };
+    /** PLAY VS BOTS from the online screens: the normal offline match with that mode / rule */
+    const playOffline = (mode: MatchMode, rule: MatchRule): void => {
+      const pr = profile.get();
+      const maps = playableMaps();
+      const pick = maps[Math.floor(Math.random() * maps.length)] ?? mapById(LOBBY_MAP);
+      void startMatch({ map: pick.id, random: true, preset: pr.preset, skill: pr.skill, kit: pr.kit, crew: pr.crew, name: pr.name, mode, ffaColor: pr.ffaColor, rule });
+    };
+    const openOnline = async (join?: string): Promise<void> => {
+      if (!onlineCtl) {
+        try {
+          const mod = await import('./net/online.ts');
+          onlineCtl = mod.createOnline({
+            uiRoot, version: VERSION, entryUrl: import.meta.url, dev: app.dev, params, profile,
+            device: () => (input.mode === 'touch' ? 'touch' : 'kbm'), sound: (x) => audio.ui(x),
+            menus: { returnFromOnline: () => menus.returnFromOnline(), hideAll: () => menus.hideAll(), showPause: (m?: string) => menus.showPause(m), open: (x) => menus.open(x) },
+            loadMatch: loadOnlineMatch, toLobby: (online) => toLobby(online), playOffline,
+            lobbySimMs: () => (app.game && app.game.isLobby ? app.game.simMs : 0),
+            stats,                                    // CHANGED(STATS): onlineEnd at the host's end / a void / a drop; matchBegin on a host migration
+          });
+        } catch (e) { console.warn('[dyefield] online unavailable:', e); return; }
+      }
+      onlineCtl.open(join);
+    };
 
     // ESC / P (the 'pause' action): pause a live match; on the pause card a non-ESC pause key goes back
     input.onUi((a, e) => {
@@ -1015,6 +1119,9 @@ async function boot(): Promise<void> {
       menus.showTitle();
       bootUi.hide();
       audio.playMusic('lobby');                   // queued until the first gesture unlocks the context
+      // CHANGED(ONLINE) (§O10 deep link): ?room=K7QX opens JOIN ROOM pre-filled (the portal forwards its ?room= into the iframe)
+      const roomQ = params.get('room');
+      if (ONLINE_ENABLED && (roomQ || (app.dev && params.get('net')))) void openOnline(roomQ ?? undefined);
     }
   } catch (e) {
     if (contextLost) return;                      // B-F1: a boot load that failed on the lost context keeps the reset card

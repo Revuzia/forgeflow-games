@@ -242,7 +242,7 @@ def title(run):
     run.ok("Free-for-all" in (boot_title or "") and "4 v 4" in (boot_title or "") and "Washout" in (boot_title or ""),
            "the page title %r does not name both modes and the WASHOUT rule" % boot_title)
     labels = s.safe_js("() => [...document.querySelectorAll('.dfm-stack .dfm-item .lbl')].map((e) => e.textContent)", default=[])
-    run.ok(labels == ["PLAY", "LOADOUT", "SETTINGS", "HOW TO PLAY", "CREDITS"], "menu labels %s" % labels)
+    run.ok(labels == ["PLAY", "PLAY ONLINE", "LOADOUT", "SETTINGS", "HOW TO PLAY", "CREDITS"], "menu labels %s" % labels)  # CHANGED(ONLINE) CONTRACT_ONLINE §O4.1: the PLAY ONLINE tile beside PLAY
     hints = s.safe_js("() => document.querySelector('.dfm-hints').innerText", default="")
     run.ok("ENTER" in (hints or ""), "key-hint pills missing (%r)" % hints)
     ses = run.df("session") or {}

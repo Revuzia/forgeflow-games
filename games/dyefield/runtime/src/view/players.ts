@@ -891,6 +891,15 @@ class RunnerView {
     tagHost?.append(this.tag);
   }
 
+  /** CHANGED(ONLINE) (CONTRACT_ONLINE §O12.2): a new name on the tag (a late joiner / reconnect took the runner); never
+   *  called offline */
+  rename(name: string, status?: 'human' | 'bot' | 'away'): void {
+    (this as unknown as { name: string }).name = name;
+    const s = this.tag.querySelector('span');
+    if (s) s.textContent = name;
+    if (status) this.tag.dataset.net = status;              // net/ui/hud.css draws the human / bot / away chip
+  }
+
   /** start an upper one-shot (restarts it when already playing) */
   playOne(k: OneShot): void {
     const a = this.overA.get(k);
@@ -1235,6 +1244,9 @@ export class PlayerViews {
   }
 
   view(id: number): RunnerView | undefined { return this.views[id]; }
+
+  /** CHANGED(ONLINE) (CONTRACT_ONLINE §O12.2): rename runner `id`'s name tag (a seat change); never called offline */
+  rename(id: number, name: string, status?: 'human' | 'bot' | 'away'): void { this.views[id]?.rename(name, status); }
 
   /** interpolated render pose of runner i (after update()) */
   frame(i: number): RunnerFrame { return this.frames[i]; }

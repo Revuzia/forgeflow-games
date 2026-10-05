@@ -1,6 +1,6 @@
 {
   "name": "dyefield",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "private": true,
   "type": "module",
   "description": "DYEFIELD \u2014 Harbor Cup 4 v 4 turf-paint arena. Three.js + TypeScript + Vite runtime, Blender-authored art. `npm install && npm run dev`.",
@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "probe": "node _harness/probe_paint.ts && node _harness/probe_move.ts && node _harness/probe_swim.ts && node _harness/probe_combat.ts && node _harness/probe_match.ts && node _harness/probe_kits.ts && node _harness/probe_audio.ts && node _harness/probe_nav.ts --map pier18 && node _harness/probe_nav.ts --map lockwell && node _harness/probe_nav.ts --map cinder && node _harness/probe_bots.ts --lineup mixed && node _harness/probe_bots.ts --mode ffa --map pier18 --seeds 1,2,3 && node _harness/probe_bots.ts --mode ffa --map lockwell --seeds 1,2,3 && node _harness/probe_bots.ts --mode ffa --map cinder --seeds 1,2,3",
     "probe:washout": "node _harness/probe_match.ts --rule washout && node _harness/probe_bots.ts --rule washout --mode teams --map pier18 --seeds 1,2,3 && node _harness/probe_bots.ts --rule washout --mode teams --map lockwell --seeds 1,2,3 && node _harness/probe_bots.ts --rule washout --mode teams --map cinder --seeds 1,2,3 && node _harness/probe_bots.ts --rule washout --mode ffa --map pier18 --seeds 1,2,3 && node _harness/probe_bots.ts --rule washout --mode ffa --map lockwell --seeds 1,2,3 && node _harness/probe_bots.ts --rule washout --mode ffa --map cinder --seeds 1,2,3",
+    "probe:net": "node _harness/probe_net.ts",
+    "probe:stats": "node _harness/probe_stats.ts",
     "probe:washout:tune": "node _harness/probe_bots.ts --rule washout --tune",
     "check": "npm run typecheck && npm run probe",
     "art": "python art/build.py all"

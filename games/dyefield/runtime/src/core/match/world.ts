@@ -71,7 +71,7 @@ import type { MatchMode, MatchRule, MoveState, PlayerIntent, Side, TeamId } from
 import { CREW_SLOTS, DEG, emptyIntent } from '../types.ts';
 import { hash32, mulberry32 } from '../rng.ts';
 import { COMBAT, HEALTH, HITBOX, KITS, MATCH, MOVE, SLICK, TANK, TICK } from '../config.ts';
-import { Runner, type PadZone, type SpawnPoint } from '../runner.ts';
+import { Runner, type PadZone, type RunnerNetState, type SpawnPoint } from '../runner.ts';
 import type { RosterEntry } from './roster.ts';
 import type { MatchPhase, SimEvent } from './events.ts';
 import {
@@ -241,6 +241,12 @@ export function ffaStartSites(pool: readonly SpawnPoint[], n: number, rnd: () =>
   const out: number[] = [];
   for (let i = 0; i < n; i++) out.push(picked[i % picked.length]);
   return out;
+}
+
+/** CHANGED(ONLINE) (CONTRACT_ONLINE §O12.2): MatchWorld's private match state (MatchWorld.netState / netRestore) */
+export interface WorldNetState {
+  tick: number; liveTicks: number; countTicks: number; phase: MatchPhase; endedBy: 'horn' | 'limit' | null; limitHit: boolean;
+  scores: number[]; respawnTicks: number[]; protectTicks: number[]; siteHist: number[]; killer: number[]; slots: SpawnPoint[];
 }
 
 export interface MatchStats {
@@ -875,6 +881,60 @@ export class MatchWorld implements ProjectileHost, KitHost, SpecialHost {
   devTeleport(pid: number, x: number, y: number, z: number, yaw?: number): void {
     this.runners[pid]?.teleport(x, y, z, yaw);
   }
+
+  // ── CHANGED(ONLINE) (CONTRACT_ONLINE §O12.2): net read / write of the private match state. Additive: never called offline ──
+
+  /** CHANGED(ONLINE): the private clock, scores, respawn / protect ticks, FFA site history, killers and spawn slots (a copy) */
+  netState(): WorldNetState {
+    return {
+      tick: this.tick, liveTicks: this.liveTicks, countTicks: this.countTicks, phase: this.phase, endedBy: this.endedBy,
+      limitHit: this.limitHit, scores: this.scoreArr.slice(), respawnTicks: Array.from(this.respawnTicks),
+      protectTicks: Array.from(this.protectTicks), siteHist: Array.from(this.siteHist), killer: Array.from(this.killer),
+      slots: this.slots.map((s) => ({ ...s })),
+    };
+  }
+
+  /**
+   * CHANGED(ONLINE): restore (a part of) the match state — a client's container world (clock / phase / scores only) or a
+   * new host after a migration (everything, then `runners` per runner through Runner.netLoad). With `resetCombat` the
+   * projectiles are cleared, running specials end (meters kept; their 'special' end events are queued — the caller drains
+   * and discards them) and every kit transient is reset. timeLeft / countdown follow liveTicks / countTicks.
+   */
+  netRestore(s: Partial<WorldNetState> & { runners?: ReadonlyArray<Partial<RunnerNetState> | null>; resetCombat?: boolean; result?: MatchResult | null }): void {
+    if (s.tick !== undefined) this.tick = s.tick;
+    if (s.liveTicks !== undefined) this.liveTicks = s.liveTicks;
+    if (s.countTicks !== undefined) this.countTicks = s.countTicks;
+    if (s.phase !== undefined) this.phase = s.phase;
+    if (s.endedBy !== undefined) this.endedBy = s.endedBy;
+    if (s.limitHit !== undefined) this.limitHit = s.limitHit;
+    if (s.result !== undefined) this.result = s.result;
+    if (s.scores) for (let k = 0; k < this.scoreArr.length && k < s.scores.length; k++) this.scoreArr[k] = s.scores[k] | 0;
+    if (s.respawnTicks) for (let i = 0; i < this.respawnTicks.length && i < s.respawnTicks.length; i++) this.respawnTicks[i] = s.respawnTicks[i] | 0;
+    if (s.protectTicks) for (let i = 0; i < this.protectTicks.length && i < s.protectTicks.length; i++) this.protectTicks[i] = s.protectTicks[i] | 0;
+    if (s.siteHist) for (let i = 0; i < this.siteHist.length && i < s.siteHist.length; i++) this.siteHist[i] = s.siteHist[i] | 0;
+    if (s.killer) for (let i = 0; i < this.killer.length && i < s.killer.length; i++) this.killer[i] = s.killer[i] | 0;
+    if (s.slots) for (let i = 0; i < this.slots.length && i < s.slots.length; i++) this.slots[i] = { ...s.slots[i] };
+    const left = this.durTicks - this.liveTicks;
+    this.timeLeft = this.phase === 'ended' ? 0 : Math.max(0, left) * TICK;
+    this.countdown = this.countTicks * TICK;
+    if (s.runners) {
+      for (let i = 0; i < this.runners.length && i < s.runners.length; i++) {
+        const rs = s.runners[i];
+        if (rs) this.runners[i].netLoad(rs);
+      }
+    }
+    if (s.resetCombat) {
+      this.projectiles.clear();
+      for (const r of this.runners) {
+        if (r.specialActive !== '') endSpecial(r, r.x, r.y, r.z, this);
+        resetKit(r, this);
+        r.leaping = false; r.slamPending = false;
+      }
+    }
+  }
+
+  /** CHANGED(ONLINE): the match length in ticks (the clock's denominator) */
+  get netDurTicks(): number { return this.durTicks; }
 
   // ── internals ─────────────────────────────────────────────────────────────────────────────
 

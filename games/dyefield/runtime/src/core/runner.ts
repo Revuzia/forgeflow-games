@@ -88,6 +88,29 @@ export interface RunnerOptions {
 /** CHANGED(MAPSIM): s after a spring launch before any spring may fire again */
 export const SPRING_RELOCK = 0.4;
 
+/** CHANGED(ONLINE) (CONTRACT_ONLINE §O12.2): the numeric public fields of a Runner's net state (Runner.netState / netLoad) */
+export const RUNNER_NET_NUM = [
+  'x', 'y', 'z', 'vx', 'vy', 'vz', 'yaw', 'px', 'py', 'pz', 'pyaw', 'aimYaw', 'aimPitch', 'tank', 'hp', 'respawnT', 'special',
+  'lastAttacker', 'lastHitT', 'lastHitBy', 'protectedT', 'spawnSite', 'washes', 'washedCount', 'painted', 'landings', 'jumps',
+  'surfacing', 'speed', 'airTime', 'respawns', 'wallNx', 'wallNz', 'shots', 'dries', 'slicks', 'refillsFromLow', 'splats',
+  'ticks', 'fireCd', 'dryCd', 'charge', 'specialT', 'subCooldown', 'subs', 'flicks', 'beams', 'bursts', 'specials',
+  'flattens', 'rollMetres', 'holdT', 'flickT', 'flickCd', 'standT', 'rollAx', 'rollAy', 'rollAz', 'rollSeed', 'strokes',
+  'glintT', 'leapT', 'leapG', 'specialBuf', 'launches', 'lastSpring', 'onConveyor', 'springLock',
+] as const;
+/** CHANGED(ONLINE): the boolean public fields of a Runner's net state */
+export const RUNNER_NET_BOOL = [
+  'grounded', 'alive', 'hidden', 'firing', 'slickForm', 'brushing', 'inSea', 'lowArmed', 'specialReady', 'rolling', 'flicking',
+  'leaping', 'prevFireHeld', 'pressFlicked', 'rollHas', 'charging', 'slamPending', 'specialHeld', 'specialBufShort',
+  'ballistic', 'courtFrozen', 'inOob',
+] as const;
+
+/** CHANGED(ONLINE): a Runner's complete mutable state (Runner.netState): the public fields above + the private ones */
+export type RunnerNetState = { [K in (typeof RUNNER_NET_NUM)[number]]: number } & { [K in (typeof RUNNER_NET_BOOL)[number]]: boolean } & {
+  state: MoveState; specialActive: string; lastGround: 'walk' | 'slog' | 'slick'; tall: boolean;
+  coyote: number; jumpBuf: number; prevJump: boolean; prevFire: boolean; brushClock: number; offDyeT: number; wallCd: number;
+  refilling: boolean; probeNx: number; probeNz: number; spawnX: number; spawnY: number; spawnZ: number; spawnYaw: number;
+};
+
 const TAU = Math.PI * 2;
 /** runner-side scene queries see grate_* too (the capsule collides with them) */
 const GRATES = { grates: true } as const;
@@ -378,6 +401,60 @@ export class Runner {
 
   /** The spawn this runner returns to. */
   spawnPoint(): SpawnPoint { return { ...this.spawn }; }
+
+  // ── CHANGED(ONLINE) (CONTRACT_ONLINE §O12.2): net state read / write. Additive: never called offline ──────────
+
+  /** CHANGED(ONLINE): every mutable field Runner.step / the kits read, the private ones included, into `out` (a reused
+   *  object, or a new one). Feet = the capsule's feet (exact: Runner.x/y/z always come from body.feet()). */
+  netState(out?: RunnerNetState): RunnerNetState {
+    const o = out ?? ({} as RunnerNetState);
+    for (const k of RUNNER_NET_NUM) (o as unknown as Record<string, number>)[k] = (this as unknown as Record<string, number>)[k];
+    for (const k of RUNNER_NET_BOOL) (o as unknown as Record<string, boolean>)[k] = (this as unknown as Record<string, boolean>)[k];
+    o.state = this.state;
+    o.specialActive = this.specialActive;
+    o.lastGround = this.lastGround;
+    o.tall = this.tall;
+    o.coyote = this.coyote; o.jumpBuf = this.jumpBuf; o.prevJump = this.prevJump; o.prevFire = this.prevFire;
+    o.brushClock = this.brushClock; o.offDyeT = this.offDyeT; o.wallCd = this.wallCd; o.refilling = this.refilling;
+    o.probeNx = this.probeNx; o.probeNz = this.probeNz;
+    o.spawnX = this.spawn.x; o.spawnY = this.spawn.y; o.spawnZ = this.spawn.z; o.spawnYaw = this.spawn.yaw;
+    return o;
+  }
+
+  /** CHANGED(ONLINE): load a net state (a host's, or a saved prediction state). Moves the Rapier capsule with it and sets
+   *  its shape for the loaded tall / slick form (§O5.5 review): the KCC moves the capsule, not runner.x, so a load that
+   *  wrote only the fields would start the next step from the old capsule. The feet are the host's exact feet (no skin is
+   *  added, unlike teleport(), whose targets are floor points). Fields absent from `s` keep their value. */
+  netLoad(s: Partial<RunnerNetState>): void {
+    for (const k of RUNNER_NET_NUM) { const v = (s as Record<string, unknown>)[k]; if (typeof v === 'number') (this as unknown as Record<string, number>)[k] = v; }
+    for (const k of RUNNER_NET_BOOL) { const v = (s as Record<string, unknown>)[k]; if (typeof v === 'boolean') (this as unknown as Record<string, boolean>)[k] = v; }
+    if (s.state !== undefined) this.state = s.state;
+    if (s.specialActive !== undefined) this.specialActive = s.specialActive;
+    if (s.lastGround !== undefined) this.lastGround = s.lastGround;
+    if (s.coyote !== undefined) this.coyote = s.coyote;
+    if (s.jumpBuf !== undefined) this.jumpBuf = s.jumpBuf;
+    if (s.prevJump !== undefined) this.prevJump = s.prevJump;
+    if (s.prevFire !== undefined) this.prevFire = s.prevFire;
+    if (s.brushClock !== undefined) this.brushClock = s.brushClock;
+    if (s.offDyeT !== undefined) this.offDyeT = s.offDyeT;
+    if (s.wallCd !== undefined) this.wallCd = s.wallCd;
+    if (s.refilling !== undefined) this.refilling = s.refilling;
+    if (s.probeNx !== undefined) this.probeNx = s.probeNx;
+    if (s.probeNz !== undefined) this.probeNz = s.probeNz;
+    if (s.spawnX !== undefined && s.spawnY !== undefined && s.spawnZ !== undefined && s.spawnYaw !== undefined) {
+      this.spawn = { x: s.spawnX, y: s.spawnY, z: s.spawnZ, yaw: s.spawnYaw };
+    }
+    if (s.tall !== undefined && s.tall !== this.tall) {
+      if (s.tall) this.body.setShape(MOVE.radius, MOVE.halfHeight);
+      else this.body.setShape(MOVE.radius, MOVE.slickHalfHeight);
+      this.tall = s.tall;
+    }
+    if (s.x !== undefined && s.y !== undefined && s.z !== undefined) {
+      this.body.setFeet(s.x, s.y, s.z);
+      const f = this.body.feet();
+      this.x = f.x; this.y = f.y; this.z = f.z;
+    }
+  }
 
   // ── queries ───────────────────────────────────────────────────────────────────────────────
 

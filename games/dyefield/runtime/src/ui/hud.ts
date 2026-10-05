@@ -251,6 +251,11 @@ export class Hud {
   /** the minimap is turned 180° (a GULF CREW viewer in teams mode only) */
   private readonly flipMini: boolean;
   private readonly names = new Map<number, string>();
+  /** CHANGED(ONLINE): runner id → its crew (rename) */
+  private readonly teamOfId = new Map<number, TeamId>();
+  /** CHANGED(ONLINE): the FFA "me" panel's name and the local runner id (rename) */
+  private meName: HTMLElement | null = null;
+  private youIdNet = 0;
   private meBox: HTMLElement | null = null;
   private mePct: HTMLElement | null = null;
   private meRank: HTMLElement | null = null;
@@ -327,7 +332,8 @@ export class Hud {
     const sunRow = el('div', 'df-crests sun');
     const gulfRow = el('div', 'df-crests gulf');
     const roster = o.roster ?? [];
-    for (const r of roster) this.names.set(r.team, r.name);
+    for (const r of roster) { this.names.set(r.team, r.name); this.teamOfId.set(r.id, r.team); }
+    this.youIdNet = o.youId ?? 0;
     const mkCrest = (id: number, team: TeamId, name: string): CrestEl => {
       const look = this.ffa ? crewLook(team, 'ffa') : null;
       const box = el('div', `df-crest ${look ? 'ffa' : teamKey(team)}${id === (o.youId ?? 0) ? ' you' : ''}`);
@@ -390,7 +396,8 @@ export class Hud {
       const mk = el('i', 'mk', meLook.markGlyph);
       mk.setAttribute('aria-hidden', 'true');
       const txt = el('div', 'txt');
-      txt.append(el('span', 'nm', roster.find((r) => r.id === (o.youId ?? 0))?.name ?? ''));
+      this.meName = el('span', 'nm', roster.find((r) => r.id === (o.youId ?? 0))?.name ?? '');
+      txt.append(this.meName);
       this.mePct = el('b', 'pct', pct1(0));
       // W5 WASHOUT: "n / limit" (the limit part is empty in TURF)
       this.meLim = el('span', 'lim', '');
@@ -1165,6 +1172,20 @@ export class Hud {
         row.li.classList.toggle('you', t === this.team);
       }
       if (row.txt !== p) { row.txt = p; row.pct.textContent = p; }
+    }
+  }
+
+  /** CHANGED(ONLINE) (CONTRACT_ONLINE §O12.2): runner `id` has a new name (an online seat change) — its crest tooltip, and in
+   *  FFA its crew's name on the leaderboard (and the "me" panel for the local runner). Never called offline. */
+  rename(id: number, name: string): void {
+    const c = this.crests[id];
+    if (c) c.box.title = name;
+    const team = this.teamOfId.get(id);
+    if (team === undefined) return;
+    if (this.ffa) {
+      this.names.set(team, name);
+      for (const row of this.lead) if (row.team === team) row.name.textContent = name;
+      if (id === this.youIdNet && this.meName) this.meName.textContent = name;
     }
   }
 

@@ -57,6 +57,30 @@
 :where(html:not(.df-touch)) .dfm[data-crew="gulf"] .dfm-item-play:focus { background: linear-gradient(180deg, #d4ceff, #9d90ff); }
 @media (hover: hover) { :where(html:not(.df-touch)) .dfm[data-crew="gulf"] .dfm-item-play:hover { background: linear-gradient(180deg, #d4ceff, #9d90ff); } }
 .dfm-item.small { height: 48px; font-size: 22px; box-shadow: 0 5px 0 var(--ink); }
+/* CONTRACT_ONLINE §O4.1: PLAY + PLAY ONLINE share the stack's first row (PLAY keeps its size and look; the tile is the
+   sea-blue "PLAY / ONLINE" beside it). The gap is wider than PLAY's focus nudge (12 px + the 1° tilt), so the two never
+   touch; the tile's own focus lifts it instead of sliding it. The tile stays under a third of the stack (two stacked
+   lines, no side icon): PLAY's centre then stays nearer LOADOUT's than the tile's does, so ↑ from LOADOUT returns to PLAY
+   (the menus' spatial scoring; menus.py asserts ↓ ↑ = LOADOUT → PLAY). */
+.dfm-playrow { position: relative; display: flex; align-items: stretch; gap: 18px; margin-bottom: 4px; }
+.dfm-playrow > .dfm-item-play { flex: 1 1 auto; min-width: 0; margin-bottom: 0; white-space: nowrap; }
+.dfm-item-online { flex: 0 0 clamp(100px, 32%, 136px); height: auto; min-height: 44px; padding: 0 8px; justify-content: center; gap: 0; white-space: nowrap;
+  background: linear-gradient(180deg, #a6eef6, var(--sea)); color: #04313f; font-size: clamp(22px, 2.05vw, 30px); }
+.dfm-item-online .oico { flex: none; width: 1.15em; height: 1.15em; }
+.dfm-item-online .oico svg { display: block; width: 100%; height: 100%; }
+.dfm-item-online .lbl { display: flex; flex-direction: column; align-items: center; }
+.dfm-item-online .l1 { display: inline-flex; align-items: center; gap: .3em; font-size: .52em; line-height: 1.1; letter-spacing: .16em; }
+.dfm-item-online .l2 { font-size: .8em; line-height: .95; letter-spacing: .04em; }
+:where(html:not(.df-touch)) .dfm-item-online:focus { background: linear-gradient(180deg, #d2f8fc, #5fd5e3); transform: translateY(-4px) rotate(1deg);
+  box-shadow: 0 9px 0 var(--ink), 0 0 0 4px var(--cream); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-item-online:hover { background: linear-gradient(180deg, #d2f8fc, #5fd5e3); transform: translateY(-4px) rotate(1deg);
+  box-shadow: 0 9px 0 var(--ink), 0 0 0 4px var(--cream); } }
+.dfm-item-online:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--ink); }
+.dfm-item-online.off { background: linear-gradient(180deg, #e6e9ef, #b9c1d0); color: #5d667a; cursor: not-allowed; }
+:where(html:not(.df-touch)) .dfm-item-online.off:focus { background: linear-gradient(180deg, #eef0f4, #c9cfdb); }
+html.df-touch .dfm-item-online .l1 { font-size: 12px; }
+.dfm-online-why { position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%); width: max-content; max-width: min(280px, 34vw); padding: 8px 14px;
+  border-radius: 16px; background: var(--ink); color: var(--cream); font: 800 14px/1.3 var(--body); box-shadow: 0 4px 0 rgba(10,20,44,.45); pointer-events: none; }
 
 .dfm-corner { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; pointer-events: none; }
 .dfm-corner-row { display: flex; align-items: center; gap: 12px; }
@@ -570,6 +594,17 @@ html.df-cb .df-wo-chip.gulf { background-image: repeating-linear-gradient(135deg
 .dfm-fs:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--ink); }
 .dfm-fs[aria-pressed="true"] { background: var(--ink); color: var(--cream); }
 
+/* CAREER (CONTRACT_STATS §S10.3) — the title corner's pill, between the profile card and FULLSCREEN: the same ink-bordered
+   cream capsule language as .dfm-fs, with a trophy glyph and the word. A corner button, not a main-stack item. */
+.dfm-career { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 46px; padding: 0 16px 0 12px; border-radius: 23px; border: 4px solid var(--ink);
+  background: var(--cream); color: var(--ink); box-shadow: 0 5px 0 var(--ink); cursor: pointer; pointer-events: auto; white-space: nowrap;
+  font: 400 20px/1 var(--display); letter-spacing: .06em; transition: transform .12s ease, background-color .12s ease; }
+.dfm-career .cico { flex: none; display: block; width: 22px; height: 22px; }
+.dfm-career .cico svg { display: block; width: 100%; height: 100%; }
+:where(html:not(.df-touch)) .dfm-career:focus { outline: none; background: var(--crew); transform: translateY(-2px); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-career:hover { outline: none; background: var(--crew); transform: translateY(-2px); } }
+.dfm-career:active { transform: translateY(3px); box-shadow: 0 2px 0 var(--ink); }
+
 /* the iPhone Add-to-Home-Screen tip (M9): one line where it fits; its ✕ (a 44 px target) dismisses it */
 .dfm-tip { display: inline-flex; align-items: center; gap: 4px; max-width: min(560px, 100%); min-height: 44px; padding: 0 0 0 16px; border-radius: 24px;
   border: 3px solid var(--ink); background: var(--warn); color: var(--ink); box-shadow: 0 4px 0 var(--ink); font: 800 14px/1.2 var(--body);
@@ -671,12 +706,19 @@ html.df-touch .df-fps { left: 50%; top: auto; bottom: calc(env(safe-area-inset-b
   .dfm-item { height: 44px; padding: 0 14px; border-width: 3px; border-radius: 14px; box-shadow: 0 4px 0 var(--ink); font-size: 20px; }
   .dfm-item-play { height: 52px; font-size: 28px; margin-bottom: 0; }
   :where(html:not(.df-touch)) .dfm-item:focus { transform: translateX(8px) rotate(-1deg); box-shadow: 0 5px 0 var(--ink); }
+  /* CONTRACT_ONLINE §O4.1 on a phone: the row stays one PLAY-high line (the stack keeps its five-row height) */
+  .dfm-playrow { gap: 14px; margin-bottom: 0; }
+  .dfm-item-online { height: auto; flex-basis: clamp(92px, 34%, 124px); padding: 0 6px; font-size: 21px; }
+  :where(html:not(.df-touch)) .dfm-item-online:focus { transform: translateY(-3px) rotate(1deg); box-shadow: 0 6px 0 var(--ink), 0 0 0 3px var(--cream); }
+  .dfm-online-why { font-size: 13px; padding: 6px 12px; max-width: min(260px, 40vw); }
   .dfm-item.small { height: 44px; font-size: 19px; box-shadow: 0 4px 0 var(--ink); }
   .dfm-corner, .dfm-corner-row { gap: 8px; }
   .dfm-profile { gap: 8px; padding: 4px 14px 4px 4px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); }
   .dfm-profile .mark { width: 36px; height: 36px; border-width: 2px; font-size: 20px; }
   .dfm-profile b { font-size: 17px; max-width: 11ch; }
   .dfm-fs { width: 44px; height: 44px; border-width: 3px; box-shadow: 0 4px 0 var(--ink); }
+  .dfm-career { height: 44px; padding: 0 12px 0 9px; gap: 6px; border-width: 3px; border-radius: 22px; box-shadow: 0 4px 0 var(--ink); font-size: 17px; }
+  .dfm-career .cico { width: 20px; height: 20px; }
   .dfm-tip { font-size: 12.5px; padding-left: 12px; max-width: min(440px, 100%); }
   .dfm-br { bottom: calc(12px + var(--gb)); gap: 8px; }
   .dfm-br > .dfm-tip { max-width: min(440px, calc(100vw - var(--gl) - var(--gr) - clamp(220px, 33vw, 290px) - 24px)); }
@@ -895,6 +937,7 @@ html.df-touch .df-fps { left: 50%; top: auto; bottom: calc(env(safe-area-inset-b
   .df-standings.wo .srow.win .pct { font-size: 13px; }
 }
 @media (max-height: 500px) and (max-width: 700px) {
+  .dfm-item-online .oico { display: none; }
   .dfm-head h2 { font-size: 26px; }
   .dfm-modebox .dfm-cap { display: none; }
   .dfm-modebox { padding-left: 4px; }

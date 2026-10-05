@@ -609,15 +609,64 @@ export class BotDirector {
     if (this.ffa || this.washout) {   // review F3 spawn grace: each runner's last respawn tick (CHANGED(WASHOUT): both modes)
       for (const r of w.runners) if (r.respawns !== this.respSeen[r.id]) { this.respSeen[r.id] = r.respawns; this.respTick[r.id] = w.tick; }
     }
+    const rearm = this.rearm;                                         // CHANGED(ONLINE): null offline
     for (let i = 0; i < this.brains.length; i++) {
       const b = this.brains[i];
       if (!b || !intents[i]) continue;
-      if ((w.tick + b.phase) % THINK_EVERY === 0) this.decide(b);
+      if ((w.tick + b.phase) % THINK_EVERY === 0 || (rearm !== null && rearm[i] === 1)) {
+        if (rearm !== null) rearm[i] = 0;
+        this.decide(b);
+      }
       this.control(b, intents[i]);
     }
   }
 
+  // ── CHANGED(ONLINE) (CONTRACT_ONLINE §O12.2): human seats on an all-bot roster. Additive: never called offline ──
+
+  /** brains parked while a human drives their runner (index = runner id; null = not parked) */
+  private parked: Array<Brain | null> | null = null;
+  /** runner id → 1: the brain was just released and decides on the next think */
+  private rearm: Uint8Array | null = null;
+
+  /**
+   * CHANGED(ONLINE): a human drives runner `id` (on) or its bot takes it back (off). While on, the runner has no brain at
+   * all — exactly an offline human's null brain: think() never writes its intent and the other brains never count it as
+   * a bot. Released, the brain comes back reset (no stale path / target) and decides on the next think. Only runners
+   * built with `bot: true` have a brain to park; others are left alone.
+   */
+  setHuman(id: number, on: boolean): void {
+    if (id < 0 || id >= this.brains.length) return;
+    if (!this.parked) this.parked = new Array<Brain | null>(this.brains.length).fill(null);
+    if (!this.rearm) this.rearm = new Uint8Array(this.brains.length);
+    if (on) {
+      const b = this.brains[id];
+      if (!b) return;
+      this.parked[id] = b;
+      this.brains[id] = null;
+      this.rearm[id] = 0;
+    } else {
+      const b = this.parked[id];
+      if (!b) return;
+      this.parked[id] = null;
+      this.resetBrain(b);
+      b.aimYaw = b.r.yaw; b.desYaw = b.r.yaw;
+      b.seenRespawns = b.r.respawns;
+      this.brains[id] = b;
+      this.rearm[id] = 1;
+    }
+  }
+
+  /** CHANGED(ONLINE): is runner `id` human-driven now (setHuman on)? */
+  isHuman(id: number): boolean { return !!this.parked && this.parked[id] !== null && this.parked[id] !== undefined; }
+
   holding(i: number): boolean { return !!this.brains[i]?.holding; }
+
+  /** CHANGED(STATS-INTEGRATION) read-back (no effect on the sim): runner id → the tier its brain plays (null: no brain —
+   *  a human's runner, or one a human drives now). The node probe and `__DF__.match().botTiers` use it. */
+  tiers(): Array<BotSkill | null> {
+    const ids = Object.keys(SKILLS) as BotSkill[];
+    return this.brains.map((b) => (b ? (ids.find((k) => SKILLS[k] === b.sk) ?? null) : null));
+  }
 
   info(i: number): { mode: string; goal: number; target: number; holding: boolean } {
     const b = this.brains[i];

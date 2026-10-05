@@ -268,9 +268,22 @@ def detect_hashed_build(game_dir):
     return False, ""
 
 
-def _is_critical(relative, hashed):
+def _entry_ref_paths(game_dir):
+    """Root-relative posix paths of the local scripts / modulepreloads the entry index.html
+    loads (query + fragment + leading './' or '/' stripped). In a hashed build these ARE the
+    code: DYEFIELD 1.5.0 shipped an index.html pointing at an entry JS whose upload had
+    silently failed (live 404 until re-uploaded by hand) because the gate only knew runtime/."""
+    out = set()
+    for ref in _entry_script_refs(game_dir):
+        out.add(re.sub(r"^(?:\./|/)+", "", ref.split("#", 1)[0].split("?", 1)[0]))
+    return out
+
+
+def _is_critical(relative, hashed, entry_refs=()):
     """A failed upload of this file must stop the deploy before the entry page goes up."""
     if relative.name in CRITICAL_FILES:
+        return True
+    if relative.as_posix() in entry_refs:
         return True
     parts = relative.parts
     if hashed or relative.suffix.lower() not in _CRITICAL_JS_SUFFIXES:
@@ -294,6 +307,7 @@ def plan_uploads(game_dir, slug, force=False, manifest=None):
     game_dir = Path(game_dir)
     manifest = {} if manifest is None else manifest
     hashed, evidence = detect_hashed_build(game_dir)
+    entry_refs = _entry_ref_paths(game_dir)
     ALWAYS = {"index.html", "game_meta.json", "content.json"}   # code/metadata: always re-push
     body, deferred = [], {}
     skipped_dev = unchanged = 0
@@ -323,7 +337,7 @@ def plan_uploads(game_dir, slug, force=False, manifest=None):
                 continue                      # unchanged + already uploaded -> skip
             # new or changed asset -> upload (manifest updated on success)
         item = {"path": file_path, "relative": relative, "key": r2_key, "md5": _h,
-                "critical": _is_critical(relative, hashed), "phase": "body"}
+                "critical": _is_critical(relative, hashed, entry_refs), "phase": "body"}
         if len(relative.parts) == 1 and relative.name in DEFERRED_ROOT_FILES:
             item["phase"] = "entry" if relative.name == "index.html" else "meta"
             deferred[relative.name] = item

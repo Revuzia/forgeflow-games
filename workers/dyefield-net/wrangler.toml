@@ -1,0 +1,35 @@
+# dyefield-net: the DYEFIELD real-time relay (CONTRACT_ONLINE.md §O2). Workers Free + SQLite-backed Durable Objects.
+# Deploy ONLY in the stage the orchestrator names (§O12.1), with CLOUDFLARE_API_TOKEN unset (OAuth).
+name = "dyefield-net"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "LOBBY"
+class_name = "Lobby"
+
+[[durable_objects.bindings]]
+name = "ROOM"
+class_name = "Room"
+
+[[durable_objects.bindings]]
+name = "METER"
+class_name = "Meter"
+
+# SQLite-backed classes only: `new_classes` (key-value backend) is Workers Paid only.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Lobby", "Room", "Meter"]
+
+[vars]
+ALLOWED_ORIGINS = "https://forgeflow-games-cdn.isimcha85.workers.dev,https://forgeflowgames.com,https://www.forgeflowgames.com"
+# §O9.3a: "strict" = admission on raw (1:1) against RAW_CAP; "billing20" = admission on units against DAILY_UNIT_CAP.
+# Switch to "billing20" only after the owner's dashboard reading confirms 20:1 counting on the Free plan.
+COUNT_MODE = "strict"
+RAW_CAP = "55000"
+# 60000 on Free; 85000 once DO requests are confirmed separate from the Workers 100k/day; <= 30000 on Workers Paid (§O9.4).
+DAILY_UNIT_CAP = "60000"
+PER_IP_ROOM = "8"
+PER_IP_LOBBY = "4"
+PROTO = "1"

@@ -1,0 +1,17 @@
+{
+  "name": "dyefield-net",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "DYEFIELD real-time relay: Cloudflare Worker + SQLite Durable Objects (Lobby, Room, Meter)",
+  "scripts": {
+    "dev": "wrangler dev --local --port 8790",
+    "typecheck": "wrangler types --env-interface CfEnv && node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+    "types": "wrangler types --env-interface CfEnv",
+    "test": "node test/run_all.mjs",
+    "dry-run": "wrangler deploy --dry-run --outdir .wrangler/dry"
+  },
+  "devDependencies": {
+    "wrangler": "^4.92.0"
+  }
+}

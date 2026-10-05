@@ -1,0 +1,12 @@
+# LOCAL A/B baseline for the T9 latency test only. Never deploy this.
+name = "dyefield-net-baseline-local"
+main = "index.js"
+compatibility_date = "2025-06-01"
+
+[[durable_objects.bindings]]
+name = "BASE"
+class_name = "Base"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Base"]
