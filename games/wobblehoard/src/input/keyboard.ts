@@ -1,8 +1,13 @@
-// Keyboard glue. Space = poke the centre (hold it to squish: it is a synthetic pointer at the body's centre, so it runs
-// the SAME gesture code as a finger), G = gravity <-> float, M = mute, Escape = close the panel.
-// Extras for people who cannot drag: arrow keys orbit, + / - zoom.
-// Shortcuts stay out of the way of focused controls (a slider owns the arrows, a button owns Space).
-import type { App } from '../app.ts';
+// Keyboard glue. Space = poke the centre (hold it to squish: it is a synthetic pointer at the body's centre, so it runs the SAME gesture
+// code as a finger), G = gravity <-> float, M = mute, Escape = close the panel. Extras for people who cannot drag: arrow keys orbit,
+// + / - zoom. During a ceremony Space, Enter and Escape skip it (after the 350 ms gate).
+//
+// Focus rules (WCAG 2.1.1 / 2.1.4; audit findings 12 and 13):
+//   * A focused control (button, input, select, a role=button/switch/slider/radio element, contentEditable) owns its keys: Space activates
+//     the button, arrows move the slider, and the single-letter shortcuts G and M do NOTHING there (M is the Quality select's typeahead).
+//   * The squishy's own focus target (src/ui/playTarget.ts, role=application) and the page itself (nothing focused) are play surfaces.
+//   * G and M can be switched off in Settings ("Keyboard shortcuts"); Ctrl / Cmd / Alt combinations are always left alone.
+import type { Game as App } from '../shell/game.ts';
 
 export const KEY_POINTER_ID = -1000;
 const ORBIT_PX = 26;
@@ -15,6 +20,10 @@ export interface KeyTarget {
 export interface KeyboardOptions {
   /** Escape pressed: return true if something was closed (then the event is consumed). */
   onEscape(): boolean;
+  /** G / M allowed (Settings.shortcuts). Default: always. */
+  shortcutsEnabled?(): boolean;
+  /** a key reached the toy (the hint switches to keyboard wording) */
+  onKeyUsed?(): void;
 }
 
 interface KeyEventLike extends Event {
@@ -22,17 +31,19 @@ interface KeyEventLike extends Event {
 }
 
 const INTERACTIVE = new Set(['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'A', 'SUMMARY']);
-function interactiveTarget(t: EventTarget | null): boolean {
+/** true for a focused control that owns its keys; the squishy's play target is NOT one (role=application is ours). */
+export function interactiveTarget(t: EventTarget | null): boolean {
   const el = t as (Element & { isContentEditable?: boolean }) | null;
   if (!el || typeof el.tagName !== 'string') return false;
   if (INTERACTIVE.has(el.tagName)) return true;
   if (el.isContentEditable) return true;
   const role = el.getAttribute?.('role');
-  return role === 'button' || role === 'switch' || role === 'slider' || role === 'radio';
+  return role === 'button' || role === 'switch' || role === 'slider' || role === 'radio' || role === 'menuitem' || role === 'tab' || role === 'textbox' || role === 'combobox' || role === 'option';
 }
 
 export function attachKeyboard(target: KeyTarget, app: Pick<App, 'input' | 'phase' | 'toggleGravity' | 'toggleMute'>, opts: KeyboardOptions): () => void {
   let spaceHeld = false;
+  const shortcuts = opts.shortcutsEnabled ?? (() => true);
 
   const releaseSpace = (cancel: boolean): void => {
     if (!spaceHeld) return;
@@ -45,24 +56,31 @@ export function attachKeyboard(target: KeyTarget, app: Pick<App, 'input' | 'phas
   const onDown = (ev: Event): void => {
     const e = ev as KeyEventLike;
     if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (e.key === 'Escape') { if (opts.onEscape()) e.preventDefault(); return; }
+    const key = e.key;
+    const space = key === ' ' || e.code === 'Space';
+    // a ceremony: Space / Enter / Escape skip it (the 350 ms gate is the ceremony controller's), nothing else reaches the toy
+    if (app.phase === 'play' && (space || key === 'Enter' || key === 'Escape') && !interactiveTarget(e.target) && app.input.skip()) { e.preventDefault(); return; }
+    if (key === 'Escape') { if (opts.onEscape()) e.preventDefault(); return; }
     if (app.phase !== 'play') return;
     const inControl = interactiveTarget(e.target);
-    const key = e.key;
-    if (key === ' ' || e.code === 'Space') {
+    if (space) {
       if (inControl) return;
       e.preventDefault();
       if (e.repeat || spaceHeld) return;
       const c = app.input.screenCentre();
       if (!c) return;
       spaceHeld = true;
+      opts.onKeyUsed?.();
       app.input.pointerDown({ id: KEY_POINTER_ID, x: c.x, y: c.y, type: 'touch' });
       return;
     }
-    if (e.repeat && (key === 'g' || key === 'G' || key === 'm' || key === 'M')) return;
-    if (key === 'g' || key === 'G') { app.toggleGravity(); return; }
-    if (key === 'm' || key === 'M') { app.toggleMute(); return; }
-    if (inControl) return; // arrows belong to a focused slider / select
+    if (inControl) return; // letters, arrows and +/- belong to a focused control (a slider's arrows, a select's typeahead)
+    if (key === 'g' || key === 'G' || key === 'm' || key === 'M') {
+      if (e.repeat || !shortcuts() || app.input.live === false) return;   // live: no ceremony, nothing suspended (context loss)
+      opts.onKeyUsed?.();
+      if (key === 'g' || key === 'G') app.toggleGravity(); else app.toggleMute();
+      return;
+    }
     switch (key) {
       case 'ArrowLeft': e.preventDefault(); app.input.orbitBy(-ORBIT_PX, 0); break;
       case 'ArrowRight': e.preventDefault(); app.input.orbitBy(ORBIT_PX, 0); break;
@@ -70,7 +88,9 @@ export function attachKeyboard(target: KeyTarget, app: Pick<App, 'input' | 'phas
       case 'ArrowDown': e.preventDefault(); app.input.orbitBy(0, ORBIT_PX); break;
       case '+': case '=': e.preventDefault(); app.input.zoomBy(-1); break;
       case '-': case '_': e.preventDefault(); app.input.zoomBy(1); break;
+      default: return;
     }
+    opts.onKeyUsed?.();
   };
   const onUp = (ev: Event): void => {
     const e = ev as KeyEventLike;

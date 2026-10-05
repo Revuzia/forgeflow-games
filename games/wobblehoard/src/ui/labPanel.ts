@@ -1,6 +1,7 @@
 // Sound lab (?lab=1, dev only): one button per voice. "Squish" is a hold button: press and keep it down to hear the
 // continuous squelch with a scripted compression ramp, let go to end it. Works with mouse, touch and keyboard (Space/Enter).
 import type { App } from '../app.ts';
+import './dev.css';
 import { h } from './dom.ts';
 
 export interface LabPanel { el: HTMLElement; destroy(): void }

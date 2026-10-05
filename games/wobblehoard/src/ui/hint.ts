@@ -18,8 +18,10 @@ export function createHintController(idleMs: number = HINT_IDLE_MS): HintControl
   };
 }
 
-/** Wording per input style. One line, plain words. */
+/** Wording per input style. One line, plain words, ONE wording for the pull everywhere ("drag out to stretch": press on the squishy,
+ *  then drag away from it). The keyboard line appears once a key has been used (audit finding 17). */
 export const HINT_TEXT = {
-  touch: 'Tap to poke · hold to squish · pull the edge',
-  pointer: 'Click to poke · hold to squish · drag off the edge to pull',
+  touch: 'Tap to poke · hold to squish · drag out to stretch',
+  pointer: 'Click to poke · hold to squish · drag out to stretch',
+  keyboard: 'Space to poke · hold Space to squish · arrows look around',
 } as const;

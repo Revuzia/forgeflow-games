@@ -1,7 +1,7 @@
 // Thin DOM glue: pointer events on the canvas -> App.input (which owns ndc conversion, the raycast through the camera
 // and the gesture state machine). Everything touch-hostile the browser would do on its own is switched off here:
 // scrolling, pull-to-refresh, double-tap zoom, pinch-zoom of the page, text selection, the context menu.
-import type { App } from '../app.ts';
+import type { Game as App } from '../shell/game.ts';
 
 export interface PointerGlueApp { input: App['input']; unlockAudio(): void }
 

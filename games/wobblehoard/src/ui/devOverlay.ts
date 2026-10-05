@@ -1,6 +1,7 @@
 // ?dev=1: a tiny stats readout. It deliberately does not call audio.stats() (that call resets the analyser peak the
 // harness reads), only the stage and body metrics.
 import type { App } from '../app.ts';
+import './dev.css';
 import { h } from './dom.ts';
 
 export function createDevOverlay(root: HTMLElement, app: Pick<App, 'stage' | 'body' | 'fps' | 'phase'>): { el: HTMLElement; destroy(): void } {

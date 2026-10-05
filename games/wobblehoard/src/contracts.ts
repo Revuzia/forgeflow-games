@@ -314,6 +314,20 @@ export interface Settings {
   shake: number;        // 0..1 screen-shake strength (0 = off). Defaults to 0 when prefers-reduced-motion.
   gravity: boolean;     // true tabletop, false floating
   quality: QualityTier | 'auto';
+  /* SHELL-2a (optional, additive; CONTRACT section 8 "planned"). Absent = the player never chose: the shell uses the default
+   * (src/core/settings.ts resolveSettings), so an old stored blob keeps working and Calm keeps following prefers-reduced-motion. */
+  /** Music bed volume 0..1 (= AudioSettings.music; 0 = off). Default 0.45, the designed level (SOUND.md round 3). */
+  music?: number;
+  /** Extra squish: a deeper press for the same hold (scales the finger-pressure target toward full depth). Default off (NEXT_STEPS B8). */
+  extraSquish?: boolean;
+  /** Calm effects (DESIGN 6.6): stage.setCalmEffects + `calm` on the ceremony sounds. Default = prefers-reduced-motion. */
+  calm?: boolean;
+  /** Skip animations (DESIGN 6.6): ceremonies jump straight to the reveal frame. Default off. */
+  skipAnimations?: boolean;
+  /** Fast open (DESIGN 6.1): repeat Common and Uncommon capsules play the 0.8 s quick pop. Default off. */
+  fastOpen?: boolean;
+  /** Single-key shortcuts (G gravity, M mute) on or off (WCAG 2.1.4). Default on. */
+  shortcuts?: boolean;
 }
 
 /** `window.__WH__`, exposed only when the URL has ?dev=1. Deterministic stepping makes screenshots and probes reproducible. */

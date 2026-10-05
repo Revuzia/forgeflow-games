@@ -1,0 +1,11 @@
+/* Pre-boot paint (linked from index.html, so the page needs no inline <style>: a strict style-src 'self' CSP works; audit finding 21).
+   The colours match --wh-ink / --wh-cream in src/ui/theme.ts; the real stylesheet arrives with the app bundle. */
+html, body { margin: 0; height: 100%; background: #14102a; color: #fff1d6; overflow: hidden; overscroll-behavior: none;
+  touch-action: none; -webkit-user-select: none; user-select: none; font-family: system-ui, sans-serif; }
+#boot { position: fixed; inset: 0; display: grid; place-items: center; align-content: center; gap: 14px; padding: 24px; text-align: center;
+  font-weight: 900; letter-spacing: .08em; font-size: 18px; }
+/* The boot watchdog without a script: if the app has not replaced #boot after 12 s (blocked script, dead network), this line appears. */
+#boot::after { content: "This is taking a while. Check your connection, then reload."; font-weight: 700; letter-spacing: 0; font-size: 15px;
+  max-width: 30ch; opacity: 0; animation: wh-boot-slow 0.01s linear 12s forwards; }
+@keyframes wh-boot-slow { to { opacity: 1; } }
+noscript { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; background: #14102a; }

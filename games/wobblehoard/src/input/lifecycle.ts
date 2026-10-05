@@ -3,7 +3,7 @@
 //  * blur / orientationchange -> release every pointer (a mouse button released outside the window never reports its up)
 //  * iOS only lets audio start from touchend/click (not pointerdown), and an AudioContext can be 'interrupted' again by a
 //    call or app switch: so any later gesture re-tries unlock() while the context is not running (cheap, idempotent).
-import type { App } from '../app.ts';
+import type { Game as App } from '../shell/game.ts';
 
 export function attachLifecycle(app: Pick<App, 'setHidden' | 'input' | 'unlockAudio' | 'profile'>): () => void {
   const off: Array<() => void> = [];

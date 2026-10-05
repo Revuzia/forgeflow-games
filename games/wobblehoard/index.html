@@ -7,31 +7,26 @@
 <meta name="theme-color" content="#14102a">
 <meta name="color-scheme" content="dark">
 <meta name="description" content="WOBBLEHOARD: a squishy toy that squishes back. Poke it, squash it, pull it, let go.">
+<!--
+  No inline script and no inline style on this page, so the production build runs under a strict Content Security Policy.
+  Recommended response header for dist/ (the CDN or the portal sets it; a <meta> tag cannot carry frame-ancestors):
+    Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self';
+      font-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors <the portal origin>
+  img-src data: covers the favicon below and the Quality select's arrow (src/ui/styles.css). The app sets styles only through the CSSOM
+  (element.style.setProperty), which style-src 'self' allows. _harness/browser_shell.mjs serves the built dist/ with this policy
+  (frame-ancestors aside) and fails on any CSP violation. The dev server (vite) injects inline modules and styles: dev is not covered.
+-->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 3c2 4 9 7 10 14 1 6-4 12-10 12S5 24 6 17C7 10 14 7 16 3z' fill='%23ffb347'/%3E%3Ccircle cx='12' cy='19' r='2' fill='%2314102a'/%3E%3Ccircle cx='20' cy='19' r='2' fill='%2314102a'/%3E%3C/svg%3E">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<style>
-  /* Pre-boot paint only (matches --wh-ink in src/ui/theme.ts); the real stylesheet loads with the app. */
-  html, body { margin: 0; height: 100%; background: #14102a; color: #fff1d6; overflow: hidden; overscroll-behavior: none;
-    touch-action: none; -webkit-user-select: none; user-select: none; font-family: system-ui, sans-serif; }
-  #boot { position: fixed; inset: 0; display: grid; place-items: center; font-weight: 900; letter-spacing: .08em; font-size: 18px; }
-  noscript { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; background: #14102a; }
-</style>
+<link rel="stylesheet" href="./src/ui/boot.css">
 </head>
 <body>
-<canvas id="stage" role="img" aria-label="Your squishy, a soft translucent blob. Poke it, hold to squish, pull it from the edge."></canvas>
+<canvas id="stage" role="img" aria-label="Your squishy: a soft translucent toy on a felt mat."></canvas>
 <div id="ui"></div>
 <div id="boot" role="status">WOBBLEHOARD</div>
 <noscript>WOBBLEHOARD needs JavaScript to run. Please switch it on and reload.</noscript>
-<script>
-  // If the app has not started after 12 s (blocked script, dead network), say so instead of sitting on a blank page.
-  setTimeout(function () {
-    if (window.__whBooted) return;
-    var b = document.getElementById('boot');
-    if (b) { b.textContent = 'This is taking a while. Check your connection, then reload.'; b.style.padding = '24px'; b.style.textAlign = 'center'; }
-  }, 12000);
-</script>
 <script type="module" src="./src/main.ts"></script>
 </body>
 </html>
