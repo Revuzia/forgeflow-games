@@ -169,7 +169,8 @@ export class Capsule {
   }
   slideTo(x: number, z: number, k: number): void { this.pos.x += (x - this.pos.x) * k; this.pos.z += (z - this.pos.z) * k; }
 
-  setSqueeze(p: number): void { this.squeeze = Math.min(1, Math.max(0, p)); }
+  setSqueeze(p: number): void { this.squeeze = Number.isFinite(p) ? Math.min(1, Math.max(0, p)) : 0; }
+  get squeezeAmount(): number { return this.squeeze; }
   /** Crack spread 0..1 and the tell: leak amount 0..1.5 with the tier colour (linear), prism = rainbow cracks. */
   setCrack(crack: number, leak: number, c: [number, number, number], prism: boolean): void {
     this.u.uCrack.value = crack; this.u.uLeakAmt.value = leak; this.leak = leak;

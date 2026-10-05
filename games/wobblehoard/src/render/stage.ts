@@ -86,6 +86,10 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   let trauma = 0, shakeScale = 1;
   let cssW = 1, cssH = 1, dpr = 1;
   let bodyScale = 1;
+  // camera framing scale: eases toward the primary body's size (or the ceremony result's size from its burst on), so a result
+  // that is bigger or smaller than the body it replaces never makes the framing jump; skip() snaps it (the crossfade hides that)
+  let camScale = 1;
+  let framing: number | null = null;
   let floatMode = false, floatT = 0;
   let calm = false;
   let disposed = false, lost = false;
@@ -103,7 +107,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   let capsuleId = 0;
 
   const primary = (): BodyView | null => views.find((v) => v.id === primaryId) ?? null;
-  const fitDistance = (): number => bodyScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect));
+  const fitDistance = (): number => camScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect));
 
   /** Where the meter-full capsule lands: beside the primary body when the frame is wide enough to show it whole, else in front of it. */
   function capsuleSpot(p: BodyView | null): { x: number; z: number } {
@@ -131,7 +135,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     if (pos) v.proxy.setOffset(pos.x, pos.y, pos.z);
     scene.add(v.group);
     views.push(v);
-    if (primaryId === null) { primaryId = v.id; bodyScale = v.scale; }
+    if (primaryId === null) { primaryId = v.id; bodyScale = v.scale; if (!director.active) camScale = bodyScale; }
     return v;
   }
   function removeView(v: BodyView): void {
@@ -158,13 +162,14 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     yaw += (tYaw - yaw) * k;
     pitch += (tPitch - pitch) * k;
     zoomF += (tZoom - zoomF) * k;
+    camScale += ((framing ?? bodyScale) - camScale) * (1 - Math.exp(-dt * 4));
     // follow the primary body gently (it can drift when shoved or floating); a ceremony keeps the pad centred
-    let wx = 0, wy = TARGET_Y * bodyScale, wz = 0;
+    let wx = 0, wy = TARGET_Y * camScale, wz = 0;
     const p = primary();
     if (p && !director.active) {
       const c = p.proxy.center;
       wx = c.x * 0.6; wz = c.z * 0.6;
-      wy = TARGET_Y * bodyScale + Math.max(0, c.y - TARGET_Y * bodyScale) * 0.7;
+      wy = TARGET_Y * camScale + Math.max(0, c.y - TARGET_Y * camScale) * 0.7;
     }
     const kt = 1 - Math.exp(-dt * 6);
     tgt.x += (wx - tgt.x) * kt; tgt.y += (wy - tgt.y) * kt; tgt.z += (wz - tgt.z) * kt;
@@ -196,7 +201,8 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     createOwned(genome, createBody, t) { return addView(createBody(genome), genome, t, true); },
     allViews: () => views,
     removeView,
-    makePrimary(v) { primaryId = v.id; v.owned = false; bodyScale = v.scale; },
+    makePrimary(v) { primaryId = v.id; v.owned = false; bodyScale = v.scale; framing = null; },
+    setFraming(scale, snap) { framing = scale; if (snap) camScale = scale ?? bodyScale; },
     capsule: () => capsule,
     ensureCapsule() {
       if (!capsule) { capsule = new Capsule(hub, quad, !TIERS[tier].transmission); capsule.placeStanding(0, 0.25); scene.add(capsule.group); capsuleId++; }
@@ -239,7 +245,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       director.abort();
       stage.clearBodies();
       const v = addView(body, genome, 'common', false);
-      primaryId = v.id; bodyScale = v.scale;
+      primaryId = v.id; bodyScale = v.scale; camScale = bodyScale; framing = null;
       tgt.set(body.center.x * 0.6, TARGET_Y * bodyScale, body.center.z * 0.6);
       governor.resetWindow(24);
     },
@@ -306,8 +312,9 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       updateCamera(d, time);
       table.update(camera);
       for (const v of views) {
+        v.clock += d;                     // every view ages, hidden ones too (a ceremony result is created hidden at t = 0)
         if (!v.visible) continue;
-        v.update(d, time, input.pointerNdc, camera, floatT, v.owned ? d * ts : 0);
+        v.update(d, v.clock, input.pointerNdc, camera, floatT, v.owned ? d * ts : 0);
       }
       capsule?.update(d * ts, time);
       particles.update(d * ts, time);

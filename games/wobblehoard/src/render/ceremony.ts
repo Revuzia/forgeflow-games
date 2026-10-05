@@ -38,6 +38,12 @@ export function mergeDuration(tier: TierName, o: { tierUp?: boolean; calm?: bool
 
 // ---- the 6.3 escalation table (index = tier) ----
 const PREROLL_S = [0, 0, 0.3, 0.5, 0.8, 1.0];
+/**
+ * Merge T3 (burst) time per result tier, nominal seconds from the start: T0 press 0.4 + T1 fold 0.5 + T2 charge (the rest).
+ * These are the audio lane's `MERGE_CHARGE_S` (src/audio/ceremony.ts, _spec/SOUND.md "Time map"), so `mergeStart()` at 0 with its
+ * default `chargeS` and `burst()` on the 'burst' beat line up; T4 (the reveal) gets the rest of the DESIGN 6.1 budget.
+ */
+export const MERGE_BURST_AT_S = [1.3, 1.5, 1.8, 2.1, 2.4, 2.8];
 const MOTES = [12, 24, 40, 70, 120, 200];
 const GLITTER = [0, 6, 12, 0, 0, 0];
 const SPIRAL = [0, 0, 0, 24, 0, 0];
@@ -75,6 +81,8 @@ export interface CeremonyHost {
   removeFromScene(o: THREE.Object3D): void;
   /** Render the current state to the screen and start a crossfade snapshot of it. */
   crossfade(seconds: number): void;
+  /** Camera framing: ease toward a body scale (the result's, from its burst on); null = the primary body's. `snap` jumps there. */
+  setFraming(scale: number | null, snap?: boolean): void;
   shake(a: number): void;
   /** World half-width of the frame at the table centre at the rest framing (so a ceremony can start its bodies inside the picture). */
   viewHalfWidth(): number;
@@ -129,6 +137,11 @@ abstract class Run implements CeremonyHandle {
     if (this.finished || this.skipping) return;
     this.host.crossfade(SKIP_CROSSFADE_S);
     this.finalize(true);
+    // the final reveal frame, exactly: the result's own clock (every time-phased idle effect reads it) jumps to where the natural
+    // ending will have it once the 120 ms crossfade is over, and the framing snaps to the result (the crossfade hides the cut)
+    const v = this.resultView;
+    if (v) v.clock = Math.max(v.clock, this.duration - SKIP_CROSSFADE_S);
+    this.host.setFraming(null, true);
     this.beat('reveal'); this.beat('settle');
     this.skipping = true; this.skipLeft = SKIP_CROSSFADE_S;
   }
@@ -235,8 +248,9 @@ export class CapsuleRun extends Run {
   private cx = 0; private cz = 0;
   private drop = { y: 0.5, vy: 0.7, bounces: 0, landed: false, age: 0 };
   private converge = false;
-  private dipT = -1;
   private fadeIn = 0;
+  /** Squeeze the capsule already had when the reveal started (the shell's hold-to-open): B0 continues from it, never jumps back. */
+  private readonly sq0: number;
 
   constructor(host: CeremonyHost, spec: CapsuleRevealSpec, hooks: CeremonyHooks | undefined) {
     const tier = spec.result.tier, calm = host.calm();
@@ -252,6 +266,7 @@ export class CapsuleRun extends Run {
     this.tb = { b0, b1, b2, b3: D - (b0 + b1 + b2), burstAt: b0 + b1, revealAt: b0 + b1 + b2 };
     this.cap = host.capsule() ?? host.ensureCapsule();
     if (!this.cap.landed && this.cap.group.visible === false) this.cap.placeStanding(0, 0.25);
+    this.sq0 = this.cap.squeezeAmount;
     this.others = spec.keepCurrent ? [] : host.allViews().filter((v) => v.visible);
     this.pillar = i === 4 ? new LightPillar() : null;
     this.dome = i === 5 ? new PrismDome() : null;
@@ -275,7 +290,7 @@ export class CapsuleRun extends Run {
     this.cx = cap.pos.x; this.cz = cap.pos.z;
     // --- B0: grab ---
     if (t < b0) {
-      cap.setSqueeze(0.7 + 0.3 * smooth(0, b0, t));
+      cap.setSqueeze(this.sq0 + (1 - this.sq0) * smooth(0, b0, t));
       if (!this.calm) cap.wobble(0.9 * Math.sin(t * 52) * dt * 12);
     }
     // --- B1: crack (+ the tier pre-roll): light leaks through the cracks in the TIER colour ---
@@ -348,6 +363,7 @@ export class CapsuleRun extends Run {
     this.drop = { y: 0.3, vy: 0.6, bounces: 0, landed: false, age: 0 };
     v.proxy.setOffset(this.cx, this.drop.y, this.cz);
     v.proxy.scale = 0.55;
+    host.setFraming(v.scale);
     this.burstParticles(this.cx, 0.4, this.cz, v.scale, v);
     this.startRamp();
     void i;
@@ -431,7 +447,7 @@ export class MergeRun extends Run {
     const i = this.style.index;
     const nominal = MERGE_BUDGET_S[tier] + (tierUp ? TIER_UP_ACCENT_S : 0);
     const ks = this.ks = D / nominal;
-    const T0 = 0.4 * ks, T1 = 0.5 * ks, T2 = (0.4 + 1.5 * PREROLL_S[i]) * ks, T3 = 0.2 * ks;
+    const T0 = 0.4 * ks, T1 = 0.5 * ks, T2 = (MERGE_BURST_AT_S[i] - 0.9) * ks, T3 = 0.2 * ks;
     const T4 = D - (T0 + T1 + T2 + T3);
     this.b = { t0: 0, t1: T0, t2: T0 + T1, t3: T0 + T1 + T2, t4: T0 + T1 + T2 + T3, a1: T0, a2: T1, a3: T2, a4: T4 };
     this.others = host.allViews().filter((v) => v.visible);
@@ -569,6 +585,7 @@ export class MergeRun extends Run {
     const v = this.resultView as BodyView;
     v.setVisible(true);
     v.proxy.setOffset(0, 0, 0); v.proxy.scale = 1;
+    host.setFraming(v.scale);
     // springs open: overshoots ~1.25x, then settles (native burstOpen, or the proxy's puppet spring)
     if (v.proxy.native.burst) v.proxy.burstOpen(1); else v.proxy.popFrom(-0.2, 7.2);
     const mix = v.mats.uniforms;

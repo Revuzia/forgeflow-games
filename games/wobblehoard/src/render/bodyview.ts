@@ -38,6 +38,13 @@ export class BodyView {
   readonly fp: Footprint = { cx: 0, cz: 0, rx: 0.5, rz: 0.5, lowY: 0, compression: 0, stretch: 0 };
   /** Extra pool light (capsule tell, merge charge) 0..1 added by the ceremonies. */
   extraPool = 0;
+  /**
+   * The view's OWN clock (seconds since it was created). Every time-phased idle effect (blink, breathing, core pulse, aurora,
+   * thin-film drift, orbiting motes / satellites, glitter twinkle, pool caustics) reads this, never the stage's global time, so
+   * a body's look is a function of its own age: a ceremony skip() can fast-forward the result to EXACTLY the frame the natural
+   * ending reaches, and two bodies on the table do not breathe in lockstep. Advanced by the stage every frame (hidden views too).
+   */
+  clock = 0;
   private spec: TierSpec;
   private readonly hub: EnvHub;
   private smComp = 0; private smStretch = 0; private prevSq = 0; private sqRate = 0; private touchGate = 0; private grabGate = 0;
@@ -101,7 +108,7 @@ export class BodyView {
 
   /**
    * One frame: sync the proxy (offset + puppet), refresh the fine mesh, then core / face / FX / decals / rarity.
-   * `simDt` steps an owned body (ceremony time-scale); `fxDt` drives particles and the eased state.
+   * `simDt` steps an owned body (ceremony time-scale). `time` is this view's own clock (see `clock`; the stage advances it).
    */
   update(dt: number, time: number, pointer: { x: number; y: number } | null, camera: THREE.PerspectiveCamera | null, floatT: number, simDt: number): void {
     if (this.disposed) return;

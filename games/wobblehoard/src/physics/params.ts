@@ -140,11 +140,9 @@ export const FINGER = {
    *  rest radii) until no vertex under the footprint is inside the tip. A tip wider than the swirl-peak otherwise starts with the apex
    *  already inside it and pushes it out sideways. */
   maxLift: 0.35,
-  /** Floppy skin (weight x this) is pushed out of the tip along a blend of the radial and the finger-travel direction instead of purely
-   *  radially: it is carried along as the peak is shoved over, instead of being slid round the sphere (wrapped, then folded). */
-  peakAxial: 0.8,
   /** Cap (m/s) on how fast the tip may move into the body: the critically damped ease reaches ~6 m/s on a full-pressure tap. tuned: 3.5 left
-   *  the peak unfolded under a hard shove but flopped only 17% R (the gate wants 25%: the flop IS partly that violence); 5.5 keeps ~29%. */
+   *  the peak unfolded under a hard shove but flopped only 17% R (the gate wants 25%: the flop IS partly that violence); 5.5 keeps ~29% (28% since the
+   *  fingertip projects every particle radially: the removed 'peakAxial' exit, see softbody.ts, collisions). */
   maxSpeed: 5.5,
   /** Max speed (rest radii per second) at which the tip sphere grows with pressure (it shrinks at once). */
   growRate: 0.6,

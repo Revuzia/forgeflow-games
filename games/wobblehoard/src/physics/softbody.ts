@@ -950,23 +950,16 @@ export class SoftBody implements SoftBodyLike {
         const y0 = XP[i + 1];
         let nx: number, ny: number, nz: number, pen: number;
         const px0 = XP[i], pz0 = XP[i + 2];
-        const wa = FINGER.peakAxial * this.floppyW[i / 3];
+        // Minimum-distance (radial) projection onto the sphere, for every particle. (An earlier "axial" exit pushed floppy skin out
+        // along the finger's travel instead: a swirl-peak vertex that had entered the sphere BEHIND its centre was carried straight
+        // through it to the leading face, past its own neighbours, and on the leading face it kept a squashed cone from spreading
+        // sideways, so the apex triangles piled up on the sphere's cap and overlapped: 171-180 degree folds under a press on the peak
+        // base. The radial exit spreads a squashed thin feature outward like real jelly; the contact friction below carries the skin.)
         if (d2 > 1e-14) {
           const d = Math.sqrt(d2);
           nx = dx / d; ny = dy / d; nz = dz / d; pen = r - d;
-          if (wa > 0) {
-            // thin floppy skin is carried along the finger's travel instead of slid around the sphere (it would wrap round it and fold):
-            // exit along a blend of the radial and the travel direction, to the sphere surface
-            let ex = nx * (1 - wa) + f.dx * wa, ey = ny * (1 - wa) + f.dy * wa, ez = nz * (1 - wa) + f.dz * wa;
-            const el = Math.sqrt(ex * ex + ey * ey + ez * ez) || 1;
-            ex /= el; ey /= el; ez /= el;
-            const bq = ex * dx + ey * dy + ez * dz, disc = bq * bq - (d2 - r2);
-            const tt = -bq + Math.sqrt(disc > 0 ? disc : 0);
-            XP[i] = px0 + ex * tt; XP[i + 1] = y0 + ey * tt; XP[i + 2] = pz0 + ez * tt;
-            const qx = XP[i] - cx, qy = XP[i + 1] - cy, qz = XP[i + 2] - cz, ql = Math.sqrt(qx * qx + qy * qy + qz * qz) || 1;
-            nx = qx / ql; ny = qy / ql; nz = qz / ql; pen = Math.max(pen, tt);
-          } else { XP[i] = cx + nx * r; XP[i + 1] = cy + ny * r; XP[i + 2] = cz + nz * r; }
-        } else { nx = f.dx; ny = f.dy; nz = f.dz; pen = r; XP[i] = cx + nx * r; XP[i + 1] = cy + ny * r; XP[i + 2] = cz + nz * r; }
+        } else { nx = f.dx; ny = f.dy; nz = f.dz; pen = r; }
+        XP[i] = cx + nx * r; XP[i + 1] = cy + ny * r; XP[i + 2] = cz + nz * r;
         // contact friction: the skin sticks to the fingertip. Undo (up to mu x penetration) the tangential slide of the
         // particle relative to the tip during this substep, so a finger drags the surface with it instead of letting a
         // sloped press squirt the body out sideways.
