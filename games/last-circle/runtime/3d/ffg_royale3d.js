@@ -8,8 +8,9 @@
  *
  *   menu → lobby → drop → match loop → victory/defeat → stats → menu
  *
- * Frame order (update): input/brains → movement+physics → weapons/projectiles
- * → loot → storm → fx → hud. Bots emit the SAME input struct the
+ * Frame order: input → [fixed SIM_DT ticks from an accumulator: brains →
+ * movement+physics → weapons/projectiles → loot → storm → net] → view (actors
+ * interpolated between ticks, camera, fx, hud, audio). Bots emit the SAME input struct the
  * human's keyboard/mouse produces and run through the same movement/weapon
  * code — "bots are players" is structural, not simulated.
  *
@@ -92,6 +93,12 @@ register3d("royale", async function (kernel, content) {
     if (!W._groups[name]) { const g = new THREE.Group(); g.name = name; W.scene.add(g); W._groups[name] = g; }
     return W._groups[name];
   };
+  // FIXED-TICK accumulator state (see "frame pipeline"). Declared here, before
+  // anything can call startMatch, which resets it.
+  const LOOP = { acc: 0, frozen: true, ticks: 0, dropped: 0, lastTicks: 0 };
+  W.simTick = 0;            // fixed sim ticks run this match (live loop and fastForward alike)
+  W.alpha = 1;              // interpolation factor handed to this frame's view
+  W.frameDt = 0;            // the REAL frame dt the view (camera, shake, fx, hud) runs on
 
   // module init (order matters: audio/fx/hud first — others emit into them)
   audioMod.init(W);
@@ -641,6 +648,8 @@ register3d("royale", async function (kernel, content) {
     // fx.update on phase "menu"), so the NEXT match opened already shaking.
     W.camShake = 0; W.fovPunch = 0; W.hitstopT = 0;
     W._winHold = false; W._winOrbit = 0; W._winDist = 0;
+    // a new match starts with no sim debt and tick 0 (resume-primed on its first frame)
+    LOOP.acc = 0; LOOP.frozen = true; LOOP.lastTicks = 0; W.simTick = 0; W.alpha = 1;
     W._reportedMatch = false;   // portal leaderboard bridge fires once per match
 
     // clear the previous world (every module's disposeMatch, the roster, the
@@ -891,16 +900,68 @@ register3d("royale", async function (kernel, content) {
   // "updaters" section. Only with ?prof=1: without it PROF is null and the frame
   // makes no profiler call at all.
   const PROF = kernel.prof && kernel.prof.enabled ? kernel.prof : null;
+
+  // ── FIXED TICK (PLAN L4 phase B + L5 l, contract C5) ────────────────────────
+  // A port of BLOCKTOOTH src/core/loop.ts:230-289. The SIMULATION advances in
+  // whole SIM_DT ticks from an accumulator fed by the frame's real dt; the VIEW
+  // runs once per rendered frame and draws actors interpolated between their
+  // last two ticks (alpha = acc / SIM_DT). Before this, every module stepped
+  // once per frame with that frame's dt: a jump peaked at a different height at
+  // 30 Hz than at 144 Hz, cadence and movement depended on the display, and a
+  // live match could never replay a fastForward one. Now:
+  //   * dt is clamped to MAX_FRAME_DT and at most MAX_STEPS ticks run per frame;
+  //     debt still owed after that is DROPPED (counted), never fast-forwarded
+  //     (spiral-of-death guard) — a stalled tab never turns into a burst;
+  //   * timeScale (hitstop, solo only) scales sim time only; the view keeps the
+  //     real dt (feel G14: "timeScale scales SIM time only. Rendering always runs");
+  //   * a pause or a non-match phase freezes the accumulator; resuming PRIMES it
+  //     to just under one tick (RESUME_PRIME), so the first frame back continues
+  //     from the last drawn state instead of popping half a tick backwards;
+  //   * fastForward runs the SAME simTick at the same SIM_DT, so a seed replays
+  //     identically through the live loop and through fastForward.
+  // ONLINE (W.net) runs the same fixed tick (two-client sync measured — see the
+  // note in the frame below); hitstop stays solo-only.
+  const SIM_DT = 1 / 60, MAX_STEPS = 5, MAX_FRAME_DT = 0.1;
+  const ACC_EPS = 1e-7, TICK_DUE = SIM_DT - ACC_EPS, RESUME_PRIME = 0.999;
+  /** ONE simulation step of h seconds: bots, player.tick, weapons, loot, storm,
+   *  net. The live accumulator and fastForward both call exactly this. */
+  function simTick(h, live) {
+    if (W.phase !== "over") W.t += h;
+    if (PROF) PROF.begin("bots");
+    botsMod.update(W, h);           // brains → bot input structs (staggered)
+    if (PROF) { PROF.end("bots"); PROF.begin("player"); }
+    if (playerMod.tick) playerMod.tick(W, h); else playerMod.update(W, h);   // movement + physics (all actors)
+    if (PROF) { PROF.end("player"); PROF.begin("weapons"); }
+    weaponsMod.update(W, h);        // fire/reload/projectiles/damage
+    if (PROF) { PROF.end("weapons"); PROF.begin("loot"); }
+    lootMod.update(W, h);           // pickups, chest channels
+    if (PROF) { PROF.end("loot"); PROF.begin("storm"); }
+    stormMod.update(W, h);          // circle, damage ticks, warnings
+    if (PROF) PROF.end("storm");
+    // net.js paces itself on performance.now() (12/8/5 Hz state, 10 Hz bots), so
+    // it is indifferent to how often it is called; never from fastForward (the
+    // deterministic harness path stays offline and silent).
+    if (live && W.net) {
+      if (PROF) PROF.begin("net");
+      netMod.update(W, h);
+      if (PROF) PROF.end("net");
+    }
+    W.simTick++;
+    if (W._tickHook) W._tickHook(W);   // test surface only (harness replay probes)
+  }
+  W.loopStats = () => ({ simDt: SIM_DT, ticks: W.simTick, dropped: LOOP.dropped, lastTicks: LOOP.lastTicks, alpha: W.alpha, acc: LOOP.acc, frozen: LOOP.frozen, fixed: !W._netVarStep });
+
   kernel.onUpdate((dt) => {
     // cinematic menu world (orbit cam, water, storm ring, particles)
     if (W.phase === "menu") {
+      LOOP.frozen = true;
       if (PROF) PROF.begin("menu");
       hudMod.updateMenuWorld(W, Math.min(dt, 0.05));
       if (PROF) PROF.end("menu");
       return;
     }
-    if (W.paused) return;
-    if (W.phase !== "match" && W.phase !== "drop" && W.phase !== "over") return;
+    if (W.paused) { LOOP.frozen = true; return; }
+    if (W.phase !== "match" && W.phase !== "drop" && W.phase !== "over") { LOOP.frozen = true; return; }
     // Victory hold: ~120° of orbit and a slow pull-back across the 2600 ms beat
     // endMatch already pays for. Read by player.js updateCamera — the winning
     // frame used to be a 34 px banner over a motionless world at the default
@@ -910,7 +971,6 @@ register3d("royale", async function (kernel, content) {
       W._winDist = Math.min(1.3, (W._winDist || 0) + Math.min(dt, 0.05) * 0.55);
     }
     const real = Math.min(dt, 0.05);
-    let step = real;
     // HITSTOP — the one Vlambeer technique this build shipped none of; nothing in
     // runtime/ scaled frame dt on impact (the only timeScale-shaped code was the
     // animation-mixer LOD in player.js). SOLO ONLY: net.js broadcasts at 12 Hz and
@@ -918,29 +978,55 @@ register3d("royale", async function (kernel, content) {
     // client drifts it off the link and reads as a dropout. Decremented with the
     // REAL dt so the freeze is the same wall-clock length whatever scale is applied.
     // It scales SIM time only (feel G14; BLOCKTOOTH loop.ts: "timeScale scales SIM
-    // time only. Rendering always runs"): fx, hud and audio get the real dt, so a
-    // kill's damage number, marker and shake keep moving through the freeze.
-    // player.update still holds the camera and gets the sim step until lane L5
-    // splits it (C5); W.frameDt is the real dt for that split to read.
+    // time only. Rendering always runs"): it is the accumulator's timeScale, and
+    // the view (player.frame's camera, fx, hud, audio) gets the real dt.
+    let timeScale = 1;
     if (W.hitstopT > 0) {
       W.hitstopT = Math.max(0, W.hitstopT - dt);
-      if (!W.net) step *= 0.12;
+      if (!W.net) timeScale = 0.12;
     }
     W.frameDt = real;
     followShadow();
-    if (W.phase !== "over") W.t += step;
 
-    if (PROF) PROF.begin("bots");
-    botsMod.update(W, step);        // brains → bot input structs (staggered)
-    if (PROF) { PROF.end("bots"); PROF.begin("player"); }
-    playerMod.update(W, step);      // all actors: movement + physics + camera
-    if (PROF) { PROF.end("player"); PROF.begin("weapons"); }
-    weaponsMod.update(W, step);     // fire/reload/projectiles/damage
-    if (PROF) { PROF.end("weapons"); PROF.begin("loot"); }
-    lootMod.update(W, step);        // pickups, chest channels
-    if (PROF) { PROF.end("loot"); PROF.begin("storm"); }
-    stormMod.update(W, step);       // circle, damage ticks, warnings
-    if (PROF) { PROF.end("storm"); PROF.begin("fx"); }
+    let alpha = 1;
+    if (W._netVarStep) {
+      // TEST SWITCH ONLY (never set by the game): the pre-tick stepping, one
+      // simTick per frame with the frame's dt, drawn at alpha 1 — kept so the
+      // two-client sync probe can compare both. ONLINE RUNS THE FIXED TICK: PLAN
+      // section 7 made that conditional on a two-client SQUAD UP session still
+      // syncing; measured 2026-10-01 (T-tick-actors netsync.py: real net.js over
+      // Supabase Realtime, a private room, host + guest stepped at a cycling
+      // 1/30..1/144 frame dt, the same map + seed for 2 runs per mode): match
+      // clock p90 0.033-0.041 s (variable step 0.024-0.037), each human's copy on
+      // the other client p90 <= 1.09 m (<= 1.01), guest bots median 1.52-1.64 m
+      // (1.51-1.54), p90 3.35-3.63 m (3.06-3.11), every death the same victim in
+      // the same order on both clients, no hostLost, 0 page errors.
+      LOOP.frozen = true;
+      simTick(real, true);
+      LOOP.lastTicks = 1;
+    } else {
+      if (LOOP.frozen) { LOOP.frozen = false; LOOP.acc = SIM_DT * RESUME_PRIME; }
+      LOOP.acc += Math.min(dt, MAX_FRAME_DT) * timeScale;
+      let n = 0;
+      while (LOOP.acc >= TICK_DUE && n < MAX_STEPS) {
+        LOOP.acc = Math.max(0, LOOP.acc - SIM_DT);
+        simTick(SIM_DT, true);
+        n++;
+        // a tick that paused or left the match (match end -> menu) stops here
+        if (W.paused || (W.phase !== "match" && W.phase !== "drop" && W.phase !== "over")) break;
+      }
+      // spiral-of-death guard: whatever is still owed after the cap is dropped
+      if (LOOP.acc >= TICK_DUE) { LOOP.dropped += Math.floor((LOOP.acc + ACC_EPS) / SIM_DT); LOOP.acc = 0; }
+      alpha = LOOP.acc / SIM_DT;
+      alpha = alpha < 0 ? 0 : alpha > 1 ? 1 : alpha;
+      LOOP.lastTicks = n;
+    }
+    W.alpha = alpha;
+
+    // ── view: once per rendered frame, real dt ──
+    if (PROF) PROF.begin("player");
+    if (playerMod.frame) playerMod.frame(W, real, alpha);   // interpolated actors, camera (live mouse look), view pass
+    if (PROF) { PROF.end("player"); PROF.begin("fx"); }
     fxMod.update(W, real);          // particles, tracers, damage numbers
     if (PROF) { PROF.end("fx"); PROF.begin("hud"); }
     hudMod.update(W, real);         // bars, minimap, feed, timers
@@ -948,18 +1034,13 @@ register3d("royale", async function (kernel, content) {
     // audio.js had NO per-frame hook at all — it exported only init/setVolumes/
     // startMenuMusic/startMatchMusic/onMatchEnd, so listener sync, the storm bed,
     // ambience and the music duck had nowhere to live. Deliberately NOT added to
-    // the fastForward loop below: that path is the deterministic test harness and
-    // must stay silent and rAF-free. Guarded because audio.js lands `update` in a
+    // fastForward: that path is the deterministic test harness and must stay
+    // silent and rAF-free. Guarded because audio.js lands `update` in a
     // parallel change and an unguarded call here would throw every frame.
     if (audioMod.update) {
       if (PROF) PROF.begin("audio");
       audioMod.update(W, real);
       if (PROF) PROF.end("audio");
-    }
-    if (W.net) {
-      if (PROF) PROF.begin("net");
-      netMod.update(W, real);
-      if (PROF) PROF.end("net");
     }
 
     // win/lose
@@ -1012,13 +1093,16 @@ register3d("royale", async function (kernel, content) {
     // An INTEGER step count: `for (t = 0; t < s; t += h)` accumulated float error,
     // so fastForward(0.5, 1/30) ran 16 steps (0.533 s) instead of 15 (bots S4).
     // ceil(s/h - 1e-9) keeps the old count wherever s/h is not a whole number.
+    // FIXED TICK: it runs the live loop's own simTick at SIM_DT (stepS is accepted
+    // for old callers and no longer sets the step size), plus the player view at
+    // alpha 1 after each tick (camera + view pass, as player.update did here),
+    // so the same seed replays identically here and through the live accumulator.
+    // An integer tick count; W.t advances by exactly n * SIM_DT.
     fastForward: (seconds, stepS) => {
-      const h = stepS > 0 ? stepS : 1 / 30;
-      const n = Math.max(0, Math.ceil((+seconds || 0) / h - 1e-9));
+      const n = Math.max(0, Math.ceil((+seconds || 0) / SIM_DT - 1e-9));
       for (let i = 0; i < n; i++) {
-        W.t += h;
-        botsMod.update(W, h); playerMod.update(W, h); weaponsMod.update(W, h);
-        lootMod.update(W, h); stormMod.update(W, h);
+        simTick(SIM_DT, false);
+        if (playerMod.frame) playerMod.frame(W, SIM_DT, 1);
         if (W.match && W.match.over) break;
       }
       return controller.state();

@@ -31,7 +31,16 @@ import * as THREE from "three";
 
 /** The skeleton contract every playable Meshy rig must satisfy.
  *  Names verified against all 5 shipping skins (65 GLBs decoded 2026-07-22:
- *  identical hierarchies, 24 bound bones per clip, zero missing targets). */
+ *  identical hierarchies, 24 bound bones per clip, zero missing targets).
+ *
+ *  The 2026-08 Mixamo re-rig renamed every bone "mixamorig:<Name>" (THREE
+ *  sanitizes the colon away -> "mixamorigHips") and uses Mixamo's spine names
+ *  (Spine1/Spine2 for Meshy's Spine01/Spine02). The contract below kept the old
+ *  exact names, so the audit failed ALL FIVE skins on every load (18 "missing"
+ *  bones each, measured 2026-10-01) and every actor's holder on
+ *  "mixamorigRightHand" was reported illegal: 55 false [rig] warnings per load
+ *  that buried any real one. Names are now compared through boneKey(), which
+ *  strips the prefix, and the spine accepts either naming. */
 export const EXPECTED_SKELETON = {
   required: [
     "Hips", "Spine02", "Spine01", "Spine", "Head",
@@ -40,6 +49,8 @@ export const EXPECTED_SKELETON = {
     "RightUpLeg", "RightLeg", "RightFoot",
     "LeftUpLeg", "LeftLeg", "LeftFoot",
   ],
+  // Mixamo spellings accepted for a required (Meshy-named) bone
+  aliases: { Spine02: ["Spine2"], Spine01: ["Spine1"] },
   // neck is lowercase on some Meshy exports — accept either, require one
   oneOf: [["neck", "Neck"]],
   // legal attachment points per kind. THIS is what makes "armor on the face"
@@ -58,23 +69,31 @@ export const EXPECTED_SKELETON = {
   weaponLengthBand: { min: 0.2, max: 1.1 },
 };
 
+/** Contract name of a bone: the Mixamo prefix ("mixamorig:" / sanitized
+ *  "mixamorig") removed, so "mixamorigRightHand" and "RightHand" are one bone. */
+export function boneKey(name) {
+  return String(name || "").replace(/^mixamorig:?/i, "");
+}
+
 /** Walk a rig and audit it against EXPECTED_SKELETON.
  *  Returns { ok, missing, bones, handBone, boneWorldScale, skinnedMeshes,
  *  boundBones } and warns once per violation — a rig that fails here will
  *  misbehave in pose.js (aim chain) and player.js (weapon holder), so the
- *  warning names the downstream victim. */
+ *  warning names the downstream victim. `bones` is keyed by contract name
+ *  (boneKey); the Bone objects keep their real names. */
 export function inspectRig(root, label) {
   const bones = new Map();
   let skinnedMeshes = 0;
   const boundBones = new Set();
   root.traverse((o) => {
-    if (o.isBone) bones.set(o.name, o);
+    if (o.isBone) { const k = boneKey(o.name); if (!bones.has(k)) bones.set(k, o); }
     if (o.isSkinnedMesh) {
       skinnedMeshes++;
       if (o.skeleton) for (const b of o.skeleton.bones) boundBones.add(b.name);
     }
   });
-  const missing = EXPECTED_SKELETON.required.filter((n) => !bones.has(n));
+  const has = (n) => bones.has(n) || (EXPECTED_SKELETON.aliases[n] || []).some((x) => bones.has(x));
+  const missing = EXPECTED_SKELETON.required.filter((n) => !has(n));
   for (const group of EXPECTED_SKELETON.oneOf) {
     if (!group.some((n) => bones.has(n))) missing.push(group.join("|"));
   }
@@ -111,14 +130,15 @@ export function attachToBone(actor, obj, boneName, opts) {
   const kind = (opts && opts.kind) || "weapon";
   const legal = EXPECTED_SKELETON.attachPoints[kind];
   if (!legal) throw new Error(`[rig] unknown attachment kind "${kind}"`);
-  if (!legal.includes(boneName)) {
+  const key = boneKey(boneName);
+  if (!legal.includes(key)) {
     throw new Error(
       `[rig] REFUSED: kind "${kind}" may not attach to bone "${boneName}" ` +
       `(legal: ${legal.join(", ")}). This guard exists because auto-rigged ` +
       `gear glued to the wrong bone is the classic Meshy failure mode.`);
   }
   let bone = null;
-  actor.rig.scene.traverse((o) => { if (o.isBone && o.name === boneName && !bone) bone = o; });
+  actor.rig.scene.traverse((o) => { if (o.isBone && boneKey(o.name) === key && !bone) bone = o; });
   if (!bone) throw new Error(`[rig] bone "${boneName}" not found on ${actor.skin || "actor"}`);
   const holder = new THREE.Group();
   bone.add(holder);
@@ -139,7 +159,7 @@ export function validateAttachments(actor) {
   if (actor.hand) {
     const parent = actor.hand.parent;
     const legal = EXPECTED_SKELETON.attachPoints.weapon;
-    if (!parent || !parent.isBone || !legal.includes(parent.name)) {
+    if (!parent || !parent.isBone || !legal.includes(boneKey(parent.name))) {
       issues.push(`weapon holder parented to "${parent ? parent.name : "nothing"}" — legal: ${legal.join(", ")}`);
     }
     if (parent && parent.isBone) {
@@ -177,4 +197,32 @@ export function validateAttachments(actor) {
   }
   if (issues.length) console.warn(`[rig] ${actor.skin || "actor"} attachment issues:`, issues);
   return { ok: issues.length === 0, issues };
+}
+
+/** Drop every clip track whose target node does not exist under `root`.
+ *
+ *  The clip GLBs are shared across skins and carry the FULL Mixamo hand (65
+ *  bones), while athlete's rig ships 34 bones (no middle/ring/pinky fingers).
+ *  Each orphan track made three's PropertyBinding warn "No target node found"
+ *  once per mixer per clip on first play — 348 orphan tracks across athlete's
+ *  clips, ~180 warnings per load (measured 2026-10-01), and every one of them
+ *  also paid a binding that animates nothing. Run once per cached gltf, before
+ *  any clone builds its mixer, so no instance ever binds an orphan.
+ *  Returns { dropped, kept }. */
+export function pruneClipTracks(root, clips) {
+  const names = new Set();
+  root.traverse((o) => { if (o.name) names.add(o.name); names.add(o.uuid); });
+  let dropped = 0, kept = 0;
+  for (const clip of clips || []) {
+    if (!clip || !clip.tracks) continue;
+    const before = clip.tracks.length;
+    clip.tracks = clip.tracks.filter((t) => {
+      let node;
+      try { node = THREE.PropertyBinding.parseTrackName(t.name).nodeName; } catch (e) { return true; }
+      return !node || names.has(node);
+    });
+    dropped += before - clip.tracks.length;
+    kept += clip.tracks.length;
+  }
+  return { dropped, kept };
 }
