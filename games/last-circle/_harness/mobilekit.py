@@ -109,6 +109,14 @@ OVERLAP_JS = r"""
     if (e.tagName === 'CANVAS' && e.width > 1500) continue;
     if (!vis(e)) continue;
     const r = e.getBoundingClientRect(); if (r.width < 2 || r.height < 2) continue;
+    // LAYOUT_JS's clip rule (Wave-2 L7T request): an element entirely outside its nearest SMALL on-screen overflow-clipping
+    // ancestor (a compass strip, a scroller) shows nothing, so it cannot sit under a touch control
+    let clipped = false;
+    for (let n = e.parentElement; n && n !== document.body; n = n.parentElement) { const s2 = getComputedStyle(n);
+      if (s2.overflowX !== 'visible' || s2.overflowY !== 'visible') { const c = n.getBoundingClientRect();
+        const small = c.left >= -1 && c.top >= -1 && c.right <= innerWidth + 1 && c.bottom <= innerHeight + 1 && (c.width < innerWidth * 0.8 || c.height < innerHeight * 0.8);
+        if (small && (r.right <= c.left + 1 || r.left >= c.right - 1 || r.bottom <= c.top + 1 || r.top >= c.bottom - 1)) clipped = true; break; } }
+    if (clipped) continue;
     for (const c of ctl) {
       const ix = Math.min(r.right, c.r.right) - Math.max(r.left, c.r.left), iy = Math.min(r.bottom, c.r.bottom) - Math.max(r.top, c.r.top);
       if (ix > 2 && iy > 2) hits.push({ hud: e.tagName.toLowerCase() + ' "' + (e.textContent || '').trim().slice(0, 24) + '"', ctl: c.n, area: Math.round(ix * iy) });

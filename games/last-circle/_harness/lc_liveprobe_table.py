@@ -85,12 +85,13 @@ def main():
         print("| %s | %s | %s | %s | %s | %s | %s | %s |" % ((m,) + tuple(agg([x[i] for x in rows], 0) for i in range(7))))
 
     print("\n### Match load / lobby (per map)\n")
-    print("| map | startMatch() ms (menu -> lobby shown) | Enter -> drop s | land fastForward wall s | endgame over? | endgame wall s | PLAY AGAIN -> lobby s |")
-    print("|---|---|---|---|---|---|---|")
+    print("| map | startMatch() ms (menu -> lobby shown) | Enter -> drop s (harness wall) | Enter -> drop s (in-page) | land fastForward wall s | endgame over? | endgame wall s | PLAY AGAIN -> lobby s |")
+    print("|---|---|---|---|---|---|---|---|")
     for m in maps:
         R = [r for r in runs if r["map"] == m]
-        print("| %s | %s | %s | %s | %s | %s | %s |" % (
+        print("| %s | %s | %s | %s | %s | %s | %s | %s |" % (
             m, agg([(r.get("load") or {}).get("ms") for r in R], 0), agg([r.get("lobby_skip_s") for r in R], 2),
+            agg([r.get("lobby_skip_page_s") for r in R], 3),
             agg([(r.get("land_ff") or {}).get("wall_s") for r in R], 1),
             "/".join(str((r.get("endgame") or {}).get("over")) for r in R),
             agg([(r.get("endgame") or {}).get("wall_s") for r in R], 0), agg([r.get("again_load_s") for r in R], 1)))

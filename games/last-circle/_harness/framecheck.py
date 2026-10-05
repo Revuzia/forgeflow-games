@@ -18,7 +18,10 @@ Counted (each with the PLAN threshold it gates on; "was" = the audit's measureme
                       rendered frame: calls <= 250 (was 482), actor-chute calls <= 2, actor-nametag calls <= 1 (L5 e/f)
   skinned tris        per visible actor < 30 k (L5 b)
   match frame         total tris < 5 M (was 16.5 M, L5)
-  forced layouts      CDP LayoutCount per frame: drop 0.00 (was 1.00, L3), match 0.00 (was 0.15, L7)
+  forced layouts      Layout trace events WITH A JS STACK per frame (a stack-traced Chrome trace over 240 drop / 600 match
+                      pumped frames): drop 0.00 (was 1.00, L3), match 0.00 (was 0.15, L7); each forcing call site is printed
+                      (file:line:col). CDP LayoutCount (which also counts the browser's own lifecycle layout after each
+                      evaluate - Wave-3: that was all of Wave-2's 0.01 / 0.02) is information. Falsifier: --plant forced-layout
   allocation          HeapProfiler sampling KB per match frame < 100 (was 554.5, L6 i)
   queryColliders      calls per match frame <= 150 (was 423.2; PLAN says "well below 423" - this harness reads that
                       as <= 150, about a third; L6 may tighten)
@@ -140,8 +143,23 @@ CLUSTER_JS = r"""() => {
   P.onBeforeRender(); const k = W.kernel; if (k.composer) k.composer.render(1 / 60); else k.renderer.render(k.scene, k.camera); P.onAfterRender();
   const row = FC.last;
   live.forEach((a, i) => { a.obj.position.copy(saved[i][0]); if (a.nameTag) a.nameTag.visible = saved[i][1]; if (a.weaponMesh) a.weaponMesh.visible = saved[i][2]; a.obj.updateMatrixWorld(true); });
-  return { n: live.length, chutes: live.filter((a) => a.chute).length, row };
+  return { n: live.length, chutes: live.filter((a) => !!(a.chute && a.chute.visible !== false && a.chute.deployed !== false && a.chute.active !== false)).length, row };
 }"""
+
+# weapon view-models (VERIFY.md #25): weapons.js builds its protos asynchronously and refreshWeaponMesh awaits them, so with
+# the 15k-tri bodies the guns can pop in seconds into the drop (L2: 3.6-10.2 s). Every actor-weapon measurement first awaits
+# W.weaponProto('pistol') - the same promise every pending refreshWeaponMesh awaits, so by the time it resolves for us their
+# continuations (registered earlier) have attached the meshes.
+WPN_STATE_JS = r"""() => { const W = window.__LC__.W; const live = W.actors.filter((a) => a.alive);
+  return { protosReady: !!W._weaponProtos, liveActors: live.length, withWeaponMesh: live.filter((a) => a.weaponMesh).length,
+           withHand: live.filter((a) => a.hand).length, weaponProtoApi: typeof W.weaponProto === 'function' }; }"""
+WPN_AWAIT_JS = r"""async () => { const W = window.__LC__.W; const t0 = performance.now();
+  if (typeof W.weaponProto !== 'function') return { awaited: false, why: 'no W.weaponProto' };
+  let ok = true; try { await W.weaponProto('pistol'); } catch (e) { ok = String(e); }
+  await new Promise((r) => setTimeout(r, 0));
+  const live = W.actors.filter((a) => a.alive);
+  return { awaited: true, ok, waitedMs: Math.round(performance.now() - t0), protosReady: !!W._weaponProtos,
+           liveActors: live.length, withWeaponMesh: live.filter((a) => a.weaponMesh).length, withHand: live.filter((a) => a.hand).length }; }"""
 
 CADENCE_JS = r"""async () => {
   const C = window.__LC__, W = C.W;
@@ -176,9 +194,80 @@ def metrics(cdp):
     return {x["name"]: x["value"] for x in cdp.send("Performance.getMetrics")["metrics"]}
 
 
+# ---- forced layouts (Wave-3 H-harness) ------------------------------------------------------------------------------
+# CDP LayoutCount counts EVERY layout, including the browser's own rendering-lifecycle layout that runs after each
+# page.evaluate returns when the HUD dirtied the DOM. Wave-3 probe (scratch wave3/H-harness/layoutprobe.py): LayoutCount
+# scaled with the number of evaluates, not frames (drop 240 frames in 1 / 4 / 24 evaluates -> 2 / 4 / 12 layouts), and a
+# stack-traced Chrome trace showed 0 of 14 Layout events with a JS stack - so Wave-2's "0.01 / 0.02 forced layouts per
+# frame" were lifecycle layouts at this harness's chunk boundaries. A FORCED layout is a Layout trace event that carries a
+# JS stack (beginData.stackTrace with disabled-by-default-devtools.timeline.stack): script asked for geometry while layout
+# was dirty. That is what the gate counts now, with the call site; CDP LayoutCount stays as information.
+TRACE_CATS = ["devtools.timeline", "disabled-by-default-devtools.timeline", "disabled-by-default-devtools.timeline.stack"]
+
+# --plant forced-layout (falsifier): a kernel updater that writes a style and then reads offsetWidth on every frame
+PLANT_FORCED_JS = r"""() => { const k = window.__LC__.W.kernel; if (window.__H_PLANT_FL__) return 'already';
+  const el = document.createElement('div'); el.id = '__h_plant_fl';
+  el.style.cssText = 'position:absolute;left:0;top:0;width:10px;height:10px;pointer-events:none'; document.body.appendChild(el); let i = 0;
+  window.__H_PLANT_FL__ = function hPlantForcedLayout() { el.style.width = (10 + (i++ % 2)) + 'px'; return el.offsetWidth; };
+  k._updaters.push(window.__H_PLANT_FL__); return 'planted: kernel updater hPlantForcedLayout (style write + offsetWidth read every frame)'; }"""
+
+
+def _site(fr):
+    # the timeline stack's lineNumber/columnNumber are 1-based here (probe: the trace and Error().stack both gave
+    # ffg_kernel_3d.js:738:37 for the same frame)
+    url = (fr.get("url") or "").split("/games/last-circle/")[-1].split("?")[0] or "(eval)"
+    return "%s %s:%s:%s" % (fr.get("functionName") or "(anon)", url, fr.get("lineNumber"), fr.get("columnNumber"))
+
+
+def classify_trace(raw):
+    """Layout / UpdateLayoutTree events on the renderer main thread -> forced (with a JS stack) vs lifecycle, with sites."""
+    tr = json.loads(raw)
+    evs = tr["traceEvents"] if isinstance(tr, dict) else tr
+    main = {(e["pid"], e["tid"]) for e in evs if e.get("ph") == "M" and e.get("name") == "thread_name"
+            and (e.get("args") or {}).get("name") == "CrRendererMain"}
+    out = {"forcedLayouts": 0, "lifecycleLayouts": 0, "forcedStyle": 0, "sites": {}}
+    for e in evs:
+        if (e.get("pid"), e.get("tid")) not in main or e.get("name") not in ("Layout", "UpdateLayoutTree") or e.get("ph") not in ("X", "B"):
+            continue
+        a = e.get("args") or {}
+        st = (a.get("beginData") or {}).get("stackTrace") or (a.get("data") or {}).get("stackTrace") or []
+        if e["name"] == "Layout":
+            if st:
+                out["forcedLayouts"] += 1
+                key = " <- ".join(_site(f) for f in st[:3])
+                out["sites"][key] = out["sites"].get(key, 0) + 1
+            else:
+                out["lifecycleLayouts"] += 1
+        elif st:
+            out["forcedStyle"] += 1
+    out["sites"] = sorted(out["sites"].items(), key=lambda kv: -kv[1])[:8]
+    return out
+
+
+def forced_layout_window(s, cdp, n, chunk=60):
+    """Pump n frames (no render) under a stack-traced Chrome trace. Returns counts per frame + the forcing call sites, or
+    {'error': ...} when tracing is unavailable (the caller reports could-not-judge)."""
+    m0 = metrics(cdp)
+    try:
+        s.browser.start_tracing(page=s.page, categories=TRACE_CATS)
+    except Exception as e:
+        return {"error": "tracing did not start: %s" % str(e).splitlines()[0][:200]}
+    try:
+        s.step_frames(n, 1 / 60, render=False, chunk=chunk)
+    finally:
+        raw = s.browser.stop_tracing()
+    m1 = metrics(cdp)
+    c = classify_trace(raw)
+    return {"frames": n, "evaluates": -(-n // chunk), "forcedLayouts": c["forcedLayouts"],
+            "forcedLayoutsPerFrame": round(c["forcedLayouts"] / n, 3), "forcedStyleRecalcs": c["forcedStyle"],
+            "lifecycleLayouts(info)": c["lifecycleLayouts"], "cdpLayoutCount(info)": int(m1["LayoutCount"] - m0["LayoutCount"]),
+            "cdpLayoutsPerFrame(info, incl. lifecycle)": round((m1["LayoutCount"] - m0["LayoutCount"]) / n, 3),
+            "forcingSites": c["sites"], "traceKB": len(raw) // 1024}
+
+
 def mdelta(m0, m1, nf):
     return {"frames": nf,
-            "forcedLayoutsPerFrame": round((m1["LayoutCount"] - m0["LayoutCount"]) / nf, 2),
+            "cdpLayoutsPerFrame": round((m1["LayoutCount"] - m0["LayoutCount"]) / nf, 3),     # incl. lifecycle layouts
             "styleRecalcsPerFrame": round((m1["RecalcStyleCount"] - m0["RecalcStyleCount"]) / nf, 2),
             "layoutMsPerFrame": round((m1["LayoutDuration"] - m0["LayoutDuration"]) * 1000 / nf, 3)}
 
@@ -194,11 +283,23 @@ def main():
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--every", type=int, default=30, help="render every Nth pumped frame")
     ap.add_argument("--real-draws", action="store_true")
-    ap.add_argument("--skip", default="", help="comma list of sections to skip: space,cluster,layout,alloc,qc,cadence,match")
+    ap.add_argument("--skip", default="", help="comma list of sections to skip: shadow,space,cluster,layout,alloc,qc,cadence,match")
+    ap.add_argument("--plant", default=None, choices=["forced-layout"],
+                    help="FALSIFIER: a kernel updater forces a layout every frame; both forced-layout rows MUST fail (the plant run "
+                         "judges only those rows - every other section is skipped or reported as information)")
     args = ap.parse_args()
     skip = {x.strip() for x in args.skip.split(",") if x.strip()}
+    if args.plant:
+        skip |= {"shadow", "space", "cluster", "alloc", "qc", "cadence", "match"}
+        if not args.report:
+            args.report = "framecheck_plant_" + args.plant.replace("-", "_")
 
     def body(v):
+        if args.plant:
+            _check = v.check
+            judged = ("forced layouts", "game threw", "harness exception", "environment", "interrupted")
+            v.check = lambda name, ok, detail="", expect=None: (
+                _check(name, ok, detail, expect) if any(j in name for j in judged) else v.info("[plant run, not judged] " + name, detail))
         with C.Session(args, "framecheck") as s:
             s.boot()
             s.freeze_loop()
@@ -228,15 +329,41 @@ def main():
             v.check("drop frame 1: total tris < 1.5 M", f1["tris"] < 1_500_000, {"tris": f1["tris"], "calls": f1["calls"]}, expect="< 1.5 M (was 9.91 M)")
             v.check("drop frame 1: shadow:actor* tris < 0.5 M", sh_act < 500_000, {"shadowActorTris": sh_act}, expect="< 0.5 M (was 8.57 M)")
             print("    drop frame 1 attribution: %s" % sorted(att.items(), key=lambda kv: -kv[1][1])[:10], flush=True)
-            s.step_frames(29, 1 / 60, render=args.every)
+            v.info("weapon view-models at drop frame 1 (information; L4 item 7 preloads them before the lobby)",
+                   s.js(WPN_STATE_JS))
+            # ---- drop window shadow share (PLAN L4 b gate, measured in lc_liveprobe as 60-80 %): 6 CONSECUTIVE rendered
+            # drop frames with attribution (a shadow refresh every 3rd frame is covered twice); total tris include the
+            # shadow passes (renderer.info is reset once per frame, autoReset off)
+            if "shadow" not in skip:
+                sh_rows = []
+                for _ in range(6):
+                    s.js("() => { window.__FC__.want = true; }")
+                    s.step_frames(1, 1 / 60, render=True)
+                    r6 = s.js("() => window.__FC__.last")
+                    a6 = r6.get("attr") or {}
+                    sh_rows.append({"t": r6.get("t"), "tris": r6.get("tris"), "shadowTris": attr_sum(a6, lambda k: k.startswith("shadow:"), 1),
+                                    "shadowCalls": attr_sum(a6, lambda k: k.startswith("shadow:"), 0),
+                                    "shadowMapTris": attr_sum(a6, lambda k: k.startswith("shadow:") and not k.startswith("shadow:actor"), 1)})
+                tot = sum(x["tris"] or 0 for x in sh_rows)
+                sht = sum(x["shadowTris"] for x in sh_rows)
+                share = round(100.0 * sht / tot, 1) if tot else None
+                v.data["dropShadowWindow"] = sh_rows
+                v.check("drop window: shadow share of tris < 30 % (6 consecutive drop frames)", share is not None and share < 30,
+                        {"sharePct": share, "shadowTris": sht, "tris": tot, "frames": sh_rows}, expect="< 30 % (was 60-80 %, L4 b)")
+                v.check("drop window: the shadow pass still draws world casters (ground stays shadowed)",
+                        any(x["shadowMapTris"] > 0 for x in sh_rows), {"worldCasterTrisPerFrame": [x["shadowMapTris"] for x in sh_rows]},
+                        expect="> 0 on at least 1 of 6 frames (L4 b must not buy the share by dropping the ground shadows)")
+                s.step_frames(23, 1 / 60, render=args.every)
+            else:
+                s.step_frames(29, 1 / 60, render=args.every)
             # ---- 10 real SPACE toggles while gliding high
             if "space" not in skip:
                 geo = []
-                pl = s.js("() => { const p = window.__LC__.W.player; return { gliding: p.gliding, chute: !!p.chute, y: +p.pos.y.toFixed(1) }; }")
+                pl = s.js("() => { const p = window.__LC__.W.player; const a = p; return { gliding: p.gliding, chute: !!(a.chute && a.chute.visible !== false && a.chute.deployed !== false && a.chute.active !== false), y: +p.pos.y.toFixed(1) }; }")
                 for i in range(10):
                     s.press("Space", 0.05)
                     s.step_frames(12, 1 / 60, render=12)
-                    geo.append(s.js("() => ({ g: window.__LC__.W.kernel.renderer.info.memory.geometries, chute: !!window.__LC__.W.player.chute, gliding: window.__LC__.W.player.gliding })"))
+                    geo.append(s.js("() => ({ g: window.__LC__.W.kernel.renderer.info.memory.geometries, chute: ((a) => !!(a.chute && a.chute.visible !== false && a.chute.deployed !== false && a.chute.active !== false))(window.__LC__.W.player), gliding: window.__LC__.W.player.gliding })"))
                 gs = [x["g"] for x in geo]
                 toggled = len({x["chute"] for x in geo}) > 1
                 if not pl.get("gliding") or not toggled:
@@ -251,6 +378,10 @@ def main():
                     if (s.safe_js("() => window.__LC__.W.t", default=0) or 0) >= 10 or s.phase() != "drop":
                         break
                     s.step_frames(120, 1 / 60, render=args.every)
+                wa = s.js(WPN_AWAIT_JS)
+                v.data["weaponsBeforeCluster"] = wa
+                v.info("weapon view-models awaited before the drop cluster (VERIFY.md #25)", wa)
+                s.step_frames(2, 1 / 60, render=False)
                 cl = s.js(CLUSTER_JS)
                 row = cl["row"]
                 att = row.get("attr") or {}
@@ -264,6 +395,10 @@ def main():
                 else:
                     v.check("drop cluster: actor-chute calls <= 2", chute_calls <= 2, {"chuteCalls": chute_calls, "chutesOut": cl["chutes"]}, expect="<= 2 (was 200)")
                 v.check("drop cluster: actor-nametag calls <= 1", tag_calls <= 1, {"nametagCalls": tag_calls}, expect="1 (was 49)")
+                v.info("drop cluster: actor-weapon calls / tris (main pass)", {
+                    "calls": attr_sum(att, lambda k: ":actor-weapon" in k and k.startswith("main"), 0),
+                    "tris": attr_sum(att, lambda k: ":actor-weapon" in k and k.startswith("main"), 1),
+                    "actorsWithWeaponMesh": (wa or {}).get("withWeaponMesh")})
                 sk = row.get("skinByActor") or {}
                 mx = max(sk.values()) if sk else None
                 v.check("skinned tris per visible actor < 30 k", mx is not None and mx < 30_000,
@@ -271,14 +406,17 @@ def main():
                 if row.get("newPrograms"):
                     v.info("drop cluster frame compiled programs", row["newPrograms"])
                 print("    drop cluster attribution: %s" % sorted(att.items(), key=lambda kv: -kv[1][0])[:12], flush=True)
-            # ---- forced layouts per drop frame (no render: pure CPU window)
+            if args.plant == "forced-layout":
+                v.note("PLANTED FAULT: " + s.js(PLANT_FORCED_JS) + " - both forced-layout rows MUST fail")
+            # ---- forced layouts per drop frame (no render: pure CPU window), counted from a stack-traced Chrome trace
             if "layout" not in skip:
-                m0 = metrics(cdp)
-                s.step_frames(240, 1 / 60, render=False)
-                m1 = metrics(cdp)
-                ld = mdelta(m0, m1, 240)
+                ld = forced_layout_window(s, cdp, 240)
                 v.data["layoutDrop"] = ld
-                v.check("forced layouts per drop frame == 0.00", ld["forcedLayoutsPerFrame"] == 0, ld, expect="0.00 (was 1.00)")
+                if "error" in ld:
+                    v.cnj("forced layouts per drop frame == 0.00 (trace: Layout events with a JS stack)", ld["error"])
+                else:
+                    v.check("forced layouts per drop frame == 0.00 (trace: Layout events with a JS stack)", ld["forcedLayouts"] == 0, ld,
+                            expect="0.00 (was 1.00)")
             # ---- to the ground
             t0 = time.time()
             for _ in range(12):
@@ -292,6 +430,7 @@ def main():
                 s.step_frames(30, 1 / 60, render=30)
             # ---- match frames
             if "match" not in skip:
+                v.data["weaponsBeforeMatchFrame"] = s.js(WPN_AWAIT_JS)
                 s.js("() => { const M = window.__LC__.W.map, q = M.queryColliders; window.__QC__ = 0; if (!M.__hqc) { M.__hqc = true; M.queryColliders = function () { window.__QC__++; return q.apply(this, arguments); }; } }")
                 n0 = s.js("() => window.__FC__.log.length")
                 s.step_frames(299, 1 / 60, render=args.every)
@@ -337,7 +476,16 @@ def main():
                 v.data["allocTopSites"] = [[k, round(x / 1024)] for k, x in sorted(agg.items(), key=lambda kv: -kv[1])[:30]]
                 v.data["allocByFile"] = [[k, round(x / 1024)] for k, x in sorted(by_file.items(), key=lambda kv: -kv[1])[:15]]
                 if "layout" not in skip:
-                    v.check("forced layouts per match frame == 0.00", lm["forcedLayoutsPerFrame"] == 0, lm, expect="0.00 (was 0.15)")
+                    # the alloc window's CDP count (lifecycle layouts included) is information; the gate is a separate,
+                    # stack-traced 600-frame window (tracing is kept out of the heap-sampling window)
+                    v.info("CDP LayoutCount per match frame (includes the browser's lifecycle layouts at the 10 evaluate boundaries)", lm)
+                    lt = forced_layout_window(s, cdp, 600)
+                    v.data["layoutMatchTrace"] = lt
+                    if "error" in lt:
+                        v.cnj("forced layouts per match frame == 0.00 (trace: Layout events with a JS stack)", lt["error"])
+                    else:
+                        v.check("forced layouts per match frame == 0.00 (trace: Layout events with a JS stack)", lt["forcedLayouts"] == 0, lt,
+                                expect="0.00 (was 0.15)")
                 if "alloc" not in skip:
                     v.check("KB allocated per match frame < 100", kbpf < 100, {"KBperFrame": kbpf, "topFiles": v.data["allocByFile"][:6]},
                             expect="< 100 (was 554.5)")

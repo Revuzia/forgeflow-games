@@ -9,8 +9,10 @@ Real input for every acceptance action; __LC__ only for setup (landing: fastForw
   2. REAL click on the mode card (the card IS the play button, hud.js showMenu) -> the lobby; a REAL Enter drops in
   3. the harness rAF counter and W.t must advance on their own (the kernel's loop) - could-not-judge if the box
      starves rAF (harness-gates E2), never a pass
-  4. REAL click on the canvas -> document.pointerLockElement set (player.js mousedown -> tryLock)
-  5. landed (setup), then a REAL KeyW held while 90 kernel frames (1.5 s at 1/60) are stepped -> moved > 3 m
+  4. REAL click on the canvas -> document.pointerLockElement set (player.js mousedown -> tryLock); the lock must never
+     drop while the page has focus AND the player is alive (a death screen releases the cursor by design)
+  5. landed (setup: land(protect=True) + common.guard_player, so no bot can kill the test subject during the setup or
+     the walk - VERIFY.md #23), then a REAL KeyW held while 90 kernel frames (1.5 s at 1/60) are stepped -> moved > 3 m
   6. the whole run: 0 console errors, 0 page / window errors, 0 failed requests (HTTP >= 400 or network; ERR_ABORTED is
      not a failure), 0 shader/GL errors, 0 `[rig]` warnings. The three.js PropertyBinding "No target node found"
      line is allow-listed (counted, printed) until lane L5 drops trackless clip tracks.
@@ -48,7 +50,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
     ap.add_argument("--mode", default="standard", choices=sorted(MODE_RE))
+    ap.add_argument("--plant", default=None, choices=["lock-drop"],
+                    help="FALSIFIER: lock-drop = exitPointerLock() while focused and alive; the lock row MUST then fail")
     args = ap.parse_args()
+    if args.plant and not args.report:
+        args.report = "bootcheck_plant_" + args.plant.replace("-", "_")
 
     def body(v):
         with C.Session(args, "bootcheck") as s:
@@ -110,12 +116,19 @@ def main():
             lk = s.js("() => window.__H_LOCK__")
             v.check("a REAL canvas click takes pointer lock", locked is not None,
                     {"s": locked, "requests": lk.get("requests"), "errors": lk.get("errors"), "losses": lk.get("losses")})
-            # land (setup), then REAL KeyW with stepped frames
+            # land (setup), then REAL KeyW with stepped frames. The test subject is PROTECTED through the setup and the walk
+            # (VERIFY.md #23: gate run 1 lost the player in the air during an unprotected land(); the death screen then
+            # released the cursor and the lock/walk rows failed for a reason that had nothing to do with boot or input).
             s.stage("land")
-            land = s.land(120)
-            v.info("landed via fastForward (setup only)", land)
+            s.guard_player(True)
+            land = s.land(120, protect=True)
+            v.info("landed via fastForward (setup only, player protected)", land)
             s.freeze_loop()
             s.step_frames(20, 1 / 60, render=20)
+            if args.plant == "lock-drop":
+                v.note("PLANTED FAULT: document.exitPointerLock() while focused and alive (the lock row MUST fail)")
+                s.js("() => document.exitPointerLock()")
+                s.sleep(0.5)
             p0 = s.js("() => { const p = window.__LC__.W.player; return { x: p.pos.x, y: p.pos.y, z: p.pos.z, alive: p.alive, onGround: p.onGround }; }")
             s.stage("walk")
             s.page.keyboard.down("KeyW")
@@ -125,13 +138,20 @@ def main():
                 s.page.keyboard.up("KeyW")
             p1 = s.js("() => { const p = window.__LC__.W.player; return { x: p.pos.x, y: p.pos.y, z: p.pos.z, alive: p.alive, onGround: p.onGround }; }")
             dist = math.hypot(p1["x"] - p0["x"], p1["z"] - p0["z"])
-            if not p0.get("alive"):
-                v.cnj("a REAL W held for 1.5 s (stepped) moves the player > 3 m", "the player was dead before the walk (%s)" % land)
+            if not p0.get("alive") or not p1.get("alive"):
+                v.cnj("a REAL W held for 1.5 s (stepped) moves the player > 3 m", "the player died %s the walk despite the guard (%s)" % (
+                    "before" if not p0.get("alive") else "during", land))
             else:
                 v.check("a REAL W held for 1.5 s (stepped) moves the player > 3 m", dist > 3.0, {"moved_m": round(dist, 2), "from": p0, "to": p1})
             lk2 = s.js("() => window.__H_LOCK__")
+            # a loss while the player is dead is the death screen releasing the cursor (by design), not a lock defect
             focused_losses = [l for l in (lk2.get("losses") or []) if l.get("hasFocus") and l.get("visibility") != "hidden"]
-            v.check("pointer lock never dropped while the page had focus", not focused_losses, {"losses": lk2.get("losses")})
+            alive_losses = [l for l in focused_losses if l.get("alive") is not False]
+            if focused_losses and not alive_losses:
+                v.note("pointer lock dropped only while the player was dead (death screen): %s" % focused_losses)
+            v.check("pointer lock never dropped while the page had focus and the player was alive", not alive_losses,
+                    {"losses": lk2.get("losses"), "playerAliveAfterWalk": p1.get("alive")})
+            s.guard_player(False)
             s.thaw_loop()
             s.sleep(1.0)
             d = s.diagnostics()

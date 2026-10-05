@@ -58,6 +58,13 @@ PLAYER_JS = r"""() => { const W = window.__LC__.W, p = W.player; return { x: p.p
     if (r.width < Math.min(300, innerHeight * 0.6)) return false; for (let n = c; n && n.nodeType === 1; n = n.parentElement) { const st = getComputedStyle(n);
       if (st.display === 'none' || st.visibility === 'hidden' || parseFloat(st.opacity) === 0) return false; } return true; }) }; }"""
 
+SLOT_PREP_JS = r"""() => { const W = window.__LC__.W, p = W.player, sl = p.inventory.slots;
+  const was = sl.map((x) => x ? (x.id || x.kind) : null);
+  if (!sl[0]) sl[0] = { kind: 'weapon', id: 'pistol', rarity: 0, mag: 12 };
+  if (!sl[1]) sl[1] = { kind: 'weapon', id: 'smg', rarity: 0, mag: 30 };
+  if (W.equipSlot) W.equipSlot(p, 0); else p.inventory.active = 0;
+  return { was, now: sl.map((x) => x ? (x.id || x.kind) : null), active: p.inventory.active }; }"""
+
 SLOTS_JS = r"""() => {
   const own = (e) => Array.from(e.childNodes).filter((n) => n.nodeType === 3).map((n) => n.textContent).join('').trim();
   const am = [...document.querySelectorAll('div')].find((e) => /^(\d+|∞)\s*\/\s*(\d+|∞)$/.test(own(e)) && e.offsetParent !== null);
@@ -230,13 +237,21 @@ def run_device(v, args, dev):
             s1 = rd()
             v.check(P + "holding USE 2 s at a chest opens it", (s1["chests"] or 0) > (s0["chests"] or 0), {"chests": [s0["chests"], s1["chests"]], "chest": ch})
         # slot 2 tap + minimap tap
+        # SETUP (not judged): slot 2 must hold something to switch to and slot 1 must be the active one, or the tap proves
+        # nothing (Wave-2 L7T: the pistol setup above had left index 1 active, so the old row read active [1, 1])
+        prep = s.js(SLOT_PREP_JS)
+        s.step_frames(30, 1 / 60, render=False)
         sl = s.js(SLOTS_JS)
         if len(sl["slots"]) >= 2:
             s0 = rd()
-            T.tap(*MK.center(sl["slots"][1]))
-            s.step_frames(10, 1 / 60, render=False)
-            s1 = rd()
-            v.check(P + "a tap on HUD slot 2 makes it the active slot", s1["active"] == 1, {"active": [s0["active"], s1["active"]], "slot2": [round(x) for x in sl["slots"][1]]})
+            if s0["active"] == 1:
+                v.cnj(P + "a tap on HUD slot 2 makes it the active slot", "precondition: slot 2 was already active before the tap (%s)" % prep)
+            else:
+                T.tap(*MK.center(sl["slots"][1]))
+                s.step_frames(10, 1 / 60, render=False)
+                s1 = rd()
+                v.check(P + "a tap on HUD slot 2 makes it the active slot", s1["active"] == 1,
+                        {"active": [s0["active"], s1["active"]], "slot2": [round(x) for x in sl["slots"][1]], "setup": prep})
         else:
             v.cnj(P + "a tap on HUD slot 2 makes it the active slot", "HUD slots not found (%s)" % sl)
         if sl["minimap"]:

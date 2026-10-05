@@ -1,9 +1,13 @@
 // How often is a bot standing INSIDE a wall/building volume, split by the camera-distance LOD
 // (player.js:962 far = > 250 m from the camera => terrain-only movement, no wall blocking).
-async ([seed, mapId, seconds]) => {
+// Args: [seed, mapId, seconds, skipStart] - skipStart (L1F): the harness already started the match and left the lobby with a
+// REAL Enter (common.start_match) with the kernel loop frozen; without it the probe starts its own (audit behaviour).
+async ([seed, mapId, seconds, skipStart]) => {
   const C = window.__LC__, W = C.W;
-  await C.startMatch({ mapId, mode: "standard", seed });
-  window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+  if (!skipStart) {
+    await C.startMatch({ mapId, mode: "standard", seed });
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter" }));
+  }
   W.paused = true;
   const m = W.map;
   // inside = the actor's capsule centre column overlaps a non-ramp collider at body height

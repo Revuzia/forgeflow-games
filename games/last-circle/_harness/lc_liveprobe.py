@@ -280,6 +280,19 @@ requestAnimationFrame(f);
 </script></body></html>"""
 
 STATE_JS = r"""() => { try { return window.__LC__.state(); } catch (e) { return { error: String(e) }; } }"""
+SKIP_STAMP_JS = r"""() => { const W = window.__LC__.W; const S = window.__LP_SKIP__ = { key: null, phase: null, accessor: false };
+  if (!window.__LP_SKIP_L__) { window.__LP_SKIP_L__ = true;
+    addEventListener('keydown', (e) => { const s = window.__LP_SKIP__; if (s && e.key === 'Enter' && s.key == null) s.key = performance.now(); }, true); }
+  const d = Object.getOwnPropertyDescriptor(W, 'phase');
+  if (d && d.configurable !== false && !d.get && !d.set) { let v = W.phase;
+    Object.defineProperty(W, 'phase', { configurable: true, enumerable: true, get: () => v,
+      set: (x) => { v = x; if ((x === 'drop' || x === 'match') && S.phase == null) S.phase = performance.now(); } });
+    S.accessor = true; }
+  return S; }"""
+SKIP_READ_JS = r"""() => { const W = window.__LC__.W, S = window.__LP_SKIP__ || {};
+  if (S.accessor) { const v = W.phase; delete W.phase; W.phase = v; S.accessor = false; }
+  return { keyMs: S.key == null ? null : Math.round(S.key), phaseMs: S.phase == null ? null : Math.round(S.phase),
+           s: S.key != null && S.phase != null ? +((S.phase - S.key) / 1000).toFixed(3) : null }; }"""
 
 _GPU_PS = r"""
 [Console]::OutputEncoding=[Text.Encoding]::UTF8
@@ -579,10 +592,16 @@ class Run:
             self.out["load"] = r
             # the lobby DOM is up; a real Enter skips the 0.7 s fill + 3 x 0.9 s countdown (hud.js finishLobby)
             _sleep(0.4)
+            self.js(SKIP_STAMP_JS)
             tk = time.time()
             self.page.keyboard.press("Enter")
             dt = self.wait_js("() => window.__LC__.W.phase === 'drop' || window.__LC__.W.phase === 'match'", 15, 0.02)
             self.out["lobby_skip_s"] = None if dt is None else round(time.time() - tk, 3)
+            # in-page: Enter keydown -> W.phase drop/match (the honest number; lobby_skip_s above includes the harness's
+            # keyboard.press round trip, 0.03-30 s on this box - L4A Wave 2)
+            sk = self.js(SKIP_READ_JS)
+            self.out["lobby_skip_page_s"] = sk.get("s")
+            self.out["lobby_skip_page"] = sk
             if dt is None:
                 self.out["notes"].append("Enter did not leave the lobby within 15 s; phase=%s" % self.js(STATE_JS).get("phase"))
                 self.wait_js("() => window.__LC__.W.phase === 'drop' || window.__LC__.W.phase === 'match'", 10, 0.1)

@@ -142,7 +142,10 @@ INIT_JS = r"""
   document.addEventListener('pointerlockchange', () => {
     L.changes++; L.locked = !!document.pointerLockElement;
     if (L.locked) { L.lastOn = now(); ev('pointerlock ON'); return; }
-    L.losses.push({ t: now(), hasFocus: document.hasFocus(), visibility: document.visibilityState });
+    // alive/phase: a death screen releases the cursor BY DESIGN (hud releaseCursor), so gates judge lock losses while alive
+    let alive = null, phase = null;
+    try { const W = window.__LC__ && window.__LC__.W; if (W) { phase = W.phase || null; alive = W.player ? !!W.player.alive : null; } } catch (_) {}
+    L.losses.push({ t: now(), hasFocus: document.hasFocus(), visibility: document.visibilityState, alive, phase });
     ev('pointerlock OFF');
   });
   document.addEventListener('pointerlockerror', () => { L.errors++; ev('pointerlockerror'); });
@@ -863,14 +866,29 @@ class Session:
 
     def land(self, max_s=120, step=1.0 / 30, protect=False):
         """SETUP ONLY (sim, no view): fastForward until the local player stands on the ground. protect=True tops the
-        player's hp/shield up every 0.25 s of sim so a bot cannot kill the test subject during the skip (the 21:38 mobile
-        run lost 2 of 4 devices to 'the player died while landing')."""
+        player's hp/shield up after EVERY sim step (one fastForward(h, h) per step) so a bot cannot kill the test subject
+        during the skip (the 21:38 mobile run lost 2 of 4 devices to 'the player died while landing'; Wave-1 gate run 1 lost
+        bootcheck's lock/walk rows to a death in the air at t 27.76). Only a single step dealing > 200 damage can still kill."""
         return self.js("""([maxS, h, prot]) => { const C = window.__LC__, W = C.W, p = W.player;
             const top = () => { if (prot && p && p.alive) { p.hp = Math.max(p.hp, 100); p.shield = Math.max(p.shield || 0, 100); } };
-            let t = 0; top();
-            while (t < maxS && p && p.alive && (p.gliding || !p.onGround || W.phase === 'drop')) { C.fastForward(prot ? 0.25 : 0.5, h); t += prot ? 0.25 : 0.5; top(); }
-            return { t: +W.t.toFixed(2), phase: W.phase, onGround: !!(p && p.onGround), gliding: !!(p && p.gliding), alive: !!(p && p.alive) }; }""",
+            let t = 0, n = 0; top();
+            const slice = prot ? h : 0.5;
+            while (t < maxS && p && p.alive && (p.gliding || !p.onGround || W.phase === 'drop')) { C.fastForward(slice, h); t += slice; n++; top(); }
+            return { t: +W.t.toFixed(2), phase: W.phase, onGround: !!(p && p.onGround), gliding: !!(p && p.gliding), alive: !!(p && p.alive),
+                     protected: !!prot, slices: n }; }""",
                        [max_s, step, bool(protect)])
+
+    def guard_player(self, on=True):
+        """SETUP ONLY: a harness-owned kernel updater that tops the local player's hp/shield up to 100/100 on every frame
+        (the kernel's own loop, common.step_frames and __LC__.stepFrames all run kernel._updaters), so a bot cannot kill the
+        test subject while a gate measures something else (walking, aiming, the HUD). on=False removes it."""
+        return self.js("""(on) => { const W = window.__LC__ && window.__LC__.W, k = W && W.kernel;
+            if (!k || !Array.isArray(k._updaters)) return 'no kernel._updaters';
+            const i = window.__H_GUARD__ ? k._updaters.indexOf(window.__H_GUARD__) : -1;
+            if (!on) { if (i >= 0) k._updaters.splice(i, 1); window.__H_GUARD__ = null; return 'off'; }
+            if (i >= 0) return 'already';
+            window.__H_GUARD__ = () => { const p = W.player; if (p && p.alive) { if (p.hp < 100) p.hp = 100; if ((p.shield || 0) < 100) p.shield = 100; } };
+            k._updaters.push(window.__H_GUARD__); return 'on'; }""", bool(on))
 
     # input
     def press(self, key, hold_s=0.06):

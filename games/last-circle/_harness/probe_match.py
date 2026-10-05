@@ -16,14 +16,18 @@ audit's driver:
 
 GATES (PLAN L6; pooled over DISTINCT (seed, map) runs unless stated):
   pistol share of gun kills <= 35 %                 bot lives that END holding the pistol <= 40 %
-  landed samples carrying a better gun but HOLDING the pistol < 5 % of samples that carry a better gun
+  landed samples carrying a better gun but HOLDING the pistol < 5 % of samples that carry a better gun - TWO rows: the raw-DPS
+  sim gunScore metric (the better gun must be loaded and out-score the held pistol; the audit's looser count is INFO), and the
+  range/ammo-aware one (VERIFY.md #24, L6 pmdiag: sim gunValueAt at the live
+  fight, bots.js's own swap rule mirrored in probe_match.js valueBetter)
   sniper kills > 0 in most matches                  stuck (net < 0.4 m over 3 s while in a moving state) < 2 % of moving
                                                     samples in EVERY run, and no bot with > 5 stuck episodes in a run
   seed 1 isla_viva: bot s21 is never frozen >= 12 s and leaves Coco Village (or dies)
   the same seed twice: identical 5-s fingerprints AND placements; a different seed: different fingerprints
   census per map: (floor guns + chests) / players >= 3 and >= 8 light-ammo boxes; the game's path search finds a usable
   path for >= 15 of 30 blocked pairs at 120 m and at 180 m
-INFO: pacing (deaths before 60 s, match end), dry shares, sniper/launcher carried but pistol held, far-bot wall clipping.
+  --farwall (gate.py passes it): far-bot wall clipping farToNearInside == 0 (PLAN L5 d) on seeds 1 and 7 isla_viva
+INFO: pacing (deaths before 60 s, match end), dry shares, sniper/launcher carried but pistol held.
 Exit 0 pass / 1 fail / 2 could not judge.
 """
 from __future__ import annotations
@@ -81,7 +85,7 @@ def main():
     ap.add_argument("--no-paths", action="store_true", help="skip probe_paths (census + path search)")
     ap.add_argument("--paths-maps", default="isla_viva,ashgrid,deepwood")
     ap.add_argument("--paths-live", type=float, default=60.0, help="live path-sampling seconds per map (information)")
-    ap.add_argument("--farwall", action="store_true", help="also run probe_farwall (far-bot wall clipping, information)")
+    ap.add_argument("--farwall", action="store_true", help="also run probe_farwall (far-bot wall clipping; gates farToNearInside == 0, PLAN L5 d)")
     args = ap.parse_args()
     runs = []
     for r in args.runs.split(","):
@@ -127,7 +131,7 @@ def main():
                 for seed, mp in ((1, "isla_viva"), (7, "isla_viva")):
                     s.start_match("standard", seed, mp, enter=True)
                     s.freeze_loop()
-                    far.append(s.page.evaluate(js_far, [seed, mp, 400]))
+                    far.append(s.page.evaluate(js_far, [seed, mp, 400, 1]))
             d = s.diagnostics()
         v.data["results"] = results
         v.data["paths"] = paths
@@ -152,7 +156,29 @@ def main():
         v.check("bot lives that end holding the pistol <= 40 %", eol is not None and eol <= 40, {"pct": eol, "n": len(ei)}, expect="<= 40 % (was 74.8 %)")
         bn = sum(r["agg"].get("betterN", 0) for r in distinct)
         bh = sum(r["agg"].get("betterHoldPistolN", 0) for r in distinct)
-        v.check("carrying a better gun but holding the pistol < 5 % (landed samples)", bn > 0 and pct(bh, bn) < 5, {"holdPistol": bh, "carryBetter": bn, "pct": pct(bh, bn)})
+        rn = sum(r["agg"].get("rawBetterN", 0) for r in distinct)
+        rh = sum(r["agg"].get("rawHoldPistolN", 0) for r in distinct)
+        v.check("carrying a better gun but holding the pistol < 5 % (landed samples, raw-DPS gunScore)", rn > 0 and pct(rh, rn) < 5,
+                {"holdPistol": rh, "carryBetter": rn, "pct": pct(rh, rn)},
+                expect="< 5 % ('better' = a LOADED gun with a higher sim gunScore than the common pistol; 'holds the pistol' = a pistol "
+                       "scoring below that gun; range is ignored - the value-aware row below judges range)")
+        v.info("audit definition of the same row (comparable with the audit's 74.8 % era numbers; counts a held rare pistol and dry guns)",
+               {"holdPistol": bh, "carryBetter": bn, "pct": pct(bh, bn)})
+        # VERIFY.md #24: the range/ammo-aware variant (L6 pmdiag; probe_match.js valueBetter) beside the raw-DPS one
+        if not any(r["agg"].get("valueAware") for r in distinct):
+            v.cnj("carrying a better gun (range/ammo-aware value) but holding the pistol < 5 %", "the sim exposes no gunValueAt")
+        else:
+            vb = sum(r["agg"].get("valBetterN", 0) for r in distinct)
+            vh = sum(r["agg"].get("valHoldPistolN", 0) for r in distinct)
+            vj = sum(r["agg"].get("valJudgedN", 0) for r in distinct)
+            bd = collections.Counter()
+            for r in distinct:
+                bd.update(r["agg"].get("valByDist") or {})
+            v.check("carrying a better gun (range/ammo-aware value) but holding the pistol < 5 %", vb > 0 and pct(vh, vb) < 5,
+                    {"holdPistol": vh, "carryBetterByValue": vb, "pct": pct(vh, vb), "judgedSamples": vj, "holdPistolByFightDist": dict(bd),
+                     "examples": [x for r in distinct for x in (r.get("valSamples") or [])][:6]},
+                    expect="< 5 % ('better' = beats the pistol slot by bots.js's own rule: sim gunValueAt at the live fight's range/EHP "
+                           "or the idle mean, own mag + reserve, swap price 0.4 s, margin 1.15; swap-gate/reload/consumable samples skipped)")
         sn = [r for r in distinct if any(k["wid"] == "sniper" for k in r["kills"])]
         v.check("sniper kills > 0 in most matches", len(sn) * 2 > len(distinct), {"matchesWithSniperKills": len(sn), "matches": len(distinct),
                                                                                    "sniperKills": wids.get("sniper", 0)}, expect="> half (was 4 sniper kills in 539)")
@@ -241,7 +267,12 @@ def main():
             "allDry": pct(sum(r["agg"]["allDryN"] for r in distinct), sum(r["agg"]["landedN"] for r in distinct)),
             "activeDry": pct(sum(r["agg"]["activeDryN"] for r in distinct), sum(r["agg"]["landedN"] for r in distinct))})
         if far:
-            v.info("far-bot wall clipping (probe_farwall)", far)
+            # PLAN L5 gate (d: far bots keep blockedHoriz + supportAt): no bot that stood inside a wall while far (> 250 m from
+            # the camera, the old terrain-only LOD) is still inside it once it comes near
+            ftn = sum(r.get("farToNearInside", 0) for r in far)
+            v.check("far-bot wall clipping: farToNearInside == 0 (probe_farwall, --farwall)", ftn == 0,
+                    {"farToNearInside": ftn, "runs": [{k: r.get(k) for k in ("seed", "map", "simT", "farN", "farIn", "nearN", "nearIn", "farToNearInside", "ex")} for r in far]},
+                    expect="0 (L5 d)")
         v.check("no page errors / window errors during the runs", not (d["pageErrors"] or d["windowErrors"]),
                 {"pageErrors": d["pageErrors"][:3], "windowErrors": d["windowErrors"][:3]})
     return C.run_gate("probe_match", body, args)

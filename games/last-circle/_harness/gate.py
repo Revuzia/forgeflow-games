@@ -10,9 +10,14 @@ Node first (`node <file>` for every runtime/**/*.selftest.cjs: royale.selftest.c
 selftest when they exist) - they prove the SIM only. Then the browser gates run ONE AT A TIME (one Chrome at a time on this
 shared box), each as its own process with the same --base / --disk / --rev / --headed / --gpu flags:
 
-  bootcheck   bootguard   rigcheck (3 seeds)   playtest   portalcheck (--matrix)   framecheck   feelcheck
+  bootcheck   bootguard   rigcheck (3 seeds)   playtest   portalcheck (--matrix)   framecheck   lifecycle   feelcheck
   layoutcheck (desktop + phones)   mobile (4 devices)   probe_match (>= 6 seeds, storm on)   leaktest (3 ashgrid)
   perfcheck (INFORMATION ONLY: shown, never counted)
+
+--negative-controls adds the planted-fault runs, each of which must exit 1: rigcheck --inject-regression, portalcheck minus
+allow-pointer-lock, bootguard j/k --plant no-card and --plant hidden-card, bootcheck --plant lock-drop, feelcheck --plant
+kill-marker-short, layoutcheck --only phones --plant no-touch-ui, framecheck --plant forced-layout; and feelcheck --plant
+blind-sampler, which must exit 2 (a blinded sampler is could-not-judge, never a verdict).
 
 Each gate's stdout goes to _harness/_reports/gate_<stamp>/<gate>.log and its JSON report to _harness/_reports/. A gate exits
 0 pass / 1 fail / 2 could-not-judge; a timeout or a crash of the gate process is could-not-judge. The overall verdict:
@@ -40,10 +45,11 @@ GATES = [
     ("playtest", "playtest.py", [], 5400, False),
     ("portalcheck", "portalcheck.py", ["--matrix"], 3600, False),
     ("framecheck", "framecheck.py", [], 5400, False),
+    ("lifecycle", "lifecycle.py", [], 3600, False),
     ("feelcheck", "feelcheck.py", [], 3600, False),
     ("layoutcheck", "layoutcheck.py", [], 5400, False),
     ("mobile", "mobile.py", [], 7200, False),
-    ("probe_match", "probe_match.py", [], 14400, False),
+    ("probe_match", "probe_match.py", ["--farwall"], 14400, False),
     ("leaktest", "leaktest.py", [], 7200, False),
     ("perfcheck", "perfcheck.py", [], 7200, True),
 ]
@@ -51,6 +57,18 @@ GATES = [
 NEGATIVE = [
     ("rigcheck-injected", "rigcheck.py", ["--seeds", "7", "--inject-regression"], 3600),
     ("portalcheck-minus-pointer-lock", "portalcheck.py", ["--drop-token", "allow-pointer-lock"], 3600),
+    # Wave-2 L1F: the j/k card judge must FAIL when no card is painted / the card is hidden, and the lock row when the
+    # lock drops while the player is alive (bootguard / bootcheck --plant)
+    ("bootguard-plant-no-card", "bootguard.py", ["--cases", "j,k", "--plant", "no-card"], 1800),
+    ("bootguard-plant-hidden-card", "bootguard.py", ["--cases", "j,k", "--plant", "hidden-card"], 1800),
+    ("bootcheck-plant-lock-drop", "bootcheck.py", ["--plant", "lock-drop"], 3600),
+    # Wave-3 H-harness: the kill-marker row must FAIL on a 50 ms kill hold; a blind sampler (the Wave-2 ordering defect)
+    # must be COULD-NOT-JUDGE (expected exit 2), never a verdict; the phone overlap rows must not pass with no touch controls
+    ("feelcheck-plant-kill-marker-short", "feelcheck.py", ["--plant", "kill-marker-short"], 1800),
+    ("feelcheck-plant-blind-sampler", "feelcheck.py", ["--plant", "blind-sampler"], 1800, 2),
+    ("layoutcheck-plant-no-touch-ui", "layoutcheck.py", ["--only", "phones", "--plant", "no-touch-ui"], 3600),
+    # forced layouts are counted from a stack-traced trace now: a planted style-write + offsetWidth updater must FAIL both rows
+    ("framecheck-plant-forced-layout", "framecheck.py", ["--plant", "forced-layout"], 3600),
 ]
 
 
@@ -139,15 +157,23 @@ def main():
         r["info"] = info
         rows.append(r)
     if args.negative_controls:
-        for name, script, extra, timeout in NEGATIVE:
+        for ent in NEGATIVE:
+            name, script, extra, timeout = ent[:4]
+            want = ent[4] if len(ent) > 4 else 1
             if only is not None and name.split("-")[0] not in only:
                 continue
             r = run_gate(name, script, extra, timeout, args, logdir)
-            # a planted fault must FAIL the gate: exit 1 is the pass here
             r["negative"] = True
             r["info"] = False
-            r["exit"] = {1: 0, 0: 1}.get(r["exit"], 2)
-            r["verdict"] = ("planted fault detected - " if r["exit"] == 0 else "planted fault NOT detected - ") + r["verdict"]
+            r["gateExit"] = r["exit"]
+            if want == 1:
+                # a planted fault must FAIL the gate: exit 1 is the pass here
+                r["exit"] = {1: 0, 0: 1}.get(r["exit"], 2)
+            else:
+                # a blinded measurement must be COULD-NOT-JUDGE: exit 2 is the pass here; a verdict either way is a harness defect
+                r["exit"] = 0 if r["exit"] == want else 1
+            r["verdict"] = ("planted fault detected (exit %d as required) - " % want if r["exit"] == 0 else
+                            "planted fault NOT detected (gate exit %s, wanted %d) - " % (r["gateExit"], want)) + r["verdict"]
             rows.append(r)
     counted = [r for r in rows if not r.get("info")]
     code = 1 if any(r["exit"] == 1 for r in counted) else (2 if any(r["exit"] == 2 for r in counted) or not counted else 0)

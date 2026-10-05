@@ -17,8 +17,12 @@ DESKTOP (1280x720, 1366x768, 1920x1080):
 PHONES (touch emulation, landscape 667x375 / 852x393 / 915x412 / 1180x820):
   HOW TO PLAY  GOT IT is on-screen at every size, and ONE real tap closes it
   menu + HUD   0 clipped text/controls, tap targets >= 44 px, fonts >= 12 px, no page scroll,
-               0 HUD text under a touch control or the control bar (in a match)
+               0 HUD text under a touch control or the control bar (in a match, player protected) - judged ONLY while the
+               data-touch-ui stick + FIRE are rendered at that size (else CNJ: nothing could overlap)
+  controls     the data-touch-ui stick + FIRE are rendered in the live match at every size (FAIL when absent)
   (the touch INTERACTIONS - look, fire, USE, slot taps, minimap tap, portrait overlay - are mobile.py)
+Falsifier: `--only phones --plant no-touch-ui` (every data-touch-ui control display:none) must FAIL the controls row and
+leave the overlap rows CNJ.
 Exit 0 pass / 1 fail / 2 could not judge.
 """
 from __future__ import annotations
@@ -76,6 +80,32 @@ FOV_JS = r"""() => {
   const rows = [...document.querySelectorAll('div, label, span')].filter((e) => /field of view|\bfov\b/i.test(e.textContent || '') && e.textContent.length < 80);
   const txt = rows.map((e) => (e.textContent || '').trim()).sort((a, b) => a.length - b.length);
   return { rows: txt.slice(0, 4), has57deg: txt.some((t) => /57\s*°/.test(t)) };
+}"""
+
+
+# Lane L10's touch layer marks every control with data-touch-ui (touch.js header table: stick, fire, jump, reload, ads,
+# use, pause). The phone overlap rows are judged only while these marks are RENDERED (every ancestor displayed, not
+# hidden, opacity > 0, a non-empty rect on screen) - wave2/VERIFY.md 7 L1F: the rows used to pass with controls: [] (nothing
+# mounted, so nothing could overlap). REQUIRED_TOUCH is the minimum a phone player needs to move and shoot.
+REQUIRED_TOUCH = ("stick", "fire")
+# --plant no-touch-ui (falsifier): a stylesheet that removes every data-touch-ui control
+PLANT_NO_TOUCH = r"""(() => { const add = () => { const st = document.createElement('style'); st.id = '__h_plant_notouch';
+  st.textContent = '[data-touch-ui]{display:none !important}'; (document.head || document.documentElement).appendChild(st); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', add); else add(); })();"""
+
+MOUNTED_JS = r"""() => {
+  const W = window.__LC__ && window.__LC__.W;
+  const shown = (e) => { for (let n = e; n && n.nodeType === 1; n = n.parentElement) { if (n.hidden) return false; const s = getComputedStyle(n);
+    if (s.display === 'none' || s.visibility === 'hidden' || parseFloat(s.opacity) === 0) return false; } return true; };
+  const out = { phase: W ? W.phase : null, alive: !!(W && W.player && W.player.alive), paused: !!(W && W.paused), ids: [], hiddenIds: [], controls: [] };
+  for (const e of document.querySelectorAll('[data-touch-ui]')) {
+    const id = e.getAttribute('data-touch-ui') || '?';
+    const r = e.getBoundingClientRect();
+    const onScreen = r.width >= 1 && r.height >= 1 && r.right > 0 && r.bottom > 0 && r.left < innerWidth && r.top < innerHeight;
+    if (shown(e) && onScreen) { out.ids.push(id); out.controls.push({ id, r: [Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)] }); }
+    else out.hiddenIds.push(id);
+  }
+  return out;
 }"""
 
 
@@ -172,8 +202,13 @@ def desktop(v, args):
 def phones(v, args):
     spec = MK.DEVICES["pixel7"]
     ctx_kw = {"device_scale_factor": spec["dpr"], "is_mobile": True, "has_touch": True, "user_agent": spec["ua"]}
+    inits = [MK.PHONE_NO_LOCK]
+    if getattr(args, "plant", None) == "no-touch-ui":
+        inits.append(PLANT_NO_TOUCH)
+        v.note("PLANTED FAULT: every [data-touch-ui] control display:none (the Wave-2 integrated state: nothing mounted) - "
+               "the overlap rows MUST be CNJ and the touch-controls row MUST FAIL")
     with C.Session(args, "layoutcheck-phones", viewport={"width": spec["w"], "height": spec["h"]}, context_kw=ctx_kw,
-                   init_scripts=[MK.PHONE_NO_LOCK]) as s:
+                   init_scripts=inits) as s:
         T = MK.Touch(s.cdp(), s.sleep)
         s.stage("boot")
         s.goto()
@@ -233,22 +268,50 @@ def phones(v, args):
                     lay["nClipped"] == 0 and lay["nSmallTargets"] == 0 and lay["nSmallFonts"] == 0 and not lay["pageScrolls"],
                     {"clipped": lay["nClipped"], "smallTargets": lay["nSmallTargets"], "smallFonts": lay["nSmallFonts"], "scroll": lay["pageScrolls"],
                      "firstClipped": lay["clipped"][:3], "firstSmall": lay["smallTargets"][:3]})
-        # in-match HUD
+        # in-match HUD. The test subject is protected (setup): the touch layer hides on death / spectate BY DESIGN, so a
+        # death during the landing skip must not read as "no touch controls".
         s.page.set_viewport_size({"width": 915, "height": 412})
         s.start_match("standard", 7, "isla_viva", enter=True)
-        s.land(120)
+        s.guard_player(True)
+        v.info("landed (setup, player protected)", s.land(120, protect=True))
         s.step_frames(20, 1 / 60, render=False)
+        mounted = {}
         for name, w, h in MK.PHONE_SIZES:
             s.page.set_viewport_size({"width": w, "height": h})
             s.sleep(1.0)
             s.step_frames(3, 1 / 60, render=False)
             lay = s.js(MK.LAYOUT_JS)
             ol = s.js(MK.OVERLAP_JS)
+            mt = s.js(MOUNTED_JS)
+            mounted[name] = mt
             v.check("%s %dx%d match HUD: 0 clipped, targets >= 44 px, fonts >= 12 px" % (name, w, h),
                     lay["nClipped"] == 0 and lay["nSmallTargets"] == 0 and lay["nSmallFonts"] == 0,
                     {"clipped": lay["nClipped"], "smallTargets": lay["nSmallTargets"], "smallFonts": lay["nSmallFonts"],
                      "firstClipped": lay["clipped"][:3], "firstSmallFont": lay["smallFonts"][:3]})
-            v.check("%s %dx%d match HUD: 0 HUD text under a touch control / the control bar" % (name, w, h), not ol, ol[:6])
+            row = "%s %dx%d match HUD: 0 HUD text under a touch control / the control bar" % (name, w, h)
+            playing = mt.get("phase") in ("drop", "match") and mt.get("alive") and not mt.get("paused")
+            missing = [c for c in REQUIRED_TOUCH if c not in mt.get("ids", [])]
+            if not playing:
+                v.cnj(row, "not in a live match (phase %s, alive %s, paused %s): the touch layer is hidden by design" % (
+                    mt.get("phase"), mt.get("alive"), mt.get("paused")))
+            elif missing:
+                v.cnj(row, "no touch controls rendered to overlap (missing data-touch-ui %s; rendered %s, hidden %s)" % (
+                    missing, mt.get("ids"), mt.get("hiddenIds")))
+            else:
+                v.check(row, not ol, {"overlaps": ol[:6], "touchControls": mt.get("ids")})
+        # the controls themselves: a phone player in a live match must SEE the stick and FIRE (FAIL, not CNJ, when absent)
+        live = {n: m for n, m in mounted.items() if m.get("phase") in ("drop", "match") and m.get("alive") and not m.get("paused")}
+        lack = {n: [c for c in REQUIRED_TOUCH if c not in m.get("ids", [])] for n, m in live.items()}
+        lack = {n: l for n, l in lack.items() if l}
+        name_m = "phones: touch controls (data-touch-ui %s) rendered in the live match at every size" % "+".join(REQUIRED_TOUCH)
+        det_m = {"missing": lack, "rendered": {n: m.get("ids") for n, m in mounted.items()}, "hidden": {n: m.get("hiddenIds") for n, m in mounted.items()}}
+        if lack:
+            v.check(name_m, False, det_m)
+        elif len(live) < len(mounted):
+            v.cnj(name_m, "the match was not live at %s (%s)" % ([n for n in mounted if n not in live], det_m))
+        else:
+            v.check(name_m, True, det_m)
+        s.guard_player(False)
         v.info("touch layer mounted", s.js(MK.TOUCH_JS))
 
 
@@ -256,7 +319,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
     ap.add_argument("--only", choices=["desktop", "phones"], default=None)
+    ap.add_argument("--plant", default=None, choices=["no-touch-ui"],
+                    help="FALSIFIER (phones): hide every data-touch-ui control; the touch-controls row MUST FAIL and the overlap rows be CNJ")
     args = ap.parse_args()
+    if args.plant and not args.report:
+        args.report = "layoutcheck_plant_" + args.plant.replace("-", "_")
 
     def body(v):
         if args.only in (None, "desktop"):

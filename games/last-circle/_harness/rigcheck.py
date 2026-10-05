@@ -80,7 +80,7 @@ RIG_JS = r"""(opts) => {
     // tracks the aim yaw only while |aimDelta| <= 0.6 rad (body within the twist clamp of the camera)
     const bodyFwdYaw = a._bodyYaw != null ? a._bodyYaw - Math.PI : a.yaw;
     let aimDelta = a.yaw - bodyFwdYaw; while (aimDelta > Math.PI) aimDelta -= Math.PI * 2; while (aimDelta < -Math.PI) aimDelta += Math.PI * 2;
-    rows.push({ id: a.id, skin: a.skin, bot: !!a.isBot, player: a === W.player, onGround: !!a.onGround, gliding: !!a.gliding, chute: !!a.chute,
+    rows.push({ id: a.id, skin: a.skin, bot: !!a.isBot, player: a === W.player, onGround: !!a.onGround, gliding: !!a.gliding, chute: !!(a.chute && a.chute.visible !== false && a.chute.deployed !== false && a.chute.active !== false),
       aimDelta: +aimDelta.toFixed(3),
       swimming: !!a.swimming, emoting: !!a.emoting, crouching: !!a.crouching, weapon: a.weapon ? a.weapon.id : null, armed,
       wstate: a.weapon ? a.weapon.state : null, combat: !!(a.input && (a.input.ads || (W.t - a.lastShotT < 1.5))), armMode: a._armMode || null,
@@ -96,7 +96,7 @@ CHUTE_JS = r"""(dt) => {
   const W = window.__LC__.W; const S = window.__H_CHUTE__ = window.__H_CHUTE__ || { run: {}, worst: {}, samples: 0 };
   S.samples++;
   for (const a of W.actors) { if (!a) continue;
-    const bad = !!(a.alive && a.chute && a.onGround && !a.gliding);
+    const bad = !!(a.alive && (a.chute && a.chute.visible !== false && a.chute.deployed !== false && a.chute.active !== false) && a.onGround && !a.gliding);
     S.run[a.id] = bad ? (S.run[a.id] || 0) + dt : 0;
     if (S.run[a.id] > (S.worst[a.id] || 0)) S.worst[a.id] = +S.run[a.id].toFixed(2); }
   return null;
@@ -294,7 +294,7 @@ def main():
             for _ in range(4):
                 s.js(CHUTE_JS, 0.25)
                 s.step_frames(15, 1 / 60, render=False)
-            ch = s.js("() => ({ worst: (window.__H_CHUTE__ || {}).worst || {}, me: (() => { const p = window.__LC__.W.player; return { chute: !!p.chute, onGround: p.onGround, gliding: p.gliding }; })() })")
+            ch = s.js("() => ({ worst: (window.__H_CHUTE__ || {}).worst || {}, me: (() => { const p = window.__LC__.W.player, a = p; return { chute: !!(a.chute && a.chute.visible !== false && a.chute.deployed !== false && a.chute.active !== false), onGround: p.onGround, gliding: p.gliding }; })() })")
             mine = ch["worst"].get(s.js("() => window.__LC__.W.player.id"), 0)
             if agl and agl.get("gliding") is False and agl.get("agl", 99) > 16:
                 v.cnj("(d) REAL Space spam from <= 16 m AGL leaves no canopy on the grounded player", "the player landed before 16 m AGL was reached")

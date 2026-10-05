@@ -67,6 +67,52 @@ async ([seed, mapId, maxSeconds, stepS, patchSeed, stormOn, skipStart, watchIds]
     for (const s of guns(a)) { const sc = K.gunScore(s.id, s.rarity || 0); if (sc > bs) { bs = sc; b = s; } }
     return b ? b.id + ":" + (b.rarity || 0) : "none";
   };
+  // ── L1F (VERIFY.md #24): the RANGE/AMMO-AWARE "better gun" variant (L6's pmdiag), beside the raw-DPS gunScore one.
+  // Values come from the sim's own gunValueAt (time-to-kill from the weapon tables) for THIS bot's hands: the live fight
+  // (target seen < 3 s ago: its distance + EHP, the bot's own speed) or, out of a fight, the mean over 5/15/40/80 m;
+  // the slot's own mag + reserve; the bot's tier aim error x 0.7 RMS; a sniper on the run halved. The decision rule is
+  // bots.js ensureGunOut's, MIRRORED here (constants: idle tie 0.02, swap price 0.4 s in a fight, margin 1.15): a sample
+  // "carries a better gun (value)" when a carried gun with ammo beats the PISTOL slot by that rule, whatever is held;
+  // it "holds the pistol" when the active weapon is the pistol. Transitional samples are skipped: within 1.2 s of the last
+  // swap (the bot's swap gate), reloading, or holding a consumable. If L6 changes ensureGunOut's rule, update this mirror.
+  const VAL = typeof K.gunValueAt === "function";
+  const IDLE_R = [5, 15, 40, 80];
+  const gv = (a, s, dist, ehp, speed) => {
+    const def = K.WEAPONS[s.id]; if (!def) return -1;
+    const reserve = a.inventory.ammo[def.ammo] || 0, mag = s.mag != null ? s.mag : 0;
+    if (mag + reserve <= 0) return 0;
+    const tk = a.brain && a.brain.tierK; const aimDeg = tk ? tk.aimErrDeg * 0.7 : undefined;
+    if (dist == null) { let v = 0; for (const d of IDLE_R) v += K.gunValueAt(s.id, s.rarity || 0, d, { mag, reserve, aimDeg }); return v / IDLE_R.length; }
+    let v = K.gunValueAt(s.id, s.rarity || 0, dist, { ehp, speed, mag, reserve, aimDeg });
+    if (def.cls === "sniper" && speed > 3) v *= 0.5;
+    return v;
+  };
+  const fightOf = (a, b) => {
+    const bb = b && b.bb; let dist = null, ehp = 150;
+    if (bb && bb.target && bb.targetPos && W.t - bb.targetSeenT < 3) {
+      dist = Math.hypot(bb.targetPos.x - a.pos.x, bb.targetPos.z - a.pos.z);
+      const t = W.actorById.get(bb.target); if (t && t.alive) ehp = (t.hp || 0) + (t.shield || 0);
+    }
+    return { dist, ehp, speed: a.vel ? Math.hypot(a.vel.x, a.vel.z) : 0 };
+  };
+  // returns null (not judged: no pistol slot / transitional / no other loaded gun) or { better, holdsPistol, ... }
+  const valueBetter = (a, b) => {
+    if (!VAL) return null;
+    const gs = guns(a);
+    const pist = gs.find((s) => s.id === "pistol");
+    if (!pist) return null;
+    const w = a.weapon;
+    if (!w || w.id.startsWith("consumable") || w.state === "reloading") return null;
+    if (b && b.bb && W.t - (b.bb.swapT != null ? b.bb.swapT : -99) <= 1.2) return null;
+    const c = fightOf(a, b);
+    const sc = (s) => { const v = gv(a, s, c.dist, c.ehp, c.speed); return (c.dist != null && v > 0) ? v + 0.02 * gv(a, s, null, c.ehp, c.speed) : v; };
+    const pv = sc(pist);
+    let bestV = -1, bestS = null;
+    for (const s of gs) { if (s === pist || slotAmmo(a, s) <= 0) continue; const v = sc(s); if (v > bestV) { bestV = v; bestS = s; } }
+    if (!bestS) return { better: false };
+    const eff = c.dist != null ? c.ehp / (c.ehp / Math.max(1e-6, bestV) + 0.4) : bestV;
+    return { better: eff > pv * 1.15, holdsPistol: w.id === "pistol", dist: c.dist, pv, bestV, best: bestS.id + ":" + (bestS.rarity || 0) };
+  };
 
   // ── events ──
   const kills = [];            // {t, victim, killer, wid, killerActive, killerIsBot}
@@ -116,6 +162,12 @@ async ([seed, mapId, maxSeconds, stepS, patchSeed, stormOn, skipStart, watchIds]
   const stuckOpen = new Map();
   let movingN = 0, stuckBoxN = 0, stuckNetN = 0, aliveN = 0, activeDryN = 0, allDryN = 0, landedN = 0;
   let carryNotHoldN = 0, carrySniperLauncherN = 0, betterN = 0, betterHoldPistolN = 0;
+  let valJudgedN = 0, valBetterN = 0, valHoldPistolN = 0;
+  // L1F (L6F request): the audit's raw-DPS definition counted (1) a bot HOLDING its best gun when that gun is a rare pistol
+  // (gunScore pistol:1 153 > pistol:0 133, held id "pistol") and (2) better guns with 0 rounds. The refined raw row: a
+  // better gun must be LOADED (mag + reserve > 0), and "holds the pistol" means a pistol scoring below the best loaded gun.
+  let rawBetterN = 0, rawHoldPistolN = 0;
+  const valByDist = {}, valSamples = [];
   const stuckRun = new Map(), maxStuckRun = new Map();
   const watch = new Set(watchIds || []), track = {};
   const everAllDry = new Set(), everStuck = new Set();
@@ -151,6 +203,30 @@ async ([seed, mapId, maxSeconds, stepS, patchSeed, stormOn, skipStart, watchIds]
       landedN++;
       if (upgraded(a)) up++;
       if (carriesBetter(a)) { better++; betterN++; if (a.weapon && a.weapon.id === "pistol") betterHoldPistolN++; }
+      {
+        let bestLoaded = -1;
+        for (const s of guns(a)) { if (slotAmmo(a, s) <= 0) continue; const sc = K.gunScore(s.id, s.rarity || 0); if (sc > PISTOL_SCORE * 1.001 && sc > bestLoaded) bestLoaded = sc; }
+        if (bestLoaded > 0) {
+          rawBetterN++;
+          const hs = a.inventory.slots[a.inventory.active];
+          const heldScore = hs && hs.kind === "weapon" ? K.gunScore(hs.id, hs.rarity || 0) : -1;
+          if (a.weapon && a.weapon.id === "pistol" && heldScore < bestLoaded) rawHoldPistolN++;
+        }
+      }
+      const vb = valueBetter(a, b);
+      if (vb) {
+        valJudgedN++;
+        if (vb.better) {
+          valBetterN++;
+          if (vb.holdsPistol) {
+            valHoldPistolN++;
+            const db = vb.dist == null ? "idle" : vb.dist < 15 ? "<15" : vb.dist < 30 ? "15-30" : vb.dist < 60 ? "30-60" : vb.dist < 120 ? "60-120" : "120+";
+            valByDist[db] = (valByDist[db] || 0) + 1;
+            if (valSamples.length < 40) valSamples.push({ t: +W.t.toFixed(1), id, st: b.state, dist: vb.dist == null ? null : +vb.dist.toFixed(0),
+              pistolV: +vb.pv.toFixed(2), best: vb.best, bestV: +vb.bestV.toFixed(2) });
+          }
+        }
+      }
       if (holdsNonPistol(a)) holdNP++;
       const gs = guns(a);
       const hasSL = gs.some((s) => s.id === "sniper" || s.id === "glauncher");
@@ -222,6 +298,8 @@ async ([seed, mapId, maxSeconds, stepS, patchSeed, stormOn, skipStart, watchIds]
     callers, track, pois: W.map.pois.map((p) => ({ id: p.id, name: p.name, x: p.x, z: p.z, r: p.r })),
     maxStuck: [...maxStuckRun.entries()].sort((x, y) => y[1] - x[1]).slice(0, 8),
     agg: { movingN, stuckBoxN, stuckNetN, landedN, activeDryN, allDryN, carryNotHoldN, carrySniperLauncherN, betterN, betterHoldPistolN,
+      valueAware: VAL, valJudgedN, valBetterN, valHoldPistolN, valByDist, rawBetterN, rawHoldPistolN,
       everAllDry: everAllDry.size, everStuck: everStuck.size, nBots: botIds.length, chests, stateCount },
+    valSamples,
   };
 }
