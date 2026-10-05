@@ -12,36 +12,39 @@ build contract (lanes, gates, ports, commands) is [`CONTRACT.md`](CONTRACT.md); 
 
 **This is the only place that says what is built, wired into the app, or specification only.** Other documents link here instead of restating it.
 "Built" = the code is in the tree. "Wired" = `src/app.ts` uses it in the running game. Gate results live in gitignored reports, so the last result and
-its date are copied here; update the row (with the date) whenever a lane re-runs its gate.
+its date are copied here; update the row (with the date) whenever a lane re-runs its gate. Rows marked "read from the report" were copied from the
+lane's own report file, not re-run by the docs lane; "checkpoint `fc60963`" is the orchestrator's commit of 2026-10-05 06:37.
 
 | Module | Built | Wired into the app | Spec only | Last gate result (date, UTC) |
 |---|---|---|---|---|
-| Slice physics: DOLLOP soft body (`src/physics`) | yes | yes | | `probe_softbody.ts --quick`, 2026-10-05 05:43: 94 of 96 rows pass; 2 mesh-fold rows fail (a hard shove at the swirl-peak, the contact fold limit). PHYS is rewriting: **in progress** |
-| Physics round 2: material families, species rest shapes, `metrics.press` and `reaction`, ceremony drivers, per-family G1 band (CONTRACT 4.2, 4.3) | no (declared in `contracts.ts`; not in `softbody.ts`) | no | the interface | **in progress** (PHYS) |
+| Slice physics: DOLLOP soft body (`src/physics`) | yes | yes | | `probe_softbody.ts` (full run), 2026-10-05 06:44, read from the report: 99 of 100 rows pass; 1 fails (a hard side shove at the swirl-peak leaves a 138 degree crease against the 115 degree limit). PHYS is rewriting: **in progress** |
+| Physics round 2: material families, species rest shapes, `metrics.press` and `reaction`, ceremony drivers, per-family G1 band (CONTRACT 4.2, 4.3) | partly: `softbody.ts` at checkpoint `fc60963` fills `metrics.press` and `metrics.reaction`; material families, species rest shapes, the ceremony drivers and the per-family band are not in it yet | no | the rest of the interface | **in progress** (PHYS) |
 | Slice audio: poke, squish, release, land, pop, blend | yes | yes | | SOUND.md records 372/372 checks for rounds 1 and 2 |
 | Audio round 2: `meterFull`, `capsuleBeat`, `reveal`, `mergeStart`, `duck` | yes (landed 2026-10-02 18:07, commit `d0c4545`) | no | | as above |
-| Audio round 3: music bed, `bump`, `lift`, `toss`, `strand` | in progress (`music.ts`, `interact.ts` not yet committed) | no | | **in progress** (AUDIO) |
-| Slice render: the jelly stage | yes (landed 2026-10-02 16:36) | yes | | `browser_render.mjs`, 2026-10-05 05:13: 182 of 185 checks ok |
-| Render round 2: several bodies, tier look, capsule drop and reveal, merge ceremony, Calm effects, flash governor | yes (`src/render/stage.ts`) | no | | same run: one listed failure (the Legendary merge escalation row); audit fixes **in progress** |
+| Audio round 3: music bed, `bump`, `lift`, `toss`, `strand` | in the tree (`music.ts`, `interact.ts`, first committed in checkpoint `7954349`, 2026-10-05 05:51); still being tuned | no | | **in progress** (AUDIO; its probe was running at 06:37, result not recorded here) |
+| Slice render: the jelly stage | yes (landed 2026-10-02 16:36) | yes | | `browser_render.mjs`, last complete run 2026-10-05 05:13: 182 of 185 checks ok (recorded then); a later run (started 06:24) was cut off: its report says the browser closed mid-run |
+| Render round 2: several bodies, tier look, capsule drop and reveal, merge ceremony, Calm effects, flash governor | yes (`src/render/stage.ts`) | no | | 05:13 run: one listed failure (the Legendary merge escalation row); audit fixes **in progress** |
 | Slice shell: input, keyboard, settings, HUD, title, errors | yes (landed 2026-10-02 17:16) | yes | | `browser_shell.mjs`, 2026-10-02 17:12: 151/151 |
-| Core economy logic: `rarity`, `meter`, `drops`, `merge`, `genome` with 50 species | yes (landed 2026-10-02 18:01, commit `7869499`) | no | | re-run by the docs lane 2026-10-05 05:57: `probe_economy` 98/98, `probe_genome` 14/14 |
-| Catalog and material data: `catalog.ts` (50 species), `materials.ts` (12 families), `shapes.ts` | yes | no (only core, the probes and the sim import them) | | 2026-10-05 05:57: `probe_catalog` 109/109, `probe_materials` 42/42. A species rename is **in progress** (CORE) |
-| Economy sim | yes | (not a game module) | | full canonical run 2026-10-05: DESIGN 5.0 (hash recorded there) |
-| Typecheck of the whole tree | | | | `npx tsc --noEmit -p tsconfig.json` clean, 2026-10-05 (docs lane) |
+| Core economy logic: `rarity`, `meter`, `drops`, `merge`, `genome` with 50 species | yes (landed 2026-10-02 18:01, commit `7869499`; audit fixes in checkpoint `fc60963`) | no | | run by the docs lane on a clean export of checkpoint `fc60963`, 2026-10-05 06:50: `probe_economy` 138/138, `probe_genome` 25/25 |
+| Catalog and material data: `catalog.ts` (50 species), `materials.ts` (12 families), `shapes.ts`, `palette.ts`, `species.ts` | yes | no (only core, the probes and the sim import them) | | same run: `probe_catalog` 118/118, `probe_materials` 46/46. A species rename is **in progress** (CORE): on the working tree at 06:48, mid-edit, `probe_catalog` failed 2 checks (the index lock and `CATALOG.md` not yet regenerated), which is CORE's to finish |
+| Economy sim | yes | (not a game module) | | full canonical run 2026-10-05, re-run on checkpoint `fc60963` the same day: identical output (DESIGN 5.0, hash recorded there) |
+| Typecheck of the whole tree | | | | `npx tsc --noEmit -p tsconfig.json`: see section 7 for the docs lane's last run |
 | COLLECTION module 1: local Hoard, meter feed, capsule table, restock, tasks, Practice shelf | no | no | yes (COLLECTION.md) | |
-| SERVER MINT 1b: migration, commit functions, `wh-api` host, portal bridge | no (drafts in COLLECTION.md appendices; nothing in `supabase/`) | no | yes | drafts passed 149 SQL + 36 host checks on a scratch PostgreSQL 16, 2026-10-02 [V then]; **the 2026-10-05 revisions were not run** (section 7) |
-| MERGE module: host ops `wh_merge` and `wh_tidy`, pad UI, Tidy-up | merge rules only (`core/merge.ts`) | no | server and UI (MERGE.md) | rules: `probe_economy` 98/98 (above) |
+| SERVER MINT 1b: migration, commit functions, `wh-api` host, portal bridge | no (drafts in COLLECTION.md appendices; nothing in `supabase/`) | no | yes | drafts on a scratch PostgreSQL 16: 149 SQL + 36 host checks on 2026-10-02; **after the 2026-10-05 security revisions, 170 SQL + 37 host checks, the ops pack and the A.7 privilege audit (with its negative test), 2026-10-05, last run finished 06:53 UTC [V]**. Never run on Supabase (gate G9) |
+| MERGE module: host ops `wh_merge` and `wh_tidy`, pad UI, Tidy-up | merge rules only (`core/merge.ts`) | no | server and UI (MERGE.md) | rules: `probe_economy` (above); the draft host and commit function: as SERVER MINT |
 | TRADE module: friends, shelf, board, proposals, review screen, block and report | no | no | yes (TRADE.md) | as SERVER MINT |
 | Stage B: the reference-clip features (section 4) | audio side in progress (round 3) | no | yes | |
 
-**Stage A** is what the lanes are finishing now: physics round 2, the render round-2 audit fixes, audio round 3, and then the shell rewrite that wires
+**Stage A** is what the lanes were finishing on 2026-10-05: physics round 2, the render round-2 audit fixes, audio round 3, and then the shell rewrite that wires
 rounds 2 and 3 into the app. **Stage B** is the play-mat work taken from the reference clips (section 4). The collection, server, merge and trade
 modules (P2 to P8) follow the roadmap of section 2.
 
 **What the module documents proved, and when.** On 2026-10-02 the draft SQL and a reference host passed 149 SQL-level and 36 host-level checks on a
 scratch PostgreSQL 16 with a Supabase stand-in (parallel acceptors, double-spend, replay, tampered payloads, fault injection, deadlock storm,
-laundering ring, conservation). **Not proven:** anything on a real Supabase project, the Edge Function, the portal, or any UI; and none of the
-security revisions made to the drafts on 2026-10-05 (section 7), because this container has no PostgreSQL.
+laundering ring, conservation). After the security revisions of 2026-10-05 (section 7) the same suites, grown to **170 SQL-level and 37 host-level
+checks**, passed again on 2026-10-05 on a scratch PostgreSQL 16.14, with the SQL, the runner and the host cut verbatim out of the documents by a
+script; the migration's privilege audit (COLLECTION A.7) passed and was shown to fail the migration on a schema-wide revoke or a stray grant.
+**Not proven:** anything on a real Supabase project, PostgREST, the Edge Function, the portal, any UI, or load.
 
 ## 2. The roadmap
 
@@ -94,9 +97,9 @@ security revisions made to the drafts on 2026-10-05 (section 7), because this co
 | # | Decision | Options and my recommendation | Blocks | If no answer |
 |---|---|---|---|---|
 | **D-1** | **Merge cost 2 or 3.** | Keep **2** (DESIGN 5.6: 3.1 to 3.8 minutes per capsule is the "decent effort" band; at the chosen 100 SP meter, 3 fails the "a mergeable set in the first one or two sessions" target: 36.6 minutes against 10.4 to the first mergeable set [sim O]). Flip only if a playtest measures 1.5 minutes or less per capsule, or the meter changes too. **The flip costs one line, seven probe edits, a config row and a host redeploy: [MERGE.md section 8](MERGE.md), checked in a scratch copy.** | Nothing now | Stays 2 |
-| **D-2** | **Should trade be mandatory for completion?** | Today it is not: a solo player finishes in about 205 days against 131 with trading (1.56x at the median) [sim K], and trade supplies about a third of Epic+ first copies [sim L] (DESIGN 5.0). The levers that could change that (account exclusives, version groups, gift species, and others) and their costs are in [TRADE.md section 2](TRADE.md). **None is adopted.** Recommendation: ship as designed, measure the real trade share in the beta, then decide. Any lever excludes players who cannot trade (age gate, no friends, no sign-in), so decide D-5 first. | The design of P7 only if a lever is chosen | Not mandatory |
+| **D-2** | **Should trade be mandatory for completion?** | As designed it is not: a solo player finishes in about 205 days against 131 with trading (1.56x at the median) [sim K], and trade supplies about a third of Epic+ first copies [sim L] (DESIGN 5.0). The levers that could change that (account exclusives, version groups, gift species, and others) and their costs are in [TRADE.md section 2](TRADE.md). **None is adopted.** Recommendation: ship as designed, measure the real trade share in the beta, then decide. Any lever excludes players who cannot trade (age gate, no friends, no sign-in), so decide D-5 first. | The design of P7 only if a lever is chosen | Not mandatory |
 | **D-3** | **Name clearance.** | A trademark and domain search on the title **WOBBLEHOARD** and all 50 species names (DESIGN section 9 requires it before release; `probe_catalog.ts` only checks against a built-in denylist, which is not a legal search). **I cannot do this with the tools I have.** Recommendation: before any art or marketing spend; a working title is fine for the beta. | Public launch, store listings | The title stays "working" |
-| **D-4** | **Account requirements.** | Real squishies need a server account. **(a)** the existing portal accounts (email sign-up, Google): works today, but needs an email address, which is the child-privacy question (D-5). **(b)** Supabase anonymous sign-ins [G: supported by Supabase Auth, not used by the portal today]: a player gets a real account and a real Hoard with **no email**, can collect and merge, and trade stays off (the database default) until the account is linked to a verified identity; weaker against multi-accounting (clear storage, new account) but safe because trade is gated. **(c)** guests stay practice only. Recommendation: **v1 = (a) and (c)**; evaluate (b) after the beta, because it changes the portal. | P4's account story, P5's first-sign-in flow | (a) and (c) |
+| **D-4** | **Account requirements.** | Real squishies need a server account. **(a)** the existing portal accounts (email sign-up, Google): works as of 2026-10-05, but needs an email address, which is the child-privacy question (D-5). **(b)** Supabase anonymous sign-ins [G: supported by Supabase Auth, not used by the portal today]: a player gets a real account and a real Hoard with **no email**, can collect and merge, and trade stays off (the database default) until the account is linked to a verified identity; weaker against multi-accounting (clear storage, new account) but safe because trade is gated. **(c)** guests stay practice only. Recommendation: **v1 = (a) and (c)**; evaluate (b) after the beta, because it changes the portal. | P4's account story, P5's first-sign-in flow | (a) and (c) |
 | **D-5** | **Age gating and consent for trading.** | The portal has no age field and no parental flow [R]; its privacy page says "No account creation is required to play games" and "We do not knowingly collect personal information from children under 13" [R] while real items need an account. Options in [TRADE.md 16.3](TRADE.md): **A** closed beta, trading switched on by hand for named adults; **B** a neutral age screen at portal sign-up with trading for 13+ (or 16+); **C** verifiable parental consent via a third party; **D** adults only. **Recommendation: A for the beta, and C if children are the audience.** Needs the owner and counsel; I am not a lawyer. The switch it sets (`trade_enabled`) closes every social surface, not only trading (TRADE 16.1). | Any trading by anyone who is not an allow-listed tester; the launch | **A** (trading off by default) |
 | **D-6** | **Server hosting and cost.** | The logic is TypeScript and must run the game's own modules verbatim. Options: **(a) a Supabase Edge Function** (recommended: same project, JWT verified by the platform, no new vendor); **(b)** a Cloudflare Worker (the repo already deploys `workers/games-cdn` with wrangler) calling PostgREST with the service key: **no SQL change**; **(c)** port to PL/pgSQL with golden vectors (not recommended: drift risk). **Cost formula [G, unverified plan limits]:** Edge invocations per month = daily active players x sessions a day x (minutes per session x batches per minute + about 10 other host calls) x 30. With a 45 second batch (1.33 a minute) and one 20 minute session: 37 calls per player-day, so **1,000 daily players is about 1.1 million a month and 10,000 about 11 million**; the free plan allows 500,000 and the Pro plan includes 2,000,000 [G]. Plain `rpc` calls (inbox polling at 1 a minute, reads) are not Edge invocations. **Storage measured on the scratch database [V, 2026-10-02]:** an item costs about **225 bytes with indexes**, a ledger row about **318 bytes**; at 331 items a player (the sim's week-9 mean [sim G]) that is about **200 KB per player**, so 1,000 players are about 200 MB and 100,000 about 20 GB [U: random test data, no compression]. I do not know which Supabase plan the `qkid` project is on. | P4 | Edge Function |
 | D-7 | **Trade numbers.** | Daily cap 3 (the sim value; DESIGN says "raise to 5 as headroom"), pair cap 1, lock 24 h, gate 2 days and 10 capsules, offer shelf 12, friends 30, live offers 3 and 10, the per-account rate buckets of TRADE 7.4. All are config or constants. Recommendation: ship as written, review in the beta. | Nothing | As written |
@@ -150,18 +153,34 @@ None of these is built or scheduled. Each is a paragraph on how it would sit on 
 6. **The sim's trade ratio (1.5 to 1.7x) is a hard ceiling** of the current catalog (DESIGN 5.8): owner expectations of "required" need a decision (D-2), not more code.
 7. **Per-lane file ownership:** `core/save.ts` and `core/genome.ts` need the additive `'restock'` origin; the shell lane owns `save.ts` (COLLECTION 3.5).
 8. **The shared CDN origin** (D-16): any script on it can read and write this game's `localStorage`. The design never trusts or blindly replays local data (COLLECTION 7.7), but the clean fix is infrastructure.
-9. **The draft SQL was revised on 2026-10-05 without a database to run it on** (section 7). Treat the revisions as unverified until the suites run again (gate G9).
+9. **The draft SQL has only ever run on a scratch PostgreSQL with a stand-in for Supabase** (the 2026-10-05 revisions included, section 7). RLS and grants under PostgREST, `SECURITY DEFINER` ownership and the Edge Function are unproven until gate G9 runs on a staging project.
 
-## 7. What this lane did and did not do (2026-10-05 revision)
+## 7. What the docs lane did and did not do (2026-10-05 revision)
 
 **Done:** this file now carries the one status table (section 1) with absolute dates and schedules the reference-clip items as stage B
 (section 4, owner decision D-15); D-16 and D-17 were added; CONTRACT.md was rewritten as the current build contract; DESIGN.md was brought in line
-with the clip review, the module documents' deviations and one canonical sim run (DESIGN 5.0, re-run on 2026-10-05). The draft SQL and host in
-COLLECTION.md, MERGE.md and TRADE.md were revised for the 2026-10-05 security audit: the grant revocation is scoped to WH objects and audited, local
-pending operations keep no replayable parameters, the trading switch closes every social surface, the report hold cannot be re-armed, friend-code
-errors no longer reveal a code's validity, counters keep the trade's tier, board trades stay 1 for 1, the incoming-offer cap holds under concurrency,
-payload limits are described honestly with per-account rate buckets added, and Tidy-up sub-keys cannot collide.
+with the clip review, the module documents' deviations and one canonical sim run (DESIGN 5.0). The draft SQL and host in COLLECTION.md, MERGE.md and
+TRADE.md were revised for the 2026-10-05 security audit: the grant revocation is scoped to WH objects and audited, local pending operations keep no
+replayable parameters, the trading switch closes every social surface, the report hold cannot be re-armed, friend-code errors no longer reveal a
+code's validity, counters keep the trade's tier, board trades stay 1 for 1, the incoming-offer cap holds under concurrency, payload limits are
+described honestly with per-account rate buckets added, and Tidy-up sub-keys cannot collide.
 
-**Not done:** no code under `src` or `_harness`; nothing under `supabase/`; nothing deployed; no trademark or legal search; no real-Supabase run;
-no UI. **The revised SQL, the new test cases in TRADE.md Appendix C and the revised host were not run: this container has no PostgreSQL and
-installing one was out of scope.** They were checked by reading only.
+**Verified on 2026-10-05 [V]** (this container has PostgreSQL 16.14 and Node 22.22.0; nothing was installed):
+
+* **The draft server, as written in the documents.** A script cut every SQL block, the Python runner and the two host files verbatim out of
+  COLLECTION.md, MERGE.md and TRADE.md and ran them on a scratch database with the stand-in of TRADE Appendix B: the migration loaded in the
+  order of COLLECTION Appendix A with its privilege audit A.7 passing; **170 of 170 SQL checks** (TRADE Appendix C, including every check added
+  for the audit); the ops pack without an error; **37 of 37 host checks** (COLLECTION Appendix C) against `src/core` and `src/data` as they stood at 06:53 UTC. Both suites were run twice
+  (finishing 06:42 and 06:53 UTC), the second time after the last edit to any appendix.
+  A.7 was also loaded after six injected faults (the first draft's schema-wide revoke on tables, the same on sequences, a callable helper, a usable
+  WH sequence, an extra table grant, RLS switched on for a portal table) and failed the migration every time.
+* **The canonical sim** re-run on checkpoint `fc60963`: byte-identical to the run DESIGN 5.0 quotes (same SHA-256).
+* **The CORE probes** on a clean export of checkpoint `fc60963`: `probe_economy`, `probe_genome`, `probe_catalog`, `probe_materials` all pass.
+* **The volume-band table** of CONTRACT 4.3 regenerated from `materials.ts` with the command printed there; **the family and lane rules** of
+  DESIGN 5.2 recomputed from `catalog.ts` (grid, lane totals 10/10/9/8/7/6, 3 to 5 species and tiers per family, signature family higher in
+  mean tier, no tier more than 40% one lane).
+* `npx tsc --noEmit -p tsconfig.json` clean for the whole tree at 06:52 UTC, with the other lanes' edits in progress.
+
+**Not done:** no code under `src` or `_harness`; nothing under `supabase/`; nothing deployed; no trademark or legal search; no run on a real
+Supabase project (PostgREST, RLS as Supabase configures it, the Edge Function, Deno); no UI; no load test. The physics, render and audio gate
+numbers in section 1 are copied from those lanes' own reports, not re-run here.

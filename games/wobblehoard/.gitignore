@@ -3,3 +3,7 @@ dist/
 _shots/
 _harness/_reports/
 _harness/_renders/
+# Stray debug captures at the game root (the only image that belongs in the folder is public/thumbnail.png).
+/dbg_*
+/*.png
+/*.jpg

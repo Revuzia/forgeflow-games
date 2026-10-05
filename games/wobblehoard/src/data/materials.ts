@@ -206,11 +206,17 @@ export interface MaterialFamily {
   id: MaterialFamilyId;
   /** Short display name (original). */
   name: string;
-  /** One line a designer can recognise: what it feels like in the hand. */
+  /** One line a designer can recognise: what it feels like in the hand. Describes what is BUILT (see `planned`). */
   blurb: string;
   physics: MaterialParams;
   look: MaterialLook;
   sound: MaterialSound;
+  /**
+   * A behaviour the family is SPECIFIED to have (its numbers may already describe it) but the physics does not build yet. No blurb or
+   * tag may promise it: _harness/probe_catalog.ts screens the family blurb and every blurb and tag of the family's species for
+   * `promiseWords`, and _spec/CATALOG.md prints the note. Delete the entry in the change that ships the behaviour.
+   */
+  planned?: { feature: string; promiseWords: readonly string[] };
 }
 
 const P = (
@@ -305,7 +311,11 @@ export const MATERIAL_FAMILIES: Record<MaterialFamilyId, MaterialFamily> = {
   },
   popdome: {
     id: 'popdome', name: 'Pop Dome',
-    blurb: 'A stiff silicone dome that resists, then gives under a firm press and springs straight back (the inside-out pop is planned, not built).',
+    blurb: 'A stiff silicone dome that resists, then gives under a firm press and springs straight back.',
+    planned: {
+      feature: 'the bistable snap: past a threshold the dome pops and flips inside out, then flips back (SQUISHY_SCIENCE.md 3.9; the family\'s `snap` number specifies it, the physics solver does not build it yet)',
+      promiseWords: ['pop', 'pops', 'popping', 'flip', 'flips', 'flipping', 'inside out', 'snap', 'snaps', 'snapping', 'click', 'clicks'],
+    },
     physics: P(44, 70, 0.30, 0.06, 0.1, 0, 0.1, 0, 60, 2.4, 8, 3, 0.08, 0.08, 0.8, 0.80, 0, 0, 0, 3, 0.4, 0.5, 1),
     look: L(0.35, 0.2, 0.7, 0.2, 0.2, 0.25, 0, 0, 0.4, 0.15, 0.1, 0.6, 0.2),
     sound: S(0.1, 0.3, 0.8, 5200, 1.0, 0, 0.2, 0, 1.5, 1.0, 0),

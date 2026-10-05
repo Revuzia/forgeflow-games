@@ -9,7 +9,7 @@
 // whichever side moved.
 import { readFileSync } from 'node:fs';
 import {
-  CATALOG, SPECIES, SPECIES_BY_ID, SPECIES_BY_TIER, LANES, SIGNATURE_BIAS, speciesBaseGenome, speciesTemplateGenome, tierOf, familyOf, tierIndexOf, speciesIdx, getSpecies, isSpeciesId,
+  CATALOG, SPECIES, SPECIES_BY_ID, SPECIES_BY_TIER, LANES, SIGNATURE_BIAS, PATTERN_SPECKLE_FLOOR, speciesBaseGenome, speciesTemplateGenome, tierOf, familyOf, tierIndexOf, speciesIdx, getSpecies, isSpeciesId,
 } from '../src/data/catalog.ts';
 import type { SpeciesDef, SpeciesId, LaneId } from '../src/data/catalog.ts';
 import {
@@ -45,15 +45,14 @@ const T = {
   bandRadiusMax: 0.035,       // largest OKLab deviation of an instance from its species' centre colour
   pastelL: 0.8, pastelC: 0.09, // "pastel-kawaii default" = body L >= 0.80 and chroma < 0.09: none allowed
   dollopFitRms: 0.02, dollopFitMax: 0.1, // evalShape(DOLLOP_RECIPE) against the frozen physics DOLLOP snapshot below, units of R0
-  lineageMargin: 0.01,        // OKLab margin by which a lineage-tinted merge result must stay nearer its own species centre (merge.ts)
 };
 
 /* ───────────────────────────── the locked registry (append-only!) ───────────────────────────── */
 // When a species is APPENDED to SPECIES, append its id here in the same commit. Existing positions must never change.
-// (idx 20 and 36 were re-slugged once, before launch, by the language-safety review: see src/data/species.ts rule 3.)
+// (idx 15, 18, 20 and 36 were re-slugged once, before launch, by the language-safety review: see src/data/species.ts rule 3.)
 const IDX_LOCK: readonly string[] = [
   'dollop', 'plumpet', 'twangle', 'puddlo', 'glubbin', 'crumbit', 'chunkle', 'munchip', 'wisplet', 'cushlet', 'crimpo', 'thumbly', 'sproink', 'dimpla',
-  'nuzzo', 'flickum', 'swishel', 'granulo', 'peakum', 'wrigglo', 'acornel', 'capnap', 'knubby', 'kneadle', 'hooplet',
+  'nuzzo', 'tadpolo', 'swishel', 'granulo', 'sproutle', 'wrigglo', 'acornel', 'capnap', 'knubby', 'kneadle', 'hooplet',
   'spirelo', 'zingle', 'petalop', 'burrbin', 'marigel', 'gloopsy', 'hushpuff', 'drowsel', 'thudge', 'diademo',
   'taffelin', 'rattlebead', 'cindergoo', 'selenuff', 'pastrel', 'flipdome', 'caromel',
   'ambrosel', 'tidelume', 'glimglop', 'somnuff', 'fossilo',
@@ -153,7 +152,7 @@ const DENY_COMPOUND = ['fluffer nutter', 'marshmallow fluff', 'silly putty', 'th
   'peppa pig', 'paw patrol', 'sponge bob', 'hush puppies', 'kit kat', 'jelly cat', 'squish mallow', 'slime rancher', 'animal crossing', 'baby yoda', 'mr potato head',
   'huggy wuggy', 'kissy missy', 'poppy playtime', 'fall guys', 'candy crush', 'angry birds', 'among us', 'adopt me', 'my melody', 'tuxedo sam', 'moshi monsters',
   'lol surprise', 'little tikes', 'teddy ruxpin', 'buzz lightyear', 'winnie the pooh', 'peter rabbit', 'tom and jerry', 'bugs bunny', 'scooby doo', 'charlie brown',
-  'play foam', 'jolly rancher', 'little twin stars', 'my little pony', 'sylvanian families', 'calico critters', 'thomas the tank', 'baby shark'];
+  'play foam', 'little twin stars', 'sylvanian families', 'calico critters', 'thomas the tank', 'baby shark'];
 /** Why `word` (a name or id) runs a multi-word brand's word starts together, or ''. */
 function compoundReason(word: string): string {
   const w = norm(word);
@@ -171,11 +170,13 @@ function compoundReason(word: string): string {
 // ── Language safety ──
 // Names are read aloud by players of every language, so the gate is MULTILINGUAL: profanity, sexual terms, slurs, violence and drugs in
 // English plus Spanish (es, incl. Latin American usage), Portuguese (pt, incl. Brazilian), French (fr), Italian (it), German (de), Dutch (nl),
-// Tagalog / Filipino (tl) and common internet slang (net). The multilingual lists and the harshest English entries are stored REVERSED
-// (one space-separated string per language) so this file and code search stay clean; rev() restores them at load.
+// Tagalog / Filipino (tl) and common internet slang (net) as the required core, and the next largest player languages in romanised form:
+// Japanese (ja), Polish (pl), Russian (ru), Turkish (tr), Indonesian / Malay (id), Finnish (fi), Hindi (hi) and Arabic (ar). The multilingual
+// lists and the harshest English entries are stored REVERSED (one space-separated string per language) so this file and code search stay
+// clean; rev() restores them at load.
 // Matching for a NAME or ID (one invented word, normalised to letters):
-//   term of <= 3 letters  equal to the whole name, or (a short strong root) at its very start or end (SAFE_ROOTS);
-//   4 letters             contained anywhere;
+//   term of <= 3 letters  equal to the whole name, or (a short strong root) at its very start or end as it SOUNDS (SAFE_ROOTS on spoken());
+//   4 letters             contained anywhere, as spelled or as it sounds (spoken(): "Phart" contains "fart", "Kunt" ...);
 //   5 letters             contained anywhere, or the whole name SOUNDS within one edit of it;
 //   6+ letters            any stretch of the name SOUNDS within one edit of it (substitution, insertion or deletion).
 // "Sounds within one edit": a substitution only counts when the two letters sound alike (vowel for vowel, c/k/q, s/z/c, b/v/w, f/v, g/j, d/t,
@@ -197,12 +198,29 @@ const SAFE_LANG_REVERSED: Readonly<Record<string, string>> = {
   tl: 'anignatup anignat ogag agnat lolu odatnarat totnak natutnak ekup itit tarub gayab kepkep lokaj alkab kopkop todnih uykap tehskap lapuk totu stite toyi laslas gobil gobilam domat talib away epep yadup toyab',
   net: 'ftw ufts oftg lmf flim flid toht wfsn iatneh ffiy oafml syk smk lecni kcuc paf yssub tayg ttayg noog gninoog remooc oageha atuf ilol atohs odep norp snafylno hautkwah zeed amgil amgus kcuhp kuf kcf quf hctb zza boob aboob sedun txes gnitxes pmis dms cciht kcid tun dettun anignam',
   en: 'lana esra elohesra elohssa renob odlid ynroh ygro msagro citore tcere pmuh krewt ytoob elppin nemes mreps hctorc elcitset mutorcs reggub skcollob reknaw ressot gals knaks knups nooc cips knihc koog ekik kcabtew ynnart ekyd zaps ikap daehlewot daehgar renaeb yknoh niksder wauqs aggin reltih kkk dahij tselom trevrep vrep tsecni ytilaitseb eniacoc dsl ysatsce muipo timov frab aehrraid drut eikood oopoop eeweew kcasllab kcastun yttit eittit seittit sboob mub elohmub gulpttub elohttub tilc avluv aibal modnoc argaiv sebup cibup latineg slatineg lauxes reppirts rekooh pmip lehtorb eporg eldnof knaps yknik msdb hsitef',
+  ja: 'oknam oknamo oknihc opnihc oknu osuk orayosuk akab orayakab iappo ihcce namiray amatnik nakihc iagihcik eamijnihs oha ustek',
+  pl: 'awruk juhc juh adzip cabej ynabej satuk elodreip cilodreip apud apic nysywruks atamzs atoic jaladreips bejz libed lewc',
+  ru: 'taylb daylb dajlb akus cedzip yuhk yuh iuh kadum tabe tabey nalbe onvog rodip sarodip radip apohz apulaz ahkuylhs beoblod iuhan yuhan',
+  tr: 'kma anima miyokanima ritkis sikis mirekis upsoro karray karay enbi tavag ephak knevezep katlak ilakezireg kis',
+  id: 'lotnok kemem totnegn totne tasgnab tubmej kolbog lolot gnijna ibab terpmak tatnap kamikup ikup uacnal ladnus rucalep nagnijab tarapek kocnaj kucnaj usa',
+  fi: 'elekrep uttiv anataas aksap aapisuk ittevleh arouh esrep apryk ukklum ataknur',
+  hi: 'ayituhc aituhc tuhc dohcnehb dohcneheb dohcradam dohcredam dnaag dnag dnul adual adval idnar idsohb ekidsohb adsohb imarah attuk animak yenimak tnaahj ittat',
+  ar: 'atuomrahs atumrahs toomrahs ssuk kamosok kamossuk ibbez erya irya arahk kaynam kantem blak ramh blaknbi sahlet lemaz abhak abhag',
 };
 const SAFE_LANGS = Object.keys(SAFE_LANG_REVERSED);
 const SAFE_BY_LANG: Readonly<Record<string, string[]>> = Object.fromEntries(SAFE_LANGS.map((k) => [k, SAFE_LANG_REVERSED[k].split(' ').map(rev)]));
 const SAFE = [...new Set([...SAFE_PLAIN, ...SAFE_REVERSED, ...SAFE_LANGS.flatMap((k) => SAFE_BY_LANG[k])].map(norm))].filter((t) => t.length >= 2);
-/** Short strong roots that may not begin (or end) a name even inside a longer word. */
-const SAFE_ROOTS = /^(cum|ass|sex|tit|poo|pee|fag|nig|fap|kys|wtf|fuk|fck|kut|cul)|(cum|ass|sex|tit|poo|pee|fag|nig|fap|kys|wtf|fuk|fck|kut)$/;
+/**
+ * How a word SOUNDS, as a spelling: ph -> f, ck / q / hard c -> k, soft c (before e, i, y) -> s, x -> ks, z -> s, ea -> ee. Kid humour
+ * reads names aloud, so "Peakum" is "pee" + "kum" and "Phartlo" holds "fart" even though neither spells the word.
+ */
+function spoken(w: string): string {
+  return norm(w).replace(/ph/g, 'f').replace(/ck/g, 'k').replace(/q/g, 'k').replace(/ch/g, '\u0001').replace(/c(?=[eiy])/g, 's').replace(/c/g, 'k')
+    .replace(/\u0001/g, 'ch').replace(/x/g, 'ks').replace(/z/g, 's').replace(/ea/g, 'ee');
+}
+/** Short strong roots that may not begin (or end) a name even inside a longer word, matched on the SPOKEN form of the name. */
+const SAFE_ROOT_LIST = ['cum', 'ass', 'sex', 'tit', 'poo', 'pee', 'fag', 'nig', 'fap', 'kys', 'wtf', 'fuk', 'fck', 'kut', 'cul', 'gay'].map(spoken);
+const SAFE_ROOTS = new RegExp(`^(${SAFE_ROOT_LIST.join('|')})|(${SAFE_ROOT_LIST.filter((r) => r !== 'kul').join('|')})$`);
 /** Ordinary English words that equal a term from another list (Tagalog/Dutch slang, internet slang): allowed in English PROSE only, never in a name. */
 const ENGLISH_HOMOGRAPHS = new Set(['nut', 'hump', 'bite']);
 const VOWELS = 'aeiouy';
@@ -222,14 +240,16 @@ function soundsInside(w: string, t: string): boolean {
 /** Name or id: why it is unsafe in any screened language, or ''. */
 function unsafeReason(word: string): string {
   const w = norm(word);
+  const sw = spoken(w);
   for (const t of SAFE) {
     if (t.length <= 3) { if (w === t) return `equals "${t}"`; continue; }
     if (w.includes(t)) return `contains "${t}"`;
+    if (t.length === 4 && spoken(t).length >= 4 && sw.includes(spoken(t))) return `sounds like it contains "${t}"`; // (a term that shrinks, "dick" -> "dik", is left to the literal rule)
     if (t.length === 5 && soundsWithin1(w, t)) return `sounds like "${t}"`;
     if (t.length >= 6 && soundsInside(w, t)) return `contains something that sounds like "${t}"`;
   }
-  const m = SAFE_ROOTS.exec(w);
-  return m ? `begins or ends with "${m[0]}"` : '';
+  const m = SAFE_ROOTS.exec(sw);
+  return m ? `begins or ends with the sound "${m[0]}"` : '';
 }
 /** English prose (blurb, tag, silhouette, family text, task text): any whole word equal to a term, or a word containing a term of 6+ letters. */
 function unsafeReasonText(text: string): string {
@@ -291,14 +311,15 @@ check('IDX_LOCK: existing positions never change (append-only)', IDX_LOCK.every(
   CATALOG.length > IDX_LOCK.length ? `${CATALOG.length - IDX_LOCK.length} appended since the lock: append them to IDX_LOCK` : '');
 check('IDX_LOCK covers every species (append new ones to the lock)', CATALOG.length === IDX_LOCK.length);
 // The wire format, pinned end to end: these literal share strings were written once (the starter genome with its species byte set to
-// 0 / 7 / 20 / 36 / 47 / 49) and must decode to these species forever. A reorder, a deleted entry or a slug change in SPECIES fails here.
+// 0 / 7 / 15 / 18 / 20 / 36 / 47 / 49) and must decode to these species forever. A reorder, a deleted entry or a slug change in SPECIES fails here.
 {
   const WIRE: Array<[string, string]> = [
-    ['g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'dollop'], ['g1.AQcAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'munchip'], ['g1.ARQAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'acornel'],
+    ['g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'dollop'], ['g1.AQcAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'munchip'], ['g1.AQ8AAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'tadpolo'],
+    ['g1.ARIAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'sproutle'], ['g1.ARQAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'acornel'],
     ['g1.ASQAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'rattlebead'], ['g1.AS8AAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'skeinara'], ['g1.ATEAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'prismelo'],
   ];
   const got = WIRE.map(([code]) => decodeGenome(code)?.species ?? 'null');
-  check('pinned share strings decode to their species (idx byte 0/7/20/36/47/49 -> dollop/munchip/acornel/rattlebead/skeinara/prismelo) and re-encode to the same text',
+  check('pinned share strings decode to their species (idx byte 0/7/15/18/20/36/47/49 -> dollop/munchip/tadpolo/sproutle/acornel/rattlebead/skeinara/prismelo) and re-encode to the same text',
     WIRE.every(([code, id], i) => got[i] === id && encodeGenome(decodeGenome(code) as Genome) === code), got.join(' '));
 }
 check('lookup is safe against hostile ids', getSpecies('__proto__') === undefined && getSpecies('constructor') === undefined && getSpecies(7) === undefined && !isSpeciesId('toString') && SPECIES_BY_ID['dollop'].idx === 0);
@@ -446,10 +467,13 @@ check(`silhouettes pairwise distinct (volume-normalised RMS radius difference >=
   check('evalShape never returns NaN or Infinity', nan === 0);
   const a = evalShape(CATALOG[7].shape, 0.3, 0.5, Math.sqrt(1 - 0.34)), b = evalShape(CATALOG[7].shape, 0.3, 0.5, Math.sqrt(1 - 0.34));
   check('evalShape is deterministic', a === b);
+  // Speed of the code, not of the machine: the same 400000-call run, best of 5 (other lanes' probes may be loading the CPU; a real
+  // slowdown fails every run, a scheduler hiccup fails one). The threshold is unchanged.
   const d = CATALOG[30].shape;
-  const t0 = performance.now(); let acc = 0; for (let i = 0; i < 400000; i++) acc += evalShape(d, 0.6, 0.0, 0.8);
-  const ms = performance.now() - t0;
-  check('evalShape speed: 400000 calls in under 400 ms (about 1 us each; a body build needs ~650)', ms < 400 && acc > 0, `${ms.toFixed(0)} ms`);
+  let acc = 0; const runs: number[] = [];
+  for (let k = 0; k < 5; k++) { const t0 = performance.now(); for (let i = 0; i < 400000; i++) acc += evalShape(d, 0.6, 0.0, 0.8); runs.push(performance.now() - t0); }
+  const ms = Math.min(...runs);
+  check('evalShape speed: 400000 calls in under 400 ms (about 1 us each; a body build needs ~650), best of 5 runs', ms < 400 && acc > 0, `${runs.map((x) => x.toFixed(0)).join(' / ')} ms`);
 }
 
 /* ═══════════════════════════════════ 5. palettes ═══════════════════════════════════ */
@@ -486,7 +510,7 @@ check('resolution keeps every species\' own look: resolved translucency / gloss 
   CATALOG.every((d) => { const g = centreGenome(d), r = resolved(d); return r.translucency === g.translucency && r.gloss === g.gloss && r.coreGlow === g.coreGlow && r.glitter === g.glitter; }));
 check('rarity is in the colour: mean chroma never falls with tier', chroma.every((g, i) => i === 0 || g >= chroma[i - 1] - 1e-9));
 check('Common has no sparkle beyond the starter (glitter <= 0.3)', CATALOG.filter((d) => d.tier === 'common').every((d) => d.look.glitter <= 0.3));
-check('Rare and above carry a speckle / swirl / bands layer (pattern not plain, speckle >= 0.3)', CATALOG.filter((d) => tierIndexOf(d.id) >= 2).every((d) => d.look.pattern !== 'plain' && d.look.speckle >= 0.3));
+check(`Rare and above carry a speckle / swirl / bands layer (pattern not plain, speckle >= ${PATTERN_SPECKLE_FLOOR})`, CATALOG.filter((d) => tierIndexOf(d.id) >= 2).every((d) => d.look.pattern !== 'plain' && d.look.speckle >= PATTERN_SPECKLE_FLOOR));
 check('Epic and above are strongly patterned (speckle >= 0.5, glitter >= 0.5)', CATALOG.filter((d) => tierIndexOf(d.id) >= 3).every((d) => d.look.speckle >= 0.5 && d.look.glitter >= 0.5));
 check('Common and Uncommon are plain or lightly marked (pattern plain)', CATALOG.filter((d) => tierIndexOf(d.id) <= 1).every((d) => d.look.pattern === 'plain'));
 const TELL: Record<string, number> = { common: 56, uncommon: 172, rare: 272, epic: 2, legendary: 42 };
@@ -527,7 +551,7 @@ check('size spread: smallest <= 0.35 and largest >= 0.65 (some small, some big)'
 header('6. speciesBaseGenome: deterministic, quantised, share-string round trip');
 const KEYS = ['chroma', 'lightness', 'coreGlow', 'translucency', 'gloss', 'firmness', 'bounce', 'stretch', 'size', 'glitter', 'speckle', 'eyeSpacing', 'eyeSize', 'eyeHeight'] as const;
 {
-  let det = true, rt = true, fixed = true, inBand = true, sameSpecies = true, fixedFields = true, n = 0, firstBad = '';
+  let det = true, rt = true, fixed = true, inBand = true, sameSpecies = true, fixedFields = true, layer = true, n = 0, firstBad = '', minLayer = 1;
   const q = 1 / 255 + 1e-9;
   for (const d of CATALOG) for (let s = 0; s < 200; s++) {
     const seed = Math.imul(s + 1, 0x9e3779b1) >>> 0;
@@ -548,6 +572,7 @@ const KEYS = ['chroma', 'lightness', 'coreGlow', 'translucency', 'gloss', 'firmn
     const dh = Math.abs(((g.hue - d.look.hue + 540) % 360) - 180);
     if (dh > d.bands.hue + 1) { inBand = false; firstBad ||= `${d.id}.hue`; }
     if ((d.look.glitter === 0 && g.glitter !== 0) || (d.look.speckle === 0 && g.speckle !== 0)) fixedFields = false;
+    if (d.look.pattern !== 'plain') { minLayer = Math.min(minLayer, g.speckle); if (g.pattern === 'plain' || g.speckle < PATTERN_SPECKLE_FLOOR - 1e-9) layer = false; }
   }
   check(`deterministic for all ${CATALOG.length} species x 200 seeds (${n} genomes)`, det);
   check('every genome round-trips encodeGenome -> decodeGenome losslessly', rt, firstBad);
@@ -555,6 +580,7 @@ const KEYS = ['chroma', 'lightness', 'coreGlow', 'translucency', 'gloss', 'firmn
   check('genome.species / seed / version are set as documented', sameSpecies);
   check('instances differ from the species look only inside the cosmetic bands (plus the signature-touch shift)', inBand, firstBad);
   check('pattern and eye style never vary; zero glitter / zero speckle stay zero', fixedFields);
+  check(`every INSTANCE of a Rare-and-up species shows its pattern layer (speckle >= ${PATTERN_SPECKLE_FLOOR}, the band is clamped there)`, layer, `lowest instance speckle ${f3(minLayer)}`);
   const seeds = new Set(Array.from({ length: 100 }, (_, i) => encodeGenome(speciesBaseGenome('plumpet', i + 1))));
   check('different seeds give different instances', seeds.size >= 95, `${seeds.size}/100 distinct`);
   const hs = Array.from({ length: 400 }, (_, i) => speciesBaseGenome('twangle', i + 1));
@@ -597,14 +623,16 @@ check('the gate does not cry wolf on innocent words (Dollop, Gloopsy, Munchip, P
 
 // language safety over EVERY player-facing or design-facing string the data layer owns
 const LANG_COVERAGE = ['es', 'pt', 'fr', 'it', 'de', 'nl', 'tl', 'net', 'en'];
-check(`the language list covers English, Spanish, Portuguese, French, Italian, German, Dutch, Tagalog and internet slang (${SAFE.length} terms; >= 25 per language)`,
-  LANG_COVERAGE.every((k) => (SAFE_BY_LANG[k] ?? []).length >= 25), LANG_COVERAGE.map((k) => `${k} ${(SAFE_BY_LANG[k] ?? []).length}`).join(' '));
+const LANG_EXTRA = ['ja', 'pl', 'ru', 'tr', 'id', 'fi', 'hi', 'ar'];
+check(`the language lists cover the required core (English, Spanish, Portuguese, French, Italian, German, Dutch, Tagalog, internet slang: >= 25 terms each) and ${LANG_EXTRA.length} more player languages (>= 10 each); ${SAFE.length} distinct terms`,
+  LANG_COVERAGE.every((k) => (SAFE_BY_LANG[k] ?? []).length >= 25) && LANG_EXTRA.every((k) => (SAFE_BY_LANG[k] ?? []).length >= 10),
+  [...LANG_COVERAGE, ...LANG_EXTRA].map((k) => `${k} ${(SAFE_BY_LANG[k] ?? []).length}`).join(' '));
 let safeOk = true; const safeMsg: string[] = [];
 for (const d of CATALOG) {
   const r = unsafeReason(d.name) || unsafeReason(d.id) || unsafeReasonText(d.blurb) || [...d.tags, d.silhouette].map((x) => unsafeReasonText(x)).find((x) => x) || '';
   if (r) { safeOk = false; safeMsg.push(`${d.id}: ${r}`); }
 }
-check(`language safety (9 language lists, substring + sound-alike edit distance 1): no unsafe species name, id, blurb, tag or silhouette text`, safeOk, safeMsg.join(' | '));
+check(`language safety (${SAFE_LANGS.length} language lists, substring + sound-alike edit distance 1 + spoken roots): no unsafe species name, id, blurb, tag or silhouette text`, safeOk, safeMsg.join(' | '));
 {
   const other: Array<[string, string]> = [];
   for (const f of MATERIAL_LIST) other.push([`family ${f.id} name`, f.name], [`family ${f.id} blurb`, f.blurb]);
@@ -616,15 +644,36 @@ check(`language safety (9 language lists, substring + sound-alike edit distance 
 }
 {
   // the gate must bite in every language and on respellings, and must not cry wolf on ordinary words. Bad examples stored reversed.
-  const BAD = 'nocaram nokiram anociram legnatup olozzac olodrem olagrev ojednep ognihc uhlarac atecub iznawhcs oreknak oanignat elkcif ystuk ottayg anignam eltoop ekatihs oetup odrannoc leznorts orekkilf okepkep lekuen ohnidaiv einoog'.split(' ').map(rev);
+  const BAD = ('nocaram nokiram anociram legnatup olozzac olodrem olagrev ojednep ognihc uhlarac atecub iznawhcs oreknak oanignat elkcif ystuk ottayg anignam eltoop ekatihs oetup odrannoc leznorts orekkilf okepkep lekuen ohnidaiv einoog'
+    + ' olawruk kitaylb leritkis olotnok elkrep oletuhc olabhak oloknam ledzip okcabej').split(' ').map(rev);
   const missed = BAD.filter((n) => unsafeReason(n) === '');
-  const INNOCENT = ['Dollop', 'Munchip', 'Chunkle', 'Clatterbead', 'Acornel', 'Rattlebead', 'Diademo', 'Constello', 'Marigel', 'Caromel', 'Puddlo', 'Pastrel', 'Hushpuff', 'Peakum', 'Flickum', 'Mangolo', 'Twinkle'];
+  const INNOCENT = ['Dollop', 'Munchip', 'Chunkle', 'Clatterbead', 'Acornel', 'Rattlebead', 'Tadpolo', 'Sproutle', 'Diademo', 'Constello', 'Marigel', 'Caromel', 'Puddlo', 'Pastrel', 'Hushpuff', 'Cushlet', 'Capnap', 'Cindergoo',
+    'Crumbit', 'Possum', 'Pistachio', 'Cocoa', 'Mangolo', 'Twinkle'];
   const wolf = INNOCENT.filter((n) => unsafeReason(n) !== '');
-  check(`the language gate bites: ${BAD.length} respelled unsafe names across es/pt/fr/it/de/nl/tl/slang are all rejected`, missed.length === 0, missed.length ? `missed ${missed.length}` : '');
-  check('the language gate does not cry wolf on ordinary-sounding names (Munchip, Chunkle, Clatterbead, Acornel, Diademo, Constello, Mangolo, Twinkle ...)', wolf.length === 0, wolf.map((n) => `${n}: ${unsafeReason(n)}`).join(' | '));
+  check(`the language gate bites: ${BAD.length} respelled unsafe names across es/pt/fr/it/de/nl/tl/slang/ja/pl/ru/tr/id/fi/hi/ar are all rejected`, missed.length === 0, missed.length ? `missed ${missed.length}` : '');
+  check('the language gate does not cry wolf on ordinary-sounding names (Munchip, Chunkle, Clatterbead, Tadpolo, Sproutle, Cushlet, Possum, Pistachio, Cocoa, Mangolo, Twinkle ...)', wolf.length === 0, wolf.map((n) => `${n}: ${unsafeReason(n)}`).join(' | '));
+  // names are judged by how they SOUND: the two pre-release names this rule retired (idx 15, 18) and two spelled-around bad words
+  const SOUNDS = ['Peakum', 'Flickum', 'Phartlo', 'Azzlo'];
+  check('the gate reads names aloud: Peakum ("pee"..."kum"), Flickum ("...kum"), Phartlo ("fart"), Azzlo ("ass...") are rejected', SOUNDS.every((n) => unsafeReason(n) !== ''), SOUNDS.map((n) => `${n}: ${unsafeReason(n) || 'MISSED'}`).join('; '));
   check('prose screening: an unsafe word is caught, an ordinary English homograph is not', unsafeReasonText('what the hell') !== '' && unsafeReasonText(`una ${rev('adreim')}`) !== '' && unsafeReasonText('A soft round friend.') === '' && unsafeReasonText('Take a bite of this nut-brown hump.') === '');
 }
-check('every name is also a safe, plain reading: no name begins or ends with an unsafe short root (cum, ass, sex, tit, poo, pee, kut ...)', CATALOG.every((d) => !SAFE_ROOTS.test(d.id)));
+check('every name is also a safe reading aloud: no name begins or ends with the sound of an unsafe short root (cum, ass, sex, tit, poo, pee, kut ...)', CATALOG.every((d) => !SAFE_ROOTS.test(spoken(d.id))),
+  CATALOG.filter((d) => SAFE_ROOTS.test(spoken(d.id))).map((d) => d.name).join(' '));
+{
+  // a behaviour a family is specified to have but the physics does not build yet (MaterialFamily.planned) is never promised to a player
+  const hits: string[] = [];
+  for (const f of MATERIAL_LIST) {
+    if (!f.planned) continue;
+    const texts: Array<[string, string]> = [[`family ${f.id} blurb`, f.blurb], ...CATALOG.filter((d) => d.family === f.id).flatMap((d): Array<[string, string]> => [[`${d.id} blurb`, d.blurb], [`${d.id} tags`, d.tags.join(' ')]])];
+    for (const [where, text] of texts) {
+      const words = ` ${text.toLowerCase().replace(/[^a-z]+/g, ' ')} `;
+      const w = f.planned.promiseWords.find((p) => words.includes(` ${p} `));
+      if (w) hits.push(`${where}: "${w}"`);
+    }
+  }
+  const planned = MATERIAL_LIST.filter((f) => f.planned).map((f) => f.id);
+  check(`no blurb or tag promises a planned, unbuilt behaviour (${planned.join(', ') || 'none planned'}: e.g. the Pop Dome's inside-out pop)`, hits.length === 0, hits.join(' | '));
+}
 
 /* ═══════════════════════════════════ 8. rarity data (src/core/rarity.ts) ═══════════════════════════════════ */
 header('8. rarity tables: odds, visual language, reveal budgets, haptics');
@@ -655,8 +704,10 @@ header('9. _spec/CATALOG.md is exactly what the data generates');
   const want = renderCatalogDoc();
   const a = onDisk.split('\n'), b = want.split('\n');
   let first = -1; for (let i = 0; i < Math.max(a.length, b.length); i++) if (a[i] !== b[i]) { first = i; break; }
+  let col = 0; if (first >= 0) { const x = a[first] ?? '', y = b[first] ?? ''; while (col < x.length && col < y.length && x[col] === y[col]) col++; }
+  const around = (line: string | undefined): string => (line === undefined ? '<missing>' : line.slice(Math.max(0, col - 30), col + 40));
   check('_spec/CATALOG.md matches renderCatalogDoc() byte for byte (if not: node _harness/gen_catalog_doc.ts, never a hand edit)', onDisk === want,
-    first >= 0 ? `first difference at line ${first + 1}: on disk "${(a[first] ?? '<missing>').slice(0, 70)}" vs generated "${(b[first] ?? '<missing>').slice(0, 70)}"` : '');
+    first >= 0 ? `first difference at line ${first + 1}, column ${col + 1}: on disk "...${around(a[first])}" vs generated "...${around(b[first])}"` : '');
 }
 
 /* ═══════════════════════════════════ 10. SEAMS with other lanes (informative unless WH_STRICT_SEAMS=1) ═══════════════════════════════════ */

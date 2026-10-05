@@ -8,11 +8,15 @@ The ceremony visuals and sounds (capsule drop, open, reveal) are built by the re
 
 **What was actually run (read before trusting the SQL).** The draft SQL in Appendix A was loaded into a scratch PostgreSQL 16.14 with a minimal stand-in for Supabase (roles `anon`, `authenticated`, `service_role`, an `auth.users` table, `auth.uid()` read from the same `request.jwt.claim.sub` setting that migration 0008's self-test uses) and driven by two suites: **149 SQL-level checks** (TRADE.md Appendix C, run through `psql` with `set role authenticated`, many of them with 10 to 48 parallel sessions) and **36 host-level checks** (Appendix C of this file: the reference host of Appendix B running the game's real `meter.ts`, `drops.ts`, `merge.ts`, `catalog.ts` against the SQL, with the real 50-species catalog). All 185 passed on 2026-10-02. **Not run:** a real Supabase project, PostgREST, Edge Functions or Deno, the portal, any browser UI. Everything marked "NOT APPLIED" is a draft: nothing was written to `supabase/migrations/` and nothing was deployed.
 
-**Revised on 2026-10-05 and NOT run since** (an audit found the problems; this container has no PostgreSQL, so the revisions were checked by reading only):
+**Revised on 2026-10-05 after an audit, and run again the same day** [V]:
 the grant revocation is now scoped to the WH objects by name, with a privilege snapshot before the migration and an audit after it (A.0, A.2, A.7);
 the local save keeps only idempotency keys of in-flight operations, never their parameters, and a reload asks the new read `wh_op_status` instead of
 re-sending anything (5.1, 7.7); the mirror stores a salted account tag instead of the auth id (5.4); Tidy-up sub-keys are hashes (Appendix B, one new
-host check in Appendix C); the bridge's limits are described as what they are (8.2). The trade-side revisions are listed in TRADE.md.
+host check in Appendix C); the bridge's limits are described as what they are (8.2). The trade-side revisions are listed in TRADE.md. With all of
+them, the SQL, the runner and this file's host were cut **verbatim out of the three documents** by a script and run on a scratch PostgreSQL 16.14:
+**170 of 170 SQL checks, 37 of 37 host checks** (against `src/core` and `src/data` as they stood on 2026-10-05), the ops pack clean, and the privilege
+audit A.7 passing; A.7 was also shown to **fail** the migration when a schema-wide revoke or a stray grant is injected (A.7). Still not run: Supabase,
+PostgREST, the Edge Function, Deno, the portal, any UI.
 
 ---
 
@@ -501,9 +505,10 @@ const GAME_RPC: Record<string, Record<string, 'sql' | 'host'>> = {
     wh_state: 'sql', wh_inventory: 'sql', wh_op_status: 'sql', wh_set_fav: 'sql', wh_mark_seen: 'sql', wh_handle_set: 'sql', wh_shelf_set: 'sql',
     wh_friend_code_get: 'sql', wh_friend_code_rotate: 'sql', wh_friend_redeem: 'sql', wh_friend_respond: 'sql', wh_friend_list: 'sql', wh_friend_shelf: 'sql', wh_friend_remove: 'sql',
     wh_listing_create: 'sql', wh_board_search: 'sql', wh_propose_trade: 'sql', wh_trade_view: 'sql', wh_counter_trade: 'sql', wh_confirm_trade: 'sql', wh_cancel_trade: 'sql',
-    wh_trade_inbox: 'sql', wh_trade_emote: 'sql', wh_block: 'sql', wh_report: 'sql',
+    wh_trade_inbox: 'sql', wh_trade_emote: 'sql', wh_block: 'sql', wh_unblock: 'sql', wh_block_list: 'sql', wh_listing_cancel: 'sql', wh_report: 'sql',
   },
 };
+// = the 7 host operations + the 28 client RPCs of TRADE.md 7.2 (the same 28 that COLLECTION A.7 allows `authenticated` to execute).
 // guard: slug must be the game CURRENTLY being played (currentGameSlug), the source frame check already in handleGameMessage applies,
 // args JSON <= 16 KB, at most 8 calls per second per frame, `args.idem` present and well-formed for every mutating function.
 // NOTE: this guard only covers calls made THROUGH the bridge. Every 'sql' function is executable by `authenticated`, so a player can call
@@ -658,6 +663,9 @@ IDs map to probes and manual checks. "Probe" means a plain-node file in `_harnes
 | S12 | `probe_server_vendor.ts`: the vendored `_shared/wh/core` and `data` hash equal the game's | to build |
 | S13 | `wh_config` seeds equal the TypeScript constants (`merge_cost`, caps, lock hours) | to build |
 | S14 | A real Supabase project: the same suites through PostgREST and the Edge Function | **not run** |
+| S15 | The migration's privilege audit (A.0, A.7) passes on the migration as written and fails it on a schema-wide revoke, a callable helper, a usable WH sequence or an extra table grant | [V 2026-10-05, scratch database] |
+| S16 | Tidy-up with a 64-character key runs every merge under its own sub-key; a retry replays all of them | [V 2026-10-05, host suite] |
+| S17 | `wh_op_status` answers only the caller's own keys, from stored answers, and refuses junk | [V 2026-10-05, TRADE.md T17] |
 
 **UI (browser harness in the style of `_harness/browser_shell.mjs`; screenshots to `_shots/`)**
 
@@ -699,13 +707,13 @@ Steps 1 to 5 need no server and can ship first as a practice-only Hoard.
 * **[G]** Supabase Edge Function limits and pricing; Deno accepting `.ts` relative imports; `supabase functions deploy` bundling files outside `supabase/functions`; localStorage quota (about 5 MB); that anonymous sign-ins exist (see NEXT_STEPS D-4).
 * **[U]** the 5-minute bank and the 5-capsule table cap are my numbers; the regularity thresholds in P6 are guesses; `STRETCH_2X_INTENSITY`; icon render cost; the sizes in section 12.
 * The slice-1 `app.ts` notes the real body's stretch tops out near 0.3 and its release intensities run 0.35 to 0.57; the meter's thresholds (0.4 s hold, 0.35 snap) assume those (DESIGN risk 12). Re-measure with the real meter on a device.
-* **The 2026-10-05 revisions were not run** (the scoped revocation and the privilege audit of A.0, A.2 and A.7, `wh_op_status`, the `wh_rate` buckets, the Tidy-up sub-key and its host check): this container has no PostgreSQL. Re-run both suites (and the new checks) before the migration is applied anywhere.
+* **The 2026-10-05 revisions** (the scoped revocation and the privilege audit of A.0, A.2 and A.7, `wh_op_status`, the `wh_rate` buckets, the Tidy-up sub-key and its host check) **ran on a scratch PostgreSQL 16 only** (170/170 SQL, 37/37 host, 2026-10-05 [V]). Re-run both suites after any edit to an appendix, and on staging before the migration is applied anywhere (gate G9).
 * **[G/U]** whether the Supabase API gateway can be given a request-body limit for PostgREST calls, and what its default is (TRADE.md 7.4).
 * **Owner questions** that this module depends on are collected in `NEXT_STEPS.md`: hosting (D-6), age gating (D-5), account requirements (D-4), telemetry (D-9).
 
 ---
 
-## Appendix A. Draft SQL (NOT APPLIED; verified on local PostgreSQL 16 with a stub, 2026-10-02)
+## Appendix A. Draft SQL (NOT APPLIED; verified on local PostgreSQL 16 with a stub on 2026-10-02, and after the revisions on 2026-10-05)
 
 Split into the order it would be one migration file, inside one `begin; ... commit;` with a self-test DO block at the end in the style of `0008_blocktooth_stats.sql`. The social and trade tables and functions are in `TRADE.md` Appendix A and the merge commit function in `MERGE.md` Appendix A. **One migration is recommended**, in this order (each step needs the ones before it):
 
@@ -1162,7 +1170,7 @@ begin
 end $$;
 
 -- after a reload the client asks what happened to the operations it had in flight, BY KEY ONLY (section 7.7). It never re-sends their parameters:
--- a key that is not here never committed (or is still running and will show up in wh_inventory). Read-only. (Added 2026-10-05; NOT run.)
+-- a key that is not here never committed (or is still running and will show up in wh_inventory). Read-only. (Added 2026-10-05.)
 create function public.wh_op_status(p jsonb) returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare v_uid uuid := auth.uid(); v_keys text[];
 begin
@@ -1180,7 +1188,13 @@ revoke all on function public.wh_state(jsonb), public.wh_inventory(jsonb), publi
 grant execute on function public.wh_state(jsonb), public.wh_inventory(jsonb), public.wh_op_status(jsonb), public.wh_set_fav(jsonb), public.wh_mark_seen(jsonb) to authenticated;
 ```
 
-### A.7 Privilege audit (the last statement before `commit;`; added 2026-10-05, NOT run)
+### A.7 Privilege audit (the last statement before `commit;`; added 2026-10-05)
+
+**Verified on 2026-10-05 [V]** on the scratch database: it passes on the migration as written. Loaded again with everything except A.7 and then one
+injected change each, it raised `WH_SELFTEST_FAIL` every time: the first draft's `revoke all on all tables in schema public from anon, authenticated`
+("portal objects changed: rel:portal_sentinel"), the same on all sequences, `grant execute` on the helper `wh__blocked` to `authenticated`, `grant usage`
+on `wh_ledger_id_seq`, `grant insert` on `wh_items`, and enabling RLS on the portal's sentinel table. On the real project the snapshot also covers every
+portal table, view, sequence and function in `public`, so none of them can change without rolling the whole migration back.
 
 ```sql
 -- Raises WH_SELFTEST_FAIL, and so rolls the WHOLE migration back, if
@@ -1438,9 +1452,9 @@ export function createHost(db: Db, deps: HostDeps = {}) {
 }
 ```
 
-## Appendix C. Host test suite (ran 36/36 on 2026-10-02; one check added on 2026-10-05, not run)
+## Appendix C. Host test suite (36/36 on 2026-10-02; 37/37 with the check added on 2026-10-05, run that day)
 
-Run against the scratch database after loading the SQL of Appendix A (and TRADE.md Appendix A, which the conservation view lives in). `Db.rpc` shells out to `psql` as `service_role`. The Tidy-up check with a 64-character key was added after the 2026-10-05 audit and has not been run (no PostgreSQL in that container).
+Run against the scratch database after loading the SQL of Appendix A (and TRADE.md Appendix A, which the conservation view lives in). `Db.rpc` shells out to `psql` as `service_role`. The Tidy-up check with a 64-character key was added after the 2026-10-05 audit; the whole suite passed 37 of 37 on 2026-10-05 [V].
 
 ```ts
 // Local test of the reference host against the draft SQL (PG16 + stub). Plain node: node host_test.ts
@@ -1562,7 +1576,7 @@ check('merging items that are not yours is refused', (await host.merge(mu, { ide
 const pairs: string[][] = []; for (let i = 0; i < 12; i++) pairs.push(give('wisplet', 2));
 const td = await host.tidy(mu, { idem: idem(), plan: pairs.slice(0, 10) });
 check('Tidy-up stops at the daily cap of 10 merges (what ran stays done)', td.ok && td.done === 10 - Number(sql(`select merges_today - ${td.done} from public.wh_accounts where user_id='${mu}'`)) && Number(sql(`select merges_today from public.wh_accounts where user_id='${mu}'`)) === 10, { done: td.done, last: td.results.at(-1)?.error });
-// Tidy-up with the longest allowed key: every merge runs under its own sub-key, and a retry replays all of them (added 2026-10-05, NOT run)
+// Tidy-up with the longest allowed key: every merge runs under its own sub-key, and a retry replays all of them (added 2026-10-05)
 {
   sql(`update public.wh_accounts set merges_today = 0 where user_id='${mu}'`);            // test only: a fresh day for this account
   const pairs64: string[][] = []; for (let i = 0; i < 3; i++) pairs64.push(give('cushlet', 2));

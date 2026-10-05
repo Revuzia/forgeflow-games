@@ -162,9 +162,13 @@ def main():
     results = []
     for slug in targets:
         print("\n" + "=" * 60)
-        res = dg.deploy_one(ROOT / "games" / slug, slug)
+        gdir = ROOT / "games" / slug
+        # deploy_one refuses a source folder (a root index.html that loads a .ts module, i.e. a
+        # Vite game) and prints the build-then-deploy-dist command; that shows up as ✗ below.
+        res = dg.deploy_one(gdir, slug)
         if res.get("ok"):
-            live = dg.verify_live(slug)
+            # content.json is only checked when the game folder has one (many games have none).
+            live = dg.verify_live(slug, game_dir=gdir)
             print("  live check: " + "  ".join(f"{k}={v}" for k, v in live.items()))
             res["live"] = live
         results.append((slug, res))
@@ -174,6 +178,8 @@ def main():
     for slug, res in results:
         if res.get("ok") and all(v == 200 for v in (res.get("live") or {}).values()):
             print(f"  ✓ {slug}  →  {res['url']}")
+            if res.get("metadata_ok") is False:
+                print("      ! files are live, but the site database row was NOT updated (see the [supabase] lines)")
         else:
             allok = False
             why = res.get("reason") or ("live check not all 200: " + str(res.get("live")))

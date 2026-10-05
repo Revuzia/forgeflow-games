@@ -123,8 +123,9 @@ price (build cost 1). The paid-gacha row is shown only to explain what we refuse
 ### 5.0 The canonical sim run and the headline numbers
 
 **One saved run is the source of every [sim] number** in this file, in TRADE.md, MERGE.md and NEXT_STEPS.md: `node _harness/sim_economy.ts` with no
-flags (5000 players, 60-day and 450-day horizons, seed `0x5eed1234`, `MERGE_COST=2`), run on **2026-10-05** under Node 22.22.0 against the game logic of
-commit `7869499` (`src/core` and `src/data` have not changed since 2026-10-02). It took 290 s and printed 297 lines. **Re-quote check:** the SHA-256 of the
+flags (5000 players, 60-day and 450-day horizons, seed `0x5eed1234`, `MERGE_COST=2`), run on **2026-10-05** under Node 22.22.0, first against the game
+logic of commit `7869499` (290 s, 297 lines), then again the same day against checkpoint `fc60963`, after the CORE lane's audit fixes and a species
+rename had changed `src/core`, `src/data` and the sim itself (342 s): **the two outputs are byte-identical**. **Re-quote check:** the SHA-256 of the
 output without its last line (the wall-clock "(elapsed ...)" line) is
 `855b4a6369bf5dc6d1e564c09c187694fd79eed01197282ccdcb498bfeb151a2`;
 `node _harness/sim_economy.ts | grep -v '^(elapsed' | sha256sum` must print the same value, and if it does not, the logic or the sim changed and every
@@ -578,11 +579,11 @@ the **lineage colours** of the two parents remain visible in the new body's hue 
 
 ## 7. Module map, build order and the seams the slice already leaves
 
-### 7.1 Seams in the code today
+### 7.1 Seams in the code (as of 2026-10-05)
 
 Status of these seams on 2026-10-05; the module status table is NEXT_STEPS section 1.
 
-| Seam | Today | What the economy needs |
+| Seam | In the code on 2026-10-05 | What the economy needs |
 |---|---|---|
 | `Genome.species` (`src/core/genome.ts`) | `SPECIES` is the 50-entry list owned by `src/data/catalog.ts` (imported by `genome.ts`); the share string stores the species **index in one byte**; an unknown index decodes to `null` (`probe_genome.ts`) | Done: 50 ids. Stays **append-only** forever (never reorder or reuse an index; up to 256). Tier and family are **not** in `Genome`; they come from the catalog by species. |
 | `Genome` numeric traits | quantised to 1/255, `seed` uint32 cosmetic | Capsule genome = species template with jitter; merge genome = template mixed with the two parents (circular mean of hue and coreHue). Every instance stays visually unique. |

@@ -5,7 +5,7 @@ Rules and numbers: [`DESIGN.md`](DESIGN.md) 5.6 (the merge rules), 5.9 (supply a
 
 **Grades.** **[V]** verified by running it in this session. **[R]** read in the repo. **[S]** a DESIGN claim not re-checked. **[G]** general knowledge. **[U]** my assumption or an open question.
 
-**What was run.** The merge commit function (Appendix A) and the reference host (`host_merge`, Appendix B; the whole file is `COLLECTION.md` Appendix B) were exercised against a scratch PostgreSQL 16 with a Supabase stand-in: **36 host checks and the 149-check SQL suite pass** (the merge-specific checks are listed in section 10). A scratch **copy** of the game with `MERGE_COST = 3` was run through the probes to produce the checklist in section 8 (the repository files were not modified). Not run: a real Supabase project, the Edge Function, the ceremony, any UI. **Revised on 2026-10-05 and not run since** (no PostgreSQL in that container): Tidy-up sub-keys are now hashes (M-3), and the client keeps only the key of a pending merge in storage, never its item ids (3.1, section 6).
+**What was run.** The merge commit function (Appendix A) and the reference host (`host_merge`, Appendix B; the whole file is `COLLECTION.md` Appendix B) were exercised against a scratch PostgreSQL 16 with a Supabase stand-in: **36 host checks and the 149-check SQL suite passed on 2026-10-02** (the merge-specific checks are listed in section 10). A scratch **copy** of the game with `MERGE_COST = 3` was run through the probes to produce the checklist in section 8 (the repository files were not modified). Not run: a real Supabase project, the Edge Function, the ceremony, any UI. **Revised on 2026-10-05 and run again the same day** [V]: Tidy-up sub-keys are now hashes (M-3), and the client keeps only the key of a pending merge in storage, never its item ids (3.1, section 6). With the revisions of all three module documents, cut verbatim out of them and run on a scratch PostgreSQL 16.14: **37 of 37 host checks** (including the new 64-character Tidy-up key, R9b) and **170 of 170 SQL checks** (TRADE.md 18.1).
 
 ---
 
@@ -260,7 +260,7 @@ Tier-up chance Common 30%, Uncommon 25%, Rare 20%, Epic 15%, Legendary 10%; a fi
 | R7 | Concurrent change between read and commit: the host retries on fresh state | host suite | [V] |
 | R8 | Locked, hearted, reserved, mixed, Mythic, not-yours, wrong count: refused with the right code | SQL T11, host suite | [V] |
 | R9 | 10 merges a UTC day, the 11th `daily_cap`; Tidy-up stops at the cap and keeps what ran | SQL T11, host suite | [V] |
-| R9b | Tidy-up with a 64-character key runs every merge under a distinct sub-key and a retry replays all of them | host suite (COLLECTION Appendix C) | added 2026-10-05, **not run** |
+| R9b | Tidy-up with a 64-character key runs every merge under a distinct sub-key and a retry replays all of them | host suite (COLLECTION Appendix C) | [V] added and run 2026-10-05 |
 | R9c | A forged pending merge in storage (with item ids) is never sent after a reload; only `wh_op_status` with the key | COLLECTION C11 | to build |
 | R10 | A bad host roll (wrong tier, same species, species byte mismatch) is rejected loudly and nothing changes; a cost mismatch aborts | SQL T11 | [V] |
 | R11 | Every merge result is a legal tier move; conservation view empty afterwards | host suite | [V] |
@@ -285,7 +285,7 @@ Tier-up chance Common 30%, Uncommon 25%, Rare 20%, Epic 15%, Legendary 10%; a fi
 ## 12. Unverified claims and open questions
 
 * Not run on a real Supabase project, through the Edge Function, or in any browser; the UI and the ceremony wiring are specification only.
-* The 2026-10-05 revisions (hashed Tidy-up sub-keys, keys-only pending merges) were checked by reading only.
+* The 2026-10-05 revisions ran on a scratch PostgreSQL only: the hashed Tidy-up sub-keys through the host suite (R9b [V]); the keys-only pending merge is client behaviour and waits for the client (R9c, COLLECTION C11).
 * **[U]** typical server latency (a few hundred milliseconds), the 1.2 s and 8 s thresholds in 3.1, M-4 and M-5 (Tidy-up defaults and its ceremony), the 5-minute auto-retry window.
 * **[R]** the render lane's ceremony supports 2 to 3 parents by its source; I did not see it run.
 * The flip checklist was produced from a copy of the game as it stood on 2026-10-02; other lanes were editing `src` at the time. Re-run the scratch flip when someone actually flips.

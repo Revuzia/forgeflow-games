@@ -42,6 +42,24 @@ python "C:/Users/TestRun/Claude Claw/forgeflow-games/pipeline/deploy_game.py" \
 Auto-runs `generate_cover.py` (if no thumbnail.png), uploads all files
 to R2, upserts Supabase metadata. ~1-3 min depending on file count.
 
+### Vite games (TypeScript + `npm run build`: blocktooth, dyefield, hit-parade, wobblehoard)
+The game folder is SOURCE; only its build output is deployable. Build, then
+point `--game-dir` at `<game>/dist`:
+```bash
+cd games/<slug> && npm ci && npm run check && npm run build && cd ../..
+python pipeline/deploy_game.py --game-dir games/<slug>/dist --slug <slug> --dry-run   # read the plan
+python pipeline/deploy_game.py --game-dir games/<slug>/dist --slug <slug>
+```
+- `game_meta.json` and `thumbnail.png` live in the Vite public folder
+  (`public/`, or `runtime/public/` when the Vite root is `runtime/`), so the
+  build copies them into `dist/`. Check `ls games/<slug>/dist/game_meta.json`
+  before deploying; without it the row gets default metadata.
+- Never deploy the game folder itself, and `upload_game.py` cannot deploy a
+  Vite game: `deploy_game.py` (which `upload_game.py` calls) refuses any folder
+  whose root `index.html` loads a `.ts` module and prints the commands above.
+- A game may wrap this in `npm run deploy` (wobblehoard does: check, build,
+  then deploy `dist`; `npm run deploy:dry` builds and prints the plan only).
+
 ### Daily 1am pipeline run
 `scripts/run_game_pipeline.py` runs end-to-end: research → design →
 build → QA → deploy. Its `phase_deploy` function uploads to R2 and

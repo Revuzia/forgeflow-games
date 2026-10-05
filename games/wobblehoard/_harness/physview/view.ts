@@ -39,6 +39,8 @@ function touch(b: SoftBody, id: 0 | 1, from: V3, dir: V3): V3 | null {
 
 const REL = 1.4;
 const PX = Number(new URLSearchParams(location.search).get('px') ?? 0);
+const SDIR = new URLSearchParams(location.search).get('sdir') ?? '-x';
+const SY = Number(new URLSearchParams(location.search).get('sy') ?? 0.96);
 const SCENARIOS: Record<string, Scenario> = {
   // (a) a quick side poke at dome height, then let go
   side_poke: {
@@ -164,12 +166,18 @@ const SCENARIOS: Record<string, Scenario> = {
     },
   },
   // a hard side shove right at the swirl-peak (pressure 1 at once, 0.25 s): the peak is whipped over and must not fold or invert
+  // ?sdir=-x|+x|-z|+z (where the finger comes from, default -x) and ?sy= (height of the ray, default 0.96, scaled with the body like the probe)
   peak_shove: {
-    title: 'hard side shove at the peak (y=0.96, pressure 1 from 0.30 s, lifted at 0.55 s)',
+    title: `hard side shove at the peak (from ${SDIR}, y=${SY}, pressure 1 from 0.30 s, lifted at 0.55 s)`,
     frames: [0.3, 0.33, 0.36, 0.4, 0.45, 0.55, 0.6, 0.65, 0.72, 0.85, 1.05, 1.5],
     camDist: 2.8, camTarget: [0.1, 0.7, 0], yawDeg: 24, pitchDeg: 12,
     tick(t, b, c) {
-      if (t >= 0.3 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(-3, 0.96, 0), v3(1, 0, 0)); b.fingerPressure(0, 1); }
+      if (t >= 0.3 && !c.n.down) {
+        c.n.down = 1;
+        const k = b.restRadius / 0.5125, ax = SDIR.endsWith('x'), sg = SDIR.startsWith('-') ? -1 : 1;
+        touch(b, 0, v3(ax ? 3 * sg : 0, SY * k, ax ? 0 : 3 * sg), v3(ax ? -sg : 0, 0, ax ? 0 : -sg));
+        b.fingerPressure(0, 1);
+      }
       if (t >= 0.55 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
     },
   },

@@ -7,9 +7,12 @@
 //   1. NEVER reorder, delete or reuse an entry. A species that must disappear stays here with its idx.
 //   2. New species are APPENDED at the end (idx = previous length, max MAX_SPECIES_IDX), in any tier, together with their CATALOG entry.
 //   3. The id (slug) of an existing entry is frozen once anything outside this repository stores it (a save, a server row, a trade).
-//      The one pre-release exception (2026-10, before any save or server row held a catalog species): idx 20 and idx 36 were given new
-//      slugs and names by the language-safety review (see _harness/probe_catalog.ts section 7). Their idx bytes did not change, so every
-//      share string ever written still decodes to the same species. After launch a rename needs a legacy-id alias in getSpecies().
+//      The one pre-release exception (2026-10, before any save or server row held a catalog species): the language-safety review
+//      (see _harness/probe_catalog.ts section 7) gave new slugs and names to idx 15 (Flickum -> Tadpolo), idx 18 (Peakum -> Sproutle),
+//      idx 20 (Fluffnut -> Acornel) and idx 36 (Maracon -> Rattlebead). Their idx bytes did not change, so every share string ever
+//      written still decodes to the same position. A slug also salts speciesBaseGenome (catalog.ts), so the rename re-rolled those four
+//      species' (seed -> genome) mapping; nothing stored a (species, seed) pair yet. After launch a rename needs a legacy-id alias in
+//      getSpecies() AND must keep the old salt, or every stored instance of that species would change look.
 //   4. _harness/probe_catalog.ts holds a locked copy of this list (IDX_LOCK) and pins a few share strings byte for byte.
 
 /** Species ids in IDX ORDER. APPEND ONLY. Position = idx = the byte stored in share strings. */
@@ -17,7 +20,7 @@ export const SPECIES = [
   // common (0..13)
   'dollop', 'plumpet', 'twangle', 'puddlo', 'glubbin', 'crumbit', 'chunkle', 'munchip', 'wisplet', 'cushlet', 'crimpo', 'thumbly', 'sproink', 'dimpla',
   // uncommon (14..24)
-  'nuzzo', 'flickum', 'swishel', 'granulo', 'peakum', 'wrigglo', 'acornel', 'capnap', 'knubby', 'kneadle', 'hooplet',
+  'nuzzo', 'tadpolo', 'swishel', 'granulo', 'sproutle', 'wrigglo', 'acornel', 'capnap', 'knubby', 'kneadle', 'hooplet',
   // rare (25..34)
   'spirelo', 'zingle', 'petalop', 'burrbin', 'marigel', 'gloopsy', 'hushpuff', 'drowsel', 'thudge', 'diademo',
   // epic (35..41)

@@ -6,12 +6,17 @@ The owner's brief: **"Players collect squishies and trade them with other player
 
 **What was run.** The draft SQL in Appendix A was loaded into a scratch PostgreSQL 16.14 with a minimal Supabase stand-in (roles, `auth.users`, `auth.uid()` via the `request.jwt.claim.sub` setting, default privileges imitating Supabase's) and exercised by **149 checks** (Appendix C; each psql call is a separate database session, so the "parallel" tests are real concurrent transactions, up to 48 at a time). **All 149 passed on 2026-10-02**, together with 36 host-level checks described in COLLECTION.md. **Not run:** a real Supabase project, PostgREST, the portal, any UI, load tests, and anything about real children. Nothing was written to `supabase/migrations/`; everything marked NOT APPLIED is a draft.
 
-**Revised on 2026-10-05 after a security audit, and NOT run since** (this container has no PostgreSQL; checked by reading only): the grant revocation is
+**Revised on 2026-10-05 after a security audit, and run again the same day** [V]: the grant revocation is
 scoped to WH objects and audited (COLLECTION A.0, A.2, A.7); trading switched off now closes every social surface (16.1, a trigger); the report hold
 cannot be re-armed and needs reporters who interacted with the account (13); friend-code errors no longer reveal a code's validity (5.3); a counter
 keeps the trade's tier, and board trades stay 1 for 1 through proposals and counters (D-T5); the incoming-offer cap holds under concurrency (8.2);
 the payload claim is corrected and per-account rate buckets are added (7.4); a moderation hold pauses trades instead of failing them (D-T10).
-New checks for each are in Appendix C, marked "added 2026-10-05, not run".
+New checks for each are in Appendix C, marked "added 2026-10-05". The SQL of all three module documents, the runner and the reference host were
+extracted **verbatim from the documents** by a script and loaded in the migration order of COLLECTION Appendix A (the privilege snapshot A.0 first,
+the audit A.7 last; A.7 passed) into a scratch PostgreSQL 16.14 with the stand-in of Appendix B: **170 of 170 SQL checks** (Appendix C), the ops pack
+without an error, and **37 of 37 host checks** (COLLECTION Appendix C) against the game's `src/core` and `src/data` as they stood that day. A.7 was
+also shown to fail the migration when a schema-wide revoke, a callable helper, a usable WH sequence or an extra table grant is injected (COLLECTION
+A.7). Still **not run**: a real Supabase project, PostgREST, the Edge Function, the portal, any UI, load.
 
 ---
 
@@ -202,7 +207,7 @@ RLS (Appendix A.1b here, A.2 in `COLLECTION.md`): on for all; **no write privile
 
 ### 7.2 The RPC surface (all take one `jsonb` parameter `p` like 0008; all return `{ok, ...}` or `{ok:false, error}`)
 
-All are `SECURITY DEFINER`, `search_path = public`, `lock_timeout = 3s`, executable by `authenticated` only (`anon` revoked), keyed on `auth.uid()` (never on a parameter). The internals (`wh__*`, helpers included) are executable by nobody but `service_role`; there are exactly **28** client RPCs (the 27 checked by the audit query O14 on 2026-10-02 [V], plus `wh_op_status`, added 2026-10-05 and not run), and the migration's own audit (COLLECTION A.7) fails if a player can execute anything else.
+All are `SECURITY DEFINER`, `search_path = public`, `lock_timeout = 3s`, executable by `authenticated` only (`anon` revoked), keyed on `auth.uid()` (never on a parameter). The internals (`wh__*`, helpers included) are executable by nobody but `service_role`; there are exactly **28** client RPCs (checked on 2026-10-05 by the audit query O14 and by the migration's own audit, COLLECTION A.7 [V]; 27 before `wh_op_status` was added that day), and the migration's own audit (COLLECTION A.7) fails if a player can execute anything else.
 
 | RPC | Input | Output | Notes |
 |---|---|---|---|
@@ -231,23 +236,6 @@ All are `SECURITY DEFINER`, `search_path = public`, `lock_timeout = 3s`, executa
 
 **Admin** (plain `update` statements run by the owner in the SQL editor; see section 15): `trade_enabled`, `restricted_until`, `hold_reviewed_at`, `wh_config`.
 
-### 7.4 Payload limits and per-account rates (revised 2026-10-05)
-
-* **What does not protect the database:** the 8 KB check inside each function runs after PostgREST and Postgres have parsed the body (7.1), and
-  the portal bridge's guard (16 KB, 8 calls a second: COLLECTION 8.2) covers only calls made through the bridge. Every client RPC is granted to
-  `authenticated`, so a player can call PostgREST directly with their own JWT and skip the bridge.
-* **Body size: at the edge.** Configure a request-body limit in front of PostgREST for the WH functions (the Supabase API gateway, or a
-  Cloudflare Worker in front of the project) [G/U: whether and how the Supabase gateway exposes this setting was not checked]. The Edge Function
-  host refuses a large or unannounced body by its `content-length` before reading it (COLLECTION 7.2). Each function also computes its
-  idempotency digest only **after** the 8 KB check, so an oversized body is at least not re-serialised and hashed.
-* **Call rate: per account, in the database.** `wh__take(uid, bucket)` is a token bucket in `wh_rate` (one row per account and bucket), refilled
-  continuously; a call over the rate answers the non-terminal `slow_down` and writes nothing else. Buckets (`wh_config`, tunable without a deploy):
-  `offer` (`wh_propose_trade`, `wh_counter_trade`): 30 tokens, 0.1 a second; `search` (`wh_board_search`): 30 tokens, 0.5 a second.
-  `wh_friend_redeem` (10 attempts an hour, counted even on failure) and `wh_report` (5 a day) already have stricter limits of their own.
-  A replay of a stored answer (same idempotency key) costs no token, so an honest retry is never refused.
-* **What remains:** buckets bound each account, not each client: many accounts, or many requests without a valid JWT, are the gateway's job
-  (NEXT_STEPS P8). The host operations (COLLECTION 7.4) have no bucket yet (COLLECTION 7.6 P5).
-
 ### 7.3 Error codes and player copy (shared with COLLECTION and MERGE)
 
 | Code | Meaning | Player sees |
@@ -273,6 +261,23 @@ All are `SECURITY DEFINER`, `search_path = public`, `lock_timeout = 3s`, executa
 | `busy` | lock timeout | "Busy for a moment. Trying again." (auto retry, same key) |
 | `too_many_changes` | a negotiation reached 20 versions | "That swap has been changed too many times. Start a new one." |
 | `idem_reuse`, `bad_payload` | client bug (or a payload over 8 KB) | "Something went wrong. Reload and try again." |
+
+### 7.4 Payload limits and per-account rates (revised 2026-10-05)
+
+* **What does not protect the database:** the 8 KB check inside each function runs after PostgREST and Postgres have parsed the body (7.1), and
+  the portal bridge's guard (16 KB, 8 calls a second: COLLECTION 8.2) covers only calls made through the bridge. Every client RPC is granted to
+  `authenticated`, so a player can call PostgREST directly with their own JWT and skip the bridge.
+* **Body size: at the edge.** Configure a request-body limit in front of PostgREST for the WH functions (the Supabase API gateway, or a
+  Cloudflare Worker in front of the project) [G/U: whether and how the Supabase gateway exposes this setting was not checked]. The Edge Function
+  host refuses a large or unannounced body by its `content-length` before reading it (COLLECTION 7.2). Each function also computes its
+  idempotency digest only **after** the 8 KB check, so an oversized body is at least not re-serialised and hashed.
+* **Call rate: per account, in the database.** `wh__take(uid, bucket)` is a token bucket in `wh_rate` (one row per account and bucket), refilled
+  continuously; a call over the rate answers the non-terminal `slow_down` and writes nothing else. Buckets (`wh_config`, tunable without a deploy):
+  `offer` (`wh_propose_trade`, `wh_counter_trade`): 30 tokens, 0.1 a second; `search` (`wh_board_search`): 30 tokens, 0.5 a second.
+  `wh_friend_redeem` (10 attempts an hour, counted even on failure) and `wh_report` (5 a day) already have stricter limits of their own.
+  A replay of a stored answer (same idempotency key) costs no token, so an honest retry is never refused.
+* **What remains:** buckets bound each account, not each client: many accounts, or many requests without a valid JWT, are the gateway's job
+  (NEXT_STEPS P8). The host operations (COLLECTION 7.4) have no bucket yet (COLLECTION 7.6 P5).
 
 ## 8. The atomic swap
 
@@ -529,43 +534,43 @@ Until the owner picks, **A is the only safe default** and is what the draft impl
 
 ## 18. Test plan
 
-### 18.1 What the harness proves (Appendix C; run 2026-10-02; 149/149)
+### 18.1 What the harness proves (Appendix C; 149/149 on 2026-10-02, 170/170 on 2026-10-05)
 
-IDs are the section numbers of the runner. "Parallel" means that many separate database sessions at once. **Checks added on 2026-10-05** (in T3b, T4, T9, T10, T17b, T17c, T18 and the new T19) cover the audit's findings and **have not been run**: there is no PostgreSQL in the container that wrote them.
+IDs are the section numbers of the runner. "Parallel" means that many separate database sessions at once. **Checks added on 2026-10-05** (in T3b, T4, T9, T10, T17b, T17c, T18 and the new T19) cover the audit's findings; with them the whole suite passed **170 of 170 on 2026-10-05** [V] (how: 18.2).
 
 | ID | Proves | Method |
 |---|---|---|
 | T1 | Happy path: propose, view, the 5 s wait (`review_first`, `wait`), execute; owners swapped, `trade_count`, 24 h lock, shelf and reservation cleared, two ledger rows; replay of the same confirm returns the stored result; a new key on an executed trade is `not_pending`; key reuse with other arguments is `idem_reuse`; conservation empty; received item cannot be re-offered or merged | sequential |
 | T2 | **N parallel acceptors of the same offer:** 20 parallel confirms with 20 keys: exactly one `executed`, 19 `not_pending`, one swap in the ledger. 20 parallel with one key: all `ok`, one execution | 20 sessions |
 | T3 | **Double-spend of an item:** 20 parallel proposals of ONE item to 20 friends: exactly one accepted, 19 `reserved`; a merge of a reserved item is refused | 20 sessions |
-| T3b | **Incoming cap under concurrency** (added 2026-10-05, not run): 20 friends propose to one account at once: exactly 10 live incoming offers | 20 sessions |
-| T4 | Counter bumps the version, moves the reservation, voids the other consent; confirming the old version is `changed`; the other side must view v2 first; executes v2. Added 2026-10-05 (not run): a counter that switches the tier is `tier_mismatch` and leaves the trade as it was | sequential |
+| T3b | **Incoming cap under concurrency** (added 2026-10-05): 20 friends propose to one account at once: exactly 10 live incoming offers | 20 sessions |
+| T4 | Counter bumps the version, moves the reservation, voids the other consent; confirming the old version is `changed`; the other side must view v2 first; executes v2. Added 2026-10-05: a counter that switches the tier is `tier_mismatch` and leaves the trade as it was | sequential |
 | T4b | **Scam-by-switch race:** A counters while B confirms the old terms, 24 pairs, 8 at a time: B only ever executed the terms B had been shown, or was told `changed`; the countered item never moved unseen | 48 sessions |
 | T5 | **Tampered payloads (12 kinds):** wrong tier mix, count mismatch, 4 items, someone else's item, duplicate ids, same item both sides, empty, unknown uuid, not a uuid, a 1000-element array, an unshelved item, null arrays; non-friend partner, self partner, short idem, `anon`, signed-out; a stranger viewing or confirming; **direct insert, update, delete; selects of the ledger, config, the conservation view, `wh_trades`, `wh_blocks`, `wh_friends`, `wh_trade_items`; calling `wh__trade_execute` and the helpers `wh__are_friends`, `wh__blocked`, `wh__flag`, `wh__cfg_int`; self-enabling `trade_enabled`**; RLS: a player reads only their own items | sequential |
 | T6 | **Partial failure:** an exception injected after the swap: nothing moved, trade still proposed, no ledger rows, reservation intact; the same confirm without the fault succeeds | fault injection |
 | T7 | Caps: 3 in 24 h execute, the 4th is `daily_cap` and stays alive; after back-dating 25 h it executes; a second trade with the same partner is `pair_cap` | sequential |
 | T8 | Expiry frees items without any job; an expired trade cannot be confirmed and is recorded `expired`; **kill switch**: confirm and propose `frozen`, the trade stays alive, then executes after thaw | sequential |
-| T9 | Friend codes: alphabet and length, own and junk codes `not_found`, redeem makes a request not a friendship, only the owner can respond, the 11th attempt is `slow_down` and the counter committed, rotation kills the old code, mutual requests complete. Added 2026-10-05 (not run): with 10 requests parked, a valid and an invalid code get the same `too_many_requests` and nothing reaches the target | sequential |
-| T10 | Block mid-trade cancels, releases, unfriends; both sides get the generic answers; board listing, search (`you_can_give`), `listing_mismatch`, a proposal through a listing between non-friends, block hides listings. Added 2026-10-05 (not run): 2 for 2 through the board is `bad_size`, and a board counter can neither grow to 2 for 2 nor leave the listing | sequential |
+| T9 | Friend codes: alphabet and length, own and junk codes `not_found`, redeem makes a request not a friendship, only the owner can respond, the 11th attempt is `slow_down` and the counter committed, rotation kills the old code, mutual requests complete. Added 2026-10-05: with 10 requests parked, a valid and an invalid code get the same `too_many_requests` and nothing reaches the target | sequential |
+| T10 | Block mid-trade cancels, releases, unfriends; both sides get the generic answers; board listing, search (`you_can_give`), `listing_mismatch`, a proposal through a listing between non-friends, block hides listings. Added 2026-10-05: 2 for 2 through the board is `bad_size`, and a board counter can neither grow to 2 for 2 nor leave the listing | sequential |
 | T11, T12 | The merge and capsule commit functions: validation, replay, conflict, 20 parallel merges of one pair (one commits), 10 parallel opens with one credit (one opens), bad host rolls rejected loudly, cost mismatch aborts, 10 merges a day then `daily_cap`; 10 parallel first-contact bootstraps make one account and one starter | up to 20 sessions |
 | T13 | **Deadlock storm:** 57 mixed operations (confirm, cancel, merge commits, shelf, block) over 6 accounts, 48 at a time: zero deadlocks, conservation clean | 48 sessions |
 | T14 | **Laundering ring:** a mule with 10 duplicated items; at most 3 placed in 24 h; receivers cannot merge or pass them on | sequential |
 | T15 | Ops: a cloned row is flagged by the conservation view; deleting an account burns its items; conservation clean again | sequential |
 | T16 | A held lock fails fast (3 s `lock_timeout`), then the same call succeeds; 10 parallel retries of one propose make one trade; same key different arguments is `idem_reuse` | 10 sessions |
-| T17 | `wh_state`, paging, favourites block proposing and merging, friend shelf privacy, handle rules, inbox, emotes, unfriend, seen | sequential |
-| T17b | An oversized payload is refused (a sanity limit after parsing, 7.4); a negotiation is capped at 20 versions; deleting an account also deletes its idempotency rows. Added 2026-10-05 (not run): with the `offer` bucket at 3 tokens and no refill, the 4th proposal answers `slow_down` and writes nothing | sequential |
-| T17c | **Privilege audit:** the only `wh_` functions a player can execute are the client RPCs (27 on 2026-10-02; 28 with `wh_op_status`) (no helper, no commit function, no trigger function) and `anon` can execute none; players hold SELECT on `wh_species`, `wh_accounts`, `wh_items`, `wh_capsules` and nothing else on any `wh_` table. Added 2026-10-05 (not run): the stub's portal sentinel table and sequence keep their grants after the migration | catalog queries |
+| T17 | `wh_state`, paging, hearted items (`fav`) block proposing and merging, friend shelf privacy, handle rules, inbox, emotes, unfriend, seen | sequential |
+| T17b | An oversized payload is refused (a sanity limit after parsing, 7.4); a negotiation is capped at 20 versions; deleting an account also deletes its idempotency rows. Added 2026-10-05: with the `offer` bucket at 3 tokens and no refill, the 4th proposal answers `slow_down` and writes nothing | sequential |
+| T17c | **Privilege audit:** the only `wh_` functions a player can execute are the client RPCs (27 on 2026-10-02; 28 with `wh_op_status`) (no helper, no commit function, no trigger function) and `anon` can execute none; players hold SELECT on `wh_species`, `wh_accounts`, `wh_items`, `wh_capsules` and nothing else on any `wh_` table. Added 2026-10-05: the stub's portal sentinel table and sequence keep their grants after the migration | catalog queries |
 | T17d | Retention: `wh__purge()` removes play idempotency rows after 1 day and the others after 30 days and nothing else; players cannot call it | sequential |
-| T18 | Reports: the hold needs 3 distinct eligible reporters (a brand-new reporter does not count); the held account cannot trade; report rate limit; unblock keeps the friendship removed; listing cancel. Revised 2026-10-05 (not run): reporters with no interaction do not count; a repeat report cannot re-arm the hold; a second automatic hold needs a review first | sequential |
-| T19 | **Trading switched off** (added 2026-10-05, not run): an account on a hold cannot accept a pending request; switching trading off cancels the pending request, the live trade (items released) and the listing and empties the shelf; the gated account sees no friends or requests; its friends no longer see it or its shelf; the friendship is suspended and returns when trading is switched on again | sequential |
+| T18 | Reports: the hold needs 3 distinct eligible reporters (a brand-new reporter does not count); the held account cannot trade; report rate limit; unblock keeps the friendship removed; listing cancel. Revised 2026-10-05: reporters with no interaction do not count; a repeat report cannot re-arm the hold; a second automatic hold needs a review first; a hold pauses a trade instead of failing it, and no emote reaches or leaves a held account | sequential |
+| T19 | **Trading switched off** (added 2026-10-05): an account on a hold cannot accept a pending request; switching trading off cancels the pending request, the live trade (items released) and the listing and empties the shelf; the gated account sees no friends or requests; its friends no longer see it or its shelf; the friendship is suspended and returns when trading is switched on again | sequential |
 
 ### 18.2 How to run it (local, no Supabase needed)
 
-PostgreSQL 16 plus Python 3 and `psql`: load the stub (Appendix B), then the migration in the order given at the top of COLLECTION.md Appendix A (the snapshot A.0 first, the audit A.7 last), then `t_helpers.sql`, set `trade_confirm_cooldown_s` to 5 (the default) and run the runner. A full run is about 80 seconds. The same runner works against a **staging Supabase project** if `call()` is changed to PostgREST requests with test users' JWTs (the Auth admin API creates them over HTTP; no new dependency); never run it against production.
+PostgreSQL 16 plus Python 3 and `psql`: load the stub (Appendix B), then the migration in the order given at the top of COLLECTION.md Appendix A (the snapshot A.0 first, the audit A.7 last), then `t_helpers.sql`, set `trade_confirm_cooldown_s` to 5 (the default) and run the runner. A full run took 89 to 107 seconds on 2026-10-05 (4 CPUs). **The appendices are the source of truth:** on 2026-10-05 a short script cut every SQL block, the runner and the two host files out of COLLECTION.md, MERGE.md and this file and ran them unchanged, so what passed is exactly what is printed here (re-do that after any edit to an appendix). **The negative test of the migration's audit (COLLECTION A.7):** load everything except A.7, apply one fault (for example the first draft's `revoke all on all tables in schema public from anon, authenticated`), then run A.7: it must raise `WH_SELFTEST_FAIL` (six faults, six failures on 2026-10-05 [V]). The same runner works against a **staging Supabase project** if `call()` is changed to PostgREST requests with test users' JWTs (the Auth admin API creates them over HTTP; no new dependency); never run it against production.
 
 ### 18.3 Not covered, to add before launch
 
-**Every check added on 2026-10-05** (run the whole suite first); the request-body limit at the gateway (7.4); through PostgREST (RLS and grants as Supabase really configures them); the Edge Function and the portal bridge end to end; load (hundreds of parallel confirms, a large `wh_items`); the `DO`-block self-test inside the migration (a one-transaction subset of T1, T3, T5 to T8, T11, T12, T15 in the style of 0008's self-test); the hourly conservation job; the admin recall function; the UI.
+The request-body limit at the gateway (7.4); through PostgREST (RLS and grants as Supabase really configures them); the Edge Function and the portal bridge end to end; load (hundreds of parallel confirms, a large `wh_items`); the `DO`-block self-test inside the migration (a one-transaction subset of T1, T3, T5 to T8, T11, T12, T15 in the style of 0008's self-test); the hourly conservation job; the admin recall function; the UI.
 
 ## 19. Work breakdown (rough, one engineer [U])
 
@@ -591,13 +596,13 @@ PostgreSQL 16 plus Python 3 and `psql`: load the stub (Appendix B), then the mig
 * **[U]:** every cap and limit marked [U] in section 9 (offer shelf 12, friends 30, live offers 3 and 10); the retention periods; the sizes in section 19; the 1 second hold; the choice of 6 reports reasons.
 * **Owner questions** (NEXT_STEPS): D-5 age gating (trading stays off until answered), D-2 whether trade should be mandatory for completion, D-8 handle word lists, D-4 account requirements.
 * **Not in the draft, needed before launch:** the scheduled jobs (the hourly conservation check with auto-freeze, the daily `wh__purge()` call), the admin recall function, the portal-friend hint, the request-body limit at the gateway (7.4), rate limits on the host operations (the trade and board RPCs have the buckets of 7.4).
-* **Revised on 2026-10-05 and not run:** everything listed at the top of this document under "Revised on 2026-10-05". The SQL was checked by reading only; run the whole suite, with the new checks, before anything is applied.
+* **The 2026-10-05 revisions ran on a scratch PostgreSQL 16 only** (170/170 SQL, 37/37 host, the ops pack, the A.7 audit and its negative test); like the rest of the draft they have never run on Supabase (first bullet).
 * **Owner decision D-17:** whether friendships are suspended (the draft) or deleted when trading is switched off.
 * The scam-by-switch and confirm tests prove the **server** enforces version-bound consent; they do not prove a person reads the screen. The review screen needs usability testing with real players, including children, under the owner's consent rules.
 
 ---
 
-## Appendix A. Draft SQL (NOT APPLIED; verified on local PostgreSQL 16 with a stub, 2026-10-02)
+## Appendix A. Draft SQL (NOT APPLIED; verified on local PostgreSQL 16 with a stub on 2026-10-02, and after the revisions on 2026-10-05)
 
 Run after `COLLECTION.md` Appendix A.1 (tables for items and accounts) and before its A.2 (row level security, which also covers these tables). All of these belong in one migration file, inside one `begin; ... commit;`; the full order (from the privilege snapshot A.0 to the privilege audit A.7) is at the top of COLLECTION.md Appendix A.
 
@@ -686,7 +691,7 @@ create table public.wh_trade_events (
   seq integer not null, at timestamptz not null default now(), actor uuid, kind text not null, terms_version integer, detail jsonb,
   primary key (trade_id, seq)
 );
--- per-account token buckets (7.4; added 2026-10-05, NOT run): one row per account and bucket, refilled continuously by wh__take
+-- per-account token buckets (7.4; added 2026-10-05): one row per account and bucket, refilled continuously by wh__take
 create table public.wh_rate (
   user_id uuid not null references public.wh_accounts(user_id) on delete cascade,
   bucket text not null check (bucket ~ '^[a-z]{1,16}$'),
@@ -774,7 +779,7 @@ end $$;
 create function public.wh__release(p_trade uuid) returns void language sql set search_path = public as
 $$ update public.wh_items set reserved_trade_id = null where reserved_trade_id = p_trade $$;
 
--- per-account token bucket (7.4; added 2026-10-05, NOT run). false = over the rate. It never raises, so the refill accounting commits even when
+-- per-account token bucket (7.4; added 2026-10-05). false = over the rate. It never raises, so the refill accounting commits even when
 -- the caller then refuses. wh_config 'rate_<bucket>' = {"cap": n, "per_s": r}. Callers take it after their account lock and before any item lock.
 create function public.wh__take(p_uid uuid, p_bucket text) returns boolean language plpgsql set search_path = public as $$
 declare v_cfg jsonb := (select value from public.wh_config where key = 'rate_' || p_bucket);
@@ -1312,7 +1317,7 @@ begin
 end $$;
 
 -- fixed reasons: 1 name bothers me, 2 too many offers or requests, 3 tried to trick me, 4 I think they are cheating, 5 made me uncomfortable, 6 something else
--- Automatic hold (section 13; revised 2026-10-05, NOT run): THREE DIFFERENT reporters within 7 days who pass the new-account gate AND had a real
+-- Automatic hold (section 13; revised 2026-10-05): THREE DIFFERENT reporters within 7 days who pass the new-account gate AND had a real
 -- interaction with the reported account in those 7 days (a trade row between them either way, which includes a proposal on its listing, a friend
 -- request either way, or a friendship), counting only reports filed after the last automatic hold started, put the account on a 24 h hold for
 -- human review. At most ONE automatic hold until a person has reviewed it (hold_reviewed_at), then at most one per 7 days. Never a ban.
@@ -1391,7 +1396,7 @@ begin
 end $$;
 create trigger wh_on_user_delete before delete on auth.users for each row execute function public.wh__on_user_delete();
 
--- The age/consent seam (16.1; added 2026-10-05, NOT run): when trading is switched OFF for an account (the owner, or a future age or consent flow),
+-- The age/consent seam (16.1; added 2026-10-05): when trading is switched OFF for an account (the owner, or a future age or consent flow),
 -- every social surface closes at once. Pending friend requests both ways are cancelled, live trades are cancelled and their items released,
 -- listings close and the offer shelf is emptied. Existing friendships are SUSPENDED: kept, but every function hides them while the account fails
 -- the gate (owner decision NEXT_STEPS D-17 may turn this into a delete). This runs INSIDE the update of the account row, so it must never WAIT for a
@@ -1688,7 +1693,7 @@ create or replace function public.t_friends(a uuid, b uuid) returns void languag
 $$ insert into public.wh_friends (user_lo, user_hi) values (least(a, b), greatest(a, b)) on conflict do nothing $$;
 ```
 
-## Appendix C. Test runner (Python 3 and `psql`; ran 149/149 on 2026-10-02)
+## Appendix C. Test runner (Python 3 and `psql`; 149/149 on 2026-10-02, 170/170 on 2026-10-05)
 
 Each `call()` is a separate `psql` process, that is a separate database session with its own role and `auth.uid()`. `ThreadPoolExecutor(n)` gives n concurrent sessions. Section numbers are the test ids of section 18.
 
@@ -1784,7 +1789,7 @@ check('the item is reserved by exactly that trade', sql(f"select reserved_trade_
 r = call(None, 'wh__commit_merge', {'uid': a, 'idem': idem(), 'args_digest': 'x', 'expect_version': int(sql(f"select version from public.wh_accounts where user_id='{a}'")), 'inputs': [a1, item(a, 5)], 'cost': 2, 'out_species_idx': 6, 'out_tier_idx': 2, 'tier_up': False, 'genome_seed': 1, 'genome_code': 'g1.' + 'A' * 35, 'pity_after': [0]*6}, role='service_role')
 check('merge refuses an item reserved by a live trade', r.get('error') == 'reserved', r)
 
-print('== 3b. the incoming live-offer cap holds under concurrency (added 2026-10-05, not run) ==')
+print('== 3b. the incoming live-offer cap holds under concurrency (added 2026-10-05) ==')
 hub = acct(); frs = [acct() for _ in range(20)]
 for f_ in frs: friends(hub, f_)
 hub_items = {f_: item(hub, 6) for f_ in frs}; their = {f_: item(f_, 5) for f_ in frs}
@@ -1806,7 +1811,7 @@ check('A confirms v2 -> executes', c.get('ok') and c.get('status') == 'executed'
 check('B untouched item b1 stayed with B', owner_of(b1) == b)
 a, b, a1, b1 = pair_with_items(); tid = propose(a, b, [a1], [b1])['trade_id']; b_unc, a_unc = item(b, 3), item(a, 4)
 r = call(b, 'wh_counter_trade', {'idem': idem(), 'trade_id': tid, 'expect_version': 1, 'give': [b_unc], 'get': [a_unc]})
-check('a counter cannot switch a Rare trade to Uncommon items (tier_mismatch; terms and tier unchanged) [added 2026-10-05, not run]', r.get('error') == 'tier_mismatch'
+check('a counter cannot switch a Rare trade to Uncommon items (tier_mismatch; terms and tier unchanged) [added 2026-10-05]', r.get('error') == 'tier_mismatch'
       and sql(f"select terms_version || ':' || tier_idx from public.wh_trades where id='{tid}'") == '1:2', r)
 
 print('== 4b. scam-by-switch race: A counters while B confirms the old terms ==')
@@ -1929,7 +1934,7 @@ for t_ in parked: call(o_, 'wh_friend_redeem', {'code': call(t_, 'wh_friend_code
 sql(f"update public.wh_accounts set redeem_attempts = 0 where user_id='{o_}'")             # test only: a fresh hour of attempts
 tgt = acct(); tcode = call(tgt, 'wh_friend_code_get')['code']
 rv, ri = call(o_, 'wh_friend_redeem', {'code': tcode}), call(o_, 'wh_friend_redeem', {'code': 'ZZZZZZZZ'})
-check('no oracle: with 10 requests parked, a valid and an invalid code get the same too_many_requests, and nothing reaches the target [added 2026-10-05, not run]',
+check('no oracle: with 10 requests parked, a valid and an invalid code get the same too_many_requests, and nothing reaches the target [added 2026-10-05]',
       rv.get('error') == 'too_many_requests' and ri.get('error') == 'too_many_requests' and sql(f"select count(*) from public.wh_friend_requests where to_user='{tgt}'") == '0', (rv, ri))
 
 print('== 10. block mid-trade, board ==')
@@ -1946,13 +1951,13 @@ check('board search finds it, shows what I can give (my shelf item of a wanted s
 r = call(m, 'wh_propose_trade', {'idem': idem(), 'listing_id': lst['listing_id'], 'give': [m2], 'get': [l1]})
 check('listing mismatch: giving a species the lister did not ask for is refused', r.get('error') == 'listing_mismatch', r)
 r = call(m, 'wh_propose_trade', {'idem': idem(), 'listing_id': lst['listing_id'], 'give': [m1, item(m, 5)], 'get': [l1, l2]})
-check('a stranger cannot propose 2 for 2 through the board (D-T5) [added 2026-10-05, not run]', r.get('error') == 'bad_size', r)
+check('a stranger cannot propose 2 for 2 through the board (D-T5) [added 2026-10-05]', r.get('error') == 'bad_size', r)
 r = call(m, 'wh_propose_trade', {'idem': idem(), 'listing_id': lst['listing_id'], 'give': [m1], 'get': [l2]})
 check('board proposal between non-friends works through the listing', r.get('ok') is True, r)
 bt = r['trade_id']; view(l, bt)
 c2 = call(l, 'wh_counter_trade', {'idem': idem(), 'trade_id': bt, 'expect_version': 1, 'give': [l1, l2], 'get': [m1, m2]})
 c3 = call(l, 'wh_counter_trade', {'idem': idem(), 'trade_id': bt, 'expect_version': 1, 'give': [item(l, 6)], 'get': [m1]})
-check('a board trade cannot be countered into 2 for 2, nor to an item outside the listing [added 2026-10-05, not run]', c2.get('error') == 'bad_size' and c3.get('error') == 'listing_mismatch', (c2, c3))
+check('a board trade cannot be countered into 2 for 2, nor to an item outside the listing [added 2026-10-05]', c2.get('error') == 'bad_size' and c3.get('error') == 'listing_mismatch', (c2, c3))
 sql(f"insert into public.wh_blocks(blocker, blocked) values ('{l}','{m}')")
 check('a block hides listings both ways', all(x['listing_id'] != lst['listing_id'] for x in call(m, 'wh_board_search', {})['listings']))
 
@@ -2106,7 +2111,7 @@ check('an oversized payload (9 KB) is refused as the first step (a sanity limit:
 rb, rb2 = acct(), acct(); friends(rb, rb2); set_cfg('rate_offer', {'cap': 3, 'per_s': 0})
 outs = [call(rb, 'wh_propose_trade', {'idem': idem(), 'partner_ref': pid(rb2), 'give': [str(uuid.uuid4())], 'get': [str(uuid.uuid4())]}) for _ in range(4)]
 set_cfg('rate_offer', {'cap': 30, 'per_s': 0.1})
-check('rate bucket: with rate_offer at 3 tokens and no refill, the 4th proposal in a row answers slow_down and writes nothing [added 2026-10-05, not run]',
+check('rate bucket: with rate_offer at 3 tokens and no refill, the 4th proposal in a row answers slow_down and writes nothing [added 2026-10-05]',
       [o.get('error') for o in outs] == ['gone', 'gone', 'gone', 'slow_down'] and sql(f"select count(*) from public.wh_trades where a_user='{rb}'") == '0', [o.get('error') for o in outs])
 a, b = acct(), acct(); friends(a, b); ai = [item(a, 5) for _ in range(3)]; bi = [item(b, 6) for _ in range(3)]
 tid = propose(a, b, [ai[0]], [bi[0]])['trade_id']; ver = 1; last = None
@@ -2125,7 +2130,7 @@ expected = sorted('wh_block wh_block_list wh_board_search wh_cancel_trade wh_con
 check('the ONLY wh_ functions a player can call are the 28 client RPCs (no helper, no commit function, no trigger function); anon can call none', fn_ok.split(',') == expected and sql("select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like 'wh\\_%' and has_function_privilege('anon', p.oid, 'execute')") == '0', fn_ok.split(',') if fn_ok.split(',') != expected else '')
 tg = sql("select string_agg(table_name || ':' || grantee || ':' || privs, ' ' order by table_name, grantee) from (select table_name, grantee, string_agg(privilege_type, ',' order by privilege_type) as privs from information_schema.role_table_grants where grantee in ('anon','authenticated') and table_name like 'wh\\_%' group by 1, 2) x")
 check('table privileges: players have SELECT on species, accounts, items, capsules and NOTHING else on any wh_ table', tg == 'wh_accounts:authenticated:SELECT wh_capsules:authenticated:SELECT wh_items:authenticated:SELECT wh_species:anon:SELECT wh_species:authenticated:SELECT', tg)
-check("the migration left the portal's own objects alone: the sentinel keeps anon SELECT, authenticated INSERT and sequence USAGE [added 2026-10-05, not run]",
+check("the migration left the portal's own objects alone: the sentinel keeps anon SELECT, authenticated INSERT and sequence USAGE [added 2026-10-05]",
       sql("select has_table_privilege('anon', 'public.portal_sentinel', 'select') and has_table_privilege('authenticated', 'public.portal_sentinel', 'insert') and has_sequence_privilege('authenticated', 'public.portal_sentinel_id_seq', 'usage')") == 't')
 
 print('== 17d. retention ==')
@@ -2139,7 +2144,7 @@ check('players cannot call the purge', 'permission denied' in call(pu, 'wh__purg
 print('== 18. reports, unblock, listings ==')
 v = acct(); rs = [acct() for _ in range(3)]; young = acct(); sql(f"update public.wh_accounts set created_at = now() where user_id='{young}'")
 for s_ in [acct() for _ in range(3)]: call(s_, 'wh_report', {'partner_ref': pid(v), 'reason': 3})
-check('three eligible reporters with NO interaction with the account (no trade, request or friendship in 7 days) do not hold it [added 2026-10-05, not run]', sql(f"select restricted_until is null from public.wh_accounts where user_id='{v}'") == 't')
+check('three eligible reporters with NO interaction with the account (no trade, request or friendship in 7 days) do not hold it [added 2026-10-05]', sql(f"select restricted_until is null from public.wh_accounts where user_id='{v}'") == 't')
 for r_ in rs + [young]: friends(r_, v)                                    # an interaction: a friendship
 for r_ in rs[:2]: call(r_, 'wh_report', {'partner_ref': pid(v), 'reason': 3})
 call(young, 'wh_report', {'partner_ref': pid(v), 'reason': 3})
@@ -2150,25 +2155,30 @@ w = acct(); friends(v, w); vi, wi = item(v, 5), item(w, 6)
 check('the held account cannot propose or be proposed to (generic unavailable)', propose(v, w, [vi], [wi]).get('error') == 'not_allowed' and propose(w, v, [wi], [vi]).get('error') == 'unavailable', (propose(v, w, [vi], [wi]).get('error'), propose(w, v, [wi], [vi]).get('error')))
 sql(f"update public.wh_accounts set restricted_until = now() - interval '1 minute' where user_id='{v}'"); sql(f"update public.wh_reports set at = at - interval '25 hours' where reported='{v}'")
 call(rs[0], 'wh_report', {'partner_ref': pid(v), 'reason': 3})
-check('a repeat report by one of the same reporters does NOT re-arm the hold [added 2026-10-05, not run]', sql(f"select restricted_until < now() from public.wh_accounts where user_id='{v}'") == 't')
+check('a repeat report by one of the same reporters does NOT re-arm the hold [added 2026-10-05]', sql(f"select restricted_until < now() from public.wh_accounts where user_id='{v}'") == 't')
 fresh = [acct() for _ in range(3)]
 for r_ in fresh: friends(r_, v); call(r_, 'wh_report', {'partner_ref': pid(v), 'reason': 2})
-check('three NEW eligible reporters cannot cause a second automatic hold before a person has reviewed the first [added 2026-10-05, not run]', sql(f"select restricted_until < now() from public.wh_accounts where user_id='{v}'") == 't')
+check('three NEW eligible reporters cannot cause a second automatic hold before a person has reviewed the first [added 2026-10-05]', sql(f"select restricted_until < now() from public.wh_accounts where user_id='{v}'") == 't')
 sql(f"update public.wh_accounts set hold_reviewed_at = now(), auto_hold_at = now() - interval '8 days' where user_id='{v}'")
 call(fresh[0], 'wh_report', {'partner_ref': pid(v), 'reason': 2})
-check('after a review, and 7 days after the last automatic hold, eligible reports can hold it again [added 2026-10-05, not run]', sql(f"select restricted_until > now() + interval '23 hours' from public.wh_accounts where user_id='{v}'") == 't')
+check('after a review, and 7 days after the last automatic hold, eligible reports can hold it again [added 2026-10-05]', sql(f"select restricted_until > now() + interval '23 hours' from public.wh_accounts where user_id='{v}'") == 't')
 check('report abuse is limited to 5 a day; bad reasons refused', call(rs[0], 'wh_report', {'partner_ref': pid(w), 'reason': 9}).get('error') == 'bad_payload' and all(call(rs[0], 'wh_report', {'partner_ref': pid(w), 'reason': 2}).get('ok') for _ in range(4)) and call(rs[0], 'wh_report', {'partner_ref': pid(w), 'reason': 2}).get('error') == 'slow_down')
 ha, hb, ha1, hb1 = pair_with_items(); htid = propose(ha, hb, [ha1], [hb1])['trade_id']; view(hb, htid); settle()
 sql(f"update public.wh_accounts set restricted_until = now() + interval '1 hour' where user_id='{ha}'"); hc = confirm(hb, htid)
 check('a confirm while the other party is on a hold answers the generic unavailable and the trade stays alive (D-T10) [added 2026-10-05]',
       hc.get('error') == 'unavailable' and hc.get('terminal') is False and sql(f"select status from public.wh_trades where id='{htid}'") == 'proposed', hc)
-sql(f"update public.wh_accounts set restricted_until = null where user_id='{ha}'"); hc = confirm(hb, htid)
+he = (call(hb, 'wh_trade_emote', {'trade_id': htid, 'emote': 1}), call(ha, 'wh_trade_emote', {'trade_id': htid, 'emote': 1}))
+check('no emote reaches or leaves an account on a hold: both parties get not_found and no event is written (16.1) [added 2026-10-05]',
+      all(e.get('error') == 'not_found' for e in he) and sql(f"select count(*) from public.wh_trade_events where trade_id='{htid}' and kind='emote'") == '0', he)
+sql(f"update public.wh_accounts set restricted_until = null where user_id='{ha}'")
+check('once the hold ends, emotes work again [added 2026-10-05]', call(hb, 'wh_trade_emote', {'trade_id': htid, 'emote': 2}).get('ok') is True)
+hc = confirm(hb, htid)
 check('when the hold ends, the same standing confirm executes [added 2026-10-05]', hc.get('status') == 'executed', hc)
 x, y = acct(), acct(); friends(x, y); call(x, 'wh_block', {'partner_ref': pid(y)}); bl = call(x, 'wh_block_list')
 check('block list shows handles only; unblock removes the block but NOT the friendship', len(bl['blocked']) == 1 and 'user' not in json.dumps(bl) and call(x, 'wh_unblock', {'partner_ref': pid(y)}).get('ok') and sql(f"select count(*) from public.wh_blocks where blocker='{x}'") == '0' and sql(f"select count(*) from public.wh_friends where user_lo=least('{x}'::uuid,'{y}'::uuid) and user_hi=greatest('{x}'::uuid,'{y}'::uuid)") == '0')
 l = acct(); li = item(l, 5); lst = call(l, 'wh_listing_create', {'items': [li], 'wants': [5, 6]}); other = acct()
 check('a listing can be cancelled by its owner only and then disappears from the board', call(other, 'wh_listing_cancel', {'listing_id': lst['listing_id']}).get('ok') and any(z['listing_id'] == lst['listing_id'] for z in call(other, 'wh_board_search', {})['listings']) and call(l, 'wh_listing_cancel', {'listing_id': lst['listing_id']}).get('ok') and not any(z['listing_id'] == lst['listing_id'] for z in call(other, 'wh_board_search', {})['listings']))
-print('== 19. trading switched off (the age/consent seam) closes every social surface (added 2026-10-05, not run) ==')
+print('== 19. trading switched off (the age/consent seam) closes every social surface (added 2026-10-05) ==')
 adult, child, pal = acct(), acct(), acct(); friends(child, pal)
 ccode = call(child, 'wh_friend_code_get')['code']; rq = call(adult, 'wh_friend_redeem', {'code': ccode})
 rid = sql(f"select id from public.wh_friend_requests where from_user='{adult}' and to_user='{child}' and status='pending'")

@@ -7,8 +7,8 @@
 //    => same piece; the RNG never repeats, so the piece never loops.
 //  * MusicBed: one playing "session" of that score. A lookahead scheduler turns the composer's bars into WebAudio notes:
 //    the engine calls advance(now + LOOKAHEAD_S) from a 100 ms timer, offline renders call it once for the whole span.
-//    Each session owns a small bus (mallet echo, a smooth duck, a one-shot fade-in and a one-shot fade-out gain), never
-//    cancels automation, and caps itself at MAX_LIVE_NOTES sounding note groups.
+//    Each session owns a small bus (a smooth duck, a fast "room" dip for the effects, a one-shot fade-in, a one-shot fade-out
+//    and a one-shot pause fade) and caps itself at MAX_LIVE_NOTES sounding note groups.
 //
 // The same code runs live and in an OfflineAudioContext (the probe renders it), like every other voice.
 import { clamp } from '../core/rng.ts';
@@ -41,6 +41,28 @@ export const FIRST_NOTE_S = 1.2;
 export const DUCK_DB = -9;
 export const DUCK_ATTACK_TC = 0.12;
 export const DUCK_RELEASE_TC = 0.5;
+/**
+ * Room for the effects (round-3 fix). Every one-shot effect dips the music by ROOM_DB from the moment it is called until its
+ * own end, then the music comes back (release tc ROOM_RELEASE_TC: within 1 dB about 0.55 s after the effect). Measured
+ * before: with only the slow ceremony/squish duck, 25 of 330 effect placements over 6 minutes of music stood less than
+ * 8 dB above the music in their own bands (a soft toss 5 dB UNDER the pads, a poke 3.4 dB and a pop 0.6 dB over a
+ * coinciding mallet). The dip is fast (attack tc 2 ms) so even a 45 ms pop gets it, and it starts ROOM_LEAD_S before the
+ * effect (the engine schedules every effect that far ahead of the call). Its own gain node: it never fights the slow duck.
+ */
+export const ROOM_DB = -9;
+export const ROOM_ATTACK_TC = 0.002;
+export const ROOM_RELEASE_TC = 0.3;
+/** = the engine's effect LOOKAHEAD: an effect called at t starts at t + ROOM_LEAD_S, the dip starts at t. */
+export const ROOM_LEAD_S = 0.004;
+export const ROOM_MAX_HOLD_S = 4;
+/** Which effects make room, and how deep (dB). The engine and the offline mix renders both read this table. The held
+ *  squish keeps the slow duck (SQUISH_DUCK_RATE); the ceremony voices keep the slow duck (capsule beats get both). */
+export const ROOM_KINDS: Readonly<Record<string, number>> = {
+  poke: ROOM_DB, release: ROOM_DB, land: ROOM_DB, pop: ROOM_DB, blend: ROOM_DB, meterFull: ROOM_DB, capsule: ROOM_DB,
+  bump: ROOM_DB, lift: ROOM_DB, toss: ROOM_DB, strandSnap: ROOM_DB,
+};
+/** At most this many bars in a row without a mallet note (a long rest reads as the music having stopped). */
+export const MAX_REST_BARS = 2;
 /** Music volume 0..1 relative to master; 0.45 is the designed level (see chain.ts musicGain). */
 export const MUSIC_DEFAULT = 0.45;
 /** The music ducks while a held squish is loud: |rate| (1/s) at or above this (its squelch is then within ~10 dB of its max). */
@@ -55,10 +77,18 @@ export const MEL_HI = 86;
 const MEL_HOME = 77;
 
 /* Session levels (linear, before the chain's music gain). Calibrated with the probe for a long-term RMS of about
- * -27 dBFS at music 0.45 / master 1: the pad carries the floor, the mallets sit a little above it. */
-const PAD_LEVEL = dbToGain(-28);
-const MALLET_LEVEL = dbToGain(-15.5);
-const BUBBLE_LEVEL = dbToGain(-24);
+ * -28.5 dBFS at music 0.45 / master 1. Round-3 fix: the pad was the strongest and the only continuous component, sitting
+ * where the ear is most sensitive; it is now 5 dB lower and the sparse mallet carries more of the level. */
+const PAD_LEVEL = dbToGain(-33);
+const MALLET_LEVEL = dbToGain(-14);
+const BUBBLE_LEVEL = dbToGain(-23);
+/** The music's bubbles settle upward by this much (the game's bubbles chirp ~30%; a tuned note needs far less) ... */
+const BUBBLE_RISE = 0.03;
+/** ... and start this fraction of the rise below the note, so the pitch heard (between the energy-weighted pitch and the
+ *  spectral peak of the little chirp) is the scored note. Measured: spectral peak +10..+17 cents, energy-weighted -8..-13
+ *  cents for A5..D7; with the earlier rise 0.05 aimed AT the note they were +59..+80 and +33..+38 cents (sharp). */
+const BUBBLE_AIM = 0.65;
+const BUBBLE_SOFT = 2.2;
 /** Each mallet note repeats once, 3/4 beat later, this loud (-11 dB), darker (no x3.98 partial) and on the other side. */
 const ECHO_LEVEL = 0.28;
 /** 3/4 of a beat: the echo lands on a dotted-eighth, off the grid, so it reads as space rather than as extra notes. */
@@ -161,6 +191,7 @@ export class Composer {
   private cur = MEL_HOME;
   private queue: Role[] = [];
   private lastCall: { cell: readonly number[]; steps: number[] } | null = null;
+  private restRun = 0;
   /** History of field changes (bar index, field, length in bars): the probe checks the drift rules from it. */
   readonly fieldLog: { bar: number; field: number; bars: number }[] = [];
 
@@ -268,7 +299,11 @@ export class Composer {
       if (this.queue.length === 0 && this.r() < 0.5) this.queue = ['rest', 'call'];
     }
     if (this.queue.length === 0) this.queue = pick(this.r, PHRASES).slice();
-    const role = this.queue.shift() as Role;
+    let role = this.queue.shift() as Role;
+    // never more than MAX_REST_BARS empty bars in a row (a phrase rest, a field's opening rest and a rest+rest phrase could
+    // add up to 5 bars = 18 s of pad alone)
+    if (role === 'rest' && this.restRun >= MAX_REST_BARS) role = 'call';
+    this.restRun = role === 'rest' ? this.restRun + 1 : 0;
     const ends = role === 'answer' || (role === 'call' && (this.queue.length === 0 || this.queue[0] === 'rest'));
     const notes = role === 'rest' ? [] : this.melodyBar(role, ends);
     const out: PlannedBar = { bar: this.bar, field: this.field, fieldStart, barsLeft: this.barsLeft, seed: this.seed(), notes };
@@ -377,6 +412,14 @@ function mallet(ctx: Ctx, dest: AudioNode, t: number, f: number, vel: number, pa
   return { bag, end };
 }
 
+/**
+ * The music's bubble grace/trail note: the game's Minnaert bubble (dsp.ts) tuned to `f`. Its radius is chosen so that the
+ * small upward settle (BUBBLE_RISE) is centred on the note instead of starting there. Returns the time it is silent.
+ */
+export function musicBubble(ctx: Ctx, dest: AudioNode, t: number, f: number, amp: number): number {
+  return bubble(ctx, dest, t, 3.26 / (f / (1 + BUBBLE_AIM * BUBBLE_RISE)), amp, BUBBLE_RISE, BUBBLE_SOFT);
+}
+
 /* ───────────────────────────── the scheduler / one playing session ───────────────────────────── */
 
 export interface MusicLogEntry {
@@ -404,6 +447,8 @@ export interface MusicBedOptions {
   /** Pitch ratio of the whole score (default 1). */
   pitch?: number;
   fadeInS?: number;
+  /** Diagnostics only (stem renders): level multipliers for the pad and for the mallets + bubbles (default 1). */
+  layers?: { pad?: number; mallet?: number };
 }
 
 export class MusicBed {
@@ -415,7 +460,10 @@ export class MusicBed {
   private readonly bus: Bag;
   private readonly melBus: GainNode;
   private readonly duckG: GainNode;
+  private readonly roomG: GainNode;
   private readonly fadeOut: GainNode;
+  private readonly pauseG: GainNode;
+  private readonly padIn: GainNode;
   private readonly pr: number;
   private nextBarT: number;
   private pending: Pending[] = [];
@@ -425,6 +473,10 @@ export class MusicBed {
   private first = true;
   private ducked = false;
   private duckUntil = -Infinity;
+  private roomUntil = -Infinity;
+  private roomGain = 1;
+  private roomFrom = 0;
+  private fastUsed = false;
   private stoppedAt = Infinity;
   private endT = Infinity;
   private freed = false;
@@ -436,22 +488,26 @@ export class MusicBed {
     this.nextBarT = this.t0;
     this.log = opts.log ? [] : null;
     this.pr = clamp(fin(opts.pitch, 1), 0.5, 2);
-    // session bus: [pads] + [mallets (each with its own scheduled echo)] -> duck -> fadeIn -> fadeOut -> head -> out
+    // session bus: [pads] + [mallets (each with its own scheduled echo)] -> duck -> room -> fadeIn -> fadeOut -> pause -> head -> out
     // There is deliberately no DelayNode here: with one, an offline render scheduled in live-like slices differed from the
     // same score scheduled in one go (Chromium delayed the echo copy by a render-quantum-sized amount depending on when the
     // notes were connected). Each note now schedules its own echo, so live and offline renders are identical.
     const bag = new Bag(ctx, out, 'musicBus', 0);
     this.bus = bag;
     this.fadeOut = bag.gain(1);
+    this.pauseG = bag.gain(1);
     const fadeIn = bag.gain(0);
     this.duckG = bag.gain(1);
-    this.melBus = bag.gain(1);
-    this.duckG.connect(fadeIn); fadeIn.connect(this.fadeOut); this.fadeOut.connect(bag.head);
-    this.melBus.connect(this.duckG);
+    this.roomG = bag.gain(1);
+    const lay = opts.layers ?? {};
+    this.melBus = bag.gain(clamp(fin(lay.mallet, 1), 0, 4));
+    this.padIn = bag.gain(clamp(fin(lay.pad, 1), 0, 4));
+    this.duckG.connect(this.roomG); this.roomG.connect(fadeIn); fadeIn.connect(this.fadeOut); this.fadeOut.connect(this.pauseG); this.pauseG.connect(bag.head);
+    this.melBus.connect(this.duckG); this.padIn.connect(this.duckG);
     // The session bus is stereo for its whole life. Otherwise the first panned note connected mid-session switches the bus
     // and the master chain from mono to stereo processing, and the new channel's filter/limiter state starts from zero (a
     // small transient; measured as a live-vs-offline difference before this was fixed).
-    for (const n of [this.melBus, this.duckG, fadeIn, this.fadeOut, bag.head]) {
+    for (const n of [this.melBus, this.padIn, this.duckG, this.roomG, fadeIn, this.fadeOut, this.pauseG, bag.head]) {
       n.channelCount = 2; n.channelCountMode = 'explicit'; n.channelInterpretation = 'speakers';
     }
     const fi = clamp(fin(opts.fadeInS, FADE_IN_S), 0.05, 10);
@@ -463,6 +519,8 @@ export class MusicBed {
   /** Context time at which a stopped session is silent (Infinity while playing). */
   get endTime(): number { return this.endT; }
   get isDucked(): boolean { return this.ducked; }
+  /** True while an effect's room dip holds (until its effect ends; the recovery follows). */
+  roomedAt(t: number): boolean { return t < this.roomUntil; }
 
   /** Sounding note groups at time t (pads, mallets and bubbles whose span covers t). */
   liveAt(t: number): number {
@@ -506,22 +564,22 @@ export class MusicBed {
     const now = this.ctx.currentTime;
     let t = e.t;
     if (t < now) {
-      // a stalled main thread: pads still start (now), stale notes are dropped instead of piling up late
-      if (e.kind !== 'pad' || now - t > 2) { this.stats.late++; this.logIt(e, t, t, 'late'); return; }
+      // a stalled main thread: stale notes are dropped instead of piling up late; a pad starts now, however late, as long as
+      // its field has more than a second left (a field lasts 29-58 s: dropping its pad would leave the mallets over nothing)
+      if (e.kind !== 'pad' || now > e.end - 1) { this.stats.late++; this.logIt(e, t, t, 'late'); return; }
       t = now + 0.005;
     }
     if (e.kind !== 'pad' && this.liveNotesAt(t) >= MAX_LIVE_NOTES - PAD_SLOTS) { this.stats.dropped++; this.logIt(e, t, t, 'cap'); return; }
     let end: number;
     if (e.kind === 'pad') {
-      const p = padChord(this.ctx, this.duckG, t, e.end, FIELDS[e.field], e.seed, this.pr);
+      const p = padChord(this.ctx, this.padIn, t, e.end, FIELDS[e.field], e.seed, this.pr);
       this.groups.push(p.bag); end = p.end; this.stats.pads++;
     } else if (e.kind === 'mallet') {
       const m = mallet(this.ctx, this.melBus, t, midiHz(e.midi) * this.pr, e.vel, e.pan, e.seed);
       this.groups.push(m.bag); end = m.end; this.stats.notes++;
     } else {
-      // the game's Minnaert bubble, tuned: radius from the target pitch, a small upward chirp (+5%), a slightly longer ring
-      const f = midiHz(e.midi) * this.pr;
-      end = bubble(this.ctx, this.melBus, t, 3.26 / f, BUBBLE_LEVEL * e.vel, 0.05, 2.2);
+      // the game's Minnaert bubble, tuned (musicBubble): a small upward settle centred on the note, a slightly longer ring
+      end = musicBubble(this.ctx, this.melBus, t, midiHz(e.midi) * this.pr, BUBBLE_LEVEL * e.vel);
       this.stats.bubbles++;
     }
     this.spans.push({ t, end, pad: e.kind === 'pad' });
@@ -554,6 +612,29 @@ export class MusicBed {
     this.ducked = false;
   }
 
+  /**
+   * Make room for an effect: dip by `db` (default ROOM_DB) from `from` (fast, tc ROOM_ATTACK_TC) until `until`, then
+   * recover (tc ROOM_RELEASE_TC). Overlapping calls extend the hold and keep the deepest dip. Deterministic for a given
+   * sequence of calls (live and offline renders agree): the only cancellation removes the pending recovery of the hold
+   * being extended, and setTargetAtTime always starts from the current value, so the gain never jumps.
+   */
+  makeRoom(from: number, until: number, db: number = ROOM_DB): void {
+    if (this.freed) return;
+    const a = Math.max(0, fin(from, 0), this.roomFrom);
+    const b = Math.min(Math.max(a + 0.02, fin(until, a)), a + ROOM_MAX_HOLD_S);
+    const g = dbToGain(clamp(fin(db, ROOM_DB), -24, 0));
+    const held = a < this.roomUntil;
+    const tg = held ? Math.min(g, this.roomGain) : g;
+    const end = held ? Math.max(b, this.roomUntil) : b;
+    try {
+      const p = this.roomG.gain;
+      p.cancelScheduledValues(a);
+      p.setTargetAtTime(tg, a, ROOM_ATTACK_TC);
+      p.setTargetAtTime(1, end, ROOM_RELEASE_TC);
+    } catch { /* closed context */ }
+    this.roomUntil = end; this.roomGain = tg; this.roomFrom = a;
+  }
+
   /** Raised-cosine fade to exact silence over `fadeS` from `at`, then nothing more is scheduled. Returns the silent time. */
   stop(at: number, fadeS = FADE_OUT_S): number {
     if (this.stoppedAt < Infinity || this.freed) return this.endT;
@@ -566,12 +647,30 @@ export class MusicBed {
     return this.endT;
   }
 
-  /** Disconnect every node now (after the fade, on pause-suspend, on dispose). */
+  /**
+   * Silent within `fadeS` from `at`, even if a slower fade-out is already running (setPaused(true) during the 1.4 s fade of
+   * a music-off or a mute): a second, one-shot raised-cosine on its own gain node. Returns the silent time.
+   */
+  fastStop(at: number, fadeS = PAUSE_FADE_S): number {
+    if (this.freed) return this.endT;
+    if (!this.stopped) return this.stop(at, fadeS);
+    const t = Math.max(this.ctx.currentTime, fin(at, this.ctx.currentTime));
+    const f = clamp(fin(fadeS, PAUSE_FADE_S), 0.02, 6);
+    if (this.fastUsed || t + f + 0.01 >= this.endT) return this.endT;
+    this.fastUsed = true;
+    try { this.pauseG.gain.setValueCurveAtTime(curve(1, 0), t, f); } catch { return this.endT; }
+    this.endT = t + f + 0.01;
+    return this.endT;
+  }
+
+  /** Disconnect every node now (after the fade, on pause-suspend, on dispose). Sources are stopped first: a disconnected
+   *  oscillator still runs until its stop time, and a pad's stop time can be up to a minute away. */
   free(): void {
     if (this.freed) return;
     this.freed = true;
     this.pending.length = 0;
-    for (const g of this.groups) g.free();
+    const now = this.ctx.currentTime;
+    for (const g of this.groups) { g.stopAll(now); g.free(); }
     this.groups.length = 0;
     this.bus.free();
   }

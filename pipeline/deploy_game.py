@@ -10,6 +10,8 @@ Usage:
   python pipeline/deploy_game.py --game-dir games/001-tropical-fury --slug tropical-fury
 
 Flow:
+  0. Refuse a SOURCE folder: a root index.html that loads a TypeScript module (a Vite game's own
+     folder) is not deployable. Build it (`npm run build`) and pass --game-dir <game>/dist.
   1. Upload new/changed files in game-dir to R2 bucket forgeflow-games/{slug}/ — every
      other file first, then the root index.html, then the root game_meta.json LAST. A
      critical failure (for an unhashed game: any runtime/**/*.js) aborts before
@@ -253,6 +255,44 @@ def _entry_script_refs(game_dir):
     refs += re.findall(r"""<link\b(?=[^>]*\brel\s*=\s*["']modulepreload["'])[^>]*?\bhref\s*=\s*["']([^"']+)["']""",
                        html, re.I)
     return [r for r in refs if not re.match(r"^(?:[a-z][a-z0-9+.-]*:|//)", r, re.I)]
+
+
+# SOURCE-FOLDER GUARD (2026-10-05, WOBBLEHOARD audit). A Vite game's folder (blocktooth, wobblehoard) has a root
+# index.html that loads TypeScript straight from src/ (`<script type="module" src="./src/main.ts">`), which only the Vite
+# dev server can run. Uploaded as-is, the CDN serves main.ts with no JavaScript MIME type and bare imports ('three')
+# cannot resolve, so the page never starts, and every source file under src/ ships publicly. The deployable thing is the
+# build output (`npm run build` -> <game>/dist). No browser runs TypeScript, so a root entry that loads a .ts module is
+# never deployable: refuse it and print the right command.
+_SOURCE_MODULE_SUFFIXES = (".ts", ".tsx", ".mts", ".cts")
+
+
+def source_entry_refs(game_dir):
+    """Local <script src> / modulepreload refs of the ROOT index.html that point at a TypeScript source module."""
+    out = []
+    for ref in _entry_script_refs(game_dir):
+        path = ref.split("#", 1)[0].split("?", 1)[0]
+        if path.lower().endswith(_SOURCE_MODULE_SUFFIXES):
+            out.append(ref)
+    return out
+
+
+def source_folder_refusal(game_dir, slug):
+    """None if game_dir is deployable; otherwise the message explaining why not and what to run instead."""
+    refs = source_entry_refs(game_dir)
+    if not refs:
+        return None
+    game_dir = Path(game_dir).resolve()
+    try:
+        rel = game_dir.relative_to(ROOT).as_posix()
+    except ValueError:
+        rel = game_dir.as_posix()
+    back = "/".join(".." for _ in Path(rel).parts) if not Path(rel).is_absolute() else str(ROOT)
+    return (f"REFUSED: {rel}/index.html loads {refs[0]}, so this is a source folder (Vite), not a build.\n"
+            f"  Uploaded as-is the page never starts (no browser runs TypeScript) and the source tree would be published.\n"
+            f"  Build it, then deploy the build output (run from the repo root):\n"
+            f"    cd {rel} && npm ci && npm run build && cd {back}\n"
+            f"    python pipeline/deploy_game.py --game-dir {rel}/dist --slug {slug} --dry-run   # check the upload plan\n"
+            f"    python pipeline/deploy_game.py --game-dir {rel}/dist --slug {slug}")
 
 
 def detect_hashed_build(game_dir):
@@ -664,8 +704,23 @@ def insert_game_metadata(slug: str, metadata: dict):
 CDN_BASE = "https://forgeflow-games-cdn.isimcha85.workers.dev"
 
 
-def verify_live(slug, files=("index.html", "thumbnail.png", "content.json")):
-    """GET key files from the CDN and report their HTTP status. Returns a dict."""
+LIVE_CHECK_FILES = ("index.html", "thumbnail.png", "content.json")
+# Files a game may legitimately not have. With a game_dir, verify_live checks them only when the game has them locally
+# (Vite games such as blocktooth and wobblehoard have no content.json, and a 404 there is not a failed deploy).
+LIVE_CHECK_OPTIONAL = ("content.json",)
+
+
+def verify_live(slug, files=None, game_dir=None):
+    """GET key files from the CDN and report their HTTP status. Returns a dict.
+
+    files: an explicit list is checked exactly as given. Default: LIVE_CHECK_FILES; when game_dir (the folder that was
+    deployed) is given, an optional file the game does not have locally (content.json) is left out instead of being
+    reported as a 404. Without game_dir the default is unchanged (all three)."""
+    if files is None:
+        files = LIVE_CHECK_FILES
+        if game_dir is not None:
+            gd = Path(game_dir)
+            files = tuple(f for f in files if f not in LIVE_CHECK_OPTIONAL or (gd / f).is_file())
     out = {}
     for f in files:
         url = f"{CDN_BASE}/{slug}/{f}"
@@ -723,6 +778,14 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, r
     if not game_dir.exists():
         print(f"Error: {game_dir} does not exist")
         return {"ok": False, "uploaded": 0, "total": 0, "url": None, "reason": "missing dir"}
+
+    # ── source-folder guard (see source_folder_refusal): before the cover step, so a refused
+    # deploy never spends an image-generation call either. Applies to --dry-run too.
+    refusal = source_folder_refusal(game_dir, slug)
+    if refusal:
+        _safe_print(refusal)
+        return {"ok": False, "uploaded": 0, "total": 0, "url": None,
+                "reason": "source folder, not a build: `npm run build` it, then deploy its dist/ folder"}
 
     # ── staged-content guard (owner-deferred releases) ────────────────────
     # Slugs listed in state/staged_slugs.json have unreleased content STAGED on
@@ -834,12 +897,17 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, r
         metadata["thumbnail_url"] = f"{CDN_BASE}/{slug}/thumbnail.png{_tv}"
     if thumb_path.exists() and not metadata.get("hero_image_url"):
         metadata["hero_image_url"] = f"{CDN_BASE}/{slug}/thumbnail.png{_tv}"
-    insert_game_metadata(slug, metadata)
+    metadata_ok = insert_game_metadata(slug, metadata)
+    if not metadata_ok:
+        # Not fatal (the files are live; ok keeps its old meaning), but never silent: the portal row was not
+        # written, so a new game is not listed and an existing one keeps its old build_version / text.
+        print("  [supabase] WARN: the games row was NOT inserted/updated (see the [supabase] line above).")
     print(f"Done! Game available at: {CDN_BASE}/{slug}/index.html")
     if refresh_portal:
         refresh_portal_prerender()
     # ok = the code/metadata files went up (assets are skipped by default now, so uploaded<total is normal & fine).
-    return {"ok": uploaded > 0, "uploaded": uploaded, "total": total, "url": f"{CDN_BASE}/{slug}/index.html"}
+    return {"ok": uploaded > 0, "uploaded": uploaded, "total": total, "url": f"{CDN_BASE}/{slug}/index.html",
+            "metadata_ok": bool(metadata_ok)}
 
 
 def main():

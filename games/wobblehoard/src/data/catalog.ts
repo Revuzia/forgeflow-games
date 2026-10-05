@@ -113,12 +113,22 @@ export interface SpeciesDef {
 
 /* ───────────────────────────────────────────────── helper builders ───────────────────────────────────────────────── */
 
-/** Default cosmetic bands: small enough that two species of a tier never overlap in colour (probe_catalog.ts checks the gap). */
-const BANDS: LookBands = {
+/** Default cosmetic bands: small enough that two species of a tier never overlap in colour (probe_catalog.ts checks the gap). A species
+ *  may override single bands (`bands` in its entry); _spec/CATALOG.md prints these numbers from here. */
+export const DEFAULT_LOOK_BANDS: Readonly<LookBands> = Object.freeze({
   hue: 4, chroma: 0.04, lightness: 0.035, coreHue: 8, coreGlow: 0.06, translucency: 0.06, gloss: 0.06,
   firmness: 0.08, bounce: 0.08, stretch: 0.08, size: 0.07, glitter: 0.08, speckle: 0.12,
   eyeSpacing: 0.06, eyeSize: 0.06, eyeHeight: 0.06,
-};
+});
+
+const BANDS = DEFAULT_LOOK_BANDS;
+
+/**
+ * Rare and up carry a visible pattern layer (DESIGN 5.3: "speckle or swirl layer"): every patterned species has a base speckle of at
+ * least this (probe_catalog.ts), and no INSTANCE of a patterned species rolls its pattern strength below it either (speciesBaseGenome
+ * clamps the band at this floor), so a capsule drop or a merge result never comes out with a washed-out Rare layer.
+ */
+export const PATTERN_SPECKLE_FLOOR = 0.3;
 
 type LookIn = Pick<LookBase, 'hue' | 'chroma' | 'lightness' | 'coreHue' | 'coreGlow'> & Partial<LookBase>;
 const look = (o: LookIn): LookBase => ({
@@ -151,10 +161,10 @@ const SHAPES: Record<SpeciesId, ShapeRecipe> = {
   dimpla: shape([1.2, 0.62, 1.2], [B([0, 1, 0], 0.55, 0.7)]),
   // ── uncommon ──
   nuzzo: shape([0.95, 0.9, 0.95], [B([0.75, 0.65, -0.05], 0.8, 0.42, true)]),
-  flickum: shape([0.85, 0.95, 0.9], [B([0, 0.1, -1], 1.0, 0.38), D([0, -1, 0], 0.08, 0.6)]),
+  tadpolo: shape([0.85, 0.95, 0.9], [B([0, 0.1, -1], 1.0, 0.38), D([0, -1, 0], 0.08, 0.6)]),
   swishel: shape([1.0, 0.95, 1.0], [D([0, 1, 0], 0.55, 0.7)]),
   granulo: shape([0.7, 0.7, 0.55], [B([0, 1, 0], 0.9, 0.45), B([0.951, 0.309, 0], 0.9, 0.45, true), B([0.588, -0.809, 0], 0.9, 0.45, true)]),
-  peakum: shape([1.0, 0.8, 0.9], [B([0.45, 1, -0.3], 1.0, 0.36, true)]),
+  sproutle: shape([1.0, 0.8, 0.9], [B([0.45, 1, -0.3], 1.0, 0.36, true)]),
   wrigglo: shape([1.3, 0.66, 0.7], [B([1, 0.45, 0], 0.38, 0.5), D([-0.3, 1, 0], 0.2, 0.6)]),
   acornel: shape([0.95, 0.85, 0.95], [B([0, 0.5, 0], 0.4, 1.1), B([0, 1, 0.1], 0.7, 0.36)]),
   capnap: shape([1.25, 0.75, 1.25], [D([0.85, -0.55, 0], 0.5, 0.7, true), D([0, -0.55, 0.85], 0.3, 0.7), D([0, -0.55, -0.85], 0.5, 0.7)]),
@@ -302,11 +312,11 @@ const RAW: readonly DefIn[] = [
     tags: ['eared', 'round', 'glossy'],
   },
   {
-    id: 'flickum', name: 'Flickum', tier: 'uncommon', family: 'stickystretch', lane: 'jelly', signature: 'pull',
-    silhouette: 'body with a long knobbed tail', shape: SHAPES.flickum,
+    id: 'tadpolo', name: 'Tadpolo', tier: 'uncommon', family: 'stickystretch', lane: 'jelly', signature: 'pull',
+    silhouette: 'tadpole: round body with a long knobbed tail', shape: SHAPES.tadpolo,
     look: look({ hue: 123, chroma: 0.78, lightness: 0.41, coreHue: 172, coreGlow: 0.5, translucency: 0.55, gloss: 0.75, firmness: 0.35, bounce: 0.6, stretch: 0.8, size: 0.45, glitter: 0.18, eyeStyle: 'dot', eyeSpacing: 0.45 }),
     blurb: 'An emerald drop with a long knobbed tail. Stretch the tail and it flicks back.',
-    tags: ['tailed', 'stretchy', 'pull'],
+    tags: ['tadpole', 'tailed', 'stretchy', 'pull'],
   },
   {
     id: 'swishel', name: 'Swishel', tier: 'uncommon', family: 'waterfill', lane: 'fill', signature: 'poke',
@@ -325,11 +335,11 @@ const RAW: readonly DefIn[] = [
     tags: ['star', 'beads', 'lobed'],
   },
   {
-    id: 'peakum', name: 'Peakum', tier: 'uncommon', family: 'gummy', lane: 'chew', signature: 'poke',
-    silhouette: 'round body with twin peaks swept back like tufts', shape: SHAPES.peakum,
+    id: 'sproutle', name: 'Sproutle', tier: 'uncommon', family: 'gummy', lane: 'chew', signature: 'poke',
+    silhouette: 'sprout: round body with twin peaks swept back like tufts', shape: SHAPES.sproutle,
     look: look({ hue: 98, chroma: 0.74, lightness: 0.57, coreHue: 172, coreGlow: 0.55, translucency: 0.75, gloss: 0.75, firmness: 0.55, bounce: 0.6, stretch: 0.4, size: 0.5, glitter: 0.2, eyeStyle: 'oval', eyeSize: 0.5 }),
-    blurb: 'A lime gummy with two backswept tufts. Flick one and they wiggle together.',
-    tags: ['peaks', 'chewy', 'lime'],
+    blurb: 'A lime gummy sprout with two backswept tufts. Flick one and they wiggle together.',
+    tags: ['sprout', 'peaks', 'chewy', 'lime'],
   },
   {
     id: 'wrigglo', name: 'Wrigglo', tier: 'uncommon', family: 'slimegoo', lane: 'chew', signature: 'pull',
@@ -357,7 +367,7 @@ const RAW: readonly DefIn[] = [
     silhouette: 'mitten: one big thumb-lump on the side', shape: SHAPES.knubby,
     look: look({ hue: 79, chroma: 0.38, lightness: 0.09, coreHue: 172, coreGlow: 0.45, translucency: 0.5, gloss: 0.35, firmness: 0.45, bounce: 0.35, stretch: 0.55, size: 0.5, glitter: 0.1, eyeStyle: 'dot', eyeHeight: 0.6 }),
     blurb: 'A khaki dough glove with one big thumb. Poke the thumb and the whole glove nods.',
-    tags: ['gourd', 'stacked', 'doughy'],
+    tags: ['mitten', 'thumb', 'doughy'],
   },
   {
     id: 'kneadle', name: 'Kneadle', tier: 'uncommon', family: 'putty', lane: 'dough', signature: 'squeeze',
@@ -633,7 +643,8 @@ export function speciesTemplateGenome(speciesId: SpeciesId): Genome {
  * the capsule roll only has to carry a species id and a uint32 and the server can recompute and compare. The result is quantised
  * with quantizeGenome (it round-trips through encodeGenome / decodeGenome). Two instances of one species differ only inside the
  * species' cosmetic bands (a few degrees of hue, a few percent of the other numbers); pattern and eye style never vary. A field whose
- * base value is 0 (no glitter, no speckle) stays 0 so Common squishies never grow sparkle by chance.
+ * base value is 0 (no glitter, no speckle) stays 0 so Common squishies never grow sparkle by chance, and a patterned species' speckle
+ * never rolls below PATTERN_SPECKLE_FLOOR (the band is clamped there; the draw itself is unchanged).
  * Draw order is FIXED (16 triangular draws, one per band, in the order below); do not reorder.
  * `seed` becomes genome.seed (speckle layout, glitter layout, eye timing).
  */
@@ -657,13 +668,14 @@ export function speciesBaseGenome(speciesId: SpeciesId, seed: number): Genome {
   const size = around(L.size, B2.size);
   const glitter = around(L.glitter, B2.glitter);
   const speckle = around(L.speckle, B2.speckle);
+  const speckleFloor = L.pattern === 'plain' ? 0 : Math.min(PATTERN_SPECKLE_FLOOR, L.speckle); // never above the species' own base
   const eyeSpacing = around(L.eyeSpacing, B2.eyeSpacing);
   const eyeSize = around(L.eyeSize, B2.eyeSize);
   const eyeHeight = around(L.eyeHeight, B2.eyeHeight);
   return quantizeGenome({
     v: GENOME_VERSION, species: d.id, seed: s,
     hue, chroma, lightness, coreHue, coreGlow, translucency, gloss, firmness, bounce, stretch, size,
-    glitter: L.glitter === 0 ? 0 : glitter, speckle: L.speckle === 0 ? 0 : speckle,
+    glitter: L.glitter === 0 ? 0 : glitter, speckle: L.speckle === 0 ? 0 : Math.max(speckleFloor, speckle),
     pattern: L.pattern, eyeStyle: L.eyeStyle, eyeSpacing, eyeSize, eyeHeight,
   });
 }

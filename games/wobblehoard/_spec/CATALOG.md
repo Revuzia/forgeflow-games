@@ -38,11 +38,11 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | Jelly Gel (`jellygel`) | Glossy, translucent and bouncy: squashes without losing volume, bulges around your finger, wobbles for a while. | Dollop, Plumpet, Nuzzo, Spirelo, Ambrosel | Common, Uncommon, Rare, Legendary |
 | Liquid Core (`waterfill`) | A thin skin around a sloshing liquid: it bulges where you do not press and keeps swaying after you let go. | Puddlo, Glubbin, Swishel, Petalop, Tidelume | Common, Uncommon, Rare, Legendary |
 | Bounce Putty (`putty`) | Firm with no bounce when you poke it fast, flows like taffy when you lean on it, and keeps the dent you leave. | Kneadle, Thudge, Fossilo | Uncommon, Rare, Legendary |
-| Sticky Stretch (`stickystretch`) | Clingy and stretchy: it grabs your fingertip, pulls into long thin strings, then snaps back with a tack. | Twangle, Flickum, Zingle, Taffelin, Skeinara | Common, Uncommon, Rare, Epic, Mythic |
+| Sticky Stretch (`stickystretch`) | Clingy and stretchy: it grabs your fingertip, pulls into long thin strings, then snaps back with a tack. | Twangle, Tadpolo, Zingle, Taffelin, Skeinara | Common, Uncommon, Rare, Epic, Mythic |
 | Slime Goo (`slimegoo`) | A wet, sticky glob: it oozes after every squeeze, drips into strings and takes ages to pull itself together. | Wrigglo, Gloopsy, Cindergoo, Glimglop | Uncommon, Rare, Epic, Legendary |
 | Firm Silicone (`firmsilicone`) | Dense, grippy rubber: pushes back hard, snaps back instantly and keeps rebounding. | Sproink, Hooplet, Caromel | Common, Uncommon, Epic |
-| Pop Dome (`popdome`) | A stiff silicone dome that resists, then gives under a firm press and springs straight back (the inside-out pop is planned, not built). | Dimpla, Diademo, Flipdome | Common, Rare, Epic |
-| Gummy Jelly (`gummy`) | Firm and chewy: a quick, slightly sticky spring-back with very little wobble, like candy. | Chunkle, Munchip, Peakum, Marigel, Prismelo | Common, Uncommon, Rare, Mythic |
+| Pop Dome (`popdome`) | A stiff silicone dome that resists, then gives under a firm press and springs straight back. *Planned, not built yet: the bistable snap: past a threshold the dome pops and flips inside out, then flips back (SQUISHY_SCIENCE.md 3.9; the family's `snap` number specifies it, the physics solver does not build it yet).* | Dimpla, Diademo, Flipdome | Common, Rare, Epic |
+| Gummy Jelly (`gummy`) | Firm and chewy: a quick, slightly sticky spring-back with very little wobble, like candy. | Chunkle, Munchip, Sproutle, Marigel, Prismelo | Common, Uncommon, Rare, Mythic |
 | Bead Squeeze (`beadsqueeze`) | A bag of tiny beads: it yields, rearranges with a crunch, firms up as it jams, and stays a little lumpy. | Crumbit, Granulo, Burrbin, Rattlebead, Constello | Common, Uncommon, Rare, Epic, Mythic |
 
 ## The roster
@@ -64,10 +64,10 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | 12 | **Sproink** | Common | Firm Silicone (rubber) | poke | rounded bullet pointing at you | <span style="color:#67c3a3">&#9632;</span> `#67c3a3` | <span style="color:#c89506">&#9632;</span> `#c89506` | A rubbery seafoam bullet that stares straight at you. Poke it and it boings back. |
 | 13 | **Dimpla** | Common | Pop Dome (rubber) | poke | wide button dome | <span style="color:#85a679">&#9632;</span> `#85a679` | <span style="color:#c89506">&#9632;</span> `#c89506` | A sage-green button dome. Press the middle and feel it push back. |
 | 14 | **Nuzzo** | Uncommon | Jelly Gel (jelly) | squeeze | round body with two round ears | <span style="color:#5bbef3">&#9632;</span> `#5bbef3` | <span style="color:#05b4bb">&#9632;</span> `#05b4bb` | A sky-blue jelly with round ears. It nudges into your palm and stays there. |
-| 15 | **Flickum** | Uncommon | Sticky Stretch (jelly) | pull | body with a long knobbed tail | <span style="color:#04bb5c">&#9632;</span> `#04bb5c` | <span style="color:#05b4bb">&#9632;</span> `#05b4bb` | An emerald drop with a long knobbed tail. Stretch the tail and it flicks back. |
+| 15 | **Tadpolo** | Uncommon | Sticky Stretch (jelly) | pull | tadpole: round body with a long knobbed tail | <span style="color:#04bb5c">&#9632;</span> `#04bb5c` | <span style="color:#05b4bb">&#9632;</span> `#05b4bb` | An emerald drop with a long knobbed tail. Stretch the tail and it flicks back. |
 | 16 | **Swishel** | Uncommon | Liquid Core (fill) | poke | round bowl with a deep dish on top | <span style="color:#0d7888">&#9632;</span> `#0d7888` | <span style="color:#18b79d">&#9632;</span> `#18b79d` | An ocean-teal bowl of water with a dish on top. Poke it and the dish ripples. |
 | 17 | **Granulo** | Uncommon | Bead Squeeze (fill) | squeeze | chunky five-point star facing you | <span style="color:#fee021">&#9632;</span> `#fee021` | <span style="color:#0ab5b4">&#9632;</span> `#0ab5b4` | A sunshine-yellow star stuffed with beads. Every point gives a crunchy crackle. |
-| 18 | **Peakum** | Uncommon | Gummy Jelly (chew) | poke | round body with twin peaks swept back like tufts | <span style="color:#9ccc38">&#9632;</span> `#9ccc38` | <span style="color:#05b4bb">&#9632;</span> `#05b4bb` | A lime gummy with two backswept tufts. Flick one and they wiggle together. |
+| 18 | **Sproutle** | Uncommon | Gummy Jelly (chew) | poke | sprout: round body with twin peaks swept back like tufts | <span style="color:#9ccc38">&#9632;</span> `#9ccc38` | <span style="color:#05b4bb">&#9632;</span> `#05b4bb` | A lime gummy sprout with two backswept tufts. Flick one and they wiggle together. |
 | 19 | **Wrigglo** | Uncommon | Slime Goo (chew) | pull | long worm with a raised head | <span style="color:#1eb6ab">&#9632;</span> `#1eb6ab` | <span style="color:#16afd6">&#9632;</span> `#16afd6` | A long aqua wiggler that oozes after each squeeze and slowly gathers itself up. |
 | 20 | **Acornel** | Uncommon | Marshmallow Puff (foam) | squeeze | wide acorn: broad cap and a tall stem | <span style="color:#8885dc">&#9632;</span> `#8885dc` | <span style="color:#05b4bb">&#9632;</span> `#05b4bb` | A periwinkle puff with a wide cap and a tall stem. Featherlight and a little shy. |
 | 21 | **Capnap** | Uncommon | Slow-Rise Foam (foam) | squeeze | mushroom: wide cap on a narrow stalk | <span style="color:#6356ba">&#9632;</span> `#6356ba` | <span style="color:#05b4bb">&#9632;</span> `#05b4bb` | A sleepy indigo mushroom cap. Press it down and it takes its time to rise. |
@@ -116,7 +116,7 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | 9 | Cushlet | Marshmallow Puff | 0.15 / 0.00 / 0.45 / plain  / sleepy / 0.70 | 4 / 1.30 / 1.92 | Plumpet 0.11 | Thudge 0.078 |
 | 10 | Crimpo | Mochi Dough | 0.30 / 0.00 / 0.40 / plain  / dot / 0.55 | 2 / 0.99 / 1.58 | Wrigglo 0.10 | Ambrosel 0.056 |
 | 11 | Thumbly | Mochi Dough | 0.30 / 0.00 / 0.45 / plain  / oval / 0.50 | 2 / 1.31 / 1.67 | Glubbin 0.14 | Wisplet 0.090 |
-| 12 | Sproink | Firm Silicone | 0.30 / 0.00 / 0.35 / plain  / wide / 0.40 | 1 / 0.87 / 1.60 | Flickum 0.12 | Wrigglo 0.062 |
+| 12 | Sproink | Firm Silicone | 0.30 / 0.00 / 0.35 / plain  / wide / 0.40 | 1 / 0.87 / 1.60 | Tadpolo 0.12 | Wrigglo 0.062 |
 | 13 | Dimpla | Pop Dome | 0.25 / 0.00 / 0.45 / plain  / dot / 0.35 | 1 / 1.01 / 1.58 | Dollop 0.11 | Sproink 0.082 |
 
 ### Uncommon (11)
@@ -124,10 +124,10 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | idx | Name | Family | Look numbers (core glow / glitter / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
 |---|---|---|---|---|---|---|
 | 14 | Nuzzo | Jelly Gel | 0.52 / 0.20 / 0.70 / plain  / oval / 0.35 | 1 / 1.06 / 2.09 | Hushpuff 0.10 | Diademo 0.054 |
-| 15 | Flickum | Sticky Stretch | 0.50 / 0.18 / 0.55 / plain  / dot / 0.45 | 2 / 0.84 / 1.82 | Taffelin 0.10 | Munchip 0.093 |
+| 15 | Tadpolo | Sticky Stretch | 0.50 / 0.18 / 0.55 / plain  / dot / 0.45 | 2 / 0.84 / 1.82 | Taffelin 0.10 | Munchip 0.093 |
 | 16 | Swishel | Liquid Core | 0.58 / 0.25 / 0.70 / plain  / sleepy / 0.60 | 1 / 0.81 / 1.54 | Dollop 0.15 | Puddlo 0.053 |
 | 17 | Granulo | Bead Squeeze | 0.50 / 0.30 / 0.55 / plain  / wide / 0.40 | 3 / 0.62 / 2.45 | Marigel 0.11 | Caromel 0.080 |
-| 18 | Peakum | Gummy Jelly | 0.55 / 0.20 / 0.75 / plain  / oval / 0.50 | 1 / 0.91 / 2.28 | Diademo 0.11 | Caromel 0.073 |
+| 18 | Sproutle | Gummy Jelly | 0.55 / 0.20 / 0.75 / plain  / oval / 0.50 | 1 / 0.91 / 2.28 | Diademo 0.11 | Caromel 0.073 |
 | 19 | Wrigglo | Slime Goo | 0.55 / 0.25 / 0.70 / plain  / dot / 0.60 | 2 / 0.67 / 1.38 | Crimpo 0.10 | Gloopsy 0.061 |
 | 20 | Acornel | Marshmallow Puff | 0.45 / 0.15 / 0.50 / plain  / sleepy / 0.45 | 2 / 1.19 / 2.64 | Spirelo 0.11 | Selenuff 0.071 |
 | 21 | Capnap | Slow-Rise Foam | 0.50 / 0.10 / 0.45 / plain  / sleepy / 0.55 | 3 / 0.61 / 1.29 | Dimpla 0.16 | Selenuff 0.075 |
@@ -148,7 +148,7 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | 31 | Hushpuff | Marshmallow Puff | 0.66 / 0.30 / 0.60 / speckle 0.40 / sleepy / 0.65 | 3 / 1.35 / 2.19 | Nuzzo 0.10 | Kneadle 0.059 |
 | 32 | Drowsel | Slow-Rise Foam | 0.65 / 0.20 / 0.60 / swirl 0.55 / sleepy / 0.60 | 2 / 1.20 / 2.15 | Hushpuff 0.12 | Acornel 0.092 |
 | 33 | Thudge | Bounce Putty | 0.68 / 0.30 / 0.60 / speckle 0.60 / oval / 0.60 | 4 / 1.21 / 1.89 | Caromel 0.12 | Fossilo 0.067 |
-| 34 | Diademo | Pop Dome | 0.72 / 0.40 / 0.70 / bands 0.50 / wide / 0.40 | 3 / 1.27 / 2.24 | Peakum 0.11 | Nuzzo 0.054 |
+| 34 | Diademo | Pop Dome | 0.72 / 0.40 / 0.70 / bands 0.50 / wide / 0.40 | 3 / 1.27 / 2.24 | Sproutle 0.11 | Nuzzo 0.054 |
 
 ### Epic (7)
 
@@ -160,7 +160,7 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | 38 | Selenuff | Marshmallow Puff | 0.82 / 0.65 / 0.75 / swirl 0.60 / sleepy / 0.60 | 3 / 1.00 / 2.29 | Nuzzo 0.11 | Acornel 0.071 |
 | 39 | Pastrel | Mochi Dough | 0.80 / 0.50 / 0.70 / bands 0.65 / oval / 0.55 | 3 / 0.84 / 1.38 | Crimpo 0.10 | Fossilo 0.064 |
 | 40 | Flipdome | Pop Dome | 0.85 / 0.55 / 0.80 / bands 0.70 / wide / 0.45 | 3 / 1.26 / 2.22 | Burrbin 0.10 | Munchip 0.106 |
-| 41 | Caromel | Firm Silicone | 0.82 / 0.50 / 0.75 / swirl 0.60 / wide / 0.45 | 3 / 1.14 / 2.02 | Thudge 0.12 | Peakum 0.073 |
+| 41 | Caromel | Firm Silicone | 0.82 / 0.50 / 0.75 / swirl 0.60 / wide / 0.45 | 3 / 1.14 / 2.02 | Thudge 0.12 | Sproutle 0.073 |
 
 ### Legendary (5)
 
@@ -197,7 +197,11 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | Gummy Jelly | 0.55 | 0.07 | 0.15 | 0.00 | 0.40 | 0.25 | 0.30 | 0.00 | 0.00 | 0.56 |
 | Bead Squeeze | 0.17 | 0.70 | 0.94 | 0.29 | 0.24 | 0.31 | 0.00 | 0.35 | 0.00 | 0.75 |
 
+Scores are the specified numbers. Planned, not built yet (no blurb may promise it until it ships): Pop Dome: the bistable snap: past a threshold the dome pops and flips inside out, then flips back (SQUISHY_SCIENCE.md 3.9; the family's `snap` number specifies it, the physics solver does not build it yet).
+
 ## Known sources of variation inside a species
 
-`speciesBaseGenome(species, seed)` rolls hue +-4 degrees, chroma +-0.04, lightness +-0.035, core hue +-8 degrees, core glow, translucency and gloss +-0.06, firmness / bounce / stretch +-0.08 (plus a +0.04 centre shift for the signature touch), size +-0.07, glitter +-0.08, speckle +-0.12, eye spacing / size / height +-0.06. Pattern and eye style never vary. Two Plumpets are recognisably the same species, never identical.
+`speciesBaseGenome(species, seed)` rolls (triangular, default bands) hue +-4 degrees, chroma +-0.04, lightness +-0.035, core hue +-8 degrees, core glow +-0.06, translucency +-0.06, gloss +-0.06, firmness +-0.08, bounce +-0.08, stretch +-0.08 (plus a centre shift for the signature touch: poke bounce +0.04, squeeze firmness +0.04, pull stretch +0.04), size +-0.07, glitter +-0.08, speckle +-0.12 (never below 0.3 on a patterned species, so a Rare-and-up instance always shows its layer), eye spacing +-0.06, eye size +-0.06, eye height +-0.06. A zero glitter or speckle stays zero. Pattern and eye style never vary. Two Plumpets are recognisably the same species, never identical.
+
+Per-species band overrides: Granulo (chroma +-0.02, lightness +-0.015); Skeinara (chroma +-0.02, lightness +-0.02); Constello (chroma +-0.02, lightness +-0.02); Prismelo (chroma +-0.02, lightness +-0.02).
 

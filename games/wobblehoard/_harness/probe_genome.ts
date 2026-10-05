@@ -36,7 +36,12 @@ const inst = newInstance(starter, { kind: 'starter' }, 'Dollop', 'test-id', 1);
 check('instance carries id/genome/tradeCount', inst.id === 'test-id' && inst.tradeCount === 0 && inst.genome === starter);
 
 // ---- catalog species (the species list now comes from src/data/catalog.ts; full coverage is in probe_catalog.ts) ----
-check('SPECIES is the catalog order (50 species, dollop first)', SPECIES.length === 50 && SPECIES[0] === 'dollop' && SPECIES.every((id, i) => CATALOG[i].id === id));
+{
+  // on the wire, byte 1 of a share string is the species' catalog idx: write every species, read the byte back, decode it back
+  const byte1 = (code: string): number => Uint8Array.from(atob(code.slice(3).replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - ((code.length - 3) % 4)) % 4)), (c) => c.charCodeAt(0))[1];
+  const wrong = CATALOG.filter((d) => { const code = encodeGenome(speciesBaseGenome(d.id, 77)); return byte1(code) !== d.idx || decodeGenome(code)?.species !== d.id; });
+  check(`every catalog species writes its idx into byte 1 of its share string and decodes back to itself (${CATALOG.length} species, dollop = 0)`, wrong.length === 0 && CATALOG.length === SPECIES.length && byte1(encodeGenome(starter)) === 0, wrong.map((d) => d.id).join(' '));
+}
 check('starter genome is bit-identical to before the catalog (share string and a random genome)', encodeGenome(starter) === 'g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA' && encodeGenome(randomGenome(7)) === 'g1.AQAAAF8NYyBhAT8Ap4vqd66h45hz4zx7vss');
 for (const id of ['plumpet', 'cindergoo', 'constello'] as const) {
   const g = speciesBaseGenome(id, 12345);

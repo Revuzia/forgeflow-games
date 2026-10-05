@@ -401,13 +401,15 @@ Margin warning: the worst corner genome moves a family 0.111 (RMS, normalised) f
 | skip | FEM viscoelasticity, real fluid, tension-field yield surface | | cost out of budget (CONTRACT: step <= 2 ms mean) | no |
 
 **Risks**
-1. **Contract G1** (contract side resolved 2026-10-05): the slice-1 band 0.85..1.15 is false for compressible families (measured minima 0.65-0.82). CONTRACT 4.2
-   now states a per-family band derived from `materials.ts`; `probe_softbody.ts` (PHYS) still checks the single slice-1 band until physics round 2 lands with materials.
+1. **Contract G1** (contract side resolved 2026-10-05): the slice-1 band 0.85..1.15 is false for compressible families (measured minima 0.65-0.82). CONTRACT 4.3
+   now states a per-family band derived from `materials.ts` (lower bound `min(0.85, 1 - volBleedMax - 0.05)`); `probe_softbody.ts` (PHYS) still checks the single
+   slice-1 band until physics round 2 lands with materials.
 2. **PHYS keeps retuning** (smOmega, edgeAlphaT, gravity 15 -> 10, new `bendK`, `glue`, `groundDamp`, finger friction while I worked). Ratios survive; the functional forms in 3.1-3.2 do not if the blocks are rewritten.
 3. **Budget**: the plain solver is already 1.4-1.6 ms mean here against the 2.0 ms gate; the features add 0.05-0.3 ms. Update memory once per frame.
 4. **No felt force** with kinematic fingers (3.6). **Resolved in the contract:** `SoftMetrics.reaction?: number` (0..1, normalised summed finger-projection
-   correction, smoothed) was added to `src/contracts.ts` as an optional round-2 member, next to `press?`. Still open: PHYS does not populate either yet
-   (`src/physics/softbody.ts` on 2026-10-05 fills neither), so consumers must keep treating `undefined` as 0 until the physics round-2 rewrite lands.
+   correction, smoothed) was added to `src/contracts.ts` as an optional round-2 member, next to `press?`. PHYS's rewrite now fills both
+   (`src/physics/softbody.ts` at checkpoint `fc60963`, 2026-10-05; that rewrite is in progress and its gate was not re-run for them). Consumers still treat
+   `undefined` as 0, because the members stay optional in the contract.
 5. **Rotation extraction uses Q**, so a large plastic dent slightly biases R; clamp via `memMax`. Not measured.
 6. **Tack and slosh are numerically tested, not seen**; both need a screenshot pass. Tack touches finger retract behaviour.
 7. **Time scales are compressed ~ 2x** against real foam (4.5 s against 5-10 s [S3]) for play value; one constant per family.

@@ -22,12 +22,11 @@ import {
 } from '../src/core/merge.ts';
 import type { MergeState, MergeRollOk, MergePreviewOk, MergeRoll, MergeInput, MergeRules, MergePreview } from '../src/core/merge.ts';
 import { TIERS, TIER_ODDS, TIER_COUNT, TOP_TIER_INDEX, TIER_SPECIES_COUNTS, tierIndex } from '../src/core/rarity.ts';
-import { CATALOG, SPECIES_BY_TIER, speciesBaseGenome, getSpecies } from '../src/data/catalog.ts';
+import { CATALOG, SPECIES_BY_TIER, PATTERN_SPECKLE_FLOOR, speciesBaseGenome, speciesTemplateGenome, getSpecies } from '../src/data/catalog.ts';
 import type { SpeciesId } from '../src/data/catalog.ts';
 import { encodeGenome, decodeGenome, genomeEquals } from '../src/core/genome.ts';
 import type { Genome } from '../src/core/genome.ts';
 import { bodyLab, labDistance } from '../src/data/palette.ts';
-import { speciesTemplateGenome } from '../src/data/catalog.ts';
 import { BEHAV, playStream, buildCatalog, bitsetWords, bitsetHas, setMasks, swapCountCore } from './sim_economy.ts';
 
 let bad = 0;
@@ -528,6 +527,7 @@ function mergeSection(COST: number, scale: number): void {
       const outT = tierIndex(def.tier);
       if (r.outcome.tierUp) tierUps++;
       if ((outT <= 1) !== (g.pattern === 'plain')) patternRule++;                                        // Common/Uncommon plain, Rare+ patterned
+      if (outT >= 2 && g.speckle < PATTERN_SPECKLE_FLOOR - 1e-9) patternRule++;                         // ... with a visible layer
       if (r.outcome.tierUp && g.pattern !== def.look.pattern) tierUpOwnPattern++;                       // a tier-up keeps the species' own pattern
       if (!r.outcome.tierUp && g.pattern !== def.look.pattern && !parents.some((p) => p.pattern === g.pattern)) sameTierPattern++;
       if (!keepsSpeciesColour(g, 0)) foreignColour++;                                                   // nearer another same-tier species' colour
@@ -543,7 +543,7 @@ function mergeSection(COST: number, scale: number): void {
     const sorted = shifts.slice().sort((x, y) => x - y), visible = shifts.filter((x) => x >= 3).length / Math.max(1, shifts.length), ds = drift.slice().sort((x, y) => x - y);
     console.log(`   ${n} merges with real parent genomes (${tierUps} tier-ups): lineage hue tint median ${sorted[Math.floor(sorted.length / 2)] ?? 0} deg, p90 ${sorted[Math.floor(sorted.length * 0.9)] ?? 0} deg, max ${sorted[sorted.length - 1] ?? 0} deg; ${pct(visible, 0)} tinted >= 3 deg; colour distance from the species centre median ${f2(ds[Math.floor(ds.length / 2)] ?? 0)}, max ${(ds[ds.length - 1] ?? 0).toFixed(3)} OKLab`);
     check('lineage: every merge with real parent genomes is accepted and the result round-trips its share string', refusedL === 0 && roundTrip === 0 && n > 1000, `${refusedL} refused, ${roundTrip} round-trip failures`);
-    check('lineage keeps the rarity layer: Common/Uncommon results are plain, Rare-and-up results are patterned (no tier-up ever comes out plain)', patternRule === 0, `${patternRule} violations`);
+    check(`lineage keeps the rarity layer: Common/Uncommon results are plain, Rare-and-up results are patterned with speckle >= ${PATTERN_SPECKLE_FLOOR} (no tier-up ever comes out plain or washed out)`, patternRule === 0, `${patternRule} violations`);
     check('lineage: a tier-up keeps the result species\' own pattern; a same-tier result has its own pattern or a parent\'s', tierUpOwnPattern === 0 && sameTierPattern === 0 && tierUps > 500, `${tierUpOwnPattern} / ${sameTierPattern} violations, ${tierUps} tier-ups`);
     check('lineage never makes a result look like another species: its body colour stays nearer its own species\' centre than any other same-tier centre', foreignColour === 0, `${foreignColour} of ${n}`);
     check(`lineage tint stays inside the colour budget: the body is at most ${LINEAGE_MAX_DISTANCE} OKLab from its species' centre colour`, tooFarColour === 0, `${tooFarColour} of ${n}`);

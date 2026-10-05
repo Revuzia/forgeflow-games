@@ -71,6 +71,10 @@ export interface SoftParams {
    *  every frame), never reached by a single nudge. matBrake = matGlide = 0 (and matRim huge) disables it (the probe compares).
    *  Not genome-dependent. */
   matR0: number; matRamp: number; matBrake: number; matGlide: number; matRim: number;
+  /** THIN-PART VOLUME (experimental) */
+  partTau: number; partVolMin: number; partVolKappa: number; partTrans: number; partVolCap: number;
+  /** STRUTS (experimental) */
+  strutTau: number; strutMaxR: number; strutMin: number; strutAlphaT: number;
 }
 
 export function deriveParams(genome: Genome): SoftParams {
@@ -119,6 +123,8 @@ export function deriveParams(genome: Genome): SoftParams {
     // tuned (probe 'mat corral' rows): a 12 m/s nudge (the nudge() clamp) carried the body 3-6.6 m and ten 4 m/s shoves 9 m with no corral;
     // these keep the worst case inside ~2.5 m and bring a body back from 2.5 m to the dead zone in a few seconds
     matR0: 0.6, matRamp: 0.6, matBrake: 6, matGlide: 0.35, matRim: 2.5,
+    partTau: 0.6, partVolMin: 0, partVolKappa: 0.5, partTrans: 0, partVolCap: 100,
+    strutTau: 0.3, strutMaxR: 0.5, strutMin: 0, strutAlphaT: 0.05,
   };
 }
 

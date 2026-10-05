@@ -5,7 +5,8 @@
 // the generated _spec/CATALOG.md (it prints the cost; probe_catalog.ts fails while the generated file is stale). Nothing else in src or
 // _harness hard-codes 2: probe_economy.ts builds every selection from MERGE_COST, accepts 2 or 3, and on every run also replays its
 // whole merge section at the OTHER cost (passed as the explicit `cost` argument), so the flip is rehearsed continuously; the sim reads
-// the constant (and its `--M 3` run overrides it).
+// the constant (and its `--M 3` run overrides it). Outside the game code the server keeps its own copy (the `merge_cost` config row and
+// the vendored host): _spec/MERGE.md section 8 is the deploy checklist, and a host/database mismatch aborts loudly.
 //
 // Rules, exactly as DESIGN 5.6:
 //   * Inputs: MERGE_COST squishies of one species, Common to Legendary. A Mythic cannot merge (nothing above it).

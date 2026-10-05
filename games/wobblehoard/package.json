@@ -4,13 +4,23 @@
   "private": true,
   "type": "module",
   "description": "WOBBLEHOARD — a 3D soft-body squishy collectible toy. Poke it, squash it, let go. Three.js + TypeScript + Vite, procedural WebAudio. `npm install && npm run dev`.",
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "probe": "node _harness/run_probes.ts",
-    "check": "npm run typecheck && npm run probe"
+    "check": "npm run typecheck && npm run probe",
+    "probe:physics-film": "node _harness/browser_physics.mjs",
+    "probe:audio": "node _harness/probe_audio.mjs",
+    "probe:render": "node _harness/browser_render.mjs",
+    "probe:shell": "node _harness/browser_shell.mjs",
+    "probe:browser": "npm run probe:audio && npm run probe:render && npm run probe:shell",
+    "deploy:dry": "npm run build && python ../../pipeline/deploy_game.py --game-dir dist --slug wobblehoard --dry-run",
+    "deploy": "npm run check && npm run build && python ../../pipeline/deploy_game.py --game-dir dist --slug wobblehoard"
   },
   "dependencies": {
     "three": "0.186.0"

@@ -1,6 +1,6 @@
 # WOBBLEHOARD: build contract (current build, revised 2026-10-05)
 
-Working title. This is the contract the lanes build against **now**. It replaces the slice-1 contract of 2026-10-02: that slice (**one original
+Working title. This is the contract the lanes build against **as of 2026-10-05**. It replaces the slice-1 contract of 2026-10-02: that slice (**one original
 squishy, DOLLOP, that you can poke, squish, pull and release, in real-time 3D soft-body physics, with original procedural sound**) is built, and
 the game is growing into a collection toy (50 species, capsules, merge, trade: [`DESIGN.md`](DESIGN.md)). Section 13 lists what changed against
 the slice-1 text. Section numbers 3, 4, 6, 7 and 8 are kept from the slice-1 contract because code and probes cite them.
@@ -32,7 +32,7 @@ Lanes never edit each other's files. A lane that needs a change in another lane'
 | AUDIO | `src/audio/**`, `_harness/probe_audio.mjs`, `_harness/audioview/**`, `_spec/SOUND.md` | Slice and round 2: built (landed 2026-10-02). Round 3 (section 5.3): **in progress** |
 | RENDER | `src/render/**`, `_harness/browser_render.mjs`, `_harness/renderview/**` | Slice: built. Round 2 (section 7.3): implemented in `src/render/stage.ts`; audit fixes **in progress** |
 | SHELL | `src/app.ts`, `src/main.ts`, `src/input/**`, `src/ui/**`, `src/core/settings.ts`, `src/core/save.ts`, `index.html`, `_harness/browser_shell.mjs`, `_harness/probe_app.ts`, `_harness/probe_gestures.ts` | Slice: built (2026-10-02). Wiring the round-2/3 members and the collection loop: **planned** (a later stage rewrites these files) |
-| CORE (catalog and economy) | `src/core/rarity.ts`, `src/core/meter.ts`, `src/core/drops.ts`, `src/core/merge.ts`; `src/data/**` (`catalog.ts`, `materials.ts`, `shapes.ts`); `_harness/probe_economy.ts`, `probe_catalog.ts`, `probe_genome.ts`, `probe_materials.ts`, `sim_economy.ts`, `gen_catalog_doc.ts`; `_spec/CATALOG.md` (generated: never edit by hand) | Built (2026-10-02). A species rename is **in progress** |
+| CORE (catalog and economy) | `src/core/rarity.ts`, `src/core/meter.ts`, `src/core/drops.ts`, `src/core/merge.ts`; `src/data/**` (`catalog.ts`, `species.ts`, `materials.ts`, `shapes.ts`, `palette.ts`); `_harness/probe_economy.ts`, `probe_catalog.ts`, `probe_genome.ts`, `probe_materials.ts`, `sim_economy.ts`, `gen_catalog_doc.ts`; `_spec/CATALOG.md` (generated: never edit by hand) | Built (2026-10-02). A species rename is **in progress** |
 | DOCS | `_spec/DESIGN.md`, `CONTRACT.md`, `NEXT_STEPS.md`, `COLLECTION.md`, `MERGE.md`, `TRADE.md`, `SQUISHY_SCIENCE.md`, `REFERENCES.md` | Current |
 | INTEGRATION (the orchestrator) | `src/contracts.ts`, `src/core/genome.ts`, `src/core/rng.ts`, `package.json`, `tsconfig.json`, `vite.config.ts`, `_harness/pw.mjs`, `_harness/mocks.ts`, `_harness/run_probes.ts`, `public/**`, commits | Current |
 
@@ -90,8 +90,9 @@ Lanes never edit each other's files. A lane that needs a change in another lane'
 
 ### 4.2 Round 2 (in progress)
 
-All of these are declared in `src/contracts.ts` (optional members) or come from `src/data/**`; none of them is in `src/physics/softbody.ts` as
-of 2026-10-05.
+All of these are declared in `src/contracts.ts` (optional members) or come from `src/data/**`. At checkpoint `fc60963` (2026-10-05 06:37 UTC)
+`src/physics/softbody.ts` fills `metrics.press` and `metrics.reaction`; the material families, the species rest shapes, the ceremony drivers and the
+per-family band are not in it yet (the rewrite is in progress and its gate has not been re-run on those parts).
 
 * **Material families.** The body applies the family of the genome's species (`familyOf(species)` in `src/data/catalog.ts`) through
   `resolveMaterial(familyId, genome).solver` (`src/data/materials.ts`): scale factors on PHYS's own tuned parameters (the Jelly Gel family at a
@@ -102,7 +103,7 @@ of 2026-10-05.
 * **Metrics** `press?` (deepest single-finger indentation, 0..1) and `reaction?` (normalised summed finger-projection correction, a firmness
   signal for audio and haptics). Consumers treat `undefined` as 0.
 * **Ceremony drivers** `setFold?(t)`, `moveTo?(p, stiffness)`, `tremble?(amp)`, `burstOpen?(strength)` for the merge ceremony and the capsule
-  reveal. The renderer feature-detects them and falls back to a procedural puppet when absent (it does today).
+  reveal. The renderer feature-detects them and falls back to a procedural puppet when absent (it does at checkpoint `fc60963`).
 * **Stage B (planned, NEXT_STEPS section 4):** several bodies on the mat with body-to-body contact, pick-up and toss, long pulls, tack strands.
   These need new contract members; none is declared yet.
 
@@ -189,7 +190,7 @@ NEXT_STEPS.md section 1 (and the audio numbers in SOUND.md).
 | G6 | SHELL | mobile | 390x844 touch emulation: no horizontal scroll, controls reachable, hint text readable | Built |
 | **G7** | RENDER, AUDIO | ceremonies and the flash budget (DESIGN 6.1 to 6.6) | render, round-2 block of `browser_render.mjs`: every tier's capsule reveal and merge ceremony (plus tier-up, 3 parents, quick pop) within 10% of the DESIGN 6.1 budget, beats once and in order, the DESIGN 6.3 escalation row exactly with ONE light ramp, mean-luminance transitions 3 or fewer in any rolling second, `skip()` lands on the same final frame and never hides the result, the Calm variant of every tier; the FlashGovernor under adversarial input (2 flashes a second or fewer, flash alpha 0.25 or less, rings 500 ms apart or more, ember coral and lagoon cyan never alternating faster than 2 Hz, none in calm mode). Audio: the round-2 ceremony checks of `probe_audio.mjs` | Built, one render check failing (NEXT_STEPS section 1) |
 | **G8** | CORE | `npm run probe` (every `_harness/probe_*.ts` under node; the CORE ones are `probe_economy.ts`, `probe_catalog.ts`, `probe_genome.ts`, `probe_materials.ts`) | all exit 0; `CATALOG.md` regenerated by `node _harness/gen_catalog_doc.ts` after any catalog change; after any change to `src/core` or `src/data`, the canonical sim (DESIGN 5.0) is re-run and its hash compared before any number is re-quoted | Built |
-| **G9** | server (no lane yet) | the host suite (COLLECTION Appendix C), the SQL suite (TRADE Appendix C) and the migration's own self-test block with its privilege audit (COLLECTION A.7), on a **staging** Supabase project through PostgREST and the Edge Function | all pass; the privilege audit shows no change to any non-WH object | **Planned** (the drafts passed 149 + 36 checks on a scratch PostgreSQL 16 on 2026-10-02; the 2026-10-05 revisions were not run) |
+| **G9** | server (no lane yet) | the host suite (COLLECTION Appendix C), the SQL suite (TRADE Appendix C) and the migration's own self-test block with its privilege audit (COLLECTION A.7), on a **staging** Supabase project through PostgREST and the Edge Function | all pass; the privilege audit shows no change to any non-WH object | **Planned** on staging. On a scratch PostgreSQL 16 the drafts passed 149 + 36 checks on 2026-10-02 and, after the 2026-10-05 security revisions, 170 + 37 checks plus the A.7 audit and its negative test on 2026-10-05 (NEXT_STEPS section 1) |
 
 ## 7. Visual direction and render contract (RENDER, SHELL)
 
@@ -293,9 +294,10 @@ While a lane's collaborators are unfinished, code against `src/contracts.ts` and
 
 ## 11. Core economy and data contract (CORE; built)
 
-* `src/data/catalog.ts`: the 50 species (tier, material family, lane, signature touch, look, shape recipe, palette). **`idx` is stored in share
-  strings and is append-only forever** (never reorder or reuse an index); after launch an `id` is never renamed either. Display names may change
-  before launch if `probe_catalog.ts` passes and `CATALOG.md` is regenerated.
+* `src/data/catalog.ts`: the 50 species (tier, material family, lane, signature touch, look, shape recipe, palette). The id list itself is the leaf
+  module `src/data/species.ts` (re-exported by `catalog.ts` and `genome.ts`). **`idx` is stored in share strings and is append-only forever** (never
+  reorder or reuse an index); after launch an `id` is never renamed either (a slug also salts the species' base genome). Before launch the CORE lane
+  may rename a species if `probe_catalog.ts` passes and `CATALOG.md` is regenerated (`species.ts` records each pre-launch rename by idx).
 * `src/core/rarity.ts`: the six tiers, the public odds (76.3 / 13 / 6 / 2.8 / 1.4 / 0.5%), `TIER_STYLE` (gem shape, frame colour).
 * `src/core/meter.ts`: the Squish meter of DESIGN 5.4 (pay table, freshness, double-tap gate, medley, valve, onboarding ramp, daily caps, UTC day).
 * `src/core/drops.ts`: `rollCapsule` (tier by the public odds, species uniform inside the tier, genome seed; random source injected), restock, tasks.
@@ -304,6 +306,9 @@ While a lane's collaborators are unfinished, code against `src/contracts.ts` and
 * `src/core/genome.ts` (shared): the `g1.` share string (26 bytes, species index in one byte; hostile input decodes to `null`), quantisation,
   `SquishyInstance`. Genomes compare with `genomeEquals`, never with `JSON.stringify`.
 * `src/data/materials.ts`, `src/data/shapes.ts`: the 12 material families and the rest-shape language (4.2).
+* `src/data/palette.ts`: genome to body and core colour (OKLCH formulas); `src/render/oklch.ts` must draw with exactly these. `probe_catalog.ts`
+  compares the two every run and reports a drift as SEAM-DRIFT; it fails the run only with `WH_STRICT_SEAMS=1` (integration runs), because the fix
+  belongs to the render lane.
 * **The server will run these modules verbatim** (COLLECTION.md C-1); a vendor script and a hash probe will enforce it (planned).
 
 ## 12. Module seams that are planned (COLLECTION, MERGE, TRADE)
