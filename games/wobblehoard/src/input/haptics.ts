@@ -54,7 +54,11 @@ export const HAPTIC_MS = { poke: 8, release: 18, pop: 6, squeezeMin: 3, squeezeM
 
 function defaultVibrate(): ((p: number | number[]) => boolean) | null {
   try {
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') return (p) => navigator.vibrate(p);
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      // Chrome refuses (and logs a console error) a vibrate() before the first tap on the page: skip it until there was one
+      const ua = (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation;
+      return (p) => (ua && !ua.hasBeenActive ? false : navigator.vibrate(p));
+    }
   } catch { /* ignore */ }
   return null;
 }
@@ -64,14 +68,17 @@ export function createHaptics(opts: HapticsOptions = {}): Haptics {
   const now = opts.now ?? (() => (typeof performance !== 'undefined' ? performance.now() : Date.now()));
   let enabled = opts.enabled ?? true;
   let lastSqueeze = -1e9;
+  /** a vibration was started since the last cancel (cancel() only calls vibrate(0) then: boot and hidden tabs stay silent) */
+  let buzzing = false;
 
   const buzz = (ms: number): void => {
     if (!vibrate || !enabled) return;
-    try { vibrate(ms); } catch { /* some browsers throw when the page lacks user activation */ }
+    try { if (vibrate(ms)) buzzing = true; } catch { /* some browsers throw when the page lacks user activation */ }
   };
 
   const cancel = (): void => {
-    if (!vibrate) return;
+    if (!vibrate || !buzzing) return;
+    buzzing = false;
     try { vibrate(0); } catch { /* ignore */ }
   };
 
@@ -95,7 +102,7 @@ export function createHaptics(opts: HapticsOptions = {}): Haptics {
     cancel,
     pattern(p) {
       if (!vibrate || !enabled || !p.length) return;
-      try { vibrate(p.map((v) => Math.max(0, Math.min(1000, Math.round(v))))); } catch { /* ignore */ }
+      try { if (vibrate(p.map((v) => Math.max(0, Math.min(1000, Math.round(v)))))) buzzing = true; } catch { /* ignore */ }
     },
   };
 }

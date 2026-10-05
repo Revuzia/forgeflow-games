@@ -1042,13 +1042,15 @@ async function main() {
       await page.keyboard.down('Space'); await sleep(60); await page.keyboard.up('Space');
       check('Space on the squishy pokes it (poke SoftEvent + audio poke)', !!(await waitEvent(page, seen, 'poke', { timeout: 40000 })) && (await started(page)).poke === a0.poke + 1);
       await waitUntil(page, () => window.__WH__.state().metrics.fingers === 0, null, 30000);
-      a0 = await started(page);
+      a0 = await started(page); seen = await evKeys(page);
       await page.keyboard.down('Space');
+      // a hold, not a tap: wait for the press SoftEvent (after the 0.18 s tap window), then for the squeeze to be held
+      const kpress = await waitEvent(page, seen, 'press', { timeout: 60000 });
       const kd = await waitUntil(page, () => window.__WH__.state().metrics.compression > 0.1, null, 60000);
       const kdm = (await state(page)).metrics;
-      await page.keyboard.up('Space');
       const kdv = (await started(page)).squish - a0.squish;
-      check('holding Space squishes (a squish voice, compression rises)', kd && kdv > 0, `compression ${kdm.compression.toFixed(3)}, press ${typeof kdm.press === 'number' ? kdm.press.toFixed(3) : 'n/a'}, fingers ${kdm.fingers}, squish voices +${kdv}`);
+      await page.keyboard.up('Space');
+      check('holding Space squishes (a press event, a squish voice, compression > 0.1 while held)', !!kpress && kd && kdv === 1 && kdm.fingers === 1, `press event ${!!kpress}, compression ${kdm.compression.toFixed(3)}, press ${typeof kdm.press === 'number' ? kdm.press.toFixed(3) : 'n/a'}, fingers ${kdm.fingers}, squish voices +${kdv}`);
       await waitUntil(page, () => window.__WH__.state().metrics.fingers === 0, null, 60000);
       await page.keyboard.press('g'); await sleep(500);
       check('G on the squishy: float mode, announced in the live region ("Floating")', (await state(page)).settings.gravity === false && /Floating/.test(await live(page)), await live(page));

@@ -204,7 +204,7 @@ export interface Game {
   /** release every finger, grab, held voice and capsule hold (never throws) */
   releaseEverything(): void;
   on<K extends keyof ShellEvents>(type: K, fn: ShellEvents[K]): () => void;
-  /** dev tools: a callback every sim step (the sound lab's scripted squelch) */
+  /** a callback every sim step (the reveal plate's game-time timer in hudBinding.ts; the sound lab's scripted squelch) */
   onStep(fn: (dt: number, simTime: number) => void): () => void;
   /** dev tools: a callback inside releaseEverything (the sound lab's held voice ends when the tab hides) */
   onRelease(fn: () => void): () => void;

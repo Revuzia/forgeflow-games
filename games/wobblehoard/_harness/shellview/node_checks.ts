@@ -12,7 +12,7 @@ import type { Genome } from '../../src/core/genome.ts';
 import { SETTINGS_KEY, defaultSettings, loadSettings, memoryStorage, resolveSettings, saveSettings } from '../../src/core/settings.ts';
 import { speciesBaseGenome, tierOf } from '../../src/data/catalog.ts';
 import { KEY_POINTER_ID, attachKeyboard } from '../../src/input/keyboard.ts';
-import { CALIBRATION, pressDirection } from '../../src/shell/feel.ts';
+import { CALIBRATION, pressDirection, releaseFxLevel } from '../../src/shell/feel.ts';
 import { createCollection, WH_QUEUE_MAX } from '../../src/collection/index.ts';
 import { SKIP_GATE_MS } from '../../src/shell/ceremonies.ts';
 import { createMockWorld, recorder } from '../mocks.ts';
@@ -420,6 +420,38 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     bentN.y < -0.99 && (CALIBRATION.bendWithPress ? bentP.y < -0.99 : bentP === ray), `with press ${bentP.y.toFixed(3)}, without ${bentN.y.toFixed(3)}`);
   r.app.input.pointerUp({ id: 1, x: c.x, y: c.y, t: r.w.clock.t });
   run(r, 300);
+}
+
+/* ───────────────────────── 7a. release FX: press depth gates the bubbles on a press body; intensity only as the fallback ───────────────────────── */
+{
+  const lv = [releaseFxLevel(0.25, 0.5, true), releaseFxLevel(0.25, 0.8, true), releaseFxLevel(0.9, 0, true), releaseFxLevel(0.25, 0.9, false), releaseFxLevel(0.35, 0, false)];
+  check('release FX: with metrics.press a gentle press (peak 0.5) stays quiet and a deep one (0.8) bubbles; without press, intensity 0.25 stays quiet and 0.35 bubbles',
+    lv[0] === 0 && lv[1] > 0 && lv[2] > 0 && lv[3] === 0 && lv[4] > 0, lv.map((v) => v.toFixed(3)).join(', '));
+}
+
+/* ───────────────────────── 7b. round 3: the strand voice follows metrics.strands when the body reports it ───────────────────────── */
+{
+  const r = rig({ round2: false });
+  const calls: Array<{ tension: number; snap?: boolean }> = [];
+  (r.w.audio as unknown as Record<string, unknown>).strand = (p: { tension: number; snap?: boolean }) => { calls.push(p); };
+  const m = r.w.body.metrics as unknown as { strands?: number };
+  const origStep = r.w.body.step.bind(r.w.body);
+  let target = 0;
+  (r.w.body as unknown as { step: (dt: number) => void }).step = (dt) => { origStep(dt); m.strands = target; };
+  run(r, 100);
+  const quiet = calls.length;
+  target = 0.5; run(r, 200);
+  const held = calls.length - quiet;
+  const steady = calls.slice(quiet).every((c) => Math.abs(c.tension - 0.5) < 1e-9 && !c.snap);
+  target = 0; run(r, 100);
+  const snapCall = calls.at(-1);
+  const broke = snapCall?.snap === true && Math.abs(snapCall.tension - 0.5) < 1e-9 && calls.filter((c) => c.snap).length === 1;
+  const n1 = calls.length;
+  target = 0.1; run(r, 100); target = 0; run(r, 100);
+  const weak = calls.slice(n1);
+  check('strand (metrics.strands): one call per step while the strings hold (tension = strands), ONE snap when strong strings let go, silent at rest',
+    quiet === 0 && held >= 10 && steady && broke, `rest ${quiet}, held ${held}, last ${JSON.stringify(snapCall)}`);
+  check('strand (metrics.strands): weak strings (< 0.3) that let go just stop calling (no snap)', weak.length >= 5 && weak.every((c) => !c.snap), `${weak.length} calls, snaps ${weak.filter((c) => c.snap).length}`);
 }
 
 /* ───────────────────────── 8. the collection module through the port: meter feed, events, table cap ───────────────────────── */

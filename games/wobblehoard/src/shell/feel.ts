@@ -7,7 +7,7 @@
 //     wherever `press` actually replaces the compensation (squelch depth, release FX).
 //   * Two compensations are NOT replaced by `press` and stay on for every body until physics changes (measured with the real SoftBody at
 //     checkpoint 24, 2026-10-05, default camera 1280x800, Dollop, scratch script calib2.ts; re-measured by _harness/shellview/node_checks.ts,
-//     which fails loudly when the physics changes enough to retire them):
+//     which fails loudly when the physics changes enough to retire them; the checkpoint-29 physics gives 10 of 13 and 3 of 13, stretch 0.32):
 //       - the press-direction bend: without it a squeeze of 1.4 s gave a `release` event on 3 of 13 hit points, with it on 12 of 13
 //         (release needs compression > 0.08 along the press axis at lift: contract 4.1). Release events are what blooping, bubbles AND the
 //         meter's squeeze credit (DESIGN 5.4) hang on, so retiring the bend today would make most squeezes pay nothing.

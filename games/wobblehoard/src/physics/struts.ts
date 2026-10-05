@@ -4,7 +4,8 @@
 // constraint stands in for the jelly inside), but a thin feature such as the swirl-peak has almost no volume of its own, so nothing holds
 // its two walls apart: a fingertip wider than the feature drags the near wall over the far one, the cone's walls collapse onto each other
 // and the skin folds (adjacent triangles at 130-180 degrees, the 'hard side shove' row of the probe). A real jelly peak is SOLID; these
-// chords are its interior. Each one joins two surface vertices of the same thin part straight through the inside and is one-sided
+// chords are its interior. Each one joins two surface vertices of the same thin part (`group`: the same recipe feature, physics round 2)
+// straight through the inside and is one-sided
 // (softbody.ts strutPass: it only resists being shortened below params.strutMin of its rest length), so it stores no energy at rest,
 // never stiffens a stretch, a bend or a flop, and only acts when a wall is being pushed onto the opposite one.
 import type { IcoMesh } from './mesh.ts';
@@ -24,7 +25,7 @@ export interface Struts {
  * no triangle of the rest surface (so they run through the inside, not across a concavity). Preference goes to the chord that leaves the
  * vertex most nearly along its inward normal (the opposite wall). The result is deterministic (fixed scan order, stable sort).
  */
-export function buildStruts(Q: Float64Array, mesh: IcoMesh, floppy: ArrayLike<number>, tau: number, maxLen: number, perVertex: number, cosIn: number): Struts {
+export function buildStruts(Q: Float64Array, mesh: IcoMesh, floppy: ArrayLike<number>, tau: number, maxLen: number, perVertex: number, cosIn: number, group?: ArrayLike<number>): Struts {
   const n = mesh.vertexCount, tris = mesh.tris, nt = tris.length / 3;
   const cand: number[] = [];
   for (let i = 0; i < n; i++) if (floppy[i] >= tau) cand.push(i);
@@ -94,6 +95,7 @@ export function buildStruts(Q: Float64Array, mesh: IcoMesh, floppy: ArrayLike<nu
     ranked.length = 0;
     for (const j of cand) {
       if (j === i || adjacent.has(i * n + j)) continue;
+      if (group && group[i] !== group[j]) continue;   // only inside ONE thin feature (marigel: spokes between two petals creased the valley)
       const dx = Q[j * 3] - Q[i3], dy = Q[j * 3 + 1] - Q[i3 + 1], dz = Q[j * 3 + 2] - Q[i3 + 2];
       const L = len3(dx, dy, dz);
       if (!(L <= maxLen) || L < 1e-12) continue;

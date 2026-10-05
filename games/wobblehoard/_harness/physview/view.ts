@@ -7,7 +7,8 @@
 // and steps the sim with a FIXED dt of 1/60 s (no wall clock), so the filmstrips are reproducible.
 // Extra URL params: ?p=<json SoftParams override> ?f=<json FINGER override> ?g=<genome seed or g1.code> ?gf= ?gb= ?gs= ?gz= (firmness, bounce,
 // stretch, size overrides) ?detail=<3|4> ?px=<press x offset for hold_squash / hold_close / peak_rest_close / tap_close / press_close>
-// ?fps=<sim frame rate, default 60>.
+// ?fps=<sim frame rate, default 60>. Physics round 2: ?species=<catalog id> (that species' template genome: its recipe shape and its material
+// family) and ?family=<material family id> (forces the family); scenario family_demo = press-hold-release, then a pull (one per family).
 // Every step also logs the worst mesh FOLD (largest dihedral between adjacent triangles, edges over 90 degrees, inward-facing
 // triangles): the rest shape's own maximum is ~50 degrees, so anything near 180 is a crease or a tucked-under flap.
 // window.__PV__ is the harness hook (see bottom).
@@ -15,6 +16,7 @@ import * as THREE from 'three';
 import { SoftBody } from '../../src/physics/softbody.ts';
 import { FINGER } from '../../src/physics/params.ts';
 import { genomeFromParam, quantizeGenome } from '../../src/core/genome.ts';
+import { getSpecies, speciesTemplateGenome } from '../../src/data/catalog.ts';
 import type { V3 } from '../../src/contracts.ts';
 
 type Ctx = { n: Record<string, number>; hit: Record<string, V3 | null>; vtx: number; R: number };
@@ -348,6 +350,27 @@ const SCENARIOS: Record<string, Scenario> = {
       tap('a', 0.3, 0.12, 0.6); tap('b', 1.0, 0.049, 1); tap('c', 1.12, 0.049, 1);
     },
   },
+  // physics round 2, one filmstrip per material family (?family=, ?species=): a full press on the top held 1.2 s, released, watched for
+  // the family's recovery (slow rise, puff back, held dent, ooze), then a sideways pull of the flank and its snap back
+  family_demo: {
+    title: 'family demo: press the top 0.30-1.50 s, release, watch; pull the +x flank 4.0-5.0 s, let go 5.2 s',
+    frames: [0.25, 0.8, 1.45, 1.6, 1.9, 2.4, 3.2, 3.95, 4.6, 5.15, 5.35, 6.4],
+    camDist: 4.0,
+    camTarget: [0.2, 0.5, 0],
+    tick(t, b, c) {
+      const R = b.restRadius;
+      if (t >= 0.3 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(b.center.x + 0.1 * R, 4 * R, b.center.z), v3(0, -1, 0)); }
+      if (c.n.down === 1 && t < 1.5) b.fingerPressure(0, 1);
+      if (t >= 1.5 && c.n.down === 1) { c.n.down = 2; b.fingerUp(0); }
+      if (t >= 4.0 && !c.n.grab) {
+        c.n.grab = 1;
+        const hit = b.raycast(v3(b.center.x + 4 * R, b.center.y, b.center.z), v3(-1, 0, 0));
+        if (hit) { c.hit.p = hit.point; b.grab(0, hit.vertex, hit.point); }
+      }
+      if (c.n.grab === 1 && c.hit.p) { const k = clamp01((t - 4.05) / 0.8); b.grabMove(0, v3(c.hit.p.x + 1.4 * R * k, c.hit.p.y + 0.3 * R * k, c.hit.p.z)); }
+      if (t >= 5.2 && c.n.grab === 1) { c.n.grab = 2; b.grabRelease(0); }
+    },
+  },
   // a straight rub as the player makes it (probe_softbody 'camera-plane rub' rows): the game camera at (0, 1.6 k, 2.6 k), k = R / 0.5125;
   // the finger lands where the camera ray through c + (cu.x R, cu.y 1.3 R, cu.z R) hits (cu.y <= 0: cu.y R), then the pointer slides in the
   // screen plane at ?ang= degrees (0 = screen right, 90 = screen up) and ?sp= m/s from 0.15 s on; the shell's pressure profile (0.55, a
@@ -406,6 +429,7 @@ const sc: Scenario = { ...(SCENARIOS[scnName] ?? SCENARIOS.side_poke) };
   const pt = q.get('pitch'); if (pt && Number.isFinite(Number(pt))) sc.pitchDeg = Number(pt);
 }
 let genome = genomeFromParam(q.get('g'));
+{ const sp = q.get('species'); if (sp && getSpecies(sp)) genome = speciesTemplateGenome(getSpecies(sp)!.id); }
 // ?gf= ?gb= ?gs= ?gz= override firmness / bounce / stretch / size (0..1) for the genome-extremes filmstrips
 {
   const ov = { ...genome };
@@ -419,7 +443,8 @@ const detail = Number(q.get('detail') ?? 3);
 // ?f=<json> overrides FINGER constants (tuning only), e.g. ?f={"friction":0.5}
 try { const raw = q.get('f'); if (raw) Object.assign(FINGER, JSON.parse(raw)); } catch { /* ignore */ }
 
-const body = new SoftBody(genome, { detail, params });
+const family = q.get('family') ?? undefined;
+const body = new SoftBody(genome, { detail, params, ...(family ? { family } : {}) });
 if (sc.float) body.gravity = false;
 if (sc.float) body.reset();
 
@@ -567,7 +592,7 @@ cam.lookAt(tgt[0], tgt[1], tgt[2]);
 
 const labels = document.getElementById('labels') as HTMLDivElement;
 const title = document.createElement('div');
-title.id = 'title'; title.textContent = `${scnName}: ${sc.title}   sim ${simMs.toFixed(0)} ms for ${log.length} steps`;
+title.id = 'title'; title.textContent = `${scnName}: ${sc.title}   [${genome.species} / ${(body as unknown as { family: string }).family}]   sim ${simMs.toFixed(0)} ms for ${log.length} steps`;
 labels.appendChild(title);
 
 function drawSnap(s: Snap, idx: number): void {

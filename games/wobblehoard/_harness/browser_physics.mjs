@@ -8,6 +8,9 @@
 //   node _harness/browser_physics.mjs hold_squash --gf 1 --gb 1 --gs 0 --gz 1 --tag firm   genome extremes, files get a _<tag> suffix
 //   node _harness/browser_physics.mjs press_close --px 0.2 --tag x20 --q mark=1             close-up of a hold at x=0.2, folded triangles magenta
 //   (--q passes extra viewer params: frames=t1,..,t12  cd=<camera distance>  ct=x,y,z  yaw=  pitch=  mark=1)
+//   node _harness/browser_physics.mjs family_demo --family slowrise --tag slowrise    a material family on the DOLLOP shape
+//   node _harness/browser_physics.mjs family_demo --species tidelume --tag tidelume  a catalog species (its shape and its family)
+//   node _harness/browser_physics.mjs --sheet                 the 50-species rest contact sheet (_harness/physview/sheet.html) -> species_sheet.png
 // Each strip prints the worst mesh FOLD (largest dihedral between adjacent triangles; the rest shape's own maximum is ~50 deg) and the fold
 // left in the last frame (a folded flap that is still there at the end is a FAIL: > 90 deg means a tucked-under triangle).
 // Exits 1 on a console error, a failed request, a blank canvas, a non-finite sim, a safety-net reset or a fold left in the last frame.
@@ -15,7 +18,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ROOT, startVite, launch } from './pw.mjs';
 
-const PORT = 5362;
+const PORT = Number(process.argv[process.argv.indexOf('--port') + 1]) > 0 && process.argv.includes('--port') ? Number(process.argv[process.argv.indexOf('--port') + 1]) : 5362;   // --port <n> when 5362 is taken
 const FOLD_END_MAX = 90;   // degrees: a settled-ish last frame may not hold a crease sharper than this (rest shape max ~50)
 const ALL = ['side_poke', 'hold_squash', 'pull_lobe', 'peak_flop', 'float_shove', 'pinch', 'top_peak_poke', 'top_peak_hold', 'hold_close', 'hold_shoulder', 'peak_shove', 'peak_rest_close', 'pinch_stagger',
   'tap_close', 'press_close', 'edge_low', 'edge_rim', 'fast_tap1', 'fast_tap3', 'rub', 'pull_far', 'pull_peak', 'mat_nudge', 'rub_peak', 'pinch_peak', 'tip_tap'];
@@ -23,10 +26,12 @@ const args = process.argv.slice(2);
 const opt = {};
 const names = [];
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === '--p' || args[i] === '--f' || args[i] === '--g' || args[i] === '--detail' || args[i] === '--out' || args[i] === '--px' || args[i] === '--tag' || args[i] === '--gf' || args[i] === '--gb' || args[i] === '--gs' || args[i] === '--gz' || args[i] === '--q') opt[args[i].slice(2)] = args[++i];
+  if (args[i] === '--p' || args[i] === '--f' || args[i] === '--g' || args[i] === '--detail' || args[i] === '--out' || args[i] === '--px' || args[i] === '--tag' || args[i] === '--gf' || args[i] === '--gb' || args[i] === '--gs' || args[i] === '--gz' || args[i] === '--q' || args[i] === '--family' || args[i] === '--species') opt[args[i].slice(2)] = args[++i];
+  else if (args[i] === '--sheet') opt.sheet = true;
+  else if (args[i] === '--port') i++;
   else names.push(args[i]);
 }
-const scenarios = names.length ? names : ALL;
+const scenarios = opt.sheet ? ['species_sheet'] : names.length ? names : ALL;
 const outDir = resolve(ROOT, '_shots', opt.out ?? 'phys');
 mkdirSync(outDir, { recursive: true });
 
@@ -46,9 +51,11 @@ try {
     if (opt.g) qs.set('g', opt.g);
     if (opt.detail) qs.set('detail', opt.detail);
     if (opt.px) qs.set('px', opt.px);
+    if (opt.family) qs.set('family', opt.family);
+    if (opt.species) qs.set('species', opt.species);
     for (const k of ['gf', 'gb', 'gs', 'gz']) if (opt[k] !== undefined) qs.set(k, opt[k]);
     if (opt.q) for (const [k, v] of new URLSearchParams(opt.q)) qs.set(k, v);   // --q 'frames=1.2,1.3&cd=1.6&ct=0,0.7,0' ad-hoc camera / frame overrides
-    await page.goto(`${vite.url}_harness/physview/index.html?${qs}`, { waitUntil: 'load' });
+    await page.goto(`${vite.url}_harness/physview/${opt.sheet ? 'sheet' : 'index'}.html?${qs}`, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__PV__ && window.__PV__.ready, null, { timeout: 90000 });
     const info = await page.evaluate(() => {
       const pv = window.__PV__;

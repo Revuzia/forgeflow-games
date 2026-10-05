@@ -80,6 +80,9 @@ export interface SoftParams {
    *  crossing no triangle. One-sided: a strut shorter than strutMin x its rest length is pushed back out to it (XPBD compliance strutAlphaT,
    *  alpha / h^2); otherwise it does nothing. 0 strutMin disables them. */
   strutTau: number; strutMaxR: number; strutPer: number; strutCos: number; strutMin: number; strutAlphaT: number;
+  /** Static Coulomb friction between the fingertip and the skin (FINGER.friction for the gel / DOLLOP; material families scale it with
+   *  their tack: src/data/materials.ts SolverScale.fingerFriction). The kinetic coefficient scales with it (FINGER.frictionKinetic). */
+  fingerFriction: number;
 }
 
 export function deriveParams(genome: Genome): SoftParams {
@@ -136,6 +139,7 @@ export function deriveParams(genome: Genome): SoftParams {
     // strutTau 0.5 = the upper half of the floppy zone (the cone itself, not its base, which must bend). The flop of the starter's peak under
     // the gate's side poke is 31.5% R with them (28.4% without).
     strutTau: 0.5, strutMaxR: 0.5, strutPer: 5, strutCos: 0.2, strutMin: 0.9, strutAlphaT: 0.05,
+    fingerFriction: FINGER.friction,
   };
 }
 

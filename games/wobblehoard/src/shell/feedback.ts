@@ -9,7 +9,10 @@
 // Round 3 play-mat voices (SOUND.md "When the shell should call what"), each feature-detected on the audio engine:
 //   lift    the rising edge of "grabbed and lifted off the mat" (table mode only: a floating body is never grounded) held 0.1 s
 //   toss    on the snap that ends a lifted pull, speed = |centre velocity| / 4 m/s, only above 0.1
-//   strand  every frame while a TACKY family (Sticky Stretch, Slime Goo) is pulled, tension = pull level; snap: true when it is let go
+//   strand  a body that reports SoftMetrics.strands (contracts.ts: the physics' own sticky strings, a pull or a press lifting off a tacky
+//           body): every frame while strands >= 0.02, tension = strands; when they let go from >= 0.3 that was a break: snap: true.
+//           A body without the metric: every frame while a TACKY family (Sticky Stretch, Slime Goo) is pulled, tension = pull level;
+//           snap: true on the snap event.
 //   bump    SEAM ONLY: needs two bodies touching (stage B). `bumpCheck` is the place: the rising edge of distance(cA, cB) < 0.95 (rA + rB).
 import type { SoftBodyLike, SoftEvent, SquishAudio, SquishVoiceHandle, StageLike, V3 } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
@@ -54,6 +57,8 @@ export interface FeedbackDeps {
 }
 
 const TACKY = new Set<string>(['stickystretch', 'slimegoo']);
+/** metrics.strands: a strand voice runs from STRAND_ON; strings that let go from STRAND_BREAK or more broke (a snap), weaker ones just fade */
+const STRAND_ON = 0.02, STRAND_BREAK = 0.3;
 
 export function createFeedback(d: FeedbackDeps): Feedback {
   const voices: Array<Voice | null> = [null, null];
@@ -62,7 +67,7 @@ export function createFeedback(d: FeedbackDeps): Feedback {
   const { touch } = d;
   // round 3 state
   let lifted = false, liftSince = -1, wasGroundedAtGrab = false;
-  let strandOn = false;
+  let strandOn = false, strandLast = 0;
   let pcx = 0, pcy = 0, pcz = 0, vx = 0, vy = 0, vz = 0, haveC = false;
   const tacky = (): boolean => { try { const g = d.genome(); return !!getSpecies(g.species) && TACKY.has(familyOf(g.species)); } catch { return false; } };
 
@@ -146,9 +151,12 @@ export function createFeedback(d: FeedbackDeps): Feedback {
         if (S > 0.25) d.stage.spawnFx('bubbles', ev.at, S);
         if (S > 0.55) d.stage.spawnFx('glitter', ev.at, S);
         if (strandOn && d.audio.strand) {
-          // the strand's own snap carries 1-3 tiny bubbles (SOUND.md): no extra pops for it
-          try { d.audio.strand({ tension: S, snap: true, pitch: pitch(), pan: d.panOfPoint(ev.at) }); } catch (e) { d.report(e); }
-          strandOn = false;
+          // the strand's own snap carries 1-3 tiny bubbles (SOUND.md): no extra pops for it. With metrics.strands the strings may outlast
+          // the snap event: update() plays their break when they let go.
+          if (typeof (body.metrics as { strands?: number }).strands !== 'number') {
+            try { d.audio.strand({ tension: S, snap: true, pitch: pitch(), pan: d.panOfPoint(ev.at) }); } catch (e) { d.report(e); }
+            strandOn = false;
+          }
         } else pops(1 + Math.min(2, Math.floor(S * 2.999)), ev.at, Math.max(0.4, S));
         if (lifted && d.audio.toss) {
           const speed = clamp(Math.hypot(vx, vy, vz) / 4, 0, 1);
@@ -193,28 +201,39 @@ export function createFeedback(d: FeedbackDeps): Feedback {
 
     // ---- round 3: lift / strand (feature-detected) ----
     const grabbed = touch.grabActive[0] || touch.grabActive[1];
-    if (grabbed) {
-      if (d.audio.lift && !lifted && d.gravity() && wasGroundedAtGrab) {
-        const off = !m.grounded || m.stretch >= 1;
-        if (off) { if (liftSince < 0) liftSince = d.simTime(); else if (d.simTime() - liftSince >= 0.1) { lifted = true; try { d.audio.lift({ pitch: pitch(), pan: d.panOfPoint(c) }); } catch (e) { d.report(e); } } }
-        else liftSince = -1;
-      }
-      if (d.audio.strand && tacky()) {
+    if (grabbed && d.audio.lift && !lifted && d.gravity() && wasGroundedAtGrab) {
+      const off = !m.grounded || m.stretch >= 1;
+      if (off) { if (liftSince < 0) liftSince = d.simTime(); else if (d.simTime() - liftSince >= 0.1) { lifted = true; try { d.audio.lift({ pitch: pitch(), pan: d.panOfPoint(c) }); } catch (e) { d.report(e); } } }
+      else liftSince = -1;
+    }
+    if (d.audio.strand) {
+      const sm = (m as { strands?: number }).strands;   // read through a cast: the field is the physics lane's round-3 addition
+      if (typeof sm === 'number') {
+        // the physics reports its strings: the voice follows them (a press lifting off a tacky body makes them too, not only a pull)
+        if (sm >= STRAND_ON) {
+          strandOn = true; strandLast = sm;
+          try { d.audio.strand({ tension: clamp01(sm), pitch: pitch(), pan: d.panOfPoint(c) }); } catch (e) { d.report(e); }
+        } else if (strandOn) {
+          strandOn = false;
+          if (strandLast >= STRAND_BREAK) { try { d.audio.strand({ tension: clamp01(strandLast), snap: true, pitch: pitch(), pan: d.panOfPoint(c) }); } catch (e) { d.report(e); } }
+          strandLast = 0;   // weaker strings: stop calling, the engine fades the held voice itself
+        }
+      } else if (grabbed && tacky()) {
         const tension = pullLevel(m.stretch, hasPress(m));
-        if (tension >= 0.02 || strandOn) {
+        if (tension >= STRAND_ON || strandOn) {
           strandOn = true;
           try { d.audio.strand({ tension, pitch: pitch(), pan: d.panOfPoint(c) }); } catch (e) { d.report(e); }
         }
-      }
-    } else if (strandOn) strandOn = false; // no snap event (a cancelled pull): just stop calling, the engine ends the held voice itself
+      } else if (strandOn) strandOn = false; // no snap event (a cancelled pull): just stop calling, the engine ends the held voice itself
+    }
   }
 
   return {
     handle,
     update,
     sweep() { for (let f = 0; f < 2; f++) if (voices[f] && !touch.fingerDown[f] && !touch.grabActive[f]) endVoice(f, 0.08); },
-    endAll(fade) { endVoice(0, fade); endVoice(1, fade); strandOn = false; },
-    resetBody() { lifted = false; liftSince = -1; strandOn = false; haveC = false; vx = vy = vz = 0; },
+    endAll(fade) { endVoice(0, fade); endVoice(1, fade); strandOn = false; strandLast = 0; },
+    resetBody() { lifted = false; liftSince = -1; strandOn = false; strandLast = 0; haveC = false; vx = vy = vz = 0; },
     get liveVoices() { return (voices[0] ? 1 : 0) + (voices[1] ? 1 : 0); },
   };
 }

@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>wobblehoard species sheet</title>
+<style>
+  html, body { margin: 0; background: #14102a; color: #fff1d6; font: 11px/1.25 ui-monospace, Menlo, Consolas, monospace; }
+  #wrap { position: relative; width: 1600px; height: 1200px; }
+  canvas { display: block; }
+  #labels div { position: absolute; width: 160px; box-sizing: border-box; padding: 3px 5px; pointer-events: none; text-shadow: 0 1px 2px #000; white-space: pre; }
+</style>
+</head>
+<body>
+<div id="wrap"><canvas id="c" width="1600" height="1200"></canvas><div id="labels"></div></div>
+<script type="module" src="./sheet.ts"></script>
+</body>
+</html>

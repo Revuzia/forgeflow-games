@@ -45,6 +45,7 @@ import { makeStarterGenome, randomGenome, quantizeGenome } from '../src/core/gen
 import type { Genome } from '../src/core/genome.ts';
 import { mulberry32 } from '../src/core/rng.ts';
 import type { V3, SoftEvent } from '../src/contracts.ts';
+import { MATERIAL_FAMILY_IDS, MATERIAL_FAMILIES } from '../src/data/materials.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const QUICK = process.argv.includes('--quick');
@@ -536,6 +537,17 @@ function sweepSpecs(starter: Genome): FoldSpec[] {
   out.push({ label: 'sweep/starter/tap x=.1 z=.1', genome: starter, detail: 3, spot: -1, mode: 'tap', ray: [v3(0.1, 3, 0.1), down] });
   return out;
 }
+/** Rest height of the tip (highest particle) of a genome's body after 0.5 s on the table. Physics round 2: the peak presses below are placed
+ *  RELATIVE to it. They were absolute heights (0.9 / 0.96 m) fitted to the hand-built DOLLOP's tip at 1.016 m; the catalog recipe DOLLOP
+ *  (one shape code path for all 50 species) has a broader, unpinched swirl-peak with its tip at 0.951 m, so 0.96 m missed it entirely. */
+const TOPS = new Map<Genome, number>();
+function restTop(g: Genome): number {
+  let t = TOPS.get(g);
+  if (t === undefined) { const b = new SoftBody(g); settle(b, 0.5); t = topY(b); TOPS.set(g, t); }
+  return t;
+}
+/** 6 cm and 12 cm under the tip (the old 0.96 / 0.9 m on the old 1.016 m tip). */
+const UNDER6 = 0.056, UNDER12 = 0.116;
 /** Side presses at the swirl-peak, 6 and 12 cm under its tip, from 4 directions, on 5 genomes (the starter also at detail 4): with the
  *  shell's own pressure profile (48 presses; 179 degrees / 100 frames over 120 without the contact fold limit), and as an instant
  *  pressure-1 shove (a stress case the shell never sends; 162-180 degrees at HEAD). Plus the low side press at the table rim (y = 0.05,
@@ -546,9 +558,10 @@ function shoveSpecs(starter: Genome): FoldSpec[] {
     ['firm', quantizeGenome({ ...starter, firmness: 1 })], ['small', quantizeGenome({ ...starter, size: 0 })]];
   const dirs: Array<[string, V3, V3]> = [['-x', v3(-3, 0, 0), v3(1, 0, 0)], ['+x', v3(3, 0, 0), v3(-1, 0, 0)], ['-z', v3(0, 0, -3), v3(0, 0, 1)], ['+z', v3(0, 0, 3), v3(0, 0, -1)]];
   for (const mode of ['shell', 'shove'] as const) {
-    for (const [n, g] of G) for (const detail of n === 'starter' ? [3, 4] : [3]) for (const y of [0.9, 0.96]) for (const [dn, o, d] of dirs) {
-      if (mode === 'shove' && (y !== 0.96 || (n !== 'starter' && n !== 'bouncy-big' && n !== 'soft'))) continue;   // the stress case: a subset
-      out.push({ label: `${mode}/${n}${detail === 4 ? '@d4' : ''}/y=${y} from ${dn}`, genome: g, detail, spot: -1, mode, ray: [v3(o.x, y, o.z), d] });
+    for (const [n, g] of G) for (const detail of n === 'starter' ? [3, 4] : [3]) for (const under of [UNDER12, UNDER6]) for (const [dn, o, d] of dirs) {
+      if (mode === 'shove' && (under !== UNDER6 || (n !== 'starter' && n !== 'bouncy-big' && n !== 'soft'))) continue;   // the stress case: a subset
+      const y = restTop(g) - under;
+      out.push({ label: `${mode}/${n}${detail === 4 ? '@d4' : ''}/y=tip-${Math.round(under * 100)}cm from ${dn}`, genome: g, detail, spot: -1, mode, ray: [v3(o.x, y, o.z), d] });
     }
   }
   out.push({ label: 'rim/starter/hold y=.05', genome: starter, detail: 3, spot: -1, mode: 'hold', ray: [v3(3, 0.05, 0), v3(-1, 0, 0)] });
@@ -560,7 +573,8 @@ function shoveSpecs(starter: Genome): FoldSpec[] {
  *  the contact fold limit may leave a vertex inside for a substep. */
 function tipPenetration(starter: Genome): number {
   let worst = 0;
-  for (const [o, d] of [[v3(-3, 0.96, 0), v3(1, 0, 0)], [v3(3, 0.96, 0), v3(-1, 0, 0)], [v3(0, 0.96, -3), v3(0, 0, 1)], [v3(0.2, 3, 0), v3(0, -1, 0)]] as const) {
+  const y6 = restTop(starter) - UNDER6;
+  for (const [o, d] of [[v3(-3, y6, 0), v3(1, 0, 0)], [v3(3, y6, 0), v3(-1, 0, 0)], [v3(0, y6, -3), v3(0, 0, 1)], [v3(0.2, 3, 0), v3(0, -1, 0)]] as const) {
     const b = new SoftBody(starter);
     settle(b, 0.3);
     touch(b, 0, o, d); b.fingerPressure(0, 1);
@@ -1304,6 +1318,83 @@ function flippedVsRest(b: SoftBody): number {
  * the window, so the window's own loop allocates nothing. (A sampling heap profiler cannot prove zero: it charges its own bookkeeping to
  * whatever function is running.)
  */
+/** Physics round 2: every material family allocates nothing per frame once compiled (memory arm, air bleed, slosh, jam, strands), pressed
+ *  and rubbed on the DOLLOP shape: exact new-space growth per 120 frames, best of 3 windows, per family. */
+function familyAllocCheck(starter: Genome): Array<{ fam: string; bytes: number }> {
+  const newUsed = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
+  const empty: number[] = [];
+  for (let k = 0; k < 6; k++) { const u0 = newUsed(); empty.push(newUsed() - u0); }
+  const base = empty[empty.length - 1];
+  const ev: SoftEvent[] = [];
+  for (let i = 0; i < 64; i++) ev.push(ev[0]);
+  ev.length = 0;
+  const rub: V3[] = [], prs: unknown[] = [null];
+  for (let i = 0; i < 2400; i++) { rub.push(v3(0.15 + 0.06 * Math.sin(i * 0.05), 0.8, 0.06 * Math.cos(i * 0.05))); prs.push(0.8 + 0.2 * Math.sin(i * 0.1)); }
+  const out: Array<{ fam: string; bytes: number }> = [];
+  for (const fam of MATERIAL_FAMILY_IDS) {
+    const b = new SoftBody(starter, { family: fam });
+    b.warmUp();
+    let i = 0;
+    const frame = (): void => { b.fingerMove(0, rub[i % 2400]); b.fingerPressure(0, prs[(i % 2400) + 1] as number); i++; b.step(DT); ev.length = 0; b.drainEvents(ev); };
+    touch(b, 0, v3(0.15, 4, 0), v3(0, -1, 0));
+    for (let k = 0; k < 900; k++) frame();
+    let best = Infinity;
+    for (let w = 0; w < 3; w++) { const u0 = newUsed(); for (let k = 0; k < 120; k++) frame(); const d = newUsed() - u0; if (d >= 0 && d < best) best = d; }
+    out.push({ fam, bytes: best - base });
+  }
+  return out;
+}
+
+interface CeremonyResult { foldSph: number; restSph: number; foldVol: number; foldMove: number; backErr: number; moveErr: number; moveSph: number; burstVol: number; burstErr: number; hostileOk: boolean; det: boolean }
+/** The ceremony drivers (contracts.ts SoftBodyLike, DESIGN.md 6.4) on the starter: fold into a ball and back, slide to a pad, tremble,
+ *  burst open; then hostile values; and the same script twice gives the same hash. */
+function ceremonyChecks(starter: Genome): CeremonyResult {
+  const script = (): { r: CeremonyResult; hash: number } => {
+    const b = new SoftBody(starter);
+    const runF = (s: number, f?: () => void): void => { for (let i = 0; i < Math.round(s / DT); i++) { f?.(); b.step(DT); } };
+    const sph = (): number => { const P = b.positions, c = b.center; let m = 0, m2 = 0; for (let i = 0; i < b.vertexCount; i++) { const d = Math.hypot(P[i * 3] - c.x, P[i * 3 + 1] - c.y, P[i * 3 + 2] - c.z); m += d; m2 += d * d; } m /= b.vertexCount; return Math.sqrt(Math.max(0, m2 / b.vertexCount - m * m)) / m; };
+    const prev = new Float32Array(b.positions.length);
+    const move = (): number => { let m = 0; for (let i = 0; i < b.vertexCount; i++) m = Math.max(m, Math.hypot(b.positions[i * 3] - prev[i * 3], b.positions[i * 3 + 1] - prev[i * 3 + 1], b.positions[i * 3 + 2] - prev[i * 3 + 2])); prev.set(b.positions); return m; };
+    runF(1);
+    const r: CeremonyResult = { foldSph: 0, restSph: sph(), foldVol: 0, foldMove: 0, backErr: 0, moveErr: 0, moveSph: 0, burstVol: 0, burstErr: 0, hostileOk: false, det: false };
+    prev.set(b.positions);
+    b.setFold(1); runF(1.5, () => { r.foldMove = Math.max(r.foldMove, move() / b.restRadius); });
+    r.foldSph = sph(); r.foldVol = b.metrics.volume;
+    b.setFold(0); runF(1.5); r.backErr = shapeFit(b);
+    b.moveTo(v3(0.5, 0.5, -0.3), 1); b.tremble(0.4); runF(3); b.tremble(0); runF(0.5);
+    r.moveErr = Math.hypot(b.center.x - 0.5, b.center.z + 0.3); r.moveSph = shapeFit(b);
+    b.moveTo(null);
+    b.burstOpen(1); runF(2, () => { r.burstVol = Math.max(r.burstVol, b.metrics.volume); }); r.burstErr = shapeFit(b);
+    for (const v of [NaN, Infinity, -Infinity, -5, 1e9, 'x', null, undefined, {}] as unknown[]) {
+      b.setFold(v as number); b.tremble(v as number); b.burstOpen(v as number); b.moveTo(v as V3, v as number); b.moveTo({ x: v, y: v, z: v } as V3, v as number);
+    }
+    b.setFold(0); b.tremble(0); b.moveTo(null); runF(3);
+    let fin = true; for (let i = 0; i < b.positions.length; i++) if (!Number.isFinite(b.positions[i])) fin = false;
+    r.hostileOk = fin && b.debug.safetyResets === 0 && shapeFit(b) < 0.03;
+    return { r, hash: b.stateHash() };
+  };
+  const a = script(), c = script();
+  a.r.det = a.hash === c.hash;
+  return a.r;
+}
+
+/** Per-family volume band (CONTRACT 4.2): a hard top squeeze and a hard pinch on the DOLLOP shape for every material family. */
+function familyVolumeBands(starter: Genome): Array<{ fam: string; lo: number; min: number; max: number }> {
+  return MATERIAL_FAMILY_IDS.map((fam) => {
+    let min = 9, max = 0;
+    for (const kind of ['top', 'pinch'] as const) {
+      const b = new SoftBody(starter, { family: fam });
+      run(b, 1);
+      if (kind === 'top') touch(b, 0, v3(0.22, 4, 0), v3(0, -1, 0)); else { touch(b, 0, v3(-4, 0.34, 0), v3(1, 0, 0)); touch(b, 1, v3(4, 0.34, 0), v3(-1, 0, 0)); b.fingerPressure(1, 1); }
+      b.fingerPressure(0, 1);
+      run(b, 1.5, () => { min = Math.min(min, b.metrics.volume); max = Math.max(max, b.metrics.volume); });
+      b.fingerUp(0); b.fingerUp(1);
+      run(b, 3, () => { min = Math.min(min, b.metrics.volume); max = Math.max(max, b.metrics.volume); });
+    }
+    return { fam, lo: Math.min(0.85, 1 - MATERIAL_FAMILIES[fam].physics.volBleedMax - 0.05), min, max };
+  });
+}
+
 function allocCheck(starter: Genome): { states: Array<{ name: string; bytes: number }> } {
   const newUsed = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
   const empty: number[] = [];
@@ -1320,6 +1411,7 @@ function allocCheck(starter: Genome): { states: Array<{ name: string; bytes: num
   let i = 0, input = 0;
   const frame = (): void => {
     if (input === 1) { b.fingerMove(0, rub[i]); b.fingerPressure(0, prs[i + 1] as number); } else if (input === 2) b.grabMove(0, pull[i]);
+    else if (input === 3) { b.setFold(prs[i + 1] as number); b.tremble(prs[i + 1] as number); b.moveTo(rub[i], 1); if (i % 30 === 0) b.burstOpen(0.5); }
     i++;
     b.step(DT);
   };
@@ -1334,6 +1426,7 @@ function allocCheck(starter: Genome): { states: Array<{ name: string; bytes: num
     }, leave: () => b.grabRelease(0) },
     { name: 'float (hover + bob)', warm: 600, input: 0, enter: () => { b.gravity = false; }, leave: () => { b.gravity = true; } },
     { name: 'mat corral (gliding back from a nudge)', warm: 600, input: 0, enter: () => {}, leave: () => {} },
+    { name: 'ceremony drivers (setFold + tremble + moveTo every frame, a burstOpen every 30 frames)', warm: 1200, input: 3, enter: () => {}, leave: () => { b.setFold(0); b.tremble(0); b.moveTo(null); } },
   ];
   const out: Array<{ name: string; bytes: number }> = [];
   for (const st of states) {
@@ -1626,9 +1719,10 @@ async function main(): Promise<void> {
     add('G1', 'raycast from +x hits the front surface with an outward normal and a nearest vertex', hit ? `n.x ${f2(hit.normal.x, 2)}, t ${f2(hit.t, 2)}, vertex ${hit.vertex}` : 'MISS', 'n.x > 0.5, t > 0', !!hit && hit.normal.x > 0.5 && hit.t > 0 && hit.vertex >= 0 && hit.vertex < b.vertexCount);
     add('G1', 'raycast aimed away from the body misses', `${b.raycast(v3(0, 5, 0), v3(0, 1, 0)) === null}`, 'true', b.raycast(v3(0, 5, 0), v3(0, 1, 0)) === null);
 
-    // poke -> press -> release
+    // poke -> press -> release (on the shoulder, outside the swirl-peak: physics round 2 moved this press from x = 0.22 to 0.3 m, because the
+    // catalog recipe DOLLOP's peak is 2.6x wider 6 cm under its tip, so 0.22 m now lands on the peak's flank)
     const tDown = clock;
-    touch(b, 0, v3(0.22, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 0.8);
+    touch(b, 0, v3(0.3, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 0.8);
     let maxRate = -9, maxComp = 0, fingersSeen = 0;
     go(b, 0.7, () => { maxRate = Math.max(maxRate, b.metrics.compressionRate); maxComp = Math.max(maxComp, b.metrics.compression); fingersSeen = Math.max(fingersSeen, b.metrics.fingers); });
     const tUp = clock;
@@ -1921,6 +2015,17 @@ async function main(): Promise<void> {
   {
     const al = allocCheck(starter);
     add('G1p', `step() + the per-frame input calls allocate nothing once compiled (CONTRACT section 3), exact new-space growth per 120 frames: ${al.states.map((x) => x.name).join(' / ')} (was: 16 B every frame from a boxed finalize() argument, ~200 B per frame floating from a boxed hoverY(), 64 B per fingerMove from boxed rayMesh() arguments)`, al.states.map((x) => `${x.bytes} B`).join(' / '), '0 B each', al.states.every((x) => x.bytes === 0));
+    const fa = familyAllocCheck(starter);
+    add('G1p', 'physics round 2: every material family allocates nothing per frame once compiled (memory arm, air bleed, slosh, jam, strands; press + rub every frame on the DOLLOP shape), exact new-space growth per 120 frames', fa.map((x) => `${x.fam} ${x.bytes} B`).join(', '), '0 B each', fa.every((x) => x.bytes === 0));
+  }
+  // ---- physics round 2: ceremony drivers and the per-family volume band
+  {
+    const c = ceremonyChecks(starter);
+    add('G1', 'ceremony setFold(1): the body folds into an equal-volume ball (sphericity = std / mean of the particle distances from the centre), eased (largest particle move per frame), and setFold(0) brings back the rest shape', `sphericity ${f2(c.restSph, 3)} -> ${f2(c.foldSph, 3)}, volume ${f2(c.foldVol, 3)}, largest move ${f2(c.foldMove, 3)} R / frame, back: shape error ${f2(c.backErr, 3)} R`, 'sphericity <= 0.02, volume 0.97..1.03, <= 0.06 R / frame, back <= 0.03 R', c.foldSph <= 0.02 && Math.abs(c.foldVol - 1) <= 0.03 && c.foldMove <= 0.06 && c.backErr <= 0.03);
+    add('G1', 'ceremony moveTo(pad) + tremble: the centre slides to the pad on the table (3 s) without keeping a deformation; burstOpen(1): the goal overshoots (volume up to ~1.25^3) and settles by itself within 2 s', `pad miss ${f2(c.moveErr * 1000, 1)} mm, shape error ${f2(c.moveSph, 3)} R; burst volume max ${f2(c.burstVol, 2)}, shape error 2 s later ${f2(c.burstErr, 3)} R`, 'miss <= 20 mm, <= 0.03 R; volume 1.4..2.1, <= 0.03 R', c.moveErr <= 0.02 && c.moveSph <= 0.03 && c.burstVol >= 1.4 && c.burstVol <= 2.1 && c.burstErr <= 0.03);
+    add('G1', 'ceremony drivers take hostile values (NaN, +-Infinity, -5, 1e9, a string, null, undefined, {}) without harm, and the whole ceremony script is deterministic (two runs, same hash)', `finite and back at rest: ${c.hostileOk}, deterministic: ${c.det}`, 'true, true', c.hostileOk && c.det);
+    const vb = familyVolumeBands(starter);
+    add('G1', 'physics round 2: volume under a hard squeeze and a hard pinch inside each material family\'s band (CONTRACT 4.2: min(0.85, 1 - volBleedMax - 0.05) .. 1.15; the compressible families lose volume by design)', vb.map((x) => `${x.fam} ${f2(x.min, 2)}..${f2(x.max, 2)} (>= ${f2(x.lo, 2)})`).join(', '), 'each in its band', vb.every((x) => x.min >= x.lo && x.max <= 1.15));
   }
 
   // ---- G1: hard-release scenarios + fuzz, in a worker pool (each job is independent and seeded, so the result does not depend on the worker count)
@@ -1946,10 +2051,10 @@ async function main(): Promise<void> {
       { label: 'bouncy-big/top x=.2/tap', genome: big, detail: 3, spot: 4, mode: 'tap' }, { label: 'stretchy-small/top x=.2/tap', genome: small, detail: 3, spot: 4, mode: 'tap' },
       { label: 'f1b0s0/top x=.3/hold', genome: genomes.find((g) => g.name === 'f1b0s0')!.g, detail: 3, spot: 5, mode: 'hold' },
       { label: 'starter@d4/top x=.1/hold', genome: starter, detail: 4, spot: 2, mode: 'hold' },
-      { label: 'starter/peak shove from -x', genome: starter, detail: 3, spot: -1, mode: 'shove', ray: [v3(-3, 0.96, 0), v3(1, 0, 0)] },
-      { label: 'starter/peak shove from +x', genome: starter, detail: 3, spot: -1, mode: 'shove', ray: [v3(3, 0.96, 0), v3(-1, 0, 0)] },
-      { label: 'starter/peak side press (shell profile) from -x', genome: starter, detail: 3, spot: -1, mode: 'shell', ray: [v3(-3, 0.96, 0), v3(1, 0, 0)] },
-      { label: 'starter/peak side press (shell profile) from +z', genome: starter, detail: 3, spot: -1, mode: 'shell', ray: [v3(0, 0.96, 3), v3(0, 0, -1)] },
+      { label: 'starter/peak shove from -x', genome: starter, detail: 3, spot: -1, mode: 'shove', ray: [v3(-3, restTop(starter) - UNDER6, 0), v3(1, 0, 0)] },
+      { label: 'starter/peak shove from +x', genome: starter, detail: 3, spot: -1, mode: 'shove', ray: [v3(3, restTop(starter) - UNDER6, 0), v3(-1, 0, 0)] },
+      { label: 'starter/peak side press (shell profile) from -x', genome: starter, detail: 3, spot: -1, mode: 'shell', ray: [v3(-3, restTop(starter) - UNDER6, 0), v3(1, 0, 0)] },
+      { label: 'starter/peak side press (shell profile) from +z', genome: starter, detail: 3, spot: -1, mode: 'shell', ray: [v3(0, restTop(starter) - UNDER6, 3), v3(0, 0, -1)] },
     ];
     for (const spec of subSpecs) jobs.push({ type: 'foldsub', spec });
     for (const gn of ['starter', 'f1b1s0', 'f0b0s1', 'small', 'large']) {

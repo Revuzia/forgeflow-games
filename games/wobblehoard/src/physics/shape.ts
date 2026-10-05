@@ -1,20 +1,29 @@
-// Rest shapes. A rest shape is a PURE FUNCTION of (species, unit direction, size): `restPoint()`.
-// Future species slot in by adding a case to `restPoint()` (and a `soft` weight if they have a floppy part); nothing
-// else in the solver knows what a DOLLOP is.
-//
-// DOLLOP = a whipped-cream dollop: a squat dome (radius R0, flattened to 0.8 in Y) with a flat-ish foot so it sits
-// stably, a faint spiral piping ridge on the flanks, and a narrow raised, slightly leaning swirl-peak at +Y.
-// The peak is the secondary-motion showpiece, so the shape-matching stiffness drops there (SoftParams.peakSoft):
-// it lags behind the body when shoved and flops back with its own, slower wobble (the solver reads `floppy`).
+// Rest shapes. A rest shape is a PURE FUNCTION of (species, unit direction, size): `restPoint()`. Since physics round 2 every species,
+// DOLLOP included, takes its shape from its catalog recipe (src/data/catalog.ts speciesDef(id).shape, evaluated by src/data/shapes.ts
+// evalShape, THE single rest-shape evaluator), so the 50 species need no physics code of their own; an unknown species is a DOLLOP.
+// On top of the recipe the physics adds two things a recipe does not say:
+//   * a FLAT FOOT: the lowest FOOT_CUT of the standing height is flattened onto a plane (a smooth max, then snapped), so every species
+//     rests on a patch of exactly coplanar particles and rest on the table is exact (no rocking on a single vertex);
+//   * the FLOPPY weight of each particle (0 body .. 1 tip of a thin feature: the swirl-peak, a horn, an ear, a tail, a star point). The
+//     solver softens the shape matching there (SoftParams.peakSoft), holds the feature's own shape with the Laplacian (bendFloor) and
+//     puts thin-part struts through it (struts.ts), so a thin feature flops and recovers instead of folding. It comes from the recipe:
+//     every bump or ridge contributes its own Gaussian widened by FLOPPY_WIDEN radians, weighted by how THIN it is (tall for its width,
+//     and narrow: DOLLOP's peak, amplitude 0.5 at width 0.35, is fully floppy; a broad swelling or a cube's rounded corner is not), so
+//     DOLLOP keeps the zone it was tuned with (0.7 rad around the peak).
 import type { Genome } from '../core/genome.ts';
-import { clamp, lerp, smoothstep } from '../core/rng.ts';
+import { clamp, lerp } from '../core/rng.ts';
 import type { IcoMesh } from './mesh.ts';
+import { getSpecies } from '../data/catalog.ts';
+import { DOLLOP_RECIPE, evalShape, forEachDirection } from '../data/shapes.ts';
+import type { ShapeRecipe, ShapeFeature } from '../data/shapes.ts';
 
 export interface RestShape {
   /** Rest positions relative to the mass-weighted rest centre (3 per vertex). */
   restLocal: Float64Array;
   /** Per-vertex weight of the floppy part (the swirl-peak): 0 = body, 1 = tip. The solver maps it to a stiffness multiplier. */
   floppy: Float64Array;
+  /** Per-vertex thin feature the floppy weight belongs to (floppyFeature; -1 = none). Struts only join particles of the same feature. */
+  feature: Int16Array;
   /** Per-vertex mass from tributary rest area, normalised to mean 1. */
   mass: Float64Array;
   /** Nominal radius R0 (0.5 x lerp(0.8, 1.25, size)). */
@@ -52,43 +61,80 @@ export function physicsGenome(g: Partial<Genome> | null | undefined): PhysGenome
 /** Radius R0 for a genome: 0.5 x lerp(0.8, 1.25, size) (size sanitised by physicsGenome). */
 export const restRadiusOf = (g: Partial<Genome> | null | undefined): number => 0.5 * lerp(0.8, 1.25, physicsGenome(g).size);
 
-export const FLATTEN = 0.8;       // Y squash of the dome
-const PEAK_SIGMA = 0.40;
-const FLOPPY_SIGMA = 0.7;         // angular half-width of the softened zone around the peak, radians          // angular half-width of the swirl-peak, radians
-const PEAK_LIFT = 0.46;           // peak height above the dome, in R0
-const PEAK_PINCH = 0.50;          // how much the peak narrows toward the axis
-const FOOT = 0.90;                // foot plane height as a fraction of the dome's bottom (flat base so it sits)
+/** Flat foot: the lowest FOOT_CUT x standing height (rest radii) of every shape is flattened onto a plane (DOLLOP: 0.05 R0). */
+const FOOT_CUT = 0.025;
+/** Smooth-max blend width of the foot edge, rest radii (the old hand-built DOLLOP used 0.035). */
+const FOOT_SOFT = 0.035;
+/** The floppy zone of a thin feature is its own width plus this (radians; DOLLOP's peak: 0.35 -> the 0.7 rad zone it was tuned with). */
+const FLOPPY_WIDEN = 0.35;
+/** Thinness of a feature: smoothstep(THIN_LO, THIN_HI) of amplitude / width (tall for its width) x (1 - smoothstep(NARROW_LO, NARROW_HI) of
+ *  the width) (narrow). tuned on the 50-species smoke: a width-only or ratio-only test made cushlet's four rounded corners floppy, which
+ *  softened 97% of its particles (624 of 642) and built 1560 struts. */
+const THIN_LO = 0.7, THIN_HI = 1.3, NARROW_LO = 0.4, NARROW_HI = 0.6;
+
+/** Recipe of a species (an unknown or hostile id is DOLLOP). */
+export function recipeOf(species: unknown): ShapeRecipe {
+  const d = getSpecies(species);
+  return d ? d.shape : DOLLOP_RECIPE;
+}
+
+interface ShapeInfo { bottom: number; floor: number }
+const INFO = new Map<ShapeRecipe, ShapeInfo>();
+/** Lowest point of a recipe (units of R0, relative to its centre) and its foot plane. Cached per recipe (computed once, ~4000 evaluations). */
+function shapeInfo(r: ShapeRecipe): ShapeInfo {
+  let info = INFO.get(r);
+  if (!info) {
+    let lo = Infinity, hi = -Infinity;
+    forEachDirection(4096, (x, y, z) => { const v = y * evalShape(r, x, y, z); if (v < lo) lo = v; if (v > hi) hi = v; });
+    info = { bottom: lo, floor: lo + FOOT_CUT * (hi - lo) };
+    INFO.set(r, info);
+  }
+  return info;
+}
+
+const sstep = (a: number, b: number, x: number): number => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+const featW = (f: ShapeFeature, dx: number, dy: number, dz: number, widen: number): number => {
+  const d = f.dir, w = f.width + widen, dot = dx * d[0] + dy * d[1] + dz * d[2];
+  if (f.kind === 'ridge' && f.n && f.len) {
+    const n = f.n, across = dx * n[0] + dy * n[1] + dz * n[2], len = f.len + widen;
+    return Math.exp(-(across * across) / (w * w) - (2 - 2 * dot) / (len * len));
+  }
+  return Math.exp(-(2 - 2 * dot) / (w * w));
+};
+/** Which thin feature the last floppyOf() call's weight came from (2 x feature index, + 1 for a mirror copy; -1 = none). */
+export let floppyFeature = -1;
+/** Floppy weight 0..1 of a direction: the thin bumps and ridges of the recipe (see the header). Sets floppyFeature. */
+export function floppyOf(r: ShapeRecipe, dx: number, dy: number, dz: number): number {
+  let fl = 0;
+  floppyFeature = -1;
+  r.features.forEach((f, k) => {
+    if (f.kind === 'dent') return;
+    const t = sstep(THIN_LO, THIN_HI, f.amp / f.width) * (1 - sstep(NARROW_LO, NARROW_HI, f.width));
+    if (t <= 0) return;
+    const g0 = featW(f, dx, dy, dz, FLOPPY_WIDEN), g1 = f.mirrorX ? featW(f, -dx, dy, dz, FLOPPY_WIDEN) : 0;
+    if (t * g0 > fl) { fl = t * g0; floppyFeature = 2 * k; }
+    if (t * g1 > fl) { fl = t * g1; floppyFeature = 2 * k + 1; }
+  });
+  return fl;
+}
 
 /**
- * Rest point for a unit direction. Writes xyz into out[o..o+2] and returns the floppy-part weight (0..1: 1 at the swirl tip).
- * No state, no randomness: the same (species, direction, R0) always gives the same point.
+ * Rest point for a unit direction. Writes xyz into out[o..o+2] and returns the floppy-part weight (0..1: 1 at the tip of a thin feature).
+ * No state, no randomness: the same (species, direction, R0) always gives the same point. Position = u * evalShape(recipe, u) * R0, with
+ * the flat foot applied.
  */
 export function restPoint(species: Genome['species'], dx: number, dy: number, dz: number, R0: number, out: Float64Array | number[], o: number): number {
-  switch (species) {
-    case 'dollop':
-    default: {
-      const theta = Math.acos(clamp(dy, -1, 1));            // angle from +Y
-      const phi = Math.atan2(dz, dx);
-      const w = Math.exp(-(theta / PEAK_SIGMA) * (theta / PEAK_SIGMA));   // peak weight 0..1
-      // piped swirl ridge on the flanks (3 lobes winding with height)
-      const ridge = 0.028 * Math.sin(3 * phi + 6.5 * theta) * smoothstep(0.3, 0.8, theta) * (1 - smoothstep(1.9, 2.5, theta));
-      let x = dx * R0 * (1 + ridge);
-      let y = dy * R0 * FLATTEN * (1 + ridge * 0.5);
-      let z = dz * R0 * (1 + ridge);
-      // the peak: lift and pinch toward the axis, with a little lean (a curl, so it is not a perfect cone)
-      const pinch = 1 - PEAK_PINCH * w;
-      x *= pinch; z *= pinch;
-      y += R0 * PEAK_LIFT * w;
-      x += R0 * 0.085 * w * w;
-      z += R0 * 0.03 * w * w;
-      // flat foot: smooth max with the foot plane so the body sits on a patch, not on a point
-      const floor = -R0 * FLATTEN * FOOT, k = 0.035 * R0;
-      y = 0.5 * (y + floor + Math.sqrt((y - floor) * (y - floor) + k * k));
-      if (y - floor < 0.004 * R0) y = floor;          // the foot is an exactly flat disc, so rest on the table is exact
-      out[o] = x; out[o + 1] = y; out[o + 2] = z;
-      return Math.exp(-(theta / FLOPPY_SIGMA) * (theta / FLOPPY_SIGMA));   // the floppy zone is wider than the peak itself, so its BASE can bend
-    }
-  }
+  const rec = recipeOf(species);
+  const info = shapeInfo(rec);
+  const r = evalShape(rec, dx, dy, dz) * R0;
+  const x = dx * r, z = dz * r;
+  let y = dy * r;
+  // flat foot: smooth max with the foot plane, then snapped, so the body sits on a patch of exactly coplanar particles
+  const floor = info.floor * R0, k = FOOT_SOFT * R0;
+  y = 0.5 * (y + floor + Math.sqrt((y - floor) * (y - floor) + k * k));
+  if (y - floor < 0.004 * R0) y = floor;
+  out[o] = x; out[o + 1] = y; out[o + 2] = z;
+  return floppyOf(rec, dx, dy, dz);
 }
 
 /** Signed enclosed volume of a closed triangle mesh (positive for outward winding). */
@@ -109,9 +155,10 @@ export function buildRest(genome: Genome, mesh: IcoMesh): RestShape {
   const pg = physicsGenome(genome);
   const R0 = restRadiusOf(pg);
   const p = new Float64Array(n * 3);
-  const floppy = new Float64Array(n);
+  const floppy = new Float64Array(n), feature = new Int16Array(n);
   for (let i = 0; i < n; i++) {
     floppy[i] = restPoint(pg.species, mesh.dirs[i * 3], mesh.dirs[i * 3 + 1], mesh.dirs[i * 3 + 2], R0, p, i * 3);
+    feature[i] = floppyFeature;
   }
   // tributary-area masses (a third of each incident triangle), mean 1
   const mass = new Float64Array(n);
@@ -137,7 +184,7 @@ export function buildRest(genome: Genome, mesh: IcoMesh): RestShape {
     if (p[i * 3 + 1] > maxY) { maxY = p[i * 3 + 1]; peak = i; }
   }
   return {
-    restLocal: p, floppy, mass, restRadius: R0, restCenterY: -minY, peakVertex: peak,
+    restLocal: p, floppy, feature, mass, restRadius: R0, restCenterY: -minY, peakVertex: peak,
     restVolume: meshVolume(p, tris), height: maxY - minY,
   };
 }
