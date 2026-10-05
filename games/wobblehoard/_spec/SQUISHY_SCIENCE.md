@@ -164,8 +164,10 @@ vt = clamp(vt, mat.volFloor, 1);                    // loaded = finger down/retr
 * Rate dependence of air (Darcy [S9]): damp the volume rate. Compressible families only (an incompressible body has no volume rate to damp):
   `c = 1 - exp(-2 zeta omegaV H); V_i -= c * dC * WV_i * GRAD_i / (S * v6)` with `dC = sum GRAD_i . V_i / v6`; zeta = `airDamp` (foam 0.9). It adds
   momentum-free damping of the volume mode only; measured fast/slow finger reaction 11.8 for foam against 7.1 for gel [M, older snapshot].
-* **Contract conflict**: CONTRACT.md G1 wants `metrics.volume` in 0.85..1.15. True for jelly, silicone, gummy, liquid, putty, slime, stickystretch; the
-  foam, marshmallow, beads and dome go to 0.65-0.82 by design. G1 needs a per-family volume band (`1 - volBleedMax - 0.05 .. 1.15`).
+* **Contract conflict (resolved in the contract on 2026-10-05)**: the slice-1 G1 wanted `metrics.volume` in 0.85..1.15 for every body. True for jelly,
+  silicone, gummy, liquid, putty, slime, stickystretch; the foam, marshmallow, beads and dome go to 0.65-0.82 by design. CONTRACT.md section 4.2 and
+  gate G1 now use a per-family band, lower bound `min(0.85, 1 - volBleedMax - 0.05)`, upper bound 1.15, computed from `src/data/materials.ts`
+  (table in CONTRACT 4.2). The probe that enforces it is physics round-2 work (in progress).
 
 ### 3.3 Plasticity and creep
 
@@ -389,7 +391,7 @@ Margin warning: the worst corner genome moves a family 0.111 (RMS, normalised) f
 | # | Feature | Value | New code and cost (measured in the prototype) | Do it |
 |---|---|---|---|---|
 | P0 | `applyMaterial` ratios on existing params (stiffness, skin, damping x3, friction, glue, volume kappa) | high: jelly, silicone, gummy, liquid, slime, sticky, dome already differ in touch | 0 new solver lines, 0 cost | now |
-| P1 | volume target + bottom-out (foam, marshmallow, beads, dome) | highest single "wow": a sponge that stays pressed | ~ 15 lines, one scalar, +0.05-0.1 ms; needs the G1 volume band per family | next |
+| P1 | volume target + bottom-out (foam, marshmallow, beads, dome) | highest single "wow": a sponge that stays pressed | ~ 15 lines, one scalar, +0.05-0.1 ms; the per-family G1 band it needs is now in CONTRACT 4.2 | next |
 | P2 | memory arm once per frame (viscoelastic recovery, held dents, `glue` scale, Laplacian blend) | high: putty, mochi, slime, slow rise | ~ 60 lines, MEM 3n doubles, +0.1-0.3 ms | next |
 | P3 | `speedDamp` as `intDamp2` (rate stiffening) | medium, already a param | 0 lines | with P0 |
 | P4 | Darcy volume-rate damping (compressible only) | low-medium | ~ 12 lines, +0.02 ms | after P1 |
@@ -399,10 +401,13 @@ Margin warning: the worst corner genome moves a family 0.111 (RMS, normalised) f
 | skip | FEM viscoelasticity, real fluid, tension-field yield surface | | cost out of budget (CONTRACT: step <= 2 ms mean) | no |
 
 **Risks**
-1. **Contract G1**: volume band 0.85..1.15 is false for compressible families (measured minima 0.65-0.82); `probe_softbody` needs a per-family band.
+1. **Contract G1** (contract side resolved 2026-10-05): the slice-1 band 0.85..1.15 is false for compressible families (measured minima 0.65-0.82). CONTRACT 4.2
+   now states a per-family band derived from `materials.ts`; `probe_softbody.ts` (PHYS) still checks the single slice-1 band until physics round 2 lands with materials.
 2. **PHYS keeps retuning** (smOmega, edgeAlphaT, gravity 15 -> 10, new `bendK`, `glue`, `groundDamp`, finger friction while I worked). Ratios survive; the functional forms in 3.1-3.2 do not if the blocks are rewritten.
 3. **Budget**: the plain solver is already 1.4-1.6 ms mean here against the 2.0 ms gate; the features add 0.05-0.3 ms. Update memory once per frame.
-4. **No felt force** with kinematic fingers (3.6). A `metrics.reaction` (sum of finger projection corrections, smoothed) would give haptics and audio a real "firmness" signal; I did not edit contracts.
+4. **No felt force** with kinematic fingers (3.6). **Resolved in the contract:** `SoftMetrics.reaction?: number` (0..1, normalised summed finger-projection
+   correction, smoothed) was added to `src/contracts.ts` as an optional round-2 member, next to `press?`. Still open: PHYS does not populate either yet
+   (`src/physics/softbody.ts` on 2026-10-05 fills neither), so consumers must keep treating `undefined` as 0 until the physics round-2 rewrite lands.
 5. **Rotation extraction uses Q**, so a large plastic dent slightly biases R; clamp via `memMax`. Not measured.
 6. **Tack and slosh are numerically tested, not seen**; both need a screenshot pass. Tack touches finger retract behaviour.
 7. **Time scales are compressed ~ 2x** against real foam (4.5 s against 5-10 s [S3]) for play value; one constant per family.

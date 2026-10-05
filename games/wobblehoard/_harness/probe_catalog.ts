@@ -1,6 +1,13 @@
 // Catalog probe: the 50-species roster as DATA must satisfy the design (DESIGN 5.2, 5.3, 9) and the engineering rules (append-only idx,
 // share-string round trips, star-convex shapes, distinct silhouettes and palettes, originality and language safety).
 // Plain node:  node _harness/probe_catalog.ts      (exit 1 on any failure; thresholds below are STATED, never loosened to pass)
+//
+// Every GATE here reads only src/core and src/data (colours through the palette contract src/data/palette.ts, the DOLLOP shape through a
+// frozen snapshot), so a change in another lane can never turn this probe red by itself. Section 10 runs SEAM checks against the render
+// and physics lanes' live code (does the renderer still draw the contract colours? does the physics DOLLOP still match the snapshot?);
+// drift there is reported as SEAM-DRIFT and fails the run only with WH_STRICT_SEAMS=1 (integration runs), because the fix belongs to
+// whichever side moved.
+import { readFileSync } from 'node:fs';
 import {
   CATALOG, SPECIES, SPECIES_BY_ID, SPECIES_BY_TIER, LANES, SIGNATURE_BIAS, speciesBaseGenome, speciesTemplateGenome, tierOf, familyOf, tierIndexOf, speciesIdx, getSpecies, isSpeciesId,
 } from '../src/data/catalog.ts';
@@ -8,15 +15,19 @@ import type { SpeciesDef, SpeciesId, LaneId } from '../src/data/catalog.ts';
 import {
   SHAPE_R_MIN, SHAPE_R_MAX, SHAPE_MIN_WIDTH, evalShape, shapeVolumeRatio, shapeBounds, shapeSlope, shapeDistance, forEachDirection, DOLLOP_RECIPE,
 } from '../src/data/shapes.ts';
-import { MATERIAL_FAMILY_IDS, MATERIAL_FAMILIES, isMaterialFamilyId, materialDistance } from '../src/data/materials.ts';
+import { MATERIAL_FAMILY_IDS, MATERIAL_FAMILIES, MATERIAL_LIST, isMaterialFamilyId, materialDistance, resolveMaterial } from '../src/data/materials.ts';
 import { TIERS, TIER_SPECIES_COUNTS, TOTAL_SPECIES, TIER_ODDS, TIER_NAMES, TIER_ODDS_PERCENT, TIER_STYLE, TIER_STYLES, oddsPerSpecies, oddsLabel, nextTier, tierFromIndex, isTierId } from '../src/core/rarity.ts';
-import { quantizeGenome, encodeGenome, decodeGenome, genomeEquals, makeStarterGenome, randomGenome, GENOME_VERSION, SPECIES as GENOME_SPECIES } from '../src/core/genome.ts';
+import { quantizeGenome, encodeGenome, decodeGenome, genomeEquals, makeStarterGenome, randomGenome } from '../src/core/genome.ts';
 import type { Genome } from '../src/core/genome.ts';
-import { genomePalette } from '../src/render/oklch.ts';
-import { restPoint } from '../src/physics/shape.ts';
+import { TASK_DEFS } from '../src/core/drops.ts';
+import { bodyLab as paletteBodyLab, bodyLinear, coreLinear, labDistance } from '../src/data/palette.ts';
+import { renderCatalogDoc, CATALOG_DOC_PATH } from './gen_catalog_doc.ts';
 
-let bad = 0;
+let bad = 0, seamDrift = 0;
+const STRICT_SEAMS = process.env.WH_STRICT_SEAMS === '1';
 const check = (name: string, ok: boolean, extra = ''): void => { if (!ok) bad++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra ? '  ' + extra : ''}`); };
+/** A cross-lane contract check: printed always, counted as a failure only with WH_STRICT_SEAMS=1. */
+const seam = (name: string, ok: boolean, extra = ''): void => { if (!ok) { seamDrift++; if (STRICT_SEAMS) bad++; } console.log(`${ok ? 'ok  ' : 'SEAM-DRIFT'} [seam] ${name}${extra ? '  ' + extra : ''}`); };
 const header = (t: string): void => console.log(`\n== ${t} ==`);
 const f2 = (x: number): string => x.toFixed(2);
 const f3 = (x: number): string => x.toFixed(3);
@@ -33,16 +44,18 @@ const T = {
   paletteAll: 0.045,          // ... of any two species
   bandRadiusMax: 0.035,       // largest OKLab deviation of an instance from its species' centre colour
   pastelL: 0.8, pastelC: 0.09, // "pastel-kawaii default" = body L >= 0.80 and chroma < 0.09: none allowed
-  dollopFitRms: 0.02, dollopFitMax: 0.1, // evalShape(DOLLOP_RECIPE) against the live physics restPoint('dollop'), units of R0
+  dollopFitRms: 0.02, dollopFitMax: 0.1, // evalShape(DOLLOP_RECIPE) against the frozen physics DOLLOP snapshot below, units of R0
+  lineageMargin: 0.01,        // OKLab margin by which a lineage-tinted merge result must stay nearer its own species centre (merge.ts)
 };
 
 /* ───────────────────────────── the locked registry (append-only!) ───────────────────────────── */
 // When a species is APPENDED to SPECIES, append its id here in the same commit. Existing positions must never change.
+// (idx 20 and 36 were re-slugged once, before launch, by the language-safety review: see src/data/species.ts rule 3.)
 const IDX_LOCK: readonly string[] = [
   'dollop', 'plumpet', 'twangle', 'puddlo', 'glubbin', 'crumbit', 'chunkle', 'munchip', 'wisplet', 'cushlet', 'crimpo', 'thumbly', 'sproink', 'dimpla',
-  'nuzzo', 'flickum', 'swishel', 'granulo', 'peakum', 'wrigglo', 'fluffnut', 'capnap', 'knubby', 'kneadle', 'hooplet',
+  'nuzzo', 'flickum', 'swishel', 'granulo', 'peakum', 'wrigglo', 'acornel', 'capnap', 'knubby', 'kneadle', 'hooplet',
   'spirelo', 'zingle', 'petalop', 'burrbin', 'marigel', 'gloopsy', 'hushpuff', 'drowsel', 'thudge', 'diademo',
-  'taffelin', 'maracon', 'cindergoo', 'selenuff', 'pastrel', 'flipdome', 'caromel',
+  'taffelin', 'rattlebead', 'cindergoo', 'selenuff', 'pastrel', 'flipdome', 'caromel',
   'ambrosel', 'tidelume', 'glimglop', 'somnuff', 'fossilo',
   'skeinara', 'constello', 'prismelo',
 ];
@@ -53,17 +66,10 @@ const DESIGN_GRID: Record<LaneId, number[]> = {
   jelly: [3, 2, 2, 1, 1, 1], fill: [3, 2, 2, 1, 1, 1], chew: [2, 2, 2, 1, 1, 1], foam: [2, 2, 2, 1, 1, 0], dough: [2, 2, 1, 1, 1, 0], rubber: [2, 1, 1, 2, 0, 0],
 };
 
-/* ───────────────────────────── colour maths ───────────────────────────── */
-const toOklab = (lin: readonly number[]): [number, number, number] => {
-  const [r, g, b] = lin;
-  const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
-  const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
-  const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
-  return [0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s, 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s];
-};
-const dE = (a: readonly number[], b: readonly number[]): number => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+/* ───────────────────────────── colour maths: the palette contract (src/data/palette.ts) ───────────────────────────── */
+const dE = labDistance;
 const centreGenome = (d: SpeciesDef): Genome => speciesTemplateGenome(d.id);
-const bodyLab = (g: Genome): [number, number, number] => toOklab(genomePalette(g).body);
+const bodyLab = (g: Genome): [number, number, number] => paletteBodyLab(g);
 
 /* ───────────────────────────── originality + language safety ───────────────────────────── */
 // Real brands, characters, toy lines, games and trademarks (and the original 151 Pokemon + common later ones). Lowercase, letters only after
@@ -97,7 +103,7 @@ const DENY_CHARACTERS = ['disney', 'pixar', 'marvel', 'dccomics', 'mickey', 'min
   'pongo', 'tamagotchi', 'thomasthetank', 'teletubbies', 'muppets', 'kermit', 'elmo', 'barney', 'dora', 'clifford', 'pingu', 'moomin', 'hellokitty', 'astroboy', 'doraemon', 'pompompurin', 'hamtaro', 'sailorscouts', 'popples'];
 const DENY_BRANDS = ['google', 'apple', 'samsung', 'tesla', 'nike', 'adidas', 'haribo', 'skittles', 'starburst', 'twizzlers', 'jollyrancher', 'tootsie', 'snickers', 'kitkat', 'oreo', 'nutella', 'pringles', 'doritos', 'cheetos', 'hersheys',
   'twix', 'reeses', 'fanta', 'pepsi', 'cocacola', 'nestle', 'pillsbury', 'doughboy', 'hushpuppies', 'kleenex', 'tupperware', 'velcro', 'lavalamp', 'ikea', 'amazon', 'netflix', 'spotify',
-  'youtube', 'tiktok', 'instagram', 'snapchat', 'discord', 'twitch', 'xbox', 'playstation', 'atari', 'sega'];
+  'youtube', 'tiktok', 'instagram', 'snapchat', 'discord', 'twitch', 'xbox', 'playstation', 'atari', 'sega', 'fluffernutter', 'marshmallowfluff'];
 const DENY_ALL = [...DENY_TOYS, ...DENY_GAMES, ...DENY_NEOPETS, ...DENY_POKEMON, ...DENY_CHARACTERS, ...DENY_BRANDS];
 const norm = (s: string): string => s.toLowerCase().replace(/[^a-z]/g, '');
 const DENY = [...new Set(DENY_ALL.map(norm))].filter((x) => x.length >= 2);
@@ -127,7 +133,7 @@ function denyReason(word: string): string {
   return '';
 }
 // Ordinary English words that merely resemble a denylist entry (Pokemon "Goldeen" vs "golden"): allowed inside BLURBS only, never as a name.
-const ORDINARY_WORDS = new Set(['golden']);
+const ORDINARY_WORDS = new Set(['golden', 'wobble', 'wobbles', 'twenty']); // golden~Goldeen, wobble~Sobble, twenty~Tweety: everyday English
 /** The same for a blurb: word by word, plus long phrases against the letters-only text. */
 function denyReasonText(text: string): string {
   const flat = norm(text);
@@ -139,26 +145,134 @@ function denyReasonText(text: string): string {
   return '';
 }
 
-// Language safety: profanity, sexual terms, violence, drugs and hate. The harshest entries are stored REVERSED so this file itself stays clean.
+/** Multi-word brands: a name that runs the START of the first word (>= 4 letters, or all of a shorter word, which must then begin the name)
+ *  straight into the start of the second word (>= 3 letters) evokes the brand even though it contains neither word whole
+ *  ("Fluffnut" -> "Fluffer Nutter", "Sillyputt" -> "Silly Putty"). Space-separated, lowercase. */
+const DENY_COMPOUND = ['fluffer nutter', 'marshmallow fluff', 'silly putty', 'thinking putty', 'kinetic sand', 'play doh', 'nee doh', 'pop it', 'hello kitty', 'jolly rancher',
+  'hot wheels', 'beanie babies', 'beanie boo', 'care bears', 'build a bear', 'fisher price', 'pop mart', 'skull panda', 'my little pony', 'polly pocket', 'cabbage patch',
+  'peppa pig', 'paw patrol', 'sponge bob', 'hush puppies', 'kit kat', 'jelly cat', 'squish mallow', 'slime rancher', 'animal crossing', 'baby yoda', 'mr potato head',
+  'huggy wuggy', 'kissy missy', 'poppy playtime', 'fall guys', 'candy crush', 'angry birds', 'among us', 'adopt me', 'my melody', 'tuxedo sam', 'moshi monsters',
+  'lol surprise', 'little tikes', 'teddy ruxpin', 'buzz lightyear', 'winnie the pooh', 'peter rabbit', 'tom and jerry', 'bugs bunny', 'scooby doo', 'charlie brown',
+  'play foam', 'jolly rancher', 'little twin stars', 'my little pony', 'sylvanian families', 'calico critters', 'thomas the tank', 'baby shark'];
+/** Why `word` (a name or id) runs a multi-word brand's word starts together, or ''. */
+function compoundReason(word: string): string {
+  const w = norm(word);
+  for (const c of DENY_COMPOUND) {
+    const [a, b] = c.split(' ');
+    const minA = Math.min(4, a.length), minB = Math.min(3, b.length);
+    for (let i = 0; i < w.length; i++) {
+      if (a.length < 4 && i > 0) break; // a short first word only counts at the start of the name
+      for (let la = minA; la <= a.length && w.slice(i, i + la) === a.slice(0, la); la++) if (w.slice(i + la, i + la + minB) === b.slice(0, minB)) return `runs "${a.slice(0, la)}" into "${b.slice(0, minB)}" ("${c}")`;
+    }
+  }
+  return '';
+}
+
+// ── Language safety ──
+// Names are read aloud by players of every language, so the gate is MULTILINGUAL: profanity, sexual terms, slurs, violence and drugs in
+// English plus Spanish (es, incl. Latin American usage), Portuguese (pt, incl. Brazilian), French (fr), Italian (it), German (de), Dutch (nl),
+// Tagalog / Filipino (tl) and common internet slang (net). The multilingual lists and the harshest English entries are stored REVERSED
+// (one space-separated string per language) so this file and code search stay clean; rev() restores them at load.
+// Matching for a NAME or ID (one invented word, normalised to letters):
+//   term of <= 3 letters  equal to the whole name, or (a short strong root) at its very start or end (SAFE_ROOTS);
+//   4 letters             contained anywhere;
+//   5 letters             contained anywhere, or the whole name SOUNDS within one edit of it;
+//   6+ letters            any stretch of the name SOUNDS within one edit of it (substitution, insertion or deletion).
+// "Sounds within one edit": a substitution only counts when the two letters sound alike (vowel for vowel, c/k/q, s/z/c, b/v/w, f/v, g/j, d/t,
+// p/b, m/n); an inserted or deleted letter always counts. That catches respellings (a vowel swapped or a letter doubled inside a slur)
+// without flagging ordinary English ("chunk", "clatter", "munch"). BLURBS, tags, silhouettes, family names/blurbs and task texts are
+// English prose: a word fails if it equals a term (or contains one of 6+ letters), except a few ordinary English homographs.
 const rev = (s: string): string => [...s].reverse().join('');
 const SAFE_PLAIN = ['damn', 'hell', 'crap', 'piss', 'shit', 'fuck', 'bitch', 'bastard', 'dick', 'cock', 'pussy', 'boob', 'tits', 'sexy', 'sex', 'porn', 'nude', 'naked', 'rape', 'kill', 'murder', 'suicide', 'death', 'dead', 'die', 'blood', 'gore', 'gun',
   'shoot', 'bomb', 'terror', 'nazi', 'slave', 'drug', 'weed', 'pot', 'meth', 'cocaine', 'heroin', 'beer', 'wine', 'vodka', 'whisky', 'booze', 'drunk', 'smoke', 'cigar', 'vape', 'poop', 'pee', 'fart', 'butt', 'anus', 'penis', 'vagina', 'idiot',
   'stupid', 'dumb', 'retard', 'moron', 'ugly', 'fat', 'hate', 'devil', 'satan', 'demon', 'curse', 'hang', 'noose', 'knife', 'stab', 'abuse', 'cum', 'jizz', 'slut', 'whore', 'screw', 'wank', 'twat', 'prick'];
 const SAFE_REVERSED = ['reggin', 'toggaf', 'tnuc', 'ssa'].map(rev);
-const SAFE = [...new Set([...SAFE_PLAIN, ...SAFE_REVERSED].map(norm))];
-/** Name or id: contains a term of 4+ letters, or equals a term of 3 or fewer letters. */
+const SAFE_LANG_REVERSED: Readonly<Record<string, string>> = {
+  es: 'atup otup satup adreim redoj odidoj onoc norbac anorbac ojednep ajednep ragnihc adagnihc odagnihc agnihc ognihc agrev allop ehcnip oreluc oluc aciram nociram ocaram acaram nomam adamam ahconap ohcohc ahcnoc ajip agnip ojarac regoc rallof arroz arrep sallopilig ollupac aitsoh atupeujih odiraplam aerronog noveuh odulob odutolep oailuc noew acadus atargen otoj arellitrot arellob ajipapuhc oveugamam atenup senojoc nojoc etejo otro olort eteros',
+  pt: 'ohlarac arrop adrem adof redof esadof atecub atecob atoxox atox acorip acip alor etecac atehnup odaiv daiv ahcib oatapas oazuc odabmorra acabab oirato onroc atsob acargsed adnubagav adafas ocacam ohletnep ocoirb olerg aciriris uconuap',
+  fr: 'edrem drem niatup etup epolas dualas drannoc essannoc ennoc elucne relucne etib elliuoc selliuoc ettahc euqin reuqin relnarb ruelnarb ertuof ledrob edep ettepat eniuog ergen eluonguob aluobmab reihc buet erbihc essaiffuop essatep ecrag dratab buobz ettoif ezuolrat',
+  it: 'ozzac zzac izzac aihcnim oznorts aznorts anattup aiort olucnaffav olucnaf agif acif enoilgoc inoilgoc oicorf oihcconif enoihccir oidocrop odratsab attongim aloccoz erapocs onipmop orgen enorret eragac eraicsip arrobs enniz enottaluc',
+  de: 'essiehcs ssiehcs hcsra hcolhcsra nekcif kcif eztof znawhcs eruh reshciw eshciw lethcuwhcs regen ekcak essip nettit ihcsum ettun tsaps itsaps ognom ekanak trubegssim nhosneruh toidillov nesmub lemmip neztof eztarbkcak',
+  nl: 'tuk lul kaztoolk reknak gniret sufyt emmodrevdog reoh rekkilf nekuen tnorts loognom rejilreknak tels feet omoh thcin fjiwtuk siruelp reteimedos fjiwekkat etolk revdog erelok rejiltsep rejilsufyt rejilgniret gnojnereoh turt eireols lons rekkur nepjip neffeb dniktuk ejteim seenihcpeop lekie reohreknak',
+  tl: 'anignatup anignat ogag agnat lolu odatnarat totnak natutnak ekup itit tarub gayab kepkep lokaj alkab kopkop todnih uykap tehskap lapuk totu stite toyi laslas gobil gobilam domat talib away epep yadup toyab',
+  net: 'ftw ufts oftg lmf flim flid toht wfsn iatneh ffiy oafml syk smk lecni kcuc paf yssub tayg ttayg noog gninoog remooc oageha atuf ilol atohs odep norp snafylno hautkwah zeed amgil amgus kcuhp kuf kcf quf hctb zza boob aboob sedun txes gnitxes pmis dms cciht kcid tun dettun anignam',
+  en: 'lana esra elohesra elohssa renob odlid ynroh ygro msagro citore tcere pmuh krewt ytoob elppin nemes mreps hctorc elcitset mutorcs reggub skcollob reknaw ressot gals knaks knups nooc cips knihc koog ekik kcabtew ynnart ekyd zaps ikap daehlewot daehgar renaeb yknoh niksder wauqs aggin reltih kkk dahij tselom trevrep vrep tsecni ytilaitseb eniacoc dsl ysatsce muipo timov frab aehrraid drut eikood oopoop eeweew kcasllab kcastun yttit eittit seittit sboob mub elohmub gulpttub elohttub tilc avluv aibal modnoc argaiv sebup cibup latineg slatineg lauxes reppirts rekooh pmip lehtorb eporg eldnof knaps yknik msdb hsitef',
+};
+const SAFE_LANGS = Object.keys(SAFE_LANG_REVERSED);
+const SAFE_BY_LANG: Readonly<Record<string, string[]>> = Object.fromEntries(SAFE_LANGS.map((k) => [k, SAFE_LANG_REVERSED[k].split(' ').map(rev)]));
+const SAFE = [...new Set([...SAFE_PLAIN, ...SAFE_REVERSED, ...SAFE_LANGS.flatMap((k) => SAFE_BY_LANG[k])].map(norm))].filter((t) => t.length >= 2);
+/** Short strong roots that may not begin (or end) a name even inside a longer word. */
+const SAFE_ROOTS = /^(cum|ass|sex|tit|poo|pee|fag|nig|fap|kys|wtf|fuk|fck|kut|cul)|(cum|ass|sex|tit|poo|pee|fag|nig|fap|kys|wtf|fuk|fck|kut)$/;
+/** Ordinary English words that equal a term from another list (Tagalog/Dutch slang, internet slang): allowed in English PROSE only, never in a name. */
+const ENGLISH_HOMOGRAPHS = new Set(['nut', 'hump', 'bite']);
+const VOWELS = 'aeiouy';
+const SOUND_ALIKE = ['ckq', 'scz', 'bvw', 'fv', 'gj', 'dt', 'pb', 'mn'];
+const alike = (x: string, y: string): boolean => (VOWELS.includes(x) && VOWELS.includes(y)) || SOUND_ALIKE.some((g) => g.includes(x) && g.includes(y));
+/** Edit distance <= 1 where a substitution only counts between letters that sound alike. */
+function soundsWithin1(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (a.length === b.length) { let d = -1; for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) { if (d >= 0) return false; d = i; } return alike(a[d], b[d]); }
+  return within1(a, b);
+}
+/** Some stretch of `w` (length L-1..L+1 for a term of length L) sounds within one edit of `t`. */
+function soundsInside(w: string, t: string): boolean {
+  for (let len = t.length - 1; len <= t.length + 1; len++) for (let i = 0; i + len <= w.length; i++) if (soundsWithin1(w.slice(i, i + len), t)) return true;
+  return false;
+}
+/** Name or id: why it is unsafe in any screened language, or ''. */
 function unsafeReason(word: string): string {
   const w = norm(word);
-  for (const t of SAFE) { if (t.length <= 3) { if (w === t) return `equals "${t}"`; } else if (w.includes(t)) return `contains "${t}"`; }
-  return '';
+  for (const t of SAFE) {
+    if (t.length <= 3) { if (w === t) return `equals "${t}"`; continue; }
+    if (w.includes(t)) return `contains "${t}"`;
+    if (t.length === 5 && soundsWithin1(w, t)) return `sounds like "${t}"`;
+    if (t.length >= 6 && soundsInside(w, t)) return `contains something that sounds like "${t}"`;
+  }
+  const m = SAFE_ROOTS.exec(w);
+  return m ? `begins or ends with "${m[0]}"` : '';
 }
-/** Blurb: any whole word equal to a term, or a word containing a term of 6+ letters. (Names and ids are stricter: they are single invented words.) */
+/** English prose (blurb, tag, silhouette, family text, task text): any whole word equal to a term, or a word containing a term of 6+ letters. */
 function unsafeReasonText(text: string): string {
   for (const raw of text.toLowerCase().split(/[^a-z]+/)) {
-    if (!raw) continue;
+    if (!raw || ENGLISH_HOMOGRAPHS.has(raw)) continue;
     for (const t of SAFE) { if (raw === t) return `word "${raw}"`; if (t.length >= 6 && raw.includes(t)) return `word "${raw}" contains "${t}"`; }
   }
   return '';
+}
+
+/* ───────────────────────────── the frozen physics DOLLOP ───────────────────────────── */
+// restPoint('dollop', u, R0 = 1) of src/physics/shape.ts at DOLLOP_SNAPSHOT_N fixed directions (forEachDirection), frozen on 2026-10-05
+// (identical to the version the catalog recipe was first fitted against). Int16 little-endian, x/y/z * 10000, base64. The section-4 gate
+// fits DOLLOP_RECIPE against these numbers, so a physics rewrite cannot move the catalog gate; section 10 reports (SEAM) when the live
+// physics no longer matches. Refresh after an INTENDED physics shape change:  node _harness/probe_catalog.ts --freeze-dollop
+const DOLLOP_SNAPSHOT_N = 400;
+const DOLLOP_SNAPSHOT =
+  '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';
+function dollopSnapshot(): Float64Array {
+  const buf = Buffer.from(DOLLOP_SNAPSHOT, 'base64');
+  const out = new Float64Array(buf.length / 2);
+  for (let i = 0; i < out.length; i++) out[i] = buf.readInt16LE(i * 2) / 10000;
+  return out;
+}
+type RestPointFn = (species: string, dx: number, dy: number, dz: number, R0: number, out: number[], o: number) => number;
+function sampleDollop(restPoint: RestPointFn): Float64Array {
+  const out = [0, 0, 0], pts = new Float64Array(DOLLOP_SNAPSHOT_N * 3);
+  forEachDirection(DOLLOP_SNAPSHOT_N, (x, y, z, i) => { restPoint('dollop', x, y, z, 1, out, 0); pts[i * 3] = out[0]; pts[i * 3 + 1] = out[1]; pts[i * 3 + 2] = out[2]; });
+  return pts;
+}
+if (process.argv.includes('--freeze-dollop')) {
+  const { restPoint } = (await import('../src/physics/shape.ts')) as unknown as { restPoint: RestPointFn };
+  const pts = sampleDollop(restPoint), buf = Buffer.alloc(pts.length * 2);
+  pts.forEach((v, i) => buf.writeInt16LE(Math.round(v * 10000), i * 2));
+  console.log(buf.toString('base64'));
+  process.exit(0);
 }
 
 /* ═══════════════════════════════════ 1. roster, counts, registry ═══════════════════════════════════ */
@@ -176,10 +290,24 @@ check("'dollop' is idx 0, Common, jelly gel", CATALOG[0].id === 'dollop' && CATA
 check('IDX_LOCK: existing positions never change (append-only)', IDX_LOCK.every((id, i) => CATALOG[i] && CATALOG[i].id === id) && CATALOG.length >= IDX_LOCK.length,
   CATALOG.length > IDX_LOCK.length ? `${CATALOG.length - IDX_LOCK.length} appended since the lock: append them to IDX_LOCK` : '');
 check('IDX_LOCK covers every species (append new ones to the lock)', CATALOG.length === IDX_LOCK.length);
-check('genome.ts SPECIES is the catalog order', GENOME_SPECIES.length === SPECIES.length && GENOME_SPECIES.every((id, i) => id === SPECIES[i]));
+// The wire format, pinned end to end: these literal share strings were written once (the starter genome with its species byte set to
+// 0 / 7 / 20 / 36 / 47 / 49) and must decode to these species forever. A reorder, a deleted entry or a slug change in SPECIES fails here.
+{
+  const WIRE: Array<[string, string]> = [
+    ['g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'dollop'], ['g1.AQcAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'munchip'], ['g1.ARQAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'acornel'],
+    ['g1.ASQAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'rattlebead'], ['g1.AS8AAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'skeinara'], ['g1.ATEAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA', 'prismelo'],
+  ];
+  const got = WIRE.map(([code]) => decodeGenome(code)?.species ?? 'null');
+  check('pinned share strings decode to their species (idx byte 0/7/20/36/47/49 -> dollop/munchip/acornel/rattlebead/skeinara/prismelo) and re-encode to the same text',
+    WIRE.every(([code, id], i) => got[i] === id && encodeGenome(decodeGenome(code) as Genome) === code), got.join(' '));
+}
 check('lookup is safe against hostile ids', getSpecies('__proto__') === undefined && getSpecies('constructor') === undefined && getSpecies(7) === undefined && !isSpeciesId('toString') && SPECIES_BY_ID['dollop'].idx === 0);
 check('SPECIES_BY_TIER matches', SPECIES_BY_TIER.every((l, t) => l.length === TIER_SPECIES_COUNTS[t] && l.every((d) => tierIndexOf(d.id) === t)));
-check('tierOf / familyOf agree with the entries', CATALOG.every((d) => tierOf(d.id) === d.tier && familyOf(d.id) === d.family));
+{
+  let threw = 0; for (const x of ['', 'nope', '__proto__', 'DOLLOP']) { try { tierOf(x as SpeciesId); } catch (e) { if (e instanceof RangeError) threw++; } try { familyOf(x as SpeciesId); } catch (e) { if (e instanceof RangeError) threw++; } }
+  check('tierOf / familyOf answer for known species (dollop common jellygel, rattlebead epic beadsqueeze, prismelo mythic gummy) and throw RangeError for unknown ids',
+    (() => { try { return tierOf('dollop') === 'common' && familyOf('dollop') === 'jellygel' && tierOf('rattlebead') === 'epic' && familyOf('rattlebead') === 'beadsqueeze' && tierOf('prismelo') === 'mythic' && familyOf('prismelo') === 'gummy'; } catch { return false; } })() && threw === 8);
+}
 check('tier names exist for display', TIERS.every((t) => typeof TIER_NAMES[t] === 'string' && TIER_NAMES[t].length > 3));
 
 /* ═══════════════════════════════════ 2. names, blurbs, tags ═══════════════════════════════════ */
@@ -298,17 +426,17 @@ for (let i = 0; i < CATALOG.length; i++) for (let j = i + 1; j < CATALOG.length;
 sil.sort((a, b) => a[0] - b[0]);
 console.log('closest silhouettes: ' + sil.slice(0, 6).map((p) => `${p[1]}/${p[2]} ${f3(p[0])}`).join(', '));
 check(`silhouettes pairwise distinct (volume-normalised RMS radius difference >= ${T.silhouetteMin})`, sil[0][0] >= T.silhouetteMin, `closest ${sil[0][1]} / ${sil[0][2]} = ${f3(sil[0][0])}, median pair ${f3(sil[Math.floor(sil.length / 2)][0])}`);
-// dollop against the live physics function
+// dollop against the FROZEN physics DOLLOP (see DOLLOP_SNAPSHOT below; section 10 checks the live physics against the same snapshot)
 {
-  const out = [0, 0, 0]; let s = 0, mx = 0, n = 0;
-  forEachDirection(3000, (x, y, z) => {
-    restPoint('dollop', x, y, z, 1, out, 0);
-    const l = Math.hypot(out[0], out[1], out[2]);
-    const e = evalShape(DOLLOP_RECIPE, out[0] / l, out[1] / l, out[2] / l) - l;
-    s += e * e; mx = Math.max(mx, Math.abs(e)); n++;
-  });
-  const rms = Math.sqrt(s / n);
-  check(`DOLLOP recipe reproduces the physics lane's rest shape (RMS <= ${T.dollopFitRms}, worst <= ${T.dollopFitMax} R0)`, rms <= T.dollopFitRms && mx <= T.dollopFitMax, `RMS ${f3(rms)}, worst ${f3(mx)} (at the peak tip)`);
+  const pts = dollopSnapshot();
+  let s = 0, mx = 0;
+  for (let i = 0; i < pts.length; i += 3) {
+    const l = Math.hypot(pts[i], pts[i + 1], pts[i + 2]);
+    const e = evalShape(DOLLOP_RECIPE, pts[i] / l, pts[i + 1] / l, pts[i + 2] / l) - l;
+    s += e * e; mx = Math.max(mx, Math.abs(e));
+  }
+  const rms = Math.sqrt(s / (pts.length / 3));
+  check(`DOLLOP recipe reproduces the frozen physics rest shape (${pts.length / 3} points; RMS <= ${T.dollopFitRms}, worst <= ${T.dollopFitMax} R0)`, rms <= T.dollopFitRms && mx <= T.dollopFitMax, `RMS ${f3(rms)}, worst ${f3(mx)} (at the peak tip)`);
   check("CATALOG's dollop uses DOLLOP_RECIPE", CATALOG[0].shape === DOLLOP_RECIPE);
 }
 // evaluator hot path: no allocation, deterministic, never NaN
@@ -343,11 +471,19 @@ const lch = labs.map((l) => ({ L: l[0], C: Math.hypot(l[1], l[2]) }));
 check(`not pastel-kawaii: no body with L >= ${T.pastelL} and chroma < ${T.pastelC}`, lch.every((x) => !(x.L >= T.pastelL && x.C < T.pastelC)), `lightest ${f2(Math.max(...lch.map((x) => x.L)))}`);
 check('palette has range: lightness spans at least 0.2 and chroma at least 0.12 across the roster', Math.max(...lch.map((x) => x.L)) - Math.min(...lch.map((x) => x.L)) >= 0.2 && Math.max(...lch.map((x) => x.C)) - Math.min(...lch.map((x) => x.C)) >= 0.12);
 const byTier = (f: (d: SpeciesDef) => number): number[] => TIERS.map((_, t) => mean(CATALOG.filter((d) => tierIndexOf(d.id) === t).map(f)));
-const glow = byTier((d) => d.look.coreGlow), glit = byTier((d) => d.look.glitter), trans = byTier((d) => d.look.translucency), chroma = byTier((d) => d.look.chroma);
-console.log(`tier means  coreGlow ${glow.map(f2).join(' ')} | glitter ${glit.map(f2).join(' ')} | translucency ${trans.map(f2).join(' ')} | chroma ${chroma.map(f2).join(' ')}`);
-check('rarity is in the material: mean coreGlow rises strictly with tier', glow.every((g, i) => i === 0 || g > glow[i - 1]));
-check('rarity is in the material: mean glitter rises strictly with tier', glit.every((g, i) => i === 0 || g > glit[i - 1]));
-check('rarity is in the material: mean translucency never falls with tier', trans.every((g, i) => i === 0 || g >= trans[i - 1] - 1e-9));
+// "Rarity is in the material" is judged on the RESOLVED look: resolveMaterial(family, the species' template genome).look, the numbers a
+// consumer draws with (src/data/materials.ts passes the genome's translucency / gloss / coreGlow / glitter through, so the family can never
+// flatten a tier's look). The raw catalog means are printed next to them.
+const resolved = (d: SpeciesDef): ReturnType<typeof resolveMaterial>['look'] => resolveMaterial(d.family, centreGenome(d)).look;
+const glow = byTier((d) => resolved(d).coreGlow), glit = byTier((d) => resolved(d).glitter), trans = byTier((d) => resolved(d).translucency), chroma = byTier((d) => d.look.chroma);
+const rawGlow = byTier((d) => d.look.coreGlow), rawTrans = byTier((d) => d.look.translucency);
+console.log(`tier means (resolved)  coreGlow ${glow.map(f2).join(' ')} | glitter ${glit.map(f2).join(' ')} | translucency ${trans.map(f2).join(' ')} | chroma ${chroma.map(f2).join(' ')}`);
+console.log(`tier means (raw catalog) coreGlow ${rawGlow.map(f2).join(' ')} | translucency ${rawTrans.map(f2).join(' ')}`);
+check('rarity is in the material: mean RESOLVED coreGlow rises strictly with tier', glow.every((g, i) => i === 0 || g > glow[i - 1]));
+check('rarity is in the material: mean RESOLVED glitter rises strictly with tier', glit.every((g, i) => i === 0 || g > glit[i - 1]));
+check('rarity is in the material: mean RESOLVED translucency never falls with tier', trans.every((g, i) => i === 0 || g >= trans[i - 1] - 1e-9));
+check('resolution keeps every species\' own look: resolved translucency / gloss / coreGlow / glitter equal the template genome\'s (no family override)',
+  CATALOG.every((d) => { const g = centreGenome(d), r = resolved(d); return r.translucency === g.translucency && r.gloss === g.gloss && r.coreGlow === g.coreGlow && r.glitter === g.glitter; }));
 check('rarity is in the colour: mean chroma never falls with tier', chroma.every((g, i) => i === 0 || g >= chroma[i - 1] - 1e-9));
 check('Common has no sparkle beyond the starter (glitter <= 0.3)', CATALOG.filter((d) => d.tier === 'common').every((d) => d.look.glitter <= 0.3));
 check('Rare and above carry a speckle / swirl / bands layer (pattern not plain, speckle >= 0.3)', CATALOG.filter((d) => tierIndexOf(d.id) >= 2).every((d) => d.look.pattern !== 'plain' && d.look.speckle >= 0.3));
@@ -448,21 +584,47 @@ check('denylist covers the required families (squishmallow, jellycat, labubu, sm
 check('denylist includes the original 151 Pokemon (bulbasaur .. mew)', ['bulbasaur', 'charizard', 'pikachu', 'jigglypuff', 'snorlax', 'eevee', 'mewtwo', 'mew', 'psyduck', 'gengar', 'magikarp'].every((x) => DENY.includes(x)) && DENY_POKEMON.length >= 190);
 let origOk = true; const origMsg: string[] = [];
 for (const d of CATALOG) {
-  const r1 = denyReason(d.name), r2 = denyReason(d.id), r3 = denyReasonText(d.blurb);
-  if (r1 || r2 || r3) { origOk = false; origMsg.push(`${d.id}: ${r1 || r2 || r3}`); }
+  const r1 = denyReason(d.name), r2 = denyReason(d.id), r3 = denyReasonText(d.blurb), r4 = compoundReason(d.name) || compoundReason(d.id);
+  if (r1 || r2 || r3 || r4) { origOk = false; origMsg.push(`${d.id}: ${r1 || r2 || r3 || r4}`); }
 }
-check('no species name, id or blurb contains or is within edit distance 1 of a real brand, character, toy line or game', origOk, origMsg.join(' | '));
+check('no species name, id or blurb contains or is within edit distance 1 of a real brand, character, toy line or game, or runs a multi-word brand together', origOk, origMsg.join(' | '));
 // the gate itself must bite: known bad examples are caught, innocent words are not
 check('the gate catches known near-misses (Squirmle~Squirtle, Dumplo~Duplo, Prongo~Pongo, Pikachi, Squishmellow, Labubo, Plortz, Kirbi, Funkoo)', ['Squirmle', 'Pikachi', 'Squishmellow', 'Labubo', 'Plortz', 'Kirbi', 'Funkoo', 'Jellycats', 'Mariooo', 'Dumplo', 'Prongo'].every((n) => denyReason(n) !== ''));
+check('the multi-word brand rule bites (Fluffnut ~ Fluffer Nutter, Sillyputt, Hellokit, Jellycato, Peppapigs, Kitkatto) and spares look-alikes (Jellycap, Hushpuff, Caromel, Constello)',
+  ['Fluffnut', 'Sillyputt', 'Hellokit', 'Jellycato', 'Peppapigs', 'Kitkatto'].every((n) => compoundReason(n) !== '') && ['Jellycap', 'Hushpuff', 'Caromel', 'Constello', 'Dollop'].every((n) => compoundReason(n) === ''),
+  ['Fluffnut', 'Jellycap'].map((n) => `${n}: ${compoundReason(n) || 'ok'}`).join('; '));
 check('the gate does not cry wolf on innocent words (Dollop, Gloopsy, Munchip, Plumpet, Jelly, Squish)', ['Dollop', 'Gloopsy', 'Munchip', 'Plumpet', 'Jelly', 'Squish'].every((n) => denyReason(n) === ''));
+
+// language safety over EVERY player-facing or design-facing string the data layer owns
+const LANG_COVERAGE = ['es', 'pt', 'fr', 'it', 'de', 'nl', 'tl', 'net', 'en'];
+check(`the language list covers English, Spanish, Portuguese, French, Italian, German, Dutch, Tagalog and internet slang (${SAFE.length} terms; >= 25 per language)`,
+  LANG_COVERAGE.every((k) => (SAFE_BY_LANG[k] ?? []).length >= 25), LANG_COVERAGE.map((k) => `${k} ${(SAFE_BY_LANG[k] ?? []).length}`).join(' '));
 let safeOk = true; const safeMsg: string[] = [];
 for (const d of CATALOG) {
   const r = unsafeReason(d.name) || unsafeReason(d.id) || unsafeReasonText(d.blurb) || [...d.tags, d.silhouette].map((x) => unsafeReasonText(x)).find((x) => x) || '';
   if (r) { safeOk = false; safeMsg.push(`${d.id}: ${r}`); }
 }
-check(`language safety: no profanity, sexual, violent, drug or hate terms in names, ids, blurbs, tags or silhouette text (${SAFE.length} terms)`, safeOk, safeMsg.join(' | '));
-check('the safety gate bites (rejects an obvious bad word, accepts innocent ones)', unsafeReason('Shitty') !== '' && unsafeReasonText('what the hell') !== '' && unsafeReason('Dollop') === '' && unsafeReasonText('A soft round friend.') === '');
-check('every name is also a safe, plain reading: no name begins or ends with an unsafe 3-letter root (cum, ass, sex, tit, poo, pee)', CATALOG.every((d) => !/^(cum|ass|sex|tit|poo|pee|fag|nig)|(ass|sex|tit|poo|pee|fag|nig)$/.test(d.id)));
+check(`language safety (9 language lists, substring + sound-alike edit distance 1): no unsafe species name, id, blurb, tag or silhouette text`, safeOk, safeMsg.join(' | '));
+{
+  const other: Array<[string, string]> = [];
+  for (const f of MATERIAL_LIST) other.push([`family ${f.id} name`, f.name], [`family ${f.id} blurb`, f.blurb]);
+  for (const l of LANES) other.push([`lane ${l.id}`, l.name]);
+  for (const t of TIERS) other.push([`tier ${t}`, TIER_NAMES[t]]);
+  for (const t of TASK_DEFS) other.push([`task ${t.id}`, t.text]);
+  const hits = other.map(([where, text]) => [where, unsafeReasonText(text) || denyReasonText(text)]).filter(([, r]) => r);
+  check(`language safety and originality of the other data strings (${other.length}: family names and blurbs, lane and tier names, daily task texts)`, hits.length === 0, hits.map(([w, r]) => `${w}: ${r}`).join(' | '));
+}
+{
+  // the gate must bite in every language and on respellings, and must not cry wolf on ordinary words. Bad examples stored reversed.
+  const BAD = 'nocaram nokiram anociram legnatup olozzac olodrem olagrev ojednep ognihc uhlarac atecub iznawhcs oreknak oanignat elkcif ystuk ottayg anignam eltoop ekatihs oetup odrannoc leznorts orekkilf okepkep lekuen ohnidaiv einoog'.split(' ').map(rev);
+  const missed = BAD.filter((n) => unsafeReason(n) === '');
+  const INNOCENT = ['Dollop', 'Munchip', 'Chunkle', 'Clatterbead', 'Acornel', 'Rattlebead', 'Diademo', 'Constello', 'Marigel', 'Caromel', 'Puddlo', 'Pastrel', 'Hushpuff', 'Peakum', 'Flickum', 'Mangolo', 'Twinkle'];
+  const wolf = INNOCENT.filter((n) => unsafeReason(n) !== '');
+  check(`the language gate bites: ${BAD.length} respelled unsafe names across es/pt/fr/it/de/nl/tl/slang are all rejected`, missed.length === 0, missed.length ? `missed ${missed.length}` : '');
+  check('the language gate does not cry wolf on ordinary-sounding names (Munchip, Chunkle, Clatterbead, Acornel, Diademo, Constello, Mangolo, Twinkle ...)', wolf.length === 0, wolf.map((n) => `${n}: ${unsafeReason(n)}`).join(' | '));
+  check('prose screening: an unsafe word is caught, an ordinary English homograph is not', unsafeReasonText('what the hell') !== '' && unsafeReasonText(`una ${rev('adreim')}`) !== '' && unsafeReasonText('A soft round friend.') === '' && unsafeReasonText('Take a bite of this nut-brown hump.') === '');
+}
+check('every name is also a safe, plain reading: no name begins or ends with an unsafe short root (cum, ass, sex, tit, poo, pee, kut ...)', CATALOG.every((d) => !SAFE_ROOTS.test(d.id)));
 
 /* ═══════════════════════════════════ 8. rarity data (src/core/rarity.ts) ═══════════════════════════════════ */
 header('8. rarity tables: odds, visual language, reveal budgets, haptics');
@@ -485,6 +647,45 @@ header('8. rarity tables: odds, visual language, reveal budgets, haptics');
   check('species per tier constants add up to 50', TIER_SPECIES_COUNTS.reduce((a, b) => a + b, 0) === 50 && TOTAL_SPECIES === 50);
 }
 
-console.log(`\n${bad ? bad + ' check(s) FAILED' : 'all catalog checks passed'}`);
+/* ═══════════════════════════════════ 9. the generated doc cannot go stale ═══════════════════════════════════ */
+header('9. _spec/CATALOG.md is exactly what the data generates');
+{
+  let onDisk = '';
+  try { onDisk = readFileSync(CATALOG_DOC_PATH, 'utf8'); } catch { onDisk = ''; }
+  const want = renderCatalogDoc();
+  const a = onDisk.split('\n'), b = want.split('\n');
+  let first = -1; for (let i = 0; i < Math.max(a.length, b.length); i++) if (a[i] !== b[i]) { first = i; break; }
+  check('_spec/CATALOG.md matches renderCatalogDoc() byte for byte (if not: node _harness/gen_catalog_doc.ts, never a hand edit)', onDisk === want,
+    first >= 0 ? `first difference at line ${first + 1}: on disk "${(a[first] ?? '<missing>').slice(0, 70)}" vs generated "${(b[first] ?? '<missing>').slice(0, 70)}"` : '');
+}
+
+/* ═══════════════════════════════════ 10. SEAMS with other lanes (informative unless WH_STRICT_SEAMS=1) ═══════════════════════════════════ */
+header(`10. seams: the render lane draws the palette contract, the physics DOLLOP is the frozen snapshot${STRICT_SEAMS ? ' (STRICT)' : ''}`);
+{
+  type PaletteFn = (g: Genome) => { body: number[]; core: number[] };
+  let genomePalette: PaletteFn | null = null, why = '';
+  try { genomePalette = ((await import('../src/render/oklch.ts')) as unknown as { genomePalette: PaletteFn }).genomePalette; } catch (e) { why = String(e).slice(0, 120); }
+  if (!genomePalette) seam('render lane module src/render/oklch.ts loads (genomePalette)', false, why);
+  else {
+    const gs: Genome[] = [...CATALOG.map(centreGenome), ...CATALOG.flatMap((d) => [1, 2, 3].map((k) => speciesBaseGenome(d.id, k * 7919))), ...Array.from({ length: 200 }, (_, i) => randomGenome(i))];
+    let worst = 0, where = '';
+    for (const g of gs) {
+      const p = genomePalette(g), b = bodyLinear(g), c = coreLinear(g);
+      const d = Math.max(...b.map((v, i) => Math.abs(v - p.body[i])), ...c.map((v, i) => Math.abs(v - p.core[i])));
+      if (d > worst) { worst = d; where = encodeGenome(g); }
+    }
+    seam(`the renderer's genomePalette body and core colours equal the palette contract src/data/palette.ts (${gs.length} genomes, max linear-RGB difference <= 1e-9)`, worst <= 1e-9, worst > 1e-9 ? `max ${worst.toExponential(2)} at ${where}: the render lane changed the drawn colour; it should import src/data/palette.ts, or the catalog colour gates must be re-run against the new formula` : '');
+  }
+  let restPoint: RestPointFn | null = null; why = '';
+  try { restPoint = ((await import('../src/physics/shape.ts')) as unknown as { restPoint: RestPointFn }).restPoint; } catch (e) { why = String(e).slice(0, 120); }
+  if (!restPoint) seam('physics lane module src/physics/shape.ts loads (restPoint)', false, why);
+  else {
+    const live = sampleDollop(restPoint), snap = dollopSnapshot();
+    let mx = 0; for (let i = 0; i < live.length; i++) mx = Math.max(mx, Math.abs(live[i] - snap[i]));
+    seam(`the physics DOLLOP rest shape still equals the frozen snapshot (${DOLLOP_SNAPSHOT_N} points, max difference <= 1e-4 R0)`, mx <= 1e-4, mx > 1e-4 ? `max ${mx.toFixed(4)} R0: physics changed the DOLLOP shape; refit DOLLOP_RECIPE (src/data/shapes.ts) and refresh the snapshot with --freeze-dollop` : '');
+  }
+  if (seamDrift) console.log(`(${seamDrift} seam check(s) drifted${STRICT_SEAMS ? ' and count as failures' : '; informative here, set WH_STRICT_SEAMS=1 to make them fail'})`);
+}
+
+console.log(`\n${bad ? bad + ' check(s) FAILED' : 'all catalog checks passed'}${seamDrift && !STRICT_SEAMS ? ` (${seamDrift} seam drift(s) reported above)` : ''}`);
 process.exit(bad ? 1 : 0);
-void speciesBaseGenome;

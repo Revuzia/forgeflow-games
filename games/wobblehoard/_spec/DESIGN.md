@@ -1,15 +1,20 @@
 # WOBBLEHOARD: design decisions (collection, merge, trade, reveal)
 
 Working title. This is the decision document that [`COLLECTION.md`](COLLECTION.md), [`MERGE.md`](MERGE.md), [`TRADE.md`](TRADE.md) and every implementer follow.
-Slice 1 (poke, squish, pull, release one squishy) is built elsewhere; everything here is what comes after it.
-Numbers marked **[sim]** are quoted from `_harness/sim_economy.ts` (run `node _harness/sim_economy.ts`, about 6 minutes for 5000 players; `--quick` for a fast check;
-deterministic). Since the catalog lane landed, that sim **imports the real game logic** (`src/data/catalog.ts`, `src/core/meter.ts`, `drops.ts`, `merge.ts`, `rarity.ts`) instead of its own copies,
-and every number below was re-quoted from that run (seed 0x5eed1234); `_harness/probe_economy.ts` checks the same rules independently. Player behaviour in that sim is **assumed**, not measured (section 5.12).
+Where a module document deliberately refines a rule here, it says so with a numbered deviation (D-T, M, C) and this file carries a "Superseded" note
+pointing at it (section 5.13 lists them all); the module document's rule is then the current one.
+Slice 1 (poke, squish, pull, release one squishy) is built and runs in the app. The economy logic of section 5 (catalog, rarity, meter, drops, merge) is
+built and tested as pure modules but **not wired into the app yet**; the server, the Hoard, merge and trade modules are specification only. The single
+status table (built, wired, spec-only, with dates) is [`NEXT_STEPS.md`](NEXT_STEPS.md) section 1; the current build contract is [`CONTRACT.md`](CONTRACT.md).
+Numbers marked **[sim]** come from **one saved run** of `_harness/sim_economy.ts`, the canonical run of section 5.0, and carry the sim section they come from
+(for example **[sim K]**). The sim **imports the real game logic** (`src/data/catalog.ts`, `src/core/meter.ts`, `drops.ts`, `merge.ts`, `rarity.ts`) instead of
+its own copies; `_harness/probe_economy.ts` checks the same rules independently. Player behaviour in that sim is **assumed**, not measured (section 5.12).
 
 **Evidence grades used in this file.** **[O]** = I opened the page. **[S]** = the URL was returned by a web search whose result
-summary states the claim; the page itself was NOT opened. **[G]** = general knowledge, unverified. Why so few [O]: the sandbox
-egress proxy refused every host I tried through `WebFetch` and `curl` (`EGRESS_BLOCKED` / `403 CONNECT`) except
-`developer.apple.com` and `github.com`; x.com (the reference clips) is blocked too, so the clips were never seen, only described.
+summary states the claim; the page itself was NOT opened. **[G]** = general knowledge, unverified. Why so few [O]: during the research for
+sections 3 and 4 (2026-10-02) the sandbox egress proxy refused every host tried through `WebFetch` and `curl` (`EGRESS_BLOCKED` / `403 CONNECT`)
+except `developer.apple.com` and `github.com`. **The two reference clips were reviewed later, on 2026-10-05, from downloaded copies kept outside the
+repo**; that review is [`REFERENCES.md`](REFERENCES.md), and section 2 below follows it.
 
 ---
 
@@ -30,18 +35,27 @@ exact one you are missing.
 
 ## 2. The two reference clips: ideas taken, versions ours
 
-Clips could not be opened (x.com blocked); this maps the owner's descriptions only. Nothing visual or audible is copied.
+The owner pointed at two short clips on X. They were reviewed on 2026-10-05 from downloaded copies kept outside the repo (frame contact sheets and an
+audio spectrogram). **[`REFERENCES.md`](REFERENCES.md) is the only place the clips are read** (beat by beat, with the reviewer's do-not-copy checklist);
+this table maps its ideas onto the design and uses its labels: **clip A** = a translucent, glowing jellyfish tech demo (20 s, no audio); **clip B** = a
+browser squishy shelf with slime trays, a settings panel and a paid blender (45.7 s, music and effects). Nothing visual or audible is copied (section 9).
+Stage B items (B1 to B9) are scheduled in [`NEXT_STEPS.md`](NEXT_STEPS.md) section 4.
 
-| Idea in the brief (clip) | Our original version |
-|---|---|
-| Shelf of glossy collectibles you poke until they squash (1) | The **Hoard**: a dark felt cabinet of lit plinths, one per species, a stack badge for spares. Poking a squishy on its plinth is the slice-1 interaction. |
-| Mix-and-match row (1) | The **Merge pad** (section 5.6): two same-species squishies pressed together; the result keeps their colours as lineage. |
-| Slime pull-and-pop with glitter and bubbles (1) | **Pull-and-let-go (snap)**: stretch, release, trapped-air bubbles and glitter inside the body (slice 1, RENDER lane). It pays the meter. |
-| Blender combines up to six into a hybrid (1) | **Not core.** The input count in the clip is not a design number. A capped **Tidy-up** (bulk merge, up to 10 merges a day) is the only descendant (5.6). |
-| Settings: louder squish, volume, haptics, screen shake, gravity vs float (1) | Same settings, our labels and layout (`CONTRACT.md` section 8) plus **Calm effects** (section 6.6). |
-| Translucent jelly that stretches, divides, reconnects (2) | Slice-1 soft body; the **fold** in the merge ceremony reuses the same body. |
-| Fold into a glowing ball, then spring back (2) | The **merge ceremony** (section 6): two bodies converge, fold into one glowing ball, charge, spring open, reveal. Our own timing, colours and sound. |
-| Made to be touched (2) | The meter pays for touching in *varied* ways and ignores mashing (5.4). |
+| Idea (clip, beat) | Our original version | Status |
+|---|---|---|
+| A shelf of glossy squishies you poke until they squash (B, "poke.") | The **Hoard**: a dark felt cabinet of lit plinths, one per species, a stack badge for spares. Poking a squishy on its plinth is the slice-1 interaction. | Poking: built. Hoard: spec (COLLECTION.md) |
+| Many squishies tossed onto the shelf; they fall, collide, tumble and pile up (B, "mix and match.") | A **play mat with several squishies out at once**, **soft body-to-body contact**, and **pull past the limit to pick one up**, then toss it. (A first draft of this table, written from a description before the clips were seen, read this beat as a "mix-and-match row" and mapped it to the merge pad. That reading is withdrawn: merge answers the blender beat below.) | Stage B items B1 to B3 |
+| Slime pull-and-pop with glitter and bubbles (B, "pull. pop.") | **Pull-and-let-go (snap)**: stretch, release, trapped-air bubbles and glitter inside the body (slice 1). It pays the meter. Tacky families also **string and snap** (B6). | Snap: built. Strands: stage B |
+| A paid six-input blender that liquifies squishies into hybrids (B, "Premium: the Blender.") | **Free merge** of two of the same species (5.6) with the fold-into-a-ball ceremony. The input count in the clip is not a design number; a capped **Tidy-up** (bulk merge, up to 10 merges a day) is the only descendant (5.6). No paywall, no hybrids. | Rules: built (`core/merge.ts`). Module: spec (MERGE.md) |
+| Settings: louder squish ("more squish."), volume, haptics, screen shake, gravity vs float (B) | Same settings, our labels and layout (`CONTRACT.md` section 8) plus **Calm effects** (section 6.6) and an optional **Extra squish** depth. | Built except Calm effects (planned) and Extra squish (B8) |
+| A looping music bed (B, audio) | An original, generative, gentle ambient bed with its own volume, ducked under ceremonies. | Audio round 3 in progress; wiring B7 |
+| A touch blooms light at the contact point (A, "Touch the light") | **Contact glow**, tinted by the core colour, on top of the pressure blush; obeys the flash budget (6.6). | Stage B item B5 |
+| Pulled out 3 to 4 times its length like taffy, then springs back (A, "To the limit") | **Long pulls** for the stretchy families (Sticky Stretch, Slime Goo) to their `maxPull`; firm families resist. | Physics round 2, then B4 |
+| Translucent jelly that returns exactly to shape (A, "The form remembers") | The slice-1 soft body (shape matching plus the memory arm of SQUISHY_SCIENCE 3.1). | Built |
+| Cut into pieces that each stretch and then reconnect (A, "Each cut, another size" to "Everything reconnects") | **Not in v1**: the *Jelly Lab* stretch module (NEXT_STEPS section 5). | Stretch |
+| Folds into a glowing ball, then springs back (A, "All the light in one ball") | The **merge ceremony** (section 6): two bodies converge, fold into one glowing ball, charge, spring open, reveal. Our own timing, colours and sound. | Render and audio: built (procedural fold fallback); physics drivers: round 2, in progress |
+| Three colourways of one toy (A, "Aurora. Amber. Abyssal.") | **Open owner decision D-15** (NEXT_STEPS): optional rare colourway variants. Until decided: none in v1 (5.6). | Decision |
+| Made to be touched (the owner's brief) | The meter pays for touching in *varied* ways and ignores mashing (5.4). | Logic built; not wired |
 
 ## 3. Research summary
 
@@ -75,7 +89,7 @@ Clips could not be opened (x.com blocked); this maps the owner's descriptions on
 | UK Children's Code (15 standards) | High-privacy defaults, profiling off, no nudge techniques, geolocation off. | Section 8. | **[S]** [ICO standards](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/childrens-information/childrens-code-guidance-and-resources/age-appropriate-design-a-code-of-practice-for-online-services/code-standards/) |
 | COPPA | Verifiable parental consent under 13; rule amended 22 Apr 2025 (retention limits, more data counted as personal). | No personal data collected by the game; consent is the portal's job (open question 1). | **[S]** [FTC FAQ](https://www.ftc.gov/business-guidance/resources/complying-coppa-frequently-asked-questions), [2025 rule](https://www.ftc.gov/news-events/news/press-releases/2025/01/ftc-finalizes-changes-childrens-privacy-rule-limiting-companies-ability-monetize-kids-data) |
 | Duplication exploits | RuneScape's 2003 party-hat dupe made over two million copies and was never rolled back; Diablo 2 had several dupes. | Single-writer ledger, conservation check, locks, caps (section 8.3). | **[S]** [RuneScape](https://runescape.fandom.com/wiki/Duplication_glitch), [Diablo 2](https://gist.github.com/amtal/bf941bde443eefc7d4626fd439d7f480), [overview](https://en.wikipedia.org/wiki/Duping_(video_games)) |
-| Atomic server-side moves | Make every item move one all-or-nothing transaction; never "add before remove"; cooldowns and locks close time windows. | `commit_trade` and `merge` RPCs (8.3). | **[S]** [bugnet](https://bugnet.io/blog/how-to-fix-inventory-item-duplication-bug), [gamedev.net](https://gamedev.net/forums/topic/260848-duping/) |
+| Atomic server-side moves | Make every item move one all-or-nothing transaction; never "add before remove"; cooldowns and locks close time windows. | `wh__trade_execute` (called by `wh_confirm_trade`) and `wh__commit_merge` (8.3). | **[S]** [bugnet](https://bugnet.io/blog/how-to-fix-inventory-item-duplication-bug), [gamedev.net](https://gamedev.net/forums/topic/260848-duping/) |
 | Dark patterns, daily streaks | Streaks and timers exploit loss aversion and FOMO, worst for children. | No streak punishment, no countdown FOMO (8.4). | **[S]** [arXiv 2207.09928](https://arxiv.org/pdf/2207.09928) |
 | Flashing content | WCAG 2.3.1: no more than 3 flashes in any second. 685 viewers were hospitalised after a 1997 broadcast with red/blue flashing. | Flash budget, Calm effects (6.6). | **[S]** [WCAG](https://w3c.github.io/wcag21/understanding/three-flashes-or-below-threshold.html), [Porygon episode](https://en.wikipedia.org/wiki/Denn%C5%8D_Senshi_Porygon) |
 | Birthday and coupon-collector maths | Expected draws to collect all n equally likely items = n times H(n) (50 items: about 225). | Calibrates every "first pair / first triple" number below. | **[S]** [Wikipedia](https://en.wikipedia.org/wiki/Coupon_collector%27s_problem) |
@@ -106,17 +120,46 @@ price (build cost 1). The paid-gacha row is shown only to explain what we refuse
 
 ## 5. THE CHOSEN LOOP
 
+### 5.0 The canonical sim run and the headline numbers
+
+**One saved run is the source of every [sim] number** in this file, in TRADE.md, MERGE.md and NEXT_STEPS.md: `node _harness/sim_economy.ts` with no
+flags (5000 players, 60-day and 450-day horizons, seed `0x5eed1234`, `MERGE_COST=2`), run on **2026-10-05** under Node 22.22.0 against the game logic of
+commit `7869499` (`src/core` and `src/data` have not changed since 2026-10-02). It took 290 s and printed 297 lines. **Re-quote check:** the SHA-256 of the
+output without its last line (the wall-clock "(elapsed ...)" line) is
+`855b4a6369bf5dc6d1e564c09c187694fd79eed01197282ccdcb498bfeb151a2`;
+`node _harness/sim_economy.ts | grep -v '^(elapsed' | sha256sum` must print the same value, and if it does not, the logic or the sim changed and every
+number below must be re-quoted from the new output. The output prints no species names, so renaming a species does not change it.
+
+**Tags.** **[sim K]** = section K of that run, and so on. Sections use **different populations** (K: 5000 players, of whom 1093 are regular willing
+traders; O: 3000; P and Q: 2000), so one quantity can differ by a day or two between sections: all 50 for regular willing traders is
+205 / 131 days in K, 206 / 130 in O and 201 / 129 in P. **Quote K for the headline and tag every other figure with its section.**
+
+| Headline | Value | Source |
+|---|---|---|
+| Active minutes per capsule, regular players | **3.1** (median; p10 2.6, p90 3.8) | [sim C, n=5000] |
+| First capsule; first pair of any species (regular) | 64 s; after 5 capsules, 10.5 active minutes | [sim C] |
+| All 50 species, p50 day, regular willing traders: solo / with trade | **205 / 131** (x1.56; x1.69 at p25, x1.52 at p75, x1.57 at p90) | [sim K, n=1093] |
+| Active hours to all 50, same players: solo / with trade | about 50 / about 33 | [sim K] |
+| Finished all 50 by day 120: solo / with trade | 8% / 43% | [sim K] |
+| First copy of any Rare / Epic / Legendary / Mythic, median day | all players, trade world: 3 / 7 / 15 / 38 [sim K, n=5000]; regular willing traders: 2 / 5 / 11 / 28 [sim Q, n=2000] | |
+| Route of Epic+ first copies, willing traders, trade world | capsule 65%, **trade 33%**, merge 1% (solo world: capsule 93%, merge 7%) | [sim L] |
+| Last 5 species a finisher completed (any tier) | trade 52%, capsule 44%, merge 4% | [sim L] |
+| Last 5 Epic+ species a finisher completed | trade 51%, capsule 45%, merge 3% | [sim L] |
+| Frictionless oracle (everyone willing, no friction, cap 20): all 50 solo / trade | 210 / 119 (x1.76) | [sim P, n=2000] |
+| Merges per regular player per 100 days | 8.5 | [sim O, n=3000] |
+| Mean items held per player at week 9: merging on / off / with Tidy-up | 331 / 338 / 281 | [sim G] |
+
 ### 5.1 In nine lines
 
 1. **Touch** (poke, squeeze-and-release, pull-and-let-go, mixed) pays **squish points**; **100 SP = one free capsule** (about **3 to 4 active minutes**).
 2. **Open the capsule** (squeeze it until it cracks): one random squishy of **50**, six tiers. Odds are public. Repeats are allowed.
 3. **Daily Restock**: once a day, pick 1 of 3 offered Common or Uncommon squishies (a gift, not a gate). **Two small tasks** a day (max 5 a week) each pay one capsule.
 4. **Merge**: **2 of the same species -> 1 new random squishy**, never below their tier; a finished row always moves up; after 4 duds in a row the next one moves up.
-5. **Trade**: exact same-tier swaps (1 to 3 per trade), friend code or species-icon board, server-authoritative, 24 h receive lock, no currency, no text.
+5. **Trade**: exact same-tier swaps (1 to 3 per side between friends; 1 for 1 on the board, TRADE D-T5), friend code or species-icon board, server-authoritative, 24 h receive lock, no currency, no text.
 6. Rarity is **visible in the object** (section 5.3) and **felt** (material families, 5.2).
 7. Merge is random, trade is exact, so they do not compete (5.8).
 8. Everything is free. There is no real-money path (section 8).
-9. Targets: a regular player owns all 50 in about **131 days (33 active hours) with trading vs 205 days (50 hours) solo [sim]**.
+9. Targets: a regular player owns all 50 in about **131 days (33 active hours) with trading vs 205 days (50 hours) solo [sim K]** (5.0).
 
 ### 5.2 The catalog: 50 species, 6 tiers, material families
 
@@ -133,19 +176,27 @@ price (build cost 1). The paid-gacha row is shown only to explain what we refuse
 Room to grow past 60: new species append to the end of `SPECIES` and to the tier of their choice; see risk 3 (seasons). The catalog
 agent builds species 0..49 from this table. **Species 0 is Dollop** (the slice squishy), Common.
 
-**Why these counts and odds [sim, section Q]:** the first guess (16/12/10/6/4/2 at 50/25/14/7/3/1) finished all 50 in **45 days with trade** (too easy).
+**Why these counts and odds [sim Q, n=2000]:** the first guess (16/12/10/6/4/2 at 50/25/14/7/3/1) finished all 50 in **45 days with trade** (too easy).
 Steeper odds with more Epic-and-above species stretch the tail; the chosen set gives first Rare around day 3, first Epic day 7, first Legendary day 15, first Mythic day 38
-(medians over all players; for regular players day 2 / 5 / 11 / 28) and 131 days to finish for a regular trader.
+(medians over all players in the trade world [sim K]; for regular willing traders day 2 / 5 / 11 / 28 [sim Q]) and 131 days to finish for a regular trader [sim K].
 
-**Material families (rule reserved; the families themselves come from `_spec/SQUISHY_SCIENCE.md` and `src/data/materials.ts`, owned by another agent):**
+**Material families and lanes (built: `src/data/catalog.ts` assigns them, `src/data/materials.ts` defines each family's feel; the generated view is
+[`CATALOG.md`](CATALOG.md) "Family lanes"; the physics of each family is [`SQUISHY_SCIENCE.md`](SQUISHY_SCIENCE.md) section 4):**
 
 * Every species belongs to **exactly one material family**. A family fixes its **touch feel** (firmness, bounce, stretch, damping, recovery time presets
   fed into `SoftBody`), so a collector wants variety in *feel*, not only colour.
-* Use **6 families** (letters A to F here; examples to map: slow-rise foam, mochi/taba, gel/jelly, liquid-filled, slime/putty, plus one more).
-* Each family has species in **at least 4 tiers** and **6 to 10 species** overall; no tier is more than 40% one family.
-* Suggested allocation (catalog agent may move any cell by one, totals fixed):
+* There are **12 families in 6 lanes (A to F)**. A lane pairs an *everyday* family with a *signature* family of the same kind of material:
+  A Jelly (Jelly Gel, Sticky Stretch), B Fill (Liquid Core, Bead Squeeze), C Chew (Gummy Jelly, Slime Goo), D Foam (Marshmallow Puff, Slow-Rise Foam),
+  E Dough (Mochi Dough, Bounce Putty), F Rubber (Firm Silicone, Pop Dome). In every lane the signature family has the **higher mean tier**
+  (higher tiers favour the more distinctive feel).
+* The distribution rules apply **per lane** (the columns of the grid below are lanes, not families): each lane has species in **at least 4 tiers** and
+  **6 to 10 species**; no tier is more than 40% one lane. A single family holds 3 to 5 species and appears in 3 to 5 tiers.
+* `_harness/probe_catalog.ts` checks the grid cell by cell, the lane totals (10/10/9/8/7/6), that every species uses a family of its own lane, and the
+  signature rule. A new species (a season, risk 3) picks a lane and one of its two families, is appended to the end of the catalog, and must keep
+  these rules; re-run `probe_catalog.ts` and the sim.
+* Species per tier and lane (as built; `probe_catalog.ts` holds the same grid):
 
-| Tier (n) | A | B | C | D | E | F |
+| Tier (n) | A Jelly | B Fill | C Chew | D Foam | E Dough | F Rubber |
 |---|---|---|---|---|---|---|
 | Common (14) | 3 | 3 | 2 | 2 | 2 | 2 |
 | Uncommon (11) | 2 | 2 | 2 | 2 | 2 | 1 |
@@ -220,14 +271,20 @@ the sim's 5 is lower because the starter Dollop, restock picks and task capsules
 The hypothesis: what you drop depends on how you play (tilt which species inside a tier), so your hoard has gaps other styles fill. Implemented as
 `weight = exp(beta x recent share of that style)` inside a tier only (tier odds untouched, Legendary and Mythic ignore it), with global supply rebalanced so no style group is scarcer.
 
-| beta | P(random pair has a feasible swap), day 60: different-style / same-style | Trade speed-up, regular traders, all 50 (p50) | Slowest vs fastest archetype, all 50 | Slowest vs fastest, Epic row |
+| beta | P(random pair has a feasible swap), day 60: different-style / same-style [sim J1] | Trade speed-up, all 50, p50 solo / trade, willing traders of every type [sim J2] | Slowest vs fastest play style, Epic row, trade world [sim J2] | Slowest vs fastest play style, all 50 [sim J2] |
 |---|---|---|---|---|
-| 0 (off) | 56% / 55% | **1.62x** | 1.07x | 1.11x |
-| 2 | 61% / 56% | 1.67x | 1.10x | 1.17x |
-| 4 | not shown | 1.83x | 1.21x | 1.18x |
+| 0 (off) | 57% / 57% | **1.53x** | 1.07x | 1.15x |
+| 2 | 61% / 57% | 1.67x | 1.15x | 1.14x |
+| 4 | not shown | 1.86x | 1.22x | 1.18x |
 
-**Verdict: drop it from species odds.** At a fair strength (beta 2) it adds about 3% to the trade speed-up and 5 points of "different-style pair" matching; at the strength where it helps
-(beta 4: +13%) the slowest style takes about 20% longer to finish, which reads as "my way of playing is penalised". It also needs supply-balancing maths and complicates odds disclosure.
+(J2 counts willing traders of every player type, so its speed-up at beta 0 (1.53x) is lower than the regular-trader headline of 1.56x [sim K].)
+
+**Verdict: drop it from species odds.** At beta 2 it adds about 9% to the trade speed-up (1.53x to 1.67x) and 4 points of "different-style pair" matching
+(57% to 61%), but it doubles the gap between the slowest and the fastest play style on the Epic row (1.07x to 1.15x); at beta 4 it adds 22% (1.86x) and
+the slowest style takes 22% longer on the Epic row, which reads as "my way of playing is penalised". It also needs supply-balancing maths and complicates
+odds disclosure. **Honest note:** an earlier version of this table (1.62x to 1.67x at beta 0 to 2, about 3%) does not reproduce from the
+canonical run (5.0), which shows about 9%; it came from an older run or another population. This is a closer call than it first looked; the verdict stands
+on fairness and odds disclosure.
 **Kept as flavour only:** the style of your touching tints the *look and feel traits* of what you roll within a species (more bounce for pokers, etc.), cosmetic, not economic.
 Revisit only after a real playtest shows trading is too weak (the knob exists in the sim as `beta`).
 
@@ -243,15 +300,17 @@ Revisit only after a real playtest shows trading is too weak (the knob exists in
 | Pity | After **4 merges in a row from the same tier without a tier-up, the next one tiers up** (so never more than 4 duds in a row). The counter is per input tier, so it cannot be banked on cheap fodder and spent on a Legendary pair. |
 | Species roll | Random inside the output tier, **never the input species**; species you do not own are weighted **x1.5** (mild). No "guaranteed new species" rule (it added nothing once finished rows tier up, [sim F vs G]). |
 | Look of the result | Species template mixed with the inputs' hue and pattern (circular mean, jitter): the lineage colours are visible. `origin = { kind: 'blend', parents: [idA, idB] }`. |
-| Variants and colourways | **None in v1.** Every instance's genome is already unique. A cosmetic "Prism" colourway (same tier for trade parity) is a possible season addition. |
+| Variants and colourways | **None in v1.** Every instance's genome is already unique. Rare colourway variants per species (an idea from reference clip A) are **open owner decision D-15** in NEXT_STEPS: they add a collecting dimension and change the economy, so the sim must be re-run before any decision. A cosmetic "Prism" colourway (same tier for trade parity) is a possible season addition. |
 | Bulk N-input merge | A true multi-input blender (the clip's six) is **deferred**; only the capped Tidy-up below exists in v1. |
-| Safety | **Hold to merge** 0.5 s (release early cancels, nothing consumed). **Preview** shows exact tier odds and how many species you still lack in the output and next tier. A warning appears if it uses your **last copy**. Favourited squishies are protected. Output **locked 24 h** (cannot trade or merge). Daily cap **10 merges**. |
-| **Tidy-up** (bulk merge, the only descendant of the 6-input blender) | One button that runs up to 10 eligible spare-pair merges, never touching favourites or your last copy of a species. |
+| Safety | **Hold to merge** 0.5 s (release early cancels, nothing consumed). **Preview** shows exact tier odds and how many species you still lack in the output and next tier. A warning appears if it uses your **last copy**. **Hearted** squishies are protected. Output **locked 24 h** (cannot trade or merge). Daily cap **10 merges**. |
+| **Tidy-up** (bulk merge, the only descendant of the 6-input blender) | One button that runs up to 10 eligible spare-pair merges, never touching hearted copies or your last copy of a species. MERGE.md M-4 narrows the default to Common and Uncommon and keeps shelved items out. |
+| **The protection mark** | Called **Heart** wherever a player sees it (a heart icon; "hearted" copies): it protects a copy from merge, Tidy-up and trade and keeps it as the stack's keeper. Every document uses this name. The database column is `wh_items.fav` and the API error code is `favourite`; those wire names stay. |
 
 **Why M = 2 and not 3 (applying the owner's rule).** The rule: if actually earning a squishy takes decent effort (3 minutes or more), merge cost is 2; if it is easy (about 1.5 minutes or less), 3; in between, break the tie with the sim.
 At 100 SP per capsule a regular player spends **3.1 to 3.8 active minutes per capsule**, which is the decent-effort band, so **M = 2**. The sim agrees: a pair arrives in the
 first one or two sessions for regular players (**91% by 25 minutes, 57% by the first 12**), whereas a triple would take **37 minutes, 27% by 25 minutes**, i.e. three or more sessions.
-Trade still wins for the last species at M = 2 (5.8). Side by side [sim O, 3000 players, 450 days, regular players willing to trade]:
+Trade still wins for the last species at M = 2 (5.8). Side by side [sim O, 3000 players, 450 days, regular players willing to trade; its 206 / 130 differs
+from the headline 205 / 131 of section K only by sample]:
 
 | Metric | **100 SP, M=2 (chosen)** | 100 SP, M=3 | 40 SP (about 1.3 to 1.5 min), M=2 | 40 SP, M=3 |
 |---|---|---|---|---|
@@ -268,7 +327,7 @@ Trade still wins for the last species at M = 2 (5.8). Side by side [sim O, 3000 
 
 M = 3 has a slightly better trade ratio but fails the "mergeable set in the first one or two sessions" target at the chosen meter, and a faster meter that would fix that (40 SP) is
 the "too easy" band (all 50 in about 90 days with trade). **The meter rate and M are a pair: 100 SP and M = 2.**
-**Sensitivity** (2000 players, regular traders, days to all 50 solo / trade): as modelled 3.1 min/capsule **201 / 129**; players **2x slower** (5.4 min/capsule, the edge of grindy) **365 / 221**
+**Sensitivity** [sim P, 2000 players, regular willing traders, days to all 50 solo / trade]: as modelled 3.1 min/capsule **201 / 129**; players **2x slower** (5.4 min/capsule, the edge of grindy) **365 / 221**
 (73% -> 94% finished by day 450); **2x faster** (2.2 min) **150 / 90**; **half the play time** **394 / 255**. The design holds at both extremes.
 
 ### 5.7 Trade: the v1 rules
@@ -276,11 +335,11 @@ the "too easy" band (all 50 in about 90 days with trade). **The meter rate and M
 | Rule | Value |
 |---|---|
 | What moves | Squishy instances, item-for-item. **No currency, no free text.** |
-| Parity | **Same tier, same count**: 1 to 3 squishies per side. A Rare can only ever be swapped for a Rare. No lopsided deal is possible by construction. |
-| Any spare for any spare | A side may take one of your spares even if it already owns that species (a "favour swap"); the server only checks tier and count. (Sim: both sides must gain a new species -> 150 days to finish; favour swaps allowed -> 129.) |
-| Finding a partner | **Friend code** (mutual accept) or the public **wants/offers board**: a grid of species icons, searchable by species and tier, 3 offers and 3 wants per listing. Anonymous alias, no profile. |
-| Locks and caps | **24 h receive lock** on traded-in and merge-made squishies (cannot trade or merge); **max 3 completed trades a day** (sim value; raise to 5 as headroom), **1 per partner per day**; new accounts need 2 days and 10 capsules opened before trading. |
-| Atomic | Server holds both offers in escrow, both confirm within 60 s, then one transaction swaps owners, bumps `tradeCount`, writes the ledger. Anything fails: nothing moves. |
+| Parity | **Same tier, same count**: 1 to 3 squishies per side. A Rare can only ever be swapped for a Rare. No lopsided deal is possible by construction. **Refined by TRADE D-T5:** 2 or 3 each way only between friends; a board trade is 1 for 1. |
+| Any spare for any spare | A side may take one of your spares even if it already owns that species (a "favour swap"); the server only checks tier and count. ([sim P]: both sides must gain a new species -> 150 days to finish; favour swaps allowed -> 129.) |
+| Finding a partner | **Friend code** (mutual accept) or the public **wants/offers board**: a grid of species icons, searchable by species and tier. Anonymous alias, no profile. ~~3 offers and 3 wants per listing~~ **Superseded by TRADE D-T5:** a listing shows up to 3 offered items and up to 3 wanted species (or "any of this tier"), but each board trade is **1 for 1**: one of the offers for one item of a wanted species. |
+| Locks and caps | **24 h receive lock** on traded-in and merge-made squishies (cannot trade or merge); **max 3 completed trades a day** (sim value; raise to 5 as headroom), **1 per partner per day**; new accounts need 2 days and 10 capsules opened before trading. **Refined by TRADE D-T4:** "a day" is a rolling 24 hours, not a calendar day. |
+| Atomic | One transaction swaps owners, bumps `tradeCount`, writes the ledger. Anything fails: nothing moves. ~~Server holds both offers in escrow, both confirm within 60 s~~ **Superseded by TRADE D-T1 and D-T3:** each side confirms explicitly a numbered version of the terms it was shown at least 5 s earlier (a counter voids the other side's consent); a proposal lives 24 h (async); a `live` trade keeps a 60 s window re-armed by each counter; the waiting party's items are reserved, and a reservation lapses by itself when the trade is no longer live. The swap is `wh__trade_execute`, called by the second `wh_confirm_trade`. |
 | Never | Trading a share string, a code or a screenshot. Free-text chat. Currency, tips or bundles of different tiers. |
 
 ### 5.8 Why trade stays NEEDED (and merge does not replace it)
@@ -300,12 +359,12 @@ the "too easy" band (all 50 in about 90 days with trade). **The meter rate and M
   Merge roughly matches a drop for Rare to Legendary because re-rolling spares of the target's tier turns "any copy" into "that copy" at about the odds a drop would; it is cheaper only for Uncommon
   (it recycles the flood of Common spares), a row that is cheap anyway. So it stays a recycler and a lottery ticket, not a route to a specific Epic or above.
 * **Where the last species came from** [sim L, all willing traders who finished, no churn]: of the **last 5 species** a finisher completed, **52% arrived by trade, 44% by capsule, 4% by merge**.
-  For the last 5 Epic-and-above: **51% trade, 45% capsule, 4% merge**. Over all Epic+ first copies: capsule 66%, **trade 33%**, merge 2% (solo world: merge 7%).
-* **Trade speeds completion** (regular traders, same players solo vs trade) [sim K]: Rare row **68 -> 34 days (2.0x)**, Epic row **102 -> 56 (1.8x)**, Legendary **136 -> 76 (1.8x)**, Mythic **180 -> 118 (1.5x)**, all 50 **205 -> 131 (1.56x at p50; 1.69x at p25, 1.52x at p75, 1.57x at p90)**.
+  For the last 5 Epic-and-above: **51% trade, 45% capsule, 3% merge**. Over all Epic+ first copies: capsule 65%, **trade 33%**, merge 1% (solo world: capsule 93%, merge 7%).
+* **Trade speeds completion** (regular willing traders, the same players solo vs trade) [sim K, n=1093]: Rare row **68 -> 34 days (2.0x)**, Epic row **102 -> 56 (1.8x)**, Legendary **136 -> 76 (1.8x)**, Mythic **180 -> 118 (1.5x)**, all 50 **205 -> 131 (1.56x at p50; 1.69x at p25, 1.52x at p75, 1.57x at p90)**.
   Finished all 50 by day 120: **8% solo vs 43% with trade**. Casual traders: all 50 by day 450, **1% solo vs 25% with trade**; Epic row **45% vs 92%**.
 * **Honest limit: the owner's "at least about 2x" is not reached for the whole shelf (about 1.5 to 1.7x).** Trading moves copies around; it cannot create them, so the rarest species bound both routes. Even a
-  frictionless oracle (everyone willing, no friction, cap 20) only reaches **1.76x** [sim P: 210 / 119]. The knobs, if the owner wants more: more species in the top tiers, or steeper odds (both tried in section Q: the six catalogs tested land between 1.53x and 1.76x, none at 2x). We chose pacing over a bigger ratio.
-* Merge does **not** make trade pointless: switching merge off entirely moves "all 50 with trade" from 129 to 132 days and solo from 201 to 240 (merge helps solo by about 16%, trade-world by about 2%).
+  frictionless oracle (everyone willing, no friction, cap 20) only reaches **1.76x** [sim P, n=2000: 210 / 119]. The knobs, if the owner wants more: more species in the top tiers, or steeper odds (both tried in [sim Q]: the six catalogs tested land between 1.53x and 1.76x, none at 2x). We chose pacing over a bigger ratio.
+* Merge does **not** make trade pointless: switching merge off entirely moves "all 50 with trade" from 129 to 132 days and solo from 201 to 240 [sim P, n=2000] (merge helps solo by about 16%, trade-world by about 2%).
 
 ### 5.9 Duplicates and supply [sim D, G, F; 60-day cohort with churn, trade on]
 
@@ -378,17 +437,42 @@ the "too easy" band (all 50 in about 90 days with trade). **The meter rate and M
 | Mythic row (3) | 180 | 118 |
 | **All 50** | **205 (about 50 active hours)** | **131 (about 33 active hours)** |
 
-A tier row finished is a **fixed cosmetic reward** (shelf light, frame), never an extra random item (the Japanese kompu-gacha lesson). First Rare day 3, Epic day 7, Legendary day 15, Mythic day 38 (medians, all players; regular players 2 / 5 / 11 / 28).
+A tier row finished is a **fixed cosmetic reward** (shelf light, frame), never an extra random item (the Japanese kompu-gacha lesson). First Rare day 3, Epic day 7, Legendary day 15, Mythic day 38 (medians, all players, trade world [sim K]; regular willing traders 2 / 5 / 11 / 28 [sim Q]).
 
 ### 5.12 Limits of the sim (read before trusting a number)
 
 * **Behaviour is assumed:** touch speed, session lengths, active days (0.4 / 0.7 / 0.9), churn, willingness to trade (30 / 55 / 75%), friends (35% have none), when people merge (30% merge even finished rows). **The 3.1 minutes per capsule is a model of human touching, not a measurement**; the first real playtest must
   re-measure it and the capsule cost (100 SP) is the one dial to retune.
 * Trading is modelled as same-tier swaps matched daily over friends plus a species-searchable board; real timing, notifications and UI friction are not modelled. The "favour swap" acceptance (50%) is a guess; with
-  mutual-need only, trade finishes in 150 days instead of 129.
+  mutual-need only, trade finishes in 150 days instead of 129 [sim P].
 * The population is one cohort in one catalog; no new species arrive, no seasons, no players joining later (veterans would hold spares newcomers cannot afford; risk 3).
 * Active hours count only touching time. Bots, multi-accounting and real-money trading are not modelled beyond the toy ring.
+* The sim lets a board partner swap up to 3 items per trade (`maxSwapsPerTrade = 3`); TRADE D-T5 makes board trades 1 for 1 (friends may still swap 2 or 3).
+  The sim may therefore overstate board trading a little. Not re-run with the restriction [U].
 * Sim cost of the tier FX, art and server are out of scope. Everything is deterministic (seeded `mulberry32`), so changing one rule shows its effect exactly.
+
+### 5.13 Where the module documents refine these rules
+
+The module documents were written after this file and refine some rules with numbered deviations. **Where they differ, the module document is current**;
+the rows of 5.6 and 5.7 they touch carry a note.
+
+| Rule here | Refinement | Where |
+|---|---|---|
+| 5.7 "both confirm within 60 s" | Explicit, version-bound consent after a server-checked 5 s review; async proposals live 24 h; `live` mode keeps a 60 s window re-armed by each counter | TRADE D-T1, D-T9 |
+| 5.7 escrow | The waiting party's items are reserved; a reservation lapses by itself when the trade stops being live (no cron) | TRADE D-T3 |
+| 5.7 "3 trades a day", "1 per partner a day" | Rolling 24 h windows, not calendar days | TRADE D-T4 |
+| 5.7 "1 to 3 per side", "3 offers and 3 wants per listing" | Board trades are 1 for 1 (one of up to 3 offers for one item of up to 3 wanted species); 2 or 3 each way only between friends | TRADE D-T5 |
+| 5.7 friend code or board | Friends see only an opt-in offer shelf (at most 12 items); WH keeps its own friend graph, not the portal's `friendships` | TRADE D-T2, D-T7 |
+| 5.7 confirm | Epic and above need a 1 s hold on the final confirm | TRADE D-T8 |
+| 5.7 caps | Caps and the global freeze refuse without killing the trade; other failures end it | TRADE D-T10 |
+| 8.2 "trading enabled only for old-enough accounts" | `trade_enabled` is off by default for every account; the same switch (and a moderation hold) closes every social surface | TRADE D-T6, 16.1; COLLECTION C-7 |
+| 5.6 preview and odds | The merge request carries an odds digest; stale odds are refused with the new preview | MERGE M-1, M-7 |
+| 5.6 "owned" | Owned counts every live item, locked and reserved ones included | MERGE M-2 |
+| 5.6 Tidy-up | N sequential atomic merges with derived sub-keys; default tiers Common and Uncommon; shelved items excluded; full ceremony for the best result only | MERGE M-3, M-4, M-5 |
+| 5.6 daily cap | Counts merges, not inputs; resets at the UTC day | MERGE M-6 |
+| 5.4 meter, server-side | The server takes play time from its own clock with a 5-minute bank; at most 5 unopened capsules wait, then accrual pauses | COLLECTION C-4, C-5 |
+| 7.1 local saves | Guests keep a Practice shelf that is never promoted | COLLECTION C-6 |
+| 5.4 "a day" | UTC day for meter, restock, tasks and the merge cap | COLLECTION C-8 |
 
 ---
 
@@ -496,9 +580,11 @@ the **lineage colours** of the two parents remain visible in the new body's hue 
 
 ### 7.1 Seams in the code today
 
+Status of these seams on 2026-10-05; the module status table is NEXT_STEPS section 1.
+
 | Seam | Today | What the economy needs |
 |---|---|---|
-| `Genome.species` (`src/core/genome.ts`) | `SPECIES = ['dollop']`; share string stores the species **index in one byte** | Grow to 50 ids, **append-only** (never reorder, up to 256). Tier and family are **not** in `Genome`; they come from the catalog by species. |
+| `Genome.species` (`src/core/genome.ts`) | `SPECIES` is the 50-entry list owned by `src/data/catalog.ts` (imported by `genome.ts`); the share string stores the species **index in one byte**; an unknown index decodes to `null` (`probe_genome.ts`) | Done: 50 ids. Stays **append-only** forever (never reorder or reuse an index; up to 256). Tier and family are **not** in `Genome`; they come from the catalog by species. |
 | `Genome` numeric traits | quantised to 1/255, `seed` uint32 cosmetic | Capsule genome = species template with jitter; merge genome = template mixed with the two parents (circular mean of hue and coreHue). Every instance stays visually unique. |
 | Share string `g1.` | lossless, 38 chars, hostile input returns `null` | **Look-only.** Never a claim ticket for ownership; trade, merge and board accept item ids, not strings. A decoded string is a "ghost" you can view, not own. |
 | `SquishyInstance.id` | `crypto.randomUUID()` default | Owned items get a **server-minted** id (unique constraint, never reused). Client ids are local-ghost only. |
@@ -511,13 +597,15 @@ the **lineage colours** of the two parents remain visible in the new body's hue 
 
 ### 7.2 Modules and build order
 
+The function names below are owned by the module documents (COLLECTION 7.4, MERGE 4, TRADE 7.2); if they ever differ, those documents win.
+
 | Order | Module | Contents | Depends on |
 |---|---|---|---|
-| 0 | Slice 1 (now) | Soft body, audio, render, shell for one squishy | none |
-| 1 | **COLLECTION** ([`COLLECTION.md`](COLLECTION.md)) | `src/data/catalog.ts` (50 species: built), `src/core/rarity.ts` (odds, tiers: built), `src/core/meter.ts` and `drops.ts` (rules in 5.4: built), capsule open + reveal (6.3), Hoard UI with stacks, restock, tasks. Local-only items flagged non-tradeable. | slice 1, `materials.ts` |
-| 1b | **SERVER MINT** | Supabase tables + RPCs: `wh_report_play`, `wh_open_capsule`, `wh_claim_restock`, `wh_complete_task`. Server owns the meter caps, the RNG and ids. **A local save is never promoted to tradeable.** | 1, portal bridge |
-| 2 | **MERGE** ([`MERGE.md`](MERGE.md)) | `src/core/merge.ts` (`MERGE_COST`, roll, preview), `wh_merge` RPC, ceremony (6.4), Tidy-up | 1b |
-| 3 | **TRADE** ([`TRADE.md`](TRADE.md)) | friend codes, board, `wh_propose_trade` / `wh_confirm_trade` / `wh_cancel`, escrow, locks, ledger, reports, kill-switch | 1b (parallel with 2) |
+| 0 | Slice 1 (built 2026-10-02) | Soft body, audio, render, shell for one squishy | none |
+| 1 | **COLLECTION** ([`COLLECTION.md`](COLLECTION.md)) | `src/data/catalog.ts` (50 species: built), `src/core/rarity.ts` (odds, tiers: built), `src/core/meter.ts` and `drops.ts` (rules in 5.4: built), capsule open + reveal (6.3: render and audio built, not wired), Hoard UI with stacks, restock, tasks (spec). Local-only items flagged non-tradeable. | slice 1, `materials.ts` |
+| 1b | **SERVER MINT** | Supabase tables, SQL commit functions and a TypeScript host. Host operations `wh_hello`, `wh_report_play`, `wh_open_capsule`, `wh_claim_restock`, `wh_complete_task`; reads `wh_state`, `wh_inventory`, `wh_op_status`. Server owns the meter caps, the RNG and ids. **A local save is never promoted to tradeable.** (spec) | 1, portal bridge |
+| 2 | **MERGE** ([`MERGE.md`](MERGE.md)) | `src/core/merge.ts` (`MERGE_COST`, roll, preview: **built and tested**, `probe_economy.ts`); the host operations `wh_merge` and `wh_tidy`, which write through `wh__commit_merge`; ceremony (6.4: render and audio built, not wired); Tidy-up UI (spec) | 1b |
+| 3 | **TRADE** ([`TRADE.md`](TRADE.md)) | friend codes, board, `wh_propose_trade` / `wh_counter_trade` / `wh_confirm_trade` (the second confirm runs `wh__trade_execute`) / `wh_cancel_trade`, reservations, locks, ledger, reports, kill-switch (spec) | 1b (parallel with 2) |
 
 Why server mint comes before trade: a forgeable local inventory makes every Mythic suspect. Why trade can start without merge: they share only the lock.
 
@@ -536,19 +624,21 @@ Why server mint comes before trade: a forgeable local inventory makes every Myth
 * **Friend code or board only.** Codes are 8 characters without look-alike letters, mutual accept, 10 attempts an hour. **Do not use the portal's `find_users`** (searches by email or username).
 * Anonymous alias (adjective plus noun) and the player's best squishy as avatar; no profile page.
 * Age: the portal account is email-based, so COPPA and UK Children's Code duties sit with the portal. The game collects **no personal data of its own**, keeps high-privacy defaults, profiling off, no nudges.
-  Recommended: trading is enabled only for accounts the portal marks as old enough or parent-approved (open question 1).
+  Recommended: trading is enabled only for accounts the portal marks as old enough or parent-approved (open question 1). **The same switch closes every
+  social surface, not only trading**: an account with trading off (or on a moderation hold) cannot gain friends, has its shelf, friend list and emotes
+  hidden, and its pending requests, live trades and listings are cancelled when the switch goes off (TRADE 16.1).
 * Block and report on every trade card; blocked players cannot see your board listings.
 
 ### 8.3 Dupe-proofing and provenance
 * **Single writer:** only server RPCs change ownership. Clients send item ids and an idempotency key, never item data.
-* **`commit_trade`:** one transaction locks both item sets (`SELECT ... FOR UPDATE`), re-checks owner, `version`, `lockedUntil` and `inTradeId`, swaps owners, bumps `tradeCount` and `version`, sets `lockedUntil`, writes two ledger rows; any failure rolls back everything. **`merge`:** consume 2 and mint 1 in one transaction with a server-side RNG.
+* **Trade (`wh_confirm_trade`, whose second confirmation runs `wh__trade_execute`; TRADE.md 8.1 owns the names):** one transaction locks the trade row, both accounts in ascending id, then the items in ascending id (`SELECT ... FOR UPDATE`), re-checks owner, `version`, `lockedUntil` and the reservation, swaps owners, bumps `tradeCount` and `version`, sets `lockedUntil`, writes the ledger rows; any failure rolls back everything. **Merge (the host operation `wh_merge`, which writes through `wh__commit_merge`; MERGE.md 4.5):** consume 2 and mint 1 in one transaction; the roll is made by the host with a CSPRNG and logged.
 * **Conservation check** every hour: items minted minus items consumed must equal items held; a mismatch freezes trading. A **kill-switch** freezes trading and merging globally. Ledger plus `origin.parents` let a bad batch be traced and recalled.
 * **Locks and caps:** 24 h receive and merge lock, 3 trades a day, 1 per partner a day, new-account gate (5.7). Together they cut a hostile ring's output from thousands of copies to about 5 and its laundering to 0 (5.10).
 * **Real-money trading:** no currency, and tier parity means value cannot be moved with lopsided deals; still forbidden in the terms and monitored for one-sided flows.
 
 ### 8.4 Pressure and rhythm
 * No streaks, no countdown FOMO, no "you lost it", no push notifications by default. Restock offers refresh daily and never accumulate guilt. Caps are framed as rest, not punishment (UK Children's Code: no nudge techniques).
-* Merge is never silent: hold to confirm, preview odds, last-copy warning, favourites protected.
+* Merge is never silent: hold to confirm, preview odds, last-copy warning, hearted squishies protected.
 
 ### 8.5 Light, motion, sound
 * Flash budget and Calm effects (6.6); **photosensitivity** is treated as a safety issue, not polish. Volume ramps on every voice; haptics optional.
@@ -581,8 +671,8 @@ Why server mint comes before trade: a forgeable local inventory makes every Myth
 | 6 | **Dozens of repeat Commons.** 90% of capsules are repeats by week 3. | Could feel flat. | Reveal compresses repeats; Tidy-up; Rare+ repeats are the trade fuel. If it feels flat, raise Uncommon odds before touching the meter. |
 | 7 | **Bots and macros.** | A cycler hits 40 SP/min. | Daily cap of 12 capsules, server-side plausibility checks on touches, no cash value. Cannot be zero. |
 | 8 | **Grey-market trading** of tier items outside the game. | Happens in every trading game. | Terms; tier-parity makes buying with lopsided deals impossible; monitor one-sided flows. |
-| 9 | **Merge preview honesty and last-copy mistakes.** | Regret erodes trust. | Hold-to-confirm, last-copy warning, favourites. |
+| 9 | **Merge preview honesty and last-copy mistakes.** | Regret erodes trust. | Hold-to-confirm, last-copy warning, hearts (5.6), the odds digest (MERGE M-1). |
 | 10 | **Art cost.** 15 of 50 species are Epic or above with tier FX. | Time. | FX are per-tier presets, not per-species. |
 | 11 | **Trade fuel for Mythics.** Only 3 species; a swap needs a spare of the *other* Mythic. | Mythic swaps are rare events. | Intended. Check in the first month of data. |
-| 12 | **Physics lane must emit the touches the meter reads** (`release.heldFor`, `snap.intensity` threshold). | The 3.1 min figure assumes the micro-model's timings. | Add the meter to the G3/G4 gates. |
+| 12 | **Physics lane must emit the touches the meter reads** (`release.heldFor`, `snap.intensity` threshold). | The 3.1 min figure assumes the micro-model's timings. | Done in the contract (2026-10-05): gate **G4m** (CONTRACT section 6) checks that real mouse and touch input produce the `SoftEvent`s the meter maps to touches. It runs once the shell wires the meter (planned); until then it is not run. |
 | 13 | **Sources.** All research is [S] except Apple's guidelines. | Some claims may have drifted. | Re-verify 3.1 and 3.2 once a network without the egress block is available. |

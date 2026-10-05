@@ -159,16 +159,20 @@ export const FINGER = {
    *  fingertip projects every particle radially: the removed 'peakAxial' exit, see softbody.ts, collisions). */
   maxSpeed: 5.5,
   /** Contact fold limit (softbody.ts foldLimit): near a fingertip no two neighbouring triangles may fold past this normal dihedral (degrees;
-   *  the rest shape's own maximum is 50). tuned: 110 took a hard side shove at the peak from 176-180 to 110-112, the detail-4 peak-flank tap
-   *  from 161 to 110 and a low side press at the table rim from 132 to 116, and changed nothing that did not fold (flop, wobble, presses). */
+   *  the rest shape's own maximum is 50). tuned: 110 took the detail-4 peak-flank tap from 161 to 111 and a low side press at the table rim
+   *  from 132 to 113, and changed nothing that did not fold (flop, wobble, presses); side presses at the peak: see foldIters. */
   foldMaxDeg: 110,
   /** ...checked on edges with a vertex within this many tip radii of a fingertip this substep. tuned: 1.0 (only the vertices inside it) left
    *  the crease of the detail-4 peak-flank tap, which forms just beyond the contact (1.1-1.3 tip radii); 1.3 and 1.6 both fix it. */
   foldNear: 1.3,
-  /** ...alternating with putting the touched skin back on the fingertip this many times per substep (Gauss-Seidel). tuned on the hard peak
-   *  shoves (3 directions, 3 genomes, detail 3 and 4): 1 without re-seating left the skin up to 4.7% R inside the tip; 1 with re-seating
-   *  undid the unfolding (up to 179 deg); 2: 171; 3: 142; see the probe for the value used. */
-  foldIters: 3,
+  /** ...alternating with putting the touched skin back on the fingertip this many times per substep (Gauss-Seidel: the two disagree for
+   *  a crushed cone). tuned on 48 side presses at the peak with the shell's pressure profile (0.55 at contact, ramp to 1; 5 genomes, 2
+   *  heights, 4 directions, detail 3 and 4): 0 (no limit) worst 179 deg / 100 frames over 120; 1: 159 / 21; 2: 141 / 7; 3: 131 / 1;
+   *  4: 115 / 0. (One pass WITHOUT re-seating left the skin up to 4.7% R inside the tip.) An instant pressure-1 shove (a stress case the
+   *  shell never sends): 180 / 252 -> 138 / 4 over 16 presses, NOT under 115 / 0; tried without success: 5, 6, 8 passes, ending on the fold
+   *  pass instead of the re-seat, foldNear 1.6 / 2.0 (worst 136-178, erratic), and sharing the opening with the edge's own two vertices
+   *  (much worse, 156-180). The remaining folds are a thin cone crushed under a wider sphere (detail 4) and the rebound at the lift. */
+  foldIters: 4,
   /** Max speed (rest radii per second) at which the tip sphere grows with pressure (it shrinks at once). */
   growRate: 0.6,
   /** Held >= this long (s) and in contact -> 'press' event. */

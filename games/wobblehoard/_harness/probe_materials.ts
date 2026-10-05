@@ -8,8 +8,8 @@ import {
 } from '../src/data/materials.ts';
 import type { MaterialFamily, MaterialFamilyId, MaterialParams, PhysicsKey, ResolvedMaterial, ScaleKey } from '../src/data/materials.ts';
 import { makeStarterGenome, randomGenome } from '../src/core/genome.ts';
+import { CATALOG, speciesTemplateGenome, speciesBaseGenome } from '../src/data/catalog.ts';
 import type { Genome } from '../src/core/genome.ts';
-import { deriveParams } from '../src/physics/params.ts';
 import { mulberry32 } from '../src/core/rng.ts';
 
 let bad = 0;
@@ -141,6 +141,30 @@ check('hue, seed, pattern, eyes and glitter do not change physics or solver numb
     `smOmega ${soft.physics.smOmega.toFixed(1)} -> ${firm.physics.smOmega.toFixed(1)}`);
 }
 
+// look: ONE source of truth per field. The genome's translucency / gloss / coreGlow / glitter (the catalog's per-tier rarity layer) are what
+// a consumer draws; the family supplies only the surface fields a genome lacks, and its four reference numbers are the fallback.
+{
+  const PASS = ['translucency', 'gloss', 'coreGlow', 'glitter'] as const;
+  const SURFACE = ['roughness', 'subsurface', 'fuzz', 'grain', 'thickness', 'blush', 'stretchPale'] as const;
+  let passOk = true, surfOk = true, n = 0, firstBad = '';
+  const gs: Genome[] = [...CATALOG.map((d) => speciesTemplateGenome(d.id)), ...CATALOG.map((d) => speciesBaseGenome(d.id, 99)), ...Array.from({ length: 300 }, (_, i) => randomGenome(i + 1))];
+  for (const g of gs) for (const id of MATERIAL_FAMILY_IDS) {
+    const r = resolveMaterial(id, g); n++;
+    for (const k of PASS) if (r.look[k] !== Math.min(1, Math.max(0, g[k]))) { passOk = false; firstBad ||= `${id}/${g.species}.${k}: ${r.look[k]} vs genome ${g[k]}`; }
+    for (const k of SURFACE) if (r.look[k] !== MATERIAL_FAMILIES[id].look[k]) surfOk = false;
+  }
+  check(`look pass-through: resolved translucency / gloss / coreGlow / glitter equal the genome's own values for ${n} (genome, family) pairs (no family override of the rarity layer)`, passOk, firstBad);
+  check('look: the family supplies roughness, subsurface, fuzz, grain, thickness, blush and stretch-pale unchanged', surfOk);
+  const half = { species: 'dollop', firmness: 0.5 } as unknown as Genome;
+  const fb = MATERIAL_FAMILY_IDS.every((id) => { const r = resolveMaterial(id, half).look, f = MATERIAL_FAMILIES[id].look; return r.translucency === f.translucency && r.gloss === f.gloss && r.coreGlow === Math.min(1, 0.5 * f.coreGlow) && r.glitter === Math.min(1, 0.5 * f.glitter); });
+  check('look fallback: a genome that lacks the field gets the family reference value (translucency, gloss) or half the family multiplier (coreGlow, glitter)', fb);
+  // the bug this fixes: under the old family-band mapping an Epic marshmallow (genome translucency 0.75) resolved to ~0.075, below a Common gel
+  const sel = speciesTemplateGenome('selenuff'), wis = speciesTemplateGenome('wisplet');
+  check('a high-tier species keeps its tier look through resolution (Selenuff, Epic marshmallow, stays more translucent and brighter-cored than Wisplet, Common marshmallow)',
+    resolveMaterial('marshmallow', sel).look.translucency > resolveMaterial('marshmallow', wis).look.translucency && resolveMaterial('marshmallow', sel).look.coreGlow > resolveMaterial('marshmallow', wis).look.coreGlow,
+    `translucency ${resolveMaterial('marshmallow', sel).look.translucency.toFixed(2)} vs ${resolveMaterial('marshmallow', wis).look.translucency.toFixed(2)}`);
+}
+
 /* ───────────────────────── 4. determinism and totality ───────────────────────── */
 console.log('== determinism and totality');
 let totalOk = true, detOk = true, runs = 0;
@@ -232,12 +256,18 @@ function argmaxSound(key: 'airPuff' | 'bubbleRate' | 'stickyStrings'): MaterialF
   const kappaOk = Math.abs(foam.solver.scale.volKappa - (MATERIAL_FAMILIES.jellygel.physics.volOmega / foam.physics.volOmega) ** 2) < 1e-9 && put.volKappa > 50 * base.volKappa;
   check('solver mapping is relative: gel at a neutral genome is the identity, applyMaterial scales known keys and passes the rest, foam is ~160x more compressible',
     ident && same && put.extra === 7 && kappaOk && put.smOmega < base.smOmega, `foam volKappa ${base.volKappa} -> ${put.volKappa.toFixed(1)}, smOmega ${base.smOmega} -> ${put.smOmega.toFixed(1)}`);
-  // soft compatibility with the PHYS defaults (another lane's file: drift here is a WARN, not a failure)
+  // soft compatibility with the PHYS defaults (another lane's file, loaded dynamically so a physics module mid-rewrite cannot crash this
+  // probe: drift or a load failure is a WARN, not a failure)
   const g = makeStarterGenome(), r = resolveMaterial('jellygel', g);
   const neut = { ...g, firmness: 0.5, bounce: 0.5, stretch: 0.5 };
-  const got = applyMaterial(deriveParams(neut) as unknown as Record<ScaleKey, number>, r) as unknown as Record<string, number>, want = deriveParams(g) as unknown as Record<string, number>;
-  const keys: string[] = ['smOmega', 'edgeAlphaT', 'edgeSoftStrain', 'intDamp', 'affDamp', 'intDamp2', 'maxPull'];
-  warn('gel at the starter genome ~ the physics lane\'s own deriveParams(starter) (within 35%)', keys.every((k) => Math.abs(got[k] - want[k]) / want[k] < 0.35), keys.map((k) => `${k} ${got[k].toFixed(2)}/${want[k].toFixed(2)}`).join(' '));
+  let deriveParams: ((g: Genome) => unknown) | null = null, why = '';
+  try { deriveParams = ((await import('../src/physics/params.ts')) as unknown as { deriveParams: (g: Genome) => unknown }).deriveParams; } catch (e) { why = String(e).slice(0, 100); }
+  if (!deriveParams) warn('physics lane module src/physics/params.ts loads (deriveParams)', false, why);
+  else {
+    const got = applyMaterial(deriveParams(neut) as Record<ScaleKey, number>, r) as unknown as Record<string, number>, want = deriveParams(g) as Record<string, number>;
+    const keys: string[] = ['smOmega', 'edgeAlphaT', 'edgeSoftStrain', 'intDamp', 'affDamp', 'intDamp2', 'maxPull'];
+    warn('gel at the starter genome ~ the physics lane\'s own deriveParams(starter) (within 35%)', keys.every((k) => Math.abs(got[k] - want[k]) / want[k] < 0.35), keys.map((k) => `${k} ${got[k].toFixed(2)}/${want[k].toFixed(2)}`).join(' '));
+  }
 }
 
 /* ───────────────────────── 6. 1-D reductions of the solver formulas, with the families' numbers ───────────────────────── */

@@ -94,6 +94,8 @@ class Finger {
   retractRate = 0;     // depth units per second while retracting
   tipR = 0.1;          // current tip radius
   share = 1;           // eased fraction of the depth range this tip uses (1 alone, FINGER.pinchShare as one jaw of a pinch)
+  lift = 0;            // how far the anchor was lifted back off the surface at touch-down (seating), world units
+  touching = false;    // some particle was inside the tip in the last substep
   cx = 0; cy = 0; cz = 0;   // tip centre (world)
   ocx = 0; ocy = 0; ocz = 0; // tip centre at the previous substep (for the contact friction)
   /** Back to the state of a new Finger (reset() must leave the body bit-identical to a fresh one). */
@@ -102,7 +104,7 @@ class Finger {
     this.px = 0; this.py = 0; this.pz = 0; this.tx = 0; this.ty = 0; this.tz = 0;
     this.dx = 0; this.dy = -1; this.dz = 0; this.nx = 0; this.ny = 1; this.nz = 0;
     this.depth = 0; this.depthV = 0; this.target = 0; this.depthMax = 0.3; this.holdT = 0; this.retractRate = 0;
-    this.tipR = 0.1; this.share = 1;
+    this.tipR = 0.1; this.share = 1; this.lift = 0; this.touching = false;
     this.cx = 0; this.cy = 0; this.cz = 0; this.ocx = 0; this.ocy = 0; this.ocz = 0;
   }
 }
@@ -138,6 +140,8 @@ const LAND_NORM = 4.5;             // m/s that maps to intensity 1
 const POKE_NORM = 3.2;             // m/s predicted closing speed that maps to intensity 1
 const MAX_SPEED = 14;              // safety clamp on particle speed (m/s)
 const MAX_NUDGE = 12;              // nudge() clamps the velocity change to this (m/s)
+const REACT_REF = 20;              // metrics.reaction: push-back (m/s^2 per unit body mass) that maps to 1 - 1/e. tuned: 10 saturated every
+                                   // contact impulse at ~1; at 20 a held full press reads soft 0.2-0.6, starter 0.3-0.6, firm 0.45-0.9
 const HOVER_OMEGA = 4.6, HOVER_ZETA = 0.62, HOVER_ABOVE = 0.35;
 const BOB_AMP = 0.03, BOB_HZ = 0.33;
 const NEAR = 0.01;                // a particle this close to the table counts as touching it (m)
@@ -193,7 +197,7 @@ export class SoftBody implements SoftBodyLike {
   readonly center: V3 = { x: 0, y: 0, z: 0 };
   readonly frame = { x: 0, y: 0, z: 0, w: 1 };
   readonly metrics: SoftMetrics = {
-    compression: 0, compressionRate: 0, stretch: 0, volume: 1, kinetic: 0, grounded: true, fingers: 0, grabbed: false,
+    compression: 0, compressionRate: 0, stretch: 0, volume: 1, kinetic: 0, grounded: true, fingers: 0, grabbed: false, press: 0, reaction: 0,
   };
   readonly restRadius: number;
   /** Harness-only counters (not part of SoftBodyLike). `safetyResets` must stay 0: it counts emergency non-finite recoveries. */
@@ -287,6 +291,7 @@ export class SoftBody implements SoftBodyLike {
   private nearMass = 1;                     // their mass (friction normal-load proxy)
   private supp = 0;                         // 0..1 how much of its weight the table carries (see substep)
   private keAcc = 0;
+  private reactAcc = 0;                     // summed fingertip corrections (mass x penetration) of this step's substeps
   private keSubs = 0;
   private prevCompression = 0;
   private lastAxisX = 0; private lastAxisY = 1; private lastAxisZ = 0;
@@ -473,7 +478,7 @@ export class SoftBody implements SoftBodyLike {
       this.nearCount = near; this.nearMass = Math.max(1, nearM);
       this.supp = this.gravityOn ? smooth01((near - 1) / 4) : 0;
     }
-    this.keAcc = 0; this.keSubs = 0; this.prevCompression = 0;
+    this.keAcc = 0; this.keSubs = 0; this.prevCompression = 0; this.reactAcc = 0;
     this.lastAxisX = 0; this.lastAxisY = 1; this.lastAxisZ = 0; this.lastAxisT = -10;
     this.simTime = 0; this.subIdx = 0; this.touchStamp.fill(-1); this.hingeStamp.fill(-1); this.tipNearN = 0; this.hingeCount = 0;
     for (const f of this.fingers) f.clear();
@@ -484,6 +489,7 @@ export class SoftBody implements SoftBodyLike {
     this.pendingLand = -1;
     const m = this.metrics;
     m.compression = 0; m.compressionRate = 0; m.stretch = 0; m.volume = 1; m.kinetic = 0; m.grounded = this.gravityOn; m.fingers = 0; m.grabbed = false;
+    m.press = 0; m.reaction = 0;
     this.strain.fill(1);
     this.syncOutputs();
   }
@@ -498,7 +504,7 @@ export class SoftBody implements SoftBodyLike {
     this.acc -= nsub * H;
     if (this.acc < 0) this.acc = 0;
     if (nsub === 0) return;
-    this.keAcc = 0; this.keSubs = 0;
+    this.keAcc = 0; this.keSubs = 0; this.reactAcc = 0;
     for (let s = 0; s < nsub; s++) {
       this.substep();
       this.simTime += H;
@@ -597,7 +603,7 @@ export class SoftBody implements SoftBodyLike {
     f.down = true; f.retracting = false; f.contacted = false; f.pressed = false;
     f.px = hx; f.py = hy; f.pz = hz; f.tx = hx; f.ty = hy; f.tz = hz;
     f.dx = dx; f.dy = dy; f.dz = dz; f.nx = nx; f.ny = ny; f.nz = nz;
-    f.depth = 0; f.depthV = 0; f.target = 0; f.holdT = 0;
+    f.depth = 0; f.depthV = 0; f.target = 0; f.holdT = 0; f.lift = lift;
     f.share = this.fingers[id ^ 1].down ? FINGER.pinchShare : 1;
     f.tipR = R * FINGER.rMin;
     // a thin free part (the swirl-peak) can be shoved aside by far more than its own thickness, so a flank press may
@@ -722,29 +728,36 @@ export class SoftBody implements SoftBodyLike {
    * path, so V8 optimises the shared code once, with complete type feedback: first a few frames that visit EVERY branch (two fingers,
    * rub, release, a grab with a finger still down, snap, float, a shove, a landing, every event kind) while the code is still being
    * profiled, then a mixed workout until it is compiled. THIS body is never touched: its state is bit-identical before and after.
-   * (The once-per-frame entry points, step() itself and finalize(), reach V8's top tier only after ~1000 more frames; until then a frame
-   * leaves a few hundred bytes of short-lived garbage. Forcing them with thousands of cheap calls here was tried: it made warmUp() 2x
-   * slower and step() deoptimised on the first real frame, so it is not done. Measured in _harness/probe_softbody.ts.)
+   * (The once-per-frame entry points step() and finalize() still tier up with use: measured after warmUp() on node 22, ~11 KB of
+   * short-lived numbers a frame for the first ~2 s, ~340 B a frame until ~20 s, then zero; a young-generation scavenge now and then, no
+   * hitch. Forcing them with thousands of cheap calls here was tried: warmUp() got 2x slower and step() deoptimised on its first real
+   * frame, so it is not done.)
    * Allocates the twin (garbage afterwards): call it once at load, e.g. behind the title card, never per frame. Nothing calls it
-   * implicitly. Cost ~0.3-0.6 s on a desktop (node 22); see _harness/probe_softbody.ts for the measured first-session hitches.
+   * implicitly. Cost: 0.8-1.4 s measured in the 4-core test container while other jobs ran (node 22); the first-session hitches with and
+   * without it are measured in _harness/probe_softbody.ts (cold JIT rows).
    */
   warmUp(): void {
     const w = new SoftBody(this.genomeRef, { detail: this.detailArg, params: this.p });
     const R = w.restRadius, dt = 1 / 60, F = Math.max(1, Math.floor(SoftBody.warmFrames));
     const ev: SoftEvent[] = [];
     const frame = (): void => { w.step(dt); w.tip(0); w.tip(1); w.drainEvents(ev); ev.length = 0; };
+    // every ray is aimed relative to the twin's current centre: the shoves below move it off the middle of the mat, and a press that
+    // misses warms nothing (measured: with world-fixed rays all 4 top presses of the workout missed, so a lone finger never ran; V8
+    // later compiled the finger paths with that branch's type feedback empty, and the player's first press deoptimised them)
+    const ray = (ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): RayHit | null =>
+      w.raycast({ x: w.center.x + ox, y: oy, z: w.center.z + oz }, { x: dx, y: dy, z: dz });
     const down = (id: 0 | 1, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number): void => {
-      const dir = { x: dx, y: dy, z: dz }, h = w.raycast({ x: ox, y: oy, z: oz }, dir);
-      if (h) { w.fingerDown(id, { point: h.point, normal: h.normal, dir }); w.fingerPressure(id, 1); }
+      const h = ray(ox, oy, oz, dx, dy, dz);
+      if (h) { w.fingerDown(id, { point: h.point, normal: h.normal, dir: { x: dx, y: dy, z: dz } }); w.fingerPressure(id, 1); }
     };
     const top = (id: 0 | 1, x: number): void => down(id, x * R, 6 * R, 0.05 * R, 0, -1, 0);
     const side = (id: 0 | 1, sx: number): void => down(id, sx * 6 * R, 0.7 * R, 0, -sx, 0, 0);
     const pull = (k: number): void => { const g = w.grabs[0]; if (g.active) w.grabMove(0, { x: g.t0x + 0.8 * R * k, y: g.t0y + 0.3 * R * k, z: g.t0z }); };
     // 1) every branch in the first frames (the twin's private state is nudged so 'press' and 'land' fire at once)
     top(0, 0.4); side(1, 1); w.fingers[0].holdT = w.fingers[1].holdT = FINGER.pressAfterS; frame();   // poke, press, pinch
-    const hm = w.raycast({ x: 0.1 * R, y: 6 * R, z: 0 }, { x: 0, y: -1, z: 0 }); if (hm) w.fingerMove(0, hm.point); frame();   // rub
+    const hm = ray(0.1 * R, 6 * R, 0, 0, -1, 0); if (hm) w.fingerMove(0, hm.point); frame();                    // rub
     w.fingerUp(0);                                                                                   // release + retract
-    const hg = w.raycast({ x: -6 * R, y: 0.8 * R, z: 0.1 * R }, { x: 1, y: 0, z: 0 });
+    const hg = ray(-6 * R, 0.8 * R, 0.1 * R, 1, 0, 0);
     if (hg) w.grab(0, hg.vertex, hg.point);                                                          // grab (pinned feet) while finger 1 is down
     pull(0.5); frame(); w.fingerUp(1); pull(1); frame();
     w.grabRelease(0); frame(); w.pinHold = 1e-9; frame();                                           // snap, pinned-feet hold and expiry
@@ -756,7 +769,7 @@ export class SoftBody implements SoftBodyLike {
       top(0, k & 1 ? -0.3 : 0.2); for (let i = 0; i < F; i++) frame();
       side(1, k & 1 ? -1 : 1); for (let i = 0; i < F; i++) frame();
       w.fingerUp(0); w.fingerUp(1); for (let i = 0; i < 2; i++) frame();
-      const g = w.raycast({ x: 6 * R, y: 0.8 * R, z: 0 }, { x: -1, y: 0, z: 0 });
+      const g = ray(6 * R, 0.8 * R, 0, -1, 0, 0);
       if (g) { w.grab(0, g.vertex, g.point); for (let i = 0; i < F; i++) { pull(i / F); frame(); } w.grabRelease(0); }
       w.gravity = (k & 1) === 1; if (w.gravity) w.nudge({ x: k - 2, y: 0, z: 8 }); for (let i = 0; i < F; i++) frame();
     }
@@ -1231,6 +1244,7 @@ export class SoftBody implements SoftBodyLike {
     // ---- collisions: finger spheres, then the table (the table always wins)
     this.tipNearN = 0;
     let fingerDown = 0;   // mass-weighted downward push of the fingertips this substep: extra normal load on the table
+    let react = 0;        // mass-weighted penetration the fingertips corrected this substep (metrics.reaction)
     for (let k = 0; k < 2; k++) {
       const f = this.fingers[k];
       if (!f.down && !f.retracting) continue;
@@ -1271,7 +1285,9 @@ export class SoftBody implements SoftBodyLike {
           XP[i] -= tx * k2; XP[i + 1] -= ty * k2; XP[i + 2] -= tz * k2;
         }
         if (XP[i + 1] < y0) fingerDown += M[i / 3] * (y0 - XP[i + 1]);
+        react += M[i / 3] * pen;
       }
+      f.touching = hit;
       if (hit && !f.contacted && f.down) {
         f.contacted = true;
         // predicted peak closing speed of the critically damped approach, plus what it already has
@@ -1333,6 +1349,7 @@ export class SoftBody implements SoftBodyLike {
       this.supp = smooth01((near - 1) / 4);
     }
 
+    this.reactAcc += react;
     // ---- contact fold limit: near a fingertip, no two neighbouring triangles may fold past FINGER.foldMaxDeg (see foldLimit)
     if (this.tipNearN > 0) this.foldLimit();
 
@@ -1574,6 +1591,19 @@ export class SoftBody implements SoftBodyLike {
     m.grounded = this.nearCount >= 3;
     m.fingers = nf;
     m.grabbed = this.grabs[0].active || this.grabs[1].active;
+    // press: the deepest current fingertip indentation, as a fraction of that finger's safe depth (the seating lift is not indentation);
+    // only while the tip is actually in the skin. reaction: the push-back the fingertips met, a force (mass x penetration / H^2 per
+    // substep, averaged over the step) mapped to 0..1 by REACT_REF, so a firm body pushes back harder than a soft one at the same depth.
+    let press = 0;
+    for (let k = 0; k < 2; k++) {
+      const f = this.fingers[k];
+      if (!f.touching || (!f.down && !f.retracting)) continue;
+      const span = f.depthMax - f.lift;
+      if (span > 1e-6) { const v = (clamp(f.depth, 0, 1) * f.depthMax * f.share - f.lift) / span; if (v > press) press = v; }
+    }
+    m.press = clamp(press, 0, 1);
+    const force = this.reactAcc / Math.max(1, nsub) / (H * H) / this.Mtot;   // per unit body mass: m/s^2
+    m.reaction = force > 0 ? 1 - Math.exp(-force / REACT_REF) : 0;
     const sp = Math.sqrt(this.vcx * this.vcx + this.vcy * this.vcy + this.vcz * this.vcz);
     if (sp > this.debug.maxSpeed) this.debug.maxSpeed = sp;
     this.debug.contacts = this.contactCount;

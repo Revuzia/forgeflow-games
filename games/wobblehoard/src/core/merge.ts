@@ -1,8 +1,11 @@
 // WOBBLEHOARD merge: MERGE_COST squishies of the SAME species become ONE new random squishy (_spec/DESIGN.md 5.6).
 //
 // THE ONE CONSTANT: `MERGE_COST`. The owner's rule picked 2 from the measured 3.1 to 3.8 active minutes per capsule (decent effort
-// => 2; an easy 1.5 minutes or less => 3). Flipping to 3 is this one line. Nothing else in this file, the probes or the sim hard-codes 2
-// (probe_economy.ts derives every expectation from the constant; the sim's own M = 3 sensitivity run reads it too).
+// => 2; an easy 1.5 minutes or less => 3). Flipping to 3 is this one source line, then `node _harness/gen_catalog_doc.ts` to regenerate
+// the generated _spec/CATALOG.md (it prints the cost; probe_catalog.ts fails while the generated file is stale). Nothing else in src or
+// _harness hard-codes 2: probe_economy.ts builds every selection from MERGE_COST, accepts 2 or 3, and on every run also replays its
+// whole merge section at the OTHER cost (passed as the explicit `cost` argument), so the flip is rehearsed continuously; the sim reads
+// the constant (and its `--M 3` run overrides it).
 //
 // Rules, exactly as DESIGN 5.6:
 //   * Inputs: MERGE_COST squishies of one species, Common to Legendary. A Mythic cannot merge (nothing above it).
@@ -11,7 +14,8 @@
 //   * PITY: after 4 merges in a row from the same input tier without a tier-up, the next one tiers up (so never more than 4 duds in a row).
 //     The counter is per input tier, so it cannot be banked on cheap fodder and spent on a Legendary pair.
 //   * Species roll: random inside the output tier, NEVER the input species; species you do not own are weighted x1.5. No "guaranteed new" rule.
-//   * Look of the result: the species template, its hue and pattern mixed with the inputs' (lineage colours stay visible).
+//   * Look of the result: a normal instance of the result species, tinted toward the inputs' hue (lineage colours stay visible) only as far
+//     as it stays recognisably its own species; see lineageGenome for the exact bounds.
 //
 // Pure and deterministic. Randomness is injected (see RngSource in drops.ts). EXACT DRAW ORDER (never reorder): 1) tier-up roll, 2) species
 // roll, 3) genome seed. Exactly three draws per merge, always, so a server can replay a merge from its seed.
@@ -21,17 +25,19 @@
 // secret seed, the account's true ownership and pity counters, consumes the inputs and stores the pity counter it returns, in ONE transaction.
 // The 0.5 s hold, the 24 h output lock, the 10-merges-a-day cap, favourites and the last-copy warning are UI and server policy, not part of the roll.
 import type { Genome } from './genome.ts';
-import { quantizeGenome } from './genome.ts';
+import { quantizeGenome, canonicalGenome } from './genome.ts';
 import { mulberry32 } from './rng.ts';
 import { TIERS, TIER_COUNT, TOP_TIER_INDEX, tierIndex } from './rarity.ts';
 import type { TierId } from './rarity.ts';
-import { CATALOG, SPECIES_BY_TIER, getSpecies, speciesBaseGenome } from '../data/catalog.ts';
+import { CATALOG, SPECIES_BY_TIER, getSpecies, speciesBaseGenome, speciesTemplateGenome } from '../data/catalog.ts';
 import type { SpeciesDef, SpeciesId } from '../data/catalog.ts';
+import { bodyLab, labDistance } from '../data/palette.ts';
+import type { Lab } from '../data/palette.ts';
 import { draw, makeRng, pickWeighted } from './drops.ts';
 import type { RngSource } from './drops.ts';
 
 /** How many squishies of the SAME species one merge consumes. The single constant (owner's rule: 2; change to 3 here and nowhere else). */
-export const MERGE_COST = 2;
+export const MERGE_COST: number = 2; // typed `number`, not the literal 2, so no consumer can compile a comparison that breaks when this flips to 3
 
 /** Tier-up chance by INPUT tier index (Common..Mythic). Mythic is 0: it cannot merge. */
 export const MERGE_TIER_UP: readonly number[] = [0.30, 0.25, 0.20, 0.15, 0.10, 0];
@@ -63,7 +69,10 @@ export const MERGE_RULES: MergeRules = { tierUp: MERGE_TIER_UP, unownedWeight: M
 
 /* ───────────────────────────────────────────────── inputs and state ───────────────────────────────────────────────── */
 
-/** What a caller may hand in as one input: a species id, or anything carrying a species / a genome. */
+/**
+ * What a caller may hand in as one input: a species id, or anything carrying a species / a genome. A genome, when given, must be a
+ * valid genome (canonicalGenome) of that same species, else the merge is refused with 'invalid-genome' (it would feed the lineage).
+ */
 export type MergeInput = SpeciesId | { species: SpeciesId; genome?: Genome } | { genome: Genome };
 
 /** How many copies of a species the player owns: a map of counts, a Set of owned ids (counts then unknown), or a lookup function. */
@@ -78,7 +87,7 @@ export interface MergeState {
 
 export const createMergePity = (): number[] => new Array(TIER_COUNT).fill(0);
 
-export type MergeError = 'wrong-count' | 'mixed-species' | 'unknown-species' | 'mythic-cannot-merge' | 'not-enough-copies';
+export type MergeError = 'wrong-count' | 'mixed-species' | 'unknown-species' | 'invalid-genome' | 'mythic-cannot-merge' | 'not-enough-copies';
 
 function copiesOf(owned: MergeOwned, id: SpeciesId): number {
   if (!owned) return 0;
@@ -222,7 +231,7 @@ export type MergePreview = MergePreviewOk | MergePreviewErr;
 
 interface Resolved { def: SpeciesDef; inputs: SpeciesId[]; genomes: Genome[] }
 
-/** Validate the inputs (count, same species, known, not Mythic, enough copies) and normalise them. */
+/** Validate the inputs (count, known species, valid genomes of that species, same species, not Mythic, enough copies) and normalise them. */
 function resolveInputs(inputs: readonly MergeInput[], state: MergeState | undefined, cost: number): Resolved | MergeError {
   state = state ?? { owned: {} };
   if (!Array.isArray(inputs) || inputs.length !== cost) return 'wrong-count';
@@ -231,9 +240,14 @@ function resolveInputs(inputs: readonly MergeInput[], state: MergeState | undefi
     let id: unknown, g: Genome | undefined;
     if (typeof x === 'string') id = x;
     else if (x && typeof x === 'object') {
-      const o = x as { species?: unknown; genome?: Genome };
-      g = o.genome && typeof o.genome === 'object' ? o.genome : undefined;
+      const o = x as { species?: unknown; genome?: unknown };
+      if (o.genome !== undefined && o.genome !== null) {
+        const c = canonicalGenome(o.genome);
+        if (!c) return getSpecies(o.species ?? (o.genome as { species?: unknown }).species) ? 'invalid-genome' : 'unknown-species';
+        g = c;
+      }
       id = o.species ?? g?.species;
+      if (g && o.species !== undefined && o.species !== g.species) return 'invalid-genome';
     }
     const d = getSpecies(id);
     if (!d) return 'unknown-species';
@@ -287,7 +301,7 @@ export interface MergeOutcome {
   isNew: boolean;
   /** uint32 for the result's genome (genome.seed). */
   genomeSeed: number;
-  /** The result's genome: the species template with the inputs' hue and pattern mixed in when the inputs carried genomes, else the plain template. */
+  /** The result's genome: speciesBaseGenome(species, genomeSeed), with the inputs' lineage tint (lineageGenome) when the inputs carried genomes. */
   genome: Genome;
 }
 
@@ -318,21 +332,77 @@ function circularMean(deg: readonly number[]): number {
 }
 const angleDiff = (a: number, b: number): number => ((a - b + 540) % 360) - 180;
 
+/** Lineage pulls the result hue this fraction of the way toward the parents' mean hue... */
+export const LINEAGE_PULL = 0.4;
+/** ...at most this many degrees (before the identity bound below), plus up to +-LINEAGE_JITTER degrees. */
+export const LINEAGE_MAX_SHIFT = 30;
+export const LINEAGE_JITTER = 3;
+/** OKLab margin by which a tinted result must stay nearer its own species' centre colour than any other species of its tier. */
+export const LINEAGE_IDENTITY_MARGIN = 0.01;
 /**
- * The look of a merge result: the species template with the PARENTS' hue and pattern mixed in, so their colours stay visible (DESIGN 5.6).
- * hue moves 40% of the way toward the circular mean of the parents' hues, at most 35 degrees, plus up to 3 degrees of jitter; the pattern is
- * the template's or one parent's (an even three-way pick), and a borrowed non-plain pattern gets at least a speckle strength of 0.3.
- * Everything else (core hue = the tier's tell colour, materials, eyes) stays the species'. Deterministic from (template, parents, seed).
+ * Absolute colour budget of the tint: the body stays within this OKLab distance of its species' centre colour. 0.04 is about two
+ * just-noticeable differences (visible side by side, as lineage should be), a little more than the cosmetic band of a plain instance
+ * (<= 0.035, probe_catalog) and about half the gap between two species of one tier (>= 0.075): tinted, never a different colour.
+ */
+export const LINEAGE_MAX_DISTANCE = 0.04;
+
+/** Body colour (OKLab) of every species' template genome: the species' centre colour. Built on first use, never at module load. */
+let centreLabs: Map<SpeciesId, Lab> | null = null;
+function centreLab(id: SpeciesId): Lab {
+  if (!centreLabs) centreLabs = new Map(CATALOG.map((d) => [d.id, bodyLab(speciesTemplateGenome(d.id))] as [SpeciesId, Lab]));
+  return centreLabs.get(id) as Lab;
+}
+
+/**
+ * True when genome `g` is recognisably its own species by colour: its body colour (src/data/palette.ts, OKLab) is nearer its species'
+ * centre colour than the centre colour of ANY other species of the same tier, by at least `margin`, and (when given) no further than
+ * `maxDistance` from its own centre. (Species of other tiers differ in silhouette, glow and tier styling as well; probe_catalog keeps
+ * every same-tier pair of centres >= 0.075 apart.)
+ */
+export function keepsSpeciesColour(g: Genome, margin: number = LINEAGE_IDENTITY_MARGIN, maxDistance: number = Infinity): boolean {
+  const def = getSpecies(g.species);
+  if (!def) return false;
+  const lab = bodyLab(g);
+  const own = labDistance(lab, centreLab(def.id));
+  if (own > maxDistance) return false;
+  for (const o of SPECIES_BY_TIER[tierIndex(def.tier)]) if (o.id !== def.id && labDistance(lab, centreLab(o.id)) < own + margin) return false;
+  return true;
+}
+
+/**
+ * The look of a merge result (DESIGN 5.6: "the lineage colours stay visible"), bounded so the result is always recognisably ITS species.
+ *   * hue: a lineage TINT toward the circular mean of the parents' hues: LINEAGE_PULL of the way, at most LINEAGE_MAX_SHIFT degrees, plus
+ *     up to +-LINEAGE_JITTER degrees of jitter, but only as far as the body colour stays within LINEAGE_MAX_DISTANCE (OKLab) of the
+ *     species' centre colour AND nearer that centre than any other same-tier species' centre (keepsSpeciesColour), at every whole degree
+ *     on the way (the tint stops at the first degree that would break either). Saturated colours get a few degrees, greyish ones more;
+ *     the template's own hue is always allowed (it is a normal instance).
+ *   * pattern: the species' own pattern. Only a SAME-TIER merge into a patterned species (Rare and up) may inherit a parent's non-plain
+ *     pattern (an even pick between the template and each parent), because that pattern is then a valid rarity layer of this very
+ *     tier. A tier-up never borrows (the parents' pattern belongs to a lower tier), and plain never turns patterned or back.
+ *   * everything else (chroma, lightness, core hue = the tier's tell colour, speckle, glitter, translucency, materials, eyes) is the
+ *     template's: the result is otherwise a normal instance of its species.
+ * Deterministic from (template, parents, seed): always exactly two draws (jitter, pattern pick). Parents that are not valid genomes are
+ * ignored here (rollMerge refuses them before this point).
  */
 export function lineageGenome(template: Genome, parents: readonly Genome[], seed: number): Genome {
-  if (!parents.length) return template;
+  const ps = parents.map((p) => canonicalGenome(p)).filter((p): p is Genome => p !== null);
+  if (!ps.length) return template;
   const r = mulberry32((seed ^ 0x6c696e65) >>> 0);
-  const mean = circularMean(parents.map((p) => p.hue));
-  const shift = Math.max(-35, Math.min(35, angleDiff(mean, template.hue) * 0.4)) + (r() - 0.5) * 6;
-  const pick = Math.floor(r() * (parents.length + 1)); // 0 = keep the template's pattern
-  const pattern = pick === 0 ? template.pattern : parents[pick - 1].pattern;
-  const speckle = pattern !== 'plain' && pattern !== template.pattern ? Math.max(template.speckle, 0.3) : template.speckle;
-  return quantizeGenome({ ...template, hue: template.hue + shift, pattern, speckle });
+  const jitter = (r() - 0.5) * 2 * LINEAGE_JITTER;
+  const pick = Math.floor(r() * (ps.length + 1)); // 0 = keep the template's pattern
+  const mean = circularMean(ps.map((p) => p.hue));
+  const want = Math.max(-LINEAGE_MAX_SHIFT, Math.min(LINEAGE_MAX_SHIFT, angleDiff(mean, template.hue) * LINEAGE_PULL)) + jitter;
+  const dir = want < 0 ? -1 : 1, steps = Math.round(Math.abs(want));
+  let k = 0;
+  while (k < steps && keepsSpeciesColour(quantizeGenome({ ...template, hue: template.hue + dir * (k + 1) }), LINEAGE_IDENTITY_MARGIN, LINEAGE_MAX_DISTANCE)) k++;
+  // pattern: inherited only inside one tier, and only between patterned looks
+  const def = getSpecies(template.species);
+  let pattern = template.pattern;
+  if (pick > 0 && def && template.pattern !== 'plain') {
+    const parent = ps[pick - 1], pDef = getSpecies(parent.species);
+    if (pDef && pDef.tier === def.tier && parent.pattern !== 'plain') pattern = parent.pattern;
+  }
+  return quantizeGenome({ ...template, hue: template.hue + dir * k, pattern });
 }
 
 /**

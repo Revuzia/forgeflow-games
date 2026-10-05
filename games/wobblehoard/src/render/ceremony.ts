@@ -248,6 +248,15 @@ abstract class Run implements CeremonyHandle {
     if (this.host.flash.ring(this.host.now())) { v.fx.spawn('ring', { x, y: 0, z }, gain); if (escalation) this.stats.rings++; }
   }
 
+  /**
+   * The Mythic prism dome after the burst: it swells (radius x1.9, height x1.8 over 0.6 s) and fades. An expanding shell of light THINS as
+   * it grows (strength / swept area), so it never adds a second luminance peak right after the burst flash (the flash probe counts those).
+   */
+  protected expandDome(dome: PrismDome, x: number, z: number, r0: number, h0: number, s0: number, age: number, t: number): void {
+    const g = smooth(0, 0.6, age), rx = r0 * (1 + 0.9 * g), ry = h0 * (1 + 0.8 * g);
+    dome.set(x, z, rx, ry, s0 * ((r0 * h0) / (rx * ry)) * (1 - smooth(0.4, 1.4, age)), t);
+  }
+
   /** Rings: staggered >= 500 ms apart through the governor (fades in calm mode: same count and spacing). */
   protected ringSchedule(t0: number): number[] {
     const n = RINGS[this.style.index], out: number[] = [];
@@ -361,7 +370,7 @@ export class CapsuleRun extends Run {
         const w = smooth(0, 0.04, a) * (1 - smooth(dipLen, dipLen + 0.09, a));
         ts = 1 - (1 - dipScale) * w;
       }
-      this.tickResult(dt * ts);
+      this.tickResult(dt * ts, dt);
       cap.setCrack(1, Math.max(0, LEAK[i] * (1 - (t - burstAt) * 2.2)), st.tell, st.prism);
       // rings
       while (this.ringIdx < this.rings.length && t >= this.rings[this.ringIdx]) {
@@ -370,7 +379,7 @@ export class CapsuleRun extends Run {
         if (v) this.spawnRing(v, this.cx, this.cz, RING_GAIN[this.ringIdx - 1] ?? 0.3);
       }
       if (this.pillar) this.pillar.set(this.cx, this.cz, 0.22 + 0.5 * (t - burstAt), 3.2, st.tell, 0.2 * Math.max(0, 1 - (t - burstAt) * 1.3));
-      if (this.dome) this.dome.set(this.cx, this.cz, 0.62 + 0.7 * smooth(0, 0.6, t - burstAt), 0.8 + 0.8 * smooth(0, 0.6, t - burstAt), 0.85 * (1 - smooth(0.4, 1.4, t - burstAt)), t);
+      if (this.dome) this.expandDome(this.dome, this.cx, this.cz, 0.62, 0.8, 0.85, t - burstAt, t);
     }
     if (t >= this.tb.revealAt) this.beat('reveal');
     // the 6.3 camera column, exactly (Common: none): push / pull-back / arc from the burst, eased back before the end
@@ -399,7 +408,7 @@ export class CapsuleRun extends Run {
     this.cap.wobble(0);
   }
 
-  private tickResult(dt: number): void {
+  private tickResult(dt: number, realDt: number): void {   // dt: time-scaled (the hop, physics); realDt: wall (the fades)
     const v = this.resultView;
     if (!v) return;
     const d = this.drop, off = v.proxy.offset;
@@ -419,7 +428,7 @@ export class CapsuleRun extends Run {
       }
     }
     off.y = d.y;
-    this.fadeIn = Math.min(1, this.fadeIn + dt / 0.7);
+    this.fadeIn = Math.min(1, this.fadeIn + realDt / 0.3);   // the result's tier FX arrive UNDER the burst light, so the scene only dims after the flash
     v.rarity.strength = smooth(0, 1, this.fadeIn);
     const u = v.mats.uniforms;
     u.uTierAmt.value = Math.max(0, (0.26 + 0.02 * this.style.index) * (1 - d.age / 0.9));
@@ -599,14 +608,14 @@ export class MergeRun extends Run {
         const a = t - b.t3;
         ts = 1 - (1 - dipScale) * smooth(0, 0.04, a) * (1 - smooth(dipLen, dipLen + 0.09, a));
       }
-      this.tickResult(dt * ts);
+      this.tickResult(dt * ts, dt);
       while (this.ringIdx < this.rings.length && t >= this.rings[this.ringIdx]) {
         this.ringIdx++;
         const v = this.resultView;
         if (v) this.spawnRing(v, 0, 0, RING_GAIN[this.ringIdx - 1] ?? 0.3);
       }
       if (this.pillar) this.pillar.set(0, 0, 0.25 + 0.5 * (t - b.t3), 3.2, st.tell, 0.2 * Math.max(0, 1 - (t - b.t3) * 1.2));
-      if (this.dome) this.dome.set(0, 0, 0.7 + 0.6 * smooth(0, 0.6, t - b.t3), 0.9 + 0.7 * smooth(0, 0.6, t - b.t3), 0.8 * (1 - smooth(0.4, 1.4, t - b.t3)), t);
+      if (this.dome) this.expandDome(this.dome, 0, 0, 0.7, 0.9, 0.8, t - b.t3, t);
       // tier-up accent: a rising ladder of star sparkles in the new colour over the last 0.4 s
       if (this.spec.result.tierUp && !this.sparkled && t >= this.duration - 0.4 * this.ks) {
         this.sparkled = true;
@@ -648,7 +657,7 @@ export class MergeRun extends Run {
     host.shake(KICK[i]);
   }
 
-  private tickResult(dt: number): void {
+  private tickResult(dt: number, realDt: number): void {   // dt: time-scaled (the hop, physics); realDt: wall (the fades)
     const v = this.resultView;
     if (!v) return;
     const d = this.drop, off = v.proxy.offset, u = v.mats.uniforms;
@@ -668,7 +677,7 @@ export class MergeRun extends Run {
       }
       off.y = d.y;
     }
-    this.fadeIn = Math.min(1, this.fadeIn + dt / 0.8);
+    this.fadeIn = Math.min(1, this.fadeIn + realDt / 0.3);   // the result's tier FX arrive UNDER the burst light, so the scene only dims after the flash
     v.rarity.strength = smooth(0, 1, this.fadeIn);
     u.uTierAmt.value = Math.max(0, (0.32 + 0.025 * this.style.index) * (1 - d.age / 0.9));
     u.uMixAmt.value = Math.max(0, 0.45 * (1 - d.age / 1.5));

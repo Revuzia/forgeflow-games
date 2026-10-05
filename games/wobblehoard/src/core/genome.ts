@@ -4,11 +4,15 @@
 //   * trade       — an instance is the unit of trade; the genome travels with it as a compact share string
 // Every number is stored QUANTISED to 1/255 (hue to whole degrees) so encode/decode is lossless and a genome can be
 // compared, hashed and stored server-side without float drift.
+//
+// CANONICAL FORM. quantizeGenome is the one canonicaliser: encodeGenome quantises before it writes (so a genome and its quantised
+// copy share one string), decodeGenome accepts only the string encodeGenome would write for the result (no alias spellings), and
+// genomeEquals compares canonical forms. One genome <=> one share string, so a code can serve as an identity or dedupe key.
 import { mulberry32, clamp, hashString } from './rng.ts';
-// The species list now lives in the catalog (src/data/catalog.ts): append-only, position = idx = the byte stored in share strings.
-// genome.ts only READS it inside functions (never at module load), so the catalog <-> genome import cycle is safe in either order.
-import { SPECIES } from '../data/catalog.ts';
-import type { SpeciesId } from '../data/catalog.ts';
+// The species list lives in the leaf module src/data/species.ts (append-only: position = idx = the byte stored in share strings).
+// Both this file and src/data/catalog.ts import it, so there is no genome <-> catalog import cycle.
+import { SPECIES } from '../data/species.ts';
+import type { SpeciesId } from '../data/species.ts';
 export { SPECIES };
 export type { SpeciesId };
 
@@ -42,6 +46,12 @@ export interface Genome {
   eyeHeight: number;         // 0..1
 }
 
+/** Every field of a Genome, in a fixed order (canonicalGenome copies exactly these; extra keys are dropped). */
+const GENOME_KEYS = [
+  'v', 'species', 'seed', 'hue', 'chroma', 'lightness', 'coreHue', 'coreGlow', 'translucency', 'gloss', 'firmness', 'bounce', 'stretch', 'size',
+  'glitter', 'speckle', 'pattern', 'eyeStyle', 'eyeSpacing', 'eyeSize', 'eyeHeight',
+] as const satisfies readonly (keyof Genome)[];
+
 /** The unit of ownership and trade. `id` is globally unique and never reused. */
 export interface SquishyInstance {
   id: string;
@@ -52,19 +62,45 @@ export interface SquishyInstance {
   tradeCount: number;        // incremented by the server on every completed trade (never client-side)
 }
 
-const q255 = (v: number): number => Math.round(clamp(v, 0, 1) * 255) / 255;
-const qDeg = (v: number): number => ((Math.round(v) % 360) + 360) % 360;
+/** Unit field onto the 1/255 grid. A non-finite value (NaN, a missing field) becomes the neutral 0.5; +-Infinity clamps to 1 / 0. */
+const q255 = (v: number): number => (typeof v !== 'number' || Number.isNaN(v) ? 0.5 : Math.round(clamp(v, 0, 1) * 255) / 255);
+/** Degrees onto whole degrees 0..359 (wrapping). A non-finite value (or a non-number) becomes 0. */
+const qDeg = (v: number): number => (typeof v === 'number' && Number.isFinite(v) ? ((Math.round(v) % 360) + 360) % 360 : 0);
 
 const UNIT_KEYS = [
   'chroma', 'lightness', 'coreGlow', 'translucency', 'gloss', 'firmness', 'bounce', 'stretch', 'size',
   'glitter', 'speckle', 'eyeSpacing', 'eyeSize', 'eyeHeight',
 ] as const;
 
-/** Snap every field onto its storage grid. All constructors below return quantised genomes. */
+/**
+ * Snap every numeric field onto its storage grid (the canonical form). All constructors below return quantised genomes, and
+ * quantizeGenome is idempotent. Non-finite numbers get defined values (unit fields 0.5, hues 0, seed 0) so the result is always
+ * finite; the enum fields (species, pattern, eyeStyle) and `v` are copied as they are (encodeGenome validates them).
+ */
 export function quantizeGenome(g: Genome): Genome {
-  const out: Genome = { ...g, seed: g.seed >>> 0, hue: qDeg(g.hue), coreHue: qDeg(g.coreHue) };
+  const out: Genome = { ...g, seed: typeof g.seed === 'number' && Number.isFinite(g.seed) ? g.seed >>> 0 : 0, hue: qDeg(g.hue), coreHue: qDeg(g.coreHue) };
   for (const k of UNIT_KEYS) out[k] = q255(g[k]);
   return out;
+}
+
+/** True when `x` has the version and enum fields a share string can carry (the numbers are canonicalised, never rejected). */
+function encodable(x: Genome): boolean {
+  return x.v === GENOME_VERSION && SPECIES.includes(x.species) && PATTERNS.includes(x.pattern) && EYE_STYLES.includes(x.eyeStyle);
+}
+
+/**
+ * Strict validation for genomes that come from outside (a save, a merge request, another player): an object with v = 1, a known
+ * species / pattern / eye style, and a FINITE number in every numeric field. Returns its canonical (quantised) form, or null.
+ * Unlike quantizeGenome it never invents a value: NaN, a missing field or a string is a rejection, not a default.
+ */
+export function canonicalGenome(x: unknown): Genome | null {
+  if (!x || typeof x !== 'object') return null;
+  const g = x as Record<string, unknown>;
+  for (const k of ['seed', 'hue', 'coreHue', ...UNIT_KEYS]) if (typeof g[k] !== 'number' || !Number.isFinite(g[k])) return null;
+  const c = quantizeGenome(x as Genome);
+  const out = {} as Record<string, unknown>;
+  for (const k of GENOME_KEYS) out[k] = (c as unknown as Record<string, unknown>)[k];
+  return encodable(out as unknown as Genome) ? (out as unknown as Genome) : null;
 }
 
 /** The slice's one hand-made squishy: DOLLOP, a translucent apricot-amber swirl-peaked blob with an ember-coral core. */
@@ -138,17 +174,28 @@ function fromB64Url(s: string): Uint8Array | null {
   return Uint8Array.from(out);
 }
 
+/**
+ * The share string of a genome. Quantises first (quantizeGenome), so a genome and its quantised copy encode identically and hue,
+ * NaN or out-of-range numbers can never produce a string that decodeGenome would reject. Throws a RangeError for a genome that has
+ * no share string at all (wrong version, unknown species / pattern / eye style): that is a programming error, never player input.
+ */
 export function encodeGenome(g: Genome): string {
+  const q = quantizeGenome(g);
+  if (!encodable(q)) throw new RangeError(`encodeGenome: not a v${GENOME_VERSION} genome with a known species / pattern / eyeStyle (${String(q.species)} / ${String(q.pattern)} / ${String(q.eyeStyle)})`);
   const b = new Uint8Array(4 + 4 + 2 + 2 + UNIT_KEYS.length);
-  b[0] = g.v; b[1] = SPECIES.indexOf(g.species); b[2] = PATTERNS.indexOf(g.pattern); b[3] = EYE_STYLES.indexOf(g.eyeStyle);
-  const s = g.seed >>> 0;
+  b[0] = q.v; b[1] = SPECIES.indexOf(q.species); b[2] = PATTERNS.indexOf(q.pattern); b[3] = EYE_STYLES.indexOf(q.eyeStyle);
+  const s = q.seed;
   b[4] = s & 255; b[5] = (s >>> 8) & 255; b[6] = (s >>> 16) & 255; b[7] = (s >>> 24) & 255;
-  b[8] = g.hue & 255; b[9] = g.hue >> 8; b[10] = g.coreHue & 255; b[11] = g.coreHue >> 8;
-  UNIT_KEYS.forEach((k, i) => { b[12 + i] = Math.round(clamp(g[k], 0, 1) * 255); });
+  b[8] = q.hue & 255; b[9] = q.hue >> 8; b[10] = q.coreHue & 255; b[11] = q.coreHue >> 8;
+  UNIT_KEYS.forEach((k, i) => { b[12 + i] = Math.round(q[k] * 255); });
   return 'g1.' + toB64Url(b);
 }
 
-/** Returns null for anything that is not a valid v1 share string (never throws; the input may come from another player). */
+/**
+ * Returns null for anything that is not a valid, CANONICAL v1 share string (never throws; the input may come from another player).
+ * Canonical = exactly the string encodeGenome writes for the decoded genome: 26 bytes give 35 base64url characters whose last one
+ * carries 2 unused bits, and a string with those bits set (or any other alias spelling) is refused rather than silently accepted.
+ */
 export function decodeGenome(code: string): Genome | null {
   if (typeof code !== 'string' || !code.startsWith('g1.')) return null;
   const b = fromB64Url(code.slice(3));
@@ -163,11 +210,19 @@ export function decodeGenome(code: string): Genome | null {
     seed: (b[4] | (b[5] << 8) | (b[6] << 16) | (b[7] << 24)) >>> 0, hue, coreHue,
   } as Genome;
   UNIT_KEYS.forEach((k, i) => { g[k] = b[12 + i] / 255; });
-  return g;
+  return encodeGenome(g) === code ? g : null;
 }
 
-/** Canonical equality (key order and float noise independent): two genomes are equal iff their share strings are. */
-export const genomeEquals = (a: Genome, b: Genome): boolean => encodeGenome(a) === encodeGenome(b);
+/**
+ * Canonical equality: true iff the two genomes have the same canonical (quantised) form, i.e. for any encodable genome iff their share
+ * strings are equal. Independent of key order and of float noise below the storage grid (genomeEquals(g, quantizeGenome(g)) is true).
+ * Total: never throws, also for genomes that cannot be encoded (those compare field by field after quantisation).
+ */
+export function genomeEquals(a: Genome, b: Genome): boolean {
+  if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return a === b;
+  const qa = quantizeGenome(a) as unknown as Record<string, unknown>, qb = quantizeGenome(b) as unknown as Record<string, unknown>;
+  return GENOME_KEYS.every((k) => qa[k] === qb[k]); // === (not Object.is): -0 and 0 encode to the same byte
+}
 
 /** Fresh instance. `id` and `now` are injectable so tests stay deterministic. */
 export function newInstance(

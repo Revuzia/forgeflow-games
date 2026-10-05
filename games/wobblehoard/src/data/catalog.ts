@@ -2,9 +2,11 @@
 //
 // ═══════════════════════════════════ IDX STABILITY: APPEND-ONLY, FOREVER ═══════════════════════════════════
 // A species' position in SPECIES (== its `idx`) is written into every share string (one byte, src/core/genome.ts), every save and,
-// later, every server row. Therefore:
-//   1. NEVER reorder, rename the id of, delete, or reuse an entry. A species that must disappear stays here with its idx.
-//   2. New species are APPENDED at the end of SPECIES and at the end of CATALOG (idx = previous length, max 255), in any tier.
+// later, every server row. The registry itself lives in the leaf module ./species.ts (re-exported here), so that genome.ts and this
+// file never import each other. Therefore:
+//   1. NEVER reorder, delete, or reuse an entry; never rename the id of a species once anything outside the repo stores it (see the
+//      one pre-release exception documented in ./species.ts). A species that must disappear stays here with its idx.
+//   2. New species are APPENDED at the end of SPECIES (./species.ts) and at the end of CATALOG (idx = previous length, max 255), in any tier.
 //   3. `name`, `blurb`, `tags`, the look and the shape of an existing species MAY be tuned (they are not stored in share strings),
 //      but a tier or family change moves a species in the economy: do it only with a design decision, never silently.
 //   4. probe_catalog.ts holds a locked copy of the id list (IDX_LOCK) and fails if any existing position changes; when you append,
@@ -34,10 +36,18 @@
 // Tier language shows in the data itself, not only in the label (DESIGN 5.3): coreGlow, glitter, translucency, patterning and the
 // number of features in the silhouette all rise with tier, and the inner-light hue (coreHue) is the tier's tell colour (cream,
 // lagoon, dusk violet, ember coral, sodium amber; Mythic cycles), with body hues kept within the +-110 degrees the renderer allows
-// between body and core, so the stored coreHue is the hue that is actually drawn.
+// between body and core, so the stored coreHue is the hue that is actually drawn. These genome numbers ARE the drawn values:
+// src/data/materials.ts resolveMaterial passes translucency, gloss, coreGlow and glitter through unchanged (the family only adds the
+// surface fields a genome does not carry), so the rarity stays in the material.
 //
-// ORIGINALITY: every name, blurb and palette below is invented for this game. probe_catalog.ts runs a 200+ word denylist of real
-// brands, characters, toy lines and games (edit distance 1 included) and a language-safety list over names, ids and blurbs.
+// ORIGINALITY AND LANGUAGE SAFETY: every name, blurb and palette below is invented for this game. probe_catalog.ts runs a 200+ word
+// denylist of real brands, characters, toy lines and games (edit distance 1 and multi-word brand prefixes included) and a MULTILINGUAL
+// language-safety gate (English, Spanish, Portuguese, French, Italian, German, Dutch, Tagalog and internet slang; substring and
+// sound-alike edit-distance-1 matching) over every name, id, blurb, tag and silhouette line. Names are read aloud by players of every
+// language, so a name is judged by how it SOUNDS, not only by how it is spelled.
+//
+// Pop Dome: the bistable snap ("pops and flips inside out", SQUISHY_SCIENCE.md 3.9) is NOT built yet; popdome species ship as stiff
+// domes that give under a firm press and spring back, so their blurbs promise exactly that and nothing more.
 import type { Genome, EyeStyleId, PatternId } from '../core/genome.ts';
 import { quantizeGenome, GENOME_VERSION } from '../core/genome.ts';
 import { mulberry32, hashString } from '../core/rng.ts';
@@ -46,28 +56,13 @@ import type { TierId } from '../core/rarity.ts';
 import { TIERS, tierIndex } from '../core/rarity.ts';
 import type { ShapeRecipe } from './shapes.ts';
 import { DOLLOP_RECIPE, shape, bump as B, dent as D, ridge as R } from './shapes.ts';
+import { SPECIES, SPECIES_COUNT, MAX_SPECIES_IDX } from './species.ts';
+import type { SpeciesId } from './species.ts';
 
-/* ───────────────────────────────────────────── the append-only registry ───────────────────────────────────────────── */
+/* ───────────────────────────────────────────── the append-only registry (./species.ts) ───────────────────────────────────────────── */
 
-/** Species ids in IDX ORDER. APPEND ONLY. Position = idx = the byte stored in share strings. */
-export const SPECIES = [
-  // common (0..13)
-  'dollop', 'plumpet', 'twangle', 'puddlo', 'glubbin', 'crumbit', 'chunkle', 'munchip', 'wisplet', 'cushlet', 'crimpo', 'thumbly', 'sproink', 'dimpla',
-  // uncommon (14..24)
-  'nuzzo', 'flickum', 'swishel', 'granulo', 'peakum', 'wrigglo', 'fluffnut', 'capnap', 'knubby', 'kneadle', 'hooplet',
-  // rare (25..34)
-  'spirelo', 'zingle', 'petalop', 'burrbin', 'marigel', 'gloopsy', 'hushpuff', 'drowsel', 'thudge', 'diademo',
-  // epic (35..41)
-  'taffelin', 'maracon', 'cindergoo', 'selenuff', 'pastrel', 'flipdome', 'caromel',
-  // legendary (42..46)
-  'ambrosel', 'tidelume', 'glimglop', 'somnuff', 'fossilo',
-  // mythic (47..49)
-  'skeinara', 'constello', 'prismelo',
-] as const;
-export type SpeciesId = (typeof SPECIES)[number];
-export const SPECIES_COUNT = SPECIES.length;
-/** Highest idx a share string can carry (one byte). */
-export const MAX_SPECIES_IDX = 255;
+export { SPECIES, SPECIES_COUNT, MAX_SPECIES_IDX };
+export type { SpeciesId };
 
 /* ───────────────────────────────────────────────────── types ───────────────────────────────────────────────────── */
 
@@ -161,7 +156,7 @@ const SHAPES: Record<SpeciesId, ShapeRecipe> = {
   granulo: shape([0.7, 0.7, 0.55], [B([0, 1, 0], 0.9, 0.45), B([0.951, 0.309, 0], 0.9, 0.45, true), B([0.588, -0.809, 0], 0.9, 0.45, true)]),
   peakum: shape([1.0, 0.8, 0.9], [B([0.45, 1, -0.3], 1.0, 0.36, true)]),
   wrigglo: shape([1.3, 0.66, 0.7], [B([1, 0.45, 0], 0.38, 0.5), D([-0.3, 1, 0], 0.2, 0.6)]),
-  fluffnut: shape([0.95, 0.85, 0.95], [B([0, 0.5, 0], 0.4, 1.1), B([0, 1, 0.1], 0.7, 0.36)]),
+  acornel: shape([0.95, 0.85, 0.95], [B([0, 0.5, 0], 0.4, 1.1), B([0, 1, 0.1], 0.7, 0.36)]),
   capnap: shape([1.25, 0.75, 1.25], [D([0.85, -0.55, 0], 0.5, 0.7, true), D([0, -0.55, 0.85], 0.3, 0.7), D([0, -0.55, -0.85], 0.5, 0.7)]),
   knubby: shape([0.95, 1.0, 0.78], [B([1, 0.1, 0.1], 0.65, 0.45), D([-1, 0, 0], 0.1, 0.6)]),
   kneadle: shape([1.1, 0.8, 0.95], [B([-0.6, 0.5, -0.3], 0.6, 0.55), D([0.7, 0.9, 0.3], 0.25, 0.5)]),
@@ -179,7 +174,7 @@ const SHAPES: Record<SpeciesId, ShapeRecipe> = {
   diademo: shape([1.05, 0.7, 1.05], [B([0, 1, 0], 1.0, 0.4), B([0.6, 0.8, 0], 0.9, 0.38, true), B([0.35, 0.8, -0.55], 0.85, 0.38, true)]),
   // ── epic ──
   taffelin: shape([0.8, 0.85, 1.1], [R([0, 0.3, -1], [0, 1, 0], 0.65, 0.42, 1.1), B([1, 0, -0.2], 0.4, 0.4, true), B([0.9, -0.25, 0.3], 0.3, 0.45, true)]),
-  maracon: shape([0.9, 0.95, 0.9], [B([0, 1, 0], 0.55, 0.4), B([0.9, 0.5, -0.4], 0.5, 0.4, true), B([0, 0.3, -1], 0.5, 0.4), D([0.9, 0.2, 0.4], 0.2, 0.45, true)]),
+  rattlebead: shape([0.9, 0.95, 0.9], [B([0, 1, 0], 0.55, 0.4), B([0.9, 0.5, -0.4], 0.5, 0.4, true), B([0, 0.3, -1], 0.5, 0.4), D([0.9, 0.2, 0.4], 0.2, 0.45, true)]),
   cindergoo: shape([0.8, 0.85, 0.8], [B([0, 1, 0], 0.6, 0.55), B([0, 1, 0], 0.45, 0.35), B([0.6, 0.8, 0], 0.4, 0.36, true), B([0.8, -0.2, 0.2], 0.4, 0.45, true)]),
   selenuff: shape([1.0, 0.9, 0.85], [B([0.6, 0.85, -0.15], 0.9, 0.38, true), D([0, 0.95, 0.2], 0.35, 0.55), B([0, 0.25, -1], 0.45, 0.5)]),
   pastrel: shape([1.25, 0.65, 0.8], [D([0, -1, 0], 0.36, 0.7), B([0.95, 0.2, 0.2], 0.4, 0.4, true), R([0, 1, 0], [1, 0, 0], 0.3, 0.35, 1.2)]),
@@ -344,8 +339,8 @@ const RAW: readonly DefIn[] = [
     tags: ['worm', 'long', 'oozy', 'pull'],
   },
   {
-    id: 'fluffnut', name: 'Fluffnut', tier: 'uncommon', family: 'marshmallow', lane: 'foam', signature: 'squeeze',
-    silhouette: 'wide acorn: broad cap and a tall stem', shape: SHAPES.fluffnut,
+    id: 'acornel', name: 'Acornel', tier: 'uncommon', family: 'marshmallow', lane: 'foam', signature: 'squeeze',
+    silhouette: 'wide acorn: broad cap and a tall stem', shape: SHAPES.acornel,
     look: look({ hue: 256, chroma: 0.49, lightness: 0.36, coreHue: 172, coreGlow: 0.45, translucency: 0.5, gloss: 0.3, firmness: 0.3, bounce: 0.3, stretch: 0.5, size: 0.45, glitter: 0.15, eyeStyle: 'sleepy', eyeHeight: 0.46 }),
     blurb: 'A periwinkle puff with a wide cap and a tall stem. Featherlight and a little shy.',
     tags: ['acorn', 'capped', 'puffy'],
@@ -448,8 +443,8 @@ const RAW: readonly DefIn[] = [
     id: 'diademo', name: 'Diademo', tier: 'rare', family: 'popdome', lane: 'rubber', signature: 'poke',
     silhouette: 'low dome wearing a five-point crown', shape: SHAPES.diademo,
     look: look({ hue: 196, chroma: 0.55, lightness: 0.5, coreHue: 272, coreGlow: 0.72, translucency: 0.7, gloss: 0.85, firmness: 0.75, bounce: 0.55, stretch: 0.3, size: 0.4, glitter: 0.4, speckle: 0.5, pattern: 'bands', eyeStyle: 'wide', eyeSpacing: 0.6 }),
-    blurb: 'An azure dome wearing a tiny crown. It resists, resists, then gives with a pop.',
-    tags: ['crowned', 'dome', 'popping'],
+    blurb: 'An azure dome wearing a tiny crown. It resists, resists, then gives under your thumb.',
+    tags: ['crowned', 'dome', 'springy'],
   },
 
   /* ══════════════ EPIC (7): four features, two-tone swirl or bands, a blooming core, glitter that drifts ══════════════ */
@@ -461,8 +456,8 @@ const RAW: readonly DefIn[] = [
     tags: ['comet', 'tailed', 'finned', 'stretchy'],
   },
   {
-    id: 'maracon', name: 'Maracon', tier: 'epic', family: 'beadsqueeze', lane: 'fill', signature: 'squeeze',
-    silhouette: 'round rattle with a top knob, side nubs and a back tail', shape: SHAPES.maracon,
+    id: 'rattlebead', name: 'Rattlebead', tier: 'epic', family: 'beadsqueeze', lane: 'fill', signature: 'squeeze',
+    silhouette: 'round rattle with a top knob, side nubs and a back tail', shape: SHAPES.rattlebead,
     look: look({ hue: 28, chroma: 0.82, lightness: 0.49, coreHue: 353, coreGlow: 0.8, translucency: 0.8, gloss: 0.6, firmness: 0.5, bounce: 0.5, stretch: 0.4, size: 0.5, glitter: 0.6, speckle: 0.7, pattern: 'bands', eyeStyle: 'wide', eyeSize: 0.6 }),
     blurb: 'An amber rattle ball with stripes. Each squeeze shakes out a hundred tiny beads of sound.',
     tags: ['rattle', 'knobbed', 'beads', 'striped'],
@@ -492,8 +487,8 @@ const RAW: readonly DefIn[] = [
     id: 'flipdome', name: 'Flipdome', tier: 'epic', family: 'popdome', lane: 'rubber', signature: 'poke',
     silhouette: 'high dome with side seams and a back knob', shape: SHAPES.flipdome,
     look: look({ hue: 117, chroma: 0.76, lightness: 0.02, coreHue: 22, coreGlow: 0.85, translucency: 0.8, gloss: 0.85, firmness: 0.8, bounce: 0.65, stretch: 0.25, size: 0.45, glitter: 0.55, speckle: 0.7, pattern: 'bands', eyeStyle: 'wide', eyeSpacing: 0.55 }),
-    blurb: 'An emerald dome that flips inside out with a satisfying pop, then flips back.',
-    tags: ['dome', 'popping', 'seamed'],
+    blurb: 'A stiff emerald dome with side seams. Press hard and it gives way, then springs back.',
+    tags: ['dome', 'springy', 'seamed'],
   },
   {
     id: 'caromel', name: 'Caromel', tier: 'epic', family: 'firmsilicone', lane: 'rubber', signature: 'poke',

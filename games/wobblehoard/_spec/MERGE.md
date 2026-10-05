@@ -5,7 +5,7 @@ Rules and numbers: [`DESIGN.md`](DESIGN.md) 5.6 (the merge rules), 5.9 (supply a
 
 **Grades.** **[V]** verified by running it in this session. **[R]** read in the repo. **[S]** a DESIGN claim not re-checked. **[G]** general knowledge. **[U]** my assumption or an open question.
 
-**What was run.** The merge commit function (Appendix A) and the reference host (`host_merge`, Appendix B; the whole file is `COLLECTION.md` Appendix B) were exercised against a scratch PostgreSQL 16 with a Supabase stand-in: **36 host checks and the 149-check SQL suite pass** (the merge-specific checks are listed in section 10). A scratch **copy** of the game with `MERGE_COST = 3` was run through the probes to produce the checklist in section 8 (the repository files were not modified). Not run: a real Supabase project, the Edge Function, the ceremony, any UI.
+**What was run.** The merge commit function (Appendix A) and the reference host (`host_merge`, Appendix B; the whole file is `COLLECTION.md` Appendix B) were exercised against a scratch PostgreSQL 16 with a Supabase stand-in: **36 host checks and the 149-check SQL suite pass** (the merge-specific checks are listed in section 10). A scratch **copy** of the game with `MERGE_COST = 3` was run through the probes to produce the checklist in section 8 (the repository files were not modified). Not run: a real Supabase project, the Edge Function, the ceremony, any UI. **Revised on 2026-10-05 and not run since** (no PostgreSQL in that container): Tidy-up sub-keys are now hashes (M-3), and the client keeps only the key of a pending merge in storage, never its item ids (3.1, section 6).
 
 ---
 
@@ -28,7 +28,7 @@ Rules and numbers: [`DESIGN.md`](DESIGN.md) 5.6 (the merge rules), 5.9 (supply a
 
 ### 2.1 Inherited from DESIGN
 
-All of 5.6: inputs, output tier rule, finished row always tiers up, pity 4 per input tier, species roll never the input species with unowned weight 1.5, lineage look, no variants, hold 0.5 s, preview, last-copy warning, favourites protected, output locked 24 hours, 10 merges a day, Tidy-up up to 10 spare-pair merges never touching favourites or the last copy. Result first (section 6).
+All of 5.6: inputs, output tier rule, finished row always tiers up, pity 4 per input tier, species roll never the input species with unowned weight 1.5, lineage look, no variants, hold 0.5 s, preview, last-copy warning, hearted copies protected (the protection mark is called **Heart** everywhere; the column is `fav`, the error code `favourite`), output locked 24 hours, 10 merges a day, Tidy-up up to 10 spare-pair merges never touching hearted copies or the last copy. Result first (section 6).
 
 ### 2.2 Proposed here
 
@@ -36,8 +36,8 @@ All of 5.6: inputs, output tier rule, finished row always tiers up, pity 4 per i
 |---|---|---|
 | M-1 | The merge request carries an **odds digest**; a stale digest is refused (`odds_changed`) with the fresh preview and nothing is consumed. | "Preview honesty" (DESIGN risk 9): the player must never merge at odds they were not shown. |
 | M-2 | "Owned" for the unowned-species weight and the finished-row test counts **every live item of the account**, including locked and reserved ones. | Species ownership is a collection fact, not a trading fact; a locked arrival still means you own the species. |
-| M-3 | Tidy-up is N sequential atomic merges (sub-keys `<key>-0` to `<key>-9`), not one big transaction; it stops at the first refusal and what ran stays done. | Each merge changes pity and ownership, so each must be rolled against fresh state; atomic per merge, idempotent as a whole. |
-| M-4 | Tidy-up defaults to **Common and Uncommon only** and never touches items on the offer shelf; "Include Rare and above" is an off-by-default toggle. | DESIGN 5.9: Rare-and-above spares are the trade fuel. DESIGN says Tidy-up spares favourites and the last copy; it does not say this, so it is mine [U]. |
+| M-3 | Tidy-up is N sequential atomic merges, each under its own sub-key `tidySubKey(key, i)` (a hash of the key and the index), not one big transaction; it stops at the first refusal and what ran stays done. | Each merge changes pity and ownership, so each must be rolled against fresh state; atomic per merge, idempotent as a whole. (The first draft's `<key>-<i>` cut to 64 characters made every sub-key the same for a 63- or 64-character key; fixed 2026-10-05.) |
+| M-4 | Tidy-up defaults to **Common and Uncommon only** and never touches items on the offer shelf; "Include Rare and above" is an off-by-default toggle. | DESIGN 5.9: Rare-and-above spares are the trade fuel. DESIGN says Tidy-up spares hearted copies and the last copy; it does not say this, so it is mine [U]. |
 | M-5 | A Tidy-up plays the full ceremony only for its **best result** (highest tier, then newest species) and shows the rest as a results list. | Ten full ceremonies would run at least 22 seconds (ten Common merges at 2.2 s each; more for higher tiers). DESIGN 6 specifies no bulk ceremony [U]. |
 | M-6 | The merge cap counts **merges**, not inputs, and resets at the **UTC day** (the meter's day). | Same day as the meter and restock. |
 | M-7 | Client and host share one tiny pure function, `oddsDigest`, built on `hashString` (FNV-1a, already in `core/rng.ts`). It lives in a new file `src/core/oddsDigest.ts`. | The browser needs it synchronously; it is a staleness check, not a security feature. |
@@ -55,7 +55,7 @@ All of 5.6: inputs, output tier rule, finished row always tiers up, pity 4 per i
    * "The new squishy is locked for 24 hours." "Merges today: 3 of 10."
    * **Last-copy warning** (`usesLastCopy`): a modal "This uses your last {name}. Merge anyway?", focus on Cancel.
 4. **Hold to merge, 0.5 s** (`MERGE_HOLD_MS`): a progress ring fills; releasing early cancels and **nothing is sent**; `Enter` or `Space` held 0.5 s does the same; an accessibility setting allows tap-then-confirm. The label is "Hold to merge".
-5. **On completion:** the client writes the request into `pending` (key and arguments) **first**, then calls `wh_merge` with `{ idem, items, odds_digest }`.
+5. **On completion:** the client records `{kind: 'merge', idem}` in `pending` **first** (the key only, never the item ids: storage is shared with other games, COLLECTION 4 and 7.7), keeps the full request in memory, then calls `wh_merge` with `{ idem, items, odds_digest }`.
 6. **While waiting** (typically a few hundred milliseconds [U]): the two bodies stay on the pad, the pad glows (CSS, no audio). After 1.2 s a quiet progress ring appears; at 8 s: "Taking a moment. Your squishies are safe." and the client asks `wh_state`/`wh_inventory` to find out what happened.
 7. **On the answer:** `stage.playMergeCeremony` with the server's result (section 7), then the new squishy lands on the pad, a "locked 24 h" chip, and the unseen dot clears when the ceremony ends.
 8. **Refusals** show plain text and leave everything as it was: `odds_changed` shows the new preview and says "The odds changed. Have another look."; `locked`, `favourite`, `reserved`, `not_yours` say which copy and why; `daily_cap` says "10 merges today. They're resting until tomorrow."; `frozen` says "Merging is paused for a short while."
@@ -76,7 +76,7 @@ All of 5.6: inputs, output tier rule, finished row always tiers up, pity 4 per i
 * **Button** in the Hoard header when at least one candidate exists. It opens a plan sheet.
 * **Candidates** (`stacks.ts`): for each stack, the `mergeable` copies (not the keeper, not hearted, locked, reserved or on the shelf), grouped newest first in groups of `MERGE_COST`. Stacks are ordered by tier ascending then catalog index, so the flood of Commons is recycled first. Default tiers: Common and Uncommon; a toggle includes Rare and above (M-4). The plan has at most `min(10, 10 - merges_today)` pairs.
 * **The sheet** lists the pairs grouped by species with a one-line summary per species of the *first* merge's odds and the note "Odds are recalculated after each merge." It shows the cap ("7 merges left today") and a **single hold 0.5 s** confirms the whole plan.
-* **Execution:** `wh_tidy({ idem, plan: [[idA, idB], ...] })`. The host runs the merges one after another, each with the sub-key `<idem>-<i>`, each rolled against freshly read state (pity and ownership change after every merge), and **stops at the first refusal**. What ran stays done [V: Tidy-up stopped at the daily cap with 6 done and a `daily_cap` as the last result].
+* **Execution:** `wh_tidy({ idem, plan: [[idA, idB], ...] })`. The host runs the merges one after another, each with its own sub-key `tidySubKey(idem, i)` (COLLECTION Appendix B), each rolled against freshly read state (pity and ownership change after every merge), and **stops at the first refusal**. What ran stays done [V: Tidy-up stopped at the daily cap with 6 done and a `daily_cap` as the last result].
 * **Result:** a results sheet (one row per merge: input species, output species and tier gem, NEW and TIER UP tags) and the full ceremony for the best result only (M-5). Retrying the same Tidy-up key after a lost response re-walks the plan: each sub-key returns its stored result, so the assembled answer is identical.
 
 ## 4. Server
@@ -122,7 +122,7 @@ All of 5.6: inputs, output tier rule, finished row always tiers up, pity 4 per i
     if (!isIdem(req?.idem) || !Array.isArray(req.plan) || req.plan.length > 10) return { ok: false, error: 'bad_payload' };
     const results: any[] = [];
     for (let i = 0; i < req.plan.length; i++) {
-      const r = await merge(uid, { idem: `${req.idem}-${i}`.slice(0, 64).padEnd(16, '0'), items: req.plan[i] });
+      const r = await merge(uid, { idem: tidySubKey(req.idem, i), items: req.plan[i] });                // a hash of (key, i): never collides
       results.push(r); if (!r.ok) break;                                                                 // stop at the first refusal; what was done stays done
     }
     return { ok: true, results, done: results.filter((r) => r.ok).length };
@@ -187,12 +187,12 @@ What it cannot check is that the *probabilities* were honoured: that is the host
 
 ## 6. Failure, retry and "result first"
 
-Rule: **the server commits the result before any animation starts.** A request is written to `pending` before it is sent; a retry carries the same key.
+Rule: **the server commits the result before any animation starts.** The key (never the item ids) is written to `pending` before the request is sent; a same-session retry re-sends the in-memory request with the same key; after a reload nothing is re-sent: the client asks `wh_op_status` about the key and refreshes the Hoard (COLLECTION 7.7).
 
 | Situation | What happens | Why nothing is lost or doubled |
 |---|---|---|
 | The tab is closed during the ceremony | The merge was committed before the ceremony. On the next load the output shows as an unseen item (a "NEW" dot) with a "Replay reveal" button; the inputs are gone | The answer was stored first [V by construction: the commit precedes the reply] |
-| The response is lost | The client retries the same key within 5 minutes (a retry after 5 minutes is not made automatically: the Hoard is refreshed instead) | `wh_ops` returns the stored answer [V: replay returned the same item] |
+| The response is lost | In the same session the client re-sends the in-memory request with the same key within 5 minutes; after a reload, or after 5 minutes, it never re-sends: it asks `wh_op_status` and refreshes the Hoard, and a merge that did not commit needs a new hold to confirm | `wh_ops` returns the stored answer [V: replay returned the same item] |
 | Double tap, or hold twice | The second call has a new key on inputs that are now consumed: `not_yours` | The inputs are locked by the first commit's rows [V: 20 parallel merges of one pair: one commits] |
 | Two devices merge the same pair | One commits; the other gets `conflict` internally, re-reads and gets `not_yours` | `expect_version`, then ownership |
 | Something else changed the account in between (a trade, a capsule) | The host retries from fresh state with fresh draws; if the odds shown differ: `odds_changed` | Optimistic concurrency [V: injected bump, retry succeeded]; digest |
@@ -260,6 +260,8 @@ Tier-up chance Common 30%, Uncommon 25%, Rare 20%, Epic 15%, Legendary 10%; a fi
 | R7 | Concurrent change between read and commit: the host retries on fresh state | host suite | [V] |
 | R8 | Locked, hearted, reserved, mixed, Mythic, not-yours, wrong count: refused with the right code | SQL T11, host suite | [V] |
 | R9 | 10 merges a UTC day, the 11th `daily_cap`; Tidy-up stops at the cap and keeps what ran | SQL T11, host suite | [V] |
+| R9b | Tidy-up with a 64-character key runs every merge under a distinct sub-key and a retry replays all of them | host suite (COLLECTION Appendix C) | added 2026-10-05, **not run** |
+| R9c | A forged pending merge in storage (with item ids) is never sent after a reload; only `wh_op_status` with the key | COLLECTION C11 | to build |
 | R10 | A bad host roll (wrong tier, same species, species byte mismatch) is rejected loudly and nothing changes; a cost mismatch aborts | SQL T11 | [V] |
 | R11 | Every merge result is a legal tier move; conservation view empty afterwards | host suite | [V] |
 | R12 | Distribution: tier-up rates, pity ceiling of 4 duds, finished row always up | `probe_economy.ts` (existing, 300 000 rolls per case) | [V] 98/98 at M = 2 (unedited) and at M = 3 (after the edits) |
@@ -283,6 +285,7 @@ Tier-up chance Common 30%, Uncommon 25%, Rare 20%, Epic 15%, Legendary 10%; a fi
 ## 12. Unverified claims and open questions
 
 * Not run on a real Supabase project, through the Edge Function, or in any browser; the UI and the ceremony wiring are specification only.
+* The 2026-10-05 revisions (hashed Tidy-up sub-keys, keys-only pending merges) were checked by reading only.
 * **[U]** typical server latency (a few hundred milliseconds), the 1.2 s and 8 s thresholds in 3.1, M-4 and M-5 (Tidy-up defaults and its ceremony), the 5-minute auto-retry window.
 * **[R]** the render lane's ceremony supports 2 to 3 parents by its source; I did not see it run.
 * The flip checklist was produced from a copy of the game as it stood on 2026-10-02; other lanes were editing `src` at the time. Re-run the scratch flip when someone actually flips.

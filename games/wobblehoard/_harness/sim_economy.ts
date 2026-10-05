@@ -38,17 +38,32 @@ const PLAYER_TYPES = ['casual', 'regular', 'devoted'];
 const ARCHE_NAMES = ['poker', 'squeezer', 'puller', 'mixed'];
 const MAX_AFFINITY_TIER = 3; // tiers 0..3 can be tilted by playstyle; Legendary and Mythic ignore your hands
 
-/** `real` = built from src/data/catalog.ts (handles are catalog positions = idx). Otherwise a hypothetical roster for what-if sweeps. */
-interface Catalog { n: number; tierOf: Uint8Array; groupOf: Uint8Array; byTier: number[][]; maskLo: Int32Array; maskHi: Int32Array; real: boolean; }
-function buildCatalog(counts: number[]): Catalog {
+/**
+ * `real` = built from src/data/catalog.ts (handles are catalog positions = idx). Otherwise a hypothetical roster for what-if sweeps.
+ * Species sets (a player's needs and spares, the species of a tier) are BITSETS of `words` 32-bit words: species s is bit (s & 31) of
+ * word (s >>> 5), so any roster size works (the catalog may grow to idx 255, DESIGN 5.2). See bitsetOf / bitsetHas / bitsetAndCount.
+ */
+export interface Catalog { n: number; words: number; tierOf: Uint8Array; groupOf: Uint8Array; byTier: number[][]; tierMask: Int32Array[]; real: boolean; }
+/** Words needed for a bitset over n species. */
+export const bitsetWords = (n: number): number => Math.max(1, (n + 31) >>> 5);
+export const bitsetSet = (set: Int32Array, s: number): void => { set[s >>> 5] |= 1 << (s & 31); };
+export const bitsetHas = (set: Int32Array, s: number): boolean => (set[s >>> 5] & (1 << (s & 31))) !== 0;
+/** popcount(a & b & c) over all words (c omitted = all ones). */
+export function bitsetAndCount(a: Int32Array, b: Int32Array, c?: Int32Array): number {
+  let n = 0;
+  for (let w = 0; w < a.length; w++) n += pop32(a[w] & b[w] & (c ? c[w] : -1));
+  return n;
+}
+export function buildCatalog(counts: number[]): Catalog {
   const n = counts.reduce((a, b) => a + b, 0);
-  const cat: Catalog = { n, tierOf: new Uint8Array(n), groupOf: new Uint8Array(n), byTier: [], maskLo: new Int32Array(NT), maskHi: new Int32Array(NT), real: false };
+  const words = bitsetWords(n);
+  const cat: Catalog = { n, words, tierOf: new Uint8Array(n), groupOf: new Uint8Array(n), byTier: [], tierMask: Array.from({ length: NT }, () => new Int32Array(words)), real: false };
   let idx = 0;
   for (let t = 0; t < NT; t++) {
     const list: number[] = [];
     for (let i = 0; i < counts[t]; i++, idx++) {
       cat.tierOf[idx] = t; cat.groupOf[idx] = t <= MAX_AFFINITY_TIER ? i % 3 : 3; list.push(idx);
-      if (idx < 32) cat.maskLo[t] |= 1 << idx; else cat.maskHi[t] |= 1 << (idx - 32);
+      bitsetSet(cat.tierMask[t], idx);
     }
     cat.byTier.push(list);
   }
@@ -59,11 +74,11 @@ function realCatalog(): Catalog {
   const cat = buildCatalog(TIER_SPECIES_COUNTS.slice());
   // rebuild the tier tables from the real catalog (idx order may interleave tiers in the future; today it is tier-sorted)
   cat.byTier = TIERS.map(() => [] as number[]);
-  cat.maskLo.fill(0); cat.maskHi.fill(0);
+  for (const m of cat.tierMask) m.fill(0);
   CATALOG.forEach((d, h) => {
     const t = tierIndex(d.tier);
     cat.tierOf[h] = t; cat.groupOf[h] = t <= MAX_AFFINITY_TIER ? cat.byTier[t].length % 3 : 3; cat.byTier[t].push(h);
-    if (h < 32) cat.maskLo[t] |= 1 << h; else cat.maskHi[t] |= 1 << (h - 32);
+    bitsetSet(cat.tierMask[t], h);
   });
   cat.real = true;
   return cat;
@@ -256,7 +271,8 @@ interface Player {
   merges: number; mergeUps: number; mergeRepeats: number; mergeBad: number; mergeAnyBad: number; liveMerges: number; liveRepeat: number; liveBad: number; liveNew: number; outByTier: Uint16Array; inByTier: Uint16Array;
   capsules: number; dupCapsules: number; capsByTier: Uint16Array;
   trades: number; tradesToday: number; tradeDay: number; activeDays: number; taskWeek: number; taskDone: number;
-  needLo: number; needHi: number; spLo: number; spHi: number;
+  /** Bitsets (Catalog.words words): species the player has none of, and species with a tradeable spare. Rebuilt by setMasks. */
+  need: Int32Array; spare: Int32Array;
 }
 function makePlayers(P: Params, pop: Pop, cat: Catalog): Player[] {
   const out: Player[] = [];
@@ -270,7 +286,7 @@ function makePlayers(P: Params, pop: Pop, cat: Catalog): Player[] {
       noUp: new Uint8Array(NT), bad: new Uint8Array(NT), maxBad: 0,
       merges: 0, mergeUps: 0, mergeRepeats: 0, mergeBad: 0, mergeAnyBad: 0, liveMerges: 0, liveRepeat: 0, liveBad: 0, liveNew: 0, outByTier: new Uint16Array(NT), inByTier: new Uint16Array(NT),
       capsules: 0, dupCapsules: 0, capsByTier: new Uint16Array(NT),
-      trades: 0, tradesToday: 0, tradeDay: -1, activeDays: 0, taskWeek: -1, taskDone: 0, needLo: 0, needHi: 0, spLo: 0, spHi: 0,
+      trades: 0, tradesToday: 0, tradeDay: -1, activeDays: 0, taskWeek: -1, taskDone: 0, need: new Int32Array(cat.words), spare: new Int32Array(cat.words),
     });
   }
   return out;
@@ -278,6 +294,32 @@ function makePlayers(P: Params, pop: Pop, cat: Catalog): Player[] {
 const lockedNow = (p: Player, s: number, day: number): number => (day < p.lockUntil[s] ? p.lockedCopies[s] : 0);
 const spareOf = (p: Player, s: number, day: number): number => Math.max(0, p.count[s] - lockedNow(p, s, day) - 1);
 function addLock(p: Player, s: number, day: number, L: number): void { if (L <= 0) return; if (day >= p.lockUntil[s]) p.lockedCopies[s] = 0; p.lockedCopies[s]++; p.lockUntil[s] = Math.max(p.lockUntil[s], day + L); }
+/** Rebuild a player's need / spare bitsets for `day` (spares exclude copies still under the trade lock and the copy the player keeps). */
+export function setMasks(cat: Catalog, p: Pick<Player, 'count' | 'lockUntil' | 'lockedCopies' | 'need' | 'spare'>, day: number): void {
+  p.need.fill(0); p.spare.fill(0);
+  for (let s = 0; s < cat.n; s++) {
+    if (p.count[s] === 0) bitsetSet(p.need, s);
+    else if (spareOf(p as Player, s, day) > 0) bitsetSet(p.spare, s);
+  }
+}
+/**
+ * Units A could receive from B in one trade, at most `cap`, best tiers first: per tier, min(B's spares that A needs, what A can give).
+ * A gives B's needs from its spares (`mutual` units); with `favour` A may also give any same-tier spare. Pure (reads the bitsets only).
+ */
+export function swapCountCore(cat: Catalog, A: Pick<Player, 'need' | 'spare'>, B: Pick<Player, 'need' | 'spare'>, cap: number, favour: boolean): { total: number; mutual: number } {
+  let tot = 0, mut = 0;
+  for (let t = NT - 1; t >= 0 && tot < cap; t--) {
+    const m = cat.tierMask[t];
+    const y = bitsetAndCount(B.spare, A.need, m);
+    if (y === 0) continue;
+    const x = bitsetAndCount(A.spare, B.need, m);
+    const give = favour ? bitsetAndCount(A.spare, m) : x;
+    const k = Math.min(y, give, cap - tot);
+    if (k <= 0) continue;
+    mut += Math.min(k, x); tot += k;
+  }
+  return { total: tot, mutual: mut };
+}
 
 /* ───────────────────────────── merge rule (shared by players and the farmer): the REAL core ───────────────────────────── */
 
@@ -402,30 +444,13 @@ function runScenario(P: Params, pop: Pop, label: string, cat: Catalog = sameCoun
     wk.merges[w]++; wk.mergeIn[w] += M;
     return true;
   };
-  const masks = (p: Player, day: number): void => {
-    let nl = 0, nh = 0, sl = 0, sh = 0;
-    for (let s = 0; s < cat.n; s++) {
-      const bit = s < 32 ? 1 << s : 1 << (s - 32);
-      if (p.count[s] === 0) { if (s < 32) nl |= bit; else nh |= bit; } else if (spareOf(p, s, day) > 0) { if (s < 32) sl |= bit; else sh |= bit; }
-    }
-    p.needLo = nl; p.needHi = nh; p.spLo = sl; p.spHi = sh;
-  };
+  const masks = (p: Player, day: number): void => setMasks(cat, p, day);
   let lastMutual = 0;
   /** Units A could receive from B today. Same-tier 1:1. 'mutual' units = A gives something B still needs; with favour swaps (P.favorProb > 0) A may also give ANY same-tier spare (B just gains a spare). */
   const swapCount = (A: Player, B: Player, cap: number): number => {
-    let tot = 0, mut = 0;
-    for (let t = NT - 1; t >= 0 && tot < cap; t--) {
-      const ml = cat.maskLo[t], mh = cat.maskHi[t];
-      const y = pop32(B.spLo & A.needLo & ml) + pop32(B.spHi & A.needHi & mh);
-      if (y === 0) continue;
-      const x = pop32(A.spLo & B.needLo & ml) + pop32(A.spHi & B.needHi & mh);
-      const give = P.favorProb > 0 ? pop32(A.spLo & ml) + pop32(A.spHi & mh) : x;
-      const k = Math.min(y, give, cap - tot);
-      if (k <= 0) continue;
-      mut += Math.min(k, x); tot += k;
-    }
-    lastMutual = mut;
-    return tot;
+    const r = swapCountCore(cat, A, B, cap, P.favorProb > 0);
+    lastMutual = r.mutual;
+    return r.total;
   };
 
   for (let day = 0; day < P.days; day++) {
@@ -522,7 +547,7 @@ function runScenario(P: Params, pop: Pop, label: string, cat: Catalog = sameCoun
       const board = traders.filter((p) => p.usesBoard);
       // the public board is SEARCHABLE BY SPECIES (a grid of species icons, never free text): offers[s] = board users holding a spare of s
       const offers: Player[][] = Array.from({ length: cat.n }, () => []);
-      for (const b of board) for (let s = 0; s < cat.n; s++) { const bit = s < 32 ? 1 << s : 1 << (s - 32); if (((s < 32 ? b.spLo : b.spHi) & bit) !== 0) offers[s].push(b); }
+      for (const b of board) for (let s = 0; s < cat.n; s++) if (bitsetHas(b.spare, s)) offers[s].push(b);
       const order = traders.slice();
       for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(sys() * (i + 1)); const t = order[i]; order[i] = order[j]; order[j] = t; }
       for (const A of order) {

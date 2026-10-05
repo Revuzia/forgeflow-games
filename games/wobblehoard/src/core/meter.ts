@@ -2,20 +2,30 @@
 //
 //   addInteraction(state, { kind, amount, tMs })  ->  { state, spGained, capsulesEarned, detail }
 //
-// Time is a PARAMETER (`tMs`, milliseconds on any monotonic or epoch clock); nothing here reads a clock or a random number.
+// Time is a PARAMETER (`tMs`, EPOCH milliseconds); nothing here reads a clock or a random number. Epoch, not any monotonic clock: the
+// default day key is floor(tMs / 86400000) (a UTC day), and a saved state compares the next touch against its stored lastEventMs, so a
+// page clock such as performance.now() would put every touch on day 0 and, after a reload, refuse every touch as 'out-of-order'.
 // The state is plain JSON (numbers, null and arrays only): it survives JSON.stringify / JSON.parse and can be stored in a save or a server row.
 // Hostile input (NaN, negative, huge, out-of-order times, unknown kinds) never throws and never corrupts the state: the call is refused
 // (spGained 0, state returned unchanged) or the number is clamped, and `detail.refused` says why.
 //
-// WHAT THE SERVER MUST ALSO RECOMPUTE: all of it. The client only REPORTS touches (kind, amount, time); the server runs the same
-// addInteraction over the same ordered list, so the freshness decay, the per-minute valve, the daily cap and the capsule thresholds
-// are server-side facts and the client meter is a preview for the HUD ring.
+// WHO OWNS THE TIME (_spec/COLLECTION.md section 7.5, "What time it is: never trusted"). The SERVER is the authority and never replays
+// client timestamps. The client reports touches as [kind, amount, dtMs] where dtMs are only RELATIVE offsets inside a batch; the host lays
+// the batch out so its last touch is the database's "now", drops what would land at or before the last accepted touch or outside the
+// 5-minute bank, and only then calls addInteraction with those server-placed epoch times. So freshness, the per-minute valve, the daily
+// cap and the capsule thresholds are server-side facts. The CLIENT meter is a PREVIEW for the HUD ring: it runs the same addInteraction
+// on its own touches with Date.now() times and is reconciled with the server's meter on every reply (fold the unacknowledged touches
+// over the server state). Pass sanitizeMeter(saved, Date.now()) when loading a saved preview so a state from a skewed clock cannot freeze it.
 //
 // The rules (every number below is DESIGN 5.4 and is the reference behaviour of _harness/sim_economy.ts):
 //   poke                    0.8 SP. Needs a distinct contact: a poke less than 250 ms after the previous poke pays nothing.
 //   squeeze-and-release     0.7 SP + 0.45 SP per second held (hold counted up to 3 s); a soft pop of +0.5 SP if held 1.8 s or more.
 //                           (a "squeeze" held under 0.4 s is just a poke: SoftEvent mapping, DESIGN 5.4)
-//   pull-and-let-go (snap)  1.8 SP; 0.5 SP if it never stretched (snap intensity under 0.35).
+//   pull-and-let-go (snap)  1.8 SP; 0.5 SP if it never stretched (snap intensity under 0.35). PROVISIONAL threshold: the slice body was
+//                           measured to top out near 0.3 snap intensity even on a hard pull (src/app.ts stretchFull note), which would pay
+//                           every pull the 0.5 rate and undo the Puller pace. The physics rewrite decides the real figure; then set this
+//                           from measured gestures (or rescale snap intensity in the contract) and re-run the sim. probe_economy.ts prints
+//                           the snap intensity the live body reaches on scripted pulls next to this threshold (informative, not a gate).
 //   medley                  +2 SP when three different kinds land within 12 s, then a 25 s cooldown.
 //   freshness (anti-mash)   pay x clamp((seconds since your last touch of the SAME kind / tau)^2, 0.03, 1); tau poke 0.9, squeeze 2.4, pull 3.0 s.
 //   valve                   at most 40 SP credited in any rolling minute (checked at 500 ms resolution over a 60.5 s window, so it is never looser than 60 s).
@@ -44,7 +54,7 @@ export const PAY = {
   pull: 1.8,
   /** What a pull pays when it never stretched. */
   pullFail: 0.5,
-  /** Snap intensity at or above which a pull pays in full. */
+  /** Snap intensity at or above which a pull pays in full. PROVISIONAL until measured on the rewritten body (see the header). */
   pullFullIntensity: 0.35,
   medley: 2,
 } as const;
@@ -100,23 +110,36 @@ export function createMeter(): MeterState {
   return { v: METER_STATE_VERSION, sp: 0, earned: 0, lastMs: [null, null, null], lastEventMs: null, recent: [], medleyReadyMs: 0, valve: [], day: null, dayCapsules: 0 };
 }
 
-/** Parse untrusted JSON into a valid MeterState, or a fresh one if it is not valid. Never throws. */
-export function sanitizeMeter(x: unknown): MeterState {
+/**
+ * Parse untrusted JSON into a valid MeterState, or a fresh one if it is not valid. Never throws.
+ * `nowMs` (optional, epoch ms): the caller's current time. When given, every stored time later than it (the last touch, the per-kind
+ * times, the medley window and cooldown, the valve buckets) is pulled back to it, so a state saved under a clock that was ahead (or
+ * written with the wrong clock) cannot refuse every new touch as 'out-of-order' until real time catches up. The server passes its own
+ * now; a client preview passes Date.now(). Without `nowMs` the state is only validated, never moved.
+ */
+export function sanitizeMeter(x: unknown, nowMs?: number): MeterState {
   try {
     const o = x as Partial<MeterState> | null;
     if (!o || typeof o !== 'object' || o.v !== METER_STATE_VERSION) return createMeter();
     const num = (v: unknown, lo: number, hi: number, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d);
-    const tOrNull = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= MAX_T_MS ? v : null);
+    const now = typeof nowMs === 'number' && Number.isFinite(nowMs) && nowMs >= 0 && nowMs <= MAX_T_MS ? nowMs : null;
+    const cap = (t: number): number => (now !== null && t > now ? now : t);
+    const tOrNull = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= MAX_T_MS ? cap(v) : null);
     const earned = Math.floor(num(o.earned, 0, 1e9, 0));
     const lm = Array.isArray(o.lastMs) ? o.lastMs : [];
     const recent: Array<[number, number]> = [];
-    if (Array.isArray(o.recent)) for (const r of o.recent.slice(-64)) if (Array.isArray(r) && typeof r[0] === 'number' && Number.isFinite(r[0]) && (r[1] === 0 || r[1] === 1 || r[1] === 2)) recent.push([r[0], r[1]]);
+    if (Array.isArray(o.recent)) for (const r of o.recent.slice(-64)) if (Array.isArray(r) && typeof r[0] === 'number' && Number.isFinite(r[0]) && (r[1] === 0 || r[1] === 1 || r[1] === 2)) recent.push([cap(r[0]), r[1]]);
     const valve: Array<[number, number]> = [];
-    if (Array.isArray(o.valve)) for (const r of o.valve.slice(-VALVE_BUCKETS)) if (Array.isArray(r) && typeof r[0] === 'number' && Number.isFinite(r[0]) && typeof r[1] === 'number' && Number.isFinite(r[1]) && r[1] >= 0) valve.push([r[0], r[1]]);
+    const nowBucket = now !== null ? Math.floor(now / VALVE_BUCKET_MS) : Infinity;
+    if (Array.isArray(o.valve)) for (const r of o.valve.slice(-VALVE_BUCKETS)) if (Array.isArray(r) && typeof r[0] === 'number' && Number.isFinite(r[0]) && typeof r[1] === 'number' && Number.isFinite(r[1]) && r[1] >= 0) {
+      const b = Math.min(r[0], nowBucket), tail = valve.length ? valve[valve.length - 1] : null;
+      if (tail && tail[0] === b) tail[1] += r[1]; else valve.push([b, r[1]]);
+    }
+    const medleyMax = now !== null ? now + MEDLEY_COOLDOWN_MS : MAX_T_MS * 2;
     return {
       v: METER_STATE_VERSION, sp: num(o.sp, 0, capsuleThreshold(earned) - 1e-9, 0), earned,
       lastMs: [tOrNull(lm[0]), tOrNull(lm[1]), tOrNull(lm[2])], lastEventMs: tOrNull(o.lastEventMs), recent,
-      medleyReadyMs: num(o.medleyReadyMs, 0, MAX_T_MS * 2, 0), valve,
+      medleyReadyMs: num(o.medleyReadyMs, 0, medleyMax, 0), valve,
       day: typeof o.day === 'number' && Number.isFinite(o.day) ? Math.floor(o.day) : null, dayCapsules: Math.floor(num(o.dayCapsules, 0, 1e6, 0)),
     };
   } catch {
@@ -134,7 +157,8 @@ export interface Interaction {
    * pull: the snap intensity 0..1 (SoftEvent.intensity); 0.35 or more pays in full, less pays the "never stretched" rate.
    */
   amount: number;
-  /** Time of the touch in ms (the moment the finger lifted or the pull was let go). Must not go backwards between calls. */
+  /** EPOCH time of the touch in ms (the moment the finger lifted or the pull was let go): server-placed on the server, Date.now() in the
+   *  client preview. Must not go backwards between calls. */
   tMs: number;
   /** Optional day key for the daily cap (default: UTC day number floor(tMs / 86400000)). The server decides what a day is. */
   dayKey?: number;

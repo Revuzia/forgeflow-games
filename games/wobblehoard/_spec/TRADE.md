@@ -6,6 +6,13 @@ The owner's brief: **"Players collect squishies and trade them with other player
 
 **What was run.** The draft SQL in Appendix A was loaded into a scratch PostgreSQL 16.14 with a minimal Supabase stand-in (roles, `auth.users`, `auth.uid()` via the `request.jwt.claim.sub` setting, default privileges imitating Supabase's) and exercised by **149 checks** (Appendix C; each psql call is a separate database session, so the "parallel" tests are real concurrent transactions, up to 48 at a time). **All 149 passed on 2026-10-02**, together with 36 host-level checks described in COLLECTION.md. **Not run:** a real Supabase project, PostgREST, the portal, any UI, load tests, and anything about real children. Nothing was written to `supabase/migrations/`; everything marked NOT APPLIED is a draft.
 
+**Revised on 2026-10-05 after a security audit, and NOT run since** (this container has no PostgreSQL; checked by reading only): the grant revocation is
+scoped to WH objects and audited (COLLECTION A.0, A.2, A.7); trading switched off now closes every social surface (16.1, a trigger); the report hold
+cannot be re-armed and needs reporters who interacted with the account (13); friend-code errors no longer reveal a code's validity (5.3); a counter
+keeps the trade's tier, and board trades stay 1 for 1 through proposals and counters (D-T5); the incoming-offer cap holds under concurrency (8.2);
+the payload claim is corrected and per-account rate buckets are added (7.4); a moderation hold pauses trades instead of failing them (D-T10).
+New checks for each are in Appendix C, marked "added 2026-10-05, not run".
+
 ---
 
 ## 1. Summary of the design
@@ -25,7 +32,7 @@ The owner's brief: **"Players collect squishies and trade them with other player
 
 ## 2. The honest limit, and levers the owner could pull (none adopted)
 
-**The plain statement.** In the economy sim, a regular player who trades finishes all 50 species in about **131 days against 205 solo, a factor of 1.56 at the median (1.69 at p25, 1.52 at p75, 1.57 at p90)**. Of all Epic-and-above first copies, about **33% arrive by trade**, 66% by capsule, 2% by merge; of a finisher's last five species, 52% arrive by trade. A frictionless oracle (everyone willing, no caps) reaches only 1.76 times [DESIGN 5.8, from `_harness/sim_economy.ts`; behaviour in that sim is assumed, not measured: DESIGN 5.12]. **Trade is built, required as a feature, and useful, but with the current rules a player can finish the shelf without trading.** The owner's phrase "trading is required" is met as a module; it is **not** met as a mechanic that forces a player to trade. Trading moves copies; it cannot create them, so the rarest species bound both routes.
+**The plain statement.** In the economy sim, a regular player who trades finishes all 50 species in about **131 days against 205 solo, a factor of 1.56 at the median (1.69 at p25, 1.52 at p75, 1.57 at p90)** [sim K]. Of all Epic-and-above first copies, about **33% arrive by trade**, 65% by capsule, 1% by merge [sim L]; of a finisher's last five species, 52% arrive by trade [sim L]. A frictionless oracle (everyone willing, no caps) reaches only 1.76 times [sim P]. [All from the canonical run of `_harness/sim_economy.ts`, DESIGN 5.0 (sections K, L, P); behaviour in that sim is assumed, not measured: DESIGN 5.12.] **Trade is specified (not built: NEXT_STEPS section 1), required as a feature, and useful, but with the current rules a player can finish the shelf without trading.** The owner's phrase "trading is required" is met as a module; it is **not** met as a mechanic that forces a player to trade. Trading moves copies; it cannot create them, so the rarest species bound both routes.
 
 **Levers that would raise trade's importance, with their costs. None is adopted; each needs the owner's decision (NEXT_STEPS D-2) and, for any of them, a sim run before code.**
 
@@ -55,12 +62,12 @@ Item-for-item, same tier, same count 1 to 3 (5.7); any spare for any spare ("fav
 | D-T2 | An opt-in **offer shelf** (at most 12 items) is the only thing friends can see; a listing exposes at most 3 of its items. | Nobody's full Hoard is visible to anyone: privacy by default. |
 | D-T3 | Reservations expire **lazily** (an item is free when the trade holding it is not live). | No cron dependency; expired trades never hold items (tested). |
 | D-T4 | Trade caps are **rolling 24 hour windows**, not UTC days. | A UTC-day cap lets you do 3 at 23:59 and 3 at 00:01. Caps matter most for value-moving actions. |
-| D-T5 | A board listing is **1 for 1 with up to 3 alternatives on each side**; k-for-k (2 or 3 each) is available through direct proposals to friends. | Keeps the matching rule trivial and checkable. |
+| D-T5 | A board listing is **1 for 1 with up to 3 alternatives on each side**; k-for-k (2 or 3 each) is available through direct proposals to friends. **Enforced** (since 2026-10-05) in `wh_propose_trade` and in `wh_counter_trade`, which also keeps a board counter inside its listing. | Keeps the matching rule trivial and checkable, and keeps strangers to the smallest possible exchange. |
 | D-T6 | `trade_enabled` is **false by default**, flipped only by the owner (or a future age/consent flow). | DESIGN open question 1. The strictest default is off. |
 | D-T7 | The friend graph is **WH's own** (`wh_friends`), not the portal's `friendships`. | The portal table's RLS lets a user forge an `accepted` row with anyone (section 17). |
 | D-T8 | Epic and above need a **1 second hold** on the final confirm, on top of the 5 second review. | Same rule as merge's hold-to-confirm; cheap protection for the 15 most valuable species. |
 | D-T9 | `terms_version`, not a time window, is the anti-switch mechanism. | A switch cannot be raced: the confirm names a version. |
-| D-T10 | Caps and the global freeze are **non-terminal**: the trade stays alive and nobody's consent changes. Every other failure is terminal (`failed`, reason recorded, items released). | A player who hits today's cap can still complete tomorrow if the offer is still alive. |
+| D-T10 | Caps, the global freeze and a **moderation hold** on either party are **non-terminal**: the trade stays alive and nobody's consent changes (a hold answers the generic `unavailable`, so the other party does not learn a hold exists). Every other failure is terminal (`failed`, reason recorded, items released). | A player who hits today's cap can still complete tomorrow if the offer is still alive; a 24 h hold (possibly from false reports) must not destroy an innocent player's swaps. |
 
 ## 4. Threat model
 
@@ -83,8 +90,11 @@ Assets: the integrity of the item ledger; players (children first) from scams, p
 | Map other people's friendships and blocks | Call the helper `wh__are_friends(a, b)` or `wh__blocked(a, b)` with any two auth ids (which are world-readable through the portal's `profiles` table) | Execute revoked on every helper (**found in my own review: Supabase grants EXECUTE on new functions to players by default, so the first draft left them open**); the privilege audit queries O14 and O15 list what players can call and must match the client RPC list exactly | T5, T17c |
 | Learn who a child is | Link a handle to a username or email (for example through a direct select of `wh_trades`, whose rows carry the partner's auth id) | WH never returns an auth id, email, username or avatar; `public_id` is separate; profiles stay unread; **no client access to `wh_trades` or `wh_blocks`** | T5, section 5, 17 |
 | Reach a child | Guess a friend code; spam requests | 8 characters, 10 attempts an hour, a code only creates a request, rotation, incoming request caps | T9 |
-| Harass | Repeated proposals, requests | Block (instant, symmetric), live and incoming caps, reports with a soft hold | T10, T18 |
-| Silence an innocent by false reports | A ring files reports | Only reporters who pass the new-account gate count, 3 distinct needed, hold is 24 h and reviewed, never a ban | T18 |
+| Harass | Repeated proposals, requests | Block (instant, symmetric), live and incoming caps (held under both account locks), per-account rate buckets, reports with a soft hold | T3b, T10, T17b, T18 |
+| Silence an innocent by false reports | A ring files reports, then keeps re-filing them | Only reporters who pass the new-account gate **and interacted with the account in the last 7 days** count; 3 distinct needed; only reports filed after the last hold count; **at most one automatic hold before a person reviews it**; 24 h, never a ban; a hold pauses trades without ending them | T18 |
+| Probe friend codes through error answers | Park 10 outgoing requests, then try codes and compare the answers | The redeemer's own limits answer before any code lookup; every target-side failure answers `not_found` | T9 |
+| Reach a child whose trading was switched off | An existing friend, a pending request, the shelf | The social gate on every surface plus the switch-off trigger (16.1) | T19 |
+| Flood the database | Call PostgREST directly with one's own JWT (the bridge's limits do not apply), large bodies | A body limit at the gateway (to configure, 7.4), per-account rate buckets, every function's own limits | T17b (buckets); the gateway is not tested |
 | Cash trading | Sell items for money | Tier parity means no value can be moved by lopsided deals; one-sided species flows are monitored; forbidden in the terms | ops O6, O7 |
 | Multi-account farms | Many alts funnelling items | Gate, caps, ops view of bursts and tight clusters | ops O6 to O8, O10 |
 | Hijack a session | A compromised game build confirms trades as the player | Cannot be fully prevented by the game; hardening H1: a portal-rendered confirm (section 12.6) | not built |
@@ -120,7 +130,7 @@ WH does not read or write `profiles.is_online`, `current_game_slug` or `last_see
 * **Alphabet** `23456789ABCDEFGHJKMNPQRSTUVWXYZ` (31 characters; no 0, O, 1, I, L), length 8: **39.6 bits, 8.5e11 codes** [V: computed]. Generated with `gen_random_bytes` and rejection sampling (accept a byte below 248 = 31 x 8, so there is no modulo bias).
 * **Guessing:** with 1,000,000 live codes, one account at the limit (240 attempts a day) has a 2.8e-4 chance per day of hitting any code; 100 sybil accounts at the limit have 2.8e-2 per day [V: computed]. That is why **a code hit only creates a request** the owner must accept: a lucky guess buys a request the owner can decline, not access. Incoming pending requests are capped at 20 per player and expire after 7 days; a code can be rotated at any time (at most once a minute) and the old one stops working at once [V].
 * **Attempts:** every redeem call counts, success or not; 10 an hour per account; the counter is committed even on failure (the function returns, never raises, so the update is not rolled back) [V: the 11th and 12th attempts answer `slow_down` and the counter stands at 10].
-* **No oracle:** a wrong code, your own code, a blocked pair, and a target that fails the gate all answer the same `not_found`.
+* **No oracle:** a wrong code, your own code, a blocked pair, a target that fails the gate, a target at its friend limit and a target with 20 pending requests all answer the same `not_found`. The redeemer's **own** limits (30 friends: `friend_limit`; 10 pending outgoing requests: `too_many_requests`) are checked **before the code is looked up**, so those answers are the same for every code. (Fixed after the 2026-10-05 audit: they used to be checked after the lookup, so an attacker who parked 10 requests could tell valid codes from invalid ones, 10 an hour, without ever creating a request the target could see.)
 * **If both players asked each other,** the second redeem completes the friendship [V].
 * **No email or username search anywhere.** DESIGN: do not reuse the portal's `find_users` (it searches by email or username) [R: 0003].
 * A friend limit of 30 per player bounds a ring's size (my number [U]).
@@ -166,10 +176,10 @@ Block is instant and symmetric in effect: it removes the friendship, cancels liv
 | draft to PROPOSED | A, `wh_propose_trade` | Signed in; kill switch on; both pass the gate (trade allowed, not restricted, 2 days, 10 capsules); not blocked; friends or a live listing; no other live trade between the pair; A has at most 3 live outgoing and the partner at most 10 incoming; 1 to 3 items each, equal counts, no duplicates; all items one tier; A's items owned, unlocked, not hearted, not reserved; the partner's items are on their offer shelf, unlocked, not hearted, not reserved; board: items inside the listing and the given species among the listing's wants | Trade row, items snapshot with `item_version`, A's items reserved, `a_confirmed = 1`, expiry set |
 | PROPOSED or COUNTERED to COUNTERED | Either party, `wh_counter_trade` | Live and unexpired; `expect_version` equals current; at most 20 versions per trade; same item rules; items of the old terms count as free for this trade | Terms replaced, `terms_version + 1`, the counterer's confirmation set, the other's void, reservations moved to the counterer's items, expiry re-armed |
 | to EXECUTED | The party that has not confirmed the current version, `wh_confirm_trade` | Live and unexpired; `expect_version` equals current; the caller was **shown** this version (`viewed == terms_version`) at least 5 seconds ago; kill switch on; both gates; not blocked; friends (friend trades); rolling 24 h caps for both and the pair; every item still owned by the right party, same `version`, unlocked, not hearted, not reserved by another live trade, tier matches | Owners swapped; `trade_count + 1`; `version + 1`; `locked_until = now + 24 h`; reservations and shelf marks cleared; two ledger rows per item pair; both accounts' versions bumped; listing closed |
-| to FAILED | the same call | A terminal check failed: gate lost, blocked, not friends, items gone or moved or changed or locked or hearted or reserved, size or tier broken | `failed`, `ended_reason` set, items released, event logged. **Committed** (the function returns normally) |
-| to CANCELLED | Either party `wh_cancel_trade`; `wh_block`; `wh_friend_remove`; account deletion | Live | Items released |
+| to FAILED | the same call | A terminal check failed: gate lost for good (trading switched off), blocked, not friends, items gone or moved or changed or locked or hearted or reserved, size or tier broken | `failed`, `ended_reason` set, items released, event logged. **Committed** (the function returns normally) |
+| to CANCELLED | Either party `wh_cancel_trade`; `wh_block`; `wh_friend_remove`; account deletion; trading switched off for either party (the trigger of 16.1) | Live | Items released |
 | to EXPIRED | Time (checked lazily by any touch of the trade; no cron) | `expires_at <= now()` | Items released; a stale reservation never blocks anything meanwhile |
-| Non-terminal refusals | the same confirm call | kill switch off (`frozen`), or `daily_cap`, `partner_daily_cap`, `pair_cap` | Trade stays alive, nobody's consent changes, no record |
+| Non-terminal refusals | the same confirm call | kill switch off (`frozen`), `daily_cap`, `partner_daily_cap`, `pair_cap`, or a moderation hold on either party (`unavailable`) | Trade stays alive, nobody's consent changes, no record |
 
 **Time rules.** `async`: 24 hours from the last change of terms. `live`: 60 seconds, re-armed by each counter (a first confirmation does not re-arm). Idempotency keys are kept 30 days.
 
@@ -184,41 +194,59 @@ Block is instant and symmetric in effect: it removes the friendship, cancels liv
 | `wh_friends` | Mutual friendship as ONE row with `user_lo < user_hi` (consent by construction; the portal's two-row scheme can be half-forged) |
 | `wh_blocks` | Directional row, symmetric effect |
 | `wh_reports` | Fixed reason 1 to 6, no text |
+| `wh_rate` | Per-account token buckets (7.4) |
 | `wh_listings` | The board: 1 to 3 offered item ids, up to 3 wanted species or `want_open`, one tier, 7 day expiry, at most 3 active per player |
 | `wh_trades`, `wh_trade_items`, `wh_trade_events` | The trade, its current terms with an item-version snapshot, an append-only event log (propose, counter, confirm, cancel, expire, fail, execute, emote) |
 
-RLS (Appendix A.1b here, A.2 in `COLLECTION.md`): on for all; **no write privilege for `anon` or `authenticated` on any table**; narrow own-row selects only on `wh_accounts`, `wh_items`, `wh_capsules` and the public `wh_species`. **`wh_trades` and `wh_blocks` have no client access at all**, because their rows carry the *other* player's auth id and a direct select would hand it over (found in my own review of an earlier draft that had a party-select policy; fixed; checked [V]). Everything else is reachable only through the RPCs below. Every RPC refuses a payload over 8 KB (`bad_payload`) before parsing it [V].
+RLS (Appendix A.1b here, A.2 in `COLLECTION.md`): on for all; **no write privilege for `anon` or `authenticated` on any table**; narrow own-row selects only on `wh_accounts`, `wh_items`, `wh_capsules` and the public `wh_species`. **`wh_trades` and `wh_blocks` have no client access at all**, because their rows carry the *other* player's auth id and a direct select would hand it over (found in my own review of an earlier draft that had a party-select policy; fixed; checked [V]). Everything else is reachable only through the RPCs below. Every RPC refuses a payload over 8 KB (`bad_payload`) as its first step [V on 2026-10-02]; **that is a sanity limit, not protection against large bodies**: PostgREST has already read and parsed the request and Postgres has built the `jsonb` value before the function runs (an earlier version of this paragraph said "before parsing it", which was wrong). The real limits are in 7.4.
 
 ### 7.2 The RPC surface (all take one `jsonb` parameter `p` like 0008; all return `{ok, ...}` or `{ok:false, error}`)
 
-All are `SECURITY DEFINER`, `search_path = public`, `lock_timeout = 3s`, executable by `authenticated` only (`anon` revoked), keyed on `auth.uid()` (never on a parameter). The internals (`wh__*`, helpers included) are executable by nobody but `service_role`; there are exactly 27 client RPCs and the audit query O14 proves it [V].
+All are `SECURITY DEFINER`, `search_path = public`, `lock_timeout = 3s`, executable by `authenticated` only (`anon` revoked), keyed on `auth.uid()` (never on a parameter). The internals (`wh__*`, helpers included) are executable by nobody but `service_role`; there are exactly **28** client RPCs (the 27 checked by the audit query O14 on 2026-10-02 [V], plus `wh_op_status`, added 2026-10-05 and not run), and the migration's own audit (COLLECTION A.7) fails if a player can execute anything else.
 
 | RPC | Input | Output | Notes |
 |---|---|---|---|
 | `wh_friend_code_get()` | none | `{code}` | creates on first call |
 | `wh_friend_code_rotate()` | none | `{code}` | at most once a minute |
-| `wh_friend_redeem(p)` | `{code}` | `{requested}` or `{friends}` or `{already_friends}` | 10 attempts an hour; same `not_found` for every failure |
-| `wh_friend_respond(p)` | `{request_id, accept}` | `{accepted}` | recipient only |
-| `wh_friend_list(p)` | none | friends, incoming requests (handles only), outgoing count | |
-| `wh_friend_shelf(p)` | `{friend_ref}` | the friend's offered, unlocked, free items with `is_new_to_you` | friends only |
+| `wh_friend_redeem(p)` | `{code}` | `{requested}` or `{friends}` or `{already_friends}` | 10 attempts an hour; the caller's own limits answer first; every code-side failure is the same `not_found` (5.3) |
+| `wh_friend_respond(p)` | `{request_id, accept}` | `{accepted}` | recipient only; accepting needs both sides past the gate (16.1) |
+| `wh_friend_list(p)` | none | friends, incoming requests (handles only), outgoing count | empty (with `paused: true`) for a gated caller; gated friends and their requests are left out (16.1) |
+| `wh_friend_shelf(p)` | `{friend_ref}` | the friend's offered, unlocked, free items with `is_new_to_you` | friends only, both past the gate |
 | `wh_friend_remove(p)` | `{friend_ref}` | `{cancelled_trades}` | cancels live friend trades |
 | `wh_shelf_set(p)` | `{item_ids[] up to 12}` | `{offered}` | replaces the whole shelf; refuses hearted, locked, consumed, not-yours |
 | `wh_listing_create(p)` | `{items[1..3], wants[0..3], open}` | `{listing_id}` | items on the shelf, one tier, wants of that tier |
 | `wh_listing_cancel(p)` | `{listing_id}` | `{ok}` | owner only |
-| `wh_board_search(p)` | `{tier?, species?}` | up to 30 listings: `listing_id, lister, handle, tier, offers[], want_species, want_open, you_can_give[]` | excludes own, blocked both ways, ungated listers |
-| `wh_propose_trade(p)` | `{idem, partner_ref? , listing_id?, give[], get[], mode?}` | `{trade_id, status, terms_version, expires_at}` | |
+| `wh_board_search(p)` | `{tier?, species?}` | up to 30 listings: `listing_id, lister, handle, tier, offers[], want_species, want_open, you_can_give[]` | excludes own, blocked both ways, ungated listers; rate bucket `search` (7.4) |
+| `wh_propose_trade(p)` | `{idem, partner_ref? , listing_id?, give[], get[], mode?}` | `{trade_id, status, terms_version, expires_at}` | 1 for 1 through the board (D-T5); locks both accounts (8.2); rate bucket `offer` |
 | `wh_trade_view(p)` | `{trade_id}` | exact terms, `you_give`, `you_receive` (look, species, tier, `trade_count`, `you_own_species`), `you_confirmed`, `they_confirmed`, `confirm_in_ms`, partner handle | **records that this version was shown to this party** |
-| `wh_counter_trade(p)` | `{idem, trade_id, expect_version, give[], get[]}` | `{status:'countered', terms_version, expires_at}` | |
+| `wh_counter_trade(p)` | `{idem, trade_id, expect_version, give[], get[]}` | `{status:'countered', terms_version, expires_at}` | keeps the trade's tier (`tier_mismatch` otherwise); a board trade stays 1 for 1 inside its listing (`bad_size`, `listing_mismatch`); rate bucket `offer` |
 | `wh_confirm_trade(p)` | `{idem, trade_id, expect_version}` | `{status:'executed'}` or `{waiting_for_partner}` or an error | executes on the second consent |
 | `wh_cancel_trade(p)` | `{idem, trade_id}` | `{status:'cancelled'}` | either party |
 | `wh_trade_inbox(p)` | none | live trades and those changed in the last 3 days, with partner handle and confirmation flags | poll every 20 s while a trade panel is open, 60 s otherwise |
-| `wh_trade_emote(p)` | `{trade_id, emote 1..6}` | `{ok}` | 1 hello, 2 thanks, 3 wow, 4 oops, 5 bye, 6 good swap; one per 5 s |
+| `wh_trade_emote(p)` | `{trade_id, emote 1..6}` | `{ok}` | 1 hello, 2 thanks, 3 wow, 4 oops, 5 bye, 6 good swap; one per 5 s; both parties past the gate |
 | `wh_block(p)`, `wh_unblock(p)`, `wh_block_list(p)` | `{partner_ref}` | counts and handles | |
-| `wh_report(p)` | `{partner_ref, reason 1..6}` | `{ok}` | 5 a day; 3 distinct eligible reporters in 7 days put the target on a 24 h trade hold |
+| `wh_report(p)` | `{partner_ref, reason 1..6}` | `{ok}` | 5 a day; the automatic hold rules are in section 13 |
 | `wh_handle_set(p)` | `{adj 0..63, noun 0..63}` | `{handle}` | once a week; the number is server-assigned and unique |
-| `wh_state`, `wh_inventory`, `wh_set_fav`, `wh_mark_seen` | see COLLECTION.md | | |
+| `wh_state`, `wh_inventory`, `wh_op_status`, `wh_set_fav`, `wh_mark_seen` | see COLLECTION.md | | |
 
-**Admin** (plain `update` statements run by the owner in the SQL editor; see section 15): `trade_enabled`, `restricted_until`, `wh_config`.
+**Admin** (plain `update` statements run by the owner in the SQL editor; see section 15): `trade_enabled`, `restricted_until`, `hold_reviewed_at`, `wh_config`.
+
+### 7.4 Payload limits and per-account rates (revised 2026-10-05)
+
+* **What does not protect the database:** the 8 KB check inside each function runs after PostgREST and Postgres have parsed the body (7.1), and
+  the portal bridge's guard (16 KB, 8 calls a second: COLLECTION 8.2) covers only calls made through the bridge. Every client RPC is granted to
+  `authenticated`, so a player can call PostgREST directly with their own JWT and skip the bridge.
+* **Body size: at the edge.** Configure a request-body limit in front of PostgREST for the WH functions (the Supabase API gateway, or a
+  Cloudflare Worker in front of the project) [G/U: whether and how the Supabase gateway exposes this setting was not checked]. The Edge Function
+  host refuses a large or unannounced body by its `content-length` before reading it (COLLECTION 7.2). Each function also computes its
+  idempotency digest only **after** the 8 KB check, so an oversized body is at least not re-serialised and hashed.
+* **Call rate: per account, in the database.** `wh__take(uid, bucket)` is a token bucket in `wh_rate` (one row per account and bucket), refilled
+  continuously; a call over the rate answers the non-terminal `slow_down` and writes nothing else. Buckets (`wh_config`, tunable without a deploy):
+  `offer` (`wh_propose_trade`, `wh_counter_trade`): 30 tokens, 0.1 a second; `search` (`wh_board_search`): 30 tokens, 0.5 a second.
+  `wh_friend_redeem` (10 attempts an hour, counted even on failure) and `wh_report` (5 a day) already have stricter limits of their own.
+  A replay of a stored answer (same idempotency key) costs no token, so an honest retry is never refused.
+* **What remains:** buckets bound each account, not each client: many accounts, or many requests without a valid JWT, are the gateway's job
+  (NEXT_STEPS P8). The host operations (COLLECTION 7.4) have no bucket yet (COLLECTION 7.6 P5).
 
 ### 7.3 Error codes and player copy (shared with COLLECTION and MERGE)
 
@@ -262,7 +290,7 @@ All are `SECURITY DEFINER`, `search_path = public`, `lock_timeout = 3s`, executa
 
 ### 8.2 Lock order and why it cannot deadlock
 
-Every function that takes more than one lock takes them in this order: **trade row, then account rows in ascending id, then item rows in ascending id** (`select ... order by id for update`). `wh_cancel_trade`, `wh_counter_trade`, `wh_confirm_trade`, `wh_block`, `wh_friend_remove` follow it literally. The single-account functions (`wh_propose_trade`, `wh__commit_merge`, `wh__commit_open_capsule`) take their own account first and their items after, which is a prefix of the same order, and they never take a trade row after an account. A cycle would need a function that takes an item before an account or an account before a trade row: none exists. A `lock_timeout` of 3 seconds on every function turns the (never observed) pathological case into a retryable `busy` instead of a hang [V: a held lock failed fast in 2.5 to 5 s and the same call then succeeded]. [V] 57 mixed operations in parallel over 6 accounts (confirm, cancel, merge, shelf, block): zero deadlocks, the conservation view clean afterwards.
+Every function that takes more than one lock takes them in this order: **trade row, then account rows in ascending id, then item rows in ascending id** (`select ... order by id for update`). `wh_cancel_trade`, `wh_counter_trade`, `wh_confirm_trade`, `wh_block`, `wh_friend_remove` follow it literally. `wh_propose_trade` has no trade row yet: it locks **both** accounts in ascending id (since 2026-10-05: with only its own account locked, parallel proposals from different accounts all passed the partner's incoming-offer check, 13 live against a cap of 10 in the audit's test), then the items. `wh_report` locks both accounts in ascending id. The single-account functions (`wh__commit_merge`, `wh__commit_open_capsule`) take their own account first and their items after, which is a prefix of the same order, and they never take a trade row after an account. The rate bucket row (`wh_rate`, 7.4) is only ever taken after the caller's account and before any item, and nothing that holds an item waits for it. The one exception to the order is the trigger that runs when trading is switched off (16.1): it runs inside the update of an account row, so it takes that account's trade rows with `NOWAIT` and never waits in the wrong order (if a trade is being confirmed at that instant, the switch fails with `lock_not_available` and the owner runs it again). A cycle would need a function that takes an item before an account or an account before a trade row: none exists. A `lock_timeout` of 3 seconds on every function turns the (never observed) pathological case into a retryable `busy` instead of a hang [V: a held lock failed fast in 2.5 to 5 s and the same call then succeeded]. [V] 57 mixed operations in parallel over 6 accounts (confirm, cancel, merge, shelf, block): zero deadlocks, the conservation view clean afterwards.
 
 ### 8.3 Version columns
 
@@ -295,7 +323,7 @@ Isolation level is READ COMMITTED with explicit row locks. SERIALIZABLE would al
 | Daily cap | 3 completed trades per rolling 24 h per account | The sim value ("raise to 5 as headroom"). Together with the pair limit it is what stops raw giver-side dupe-bug copying: the ring went from 720 copies (lock only) to 5 (lock, cap, pair). |
 | Pair cap | 1 per partner per rolling 24 h | Prevents ping-pong between two accounts; part of the 5 / 0 / 1 result. |
 | New-account gate | 2 days and 10 capsules opened, both sides | DESIGN 5.7. Raises the cost of throwaway accounts. |
-| Live offers | 3 outgoing, 10 incoming per player | Spam and reservation hoarding (my numbers [U]). |
+| Live offers | 3 outgoing, 10 incoming per player | Spam and reservation hoarding (my numbers [U]). Both counted under both account locks (8.2). |
 | Offer shelf | 12 items | Privacy and the size of what one player can expose (my number [U]). |
 | Friends | 30 | Bounds ring size (my number [U]). |
 | Rolling windows | not UTC days | Day-boundary gaming. |
@@ -304,7 +332,7 @@ Isolation level is READ COMMITTED with explicit row locks. SERIALIZABLE would al
 
 ## 10. The wants and offers board (species icons, no text)
 
-**Listing.** A player with at least one item on their offer shelf can post up to **3 active listings**. A listing is: **1 to 3 offered items** (all one tier, all on the shelf, free), and either **1 to 3 wanted species of that tier** or `want_open` ("any of this tier", the favour swap). It lives 7 days (`expires_at`), can be cancelled, and closes when a trade through it executes. Each side of a board trade is **1 for 1** (D-T5): the proposer gives one item, receives one of the listing's offered items. Bigger swaps (2 or 3 each way) are possible between friends.
+**Listing.** A player with at least one item on their offer shelf can post up to **3 active listings**. A listing is: **1 to 3 offered items** (all one tier, all on the shelf, free), and either **1 to 3 wanted species of that tier** or `want_open` ("any of this tier", the favour swap). It lives 7 days (`expires_at`), can be cancelled, and closes when a trade through it executes. Each side of a board trade is **1 for 1** (D-T5): the proposer gives one item, receives one of the listing's offered items. Bigger swaps (2 or 3 each way) are possible between friends. Enforced on the server (since 2026-10-05; not run): a board proposal with more than one item a side answers `bad_size`, and a counter on a board trade must stay 1 for 1 with the lister's item one of the listing's offers and the proposer's item of a wanted species (`listing_mismatch`).
 
 **What a viewer sees.** Icon, species name, tier gem and the unique look of each offered item, the wanted species as icons with names (or "any of this tier"), the lister's handle and avatar. **Nothing else**: no profile, no history, no online status, no free text.
 
@@ -380,8 +408,8 @@ A compromised game build could call `wh_confirm_trade` itself after the 5 second
 * **Where:** on every trade card, the review screen, the friend list and each listing: a "..." menu with **Block** and **Report**.
 * **Block:** a confirm "Blocking removes them from your friends and cancels your swaps with them. They won't be told." One tap on Block. Effects in 5.4. A "Blocked" list with Unblock lives in Settings (handles only).
 * **Report:** pick one of six fixed reasons, each a plain sentence, no free text: 1 "Their name bothers me", 2 "Too many offers or requests", 3 "They tried to trick me", 4 "I think they are cheating", 5 "They made me feel uncomfortable", 6 "Something else". Reason 5 also shows "Talk to a grown-up you trust." The reply is always "Thanks. We'll take a look." The reporter is never named to the reported player and never told the outcome. A report does not block; offer Block next to it.
-* **Automatic effect:** three **distinct** reporters who pass the new-account gate within 7 days put the reported account on a **24 hour trade hold** (`restricted_until`) and queue it for human review; it never bans. Reporters under the gate, repeat reporters and the 5-a-day limit do not count [V: two eligible reporters plus one brand-new account did nothing; a third eligible one held the account, and the held account could neither propose nor be proposed to].
-* **Ops follow-up:** query O9 lists accounts by distinct reporters and blocks received. A person decides; the hold lifts by itself.
+* **Automatic effect** (revised 2026-10-05; the old rule re-armed the hold on every repeat report, so three sybil accounts could keep anyone on hold indefinitely): three **distinct** reporters within 7 days put the reported account on a **24 hour hold** (`restricted_until`) and queue it for human review, but only reporters who (a) pass the new-account gate and (b) **had a real interaction with the account in the last 7 days** count: a trade row between them in either direction (which includes a proposal on its listing), a friend request either way, or a friendship. Only reports filed **after the last automatic hold started** count. **At most one automatic hold until a person has reviewed it** (`hold_reviewed_at`), and after a review at most one per 7 days. It never bans and never touches items; a hold pauses the account's trades without ending them (D-T10) and closes its social surfaces while it lasts (16.1). [V on 2026-10-02 for the original rule: two eligible reporters plus one brand-new account did nothing, a third eligible one held the account, and the held account could neither propose nor be proposed to. The revised rule: T18, added 2026-10-05, not run.]
+* **Ops follow-up:** query O9 lists accounts by distinct reporters, blocks received and their hold history. A person decides, sets `hold_reviewed_at` (15.1) and clears or extends the hold; an unreviewed hold lifts by itself after 24 h.
 
 ## 14. Moderation and ops
 
@@ -418,6 +446,11 @@ update public.wh_config set value = 'true', updated_at = now() where key in ('tr
 -- Allow one tester to trade / hold an account:
 update public.wh_accounts set trade_enabled = true where public_id = '<their public id>';
 update public.wh_accounts set restricted_until = now() + interval '48 hours' where public_id = '<id>';
+-- A person reviewed a report hold (13): record it, and clear the hold if it was unfounded:
+update public.wh_accounts set hold_reviewed_at = now(), restricted_until = null where public_id = '<id>';
+-- Switch trading OFF for an account (also cancels its requests, live trades, listings and shelf: the trigger of 16.1). If it fails with
+-- lock_not_available, a trade of that account was being confirmed at that instant: run it again.
+update public.wh_accounts set trade_enabled = false where public_id = '<id>';
 ```
 
 The client reads the flags from `wh_state.flags` and greys the relevant buttons with the `frozen` copy.
@@ -443,7 +476,7 @@ Statements marked [S] are the ones DESIGN 3.2 and 8.2 give; I did not re-check t
 | High-privacy defaults | Trading **off** until switched on; offer shelf empty until the player adds items; no discoverability (no search, no suggestions) |
 | No nudges | No streaks, no countdown FOMO, no push notifications, no "last chance", no social-proof counters; the board shows no popularity numbers (UK Children's Code: no nudge techniques [S]) |
 | Data minimisation | WH tables hold the auth id, game data, counters and fixed codes. No IP, device id, free text or per-touch log. Telemetry is aggregate only (COLLECTION 7.12) |
-| Parental and age control | The portal has **no age field and no parental flow** [R: a search of `src` and `pages` for age, birth, parental and COPPA terms found only the privacy page text]. `trade_enabled` is the seam: owner-set today, set by a future age/consent flow later |
+| Parental and age control | The portal has **no age field and no parental flow** [R: a search of `src` and `pages` for age, birth, parental and COPPA terms found only the privacy page text]. `trade_enabled` is the seam: owner-set today, set by a future age/consent flow later. **It cuts every social surface, not only trading** (revised 2026-10-05; the old draft let a gated child still accept friend requests and expose its shelf): while an account fails the gate (trading off, or a moderation hold) it cannot accept a friend request or redeem a code, its friend list and requests are empty, its friends no longer see it or its shelf, emotes are refused, and it is invisible on the board. Switching `trade_enabled` off also **cancels** its pending friend requests both ways, its live trades (items released) and its listings, and empties its offer shelf (trigger `wh_on_trade_disabled`, A.3). Existing friendships are **suspended**, not deleted: owner decision NEXT_STEPS D-17 |
 | Safe by construction | Same-tier swaps (no lopsided deals), 24 h lock, caps, review screen, block, report, kill switch |
 
 ### 16.2 UK Children's Code and COPPA, as far as DESIGN states them
@@ -490,7 +523,7 @@ Until the owner picks, **A is the only safe default** and is what the draft impl
 | `game_saves` (cloud save slots) | Not used for the Hoard | A game can write arbitrary JSON into its own save [R: `saveGameData` merges whatever the game sends]; ownership must never come from it |
 | `profiles.is_online`, `current_game_slug` | Not touched | WH exposes no presence |
 
-**Nothing existing is altered.** The migration only creates `wh_*` tables, functions and one trigger; it does not `ALTER` any existing table, policy or function and does not touch `handle_new_user`, `find_users` or `set_updated_at`. **Pre-existing exposure the owner should know about (not WH's to fix):** the world-readable `profiles` table and the permissive `friendships` policies are a privacy and consent risk for any children's use of the portal, with or without WH. Recommended separately: restrict `profiles` SELECT to what the UI needs, and make `friendships` writes go through a function that checks the other side.
+**Nothing existing is altered.** The migration only creates `wh_*` tables, functions, triggers on its own tables and one trigger on `auth.users`; it does not `ALTER` any existing table, policy or function and does not touch `handle_new_user`, `find_users` or `set_updated_at`. Its grant revocation names the WH objects one by one (COLLECTION A.2): the first draft's `revoke all on all tables in schema public from anon, authenticated` would have stripped the portal's own grants (games, profiles, game_saves, leaderboards, friendships, df_*, bt_*) and broken the site, and the test suite could not see it because the stub held only WH tables (found by the 2026-10-05 audit). The migration now snapshots every privilege of the portal's objects first and fails as a whole if any changed (COLLECTION A.0 and A.7), and the test stub has a portal sentinel table (Appendix B, check in T17c). **Pre-existing exposure the owner should know about (not WH's to fix):** the world-readable `profiles` table and the permissive `friendships` policies are a privacy and consent risk for any children's use of the portal, with or without WH. Recommended separately: restrict `profiles` SELECT to what the UI needs, and make `friendships` writes go through a function that checks the other side.
 
 **Migration practice [R]:** like 0008, one file with its own `begin; ... commit;`, applied by hand (Management API or Dashboard), not re-runnable (a second apply fails at the first `create table` and rolls back whole), ending with a self-test `DO` block that acts as fake signed-in users inside a subtransaction and raises `WH_SELFTEST_FAIL` on any failed check. The project is `qkidwgyapmitrdxnavmi` (accounts live there; `wugox...` is Realtime only) [R: 0008 header, platform.md]. Migration numbering: the next free number after `0008`; `0007` is absent from the repo.
 
@@ -498,39 +531,41 @@ Until the owner picks, **A is the only safe default** and is what the draft impl
 
 ### 18.1 What the harness proves (Appendix C; run 2026-10-02; 149/149)
 
-IDs are the section numbers of the runner. "Parallel" means that many separate database sessions at once.
+IDs are the section numbers of the runner. "Parallel" means that many separate database sessions at once. **Checks added on 2026-10-05** (in T3b, T4, T9, T10, T17b, T17c, T18 and the new T19) cover the audit's findings and **have not been run**: there is no PostgreSQL in the container that wrote them.
 
 | ID | Proves | Method |
 |---|---|---|
 | T1 | Happy path: propose, view, the 5 s wait (`review_first`, `wait`), execute; owners swapped, `trade_count`, 24 h lock, shelf and reservation cleared, two ledger rows; replay of the same confirm returns the stored result; a new key on an executed trade is `not_pending`; key reuse with other arguments is `idem_reuse`; conservation empty; received item cannot be re-offered or merged | sequential |
 | T2 | **N parallel acceptors of the same offer:** 20 parallel confirms with 20 keys: exactly one `executed`, 19 `not_pending`, one swap in the ledger. 20 parallel with one key: all `ok`, one execution | 20 sessions |
 | T3 | **Double-spend of an item:** 20 parallel proposals of ONE item to 20 friends: exactly one accepted, 19 `reserved`; a merge of a reserved item is refused | 20 sessions |
-| T4 | Counter bumps the version, moves the reservation, voids the other consent; confirming the old version is `changed`; the other side must view v2 first; executes v2 | sequential |
+| T3b | **Incoming cap under concurrency** (added 2026-10-05, not run): 20 friends propose to one account at once: exactly 10 live incoming offers | 20 sessions |
+| T4 | Counter bumps the version, moves the reservation, voids the other consent; confirming the old version is `changed`; the other side must view v2 first; executes v2. Added 2026-10-05 (not run): a counter that switches the tier is `tier_mismatch` and leaves the trade as it was | sequential |
 | T4b | **Scam-by-switch race:** A counters while B confirms the old terms, 24 pairs, 8 at a time: B only ever executed the terms B had been shown, or was told `changed`; the countered item never moved unseen | 48 sessions |
 | T5 | **Tampered payloads (12 kinds):** wrong tier mix, count mismatch, 4 items, someone else's item, duplicate ids, same item both sides, empty, unknown uuid, not a uuid, a 1000-element array, an unshelved item, null arrays; non-friend partner, self partner, short idem, `anon`, signed-out; a stranger viewing or confirming; **direct insert, update, delete; selects of the ledger, config, the conservation view, `wh_trades`, `wh_blocks`, `wh_friends`, `wh_trade_items`; calling `wh__trade_execute` and the helpers `wh__are_friends`, `wh__blocked`, `wh__flag`, `wh__cfg_int`; self-enabling `trade_enabled`**; RLS: a player reads only their own items | sequential |
 | T6 | **Partial failure:** an exception injected after the swap: nothing moved, trade still proposed, no ledger rows, reservation intact; the same confirm without the fault succeeds | fault injection |
 | T7 | Caps: 3 in 24 h execute, the 4th is `daily_cap` and stays alive; after back-dating 25 h it executes; a second trade with the same partner is `pair_cap` | sequential |
 | T8 | Expiry frees items without any job; an expired trade cannot be confirmed and is recorded `expired`; **kill switch**: confirm and propose `frozen`, the trade stays alive, then executes after thaw | sequential |
-| T9 | Friend codes: alphabet and length, own and junk codes `not_found`, redeem makes a request not a friendship, only the owner can respond, the 11th attempt is `slow_down` and the counter committed, rotation kills the old code, mutual requests complete | sequential |
-| T10 | Block mid-trade cancels, releases, unfriends; both sides get the generic answers; board listing, search (`you_can_give`), `listing_mismatch`, a proposal through a listing between non-friends, block hides listings | sequential |
+| T9 | Friend codes: alphabet and length, own and junk codes `not_found`, redeem makes a request not a friendship, only the owner can respond, the 11th attempt is `slow_down` and the counter committed, rotation kills the old code, mutual requests complete. Added 2026-10-05 (not run): with 10 requests parked, a valid and an invalid code get the same `too_many_requests` and nothing reaches the target | sequential |
+| T10 | Block mid-trade cancels, releases, unfriends; both sides get the generic answers; board listing, search (`you_can_give`), `listing_mismatch`, a proposal through a listing between non-friends, block hides listings. Added 2026-10-05 (not run): 2 for 2 through the board is `bad_size`, and a board counter can neither grow to 2 for 2 nor leave the listing | sequential |
 | T11, T12 | The merge and capsule commit functions: validation, replay, conflict, 20 parallel merges of one pair (one commits), 10 parallel opens with one credit (one opens), bad host rolls rejected loudly, cost mismatch aborts, 10 merges a day then `daily_cap`; 10 parallel first-contact bootstraps make one account and one starter | up to 20 sessions |
 | T13 | **Deadlock storm:** 57 mixed operations (confirm, cancel, merge commits, shelf, block) over 6 accounts, 48 at a time: zero deadlocks, conservation clean | 48 sessions |
 | T14 | **Laundering ring:** a mule with 10 duplicated items; at most 3 placed in 24 h; receivers cannot merge or pass them on | sequential |
 | T15 | Ops: a cloned row is flagged by the conservation view; deleting an account burns its items; conservation clean again | sequential |
 | T16 | A held lock fails fast (3 s `lock_timeout`), then the same call succeeds; 10 parallel retries of one propose make one trade; same key different arguments is `idem_reuse` | 10 sessions |
 | T17 | `wh_state`, paging, favourites block proposing and merging, friend shelf privacy, handle rules, inbox, emotes, unfriend, seen | sequential |
-| T17b | An oversized payload is refused; a negotiation is capped at 20 versions; deleting an account also deletes its idempotency rows | sequential |
-| T17c | **Privilege audit:** the only `wh_` functions a player can execute are the 27 client RPCs (no helper, no commit function, no trigger function) and `anon` can execute none; players hold SELECT on `wh_species`, `wh_accounts`, `wh_items`, `wh_capsules` and nothing else on any `wh_` table | catalog queries |
+| T17b | An oversized payload is refused (a sanity limit after parsing, 7.4); a negotiation is capped at 20 versions; deleting an account also deletes its idempotency rows. Added 2026-10-05 (not run): with the `offer` bucket at 3 tokens and no refill, the 4th proposal answers `slow_down` and writes nothing | sequential |
+| T17c | **Privilege audit:** the only `wh_` functions a player can execute are the client RPCs (27 on 2026-10-02; 28 with `wh_op_status`) (no helper, no commit function, no trigger function) and `anon` can execute none; players hold SELECT on `wh_species`, `wh_accounts`, `wh_items`, `wh_capsules` and nothing else on any `wh_` table. Added 2026-10-05 (not run): the stub's portal sentinel table and sequence keep their grants after the migration | catalog queries |
 | T17d | Retention: `wh__purge()` removes play idempotency rows after 1 day and the others after 30 days and nothing else; players cannot call it | sequential |
-| T18 | Reports: the hold needs 3 distinct eligible reporters (a brand-new reporter does not count); the held account cannot trade; report rate limit; unblock keeps the friendship removed; listing cancel | sequential |
+| T18 | Reports: the hold needs 3 distinct eligible reporters (a brand-new reporter does not count); the held account cannot trade; report rate limit; unblock keeps the friendship removed; listing cancel. Revised 2026-10-05 (not run): reporters with no interaction do not count; a repeat report cannot re-arm the hold; a second automatic hold needs a review first | sequential |
+| T19 | **Trading switched off** (added 2026-10-05, not run): an account on a hold cannot accept a pending request; switching trading off cancels the pending request, the live trade (items released) and the listing and empties the shelf; the gated account sees no friends or requests; its friends no longer see it or its shelf; the friendship is suspended and returns when trading is switched on again | sequential |
 
 ### 18.2 How to run it (local, no Supabase needed)
 
-PostgreSQL 16 plus Python 3 and `psql`: load the stub (Appendix B), then the migration files in the order of the appendices, then `t_helpers.sql`, set `trade_confirm_cooldown_s` to 5 (the default) and run the runner. A full run is about 80 seconds. The same runner works against a **staging Supabase project** if `call()` is changed to PostgREST requests with test users' JWTs (the Auth admin API creates them over HTTP; no new dependency); never run it against production.
+PostgreSQL 16 plus Python 3 and `psql`: load the stub (Appendix B), then the migration in the order given at the top of COLLECTION.md Appendix A (the snapshot A.0 first, the audit A.7 last), then `t_helpers.sql`, set `trade_confirm_cooldown_s` to 5 (the default) and run the runner. A full run is about 80 seconds. The same runner works against a **staging Supabase project** if `call()` is changed to PostgREST requests with test users' JWTs (the Auth admin API creates them over HTTP; no new dependency); never run it against production.
 
 ### 18.3 Not covered, to add before launch
 
-Through PostgREST (RLS and grants as Supabase really configures them); the Edge Function and the portal bridge end to end; load (hundreds of parallel confirms, a large `wh_items`); the `DO`-block self-test inside the migration (a one-transaction subset of T1, T3, T5 to T8, T11, T12, T15 in the style of 0008's self-test); the hourly conservation job; the admin recall function; the UI.
+**Every check added on 2026-10-05** (run the whole suite first); the request-body limit at the gateway (7.4); through PostgREST (RLS and grants as Supabase really configures them); the Edge Function and the portal bridge end to end; load (hundreds of parallel confirms, a large `wh_items`); the `DO`-block self-test inside the migration (a one-transaction subset of T1, T3, T5 to T8, T11, T12, T15 in the style of 0008's self-test); the hourly conservation job; the admin recall function; the UI.
 
 ## 19. Work breakdown (rough, one engineer [U])
 
@@ -555,14 +590,16 @@ Through PostgREST (RLS and grants as Supabase really configures them); the Edge 
 * **[G]:** `pg_cron` availability; PostgREST cancelling a query when the HTTP connection drops; the legal statements in 16.2.
 * **[U]:** every cap and limit marked [U] in section 9 (offer shelf 12, friends 30, live offers 3 and 10); the retention periods; the sizes in section 19; the 1 second hold; the choice of 6 reports reasons.
 * **Owner questions** (NEXT_STEPS): D-5 age gating (trading stays off until answered), D-2 whether trade should be mandatory for completion, D-8 handle word lists, D-4 account requirements.
-* **Not in the draft, needed before launch:** the scheduled jobs (the hourly conservation check with auto-freeze, the daily `wh__purge()` call), the admin recall function, the portal-friend hint, per-account call rate limiting.
+* **Not in the draft, needed before launch:** the scheduled jobs (the hourly conservation check with auto-freeze, the daily `wh__purge()` call), the admin recall function, the portal-friend hint, the request-body limit at the gateway (7.4), rate limits on the host operations (the trade and board RPCs have the buckets of 7.4).
+* **Revised on 2026-10-05 and not run:** everything listed at the top of this document under "Revised on 2026-10-05". The SQL was checked by reading only; run the whole suite, with the new checks, before anything is applied.
+* **Owner decision D-17:** whether friendships are suspended (the draft) or deleted when trading is switched off.
 * The scam-by-switch and confirm tests prove the **server** enforces version-bound consent; they do not prove a person reads the screen. The review screen needs usability testing with real players, including children, under the owner's consent rules.
 
 ---
 
 ## Appendix A. Draft SQL (NOT APPLIED; verified on local PostgreSQL 16 with a stub, 2026-10-02)
 
-Run after `COLLECTION.md` Appendix A.1 (tables for items and accounts) and before its A.2 (row level security, which also covers these tables). All of these belong in one migration file, inside one `begin; ... commit;`, followed by a self-test `DO` block.
+Run after `COLLECTION.md` Appendix A.1 (tables for items and accounts) and before its A.2 (row level security, which also covers these tables). All of these belong in one migration file, inside one `begin; ... commit;`; the full order (from the privilege snapshot A.0 to the privilege audit A.7) is at the top of COLLECTION.md Appendix A.
 
 ### A.1 Social and trade tables
 
@@ -649,6 +686,13 @@ create table public.wh_trade_events (
   seq integer not null, at timestamptz not null default now(), actor uuid, kind text not null, terms_version integer, detail jsonb,
   primary key (trade_id, seq)
 );
+-- per-account token buckets (7.4; added 2026-10-05, NOT run): one row per account and bucket, refilled continuously by wh__take
+create table public.wh_rate (
+  user_id uuid not null references public.wh_accounts(user_id) on delete cascade,
+  bucket text not null check (bucket ~ '^[a-z]{1,16}$'),
+  tokens real not null, at timestamptz not null default now(),
+  primary key (user_id, bucket)
+);
 ```
 
 ### A.1b Row level security, grants and config seeds (the same block as `COLLECTION.md` A.2, repeated so this document stands alone; run it once, after all the tables)
@@ -663,16 +707,23 @@ alter table public.wh_friend_requests enable row level security; alter table pub
 alter table public.wh_blocks enable row level security;       alter table public.wh_reports enable row level security;
 alter table public.wh_listings enable row level security;     alter table public.wh_trades enable row level security;
 alter table public.wh_trade_items enable row level security;  alter table public.wh_trade_events enable row level security;
+alter table public.wh_rate enable row level security;
 
 create policy wh_species_read  on public.wh_species  for select using (true);
 create policy wh_accounts_own  on public.wh_accounts for select using (user_id = auth.uid());
 create policy wh_items_own     on public.wh_items    for select using (owner_id = auth.uid());
 create policy wh_capsules_own  on public.wh_capsules for select using (owner_id = auth.uid());
 -- wh_blocks and wh_trades carry the OTHER player's auth id, so a direct select would break the privacy design: they have NO client policy and no grant, like every table below.
--- wh_ops, wh_ledger, wh_config, wh_reports, wh_friend_*, wh_listings, wh_trade_items, wh_trade_events, wh_blocks, wh_trades: RPC only.
+-- wh_ops, wh_ledger, wh_config, wh_reports, wh_friend_*, wh_listings, wh_trade_items, wh_trade_events, wh_blocks, wh_trades, wh_rate: RPC only.
 
-revoke all on all tables in schema public from anon, authenticated;
-revoke all on all sequences in schema public from anon, authenticated;
+-- Supabase's default privileges GRANT ALL on every new public table and sequence to anon and authenticated: take that back on the WH objects
+-- ONLY, BY NAME, as 0008 does for bt_*. NEVER "revoke ... on all tables in schema public": that strips the portal's own grants too (games,
+-- profiles, game_saves, leaderboards, friendships, df_*, bt_*) and breaks the whole site (found by the 2026-10-05 audit in the earlier draft).
+-- COLLECTION A.7 fails the migration if any non-WH privilege changed, and if a WH table or sequence is missing from these lists.
+revoke all on table public.wh_species, public.wh_config, public.wh_accounts, public.wh_items, public.wh_capsules, public.wh_ops, public.wh_ledger,
+  public.wh_friend_codes, public.wh_friend_requests, public.wh_friends, public.wh_blocks, public.wh_reports, public.wh_listings,
+  public.wh_trades, public.wh_trade_items, public.wh_trade_events, public.wh_rate from anon, authenticated;
+revoke all on sequence public.wh_capsules_seq_seq, public.wh_ledger_id_seq, public.wh_reports_id_seq from anon, authenticated;
 grant select on public.wh_species, public.wh_accounts, public.wh_items, public.wh_capsules to authenticated;
 grant select on public.wh_species to anon;
 
@@ -680,7 +731,8 @@ insert into public.wh_config(key, value) values
   ('minting_enabled','true'), ('merging_enabled','true'), ('trading_enabled','true'), ('board_enabled','true'),
   ('merge_cost','2'), ('merge_daily_cap','10'), ('merge_lock_hours','24'), ('receive_lock_hours','24'),
   ('trade_daily_cap','3'), ('trade_pair_cap','1'), ('trade_confirm_cooldown_s','5'), ('trade_ttl_async_h','24'), ('trade_ttl_live_s','60'),
-  ('new_account_days','2'), ('new_account_capsules','10');
+  ('new_account_days','2'), ('new_account_capsules','10'),
+  ('rate_offer','{"cap": 30, "per_s": 0.1}'), ('rate_search','{"cap": 30, "per_s": 0.5}');      -- per-account token buckets (TRADE 7.4)
 ```
 
 ### A.2 Trade functions: helpers, propose, view, cancel, the atomic swap, confirm, counter
@@ -722,16 +774,31 @@ end $$;
 create function public.wh__release(p_trade uuid) returns void language sql set search_path = public as
 $$ update public.wh_items set reserved_trade_id = null where reserved_trade_id = p_trade $$;
 
+-- per-account token bucket (7.4; added 2026-10-05, NOT run). false = over the rate. It never raises, so the refill accounting commits even when
+-- the caller then refuses. wh_config 'rate_<bucket>' = {"cap": n, "per_s": r}. Callers take it after their account lock and before any item lock.
+create function public.wh__take(p_uid uuid, p_bucket text) returns boolean language plpgsql set search_path = public as $$
+declare v_cfg jsonb := (select value from public.wh_config where key = 'rate_' || p_bucket);
+        v_cap real := coalesce((v_cfg->>'cap')::real, 30); v_rate real := coalesce((v_cfg->>'per_s')::real, 0.1); v_left real;
+begin
+  insert into public.wh_rate (user_id, bucket, tokens, at) values (p_uid, p_bucket, v_cap, now()) on conflict (user_id, bucket) do nothing;
+  update public.wh_rate set tokens = least(v_cap, tokens + greatest(0, extract(epoch from (now() - at)))::real * v_rate), at = now()
+   where user_id = p_uid and bucket = p_bucket returning tokens into v_left;
+  if v_left is null or v_left < 1 then return false; end if;
+  update public.wh_rate set tokens = tokens - 1 where user_id = p_uid and bucket = p_bucket;
+  return true;
+end $$;
+
 -- ---------------------------------------------------------------- propose
 create function public.wh_propose_trade(p jsonb) returns jsonb language plpgsql security definer set search_path = public set lock_timeout = '3s' as $$
 declare
-  v_uid uuid := auth.uid(); v_idem text := p->>'idem'; v_digest text := md5(p::text);
+  v_uid uuid := auth.uid(); v_idem text := p->>'idem'; v_digest text;
   v_give uuid[]; v_get uuid[]; v_listing uuid; v_mode text := coalesce(p->>'mode', 'async');
   a public.wh_accounts%rowtype; b public.wh_accounts%rowtype; v_prev public.wh_ops%rowtype; l public.wh_listings%rowtype;
   v_partner uuid; v_via text; v_err text; v_tier smallint; v_trade uuid := gen_random_uuid(); v_ttl interval; v_res jsonb;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
+  v_digest := md5(p::text);                                                                                        -- only after the size check
   if v_idem is null or v_idem !~ '^[A-Za-z0-9_-]{16,64}$' or v_mode not in ('async', 'live') then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;
   begin
     if jsonb_typeof(p->'give') <> 'array' or jsonb_typeof(p->'get') <> 'array' or jsonb_array_length(p->'give') > 3 or jsonb_array_length(p->'get') > 3 then
@@ -742,29 +809,34 @@ begin
   exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload');
   end;
   if not public.wh__flag('trading_enabled') then return jsonb_build_object('ok', false, 'error', 'frozen'); end if;
-  select * into a from public.wh_accounts where user_id = v_uid for update;
+  -- the partner, found WITHOUT a lock first: by public id (a friend) or through a board listing ...
+  if p->>'partner_ref' is not null then select user_id into v_partner from public.wh_accounts where public_id = p->>'partner_ref'; end if;
+  if v_listing is not null then
+    select * into l from public.wh_listings where id = v_listing and active and expires_at > now();
+    if not found then return jsonb_build_object('ok', false, 'error', 'unavailable'); end if;
+    if v_partner is not null and v_partner <> l.user_id then return jsonb_build_object('ok', false, 'error', 'unavailable'); end if;
+    v_partner := l.user_id;
+  end if;
+  -- ... then BOTH accounts locked in ascending user_id (the global order, 8.2), so the partner's incoming-offer count and the pair check below
+  -- cannot be raced by parallel proposals from other accounts (2026-10-05 audit: 20 parallel proposals left 13 live offers against a cap of 10)
+  perform 1 from public.wh_accounts where user_id in (v_uid, coalesce(v_partner, v_uid)) order by user_id for update;
+  select * into a from public.wh_accounts where user_id = v_uid;
   if not found then return jsonb_build_object('ok', false, 'error', 'no_account'); end if;
   select * into v_prev from public.wh_ops where user_id = v_uid and idem = v_idem;
   if found then
     if v_prev.op <> 'propose' or v_prev.args_digest <> v_digest then return jsonb_build_object('ok', false, 'error', 'idem_reuse'); end if;
     return v_prev.result || '{"replayed":true}'::jsonb;
   end if;
+  if not public.wh__take(v_uid, 'offer') then return jsonb_build_object('ok', false, 'error', 'slow_down'); end if;      -- 7.4; a replay above costs no token
   if public.wh__gate(a) is not null then return jsonb_build_object('ok', false, 'error', public.wh__gate(a)); end if;
-  -- partner: by public id (friend) or through a board listing
-  if p->>'partner_ref' is not null then select * into b from public.wh_accounts where public_id = p->>'partner_ref'; end if;
-  if v_listing is not null then
-    select * into l from public.wh_listings where id = v_listing and active and expires_at > now();
-    if not found then return jsonb_build_object('ok', false, 'error', 'unavailable'); end if;
-    if b.user_id is not null and b.user_id <> l.user_id then return jsonb_build_object('ok', false, 'error', 'unavailable'); end if;
-    select * into b from public.wh_accounts where user_id = l.user_id;
-  end if;
-  if b.user_id is null or b.user_id = v_uid or public.wh__gate(b) is not null or public.wh__blocked(v_uid, b.user_id)
-     or not public.wh__flag('trading_enabled') then
+  if v_partner is not null then select * into b from public.wh_accounts where user_id = v_partner; end if;
+  if b.user_id is null or b.user_id = v_uid or public.wh__gate(b) is not null or public.wh__blocked(v_uid, b.user_id) then
     return jsonb_build_object('ok', false, 'error', 'unavailable');       -- one generic answer: no hint whether a block, a gate or a typo caused it
   end if;
-  v_partner := b.user_id;
   v_via := case when public.wh__are_friends(v_uid, v_partner) then 'friend' when v_listing is not null then 'board' end;
   if v_via is null then return jsonb_build_object('ok', false, 'error', 'unavailable'); end if;
+  -- D-T5: between strangers (through the board) a trade is 1 for 1; 2 or 3 each way only between friends
+  if v_via = 'board' and (cardinality(v_give) <> 1 or cardinality(v_get) <> 1) then return jsonb_build_object('ok', false, 'error', 'bad_size'); end if;
   if exists (select 1 from public.wh_trades t where t.status in ('proposed','countered') and t.expires_at > now()
              and ((t.a_user = v_uid and t.b_user = v_partner) or (t.a_user = v_partner and t.b_user = v_uid))) then
     return jsonb_build_object('ok', false, 'error', 'pair_busy'); end if;
@@ -801,7 +873,7 @@ declare
   v_seen integer; v_seen_at timestamptz; v_status text;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   begin v_trade := (p->>'trade_id')::uuid; exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end;
   select * into t from public.wh_trades where id = v_trade and (a_user = v_uid or b_user = v_uid);
   if not found then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
@@ -829,10 +901,11 @@ end $$;
 
 -- ---------------------------------------------------------------- cancel (either party, any time before execution)
 create function public.wh_cancel_trade(p jsonb) returns jsonb language plpgsql security definer set search_path = public set lock_timeout = '3s' as $$
-declare v_uid uuid := auth.uid(); v_idem text := p->>'idem'; v_digest text := md5(p::text); v_trade uuid; t public.wh_trades%rowtype; v_prev public.wh_ops%rowtype; v_res jsonb;
+declare v_uid uuid := auth.uid(); v_idem text := p->>'idem'; v_digest text; v_trade uuid; t public.wh_trades%rowtype; v_prev public.wh_ops%rowtype; v_res jsonb;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
+  v_digest := md5(p::text);
   if v_idem is null or v_idem !~ '^[A-Za-z0-9_-]{16,64}$' then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;
   begin v_trade := (p->>'trade_id')::uuid; exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end;
   select * into t from public.wh_trades where id = v_trade and (a_user = v_uid or b_user = v_uid) for update;          -- trade row first
@@ -864,6 +937,9 @@ begin
   if not public.wh__flag('trading_enabled') then return jsonb_build_object('ok', false, 'error', 'frozen', 'terminal', false); end if;   -- global switch: the trade stays alive
   select * into ra from public.wh_accounts where user_id = t.a_user;  select * into rb from public.wh_accounts where user_id = t.b_user;
   v_bad := coalesce(public.wh__gate(ra), public.wh__gate(rb));
+  -- a moderation hold (restricted_until in the future, both still trade_enabled) is TEMPORARY: like the caps it refuses without ending the trade
+  -- (D-T10), and with the generic 'unavailable' so the other party does not learn that a hold exists. Trading switched off stays terminal.
+  if v_bad = 'not_allowed' and ra.trade_enabled and rb.trade_enabled then v_bad := 'unavailable'; v_terminal := false; end if;
   if v_bad is null and public.wh__blocked(t.a_user, t.b_user) then v_bad := 'blocked'; end if;
   if v_bad is null and t.via = 'friend' and not public.wh__are_friends(t.a_user, t.b_user) then v_bad := 'not_friends'; end if;
   if v_bad is null then                                                          -- caps are ROLLING 24 h windows, counted under both account locks
@@ -919,12 +995,13 @@ end $$;
 -- ---------------------------------------------------------------- confirm: records the caller's consent for ONE terms version; the second consent executes in the same transaction
 create function public.wh_confirm_trade(p jsonb) returns jsonb language plpgsql security definer set search_path = public set lock_timeout = '3s' as $$
 declare
-  v_uid uuid := auth.uid(); v_idem text := p->>'idem'; v_digest text := md5(p::text); v_trade uuid; v_expect integer;
+  v_uid uuid := auth.uid(); v_idem text := p->>'idem'; v_digest text; v_trade uuid; v_expect integer;
   t public.wh_trades%rowtype; v_prev public.wh_ops%rowtype; v_side char(1); v_viewed integer; v_viewed_at timestamptz; v_cd integer := public.wh__cfg_int('trade_confirm_cooldown_s', 5);
   v_mine integer; v_theirs integer; v_ex jsonb; v_res jsonb;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
+  v_digest := md5(p::text);
   if v_idem is null or v_idem !~ '^[A-Za-z0-9_-]{16,64}$' then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;
   begin v_trade := (p->>'trade_id')::uuid; v_expect := (p->>'expect_version')::integer; exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end;
   select * into t from public.wh_trades where id = v_trade and (a_user = v_uid or b_user = v_uid) for update;          -- LOCK ORDER 1: the trade row
@@ -973,12 +1050,13 @@ end $$;
 -- ---------------------------------------------------------------- counter: either party replaces BOTH sets of terms; the counterer's consent is implied, the other side's is void
 create function public.wh_counter_trade(p jsonb) returns jsonb language plpgsql security definer set search_path = public set lock_timeout = '3s' as $$
 declare
-  v_uid uuid := auth.uid(); v_idem text := p->>'idem'; v_digest text := md5(p::text); v_trade uuid; v_expect integer; v_give uuid[]; v_get uuid[];
+  v_uid uuid := auth.uid(); v_idem text := p->>'idem'; v_digest text; v_trade uuid; v_expect integer; v_give uuid[]; v_get uuid[];
   t public.wh_trades%rowtype; v_prev public.wh_ops%rowtype; v_side char(1); v_other uuid; v_err text; v_res jsonb; v_ver integer;
-  v_ttl interval; v_me public.wh_accounts%rowtype;
+  v_ttl interval; v_me public.wh_accounts%rowtype; l public.wh_listings%rowtype; v_a uuid[]; v_b uuid[]; v_tier smallint;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
+  v_digest := md5(p::text);
   if v_idem is null or v_idem !~ '^[A-Za-z0-9_-]{16,64}$' then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;
   begin
     v_trade := (p->>'trade_id')::uuid; v_expect := (p->>'expect_version')::integer;
@@ -993,6 +1071,7 @@ begin
     if v_prev.op <> 'counter' or v_prev.args_digest <> v_digest then return jsonb_build_object('ok', false, 'error', 'idem_reuse'); end if;
     return v_prev.result || '{"replayed":true}'::jsonb;
   end if;
+  if not public.wh__take(v_uid, 'offer') then return jsonb_build_object('ok', false, 'error', 'slow_down'); end if;      -- 7.4
   if not public.wh__flag('trading_enabled') then return jsonb_build_object('ok', false, 'error', 'frozen'); end if;
   if t.status not in ('proposed','countered') or t.expires_at <= now() then return jsonb_build_object('ok', false, 'error', 'not_pending', 'status', t.status); end if;
   if v_expect is distinct from t.terms_version then return jsonb_build_object('ok', false, 'error', 'changed', 'terms_version', t.terms_version); end if;
@@ -1000,9 +1079,22 @@ begin
   v_side := case when t.a_user = v_uid then 'a' else 'b' end;  v_other := case v_side when 'a' then t.b_user else t.a_user end;
   select * into v_me from public.wh_accounts where user_id = v_uid;
   if public.wh__gate(v_me) is not null or public.wh__blocked(v_uid, v_other) then return jsonb_build_object('ok', false, 'error', 'unavailable'); end if;
+  -- D-T5 also binds counters: a board trade (a_user = the proposer, b_user = the lister) stays 1 for 1, the lister's item one of the listing's
+  -- offers and the proposer's item of a wanted species (2026-10-05 audit: strangers could counter their way to 3 for 3)
+  if t.via = 'board' then
+    if cardinality(v_give) <> 1 or cardinality(v_get) <> 1 then return jsonb_build_object('ok', false, 'error', 'bad_size'); end if;
+    v_a := case v_side when 'a' then v_give else v_get end;  v_b := case v_side when 'a' then v_get else v_give end;
+    select * into l from public.wh_listings where id = t.listing_id;
+    if not found or not (v_b <@ l.offer_items)
+       or not (l.want_open or exists (select 1 from public.wh_items g where g.id = v_a[1] and g.species_idx = any (l.want_species))) then
+      return jsonb_build_object('ok', false, 'error', 'listing_mismatch'); end if;
+  end if;
   perform 1 from public.wh_items where id in (select item_id from public.wh_trade_items where trade_id = t.id union select unnest(v_give || v_get)) order by id for update;
   v_err := public.wh__check_terms(t.id, v_uid, v_other, v_give, v_get, true);        -- items this trade already reserves count as free here
   if v_err is not null then return jsonb_build_object('ok', false, 'error', v_err); end if;
+  -- a counter keeps the trade's tier: tier_idx is what both review screens state ("Same tier: Rare"); another tier is refused, never switched
+  select tier_idx into v_tier from public.wh_items where id = v_give[1];
+  if v_tier is distinct from t.tier_idx then return jsonb_build_object('ok', false, 'error', 'tier_mismatch'); end if;
   perform public.wh__release(t.id);                                                -- the previous waiting party's reservation goes away
   v_ver := t.terms_version + 1;
   v_ttl := case t.mode when 'live' then make_interval(secs => public.wh__cfg_int('trade_ttl_live_s', 60)) else make_interval(hours => public.wh__cfg_int('trade_ttl_async_h', 24)) end;
@@ -1020,7 +1112,8 @@ end $$;
 
 -- ---------------------------------------------------------------- privileges: client RPCs for authenticated only; internals for nobody
 revoke all on function public.wh__commit_open_capsule(jsonb), public.wh__commit_merge(jsonb), public.wh__trade_execute(uuid), public.wh__check_terms(uuid,uuid,uuid,uuid[],uuid[],boolean),
-  public.wh__release(uuid), public.wh__ev(uuid,uuid,text,integer,jsonb), public.wh__gate(public.wh_accounts), public.wh__genome_ok(text,smallint,bigint) from public, anon, authenticated;
+  public.wh__release(uuid), public.wh__ev(uuid,uuid,text,integer,jsonb), public.wh__gate(public.wh_accounts), public.wh__genome_ok(text,smallint,bigint),
+  public.wh__take(uuid, text) from public, anon, authenticated;
 grant execute on function public.wh__commit_open_capsule(jsonb), public.wh__commit_merge(jsonb) to service_role;
 revoke all on function public.wh_propose_trade(jsonb), public.wh_trade_view(jsonb), public.wh_cancel_trade(jsonb), public.wh_confirm_trade(jsonb), public.wh_counter_trade(jsonb) from public, anon;
 grant execute on function public.wh_propose_trade(jsonb), public.wh_trade_view(jsonb), public.wh_cancel_trade(jsonb), public.wh_confirm_trade(jsonb), public.wh_counter_trade(jsonb) to authenticated;
@@ -1077,7 +1170,7 @@ declare
   v_uid uuid := auth.uid(); v_code text := upper(regexp_replace(coalesce(p->>'code', ''), '[\s-]', '', 'g')); a public.wh_accounts%rowtype; v_owner uuid; o public.wh_accounts%rowtype; v_rev uuid;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   select * into a from public.wh_accounts where user_id = v_uid for update;
   if not found then return jsonb_build_object('ok', false, 'error', 'no_account'); end if;
   if a.redeem_window_at is null or a.redeem_window_at < now() - interval '1 hour' then a.redeem_window_at := now(); a.redeem_attempts := 0; end if;
@@ -1086,21 +1179,25 @@ begin
   end if;
   update public.wh_accounts set redeem_window_at = a.redeem_window_at, redeem_attempts = a.redeem_attempts + 1 where user_id = v_uid;   -- every attempt counts; the function RETURNS (never raises) so this commits
   if public.wh__gate(a) is not null then return jsonb_build_object('ok', false, 'error', 'not_allowed'); end if;
+  -- the caller's OWN limits come BEFORE any code lookup, so their answers are the same for every code (2026-10-05 audit: checked after the lookup,
+  -- they told a caller with 10 parked requests which codes were valid, without ever creating a request the target could see). A player at these
+  -- limits can still accept an incoming request with wh_friend_respond.
+  if (select count(*) from public.wh_friends where v_uid in (user_lo, user_hi)) >= 30 then return jsonb_build_object('ok', false, 'error', 'friend_limit'); end if;
+  if (select count(*) from public.wh_friend_requests where from_user = v_uid and status = 'pending' and expires_at > now()) >= 10 then return jsonb_build_object('ok', false, 'error', 'too_many_requests'); end if;
   if v_code !~ '^[2-9A-HJKMNP-Z]{8}$' then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
   select user_id into v_owner from public.wh_friend_codes where code = v_code;
   if v_owner is null or v_owner = v_uid or public.wh__blocked(v_uid, v_owner) then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;   -- same answer for all of: wrong, own, blocked
   select * into o from public.wh_accounts where user_id = v_owner;
   if public.wh__gate(o) is not null then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
   if public.wh__are_friends(v_uid, v_owner) then return jsonb_build_object('ok', true, 'already_friends', true); end if;
-  if (select count(*) from public.wh_friends where v_uid in (user_lo, user_hi)) >= 30 or (select count(*) from public.wh_friends where v_owner in (user_lo, user_hi)) >= 30 then
-    return jsonb_build_object('ok', false, 'error', 'friend_limit'); end if;
+  -- the TARGET's limits answer like a wrong code
+  if (select count(*) from public.wh_friends where v_owner in (user_lo, user_hi)) >= 30 then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
   select id into v_rev from public.wh_friend_requests where from_user = v_owner and to_user = v_uid and status = 'pending' and expires_at > now() for update;
   if v_rev is not null then                                                     -- they already asked me: this is the acceptance
     insert into public.wh_friends (user_lo, user_hi) values (least(v_uid, v_owner), greatest(v_uid, v_owner)) on conflict do nothing;
     update public.wh_friend_requests set status = 'accepted', decided_at = now() where id = v_rev;
     return jsonb_build_object('ok', true, 'friends', true);
   end if;
-  if (select count(*) from public.wh_friend_requests where from_user = v_uid and status = 'pending' and expires_at > now()) >= 10 then return jsonb_build_object('ok', false, 'error', 'too_many_requests'); end if;
   if (select count(*) from public.wh_friend_requests where to_user = v_owner and status = 'pending' and expires_at > now()) >= 20 then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
   insert into public.wh_friend_requests (from_user, to_user) values (v_uid, v_owner) on conflict do nothing;
   return jsonb_build_object('ok', true, 'requested', true);
@@ -1110,12 +1207,15 @@ create function public.wh_friend_respond(p jsonb) returns jsonb language plpgsql
 declare v_uid uuid := auth.uid(); r public.wh_friend_requests%rowtype; v_accept boolean := coalesce((p->>'accept')::boolean, false);
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   begin select * into r from public.wh_friend_requests where id = (p->>'request_id')::uuid and to_user = v_uid for update;
   exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end;
   if not found or r.status <> 'pending' or r.expires_at <= now() then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
   if v_accept then
     if public.wh__blocked(r.from_user, r.to_user) then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
+    -- the age/consent seam (16.1): nobody gains a friend while either side fails the gate (trading off or a moderation hold); same generic answer
+    if exists (select 1 from public.wh_accounts x where x.user_id in (r.from_user, r.to_user) and public.wh__gate(x) is not null) then
+      return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
     if (select count(*) from public.wh_friends where r.from_user in (user_lo, user_hi)) >= 30 or (select count(*) from public.wh_friends where v_uid in (user_lo, user_hi)) >= 30 then
       return jsonb_build_object('ok', false, 'error', 'friend_limit'); end if;
     insert into public.wh_friends (user_lo, user_hi) values (least(r.from_user, r.to_user), greatest(r.from_user, r.to_user)) on conflict do nothing;
@@ -1129,7 +1229,7 @@ create function public.wh_shelf_set(p jsonb) returns jsonb language plpgsql secu
 declare v_uid uuid := auth.uid(); v_ids uuid[]; v_ok integer;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   begin
     if jsonb_typeof(p->'item_ids') <> 'array' or jsonb_array_length(p->'item_ids') > 12 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;
     v_ids := array(select distinct (jsonb_array_elements_text(p->'item_ids'))::uuid);
@@ -1147,7 +1247,7 @@ create function public.wh_listing_create(p jsonb) returns jsonb language plpgsql
 declare v_uid uuid := auth.uid(); a public.wh_accounts%rowtype; v_items uuid[]; v_want smallint[]; v_open boolean := coalesce((p->>'open')::boolean, false); v_tier smallint; v_id uuid;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   if not public.wh__flag('board_enabled') or not public.wh__flag('trading_enabled') then return jsonb_build_object('ok', false, 'error', 'frozen'); end if;
   begin
     if jsonb_typeof(p->'items') <> 'array' or jsonb_array_length(p->'items') not between 1 and 3 or jsonb_array_length(coalesce(p->'wants', '[]'::jsonb)) > 3 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;
@@ -1172,10 +1272,11 @@ create function public.wh_board_search(p jsonb) returns jsonb language plpgsql s
 declare v_uid uuid := auth.uid(); a public.wh_accounts%rowtype; v_tier smallint; v_species smallint;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   begin v_tier := nullif(p->>'tier', '')::smallint; v_species := nullif(p->>'species', '')::smallint; exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end;
   select * into a from public.wh_accounts where user_id = v_uid;
   if not found or public.wh__gate(a) is not null or not public.wh__flag('board_enabled') then return jsonb_build_object('ok', false, 'error', 'not_allowed'); end if;
+  if not public.wh__take(v_uid, 'search') then return jsonb_build_object('ok', false, 'error', 'slow_down'); end if;      -- 7.4: the board query is the heaviest read
   return jsonb_build_object('ok', true, 'listings', coalesce((select jsonb_agg(x) from (
     select l.id as listing_id, ac.public_id as lister, ac.handle_adj, ac.handle_noun, ac.handle_num, l.tier_idx, l.want_species, l.want_open,
       (select jsonb_agg(jsonb_build_object('item_id', i.id, 'species_idx', i.species_idx, 'genome_code', i.genome_code, 'is_new_to_you',
@@ -1195,7 +1296,7 @@ create function public.wh_block(p jsonb) returns jsonb language plpgsql security
 declare v_uid uuid := auth.uid(); v_other uuid; v_trades uuid[];
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   select user_id into v_other from public.wh_accounts where public_id = p->>'partner_ref';
   if v_other is null or v_other = v_uid then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
   select coalesce(array_agg(id order by id), '{}') into v_trades from public.wh_trades where status in ('proposed','countered') and ((a_user = v_uid and b_user = v_other) or (a_user = v_other and b_user = v_uid));
@@ -1211,22 +1312,40 @@ begin
 end $$;
 
 -- fixed reasons: 1 name bothers me, 2 too many offers or requests, 3 tried to trick me, 4 I think they are cheating, 5 made me uncomfortable, 6 something else
--- three DIFFERENT eligible reporters within 7 days put the reported account on a 24 h trade hold for human review (never a ban: a ring of fake reporters must not be able to silence someone for long)
-create function public.wh_report(p jsonb) returns jsonb language plpgsql security definer set search_path = public as $$
-declare v_uid uuid := auth.uid(); v_other uuid; v_reason smallint; me public.wh_accounts%rowtype; v_n integer;
+-- Automatic hold (section 13; revised 2026-10-05, NOT run): THREE DIFFERENT reporters within 7 days who pass the new-account gate AND had a real
+-- interaction with the reported account in those 7 days (a trade row between them either way, which includes a proposal on its listing, a friend
+-- request either way, or a friendship), counting only reports filed after the last automatic hold started, put the account on a 24 h hold for
+-- human review. At most ONE automatic hold until a person has reviewed it (hold_reviewed_at), then at most one per 7 days. Never a ban.
+-- (The old rule re-armed the hold on every repeat report by the same three accounts, which needed no relationship to the target.)
+create function public.wh_report(p jsonb) returns jsonb language plpgsql security definer set search_path = public set lock_timeout = '3s' as $$
+declare v_uid uuid := auth.uid(); v_other uuid; v_reason smallint; me public.wh_accounts%rowtype; o public.wh_accounts%rowtype; v_n integer;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   begin v_reason := (p->>'reason')::smallint; exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end;
   select user_id into v_other from public.wh_accounts where public_id = p->>'partner_ref';
   if v_other is null or v_other = v_uid or v_reason not between 1 and 6 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;
-  select * into me from public.wh_accounts where user_id = v_uid for update;
+  perform 1 from public.wh_accounts where user_id in (v_uid, v_other) order by user_id for update;     -- both accounts, ascending (8.2): the hold updates the other one
+  select * into me from public.wh_accounts where user_id = v_uid;
+  if not found then return jsonb_build_object('ok', false, 'error', 'no_account'); end if;
+  select * into o from public.wh_accounts where user_id = v_other;
   if (select count(*) from public.wh_reports where reporter = v_uid and at > now() - interval '24 hours') >= 5 then return jsonb_build_object('ok', false, 'error', 'slow_down'); end if;
   insert into public.wh_reports (reporter, reported, reason) values (v_uid, v_other, v_reason);
-  if public.wh__gate(me) is null then                                              -- only reporters that pass the new-account gate count toward the hold
-    select count(distinct r.reporter) into v_n from public.wh_reports r join public.wh_accounts ra on ra.user_id = r.reporter
-      where r.reported = v_other and r.at > now() - interval '7 days' and public.wh__gate(ra) is null;
-    if v_n >= 3 then update public.wh_accounts set restricted_until = greatest(coalesce(restricted_until, now()), now() + interval '24 hours') where user_id = v_other; end if;
+  if public.wh__gate(me) is null
+     and (o.auto_hold_at is null or (o.hold_reviewed_at > o.auto_hold_at and o.auto_hold_at < now() - interval '7 days')) then
+    select count(distinct r.reporter) into v_n
+      from public.wh_reports r join public.wh_accounts ra on ra.user_id = r.reporter
+     where r.reported = v_other and r.at > now() - interval '7 days' and r.at > coalesce(o.auto_hold_at, '-infinity')
+       and public.wh__gate(ra) is null
+       and (exists (select 1 from public.wh_trades t where t.created_at > now() - interval '7 days'
+                     and ((t.a_user = r.reporter and t.b_user = v_other) or (t.a_user = v_other and t.b_user = r.reporter)))
+         or exists (select 1 from public.wh_friend_requests q where q.created_at > now() - interval '7 days'
+                     and ((q.from_user = r.reporter and q.to_user = v_other) or (q.from_user = v_other and q.to_user = r.reporter)))
+         or public.wh__are_friends(r.reporter, v_other));
+    if v_n >= 3 then
+      update public.wh_accounts set restricted_until = greatest(coalesce(restricted_until, now()), now() + interval '24 hours'), auto_hold_at = now()
+       where user_id = v_other;
+    end if;
   end if;
   return jsonb_build_object('ok', true);
 end $$;
@@ -1235,7 +1354,7 @@ create function public.wh_unblock(p jsonb) returns jsonb language plpgsql securi
 declare v_uid uuid := auth.uid();
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   delete from public.wh_blocks where blocker = v_uid and blocked = (select user_id from public.wh_accounts where public_id = p->>'partner_ref');
   return jsonb_build_object('ok', true);                                            -- friendship is NOT restored: they have to be invited again
 end $$;
@@ -1244,7 +1363,7 @@ create function public.wh_block_list(p jsonb default '{}'::jsonb) returns jsonb 
 declare v_uid uuid := auth.uid();
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   return jsonb_build_object('ok', true, 'blocked', coalesce((select jsonb_agg(jsonb_build_object('ref', o.public_id, 'adj', o.handle_adj, 'noun', o.handle_noun, 'num', o.handle_num) order by b.at)
     from public.wh_blocks b join public.wh_accounts o on o.user_id = b.blocked where b.blocker = v_uid), '[]'::jsonb));
 end $$;
@@ -1253,7 +1372,7 @@ create function public.wh_listing_cancel(p jsonb) returns jsonb language plpgsql
 declare v_uid uuid := auth.uid();
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   begin update public.wh_listings set active = false where id = (p->>'listing_id')::uuid and user_id = v_uid;
   exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end;
   return jsonb_build_object('ok', true);
@@ -1272,6 +1391,29 @@ begin
 end $$;
 create trigger wh_on_user_delete before delete on auth.users for each row execute function public.wh__on_user_delete();
 
+-- The age/consent seam (16.1; added 2026-10-05, NOT run): when trading is switched OFF for an account (the owner, or a future age or consent flow),
+-- every social surface closes at once. Pending friend requests both ways are cancelled, live trades are cancelled and their items released,
+-- listings close and the offer shelf is emptied. Existing friendships are SUSPENDED: kept, but every function hides them while the account fails
+-- the gate (owner decision NEXT_STEPS D-17 may turn this into a delete). This runs INSIDE the update of the account row, so it must never WAIT for a
+-- trade row (that would invert the lock order of 8.2): trade rows are taken with NOWAIT, and if one is being confirmed at that instant the update
+-- fails with lock_not_available and the owner runs it again.
+create function public.wh__on_trade_disabled() returns trigger language plpgsql security definer set search_path = public set lock_timeout = '3s' as $$
+declare v_trades uuid[];
+begin
+  select coalesce(array_agg(id order by id), '{}') into v_trades from public.wh_trades
+   where status in ('proposed', 'countered') and (a_user = new.user_id or b_user = new.user_id);
+  perform 1 from public.wh_trades where id = any(v_trades) order by id for update nowait;
+  perform 1 from public.wh_items where reserved_trade_id = any(v_trades) order by id for update;
+  update public.wh_items set reserved_trade_id = null where reserved_trade_id = any(v_trades);
+  update public.wh_trades set status = 'cancelled', ended_reason = 'trading_off', updated_at = now() where id = any(v_trades) and status in ('proposed', 'countered');
+  update public.wh_friend_requests set status = 'cancelled', decided_at = now() where status = 'pending' and (from_user = new.user_id or to_user = new.user_id);
+  update public.wh_listings set active = false where user_id = new.user_id and active;
+  update public.wh_items set offered_at = null where owner_id = new.user_id and offered_at is not null;
+  return null;
+end $$;
+create trigger wh_on_trade_disabled after update of trade_enabled on public.wh_accounts
+  for each row when (old.trade_enabled and not new.trade_enabled) execute function public.wh__on_trade_disabled();
+
 -- ops: conservation + anomaly views (service_role / SQL editor only)
 create view public.wh_v_conservation as
   select 'live_item_without_exactly_one_mint'::text as problem, i.id::text as ref from public.wh_items i
@@ -1286,7 +1428,7 @@ create view public.wh_v_conservation as
     (select count(*) from public.wh_ledger where kind = 'mint') - (select count(*) from public.wh_ledger where kind in ('consume','burn')) <> (select count(*) from public.wh_items where consumed_at is null);
 
 revoke all on public.wh_v_conservation from anon, authenticated;
-revoke all on function public.wh__new_code(), public.wh__on_user_delete() from public, anon, authenticated;
+revoke all on function public.wh__new_code(), public.wh__on_user_delete(), public.wh__on_trade_disabled() from public, anon, authenticated;
 revoke all on function public.wh_friend_code_get(), public.wh_friend_code_rotate(), public.wh_friend_redeem(jsonb), public.wh_friend_respond(jsonb), public.wh_shelf_set(jsonb), public.wh_listing_create(jsonb),
   public.wh_board_search(jsonb), public.wh_block(jsonb), public.wh_report(jsonb), public.wh_unblock(jsonb), public.wh_block_list(jsonb), public.wh_listing_cancel(jsonb) from public, anon;
 grant execute on function public.wh_friend_code_get(), public.wh_friend_code_rotate(), public.wh_friend_redeem(jsonb), public.wh_friend_respond(jsonb), public.wh_shelf_set(jsonb), public.wh_listing_create(jsonb),
@@ -1303,7 +1445,7 @@ create function public.wh_handle_set(p jsonb) returns jsonb language plpgsql sec
 declare v_uid uuid := auth.uid(); a public.wh_accounts%rowtype; v_adj smallint; v_noun smallint; v_num smallint; v_try integer := 0;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   begin v_adj := (p->>'adj')::smallint; v_noun := (p->>'noun')::smallint; exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end;
   if v_adj not between 0 and 63 or v_noun not between 0 and 63 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;
   select * into a from public.wh_accounts where user_id = v_uid for update;
@@ -1321,25 +1463,35 @@ begin
 end $$;
 
 create function public.wh_friend_list(p jsonb default '{}'::jsonb) returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare v_uid uuid := auth.uid();
+declare v_uid uuid := auth.uid(); me public.wh_accounts%rowtype;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
+  -- the age/consent seam (16.1): a gated account sees no friends and no requests, and gated accounts are left out of everyone's list
+  select * into me from public.wh_accounts where user_id = v_uid;
+  if not found or public.wh__gate(me) is not null then
+    return jsonb_build_object('ok', true, 'paused', true, 'friends', '[]'::jsonb, 'requests_in', '[]'::jsonb, 'requests_out', 0); end if;
   return jsonb_build_object('ok', true,
     'friends', coalesce((select jsonb_agg(jsonb_build_object('ref', o.public_id, 'adj', o.handle_adj, 'noun', o.handle_noun, 'num', o.handle_num, 'since', f.since) order by f.since)
-       from public.wh_friends f join public.wh_accounts o on o.user_id = case when f.user_lo = v_uid then f.user_hi else f.user_lo end where v_uid in (f.user_lo, f.user_hi)), '[]'::jsonb),
+       from public.wh_friends f join public.wh_accounts o on o.user_id = case when f.user_lo = v_uid then f.user_hi else f.user_lo end
+       where v_uid in (f.user_lo, f.user_hi) and public.wh__gate(o) is null), '[]'::jsonb),
     'requests_in', coalesce((select jsonb_agg(jsonb_build_object('request_id', r.id, 'ref', o.public_id, 'adj', o.handle_adj, 'noun', o.handle_noun, 'num', o.handle_num, 'at', r.created_at) order by r.created_at)
-       from public.wh_friend_requests r join public.wh_accounts o on o.user_id = r.from_user where r.to_user = v_uid and r.status = 'pending' and r.expires_at > now()), '[]'::jsonb),
+       from public.wh_friend_requests r join public.wh_accounts o on o.user_id = r.from_user
+       where r.to_user = v_uid and r.status = 'pending' and r.expires_at > now() and public.wh__gate(o) is null), '[]'::jsonb),
     'requests_out', (select count(*) from public.wh_friend_requests r where r.from_user = v_uid and r.status = 'pending' and r.expires_at > now()));
 end $$;
 
 create function public.wh_friend_shelf(p jsonb) returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare v_uid uuid := auth.uid(); v_other uuid;
+declare v_uid uuid := auth.uid(); v_other uuid; me public.wh_accounts%rowtype; o public.wh_accounts%rowtype;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
-  select user_id into v_other from public.wh_accounts where public_id = p->>'friend_ref';
-  if v_other is null or not public.wh__are_friends(v_uid, v_other) or public.wh__blocked(v_uid, v_other) then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
+  select * into o from public.wh_accounts where public_id = p->>'friend_ref';
+  select * into me from public.wh_accounts where user_id = v_uid;
+  v_other := o.user_id;
+  -- friends only, and both past the gate (16.1): a gated account neither shows its shelf nor looks at anyone's
+  if v_other is null or me.user_id is null or not public.wh__are_friends(v_uid, v_other) or public.wh__blocked(v_uid, v_other)
+     or public.wh__gate(me) is not null or public.wh__gate(o) is not null then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
   return jsonb_build_object('ok', true, 'items', coalesce((select jsonb_agg(jsonb_build_object('item_id', i.id, 'species_idx', i.species_idx, 'tier_idx', i.tier_idx, 'genome_code', i.genome_code,
       'is_new_to_you', not exists (select 1 from public.wh_items m where m.owner_id = v_uid and m.species_idx = i.species_idx and m.consumed_at is null)) order by i.id)
     from public.wh_items i where i.owner_id = v_other and i.consumed_at is null and i.offered_at is not null and not i.fav and (i.locked_until is null or i.locked_until <= now()) and public.wh__res_free(i.reserved_trade_id, null)), '[]'::jsonb));
@@ -1349,7 +1501,7 @@ create function public.wh_friend_remove(p jsonb) returns jsonb language plpgsql 
 declare v_uid uuid := auth.uid(); v_other uuid; v_trades uuid[];
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   select user_id into v_other from public.wh_accounts where public_id = p->>'friend_ref';
   if v_other is null then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
   select coalesce(array_agg(id order by id), '{}') into v_trades from public.wh_trades where status in ('proposed','countered') and via = 'friend' and ((a_user = v_uid and b_user = v_other) or (a_user = v_other and b_user = v_uid));
@@ -1366,7 +1518,7 @@ create function public.wh_trade_inbox(p jsonb default '{}'::jsonb) returns jsonb
 declare v_uid uuid := auth.uid();
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   return jsonb_build_object('ok', true, 'trades', coalesce((select jsonb_agg(x order by x.updated_at desc) from (
     select t.id as trade_id, case when t.a_user = v_uid then 'a' else 'b' end as you_are, case when t.status in ('proposed','countered') and t.expires_at <= now() then 'expired' else t.status end as status,
            t.terms_version, t.tier_idx, t.mode, t.via, t.expires_at, t.updated_at,
@@ -1383,11 +1535,13 @@ create function public.wh_trade_emote(p jsonb) returns jsonb language plpgsql se
 declare v_uid uuid := auth.uid(); v_trade uuid; v_emote smallint; t public.wh_trades%rowtype;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (7.4)
   begin v_trade := (p->>'trade_id')::uuid; v_emote := (p->>'emote')::smallint; exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end;
   if v_emote not between 1 and 6 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;
   select * into t from public.wh_trades where id = v_trade and (a_user = v_uid or b_user = v_uid) for update;
   if not found or t.status not in ('proposed','countered') then return jsonb_build_object('ok', false, 'error', 'not_found'); end if;
+  if exists (select 1 from public.wh_accounts x where x.user_id in (t.a_user, t.b_user) and public.wh__gate(x) is not null) then
+    return jsonb_build_object('ok', false, 'error', 'not_found'); end if;                                                 -- 16.1: no contact while either side is gated
   if exists (select 1 from public.wh_trade_events e where e.trade_id = v_trade and e.actor = v_uid and e.kind = 'emote' and e.at > now() - interval '5 seconds') then return jsonb_build_object('ok', false, 'error', 'slow_down'); end if;
   perform public.wh__ev(v_trade, v_uid, 'emote', t.terms_version, jsonb_build_object('emote', v_emote));
   return jsonb_build_object('ok', true);
@@ -1437,7 +1591,7 @@ from public.wh_trades where status = 'executed' and executed_at > now() - interv
 select date_trunc('hour', created_at) as hour, count(*) as new_accounts, count(*) filter (where capsules_opened >= 10) as past_gate from public.wh_accounts group by 1 having count(*) >= 5 order by 1 desc;
 
 -- O9  Abuse signals (7 days): reports against an account from distinct reporters, blocks received, proposals that die unanswered
-select a.public_id,
+select a.public_id, a.restricted_until, a.auto_hold_at, a.hold_reviewed_at,
   (select count(distinct r.reporter) from public.wh_reports r where r.reported = a.user_id and r.at > now() - interval '7 days') as reporters_7d,
   (select count(*) from public.wh_blocks b where b.blocked = a.user_id) as blocked_by,
   (select count(*) from public.wh_trades t where t.a_user = a.user_id and t.created_at > now() - interval '7 days' and t.status in ('cancelled', 'expired')) as dead_proposals_7d
@@ -1462,7 +1616,8 @@ from public.wh_ledger l left join public.wh_items i on i.id = l.item_id where l.
 -- O13 Stale reservations (an item reserved by a trade that is no longer live; harmless, the lock is lazy, but a long list means a bug)
 select i.id, i.reserved_trade_id, t.status from public.wh_items i join public.wh_trades t on t.id = i.reserved_trade_id where t.status not in ('proposed', 'countered') or t.expires_at <= now();
 
--- O14 Privilege audit (functions): every wh_ function that a player can call. Must be EXACTLY the client RPCs of TRADE.md section 7.2; `anon` must have none.
+-- O14 Privilege audit (functions): every wh_ function that a player can call. Must be EXACTLY the 28 client RPCs of TRADE.md section 7.2; `anon` must have none.
+--     (The migration runs the same check, and a check that the portal's own grants are unchanged, as its last statement: COLLECTION A.7.)
 select p.proname, has_function_privilege('authenticated', p.oid, 'execute') as authenticated, has_function_privilege('anon', p.oid, 'execute') as anon
 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public' and p.proname like 'wh\_%' and (has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute')) order by 1;
@@ -1494,6 +1649,9 @@ create function auth.uid() returns uuid language sql stable as $$ select nullif(
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
 alter default privileges in schema public grant execute on functions to anon, authenticated, service_role, public;
+-- A sentinel for the portal's OWN objects (added 2026-10-05): created like Supabase creates any table (so it gets the default grants), it must keep
+-- them through the migration. The first draft's schema-wide revoke would have stripped them, and a stub with only wh_ tables could not show it.
+create table public.portal_sentinel (id bigserial primary key, note text);
 ```
 
 ```sql
@@ -1626,6 +1784,14 @@ check('the item is reserved by exactly that trade', sql(f"select reserved_trade_
 r = call(None, 'wh__commit_merge', {'uid': a, 'idem': idem(), 'args_digest': 'x', 'expect_version': int(sql(f"select version from public.wh_accounts where user_id='{a}'")), 'inputs': [a1, item(a, 5)], 'cost': 2, 'out_species_idx': 6, 'out_tier_idx': 2, 'tier_up': False, 'genome_seed': 1, 'genome_code': 'g1.' + 'A' * 35, 'pity_after': [0]*6}, role='service_role')
 check('merge refuses an item reserved by a live trade', r.get('error') == 'reserved', r)
 
+print('== 3b. the incoming live-offer cap holds under concurrency (added 2026-10-05, not run) ==')
+hub = acct(); frs = [acct() for _ in range(20)]
+for f_ in frs: friends(hub, f_)
+hub_items = {f_: item(hub, 6) for f_ in frs}; their = {f_: item(f_, 5) for f_ in frs}
+with cf.ThreadPoolExecutor(20) as ex: res = list(ex.map(lambda f_: propose(f_, hub, [their[f_]], [hub_items[f_]]), frs))
+live = int(sql(f"select count(*) from public.wh_trades where b_user='{hub}' and status in ('proposed','countered') and expires_at > now()"))
+check('20 friends propose to one account at once: exactly 10 live incoming offers (both accounts are locked in ascending id)', live == 10 and sum(1 for x in res if x.get('ok')) == 10, (live, sorted(set((x.get('error') or 'ok') for x in res))))
+
 print('== 4. counter, versions, scam-by-switch ==')
 a, b, a1, b1 = pair_with_items(); b2 = item(b, 6); tid = propose(a, b, [a1], [b1])['trade_id']
 view(b, tid); settle()
@@ -1638,6 +1804,10 @@ va = view(a, tid); check('A sees the new exact items', va.get('terms_version') =
 settle(); c = confirm(a, tid, 2)
 check('A confirms v2 -> executes', c.get('ok') and c.get('status') == 'executed' and owner_of(b2) == a and owner_of(a1) == b, c)
 check('B untouched item b1 stayed with B', owner_of(b1) == b)
+a, b, a1, b1 = pair_with_items(); tid = propose(a, b, [a1], [b1])['trade_id']; b_unc, a_unc = item(b, 3), item(a, 4)
+r = call(b, 'wh_counter_trade', {'idem': idem(), 'trade_id': tid, 'expect_version': 1, 'give': [b_unc], 'get': [a_unc]})
+check('a counter cannot switch a Rare trade to Uncommon items (tier_mismatch; terms and tier unchanged) [added 2026-10-05, not run]', r.get('error') == 'tier_mismatch'
+      and sql(f"select terms_version || ':' || tier_idx from public.wh_trades where id='{tid}'") == '1:2', r)
 
 print('== 4b. scam-by-switch race: A counters while B confirms the old terms ==')
 swapped_bad = 0; ex_cnt = 0; ch_cnt = 0
@@ -1754,6 +1924,13 @@ old = call(u1, 'wh_friend_code_get')['code']; sql(f"update public.wh_friend_code
 check('rotation invalidates the old code', new != old and call(u3, 'wh_friend_redeem', {'code': old}).get('error') == 'not_found' and call(u3, 'wh_friend_redeem', {'code': new}).get('requested'))
 u4 = acct(); c4 = call(u4, 'wh_friend_code_get')['code']; call(u3, 'wh_friend_redeem', {'code': c4}); r = call(u4, 'wh_friend_redeem', {'code': call(u3, 'wh_friend_code_get')['code']})
 check('both sides asked each other: the second redeem completes the friendship', r.get('friends') is True)
+o_ = acct(); parked = [acct() for _ in range(10)]
+for t_ in parked: call(o_, 'wh_friend_redeem', {'code': call(t_, 'wh_friend_code_get')['code']})
+sql(f"update public.wh_accounts set redeem_attempts = 0 where user_id='{o_}'")             # test only: a fresh hour of attempts
+tgt = acct(); tcode = call(tgt, 'wh_friend_code_get')['code']
+rv, ri = call(o_, 'wh_friend_redeem', {'code': tcode}), call(o_, 'wh_friend_redeem', {'code': 'ZZZZZZZZ'})
+check('no oracle: with 10 requests parked, a valid and an invalid code get the same too_many_requests, and nothing reaches the target [added 2026-10-05, not run]',
+      rv.get('error') == 'too_many_requests' and ri.get('error') == 'too_many_requests' and sql(f"select count(*) from public.wh_friend_requests where to_user='{tgt}'") == '0', (rv, ri))
 
 print('== 10. block mid-trade, board ==')
 a, b, a1, b1 = pair_with_items(); tid = propose(a, b, [a1], [b1])['trade_id']
@@ -1768,8 +1945,14 @@ s = call(m, 'wh_board_search', {'tier': 2}); L = [x for x in s['listings'] if x[
 check('board search finds it, shows what I can give (my shelf item of a wanted species) and what is NEW to me', len(L) == 1 and L[0]['you_can_give'] == [m1] and len(L[0]['offers']) == 2 and 'user_id' not in json.dumps(s), s if not L else '')
 r = call(m, 'wh_propose_trade', {'idem': idem(), 'listing_id': lst['listing_id'], 'give': [m2], 'get': [l1]})
 check('listing mismatch: giving a species the lister did not ask for is refused', r.get('error') == 'listing_mismatch', r)
+r = call(m, 'wh_propose_trade', {'idem': idem(), 'listing_id': lst['listing_id'], 'give': [m1, item(m, 5)], 'get': [l1, l2]})
+check('a stranger cannot propose 2 for 2 through the board (D-T5) [added 2026-10-05, not run]', r.get('error') == 'bad_size', r)
 r = call(m, 'wh_propose_trade', {'idem': idem(), 'listing_id': lst['listing_id'], 'give': [m1], 'get': [l2]})
 check('board proposal between non-friends works through the listing', r.get('ok') is True, r)
+bt = r['trade_id']; view(l, bt)
+c2 = call(l, 'wh_counter_trade', {'idem': idem(), 'trade_id': bt, 'expect_version': 1, 'give': [l1, l2], 'get': [m1, m2]})
+c3 = call(l, 'wh_counter_trade', {'idem': idem(), 'trade_id': bt, 'expect_version': 1, 'give': [item(l, 6)], 'get': [m1]})
+check('a board trade cannot be countered into 2 for 2, nor to an item outside the listing [added 2026-10-05, not run]', c2.get('error') == 'bad_size' and c3.get('error') == 'listing_mismatch', (c2, c3))
 sql(f"insert into public.wh_blocks(blocker, blocked) values ('{l}','{m}')")
 check('a block hides listings both ways', all(x['listing_id'] != lst['listing_id'] for x in call(m, 'wh_board_search', {})['listings']))
 
@@ -1913,9 +2096,18 @@ check('inbox lists the live trade for the partner with handle only', r.get('ok')
 check('emote: fixed set only, rate limited', call(a, 'wh_trade_emote', {'trade_id': r['trade_id'], 'emote': 2}).get('ok') and call(a, 'wh_trade_emote', {'trade_id': r['trade_id'], 'emote': 2}).get('error') == 'slow_down' and call(a, 'wh_trade_emote', {'trade_id': r['trade_id'], 'emote': 9}).get('error') == 'bad_payload')
 fr = call(a, 'wh_friend_remove', {'friend_ref': pid(b)}); check('unfriending cancels the live trade and frees the items', fr.get('cancelled_trades') == 1 and sql(f"select status from public.wh_trades where id='{r['trade_id']}'") == 'cancelled' and propose(a, b, [a1], [b1]).get('error') == 'unavailable')
 check('mark_seen sets the flag', call(a, 'wh_mark_seen', {'item_ids': [a1]}).get('ok') and sql(f"select seen_at is not null from public.wh_items where id='{a1}'") == 't')
+ox, oy, oxi, oyi = pair_with_items(); ko = idem(); po = call(ox, 'wh_propose_trade', {'idem': ko, 'partner_ref': pid(oy), 'give': [oxi], 'get': [oyi]})
+so, sother = call(ox, 'wh_op_status', {'idems': [ko, idem()]}), call(oy, 'wh_op_status', {'idems': [ko]})
+check('wh_op_status returns the stored answer of an own key only (nothing for an unknown key or for another player), and refuses junk [added 2026-10-05]',
+      po.get('ok') and list(so['ops'].keys()) == [ko] and so['ops'][ko]['result']['trade_id'] == po['trade_id'] and sother['ops'] == {} and call(ox, 'wh_op_status', {'idems': 'x'}).get('error') == 'bad_payload', so)
 print('== 17b. payload guard, counter cap, ops cleanup on deletion ==')
 a, b, a1, b1 = pair_with_items(); huge = {'idem': idem(), 'partner_ref': pid(b), 'give': [a1], 'get': [b1], 'pad': 'x' * 9000}
-check('an oversized payload (9 KB) is refused before anything is parsed', call(a, 'wh_propose_trade', huge).get('error') == 'bad_payload' and call(a, 'wh_board_search', {'pad': 'x' * 9000}).get('error') == 'bad_payload' and call(a, 'wh_friend_redeem', {'code': 'x' * 9000}).get('error') == 'bad_payload')
+check('an oversized payload (9 KB) is refused as the first step (a sanity limit: PostgREST has already parsed it; 7.4)', call(a, 'wh_propose_trade', huge).get('error') == 'bad_payload' and call(a, 'wh_board_search', {'pad': 'x' * 9000}).get('error') == 'bad_payload' and call(a, 'wh_friend_redeem', {'code': 'x' * 9000}).get('error') == 'bad_payload')
+rb, rb2 = acct(), acct(); friends(rb, rb2); set_cfg('rate_offer', {'cap': 3, 'per_s': 0})
+outs = [call(rb, 'wh_propose_trade', {'idem': idem(), 'partner_ref': pid(rb2), 'give': [str(uuid.uuid4())], 'get': [str(uuid.uuid4())]}) for _ in range(4)]
+set_cfg('rate_offer', {'cap': 30, 'per_s': 0.1})
+check('rate bucket: with rate_offer at 3 tokens and no refill, the 4th proposal in a row answers slow_down and writes nothing [added 2026-10-05, not run]',
+      [o.get('error') for o in outs] == ['gone', 'gone', 'gone', 'slow_down'] and sql(f"select count(*) from public.wh_trades where a_user='{rb}'") == '0', [o.get('error') for o in outs])
 a, b = acct(), acct(); friends(a, b); ai = [item(a, 5) for _ in range(3)]; bi = [item(b, 6) for _ in range(3)]
 tid = propose(a, b, [ai[0]], [bi[0]])['trade_id']; ver = 1; last = None
 for k in range(21):
@@ -1929,10 +2121,12 @@ check('deleting an account also deletes its idempotency rows', sql(f"select coun
 
 print('== 17c. privilege audit (the queries O14 and O15 of the ops pack) ==')
 fn_ok = sql("select string_agg(p.proname, ',' order by p.proname) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like 'wh\\_%' and (has_function_privilege('authenticated', p.oid, 'execute') or has_function_privilege('anon', p.oid, 'execute'))")
-expected = sorted('wh_block wh_block_list wh_board_search wh_cancel_trade wh_confirm_trade wh_counter_trade wh_friend_code_get wh_friend_code_rotate wh_friend_list wh_friend_redeem wh_friend_remove wh_friend_respond wh_friend_shelf wh_handle_set wh_inventory wh_listing_cancel wh_listing_create wh_mark_seen wh_propose_trade wh_report wh_set_fav wh_shelf_set wh_state wh_trade_emote wh_trade_inbox wh_trade_view wh_unblock'.split())
-check('the ONLY wh_ functions a player can call are the 27 client RPCs (no helper, no commit function, no trigger function); anon can call none', fn_ok.split(',') == expected and sql("select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like 'wh\\_%' and has_function_privilege('anon', p.oid, 'execute')") == '0', fn_ok.split(',') if fn_ok.split(',') != expected else '')
+expected = sorted('wh_block wh_block_list wh_board_search wh_cancel_trade wh_confirm_trade wh_counter_trade wh_friend_code_get wh_friend_code_rotate wh_friend_list wh_friend_redeem wh_friend_remove wh_friend_respond wh_friend_shelf wh_handle_set wh_inventory wh_listing_cancel wh_listing_create wh_mark_seen wh_op_status wh_propose_trade wh_report wh_set_fav wh_shelf_set wh_state wh_trade_emote wh_trade_inbox wh_trade_view wh_unblock'.split())
+check('the ONLY wh_ functions a player can call are the 28 client RPCs (no helper, no commit function, no trigger function); anon can call none', fn_ok.split(',') == expected and sql("select count(*) from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname like 'wh\\_%' and has_function_privilege('anon', p.oid, 'execute')") == '0', fn_ok.split(',') if fn_ok.split(',') != expected else '')
 tg = sql("select string_agg(table_name || ':' || grantee || ':' || privs, ' ' order by table_name, grantee) from (select table_name, grantee, string_agg(privilege_type, ',' order by privilege_type) as privs from information_schema.role_table_grants where grantee in ('anon','authenticated') and table_name like 'wh\\_%' group by 1, 2) x")
 check('table privileges: players have SELECT on species, accounts, items, capsules and NOTHING else on any wh_ table', tg == 'wh_accounts:authenticated:SELECT wh_capsules:authenticated:SELECT wh_items:authenticated:SELECT wh_species:anon:SELECT wh_species:authenticated:SELECT', tg)
+check("the migration left the portal's own objects alone: the sentinel keeps anon SELECT, authenticated INSERT and sequence USAGE [added 2026-10-05, not run]",
+      sql("select has_table_privilege('anon', 'public.portal_sentinel', 'select') and has_table_privilege('authenticated', 'public.portal_sentinel', 'insert') and has_sequence_privilege('authenticated', 'public.portal_sentinel_id_seq', 'usage')") == 't')
 
 print('== 17d. retention ==')
 pu = acct()
@@ -1944,6 +2138,9 @@ check('players cannot call the purge', 'permission denied' in call(pu, 'wh__purg
 
 print('== 18. reports, unblock, listings ==')
 v = acct(); rs = [acct() for _ in range(3)]; young = acct(); sql(f"update public.wh_accounts set created_at = now() where user_id='{young}'")
+for s_ in [acct() for _ in range(3)]: call(s_, 'wh_report', {'partner_ref': pid(v), 'reason': 3})
+check('three eligible reporters with NO interaction with the account (no trade, request or friendship in 7 days) do not hold it [added 2026-10-05, not run]', sql(f"select restricted_until is null from public.wh_accounts where user_id='{v}'") == 't')
+for r_ in rs + [young]: friends(r_, v)                                    # an interaction: a friendship
 for r_ in rs[:2]: call(r_, 'wh_report', {'partner_ref': pid(v), 'reason': 3})
 call(young, 'wh_report', {'partner_ref': pid(v), 'reason': 3})
 check('reports from a NEW account (fails the gate) and only two eligible reporters do not trigger a hold', sql(f"select restricted_until is null from public.wh_accounts where user_id='{v}'") == 't')
@@ -1951,11 +2148,48 @@ call(rs[2], 'wh_report', {'partner_ref': pid(v), 'reason': 5})
 check('a third DISTINCT eligible reporter puts the account on a 24 h trade hold (not a ban)', sql(f"select restricted_until > now() + interval '23 hours' and restricted_until < now() + interval '25 hours' from public.wh_accounts where user_id='{v}'") == 't')
 w = acct(); friends(v, w); vi, wi = item(v, 5), item(w, 6)
 check('the held account cannot propose or be proposed to (generic unavailable)', propose(v, w, [vi], [wi]).get('error') == 'not_allowed' and propose(w, v, [wi], [vi]).get('error') == 'unavailable', (propose(v, w, [vi], [wi]).get('error'), propose(w, v, [wi], [vi]).get('error')))
+sql(f"update public.wh_accounts set restricted_until = now() - interval '1 minute' where user_id='{v}'"); sql(f"update public.wh_reports set at = at - interval '25 hours' where reported='{v}'")
+call(rs[0], 'wh_report', {'partner_ref': pid(v), 'reason': 3})
+check('a repeat report by one of the same reporters does NOT re-arm the hold [added 2026-10-05, not run]', sql(f"select restricted_until < now() from public.wh_accounts where user_id='{v}'") == 't')
+fresh = [acct() for _ in range(3)]
+for r_ in fresh: friends(r_, v); call(r_, 'wh_report', {'partner_ref': pid(v), 'reason': 2})
+check('three NEW eligible reporters cannot cause a second automatic hold before a person has reviewed the first [added 2026-10-05, not run]', sql(f"select restricted_until < now() from public.wh_accounts where user_id='{v}'") == 't')
+sql(f"update public.wh_accounts set hold_reviewed_at = now(), auto_hold_at = now() - interval '8 days' where user_id='{v}'")
+call(fresh[0], 'wh_report', {'partner_ref': pid(v), 'reason': 2})
+check('after a review, and 7 days after the last automatic hold, eligible reports can hold it again [added 2026-10-05, not run]', sql(f"select restricted_until > now() + interval '23 hours' from public.wh_accounts where user_id='{v}'") == 't')
 check('report abuse is limited to 5 a day; bad reasons refused', call(rs[0], 'wh_report', {'partner_ref': pid(w), 'reason': 9}).get('error') == 'bad_payload' and all(call(rs[0], 'wh_report', {'partner_ref': pid(w), 'reason': 2}).get('ok') for _ in range(4)) and call(rs[0], 'wh_report', {'partner_ref': pid(w), 'reason': 2}).get('error') == 'slow_down')
+ha, hb, ha1, hb1 = pair_with_items(); htid = propose(ha, hb, [ha1], [hb1])['trade_id']; view(hb, htid); settle()
+sql(f"update public.wh_accounts set restricted_until = now() + interval '1 hour' where user_id='{ha}'"); hc = confirm(hb, htid)
+check('a confirm while the other party is on a hold answers the generic unavailable and the trade stays alive (D-T10) [added 2026-10-05]',
+      hc.get('error') == 'unavailable' and hc.get('terminal') is False and sql(f"select status from public.wh_trades where id='{htid}'") == 'proposed', hc)
+sql(f"update public.wh_accounts set restricted_until = null where user_id='{ha}'"); hc = confirm(hb, htid)
+check('when the hold ends, the same standing confirm executes [added 2026-10-05]', hc.get('status') == 'executed', hc)
 x, y = acct(), acct(); friends(x, y); call(x, 'wh_block', {'partner_ref': pid(y)}); bl = call(x, 'wh_block_list')
 check('block list shows handles only; unblock removes the block but NOT the friendship', len(bl['blocked']) == 1 and 'user' not in json.dumps(bl) and call(x, 'wh_unblock', {'partner_ref': pid(y)}).get('ok') and sql(f"select count(*) from public.wh_blocks where blocker='{x}'") == '0' and sql(f"select count(*) from public.wh_friends where user_lo=least('{x}'::uuid,'{y}'::uuid) and user_hi=greatest('{x}'::uuid,'{y}'::uuid)") == '0')
 l = acct(); li = item(l, 5); lst = call(l, 'wh_listing_create', {'items': [li], 'wants': [5, 6]}); other = acct()
 check('a listing can be cancelled by its owner only and then disappears from the board', call(other, 'wh_listing_cancel', {'listing_id': lst['listing_id']}).get('ok') and any(z['listing_id'] == lst['listing_id'] for z in call(other, 'wh_board_search', {})['listings']) and call(l, 'wh_listing_cancel', {'listing_id': lst['listing_id']}).get('ok') and not any(z['listing_id'] == lst['listing_id'] for z in call(other, 'wh_board_search', {})['listings']))
+print('== 19. trading switched off (the age/consent seam) closes every social surface (added 2026-10-05, not run) ==')
+adult, child, pal = acct(), acct(), acct(); friends(child, pal)
+ccode = call(child, 'wh_friend_code_get')['code']; rq = call(adult, 'wh_friend_redeem', {'code': ccode})
+rid = sql(f"select id from public.wh_friend_requests where from_user='{adult}' and to_user='{child}' and status='pending'")
+sql(f"update public.wh_accounts set restricted_until = now() + interval '1 hour' where user_id='{child}'")
+check('an account on a hold cannot accept a pending friend request (generic not_found), and the request stays pending',
+      rq.get('requested') is True and call(child, 'wh_friend_respond', {'request_id': rid, 'accept': True}).get('error') == 'not_found' and sql(f"select status from public.wh_friend_requests where id='{rid}'") == 'pending')
+sql(f"update public.wh_accounts set restricted_until = null where user_id='{child}'")
+ci, pi_ = item(child, 5), item(pal, 6); tr = propose(pal, child, [pi_], [ci]); lc = call(child, 'wh_listing_create', {'items': [item(child, 5)], 'wants': [5]})
+sql(f"update public.wh_accounts set trade_enabled = false where user_id='{child}'")
+check('switching trading off cancels the pending request, the live trade (items released) and the listing, and empties the offer shelf',
+      tr.get('ok') and lc.get('ok') and sql(f"select status from public.wh_friend_requests where id='{rid}'") == 'cancelled' and sql(f"select status from public.wh_trades where id='{tr['trade_id']}'") == 'cancelled'
+      and sql(f"select coalesce(reserved_trade_id::text,'') from public.wh_items where id='{pi_}'") == '' and sql(f"select count(*) from public.wh_listings where user_id='{child}' and active") == '0'
+      and sql(f"select count(*) from public.wh_items where owner_id='{child}' and offered_at is not null") == '0', (tr, lc))
+cl = call(child, 'wh_friend_list')
+check('the gated account sees no friends and no requests', cl.get('paused') is True and cl['friends'] == [] and cl['requests_in'] == [], cl)
+check('its friends no longer see it or its shelf, and it cannot look at theirs', all(f['ref'] != pid(child) for f in call(pal, 'wh_friend_list')['friends'])
+      and call(pal, 'wh_friend_shelf', {'friend_ref': pid(child)}).get('error') == 'not_found' and call(child, 'wh_friend_shelf', {'friend_ref': pid(pal)}).get('error') == 'not_found')
+pair_sql = f"select count(*) from public.wh_friends where user_lo=least('{child}'::uuid,'{pal}'::uuid) and user_hi=greatest('{child}'::uuid,'{pal}'::uuid)"
+suspended = sql(pair_sql) == '1'
+sql(f"update public.wh_accounts set trade_enabled = true where user_id='{child}'")
+check('the friendship is suspended, not deleted (owner decision D-17), and is visible again once trading is back on', suspended and any(f['ref'] == pid(child) for f in call(pal, 'wh_friend_list')['friends']))
 print(f'\n{checks - fails}/{checks} checks passed in {time.time() - t0:.0f} s')
 sys.exit(1 if fails else 0)
 ```

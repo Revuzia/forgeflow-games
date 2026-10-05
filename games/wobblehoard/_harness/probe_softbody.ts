@@ -187,11 +187,13 @@ const FOLD_SPOTS: Array<[string, V3, V3]> = [
   ['peak flank y=.9', v3(3, 0.9, 0), v3(-1, 0, 0)], ['side y=.7', v3(3, 0.7, 0), v3(-1, 0, 0)], ['side y=.5', v3(3, 0.5, 0), v3(-1, 0, 0)],
   ['side y=.25', v3(3, 0.25, 0), v3(-1, 0, 0)], ['oblique', v3(3, 2.2, 0), v3(-0.8, -0.6, 0)],
 ];
-interface FoldSpec { label: string; genome: Genome; detail: number; spot: number; mode: 'tap' | 'hold' | 'shove'; ray?: [V3, V3] }
+interface FoldSpec { label: string; genome: Genome; detail: number; spot: number; mode: 'tap' | 'hold' | 'shove' | 'shell'; ray?: [V3, V3] }
 /** Pressure, lift time and length of a press of each mode (tap and hold as the fold matrix has always used them; shove: pressure 1 at once
- *  for 0.25 s, the hard side shove of the physview strip 'peak_shove'). */
+ *  for 0.25 s, the hard side shove of the physview strip 'peak_shove', which the shell never sends; shell: the shell's own profile,
+ *  src/input/gestures.ts: tapPressure 0.55 at contact, after tapMs 0.18 s a ramp to 1 over rampMs 0.9 s, lifted at 1.3 s). */
 const pressPlan = (mode: FoldSpec['mode']): { p: (t: number) => number; tUp: number; T: number } =>
-  mode === 'tap' ? { p: () => 0.6, tUp: 0.12, T: 3.5 } : mode === 'hold' ? { p: (t) => Math.min(1, t / 0.9), tUp: 1.1, T: 4.5 } : { p: () => 1, tUp: 0.25, T: 3.5 };
+  mode === 'tap' ? { p: () => 0.6, tUp: 0.12, T: 3.5 } : mode === 'hold' ? { p: (t) => Math.min(1, t / 0.9), tUp: 1.1, T: 4.5 }
+    : mode === 'shove' ? { p: () => 1, tUp: 0.25, T: 3.5 } : { p: (t) => (t < 0.18 ? 0.55 : Math.min(1, 0.55 + 0.45 * (t - 0.18) / 0.9)), tUp: 1.3, T: 3.5 };
 interface FoldResult {
   label: string; missed: boolean;
   worst: number; f90: number; f120: number;                  // worst dihedral during the press and after, frames over 90 / 120 degrees
@@ -516,17 +518,21 @@ function sweepSpecs(starter: Genome): FoldSpec[] {
   out.push({ label: 'sweep/starter/tap x=.1 z=.1', genome: starter, detail: 3, spot: -1, mode: 'tap', ray: [v3(0.1, 3, 0.1), down] });
   return out;
 }
-/** Hard side shoves at the swirl-peak (pressure 1 at once for 0.25 s, 6 cm under its tip, three directions; they folded 162-180 degrees
- *  at HEAD too) and the low side press at the table rim (y = 0.05, 132 degrees at HEAD). */
+/** Side presses at the swirl-peak, 6 and 12 cm under its tip, from 4 directions, on 5 genomes (the starter also at detail 4): with the
+ *  shell's own pressure profile (48 presses; 179 degrees / 100 frames over 120 without the contact fold limit), and as an instant
+ *  pressure-1 shove (a stress case the shell never sends; 162-180 degrees at HEAD). Plus the low side press at the table rim (y = 0.05,
+ *  132 degrees at HEAD). */
 function shoveSpecs(starter: Genome): FoldSpec[] {
   const out: FoldSpec[] = [];
-  const big = quantizeGenome({ ...starter, bounce: 1, size: 1 }), soft = quantizeGenome({ ...starter, firmness: 0 });
-  for (const [n, g] of [['starter', starter], ['bouncy-big', big], ['soft', soft]] as const) {
-    out.push({ label: `shove/${n}/from -x`, genome: g, detail: 3, spot: -1, mode: 'shove', ray: [v3(-3, 0.96, 0), v3(1, 0, 0)] });
-    out.push({ label: `shove/${n}/from +x`, genome: g, detail: 3, spot: -1, mode: 'shove', ray: [v3(3, 0.96, 0), v3(-1, 0, 0)] });
-    out.push({ label: `shove/${n}/from -z`, genome: g, detail: 3, spot: -1, mode: 'shove', ray: [v3(0, 0.96, -3), v3(0, 0, 1)] });
+  const G: Array<[string, Genome]> = [['starter', starter], ['bouncy-big', quantizeGenome({ ...starter, bounce: 1, size: 1 })], ['soft', quantizeGenome({ ...starter, firmness: 0 })],
+    ['firm', quantizeGenome({ ...starter, firmness: 1 })], ['small', quantizeGenome({ ...starter, size: 0 })]];
+  const dirs: Array<[string, V3, V3]> = [['-x', v3(-3, 0, 0), v3(1, 0, 0)], ['+x', v3(3, 0, 0), v3(-1, 0, 0)], ['-z', v3(0, 0, -3), v3(0, 0, 1)], ['+z', v3(0, 0, 3), v3(0, 0, -1)]];
+  for (const mode of ['shell', 'shove'] as const) {
+    for (const [n, g] of G) for (const detail of n === 'starter' ? [3, 4] : [3]) for (const y of [0.9, 0.96]) for (const [dn, o, d] of dirs) {
+      if (mode === 'shove' && (y !== 0.96 || (n !== 'starter' && n !== 'bouncy-big' && n !== 'soft'))) continue;   // the stress case: a subset
+      out.push({ label: `${mode}/${n}${detail === 4 ? '@d4' : ''}/y=${y} from ${dn}`, genome: g, detail, spot: -1, mode, ray: [v3(o.x, y, o.z), d] });
+    }
   }
-  out.push({ label: 'shove/starter@d4/from -x', genome: starter, detail: 4, spot: -1, mode: 'shove', ray: [v3(-3, 0.96, 0), v3(1, 0, 0)] });
   out.push({ label: 'rim/starter/hold y=.05', genome: starter, detail: 3, spot: -1, mode: 'hold', ray: [v3(3, 0.05, 0), v3(-1, 0, 0)] });
   out.push({ label: 'rim/large/hold y=.05', genome: quantizeGenome({ ...starter, size: 1 }), detail: 3, spot: -1, mode: 'hold', ray: [v3(3, 0.05, 0), v3(-1, 0, 0)] });
   return out;
@@ -753,6 +759,34 @@ function coldChild(warm: boolean): void {
   }
   const sorted = [...ts].sort((x, y) => x - y);
   process.stdout.write(JSON.stringify({ warmMs, same, worst: sorted[sorted.length - 1], p95: sorted[Math.floor(ts.length * 0.95)], over4: ts.filter((x) => x > 4).length, total: ts.reduce((x, y) => x + y, 0) }));
+}
+/** Late-press child (a fresh process, --late-press-child): warmUp(), 25 s at rest (long enough for V8 to compile the per-substep code
+ *  with whatever type feedback warmUp() left), then a lone finger 0 press, and after another 25 s a lone finger 1 press. Exact new-space
+ *  growth per frame over the first 3 s of each press (smallest of 3 windows of 60 frames that saw no scavenge): if warmUp() missed a
+ *  path, the first real press deoptimises the compiled code and the step runs boxed for seconds (was 9 KB per frame for ~3 s). */
+function latePressChild(): void {
+  const newUsed = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
+  const empty: number[] = [];
+  for (let k = 0; k < 6; k++) { const u0 = newUsed(); empty.push(newUsed() - u0); }
+  const base = empty[empty.length - 1];
+  const b = new SoftBody(makeStarterGenome());
+  b.warmUp();
+  // information: the garbage per frame right after warmUp(), while V8 still runs the once-per-frame step() / finalize() in a lower tier
+  const early: number[] = [];
+  for (let w = 0; w < 2; w++) { const u0 = newUsed(); for (let i = 0; i < 60; i++) b.step(DT); const d = newUsed() - u0 - base; early.push(d >= 0 ? d / 60 : NaN); }
+  const perFrame = (): number => {
+    let best = Infinity;
+    for (let w = 0; w < 3; w++) { const u0 = newUsed(); for (let i = 0; i < 60; i++) b.step(DT); const d = newUsed() - u0 - base; if (d >= 0 && d < best) best = d; }
+    return best / 60;
+  };
+  const out: number[] = [];
+  for (const id of [0, 1] as const) {
+    for (let i = 0; i < 1500; i++) b.step(DT);
+    touch(b, id, v3(0.1, 3, 0), v3(0, -1, 0)); b.fingerPressure(id, 0.8);
+    out.push(perFrame());
+    b.fingerUp(id);
+  }
+  process.stdout.write(JSON.stringify({ late: out, early }));
 }
 interface ColdRun { warmMs: number; same: boolean; worst: number; p95: number; over4: number; total: number }
 function coldRuns(warm: boolean, n: number): ColdRun[] {
@@ -981,9 +1015,9 @@ function flippedVsRest(b: SoftBody): number {
  * functions step() and finalize() last; the states with an input call every frame get 3000, the calls V8 needs before it compiles
  * fingerMove / grabMove), then the smallest of 3 windows of 120 frames counts. The per-frame inputs are generated BEFORE
  * the window, so the window's own loop allocates nothing. (A sampling heap profiler cannot prove zero: it charges its own bookkeeping to
- * whatever function is running.) Also reported: the garbage per frame in the first 120 frames after warmUp(), before that compilation.
+ * whatever function is running.)
  */
-function allocCheck(starter: Genome): { states: Array<{ name: string; bytes: number }>; early: number } {
+function allocCheck(starter: Genome): { states: Array<{ name: string; bytes: number }> } {
   const newUsed = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
   const empty: number[] = [];
   for (let k = 0; k < 6; k++) { const u0 = newUsed(); empty.push(newUsed() - u0); }
@@ -1003,8 +1037,6 @@ function allocCheck(starter: Genome): { states: Array<{ name: string; bytes: num
     b.step(DT);
   };
   const quiet = (n: number): void => { for (let k = 0; k < n; k++) { frame(); ev.length = 0; b.drainEvents(ev); } };
-  let early = NaN;
-  { const u0 = newUsed(); for (let k = 0; k < 120; k++) frame(); const d = newUsed() - u0 - base; early = d >= 0 ? d / 120 : NaN; ev.length = 0; b.drainEvents(ev); }
   const states: Array<{ name: string; warm: number; enter: () => void; leave: () => void; input: number }> = [
     { name: 'rest', warm: 2400, enter: () => {}, leave: () => {}, input: 0 },
     { name: 'press + rub (fingerMove + fingerPressure every frame)', warm: 3000, input: 1, enter: () => { touch(b, 0, v3(0.15, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 1); }, leave: () => b.fingerUp(0) },
@@ -1032,7 +1064,7 @@ function allocCheck(starter: Genome): { states: Array<{ name: string; bytes: num
     out.push({ name: st.name, bytes: best - base });
     st.leave(); input = 0; quiet(90);
   }
-  return { states: out, early };
+  return { states: out };
 }
 
 
@@ -1140,6 +1172,27 @@ function rubChecks(starter: Genome): { drift: number; lift: number; worst: strin
   return { drift, lift, worst };
 }
 
+
+/** metrics.press / metrics.reaction (contracts.ts round 2, PHYS fills them in; they were never set before round 3). */
+function pressReaction(starter: Genome): { restPress: number; restReact: number; dentPress: number; dentComp: number; afterLift: number; firm: number; soft: number; inRange: boolean } {
+  let inRange = true;
+  const watch = (b: SoftBody): void => { const p = b.metrics.press ?? -1, r = b.metrics.reaction ?? -1; if (!(p >= 0 && p <= 1 && r >= 0 && r <= 1)) inRange = false; };
+  const b = new SoftBody(starter);
+  settle(b, 0.5);
+  const restPress = b.metrics.press ?? -1, restReact = b.metrics.reaction ?? -1;
+  // a side press on the swirl-peak: a single-finger dent that the global compression barely sees
+  touch(b, 0, v3(-4, 0.9, 0), v3(1, 0, 0)); b.fingerPressure(0, 1);
+  let dentPress = 0, dentComp = 0;
+  run(b, 0.8, () => { watch(b); dentPress = Math.max(dentPress, b.metrics.press ?? 0); dentComp = Math.max(dentComp, b.metrics.compression); });
+  b.fingerUp(0);
+  run(b, 0.1, () => watch(b));
+  const afterLift = b.metrics.press ?? -1;
+  // the same held side press on a firm and a soft body: the push-back
+  const held = (g: Genome): number => { const c = new SoftBody(g); settle(c, 0.5); touch(c, 0, v3(4, 0.4, 0), v3(-1, 0, 0)); c.fingerPressure(0, 1); run(c, 1, () => watch(c)); return c.metrics.reaction ?? 0; };
+  const firm = held(quantizeGenome({ ...starter, firmness: 1 })), soft = held(quantizeGenome({ ...starter, firmness: 0 }));
+  return { restPress, restReact, dentPress, dentComp, afterLift, firm, soft, inRange };
+}
+
 // ------------------------------------------------------------------------------------------------ worker pool
 
 type Job = { type: 'squeeze'; spec: SqueezeSpec } | { type: 'fuzz'; index: number; nEvents: number } | { type: 'fold'; spec: FoldSpec }
@@ -1164,13 +1217,15 @@ if (!isMainThread) {
   parentPort!.postMessage(out);
 } else if (process.argv.includes('--cold-child')) {
   coldChild(process.argv.includes('warm'));   // a fresh process for the cold-JIT measurement (see coldRuns)
+} else if (process.argv.includes('--late-press-child')) {
+  latePressChild();
 } else {
   await main();
 }
 
 function runPool(jobs: Job[], nWorkers: number): Promise<JobResult[]> {
   // heaviest first, round robin, so the workers finish together
-  const weight = (j: Job): number => (j.type === 'hostile' ? (j.replay ? 24 : 12) : j.type === 'fuzz' ? 3 : j.type === 'fold' ? (j.spec.detail >= 4 ? 4 : 1.5) : j.type === 'fold2' || j.type === 'foldsub' ? 1.5 : 1);
+  const weight = (j: Job): number => (j.type === 'hostile' ? (j.replay ? 24 : 12) : j.type === 'fuzz' ? 3 : j.type === 'fold' ? (j.spec.detail >= 4 ? 4 : 1.5) : j.type === 'fold2' || j.type === 'foldsub' ? (j.spec.detail >= 4 ? 4 : 1.5) : 1);
   const order = jobs.map((j, i) => ({ j, i })).sort((a, b) => weight(b.j) - weight(a.j));
   const buckets: Array<Array<{ j: Job; i: number }>> = Array.from({ length: nWorkers }, () => []);
   order.forEach((o, k) => buckets[k % nWorkers].push(o));
@@ -1437,8 +1492,11 @@ async function main(): Promise<void> {
     add('G1', `API edge cases (was verify_phys_cr_edge.ts, ${ap.tried} cases): step(+-Infinity / 1e9 / 1e-9), positions identity, raycast(null / NaN / Infinity), bad finger / grab ids and vertices, double fingerDown, reset() mid-press / mid-grab, input after reset, gravity switch keeps the hash, drainEvents appends and clears, 40 quick taps without event spam`, ap.bad.length ? `fails: ${ap.bad.join('; ')}` : `all ${ap.tried} hold`, 'all', ap.bad.length === 0);
     const rb = rubChecks(starter);
     add('G1', `rubbing (was verify_phys_rub.ts): 24 rubs across the top (pressure 0.2..0.8, 0.25..2 m/s): how far the body ends up dragged (${rb.worst}), highest the foot ever lifts`, `${f2(rb.drift * 1000, 1)} mm, ${f2(rb.lift * 1000, 2)} mm`, '<= 50 mm, <= 1 mm', rb.drift <= 0.05 && rb.lift <= 0.001);
+    const pr = pressReaction(starter);
+    add('G1', "metrics.press (round 2, now filled in): 0 at rest, ~1 for a full single-finger dent the global compression barely sees (side press on the swirl-peak), back to 0 within 0.1 s of the lift; always 0..1", `rest ${f2(pr.restPress, 2)}, dent ${f2(pr.dentPress, 2)} (compression ${f2(pr.dentComp, 2)}), 0.1 s after lift ${f2(pr.afterLift, 2)}, in range ${pr.inRange}`, '0, >= 0.9 (comp < 0.1), 0, true', pr.restPress === 0 && pr.dentPress >= 0.9 && pr.dentComp < 0.1 && pr.afterLift === 0 && pr.inRange);
+    add('G1', 'metrics.reaction (round 2, now filled in): 0 at rest; a held full side press meets more push-back from a firm body than from a soft one', `rest ${f2(pr.restReact, 2)}, firm ${f2(pr.firm, 2)} vs soft ${f2(pr.soft, 2)}`, '0, firm > soft', pr.restReact === 0 && pr.firm > pr.soft && pr.inRange);
     const tp = tipPenetration(starter);
-    add('G1', 'contact fold limit side effect: deepest skin inside a fingertip at the end of a frame, hard peak shoves and a top press (the next substep takes it out)', `${f2(tp * 100, 2)} % R`, '<= 2 % R', tp <= 0.02);
+    add('G1', 'contact fold limit: the skin never ends a frame inside a fingertip (deepest at a frame end over instant peak shoves and a top press; the fold limit re-seats what it moves)', `${f2(tp * 100, 2)} % R`, '<= 0.5 % R', tp <= 0.005);
     const cl = corralLocalChecks(starter);
     add('G1', 'mat corral is invisible near the centre: press, pinch, pull and a small nudge give identical hashes with the corral on and off (rest pose and interaction untouched)', `${cl.deadZone}`, 'true', cl.deadZone);
     add('G1', `mat corral never fights a finger or a grab, and float mode is unchanged: identical hashes on / off while a finger holds a body nudged ${cl.outAtLift.toFixed(2)} m out, while a grab holds it ${cl.grabOut.toFixed(2)} m out, and for a floating shove`, `finger ${cl.finger}, grab ${cl.grab}, float ${cl.float}`, 'true, true, true', cl.finger && cl.grab && cl.float);
@@ -1474,7 +1532,6 @@ async function main(): Promise<void> {
   {
     const al = allocCheck(starter);
     add('G1p', `step() + the per-frame input calls allocate nothing once compiled (CONTRACT section 3), exact new-space growth per 120 frames: ${al.states.map((x) => x.name).join(' / ')} (was: 16 B every frame from a boxed finalize() argument, ~200 B per frame floating from a boxed hoverY(), 64 B per fingerMove from boxed rayMesh() arguments)`, al.states.map((x) => `${x.bytes} B`).join(' / '), '0 B each', al.states.every((x) => x.bytes === 0));
-    add('info', 'garbage per frame in the first 120 frames after warmUp(), before V8 has compiled the once-per-frame step() / finalize() (a few hundred bytes of short-lived objects for ~20 s, then zero)', `${f2(al.early, 0)} B/frame`, '(information)', true);
   }
 
   // ---- G1: hard-release scenarios + fuzz, in a worker pool (each job is independent and seeded, so the result does not depend on the worker count)
@@ -1502,6 +1559,8 @@ async function main(): Promise<void> {
       { label: 'starter@d4/top x=.1/hold', genome: starter, detail: 4, spot: 2, mode: 'hold' },
       { label: 'starter/peak shove from -x', genome: starter, detail: 3, spot: -1, mode: 'shove', ray: [v3(-3, 0.96, 0), v3(1, 0, 0)] },
       { label: 'starter/peak shove from +x', genome: starter, detail: 3, spot: -1, mode: 'shove', ray: [v3(3, 0.96, 0), v3(-1, 0, 0)] },
+      { label: 'starter/peak side press (shell profile) from -x', genome: starter, detail: 3, spot: -1, mode: 'shell', ray: [v3(-3, 0.96, 0), v3(1, 0, 0)] },
+      { label: 'starter/peak side press (shell profile) from +z', genome: starter, detail: 3, spot: -1, mode: 'shell', ray: [v3(0, 0.96, 3), v3(0, 0, -1)] },
     ];
     for (const spec of subSpecs) jobs.push({ type: 'foldsub', spec });
     for (const gn of ['starter', 'f1b1s0', 'f0b0s1', 'small', 'large']) {
@@ -1577,11 +1636,13 @@ async function main(): Promise<void> {
     {
       const f2all = results.filter((r): r is Extract<JobResult, { type: 'fold2' }> => r.type === 'fold2').map((r) => r.res);
       const sw = f2all.filter((r) => r.label.startsWith('sweep/')), sh = f2all.filter((r) => r.label.startsWith('shove/')), rim = f2all.filter((r) => r.label.startsWith('rim/'));
+      const sp = f2all.filter((r) => r.label.startsWith('shell/'));
       const ws = sw.reduce((a, c) => (c.worst > a.worst ? c : a)), wr = sw.reduce((a, c) => (c.restWorst > a.restWorst ? c : a));
       add('G1', `fold sweep of the verifier that found the transient folds (${sw.length} presses: starter, soft, firm, bouncy-big, stretchy-small; taps and holds x = 0 .. 0.25; was 171-180 deg at x = 0.2 / 0.25): sharpest crease (${ws.label}), frames over 120 deg, missed rays`, `${f2(ws.worst, 0)} deg, ${sw.reduce((a, c) => a + c.f120, 0)} frames, ${sw.filter((r) => r.missed).length} missed`, '<= 115 deg, 0 frames, 0', ws.worst <= 115 && sw.every((r) => r.f120 === 0 && !r.missed));
       add('G1', `fold sweep: left at rest 3 s after the finger lifted (${wr.label}); edges over 90 deg, inward triangles`, `${f2(wr.restWorst, 0)} deg, ${sw.reduce((a, c) => a + c.restN90, 0)}, ${sw.reduce((a, c) => a + c.restInward, 0)}`, `<= ${FOLD_REST_MAX} deg, 0, 0`, wr.restWorst <= FOLD_REST_MAX && sw.every((r) => r.restN90 === 0 && r.restInward === 0));
-      const wsv = sh.reduce((a, c) => (c.worst > a.worst ? c : a)), wrim = rim.reduce((a, c) => (c.worst > a.worst ? c : a));
-      add('G1', `hard side shove at the swirl-peak (pressure 1 at once, 6 cm under its tip, 3 directions x 3 genomes + detail 4; a fingertip wider than the peak crushed it flat: 162-180 deg at HEAD, fixed by the contact fold limit): sharpest crease (${wsv.label}), frames over 120 deg, rest`, `${f2(wsv.worst, 0)} deg, ${sh.reduce((a, c) => a + c.f120, 0)} frames, rest ${f2(Math.max(...sh.map((r) => r.restWorst)), 0)} deg`, '<= 115 deg, 0 frames, rest <= 60', wsv.worst <= 115 && sh.every((r) => r.f120 === 0 && !r.missed && r.restN90 === 0 && r.restWorst <= FOLD_REST_MAX));
+      const wsv = sh.reduce((a, c) => (c.worst > a.worst ? c : a)), wrim = rim.reduce((a, c) => (c.worst > a.worst ? c : a)), wsp = sp.reduce((a, c) => (c.worst > a.worst ? c : a));
+      add('G1', `side press at the swirl-peak with the shell's pressure profile (${sp.length} presses: 5 genomes + detail 4, 6 / 12 cm under the tip, 4 directions; a fingertip wider than the peak crushed it flat: 179 deg, 100 frames over 120 without the contact fold limit): sharpest crease (${wsp.label}), frames over 120 deg, rest`, `${f2(wsp.worst, 0)} deg, ${sp.reduce((a, c) => a + c.f120, 0)} frames, rest ${f2(Math.max(...sp.map((r) => r.restWorst)), 0)} deg`, '<= 120 deg, 0 frames, rest <= 60', wsp.worst <= 120 && sp.every((r) => r.f120 === 0 && !r.missed && r.restN90 === 0 && r.restWorst <= FOLD_REST_MAX));
+      add('G1', `hard side shove at the swirl-peak (pressure 1 at once, 6 cm under its tip, 4 directions x 3 genomes + detail 4: ${sh.length} presses, a stress case the shell never sends, its own presses are the row above; a fingertip wider than the peak crushed it flat: 162-180 deg at HEAD): sharpest crease (${wsv.label}), frames over 120 deg, rest`, `${f2(wsv.worst, 0)} deg, ${sh.reduce((a, c) => a + c.f120, 0)} frames, rest ${f2(Math.max(...sh.map((r) => r.restWorst)), 0)} deg`, '<= 115 deg, 0 frames, rest <= 60', wsv.worst <= 115 && sh.every((r) => r.f120 === 0 && !r.missed && r.restN90 === 0 && r.restWorst <= FOLD_REST_MAX));
       add('G1', `low side press at the table rim (y = 0.05, hold; 132 deg at HEAD): sharpest crease (${wrim.label}), frames over 120 deg`, `${f2(wrim.worst, 0)} deg, ${rim.reduce((a, c) => a + c.f120, 0)} frames`, '<= 120 deg, 0 frames', wrim.worst <= 120 && rim.every((r) => r.f120 === 0 && !r.missed));
       const sb = results.filter((r): r is Extract<JobResult, { type: 'foldsub' }> => r.type === 'foldsub').map((r) => r.res);
       const wsb = sb.reduce((a, c) => (c.worst > a.worst ? c : a));
@@ -1630,6 +1691,11 @@ async function main(): Promise<void> {
     const cmed = [...cold].sort((a, c) => a.over4 - c.over4)[1];
     add('G1p', `cold JIT: first session of a fresh process (rest, tap, hold, pinch, pull, float; 400 frames): steps over 4 ms, worst and p95 step with warmUp() (best of 3; warmUp itself ${warm.map((r) => f2(r.warmMs, 0)).join(' / ')} ms, once, at load) vs without (median of 3, alternating processes, same load)`, `with: ${best.over4} steps, worst ${f2(best.worst, 1)} ms, p95 ${f2(best.p95, 2)} ms; without: ${cmed.over4} steps, worst ${f2(cmed.worst, 1)} ms, p95 ${f2(cmed.p95, 2)} ms`, 'with <= 1/5 of without (and <= 10), p95 <= 1/4', best.over4 <= Math.min(10, cmed.over4 / 5) && best.p95 <= cmed.p95 / 4);
     add('G1', 'cold JIT: warmUp() left the body bit-identical in every fresh process', warm.map((r) => String(r.same)).join(', '), 'all true', warm.every((r) => r.same));
+    const lp = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--late-press-child'], { encoding: 'utf8', timeout: 120000 });
+    let late: number[] = [Infinity, Infinity], early: number[] = [NaN, NaN];
+    try { ({ late, early } = JSON.parse(lp.stdout) as { late: number[]; early: number[] }); } catch { /* reported as Infinity */ }
+    add('G1p', 'warmUp() covers a lone finger: in a fresh process, warmUp(), 25 s at rest, then the first press of finger 0 (and later of finger 1): exact new-space growth per frame over its first 3 s (was 9 KB / frame: the workout\'s top presses missed the twin after its corral shove, so V8 compiled the finger paths without that feedback and the first real press deoptimised them)', late.map((x) => `${f2(x, 0)} B`).join(' / '), '0 B each', late.every((x) => x === 0));
+    add('info', 'garbage per frame in the first 2 x 60 frames after warmUp() (same fresh process, at rest): V8 still runs the once-per-frame step() / finalize() in a lower tier; ~340 B / frame follows until ~20 s, then zero (young-generation garbage, no hitch: see the cold JIT row)', early.map((x) => (Number.isFinite(x) ? `${f2(x, 0)} B` : 'scavenged')).join(' / '), '(information)', true);
   }
 
   // ---- report

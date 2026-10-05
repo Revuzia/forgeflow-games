@@ -1,7 +1,9 @@
 // WOBBLEHOARD material families: the "what does it feel / look / sound like in the hand" table.
 //
 // A FAMILY is a material (slow-rise foam, jelly gel, putty ...). A GENOME instance picks a position inside a bounded band
-// around its family (firmer / bouncier / stretchier / bigger / glossier), never a different character.
+// around its family's PHYSICS (firmer / bouncier / stretchier / bigger), never a different character. The LOOK fields the genome
+// carries (translucency, gloss, coreGlow, glitter) are the catalog's per-tier rarity layer and pass through resolveMaterial unchanged;
+// the family adds only the surface fields a genome does not have (see MaterialLook).
 // Research, the maths of every axis and the solver mapping are in _spec/SQUISHY_SCIENCE.md. Units match src/physics/params.ts
 // (smOmega rad/s, edgeAlphaT in XPBD alpha-tilde units, intDamp 1/s, maxPull in rest radii) so PHYS can adopt `solver` as is.
 //
@@ -112,15 +114,22 @@ export const PHYSICS_AXES: readonly AxisSpec[] = [
 
 /* ───────────────────────────────────────────── look ───────────────────────────────────────────── */
 
-/** Visual numbers (RENDER lane). Centres + spans: the genome picks a position inside the span, so a foam can never turn glassy. */
+/**
+ * Visual numbers of a family (RENDER lane). ONE SOURCE OF TRUTH per field:
+ *   * translucency, gloss, coreGlow, glitter are carried by the GENOME (the catalog sets them per species and per tier: that is where
+ *     the rarity lives, DESIGN 5.3). resolveMaterial passes the genome's values through unchanged; the family numbers below for these
+ *     four fields are the family's CHARACTER REFERENCE: the fallback when a genome lacks the field, and what the catalog author and
+ *     probe_catalog.ts use to judge which families may carry a high-tier body (an opaque foam hides an inner light).
+ *   * roughness, subsurface, fuzz, grain, thickness, blush, stretchPale are not in the genome: the family supplies them as they are.
+ */
 export interface MaterialLook {
-  /** 0..1 centre of the translucency band (1 = glassy). genome.translucency moves it within +/- translucencySpan. */
+  /** 0..1 typical translucency of the material (1 = glassy). Reference / fallback only: genome.translucency is what is drawn. */
   translucency: number;
-  /** 0..0.4 half-width of the translucency band. */
+  /** 0..0.4 half-width of the material's natural translucency band (reference). */
   translucencySpan: number;
-  /** 0..1 centre of the clearcoat/gloss band. genome.gloss moves it within +/- glossSpan. */
+  /** 0..1 typical clearcoat/gloss. Reference / fallback only: genome.gloss is what is drawn. */
   gloss: number;
-  /** 0..0.4 half-width of the gloss band. */
+  /** 0..0.4 half-width of the natural gloss band (reference). */
   glossSpan: number;
   /** 0.02..1 base-layer micro roughness (1 = chalky, 0.03 = wet). */
   roughness: number;
@@ -136,9 +145,11 @@ export interface MaterialLook {
   blush: number;
   /** 0..1 stretched regions (strain > 1) go paler and clearer. */
   stretchPale: number;
-  /** 0..1.5 multiplier on genome.coreGlow (an opaque foam hides its core). */
+  /** 0..1.5 how readily the material shows an inner light (an opaque foam hides its core). Reference: the catalog keeps bright-cored
+   *  high tiers in families >= 0.5; the drawn value is genome.coreGlow (fallback when missing: 0.5 x this, clamped to 0..1). */
   coreGlow: number;
-  /** 0..1.5 multiplier on genome.glitter (suspended sparkle needs a clear medium). */
+  /** 0..1.5 how readily the material shows suspended sparkle (needs a clear medium). Reference; drawn value is genome.glitter
+   *  (fallback when missing: 0.5 x this, clamped to 0..1). */
   glitter: number;
 }
 
@@ -266,7 +277,7 @@ export const MATERIAL_FAMILIES: Record<MaterialFamilyId, MaterialFamily> = {
   },
   putty: {
     id: 'putty', name: 'Bounce Putty',
-    blurb: 'Firm and dead when you poke it fast, flows like taffy when you lean on it, and keeps the dent you leave.',
+    blurb: 'Firm with no bounce when you poke it fast, flows like taffy when you lean on it, and keeps the dent you leave.',
     physics: P(12, 300, 0, 0.1, 0.05, 5.0, 0.5, 0.07, 40, 12, 30, 28, 0.60, 0.45, 2.3, 0.70, 0.20, 0.3, 0, 3, 0.4, 0, 0),
     look: L(0.08, 0.08, 0.55, 0.15, 0.45, 0.2, 0.1, 0.1, 0.5, 0.2, 0.25, 0.25, 0.2),
     sound: S(0.45, 1.2, 3.5, 700, 0.2, 0.3, 0, 0.25, 0.75, 0.1, -1.5),
@@ -294,7 +305,7 @@ export const MATERIAL_FAMILIES: Record<MaterialFamilyId, MaterialFamily> = {
   },
   popdome: {
     id: 'popdome', name: 'Pop Dome',
-    blurb: 'A stiff silicone dome that resists, then suddenly gives with a pop and flips inside out.',
+    blurb: 'A stiff silicone dome that resists, then gives under a firm press and springs straight back (the inside-out pop is planned, not built).',
     physics: P(44, 70, 0.30, 0.06, 0.1, 0, 0.1, 0, 60, 2.4, 8, 3, 0.08, 0.08, 0.8, 0.80, 0, 0, 0, 3, 0.4, 0.5, 1),
     look: L(0.35, 0.2, 0.7, 0.2, 0.2, 0.25, 0, 0, 0.4, 0.15, 0.1, 0.6, 0.2),
     sound: S(0.1, 0.3, 0.8, 5200, 1.0, 0, 0.2, 0, 1.5, 1.0, 0),
@@ -432,6 +443,10 @@ export interface SolverMaterial {
   sloshMass: number; sloshHz: number; sloshZeta: number; snap: number;
 }
 
+/**
+ * The look numbers a consumer draws with. translucency, gloss, coreGlow and glitter are the GENOME's own values (the catalog's per-tier
+ * rarity layer, never overridden by the family); the other seven come from the family.
+ */
 export interface ResolvedLook {
   translucency: number; gloss: number; roughness: number; subsurface: number; fuzz: number; grain: number;
   thickness: number; blush: number; stretchPale: number; coreGlow: number; glitter: number;
@@ -488,6 +503,8 @@ function modulate(b: MaterialParams, f: number, bo: number, s: number, z: number
  * Family x genome -> concrete numbers for physics, render and audio. Total (never throws, any family id, any half-built genome),
  * deterministic (no randomness, no clock) and monotone: raising firmness never lowers smOmega or volOmega, never raises
  * volBleedMax or edgeAlphaT; raising bounce never raises intDamp; raising stretch never lowers maxPull; and so on.
+ * Look: the genome's translucency, gloss, coreGlow and glitter pass through unchanged (clamped to 0..1); a field the genome lacks
+ * (missing or not finite) falls back to the family's reference value. The family supplies the surface fields the genome does not carry.
  */
 export function resolveMaterial(familyId: string, genome: Genome): ResolvedMaterial {
   const known = isMaterialFamilyId(familyId);
@@ -495,17 +512,17 @@ export function resolveMaterial(familyId: string, genome: Genome): ResolvedMater
   const fam = MATERIAL_FAMILIES[id];
   const g = (genome ?? {}) as Partial<Genome>;
   const f = unit(g.firmness), bo = unit(g.bounce), s = unit(g.stretch), z = unit(g.size);
-  const t = unit(g.translucency), gl = unit(g.gloss);
 
   const physics = modulate(fam.physics, f, bo, s, z);
   const fl = fam.look;
+  const own = (v: unknown, fallback: number): number => clamp(num(v, fallback), 0, 1);
   const look: ResolvedLook = {
-    translucency: clamp(fl.translucency + fl.translucencySpan * (2 * t - 1), 0, 1),
-    gloss: clamp(fl.gloss + fl.glossSpan * (2 * gl - 1), 0, 1),
+    translucency: own(g.translucency, fl.translucency),
+    gloss: own(g.gloss, fl.gloss),
     roughness: fl.roughness, subsurface: fl.subsurface, fuzz: fl.fuzz, grain: fl.grain, thickness: fl.thickness,
     blush: fl.blush, stretchPale: fl.stretchPale,
-    coreGlow: clamp(unit(g.coreGlow) * fl.coreGlow, 0, 1),
-    glitter: clamp(unit(g.glitter) * fl.glitter, 0, 1),
+    coreGlow: own(g.coreGlow, 0.5 * fl.coreGlow),
+    glitter: own(g.glitter, 0.5 * fl.glitter),
   };
   const sound: MaterialSound = { ...fam.sound, ring: clamp(fam.sound.ring * (1 + 0.25 * (2 * bo - 1)), 0, 1) };
 

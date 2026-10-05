@@ -8,6 +8,12 @@ The ceremony visuals and sounds (capsule drop, open, reveal) are built by the re
 
 **What was actually run (read before trusting the SQL).** The draft SQL in Appendix A was loaded into a scratch PostgreSQL 16.14 with a minimal stand-in for Supabase (roles `anon`, `authenticated`, `service_role`, an `auth.users` table, `auth.uid()` read from the same `request.jwt.claim.sub` setting that migration 0008's self-test uses) and driven by two suites: **149 SQL-level checks** (TRADE.md Appendix C, run through `psql` with `set role authenticated`, many of them with 10 to 48 parallel sessions) and **36 host-level checks** (Appendix C of this file: the reference host of Appendix B running the game's real `meter.ts`, `drops.ts`, `merge.ts`, `catalog.ts` against the SQL, with the real 50-species catalog). All 185 passed on 2026-10-02. **Not run:** a real Supabase project, PostgREST, Edge Functions or Deno, the portal, any browser UI. Everything marked "NOT APPLIED" is a draft: nothing was written to `supabase/migrations/` and nothing was deployed.
 
+**Revised on 2026-10-05 and NOT run since** (an audit found the problems; this container has no PostgreSQL, so the revisions were checked by reading only):
+the grant revocation is now scoped to the WH objects by name, with a privilege snapshot before the migration and an audit after it (A.0, A.2, A.7);
+the local save keeps only idempotency keys of in-flight operations, never their parameters, and a reload asks the new read `wh_op_status` instead of
+re-sending anything (5.1, 7.7); the mirror stores a salted account tag instead of the auth id (5.4); Tidy-up sub-keys are hashes (Appendix B, one new
+host check in Appendix C); the bridge's limits are described as what they are (8.2). The trade-side revisions are listed in TRADE.md.
+
 ---
 
 ## 1. Summary
@@ -60,7 +66,7 @@ Odds, tiers, meter rules, caps, restock and tasks (5.2, 5.4); repeats allowed; a
 | `src/collection/meterfeed.ts` | `SoftEvent` to `Interaction` mapping (DESIGN 5.4), the batch builder, the local preview meter. |
 | `src/collection/bridge.ts` | The postMessage client (`whoami`, `rpc`), a state machine `standalone / waiting / silent / guest / signedIn` copied from `games/blocktooth/src/net/portal.ts`. The only file that touches `window.parent`. |
 | `src/collection/api.ts` | Typed wrappers for every `wh_*` call; validates every response shape at runtime (never trust the reply). |
-| `src/collection/sync.ts` | Mirror, pending-ops queue, reconcile, backoff. |
+| `src/collection/sync.ts` | Mirror, pending-op keys, reconcile through `wh_op_status`, backoff (section 7.7). |
 | `src/collection/copy.ts` | Error code to plain-English player text (section 9.9). |
 | `src/collection/index.ts` | `createCollection(deps)` returning the `Collection` interface the shell and UI use. |
 
@@ -68,7 +74,7 @@ Odds, tiers, meter rules, caps, restock and tasks (5.2, 5.4); repeats allowed; a
 
 **Server, new, outside the game folder:** `supabase/migrations/00NN_wobblehoard_mint.sql` (applied by hand by the owner, like 0002 to 0008; the number is the next free one: `0007` is absent from the repo, ask), `supabase/functions/wh-api/index.ts` with `_shared/wh/core` and `_shared/wh/data` (vendored copies of the game's modules plus `host.ts`, Appendix B), `games/wobblehoard/_harness/vendor_server.mjs` and `probe_server_vendor.ts` (copy and hash check, so "verbatim" is enforced, not hoped for).
 
-**Portal, changed (not by this lane):** `src/lib/gameBridge.ts` gains the `forgeflow:rpc` handler and the allowlist (section 8). No existing table, policy or function is altered by any of this work. The one trigger on `auth.users` is described in TRADE.md section 16.5.
+**Portal, changed (not by this lane):** `src/lib/gameBridge.ts` gains the `forgeflow:rpc` handler and the allowlist (section 8). No existing table, policy or function is altered by any of this work, and the migration proves it: it snapshots every privilege of the portal's objects first and fails as a whole if any changed (Appendix A.0 and A.7). The one trigger on `auth.users` is described in TRADE.md section 16.5.
 
 ### 3.2 Import rules (enforced by a probe, `probe_collection_imports.ts`)
 
@@ -125,10 +131,14 @@ export interface Collection {
 | Which three species the restock offers | Displays (same code, same seed). | Recomputes and refuses any other pick. |
 | Whether a task is done | Shows a progress bar. | Counts touches itself; the client's "done" is a hint. |
 | Merge odds, the roll, the pity counter | `previewMerge` for the panel. | Rolls and stores pity (MERGE.md). |
-| Locks, caps, favourites, reservations | Greys out buttons. | Enforces in the commit function. |
+| Locks, caps, hearts, reservations | Greys out buttons. | Enforces in the commit function. |
 | What time it is | Never trusted. Only relative offsets (`dtMs`) are sent. | `now()` of the database. |
 
-The game iframe is untrusted for rolls but not powerless: it holds the player's session through the portal, so a compromised game build can call any allowed RPC as that player (it cannot do more than the player can). All games share one CDN origin [R] (`forgeflow-games-cdn.isimcha85.workers.dev/<slug>/`), so `localStorage` is shared by every game on it: treat the local save as hostile input at all times (this design already does).
+The game iframe is untrusted for rolls but not powerless: it holds the player's session through the portal, so a compromised game build can call any allowed RPC as that player (it cannot do more than the player can). All games share one CDN origin [R] (`forgeflow-games-cdn.isimcha85.workers.dev/<slug>/`, uploaded by `pipeline/deploy_game.py`), so `localStorage` is shared by every game on it, and by any script injected into any of them. **The local save is hostile input at all times, and it must also hold nothing another script could turn into an action or an identity:**
+
+* **No replayable parameters.** A sibling game could write a fake pending merge naming two of the player's own spare ids (it can read them from the mirror) and this game would send it, with the player's session, on the next load. So `pending` holds only idempotency keys and op kinds, never item ids, picks or touches, and nothing from storage is ever re-sent: after a reload the client asks `wh_op_status` what happened to those keys (7.7). Every op that consumes, chooses or moves items needs a fresh confirmation in the current session.
+* **No portal auth id.** The mirror is tagged with a salted hash of the account id (5.4), not the id itself (TRADE.md 5.1: the game must never forward it).
+* **The clean fix is a separate origin per game** (owner decision NEXT_STEPS D-16); until then the two rules above are the mitigation.
 
 ## 5. The local-first inventory
 
@@ -163,13 +173,18 @@ export interface HoardSave {
   ghostPity: number[];          // practice merge pity, length 6
   ghostCapsules: number;        // unopened practice capsules (cap 5)
   mirror: null | {              // read-only cache of the signed-in account
-    accountId: string; at: number; version: number;
+    acctTag: string;            // NOT the auth id: the first 32 hex characters of SHA-256('wh-acct:' + deviceId + ':' + authId) (section 5.4)
+    at: number; version: number;
     items: MirrorRow[]; meter: MeterState; credits: number; pity: number[]; serverDay: number;
   };
-  pending: PendingOp[];         // idempotent ops not yet acknowledged (section 7.7)
+  pending: PendingOp[];         // in-flight mutating ops: KEYS ONLY, never their parameters (section 7.7)
   prefs: { view: 'cabinet' | 'grid'; sort: SortKey; tiers: number; lanes: number; onlySpares: boolean; onlyMissing: boolean };
   migratedFromV1: boolean;
 }
+
+/** What a reload may know about an operation that was in flight: its kind and key, nothing else. No item ids, picks, task ids or touches are
+ *  ever stored, so nothing read back from this shared storage can be turned into a request (section 4). Capped at 20 entries, dropped after 10 minutes. */
+export interface PendingOp { kind: 'play' | 'open' | 'restock' | 'task' | 'merge' | 'tidy' | 'trade'; idem: string; acctTag: string; at: number }
 ```
 
 * Key `wobblehoard:v2:hoard`; unreadable blobs are parked in `wobblehoard:v2:hoard.unreadable` (20 000 characters), exactly like `core/save.ts` does for v1. A blob with `v > 2` is **newer**: run on a fresh in-memory save and never overwrite it.
@@ -208,7 +223,7 @@ interface Stack {
 
 ### 5.4 Account switching, sign-out and shared devices
 
-* The mirror carries `accountId`. A different account (or sign-out) **wipes the mirror from storage** and the pending ops tagged with the old account. Prefs and the Practice shelf stay. Rationale: kids share tablets; the strictest design leaves no real inventory behind.
+* The mirror carries `acctTag`, a salted hash of the portal's account id (`deviceId` is the salt; `crypto.subtle.digest`), never the id itself: every game on the shared origin can read this storage (section 4). The game recomputes the tag from the identity the portal sends and compares. A different account (or sign-out) **wipes the mirror from storage** and the pending keys tagged with the old account. Prefs and the Practice shelf stay. Rationale: kids share tablets; the strictest design leaves no real inventory behind.
 * Two tabs: every send is idempotent and the server is the source of truth, so two tabs cannot double-pay; the mirror is last-write-wins and re-fetched on focus. No locking is needed.
 
 ## 6. Guest and signed-in flows
@@ -283,6 +298,8 @@ Deno.serve(async (req) => {
   const jwt = (req.headers.get('Authorization') ?? '').replace(/^Bearer /, '');
   const { data: { user } } = await admin.auth.getUser(jwt);
   if (!user) return cors(json({ ok: false, error: 'not_signed_in' }, 401));
+  const len = req.headers.get('content-length');                 // refuse a large or unannounced body BEFORE reading it into memory
+  if (len === null || !/^[0-9]{1,6}$/.test(len) || Number(len) > 16384) return cors(json({ ok: false, error: 'bad_payload' }, 413));
   const raw = await req.text(); if (raw.length > 16384) return cors(json({ ok: false, error: 'bad_payload' }, 413));
   const { fn, args } = JSON.parse(raw); const op = (OPS as any)[fn];
   if (!op) return cors(json({ ok: false, error: 'not_allowed' }, 403));
@@ -301,8 +318,9 @@ Deno.serve(async (req) => {
 | `wh_capsules` | The queue: one row per earned capsule (`source` play or task), opened in strict FIFO order (`seq`). | commit functions |
 | `wh_ops` | Idempotency: `(user_id, idem)` with the stored answer and a digest of the arguments; 30-day retention, play batches 1 day (`wh__purge`, run daily). | commit functions |
 | `wh_ledger` | Append-only (a trigger refuses update and delete): `mint`, `consume`, `transfer`, `burn` with the draws and odds basis in `detail`. No foreign keys, so it survives account deletion. | commit functions |
+| `wh_rate` | Per-account token buckets for the offer and board RPCs (TRADE.md 7.4); one row per account and bucket. | `wh__take` |
 
-Client access: RLS is on for every table; `anon` and `authenticated` have **no write privileges at all** (a direct insert answers 42501, checked [V]); a player may `select` only their own `wh_accounts`, `wh_items`, `wh_capsules` rows (and the public species list). Everything else goes through RPCs, as 0008 does for BLOCKTOOTH. In particular `wh_trades` and `wh_blocks` are not readable at all, because they carry another player's auth id (TRADE.md section 7.1).
+Client access: RLS is on for every table; `anon` and `authenticated` have **no write privileges at all** (a direct insert answers 42501, checked [V]). The privileges are taken back **by name, on the WH objects only** (A.2): a schema-wide revoke would also strip the portal's own grants and break the site, and the migration's own audit (A.0, A.7) fails it if any non-WH privilege changed; a player may `select` only their own `wh_accounts`, `wh_items`, `wh_capsules` rows (and the public species list). Everything else goes through RPCs, as 0008 does for BLOCKTOOTH. In particular `wh_trades` and `wh_blocks` are not readable at all, because they carry another player's auth id (TRADE.md section 7.1).
 
 ### 7.4 The operations
 
@@ -318,6 +336,7 @@ All mutating calls require `idem`. The host's reply is the JSON shown; a replay 
 | `wh_claim_restock` | host | `{idem, pick: SpeciesId}` | `{ok, item_id, species_idx, tier_idx, genome_code, is_new, copies, version}` | The three offered species from `daySeed(uid, serverDay, 'restock')` (refuses any other pick), the day, the once-a-day rule, the genome. | `not_offered`, `already_claimed`, `wrong_day`, `frozen` |
 | `wh_complete_task` | host | `{idem, task_id}` | `{ok, credits, version}` | Today's two tasks from `daySeed(uid, serverDay, 'tasks')`, progress from the server's own counters, `claimTask` (once a day, 5 a week). | `not_offered`, `not_done` (with `progress`, `target`), `already_claimed`, `weekly_limit` |
 | `wh_set_fav`, `wh_mark_seen` | SQL rpc | `{item_ids[], fav?}` | `{ok}` | Own items only. Hearting removes an item from the offer shelf and does not bump the item version (it is cosmetic). | `bad_payload` |
+| `wh_op_status` | SQL rpc | `{idems: [up to 20 keys]}` | `{ok, ops: {key: {op, at, result}}}` | Own stored answers only (`wh_ops`). A key that is absent never committed, or is still running and will show up in `wh_inventory`. Read-only: it never runs anything (7.7). | `bad_payload` |
 
 **Open by "next credit", not by id.** The table shows up to 5 capsule objects, but the client never names a capsule: `wh_open_capsule` opens the oldest unopened credit. That is why an *optimistic* capsule drop (fired by the client's preview meter the moment its ring fills, so the cue feels instant) is safe: if the server credited fewer, the first open answers `no_capsule`, the capsule melts gently, and the ring resumes. [V: host test "no credit left: no_capsule"].
 
@@ -384,7 +403,7 @@ The reference implementation is `host_play` below (Appendix B has the whole file
 
 **Other rules in the host.** At most 120 events per request, `dtMs` non-decreasing, kinds 0 to 2 only, amounts clamped (squeeze 0 to 10 s, pull 0 to 1); the table-full rule (C-5): once credits reach 5 the host stops processing the batch, answers `queue_full: true` and the meter does not move.
 
-**Offline buffering.** The client may hold up to 5 minutes of touches while offline or while a request is in flight and send them later; anything older than the bank is simply not paid. Batch every 30 to 45 s while touching, on `visibilitychange: hidden`, and just before opening a capsule.
+**Offline buffering.** The client may hold up to 5 minutes of touches **in memory** while offline or while a request is in flight and send them later; anything older than the bank is simply not paid. Touches are never written to storage, so a reload loses the unsent ones (7.7). Batch every 30 to 45 s while touching, on `visibilitychange: hidden`, and just before opening a capsule.
 
 ### 7.6 Plausibility checks against macros (DESIGN risk 7)
 
@@ -420,7 +439,13 @@ No check can tell a perfect macro that runs in real time from a human; DESIGN ri
 | The portal is an older build without `forgeflow:rpc` | The bridge state becomes `silent`; the game behaves as a guest | |
 | The player's session expired | The portal's refresh fails; the call returns an error the game shows as "Sign in again" | |
 
-**Never auto-retry after a reload** (see MERGE.md and TRADE.md): only `wh_report_play` batches younger than 5 minutes, `wh_open_capsule`, `wh_claim_restock` and `wh_complete_task` are replayed from `pending`. Merge is replayed only if it was confirmed (held) and is younger than 5 minutes; **trade operations are never replayed**: after a reload the client re-fetches the trade and shows the review again.
+**Retries live in memory; storage holds keys only** (see section 4, MERGE.md 6 and TRADE.md 8.4).
+
+* **In the same session** a lost or timed-out call is retried by re-sending the request kept **in memory**, with the same key, for up to 5 minutes (3 tries with backoff). Memory cannot be read or written by another page, so this is safe.
+* **Before sending**, the client appends `{kind, idem, acctTag, at}` to `pending` in storage. Never the item ids, the restock pick, the task id or the touches.
+* **After a reload nothing is re-sent from storage.** The client keeps the keys younger than 10 minutes whose tag matches the signed-in account, asks `wh_op_status({idems})`, refreshes `wh_state` and `wh_inventory`, and clears `pending`. A key found there committed: its stored answer drives the UI (a capsule that opened shows its item as unseen with "Replay reveal"; a merge shows its result card). A key not found never committed, or is still running and will appear in the next inventory refresh; either way the player simply does it again, which for a merge, a Tidy-up, a restock pick or a trade means **a fresh confirmation in the current session**. A forged `pending` entry can therefore cause at most a status read of a key, never an action.
+* **Touches not yet sent are lost on a reload or a crash** (at most one batch interval, 30 to 45 s, since batches are also sent on `visibilitychange: hidden` and before a capsule opens). The meter simply pays a little less; nothing is owed and nothing can be injected.
+* **Trade operations are never retried after a reload**: the client re-fetches the trade and shows the review again.
 
 ### 7.8 Random source and what is logged
 
@@ -473,7 +498,7 @@ Aggregate only: per UTC day, buckets of (active minutes per capsule, capsules op
 const GAME_RPC: Record<string, Record<string, 'sql' | 'host'>> = {
   wobblehoard: {
     wh_hello: 'host', wh_report_play: 'host', wh_open_capsule: 'host', wh_claim_restock: 'host', wh_complete_task: 'host', wh_merge: 'host', wh_tidy: 'host',
-    wh_state: 'sql', wh_inventory: 'sql', wh_set_fav: 'sql', wh_mark_seen: 'sql', wh_handle_set: 'sql', wh_shelf_set: 'sql',
+    wh_state: 'sql', wh_inventory: 'sql', wh_op_status: 'sql', wh_set_fav: 'sql', wh_mark_seen: 'sql', wh_handle_set: 'sql', wh_shelf_set: 'sql',
     wh_friend_code_get: 'sql', wh_friend_code_rotate: 'sql', wh_friend_redeem: 'sql', wh_friend_respond: 'sql', wh_friend_list: 'sql', wh_friend_shelf: 'sql', wh_friend_remove: 'sql',
     wh_listing_create: 'sql', wh_board_search: 'sql', wh_propose_trade: 'sql', wh_trade_view: 'sql', wh_counter_trade: 'sql', wh_confirm_trade: 'sql', wh_cancel_trade: 'sql',
     wh_trade_inbox: 'sql', wh_trade_emote: 'sql', wh_block: 'sql', wh_report: 'sql',
@@ -481,6 +506,9 @@ const GAME_RPC: Record<string, Record<string, 'sql' | 'host'>> = {
 };
 // guard: slug must be the game CURRENTLY being played (currentGameSlug), the source frame check already in handleGameMessage applies,
 // args JSON <= 16 KB, at most 8 calls per second per frame, `args.idem` present and well-formed for every mutating function.
+// NOTE: this guard only covers calls made THROUGH the bridge. Every 'sql' function is executable by `authenticated`, so a player can call
+// PostgREST directly with their own JWT and skip it. The real limits are server-side (TRADE.md 7.4): a request-body limit at the gateway or
+// edge, the per-account buckets in the database, the host's own content-length check (7.2), and every function's own rules.
 // 'sql'  -> supabase.rpc(fn, { p: args })           (the 0008 pattern: one jsonb parameter named p)
 // 'host' -> supabase.functions.invoke('wh-api', { body: { fn, args } })   (the user's JWT is attached by supabase-js)
 // reply  -> frame.contentWindow.postMessage({ type: 'forgeflow:rpc_result', _reqId, ok, data | error }, gameFrameOrigin)
@@ -609,6 +637,8 @@ IDs map to probes and manual checks. "Probe" means a plain-node file in `_harnes
 | C08 | The preview meter reconciles: for random streams, `fold(addInteraction, serverMeter, unacked)` equals the server meter when nothing is unacked |
 | C09 | No outgoing message ever contains a ghost id (scan every `forgeflow:rpc` the fake bridge sees) |
 | C10 | `probe_collection_imports.ts`: the import rules of section 3.2 hold |
+| C11 | Hostile storage: a save whose `pending` holds forged entries (with or without extra fields such as item ids, picks or touches) makes the client send nothing on load except one `wh_op_status` with keys; a merge, Tidy-up, restock or trade is never sent without a fresh in-session confirmation |
+| C12 | The stored mirror never contains the portal's auth id (only `acctTag`); switching accounts with a forged tag wipes the mirror |
 
 **Server (the Appendix C host suite is the template; the SQL suite is TRADE.md Appendix C)**
 
@@ -664,20 +694,43 @@ Steps 1 to 5 need no server and can ship first as a practice-only Hoard.
 
 ## 13. Unverified claims and open questions
 
-* **Not in the draft, needed before launch:** the scheduled jobs: the daily call to `wh__purge()` (the function is in the draft [V]: `wh_ops` 30 days and play batches 1 day, finished trade events 13 months, reports 12 months) and the hourly conservation check (TRADE.md 14.3); per-account call rate limiting (P5).
+* **Not in the draft, needed before launch:** the scheduled jobs: the daily call to `wh__purge()` (the function is in the draft [V]: `wh_ops` 30 days and play batches 1 day, finished trade events 13 months, reports 12 months, idle rate buckets 1 day) and the hourly conservation check (TRADE.md 14.3); a per-account rate limit on the host operations (P5; the `wh__take` bucket of TRADE.md 7.4 can serve).
 * **Not run anywhere real:** Supabase (RLS through PostgREST, `SECURITY DEFINER` ownership, default privileges as the stub imitates them), Edge Functions, Deno import behaviour, the portal bridge, every UI.
 * **[G]** Supabase Edge Function limits and pricing; Deno accepting `.ts` relative imports; `supabase functions deploy` bundling files outside `supabase/functions`; localStorage quota (about 5 MB); that anonymous sign-ins exist (see NEXT_STEPS D-4).
 * **[U]** the 5-minute bank and the 5-capsule table cap are my numbers; the regularity thresholds in P6 are guesses; `STRETCH_2X_INTENSITY`; icon render cost; the sizes in section 12.
 * The slice-1 `app.ts` notes the real body's stretch tops out near 0.3 and its release intensities run 0.35 to 0.57; the meter's thresholds (0.4 s hold, 0.35 snap) assume those (DESIGN risk 12). Re-measure with the real meter on a device.
-* `DESIGN.md` 7.2 still lists `src/core/catalog.ts` and `economy.ts`; the real files are `src/data/catalog.ts` and none for economy. I did not touch that row (my edits to DESIGN were limited to the module names and links).
-* `CONTRACT.md` (lines 5 and 27) still says `BLEND.md`; it is not mine to edit.
+* **The 2026-10-05 revisions were not run** (the scoped revocation and the privilege audit of A.0, A.2 and A.7, `wh_op_status`, the `wh_rate` buckets, the Tidy-up sub-key and its host check): this container has no PostgreSQL. Re-run both suites (and the new checks) before the migration is applied anywhere.
+* **[G/U]** whether the Supabase API gateway can be given a request-body limit for PostgREST calls, and what its default is (TRADE.md 7.4).
 * **Owner questions** that this module depends on are collected in `NEXT_STEPS.md`: hosting (D-6), age gating (D-5), account requirements (D-4), telemetry (D-9).
 
 ---
 
 ## Appendix A. Draft SQL (NOT APPLIED; verified on local PostgreSQL 16 with a stub, 2026-10-02)
 
-Split into the order it would be one migration file, inside one `begin; ... commit;` with a self-test DO block at the end in the style of `0008_blocktooth_stats.sql`. The social and trade tables and functions are in `TRADE.md` Appendix A; they belong to the same migration or a second one (owner's choice; the draft is written so either works). Names, signatures and error codes are the contract; bodies are drafts.
+Split into the order it would be one migration file, inside one `begin; ... commit;` with a self-test DO block at the end in the style of `0008_blocktooth_stats.sql`. The social and trade tables and functions are in `TRADE.md` Appendix A and the merge commit function in `MERGE.md` Appendix A. **One migration is recommended**, in this order (each step needs the ones before it):
+
+1. A.0 here (the privilege snapshot: the first statement after `begin;`), 2. A.1 here, 3. TRADE A.1 (social and trade tables, `wh_rate`), 4. A.2 here (= TRADE A.1b: RLS, grants, config), 5. A.3 to A.6 here, 6. MERGE Appendix A, 7. TRADE A.2 to A.4, 8. A.7 here (the privilege audit: the last statement before `commit;`). The ops pack (TRADE A.5) is not part of the migration.
+
+If the owner splits it into two files, each file gets its own A.0 and A.7, and A.2's revoke list names only the objects that file creates. Names, signatures and error codes are the contract; bodies are drafts.
+
+### A.0 Privilege snapshot (the first statement of the migration)
+
+```sql
+-- 0. Snapshot the privileges, RLS flag and policy count of every EXISTING object in public that is not WH's (the portal's tables, views,
+--    sequences and functions: games, profiles, game_saves, leaderboards, friendships, df_*, bt_* ...), so A.7 can prove this migration changed
+--    none of them. A plain table (not a temp table) so the snapshot also survives when the appendices are loaded as separate files in a test;
+--    A.7 drops it. Its name starts with wh_, so it is not part of what it snapshots.
+create table public.wh__acl_before as
+  select 'rel:' || c.oid::regclass::text as obj,
+         coalesce(c.relacl::text, '<default>') || ' rls=' || c.relrowsecurity::text
+           || ' policies=' || (select count(*) from pg_policy pol where pol.polrelid = c.oid)::text as acl
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm', 'S', 'f') and c.relname not like 'wh\_%'
+  union all
+  select 'fn:' || p.oid::regprocedure::text, coalesce(p.proacl::text, '<default>')
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname not like 'wh\_%';
+```
 
 ### A.1 Tables: reference, accounts, items, capsules, idempotency, ledger
 
@@ -709,7 +762,9 @@ create table public.wh_accounts (
   task_progress      jsonb not null default '{}'::jsonb,                             -- today's counters
   capsules_opened    integer not null default 0,
   trade_enabled      boolean not null default false,                                 -- default OFF: age/consent decision is the owner's
-  restricted_until   timestamptz,
+  restricted_until   timestamptz,                                                    -- a moderation hold: pauses trading and every social surface
+  auto_hold_at       timestamptz,                                                    -- start of the last AUTOMATIC report hold (TRADE 13): reports filed before it never count again
+  hold_reviewed_at   timestamptz,                                                    -- set by ops when a person has reviewed a hold; a second automatic hold needs it
   handle_adj         smallint, handle_noun smallint, handle_num smallint, handle_changed_at timestamptz,
   redeem_window_at   timestamptz, redeem_attempts smallint not null default 0
 );
@@ -789,16 +844,23 @@ alter table public.wh_friend_requests enable row level security; alter table pub
 alter table public.wh_blocks enable row level security;       alter table public.wh_reports enable row level security;
 alter table public.wh_listings enable row level security;     alter table public.wh_trades enable row level security;
 alter table public.wh_trade_items enable row level security;  alter table public.wh_trade_events enable row level security;
+alter table public.wh_rate enable row level security;
 
 create policy wh_species_read  on public.wh_species  for select using (true);
 create policy wh_accounts_own  on public.wh_accounts for select using (user_id = auth.uid());
 create policy wh_items_own     on public.wh_items    for select using (owner_id = auth.uid());
 create policy wh_capsules_own  on public.wh_capsules for select using (owner_id = auth.uid());
 -- wh_blocks and wh_trades carry the OTHER player's auth id, so a direct select would break the privacy design: they have NO client policy and no grant, like every table below.
--- wh_ops, wh_ledger, wh_config, wh_reports, wh_friend_*, wh_listings, wh_trade_items, wh_trade_events, wh_blocks, wh_trades: RPC only.
+-- wh_ops, wh_ledger, wh_config, wh_reports, wh_friend_*, wh_listings, wh_trade_items, wh_trade_events, wh_blocks, wh_trades, wh_rate: RPC only.
 
-revoke all on all tables in schema public from anon, authenticated;
-revoke all on all sequences in schema public from anon, authenticated;
+-- Supabase's default privileges GRANT ALL on every new public table and sequence to anon and authenticated: take that back on the WH objects
+-- ONLY, BY NAME, as 0008 does for bt_*. NEVER "revoke ... on all tables in schema public": that strips the portal's own grants too (games,
+-- profiles, game_saves, leaderboards, friendships, df_*, bt_*) and breaks the whole site (found by the 2026-10-05 audit in the earlier draft).
+-- COLLECTION A.7 fails the migration if any non-WH privilege changed, and if a WH table or sequence is missing from these lists.
+revoke all on table public.wh_species, public.wh_config, public.wh_accounts, public.wh_items, public.wh_capsules, public.wh_ops, public.wh_ledger,
+  public.wh_friend_codes, public.wh_friend_requests, public.wh_friends, public.wh_blocks, public.wh_reports, public.wh_listings,
+  public.wh_trades, public.wh_trade_items, public.wh_trade_events, public.wh_rate from anon, authenticated;
+revoke all on sequence public.wh_capsules_seq_seq, public.wh_ledger_id_seq, public.wh_reports_id_seq from anon, authenticated;
 grant select on public.wh_species, public.wh_accounts, public.wh_items, public.wh_capsules to authenticated;
 grant select on public.wh_species to anon;
 
@@ -806,7 +868,8 @@ insert into public.wh_config(key, value) values
   ('minting_enabled','true'), ('merging_enabled','true'), ('trading_enabled','true'), ('board_enabled','true'),
   ('merge_cost','2'), ('merge_daily_cap','10'), ('merge_lock_hours','24'), ('receive_lock_hours','24'),
   ('trade_daily_cap','3'), ('trade_pair_cap','1'), ('trade_confirm_cooldown_s','5'), ('trade_ttl_async_h','24'), ('trade_ttl_live_s','60'),
-  ('new_account_days','2'), ('new_account_capsules','10');
+  ('new_account_days','2'), ('new_account_capsules','10'),
+  ('rate_offer','{"cap": 30, "per_s": 0.1}'), ('rate_search','{"cap": 30, "per_s": 0.5}');      -- per-account token buckets (TRADE 7.4)
 ```
 
 ### A.3 Helpers
@@ -1025,13 +1088,14 @@ begin
 end $$;
 
 -- retention, run daily by a scheduled job (the job itself is NOT in the draft): idempotency rows 30 days (play batches 1 day: one every ~45 s of play would otherwise
--- dominate the table), finished trade events 13 months, reports 12 months. The ledger is never purged.
+-- dominate the table), finished trade events 13 months, reports 12 months, idle rate buckets 1 day. The ledger is never purged.
 create function public.wh__purge() returns jsonb language plpgsql security definer set search_path = public as $$
 declare a integer; b integer; c integer;
 begin
   delete from public.wh_ops where created_at < now() - interval '30 days' or (op = 'play' and created_at < now() - interval '1 day');  get diagnostics a = row_count;
   delete from public.wh_trade_events e using public.wh_trades t where t.id = e.trade_id and t.status in ('executed', 'cancelled', 'expired', 'failed') and t.updated_at < now() - interval '13 months';  get diagnostics b = row_count;
   delete from public.wh_reports where at < now() - interval '12 months';  get diagnostics c = row_count;
+  delete from public.wh_rate where at < now() - interval '1 day';                     -- an idle bucket is full again: the row adds nothing
   return jsonb_build_object('ops', a, 'trade_events', b, 'reports', c);
 end $$;
 
@@ -1042,13 +1106,13 @@ grant execute on function public.wh__bootstrap(jsonb), public.wh__read_state(jso
 ### A.6 Client reads and small writes (collection side)
 
 ```sql
--- ===== client reads and small writes, collection side: state, inventory, favourites, seen (DRAFT; tested locally; NOT APPLIED) =====
+-- ===== client reads and small writes, collection side: state, inventory, op status, hearts, seen (DRAFT; tested locally on 2026-10-02 except wh_op_status; NOT APPLIED) =====
 
 create function public.wh_state(p jsonb default '{}'::jsonb) returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare v_uid uuid := auth.uid(); a public.wh_accounts%rowtype; v_gate text;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (TRADE 7.4)
   select * into a from public.wh_accounts where user_id = v_uid;
   if not found then return jsonb_build_object('ok', false, 'error', 'no_account'); end if;
   v_gate := public.wh__gate(a);
@@ -1066,7 +1130,7 @@ create function public.wh_inventory(p jsonb default '{}'::jsonb) returns jsonb l
 declare v_uid uuid := auth.uid(); v_after uuid; v_limit integer := least(greatest(coalesce((p->>'limit')::integer, 200), 1), 200); v_rows jsonb;
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (TRADE 7.4)
   begin v_after := nullif(p->>'after', '')::uuid; exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end;
   select coalesce(jsonb_agg(x order by x.id), '[]'::jsonb) into v_rows from (
     select i.id, i.species_idx, i.tier_idx, i.genome_code, i.origin, floor(extract(epoch from i.born_at) * 1000)::bigint as born_ms, i.trade_count, i.locked_until, i.fav, i.offered_at is not null as offered,
@@ -1079,7 +1143,7 @@ create function public.wh_set_fav(p jsonb) returns jsonb language plpgsql securi
 declare v_uid uuid := auth.uid(); v_ids uuid[];
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (TRADE 7.4)
   begin if jsonb_array_length(p->'item_ids') > 50 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if; v_ids := array(select (jsonb_array_elements_text(p->'item_ids'))::uuid);
   exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end;
   update public.wh_items set fav = coalesce((p->>'fav')::boolean, false), offered_at = case when coalesce((p->>'fav')::boolean, false) then null else offered_at end
@@ -1091,14 +1155,84 @@ create function public.wh_mark_seen(p jsonb) returns jsonb language plpgsql secu
 declare v_uid uuid := auth.uid(); v_ids uuid[];
 begin
   if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
-  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- hostile or buggy callers cannot make us parse megabytes
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (TRADE 7.4)
   begin v_ids := array(select (jsonb_array_elements_text(p->'item_ids'))::uuid); exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end;
   update public.wh_items set seen_at = now() where id = any(v_ids) and owner_id = v_uid and seen_at is null;
   return jsonb_build_object('ok', true);
 end $$;
 
-revoke all on function public.wh_state(jsonb), public.wh_inventory(jsonb), public.wh_set_fav(jsonb), public.wh_mark_seen(jsonb) from public, anon;
-grant execute on function public.wh_state(jsonb), public.wh_inventory(jsonb), public.wh_set_fav(jsonb), public.wh_mark_seen(jsonb) to authenticated;
+-- after a reload the client asks what happened to the operations it had in flight, BY KEY ONLY (section 7.7). It never re-sends their parameters:
+-- a key that is not here never committed (or is still running and will show up in wh_inventory). Read-only. (Added 2026-10-05; NOT run.)
+create function public.wh_op_status(p jsonb) returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare v_uid uuid := auth.uid(); v_keys text[];
+begin
+  if v_uid is null then raise exception 'not_signed_in' using errcode = '42501'; end if;
+  if octet_length(p::text) > 8192 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;      -- a sanity limit only: PostgREST has already parsed the body (TRADE 7.4)
+  begin
+    if jsonb_typeof(p->'idems') is distinct from 'array' or jsonb_array_length(p->'idems') > 20 then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end if;
+    v_keys := array(select jsonb_array_elements_text(p->'idems'));
+  exception when others then return jsonb_build_object('ok', false, 'error', 'bad_payload'); end;
+  return jsonb_build_object('ok', true, 'ops', coalesce((select jsonb_object_agg(o.idem, jsonb_build_object('op', o.op, 'at', o.created_at, 'result', o.result))
+    from public.wh_ops o where o.user_id = v_uid and o.idem = any(v_keys)), '{}'::jsonb));
+end $$;
+
+revoke all on function public.wh_state(jsonb), public.wh_inventory(jsonb), public.wh_op_status(jsonb), public.wh_set_fav(jsonb), public.wh_mark_seen(jsonb) from public, anon;
+grant execute on function public.wh_state(jsonb), public.wh_inventory(jsonb), public.wh_op_status(jsonb), public.wh_set_fav(jsonb), public.wh_mark_seen(jsonb) to authenticated;
+```
+
+### A.7 Privilege audit (the last statement before `commit;`; added 2026-10-05, NOT run)
+
+```sql
+-- Raises WH_SELFTEST_FAIL, and so rolls the WHOLE migration back, if
+--  (1) any privilege, RLS flag or policy count of a NON-WH object in public differs from the snapshot of A.0 (the portal is untouched),
+--  (2) players hold anything on a wh_ table or view beyond SELECT on wh_species (anon and authenticated) and on wh_accounts, wh_items,
+--      wh_capsules (authenticated),
+--  (3) players can use any wh_ sequence, or
+--  (4) players can execute a wh_ function that is not one of the 28 client RPCs (TRADE.md 7.2).
+-- The functional self-test (a one-transaction subset of the SQL suite, in the style of 0008's) is still to be written (TRADE.md 18.3).
+do $$
+declare v_bad text;
+begin
+  with now_acl as (
+    select 'rel:' || c.oid::regclass::text as obj,
+           coalesce(c.relacl::text, '<default>') || ' rls=' || c.relrowsecurity::text
+             || ' policies=' || (select count(*) from pg_policy pol where pol.polrelid = c.oid)::text as acl
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+     where n.nspname = 'public' and c.relkind in ('r', 'p', 'v', 'm', 'S', 'f') and c.relname not like 'wh\_%'
+    union all
+    select 'fn:' || p.oid::regprocedure::text, coalesce(p.proacl::text, '<default>')
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname not like 'wh\_%')
+  select string_agg(coalesce(b.obj, a.obj), ', ' order by coalesce(b.obj, a.obj)) into v_bad
+    from public.wh__acl_before b full join now_acl a on a.obj = b.obj
+   where b.acl is distinct from a.acl;
+  if v_bad is not null then raise exception 'WH_SELFTEST_FAIL portal objects changed: %', v_bad; end if;
+
+  select string_agg(table_name || ':' || grantee || ':' || privilege_type, ', ') into v_bad
+    from information_schema.role_table_grants
+   where table_schema = 'public' and table_name like 'wh\_%' and table_name <> 'wh__acl_before' and grantee in ('anon', 'authenticated')
+     and not (privilege_type = 'SELECT' and (table_name = 'wh_species' or (grantee = 'authenticated' and table_name in ('wh_accounts', 'wh_items', 'wh_capsules'))));
+  if v_bad is not null then raise exception 'WH_SELFTEST_FAIL players hold table privileges they must not: %', v_bad; end if;
+
+  select string_agg(c.relname, ', ') into v_bad
+    from pg_class c join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public' and c.relkind = 'S' and c.relname like 'wh\_%'
+     and (has_sequence_privilege('anon', c.oid, 'usage') or has_sequence_privilege('anon', c.oid, 'select') or has_sequence_privilege('anon', c.oid, 'update')
+       or has_sequence_privilege('authenticated', c.oid, 'usage') or has_sequence_privilege('authenticated', c.oid, 'select') or has_sequence_privilege('authenticated', c.oid, 'update'));
+  if v_bad is not null then raise exception 'WH_SELFTEST_FAIL players can use WH sequences: %', v_bad; end if;
+
+  select string_agg(p.proname, ', ' order by p.proname) into v_bad
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname like 'wh\_%'
+     and (has_function_privilege('anon', p.oid, 'execute')
+       or (has_function_privilege('authenticated', p.oid, 'execute') and p.proname not in (
+           'wh_block', 'wh_block_list', 'wh_board_search', 'wh_cancel_trade', 'wh_confirm_trade', 'wh_counter_trade', 'wh_friend_code_get',
+           'wh_friend_code_rotate', 'wh_friend_list', 'wh_friend_redeem', 'wh_friend_remove', 'wh_friend_respond', 'wh_friend_shelf', 'wh_handle_set',
+           'wh_inventory', 'wh_listing_cancel', 'wh_listing_create', 'wh_mark_seen', 'wh_op_status', 'wh_propose_trade', 'wh_report', 'wh_set_fav',
+           'wh_shelf_set', 'wh_state', 'wh_trade_emote', 'wh_trade_inbox', 'wh_trade_view', 'wh_unblock')));
+  if v_bad is not null then raise exception 'WH_SELFTEST_FAIL players can execute: %', v_bad; end if;
+end $$;
+drop table public.wh__acl_before;
 ```
 
 ## Appendix B. Reference host (TypeScript, DRAFT, NOT DEPLOYED)
@@ -1133,6 +1267,9 @@ const u32 = (): number => { const u = new Uint32Array(1); webcrypto.getRandomVal
 const digestOf = (o: unknown): string => createHash('sha256').update(JSON.stringify(o)).digest('hex').slice(0, 32);
 const idxOf = (id: SpeciesId): number => CATALOG.find((d) => d.id === id)!.idx;
 const isIdem = (x: unknown): x is string => typeof x === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(x);
+/** Tidy-up's key for its i-th merge: a hash, so sub-keys can never collide. (The first draft used `${idem}-${i}`.slice(0, 64), which drops the
+ *  suffix for a 63- or 64-character key: every merge then shared one key and the second one answered idem_reuse.) 40 characters, inside the idem alphabet. */
+export const tidySubKey = (idem: string, i: number): string => 't' + createHash('sha256').update(`wh-tidy:${idem}:${i}`).digest('hex').slice(0, 39);
 
 /** What the preview panel and the server both compute: if this changed between preview and commit, the player is shown the new odds first. */
 export function oddsDigest(p: MergePreviewOk): string {
@@ -1283,7 +1420,7 @@ export function createHost(db: Db, deps: HostDeps = {}) {
     if (!isIdem(req?.idem) || !Array.isArray(req.plan) || req.plan.length > 10) return { ok: false, error: 'bad_payload' };
     const results: any[] = [];
     for (let i = 0; i < req.plan.length; i++) {
-      const r = await merge(uid, { idem: `${req.idem}-${i}`.slice(0, 64).padEnd(16, '0'), items: req.plan[i] });
+      const r = await merge(uid, { idem: tidySubKey(req.idem, i), items: req.plan[i] });
       results.push(r); if (!r.ok) break;                                                                 // stop at the first refusal; what was done stays done
     }
     return { ok: true, results, done: results.filter((r) => r.ok).length };
@@ -1301,14 +1438,14 @@ export function createHost(db: Db, deps: HostDeps = {}) {
 }
 ```
 
-## Appendix C. Host test suite (ran 36/36)
+## Appendix C. Host test suite (ran 36/36 on 2026-10-02; one check added on 2026-10-05, not run)
 
-Run against the scratch database after loading the SQL of Appendix A (and TRADE.md Appendix A, which the conservation view lives in). `Db.rpc` shells out to `psql` as `service_role`.
+Run against the scratch database after loading the SQL of Appendix A (and TRADE.md Appendix A, which the conservation view lives in). `Db.rpc` shells out to `psql` as `service_role`. The Tidy-up check with a 64-character key was added after the 2026-10-05 audit and has not been run (no PostgreSQL in that container).
 
 ```ts
 // Local test of the reference host against the draft SQL (PG16 + stub). Plain node: node host_test.ts
 import { spawnSync } from 'node:child_process';
-import { createHost, oddsDigest, WH_QUEUE_MAX } from './host_ref.ts';
+import { createHost, oddsDigest, WH_QUEUE_MAX, tidySubKey } from './host_ref.ts';
 import { CATALOG, SPECIES, speciesBaseGenome } from './data/catalog.ts';
 import { TIERS, TIER_ODDS } from './core/rarity.ts';
 import { MERGE_COST, previewMerge } from './core/merge.ts';
@@ -1425,6 +1562,14 @@ check('merging items that are not yours is refused', (await host.merge(mu, { ide
 const pairs: string[][] = []; for (let i = 0; i < 12; i++) pairs.push(give('wisplet', 2));
 const td = await host.tidy(mu, { idem: idem(), plan: pairs.slice(0, 10) });
 check('Tidy-up stops at the daily cap of 10 merges (what ran stays done)', td.ok && td.done === 10 - Number(sql(`select merges_today - ${td.done} from public.wh_accounts where user_id='${mu}'`)) && Number(sql(`select merges_today from public.wh_accounts where user_id='${mu}'`)) === 10, { done: td.done, last: td.results.at(-1)?.error });
+// Tidy-up with the longest allowed key: every merge runs under its own sub-key, and a retry replays all of them (added 2026-10-05, NOT run)
+{
+  sql(`update public.wh_accounts set merges_today = 0 where user_id='${mu}'`);            // test only: a fresh day for this account
+  const pairs64: string[][] = []; for (let i = 0; i < 3; i++) pairs64.push(give('cushlet', 2));
+  const k64 = 'a'.repeat(64); const t64 = await host.tidy(mu, { idem: k64, plan: pairs64 }); const again = await host.tidy(mu, { idem: k64, plan: pairs64 });
+  check('Tidy-up with a 64-character key: 3 merges under 3 distinct sub-keys, and the retry replays all 3', t64.ok && t64.done === 3 && again.done === 3 && again.results.every((r: any) => r.replayed === true)
+    && new Set([0, 1, 2].map((i) => tidySubKey(k64, i))).size === 3, { done: t64.done, errors: t64.results.map((r: any) => r.error) });
+}
 // REPLAY AUDIT: rebuild each merge from its ledger row (draws, pity before, candidate ownership) and the parents' stored genomes, and compare
 {
   const { rollMerge: rm } = await import('./core/merge.ts');
