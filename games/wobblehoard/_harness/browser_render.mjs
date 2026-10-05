@@ -366,7 +366,7 @@ try {
     const run = (o) => rp.evaluate((o) => window.__RV__.runCeremony(o), o);
     const DT = 1 / 30;
     const tiersToRun = QUICK ? ['common', 'mythic'] : TIERS6;
-    const REQ = { capsule: ['grab', 'crack', 'burst', 'reveal', 'settle'], merge: ['press', 'fold', 'charge', 'burst', 'reveal', 'settle'] };
+    const REQ = { capsule: (tier) => ['grab', 'crack', ...(TIERS6.indexOf(tier) >= 2 ? ['preroll'] : []), 'burst', 'reveal', 'settle'], merge: () => ['press', 'fold', 'charge', 'burst', 'reveal', 'settle'] };
     let worstTransitions = 0, worstWhere = '';
     const natural = {};
     for (const kind of ['capsule', 'merge']) {
@@ -377,12 +377,12 @@ try {
         const flashes = zigzag(r.lumas), win = worstWindow(flashes, DT), sw = swing(r.lumas);
         if (win > worstTransitions) { worstTransitions = win; worstWhere = `${kind}:${tier}`; }
         const order = r.beats.map((b) => b.beat);
-        const beatsOk = JSON.stringify(order) === JSON.stringify(REQ[kind]);
+        const beatsOk = JSON.stringify(order) === JSON.stringify(REQ[kind](tier));
         const ts = r.beats.map((b) => b.t);
         const monotone = ts.every((t, i) => i === 0 || t >= ts[i - 1] - 1e-6);
         R2.durations[`${kind}:${tier}`] = { budget, measured: r.seconds, reported: r.duration, frames: r.frames, beats: r.beats.map((b) => `${b.beat}@${b.t.toFixed(2)}`), maxScreenLight: r.maxLight, maxParticles: r.maxParticles, lumaMin: sw.min, lumaMax: sw.max, transitions1s: win, transitions1s_at_0_02: worstWindow(zigzagT(r.lumas, 0.02), DT), transitions1s_at_0_01: worstWindow(zigzagT(r.lumas, 0.01), DT) };
         check(Math.abs(r.seconds - budget) <= 0.1 * budget && Math.abs(r.duration - budget) <= 0.01 * budget + 1e-9, `${kind} ${tier}: duration ${r.seconds.toFixed(2)} s within 10% of the ${budget.toFixed(1)} s budget`, `reported ${r.duration.toFixed(2)} s`);
-        check(beatsOk && monotone && r.doneResolved && r.bodiesAtEnd === 1 && r.resultVisibleAtEnd, `${kind} ${tier}: beats fire once in order ${REQ[kind].join('>')}, done resolves, result is the one visible body`, `${order.join('>')} done=${r.doneResolved} bodies=${r.bodiesAtEnd}`);
+        check(beatsOk && monotone && r.doneResolved && r.bodiesAtEnd === 1 && r.resultVisibleAtEnd, `${kind} ${tier}: beats fire once in order ${REQ[kind](tier).join('>')}, done resolves, result is the one visible body`, `${order.join('>')} done=${r.doneResolved} bodies=${r.bodiesAtEnd}`);
         check(r.maxLight <= 0.25 + 1e-6 && win <= 3, `${kind} ${tier}: flash-safe (screen alpha <= 0.25; <= 3 luminance transitions in any 1 s)`, `max alpha ${r.maxLight.toFixed(3)}, worst 1 s window ${win} transitions, luma ${sw.min.toFixed(3)}..${sw.max.toFixed(3)}, particles <= ${r.maxParticles}`);
       }
     }

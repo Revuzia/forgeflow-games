@@ -20,7 +20,7 @@ const args = process.argv.slice(2);
 const opt = {};
 const names = [];
 for (let i = 0; i < args.length; i++) {
-  if (args[i] === '--p' || args[i] === '--f' || args[i] === '--g' || args[i] === '--detail' || args[i] === '--out' || args[i] === '--px' || args[i] === '--tag' || args[i] === '--gf' || args[i] === '--gb' || args[i] === '--gs' || args[i] === '--gz') opt[args[i].slice(2)] = args[++i];
+  if (args[i] === '--p' || args[i] === '--f' || args[i] === '--g' || args[i] === '--detail' || args[i] === '--out' || args[i] === '--px' || args[i] === '--tag' || args[i] === '--gf' || args[i] === '--gb' || args[i] === '--gs' || args[i] === '--gz' || args[i] === '--q') opt[args[i].slice(2)] = args[++i];
   else names.push(args[i]);
 }
 const scenarios = names.length ? names : ALL;
@@ -44,6 +44,7 @@ try {
     if (opt.detail) qs.set('detail', opt.detail);
     if (opt.px) qs.set('px', opt.px);
     for (const k of ['gf', 'gb', 'gs', 'gz']) if (opt[k] !== undefined) qs.set(k, opt[k]);
+    if (opt.q) for (const [k, v] of new URLSearchParams(opt.q)) qs.set(k, v);   // --q 'frames=1.2,1.3&cd=1.6&ct=0,0.7,0' ad-hoc camera / frame overrides
     await page.goto(`${vite.url}_harness/physview/index.html?${qs}`, { waitUntil: 'load' });
     await page.waitForFunction(() => window.__PV__ && window.__PV__.ready, null, { timeout: 90000 });
     const info = await page.evaluate(() => {

@@ -184,7 +184,7 @@ const SCENARIOS: Record<string, Scenario> = {
 };
 
 interface Snap {
-  t: number; pos: Float32Array; strain: Float32Array;
+  t: number; pos: Float32Array; strain: Float32Array; bad: Uint8Array;
   tips: Array<{ x: number; y: number; z: number; r: number } | null>;
   top: number; foot: number; cy: number; cx: number; cz: number;
   comp: number; rate: number; stretch: number; vol: number; kin: number; grounded: boolean; fingers: number; grabbed: boolean;
@@ -194,7 +194,15 @@ interface LogRow { t: number; comp: number; rate: number; stretch: number; vol: 
 
 const q = new URLSearchParams(location.search);
 const scnName = q.get('scn') ?? 'side_poke';
-const sc = SCENARIOS[scnName] ?? SCENARIOS.side_poke;
+const sc: Scenario = { ...(SCENARIOS[scnName] ?? SCENARIOS.side_poke) };
+// ad-hoc inspection overrides (any scenario): ?frames=t1,t2,...(12) ?cd=<camera distance> ?ct=x,y,z ?yaw= ?pitch= ?mark=1 (tint folded triangles magenta)
+{
+  const fr = q.get('frames'); if (fr) { const a = fr.split(',').map(Number).filter(Number.isFinite); if (a.length) sc.frames = a; }
+  const cd = q.get('cd'); if (cd && Number.isFinite(Number(cd))) sc.camDist = Number(cd);
+  const ct = q.get('ct'); if (ct) { const a = ct.split(',').map(Number); if (a.length === 3 && a.every(Number.isFinite)) sc.camTarget = [a[0], a[1], a[2]]; }
+  const yw = q.get('yaw'); if (yw && Number.isFinite(Number(yw))) sc.yawDeg = Number(yw);
+  const pt = q.get('pitch'); if (pt && Number.isFinite(Number(pt))) sc.pitchDeg = Number(pt);
+}
 let genome = genomeFromParam(q.get('g'));
 // ?gf= ?gb= ?gs= ?gz= override firmness / bounce / stretch / size (0..1) for the genome-extremes filmstrips
 {
@@ -226,6 +234,8 @@ const triEdges: Array<[number, number]> = (() => {
   return out;
 })();
 const triN = new Float64Array((body.indices.length / 3) * 3);
+const badV = new Uint8Array(body.vertexCount);   // vertices of a triangle that is part of an edge over MARK_DEG (filled by foldStats, drawn magenta with ?mark=1)
+const MARK_DEG = 100;
 function foldStats(): { fold: number; folds90: number; inward: number } {
   const P = body.positions, I = body.indices, nT = I.length / 3;
   let inward = 0;
@@ -239,16 +249,20 @@ function foldStats(): { fold: number; folds90: number; inward: number } {
     if (nx * cx + ny * cy + nz * cz < 0) inward++;
   }
   let worst = 1, n90 = 0;   // worst = smallest cosine
+  badV.fill(0);
+  const cosMark = Math.cos((MARK_DEG * Math.PI) / 180);
   for (const [t1, t2] of triEdges) {
     const dot = triN[t1 * 3] * triN[t2 * 3] + triN[t1 * 3 + 1] * triN[t2 * 3 + 1] + triN[t1 * 3 + 2] * triN[t2 * 3 + 2];
     if (dot < worst) worst = dot;
     if (dot < 0) n90++;
+    if (dot < cosMark) for (const t of [t1, t2]) for (let k = 0; k < 3; k++) badV[I[t * 3 + k]] = 1;
   }
   return { fold: (Math.acos(Math.max(-1, Math.min(1, worst))) * 180) / Math.PI, folds90: n90, inward };
 }
 
 // ---- run the scenario with a fixed dt, capture snapshots at the requested times
 const DT = 1 / Number(q.get('fps') ?? 60);
+const MARK = q.get('mark') === '1';
 const snaps: Snap[] = [];
 const log: LogRow[] = [];
 const events: Array<{ t: number; kind: string; intensity: number; finger: number; heldFor: number }> = [];
@@ -262,7 +276,7 @@ function snapshot(t: number): Snap {
   const fs = foldStats();
   return {
     fold: fs.fold, folds90: fs.folds90, inward: fs.inward,
-    t, pos: Float32Array.from(P), strain: Float32Array.from(body.strain),
+    t, pos: Float32Array.from(P), strain: Float32Array.from(body.strain), bad: Uint8Array.from(badV),
     tips: [body.tip(0), body.tip(1)].map((k) => (k ? { x: k.x, y: k.y, z: k.z, r: k.r } : null)),
     top, foot, cy: body.center.y, cx: body.center.x, cz: body.center.z,
     comp: m.compression, rate: m.compressionRate, stretch: m.stretch, vol: m.volume, kin: m.kinetic, grounded: m.grounded, fingers: m.fingers, grabbed: m.grabbed,
@@ -358,6 +372,7 @@ function drawSnap(s: Snap, idx: number): void {
     const tint = d >= 0 ? [1.0, 0.25, 0.2] : [0.25, 0.8, 1.0];
     const a = Math.abs(d) * 0.85;
     col[i * 3] = base[0] + (tint[0] - base[0]) * a; col[i * 3 + 1] = base[1] + (tint[1] - base[1]) * a; col[i * 3 + 2] = base[2] + (tint[2] - base[2]) * a;
+    if (MARK && s.bad[i]) { col[i * 3] = 1; col[i * 3 + 1] = 0; col[i * 3 + 2] = 1; }
   }
   geo.attributes.color.needsUpdate = true;
   geo.computeVertexNormals();

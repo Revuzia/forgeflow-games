@@ -304,6 +304,7 @@ export class CapsuleRun extends Run {
         }
       }
     }
+    if (i >= 2 && t >= 0.65 * this.ks) this.beat('preroll');   // Rare+: the audio swell starts here, PREROLL_S[i] before the burst
     // --- B2: burst ---
     let ts = 1;
     if (t >= burstAt && !this.burst) this.doBurst();

@@ -189,7 +189,8 @@ export interface AddBodyOpts {
 }
 
 /** Beats the ceremonies report, in time order, so the shell can fire audio / haptics in sync. `t` = seconds since the ceremony started. */
-export type CeremonyBeat = 'grab' | 'crack' | 'burst' | 'reveal' | 'press' | 'fold' | 'charge' | 'settle';
+/** 'preroll' is capsule-only and fires for Rare and up at 0.65 s (the start of the tier pre-roll, 0.3 / 0.5 / 0.8 / 1.0 s before 'burst'): the audio reveal swell starts there (_spec/SOUND.md). */
+export type CeremonyBeat = 'grab' | 'crack' | 'burst' | 'reveal' | 'press' | 'fold' | 'charge' | 'settle' | 'preroll';
 export interface CeremonyHooks {
   onBeat?(beat: CeremonyBeat, info: { t: number; tier: TierName }): void;
 }
