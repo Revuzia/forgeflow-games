@@ -277,14 +277,18 @@ function mkHeightFn(mapId, seed) {
 }
 
 // ── palette / biome coloring per map ────────────────────────────────────────
-function colorAt(mapId, h, x, z, seed) {
+function colorAt(mapId, h, x, z, seed, out) {
+  // `out` (optional) receives the colour and is returned - the clutter ring
+  // recolours up to 1,400 tufts per rebuild. Same arithmetic as the old literal
+  // returns, term for term.
+  const o = out || [0, 0, 0];
   const n = fbm(x / 60, z / 60, seed + 51, 2, 2, 0.5);
   if (mapId === "isla_viva") {
-    if (h < 0.4) return [0.93, 0.87, 0.64];                       // sand
-    if (h < 2.2) return [0.90 - n * 0.1, 0.84, 0.58];
-    if (h > 58) return [0.42, 0.38, 0.36];                        // volcano rock
-    if (h > 34) return [0.48 + n * 0.1, 0.44, 0.38];
-    return [0.18 + n * 0.15, 0.62 + n * 0.18, 0.28];              // lush grass
+    if (h < 0.4) return rgb(o, 0.93, 0.87, 0.64);                 // sand
+    if (h < 2.2) return rgb(o, 0.90 - n * 0.1, 0.84, 0.58);
+    if (h > 58) return rgb(o, 0.42, 0.38, 0.36);                  // volcano rock
+    if (h > 34) return rgb(o, 0.48 + n * 0.1, 0.44, 0.38);
+    return rgb(o, 0.18 + n * 0.15, 0.62 + n * 0.18, 0.28);        // lush grass
   }
   if (mapId === "ashgrid") {
     // SAVANNA split into a green west and an arid DESERT east — a GEOGRAPHIC zone
@@ -292,29 +296,30 @@ function colorAt(mapId, h, x, z, seed) {
     const edge = fbm(x / 260, z / 260, seed + 61, 2, 2, 0.5) * 120;
     const desert = Math.max(0, Math.min(1, (x - 40 + edge) / 320));   // 1 = desert dunes (east)
     const m = fbm(x / 130, z / 130, seed + 77, 2, 2, 0.5);            // local green/gold patches
-    if (h < 0.5) return [0.85, 0.74, 0.5];                            // sandy dry wash
-    if (h > 28) return [0.55 + n * 0.08, 0.44, 0.31];                 // sun-baked bluffs
-    const green = [0.58 + n * 0.12, 0.70 + m * 0.20, 0.30 + n * 0.08]; // savanna grass (brighter, greener)
-    const sand = [0.90 + n * 0.07, 0.78 + n * 0.06, 0.50];            // desert sand (bright)
-    return [green[0] + (sand[0] - green[0]) * desert, green[1] + (sand[1] - green[1]) * desert, green[2] + (sand[2] - green[2]) * desert];
+    if (h < 0.5) return rgb(o, 0.85, 0.74, 0.5);                      // sandy dry wash
+    if (h > 28) return rgb(o, 0.55 + n * 0.08, 0.44, 0.31);           // sun-baked bluffs
+    const g0 = 0.58 + n * 0.12, g1 = 0.70 + m * 0.20, g2 = 0.30 + n * 0.08;   // savanna grass (brighter, greener)
+    const s0 = 0.90 + n * 0.07, s1 = 0.78 + n * 0.06, s2 = 0.50;           // desert sand (bright)
+    return rgb(o, g0 + (s0 - g0) * desert, g1 + (s1 - g1) * desert, g2 + (s2 - g2) * desert);
   }
   if (mapId === "deepwood") {
     // FOREST with a distinct northern SNOW biome — a GEOGRAPHIC zone (guaranteed
     // every seed) with an organic noisy edge. Snow is intentionally bright bluish-white.
     const edge = fbm(x / 240, z / 240, seed + 91, 2, 2, 0.5) * 90;
     const snow = Math.max(0, Math.min(1, (-z - 100 + edge) / 260));   // 1 = deep snow (far north)
-    let base;
-    if (h < 0.6) base = [0.55, 0.5, 0.38];                            // river mud
-    else if (h > 44) base = [0.5, 0.48, 0.45];                        // rocky tops
-    else base = [0.12 + n * 0.1, 0.4 + n * 0.14, 0.16];              // deep green
+    let b0, b1, b2;
+    if (h < 0.6) { b0 = 0.55; b1 = 0.5; b2 = 0.38; }                  // river mud
+    else if (h > 44) { b0 = 0.5; b1 = 0.48; b2 = 0.45; }              // rocky tops
+    else { b0 = 0.12 + n * 0.1; b1 = 0.4 + n * 0.14; b2 = 0.16; }    // deep green
     if (snow > 0.01) {
-      const sc = [0.90 + n * 0.06, 0.94 + n * 0.05, 0.98];           // snow (crisp bright white, faint blue)
-      return [base[0] + (sc[0] - base[0]) * snow, base[1] + (sc[1] - base[1]) * snow, base[2] + (sc[2] - base[2]) * snow];
+      const c0 = 0.90 + n * 0.06, c1 = 0.94 + n * 0.05, c2 = 0.98;   // snow (crisp bright white, faint blue)
+      return rgb(o, b0 + (c0 - b0) * snow, b1 + (c1 - b1) * snow, b2 + (c2 - b2) * snow);
     }
-    return base;
+    return rgb(o, b0, b1, b2);
   }
-  return [0.5 + n * 0.1, 0.62, 0.42];
+  return rgb(o, 0.5 + n * 0.1, 0.62, 0.42);
 }
+function rgb(o, r, g, b) { o[0] = r; o[1] = g; o[2] = b; return o; }
 
 // ═══════════════════════════════════════════════════════════════════════════
 /** Release the GPU resources the LAST map allocated.
@@ -1861,12 +1866,49 @@ export async function buildMap(W, mapId) {
   // roughness 0.42 / metalness 0.6): scene.environment is still null everywhere in
   // this game, so a metal lobe would reflect pure black and look worse, not better.
   const EMIT = { "#ffe9a8": 0xffe9a8, "#fff2b0": 0xfff2b0 };
+  // ONE MESH PER TEXTURE KIND, colour per VERTEX (lane S, 2026-10). The batches
+  // were one merged mesh per colour x kind — ~30 meshes, each spanning the whole
+  // map, so neither the camera nor the shadow camera could ever reject one: ~30
+  // main-pass and ~30 shadow-pass draw calls a frame for ~9 k triangles, 29 of the
+  // drop cluster's 39 shadow:map calls. Every non-emissive batch already shares
+  // roughness/metalness/normalScale and differs only in colour and texture kind,
+  // so the colour moves into a vertex attribute (linear, exactly what the material
+  // colour converted to) and the kinds merge: diffuse = white x vColor x texel,
+  // the same product as colour x texel, pixel for pixel. Same program family as
+  // the terrain (vertexColors + map + normalMap). The two emissive colours keep
+  // their own mesh each: emissive is a uniform.
+  const kindGroups = {};                          // tkind -> [geometry with a color attribute]
+  const _vc = new THREE.Color();
   for (const bkey in batches) {
-    const merged = BufferGeometryUtils.mergeGeometries(batches[bkey], false);
     const bar = bkey.lastIndexOf("|");
     const color = bkey.slice(0, bar), tkind = bkey.slice(bar + 1);
+    if (EMIT[color]) continue;                    // built below, one mesh per colour
+    _vc.set(color);
+    const list = kindGroups[tkind] || (kindGroups[tkind] = []);
+    for (const geo of batches[bkey]) {
+      const n = geo.attributes.position.count, ca = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { ca[i * 3] = _vc.r; ca[i * 3 + 1] = _vc.g; ca[i * 3 + 2] = _vc.b; }
+      geo.setAttribute("color", new THREE.BufferAttribute(ca, 3));
+      list.push(geo);
+    }
+  }
+  for (const tkind in kindGroups) {
+    const merged = BufferGeometryUtils.mergeGeometries(kindGroups[tkind], false);
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.88, metalness: 0.04 });
+    let tx = null;
+    try { tx = KIND_TEX[tkind] ? KIND_TEX[tkind](aniso) : _st; } catch (e) { tx = _st; }
+    if (tx) { mat.map = tx.map; mat.normalMap = tx.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5); }
+    const mesh = new THREE.Mesh(merged, mat);
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    mesh.name = "structures:" + tkind;
+    g.add(mesh);
+  }
+  for (const bkey in batches) {
+    const color = bkey.slice(0, bkey.lastIndexOf("|"));
     const emit = EMIT[color];
-    const mat = new THREE.MeshStandardMaterial({ color, roughness: emit ? 0.5 : 0.88, metalness: emit ? 0 : 0.04 });
+    if (!emit) continue;                          // merged per kind above
+    const merged = BufferGeometryUtils.mergeGeometries(batches[bkey], false);
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0 });
     // 1.4 already clipped to white on screen, so the extra headroom costs nothing
     // visible on the lamp itself — but the bloom pass samples the HDR render target
     // BEFORE OutputPass tonemaps it, so values above the 0.72 threshold are what
@@ -1874,15 +1916,7 @@ export async function buildMap(W, mapId) {
     // as light sources at distance. Do NOT chase this with kn.bloom.strength instead:
     // a global raise blooms the Deepwood snow and the Savanna sand, which is exactly
     // the "bloom haze" that 0.14 was tuned to prevent.
-    if (emit) { mat.emissive = new THREE.Color(emit); mat.emissiveIntensity = 2.8; mat.toneMapped = false; }
-    else {
-      // per-kind relief: shingle/plank/metal/block get their own pattern, "s"
-      // keeps the struct brick. Built through the same _texCache, so dispose
-      // treats them as shared, same as ground/struct.
-      let tx = null;
-      try { tx = KIND_TEX[tkind] ? KIND_TEX[tkind](aniso) : _st; } catch (e) { tx = _st; }
-      if (tx) { mat.map = tx.map; mat.normalMap = tx.normal; mat.normalScale = new THREE.Vector2(0.5, 0.5); }
-    }
+    mat.emissive = new THREE.Color(emit); mat.emissiveIntensity = 2.8; mat.toneMapped = false;
     const mesh = new THREE.Mesh(merged, mat);
     mesh.castShadow = true; mesh.receiveShadow = true;
     g.add(mesh);
@@ -2075,6 +2109,7 @@ export async function buildMap(W, mapId) {
     g.add(clutter);
     const _cm = new THREE.Matrix4(), _cq = new THREE.Quaternion(), _cs = new THREE.Vector3(), _cp = new THREE.Vector3();
     const _cy = new THREE.Vector3(0, 1, 0), _hide = new THREE.Matrix4().makeScale(1e-4, 1e-4, 1e-4);
+    const _clC = [0, 0, 0];                           // colorAt out (a rebuild colours up to 1,400 tufts)
     // The tufts used to be a golden-angle spiral bolted to the CAMERA: instance i
     // always sat at (clX + cos(i*GA)*r, ...), so the offset depended only on i and
     // every tuft was rigidly parented to the camera anchor. Re-snapping that
@@ -2096,7 +2131,8 @@ export async function buildMap(W, mapId) {
       if (clT < 0.5) return;
       // rebuild only when the camera has walked far enough that the ring content
       // would actually change, or on a slow watchdog tick
-      if (Math.hypot(cam.position.x - clAX, cam.position.z - clAZ) < CELL && clT < 6) return;
+      const mvx = cam.position.x - clAX, mvz = cam.position.z - clAZ;   // (Math.hypot allocates: rest args)
+      if (mvx * mvx + mvz * mvz < CELL * CELL && clT < 6) return;
       clT = 0; clAX = cam.position.x; clAZ = cam.position.z;
       const cx0 = Math.floor((clAX - CL_R) / CELL), cx1 = Math.ceil((clAX + CL_R) / CELL);
       const cz0 = Math.floor((clAZ - CL_R) / CELL), cz1 = Math.ceil((clAZ + CL_R) / CELL);
@@ -2122,7 +2158,7 @@ export async function buildMap(W, mapId) {
           if (s < 0.02) continue;
           _cm.compose(_cp.set(x, y, z), _cq.setFromAxisAngle(_cy, h2 * 6.283), _cs.set(s, s, s));
           clutter.setMatrixAt(n, _cm);
-          const c = colorAt(mapId, y, x, z, seed);
+          const c = colorAt(mapId, y, x, z, seed, _clC);
           clutter.instanceColor.setXYZ(n, c[0] * 0.82, c[1] * 0.82, c[2] * 0.82);   // contact darkening
           n++;
         }
@@ -2177,10 +2213,18 @@ export async function buildMap(W, mapId) {
     }
   });
   let qStamp = 0;
+  //   ALLOCATION (lane S, 2026-10): `o.length = 0` then push() made V8 drop the
+  //   array's backing store on EVERY query and allocate a new one on the first
+  //   push - ~2.7 KB a match frame of "push" garbage across ~110 queries. Results
+  //   are now written by index into the kept backing store and the length is set
+  //   once at the end; an empty result from the shared scratch is a frozen shared
+  //   [] (every caller only reads it), so a miss never resets the scratch either.
+  //   Same colliders, same order.
   const qOut = [];
+  const Q_EMPTY = Object.freeze([]);
   function queryColliders(x, z, r, out) {
     const o = out || qOut;
-    o.length = 0;
+    let n = 0;
     const stamp = ++qStamp;
     const x0 = Math.floor((x - r) / CELL), x1 = Math.floor((x + r) / CELL);
     const z0 = Math.floor((z - r) / CELL), z1 = Math.floor((z + r) / CELL);
@@ -2189,14 +2233,26 @@ export async function buildMap(W, mapId) {
       if (!l) continue;
       for (let i = 0; i < l.length; i++) {
         const c = l[i];
-        if (!c.dead && c._qs !== stamp) { c._qs = stamp; o.push(c); }
+        if (!c.dead && c._qs !== stamp) { c._qs = stamp; o[n++] = c; }
       }
     }
+    if (n === 0 && !out) return Q_EMPTY;
+    if (o.length !== n) o.length = n;
     return o;
   }
 
   // ── LOS (coarse march vs terrain + static boxes) ──────────────────────────
   const losCols = [];
+  function spanTouches(cols, x0, y0, z0, x1, y1, z1) {
+    const lx = (x0 < x1 ? x0 : x1) - 0.01, hx = (x0 < x1 ? x1 : x0) + 0.01;
+    const ly = (y0 < y1 ? y0 : y1) - 0.01, hy = (y0 < y1 ? y1 : y0) + 0.01;
+    const lz = (z0 < z1 ? z0 : z1) - 0.01, hz = (z0 < z1 ? z1 : z0) + 0.01;
+    for (let i = 0; i < cols.length; i++) {
+      const c = cols[i];
+      if (c.maxX >= lx && c.minX <= hx && c.maxY >= ly && c.minY <= hy && c.maxZ >= lz && c.minZ <= hz) return true;
+    }
+    return false;
+  }
   function losBlocked(ax, ay, az, bx, by, bz) {
     const dx = bx - ax, dy = by - ay, dz = bz - az;
     const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -2219,7 +2275,12 @@ export async function buildMap(W, mapId) {
       const hx = x1 - x0, hz = z1 - z0;                   // (Math.hypot allocates: rest-args builtin)
       const r = Math.sqrt(hx * hx + hz * hz) / 2 + 0.6;
       const cols = queryColliders((x0 + x1) / 2, (z0 + z1) / 2, r, losCols);
-      if (cols.length && S.segmentColliders(x0, y0, z0, x1, y1, z1, cols)) return true;
+      // segmentColliders is exact but costs a boxed call (6 doubles) and a result
+      // object per hit; most spans have no collider whose box even overlaps the
+      // span's box, and a slab test can only hit a box it overlaps, so those spans
+      // skip it. Overlap is tested with a 1 cm margin (a superset), so the answer
+      // is the same boolean as before.
+      if (cols.length && spanTouches(cols, x0, y0, z0, x1, y1, z1) && S.segmentColliders(x0, y0, z0, x1, y1, z1, cols)) return true;
     }
     const steps = Math.min(60, Math.max(6, Math.floor(len / 3)));
     for (let i = 1; i < steps; i++) {

@@ -137,6 +137,8 @@ export function disposeLootResources(W) {
     });
   };
   keep(ringGeo); keep(glowTex); keep(chestProto);
+  if (blobMesh) { keep(blobMesh.geometry); keep(blobMesh.material); }
+  for (const d of chestDepthMats.values()) keep(d);
   for (const k in ringMats) keep(ringMats[k]);
   for (const k in kindGeos) keep(kindGeos[k]);
   for (const k in kindMats) keep(kindMats[k]);
@@ -190,6 +192,8 @@ export function populate(W) {
   const g = W.group("loot");
   g.clear();
   g.userData.disposed = false;
+  blobReset();
+  g.add(blobInit());
 
   let fi = 0;
   const floorPts = [];
@@ -220,6 +224,7 @@ export function populate(W) {
     const lp = floorPts[Math.floor(rng() * floorPts.length)];
     spawnItem(W, { kind: "ammo", id: "light", count: K.AMMO.light.box }, lp.x - 0.6, lp.y, lp.z + 1.0, "fl:" + i);
   }
+  blobFlush();
 }
 
 /** Test hook (read-only by convention): every live ground item, for the loot
@@ -232,6 +237,7 @@ export function debugItems() { return [...items.values()].filter((it) => !it.tak
 export function disposeMatch(W) {
   const r = disposeLootResources(W);
   items.clear(); chests.clear(); lootGrid.clear();
+  blobReset();
   takenIds.length = 0;
   supplyState = null;
   chestChannel.id = null; chestChannel.t = 0;
@@ -258,6 +264,127 @@ const kindMats = {
   shieldC: new THREE.MeshStandardMaterial({ color: 0x4aa8ff, emissive: 0x123a66, emissiveIntensity: 0.5 }),
 };
 
+// ── shadow policy (lane S, 2026-10) ─────────────────────────────────────────
+// The kernel's loadGLTF marks every GLB mesh castShadow, and every floor gun,
+// pickup and chest is a clone of one: 45 of the drop cluster's 264 draw calls were
+// loot in the SHADOW pass (multi-submesh guns up to ~6 k tris each, chest models
+// 150 m away) on top of 49 in the colour pass. Small pickups do not cast real-time
+// shadows in a BR (they float and spin over their rarity ring, which is their
+// ground contact); a chest is a solid object standing on the ground, so it casts
+// while the camera is within CHEST_SHADOW_R - beyond that its shadow is a few
+// texels of a 2048 map - and its silhouette shadow is handed back the moment you
+// walk up to it. From the glider (> 40 m up) no loot casts at all.
+const CHEST_SHADOW_R = 45, CHEST_SHADOW_R2 = CHEST_SHADOW_R * CHEST_SHADOW_R;
+const CHEST_SHADOW_OFF2 = 50 * 50;   // hysteresis: on inside 45 m, off past 50 m (no flicker at the edge)
+function noShadow(o) { o.traverse((n) => { if (n.castShadow) n.castShadow = false; }); return o; }
+// Chest casters render the shadow pass through their OWN depth material (one per
+// source material, shared by every chest, kept for the page like the protos).
+// three's shared shadow depth material copies .map from whichever caster it is
+// drawing but only re-selects its program at instancing/skinning boundaries, so
+// its variant (map / no map) depends on caster ORDER; switching chests in and out
+// by distance changed that order and linked a new depth program mid-drop
+// (measured: 1 on drop frame 1). A dedicated material per source material always
+// sees the same map, so its one program is linked by the match warm-up frame.
+const chestDepthMats = new Map();
+function chestDepthFor(mat) {
+  let d = chestDepthMats.get(mat);
+  if (!d) { d = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }); chestDepthMats.set(mat, d); }
+  return d;
+}
+
+// CONTACT BLOBS. With the real shadow gone, a floating gun lost the faint smudge
+// it used to leave on the ground (before/after screenshots, lane S 2026-10), so
+// every floor item gets a soft dark disc on the surface under it instead - the
+// standard pickup contact shadow. All of them are ONE InstancedMesh (one draw
+// call for the whole map, built once per page and re-parented each match, so the
+// instance buffer is never re-allocated). A slot shows only while its item is
+// drawn (the same 3D cull as the item), is parked at zero scale otherwise, and
+// changed slots go up as one sub-range a frame.
+const BLOB_MAX = 2048, BLOB_D = 0.95;
+let blobMesh = null, blobN = 0, blobLo = Infinity, blobHi = -1;
+const blobFree = [];
+const blobShown = new Float32Array(BLOB_MAX * 16);  // each slot's "visible" matrix (re-shown after a cull)
+const blobCols = [];                               // own queryColliders out array (never the shared scratch)
+const _bM = new THREE.Matrix4(), _bQ = new THREE.Quaternion(), _bS = new THREE.Vector3(1, 1, 1);
+const _bP = new THREE.Vector3(), _bN = new THREE.Vector3(), _bUp = new THREE.Vector3(0, 1, 0);
+const _bZero = new THREE.Matrix4().makeScale(0, 0, 0);
+function blobInit() {
+  if (blobMesh) return blobMesh;
+  const cv = document.createElement("canvas");
+  cv.width = cv.height = 64;
+  const ctx = cv.getContext("2d");
+  const gr = ctx.createRadialGradient(32, 32, 1, 32, 32, 31);
+  gr.addColorStop(0, "rgba(0,0,0,0.42)");
+  gr.addColorStop(0.5, "rgba(0,0,0,0.26)");
+  gr.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = gr;
+  ctx.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace;
+  const geo = new THREE.PlaneGeometry(BLOB_D, BLOB_D); geo.rotateX(-Math.PI / 2);
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  blobMesh = new THREE.InstancedMesh(geo, mat, BLOB_MAX);
+  blobMesh.name = "loot-blobs";
+  blobMesh.frustumCulled = false;                  // map-wide by design: one call, never culled
+  blobMesh.castShadow = false; blobMesh.receiveShadow = false;
+  blobMesh.renderOrder = -1;                       // first transparent: water covers, glows add on top
+  blobMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  blobMesh.count = 0;
+  return blobMesh;
+}
+function blobReset() { blobN = 0; blobFree.length = 0; blobLo = Infinity; blobHi = -1; if (blobMesh) blobMesh.count = 0; }
+function blobMark(i) { if (i < blobLo) blobLo = i; if (i > blobHi) blobHi = i; }
+function blobFlush() {
+  if (!blobMesh || blobHi < 0) return;
+  const a = blobMesh.instanceMatrix;
+  a.clearUpdateRanges();
+  a.addUpdateRange(blobLo * 16, (blobHi - blobLo + 1) * 16);
+  a.needsUpdate = true;
+  blobLo = Infinity; blobHi = -1;
+}
+/** Slot for a new item at (x, y, z): the matrix sits on the highest surface at or
+ *  below the item (a building floor, else the terrain, tilted to its slope).
+ *  -1 = no blob (pool full, or nothing within reach under the item). */
+function blobAlloc(W, it) {
+  if (!blobMesh || !W.map) return -1;
+  const M = W.map, x = it.pos.x, y = it.pos.y, z = it.pos.z;
+  let floor = M.heightAt(x, z), onBox = false;
+  if (M.queryColliders) {
+    const cs = M.queryColliders(x, z, 0.05, blobCols);
+    for (let i = 0; i < cs.length; i++) {
+      const c = cs[i];
+      if (c.kind !== "box" || x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) continue;
+      if (c.maxY <= y + 0.05 && c.maxY > floor) { floor = c.maxY; onBox = true; }
+    }
+  }
+  if (y - floor > 0.9) return -1;
+  const slot = blobFree.length ? blobFree.pop() : (blobN < BLOB_MAX ? blobN++ : -1);
+  if (slot < 0) return -1;
+  if (blobN > blobMesh.count) blobMesh.count = blobN;
+  if (onBox) _bQ.identity();
+  else {
+    const e = 0.6;
+    _bN.set(M.heightAt(x - e, z) - M.heightAt(x + e, z), 2 * e, M.heightAt(x, z - e) - M.heightAt(x, z + e)).normalize();
+    _bQ.setFromUnitVectors(_bUp, _bN);
+  }
+  // terrain: +5 cm clears the rendered chunk mesh (piecewise-linear between ~2.6 m
+  // vertices) where it sits a little above the analytic height; a box top is exact
+  _bM.compose(_bP.set(x, floor + (onBox ? 0.02 : 0.05), z), _bQ, _bS).toArray(blobShown, slot * 16);
+  return slot;
+}
+function blobShow(it, on) {
+  if (!blobMesh || it.blob == null || it.blob < 0) return;
+  if (on) _bM.fromArray(blobShown, it.blob * 16); else _bM.copy(_bZero);
+  blobMesh.setMatrixAt(it.blob, _bM);
+  blobMark(it.blob);
+}
+function blobRelease(it) {
+  if (it.blob == null || it.blob < 0) return;
+  blobShow(it, false);
+  blobFree.push(it.blob);
+  it.blob = -1;
+}
+
 function itemMesh(W, data) {
   const grp = new THREE.Group();
   grp.add(rarityRing(data.kind === "weapon" ? data.rarity : 0));
@@ -265,7 +392,7 @@ function itemMesh(W, data) {
     // weapon proto (async — attach when protos ready)
     if (W.weaponProto) {
       W.weaponProto(data.id).then((proto) => {
-        if (proto && grp.parent) { const m = proto.clone(); m.position.y = 0.45; m.rotation.z = 0.5; grp.add(m); }
+        if (proto && grp.parent) { const m = noShadow(proto.clone()); m.position.y = 0.45; m.rotation.z = 0.5; grp.add(m); }
       });
     }
   } else if (data.kind === "ammo") {
@@ -278,7 +405,7 @@ function itemMesh(W, data) {
     };
     if (W.itemProto) {
       W.itemProto(data.id).then((proto) => {
-        if (proto && grp.parent) { const m = proto.clone(); m.position.y = 0.42; grp.add(m); }
+        if (proto && grp.parent) { const m = noShadow(proto.clone()); m.position.y = 0.42; grp.add(m); }
         else if (grp.parent) fallback();
       });
     } else fallback();
@@ -295,8 +422,11 @@ export function spawnItem(W, data, x, y, z, id) {
   const gy = Math.max(y, W.map.heightAt(x, z) + 0.15);
   group.position.set(x, gy, z);
   W.group("loot").add(group);
-  items.set(id, { id, data, pos: { x, y: gy, z }, group, taken: false });
+  const it = { id, data, pos: { x, y: gy, z }, group, taken: false, blob: -1 };
+  items.set(id, it);
   gridAdd("item", id, { x, z });
+  it.blob = blobAlloc(W, it);
+  blobShow(it, true);
   return id;
 }
 
@@ -373,7 +503,19 @@ function spawnChest(W, x, y, z) {
     const m = proto.clone();
     group.add(m);
     const rec = chests.get(id);
-    if (rec) rec.model = m;
+    if (rec) {
+      rec.model = m;
+      // the model's casters, toggled by distance in update(). They stay ON until
+      // the first update so the match warm-up frame links their depth variant.
+      const casters = [];
+      m.traverse((n) => {
+        if (!n.isMesh || !n.castShadow) return;
+        if (Array.isArray(n.material)) { n.castShadow = false; return; }   // (none in chest.glb; never via the shared material)
+        n.customDepthMaterial = chestDepthFor(n.material);
+        casters.push(n);
+      });
+      rec.casters = casters; rec.cast = true;
+    }
   });
   W.group("loot").add(group);
   chests.set(id, { id, pos: { x, y: gy, z }, group, opened: false, glow, beam, ring });
@@ -492,6 +634,7 @@ function openChest(W, a, id) {
  *  match teardown can no longer reach it — so it is freed here. */
 function releaseItem(it) {
   if (it.group.parent) it.group.parent.remove(it.group);
+  blobRelease(it);
   if (it.glow) { it.glow.material.dispose(); it.glow = null; }
 }
 
@@ -790,7 +933,7 @@ export function update(W, dt) {
     const dx = it.pos.x - cp.x, dy = it.pos.y - cp.y, dz = it.pos.z - cp.z;
     const d2 = dx * dx + dy * dy + dz * dz;
     const vis = d2 < cull2;
-    if (it.group.visible !== vis) it.group.visible = vis;
+    if (it.group.visible !== vis) { it.group.visible = vis; blobShow(it, vis); }
     if (!vis || d2 > 90 * 90) continue;
     it.group.rotation.y = bobT * 1.4;
     it.group.position.y = it.pos.y + Math.sin(bobT * 2 + it.pos.x) * 0.08 + 0.08;
@@ -806,6 +949,10 @@ export function update(W, dt) {
     // glider toward, and hiding them would make chests unfindable on descent.
     if (c.model) c.model.visible = d2 < cull2;
     if (c.ring) c.ring.visible = d2 < cull2;
+    if (c.casters) {
+      const cast = d2 < (c.cast ? CHEST_SHADOW_OFF2 : CHEST_SHADOW_R2);
+      if (c.cast !== cast) { c.cast = cast; for (let i = 0; i < c.casters.length; i++) c.casters[i].castShadow = cast; }
+    }
     if (c.opened || !c.glow) continue;
     if (d2 > 160 * 160) continue;
     const k = 0.85 + Math.sin(bobT * 2.4 + c.pos.x) * 0.15;
@@ -875,6 +1022,7 @@ export function update(W, dt) {
     if (!b.isBot || !b.alive || b.gliding || b.netRemote || !b.inventory) continue;
     botWalkover(W, b);
   }
+  blobFlush();                    // this frame's blob slot changes, one sub-range upload
 }
 
 const WALK_R = 1.5, WALK_DY = 2.2;
