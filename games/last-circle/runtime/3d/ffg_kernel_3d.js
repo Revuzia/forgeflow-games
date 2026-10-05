@@ -204,6 +204,8 @@ export class Kernel3D {
     this._errorHandlers = [];
     this.lastError = null;
     this.contextLost = false;
+    this._lostReported = false;       // this loss already reached the handlers (one card per loss)
+    this._lostHandled = false;
     this.onContextRestored = null;    // default on restore: location.reload()
     // C3: frame profiler, `?prof=1` only
     this.prof = NOOP_PROF;
@@ -298,6 +300,7 @@ export class Kernel3D {
     }, false);
     cv.addEventListener("webglcontextrestored", () => {
       this.contextLost = false;
+      this._lostReported = false;        // a later loss gets its own card
       if (typeof this.onContextRestored === "function") this.onContextRestored();
       else location.reload();
     }, false);
@@ -756,7 +759,9 @@ export class Kernel3D {
    *                             "contextlost" | ...); returns an unsubscribe function.
    *                             Registered handlers REPLACE the default card; if every
    *                             handler throws, the default card still shows.
-   *   kernel.onError(err, info) dispatch (what the loop's catch calls).
+   *   kernel.onError(err, info) dispatch (what the loop's catch calls). While the GL
+   *                             context is lost every dispatch is kind "contextlost"
+   *                             (the original kind kept as info.cause), once per loss.
    * The default: console.error + window.__LC_BOOT__.fail(title, detail, actions)
    * when the boot guard is present, else (or if that painted nothing) a minimal
    * inline card with RELOAD. Pointer lock is released first either way — a card
@@ -769,7 +774,24 @@ export class Kernel3D {
     }
     const err = arg instanceof Error ? arg : new Error(String(arg));
     const inf = Object.assign({ kind: "error" }, info || {}, { kernel: this });
-    this.lastError = { message: err.message, stack: err.stack || "", kind: inf.kind, t: Math.round(performance.now()) };
+    // A context loss usually reaches us FIRST as whatever throws on the dead
+    // context: loseContext() / a GPU reset is asynchronous, and a frame that runs
+    // before webglcontextlost is delivered can throw inside three (a lost context
+    // returns null shader logs: "Cannot read properties of null (reading 'trim')").
+    // That is a context loss, not a game bug — report it as one (the RELOAD-only
+    // card, reload on restore), keep the original kind as info.cause, and stop
+    // the loop. One card per loss: the event that follows does not dispatch again.
+    if (inf.kind !== "contextlost" && (this.contextLost || this._glLost())) {
+      inf.cause = inf.kind;
+      inf.kind = "contextlost";
+      this.stop();
+      this.contextLost = true;
+    }
+    if (inf.kind === "contextlost") {
+      if (this._lostReported) return this._lostHandled;
+      this._lostReported = true;
+    }
+    this.lastError = { message: err.message, stack: err.stack || "", kind: inf.kind, cause: inf.cause || null, t: Math.round(performance.now()) };
     console.error("[FFG3D] " + inf.kind + " error:", err);
     try { if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock(); } catch (e) {}
     let handled = false;
@@ -777,7 +799,16 @@ export class Kernel3D {
       try { h(err, inf); handled = true; } catch (e) { console.error("[FFG3D] onError handler threw:", e); }
     }
     if (!handled) this._defaultErrorCard(err, inf);
+    if (inf.kind === "contextlost") this._lostHandled = handled;
     return handled;
+  }
+
+  /** True when the renderer's GL context reports itself lost (never throws). */
+  _glLost() {
+    try {
+      const gl = this.renderer && this.renderer.getContext && this.renderer.getContext();
+      return !!(gl && typeof gl.isContextLost === "function" && gl.isContextLost());
+    } catch (e) { return false; }
   }
 
   _defaultErrorCard(err, info) {

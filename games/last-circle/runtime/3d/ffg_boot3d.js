@@ -51,19 +51,10 @@ function handoff() {
   if (s) requestAnimationFrame(() => requestAnimationFrame(() => s.remove()));
 }
 
-// A phone loads ~8 MB of character GLB and only then discovers there is no way
-// to move. PLAY ANYWAY is always there — this can never be a hard gate.
-// (Removal of this card is scheduled for after the touch layer lands: PLAN L9 last step.)
-function desktopOnlyCard(onPlay) {
-  const s = document.getElementById("lc-splash");
-  if (s) s.remove();                                   // the card is the thing to read now
-  const host = document.getElementById("game-container") || document.body;
-  const card = document.createElement("div");
-  card.style.cssText = "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:24px;text-align:center;background:#08131f;font:14px/1.6 system-ui,sans-serif;color:#cfe3f5;z-index:60";
-  card.innerHTML = '<div style="max-width:340px"><div style="font:700 18px/1.3 system-ui,sans-serif;color:#e8f4ff;margin-bottom:10px">LAST CIRCLE IS DESKTOP-ONLY</div><div style="margin-bottom:18px">Keyboard and mouse required — there are no touch controls yet. Come back on a computer for the full 50-player match.</div><button type="button" style="padding:11px 20px;border:0;border-radius:8px;background:#2f9e6e;color:#04140d;font:700 14px system-ui,sans-serif;cursor:pointer">PLAY ANYWAY</button></div>';
-  card.querySelector("button").addEventListener("click", () => { card.remove(); onPlay(); });
-  host.appendChild(card);
-}
+// (No "desktop-only" card any more: phones have a native touch layer —
+// royale/touch.js — and boot straight to the menu like desktop. PLAN L9 last
+// step, Wave 3, after mobile.py passed 48/48. Only REAL capability checks gate
+// the boot: the sitelock and WebGL 2, below.)
 
 // ── checks that run BEFORE the engine is downloaded ─────────────────────────
 // Sitelock. Keep the list here and nowhere else — a sitelock that is hard to
@@ -314,16 +305,6 @@ async function main() {
     console.error("[FFG3D] engine load failed:", e);
     // once the kernel resolved only the royale graph can hold the failed file
     await engineFail(e, kernelIn ? [royaleUrl] : [kernelUrl, royaleUrl], kernelIn ? [kernelUrl] : []);
-    return;
-  }
-
-  // A touchscreen laptop reports coarse AND fine — it must not be stopped, hence
-  // both queries rather than just the coarse one.
-  const coarse = !!(window.matchMedia && matchMedia("(pointer: coarse)").matches
-                    && !matchMedia("(pointer: fine)").matches);
-  if (coarse) {
-    handoff();                // the engine is in: the card is the thing to read now, not a watchdog
-    desktopOnlyCard(() => start(boot3d));
     return;
   }
   await start(boot3d);

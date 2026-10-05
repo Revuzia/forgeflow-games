@@ -190,8 +190,8 @@ function layer(name, styles) {
 
 // ═══ TOUCH MODE (contract C6: hud.setTouchMode(W, on)) ═══════════════════════
 // Touch mode is a property of the DEVICE IN USE, not of the match phase: it
-// flips on with the first real touch (or at boot on a coarse-only pointer —
-// the same test the KEYBOARD + MOUSE card uses) and off with a real mouse
+// flips on with the first real touch (or at boot on a coarse-only pointer:
+// coarse AND not fine, so a touch laptop starts in mouse mode) and off with a real mouse
 // press, last input wins. touch.js (lane L10) may also call setTouchMode
 // directly; both paths land on the same state. What it changes:
 //   * <html class="lc-touch">: TOUCH_CSS lifts every small label to 12 px
@@ -1216,30 +1216,9 @@ export function showMenu(W, startMatch) {
   try {
     if (!localStorage.getItem("lc_seen_intro")) R._introT = setTimeout(() => { R._introT = null; showHowToPlay(W); }, 500);
   } catch (e) {}
-  // Touch-only visitors get told the truth instead of an unplayable match. A grep
-  // for touchstart|touchmove|ontouchstart|maxTouchPoints across runtime/,
-  // game_controls.js and index.html returns exactly one hit — the pointerdown
-  // autoplay unlock in audio.js — so a phone visitor gets a tappable menu and
-  // then a match they cannot move in. BOTH pointer queries are tested, not
-  // maxTouchPoints: a touch-capable laptop reports touch points but also reports
-  // a fine pointer and must not see this. Sits above the How To Play modal
-  // (zIndex 70) and never blocks booting.
-  try {
-    const coarse = window.matchMedia && window.matchMedia("(pointer: coarse)").matches
-      && !window.matchMedia("(pointer: fine)").matches;
-    if (coarse && !localStorage.getItem("lc_seen_kbm")) {
-      const KL = layer("kbm", {
-        pointerEvents: "auto", background: "rgba(4,8,16,0.92)", display: "flex",
-        alignItems: "center", justifyContent: "center", zIndex: 71,
-      });
-      const kbox = h("div", Object.assign({ padding: "26px 34px", maxWidth: "440px", display: "flex", flexDirection: "column", gap: "12px", textAlign: "center" }, PANEL), null, KL);
-      h("div", { fontFamily: "Orbitron, " + FONT_DISPLAY, fontSize: "17px", fontWeight: "900", letterSpacing: "2px" }, "KEYBOARD + MOUSE REQUIRED", kbox);
-      h("div", { fontSize: "13.5px", opacity: "0.85", lineHeight: "1.55", fontFamily: "Rajdhani, " + FONT },
-        "Last Circle needs a keyboard and mouse. Movement, aiming, looting and the parachute are all key-bound — there is no touch control scheme yet.", kbox);
-      const kgo = h("button", Object.assign({}, BTN, { background: "#57b0ff", color: "#fff", alignSelf: "center" }), "CONTINUE ANYWAY", kbox);
-      kgo.onclick = () => { try { localStorage.setItem("lc_seen_kbm", "1"); } catch (e2) {} KL.remove(); R.kbm = null; };
-    }
-  } catch (e) {}
+  // (The "KEYBOARD + MOUSE REQUIRED" first-run card for touch-only visitors is
+  // gone: phones have a native touch layer now — royale/touch.js — and go
+  // straight to this menu like desktop. Wave 3, after mobile.py passed 48/48.)
 
   // — SKIN BAY: premium 3D turntable —
   const bay = h("div", Object.assign({
@@ -1512,7 +1491,7 @@ export function showLoading(W, text) {
   // a new match must clear every stray screen from the previous one — including
   // the first-run How To Play, which was neither in this list nor cancellable
   if (R._introT) { clearTimeout(R._introT); R._introT = null; }
-  ["post", "death", "pause", "settings", "bigmap", "howto", "career", "kbm", "menu", "hud"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });
+  ["post", "death", "pause", "settings", "bigmap", "howto", "career", "menu", "hud"].forEach((n) => { if (R[n]) { R[n].remove(); R[n] = null; } });
   teardownMenuWorld(W);
   W.paused = false;
   ensureAAAStyles();
