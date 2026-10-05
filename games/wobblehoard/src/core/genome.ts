@@ -58,7 +58,8 @@ export interface SquishyInstance {
   genome: Genome;
   name: string;
   bornAt: number;            // epoch ms
-  origin: { kind: 'starter' | 'drop' | 'task' | 'blend' | 'trade'; parents?: string[] };
+  /** 'restock' (additive, COLLECTION.md 3.5 item 1 / DESIGN 7.1): a Daily Restock pick. */
+  origin: { kind: 'starter' | 'drop' | 'task' | 'blend' | 'trade' | 'restock'; parents?: string[] };
   tradeCount: number;        // incremented by the server on every completed trade (never client-side)
 }
 
