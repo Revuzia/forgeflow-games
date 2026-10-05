@@ -52,14 +52,79 @@
  * positions are derived state, republished from `world/shrine.js` on every
  * boot and after every realm re-ground, so a save can name a shrine without
  * pinning coordinates that the landform may have re-chosen.
+ *
+ * ---------------------------------------------------------------------------
+ * SAVE BLOB v4 — THE MEANING LAYER (_spec/QUEST_DESIGN.md §8, lane Q)
+ *
+ * v4 = v3's core fields + two new core fields this file owns + any number of
+ * SAVE SECTIONS other systems register without editing this file:
+ *
+ *   shrinesLit  {cold:[id…], sand:[id…], ash:[id…]} — which shrines have ever
+ *               been ACTIVATED, per realm. QUEST §8 does not list it, but §2
+ *               ("activate 3 of the 6 ring shrines"), §5 (fast travel "to any
+ *               other activated shrine") and §7 (map: "activated vs dormant
+ *               shrines") are all impossible without it, and the activation
+ *               fact is this file's (the touch edge lives here).
+ *   playTime    seconds of GAME time across the run — the journal's "play
+ *               time" stat (QUEST §7). Frozen frames add nothing.
+ *
+ *   registerSaveSection(name, {serialize() -> JSON value, deserialize(v, info)})
+ *     `name` is a top-level blob key ("quest", "relics", "wakeGlass") or a
+ *     DOTTED path ("quest.caches") that nests under another section — which
+ *     is how side content lands exactly where §8 draws it (quest.caches,
+ *     quest.trials, quest.bounties, quest.lore) without the quest engine
+ *     owning it. Core field names are reserved (the call throws).
+ *     `deserialize(value, info)` runs IMMEDIATELY on registration (with the
+ *     blob this file already loaded), again on every `load()` (CONTINUE) and
+ *     on `newGame()` (PLAY) with `value === undefined`. A section missing
+ *     from the blob — every v1-v3 save — also arrives as `undefined`: it must
+ *     default. `info = {reason: "register"|"load"|"new", schemaVer, legacy}`;
+ *     `legacy` is true for a blob written before v4 (a veteran character).
+ *   Saved on every `save()`; a section that was LOADED but whose owner has
+ *   not registered (yet) is written back verbatim, so construction order can
+ *   never drop data, and a throwing serialize() keeps its last loaded value.
+ *
+ *   `boons` left the core list in v4: v1-v3 wrote an always-empty array
+ *   (nothing ever read it — QUEST §0), and §8 gives the key to the boon
+ *   system's `[{bossKey, pick}]`. An old `[]` reaches that section intact.
+ *
+ * EVENTS this file emits on the meaning-layer bus (quests/events.js):
+ *   'shrine:activated' {realm, id, x, z, first} — the touch edge below.
+ *       first = this shrine had never been lit IN THIS REALM.
+ *   'enemy:killed'     {realm, key, id, x, z, tier, bounty} — one per kill
+ *       event drained from the registry (training dummies excluded). This
+ *       file is the ONE place the kill ring is turned into bus events, so no
+ *       other system has to sit inside the registry drain window.
+ *       key = the enemy runtime's combatData key when `attach({enemies})`
+ *       has been called (else the registry display name); bounty = whatever
+ *       `this.bountyOf(id)` returns (null when no bounty system hooks it).
+ *   'player:levelup'   {level} — once per level gained.
+ *   'player:died'      {realm, x, z} — the hp<=0 edge.
  */
 
 import { TIER } from "../combat/damageable.js";
+import { bus } from "../quests/events.js";
 
 /** The one localStorage key. */
 export const SAVE_KEY = "driftwake_save";
-/** Current save schema. v1 blobs load with defaulted new fields. */
-export const SCHEMA_VER = 3;   // v3 adds `pos` (auto-save position, owner 2026-08-10)
+/** Current save schema. v1-v3 blobs load with defaulted new fields.
+ *  v3 added `pos` (auto-save position, owner 2026-08-10); v4 added
+ *  `shrinesLit`, `playTime` and registered save sections (QUEST §8). */
+export const SCHEMA_VER = 4;
+
+/**
+ * Core blob keys this file writes itself. A save section may not claim one —
+ * `registerSaveSection` throws — so no system can clobber the character.
+ */
+export const CORE_KEYS = Object.freeze([
+    "schemaVer", "level", "xp", "driftmarks", "spellsUnlocked",
+    "realmsUnlocked", "bossesKilled", "bossGates", "lastShrineId",
+    "restedBank", "lastSeenTs", "objectiveState", "deaths", "pos",
+    "shrinesLit", "playTime",
+]);
+
+/** Realm tokens the lit-shrine map is keyed by. */
+const REALMS = ["cold", "sand", "ash"];
 
 /**
  * §8.1 ACTIVATION RADIUS, m (owner 2026-08-19). Come within this of any
@@ -77,6 +142,9 @@ export const SCHEMA_VER = 3;   // v3 adds `pos` (auto-save position, owner 2026-
  * and landed on the spawn monument.
  */
 export const SHRINE_TOUCH_R = 6.0;
+
+/** PROGRESSION §3.5 — the tutorial first-blood grant, flat XP, once a run. */
+export const FIRST_BLOOD_XP = 20;
 
 /**
  * Spell unlock levels by INTERNAL spell id (§7 mapped through the owner
@@ -232,6 +300,40 @@ export class Progression {
         this.lastSeenTs = Date.now();
         /** @type {Record<string, number>} per-realm objective chain node (P3.1). */
         this.objectiveState = {};
+        /**
+         * v4 — shrines ever ACTIVATED, per realm (see the header). Arrays
+         * of SHRINE_IDS; mutated in place, never reassigned per realm, so the
+         * touch scan reads them without allocating.
+         * @type {Record<string, string[]>}
+         */
+        this.shrinesLit = { cold: [], sand: [], ash: [] };
+        /** v4 — game seconds played across the run (journal stat). */
+        this.playTime = 0;
+
+        // ------------------------------------------------- meaning layer (v4)
+        /** The realm the player is standing in — kept current by the
+         *  'realm:entered' bus event (main.js enterRealm) and by
+         *  `setRealm()`. Labels shrine activations and deaths. */
+        this.realm = "cold";
+        /** Registered save sections, sorted shallow-first so a nested
+         *  section ("quest.caches") is written into its parent's value.
+         *  @type {{name:string, path:string[], impl:{serialize:()=>any,
+         *          deserialize:(v:any, info:object)=>void}}[]} */
+        this._sections = [];
+        /** The last blob read from storage (null on a fresh/new run). Kept
+         *  so a section registered AFTER the load still gets its data, and so
+         *  an unregistered section is written back verbatim. */
+        this._blob = null;
+        /** schemaVer of the blob last READ from storage (0 = none). */
+        this._loadedVer = 0;
+        /** Enemy runtime, for 'enemy:killed' combatData keys (attach()). */
+        this.enemies = null;
+        /** Optional bounty hook: `(registryId) => bountyId|null`, set by the
+         *  bounty system; fills 'enemy:killed'.bounty. */
+        this.bountyOf = null;
+        this._unsubRealm = bus.on("realm:entered", (p) => {
+            if (p && typeof p.realm === "string") this.setRealm(p.realm);
+        });
 
         // ------------------------------------------------- live state
         /**
@@ -289,6 +391,10 @@ export class Progression {
         this._deathT = 0;
         this._streak = 0;
         this._streakAt = -Infinity;
+        /** PROGRESSION §3.5 tutorial first-blood already paid this run? One
+         *  flag for both payers — a training dummy's kill and the quest
+         *  engine's first onboarding kill (QUEST §6.4) — so it pays once. */
+        this._dummyFirstBlood = false;
 
         this.load();
         // Fresh session restore: pools at the loaded level, filled (P1.2
@@ -312,6 +418,125 @@ export class Progression {
             refs.spells.damageMult = this.damageMult;
         }
         if (refs.hud) this.hud = refs.hud;
+        // v4: the enemy runtime, so 'enemy:killed' can carry the combatData
+        // key (the registry only knows the display name).
+        if (refs.enemies) this.enemies = refs.enemies;
+    }
+
+    /**
+     * The realm the player now stands in. Called by the 'realm:entered' bus
+     * listener (and safe to call directly — idempotent). Only labels events
+     * and picks the lit-shrine list; it moves nothing.
+     * @param {string} token @returns {void}
+     */
+    setRealm(token) {
+        if (typeof token === "string" && REALMS.indexOf(token) >= 0) this.realm = token;
+    }
+
+    // --------------------------------------------------------- lit shrines
+
+    /** Has shrine `id` ever been activated in `realm`?
+     *  @param {string} realm @param {string} id @returns {boolean} */
+    isShrineLit(realm, id) {
+        const l = this.shrinesLit[realm];
+        return !!l && l.indexOf(id) >= 0;
+    }
+
+    /** The lit list for a realm (live array — read, never mutate).
+     *  @param {string} realm @returns {string[]} */
+    litShrines(realm) {
+        let l = this.shrinesLit[realm];
+        if (!l) { l = []; this.shrinesLit[realm] = l; }
+        return l;
+    }
+
+    // ------------------------------------------------------- save sections
+
+    /**
+     * v4 SAVE SECTIONS — let a system persist without editing this file (see
+     * the header for the whole contract). Registering an existing name
+     * replaces it. `deserialize` runs immediately with this file's already-
+     * loaded blob.
+     * @param {string} name top-level key or dotted path ("quest.caches")
+     * @param {{serialize: () => any,
+     *          deserialize: (v: any, info: {reason:string, schemaVer:number,
+     *                        legacy:boolean}) => void}} impl
+     * @returns {() => void} unregister
+     */
+    registerSaveSection(name, impl) {
+        if (typeof name !== "string" || !name) {
+            throw new Error("registerSaveSection: name must be a non-empty string");
+        }
+        const path = name.split(".");
+        for (let i = 0; i < path.length; i++) {
+            if (!/^[A-Za-z_$][\w$]*$/.test(path[i])) {
+                throw new Error("registerSaveSection: bad section name '" + name + "'");
+            }
+        }
+        if (CORE_KEYS.indexOf(path[0]) >= 0) {
+            throw new Error("registerSaveSection: '" + path[0] +
+                "' is a core progression field");
+        }
+        if (!impl || typeof impl.serialize !== "function" ||
+            typeof impl.deserialize !== "function") {
+            throw new Error("registerSaveSection: impl needs serialize() and deserialize()");
+        }
+        const at = this._sectionIndex(name);
+        if (at >= 0) this._sections.splice(at, 1);
+        const entry = { name, path, impl };
+        this._sections.push(entry);
+        // Shallow-first, so a child section writes into its parent's value.
+        this._sections.sort((a, b) => a.path.length - b.path.length);
+        this._deserializeOne(entry, "register");
+        return () => {
+            const i = this._sections.indexOf(entry);
+            if (i >= 0) this._sections.splice(i, 1);
+        };
+    }
+
+    /**
+     * The value a (possibly dotted) section had in the blob last READ or
+     * WRITTEN — undefined if none. A parent section's serializer (the quest
+     * engine's `quest`) starts from this so a child it does not own
+     * (`quest.caches`, `quest.trials` …) keeps its newest value even while
+     * that child's owner is not registered.
+     * @param {string} name @returns {any}
+     */
+    lastSaved(name) {
+        return pathGet(this._blob, String(name).split("."));
+    }
+
+    /** @param {string} name @returns {number} */
+    _sectionIndex(name) {
+        for (let i = 0; i < this._sections.length; i++) {
+            if (this._sections[i].name === name) return i;
+        }
+        return -1;
+    }
+
+    /** Hand one section its slice of the current blob.
+     *  @param {{path:string[], name:string, impl:any}} s
+     *  @param {string} reason @returns {void} */
+    _deserializeOne(s, reason) {
+        const b = this._blob;
+        // The version READ from storage (a save since then does not make an
+        // old character new). 0 = no stored run at all.
+        const ver = b ? this._loadedVer : 0;
+        const info = { reason, schemaVer: ver, legacy: ver > 0 && ver < SCHEMA_VER };
+        try {
+            s.impl.deserialize(pathGet(b, s.path), info);
+        } catch (e) {
+            console.error("[progression] save section '" + s.name +
+                "' failed to deserialize:", e);
+        }
+    }
+
+    /** Re-deserialize every registered section (load / new game).
+     *  @param {string} reason @returns {void} */
+    _deserializeAll(reason) {
+        // Snapshot: a deserializer may (legally) register another section.
+        const list = this._sections.slice();
+        for (let i = 0; i < list.length; i++) this._deserializeOne(list[i], reason);
     }
 
     /**
@@ -395,7 +620,15 @@ export class Progression {
      * shrine's stand point, 4.5 m from the anchor and therefore inside the
      * radius, but the id already matches.
      *
-     * Silent by owner decision (2026-08-19): no modal, no prompt, no XP.
+     * No modal and no XP by owner decision (2026-08-19). v4 (QUEST §5/§8):
+     * the edge is ALSO "not yet lit in this realm" — the spawn shrine is the
+     * default respawn target from frame one (§8.1, `lastShrineId` never null)
+     * but it is not LIT until touched, and touching it is quest step cold.1.
+     * So the edge fires when the nearest in-radius shrine is either unlit in
+     * the current realm (first: true — it joins `shrinesLit`) or lit but not
+     * the current respawn target (first: false — the §8.1 re-target). Both
+     * save once and emit 'shrine:activated'; every other frame inside the
+     * radius is a compare and a return, as before.
      * @returns {void}
      */
     _touchShrines() {
@@ -415,10 +648,17 @@ export class Progression {
         }
         if (best < 0) return;
         const id = ids[best];
-        if (id === this.lastShrineId) return;
+        const lit = this.litShrines(this.realm);
+        const first = lit.indexOf(id) < 0;
+        if (!first && id === this.lastShrineId) return;
+        if (first) lit.push(id);
         this.lastShrineId = id;
         this.shrineActivations++;
         this.save();
+        bus.emit("shrine:activated", {
+            realm: this.realm, id,
+            x: this._shrineX[best], z: this._shrineZ[best], first,
+        });
     }
 
     /** §8.1 respawn grace / death window — enemies must not damage through
@@ -435,6 +675,7 @@ export class Progression {
      */
     update(dt) {
         this.time += dt;
+        this.playTime += dt;
 
         // ---- kill events → XP (registry may not exist yet; guarded).
         const r = this.registry;
@@ -447,13 +688,23 @@ export class Progression {
                 // first-blood grant, then silence. evKind is stamped at
                 // emit time, so this survives slot removal.
                 if (r.evKind[e] === "dummy") {
-                    if (!this._dummyFirstBlood) {
-                        this._dummyFirstBlood = true;
-                        this.addXP(20, "first-blood");
-                    }
+                    this.grantFirstBlood();
                     continue;
                 }
-                this._onKill(r.evId[e], r.evTier[e]);
+                const id = r.evId[e];
+                // Read the key BEFORE the XP grant: a ding inside addXP saves
+                // but never removes bodies, so the order is only for clarity.
+                const key = bus.count("enemy:killed") > 0 ? this._keyOf(id) : null;
+                this._onKill(id, r.evTier[e]);
+                // v4: the meaning layer's kill fact. Payload built only when
+                // something listens — kills are events, never a frame path.
+                if (bus.count("enemy:killed") > 0) {
+                    bus.emit("enemy:killed", {
+                        realm: this.realm, key, id,
+                        x: r.evX[e], z: r.evZ[e], tier: r.evTier[e],
+                        bounty: this.bountyOf ? (this.bountyOf(id) || null) : null,
+                    });
+                }
             }
         }
 
@@ -470,6 +721,9 @@ export class Progression {
             this.dead = true;
             this._deathT = 0;
             this.deaths++;
+            bus.emit("player:died", {
+                realm: this.realm, x: c.position.x, z: c.position.z,
+            });
         }
         if (this.dead) {
             this._deathT += dt;
@@ -503,6 +757,7 @@ export class Progression {
             this._mintDriftmarks();
             return;
         }
+        const from = this.level;
         let dinged = false;
         while (this.level < cap && this.xp >= this.xpNeed) {
             this.xp -= this.xpNeed;
@@ -518,11 +773,29 @@ export class Progression {
             if (this.hud && this.hud.ding) this.hud.ding();
             if (this.level >= cap) this._mintDriftmarks();
             this.save();
+            // v4: one event per level gained, AFTER the stats and the save,
+            // so a listener reading the controller sees the new pools.
+            for (let L = from + 1; L <= this.level; L++) {
+                bus.emit("player:levelup", { level: L });
+            }
         }
     }
 
-    /** Persist the v2 blob. Event-scoped — never on the steady frame path.
-     *  @returns {void} */
+    /**
+     * PROGRESSION §3.5 "Training dummy first-blood (tutorial, once) — 20 XP
+     * flat". Objective income (§3.5), so it is outside the per-kill cap. The
+     * dummies left the game (owner 2026-08-10); the tutorial is now QUEST §6,
+     * whose engine pays this on the first onboarding kill. Once per run,
+     * whichever payer asks first.
+     * @returns {boolean} true if it paid now
+     */
+    grantFirstBlood() {
+        if (this._dummyFirstBlood) return false;
+        this._dummyFirstBlood = true;
+        this.addXP(FIRST_BLOOD_XP, "first-blood");
+        return true;
+    }
+
     /** Unlock level for an internal spell id (spellbar lock badges). */
     unlockLevelOf(id) {
         return UNLOCK_LEVEL[id] || 1;
@@ -590,6 +863,18 @@ export class Progression {
         this.lastShrineId = "cold_spawn";   // §8.1 default, never null
         this.savedPos = null;                // a new run starts at the shrine
         this._dummyFirstBlood = false;
+        // v4: nothing lit (the spawn shrine is the respawn DEFAULT, not lit —
+        // touching it is quest step cold.1), no play time, and every save
+        // section back to its defaults. Lists are cleared in place so any
+        // holder of `litShrines(realm)` stays valid.
+        for (let i = 0; i < REALMS.length; i++) this.litShrines(REALMS[i]).length = 0;
+        this.playTime = 0;
+        this._blob = null;
+        this._deserializeAll("new");
+        // This run is a v4 run from its first save on: a section registered
+        // after PLAY must not be told it is reading the PREVIOUS character's
+        // legacy blob (the `_loadedVer` of whatever was loaded at boot).
+        this._loadedVer = SCHEMA_VER;
         this.unlocked.clear();
         this._refreshNeed();
         this._unlockCheck();
@@ -610,7 +895,18 @@ export class Progression {
 
     save() {
         this.lastSeenTs = Date.now();
-        const blob = {
+        // v4: start from whatever the loaded blob carried beyond the core —
+        // sections whose owner has not registered (yet), and v3's `boons` —
+        // so nothing is dropped by construction order. Core fields and
+        // registered sections overwrite below.
+        const blob = {};
+        const old = this._blob;
+        if (old && typeof old === "object") {
+            for (const k in old) {
+                if (CORE_KEYS.indexOf(k) < 0) blob[k] = old[k];
+            }
+        }
+        Object.assign(blob, {
             schemaVer: SCHEMA_VER,
             level: this.level,
             xp: this.xp,
@@ -618,7 +914,6 @@ export class Progression {
             // `_earnedUnlocks` and not the live set: a TEST session must not
             // write its granted kit into a real character's save.
             spellsUnlocked: this._earnedUnlocks(),
-            boons: this.boons,
             realmsUnlocked: this.realmsUnlocked,
             bossesKilled: this.bossesKilled,
             // Realm gates ride the same blob as the kills that raised them
@@ -634,7 +929,30 @@ export class Progression {
             // state so every save — level ding, boss flag, autosave tick —
             // carries the CURRENT position without a second call site.
             pos: this._posFor ? this._posFor() : this.savedPos,
-        };
+            // v4 core.
+            shrinesLit: {
+                cold: this.litShrines("cold").slice(),
+                sand: this.litShrines("sand").slice(),
+                ash: this.litShrines("ash").slice(),
+            },
+            playTime: Math.round(this.playTime),
+        });
+        // v4 sections, shallow-first (a dotted child lands inside its
+        // parent's value). A throwing serializer keeps its loaded value.
+        for (let i = 0; i < this._sections.length; i++) {
+            const s = this._sections[i];
+            let v;
+            try {
+                v = s.impl.serialize();
+            } catch (e) {
+                console.error("[progression] save section '" + s.name +
+                    "' failed to serialize:", e);
+                v = pathGet(old, s.path);
+            }
+            if (v !== undefined) pathSet(blob, s.path, v);
+        }
+        // What was just written becomes the blob a late registrant reads.
+        this._blob = blob;
         try {
             localStorage.setItem(SAVE_KEY, JSON.stringify(blob));
         } catch (e) {
@@ -658,10 +976,17 @@ export class Progression {
             b = null;
         }
         if (!b || typeof b !== "object" || typeof b.level !== "number") {
+            // No run (or a corrupt one, never partially applied): sections
+            // still get their defaults, exactly as on a new game.
+            this._blob = null;
+            this._loadedVer = 0;
             this._refreshNeed();
             this._unlockCheck();
+            this._deserializeAll("load");
             return;
         }
+        this._blob = b;
+        this._loadedVer = typeof b.schemaVer === "number" ? b.schemaVer : 1;
 
         const cap = this.data.levelCap;
         this.level = Math.max(1, Math.min(cap, Math.floor(b.level)));
@@ -712,6 +1037,45 @@ export class Progression {
                 if (id >= 1 && id <= 5) this.unlocked.add(id);
             }
         }
+
+        // v4 core. A v1-v3 blob has neither key: nothing lit, no play time.
+        // Lists refilled IN PLACE (their identity is what the touch scan and
+        // any `litShrines()` holder read). Only string ids survive.
+        const sl = b.shrinesLit && typeof b.shrinesLit === "object" ? b.shrinesLit : null;
+        for (let i = 0; i < REALMS.length; i++) {
+            const list = this.litShrines(REALMS[i]);
+            list.length = 0;
+            const src = sl && Array.isArray(sl[REALMS[i]]) ? sl[REALMS[i]] : null;
+            if (!src) continue;
+            for (let k = 0; k < src.length; k++) {
+                if (typeof src[k] === "string" && list.indexOf(src[k]) < 0) list.push(src[k]);
+            }
+        }
+        this.playTime = Math.max(0, +b.playTime || 0);
+
+        // Sections last: they may read the core fields restored above.
+        this._deserializeAll("load");
+    }
+
+    /**
+     * The enemy runtime's combatData key for a registry id — a scan of its
+     * 24-slot pool (event edge only). Falls back to the registry's display
+     * name when no enemy runtime is attached or the body is already gone.
+     * @param {number} id @returns {string|null}
+     */
+    _keyOf(id) {
+        const en = this.enemies;
+        if (en && en.id && en.unitOf && en.units) {
+            for (let i = 0; i < en.id.length; i++) {
+                if (en.id[i] === id && en.alive[i]) {
+                    const u = en.units[en.unitOf[i]];
+                    if (u) return u.key || u.name || null;
+                }
+            }
+        }
+        const r = this.registry;
+        const s = r ? r.slot(id) : -1;
+        return s >= 0 ? r.name[s] : null;
     }
 
     // ------------------------------------------------------------- internals
@@ -935,4 +1299,38 @@ export class Progression {
         this._streak = 0; // a death breaks the chain
         this.save();
     }
+}
+
+// ------------------------------------------------------ save-section paths
+
+/**
+ * Read a (possibly dotted) section path out of a blob.
+ * @param {any} obj @param {string[]} path @returns {any} undefined if absent
+ */
+function pathGet(obj, path) {
+    let o = obj;
+    for (let i = 0; i < path.length; i++) {
+        if (!o || typeof o !== "object") return undefined;
+        o = o[path[i]];
+    }
+    return o;
+}
+
+/**
+ * Write a section value at a (possibly dotted) path. Every parent on the way
+ * is SHALLOW-COPIED before the child is written, so a serializer that handed
+ * back its live state object never has a sibling section written into it.
+ * @param {object} blob @param {string[]} path @param {any} value
+ * @returns {void}
+ */
+function pathSet(blob, path, value) {
+    let o = blob;
+    for (let i = 0; i < path.length - 1; i++) {
+        const k = path[i];
+        const cur = o[k];
+        o[k] = (cur && typeof cur === "object" && !Array.isArray(cur))
+            ? Object.assign({}, cur) : {};
+        o = o[k];
+    }
+    o[path[path.length - 1]] = value;
 }

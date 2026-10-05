@@ -104,6 +104,8 @@ import { gradeAt } from "../world/shrine.js";
 import { nextRealm } from "../world/realms.js";
 import { PLAY_RADIUS } from "../terrain/terrain.js";
 import { sfx } from "../audio/sfx.js";
+// [LANE Q] the meaning layer's bus: 'boss:killed' is emitted from _onDeath.
+import { bus } from "../quests/events.js";
 
 /** TEST mode's effective level: opens the mini boss (6) and the realm boss (8) at once for a
  *  testing session (owner 2026-08-16). */
@@ -255,6 +257,20 @@ export class BossEncounters {
         this.enterRealm = null;
         /** The pack director, so a live boss can hold its second slot. */
         this.encounters = null;
+        /**
+         * [LANE Q] QUEST GATE (_spec/QUEST_DESIGN.md §2 GATING): a function
+         * `(realm, kind) => boolean` — the mini boss may only arm once that
+         * realm's "Kindle the Ring" is complete, the realm boss only after
+         * "Wake the Anchors". Installed by `quests/questSystem.js`; while it
+         * is null the director keeps its level-only gate (bare harnesses and
+         * every pre-quest probe behave exactly as before). The level gates
+         * stay as a FLOOR under it, and TEST mode lifts only the floor —
+         * `spawnBoss()` (the probe force path) bypasses both, as documented.
+         * @type {((realm:string, kind:string)=>boolean)|null}
+         */
+        this.questGate = null;
+        /** [LANE Q] true while the event in flight came from `spawnBoss()`. */
+        this._forced = false;
 
         /** Director clock — update(dt) only, frozen frames advance nothing. */
         this.time = 0;
@@ -358,6 +374,15 @@ export class BossEncounters {
             return;
         }
         if (this.state === "pending") {
+            // [LANE Q] a marked arena whose quest gate has since CLOSED (a NEW
+            // RUN reset the chain under it) stands down instead of emerging.
+            if (!this._forced && !this._questOpen(this.kind)) {
+                this.state = "idle";
+                this.kind = null;
+                this.row = null;
+                this._tryAt = this.time + RETRY_S;
+                return;
+            }
             const c = this.controller;
             const dx = this.ax - c.position.x, dz = this.az - c.position.z;
             const d2 = dx * dx + dz * dz;
@@ -382,6 +407,7 @@ export class BossEncounters {
         this.kind = kind;
         this.row = row;
         this.state = "pending";
+        this._forced = false;   // [LANE Q] armed through the gates
     }
 
     // ------------------------------------------------------------ test API
@@ -404,6 +430,9 @@ export class BossEncounters {
         this.kind = kind;
         this.row = row;
         this.state = "pending";
+        // [LANE Q] the force path bypasses the quest gate too, including the
+        // pending re-check (a body that has not streamed leaves it pending).
+        this._forced = true;
         return this._emerge();
     }
 
@@ -428,6 +457,7 @@ export class BossEncounters {
         if (this.bossId > 0) this.enemies.despawn(this.bossId);
         this.bossId = -1;
         this.state = "idle";
+        this._forced = false;   // [LANE Q]
         this.kind = null;
         this.row = null;
         this.phase = 1;
@@ -472,7 +502,7 @@ export class BossEncounters {
         const g = this._gateFor(this.realm);
         if (!g || !this.portal) return;
         this.portal.onEnter = (t) => this._onPortalEnter(t);
-        this.portal.open(g.x, g.z, g.token);
+        this.portal.open(g.x, g.z, g.token, this.realm);   // [LANE Q] from
     }
 
     /**
@@ -600,9 +630,41 @@ export class BossEncounters {
         const lv = this._effLevel();
         const b = BOSS_BY_REALM[this.realm];
         if (!b) return null;
-        if (b.mini && lv >= MINI_LEVEL && !this._isKilled("mini")) return "mini";
-        if (b.realm && lv >= REALM_LEVEL && !this._isKilled("realm")) return "realm";
+        if (b.mini && lv >= MINI_LEVEL && !this._isKilled("mini") &&
+            this._questOpen("mini")) return "mini";
+        if (b.realm && lv >= REALM_LEVEL && !this._isKilled("realm") &&
+            this._questOpen("realm")) return "realm";
         return null;
+    }
+
+    /** [LANE Q] Does the quest allow this realm's `kind` to arm? No gate
+     *  installed = yes (the pre-quest behaviour). Allocation-free — it is
+     *  read every frame while an arena is pending.
+     *  @param {string|null} kind @returns {boolean} */
+    _questOpen(kind) {
+        const g = this.questGate;
+        return typeof g !== "function" || !!g(this.realm, kind);
+    }
+
+    /** [LANE Q] The level FLOOR under the quest gate (QUEST §2): 6 for the
+     *  mini boss, 8 for the realm boss. @param {string} kind @returns {number} */
+    levelFloor(kind) {
+        return kind === "realm" ? REALM_LEVEL : MINI_LEVEL;
+    }
+
+    /** [LANE Q] Is the player at or over `kind`'s floor right now? Same
+     *  band-clamped, TEST-aware level the gate itself reads.
+     *  @param {string} kind @returns {boolean} */
+    meetsFloor(kind) {
+        return this._effLevel() >= this.levelFloor(kind);
+    }
+
+    /** [LANE Q] Is an arena for `kind` marked (pending) or fought (live) in
+     *  this realm right now? When true, `ax / az` IS its centre — the quest
+     *  waypoint reads them directly (no allocation).
+     *  @param {string} kind @returns {boolean} */
+    armedArena(kind) {
+        return (this.state === "pending" || this.state === "live") && this.kind === kind;
     }
 
     /**
@@ -914,9 +976,15 @@ export class BossEncounters {
         this.bossId = -1;
         this.kills++;
         this._setBossLive(false);
+        // [LANE Q] first-kill flag for 'boss:killed', read BEFORE the flags
+        // below are written (either store counts: the director's own map or
+        // the persisted progression one).
+        let first = false;
 
         if (kind) {
             const k = this.realm + ":" + kind;
+            const pk = this.progression;
+            first = !this._killed[k] && !(pk && pk.bossesKilled && pk.bossesKilled[k]);
             this._killed[k] = true;
             const p = this.progression;
             if (p && p.bossesKilled) {
@@ -943,7 +1011,9 @@ export class BossEncounters {
             }
             if (this.portal) {
                 this.portal.onEnter = (t) => this._onPortalEnter(t);
-                this.portal.open(g.x, g.z, token);
+                // [LANE Q] 4th arg: the realm the gate stands in, so the
+                // portal can say {from, to} on 'portal:entered'.
+                this.portal.open(g.x, g.z, token, this.realm);
             }
         }
 
@@ -951,7 +1021,22 @@ export class BossEncounters {
         this.row = null;
         this.phase = 1;
         this.state = "idle";
+        this._forced = false;
         this._tryAt = this.time + FIRST_TRY_S;
+
+        // [LANE Q] the meaning layer's boss fact — AFTER the flags, the save
+        // and the portal, so a listener sees the world the death produced.
+        // `key` is the BOSSES row key (else the combat key); `x, z` the arena.
+        if (kind) {
+            bus.emit("boss:killed", {
+                realm: this.realm, kind,
+                key: row ? (row.bossKey || row.combatKey) : null,
+                name: row ? bossTitle(row) : null,
+                first,
+                combatKey: row ? row.combatKey : null,
+                x: this.ax, z: this.az,
+            });
+        }
     }
 
     /** The player walked into the portal. @param {string} token @returns {void} */
@@ -962,7 +1047,39 @@ export class BossEncounters {
             p.realmsUnlocked.push(token);
             if (typeof p.save === "function") p.save();
         }
-        if (this.enterRealm) this.enterRealm(token);
+        // [LANE Q] QUEST §9: "After the Ash realm boss, its portal leads back
+        // to the Cold spawn shrine." The finale's gate is the RING CLOSURE
+        // (`ringNext`: realms.js ends the chain, this file loops it to cold),
+        // so a gate standing in the chain's LAST realm lands the player on
+        // the first stone's stand point — where "Mend the Drift" is touched
+        // and the ending's flyover rises from. Every other gate keeps the
+        // player's ground position, exactly as before.
+        const closesRing = nextRealm(this.realm) === null;
+        if (!this.enterRealm) return;
+        const entered = this.enterRealm(token);
+        if (!closesRing) return;
+        const land = () => this._landAtSpawnShrine();
+        if (entered && typeof entered.then === "function") entered.then(land, land);
+        else land();
+    }
+
+    /** [LANE Q] Put the player on the spawn shrine's STAND POINT (never its
+     *  anchor — that is the monolith's axis; progression._respawn's rule),
+     *  at rest. An event edge. @returns {void} */
+    _landAtSpawnShrine() {
+        const sh = this.shrine;
+        const s = sh && sh.positions ? sh.positions[0] : null;
+        const c = this.controller;
+        if (!s || !c || !c.position) return;
+        const x = Number.isFinite(s.sx) ? s.sx : s.x;
+        const z = Number.isFinite(s.sz) ? s.sz : s.z;
+        c.position.x = x;
+        c.position.z = z;
+        c.position.y = this.terrain.heightAt(x, z);
+        if (c.velocity && c.velocity.set) c.velocity.set(0, 0, 0);
+        c.vertVel = 0;
+        c.airborne = false;
+        c.airHeight = 0;
     }
 
     /** Tell the pack director a boss owns the field (it holds its second

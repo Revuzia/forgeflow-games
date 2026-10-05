@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>lane W heightfield bake</title>
+<!-- Probe page for qa_wa_hbake.py. Bakes the REAL per-realm macro heightfield
+     with the game's own Heightfield class (src/terrain/heightfield.js), the
+     realm's own landform block and wind direction (src/world/realms.js), and
+     exposes the CPU mirror (heightCPU, 2048^2 at 1 m) for export, so the Node
+     logic probe (qa_worldact_node.mjs) can place caches, trials and bounties on
+     the exact ground the game stands on without booting the whole game.
+     Nothing here is loaded by the game. -->
+<script type="importmap">
+{ "imports": { "three": "../assets/vendor/three/build/three.module.js" } }
+</script>
+</head>
+<body>
+<div id="st">loading</div>
+<script type="module">
+import * as THREE from "three";
+import { registerShaders } from "../src/shaders/registry.js";
+import { S, set } from "../src/core/settings.js";
+import { checkCaps } from "../src/core/gfx.js";
+import { Heightfield } from "../src/terrain/heightfield.js";
+import * as realms from "../src/world/realms.js";
+
+const st = document.getElementById("st");
+try {
+    registerShaders();
+    const canvas = document.createElement("canvas");
+    canvas.width = 64; canvas.height = 64;
+    document.body.appendChild(canvas);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: false });
+    const caps = checkCaps(renderer);
+    const hf = new Heightfield(renderer);
+    window.__hf = hf;
+    window.__bake = (realm) => {
+        const R = realms.realm(realm);
+        // terrain.applyRealm(): the realm's own wind direction, then its landform.
+        set("windDirection", R.wind.direction);
+        hf.setLandform(realms.landformFor(realm));
+        const t0 = performance.now();
+        hf.bake();
+        const h = hf.heightCPU;
+        let sum = 0;
+        for (let i = 0; i < h.length; i += 97) sum += h[i];
+        return {
+            realm, ms: +(performance.now() - t0).toFixed(1), readError: hf.readError,
+            res: hf.cpuRes, texel: hf.cpuTexel, originX: hf.origin.x, originZ: hf.origin.y,
+            size: hf.size, min: hf.minHeight, max: hf.maxHeight, bakeCount: hf.bakeCount,
+            lfDefault: hf._lfDefault, windDirection: S.windDirection,
+            macroHeightScale: S.macroHeightScale, landformHeightScale: hf.landform.heightScale,
+            checksum97: sum, h00: hf.heightAt(0, 0), h_100_50: hf.heightAt(100, -50),
+            caps,
+        };
+    };
+    // One base64 chunk of the mirror's bytes: [i*CH, (i+1)*CH).
+    window.__chunk = (i, CH) => {
+        const u8 = new Uint8Array(hf.heightCPU.buffer);
+        const a = i * CH, b = Math.min(u8.length, a + CH);
+        let s = "";
+        const SUB = 0x8000;
+        for (let k = a; k < b; k += SUB) {
+            s += String.fromCharCode.apply(null, u8.subarray(k, Math.min(b, k + SUB)));
+        }
+        return { n: b - a, total: u8.length, b64: btoa(s) };
+    };
+    window.__ready = true;
+    st.textContent = "ready";
+} catch (e) {
+    window.__err = String((e && e.stack) || e);
+    st.textContent = "error " + window.__err;
+}
+</script>
+</body>
+</html>

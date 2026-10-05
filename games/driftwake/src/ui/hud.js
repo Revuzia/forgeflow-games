@@ -11,6 +11,14 @@
  *
  * '#hud' is chrome-hidden by the harness (`_harness/shoot.py`), and like the
  * rest of the play HUD it shows only under pointer lock.
+ *
+ * WAKE GLASS (lane U, _spec/QUEST_DESIGN.md §4.3 "the HUD shows current Wake
+ * Glass beside mana"): a small pill directly under the mana bar, inside
+ * '#hud' so it shares the HUD's show/hide and never drifts from the bars.
+ * Hidden until `attach({ shop, bus })` hands it the wallet; written on the
+ * 'glass:changed' EVENT only (a bump on gains), never polled per frame.
+ * (Lane R's `GlassCounter` in ui/shrineMenu.js is the same readout as a
+ * standalone element: the integrator constructs ONE of the two.)
  */
 
 import { input } from "../core/input.js";
@@ -66,6 +74,26 @@ const CSS = `
   background: rgba(230, 245, 255, 0.28);
   border-radius: 1px;
 }
+.hud-glass {
+  display: none; align-items: center; gap: 6px;
+  width: max-content; height: 20px; box-sizing: border-box;
+  padding: 0 10px 0 8px; margin-top: -1px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, rgba(10, 16, 22, 0.62), rgba(6, 10, 15, 0.75));
+  border: 1px solid rgba(160, 205, 235, 0.26);
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.45);
+  font: 600 11px/1 "Segoe UI", system-ui, sans-serif; letter-spacing: 0.03em;
+  color: rgba(240, 248, 253, 0.94); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.95);
+  font-variant-numeric: tabular-nums;
+}
+#hud.glass .hud-glass { display: flex; }
+.hud-glass svg {
+  width: 11px; height: 13px; fill: rgba(168, 220, 245, 0.18);
+  stroke: var(--hud-accent, #a8dcf5); stroke-width: 1.5;
+}
+.hud-glass .hud-glass-l { color: rgba(205, 228, 244, 0.6); font-weight: 500; }
+@keyframes hud-glass-bump { 0% { transform: scale(1.14); border-color: rgba(234, 250, 255, 0.9); } 100% { transform: scale(1); } }
+.hud-glass.bump { animation: hud-glass-bump 280ms ease-out; transform-origin: left center; }
 @keyframes hud-deny {
   0%, 100% { border-color: rgba(160, 205, 235, 0.26); }
   30%      { border-color: rgba(255, 120, 90, 0.9);
@@ -87,7 +115,12 @@ export class Hud {
             '<div class="hud-bar hud-health"><div class="hud-fill"></div>' +
             '<span class="hud-val"></span></div>' +
             '<div class="hud-bar hud-mana"><div class="hud-fill"></div>' +
-            '<span class="hud-val"></span></div>';
+            '<span class="hud-val"></span></div>' +
+            // Lane U: the Wake Glass pill (hidden until a shop is attached).
+            '<div class="hud-glass"><svg viewBox="0 0 12 14" aria-hidden="true">' +
+            '<path d="M6 1l4.4 2.6v6.8L6 13 1.6 10.4V3.6z"/>' +
+            '<path d="M1.6 3.6L6 6.2l4.4-2.6M6 6.2V13" fill="none"/></svg>' +
+            '<span class="hud-glass-n">0</span><span class="hud-glass-l">Wake Glass</span></div>';
         document.body.appendChild(el);
         this.el = el;
         this.controller = controller;
@@ -101,15 +134,51 @@ export class Hud {
         this._mTxt = "";
 
         this.overlay = null;
+        this._glassEl = el.querySelector(".hud-glass");
+        this._glassN = el.querySelector(".hud-glass-n");
+        /** @type {any} lane R's Shop (ctx.shop) once attached. */
+        this.shop = null;
+        this._glass = -1;
+        this._offGlass = null;
         this._show = false;
         this._h = -1;
         this._m = -1;
         this._denyUntil = 0;
     }
 
-    /** @param {{ overlay?: any }} refs @returns {void} */
+    /**
+     * @param {{ overlay?: any, shop?: any, bus?: any, accent?: string }} refs
+     *   `shop` + `bus` switch the Wake Glass pill on (lane U).
+     * @returns {void}
+     */
     attach(refs) {
         if (refs.overlay) this.overlay = refs.overlay;
+        if (refs.accent) this.el.style.setProperty("--hud-accent", refs.accent);
+        if (refs.shop) {
+            this.shop = refs.shop;
+            this.el.classList.add("glass");
+            this._writeGlass(false);
+            if (refs.bus && !this._offGlass) {
+                this._offGlass = refs.bus.on("glass:changed", (p) => {
+                    this._writeGlass(!!(p && p.delta > 0));
+                });
+            }
+        }
+    }
+
+    /** The Wake Glass readout, written on the event only.
+     *  @param {boolean} bump @returns {void} */
+    _writeGlass(bump) {
+        const n = this.shop ? this.shop.glass | 0 : 0;
+        if (n !== this._glass) {
+            this._glass = n;
+            this._glassN.textContent = String(n);
+        }
+        if (bump) {
+            this._glassEl.classList.remove("bump");
+            void this._glassEl.offsetWidth;
+            this._glassEl.classList.add("bump");
+        }
     }
 
     /** Not-enough-mana feedback; called from the spell system's gate. */
@@ -153,6 +222,9 @@ export class Hud {
             this._mTxt = mTxt;
             this._manaVal.textContent = mTxt;
         }
+        // Wake Glass: the event writes it; this integer compare catches a
+        // wallet restored by a save load / NEW RUN that emitted no event.
+        if (this.shop !== null && (this.shop.glass | 0) !== this._glass) this._writeGlass(false);
         if (this._denyUntil && performance.now() >= this._denyUntil) {
             this._denyUntil = 0;
             this._manaBar.classList.remove("deny");

@@ -409,6 +409,10 @@ export class SpellSystem {
             // hold ctx by reference, exactly like `bolt`.
             fx: null,
             handPosition: (which, out, off) => this._handPosition(which, out, off),
+            /** [LANE R] Great Vortex boon: the vortex's radius scale (vortex.js
+             *  ring, helices, grains — and so spellHits' hit ring). Written
+             *  each frame in update() from `mods`; 1 = the shipped spell. */
+            vortexScale: 1,
         };
 
         /**
@@ -505,6 +509,9 @@ export class SpellSystem {
          * `COOLDOWN` so nothing renders it as a cooling spell.
          */
         this._boltNext = 0;
+        /** [LANE R] reward modifiers (progression/modifiers.js) — null =
+         *  identity. Read for cooldowns, the bolt's range and the vortex clock. */
+        this.mods = null;
 
         /**
          * FROST ARC cast edge (cold LMB). `arcGen` bumps once per arc cast;
@@ -629,7 +636,13 @@ export class SpellSystem {
         else this._cancelAll();
         this._drainPending();
 
-        for (let i = 0; i < this.spells.length; i++) this.spells[i].update(dt);
+        ctx.vortexScale = this.mods === null ? 1 : this.mods.vortexRadius;   // [LANE R]
+        for (let i = 0; i < this.spells.length; i++) {
+            const s = this.spells[i];
+            // [LANE R] Furnace Core: the vortex's own clock slows through its hold.
+            s.update(s === this.vortex && this.mods !== null
+                ? dt * this.mods.vortexClock(s.t) : dt);
+        }
 
         // After the bolt has updated (its impact flags are fresh for exactly
         // this frame), before anything renders. Reading the flags consumes
@@ -771,7 +784,7 @@ export class SpellSystem {
             // AoE that slows cannot be strobed, so it runs a real cooldown
             // through the same `_cdUntil` map the toolbar wipes read.
             if (this._time < (this._cdUntil[ARC_KEY] || 0)) return;
-            this._cdUntil[ARC_KEY] = this._time + ARC_COOLDOWN;
+            this._cdUntil[ARC_KEY] = this._time + this._cd(ARC_KEY, ARC_COOLDOWN);
             this._lastCast = this._time;
             ctx.controller.castWave = 3;
             this._fireArc();
@@ -790,7 +803,7 @@ export class SpellSystem {
             return;
         }
         c.mana -= cost;
-        this._cdUntil[key] = this._time + (COOLDOWN[key] || 0);
+        this._cdUntil[key] = this._time + this._cd(key, COOLDOWN[key] || 0);
 
         this._lastCast = this._time;
         // The rider winds up NOW; the flag carries the key so meshChar picks
@@ -854,6 +867,8 @@ export class SpellSystem {
     _fireBolt(own, sizeMul, range) {
         const ctx = this.ctx;
         const eye = ctx.rig.camera.position;
+        // [LANE R] Frostglass Lens: the primary's leash (and its aim cap).
+        const boltRange = BOLT_RANGE * (this.mods === null ? 1 : this.mods.boltRange);
         aimPoint(
             _aim, ctx.terrain,
             eye.x, eye.y, eye.z,
@@ -861,7 +876,7 @@ export class SpellSystem {
             // keepPitch: the bolt is a PROJECTILE. When the aim ray misses the
             // ground (any shot above the skyline) it must carry the pitch it
             // was fired at instead of being planted on the sand ahead.
-            BOLT_RANGE, BOLT_FALLBACK, true
+            boltRange, BOLT_FALLBACK, true
         );
         this._handPosition(1, _hand, 0);
 
@@ -883,7 +898,7 @@ export class SpellSystem {
         return this.bolt.fire(
             _hand[0], _hand[1], _hand[2],
             dx, dy, dz,
-            BOLT_SPEED, range || BOLT_RANGE, own || 0, sizeMul || 1
+            BOLT_SPEED, range || boltRange, own || 0, sizeMul || 1
         );
     }
 
@@ -1005,10 +1020,18 @@ export class SpellSystem {
      * @returns {number} remaining fraction of the full cooldown
      */
     cooldownFrac(key) {
-        const total = COOLDOWN[key];
-        if (!total) return 0;
+        if (!COOLDOWN[key]) return 0;
+        const total = this._cd(key, COOLDOWN[key]);   // [LANE R] the wipe spans the real cooldown
         const left = (this._cdUntil[key] || 0) - this._time;
         return left <= 0 ? 0 : Math.min(1, left / total);
+    }
+
+    /**
+     * [LANE R] A key's cooldown after rewards (Quickened Spikes, Sand Glass).
+     * @param {number} key @param {number} base s @returns {number}
+     */
+    _cd(key, base) {
+        return this.mods === null ? base : this.mods.cooldown(key, base);
     }
 
     /** Remaining cooldown seconds for a key (0 when ready). @param {number} key */

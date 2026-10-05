@@ -136,6 +136,34 @@ import { Progression } from "./progression/progression.js";
 import { XpHud } from "./progression/xphud.js";
 import { Minimap } from "./ui/minimap.js";
 import { audio } from "./audio/audio.js";
+// ================================================ [MEANING LAYER] imports BEGIN
+// _spec/QUEST_DESIGN.md — the reason to play: the quest engine (lane Q), the
+// world activities (lane W), the rewards + shrine hub (lane R) and the
+// player-facing UI (lane U). They never import each other; they meet on ONE
+// event bus (quests/events.js — its header is the event catalogue) and ONE
+// shared ctx object (`mctx`, built in the construction block below).
+import { bus as questBus } from "./quests/events.js";
+import { QuestSystem } from "./quests/questSystem.js";
+import { RelicCaches } from "./world/caches.js";
+import { WakeTrials } from "./world/trials.js";
+import { Bounties } from "./world/bounties.js";
+import { WaypointBeacon } from "./world/beacon.js";
+import { Modifiers } from "./progression/modifiers.js";
+import { Boons } from "./progression/boons.js";
+import { Relics } from "./progression/relics.js";
+import { Shop } from "./progression/shop.js";
+import { BoonPick, DriftmarkToast, anyModalOpen } from "./ui/boonPick.js";
+import { ShrineMenu } from "./ui/shrineMenu.js";
+import { QuestTracker } from "./ui/questTracker.js";
+import { Compass } from "./ui/compass.js";
+import { Dialogue } from "./ui/dialogue.js";
+import { Toasts } from "./ui/toasts.js";
+import { Interact } from "./ui/interact.js";
+import { Journal } from "./ui/journal.js";
+import { WorldMap } from "./ui/worldMap.js";
+import { IntroCard } from "./ui/introCard.js";
+import { Ending } from "./ui/ending.js";
+// ================================================== [MEANING LAYER] imports END
 
 // ------------------------------------------------------- module-scope scratch
 const _vel = new THREE.Vector3();
@@ -624,6 +652,17 @@ async function boot() {
     let realmToken = "cold";
     /** TEMP portal re-entrancy latch (see the frame-loop consumer). */
     let realmSwitching = false;
+    // ------------------------------------- [MEANING LAYER] the shared ctx
+    // ONE object every meaning-layer module is constructed with (the lane
+    // contract's `ctx`). Declared HERE, empty, so `enterRealm` below can reach
+    // the systems through it without touching a `const` that is still in its
+    // temporal dead zone; it is filled in the construction block after the
+    // boss director. Several modules self-register on it (ctx.quests,
+    // ctx.mods, ctx.shop, ctx.shrineMenu, ...), which is how they find each
+    // other without importing each other.
+    /** @type {Record<string, any>} */
+    const mctx = {};
+    // ------------------------------------------------- [MEANING LAYER] END
 
     async function enterRealm(name) {
         // The TOKEN, never `realm().name`. The row's `name` is the display
@@ -680,6 +719,9 @@ async function boot() {
         // wear the realm's authored albedo rows (owner 2026-08-13: the
         // wake stayed snow-white in sand/ash).
         wake.applyRealm(realms.realm(token));
+        // [MEANING LAYER] lane R: the bought wake-trail colour re-tints over
+        // the realm's own wake albedo, so it must follow `wake.applyRealm`.
+        if (mctx.shop) mctx.shop.setRealm(token);
         spray.applyRealm(realms.realm(token));
         // laneC: the hurt vignette red-shifts toward THIS realm's ember hue.
         hurtFx.setRealm(token);
@@ -702,8 +744,40 @@ async function boot() {
         // sink, the new realm's rise, and every prism base is re-sampled three
         // frames later once the re-bake has run inside terrain.update().
         landmarks.setRealm(token);
+        // ----------------------- [MEANING LAYER] lane W: world activities
+        // AFTER `landmarks.setRealm`: the caches sit on the landmark sites,
+        // the trials and bounties keep clear of them, and all four re-ground
+        // on the new heightfield once the landmark re-ground has landed.
+        if (mctx.caches) {
+            mctx.caches.setRealm(token);
+            mctx.trials.setRealm(token);
+            mctx.bounties.setRealm(token);
+            mctx.beacon.setRealm(token);
+        }
+        // --------------------------------------------- [MEANING LAYER] END
         await sky.solve();
         realmToken = token;
+        // ------------------------ [MEANING LAYER] the realm is now in force
+        // 'realm:entered' AFTER the token is published, so a listener that
+        // reads `getRealm()` agrees with the payload (lane Q: progression
+        // labels shrine activations with it; without the emit it caught up a
+        // frame late through the quest's poll and mislabelled the Ash->Cold
+        // ring-closure landing). Every caller — keys 6/7, the portal, a
+        // cross-realm fast travel, CONTINUE — goes through this one function.
+        questBus.emit("realm:entered", { realm: token });
+        if (mctx.quests) {
+            mctx.mods.setRealm(token);
+            mctx.shrineMenu.setRealm(token);
+            mctx.boonPick.setRealm(token);
+            mctx.questTracker.setRealm(token);
+            mctx.compass.setRealm(token);
+            mctx.dialogue.setRealm(token);
+            mctx.toasts.setRealm(token);
+            mctx.journal.setRealm(token);
+            mctx.worldMap.setRealm(token);
+            mctx.interact.setRealm(token);
+        }
+        // --------------------------------------------- [MEANING LAYER] END
         return token;
     }
     const encounters = new Encounters(enemies, registry, character, combatData, minimap);
@@ -835,6 +909,74 @@ async function boot() {
     let bossKillsSeen = bossEncounters.kills;
     // ---------------------------------------------------- [INTEGRATOR] END
 
+    // ========================================= [MEANING LAYER] construction
+    // _spec/QUEST_DESIGN.md. HERE, and in this order, for these reasons:
+    //  - after the boss director: the quest engine installs the QUEST GATE on
+    //    it (`bossEncounters.questGate` — the mini boss arms only after
+    //    "Kindle the Ring", the realm boss only after "Wake the Anchors"), and
+    //    the rewards hear its 'boss:killed';
+    //  - after `shrine.register(progression)`: the quest reads the seven
+    //    respawn/activation anchors through progression;
+    //  - before the warm-up: the caches, trial gates and beacon are three new
+    //    RawShaderMaterial pipelines that must compile behind the boot screen;
+    //  - before `startShell()`: the intro card arms on PLAY's NEW RUN.
+    // Each module's own header documents what it reads off the ctx; the
+    // fields below are the union of those reads (all four lane reports).
+    Object.assign(mctx, {
+        scene, terrain, character, rig, spells, crystals: spells.crystals,
+        spellHits, registry, enemies, encounters, bosses: bossEncounters,
+        portal, shrine, landmarks, progression, realms, enterRealm,
+        getRealm: () => realmToken, input, S, set, bus: questBus,
+        sky, shadows, overlay, hud, minimap, motes, wake,
+    });
+    // ---- lane Q: the main quest (20 steps), onboarding, gating, waypoint.
+    const quests = new QuestSystem(mctx);                    // -> mctx.quests
+    // ---- lane W: relic caches, wake trials, bounties, the waypoint column.
+    // Order: caches need the landmarks; trials keep clear of the caches;
+    // bounties keep clear of both.
+    const caches = new RelicCaches(mctx);
+    mctx.caches = caches;
+    const trials = new WakeTrials(mctx);
+    mctx.trials = trials;
+    const bounties = new Bounties(mctx);
+    mctx.bounties = bounties;
+    const beacon = new WaypointBeacon(mctx);
+    mctx.beacon = beacon;
+    // The beacon listens to 'quest:waypoint', but the quest announced its
+    // first waypoint (register) before the beacon existed.
+    if (quests.waypoint) beacon.set(quests.waypoint);
+    // ---- lane R: rewards and the shrine hub. Modifiers FIRST (every other
+    // reward writes into it), Relics before Shop (the shop sells slot 3).
+    const mods = new Modifiers(mctx);                        // -> mctx.mods
+    const relics = new Relics(mctx);                         // -> mctx.relics
+    const boons = new Boons(mctx);                           // -> mctx.boons
+    const shop = new Shop(mctx);                             // -> mctx.shop
+    const boonPick = new BoonPick(mctx);
+    mctx.boonPick = boonPick;
+    const driftToast = new DriftmarkToast(mctx);
+    mctx.driftToast = driftToast;
+    const shrineMenu = new ShrineMenu(mctx);                 // -> mctx.shrineMenu
+    // ---- lane U: the player-facing UI. The Wake Glass counter is the HUD
+    // pill (hud.js), NOT lane R's GlassCounter — both sit in the same spot.
+    hud.attach({ shop, bus: questBus });
+    const questTracker = new QuestTracker(mctx);             // -> mctx.questTracker
+    const compass = new Compass(mctx);
+    mctx.compass = compass;
+    const dialogue = new Dialogue(mctx);
+    mctx.dialogue = dialogue;
+    const toasts = new Toasts(mctx);
+    mctx.toasts = toasts;
+    // The ONE E-key router (cache -> shrine menu -> dialogue skip). It sets
+    // `caches.readsInput = false`, so lane W's own E read is off: one press,
+    // one action.
+    const interact = new Interact(mctx);                     // -> mctx.interact
+    const journal = new Journal(mctx);                       // -> mctx.journal
+    const worldMap = new WorldMap(mctx);                     // -> mctx.worldMap
+    const introCard = new IntroCard(mctx);                   // -> mctx.introCard
+    const ending = new Ending(mctx);                         // -> mctx.ending
+    minimap.attachQuest(mctx);
+    // ============================================ [MEANING LAYER] END
+
     initInput(canvas, { onToggleOverlay: () => overlay.toggle() });
 
     // ------------------------------------------------------------- warm-up
@@ -865,6 +1007,16 @@ async function boot() {
     // without ageing; `motes.clear()` below takes it away before frame one.
     motes.spawnAt(character.position.x + 2, character.position.z + 2, 1);
     motes.update(0);
+    // [MEANING LAYER] lane W: one real cache formation + glint, one trial
+    // ring and one beacon column, so their three pipelines specialise behind
+    // the boot screen (a collapsed instance is a zero-area triangle and
+    // compiles nothing). Undone by finishWarmUp() after the warm frames.
+    {
+        const wx = character.position.x + 6, wz = character.position.z + 6;
+        caches.warmUpSeed(wx, wz);
+        trials.warmUpSeed(wx + 4, wz);
+        beacon.warmUpSeed(wx, wz);
+    }
 
     // One compile-and-draw over the whole beauty scene. The spell meshes are
     // forced visible for the duration and put back exactly as they were.
@@ -873,6 +1025,8 @@ async function boot() {
         wake.mesh, spray.mesh, fxTelegraph.mesh,
         motes.mesh,   // [LANE-M motes]
         portal.mesh,  // [LANE B] the gate's crystal variant, compiled hidden
+        // [MEANING LAYER] lane W's three pipelines (seeded above).
+        ...caches.warmUpMeshes, ...trials.warmUpMeshes, ...beacon.warmUpMeshes,
     ]);
     await shadows.warmUp();
     await depthPass.warmUp(rig.camera);
@@ -891,6 +1045,10 @@ async function boot() {
     // Only now: the spell meshes had to be standing THROUGH those frames for
     // their pipelines to exist. Nothing synthetic survives into frame one.
     spells.finishWarmUp();
+    // [MEANING LAYER] lane W: the seeded formation / ring / column go away.
+    caches.finishWarmUp();
+    trials.finishWarmUp();
+    beacon.finishWarmUp();
     motes.clear();   // [LANE-M motes] the seeded warm orb never reaches frame one
     wake.warmUpClear();
     spray.clear();
@@ -1024,6 +1182,11 @@ async function boot() {
 
         _vel.copy(character.velocity);
         rig.update(dt, character.position, _vel, character.lean, character.speed01);
+        // [MEANING LAYER] lane U: the ending's flyover OVERRIDES the camera
+        // the rig just placed — here, before post.update jitters the
+        // projection and anything reads the view-projection. A no-op unless
+        // the ending is in its flyover / card / credits phase.
+        ending.drive();
 
         // Jitters the projection and republishes everything the screen-space
         // passes derive from the camera. Must be after the rig has moved and
@@ -1044,6 +1207,10 @@ async function boot() {
         // spell state, then bodies/director (they read the fresh CC state).
         registry.update(dt);
         spellHits.update(dt);
+        // [MEANING LAYER] lane R: boon/relic/shop modifiers — Ember Coil burn
+        // ticks, the dodge-surf window, Undying Wake, mote heal bonus. Right
+        // after the damage pass, so this frame's hits are what it reads.
+        mods.update(dt);
         shrine.update(dt);
         // [LANE-L landmarks] Growth / realm cross-fade / post-swap re-ground.
         // A settled, un-swapped layer is a strict no-op — no upload, no uniform
@@ -1104,6 +1271,27 @@ async function boot() {
                 () => { realmSwitching = false; });
         }
         progression.update(dt);
+        // ------------------------------------ [MEANING LAYER] frame: logic
+        // AFTER progression.update: progression drains the registry's kill
+        // ring into 'enemy:killed' and emits 'shrine:activated' /
+        // 'player:levelup' this frame, so the quest engine and the world
+        // activities see this frame's facts. BEFORE registry.endFrame() and
+        // endFrame(): the E / J / M edges and the kill ring still exist.
+        // Every update is a strict no-op at dt === 0 (S.freezeTime).
+        quests.update(dt);
+        caches.update(dt);
+        trials.update(dt);
+        bounties.update(dt);
+        beacon.update(dt);
+        // Event-driven today (empty bodies) — called anyway so the module
+        // contract (every system gets update(dt)) holds if one grows a tick.
+        relics.update(dt);
+        boons.update(dt);
+        shop.update(dt);
+        boonPick.update(dt);
+        driftToast.update(dt);
+        shrineMenu.update(dt);
+        // ------------------------------------------------ [MEANING LAYER] END
         // The autosave heartbeat: a crash or tab close costs at most ten
         // seconds of stand. Event saves (dings, boss flags) still fire on
         // their own edges; this one exists for the position ride-along.
@@ -1165,6 +1353,20 @@ async function boot() {
         // which `endFrame()` clears.
         crosshair.update();
         spellbar.update();
+        // ----------------------------------- [MEANING LAYER] frame: the UI
+        // The HUD stage, before the vitals draw and before endFrame() clears
+        // the E / J / M edges. Interact first: it routes this frame's E press
+        // (cache -> shrine menu -> dialogue skip) before the panels read it.
+        interact.update(dt);
+        questTracker.update(dt);
+        compass.update(dt);
+        dialogue.update(dt);
+        toasts.update(dt);
+        journal.update(dt);
+        worldMap.update(dt);
+        introCard.update(dt);
+        ending.update(dt);
+        // ------------------------------------------------ [MEANING LAYER] END
         hud.update();
         minimap.update();
         floaters.update();
@@ -1375,7 +1577,7 @@ async function boot() {
                 { h: "Ollie", p: "Tap <b>SPACE</b> mid-carve for a surf ollie — nearly twice the height, carrying your full speed through the air. The wake gaps under you and, if you keep holding <b>RMB</b>, you land straight back into the carve." },
                 { h: "Spells", p: "<b>LMB</b> hurls a bolt — hold to keep throwing; it costs nothing. <b>1</b> sweeps a frost arc: everything in front of you takes the hit, the ground glazes over, and whatever is caught is SLOWED. <b>2</b> a ploughing crescent that shoves what it hits · <b>3</b> a targeted eruption · <b>4</b> a spiral of hexagonal ice that stuns · <b>5</b> three helices that lift everything around you. Spells unlock as you level, and every realm re-elements the whole kit — fire in ash, sand in sand." },
                 { h: "Fighting", p: "<b>TAB</b> targets the nearest enemy and cycles outward; one more press past the last drops the target. Spells cost mana and run their own cooldowns — the bolt and the arc are free. Fell a whole pack and that ground stays quiet for a while." },
-                { h: "Panels", p: "<b>F1</b> settings · <b>F3</b> debug · <b>Esc</b> pause. The settings panel is live: every slider in it moves the running scene, including the sun." },
+                { h: "Panels", p: "<b>J</b> journal · <b>M</b> map · <b>E</b> interact (caches, shrines, skip the Echo) · <b>F1</b> settings · <b>F3</b> debug · <b>Esc</b> pause (closes an open panel first). The settings panel is live: every slider in it moves the running scene, including the sun." },
             ],
             onPlay: () => {
                 // PLAY is a NEW RUN: wipe the save and reset to level 1. The
@@ -1428,7 +1630,13 @@ async function boot() {
         // so binding pause to the key alone gives a pause button that works only
         // when the game is not being played. Losing the lock IS the gesture.
         document.addEventListener("pointerlockchange", () => {
-            if (document.pointerLockElement !== canvas && shell.phase === "playing") {
+            // [MEANING LAYER] ...unless the lock was released ON PURPOSE: the
+            // two reward modals (boon pick, shrine menu — anyModalOpen) and
+            // the cursor panels (journal, map — input.panel) free the pointer
+            // so their buttons can be clicked; pausing under them would bury
+            // the panel beneath the pause menu.
+            if (document.pointerLockElement !== canvas && shell.phase === "playing" &&
+                !anyModalOpen() && !input.panel) {
                 shell.pause();
             }
         });
@@ -1550,6 +1758,16 @@ async function boot() {
         // entry points and neither is called from the frame.
         perfProfile: profileSnapshot,
         perfProfileReset: profileReset,
+        // [MEANING LAYER] every system of _spec/QUEST_DESIGN.md, for probes.
+        // `meaning` is the shared ctx itself (each module's self-registered
+        // name lives on it); the grouped names below are the same objects.
+        bus: questBus,
+        meaning: mctx,
+        quests,
+        world: { caches, trials, bounties, beacon },
+        rewards: { mods, relics, boons, shop, boonPick, driftToast, shrineMenu },
+        ui: { questTracker, compass, dialogue, toasts, interact, journal,
+            worldMap, introCard, ending },
     };
 
     // The product is DRIFTWAKE; the contract is `SNOWFLOW`. An ALIAS, not a

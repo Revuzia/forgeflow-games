@@ -59,8 +59,12 @@ export class Vortex {
         this.spin = 0;
         this._stripOwed = 0;
         this._grainOwed = 0;
-        /** How far out the stripping ring has reached, metres. */
+        /** How far out the stripping ring has reached, metres — the DRAWN
+         *  ring, which `combat/spellHits.js` also uses as the hit ring:
+         *  `_ringBase` × the reward scale (`ctx.vortexScale`, [LANE R] Great
+         *  Vortex boon, 1 = the shipped spell). */
         this.ring = 0.9;
+        this._ringBase = 0.9;
     }
 
     trigger() {
@@ -69,7 +73,8 @@ export class Vortex {
             if (this.strands[i] < 0) this.strands[i] = ctx.water.acquire();
         }
         this.t = 0;
-        this.ring = 0.9;
+        this._ringBase = 0.9;
+        this.ring = 0.9 * (ctx.vortexScale || 1);
         this._stripOwed = 0;
         this._grainOwed = 0;
         this.active = true;
@@ -142,7 +147,8 @@ export class Vortex {
                 // Wide at the bottom where it is picking snow up, narrower and
                 // faster at the top. NOT a cone: the waist is what makes it read
                 // as a vortex rather than as a party hat.
-                const r = (2.55 - 1.15 * h) * (0.78 + 0.34 * bell(clamp01(h * 1.2)));
+                const r = (2.55 - 1.15 * h) * (0.78 + 0.34 * bell(clamp01(h * 1.2)))
+                        * (ctx.vortexScale || 1);              // [LANE R] Great Vortex
 
                 const x = this.x + Math.cos(ang) * r;
                 const z = this.z + Math.sin(ang) * r;
@@ -221,9 +227,12 @@ export class Vortex {
         const f = this.ctx.deform;
 
         const holding = this.t < RAMP + HOLD;
-        this.ring = holding
-            ? Math.min(3.1, this.ring + dt * 0.85)
-            : Math.max(0.9, this.ring - dt * 2.2);
+        this._ringBase = holding
+            ? Math.min(3.1, this._ringBase + dt * 0.85)
+            : Math.max(0.9, this._ringBase - dt * 2.2);
+        // [LANE R] Great Vortex: the whole ring timeline scales, so the drawn
+        // scour, the helices and the hit ring stay one radius.
+        this.ring = this._ringBase * (this.ctx.vortexScale || 1);
 
         this._stripOwed += dt;
         if (this._stripOwed < 1 / 45) return;        // 45 Hz throttle
@@ -295,7 +304,7 @@ export class Vortex {
             const ang = phase + this.spin + h * TURNS * Math.PI * 2
                       + (rand() - 0.5) * 0.9;
             const r = (2.55 - 1.15 * h) * (0.78 + 0.34 * bell(clamp01(h * 1.2)))
-                    * (0.85 + rand() * 0.35);
+                    * (0.85 + rand() * 0.35) * (ctx.vortexScale || 1);   // [LANE R]
 
             const cs = Math.cos(ang);
             const sn = Math.sin(ang);

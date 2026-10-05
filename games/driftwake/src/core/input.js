@@ -34,6 +34,29 @@
  *     in-progress carve. The guard is added below to match `mousedown`. Held
  *     state is still dropped on unlock and on window blur, which is where that
  *     cleanup belongs.
+ *
+ *  3. THE MEANING LAYER'S KEYS (_spec/QUEST_DESIGN.md §7, lane U):
+ *     `interactPressed` (E), `journalPressed` (J) and `mapPressed` (M) are
+ *     per-frame EDGES exactly like `jumpPressed` — set on the keydown edge,
+ *     cleared by `endFrame()`, never written back by a consumer. Nothing in
+ *     this file decides what E does: `ui/interact.js` routes it (dialogue
+ *     skip -> relic cache -> shrine menu), `ui/journal.js` and
+ *     `ui/worldMap.js` consume J and M. A CLOSED panel listens to nothing and
+ *     steals no key.
+ *
+ *  4. THE PANEL STACK. A UI panel that owns the keyboard (journal, map, the
+ *     intro card, the ending) calls `openPanel(name, onKey)`; from then on
+ *     every keydown is delivered to the TOP panel's `onKey` in the CAPTURE
+ *     phase on window and stopped there, so no spell, move, jump or edge key
+ *     reaches the game, and the FFG shell's Escape (a window BUBBLE listener)
+ *     never sees an Esc a panel consumed — Esc closes the panel first, the
+ *     next Esc pauses (QUEST §7). F1 / F3 / Backquote / F5 / F11 / F12 pass
+ *     through. `input.panel` names the top panel (null = none): it is what
+ *     main.js's pointerlockchange -> shell.pause() guard reads, because a
+ *     cursor panel releases the pointer lock on purpose. The two reward
+ *     modals (ui/boonPick.js, ui/shrineMenu.js) keep their own capture
+ *     handlers and their own `anyModalOpen()`; a cursor panel closes itself
+ *     when one of them opens (bus 'ui:open'), so the two never stack.
  */
 
 export const input = {
@@ -107,6 +130,16 @@ export const input = {
      */
     boltHeld: false,
 
+    /** One-frame edge: E pressed — interact (contract 3). Cleared by endFrame(). */
+    interactPressed: false,
+    /** One-frame edge: J pressed — journal toggle (contract 3). */
+    journalPressed: false,
+    /** One-frame edge: M pressed — world map toggle (contract 3). */
+    mapPressed: false,
+    /** @type {string|null} the top UI panel that owns the keyboard (contract
+     *  4), or null. Read by main.js's pause-on-unlock guard. */
+    panel: null,
+
     locked: false,
 };
 
@@ -141,8 +174,11 @@ let onToggleOverlay = null;
  */
 export function initInput(canvas, hooks) {
     onToggleOverlay = hooks?.onToggleOverlay ?? null;
+    _hookPanelKeys();
 
     canvas.addEventListener("click", () => {
+        // A cursor panel is up: the click belongs to the panel, not the lock.
+        if (_panels.length > 0 && _panels[_panels.length - 1].cursor) return;
         if (!input.locked) canvas.requestPointerLock();
     });
 
@@ -150,12 +186,12 @@ export function initInput(canvas, hooks) {
         input.locked = document.pointerLockElement === canvas;
         if (!input.locked) {
             // Drop held state so the character doesn't run off while unfocused.
-            for (const k in keys) keys[k] = false;
-            input.surf = false;
-            input.jump = false;
-            input.spellHeld2 = false;
-            input.boltHeld = false;
-            input.sprintOn = false;
+            dropHeld();
+        } else if (_panels.length > 0 && _panels[_panels.length - 1].cursor) {
+            // A re-lock requested by a closing modal landed AFTER a cursor
+            // panel opened (the shrine menu's Chronicle -> journal hand-off):
+            // the panel needs the cursor, so give it back.
+            try { document.exitPointerLock(); } catch (e) { /* nothing held */ }
         }
     });
 
@@ -224,7 +260,15 @@ export function initInput(canvas, hooks) {
         }
 
         if (e.repeat) return;
+        // Belt and braces for contract 4: the capture handler already stopped
+        // every key while a panel is up; nothing below may fire then.
+        if (_panels.length > 0) return;
         keys[e.code] = true;
+
+        // Contract 3: the meaning layer's edges.
+        if (e.code === "KeyE") input.interactPressed = true;
+        else if (e.code === "KeyJ") input.journalPressed = true;
+        else if (e.code === "KeyM") input.mapPressed = true;
 
         // SHIFT toggles run. On the press edge only — the repeat guard above
         // is what keeps a held Shift from strobing the latch — and keyup
@@ -271,14 +315,141 @@ export function initInput(canvas, hooks) {
         // (Digit1 keyup: nothing — the arc is an edge, not a hold.)
     });
 
-    window.addEventListener("blur", () => {
-        for (const k in keys) keys[k] = false;
-        input.surf = false;
-        input.jump = false;
-        input.spellHeld2 = false;
-        input.boltHeld = false;
-        input.sprintOn = false;
-    });
+    window.addEventListener("blur", dropHeld);
+}
+
+/** Drop every held key and held flag (unlock, blur, a panel opening). */
+function dropHeld() {
+    for (const k in keys) keys[k] = false;
+    input.surf = false;
+    input.jump = false;
+    input.spellHeld2 = false;
+    input.boltHeld = false;
+    input.sprintOn = false;
+}
+
+// ---------------------------------------------------------------------------
+// The panel stack (contract 4)
+// ---------------------------------------------------------------------------
+
+/** @type {{name:string, onKey:(e:KeyboardEvent)=>void, cursor:boolean}[]} */
+const _panels = [];
+let _panelKeysHooked = false;
+
+/** Keys a panel never swallows (the settings/debug panels, browser keys) —
+ *  the same list ui/boonPick.js uses. @param {string} code */
+function passThrough(code) {
+    return code === "F1" || code === "F3" || code === "F5" || code === "F11" ||
+        code === "F12" || code === "Backquote";
+}
+
+/**
+ * [INTEGRATOR] M is the WORLD MAP in play (QUEST_DESIGN §7), but the page
+ * control bar (game_controls.js, owned by the FFG page furniture) binds M to
+ * MUTE on its own window keydown listener, which is registered before this
+ * module's — so before this guard every map open also flipped the page mute
+ * (measured by reading game_controls' mute state across an M press). While
+ * the game is in play the map owns the key: the edge is set HERE, in the
+ * capture phase, and the event is stopped so the bar never sees it. On the
+ * title / pause menus (no map there) M still reaches the bar and mutes; the
+ * bar's Mute button works everywhere. Without a shell (automation) the map
+ * owns it too. A panel on top keeps its own handling below.
+ * @param {KeyboardEvent} e @returns {boolean} whether M was taken
+ */
+function _mapKey(e) {
+    if (e.code !== "KeyM") return false;
+    const t = e.target;
+    if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return false;
+    const FFG = globalThis.FFG;
+    const shell = FFG ? FFG.shell : null;
+    if (shell && shell.phase !== "playing") return false;
+    if (!e.repeat) input.mapPressed = true;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    return true;
+}
+
+/** @param {KeyboardEvent} e */
+function _panelKey(e) {
+    if (_panels.length === 0) { _mapKey(e); return; }
+    if (passThrough(e.code)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    const top = _panels[_panels.length - 1];
+    try {
+        top.onKey(e);
+    } catch (err) {
+        console.error("[input] panel '" + top.name + "' key handler threw:", err);
+    }
+}
+
+function _hookPanelKeys() {
+    if (_panelKeysHooked || typeof window === "undefined" || !window.addEventListener) return;
+    _panelKeysHooked = true;
+    window.addEventListener("keydown", _panelKey, true);
+}
+
+/**
+ * A UI panel takes the keyboard (contract 4). Re-opening a panel already on
+ * the stack moves it to the top.
+ * @param {string} name
+ * @param {(e: KeyboardEvent) => void} onKey every keydown while on top
+ * @param {{cursor?: boolean}} [opt] cursor: the panel needs the mouse — the
+ *   pointer lock is released now (and kept released while it is on top)
+ * @returns {void}
+ */
+export function openPanel(name, onKey, opt) {
+    _hookPanelKeys();
+    for (let i = _panels.length - 1; i >= 0; i--) {
+        if (_panels[i].name === name) _panels.splice(i, 1);
+    }
+    const cursor = !!(opt && opt.cursor);
+    _panels.push({ name, onKey: onKey || (() => {}), cursor });
+    input.panel = name;
+    // Nothing held when the panel opened may keep acting behind it.
+    dropHeld();
+    input.interactPressed = input.journalPressed = input.mapPressed = false;
+    input.jumpPressed = false;
+    input.spellPressed = 0;
+    if (cursor && typeof document !== "undefined" && document.pointerLockElement) {
+        try { document.exitPointerLock(); } catch (e) { /* nothing held */ }
+    }
+}
+
+/**
+ * Pop a panel (anywhere in the stack). Does NOT re-lock the pointer — the
+ * panel decides that (`requestLock()`), since only it knows whether a modal
+ * or the shell now owns the screen.
+ * @param {string} name @returns {boolean} whether it was open
+ */
+export function closePanel(name) {
+    let was = false;
+    for (let i = _panels.length - 1; i >= 0; i--) {
+        if (_panels[i].name === name) { _panels.splice(i, 1); was = true; }
+    }
+    input.panel = _panels.length ? _panels[_panels.length - 1].name : null;
+    return was;
+}
+
+/** Is any UI panel holding the keyboard? @returns {boolean} */
+export function panelOpen() {
+    return _panels.length > 0;
+}
+
+/**
+ * Ask for the pointer lock back on the game canvas (#view). Needs a user
+ * gesture (a click, or a non-Esc keydown); a refusal is not an error — the
+ * canvas click re-locks.
+ * @returns {void}
+ */
+export function requestLock() {
+    if (typeof document === "undefined") return;
+    const cv = document.getElementById("view");
+    if (!cv || document.pointerLockElement === cv || !cv.requestPointerLock) return;
+    try {
+        const p = /** @type {any} */ (cv.requestPointerLock());
+        if (p && p.catch) p.catch(() => {});
+    } catch (e) { /* no gesture */ }
 }
 
 /**
@@ -347,6 +518,9 @@ export function endFrame() {
     input.jumpPressed = false;
     input.targetCycle = false;
     input.realmPortal = null;
+    input.interactPressed = false;
+    input.journalPressed = false;
+    input.mapPressed = false;
 }
 
 /**

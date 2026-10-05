@@ -171,6 +171,13 @@ export class CharacterController {
          * doc — the HUD reads these, the spell system gates casts on mana,
          * and nothing damages the player until enemies exist.
          */
+        /** [LANE R] reward modifiers (progression/modifiers.js) — null = identity.
+         *  Read by the `healthMax`/`manaMax` accessors, the mana regen tick,
+         *  the surf cap and the ollie impulse; nothing else. */
+        this.mods = null;
+        /** Progression-written bases behind the `healthMax`/`manaMax` accessors. */
+        this._healthMaxBase = 100;
+        this._manaMaxBase = 100;
         this.health = 100;
         this.healthMax = 100;
         this.mana = 100;
@@ -248,6 +255,32 @@ export class CharacterController {
     }
 
     /**
+     * [LANE R] Max pools = the base progression writes (`_applyLevelStats`
+     * assigns through the setter) × the reward multiplier (boons, relics,
+     * shop ranks, Driftmarks). Rounded like the base, so the HUD's "x / max"
+     * stays a whole number. Identity while `mods` is null.
+     * @returns {number}
+     */
+    get healthMax() {
+        const m = this.mods;
+        return m === null ? this._healthMaxBase : Math.round(this._healthMaxBase * m.maxHp);
+    }
+
+    set healthMax(v) {
+        this._healthMaxBase = v;
+    }
+
+    /** @returns {number} see `healthMax` */
+    get manaMax() {
+        const m = this.mods;
+        return m === null ? this._manaMaxBase : Math.round(this._manaMaxBase * m.maxMana);
+    }
+
+    set manaMax(v) {
+        this._manaMaxBase = v;
+    }
+
+    /**
      * @param {number} dt
      * @param {import("../core/camera.js").CameraRig} rig
      * @returns {void}
@@ -257,7 +290,8 @@ export class CharacterController {
 
         // Mana ticks back on the integration step (placeholder rate — see the
         // combat-resources block in the constructor).
-        this.mana = Math.min(this.manaMax, this.mana + this.manaRegen * h);
+        this.mana = Math.min(this.manaMax, this.mana + this.manaRegen *
+            (this.mods === null ? 1 : this.mods.manaRegen) * h);   // [LANE R] Warm Hands
 
         this.prevVelocity.copy(this.velocity);
         // Re-read every frame: the harness pins `input.surf` with a getter and a
@@ -277,7 +311,9 @@ export class CharacterController {
         // through the air. (Owner decision 2026-08-04, reversing the earlier
         // hard block on jumping out of a carve.)
         if (input.jumpPressed && !this.airborne) {
-            this.vertVel = JUMP_VEL * (1 + (OLLIE_MULT - 1) * this.surf);
+            this.vertVel = JUMP_VEL * (1 + (OLLIE_MULT - 1) * this.surf) *
+                // [LANE R] Dune Runner — the surf ollie only, blended like OLLIE_MULT.
+                (this.mods === null ? 1 : 1 + (this.mods.surfJumpVel - 1) * this.surf);
             this.airborne = true;
             this.airTime = 0;
             this._jumpCut = false;
@@ -485,8 +521,11 @@ export class CharacterController {
             this.velocity.x *= k;
             this.velocity.z *= k;
         }
-        if (s > SURF_MAX) {
-            const k = SURF_MAX / s;
+        // [LANE R] the cap IS the flat-ground top speed (see SURF_MAX), so the
+        // reward multiplier (Sandstep, Keel, Driftmarks) scales exactly it.
+        const smax = SURF_MAX * (this.mods === null ? 1 : this.mods.surfSpeed);
+        if (s > smax) {
+            const k = smax / s;
             this.velocity.x *= k;
             this.velocity.z *= k;
         }

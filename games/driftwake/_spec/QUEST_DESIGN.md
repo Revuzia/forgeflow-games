@@ -46,7 +46,7 @@ lines, never more. No NPC model is needed: the Echo is a voice, shown in the
 dialogue box with the name "The Echo". Tone: spare, warm, a little sad. Never
 exposition dumps. Never modern slang.
 
-## 2. The main quest (the spine) — 18 steps, 6 per realm
+## 2. The main quest (the spine) — 20 steps (Cold 8, Sand 6, Ash 6)
 
 One fixed chain per realm. Each step grants objective XP per
 PROGRESSION_DESIGN §3.5 (15% of the current level's XP_to_next per step,
@@ -59,9 +59,9 @@ tracker text (≤ 60 chars), completion event, optional waypoint target.
 | cold.2 | Carve Your Wake | surf 150 m total (RMB held, grounded) | none (teach) |
 | cold.3 | Answer the Drift | kill 5 enemies | nearest live pack |
 | cold.4 | Kindle the Ring | activate 3 of the 6 ring shrines | nearest dormant shrine |
-| cold.5 | Break the Shrinebreaker | kill the cold MINI boss | mini boss arena |
+| cold.5 | Break the Icewall | kill the cold MINI boss | mini boss arena |
 | cold.6 | Wake the Anchors | activate all 6 ring shrines | nearest dormant shrine |
-| cold.7 | The Moraine Elder | kill the cold REALM boss | realm boss arena |
+| cold.7 | The Shrinebreaker | kill the cold REALM boss | realm boss arena |
 | cold.8 | Cross the Drift | step through the portal | portal |
 
 Cold has 8 steps (the first three are the onboarding, §6). Sand and Ash use the
@@ -78,6 +78,18 @@ realm; the realm boss only after "Wake the Anchors". Level gates stay as a
 FLOOR (mini ≥ 6, realm ≥ 8) — if the player is under-level when the quest
 unlocks the boss, the tracker says "Grow stronger — reach level 6" and the
 waypoint points at the densest nearby pack instead. ?test mode lifts both.
+
+THE SIX WARDENS ARE THE SIX LIVE BOSSES (orchestrator decision 2026-09-30).
+Every boss step names what the game really spawns: combat/roster.js bossKind
+rows, read by combat/bossEncounters.js BOSS_BY_REALM. Cold mini = The Icewall,
+Cold realm = Shrinebreaker; Sand mini = Gatekeeper of Brass, Sand realm =
+Warden of the Sundered Gate; Ash mini = Furnace Guardian, Ash realm = Volcanic
+Plate Knight. The first draft of this table called the Cold mini boss the
+Shrinebreaker and the Cold realm boss the Moraine Elder; the Moraine Elder is
+a design-park row (combatData BOSSES) with no mesh and is never spawned, so
+cold.5 and cold.7 were renamed. Step titles, Echo lines, lore shards, boon
+pair labels and the journal all follow this list (src/quests/storyText.js,
+src/quests/questData.js).
 
 ## 3. Side content — the reason to ride to every horizon
 

@@ -133,6 +133,9 @@ export class SpellHits {
          * Applied to every damage amount, never to poise or CC.
          */
         this.damageMult = 1;
+        /** [LANE R] reward modifiers (progression/modifiers.js) - null =
+         *  identity. Every damage() below multiplies by `_rm(slot, kind)`. */
+        this.mods = null;
 
         const cap = registry.x.length;
 
@@ -212,7 +215,7 @@ export class SpellHits {
         /** @type {(slot:number, id:number, d2:number)=>void} */
         this._burstCb = (slot, id, d2) => this._bloomBurstHit(slot, id, d2);
         /** @type {(slot:number, id:number, d2:number)=>void} */
-        this._splashCb = (slot, id, d2) => this._boltSplashHit(id);
+        this._splashCb = (slot, id, d2) => this._boltSplashHit(id, slot);
 
         // ---- frost arc (cold LMB) ------------------------------------------
         /** Last `spells.arcGen` consumed — the cast-edge latch. */
@@ -536,14 +539,21 @@ export class SpellHits {
                 if (id >= 0) {
                     const moving = this._bMoving[i] === 1;
                     const base = moving ? D.damageMoving : D.damage;
+                    const hs = reg.slot(id);                       // [LANE R]
+                    const c0 = hs >= 0 ? reg.chill[hs] : 0;        // [LANE R]
                     const dmg = base * (1 + (rand() * 2 - 1) * D.variance)
-                              * this.damageMult;
+                              * this.damageMult * this._rm(hs, 0);
                     reg.damage(id, dmg, {
                         poise: D.poise,
                         // §1.1: no Chill stack above the speed gate.
                         chill: D.chill && !moving,
                         tag: "bolt",
                     });
+                    // [LANE R] chill rewards (Deep Chill, Rime Heart) + Ember Coil.
+                    if (this.mods !== null) {
+                        if (D.chill && !moving) this.mods.onChillHit(reg, hs, id, c0, false);
+                        this.mods.onBoltHit(id);
+                    }
                     this._bSpent[i] = 1;         // one direct hit per bolt
                     this._bHitId[i] = id;
                     // Terminate the projectile HERE, at the body it hit, so
@@ -579,11 +589,12 @@ export class SpellHits {
         );
     }
 
-    /** @param {number} id */
-    _boltSplashHit(id) {
+    /** @param {number} id @param {number} slot */
+    _boltSplashHit(id, slot) {
         if (id === this._boltHitId) return;
         this.registry.damage(
-            id, this.data.bolt.splashDamage * this.damageMult, { tag: "splash" }
+            id, this.data.bolt.splashDamage * this.damageMult * this._rm(slot, 0),
+            { tag: "splash" }
         );
     }
 
@@ -630,8 +641,9 @@ export class SpellHits {
         // (`_harness/qa_arcdiag.py`, 2026-08-11).
         const gy = this.spells.ctx.terrain.heightAt(reg.x[slot], reg.z[slot]);
         if (reg.y[slot] > gy + D.arc.heightGate) return;
+        const c0 = reg.chill[slot];                            // [LANE R]
         const dmg = D.damage * (1 + (rand() * 2 - 1) * D.variance)
-                  * this.damageMult;
+                  * this.damageMult * this._rm(slot, 0);
         reg.damage(id, dmg, {
             poise: D.poise,
             chill: D.chill,            // 1 stack per hit, exactly like the dart
@@ -640,6 +652,8 @@ export class SpellHits {
             ccMag: D.arc.slowFrac,
             tag: "bolt",
         });
+        // [LANE R] Frost Nova (the arc chills twice), Deep Chill, Rime Heart.
+        if (this.mods !== null && D.chill) this.mods.onChillHit(reg, slot, id, c0, true);
     }
 
     // =====================================================================
@@ -704,7 +718,7 @@ export class SpellHits {
             let nx = ex - ch.position.x;
             let nz = ez - ch.position.z;
             const nl = Math.hypot(nx, nz) || 1;
-            reg.damage(reg.idOf[i], D.damage * this.damageMult, {
+            reg.damage(reg.idOf[i], D.damage * this.damageMult * this._rm(i, 0), {
                 cc: "knockback",
                 ccMag: D.nudge,
                 dirX: nx / nl,
@@ -857,11 +871,12 @@ export class SpellHits {
         const dx = ex - cx;
         const dz = ez - cz;
         const d = Math.hypot(dx, dz) || 1;
-        const dmg = D.damage * w * this._qEnv * this.damageMult;
+        const dmg = D.damage * w * this._qEnv * this.damageMult * this._rm(slot, 1);
         reg.damage(id, dmg, {
             poise: D.poise,
             cc: "knockback",               // registry adds the 0.4 s stagger
-            ccMag: D.kbMag,                // tier fractions applied in-registry
+            // tier fractions applied in-registry; [LANE R] Tidal Force +30%
+            ccMag: D.kbMag * (this.mods === null ? 1 : this.mods.waveKnock),
             dirX: dx / d,                  // outward radial: the wave ploughs
             dirZ: dz / d,
             tag: "wave",
@@ -931,7 +946,7 @@ export class SpellHits {
             // (QA battery A measured 8.1 of the designed 15 DPS).
             const k = Math.min(this._cOwed[i], 0.25);
             this._cOwed[i] = 0;
-            reg.damage(reg.idOf[i], D.columnDps * k * this.damageMult, {
+            reg.damage(reg.idOf[i], D.columnDps * k * this.damageMult * this._rm(i, 0), {
                 tag: "bloom",
             });
         }
@@ -947,7 +962,7 @@ export class SpellHits {
         const inner = D.burstRadius * D.innerFrac;
         const f = clamp01((dist - inner) / (D.burstRadius - inner));
         const dmg = (D.burstDamage + (D.burstRim - D.burstDamage) * f)
-                  * this.damageMult;
+                  * this.damageMult * this._rm(slot, 0);
         reg.damage(id, dmg, {
             poise: D.poise,
             cc: "slow",
@@ -1000,7 +1015,7 @@ export class SpellHits {
             if (reg.y[i] > cr.y + D.prismHeight) continue;
             if (reg.y[i] + reg.height[i] < cr.y - D.baseSink) continue;
 
-            reg.damage(id, D.damage * this.damageMult, {
+            reg.damage(id, D.damage * this.damageMult * this._rm(i, 0), {
                 poise: D.poise,            // 60 — the stance-break tool
                 cc: "stun",
                 ccDur: D.stunDur,          // tier scaling is the registry's job
@@ -1048,12 +1063,16 @@ export class SpellHits {
         const gy = this.spells.ctx.terrain.heightAt(vx.x, vx.z);
         const top = D.top * env;
         const canLift = holding && env >= D.liftEnvGate;
+        // [LANE R] Great Vortex boon (+15% radius) is already IN `vx.ring`:
+        // spells/vortex.js scales its drawn ring by ctx.vortexScale, so the
+        // ring that is drawn is the ring that hits.
+        const ringR = vx.ring;
 
         for (let i = 0; i < reg.count; i++) {
             if (reg.hp[i] <= 0) continue;
             const dx = reg.x[i] - vx.x;
             const dz = reg.z[i] - vx.z;
-            const rr = vx.ring + reg.radius[i];
+            const rr = ringR + reg.radius[i];
             if (dx * dx + dz * dz > rr * rr) continue;
             if (reg.y[i] > gy + top) continue;
             if (reg.y[i] + reg.height[i] < gy) continue;
@@ -1072,7 +1091,7 @@ export class SpellHits {
 
             const liftable = reg.tier[i] <= TIER.LIGHT;
             if (liftable && canLift) {
-                reg.damage(id, D.dps * env * k * this.damageMult, {
+                reg.damage(id, D.dps * env * k * this.damageMult * this._rm(i, 0), {
                     poise: D.poisePerSec * k,
                     cc: "lift",
                     tag: "vortex",
@@ -1086,7 +1105,7 @@ export class SpellHits {
                 // (§5.2), renewed while inside the ring.
                 const frac = reg.tier[i] === TIER.BOSS
                     ? D.bossSlowFrac : D.slowFrac;
-                reg.damage(id, D.dps * env * k * this.damageMult, {
+                reg.damage(id, D.dps * env * k * this.damageMult * this._rm(i, 0), {
                     poise: D.poisePerSec * k,
                     cc: liftable ? null : "slow",
                     ccDur: D.slowRenew,
@@ -1119,7 +1138,7 @@ export class SpellHits {
             reg.lifted[slot] = 0;          // clear BEFORE the impulse lands
             if (reg.hp[slot] <= 0) continue;
             const mag = D.flingMin + rand() * (D.flingMax - D.flingMin);
-            reg.damage(id, D.flingDamage * this.damageMult, {
+            reg.damage(id, D.flingDamage * this.damageMult * this._rm(slot, 0), {
                 cc: "knockback",
                 ccMag: mag,
                 dirX: ax,
@@ -1138,6 +1157,20 @@ export class SpellHits {
             if (slot >= 0) reg.lifted[slot] = 0;
         }
         this._liftN = 0;
+    }
+
+    /**
+     * [LANE R] The reward damage factor for one hit on registry `slot`, read
+     * before the hit lands (modifiers.js `hitMult`; kind 0 kit, 1 wave).
+     * @param {number} slot @param {number} kind @returns {number}
+     */
+    _rm(slot, kind) {
+        const m = this.mods;
+        if (m === null) return 1;
+        // The out-slot form: no boxed double crosses the call if V8 does
+        // not inline it (modifiers.js hitMultInto).
+        m.hitMultInto(this.registry, slot, kind);
+        return m.hm[0];
     }
 
     // =====================================================================

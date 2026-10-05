@@ -53,6 +53,8 @@ import { S } from "../core/settings.js";
 import { shader } from "../core/glsl.js";
 import { vertex, fragment, depthVertex } from "../shaders/crystal.glsl.js";
 import { REALM_PALETTE } from "../spells/spellSystem.js";
+// [LANE Q] the meaning layer's bus: 'portal:entered' {from, to} on the walk-in.
+import { bus } from "../quests/events.js";
 
 /** Prisms: 2 pylons + a 10-shard arch. */
 const PYLONS = 2;
@@ -117,6 +119,9 @@ export class RealmPortal {
         this.y = 0;
         /** @type {string|null} */
         this.token = null;
+        /** [LANE Q] The realm the gate STANDS in (open()'s 4th arg) — the
+         *  `from` of 'portal:entered'. @type {string|null} */
+        this.from = null;
         /** @type {((token:string)=>void)|null} fired once, on entry. */
         this.onEnter = null;
 
@@ -203,13 +208,15 @@ export class RealmPortal {
      * to. Re-opening moves it and restarts the rise.
      * @param {number} x @param {number} z
      * @param {"cold"|"sand"|"ash"} token the NEXT realm
+     * @param {string} [from] [LANE Q] the realm the gate stands in
      * @returns {void}
      */
-    open(x, z, token) {
+    open(x, z, token, from) {
         this.x = x;
         this.z = z;
         this.y = this.terrain.heightAt(x, z);
         this.token = token;
+        this.from = typeof from === "string" ? from : null;
         this._open = true;
         this._entered = false;
         this._armed = false;      // must be walked into, not stood in
@@ -234,6 +241,7 @@ export class RealmPortal {
         this._entered = false;
         this.mesh.visible = false;
         this.token = null;
+        this.from = null;
     }
 
     /**
@@ -279,6 +287,9 @@ export class RealmPortal {
             } else if (inside) {
                 this._entered = true;
                 const t = this.token;
+                // [LANE Q] BEFORE onEnter: the realm change it starts is async,
+                // and listeners must see the world as it was at the step-in.
+                bus.emit("portal:entered", { from: this.from, to: t });
                 if (this.onEnter && t) this.onEnter(t);
             }
         }
@@ -344,7 +355,7 @@ export class RealmPortal {
     /** Probe surface. */
     get stats() {
         return {
-            open: this._open, token: this.token, entered: this._entered,
+            open: this._open, token: this.token, from: this.from, entered: this._entered,
             armed: this._armed,
             x: this.x, z: this.z, y: this.y,
             grow: this._g, tintAmt: this._tintAmt.value,
