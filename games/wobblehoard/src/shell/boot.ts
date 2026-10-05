@@ -205,6 +205,6 @@ export async function boot(): Promise<(() => void) | null> {
     ui.destroy();
     g.dispose();   // flushes and disposes the collection; disposes stage and audio
     try { profile?.flush(); profile?.dispose(); } catch { /* ignore */ }
-    if (window.__WH__) delete window.__WH__;
+    if (import.meta.env.DEV && window.__WH__) delete window.__WH__;
   };
 }

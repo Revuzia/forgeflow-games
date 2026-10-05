@@ -182,6 +182,17 @@ async function layoutOf(page) {
   });
 }
 const overlap = (a, b) => a && b && !(a.r <= b.x || b.r <= a.x || a.b <= b.y || b.b <= a.y);
+/** let the page settle before measuring a layout: two animation frames (ResizeObserver work such as the hint fit runs in between), then
+ *  every running finite CSS transition / animation (the settings sheet sliding in) to its end. SwiftShader frames can take a second. */
+async function settle(page, timeoutMs = 10000) {
+  await page.evaluate(async (to) => {
+    const raf = () => new Promise((r) => requestAnimationFrame(() => r()));
+    await raf(); await raf();
+    const anims = document.getAnimations().filter((a) => a.playState === 'running' && Number.isFinite(a.effect?.getComputedTiming?.().endTime ?? Infinity));
+    await Promise.race([Promise.all(anims.map((a) => a.finished.catch(() => {}))), new Promise((r) => setTimeout(r, to))]);
+    await raf();
+  }, timeoutMs);
+}
 
 // =====================================================================================================
 async function main() {
@@ -928,14 +939,17 @@ async function main() {
       // settings as a bottom sheet
       await page.touchscreen.tap(L.gear.x + L.gear.w / 2, L.gear.y + L.gear.h / 2);
       await waitUntil(page, () => document.querySelector('.panel').dataset.open === 'true' && getComputedStyle(document.querySelector('.panel')).opacity === '1', null, 8000);
-      await sleep(900);
+      await sleep(900); await settle(page);
       const L2 = await layoutOf(page);
       check('phone: settings is a bottom sheet (full width, docked to the bottom edge)', L2.panel && Math.abs(L2.panel.x) < 1 && Math.abs(L2.panel.w - L2.iw) < 2 && Math.abs(L2.panel.b - L2.ih) < 2, JSON.stringify(L2.panel));
       check('phone: the sheet leaves the top half free (sheet is < 60% of the screen) and no scroll appears', L2.panel.h < L2.ih * 0.6 && L2.sw <= L2.iw && L2.sh <= L2.ih, `sheet ${Math.round(L2.panel.h)} of ${L2.ih}`);
       const sizes = await page.evaluate(() => [...document.querySelectorAll('.panel input[type=range], .panel .seg-face, .panel select, .panel .row-switch, .panel .icon-btn')].map((e) => { const b = e.getBoundingClientRect(); return { cls: e.className || e.tagName, w: Math.round(b.width), h: Math.round(b.height) }; }));
       check('phone: every settings control is >= 44 px', sizes.every((s) => s.h >= 44 && s.w >= 44), sizes.filter((s) => s.h < 44 || s.w < 44).map((s) => `${s.cls} ${s.w}x${s.h}`).join(', ') || `${sizes.length} checked`);
       const bd = await body(page);
-      check('phone: with the sheet open the squishy is still visible above it (centre above the sheet top)', bd && bd.y * L2.ih < L2.panel.y, `squishy y ${(bd.y * L2.ih).toFixed(0)} vs sheet top ${L2.panel.y.toFixed(0)}`);
+      // bodyScreen() is in canvas coordinates; the canvas itself slides up while the sheet is open (styles.css), so map through its rect
+      const cv = await page.evaluate(() => { const b = document.querySelector('#stage').getBoundingClientRect(); return { y: b.y, h: b.height }; });
+      const visY = bd ? cv.y + bd.y * cv.h : NaN;
+      check('phone: with the sheet open the squishy is still visible above it (centre above the sheet top)', bd && visY < L2.panel.y, `squishy y ${visY.toFixed(0)} on screen (canvas shifted ${cv.y.toFixed(0)} px) vs sheet top ${L2.panel.y.toFixed(0)}`);
       await shot(page, 'settings_phone');
       // drag the volume slider with a finger
       const vb = await page.locator('#wh-volume').boundingBox();
@@ -955,16 +969,16 @@ async function main() {
       const L3 = await layoutOf(page);
       check('landscape phone 844x390: no scroll, HUD on screen', L3.sw <= L3.iw && L3.sh <= L3.ih && L3.gear.r <= L3.iw && L3.name.b <= L3.ih, `scroll ${L3.sw}x${L3.sh} of ${L3.iw}x${L3.ih}`);
       await page.touchscreen.tap(L3.gear.x + L3.gear.w / 2, L3.gear.y + L3.gear.h / 2);
-      await sleep(900);
+      await sleep(900); await settle(page);
       const L4 = await layoutOf(page);
       check('landscape phone: the settings panel fits (scrolls inside itself) and does not overflow the screen', L4.panel.b <= L4.ih + 1 && L4.panel.y >= 0 && L4.sw <= L4.iw, JSON.stringify(L4.panel));
       await shot(page, 'settings_landscape');
       await page.keyboard.press('Escape');
       await sleep(300);
       await page.setViewportSize({ width: 320, height: 568 });
-      await sleep(1000);
+      await sleep(1000); await settle(page);
       const L5 = await layoutOf(page);
-      check('small phone 320x568: no scroll, hint inside the screen, not clipped, at most two lines', L5.sw <= L5.iw && L5.sh <= L5.ih && L5.hint.x >= 0 && L5.hint.r <= L5.iw && !L5.hintClipped && L5.hintLines <= 2, `hint ${JSON.stringify(L5.hint)}, lines ${L5.hintLines}`);
+      check('small phone 320x568: no scroll, hint inside the screen, not clipped, at most two lines', L5.sw <= L5.iw && L5.sh <= L5.ih && L5.hint.x >= 0 && L5.hint.r <= L5.iw && !L5.hintClipped && L5.hintLines <= 2, `scroll ${L5.sw}x${L5.sh} of ${L5.iw}x${L5.ih}, hint ${JSON.stringify(L5.hint)}, font ${L5.hintFont}px, clipped ${L5.hintClipped}, lines ${L5.hintLines}`);
       await shot(page, 'play_small_phone');
       await page.setViewportSize({ width: 390, height: 844 });
       await context.close();
@@ -988,7 +1002,7 @@ async function main() {
       await page.evaluate(() => window.__WH__.shell.grant(2));
       for (const [W, H] of [[320, 568], [568, 320], [320, 460], [320, 256]]) {
         await page.setViewportSize({ width: W, height: H });
-        await sleep(1200);
+        await sleep(1200); await settle(page);
         const L = await layoutOf(page);
         const inside = (r) => r && r.x >= -0.5 && r.r <= L.iw + 0.5 && r.y >= -0.5 && r.b <= L.ih + 0.5;
         check(`reflow ${W}x${H} play: no horizontal or vertical scroll; gear, mute, name plate, meter ring and capsule button fully on screen`,
@@ -997,7 +1011,7 @@ async function main() {
           JSON.stringify({ hint: L.hint, hintShow: L.hintShow, lines: L.hintLines }));
         await shot(page, `play_${W}x${H}`);
         await page.evaluate(() => document.querySelector('button[aria-label="Settings"]').click());
-        await sleep(900);
+        await sleep(900); await settle(page);
         const P = await layoutOf(page);
         const clipped = P.labels.filter((l) => l.x < P.panel.x - 0.5 || l.r > P.panel.r + 0.5 || l.x < 0 || l.r > P.iw || l.sw > l.cw + 1);
         check(`reflow ${W}x${H} settings: the panel is inside the viewport, scrolls inside itself, and no label is cut off`,
@@ -1031,19 +1045,26 @@ async function main() {
       a0 = await started(page);
       await page.keyboard.down('Space');
       const kd = await waitUntil(page, () => window.__WH__.state().metrics.compression > 0.1, null, 60000);
+      const kdm = (await state(page)).metrics;
       await page.keyboard.up('Space');
-      check('holding Space squishes (a squish voice, compression rises)', kd && (await started(page)).squish > a0.squish);
+      const kdv = (await started(page)).squish - a0.squish;
+      check('holding Space squishes (a squish voice, compression rises)', kd && kdv > 0, `compression ${kdm.compression.toFixed(3)}, press ${typeof kdm.press === 'number' ? kdm.press.toFixed(3) : 'n/a'}, fingers ${kdm.fingers}, squish voices +${kdv}`);
       await waitUntil(page, () => window.__WH__.state().metrics.fingers === 0, null, 60000);
       await page.keyboard.press('g'); await sleep(500);
       check('G on the squishy: float mode, announced in the live region ("Floating")', (await state(page)).settings.gravity === false && /Floating/.test(await live(page)), await live(page));
       await page.keyboard.press('g'); await page.keyboard.press('m'); await sleep(500);
       check('M on the squishy: muted, the mute button shows it, announced ("Sound off")', (await page.evaluate(() => document.querySelector('.hud-actions button[aria-pressed]').getAttribute('aria-pressed'))) === 'true' && /Sound off/.test(await live(page)), await live(page));
       await page.keyboard.press('m'); await sleep(300);
-      // Tab order: Mute, Settings, the squishy
+      // Tab order: Mute, Settings, the squishy. (blur() keeps Chromium's sequential-navigation start point on the squishy, so the first Tab
+      // leaves the document (BODY) and the cycle starts there: judge the cycle of real stops, which must be exactly these three, in order.)
       await page.evaluate(() => document.activeElement.blur());
       const order = [];
-      for (let i = 0; i < 4; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')?.split(':')[0] ?? document.activeElement?.tagName)); }
-      check('Tab order in play: Mute, Settings, the squishy', order[0] === 'Mute sound' && order[1] === 'Settings' && order[2] === 'Squishy', order.join(' > '));
+      for (let i = 0; i < 7; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')?.split(':')[0] ?? document.activeElement?.tagName)); }
+      const stops = order.filter((o) => o !== 'BODY');
+      const want = ['Mute sound', 'Settings', 'Squishy'];
+      const k0 = stops.indexOf('Mute sound');
+      const cycleOk = k0 >= 0 && stops.length >= k0 + 3 && stops.every((o, i) => o === want[(((i - k0) % 3) + 3) % 3]);
+      check('Tab order in play: Mute, Settings, the squishy (and no other stop)', cycleOk, order.join(' > '));
       // shortcuts stay out of form controls
       await page.focus('button[aria-label="Settings"]'); await page.keyboard.press('Enter'); await sleep(500);
       const g0 = (await state(page)).settings.gravity;

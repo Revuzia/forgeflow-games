@@ -67,6 +67,7 @@ body {
 .hud {
   position: fixed;
   inset: 0;
+  z-index: 3;   /* above the squishy's focus ring (.play-target, 2): the ring never draws over the hint or the buttons */
   pointer-events: none !important;
   padding: calc(var(--safe-t) + 12px) calc(var(--safe-r) + var(--gutter)) calc(var(--safe-b) + 14px) calc(var(--safe-l) + var(--gutter));
   transition: opacity .4s ease;
