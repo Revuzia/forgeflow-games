@@ -12,7 +12,7 @@ import { clamp } from '../core/rng.ts';
 import { c01, fin, liveNodeCount, makeRng, noiseBuffer, type VoiceGroup } from './dsp.ts';
 import { createMasterChain, musicGain, type MasterChain } from './chain.ts';
 import { blend, land, poke, pop, release, squish, type SquishVoice } from './voices.ts';
-import { TIERS, capsuleBurst, crack, grab, meterFull, mergeStart, mythicDuck, reveal, tierIdx, type MergeVoice } from './ceremony.ts';
+import { BURST_LOOKAHEAD_S, TIERS, capsuleBurst, crack, grab, meterFull, mergeStart, mythicDuck, reveal, tierIdx, type MergeVoice } from './ceremony.ts';
 import {
   Composer, FADE_OUT_S, HELD_ROOM_HOLD_S, LOOKAHEAD_S as MUSIC_LOOKAHEAD_S, MUSIC_DEFAULT, MusicBed, PAUSE_FADE_S, ROOM_TAIL_S, TICK_MS,
   roomDb, squishRoomDb, strandRoomDb,
@@ -40,6 +40,13 @@ const STRAND_ORPHAN_S = 0.4;
 const MUSIC_RESTART_MS = 300;
 /** Sessions still fading out; beyond this the oldest is cut (only a hostile toggle storm gets here). */
 const MAX_RETIRING = 6;
+/** The build pump: how far ahead it builds and how often it runs (only while something is pending). */
+const PUMP_AHEAD_S = 0.5;
+const PUMP_MS = 80;
+/** The merge charge builds this much of its squelch/ticks in the call; the pump (first tick PUMP_MS later) does the rest. */
+const MERGE_FIRST_SLICE_S = 0.2;
+/** A blend builds this much of its bubble stream, clinks and flourish in the call. */
+const BLEND_FIRST_SLICE_S = 0.5;
 
 const NOOP_HANDLE: SquishVoiceHandle = Object.freeze({ update() { /* not unlocked */ }, end() { /* not unlocked */ } });
 const NOOP_MERGE = Object.freeze({ burst() { /* nothing charging */ }, stop() { /* nothing charging */ } });
@@ -55,8 +62,9 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
   let unlockP: Promise<void> | null = null;
   let lastResumeTry = -1e9;
   let lastGrab = -1e9;
-  // merge charges that still have squelch/tick events to schedule (pumped ~0.5 s ahead every 80 ms)
-  const pumped: MergeVoice[] = [];
+  // voices that still have pieces to build (a merge charge's squelch/ticks, a blend's bubble stream, a reveal's or a
+  // burst's later notes): pumped ~PUMP_AHEAD_S ahead every PUMP_MS, so no single call builds hundreds of nodes
+  const pumped: { advance(until: number): boolean; readonly alive: boolean }[] = [];
   let pumpTimer: ReturnType<typeof setInterval> | null = null;
   let lastStatsT = 0;
   let dropped = 0;
@@ -190,7 +198,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
   function musicRoomHeld(db: number): void {
     if (!musicInst || !ctx || !(db < -0.05)) return;
     const t = ctx.currentTime;
-    try { musicInst.makeRoom(t, t + HELD_ROOM_HOLD_S + ROOM_TAIL_S, db); } catch { /* ignore */ }
+    try { musicInst.makeRoom(t, t + HELD_ROOM_HOLD_S, db); } catch { /* ignore */ }
   }
 
   /** register() + make room for it in the music. */
@@ -251,9 +259,18 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
     }
   }
 
+  /** Hand a voice that may have pieces left to build to the pump. It is NOT advanced here: building more in this call is
+   *  what the pump exists to avoid (its first tick, PUMP_MS later, takes over; a voice with nothing left drops out then). */
+  function pumpLater(v: { advance?(until: number): boolean; readonly alive: boolean; readonly deferred?: number }): void {
+    if (!ctx || typeof v.advance !== 'function') return;
+    if (typeof v.deferred === 'number' && v.deferred === 0) return;     // a Bag that built everything in the call
+    pumped.push(v as { advance(until: number): boolean; readonly alive: boolean });
+    if (!pumpTimer) pumpTimer = setInterval(pump, PUMP_MS);
+  }
+
   function pump(): void {
     if (!ctx) return;
-    const until = ctx.currentTime + 0.5;
+    const until = ctx.currentTime + PUMP_AHEAD_S;
     for (let i = pumped.length - 1; i >= 0; i--) {
       let done = true;
       try { done = pumped[i].advance(until); } catch { /* ended */ }
@@ -306,16 +323,31 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
     if (!timer) timer = setInterval(sweep, 500);
   }
 
-  async function doUnlock(): Promise<void> {
-    if (disposed) return;
+  /**
+   * iOS/Safari audio session (round-3 audit fix): with sound on, ask for the 'playback' session so the hardware ringer
+   * switch does not silence the game (sound is one of the three non-colour rarity cues, DESIGN 6.6). Like a video, it then
+   * pauses other apps' audio; muted, the game hands the session back ('ambient'). Feature-detected (navigator.audioSession,
+   * Safari 16.4+), a no-op elsewhere. Untested on a device.
+   */
+  function claimSession(): void {
     try {
-      if (!ctx) build();
+      const nav = (globalThis as unknown as { navigator?: { audioSession?: { type: string } } }).navigator;
+      const as = nav && nav.audioSession;
+      if (!as) return;
+      const want = settings.muted ? 'ambient' : 'playback';
+      if (as.type !== want) as.type = want;
+    } catch { /* read-only or unsupported */ }
+  }
+
+  function doUnlock(): Promise<void> {
+    if (disposed) return Promise.resolve();
+    try {
+      if (!ctx) { claimSession(); build(); }
       const c = ctx;
-      if (!c) return;
-      if (c.state !== 'running' && !paused) {
-        // resume() can stay pending for ever without a user gesture, so never await it unbounded
-        await Promise.race([c.resume(), new Promise<void>((res) => setTimeout(res, 1200))]);
-      }
+      if (!c) return Promise.resolve();
+      // Everything that must happen INSIDE the user gesture happens synchronously here, before the first await
+      // (round-3 audit fix: the silent buffer used to start after awaiting resume(), when the gesture was already over).
+      const res = c.state !== 'running' && !paused ? c.resume() : null;
       // iOS Safari: a one-sample silent buffer started inside the gesture fully unlocks output
       try {
         const b = c.createBuffer(1, 1, 22050);
@@ -325,8 +357,10 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
         s.onended = () => { try { s.disconnect(); } catch { /* gone */ } };
         s.start(0);
       } catch { /* not needed everywhere */ }
-      syncMusic();
-    } catch { /* an unlock failure must never break the game: ready stays false */ }
+      // resume() can stay pending for ever without a user gesture, so never await it unbounded
+      const wait = res ? Promise.race([res.catch(() => { /* needs a gesture */ }), new Promise<void>((ok) => setTimeout(ok, 1200))]) : Promise.resolve();
+      return wait.then(() => { syncMusic(); }, () => { /* never reject */ });
+    } catch { return Promise.resolve(); /* an unlock failure must never break the game: ready stays false */ }
   }
 
   const self: SquishAudio = {
@@ -341,7 +375,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       if (!s || typeof s !== 'object') return;
       if (s.master !== undefined) settings.master = c01(s.master, settings.master);
       if (s.squishBoost !== undefined) settings.squishBoost = c01(s.squishBoost, settings.squishBoost);
-      if (s.muted !== undefined) settings.muted = !!s.muted;
+      if (s.muted !== undefined) { const m = !!s.muted; if (m !== settings.muted) { settings.muted = m; if (ctx) claimSession(); } }
       if (s.music !== undefined) settings.music = c01(s.music, settings.music);
       if (chain) chain.apply(settings);
       if (settings.muted) killAll(0.03);
@@ -424,9 +458,10 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       if (!a) return { stop() { /* nothing playing */ } };
       try {
         const v = blend(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
-          rng: makeRng(a.seed), jitter: a.jitter, count: fin(p?.count, 3), durationS: fin(p?.durationS, 2.2),
+          rng: makeRng(a.seed), jitter: a.jitter, count: fin(p?.count, 3), durationS: fin(p?.durationS, 2.2), lookaheadS: BLEND_FIRST_SLICE_S,
         });
         registerFx(v, 'blend');
+        pumpLater(v);
         return { stop() { try { v.stop(); } catch { /* ignore */ } } };
       } catch { dropped++; return { stop() { /* failed to start */ } }; }
     },
@@ -452,7 +487,8 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       }
       const a = accept('capsule');
       if (!a) return;
-      const base = { rng: makeRng(a.seed), jitter: a.jitter, pitch: clamp(fin(p.pitch, 1), 0.5, 2) };
+      // calm (DESIGN 6.6 "Calm effects"): softer, slower-edged beats and the low-passed, 5 dB softer burst pop
+      const base = { rng: makeRng(a.seed), jitter: a.jitter, pitch: clamp(fin(p.pitch, 1), 0.5, 2), calm: p.calm === true };
       const t0 = a.c.currentTime + LOOKAHEAD;
       try {
         // grab and crack take NO tier: the shell must not spoil the result before the burst
@@ -475,10 +511,11 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
         const g = reveal(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
           rng: makeRng(a.seed), jitter: a.jitter, tier, tierUp: p?.tierUp === true, isNew: p?.isNew === true,
           mythicVariant: fin(p?.mythicVariant, 0), durationS: p?.durationS === undefined ? undefined : fin(p.durationS, NaN),
-          calm, pitch: clamp(fin(p?.pitch, 1), 0.5, 2),
+          calm, pitch: clamp(fin(p?.pitch, 1), 0.5, 2), lookaheadS: BURST_LOOKAHEAD_S,
         });
         register(g);
         musicDuck(g.endTime);
+        pumpLater(g);
       } catch { dropped++; }
     },
 
@@ -490,13 +527,12 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
         v = mergeStart(a.c, chain!.plain, a.c.currentTime + LOOKAHEAD, {
           rng: makeRng(a.seed), jitter: a.jitter, tier: asTier(p?.tier), calm: p?.calm === true,
           chargeS: p?.chargeS === undefined ? undefined : fin(p.chargeS, NaN), pitch: clamp(fin(p?.pitch, 1), 0.5, 2),
-          lookaheadS: 0.5,
+          lookaheadS: MERGE_FIRST_SLICE_S,
         });
       } catch { dropped++; return NOOP_MERGE; }
       register(v);
       musicDuck(v.endTime);
-      pumped.push(v);
-      if (!pumpTimer) pumpTimer = setInterval(pump, 80);
+      pumpLater(v);
       let done = false;
       return {
         burst(q) {
@@ -509,7 +545,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
               tier: asTier(q?.tier), tierUp: q?.tierUp === true, mythicVariant: fin(q?.mythicVariant, 0),
               durationS: q?.durationS === undefined ? undefined : fin(q.durationS, NaN),
             });
-            if (g) { register(g); musicDuck(g.endTime); }
+            if (g) { register(g); musicDuck(g.endTime); pumpLater(g); }
           } catch { dropped++; }
         },
         stop() {

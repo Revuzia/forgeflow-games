@@ -125,7 +125,7 @@ export interface AudioSettings {
   squishBoost: number; // 0..1: "louder squish" — 0 = baseline, 1 = +9 dB on the squish/release/poke voices (limiter stays on)
   muted: boolean;
   /** Round 3 (optional): music bed volume 0..1, relative to master (it sits under the master gain). 0.45 = the designed level
-   *  (about -27 dBFS long-term at master 1), 1 = +6 dB over that, 0 = off (nothing is scheduled). Default 0.45. */
+   *  (about -29 dBFS long-term at master 1), 1 = +6 dB over that, 0 = off (nothing is scheduled). Default 0.45. */
   music?: number;
 }
 
@@ -164,8 +164,9 @@ export interface SquishAudio {
   /* Round 2 (OPTIONAL members so existing mocks keep compiling; AUDIO implements them, see DESIGN.md sections 6.2-6.5). */
   /** Meter full: two-note rising "plink-plonk" (~180 ms), quieter when `quiet` (player mid-squeeze). */
   meterFull?(p?: { quiet?: boolean; pitch?: number }): void;
-  /** Capsule beats: 'grab' = soft rising squeak while squeezing (progress 0..1), 'crack' = shell tick, 'burst' = pop + short tier cue. */
-  capsuleBeat?(p: { beat: 'grab' | 'crack' | 'burst'; progress?: number; tier?: TierName; pitch?: number }): void;
+  /** Capsule beats: 'grab' = soft rising squeak while squeezing (progress 0..1), 'crack' = shell tick, 'burst' = pop + short tier cue.
+   *  `calm` (round 3, optional, additive; DESIGN 6.6 "Calm effects"): softer, slower-edged beats and a low-passed, 5 dB softer burst pop. */
+  capsuleBeat?(p: { beat: 'grab' | 'crack' | 'burst'; progress?: number; tier?: TierName; pitch?: number; calm?: boolean }): void;
   /** The tier motif of the reveal (DESIGN 6.5). `mythicVariant` (0..2) selects the unique 3-note motif of each Mythic. `tierUp` adds the rising ladder. durationS fits the budget in DESIGN 6.1; `calm` shortens and softens. */
   reveal?(p: { tier: TierName; tierUp?: boolean; isNew?: boolean; mythicVariant?: number; durationS?: number; calm?: boolean; pitch?: number }): void;
   /** Merge ceremony T0..T2: hum + squelch + noise-tick density rising for `chargeS`; call burst() at T3 with the result, stop() to abort. */
@@ -175,7 +176,8 @@ export interface SquishAudio {
 
   /* Round 3 (OPTIONAL members, additive; AUDIO implements them, see _spec/SOUND.md "Round 3"). */
   /** Generative ambient music bed. `on` starts/stops it (2.5 s fade-in, 1.4 s fade-out; never before unlock()); `volume` 0..1 is
-   *  the same value as AudioSettings.music. It follows setPaused and mute, and ducks itself under the ceremony voices and a loud held squish. */
+   *  the same value as AudioSettings.music. It follows setPaused and mute, ducks itself under the ceremony voices, and makes room
+   *  (a fast dip) under every effect voice, the held squish and strand by their own level (see SOUND.md "Room for the effects"). */
   setMusic?(p: { on?: boolean; volume?: number }): void;
   /** Two squishies collided: a soft double thud with a wet slap. intensity 0..1 (relative impact speed). Rate-limited inside: call it per contact event. */
   bump?(p: { intensity: number; pitch?: number; pan?: number }): void;

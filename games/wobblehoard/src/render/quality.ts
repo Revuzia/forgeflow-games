@@ -52,9 +52,13 @@ export class QualityGovernor {
     this.sum = 0; this.count = 0; this.windowT = 0; this.hold = frames;
   }
 
-  sample(ms: number): QualityTier | null {
-    if (!(ms > 0) || ms > 400) return null;          // paused / hidden tab / first frame
-    this.frameMsEma = this.frameMsEma === 0 ? ms : this.frameMsEma * 0.9 + ms * 0.1;
+  sample(raw: number): QualityTier | null {
+    // > 2 s between two renders = a paused / hidden tab or the first frame: ignored. Anything shorter COUNTS, clamped to 100 ms (4x the
+    // threshold) for the drop decision: a device that really runs at 2 fps must still drop a tier (ignoring every sample over 400 ms, as
+    // before, starved the window there and it never dropped), while one stray long hitch in an otherwise smooth second stays under it.
+    if (!(raw > 0) || raw > 2000) return null;
+    this.frameMsEma = this.frameMsEma === 0 ? raw : this.frameMsEma * 0.9 + raw * 0.1;
+    const ms = Math.min(raw, 100);
     if (this.hold > 0) { this.hold--; return null; }
     this.sum += ms; this.count++; this.windowT += ms;
     if (this.windowT < 1000) return null;

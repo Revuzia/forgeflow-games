@@ -9,7 +9,7 @@
 //   merge:         mergeStart({chargeS}) at 0, burst() at chargeS (T3); its motif is the T4 reveal sound.
 import type { TierName } from '../contracts.ts';
 import { clamp } from '../core/rng.ts';
-import { Bag, c01, dbToGain, fin, lerp, makeRng, rexp, rr, type Rng, type VoiceGroup } from './dsp.ts';
+import { Bag, harmonicWave, c01, dbToGain, fin, lerp, makeRng, rexp, rr, type Rng, type VoiceGroup } from './dsp.ts';
 import { pitchOf, pop, squish, startTime, type SquishVoice, type VoiceBase } from './voices.ts';
 
 type Ctx = BaseAudioContext;
@@ -110,16 +110,19 @@ function ring(g: AudioParam, t: number, endT: number, peak: number, att: number,
 /** A struck tone built from sine partials [ratio, level]; higher partials die sooner. Returns the partial count. */
 function note(c: TierCtx, t: number, endT: number, f: number, parts: Parts, peak: number, knee = true, att = c.att): number {
   const { bag } = c;
-  for (let i = 0; i < parts.length; i++) {
-    const [ratio, lvl] = parts[i];
-    const fq = f * ratio;
-    if (fq > 9000) continue;
-    const e = t + (endT - t) / (1 + 0.38 * i);
-    const o = bag.osc('sine', fq, t, e + 0.05);
-    const g = bag.gain(0);
-    o.connect(g); g.connect(bag.head);
-    ring(g.gain, t, e, peak * lvl * c.trim, att, END_AMP * Math.sqrt(lvl), knee);
-  }
+  // (no rng draws in here, so the engine's pump may build it later: Bag.defer)
+  bag.defer(t, () => {
+    for (let i = 0; i < parts.length; i++) {
+      const [ratio, lvl] = parts[i];
+      const fq = f * ratio;
+      if (fq > 9000) continue;
+      const e = t + (endT - t) / (1 + 0.38 * i);
+      const o = bag.osc('sine', fq, t, e + 0.05);
+      const g = bag.gain(0);
+      o.connect(g); g.connect(bag.head);
+      ring(g.gain, t, e, peak * lvl * c.trim, att, END_AMP * Math.sqrt(lvl), knee);
+    }
+  });
   return parts.length;
 }
 
@@ -133,12 +136,14 @@ function ladder(c: TierCtx, t: number, maxEnd: number): number {
     const f = ROOT * 0.5 * SEMI(steps[i]) * c.pr * (1 + 0.004 * (c.r() - 0.5));
     const peak = L(-22 + 0.4 * i) * (c.calm ? 0.7 : 1);
     const e = u + 0.2;
-    const o = c.bag.osc('sine', f, u, e + 0.05);
-    const o2 = c.bag.osc('sine', f * 2, u, e + 0.05);
-    const g = c.bag.gain(0), g2 = c.bag.gain(0);
-    o.connect(g); o2.connect(g2); g.connect(c.bag.head); g2.connect(c.bag.head);
-    g.gain.setValueAtTime(0, u); g.gain.linearRampToValueAtTime(peak * c.trim, u + c.att); g.gain.setTargetAtTime(0, u + c.att, 0.05);
-    g2.gain.setValueAtTime(0, u); g2.gain.linearRampToValueAtTime(peak * 0.25 * c.trim, u + c.att); g2.gain.setTargetAtTime(0, u + c.att, 0.035);
+    c.bag.defer(u, () => {
+      const o = c.bag.osc('sine', f, u, e + 0.05);
+      const o2 = c.bag.osc('sine', f * 2, u, e + 0.05);
+      const g = c.bag.gain(0), g2 = c.bag.gain(0);
+      o.connect(g); o2.connect(g2); g.connect(c.bag.head); g2.connect(c.bag.head);
+      g.gain.setValueAtTime(0, u); g.gain.linearRampToValueAtTime(peak * c.trim, u + c.att); g.gain.setTargetAtTime(0, u + c.att, 0.05);
+      g2.gain.setValueAtTime(0, u); g2.gain.linearRampToValueAtTime(peak * 0.25 * c.trim, u + c.att); g2.gain.setTargetAtTime(0, u + c.att, 0.035);
+    });
     end = e;
   }
   return end;
@@ -151,10 +156,12 @@ function sparkle(c: TierCtx, t: number): void {
     const u = t + i * 0.03;
     const f = base[i] * c.pr * (1 + 0.02 * (c.r() - 0.5));
     const e = u + 0.28;
-    const o = c.bag.osc('sine', f, u, e + 0.03);
-    const g = c.bag.gain(0);
-    o.connect(g); g.connect(c.bag.head);
-    g.gain.setValueAtTime(0, u); g.gain.linearRampToValueAtTime(L(-30) * c.trim * (c.calm ? 0.6 : 1), u + c.att); g.gain.setTargetAtTime(0, u + c.att, 0.05);
+    c.bag.defer(u, () => {
+      const o = c.bag.osc('sine', f, u, e + 0.03);
+      const g = c.bag.gain(0);
+      o.connect(g); g.connect(c.bag.head);
+      g.gain.setValueAtTime(0, u); g.gain.linearRampToValueAtTime(L(-30) * c.trim * (c.calm ? 0.6 : 1), u + c.att); g.gain.setTargetAtTime(0, u + c.att, 0.05);
+    });
   }
 }
 
@@ -242,20 +249,22 @@ function choir(c: TierCtx, t: number, swellEnd: number, holdTo: number, endT: nu
 /** A cluster of high sines with a slow tremble (AM), plucked once: the "shimmer". */
 function shimmer(c: TierCtx, t: number, freqs: readonly number[], peakDb: number, tau: number, len: number, lfoHz: number): void {
   const { bag } = c;
-  const am = bag.gain(0.72);
-  am.connect(bag.head);
-  const lfo = bag.osc('sine', lfoHz, t, t + len);
-  const depth = bag.gain(0.26);
-  lfo.connect(depth); depth.connect(am.gain);
-  for (const f0 of freqs) {
-    const f = f0 * c.pr * (1 + 0.02 * (c.r() - 0.5));
-    const o = bag.osc('sine', f, t, t + len);
-    const g = bag.gain(0);
-    o.connect(g); g.connect(am);
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(L(peakDb) * c.trim, t + 0.008);
-    g.gain.setTargetAtTime(0, t + 0.008, tau);
-  }
+  const fs = freqs.map((f0) => f0 * c.pr * (1 + 0.02 * (c.r() - 0.5)));
+  bag.defer(t, () => {
+    const am = bag.gain(0.72);
+    am.connect(bag.head);
+    const lfo = bag.osc('sine', lfoHz, t, t + len);
+    const depth = bag.gain(0.26);
+    lfo.connect(depth); depth.connect(am.gain);
+    for (const f of fs) {
+      const o = bag.osc('sine', f, t, t + len);
+      const g = bag.gain(0);
+      o.connect(g); g.connect(am);
+      g.gain.setValueAtTime(0, t);
+      g.gain.linearRampToValueAtTime(L(peakDb) * c.trim, t + 0.008);
+      g.gain.setTargetAtTime(0, t + 0.008, tau);
+    }
+  });
 }
 
 const BELL: Parts = [[1, 1], [2.76, 0.34], [5.4, 0.12]];          // inharmonic strike partials (Rare)
@@ -422,6 +431,8 @@ export interface RevealParams extends VoiceBase {
   /** Total length of the cue from the call (see the time map at the top of this file). Default per tier. */
   durationS?: number;
   calm?: boolean;
+  /** Build only what starts within `lookaheadS` now; the rest is built by the engine's pump (Bag.defer). Default: all now. */
+  lookaheadS?: number;
 }
 
 export function reveal(ctx: Ctx, out: AudioNode, t0: number, p: RevealParams): VoiceGroup {
@@ -431,6 +442,7 @@ export function reveal(ctx: Ctx, out: AudioNode, t0: number, p: RevealParams): V
   const calm = p.calm === true;
   const bag = new Bag(ctx, out, 'reveal', 0);
   bag.priority = 2;
+  if (p.lookaheadS !== undefined) bag.deferFrom = t + clamp(fin(p.lookaheadS, 0.6), 0.05, 10);
   const lay = layout(ti, p.durationS, calm, false);
   const endT = buildTier(bag, p.rng, t, ti, {
     pr, lay, calm, tierUp: p.tierUp === true, isNew: p.isNew === true, variant: fin(p.mythicVariant, 0), burst: false,
@@ -482,7 +494,7 @@ function pluckEnv(g: AudioParam, t: number, peak: number, att: number, tau: numb
 
 /* ═══════════════════════════════════ capsule beats ═══════════════════════════════════ */
 
-export interface GrabParams extends VoiceBase { progress?: number }
+export interface GrabParams extends VoiceBase { progress?: number; calm?: boolean }
 
 /** B0: soft rising squeak. `progress` (0..1) raises its start pitch (420 -> 820 Hz) so repeated calls climb while squeezing. ~200 ms. */
 export function grab(ctx: Ctx, out: AudioNode, t0: number, p: GrabParams): VoiceGroup {
@@ -492,8 +504,10 @@ export function grab(ctx: Ctx, out: AudioNode, t0: number, p: GrabParams): Voice
   const prog = c01(p.progress, 0);
   const bag = new Bag(ctx, out, 'grab', p.pan ?? 0);
   const f0 = lerp(420, 820, prog) * pr;
+  const calm = p.calm === true;
   const o = bag.osc('sine', f0, t, t + 0.3);
-  o.setPeriodicWave(squeakWave(ctx));
+  // per-context cached wave (round-3 audit fix: building a PeriodicWave per call cost ~1 ms on a laptop, ~4 ms throttled)
+  o.setPeriodicWave(harmonicWave(ctx, 'squeak', [1, 0, 0.22, 0, 0.08]));
   o.frequency.setValueAtTime(f0, t);
   o.frequency.setTargetAtTime(f0 * 1.4, t, 0.07);
   const lfo = bag.osc('sine', 9 + 3 * r(), t, t + 0.3);
@@ -501,24 +515,18 @@ export function grab(ctx: Ctx, out: AudioNode, t0: number, p: GrabParams): Voice
   lfo.connect(lfoD); lfoD.connect(o.frequency);
   const amp = bag.gain(0);
   o.connect(amp); amp.connect(bag.head);
-  pluckEnv(amp.gain, t, L(-15), 0.014, 0.055);
+  pluckEnv(amp.gain, t, L(calm ? -17.5 : -15), calm ? 0.03 : 0.014, 0.055);
   // the rub: a narrow band of noise riding the squeak
   const n = bag.noise(r, t, t + 0.25);
   const bp = bag.biquad('bandpass', 2300 * pr * (1 + 0.3 * prog), 6);
   const gn = bag.gain(0);
   n.connect(bp); bp.connect(gn); gn.connect(bag.head);
-  pluckEnv(gn.gain, t, L(-17), 0.012, 0.05);
+  pluckEnv(gn.gain, t, L(calm ? -19.5 : -17), calm ? 0.03 : 0.012, 0.05);
   bag.endTime = t + 0.32;
   return bag;
 }
 
-function squeakWave(ctx: Ctx): PeriodicWave {
-  const real = new Float32Array(6), imag = new Float32Array(6);
-  imag[1] = 1; imag[3] = 0.22; imag[5] = 0.08;
-  return ctx.createPeriodicWave(real, imag);
-}
-
-export type CrackParams = VoiceBase;
+export interface CrackParams extends VoiceBase { calm?: boolean }
 
 /** B1: a dry shell tick (+ a tiny echo tick 26 ms later = a hairline crack), ~45 ms. Takes no tier: the tier is never audible here. */
 export function crack(ctx: Ctx, out: AudioNode, t0: number, p: CrackParams): VoiceGroup {
@@ -526,14 +534,16 @@ export function crack(ctx: Ctx, out: AudioNode, t0: number, p: CrackParams): Voi
   const pr = pitchOf(p);
   const r = p.rng;
   const bag = new Bag(ctx, out, 'crack', p.pan ?? 0);
-  for (const [dt, lv] of [[0, L(-14.5)], [0.026, L(-20.5)]] as const) {
+  // calm: 2.5 dB softer and a slower edge (no sudden 0.5 ms click)
+  const calm = p.calm === true, k = calm ? L(-2.5) : 1;
+  for (const [dt, lv] of [[0, L(-14.5) * k], [0.026, L(-20.5) * k]] as const) {
     const u = t + dt;
     const n = bag.noise(r, u, u + 0.02);
     const bp = bag.biquad('bandpass', 3300 * pr * (1 + 0.1 * (r() - 0.5)), 1.3);
     const g = bag.gain(0);
     n.connect(bp); bp.connect(g); g.connect(bag.head);
     g.gain.setValueAtTime(0, u);
-    g.gain.linearRampToValueAtTime(lv * 2.6, u + 0.0005);
+    g.gain.linearRampToValueAtTime(lv * 2.6, u + (calm ? 0.0015 : 0.0005));
     g.gain.linearRampToValueAtTime(0, u + 0.0032);
     const o = bag.osc('sine', 1350 * pr, u, u + 0.03);
     const og = bag.gain(0);
@@ -625,13 +635,14 @@ export interface MergeVoice extends VoiceGroup {
 const smooth = (u: number): number => { const x = clamp(u, 0, 1); return x * x * (3 - 2 * x); };
 
 /** T3 voice on its own: noise transient + tier bell/motif of reveal() (+ ladder). */
-export function mergeBurst(ctx: Ctx, out: AudioNode, t0: number, p: VoiceBase & MergeBurstParams & { calm?: boolean; layers?: { noise?: boolean } }): VoiceGroup {
+export function mergeBurst(ctx: Ctx, out: AudioNode, t0: number, p: VoiceBase & MergeBurstParams & { calm?: boolean; layers?: { noise?: boolean }; lookaheadS?: number }): VoiceGroup {
   const t = startTime(t0);
   const ti = tierIdx(p.tier);
   const pr = pitchOf(p);
   const calm = p.calm === true;
   const bag = new Bag(ctx, out, 'mergeBurst', 0);
   bag.priority = 2;
+  if (p.lookaheadS !== undefined) bag.deferFrom = t + clamp(fin(p.lookaheadS, 0.6), 0.05, 10);
   const lay = layout(ti, p.durationS, calm, true);
   const r = p.rng;
   // noise transient: a quick "foomp" of band-passed noise (calm: slower and darker, no sudden edge)
@@ -722,6 +733,12 @@ export function mergeStart(ctx: Ctx, out: AudioNode, t0: number, p: MergeParams)
   let stopped = false;
   const advance = (until: number): boolean => {
     if (stopped || !bag.alive || bag.dying) return true;
+    // Round-3 audit fix: after a main-thread stall (a shader compile, GC, a throttled timer) the slices we missed are in the
+    // past. Skip them (the charge gaps briefly; the pre-scheduled hum continues) instead of piling every late squelch
+    // update, bubble and tick onto "now".
+    const now = ctx.currentTime;
+    if (child && !squelchEnded && t + su < now) su = Math.min(C, Math.ceil((now - t) / 0.02) * 0.02);
+    if (tg && !ticksDone) while (tu < now && tu < t + C) tu += rexp(r, lam0 * Math.pow(lam1 / lam0, clamp((tu - t) / C, 0, 1)));
     if (child && !squelchEnded) {
       for (; su < C && t + su < until; su += 0.02) {
         const cmp = 0.9 * smooth(su / C);
@@ -778,11 +795,15 @@ export function mergeStart(ctx: Ctx, out: AudioNode, t0: number, p: MergeParams)
       return mergeBurst(ctx, out, at, {
         rng: makeRng((r() * 4294967296) >>> 0), pitch: pr, jitter: 1, calm,
         tier: q.tier, tierUp: q.tierUp, mythicVariant: q.mythicVariant, durationS: q.durationS,
+        ...(p.lookaheadS !== undefined ? { lookaheadS: BURST_LOOKAHEAD_S } : {}),
       });
     },
   };
   return voice;
 }
+
+/** A live (pumped) reveal or merge burst builds what starts within this much of the call; the pump builds the rest. */
+export const BURST_LOOKAHEAD_S = 0.6;
 
 /** The duck the engine applies at the start of a Mythic reveal (DESIGN 6.3: 250 ms audio duck). */
 export function mythicDuck(calm: boolean): { db: number; ms: number } {

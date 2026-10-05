@@ -107,7 +107,8 @@ export class BumpLimiter {
   /** Returns the intensity to play (attenuated for a busy pile), or null to skip this bump. `t` in seconds. */
   admit(intensity: number, t: number): number | null {
     const I = c01(intensity, 0);
-    if (I < BumpLimiter.MIN_INTENSITY) { this.throttled++; return null; }
+    // a non-finite clock would poison the bucket for good (NaN tokens never compare < 1): such a call is dropped
+    if (I < BumpLimiter.MIN_INTENSITY || !Number.isFinite(t)) { this.throttled++; return null; }
     if (this.refillT > -1e8) this.tokens = Math.min(BumpLimiter.CAPACITY, this.tokens + Math.max(0, t - this.refillT) * BumpLimiter.REFILL_PER_S);
     this.refillT = t;
     if ((t - this.lastT < BumpLimiter.MIN_GAP_S && I < this.lastI * 1.6) || this.tokens < 1) { this.throttled++; return null; }

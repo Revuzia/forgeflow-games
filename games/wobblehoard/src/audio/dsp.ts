@@ -113,6 +113,8 @@ export interface VoiceGroup {
   readonly priority?: number;
   /** Fade out quickly (default 20 ms) and free the nodes. Safe to call twice. `atTime` scripts it for offline renders. */
   kill(fadeS?: number, atTime?: number): void;
+  /** Voices built with a lookahead: build what starts before `until` (the engine's pump). True when nothing is left. */
+  advance?(until: number): boolean;
   /** Disconnect everything NOW (no fade). Used when the context is suspended and 'ended' events will not arrive. */
   free(): void;
 }
@@ -129,8 +131,15 @@ export class Bag implements VoiceGroup {
   /** Present when the group is panned (always for held voices, whose pan is live-updatable). */
   panner: StereoPannerNode | null = null;
   onFree: ((b: Bag) => void) | null = null;
+  /**
+   * Deferred building (round-3 audit fix): when set, pieces of the voice that start at or after this context time are not
+   * built in the call but queued (defer) and built by the engine's lookahead pump (advanceDeferred), so one call never
+   * builds hundreds of nodes. null (offline renders, tests): everything is built at once, sample-identical.
+   */
+  deferFrom: number | null = null;
   private nodes: AudioNode[] = [];
   private sources: AudioScheduledSourceNode[] = [];
+  private later: { at: number; fn: () => void }[] = [];
   private pending = 0;
   private killed = false;
   get dying(): boolean { return this.killed; }
@@ -191,6 +200,42 @@ export class Bag implements VoiceGroup {
     if (tEnd !== undefined) s.stop(tEnd);
     return s;
   }
+  /**
+   * Build `fn` now, or (deferFrom set and `at` >= deferFrom) once the pump's horizon reaches `at`. `fn` must not draw from
+   * the voice's rng (draw first, then defer the node building), so live and offline builds stay identical. Each queued
+   * piece holds the bag alive until it is built or dropped.
+   */
+  defer(at: number, fn: () => void): void {
+    if (this.deferFrom === null || !(at >= this.deferFrom) || !this.alive || this.killed) { if (this.alive && !this.killed) fn(); return; }
+    this.pending++;
+    this.later.push({ at, fn });
+  }
+
+  /** Pieces still waiting for the pump. */
+  get deferred(): number { return this.later.length; }
+  advance(until: number): boolean { return this.advanceDeferred(until); }
+
+  /**
+   * Build every queued piece that starts before `until`. A piece already in the past (a stalled main thread) is dropped
+   * rather than started late with its envelope in the past. Returns true when nothing is left to build.
+   */
+  advanceDeferred(until: number): boolean {
+    if (!this.later.length) return true;
+    const drop = !this.alive || this.killed;
+    const now = this.ctx.currentTime;
+    const keep: { at: number; fn: () => void }[] = [];
+    let released = 0;
+    for (const it of this.later) {
+      if (drop || it.at < now - 0.002) { released++; continue; }
+      if (it.at < until) { try { it.fn(); } catch { /* a closed context: nothing to build */ } released++; }
+      else keep.push(it);
+    }
+    this.later = keep;
+    this.pending -= released;
+    if (this.alive && this.pending <= 0) this.free();
+    return this.later.length === 0;
+  }
+
   /** Schedule the stop of every registered source (used by held voices when they end). */
   stopAll(t: number): void {
     for (const s of this.sources) { try { s.stop(t); } catch { /* already stopped */ } }
@@ -217,6 +262,11 @@ export class Bag implements VoiceGroup {
   free(): void {
     if (!this.alive) return;
     this.alive = false;
+    this.later.length = 0;
+    // Round-3 audit fix: a source that has not ended (a held voice with no stop time, a merge freed mid-charge by
+    // setPaused, a reaped straggler) must be STOPPED, not just disconnected: a disconnected source keeps playing (and
+    // costing) until its stop time, i.e. for ever for a held voice, while the counters already called it freed.
+    if (this.pending > 0) for (const s of this.sources) { try { s.stop(); } catch { /* never started / already stopped */ } }
     for (const n of this.nodes) { try { n.disconnect(); } catch { /* already gone */ } }
     for (const s of this.sources) s.onended = null;
     nodeCounters.freed += this.nodes.length;

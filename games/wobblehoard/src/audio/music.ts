@@ -54,13 +54,19 @@ export const DUCK_RELEASE_TC = 0.5;
  */
 export const ROOM_DB = -24;
 /** The dip is split: the melody (mallets, their echoes, the bubbles: tonal transients in the effects' own 0.4-2.4 kHz band,
- *  the part that actually covers a soft effect) takes the full ROOM_DB; the dark breathing pad only this share of it in
- *  dB (-12 dB), so a soft carpet stays under the play instead of the music vanishing and pumping back. */
-export const ROOM_PAD_SHARE = 0.6;
+ *  the part that most often covers a soft effect) takes the full ROOM_DB; the dark breathing pad this share of it in dB
+ *  (-17.3 dB), so a soft carpet stays under the play instead of the music vanishing altogether. */
+export const ROOM_PAD_SHARE = 0.72;
+/** The melody's dip is fast (a mallet note already ringing is the masker to remove)... */
 export const ROOM_ATTACK_TC = 0.0015;
+/** ... the pad's is gentle: a sustained chord cut in a few ms would itself be heard as a gate (seen as a vertical splatter
+ *  stripe at every dip onset in the music stem's spectrogram). */
+export const ROOM_PAD_ATTACK_TC = 0.006;
 /** Slow enough that a tap every second keeps the music down instead of pumping it up and down (within 1 dB about 1.4 s
  *  after the last effect ends). */
 export const ROOM_RELEASE_TC = 0.6;
+/** The pad comes back more slowly still: from its deeper dip, a faster return would swell by > 1.5 dB per 20 ms at first. */
+export const ROOM_PAD_RELEASE_TC = 0.9;
 /** = the engine's effect LOOKAHEAD: an effect called at t starts at t + ROOM_LEAD_S, the dip starts at t. */
 export const ROOM_LEAD_S = 0.004;
 /** Each dip holds this long after its effect ends before recovering, so a player tapping every second keeps the music
@@ -74,10 +80,13 @@ export const ROOM_KINDS: Readonly<Record<string, number>> = {
   release: ROOM_DB, land: ROOM_DB, bump: ROOM_DB, lift: ROOM_DB, toss: ROOM_DB,
 };
 /** Held voices: each update holds its dip this long (so a rubbing squish that dips and swells frame by frame keeps the
- *  deepest dip of the last HELD_ROOM_HOLD_S instead of tremoloing the music). */
+ *  deepest dip of the last HELD_ROOM_HOLD_S instead of tremoloing the music). No ROOM_TAIL_S here: the one-shot that ends a
+ *  gesture (release, snap) brings its own. */
 export const HELD_ROOM_HOLD_S = 0.25;
-/** The held squish dips fully from this |rate| (1/s) on (its squelch is then within ~10 dB of its max), proportionally below. */
+/** The held squish dips fully from this |rate| (1/s) on (its squelch is then within ~10 dB of its max), not at all below
+ *  SQUISH_ROOM_MIN_RATE (the squelch is then 40 dB under its max: inaudible), in proportion (dB) between. */
 export const SQUISH_ROOM_RATE = 0.7;
+export const SQUISH_ROOM_MIN_RATE = 0.15;
 /** The held strand dips fully from this tension on, proportionally below. */
 export const STRAND_ROOM_T = 0.35;
 /**
@@ -90,7 +99,7 @@ export function roomDb(kind: string, musicGainDb = 0): number | null {
   return d === undefined ? null : d - Math.max(0, fin(musicGainDb, 0));
 }
 export function squishRoomDb(rate: number, musicGainDb = 0): number {
-  const a = clamp((Math.abs(fin(rate, 0)) - 0.04) / (SQUISH_ROOM_RATE - 0.04), 0, 1);
+  const a = clamp((Math.abs(fin(rate, 0)) - SQUISH_ROOM_MIN_RATE) / (SQUISH_ROOM_RATE - SQUISH_ROOM_MIN_RATE), 0, 1);
   return a * (ROOM_DB - Math.max(0, fin(musicGainDb, 0)));
 }
 export function strandRoomDb(tension: number, musicGainDb = 0): number {
@@ -114,8 +123,14 @@ const MEL_HOME = 77;
  * steady three-line chord in every spectrogram). Now the pad is darker (sines, no triangles), each of its tones breathes
  * on its own (so the full chord is rare) and it sits about 6 dB under the sparse mallet, which carries the level. */
 const PAD_LEVEL = dbToGain(-28.8);
-const MALLET_LEVEL = dbToGain(-11.5);
-const BUBBLE_LEVEL = dbToGain(-20.5);
+const MALLET_LEVEL = dbToGain(-12.5);
+const BUBBLE_LEVEL = dbToGain(-21.5);
+/** The pad answers the melody: it swells this much in a bar with no mallet note (half of it in a one-note bar) and sits
+ *  back under busier bars (time constant PAD_FILL_TC, moving ahead of the bar line by PAD_FILL_LEAD_S). Without it, a
+ *  sparse melody carrying the level made the 10 s level swing by +/-3.5 dB with the phrasing (rests = pad alone). */
+export const PAD_FILL_DB = 5;
+const PAD_FILL_TC = 1.0;
+const PAD_FILL_LEAD_S = 0.5;
 /** The music's bubbles settle upward by only 1% (17 cents; the game's bubbles chirp ~30%: a tuned note cannot) ... */
 const BUBBLE_RISE = 0.01;
 /** ... and start this fraction of the rise below the note, so the pitch lands on the scored note. Measured (A5..D7,
@@ -506,6 +521,8 @@ export class MusicBed {
   private readonly fadeOut: GainNode;
   private readonly pauseG: GainNode;
   private readonly padIn: GainNode;
+  private readonly padFill: GainNode;
+  private fillAt = -Infinity;
   private readonly pr: number;
   private nextBarT: number;
   private pending: Pending[] = [];
@@ -547,13 +564,14 @@ export class MusicBed {
     const lay = opts.layers ?? {};
     this.melBus = bag.gain(clamp(fin(lay.mallet, 1), 0, 4));
     this.padIn = bag.gain(clamp(fin(lay.pad, 1), 0, 4));
+    this.padFill = bag.gain(1);
     this.duckG.connect(fadeIn); fadeIn.connect(this.fadeOut); this.fadeOut.connect(this.pauseG); this.pauseG.connect(bag.head);
     this.melBus.connect(this.roomMel); this.roomMel.connect(this.duckG);
-    this.padIn.connect(this.roomPad); this.roomPad.connect(this.duckG);
+    this.padIn.connect(this.padFill); this.padFill.connect(this.roomPad); this.roomPad.connect(this.duckG);
     // The session bus is stereo for its whole life. Otherwise the first panned note connected mid-session switches the bus
     // and the master chain from mono to stereo processing, and the new channel's filter/limiter state starts from zero (a
     // small transient; measured as a live-vs-offline difference before this was fixed).
-    for (const n of [this.melBus, this.padIn, this.roomMel, this.roomPad, this.duckG, fadeIn, this.fadeOut, this.pauseG, bag.head]) {
+    for (const n of [this.melBus, this.padIn, this.padFill, this.roomMel, this.roomPad, this.duckG, fadeIn, this.fadeOut, this.pauseG, bag.head]) {
       n.channelCount = 2; n.channelCountMode = 'explicit'; n.channelInterpretation = 'speakers';
     }
     const fi = clamp(fin(opts.fadeInS, FADE_IN_S), 0.05, 10);
@@ -564,10 +582,14 @@ export class MusicBed {
   get stopped(): boolean { return this.stoppedAt < Infinity; }
   /** Context time at which a stopped session is silent (Infinity while playing). */
   get endTime(): number { return this.endT; }
-  /** True while the slow (ceremony) duck holds or an effect's room dip is active (the dip's recovery included). */
-  get isDucked(): boolean { return this.ducked || this.ctx.currentTime < this.roomUntil; }
-  /** True while an effect's room dip holds (until its effect ends; the recovery follows). */
-  roomedAt(t: number): boolean { return t < this.roomUntil; }
+  /** True while the slow (ceremony) duck holds or an effect's room dip of more than 1 dB is requested right now. */
+  get isDucked(): boolean { return this.ducked || this.roomTargetAt(this.ctx.currentTime) < 0.891; }
+  /** The room dip's planned target gain at time t (1 = none; the recovery toward 1 counts as none). */
+  roomTargetAt(t: number): number {
+    let g = 1;
+    for (const s of this.roomPlan) if (s.t <= t) g = s.g;
+    return t < this.roomUntil ? g : 1;
+  }
 
   /** Sounding note groups at time t (pads, mallets and bubbles whose span covers t). */
   liveAt(t: number): number {
@@ -594,11 +616,18 @@ export class MusicBed {
         this.pending.push({ t: bt, kind: 'pad', midi: 0, field: b.field, vel: 1, pan: 0, seed: b.seed, end: bt + b.barsLeft * BAR_S });
       }
       this.first = false;
+      let busy = 0;
       for (const n of b.notes) {
         const t = bt + n.at;
         if (t < this.t0 + FIRST_NOTE_S) continue;
+        if (n.kind === 'mallet') busy++;
         this.pending.push({ t, kind: n.kind, midi: n.midi, field: b.field, vel: n.vel, pan: n.pan, seed: n.seed, end: 0 });
       }
+      // the pad fills the melody's rests (planned with the bar, so live and offline schedule the same automation)
+      const fdb = busy === 0 ? PAD_FILL_DB : busy === 1 ? PAD_FILL_DB / 2 : 0;
+      const ft = Math.max(this.t0, bt - PAD_FILL_LEAD_S, this.fillAt);
+      try { this.padFill.gain.setTargetAtTime(dbToGain(fdb), ft, PAD_FILL_TC); } catch { /* closed */ }
+      this.fillAt = ft;
       this.nextBarT += BAR_S;
     }
     this.pending.sort((a, b) => a.t - b.t);
@@ -697,7 +726,10 @@ export class MusicBed {
     try {
       const pm = this.roomMel.gain, pp = this.roomPad.gain;
       pm.cancelScheduledValues(a); pp.cancelScheduledValues(a);
-      for (const s of plan) { pm.setTargetAtTime(s.g, s.t, s.tc); pp.setTargetAtTime(Math.pow(s.g, ROOM_PAD_SHARE), s.t, s.tc); }
+      for (const s of plan) {
+        pm.setTargetAtTime(s.g, s.t, s.tc);
+        pp.setTargetAtTime(Math.pow(s.g, ROOM_PAD_SHARE), s.t, s.tc === ROOM_ATTACK_TC ? ROOM_PAD_ATTACK_TC : ROOM_PAD_RELEASE_TC);
+      }
     } catch { /* closed context */ }
     this.roomPlan = plan; this.roomFrom = a; this.roomUntil = t;
   }

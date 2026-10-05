@@ -174,6 +174,70 @@ function bandFrames(x, from, to, win = 2048) {
   return out;
 }
 
+
+/* ───────── loudness weighting (round-3 fix): K-weighting (ITU-R BS.1770, 48 kHz biquads) and A-weighting (IEC 61672) ───────── */
+const KB1 = [1.53512485958697, -2.69169618940638, 1.19839281085285], KA1 = [1, -1.69065929318241, 0.73248077421585];
+const KB2 = [1.0, -2.0, 1.0], KA2 = [1, -1.99004745483398, 0.99007225036621];
+function biq2(b, a, f) {
+  const w = 2 * Math.PI * f / SR, c1 = Math.cos(w), s1 = Math.sin(w), c2 = Math.cos(2 * w), s2 = Math.sin(2 * w);
+  const nr = b[0] + b[1] * c1 + b[2] * c2, ni = -(b[1] * s1 + b[2] * s2), dr = a[0] + a[1] * c1 + a[2] * c2, di = -(a[1] * s1 + a[2] * s2);
+  return (nr * nr + ni * ni) / (dr * dr + di * di);
+}
+const kW2 = (f) => biq2(KB1, KA1, f) * biq2(KB2, KA2, f);
+const aW2 = (f) => { const f2 = f * f; const ra = (12194 ** 2 * f2 * f2) / ((f2 + 20.6 ** 2) * Math.sqrt((f2 + 107.7 ** 2) * (f2 + 737.9 ** 2)) * (f2 + 12194 ** 2)); return ra * ra * 1.2589; };
+const LW = 960, LN = 1024, LH = 480;   // 20 ms Hann frames, 10 ms hop
+const KT = new Float64Array(LN / 2 + 1), AT = new Float64Array(LN / 2 + 1);
+for (let k = 1; k <= LN / 2; k++) { KT[k] = kW2(k * SR / LN); AT[k] = aW2(k * SR / LN); }
+function weightedHops(x, from, to) {
+  const out = [];
+  for (let s = Math.max(0, Math.round(from * SR) - LW / 2); s + LW <= Math.min(x.length, Math.round(to * SR) + LW / 2); s += LH) {
+    const p = frameSpectrum(x, s, LW, LN);
+    let k = 0, a = 0; for (let q = 1; q < p.length; q++) { k += p[q] * KT[q]; a += p[q] * AT[q]; }
+    out.push({ t: (s + LW / 2) / SR, k, a });
+  }
+  return out;
+}
+/** Loudness of an effect over the music, over the effect's own loudest 20 ms frames (within 10 dB of its loudest), K- and
+ *  A-weighted: 10 log10(sum effect / sum music) over exactly those frames, in LU (K) / dB (A). */
+function loudSep(fx, mu, at, end) {
+  const F = weightedHops(fx, at - 0.02, end + 0.02), M = weightedHops(mu, at - 0.02, end + 0.02);
+  const res = {};
+  for (const w of ['k', 'a']) {
+    const mx = Math.max(...F.map((q) => q[w]));
+    let sf = 0, sm = 0;
+    F.forEach((q, i) => { if (q[w] >= mx * 0.1) { sf += q[w]; sm += M[i][w]; } });
+    res[w.toUpperCase()] = 10 * Math.log10(sf / Math.max(sm, 1e-30));
+  }
+  return res;
+}
+/** In-band separation exactly as section D defines it (1/3-octave bands holding 70% of the effect, frames within 20 dB). */
+function sep70(fx, mu, at, end) {
+  const F = bandFrames(fx, at, end), Mu = bandFrames(mu, at, end);
+  const mx = Math.max(...F.map((q) => q.tot));
+  const keep = F.map((q, i) => (q.tot >= mx * 0.01 ? i : -1)).filter((i) => i >= 0);
+  const eF = new Float64Array(BANDS.length), eM = new Float64Array(BANDS.length);
+  for (const i of keep) for (let b = 0; b < BANDS.length; b++) { eF[b] += F[i].e[b]; eM[b] += Mu[i].e[b]; }
+  const order = [...BANDS.keys()].sort((a, b) => eF[b] - eF[a]);
+  const tot = eF.reduce((a, b) => a + b, 0);
+  let acc = 0, sF = 0, sM = 0; const used = [];
+  for (const b of order) { if (acc >= 0.7 * tot) break; acc += eF[b]; sF += eF[b]; sM += eM[b]; used.push(Math.round(BANDS[b].fc)); }
+  return { snr: 10 * Math.log10(sF / Math.max(sM, 1e-30)), bands: used };
+}
+/** mulberry32 (Node side, for the seeded event layouts). */
+const mul32 = (s) => () => { s |= 0; s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+/** Pitch of a short tone: spectral peak (Hann from the onset, zero-padded to 65536, parabolic) and the energy-weighted
+ *  instantaneous frequency (positive zero crossings, each period weighted by its energy), both in cents from `tgt`. */
+function tonePitch(x, tgt) {
+  const p = frameSpectrum(x, Math.round(0.01 * SR), 8192, 65536);
+  let bk = 2; for (let k = 2; k < p.length - 1; k++) if (p[k] > p[bk]) bk = k;
+  const a = Math.log(p[bk - 1]), b = Math.log(p[bk]), c = Math.log(p[bk + 1]); const d = 0.5 * (a - c) / (a - 2 * b + c);
+  const f = (bk + d) * SR / 65536;
+  const zc = []; let prev = -1;
+  for (let i = 1; i < x.length; i++) if (x[i - 1] < 0 && x[i] >= 0) { const fr = i - 1 + (-x[i - 1]) / (x[i] - x[i - 1]); if (prev >= 0) { let e = 0; for (let q = Math.floor(prev); q < Math.floor(fr); q++) e += x[q] * x[q]; zc.push([SR / (fr - prev), e]); } prev = fr; }
+  const ew = zc.reduce((s2, [ff, e]) => s2 + Math.log2(ff) * e, 0) / zc.reduce((s2, [, e]) => s2 + e, 0);
+  return { peakC: 1200 * Math.log2(f / tgt), ewC: 1200 * (ew - Math.log2(tgt)) };
+}
+
 export async function round3Checks(env) {
   const { page, check, OUT } = env;
   const ev = (fn, arg) => page.evaluate(([f, a]) => window.AV[f](a), [fn, arg]);
@@ -285,6 +349,22 @@ export async function round3Checks(env) {
     writeFileSync(resolve(OUT, `music_seed${seed}_90s.wav`), wavBuffer(x, SR));
     const marks = r.log.filter((e) => e.kind === 'pad' && e.t < 30).map((e) => ({ t: e.t, label: FIELD_NAMES[e.field] }));
     writeFileSync(resolve(OUT, `music_seed${seed}_30s.png`), spectrogramPng(cut(x, 0, 30), SR, { title: `MUSIC SEED ${seed}, FIRST 30 S`, win: 4096, width: 1400, fMin: 40, fMax: 12000, marks }));
+  }
+  {
+    // round-3 fix: the music's bubble graces/trails are tuned (music.ts musicBubble: a 1% settle, started 0.6 of it below
+    // the note). The first version glided +5% from the note: +33..+38 cents sharp energy-weighted, +59..+80 at the peak.
+    const g = 'music bubbles in tune';
+    const midis = [81, 83, 85, 86, 88, 90, 91, 93, 95, 97, 98];
+    const rows = [];
+    for (const pitch of [1, 0.9, 1.12]) {
+      const rs = await page.evaluate((q) => window.AV.renderMusicBubbles(q), { midis, pitch });
+      for (const q of rs) { const x = decAll(q)[0]; rows.push({ pitch, midi: q.midi, ...tonePitch(x, midiHz(q.midi) * pitch) }); }
+    }
+    const ew = rows.map((q) => q.ewC), pk = rows.map((q) => q.peakC);
+    const span = (a) => `${f1(Math.min(...a))}..${f1(Math.max(...a))}`;
+    check(g, 'every bubble grace/trail note (A5..D7, score pitch 0.9 / 1 / 1.12) sounds its scored note: energy-weighted pitch within +/-10 cents', ew.every((v) => Math.abs(v) <= 10), `${span(ew)} cents (${rows.length} notes)`, '+/-10 cents');
+    check(g, '... and the spectral peak within +/-10 cents too', pk.every((v) => Math.abs(v) <= 10), `${span(pk)} cents`, '+/-10 cents');
+    info.music.bubbleCents = { energyWeighted: [Math.min(...ew), Math.max(...ew)], spectralPeak: [Math.min(...pk), Math.max(...pk)] };
   }
   {
     const g = 'music determinism';
@@ -464,6 +544,126 @@ export async function round3Checks(env) {
     info.mix = res;
   }
 
+  /* ═════════════════════════ D2. separation, robustly: seeds x random timings x the genome pitch range ═════════════════════════ */
+  {
+    // Round-3 fix. Section D tests one fixed 20 s sequence at pitch 1; an independent check found placements where effects
+    // fell below 8 dB (a soft toss 5 dB UNDER the pads). Here: 4 music seeds (one is the engine's default composer seed)
+    // x 90 s, every effect variant (soft / medium / hard) placed at seeded random times (gaps log-uniform 0.15-4 s, so many
+    // effects arrive alone, after a pause, onto music at full level), each at a random pitch ratio in 0.70..1.43 (the
+    // genome range); strands called at a random 30-60 Hz with 30% frame jitter on the audio clock's 128-sample grid. The
+    // music stem includes the room dips exactly as the engine would ask for them. Gates on the WORST placement.
+    const g = 'mix robustness';
+    const VARS = [
+      ['poke 0.2', 'poke', { intensity: 0.2 }], ['poke 0.6', 'poke', { intensity: 0.6 }], ['poke 1', 'poke', { intensity: 1 }],
+      ['release 0.3', 'release', { compression: 0.3 }], ['release 0.7', 'release', { compression: 0.7 }],
+      ['land 0.3', 'land', { intensity: 0.3 }], ['land 0.7', 'land', { intensity: 0.7 }],
+      ['pop 0.2', 'pop', { size: 0.2 }], ['pop 0.5', 'pop', { size: 0.5 }], ['pop 0.9', 'pop', { size: 0.9 }],
+      ['bump 0.15', 'bump', { intensity: 0.15 }], ['bump 0.5', 'bump', { intensity: 0.5 }], ['bump 0.9', 'bump', { intensity: 0.9 }],
+      ['lift', 'lift', {}], ['toss 0.15', 'toss', { speed: 0.15 }], ['toss 0.5', 'toss', { speed: 0.5 }], ['toss 1', 'toss', { speed: 1 }],
+      ['snap 0.5', 'strandSnap', { tension: 0.5 }], ['strand', 'strand', {}], ['squish', 'squish', {}],
+    ];
+    const LEN = { strand: 1.7, squish: 3.3 };
+    const ENGINE_COMPOSER = (0x57a15b00 ^ 0x2f6b3c1d) >>> 0;     // engine.ts: the default createAudio() composer seed
+    const runs = [];
+    const plan = (seed, secs) => {
+      const r = mul32(seed * 7 + 3), events = [];
+      let t = 3, k = Math.floor(r() * VARS.length);
+      while (t < secs - 4) {
+        const [tag, voice, params] = VARS[k++ % VARS.length];
+        const pitch = 0.7 * Math.pow(1.43 / 0.7, r());
+        events.push({ at: +t.toFixed(4), tag, voice, params, pitch, pattern: { hz: 30 + 30 * r(), jitter: 0.3, quantum: 128 / SR, seed: k } });
+        t += (LEN[voice] ?? 0.5) + 0.15 * Math.pow(4 / 0.15, r());
+      }
+      return events;
+    };
+    const measure = async (seed, secs, musicVolume) => {
+      const events = plan(seed, secs);
+      const fx = dec(await ev('renderMix', { seed, secs, music: false, effects: true, events, musicVolume }));
+      const mu = dec(await ev('renderMix', { seed, secs, music: true, effects: false, events, musicVolume }));
+      const out = [];
+      let prevEnd = -10;
+      for (const sp of fx.spans) {
+        const iso = sp.at - prevEnd > 2.5; prevEnd = Math.max(prevEnd, sp.end);
+        const s70 = sep70(fx.x, mu.x, sp.at, Math.min(sp.end + 0.05, secs));
+        const L = loudSep(fx.x, mu.x, sp.at, Math.min(sp.end, secs));
+        out.push({ seed, tag: sp.tag, at: sp.at, pitch: sp.pitch, iso, sep: s70.snr, bands: s70.bands, K: L.K, A: L.A });
+      }
+      return { out, events, fx, mu };
+    };
+    for (const seed of [ENGINE_COMPOSER, 1, 2, 17]) {
+      const m = await measure(seed, 90);
+      runs.push(...m.out);
+      if (seed === 1) {
+        const x = new Float32Array(m.fx.x.length); for (let i = 0; i < x.length; i++) x[i] = m.fx.x[i] + m.mu.x[i];
+        const marks = m.events.filter((e) => e.at < 30).map((e) => ({ t: e.at, label: e.tag.toUpperCase() }));
+        writeFileSync(resolve(OUT, 'mix_sweep.png'), spectrogramPng(cut(x, 0, 30), SR, { title: 'MIX SWEEP (MUSIC SEED 1, RANDOM PITCH AND TIMING), FIRST 30 S', win: 2048, width: 1400, fMin: 40, fMax: 12000, marks }));
+        writeFileSync(resolve(OUT, 'mix_sweep_music.png'), spectrogramPng(cut(m.mu.x, 0, 30), SR, { title: 'MUSIC STEM OF THE SAME 30 S (THE ROOM DIPS)', win: 4096, width: 1400, fMin: 40, fMax: 12000, marks }));
+        writeFileSync(resolve(OUT, 'mix_sweep.wav'), wavBuffer(x, SR));
+      }
+    }
+    const worst = (k) => runs.reduce((a, b) => (b[k] < a[k] ? b : a));
+    const ws = worst('sep'), wk = worst('K'), wa = worst('A');
+    const iso = runs.filter((q) => q.iso);
+    const by = {}; for (const q of runs) (by[q.tag] ??= []).push(q);
+    const perVoice = Object.entries(by).map(([t, rs]) => `${t} ${f1(Math.min(...rs.map((q) => q.sep)))}/${f1(Math.min(...rs.map((q) => q.K)))}`).join(', ');
+    const where = (q) => `${q.tag} @${f2(q.at)} s, seed ${q.seed}, pitch ${f2(q.pitch)}${q.iso ? ', alone after a pause' : ''}`;
+    check(g, `in-band: every effect >= 8 dB above the music in its own band, ${runs.length} placements (4 seeds x 90 s, ${VARS.length} variants, pitch 0.70..1.43, random timing; ${iso.length} alone after a pause)`, ws.sep >= 8, `worst ${f1(ws.sep)} dB (${where(ws)}, bands ${ws.bands.join('/')} Hz); median ${f1(median(runs.map((q) => q.sep)))} dB`, '>= 8 dB');
+    check(g, 'loudness: over each effect\'s own loudest 20 ms frames (within 10 dB of its loudest), K-weighted (BS.1770) effect over music >= 10 LU, every placement', wk.K >= 10, `worst ${f1(wk.K)} LU (${where(wk)}); median ${f1(median(runs.map((q) => q.K)))} LU; per effect (worst in-band dB / worst LU): ${perVoice}`, '>= 10 LU');
+    // A-weighting is reported, not gated: it discounts the squishies' 60-300 Hz bodies by 10-20 dB, and the residual
+    // shortfalls are a soft body landing within a few ms of a mallet attack that had already started (causal: no dip can
+    // remove a note that began before the effect was called)
+    info.mixRobust = { n: runs.length, isolated: iso.length, worstSep: ws, worstK: wk, worstA: wa, aBelow10: runs.filter((q) => q.A < 10).length, medianA: median(runs.map((q) => q.A)), all: runs.map((q) => ({ ...q, bands: undefined })) };
+    check(g, '(info, not gated) A-weighted effect over music over the same frames', true, `worst ${f1(wa.A)} dB (${where(wa)}); ${runs.filter((q) => q.A < 10).length}/${runs.length} placements under 10 dB; median ${f1(median(runs.map((q) => q.A)))} dB`, 'reported');
+    // the music slider at its top (+6 dB): the dips deepen by the same 6 dB (music.ts roomDb), so in-band separation holds
+    const hi = [];
+    for (const seed of [1, 4242]) hi.push(...(await measure(seed, 60, 1)).out);
+    const wh = hi.reduce((a, b) => (b.sep < a.sep ? b : a)), whk = hi.reduce((a, b) => (b.K < a.K ? b : a));
+    check(g, 'music volume 1 (+6 dB, the slider\'s top): in-band still >= 8 dB for every effect (2 seeds x 60 s; K-weighted reported)', wh.sep >= 8, `worst in-band ${f1(wh.sep)} dB (${where(wh)}); worst K ${f1(whk.K)} LU (${where(whk)}), ${hi.filter((q) => q.K < 10).length}/${hi.length} under 10 LU`, '>= 8 dB');
+  }
+
+  /* ═════════════════════════ D3. the room dip itself ═════════════════════════ */
+  {
+    const g = 'music room dip';
+    const RD = K.ROOM_DB, PD = K.ROOM_DB * K.ROOM_PAD_SHARE;
+    const base = { seed: 3, secs: 30 };
+    const padP = dec(await ev('renderMusic', { ...base, layers: { pad: 1, mallet: 0 } }));
+    const melP = dec(await ev('renderMusic', { ...base, layers: { pad: 0, mallet: 1 } }));
+    const note = melP.log.find((e) => e.kind === 'mallet' && !e.dropped && e.t > 12 && e.t < 20);
+    const T = note ? note.t - 0.05 : 15;
+    const rooms = [{ from: T, until: T + 0.8, db: RD }];
+    const padR = dec(await ev('renderMusic', { ...base, layers: { pad: 1, mallet: 0 }, rooms }));
+    const melR = dec(await ev('renderMusic', { ...base, layers: { pad: 0, mallet: 1 }, rooms }));
+    const gainDb = (a, b, t0, t1) => dbOf(rmsOf(cut(b, t0, t1)) / Math.max(rmsOf(cut(a, t0, t1)), 1e-12));
+    const dPad = gainDb(padP.x, padR.x, T + 0.1, T + 0.8), dMel = gainDb(melP.x, melR.x, T + 0.06, T + 0.8);
+    check(g, `depth while held: the melody (mallets, echoes, bubbles) ${RD} dB, the pad ${f1(PD)} dB (+/-1 dB)`, Math.abs(dMel - RD) <= 1 && Math.abs(dPad - PD) <= 1, `melody ${f2(dMel)} dB, pad ${f2(dPad)} dB`, `${RD}, ${f1(PD)} +/- 1`);
+    // attack and recovery on the continuous pad stem (2 ms windows for the attack, 20 ms for the recovery)
+    const e2a = envelope(cut(padP.x, T - 0.01, T + 0.1), 0.002), e2b = envelope(cut(padR.x, T - 0.01, T + 0.1), 0.002);
+    const att = e2b.map((p, i) => ({ t: p.t - 0.01, db: p.db - e2a[i].db })).find((p) => p.t > 0 && p.db <= PD + 1);
+    const ea = envelope(padP.x, 0.02), eb = envelope(padR.x, 0.02);
+    const gdb = eb.map((p, i) => ({ t: p.t, db: p.db - ea[i].db }));
+    const rec = gdb.find((p) => p.t > T + 0.8 && p.db >= -1);
+    // ("outside" = before the dip, and from 6 s after the hold: 6.7 of the pad's 0.9 s recovery time constants)
+    const outside = Math.max(...gdb.filter((p) => p.t < T - 0.05 || p.t > T + 0.8 + 6).map((p) => Math.abs(p.db)));
+    const smooth = Math.max(...gdb.slice(1).map((p, i) => Math.abs(p.db - gdb[i].db)).filter((v, i) => gdb[i].t > T + 0.05 && gdb[i].t < T + 4));
+    check(g, 'attack: the pad within 1 dB of its depth <= 40 ms after the call (the melody\'s is faster: 1.5 ms time constant)', att && att.t <= 0.04, att ? `${(att.t * 1000).toFixed(0)} ms` : 'never', '<= 40 ms');
+    // (an exponential return from -14 dB with a 0.6 s time constant starts at ~1.2 dB per 20 ms: a swell, no jump)
+    check(g, 'recovery after the hold ends: back within 1 dB 0.6..2.5 s later, a swell (<= 1.5 dB per 20 ms), untouched outside (< 0.05 dB)', rec && rec.t - (T + 0.8) >= 0.6 && rec.t - (T + 0.8) <= 2.5 && smooth <= 1.5 && outside < 0.05, `${rec ? f2(rec.t - T - 0.8) : 'never'} s, largest step ${f2(smooth)} dB / 20 ms, outside ${f3(outside)} dB`, '0.6..2.5 s, <= 1.5, < 0.05');
+    const full = dec(await ev('renderMusic', { ...base })), fullR = dec(await ev('renderMusic', { ...base, rooms }));
+    const sa = stepIn(full.x, T - 0.05, T + 3), sb = stepIn(fullR.x, T - 0.05, T + 3);
+    check(g, 'no click: in and around the dip the largest sample step and 2nd difference are <= those of the same music without it', sb.step <= sa.step * 1.02 + 1e-5 && sb.d2 <= sa.d2 * 1.02 + 1e-6, `step ${f3(sb.step)} vs ${f3(sa.step)}, d2 ${sb.d2.toExponential(1)} vs ${sa.d2.toExponential(1)}`, '<=');
+    // a staircase: a deep dip for 0.3 s inside a shallow one held to +1.2 s: after the deep hold the gain rises to the
+    // shallow depth (not to 0 dB), then recovers when the shallow hold ends
+    const T2 = 10;
+    const stairs = [{ from: T2, until: T2 + 0.3, db: RD }, { from: T2 + 0.01, until: T2 + 3.5, db: -6 }];
+    const padS = dec(await ev('renderMusic', { ...base, layers: { pad: 1, mallet: 0 }, rooms: stairs }));
+    const deep = gainDb(padP.x, padS.x, T2 + 0.1, T2 + 0.3), mid = gainDb(padP.x, padS.x, T2 + 2.6, T2 + 3.5), after = gainDb(padP.x, padS.x, T2 + 8, T2 + 9);
+    check(g, 'overlapping dips stack as a staircase: the deepest active hold wins, then (once it ends) the next, then none', Math.abs(deep - PD) <= 1.5 && Math.abs(mid - (-6 * K.ROOM_PAD_SHARE)) <= 1 && Math.abs(after) < 0.3, `pad ${f1(deep)} dB (deep), ${f1(mid)} dB (shallow), ${f2(after)} dB after`, `${f1(PD)}, ${f1(-6 * K.ROOM_PAD_SHARE)}, 0`);
+    const rule = await page.evaluate(async () => { const M = await import('/src/audio/music.ts'); return { poke: M.roomDb('poke'), poke6: M.roomDb('poke', 6), reveal: M.roomDb('reveal'), sq01: M.squishRoomDb(0.1), sq07: M.squishRoomDb(0.7), sq2: M.squishRoomDb(-2), st0: M.strandRoomDb(0), st035: M.strandRoomDb(0.35), st1: M.strandRoomDb(1, 6), kinds: Object.keys(M.ROOM_KINDS) }; });
+    check(g, 'the rule: every effect one-shot makes room (ceremony reveal/merge keep the slow duck); squish by |rate| (none <= 0.15/s, full >= 0.7/s), strand by tension (full >= 0.35); the dip deepens by the music volume above its default', rule.poke === RD && rule.poke6 === RD - 6 && rule.reveal === null && rule.sq01 === 0 && rule.sq07 === RD && rule.sq2 === RD && rule.st0 === 0 && rule.st035 === RD && rule.st1 === RD - 6 && ['poke', 'release', 'land', 'pop', 'bump', 'lift', 'toss', 'strandSnap', 'capsule', 'meterFull', 'blend'].every((k) => rule.kinds.includes(k)), JSON.stringify({ ...rule, kinds: rule.kinds.join(',') }), 'as declared');
+    writeFileSync(resolve(OUT, 'music_room.png'), spectrogramPng(cut(fullR.x, T - 3, T + 5), SR, { title: `MUSIC ROOM DIP (MELODY ${RD} DB, PAD ${f1(PD)} DB) AT ${f1(T)} S, SHOWN ${f1(T - 3)}-${f1(T + 5)} S`, win: 4096, width: 1100, fMin: 40, fMax: 12000, marks: [{ t: 3, label: 'DIP' }, { t: 3.8, label: 'HOLD ENDS' }] }));
+    info.music.room = { dMel, dPad, attackS: att && att.t, recoveryS: rec && rec.t - T - 0.8, smooth, deep, mid, after };
+  }
+
   /* ═════════════════════════ E. the new interaction voices ═════════════════════════ */
   const V = {
     bump: { spec: { voice: 'bump', params: { intensity: 0.6 }, seed: 31, secs: 0.6 }, lo: { intensity: 0 }, hi: { intensity: 1 }, dur: [0.07, 0.2], win: 512 },
@@ -558,6 +758,36 @@ export async function round3Checks(env) {
     const sm = metrics(cut(r.x, r.t0, r.n / SR), SR);
     check(g, 'orphaned strand fades without a click (max step < 0.25)', sm.maxJump < 0.25, f3(sm.maxJump), '< 0.25');
     writeFileSync(resolve(OUT, 'strand_orphan.png'), spectrogramPng(cut(r.x, r.t0, r.n / SR), SR, { title: 'STRAND: CALLER STOPS AT 0.8 S (NO END, NO SNAP)', win: 1024, width: 900, fMin: 40, fMax: 14000, marks: r.script.marks }));
+  }
+  {
+    // Round-3 fix: the held strand ALONE (no snap) at realistic per-frame call patterns. The first version peaked at
+    // -28.6 dBFS in a realistic stretch (its gate is -20..-1) and a constant hold sat at -47 dBFS RMS; the old checks only
+    // saw the stretch + snap render, whose peak is the snap's.
+    const g = 'voice strand (realistic calls)';
+    const pats = [
+      ['30 Hz, 30% jitter', { hz: 30, jitter: 0.3 }], ['45 Hz, 40% jitter, 10 ms audio callbacks', { hz: 45, jitter: 0.4, quantum: 0.01 }],
+      ['60 Hz, 20% jitter, 128-sample grid', { hz: 60, jitter: 0.2, quantum: 128 / SR }], ['120 Hz, 10 ms callbacks (2-3 calls per step)', { hz: 120, quantum: 0.01 }],
+      ['60 Hz exact', { hz: 60 }],
+    ];
+    const rows = [];
+    for (const [name, pattern] of pats) {
+      const r = await render({ voice: 'strand', script: 'real', pattern, seed: 35 });
+      const x = cut(r.x, r.t0, r.t0 + 1.45);
+      const w = envelope(x, 0.1);
+      rows.push({ name, peak: dbOf(peakOf(x)), rms: Math.max(...w.map((p) => p.db)), step: stepIn(r.x, 0, r.n / SR).step });
+    }
+    const pk = rows.map((q) => q.peak), rm = rows.map((q) => q.rms);
+    check(g, 'a realistic stretch to tension 0.85 (1.2 s pull + 0.25 s hold, no snap): the strand alone peaks in -20..-1 dBFS at every call pattern (30-120 Hz, jittered, on the audio clock\'s grid)', pk.every((v) => v >= -20 && v <= -1) && rows.every((q) => q.step < 0.25), rows.map((q) => `${q.name}: ${f1(q.peak)}`).join('; ') + ` dBFS; max step ${f3(Math.max(...rows.map((q) => q.step)))}`, '-20..-1');
+    check(g, 'call-rate independent: peak and loudest 100 ms RMS agree within 1.5 dB across the five call patterns', Math.max(...pk) - Math.min(...pk) <= 1.5 && Math.max(...rm) - Math.min(...rm) <= 1.5, `peak spread ${f2(Math.max(...pk) - Math.min(...pk))} dB, RMS spread ${f2(Math.max(...rm) - Math.min(...rm))} dB`, '<= 1.5 dB');
+    let lo = Infinity, hi = -Infinity;
+    for (let sd = 1; sd <= 12; sd++) { const r = await render({ voice: 'strand', script: 'real', pattern: { hz: 30 + 2 * sd, jitter: 0.3, quantum: 128 / SR, seed: sd }, seed: 600 + sd }); const v = dbOf(peakOf(cut(r.x, r.t0, r.t0 + 1.45))); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    check(g, '12 seeds x jittered 32-54 Hz calls: the strand alone stays in -20..-1 dBFS', lo >= -20 && hi <= -1, `${f1(lo)}..${f1(hi)} dBFS`, '-20..-1');
+    const hold = async (T) => { const r = await render({ voice: 'strand', script: 'realHold', pattern: { hz: 30, jitter: 0.3, quantum: 128 / SR, T }, seed: 36 }); return dbOf(rmsOf(cut(r.x, r.t0 + 0.4, r.t0 + 1.4))); };
+    const h2 = await hold(0.2), h8 = await hold(0.8);
+    check(g, 'held still (30 Hz jittered calls): audible at tension 0.8 (RMS >= -32 dBFS, was -47) and >= 6 dB quieter at 0.2', h8 >= -32 && h8 - h2 >= 6, `${f1(h2)} -> ${f1(h8)} dBFS RMS`, '>= -32, >= 6 dB');
+    const r0 = await render({ voice: 'strand', script: 'real', pattern: { hz: 30, jitter: 0.3, quantum: 128 / SR }, seed: 35 });
+    writeFileSync(resolve(OUT, 'strand_real.png'), spectrogramPng(cut(r0.x, r0.t0, r0.n / SR), SR, { title: 'STRAND ALONE, REALISTIC CALLS (30 HZ, 30% JITTER, AUDIO-CLOCK GRID)', win: 1024, width: 900, fMin: 40, fMax: 14000, marks: r0.script.marks }));
+    info.voices.strandReal = { rows, seeds: [lo, hi], hold: [h2, h8] };
   }
   {
     const g = 'bump rate limit (pure)';

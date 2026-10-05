@@ -288,6 +288,9 @@ export async function runEngineTests3() {
       await sleep(400);
       check('dispose() with music playing: context closed, timer stopped, later calls are safe no-ops', caught.length === before && ctx.state === 'closed' && audio.detailStats().music.ticks === ticks && !audio.detailStats().music.playing, `${ctx.state}, ${caught.length - before} exceptions, ticks after ${audio.detailStats().music.ticks - ticks}`, 'closed, 0, 0');
     }
+
+    /* ───── 11. round-3 fixes (fresh engines) ───── */
+    await fixChecks(check, tr, info);
   } catch (e) {
     check('round-3 engine tests completed', false, String(e && e.stack || e), 'no exception');
   } finally {
@@ -296,4 +299,233 @@ export async function runEngineTests3() {
   }
   info.counters = { ...nodeCounters, liveNodes: liveNodeCount(), liveGroups: liveGroupCount() };
   return { checks, info };
+}
+
+/** Busy-wait the main thread (a shader compile, a GC, a throttled timer). */
+function stall(ms) { const t0 = performance.now(); while (performance.now() - t0 < ms) { /* spin */ } }
+
+/** Round-3 fixes, each on a fresh engine (music off unless the check is about the music). */
+async function fixChecks(check, tr, info) {
+  const P = AudioScheduledSourceNode.prototype;
+  const origStart = P.start;
+  const fx = {};
+  const peakOver = async (a, ms) => { a.stats(); await sleep(ms); return a.stats().peak; };
+
+  /* the music makes room under an effect, and comes back */
+  {
+    const a = createAudio({ seed: 404 });
+    a.setMusic({ on: true });
+    await a.unlock();
+    await sleep(3200);
+    const before = a.detailStats().music.ducked;
+    a.poke({ intensity: 0.5 });
+    await sleep(40);
+    const during = a.detailStats().music.ducked;
+    await sleep(2600);
+    const after = a.detailStats().music.ducked;
+    check('room: a poke makes the music dip at once (fast duck keyed by the effect) and it comes back about 2 s later', !before && during && !after, `before ${before}, 40 ms after the poke ${during}, 2.6 s later ${after}`, 'false, true, false');
+    // a session that starts during a ceremony is ducked under it from its first note
+    a.setMusic({ on: false });
+    await sleep(1800);
+    a.reveal({ tier: 'legendary' });
+    await sleep(60);
+    a.setMusic({ on: true });
+    await sleep(400);
+    const d = a.detailStats().music;
+    check('a music session started during a ceremony (music switched on mid-reveal) is ducked under it', d.playing && d.ducked, `playing ${d.playing}, ducked ${d.ducked}`, 'true, true');
+    await sleep(3500);
+    // setPaused(true) twice (visibilitychange + pagehide): the second call must not skip the fade or shorten the suspend
+    const ctx = a.stats().state;
+    a.setPaused(true); a.setPaused(true);
+    await sleep(60);
+    const mid = { state: a.stats().state, sessions: a.detailStats().music.sessions };
+    await sleep(400);
+    const end = { state: a.stats().state, sessions: a.detailStats().music.sessions };
+    check('setPaused(true) twice in a row: the music still fades (sessions alive and context running 60 ms later), then suspends with nothing left', ctx === 'running' && mid.state === 'running' && mid.sessions >= 1 && end.state === 'suspended' && end.sessions === 0, `60 ms: ${mid.state}, ${mid.sessions} session(s); 460 ms: ${end.state}, ${end.sessions}`, 'running >= 1, suspended 0');
+    a.setPaused(false);
+    await sleep(300);
+    a.dispose();
+  }
+
+  /* the held strand at realistic per-frame rates, through the live engine */
+  {
+    const a = createAudio({ seed: 405 });
+    await a.unlock();
+    a.setSettings({ master: 1 });
+    await sleep(100);
+    a.stats();
+    let pk = 0, pkHold = 0;
+    const t0 = performance.now();
+    let k = 0;
+    while (performance.now() - t0 < 2200) {
+      const t = (performance.now() - t0) / 1000;
+      const T = t < 1.2 ? 0.85 * (t / 1.2) * (t / 1.2) * (3 - 2 * (t / 1.2)) : 0.8;
+      a.strand({ tension: T });
+      await sleep(33 * (0.7 + 0.6 * ((k++ * 0.618) % 1)));     // ~30 Hz with +/-30% jitter
+      if (k % 3 === 0) { const s = a.stats(); if (t < 1.4) pk = Math.max(pk, s.peak); else pkHold = Math.max(pkHold, s.peak); }
+    }
+    await sleep(800);
+    const gone = (a.stats().liveKinds.strand ?? 0) === 0;
+    const db = (v) => (20 * Math.log10(Math.max(v, 1e-9))).toFixed(1);
+    check('live strand at ~30 Hz jittered calls (master 1): a stretch to 0.85 peaks in -20..-1 dBFS, a held 0.8 stays audible (> -30 dBFS peak), and it frees itself after the calls stop', pk >= 0.1 && pk <= 0.89 && pkHold > 0.0316 && gone, `stretch peak ${db(pk)} dBFS, hold ${db(pkHold)} dBFS, freed ${gone}`, '-20..-1, > -30, true');
+    a.dispose();
+  }
+
+  /* audit: setPaused(true) used to free a held squish and a charging merge without stopping their sources */
+  {
+    const a = createAudio({ seed: 406 });
+    await a.unlock();
+    await sleep(100);
+    const st = { started: 0, ended: 0 };
+    P.start = function (...args) { st.started++; this.addEventListener('ended', () => { st.ended++; }); return origStart.apply(this, args); };
+    try {
+      const h = a.squishStart({});
+      for (let i = 0; i < 10; i++) { h.update({ compression: 0.5, rate: 2 }); await sleep(16); }
+      a.mergeStart({ tier: 'rare', chargeS: 3 });
+      await sleep(200);
+      a.setPaused(true);
+      await sleep(250);
+      a.setPaused(false);
+      await sleep(1500);
+    } finally { P.start = origStart; }
+    check('setPaused(true) with a held squish and a charging merge: every source started reaches \"ended\" after the pause cycle (Bag.free stops sources, it no longer only disconnects them)', st.started > 10 && st.ended === st.started, `${st.started} started, ${st.ended} ended, ${a.stats().liveNodes} live nodes`, 'all ended');
+    a.dispose();
+  }
+
+  /* audit: calm capsule burst reachable through SquishAudio */
+  {
+    const a = createAudio({ seed: 407 });
+    await a.unlock();
+    await sleep(100);
+    const calm = [], loud = [];
+    for (let i = 0; i < 3; i++) {
+      a.stats(); a.capsuleBeat({ beat: 'burst', tier: 'rare' }); loud.push(await peakOver(a, 550));
+      a.stats(); a.capsuleBeat({ beat: 'burst', tier: 'rare', calm: true }); calm.push(await peakOver(a, 550));
+    }
+    check('capsuleBeat({calm: true}) reaches the calm burst (low-passed, softer pop): every calm burst peaks below every normal one', Math.max(...calm) < Math.min(...loud), `calm ${calm.map((v) => v.toFixed(3)).join('/')}, normal ${loud.map((v) => v.toFixed(3)).join('/')}`, 'calm < normal');
+    a.dispose();
+  }
+
+  /* audit: the iOS silent buffer must start inside the gesture, i.e. synchronously in unlock(), before any await */
+  {
+    const B = AudioBufferSourceNode.prototype, ob = B.start;
+    let silent = 0;
+    B.start = function (...args) { if (this.buffer && this.buffer.length === 1) silent++; return ob.apply(this, args); };
+    let syncCount = -1, state = '';
+    // simulate the iOS case: the context starts 'suspended' and resume() settles asynchronously (headless Chromium creates a
+    // 'running' context, where the old order was invisible)
+    const OrigAC = window.AudioContext;
+    window.AudioContext = class extends OrigAC {
+      constructor(...args) {
+        super(...args);
+        let resumed = false;
+        Object.defineProperty(this, 'state', { configurable: true, get: () => (resumed ? 'running' : 'suspended') });
+        const r = OrigAC.prototype.resume.bind(this);
+        this.resume = () => new Promise((ok) => setTimeout(() => { resumed = true; r().then(ok, ok); }, 40));
+      }
+    };
+    const a = createAudio({ seed: 408 });
+    try { const p = a.unlock(); syncCount = silent; await p; state = a.stats().state; } finally { B.start = ob; window.AudioContext = OrigAC; }
+    check('unlock() on a context that starts suspended (iOS): the one-sample silent buffer is started synchronously inside the call (inside the user gesture), not after awaiting resume()', syncCount === 1 && state === 'running', `${syncCount} started before unlock() returned; state after ${state}`, '1, running');
+    a.dispose();
+  }
+
+  /* audit: a main-thread stall during a merge charge must not schedule anything into the past */
+  {
+    const a = createAudio({ seed: 409 });
+    await a.unlock();
+    await sleep(100);
+    const late = [];
+    P.start = function (when = 0, ...rest) { const c = this.context; if (c && when > 0 && when < c.currentTime - 0.003) late.push(c.currentTime - when); return origStart.call(this, when, ...rest); };
+    try {
+      a.mergeStart({ tier: 'epic', chargeS: 2.4 });
+      await sleep(300);
+      stall(1200);
+      await sleep(1600);
+    } finally { P.start = origStart; }
+    check('merge charge with a 1.2 s main-thread stall in the middle: nothing is started in the past afterwards (the late slices are skipped, not piled onto "now")', late.length === 0, `${late.length} sources started late${late.length ? ` (up to ${(Math.max(...late) * 1000).toFixed(0)} ms)` : ''}`, '0');
+    a.dispose();
+  }
+
+  /* audit: capsuleBeat('grab') used to build a new PeriodicWave per call */
+  {
+    const a = createAudio({ seed: 410 });
+    await a.unlock();
+    await sleep(100);
+    const C = BaseAudioContext.prototype, ow = C.createPeriodicWave;
+    let waves = 0;
+    C.createPeriodicWave = function (...args) { waves++; return ow.apply(this, args); };
+    try { for (let i = 0; i < 10; i++) { a.capsuleBeat({ beat: 'grab', progress: i / 10 }); await sleep(80); } } finally { C.createPeriodicWave = ow; }
+    check('10 grab squeaks: the squeak wave is built once per context and cached (at most 1 PeriodicWave)', waves <= 1 && a.stats().started.capsule === 10, `${waves} PeriodicWaves for ${a.stats().started.capsule} grabs`, '<= 1');
+    a.dispose();
+  }
+
+  /* audit: big one-call scheduling spread over the lookahead pump */
+  {
+    const a = createAudio({ seed: 411 });
+    await a.unlock();
+    await sleep(200);
+    const cost = (fn) => { const c0 = tr.stat.created, t0 = performance.now(); const r = fn(); return { nodes: tr.stat.created - c0, ms: performance.now() - t0, r }; };
+    const bl = cost(() => a.blend({ count: 8, durationS: 8 }));
+    await sleep(120);
+    const rv = cost(() => a.reveal({ tier: 'mythic', tierUp: true, isNew: true }));
+    const mg = cost(() => a.mergeStart({ tier: 'legendary' }));
+    // the same Legendary charge built the old way (its first slice 0.5 s ahead), counted with the same counter, into a muted gain
+    const Cm = await import('/src/audio/ceremony.ts'), Dm = await import('/src/audio/dsp.ts');
+    const oc = new OfflineAudioContext(1, 4800, 48000);      // (node counts do not depend on the kind of context)
+    const old = cost(() => Cm.mergeStart(oc, oc.destination, 0.004, { rng: Dm.makeRng(5), tier: 'legendary', lookaheadS: 0.5 }));
+    const c0 = tr.stat.created;
+    await sleep(8800);
+    const later = tr.stat.created - c0;
+    // a stopped blend builds nothing more
+    const bl2 = a.blend({ count: 8, durationS: 8 });
+    await sleep(400);
+    bl2.stop();
+    await sleep(100);
+    const c1 = tr.stat.created;
+    await sleep(1500);
+    const afterStop = tr.stat.created - c1;
+    fx.spread = { blend: bl.nodes, blendMs: bl.ms, reveal: rv.nodes, revealMs: rv.ms, merge: mg.nodes, mergeMs: mg.ms, mergeOld: old.nodes, builtLater: later, afterStop };
+    check('one call never builds the whole voice: blend 8 s x 8 <= 150 nodes in the call (was ~586), Mythic reveal + tier-up + new <= 80 (was 137), Legendary mergeStart fewer than with the old 0.5 s first slice; the pump builds the rest later', bl.nodes <= 150 && rv.nodes <= 80 && mg.nodes < old.nodes && later >= 300, `blend ${bl.nodes} nodes (${bl.ms.toFixed(1)} ms), reveal ${rv.nodes} (${rv.ms.toFixed(1)} ms), merge ${mg.nodes} (${mg.ms.toFixed(1)} ms; old first slice: ${old.nodes}); ${later} nodes built by the pump afterwards`, '<= 150, <= 80, < old');
+    check('a stopped blend schedules nothing more (its pending bubbles, clinks and flourish are dropped)', afterStop <= 4, `${afterStop} nodes created in the 1.5 s after stop()`, '<= 4');
+    a.dispose();
+  }
+
+  /* audit: held squish updated twice within one audio-clock step must not double its bubbles (offline, same seed: exact) */
+  {
+    const V = await import('/src/audio/voices.ts');
+    const D = await import('/src/audio/dsp.ts');
+    const C = BaseAudioContext.prototype, oo = C.createOscillator;
+    let n = 0;
+    C.createOscillator = function (...args) { n++; return oo.apply(this, args); };
+    const run = (per) => {
+      const ctx = new OfflineAudioContext(1, 48000 * 2, 48000);
+      const c0 = n;
+      const v = V.squish(ctx, ctx.destination, 0, { rng: D.makeRng(77), pitch: 1 });
+      for (let i = 0; i < 40; i++) for (let k = 0; k < per; k++) v.update({ compression: 0.5, rate: 2.5 }, 0.05 + i * 0.03);
+      v.end(0.05, 1.3);
+      return n - c0;
+    };
+    let one = 0, four = 0;
+    try { one = run(1); four = run(4); } finally { C.createOscillator = oo; }
+    check('held squish: four update() calls per audio-clock step (same seed) make exactly as many bubbles as one (was +56%)', four === one, `1 call/step: ${one} oscillators, 4 calls/step: ${four}`, 'equal');
+  }
+
+  /* audit: iOS audio session opt-in (feature-detected) */
+  {
+    const nav = window.navigator;
+    const had = Object.getOwnPropertyDescriptor(nav, 'audioSession');
+    const fake = { type: 'auto' };
+    Object.defineProperty(nav, 'audioSession', { value: fake, configurable: true });
+    const seen = [];
+    const a = createAudio({ seed: 413 });
+    try {
+      await a.unlock(); seen.push(fake.type);
+      a.setSettings({ muted: true }); seen.push(fake.type);
+      a.setSettings({ muted: false }); seen.push(fake.type);
+    } finally { if (had) Object.defineProperty(nav, 'audioSession', had); else delete nav.audioSession; }
+    check('iOS audio session: with sound on the engine asks for "playback" (the ringer switch does not mute the game), hands it back ("ambient") when muted', seen.join(',') === 'playback,ambient,playback', seen.join(','), 'playback,ambient,playback');
+    a.dispose();
+  }
+  info.fixes = fx;
 }

@@ -320,6 +320,10 @@ export function squish(ctx: Ctx, out: AudioNode, t0: number, p: SquishParams): S
 
   let lastT = t, lastEnv = 0, dirS = 0, ended = false;
   let lastUpdateT = t;
+  /** Bubbles are already scheduled up to here: a second update that reads the same audio clock (two display frames in one
+   *  audio callback: 120 Hz screens, Android's larger buffers) must not refill the same window (round-3 audit fix:
+   *  measured +56% bubbles for four updates per audio step). */
+  let bubUntil = t;
 
   const voice: SquishVoice = {
     kind: 'squish',
@@ -365,10 +369,11 @@ export function squish(ctx: Ctx, out: AudioNode, t0: number, p: SquishParams): S
         if (pn) pn.pan.setTargetAtTime(clamp(q.pan, -1, 1), tt, 0.05);
       }
       // bubbles: Poisson, rate follows |rate|; memoryless so each hop restarts the clock
-      if (a > 0.015) {
+      if (a > 0.015 && tt + 0.003 + hop > bubUntil) {
         const lam = 95 * Math.pow(a, 1.05) * lerp(0.7, 1.2, c);
-        let u = tt + 0.003;
+        let u = Math.max(tt + 0.003, bubUntil);
         const end = tt + 0.003 + hop;
+        bubUntil = end;
         for (let guard = 0; guard < 8; guard++) {
           u += rexp(r, lam);
           if (u >= end) break;
@@ -389,8 +394,13 @@ export function squish(ctx: Ctx, out: AudioNode, t0: number, p: SquishParams): S
 
 /* ═══════════════════════════════════════════════ blend ═══════════════════════════════════════════════ */
 
-export interface BlendParams extends VoiceBase { count?: number; durationS?: number }
-export type BlendVoice = VoiceGroup & { stop(): void };
+export interface BlendParams extends VoiceBase {
+  count?: number; durationS?: number;
+  /** Build only the first `lookaheadS` of the bubble stream, clinks and flourish now and the rest through advance() (the
+   *  engine pumps it ~0.5 s ahead). Default: everything at once (offline renders). */
+  lookaheadS?: number;
+}
+export type BlendVoice = VoiceGroup & { stop(): void; advance(until: number): boolean };
 
 /**
  * A blender: a motor that spools up (two detuned saws through a resonant low-pass whose cutoff follows the rpm, a
@@ -404,6 +414,7 @@ export function blend(ctx: Ctx, out: AudioNode, t0: number, p: BlendParams): Ble
   const pr = pitchOf(p);
   const r = p.rng;
   const bag = new Bag(ctx, out, 'blend', p.pan ?? 0);
+  if (p.lookaheadS !== undefined) bag.deferFrom = t + clamp(fin(p.lookaheadS, 0.5), 0.05, 5);
   const M = dbToGain(LV.blendMotor);
   const tEnd = t + D;
 
@@ -485,7 +496,9 @@ export function blend(ctx: Ctx, out: AudioNode, t0: number, p: BlendParams): Ble
       u += rexp(r, lam);
       if (u >= stop) break;
       const rad = rlog(r, 0.0016, 0.0062) / pr;
-      bubble(ctx, bag.head, u, rad, M * 0.5 * clamp(rad * pr / 0.003, 0.3, 1.6) * rr(r, 0.5, 1), 0.25, 1.2);
+      const amp = M * 0.5 * clamp(rad * pr / 0.003, 0.3, 1.6) * rr(r, 0.5, 1);
+      const at = u;
+      bag.defer(at, () => { bubble(ctx, bag.head, at, rad, amp, 0.25, 1.2); });
     }
   }
 
@@ -498,12 +511,14 @@ export function blend(ctx: Ctx, out: AudioNode, t0: number, p: BlendParams): Ble
     const amps = [1, 0.5, 0.2];
     const taus = [0.085, 0.05, 0.03];
     const gain = M * 0.36 * rr(r, 0.6, 1);
-    for (let q = 0; q < 3; q++) {
-      const o = bag.osc('sine', f0 * ratios[q], u, u + 7.5 * taus[q] + 0.01);
-      const g = bag.gain(0);
-      o.connect(g); g.connect(bag.head);
-      pluck(g.gain, u, gain * amps[q], 0.0006, taus[q]);
-    }
+    bag.defer(u, () => {
+      for (let q = 0; q < 3; q++) {
+        const o = bag.osc('sine', f0 * ratios[q], u, u + 7.5 * taus[q] + 0.01);
+        const g = bag.gain(0);
+        o.connect(g); g.connect(bag.head);
+        pluck(g.gain, u, gain * amps[q], 0.0006, taus[q]);
+      }
+    });
     endT = Math.max(endT, u + 0.7);
   }
 
@@ -519,12 +534,14 @@ export function blend(ctx: Ctx, out: AudioNode, t0: number, p: BlendParams): Ble
       const tau = last ? 0.2 : 0.11 + 0.01 * k;
       const gainB = dbToGain(LV.blendBell) * (0.7 + 0.1 * k);
       const parts = [[1, 1], [2.76, 0.22], [5.4, 0.07]];
-      for (const [ratio, amp] of parts) {
-        const o = bag.osc('sine', f * ratio, u, u + 7.5 * tau * (ratio > 1 ? 0.6 : 1) + 0.02);
-        const g = bag.gain(0);
-        o.connect(g); g.connect(bag.head);
-        pluck(g.gain, u, gainB * amp, 0.003, tau * (ratio > 1 ? 0.6 : 1));
-      }
+      bag.defer(u, () => {
+        for (const [ratio, amp] of parts) {
+          const o = bag.osc('sine', f * ratio, u, u + 7.5 * tau * (ratio > 1 ? 0.6 : 1) + 0.02);
+          const g = bag.gain(0);
+          o.connect(g); g.connect(bag.head);
+          pluck(g.gain, u, gainB * amp, 0.003, tau * (ratio > 1 ? 0.6 : 1));
+        }
+      });
       endT = Math.max(endT, u + 7.5 * tau + 0.05);
     }
   }
@@ -545,6 +562,7 @@ export function blend(ctx: Ctx, out: AudioNode, t0: number, p: BlendParams): Ble
     kill: (f, at) => bag.kill(f, at),
     free: () => bag.free(),
     stop: () => bag.kill(0.15),
+    advance: (until) => bag.advanceDeferred(until),
   };
   return handle;
 }

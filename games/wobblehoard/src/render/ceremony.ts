@@ -77,7 +77,7 @@ const HOP_VY = 1.7, HOP_VY_CALM = 0.9;
  * the parents' lineage colour swirls through as a lighter accent fading over 0.9 s (a heavy or long mix of two far-apart hues, e.g. a
  * coral tell or a pink parent over a green result, read as khaki mud).
  */
-const TELL_AT_BURST = [0.55, 0.58, 0.62, 0.66, 0.62, 0.42];   // Legendary's gold and Mythic's white tell are already bright: less, or the body whites out
+const TELL_AT_BURST = [0.55, 0.58, 0.6, 0.42, 0.6, 0.42];   // Epic: coral over a green or teal body turns khaki; Legendary gold and Mythic white are bright already
 const MIX_AT_BURST = 0.25;
 
 const smooth = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
