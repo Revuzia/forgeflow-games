@@ -42,6 +42,10 @@ const REL = 1.4;
 const PX = Number(new URLSearchParams(location.search).get('px') ?? 0);
 const SDIR = new URLSearchParams(location.search).get('sdir') ?? '-x';
 const SY = Number(new URLSearchParams(location.search).get('sy') ?? 0.96);
+// camdrag: ?cu=<contact direction x,y,z> ?ang=<screen angle, degrees> ?sp=<m/s>
+const CU = (new URLSearchParams(location.search).get('cu') ?? '0.05,0.83,0.56').split(',').map(Number);
+const CANG = Number(new URLSearchParams(location.search).get('ang') ?? 225);
+const CSP = Number(new URLSearchParams(location.search).get('sp') ?? 2.5);
 const SCENARIOS: Record<string, Scenario> = {
   // (a) a quick side poke at dome height, then let go
   side_poke: {
@@ -340,6 +344,37 @@ const SCENARIOS: Record<string, Scenario> = {
         if (c.n[key] === 1 && t >= t0 + len) { c.n[key] = 2; b.fingerUp(0); }
       };
       tap('a', 0.3, 0.12, 0.6); tap('b', 1.0, 0.049, 1); tap('c', 1.12, 0.049, 1);
+    },
+  },
+  // a straight rub as the player makes it (probe_softbody 'camera-plane rub' rows): the game camera at (0, 1.6 k, 2.6 k), k = R / 0.5125;
+  // the finger lands where the camera ray through c + (cu.x R, cu.y 1.3 R, cu.z R) hits (cu.y <= 0: cu.y R), then the pointer slides in the
+  // screen plane at ?ang= degrees (0 = screen right, 90 = screen up) and ?sp= m/s from 0.15 s on; the shell's pressure profile (0.55, a
+  // smoothstep ramp to 1 over 0.9 s after 0.18 s) capped at 0.7 while rubbing; lifted 1.2 s after the touch. Touch at 0.5 s.
+  camdrag: {
+    title: `camera-plane rub: contact ${CU.join(', ')}, screen angle ${CANG} deg, ${CSP} m/s (touch 0.50 s, lift 1.70 s)`,
+    frames: [0.5, 0.65, 0.8, 0.95, 1.1, 1.25, 1.4, 1.55, 1.69, 1.73, 1.8, 2.1],
+    camDist: 2.4, camTarget: [0, 0.45, 0], yawDeg: 0, pitchDeg: 28,
+    tick(t, b, c) {
+      const R = b.restRadius, k = R / 0.5125, cam = v3(0, 1.6 * k, 2.6 * k);
+      const fwd = (p: V3): V3 => { const dx = p.x - cam.x, dy = p.y - cam.y, dz = p.z - cam.z, l = Math.hypot(dx, dy, dz); return v3(dx / l, dy / l, dz / l); };
+      if (t >= 0.5 - 1e-9 && !c.n.down) {
+        const ce = b.center, P0 = v3(ce.x + CU[0] * R, CU[1] > 0 ? ce.y + CU[1] * 1.3 * R : ce.y + CU[1] * R, ce.z + CU[2] * R), d0 = fwd(P0);
+        const h = b.raycast(cam, d0);
+        if (!h) { c.n.down = 2; return; }
+        b.fingerDown(0, { point: h.point, normal: h.normal, dir: d0 });
+        c.hit.p = h.point; c.n.down = 1; c.n.t0 = t;
+        const rl = Math.hypot(d0.z, d0.x), right = v3(-d0.z / rl, 0, d0.x / rl);
+        const up = v3(right.y * d0.z - right.z * d0.y, right.z * d0.x - right.x * d0.z, right.x * d0.y - right.y * d0.x);
+        const a = (CANG * Math.PI) / 180;
+        c.hit.mv = v3(right.x * Math.cos(a) + up.x * Math.sin(a), right.y * Math.cos(a) + up.y * Math.sin(a), right.z * Math.cos(a) + up.z * Math.sin(a));
+      }
+      if (c.n.down !== 1 || c.n.up) return;
+      const tr = t - c.n.t0, p0 = c.hit.p!, mv = c.hit.mv!;
+      if (tr < 1.2) {
+        const x = clamp01((tr - 0.18) / 0.9), pv = 0.55 + 0.45 * x * x * (3 - 2 * x);
+        b.fingerPressure(0, tr > 0.15 ? Math.min(pv, 0.7) : pv);
+        if (tr > 0.15) { const qq = v3(p0.x + mv.x * CSP * (tr - 0.15), p0.y + mv.y * CSP * (tr - 0.15), p0.z + mv.z * CSP * (tr - 0.15)); const hh = b.raycast(cam, fwd(qq)); if (hh) b.fingerMove(0, hh.point); }
+      } else { c.n.up = 1; b.fingerUp(0); }
     },
   },
 };
