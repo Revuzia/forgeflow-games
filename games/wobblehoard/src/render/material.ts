@@ -18,6 +18,8 @@ import type { JellyPalette, Rgb } from './oklch.ts';
 import { NOISE_GLSL } from './shaderlib.ts';
 import { KEY_DIR, RIM_DIR, type EnvHub } from './env.ts';
 import { TIERS } from './quality.ts';
+import { getSpecies } from '../data/catalog.ts';
+import { translucencyMaxOf } from '../data/materials.ts';
 import type { TierStyle } from './rarity.ts';
 
 const PATTERN_ID: Record<Genome['pattern'], number> = { plain: 0, speckle: 1, swirl: 2, bands: 3 };
@@ -199,6 +201,18 @@ const EMISSIVE_STAGE = /* glsl */`
 vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;
 `;
 
+/**
+ * The translucency the renderer draws for a genome at a rarity tier: the genome's own value plus the tier's "a little more translucency"
+ * (DESIGN 5.3), capped at the material family's `lookBounds.translucencyMax` (CONTRACT 11, the same cap `resolveMaterial` applies): a
+ * physically opaque family (foam, marshmallow, putty, mochi, bead squeeze) stays frosted at every tier, its rarity shows through core
+ * glow, glitter, gloss and the tier FX instead. An unknown species (an old share string) is uncapped.
+ */
+export function drawnTranslucency(g: Genome, tierAdd = 0): number {
+  const def = getSpecies(g.species);
+  const cap = def ? translucencyMaxOf(def.family) : 1;
+  return Math.max(0, Math.min(1, cap, (Number.isFinite(g.translucency) ? g.translucency : 0) + tierAdd));
+}
+
 export class JellyMaterials {
   readonly uniforms: JellyUniforms;
   private readonly genome: Genome;
@@ -223,7 +237,7 @@ export class JellyMaterials {
       uTime: { value: 0 }, uCompress: { value: 0 }, uStretch: { value: 0 },
       uBlushAmt: { value: 1 }, uPatStrength: { value: patStrength },
       uCoreAmt: { value: 0.5 + genome.coreGlow * 0.9 }, uCoreRadius: { value: 0.3 * scale },
-      uRimAmt: { value: 0.8 }, uScatter: { value: 0.2 + 0.2 * genome.translucency }, uAlphaBase: { value: 0.94 - 0.07 * genome.translucency },
+      uRimAmt: { value: 0.8 }, uScatter: { value: 0.2 + 0.2 * drawnTranslucency(genome) }, uAlphaBase: { value: 0.94 - 0.07 * drawnTranslucency(genome) },
       uBlushCol: { value: lin(palette.blush) }, uPaleCol: { value: lin(palette.pale) },
       uPatA: { value: lin(palette.patA) }, uPatB: { value: lin(palette.patB) },
       uRimCol: { value: new THREE.Color(0x59d6e6) }, uGlowCol: { value: lin(palette.glow) },
@@ -257,7 +271,7 @@ export class JellyMaterials {
     const pc = this.palette.core, k = s.coreTint;
     u.uCoreCol.value.setRGB(pc[0] + (s.tell[0] - pc[0]) * k, pc[1] + (s.tell[1] - pc[1]) * k, pc[2] + (s.tell[2] - pc[2]) * k, THREE.LinearSRGBColorSpace);
     u.uPatStrength.value = this.patternStrength();
-    u.uScatter.value = 0.2 + 0.2 * Math.min(1, g.translucency + s.translucencyAdd);
+    u.uScatter.value = 0.2 + 0.2 * drawnTranslucency(g, s.translucencyAdd);
   }
 
   /** Re-style for another rarity tier (rebuilds the GPU materials: a pattern define may change). */
@@ -270,7 +284,7 @@ export class JellyMaterials {
   }
 
   private make(low: boolean): THREE.MeshPhysicalMaterial {
-    const g = this.genome, p = this.palette, t = Math.min(1, g.translucency + this.style.translucencyAdd), gl = g.gloss;
+    const g = this.genome, p = this.palette, t = drawnTranslucency(g, this.style.translucencyAdd), gl = g.gloss;
     const m = new THREE.MeshPhysicalMaterial({
       color: lin(p.body),
       roughness: lerp(0.58, 0.32, gl),   // frosted body (blurs what refracts through it); the clearcoat carries the gloss

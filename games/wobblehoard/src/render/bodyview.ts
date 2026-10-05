@@ -54,14 +54,13 @@ export class BodyView {
   /** Squared camera distance of the body centre (the stage's back-to-front ordering of the translucent jellies). */
   sortDepth = 0;
   private spec: TierSpec;
-  private readonly hub: EnvHub;
   private smComp = 0; private smStretch = 0; private prevSq = 0; private sqRate = 0; private touchGate = 0; private grabGate = 0;
   private calm = false;
   private shown = true;
   private disposed = false;
 
   constructor(id: number, inner: SoftBodyLike, genome: Genome, tier: TierName, spec: TierSpec, hub: EnvHub, quad: THREE.BufferGeometry, owned: boolean) {
-    this.id = id; this.genome = genome; this.tier = tier; this.style = TIER_STYLES[tier]; this.spec = spec; this.hub = hub; this.owned = owned;
+    this.id = id; this.genome = genome; this.tier = tier; this.style = TIER_STYLES[tier]; this.spec = spec; this.owned = owned;
     this.proxy = new BodyProxy(inner);
     this.palette = genomePalette(genome);
     this.scale = inner.restRadius / 0.5;
@@ -173,6 +172,5 @@ export class BodyView {
     this.disposed = true;
     this.group.removeFromParent();
     this.jelly.dispose(); this.core.dispose(); this.face.dispose(); this.fx.dispose(); this.mats.dispose(); this.decals.dispose(); this.rarity.dispose();
-    void this.hub;
   }
 }

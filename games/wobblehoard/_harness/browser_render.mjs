@@ -17,13 +17,18 @@
 //     skip() lands on the same final frame as the natural end (RGB fingerprint, every tier) and never hides the result, the Calm variant of every tier
 //     (x0.65, no camera move / slow-mo / screen light / ramp, particles x0.3, rings -> fades), native vs puppet ceremony drivers, done robustness;
 //   * the set: sky / ground gradient seams and band edges at 4 aspect ratios x 3 camera pitches; low vs med at one frozen pressed pose (seam + MAE);
-//   * rarity contact sheets (one body per tier at 1280x800 for three genomes, and 390x844) and 6-tier x 7-beat filmstrips of both ceremonies
-//     (1280x800 med + 390x844 low; the desktop frames also land in _shots/render/film/*.jpg).
+//   * rarity contact sheets (one body per tier at 1280x800 for three genomes and one opaque-family species, and 390x844) and 6-tier x 7-beat
+//     filmstrips of both ceremonies (1280x800 med + 390x844 low; the desktop frames also land in _shots/render/film/*.jpg);
+//   * every ceremony body stays inside the top of the frame (the 1.25x spring-open + rise), the reveal owns the capsule it opens (a drop during
+//     a reveal is independent and survives it), and the jelly honours the material family's translucency cap at every tier (node-side).
 // SwiftShader is a CPU rasteriser: only the RELATIVE cost between tiers means anything here.
 import { startVite, launch, ROOT } from './pw.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { makeStarterGenome } from '../src/core/genome.ts';
+import { drawnTranslucency } from '../src/render/material.ts';
+import { CATALOG, speciesBaseGenome } from '../src/data/catalog.ts';
+import { translucencyMaxOf } from '../src/data/materials.ts';
 
 process.env.WH_FROZEN ??= '1'; // no HMR / watcher: another lane's edit must not reload the page mid-run
 const args = process.argv.slice(2);
@@ -323,6 +328,16 @@ try {
     const rctx = await browser.newContext({ viewport: { width: 320, height: 240 }, deviceScaleFactor: 1 });
     const { page: rp, bad: rbad } = await openView(rctx, `quality=low&body=${bodyQ}`, 'round2', [/GPU stall due to ReadPixels/i]);
 
+    // ---- 0. the material family's translucency cap (CONTRACT 11): the jelly never draws an opaque family clearer than its cap, at any tier ----
+    {
+      let over = 0, n = 0, capped = 0;
+      for (const d of CATALOG) for (let sd = 1; sd <= 12; sd++) {
+        const g = speciesBaseGenome(d.id, sd), cap = translucencyMaxOf(d.family);
+        for (const add of [0, 0.1, 0.15, 0.18, 0.2]) { const t = drawnTranslucency(g, add); n++; if (t > cap + 1e-9) over++; if (cap < 1) capped++; }
+      }
+      check(over === 0 && capped > 0, 'jelly translucency honours the material family cap at every rarity tier (50 species x 12 seeds x 5 tier additions)', `${over} over the cap of ${n} (${capped} in capped families)`);
+    }
+
     // ---- A. FlashGovernor, driven directly with adversarial sequences ----
     const fp = await rp.evaluate(() => window.__RV__.flashProbe());
     R2.flash = fp;
@@ -390,13 +405,38 @@ try {
       const R = window.__RV__;
       R.stage.clearBodies(); R.setGenome(''); R.setCalm(true); R.frames(10);
       const f0 = R.frameNo; R.dropCapsule();
-      const ys = []; for (let i = 0; i < 40; i++) { R.frames(1); const p = R.capsuleInfo().point; ys.push(p ? p.y : -1); }
-      const out = { landedAfterFrames: R.capsuleLandedFrame - f0, yRange: Math.max(...ys) - Math.min(...ys), hit: R.capsuleInfo().hit };
+      // screenPoint() is null until the capsule has landed (contract: not tappable while falling / fading in); from then on it must not move
+      const ys = [], pts = []; let firstPoint = -1;
+      for (let i = 0; i < 40; i++) { R.frames(1); const p = R.capsuleInfo().point; pts.push(!!p); if (p) { ys.push(p.y); if (firstPoint < 0) firstPoint = R.frameNo - f0; } }
+      const out = { landedAfterFrames: R.capsuleLandedFrame - f0, firstPointFrame: firstPoint, points: ys.length, yRange: ys.length ? Math.max(...ys) - Math.min(...ys) : -1, hit: R.capsuleInfo().hit };
       R.setCalm(false); R.capsule?.remove(); R.frames(2);
       return out;
     });
     R2.multi.capsuleCalm = capCalm;
-    check(capCalm.yRange < 1 && capCalm.landedAfterFrames >= 20 && capCalm.landedAfterFrames <= 34 && capCalm.hit, 'calm mode: the meter-full capsule fades in where it stands (no drop, no bounce), onLand after the ~0.45 s fade, tappable', JSON.stringify(capCalm));
+    check(capCalm.points >= 6 && capCalm.yRange >= 0 && capCalm.yRange < 1 && capCalm.landedAfterFrames >= 20 && capCalm.landedAfterFrames <= 34 && capCalm.firstPointFrame === capCalm.landedAfterFrames && capCalm.hit,
+      'calm mode: the meter-full capsule fades in where it stands (no drop, no bounce), onLand after the ~0.45 s fade, tappable from exactly then', JSON.stringify(capCalm));
+    // the reveal OWNS the capsule it opens (its handle reads as opening); a meter-full drop DURING a reveal makes an independent capsule that
+    // lands beside the pad (where the result lands), on screen, and is still there, tappable, after the reveal ends
+    const capOwn = await rp.evaluate(() => {
+      const R = window.__RV__, S = R.stage;
+      S.clearBodies(); R.setGenome(''); R.frames(5, 1 / 30);
+      R.dropCapsule(); R.frames(70, 1 / 30);
+      const h1 = R.capsule;
+      const a = S.playCapsuleReveal({ result: { genome: R.genome, tier: 'rare' }, createBody: (g) => new (R.body.constructor)(g), capsule: h1 });
+      R.frames(8, 1 / 30);
+      h1.setSqueeze(0); h1.remove();                                   // ignored while opening
+      const opening = { point: h1.screenPoint(), hit: h1.hitTest(160, 120, 400), landed: h1.landed };
+      R.dropCapsule(); const h2 = R.capsule;
+      let k = 0; while (a.active && k < 300) { R.frames(1, 1 / 30); k++; }
+      R.frames(40, 1 / 30);
+      const p = h2.screenPoint(), vw = window.innerWidth, vh = window.innerHeight;
+      const out = { opening, revealFrames: k, h2: { landed: h2.landed, point: p, hit: !!p && h2.hitTest(p.x, p.y), onScreen: !!p && p.x - p.r >= 0 && p.x + p.r <= vw && p.y - p.r >= 0 && p.y + p.r <= vh }, bodies: R.info().bodies };
+      h2.remove(); R.frames(2, 1 / 30);
+      return out;
+    });
+    R2.multi.capsuleOwnership = capOwn;
+    check(capOwn.opening.point === null && !capOwn.opening.hit && !capOwn.opening.landed && capOwn.h2.landed && capOwn.h2.hit && capOwn.h2.onScreen && capOwn.bodies === 1,
+      'the reveal owns its capsule (handle reads as opening, squeeze / remove ignored); a capsule dropped DURING a reveal lands on screen and stays tappable after it', JSON.stringify(capOwn));
     await rp.evaluate(() => { const R = window.__RV__; R.stage.clearBodies(); R.setGenome(''); R.frames(2); });
 
     // ---- E. ceremonies: durations vs budget, beats, flash windows, skip, calm ----
@@ -456,6 +496,8 @@ try {
         const bt = r.beats.find((b) => b.beat === 'burst')?.t ?? -1, want = SYNC[kind][tier];
         const pre = r.beats.find((b) => b.beat === 'preroll')?.t;
         check(Math.abs(bt - want) <= DT + 1e-6 && (pre === undefined || Math.abs(pre - 0.65) <= DT + 1e-6), `${kind} ${tier}: 'burst' beat on the audio time map (_spec/SOUND.md) at ${want.toFixed(2)} s${pre !== undefined ? ", 'preroll' at 0.65 s" : ''}`, `burst at ${bt.toFixed(3)} s${pre !== undefined ? `, preroll at ${pre.toFixed(3)} s` : ''}`);
+        R2.durations[`${kind}:${tier}`].minTopPx = r.minTopPx; R2.durations[`${kind}:${tier}`].minSidePx = r.minSidePx;
+        check(r.minTopPx >= 0, `${kind} ${tier}: every body stays inside the top of the frame (the 1.25x spring-open and the rise included)`, `closest silhouette ${r.minTopPx.toFixed(0)} px from the top (320x240 viewport), ${r.minSidePx.toFixed(0)} px from a side`);
         const esc = escOk(r, TIERS6.indexOf(tier));
         R2.durations[`${kind}:${tier}`].escalation = r.stats;
         check(esc.ok, `${kind} ${tier}: DESIGN 6.3 escalation row exactly (burst particles, rings, camera push / arc, time-scale dip) + ONE light ramp`, esc.txt);
@@ -558,6 +600,12 @@ try {
         for (const tier of TIERS6) cg.push([`${tier} (seed ${seed})`, await sp.evaluate(([tier, seed]) => { const R = window.__RV__; R.showTier(tier, seed); R.frames(110); return R.snapshot(); }, [tier, seed])]);
         await sheet(ctx_for_sheets(), `rarity_sheet_seed${seed}`, cg, 3, 640, 400);
       }
+      // ... and on a physically OPAQUE family (marshmallow, translucency capped at 0.4 at every tier): the tier must read without "more translucency"
+      {
+        const gm = speciesBaseGenome('wisplet', 1), cg = [];
+        for (const tier of TIERS6) cg.push([`${tier} (wisplet, marshmallow)`, await sp.evaluate(([tier, g]) => { const R = window.__RV__; R.showTier(tier, g); R.frames(110); return R.snapshot(); }, [tier, gm])]);
+        await sheet(ctx_for_sheets(), 'rarity_sheet_marshmallow', cg, 3, 640, 400);
+      }
       const dmin = Math.min(...fps.slice(1).map((f, i) => fpDiff(fps[i], f)));
       check(dmin > 1.2, 'rarity sheet: every tier differs visibly from the previous one', `min adjacent mean |diff| ${dmin.toFixed(2)}/255`);
       console.log('wrote rarity_sheet.png');
@@ -580,8 +628,8 @@ try {
       R2.multi.capsulePhone = { landedFrames: capP.landedFrames, info: capP.info, whole: capP.whole };
       // MERGE_COST 3 on a narrow portrait frame (the triangle layout; the wide frames above used the row)
       const m3p = await pp2.evaluate(() => window.__RV__.runCeremony({ kind: 'merge', tier: 'epic', dt: 1 / 30, parents: 3, settle: 10 }));
-      check(Math.abs(m3p.seconds - MER_BUDGET_EPIC) <= 0.1 * MER_BUDGET_EPIC && m3p.bodiesAtEnd === 1 && m3p.beats.length === 6 && m3p.doneResolved && m3p.maxLight <= 0.25 + 1e-6,
-        'merge with 3 parents on a 390x844 portrait frame (triangle layout): on budget, every beat, one body at the end', `${m3p.seconds.toFixed(2)} s, beats ${m3p.beats.map((x) => x.beat).join('>')}`);
+      check(Math.abs(m3p.seconds - MER_BUDGET_EPIC) <= 0.1 * MER_BUDGET_EPIC && m3p.bodiesAtEnd === 1 && m3p.beats.length === 6 && m3p.doneResolved && m3p.maxLight <= 0.25 + 1e-6 && m3p.minTopPx >= 0,
+        'merge with 3 parents on a 390x844 portrait frame (triangle layout): on budget, every beat, one body at the end, never above the frame top', `${m3p.seconds.toFixed(2)} s, beats ${m3p.beats.map((x) => x.beat).join('>')}, closest silhouette ${m3p.minTopPx.toFixed(0)} px from the top`);
       check(capP.info.landed && capP.info.hit && capP.whole, 'dropCapsule() on a 390x844 portrait frame: lands, whole on screen, tappable', JSON.stringify({ point: capP.info.point, hit: capP.info.hit }));
       writeFileSync(resolve(OUT, 'capsule_cue_phone.png'), b64(capP.png));
       await sheet(ctx_for_sheets(), 'rarity_sheet_phone', cellsP, 6, 260, 563);

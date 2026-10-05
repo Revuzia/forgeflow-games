@@ -14,7 +14,7 @@ import { createMasterChain, musicGain, type MasterChain } from './chain.ts';
 import { blend, land, poke, pop, release, squish, type SquishVoice } from './voices.ts';
 import { TIERS, capsuleBurst, crack, grab, meterFull, mergeStart, mythicDuck, reveal, tierIdx, type MergeVoice } from './ceremony.ts';
 import {
-  Composer, FADE_OUT_S, HELD_ROOM_HOLD_S, LOOKAHEAD_S as MUSIC_LOOKAHEAD_S, MUSIC_DEFAULT, MusicBed, PAUSE_FADE_S, TICK_MS,
+  Composer, FADE_OUT_S, HELD_ROOM_HOLD_S, LOOKAHEAD_S as MUSIC_LOOKAHEAD_S, MUSIC_DEFAULT, MusicBed, PAUSE_FADE_S, ROOM_TAIL_S, TICK_MS,
   roomDb, squishRoomDb, strandRoomDb,
 } from './music.ts';
 import { BumpLimiter, bump, lift, strand, strandSnap, toss, type StrandVoice } from './interact.ts';
@@ -183,14 +183,14 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
     if (!musicInst || !ctx) return;
     const db = roomDb(kind, musicBoostDb());
     if (db === null) return;
-    try { musicInst.makeRoom(ctx.currentTime, end, db); } catch { /* ignore */ }
+    try { musicInst.makeRoom(ctx.currentTime, end + ROOM_TAIL_S, db); } catch { /* ignore */ }
   }
 
   /** A held voice's per-update dip (depth from its own level), held HELD_ROOM_HOLD_S. */
   function musicRoomHeld(db: number): void {
     if (!musicInst || !ctx || !(db < -0.05)) return;
     const t = ctx.currentTime;
-    try { musicInst.makeRoom(t, t + HELD_ROOM_HOLD_S, db); } catch { /* ignore */ }
+    try { musicInst.makeRoom(t, t + HELD_ROOM_HOLD_S + ROOM_TAIL_S, db); } catch { /* ignore */ }
   }
 
   /** register() + make room for it in the music. */

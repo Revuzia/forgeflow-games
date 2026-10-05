@@ -272,6 +272,7 @@ const RV = {
     beats: BeatRec[]; doneResolved: boolean; resultVisibleAtEnd: boolean; fingerprint: number[]; bodiesAtEnd: number; ramps: number; camRange: number; resultClock: number;
     finalState: { ceremony: boolean; capsule: boolean; screenLight: number; cameraFx: { dist: number; yaw: number; pitch: number }; primaryIsResult: boolean };
     stats: Record<string, number>; drivers: typeof driverSpy; native: boolean[]; foldMax: number; resultHiddenFrames: number; particlesDropped: number;
+    minTopPx: number; minSidePx: number;
   }> {
     const dt = o.dt ?? 1 / 30;
     driverMode = o.drivers ?? 'auto';
@@ -287,8 +288,23 @@ const RV = {
     const budget = o.kind === 'capsule' ? capsuleDuration(o.tier, { quick: !!o.quick, calm: false }) : mergeDuration(o.tier, { tierUp: !!o.tierUp, calm: false });
     const h = cer.handle as CeremonyHandle;
     for (const v of stage.views) if (v.owned) native.push(v.proxy.native.fold, v.proxy.native.tremble, v.proxy.native.burst);
+    // the bodies' silhouettes on screen (sim-mesh vertices projected): how close any visible body comes to the frame edges
+    let minTopPx = Infinity, minSidePx = Infinity;
+    const pv = new THREE.Vector3();
     const watch = (): void => {
       for (const v of stage.views) if (v.owned && v.id !== h.resultBodyId) foldMax = Math.max(foldMax, v.proxy.foldAmount);
+      const cw = canvas.clientWidth || canvas.width, chh = canvas.clientHeight || canvas.height;
+      for (const v of stage.views) {
+        if (!v.visible) continue;
+        const P = v.proxy.positions;
+        for (let i = 0; i < P.length; i += 3) {
+          pv.set(P[i], P[i + 1], P[i + 2]).project(stage.camera);
+          const sx = (pv.x * 0.5 + 0.5) * cw, sy = (1 - (pv.y * 0.5 + 0.5)) * chh;
+          if (sy < minTopPx) minTopPx = sy;
+          const side = Math.min(sx, cw - sx);
+          if (side < minSidePx) minSidePx = side;
+        }
+      }
     };
     const lumas: number[] = [];
     let maxLight = 0, maxParticles = 0, frames = 0, skippedAt = -1, activeAfterSkip = -1, activeFrames = 0, ramps = 0, prevLight = 0, camMove = 0;
@@ -325,7 +341,7 @@ const RV = {
       duration, budget, frames: natural ? activeFrames : skippedAt, seconds: (natural ? activeFrames : skippedAt) * dt, skippedAtFrame: skippedAt, activeAfterSkip, lumas, maxLight, maxParticles,
       beats: cer.beats.slice(), doneResolved, resultVisibleAtEnd: !!stage.primaryBodyId() && stage.info.bodies === 1, fingerprint: fp, bodiesAtEnd: stage.info.bodies, ramps, camRange: camMove,
       resultClock: stage.views.find((v) => v.id === h.resultBodyId)?.clock ?? -1,
-      stats, drivers: { ...driverSpy }, native, foldMax, resultHiddenFrames, particlesDropped: stage.info.particlesDropped - dropped0,
+      stats, drivers: { ...driverSpy }, native, foldMax, resultHiddenFrames, particlesDropped: stage.info.particlesDropped - dropped0, minTopPx, minSidePx,
       finalState: { ceremony: stage.info.ceremony, capsule: stage.info.capsule, screenLight: stage.info.screenLight, cameraFx: { ...stage.info.cameraFx }, primaryIsResult: stage.primaryBodyId() === h.resultBodyId },
     };
   },

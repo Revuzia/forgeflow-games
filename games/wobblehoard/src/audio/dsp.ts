@@ -73,6 +73,31 @@ export function harmonicWave(ctx: Ctx, key: string, h: number[]): PeriodicWave {
   return w;
 }
 
+/**
+ * A cosine-phase periodic wave from harmonic amplitudes h[1..n], cached per context: with positive amplitudes it is a
+ * narrow pulse train (all harmonics peak together once per period). Also returns the normalised wave's minimum (WebAudio
+ * normalises the peak to 1), so a caller can map it onto a 0..1 amplitude-modulation range.
+ */
+export function pulseWave(ctx: Ctx, key: string, h: number[]): { wave: PeriodicWave; min: number } {
+  const c = cacheOf(ctx);
+  const k = 'pulse:' + key;
+  let w = c.waves.get(k);
+  if (!w) {
+    const real = new Float32Array(h.length + 1);
+    const imag = new Float32Array(h.length + 1);
+    for (let i = 0; i < h.length; i++) real[i + 1] = h[i];
+    w = ctx.createPeriodicWave(real, imag);
+    c.waves.set(k, w);
+  }
+  let mx = -Infinity, mn = Infinity;
+  for (let j = 0; j < 512; j++) {
+    let v = 0;
+    for (let i = 0; i < h.length; i++) v += h[i] * Math.cos((2 * Math.PI * (i + 1) * j) / 512);
+    mx = Math.max(mx, v); mn = Math.min(mn, v);
+  }
+  return { wave: w, min: mx > 0 ? mn / mx : -1 };
+}
+
 /* ───────────── Bag: owns the nodes of one voice group; frees them all when the last source has ended ───────────── */
 
 export interface VoiceGroup {

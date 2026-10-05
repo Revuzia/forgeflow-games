@@ -16,7 +16,7 @@
 //          that stops calling leaves nothing behind.
 //   strandSnap  the strand breaking: a small wet pop (click + a round blip), a recoil flick, then 1-3 tiny bubble pops.
 import { clamp } from '../core/rng.ts';
-import { Bag, bubble, c01, dbToGain, fin, harmonicWave, lerp, rexp, rlog, rr, type VoiceGroup } from './dsp.ts';
+import { Bag, bubble, c01, dbToGain, fin, harmonicWave, lerp, pulseWave, rexp, rlog, rr, type VoiceGroup } from './dsp.ts';
 import { pitchOf, pluck, startTime, type VoiceBase } from './voices.ts';
 
 type Ctx = BaseAudioContext;
@@ -25,8 +25,8 @@ type Ctx = BaseAudioContext;
 const LV3 = {
   bump: [-19.5, -9.5],
   lift: -12,
-  toss: [-8, -4.5],
-  strand: -15,
+  toss: [-5.5, -5],
+  strand: -8,
   snap: -14,
 };
 
@@ -182,20 +182,24 @@ export function toss(ctx: Ctx, out: AudioNode, t0: number, p: TossParams): Voice
   const bag = new Bag(ctx, out, 'toss', p.pan ?? 0);
   const A = dbToGain(lerp(LV3.toss[0], LV3.toss[1], Math.pow(s, 1.5)));
   const D = lerp(0.42, 0.26, s) * rr(r, 0.93, 1.07);           // faster = shorter fly-by
-  const fLo = 380 * pr, fHi = (900 + 2000 * s) * pr;
+  // the fly-by: a band of noise sweeping up to its brightest at 42% of the flight and back down. Narrow when slow (a soft,
+  // almost tonal "fff" whose sweep you can follow), wider when fast; a high-pass keeps the band's low skirt out (no
+  // rumble under a soft toss) and the top is capped in Hz, so a small, high-pitched squishy thrown hard is not hissy.
+  const fLo = 400 * pr, fHi = Math.min((900 + 2000 * s) * pr, 3000);
   const n = bag.noise(r, t, t + D + 0.06);
-  const bp = bag.biquad('bandpass', fLo, 1.3);
+  const hp = bag.biquad('highpass', 0.6 * fLo, 0.7);
+  const bp = bag.biquad('bandpass', fLo, lerp(2.6, 1.2, s));
   bp.frequency.setValueAtTime(fLo, t);
   bp.frequency.exponentialRampToValueAtTime(fHi, t + 0.42 * D);
   bp.frequency.exponentialRampToValueAtTime(fLo * 1.25, t + D);
-  const lp = bag.biquad('lowpass', (1700 + 2800 * s) * pr, 0.6);
+  const lp = bag.biquad('lowpass', Math.min((1700 + 2800 * s) * pr, 4500), 0.6);
   // the body wobbles in flight: a light 9-13 Hz amplitude flutter
   const flutter = bag.gain(1);
   const lfo = bag.osc('sine', rr(r, 9, 13), t, t + D + 0.06);
   const depth = bag.gain(0.2);
   lfo.connect(depth); depth.connect(flutter.gain);
   const amp = bag.gain(0);
-  n.connect(bp); bp.connect(lp); lp.connect(flutter); flutter.connect(amp); amp.connect(bag.head);
+  n.connect(hp); hp.connect(bp); bp.connect(lp); lp.connect(flutter); flutter.connect(amp); amp.connect(bag.head);
   amp.gain.setValueAtTime(0, t);
   amp.gain.linearRampToValueAtTime(A * 0.35, t + 0.18 * D);
   amp.gain.linearRampToValueAtTime(A, t + 0.42 * D);
@@ -216,42 +220,55 @@ export interface StrandVoice extends VoiceGroup {
 /** How long a strand keeps sounding after its last update (gain dead-man), and when its sources stop by themselves. */
 export const STRAND_SILENCE_S = 0.15;
 export const STRAND_STOP_S = 0.6;
+/** Stick-slip pulse shape (cosine harmonics of the slip rate): a soft, narrow strike once per slip. */
+const SLIP_PULSE = [1, 0.92, 0.78, 0.6, 0.42, 0.27, 0.15, 0.07];
 
+/**
+ * The held strand (round-3 fix: the first version passed one weak high harmonic of a low saw through a narrow band-pass and
+ * peaked at -28.6 dBFS in a realistic stretch; a constant hold sat at -47 dBFS RMS). Now the strand's own mode is struck
+ * directly: a squeak carrier at the resonance `(1100 + 2100 T) * pitch` Hz, amplitude-pulsed by a stick-slip pulse train
+ * at `(38 + 170 T^1.4) * pitch` Hz (two incommensurate wobbles make the slips irregular). At low tension the pulses are deep
+ * and slow (separate creaks); as it tightens they get faster and shallower and merge into a gritty squeak. A band-pass
+ * (Q 2.6) and a low-pass follow the carrier, so the grit stays in a band around it (a thin squeak, not a buzz). Level
+ * `T^0.75 * (0.5 + 0.5 * motion)`, motion = |dT/dt| one-pole smoothed (60 ms); updates that land on the same audio-clock
+ * step (two display frames per audio callback) are merged into the next step, so 30 Hz, 60 Hz, 120 Hz or jittered
+ * callers sound the same. Cleanup: each update re-arms a gain dead-man (silent STRAND_SILENCE_S after the last update)
+ * and keeps the sources' stop() STRAND_STOP_S ahead; the engine sweep ends any strand not updated for 0.4 s.
+ */
 export function strand(ctx: Ctx, out: AudioNode, t0: number, p: VoiceBase): StrandVoice {
   const t = startTime(t0);
   const pr = pitchOf(p);
   const r = p.rng;
   const bag = new Bag(ctx, out, 'strand', p.pan ?? 0, true);
   const A = dbToGain(LV3.strand);
-  // stick-slip excitation: a band-limited saw at the slip rate, wobbled a little by two incommensurate LFOs (irregular slips)
-  const src = bag.osc('sawtooth', 50 * pr, t);
+  const f0 = 1100 * pr;
+  // the strand's mode: a sine with a whisper of 2nd harmonic, trembling a little (+/-12 cents at 5-7 Hz)
+  const car = bag.osc('sine', f0, t);
+  car.setPeriodicWave(harmonicWave(ctx, 'strandMode', [1, 0.1, 0.03]));
+  const tr = bag.osc('sine', rr(r, 5, 7), t), trd = bag.gain(12);
+  tr.connect(trd); trd.connect(car.detune);
+  // stick-slip: the pulse train strikes the mode; its rate wobbles (+/-70 and +/-35 cents) so the slips are irregular
+  const pw = pulseWave(ctx, 'slip', SLIP_PULSE);
+  const slip = bag.osc('sine', 50 * pr, t);
+  slip.setPeriodicWave(pw.wave);
   const j1 = bag.osc('sine', rr(r, 3.7, 4.9), t), j1d = bag.gain(70);
   const j2 = bag.osc('sine', rr(r, 10.5, 12.5), t), j2d = bag.gain(35);
-  j1.connect(j1d); j1d.connect(src.detune); j2.connect(j2d); j2d.connect(src.detune);
-  // the band: two high-pass stages at 0.6x and a low-pass at 2.2x the resonance keep the saw's comb out of the rest of the
-  // spectrum (a thin squeak, not a buzz); all of them follow the resonance in update()
-  const f0 = 1100 * pr;
-  const hp = bag.biquad('highpass', 0.6 * f0, 0.7), hp2 = bag.biquad('highpass', 0.6 * f0, 0.7);
-  const lpS = bag.biquad('lowpass', 2.2 * f0, 0.7);
-  src.connect(hp); hp.connect(hp2);
-  const res1 = bag.biquad('bandpass', f0, 12);
-  const res2 = bag.biquad('bandpass', 1.5 * f0, 9);
-  const g1 = bag.gain(1.6), g2 = bag.gain(0.5);
-  hp2.connect(res1); res1.connect(g1); hp2.connect(res2); res2.connect(g2);
+  j1.connect(j1d); j1d.connect(slip.detune); j2.connect(j2d); j2d.connect(slip.detune);
+  // amplitude a(t) = base + mod * pulse(t), with pulse in [pw.min, 1]: depth d maps the pulse onto (1 - d) .. 1
+  const span = 1 - pw.min;
+  const am = bag.gain(0), mod = bag.gain(0);
+  slip.connect(mod); mod.connect(am.gain);
+  const bp = bag.biquad('bandpass', f0, 2.6);
+  const lp = bag.biquad('lowpass', 2.2 * f0, 0.7);
   const env = bag.gain(0);
-  g1.connect(lpS); g2.connect(lpS); lpS.connect(env);
-  // tiny level flutter (13-19 Hz): the strand trembles as it thins
-  const fl = bag.gain(1);
-  const fo = bag.osc('sine', rr(r, 13, 19), t), fod = bag.gain(0.22);
-  fo.connect(fod); fod.connect(fl.gain);
-  env.connect(fl); fl.connect(bag.head);
-  const sources: AudioScheduledSourceNode[] = [src, j1, j2, fo];
+  car.connect(am); am.connect(bp); bp.connect(lp); lp.connect(env); env.connect(bag.head);
+  const sources: AudioScheduledSourceNode[] = [car, tr, slip, j1, j2];
   let stopAt = t + STRAND_STOP_S;
   for (const s of sources) s.stop(stopAt);
   bag.endTime = stopAt + 0.02;
 
   let ended = false;
-  let lastT = t, lastTension = 0, lastUpdateT = t;
+  let lastT = t, lastTension = 0, lastUpdateT = t, motion = 0;
   const voice: StrandVoice = {
     kind: 'strand',
     held: true,
@@ -265,22 +282,26 @@ export function strand(ctx: Ctx, out: AudioNode, t0: number, p: VoiceBase): Stra
       if (ended || !bag.alive || bag.dying) return;
       const tt = Math.max(t, fin(atTime, ctx.currentTime));
       const T = c01(q?.tension, 0);
-      const dt = clamp(tt - lastT, 0.008, 0.1);
-      const motion = clamp(Math.abs(T - lastTension) / dt / 1.2, 0, 1);
-      lastT = tt; lastTension = T;
+      if (tt - lastT >= 0.004) {
+        const dt = Math.min(tt - lastT, 0.1);
+        const d = Math.abs(T - lastTension) / dt;
+        motion += (clamp(d / 1.2, 0, 1) - motion) * (1 - Math.exp(-dt / 0.06));
+        lastT = tt; lastTension = T;
+      }
       lastUpdateT = Math.min(tt, ctx.currentTime + 0.5);
-      const slip = (38 + 170 * Math.pow(T, 1.4)) * pr;
-      const fres = (1100 + 2100 * T) * pr;
-      src.frequency.setTargetAtTime(slip, tt, 0.03);
-      res1.frequency.setTargetAtTime(fres, tt, 0.03);
-      res2.frequency.setTargetAtTime(fres * 1.5, tt, 0.03);
-      hp.frequency.setTargetAtTime(fres * 0.6, tt, 0.03);
-      hp2.frequency.setTargetAtTime(fres * 0.6, tt, 0.03);
-      lpS.frequency.setTargetAtTime(Math.min(fres * 2.2, 16000), tt, 0.03);
-      const level = T < 0.02 ? 0 : A * Math.pow(T, 0.8) * (0.45 + 0.55 * motion);
+      const slipHz = (38 + 170 * Math.pow(T, 1.4)) * pr;
+      const fres = Math.min((1100 + 2100 * T) * pr, 9000);
+      const depth = lerp(0.95, 0.5, T);
+      slip.frequency.setTargetAtTime(slipHz, tt, 0.03);
+      car.frequency.setTargetAtTime(fres, tt, 0.03);
+      bp.frequency.setTargetAtTime(fres, tt, 0.03);
+      lp.frequency.setTargetAtTime(Math.min(fres * 2.2, 16000), tt, 0.03);
+      am.gain.setTargetAtTime(1 - depth, tt, 0.03);
+      mod.gain.setTargetAtTime(depth / span, tt, 0.03);
+      const level = T < 0.02 ? 0 : A * Math.pow(T, 0.75) * (0.5 + 0.5 * motion);
       env.gain.cancelScheduledValues(tt);
       env.gain.setTargetAtTime(level, tt, 0.025);
-      env.gain.setTargetAtTime(0, tt + STRAND_SILENCE_S, 0.03);      // dead-man: silent unless updated again
+      env.gain.setTargetAtTime(0, tt + STRAND_SILENCE_S, 0.02);      // dead-man: silent unless updated again (-65 dB 0.15 s later)
       if (typeof q?.pan === 'number' && Number.isFinite(q.pan) && bag.panner) bag.panner.pan.setTargetAtTime(clamp(q.pan, -1, 1), tt, 0.05);
       // dead-man at the graph level: the sources stop by themselves unless the caller keeps updating
       if (stopAt - tt < STRAND_STOP_S - 0.2) {

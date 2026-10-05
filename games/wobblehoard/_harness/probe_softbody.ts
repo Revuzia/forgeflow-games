@@ -20,7 +20,7 @@
 // (a tip must move continuously when a pinch starts or ends, and never go below the table).
 // Round 4 (physics repair, 2026-10-05): a dense press matrix (48 points x tap / hold / rub x 3 genomes) with the same fold limits, and
 // the mat corral bound in the hostile fuzz (a body that nothing holds never moves outward past the rim). Both failed on the code before
-// the repair (132 deg / 7 frames over 120; 1.14 m), as did the hard side shove row (138 deg).
+// the repair (checkpoint f14d3b8: 132 deg / 7 frames over 120; 232 mm past the rim), as did the hard side shove row (138 deg, 4 frames).
 //
 // Definitions the contract leaves open (all printed in the table):
 //   * "hard release": a finger presses the dome shoulder (and, separately, the swirl-peak) at pressure 1 for 1.0 s, then
@@ -1478,6 +1478,17 @@ async function main(): Promise<void> {
     let maxMove = 0;
     for (let i = 0; i < p0.length; i++) maxMove = Math.max(maxMove, Math.abs(p0[i] - b.positions[i]));
     add('G1', 'rest: largest vertex movement over 10 s at rest (no jitter, no creep)', `${(maxMove * 1000).toExponential(1)} mm`, '< 0.1 mm', maxMove < 1e-4);
+    // the same from the very first frame at the other mesh resolutions (was verify_phys_cr_detail.ts; detail 4 is the offline / quality mesh)
+    const restAt = (detail: number): number => {
+      const bd = new SoftBody(starter, { detail });
+      const q0 = Float32Array.from(bd.positions);
+      run(bd, 6);
+      let mv = 0;
+      for (let i = 0; i < q0.length; i++) mv = Math.max(mv, Math.abs(q0[i] - bd.positions[i]));
+      return mv;
+    };
+    const r2 = restAt(2), r4 = restAt(4);
+    add('G1', 'rest at detail 2 (162 vertices) and detail 4 (2562): largest vertex movement over the first 6 s from a new body', `${(r2 * 1000).toExponential(1)} mm / ${(r4 * 1000).toExponential(1)} mm`, '< 0.1 mm each', r2 < 1e-4 && r4 < 1e-4);
     // a body disturbed and released must also come to a full stop in place (no creeping on the table)
     const b6 = new SoftBody(starter);
     run(b6, 1);
@@ -1741,7 +1752,7 @@ async function main(): Promise<void> {
       add('G1', 'hostile fuzz determinism: 4 genomes replayed -> identical stateHash at every checkpoint', `${det}`, 'true', det);
       add('info', 'hostile fuzz: farthest horizontal centre excursion on the table / in any mode (float mode is unchanged by the corral and has no rim; a grab, the pinned feet or a fingertip touching the body may hold it anywhere)', `${f2(Math.max(...ho.map((r) => r.res.maxTable)), 2)} m / ${f2(Math.max(...ho.map((r) => r.res.maxAny)), 2)} m`, '(information)', true);
       const wf = ho.reduce((a, c) => (c.res.freeOut > a.res.freeOut ? c : a));
-      add('G1', `hostile fuzz, mat corral: while NOTHING holds the body (gravity on, no grab or pinned feet, no fingertip touching it) its centre never moves outward past the 2.5 m rim or past where it was let go, whichever is farther (${wf.res.label} ${wf.res.freeAt}; was 1.14 m: a finger that was down but no longer touching the shoved body switched the corral off)`, `${f2(Math.max(0, wf.res.freeOut) * 1000, 0)} mm`, '<= 50 mm', wf.res.freeOut <= 0.05);
+      add('G1', `hostile fuzz, mat corral: while NOTHING holds the body (gravity on, no grab or pinned feet, no fingertip touching it) its centre never moves outward past the 2.5 m rim or past where it was let go, whichever is farther (${wf.res.label} ${wf.res.freeAt}; was 232 mm before the repair, f1b1s0z1 out to 2.73 m: a finger that was down but no longer touching the shoved body switched the corral off)`, `${f2(Math.max(0, wf.res.freeOut) * 1000, 0)} mm`, '<= 50 mm', wf.res.freeOut <= 0.05);
     }
 
     let st = emptyStats();

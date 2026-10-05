@@ -20,7 +20,7 @@ import type { Capsule } from './capsule.ts';
 import { FlashGovernor, rampEnvelope } from './flash.ts';
 import { linearToSrgb, genomePalette, type Rgb } from './oklch.ts';
 import type { EmitSpec, Particles } from './particles.ts';
-import { LightPillar, PrismDome, TIER_STYLES, spectrum, tierIndex, type TierStyle } from './rarity.ts';
+import { LightPillar, PrismDome, TIER_STYLES, safeTier, spectrum, tierIndex, type TierStyle } from './rarity.ts';
 import type { ScreenFx } from './screenfx.ts';
 
 /** DESIGN 6.1 duration budgets, seconds (result tier). */
@@ -77,7 +77,7 @@ const HOP_VY = 1.7, HOP_VY_CALM = 0.9;
  * the parents' lineage colour swirls through as a lighter accent fading over 0.9 s (a heavy or long mix of two far-apart hues, e.g. a
  * coral tell or a pink parent over a green result, read as khaki mud).
  */
-const TELL_AT_BURST = [0.55, 0.58, 0.62, 0.66, 0.7, 0.74];
+const TELL_AT_BURST = [0.55, 0.58, 0.62, 0.66, 0.62, 0.42];   // Legendary's gold and Mythic's white tell are already bright: less, or the body whites out
 const MIX_AT_BURST = 0.25;
 
 const smooth = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -113,10 +113,13 @@ export interface CeremonyHost {
   viewHalfWidth(): number;
 }
 
-/** Display-space colour for the screen light ramp: the tier colour, lifted toward white so it reads as light, not paint. */
+/**
+ * Display-space colour for the screen light ramp: the tier colour, lifted toward white so it reads as light, not paint. Mythic (prism):
+ * a pastel white with a slow hue drift, never one saturated hue (a single spectrum sample read as a plain green or blue burst).
+ */
 function lightColour(style: TierStyle, time: number, out: Rgb): Rgb {
-  const t = style.prism ? spectrum(time * 0.2, out) : style.tell;
-  out[0] = linearToSrgb(t[0]) * 0.82 + 0.18; out[1] = linearToSrgb(t[1]) * 0.82 + 0.18; out[2] = linearToSrgb(t[2]) * 0.82 + 0.18;
+  const t = style.prism ? spectrum(time * 0.2, out) : style.tell, w = style.prism ? 0.62 : 0.18;
+  out[0] = linearToSrgb(t[0]) * (1 - w) + w; out[1] = linearToSrgb(t[1]) * (1 - w) + w; out[2] = linearToSrgb(t[2]) * (1 - w) + w;
   return out;
 }
 
@@ -222,7 +225,7 @@ abstract class Run implements CeremonyHandle {
   }
 
   /** The 6.3 particle table at the burst, plus the staggered rings (>= 500 ms apart, fades in calm mode). */
-  protected burstParticles(cx: number, cy: number, cz: number, scale: number, view: BodyView | null): void {
+  protected burstParticles(cx: number, cy: number, cz: number, scale: number): void {
     const P = this.host.particles, i = this.style.index, rng = this.rng, k = this.calm ? 0.3 : 1;
     const before = P.emitted;
     const tell = this.style.tell;
@@ -258,7 +261,6 @@ abstract class Run implements CeremonyHandle {
       P.emit({ x: cx, y: cy, z: cz, vx: rr * Math.cos(a) * sp, vy: (Math.abs(z) * 0.8 + 0.2) * sp, vz: rr * Math.sin(a) * sp, life: 1.6 + 0.6 * rng(), size: 0.034 * scale, kind: 1, r: c[0] * 0.5 + 0.5, g: c[1] * 0.5 + 0.5, b: c[2] * 0.5 + 0.5, a: 0.95, drag: 1.8, fade: 2 });
     }
     this.stats.burstParticles += P.emitted - before;
-    void view;
   }
 
   /**
@@ -341,7 +343,7 @@ export class CapsuleRun extends Run {
   }
 
   protected tick(dt: number): number {
-    const { b0, b1, burstAt, revealAt } = this.tb;
+    const { b0, b1, burstAt } = this.tb;
     const t = this.t, st = this.style, i = st.index, host = this.host, cap = this.cap;
     // --- the player's current squishy slides off; the capsule slides to the centre ---
     const slide = smooth(0, 0.5 * this.ks, t);
@@ -406,14 +408,13 @@ export class CapsuleRun extends Run {
     if (t >= this.tb.revealAt) this.beat('reveal');
     // the 6.3 camera column, exactly (Common: none): push / pull-back / arc from the burst, eased back before the end
     this.camera(burstAt, 0.5 * this.ks + 0.2, this.duration, 0.3 * this.tb.b3);
-    void revealAt;
     return ts;
   }
 
   private doBurst(): void {
     this.burst = true;
     this.beat('burst');
-    const host = this.host, st = this.style, i = st.index;
+    const host = this.host;
     this.cap.burst();
     host.particles.attractK = 0;
     host.particles.clear();
@@ -424,9 +425,8 @@ export class CapsuleRun extends Run {
     v.proxy.setOffset(this.cx, this.drop.y, this.cz);
     v.proxy.scale = 0.55;
     host.setFraming(v.scale, this.calm);   // calm: no camera moves, the framing cuts to the result under the burst instead of easing
-    this.burstParticles(this.cx, 0.4, this.cz, v.scale, v);
+    this.burstParticles(this.cx, 0.4, this.cz, v.scale);
     this.startRamp();
-    void i;
     this.cap.wobble(0);
   }
 
@@ -690,7 +690,7 @@ export class MergeRun extends Run {
     v.extraPoolTell = 1;
     this.drop = { y: 0, vy: this.calm ? HOP_VY_CALM : HOP_VY, landed: false, age: 0, hopped: true };
     this.rings.push(...this.ringSchedule(this.b.t3));
-    this.burstParticles(0, this.ballCy, 0, v.scale, v);
+    this.burstParticles(0, this.ballCy, 0, v.scale);
     this.startRamp();
     host.shake(KICK[i]);
   }
@@ -756,13 +756,15 @@ export class CeremonyDirector {
 
   startCapsule(spec: CapsuleRevealSpec, hooks?: CeremonyHooks): CeremonyHandle {
     this.abort();
-    const r = new CapsuleRun(this.host, spec, hooks);
+    const r = new CapsuleRun(this.host, { ...spec, result: { ...spec.result, tier: safeTier(spec.result.tier) } }, hooks);
     this.run = r;
     return r;
   }
   startMerge(spec: MergeCeremonySpec, hooks?: CeremonyHooks): CeremonyHandle {
     this.abort();
-    const r = new MergeRun(this.host, spec, hooks);
+    // MERGE_COST parents (2 or 3); a malformed spec degrades (no parents: the result's genome stands in) instead of throwing mid-frame
+    const parents = (spec.parents && spec.parents.length ? spec.parents : [{ genome: spec.result.genome }]).map((p) => ({ genome: p.genome, tier: safeTier(p.tier) }));
+    const r = new MergeRun(this.host, { ...spec, parents, result: { ...spec.result, tier: safeTier(spec.result.tier) } }, hooks);
     this.run = r;
     return r;
   }

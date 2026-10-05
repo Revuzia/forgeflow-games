@@ -43,6 +43,7 @@ import { EnvHub, KEY_DIR, RIM_DIR } from './env.ts';
 import { FlashGovernor } from './flash.ts';
 import { Particles } from './particles.ts';
 import { QualityGovernor, TIERS } from './quality.ts';
+import { safeTier } from './rarity.ts';
 import { ScreenFx } from './screenfx.ts';
 import { Table, PALETTE } from './table.ts';
 
@@ -67,6 +68,15 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo>, RoundTwo {
 }
 
 const TARGET_Y = 0.42;
+
+/** What a disposed stage hands out instead of throwing: a ceremony that is already over (done resolved, no result) / a capsule that is gone. */
+const INERT_CEREMONY: CeremonyHandle = Object.freeze({
+  done: Promise.resolve(), skip(): void { /* nothing to skip */ }, active: false, duration: 0, resultBody: null, resultBodyId: null,
+});
+const INERT_CAPSULE: CapsuleHandle = Object.freeze({
+  id: 0, landed: false, screenPoint: () => null, hitTest: () => false,
+  setSqueeze(): void { /* gone */ }, wobble(): void { /* gone */ }, remove(): void { /* gone */ },
+});
 const farFirst = (a: BodyView, b: BodyView): number => b.sortDepth - a.sortDepth;
 
 export function createStageDev(canvas: HTMLCanvasElement): StageDev {
@@ -135,9 +145,12 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   const primary = (): BodyView | null => { for (const v of views) if (v.id === primaryId) return v; return null; };
   const fitDistance = (): number => camScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect));
 
-  /** Where the meter-full capsule lands: beside the primary body when the frame is wide enough to show it whole, else in front of it. */
+  /**
+   * Where the meter-full capsule lands: beside the primary body when the frame is wide enough to show it whole, else in front of it.
+   * During a ceremony the primary may be sliding off (capsule reveal) or hidden (merge): the capsule goes beside the PAD, where the result lands.
+   */
   function capsuleSpot(p: BodyView | null): { x: number; z: number } {
-    const sc = p ? p.scale : 1, cx = p ? p.proxy.center.x : 0;
+    const sc = p ? p.scale : 1, cx = p && !director.active ? p.proxy.center.x : 0;
     const R = 0.24, D = fitDistance(), hw = D * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect;
     for (const zf of [0.15, 0, -0.2]) {
       const z = zf * sc, hwz = hw * Math.max(0.3, (D - z) / D);          // half-width of the frame at that depth
@@ -284,14 +297,14 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
 
     addBody(body, genome, opts?: AddBodyOpts) {
       if (disposed) return -1;
-      const v = addView(body, genome, opts?.tier ?? 'common', false, opts?.position);
+      const v = addView(body, genome, safeTier(opts?.tier), false, opts?.position);
       governor.resetWindow(24);
       return v.id;
     },
     removeBody(id) { const v = views.find((x) => x.id === id); if (v) removeView(v); },
     clearBodies() { while (views.length) removeView(views[views.length - 1]); primaryId = null; },
     primaryBodyId() { return primaryId; },
-    setBodyTier(id, t) { views.find((x) => x.id === id)?.setTier(t); },
+    setBodyTier(id, t) { views.find((x) => x.id === id)?.setTier(safeTier(t)); },
     setCalmEffects(on) {
       calm = !!on; flash.calm = calm;
       for (const v of views) v.setCalm(calm);
@@ -299,7 +312,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     },
 
     dropCapsule(opts) {
-      if (disposed) throw new Error('stage disposed');
+      if (disposed) return INERT_CAPSULE;
       discardCapsule();
       capsule = new Capsule(hub, quad, !TIERS[tier].transmission);
       const c = capsule;
@@ -312,7 +325,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       const sp = { x: 0, y: 0, r: 0 };
       const handle: CapsuleHandle = {
         id,
-        get landed() { return capsule === c && c.landed; },
+        get landed() { return capsule === c && c.touchedDown; },
         screenPoint() { return capsule === c ? c.screenPoint(camera, cssW, cssH, sp) : null; },
         hitTest(x2, y2, slop = 14) {
           const s = capsule === c ? c.screenPoint(camera, cssW, cssH, sp) : null;
@@ -325,11 +338,11 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       return handle;
     },
     playCapsuleReveal(spec: CapsuleRevealSpec, hooks?: CeremonyHooks): CeremonyHandle {
-      if (disposed) throw new Error('stage disposed');
+      if (disposed) return INERT_CEREMONY;
       return director.startCapsule(spec, hooks);
     },
     playMergeCeremony(spec: MergeCeremonySpec, hooks?: CeremonyHooks): CeremonyHandle {
-      if (disposed) throw new Error('stage disposed');
+      if (disposed) return INERT_CEREMONY;
       return director.startMerge(spec, hooks);
     },
 

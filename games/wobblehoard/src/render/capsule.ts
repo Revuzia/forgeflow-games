@@ -73,7 +73,13 @@ export class Capsule {
   readonly pos = new THREE.Vector3();
   /** World radius of the capsule (for hit testing / framing). */
   readonly radius = R;
+  /** Physics: at rest on the table (the drop's bounces are over). */
   landed = false;
+  /**
+   * The CapsuleHandle's `landed`: true from the first touchdown (the drop; the bounces and wobble may still be settling) or once the calm
+   * fade-in is complete; the same moment `onLand` fires. Until then the capsule is not tappable (screenPoint null).
+   */
+  touchedDown = false;
   gone = false;
   burstT = -1;
   private readonly u: CapsuleUniforms;
@@ -163,14 +169,14 @@ export class Capsule {
   /** Drop from above at table position (x, z). `landCb` fires on the first touchdown (haptic thump / landing sound). */
   drop(x: number, z: number, landCb?: () => void): void {
     this.pos.set(x, 0, z);
-    this.y = 2.6; this.vy = 0; this.bounces = 0; this.landed = false; this.rock = 0; this.rockV = 0; this.onLand = landCb ?? null;
+    this.y = 2.6; this.vy = 0; this.bounces = 0; this.landed = false; this.touchedDown = false; this.rock = 0; this.rockV = 0; this.onLand = landCb ?? null;
     this.group.visible = true; this.gone = false; this.burstT = -1;
     this.top.visible = this.bottom.visible = true;
   }
   /** Calm / reduced motion (DESIGN 6.2): no drop, no bounce, no wobble; it fades in where it stands (0.45 s), then `landCb` fires. */
   appear(x: number, z: number, landCb?: () => void): void {
     this.placeStanding(x, z);
-    this.fade = 0; this.onLand = landCb ?? null;
+    this.fade = 0; this.touchedDown = false; this.onLand = landCb ?? null;
     this.applyFade();
   }
   private applyFade(): void {
@@ -179,7 +185,7 @@ export class Capsule {
   }
   /** Appear already standing (reveal without a prior drop). */
   placeStanding(x: number, z: number): void {
-    this.pos.set(x, 0, z); this.y = REST_Y; this.vy = 0; this.landed = true; this.rock = 0; this.rockV = 0;
+    this.pos.set(x, 0, z); this.y = REST_Y; this.vy = 0; this.landed = true; this.touchedDown = true; this.rock = 0; this.rockV = 0;
     this.group.visible = true; this.gone = false; this.burstT = -1;
   }
   slideTo(x: number, z: number, k: number): void { this.pos.x += (x - this.pos.x) * k; this.pos.z += (z - this.pos.z) * k; }
@@ -209,9 +215,9 @@ export class Capsule {
   /** Remove the whole object at once (skip). */
   hide(): void { this.group.visible = false; this.gone = true; }
 
-  /** Screen position (CSS px) and radius (CSS px) of the capsule centre, or null when it is not standing on the table. */
+  /** Screen position (CSS px) and radius (CSS px) of the capsule centre, or null while it is falling / fading in, gone or bursting. */
   screenPoint(camera: THREE.PerspectiveCamera, w: number, h: number, out: { x: number; y: number; r: number }): { x: number; y: number; r: number } | null {
-    if (!this.group.visible || this.gone || this.burstT >= 0) return null;
+    if (!this.group.visible || this.gone || this.burstT >= 0 || !this.touchedDown) return null;
     const v = SP_A.set(this.pos.x, REST_Y, this.pos.z).project(camera);
     const top = SP_B.set(this.pos.x, REST_Y + R, this.pos.z).project(camera);
     out.x = (v.x * 0.5 + 0.5) * w; out.y = (1 - (v.y * 0.5 + 0.5)) * h;
@@ -225,7 +231,7 @@ export class Capsule {
     if (this.fade < 1) {
       this.fade = Math.min(1, this.fade + dt / 0.45);
       this.applyFade();
-      if (this.fade >= 1) { this.onLand?.(); this.onLand = null; }
+      if (this.fade >= 1) { this.touchedDown = true; this.onLand?.(); this.onLand = null; }
     }
     this.u.uTimeC.value = time;
     // drop with two soft bounces, then a rocking wobble about the base
@@ -238,8 +244,8 @@ export class Capsule {
           const hit = -this.vy;
           this.vy = hit * 0.36; this.bounces++;
           this.rockV += (this.bounces === 1 ? 5.5 : 2.5) * (this.bounces % 2 ? 1 : -1);
-          if (this.bounces === 1) { this.onLand?.(); this.onLand = null; }
-        } else { this.vy = 0; this.landed = true; }
+          if (this.bounces === 1) { this.touchedDown = true; this.onLand?.(); this.onLand = null; }
+        } else { this.vy = 0; this.landed = true; if (!this.touchedDown) { this.touchedDown = true; this.onLand?.(); this.onLand = null; } }
       }
     }
     // rocking: damped spring about the base (stronger damping while squeezed so it feels held)

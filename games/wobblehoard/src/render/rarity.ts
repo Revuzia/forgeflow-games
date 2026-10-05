@@ -19,6 +19,8 @@ import { Particles } from './particles.ts';
 
 export const TIER_ORDER: readonly TierName[] = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
 export const tierIndex = (t: TierName): number => Math.max(0, TIER_ORDER.indexOf(t));
+/** An unknown tier string (a newer server, a typo, an old save) is drawn as Common instead of breaking the view or the ceremony. */
+export const safeTier = (t: TierName | undefined | null): TierName => (typeof t === 'string' && (TIER_ORDER as readonly string[]).includes(t) ? t : 'common');
 
 const srgbToLin = (v: number): number => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
 export const hexLin = (hex: number): Rgb => [srgbToLin(((hex >> 16) & 255) / 255), srgbToLin(((hex >> 8) & 255) / 255), srgbToLin((hex & 255) / 255)];

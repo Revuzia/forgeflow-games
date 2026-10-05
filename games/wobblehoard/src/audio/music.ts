@@ -52,20 +52,26 @@ export const DUCK_RELEASE_TC = 0.5;
  * the engine schedules that far ahead of the call) so even a 45 ms pop gets it; it runs on its own gain node and never
  * fights the slow duck (the two multiply).
  */
-export const ROOM_DB = -12;
-/** The squishies' low bodies (land, bump, release, lift) get a deeper dip: their energy sits at 60-300 Hz where the ear is
- *  least sensitive, so for the same K-weighted margin they are the ones a listener loses first (A-weighted). */
-export const ROOM_BODY_DB = -15;
-export const ROOM_ATTACK_TC = 0.003;
-export const ROOM_RELEASE_TC = 0.4;
+export const ROOM_DB = -24;
+/** The dip is split: the melody (mallets, their echoes, the bubbles: tonal transients in the effects' own 0.4-2.4 kHz band,
+ *  the part that actually covers a soft effect) takes the full ROOM_DB; the dark breathing pad only this share of it in
+ *  dB (-12 dB), so a soft carpet stays under the play instead of the music vanishing and pumping back. */
+export const ROOM_PAD_SHARE = 0.6;
+export const ROOM_ATTACK_TC = 0.0015;
+/** Slow enough that a tap every second keeps the music down instead of pumping it up and down (within 1 dB about 1.4 s
+ *  after the last effect ends). */
+export const ROOM_RELEASE_TC = 0.6;
 /** = the engine's effect LOOKAHEAD: an effect called at t starts at t + ROOM_LEAD_S, the dip starts at t. */
 export const ROOM_LEAD_S = 0.004;
-export const ROOM_MAX_HOLD_S = 4;
+/** Each dip holds this long after its effect ends before recovering, so a player tapping every second keeps the music
+ *  steadily under (no pumping at the tap rate); it comes back ~2 s after the last effect. */
+export const ROOM_TAIL_S = 0.8;
+export const ROOM_MAX_HOLD_S = 5;
 /** Which one-shots make room, and how deep (dB). The engine and the offline mix renders both read this table (and
  *  roomDb() below). The ceremony voices (reveal, merge) keep the slow duck; capsule beats get both. */
 export const ROOM_KINDS: Readonly<Record<string, number>> = {
-  poke: ROOM_DB, pop: ROOM_DB, blend: ROOM_DB, meterFull: ROOM_DB, capsule: ROOM_DB, toss: ROOM_DB, strandSnap: ROOM_DB,
-  release: ROOM_BODY_DB, land: ROOM_BODY_DB, bump: ROOM_BODY_DB, lift: ROOM_BODY_DB,
+  poke: ROOM_DB, pop: ROOM_DB, blend: ROOM_DB, meterFull: ROOM_DB, capsule: ROOM_DB, strandSnap: ROOM_DB,
+  release: ROOM_DB, land: ROOM_DB, bump: ROOM_DB, lift: ROOM_DB, toss: ROOM_DB,
 };
 /** Held voices: each update holds its dip this long (so a rubbing squish that dips and swells frame by frame keeps the
  *  deepest dip of the last HELD_ROOM_HOLD_S instead of tremoloing the music). */
@@ -107,9 +113,9 @@ const MEL_HOME = 77;
  * continuous component, sitting where the ear is most sensitive (the first version: pad RMS 3-5 dB above the mallets, a
  * steady three-line chord in every spectrogram). Now the pad is darker (sines, no triangles), each of its tones breathes
  * on its own (so the full chord is rare) and it sits about 6 dB under the sparse mallet, which carries the level. */
-const PAD_LEVEL = dbToGain(-30.8);
-const MALLET_LEVEL = dbToGain(-9.5);
-const BUBBLE_LEVEL = dbToGain(-18.5);
+const PAD_LEVEL = dbToGain(-28.8);
+const MALLET_LEVEL = dbToGain(-11.5);
+const BUBBLE_LEVEL = dbToGain(-20.5);
 /** The music's bubbles settle upward by only 1% (17 cents; the game's bubbles chirp ~30%: a tuned note cannot) ... */
 const BUBBLE_RISE = 0.01;
 /** ... and start this fraction of the rise below the note, so the pitch lands on the scored note. Measured (A5..D7,
@@ -294,7 +300,7 @@ export class Composer {
       const s = cell[k];
       const last = k === cell.length - 1;
       const midi = last && ends ? (this.stepFrom(sc, steps[k]), this.resolve(sc)) : this.stepFrom(sc, steps[k]);
-      let vel = 0.6 + (s === 0 ? 0.14 : 0) + rr(this.r, -0.08, 0.08);
+      let vel = 0.62 + (s === 0 ? 0.1 : 0) + rr(this.r, -0.06, 0.06);
       if (last && ends) vel *= 0.86;
       const at = this.slotTime(s);
       const pan = clamp((midi - MEL_HOME) / 30 + rr(this.r, -0.12, 0.12), -0.35, 0.35);
@@ -410,7 +416,7 @@ function mallet(ctx: Ctx, dest: AudioNode, t: number, f: number, vel: number, pa
   const r = makeRng(seed);
   const bag = new Bag(ctx, dest, 'mallet', pan);
   const A = MALLET_LEVEL * Math.pow(clamp(vel, 0, 1), 1.3);
-  const tau = 0.3 * Math.pow(600 / f, 0.35);
+  const tau = 0.39 * Math.pow(600 / f, 0.35);
   let end = t;
   const canPan = typeof ctx.createStereoPanner === 'function';
   const ep = canPan ? bag.add(ctx.createStereoPanner()) : bag.gain(1);
@@ -495,7 +501,8 @@ export class MusicBed {
   private readonly bus: Bag;
   private readonly melBus: GainNode;
   private readonly duckG: GainNode;
-  private readonly roomG: GainNode;
+  private readonly roomMel: GainNode;
+  private readonly roomPad: GainNode;
   private readonly fadeOut: GainNode;
   private readonly pauseG: GainNode;
   private readonly padIn: GainNode;
@@ -524,7 +531,8 @@ export class MusicBed {
     this.nextBarT = this.t0;
     this.log = opts.log ? [] : null;
     this.pr = clamp(fin(opts.pitch, 1), 0.5, 2);
-    // session bus: [pads] + [mallets (each with its own scheduled echo)] -> duck -> room -> fadeIn -> fadeOut -> pause -> head -> out
+    // session bus: ([pads] -> pad room dip) + ([mallets, each with its own scheduled echo, + bubbles] -> melody room dip)
+    //   -> duck -> fadeIn -> fadeOut -> pause -> head -> out
     // There is deliberately no DelayNode here: with one, an offline render scheduled in live-like slices differed from the
     // same score scheduled in one go (Chromium delayed the echo copy by a render-quantum-sized amount depending on when the
     // notes were connected). Each note now schedules its own echo, so live and offline renders are identical.
@@ -534,16 +542,18 @@ export class MusicBed {
     this.pauseG = bag.gain(1);
     const fadeIn = bag.gain(0);
     this.duckG = bag.gain(1);
-    this.roomG = bag.gain(1);
+    this.roomMel = bag.gain(1);
+    this.roomPad = bag.gain(1);
     const lay = opts.layers ?? {};
     this.melBus = bag.gain(clamp(fin(lay.mallet, 1), 0, 4));
     this.padIn = bag.gain(clamp(fin(lay.pad, 1), 0, 4));
-    this.duckG.connect(this.roomG); this.roomG.connect(fadeIn); fadeIn.connect(this.fadeOut); this.fadeOut.connect(this.pauseG); this.pauseG.connect(bag.head);
-    this.melBus.connect(this.duckG); this.padIn.connect(this.duckG);
+    this.duckG.connect(fadeIn); fadeIn.connect(this.fadeOut); this.fadeOut.connect(this.pauseG); this.pauseG.connect(bag.head);
+    this.melBus.connect(this.roomMel); this.roomMel.connect(this.duckG);
+    this.padIn.connect(this.roomPad); this.roomPad.connect(this.duckG);
     // The session bus is stereo for its whole life. Otherwise the first panned note connected mid-session switches the bus
     // and the master chain from mono to stereo processing, and the new channel's filter/limiter state starts from zero (a
     // small transient; measured as a live-vs-offline difference before this was fixed).
-    for (const n of [this.melBus, this.padIn, this.duckG, this.roomG, fadeIn, this.fadeOut, this.pauseG, bag.head]) {
+    for (const n of [this.melBus, this.padIn, this.roomMel, this.roomPad, this.duckG, fadeIn, this.fadeOut, this.pauseG, bag.head]) {
       n.channelCount = 2; n.channelCountMode = 'explicit'; n.channelInterpretation = 'speakers';
     }
     const fi = clamp(fin(opts.fadeInS, FADE_IN_S), 0.05, 10);
@@ -685,9 +695,9 @@ export class MusicBed {
     }
     plan.push({ t, g: 1, tc: ROOM_RELEASE_TC });
     try {
-      const p = this.roomG.gain;
-      p.cancelScheduledValues(a);
-      for (const s of plan) p.setTargetAtTime(s.g, s.t, s.tc);
+      const pm = this.roomMel.gain, pp = this.roomPad.gain;
+      pm.cancelScheduledValues(a); pp.cancelScheduledValues(a);
+      for (const s of plan) { pm.setTargetAtTime(s.g, s.t, s.tc); pp.setTargetAtTime(Math.pow(s.g, ROOM_PAD_SHARE), s.t, s.tc); }
     } catch { /* closed context */ }
     this.roomPlan = plan; this.roomFrom = a; this.roomUntil = t;
   }

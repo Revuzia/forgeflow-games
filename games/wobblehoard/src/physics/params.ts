@@ -69,7 +69,8 @@ export interface SoftParams {
    *  sees it; both are off while something holds the body (a fingertip touching it, a grab, the pinned feet) and in float mode (which has
    *  its hover spring). Past `matRim` metres the outward speed is removed outright and the glide is 4x faster: a hard bound for hostile
    *  input (a 12 m/s nudge every frame), never reached by a single nudge; it also acts while a finger is down but its tip touches nothing
-   *  (the body was shoved out from under it: a finger that is merely down holds nothing, and without this a nudge carried the body 5.5 m).
+   *  (the body was shoved out from under it: a finger that is merely down holds nothing; without this the probe's hostile fuzz shoved a
+   *  body 5.1 m out past two such fingers).
    *  matBrake = matGlide = 0 (and matRim huge) disables it (the probe compares).
    *  Not genome-dependent. */
   matR0: number; matRamp: number; matBrake: number; matGlide: number; matRim: number;
