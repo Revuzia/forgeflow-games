@@ -94,7 +94,7 @@ export type RenderPortraitFn = (renderer: WebGLRenderer, id: TitanId, size: numb
 
 // ── screens (L9). Constructors unchanged: (root: HTMLElement, input: Input). ──
 /** ui/menus.ts TitleScreen.run(): resolves 'goals' on G / pad X or a click on the GOALS & RECORDS chip. */
-export interface TitleScreenApi { run(): Promise<'play' | 'goals'> }
+export interface TitleScreenApi { run(): Promise<'play' | 'goals' | 'vs'> }   // ONLINE VS (B-VIEW): 'vs' = V / pad Y / the VS PRACTICE chip
 export type SelectRow = 'cards' | 'palette' | 'perk';
 /** where the select screen resumes after GOALS & RECORDS closes (same step, choice and focused row) */
 export interface SelectResume { step: 1 | 2; titan: TitanId; biome: BiomeId; perk: PerkId | null; palette: number; row: SelectRow }
@@ -105,9 +105,14 @@ export interface SelectRunOpts {
   profile: Profile;
   bests: Record<string, number>;                    // core/save.ts loadBest()
   initial?: Partial<SelectResume>;
+  /** ONLINE VS (B-VIEW): VS PRACTICE mode: the screen re-skins (the perk row becomes RIVAL BOTS, no goals chip) and
+   *  resolves `bots` with the start result */
+  vs?: boolean;
+  /** VS PRACTICE: the bot level the row opens on (default 'regular') */
+  bots?: 'rookie' | 'regular' | 'veteran';
 }
 export type SelectResultV2 =
-  | { kind: 'start'; titan: TitanId; biome: BiomeId; perk: PerkId | null; palette: number }
+  | { kind: 'start'; titan: TitanId; biome: BiomeId; perk: PerkId | null; palette: number; bots?: 'rookie' | 'regular' | 'veteran' }
   | { kind: 'goals'; resume: SelectResume }
   | null;                                           // back to the title
 /** ui/select.ts SelectScreen.run — replaces run(portraits, initial). */

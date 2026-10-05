@@ -9,11 +9,13 @@
 
 import type { BiomeId, RunMeta, TitanId, World } from '../../src/core/types.ts';
 import { EMPTY_RUN_META } from '../../src/core/types.ts';
-import { createWorld, stepWorld } from '../../src/core/world.ts';
+import { createWorld, stepWorld, stepWorldN } from '../../src/core/world.ts';
 import { hasPendingDraft, rollOffer, pickUpgrade } from '../../src/upgrades/draft.ts';
 import { UPGRADES } from '../../src/data/upgrades.ts';
 import * as D from '../../src/core/detmath.ts';
 import { botInput, botPickUpgrade } from '../bot.ts';
+import { vsStateFlat } from '../../src/net/vshash.ts';
+import type { HashAtom } from '../../src/net/vshash.ts';
 
 const F64 = new Float64Array(1), U32 = new Uint32Array(F64.buffer);
 class Hasher {
@@ -44,6 +46,12 @@ export function hashWorld(w: World): string {
   if (w.boss) { hs.s(w.boss.id); hs.n(w.boss.x); hs.n(w.boss.z); hs.n(w.boss.hp); hs.n(w.boss.phase); hs.n(w.boss.meter); }
   for (const k of Object.keys(w.upgrades.owned).sort()) { hs.s(k); hs.n(w.upgrades.owned[k]); }
   hs.n(w.run.tonnage); hs.n(w.run.blocksLeveled);
+  if (w.mode === 'vs') {   // VS: every seat's titan / build / rail / VS record / bot memory + the phase, crown, ring, tenders
+    const a: HashAtom[] = [];
+    vsStateFlat(w, a);
+    for (const x of a) { if (typeof x === 'string') hs.s(x); else hs.n(x); }
+    for (const p of w.players) { hs.n(p.ult.charge ?? 0); hs.n(p.tally.kills ?? 0); }
+  }
   return hs.hex();
 }
 
@@ -105,4 +113,23 @@ export function runProbe(titan: string, biome: string, seed: number, ticks: numb
     result: w.run.result ?? null, endT: w.t, level: w.titan.level, ms: Date.now() - t0 };
 }
 
-(globalThis as Record<string, unknown>).btProbe = { runProbe, mathHashes };
+/** A VS match: 4 native bot seats (the VS bot brain runs INSIDE stepWorldN), the whole 4-seat world hashed every `every` ticks.
+ *  `titan` is the 4 titan ids joined by '+' (or one id for a mirror lineup). Ends at the match end or `ticks`. */
+export function runProbeVs(lineup: string, biome: string, seed: number, ticks: number, every = 300): ProbeRun {
+  const t0 = Date.now();
+  const ids = lineup.split('+') as TitanId[];
+  const four = ids.length === 4 ? ids : [ids[0], ids[0], ids[0], ids[0]];
+  const w = createWorld({ mode: 'vs', biome: biome as BiomeId, seed, view: 0, players: four.map((t) => ({ titan: t, bot: 'regular' as const })) });
+  const cps: string[] = [];
+  const none: null[] = [null, null, null, null];
+  let i = 0;
+  for (; i < ticks && !w.run.result; i++) {
+    stepWorldN(w, none);
+    if ((i + 1) % every === 0) cps.push(hashWorld(w));
+  }
+  const lv = Math.max(...w.players.map((p) => p.titan.level));
+  return { titan: 'vs:' + four.join('+'), biome, seed, meta: 'vs', ticks: i, checkpointEvery: every, checkpoints: cps, final: hashWorld(w),
+    result: w.run.result ?? null, endT: w.t, level: lv, ms: Date.now() - t0 };
+}
+
+(globalThis as Record<string, unknown>).btProbe = { runProbe, runProbeVs, mathHashes };

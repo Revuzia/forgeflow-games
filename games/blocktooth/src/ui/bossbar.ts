@@ -18,6 +18,7 @@ import type { BossDef, BossState, GateId } from '../core/types.ts';
 import { bossSubtitle } from '../data/bosses.ts';
 import { STR } from '../data/strings.ts';
 import { STR_GATE } from '../data/strings_gate.ts';
+import { VS as STR_VS } from '../data/strings_vs.ts';
 import { ClassSlot, TextSlot, VarSlot, div, el, flashesReduced, fmt, pulse } from './dom.ts';
 import { glyphSvg } from './icons.ts';
 
@@ -192,7 +193,8 @@ export class BossBar {
     ], 620);
   }
 
-  update(b: BossState | null): void {
+  /** `vs` = a VS match (lane B-VIEW): a gatekeeper rig is a PUBLIC TENDER there (no size lock, bids by damage) */
+  update(b: BossState | null, vs = false): void {
     if (!this.shown || !b) return;
     const def = this.def;
     if (!def || def.id !== b.id) return;
@@ -200,7 +202,7 @@ export class BossBar {
       // a rematch (EXTENDED COVERAGE, slot 0) reads REISSUED · SIZE V; a home gatekeeper its def kicker
       const re = b.role === 'gate' && b.slot === 0;
       this.rematchOn.set(re);
-      this.kickerT.set(re ? STR_GATE.plate.rematchKicker : def.kicker);
+      this.kickerT.set(vs ? STR_VS.tender.kicker : re ? STR_GATE.plate.rematchKicker : def.kicker);
     }
     const now = performance.now();
     const dt = this.lastT ? Math.min(0.1, (now - this.lastT) / 1000) : 0;
@@ -262,8 +264,9 @@ export class BossBar {
 
     // subtitle: sim-authored mechanic hint; intro / defeat override
     let sub = b.subtitle || bossSubtitle(b.id, b.attack);
-    if (down) sub = this.gate ? STR_GATE.plate.defeated : STR.boss.defeated;
-    else if (b.introT > 0) sub = !this.gate ? STR.boss.approaching : b.slot === 0 ? STR_GATE.plate.rematchApproaching : STR_GATE.plate.approaching;
+    if (vs && this.gate && !down) sub = b.attack ? bossSubtitle(b.id, b.attack) : STR_VS.tender.sub;   // the HEIGHT LIMIT lines are solo copy
+    if (down) sub = this.gate ? (vs ? STR_VS.tender.paid : STR_GATE.plate.defeated) : STR.boss.defeated;
+    else if (b.introT > 0) sub = !this.gate ? STR.boss.approaching : vs ? STR_VS.tender.arriving : b.slot === 0 ? STR_GATE.plate.rematchApproaching : STR_GATE.plate.approaching;
     if (sub !== this.lastSub) {
       const had = this.lastSub !== '';
       this.lastSub = sub;

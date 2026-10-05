@@ -487,7 +487,7 @@ function releaseTow(w: World, b: BossState): void {
 function tow(w: World, b: BossState, T: World['titan']): void {
   if (!(b.data.tow > 0)) return;
   if (!T.leash) { b.data.tow = 0; b.data.leash = 0; return; }
-  for (let i = 0; i < w.events.length; i++) if (w.events[i].type === 'ultFire') { releaseTow(w, b); return; }
+  for (let i = 0; i < w.events.length; i++) if (w.events[i].type === 'ultFire' && (w.mode !== 'vs' || w.events[i].p === w.cur)) { releaseTow(w, b); return; }
   if (dist(T.x, T.z, b.x, b.z) <= keepOutM(w) + TOW_CLEAR) { releaseTow(w, b); return; }
   const a = booth(b);
   T.leash.lx = a.x; T.leash.lz = a.z;

@@ -92,9 +92,11 @@ export class MarkerView implements ViewModule, MarkerViewApi {
       }
     }
     const objs = w.map.objectives;
+    const vsMode = w.mode === 'vs';
     for (let i = 0; i < objs.length; i++) {
       const o = objs[i];
       if (!o.alive) continue;
+      if (vsMode && o.oslot !== undefined && o.oslot !== w.view) continue;   // VS: private contract boards (one per seat)
       const d = Math.hypot(o.x - T.x, o.z - T.z);
       const top = OBJ_ANCHOR.get(o.id) ?? Math.max(4 * H, o.h + 1.6 * H);
       this.push(o.kind, OBJECTIVE_NAMES[o.kind], o.x, top, o.z, d, 1, false, objR);

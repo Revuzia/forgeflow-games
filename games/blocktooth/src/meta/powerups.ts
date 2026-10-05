@@ -11,6 +11,16 @@
 // RED LIGHT itself is honoured by the pre-wired hooks (ai/director.ts holds waves; ai/enemies.ts skips AI
 // and movement; combat/projectiles.ts and combat/telegraphs.ts freeze enemy-owned shots and paint), all
 // reading redLightActive(w). Bosses and their shots/paint ignore it.
+//
+// ONLINE VS (lane B-WORLD, vs_design.md section 8; every change is behind w.mode === 'vs', solo is byte-identical):
+//   * tokens are SHARED world items: each tick every token goes to the live seat that reaches it first (the closest
+//     one by reach fraction; ties: lower slot) and its effect runs AS that seat (withPlayer);
+//   * RED LIGHT / RUSH HOUR timers are PER SEAT (that seat's director.data.pu_red / pu_rush, seconds left): RED LIGHT
+//     freezes only the collector's own Civil Defense units (rivals ignore it, as bosses do); w.map.redLightT /
+//     rushHourT hold the MAX over seats (view-independent, for HUD tints / sfx only: the sim never reads them in VS);
+//   * DEMOLITION NOTICE hits only the collector's own units / shots; CLEANUP CREW magnets only the collector's own
+//     rubble (combat/pickups.ts magnetAll); RUSH HOUR and BACK PAY are the collector's own buff / UPROAR;
+//   * kill / collapse drops are rolled per drop event as the seat that made it (so rank-dependent weights are right).
 // DEMOLITION kills bank through meta/ultimate.ts (`w.ult.bankOpen` around the kill loop): normal XP, merged
 // into ≤ ULT.bankPickupsPerTick pickups flushed by the next stepUltimate. They happen after processTriggers,
 // so they proc no on-kill cards (accepted, §2.3); chargeUltimate and stepTally still see them.
@@ -29,6 +39,8 @@ import { spawnRing } from '../ai/director.ts';
 import { bossUltHit } from '../ai/bosses/index.ts';
 import { damageEnemy, killEnemy } from '../combat/damage.ts';
 import { magnetAll } from '../combat/pickups.ts';
+import { emitAs, withPlayer } from '../core/players.ts';
+import { ownerNow, redLightFor, seatLive } from '../combat/targets.ts';
 import { addUproar } from './ultimate.ts';
 
 // ─────────────────────────────── lane-local tuning ───────────────────────────────
@@ -54,8 +66,11 @@ const MAX_BUFFS = 12;   // = upgrades/engine.ts MAX_BUFFS (frenzy buffs; oldest 
 // ─────────────────────────────── exports ───────────────────────────────
 /** RED LIGHT active (foes, their shots and their paint stop). */
 export function redLightActive(w: World): boolean {
+  if (w.mode === 'vs') return w.cur >= 0 && redLightFor(w, w.cur);   // VS: the BOUND seat's timer (per collector)
   return w.map.redLightT > 0;
 }
+
+export { redLightFor };
 
 /**
  * Spawn a power-up token at (x, z) (clamped into the city bounds). `kind === null` = weighted roll from
@@ -67,6 +82,8 @@ export function spawnPowerup(w: World, kind: PowerUpKind | null, x: number, z: n
   if (w.run.result && !w.endless) return null;
   const m = w.map;
   if (!Number.isFinite(x) || !Number.isFinite(z)) { x = w.titan.x; z = w.titan.z; }
+  // VS: an unbound spawn (a drop, an unbound caller) sizes the token by the NEAREST seat's titan, not slot 0's
+  const hOf = w.mode === 'vs' && w.cur < 0 ? w.players[ownerNow(w, x, z)].titan.height : w.titan.height;
   let alive = 0, oldest: PowerUp | null = null;
   for (let i = 0; i < m.powerups.length; i++) {
     const p = m.powerups[i];
@@ -88,7 +105,7 @@ export function spawnPowerup(w: World, kind: PowerUpKind | null, x: number, z: n
     kind: k, alive: true,
     x: Math.min(B.maxX - pad, Math.max(B.minX + pad, x)),
     z: Math.min(B.maxZ - pad, Math.max(B.minZ + pad, z)),
-    t: 0, life: POWERUPS.lifeS, h: w.titan.height,
+    t: 0, life: POWERUPS.lifeS, h: hOf,
   };
   m.powerups.push(p);
   if (!forced) m.lastDropT = w.t;
@@ -98,6 +115,7 @@ export function spawnPowerup(w: World, kind: PowerUpKind | null, x: number, z: n
 
 /** Tick order: right after stepObjectives (drops from ALL of this tick's kills/collapses, timers, collect). */
 export function stepPowerups(w: World): void {
+  if (w.mode === 'vs') { stepPowerupsVs(w); return; }
   const m = w.map;
   const T = w.titan;
   const dt = w.dt;
@@ -148,6 +166,85 @@ export function stepPowerups(w: World): void {
   }
 }
 
+// ─────────────────────────────── ONLINE VS ───────────────────────────────
+/** The VS step (see the header): drops as the killer, per-seat timers, tokens to the first seat that reaches them. */
+function stepPowerupsVs(w: World): void {
+  const m = w.map;
+  const dt = w.dt;
+  const ps = w.players;
+  const live = !w.run.result;
+
+  // ── 1. drops from this tick's events, rolled AS the seat that made the kill / collapse ──
+  if (live) {
+    const ev = w.events;
+    const n0 = ev.length;
+    const bossMul = w.boss && w.boss.alive ? POWERUPS.bossDropMul : 1;
+    for (let i = 0; i < n0; i++) {
+      const e = ev[i];
+      const slot = e.p ?? -1;
+      if (slot < 0 || slot >= ps.length || !seatLive(ps[slot])) continue;
+      if (e.type === 'enemyKilled') {
+        withPlayer(w, slot, () => {
+          if (e.type !== 'enemyKilled') return;
+          if (e.kind === 'elite') { spawnPowerup(w, null, e.x, e.z, true); return; }
+          const c = (PU_TUNE.dropByKill[e.kind] ?? 0) * bossMul;
+          if (c > 0 && canRandomDrop(w) && w.rng.meta() < c) spawnPowerup(w, null, e.x, e.z, false);
+        });
+      } else if (e.type === 'buildingCollapse') {
+        if (e.tier < 2 || (e as { noCredit?: boolean }).noCredit) continue;
+        withPlayer(w, slot, () => {
+          if (e.type !== 'buildingCollapse') return;
+          const c = PU_TUNE.dropByCollapse * bossMul;
+          if (c > 0 && canRandomDrop(w) && w.rng.meta() < c) spawnPowerup(w, null, e.x, e.z, false);
+        });
+      }
+    }
+  }
+
+  // ── 2. per-seat timed effects ──
+  let redMax = 0, rushMax = 0;
+  for (let i = 0; i < ps.length; i++) {
+    const D = ps[i].director.data;
+    const r0 = D.pu_red ?? 0;
+    if (r0 > 0) {
+      const r1 = r0 - dt <= 1e-9 ? 0 : r0 - dt;
+      D.pu_red = r1;
+      if (r1 === 0) emitAs(w, i, { type: 'powerupEnd', kind: 'redLight' });
+      if (r1 > redMax) redMax = r1;
+    }
+    const u0 = D.pu_rush ?? 0;
+    if (u0 > 0) {
+      const u1 = u0 - dt <= 1e-9 ? 0 : u0 - dt;
+      D.pu_rush = u1;
+      if (u1 === 0) emitAs(w, i, { type: 'powerupEnd', kind: 'rushHour' });
+      if (u1 > rushMax) rushMax = u1;
+    }
+  }
+  m.redLightT = redMax;       // HUD / sfx mirror (max over seats); the sim reads the per-seat bag
+  m.rushHourT = rushMax;
+
+  // ── 3. tokens: age, expire, collect by the first seat that reaches them ──
+  const list = m.powerups;
+  for (let i = 0; i < list.length; i++) {
+    const p = list[i];
+    if (!p.alive) continue;
+    p.t += dt;
+    if (p.t >= p.life - 1e-9) { p.alive = false; continue; }
+    if (!live) continue;
+    let best = -1, bestF = Infinity;
+    for (let s = 0; s < ps.length; s++) {
+      if (!seatLive(ps[s])) continue;
+      const T = ps[s].titan;
+      const reach = T.radius + Math.max(1, POWERUPS.collectH * T.height);
+      const dx = p.x - T.x, dz = p.z - T.z, d2 = dx * dx + dz * dz;
+      if (d2 > reach * reach) continue;
+      const f = d2 / (reach * reach);
+      if (f < bestF) { bestF = f; best = s; }
+    }
+    if (best >= 0) { const tok = p; withPlayer(w, best, () => { collect(w, tok); }); }
+  }
+}
+
 // ─────────────────────────────── internals ───────────────────────────────
 function canRandomDrop(w: World): boolean {
   const m = w.map;
@@ -190,11 +287,13 @@ function collect(w: World, p: PowerUp): void {
       break;
     case 'redLight': {
       const s = w.boss && w.boss.alive ? POWERUPS.redLightBossS : POWERUPS.redLightS;
+      if (w.mode === 'vs') { const D = w.director.data; if ((D.pu_red ?? 0) < s) D.pu_red = s; break; }   // VS: this seat's own units only
       if (m.redLightT < s) m.redLightT = s;
       break;
     }
     case 'rushHour':
-      m.rushHourT = Math.max(m.rushHourT, POWERUPS.rushHourS);
+      if (w.mode === 'vs') { const D = w.director.data; D.pu_rush = Math.max(D.pu_rush ?? 0, POWERUPS.rushHourS); }
+      else m.rushHourT = Math.max(m.rushHourT, POWERUPS.rushHourS);
       buff(w, 'attackRate', POWERUPS.rushAttackRate, POWERUPS.rushHourS);
       buff(w, 'moveSpeed', POWERUPS.rushMoveSpeed, POWERUPS.rushHourS);
       buff(w, 'smashDamage', POWERUPS.rushSmash, POWERUPS.rushHourS);
@@ -226,6 +325,7 @@ function demolition(w: World): void {
   const T = w.titan;
   const R = spawnRing(w);
   const R2 = R * R;
+  const vs = w.mode === 'vs';
   const u = w.ult;
   const wasOpen = u.bankOpen;
   u.bankOpen = true;
@@ -235,6 +335,7 @@ function demolition(w: World): void {
   for (let i = 0; i < n; i++) {
     const e: Enemy = es[i];
     if (!e.alive) continue;
+    if (vs && e.tslot !== w.cur) continue;   // VS: only the collector's own units
     const dx = e.x - T.x, dz = e.z - T.z;
     if (dx * dx + dz * dz > R2) continue;
     if (e.elite || e.kind === 'elite') {
@@ -251,6 +352,7 @@ function demolition(w: World): void {
   for (let i = 0; i < ps.length; i++) {
     const p = ps[i];
     if (!p.alive || p.owner !== 'enemy') continue;
+    if (vs && p.oslot !== w.cur) continue;   // VS: only the collector's own seat's shots
     const dx = p.x - T.x, dz = p.z - T.z;
     if (dx * dx + dz * dz > R2) continue;
     p.alive = false;

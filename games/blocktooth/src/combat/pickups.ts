@@ -15,6 +15,14 @@
 //   * over the cap, new value merges into the mergeable pickup nearest the TITAN (not the spawn);
 //   * rubble/scrap resting longer than DRIFT_AFTER_S crawls toward the titan (ramping to
 //     DRIFT_SPEED_MUL × its max speed), so nothing is stranded and the cap drains.
+//
+// ONLINE VS (lane B-WORLD, vs_design.md section 8: "rubble is private, the city is shared"; solo is byte-identical):
+//   * a pickup BELONGS to the seat whose destruction dropped it (Pickup.pslot = the bound seat at spawn; chests are
+//     shared, pslot -1). stepPickups runs once per seat, bound, over that seat's pickups; a shared pickup goes to the
+//     NEAREST live titan (re-picked every tick: "the magnet goes to the nearest titan");
+//   * collection credits the owner (gainXp / gainMass / healTitan / events run as that seat);
+//   * over CITY.maxPickups a rubble / scrap drop merges into the OWNER's pickup nearest the owner's titan;
+//   * magnetAll (CLEANUP CREW) only pulls the bound seat's own pickups.
 
 import { cos, hypot, sin } from '../core/detmath.ts';
 import type { Pickup, PickupKind, World } from '../core/types.ts';
@@ -23,6 +31,8 @@ import { clamp } from '../core/math.ts';
 import { gainMass, gainXp, healTitan, titanMaxSpeed } from '../titans/titansim.ts';
 import { kitLatchReach } from '../titans/kits/index.ts';
 import { stat } from '../upgrades/stats.ts';
+import { withPlayer } from '../core/players.ts';
+import { nearestSeat, nearestLiveSlot } from './targets.ts';
 
 // ─────────────────────────────── tuning (lane-local) ───────────────────────────────
 /** Burst airtime (s): pickups land ~0.5 s after spawning. */
@@ -58,6 +68,12 @@ const latchOnLand = new WeakSet<Pickup>();
  *  mid-dash moves farther in one tick than the magnet's pull (Gate 2026-09-30: VOLT-KITE dashed through an OVERLOAD
  *  SITE at Size IV, 19.9 m in one tick, and its payout landed a tick late — probe_map 'not collected the next tick'). */
 const collectNext = new WeakSet<Pickup>();
+
+/** VS: while on, every pickup spawned is SHARED (pslot -1: the nearest live titan eats it) instead of private to the bound seat.
+ *  city/citysim.ts turns it on around destruction a HOSTILE caused (a rig's footsteps, a ram): rubble is private to the titan
+ *  that brought a building down, not to whoever the rig happened to be hunting. */
+let SHARED_DROPS = false;
+export function setSharedDrops(on: boolean): void { SHARED_DROPS = on; }
 
 /** Mark a live magnetised pickup as owed: the next stepPickups collects it wherever the titan is (once its collect
  *  age is reached). Used by meta/objectives.ts for the OVERLOAD SITE payout. */
@@ -100,9 +116,11 @@ function mergeTarget(w: World): Pickup | null {
   let best: Pickup | null = null, bestD = Infinity;
   let mag: Pickup | null = null, magD = Infinity;
   const ps = w.pickups;
+  const vs = w.mode === 'vs';
   for (let i = 0; i < ps.length; i++) {
     const p = ps[i];
     if (!p.alive || !mergeable(p.kind)) continue;
+    if (vs && p.pslot !== undefined && p.pslot >= 0 && p.pslot !== w.cur) continue;   // VS: only the owner's own heaps
     const dx = p.x - T.x, dz = p.z - T.z;
     const d = dx * dx + dz * dz;
     if (p.magnet && (d < magD || (d === magD && mag !== null && p.id < mag.id))) { mag = p; magD = d; }
@@ -120,6 +138,10 @@ function mergeTarget(w: World): Pickup | null {
  */
 export function spawnPickup(w: World, kind: PickupKind, x: number, z: number, xp: number, mass: number): void {
   if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+  if (w.mode === 'vs' && w.cur < 0) {   // VS: an unbound drop belongs to the nearest seat (it is made AS that seat)
+    withPlayer(w, nearestSeat(w, x, z), () => { spawnPickup(w, kind, x, z, xp, mass); });
+    return;
+  }
   const xpv = Number.isFinite(xp) && xp > 0 ? xp : 0;
   const mv = Number.isFinite(mass) && mass > 0 ? mass : 0;
   if (mergeable(kind) && xpv === 0 && mv === 0) return;
@@ -146,6 +168,7 @@ export function spawnPickup(w: World, kind: PickupKind, x: number, z: number, xp
     vx: (dx / dl) * spd, vz: (dz / dl) * spd, vy,
     xp: xpv, mass: mv, t: 0, magnet: false,
   };
+  if (w.mode === 'vs') p.pslot = kind === 'chest' || SHARED_DROPS ? -1 : w.cur;   // ONLINE VS: private to its seat (chests / hostile drops are shared)
   w.pickups.push(p);
   book.alive++;
   if (mergeable(kind) && T.alive) {
@@ -155,9 +178,33 @@ export function spawnPickup(w: World, kind: PickupKind, x: number, z: number, xp
   }
 }
 
+/** The seat a pickup is stepped for in VS: its owner, or the nearest live titan for a shared one. */
+function ownerOf(w: World, p: Pickup): number {
+  if (p.pslot !== undefined && p.pslot >= 0 && p.pslot < w.players.length) return p.pslot;
+  const n = nearestLiveSlot(w, p.x, p.z);
+  return n >= 0 ? n : nearestSeat(w, p.x, p.z);
+}
+
 /** Magnet, homing, burst physics and collection. Called once per tick by stepWorld. */
 export function stepPickups(w: World): void {
-  const book = bookOf(w);
+  if (w.mode === 'vs') {
+    // ONLINE VS: an ELIMINATED seat's pickups vanish (nobody can ever collect them), then once per seat, bound, over that seat's pickups
+    for (let i = 0; i < w.pickups.length; i++) {
+      const pk = w.pickups[i];
+      if (pk.alive && pk.pslot !== undefined && pk.pslot >= 0 && pk.pslot < w.players.length && w.players[pk.pslot].vs.eliminated) pk.alive = false;
+    }
+    for (let s = 0; s < w.players.length; s++) { const slot = s; withPlayer(w, slot, () => { stepPickupsFor(w, slot); }); }
+    let a = 0;
+    for (let i = 0; i < w.pickups.length; i++) if (w.pickups[i].alive) a++;
+    bookOf(w).alive = a;
+    return;
+  }
+  bookOf(w).alive = stepPickupsFor(w, -1);
+}
+
+/** The body of stepPickups for the bound titan; `slot` >= 0 (VS) only steps the pickups ownerOf() gives that seat.
+ *  Returns the alive pickups it handled (solo: all of them). */
+function stepPickupsFor(w: World, slot: number): number {
   const T = w.titan;
   const dt = w.dt;
   const ps = w.pickups;
@@ -175,6 +222,7 @@ export function stepPickups(w: World): void {
   for (let i = 0; i < n; i++) {
     const p = ps[i];
     if (!p.alive) continue;
+    if (slot >= 0 && ownerOf(w, p) !== slot) continue;   // VS: another seat's pickup
     p.t += dt;
     if (T.alive && !p.magnet) {
       const dx = T.x - p.x, dz = T.z - p.z;
@@ -228,8 +276,8 @@ export function stepPickups(w: World): void {
     }
     alive++;
   }
-  for (let i = n; i < ps.length; i++) if (ps[i].alive) alive++;
-  book.alive = alive;
+  for (let i = n; i < ps.length; i++) if (ps[i].alive && (slot < 0 || ownerOf(w, ps[i]) === slot)) alive++;
+  return alive;
 }
 
 function collect(w: World, p: Pickup): void {
@@ -266,9 +314,11 @@ export function magnetAll(w: World, radius: number): number {
   const r2 = radius === Infinity ? Infinity : Math.max(0, radius) * Math.max(0, radius);
   let n = 0;
   const ps = w.pickups;
+  const vs = w.mode === 'vs';
   for (let i = 0; i < ps.length; i++) {
     const p = ps[i];
     if (!p.alive || p.magnet) continue;
+    if (vs && p.pslot !== undefined && p.pslot >= 0 && p.pslot !== w.cur) continue;   // VS: only this seat's own pickups
     const dx = p.x - T.x, dz = p.z - T.z;
     if (dx * dx + dz * dz <= r2) { p.magnet = true; n++; }
   }

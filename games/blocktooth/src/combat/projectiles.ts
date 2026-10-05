@@ -11,6 +11,10 @@
 // Events: projectileHit (direct hits), explosion (aoe detonations / lob landings).
 // CITY.maxProjectiles: at the cap the oldest hostile pellet/volley is dropped first, then the oldest
 // hostile straight shot, then the oldest titan straight shot, then the oldest of anything.
+// ONLINE VS (lane B-WORLD): every projectile remembers the seat it belongs to (Projectile.oslot: the firing seat for a
+// titan shot, the seat the shooter was hunting for an enemy / boss shot). A titan shot is stepped AS its owner (bound),
+// so kills, lifesteal and XP credit the right titan and its explosions queue PvP hits; a hostile shot hits the FIRST
+// live titan on its path (any seat); RED LIGHT freezes only the shots of the collector's seat.
 
 import { hypot } from '../core/detmath.ts';
 import type { DamageKind, DamageOpts, Enemy, Owner, Projectile, ProjectileKind, World } from '../core/types.ts';
@@ -23,6 +27,9 @@ import { spawnTelegraph } from './telegraphs.ts';
 import { damageBoss } from '../ai/bosses/index.ts';
 import { damageProp, propsInRect } from '../city/citysim.ts';
 import { redLightActive } from '../meta/powerups.ts';
+import { withPlayer } from '../core/players.ts';
+import { redLightFor, seatHittable } from './targets.ts';
+import { queueRivalHit, setHostileFrom } from './damage.ts';
 
 export type ProjectileSpawn = Partial<Projectile> & {
   owner: Owner; kind: ProjectileKind; x: number; z: number; vx: number; vz: number; dmg: number;
@@ -183,6 +190,7 @@ export function spawnProjectile(w: World, p: ProjectileSpawn): Projectile {
     ex.hitIds = [];
   }
   extras.set(pr, ex);
+  if (w.mode === 'vs') pr.oslot = w.cur;   // ONLINE VS: the seat this shot belongs to (-1 = a world-owned shot; see the header)
   w.projectiles.push(pr);
   return pr;
 }
@@ -192,10 +200,10 @@ const seg = { k: 'capsule' as const, x0: 0, z0: 0, x1: 0, z1: 0, r: 0 };
 const hitEnemies: Enemy[] = [];
 const idScratch: number[] = [];
 
-interface Cand { t: number; type: 0 | 1 | 2; ref: number; e: Enemy | null; }
+interface Cand { t: number; type: 0 | 1 | 2 | 3; ref: number; e: Enemy | null; }   // 3 = a rival titan (VS)
 const cands: Cand[] = [];
 let candN = 0;
-function addCand(t: number, type: 0 | 1 | 2, ref: number, e: Enemy | null): void {
+function addCand(t: number, type: 0 | 1 | 2 | 3, ref: number, e: Enemy | null): void {
   if (candN >= cands.length) cands.push({ t: 0, type: 0, ref: 0, e: null });
   const c = cands[candN++];
   c.t = t; c.type = type; c.ref = ref; c.e = e;
@@ -283,6 +291,15 @@ function stepTitanShot(w: World, p: Projectile, ex: ProjExtra): void {
     }
     idScratch.length = 0;
   }
+  // ONLINE VS: a rival titan on the path (never the owner; live, not spawn-protected). Reported, never applied here.
+  if (w.mode === 'vs') {
+    for (let i = 0; i < w.players.length; i++) {
+      if (i === w.cur || !seatHittable(w.players[i])) continue;
+      const R = w.players[i].titan;
+      if (ex.hitIds && ex.hitIds.indexOf(2e9 + i) >= 0) continue;
+      if (circleInShape(seg, R.x, R.z, R.radius)) addCand(alongSeg(R.x, R.z), 3, i, null);
+    }
+  }
   if (candN === 0) return;
   candView.length = candN;
   for (let i = 0; i < candN; i++) candView[i] = cands[i];
@@ -304,6 +321,9 @@ function stepTitanShot(w: World, p: Projectile, ex: ProjExtra): void {
     } else if (c.type === 1) {
       if (B && B.alive) { const before = B.hp; damageBoss(w, c.ref, p.dmg, opts); lifestealFromBoss(w, before); }
       if (ex.hitIds) ex.hitIds.push(-1 - c.ref);
+    } else if (c.type === 3) {
+      queueRivalHit(w, c.ref, p.dmg, opts);
+      if (ex.hitIds) ex.hitIds.push(2e9 + c.ref);
     } else {
       damageProp(w, c.ref, p.dmg, opts);
       if (ex.hitIds) ex.hitIds.push(1e9 + c.ref);
@@ -315,9 +335,27 @@ function stepTitanShot(w: World, p: Projectile, ex: ProjExtra): void {
   candView.length = 0;
 }
 
+/** VS: the first live, hittable seat whose circle the swept segment touches (smallest t along it; ties: lower slot); -1 none. */
+function firstTitanOnSeg(w: World): number {
+  const ps = w.players;
+  let best = -1, bestT = Infinity;
+  for (let i = 0; i < ps.length; i++) {
+    if (!seatHittable(ps[i])) continue;
+    const T = ps[i].titan;
+    if (!circleInShape(seg, T.x, T.z, T.radius)) continue;
+    const t = clamp(alongSeg(T.x, T.z), 0, 1);
+    if (t < bestT) { bestT = t; best = i; }
+  }
+  return best;
+}
+
 function stepHostileShot(w: World, p: Projectile, ex: ProjExtra): void {
-  const T = w.titan;
-  if (!T.alive || !circleInShape(seg, T.x, T.z, T.radius)) return;
+  let T = w.titan;
+  if (w.mode === 'vs') {
+    const s = firstTitanOnSeg(w);   // ONLINE VS: any seat can be hit; the nearest along the path takes it
+    if (s < 0) return;
+    T = w.players[s].titan;
+  } else if (!T.alive || !circleInShape(seg, T.x, T.z, T.radius)) return;
   const t = clamp(alongSeg(T.x, T.z), 0, 1);
   const hx = seg.x0 + (seg.x1 - seg.x0) * t, hz = seg.z0 + (seg.z1 - seg.z0) * t;
   p.alive = false; p.x = hx; p.z = hz;
@@ -334,28 +372,40 @@ export function stepProjectiles(w: World): void {
   const b = w.city ? w.city.bounds : null;
   // v2 RED LIGHT (FEATURES_V2 §6.1, pre-wired): enemy-owned shots hang in the air (no move, no aging);
   // boss- and titan-owned shots are unaffected
+  const vs = w.mode === 'vs';
   const red = redLightActive(w);
   for (let i = 0; i < n; i++) {
     const p = ps[i];
     if (!p.alive) continue;
-    if (red && p.owner === 'enemy') continue;
-    const ex = extraOf(p);
-    if (p.lob) { stepLob(w, p, ex); continue; }
-    const x0 = p.x, z0 = p.z;
-    p.x += p.vx * dt;
-    p.z += p.vz * dt;
-    p.y += p.vy * dt;
-    if (p.y < 0) p.y = 0;
-    seg.x0 = x0; seg.z0 = z0; seg.x1 = p.x; seg.z1 = p.z; seg.r = p.r;
-    if (p.owner === 'titan') stepTitanShot(w, p, ex);
-    else stepHostileShot(w, p, ex);
-    if (!p.alive) continue;
-    p.life -= dt;
-    if (p.life <= EPS) {
-      p.alive = false;
-      if (p.aoe > 0) explode(w, p, ex, p.x, p.z, p.aoe);
-      continue;
-    }
-    if (b && (p.x < b.minX - OOB_PAD || p.x > b.maxX + OOB_PAD || p.z < b.minZ - OOB_PAD || p.z > b.maxZ + OOB_PAD)) p.alive = false;
+    if (vs) {
+      // ONLINE VS: RED LIGHT is per collector; a titan shot is stepped AS its owner
+      const own = p.oslot ?? -1;
+      if (p.owner === 'enemy' && own >= 0 && redLightFor(w, own)) continue;
+      if (p.owner === 'titan' && own >= 0) { withPlayer(w, own, () => { stepProjectile(w, p, dt, b); }); continue; }
+      if (own >= 0) { setHostileFrom(own); stepProjectile(w, p, dt, b); setHostileFrom(-1); continue; }   // a hostile shot: damage scaled for its own target
+    } else if (red && p.owner === 'enemy') continue;
+    stepProjectile(w, p, dt, b);
   }
+}
+
+/** One projectile for one tick (the body of the old stepProjectiles loop, unchanged). */
+function stepProjectile(w: World, p: Projectile, dt: number, b: World['city']['bounds'] | null): void {
+  const ex = extraOf(p);
+  if (p.lob) { stepLob(w, p, ex); return; }
+  const x0 = p.x, z0 = p.z;
+  p.x += p.vx * dt;
+  p.z += p.vz * dt;
+  p.y += p.vy * dt;
+  if (p.y < 0) p.y = 0;
+  seg.x0 = x0; seg.z0 = z0; seg.x1 = p.x; seg.z1 = p.z; seg.r = p.r;
+  if (p.owner === 'titan') stepTitanShot(w, p, ex);
+  else stepHostileShot(w, p, ex);
+  if (!p.alive) return;
+  p.life -= dt;
+  if (p.life <= EPS) {
+    p.alive = false;
+    if (p.aoe > 0) explode(w, p, ex, p.x, p.z, p.aoe);
+    return;
+  }
+  if (b && (p.x < b.minX - OOB_PAD || p.x > b.maxX + OOB_PAD || p.z < b.minZ - OOB_PAD || p.z > b.maxZ + OOB_PAD)) p.alive = false;
 }

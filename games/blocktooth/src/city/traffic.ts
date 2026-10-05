@@ -20,6 +20,7 @@ const BRAKE = 16;             // m/s²
 const REVERSE_SPEED = 5;      // m/s when reverse-fleeing
 const PANIC_MUL = 1.45;       // cruise multiplier when fleeing forward
 const SCARE_S = 1.5;          // scared timer refresh (s)
+// ONLINE VS (lane B-WORLD): a car reacts to the NEAREST live titan (w.mode === 'vs' only; solo is the bound titan, unchanged).
 
 interface TrafficIndex {
   cum: Float64Array[];        // per lane cumulative vertex arc lengths
@@ -68,6 +69,7 @@ export function stepTraffic(w: World): void {
   const scareR = 3 * H + 6;
   const fleeR = 1.2 * H + 5 + T.radius;
   const titanLive = T.alive;
+  const vs = w.mode === 'vs';
 
   for (let li = 0; li < idx.cars.length; li++) {
     const list = idx.cars[li];
@@ -90,14 +92,31 @@ export function stepTraffic(w: World): void {
       const cruise = cruiseSpeed(city.seed, p.id);
       const halfLen = PROP_INFO[p.kind].len / 2;
       let target = cruise;
-      if (titanLive) {
-        const dx = T.x - p.x, dz = T.z - p.z;
+      // the titan this car reacts to: solo = the bound one; VS = the nearest live titan to the car
+      let Tc = T, sR = scareR, fR = fleeR, live = titanLive;
+      if (vs) {
+        let near = -1, nd = Infinity;
+        for (let s = 0; s < w.players.length; s++) {
+          const q = w.players[s];
+          if (!q.titan.alive || q.vs.eliminated) continue;
+          const dd = (q.titan.x - p.x) * (q.titan.x - p.x) + (q.titan.z - p.z) * (q.titan.z - p.z);
+          if (dd < nd) { nd = dd; near = s; }
+        }
+        live = near >= 0;
+        if (live) {
+          Tc = w.players[near].titan;
+          const Hc = Math.max(1, Tc.height);
+          sR = 3 * Hc + 6; fR = 1.2 * Hc + 5 + Tc.radius;
+        }
+      }
+      if (live) {
+        const dx = Tc.x - p.x, dz = Tc.z - p.z;
         const d = hypot(dx, dz);
-        if (d < scareR) {
+        if (d < sR) {
           const along = dx * sin(p.heading) + dz * cos(p.heading);
-          if (along > -T.radius) {
+          if (along > -Tc.radius) {
             // titan ahead (or alongside): brake; very close → reverse-flee
-            if (d < fleeR && along > 0) target = -REVERSE_SPEED;
+            if (d < fR && along > 0) target = -REVERSE_SPEED;
             else target = 0;
             p.scared = SCARE_S;
           } else {

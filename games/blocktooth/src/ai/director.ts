@@ -22,23 +22,30 @@
 //     moved to meta/gates.ts stepGates (GATEKEEPERS §4.1 / §7.3; the K0 stub runs the old block verbatim).
 //   * cheats.noSpawns: nothing is fielded (waves, trickle, elite, scheduled boss) and the
 //     budget does not bank; timers keep running so switching it off resumes the schedule.
+//   * ONLINE VS (lane B-WORLD, vs_design.md section 8; solo is byte-identical): the director runs PER SEAT (world.ts
+//     calls stepDirector inside the per-seat bound block), so a seat's wave is spawned around ITS titan and its units are
+//     assigned to it (spawnEnemy stamps Enemy.tslot). Differences in VS: the budget rate is VS.director.budgetMulPerTitan
+//     (0.6) of the solo rate, x VS.director.crownMul (1.3) for the FRONT PAGE crown holder, on the 10-minute pacing
+//     (paceStretchFor('vs')) with no Size IV ramp; the per-kind caps and "alive" counts are the seat's OWN units, and
+//     the world cap CITY.maxEnemies is split between the seats; no RAMROD elite (VS.director.elite = false: the tenders
+//     take that role); squad ids are made unique across seats (nextSquadId).
 //   * GATEKEEPERS (§2.8, §6.3, §6.4, lane K0 pre-wire): BOSS_SPAWN_MUL / BOSS_MIX only for a city boss or a
 //     gate rematch (slot 0); × gateSpawnMul(w) always; no elite while a gate lock (slot 1–3) is pending or
 //     any fight is alive; RAMROD at SWITCHBOARD-5's kill + ELITE_AFTER_RANK_IV_S (the rank IV rule stays
 //     for a rank IV reached without that kill: the open-gate skeleton and dev cheats); nothing spawned or
 //     banked during the finale; the boss framing keeps a post-kill floor over a gate breach's tween.
 
-import { atan2, cos, exp, sin } from '../core/detmath.ts';
+import { atan2, cos, exp, hypot, sin } from '../core/detmath.ts';
 import type { DirectorState, EnemyKind, World } from '../core/types.ts';
 import {
-  BOSS_AT_S, BOSS_FRAME, PACE_STRETCH, RANK_LEVELS, SIZE_IV_RAMP_FROM, CAMERA, CITY, DIRECTOR_BUDGET_RANK_MUL, ELITE_AT_S, GROW_TWEEN_S, bossFrameFitAt, bossFrameFloorAt,
+  BOSS_AT_S, BOSS_FRAME, PACE_STRETCH, RANK_LEVELS, VS, paceStretchFor, SIZE_IV_RAMP_FROM, CAMERA, CITY, DIRECTOR_BUDGET_RANK_MUL, ELITE_AT_S, GROW_TWEEN_S, bossFrameFitAt, bossFrameFloorAt,
   bossFrameNeed, cameraDistance, frameDistance, stepFrameHold, titanHeightAt,
 } from '../core/config.ts';
 import type { FrameHold } from '../core/config.ts';
 import { TAU, clamp } from '../core/math.ts';
 import { BIOMES } from '../data/biomes.ts';
 import { ENEMIES } from '../data/enemies.ts';
-import { ringPoint, ringRadius, spawnEnemy } from './enemies.ts';
+import { nextSquadId, ringPoint, ringRadius, spawnEnemy } from './enemies.ts';
 import { endlessBudgetMul } from '../meta/endless.ts';
 import { fightAlive, gateSpawnMul } from '../meta/gates.ts';
 import { redLightActive } from '../meta/powerups.ts';
@@ -134,12 +141,19 @@ function countAlive(w: World): void {
   for (const k of KINDS) alive.by[k] = 0;
   alive.by.elite = 0;
   const es = w.enemies;
+  const vs = w.mode === 'vs';
   for (let i = 0; i < es.length; i++) {
     const e = es[i];
     if (!e.alive) continue;
+    if (vs && e.tslot !== w.cur) continue;   // VS: this seat's own units (its caps and its share of the world cap)
     alive.n++;
     alive.by[e.kind]++;
   }
+}
+
+/** The enemy ceiling this director plays against: solo CITY.maxEnemies; VS the world cap split between the seats. */
+function maxEnemiesFor(w: World): number {
+  return w.mode === 'vs' ? Math.floor(CITY.maxEnemies / Math.max(1, w.players.length)) : CITY.maxEnemies;
 }
 
 function kindAllowed(w: World, k: EnemyKind): boolean {
@@ -165,6 +179,7 @@ function weightOf(w: World, k: EnemyKind): number {
 
 /** p20: × budget at Size IV outside a boss fight — SIZE_IV_RAMP_FROM at the breach level rising to × 1 at the city lock */
 function sizeIvRamp(w: World): number {
+  if (w.mode === 'vs') return 1;   // VS: no city lock to ramp toward
   const T = w.titan;
   if (T.rank !== 3 || SIZE_IV_RAMP_FROM >= 1) return 1;
   const u = clamp((T.level - RANK_LEVELS[3]) / (RANK_LEVELS[4] - RANK_LEVELS[3]), 0, 1);
@@ -173,7 +188,13 @@ function sizeIvRamp(w: World): number {
 
 /** Budget points per second at the current time/rank (§9). */
 export function budgetRate(w: World): number {
-  const r = (1.2 + (0.9 * Math.min(w.t / PACE_STRETCH, 600)) / 60 + 0.6 * w.titan.rank) * (DIRECTOR_BUDGET_RANK_MUL[w.titan.rank] ?? 1);
+  const vs = w.mode === 'vs';
+  let r = (1.2 + (0.9 * Math.min(w.t / (vs ? paceStretchFor('vs') : PACE_STRETCH), 600)) / 60 + 0.6 * w.titan.rank) * (DIRECTOR_BUDGET_RANK_MUL[w.titan.rank] ?? 1);
+  if (vs) {
+    // vs_design.md section 8: PvE is pressure, rivals are the threat: x0.6 per titan, x1.3 for the FRONT PAGE crown
+    r *= VS.director.budgetMulPerTitan;
+    if (w.vs !== null && w.vs.crown === w.cur) r *= VS.director.crownMul;
+  }
   const out = bossRules(w) ? r * BOSS_SPAWN_MUL : r * sizeIvRamp(w);
   return out * endlessBudgetMul(w)    // v2: EXTENDED COVERAGE escalation (1 outside endless)
     * gateSpawnMul(w);                // GATEKEEPERS §6.3: GATES.spawnMul × pressure while a home gatekeeper is alive (1 otherwise)
@@ -187,7 +208,7 @@ function spawnGroup(w: World, kind: EnemyKind, n: number): number {
   const T = w.titan, rs = w.rng.spawn;
   ringPoint(w, kind, P);
   if (kind === 'squad') {
-    const sid = w.director.squadSeq++;
+    const sid = nextSquadId(w);
     // wedge facing the titan: the leader (slot 0) nearest, the rest fanned out behind it
     const h = atan2(T.x - P.x, T.z - P.z);
     const fx = sin(h), fz = cos(h), rx = -fz, rz = fx;
@@ -214,7 +235,8 @@ function spawnGroup(w: World, kind: EnemyKind, n: number): number {
 function runWave(w: World): void {
   const D = w.director, rs = w.rng.spawn;
   countAlive(w);
-  const room0 = CITY.maxEnemies - alive.n;
+  const maxEn = maxEnemiesFor(w);
+  const room0 = maxEn - alive.n;
   if (room0 <= 0) return;
   D.wave++;
   w.events.push({ type: 'waveStart', wave: D.wave });
@@ -229,7 +251,7 @@ function runWave(w: World): void {
       const g = GROUP[k][0];
       if (def.cost * g > D.spawnBudget + 1e-9) continue;
       if (alive.by[k] + g > capOf(w, k)) continue;
-      if (alive.n + g > CITY.maxEnemies || bodies + g > MAX_PER_WAVE) continue;
+      if (alive.n + g > maxEn || bodies + g > MAX_PER_WAVE) continue;
       const wt = weightOf(w, k);
       if (!(wt > 0)) continue;
       cand.push(k);
@@ -241,7 +263,7 @@ function runWave(w: World): void {
     const def = ENEMIES[kind];
     const [g0, g1] = GROUP[kind];
     let n = g0 + Math.floor(rs() * (g1 - g0 + 1));
-    n = Math.min(n, Math.floor(D.spawnBudget / def.cost), capOf(w, kind) - alive.by[kind], CITY.maxEnemies - alive.n, MAX_PER_WAVE - bodies);
+    n = Math.min(n, Math.floor(D.spawnBudget / def.cost), capOf(w, kind) - alive.by[kind], maxEn - alive.n, MAX_PER_WAVE - bodies);
     if (kind === 'squad') n = SQUAD_SIZE;
     if (n < g0) break;
     const got = spawnGroup(w, kind, n);
@@ -276,7 +298,10 @@ function spawnElite(w: World): void {
 const BF_HOLD: FrameHold = { held: 0, quietT: 0, holdS: 0, relT: -1, relD: 0 };
 function stepBossFrame(w: World): void {
   const D = w.director, dat = D.data;
-  const b = w.boss;
+  // VS: a rig only frames the seats it concerns (it hunts them, or they are within 2.2 spawn rings of it); a far-away
+  // seat's camera / spawn ring must not stretch toward a fight it is not in (that seat sees "no boss")
+  const b = w.mode === 'vs' && w.boss && w.boss.alive && w.boss.data.tslot !== w.cur
+    && hypot(w.titan.x - w.boss.x, w.titan.z - w.boss.z) > 2.2 * ringRadius(w) ? null : w.boss;
   stepPostFrame(w);
   if (!b || !b.alive) {
     // GATEKEEPERS §6.4: after a gate kill the held framing is not released while the breach tween runs —
@@ -400,7 +425,7 @@ export function stepDirector(w: World): void {
   // killT[3] above; the old ELITE_AT_S 390 default must not fire first), never on a kill tick before its breach
   // flush (w.gates.active / breachDue still set), and the rank IV rule only for the dev bypass (Size IV without it)
   const eliteOpen = Number.isFinite(w.gates.killT[3]) || (T.rank >= 3 && w.gates.active === 0 && w.gates.breachDue === 0);
-  if (!D.bossSpawned && !gatePending && !fightAlive(w) && eliteOpen && w.gates.active === 0 && w.gates.breachDue === 0) {
+  if (w.mode !== 'vs' && !D.bossSpawned && !gatePending && !fightAlive(w) && eliteOpen && w.gates.active === 0 && w.gates.breachDue === 0) {   // VS: no RAMROD (the tenders take that role)
     // p20: the gates.ts float convention (accumulated w.t reads 829.6666666666 against a 829.67 schedule; the
     // 20-minute run exposed the one-tick-late RAMROD, probe_gatekeepers case 14)
     if (D.elitesSpawned === 0 && w.t >= D.eliteT - 1e-9) spawnElite(w);

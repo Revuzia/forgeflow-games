@@ -5,6 +5,11 @@
 // and drives the glow parts (MOLO throat/gills, VOLT-KITE static mane + kite fin, HEARTHBACK
 // magma seams + crater by kit.stored/kit.cap, BRIARWICK spore pods). Reads the sim, never writes it.
 //
+// ONLINE VS (lane B-VIEW): TitanView is now a SEAT MANAGER. The single-titan view below is `TitanActor` (unchanged
+// logic); in VS one actor per seat is mounted and each is updated with the world CURSOR bound to its seat
+// (core/players.ts bindPlayer) and only that seat's events (ev.p === slot), so every `w.titan` / `w.ult` /
+// `w.meta` read inside the actor is that seat's. Solo: exactly one actor on slot 0 with the unfiltered frame.
+//
 // Run end (F18): on 'dead' the animator plays the DEFEAT pose (stagger → topple onto the flank →
 // bounce → legs out, eyes shut) — this view picks the flank that turns the belly to the camera,
 // keeps the fallen body resting ON the ground (skinned-vertex ground clamp while it moves) and
@@ -29,6 +34,7 @@ import { ULTS } from '../data/ultimates.ts';
 import { TITAN_PALETTES } from '../data/palettes.ts';
 import { CINE } from '../data/cine.ts';
 import { sizeLocked } from '../meta/gates.ts';
+import { bindPlayer } from '../core/players.ts';
 
 /**
  * Night look (LOCKWATER). The navy street (#0d1a26) and the #1b1426 ink leave a dark hide with no
@@ -89,7 +95,9 @@ interface Puff { x: number; y: number; z: number; vx: number; vy: number; vz: nu
 const _dm = new THREE.Matrix4(), _dq = new THREE.Quaternion(), _dp = new THREE.Vector3(), _ds = new THREE.Vector3(), _de = new THREE.Euler();
 const _cv = new THREE.Vector3();
 
-export class TitanView implements ViewModule {
+export class TitanActor implements ViewModule {
+  /** the seat this actor draws (VS); 0 in solo */
+  slot = 0;
   private readonly ctx: ViewCtx;
   private model: TitanModel | null = null;
   private anim: TitanAnimator | null = null;
@@ -218,8 +226,13 @@ export class TitanView implements ViewModule {
         s.downSide = this.pickDownSide(w);
         s.deadT = 0;
       } else s.deadT! += dt;
-    } else s.deadT = -1;
-    if (w.run.result === 'clear' && T.alive) s.clearT = s.clearT! >= 0 ? s.clearT! + dt : 0; else s.clearT = -1;
+    } else {
+      if (s.deadT! >= 0) this.revive(w);          // VS: an EVICTED titan is back on its feet (respawn)
+      s.deadT = -1;
+    }
+    // 'clear' = the solo victory roar; VS: the match winner roars (run.result 'vs', World.vs.winner = this seat)
+    const won = w.run.result === 'clear' || (w.run.result === 'vs' && !!w.vs && w.vs.winner === this.slot);
+    if (won && T.alive) s.clearT = s.clearT! >= 0 ? s.clearT! + dt : 0; else s.clearT = -1;
     if (this.aimT >= 0) { this.aimT += dt; if (this.aimT > 0.6) this.aimT = -1; }
 
     // locomotion
@@ -329,7 +342,10 @@ export class TitanView implements ViewModule {
   // ─────────────────────────────── internals ───────────────────────────────
   private placeRoot(w: World, alpha: number): void {
     const T = w.titan, root = this.model!.root;
-    const a = clamp(alpha, 0, 1);
+    let a = clamp(alpha, 0, 1);
+    // VS respawn / spawn teleport: the sim moves the titan in one tick, so interpolating would streak it across the
+    // city for a frame. A move of this size is never walking (mode-gated: solo draws exactly as before).
+    if (w.mode === 'vs' && a < 1 && Math.hypot(T.x - T.px, T.z - T.pz) > Math.max(25, 6 * T.height)) a = 1;
     root.position.set(lerpPose(T.px, T.x, a), 0, lerpPose(T.pz, T.z, a));
     root.rotation.set(0, lerpAngle(T.pheading, T.heading, a), 0);
     root.scale.setScalar(Math.max(0.01, lerpPose(this.hPrev, this.hCur, a)));
@@ -344,6 +360,16 @@ export class TitanView implements ViewModule {
       root.position.z += Math.cos(this.strainT * 63) * tr;
     }
     if (this.lift !== 0) root.position.y = this.lift;
+  }
+
+  /** VS: back on its feet after an EVICTED topple: drop the ground-clamp lift and the dust latch (a solo death is final) */
+  private revive(w: World): void {
+    this.lift = 0;
+    this.dustDone = false;
+    const root = this.model ? this.model.root : null;
+    if (root) root.position.y = 0;
+    for (const p of this.puffs) p.t = p.life;
+    this.hPrev = this.hCur = w.titan.height;
   }
 
   /**
@@ -680,5 +706,70 @@ export class TitanView implements ViewModule {
     this.model = null;
     this.anim = null;
     this.id = null;
+  }
+}
+
+// ─────────────────────────────── the seat manager ───────────────────────────────
+
+/**
+ * ONLINE VS (lane B-VIEW): one TitanActor per seat. Solo: one actor, the frame passes through untouched (byte-identical
+ * to the single-titan view). VS: for each seat the world cursor is bound to it and the actor gets only that seat's
+ * events; the cursor is left on the view seat at the end (the rest of the frame reads `w.titan` for the local seat).
+ */
+export class TitanView implements ViewModule {
+  private readonly ctx: ViewCtx;
+  private readonly actors: TitanActor[] = [];
+  private n = 1;
+  private readonly fi: FrameInfo = { alpha: 1, dt: 0, time: 0, events: [], camDist: 1, frozen: false };
+  private readonly evBuf: SimEvent[] = [];
+
+  constructor(ctx: ViewCtx) {
+    this.ctx = ctx;
+    this.actors.push(new TitanActor(ctx));
+  }
+
+  private actor(i: number): TitanActor {
+    let a = this.actors[i];
+    if (!a) { a = new TitanActor(this.ctx); a.slot = i; this.actors[i] = a; }
+    return a;
+  }
+
+  /** The view seat's model root (null when unmounted) — for cameras / photo framing. */
+  get object(): THREE.Object3D | null { return this.actors[0] ? this.actors[0].object : null; }
+
+  /** a seat's model root (VS nameplates / readability anchors) */
+  objectOf(slot: number): THREE.Object3D | null { const a = this.actors[slot]; return a && slot < this.n ? a.object : null; }
+
+  mount(w: World): void {
+    this.n = Math.max(1, w.players.length);
+    if (w.mode !== 'vs') { this.actors[0].slot = 0; this.actors[0].mount(w); return; }
+    for (let i = 0; i < this.n; i++) {
+      bindPlayer(w, i);
+      this.actor(i).mount(w);
+    }
+    bindPlayer(w, w.view);
+  }
+
+  update(w: World, f: FrameInfo): void {
+    if (w.mode !== 'vs') { this.actors[0].update(w, f); return; }
+    const g = this.fi;
+    g.alpha = f.alpha; g.dt = f.dt; g.time = f.time; g.camDist = f.camDist; g.frozen = f.frozen;
+    const ev = f.events, buf = this.evBuf;
+    for (let i = 0; i < this.n; i++) {
+      buf.length = 0;
+      for (let k = 0; k < ev.length; k++) if (ev[k].p === i) buf.push(ev[k]);
+      g.events = buf;
+      bindPlayer(w, i);
+      this.actors[i].update(w, g);
+    }
+    bindPlayer(w, w.view);
+  }
+
+  /** the cinematic opening is a solo thing: it drives the view seat's actor */
+  faceAnchor(out: FaceAnchor): boolean { return this.actors[0].faceAnchor(out); }
+  setCine(ch: CineChannels | null): void { this.actors[0].setCine(ch); }
+
+  unmount(): void {
+    for (const a of this.actors) a.unmount();
   }
 }

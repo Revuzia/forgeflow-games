@@ -407,10 +407,12 @@ export class ObjectiveView implements ViewModule {
     // ── bind live objectives to slots ──
     for (const s of this.slots) s.seen = false;
     const objs = map ? map.objectives : null;
+    const vsMode = w.mode === 'vs';
     if (objs) {
       for (let i = 0; i < objs.length; i++) {
         const o = objs[i];
         if (!o.alive) continue;
+        if (vsMode && o.oslot !== undefined && o.oslot !== w.view) continue;   // VS: every seat has its own private contract board
         let s = this.findSlot(o.id);
         if (!s) s = this.alloc(o, H);
         if (!s) continue;
@@ -644,6 +646,7 @@ export class ObjectiveView implements ViewModule {
 
   private onEvent(w: World, e: SimEvent): void {
     if (e.type !== 'objectiveDone') return;
+    if (w.mode === 'vs' && e.p !== undefined && e.p >= 0 && e.p !== w.view) return;   // another seat's board
     let st: Stamp | null = null;
     for (const s of this.stamps) if (!s.on) { st = s; break; }
     if (!st) st = this.stamps[0];

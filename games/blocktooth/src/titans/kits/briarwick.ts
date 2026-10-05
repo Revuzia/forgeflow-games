@@ -26,11 +26,12 @@ import { enemiesInCircle, nearestEnemies } from '../../combat/spatial.ts';
 import { spawnHazard } from '../../combat/hazards.ts';
 import { buildingsInRect } from '../../city/citysim.ts';
 import { healTitan } from '../titansim.ts';
-import { titanSpeed } from '../../core/config.ts';
+import { VS, titanSpeed } from '../../core/config.ts';
 import {
   S, aimPoint, autoInterval, closestOnBuilding, distToBuilding, emitAbility, emitAttack, faceToward, hookCooldown,
   idleAuto, knockFor, kv, rearmAuto, titanHazards,
 } from './common.ts';
+import { RIVAL_KNOCK_H, hitRivalsInShape, nearestRival, pvpLive, rivalHit, rivalSlow, rivalSlots, rivalsInShape } from '../rivals.ts';   // B-TITAN (VS): BURR LASH / pods / POP-UP PARK vs a rival
 
 /** Tuning (mutable so probes can sweep them at runtime). Ranges/radii in titan heights H, times in s. */
 export const BRIAR = {
@@ -126,7 +127,7 @@ const RING_OPTS: DamageOpts = { src: 'titan', kind: 'seed' };
 /** Floor-break detection by footprint diff (catches breaks from every source and every point of the
  *  tick — contact, lash, bursts, triggers): building id → alive floors / last tick seen, per world. */
 interface BreakCache { alive: Map<number, number>; seen: Map<number, number>; }
-const caches = new WeakMap<World, BreakCache>();
+const caches = new WeakMap<object, BreakCache>();   // B-CORE: keyed by the TitanState (per player), not the World
 
 export function init(): Record<string, number> {
   return {
@@ -190,7 +191,7 @@ const pool: Enemy[] = [];
 const LANE = { k: 'lane' as const, x: 0, z: 0, dir: 0, len: 0, w: 0 };
 /** the chosen lash: heading, distance to the aim point (the pod lands there), what it is aimed at (KIND_*) */
 const pick = { dir: 0, d: 0, kind: 0 };
-const KIND_FOE = 0, KIND_BOSS = 1, KIND_CITY = 2;
+const KIND_FOE = 0, KIND_BOSS = 1, KIND_CITY = 2, KIND_RIVAL = 3;   // KIND_RIVAL: VS only (a rival titan in reach)
 /** laneHits side output: distance along the lane of the nearest foe in it */
 let laneNear = 0;
 
@@ -354,6 +355,12 @@ function aimAtCity(w: World, t: Target | null, len: number): boolean {
 function selectLash(w: World, len: number, width: number): boolean {
   const T = w.titan;
   const t = findTarget(w, T.x, T.z, len, true);
+  const rv = nearestRival(w, len);            // VS (PvP live): a rival inside the lash's reach is whipped before anything else
+  if (rv >= 0) {
+    const Rt = w.players[rv].titan;
+    pick.dir = headingOf(Rt.x - T.x, Rt.z - T.z); pick.d = Math.min(len, hypot(Rt.x - T.x, Rt.z - T.z)); pick.kind = KIND_RIVAL;
+    return true;
+  }
   if (!t) return false;
   if (t.kind === 'boss') {
     aimPoint(w, t, T.x, T.z, aim);
@@ -421,6 +428,7 @@ function lash(w: World): void {
   K.lashDir = dir; K.lashWind = -1; K.lashW = width; K.prevDir = dir; K.lashAge = 0;
   LASH_OPTS.knock = knockFor(w, BRIAR.lashKnock);
   const hits = damageArea(w, { k: 'lane', x: T.x, z: T.z, dir, len, w: width }, titanDamage(w, BRIAR.lashDmg), LASH_OPTS);
+  if (w.mode === 'vs') hitRivalsInShape(w, { k: 'lane', x: T.x, z: T.z, dir, len, w: width }, VS.kitPct.briarwick.auto, 'vine', 'briar.auto', RIVAL_KNOCK_H.auto);   // BURR LASH: 3 % of a rival's max HP
   K.lashN = hits;
   // the view draws the whip + crack along exactly this lane (x0,z0 → x1,z1, width kit.lashW) and flashes the foes in it
   const x1 = T.x + sin(dir) * len, z1 = T.z + cos(dir) * len;
@@ -498,6 +506,7 @@ function stepPods(w: World): void {
 
 function foeNear(w: World, p: { x: number; z: number }, r: number): boolean {
   const px = p.x, pz = p.z;
+  if (w.mode === 'vs' && rivalNear(w, px, pz, r)) return true;   // VS: a rival touching a RIPE pod sets it off (PvP live only)
   enemiesInCircle(w, px, pz, r, enemyBuf);
   for (let i = 0; i < enemyBuf.length; i++) if (enemyBuf[i].alive && enemyBuf[i].hp > 0) return true;
   const B = w.boss;
@@ -505,6 +514,49 @@ function foeNear(w: World, p: { x: number; z: number }, r: number): boolean {
     for (const part of B.parts) if (hypot(part.x - px, part.z - pz) - part.r <= r) return true;
   }
   return false;
+}
+
+/** VS: a rival titan's body within `r` of (x, z) while PvP is live (OPEN HOUSE pods ignore rivals). */
+function rivalNear(w: World, x: number, z: number, r: number): boolean {
+  if (!pvpLive(w)) return false;
+  const slots = rivalSlots(w);
+  for (let i = 0; i < slots.length; i++) {
+    const p = w.players[slots[i]];
+    if (p.vs.spawnProtT > 0) continue;
+    if (hypot(p.titan.x - x, p.titan.z - z) - p.titan.radius <= r) return true;
+  }
+  return false;
+}
+
+const RIV: number[] = [];
+const RIV_SHAPE = { k: 'circle' as const, x: 0, z: 0, r: 0 };
+/** per-rival counters of pods that reached it in the CURRENT POP-UP PARK cascade (index = slot): at most podChainMax count */
+const CHAIN_KEY = ['sim_chainHit0', 'sim_chainHit1', 'sim_chainHit2', 'sim_chainHit3'];
+
+/**
+ * VS: a pod burst / the horn ring reaches rivals standing in the circle: `pct` of their max HP (before power / edge / phase) and a
+ * TANGLE (40 % slow for tangleS; CC rules apply, so B-VS caps it and grants CLEARED). `chained` = a POP-UP PARK cascade pod: at most
+ * VS.kitPct.briarwick.podChainMax pods count per rival per cascade.
+ */
+function burstRivals(w: World, x: number, z: number, r: number, pct: number, tag: string, knockH: number, chained: boolean): void {
+  RIV_SHAPE.x = x; RIV_SHAPE.z = z; RIV_SHAPE.r = r;
+  rivalsInShape(w, RIV_SHAPE, RIV);
+  const n = RIV.length;
+  if (n === 0) return;
+  const list: number[] = [];
+  for (let i = 0; i < n; i++) list.push(RIV[i]);
+  const K = w.titan.kit, KB = VS.kitPct.briarwick;
+  for (let i = 0; i < n; i++) {
+    const v = list[i];
+    if (chained) {
+      const c = K[CHAIN_KEY[v]] ?? 0;
+      if (c >= KB.podChainMax) continue;
+      K[CHAIN_KEY[v]] = c + 1;
+    }
+    // a cascade pod is a SLICE (dot): it neither waits on nor grants i-frames, so the pods 0.06 s apart each count (up to the cap)
+    rivalHit(w, v, pct, 'seed', tag, x, z, knockH, chained);
+    rivalSlow(w, v, 1 - KB.tangleSlow, KB.tangleS);
+  }
 }
 
 /** Burst one pod: circle damage, tangle, heal, and set off the ripe pods around it (chain). */
@@ -527,6 +579,8 @@ function burst(w: World, h: Hazard, link: number, src: number): void {
   damageArea(w, { k: 'circle', x, z, r }, titanDamage(w, BRIAR.burstDmg) * mul, BURST_OPTS);
   snapAfter(w);
   tangle(w, x, z, r, BRIAR.tangleS);
+  // VS: a pod reaches a rival: kitPct.briarwick.pod (3 %, x greenMul if unripe) + TANGLE; a hook cascade counts <= podChainMax pods per rival
+  if (w.mode === 'vs') burstRivals(w, x, z, r, VS.kitPct.briarwick.pod * (ripe ? 1 : BRIAR.greenMul), src === SRC_HOOK ? 'briar.chain' : 'briar.pod', RIVAL_KNOCK_H.auto, src === SRC_HOOK);
   w.events.push({ type: 'explosion', x, z, r, kind: 'seed' });
   w.events.push({ type: 'bloomBurst', x, z, r, link, ripe: ripeness });
   // spores drift back to the titan
@@ -578,8 +632,8 @@ function snapAfter(w: World): void {
 // ─────────────────────────────── floor breaks sprout pods ───────────────────────────────
 function detectBreaks(w: World): void {
   const T = w.titan;
-  let c = caches.get(w);
-  if (!c) { c = { alive: new Map(), seen: new Map() }; caches.set(w, c); }
+  let c = caches.get(w.titan);
+  if (!c) { c = { alive: new Map(), seen: new Map() }; caches.set(w.titan, c); }
   if (c.alive.size > 4096) { c.alive.clear(); c.seen.clear(); }
   const near = BRIAR.bloomNearH * T.height;
   buildingsInRect(w.city, T.x - near, T.z - near, T.x + near, T.z + near, idBuf);
@@ -620,6 +674,11 @@ function popUpPark(w: World): void {
   damageArea(w, { k: 'circle', x: T.x, z: T.z, r: rr }, titanDamage(w, BRIAR.ringDmg * power), RING_OPTS);
   snapAfter(w);
   tangle(w, T.x, T.z, rr, BRIAR.ringTangleS);
+  if (w.mode === 'vs') {
+    // a new cascade: every rival's pod-chain count starts again; the horn ring itself: ringPop (6 %) + TANGLE
+    for (let i = 0; i < CHAIN_KEY.length; i++) if (K[CHAIN_KEY[i]] !== undefined) K[CHAIN_KEY[i]] = 0;
+    burstRivals(w, T.x, T.z, rr, VS.kitPct.briarwick.ringPop, 'briar.ring', RIVAL_KNOCK_H.hook, false);
+  }
   w.events.push({ type: 'explosion', x: T.x, z: T.z, r: rr, kind: 'seed' });
   // 2) seed volley at the nearest foes (then the nearest boss part, then a fan ahead)
   const n = Math.max(3, Math.min(10, BRIAR.volleyN + Math.round(2 * (power - 1))));

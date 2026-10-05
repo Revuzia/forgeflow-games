@@ -17,6 +17,7 @@ import type { PauseCtx } from '../v2types.ts';
 import { loadSettings, saveSettings } from '../core/save.ts';
 import { STR, TICKER } from '../data/strings.ts';
 import { SCREENS } from '../data/strings_screens.ts';
+import { VS as STR_VS } from '../data/strings_vs.ts';
 import { UPGRADE_BY_ID } from '../data/upgrades.ts';
 import { PERKS_DEF } from '../data/perks.ts';
 import { familyColor, glyphSvg, iconFor } from './icons.ts';
@@ -74,7 +75,7 @@ export class TitleScreen {
   private readonly layer: HTMLDivElement;
   private readonly clock: HTMLElement;
   private readonly crawl: HTMLElement;
-  private session: ModalSession<'play' | 'goals'> | null = null;
+  private session: ModalSession<'play' | 'goals' | 'vs'> | null = null;
 
   constructor(root: HTMLElement, input: Input) {
     this.input = input;
@@ -130,6 +131,16 @@ export class TitleScreen {
     chip.addEventListener('mousedown', (ev) => { ev.preventDefault(); ev.stopPropagation(); });
     chip.addEventListener('click', (ev) => { ev.stopPropagation(); this.goals(); });
     press.appendChild(chip);
+    // ONLINE VS (lane B-VIEW): VS PRACTICE [V] — you + 3 bots in one city (vs_design.md §14.1)
+    const vsChip = el('button', 'bt-btn bt-btn-ghost bt2-goals-chip bt2-title-chip bt-vs-chip-btn');
+    vsChip.type = 'button';
+    vsChip.tabIndex = -1;
+    vsChip.dataset.v2 = 'vs-chip';
+    vsChip.appendChild(keyChip(STR_VS.menu.key));
+    vsChip.appendChild(el('span', '', STR_VS.menu.chip));
+    vsChip.addEventListener('mousedown', (ev) => { ev.preventDefault(); ev.stopPropagation(); });
+    vsChip.addEventListener('click', (ev) => { ev.stopPropagation(); this.vsPick(); });
+    press.appendChild(vsChip);
     onTap(L, () => this.go());
 
     const lower = div('bt-title-lower', L);
@@ -144,7 +155,7 @@ export class TitleScreen {
 
   /** v2 (TitleScreenApi, FEATURES_V2 §13.1): 'play' on ENTER / pad A / Start / click, 'goals' on G / pad X
    *  (read from UiPress.key: pad X maps to act 'reroll', which the title otherwise ignores) or the chip. */
-  run(): Promise<'play' | 'goals'> {
+  run(): Promise<'play' | 'goals' | 'vs'> {
     if (this.session && !this.session.done) this.session.abort();
     this.clock.textContent = wallClock();
     // CSS crawl: title lines + a few wire headlines, duplicated so the loop is seamless
@@ -160,8 +171,9 @@ export class TitleScreen {
     }
     this.layer.classList.remove('bt-hidden');
     this.layer.classList.remove('leaving');
-    const { promise, session } = runModal<'play' | 'goals'>(this.layer, this.input, (p) => {
+    const { promise, session } = runModal<'play' | 'goals' | 'vs'>(this.layer, this.input, (p) => {
       if (p.key === 'g' || p.key === 'pad:2') { this.goals(); return; }
+      if (p.key === 'v' || p.key === 'pad:3') { this.vsPick(); return; }
       if (p.act === 'confirm' || p.act === 'alt' || p.key === 'pad:0' || p.key === 'pad:9') this.go();
     }, {
       armMs: 350,
@@ -182,6 +194,13 @@ export class TitleScreen {
     const s = this.session;
     if (!s || s.done) return;
     s.finish('goals', 0);
+  }
+
+  private vsPick(): void {
+    const s = this.session;
+    if (!s || s.done) return;
+    this.layer.classList.add('leaving');
+    s.finish('vs', flashesReduced() ? 120 : 380);
   }
 }
 

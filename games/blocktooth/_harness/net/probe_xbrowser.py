@@ -34,8 +34,12 @@ FULL_CFGS = [
     ('voltkite', 'whitestacks', 1337, 'fresh'),
     ('hearthback', 'lockwater', 99, 'fresh'),
     ('briarwick', 'grideast', 7, 'full'),
+    # VS (GATE 2026-10-05): a 4-bot VS match, the whole 4-seat world hashed (src/net/vshash.ts); titan field = the lineup
+    ('molo+voltkite+hearthback+briarwick', 'grideast', 1337, 'vs'),
+    ('briarwick+hearthback+voltkite+molo', 'lockwater', 7, 'vs'),
 ]
-QUICK_CFGS = [('molo', 'grideast', 1337, 'fresh'), ('briarwick', 'lockwater', 7, 'full')]
+QUICK_CFGS = [('molo', 'grideast', 1337, 'fresh'), ('briarwick', 'lockwater', 7, 'full'),
+              ('molo+voltkite+hearthback+briarwick', 'whitestacks', 99, 'vs')]
 
 NODE_RUNNER = r"""
 import fs from 'node:fs';
@@ -43,7 +47,7 @@ globalThis.window = globalThis;
 (0, eval)(fs.readFileSync(process.argv[2], 'utf8'));
 const cfgs = JSON.parse(process.argv[3]);
 const ticks = Number(process.argv[4]);
-const runs = cfgs.map(([t, b, s, m]) => globalThis.btProbe.runProbe(t, b, s, ticks, m));
+const runs = cfgs.map(([t, b, s, m]) => m === 'vs' ? globalThis.btProbe.runProbeVs(t, b, s, ticks) : globalThis.btProbe.runProbe(t, b, s, ticks, m));
 process.stdout.write(JSON.stringify({ version: 'node ' + process.version, math: globalThis.btProbe.mathHashes(), runs }));
 """
 
@@ -98,7 +102,7 @@ def run_browser(name, launcher, cfgs, ticks):
         pg.wait_for_function('() => !!window.btProbe', timeout=60000)
         runs = []
         for t, bi, s, m in cfgs:
-            runs.append(pg.evaluate('([t, b, s, n, m]) => window.btProbe.runProbe(t, b, s, n, m)', [t, bi, s, ticks, m]))
+            runs.append(pg.evaluate('([t, b, s, n, m]) => m === "vs" ? window.btProbe.runProbeVs(t, b, s, n) : window.btProbe.runProbe(t, b, s, n, m)', [t, bi, s, ticks, m]))
         math = pg.evaluate('() => window.btProbe.mathHashes()')
         return {'version': f'{name} {b.version}', 'math': math, 'runs': runs, 'pageerrors': errors,
                 'wall_s': round(time.time() - t0, 1)}

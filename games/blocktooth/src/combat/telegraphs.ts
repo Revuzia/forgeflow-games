@@ -12,12 +12,19 @@
 //   * active > 0 → `dmg` is damage PER SECOND while active: ticks at 5 Hz (first tick on fire,
 //     each tick dealing dmg × 0.2) for `active` seconds, then alive = false.
 
+// ONLINE VS (lane B-WORLD): every telegraph remembers its seat (Telegraph.oslot: the firing seat of a titan tell, the
+// seat the enemy / rig was hunting for a hostile one) and is stepped AS that seat (bound), so a titan's blast credits
+// its owner and queues PvP hits, an onFire hook sees the right w.titan, and RED LIGHT freezes only the collector's
+// seat. A hostile tell hurts EVERY live titan inside it (damage.ts hurtTitanByShape).
+
 import type { DamageKind, DamageOpts, Owner, Shape, Telegraph, TelegraphStyle, World } from '../core/types.ts';
 import { circleInShape, shapeCenter } from '../core/math.ts';
 import type { Attacker } from './damage.ts';
 import { damageArea, hurtTitanByShape } from './damage.ts';
 import { nearestEnemy } from './spatial.ts';
 import { redLightActive } from '../meta/powerups.ts';
+import { withPlayer } from '../core/players.ts';
+import { redLightFor, seatHittable } from './targets.ts';
 
 /** Contract spawn record (+ optional titan-side damage modifiers, a superset — callers may omit). */
 export type TelegraphSpawn = {
@@ -98,6 +105,7 @@ export function spawnTelegraph(w: World, t: TelegraphSpawn): Telegraph {
   }
   const attacker = t.owner === 'titan' ? null : findAttacker(w, t.owner, t.shape, t.kind);
   extras.set(tg, { opts, attacker, nextTick: 0 });
+  if (w.mode === 'vs') tg.oslot = w.cur;   // ONLINE VS: the seat this tell belongs to (-1 = world-owned, e.g. the ring mortar; see the header)
   w.telegraphs.push(tg);
   w.events.push({ type: 'telegraphStart', id: tg.id, owner: tg.owner, style: tg.style });
   return tg;
@@ -126,8 +134,17 @@ function applyDamage(w: World, tg: Telegraph, x: TgExtra, dmg: number, first: bo
     if (!first && opts.crit === undefined) opts = { ...opts, noCrit: true };
     return damageArea(w, tg.shape, dmg, opts) > 0;
   }
-  const T = w.titan;
-  if (!(dmg > 0)) return T.alive && circleInShape(tg.shape, T.x, T.z, T.radius);
+  if (!(dmg > 0)) {
+    if (w.mode === 'vs') {   // VS: did the tell cover ANY live seat
+      for (let i = 0; i < w.players.length; i++) {
+        const R = w.players[i];
+        if (seatHittable(R) && circleInShape(tg.shape, R.titan.x, R.titan.z, R.titan.radius)) return true;
+      }
+      return false;
+    }
+    const T = w.titan;
+    return T.alive && circleInShape(tg.shape, T.x, T.z, T.radius);
+  }
   // an active (dps) telegraph is damage-over-time: every tick, including the first, is a DoT tick
   return hurtTitanByShape(w, tg.shape, dmg, tg.kind, x.attacker, tg.active > 0);
 }
@@ -139,32 +156,46 @@ export function stepTelegraphs(w: World): void {
   const n = list.length;   // telegraphs spawned during this pass start next tick
   // v2 RED LIGHT (FEATURES_V2 §6.1, pre-wired): enemy-owned paint stops counting down;
   // boss- and titan-owned telegraphs are unaffected
+  const vs = w.mode === 'vs';
   const red = redLightActive(w);
   for (let i = 0; i < n; i++) {
     const tg = list[i];
     if (!tg.alive) continue;
-    if (red && tg.owner === 'enemy') continue;
-    tg.t += dt;
-    const x = extraOf(w, tg);
-    if (!tg.fired) {
-      if (tg.t + EPS < tg.windup) continue;
-      tg.fired = true;
-      const first = applyDamage(w, tg, x, tg.active > 0 ? tg.dmg * TICK_S : tg.dmg, true);
-      if (first && tg.owner !== 'titan') tg.hitTitan = true;
-      const c = shapeCenter(tg.shape);
-      w.events.push({ type: 'telegraphFire', id: tg.id, owner: tg.owner, hit: first, x: c.x, z: c.z });
-      if (tg.onFire) tg.onFire(w, tg);
-      x.nextTick = TICK_S;
-      if (tg.active <= 0) { tg.alive = false; }
+    if (vs) {
+      // ONLINE VS: RED LIGHT is per collector; every tell is stepped AS its seat
+      const own = tg.oslot ?? -1;
+      if (tg.owner === 'enemy' && own >= 0 && redLightFor(w, own)) continue;
+      if (own >= 0) { withPlayer(w, own, () => { stepTelegraph(w, tg, dt); }); continue; }
+      stepTelegraph(w, tg, dt);
       continue;
     }
-    // active phase
-    const since = tg.t - tg.windup;
-    while (tg.alive && x.nextTick < tg.active - EPS && since + EPS >= x.nextTick) {
-      const hit = applyDamage(w, tg, x, tg.dmg * TICK_S, false);
-      if (hit && tg.owner !== 'titan') tg.hitTitan = true;
-      x.nextTick += TICK_S;
-    }
-    if (since + EPS >= tg.active) tg.alive = false;
+    if (red && tg.owner === 'enemy') continue;
+    stepTelegraph(w, tg, dt);
   }
+}
+
+/** One telegraph for one tick (the body of the old stepTelegraphs loop, unchanged). */
+function stepTelegraph(w: World, tg: Telegraph, dt: number): void {
+  tg.t += dt;
+  const x = extraOf(w, tg);
+  if (!tg.fired) {
+    if (tg.t + EPS < tg.windup) return;
+    tg.fired = true;
+    const first = applyDamage(w, tg, x, tg.active > 0 ? tg.dmg * TICK_S : tg.dmg, true);
+    if (first && tg.owner !== 'titan') tg.hitTitan = true;
+    const c = shapeCenter(tg.shape);
+    w.events.push({ type: 'telegraphFire', id: tg.id, owner: tg.owner, hit: first, x: c.x, z: c.z });
+    if (tg.onFire) tg.onFire(w, tg);
+    x.nextTick = TICK_S;
+    if (tg.active <= 0) { tg.alive = false; }
+    return;
+  }
+  // active phase
+  const since = tg.t - tg.windup;
+  while (tg.alive && x.nextTick < tg.active - EPS && since + EPS >= x.nextTick) {
+    const hit = applyDamage(w, tg, x, tg.dmg * TICK_S, false);
+    if (hit && tg.owner !== 'titan') tg.hitTitan = true;
+    x.nextTick += TICK_S;
+  }
+  if (since + EPS >= tg.active) tg.alive = false;
 }

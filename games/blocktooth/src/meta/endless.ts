@@ -67,7 +67,7 @@ function minutes(w: World): number {
 
 /** Only when run.result === 'clear'. Turns the cleared run into EXTENDED COVERAGE. */
 export function continueEndless(w: World): boolean {
-  if (w.run.result !== 'clear' || w.endless || !w.titan.alive) return false;
+  if (w.mode === 'vs' || w.run.result !== 'clear' || w.endless || !w.titan.alive) return false;   // VS has no clear / endless
   w.run.result = null;
   w.run.phase = 'endless';
   w.run.endT = -1;

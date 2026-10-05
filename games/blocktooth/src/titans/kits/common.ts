@@ -47,10 +47,20 @@ export function emitAbility(w: World, titan: TitanId, power: number): void {
   w.events.push({ type: 'ability', titan, x: w.titan.x, z: w.titan.z, power });
 }
 
-/** Alive titan-owned hazards of a kind, oldest first (hazards are appended in spawn order). */
+/**
+ * B-TITAN (online VS): who owns a titan-owned hazard = `Hazard.oslot`, stamped by combat/hazards.ts spawnHazard (B-WORLD) from the
+ * bound seat in VS (undefined in solo). Absent = slot 0. One accessor (this one) so the key can change in one place.
+ */
+export function hazardOwner(h: Hazard): number { return h.oslot ?? 0; }
+/** Is titan-owned hazard `h` the BOUND titan's? Always true in solo (one titan owns everything). */
+export function isOwnHazard(w: World, h: Hazard): boolean {
+  return w.mode !== 'vs' || hazardOwner(h) === w.cur;
+}
+
+/** Alive titan-owned hazards of a kind OF THE BOUND TITAN, oldest first (hazards are appended in spawn order). */
 export function titanHazards(w: World, kind: HazardKind, out: Hazard[]): Hazard[] {
   out.length = 0;
-  for (const h of w.hazards) if (h.alive && h.owner === 'titan' && h.kind === kind) out.push(h);
+  for (const h of w.hazards) if (h.alive && h.owner === 'titan' && h.kind === kind && isOwnHazard(w, h)) out.push(h);
   return out;
 }
 

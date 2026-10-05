@@ -50,6 +50,8 @@ import { addUproar } from './meta/ultimate.ts';
 import { placeObjectiveNear, spawnObjective } from './meta/objectives.ts';
 import { spawnPowerup } from './meta/powerups.ts';
 import { sanitizeRunMeta } from './meta/perks.ts';
+import { installVsSurface } from './testsurface_vs.ts';   // ONLINE VS (lane B-VIEW): __BT__.newVs / __BT__.vs
+import type { BtVsSurface } from './testsurface_vs.ts';
 
 export const BT_VERSION = 'blocktooth-0.1.0';
 
@@ -181,6 +183,10 @@ export interface BtSurface {
   renderBreakdown?(top?: number): BtRenderBreakdown;
   /** dev only: the live render core (scene / renderer / camera) for perf attribution probes */
   readonly debugCore?: RenderCore;
+  /** ONLINE VS (lane B-VIEW, testsurface_vs.ts): start a VS PRACTICE match; resolves when play has begun */
+  newVs?(opts: { titan?: string; biome?: string; seed?: number; bots?: string; palette?: number }): Promise<void>;
+  /** ONLINE VS (lane B-VIEW): the VS picture + DOM digest (+ `dev` set-up helpers with ?dev=1) */
+  vs?: BtVsSurface;
 }
 
 export interface BtRenderBreakdown {
@@ -656,6 +662,10 @@ export function installTestSurface(app: App): BtSurface {
     resume: () => app.resume(),
     toggle: () => app.togglePause(),
   };
+
+  const vsx = installVsSurface(app, dev);
+  surface.newVs = vsx.newVs;
+  surface.vs = vsx.vs;
 
   window.__BT__ = surface;
   window.__PAUSE__ = pauseSurface;

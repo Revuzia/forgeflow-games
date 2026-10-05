@@ -9,11 +9,16 @@
 //       hostile     → the titan (hurtTitan via the shape)
 //   * slow: `frost` hazards (or any hazard with data.slow = fraction) slow the opposing side by 40 %
 //     (data.slow overrides): enemies get slowT/slowMul, the titan gets titan.slowT/slowMul.
+// ONLINE VS (lane B-WORLD): a hazard remembers its seat (Hazard.oslot: the seat that laid it) and its ticks run AS that
+// seat (bound): a titan-owned hazard credits its owner, queues PvP hits on rivals standing in it (a wire shock, a magma
+// pool) and reports a slowing one to the VS lane; a hostile hazard hurts / slows EVERY live titan inside it.
 
 import type { DamageKind, DamageOpts, Enemy, Hazard, HazardKind, Owner, Shape, World } from '../core/types.ts';
 import { circleInShape } from '../core/math.ts';
-import { damageArea, hurtTitanByShape } from './damage.ts';
+import { damageArea, hurtTitanByShape, queueRivalSlow } from './damage.ts';
 import { enemiesInShape } from './spatial.ts';
+import { withPlayer } from '../core/players.ts';
+import { seatHittable } from './targets.ts';
 
 export type HazardSpawn = {
   owner: Owner;
@@ -72,6 +77,7 @@ export function spawnHazard(w: World, h: HazardSpawn): Hazard {
     tickT: TICK_S,   // first damage/slow tick on the first step
     data: h.data ?? {},
   };
+  if (w.mode === 'vs') hz.oslot = w.cur;   // ONLINE VS: the seat that laid it (-1 = world-owned; see the header)
   w.hazards.push(hz);
   return hz;
 }
@@ -99,6 +105,26 @@ function applySlow(w: World, h: Hazard, frac: number): void {
       e.slowMul = mul;
     }
     slowList.length = 0;
+    if (w.mode === 'vs') {
+      // ONLINE VS: a rival standing in a titan's slowing hazard is reported to the VS lane (CC rules cap and clear it)
+      for (let i = 0; i < w.players.length; i++) {
+        if (i === w.cur) continue;
+        const R = w.players[i].titan;
+        if (seatHittable(w.players[i]) && circleInShape(h.shape, R.x, R.z, R.radius)) queueRivalSlow(w, i, frac, damageKindOf(h.kind), R.x, R.z);
+      }
+    }
+    return;
+  }
+  if (w.mode === 'vs') {
+    // ONLINE VS: a hostile slowing hazard slows EVERY live titan inside it
+    for (let i = 0; i < w.players.length; i++) {
+      const R = w.players[i];
+      const T = R.titan;
+      if (!seatHittable(R) || !circleInShape(h.shape, T.x, T.z, T.radius)) continue;
+      if (T.slowT > 0 && T.slowMul < mul) continue;
+      T.slowT = Math.max(T.slowT, SLOW_LINGER_S);
+      T.slowMul = mul;
+    }
     return;
   }
   const T = w.titan;
@@ -113,21 +139,29 @@ export function stepHazards(w: World): void {
   const list = w.hazards;
   const dt = w.dt;
   const n = list.length;
+  const vs = w.mode === 'vs';
   for (let i = 0; i < n; i++) {
     const h = list[i];
     if (!h.alive) continue;
-    h.t += dt;
-    if (h.t >= h.life - EPS) { h.alive = false; continue; }
-    h.tickT += dt;
-    while (h.tickT + EPS >= TICK_S && h.alive) {
-      h.tickT -= TICK_S;
-      const frac = slowFrac(h);
-      if (frac > 0) applySlow(w, h, frac);
-      if (h.dps > 0) {
-        const dmg = h.dps * TICK_S;
-        if (h.owner === 'titan') damageArea(w, h.shape, dmg, titanOpts(h.kind));
-        else hurtTitanByShape(w, h.shape, dmg, damageKindOf(h.kind), null, true);   // DoT tick
-      }
+    const own = vs ? (h.oslot ?? -1) : -1;
+    if (own >= 0) { withPlayer(w, own, () => { stepHazard(w, h, dt); }); continue; }   // ONLINE VS: AS the seat that laid it
+    stepHazard(w, h, dt);
+  }
+}
+
+/** One hazard for one tick (the body of the old stepHazards loop, unchanged). */
+function stepHazard(w: World, h: Hazard, dt: number): void {
+  h.t += dt;
+  if (h.t >= h.life - EPS) { h.alive = false; return; }
+  h.tickT += dt;
+  while (h.tickT + EPS >= TICK_S && h.alive) {
+    h.tickT -= TICK_S;
+    const frac = slowFrac(h);
+    if (frac > 0) applySlow(w, h, frac);
+    if (h.dps > 0) {
+      const dmg = h.dps * TICK_S;
+      if (h.owner === 'titan') damageArea(w, h.shape, dmg, titanOpts(h.kind));
+      else hurtTitanByShape(w, h.shape, dmg, damageKindOf(h.kind), null, true);   // DoT tick
     }
   }
 }

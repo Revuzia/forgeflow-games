@@ -296,6 +296,7 @@ function miniWorld(biome: BiomeId, seed: number): World {
     meta: { unlocked: [], perk: null, palette: 0, reviveUsed: false },
     ult: {} as unknown as World['ult'], map: createMapState(), tally: createTally(), endless: null,
     gates: {} as unknown as World['gates'],   // GATEKEEPERS (K0): the city probe never reads the gate state
+    mode: 'solo', players: undefined as unknown as World['players'], cur: 0, pl: undefined as unknown as World['pl'], view: 0, vs: null,   // B-CORE: no player containers (creditTonnage tolerates it)
   };
 }
 function tickPrev(w: World): void {

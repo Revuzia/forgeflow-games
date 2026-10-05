@@ -14,6 +14,12 @@
 // acts on growth XP. gainMass is retired (kept as a no-op export for the pickup lane); titan.mass
 // is a mirror of SIZE progress (config sizeMassMirror) for views that still read it.
 //
+// ONLINE VS (lane B-TITAN): the same code steps every seat (core/world.ts binds one player at a time). VS-only additions, each behind
+// `w.mode === 'vs'` so a solo titan is byte-identical: the VS XP curve (xpToNextFor / cumXpAtFor), the CARD RAIL draft cadence
+// (vsDraftOwed: every level to LV 12 then every 2nd, never twice for a re-reached level), the leader-relative catch-up in place of the
+// schedule band (paceMul -> vs/comeback vsCatchUpMul), loseLevels (a KO), a decaying rival shove + root (titanfx.ts, read in stepTitan),
+// and the dash body-check on a rival (rivals.ts dashHitRivals). Titan-vs-titan rules live in rivals.ts / bodies.ts / the kits.
+//
 // Sim-private per-titan state lives in titan.kit under `sim_*` keys (plain numbers, so it is part of
 // the deterministic state and visible to debug tools). Kits may WRITE two hint keys that this module
 // reads on the next tick:  kit.sim_moveMul (own-speed multiplier, default 1) and
@@ -23,8 +29,8 @@ import { cos, exp, hypot, sin } from '../core/detmath.ts';
 import type { DamageKind, DamageOpts, Enemy, RankIndex, TitanDef, TitanState, Tier, World } from '../core/types.ts';
 import {
   AHEAD_FROM_RANK, AHEAD_GRACE_S, AHEAD_MIN, AHEAD_PER_MIN, CITY_PACE, CATCHUP_MAX, CATCHUP_PER_MIN, CRUSH_RATIO, GROW_TWEEN_S, LEVEL_GROW_S,
-  RANKS, RANK_LEVELS, RANK_SCHEDULE_S, SMASH_MIN_SPEED_FRAC, SMASH_SLOW, TIERS, TITAN, TITAN_RADIUS_PER_H, cumXpAt, sizeMassMirror,
-  titanHeightAt, titanSpeed, xpToNext,
+  RANKS, RANK_LEVELS, RANK_SCHEDULE_S, SMASH_MIN_SPEED_FRAC, SMASH_SLOW, TIERS, TITAN, TITAN_RADIUS_PER_H, VS, cumXpAt, cumXpAtFor,
+  sizeMassMirror, titanHeightAt, titanSpeed, xpToNext, xpToNextFor,
 } from '../core/config.ts';
 import { clamp, easeOutBack, headingOf, segDist, turnToward, wrapAngle } from '../core/math.ts';
 import { buildingsInRect, damageBuilding, damageProp, propsInRect, resolveCircleVsCity } from '../city/citysim.ts';
@@ -37,6 +43,10 @@ import { distToBuilding, propRadius } from './kits/common.ts';
 import { ultMoveMul } from '../meta/ultimate.ts';
 import { endlessDmgMul } from '../meta/endless.ts';
 import { fightAlive, lockGate } from '../meta/gates.ts';
+import { dashHitRivals } from './rivals.ts';   // B-TITAN (online VS): dash contact vs a rival (VS only; solo never reaches it)
+import { KB_DECAY } from './titanfx.ts';
+import { vsCatchUpMul } from '../vs/comeback.ts';   // B-VS: the leader-relative catch-up (vs_design §6.2 rule 2)
+export { knockTitan, pullTitan, rootTitan, slowTitan } from './titanfx.ts';   // B-VS applies a rival hit's effect through these
 
 // ─────────────────────────────── tuning (balance gate tunes these) ───────────────────────────────
 /** seconds to reach full speed from rest, per rank (snappy at Size I, weighty at V) */
@@ -202,6 +212,7 @@ export function stepTitan(w: World): void {
   K.sim_plowT = Math.max(0, num(K.sim_plowT, 0) - dt);
   K.sim_pressT = Math.max(0, num(K.sim_pressT, 0) - dt);
   K.sim_faceT = Math.max(0, num(K.sim_faceT, 0) - dt);
+  if (K.sim_rootT !== undefined && K.sim_rootT > 0) K.sim_rootT = Math.max(0, K.sim_rootT - dt);   // VS rival CC (rootTitan)
 
   // ── dash charges ──
   const maxCharges = Math.max(0, Math.round(stat(w, 'dashCharges')));
@@ -227,7 +238,7 @@ export function stepTitan(w: World): void {
   if (!T.moving) { mx = 0; mz = 0; m = 0; }
 
   // ── dash start ──
-  if (w.input.dash && T.dashT <= 0 && T.dashCharges >= 1) {
+  if (w.input.dash && T.dashT <= 0 && T.dashCharges >= 1 && !(num(K.sim_rootT, 0) > 0)) {
     let ddx = mx, ddz = mz;
     if (m <= INPUT_DEADZONE) { ddx = sin(T.heading); ddz = cos(T.heading); }
     const dl = hypot(ddx, ddz) || 1;
@@ -239,6 +250,7 @@ export function stepTitan(w: World): void {
     T.iframeT = Math.max(T.iframeT, TITAN.dashIframes);
     K.sim_dashIfrT = TITAN.dashIframes;            // dash-only i-frames (damage-over-time respects these)
     K.sim_dashX0 = T.x; K.sim_dashZ0 = T.z;
+    if (w.mode === 'vs') K.sim_dashHit = 0;         // VS: rivals this dash already struck (bit per slot)
     K.sim_dashSp = distM / TITAN.dashS;
     K.sim_dashLeft = distM;                        // exact path budget (the last tick is partial)
     w.events.push({ type: 'dash', x0: T.x, z0: T.z, x1: T.x + ddx * distM, z1: T.z + ddz * distM });
@@ -267,6 +279,7 @@ export function stepTitan(w: World): void {
       spMul *= Math.max(LEASH_OWN_SPEED_MUL, Math.min(1, (pull * LEASH_RESIST_MIN) / Math.max(1e-3, maxSp)));
     }
     spMul *= clamp(num(K.sim_moveMul, 1), 0, 2);
+    if (num(K.sim_rootT, 0) > 0) spMul = 0;          // VS: ROOTED by a rival (CC rules: <= 1 s)
 
     let tx = 0, tz = 0;
     if (T.moving) {
@@ -303,7 +316,15 @@ export function stepTitan(w: World): void {
   const x0 = T.x, z0 = T.z;
   const squeezing = num(K.sim_squeezeT, 0) > 0;
   const colR = squeezing ? T.radius * PIN_SQUEEZE : T.radius;
-  const dx = (vx + lpx) * dt, dz = (vz + lpz) * dt;
+  // VS: a rival's shove (knockTitan) adds a decaying velocity on top of the own + leash velocity
+  let kbx = 0, kbz = 0;
+  if (K.sim_kbx !== undefined || K.sim_kbz !== undefined) {
+    kbx = num(K.sim_kbx, 0); kbz = num(K.sim_kbz, 0);
+    const f = Math.max(0, 1 - KB_DECAY * dt);
+    K.sim_kbx = Math.abs(kbx * f) < 1e-3 ? 0 : kbx * f;
+    K.sim_kbz = Math.abs(kbz * f) < 1e-3 ? 0 : kbz * f;
+  }
+  const dx = (vx + lpx + kbx) * dt, dz = (vz + lpz + kbz) * dt;
   const len = hypot(dx, dz);
   const n = Math.max(1, Math.min(MAX_SUBSTEPS, Math.ceil(len / Math.max(0.05, T.radius * 0.5))));
   let pushX = 0, pushZ = 0, bumpTier = -1;
@@ -356,6 +377,7 @@ export function stepTitan(w: World): void {
   // ── contact smash + crush ──
   if (dashing || T.speed >= SMASH_MIN_SPEED_FRAC * maxSp) contactSmash(w, x0, z0, dashing, canFlatten);
   if (dashing || T.speed >= CRUSH_MIN_SPEED_FRAC * maxSp) crush(w);
+  if (dashing && w.mode === 'vs') dashHitRivals(w);   // VS: the dash body-checks a rival (LOW TACKLE / CALDERA SHOVE)
 
   // ── footsteps ──
   const moved = hypot(T.x - x0, T.z - z0);
@@ -513,6 +535,7 @@ function crush(w: World): void {
  * 1 otherwise (and at Size V).
  */
 export function paceMul(w: World): number {
+  if (w.mode === 'vs') return vsCatchUpMul(w, w.cur);   // VS: leader-relative catch-up instead of the schedule band (vs_design §6.2 rule 2)
   const T = w.titan;
   // GATEKEEPERS §2.2 / §4.2: the climax is governed (the city boss due or alive at Size IV); no catch-up
   // while any fight is alive
@@ -535,6 +558,19 @@ export function paceMul(w: World): number {
     }
   }
   return 1;
+}
+
+/**
+ * VS CARD RAIL cadence (vs_design §7): reaching `level` owes a draft when it is a level this titan never reached before
+ * (a KO + regrow never re-pays) AND it is on the cadence: every level up to VS.rail.everyLevelTo, then every thenEvery-th.
+ * Records the highest level reached (rail.data.maxLv) either way. Bound player only; VS only.
+ */
+function vsDraftOwed(w: World, level: number): boolean {
+  const D = w.pl.rail.data;
+  const maxLv = D.maxLv ?? 1;
+  if (level <= maxLv) return false;
+  D.maxLv = level;
+  return level <= VS.rail.everyLevelTo || (level - VS.rail.everyLevelTo) % VS.rail.thenEvery === 0;
 }
 
 /**
@@ -582,9 +618,37 @@ export function growToRank(w: World, rank: number, minLevel = 0): number {
   const r0 = T.rank;
   T.level = lv;
   T.xp = 0;
-  T.xpToNext = xpToNext(T.level);
+  T.xpToNext = xpToNextFor(w.mode, T.level);
+  if (w.mode === 'vs') w.pl.rail.data.maxLv = Math.max(w.pl.rail.data.maxLv ?? 1, T.level);   // a cheat jump owes no drafts, now or on regrow
   grow(w, r0);
   return T.rank;
+}
+
+/**
+ * VS KO (EVICTED, vs_design §6.2 rule 6): titan `slot` loses `levels` levels, floored at the start of its CURRENT Size
+ * (RANK_LEVELS[rank]: it hurts without shrinking a Size). The XP bar's fill is kept (clamped to the new level's need).
+ * The body eases down through the usual grow tween. Returns the total XP lost (cumulative curve, VS pacing) for the
+ * caller's KO XP. Re-levelling to an already-reached level owes NO new draft (rail.data.maxLv). No events.
+ */
+export function loseLevels(w: World, slot: number, levels: number): number {
+  const p = w.players[slot];
+  if (!p || !(levels > 0)) return 0;
+  const T = p.titan, K = T.kit;
+  const floor = RANK_LEVELS[T.rank];
+  const level0 = T.level, xp0 = T.xp;
+  const level1 = Math.max(floor, level0 - Math.floor(levels));
+  if (level1 === level0) return 0;
+  const need = xpToNextFor(w.mode, level1);
+  const xp1 = Math.min(xp0, need - 1e-6);
+  const lost = Math.max(0, (cumXpAtFor(w.mode, level0) + xp0) - (cumXpAtFor(w.mode, level1) + xp1));
+  T.level = level1;
+  T.xp = xp1;
+  T.xpToNext = need;
+  K.sim_growFrom = T.height;                    // a shrink tween (the same easing as a level step)
+  K.sim_growDur = LEVEL_GROW_S;
+  T.growT = LEVEL_GROW_S;
+  T.mass = sizeMassMirror(T.rank, T.level, T.xp);
+  return lost;
 }
 
 function addXp(w: World, amount: number): void {
@@ -596,8 +660,8 @@ function addXp(w: World, amount: number): void {
   while (T.xp >= T.xpToNext && n++ < MAX_LEVELUPS_PER_CALL) {
     T.xp -= T.xpToNext;
     T.level++;
-    T.xpToNext = xpToNext(T.level);
-    w.upgrades.pendingDrafts++;
+    T.xpToNext = xpToNextFor(w.mode, T.level);
+    if (w.mode !== 'vs' || vsDraftOwed(w, T.level)) w.upgrades.pendingDrafts++;   // VS: the rail cadence decides
     w.events.push({ type: 'levelUp', level: T.level });
   }
   if (T.xp >= T.xpToNext) T.xp = T.xpToNext - 1e-6;
@@ -644,8 +708,8 @@ export function breachTo(w: World, rank: RankIndex): void {
   const need = RANK_LEVELS[want];
   while (T.level < need) {
     T.level++;
-    T.xpToNext = xpToNext(T.level);
-    w.upgrades.pendingDrafts++;
+    T.xpToNext = xpToNextFor(w.mode, T.level);
+    if (w.mode !== 'vs' || vsDraftOwed(w, T.level)) w.upgrades.pendingDrafts++;
     w.events.push({ type: 'levelUp', level: T.level });
   }
   if (T.level !== lv0) { T.xp = 0; w.gates.topUpLevels += T.level - lv0; }

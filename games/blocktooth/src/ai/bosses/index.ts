@@ -25,12 +25,25 @@
 // gateUnstick (DETOUR → RAMMING THROUGH → cut-off), gateCrushTier + city collision, gateAddIds, the
 // per-second damage cap, stagger length / phase alert / fatigue by role, and defeat() handing the breach
 // to meta/gates.ts flushGateBreach (gates.breachDue) so it runs at the END of the kill tick.
+//
+// ONLINE VS (lane B-WORLD, vs_design.md section 4: the PUBLIC TENDERS; every change is behind w.mode === 'vs', solo is
+// byte-identical): the rig is the same boss framework, in the same w.boss slot, hunting ONE titan at a time. stepBoss
+// picks that TARGET (rigTargetSlot: the nearest live titan to start; then the titan with the most damage dealt to the rig
+// in the last 5 s, switching at most every VS.tender.retargetS) and runs the whole unchanged boss step with it BOUND
+// (withPlayer), so every `w.titan` in this file and in the six rig modules (windups from its speed, aim leads, escape
+// fairness, keepRange, shove) is the target's. Its telegraphs / shots / hazards hurt EVERY titan they touch
+// (combat/damage.ts), capped per victim at VS.tender.hitCapFrac of that victim's max HP. Titan damage is SHARED: every
+// hit is recorded per attacking seat (b.data sd0..sd3 = total dealt, rw<slot>_<k> = 5 one-second buckets for the
+// retarget window) and the titan-DPS window is GLOBAL, scaled by the number of attackers (dpsCapBaseFrac x (1 +
+// dpsCapPerAttacker x (attackers - 1)), max dpsCapMaxFrac). A kill never breaches (no size locks in VS): defeat() raises
+// the gateDefeated event and meta/tender.ts splits the rewards by the recorded shares. bossH latches the rig's height
+// once (a titan ranking up mid-fight does not resize it).
 
 import { atan2, cos, hypot, sin, tan } from '../../core/detmath.ts';
 import type { BossId, BossPart, BossState, DamageOpts, GateId, GateSlot, MainBossId, Shape, Telegraph, Tier, World } from '../../core/types.ts';
 import { GATE_IDS } from '../../core/types.ts';
 import {
-  BOSS_DASH_READ, BOSS_DMG_MUL, BOSS_FATIGUE, BOSS_HIT_CAP, BOSS_HP_SCALE, BOSS_KIND_MUL, BOSS_PHASE_DMG_MUL, CAMERA, GATES, RANKS, RANK_LEVELS,
+  BOSS_DASH_READ, BOSS_DMG_MUL, BOSS_FATIGUE, BOSS_HIT_CAP, BOSS_HP_SCALE, BOSS_KIND_MUL, BOSS_PHASE_DMG_MUL, CAMERA, GATES, RANKS, RANK_LEVELS, VS,
   SMASH_SLOW, bossFrameMaxMul, bossFrameNeed, cameraDistance, spawnView, titanHeightAt, titanSpeed,
 } from '../../core/config.ts';
 import { circleInShape, clamp, dist, shapeCenter, turnToward, wrapAngle } from '../../core/math.ts';
@@ -51,6 +64,8 @@ import * as switchboard5 from './switchboard5.ts';
 import { endlessBossDmgMul } from '../../meta/endless.ts';
 import { stat } from '../../upgrades/stats.ts';
 import { gateDmgMul, gateHpFor } from '../../meta/gates.ts';
+import { withPlayer } from '../../core/players.ts';
+import { nearestLiveSlot, seatLive } from '../../combat/targets.ts';
 
 // ─────────────────────────────── tuning (lane-local) ───────────────────────────────
 export const INTRO_S = 4;
@@ -274,7 +289,7 @@ export function escapeWalk(w: World, b: BossState | null, escapeM: number, dirX 
  *  mid-fight (a Size IV titan that breaches during the fight gets Size V paint). */
 export function bossH(w: World, b: BossState): number {
   const T = w.titan;
-  if (!(b.data.H > 0) || b.data.Hrank !== T.rank) {
+  if (!(b.data.H > 0) || (b.data.Hrank !== T.rank && w.mode !== 'vs')) {   // VS: latched once, a ranking target never resizes the rig
     // GATEKEEPERS §3.0: a gatekeeper latches the SETTLED ceiling (never a mid-tween height)
     b.data.H = b.role === 'gate'
       ? gateSettledH(w)
@@ -373,6 +388,7 @@ export function watchDash(w: World, b: BossState, cd: readonly number[]): { x0: 
   for (let i = 0; i < w.events.length; i++) {
     const e = w.events[i];
     if (e.type !== 'dash') continue;
+    if (w.mode === 'vs' && e.p !== w.cur) continue;   // VS: the rig answers its TARGET's dashes only
     const heat = heat0 + 1;
     b.data.dashHeat = heat;
     // P2+: a dash OUT OF LIVE BOSS PAINT is always answered (≥ ESCAPE_ANSWER_GAP apart) — the dash buys
@@ -853,10 +869,10 @@ function defeat(w: World, b: BossState): void {
   if (b.role === 'gate') {
     const gate = b.id as GateId;
     w.events.push({ type: 'gateDefeated', gate, slot: b.slot, x: b.x, z: b.z, fightS: b.data.t ?? 0, rematch: b.slot === 0 });
-    if (b.slot >= 1 && b.slot <= 3) w.gates.breachDue = b.slot;
+    if (b.slot >= 1 && b.slot <= 3 && w.mode !== 'vs') w.gates.breachDue = b.slot;   // VS: no size locks, no breach (meta/tender.ts pays)
   } else {
     w.events.push({ type: 'bossDefeated', x: b.x, z: b.z });
-    if (!w.endless && b.slot === 4) w.gates.breachDue = 4;
+    if (!w.endless && b.slot === 4 && w.mode !== 'vs') w.gates.breachDue = 4;
   }
 }
 
@@ -867,6 +883,7 @@ function defeat(w: World, b: BossState): void {
  * switches run.phase to 'boss'. No-op while a boss is alive.
  */
 export function spawnBoss(w: World, id: MainBossId): void {
+  if (w.mode === 'vs') return;   // ONLINE VS: no city boss (vs_design.md section 4.3); the finale is the titans + the ring
   if (w.boss && w.boss.alive) return;
   const mod = MODS[id];
   if (!mod) return;
@@ -892,6 +909,90 @@ export function spawnBoss(w: World, id: MainBossId): void {
 
 /** Boss AI + part colliders (stepWorld, after stepEnemies). */
 export function stepBoss(w: World): void {
+  if (w.mode === 'vs') { stepBossVs(w); return; }
+  stepBossOne(w);
+}
+
+// ─────────────────────────────── ONLINE VS: the tender rig's target + damage shares ───────────────────────────────
+const RW_BUCKETS = 5;
+/** Roll the 1 s damage buckets to the current second (zeroing the ones the clock skipped over). */
+function rigRoll(w: World, b: BossState): void {
+  const sec = Math.floor(w.t + 1e-9);
+  const last = b.data.rwT === undefined ? sec : b.data.rwT;
+  if (sec !== last) {
+    const steps = Math.min(RW_BUCKETS, Math.max(0, sec - last));
+    for (let s = 1; s <= steps; s++) {
+      const k = (last + s) % RW_BUCKETS;
+      for (let slot = 0; slot < 4; slot++) b.data['rw' + slot + '_' + k] = 0;
+    }
+  }
+  b.data.rwT = sec;
+}
+/** Total damage the rig has taken from seat `slot` (b.data sd<slot>; VS only). */
+export function rigDamageBy(b: BossState, slot: number): number { return b.data['sd' + slot] ?? 0; }
+/** Damage dealt to the rig by seat `slot` in the last RW_BUCKETS seconds (the retarget window). */
+export function rigRecentBy(b: BossState, slot: number): number {
+  let s = 0;
+  for (let k = 0; k < RW_BUCKETS; k++) s += b.data['rw' + slot + '_' + k] ?? 0;
+  return s;
+}
+/** Record `d` rig HP removed by the BOUND seat (damageBoss / bossUltHit, VS). */
+function recordRigDamage(w: World, b: BossState, d: number): void {
+  const slot = w.cur;
+  if (slot < 0 || slot > 3 || !(d > 0)) return;
+  rigRoll(w, b);
+  b.data['sd' + slot] = (b.data['sd' + slot] ?? 0) + d;
+  const k = Math.floor(w.t + 1e-9) % RW_BUCKETS;
+  const key = 'rw' + slot + '_' + k;
+  b.data[key] = (b.data[key] ?? 0) + d;
+}
+/**
+ * The seat the rig hunts this tick (VS): the nearest live titan to start; its current one while that titan is live,
+ * re-picked at once when it is not; every VS.tender.retargetS the live titan with the MOST recent damage on the rig
+ * takes it over (ties keep the current target, then the lower slot). -1 when no titan is live.
+ */
+export function rigTargetSlot(w: World, b: BossState): number {
+  const ps = w.players;
+  let cur = b.data.tslot === undefined ? -1 : b.data.tslot;
+  if (!(cur >= 0 && cur < ps.length && seatLive(ps[cur]))) {
+    cur = nearestLiveSlot(w, b.x, b.z);
+    b.data.tslot = cur; b.data.retargetT = w.t;
+    return cur;
+  }
+  rigRoll(w, b);
+  if (w.t - (b.data.retargetT ?? -Infinity) >= VS.tender.retargetS - 1e-9) {
+    let best = cur, bestV = rigRecentBy(b, cur);
+    for (let s = 0; s < ps.length; s++) {
+      if (s === cur || !seatLive(ps[s])) continue;
+      const v = rigRecentBy(b, s);
+      if (v > bestV) { bestV = v; best = s; }
+    }
+    if (best !== cur) { b.data.tslot = best; b.data.retargetT = w.t; cur = best; }
+  }
+  return cur;
+}
+/** VS: how many distinct seats dealt damage in the current 1 s DPS window (the window mask is reset with the window). */
+function windowAttackers(b: BossState): number {
+  const m = b.data.winMask ?? 0;
+  return (m & 1) + ((m >> 1) & 1) + ((m >> 2) & 1) + ((m >> 3) & 1);
+}
+
+/** VS: step the rig with its target bound, then keep every OTHER live titan out of its body. */
+function stepBossVs(w: World): void {
+  const b = w.boss;
+  if (!b || !b.alive) return;
+  const slot = rigTargetSlot(w, b);
+  if (slot < 0) { stepBossOne(w); return; }   // everyone is down: the rig idles against slot 0's fallback
+  withPlayer(w, slot, () => { stepBossOne(w); });
+  if (!b.alive) return;
+  const mod = MODS[b.id];
+  for (let i = 0; i < w.players.length; i++) {
+    if (i === slot || !seatLive(w.players[i])) continue;
+    withPlayer(w, i, () => { pushTitanOut(w, b, mod.keepOut ? mod.keepOut(w, b) : 0, mod.noseOut ? mod.noseOut(w, b) : null); });
+  }
+}
+
+function stepBossOne(w: World): void {
   const b = w.boss;
   if (!b || !b.alive) return;
   const T = w.titan, dt = w.dt;
@@ -913,7 +1014,7 @@ export function stepBoss(w: World): void {
     // an ESCAPE dash (out of live boss paint) is read: the next decision comes within escapeCdS
     if (T.alive) for (let i = 0; i < w.events.length; i++) {
       const e = w.events[i];
-      if (e.type === 'dash' && dashFromPaint(w, e.x0, e.z0)) { b.cd = Math.min(b.cd, BOSS_DASH_READ.escapeCdS); break; }
+      if (e.type === 'dash' && (w.mode !== 'vs' || e.p === w.cur) && dashFromPaint(w, e.x0, e.z0)) { b.cd = Math.min(b.cd, BOSS_DASH_READ.escapeCdS); break; }
     }
     mod.step(w, b);
   }
@@ -976,17 +1077,25 @@ export function damageBoss(w: World, part: number, dmg: number, opts: DamageOpts
   if (b.role === 'gate') {
     // GATEKEEPERS §3.0: titan damage per TUMBLING 1 s window ≤ GATES.dpsCapFrac × maxHp (bossUltHit exempt)
     const G = w.gates;
+    const vs = w.mode === 'vs';
     // engagement rule (b), §2.4: "the titan damaged the gatekeeper". A THORNS reflection is the rig's own attack bounced
     // back (hurtTitan reflects even under i-frames / god), not the titan engaging: one held a runner 230 m away
     // 'engaged' for 5 s (fx2 Gate: playtest_gate step 3, by_thorns 1.11 at 1.49 x spawnRing)
     if (opts.kind !== 'thorns') b.data.lastHitT = w.t;
-    if (!(w.t < G.dpsWinT + 1)) { G.dpsWinT = w.t; G.dpsWin = 0; }
-    const room = Math.max(0, GATES.dpsCapFrac * b.maxHp - G.dpsWin);
+    if (!(w.t < G.dpsWinT + 1)) { G.dpsWinT = w.t; G.dpsWin = 0; if (vs) b.data.winMask = 0; }
+    let capFrac: number = GATES.dpsCapFrac;
+    if (vs) {
+      // VS: ONE global window shared by every attacker, scaled by how many seats are working the rig this window
+      if (w.cur >= 0 && w.cur < 4) b.data.winMask = (b.data.winMask ?? 0) | (1 << w.cur);
+      capFrac = Math.min(VS.tender.dpsCapMaxFrac, VS.tender.dpsCapBaseFrac * (1 + VS.tender.dpsCapPerAttacker * (windowAttackers(b) - 1)));
+    }
+    const room = Math.max(0, capFrac * b.maxHp - G.dpsWin);
     if (d > room) d = room;
     if (!(d > 0)) return;
   }
   if (d > b.hp) d = b.hp;
   if (b.role === 'gate') w.gates.dpsWin += d;
+  if (w.mode === 'vs') recordRigDamage(w, b, d);   // the bids: damage per attacking seat (meta/tender.ts splits the rewards)
   b.hp -= d;
   b.data.flash = 0.12;
   // balance telemetry (probes read it; views ignore): damage dealt per DamageKind
@@ -1013,6 +1122,7 @@ export function bossUltHit(w: World, frac: number, meter: number): number {
   if (!(frac > 0) || !Number.isFinite(frac) || !(b.maxHp > 0)) return 0;
   const p = b.parts[0];
   const d = Math.min(frac * b.maxHp, b.hp);
+  if (w.mode === 'vs') recordRigDamage(w, b, d);
   b.hp -= d;
   b.data.flash = 0.12;
   b.data.by_ult = (b.data.by_ult ?? 0) + d;
@@ -1346,4 +1456,36 @@ export function spawnGate(w: World, id: GateId, rematch: number): void {
   const G = w.gates;
   G.dpsWin = 0; G.dpsWinT = -1;
   w.events.push({ type: 'gateSpawn', gate: id, slot, rematch: slot === 0 });
+}
+
+/**
+ * ONLINE VS: field a PUBLIC TENDER rig (vs_design.md section 4.2) at the crosswalk (x, z): the gatekeeper `id` in the
+ * w.boss slot, role 'gate', home slot of its id (no rematch), max HP `hp` (meta/tender.ts scales it), the GATES.introS
+ * walk-in, facing the BOUND titan (the caller binds the titan it should open on). No size lock, no run.phase change.
+ * Resets the shared DPS window and the damage-share records. Returns false while a boss is alive / unknown id.
+ */
+export function spawnTender(w: World, id: GateId, x: number, z: number, hp: number): boolean {
+  if (w.boss && w.boss.alive) return false;
+  const mod = MODS[id];
+  if (!mod) return false;
+  const b = mod.create(w);
+  b.role = 'gate';
+  b.slot = gateHomeSlot(id);
+  b.hp = hp; b.maxHp = hp;
+  b.phase = 1; b.staggerT = 0; b.attack = null; b.attackT = 0; b.meter = 0;
+  b.introT = GATES.introS;
+  b.subtitle = bossSubtitle(id, null);
+  const Bd = w.city.bounds;
+  b.x = b.px = clamp(x, Bd.minX, Bd.maxX); b.z = b.pz = clamp(z, Bd.minZ, Bd.maxZ);
+  b.heading = b.pheading = atan2(w.titan.x - b.x, w.titan.z - b.z);
+  b.data.H = 0;
+  bossH(w, b);
+  b.data.tslot = w.cur;
+  b.data.retargetT = w.t;
+  b.data.winMask = 0;
+  refreshParts(b);
+  w.boss = b;
+  w.gates.dpsWin = 0; w.gates.dpsWinT = -1;
+  w.events.push({ type: 'gateSpawn', gate: id, slot: b.slot, rematch: false });
+  return true;
 }

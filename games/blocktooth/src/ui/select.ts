@@ -33,9 +33,14 @@ import {
   flashesReduced,
 } from './dom.ts';
 import { buildBug, wallClock } from './menus.ts';
+import { VS as STR_VS } from '../data/strings_vs.ts';
+import type { BotLevel } from '../vs/types.ts';
 import { NextUnlockPanel, goalUnlocking } from './goals.ts';
 
 type Step = 1 | 2;
+
+/** VS PRACTICE bot levels, in row order (vs_design.md §10) */
+const BOT_LEVELS: readonly BotLevel[] = ['rookie', 'regular', 'veteran'];
 
 /** The regular HALVARD roster in escalation order (the elite RAMROD is announced separately). */
 const RESPONSE_KINDS: readonly EnemyKind[] = ['android', 'squad', 'drone', 'buggy', 'apc', 'tank', 'walker'];
@@ -64,6 +69,12 @@ export class SelectScreen {
   private readonly permit: NextUnlockPanel;
   private readonly confirmBtn: HTMLButtonElement;
   private readonly confirmLbl: HTMLElement;
+  // ONLINE VS (lane B-VIEW): VS PRACTICE re-skins this screen (opts.vs): the perk row becomes RIVAL BOTS
+  private readonly titleEl: HTMLElement;
+  private readonly perkLbl: HTMLElement;
+  private readonly goalsChip: HTMLElement;
+  private vs = false;
+  private botIx = 1;
   private readonly backBtn: HTMLButtonElement;
   private readonly rowHint: HTMLElement;
   private titanCards: HTMLElement[] = [];
@@ -100,7 +111,7 @@ export class SelectScreen {
     const bug = buildBug(head, '');
     this.clock = bug.querySelector('.bt-clock') as HTMLElement;
     const ht = div('bt-sel-htxt', head);
-    div('bt-sel-title', ht, STR.select.header);
+    this.titleEl = div('bt-sel-title', ht, STR.select.header);
     this.stepLine = div('bt-sel-step', ht);
     const tabs = div('bt-sel-tabs', head);
     this.tab1 = div('bt-sel-tab', tabs);
@@ -120,7 +131,8 @@ export class SelectScreen {
     // v2 STARTING PERK row (step 2, under the biome cards)
     const pr = this.perkRow = div('bt2-xrow bt2-perkrow', this.stage);
     pr.dataset.row = 'perk';
-    pr.appendChild(el('span', 'bt2-xrow-lbl', SCREENS.select.perkLabel));
+    this.perkLbl = el('span', 'bt2-xrow-lbl', SCREENS.select.perkLabel);
+    pr.appendChild(this.perkLbl);
     const prev = el('button', 'bt2-arrow', '◀');
     prev.type = 'button'; prev.tabIndex = -1;
     pr.appendChild(prev);
@@ -168,6 +180,7 @@ export class SelectScreen {
     goals.type = 'button';
     goals.tabIndex = -1;
     goals.dataset.v2 = 'goals-chip';
+    this.goalsChip = goals;
     goals.appendChild(keyChip(SCREENS.goalsKey));
     goals.appendChild(el('span', '', SCREENS.goalsChip));
     bar.appendChild(goals);
@@ -199,6 +212,12 @@ export class SelectScreen {
     this.portraitFor = typeof opts.portraitFor === 'function' ? opts.portraitFor : null;
     this.profile = opts.profile ?? null;
     this.bests = opts.bests || {};
+    this.vs = !!opts.vs;
+    this.botIx = Math.max(0, BOT_LEVELS.indexOf(opts.bots ?? 'regular'));
+    this.layer.dataset.vs = this.vs ? '1' : '';
+    this.titleEl.textContent = this.vs ? STR_VS.menu.header : STR.select.header;
+    this.perkLbl.textContent = this.vs ? STR_VS.menu.botsLabel : SCREENS.select.perkLabel;
+    this.goalsChip.classList.toggle('bt-hidden', this.vs);
     this.buildTitanCards(this.portraits);
     const init = opts.initial ?? {};
     const from = this.resume ?? init;
@@ -237,7 +256,7 @@ export class SelectScreen {
 
   private onPress(p: UiPress): void {
     // v2 screen bindings are read from p.key before the act switch (FEATURES_V2 §2.4)
-    if (p.key === 'g' || p.key === 'pad:2') { this.openGoals(); return; }
+    if (!this.vs && (p.key === 'g' || p.key === 'pad:2')) { this.openGoals(); return; }
     switch (p.act) {
       case 'left': this.horiz(-1); break;
       case 'right': this.horiz(1); break;
@@ -305,6 +324,7 @@ export class SelectScreen {
     s.finish({
       kind: 'start', titan, biome: BIOME_IDS[this.bi],
       perk: this.perkChoice(), palette: this.palUnlocked(titan, this.pal[titan]) ? this.pal[titan] : 0,
+      ...(this.vs ? { bots: BOT_LEVELS[this.botIx] ?? 'regular' } : {}),
     }, flashesReduced() ? 80 : 280);
   }
 
@@ -323,8 +343,8 @@ export class SelectScreen {
     this.tab1.classList.toggle('on', step === 1);
     this.tab2.classList.toggle('on', step === 2);
     this.tab1.classList.toggle('done', step === 2);
-    this.stepLine.textContent = step === 1 ? STR.select.step1 : STR.select.step2;
-    this.confirmLbl.textContent = step === 1 ? STR.select.confirm : STR.select.dropIn;
+    this.stepLine.textContent = this.vs ? (step === 1 ? STR_VS.menu.step1 : STR_VS.menu.step2) : step === 1 ? STR.select.step1 : STR.select.step2;
+    this.confirmLbl.textContent = this.vs ? (step === 1 ? STR_VS.menu.confirm : STR_VS.menu.start) : step === 1 ? STR.select.confirm : STR.select.dropIn;
     this.titanRow.classList.toggle('bt-hidden', step !== 1);
     this.biomeRow.classList.toggle('bt-hidden', step !== 2);
     this.palRow.classList.toggle('bt-hidden', step !== 1);
@@ -354,6 +374,7 @@ export class SelectScreen {
   }
 
   private perkChoice(): PerkId | null {
+    if (this.vs) return null;   // VS plays the fresh-profile pool: no perk (vs_design.md §7)
     const perk = PERK_VALUES[this.perkIx] ?? null;
     if (!perk) return null;
     return this.profile && perkUnlocked(this.profile, perk) ? perk : null;
@@ -410,6 +431,12 @@ export class SelectScreen {
   }
 
   private changePerk(d: number): void {
+    if (this.vs) {
+      this.botIx = wrapIndex(this.botIx + d, BOT_LEVELS.length);
+      this.renderPerk();
+      pulse(this.perkVal, [{ transform: `translateX(${d * 6}%)`, opacity: 0.3 }, { transform: 'none', opacity: 1 }], 160);
+      return;
+    }
     this.perkIx = wrapIndex(this.perkIx + d, PERK_VALUES.length);
     this.renderPerk();
     pulse(this.perkVal, [{ transform: `translateX(${d * 6}%)`, opacity: 0.3 }, { transform: 'none', opacity: 1 }], 160);
@@ -418,6 +445,17 @@ export class SelectScreen {
   private renderPerk(): void {
     const V = this.perkVal;
     clearEl(V);
+    if (this.vs) {
+      const lv = BOT_LEVELS[this.botIx] ?? 'regular';
+      const gl = div('bt2-perkval-glyph', V);
+      gl.innerHTML = glyphSvg('claw', '#ffd166', 22);
+      const tx = div('bt2-perkval-txt', V);
+      tx.appendChild(el('b', '', STR_VS.menu.levels[lv]));
+      tx.appendChild(el('span', '', STR_VS.menu.levelNote[lv]));
+      V.classList.remove('locked');
+      V.appendChild(el('small', 'bt2-perkval-n', `${this.botIx + 1} / ${BOT_LEVELS.length}`));
+      return;
+    }
     const perk = PERK_VALUES[this.perkIx] ?? null;
     const gl = div('bt2-perkval-glyph', V);
     const tx = div('bt2-perkval-txt', V);
@@ -442,6 +480,7 @@ export class SelectScreen {
   }
 
   private refreshPermit(): void {
+    if (this.vs) { this.permit.show(false); return; }
     if (!this.profile) { this.permit.show(false); return; }
     this.permit.show(true);
     this.permit.set(this.profile, TITAN_IDS[this.ti], this.step === 2 ? BIOME_IDS[this.bi] : null);

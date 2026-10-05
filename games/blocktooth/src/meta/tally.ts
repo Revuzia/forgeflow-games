@@ -128,6 +128,7 @@ export function stepTally(w: World): void {
   const ev = w.events;
   for (let i = 0; i < ev.length; i++) {
     const e = ev[i];
+    if (e.p !== w.cur) continue;     // B-CORE: this player's events only (solo: always 0)
     switch (e.type) {
       case 'enemyKilled':
         t.kills++;
@@ -252,7 +253,7 @@ export function stepTally(w: World): void {
   const hz = w.hazards;
   for (let i = 0; i < hz.length; i++) {
     const h = hz[i];
-    if (h.alive && h.owner === 'titan' && h.kind === 'bloom' && !h.data.wild) blooms++;
+    if (h.alive && h.owner === 'titan' && h.kind === 'bloom' && !h.data.wild && (w.mode !== 'vs' || (h.oslot ?? 0) === w.cur)) blooms++;   // B-TITAN: VS counts the bound titan's pods only
   }
   if (blooms > t.bloomsBest) t.bloomsBest = blooms;
 
@@ -263,6 +264,8 @@ export function stepTally(w: World): void {
 
   if (w.endless) t.endlessS = Math.max(0, w.t - w.endless.startT);
   if (T.rank > t.peakRank) t.peakRank = T.rank;
-  if (w.run.peakRank > t.peakRank) t.peakRank = w.run.peakRank;
-  t.blocks = w.run.blocksLeveled;
+  // VS: the per-player slice (World.run holds the world totals; solo: identical numbers, one seat)
+  const run = w.mode === 'vs' ? w.pl.run : w.run;
+  if (run.peakRank > t.peakRank) t.peakRank = run.peakRank;
+  t.blocks = run.blocksLeveled;
 }

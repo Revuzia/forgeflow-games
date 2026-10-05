@@ -61,6 +61,7 @@ import { spawnHazard } from '../combat/hazards.ts';
 import { magnetAll } from '../combat/pickups.ts';
 import { addUproar } from '../meta/ultimate.ts';
 import { healTitan, gainGrowth, gainXp, refundDash } from '../titans/titansim.ts';
+import { isOwnHazard } from '../titans/kits/common.ts';   // B-TITAN (VS): a hazard belongs to the titan that spawned it (Hazard.oslot)
 
 // ─────────────────────────────── tuning ───────────────────────────────
 /** Max recursion depth for proc → events → other procs within one tick. */
@@ -278,7 +279,7 @@ function driveUpgradeBlooms(w: World): void {
   const T = w.titan;
   const H = T.height;
   SCR_BLOOM.length = 0;
-  for (const h of w.hazards) if (h.alive && h.owner === 'titan' && h.kind === 'bloom' && h.data.upg === 1) SCR_BLOOM.push(h);
+  for (const h of w.hazards) if (h.alive && h.owner === 'titan' && h.kind === 'bloom' && h.data.upg === 1 && isOwnHazard(w, h)) SCR_BLOOM.push(h);
   if (SCR_BLOOM.length === 0) return;
   const rate = Math.max(0.2, stat(w, 'turretRate'));
   const heal = stat(w, 'sporeHeal');
@@ -369,12 +370,14 @@ function runRange(w: World, ix: TrigIndex, a: number, b: number, exclude: string
   let destroyed = false;
   for (let i = a; i < b; i++) {
     const t = ev[i].type;
-    if ((t === 'floorBreak' || t === 'propDestroyed') && !noCredit(ev[i])) { destroyed = true; break; }
+    if ((t === 'floorBreak' || t === 'propDestroyed') && !noCredit(ev[i]) && ev[i].p === w.cur) { destroyed = true; break; }
   }
   for (let i = a; i < b; i++) {
     const e = ev[i];
     // city damage done by a hostile (boss legs, a RAMROD charge) never fires the titan's triggers
     if (noCredit(e)) continue;
+    // B-CORE: only the BOUND player's own events fire its triggers (events carry p = the player bound when pushed; solo: always 0)
+    if (e.p !== w.cur) continue;
     switch (e.type) {
       case 'propDestroyed': EV_TIER = 0; fire(w, ix, 'smash', e.x, e.z, exclude, depth); onSmash(w, e.x, e.z, exclude, depth); break;
       case 'floorBreak':
@@ -760,7 +763,7 @@ function doBloom(w: World, x: number, z: number, life: number): boolean {
   const T = w.titan;
   const cap = Math.max(1, Math.floor(stat(w, 'turretCap')));
   SCR_HAZ.length = 0;
-  for (const h of w.hazards) if (h.alive && h.owner === 'titan' && h.kind === 'bloom') SCR_HAZ.push(h);
+  for (const h of w.hazards) if (h.alive && h.owner === 'titan' && h.kind === 'bloom' && isOwnHazard(w, h)) SCR_HAZ.push(h);
   let excess = SCR_HAZ.length - (cap - 1);
   for (let i = 0; i < SCR_HAZ.length && excess > 0; i++) { SCR_HAZ[i].alive = false; excess--; }
   const h = spawnHazard(w, {
@@ -773,7 +776,7 @@ function doBloom(w: World, x: number, z: number, life: number): boolean {
 
 function capUpgradeHazards(w: World, kind: HazardKind, cap: number): void {
   SCR_HAZ.length = 0;
-  for (const h of w.hazards) if (h.alive && h.owner === 'titan' && h.kind === kind && h.data.upg === 1) SCR_HAZ.push(h);
+  for (const h of w.hazards) if (h.alive && h.owner === 'titan' && h.kind === kind && h.data.upg === 1 && isOwnHazard(w, h)) SCR_HAZ.push(h);
   let excess = SCR_HAZ.length - (cap - 1);
   for (let i = 0; i < SCR_HAZ.length && excess > 0; i++) { SCR_HAZ[i].alive = false; excess--; }
 }

@@ -10,7 +10,8 @@
 
 import { hypot } from '../../core/detmath.ts';
 import type { DamageOpts, Enemy, Hazard, Shape, World } from '../../core/types.ts';
-import { dist, headingOf } from '../../core/math.ts';
+import { circleInShape, dist, headingOf } from '../../core/math.ts';
+import { VS } from '../../core/config.ts';
 import { damageArea, titanDamage } from '../../combat/damage.ts';
 import { findTarget, hitTarget } from '../../combat/targeting.ts';
 import type { Target } from '../../combat/targeting.ts';
@@ -21,6 +22,7 @@ import {
   S, aimPoint, autoInterval, distToBuilding, emitAbility, emitAttack, faceToward, hookCooldown, idleAuto, knockFor,
   makeRoom, propRadius, rearmAuto, titanHazards,
 } from './common.ts';
+import { RIVAL_KNOCK_H, nearestRival, pvpLive, rivalHit, rivalSlots } from '../rivals.ts';   // B-TITAN (VS): FORK-ARC / wires / RECAST vs a rival
 
 /** Tuning (balance gate edits these; mutable so probes can sweep them at runtime). */
 export const VOLT = {
@@ -101,13 +103,15 @@ export function step(w: World): void {
 
   // ── hook: RECAST: DETONATE ──
   if (w.input.ability && T.abilityCd <= 0) detonate(w);
+  if (w.mode === 'vs') wireShock(w);                    // VS: live wires shock a rival standing in them (2 %/s)
 
   // ── auto: FORK-ARC ──
   if (T.autoCd > 0) return;
   const range = VOLT.arcRangeH * T.height * Math.max(0.1, S(w, 'attackRange'));
   const first = findTarget(w, T.x, T.z, range, true);
-  if (!first) { idleAuto(w); return; }
-  forkArc(w, first, range);
+  const rv = nearestRival(w, range);                    // VS (HOSTILE TAKEOVER on): a rival in reach takes the first link; -1 otherwise
+  if (!first && rv < 0) { idleAuto(w); return; }
+  forkArc(w, first, range, rv);
   rearmAuto(w, autoInterval(w, VOLT.arcEveryS));
 }
 
@@ -120,33 +124,47 @@ function markHit(t: Target): void {
   }
 }
 
-function forkArc(w: World, first: Target, range: number): void {
+function forkArc(w: World, first: Target | null, range: number, rv: number): void {
   const T = w.titan;
   hitEnemies.length = 0; hitParts.length = 0; hitBuildings.length = 0; hitProps.length = 0;
   const forks = Math.min(VOLT.maxJumps, Math.max(0, Math.round(S(w, 'arcForks') + S(w, 'chains'))));
   const jumpR = VOLT.jumpRangeH * T.height * Math.max(0.1, S(w, 'chainRange'));
   ARC_OPTS.knock = knockFor(w, VOLT.arcKnock);
   const pts: number[] = [T.x, T.z];
-  let dmg = titanDamage(w, VOLT.arcDmg);
-  let cur: Target | null = first;
+  const dmg0 = titanDamage(w, VOLT.arcDmg);
+  let dmg = dmg0;
+  let curRival = rv;                                    // VS: the rival this link strikes (-1 = a foe / the city, as in solo)
+  let cur: Target | null = curRival >= 0 ? null : first;
+  let rivalMask = 0;
   let px = T.x, pz = T.z;
   let hits = 0;
-  aimPoint(w, first, T.x, T.z, pt);
+  if (curRival >= 0) { const Rt = w.players[curRival].titan; pt.x = Rt.x; pt.z = Rt.z; }
+  else aimPoint(w, first as Target, T.x, T.z, pt);
   const dir = headingOf(pt.x - T.x, pt.z - T.z);
-  for (let j = 0; j <= forks && cur; j++) {
-    aimPoint(w, cur, px, pz, pt);
-    const tx = pt.x, tz = pt.z;
-    markHit(cur);
-    hitTarget(w, cur, dmg, ARC_OPTS);
+  for (let j = 0; j <= forks && (cur || curRival >= 0); j++) {
+    let tx: number, tz: number;
+    if (curRival >= 0) {
+      // a RIVAL in the chain: kitPct.voltkite.auto of its max HP, falling off per jump like the damage does (forks still hit foes)
+      const Rt = w.players[curRival].titan;
+      tx = Rt.x; tz = Rt.z;
+      rivalMask |= 1 << curRival;
+      rivalHit(w, curRival, VS.kitPct.voltkite.auto * (dmg / dmg0), 'arc', 'volt.auto', T.x, T.z, RIVAL_KNOCK_H.auto);
+    } else {
+      aimPoint(w, cur as Target, px, pz, pt);
+      tx = pt.x; tz = pt.z;
+      markHit(cur as Target);
+      hitTarget(w, cur as Target, dmg, ARC_OPTS);
+    }
     pts.push(tx, tz);
     hits++;
     px = tx; pz = tz;
     dmg *= VOLT.arcFalloff;
     if (j === forks) break;
-    cur = nextTarget(w, px, pz, jumpR);
+    curRival = nextRival(w, px, pz, jumpR, rivalMask);
+    cur = curRival >= 0 ? null : nextTarget(w, px, pz, jumpR);
   }
   T.kit.arcHits = hits;
-  if (VOLT.groundEvery > 0 && (first.kind === 'enemy' || first.kind === 'boss') && ++T.kit.arcN % VOLT.groundEvery === 0) {
+  if (first && rv < 0 && VOLT.groundEvery > 0 && (first.kind === 'enemy' || first.kind === 'boss') && ++T.kit.arcN % VOLT.groundEvery === 0) {
     // GROUNDING: the bolt earths through the first thing it struck: a short LIVE WIRE from that point back toward VOLT-KITE,
     // so RECAST has real wires to blow without dash-weaving (titanpass T9: 31 % -> ~79 % real detonations, player-like)
     aimPoint(w, first, T.x, T.z, pt);
@@ -157,6 +175,22 @@ function forkArc(w: World, first: Target, range: number): void {
   w.events.push({ type: 'arc', pts, kind: 'fork' });
   emitAttack(w, 'forkArc', T.x, T.z, dir, range, hits);
   faceToward(w, dir);
+}
+
+/** VS: the nearest rival (PvP live, not yet struck by this arc) within `r` of (x, z), else -1. Always -1 in solo / OPEN HOUSE. */
+function nextRival(w: World, x: number, z: number, r: number, mask: number): number {
+  if (w.mode !== 'vs' || !pvpLive(w)) return -1;
+  let best = -1, bd = Infinity;
+  const slots = rivalSlots(w);
+  for (let i = 0; i < slots.length; i++) {
+    const s = slots[i];
+    if ((mask & (1 << s)) !== 0) continue;
+    const p = w.players[s];
+    if (p.vs.spawnProtT > 0) continue;
+    const d = dist(x, z, p.titan.x, p.titan.z) - p.titan.radius;
+    if (d <= r && d < bd) { bd = d; best = s; }
+  }
+  return best;
 }
 
 /** Next fork target from (x,z): nearest unhit enemy, else boss part, else nearest unhit building/prop. */
@@ -240,6 +274,8 @@ function detonate(w: World): void {
     const r = VOLT.detRH * H * area;
     DET_OPTS.knock = knockFor(w, VOLT.detKnock);
     let hits = 0;
+    const vs = w.mode === 'vs';
+    if (vs) RIV_WIRES.fill(0);
     for (let i = 0; i < wires.length; i++) {
       const h = wires[i];
       const s = h.shape;
@@ -251,18 +287,67 @@ function detonate(w: World): void {
       const dmg = titanDamage(w, VOLT.detDmg * power + VOLT.detPerSec * remaining);
       const shape: Shape = { k: 'capsule', x0, z0, x1, z1, r };
       hits += damageArea(w, shape, dmg, DET_OPTS);
+      if (vs) countWireRivals(w, shape);
       pts.push(x0, z0, x1, z1);
       h.alive = false;
     }
     w.events.push({ type: 'wireDetonate', pts });
+    if (vs) payDetonation(w);
     staticShield(w, pts.length / 4, power);
   } else {
     const r = VOLT.burstRH * H * area;
     BURST_OPTS.knock = knockFor(w, VOLT.burstKnock);
     const hits = damageArea(w, { k: 'circle', x: T.x, z: T.z, r }, titanDamage(w, VOLT.burstDmg * power), BURST_OPTS);
     w.events.push({ type: 'explosion', x: T.x, z: T.z, r, kind: 'arc' });
+    if (w.mode === 'vs') {   // no wires out: the static burst counts as ONE wire's worth against a rival
+      const slots = rivalSlots(w);
+      const list: number[] = [];
+      for (let i = 0; i < slots.length; i++) list.push(slots[i]);
+      const shape: Shape = { k: 'circle', x: T.x, z: T.z, r };
+      for (let i = 0; i < list.length; i++) {
+        const Rt = w.players[list[i]].titan;
+        if (circleInShape(shape, Rt.x, Rt.z, Rt.radius)) rivalHit(w, list[i], VS.kitPct.voltkite.detonatePerWire, 'arc', 'volt.det', T.x, T.z, RIVAL_KNOCK_H.hook);
+      }
+    }
   }
   T.kit.wires = 0;
+}
+
+// ─────────────────────────────── VS: wires vs rival titans (vs_design.md §6.4) ───────────────────────────────
+/** wires touching each rival during one RECAST (index = slot) */
+const RIV_WIRES = [0, 0, 0, 0];
+function countWireRivals(w: World, shape: Shape): void {
+  const slots = rivalSlots(w);
+  for (let i = 0; i < slots.length; i++) {
+    const Rt = w.players[slots[i]].titan;
+    if (circleInShape(shape, Rt.x, Rt.z, Rt.radius)) RIV_WIRES[slots[i]]++;
+  }
+}
+/** RECAST pays 8 % of a rival's max HP per wire touching it, at most 3 wires counted (24 %). */
+function payDetonation(w: World): void {
+  const T = w.titan;
+  for (let s = 0; s < w.players.length; s++) {
+    const n = Math.min(RIV_WIRES[s], VS.kitPct.voltkite.detonateMaxWires);
+    if (n > 0) rivalHit(w, s, n * VS.kitPct.voltkite.detonatePerWire, 'wire', 'volt.det', T.x, T.z, RIVAL_KNOCK_H.hook);
+  }
+}
+/** Live wires shock a rival standing in them: wireTickPerS of its max HP per second, once per rival per tick (wires do not stack). */
+function wireShock(w: World): void {
+  if (!pvpLive(w)) return;
+  const T = w.titan;
+  const wires = titanHazards(w, 'wire', hazBuf);
+  if (wires.length === 0) return;
+  const slots = rivalSlots(w);
+  const list: number[] = [];
+  for (let i = 0; i < slots.length; i++) list.push(slots[i]);
+  for (let i = 0; i < list.length; i++) {
+    const Rt = w.players[list[i]].titan;
+    for (let k = 0; k < wires.length; k++) {
+      if (!circleInShape(wires[k].shape, Rt.x, Rt.z, Rt.radius)) continue;
+      rivalHit(w, list[i], VS.kitPct.voltkite.wireTickPerS * w.dt, 'wire', 'volt.wire', T.x, T.z, 0, true);
+      break;
+    }
+  }
 }
 
 /** STATIC SHIELD: n wires blown -> absorb pool += min(pressCap, perWire * n) * power * maxHp, topped at shieldMax * maxHp. */

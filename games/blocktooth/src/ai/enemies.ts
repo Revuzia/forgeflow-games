@@ -17,6 +17,16 @@
 // ground first. Hostile damage is × RANKS[titan.rank].hpMul at the moment the shot is spawned.
 // Ground units never tunnel through buildings: they route along the street grid and are pushed
 // out of every standing building (resolveCircleVsCity with canFlatten −1).
+//
+// ONLINE VS (lane B-WORLD, vs_design.md section 8; every change is behind w.mode === 'vs', solo is byte-identical):
+// Civil Defense units are ASSIGNED to one titan (Enemy.tslot, set at spawn from the bound seat = the per-seat
+// director's seat). stepEnemies runs UNBOUND in VS, so each unit is stepped with its target BOUND (bindPlayer): the
+// whole AI below (surfDist, reach, leadPt, holdRing, nav, firing, hostile damage scaling by the target's rank) reads
+// `w.titan` and therefore hunts / shoots exactly that titan, unchanged. When the assigned titan is KO'd or eliminated
+// the unit re-picks the nearest live titan (combat/targets.ts enemyTargetSlot) and stays with it; with no live titan
+// it stands down. Ground units are pushed out of EVERY live titan's body. RED LIGHT freezes a unit when ITS target's
+// seat holds it. The shots a unit fires hurt whichever titan they hit (damage.ts), so rivals can be caught in each
+// other's crossfire; kills credit whoever lands them (anyone can fight any unit).
 
 import { atan2, cos, hypot, sin, tan } from '../core/detmath.ts';
 import type { CityLayout, Enemy, EnemyDef, EnemyKind, Telegraph, Tier, World } from '../core/types.ts';
@@ -30,6 +40,8 @@ import { spawnTelegraph } from '../combat/telegraphs.ts';
 import { damageTitanArea } from '../combat/damage.ts';
 import { endlessHpMul } from '../meta/endless.ts';
 import { redLightActive } from '../meta/powerups.ts';
+import { bindPlayer, unbindPlayer, withPlayer } from '../core/players.ts';
+import { enemyTargetSlot, nearestLiveSlot, redLightFor } from '../combat/targets.ts';
 
 // ─────────────────────────────── lane-local tuning ───────────────────────────────
 const REACT_MIN = 0.3, REACT_SPAN = 0.5;          // 300–800 ms reaction (§9)
@@ -220,6 +232,7 @@ function snapToStreet(c: CityLayout, x: number, z: number, vehicle: boolean, r01
  */
 export function ringPoint(w: World, kind: EnemyKind, out: { x: number; z: number }): boolean {
   const T = w.titan, c = w.city, B = c.bounds, def = ENEMIES[kind];
+  const nOther = w.mode === 'vs' ? otherViews(w) : 0;   // VS: other live titans' views (spawn points in them are not preferred)
   const R = ringRadius(w), rs = w.rng.spawn;
   const view = spawnView(w);
   const Dk = view.d * CAM_K;
@@ -255,7 +268,7 @@ export function ringPoint(w: World, kind: EnemyKind, out: { x: number; z: number
     const o = screenOut(w, D, T.x + (x - T.x) * k, T.z + (z - T.z) * k);
     const score = Math.min(o, 50);
     if (score > bestD) { bestD = score; bestX = x; bestZ = z; bestR01 = r01; }
-    if (o >= OFFSCREEN_MIN && d < okD) { ok = true; okD = d; okX = x; okZ = z; }
+    if (o >= OFFSCREEN_MIN && d < okD && !(nOther > 0 && inOtherView(nOther, x, z))) { ok = true; okD = d; okX = x; okZ = z; }
   }
   if (ok) { bestX = okX; bestZ = okZ; }
   else if (bestD > 0 && Number.isFinite(bestX)) {
@@ -276,6 +289,25 @@ export function ringPoint(w: World, kind: EnemyKind, out: { x: number; z: number
   out.x = bestX; out.z = bestZ;
   if (!def.flies) pushOutOfCity(c, out, def.radius);
   return ok;
+}
+
+// VS: the other live titans' view discs (centre + spawn-ring radius), refreshed per ringPoint call
+const OV_X: number[] = [], OV_Z: number[] = [], OV_R: number[] = [];
+/** Fill OV_* with every live titan except the bound one; returns the count. */
+function otherViews(w: World): number {
+  OV_X.length = 0; OV_Z.length = 0; OV_R.length = 0;
+  for (let i = 0; i < w.players.length; i++) {
+    const p = w.players[i];
+    if (i === w.cur || !p.titan.alive || p.vs.eliminated) continue;
+    OV_X.push(p.titan.x); OV_Z.push(p.titan.z);
+    OV_R.push(withPlayer(w, i, () => ringRadius(w)));
+  }
+  return OV_X.length;
+}
+/** Is (x, z) inside one of the views otherViews() gathered? A point within 0.85 x a rival's spawn ring would appear on its screen. */
+function inOtherView(n: number, x: number, z: number): boolean {
+  for (let k = 0; k < n; k++) { const dx = x - OV_X[k], dz = z - OV_Z[k], r = 0.85 * OV_R[k]; if (dx * dx + dz * dz < r * r) return true; }
+  return false;
 }
 
 const RES = { x: 0, z: 0, bumpTier: -1 };
@@ -533,6 +565,11 @@ function setState(e: Enemy, s: string): void { e.state = s; e.t = 0; }
  * Emits `enemySpawn` and the first-appearance category alert.
  */
 export function spawnEnemy(w: World, kind: EnemyKind, x: number, z: number, opts?: { squad?: number; slot?: number; elite?: boolean }): Enemy {
+  if (w.mode === 'vs' && w.cur < 0) {
+    // VS: an unbound spawn (a world-phase caller) is made AS the nearest live seat, which becomes the unit's target
+    const s = nearestLiveSlot(w, x, z);
+    if (s >= 0) return withPlayer(w, s, () => spawnEnemy(w, kind, x, z, opts));
+  }
   const def = ENEMIES[kind];
   const T = w.titan, B = w.city.bounds, r = w.rng.ai;
   const elite = kind === 'elite' || opts?.elite === true;
@@ -565,6 +602,7 @@ export function spawnEnemy(w: World, kind: EnemyKind, x: number, z: number, opts
     spawnT: w.t,
     ai,
   };
+  if (w.mode === 'vs' && w.cur >= 0) e.tslot = w.cur;   // ONLINE VS: assigned to the bound seat (see the header)
   w.enemies.push(e);
   w.events.push({ type: 'enemySpawn', id: e.id, kind, x: e.x, z: e.z });
   const key = ALERT_OF[kind];
@@ -840,9 +878,16 @@ function stepApc(w: World, e: AiEnemy, sp: number, dt: number): void {
   }
 }
 
+/** A fresh squad id. Solo: the director's counter, as always. VS: every seat has its own director counter, so the seat is
+ *  folded in (id = seq × 4 + seat) to keep squad ids unique across seats (the leader / count tables key on them). */
+export function nextSquadId(w: World): number {
+  if (w.mode === 'vs') return w.director.squadSeq++ * 4 + (w.cur >= 0 ? w.cur & 3 : 0);
+  return w.director.squadSeq++;
+}
+
 function deploySquad(w: World, apc: AiEnemy): void {
   const ai = apc.ai;
-  const sid = w.director.squadSeq++;
+  const sid = nextSquadId(w);
   const fx = sin(apc.heading), fz = cos(apc.heading);
   const rx = -fz, rz = fx;
   const bx = apc.x - fx * (apc.radius + 2), bz = apc.z - fz * (apc.radius + 2);
@@ -1053,6 +1098,16 @@ function stepElite(w: World, e: AiEnemy, sp: number, spMul: number, dt: number):
 }
 
 // ─────────────────────────────── integration + collisions ───────────────────────────────
+/** Push a ground unit out of a titan's body circle (the original single-titan block, shared with the VS all-titans loop). */
+function pushOutOfTitan(e: AiEnemy, T: World['titan']): void {
+  const dx = e.x - T.x, dz = e.z - T.z, rr = T.radius + e.radius, d2 = dx * dx + dz * dz;
+  if (d2 < rr * rr) {
+    const d = Math.sqrt(d2);
+    if (d > 1e-4) { e.x = T.x + (dx / d) * rr; e.z = T.z + (dz / d) * rr; }
+    else { e.x = T.x + sin(e.heading + Math.PI) * rr; e.z = T.z + cos(e.heading + Math.PI) * rr; }
+  }
+}
+
 function integrate(w: World, e: AiEnemy, dt: number): number {
   const T = w.titan, B = w.city.bounds;
   const air = ENEMIES[e.kind].flies;
@@ -1065,14 +1120,10 @@ function integrate(w: World, e: AiEnemy, dt: number): number {
   const charging = e.state === 'charge';
   if (!air) {
     // titan body: pushed out (never standing inside the titan); a charging dozer stops on contact instead
-    if (T.alive && !charging) {
-      const dx = e.x - T.x, dz = e.z - T.z, rr = T.radius + e.radius, d2 = dx * dx + dz * dz;
-      if (d2 < rr * rr) {
-        const d = Math.sqrt(d2);
-        if (d > 1e-4) { e.x = T.x + (dx / d) * rr; e.z = T.z + (dz / d) * rr; }
-        else { e.x = T.x + sin(e.heading + Math.PI) * rr; e.z = T.z + cos(e.heading + Math.PI) * rr; }
-      }
-    }
+    // (VS: out of EVERY live titan, not just its target)
+    if (w.mode === 'vs') {
+      if (!charging) for (let k = 0; k < w.players.length; k++) { const Tk = w.players[k].titan; if (Tk.alive) pushOutOfTitan(e, Tk); }
+    } else if (T.alive && !charging) pushOutOfTitan(e, T);
     // boss body
     const Bs = w.boss;
     if (Bs && Bs.alive && Bs.parts.length > 0) {
@@ -1093,7 +1144,9 @@ function integrate(w: World, e: AiEnemy, dt: number): number {
 // ─────────────────────────────── step ───────────────────────────────
 /** Advance every enemy one tick (AI, movement, firing). Called by stepWorld after stepDirector. */
 export function stepEnemies(w: World): void {
-  const dt = w.dt, T = w.titan, es = w.enemies;
+  const vs = w.mode === 'vs';
+  const dt = w.dt, es = w.enemies;
+  let T = w.titan;                       // VS: re-pointed at each unit's target below
 
   // cancel pending tells whose owner died (a dead tank does not fire its shell)
   const pl = pendingOf(w);
@@ -1122,15 +1175,34 @@ export function stepEnemies(w: World): void {
   }
   buildSep(w);
 
-  const R = ringRadius(w), recycleD2 = (R * RECYCLE_MUL) * (R * RECYCLE_MUL);
+  let R = vs ? 0 : ringRadius(w), recycleD2 = (R * RECYCLE_MUL) * (R * RECYCLE_MUL);
+  if (vs) RING_R[0] = RING_R[1] = RING_R[2] = RING_R[3] = -1;
   const n = es.length;   // enemies spawned this tick (apc squads) start acting next tick
   // v2 RED LIGHT (FEATURES_V2 §6.1, pre-wired): no AI, no movement, timers t / cd stand still;
   // only the hit flash decays
-  const red = redLightActive(w);
+  let red = redLightActive(w);
   for (let i = 0; i < n; i++) {
     const e = es[i] as AiEnemy;
     if (!e.alive) continue;
     mem(e);
+    let hold = false;                    // VS: the unit's owner is down (KO'd) or nobody is live: it stands still
+    if (vs) {
+      // ONLINE VS: step this unit AS its target (bound); it holds while its owner is KO'd, re-picks once it is eliminated
+      const ts = enemyTargetSlot(w, e);
+      if (ts >= 0) {
+        bindPlayer(w, ts);
+        T = w.titan;
+        if (!(RING_R[ts] >= 0)) RING_R[ts] = ringRadius(w);
+        R = RING_R[ts];
+        recycleD2 = (R * RECYCLE_MUL) * (R * RECYCLE_MUL);
+        red = redLightFor(w, ts);
+      } else {
+        unbindPlayer(w);
+        T = w.titan;                  // slot 0 fallback (never read for AI: the unit holds)
+        red = false;
+        hold = true;
+      }
+    }
     if (red) { if (e.flash > 0) e.flash = Math.max(0, e.flash - dt); continue; }
     e.t += dt;
     if (e.flash > 0) e.flash = Math.max(0, e.flash - dt);
@@ -1139,7 +1211,7 @@ export function stepEnemies(w: World): void {
     const spMul = e.slowT > 0 ? clamp(e.slowMul, 0, 1) : 1;
     const sp = ENEMIES[e.kind].speed * spMul;
 
-    if (T.alive && e.state !== 'charge' && e.state !== 'dive' && dist2(e.x, e.z, T.x, T.z) > recycleD2) {
+    if (!hold && T.alive && e.state !== 'charge' && e.state !== 'dive' && dist2(e.x, e.z, T.x, T.z) > recycleD2) {
       recycle(w, e);
       continue;
     }
@@ -1150,7 +1222,7 @@ export function stepEnemies(w: World): void {
       if (e.state === 'charge') setState(e, 'recover');
       else if (e.state === 'dive') setState(e, 'climb');
       else if (e.state === 'volley' || e.state === 'barrage') { e.ai.shots = 0; e.cd = Math.max(e.cd, 0.5); setState(e, 'hold'); }
-    } else if (!T.alive) {
+    } else if (hold || !T.alive) {
       halt(e);
     } else {
       switch (e.kind) {
@@ -1169,4 +1241,6 @@ export function stepEnemies(w: World): void {
     // a charging dozer that slams into a standing building stops dead
     if (e.state === 'charge' && push > 0.4) { halt(e); setState(e, 'recover'); }
   }
+  if (vs) unbindPlayer(w);
 }
+const RING_R = [-1, -1, -1, -1];   // VS: per-seat ringRadius cache for the current tick

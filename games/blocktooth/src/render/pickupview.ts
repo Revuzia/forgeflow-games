@@ -309,9 +309,13 @@ export class PickupView implements ViewModule {
     let nR = 0, nS = 0, nH = 0, nC = 0, nG = 0;
     const trailRate = q === 0 ? 10 : q === 1 ? 18 : 28;      // shards / s per magnetised pickup
 
+    const vsMode = w.mode === 'vs';
     for (let i = 0; i < w.pickups.length; i++) {
       const p: Pickup = w.pickups[i];
       if (!p.alive) continue;
+      // VS: "rubble is private" — a heap belongs to the seat whose destruction dropped it and is drawn for that seat only
+      // (pslot -1 / undefined = shared: chests and hostile drops)
+      if (vsMode && p.pslot !== undefined && p.pslot >= 0 && p.pslot !== w.view) continue;
       const x = p.px + (p.x - p.px) * a, y = p.py + (p.y - p.py) * a, z = p.pz + (p.z - p.pz) * a;
       const ph = hash01(p.id, 1) * 6.283;
       const grounded = y < 0.02 * H + 0.01;

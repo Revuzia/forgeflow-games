@@ -9,6 +9,9 @@
 // radius). Ties: enemies < boss < buildings < props, then lower id / part index.
 // GATEKEEPERS §2.4 (lane K0): with preferEnemies, an OPEN weak point of a live gatekeeper (a part whose bit
 // is set in boss.data.weakMask) within range is returned BEFORE any enemy. City bosses are unchanged.
+// ONLINE VS (lane B-WORLD, vs_design.md §6.4): from HOSTILE TAKEOVER on, a live, hittable RIVAL titan inside `range`
+// is returned FIRST ({kind:'titan', slot}); order = rival → open weak point → enemy → city. In OPEN HOUSE rivals are never
+// auto-targeted (autos keep eating the city). Solo never sees a 'titan' target.
 
 import { hypot } from '../core/detmath.ts';
 import type { DamageOpts, Enemy, World } from '../core/types.ts';
@@ -18,12 +21,30 @@ import { cityDamageAmount, damageEnemy, lifestealFromBoss, propRadius, resolveTi
 import { nearestEnemy } from './spatial.ts';
 import { damageBoss } from '../ai/bosses/index.ts';
 import { buildingById, buildingsInRect, damageBuilding, damageProp, propsInRect } from '../city/citysim.ts';
+import { queueRivalHit } from './damage.ts';
+import { rivalsHostile, seatHittable } from './targets.ts';
 
 export type Target =
   | { kind: 'enemy'; e: Enemy }
   | { kind: 'boss'; part: number }
   | { kind: 'building'; id: number }
-  | { kind: 'prop'; id: number };
+  | { kind: 'prop'; id: number }
+  | { kind: 'titan'; slot: number };   // ONLINE VS only: a rival titan (never produced in solo)
+
+/** VS: the nearest live, hittable rival (not the bound seat) within `range` of (x, z), by surface distance; -1 none. */
+function nearestRival(w: World, x: number, z: number, range: number): number {
+  const me = w.cur;
+  if (me < 0 || !rivalsHostile(w)) return -1;
+  const ps = w.players;
+  let best = -1, bestD = Infinity;
+  for (let i = 0; i < ps.length; i++) {
+    if (i === me || !seatHittable(ps[i])) continue;
+    const T = ps[i].titan;
+    const d = Math.max(0, hypot(T.x - x, T.z - z) - T.radius);
+    if (d <= range && d < bestD) { bestD = d; best = i; }
+  }
+  return best;
+}
 
 const PROP_PAD = 5.5;   // largest prop radius + slack for the rect query
 const idScratch: number[] = [];
@@ -114,6 +135,10 @@ function cityTarget(b: Best): Target | null {
 /** Pick the auto-attack target around (x, z) within `range` metres (see header for the order). */
 export function findTarget(w: World, x: number, z: number, range: number, preferEnemies = true): Target | null {
   if (!(range >= 0)) return null;
+  if (w.mode === 'vs') {
+    const rv = nearestRival(w, x, z, range);   // ONLINE VS: a rival in reach beats everything (after OPEN HOUSE)
+    if (rv >= 0) return { kind: 'titan', slot: rv };
+  }
   if (preferEnemies) {
     const weak = nearestWeakPart(w, x, z, range);   // GATEKEEPERS §2.4: an open weak point beats any enemy
     if (weak >= 0) return { kind: 'boss', part: weak };
@@ -169,6 +194,10 @@ export function targetPos(w: World, t: Target): { x: number; z: number } {
       const p = w.city.props[t.id];
       return p ? { x: p.x, z: p.z } : { x: w.titan.x, z: w.titan.z };
     }
+    case 'titan': {
+      const R = w.players[t.slot];
+      return R ? { x: R.titan.x, z: R.titan.z } : { x: w.titan.x, z: w.titan.z };
+    }
   }
 }
 
@@ -179,6 +208,7 @@ export function targetAlive(w: World, t: Target): boolean {
     case 'boss': return !!w.boss && w.boss.alive && t.part >= 0 && t.part < w.boss.parts.length;
     case 'building': { const b = buildingById(w.city, t.id); return !!b && !b.collapsed && b.alive > 0; }
     case 'prop': { const p = w.city.props[t.id]; return !!p && p.alive; }
+    case 'titan': { const R = w.players[t.slot]; return !!R && seatHittable(R); }
   }
 }
 
@@ -219,5 +249,8 @@ export function hitTarget(w: World, t: Target, dmg: number, opts: DamageOpts): v
       if (amt > 0) damageProp(w, p.id, amt, o);
       return;
     }
+    case 'titan':
+      queueRivalHit(w, t.slot, c.dmg, o);   // ONLINE VS: reported to the VS lane (combat/pvp.ts), never applied here
+      return;
   }
 }

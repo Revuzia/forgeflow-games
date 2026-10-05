@@ -8,7 +8,7 @@
 
 import { cos, hypot, sin } from '../../core/detmath.ts';
 import type { DamageOpts, Enemy, Telegraph, World } from '../../core/types.ts';
-import { RANKS } from '../../core/config.ts';
+import { RANKS, VS } from '../../core/config.ts';
 import { headingOf } from '../../core/math.ts';
 import { damageArea, titanDamage } from '../../combat/damage.ts';
 import { findTarget } from '../../combat/targeting.ts';
@@ -16,6 +16,7 @@ import { enemiesInCircle } from '../../combat/spatial.ts';
 import { spawnTelegraph } from '../../combat/telegraphs.ts';
 import { spawnHazard } from '../../combat/hazards.ts';
 import { healTitan } from '../titansim.ts';
+import { RIVAL_KNOCK_H, hitRivalsInShape, nearestRival } from '../rivals.ts';   // B-TITAN (VS): MAGMA STOMP / SHELL VENT vs a rival
 import {
   S, aimPoint, autoInterval, emitAbility, emitAttack, faceToward, hookCooldown, idleAuto, isPlowing, knockFor, kv,
   rearmAuto,
@@ -101,7 +102,15 @@ export function step(w: World): void {
   const range = reach(w);
   const t = findTarget(w, T.x, T.z, range, true);
   let x: number, z: number;
-  if (t) {
+  const rv = nearestRival(w, range);          // VS (HOSTILE TAKEOVER on): a rival in reach is stomped before foes / the city; -1 otherwise
+  if (rv >= 0) {
+    // the stomp lands after its windup, so a rival that keeps walking is led by kit.sim_aimLead (0 = aim where it stands now;
+    // bot seats set 0 / .5 / 1 from their difficulty: vs_design §10 "Hearthback stomp lead")
+    const Rt = w.players[rv].titan;
+    const lead = Math.max(0, Math.min(1, kv(w, 'sim_aimLead')));
+    const wind = Math.max(HEARTH.stompMinWindupS, S(w, 'stompDelay'));
+    x = Rt.x + Rt.vx * lead * wind; z = Rt.z + Rt.vz * lead * wind;
+  } else if (t) {
     aimPoint(w, t, T.x, T.z, aim);
     x = aim.x; z = aim.z;
   } else if (isPlowing(w)) {
@@ -132,6 +141,8 @@ function stompFire(w: World, tg: Telegraph): void {
   const s = tg.shape;
   if (s.k !== 'circle') return;
   w.events.push({ type: 'explosion', x: s.x, z: s.z, r: s.r, kind: 'stomp' });
+  // VS: MAGMA STOMP erupts under a rival too: kitPct.hearthback.auto (7 %) + a small shove (OPEN HOUSE: the shove only)
+  if (w.mode === 'vs') hitRivalsInShape(w, s, VS.kitPct.hearthback.auto, 'stomp', 'hearth.auto', RIVAL_KNOCK_H.auto);
   const knock = knockFor(w, HEARTH.stompKnock);
   if (knock > 0) {
     enemiesInCircle(w, s.x, s.z, s.r, enemyBuf);
@@ -167,6 +178,12 @@ function vent(w: World): void {
   const base = HEARTH.ventDmg + HEARTH.ventPerStored * (stored / RANKS[T.rank].hpMul);
   VENT_OPTS.knock = knockFor(w, HEARTH.ventKnock);
   const hits = damageArea(w, { k: 'circle', x: T.x, z: T.z, r }, titanDamage(w, base) * power, VENT_OPTS);
+  if (w.mode === 'vs') {
+    // vs_design §6.4: the ring scales with the store, 6 % + 0.5 % per stored point (rank-normalised, like the foe damage), capped at 25 %
+    const K2 = VS.kitPct.hearthback;
+    const pct = Math.min(K2.ventMax, K2.ventBase + K2.ventPerStored * (stored / RANKS[T.rank].hpMul));
+    hitRivalsInShape(w, { k: 'circle', x: T.x, z: T.z, r }, pct, 'vent', 'hearth.vent', RIVAL_KNOCK_H.hook);
+  }
   T.abilityCd = hookCooldown(w, HEARTH.ventCdS);
   K.stored = 0;
   w.events.push({ type: 'vent', x: T.x, z: T.z, r, power: fill });

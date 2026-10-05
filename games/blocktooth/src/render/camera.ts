@@ -38,6 +38,13 @@
 //            stashes on `camera.userData.quality`, so the settings toggle works with no extra
 //            wiring (an explicit 2nd ctor arg / `rig.quality` / `rig.shakeEnabled` also work).
 //
+// ONLINE VS (lane B-VIEW, VS mode only; solo is untouched): the rig follows the BOUND seat (World cursor = the view
+// seat, or the spectated one) and frames rivals: `vsBias` slides the look target a little toward the rivals that are
+// within VS_CAM.range view-extents, `vsWiden` multiplies the drawn distance just enough to hold every near rival (and
+// the own titan) inside |ndc| VS_CAM.margin (widen fast, hold, shrink slowly: the view never pumps), capped at
+// VS_CAM.maxWiden (a 5 m titan next to a 60 m one is covered by the HUD pips instead). `retarget()` glides the look
+// target from the old followed seat to the new one (spectate / follow the killer) and swallows the rank-change punch.
+//
 // Update order in the app frame: rig.update(w, f) → lighting.update(w, rig) → views → render.
 
 import type * as THREE from 'three';
@@ -64,6 +71,12 @@ const SHAKE_MAX_H = 0.16;
 const SHAKE_MAX_ROLL = 0.018;
 /** the lead never pushes the titan further than this fraction of the vertical view extent */
 const LEAD_MAX_FRAC = 0.22;
+
+/** VS rival framing (see the header). range: rivals considered (view extents of the unwidened distance); margin: the
+ *  |ndc| every considered titan must stay inside; widenOmega: 1/s rise; holdS: s before a shrink starts; shrinkOmega:
+ *  1/s shrink; biasFrac: look-target slide toward the rivals' centre (fraction of the way), biasMax: cap (fraction of
+ *  the view extent), glideOmega: 1/s of the spectate glide */
+const VS_CAM = { range: 3.2, margin: 0.8, maxWiden: 2.4, widenOmega: 5, holdS: 2.0, shrinkOmega: 0.55, biasFrac: 0.3, biasMax: 0.14, biasOmega: 3, glideOmega: 4 } as const;
 
 // ─────────────────────────────── framing + zoom (constants live in core/config.ts) ───────────────────────────────
 /** The AUTO distance is config.ts cameraDistance (FRAMING: one run-long curve of body height; the
@@ -123,6 +136,13 @@ export class CameraRig {
   private shakeT = 0;
   private lastRank: RankIndex = 0;
   private readonly tgt = { x: 0, y: 0, z: 0 };
+  // VS framing state (all 0 / 1 in solo)
+  private vsK = 1;                 // extra distance multiplier holding the near rivals in frame
+  private vsHoldT = 0;             // s left before vsK may shrink
+  private biasX = 0; private biasZ = 0;     // smoothed look-target slide toward the rivals
+  private glX = 0; private glZ = 0;         // spectate glide offset (decays to 0)
+  private retargetPending = false;
+  private retX = 0; private retZ = 0;       // look target of the previous followed seat
 
   constructor(camera: THREE.PerspectiveCamera, quality?: Quality) {
     this.camera = camera;
@@ -186,6 +206,16 @@ export class CameraRig {
     this.punchT = 0;
   }
 
+  /** VS: the extra distance multiplier currently holding rivals in frame (1 = none; solo always 1) — probes / HUD. */
+  get rivalWiden(): number { return this.vsK; }
+
+  /** VS: the followed seat changed (spectate, follow the killer, respawn): glide the look target from where it was to
+   *  the new seat instead of cutting, and do not read the rank difference as a rank-up. View-only. */
+  retarget(): void {
+    this.retargetPending = true;
+    this.retX = this.tx; this.retZ = this.tz;
+  }
+
   /** Snap everything to the titan's current state (run start, retry, teleport cheats). */
   reset(w: World): void {
     const T = w.titan;
@@ -202,6 +232,7 @@ export class CameraRig {
     this.punchT = -1;
     this.trauma = 0;
     this.lastRank = T.rank;
+    this.vsK = 1; this.vsHoldT = 0; this.biasX = this.biasZ = 0; this.glX = this.glZ = 0; this.retargetPending = false;
     this.apply(0, 0, 0, 0);
   }
 
@@ -236,9 +267,26 @@ export class CameraRig {
     const ko = 1 - Math.exp(-FRAME_OFF_OMEGA * dt);
     this.offX += (fo.x - this.offX) * ko;
     this.offZ += (fo.z - this.offZ) * ko;
-    this.tx = x + this.leadX + this.offX;
-    this.tz = z + this.leadZ + this.offZ;
+    const vs = w.mode === 'vs';
+    if (vs) {
+      this.vsBias(w, x, z, dt);
+      const kg = 1 - Math.exp(-VS_CAM.glideOmega * dt);
+      this.glX -= this.glX * kg; this.glZ -= this.glZ * kg;
+      if (Math.abs(this.glX) + Math.abs(this.glZ) < 1e-3) { this.glX = 0; this.glZ = 0; }
+    } else if (this.biasX !== 0 || this.biasZ !== 0 || this.glX !== 0 || this.glZ !== 0 || this.vsK !== 1) {
+      this.biasX = this.biasZ = this.glX = this.glZ = 0; this.vsK = 1;   // a solo world after a VS one
+    }
+    this.tx = x + this.leadX + this.offX + this.biasX + this.glX;
+    this.tz = z + this.leadZ + this.offZ + this.biasZ + this.glZ;
     this.ty = H * CAMERA.targetYFrac;
+    if (this.retargetPending) {
+      this.retargetPending = false;
+      this.glX = this.retX - (this.tx - this.glX);
+      this.glZ = this.retZ - (this.tz - this.glZ);
+      this.tx = x + this.leadX + this.offX + this.biasX + this.glX;
+      this.tz = z + this.leadZ + this.offZ + this.biasZ + this.glZ;
+      this.lastRank = rank;
+    }
 
     // ── distance: critically damped spring toward D*, exact solution over dt. While a boss is alive
     //    the spring widens at CAMERA.widenOmega (the director's held framing widens at once; the rig
@@ -280,6 +328,10 @@ export class CameraRig {
     // the floor binds the drawn view at the default zoom (or wider) — a punch never dips a tell out;
     // a player zoom-in is the player's choice
     if (this.floorD > 0 && this.zoomLog >= -1e-3 && this.dRender < this.floorD) this.dRender = this.floorD;
+    if (vs) {
+      this.vsWiden(w, dt, this.dRender);
+      if (this.vsK > 1) this.dRender = Math.min(this.dRender * this.vsK, Math.max(D_ABS_MAX, this.dRender));
+    }
 
     // ── pitch ──
     const pTarget = this.pitchFor(rank);
@@ -333,8 +385,16 @@ export class CameraRig {
     };
     const rank = w.titan.rank;
     let add = 0;
+    const vsMode = w.mode === 'vs';
     for (let i = 0; i < ev.length; i++) {
       const e = ev[i];
+      // VS: another seat's own-body events (hurt, rank-up, kit pulses) never shake or punch THIS camera; its footsteps
+      // do, attenuated by distance (a Size V walking past is felt, not a full shake)
+      if (vsMode && e.p !== undefined && e.p >= 0 && e.p !== w.cur) {
+        if (e.type === 'footstep') { add += TR.footstep * Math.max(0, Math.min(1, e.heavy)) * 0.6 * att(e.x, e.z); continue; }
+        if (e.type === 'rankUp' || e.type === 'titanHurt' || e.type === 'vent' || e.type === 'wireDetonate' || e.type === 'ability'
+          || e.type === 'pulse' || e.type === 'bloomBurst') continue;
+      }
       switch (e.type) {
         case 'rankUp': this.punchT = 0; this.punchK = CAMERA.punchFrac; this.punchS = CAMERA.punchS; this.lastRank = e.rank; add += TR.rankUp; break;
         case 'footstep': add += TR.footstep * Math.max(0, Math.min(1, e.heavy)); break;
@@ -374,6 +434,71 @@ export class CameraRig {
     }
     if (add > 0) this.shake(add);
     void H;
+  }
+
+  /** VS: smoothed slide of the look target toward the centre of the near rivals (so own titan + rival both fit with
+   *  less widening). x, z = the followed titan's interpolated position. */
+  private vsBias(w: World, x: number, z: number, dt: number): void {
+    const ext = Math.max(1, this.dRender * K);
+    const reach = VS_CAM.range * ext;
+    let sx = 0, sz = 0, n = 0;
+    const ps = w.players;
+    for (let i = 0; i < ps.length; i++) {
+      if (i === w.cur) continue;
+      const P = ps[i];
+      if (!P.titan.alive || P.vs.eliminated) continue;
+      const dx = P.titan.x - x, dz = P.titan.z - z;
+      const d = Math.hypot(dx, dz);
+      if (d > reach) continue;
+      const wgt = 1 - d / reach;
+      sx += dx * wgt; sz += dz * wgt; n += wgt;
+    }
+    let bx = 0, bz = 0;
+    if (n > 0) {
+      bx = (sx / n) * VS_CAM.biasFrac; bz = (sz / n) * VS_CAM.biasFrac;
+      const cap = VS_CAM.biasMax * ext, m = Math.hypot(bx, bz);
+      if (m > cap && m > 0) { bx *= cap / m; bz *= cap / m; }
+    }
+    const k = 1 - Math.exp(-VS_CAM.biasOmega * dt);
+    this.biasX += (bx - this.biasX) * k;
+    this.biasZ += (bz - this.biasZ) * k;
+  }
+
+  /** VS: grow this.vsK so every near live rival (and the followed titan) fits inside |ndc| VS_CAM.margin around the
+   *  look target; `base` = the unwidened drawn distance. Widens fast, holds, then shrinks slowly. */
+  private vsWiden(w: World, dt: number, base: number): void {
+    const aspect = Math.max(0.5, this.camera.aspect || 1.7778);
+    const halfH = (base * K) * 0.5 * VS_CAM.margin;
+    const halfW = halfH * aspect;
+    const reach = VS_CAM.range * base * K;
+    const sp = Math.sin(this.pitch), cp = Math.cos(this.pitch);
+    let need = 1;
+    const ps = w.players;
+    for (let i = -1; i < ps.length; i++) {
+      // i = -1 is the followed titan itself (the slide must never push it out of frame)
+      const P = i < 0 ? ps[Math.max(0, w.cur)] : ps[i];
+      if (i >= 0 && (i === w.cur || !P.titan.alive || P.vs.eliminated)) continue;
+      const T = P.titan;
+      const dx = T.x - this.tx, dz = T.z - this.tz;
+      if (i >= 0 && Math.hypot(dx, dz) > reach) continue;
+      const sxx = dx * COS_YAW - dz * SIN_YAW;
+      const su = -dx * SIN_YAW - dz * COS_YAW;
+      const yb = su * sp, yt = yb + T.height * cp;
+      const kx = (Math.abs(sxx) + T.radius) / halfW;
+      const ky = Math.max(yt, 0) / halfH, kb = Math.max(-yb, 0) / halfH;
+      need = Math.max(need, kx, ky, kb);
+    }
+    const target = Math.min(VS_CAM.maxWiden, Math.max(1, need));
+    if (target > this.vsK) {
+      this.vsK += (target - this.vsK) * (1 - Math.exp(-VS_CAM.widenOmega * dt));
+      this.vsHoldT = VS_CAM.holdS;
+    } else if (target > this.vsK * 0.97) {
+      this.vsHoldT = VS_CAM.holdS;
+    } else {
+      this.vsHoldT -= dt;
+      if (this.vsHoldT <= 0) this.vsK += (target - this.vsK) * (1 - Math.exp(-VS_CAM.shrinkOmega * dt));
+    }
+    if (this.vsK < 1.0005) this.vsK = 1;
   }
 
   /** Place the camera from the rig state plus a shake offset in the view plane. */

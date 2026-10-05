@@ -1161,3 +1161,132 @@ export const UI_BIND = {
   /** clear tabloid: K; on pad the KEEP GOING button is reached with the d-pad and confirmed with A */
   keepGoing: { key: 'k', pad: null },
 } as const;
+
+// ═══════════════════════════ ONLINE VS: "ZONING DISPUTE" (lane B-CORE; _spec/online/vs_design.md §3-§13) ═══════════════════════════
+// Read ONLY when World.mode === 'vs' (a solo world never touches this block, so solo stays byte-identical). Every number
+// is a [proposal] from vs_design.md for the VS pacing lane (gate VP, vs_design.md §14.3) to measure, then keep or change.
+// Times are MATCH-CLOCK seconds (= world.t - World.vs.startT; the 5 s COUNTDOWN is world.t 0..VS.countdownS).
+// VP-tuned (gate VP, GATE lane 2026-10-05, 36 matches = 12 seeds x 3 cities, REGULAR bots, all 7 VP rules PASS): cityScale 1.3, pacing.surgeMul 1.8,
+// catchUp 0.15/3/0.1/0.3, ko.levelsLost 1, pvp.finalMul 0.5, tender.lumpBasis 'trailing', director.rebuildPace 2 / rebuildCrewsMul 2 / rebuildRadiusMul 0.6.
+export const VS = {
+  maxPlayers: 4,
+  /** VS city size: the biome's block grid x this (1 = the solo city). Four titans eat four times as much, so the VS arena is bigger (GATE knob: floors standing at 7:00) */
+  cityScale: 1.3,
+  /** titans visible and frozen in their quadrants; OPEN HOUSE begins when it ends (vs_design.md §3) */
+  countdownS: 5,
+  /** phase boundaries on the match clock (§3): OPEN HOUSE 0-240, HOSTILE TAKEOVER 240-420, FINAL NOTICE 420-600, LAST CALL 600-645 */
+  phase: { openEndS: 240, takeoverEndS: 420, finalEndS: 600, hardEndS: 645 },
+  /** a human may take over a bot seat until this match-clock second (ONLINE_PLAN §2: 3:00) */
+  takeoverUntilS: 180,
+  /** seat ring colours (§12), independent of titan palettes */
+  seatColors: ['#ff5a6e', '#4dabff', '#ffc93c', '#b57bff'] as readonly string[],
+  /** pacing overrides the VS world reads INSTEAD of config XP_STRETCH / PACE_STRETCH / the RANK_SCHEDULE_S band (§3).
+   *  Sim code calls xpToNextFor / cumXpAtFor / paceStretchFor (below); solo returns the shipped values. */
+  pacing: { xpStretch: 1, paceStretch: 1, scheduleBand: false, surgeFromS: 240, surgeMul: 1.8, buildingDmgMul: 1 },
+  /** leader-relative catch-up XP (§6.2 rule 2): growth XP x min(max, 1 + perLevel x (leaderLevel - myLevel)); the LEADER's
+   *  growth XP x max(aheadMin, 1 - aheadPerLevel x (its levels above 2nd place)) (0 = off). GATE tuning knobs (VP gate). */
+  catchUp: { perLevel: 0.15, max: 3, aheadPerLevel: 0.1, aheadMin: 0.3 },
+  /** FRONT PAGE crown (§6.2 rule 3): live from the start of HOSTILE TAKEOVER */
+  crown: { fromS: 240, heatMul: 1.3, uproarMul: 1.5, bountyLevels: 1 },
+  /** KO / EVICTED rules (§6.2, §6.3) */
+  ko: {
+    respawnS: 5, levelsLost: 1, spawnProtS: 3,
+    killXpFrac: 0.4, tinyVictimRankGap: 2,          // KO XP = 40 % of the XP lost, x 0 if the victim is 2+ ranks smaller
+    creditWindowS: 10, assistMinFrac: 0.15, assistXpFrac: 0.25,
+    ccMaxS: 1.0, clearedS: 3,                       // CC on a rival lasts <= 1 s, then 3 s CLEARED
+    followKillerS: 2.5,                             // eliminated: camera follows the killer this long, then spectate
+  },
+  /** PvP damage formula (§6.1): victim.maxHp x kitPct x power x sizeEdge x phaseMul */
+  pvp: {
+    powerCap: 1.6,                                  // power = min(powerCap, sqrt(attacker.stats.damage))
+    edgePerRank: 0.12, edgeMin: 0.64, edgeMax: 1.36,
+    openHouseMul: 0,                                // OPEN HOUSE: rival hits SHOVE only
+    finalMul: 0.5,                                  // FINAL NOTICE rival damage multiplier (the elimination ramp; GATE tuning knob)
+    thornsEff: 0.5, lifestealEff: 0.5,              // reflect / steal at 50 % on rival hits
+    uproarPctMaxHp: 0.22,                           // UPROAR vs a rival: 22 % maxHp x sizeEdge (once per ultimate)
+    uproarChargePts: 120,                           // UPROAR charge = 120 x the fraction of the rival's maxHp dealt
+    ttkTargetS: 15,
+  },
+  /** kit % of the VICTIM's max HP per hit (§6.4); the VS bot sweep tunes these toward the ~15 s equal-size TTK */
+  kitPct: {
+    molo: { auto: 0.04, hookDrag: 0, dash: 0.05 },
+    voltkite: { auto: 0.025, wireTickPerS: 0.02, detonatePerWire: 0.08, detonateMaxWires: 3, dash: 0 },
+    hearthback: { auto: 0.07, ventBase: 0.06, ventPerStored: 0.005, ventMax: 0.25, ventStoreEff: 0.6, dash: 0.06 },
+    briarwick: { auto: 0.03, pod: 0.03, ringPop: 0.06, podChain: 0.03, podChainMax: 4, tangleSlow: 0.4, tangleS: 1 },
+  },
+  /** titan-titan contact (§6.3) */
+  contact: { pushSplitPow: 2, stompMaxHpFrac: 0.06, stompKnockH: 1.5, stompPairCdS: 1.5, shoveKnockH: 1.5 },
+  /** PUBLIC TENDER (§4.2): the 3 gatekeepers as shared reward events (no rank locks in VS) */
+  tender: {
+    gates: [
+      { gate: 'stencil1', atS: 105 },               // 1:45
+      { gate: 'cordon2', atS: 210 },                // 3:30
+      { gate: 'switchboard5', atS: 330 },           // 5:30
+    ] as readonly { gate: GateId; atS: number }[],
+    markerLeadS: 15,                                // marker + minimap ping this long before the rig walks in
+    spawnRingMul: 1.5,                              // >= 1.5 x the trailing titan's spawn ring from every titan
+    nearRingMul: 2,                                 // "attended" = a titan within 2 x spawn ring
+    hpPerExtraTitan: 0.6,                           // HP x (1 + 0.6 x (titans near - 1))
+    retargetS: 4, retargetWindowS: 5,               // hunts the titan that dealt the most damage in the last 5 s; switch <= every 4 s
+    dpsCapBaseFrac: 0.06, dpsCapPerAttacker: 0.5, dpsCapMaxFrac: 0.12,   // global tumbling-1 s window (solo: 6 % per titan)
+    hitCapFrac: 0.4,                                // per victim, unchanged from GATES.hitCap
+    minShareFrac: 0.15, minShareDmgFrac: 0.05,      // any titan that dealt >= 5 % gets >= 15 % of the XP lump
+    lump: { stencil1: 2, cordon2: 2.5, switchboard5: 3 } as Record<string, number>,   // XP lump, in levels of the xp bar (see lumpBasis)
+    lumpBasis: 'trailing' as 'recipient' | 'trailing',   // 'recipient': a bar of the seat's OWN level; 'trailing': the lowest live seat's bar (the same XP for everyone x share)
+    ignoredWithdrawS: 60,                           // BID WITHDRAWN
+    rewardUproar: 40,                               // = GATES.reward.uproar, x share
+  },
+  /** CONDEMNATION ORDER ring (§5): fractions of the city half-width, each step shrinks over shrinkS */
+  ring: {
+    steps: [
+      { atS: 420, frac: 0.75 }, { atS: 480, frac: 0.5 }, { atS: 540, frac: 0.3 }, { atS: 600, frac: 0.15 },
+    ] as readonly { atS: number; frac: number }[],
+    shrinkS: 20,
+    minimapFromS: 390,                              // the ring centre shows on the minimap from 6:30
+    mortarEveryS: 1.5, mortarMaxHpFrac: 0.04, mortarPerStepAdd: 0.01,
+    lastCallAddFrac: 0.02, lastCallEveryS: 5,       // LAST CALL: +2 % every 5 s
+  },
+  /** CARD RAIL (§7): drafts that never pause the sim */
+  rail: {
+    offerCount: 3, autoPickS: 12,
+    everyLevelTo: 12, thenEvery: 2,                 // a draft on every level to LV 12, then every 2nd level
+    banish: false, lock: false,                     // hidden in VS
+    openingCard: true,                              // one pre-match opening card from a 3-card offer
+  },
+  /** Civil Defense in VS (§8): the per-titan director's budget multipliers; RAMROD off; repair crews on from minute 1 */
+  director: { budgetMulPerTitan: 0.6, crownMul: 1.3, elite: false, repairFromS: 0, rebuildPace: 2, rebuildCrewsMul: 2, rebuildRadiusMul: 0.6 },
+  /** VS SCORE (§9): tonnage (k-tons) + 2 x PvP damage (% of a maxHp) + 150 x evictions + 50 x assists + 300 x bid share per tender + 100 x peak Size */
+  score: { perKTon: 1, perPvpPct: 2, perEviction: 150, perAssist: 50, perTenderShare: 300, perPeakRank: 100 },
+  /** bots (§10): knobs per difficulty. reactTicks = reaction delay to new paint; dodge = fraction of telegraphs dodged */
+  bots: {
+    rookie: { reactTicks: 12, dodge: 0.4, engageHp: 0.75, engageEdge: 1, fleeHp: 0.4 },
+    regular: { reactTicks: 6, dodge: 0.7, engageHp: 0.55, engageEdge: 0, fleeHp: 0.3 },
+    veteran: { reactTicks: 3, dodge: 0.9, engageHp: 0.45, engageEdge: -1, fleeHp: 0.2 },
+    ringMarginH: 1,                                 // stay inside the next ring step with a 1 H margin
+    antiDogpileMax: 2,                              // never be the 3rd attacker on one target (unless it wears the crown)
+    quickMatchWaitS: 20,
+  },
+  /** rematch (§11) */
+  rematch: { voteS: 15, swapS: 10 },
+} as const;
+
+// ── mode-aware pacing helpers: sim code that reads xpToNext / cumXpAt / PACE_STRETCH goes through these when it has a
+//    World, so VS can run the pre-p20 10-minute economy (VS.pacing) while solo keeps the shipped 20-minute one. ──
+/** Pure-VS xpToNext (no p20 stretch unless VS.pacing says so). */
+export function xpToNextVs(level: number): number {
+  return Math.round((8 + 6 * pow(level, 1.35)) * VS.pacing.xpStretch);
+}
+/** xpToNext(level) for a world mode: solo = the shipped curve (identical to xpToNext), vs = the VS curve. */
+export function xpToNextFor(mode: 'solo' | 'vs', level: number): number {
+  return mode === 'vs' ? xpToNextVs(level) : xpToNext(level);
+}
+const CUM_XP_VS: number[] = [0, 0];
+/** cumXpAt(level) for a world mode (separate cache for VS). */
+export function cumXpAtFor(mode: 'solo' | 'vs', level: number): number {
+  if (mode !== 'vs') return cumXpAt(level);
+  const L = Math.max(1, Math.min(10000, Math.floor(level)));
+  while (CUM_XP_VS.length <= L) { const l = CUM_XP_VS.length - 1; CUM_XP_VS.push(CUM_XP_VS[l] + xpToNextVs(l)); }
+  return CUM_XP_VS[L];
+}
+/** The time-keyed curve divisor: solo PACE_STRETCH (2.1), vs VS.pacing.paceStretch (1). */
+export function paceStretchFor(mode: 'solo' | 'vs'): number { return mode === 'vs' ? VS.pacing.paceStretch : PACE_STRETCH; }

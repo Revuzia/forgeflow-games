@@ -11,12 +11,28 @@
 //     stats.thorns × dmg back to the attacker.
 //
 // Every number the titan deals is a BASE number passed through titanDamage() by the caller.
+//
+// ONLINE VS (lane B-WORLD, _spec/online/CORE_CONTRACT.md section 8; everything below is behind w.mode === 'vs', solo runs
+// the original code path byte for byte):
+//   * titan-side damage is dealt by the BOUND seat (the kit / upgrade / hazard step bound its owner before calling):
+//     enemyHit events, kills, lifesteal and thorns credit that seat; the per-tick TickBook is keyed by owner slot;
+//   * titan-side damageArea also tests every OTHER seat's circle and queues a PvpHit (combat/pvp.ts) for the VS lane
+//     to resolve (vs_design.md section 6): this file never applies rival damage itself;
+//   * hostile shapes (enemy / boss / hazard) test EVERY live seat: each one hurt is hurt under withPlayer(victim), so
+//     armor / shield / i-frames / kit hooks / thorns / the titanHurt event (p = victim) are that seat's. A seat under
+//     spawn protection is skipped. A BOSS hit on a victim is capped at VS.tender.hitCapFrac of that victim's max HP.
+//     Hostile damage is baked for the SHOOTER's target (x that titan's rank HP multiplier at the moment it is fired): a
+//     DIFFERENT titan caught in the blast takes it rescaled to ITS OWN rank (same fraction of HP as the target would),
+//     so a Size V's crossfire never one-shots a Size I standing next to it (and a Size I's never tickles a Size V).
 
 import { cos, hypot, sin } from '../core/detmath.ts';
 import type { DamageKind, DamageOpts, Enemy, Prop, Shape, SimEvent, World } from '../core/types.ts';
-import { KILL_MASS_RANK_MUL, OVERSIZE_DAMAGE_MUL, RANKS } from '../core/config.ts';
+import { ENEMY_DMG_RANK_MUL, KILL_MASS_RANK_MUL, OVERSIZE_DAMAGE_MUL, RANKS, VS } from '../core/config.ts';
 import { circleInShape, clamp, rectInShape, shapeBounds } from '../core/math.ts';
+import { withPlayer } from '../core/players.ts';
 import { enemiesInShape, nearestEnemy } from './spatial.ts';
+import { queuePvp } from './pvp.ts';
+import { seatHittable } from './targets.ts';
 import { spawnPickup } from './pickups.ts';
 import { ENEMIES } from '../data/enemies.ts';
 import { damageBoss, gateAddIds } from '../ai/bosses/index.ts';
@@ -67,14 +83,15 @@ function giveIds(): void { idDepth--; }
 type EnemyHitEvent = Extract<SimEvent, { type: 'enemyHit' }>;
 interface TickBook {
   tick: number;
-  hits: Map<number, EnemyHitEvent>;   // enemy id → this tick's aggregated enemyHit event
-  healed: number;                      // lifesteal healed this tick
+  hits: Map<number, EnemyHitEvent>;   // enemy id → this tick's aggregated enemyHit event (VS: id × 8 + owner slot)
+  healed: number;                      // lifesteal healed this tick (solo)
+  healedBy: number[];                  // VS: lifesteal healed this tick per owner slot (the cap is per titan)
 }
 const books = new WeakMap<World, TickBook>();
 function bookOf(w: World): TickBook {
   let b = books.get(w);
-  if (!b) { b = { tick: w.tick, hits: new Map(), healed: 0 }; books.set(w, b); }
-  if (b.tick !== w.tick) { b.tick = w.tick; b.hits.clear(); b.healed = 0; }
+  if (!b) { b = { tick: w.tick, hits: new Map(), healed: 0, healedBy: [] }; books.set(w, b); }
+  if (b.tick !== w.tick) { b.tick = w.tick; b.hits.clear(); b.healed = 0; b.healedBy.length = 0; }
   return b;
 }
 
@@ -157,7 +174,9 @@ function applyKnock(w: World, e: Enemy, knock: number, ox: number, oz: number): 
 
 function emitEnemyHit(w: World, e: Enemy, dmg: number, crit: boolean): void {
   const b = bookOf(w);
-  const prev = b.hits.get(e.id);
+  // VS: one aggregated event per (enemy, hitter) so each seat's tally / triggers see its own hits (p = the bound seat)
+  const key = w.mode === 'vs' ? e.id * 8 + (w.cur & 7) : e.id;
+  const prev = b.hits.get(key);
   if (prev) {
     prev.dmg += dmg;
     prev.crit = prev.crit || crit;
@@ -165,7 +184,7 @@ function emitEnemyHit(w: World, e: Enemy, dmg: number, crit: boolean): void {
     return;
   }
   const ev: EnemyHitEvent = { type: 'enemyHit', id: e.id, x: e.x, z: e.z, dmg, crit };
-  b.hits.set(e.id, ev);
+  b.hits.set(key, ev);
   w.events.push(ev);
 }
 
@@ -177,11 +196,12 @@ function lifesteal(w: World, dealt: number): void {
   const ls = stat(w, 'lifesteal');
   if (!(ls > 0)) return;
   const b = bookOf(w);
-  const room = LIFESTEAL_CAP_PER_TICK * T.maxHp - b.healed;
+  const vs = w.mode === 'vs';
+  const room = LIFESTEAL_CAP_PER_TICK * T.maxHp - (vs ? (b.healedBy[w.cur] ?? 0) : b.healed);
   if (room <= 0) return;
   const amt = Math.min(room, ls * dealt);
   if (amt <= 0) return;
-  b.healed += amt;
+  if (vs) b.healedBy[w.cur] = (b.healedBy[w.cur] ?? 0) + amt; else b.healed += amt;
   healTitan(w, amt);
 }
 
@@ -286,9 +306,57 @@ export function damageArea(w: World, s: Shape, dmg: number, opts: DamageOpts): n
     }
   }
 
+  // ONLINE VS: every other seat the shape overlaps is reported to the VS lane (combat/pvp.ts); the hit count stays
+  // the PvE one (kits use it for their own bookkeeping), a rival is not "a thing hit" for them
+  if (w.mode === 'vs' && opts.kind !== 'thorns') queueRivals(w, s, c.dmg, hitOpts, knock);
+
   // city
   if (!opts.noCity) hits += damageCityArea(w, s, c.dmg, hitOpts);
   return hits;
+}
+
+/** VS: queue a PvpHit for every live, hittable rival (not the bound attacker) whose circle overlaps the shape. */
+function queueRivals(w: World, s: Shape, dmg: number, opts: DamageOpts, knock: number): number {
+  const from = w.cur;
+  if (from < 0) return 0;
+  const ps = w.players;
+  let n = 0;
+  for (let i = 0; i < ps.length; i++) {
+    if (i === from) continue;
+    const p = ps[i];
+    if (!seatHittable(p)) continue;
+    const R = p.titan;
+    if (!circleInShape(s, R.x, R.z, R.radius)) continue;
+    const o = shapeOrigin(s, R.x, R.z, originScratch);
+    queuePvp(w, {
+      from, to: i, kind: opts.kind, dmg, crit: opts.crit === true, dot: opts.src === 'hazard',
+      x: o.x, z: o.z, knock, slow: 0, upg: opts.fromUpgrade ?? '', tick: w.tick,
+    });
+    n++;
+  }
+  return n;
+}
+
+/** VS: report a single-target hit on rival `slot` (targeting.ts hitTarget, Target {kind:'titan'}). */
+export function queueRivalHit(w: World, slot: number, dmg: number, opts: DamageOpts): boolean {
+  const from = w.cur;
+  if (from < 0 || slot === from || slot < 0 || slot >= w.players.length) return false;
+  const p = w.players[slot];
+  if (!seatHittable(p)) return false;
+  const A = w.titan;
+  queuePvp(w, {
+    from, to: slot, kind: opts.kind, dmg, crit: opts.crit === true, dot: opts.src === 'hazard',
+    x: A.x, z: A.z, knock: opts.knock === undefined ? 0 : opts.knock, slow: 0, upg: opts.fromUpgrade ?? '', tick: w.tick,
+  });
+  return true;
+}
+
+/** VS: report a titan-owned slowing hazard over rival `slot` (combat/hazards.ts). */
+export function queueRivalSlow(w: World, slot: number, frac: number, kind: DamageKind, x: number, z: number): void {
+  const from = w.cur;
+  if (from < 0 || slot === from || slot < 0 || slot >= w.players.length) return;
+  if (!seatHittable(w.players[slot])) return;
+  queuePvp(w, { from, to: slot, kind, dmg: 0, crit: false, dot: true, x, z, knock: 0, slow: frac, upg: '', tick: w.tick });
 }
 
 /** Buildings + props inside the shape (titan side). */
@@ -437,6 +505,44 @@ export function reflectThorns(w: World, attacker: Attacker, dmg: number): void {
  * the titan. Lane-internal form of damageTitanArea with an explicit attacker.
  */
 export function hurtTitanByShape(w: World, s: Shape, dmg: number, kind: DamageKind, attacker: Attacker, dot = false): boolean {
+  if (w.mode === 'vs') return hurtEveryTitan(w, s, dmg, kind, attacker, dot);
+  return hurtBoundTitan(w, s, dmg, kind, attacker, dot);
+}
+
+/** VS: the seat whose rank scaled a hostile shot resolved while UNBOUND (a hostile projectile): set by combat/projectiles.ts. */
+let HOSTILE_FROM = -1;
+export function setHostileFrom(slot: number): void { HOSTILE_FROM = slot; }
+/** The rank factor hostile damage is baked with: a rig uses the rank HP multiplier, a unit also ENEMY_DMG_RANK_MUL. */
+function hostileScale(rank: number, boss: boolean): number {
+  const hp = RANKS[rank].hpMul;
+  return boss ? hp : hp * (ENEMY_DMG_RANK_MUL[rank] ?? 1);
+}
+
+/** VS: a hostile shape tests EVERY live seat (slot order); each one hurt is hurt AS that seat (withPlayer). */
+function hurtEveryTitan(w: World, s: Shape, dmg: number, kind: DamageKind, attacker: Attacker, dot: boolean): boolean {
+  if (!(dmg > 0)) return false;
+  const ps = w.players;
+  const boss = attacker !== null && attacker.kind === 'boss';
+  const from = HOSTILE_FROM >= 0 ? HOSTILE_FROM : w.cur;   // the seat the shot was scaled for (-1: unknown, no rescale)
+  const fromScale = from >= 0 && from < ps.length ? hostileScale(ps[from].titan.rank, boss) : 0;
+  let any = false;
+  for (let i = 0; i < ps.length; i++) {
+    const p = ps[i];
+    if (!seatHittable(p)) continue;
+    const T = p.titan;
+    if (!circleInShape(s, T.x, T.z, T.radius)) continue;
+    // rescale for a victim that is not the shot's own target (same fraction of ITS HP)
+    const dv = fromScale > 0 && i !== from ? dmg * hostileScale(T.rank, boss) / fromScale : dmg;
+    // a rig's single hit never takes more than hitCapFrac of THIS victim's max HP
+    const d = boss && !dot ? Math.min(dv, VS.tender.hitCapFrac * T.maxHp) : dv;
+    any = true;
+    withPlayer(w, i, () => { hurtBoundTitan(w, s, d, kind, attacker, dot); });
+  }
+  return any;
+}
+
+/** The solo path (and one VS victim, bound): the bound titan vs the shape. */
+function hurtBoundTitan(w: World, s: Shape, dmg: number, kind: DamageKind, attacker: Attacker, dot: boolean): boolean {
   const T = w.titan;
   if (!T.alive || !(dmg > 0)) return false;
   if (!circleInShape(s, T.x, T.z, T.radius)) return false;
@@ -453,6 +559,23 @@ export function hurtTitanByShape(w: World, s: Shape, dmg: number, kind: DamageKi
 
 /** Hostile → titan (true if the shape overlapped the titan). Contact kinds ('ram','dive') reflect thorns. */
 export function damageTitanArea(w: World, s: Shape, dmg: number, kind: DamageKind): boolean {
+  if (w.mode === 'vs') {
+    // VS: every live seat the shape overlaps; a contact kind finds ITS rammer next to that victim
+    if (!(dmg > 0)) return false;
+    const ps = w.players;
+    let any = false;
+    for (let i = 0; i < ps.length; i++) {
+      const p = ps[i];
+      if (!seatHittable(p) || !circleInShape(s, p.titan.x, p.titan.z, p.titan.radius)) continue;
+      any = true;
+      withPlayer(w, i, () => {
+        const T = w.titan;
+        const attacker = kind === 'ram' || kind === 'dive' ? contactAttacker(w, kind, T.x, T.z) : null;
+        hurtBoundTitan(w, s, dmg, kind, attacker, false);
+      });
+    }
+    return any;
+  }
   const T = w.titan;
   if (!T.alive || !(dmg > 0)) return false;
   const attacker = kind === 'ram' || kind === 'dive' ? contactAttacker(w, kind, T.x, T.z) : null;

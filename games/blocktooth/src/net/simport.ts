@@ -20,6 +20,7 @@ import type { BiomeId, RunMeta, TitanId, TitanInput, World } from '../core/types
 import { EMPTY_RUN_META } from '../core/types.ts';
 import { createWorld, stepWorld } from '../core/world.ts';
 import { hasPendingDraft, pickUpgrade, rollOffer } from '../upgrades/draft.ts';
+import { vsStateFlat, type HashAtom } from './vshash.ts';
 import { type Frame, type StartInfo, SEATS, INPUT_BYTES, decodeInput, cardOf } from './proto.ts';
 
 /** What the lockstep session needs from a world. W is opaque to the session. */
@@ -94,6 +95,11 @@ export function hashWorld(w: World): number {
   for (const p of w.city.props) { hs.bool(p.alive); if (p.lane < 0) continue; hs.num(p.x); hs.num(p.z); }
   hs.num(w.run.tonnage); hs.num(w.run.blocksLeveled); hs.num(w.run.peakRank);
   hs.str(w.run.phase); hs.str(w.run.result ?? '-');
+  if (w.mode === 'vs') {   // every seat + the world-level VS state (GATE: CORE left only the bound cursor hashed); solo never gets here
+    const a: HashAtom[] = [];
+    vsStateFlat(w, a);
+    for (let i = 0; i < a.length; i++) { const x = a[i]; if (typeof x === 'string') hs.str(x); else hs.num(x); }
+  }
   return hs.h >>> 0;
 }
 

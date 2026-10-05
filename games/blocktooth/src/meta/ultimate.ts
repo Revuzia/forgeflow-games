@@ -44,7 +44,7 @@
 
 import { cos, hypot, sin, tan } from '../core/detmath.ts';
 import type { DamageKind, DamageOpts, Enemy, Hazard, Shape, Telegraph, UltPulse, UltState, World } from '../core/types.ts';
-import { CAMERA, RANKS, ULT, spawnView } from '../core/config.ts';
+import { CAMERA, RANKS, ULT, VS, spawnView } from '../core/config.ts';
 import { spawnRing } from '../ai/director.ts';
 import { ULTS } from '../data/ultimates.ts';
 import { ENEMIES } from '../data/enemies.ts';
@@ -57,6 +57,7 @@ import { bossUltHit, releaseLeash } from '../ai/bosses/index.ts';
 import { stat } from '../upgrades/stats.ts';
 import { VOLT } from '../titans/kits/voltkite.ts';
 import { makeRoom, titanHazards } from '../titans/kits/common.ts';
+import { RIVAL_KNOCK_H, rivalHit, rivalPull, rivalRoot, rivalsInShape } from '../titans/rivals.ts';   // B-TITAN (VS): UPROAR vs a rival titan
 import { hasPendingDraft } from '../upgrades/draft.ts';
 
 // ─────────────────────────────── lane-local charge tuning (FEATURES_V2 §3.2 tuning order) ───────────────────────────────
@@ -226,7 +227,7 @@ export function ultBankKill(w: World, x: number, z: number, xp: number, mass: nu
     u.bankXp += got;
     u.bankMass += mv * ULT.killXpMul;
     u.kills++;
-    if (FIRE.w === w && FIRE.tick === w.tick) {   // a kill on the fire tick: remembered in case the fire is taken back
+    if (FIRE.w === w && FIRE.slot === w.cur && FIRE.tick === w.tick) {   // a kill on the fire tick: remembered in case the fire is taken back
       FIRE.xpRaw += xv; FIRE.xpGot += got; FIRE.massRaw += mv; FIRE.massGot += mv * ULT.killXpMul;
     }
   }
@@ -276,8 +277,9 @@ export function stepUltimate(w: World): void {
 export function chargeUltimate(w: World): void {
   const u = w.ult;
   const T = w.titan;
-  if (FIRE.w === w) {
-    if (FIRE.tick === w.tick && u.phase === 'roar' && u.t === 0 && !FIRE.owed && !rankUpThisTick(w) && hasPendingDraft(w)) unfire(w);
+  if (FIRE.w === w && FIRE.slot === w.cur) {   // B-CORE: only the firing player's chargeUltimate takes its own fire back
+    // VS: the CARD RAIL never freezes the sim, so there is nothing to take the fire back for
+    if (w.mode !== 'vs' && FIRE.tick === w.tick && u.phase === 'roar' && u.t === 0 && !FIRE.owed && !rankUpThisTick(w) && hasPendingDraft(w)) unfire(w);
     FIRE.w = null;
   }
   if (u.phase !== 'idle' || u.lockT > 0 || u.ready) return;
@@ -291,6 +293,7 @@ export function chargeUltimate(w: World): void {
   const ev = w.events;
   for (let i = 0; i < ev.length; i++) {
     const e = ev[i];
+    if (e.p !== w.cur) continue;     // B-CORE: this player's events only (solo: always 0)
     switch (e.type) {
       case 'propDestroyed':
         if (within(T.x, T.z, e.x, e.z, near)) city += ULT.prop;
@@ -341,7 +344,7 @@ function within(ax: number, az: number, bx: number, bz: number, r: number): bool
  * Scratch, not world state: it never outlives the stepWorld call that set it (FIRE.w is cleared there).
  */
 const FIRE = {
-  w: null as World | null, tick: -1, owed: false, invulT: 0, lockT: 0, kills: 0, charge: 0,
+  w: null as World | null, slot: -1, tick: -1, owed: false, invulT: 0, lockT: 0, kills: 0, charge: 0,
   xpRaw: 0, xpGot: 0, massRaw: 0, massGot: 0,
 };
 
@@ -374,7 +377,7 @@ function fire(w: World): void {
   const u = w.ult;
   const T = w.titan;
   const def = ULTS[w.titanId];
-  FIRE.w = w; FIRE.tick = w.tick; FIRE.owed = hasPendingDraft(w); FIRE.invulT = u.invulnT; FIRE.lockT = u.lockT; FIRE.kills = u.kills; FIRE.charge = u.charge;
+  FIRE.w = w; FIRE.slot = w.cur; FIRE.tick = w.tick; FIRE.owed = hasPendingDraft(w); FIRE.invulT = u.invulnT; FIRE.lockT = u.lockT; FIRE.kills = u.kills; FIRE.charge = u.charge;
   FIRE.xpRaw = 0; FIRE.xpGot = 0; FIRE.massRaw = 0; FIRE.massGot = 0;
   u.charge = 0;
   u.ready = false;
@@ -450,6 +453,7 @@ function blastStart(w: World): void {
   const T = w.titan;
   const H = T.height;
   const R = u.r;
+  if (w.mode === 'vs') ultRivals(w);
   switch (w.titanId) {
     case 'molo':
       magnetAll(w, R);
@@ -520,6 +524,43 @@ function stepBlast(w: World): void {
   if (u.t >= def.blastS - 1e-9 && u.pulse >= def.pulses.length) endUlt(w);
 }
 
+// ─────────────────────────────── UPROAR vs rival titans (VS; vs_design.md §6.4) ───────────────────────────────
+const RIV: number[] = [];
+const RIV_CIRCLE = { k: 'circle' as const, x: 0, z: 0, r: 0 };
+/** The roar's own hit on every rival inside R, ONCE per ultimate whatever the pulse count (VS.pvp.uproarPctMaxHp of its max HP,
+ *  × the size edge B-VS applies), + the kit's CC under the CC rules: BRIARWICK roots it (the pulse stun, capped by the rules);
+ *  MOLO's PULL (moloPullRivals) drags rivals much smaller than itself; VOLT-KITE / HEARTHBACK leave their wires / pools. */
+function ultRivals(w: World): void {
+  const u = w.ult;
+  RIV_CIRCLE.x = u.x; RIV_CIRCLE.z = u.z; RIV_CIRCLE.r = u.r;
+  rivalsInShape(w, RIV_CIRCLE, RIV);
+  const n = RIV.length;
+  if (n === 0) return;
+  const list: number[] = [];
+  for (let i = 0; i < n; i++) list.push(RIV[i]);
+  const kind = ULTS[w.titanId].pulses[0].kind;
+  for (let i = 0; i < n; i++) {
+    rivalHit(w, list[i], VS.pvp.uproarPctMaxHp, kind, 'uproar', u.x, u.z, RIVAL_KNOCK_H.ult);
+    if (w.titanId === 'briarwick') rivalRoot(w, list[i], 1);
+  }
+}
+
+/** MOLO PULL on rivals: a rival under CRUSH-class size (< 0.7 × MOLO's height) is dragged toward the jaws, as the hook does. */
+function moloPullRivals(w: World, step: number): void {
+  const u = w.ult, T = w.titan;
+  RIV_CIRCLE.x = u.x; RIV_CIRCLE.z = u.z; RIV_CIRCLE.r = u.r;
+  rivalsInShape(w, RIV_CIRCLE, RIV);
+  const n = RIV.length;
+  if (n === 0) return;
+  const list: number[] = [];
+  for (let i = 0; i < n; i++) list.push(RIV[i]);
+  for (let i = 0; i < n; i++) {
+    const R = w.players[list[i]].titan;
+    if (!(R.height < 0.7 * T.height)) continue;
+    rivalPull(w, list[i], T.x, T.z, step, w.dt, T.radius + R.radius);
+  }
+}
+
 /** MOLO STREET SWALLOW pull: crushable foes inside R are dragged toward the jaws; 20 base/s at 5 Hz. */
 function moloPull(w: World): void {
   const u = w.ult;
@@ -548,6 +589,7 @@ function moloPull(w: World): void {
     if (dmg > 0) damageEnemyFrom(w, e, dmg, opts, u.x, u.z);
   }
   hitBuf.length = 0;
+  if (w.mode === 'vs') moloPullRivals(w, step);
 }
 
 /** One damage pulse: enemies in the ring [r0, r1] × R (enemiesInShape + damageEnemy — never the city),

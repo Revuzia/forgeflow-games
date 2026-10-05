@@ -914,12 +914,12 @@ function gateRun(titan: TitanId, biome: BiomeId, perk: PerkId | null, minutes = 
         else if (e.type === 'vent') sup.vents++;
       }
       if (ww.tick % SIM_HZ === 0 || ww.run.result) {
-        ctx.result = ww.run.result; ctx.endT = ww.run.endT;
+        ctx.result = ww.run.result as 'clear' | 'dead' | null; ctx.endT = ww.run.endT;
         for (const id of M.goals.evalGoals(profile, ww.tally, ctx)) { met.add(id); profile.done[id] = 1; }
       }
     });
   } catch (e) { out.error = `threw @t=${w.t.toFixed(1)}: ${String((e as Error)?.stack ?? e).split('\n').slice(0, 3).join(' | ')}`; }
-  out.result = w.run.result ?? 'timeout';
+  out.result = (w.run.result as 'clear' | 'dead' | null) ?? 'timeout';   // solo probe: 'vs' cannot occur
   out.endT = w.run.result ? w.run.endT : w.t;
   out.tally = w.tally; out.supply = sup; out.met = [...met]; out.hash = hashWorld(w);
   return out;

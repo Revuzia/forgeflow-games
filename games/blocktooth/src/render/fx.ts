@@ -23,6 +23,7 @@ import { TITANS } from '../data/titans.ts';
 import { BURST_WORDS } from '../data/strings.ts';
 import { STR_GATE } from '../data/strings_gate.ts';
 import { sizeLocked } from '../meta/gates.ts';
+import { bindPlayer } from '../core/players.ts';
 import { addOutline, bakeOutlineNormals, facet, INK, makeToon } from './materials.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from './viewtypes.ts';
 /** scratch for renderer.getSize (the canvas CSS size without a layout read) */
@@ -669,10 +670,8 @@ export class FxView implements ViewModule {
     const q = this.ctx.quality.level;
     const biome = BIOMES[w.biomeId];
     this.night = biome.time === 'night';
-    this.titanId = w.titanId;
-    const tc = TITANS[w.titanId].colors;
-    lin(tc.glow, this.glow, 0);
-    lin(tc.accent, this.accent, 0);
+    this.seatNow = -2;
+    this.useTitan(w.titanId);
     lin(w.biomeId === 'whitestacks' ? '#f3f5f8' : w.biomeId === 'lockwater' ? '#b7b2c8' : '#f1e6cf', this.dustCol, 0);
     lin(this.night ? '#6a6480' : '#9a93a0', this.smokeCol, 0);
     lin(INK, this.ink, 0);
@@ -813,6 +812,28 @@ export class FxView implements ViewModule {
     this.enemyMap.clear();
   }
 
+  // ─────────────────────────────── VS: per-seat event routing ───────────────────────────────
+  /** the seat whose titan the cursor / colours currently follow (-2 = none yet) */
+  private seatNow = -2;
+
+  /** glow + accent colours and the titan-specific branches follow this titan */
+  private useTitan(id: TitanId): void {
+    this.titanId = id;
+    const tc = TITANS[id].colors;
+    lin(tc.glow, this.glow, 0);
+    lin(tc.accent, this.accent, 0);
+  }
+
+  /** ONLINE VS: bind the world cursor to the seat that produced an event (p; -1 / unknown = the view seat) so the
+   *  handlers below read THAT titan (size, kit, colours). Solo never calls it. */
+  private useSeat(w: World, p: number | undefined): void {
+    const s = p !== undefined && p >= 0 && p < w.players.length ? p : w.view;
+    if (s === this.seatNow) return;
+    this.seatNow = s;
+    bindPlayer(w, s);
+    if (w.titanId !== this.titanId) this.useTitan(w.titanId);
+  }
+
   // ─────────────────────────────── per frame ───────────────────────────────
   update(w: World, f: FrameInfo): void {
     if (!this.mounted) return;
@@ -831,7 +852,13 @@ export class FxView implements ViewModule {
       this.pickupCd = Math.max(0, this.pickupCd - dt);
       this.vacRingCd = Math.max(0, this.vacRingCd - dt);
       this.spawnFxLeft = SPAWN_FX_PER_FRAME;
-      for (let i = 0; i < f.events.length; i++) this.onEvent(w, f.events[i], f);
+      if (w.mode === 'vs') {
+        this.seatNow = -2;   // another view may have moved the cursor (or the followed seat changed) since the last frame
+        for (let i = 0; i < f.events.length; i++) { this.useSeat(w, f.events[i].p); this.onEvent(w, f.events[i], f); }
+        this.useSeat(w, w.view);
+      } else {
+        for (let i = 0; i < f.events.length; i++) this.onEvent(w, f.events[i], f);
+      }
       this.stepVacuum(w, f, dt);
     }
     this.camera().getWorldDirection(this.camDir);
@@ -970,6 +997,19 @@ export class FxView implements ViewModule {
         }
         this.dustBurst(e.x1, e.z1, lw * 0.6, Math.round(2 * qm) + 1, H * 0.1, 0.45, L('#9a7a52'));
         if (Math.random() < 0.3) this.word('vine', e.x1, H * 0.9, e.z1, f);
+        break;
+      }
+      // ONLINE VS: a rival hit landed. OPEN HOUSE (noContest): a grey shove puff, no sparks of damage; else an impact burst.
+      case 'rivalHit': {
+        const Hh = Math.max(1, T.height);
+        if (e.noContest) {
+          this.dustBurst(e.x, e.z, Hh * 0.35, Math.round(3 * qm) + 1, Hh * 0.12, 0.5);
+          this.sparks(e.x, Hh * 0.5, e.z, Math.round(3 * qm) + 1, Hh * 0.6, '#ffffff', '#c8ccd4', Hh * 0.6);
+        } else {
+          this.sparks(e.x, Hh * 0.55, e.z, Math.round(8 * qm) + 2, Hh * 1.5, '#ffffff', '#ffd166', Hh);
+          this.dustBurst(e.x, e.z, Hh * 0.45, Math.round(4 * qm) + 1, Hh * 0.14, 0.6);
+          this.ring(e.x, e.z, Hh * 0.2, Hh * 0.9, 0.3, this.accent, 0.8, Hh * 0.08);
+        }
         break;
       }
       case 'dash': {

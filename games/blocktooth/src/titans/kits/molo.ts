@@ -15,6 +15,8 @@ import { magnetAll } from '../../combat/pickups.ts';
 import { buildingsInRect, propsInRect } from '../../city/citysim.ts';
 import { ENEMIES } from '../../data/enemies.ts';
 import { titanMaxSpeed } from '../titansim.ts';
+import { VS } from '../../core/config.ts';
+import { RIVAL_KNOCK_H, hitRivalsInShape, nearestRival, rivalPull, rivalSlow, rivalsInShape } from '../rivals.ts';   // B-TITAN (VS): CURB BITE / GULLET VACUUM vs a rival
 import {
   S, aimPoint, autoInterval, emitAbility, emitAttack, faceToward, hookCooldown, idleAuto, isPlowing, knockFor, kv,
   propRadius, rearmAuto, setMoveMul,
@@ -62,7 +64,7 @@ const BITE_OPTS: DamageOpts = { src: 'titan', kind: 'bite' };
 const PULSE_OPTS: DamageOpts = { src: 'titan', kind: 'pulse' };
 const CHEW_OPTS: DamageOpts = { src: 'titan', kind: 'bite', noCity: true, noCrit: true };
 /** pickups pulled by the current vacuum (distinct ids), per world */
-const vacuumed = new WeakMap<World, Set<number>>();
+const vacuumed = new WeakMap<object, Set<number>>();   // B-CORE: keyed by the TitanState (per player), not the World
 
 export function init(): Record<string, number> {
   return { vacuumT: 0, vacAfterT: 0, vacCount: 0, vacTick: 0, pulseMark: 0, headTurn: 0 };
@@ -101,14 +103,21 @@ export function step(w: World): void {
   const half = biteHalf(w);
   const t = findTarget(w, T.x, T.z, reach, true);
   let dir: number | null = null;
-  if (t) {
+  // VS (HOSTILE TAKEOVER on): a rival inside the bite's reach is bitten before anything else (vs_design §6.4); -1 in solo / OPEN HOUSE
+  const rv = nearestRival(w, reach);
+  if (rv >= 0) {
+    const Rt = w.players[rv].titan;
+    const a = headingOf(Rt.x - T.x, Rt.z - T.z);
+    if (Math.abs(wrapAngle(a - T.heading)) <= MOLO.biteAimDeg * DEG) dir = a;
+    else faceToward(w, a);
+  } else if (t) {
     aimPoint(w, t, T.x, T.z, aim);
     const a = headingOf(aim.x - T.x, aim.z - T.z);
     const off = wrapAngle(a - T.heading);
     if (Math.abs(off) <= MOLO.biteAimDeg * DEG) dir = a;
     else faceToward(w, a);                               // swivel toward it while idle
   }
-  if (dir === null) {
+  if (dir === null && rv < 0) {
     // "else ahead": snap straight ahead — but only at something real (never a swing at air):
     // the walls it is grinding through, or anything already inside the forward cone.
     FWD.x = T.x; FWD.z = T.z; FWD.dir = T.heading; FWD.half = half; FWD.r = reach;
@@ -150,6 +159,7 @@ function bite(w: World, dir: number, reach: number, half: number): void {
   const shape: Shape = { k: 'cone', x: T.x, z: T.z, dir, half, r: reach };
   BITE_OPTS.knock = knockFor(w, MOLO.biteKnock);
   const hits = damageArea(w, shape, titanDamage(w, MOLO.biteDmg), BITE_OPTS);
+  if (w.mode === 'vs') hitRivalsInShape(w, shape, VS.kitPct.molo.auto, 'bite', 'molo.auto', RIVAL_KNOCK_H.auto);   // CURB BITE: 4 % of a rival's max HP
   T.kit.headTurn = wrapAngle(dir - T.heading);
   emitAttack(w, 'curbBite', T.x, T.z, dir, reach, hits);
 }
@@ -166,13 +176,37 @@ function vacRadius(w: World): number {
   return MOLO.vacRH * w.titan.height * Math.max(0.1, S(w, 'vacuumRadius')) * Math.max(0.1, S(w, 'area'));
 }
 
+const RIV: number[] = [];
+const RIV_CIRCLE = { k: 'circle' as const, x: 0, z: 0, r: 0 };
+/** a rival under this × MOLO's height is DRAGGED to the jaws; a bigger one is only slowed (vs_design §6.4) */
+const VAC_DRAG_RATIO = 0.7, VAC_SLOW_MUL = 0.7, VAC_SLOW_S = 0.35;
+/**
+ * GULLET VACUUM vs rival titans (VS): inside the inhale radius a much smaller rival is dragged to the jaws at the same rate as a
+ * foe (vacDragHPerS H/s), a similar-size one is slowed 30 % (refreshed on the 5 Hz chew tick). Both are CC: B-VS caps each
+ * rival at 1.0 s then CLEARED (pvpCc), so a held rival escapes. No damage (kitPct.molo.hookDrag = 0).
+ */
+function vacuumRivals(w: World, mouthX: number, mouthZ: number, R: number, drag: number, chew: boolean): void {
+  const T = w.titan;
+  RIV_CIRCLE.x = T.x; RIV_CIRCLE.z = T.z; RIV_CIRCLE.r = R;
+  rivalsInShape(w, RIV_CIRCLE, RIV);
+  const n = RIV.length;
+  if (n === 0) return;
+  const list: number[] = [];
+  for (let i = 0; i < n; i++) list.push(RIV[i]);
+  for (let i = 0; i < n; i++) {
+    const Rt = w.players[list[i]].titan;
+    if (Rt.height < VAC_DRAG_RATIO * T.height) rivalPull(w, list[i], mouthX, mouthZ, drag, w.dt, T.radius * 0.5 + Rt.radius);
+    else if (chew) rivalSlow(w, list[i], VAC_SLOW_MUL, VAC_SLOW_S);
+  }
+}
+
 function startVacuum(w: World): void {
   const T = w.titan, K = T.kit;
   K.vacuumT = MOLO.vacChannelS;
   K.vacCount = 0;
   K.vacTick = 0;
-  let set = vacuumed.get(w);
-  if (!set) { set = new Set<number>(); vacuumed.set(w, set); }
+  let set = vacuumed.get(w.titan);
+  if (!set) { set = new Set<number>(); vacuumed.set(w.titan, set); }
   set.clear();
   T.abilityCd = hookCooldown(w, MOLO.vacCdS);
   setMoveMul(w, MOLO.vacMoveMul);
@@ -190,7 +224,7 @@ function channel(w: World): void {
 
   // pickups: flag them magnetized (pickups lane pulls + collects), then add the extra 2× pull here
   magnetAll(w, R);
-  const set = vacuumed.get(w);
+  const set = vacuumed.get(w.titan);
   const extra = (MOLO.vacPullMul - 1) * Math.max(MOLO.vacBasePullMin, MOLO.vacBasePullPerMaxSpeed * titanMaxSpeed(w)) * dt;
   const R2 = R * R;
   for (let i = 0; i < w.pickups.length; i++) {
@@ -229,6 +263,7 @@ function channel(w: World): void {
     if (chew && chewDmg > 0) damageEnemy(w, e, chewDmg, CHEW_OPTS);
   }
   enemyBuf.length = 0;
+  if (w.mode === 'vs') vacuumRivals(w, mouthX, mouthZ, R, drag, chew);
 
   // release
   K.vacuumT = kv(w, 'vacuumT') - dt;

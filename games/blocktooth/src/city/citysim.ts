@@ -14,10 +14,11 @@
 
 import { cos, hypot, sin } from '../core/detmath.ts';
 import type { Building, CityLayout, DamageOpts, PickupKind, SimEvent, Tier, World } from '../core/types.ts';
-import { TIERS, cameraDistance, lootMass, lootXp } from '../core/config.ts';
+import { TIERS, VS, cameraDistance, lootMass, lootXp } from '../core/config.ts';
 import { clamp } from '../core/math.ts';
+import { creditBlock, creditTonnage } from '../core/players.ts';
 import { rInt } from '../core/rng.ts';
-import { spawnPickup } from '../combat/pickups.ts';
+import { setSharedDrops, spawnPickup } from '../combat/pickups.ts';
 import { stepTraffic } from './traffic.ts';
 import { PROP_INFO, propRadius } from './citygen.ts';
 
@@ -65,6 +66,7 @@ function countLeveled(idx: CityIndex): number {
 export function stepCity(w: World): void {
   stepTraffic(w);
   stepRebuild(w);
+  if (w.mode === 'vs') stepDemolition(w);
   // blocks-leveled: incremented immediately by damageBuilding; every second re-derive it from
   // building state (authoritative + self-healing if anything collapsed a building directly).
   // Sticky per block (see CityIndex.leveled): a rebuilt block keeps its count.
@@ -106,6 +108,16 @@ export function stepCity(w: World): void {
 //   * any damage to a building under construction sends its crew home (stage ABANDONED: a normal
 //     partial building that keeps its base-up look until it falls).
 // All state lives in a per-city side table (like the block index); views read it via rebuildBook().
+//
+// ONLINE VS (lane B-WORLD, vs_design.md section 5 + 8; every change is behind w.mode === 'vs', solo is byte-identical):
+//   * the works department is on from the first minute and works away from EVERY live titan: a lot is only dispatched
+//     when it is outside every titan's start radius and the crew downs tools while ANY titan is within its near radius
+//     (each titan's own rebuildStartR / rebuildNearR); a gatekeeper (tender) fight no longer stops every crew: the rig's
+//     keep-out (bossClear, the widest titan start radius around its centre + parts) does the job;
+//   * from FINAL NOTICE (vs.phase final / last) the city outside the CONDEMNATION ring is CONDEMNED: no crew is
+//     dispatched there, a crew already there goes home, and DEMOLITION crews bring the standing buildings outside the ring
+//     down on a cosmetic schedule (VS_DEMO_PER_S per second, outermost first, ties by id): `buildingCollapse` events
+//     tagged noCredit, NO loot, NO tonnage, NO per-player credit (the XP is the contest, vs_design.md section 5).
 // Tuning (REBUILD lane 2026-10-01, bot, 4 titans × 3 cities × seeds 1337/7 = 24 runs, HEAD city sizes): floors
 // standing at the city-boss spawn median 14 % → 44 % (min 2 → 18 %); rubble XP/min (median) minutes 13–16
 // 1019/887/788/676 → 963/1399/1391/1269; rubble XP in the 3 minutes before the city boss 2369 → 4000. The extra
@@ -198,6 +210,38 @@ export function rebuildStartR(w: World): number {
   const T = w.titan;
   return Math.max(70, 0.55 * cameraDistance(T.height) + 2 * T.radius);
 }
+/** VS: the same radii for any titan (not just the bound one). */
+function startRFor(T: { height: number; radius: number }): number { return VS.director.rebuildRadiusMul * Math.max(70, 0.55 * cameraDistance(T.height) + 2 * T.radius); }
+function nearRFor(T: { height: number; radius: number }): number { return VS.director.rebuildRadiusMul * Math.max(30, 0.3 * cameraDistance(T.height) + 3 * T.radius); }
+/** VS: a point is condemned once FINAL NOTICE has started and it lies outside the live ring (B-VS src/vs/ring.ts ringOutside). */
+function condemned(w: World, x: number, z: number): boolean {
+  const v = w.vs;
+  if (!v || (v.phase !== 'final' && v.phase !== 'last')) return false;
+  return hypot(x - v.ring.cx, z - v.ring.cz) > v.ring.r;
+}
+const SEAT_NEAR: number[] = [0, 0, 0, 0], SEAT_START: number[] = [0, 0, 0, 0];
+let seatMaxStart = 0;
+/** VS: refresh every live seat's radii for this tick; 0 for a titan that is not live (it blocks nothing). */
+function seatRadii(w: World): void {
+  seatMaxStart = 70 * VS.director.rebuildRadiusMul;
+  for (let i = 0; i < w.players.length && i < 4; i++) {
+    const p = w.players[i];
+    const live = p.titan.alive && !p.vs.eliminated;
+    SEAT_NEAR[i] = live ? nearRFor(p.titan) : -1;
+    SEAT_START[i] = live ? startRFor(p.titan) : -1;
+    if (live && SEAT_START[i] > seatMaxStart) seatMaxStart = SEAT_START[i];
+  }
+}
+/** VS: is the building within ANY live titan's near radius (near = true) / start radius (false)? */
+function nearSeat(w: World, b: Building, near: boolean): boolean {
+  for (let i = 0; i < w.players.length && i < 4; i++) {
+    const r = near ? SEAT_NEAR[i] : SEAT_START[i];
+    if (r < 0) continue;
+    const T = w.players[i].titan;
+    if (footDist(b, T.x, T.z) < r) return true;
+  }
+  return false;
+}
 /** Crews down tools while the titan is within this footprint distance (the near view): nothing ever
  *  grows under it or in its face. */
 export function rebuildNearR(w: World): number {
@@ -232,16 +276,20 @@ function rebuildEvent(w: World, stage: 'start' | 'floor' | 'done', b: Building, 
 const RB_CAND: number[] = [];
 function stepRebuild(w: World): void {
   const ph = w.run.phase;
-  if (ph === 'intro' || ph === 'clear' || ph === 'dead') return;
+  if (ph === 'intro' || ph === 'clear' || ph === 'dead' || ph === 'vsend') return;
   const city = w.city;
   const bk = rebuildBook(city);
   const T = w.titan;
+  const vs = w.mode === 'vs';
   const nearR = rebuildNearR(w);
   const startR = rebuildStartR(w);
+  if (vs) seatRadii(w);
+  const bossR = vs ? seatMaxStart : startR;   // VS: the rig keep-out uses the widest titan start radius
   const dt = w.dt;
   // a GATEKEEPER fight: everyone downs tools, nobody is dispatched (the arena is wherever the fight goes). The
   // city-boss fight keeps the works going outside the boss keep-out (bossClear) and the titan's near radius.
-  const fight = !!(w.boss && w.boss.alive && w.boss.role !== 'main');
+  // (VS: a tender rig stops nobody: its keep-out does the job, and the department is the city's lifeline from minute 1.)
+  const fight = !vs && !!(w.boss && w.boss.alive && w.boss.role !== 'main');
   // ── work ──
   let k = 0;
   for (let i = 0; i < bk.crews.length; i++) {
@@ -249,11 +297,12 @@ function stepRebuild(w: World): void {
     const b = city.buildings[id];
     const st = bk.stage[id];
     if (st !== RB_SCAFFOLD && st !== RB_RISING) continue;           // crew went home (damage / collapse)
+    if (vs && condemned(w, b.x, b.z)) { bk.stage[id] = RB_ABANDONED; bk.paused[id] = 0; continue; }   // VS: condemned lot, the crew goes home
     bk.crews[k++] = id;
-    const pause = fight || footDist(b, T.x, T.z) < nearR || !bossClear(w, b, startR);
+    const pause = fight || (vs ? nearSeat(w, b, true) : footDist(b, T.x, T.z) < nearR) || !bossClear(w, b, bossR);
     bk.paused[id] = pause ? 1 : 0;
     if (pause) continue;
-    bk.prog[id] += dt;
+    bk.prog[id] += vs ? dt * VS.director.rebuildPace : dt;   // VS: the works department scales with 4 titans (VS.director.rebuildPace)
     if (st === RB_SCAFFOLD) {
       if (bk.prog[id] < rebuildScaffoldS(b)) continue;
       bk.stage[id] = RB_RISING;
@@ -293,16 +342,19 @@ function stepRebuild(w: World): void {
   const frac = bk.totalFloors > 0 ? standing / bk.totalFloors : 1;
   const deficit = REBUILD_TARGET - frac;
   if (deficit <= 0) return;
-  const want = Math.min(REBUILD_MAX_CREWS, Math.ceil(REBUILD_MAX_CREWS * Math.min(1, deficit / REBUILD_DEFICIT_FULL)));
-  let room = Math.min(Math.round(REBUILD_DISPATCH_PER_S / REBUILD_DISPATCH_HZ), want - bk.crews.length);
+  const crewMul = vs ? VS.director.rebuildCrewsMul : 1;   // VS: more crews + a faster dispatch trickle (VS.director.rebuildCrewsMul)
+  const maxCrews = Math.round(REBUILD_MAX_CREWS * crewMul);
+  const want = Math.min(maxCrews, Math.ceil(maxCrews * Math.min(1, deficit / REBUILD_DEFICIT_FULL)));
+  let room = Math.min(Math.round(REBUILD_DISPATCH_PER_S * crewMul / REBUILD_DISPATCH_HZ), want - bk.crews.length);
   if (room <= 0) return;
   RB_CAND.length = 0;
   let wsum = 0;
   for (const b of city.buildings) {
     if (!b.collapsed || bk.stage[b.id] !== RB_NONE) continue;
     if (bk.downT[b.id] >= 0 && w.t - bk.downT[b.id] < REBUILD_MIN_DOWN_S) continue;
-    if (footDist(b, T.x, T.z) < startR) continue;
-    if (!bossClear(w, b, startR)) continue;
+    if (vs ? nearSeat(w, b, false) : footDist(b, T.x, T.z) < startR) continue;
+    if (vs && condemned(w, b.x, b.z)) continue;                       // VS: nothing is rebuilt outside the ring
+    if (!bossClear(w, b, bossR)) continue;
     RB_CAND.push(b.id);
     wsum += 1 + b.tier;
   }
@@ -322,6 +374,52 @@ function stepRebuild(w: World): void {
     rebuildEvent(w, 'start', b, bk.started);
     room--;
   }
+}
+
+// ─────────────────────────────── ONLINE VS: DEMOLITION crews ───────────────────────────────
+/** Buildings the demolition crews bring down per second outside the ring (cosmetic schedule; [proposal]). */
+export const VS_DEMO_PER_S = 10;
+const DEMO_HZ = 5;
+const DEMO_PICK: number[] = [], DEMO_KEY: number[] = [];
+
+/**
+ * FINAL NOTICE / LAST CALL: bring condemned buildings (standing, outside the live ring) down, outermost first. No loot, no
+ * tonnage, no per-player credit; the events are tagged noCredit so no titan's smash / collapse triggers fire for them.
+ */
+function stepDemolition(w: World): void {
+  const v = w.vs;
+  if (!v || (v.phase !== 'final' && v.phase !== 'last')) return;
+  const slice = Math.round(30 / DEMO_HZ);
+  if (w.tick % slice !== slice >> 1) return;
+  const per = Math.max(1, Math.round(VS_DEMO_PER_S / DEMO_HZ));
+  const R = v.ring;
+  DEMO_PICK.length = 0; DEMO_KEY.length = 0;
+  const bs = w.city.buildings;
+  for (let i = 0; i < bs.length; i++) {
+    const b = bs[i];
+    if (b.collapsed || b.alive <= 0) continue;
+    const out = hypot(b.x - R.cx, b.z - R.cz) - R.r;
+    if (out <= 0) continue;
+    // keep the `per` farthest-outside (ties: lower id), insertion into a tiny sorted list
+    let at = DEMO_PICK.length;
+    while (at > 0 && DEMO_KEY[at - 1] < out) at--;
+    if (at >= per) continue;
+    DEMO_PICK.splice(at, 0, b.id); DEMO_KEY.splice(at, 0, out);
+    if (DEMO_PICK.length > per) { DEMO_PICK.length = per; DEMO_KEY.length = per; }
+  }
+  for (let k = 0; k < DEMO_PICK.length; k++) demolishBuilding(w, bs[DEMO_PICK[k]]);
+}
+
+/** A cosmetic collapse: the building comes down, nothing drops, nobody is credited. */
+function demolishBuilding(w: World, b: Building): void {
+  const idx = cityIndex(w.city);
+  const bk = rebuildBook(w.city);
+  bk.stage[b.id] = RB_NONE; bk.prog[b.id] = 0; bk.paused[b.id] = 0;
+  bk.downT[b.id] = w.t;
+  b.collapsed = true; b.alive = 0; b.floorHp = 0;
+  push(w, { type: 'buildingCollapse', id: b.id, x: b.x, z: b.z, tier: b.tier, w: b.w, d: b.d, h: b.floors * b.floorH }, false);
+  idx.blockLive[b.block] = Math.max(0, idx.blockLive[b.block] - 1);
+  if (idx.blockLive[b.block] === 0 && idx.blockTotal[b.block] > 0) idx.leveled[b.block] = 1;   // the world total re-derives each second; no player is credited
 }
 
 // ─────────────────────────────── spatial queries ───────────────────────────────
@@ -431,6 +529,12 @@ export function nearestRubble(city: CityLayout, x: number, z: number, r: number,
 function creditsTitan(opts: DamageOpts): boolean {
   return opts.src === 'titan' || opts.src === 'hazard';
 }
+/** Tonnage: the world total always; the bound player's slice only when a TITAN did it (VS: a rig's footsteps / a ram flatten
+ *  the city without feeding the seat the rig happens to be hunting). Solo: exactly creditTonnage (credit is always true there
+ *  for the player's own damage and the bound player is the only one). */
+function tons(w: World, credit: boolean, t: number): void {
+  if (w.mode === 'vs' && !credit) w.run.tonnage += t; else creditTonnage(w, t);
+}
 /** City events caused by a hostile (a boss leg, a RAMROD) carry `noCredit: true` (an extra field
  *  on the event object, outside the SimEvent type) so the upgrade engine does not fire the titan's
  *  smash/floorBreak/collapse triggers for them — before, CAISSON-4's own footsteps detonated the
@@ -493,7 +597,7 @@ function collapseBuilding(w: World, b: Building, credit: boolean): void {
   idx.blockLive[b.block] = Math.max(0, idx.blockLive[b.block] - 1);
   if (idx.blockLive[b.block] === 0 && idx.blockTotal[b.block] > 0 && !idx.leveled[b.block]) {
     idx.leveled[b.block] = 1;
-    w.run.blocksLeveled++;
+    if (w.mode === 'vs' && !credit) w.run.blocksLeveled++; else creditBlock(w);   // B-CORE: world total + the bound player's PlayerRun (VS: hostile = world only)
   }
 }
 
@@ -505,6 +609,14 @@ function collapseBuilding(w: World, b: Building, credit: boolean): void {
  * Returns the number of floors broken.
  */
 export function damageBuilding(w: World, id: number, amount: number, opts: DamageOpts): number {
+  if (w.mode === 'vs' && !creditsTitan(opts)) {
+    // ONLINE VS: what a hostile (a rig's footsteps, a ram) brings down drops SHARED rubble (the nearest titan eats it)
+    setSharedDrops(true);
+    try { return damageBuildingOne(w, id, amount, opts); } finally { setSharedDrops(false); }
+  }
+  return damageBuildingOne(w, id, amount, opts);
+}
+function damageBuildingOne(w: World, id: number, amount: number, opts: DamageOpts): number {
   const b = w.city.buildings[id];
   if (!b || b.collapsed || b.alive <= 0 || !(amount > 0)) return 0;
   const T = w.titan;
@@ -516,6 +628,9 @@ export function damageBuilding(w: World, id: number, amount: number, opts: Damag
   const ex = clamp(T.x, b.x - b.w / 2, b.x + b.w / 2);
   const ez = clamp(T.z, b.z - b.d / 2, b.z + b.d / 2);
   let left = amount;
+  // VS (GATE knob, 1 = off): from VS.pacing.surgeFromS the city is sturdier (the HOSTILE TAKEOVER economy pays more XP per floor
+  // and the same buildings take longer to bring down, so the floors left standing hold up while the levels climb)
+  if (w.mode === 'vs' && VS.pacing.buildingDmgMul !== 1 && w.vs && w.t - w.vs.startT >= VS.pacing.surgeFromS) left *= VS.pacing.buildingDmgMul;
   let broken = 0;
   while (left > 0 && broken < MAX_FLOORS_PER_HIT && b.alive > 0) {
     if (left < b.floorHp) { b.floorHp -= left; left = 0; break; }
@@ -524,7 +639,7 @@ export function damageBuilding(w: World, id: number, amount: number, opts: Damag
     broken++;
     push(w, { type: 'floorBreak', id: b.id, remaining: b.alive, x: b.x, z: b.z, tier: b.tier }, credit);
     dropFloorRubble(w, b, ex, ez);
-    w.run.tonnage += TIERS[b.tier].tonsPerFloor;
+    tons(w, credit, TIERS[b.tier].tonsPerFloor);   // B-CORE: world total + the bound player's PlayerRun
     if (credit) T.floorsEaten++;
     if (b.alive === 0) { collapseBuilding(w, b, credit); break; }
     b.floorHp = b.floorHpMax;
@@ -540,6 +655,13 @@ export function damageBuilding(w: World, id: number, amount: number, opts: Damag
  * leaves its lane (traffic.ts drops dead cars).
  */
 export function damageProp(w: World, id: number, amount: number, opts: DamageOpts): boolean {
+  if (w.mode === 'vs' && !creditsTitan(opts)) {
+    setSharedDrops(true);   // ONLINE VS: see damageBuilding
+    try { return damagePropOne(w, id, amount, opts); } finally { setSharedDrops(false); }
+  }
+  return damagePropOne(w, id, amount, opts);
+}
+function damagePropOne(w: World, id: number, amount: number, opts: DamageOpts): boolean {
   const p = w.city.props[id];
   if (!p || !p.alive || !(amount > 0)) return false;
   p.hp -= amount;
@@ -561,7 +683,7 @@ export function damageProp(w: World, id: number, amount: number, opts: DamageOpt
     spawnPickup(w, kind, p.x + (loot() - 0.5) * spread, p.z + (loot() - 0.5) * spread, pxp / n, pmass / n);
   }
   if (info.heal > 0 && loot() < info.heal) spawnPickup(w, 'heal', p.x, p.z, 0, 0);
-  w.run.tonnage += td.tonsPerFloor;
+  tons(w, creditsTitan(opts), td.tonsPerFloor);    // B-CORE: world total + the bound player's PlayerRun
   if (creditsTitan(opts)) w.titan.propsEaten++;
   return true;
 }

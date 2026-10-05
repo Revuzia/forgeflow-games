@@ -10,6 +10,9 @@
 //   * Entities keep px/pz/pheading = pose at the START of the current tick so the view
 //     can interpolate: shown = prev + (cur - prev) * alpha.
 
+import type { BotMemory, PlayerSeat, PlayerVs, VsPhase, VsWorld } from '../vs/types.ts';
+export type { PlayerSeat } from '../vs/types.ts';
+
 // ─────────────────────────────── ids ───────────────────────────────
 export type TitanId = 'molo' | 'voltkite' | 'hearthback' | 'briarwick';
 export type BiomeId = 'grideast' | 'whitestacks' | 'lockwater';
@@ -213,6 +216,11 @@ export interface TitanInput {
   /** v2 edge: UPROAR pressed this tick (buffered like ability). OPTIONAL on purpose (existing literals stay
    *  valid): read it as `!!input.ultimate`. */
   ultimate?: boolean;
+  /** VS CARD RAIL (B-CORE): 1..3 = pick that card of the rail offer this tick (edge), 0 / absent = none. Never set in
+   *  solo (solo drafts go through the modal draft screen + pickUpgrade). Wire form = the 4th input byte (netcode.md §6.3). */
+  railPick?: number;
+  /** VS CARD RAIL: edge, reroll the current rail offer (spends `rerolls` like the modal draft). */
+  railReroll?: boolean;
 }
 
 // ─────────────────────────────── enemies ───────────────────────────────
@@ -471,7 +479,7 @@ export type OverflowRewardId = 'ovf_sick_day' | 'ovf_hot_tip' | 'ovf_hard_hat';
 export const OVERFLOW_REWARD_IDS: readonly OverflowRewardId[] = ['ovf_sick_day', 'ovf_hot_tip', 'ovf_hard_hat'];
 
 // ─────────────────────────────── director / run ───────────────────────────────
-export type RunPhase = 'intro' | 'waves' | 'elite' | 'boss' | 'clear' | 'dead' | 'endless';   // v2: 'endless' after KEEP GOING (§9)
+export type RunPhase = 'intro' | 'waves' | 'elite' | 'boss' | 'clear' | 'dead' | 'endless' | 'vsend';   // 'vsend' = a VS match was decided (run.result 'vs')   // v2: 'endless' after KEEP GOING (§9)
 
 export interface DirectorState {
   wave: number;
@@ -488,7 +496,7 @@ export interface DirectorState {
 export interface RunStats {
   phase: RunPhase;
   endT: number;            // world.t when the run ended (or -1)
-  result: 'clear' | 'dead' | null;
+  result: 'clear' | 'dead' | 'vs' | null;   // 'vs' = a VS match was decided (World.vs.winner)
   tonnage: number;         // cosmetic running total of flattened mass (tons)
   blocksLeveled: number;   // blocks whose buildings are all collapsed
   peakRank: RankIndex;
@@ -496,8 +504,13 @@ export interface RunStats {
 
 // ─────────────────────────────── events ───────────────────────────────
 /** Emitted by sim systems into world.events during a tick. The view/audio/UI read them;
- *  the upgrade engine fires triggers from them. Never mutate after emit. */
-export type SimEvent =
+ *  the upgrade engine fires triggers from them. Never mutate after emit.
+ *  B-CORE (online VS): every event carries `p`, the slot of the player that was bound (World.cur) when it was pushed
+ *  (-1 = pushed in a VS world-scoped phase with no owner bound). It is stamped by the World.events sink
+ *  (core/players.ts EventSink), never written by the 105 push sites. Titan-scoped consumers (processTriggers,
+ *  chargeUltimate, stepTally) read only events with `p === w.cur`. Solo: always 0. */
+export type SimEvent = SimEventBody & { p?: number };
+export type SimEventBody =
   | { type: 'footstep'; x: number; z: number; heavy: number }           // heavy 0..1 (rank/4)
   | { type: 'propDestroyed'; id: number; kind: PropKind; x: number; z: number; crushed: boolean }
   | { type: 'floorBreak'; id: number; remaining: number; x: number; z: number; tier: Tier }
@@ -539,7 +552,7 @@ export type SimEvent =
   | { type: 'bossDefeated'; x: number; z: number }
   | { type: 'leash'; on: boolean; x: number; z: number }
   | { type: 'upgradeProc'; id: string; x: number; z: number }
-  | { type: 'runEnd'; result: 'clear' | 'dead' }
+  | { type: 'runEnd'; result: 'clear' | 'dead' }                                  // SOLO only: a VS match end emits vsEnd instead
   // ── v2 (FEATURES_V2 §2.1, SimEventAdd) ──
   | { type: 'ultCharged' }                                                             // rising edge of ult.ready
   | { type: 'ultFire'; titan: TitanId; x: number; z: number; r: number }               // roar starts (0.4–0.6 s windup)
@@ -575,7 +588,23 @@ export type SimEvent =
   // ── REPAIR CREWS (city/citysim.ts rebuild): WARD-7 Public Works rebuilds smashed buildings away from the titan ──
   /** stage 'start' = a crew sets up on a rubble lot (scaffold goes up); 'floor' = a storey is finished (alive = floors
    *  standing now; the first one un-collapses the building); 'done' = fully rebuilt (n = buildings rebuilt this run). */
-  | { type: 'rebuild'; stage: 'start' | 'floor' | 'done'; id: number; alive: number; x: number; z: number; n: number };
+  | { type: 'rebuild'; stage: 'start' | 'floor' | 'done'; id: number; alive: number; x: number; z: number; n: number }
+  // ── ONLINE VS (B-CORE contract; vs_design.md §13). Emitted by the VS lane (p = the bound slot, or -1 for match-level ones).
+  //    Slots are PlayerState.slot; shapes are the starting proposal, B-VS may add fields (never rename). ──
+  | { type: 'vsPhase'; phase: VsPhase }
+  | { type: 'rivalHit'; from: number; to: number; pct: number; x: number; z: number; noContest: boolean }   // noContest: OPEN HOUSE shove (no HP)
+  | { type: 'evicted'; victim: number; killer: number; assists: number[]; levelsLost: number; x: number; z: number }
+  | { type: 'eliminated'; victim: number; killer: number; place: number }
+  | { type: 'respawn'; slot: number; x: number; z: number }
+  | { type: 'tenderMarker'; gate: GateId; x: number; z: number; leadS: number }
+  | { type: 'tenderSpawn'; gate: GateId; x: number; z: number }
+  | { type: 'tenderPaid'; gate: GateId; shares: number[]; top: number }
+  | { type: 'crown'; holder: number }
+  | { type: 'ringStep'; step: number; r: number }
+  | { type: 'vsEnd'; winner: number; placements: number[]; scores: number[] }
+  // ── CARD RAIL (VS drafts that never pause the sim; PlayerState.rail) ──
+  | { type: 'railOffer'; cards: string[]; chest: boolean }
+  | { type: 'railPick'; id: string; auto: boolean };
 
 /** Keys into data/strings.ts ALERTS (full-width broadcast banners). */
 export type AlertKey =
@@ -592,8 +621,65 @@ export interface RngStreams {
   meta: () => number;
 }
 
+/** Solo = the shipped single-titan game (byte-identical to before B-CORE). VS = 1..4 titans, no draft freezes,
+ *  no size locks, no city boss, no endless; the VS rules run through the src/vs hooks (core/world.ts stepWorldN). */
+export type GameMode = 'solo' | 'vs';
+export const MAX_PLAYERS = 4;
+
+/**
+ * B-CORE (online VS): everything that is PER PLAYER, in one container (netcode.md §2.2). `World.players[slot]`.
+ * The old per-player World fields (titan, titanId, upgrades, ult, tally, meta, input, director) are now a CURSOR:
+ * `bindPlayer(w, slot)` (core/players.ts) points them at that player's container, so existing `w.titan`-style code
+ * runs unchanged for whichever player is bound. Mutate THROUGH the cursor (w.titan.hp -= ...), never replace a
+ * cursor field (w.titan = ...): the next bindPlayer would silently restore the container's object.
+ */
+export interface PlayerState {
+  slot: number;            // seat index 0..3 == index in World.players
+  titanId: TitanId;
+  titan: TitanState;
+  upgrades: UpgradeState;  // builds + the modal-draft offer state (solo) — the CARD RAIL offer rides in `rail` + upgrades.offer
+  ult: UltState;
+  tally: RunTally;
+  meta: RunMeta;           // VS: sanitized to the fresh pool (palette only)
+  input: TitanInput;       // this tick's latched command (stepWorldN writes humans' here; the VS bot brain writes bots')
+  director: DirectorState; // per-player PvE director (waves / budget relative to THIS titan)
+  rail: CardRailState;     // VS CARD RAIL offer state (inert in solo)
+  /** per-player credit counters (World.run keeps the WORLD totals); maintained by creditTonnage / creditBlock + stepWorldN */
+  run: PlayerRun;
+  vs: PlayerVs;            // VS bookkeeping (src/vs/types.ts); neutral in solo
+  /** null = a human seat; else the bot brain memory (the VS lane fills `input` for it each tick) */
+  bot: BotMemory | null;
+}
+
+/** Per-player run counters (the player-credited slice of World.run). */
+export interface PlayerRun { tonnage: number; blocksLeveled: number; peakRank: RankIndex }
+
+/**
+ * VS CARD RAIL (vs_design.md §7): 3 cards slide up while play continues. The CURRENT OFFER is
+ * `upgrades.offer` (so draft.ts rollOffer / pickUpgrade / rerollOffer work unchanged on it); this struct is the
+ * rail's timing + cadence state. Inert (never touched) in solo. B-TITAN owns the logic that fills it.
+ */
+export interface CardRailState {
+  /** an offer is up on the rail (mirror of upgrades.offer !== null while in VS) */
+  open: boolean;
+  openedT: number;         // world.t the current offer slid up (-1 none)
+  expireT: number;         // world.t the 12 s auto-pick fires (Infinity none)
+  /** the open offer is a tender chest (rare+, pickUpgrade consumes upgrades.chestDrafts) */
+  chest: boolean;
+  /** offers presented so far (sequence number; the net layer / logs name an offer by (slot, seq)) */
+  seq: number;
+  /** level-ups since the last draft was owed (draft cadence: every level to LV 12, then every 2nd) */
+  sinceDraft: number;
+  /** the pre-match opening card was taken */
+  openingDone: boolean;
+  /** free numeric scratch for the rail logic (numeric so it hashes) */
+  data: Record<string, number>;
+}
+
 export interface World {
   seed: number;
+  /** ── CURSOR fields (titanId, titan, director, upgrades, input, meta, ult, tally): point at the BOUND player
+   *  (players[cur]); see PlayerState / bindPlayer. In solo they always point at players[0]. ── */
   titanId: TitanId;
   biomeId: BiomeId;
   tick: number;
@@ -601,35 +687,57 @@ export interface World {
   dt: number;              // fixed step (1 / SIM_HZ)
   rng: RngStreams;
   city: CityLayout;
-  titan: TitanState;
+  titan: TitanState;       // CURSOR (bound player's titan)
   enemies: Enemy[];        // pooled; iterate and skip !alive
   projectiles: Projectile[];
   telegraphs: Telegraph[];
   hazards: Hazard[];
   pickups: Pickup[];
   boss: BossState | null;
-  director: DirectorState;
-  upgrades: UpgradeState;
-  run: RunStats;
-  events: SimEvent[];      // this tick's events (cleared at the start of every tick)
-  input: TitanInput;       // latched command for this tick
+  director: DirectorState; // CURSOR
+  upgrades: UpgradeState;  // CURSOR
+  run: RunStats;           // WORLD-level (phase / result / endT / world totals); per-player slice = PlayerState.run
+  events: SimEvent[];      // this tick's events (cleared at the start of every tick); a sink: push() stamps ev.p = cur
+  input: TitanInput;       // CURSOR: latched command for this tick (bound player's)
+  // ── B-CORE (online VS) ──
+  mode: GameMode;
+  /** all seats, index = slot; length 1 in solo. Per-player containers live here (see PlayerState). */
+  players: PlayerState[];
+  /** slot of the BOUND player (events pushed now are stamped with it); -1 = a VS world-scoped phase with NO owner
+   *  bound (cursor fields then point at players[0] as a deterministic fallback — do not rely on them). Solo: always 0. */
+  cur: number;
+  /** the bound PlayerState (== players[max(cur, 0)]) */
+  pl: PlayerState;
+  /** the local seat the VIEW/app follows: stepWorldN leaves the cursor bound to it at the end of every tick, so
+   *  existing view/HUD/audio code that reads w.titan keeps working for the local player. Never read by the sim. */
+  view: number;
+  /** World-level VS state (phase machine, ring, tenders, crown, result); null in solo. */
+  vs: VsWorld | null;
   /** cheats (only honoured when the page was opened with ?dev=1) */
   cheats: { god: boolean; noSpawns: boolean };
   nextId: number;          // monotonically increasing id source — use newId(w)
   // ── v2 (FEATURES_V2 §2.3): createWorld initialises every one ──
-  meta: RunMeta;           // sanitizeRunMeta(opts.meta) — read-only for the sim except reviveUsed
-  ult: UltState;           // createUltState()
+  meta: RunMeta;           // CURSOR · sanitizeRunMeta(opts.meta) — read-only for the sim except reviveUsed
+  ult: UltState;           // CURSOR · createUltState()
   map: MapState;           // createMapState()
-  tally: RunTally;         // createTally()
+  tally: RunTally;         // CURSOR · createTally()
   endless: EndlessState | null;   // null until continueEndless()
   // ── GATEKEEPERS §7.2 (WorldAddV3) ──
   gates: GatesState;       // meta/gates.ts createGates()
 }
 
 export interface RunOptions {
-  titan: TitanId; biome: BiomeId; seed: number;
-  /** v2: profile-derived run meta (unlocks, perk, palette); EMPTY_RUN_META when absent */
+  /** solo: the titan (required unless `players` is given; with `players`, slot 0's titan wins and this is ignored) */
+  titan?: TitanId; biome: BiomeId; seed: number;
+  /** v2: profile-derived run meta (unlocks, perk, palette); EMPTY_RUN_META when absent. Solo only (VS: per seat). */
   meta?: RunMeta;
+  /** B-CORE: 'solo' (default) or 'vs' */
+  mode?: GameMode;
+  /** B-CORE: the seats. Solo: omit, or exactly 1 seat. VS: 1..4 seats (index = slot). Bot seats (`bot` set) are driven
+   *  by the VS bot brain. */
+  players?: PlayerSeat[];
+  /** B-CORE: the local seat the view follows (default 0) */
+  view?: number;
 }
 
 // ─────────────────────────────── data defs ───────────────────────────────
@@ -934,7 +1042,7 @@ export interface TitanPalette { id: string; name: string; primary: string; secon
 export interface PerkDef { id: PerkId; name: string; desc: string; card: string | null }
 
 /** meta/goals.ts run context (APP-PURE). */
-export interface RunCtx { titan: TitanId; biome: BiomeId; result: 'clear' | 'dead' | null; endT: number }
+export interface RunCtx { titan: TitanId; biome: BiomeId; result: 'clear' | 'dead' | 'vs' | null; endT: number }
 
 /** save.ts profile (key 'blocktooth.profile.v1', sanitised by meta/profile.ts sanitizeProfile). */
 export interface Profile {

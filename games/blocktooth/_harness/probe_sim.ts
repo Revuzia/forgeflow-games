@@ -341,7 +341,7 @@ function runOne(titan: TitanId, biome: BiomeId, seed: number, maxTicks: number, 
   }
   r.ticks = i;
   const T = w.titan;
-  r.result = w.run.result ?? 'timeout';
+  r.result = (w.run.result as 'clear' | 'dead' | null) ?? 'timeout';   // solo probe: 'vs' cannot occur
   r.endT = w.run.result ? w.run.endT : w.t;
   r.floors = T.floorsEaten; r.buildings = T.buildingsLeveled; r.props = T.propsEaten;
   r.kills = T.kills; r.crushed = T.crushed; r.dmgTaken = T.damageTaken;

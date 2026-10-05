@@ -11,7 +11,10 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "probe": "node _harness/probe_sim.ts",
     "detban": "node _harness/detban.ts",
-    "check": "npm run detban && npm run typecheck && npm run probe"
+    "probe:core": "node _harness/probe_core.ts",
+    "probe:vsrules": "node _harness/probe_vsrules.ts --quick",
+    "probe:titanvs": "node _harness/probe_titanvs.ts",
+    "check": "npm run detban && npm run typecheck && npm run probe:core && npm run probe:vsrules && npm run probe:titanvs && npm run probe"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.20.0",

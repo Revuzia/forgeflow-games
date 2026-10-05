@@ -142,6 +142,7 @@ export function gateHpFor(id: GateId, rank: RankIndex, rematch: number): number 
  */
 export function lockGate(w: World, slot: GateSlot, capped: boolean): void {
   const G = w.gates;
+  if (w.mode === 'vs') return;   // ONLINE VS: no size locks (the gatekeepers are PUBLIC TENDERS, meta/tender.ts)
   if (w.endless || w.run.result) return;
   if (!(slot >= 1 && slot <= 4)) return;
   if (slot !== G.unlocked + 1) return;
@@ -166,7 +167,7 @@ const addsSnap: number[] = [];
 /** Tick order: right after stepDirector. */
 export function stepGates(w: World): void {
   const G = w.gates, T = w.titan;
-  if (w.run.result) return;
+  if (w.run.result || w.mode === 'vs') return;   // VS: stepWorldN never calls it; the guard keeps a stray caller harmless
 
   // ── the Size V finale (§4.3) ──
   if (G.finaleT > 0) {

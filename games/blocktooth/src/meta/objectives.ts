@@ -24,6 +24,13 @@
 // deterministic per-run bag spawnEnemy uses for its 'seen_*' alert flags): map_reliefLastT (last RELIEF
 // placement), seen_overloadSite (the first-OVERLOAD alert).
 //
+// ONLINE VS (lane B-WORLD; every change is behind w.mode === 'vs', solo is byte-identical): each seat has its OWN
+// private contract board. stepObjectives runs the solo algorithm once per live seat, bound; an objective carries its
+// seat (Objective.oslot) and only that seat's credited events complete it, only that seat's titan strands / expires it,
+// and the scheduler's timers are that seat's (director.data.map_nOv / map_nRe; the RECORDS ANNEX queue is a per-seat list).
+// The payouts therefore land on the seat that earned them (UPROAR, the XP scrap, the heals, the chest, the power-up token
+// at the site, which is a SHARED world token). World counters (overloadsDone ...) aggregate every seat.
+//
 // Measured (L4, 2026-09-25). probe_map K = `node _harness/probe_map.ts`, gate bot + _harness/bot_map.ts detours,
 // fresh meta, seeds 1337/7/42/2024/99 (titans rotate), per-run medians; GATE 2 = `probe_sim.ts --det 2`, seed 1337.
 //
@@ -49,9 +56,10 @@
 
 import { atan2, cos, hypot, sin } from '../core/detmath.ts';
 import type { Building, MapState, Objective, ObjectiveKind, Prop, RankIndex, World } from '../core/types.ts';
-import { CITY, OBJECTIVES, PERKS, RANKS, xpToNext } from '../core/config.ts';
+import { CITY, OBJECTIVES, PERKS, RANKS, xpToNextFor } from '../core/config.ts';
 import { spawnRing } from '../ai/director.ts';
-import { spawnEnemy } from '../ai/enemies.ts';
+import { nextSquadId, spawnEnemy } from '../ai/enemies.ts';
+import { seatActive, withPlayer } from '../core/players.ts';
 import { owePickupNextTick, spawnPickup } from '../combat/pickups.ts';
 import { propRadius } from '../city/citygen.ts';
 import { OBJECTIVE_BIOME, PROP_HEIGHT_M } from '../data/objectives.ts';
@@ -82,6 +90,23 @@ const MIN_T = 1e-9;
 const KEY_RELIEF_LAST = 'map_reliefLastT';
 const KEY_SEEN_OVERLOAD = 'seen_overloadSite';
 
+// ── the scheduler's per-board state: the shared MapState in solo, the bound seat's director bag / list in VS ──
+const KEY_NEXT_OV = 'map_nOv', KEY_NEXT_RE = 'map_nRe';
+const ANNEX_Q = new WeakMap<object, number[]>();
+function nextOv(w: World): number { return w.mode === 'vs' ? (w.director.data[KEY_NEXT_OV] ?? 0) : w.map.nextOverloadT; }
+function setNextOv(w: World, v: number): void { if (w.mode === 'vs') w.director.data[KEY_NEXT_OV] = v; else w.map.nextOverloadT = v; }
+function nextRe(w: World): number { return w.mode === 'vs' ? (w.director.data[KEY_NEXT_RE] ?? 0) : w.map.nextReliefT; }
+function setNextRe(w: World, v: number): void { if (w.mode === 'vs') w.director.data[KEY_NEXT_RE] = v; else w.map.nextReliefT = v; }
+/** The RECORDS ANNEX due-times of the bound board (VS: a list per seat, keyed by its director object). */
+function annexQ(w: World): number[] {
+  if (w.mode !== 'vs') return w.map.annexDue;
+  let a = ANNEX_Q.get(w.director);
+  if (!a) { a = []; ANNEX_Q.set(w.director, a); }
+  return a;
+}
+/** VS: is `o` on another seat's board? (always false in solo) */
+function foreign(w: World, o: Objective): boolean { return w.mode === 'vs' && o.oslot !== w.cur; }
+
 // ─────────────────────────────── exports ───────────────────────────────
 export function createMapState(): MapState {
   return {
@@ -93,10 +118,29 @@ export function createMapState(): MapState {
   };
 }
 
-/** Event-matched completion + state sweep + expiry + scheduler (see the header). */
+/** Event-matched completion + state sweep + expiry + scheduler (see the header). VS: once per live seat, bound. */
 export function stepObjectives(w: World): void {
+  if (w.mode === 'vs') {
+    for (let i = 0; i < w.players.length; i++) {
+      if (!seatActive(w, w.players[i])) {
+        // an ELIMINATED seat's board is closed (nobody can complete it): its live objectives expire once
+        for (const o of w.map.objectives) {
+          if (o.alive && o.oslot === i) { o.alive = false; o.done = false; w.events.push({ type: 'objectiveExpire', id: o.id, kind: o.kind }); }
+        }
+        continue;
+      }
+      withPlayer(w, i, () => { stepBoard(w); });
+    }
+    return;
+  }
+  stepBoard(w);
+}
+
+/** One board for the bound titan (the whole of the original stepObjectives). */
+function stepBoard(w: World): void {
   const m = w.map;
   const T = w.titan;
+  const vs = w.mode === 'vs';
   const live = !w.run.result || !!w.endless;
   if (!live) return;
   const ring = spawnRing(w);
@@ -106,16 +150,17 @@ export function stepObjectives(w: World): void {
   for (let i = 0; i < ev.length; i++) {
     const e = ev[i];
     if (e.type !== 'rankUp') continue;
-    if (e.rank >= OBJECTIVES.annex.fromRank) m.annexDue.push(w.t + OBJECTIVES.annex.delayAfterBreachS);
+    if (vs && e.p !== w.cur) continue;   // VS: this seat's rank-ups only
+    if (e.rank >= OBJECTIVES.annex.fromRank) annexQ(w).push(w.t + OBJECTIVES.annex.delayAfterBreachS);
     const can = RANKS[e.rank].canFlatten;
     for (const o of m.objectives) {
-      if (!o.alive || o.kind !== 'overloadSite') continue;
+      if (!o.alive || o.kind !== 'overloadSite' || foreign(w, o)) continue;
       const stale = o.target === 'prop'
         ? e.rank >= 1
         : o.target === 'building' && (w.city.buildings[o.targetId]?.tier ?? 0) <= can - MAP_TUNE.breachTierGap;
       if (stale) {
         expire(w, o);
-        m.nextOverloadT = w.t + MAP_TUNE.retryS;
+        setNextOv(w, w.t + MAP_TUNE.retryS);
       }
     }
   }
@@ -125,16 +170,17 @@ export function stepObjectives(w: World): void {
     const e = ev[i];
     if (e.type !== 'buildingCollapse' && e.type !== 'propDestroyed') continue;
     if ((e as { noCredit?: boolean }).noCredit) continue;
+    if (vs && e.p !== w.cur) continue;   // VS: only what THIS seat brought down completes its own objectives
     const tgt = e.type === 'buildingCollapse' ? 'building' : 'prop';
     for (const o of m.objectives) {
-      if (o.alive && o.target === tgt && o.targetId === e.id) complete(w, o);
+      if (o.alive && o.target === tgt && o.targetId === e.id && !foreign(w, o)) complete(w, o);
     }
   }
 
   // ── 3–4. contact, sweep, life, strand ──
   const strand = OBJECTIVES.strandMul * ring;
   for (const o of m.objectives) {
-    if (!o.alive) continue;
+    if (!o.alive || foreign(w, o)) continue;
     o.t += w.dt;
     if (o.target === 'building') {
       const b = w.city.buildings[o.targetId];
@@ -251,7 +297,7 @@ export function placeObjectiveNear(w: World, kind: ObjectiveKind, x: number, z: 
 // ─────────────────────────────── scheduler ───────────────────────────────
 function countLive(w: World, kind: ObjectiveKind): number {
   let n = 0;
-  for (const o of w.map.objectives) if (o.alive && o.kind === kind) n++;
+  for (const o of w.map.objectives) if (o.alive && o.kind === kind && !foreign(w, o)) n++;
   return n;
 }
 
@@ -263,29 +309,30 @@ function schedule(w: World): void {
   // OVERLOAD SITE
   const oCfg = OBJECTIVES.overload;
   const oMax = oCfg.maxActive + (w.meta.perk === 'perk_tip_line' ? PERKS.tipLineExtraOverload : 0);
-  if (w.t >= oCfg.firstAtS - MIN_T && w.t >= m.nextOverloadT - MIN_T && countLive(w, 'overloadSite') < oMax) {
+  if (w.t >= oCfg.firstAtS - MIN_T && w.t >= nextOv(w) - MIN_T && countLive(w, 'overloadSite') < oMax) {
     const o = spawnObjective(w, 'overloadSite');
-    m.nextOverloadT = w.t + (o ? cfgB.overloadRespawnS : MAP_TUNE.retryS);
+    setNextOv(w, w.t + (o ? cfgB.overloadRespawnS : MAP_TUNE.retryS));
   }
 
   // RELIEF DEPOT
   const rCfg = OBJECTIVES.relief;
   const rMax = T.rank >= 2 ? rCfg.maxActiveHigh : rCfg.maxActiveLow;
-  if (w.t >= rCfg.firstAtS - MIN_T && w.t >= m.nextReliefT - MIN_T && countLive(w, 'reliefDepot') < rMax) {
+  if (w.t >= rCfg.firstAtS - MIN_T && w.t >= nextRe(w) - MIN_T && countLive(w, 'reliefDepot') < rMax) {
     const last = w.director.data[KEY_RELIEF_LAST];
     const hurt = T.maxHp > 0 && T.hp / T.maxHp < rCfg.hpBelow;
     const stale = last === undefined || w.t - last >= rCfg.forceEveryS - MIN_T;
     if (hurt || stale) {
       const o = spawnObjective(w, 'reliefDepot');
-      m.nextReliefT = w.t + (o ? cfgB.reliefRespawnS : MAP_TUNE.retryS);
+      setNextRe(w, w.t + (o ? cfgB.reliefRespawnS : MAP_TUNE.retryS));
     }
   }
 
   // RECORDS ANNEX (one per MASS BREACH, owed delayAfterBreachS after it)
-  if (m.annexDue.length > 0 && w.t >= m.annexDue[0] - MIN_T) {
+  const due = annexQ(w);
+  if (due.length > 0 && w.t >= due[0] - MIN_T) {
     const o = spawnObjective(w, 'recordsAnnex');
-    if (o) m.annexDue.shift();
-    else m.annexDue[0] = w.t + MAP_TUNE.retryS;
+    if (o) due.shift();
+    else due[0] = w.t + MAP_TUNE.retryS;
   }
 }
 
@@ -300,7 +347,7 @@ function complete(w: World, o: Objective): void {
   if (o.kind === 'overloadSite') {
     m.overloadsDone++;
     addUproar(w, OBJECTIVES.overload.uproar);
-    const xp = MAP_TUNE.overloadXpFrac * xpToNext(T.level);
+    const xp = MAP_TUNE.overloadXpFrac * xpToNextFor(w.mode, T.level);
     if (xp > 0 && T.alive) {
       const id0 = w.nextId;
       spawnPickup(w, 'scrap', T.x, T.z, xp, 0);
@@ -311,14 +358,14 @@ function complete(w: World, o: Objective): void {
       if (p && p.id === id0 && w.nextId === id0 + 1) { p.t = Math.max(p.t, 0.1); p.magnet = true; p.vx = 0; p.vz = 0; owePickupNextTick(p); }
       m.overloadXp += xp;
     }
-    m.nextOverloadT = Math.max(m.nextOverloadT, w.t + OBJECTIVE_BIOME[w.biomeId].overloadRespawnS);
+    setNextOv(w, Math.max(nextOv(w), w.t + OBJECTIVE_BIOME[w.biomeId].overloadRespawnS));
     spawnPowerup(w, rollKind(w, true), o.x, o.z, true);
   } else if (o.kind === 'reliefDepot') {
     m.reliefsDone++;
     const cfg = OBJECTIVES.relief;
     if (T.maxHp > 0 && T.hp / T.maxHp >= 0.95) addUproar(w, cfg.fullHpUproar);
     else for (let i = 0; i < cfg.heals; i++) spawnPickup(w, 'heal', o.x, o.z, 0, 0);
-    m.nextReliefT = Math.max(m.nextReliefT, w.t + OBJECTIVE_BIOME[w.biomeId].reliefRespawnS);
+    setNextRe(w, Math.max(nextRe(w), w.t + OBJECTIVE_BIOME[w.biomeId].reliefRespawnS));
   } else {
     m.annexesDone++;
     spawnPickup(w, 'chest', o.x, o.z, 0, 0);
@@ -332,8 +379,8 @@ function expire(w: World, o: Objective): void {
   o.done = false;
   const m = w.map;
   w.events.push({ type: 'objectiveExpire', id: o.id, kind: o.kind });
-  if (o.kind === 'overloadSite') m.nextOverloadT = Math.max(m.nextOverloadT, w.t + OBJECTIVE_BIOME[w.biomeId].overloadRespawnS);
-  else if (o.kind === 'reliefDepot') m.nextReliefT = Math.max(m.nextReliefT, w.t + OBJECTIVE_BIOME[w.biomeId].reliefRespawnS);
+  if (o.kind === 'overloadSite') setNextOv(w, Math.max(nextOv(w), w.t + OBJECTIVE_BIOME[w.biomeId].overloadRespawnS));
+  else if (o.kind === 'reliefDepot') setNextRe(w, Math.max(nextRe(w), w.t + OBJECTIVE_BIOME[w.biomeId].reliefRespawnS));
 }
 
 // ─────────────────────────────── placement (§5.2) ───────────────────────────────
@@ -341,11 +388,13 @@ interface Cand { id: number; s: number }
 const CANDS: Cand[] = [];
 
 function newObjective(w: World, kind: ObjectiveKind): Objective {
-  return {
+  const o: Objective = {
     id: w.nextId++,   // = core/world.ts newId (world.ts imports this module)
     kind, alive: true, x: 0, z: 0, target: 'none', targetId: -1, r: 0, h: 0, t: 0, life: 60,
     rank: w.titan.rank as RankIndex, done: false,
   };
+  if (w.mode === 'vs') o.oslot = w.cur;   // ONLINE VS: this seat's private board
+  return o;
 }
 
 function aheadMul(w: World, x: number, z: number): number {
@@ -371,7 +420,7 @@ function isCorner(w: World, b: Building): boolean {
 
 function tooCloseToLive(w: World, x: number, z: number, minD: number): boolean {
   for (const o of w.map.objectives) {
-    if (!o.alive) continue;
+    if (!o.alive || foreign(w, o)) continue;
     const dx = o.x - x, dz = o.z - z;
     if (dx * dx + dz * dz < minD * minD) return true;
   }
@@ -380,7 +429,7 @@ function tooCloseToLive(w: World, x: number, z: number, minD: number): boolean {
 
 function blockHasLive(w: World, block: number): boolean {
   for (const o of w.map.objectives) {
-    if (!o.alive || o.target !== 'building') continue;
+    if (!o.alive || o.target !== 'building' || foreign(w, o)) continue;
     const b = w.city.buildings[o.targetId];
     if (b && b.block === block) return true;
   }
@@ -471,7 +520,7 @@ function guard(w: World, o: Objective): void {
   const d = half + 6;
   const gx = o.x + sin(a) * d, gz = o.z + cos(a) * d;
   if (T.rank <= 1) {
-    const sid = w.director.squadSeq++;
+    const sid = nextSquadId(w);
     const h = atan2(T.x - gx, T.z - gz);
     const fx = sin(h), fz = cos(h), rx = -fz, rz = fx;
     for (let s = 0; s < MAP_TUNE.squadSize; s++) {

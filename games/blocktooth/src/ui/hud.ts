@@ -309,6 +309,9 @@ export class Hud {
     this.layer.classList.toggle('bt-hidden', !on);
   }
 
+  /** ONLINE VS (B-VIEW): the followed seat changed (spectate / follow the killer): re-read the titan card on the next update */
+  rebind(): void { this.world = null; }
+
   // ─────────────────────────────── per frame ───────────────────────────────
 
   update(w: World, dt: number): void {
@@ -317,22 +320,24 @@ export class Hud {
     const T = w.titan;
     const d = Math.min(0.1, Math.max(0, dt || 0));
 
-    // bug
+    // bug (VS: the run timer is the MATCH clock; the counters are the VIEW seat's own credited slice)
+    const vs = w.mode === 'vs' && !!w.vs;
+    const R = vs ? w.pl.run : w.run;
     this.clock.set(fmtClock((STR.clockStart[w.biomeId] ?? 14 * 60) + w.t / 60));
-    this.runT.set(STR.hud.runPrefix + fmtTime(w.t));
+    this.runT.set(STR.hud.runPrefix + fmtTime(vs ? Math.max(0, w.t - w.vs!.startT) : w.t));
 
     // counters
-    const tons = Math.max(0, w.run.tonnage);
+    const tons = Math.max(0, R.tonnage);
     if (Math.abs(tons - this.tonsShown) < 0.5) this.tonsShown = tons;
     else this.tonsShown += (tons - this.tonsShown) * Math.min(1, d * 7);
     this.tonsVal.set(fmtInt(this.tonsShown));
-    if (w.run.blocksLeveled !== this.lastBlocks) {
-      if (this.lastBlocks >= 0 && w.run.blocksLeveled > this.lastBlocks) {
+    if (R.blocksLeveled !== this.lastBlocks) {
+      if (this.lastBlocks >= 0 && R.blocksLeveled > this.lastBlocks) {
         pulse(this.blocksBox, [{ transform: 'scale(1.18)' }, { transform: 'scale(1)' }], 380);
-        this.pushWire(fmt(STR.hud.wire.block, { n: w.run.blocksLeveled }));
+        this.pushWire(fmt(STR.hud.wire.block, { n: R.blocksLeveled }));
       }
-      this.lastBlocks = w.run.blocksLeveled;
-      this.blocksVal.set(fmtInt(w.run.blocksLeveled));
+      this.lastBlocks = R.blocksLeveled;
+      this.blocksVal.set(fmtInt(R.blocksLeveled));
     }
     if (T.crushed !== this.lastCrushed) {
       if (this.lastCrushed >= 0 && T.crushed > this.lastCrushed) pulse(this.crushBox, [{ transform: 'scale(1.12)' }, { transform: 'scale(1)' }], 260);
@@ -527,7 +532,7 @@ export class Hud {
     this.card.style.setProperty('--titan-2', def ? def.colors.secondary : '#1f6f55');
     this.trail = 1; this.trailHold = 0; this.lastHpFrac = 1;
     this.lastRank = -1; this.lastLevel = -1; this.lastBlocks = -1; this.lastCrushed = -1; this.tickSpan = -1;
-    this.tonsShown = Math.max(0, w.run.tonnage);
+    this.tonsShown = Math.max(0, (w.mode === 'vs' ? w.pl.run : w.run).tonnage);
     for (const s of [this.clock, this.runT, this.tonsVal, this.blocksVal, this.crushVal, this.lvT, this.sizeT, this.hpVal, this.massVal]) s.reset();
     for (const v of [this.hpFill, this.hpTrail, this.hpShield, this.massFill, this.xpFill]) v.reset();
     for (const c of [this.lowHpOn, this.cardLow, this.zoomDim]) c.reset();

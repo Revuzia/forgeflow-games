@@ -18,16 +18,23 @@
 //     flow no-ops. Loads are serialised by a lock so a view is never mounted twice at once.
 //   * Errors: a boot/load failure or a sim exception surfaces in #fatal (onFatal); a view throwing
 //     in a frame is logged and only escalates to #fatal if it keeps failing (60 frames in a row).
+//   * ONLINE VS (lane B-VIEW, vs_design.md): the title's VS PRACTICE [V] → the select screen in VS mode → startVs() builds a
+//     4-seat World (you + 3 bots, createWorld mode 'vs') and mounts the same views plus VsView / VsHud / CardRail. A VS
+//     match is stepped through stepWorldN with ONE human input (quantised through net/proto.ts exactly like the online
+//     wire word, plus the CARD RAIL edges); the sim never pauses for a draft (the rail is state + input words) and no
+//     hit-stop slows it. EVICTED follows the killer for the respawn, an elimination follows the killer 2.5 s then
+//     SPECTATES (Q / E cycle, M map); vsEnd → the front-page end card → REMATCH (titan swap, new seed, next city) /
+//     LEAVE. Solo never touches any of this: every VS branch is gated on `this.vsInfo` / `w.mode === 'vs'`.
 //   * v2 (FEATURES_V2 §13.1, pre-wired by lane L0 against the stubs; no later lane edits this file):
 //     profile + run meta at run start, select ⇄ GOALS & RECORDS, the cinematic opening (CineCam.plan
 //     null → the legacy slate), ability bar / tracker / markers / toasts every play frame, UPROAR
 //     hit-stop, 1 Hz goal checks, draft BANISH / LOCK / NEW ids, run-end profile ledger, KEEP GOING →
 //     EXTENDED COVERAGE, pause LOADOUT ctx. Every stub keeps today's behaviour.
 
-import type { AlertKey, BiomeId, PerkId, Profile, RankIndex, RunMeta, SimEvent, TitanId, TitanInput, World } from './core/types.ts';
+import type { AlertKey, BiomeId, PerkId, PlayerSeat, Profile, RankIndex, RunMeta, SimEvent, TitanId, TitanInput, World } from './core/types.ts';
 import { BIOME_IDS, EMPTY_RUN_META, PERK_IDS, TITAN_IDS } from './core/types.ts';
-import { BUDGET, GATES, INPUT_BUFFER_S, SIM_DT, ULT } from './core/config.ts';
-import { createWorld, stepWorld } from './core/world.ts';
+import { BUDGET, GATES, INPUT_BUFFER_S, SIM_DT, ULT, VS } from './core/config.ts';
+import { createWorld, setViewSlot, stepWorld, stepWorldN } from './core/world.ts';
 import { GameLoop, frameStats } from './core/loop.ts';
 import { Input } from './core/input.ts';
 import { DebugOverlay } from './core/debug.ts';
@@ -58,8 +65,18 @@ import { ObjectiveView } from './render/objectiveview.ts';
 import { PowerupView } from './render/powerupview.ts';
 import { MarkerView } from './render/markerview.ts';
 import { CineCam } from './render/cinecam.ts';
+import { PerSeat } from './render/perseat.ts';           // ONLINE VS (B-VIEW): one UltView per seat
+import { VsView } from './render/vsview.ts';             // ONLINE VS (B-VIEW): seat rings, crown beam, cordon, tender pillars
 
 import { Hud } from './ui/hud.ts';
+import { VsHud } from './ui/vshud.ts';                   // ONLINE VS (B-VIEW)
+import { CardRail } from './ui/rail.ts';
+import { VsEndScreen } from './ui/vsend.ts';
+import type { VsMatchInfo } from './ui/vstypes.ts';
+import { SEAT_COLORS } from './ui/vstypes.ts';
+import { REMATCH_BIOMES, botName } from './data/strings_vs.ts';
+import { CARD, decodeInput, encodeInput } from './net/proto.ts';
+import type { BotLevel } from './vs/types.ts';
 import { Broadcast, onAirSeconds, runFigures } from './ui/broadcast.ts';
 import { PortalClient, buildVersionFromUrl, mergeBests, newRunNonce, type RunFiling, type RunResultPayload } from './net/portal.ts';   // ONLINE_PLAN A.1.5 (lane A-GAME)
 import { BossBar } from './ui/bossbar.ts';
@@ -124,7 +141,16 @@ export interface AppParams {
   perk: PerkId | null;
   /** v2 `?endless=1` (dev only): the clear tabloid auto-picks KEEP GOING (harness) */
   endless: boolean;
+  /** ONLINE VS (B-VIEW) `?vs=1`: with `?autostart=1` the app skips the menus into a VS PRACTICE match (titan / biome / seed / bots) */
+  vs: boolean;
+  /** `?bots=rookie|regular|veteran` for `?vs=1` (default regular) */
+  bots: BotLevel | null;
 }
+
+/** ONLINE VS PRACTICE: what the select screen hands the app */
+export interface VsRequest { titan: TitanId; biome: BiomeId; seed: number; bots: BotLevel; palette?: number }
+/** the built match: seats for createWorld + the app-side description */
+interface VsBuild { seats: PlayerSeat[]; info: VsMatchInfo; req: VsRequest }
 
 export interface RunRequest {
   titan: TitanId;
@@ -247,7 +273,33 @@ export function parseParams(search: string): AppParams {
     meta: (() => { const m = (q.get('meta') || '').toLowerCase(); return m === 'fresh' || m === 'full' ? m : null; })(),
     perk: (() => { const k = q.get('perk') || ''; return (PERK_IDS as readonly string[]).includes(k) ? (k as PerkId) : null; })(),
     endless: flag('endless'),
+    vs: flag('vs') || (q.get('mode') || '').toLowerCase() === 'vs',
+    bots: (() => { const b = (q.get('bots') || '').toLowerCase(); return b === 'rookie' || b === 'regular' || b === 'veteran' ? b : null; })(),
   };
+}
+
+/** the other three titans (TITAN_IDS order) fill the bot seats of a VS PRACTICE match */
+function vsBotTitans(me: TitanId): TitanId[] {
+  const out: TitanId[] = [];
+  for (const t of TITAN_IDS) if (t !== me && out.length < 3) out.push(t);
+  return out;
+}
+
+/** build the 4 seats (you + 3 bots) and the match description for a VS PRACTICE request */
+function buildVs(req: VsRequest): VsBuild {
+  const pal = Number.isFinite(req.palette) ? Math.max(0, Math.min(2, Math.floor(req.palette as number))) : 0;
+  const seats: PlayerSeat[] = [{ titan: req.titan, meta: { ...EMPTY_RUN_META, unlocked: [], perk: null, palette: pal }, bot: null }];
+  const info: VsMatchInfo = {
+    seats: [{ slot: 0, titan: req.titan, name: 'YOU', sign: '', bot: false, level: null, color: VS.seatColors[0] ?? SEAT_COLORS[0] }],
+    local: 0, biome: req.biome, seed: req.seed, palettes: [pal, 0, 0, 0],
+  };
+  vsBotTitans(req.titan).forEach((t, k) => {
+    const slot = k + 1;
+    const nm = botName(slot, req.seed);
+    seats.push({ titan: t, meta: { ...EMPTY_RUN_META, unlocked: [], perk: null, palette: 0 }, bot: req.bots });
+    info.seats.push({ slot, titan: t, name: nm.unit, sign: nm.sign, bot: true, level: req.bots, color: VS.seatColors[slot] ?? SEAT_COLORS[slot] });
+  });
+  return { seats, info, req };
 }
 
 /**
@@ -450,6 +502,11 @@ export class App {
   readonly cineCam: CineCam;
   private readonly markerView: MarkerView;
   private readonly titanView: TitanView;
+  // ONLINE VS (B-VIEW)
+  private readonly vsView: VsView;
+  readonly vsHud: VsHud;
+  readonly railUi: CardRail;
+  readonly vsEndScreen: VsEndScreen;
 
   // audio
   readonly audio: AudioEngine;
@@ -537,6 +594,26 @@ export class App {
   readonly portal: PortalClient;
   private runReport: { w: World; nonce: string; clearS: number | null; filing: RunFiling | null } | null = null;
 
+  // ── ONLINE VS (lane B-VIEW) ──
+  /** the live VS match's description (null in solo / outside a match) */
+  private vsInfo: VsMatchInfo | null = null;
+  private vsReq: VsRequest | null = null;
+  /** the local human's seat */
+  private vsLocal = 0;
+  /** CARD RAIL edges captured by the frame, consumed by the first tick that follows (1..3 / reroll) */
+  private vsRailPick = 0;
+  private vsRailReroll = false;
+  /** whose body the camera follows: 'own' · 'killer' (EVICTED respawn / the 2.5 s after an elimination) · 'spectate' */
+  private vsMode: 'own' | 'killer' | 'spectate' = 'own';
+  private vsFollowT = 0;
+  /** the seat that knocked the local one out last (the spectate view prefers it while it lives) */
+  private vsKiller = -1;
+  private vsEndEv: { winner: number; placements: number[]; scores: number[] } | null = null;
+  private readonly vsIn: (TitanInput | null)[] = [null, null, null, null];
+  private readonly vsBuf = new Uint8Array(4);
+  /** real seconds the VS aftermath (winner roar) runs before the end card */
+  private static readonly VS_END_DELAY_S = 3;
+
   // error accounting
   private frameErrStreak = 0;
   private frameErrTotal = 0;
@@ -572,6 +649,7 @@ export class App {
     const ctx: ViewCtx = { renderer: this.core.renderer, scene: this.core.scene, camera: this.core.camera, quality: this.core.quality };
     this.titanView = new TitanView(ctx);
     this.markerView = new MarkerView(ctx);
+    this.vsView = new VsView(ctx);
     this.views = [
       new EnvView(ctx),
       new CityView(ctx),
@@ -588,8 +666,9 @@ export class App {
       // v2 (FEATURES_V2 §2.6; L0 stubs, L6 fills)
       new ObjectiveView(ctx),
       new PowerupView(ctx),
-      new UltView(ctx),
+      new PerSeat(ctx, (c) => new UltView(c)),
       this.markerView,
+      this.vsView,
     ];
     this.cineCam = new CineCam(this.core.camera);
 
@@ -609,6 +688,15 @@ export class App {
     this.toasts = new Toasts(uiRoot);
     this.goalsScreen = new GoalsScreen(uiRoot, this.input);
     this.cineOverlay = new CineOverlay(uiRoot, this.input);
+    // ONLINE VS (B-VIEW): the VS HUD, the CARD RAIL and the front-page end card (built once, shown only in a VS match)
+    this.vsHud = new VsHud(uiRoot);
+    this.railUi = new CardRail(uiRoot);
+    this.vsEndScreen = new VsEndScreen(uiRoot, this.input);
+    this.vsHud.onSpectate = (d) => this.vsCycle(d);
+    this.vsHud.onLeave = () => { void this.goTitle(); };
+    this.vsHud.project = (x, y, z, out) => this.vsView.projectPoint(x, y, z, out);
+    this.railUi.onPick = (n) => { this.vsRailPick = n; };
+    this.railUi.onReroll = () => { this.vsRailReroll = true; };
     this.showHud(false);
     this.bossbar.hide();
     this.debug = new DebugOverlay(uiRoot);
@@ -663,6 +751,19 @@ export class App {
     return this.cinePlaying && s ? { shot: s.id, t: s.t } : null;
   }
   get isEnding(): boolean { return this.ending; }
+  /** ONLINE VS (B-VIEW): the live match description (null in solo) and the follow state — test surface */
+  get vs(): { info: VsMatchInfo; local: number; mode: 'own' | 'killer' | 'spectate'; view: number } | null {
+    const w = this._world;
+    return this.vsInfo && w ? { info: this.vsInfo, local: this.vsLocal, mode: this.vsMode, view: w.view } : null;
+  }
+  /** the live camera rig (VS framing probes) */
+  get cameraRig(): CameraRig { return this.rig; }
+  /** ONLINE VS test surface (dev): follow seat `slot` (spectate-style); returns the view seat */
+  vsSetViewDev(w: World, slot: number): number {
+    if (this.vsInfo && slot !== this.vsLocal) this.vsMode = 'spectate'; else if (this.vsInfo) this.vsMode = 'own';
+    this.vsSetView(w, slot);
+    return w.view;
+  }
 
   /** Boot: start the frame loop, then the title (or ?autostart straight into a run). */
   async boot(): Promise<void> {
@@ -674,6 +775,10 @@ export class App {
     this.splash.set(LOADING.ready, 1);
     if (this.params.autostart) {
       const c = this._choice;
+      if (this.params.vs) {                                 // ONLINE VS (B-VIEW): ?autostart=1&vs=1 → a VS PRACTICE match
+        await this.startVs({ titan: c.titan, biome: c.biome, seed: c.seed, bots: this.params.bots ?? 'regular' });
+        return;
+      }
       await this.startRun({ titan: c.titan, biome: c.biome, seed: c.seed, skipSlate: this.params.noslate });
       return;
     }
@@ -696,7 +801,7 @@ export class App {
     // pre-render the select portraits while the title is up (cached for the whole page; a no-op
     // once done) so Enter → select is instant
     if (!this.portraits) setTimeout(() => { if (ep === this.epoch && this._screen === 'title') void this.getPortraits(); }, 700);
-    let pick: 'play' | 'goals';
+    let pick: 'play' | 'goals' | 'vs';
     try {
       pick = await this.titleScreen.run();
     } finally {
@@ -710,9 +815,57 @@ export class App {
       void this.goTitle();
       return;
     }
+    if (pick === 'vs') {             // ONLINE VS (B-VIEW): VS PRACTICE
+      void this.audio.unlock();
+      this.sfx.ui('confirm');
+      void this.goVsSelect();
+      return;
+    }
     void this.audio.unlock();       // the title's Enter/click is the first user gesture
     this.sfx.ui('confirm');
     void this.goSelect();
+  }
+
+  /** ONLINE VS (B-VIEW): VS PRACTICE select (titan + city + the rival bots' level) → startVs. null = back to the title. */
+  async goVsSelect(initial?: Partial<SelectResume>, bots?: BotLevel): Promise<void> {
+    const ep = ++this.epoch;
+    await this.loadLock;
+    if (ep !== this.epoch) return;
+    await this.closeScreens();
+    if (ep !== this.epoch) return;
+    this.teardownRun();
+    this.setScreen('loading');
+    this.input.mode = 'ui';
+    this.music.play('select');
+    const pending = this.getPortraits();
+    const slow = setTimeout(() => { if (ep === this.epoch) this.splash.show(LOADING.portraits, 0.5); }, 150);
+    let portraits: Record<TitanId, string>;
+    try { portraits = await pending; } finally { clearTimeout(slow); }
+    this.splash.hide();
+    if (ep !== this.epoch) return;
+    this.setScreen('select');
+    this.modal = 'select';
+    let res: SelectResultV2 = null;
+    try {
+      res = await this.selectScreen.run({
+        portraits,
+        portraitFor: (t, pal) => this.portraitFor(t, pal),
+        profile: this._profile,
+        bests: loadBest(),
+        initial: initial ?? { titan: this._choice.titan, biome: this._choice.biome },
+        vs: true,
+        bots: bots ?? this.vsReq?.bots ?? 'regular',
+      });
+    } finally {
+      if (this.modal === 'select') this.modal = null;
+    }
+    if (ep !== this.epoch) return;
+    if (!res || res.kind !== 'start') { this.sfx.ui('back'); void this.goTitle(); return; }
+    this.sfx.ui('confirm');
+    this.paletteChoice[res.titan] = res.palette;                 // the colourway is cosmetic and shared with solo
+    this._profile.palette[res.titan] = res.palette;
+    this.persistProfile();
+    void this.startVs({ titan: res.titan, biome: res.biome, seed: freshSeed(), bots: res.bots ?? 'regular', palette: res.palette });
   }
 
   /** Titan + biome select → run (null result = back to the title). */
@@ -850,8 +1003,51 @@ export class App {
     void this.runOpening(ep);
   }
 
+  /**
+   * ONLINE VS (B-VIEW): start a VS PRACTICE match (you + 3 bots). Same load path as startRun (loading card, every view
+   * mounted, shaders warmed) but the world is a 4-seat VS world and there is no slate / cinematic: play begins at the
+   * COUNTDOWN (titans on their marks). Resolves when play has begun.
+   */
+  async startVs(req: VsRequest): Promise<void> {
+    const titan: TitanId = isTitan(req.titan) ? req.titan : 'molo';
+    const biome: BiomeId = isBiome(req.biome) ? req.biome : 'grideast';
+    const seed = Number.isFinite(req.seed) ? (Math.abs(Math.floor(req.seed)) >>> 0) : freshSeed();
+    const bots: BotLevel = req.bots === 'rookie' || req.bots === 'veteran' ? req.bots : 'regular';
+    const build = buildVs({ titan, biome, seed, bots, palette: req.palette });
+    const ep = ++this.epoch;
+    const prevLock = this.loadLock;
+    let release: () => void = () => {};
+    this.loadLock = new Promise<void>((r) => { release = r; });
+    let ok = false;
+    try {
+      await prevLock;
+      if (ep !== this.epoch) return;
+      await this.closeScreens();
+      if (ep !== this.epoch) return;
+      this.teardownRun();
+      this._choice = { titan, biome, seed };
+      this.vsReq = build.req;
+      ok = await this.loadRun(ep, titan, biome, seed, EMPTY_RUN_META, build);
+    } catch (e) {
+      if (ep === this.epoch) this.fail('the VS match failed to load', e);
+      return;
+    } finally {
+      release();
+    }
+    if (!ok || ep !== this.epoch) return;
+    this.enterPlay();
+  }
+
+  /** Same VS setup, new seed (the pause menu's RETRY in a VS match). */
+  retryVs(): Promise<void> {
+    const r = this.vsReq;
+    if (!r) return this.startVs({ titan: this._choice.titan, biome: this._choice.biome, seed: freshSeed(), bots: 'regular' });
+    return this.startVs({ ...r, seed: freshSeed() });
+  }
+
   /** Same titan + biome, new seed. */
   retry(): Promise<void> {
+    if (this.vsInfo) return this.retryVs();
     const c = this._choice;
     return this.startRun({ titan: c.titan, biome: c.biome, seed: freshSeed(), skipSlate: this.params.noslate, short: true });   // v2: RETRY → short opening
   }
@@ -905,6 +1101,7 @@ export class App {
     switch (before) {
       case 'slate':
       case 'end': {
+        if (before === 'end' && this.vsInfo) { synthKey('Enter', 'Enter'); break; }       // ONLINE VS end card: REMATCH → TITAN SWAP → LOCK IN
         if (before === 'slate' && this.cinePlaying) { this.cineOverlay.skip(); break; }   // v2 opening
         const b = this.broadcast as unknown as { dismiss?: () => boolean };
         if (typeof b.dismiss === 'function') b.dismiss();
@@ -988,15 +1185,19 @@ export class App {
   // ─────────────────────────────── loading / teardown ───────────────────────────────
 
   /** Build the world and mount every view. Returns false when superseded (epoch changed). */
-  private async loadRun(ep: number, titan: TitanId, biome: BiomeId, seed: number, meta: RunMeta): Promise<boolean> {
+  private async loadRun(ep: number, titan: TitanId, biome: BiomeId, seed: number, meta: RunMeta, vs: VsBuild | null = null): Promise<boolean> {
     this.setScreen('loading');
     this.input.mode = 'ui';
     this.splash.show(LOADING.city, 0.05);
     await yieldFrame();
     if (ep !== this.epoch) return false;
 
-    const w = createWorld({ titan, biome, seed, meta });
+    const w = vs
+      ? createWorld({ mode: 'vs', biome, seed, players: vs.seats, view: vs.info.local })
+      : createWorld({ titan, biome, seed, meta });
     this._world = w;
+    this.vsInfo = vs ? vs.info : null;
+    this.vsLocal = vs ? vs.info.local : 0;
     this.resetRunState();
     this.lighting.applyBiome(BIOMES[biome]);
 
@@ -1026,6 +1227,13 @@ export class App {
     if (ep !== this.epoch) return false;
     await this.warmCompositor();
     if (ep !== this.epoch) return false;
+    if (vs) {                                           // ONLINE VS: the seat cards need the four portraits
+      const ph = await this.getPortraits();
+      if (ep !== this.epoch) return false;
+      this.vsHud.mount(w, vs.info, ph);
+      this.vsHud.setCityName(BIOMES[biome].name);
+      this.railUi.clear();
+    }
 
     this.live = true;
     this.splash.set(LOADING.live, 1);
@@ -1096,6 +1304,8 @@ export class App {
     }
     this.mounted = [];
     this._world = null;
+    this.vsInfo = null;
+    try { this.vsHud.clear(); this.railUi.clear(); this.vsEndScreen.clear(); } catch (e) { console.error('[blocktooth] vs ui clear failed', e); }
     this.showHud(false);
     this.bossbar.hide();
     this.broadcast.clear();
@@ -1128,6 +1338,7 @@ export class App {
     this.loop.timeScale = 1;
     this.runNewGoals = [];
     this.goalsAcc = 0;
+    this.vsRailPick = 0; this.vsRailReroll = false; this.vsMode = 'own'; this.vsFollowT = 0; this.vsKiller = -1; this.vsEndEv = null;
   }
 
   /** v2 abort path of the cinematic opening (closeScreens, teardown, every epoch change). */
@@ -1140,10 +1351,13 @@ export class App {
 
   /** The HUD and the v2 HUD pieces are shown / hidden together. */
   private showHud(on: boolean): void {
+    const vs = on && !!this.vsInfo;
     this.hud.show(on);
     this.abilityBar.show(on);
-    this.tracker.show(on);
+    this.tracker.show(on && !vs);                       // the objective tracker is a solo rhythm (the KO feed owns the right column)
     this.markers.show(on);
+    this.vsHud.show(vs);                                // ONLINE VS (B-VIEW)
+    this.railUi.show(vs);
   }
 
   /**
@@ -1153,6 +1367,7 @@ export class App {
    */
   private async closeScreens(): Promise<void> {
     this.broadcast.clear();
+    this.vsEndScreen.clear();
     this.stopCine();
     if (this.modal === 'slate' || this.modal === 'end') this.modal = null;
     const m = this.modal;
@@ -1644,7 +1859,8 @@ export class App {
     try {
       this.input.update();                               // idempotent within one animation frame
       const inp = this.forcedInput ?? this.input.titanInput();
-      stepWorld(w, inp);
+      if (w.mode === 'vs') this.vsStep(w, inp);
+      else stepWorld(w, inp);
     } catch (e) {
       this.loop.simEnabled = false;
       this.fail('the simulation stopped', e);
@@ -1652,7 +1868,10 @@ export class App {
     }
     const ev = w.events;
     for (let i = 0; i < ev.length; i++) this.pushEvent(ev[i]);   // a rankUp here arms sizeUpHoldT
-    if (w.run.result) {
+    if (w.mode === 'vs') {
+      // ONLINE VS: no modal drafts (the CARD RAIL never pauses the sim); the match end stops the sim like a solo run end
+      if (w.run.result) { this.loop.simEnabled = false; this.beginVsEnding(w); }
+    } else if (w.run.result) {
       this.loop.simEnabled = false;                      // run over: nothing more to simulate
     } else if (w.tick > this.draftSuppressTick && hasPendingDraft(w) && !(w.gates.finaleT > 0)) {
       // (GATEKEEPERS §4.3: draft screens are held for the finale — the level-ups stay owed)
@@ -1679,6 +1898,7 @@ export class App {
       if (this._screen === 'play') {
         if (zin !== 0) this.rig.zoomBy(zin);
         if (this.input.pressed('zoomReset')) this.rig.resetZoom();
+        if (this.vsInfo && !this.ending) this.vsFrameInput();
       }
       const w = this._world;
       if (w && this.live) {
@@ -1748,15 +1968,23 @@ export class App {
       if (P) P.mark('cine');
     }
     if (react) {
+      // ONLINE VS: the solo HUD pieces read the VIEW seat only (the world cursor); another seat's events never reach them
+      const own = w.mode === 'vs' && events.length ? this.ownEvents(w, events) : events;
       this.hud.update(w, dt);
-      if (events.length) this.hud.onEvents(w, events);
-      this.bossbar.update(w.boss);
+      if (events.length) this.hud.onEvents(w, own);
+      this.bossbar.update(w.boss, w.mode === 'vs');
       // v2 HUD (FEATURES_V2 §4, §13.1)
       this.abilityBar.update(w, dt);
-      if (events.length) this.abilityBar.onEvents(w, events);
+      if (events.length) this.abilityBar.onEvents(w, own);
       this.tracker.update(w, dt);
-      if (events.length) this.tracker.onEvents(w, events);
+      if (events.length) this.tracker.onEvents(w, own);
       this.markers.update(this.markerView.frame());
+      if (w.mode === 'vs' && this.vsInfo) {
+        const vc = { local: this.vsLocal, spectating: this.vsMode === 'spectate' };
+        this.vsHud.update(w, dt, this.vsView.frame(), vc);
+        if (events.length) this.vsHud.onEvents(w, events, vc);
+        this.railUi.update(w, this.vsMode === 'own' && w.view === this.vsLocal, this.input.lastDevice === 'gamepad');
+      }
       if (P) P.mark('hud');
       const tg = this.rig.target;
       this.sfx.onEvents(w, events, tg.x, tg.z);
@@ -1820,8 +2048,10 @@ export class App {
 
   /** App-level reactions to this frame's events. */
   private appEvents(events: readonly SimEvent[]): void {
+    const vw = this._world && this._world.mode === 'vs' ? this._world : null;
     for (let i = 0; i < events.length; i++) {
       const e = events[i];
+      if (vw && this.vsAppEvent(vw, e)) continue;
       switch (e.type) {
         case 'rankUp': this.onRankUp(e.rank); break;
         case 'alert': this.broadcast.alert(e.key); break;
@@ -1907,7 +2137,7 @@ export class App {
   /** v2 UPROAR fire (FEATURES_V2 §3.6): hit-stop, widened input buffer, camera punch (unless reduce motion). */
   private onUltFire(): void {
     if (this.ending || this._screen !== 'play' || this._testFrozen) return;
-    if (!(this.hitStopT > ULT.hitStopS)) {
+    if (!this.vsInfo && !(this.hitStopT > ULT.hitStopS)) {   // ONLINE VS never slows the sim (the lockstep clock is the clock)
       this.loop.timeScale = Math.min(this.loop.timeScale, ULT.hitStopScale);
       this.hitStopT = Math.max(this.hitStopT, ULT.hitStopS);
       this.input.bufferS = Math.max(this.input.bufferS, SIM_DT / ULT.hitStopScale + 0.02);
@@ -1929,7 +2159,7 @@ export class App {
   }
 
   private onRankUp(rank: RankIndex): void {
-    if (!this.ending && this._screen === 'play' && !this._testFrozen) {
+    if (!this.ending && this._screen === 'play' && !this._testFrozen && !this.vsInfo) {
       this.loop.timeScale = HITSTOP_SCALE;
       this.hitStopT = HITSTOP_S;
       this.input.bufferS = HITSTOP_BUFFER_S;
@@ -1961,13 +2191,14 @@ export class App {
         this.music.setIntensity(this.musicIntensity(w));
       }
       this.checkLowHp(w);
-      if (!this._testFrozen && this.loop.simEnabled) this.checkGoals(w, dt);   // v2 (1 Hz)
+      if (!this._testFrozen && this.loop.simEnabled && !this.vsInfo) this.checkGoals(w, dt);   // v2 (1 Hz)
+      if (this.vsInfo) this.vsFollow(w, dt);
     }
 
     if (this.ending) {
       if (this._screen === 'play') {
         this.endT -= dt;
-        if (this.endT <= 0) void this.runTabloid();       // renders + captures synchronously first
+        if (this.endT <= 0) void (this.vsInfo ? this.runVsEnd() : this.runTabloid());       // renders + captures synchronously first
       }
       return;
     }
@@ -2009,6 +2240,205 @@ export class App {
     } else if (!this.lowHpArmed && f > LOW_HP_REARM) {
       this.lowHpArmed = true;
     }
+  }
+
+  // ─────────────────────────────── ONLINE VS (lane B-VIEW) ───────────────────────────────
+
+  /** The events of the VIEW seat (and the match-level ones): what the solo HUD pieces may react to. */
+  private ownEvents(w: World, ev: readonly SimEvent[]): readonly SimEvent[] {
+    const out = this.vsOwnBuf;
+    out.length = 0;
+    for (let i = 0; i < ev.length; i++) {
+      const p = ev[i].p;
+      if (p === undefined || p < 0 || p === w.view) out.push(ev[i]);
+    }
+    return out;
+  }
+  private readonly vsOwnBuf: SimEvent[] = [];
+
+  /**
+   * One VS tick: the human's command is quantised through net/proto.ts (exactly the word the online session puts on the
+   * wire: the local sim must step the DECODED input, netcode.md 6.3) with the CARD RAIL byte; every other seat gets
+   * null (bots are driven by the sim's bot brain, an online peer by its own frame).
+   */
+  private vsStep(w: World, raw: TitanInput): void {
+    let card = 0;
+    if (this.vsRailReroll) card = CARD.REROLL;
+    else if (this.vsRailPick >= 1 && this.vsRailPick <= 3) card = this.vsRailPick;
+    this.vsRailPick = 0; this.vsRailReroll = false;
+    const buf = this.vsBuf;
+    encodeInput(raw, buf, 0, card);
+    const dec = decodeInput(buf, 0);
+    if (card === CARD.REROLL) dec.railReroll = true;
+    else if (card > 0) dec.railPick = card;
+    const ins = this.vsIn;
+    for (let i = 0; i < ins.length; i++) ins[i] = null;
+    ins[this.vsLocal] = dec;
+    stepWorldN(w, ins);
+  }
+
+  /** per rendered frame in a VS match: rail edges, spectate keys, the map toggle */
+  private vsFrameInput(): void {
+    const I = this.input;
+    if (I.pressed('pick1')) this.vsRailPick = 1;
+    else if (I.pressed('pick2')) this.vsRailPick = 2;
+    else if (I.pressed('pick3')) this.vsRailPick = 3;
+    if (I.pressed('reroll')) this.vsRailReroll = true;
+    if (I.pressed('specPrev')) this.vsCycle(-1);
+    if (I.pressed('specNext')) this.vsCycle(1);
+    if (I.pressed('mapToggle')) this.vsHud.toggleMap();
+  }
+
+  /** point the camera / HUD at a seat (spectate, follow the killer, back to the own body) */
+  private vsSetView(w: World, slot: number): void {
+    if (slot === w.view || slot < 0 || slot >= w.players.length) return;
+    setViewSlot(w, slot);
+    this.rig.retarget();
+    this.hud.rebind();
+    this.abilityBar.show(slot === this.vsLocal && this._screen === 'play');
+  }
+
+  /** Q / E (pad LB / RB, the spectate bar's arrows): the next / previous LIVING titan while spectating */
+  private vsCycle(dir: number): void {
+    const w = this._world;
+    if (!w || !this.vsInfo || this.vsMode !== 'spectate') return;
+    const n = w.players.length;
+    for (let k = 1; k <= n; k++) {
+      const s = ((w.view + (dir < 0 ? -k : k)) % n + n) % n;
+      const P = w.players[s];
+      if (s === this.vsLocal || P.vs.eliminated) continue;
+      this.vsSetView(w, s);
+      this.sfx.ui('move');
+      return;
+    }
+  }
+
+  /** the VS-specific app reactions to an event; true = do not run the solo switch for it */
+  private vsAppEvent(w: World, e: SimEvent): boolean {
+    switch (e.type) {
+      case 'evicted':
+        if (e.victim === this.vsLocal && !this.ending && this.vsMode === 'own') {
+          if (e.killer >= 0 && e.killer !== e.victim) {                 // hold on the killer for the respawn
+            this.vsMode = 'killer'; this.vsFollowT = VS.ko.respawnS + 0.8;
+            this.vsSetView(w, e.killer);
+          }
+        }
+        return true;
+      case 'eliminated':
+        if (e.victim === this.vsLocal && !this.ending) {
+          this.vsKiller = e.killer;
+          this.vsMode = 'killer'; this.vsFollowT = VS.ko.followKillerS;
+          if (e.killer >= 0 && e.killer !== e.victim) this.vsSetView(w, e.killer);
+          else this.vsFollowT = 0;
+        }
+        return true;
+      case 'respawn':
+        if (e.slot === this.vsLocal && this.vsMode === 'killer') { this.vsMode = 'own'; this.vsSetView(w, this.vsLocal); }
+        return true;
+      case 'vsEnd':
+        this.vsEndEv = { winner: e.winner, placements: e.placements.slice(), scores: e.scores.slice() };
+        this.beginVsEnding(w);
+        return true;
+      case 'crown': case 'vsPhase': case 'rivalHit': case 'tenderMarker': case 'tenderSpawn': case 'tenderPaid': case 'ringStep':
+      case 'railOffer': case 'railPick':
+        return true;
+      default:
+        // another seat's own-body app cues (low-HP alerts, rank-up stings, UPROAR punch) are not ours to play
+        if (e.p !== undefined && e.p >= 0 && e.p !== w.view && (e.type === 'rankUp' || e.type === 'alert' || e.type === 'ultFire' || e.type === 'eliteSpawn')) return true;
+        return false;
+    }
+  }
+
+  /** each frame in a VS match: follow-the-killer timing, spectate target upkeep */
+  private vsFollow(w: World, dt: number): void {
+    const me = w.players[this.vsLocal];
+    if (!me || !w.vs) return;
+    if (this.vsMode === 'killer') {
+      this.vsFollowT -= dt;
+      if (me.vs.eliminated) {
+        if (this.vsFollowT <= 0) { this.vsMode = 'spectate'; this.vsEnterSpectate(w); }
+      } else if (me.titan.alive && w.view !== this.vsLocal) { this.vsMode = 'own'; this.vsSetView(w, this.vsLocal); }   // back without a respawn event
+      else if (this.vsFollowT <= 0 && me.titan.alive) { this.vsMode = 'own'; this.vsSetView(w, this.vsLocal); }
+    } else if (this.vsMode === 'own' && me.vs.eliminated) {
+      this.vsMode = 'spectate'; this.vsEnterSpectate(w);
+    } else if (this.vsMode === 'spectate') {
+      const cur = w.players[w.view];
+      if (!cur || cur.vs.eliminated || w.view === this.vsLocal) this.vsEnterSpectate(w);
+    }
+  }
+
+  private vsEnterSpectate(w: World): void {
+    const n = w.players.length;
+    let best = -1;
+    const k = this.vsKiller;
+    if (k >= 0 && k !== this.vsLocal && k < n && !w.players[k].vs.eliminated) best = k;   // stay on the killer: no camera cut
+    for (let j = 0; best < 0 && j < n; j++) {
+      const s = (this.vsLocal + 1 + j) % n;
+      if (s !== this.vsLocal && !w.players[s].vs.eliminated) best = s;
+    }
+    if (best >= 0) this.vsSetView(w, best);
+  }
+
+  /** the match was decided: stop the sim, let the winner roar, then the end card */
+  private beginVsEnding(w: World): void {
+    if (this.ending) return;
+    this.ending = true;
+    this.endResult = null;
+    this.endT = App.VS_END_DELAY_S;
+    this.wantDraft = false;
+    this.draftArmed = false;
+    this.loop.simEnabled = false;
+    this.loop.timeScale = 1;
+    this.hitStopT = 0;
+    this.input.mode = 'ui';
+    this.music.setIntensity(0.95);
+    // the front-page photo is of the WINNER (it roars during the aftermath): the camera goes to it, whoever we were following
+    const win = w.vs ? w.vs.winner : -1;
+    if (win >= 0 && win < w.players.length) this.vsSetView(w, win);
+    else if (this.vsMode !== 'own' && w.players[this.vsLocal] && !w.players[this.vsLocal].vs.eliminated) this.vsSetView(w, this.vsLocal);
+    this.vsMode = win === this.vsLocal ? 'own' : 'killer';   // not 'spectate': the spectate bar and keys are off for the aftermath
+  }
+
+  /** the front page: freeze-frame photo, then the end card → REMATCH (titan swap, new seed, next city) / LEAVE */
+  private async runVsEnd(): Promise<void> {
+    const w = this._world, info = this.vsInfo;
+    if (!w || !info) return;
+    const ep = this.epoch;
+    let photo = '';
+    const hidden: THREE_Object[] = [];
+    for (const name of PHOTO_HIDDEN_ROOTS) {
+      const o = this.core.scene.getObjectByName(name) as THREE_Object | undefined;
+      if (o && o.visible) { o.visible = false; hidden.push(o); }
+    }
+    try {
+      this.core.render();
+      photo = this.core.renderer.domElement.toDataURL('image/jpeg', 0.9);
+    } catch (e) {
+      console.error('[blocktooth] vs freeze-frame photo failed', e);
+    } finally {
+      for (const o of hidden) o.visible = true;
+    }
+    this.setScreen('end');
+    this.showHud(false);
+    this.bossbar.hide();
+    this.music.play('tabloid');
+    this.sfx.ui('print');
+    this.modal = 'end';
+    const portraits = await this.getPortraits();
+    if (ep !== this.epoch || this._world !== w) return;
+    let choice: Awaited<ReturnType<VsEndScreen['open']>>;
+    try {
+      choice = await this.vsEndScreen.open({ w, info, photo, portraits, voteS: null, end: this.vsEndEv });
+    } finally {
+      if (this.modal === 'end') this.modal = null;
+    }
+    if (ep !== this.epoch) return;
+    this.sfx.ui('confirm');
+    if (choice.kind === 'rematch') {
+      const r = this.vsReq;
+      const next = REMATCH_BIOMES[(Math.max(0, REMATCH_BIOMES.indexOf(info.biome as typeof REMATCH_BIOMES[number])) + 1) % REMATCH_BIOMES.length];
+      void this.startVs({ titan: choice.titan, biome: next, seed: freshSeed(), bots: r ? r.bots : 'regular', palette: info.palettes[info.local] ?? 0 });
+    } else void this.goTitle();
   }
 
   // ─────────────────────────────── events plumbing ───────────────────────────────

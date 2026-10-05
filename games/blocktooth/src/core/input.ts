@@ -37,11 +37,12 @@ export type Action =
   | 'confirm' | 'back' | 'pause' | 'debug'
   | 'ability' | 'dash' | 'ultimate'   // v2: UPROAR (FEATURES_V2 §2.4)
   | 'pick1' | 'pick2' | 'pick3' | 'reroll'
-  | 'zoomIn' | 'zoomOut' | 'zoomReset';
+  | 'zoomIn' | 'zoomOut' | 'zoomReset'
+  | 'specPrev' | 'specNext' | 'mapToggle';   // ONLINE VS (B-VIEW): spectate Q / E (pad LB / RB), minimap M
 
 export const ACTIONS: readonly Action[] = [
   'up', 'down', 'left', 'right', 'confirm', 'back', 'pause', 'debug', 'ability', 'dash', 'ultimate', 'pick1', 'pick2', 'pick3', 'reroll',
-  'zoomIn', 'zoomOut', 'zoomReset',
+  'zoomIn', 'zoomOut', 'zoomReset', 'specPrev', 'specNext', 'mapToggle',
 ];
 
 export type InputMode = 'ui' | 'game';
@@ -85,7 +86,9 @@ const KEYMAP: Readonly<Record<string, readonly Action[]>> = {
   Equal: ['zoomIn'], NumpadAdd: ['zoomIn'],
   Minus: ['zoomOut'], NumpadSubtract: ['zoomOut'],
   KeyZ: ['zoomReset'],
-  KeyE: ['ultimate'],                 // v2 UPROAR (pad Y / RT in pollPads)
+  KeyE: ['ultimate', 'specNext'],     // v2 UPROAR (pad Y / RT in pollPads); VS spectate: next living titan
+  KeyQ: ['specPrev'],                 // ONLINE VS spectate: previous living titan
+  KeyM: ['mapToggle'],                // ONLINE VS: enlarge / shrink the minimap
 };
 
 /** reverse map: action → key codes */
@@ -120,7 +123,7 @@ const MOVE_CODE_SET: ReadonlySet<string> = new Set<string>([
 
 // ─────────────────────────────── gamepad map (standard mapping) ───────────────────────────────
 const PAD_BUTTONS = 17;
-const PAD_A = 0, PAD_B = 1, PAD_X = 2, PAD_Y = 3, PAD_RB = 5, PAD_RT = 7, PAD_SELECT = 8, PAD_START = 9, PAD_R3 = 11;
+const PAD_A = 0, PAD_B = 1, PAD_X = 2, PAD_Y = 3, PAD_LB = 4, PAD_RB = 5, PAD_LT = 6, PAD_RT = 7, PAD_SELECT = 8, PAD_START = 9, PAD_R3 = 11;
 const PAD_UP = 12, PAD_DOWN = 13, PAD_LEFT = 14, PAD_RIGHT = 15;
 /** d-pad buttons: movement in play (live across a ui → game flip, like the movement keys) */
 const PAD_MOVE_BUTTONS: readonly number[] = [PAD_UP, PAD_DOWN, PAD_LEFT, PAD_RIGHT];
@@ -165,6 +168,9 @@ export function actionLabel(a: Action, device: InputDevice = 'keyboard'): string
       case 'zoomIn': return 'R-STICK UP';
       case 'zoomOut': return 'R-STICK DOWN';
       case 'zoomReset': return 'R3';
+      case 'specPrev': return 'LB';
+      case 'specNext': return 'RB';
+      case 'mapToggle': return 'BACK';
     }
   }
   switch (a) {
@@ -186,6 +192,9 @@ export function actionLabel(a: Action, device: InputDevice = 'keyboard'): string
     case 'zoomIn': return '=';
     case 'zoomOut': return '-';
     case 'zoomReset': return 'Z';
+    case 'specPrev': return 'Q';
+    case 'specNext': return 'E';
+    case 'mapToggle': return 'M';
   }
 }
 
@@ -591,8 +600,13 @@ export class Input {
           else if (!guard) this.edges.add('back');
           break;
         case PAD_RB:
-          if (game) { this.edges.add('dash'); this.dashAt = now; }
+          if (game) { this.edges.add('dash'); this.dashAt = now; this.edges.add('specNext'); }
           break;
+        // ONLINE VS (B-VIEW): CARD RAIL picks on the pad (the d-pad is movement): LB card 1, LT card 2, BACK card 3 (X = reroll);
+        // LB / RB also cycle the spectated titan (the rail is closed while out, so they never collide)
+        case PAD_LB: if (game) { this.edges.add('pick1'); this.edges.add('specPrev'); } break;
+        case PAD_LT: if (game) this.edges.add('pick2'); break;
+        case PAD_SELECT: if (game) this.edges.add('pick3'); break;
         case PAD_Y: case PAD_RT:          // v2 UPROAR (play only; modal screens read pad Y through ui/dom.ts)
           if (game) { this.edges.add('ultimate'); this.ultimateAt = now; }
           break;

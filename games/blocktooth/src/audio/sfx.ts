@@ -385,8 +385,20 @@ export class Sfx {
       this.bossId = w.boss ? w.boss.id : null;
       this.maxHp = Math.max(1, fin(T.maxHp, 100));
       this.frameLow = 0;
+      const vs = w.mode === 'vs';
       let pickN = 0, pickScrap = 0, pickX = 0, pickZ = 0;
       for (const e of ev) {
+        if (vs) {
+          // ONLINE VS: every voice below reads this.H / rank / titan / maxHp as "the titan that made the sound": point
+          // them at the event's seat; a rival's own-body cues (hurt, heal, level, rank, charged) are not voiced for
+          // the local player (positional hits / footsteps / ults are)
+          this.seatVoice(w, e.p);
+          if (e.p !== undefined && e.p >= 0 && e.p !== w.view) {
+            const t = e.type;
+            if (t === 'titanHurt' || t === 'titanHeal' || t === 'levelUp' || t === 'rankUp' || t === 'ultCharged' || t === 'upgradeProc'
+              || (t === 'pickup' && e.kind !== 'rubble' && e.kind !== 'scrap')) continue;
+          }
+        }
         if (e.type === 'pickup' && (e.kind === 'rubble' || e.kind === 'scrap')) {
           pickN++; if (e.kind === 'scrap') pickScrap++;
           pickX += e.x; pickZ += e.z;
@@ -395,11 +407,38 @@ export class Sfx {
         this.one(w, e);
       }
       if (pickN > 0) this.pickupTicks(pickN, pickScrap > pickN / 2, pickX / pickN, pickZ / pickN);
+      if (vs) this.seatVoice(w, w.view);
       if (w.boss && this.bossId === 'parkade6') this.parkadeTick(w.boss); else this.pkInit = false;
       if (w.boss && w.boss.role === 'gate') this.gateTick(w, w.boss); else this.gtInit = false;
       if (w.titanId === 'briarwick') this.ripenTick(w); else this.ripeInit = false;
     } catch {
       // cosmetic subsystem: never let a synthesis error reach the game loop
+    }
+  }
+
+  /** ONLINE VS: the titan state the next voices are pitched / scaled by = the seat `p` (undefined / -1 = the view seat). */
+  private seatVoice(w: World, p: number | undefined): void {
+    const P = w.players[p !== undefined && p >= 0 && p < w.players.length ? p : w.view];
+    const T = P.titan;
+    this.H = Math.max(0.5, fin(T.height, 1.2));
+    this.rank = T.rank;
+    this.titan = P.titanId;
+    this.maxHp = Math.max(1, fin(T.maxHp, 100));
+  }
+
+  /** ONLINE VS: a rival hit landed at (x, z). noContest = the OPEN HOUSE shove (a dull, grey tok instead of an impact). */
+  private rivalImpact(x: number, z: number, pct: number, noContest: boolean): void {
+    const s = this.spatial(x, z);
+    const b = this.voice('rival', 2, 0.6, s.g * (noContest ? 0.4 : 0.55 + Math.min(0.3, pct * 2)), s.pan, 0.08);
+    if (!b) return;
+    const t = b.t, o = b.o;
+    if (noContest) {
+      blip(b, o, t, 'triangle', 240, 0.07, 0.5, 150);
+      burst(b, o, t, 'white', 'bandpass', 1700, 1.2, 0.001, 0.035, 0.35);
+    } else {
+      thump(b, o, t, 280, 62, 0.28, 0.9);
+      burst(b, o, t, 'brown', 'lowpass', 1300, 0.8, 0.002, 0.14, 0.7, 260);
+      burst(b, o, t, 'white', 'highpass', 3400, 0.9, 0.001, 0.04, 0.3);
     }
   }
 
@@ -601,6 +640,23 @@ export class Sfx {
       case 'powerupEnd': if (this.gate('puEnd', now)) this.powerupEnd(e.kind); break;
       case 'revive': if (this.gate('revive', now)) this.reviveSting(); break;
       case 'endlessBoss': if (this.gate('endlessBoss', now) && this.gate('siren', now)) this.bossSiren(); break;
+      // ── ONLINE VS (lane B-VIEW) ──
+      case 'rivalHit': if (this.gate(e.noContest ? 'rivalSoft' : 'rival', now)) this.rivalImpact(e.x, e.z, e.pct, e.noContest); break;
+      case 'vsPhase':
+        if (e.phase === 'takeover' && this.gate('vsPhase', now)) this.eliteHorn();
+        else if ((e.phase === 'final' || e.phase === 'last') && this.gate('vsPhase', now)) this.bossSiren();
+        break;
+      case 'evicted':
+        if (e.victim === w.view && this.gate('vsEvict', now)) this.runEnd('dead');
+        else if (e.killer === w.view && this.gate('vsEvict', now)) this.sparkle(e.x, e.z, 1);
+        break;
+      case 'eliminated': if (e.victim === w.view && this.gate('vsEvict', now)) this.runEnd('dead'); break;
+      case 'respawn': if (e.slot === w.view && this.gate('vsEvict', now)) this.levelChime(); break;
+      case 'crown': if (this.gate('vsCrown', now)) this.approved(this.camX, this.camZ); break;
+      case 'vsEnd': if (this.gate('end', now)) this.runEnd(e.winner === w.view ? 'clear' : 'dead'); break;
+      case 'tenderMarker': if (this.gate('vsTender', now)) this.padlock(); break;
+      case 'ringStep': if (this.gate('vsRing', now)) this.klaxonBlip(); break;
+      case 'tenderSpawn': case 'tenderPaid': case 'railOffer': case 'railPick': break;
       case 'rebuild':
         if (e.stage === 'floor') { if (this.gate('rbFloor', now)) this.rebuildClank(e.x, e.z); }
         else if (e.stage === 'done') { if (this.gate('rbDone', now)) this.rebuildChime(e.x, e.z); }
