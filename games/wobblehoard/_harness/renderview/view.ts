@@ -130,6 +130,32 @@ interface BeatRec { beat: string; t: number; tier: string; frame: number }
 const cer = { handle: null as CeremonyHandle | null, kind: '', tier: '' as TierName | '', beats: [] as BeatRec[], lumas: [] as number[], frames: 0, duration: 0, dt: 1 / 30, startFrame: 0, tierUp: false, quick: false };
 let capsuleHandle: CapsuleHandle | null = null;
 let capsuleLanded = 0;
+
+// ---- ceremony body factory: 'auto' = makeBody; 'native' = the dev stub (it implements setFold / moveTo / tremble / burstOpen) with call
+// spies; 'puppet' = makeBody behind a Proxy that HIDES the optional drivers, so the render lane's procedural puppet must do the work ----
+type DriverMode = 'auto' | 'native' | 'puppet';
+const DRIVERS = ['setFold', 'moveTo', 'tremble', 'burstOpen'] as const;
+const driverSpy = { setFold: 0, setFoldMax: 0, moveTo: 0, tremble: 0, trembleMax: 0, burstOpen: 0 };
+let driverMode: DriverMode = 'auto';
+function cerBody(g: Genome): SoftBodyLike {
+  if (driverMode === 'auto') return makeBody(g);
+  if (driverMode === 'native') {
+    const b = new StubBody(g);
+    const f = b.setFold.bind(b), tr = b.tremble.bind(b), bo = b.burstOpen.bind(b), mt = b.moveTo.bind(b);
+    b.setFold = (t: number) => { driverSpy.setFold++; driverSpy.setFoldMax = Math.max(driverSpy.setFoldMax, t); f(t); };
+    b.tremble = (a: number) => { driverSpy.tremble++; driverSpy.trembleMax = Math.max(driverSpy.trembleMax, a); tr(a); };
+    b.burstOpen = (s: number) => { driverSpy.burstOpen++; bo(s); };
+    b.moveTo = (p: V3 | null, k?: number) => { driverSpy.moveTo++; mt(p, k); };
+    return b;
+  }
+  const inner = makeBody(g);
+  const hidden = new Set<string | symbol>(DRIVERS);
+  return new Proxy(inner, {
+    get(t, k) { if (hidden.has(k)) return undefined; const v = Reflect.get(t, k, t) as unknown; return typeof v === 'function' ? (v as (...a: unknown[]) => unknown).bind(t) : v; },
+    set(t, k, v) { return Reflect.set(t, k, v, t); },
+    has(t, k) { return !hidden.has(k) && Reflect.has(t, k); },
+  });
+}
 const PARENT_SEEDS = ['', '3', '8'];
 function resultGenome(tier: TierName): Genome { return genomeFromParam(String(['', '2', '5', '19', '16', '8'][['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'].indexOf(tier)] ?? '')); }
 const hooksFor = { onBeat(beat: string, info: { t: number; tier: TierName }): void { cer.beats.push({ beat, t: info.t, tier: info.tier, frame: frameNo }); } };
@@ -241,12 +267,18 @@ const RV = {
     return { after, endAfterDispose: { geometries: m.geometries, textures: m.textures, programs: m.programs }, err };
   },
   /** Run one WHOLE ceremony deterministically (fixed dt), sampling mean luminance and the screen-light alpha every frame. */
-  async runCeremony(o: { kind: 'capsule' | 'merge'; tier: TierName; dt?: number; tierUp?: boolean; calm?: boolean; quick?: boolean; parents?: number; skipAt?: number; settle?: number }): Promise<{
+  async runCeremony(o: { kind: 'capsule' | 'merge'; tier: TierName; dt?: number; tierUp?: boolean; calm?: boolean; quick?: boolean; parents?: number; skipAt?: number; settle?: number; drivers?: DriverMode }): Promise<{
     duration: number; budget: number; frames: number; seconds: number; skippedAtFrame: number; activeAfterSkip: number; lumas: number[]; maxLight: number; maxParticles: number;
-    beats: BeatRec[]; doneResolved: boolean; resultVisibleAtEnd: boolean; fingerprint: number[]; bodiesAtEnd: number; ramps: number; camRange: number;
+    beats: BeatRec[]; doneResolved: boolean; resultVisibleAtEnd: boolean; fingerprint: number[]; bodiesAtEnd: number; ramps: number; camRange: number; resultClock: number;
     finalState: { ceremony: boolean; capsule: boolean; screenLight: number; cameraFx: { dist: number; yaw: number; pitch: number }; primaryIsResult: boolean };
+    stats: Record<string, number>; drivers: typeof driverSpy; native: boolean[]; foldMax: number; resultHiddenFrames: number; particlesDropped: number;
   }> {
     const dt = o.dt ?? 1 / 30;
+    driverMode = o.drivers ?? 'auto';
+    for (const k of Object.keys(driverSpy) as (keyof typeof driverSpy)[]) driverSpy[k] = 0;
+    const dropped0 = stage.info.particlesDropped;
+    let foldMax = 0, resultHiddenFrames = 0;
+    const native: boolean[] = [];
     stage.clearBodies();
     setupBody(genomeFromParam(''));
     stage.setCalmEffects(!!o.calm);
@@ -254,16 +286,26 @@ const RV = {
     const duration = o.kind === 'capsule' ? RV.capsuleReveal(o.tier, { quick: !!o.quick }) : RV.merge(o.tier, o.parents ?? 2, !!o.tierUp);
     const budget = o.kind === 'capsule' ? capsuleDuration(o.tier, { quick: !!o.quick, calm: false }) : mergeDuration(o.tier, { tierUp: !!o.tierUp, calm: false });
     const h = cer.handle as CeremonyHandle;
+    for (const v of stage.views) if (v.owned) native.push(v.proxy.native.fold, v.proxy.native.tremble, v.proxy.native.burst);
+    const watch = (): void => {
+      for (const v of stage.views) if (v.owned && v.id !== h.resultBodyId) foldMax = Math.max(foldMax, v.proxy.foldAmount);
+    };
     const lumas: number[] = [];
     let maxLight = 0, maxParticles = 0, frames = 0, skippedAt = -1, activeAfterSkip = -1, activeFrames = 0, ramps = 0, prevLight = 0, camMove = 0;
     while (h.active && frames < 3000) {
       if (o.skipAt !== undefined && skippedAt < 0 && frames * dt >= o.skipAt) {
         h.skip(); skippedAt = frames;
-        let k = 0; while (h.active && k < 60) { frame(dt); lumas.push(meanLuma()); k++; frames++; maxLight = Math.max(maxLight, stage.info.screenLight); }
+        let k = 0;
+        while (h.active && k < 60) {
+          frame(dt); lumas.push(meanLuma()); k++; frames++; maxLight = Math.max(maxLight, stage.info.screenLight);
+          const rv = stage.views.find((v) => v.id === h.resultBodyId);
+          if (!rv || !rv.visible) resultHiddenFrames++;            // skip() must never hide the result, not even mid-crossfade
+        }
         activeAfterSkip = k;
         break;
       }
       frame(dt);
+      watch();
       lumas.push(meanLuma());
       const L = stage.info.screenLight;
       maxLight = Math.max(maxLight, L); maxParticles = Math.max(maxParticles, stage.info.particles);
@@ -273,6 +315,8 @@ const RV = {
       frames++; activeFrames = frames;
     }
     const natural = skippedAt < 0;
+    const stats = { ...(h as unknown as { stats: Record<string, number> }).stats };
+    driverMode = 'auto';
     if (h.resultBody) body = h.resultBody;   // what the shell does after `done`: adopt the result as the play body (the stage stops stepping it)
     const doneResolved = await Promise.race([h.done.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 500))]);
     for (let i = 0; i < (o.settle ?? 30); i++) { frame(dt); lumas.push(meanLuma()); }
@@ -280,6 +324,8 @@ const RV = {
     return {
       duration, budget, frames: natural ? activeFrames : skippedAt, seconds: (natural ? activeFrames : skippedAt) * dt, skippedAtFrame: skippedAt, activeAfterSkip, lumas, maxLight, maxParticles,
       beats: cer.beats.slice(), doneResolved, resultVisibleAtEnd: !!stage.primaryBodyId() && stage.info.bodies === 1, fingerprint: fp, bodiesAtEnd: stage.info.bodies, ramps, camRange: camMove,
+      resultClock: stage.views.find((v) => v.id === h.resultBodyId)?.clock ?? -1,
+      stats, drivers: { ...driverSpy }, native, foldMax, resultHiddenFrames, particlesDropped: stage.info.particlesDropped - dropped0,
       finalState: { ceremony: stage.info.ceremony, capsule: stage.info.capsule, screenLight: stage.info.screenLight, cameraFx: { ...stage.info.cameraFx }, primaryIsResult: stage.primaryBodyId() === h.resultBodyId },
     };
   },
@@ -417,7 +463,7 @@ const RV = {
     const D = capsuleDuration(tier, { quick: o.quick, calm: stage.info.calm });
     resetCer('capsule', tier, D);
     cer.quick = !!o.quick; cer.tierUp = false;
-    cer.handle = stage.playCapsuleReveal({ result: { genome: g, tier, isNew: true }, createBody: makeBody, capsule: capsuleHandle ?? undefined, quick: o.quick, keepCurrent: o.keepCurrent }, hooksFor);
+    cer.handle = stage.playCapsuleReveal({ result: { genome: g, tier, isNew: true }, createBody: cerBody, capsule: capsuleHandle ?? undefined, quick: o.quick, keepCurrent: o.keepCurrent }, hooksFor);
     return cer.handle.duration;
   },
   merge(tier: TierName, parents = 2, tierUp = false): number {
@@ -426,7 +472,7 @@ const RV = {
     resetCer('merge', tier, D);
     cer.tierUp = tierUp; cer.quick = false;
     const ps = PARENT_SEEDS.slice(0, parents).map((sd) => ({ genome: genomeFromParam(sd), tier: 'common' as TierName }));
-    cer.handle = stage.playMergeCeremony({ parents: ps, result: { genome: g, tier, tierUp, isNew: true }, createBody: makeBody }, hooksFor);
+    cer.handle = stage.playMergeCeremony({ parents: ps, result: { genome: g, tier, tierUp, isNew: true }, createBody: cerBody }, hooksFor);
     return cer.handle.duration;
   },
   /** Advance the running ceremony by up to n frames of dt (stops when it ends); records luminance per frame if asked. Returns frames done. */
@@ -440,10 +486,15 @@ const RV = {
     cer.dt = dt;
     return i;
   },
-  /** Drive frames until the ceremony's time reaches `seconds` (ceremony clock = frames x dt). */
+  /** Drive frames until the ceremony's time reaches `seconds` (ceremony clock = frames x dt). Renders only the last frame unless withLuma. */
   cerSeek(seconds: number, dt = 1 / 30, withLuma = false): void {
     const target = Math.round(seconds / dt);
-    while (cer.handle && cer.handle.active && cer.frames < target) RV.cerFrames(1, dt, withLuma);
+    while (cer.handle && cer.handle.active && cer.frames < target) {
+      frame(dt, withLuma);
+      cer.frames++;
+      if (withLuma) cer.lumas.push(meanLuma());
+    }
+    cer.dt = dt;
     stage.render();
   },
   skipCer(): void { cer.handle?.skip(); },
@@ -480,6 +531,142 @@ const RV = {
     // calm
     f.reset(); f.calm = true; out.calmFlash = f.flash(50, 0.2); out.calmRing = f.ring(50); f.calm = false; f.reset();
     return out;
+  },
+
+  /**
+   * Sky / ground gradient smoothness of the CURRENT framing with every body cleared and the felt mat hidden (only the dome shader is left):
+   * 8x8-pixel block luminance; the largest step between neighbouring block columns (a vertical seam) and the largest second difference
+   * down a column (a band edge or kink: a smooth gradient has a small one even where it is steep). Restores the scene afterwards.
+   */
+  skyProbe(): { w: number; h: number; maxColStep: number; maxRowCurv: number; maxRowStep: number; at: number[] } {
+    const hiddenVis: [THREE.Object3D, boolean][] = [];
+    stage.scene.traverse((o) => { if (o.renderOrder === -50) { hiddenVis.push([o, o.visible]); o.visible = false; } });
+    for (const v of stage.views) { hiddenVis.push([v.group, v.group.visible]); v.group.visible = false; }
+    stage.render();
+    const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    for (const [o, vis] of hiddenVis) o.visible = vis;
+    if (!x) return { w: 0, h: 0, maxColStep: -1, maxRowCurv: -1, maxRowStep: -1, at: [] };
+    x.drawImage(canvas, 0, 0);
+    const W = c.width, H = c.height, d = x.getImageData(0, 0, W, H).data, B = 8, bw = Math.floor(W / B), bh = Math.floor(H / B);
+    const L = new Float32Array(bw * bh);
+    for (let by = 0; by < bh; by++) for (let bx = 0; bx < bw; bx++) {
+      let sum = 0;
+      for (let yy = 0; yy < B; yy++) for (let xx = 0; xx < B; xx++) { const i = ((by * B + yy) * W + bx * B + xx) * 4; sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; }
+      L[by * bw + bx] = sum / (B * B);
+    }
+    let maxColStep = 0, maxRowCurv = 0, maxRowStep = 0, at: number[] = [];
+    for (let by = 0; by < bh; by++) for (let bx = 1; bx < bw; bx++) maxColStep = Math.max(maxColStep, Math.abs(L[by * bw + bx] - L[by * bw + bx - 1]));
+    for (let bx = 0; bx < bw; bx++) for (let by = 1; by < bh - 1; by++) {
+      const a = L[(by - 1) * bw + bx], b = L[by * bw + bx], e = L[(by + 1) * bw + bx];
+      maxRowStep = Math.max(maxRowStep, Math.abs(b - a));
+      const cv = Math.abs(e - 2 * b + a);
+      if (cv > maxRowCurv) { maxRowCurv = cv; at = [bx * B, by * B]; }
+    }
+    return { w: W, h: H, maxColStep, maxRowCurv, maxRowStep, at };
+  },
+  /** Screen box (canvas pixels) of the primary body's fine mesh. */
+  bodyBox(): { x0: number; y0: number; x1: number; y1: number } | null {
+    const v = stage.views.find((w) => w.id === stage.primaryBodyId());
+    if (!v) return null;
+    const j = v.jelly, cam = stage.camera, p = new THREE.Vector3();
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (const X of [j.minX, j.maxX]) for (const Y of [j.minY, j.maxY]) for (const Z of [j.minZ, j.maxZ]) {
+      p.set(X, Y, Z).project(cam);
+      const sx = (p.x * 0.5 + 0.5) * canvas.width, sy = (1 - (p.y * 0.5 + 0.5)) * canvas.height;
+      x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+    }
+    return { x0, y0, x1, y1 };
+  },
+  /**
+   * Straight horizontal seam detector over the LOWER body (rows 45%..85% of its screen box, the middle 70% of its width): for every row,
+   * the fraction of columns whose 2x2-averaged luminance steps by more than 4/255 IN THE SAME DIRECTION into the next row. Shading and
+   * glitter give scattered steps (a small fraction); a seam (a table edge or a sprite cut showing through) lines them up in one row.
+   */
+  seamProbe(): { worstRowFraction: number; row: number; box: number[] } {
+    const box = RV.bodyBox();
+    stage.render();
+    if (!box) return { worstRowFraction: -1, row: -1, box: [] };
+    const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    if (!x) return { worstRowFraction: -1, row: -1, box: [] };
+    x.drawImage(canvas, 0, 0);
+    const W = c.width, d = x.getImageData(0, 0, W, c.height).data;
+    const lum = (px: number, py: number): number => { let s = 0; for (let yy = 0; yy < 2; yy++) for (let xx = 0; xx < 2; xx++) { const i = ((py + yy) * W + px + xx) * 4; s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; } return s / 4; };
+    const bw = box.x1 - box.x0, bh = box.y1 - box.y0;
+    const xa = Math.max(0, Math.round(box.x0 + 0.15 * bw)), xb = Math.min(W - 3, Math.round(box.x1 - 0.15 * bw));
+    const ya = Math.max(0, Math.round(box.y0 + 0.45 * bh)), yb = Math.min(c.height - 4, Math.round(box.y0 + 0.85 * bh));
+    let worst = 0, row = -1;
+    for (let y = ya; y < yb; y += 1) {
+      let up = 0, dn = 0, n = 0;
+      for (let xx = xa; xx < xb; xx += 2) { const dl = lum(xx, y + 2) - lum(xx, y); if (dl > 4) up++; else if (dl < -4) dn++; n++; }
+      const f = Math.max(up, dn) / Math.max(1, n);
+      if (f > worst) { worst = f; row = y; }
+    }
+    return { worstRowFraction: worst, row, box: [box.x0, box.y0, box.x1, box.y1] };
+  },
+  /**
+   * The SAME frozen pose (no stepping, dt 0) rendered at two quality tiers: mean |RGB diff| over the body (middle 70% of its screen box,
+   * 10%..90% of its height) and the seam detector for each. For "the low tier must still look good": how far low is from med.
+   */
+  qualityCompare(a: QualityTier = 'low', b: QualityTier = 'med'): { mae: number; seamA: number; seamB: number; maeChannels: number[]; bias: number[] } {
+    const grab = (q: QualityTier): { px: Uint8ClampedArray; seam: number; box: { x0: number; y0: number; x1: number; y1: number } | null } => {
+      stage.setQuality(q);
+      stage.update(0, { time, pointerNdc: pointer });
+      const seam = RV.seamProbe().worstRowFraction;
+      stage.render();
+      const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height;
+      const x = c.getContext('2d', { willReadFrequently: true });
+      x?.drawImage(canvas, 0, 0);
+      return { px: x ? x.getImageData(0, 0, c.width, c.height).data : new Uint8ClampedArray(0), seam, box: RV.bodyBox() };
+    };
+    const A = grab(a), B = grab(b);
+    const box = B.box;
+    if (!box || !A.px.length) return { mae: -1, seamA: A.seam, seamB: B.seam, maeChannels: [], bias: [] };
+    const W = canvas.width, bw = box.x1 - box.x0, bh = box.y1 - box.y0;
+    let s = 0, n = 0; const ch = [0, 0, 0], bias = [0, 0, 0];
+    for (let y = Math.round(box.y0 + 0.1 * bh); y < Math.round(box.y0 + 0.9 * bh); y += 2) for (let x = Math.round(box.x0 + 0.15 * bw); x < Math.round(box.x1 - 0.15 * bw); x += 2) {
+      const i = (y * W + x) * 4;
+      for (let k = 0; k < 3; k++) { const d = Math.abs(A.px[i + k] - B.px[i + k]); s += d; ch[k] += d; bias[k] += A.px[i + k] - B.px[i + k]; }
+      n++;
+    }
+    return { mae: s / (3 * n), seamA: A.seam, seamB: B.seam, maeChannels: ch.map((v) => v / n), bias: bias.map((v) => v / n) };
+  },
+  /** Leak test: `cycles` x (add 3 bodies at 3 tiers, render, remove all 3). renderer.info after each cycle. */
+  addRemove3(cycles = 20): { geometries: number; textures: number; programs: number }[] {
+    const out: { geometries: number; textures: number; programs: number }[] = [];
+    const TI: TierName[] = ['common', 'rare', 'mythic'];
+    for (let i = 0; i < cycles; i++) {
+      const ids = [0, 1, 2].map((k) => { const g = genomeFromParam(String(400 + k)); return stage.addBody(makeBody(g), g, { tier: TI[k], position: { x: (k - 1) * 1.1, y: 0, z: 0 } }); });
+      for (let f = 0; f < 2; f++) { time += 1 / 30; stage.update(1 / 30, { time, pointerNdc: null }); stage.render(); }
+      for (const id of ids) stage.removeBody(id);
+      time += 1 / 30; stage.update(1 / 30, { time, pointerNdc: null }); stage.render();
+      const m = stage.memory();
+      out.push({ geometries: m.geometries, textures: m.textures, programs: m.programs });
+    }
+    return out;
+  },
+  /** CeremonyHandle.done must resolve (never reject, never hang) when a ceremony is interrupted by another one or by stage.dispose(). */
+  async doneRobustness(): Promise<{ interruptedResolved: boolean; disposedResolved: boolean; secondFinished: boolean; rejected: boolean }> {
+    let rejected = false;
+    const race = (p: Promise<void>): Promise<boolean> => Promise.race([p.then(() => true, () => { rejected = true; return false; }), new Promise<boolean>((r) => setTimeout(() => r(false), 800))]);
+    setupBody(genomeFromParam(''));
+    const a = stage.playMergeCeremony({ parents: [{ genome: genomeFromParam('') }, { genome: genomeFromParam('3') }], result: { genome: genomeFromParam('2'), tier: 'rare' }, createBody: makeBody });
+    for (let i = 0; i < 10; i++) frame(1 / 30);
+    const b = stage.playCapsuleReveal({ result: { genome: genomeFromParam('5'), tier: 'common' }, createBody: makeBody });
+    const interruptedResolved = await race(a.done);
+    let k = 0; while (b.active && k < 200) { frame(1 / 30); k++; }
+    const secondFinished = await race(b.done);
+    if (b.resultBody) body = b.resultBody;
+    const c2 = document.createElement('canvas'); c2.width = 160; c2.height = 120;
+    const s2 = createStageDev(c2); s2.resize(160, 120, 1);
+    const g = genomeFromParam('');
+    s2.setBody(makeBody(g), g);
+    const h = s2.playMergeCeremony({ parents: [{ genome: g }, { genome: g }], result: { genome: genomeFromParam('8'), tier: 'mythic' }, createBody: makeBody });
+    for (let i = 0; i < 5; i++) { s2.update(1 / 30, { time: i / 30, pointerNdc: null }); s2.render(); }
+    s2.dispose();
+    const disposedResolved = await race(h.done);
+    return { interruptedResolved, disposedResolved, secondFinished, rejected };
   },
 
   stats() { return stage.stats(); },

@@ -6,6 +6,8 @@
 //   node _harness/browser_physics.mjs --p '{"smOmega":40}'  physics param override (SoftParams) for tuning; --f '{"friction":0.5}' overrides FINGER constants
 //   node _harness/browser_physics.mjs --g 7 --detail 4      another genome / mesh detail
 //   node _harness/browser_physics.mjs hold_squash --gf 1 --gb 1 --gs 0 --gz 1 --tag firm   genome extremes, files get a _<tag> suffix
+//   node _harness/browser_physics.mjs press_close --px 0.2 --tag x20 --q mark=1             close-up of a hold at x=0.2, folded triangles magenta
+//   (--q passes extra viewer params: frames=t1,..,t12  cd=<camera distance>  ct=x,y,z  yaw=  pitch=  mark=1)
 // Each strip prints the worst mesh FOLD (largest dihedral between adjacent triangles; the rest shape's own maximum is ~50 deg) and the fold
 // left in the last frame (a folded flap that is still there at the end is a FAIL: > 90 deg means a tucked-under triangle).
 // Exits 1 on a console error, a failed request, a blank canvas, a non-finite sim, a safety-net reset or a fold left in the last frame.
@@ -15,7 +17,8 @@ import { ROOT, startVite, launch } from './pw.mjs';
 
 const PORT = 5362;
 const FOLD_END_MAX = 90;   // degrees: a settled-ish last frame may not hold a crease sharper than this (rest shape max ~50)
-const ALL = ['side_poke', 'hold_squash', 'pull_lobe', 'peak_flop', 'float_shove', 'pinch', 'top_peak_poke', 'top_peak_hold', 'hold_close', 'hold_shoulder', 'peak_shove', 'peak_rest_close', 'pinch_stagger'];
+const ALL = ['side_poke', 'hold_squash', 'pull_lobe', 'peak_flop', 'float_shove', 'pinch', 'top_peak_poke', 'top_peak_hold', 'hold_close', 'hold_shoulder', 'peak_shove', 'peak_rest_close', 'pinch_stagger',
+  'tap_close', 'press_close', 'edge_low', 'edge_rim', 'fast_tap1', 'fast_tap3', 'rub', 'pull_far', 'pull_peak', 'mat_nudge'];
 const args = process.argv.slice(2);
 const opt = {};
 const names = [];

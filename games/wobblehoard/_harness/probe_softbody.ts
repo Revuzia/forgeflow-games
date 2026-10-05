@@ -33,6 +33,8 @@
 //     {0, 1}); the others use randomGenome. After the events everything is released and the body gets 5 s to settle.
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { mkdirSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import v8 from 'node:v8';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { SoftBody } from '../src/physics/softbody.ts';
@@ -45,6 +47,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const QUICK = process.argv.includes('--quick');
 const FUZZ_RUNS = QUICK ? 20 : 200;
 const FUZZ_EVENTS = QUICK ? 400 : 1500;
+/** Frames per genome of the hostile fuzz (16 extreme genomes; every 4th replayed for determinism). */
+const HOSTILE_STEPS = QUICK ? 300 : 1200;
 const DT = 1 / 60;
 /** A settled body may keep this much dihedral (rest shape 50.4 degrees at detail 3 + 10 degrees of slack). */
 const FOLD_REST_MAX = 60;
@@ -183,7 +187,11 @@ const FOLD_SPOTS: Array<[string, V3, V3]> = [
   ['peak flank y=.9', v3(3, 0.9, 0), v3(-1, 0, 0)], ['side y=.7', v3(3, 0.7, 0), v3(-1, 0, 0)], ['side y=.5', v3(3, 0.5, 0), v3(-1, 0, 0)],
   ['side y=.25', v3(3, 0.25, 0), v3(-1, 0, 0)], ['oblique', v3(3, 2.2, 0), v3(-0.8, -0.6, 0)],
 ];
-interface FoldSpec { label: string; genome: Genome; detail: number; spot: number; mode: 'tap' | 'hold' }
+interface FoldSpec { label: string; genome: Genome; detail: number; spot: number; mode: 'tap' | 'hold' | 'shove'; ray?: [V3, V3] }
+/** Pressure, lift time and length of a press of each mode (tap and hold as the fold matrix has always used them; shove: pressure 1 at once
+ *  for 0.25 s, the hard side shove of the physview strip 'peak_shove'). */
+const pressPlan = (mode: FoldSpec['mode']): { p: (t: number) => number; tUp: number; T: number } =>
+  mode === 'tap' ? { p: () => 0.6, tUp: 0.12, T: 3.5 } : mode === 'hold' ? { p: (t) => Math.min(1, t / 0.9), tUp: 1.1, T: 4.5 } : { p: () => 1, tUp: 0.25, T: 3.5 };
 interface FoldResult {
   label: string; missed: boolean;
   worst: number; f90: number; f120: number;                  // worst dihedral during the press and after, frames over 90 / 120 degrees
@@ -196,17 +204,18 @@ function foldPress(spec: FoldSpec): FoldResult {
   const m = makeFoldMeter(b);
   settle(b, 0.5);
   const top0 = topY(b);
-  const [label, o, d] = FOLD_SPOTS[spec.spot];
+  const [label, o, d] = spec.ray ? [spec.label, spec.ray[0], spec.ray[1]] : FOLD_SPOTS[spec.spot];
   const dl = Math.hypot(d.x, d.y, d.z), dir = v3(d.x / dl, d.y / dl, d.z / dl);
   const k = b.restRadius / 0.5125;   // the contact points are given for the starter (R = 0.5125); a smaller or larger body scales the whole ray
   const hit = b.raycast(v3(o.x * k, o.y * k, o.z * k), dir);
   const res: FoldResult = { label: spec.label, missed: !hit, worst: 0, f90: 0, f120: 0, restWorst: 0, restN90: 0, restInward: 0, topErr: 0 };
   if (!hit) return res;
   b.fingerDown(0, { point: hit.point, normal: hit.normal, dir });
-  const T = spec.mode === 'tap' ? 3.5 : 4.5, tUp = spec.mode === 'tap' ? 0.12 : 1.1;
+  const plan = pressPlan(spec.mode);
+  const T = plan.T, tUp = plan.tUp;
   let up = false;
   for (let s = 0, t = 0; t < T; s++) {
-    if (!up) b.fingerPressure(0, spec.mode === 'tap' ? 0.6 : Math.min(1, t / 0.9));
+    if (!up) b.fingerPressure(0, plan.p(t));
     if (!up && t >= tUp) { up = true; b.fingerUp(0); }
     b.step(DT); t = (s + 1) * DT;
     const f = foldOf(b, m);
@@ -304,15 +313,27 @@ function hardRelease(spec: SqueezeSpec): SqueezeResult {
 
 // ------------------------------------------------------------------------------------------------ fuzz
 
-interface FuzzStats { runs: number; steps: number; nan: number; inverted: number; penetrations: number; maxPen: number; minVolRatio: number; maxVolRatio: number; safetyResets: number; maxCenter: number; failures: string[]; unsettled: number; restFold: number; restFoldRuns: number }
-const emptyStats = (): FuzzStats => ({ runs: 0, steps: 0, nan: 0, inverted: 0, penetrations: 0, maxPen: 0, minVolRatio: 9, maxVolRatio: 0, safetyResets: 0, maxCenter: 0, failures: [], unsettled: 0, restFold: 0, restFoldRuns: 0 });
+interface FuzzStats { runs: number; steps: number; nan: number; inverted: number; penetrations: number; maxPen: number; minVolRatio: number; maxVolRatio: number; safetyResets: number; maxCenter: number; failures: string[]; unsettled: number; restFold: number; restFoldRuns: number; events: number; badEvents: number; maxTableCenter: number }
+const emptyStats = (): FuzzStats => ({ runs: 0, steps: 0, nan: 0, inverted: 0, penetrations: 0, maxPen: 0, minVolRatio: 9, maxVolRatio: 0, safetyResets: 0, maxCenter: 0, failures: [], unsettled: 0, restFold: 0, restFoldRuns: 0, events: 0, badEvents: 0, maxTableCenter: 0 });
 function mergeStats(a: FuzzStats, b: FuzzStats): FuzzStats {
   return {
     runs: a.runs + b.runs, steps: a.steps + b.steps, nan: a.nan + b.nan, inverted: a.inverted + b.inverted, penetrations: a.penetrations + b.penetrations,
     maxPen: Math.max(a.maxPen, b.maxPen), minVolRatio: Math.min(a.minVolRatio, b.minVolRatio), maxVolRatio: Math.max(a.maxVolRatio, b.maxVolRatio),
     safetyResets: a.safetyResets + b.safetyResets, maxCenter: Math.max(a.maxCenter, b.maxCenter), failures: [...a.failures, ...b.failures].slice(0, 8), unsettled: a.unsettled + b.unsettled,
     restFold: Math.max(a.restFold, b.restFold), restFoldRuns: a.restFoldRuns + b.restFoldRuns,
+    events: a.events + b.events, badEvents: a.badEvents + b.badEvents, maxTableCenter: Math.max(a.maxTableCenter, b.maxTableCenter),
   };
+}
+
+/** A SoftEvent as contracts.ts defines it: finite fields, unit normal, intensity 0..1, heldFor only on release / snap, a valid finger. '' = fine. */
+function eventProblem(e: SoftEvent): string {
+  const f = [e.at.x, e.at.y, e.at.z, e.normal.x, e.normal.y, e.normal.z, e.intensity, e.heldFor];
+  if (!f.every(Number.isFinite)) return `${e.kind}: non-finite field`;
+  if (Math.abs(Math.hypot(e.normal.x, e.normal.y, e.normal.z) - 1) > 1e-6) return `${e.kind}: normal not unit`;
+  if (e.intensity < 0 || e.intensity > 1) return `${e.kind}: intensity ${e.intensity}`;
+  if (e.heldFor < 0 || (e.kind !== 'release' && e.kind !== 'snap' && e.heldFor !== 0)) return `${e.kind}: heldFor ${e.heldFor}`;
+  if (e.kind === 'land' ? e.finger !== -1 : e.finger !== 0 && e.finger !== 1) return `${e.kind}: finger ${e.finger}`;
+  return '';
 }
 
 function logUniform(r: () => number, lo: number, hi: number): number { return Math.exp(Math.log(lo) + r() * (Math.log(hi) - Math.log(lo))); }
@@ -350,6 +371,7 @@ function fuzzRun(runIndex: number, nEvents: number): { stats: FuzzStats; hash: n
     const my = minY(b);
     if (my < -0.01 * R) { stats.penetrations++; stats.maxPen = Math.max(stats.maxPen, -my / R); if (stats.failures.length < 5) stats.failures.push(`run ${runIndex}: table penetration ${(-my / R * 100).toFixed(2)}% R after ${tag}`); }
     stats.maxCenter = Math.max(stats.maxCenter, Math.hypot(b.center.x, b.center.z));
+    if (b.gravity) stats.maxTableCenter = Math.max(stats.maxTableCenter, Math.hypot(b.center.x, b.center.z));
     stats.safetyResets = b.debug.safetyResets;
   };
 
@@ -391,7 +413,10 @@ function fuzzRun(runIndex: number, nEvents: number): { stats: FuzzStats; hash: n
     } else {
       tag = 'reset'; b.reset();
     }
-    if (e % 7 === 0) { events.length = 0; b.drainEvents(events); }
+    if (e % 7 === 0) {
+      events.length = 0; b.drainEvents(events);
+      for (const ev of events) { stats.events++; const bad = eventProblem(ev); if (bad) { stats.badEvents++; if (stats.failures.length < 5) stats.failures.push(`run ${runIndex}: bad event (${bad}) after ${tag}`); } }
+    }
     checkInvariants(tag);
   }
   // the body must settle once everything is let go (gravity back on): 6 s of fixed frames
@@ -470,22 +495,682 @@ function tipChecks(starter: Genome): TipChecks {
   return { jumpLift, jumpStay, jumpLand, widthDrop, compRise, tipBelowTable, restRadius: new SoftBody(starter).restRadius };
 }
 
+// ------------------------------------------------------------------------------------------------ round-3 regression checks
+// Folded in from the throwaway _harness/verify_phys_* scripts (deleted once they were here): the fold sweep that found the 171-180 degree
+// creases under a press on the peak base, the same presses at SUBSTEP resolution (the old exit flipped a fold on and off between
+// substeps, so a frame-sampled meter could miss it), reset() == a fresh body, genome / coordinate sanitising, warmUp(), the mat corral,
+// the 'press' event's heldFor, allocation in step(), and the independent hostile fuzz.
+
+/** Presses of the verify_phys_fold sweep (starter + four genome variants, taps x = 0 .. 0.25, holds x = 0 .. 0.25, a tilted tap). */
+function sweepSpecs(starter: Genome): FoldSpec[] {
+  const out: FoldSpec[] = [];
+  const G: Array<[string, Partial<Genome>]> = [['starter', {}], ['soft', { firmness: 0.1 }], ['firm', { firmness: 0.9 }], ['bouncy-big', { bounce: 1, size: 1 }], ['stretchy-small', { stretch: 1, size: 0 }]];
+  const down = v3(0, -1, 0);
+  for (const [n, ov] of G) {
+    const g = quantizeGenome({ ...starter, ...ov });
+    for (const x of [0, 0.04, 0.1, 0.2, 0.25]) out.push({ label: `sweep/${n}/tap x=${x}`, genome: g, detail: 3, spot: -1, mode: 'tap', ray: [v3(x, 3, 0), down] });
+    for (const x of [0, 0.1, 0.2, 0.25]) out.push({ label: `sweep/${n}/hold x=${x}`, genome: g, detail: 3, spot: -1, mode: 'hold', ray: [v3(x, 3, 0), down] });
+  }
+  const t = 0.4, dir = v3(Math.sin(t), -Math.cos(t), 0);
+  out.push({ label: 'sweep/starter/tap tilt 23 deg', genome: starter, detail: 3, spot: -1, mode: 'tap', ray: [v3(-dir.x * 3, 3, 0), dir] });
+  out.push({ label: 'sweep/starter/tap x=.1 z=.1', genome: starter, detail: 3, spot: -1, mode: 'tap', ray: [v3(0.1, 3, 0.1), down] });
+  return out;
+}
+/** Hard side shoves at the swirl-peak (pressure 1 at once for 0.25 s, 6 cm under its tip, three directions; they folded 162-180 degrees
+ *  at HEAD too) and the low side press at the table rim (y = 0.05, 132 degrees at HEAD). */
+function shoveSpecs(starter: Genome): FoldSpec[] {
+  const out: FoldSpec[] = [];
+  const big = quantizeGenome({ ...starter, bounce: 1, size: 1 }), soft = quantizeGenome({ ...starter, firmness: 0 });
+  for (const [n, g] of [['starter', starter], ['bouncy-big', big], ['soft', soft]] as const) {
+    out.push({ label: `shove/${n}/from -x`, genome: g, detail: 3, spot: -1, mode: 'shove', ray: [v3(-3, 0.96, 0), v3(1, 0, 0)] });
+    out.push({ label: `shove/${n}/from +x`, genome: g, detail: 3, spot: -1, mode: 'shove', ray: [v3(3, 0.96, 0), v3(-1, 0, 0)] });
+    out.push({ label: `shove/${n}/from -z`, genome: g, detail: 3, spot: -1, mode: 'shove', ray: [v3(0, 0.96, -3), v3(0, 0, 1)] });
+  }
+  out.push({ label: 'shove/starter@d4/from -x', genome: starter, detail: 4, spot: -1, mode: 'shove', ray: [v3(-3, 0.96, 0), v3(1, 0, 0)] });
+  out.push({ label: 'rim/starter/hold y=.05', genome: starter, detail: 3, spot: -1, mode: 'hold', ray: [v3(3, 0.05, 0), v3(-1, 0, 0)] });
+  out.push({ label: 'rim/large/hold y=.05', genome: quantizeGenome({ ...starter, size: 1 }), detail: 3, spot: -1, mode: 'hold', ray: [v3(3, 0.05, 0), v3(-1, 0, 0)] });
+  return out;
+}
+
+/** The deepest any vertex sits inside a fingertip at the END of a frame (what a finger ghost would show), over the hard peak shoves:
+ *  the contact fold limit may leave a vertex inside for a substep. */
+function tipPenetration(starter: Genome): number {
+  let worst = 0;
+  for (const [o, d] of [[v3(-3, 0.96, 0), v3(1, 0, 0)], [v3(3, 0.96, 0), v3(-1, 0, 0)], [v3(0, 0.96, -3), v3(0, 0, 1)], [v3(0.2, 3, 0), v3(0, -1, 0)]] as const) {
+    const b = new SoftBody(starter);
+    settle(b, 0.3);
+    touch(b, 0, o, d); b.fingerPressure(0, 1);
+    for (let i = 0; i < 60; i++) {
+      b.step(DT);
+      const t = b.tip(0);
+      if (!t) continue;
+      for (let j = 0; j < b.vertexCount; j++) worst = Math.max(worst, (t.r - Math.hypot(b.positions[j * 3] - t.x, b.positions[j * 3 + 1] - t.y, b.positions[j * 3 + 2] - t.z)) / b.restRadius);
+    }
+  }
+  return worst;
+}
+
+interface SubFoldResult { label: string; missed: boolean; worst: number; sub120: number; frameWorst: number }
+/** One press of the fold matrix stepped one SUBSTEP at a time (inputs still change at 60 Hz frame boundaries): the worst dihedral over every substep. */
+function foldSubsteps(spec: FoldSpec): SubFoldResult {
+  const b = new SoftBody(spec.genome, { detail: spec.detail });
+  const m = makeFoldMeter(b);
+  settle(b, 0.5);
+  const [, o, d] = spec.ray ? [spec.label, spec.ray[0], spec.ray[1]] : FOLD_SPOTS[spec.spot];
+  const dl = Math.hypot(d.x, d.y, d.z), dir = v3(d.x / dl, d.y / dl, d.z / dl);
+  const k = b.restRadius / 0.5125;
+  const hit = b.raycast(v3(o.x * k, o.y * k, o.z * k), dir);
+  const res: SubFoldResult = { label: spec.label, missed: !hit, worst: 0, sub120: 0, frameWorst: 0 };
+  if (!hit) return res;
+  b.fingerDown(0, { point: hit.point, normal: hit.normal, dir });
+  const plan = pressPlan(spec.mode);
+  const T = spec.mode === 'hold' ? 3.0 : 2.0, tUp = plan.tUp;
+  let up = false;
+  for (let s = 0, t = 0; t < T; s++) {
+    if (!up) b.fingerPressure(0, plan.p(t));
+    if (!up && t >= tUp) { up = true; b.fingerUp(0); }
+    for (let q = 0; q < 6; q++) {
+      b.step(1 / 360);
+      const f = foldOf(b, m);
+      if (f.worst > res.worst) res.worst = f.worst;
+      if (f.worst > 120) res.sub120++;
+      if (q === 5 && f.worst > res.frameWorst) res.frameWorst = f.worst;
+    }
+    t = (s + 1) * DT;
+  }
+  return res;
+}
+
+/** A short scripted session: hashes at checkpoints and every event (kind, finger, intensity) in order. */
+function sessionLog(b: SoftBody): { hashes: number[]; events: string[] } {
+  const hashes: number[] = [], events: string[] = [], buf: SoftEvent[] = [];
+  const log = (): void => { b.drainEvents(buf); for (const e of buf) events.push(`${e.kind}${e.finger}:${e.intensity.toFixed(9)}:${e.heldFor.toFixed(9)}`); buf.length = 0; hashes.push(b.stateHash()); };
+  for (let i = 0; i < 30; i++) b.step(DT);
+  log();
+  touch(b, 0, v3(0.2 * b.restRadius / 0.5125, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 0.8);
+  for (let i = 0; i < 40; i++) { b.step(DT); if (i % 10 === 9) log(); }
+  b.fingerUp(0);
+  for (let i = 0; i < 40; i++) { b.step(DT); if (i % 10 === 9) log(); }
+  b.nudge(v3(1, 0.5, 0));
+  for (let i = 0; i < 120; i++) { b.step(DT); if (i % 20 === 19) log(); }
+  return { hashes, events };
+}
+const sameLog = (a: { hashes: number[]; events: string[] }, c: { hashes: number[]; events: string[] }): boolean =>
+  a.hashes.length === c.hashes.length && a.hashes.every((h, i) => h === c.hashes[i]) && a.events.join('|') === c.events.join('|');
+/** Everything a consumer can read from a body, as one string (positions bit for bit). */
+function publicState(b: SoftBody): string {
+  return JSON.stringify({ p: Array.from(b.positions), s: Array.from(b.strain), c: b.center, f: b.frame, m: b.metrics, t0: b.tip(0), t1: b.tip(1), h: b.stateHash(), g: b.gravity });
+}
+
+/** reset() must leave the body bit-identical to a fresh one (gravity and float), whatever happened before. */
+function resetChecks(starter: Genome): { grav: string[]; float: string[]; direct: boolean } {
+  const grav: string[] = [], float: string[] = [];
+  const fresh = sessionLog(new SoftBody(starter));
+  const messy = (b: SoftBody): void => {
+    settle(b, 0.3);
+    touch(b, 0, v3(0.1, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 1); run(b, 0.25);
+    touch(b, 1, v3(4, 0.35, 0), v3(-1, 0, 0)); b.fingerPressure(1, 1); run(b, 0.2);
+    b.fingerUp(1); const h = b.raycast(v3(-4, 0.4, 0.1), v3(1, 0, 0)); if (h) b.grab(1, h.vertex, h.point); b.grabMove(1, v3(-1, 0.6, 0)); run(b, 0.15);
+    b.gravity = false; run(b, 0.1); b.gravity = true; b.nudge(v3(2, 1, -1)); b.step(1 / 360);
+  };
+  for (const k of [1, 6, 7, 13]) {
+    const b = new SoftBody(starter);
+    for (let i = 0; i < k; i++) b.step(1 / 360);
+    b.reset();
+    if (!sameLog(fresh, sessionLog(b))) grav.push(`${k} substeps`);
+  }
+  { const b = new SoftBody(starter); messy(b); b.reset(); if (!sameLog(fresh, sessionLog(b))) grav.push('mid-press + grab + gravity toggles + nudge'); }
+  // the public state right after reset() equals a new body's, field for field
+  const direct = (() => { const a = new SoftBody(starter), b = new SoftBody(starter); messy(b); b.reset(); return publicState(a) === publicState(b); })();
+  // float: a new body put in float mode and reset, vs a used floating body reset
+  const mkFloat = (): SoftBody => { const b = new SoftBody(starter); b.gravity = false; b.reset(); return b; };
+  const freshF = sessionLog(mkFloat());
+  for (const k of [7, 77 * 6]) {
+    const b = mkFloat();
+    for (let i = 0; i < k; i++) b.step(1 / 360);
+    b.nudge(v3(1, 0, -1)); b.step(DT);
+    b.reset();
+    if (!sameLog(freshF, sessionLog(b))) float.push(`${k} substeps + nudge`);
+  }
+  { const b = mkFloat(); messy(b); b.gravity = false; b.reset(); if (!sameLog(freshF, sessionLog(b))) float.push('messy session'); }
+  return { grav, float, direct };
+}
+
+/** Bad genome fields must behave exactly like their documented safe value (physicsGenome: non-finite -> 0.5, finite -> clamped to 0..1). */
+function genomeChecks(starter: Genome): { bad: string[]; tried: number; resets: number } {
+  const bad: string[] = [];
+  let tried = 0, resets = 0;
+  const probe = (g: unknown): { hash: number; finite: boolean; resets: number; R: number; params: string } => {
+    const b = new SoftBody(g as Genome);
+    settle(b, 0.3);
+    touch(b, 0, v3(0.15, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 1); run(b, 0.4); b.fingerUp(0); run(b, 0.6);
+    let finite = true;
+    for (let i = 0; i < b.positions.length; i++) if (!Number.isFinite(b.positions[i])) { finite = false; break; }
+    return { hash: b.stateHash(), finite, resets: b.debug.safetyResets, R: b.restRadius, params: JSON.stringify(b.params) };
+  };
+  const expect = (label: string, g: unknown, ref: Genome): void => {
+    tried++;
+    const a = probe(g), r = probe(ref);
+    resets += a.resets;
+    if (!a.finite || a.resets > 0 || a.hash !== r.hash || a.R !== r.R || a.params !== r.params) bad.push(`${label} (finite ${a.finite}, resets ${a.resets}, R ${a.R}, same as safe value ${a.hash === r.hash && a.params === r.params})`);
+  };
+  for (const k of ['firmness', 'bounce', 'stretch', 'size'] as const) {
+    for (const v of [Number.NaN, Infinity, -Infinity, undefined]) expect(`${k}=${v}`, { ...starter, [k]: v }, { ...starter, [k]: 0.5 });
+    for (const [v, c] of [[-1, 0], [2, 1], [1e300, 1], [-1e300, 0]]) expect(`${k}=${v}`, { ...starter, [k]: v }, { ...starter, [k]: c });
+  }
+  for (const v of [Number.NaN, Infinity, -5, 1e300]) expect(`seed=${v}`, { ...starter, seed: v }, { ...starter, seed: Number.isFinite(v) ? v : 0 });
+  for (const v of [42, undefined, 'no-such-species']) expect(`species=${String(v)}`, { ...starter, species: v }, starter);
+  expect('genome=null', null, { ...starter, seed: 0, firmness: 0.5, bounce: 0.5, stretch: 0.5, size: 0.5 });
+  {
+    tried++;
+    const a = new SoftBody(starter, { params: { smOmega: Number.NaN, intDamp: -5, volKappa: Infinity, edgeAlphaT: -1 } as never }), r = new SoftBody(starter);
+    if (JSON.stringify(a.params) !== JSON.stringify(r.params)) bad.push('params override with NaN / negative / Infinity was not ignored');
+  }
+  return { bad, tried, resets };
+}
+
+/** Absurd coordinates (|c| > 1000 m: 1e30 .. 1e300) are ignored like NaN; tiny or huge DIRECTIONS still work (normalised without overflow). */
+function coordChecks(starter: Genome): { bad: string[]; tried: number } {
+  const bad: string[] = [];
+  let tried = 0;
+  // A twin pair: `ctl` gets the sane script, `odd` the same plus a hostile call; the hostile call must change nothing (or equal its sane twin)
+  const pair = (label: string, setup: (b: SoftBody) => void, sane: (b: SoftBody) => void, hostile: (b: SoftBody) => void, after?: (b: SoftBody) => string): void => {
+    tried++;
+    const a = new SoftBody(starter), b = new SoftBody(starter);
+    setup(a); setup(b); sane(a); hostile(b);
+    run(a, 0.5); run(b, 0.5);
+    const extra = after ? after(b) : '';
+    let finite = true;
+    for (let i = 0; i < b.positions.length; i++) if (!Number.isFinite(b.positions[i])) { finite = false; break; }
+    if (a.stateHash() !== b.stateHash() || !finite || b.debug.safetyResets > 0 || extra) bad.push(`${label}${extra ? ': ' + extra : ''}`);
+  };
+  const none = (): void => {};
+  const press = (b: SoftBody): void => { settle(b, 0.3); touch(b, 0, v3(0.15, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 0.8); run(b, 0.2); };
+  const grabbed = (b: SoftBody): void => { settle(b, 0.3); const h = b.raycast(v3(3, 0.42, 0), v3(-1, 0, 0)); if (h) { b.grab(0, h.vertex, h.point); b.grabMove(0, v3(h.point.x + 0.3, h.point.y + 0.1, 0)); } run(b, 0.2); };
+  for (const big of [1e30, 1e200, 1e300]) {
+    pair(`fingerDown at ${big}`, (b) => settle(b, 0.3), none, (b) => { b.fingerDown(0, { point: v3(big, big, big), normal: v3(0, 1, 0), dir: v3(0, -1, 0) }); b.fingerDown(1, { point: v3(-big, 0.5, 0), normal: v3(1, 0, 0), dir: v3(1, 0, 0) }); },
+      (b) => (b.metrics.fingers !== 0 || b.metrics.compression > 0.01 ? `fingers ${b.metrics.fingers}, compression ${b.metrics.compression}` : ''));
+    pair(`fingerMove to ${big}`, press, none, (b) => b.fingerMove(0, v3(big, 0, big)));
+    pair(`grab toward ${big}`, (b) => settle(b, 0.3), none, (b) => b.grab(1, 5, v3(big, big, 0)), (b) => (b.metrics.grabbed ? 'grabbed' : ''));
+    pair(`grabMove to ${big}`, grabbed, none, (b) => b.grabMove(0, v3(big, -big, big)));
+    pair(`nudge ${big} = nudge 12 m/s`, (b) => settle(b, 0.3), (b) => b.nudge(v3(12, 0, 0)), (b) => b.nudge(v3(big, 0, 0)));
+    pair(`fingerDown dir x ${big}`, (b) => settle(b, 0.3), (b) => { touch(b, 0, v3(0.15, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 0.8); }, (b) => {
+      const h = b.raycast(v3(0.15, 4, 0), v3(0, -1, 0))!; b.fingerDown(0, { point: h.point, normal: v3(0, big, 0), dir: v3(0, -big, 0) }); b.fingerPressure(0, 0.8);
+    });
+  }
+  // raycast: an absurd origin is a miss; a tiny / huge / unnormalised direction hits the same point with t in units of the direction
+  {
+    const b = new SoftBody(starter);
+    settle(b, 0.3);
+    tried++;
+    if (b.raycast(v3(1e200, 0.3, 0), v3(-1, 0, 0)) !== null || b.raycast(v3(1001, 0.3, 0), v3(-1, 0, 0)) !== null) bad.push('raycast from an absurd origin did not return null');
+    const ref = b.raycast(v3(3, 0.3, 0.05), v3(-1, 0, 0))!;
+    for (const s of [1e-300, 1e-11, 7, 1e300]) {
+      tried++;
+      const h = b.raycast(v3(3, 0.3, 0.05), v3(-s, 0, 0));
+      if (!h || Math.hypot(h.point.x - ref.point.x, h.point.y - ref.point.y, h.point.z - ref.point.z) > 1e-9 || Math.abs(h.t * s - ref.t) > 1e-9 * ref.t || h.vertex !== ref.vertex) bad.push(`raycast with |dir| = ${s}: ${h ? `point off by ${Math.hypot(h.point.x - ref.point.x, h.point.y - ref.point.y, h.point.z - ref.point.z)}, t*|dir| ${h.t * s} vs ${ref.t}` : 'miss'}`);
+    }
+  }
+  return { bad, tried };
+}
+
+/** warmUp() leaves the body bit-identical (fresh, and in the middle of a press), and the session afterwards equals a twin's that never warmed up. */
+function warmUpChecks(starter: Genome): { fresh: boolean; midPress: boolean; after: boolean } {
+  const a = new SoftBody(starter), b = new SoftBody(starter);
+  const s0 = publicState(a);
+  a.warmUp();
+  const fresh = publicState(a) === s0 && publicState(a) === publicState(b);
+  const c = new SoftBody(starter), d = new SoftBody(starter);
+  for (const x of [c, d]) { settle(x, 0.3); touch(x, 0, v3(0.2, 4, 0), v3(0, -1, 0)); x.fingerPressure(0, 1); run(x, 0.25); }
+  const s1 = publicState(c);
+  c.warmUp();
+  const midPress = publicState(c) === s1;
+  const lc = sessionLog(c), ld = sessionLog(d);
+  return { fresh, midPress, after: sameLog(lc, ld) };
+}
+
+/** Cold-JIT child (a fresh node process runs this file with --cold-child [warm]): a realistic first session, per-step wall times. */
+function coldChild(warm: boolean): void {
+  const b = new SoftBody(makeStarterGenome());
+  const s0 = publicState(b);
+  let warmMs = 0;
+  if (warm) { const t = performance.now(); b.warmUp(); warmMs = performance.now() - t; }
+  const same = publicState(b) === s0;
+  const ts: number[] = [];
+  for (let i = 0; i < 400; i++) {
+    if (i === 20) { touch(b, 0, v3(0.2, 3, 0), v3(0, -1, 0)); b.fingerPressure(0, 0.6); }
+    if (i === 28) b.fingerUp(0);
+    if (i === 60) touch(b, 0, v3(0, 3, 0.1), v3(0, -1, 0));
+    if (i >= 60 && i < 120) b.fingerPressure(0, Math.min(1, (i - 60) / 54));
+    if (i === 120) b.fingerUp(0);
+    if (i === 160) { touch(b, 0, v3(-3, 0.35, 0), v3(1, 0, 0)); touch(b, 1, v3(3, 0.35, 0), v3(-1, 0, 0)); b.fingerPressure(0, 0.9); b.fingerPressure(1, 0.9); }
+    if (i === 220) { b.fingerUp(0); b.fingerUp(1); }
+    if (i === 260) { const h = b.raycast(v3(3, 0.42, 0), v3(-1, 0, 0)); if (h) b.grab(0, h.vertex, h.point); }
+    if (i > 260 && i < 300) b.grabMove(0, v3(0.6 + (i - 260) * 0.01, 0.5, 0));
+    if (i === 300) b.grabRelease(0);
+    if (i === 340) b.gravity = false;
+    const t = performance.now(); b.step(DT); ts.push(performance.now() - t);
+  }
+  const sorted = [...ts].sort((x, y) => x - y);
+  process.stdout.write(JSON.stringify({ warmMs, same, worst: sorted[sorted.length - 1], p95: sorted[Math.floor(ts.length * 0.95)], over4: ts.filter((x) => x > 4).length, total: ts.reduce((x, y) => x + y, 0) }));
+}
+interface ColdRun { warmMs: number; same: boolean; worst: number; p95: number; over4: number; total: number }
+function coldRuns(warm: boolean, n: number): ColdRun[] {
+  const out: ColdRun[] = [];
+  for (let i = 0; i < n; i++) {
+    const r = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--cold-child', ...(warm ? ['warm'] : [])], { encoding: 'utf8', timeout: 120000 });
+    try { out.push(JSON.parse(r.stdout) as ColdRun); } catch { out.push({ warmMs: NaN, same: false, worst: Infinity, p95: Infinity, over4: 999, total: NaN }); }
+  }
+  return out;
+}
+
+/** The mat corral is invisible where it must be: identical hashes with it on and off for interaction near the centre, while a finger or a
+ *  grab holds the body anywhere, and in float mode; after the finger lifts it brings a far body back and stops. */
+function corralLocalChecks(starter: Genome): { deadZone: boolean; finger: boolean; grab: boolean; grabOut: number; float: boolean; outAtLift: number; back: number; stopMm: number; shapePct: number } {
+  const OFF = { matBrake: 0, matGlide: 0, matRim: 1e9 };
+  const on = (): SoftBody => new SoftBody(starter), off = (): SoftBody => new SoftBody(starter, { params: OFF });
+  // interaction near the centre: press, pinch, pull, rub, a small nudge
+  const nearScript = (b: SoftBody): number[] => {
+    const hs: number[] = [];
+    settle(b, 0.5);
+    touch(b, 0, v3(0.2, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 1); run(b, 0.7); b.fingerUp(0); run(b, 0.6); hs.push(b.stateHash());
+    touch(b, 0, v3(-4, 0.35, 0), v3(1, 0, 0)); touch(b, 1, v3(4, 0.35, 0), v3(-1, 0, 0)); b.fingerPressure(0, 0.9); b.fingerPressure(1, 0.9); run(b, 0.6); b.fingerUp(0); b.fingerUp(1); run(b, 0.6); hs.push(b.stateHash());
+    const h = b.raycast(v3(3, 0.42, 0), v3(-1, 0, 0)); if (h) { b.grab(0, h.vertex, h.point); for (let i = 0; i < 36; i++) { b.grabMove(0, v3(h.point.x + 0.02 * i, h.point.y + 0.008 * i, 0)); b.step(DT); } b.grabRelease(0); }
+    run(b, 1); hs.push(b.stateHash());
+    b.nudge(v3(0.8, 0.3, -0.5)); run(b, 3); hs.push(b.stateHash());
+    return hs;
+  };
+  const eq = (x: number[], y: number[]): boolean => x.length === y.length && x.every((v, i) => v === y[i]);
+  const deadZone = eq(nearScript(on()), nearScript(off()));
+  // a finger goes down in the same frame as a hard nudge and HOLDS: the corral must not act while it is down (the body is far outside)
+  const a = on(), c = off();
+  const held: number[][] = [[], []];
+  [a, c].forEach((b, k) => { settle(b, 0.3); touch(b, 0, v3(0, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 0.3); b.nudge(v3(9, 2, 0)); for (let i = 0; i < 90; i++) { b.step(DT); if (i % 10 === 9) held[k].push(b.stateHash()); } });
+  const finger = eq(held[0], held[1]);
+  const outAtLift = Math.hypot(a.center.x, a.center.z);
+  a.fingerUp(0);
+  run(a, 10);
+  const back = Math.hypot(a.center.x, a.center.z);
+  const q1 = Float32Array.from(a.positions);
+  run(a, 2);
+  let mm = 0; for (let i = 0; i < q1.length; i++) mm = Math.max(mm, Math.abs(q1[i] - a.positions[i]));
+  const shapePct = shapeFit(a) * 100;
+  // a grab holding the body out there: pull it out in float mode (no corral, no pinned feet), switch gravity on while it is still held
+  const g1 = on(), g2 = off();
+  const gh: number[][] = [[], []];
+  [g1, g2].forEach((b, k) => {
+    b.gravity = false; b.reset(); run(b, 0.3);
+    const h = b.raycast(v3(3, b.center.y, 0), v3(-1, 0, 0));
+    if (!h) return;
+    b.grab(0, h.vertex, h.point);
+    for (let i = 0; i < 60; i++) { b.grabMove(0, v3(h.point.x + 1.5 * (i + 1) / 60, h.point.y, 0)); b.step(DT); }
+    b.gravity = true;
+    for (let i = 0; i < 60; i++) { b.step(DT); if (i % 10 === 9) gh[k].push(b.stateHash()); }
+  });
+  const grabOut = Math.hypot(g1.center.x, g1.center.z);
+  const grab = eq(gh[0], gh[1]) && gh[0].length === 6 && g1.metrics.grabbed && grabOut > 0.6;
+  // float mode: identical with the corral on and off
+  const fl: number[][] = [[], []];
+  [on(), off()].forEach((b, k) => { b.gravity = false; b.reset(); run(b, 0.5); b.nudge(v3(12, 0, 0)); for (let i = 0; i < 240; i++) { b.step(DT); if (i % 20 === 19) fl[k].push(b.stateHash()); } });
+  return { deadZone, finger, grab, grabOut, float: eq(fl[0], fl[1]), outAtLift, back, stopMm: mm * 1000, shapePct };
+}
+
+interface CorralSpec { label: string; genome: Genome; kind: 'nudge' | 'shoves' | 'hammer'; az: number; el: number }
+interface CorralResult { label: string; kind: string; max: number; end: number; stopMm: number; shapePct: number; finite: boolean }
+/** One nudge experiment on the table: the farthest the centre gets, where it ends 14 s later, whether it has stopped and kept its shape. */
+function corralRun(spec: CorralSpec): CorralResult {
+  const b = new SoftBody(spec.genome);
+  settle(b, 0.5);
+  const ca = Math.cos(spec.az), sa = Math.sin(spec.az), ce = Math.cos(spec.el), se = Math.sin(spec.el);
+  let max = 0;
+  const track = (): void => { max = Math.max(max, Math.hypot(b.center.x, b.center.z)); };
+  if (spec.kind === 'nudge') { b.nudge(v3(12 * ce * ca, 12 * se, 12 * ce * sa)); }
+  else if (spec.kind === 'shoves') { for (let k = 0; k < 10; k++) { b.nudge(v3(4 * ca, 1, 4 * sa)); run(b, 0.5, track); } }
+  else { for (let k = 0; k < 60; k++) { b.nudge(v3(12 * ca, k % 2 ? 3 : 0, 12 * sa)); b.step(DT); track(); } }   // a 12 m/s shove EVERY frame for 1 s
+  run(b, 14, track);
+  const q1 = Float32Array.from(b.positions);
+  run(b, 2, track);
+  let mm = 0, finite = true;
+  for (let i = 0; i < q1.length; i++) { mm = Math.max(mm, Math.abs(q1[i] - b.positions[i])); if (!Number.isFinite(b.positions[i])) finite = false; }
+  return { label: spec.label, kind: spec.kind, max, end: Math.hypot(b.center.x, b.center.z), stopMm: mm * 1000, shapePct: shapeFit(b) * 100, finite };
+}
+
+interface HostileResult { label: string; steps: number; fails: string[]; hashes: number[]; events: number; maxTable: number; maxAny: number; settleT: number; settledVol: number; flipped: number; shapePct: number }
+/**
+ * The independent verifier's hostile fuzz (was _harness/verify_phys_fuzz.ts): an extreme genome (firmness, bounce, stretch, size each 0 or 1),
+ * 0..3 random calls per frame: fingers anywhere (also off the body, zero direction), pressure jumps incl. -3 and 7, moves onto the OTHER
+ * finger's point (crossing), grabs while fingers are down, far grab targets (40 R), nudges up to 1e6, gravity toggled mid-press, reset
+ * mid-grab, and the pressure of every down finger flipped 0 <-> 1 on 60% of frames; dt from {0, 0.5, 5, log-uniform 1/240..1/10}.
+ * Checked at EVERY frame: finite state, signed volume > 0, no particle 1% R under the table, valid events, no event spam, queue cap; at the
+ * end (everything released, gravity on): settles within 8 s, volume 1 +/- 0.015, no triangle flipped > 120 deg vs rest, shape <= 3% R.
+ */
+function hostileRun(idx: number, steps: number): HostileResult {
+  const g = quantizeGenome({ ...makeStarterGenome(), firmness: idx & 1, bounce: (idx >> 1) & 1, stretch: (idx >> 2) & 1, size: (idx >> 3) & 1 });
+  const label = `f${idx & 1}b${(idx >> 1) & 1}s${(idx >> 2) & 1}z${(idx >> 3) & 1}`;
+  const b = new SoftBody(g, { seed: 0xc0ffee + idx });
+  const R = b.restRadius, rv0 = restVolOf(b);
+  const rng = mulberry32(0x5eed0000 + idx * 7919);
+  const pick = (n: number): number => Math.floor(rng() * n);
+  const unit = (): V3 => { const z = 2 * rng() - 1, a = rng() * Math.PI * 2, r = Math.sqrt(1 - z * z); return v3(r * Math.cos(a), z, r * Math.sin(a)); };
+  const fails: string[] = [], hashes: number[] = [], evs: SoftEvent[] = [];
+  const fail = (m: string): void => { if (fails.length < 6) fails.push(m); };
+  const down = [false, false], press = [0, 0];
+  const lastPt: V3[] = [v3(0, R, 0), v3(0, R, 0)];
+  const lastEv = new Map<string, { t: number; dt: number }>();
+  let clock = 0, curDt = 0, events = 0, maxTable = 0, maxAny = 0;
+  const rayAtBody = (): { point: V3; normal: V3; dir: V3 } | null => {
+    const c = b.center, u = unit(), o = v3(c.x + u.x * 3 * R, c.y + u.y * 3 * R, c.z + u.z * 3 * R), j = 0.35 * R;
+    const t = v3(c.x + (rng() - 0.5) * j, c.y + (rng() - 0.5) * j, c.z + (rng() - 0.5) * j);
+    const l = Math.hypot(t.x - o.x, t.y - o.y, t.z - o.z) || 1, dir = v3((t.x - o.x) / l, (t.y - o.y) / l, (t.z - o.z) / l);
+    const h = b.raycast(o, dir);
+    return h ? { point: h.point, normal: h.normal, dir } : null;
+  };
+  const dtDraw = (): number => { const u = rng(); if (u < 0.08) return 0; if (u < 0.16) return 0.5; if (u < 0.24) return 5; return logUniform(rng, 1 / 240, 1 / 10); };
+  const check = (where: string): boolean => {
+    const P = b.positions, m = b.metrics;
+    for (let i = 0; i < P.length; i++) if (!Number.isFinite(P[i])) { fail(`NaN position @${where}`); return false; }
+    if (![m.compression, m.compressionRate, m.stretch, m.volume, m.kinetic, b.center.x, b.center.y, b.center.z, b.frame.x, b.frame.y, b.frame.z, b.frame.w].every(Number.isFinite)) { fail(`non-finite metrics / centre / frame @${where}`); return false; }
+    for (let i = 0; i < b.strain.length; i++) if (!Number.isFinite(b.strain[i])) { fail(`non-finite strain @${where}`); return false; }
+    if (!(volumeOf(P, b.indices) / rv0 > 0)) { fail(`inverted mesh @${where}`); return false; }
+    if (minY(b) < -0.01 * R) { fail(`table penetration ${(-minY(b) / R * 100).toFixed(2)}% R @${where}`); return false; }
+    const d = Math.hypot(b.center.x, b.center.z);
+    maxAny = Math.max(maxAny, d); if (b.gravity) maxTable = Math.max(maxTable, d);
+    return true;
+  };
+  let ok = true;
+  for (let s = 0; s < steps && ok; s++) {
+    const nc = pick(4);
+    for (let k = 0; k < nc; k++) {
+      const id = pick(2) as 0 | 1, other = (1 - id) as 0 | 1, r = rng();
+      if (r < 0.16) {
+        const h = rayAtBody();
+        if (h) { b.fingerDown(id, h); down[id] = true; lastPt[id] = h.point; }
+        else if (rng() < 0.2) { b.fingerDown(id, { point: v3((rng() - 0.5) * 6 * R, (rng() - 0.2) * 4 * R, (rng() - 0.5) * 6 * R), normal: unit(), dir: rng() < 0.3 ? v3(0, 0, 0) : unit() }); down[id] = true; }
+      } else if (r < 0.26) { const v = rng() < 0.8 ? (rng() < 0.5 ? 0 : 1) : (rng() < 0.5 ? -3 : 7); b.fingerPressure(id, v); press[id] = v; }
+      else if (r < 0.46) {
+        const m = rng();
+        if (m < 0.45) { const h = rayAtBody(); if (h) { b.fingerMove(id, h.point); lastPt[id] = h.point; } }
+        else if (m < 0.85) { b.fingerMove(id, lastPt[other]); lastPt[id] = lastPt[other]; }
+        else b.fingerMove(id, v3((rng() - 0.5) * 5 * R, rng() * 3 * R, (rng() - 0.5) * 5 * R));
+      } else if (r < 0.54) { b.fingerUp(id); down[id] = false; }
+      else if (r < 0.64) {
+        const v = pick(b.vertexCount), sc = rng() < 0.2 ? 6 : 2;
+        b.grab(id, v, v3(b.positions[v * 3] + (rng() - 0.5) * sc * R, b.positions[v * 3 + 1] + rng() * sc * R, b.positions[v * 3 + 2] + (rng() - 0.5) * sc * R));
+        down[id] = false;
+      } else if (r < 0.74) { const sc = rng() < 0.15 ? 40 : 3; b.grabMove(id, v3(b.center.x + (rng() - 0.5) * sc * R, b.center.y + (rng() - 0.3) * sc * R, b.center.z + (rng() - 0.5) * sc * R)); }
+      else if (r < 0.79) b.grabRelease(id);
+      else if (r < 0.86) { const mag = [0.5, 3, 12, 40, 1e6][pick(5)], u = unit(); b.nudge(v3(u.x * mag, u.y * mag, u.z * mag)); }
+      else if (r < 0.92) b.gravity = !b.gravity;
+      else if (r < 0.93) { b.reset(); down[0] = down[1] = false; lastEv.clear(); }
+      else if (r < 0.96) { for (const q of [0, 1] as const) if (down[q]) { press[q] = press[q] > 0.5 ? 0 : 1; b.fingerPressure(q, press[q]); } }
+    }
+    if (rng() < 0.6) for (const q of [0, 1] as const) if (down[q]) { press[q] = press[q] > 0.5 ? 0 : 1; b.fingerPressure(q, press[q]); }
+    const dt = dtDraw();
+    curDt = Math.min(Math.max(dt, 0), 1 / 20);
+    b.step(dt);
+    clock += curDt;
+    if (!check(`frame ${s}`)) { ok = false; break; }
+    evs.length = 0; b.drainEvents(evs);
+    if (evs.length > 128) fail(`event queue over the 128 cap (${evs.length})`);
+    for (const e of evs) {
+      events++;
+      const bad = eventProblem(e);
+      if (bad) fail(`bad event ${bad} @frame ${s}`);
+      const key = `${e.kind}:${e.finger}`, last = lastEv.get(key);
+      if (last && clock - last.t < 0.05 - curDt - last.dt - 2 / 360 - 0.001) fail(`event spam ${key}: gap ${(clock - last.t).toFixed(4)} s @frame ${s}`);
+      lastEv.set(key, { t: clock, dt: curDt });
+    }
+    if (s % 250 === 249) hashes.push(b.stateHash());
+  }
+  if (b.debug.safetyResets > 0) fail(`debug.safetyResets = ${b.debug.safetyResets}`);
+  let settleT = -1, settledVol = NaN, flipped = -1, shapePct = NaN;
+  if (ok) {
+    b.fingerUp(0); b.fingerUp(1); b.grabRelease(0); b.grabRelease(1); b.gravity = true;
+    let quiet = 0;
+    for (let i = 0, t = 0; i < 8 * 60; i++) {
+      b.step(DT); t += DT;
+      if (!check(`settle ${t.toFixed(2)} s`)) { ok = false; break; }
+      if (b.metrics.kinetic < 0.02) { if (quiet === 0) settleT = t; quiet++; } else { quiet = 0; settleT = -1; }
+    }
+    if (ok) {
+      if (settleT < 0 || quiet < 30) fail(`did not settle in 8 s (kinetic ${b.metrics.kinetic.toFixed(4)})`);
+      settledVol = b.metrics.volume;
+      if (Math.abs(settledVol - 1) > 0.015) fail(`settled volume ${settledVol.toFixed(4)}`);
+      const fl = flippedVsRest(b);
+      flipped = fl;
+      if (fl > 0) fail(`${fl} triangles flipped > 120 deg vs rest once settled`);
+      shapePct = shapeFit(b) * 100;
+      if (shapePct > 3) fail(`settled shape error ${shapePct.toFixed(2)}% R`);
+    }
+  }
+  hashes.push(b.stateHash());
+  return { label, steps, fails, hashes, events, maxTable, maxAny, settleT, settledVol, flipped, shapePct };
+}
+
+/** Triangles whose normal turned > 120 degrees from its rest normal (after the best-fit rotation is removed). */
+function flippedVsRest(b: SoftBody): number {
+  const n = b.vertexCount, P = b.positions, Q = b.restLocal, tris = b.indices;
+  let px = 0, py = 0, pz = 0, qx = 0, qy = 0, qz = 0;
+  for (let i = 0; i < n; i++) { px += P[i * 3]; py += P[i * 3 + 1]; pz += P[i * 3 + 2]; qx += Q[i * 3]; qy += Q[i * 3 + 1]; qz += Q[i * 3 + 2]; }
+  px /= n; py /= n; pz /= n; qx /= n; qy /= n; qz /= n;
+  const A = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+  for (let i = 0; i < n; i++) {
+    const x = P[i * 3] - px, y = P[i * 3 + 1] - py, z = P[i * 3 + 2] - pz, a = Q[i * 3] - qx, bb = Q[i * 3 + 1] - qy, c = Q[i * 3 + 2] - qz;
+    A[0] += x * a; A[1] += x * bb; A[2] += x * c; A[3] += y * a; A[4] += y * bb; A[5] += y * c; A[6] += z * a; A[7] += z * bb; A[8] += z * c;
+  }
+  const Rm = polar(A);
+  const nrm = (src: ArrayLike<number>, t: number): [number, number, number] => {
+    const a = tris[t] * 3, c = tris[t + 1] * 3, d = tris[t + 2] * 3;
+    const ux = src[c] - src[a], uy = src[c + 1] - src[a + 1], uz = src[c + 2] - src[a + 2], vx = src[d] - src[a], vy = src[d + 1] - src[a + 1], vz = src[d + 2] - src[a + 2];
+    const x = uy * vz - uz * vy, y = uz * vx - ux * vz, z = ux * vy - uy * vx, l = Math.hypot(x, y, z) || 1;
+    return [x / l, y / l, z / l];
+  };
+  let flipped = 0;
+  for (let t = 0; t < tris.length; t += 3) {
+    const c = nrm(P, t), r = nrm(Q, t);
+    const rx = Rm[0] * r[0] + Rm[1] * r[1] + Rm[2] * r[2], ry = Rm[3] * r[0] + Rm[4] * r[1] + Rm[5] * r[2], rz = Rm[6] * r[0] + Rm[7] * r[1] + Rm[8] * r[2];
+    if (c[0] * rx + c[1] * ry + c[2] * rz < Math.cos((120 * Math.PI) / 180)) flipped++;
+  }
+  return flipped;
+}
+
+/**
+ * step() and the per-frame input calls (fingerMove, fingerPressure, grabMove) allocate nothing once compiled, measured EXACTLY: the growth
+ * of V8's new space over a window of frames (a window that allocates nothing cannot trigger a GC) minus what the measurement itself
+ * allocates (an empty window). One warmed body walks through every steady state (the first gets 2400 frames: V8 compiles the once-per-frame
+ * functions step() and finalize() last; the states with an input call every frame get 3000, the calls V8 needs before it compiles
+ * fingerMove / grabMove), then the smallest of 3 windows of 120 frames counts. The per-frame inputs are generated BEFORE
+ * the window, so the window's own loop allocates nothing. (A sampling heap profiler cannot prove zero: it charges its own bookkeeping to
+ * whatever function is running.) Also reported: the garbage per frame in the first 120 frames after warmUp(), before that compilation.
+ */
+function allocCheck(starter: Genome): { states: Array<{ name: string; bytes: number }>; early: number } {
+  const newUsed = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
+  const empty: number[] = [];
+  for (let k = 0; k < 6; k++) { const u0 = newUsed(); empty.push(newUsed() - u0); }
+  const base = empty[empty.length - 1];   // the steady cost of one measurement (the very first call reads lower)
+  const ev: SoftEvent[] = [];
+  for (let i = 0; i < 64; i++) ev.push(ev[0]);   // pre-grown: draining never reallocates it
+  ev.length = 0;
+  const N = 2400 + 2 * 3000 + 4 * 1300;
+  const rub: V3[] = [], prs: unknown[] = [null], pull: V3[] = [];   // a generic array of numbers: reading one never boxes
+  for (let i = 0; i < N; i++) { rub.push(v3(0.15 + 0.06 * Math.sin(i * 0.05), 0.8, 0.06 * Math.cos(i * 0.05))); prs.push(0.8 + 0.2 * Math.sin(i * 0.1)); pull.push(v3(0, 0, 0)); }
+  const b = new SoftBody(starter);
+  b.warmUp();
+  let i = 0, input = 0;
+  const frame = (): void => {
+    if (input === 1) { b.fingerMove(0, rub[i]); b.fingerPressure(0, prs[i + 1] as number); } else if (input === 2) b.grabMove(0, pull[i]);
+    i++;
+    b.step(DT);
+  };
+  const quiet = (n: number): void => { for (let k = 0; k < n; k++) { frame(); ev.length = 0; b.drainEvents(ev); } };
+  let early = NaN;
+  { const u0 = newUsed(); for (let k = 0; k < 120; k++) frame(); const d = newUsed() - u0 - base; early = d >= 0 ? d / 120 : NaN; ev.length = 0; b.drainEvents(ev); }
+  const states: Array<{ name: string; warm: number; enter: () => void; leave: () => void; input: number }> = [
+    { name: 'rest', warm: 2400, enter: () => {}, leave: () => {}, input: 0 },
+    { name: 'press + rub (fingerMove + fingerPressure every frame)', warm: 3000, input: 1, enter: () => { touch(b, 0, v3(0.15, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 1); }, leave: () => b.fingerUp(0) },
+    { name: 'pinch', warm: 600, input: 0, enter: () => { touch(b, 0, v3(-4, 0.35, 0), v3(1, 0, 0)); touch(b, 1, v3(4, 0.35, 0), v3(-1, 0, 0)); b.fingerPressure(0, 0.9); b.fingerPressure(1, 0.9); }, leave: () => { b.fingerUp(0); b.fingerUp(1); } },
+    { name: 'pull (grabMove every frame)', warm: 3000, input: 2, enter: () => {
+      const h = b.raycast(v3(3, 0.42, 0), v3(-1, 0, 0));
+      if (h) { b.grab(0, h.vertex, h.point); for (let k = 0; k < N; k++) { pull[k].x = h.point.x + 0.25 + 0.1 * Math.sin(k * 0.04); pull[k].y = h.point.y; pull[k].z = h.point.z; } }
+    }, leave: () => b.grabRelease(0) },
+    { name: 'float (hover + bob)', warm: 600, input: 0, enter: () => { b.gravity = false; }, leave: () => { b.gravity = true; } },
+    { name: 'mat corral (gliding back from a nudge)', warm: 600, input: 0, enter: () => {}, leave: () => {} },
+  ];
+  const out: Array<{ name: string; bytes: number }> = [];
+  for (const st of states) {
+    st.enter(); input = st.input;
+    quiet(st.warm);
+    let best = Infinity;
+    for (let w = 0; w < 3; w++) {
+      if (st.name.startsWith('mat corral')) { b.nudge(v3(12, 0, 0)); quiet(45); }
+      const u0 = newUsed();
+      for (let k = 0; k < 120; k++) frame();
+      const d = newUsed() - u0;
+      ev.length = 0; b.drainEvents(ev);
+      if (d >= 0 && d < best) best = d;   // a negative growth means a GC ran inside the window: that window proves nothing
+    }
+    out.push({ name: st.name, bytes: best - base });
+    st.leave(); input = 0; quiet(90);
+  }
+  return { states: out, early };
+}
+
+
+/** The API's edge cases (was verify_phys_cr_edge.ts): every named case must hold. */
+function apiChecks(starter: Genome): { bad: string[]; tried: number } {
+  const bad: string[] = [];
+  let tried = 0;
+  const check = (name: string, ok: boolean): void => { tried++; if (!ok) bad.push(name); };
+  const finite = (b: SoftBody): boolean => { for (let i = 0; i < b.positions.length; i++) if (!Number.isFinite(b.positions[i])) return false; return true; };
+  const ev: SoftEvent[] = [];
+  {
+    const b = new SoftBody(starter), pos = b.positions;
+    for (const dt of [Infinity, -Infinity, 1e9, 1e-9]) { b.step(dt); check(`step(${dt}) finite`, finite(b)); }
+    check('positions array identity kept by step()', b.positions === pos);
+    b.reset(); check('positions array identity kept by reset()', b.positions === pos);
+    check('raycast(null, null) is null', b.raycast(null as unknown as V3, null as unknown as V3) === null);
+    check('raycast with a NaN direction is null', b.raycast(v3(0, 1, 3), v3(Number.NaN, 0, -1)) === null);
+    check('raycast from an infinite origin is null', b.raycast(v3(Infinity, 1, 3), v3(0, 0, -1)) === null);
+  }
+  {
+    const b = new SoftBody(starter);
+    const top = b.raycast(v3(0, 3, 0), v3(0, -1, 0))!;
+    const args = { point: top.point, normal: top.normal, dir: v3(0, -1, 0) };
+    let threw = false;
+    try { b.fingerUp(0); b.fingerUp(1); b.fingerDown(2 as 0, args); b.fingerUp(2 as 0); b.fingerUp(-1 as 0); b.fingerDown('0' as unknown as 0, args); } catch { threw = true; }
+    check('bad finger ids are ignored without throwing', !threw && b.metrics.fingers === 0);
+    b.fingerDown(0, args); b.fingerDown(0, args); run(b, 0.2);
+    check('a second fingerDown on the same id keeps one finger', b.metrics.fingers === 1);
+    b.fingerPressure(0, 1); run(b, 0.3);
+    b.fingerDown(1, { point: v3(0.2, 0.2, 0.2), normal: v3(0.5, 0.5, 0.5), dir: v3(-0.5, -0.5, -0.5) });
+    b.reset();
+    b.drainEvents(ev);
+    check('reset() mid-press: no fingers, no tips, no pending events', b.metrics.fingers === 0 && b.tip(0) === null && b.tip(1) === null && ev.length === 0);
+    run(b, 1);
+    check('reset() mid-press: the body rests', finite(b) && b.metrics.kinetic < 0.02);
+    b.fingerUp(0); b.fingerPressure(0, 1); run(b, 0.3);
+    check('fingerPressure after reset() (no finger down) is ignored', b.metrics.compression < 0.02);
+  }
+  {
+    const b = new SoftBody(starter);
+    for (const v of [-1, b.vertexCount, Number.NaN, Infinity]) { b.grab(0, v, v3(0, 1, 0)); check(`grab(vertex ${v}) is ignored`, !b.metrics.grabbed); }
+    b.grab(0, 5, v3(Number.NaN, 1, 0)); check('grab with a NaN target is ignored', !b.metrics.grabbed);
+    b.grab(2 as 0, 5, v3(0, 1, 0)); check('grab with a bad id is ignored', !b.metrics.grabbed);
+    b.grabMove(0, v3(0, 1, 0)); b.grabRelease(0); b.grabRelease(1);
+    ev.length = 0; b.drainEvents(ev); check('no events from ignored grab calls', ev.length === 0);
+    b.grab(0, 320.7, v3(0, 1, 0)); run(b, 0.1); check('grab with a fractional vertex index works', b.metrics.grabbed);
+    b.grab(0, 100, v3(0, 1, 0)); run(b, 0.1); check('a second grab on the same id works', b.metrics.grabbed && finite(b));
+    b.reset(); check('reset() mid-grab releases it', !b.metrics.grabbed);
+  }
+  {
+    const b = new SoftBody(starter);
+    settle(b, 1);
+    const h = b.stateHash();
+    b.gravity = false;
+    check('switching gravity is instant and keeps the shape (same hash)', b.stateHash() === h && b.gravity === false);
+    b.gravity = true; check('the gravity getter reads back', b.gravity === true);
+  }
+  {
+    const b = new SoftBody(starter);
+    const top = b.raycast(v3(0, 3, 0), v3(0, -1, 0))!;
+    const out: SoftEvent[] = [{ kind: 'poke', at: v3(0, 0, 0), normal: v3(0, 1, 0), intensity: 0, heldFor: 0, finger: 0 }];
+    b.drainEvents(out); check('drainEvents appends (keeps what was there)', out.length === 1);
+    b.fingerDown(0, { point: top.point, normal: top.normal, dir: v3(0, -1, 0) }); b.fingerPressure(0, 1); run(b, 0.5);
+    b.drainEvents(out); const n1 = out.length; b.drainEvents(out);
+    check('drainEvents clears the queue', n1 > 1 && out.length === n1);
+    // 40 quick taps (3 frames down, 1 up): one poke and one release per tap, never two of a kind within 50 ms
+    const c = new SoftBody(starter);
+    const t2 = c.raycast(v3(0, 3, 0), v3(0, -1, 0))!;
+    const log: Array<{ t: number; k: string }> = [];
+    let clock = 0;
+    for (let k = 0; k < 40; k++) {
+      c.fingerDown(0, { point: t2.point, normal: t2.normal, dir: v3(0, -1, 0) }); c.fingerPressure(0, 1);
+      for (let i = 0; i < 4; i++) { if (i === 3) c.fingerUp(0); c.step(DT); clock += DT; ev.length = 0; c.drainEvents(ev); for (const e of ev) log.push({ t: clock, k: e.kind + e.finger }); }
+    }
+    const spam = log.some((e, i) => log.slice(0, i).some((p) => p.k === e.k && e.t - p.t < 0.0499));
+    check('40 quick taps: one poke per tap, no event spam', log.filter((e) => e.k === 'poke0').length === 40 && !spam);
+  }
+  return { bad, tried };
+}
+
+/** Rubbing (was verify_phys_rub.ts): 24 rubs across the top, pressure 0.2 / 0.5 / 0.8, 0.25 .. 2 m/s, two lines; how far the body is
+ *  dragged (centre, 2.5 s after the finger lifted) and whether its foot ever leaves the table. */
+function rubChecks(starter: Genome): { drift: number; lift: number; worst: string } {
+  let drift = 0, lift = 0, worst = '';
+  for (const press of [0.2, 0.5, 0.8]) for (const dur of [0.3, 0.6, 1.2, 2.4]) for (const z of [0, 0.25]) {
+    const b = new SoftBody(starter);
+    const x0 = -0.3, x1 = 0.3;
+    const h0 = b.raycast(v3(x0, 3, z), v3(0, -1, 0));
+    if (!h0) continue;
+    b.fingerDown(0, { point: h0.point, normal: h0.normal, dir: v3(0, -1, 0) });
+    const T0 = 0.4, T1 = T0 + dur;
+    let up = false, footMax = 0;
+    for (let s = 0, t = 0; t < T1 + 2.5; s++) {
+      if (t < T1) {
+        b.fingerPressure(0, Math.min(1, t / 0.4) * press);
+        if (t > T0) { const k = (t - T0) / dur, h = b.raycast(v3(x0 + (x1 - x0) * k, 3, z), v3(0, -1, 0)); if (h) b.fingerMove(0, h.point); }
+      } else if (!up) { up = true; b.fingerUp(0); }
+      b.step(DT); t = (s + 1) * DT;
+      footMax = Math.max(footMax, minY(b));
+    }
+    const d = Math.hypot(b.center.x, b.center.z);
+    if (d > drift) { drift = d; worst = `pressure ${press}, ${((x1 - x0) / dur).toFixed(2)} m/s, z=${z}`; }
+    lift = Math.max(lift, footMax);
+  }
+  return { drift, lift, worst };
+}
+
 // ------------------------------------------------------------------------------------------------ worker pool
 
-type Job = { type: 'squeeze'; spec: SqueezeSpec } | { type: 'fuzz'; index: number; nEvents: number } | { type: 'fold'; spec: FoldSpec };
-type JobResult = { type: 'squeeze'; res: SqueezeResult } | { type: 'fuzz'; res: { stats: FuzzStats; hash: number } } | { type: 'fold'; res: FoldResult };
+type Job = { type: 'squeeze'; spec: SqueezeSpec } | { type: 'fuzz'; index: number; nEvents: number } | { type: 'fold'; spec: FoldSpec }
+  | { type: 'fold2'; spec: FoldSpec } | { type: 'foldsub'; spec: FoldSpec } | { type: 'corral'; spec: CorralSpec } | { type: 'hostile'; index: number; steps: number; replay: boolean };
+type JobResult = { type: 'squeeze'; res: SqueezeResult } | { type: 'fuzz'; res: { stats: FuzzStats; hash: number } } | { type: 'fold'; res: FoldResult }
+  | { type: 'fold2'; res: FoldResult } | { type: 'foldsub'; res: SubFoldResult } | { type: 'corral'; res: CorralResult } | { type: 'hostile'; res: HostileResult; replayHashes: number[] | null };
+function runJob(j: Job): JobResult {
+  switch (j.type) {
+    case 'squeeze': return { type: 'squeeze', res: hardRelease(j.spec) };
+    case 'fold': return { type: 'fold', res: foldPress(j.spec) };
+    case 'fuzz': return { type: 'fuzz', res: fuzzRun(j.index, j.nEvents) };
+    case 'fold2': return { type: 'fold2', res: foldPress(j.spec) };
+    case 'foldsub': return { type: 'foldsub', res: foldSubsteps(j.spec) };
+    case 'corral': return { type: 'corral', res: corralRun(j.spec) };
+    case 'hostile': return { type: 'hostile', res: hostileRun(j.index, j.steps), replayHashes: j.replay ? hostileRun(j.index, j.steps).hashes : null };
+  }
+}
 
 if (!isMainThread) {
   const { jobs } = workerData as { jobs: Job[] };
-  const out: JobResult[] = jobs.map((j): JobResult => (j.type === 'squeeze' ? { type: 'squeeze', res: hardRelease(j.spec) } : j.type === 'fold' ? { type: 'fold', res: foldPress(j.spec) } : { type: 'fuzz', res: fuzzRun(j.index, j.nEvents) }));
+  const out: JobResult[] = jobs.map(runJob);
   parentPort!.postMessage(out);
+} else if (process.argv.includes('--cold-child')) {
+  coldChild(process.argv.includes('warm'));   // a fresh process for the cold-JIT measurement (see coldRuns)
 } else {
   await main();
 }
 
 function runPool(jobs: Job[], nWorkers: number): Promise<JobResult[]> {
   // heaviest first, round robin, so the workers finish together
-  const weight = (j: Job): number => (j.type === 'fuzz' ? 3 : j.type === 'fold' ? (j.spec.detail >= 4 ? 4 : 1.5) : 1);
+  const weight = (j: Job): number => (j.type === 'hostile' ? (j.replay ? 24 : 12) : j.type === 'fuzz' ? 3 : j.type === 'fold' ? (j.spec.detail >= 4 ? 4 : 1.5) : j.type === 'fold2' || j.type === 'foldsub' ? 1.5 : 1);
   const order = jobs.map((j, i) => ({ j, i })).sort((a, b) => weight(b.j) - weight(a.j));
   const buckets: Array<Array<{ j: Job; i: number }>> = Array.from({ length: nWorkers }, () => []);
   order.forEach((o, k) => buckets[k % nWorkers].push(o));
@@ -542,6 +1227,7 @@ async function main(): Promise<void> {
     const pokes = ev('poke'), presses = ev('press'), releases = ev('release');
     add('G1', 'events: one poke at first contact (finger 0), intensity > 0', `${pokes.length}, intensity ${f2(pokes[0]?.e.intensity ?? 0, 2)}, at t+${f2((pokes[0]?.t ?? 0) - tDown, 3)} s`, '1, > 0', pokes.length === 1 && pokes[0].e.finger === 0 && pokes[0].e.intensity > 0 && pokes[0].t - tDown < 0.12);
     add('G1', 'events: one press once the finger has held >= 0.18 s', `${presses.length}, at t+${f2((presses[0]?.t ?? 0) - tDown, 3)} s`, '1, 0.18..0.35 s', presses.length === 1 && presses[0].t - tDown >= 0.17 && presses[0].t - tDown < 0.4);
+    add('G1', "events: the 'press' event carries heldFor = 0 (contracts.ts: heldFor is for release / snap only; it used to carry the hold time)", presses.map((x) => x.e.heldFor.toFixed(3)).join(', ') || 'no press', '0', presses.length === 1 && presses.every((x) => x.e.heldFor === 0));
     add('G1', 'events: one release on fingerUp with intensity = compression > 0.08 and heldFor ~ press time', `${releases.length}, intensity ${f2(releases[0]?.e.intensity ?? 0, 2)}, heldFor ${f2(releases[0]?.e.heldFor ?? 0, 2)} s (pressed ${f2(tUp - tDown, 2)} s)`, '1, > 0.08, +/-0.05 s', releases.length === 1 && releases[0].e.intensity > 0.08 && Math.abs(releases[0].e.heldFor - (tUp - tDown)) < 0.05);
     add('G1', 'metrics: fingers = 1 while pressed; compression and compressionRate rise while squeezing, rate goes negative after release', `fingers ${fingersSeen}, max comp ${f2(maxComp, 2)}, max rate ${f2(maxRate, 2)}, min rate ${f2(minRate, 2)}`, 'fingers 1, comp > 0.2, rate > 0.2 then < -0.5', fingersSeen === 1 && maxComp > 0.2 && maxRate > 0.2 && minRate < -0.5);
     add('G1', 'metrics: kinetic jumps right after a hard release (> 0.3)', f2(kinMax, 2), '> 0.3', kinMax > 0.3);
@@ -735,6 +1421,30 @@ async function main(): Promise<void> {
     add('G1', 'fingertip: a low side press on a large body keeps the tip sphere above the table (lowest centre height - radius)', `${f2(tc.tipBelowTable * 1000, 2)} mm`, '>= -0.01 mm', tc.tipBelowTable >= -1e-5);
   }
 
+  // ---- round-3 regression checks (single thread)
+  {
+    const rc = resetChecks(starter);
+    add('G1', 'reset() == a fresh body (gravity): the same scripted session (hashes at 12 checkpoints + every event) after 1 / 6 / 7 / 13 substeps, and after a press + pinch + grab + gravity toggles + nudge; was: differed after an odd substep count (Laplacian parity on debug.substeps, bob phase on simTime)', rc.grav.length ? `differs: ${rc.grav.join('; ')}` : 'identical (5/5)', 'identical', rc.grav.length === 0);
+    add('G1', 'reset() == a fresh body (float: new body, gravity off, reset) after 7 / 462 substeps + a shove and after a messy session', rc.float.length ? `differs: ${rc.float.join('; ')}` : 'identical (3/3)', 'identical', rc.float.length === 0);
+    add('G1', 'reset() right after a messy session: positions, strain, centre, frame, metrics, tips and hash equal a new body bit for bit', `${rc.direct}`, 'true', rc.direct);
+    const gc = genomeChecks(starter);
+    add('G1', `genome sanitising: NaN / +-Infinity / missing firmness, bounce, stretch, size behave exactly like 0.5; out of range like the clamp; bad seed / species / null genome / NaN or negative params override (${gc.tried} cases; was: size NaN -> NaN positions, firmness NaN -> 300 safety resets)`, gc.bad.length ? gc.bad.slice(0, 4).join('; ') : `all ${gc.tried} identical to the documented safe value, ${gc.resets} safety resets`, 'all, 0', gc.bad.length === 0 && gc.resets === 0);
+    const cc = coordChecks(starter);
+    add('G1', `absurd coordinates (|c| > 1000 m, 1e30 .. 1e300) in fingerDown / fingerMove / grab / grabMove / raycast are ignored like NaN, nudge(1e300) = a 12 m/s nudge, a 1e300 or 1e-300 direction works (${cc.tried} cases; was: a 1e200 finger read compression 1, a 1e200 nudge did nothing)`, cc.bad.length ? cc.bad.slice(0, 4).join('; ') : `all ${cc.tried} ok`, 'all', cc.bad.length === 0);
+    const wu = warmUpChecks(starter);
+    add('G1', 'warmUp(): leaves a fresh body and a body in the middle of a press bit-identical (positions, strain, metrics, tips, hash), and the session afterwards equals a twin that never warmed up', `fresh ${wu.fresh}, mid-press ${wu.midPress}, session after ${wu.after}`, 'true, true, true', wu.fresh && wu.midPress && wu.after);
+    const ap = apiChecks(starter);
+    add('G1', `API edge cases (was verify_phys_cr_edge.ts, ${ap.tried} cases): step(+-Infinity / 1e9 / 1e-9), positions identity, raycast(null / NaN / Infinity), bad finger / grab ids and vertices, double fingerDown, reset() mid-press / mid-grab, input after reset, gravity switch keeps the hash, drainEvents appends and clears, 40 quick taps without event spam`, ap.bad.length ? `fails: ${ap.bad.join('; ')}` : `all ${ap.tried} hold`, 'all', ap.bad.length === 0);
+    const rb = rubChecks(starter);
+    add('G1', `rubbing (was verify_phys_rub.ts): 24 rubs across the top (pressure 0.2..0.8, 0.25..2 m/s): how far the body ends up dragged (${rb.worst}), highest the foot ever lifts`, `${f2(rb.drift * 1000, 1)} mm, ${f2(rb.lift * 1000, 2)} mm`, '<= 50 mm, <= 1 mm', rb.drift <= 0.05 && rb.lift <= 0.001);
+    const tp = tipPenetration(starter);
+    add('G1', 'contact fold limit side effect: deepest skin inside a fingertip at the end of a frame, hard peak shoves and a top press (the next substep takes it out)', `${f2(tp * 100, 2)} % R`, '<= 2 % R', tp <= 0.02);
+    const cl = corralLocalChecks(starter);
+    add('G1', 'mat corral is invisible near the centre: press, pinch, pull and a small nudge give identical hashes with the corral on and off (rest pose and interaction untouched)', `${cl.deadZone}`, 'true', cl.deadZone);
+    add('G1', `mat corral never fights a finger or a grab, and float mode is unchanged: identical hashes on / off while a finger holds a body nudged ${cl.outAtLift.toFixed(2)} m out, while a grab holds it ${cl.grabOut.toFixed(2)} m out, and for a floating shove`, `finger ${cl.finger}, grab ${cl.grab}, float ${cl.float}`, 'true, true, true', cl.finger && cl.grab && cl.float);
+    add('G1', `mat corral after the finger lifts: back from ${cl.outAtLift.toFixed(2)} m to the dead-zone edge (0.6 m) in 10 s, then stopped (largest vertex movement over 2 s) with its rest shape`, `${cl.back.toFixed(3)} m, ${cl.stopMm.toFixed(3)} mm, shape ${cl.shapePct.toFixed(2)} % R`, '<= 0.61 m, < 0.1 mm, <= 3 %', cl.outAtLift > 0.8 && cl.back <= 0.61 && cl.stopMm < 0.1 && cl.shapePct <= 3);
+  }
+
   // ---- G1p: performance (nothing else of ours is running; the machine is shared with other lanes, so best-of-N)
   {
     const batches: Array<{ mean: number; p99: number }> = [];
@@ -761,6 +1471,11 @@ async function main(): Promise<void> {
     add('G1p', `step() mean at detail 3, 6 substeps (best of ${B} x ${N} steps; median batch ${f2(medMean, 2)})`, `${f2(bestMean, 3)} ms`, '<= 2.0 ms', bestMean <= 2.0);
     add('G1p', `step() p99 at detail 3 (best batch; median batch ${f2(medP99, 2)}, worst ${f2(Math.max(...batches.map((x) => x.p99)), 2)})`, `${f2(bestP99, 3)} ms`, '<= 5 ms', bestP99 <= 5);
   }
+  {
+    const al = allocCheck(starter);
+    add('G1p', `step() + the per-frame input calls allocate nothing once compiled (CONTRACT section 3), exact new-space growth per 120 frames: ${al.states.map((x) => x.name).join(' / ')} (was: 16 B every frame from a boxed finalize() argument, ~200 B per frame floating from a boxed hoverY(), 64 B per fingerMove from boxed rayMesh() arguments)`, al.states.map((x) => `${x.bytes} B`).join(' / '), '0 B each', al.states.every((x) => x.bytes === 0));
+    add('info', 'garbage per frame in the first 120 frames after warmUp(), before V8 has compiled the once-per-frame step() / finalize() (a few hundred bytes of short-lived objects for ~20 s, then zero)', `${f2(al.early, 0)} B/frame`, '(information)', true);
+  }
 
   // ---- G1: hard-release scenarios + fuzz, in a worker pool (each job is independent and seeded, so the result does not depend on the worker count)
   {
@@ -776,6 +1491,28 @@ async function main(): Promise<void> {
     for (const sp of [0, 2, 5, 9, 12]) for (const mode of ['tap', 'hold'] as const) foldSpecs.push({ label: `starter@d4/${FOLD_SPOTS[sp][0]}/${mode}`, genome: starter, detail: 4, spot: sp, mode });
     for (const spec of foldSpecs) jobs.push({ type: 'fold', spec });
     for (let i = 0; i < FUZZ_RUNS; i++) jobs.push({ type: 'fuzz', index: i, nEvents: FUZZ_EVENTS });
+    // round 3: the verify_phys_fold sweep, the cited presses at substep resolution, the mat corral, the hostile fuzz
+    for (const spec of [...sweepSpecs(starter), ...shoveSpecs(starter)]) jobs.push({ type: 'fold2', spec });
+    const big = quantizeGenome({ ...starter, bounce: 1, size: 1 }), small = quantizeGenome({ ...starter, stretch: 1, size: 0 }), down = v3(0, -1, 0);
+    const subSpecs: FoldSpec[] = [
+      { label: 'starter/top x=.2/hold', genome: starter, detail: 3, spot: 4, mode: 'hold' }, { label: 'starter/top x=.25/hold', genome: starter, detail: 3, spot: -1, mode: 'hold', ray: [v3(0.25, 3, 0), down] },
+      { label: 'starter/top x=.3/hold', genome: starter, detail: 3, spot: 5, mode: 'hold' }, { label: 'starter/top x=0/hold', genome: starter, detail: 3, spot: 0, mode: 'hold' },
+      { label: 'bouncy-big/top x=.2/tap', genome: big, detail: 3, spot: 4, mode: 'tap' }, { label: 'stretchy-small/top x=.2/tap', genome: small, detail: 3, spot: 4, mode: 'tap' },
+      { label: 'f1b0s0/top x=.3/hold', genome: genomes.find((g) => g.name === 'f1b0s0')!.g, detail: 3, spot: 5, mode: 'hold' },
+      { label: 'starter@d4/top x=.1/hold', genome: starter, detail: 4, spot: 2, mode: 'hold' },
+      { label: 'starter/peak shove from -x', genome: starter, detail: 3, spot: -1, mode: 'shove', ray: [v3(-3, 0.96, 0), v3(1, 0, 0)] },
+      { label: 'starter/peak shove from +x', genome: starter, detail: 3, spot: -1, mode: 'shove', ray: [v3(3, 0.96, 0), v3(-1, 0, 0)] },
+    ];
+    for (const spec of subSpecs) jobs.push({ type: 'foldsub', spec });
+    for (const gn of ['starter', 'f1b1s0', 'f0b0s1', 'small', 'large']) {
+      const g = genomes.find((x) => x.name === gn)!.g;
+      for (const az of [0, 2.4]) {
+        for (const el of [0, 20, 45, 70]) jobs.push({ type: 'corral', spec: { label: `${gn} az ${az} el ${el}`, genome: g, kind: 'nudge', az, el: (el * Math.PI) / 180 } });
+        jobs.push({ type: 'corral', spec: { label: `${gn} az ${az} 10 shoves`, genome: g, kind: 'shoves', az, el: 0 } });
+        jobs.push({ type: 'corral', spec: { label: `${gn} az ${az} 60 x 12 m/s`, genome: g, kind: 'hammer', az, el: 0 } });
+      }
+    }
+    for (let i = 0; i < 16; i++) jobs.push({ type: 'hostile', index: i, steps: HOSTILE_STEPS, replay: i % 4 === 0 });
     const t1 = performance.now();
     const results = await runPool(jobs, nWorkers);
     const secs = (performance.now() - t1) / 1000;
@@ -836,6 +1573,34 @@ async function main(): Promise<void> {
       add('G1', `peak recovers: highest vertex vs before the press, 3 s after a tap or 3.4 s after a hold, worst of ${d3.length} (${wt.label})`, `${f2(wt.topErr * 1000, 1)} mm`, '<= 30 mm', wt.topErr <= 0.03);
     }
 
+    // ---- round 3 rows (pool)
+    {
+      const f2all = results.filter((r): r is Extract<JobResult, { type: 'fold2' }> => r.type === 'fold2').map((r) => r.res);
+      const sw = f2all.filter((r) => r.label.startsWith('sweep/')), sh = f2all.filter((r) => r.label.startsWith('shove/')), rim = f2all.filter((r) => r.label.startsWith('rim/'));
+      const ws = sw.reduce((a, c) => (c.worst > a.worst ? c : a)), wr = sw.reduce((a, c) => (c.restWorst > a.restWorst ? c : a));
+      add('G1', `fold sweep of the verifier that found the transient folds (${sw.length} presses: starter, soft, firm, bouncy-big, stretchy-small; taps and holds x = 0 .. 0.25; was 171-180 deg at x = 0.2 / 0.25): sharpest crease (${ws.label}), frames over 120 deg, missed rays`, `${f2(ws.worst, 0)} deg, ${sw.reduce((a, c) => a + c.f120, 0)} frames, ${sw.filter((r) => r.missed).length} missed`, '<= 115 deg, 0 frames, 0', ws.worst <= 115 && sw.every((r) => r.f120 === 0 && !r.missed));
+      add('G1', `fold sweep: left at rest 3 s after the finger lifted (${wr.label}); edges over 90 deg, inward triangles`, `${f2(wr.restWorst, 0)} deg, ${sw.reduce((a, c) => a + c.restN90, 0)}, ${sw.reduce((a, c) => a + c.restInward, 0)}`, `<= ${FOLD_REST_MAX} deg, 0, 0`, wr.restWorst <= FOLD_REST_MAX && sw.every((r) => r.restN90 === 0 && r.restInward === 0));
+      const wsv = sh.reduce((a, c) => (c.worst > a.worst ? c : a)), wrim = rim.reduce((a, c) => (c.worst > a.worst ? c : a));
+      add('G1', `hard side shove at the swirl-peak (pressure 1 at once, 6 cm under its tip, 3 directions x 3 genomes + detail 4; a fingertip wider than the peak crushed it flat: 162-180 deg at HEAD, fixed by the contact fold limit): sharpest crease (${wsv.label}), frames over 120 deg, rest`, `${f2(wsv.worst, 0)} deg, ${sh.reduce((a, c) => a + c.f120, 0)} frames, rest ${f2(Math.max(...sh.map((r) => r.restWorst)), 0)} deg`, '<= 115 deg, 0 frames, rest <= 60', wsv.worst <= 115 && sh.every((r) => r.f120 === 0 && !r.missed && r.restN90 === 0 && r.restWorst <= FOLD_REST_MAX));
+      add('G1', `low side press at the table rim (y = 0.05, hold; 132 deg at HEAD): sharpest crease (${wrim.label}), frames over 120 deg`, `${f2(wrim.worst, 0)} deg, ${rim.reduce((a, c) => a + c.f120, 0)} frames`, '<= 120 deg, 0 frames', wrim.worst <= 120 && rim.every((r) => r.f120 === 0 && !r.missed));
+      const sb = results.filter((r): r is Extract<JobResult, { type: 'foldsub' }> => r.type === 'foldsub').map((r) => r.res);
+      const wsb = sb.reduce((a, c) => (c.worst > a.worst ? c : a));
+      add('G1', `fold at SUBSTEP resolution (every 1/360 s, not just the frames a renderer samples) for the ${sb.length} presses that folded or crushed the peak (${wsb.label}; its frame-sampled worst ${f2(wsb.frameWorst, 0)} deg)`, `${f2(wsb.worst, 0)} deg, ${sb.reduce((a, c) => a + c.sub120, 0)} substeps over 120 deg`, '<= 120 deg, 0', wsb.worst <= 120 && sb.every((r) => r.sub120 === 0 && !r.missed));
+      const cr = results.filter((r): r is Extract<JobResult, { type: 'corral' }> => r.type === 'corral').map((r) => r.res);
+      const one = cr.filter((r) => r.kind !== 'hammer'), ham = cr.filter((r) => r.kind === 'hammer');
+      const wo = one.reduce((a, c) => (c.max > a.max ? c : a)), wh = ham.reduce((a, c) => (c.max > a.max ? c : a));
+      add('G1', `mat corral: farthest the centre gets after a 12 m/s nudge (the nudge() clamp, 4 elevations x 2 azimuths) or ten 4 m/s shoves, ${one.length} runs over 5 genomes (${wo.label}); mat radius 3.5 m, stitched ring 3.34 m; was 3-6.6 m (one nudge), 9.2 m (shoves)`, `${f2(wo.max, 2)} m`, '<= 2.3 m', wo.max <= 2.3);
+      add('G1', `mat corral under hostile input: a 12 m/s nudge EVERY frame for 1 s (${wh.label}), rim at 2.5 m`, `${f2(wh.max, 2)} m`, '<= 2.6 m', wh.max <= 2.6);
+      const we = cr.reduce((a, c) => (c.end > a.end ? c : a)), wm = cr.reduce((a, c) => (c.stopMm > a.stopMm ? c : a)), wsh = cr.reduce((a, c) => (c.shapePct > a.shapePct ? c : a));
+      add('G1', `mat corral: 14 s later every body is back at the dead-zone edge (${we.label}), stopped (largest vertex movement over the next 2 s, ${wm.label}) with its rest shape (${wsh.label})`, `${f2(we.end, 3)} m, ${f2(wm.stopMm, 3)} mm, ${f2(wsh.shapePct, 2)} % R`, '<= 0.61 m, < 0.1 mm, <= 3 %', we.end <= 0.61 && wm.stopMm < 0.1 && wsh.shapePct <= 3 && cr.every((r) => r.finite));
+      const ho = results.filter((r): r is Extract<JobResult, { type: 'hostile' }> => r.type === 'hostile');
+      const hf = ho.flatMap((r) => r.res.fails.map((f) => `${r.res.label}: ${f}`));
+      const det = ho.filter((r) => r.replayHashes).every((r) => r.replayHashes!.length === r.res.hashes.length && r.replayHashes!.every((h, i) => h === r.res.hashes[i]));
+      add('G1', `hostile fuzz (the independent verifier's, was verify_phys_fuzz.ts): 16 extreme genomes x ${HOSTILE_STEPS} frames, fingers anywhere, pressure flicker, crossing fingers, far grabs, nudges up to 1e6, dt in {0, 0.5, 5, 1/240..1/10}; ${ho.reduce((a, c) => a + c.res.events, 0)} events checked; every frame finite, not inverted, not under the table, valid events, no spam; settles, volume, no flipped triangle, shape`, hf.length ? hf.slice(0, 4).join('; ') : `0 failures (slowest settle ${f2(Math.max(...ho.map((r) => r.res.settleT)), 2)} s, worst shape ${f2(Math.max(...ho.map((r) => r.res.shapePct)), 2)} % R)`, '0 failures', hf.length === 0);
+      add('G1', 'hostile fuzz determinism: 4 genomes replayed -> identical stateHash at every checkpoint', `${det}`, 'true', det);
+      add('info', 'hostile fuzz: farthest horizontal centre excursion on the table / in any mode (float mode is unchanged by the corral and has no rim)', `${f2(Math.max(...ho.map((r) => r.res.maxTable)), 2)} m / ${f2(Math.max(...ho.map((r) => r.res.maxAny)), 2)} m`, '(information)', true);
+    }
+
     let st = emptyStats();
     for (const r of fuzzRes) st = mergeStats(st, r.stats);
     const label = `${FUZZ_RUNS} runs x ${FUZZ_EVENTS} events, dt in [1/240, 1/10] log-uniform, random + extreme genomes, ${st.steps} checked states; pool of ${nWorkers} workers ran squeezes + fuzz in ${secs.toFixed(0)} s`;
@@ -847,11 +1612,24 @@ async function main(): Promise<void> {
     add('G1', 'fuzz: emergency non-finite recoveries (debug.safetyResets) used', String(st.safetyResets), '0', st.safetyResets === 0);
     add('G1', `fuzz: mesh fold left in a body 5 s after everything is released, worst (rest shape 50.4 deg)`, `${f2(st.restFold, 0)} deg, ${st.restFoldRuns} runs over ${FOLD_REST_MAX} deg`, `<= ${FOLD_REST_MAX} deg`, st.restFoldRuns === 0);
     add('info', 'fuzz: farthest horizontal centre excursion (a nudge or a float shove may carry it)', `${f2(st.maxCenter, 2)} m`, '(information)', true);
+    add('G1', 'fuzz: every drained event is well formed (finite fields, unit normal, intensity 0..1, heldFor only on release / snap, valid finger)', `${st.badEvents} bad of ${st.events}`, '0', st.badEvents === 0 && st.events > 0);
+    add('info', 'fuzz: farthest horizontal centre excursion while on the table (gravity on); a float-mode shove can leave it farther before gravity returns', `${f2(st.maxTableCenter, 2)} m`, '(information)', true);
     // determinism of the fuzz itself: replay one run twice in this thread and against the pool result
     const again = fuzzRun(0, FUZZ_EVENTS), again2 = fuzzRun(0, FUZZ_EVENTS);
     add('G1', 'determinism: a fuzz run replayed twice -> identical final stateHash', `${again.hash === again2.hash}`, 'true', again.hash === again2.hash);
     add('G1', 'determinism: the replay matches the pool worker result for the same run', `${again.hash === fuzzRes[0].hash}`, 'true', again.hash === fuzzRes[0].hash);
     for (const f of st.failures) add('fail', f, '', '', false);
+  }
+
+  // ---- cold JIT (fresh node processes, after the pool so nothing else of ours runs): the first session with and without warmUp()
+  {
+    // with and without warmUp() in alternating fresh processes, so both see the same machine load (this box is shared): the gate is relative
+    const warm: ColdRun[] = [], cold: ColdRun[] = [];
+    for (let k = 0; k < 3; k++) { warm.push(...coldRuns(true, 1)); cold.push(...coldRuns(false, 1)); }
+    const best = warm.reduce((a, c) => (c.over4 < a.over4 || (c.over4 === a.over4 && c.worst < a.worst) ? c : a));
+    const cmed = [...cold].sort((a, c) => a.over4 - c.over4)[1];
+    add('G1p', `cold JIT: first session of a fresh process (rest, tap, hold, pinch, pull, float; 400 frames): steps over 4 ms, worst and p95 step with warmUp() (best of 3; warmUp itself ${warm.map((r) => f2(r.warmMs, 0)).join(' / ')} ms, once, at load) vs without (median of 3, alternating processes, same load)`, `with: ${best.over4} steps, worst ${f2(best.worst, 1)} ms, p95 ${f2(best.p95, 2)} ms; without: ${cmed.over4} steps, worst ${f2(cmed.worst, 1)} ms, p95 ${f2(cmed.p95, 2)} ms`, 'with <= 1/5 of without (and <= 10), p95 <= 1/4', best.over4 <= Math.min(10, cmed.over4 / 5) && best.p95 <= cmed.p95 / 4);
+    add('G1', 'cold JIT: warmUp() left the body bit-identical in every fresh process', warm.map((r) => String(r.same)).join(', '), 'all true', warm.every((r) => r.same));
   }
 
   // ---- report

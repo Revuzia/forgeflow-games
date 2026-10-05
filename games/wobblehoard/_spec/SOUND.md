@@ -1,6 +1,7 @@
 # WOBBLEHOARD — sound design and measurements
 
-**Nobody has listened to any of this yet.** The machine that built it has no speakers and no human ears were involved.
+**Nobody has listened to any of this yet, including the round-3 music bed.** The machine that built it has no speakers and no
+human ears were involved.
 Every claim below is a measurement (levels, durations, pitch trajectories, spectrograms viewed as images) or a design
 intent. "Sounds soft/wet/cute" is **unverified**; the checklists at the end are for the first person who plugs in
 headphones. Treat the numbers as "the synthesis does what the design says", not as "it sounds good".
@@ -17,19 +18,29 @@ downloaded or copied waveforms; the designs are ours and are not modelled on any
 | `src/audio/dsp.ts` | helpers: seeded noise buffer, `Bag` (owns a voice's nodes, frees them on `ended`), Minnaert `bubble()`, soft-clip curve, node bookkeeping |
 | `src/audio/chain.ts` | master chain (now with a smooth `duck`), shared by the engine and the offline probe |
 | `src/audio/ceremony.ts` | round 2: meter-full, capsule beats, six tier reveals, merge charge + burst (DESIGN 6.1-6.7) |
-| `src/audio/engine.ts` | `createAudio(opts?)`: lazy context, polyphony cap, stealing, settings, stats, pause |
+| `src/audio/engine.ts` | `createAudio(opts?)`: lazy context, polyphony cap, stealing, settings, stats, pause; round 3: music sessions + ducking, bump limiter, held strand |
+| `src/audio/music.ts` | round 3: the generative music bed. `Composer` (pure, seeded score) + `MusicBed` (one playing session: lookahead scheduler, pad, felt mallet with its own echo, bubble graces, duck, fades) |
+| `src/audio/interact.ts` | round 3: `bump`, `BumpLimiter`, `lift`, `toss`, `strand` (held), `strandSnap` |
 | `_harness/probe_audio.mjs` | gate G2 + sanity + engine stress (Chromium). `node _harness/probe_audio.mjs` (add `--voices=poke,pop` to iterate; `--no-engine` skips the ~2 min live part, `--no-ceremony` skips the round-2 gates, `--skip-voices` skips round 1; a full run takes ~5 min) |
-| `_harness/audioview/` | `index.html` sound lab (live engine, buttons/sliders, ceremony controls), `view.js` offline render API (voices, full ceremonies, duck), `engine_tests.js`, `ceremony_checks.mjs` (round-2 gates), `analysis.mjs` (FFT, metrics, pitch tracker, spectral peaks/spread, PNG/WAV writers) |
-| `_harness/_renders/` (gitignored) | per voice: `<v>.wav`, `<v>.png` spectrogram, `<v>_min/_max.wav`, `<v>_pitch0.80/1.25.wav`; `all_voices.wav` (every voice in order, 0.5 s apart); `report.json`, `engine_report.json`; round 2: `reveal_<tier>.png/.wav`, `reveal_mythic_v0..2`, `ceremony_capsule_<tier>`, `ceremony_merge_<tier>`, `merge_charge_*`, `meterFull`, `capsule_*` |
+| `_harness/audioview/` | `index.html` sound lab (live engine, buttons/sliders, ceremony controls; round 3: music toggle + volume, bump/lift/toss, hold-to-stretch strand), `view.js` offline render API (voices, full ceremonies, duck; round 3: `renderMusic`, `renderMix`, `simulateMusic`, `composeOnly`, `bumpLimiterRun`), `engine_tests.js`, `engine_tests3.js` (round-3 live engine), `ceremony_checks.mjs` (round-2 gates), `music_checks.mjs` (round-3 gates), `analysis.mjs` (FFT, metrics, pitch tracker, spectral peaks/spread, PNG/WAV writers) |
+| `_harness/_renders/` (gitignored) | per voice: `<v>.wav`, `<v>.png` spectrogram, `<v>_min/_max.wav`, `<v>_pitch0.80/1.25.wav`; `all_voices.wav` (every voice in order, 0.5 s apart); `report.json`, `engine_report.json`; round 2: `reveal_<tier>.png/.wav`, `reveal_mythic_v0..2`, `ceremony_capsule_<tier>`, `ceremony_merge_<tier>`, `merge_charge_*`, `meterFull`, `capsule_*`; round 3: `music_seed1_90s.wav`, `music_seed2_90s.wav`, `music_seed1_30s.png`, `music_seed2_30s.png`, `music_startstop.png`, `music_duck.png`, `mix.wav/.png`, `bump/lift/toss/strand/strandSnap.wav/.png`, `strand_orphan.png`, `round3_voices.wav`, `engine_report3.json` |
 
 ## Master chain
 
 ```
-voices -> [boost gain (poke/squish/release) | plain gain (land/pop/blend)] -> bus gain -> 20 Hz high-pass
+voices -> [boost gain (poke/squish/release) | plain gain (land/pop/blend, ceremonies, bump/lift/toss/strand)
+          | music gain (round 3: the music session, musicGain(settings.music))] -> bus gain (always stereo) -> 20 Hz high-pass
        -> DynamicsCompressor (threshold -6 dB, knee 6, ratio 12, attack 2 ms, release 12 ms)
        -> WaveShaper soft clip (transparent below 0.55, tanh knee, hard ceiling 0.89 = -1 dBFS, 2x oversampled)
        -> duck gain (1.0 unless a duck() is running) -> master gain -> AnalyserNode (fftSize 32768, for stats().peak) -> destination
 ```
+
+* Round 3 changed two things here, nothing else (same nodes, same compressor and soft-clip settings, release still 12 ms):
+  a third input (`music`) and an explicitly stereo `bus` (`channelCount 2, 'explicit', 'speakers'`). With the default
+  `'max'` mode the chain switched between mono and stereo processing whenever a panned voice started or freed itself, and
+  each switch restarted a channel's filter/limiter state: measured as run-to-run differences of up to 6e-4 (and up to
+  8e-2 with the compressor bypassed) right at those moments. A mono voice is upmixed L = R and a mono destination downmixes
+  (L + R) / 2, so every mono measurement below is unchanged (all 372 round-1/2 checks still pass).
 
 * `master` (0..1) is a squared taper: 0.5 = -12 dB. `muted` is exact silence. Both sit after the limiter, so they never
   change what the limiter does. Engine default: master 0.8 (-3.9 dB), squishBoost 0, muted false.
@@ -72,6 +83,9 @@ voices -> [boost gain (poke/squish/release) | plain gain (land/pop/blend)] -> bu
   `liveKinds` (live groups by kind). `started` gained `meterFull`, `capsule`, `reveal`, `merge`, `mergeBurst`, `duck`.
 * All numbers are sanitised at the engine boundary (NaN/Infinity/strings/negatives/huge) and again inside each voice;
   `update/end` `atTime` is ignored/clamped live (a far-future time would strand a voice).
+* Round 3: the shared 2.5 s seeded noise buffer is built inside `unlock()` instead of lazily by the first voice that needs it.
+  Measured: the first music note's scheduler tick took 28 ms because of it (now 1.2 ms); the first poke of a session paid
+  the same one-time cost before.
 
 ## Voices
 

@@ -101,6 +101,8 @@ export class Particles {
   private readonly aPosA: THREE.InstancedBufferAttribute; private readonly aVelA: THREE.InstancedBufferAttribute; private readonly aColA: THREE.InstancedBufferAttribute;
   /** Global attractor (world point + strength 1/s^2). strength 0 = off. */
   ax = 0; ay = 0; az = 0; attractK = 0;
+  /** Running totals (probe): particles emitted, and emits refused because the pool was full. */
+  emitted = 0; dropped = 0;
 
   constructor(cap: number, renderOrder = 32) {
     this.cap = cap;
@@ -134,8 +136,9 @@ export class Particles {
   clear(): void { this.n = 0; this.geo.instanceCount = 0; this.mesh.visible = false; }
 
   emit(s: EmitSpec): boolean {
-    if (this.n >= this.cap) return false;
+    if (this.n >= this.cap) { this.dropped++; return false; }
     const i = this.n++;
+    this.emitted++;
     this.px[i] = s.x; this.py[i] = s.y; this.pz[i] = s.z;
     this.vx[i] = s.vx ?? 0; this.vy[i] = s.vy ?? 0; this.vz[i] = s.vz ?? 0;
     this.age[i] = 0; this.life[i] = s.life; this.size[i] = s.size; this.kind[i] = s.kind ?? 0;

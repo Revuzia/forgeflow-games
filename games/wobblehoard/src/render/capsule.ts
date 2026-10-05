@@ -100,6 +100,9 @@ export class Capsule {
   private readonly tp = new THREE.Vector3(); private readonly bp = new THREE.Vector3();
   private readonly fp: Footprint = { cx: 0, cz: 0, rx: R, rz: R, lowY: 0, compression: 0, stretch: 0 };
   private leak = 0;
+  /** Calm-mode appearance (DESIGN 6.2 reduced motion): 0..1 fade-in instead of the drop. */
+  private fade = 1;
+  private baseOpacity = 1;
 
   constructor(hub: EnvHub, quad: THREE.BufferGeometry, lowTier: boolean) {
     this.hub = hub;
@@ -131,7 +134,7 @@ export class Capsule {
     this.bottom = new THREE.Mesh(this.geoBottom, this.shellMat);
     for (const m of [this.top, this.bottom]) { m.frustumCulled = false; m.renderOrder = 12; }
     // the neutral "wad" inside: a pale lavender glow, never the tier colour until the leak starts
-    this.wadMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.55, 0.5, 0.8), toneMapped: true, fog: false });
+    this.wadMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.55, 0.5, 0.8), toneMapped: true, fog: false, transparent: true });
     this.wad = new THREE.Mesh(this.geoWad, this.wadMat);
     this.wad.scale.setScalar(0.125);
     this.wad.renderOrder = -20; this.wad.frustumCulled = false;
@@ -147,11 +150,13 @@ export class Capsule {
   applyTier(low: boolean): void {
     const m = this.shellMat;
     this.lowTier = low;
-    if (low) { m.transmission = 0; m.transparent = true; m.opacity = 0.62; m.depthWrite = false; }
+    // both variants are `transparent` so the calm-mode fade-in is an opacity ramp, never a program switch (a recompile hitch)
+    if (low) { m.transmission = 0; m.transparent = true; this.baseOpacity = 0.62; m.depthWrite = false; }
     else {
       m.transmission = 0.9; m.thickness = 0.16; m.attenuationColor = new THREE.Color(0xc9cff0); m.attenuationDistance = 0.75;
-      m.transparent = false; m.opacity = 1; m.depthWrite = true;
+      m.transparent = true; this.baseOpacity = 1; m.depthWrite = true;
     }
+    m.opacity = this.baseOpacity * this.fade;
     m.needsUpdate = true;
   }
 
@@ -161,6 +166,16 @@ export class Capsule {
     this.y = 2.6; this.vy = 0; this.bounces = 0; this.landed = false; this.rock = 0; this.rockV = 0; this.onLand = landCb ?? null;
     this.group.visible = true; this.gone = false; this.burstT = -1;
     this.top.visible = this.bottom.visible = true;
+  }
+  /** Calm / reduced motion (DESIGN 6.2): no drop, no bounce, no wobble; it fades in where it stands (0.45 s), then `landCb` fires. */
+  appear(x: number, z: number, landCb?: () => void): void {
+    this.placeStanding(x, z);
+    this.fade = 0; this.onLand = landCb ?? null;
+    this.applyFade();
+  }
+  private applyFade(): void {
+    const f = this.fade * this.fade * (3 - 2 * this.fade);
+    this.shellMat.opacity = this.baseOpacity * f; this.wadMat.opacity = f; this.decals.alphaMul = f;
   }
   /** Appear already standing (reveal without a prior drop). */
   placeStanding(x: number, z: number): void {
@@ -207,6 +222,11 @@ export class Capsule {
   update(dt: number, time: number): void {
     if (this.gone) return;
     this.time = time;
+    if (this.fade < 1) {
+      this.fade = Math.min(1, this.fade + dt / 0.45);
+      this.applyFade();
+      if (this.fade >= 1) { this.onLand?.(); this.onLand = null; }
+    }
     this.u.uTimeC.value = time;
     // drop with two soft bounces, then a rocking wobble about the base
     if (!this.landed && this.burstT < 0) {

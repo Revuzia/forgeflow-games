@@ -32,7 +32,8 @@ vec3 whSky(vec3 d) {
   vec3 c = mix(uHorizon, uPlum, smoothstep(0.0, 0.2, e));
   c = mix(c, uInk, smoothstep(0.12, 0.6, e));
   c = mix(c, uZenith, smoothstep(0.55, 1.0, e));
-  float up = smoothstep(-0.02, 0.05, e) * (1.0 - smoothstep(0.08, 0.5, e));
+  // every term is flat (zero slope) at e = 0, like the haze below the horizon: the horizon is C1, never a visible line
+  float up = smoothstep(0.0, 0.07, e) * (1.0 - smoothstep(0.09, 0.5, e));
   vec2 az = normalize(vec2(d.x, d.z) + vec2(1e-5));
   c += uGlowWarm * pow(max(dot(az, normalize(vec2(0.3, -0.95))), 0.0), 7.0) * up;
   c += uGlowCool * pow(max(dot(az, normalize(vec2(-0.75, -0.6))), 0.0), 6.0) * up;
@@ -51,8 +52,14 @@ void main() {
     float h = max(cameraPosition.y - uGroundY, 0.05);
     float t = h / max(-d.y, 1e-4);                       // distance along the ray to the ground plane
     vec2 hp = cameraPosition.xz + d.xz * t;              // hit point
-    vec3 ground = uBase * (0.8 + 0.4 * whNoise2(hp * 1.7)) + uWarm * exp(-length(hp) * 0.42);
-    float fog = smoothstep(uFogNear, uFogFar, t);
+    // grain fades with distance (no aliasing shimmer at grazing angles)
+    vec3 ground = uBase * (0.8 + 0.4 * mix(whNoise2(hp * 1.7), 0.5, smoothstep(uFogNear, uFogFar, t))) + uWarm * exp(-length(hp) * 0.42);
+    // the haze is a smooth function of the depression ANGLE, not of distance: distance fog saturated a whole range of far rays to
+    // one constant colour, a flat band whose lower end read as a hard edge across the top of the frame. This one has no plateau and
+    // meets the sky at the horizon with zero slope on both sides (C1), at every aspect ratio, pitch and zoom.
+    float dep = -d.y;
+    float fog = 1.0 - smoothstep(0.0, 0.34, dep);
+    fog *= 1.0 - 0.5 * smoothstep(0.0, 0.34, dep);
     vec3 horizon = whSky(normalize(vec3(d.x, 0.0, d.z)));
     vec3 gcol = mix(ground, horizon, fog);
     col = mix(gcol, sky, smoothstep(-0.003, 0.004, d.y));

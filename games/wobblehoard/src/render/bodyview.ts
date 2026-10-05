@@ -45,6 +45,10 @@ export class BodyView {
    * ending reaches, and two bodies on the table do not breathe in lockstep. Advanced by the stage every frame (hidden views too).
    */
   clock = 0;
+  /** Hide the eyes (a merge parent pressed in BEHIND another one: its eyes would show through the front jelly as stray extra eyes). */
+  faceHidden = false;
+  /** Squared camera distance of the body centre (the stage's back-to-front ordering of the translucent jellies). */
+  sortDepth = 0;
   private spec: TierSpec;
   private readonly hub: EnvHub;
   private smComp = 0; private smStretch = 0; private prevSq = 0; private sqRate = 0; private touchGate = 0; private grabGate = 0;
@@ -82,6 +86,9 @@ export class BodyView {
   private applyPoolColour(): void {
     const p = this.palette.pool, t = this.style.tell, k = this.style.poolTint;
     this.decals.setColor([p[0] + (t[0] - p[0]) * k, p[1] + (t[1] - p[1]) * k, p[2] + (t[2] - p[2]) * k]);
+    // Epic+ caustic ring: mostly the tier colour (Mythic: a cool white prism tint), a little of the body's pool
+    const rc = this.style.prism ? [0.75, 0.85, 1.0] : t;
+    this.decals.setRingColor([rc[0] * 0.8 + p[0] * 0.2, rc[1] * 0.8 + p[1] * 0.2, rc[2] * 0.8 + p[2] * 0.2]);
   }
 
   /** Rarity tier styling (DESIGN 5.3). Cheap: re-styles the material and the FX in place. */
@@ -120,7 +127,9 @@ export class BodyView {
     // the local dent only counts while a finger is down or just lifted (a jiggling body also moves off its rigid goal)
     this.touchGate += ((m.fingers > 0 ? 1 : 0) - this.touchGate) * (1 - Math.exp(-dt * (m.fingers > 0 ? 30 : 7)));
     this.grabGate += ((m.grabbed || m.fingers > 0 ? 1 : 0) - this.grabGate) * (1 - Math.exp(-dt * (m.grabbed || m.fingers > 0 ? 30 : 7)));
-    const rawSq = Math.max(m.compression, j.press * 0.9 * this.touchGate);
+    // metrics.press (PHYS round 2, optional: undefined = 0) is the physics' own deepest-dent reading; feature-detected, the fine mesh's dent stays the fallback
+    const physPress = typeof m.press === 'number' && Number.isFinite(m.press) ? Math.min(1, Math.max(0, m.press)) : 0;
+    const rawSq = Math.max(m.compression, j.press * 0.9 * this.touchGate, physPress * this.touchGate);
     if (dt > 1e-4) this.sqRate += ((rawSq - this.prevSq) / dt - this.sqRate) * (1 - Math.exp(-dt / 0.06));
     this.prevSq = rawSq;
     this.smComp += (rawSq - this.smComp) * (1 - Math.exp(-dt * 14));
@@ -137,8 +146,11 @@ export class BodyView {
     fp.rx = (j.maxX - j.minX) * 0.5; fp.rz = (j.maxZ - j.minZ) * 0.5;
     fp.lowY = j.minY; fp.compression = this.smComp; fp.stretch = this.smStretch;
     this.fx.setFootprint(Math.max(fp.rx, fp.rz));
-    this.face.group.visible = this.proxy.foldAmount < 0.4;   // eyes disappear into the ball while it folds
-    this.face.update(dt, time, pointer, camera, this.smComp, Math.min(this.sqRate, m.compressionRate));
+    this.face.group.visible = this.proxy.foldAmount < 0.4 && !this.faceHidden;   // eyes disappear into the ball while it folds
+    // the happy squint is the RELEASE expression: while a finger or a grab still holds the body, a wobble of the squeeze (negative rate)
+    // must not trigger it, the eyes stay wide (CONTRACT 7: widen when squeezed, squint into happy arcs on release)
+    const rate = Math.min(this.sqRate, m.compressionRate);
+    this.face.update(dt, time, pointer, camera, this.smComp, m.fingers > 0 || m.grabbed ? Math.max(0, rate) : rate);
     this.fx.update(dt, time, body);
     this.decals.update(dt, time, fp, floatT, this.style, this.calm, this.extraPool);
     this.rarity.update(dt, time, body, fp.rx, fp.rz, floatT);

@@ -2,8 +2,8 @@
 // LOOKING at the filmstrips (_harness/browser_physics.mjs -> _shots/phys/*.png) and by the numeric gates of
 // _harness/probe_softbody.ts; the "tuned:" notes record what moved them and what broke when they moved the other way.
 import type { Genome } from '../core/genome.ts';
-import { clamp, lerp } from '../core/rng.ts';
-import { restRadiusOf } from './shape.ts';
+import { lerp } from '../core/rng.ts';
+import { physicsGenome, restRadiusOf } from './shape.ts';
 
 /** Fixed internal time step. 6 substeps per 60 Hz frame, 1 XPBD iteration each (small-step XPBD: stiffness from step size, not iteration count). */
 export const SUBSTEPS_PER_FRAME = 6;
@@ -62,10 +62,21 @@ export interface SoftParams {
   bendFloor: number;
   /** Max pull distance of a grab, in rest radii. From stretch. */
   maxPull: number;
+  /** MAT CORRAL (tabletop only; the play-mat is a 3.5 m disc, its stitched ring at 3.34 m). Inside `matR0` metres of the origin nothing
+   *  happens, so the rest pose and every interaction near the centre are untouched. Beyond it, ramping in over `matRamp` metres, the
+   *  body's outward horizontal speed is braked at `matBrake` 1/s and the body glides back toward the dead zone at up to `matGlide` m/s (never under 10% of it, so it arrives and stops).
+   *  Both act on the WHOLE body alike (a uniform velocity change, a rigid translation), so nothing deforms and the table friction never
+   *  sees it; both are off while a finger, a grab or the pinned feet hold the body, and in float mode (which has its hover spring).
+   *  Past `matRim` metres the outward speed is removed outright and the glide is 4x faster: a hard bound for hostile input (a 12 m/s nudge
+   *  every frame), never reached by a single nudge. matBrake = matGlide = 0 (and matRim huge) disables it (the probe compares).
+   *  Not genome-dependent. */
+  matR0: number; matRamp: number; matBrake: number; matGlide: number; matRim: number;
 }
 
-export function deriveParams(g: Genome): SoftParams {
-  const f = clamp(g.firmness, 0, 1), b = clamp(g.bounce, 0, 1), s = clamp(g.stretch, 0, 1);
+export function deriveParams(genome: Genome): SoftParams {
+  // every field sanitised first (physicsGenome: non-finite -> the documented default, finite -> clamped to 0..1)
+  const g = physicsGenome(genome);
+  const f = g.firmness, b = g.bounce, s = g.stretch;
   // bigger toys wobble slower, and carry the same energy at the same squash fraction (without this a size-1 body hops)
   const sizeScale = 0.5 / restRadiusOf(g);
   return {
@@ -105,6 +116,9 @@ export function deriveParams(g: Genome): SoftParams {
     // hop; 0.6..1.2 / 1.2 never triggers in the normal presses and heals what a hostile fuzz leaves.
     creaseLo: 0.6, creaseHi: 1.2, creaseGain: 1.2, bendFloor: 1,
     maxPull: 1.0 + 1.4 * s,
+    // tuned (probe 'mat corral' rows): a 12 m/s nudge (the nudge() clamp) carried the body 3-6.6 m and ten 4 m/s shoves 9 m with no corral;
+    // these keep the worst case inside ~2.5 m and bring a body back from 2.5 m to the dead zone in a few seconds
+    matR0: 0.6, matRamp: 0.6, matBrake: 6, matGlide: 0.35, matRim: 2.5,
   };
 }
 
@@ -144,6 +158,17 @@ export const FINGER = {
    *  the peak unfolded under a hard shove but flopped only 17% R (the gate wants 25%: the flop IS partly that violence); 5.5 keeps ~29% (28% since the
    *  fingertip projects every particle radially: the removed 'peakAxial' exit, see softbody.ts, collisions). */
   maxSpeed: 5.5,
+  /** Contact fold limit (softbody.ts foldLimit): near a fingertip no two neighbouring triangles may fold past this normal dihedral (degrees;
+   *  the rest shape's own maximum is 50). tuned: 110 took a hard side shove at the peak from 176-180 to 110-112, the detail-4 peak-flank tap
+   *  from 161 to 110 and a low side press at the table rim from 132 to 116, and changed nothing that did not fold (flop, wobble, presses). */
+  foldMaxDeg: 110,
+  /** ...checked on edges with a vertex within this many tip radii of a fingertip this substep. tuned: 1.0 (only the vertices inside it) left
+   *  the crease of the detail-4 peak-flank tap, which forms just beyond the contact (1.1-1.3 tip radii); 1.3 and 1.6 both fix it. */
+  foldNear: 1.3,
+  /** ...alternating with putting the touched skin back on the fingertip this many times per substep (Gauss-Seidel). tuned on the hard peak
+   *  shoves (3 directions, 3 genomes, detail 3 and 4): 1 without re-seating left the skin up to 4.7% R inside the tip; 1 with re-seating
+   *  undid the unfolding (up to 179 deg); 2: 171; 3: 142; see the probe for the value used. */
+  foldIters: 3,
   /** Max speed (rest radii per second) at which the tip sphere grows with pressure (it shrinks at once). */
   growRate: 0.6,
   /** Held >= this long (s) and in contact -> 'press' event. */

@@ -5,7 +5,10 @@ import { createMasterChain } from '/src/audio/chain.ts';
 import { createAudio } from '/src/audio/engine.ts';
 import * as D from '/src/audio/dsp.ts';
 import * as C from '/src/audio/ceremony.ts';
+import * as M from '/src/audio/music.ts';
+import * as I3 from '/src/audio/interact.ts';
 import { runEngineTests } from './engine_tests.js';
+import { runEngineTests3 } from './engine_tests3.js';
 
 export const SR = 48000;
 const BOOSTED = new Set(['poke', 'squish', 'release']);   // everything else (incl. all ceremony voices) goes to the plain bus
@@ -62,6 +65,29 @@ function squishScript(name) {
   return { events, endAt, secs, marks };
 }
 
+/** Scripted strand gestures (per-frame tension updates at 60 Hz). */
+function strandScript(name) {
+  const ev = [];
+  let endAt, secs, snapAt = null, marks = [];
+  const sm = (u) => { const t = Math.min(1, Math.max(0, u)); return t * t * (3 - 2 * t); };
+  if (name === 'stretch') {
+    // pull the strand out over 1.2 s (tension 0 -> 0.9), hold it trembling 0.25 s, then it snaps
+    for (let t = 0; t < 1.45; t += 1 / 60) ev.push({ t, tension: t < 1.2 ? 0.9 * sm(t / 1.2) : 0.9 + 0.02 * Math.sin(2 * Math.PI * 7 * t) });
+    snapAt = 1.45; endAt = 1.45; secs = 2.0;
+    marks = [{ t: 0, label: 'STRETCH' }, { t: 1.2, label: 'HOLD' }, { t: 1.45, label: 'SNAP' }];
+  } else if (name === 'orphan') {
+    // the caller simply stops calling at 0.8 s (no end(), no snap): the voice must silence and free itself
+    for (let t = 0; t < 0.8; t += 1 / 60) ev.push({ t, tension: 0.7 * sm(t / 0.8) });
+    endAt = null; secs = 2.0;
+    marks = [{ t: 0, label: 'STRETCH' }, { t: 0.8, label: 'CALLS STOP' }];
+  } else if (name === 'hold2' || name === 'hold8') {
+    const T = name === 'hold2' ? 0.2 : 0.8;
+    for (let t = 0; t < 1.0; t += 1 / 60) ev.push({ t, tension: T });
+    endAt = 1.0; secs = 1.4;
+  } else throw new Error('unknown strand script ' + name);
+  return { events: ev, endAt, secs, snapAt, marks };
+}
+
 /**
  * Render one voice offline at 48 kHz.
  * spec: { voice, seed, pitch, pan, jitter, params, secs, master, boost, chain (default true), channels, script, t0 }
@@ -72,6 +98,7 @@ async function renderVoice(spec) {
   let script = null;
   let secs = spec.secs;
   if (spec.voice === 'squish') { script = squishScript(spec.script ?? 'prl'); secs = secs ?? script.secs; }
+  if (spec.voice === 'strand') { script = strandScript(spec.script ?? 'stretch'); secs = secs ?? script.secs; }
   const ctx = new OfflineAudioContext(spec.channels ?? 1, Math.ceil((secs ?? 1) * sr), sr);
   const useChain = spec.chain !== false;
   let chain = null;
@@ -95,6 +122,23 @@ async function renderVoice(spec) {
       if (spec.killAt === undefined) voice.end(0.08, t0 + script.endAt);
       break;
     }
+    case 'bump': voice = I3.bump(ctx, out, t0, base); break;
+    case 'lift': voice = I3.lift(ctx, out, t0, base); break;
+    case 'toss': voice = I3.toss(ctx, out, t0, base); break;
+    case 'strandSnap': voice = I3.strandSnap(ctx, out, t0, base); break;
+    case 'strand': {
+      const sv = I3.strand(ctx, out, t0, base);
+      voice = sv;
+      for (const e of script.events) if (spec.killAt === undefined || e.t < spec.killAt) sv.update({ tension: revive(e.tension), pan: spec.panUpdate }, t0 + e.t);
+      let end = sv.endTime;
+      if (script.snapAt !== null && spec.killAt === undefined && spec.snap !== false) {
+        sv.end(0.03, t0 + script.snapAt);
+        const sn = I3.strandSnap(ctx, out, t0 + script.snapAt, { ...base, rng: D.makeRng((spec.seed ?? 1) + 99), tension: 0.9 });
+        end = Math.max(sn.endTime, t0 + script.snapAt + 0.05);
+      } else if (script.endAt !== null && spec.killAt === undefined) { sv.end(0.05, t0 + script.endAt); end = t0 + script.endAt + 0.08; }
+      endOverride = end;
+      break;
+    }
     case 'meterFull': voice = C.meterFull(ctx, out, t0, base); break;
     case 'grab': voice = C.grab(ctx, out, t0, base); break;
     case 'crack': voice = C.crack(ctx, out, t0, base); break;
@@ -116,9 +160,10 @@ async function renderVoice(spec) {
   if (spec.duck && chain) chain.duck(revive(spec.duck.db), revive(spec.duck.ms), t0 + (spec.duck.at ?? 0));
   if (spec.killAt !== undefined) voice.kill(0.02, t0 + spec.killAt);
   const buf = await ctx.startRendering();
+  if (spec.waitEnded) await new Promise((r) => setTimeout(r, 80));   // let the 'ended' events of the render arrive
   const chans = [];
   for (let c = 0; c < buf.numberOfChannels; c++) chans.push(b64(buf.getChannelData(c)));
-  return { sr, n: buf.length, channels: chans, t0, endTime: endOverride ?? voice.endTime, script: script && { events: script.events, endAt: script.endAt, marks: script.marks }, counters: { ...D.nodeCounters } };
+  return { sr, n: buf.length, channels: chans, t0, endTime: endOverride ?? voice.endTime, script: script && { events: script.events, endAt: script.endAt, marks: script.marks }, counters: { ...D.nodeCounters }, alive: voice.alive, voiceEnd: voice.endTime };
 }
 
 /** Full ceremonies, scheduled exactly as the time map at the top of ceremony.ts says. spec: { kind: 'capsule'|'merge', tier, calm, tierUp, isNew, mythicVariant, seed, secs } */
@@ -170,10 +215,188 @@ async function renderDuck(spec) {
   return { sr, n: buf.length, channels: [b64(buf.getChannelData(0))], t0: 0, endTime: spec.secs ?? 2 };
 }
 
-window.AV = { ready: true, SR, renderVoice, renderCeremony, renderDuck, runEngineTests, consts: {
+/* ───────────── round 3: music bed, mix, long simulation ───────────── */
+
+/**
+ * Render the music bed offline. spec: { seed, secs, sr, channels, music (volume, default 0.45), master, muted, pitch,
+ *   sessions: [{ start, stop?, fade? }] (default one session from 0.05 s), ducks: [{ from, until }], chunk (s: schedule in
+ *   live-like slices through suspend(), else all at once) }. Sessions share one Composer, exactly like the engine.
+ */
+async function renderMusic(spec) {
+  const sr = spec.sr ?? SR;
+  const secs = spec.secs ?? 30;
+  const ctx = new OfflineAudioContext(spec.channels ?? 1, Math.ceil(secs * sr), sr);
+  const chain = createMasterChain(ctx);
+  chain.apply({ master: spec.master ?? 1, squishBoost: 0, muted: !!spec.muted, music: spec.music ?? M.MUSIC_DEFAULT }, true);
+  const comp = new M.Composer(spec.seed ?? 1);
+  const sessions = (spec.sessions ?? [{ start: 0.05 }]).map((x) => ({ ...x }));
+  const ducks = (spec.ducks ?? []).slice().sort((a, b) => a.from - b.from);
+  const beds = [];
+  const plan = (until) => {
+    for (const s of sessions) {
+      if (s.start >= until) continue;
+      if (!s.bed) { s.bed = new M.MusicBed(ctx, chain.music, comp, s.start, { log: true, pitch: spec.pitch }); beds.push(s.bed); }
+      const stopAt = s.stop ?? Infinity;
+      s.bed.advance(Math.min(until, stopAt));
+      if (stopAt <= until && !s.stopped) { s.bed.stop(stopAt, s.fade ?? M.FADE_OUT_S); s.stopped = true; }
+    }
+    for (const d of ducks) {
+      if (d.done || d.from >= until) continue;
+      const s = sessions.find((q) => q.bed && q.start <= d.from && (q.stop ?? Infinity) > d.from);
+      if (s) { s.bed.pollDuck(d.from); s.bed.duckSpan(d.from, d.until); }
+      d.done = true;
+    }
+    for (const s of sessions) if (s.bed) s.bed.pollDuck(until);
+  };
+  const tick = [];
+  if (spec.chunk) {
+    const step = spec.chunk;
+    let t = 0;
+    const next = () => {
+      t += step;
+      if (t >= secs) return;
+      ctx.suspend(t).then(() => { const a = performance.now(); plan(t + M.LOOKAHEAD_S); tick.push(performance.now() - a); next(); ctx.resume(); });
+    };
+    plan(M.LOOKAHEAD_S);
+    next();
+  } else plan(secs + 1);
+  const buf = await ctx.startRendering();
+  const chans = [];
+  for (let c = 0; c < buf.numberOfChannels; c++) chans.push(b64(buf.getChannelData(c)));
+  const log = [];
+  beds.forEach((b, i) => { for (const e of b.log) log.push({ ...e, session: i }); });
+  log.sort((a, b) => a.t - b.t);
+  return { sr, n: buf.length, channels: chans, t0: 0, endTime: secs, log, fieldLog: comp.fieldLog.slice(), stats: beds.map((b) => ({ ...b.stats })), tickMs: tick };
+}
+
+/** The music's composition alone (no audio): the field walk and the notes of `bars` bars, for the drift-rule checks. */
+function composeOnly(seed, bars) {
+  const comp = new M.Composer(seed);
+  const out = [];
+  for (let i = 0; i < bars; i++) out.push(comp.nextBar());
+  return { bars: out, fieldLog: comp.fieldLog.slice() };
+}
+
+/**
+ * Music + a typical play sequence through ONE chain. spec: { seed, secs, music: bool, effects: bool, events: [{ at, voice,
+ * params, script }] }. With music on, a loud held squish ducks the music by the engine's own rule (SQUISH_DUCK_RATE, hold).
+ */
+async function renderMix(spec) {
+  const sr = SR, secs = spec.secs ?? 20;
+  const ctx = new OfflineAudioContext(1, Math.ceil(secs * sr), sr);
+  const chain = createMasterChain(ctx);
+  chain.apply({ master: 1, squishBoost: 0, muted: false, music: spec.musicVolume ?? M.MUSIC_DEFAULT }, true);
+  const comp = new M.Composer(spec.seed ?? 1);
+  const bed = spec.music ? new M.MusicBed(ctx, chain.music, comp, 0.05, {}) : null;
+  if (bed) bed.advance(secs + 1);
+  const spans = [];
+  let k = 0;
+  const fx = spec.effects !== false;
+  for (const e of spec.events ?? []) {
+    const rng = D.makeRng(1000 + k++);
+    const base = { rng, pitch: 1, pan: 0, ...(e.params || {}) };
+    const out = BOOSTED.has(e.voice) ? chain.boost : chain.plain;
+    const t = e.at;
+    let end = t;
+    if (e.voice === 'squish') {
+      // the duck follows the engine's rule in both stems, so the music stem is exactly the music inside the mix
+      const sc = squishScript(e.script ?? 'prl');
+      const v = fx ? squish(ctx, out, t, base) : null;
+      for (const q of sc.events) {
+        if (v) v.update({ compression: q.compression, rate: q.rate }, t + q.t);
+        if (bed && Math.abs(q.rate) >= M.SQUISH_DUCK_RATE) { bed.pollDuck(t + q.t); bed.duckSpan(t + q.t, t + q.t + M.SQUISH_DUCK_HOLD_S); }
+      }
+      if (v) v.end(0.08, t + sc.endAt);
+      end = t + sc.endAt + 0.1;
+    } else if (!fx) {
+      end = t + 0.5;
+    } else if (e.voice === 'strand') {
+      const sc = strandScript(e.script ?? 'stretch');
+      const v = I3.strand(ctx, out, t, base);
+      for (const q of sc.events) v.update({ tension: q.tension }, t + q.t);
+      v.end(0.03, t + sc.snapAt);
+      const sn = I3.strandSnap(ctx, out, t + sc.snapAt, { ...base, rng: D.makeRng(77 + k), tension: 0.9 });
+      end = sn.endTime;
+    } else {
+      const fn = { poke, release, land, pop, bump: I3.bump, lift: I3.lift, toss: I3.toss }[e.voice];
+      end = fn(ctx, out, t, base).endTime;
+    }
+    spans.push({ voice: e.voice, at: t, end });
+  }
+  if (bed) bed.pollDuck(secs + 1);
+  const buf = await ctx.startRendering();
+  return { sr, n: buf.length, channels: [b64(buf.getChannelData(0))], t0: 0, endTime: secs, spans };
+}
+
+/**
+ * 10 minutes (or `secs`) of music scheduled exactly like the live engine: suspend() every `stepS` of audio time, then
+ * advance(now + LOOKAHEAD_S) and pollDuck(now) (the engine's tick). Measures the tick cost, live notes and live nodes over
+ * time; ends with stop() and reports whether the nodes come back to the baseline. Nothing large is sent back.
+ */
+async function simulateMusic(spec) {
+  const sr = spec.sr ?? 22050, secs = spec.secs ?? 600, step = spec.stepS ?? 0.1;
+  const stopAt = spec.stopAt ?? secs - 4;
+  const ctx = new OfflineAudioContext(1, Math.ceil(secs * sr), sr);
+  const chain = createMasterChain(ctx);
+  chain.apply({ master: 1, squishBoost: 0, muted: false, music: M.MUSIC_DEFAULT }, true);
+  D.noiseBuffer(ctx);                                   // as the engine does in unlock()
+  await new Promise((r) => setTimeout(r, 50));
+  const base = D.liveNodeCount();
+  const comp = new M.Composer(spec.seed ?? 1);
+  const bed = new M.MusicBed(ctx, chain.music, comp, 0.05, {});
+  const tick = [];
+  let maxNodes = 0, maxLive = 0, t = 0, stopped = false, samples = 0, nodeSum = 0;
+  const run = () => {
+    const a = performance.now();
+    const now = t;
+    if (!stopped && now >= stopAt) { bed.stop(now, M.FADE_OUT_S); stopped = true; }
+    bed.advance(now + M.LOOKAHEAD_S);
+    bed.pollDuck(now);
+    // a ceremony every 47 s ducks it (exercises the duck path for the whole run)
+    if (!stopped && Math.floor(now / 47) !== Math.floor((now - step) / 47)) bed.duckSpan(now, now + 3);
+    tick.push(performance.now() - a);
+    const ln = D.liveNodeCount() - base;
+    maxNodes = Math.max(maxNodes, ln); nodeSum += ln; samples++;
+    maxLive = Math.max(maxLive, bed.liveAt(now));
+  };
+  const next = () => {
+    t += step;
+    if (t >= secs - step) return;
+    ctx.suspend(t).then(() => { run(); next(); ctx.resume(); });
+  };
+  run();
+  next();
+  const buf = await ctx.startRendering();
+  const d = buf.getChannelData(0);
+  let pk = 0, ss = 0, bad = 0, maxStep = 0;
+  for (let i = 0; i < d.length; i++) { const v = d[i]; if (!Number.isFinite(v)) { bad++; continue; } const a = Math.abs(v); if (a > pk) pk = a; ss += v * v; if (i) maxStep = Math.max(maxStep, Math.abs(v - d[i - 1])); }
+  await new Promise((r) => setTimeout(r, 300));       // let the last 'ended' events arrive
+  bed.free();
+  await new Promise((r) => setTimeout(r, 50));
+  const sorted = tick.slice().sort((a, b) => a - b);
+  return {
+    secs, sr, ticks: tick.length, tickMeanMs: tick.reduce((a, b) => a + b, 0) / tick.length, tickP99Ms: sorted[Math.floor(sorted.length * 0.99)], tickMaxMs: sorted[sorted.length - 1],
+    maxLiveNotes: maxLive, statsMaxLive: bed.stats.maxLive, maxLiveNodes: maxNodes, meanLiveNodes: nodeSum / samples, endLiveNodes: D.liveNodeCount() - base,
+    stats: { ...bed.stats }, fieldLog: comp.fieldLog.slice(), peak: pk, rmsDb: 20 * Math.log10(Math.sqrt(ss / d.length) + 1e-12), bad, maxStep,
+  };
+}
+
+/** The pure bump limiter, driven with synthetic times: [{ t, intensity }] -> [{ t, out }] (out null = skipped). */
+function bumpLimiterRun(calls) {
+  const L = new I3.BumpLimiter();
+  return { out: calls.map((c) => ({ t: c.t, in: c.intensity, out: L.admit(c.intensity, c.t) })), throttled: L.throttled };
+}
+
+window.AV = { ready: true, SR, renderVoice, renderCeremony, renderDuck, runEngineTests, runEngineTests3, renderMusic, renderMix, simulateMusic, composeOnly, bumpLimiterRun, consts: {
   TIERS: C.TIERS, CAPSULE_BUDGET_S: C.CAPSULE_BUDGET_S, MERGE_BUDGET_S: C.MERGE_BUDGET_S, PRE_ROLL_S: C.PRE_ROLL_S, REVEAL_DEFAULT_S: C.REVEAL_DEFAULT_S,
   MERGE_CHARGE_S: C.MERGE_CHARGE_S, MERGE_BURST_S: C.MERGE_BURST_S, BURST_GAP_S: C.BURST_GAP_S, CALM_SCALE: C.CALM_SCALE, MYTHIC_MOTIFS: C.MYTHIC_MOTIFS,
-} };
+}, musicConsts: {
+  BPM: M.MUSIC_BPM, BEAT_S: M.BEAT_S, BAR_S: M.BAR_S, SLOT_S: M.SLOT_S, SWING: M.SWING, MAX_LIVE_NOTES: M.MAX_LIVE_NOTES, LOOKAHEAD_S: M.LOOKAHEAD_S, TICK_MS: M.TICK_MS,
+  FADE_IN_S: M.FADE_IN_S, FADE_OUT_S: M.FADE_OUT_S, PAUSE_FADE_S: M.PAUSE_FADE_S, FIRST_NOTE_S: M.FIRST_NOTE_S, DUCK_DB: M.DUCK_DB, DUCK_ATTACK_TC: M.DUCK_ATTACK_TC, DUCK_RELEASE_TC: M.DUCK_RELEASE_TC,
+  ECHO_S: M.ECHO_S, MUSIC_DEFAULT: M.MUSIC_DEFAULT, SQUISH_DUCK_RATE: M.SQUISH_DUCK_RATE, SQUISH_DUCK_HOLD_S: M.SQUISH_DUCK_HOLD_S, MEL_LO: M.MEL_LO, MEL_HI: M.MEL_HI,
+  FIELDS: M.FIELDS, FIELD_NEXT: M.FIELD_NEXT, FIELD_BARS: M.FIELD_BARS,
+}, limiterConsts: { MIN_INTENSITY: I3.BumpLimiter.MIN_INTENSITY, MIN_GAP_S: I3.BumpLimiter.MIN_GAP_S, CAPACITY: I3.BumpLimiter.CAPACITY, REFILL_PER_S: I3.BumpLimiter.REFILL_PER_S, RECENT_S: I3.BumpLimiter.RECENT_S },
+  strandConsts: { SILENCE_S: I3.STRAND_SILENCE_S, STOP_S: I3.STRAND_STOP_S } };
 window.AV.noteOnsets = (tier, durationS, calm, burst) => { const ti = C.tierIdx(tier); const lay = C.layout(ti, durationS, !!calm, !!burst); return { lay, onsets: C.noteOnsets(ti, lay) }; };
 
 /* ───────────── human-facing sound lab (live engine) ───────────── */
@@ -186,10 +409,32 @@ async function unlock() { await audio.unlock(); sync(); }
 function sync() {
   audio.setSettings({ master: +$('master').value, squishBoost: +$('boost').value, muted: $('mute').checked });
   state.amt = +$('amt').value; state.pitch = +$('pitch').value;
+  audio.setMusic({ on: $('musicOn').checked, volume: +$('music').value });
+  $('musicV').textContent = (+$('music').value).toFixed(2);
   $('pitchV').textContent = state.pitch.toFixed(2); $('amtV').textContent = state.amt.toFixed(2);
   $('masterV').textContent = (+$('master').value).toFixed(2); $('boostV').textContent = (+$('boost').value).toFixed(2);
 }
-for (const id of ['master', 'boost', 'mute', 'amt', 'pitch']) $(id).addEventListener('input', sync);
+for (const id of ['master', 'boost', 'mute', 'amt', 'pitch', 'musicOn', 'music']) $(id).addEventListener('input', sync);
+$('musicOn').addEventListener('change', async () => { await unlock(); sync(); });
+for (const b of document.querySelectorAll('button[data-r]')) {
+  b.addEventListener('pointerdown', async () => {
+    await unlock();
+    const v = b.dataset.r;
+    if (v === 'bump') audio.bump({ intensity: state.amt, pitch: state.pitch });
+    else if (v === 'lift') audio.lift({ pitch: state.pitch });
+    else if (v === 'toss') audio.toss({ speed: state.amt });
+  });
+}
+{
+  // strand: hold = stretch (tension rises over ~1.2 s, called every frame like the shell will), release = snap
+  const el = $('strand');
+  let held = false, t0 = 0;
+  const loop = () => { if (!held) return; audio.strand({ tension: Math.min(1, (performance.now() - t0) / 1200), pitch: state.pitch }); requestAnimationFrame(loop); };
+  el.addEventListener('pointerdown', async (e) => { await unlock(); el.setPointerCapture(e.pointerId); held = true; t0 = performance.now(); requestAnimationFrame(loop); });
+  const up = () => { if (!held) return; held = false; audio.strand({ tension: Math.min(1, (performance.now() - t0) / 1200), snap: true, pitch: state.pitch }); };
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', up);
+}
 $('unlock').addEventListener('click', unlock);
 for (const b of document.querySelectorAll('button[data-v]')) {
   b.addEventListener('pointerdown', async () => {

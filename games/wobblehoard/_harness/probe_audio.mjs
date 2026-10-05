@@ -1,5 +1,6 @@
 // WOBBLEHOARD audio probe (gate G2 + extra sanity + engine stress).
 //   node _harness/probe_audio.mjs [--voices=poke,pop] [--no-engine] [--port=5363]
+//   round 3 (music bed + interaction voices): --no-round3 skips it, --only3 runs only it (offline + its live engine part)
 // Renders every voice offline in Chromium (OfflineAudioContext, 48 kHz) through the SAME master chain the game uses,
 // analyses the samples in Node, writes WAV + spectrogram PNG per voice to _harness/_renders/ (gitignored), prints a table
 // and exits 1 on any failed check. Nobody on the build machine can listen: every number here is a measurement.
@@ -10,12 +11,14 @@ import {
   metrics, dominant, centroidTrack, pitchTrack, trackAt, median, wavBuffer, spectrogramPng,
 } from './audioview/analysis.mjs';
 import { ceremonyChecks } from './audioview/ceremony_checks.mjs';
+import { round3Checks } from './audioview/music_checks.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => { const [k, v] = a.slice(2).split('='); return [k, v ?? true]; }));
 const PORT = Number(args.port ?? 5363);
 const OUT = resolve(ROOT, '_harness', '_renders');
 mkdirSync(OUT, { recursive: true });
 const only = args.voices ? String(args.voices).split(',') : null;
+const only3 = !!args.only3;
 
 /* ───────────────────────── checks bookkeeping ───────────────────────── */
 const checks = [];
@@ -343,15 +346,15 @@ async function main() {
     await page.waitForFunction(() => window.AV && window.AV.ready, null, { timeout: 60000 });
 
     for (const name of Object.keys(SPEC)) {
-      if ((only && !only.includes(name)) || args['skip-voices']) continue;
+      if ((only && !only.includes(name)) || args['skip-voices'] || only3) continue;
       try { await probeVoice(name); } catch (e) { check(`G2 ${name}`, 'probe ran', false, String(e && e.stack || e), 'no exception'); }
     }
 
-    if (!only && !args['no-ceremony']) {
+    if (!only && !args['no-ceremony'] && !only3) {
       try { extra.ceremony = await ceremonyChecks({ page, check, OUT }); } catch (e) { check('ceremony', 'ceremony gates ran', false, String(e && e.stack || e), 'no exception'); }
     }
 
-    if (!args['no-engine'] && !only) {
+    if (!args['no-engine'] && !only && !only3) {
       try {
         // fresh page: the offline renders above leave never-ended sources in the page-wide node counters
         await page.goto(`${vite.url}_harness/audioview/index.html`);
@@ -361,7 +364,27 @@ async function main() {
         writeFileSync(resolve(OUT, 'engine_report.json'), JSON.stringify(res, null, 2));
       } catch (e) { check('engine', 'engine tests ran', false, String(e && e.stack || e), 'no exception'); }
     }
-    if (!args['no-engine'] && !only) {
+    // round 3 runs after the round-1/2 live tests, so their conditions are exactly what they were before round 3 (the long
+    // music renders below leave a lot of garbage behind)
+    if (!only && !args['no-round3']) {
+      try {
+        await page.goto(`${vite.url}_harness/audioview/index.html`);
+        await page.waitForFunction(() => window.AV && window.AV.ready, null, { timeout: 60000 });
+        extra.round3 = await round3Checks({ page, check, OUT });
+      } catch (e) { check('round 3', 'round-3 offline gates ran', false, String(e && e.stack || e), 'no exception'); }
+    }
+    if (!args['no-engine'] && !only && !args['no-round3']) {
+      try {
+        // round 3 live engine: music bed + interaction voices, on a fresh page (clean counters)
+        await page.goto(`${vite.url}_harness/audioview/index.html`);
+        await page.waitForFunction(() => window.AV && window.AV.ready, null, { timeout: 60000 });
+        const res = await page.evaluate(() => window.AV.runEngineTests3());
+        if (res.info && res.info.todo) check('engine round 3', 'round-3 engine tests implemented', false, 'placeholder', 'implemented');
+        for (const c of res.checks) check('engine round 3', c.name, c.pass, c.value, c.limit);
+        writeFileSync(resolve(OUT, 'engine_report3.json'), JSON.stringify(res, null, 2));
+      } catch (e) { check('engine round 3', 'round-3 engine tests ran', false, String(e && e.stack || e), 'no exception'); }
+    }
+    if (!args['no-engine'] && !only && !only3) {
       // the human-facing sound lab page: click through every control and read its own stats readout
       try {
         await page.goto(`${vite.url}_harness/audioview/index.html`);
@@ -385,6 +408,18 @@ async function main() {
         check('lab page', 'ceremony buttons start their voices (meterFull, capsule grab/crack/burst, reveal, merge, duck)', started.meterFull >= 1 && started.capsule >= 3 && started.reveal >= 1 && started.merge >= 1 && started.duck >= 1, JSON.stringify({ meterFull: started.meterFull, capsule: started.capsule, reveal: started.reveal, merge: started.merge, duck: started.duck }), 'all >= 1, capsule >= 3');
         check('lab page', 'every button starts its voice (poke 2, release 2, land, pop, blend, squish)', started.poke >= 2 && started.release >= 1 && started.land >= 1 && started.pop >= 1 && started.blend >= 1 && started.squish >= 1, JSON.stringify(started), 'all >= 1');
         check('lab page', 'engine is running and the readout is finite', out.state === 'running' && Number.isFinite(out.peak), `${out.state}, peak ${Number(out.peak).toFixed(3)}`, 'running');
+        if (!args['no-round3']) {
+          // round 3 controls: music toggle, bump / lift / toss buttons, strand hold (stretch then snap)
+          await page.check('#musicOn');
+          for (const v of ['bump', 'lift', 'toss']) { await page.click(`button[data-r="${v}"]`); await page.waitForTimeout(150); }
+          const sb = await page.locator('#strand').boundingBox();
+          await page.mouse.move(sb.x + 20, sb.y + 10); await page.mouse.down(); await page.waitForTimeout(700); await page.mouse.up();
+          await page.waitForTimeout(600);
+          const out3 = JSON.parse(await page.textContent('#out'));
+          const st3 = out3.started;
+          check('lab page', 'round-3 controls start their voices (music session, bump, lift, toss, one held strand + its snap)', st3.music >= 1 && st3.bump >= 1 && st3.lift >= 1 && st3.toss >= 1 && st3.strand === 1 && st3.strandSnap === 1, JSON.stringify({ music: st3.music, bump: st3.bump, lift: st3.lift, toss: st3.toss, strand: st3.strand, strandSnap: st3.strandSnap }), 'all >= 1, strand 1, snap 1');
+          await page.uncheck('#musicOn');
+        }
       } catch (e) { check('lab page', 'lab page ran', false, String(e && e.stack || e), 'no exception'); }
     }
     check('page', 'no console errors/warnings/page errors', pageErrors.length === 0, pageErrors.length ? pageErrors.slice(0, 3).join(' | ') : '0', '0');

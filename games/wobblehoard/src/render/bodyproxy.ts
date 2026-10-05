@@ -27,8 +27,14 @@ export class BodyProxy implements SoftBodyLike {
   readonly offset: V3 = { x: 0, y: 0, z: 0 };
   /** Uniform scale about the body's table contact (pop-in from the capsule, absorbed parents). */
   scale = 1;
-  /** Contact squash against another body: axis (horizontal unit vector) and amount 0..0.6. */
-  squashAx = 1; squashAz = 0; squashAmt = 0;
+  /**
+   * Contact squash against another body (merge T0): a contact PLANE on the side facing (-squashAx, -squashAz), `squashPlane` world
+   * units from the centre. Skin that would cross it is flattened onto it and the displaced jelly bulges out sideways and up, like
+   * two water balloons pressed together; the far side keeps its shape. `squashAmt` 0..1 blends the effect in.
+   */
+  squashAx = 1; squashAz = 0; squashAmt = 0; squashPlane = 1e9;
+  /** Contact planes on BOTH sides along the axis (the middle body of a 3-in-a-row merge, pressed from left and right). */
+  squashTwoSided = false;
   /** Extra "charge" compression 0..1 (blush, core brightening) for the merge ball. */
   charge = 0;
 
@@ -108,12 +114,12 @@ export class BodyProxy implements SoftBodyLike {
     const ox = this.offset.x, oy = this.offset.y, oz = this.offset.z;
     const R = this.foldRadius;
     const cx = c.x, cy = c.y, cz = c.z;
-    const sqA = this.squashAmt, ax = this.squashAx, az = this.squashAz;
+    const sqA = this.squashAmt, ax = this.squashAx, az = this.squashAz, plane = this.squashPlane, two = this.squashTwoSided;
     const rr = this.restRadius * 0.012 * tr;
-    // contact squash: shorten along the horizontal axis a, widen across it (volume ~ conserved)
-    const sAlong = 1 - sqA, sAcross = 1 + 0.5 * sqA;
+    const Rr = this.restRadius;
     const moved = f > 1e-3 || bs !== 0 || tr > 0 || sc !== 1 || sqA > 1e-3;
     let shift = 0;
+    let maxOver = 0;
     if (!moved) {
       for (let i = 0; i < n * 3; i += 3) { out[i] = P[i] + ox; out[i + 1] = P[i + 1] + oy; out[i + 2] = P[i + 2] + oz; }
     } else {
@@ -126,9 +132,22 @@ export class BodyProxy implements SoftBodyLike {
           dx += dx * k; dy += dy * k; dz += dz * k;
         }
         if (sqA > 1e-3) {
+          // flatten onto the contact plane (along = -plane), push the displaced volume out across the axis and up
           const along = dx * ax + dz * az;
-          const px = dx - ax * along, pz = dz - az * along;
-          dx = ax * along * sAlong + px * sAcross; dz = az * along * sAlong + pz * sAcross; dy *= sAcross * 0.5 + 0.5;
+          let over = -plane - along, side = 1;              // > 0: this skin point is past the contact plane (on the -axis side)
+          if (two && along - plane > over) { over = along - plane; side = -1; }   // ... or past the mirrored one on the +axis side
+          if (over > 0) {
+            if (over > maxOver) maxOver = over;
+            const k = sqA * over;
+            const nAlong = along + side * k * 0.92;          // nearly flat face (a little give)
+            const bul = 1 + sqA * 0.55 * Math.min(1.5, over / Rr);
+            const px = (dx - ax * along) * bul, pz = (dz - az * along) * bul;
+            dx = ax * nAlong + px; dz = az * nAlong + pz; dy = dy * (1 + sqA * 0.25 * Math.min(1.5, over / Rr)) + sqA * 0.12 * over;
+          } else {
+            const g = 1 + sqA * 0.06 * Math.max(0, 1 - (-over) / Rr);   // a little general swelling near the contact
+            const px = (dx - ax * along) * g, pz = (dz - az * along) * g;
+            dx = ax * along + px; dz = az * along + pz;
+          }
         }
         if (tr > 0) {
           dx += Math.sin(t * 61 + v * 1.7) * rr; dy += Math.sin(t * 53 + v * 2.3) * rr; dz += Math.sin(t * 47 + v * 0.9) * rr;
@@ -146,7 +165,8 @@ export class BodyProxy implements SoftBodyLike {
     this.center.x = cx + ox; this.center.y = cy + oy + shift; this.center.z = cz + oz;
     // --- strain / metrics (blush and core brightening react to the puppet) ---
     const S = inner.strain, so = this.strain;
-    const pc = Math.min(1, f * 0.35 + this.charge * 0.45 + sqA * 0.7);
+    const pressed = sqA * Math.min(1, maxOver / (0.3 * Rr));       // how hard the contact face is pressed (0 until the bodies touch)
+    const pc = Math.min(1, f * 0.35 + this.charge * 0.45 + pressed * 0.7);
     const sk = 1 - 0.1 * pc;
     for (let i = 0; i < n; i++) so[i] = S[i] * sk;
     const m = this.metrics, im = inner.metrics;

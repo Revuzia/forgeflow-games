@@ -4,10 +4,13 @@
 //   * stage-OWNED bodies (created through spec.createBody, stepped by the stage) rendered through BodyProxy puppets,
 //   * the capsule object, the shared Particles system, the ScreenFx light ramp, camera offsets (push / arc), the time-scale dip,
 //   * the beats the shell hooks audio and haptics to: grab, crack, burst, reveal (capsule) / press, fold, charge, burst, reveal (merge) + settle.
-// Budgets are 6.1 exactly (wall clock; the time-scale dip slows physics and particles, never the schedule). Flash safety (6.6) goes
-// through the FlashGovernor; calm mode removes camera moves, slow-mo, pulses and the screen flash, thins particles to x0.3, turns rings into
-// fades and shortens everything x0.65. skip() renders the current frame, snapshots it, jumps to the final state and fades the snapshot out
-// over 120 ms.
+// Budgets are 6.1 exactly (wall clock; the time-scale dip slows physics and particles, never the schedule). Beat times follow the audio
+// lane's time map (_spec/SOUND.md): capsule grab 0, crack 0.35, preroll 0.65 (Rare+), burst 0.65 + pre-roll, reveal burst + 0.35;
+// merge press 0, fold 0.4, charge 0.9, burst at MERGE_BURST_AT_S (= audio MERGE_CHARGE_S), reveal burst + 0.2. Calm scales all of it x0.65.
+// Flash safety (6.6) goes through the FlashGovernor; calm mode removes camera moves, slow-mo, pulses and the screen flash, thins particles to
+// x0.3, turns rings into fades and shortens everything x0.65. skip() renders the current frame, snapshots it, jumps to the final state
+// (including the result view's own clock, so its idle cycles are exactly where the natural ending leaves them) and fades the snapshot out
+// over 120 ms. Every run keeps `stats` (burst particles, rings, push / arc, time-scale dip, light ramps) for the probe.
 import * as THREE from 'three';
 import type { CapsuleRevealSpec, CeremonyBeat, CeremonyHandle, CeremonyHooks, MergeCeremonySpec, SoftBodyLike, TierName } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
@@ -110,6 +113,11 @@ abstract class Run implements CeremonyHandle {
   protected readonly calm: boolean;
   protected readonly tmp: Rgb = [1, 1, 1];
   resultView: BodyView | null = null;
+  /**
+   * What the run actually did, for the probe to hold against the DESIGN 6.3 escalation table: burst particles emitted, rings / calm fades
+   * spawned, the deepest push (+) or pull-back (-) and the widest arc, the lowest time scale and how long it stayed under 1, screen ramps.
+   */
+  readonly stats = { burstParticles: 0, rings: 0, fades: 0, push: 0, pull: 0, arcDeg: 0, minTimeScale: 1, dipSeconds: 0, ramps: 0 };
   // flash ramp
   private rampStart = -1; private rampAmp = 0;
 
@@ -151,10 +159,15 @@ abstract class Run implements CeremonyHandle {
     if (this.finished) return 1;
     if (this.skipping) { this.skipLeft -= dt; if (this.skipLeft <= 0) this.end(); return 1; }
     this.t += dt;
-    const ts = this.tick(dt);
+    const raw = this.tick(dt);
+    const ts = this.calm ? 1 : raw;   // calm: no slow-motion
     this.updateRamp();
+    const st = this.stats, cf = this.host.cameraFx;
+    st.push = Math.max(st.push, 1 - cf.dist); st.pull = Math.max(st.pull, cf.dist - 1); st.arcDeg = Math.max(st.arcDeg, Math.abs(cf.yaw) * 180 / Math.PI);
+    st.minTimeScale = Math.min(st.minTimeScale, raw, ts);   // raw: what the run itself animated with (the result's hop), ts: what physics got
+    if (Math.min(raw, ts) < 0.999) st.dipSeconds += dt;
     if (this.t >= this.duration) { this.finalize(false); this.beat('settle'); this.end(); }
-    return this.calm ? 1 : ts;
+    return ts;
   }
 
   protected end(): void { if (this.finished) return; this.finished = true; this.host.screen.setLight(0, 0, 0, 0); this.resolveDone(); }
@@ -165,7 +178,7 @@ abstract class Run implements CeremonyHandle {
   /** The ONE light ramp of a burst (attack 80 ms, decay 400 ms), through the flash governor. */
   protected startRamp(): void {
     const a = this.host.flash.flash(this.host.now(), FLASH_AMP[this.style.index]);
-    if (a > 0) { this.rampStart = this.t; this.rampAmp = a; }
+    if (a > 0) { this.rampStart = this.t; this.rampAmp = a; this.stats.ramps++; }
   }
   private updateRamp(): void {
     if (this.rampStart < 0) return;
@@ -189,6 +202,7 @@ abstract class Run implements CeremonyHandle {
   /** The 6.3 particle table at the burst, plus the staggered rings (>= 500 ms apart, fades in calm mode). */
   protected burstParticles(cx: number, cy: number, cz: number, scale: number, view: BodyView | null): void {
     const P = this.host.particles, i = this.style.index, rng = this.rng, k = this.calm ? 0.3 : 1;
+    const before = P.emitted;
     const tell = this.style.tell;
     const mix = (t: number, w: number): number => t * (1 - w) + w;
     const col = (j: number): Rgb => {
@@ -221,7 +235,17 @@ abstract class Run implements CeremonyHandle {
       const z = rng() * 2 - 1, a = rng() * Math.PI * 2, rr = Math.sqrt(1 - z * z), sp = (0.5 + 0.8 * rng()) * scale, c = spectrum(rng(), this.tmp);
       P.emit({ x: cx, y: cy, z: cz, vx: rr * Math.cos(a) * sp, vy: (Math.abs(z) * 0.8 + 0.2) * sp, vz: rr * Math.sin(a) * sp, life: 1.6 + 0.6 * rng(), size: 0.034 * scale, kind: 1, r: c[0] * 0.5 + 0.5, g: c[1] * 0.5 + 0.5, b: c[2] * 0.5 + 0.5, a: 0.95, drag: 1.8, fade: 2 });
     }
+    this.stats.burstParticles += P.emitted - before;
     void view;
+  }
+
+  /**
+   * One shock ring through the governor (>= 500 ms apart from ANY other ring), or its calm-mode fade. `escalation` = one of the 6.3 table's
+   * rings (counted for the probe); the Legendary+ landing "wobble ring" of DESIGN 5.3 is not, but it obeys the same gap.
+   */
+  protected spawnRing(v: BodyView, x: number, z: number, gain: number, escalation = true): void {
+    if (this.calm) { v.fx.spawn('ring', { x, y: 0, z }, gain); if (escalation) this.stats.fades++; return; }   // the view's Fx is in calm mode: a soft fade disc
+    if (this.host.flash.ring(this.host.now())) { v.fx.spawn('ring', { x, y: 0, z }, gain); if (escalation) this.stats.rings++; }
   }
 
   /** Rings: staggered >= 500 ms apart through the governor (fades in calm mode: same count and spacing). */
@@ -238,6 +262,9 @@ export class CapsuleRun extends Run {
   private readonly cap: Capsule;
   private readonly spec: CapsuleRevealSpec;
   private readonly others: BodyView[];
+  /** spec.keepCurrent: the current squishy slides ASIDE and stays (not the primary any more), instead of sliding off and being removed. */
+  private readonly keep: boolean;
+  private readonly asideX: number;
   private readonly tb: { b0: number; b1: number; b2: number; b3: number; burstAt: number; revealAt: number };
   private readonly ks: number;
   private readonly pillar: LightPillar | null;
@@ -267,7 +294,9 @@ export class CapsuleRun extends Run {
     this.cap = host.capsule() ?? host.ensureCapsule();
     if (!this.cap.landed && this.cap.group.visible === false) this.cap.placeStanding(0, 0.25);
     this.sq0 = this.cap.squeezeAmount;
-    this.others = spec.keepCurrent ? [] : host.allViews().filter((v) => v.visible);
+    this.others = host.allViews().filter((v) => v.visible);
+    this.keep = !!spec.keepCurrent;
+    this.asideX = -Math.min(1.3, Math.max(0.75, host.viewHalfWidth() * 0.62));
     this.pillar = i === 4 ? new LightPillar() : null;
     this.dome = i === 5 ? new PrismDome() : null;
     if (this.pillar) host.addToScene(this.pillar.mesh);
@@ -285,7 +314,8 @@ export class CapsuleRun extends Run {
     const t = this.t, st = this.style, i = st.index, host = this.host, cap = this.cap;
     // --- the player's current squishy slides off; the capsule slides to the centre ---
     const slide = smooth(0, 0.5 * this.ks, t);
-    for (const v of this.others) { v.proxy.offset.x = -3.4 * slide; if (slide >= 1) v.setVisible(false); }
+    if (this.keep) for (const v of this.others) v.proxy.offset.x = this.asideX * v.scale * slide;
+    else for (const v of this.others) { v.proxy.offset.x = -3.4 * slide; if (slide >= 1) v.setVisible(false); }
     cap.slideTo(0, 0.25, 1 - Math.exp(-dt * 7));
     this.cx = cap.pos.x; this.cz = cap.pos.z;
     // --- B0: grab ---
@@ -326,7 +356,7 @@ export class CapsuleRun extends Run {
     if (this.burst) {
       // time-scale dip (physics and particles only)
       const [dipScale, dipLen] = DIP[i];
-      if (dipLen > 0) {
+      if (dipLen > 0 && !this.calm) {   // calm: no slow-motion at all (not even for the result's hop)
         const a = t - burstAt;
         const w = smooth(0, 0.04, a) * (1 - smooth(dipLen, dipLen + 0.09, a));
         ts = 1 - (1 - dipScale) * w;
@@ -337,15 +367,14 @@ export class CapsuleRun extends Run {
       while (this.ringIdx < this.rings.length && t >= this.rings[this.ringIdx]) {
         this.ringIdx++;
         const v = this.resultView;
-        if (v && (this.calm || host.flash.ring(host.now()))) v.fx.spawn('ring', { x: this.cx, y: 0, z: this.cz }, RING_GAIN[this.ringIdx - 1] ?? 0.3);
+        if (v) this.spawnRing(v, this.cx, this.cz, RING_GAIN[this.ringIdx - 1] ?? 0.3);
       }
       if (this.pillar) this.pillar.set(this.cx, this.cz, 0.22 + 0.5 * (t - burstAt), 3.2, st.tell, 0.2 * Math.max(0, 1 - (t - burstAt) * 1.3));
       if (this.dome) this.dome.set(this.cx, this.cz, 0.62 + 0.7 * smooth(0, 0.6, t - burstAt), 0.8 + 0.8 * smooth(0, 0.6, t - burstAt), 0.85 * (1 - smooth(0.4, 1.4, t - burstAt)), t);
     }
     if (t >= this.tb.revealAt) this.beat('reveal');
+    // the 6.3 camera column, exactly (Common: none): push / pull-back / arc from the burst, eased back before the end
     this.camera(burstAt, 0.5 * this.ks + 0.2, this.duration, 0.3 * this.tb.b3);
-    // close in on the capsule while it is being squeezed open, then ease back out as it bursts
-    if (!this.calm) host.cameraFx.dist *= 1 - 0.11 * smooth(0, 0.35 * this.ks, t) * (1 - smooth(burstAt, burstAt + 0.3 * this.ks + 0.1, t));
     void revealAt;
     return ts;
   }
@@ -405,7 +434,8 @@ export class CapsuleRun extends Run {
     this.cap.hide(); host.discardCapsule();
     if (this.pillar) { host.removeFromScene(this.pillar.mesh); this.pillar.dispose(); }
     if (this.dome) { host.removeFromScene(this.dome.mesh); this.dome.dispose(); }
-    for (const v of this.others) host.removeView(v);
+    if (this.keep) for (const o of this.others) o.proxy.offset.x = this.asideX * o.scale;
+    else for (const o of this.others) host.removeView(o);
     const v = this.resultView as BodyView;
     v.setVisible(true);
     v.proxy.setOffset(0, 0, 0); v.proxy.scale = 1; v.proxy.popFrom(0, 0);
@@ -438,6 +468,11 @@ export class MergeRun extends Run {
   private readonly mixCol: Rgb;
   private bodyScale = 1;
   private ballCx = 0; private ballCy = 0.4; private ballCz = 0;
+  /**
+   * 2 parents: a pair side by side. 3 parents: in a ROW (left, middle, right; the middle one is pressed from both sides) where the frame is
+   * wide enough, else a TRIANGLE (one in front, two behind) whose back pair closes its eyes once pressed in behind the front one.
+   */
+  private readonly layout: 'pair' | 'row' | 'triangle';
 
   constructor(host: CeremonyHost, spec: MergeCeremonySpec, hooks: CeremonyHooks | undefined) {
     const tier = spec.result.tier, tierUp = !!spec.result.tierUp, calm = host.calm();
@@ -453,11 +488,16 @@ export class MergeRun extends Run {
     this.others = host.allViews().filter((v) => v.visible);
     for (const v of this.others) v.setVisible(false);
     const n = Math.max(2, Math.min(3, spec.parents.length));
+    const hw = host.viewHalfWidth();
+    this.layout = n === 2 ? 'pair' : hw >= 1.25 ? 'row' : 'triangle';
     for (let k = 0; k < n; k++) {
       const p = spec.parents[k] ?? spec.parents[0];
-      const ang = n === 2 ? (k === 0 ? Math.PI : 0) : Math.PI / 2 + (k * 2 * Math.PI) / 3;
-      const reach = Math.max(0.95, Math.min(1.55, host.viewHalfWidth() * 0.9));   // portrait phones are narrow: start inside the picture
-      this.start.push({ x: Math.cos(ang) * (n === 2 ? reach : reach * 0.97), z: Math.sin(ang) * (n === 2 ? 0 : 1.2) });
+      // start inside the picture: on a portrait phone the half-width at the pad is ~0.76, so the parents start ~0.5 out (mostly in view)
+      // and slide the short way in; on desktop they come from ~1.2
+      const reach = Math.max(0.45, Math.min(1.55, hw * 0.9 - 0.15));
+      if (this.layout === 'pair') this.start.push({ x: k === 0 ? -reach : reach, z: 0 });
+      else if (this.layout === 'row') this.start.push({ x: k === 0 ? 0 : (k === 1 ? -1 : 1) * Math.max(0.9, hw * 0.95 - 0.3), z: 0 });
+      else { const ang = Math.PI / 2 + (k * 2 * Math.PI) / 3; this.start.push({ x: Math.cos(ang) * reach * 0.97, z: Math.sin(ang) * 1.2 }); }
       const v = host.createOwned(p.genome, spec.createBody, p.tier ?? 'common');
       v.proxy.setOffset(this.start[k].x, 0, this.start[k].z);
       this.parents.push(v);
@@ -480,8 +520,8 @@ export class MergeRun extends Run {
   }
 
   private dirOf(k: number): { x: number; z: number } {
-    const s = this.start[k]; const l = Math.hypot(s.x, s.z) || 1;
-    return { x: s.x / l, z: s.z / l };
+    const s = this.start[k]; const l = Math.hypot(s.x, s.z);
+    return l > 1e-6 ? { x: s.x / l, z: s.z / l } : { x: 1, z: 0 };    // the middle of a row sits on the pad: its axis is the row
   }
 
   protected tick(dt: number): number {
@@ -492,14 +532,23 @@ export class MergeRun extends Run {
     if (t < b.t3) {
       // ---- T0 press together / T1 fold ----
       const slide = smooth(0, b.a1, t);
-      const gap = 0.33 * sc;                                    // each body's centre distance from the pad: touching, squashed
+      const row = this.layout === 'row';
+      // each body's centre distance from the pad once slid in (overlapping = pressed); a row's side bodies press into the middle one
+      const gap = (row ? 0.66 : 0.33) * sc;
       const foldP = smooth(b.t1, b.t2, t);
-      const squash = 0.55 * smooth(b.a1 * 0.3, b.a1, t) * (1 - smooth(b.t1 + b.a2 * 0.2, b.t2, t));
+      // the contact plane sits between the bodies, so the flattening starts exactly when they touch; it lets go during the fold
+      const squash = 1 - smooth(b.t1 + b.a2 * 0.25, b.t2, t);
+      const sideX = row ? Math.abs(this.start[1].x + (-gap - this.start[1].x) * slide) * (1 - foldP) : 0;
       for (let k = 0; k < n; k++) {
         const v = this.parents[k], s = this.start[k], d = this.dirOf(k);
-        const px = (s.x + (d.x * gap - s.x) * slide) * (1 - foldP), pz = (s.z + (d.z * gap - s.z) * slide) * (1 - foldP);
+        const middle = row && k === 0;
+        const px = middle ? 0 : (s.x + (d.x * gap - s.x) * slide) * (1 - foldP), pz = middle ? 0 : (s.z + (d.z * gap - s.z) * slide) * (1 - foldP);
         v.proxy.offset.x = px; v.proxy.offset.z = pz;
-        v.proxy.squashAx = d.x; v.proxy.squashAz = d.z; v.proxy.squashAmt = squash;
+        v.proxy.squashAx = d.x; v.proxy.squashAz = d.z; v.proxy.squashAmt = squash; v.proxy.squashTwoSided = middle;
+        v.proxy.squashPlane = row ? sideX * 0.5 : Math.hypot(px, pz) * (n === 2 ? 1 : 0.85);
+        // triangle (narrow frames): the back pair overlaps the front parent on screen from the first frame, and their eyes would show
+        // through its jelly as stray extra eyes; they keep them closed
+        if (this.layout === 'triangle' && k > 0) v.faceHidden = true;
         v.core.boost = 0.95 * smooth(b.a1 * 0.5, b.a1, t) + 0.6 * foldP;        // cores glow brighter where they touch
         v.proxy.setFold(foldP);
         if (k > 0) v.proxy.scale = 1 - 0.92 * smooth(0.55, 1, foldP);            // the others are absorbed into the ball
@@ -546,7 +595,7 @@ export class MergeRun extends Run {
     if (t >= b.t3 && !this.burst) this.doBurst();
     if (this.burst) {
       const [dipScale, dipLen] = DIP[i];
-      if (dipLen > 0) {
+      if (dipLen > 0 && !this.calm) {   // calm: no slow-motion at all (not even for the result's hop)
         const a = t - b.t3;
         ts = 1 - (1 - dipScale) * smooth(0, 0.04, a) * (1 - smooth(dipLen, dipLen + 0.09, a));
       }
@@ -554,7 +603,7 @@ export class MergeRun extends Run {
       while (this.ringIdx < this.rings.length && t >= this.rings[this.ringIdx]) {
         this.ringIdx++;
         const v = this.resultView;
-        if (v && (this.calm || host.flash.ring(host.now()))) v.fx.spawn('ring', { x: 0, y: 0, z: 0 }, RING_GAIN[this.ringIdx - 1] ?? 0.3);
+        if (v) this.spawnRing(v, 0, 0, RING_GAIN[this.ringIdx - 1] ?? 0.3);
       }
       if (this.pillar) this.pillar.set(0, 0, 0.25 + 0.5 * (t - b.t3), 3.2, st.tell, 0.2 * Math.max(0, 1 - (t - b.t3) * 1.2));
       if (this.dome) this.dome.set(0, 0, 0.7 + 0.6 * smooth(0, 0.6, t - b.t3), 0.9 + 0.7 * smooth(0, 0.6, t - b.t3), 0.8 * (1 - smooth(0.4, 1.4, t - b.t3)), t);
@@ -611,7 +660,10 @@ export class MergeRun extends Run {
         d.y = 0; d.landed = true; d.vy = 0;
         v.proxy.inner.nudge({ x: 0, y: -2.6, z: 0 });
         v.fx.spawn('dust', { x: 0, y: 0, z: 0 }, 0.8);
-        if (this.style.index >= 4) v.fx.spawn('ring', { x: 0, y: 0, z: 0 }, 0.8);   // Legendary and up: it settles with a visible wobble ring
+        // Legendary and up: it settles with a visible wobble ring (DESIGN 5.3), but never at the cost of an escalation ring: only when none of
+        // the 6.3 rings is due within the 500 ms gap (+ a frame of margin), and through the governor like every ring
+        const next = this.ringIdx < this.rings.length ? this.rings[this.ringIdx] - this.t : Infinity;
+        if (this.style.index >= 4 && next > 0.55) this.spawnRing(v, 0, 0, 0.8, false);
         this.host.shake(0.05 + 0.04 * this.style.index);
       }
       off.y = d.y;

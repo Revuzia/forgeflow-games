@@ -48,14 +48,13 @@ export function quatToMat(q: ArrayLike<number>, m: Float64Array): void {
 
 /**
  * Nearest front-facing hit of a ray against an indexed triangle mesh (Moller-Trumbore). The ray is origin + dir * t,
- * t >= 0, in the units of `dir` (it need not be normalised). Writes [t, triangle, u, v] into `out` and returns true on a hit.
+ * t >= 0, in the units of `dir` (it need not be normalised), passed as ray = [ox, oy, oz, dx, dy, dz] (a scratch array, not six
+ * numbers: this function is too large to be inlined, and doubles passed to a call are boxed, one heap allocation each).
+ * Writes [t, triangle, u, v] into `out` and returns true on a hit.
  * Back faces are culled (outward winding), so a ray that starts inside the mesh sees the far wall from inside as a miss.
  */
-export function rayMesh(
-  pos: ArrayLike<number>, tris: Uint32Array,
-  ox: number, oy: number, oz: number, dx: number, dy: number, dz: number,
-  out: Float64Array,
-): boolean {
+export function rayMesh(pos: ArrayLike<number>, tris: Uint32Array, ray: Float64Array, out: Float64Array): boolean {
+  const ox = ray[0], oy = ray[1], oz = ray[2], dx = ray[3], dy = ray[4], dz = ray[5];
   let bestT = Infinity, bestTri = -1, bestU = 0, bestV = 0;
   for (let t = 0; t < tris.length; t += 3) {
     const a = tris[t] * 3, b = tris[t + 1] * 3, c = tris[t + 2] * 3;

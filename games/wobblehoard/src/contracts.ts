@@ -110,6 +110,8 @@ export interface SoftBodyLike {
    * when that finger has no tip. For a finger ghost / contact FX. Allocates, so call it once per frame at most.
    */
   tip?(id: 0 | 1): { x: number; y: number; z: number; r: number; depth: number } | null;
+  /** Optional (PHYS addition): pay the JIT warm-up now (once, at load) so the first touches do not hitch; leaves the body's state bit-identical. */
+  warmUp?(): void;
 }
 
 export interface SoftBodyCtor {
@@ -122,6 +124,9 @@ export interface AudioSettings {
   master: number;      // 0..1 overall volume
   squishBoost: number; // 0..1: "louder squish" — 0 = baseline, 1 = +9 dB on the squish/release/poke voices (limiter stays on)
   muted: boolean;
+  /** Round 3 (optional): music bed volume 0..1, relative to master (it sits under the master gain). 0.45 = the designed level
+   *  (about -27 dBFS long-term at master 1), 1 = +6 dB over that, 0 = off (nothing is scheduled). Default 0.45. */
+  music?: number;
 }
 
 export interface SquishVoiceHandle {
@@ -167,6 +172,25 @@ export interface SquishAudio {
   mergeStart?(p: { tier: TierName; chargeS?: number; calm?: boolean; pitch?: number }): { burst(p: { tier: TierName; tierUp?: boolean; mythicVariant?: number; durationS?: number }): void; stop(): void };
   /** Duck the master by `db` (negative) for `ms` (the 250 ms Mythic pre-roll duck). */
   duck?(p: { db: number; ms: number }): void;
+
+  /* Round 3 (OPTIONAL members, additive; AUDIO implements them, see _spec/SOUND.md "Round 3"). */
+  /** Generative ambient music bed. `on` starts/stops it (2.5 s fade-in, 1.4 s fade-out; never before unlock()); `volume` 0..1 is
+   *  the same value as AudioSettings.music. It follows setPaused and mute, and ducks itself under the ceremony voices and a loud held squish. */
+  setMusic?(p: { on?: boolean; volume?: number }): void;
+  /** Two squishies collided: a soft double thud with a wet slap. intensity 0..1 (relative impact speed). Rate-limited inside: call it per contact event. */
+  bump?(p: { intensity: number; pitch?: number; pan?: number }): void;
+  /** A squishy pulled past its limit unsticks from the mat and is picked up: a sticky "thwop" unpeel. */
+  lift?(p: { pitch?: number; pan?: number }): void;
+  /** A squishy was thrown: a short soft whoosh. speed 0..1 (release speed, normalised). */
+  toss?(p: { speed: number; pan?: number }): void;
+  /** A tacky strand: call EVERY FRAME while it stretches (tension 0..1); the engine keeps one held voice and ends it ~0.15-0.6 s after
+   *  the calls stop. `snap: true` = the strand broke (a small wet pop + 1-3 tiny bubbles) and ends the held voice. */
+  strand?(p: { tension: number; snap?: boolean; pitch?: number; pan?: number }): void;
+  /** Harness readout for the round-3 parts: music scheduler state and cost, and how many calls the rate limiters swallowed. */
+  detailStats?(): {
+    music: { on: boolean; playing: boolean; sessions: number; field: number; liveNotes: number; maxLiveNotes: number; notes: number; dropped: number; ticks: number; tickMsMean: number; tickMsMax: number; tickMsRecentP99: number; tickMsRecentMax: number; ducked: boolean; volume: number };
+    throttled: Record<string, number>;
+  };
 }
 
 /* ───────────────────────────── render (src/render) ───────────────────────────── */

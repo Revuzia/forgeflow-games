@@ -38,11 +38,13 @@ void main() {
   float ndv = clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0);
   float hot = pow(ndv, 2.4);
   float mott = 0.84 + 0.3 * whNoise3(vL * 2.6 + vec3(0.0, uTime * 0.35, uTime * 0.2));
-  float soft = 0.25 + 0.75 * smoothstep(0.0, 0.6, ndv);   // no hard silhouette: matters most where nothing blurs it (low tier)
+  float soft = smoothstep(0.0, 0.8, ndv);   // additive and fading to nothing at its rim: a glow seen through the jelly, never a disc
   vec3 base = mix(uColor, uHot, 0.3 * hot * hot);
   vec3 spec = 0.5 + 0.5 * cos(6.2832 * (vec3(0.0, 0.33, 0.67) + (1.0 - ndv) * 1.3 + uTime * 0.05));
   base = mix(base, spec * (0.6 + 0.8 * hot), uPrism);
-  vec3 c = base * (0.5 + 0.7 * hot) * mott * uIntensity * soft;
+  // soft knee: a bright core gets brighter (and brighter still when squeezed) but saturates in its own hue, never into a white blob
+  float e = (0.5 + 0.7 * hot) * mott * uIntensity * soft * 0.7;
+  vec3 c = base * (1.8 * e / (1.8 + e));
   gl_FragColor = vec4(c, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -76,6 +78,9 @@ export class Core {
     const col = new THREE.Color(), hot = new THREE.Color();
     this.blobMat = new THREE.ShaderMaterial({
       vertexShader: BLOB_VERT, fragmentShader: BLOB_FRAG, fog: false,
+      // opaque list (so the transmission pass sees it and the jelly refracts it), but ADDITIVE: it lights what is behind it instead of
+      // covering it, so a big Rare+ core reads as an inner light and never as a flat coin with an edge
+      blending: THREE.AdditiveBlending, depthWrite: false, transparent: false,
       uniforms: { uColor: { value: col }, uHot: { value: hot }, uIntensity: { value: 2 }, uTime: { value: 0 }, uPrism: { value: style.corePrism } },
     });
     this.halo = new HaloQuad({ renderOrder: -19, fadeH: 0.2 * scale });
@@ -95,6 +100,13 @@ export class Core {
     col.setRGB(p.core[0], p.core[1], p.core[2], THREE.LinearSRGBColorSpace);
     hot.setRGB(p.coreHot[0], p.coreHot[1], p.coreHot[2], THREE.LinearSRGBColorSpace);
     if (style.coreWarm > 0) { col.lerp(new THREE.Color(1.0, 0.45, 0.12), style.coreWarm); hot.lerp(new THREE.Color(1.0, 0.8, 0.5), style.coreWarm); }
+    const t = style.tell;
+    if (style.coreTint > 0) {
+      const tc = new THREE.Color().setRGB(t[0], t[1], t[2], THREE.LinearSRGBColorSpace);
+      col.lerp(tc, style.coreTint); hot.lerp(tc.clone().lerp(new THREE.Color(1, 1, 1), 0.35), style.coreTint);
+    }
+    const k = style.coreTint;
+    this.halo.setColor(p.core[0] + (t[0] - p.core[0]) * k, p.core[1] + (t[1] - p.core[1]) * k, p.core[2] + (t[2] - p.core[2]) * k);
     this.blobMat.uniforms.uPrism.value = style.corePrism;
   }
 
@@ -118,7 +130,9 @@ export class Core {
     this.amount = (1.2 + 0.9 * this.glow) * st.coreMul * (1 + 1.5 * k) * pulse * b;
     this.blobMat.uniforms.uIntensity.value = (1.0 + 1.2 * this.glow) * st.coreMul * (1 + 1.4 * k) * pulse * b;
     this.blobMat.uniforms.uTime.value = time;
-    this.halo.set(c.x, c.y, c.z, r * (3.4 + 0.3 * k) * st.haloSize, (0.28 + 0.4 * this.glow) * st.haloMul * (1 + 0.7 * k) * (this.lite ? 0.85 : 1) * pulse * b);
+    const hs = (0.28 + 0.4 * this.glow) * st.haloMul * (1 + 0.7 * k) * (this.lite ? 0.85 : 1) * pulse * b;
+    // same soft knee as the jelly's inner glow: past 0.5 the halo keeps growing, slowly, so stacked glows saturate in hue instead of whiting out
+    this.halo.set(c.x, c.y, c.z, r * (3.4 + 0.3 * k) * st.haloSize, hs < 0.5 ? hs : 0.5 + (hs - 0.5) / (1 + (hs - 0.5) / 0.4));
   }
 
   dispose(): void {

@@ -28,6 +28,7 @@ void main() {
 const POOL_FRAG = /* glsl */`
 varying vec2 vUv;
 uniform vec3 uColor;
+uniform vec3 uRingCol;     // the caustic ring takes the TIER colour (it is part of the tell), not the body's pool colour
 uniform float uStrength;
 uniform float uTime;
 uniform float uRing;       // soft caustic fringe just outside the shadow edge
@@ -40,10 +41,20 @@ void main() {
   float fringe = exp(-pow((r - 0.62) * 4.2, 2.0)) * uRing;
   float cau = 0.8 + 0.4 * whNoise2(p * 7.0 + vec2(uTime * 0.25, -uTime * 0.18));
   float edge = 1.0 - smoothstep(0.78, 1.0, r);
-  float ang = atan(p.y, p.x);
-  float ring2 = exp(-pow((r - 0.8) * 14.0, 2.0)) * uRing2 * (0.6 + 0.8 * whNoise2(vec2(ang * 2.2 + uTime * 0.15, r * 8.0))) * (1.0 - smoothstep(0.9, 1.0, r));
-  float a = (body * 0.8 + fringe * 0.28) * cau * edge * uStrength + ring2 * 0.55;
-  gl_FragColor = vec4(uColor * a, 1.0);
+  // caustic ring (Epic and up): a broken, beaded band of focused light, two thin crossing filaments that slowly crawl, not a neon hoop
+  float ring2 = 0.0;
+  if (uRing2 > 0.001) {
+    float ang = atan(p.y, p.x);
+    float n1 = whNoise2(vec2(ang * 5.0 + uTime * 0.11, r * 4.0));
+    float n2 = whNoise2(vec2(ang * 9.0 - uTime * 0.07, r * 6.0 + 3.7));
+    float beads = pow(clamp(n1 * 0.6 + n2 * 0.6 - 0.15, 0.0, 1.0), 2.0) * 2.2;
+    float f1 = exp(-pow((r - 0.79 - 0.025 * (n2 - 0.5)) * 30.0, 2.0));
+    float f2 = exp(-pow((r - 0.83 + 0.03 * (n1 - 0.5)) * 38.0, 2.0));
+    float glow = exp(-pow((r - 0.81) * 9.0, 2.0)) * 0.22;
+    ring2 = ((f1 + 0.7 * f2) * (0.25 + beads) + glow) * uRing2 * (1.0 - smoothstep(0.9, 1.0, r));
+  }
+  float a = (body * 0.8 + fringe * 0.28) * cau * edge * uStrength;
+  gl_FragColor = vec4(uColor * a + uRingCol * ring2 * 0.42, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }
@@ -70,6 +81,8 @@ export class Decals {
   private readonly shadowMat: THREE.ShaderMaterial;
   private readonly poolMat: THREE.ShaderMaterial;
   private poolK = 1;
+  /** 0..1 multiplier on both decals (a fading-in object). */
+  alphaMul = 1;
 
   constructor(quad: THREE.BufferGeometry) {
     this.shadowMat = new THREE.ShaderMaterial({
@@ -84,7 +97,7 @@ export class Decals {
     this.shadow.frustumCulled = false;
     this.poolMat = new THREE.ShaderMaterial({
       vertexShader: DECAL_VERT, fragmentShader: POOL_FRAG,
-      uniforms: { uColor: { value: new THREE.Color(1, 0.6, 0.3) }, uStrength: { value: 1 }, uTime: { value: 0 }, uRing: { value: 1 }, uRing2: { value: 0 } },
+      uniforms: { uColor: { value: new THREE.Color(1, 0.6, 0.3) }, uRingCol: { value: new THREE.Color(1, 0.6, 0.3) }, uStrength: { value: 1 }, uTime: { value: 0 }, uRing: { value: 1 }, uRing2: { value: 0 } },
       transparent: false, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false,
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
     });
@@ -95,6 +108,7 @@ export class Decals {
   }
 
   setColor(c: Rgb): void { this.poolMat.uniforms.uColor.value.setRGB(c[0], c[1], c[2], THREE.LinearSRGBColorSpace); }
+  setRingColor(c: Rgb): void { this.poolMat.uniforms.uRingCol.value.setRGB(c[0], c[1], c[2], THREE.LinearSRGBColorSpace); }
   setVisible(v: boolean): void { this.shadow.visible = v; this.pool.visible = v; }
 
   update(dt: number, time: number, f: Footprint, floatT: number, style: TierStyle | null, calm: boolean, extraPool = 0): void {
@@ -106,7 +120,7 @@ export class Decals {
     const sS = 1.3 + 0.5 * fl + 0.45 * h;
     this.shadow.position.set(f.cx, 0.002, f.cz);
     this.shadow.scale.set(f.rx * sS + 0.05, 1, f.rz * sS + 0.05);
-    this.shadowMat.uniforms.uStrength.value = (0.95 - 0.38 * fl) * lift;
+    this.shadowMat.uniforms.uStrength.value = (0.95 - 0.38 * fl) * lift * this.alphaMul;
     this.shadowMat.uniforms.uSoft.value = Math.max(0, 1 - 0.75 * fl - 0.5 * Math.min(1, h * 1.5));
     // light pool: widens and brightens with the squash; softer and smaller while floating
     const squash = Math.min(1, f.compression * 1.2 + f.stretch * 0.15);
@@ -115,7 +129,7 @@ export class Decals {
     this.pool.position.set(f.cx, 0.003, f.cz);
     this.pool.scale.set(f.rx * pS + 0.1, 1, f.rz * pS + 0.1);
     const mul = style ? style.poolMul : 1;
-    this.poolMat.uniforms.uStrength.value = (this.poolK * mul + extraPool) * (1 - 0.5 * fl) * (0.85 / (1 + h * 0.9));
+    this.poolMat.uniforms.uStrength.value = (this.poolK * mul + extraPool) * (1 - 0.5 * fl) * (0.85 / (1 + h * 0.9)) * this.alphaMul;
     this.poolMat.uniforms.uRing.value = (1 - 0.55 * fl) * (style ? 0.5 + 0.5 * Math.min(1, style.index / 2) : 1);
     // caustic ring on the table: Epic and up; Legendary breathes at 0.25 Hz (never in calm mode)
     let ring2 = style ? style.ring : 0;

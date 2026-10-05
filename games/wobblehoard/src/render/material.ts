@@ -86,6 +86,7 @@ uniform float uAurora, uIri, uTwoTone, uTierAmt, uMixAmt;
 uniform vec3 uTone2Col, uTierCol, uMixCol;
 float jBlush = 0.0;
 float jPale = 0.0;
+float jMix = 0.0;
 ${NOISE_GLSL}
 float jSpeckleLayer(vec3 d, float scale, float seed) {
   vec3 q = d * scale + seed;
@@ -116,7 +117,8 @@ const COLOR_STAGE = /* glsl */`
   diffuseColor.rgb = mix(diffuseColor.rgb, uTone2Col, 0.7 * uTwoTone * smoothstep(-0.15, 0.85, vRest.y + 0.3 * whNoise3(vRest * 2.0 + uSeed * 5.0)));
   // merge ceremony: the parents' colours swirl together (lineage)
   float jMixSw = smoothstep(-0.2, 0.6, sin(atan(vRest.z, vRest.x) * 2.0 + vRest.y * 6.0 + uTime * 0.9 + 1.3 * whNoise3(vRest * 2.5)));
-  diffuseColor.rgb = mix(diffuseColor.rgb, uMixCol, uMixAmt * jMixSw);
+  jMix = uMixAmt * jMixSw;
+  diffuseColor.rgb = mix(diffuseColor.rgb, uMixCol, jMix);
 {
   // strain < 1 = compressed edges; the dent depth term catches local presses (edge lengths barely change in a dent)
   float jComp = max(clamp((1.0 - vStrain) * 5.0, 0.0, 1.0), smoothstep(0.0, 0.8, vDisp.x));
@@ -156,13 +158,20 @@ const EMISSIVE_STAGE = /* glsl */`
   float jAlong = dot(jToC, jRd);
   vec3 jPerp = jToC - jRd * jAlong;
   float jHalo = exp(-dot(jPerp, jPerp) / (uCoreRadius * uCoreRadius)) * smoothstep(-0.1, 0.25, jAlong);
-  vec3 jCore = uCoreCol * jHalo * uCoreAmt * (0.55 + 0.45 * jNdv);
+  // soft knee above 0.45: a bright (high-tier, high-coreGlow, squeezed) core keeps rising but saturates in its own hue, never clips to white
+  float jC = jHalo * uCoreAmt;
+  jC = jC < 0.45 ? jC : 0.45 + (jC - 0.45) / (1.0 + (jC - 0.45) / 0.35);
+  vec3 jCore = uCoreCol * jC * (0.55 + 0.45 * jNdv);
   vec3 jExtra = vec3(0.0);
-  if (uAurora > 0.001) {          // Legendary: a slow sodium-amber aurora drifting inside the body
-    float jy = vRest.y * 2.2 + 0.7 * whNoise3(vRest * 1.6 + vec3(0.0, uTime * 0.05, 0.0)) + uTime * 0.07;
-    float jband = smoothstep(0.45, 1.0, sin(jy * 4.712));
-    vec3 jaur = mix(vec3(1.0, 0.6, 0.16), vec3(0.25, 0.8, 0.85), 0.5 + 0.5 * sin(jy * 2.0 + uTime * 0.1));
-    jExtra += jaur * jband * (0.16 + 0.34 * (1.0 - jFres)) * uAurora;
+  if (uAurora > 0.001) {          // Legendary: slow aurora CURTAINS drifting inside the body, sodium amber low -> rose -> lagoon high
+    float jw = whNoise3(vRest * 1.5 + vec3(0.0, uTime * 0.05, uTime * 0.03));
+    float jcur = 0.5 + 0.5 * sin(atan(vRest.z, vRest.x) * 3.0 + 2.4 * jw + vRest.y * 1.5 + uTime * 0.12);
+    jcur = jcur * jcur * jcur;                                                   // soft folds, no hard stripe edges
+    float jh = smoothstep(-0.6, 0.1, vRest.y) * (1.0 - smoothstep(0.45, 1.0, vRest.y));
+    float jg = clamp(vRest.y * 0.8 + 0.45 + 0.25 * jw, 0.0, 1.0);
+    vec3 jaur = mix(vec3(1.0, 0.5, 0.06), vec3(1.0, 0.22, 0.42), smoothstep(0.0, 0.55, jg));
+    jaur = mix(jaur, vec3(0.12, 0.8, 0.78), smoothstep(0.5, 1.0, jg));
+    jExtra += jaur * jcur * jh * (0.08 + 0.26 * (1.0 - jFres)) * uAurora;
   }
   if (uIri > 0.001) {             // Mythic: thin-film iridescence, the hue slides with the view angle
     vec3 jfilm = 0.5 + 0.5 * cos(6.2832 * (vec3(0.0, 0.33, 0.67) + jNdv * 1.35 + vRest.y * 0.25 + uTime * 0.03));
@@ -170,15 +179,19 @@ const EMISSIVE_STAGE = /* glsl */`
     totalSpecular *= mix(vec3(1.0), 0.55 + jfilm, 0.6 * uIri);
   }
   jExtra += uTierCol * uTierAmt * (0.25 + 0.9 * jFres + 0.5 * jHalo);   // the tier "tell": light drifting toward the result colour
+  jExtra += uMixCol * jMix * (0.16 + 0.3 * (1.0 - jFres));             // merge lineage: the other parents' colours swirl through as light
   totalEmissiveRadiance += jRim + jScat + jCore + jExtra;
   #ifdef WH_LOW
     // low tier: no transmission target, so the body carries its own colour (a base glow) and is only lightly see-through
     totalDiffuse *= 0.16;   // the transmissive tiers keep only ~10% of the direct diffuse; the glow below stands in for the rest
     // fake depth for the transmission-less tier: a thick centre is deeper and more saturated, and the core glows through it
-    totalEmissiveRadiance += diffuseColor.rgb * (0.2 + 0.16 * jWrap) + uBlushCol * (0.34 * pow(jNdv, 1.4)) * (1.0 - 0.35 * jWrap);
+    totalEmissiveRadiance += (diffuseColor.rgb * (0.2 + 0.16 * jWrap) + uBlushCol * (0.34 * pow(jNdv, 1.4)) * (1.0 - 0.35 * jWrap)) * 0.68;
     float jLow = smoothstep(0.45, -0.7, vRest.y) * (1.0 - 0.5 * jFres);   // the lower body is where the core glow sits behind thick jelly
     vec3 jDeep = uBlushCol / max(max(uBlushCol.r, uBlushCol.g), max(uBlushCol.b, 1e-3));
     totalEmissiveRadiance = mix(totalEmissiveRadiance, totalEmissiveRadiance * jDeep * 1.15, 0.85 * jLow);
+    // without the transmission pass's absorption the glow reads paler than med/high at the same pose (measured +8..12% in G and B):
+    // a saturation lift on the jelly's own light closes most of that gap for free (specular highlights stay white)
+    totalEmissiveRadiance = max(mix(vec3(dot(totalEmissiveRadiance, vec3(0.2126, 0.7152, 0.0722))), totalEmissiveRadiance, 1.0 + 0.3 * (1.0 - jLow)), 0.0);
     float jSpec = dot(totalSpecular, vec3(0.3333));
     diffuseColor.a = clamp(mix(uAlphaBase, 1.0, jFres) + jSpec * 0.45, 0.0, 1.0);
   #endif
@@ -241,6 +254,8 @@ export class JellyMaterials {
     u.uBlushAmt.value = s.blush;
     u.uAurora.value = s.aurora; u.uIri.value = s.iri; u.uTwoTone.value = s.twoTone;
     u.uTierCol.value.setRGB(s.tell[0], s.tell[1], s.tell[2], THREE.LinearSRGBColorSpace);
+    const pc = this.palette.core, k = s.coreTint;
+    u.uCoreCol.value.setRGB(pc[0] + (s.tell[0] - pc[0]) * k, pc[1] + (s.tell[1] - pc[1]) * k, pc[2] + (s.tell[2] - pc[2]) * k, THREE.LinearSRGBColorSpace);
     u.uPatStrength.value = this.patternStrength();
     u.uScatter.value = 0.2 + 0.2 * Math.min(1, g.translucency + s.translucencyAdd);
   }
@@ -269,7 +284,7 @@ export class JellyMaterials {
     });
     this.hub.apply(m, 1.25);
     if (low) {
-      m.color = lin(p.attenuation).lerp(lin(p.blush), 0.65);   // no absorption pass: bake the deep, saturated look into the base colour
+      m.color = lin(p.attenuation).lerp(lin(p.body), 0.35);   // no absorption pass: bake the deep, saturated look into the base colour
       m.transparent = true;
       m.depthWrite = false;
       m.transmission = 0;

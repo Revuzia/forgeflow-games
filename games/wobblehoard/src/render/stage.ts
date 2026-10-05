@@ -6,6 +6,23 @@
 // Camera conventions (the SHELL lane reads these):
 //   orbit(dYaw, dPitch): radians, OrbitControls feel: pass (dx * k, dy * k) of a pointer drag and the scene turns with the finger.
 //   zoom(delta): positive = camera away. Wheel deltaY in pixels (|delta| > 4, x0.0016) or notches (|delta| <= 4, x0.12).
+//
+// Round 2, how the shell drives the ceremonies (DESIGN 6.1-6.6; audio sync per _spec/SOUND.md "Time map"):
+//   * Bodies: setBody(body, genome) = clearBodies() + addBody(body, genome) at tier 'common'; call setBodyTier(primaryBodyId(), tier) for the
+//     squishy's real tier. The SHELL steps every body it added (body.step(dt) before stage.update); the stage steps only the bodies it creates
+//     itself through spec.createBody (ceremony parents / results) until they are handed over.
+//   * Meter full: h = dropCapsule({ onLand }) (calm: it fades in where it stands, no drop). Tap / hold test with h.hitTest(cssX, cssY);
+//     while the finger holds it, h.setSqueeze(holdSeconds / 0.5) (0 on cancel); at 1 (or on a tap) fetch the result, then
+//     playCapsuleReveal({ result, createBody, capsule: h }, { onBeat }). The reveal continues the squeeze; the tier tell appears at 'crack'.
+//   * Merge: playMergeCeremony({ parents (MERGE_COST of them, 2 or 3), result, createBody }, { onBeat }). Every visible body is hidden
+//     at the start (the parents are new stage-owned bodies) and removed at the end.
+//   * Both: beats arrive through hooks.onBeat(beat, { t, tier }) in time order. handle.duration is the planned length; handle.skip() (after
+//     350 ms, DESIGN 6.1) jumps to the final reveal frame with a 120 ms crossfade, fires 'reveal' + 'settle' if they had not fired.
+//     handle.done always resolves (natural end, skip, a new ceremony started over it, dispose), never rejects. AFTER done:
+//     handle.resultBody is the primary body (primaryBodyId() === handle.resultBodyId); the stage has stopped stepping it, so the shell
+//     adopts it as its play body: step it, raycast it, send fingers to it (its render offset is 0, its physics origin is the world origin).
+//     Do NOT setBody() it (that would rebuild its view and drop its tier styling).
+//   * setCalmEffects(on): call before starting a ceremony (a running one keeps the mode it started with).
 import * as THREE from 'three';
 import type {
   AddBodyOpts, CapsuleHandle, CapsuleRevealSpec, CeremonyHandle, CeremonyHooks, FxKind, MergeCeremonySpec, QualityTier, SoftBodyLike,
@@ -38,6 +55,7 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo>, RoundTwo {
     fineVertices: number; tier: QualityTier; mode: QualityTier | 'auto'; fx: { bubbles: number; glitter: number; puffs: number } | null;
     contextLost: boolean; pixelRatio: number; drawingBuffer: [number, number]; eyeLook: number[] | null;
     bodies: number; primary: number | null; ceremony: boolean; particles: number; calm: boolean; screenLight: number; capsule: boolean; cameraFx: { dist: number; yaw: number; pitch: number };
+    particlesDropped: number; camScale: number;
   };
   readonly views: readonly BodyView[];
   readonly flash: FlashGovernor;
@@ -101,6 +119,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
 
   // ---- bodies ----
   const views: BodyView[] = [];
+  const depthOrder: BodyView[] = [];   // reused every frame (no allocation): visible views, far to near
   let primaryId: number | null = null;
   let nextId = 1;
   let capsule: Capsule | null = null;
@@ -275,7 +294,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       const p = primary();
       const spot = capsuleSpot(p);
       const x = opts?.at?.x ?? spot.x, z = opts?.at?.z ?? spot.z;
-      c.drop(x, z, opts?.onLand);
+      if (calm) c.appear(x, z, opts?.onLand); else c.drop(x, z, opts?.onLand);   // calm / reduced motion: it fades in, no drop
       scene.add(c.group);
       const sp = { x: 0, y: 0, r: 0 };
       const handle: CapsuleHandle = {
@@ -316,6 +335,14 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
         if (!v.visible) continue;
         v.update(d, v.clock, input.pointerNdc, camera, floatT, v.owned ? d * ts : 0);
       }
+      // Back-to-front order of the translucent jellies. Their meshes sit at the origin with world-space vertices, so three's own
+      // transparent / transmissive sort sees one depth for all of them and falls back to creation order (a back body painted over a front
+      // one: plainly wrong in a 3-parent merge). renderOrder 10.00..10.99, far first; everything else keeps its own order.
+      depthOrder.length = 0;
+      for (const v of views) if (v.visible) depthOrder.push(v);
+      for (const v of depthOrder) { const c = v.proxy.center; v.sortDepth = (camera.position.x - c.x) ** 2 + (camera.position.y - c.y) ** 2 + (camera.position.z - c.z) ** 2; }
+      depthOrder.sort((a, b) => b.sortDepth - a.sortDepth);
+      for (let i = 0; i < depthOrder.length; i++) depthOrder[i].jelly.mesh.renderOrder = 10 + Math.min(0.99, i * 0.01);
       capsule?.update(d * ts, time);
       particles.update(d * ts, time);
       screen.update(d);
@@ -408,6 +435,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
         pixelRatio: renderer.getPixelRatio(), drawingBuffer: [canvas.width, canvas.height] as [number, number],
         eyeLook: p ? Array.from(p.face.lookOut) : null,
         bodies: views.length, primary: primaryId, ceremony: director.active, particles: particles.count, calm, screenLight: screen.lightAlpha, capsule: !!capsule, cameraFx,
+        particlesDropped: particles.dropped, camScale,
       };
     },
   };

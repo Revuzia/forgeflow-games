@@ -12,9 +12,13 @@
 //   * FlashGovernor driven with adversarial sequences (<= 2 flashes / s, alpha <= 0.25, rings >= 500 ms apart, coral/cyan never alternating < 500 ms, calm = none);
 //   * multi-body API (addBody / removeBody / clearBodies / setBody sugar / setBodyTier), a 3-body + ceremony leak test and dispose, the meter-full capsule drop (lands, tappable);
 //   * EVERY tier's capsule reveal and merge ceremony (plus tier-up, 3 parents, quick pop) stepped deterministically at 30 fps: duration within 10% of the
-//     DESIGN 6.1 budget, beats once in order, per-frame mean luminance -> luminance-transition count per rolling second (FAIL if > 3), skip() lands on the same final
-//     frame as the natural end, and the Calm variant (x0.65, no camera move, no screen light, particles x0.3);
-//   * rarity contact sheets (one body per tier, desktop + 390x844) and 6-tier x beats filmstrips of both ceremonies (desktop + phone).
+//     DESIGN 6.1 budget, beats once in order and the 'burst' beat on the audio time map, the DESIGN 6.3 escalation row exactly (burst particles, rings,
+//     camera push / arc, time-scale dip) with ONE light ramp, per-frame mean luminance -> luminance-transition count per rolling second (FAIL if > 3),
+//     skip() lands on the same final frame as the natural end (RGB fingerprint, every tier) and never hides the result, the Calm variant of every tier
+//     (x0.65, no camera move / slow-mo / screen light / ramp, particles x0.3, rings -> fades), native vs puppet ceremony drivers, done robustness;
+//   * the set: sky / ground gradient seams and band edges at 4 aspect ratios x 3 camera pitches; low vs med at one frozen pressed pose (seam + MAE);
+//   * rarity contact sheets (one body per tier at 1280x800 for three genomes, and 390x844) and 6-tier x 7-beat filmstrips of both ceremonies
+//     (1280x800 med + 390x844 low; the desktop frames also land in _shots/render/film/*.jpg).
 // SwiftShader is a CPU rasteriser: only the RELATIVE cost between tiers means anything here.
 import { startVite, launch, ROOT } from './pw.mjs';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -128,9 +132,20 @@ try {
   check(tiers.high.fineVertices >= 10000 && tiers.med.fineVertices >= 5000 && tiers.low.fineVertices < tiers.med.fineVertices && tiers.low.fineVertices >= 2000,
     'fine mesh >= ~5k verts on med/high, fewer on low', `high ${tiers.high.fineVertices} / med ${tiers.med.fineVertices} / low ${tiers.low.fineVertices}`);
   check(tiers.low.triangles < tiers.med.triangles && tiers.med.triangles < tiers.high.triangles, 'triangle count rises with tier', `${tiers.low.triangles} / ${tiers.med.triangles} / ${tiers.high.triangles}`);
-  // the LOW tier pressed hard (round-2 fix: the table horizon / mat edge used to show through the alpha-blended body as a straight seam)
-  await shot(page, 'press_held_low', "R.setQuality('low'); R.frames(2); R.press(0.0, 0.15, 0.9, 0.9); R.frames(60)");
-  await shot(page, 'press_held_med_same_pose', "R.release(); R.frames(60); R.setQuality('med'); R.press(0.0, 0.15, 0.9, 0.9); R.frames(60)");
+  // the LOW tier pressed hard (round-2 fixes: the table horizon / mat edge used to show through the alpha-blended body as a straight seam;
+  // the low tier read paler than med). One pose, frozen (dt 0), rendered at low and at med: seam detector + mean |RGB diff| over the body.
+  await page.evaluate(() => { const R = window.__RV__; R.setQuality('low'); R.frames(2); R.press(0.0, 0.15, 0.9, 0.9); R.frames(60); });
+  const qc = await page.evaluate(() => window.__RV__.qualityCompare('low', 'med'));
+  report.perf.lowVsMed = qc;
+  await shot(page, 'press_held_med_same_pose');
+  await shot(page, 'press_held_low', "R.setQuality('low'); R.stage.update(0, { time: R.time, pointerNdc: null });");
+  // eyes, glints and glitter put ~0.3 of a row's columns into one step in ANY tier (med is the reference); a straight seam across the body lines up most of them
+  check(qc.seamA >= 0 && qc.seamA <= 0.5 && qc.seamA <= qc.seamB + 0.12, 'low tier pressed: no straight horizontal seam across the lower body (worst row: fraction of columns stepping together, low vs the med reference)', `low ${qc.seamA.toFixed(2)}, med ${qc.seamB.toFixed(2)} (a body-wide seam lines up > 0.5)`);
+  // and two more genomes at rest (violet bands, green speckle): low has no transmission pass, so it imitates it; these numbers say how well
+  const qg = await page.evaluate(() => { const R = window.__RV__; const o = {}; for (const s of ['16', '19']) { R.setGenome(s); R.frames(120); o[s] = R.qualityCompare('low', 'med'); } R.setGenome(''); R.setQuality('low'); R.frames(2); return o; });
+  report.perf.lowVsMedGenomes = qg;
+  check(qc.mae >= 0 && qc.mae <= 8 && qg['16'].mae <= 10 && qg['19'].mae <= 16, 'low tier vs med at the SAME frozen pose: mean |RGB diff| over the body (DOLLOP pressed <= 8, seed 16 <= 10, seed 19 <= 16 /255)',
+    `DOLLOP pressed ${qc.mae.toFixed(2)} (bias R/G/B ${qc.bias.map((v) => v.toFixed(1)).join('/')}), seed 16 ${qg['16'].mae.toFixed(2)}, seed 19 ${qg['19'].mae.toFixed(2)} (mostly the silhouette rim, where med shows the background through)`);
   await page.evaluate(() => { const R = window.__RV__; R.release(); R.frames(90); R.setQuality('med'); R.frames(2); });
 
   // DPR caps per tier
@@ -193,6 +208,30 @@ try {
     check(sw.sw <= sw.iw, 'phone: no horizontal scroll', `scrollWidth ${sw.sw} <= innerWidth ${sw.iw}; drawing buffer ${sw.db.join('x')} @ DPR ${sw.pr}`);
     report.problems.push(...pbad);
     await pctx.close();
+  }
+
+  /* ───────────────────────── the set: a seamless dusk gradient at every aspect ratio and camera pitch ───────────────────────── */
+  // (round-2 fix: the distance fog of the ground beyond the mat saturated to one flat colour band whose lower end read as a hard edge across the
+  // top of the frame, and the sky glow had a kink at the horizon). Bodies and the felt mat hidden; 8x8 block luminance. A vertical seam = a
+  // step between neighbouring block columns; a band edge / kink = a large second difference down a column (a smooth gradient has a small one
+  // even where it is steep). Before the fix: curvature 2.9 (desktop, default pitch) .. 4.3 (lowest pitch).
+  {
+    const sky = {};
+    for (const [vw, vh, dprS] of QUICK ? [[1280, 800, 1], [390, 844, 2]] : [[1280, 800, 1], [390, 844, 2], [2560, 1080, 1], [800, 1280, 1]]) {
+      const sctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: dprS });
+      const { page: kp, bad: kbad } = await openView(sctx, `quality=med&body=${BODY === 'auto' ? '' : BODY}`, `sky-${vw}x${vh}`, [/GPU stall due to ReadPixels/i]);
+      for (const [pname, dp] of [['default', 0], ['lowest', -50], ['highest', 50]]) {
+        const r = await kp.evaluate((dp) => { const R = window.__RV__; if (dp) R.orbit(0, dp); R.frames(200); return R.skyProbe(); }, dp);
+        sky[`${vw}x${vh}@${dprS}:${pname}`] = r;
+      }
+      report.problems.push(...kbad);
+      await sctx.close();
+    }
+    report.sky = sky;
+    const worstCol = Math.max(...Object.values(sky).map((r) => r.maxColStep)), worstCurv = Math.max(...Object.values(sky).map((r) => r.maxRowCurv));
+    const where = Object.entries(sky).sort((a, b) => b[1].maxRowCurv - a[1].maxRowCurv)[0];
+    check(worstCol <= 1.0, 'sky / ground gradient: no vertical seams at any aspect ratio or camera pitch (max step between 8 px block columns <= 1/255)', `worst ${worstCol.toFixed(2)}/255 over ${Object.keys(sky).length} framings`);
+    check(worstCurv <= 2.5, 'sky / ground gradient: no band edge or kink at any aspect ratio or camera pitch (max second difference down a column <= 2.5/255 per 8 px)', `worst ${worstCurv.toFixed(2)} at ${where[0]} (${where[1].w}x${where[1].h}, block ${where[1].at.join(',')}); steepest smooth slope ${Math.max(...Object.values(sky).map((r) => r.maxRowStep)).toFixed(2)}/255 per 8 px`);
   }
 
   /* ───────────────────────── lifecycle: leaks, dispose, context loss, allocation, auto tier ───────────────────────── */
@@ -274,6 +313,9 @@ try {
     const TIERS6 = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
     const CAP_BUDGET = { common: 1.6, uncommon: 2.0, rare: 2.6, epic: 3.2, legendary: 3.9, mythic: 4.5 };
     const MER_BUDGET = { common: 2.2, uncommon: 2.6, rare: 3.2, epic: 3.8, legendary: 4.5, mythic: 5.2 };
+    const MER_BUDGET_EPIC = MER_BUDGET.epic;
+    // the audio lane's time map (_spec/SOUND.md): capsule burst at 0.65 s + the tier pre-roll; merge burst at MERGE_CHARGE_S
+    const SYNC = { capsule: { common: 0.65, uncommon: 0.65, rare: 0.95, epic: 1.15, legendary: 1.45, mythic: 1.65 }, merge: { common: 1.3, uncommon: 1.5, rare: 1.8, epic: 2.1, legendary: 2.4, mythic: 2.8 } };
     const bodyQ = BODY === 'auto' ? '' : BODY;
     const R2 = (report.round2 = { flash: {}, durations: {}, skip: {}, calm: {}, rarity: {}, multi: {}, cost3: {} });
     const sheetCtx = await browser.newContext({ viewport: { width: 800, height: 600 } });
@@ -343,6 +385,18 @@ try {
     });
     R2.multi.capsule = cap;
     check(cap.ok && cap.miss && cap.inView && cap.landedAfter < 100, 'dropCapsule() on the desktop frame: lands (<3.3 s), stays tappable, fully inside the viewport, hitTest rejects far taps', JSON.stringify({ landedFrames: cap.landedAfter, point: cap.info.point, hit: cap.info.hit, miss: cap.miss }));
+    // calm / reduced motion (DESIGN 6.2): no drop, it fades in where it stands; onLand fires when it is fully there
+    const capCalm = await rp.evaluate(() => {
+      const R = window.__RV__;
+      R.stage.clearBodies(); R.setGenome(''); R.setCalm(true); R.frames(10);
+      const f0 = R.frameNo; R.dropCapsule();
+      const ys = []; for (let i = 0; i < 40; i++) { R.frames(1); const p = R.capsuleInfo().point; ys.push(p ? p.y : -1); }
+      const out = { landedAfterFrames: R.capsuleLandedFrame - f0, yRange: Math.max(...ys) - Math.min(...ys), hit: R.capsuleInfo().hit };
+      R.setCalm(false); R.capsule?.remove(); R.frames(2);
+      return out;
+    });
+    R2.multi.capsuleCalm = capCalm;
+    check(capCalm.yRange < 1 && capCalm.landedAfterFrames >= 20 && capCalm.landedAfterFrames <= 34 && capCalm.hit, 'calm mode: the meter-full capsule fades in where it stands (no drop, no bounce), onLand after the ~0.45 s fade, tappable', JSON.stringify(capCalm));
     await rp.evaluate(() => { const R = window.__RV__; R.stage.clearBodies(); R.setGenome(''); R.frames(2); });
 
     // ---- E. ceremonies: durations vs budget, beats, flash windows, skip, calm ----
@@ -369,6 +423,21 @@ try {
     const REQ = { capsule: (tier) => ['grab', 'crack', ...(TIERS6.indexOf(tier) >= 2 ? ['preroll'] : []), 'burst', 'reveal', 'settle'], merge: () => ['press', 'fold', 'charge', 'burst', 'reveal', 'settle'] };
     let worstTransitions = 0, worstWhere = '';
     const natural = {};
+    // DESIGN 6.3 escalation table, transcribed from the spec (index = result tier). Burst particles: motes + glitter + Epic spiral trails (24)
+    // + Legendary aurora ribbons (3 x 14 segments) + Mythic star points (24). Camera: push fraction (Legendary: a 7% pull-back), arc degrees.
+    const ESC = {
+      particles: [12, 24 + 6, 40 + 12, 70 + 24, 120 + 3 * 14, 200 + 24],
+      calmParticles: [4, 7 + 2, 12 + 4, 21 + 7, 36 + 1 * 14, 60 + 7],             // x0.3 (rounded per kind; one ribbon of three)
+      rings: [0, 0, 1, 2, 3, 3], push: [0, 0.02, 0.04, 0.06, 0, 0.05], pull: [0, 0, 0, 0, 0.07, 0], arc: [0, 0, 6, 10, 15, 25],
+      dip: [[1, 0], [1, 0], [1, 0], [0.6, 0.25], [0.5, 0.35], [0.4, 0.5]],
+    };
+    const escOk = (r, i) => {
+      const s = r.stats, [dScale, dLen] = ESC.dip[i];
+      const okP = s.burstParticles === ESC.particles[i], okR = s.rings === ESC.rings[i] && s.fades === 0;
+      const okC = Math.abs(s.push - ESC.push[i]) <= 0.002 && Math.abs(s.pull - ESC.pull[i]) <= 0.002 && Math.abs(s.arcDeg - ESC.arc[i]) <= 0.2;
+      const okT = dLen === 0 ? s.minTimeScale === 1 && s.dipSeconds === 0 : Math.abs(s.minTimeScale - dScale) <= 0.01 && s.dipSeconds >= dLen && s.dipSeconds <= dLen + 0.2;
+      return { ok: okP && okR && okC && okT && s.ramps === 1 && r.particlesDropped === 0, txt: `particles ${s.burstParticles}/${ESC.particles[i]}, rings ${s.rings}/${ESC.rings[i]}, push ${(s.push * 100).toFixed(1)}%/${ESC.push[i] * 100}%, pull-back ${(s.pull * 100).toFixed(1)}%/${ESC.pull[i] * 100}%, arc ${s.arcDeg.toFixed(1)}/${ESC.arc[i]} deg, time scale ${s.minTimeScale.toFixed(2)} for ${s.dipSeconds.toFixed(2)} s / ${dScale} for ${dLen} s, light ramps ${s.ramps}, dropped ${r.particlesDropped}` };
+    };
     for (const kind of ['capsule', 'merge']) {
       for (const tier of tiersToRun) {
         const r = await run({ kind, tier, dt: DT });
@@ -384,6 +453,12 @@ try {
         check(Math.abs(r.seconds - budget) <= 0.1 * budget && Math.abs(r.duration - budget) <= 0.01 * budget + 1e-9, `${kind} ${tier}: duration ${r.seconds.toFixed(2)} s within 10% of the ${budget.toFixed(1)} s budget`, `reported ${r.duration.toFixed(2)} s`);
         check(beatsOk && monotone && r.doneResolved && r.bodiesAtEnd === 1 && r.resultVisibleAtEnd, `${kind} ${tier}: beats fire once in order ${REQ[kind](tier).join('>')}, done resolves, result is the one visible body`, `${order.join('>')} done=${r.doneResolved} bodies=${r.bodiesAtEnd}`);
         check(r.maxLight <= 0.25 + 1e-6 && win <= 3, `${kind} ${tier}: flash-safe (screen alpha <= 0.25; <= 3 luminance transitions in any 1 s)`, `max alpha ${r.maxLight.toFixed(3)}, worst 1 s window ${win} transitions, luma ${sw.min.toFixed(3)}..${sw.max.toFixed(3)}, particles <= ${r.maxParticles}`);
+        const bt = r.beats.find((b) => b.beat === 'burst')?.t ?? -1, want = SYNC[kind][tier];
+        const pre = r.beats.find((b) => b.beat === 'preroll')?.t;
+        check(Math.abs(bt - want) <= DT + 1e-6 && (pre === undefined || Math.abs(pre - 0.65) <= DT + 1e-6), `${kind} ${tier}: 'burst' beat on the audio time map (_spec/SOUND.md) at ${want.toFixed(2)} s${pre !== undefined ? ", 'preroll' at 0.65 s" : ''}`, `burst at ${bt.toFixed(3)} s${pre !== undefined ? `, preroll at ${pre.toFixed(3)} s` : ''}`);
+        const esc = escOk(r, TIERS6.indexOf(tier));
+        R2.durations[`${kind}:${tier}`].escalation = r.stats;
+        check(esc.ok, `${kind} ${tier}: DESIGN 6.3 escalation row exactly (burst particles, rings, camera push / arc, time-scale dip) + ONE light ramp`, esc.txt);
       }
     }
     check(worstTransitions <= 3, 'FLASH PROBE: no 1 s window of any capsule / merge ceremony has more than 3 luminance transitions', `worst ${worstTransitions} (${worstWhere}), threshold ${FLASH_THR} mean linear luminance`);
@@ -402,37 +477,65 @@ try {
       check(Math.abs(q.seconds - 0.8) <= 0.08 && q.bodiesAtEnd === 1, 'quick pop (common, fast open): 0.8 s', `${q.seconds.toFixed(2)} s`);
     }
 
-    // skip(): jumps to the final reveal frame (120 ms crossfade), result never hidden, same final frame as the natural end
-    // "same final frame": luminance of the 48x36 fingerprint box-filtered to 24x18 (time-phased idle effects such as Mythic's slowly cycling aura hue differ by phase, not by state)
+    // ceremony drivers: FEATURE-DETECTED. 'native' = bodies that implement setFold / tremble / burstOpen (the dev stub; PHYS may add them to
+    // the real body at any time) must be driven through them; 'puppet' = the same drivers hidden, the render lane's procedural puppet folds the ball
+    {
+      const nat = await run({ kind: 'merge', tier: 'epic', dt: DT, drivers: 'native' });
+      const pup = await run({ kind: 'merge', tier: 'epic', dt: DT, drivers: 'puppet' });
+      R2.drivers = { native: { spy: nat.drivers, native: nat.native, foldMax: nat.foldMax }, puppet: { spy: pup.drivers, native: pup.native, foldMax: pup.foldMax } };
+      check(nat.native.length >= 9 && nat.native.every(Boolean) && nat.drivers.setFoldMax >= 0.99 && nat.drivers.tremble > 0 && nat.drivers.trembleMax > 0.5 && nat.drivers.burstOpen === 1 && nat.doneResolved && nat.bodiesAtEnd === 1,
+        'merge with NATIVE ceremony drivers: setFold rises to 1, tremble during the charge, ONE burstOpen, done resolves', JSON.stringify(nat.drivers));
+      check(pup.native.length >= 9 && pup.native.every((x) => !x) && pup.foldMax >= 0.95 && pup.doneResolved && pup.bodiesAtEnd === 1 && pup.beats.length === 6,
+        'merge with the drivers HIDDEN: the procedural puppet folds the parents into the ball (fold >= 0.95), every beat, done resolves', `fold ${pup.foldMax.toFixed(2)}, beats ${pup.beats.length}`);
+    }
+    {
+      const d = await rp.evaluate(() => window.__RV__.doneRobustness());
+      R2.doneRobustness = d;
+      check(d.interruptedResolved && d.disposedResolved && d.secondFinished && !d.rejected, 'CeremonyHandle.done never rejects or hangs: resolves when interrupted by a new ceremony and when the stage is disposed mid-ceremony', JSON.stringify(d));
+      const ar = await rp.evaluate(() => window.__RV__.addRemove3(20));
+      R2.multi.addRemove3 = ar;
+      const flat = ['geometries', 'textures', 'programs'].every((k) => ar.slice(2).every((x) => x[k] === ar[2][k]));
+      check(flat, '20 cycles of addBody x3 (common / rare / mythic) + removeBody x3: renderer.info memory flat after the first cycles', ['geometries', 'textures', 'programs'].map((k) => `${k} ${ar.map((x) => x[k]).join(',')}`).join(' | '));
+      await rp.evaluate(() => { const R = window.__RV__; R.stage.clearBodies(); R.setGenome(''); R.frames(2); });
+    }
+
+    // skip(): jumps to the final reveal frame (120 ms crossfade), result never hidden, same final frame as the natural end.
+    // "Same final frame" = the 48x36 RGB fingerprint 3 s after `done` (the natural ending lands with a wobble that is still ringing out at its
+    // last ceremony frame), mean |diff| <= 1.5/255 per channel for EVERY tier. Each body view runs its own clock and skip() fast-forwards the
+    // result's clock to the natural end, so time-phased idle effects (Mythic hue cycle, satellites, core pulse, blink) line up; what is left is
+    // the soft body's own settle after the landing vs a reset body (sub-millimetre).
+    const rgbDiff = (a, b) => { let d = 0; for (let i = 0; i < a.length; i += 4) d += (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2])) / 3; return d / (a.length / 4); };
     const lumaGrid = (fp) => { const o = new Float32Array(24 * 18); for (let y = 0; y < 36; y++) for (let x = 0; x < 48; x++) { const i = (y * 48 + x) * 4; o[(y >> 1) * 24 + (x >> 1)] += (0.2126 * fp[i] + 0.7152 * fp[i + 1] + 0.0722 * fp[i + 2]) / 4; } return o; };
     const fpDiff = (a, b) => { const A = lumaGrid(a), B = lumaGrid(b); let d = 0; for (let i = 0; i < A.length; i++) d += Math.abs(A[i] - B[i]); return d / A.length; };
     for (const kind of ['capsule', 'merge']) {
-      for (const tier of QUICK ? ['mythic'] : ['common', 'rare', 'mythic']) {
+      for (const tier of QUICK ? ['mythic'] : TIERS6) {
         const budget = (kind === 'capsule' ? CAP_BUDGET : MER_BUDGET)[tier];
         // 3 s of settle frames after each: the natural ending lands with a wobble that is still ringing out at the last ceremony frame
         const nat = await run({ kind, tier, dt: DT, settle: 90 });
         const sk = await run({ kind, tier, dt: DT, skipAt: budget * 0.42, settle: 90 });
-        const d = fpDiff(nat.fingerprint, sk.fingerprint);
+        const d = rgbDiff(nat.fingerprint, sk.fingerprint);
         const order = sk.beats.map((b) => b.beat);
         const win = worstWindow(zigzag(sk.lumas), DT);
         R2.skip[`${kind}:${tier}`] = { fingerprintMeanAbsDiff: d, activeFramesAfterSkip: sk.activeAfterSkip, beats: order, transitions1s: win, maxScreenLight: sk.maxLight };
         const same = (x) => !x.ceremony && !x.capsule && x.screenLight === 0 && x.cameraFx.dist === 1 && x.cameraFx.yaw === 0 && x.cameraFx.pitch === 0 && x.primaryIsResult;
         check(same(sk.finalState) && same(nat.finalState), `${kind} ${tier}: after skip() AND after the natural end the stage state is identical (no ceremony, capsule gone, no screen light, camera at rest, the result is the primary body)`, JSON.stringify(sk.finalState));
-        check(d <= (tier === 'mythic' ? 11 : 6) && sk.activeAfterSkip >= 1 && sk.activeAfterSkip * DT <= 0.12 + 2 * DT && sk.doneResolved && sk.bodiesAtEnd === 1 && sk.resultVisibleAtEnd && order.includes('reveal') && order.includes('settle'),
-          `${kind} ${tier}: skip() ends on the same final frame (mean luminance |diff| ${d.toFixed(2)}/255; time-phased idle effects differ: Mythic's hue cycle and core pulse, tolerance 11 for it, 6 otherwise), 120 ms crossfade, result visible, done resolves`, `crossfade ${sk.activeAfterSkip} frames, beats ${order.join('>')}`);
-        check(win <= 3 && sk.maxLight <= 0.25 + 1e-6, `${kind} ${tier}: skip() is flash-safe too`, `transitions ${win}`);
+        check(d <= 1.5 && sk.activeAfterSkip * DT >= 0.12 - 1e-6 && sk.activeAfterSkip * DT <= 0.12 + 2 * DT && sk.doneResolved && sk.bodiesAtEnd === 1 && sk.resultVisibleAtEnd && order.includes('reveal') && order.includes('settle'),
+          `${kind} ${tier}: skip() ends on the same final frame (RGB fingerprint mean |diff| ${d.toFixed(2)}/255 <= 1.5), 120 ms crossfade, result visible, done resolves`, `crossfade ${sk.activeAfterSkip} frames, beats ${order.join('>')}, result clock natural ${nat.resultClock.toFixed(3)} s vs skip ${sk.resultClock.toFixed(3)} s`);
+        check(win <= 3 && sk.maxLight <= 0.25 + 1e-6 && sk.resultHiddenFrames === 0, `${kind} ${tier}: skip() is flash-safe and never hides the result (not even mid-crossfade)`, `transitions ${win}, result hidden on ${sk.resultHiddenFrames} crossfade frames`);
       }
     }
 
     // Calm: no camera moves, no slow-mo, particles x0.3, rings -> fades, durations x0.65, no flash
-    for (const kind of ['capsule', 'merge']) {
-      const tier = 'mythic';
+    for (const kind of ['capsule', 'merge']) for (const tier of QUICK ? ['mythic'] : TIERS6) {
       const norm = natural[`${kind}:${tier}`] ?? (await run({ kind, tier, dt: DT, calm: false }));
       const calm = await run({ kind, tier, dt: DT, calm: true });
       const budget = (kind === 'capsule' ? CAP_BUDGET : MER_BUDGET)[tier] * 0.65;
-      R2.calm[`${kind}:${tier}`] = { measured: calm.seconds, budget, maxScreenLight: calm.maxLight, particles: calm.maxParticles, normalParticles: norm.maxParticles, camRange: calm.camRange, normalCamRange: norm.camRange };
-      check(Math.abs(calm.seconds - budget) <= 0.1 * budget && calm.maxLight === 0 && calm.camRange < 1e-6 && calm.maxParticles <= 0.45 * norm.maxParticles + 4 && norm.camRange > 0.02,
-        `Calm ${kind} ${tier}: duration x0.65 (${calm.seconds.toFixed(2)} s), no screen light, camera effects ${calm.camRange.toExponential(0)} vs ${norm.camRange.toFixed(2)} in the normal run, particles ${calm.maxParticles} vs ${norm.maxParticles}`);
+      R2.calm[`${kind}:${tier}`] = { measured: calm.seconds, budget, maxScreenLight: calm.maxLight, particles: calm.maxParticles, normalParticles: norm.maxParticles, camRange: calm.camRange, normalCamRange: norm.camRange, stats: calm.stats };
+      const cs = calm.stats, ti = TIERS6.indexOf(tier);
+      check(Math.abs(calm.seconds - budget) <= 0.1 * budget && calm.maxLight === 0 && calm.camRange < 1e-6 && calm.maxParticles <= 0.45 * norm.maxParticles + 4 && (tier === 'common' || norm.camRange > 0.02)
+        && cs.minTimeScale === 1 && cs.dipSeconds === 0 && cs.rings === 0 && cs.fades === ESC.rings[ti] && cs.burstParticles === ESC.calmParticles[ti] && cs.ramps === 0,
+        `Calm ${kind} ${tier}: duration x0.65 (${calm.seconds.toFixed(2)} s), no screen light / ramp, no camera move, no slow-motion, particles x0.3, rings become fades`,
+        `camera ${calm.camRange.toExponential(0)} vs ${norm.camRange.toFixed(2)} normal, burst particles ${cs.burstParticles} (expected ${ESC.calmParticles[ti]}), live particles ${calm.maxParticles} vs ${norm.maxParticles}, time scale ${cs.minTimeScale}, rings ${cs.rings} fades ${cs.fades}, ramps ${cs.ramps}`);
     }
     await rp.evaluate(() => { const R = window.__RV__; R.setCalm(false); R.stage.clearBodies(); R.setGenome(''); R.frames(2); });
     report.problems.push(...rbad);
@@ -440,7 +543,7 @@ try {
 
     // ---- F. rarity ladder reads from the object: one body per tier, desktop + phone ----
     {
-      const sctx = await browser.newContext({ viewport: { width: 480, height: 360 }, deviceScaleFactor: 1 });
+      const sctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
       const { page: sp, bad: sbad } = await openView(sctx, `quality=med&body=${bodyQ}`, 'rarity', [/GPU stall due to ReadPixels/i]);
       const cells = [], fps = [];
       for (const tier of TIERS6) {
@@ -448,7 +551,13 @@ try {
         cells.push([tier, r.png]); fps.push(r.fp);
         R2.rarity[tier] = { rarityFx: r.info.rarity ?? null };
       }
-      await sheet(ctx_for_sheets(), 'rarity_sheet', cells, 3, 480, 360);
+      await sheet(ctx_for_sheets(), 'rarity_sheet', cells, 3, 640, 400);
+      // the same ladder on two more genomes (a violet banded one and a green speckled one): the tier must read on ANY body colour
+      for (const seed of ['16', '19']) {
+        const cg = [];
+        for (const tier of TIERS6) cg.push([`${tier} (seed ${seed})`, await sp.evaluate(([tier, seed]) => { const R = window.__RV__; R.showTier(tier, seed); R.frames(110); return R.snapshot(); }, [tier, seed])]);
+        await sheet(ctx_for_sheets(), `rarity_sheet_seed${seed}`, cg, 3, 640, 400);
+      }
       const dmin = Math.min(...fps.slice(1).map((f, i) => fpDiff(fps[i], f)));
       check(dmin > 1.2, 'rarity sheet: every tier differs visibly from the previous one', `min adjacent mean |diff| ${dmin.toFixed(2)}/255`);
       console.log('wrote rarity_sheet.png');
@@ -469,6 +578,10 @@ try {
         return { landedFrames: f, info: c, whole: !!c.point && c.point.x - c.point.r >= 0 && c.point.x + c.point.r <= vw && c.point.y - c.point.r >= 0 && c.point.y + c.point.r <= vh, png: R.snapshot() };
       });
       R2.multi.capsulePhone = { landedFrames: capP.landedFrames, info: capP.info, whole: capP.whole };
+      // MERGE_COST 3 on a narrow portrait frame (the triangle layout; the wide frames above used the row)
+      const m3p = await pp2.evaluate(() => window.__RV__.runCeremony({ kind: 'merge', tier: 'epic', dt: 1 / 30, parents: 3, settle: 10 }));
+      check(Math.abs(m3p.seconds - MER_BUDGET_EPIC) <= 0.1 * MER_BUDGET_EPIC && m3p.bodiesAtEnd === 1 && m3p.beats.length === 6 && m3p.doneResolved && m3p.maxLight <= 0.25 + 1e-6,
+        'merge with 3 parents on a 390x844 portrait frame (triangle layout): on budget, every beat, one body at the end', `${m3p.seconds.toFixed(2)} s, beats ${m3p.beats.map((x) => x.beat).join('>')}`);
       check(capP.info.landed && capP.info.hit && capP.whole, 'dropCapsule() on a 390x844 portrait frame: lands, whole on screen, tappable', JSON.stringify({ point: capP.info.point, hit: capP.info.hit }));
       writeFileSync(resolve(OUT, 'capsule_cue_phone.png'), b64(capP.png));
       await sheet(ctx_for_sheets(), 'rarity_sheet_phone', cellsP, 6, 260, 563);
@@ -477,27 +590,34 @@ try {
       report.problems.push(...pbad2);
     }
 
-    // ---- G. filmstrips: 6 tiers x beats for both ceremonies (desktop med + phone low) ----
+    // ---- G. filmstrips: 6 tiers x 7 beats for both ceremonies, 1280x800 (med) and 390x844 (low) ----
     if (!QUICK) {
       const PRE = { common: 0, uncommon: 0, rare: 0.3, epic: 0.5, legendary: 0.8, mythic: 1.0 };
+      const MERGE_BURST_AT = { common: 1.3, uncommon: 1.5, rare: 1.8, epic: 2.1, legendary: 2.4, mythic: 2.8 };   // = audio MERGE_CHARGE_S
       const timesFor = (kind, t) => {
-        if (kind === 'capsule') { const burst = 0.65 + PRE[t], D = CAP_BUDGET[t]; return [0.2, burst - 0.15, burst + 0.1, burst + 0.45, burst + 1.0, D - 0.03]; }
-        const T1 = 0.4, T2 = 0.5, T3 = 0.4 + 1.5 * PRE[t], T4 = 0.2, D = MER_BUDGET[t];
-        return [T1 * 0.8, T1 + 0.3 * T2 + 0.1, T1 + T2 + 0.05, T1 + T2 + T3 * 0.75, T1 + T2 + T3 + T4 + 0.12, D - 0.03];
+        if (kind === 'capsule') {
+          const burst = 0.65 + PRE[t], reveal = burst + 0.35, D = CAP_BUDGET[t];
+          return [['grab', 0.2], ['crack', 0.5], ['tell', burst - 0.05], ['burst', burst + 0.1], ['drop', burst + 0.4], ['reveal', reveal + (D - reveal) * 0.5], ['final', D - 0.03]];
+        }
+        const t3 = MERGE_BURST_AT[t], D = MER_BUDGET[t];
+        return [['slide', 0.25], ['press', 0.42], ['fold', 0.75], ['charge', t3 - 0.3], ['burst', t3 + 0.08], ['rise', t3 + 0.55], ['final', D - 0.03]];
       };
+      mkdirSync(resolve(OUT, 'film'), { recursive: true });
       for (const [label, vp, query, cols, cw, ch, tiersSel] of [
-        ['desktop', { width: 260, height: 208 }, 'quality=med', 6, 260, 208, TIERS6],
-        ['phone', { width: 390, height: 844 }, 'quality=low', 6, 130, 281, ['rare', 'mythic']],
+        ['desktop', { width: 1280, height: 800 }, 'quality=med', 7, 320, 200, TIERS6],
+        ['phone', { width: 390, height: 844 }, 'quality=low', 7, 130, 281, TIERS6],
       ]) {
         const fctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
         const { page: fpg, bad: fbad } = await openView(fctx, `${query}&body=${bodyQ}`, `filmstrip-${label}`, [/GPU stall due to ReadPixels/i]);
-        for (const kind of ['capsule', 'merge']) {
+        for (const kind of ['capsule', 'merge', 'merge3']) {   // merge3 = MERGE_COST 3 (row on wide frames, triangle on narrow ones)
           const cells = [];
-          for (const tier of tiersSel) {
-            const ts = timesFor(kind, tier);
+          for (const tier of kind === 'merge3' ? ['rare', 'mythic'] : tiersSel) {
+            const ts = timesFor(kind === 'merge3' ? 'merge' : kind, tier);
             for (let i = 0; i < ts.length; i++) {
-              const png = await fpg.evaluate(([kind, tier, t, first]) => { const R = window.__RV__; if (first) { if (kind === 'capsule') R.capsuleReveal(tier); else R.merge(tier, 2, false); } R.cerSeek(t, 1 / 30); return R.snapshot(); }, [kind, tier, ts[i], i === 0]);
-              cells.push([`${tier} ${ts[i].toFixed(2)}s`, png]);
+              const [beat, t] = ts[i];
+              const jpg = await fpg.evaluate(([kind, tier, t, first]) => { const R = window.__RV__; if (first) { if (kind === 'capsule') R.capsuleReveal(tier); else R.merge(tier, kind === 'merge3' ? 3 : 2, false); } R.cerSeek(t, 1 / 30); return R.stage.canvas.toDataURL('image/jpeg', 0.9); }, [kind, tier, t, i === 0]);
+              if (label === 'desktop') writeFileSync(resolve(OUT, 'film', `${kind}_${tier}_${i}_${beat}.jpg`), b64(jpg));
+              cells.push([`${tier} ${beat} ${t.toFixed(2)}s`, jpg]);
             }
             await fpg.evaluate(() => { const R = window.__RV__; if (R.cerState().active) R.skipCer(); R.frames(12); });
           }

@@ -1,9 +1,12 @@
 // Minimal debug viewer of the soft-body SIM mesh (not the pretty render): flat-shaded facets tinted by strain
 // (cyan = compressed, red = stretched), a dim wireframe ghost of the rest shape, the table, and the finger-tip spheres.
-// It is driven by a scripted scenario from the URL (?scn=side_poke|hold_squash|pull_lobe|peak_flop|float_shove|pinch)
+// It is driven by a scripted scenario from the URL (?scn=<name>, see SCENARIOS: side_poke, hold_squash, pull_lobe, peak_flop, float_shove,
+// pinch, the fold regressions top_peak_poke / top_peak_hold / hold_close / peak_rest_close / pinch_stagger / peak_shove / hold_shoulder,
+// the close-ups tap_close / press_close (?px=), edge_low, edge_rim, fast_tap1, fast_tap3, rub, pull_far, pull_peak and mat_nudge)
 // and steps the sim with a FIXED dt of 1/60 s (no wall clock), so the filmstrips are reproducible.
 // Extra URL params: ?p=<json SoftParams override> ?f=<json FINGER override> ?g=<genome seed or g1.code> ?gf= ?gb= ?gs= ?gz= (firmness, bounce,
-// stretch, size overrides) ?detail=<3|4> ?px=<press x offset for hold_squash / peak_rest_close> ?fps=<sim frame rate, default 60>.
+// stretch, size overrides) ?detail=<3|4> ?px=<press x offset for hold_squash / hold_close / peak_rest_close / tap_close / press_close>
+// ?fps=<sim frame rate, default 60>.
 // Every step also logs the worst mesh FOLD (largest dihedral between adjacent triangles, edges over 90 degrees, inward-facing
 // triangles): the rest shape's own maximum is ~50 degrees, so anything near 180 is a crease or a tucked-under flap.
 // window.__PV__ is the harness hook (see bottom).
@@ -170,6 +173,115 @@ const SCENARIOS: Record<string, Scenario> = {
       if (t >= 0.55 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
     },
   },
+  // ---- round 3: close-ups of presses near the peak (the 171-180 degree transient folds), extra edge cases, the mat corral ----
+  // close-up of a TAP from straight above at x = PX (?px=0 / 0.1 / 0.2 / 0.3): every frame of the contact
+  tap_close: {
+    title: 'tap from above at x=PX (pressure 0.6, 0.30-0.42 s), close-up of the contact',
+    frames: [0.3, 0.32, 0.34, 0.36, 0.38, 0.4, 0.42, 0.44, 0.47, 0.52, 0.62, 0.85],
+    camDist: 1.9, camTarget: [0.1, 0.75, 0], yawDeg: 24, pitchDeg: 22,
+    tick(t, b, c) {
+      if (t >= 0.3 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(PX, 3, 0), v3(0, -1, 0)); b.fingerPressure(0, 0.6); }
+      if (t >= 0.42 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
+  // close-up of a HOLD from straight above at x = PX, through the whole ramp (the old folds appeared 0.1-0.7 s into it) and the release
+  press_close: {
+    title: 'hold from above at x=PX (ramp 0.9 s from 0.40 s), close-up through the press, release 1.50 s',
+    frames: [0.45, 0.55, 0.65, 0.75, 0.85, 0.95, 1.1, 1.3, 1.48, 1.53, 1.6, 1.8],
+    camDist: 2.0, camTarget: [0.1, 0.65, 0], yawDeg: 24, pitchDeg: 24,
+    tick(t, b, c) {
+      if (t >= 0.4 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(PX, 3, 0), v3(0, -1, 0)); }
+      if (c.n.down && !c.n.up) b.fingerPressure(0, clamp01((t - 0.4) / 0.9));
+      if (t >= 1.5 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
+  // very low side press right at the table edge
+  edge_low: {
+    title: 'side press at y=0.05 (just above the table), ramp 0.9 s, hold, release 1.4 s',
+    frames: [0.5, 0.8, 1.1, 1.38, 1.44, 1.48, 1.54, 1.62, 1.75, 1.95, 2.3, 2.9],
+    camDist: 3.2, yawDeg: 24, pitchDeg: 9,
+    tick(t, b, c) {
+      if (t >= 0.4 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(3, 0.05, 0), v3(-1, 0, 0)); }
+      if (c.n.down && !c.n.up) b.fingerPressure(0, clamp01((t - 0.4) / 0.9));
+      if (t >= 1.4 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
+  // press down on the shoulder close to the foot rim (x=0.42)
+  edge_rim: {
+    title: 'press straight down near the foot rim (x=0.42), ramp 0.9 s, hold, release 1.4 s',
+    frames: [0.5, 0.8, 1.1, 1.38, 1.44, 1.48, 1.54, 1.62, 1.75, 1.95, 2.3, 2.9],
+    camDist: 3.2, yawDeg: 24, pitchDeg: 9,
+    tick(t, b, c) {
+      if (t >= 0.4 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(0.42, 3, 0), v3(0, -1, 0)); }
+      if (c.n.down && !c.n.up) b.fingerPressure(0, clamp01((t - 0.4) / 0.9));
+      if (t >= 1.4 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
+  // 1-frame tap (down + pressure 1 + up on the very next frame) on the dome flank
+  fast_tap1: {
+    title: '1-frame tap on the flank at y=0.4: down at 0.30, up at the next frame',
+    frames: [0.3, 0.317, 0.333, 0.35, 0.383, 0.417, 0.45, 0.5, 0.58, 0.7, 0.9, 1.3],
+    camDist: 3.2, yawDeg: 24, pitchDeg: 9,
+    tick(t, b, c) {
+      if (t >= 0.3 && !c.n.down) { c.n.down = 1; c.n.dt0 = t; touch(b, 0, v3(3, 0.4, 0), v3(-1, 0, 0)); b.fingerPressure(0, 1); }
+      if (c.n.down && !c.n.up && t >= c.n.dt0 + 0.0166) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
+  // 3-frame (50 ms) tap straight down on the dome top-shoulder
+  fast_tap3: {
+    title: '3-frame tap straight down at x=0.2: pressure 1 for 50 ms',
+    frames: [0.3, 0.317, 0.333, 0.35, 0.383, 0.417, 0.45, 0.5, 0.58, 0.7, 0.9, 1.3],
+    camDist: 3.2, yawDeg: 24, pitchDeg: 9,
+    tick(t, b, c) {
+      if (t >= 0.3 && !c.n.down) { c.n.down = 1; c.n.dt0 = t; touch(b, 0, v3(0.2, 3, 0), v3(0, -1, 0)); b.fingerPressure(0, 1); }
+      if (c.n.down && !c.n.up && t >= c.n.dt0 + 0.049) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
+  // fast rub across the top, over the swirl-peak
+  rub: {
+    title: 'press x=-0.3 from the top at 0.3, drag across to x=0.3 in 0.3 s (from 0.5), up at 0.9',
+    frames: [0.35, 0.45, 0.55, 0.62, 0.7, 0.78, 0.86, 0.92, 0.98, 1.1, 1.3, 1.7],
+    camDist: 3.2, yawDeg: 24, pitchDeg: 14,
+    tick(t, b, c) {
+      if (t >= 0.3 && !c.n.down) { c.n.down = 1; touch(b, 0, v3(-0.3, 3, 0), v3(0, -1, 0)); }
+      if (c.n.down && !c.n.up) {
+        b.fingerPressure(0, 0.6);
+        if (t >= 0.5) { const k = clamp01((t - 0.5) / 0.3); const h = b.raycast(v3(-0.3 + 0.6 * k, 3, 0), v3(0, -1, 0)); if (h) b.fingerMove(0, h.point); }
+      }
+      if (t >= 0.9 && !c.n.up) { c.n.up = 1; b.fingerUp(0); }
+    },
+  },
+  // pull far past the max pull and let go
+  pull_far: {
+    title: 'pull a flank lobe 2.2 m out (past the limit), hold 0.3 s, let go at 1.4',
+    frames: [0.6, 0.8, 1.0, 1.2, 1.38, 1.42, 1.46, 1.5, 1.56, 1.66, 1.85, 2.3],
+    camDist: 5.2, camTarget: [0.5, 0.5, 0], yawDeg: 24, pitchDeg: 9,
+    tick(t, b, c) {
+      if (t >= 0.4 && !c.n.down) { c.n.down = 1; const hit = b.raycast(v3(3, 0.42, 0), v3(-1, 0, 0)); if (hit) { c.hit.p = hit.point; b.grab(0, hit.vertex, hit.point); } }
+      if (c.n.down && !c.n.up && c.hit.p) { const k = clamp01((t - 0.45) / 0.7); b.grabMove(0, v3(c.hit.p.x + 2.2 * k, c.hit.p.y + 0.5 * k, c.hit.p.z)); }
+      if (t >= 1.4 && !c.n.up) { c.n.up = 1; b.grabRelease(0); }
+    },
+  },
+  // grab the swirl-peak itself and pull it straight up
+  pull_peak: {
+    title: 'grab the peak tip, pull up 1.0 m, let go at 1.2',
+    frames: [0.5, 0.65, 0.8, 0.95, 1.15, 1.22, 1.26, 1.3, 1.36, 1.46, 1.7, 2.1],
+    camDist: 4.2, camTarget: [0, 0.8, 0], yawDeg: 24, pitchDeg: 9,
+    tick(t, b, c) {
+      if (t >= 0.4 && !c.n.down) { c.n.down = 1; const hit = b.raycast(v3(0, 3, 0), v3(0, -1, 0)); if (hit) { c.hit.p = hit.point; b.grab(0, hit.vertex, hit.point); } }
+      if (c.n.down && !c.n.up && c.hit.p) { const k = clamp01((t - 0.45) / 0.6); b.grabMove(0, v3(c.hit.p.x, c.hit.p.y + 1.0 * k, c.hit.p.z)); }
+      if (t >= 1.2 && !c.n.up) { c.n.up = 1; b.grabRelease(0); }
+    },
+  },
+  // the mat corral: a 12 m/s nudge (the clamp) at 20 degrees on the table; the body is braked past 0.6 m and glides back (it used to land 5 m away)
+  mat_nudge: {
+    title: 'mat corral: 12 m/s nudge at 20 deg (0.30 s); braked past 0.6 m, glides back to the dead-zone edge',
+    frames: [0.28, 0.4, 0.55, 0.75, 1.0, 1.4, 2.0, 2.8, 3.8, 5.0, 6.5, 8.0],
+    camDist: 9.5, camTarget: [1.0, 0.4, 0], yawDeg: 0, pitchDeg: 32,
+    tick(t, b, c) {
+      if (t >= 0.3 && !c.n.down) { c.n.down = 1; b.nudge(v3(12 * Math.cos(0.35), 12 * Math.sin(0.35), 0)); }
+    },
+  },
   // press on the dome shoulder next to the peak, ramp and hold (the peak must not crumple while the body squashes)
   hold_shoulder: {
     title: 'hold-squash on the dome shoulder (x=0.3), close-up of the peak, release 1.4',
@@ -318,9 +430,15 @@ scene.add(new THREE.HemisphereLight(0xffe2c0, 0x33224d, 1.1));
 const key = new THREE.DirectionalLight(0xffb347, 2.0); key.position.set(2, 4, 3); scene.add(key);
 const rim = new THREE.DirectionalLight(0x59d6e6, 1.0); rim.position.set(-3, 2, -2); scene.add(rim);
 
-const table = new THREE.Mesh(new THREE.CircleGeometry(2.2, 64), new THREE.MeshBasicMaterial({ color: 0x2a2150 }));
+const table = new THREE.Mesh(new THREE.CircleGeometry(3.5, 96), new THREE.MeshBasicMaterial({ color: 0x2a2150 }));   // the play-mat (src/render/table.ts MAT_R)
 table.rotation.x = -Math.PI / 2; table.position.y = -0.002; scene.add(table);
-const grid = new THREE.GridHelper(4.4, 22, 0x5b3a86, 0x3b2c6a); grid.position.y = 0.0005; scene.add(grid);
+const grid = new THREE.GridHelper(7, 35, 0x5b3a86, 0x3b2c6a); grid.position.y = 0.0005; scene.add(grid);
+{ // the mat corral's dead zone (0.6 m) and rim (2.5 m), as faint rings
+  for (const [r, col] of [[0.6, 0x59d6e6], [2.5, 0xff5a4d]] as const) {
+    const ring = new THREE.Mesh(new THREE.RingGeometry(r - 0.01, r + 0.01, 96), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.45 }));
+    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.001; scene.add(ring);
+  }
+}
 
 const geo = new THREE.BufferGeometry();
 geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(body.vertexCount * 3), 3));

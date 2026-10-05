@@ -40,7 +40,9 @@ export interface TierStyle {
   iri: number;              // 0..1 thin-film iridescence
   swirlFloor: number;       // a plain-pattern body gets a swirl layer of this strength (Rare and up)
   // core
-  coreMul: number; coreSize: number; coreWarm: number; corePrism: number; corePulseHz: number; corePulseAmp: number; haloMul: number; haloSize: number;
+  coreMul: number; coreSize: number; coreWarm: number; corePrism: number;
+  /** 0..1: the core (blob, halo, the jelly's inner glow) leans toward the TIER colour, so a Legendary's bright core is gold on any genome. */
+  coreTint: number; corePulseHz: number; corePulseAmp: number; haloMul: number; haloSize: number;
   // floor light
   poolMul: number; poolTint: number; ring: number; ringPulseHz: number;
   // aura / dome / pillar
@@ -54,30 +56,30 @@ export interface TierStyle {
 const base = (name: TierName, index: number, tell: Rgb, family: TintFamily): TierStyle => ({
   name, index, tell, tellFamily: family, prism: false,
   translucencyAdd: 0, attenuation: 1, rim: 1, blush: 1, twoTone: 0, aurora: 0, iri: 0, swirlFloor: 0,
-  coreMul: 1, coreSize: 1, coreWarm: 0, corePrism: 0, corePulseHz: 0, corePulseAmp: 0, haloMul: 1, haloSize: 1,
+  coreMul: 1, coreSize: 1, coreWarm: 0, corePrism: 0, coreTint: 0, corePulseHz: 0, corePulseAmp: 0, haloMul: 1, haloSize: 1,
   poolMul: 1, poolTint: 0, ring: 0, ringPulseHz: 0, rimHalo: 0, dome: 0, pillar: 0,
   sparkleBase: 0, drift: false, sparkTrail: false, constellation: 0, motes: 0, satellites: 0,
 });
 
 export const TIER_STYLES: Record<TierName, TierStyle> = {
   common: { ...base('common', 0, hexLin(0xfff1d6), 'other'), rim: 0.8, coreMul: 0.7, haloMul: 0.8, poolMul: 0.62 },
-  uncommon: { ...base('uncommon', 1, hexLin(0x59d6e6), 'cyan'), translucencyAdd: 0.1, rim: 1.0, coreMul: 1.05, coreWarm: 0.5, poolMul: 1.05, poolTint: 0.2, sparkleBase: 0.2 },
+  uncommon: { ...base('uncommon', 1, hexLin(0x59d6e6), 'cyan'), translucencyAdd: 0.1, rim: 1.0, coreMul: 1.05, coreWarm: 0.5, poolMul: 1.25, poolTint: 0.85, sparkleBase: 0.2 },
   rare: {
     ...base('rare', 2, hexLin(0x8a5cf0), 'other'), translucencyAdd: 0.15, attenuation: 0.8, rim: 1.35, swirlFloor: 0.8,
     coreMul: 1.15, coreSize: 1.18, corePulseHz: 0.36, corePulseAmp: 0.16, haloMul: 1.1, poolMul: 0.95, poolTint: 0.3, rimHalo: 0.5, sparkleBase: 0.45,
   },
   epic: {
     ...base('epic', 3, hexLin(0xff5a4d), 'coral'), translucencyAdd: 0.15, attenuation: 0.8, rim: 1.2, blush: 1.5, twoTone: 0.85,
-    coreMul: 1.3, coreSize: 1.2, haloMul: 1.9, haloSize: 1.3, poolMul: 0.9, poolTint: 0.25, ring: 0.7, rimHalo: 0.6, sparkleBase: 0.55, drift: true, motes: 4,
+    coreMul: 1.3, coreSize: 1.2, coreTint: 0.3, haloMul: 1.6, haloSize: 1.3, poolMul: 0.9, poolTint: 0.25, ring: 0.7, rimHalo: 0.26, sparkleBase: 0.55, drift: true, motes: 4,
   },
   legendary: {
     ...base('legendary', 4, hexLin(0xffb347), 'other'), translucencyAdd: 0.18, attenuation: 0.75, rim: 1.3, blush: 1.3, aurora: 1,
-    coreMul: 1.65, coreSize: 1.25, haloMul: 2.0, haloSize: 1.35, poolMul: 1.0, poolTint: 0.2, ring: 0.8, ringPulseHz: 0.25, rimHalo: 0.58, pillar: 0.5,
+    coreMul: 1.15, coreSize: 1.25, coreTint: 0.55, haloMul: 1.2, haloSize: 1.3, poolMul: 1.0, poolTint: 0.35, ring: 0.8, ringPulseHz: 0.25, rimHalo: 0.46, pillar: 0.5,
     sparkleBase: 0.85, drift: true, sparkTrail: true,
   },
   mythic: {
     ...base('mythic', 5, [1, 1, 1], 'other'), prism: true, translucencyAdd: 0.2, attenuation: 0.7, rim: 1.4, blush: 1.2, iri: 1,
-    coreMul: 1.6, coreSize: 1.25, corePrism: 1, corePulseHz: 0.2, corePulseAmp: 0.12, haloMul: 2.0, haloSize: 1.4, poolMul: 1.15, ring: 0.6, rimHalo: 0.6, dome: 1,
+    coreMul: 1.25, coreSize: 1.25, corePrism: 1, corePulseHz: 0.2, corePulseAmp: 0.12, haloMul: 1.25, haloSize: 1.35, poolMul: 1.15, ring: 0.6, rimHalo: 0.24, dome: 1,
     sparkleBase: 0.3, drift: true, constellation: 12, satellites: 2,
   },
 };
@@ -117,9 +119,12 @@ uniform float uStrength;
 uniform float uTime;
 void main() {
   float ndv = clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0);
-  float fres = pow(1.0 - ndv, 2.4);
-  vec3 film = 0.5 + 0.5 * cos(6.2832 * (vec3(0.0, 0.33, 0.67) + ndv * 1.2 + vH * 0.8 + uTime * 0.04));
-  float a = (fres * 0.85 + 0.035) * (1.0 - smoothstep(0.55, 1.0, vH)) * uStrength;
+  // a SOFT shell of light: brightest a little inside its silhouette and fading to nothing AT it (no glass-bell outline), gone toward
+  // the top and at the table seam; a pastel prism (half white), not a saturated rainbow band
+  float shell = smoothstep(0.0, 0.35, ndv) * pow(1.0 - ndv, 1.7);
+  vec3 film = 0.5 + 0.5 * cos(6.2832 * (vec3(0.0, 0.33, 0.67) + ndv * 0.9 + vH * 0.6 + uTime * 0.04));
+  film = mix(vec3(0.82, 0.88, 1.0), film, 0.55);
+  float a = (shell * 0.95 + 0.025) * smoothstep(0.0, 0.2, vH) * (1.0 - smoothstep(0.4, 0.95, vH)) * uStrength;
   gl_FragColor = vec4(film * a, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -145,7 +150,8 @@ uniform vec3 uColor;
 uniform float uStrength;
 void main() {
   float ndv = abs(dot(normalize(vN), normalize(vV)));
-  float a = pow(ndv, 2.4) * pow(max(0.0, 1.0 - vH), 2.1) * smoothstep(0.0, 0.08, vH) * uStrength;
+  // across the column: (1 - x^2)^2, a soft beam with no visible sides; up: fades out long before the top
+  float a = pow(ndv, 4.0) * pow(max(0.0, 1.0 - vH), 2.4) * smoothstep(0.0, 0.1, vH) * uStrength;
   gl_FragColor = vec4(uColor * a, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -298,7 +304,7 @@ export class RarityFx {
     if (this.aura && st.rimHalo > 0) {
       const tint = st.prism ? spectrum(time * 0.05, this.col) : st.tell;
       const g = this.ctx.palette.glow;
-      this.aura.setColor(tint[0] * 0.6 + g[0] * 0.4, tint[1] * 0.6 + g[1] * 0.4, tint[2] * 0.6 + g[2] * 0.4);
+      this.aura.setColor(tint[0] * 0.8 + g[0] * 0.2, tint[1] * 0.8 + g[1] * 0.2, tint[2] * 0.8 + g[2] * 0.2);   // the TIER colour dominates (it is the tell)
       this.aura.set(c.x, c.y, c.z, R * 1.85, 0.38 * st.rimHalo * k);
     }
     // dome (Mythic): a soft light dome standing on the table
@@ -316,6 +322,7 @@ export class RarityFx {
       const kf = 1 - Math.exp(-dt * 6);
       this.fx += (c.x - this.fx) * kf; this.fy += (c.y - this.fy) * kf; this.fz += (c.z - this.fz) * kf;
       const lagVx = (c.x - this.fx) / 0.17, lagVz = (c.z - this.fz) / 0.17;   // the follower lags: motes trail when the body moves
+      const trailing = Math.hypot(lagVx, lagVz) > 0.25;
       const tint = st.tell;
       for (let i = 0; i < this.nMotes; i++) {
         const ph = i * (Math.PI * 2 / Math.max(1, this.nMotes)) + 0.7;
@@ -325,7 +332,8 @@ export class RarityFx {
         const x = this.fx + Math.cos(th) * r, z = this.fz + Math.sin(th) * r;
         const sp = w * r;
         this.orbit.set(i, x, y, z, -Math.sin(th) * sp * 1.6 + lagVx * 3, 0, Math.cos(th) * sp * 1.6 + lagVz * 3, 0.0);
-        this.orbit.configure(i, 2, 0.026 * sc, tint[0], tint[1] * 0.9 + 0.1, tint[2] * 0.8 + 0.1, 0.75 * k);
+        // round soft motes while the body idles, stretched into streaks (their trails) while it moves
+        this.orbit.configure(i, trailing ? 2 : 0, (trailing ? 0.034 : 0.05) * sc, tint[0] * 0.7 + 0.3, tint[1] * 0.6 + 0.3, tint[2] * 0.55 + 0.3, 0.95 * k);
       }
       for (let j = 0; j < this.nSats; j++) {
         const i = 6 + j;

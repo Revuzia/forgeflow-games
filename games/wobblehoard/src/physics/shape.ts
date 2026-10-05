@@ -29,8 +29,28 @@ export interface RestShape {
   height: number;
 }
 
-/** Radius R0 for a genome: 0.5 x lerp(0.8, 1.25, size). */
-export const restRadiusOf = (g: Genome): number => 0.5 * lerp(0.8, 1.25, clamp(g.size, 0, 1));
+/**
+ * The genome fields the physics reads, made safe. A genome arrives from a share string, a save file or another lane, so physics
+ * never trusts it: a unit field (firmness, bounce, stretch, size) that is finite is clamped to 0..1; one that is missing or NOT
+ * finite (NaN, +/-Infinity) takes its documented default, GENOME_DEFAULTS (the middle of the range: a NaN must not silently turn
+ * into the floppiest or the firmest toy). `seed` becomes a uint32 (non-finite -> 0); a `species` that is not a string becomes
+ * 'dollop' (restPoint already maps an unknown species name to the dollop shape). A null genome gives all defaults.
+ */
+export interface PhysGenome { species: Genome['species']; seed: number; firmness: number; bounce: number; stretch: number; size: number }
+export const GENOME_DEFAULTS: Readonly<PhysGenome> = { species: 'dollop', seed: 0, firmness: 0.5, bounce: 0.5, stretch: 0.5, size: 0.5 };
+const unitOr = (v: unknown, def: number): number => (typeof v === 'number' && Number.isFinite(v) ? clamp(v, 0, 1) : def);
+export function physicsGenome(g: Partial<Genome> | null | undefined): PhysGenome {
+  const d = GENOME_DEFAULTS;
+  if (!g || typeof g !== 'object') return { ...d };
+  return {
+    species: typeof g.species === 'string' ? g.species : d.species,
+    seed: typeof g.seed === 'number' && Number.isFinite(g.seed) ? g.seed >>> 0 : d.seed,
+    firmness: unitOr(g.firmness, d.firmness), bounce: unitOr(g.bounce, d.bounce), stretch: unitOr(g.stretch, d.stretch), size: unitOr(g.size, d.size),
+  };
+}
+
+/** Radius R0 for a genome: 0.5 x lerp(0.8, 1.25, size) (size sanitised by physicsGenome). */
+export const restRadiusOf = (g: Partial<Genome> | null | undefined): number => 0.5 * lerp(0.8, 1.25, physicsGenome(g).size);
 
 export const FLATTEN = 0.8;       // Y squash of the dome
 const PEAK_SIGMA = 0.40;
@@ -86,11 +106,12 @@ export function meshVolume(pos: ArrayLike<number>, tris: Uint32Array): number {
 
 export function buildRest(genome: Genome, mesh: IcoMesh): RestShape {
   const n = mesh.vertexCount;
-  const R0 = restRadiusOf(genome);
+  const pg = physicsGenome(genome);
+  const R0 = restRadiusOf(pg);
   const p = new Float64Array(n * 3);
   const floppy = new Float64Array(n);
   for (let i = 0; i < n; i++) {
-    floppy[i] = restPoint(genome.species, mesh.dirs[i * 3], mesh.dirs[i * 3 + 1], mesh.dirs[i * 3 + 2], R0, p, i * 3);
+    floppy[i] = restPoint(pg.species, mesh.dirs[i * 3], mesh.dirs[i * 3 + 1], mesh.dirs[i * 3 + 2], R0, p, i * 3);
   }
   // tributary-area masses (a third of each incident triangle), mean 1
   const mass = new Float64Array(n);
