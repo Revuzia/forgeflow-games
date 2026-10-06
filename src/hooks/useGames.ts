@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase, type Game } from "../lib/supabase";
+import { applyGameQuery } from "../lib/seed";
 
 export function useGames(options?: {
   genre?: string;
@@ -7,10 +8,15 @@ export function useGames(options?: {
   sort?: "popular" | "new" | "top_rated" | "random";
   limit?: number;
   status?: string;
-}) {
+}, seed?: Game[]) {
   const { genre, search, sort = "popular", limit = 50, status = "published" } = options || {};
+  // Prerender seed (see src/lib/seed.ts): lets the static HTML contain real game
+  // cards. Only for the plain published/unsearched view; everything else fetches.
+  const initial = !search && status === "published" ? applyGameQuery(seed, { genre, sort, limit }) : undefined;
 
   return useQuery({
+    initialData: initial,
+    initialDataUpdatedAt: initial ? 0 : undefined, // stale at once -> refetch on mount, never serve old counts
     queryKey: ["games", genre, search, sort, limit, status],
     queryFn: async () => {
       let query = supabase
@@ -50,8 +56,11 @@ export function useGames(options?: {
   });
 }
 
-export function useGame(slug: string) {
+export function useGame(slug: string, seed?: Game | null) {
+  const initial = seed && seed.slug === slug ? seed : undefined;
   return useQuery({
+    initialData: initial,
+    initialDataUpdatedAt: initial ? 0 : undefined,
     queryKey: ["game", slug],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -84,8 +93,11 @@ export function useFeaturedGames() {
   });
 }
 
-export function useRelatedGames(game: Game | null) {
+export function useRelatedGames(game: Game | null, seed?: Game[]) {
+  const initial = game && seed ? seed : undefined;
   return useQuery({
+    initialData: initial,
+    initialDataUpdatedAt: initial ? 0 : undefined,
     queryKey: ["games", "related", game?.id],
     queryFn: async () => {
       if (!game) return [];

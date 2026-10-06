@@ -1,0 +1,23 @@
+{
+  "_readme": "MASTER SWITCH for advertising on forgeflowgames.com. Everything here ships OFF. Portal ad slots are decided at BUILD time (run pipeline/deploy_portal.py after editing); the in-game SDK (forgeflow-sdk.js) fetches this same file at RUNTIME. ads.txt is generated from publisherId by scripts/build-seo.mjs, so it can never drift from this file.",
+  "enabled": false,
+  "publisherId": "ca-pub-4272113962717102",
+  "_publisherIdNote": "ASSUMPTION: this is the existing Google AdSense account (the one in Revuzia's ads.txt). One AdSense account can hold several sites. If forgeflowgames.com is added under a DIFFERENT account, change this one value and redeploy.",
+  "slots": {
+    "_note": "AdSense display-unit IDs (10 digits), created in AdSense > Ads > By ad unit AFTER the site is approved. An empty string keeps that slot invisible.",
+    "homeMid": "",
+    "gamesBottom": "",
+    "categoryBottom": "",
+    "gameBelow": "",
+    "gameRailLeft": "",
+    "gameRailRight": ""
+  },
+  "inGame": {
+    "_note": "Midgame / rewarded ads inside games, via the SDK's ForgeFlow.ads.requestAd(). Needs AdSense 'H5 Games Ads' approval AND a verified domain for the game host. Rules follow CrazyGames' published pacing: at most one midgame ad per 3 minutes, none during the first 3 minutes after load, rewarded ads optional and time-limited.",
+    "enabled": false,
+    "testMode": false,
+    "midgameCooldownSeconds": 180,
+    "startGraceSeconds": 180,
+    "rewardedCooldownSeconds": 60
+  }
+}

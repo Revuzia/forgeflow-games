@@ -9,7 +9,7 @@ export default function AboutPage() {
           no signups, no app store required.
         </p>
         <p>
-          Our growing library spans five genres: platformers, adventure, RPGs, action RPGs, and
+          Our growing library spans action, strategy, RPGs, adventure, arcade, racing, platformers, shooters and classic
           digital board games. Every game is an original creation built with modern web technologies
           including WebGPU, Three.js, and HTML5 Canvas.
         </p>

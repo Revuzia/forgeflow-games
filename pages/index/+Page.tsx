@@ -4,8 +4,12 @@ import { useGames, useFeaturedGames } from "../../src/hooks/useGames";
 import GameCarousel from "../../src/components/game/GameCarousel";
 import GameGrid from "../../src/components/game/GameGrid";
 import { CATEGORIES } from "../../src/lib/supabase";
+import { usePageContext } from "vike-react/usePageContext";
+import AdSlot from "../../src/components/ads/AdSlot";
 
 export default function HomePage() {
+  // Prerender-time registry rows (src/lib/seed.ts): the static HTML lists real games.
+  const { gamesSeed } = usePageContext() as { gamesSeed?: import("../../src/lib/supabase").Game[] };
   // 2026-07-07 — SPA-fallback recovery. Cloudflare Pages's catch-all
   // (`/* /index.html 200`) serves this prerendered HOMEPAGE for any URL that
   // has no static HTML of its own — e.g. a game published after the last
@@ -23,13 +27,13 @@ export default function HomePage() {
   }, []);
 
   const featured = useFeaturedGames();
-  const popular = useGames({ sort: "popular", limit: 12 });
-  const newest = useGames({ sort: "new", limit: 12 });
-  const platformers = useGames({ genre: "platformer", limit: 12 });
-  const adventure = useGames({ genre: "adventure", limit: 12 });
-  const rpg = useGames({ genre: "rpg", limit: 12 });
-  const arpg = useGames({ genre: "arpg", limit: 12 });
-  const board = useGames({ genre: "board_game", limit: 12 });
+  const popular = useGames({ sort: "popular", limit: 12 }, gamesSeed);
+  const newest = useGames({ sort: "new", limit: 12 }, gamesSeed);
+  const platformers = useGames({ genre: "platformer", limit: 12 }, gamesSeed);
+  const adventure = useGames({ genre: "adventure", limit: 12 }, gamesSeed);
+  const rpg = useGames({ genre: "rpg", limit: 12 }, gamesSeed);
+  const arpg = useGames({ genre: "arpg", limit: 12 }, gamesSeed);
+  const board = useGames({ genre: "board_game", limit: 12 }, gamesSeed);
 
   const heroGame = featured.data?.[0];
 
@@ -94,6 +98,9 @@ export default function HomePage() {
             viewAllHref="/games?sort=new"
           />
         )}
+
+        {/* Between the two discovery rows and the genre rows: a natural content break. Renders nothing until ads are enabled. */}
+        <AdSlot slot="homeMid" />
 
         {/* Per-genre rows */}
         {platformers.data && platformers.data.length > 0 && (

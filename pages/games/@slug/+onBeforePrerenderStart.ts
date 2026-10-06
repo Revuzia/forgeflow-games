@@ -1,33 +1,21 @@
-// 2026-05-11 — Enumerate all published game slugs from Supabase at build
-// time so Vike can pre-render `/games/<slug>/index.html` for each one.
-// Without this, direct visits to game URLs fell through Cloudflare Pages's
-// SPA catch-all to the pre-rendered HOMEPAGE index.html.
+// 2026-05-11 — Enumerate all published game slugs at build time so Vike can
+// prerender `/games/<slug>/index.html` for each one (without it a hard load of a
+// game URL fell through to the homepage).
 //
-// Returns an array of URL paths that Vike will then walk through prerender,
-// rendering each as its own static HTML file in dist/client.
+// 2026-10-06 — Each URL now also carries its registry row (gameSeed) and its
+// related games (relatedSeed) as pageContext, so the static HTML is the real
+// game page — title, description, controls, tags, related games — instead of a
+// loading skeleton. Both are listed in passToClient (pages/+config.ts) so the
+// browser hydrates from the same data; see src/lib/seed.ts for why this is not a
+// +data hook.
+import { fetchPublishedGames, slimGames } from "../../../src/lib/seedFetch";
+import { relatedFor } from "../../../src/lib/seed";
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://qkidwgyapmitrdxnavmi.supabase.co";
-const SUPABASE_KEY = process.env.VITE_SUPABASE_PUBLISHABLE_KEY || "sb_publishable_OY39hagVV9OObItwE2VYoA_YuAu0FPZ";
-
-export default async function onBeforePrerenderStart(): Promise<string[]> {
-  try {
-    const url = `${SUPABASE_URL}/rest/v1/games?status=eq.published&select=slug`;
-    const r = await fetch(url, {
-      headers: {
-        apikey: SUPABASE_KEY,
-        Authorization: `Bearer ${SUPABASE_KEY}`,
-      },
-    });
-    if (!r.ok) {
-      console.warn(`[prerender] Supabase fetch failed (${r.status}); pre-rendering zero game slugs`);
-      return [];
-    }
-    const rows = (await r.json()) as Array<{ slug: string }>;
-    const urls = rows.map((row) => `/games/${row.slug}`);
-    console.log(`[prerender] Pre-rendering ${urls.length} game slugs`);
-    return urls;
-  } catch (e) {
-    console.warn(`[prerender] error enumerating slugs:`, e);
-    return [];
-  }
+export default async function onBeforePrerenderStart() {
+  const all = await fetchPublishedGames();
+  console.log(`[prerender] Pre-rendering ${all.length} game pages with seeds`);
+  return all.map((g) => ({
+    url: `/games/${g.slug}`,
+    pageContext: { gameSeed: g, relatedSeed: slimGames(relatedFor(all, g)) },
+  }));
 }

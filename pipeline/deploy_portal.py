@@ -96,7 +96,7 @@ def main():
         ["npm", "run", "build"],
         cwd=str(ROOT),
         capture_output=True, text=True, encoding="utf-8", errors="replace",
-        shell=True, timeout=300,
+        shell=True, timeout=900,
     )
     if r.returncode != 0:
         print("BUILD FAILED:")
@@ -140,7 +140,7 @@ def main():
     r = subprocess.run(
         cmd, cwd=str(ROOT), env=env,
         capture_output=True, text=True, encoding="utf-8", errors="replace",
-        shell=True, timeout=300,
+        shell=True, timeout=900,
     )
     out = (r.stdout or "") + (r.stderr or "")
     safe_out = out[-2000:].encode("ascii", "replace").decode("ascii")

@@ -1,3 +1,18 @@
 /games/wobblesworth   /games/wanderwild   301
 /games/wobblesworth/  /games/wanderwild/  301
-/* /index.html 200
+
+# Safety net ONLY for pages that exist in the registry but were published after
+# the last portal build (no static HTML yet): serve the app shell and let the
+# client router resolve it (see the SPA-fallback effect in pages/index/+Page.tsx).
+# Static prerendered files always win over these rewrites.
+#
+# THE TARGET MUST BE "/" NOT "/index.html". Verified on Cloudflare Pages
+# (2026-10-06): a 200-rewrite to /index.html is silently ignored (404), while a
+# rewrite to / works. That means the old catch-all "/* /index.html 200" never did
+# anything — the old "every URL is 200" behaviour was just Pages' default
+# single-page-app mode, which only applies when there is NO top-level 404.html.
+#
+# There is deliberately no global catch-all. With a real 404.html (written by
+# scripts/postbuild-404.mjs) and no catch-all, /zzz now returns a true 404.
+/games/*     /  200
+/category/*  /  200

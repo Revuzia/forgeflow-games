@@ -1,7 +1,18 @@
 import { usePageContext } from "vike-react/usePageContext";
+import { useConfig } from "vike-react/useConfig";
+import { Head } from "vike-react/Head";
+import { categoryHref, genreLabel } from "../../../src/lib/categories";
+import { SITE_URL, SITE_NAME, absUrl, canonicalFor, clip } from "../../../src/config/site";
+import type { Game } from "../../../src/lib/supabase";
+import AdSlot from "../../../src/components/ads/AdSlot";
+import useNoindex from "../../../src/hooks/useNoindex";
+import AdRails from "../../../src/components/ads/AdRails";
 import { useGame, useRelatedGames } from "../../../src/hooks/useGames";
 import GamePlayer from "../../../src/components/game/GamePlayer";
 import GameCarousel from "../../../src/components/game/GameCarousel";
+import GameDescription from "../../../src/components/game/GameDescription";
+import { getMobileSupport, MOBILE_BADGE } from "../../../src/lib/mobile";
+import useIsTouchDevice from "../../../src/hooks/useIsTouchDevice";
 import { GAME_STATS_PANELS } from "../../../src/components/game/StatsPanel";
 
 const DIFFICULTY_LABELS: Record<string, { label: string; color: string }> = {
@@ -12,10 +23,36 @@ const DIFFICULTY_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 export default function GamePage() {
-  const { routeParams } = usePageContext();
+  // gameSeed / relatedSeed are the registry rows handed over at prerender time
+  // (pages/games/@slug/+onBeforePrerenderStart.ts), so the STATIC html is the
+  // real game page. They are absent on a client-side navigation, which fetches.
+  const { routeParams, gameSeed, relatedSeed } = usePageContext() as {
+    routeParams?: Record<string, string>;
+    gameSeed?: Game;
+    relatedSeed?: Game[];
+  };
   const slug = routeParams?.slug || "";
-  const { data: game, isLoading, error } = useGame(slug);
-  const { data: related } = useRelatedGames(game || null);
+  const { data: game, isLoading, error } = useGame(slug, gameSeed);
+  const { data: related } = useRelatedGames(game || null, relatedSeed);
+  const isTouch = useIsTouchDevice();
+  // A slug that resolves to nothing is only discovered client-side (see useNoindex).
+  useNoindex(!isLoading && (!!error || !game));
+
+  // Head. Before this, every game page shared the homepage's generic description
+  // and had no <title> at all.
+  const config = useConfig();
+  if (game) {
+    config({
+      title: `Play ${game.title} Free Online | ${SITE_NAME}`,
+      description: clip(
+        game.short_description || game.description ||
+          `Play ${game.title}, a free ${genreLabel(game.genre).toLowerCase()} game, in your browser on ${SITE_NAME}.`,
+      ),
+      image: absUrl(game.hero_image_url || game.thumbnail_url || ""),
+    });
+  } else if (!isLoading) {
+    config({ title: `Game not found | ${SITE_NAME}` });
+  }
 
   if (isLoading) {
     return (
@@ -32,6 +69,7 @@ export default function GamePage() {
   if (error || !game) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-20 text-center">
+        <Head><meta name="robots" content="noindex, follow" /></Head>
         <h1 className="font-display font-bold text-3xl text-gray-200 mb-3">Game Not Found</h1>
         <p className="text-surface-500 mb-6">This game doesn't exist or hasn't been published yet.</p>
         <a href="/games" className="btn-primary">Browse All Games</a>
@@ -41,17 +79,66 @@ export default function GamePage() {
 
   const diff = DIFFICULTY_LABELS[game.difficulty] || DIFFICULTY_LABELS.medium;
   const rating = game.rating_count > 0 ? (game.rating_sum / game.rating_count).toFixed(1) : null;
+  // 2026-09-15 — honest mobile labelling, driven by games.mobile_support.
+  const mobile = getMobileSupport(game);
+  const mobileBadge = mobile === "none" ? null : MOBILE_BADGE[mobile];
+  const touchControlsNote =
+    mobile === "full"
+      ? "On-screen thumbstick and action buttons — playable on phones and tablets."
+      : mobile === "partial"
+      ? "Partial on-screen touch controls — some actions still need a keyboard."
+      : null;
+
+  // Structured data: VideoGame + breadcrumbs. aggregateRating only when real
+  // ratings exist — never invented. "<" is escaped so database text can never
+  // close the <script> early.
+  const canonical = canonicalFor(`/games/${game.slug}`);
+  const jsonLd = JSON.stringify({
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "VideoGame",
+        name: game.title,
+        url: canonical,
+        description: clip(game.description || game.short_description || "", 300),
+        image: absUrl(game.hero_image_url || game.thumbnail_url || ""),
+        genre: genreLabel(game.genre),
+        applicationCategory: "Game",
+        operatingSystem: "Any — runs in a web browser",
+        inLanguage: "en",
+        datePublished: game.created_at,
+        dateModified: game.updated_at,
+        publisher: { "@type": "Organization", name: "ForgeFlow Labs", url: SITE_URL },
+        offers: { "@type": "Offer", price: "0", priceCurrency: "USD", availability: "https://schema.org/InStock" },
+        ...(game.rating_count > 0 && rating
+          ? { aggregateRating: { "@type": "AggregateRating", ratingValue: Number(rating), ratingCount: game.rating_count, bestRating: 5, worstRating: 1 } }
+          : {}),
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
+          { "@type": "ListItem", position: 2, name: "Games", item: `${SITE_URL}/games/` },
+          { "@type": "ListItem", position: 3, name: game.title, item: canonical },
+        ],
+      },
+    ],
+  }).replace(/</g, "\\u003c");
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+      <Head>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd }} />
+      </Head>
+      <AdRails />
       {/* Breadcrumb */}
       <nav className="text-sm text-surface-500 mb-4 flex items-center gap-2">
         <a href="/" className="hover:text-brand-blue transition-colors">Home</a>
         <span>/</span>
         <a href="/games" className="hover:text-brand-blue transition-colors">Games</a>
         <span>/</span>
-        <a href={`/category/${game.genre}`} className="hover:text-brand-blue transition-colors capitalize">
-          {game.genre.replace("_", " ")}
+        <a href={categoryHref(game.genre)} className="hover:text-brand-blue transition-colors capitalize">
+          {genreLabel(game.genre)}
         </a>
         <span>/</span>
         <span className="text-gray-300">{game.title}</span>
@@ -78,20 +165,39 @@ export default function GamePage() {
               <span className="px-2 py-0.5 rounded text-xs font-bold" style={{ color: diff.color, backgroundColor: diff.color + "15" }}>
                 {diff.label}
               </span>
-              {game.has_mobile_support && (
-                <span className="text-surface-500 flex items-center gap-1">
+              {mobileBadge ? (
+                <span
+                  className="px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1"
+                  style={{ color: mobileBadge.color, backgroundColor: mobileBadge.color + "15" }}
+                >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                  Mobile
+                  {mobileBadge.long}
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded text-xs font-bold text-surface-500 bg-surface-800 border border-surface-600/30 flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                  Desktop only
                 </span>
               )}
             </div>
 
+            {/* Touch visitor + keyboard-only game: say so plainly instead of
+                letting them tap Play and find dead controls. */}
+            {isTouch && mobile === "none" && (
+              <div className="mb-4 rounded-lg border border-surface-600/30 bg-surface-800 px-3 py-2 text-sm text-surface-500">
+                This game needs a keyboard and mouse — it won’t be playable on this device.
+              </div>
+            )}
+
+            {/* 2026-09-15 — line breaks and "- " bullets in the stored
+                description are honoured now (text-only, never raw HTML).
+                Previously the whole string landed in one <p> as a run-on wall. */}
             {game.description && (
-              <p className="text-gray-300 leading-relaxed mb-6">{game.description}</p>
+              <GameDescription text={game.description} className="text-gray-300 leading-relaxed mb-6" />
             )}
 
             {/* Controls */}
-            {(game.controls_keyboard || game.controls_gamepad) && (
+            {(game.controls_keyboard || game.controls_gamepad || touchControlsNote) && (
               <div className="bg-surface-800 rounded-lg p-4 border border-surface-600/30 mb-6">
                 <h3 className="font-display font-semibold text-sm text-gray-200 mb-2">Controls</h3>
                 {game.controls_keyboard && (
@@ -100,8 +206,17 @@ export default function GamePage() {
                   </p>
                 )}
                 {game.controls_gamepad && (
-                  <p className="text-sm text-surface-500">
+                  <p className="text-sm text-surface-500 mb-1">
                     <span className="text-gray-400">Gamepad:</span> {game.controls_gamepad}
+                  </p>
+                )}
+                {touchControlsNote ? (
+                  <p className="text-sm text-surface-500">
+                    <span className="text-gray-400">Touch:</span> {touchControlsNote}
+                  </p>
+                ) : (
+                  <p className="text-sm text-surface-500">
+                    <span className="text-gray-400">Touch:</span> Not supported — desktop only.
                   </p>
                 )}
               </div>
@@ -152,13 +267,16 @@ export default function GamePage() {
         </aside>
       </div>
 
+      {/* In-flow ad: below the whole player + info grid, so it is far more than 150px from the game canvas (AdSense accidental-click rule). Renders nothing until ads are enabled. */}
+      <AdSlot slot="gameBelow" className="mt-10" />
+
       {/* Related games */}
       {related && related.length > 0 && (
         <div className="mt-12">
           <GameCarousel
             title="You Might Also Like"
             games={related}
-            viewAllHref={`/category/${game.genre}`}
+            viewAllHref={categoryHref(game.genre)}
           />
         </div>
       )}

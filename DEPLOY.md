@@ -84,3 +84,25 @@ Or wait up to 24h (cache-control max-age=86400 on R2 worker).
 **"Pages says deploy succeeded but site is unchanged"** — hard refresh
 (Ctrl+Shift+R) sometimes isn't enough; use a fresh incognito window or
 append `?_=<timestamp>` to the URL.
+
+## SEO, sitemap, 404s and ads (2026-10-06)
+
+Generated on every `npm run build` (so every `deploy_portal.py` / game publish refreshes them):
+
+| File | Made by | Notes |
+|---|---|---|
+| `public/sitemap.xml` | `scripts/build-seo.mjs` (prebuild) | every indexable page + each published game with real `<lastmod>`. If the registry is unreachable it KEEPS the previous file and warns loudly — it never writes an empty sitemap. |
+| `public/ads.txt` | `scripts/build-seo.mjs` | generated from `publisherId` in `public/ads-config.json`, so it cannot drift from the ad config. |
+| `public/robots.txt` | `scripts/build-seo.mjs` | disallows `/auth/ /profile/ /friends/ /search/`. |
+| `dist/client/404.html` | `scripts/postbuild-404.mjs` (postbuild) | **a top-level 404.html is what turns off Cloudflare Pages' single-page-app mode**, which otherwise answers EVERY unknown URL with 200 (soft 404s — what sank Revuzia's AdSense application). |
+| `public/images/og-default.png` | `python scripts/make-og-image.py` | 1200x630 share card. It did not exist before 2026-10-06: every shared link had a broken preview. |
+
+**Cloudflare Pages `_redirects` gotcha (verified 2026-10-06):** a 200-rewrite whose target is `/index.html` is silently IGNORED; a rewrite to `/` works. The old `/* /index.html 200` never did anything — the old "every URL is 200" was just SPA mode. The `/games/*` and `/category/*` rules in `public/_redirects` (target `/`) are the safety net for a game published after the last build; everything else 404s.
+
+**Page heads.** Titles/descriptions come from vike-react (`+title.ts` / `+description.ts` for static pages, `useConfig()` for game and category pages), canonical + noindex from `pages/+Head.tsx`, JSON-LD (VideoGame + BreadcrumbList) in the game page. Prerender seeds (`+onBeforePrerenderStart.ts` -> `pageContext`, listed in `passToClient`) put the real game data into the static HTML; see `src/lib/seed.ts` for why this is deliberately NOT a Vike `+data` hook (reload loop for games published after the last build).
+
+**Ads — shipped OFF.** Master switch: `public/ads-config.json` (`enabled`, `publisherId`, slot ids, `inGame`). Portal display slots (`src/components/ads/AdSlot.tsx`, `AdRails.tsx`) render NOTHING while off — no box, no script. In-game midgame/rewarded ads: `ForgeFlow.ads.requestAd("midgame"|"rewarded", {adStarted, adFinished, adError})` in `public/forgeflow-sdk.js` (CrazyGames-shaped; 3-minute cooldown + 3-minute start grace; Google requires the ad tag in the SAME document as the game canvas, which is why it lives in the SDK and not the portal page). To switch on: (1) add forgeflowgames.com to AdSense and get it approved, (2) create display ad units and paste their ids into `slots`, (3) set `enabled: true`, (4) `python pipeline/deploy_portal.py`. In-game ads additionally need AdSense "H5 Games Ads" approval and a game host on a domain you can verify (not `*.workers.dev`).
+
+**Test a portal change on a PREVIEW first** (does not touch forgeflowgames.com):
+`CLOUDFLARE_API_TOKEN=<isimcha85 Pages token> npx wrangler pages deploy dist/client --project-name forgeflow-games --branch seo-preview --commit-dirty=true` -> `https://seo-preview.forgeflow-games.pages.dev`.
+

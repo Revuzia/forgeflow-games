@@ -77,13 +77,22 @@ export default function GamePlayer({ game }: Props) {
       if (!e.data || typeof e.data !== "object") return;
       switch (e.data.type) {
         case "forgeflow:show_interstitial":
-          // TODO: trigger interstitial ad
-          console.log("[ad] Interstitial requested by game");
+        case "forgeflow:show_rewarded": {
+          // Ads are NOT served from this page. Google requires the ad tag and the
+          // game canvas to live in the SAME document, and the game runs in its own
+          // iframe — so in-game ads are requested INSIDE the game through the SDK's
+          // ForgeFlow.ads.requestAd() (public/forgeflow-sdk.js), CrazyGames-style.
+          // This legacy message path has no provider; answer immediately so a game
+          // that still posts it never waits on an ad that cannot arrive.
+          const win = iframeRef.current?.contentWindow;
+          if (win && e.source === win) {
+            win.postMessage(
+              { type: "forgeflow:ad_result", kind: e.data.type === "forgeflow:show_rewarded" ? "rewarded" : "midgame", status: "unfilled", rewarded: false },
+              "*",
+            );
+          }
           break;
-        case "forgeflow:show_rewarded":
-          // TODO: trigger rewarded ad, send reward back
-          console.log("[ad] Rewarded ad requested by game");
-          break;
+        }
         case "forgeflow:level_complete":
           console.log("[analytics] Level complete:", e.data.level);
           break;

@@ -71,3 +71,10 @@
     border-color: rgba(255, 136, 0, 0.4);
   }
 }
+
+/* Ad rails (see src/components/ads/AdRails.tsx). Hidden unless the viewport is
+   wide enough to keep every ad clear of the game canvas. Rendered only when ads
+   are enabled, so this costs nothing while they are off. */
+.ffg-rail { display: none; z-index: 5; }
+@media (min-width: 1640px) { .ffg-rail-right { display: block; } }
+@media (min-width: 1900px) { .ffg-rail-left { display: block; } }

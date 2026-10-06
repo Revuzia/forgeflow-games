@@ -1,4 +1,9 @@
 User-agent: *
 Allow: /
+# Private, per-user or transient pages — nothing here belongs in a search index.
+Disallow: /auth/
+Disallow: /profile/
+Disallow: /friends/
+Disallow: /search/
 
 Sitemap: https://forgeflowgames.com/sitemap.xml
