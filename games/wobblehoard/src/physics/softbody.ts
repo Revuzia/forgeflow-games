@@ -146,7 +146,7 @@ class Grab {
   }
 }
 
-const KIND_INDEX: Record<SoftEventKind, number> = { poke: 0, press: 1, release: 2, land: 3, grab: 4, snap: 5 };
+const KIND_INDEX: Record<SoftEventKind, number> = { poke: 0, press: 1, release: 2, land: 3, grab: 4, snap: 5, bump: 6 };
 
 const SM_ITERS = 2;                // rotation extraction iterations per substep (warm started)
 const LAND_MIN_SPEED = 0.9;        // m/s of centre-of-mass fall speed for a 'land' event
@@ -397,7 +397,7 @@ export class SoftBody implements SoftBodyLike {
   private readonly fingers: Finger[] = [new Finger(), new Finger()];
   private readonly grabs: Grab[];
   private events: SoftEvent[] = [];
-  private readonly lastEvent = new Float64Array(6 * 3).fill(-10);
+  private readonly lastEvent = new Float64Array(7 * 3).fill(-10);   // per event kind (KIND_INDEX) x finger (-1, 0, 1)
   private readonly rayOut = new Float64Array(4);
   private readonly rayOut2 = new Float64Array(4);
   private readonly ray6 = new Float64Array(6);              // rayMesh input scratch (origin, direction)

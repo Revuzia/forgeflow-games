@@ -29,7 +29,8 @@ export type SoftEventKind =
   | 'release'  // a finger lifted while the body was compressed (intensity = compression released, 0..1; heldFor = seconds pressed)
   | 'land'     // body hit the table (intensity = impact speed, 0..1)
   | 'grab'     // a pull started (intensity 0.5, fixed: see PULL INTENSITY above)
-  | 'snap';    // a pull was let go (intensity = the pull level released, 0..1: 1 = the family's maxPull; see above)
+  | 'snap'     // a pull was let go (intensity = the pull level released, 0..1: 1 = the family's maxPull; see above)
+  | 'bump';    // CUT / B2 (optional): this body hit another body (intensity = relative impact speed 0..1; at = contact point)
 
 export interface SoftEvent {
   kind: SoftEventKind;
@@ -63,6 +64,23 @@ export interface FingerDownArgs {
   point: V3;     // surface hit (from raycast)
   normal: V3;    // outward normal at the hit
   dir: V3;       // unit direction the finger travels (the camera ray direction)
+}
+
+/* CUT (_spec/CUT.md, owner request 2026-10-06): slice a squishy into pieces and reconnect them. Every member below is optional. */
+/** A cut plane in the body's world space. The 'a' side is where dot(p - point, normal) >= 0. */
+export interface CutPlane { point: V3; normal: V3 }
+/** Construction options for one piece of a cut squishy (passed as SoftBodyCtor opts.piece). */
+export interface PieceOpts {
+  /** Volume as a fraction of the whole squishy, 0.125..1; the rest shape is scaled by cbrt(frac). */
+  frac: number;
+  /** true: an eyeless rounded chunk with a flat cut face toward cutNormal that rounds over by the family's memory (CUT.md 1);
+   *  false: the face piece, i.e. the species silhouette scaled to frac. */
+  chunk: boolean;
+  /** World-space outward normal of the fresh cut face. */
+  cutNormal?: V3;
+  /** Initial centre of mass (m) and velocity (m/s). */
+  at?: V3;
+  vel?: V3;
 }
 
 export interface SoftBodyLike {
@@ -110,6 +128,19 @@ export interface SoftBodyLike {
   /** Spring open: radial impulse + goal overshoot (~1.25x) that settles by itself (the T3 burst). strength 0..1. */
   burstOpen?(strength: number): void;
 
+  /* CUT (optional; _spec/CUT.md section 4). */
+  /** Volume fraction of the whole squishy this body holds: 1 for an uncut squishy. */
+  readonly frac?: number;
+  /** Pure: the volume fraction (of this body) on the plane's 'a' side, or null when the plane misses the body. */
+  measureCut?(plane: CutPlane): number | null;
+  /** 0..1: morph the goal into a waisted peanut along the plane (eased, volume held; 1 = a thin waist ready to part); null releases. */
+  setNeck?(plane: CutPlane | null, t: number): void;
+  /** Grow or shrink the rest volume smoothly to a new fraction of the whole over `seconds` (reconnect growth, the giver's shrink). */
+  setFrac?(frac: number, seconds: number): void;
+  /** Soft body-to-body contact (stage B item B2) against `others` this frame: pushes particles apart on both sides and emits 'bump'.
+   *  Call once per frame before step(), with every other body on the mat. */
+  collide?(others: readonly SoftBodyLike[]): void;
+
   /** External shove (screen-bump, drop-in). World-space velocity change applied to every particle. */
   nudge(impulse: V3): void;
   /** Put the body back at rest shape on the table / hover height. */
@@ -128,7 +159,7 @@ export interface SoftBodyLike {
 }
 
 export interface SoftBodyCtor {
-  new (genome: Genome, opts?: { detail?: number; seed?: number }): SoftBodyLike;
+  new (genome: Genome, opts?: { detail?: number; seed?: number; /** CUT: build one piece of a cut squishy. */ piece?: PieceOpts }): SoftBodyLike;
 }
 
 /* ───────────────────────────── audio (src/audio) — procedural WebAudio, zero samples ───────────────────────────── */
@@ -201,6 +232,12 @@ export interface SquishAudio {
   /** A tacky strand: call EVERY FRAME while it stretches (tension 0..1); the engine keeps one held voice and ends it ~0.15-0.6 s after
    *  the calls stop. `snap: true` = the strand broke (a small wet pop + 1-3 tiny bubbles) and ends the held voice. */
   strand?(p: { tension: number; snap?: boolean; pitch?: number; pan?: number }): void;
+  /** CUT (optional): the slice. phase 'start' when the waist begins to form (a wet slice that lasts `neckS` seconds), 'separate'
+   *  when the pieces part (a soft pop). frac = the smaller piece's fraction of the whole (smaller sounds higher). */
+  cut?(p: { phase: 'start' | 'separate'; frac: number; neckS?: number; family?: string; pan?: number; calm?: boolean }): void;
+  /** CUT (optional): two pieces flowed back together (a gloopy "blorp" sized by the merged fraction); all = the Reconnect-all
+   *  flourish as the squishy becomes whole again. */
+  rejoin?(p: { frac: number; all?: boolean; pan?: number; calm?: boolean }): void;
   /** Harness readout for the round-3 parts: music scheduler state and cost, and how many calls the rate limiters swallowed. */
   detailStats?(): {
     music: { on: boolean; playing: boolean; sessions: number; field: number; liveNotes: number; maxLiveNotes: number; notes: number; dropped: number; ticks: number; tickMsMean: number; tickMsMax: number; tickMsRecentP99: number; tickMsRecentMax: number; ducked: boolean; volume: number };
@@ -225,6 +262,8 @@ export interface AddBodyOpts {
   tier?: TierName;
   /** Render-space offset of the body (the simulated body itself keeps its own origin; the stage draws it here). */
   position?: V3;
+  /** CUT (optional): a piece without a face (an eyeless chunk of the same jelly). Default false. */
+  chunk?: boolean;
 }
 
 /** Beats the ceremonies report, in time order, so the shell can fire audio / haptics in sync. `t` = seconds since the ceremony started. */
@@ -298,6 +337,11 @@ export interface StageLike {
   /** Tabletop visuals vs floating visuals (shadow softness/size, light pool). */
   setFloatMode(on: boolean): void;
   spawnFx(kind: FxKind, at: V3, intensity: number): void;
+  /** CUT (optional): a thin warm seam glow along `plane` on body `bodyId` while it necks; t 0..1 (0 or a null plane clears it).
+   *  A glow, never a flash: the flash governor applies. */
+  setCutSeam?(bodyId: number, plane: CutPlane | null, t: number): void;
+  /** CUT (optional): the reconnect bridge, a glowing neck between two bodies; t 0..1 (0 clears). */
+  setBridge?(aId: number, bId: number, t: number): void;
   dispose(): void;
   stats(): { drawCalls: number; triangles: number; tier: QualityTier; frameMsEma: number };
 
