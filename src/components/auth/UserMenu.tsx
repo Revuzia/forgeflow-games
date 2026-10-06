@@ -57,8 +57,6 @@ export default function UserMenu() {
           id: userId,
           username,
           avatar_url: meta.avatar_url || meta.picture || null,
-          level: 1,
-          xp: 0,
         }, { onConflict: "id" });
         p = await getProfile(userId);
       }

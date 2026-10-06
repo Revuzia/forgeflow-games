@@ -35,8 +35,6 @@ export async function signUpWithEmail(email: string, password: string, username:
     await supabase.from("profiles").upsert({
       id: data.user.id,
       username,
-      level: 1,
-      xp: 0,
     });
   }
   return data;
@@ -129,22 +127,6 @@ export function getXPProgress(xp: number): { level: number; current: number; nee
     needed,
     percent: Math.min(100, Math.round((current / needed) * 100)),
   };
-}
-
-export async function addXP(userId: string, amount: number, reason: string) {
-  const profile = await getProfile(userId);
-  if (!profile) return;
-
-  const newXP = profile.xp + amount;
-  const oldLevel = getLevelFromXP(profile.xp);
-  const newLevel = getLevelFromXP(newXP);
-
-  await supabase.from("profiles").update({
-    xp: newXP,
-    level: newLevel,
-  }).eq("id", userId);
-
-  return { newXP, newLevel, leveledUp: newLevel > oldLevel };
 }
 
 // ── Online Status ──

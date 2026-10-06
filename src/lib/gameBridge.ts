@@ -32,9 +32,7 @@
 
 import { mergePreservingKeys, REPLACE_MARKER } from "./saveMerge";
 import { supabase } from "./supabase";
-import { addXP, setOnlineStatus, submitScore, addRecentlyPlayed, getCurrentSeasonWeek, getProfile, getLevelFromXP } from "./auth";
-// addXP is still imported because unlockAchievement() inside this file
-// still calls it — that's the ONE remaining XP source by design.
+import { setOnlineStatus, submitScore, addRecentlyPlayed, getCurrentSeasonWeek, getProfile, getLevelFromXP } from "./auth";
 
 /** Games with a stats backend: slug -> server functions (SECURITY DEFINER RPCs on qkid). */
 const GAME_STATS_RPC: Record<string, { run: string; vs: string }> = {
@@ -282,10 +280,10 @@ function handleGameMessage(event: MessageEvent) {
     case "forgeflow:achievement":
       // Game reports an achievement unlock — by numeric id OR by slug.
       // The SDK prefers slug because games don't know DB ids at build time.
-      if (currentUserId && payload.achievementId) {
-        unlockAchievement(currentUserId, payload.achievementId);
-      } else if (currentUserId && payload.achievementSlug && currentGameId) {
-        unlockAchievementBySlug(currentUserId, currentGameId, payload.achievementSlug);
+      // Slug only, always scoped to the CURRENT game (the old numeric-id path was
+      // unscoped and no shipped game sends it). All XP/unlock logic is server-side.
+      if (currentUserId && currentGameId && typeof payload.achievementSlug === "string") {
+        unlockAchievementBySlug(currentGameId, payload.achievementSlug);
       }
       break;
 
@@ -356,56 +354,13 @@ function handleGameMessage(event: MessageEvent) {
   }
 }
 
-async function unlockAchievementBySlug(userId: string, gameId: number, slug: string) {
-  const { data } = await supabase
-    .from("achievements")
-    .select("id")
-    .eq("game_id", gameId)
-    .eq("slug", slug)
-    .single();
-  if (data?.id) await unlockAchievement(userId, data.id);
-}
-
-async function unlockAchievement(userId: string, achievementId: number) {
-  // Check if already unlocked
-  const { data: existing } = await supabase
-    .from("user_achievements")
-    .select("id")
-    .eq("user_id", userId)
-    .eq("achievement_id", achievementId)
-    .single();
-
-  if (existing) return; // Already unlocked
-
-  // Get achievement details for XP
-  const { data: ach } = await supabase
-    .from("achievements")
-    .select("points, tier")
-    .eq("id", achievementId)
-    .single();
-
-  if (!ach) return;
-
-  // Check if this is Badge of the Day (2x points)
-  const today = new Date().toISOString().split("T")[0];
-  const { data: daily } = await supabase
-    .from("daily_badge")
-    .select("bonus_multiplier")
-    .eq("achievement_id", achievementId)
-    .eq("active_date", today)
-    .single();
-
-  const multiplier = daily?.bonus_multiplier || 1;
-  const xpGain = ach.points * multiplier;
-
-  // Unlock
-  await supabase.from("user_achievements").insert({
-    user_id: userId,
-    achievement_id: achievementId,
-  });
-
-  // Award XP
-  await addXP(userId, xpGain, `achievement_${achievementId}`);
+// One transaction on the server (0009_server_authoritative_xp.sql): inserts the unlock
+// ON CONFLICT DO NOTHING and adds XP only if a row was really inserted. Idempotent, so
+// a retry or a concurrent duplicate can never double-award, and a failure rolls both back.
+async function unlockAchievementBySlug(gameId: number, slug: string) {
+  const { data, error } = await supabase.rpc("unlock_achievement", { p_game_id: gameId, p_slug: slug });
+  if (error) console.warn("[bridge] unlock_achievement failed:", error.message);
+  else if (data && (data as { ok?: boolean }).ok === false) console.warn("[bridge] unlock_achievement refused:", (data as { error?: string }).error);
 }
 
 /**
