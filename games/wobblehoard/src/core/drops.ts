@@ -133,7 +133,7 @@ export const TASK_DEFS: readonly TaskDef[] = [
   { id: 'soft-pops-5', text: 'Five soft pops in a row', metric: 'softPops', target: 5 },
   { id: 'quick-squeezes-10', text: 'Ten quick squeezes', metric: 'squeezes', target: 10 }, // was 'Twenty gentle pokes': taps earn nothing, tasks included (owner, 2026-10-06)
   { id: 'slow-squeezes-5', text: 'Five slow squeezes, a second each', metric: 'squeezes', target: 5, param: 1 },
-  { id: 'medley-1', text: 'Squeeze and pull within twelve seconds', metric: 'medleys', target: 1 }, // a tap no longer counts toward the medley
+  { id: 'medley-1', text: 'Squeeze and stretch within twelve seconds', metric: 'medleys', target: 1 }, // a tap no longer counts toward the medley
   { id: 'snaps-3', text: 'Let three stretches snap back', metric: 'snaps', target: 3 },
   { id: 'stretch-3', text: 'Stretch three of them as far as they will go', metric: 'stretch', target: 3 }, // was 'Ten pokes with a calm pause between' (owner, 2026-10-06)
   { id: 'squeeze-long-3', text: 'Three long squeezes, two seconds each', metric: 'squeezes', target: 3, param: 2 },

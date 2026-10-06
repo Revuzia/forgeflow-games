@@ -237,6 +237,11 @@ second step reverses the "ordinary tapping always pays a little" half of the fir
 freshness) and keeps the rest. Because the taps stopped paying, the squeeze and stretch pay per second was raised so the pace stays in its band. The numbers in this section come from
 the 2026-10-06 run of `node _harness/sim_economy.ts` after that decision (no flags; output SHA-256 without the elapsed line
 `4c5d0cf26dce22d81eb76e7e9d1b4b4f767480c285abc0d3f0ac0bc52e5813c0`; the run before it, with taps paying, had `9d030f8166038689e89c1e9d2e19957d49c1ed35f2aad55d59a9675d7a72b9b6`).
+**Later the same day (owner decision, second): the medley's pull must be STRETCHED** (level at least 0.35; a pull that never stretched is not a medley touch). The full simulation was re-run on that rule
+(`node _harness/sim_economy.ts`, no flags, 390 s; output SHA-256 without the elapsed line `b87607531ddcd3938fb274fd` (first 24 hex digits; the engineer's earlier run is the `4c5d0cf2...` above)).
+The headline moved only in the last digit: the paying styles need 3.3 / 3.5 / 3.7 minutes a capsule (squeezer / puller / mixed) and the holder 3.2 (band 3.0 to 3.8), the poker 7.5 and the tapper 9.0, the regular median is still 3.5
+(p10 2.7, p90 6.1), the first capsule 77.3 s and the first pair 12.4 min. **The tables below quote the run before this one**, so a figure here can differ from the new run by its last digit (the squeezer 30.8 SP/min became 30.6,
+the mixed 27.3 became 27.2, the poker 13.5 became 13.4); re-quote them from one canonical run at the Stage C doc pass. The cheapest script (a tiny flick alternating with a 0.4 s press every 1.2 s) fell from 36.3 to 31.5 SP/min.
 **The rest of this document still quotes the 2026-10-05 canonical run of section 5.0** (whose hash the old rules reproduced exactly on 2026-10-06); the new rules move those figures,
 and by more than a few percent now, because the assumed population has 38% pokers, who mostly tap and so earn about half as much as a player who squeezes: the median regular
 player's active minutes per capsule 3.0 becomes **3.5** (p10 2.7, p90 6.1) [sim C], the first capsule 64 s becomes **77 s** [sim C], and all 50 for regular willing traders

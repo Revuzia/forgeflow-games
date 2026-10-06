@@ -39,9 +39,10 @@
 //                           1.0 = pulled to its limit, measured 1.000 on a full pull and 0.500 on a half pull for all 12 families), so 0.35
 //                           means "pulled about a third of the way to its limit". The stretch test is the level AT THE RELEASE: the event
 //                           does not say how long the level was over 0.35, so the whole hold counted once the release is stretched.
-//   medley                  +PAY.medley SP when the two PAID kinds, a squeeze and a pull, both land within 12 s, then a 25 s cooldown. (It was
+//   medley                  +PAY.medley SP when a squeeze and a STRETCHED pull (level >= PAY.pullFullIntensity; a pull that never stretched
+//                           pays its flat pullFail but is not a medley touch: owner decision 2026-10-06) both land within 12 s, then a 25 s cooldown. (It was
 //                           "three different kinds"; with taps free it could be unlocked by a free tap, so a tap neither joins nor completes
-//                           a medley.) The Tasks panel's medley task ("Squeeze and pull within twelve seconds") reads detail.medley, so it stays reachable.
+//                           a medley.) The Tasks panel's medley task ("Squeeze and stretch within twelve seconds") reads detail.medley, so it stays reachable.
 //   freshness (anti-mash)   pay x clamp((seconds since your last touch of the SAME kind / tau)^2, floor, 1); tau squeeze 2.4, pull 3.0 s;
 //                           floor 0.03 (mashing squeezes or pulls stays worthless). Index 0 (the tap: tau 0.75 s, floor 0.25, and the
 //                           250 ms double-tap gap) multiplies a base of 0 now; it is KEPT inert, and reported in `detail`, so the saved shape and
@@ -253,9 +254,11 @@ export const dailyRateFor = (dayCapsules: number): number =>
 interface PayCalc {
   paid: TouchKind; ki: number; t: number; dayKey: number; dayCapsules: number; base: number; doubleTap: boolean; freshness: number;
   medley: number; medleyReadyMs: number; dailyRate: number; bucket: number; pay: number; valveClamped: boolean;
+  /** The kind index this touch counts as in the medley window: ki, except 0 (none) for a tap and for a pull that never stretched. */
+  mk: number;
 }
 const CALC: PayCalc = {
-  paid: 'poke', ki: 0, t: 0, dayKey: 0, dayCapsules: 0, base: 0, doubleTap: false, freshness: 1, medley: 0, medleyReadyMs: 0, dailyRate: 1, bucket: 0, pay: 0, valveClamped: false,
+  paid: 'poke', ki: 0, t: 0, dayKey: 0, dayCapsules: 0, base: 0, doubleTap: false, freshness: 1, medley: 0, medleyReadyMs: 0, dailyRate: 1, bucket: 0, pay: 0, valveClamped: false, mk: 0,
 };
 function computePay(state: MeterState, ev: Interaction, c: PayCalc): NonNullable<InteractionDetail['refused']> | null {
   // ---- validate (never throw) ----
@@ -309,10 +312,14 @@ function computePay(state: MeterState, ev: Interaction, c: PayCalc): NonNullable
   // ---- medley: a squeeze and a pull, the two PAID kinds, within the window (the touches of the last 12 s plus this one). A tap is not a
   // paid kind: it can neither complete a medley nor stand in for one of its two touches (and an index-0 entry an older state still holds is
   // masked out below). ----
+  // Owner decision 2026-10-06: the pull of a medley must be a STRETCHED one (level at or above PAY.pullFullIntensity). A pull that never stretched
+  // pays its flat pullFail but is not a medley touch: it neither completes a medley nor stands in for the pull (a tiny flick alternating with a
+  // 0.4 s press earned about 36 SP/min, 125% of a paying human, before this).
+  const mk = paid === 'pull' && clamp(amountRaw, 0, 1) < PAY.pullFullIntensity ? 0 : ki;
   let medley = 0;
   let medleyReadyMs = state.medleyReadyMs;
-  if (ki !== 0 && t >= medleyReadyMs) {
-    let mask = 1 << ki;
+  if (mk !== 0 && t >= medleyReadyMs) {
+    let mask = 1 << mk;
     const rec = state.recent, from = t - MEDLEY_WINDOW_MS;
     for (let i = 0; i < rec.length; i++) if (rec[i][0] >= from) mask |= 1 << rec[i][1];
     if ((mask & MEDLEY_KINDS_MASK) === MEDLEY_KINDS_MASK) { medley = PAY.medley; medleyReadyMs = t + MEDLEY_COOLDOWN_MS; }
@@ -331,7 +338,7 @@ function computePay(state: MeterState, ev: Interaction, c: PayCalc): NonNullable
   if (pay > room) { pay = room; valveClamped = true; }
 
   c.paid = paid; c.ki = ki; c.t = t; c.dayKey = dayKey; c.dayCapsules = dayCapsules; c.base = base; c.doubleTap = doubleTap; c.freshness = freshness;
-  c.medley = medley; c.medleyReadyMs = medleyReadyMs; c.dailyRate = dailyRate; c.bucket = bucket; c.pay = pay; c.valveClamped = valveClamped;
+  c.medley = medley; c.medleyReadyMs = medleyReadyMs; c.dailyRate = dailyRate; c.bucket = bucket; c.pay = pay; c.valveClamped = valveClamped; c.mk = mk;
   return null;
 }
 
@@ -345,7 +352,7 @@ export function addInteraction(state: MeterState, ev: Interaction): InteractionR
   // ---- the medley window and the valve ledger (new arrays: the input state is never mutated). Only PAID touches enter the window. ----
   const recent: Array<[number, number]> = [];
   for (const r of state.recent) if (r[0] >= t - MEDLEY_WINDOW_MS && r[1] !== 0) recent.push(r);
-  if (ki !== 0) recent.push([t, ki]);
+  if (c.mk !== 0) recent.push([t, c.mk]);
   const valve: Array<[number, number]> = [];
   for (const r of state.valve) if (r[0] > bucket - VALVE_BUCKETS) valve.push([r[0], r[1]]);
   if (pay > 0) {

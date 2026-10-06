@@ -138,6 +138,22 @@ check('heldS is a pull field only: a poke ignores it (pays 0) and a squeeze igno
     seqRun([['squeeze', 1, 0], ['poke', 0, 1000], ['pull', 1, 1000]]).got.join() === '0,0,2' && seqRun([['squeeze', 1, 0], ['poke', 0, 10000], ['pull', 1, 3000]]).got.join() === '0,0,0');
   check('a short squeeze (a tap) cannot stand in for the squeeze of a medley: a squeeze held 0.39 s then a pull pays no bonus, a squeeze held 0.4 s then a pull does',
     seqRun([['squeeze', 0.39, 0], ['pull', 1, 1000]]).got.join() === '0,0' && seqRun([['squeeze', 0.4, 0], ['pull', 1, 1000]]).got.join() === '0,2');
+  // ADDED (owner decision 2026-10-06, second: "yes" to "require a genuinely stretched pull for the medley"): the pull of a medley must be a STRETCHED one
+  // (level >= PAY.pullFullIntensity = 0.35). A pull that never stretched still pays its flat PAY.pullFail but is not a medley touch.
+  check('medley: the pull must be STRETCHED (level 0.35 or more): a squeeze then a pull of level 0.3499 / 0.34 / 0.06 / 0 pays no bonus and the pull pays its flat 0.5 SP; the same pull at exactly 0.35 pays the bonus, in either order',
+    [0.3499, 0.34, 0.06, 0].every((lv) => { const r = seqRun([['squeeze', 1, 0], ['pull', lv, 1000]]), q = seqRun([['pull', lv, 0], ['squeeze', 1, 1000]]); return r.got.join() === '0,0' && near(r.sp[1], PAY.pullFail) && q.got.join() === '0,0'; })
+    && seqRun([['squeeze', 1, 0], ['pull', 0.35, 1000]]).got.join() === '0,2' && seqRun([['pull', 0.35, 0], ['squeeze', 1, 1000]]).got.join() === '0,2' && PAY.pullFullIntensity === 0.35);
+  check('medley: an unstretched pull between a squeeze and a stretched pull is simply ignored (squeeze, flick, stretch pays on the stretch) and a flick does not extend the 12 s window (squeeze at 0, flick at 10 s, stretch at 13 s: nothing)',
+    seqRun([['squeeze', 1, 0], ['pull', 0.06, 1000], ['pull', 1, 1000]]).got.join() === '0,0,2' && seqRun([['squeeze', 1, 0], ['pull', 0.06, 10000], ['pull', 1, 3000]]).got.join() === '0,0,0');
+  {
+    // the cheapest script the verifier found (ECON verification, F2): a tiny flick alternating with a 0.4 s press every 1.2 s. It earned 36.3 SP/min while a flick could join
+    // the medley; now it earns 31.5 (the 0.4 s press every 2.4 s alone is 23.5): still under the 40 SP/min valve, reported here so a later change cannot raise it unnoticed
+    let st = createMeter(), tt = T0, total = 0, meds = 0;
+    const minutes = 10;
+    for (let i = 0; tt < T0 + minutes * 60000; i++) { tt += 1200; const r = addInteraction(st, i % 2 ? { kind: 'squeeze', amount: 0.4, tMs: tt } : { kind: 'pull', amount: 0.06, heldS: 0.05, tMs: tt }); st = r.state; total += r.spGained; if (r.detail.medley > 0) meds++; }
+    const perMin = total / minutes;
+    check('a tiny unstretched flick alternating with a 0.4 s press every 1.2 s earns no medley and at most 33 SP/min (36.3 before the medley needed a stretched pull; a paying human earns about 29), inside the 40 SP/min valve', meds === 0 && perMin <= 33 && perMin <= VALVE_SP_PER_MINUTE, `${f2(perMin)} SP/min, ${meds} medleys in ${minutes} minutes`);
+  }
   {
     // an old save: its medley window may still hold index-0 entries (a tap, counted before taps became free); they must not complete a medley, and a load drops them
     const old = JSON.parse(JSON.stringify(createMeter())) as MeterState;
