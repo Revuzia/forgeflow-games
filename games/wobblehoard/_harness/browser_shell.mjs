@@ -478,6 +478,139 @@ async function main() {
       check('right button on the body orbits: no finger down, no poke, view changes', dur.metrics.fingers === 0 && (await started(page)).poke === a0.poke && sigDiff(sR0, sR1) > 0.8, `fingers ${dur.metrics.fingers}, diff ${sigDiff(sR0, sR1).toFixed(2)}`);
     });
 
+    // ------------------------------------------------------------------------------------------------
+    // Shift + drag pulls BOTH sides on a mouse (owner decision 2026-10-06; src/input/gestures.ts SHIFT): the real page, real mouse events with
+    // the real Shift key (Playwright's keyboard.down('Shift') puts shiftKey on the pointer events), real physics, real audio. A touch never mirrors.
+    // ------------------------------------------------------------------------------------------------
+    await section('shift-pull', async () => {
+      const { page } = D;
+      const vp = page.viewportSize();
+      const B = await body(page);
+      const cx = B.x * vp.width, cy = B.y * vp.height, r = B.rPx;
+      // the hint: the pointer wording names the Shift pull, on ONE line at full size, and a held Shift key is not "a key used" (no keyboard wording)
+      const L0 = await layoutOf(page);
+      const hint0 = await page.evaluate(() => document.querySelector('.hint').textContent);
+      check('desktop hint: pointer wording plus "Shift + drag pulls both sides", on one line, readable, not clipped', /^Click to poke/.test(hint0) && /Shift \+ drag pulls both sides/.test(hint0) && L0.hintLines <= 1 && L0.hintFont >= 12 && !L0.hintClipped && L0.hint.x >= 0 && L0.hint.r <= L0.iw, `${hint0} (font ${L0.hintFont}px, lines ${L0.hintLines})`);
+      await page.keyboard.down('Shift'); await sleep(150); await page.keyboard.up('Shift'); await sleep(150);
+      const hint1 = await page.evaluate(() => ({ text: document.querySelector('.hint').textContent, kbd: document.body.dataset.kbd ?? null }));
+      check('pressing the Shift key alone does not switch the hint to the keyboard wording (it stays the pointer line)', hint1.text === hint0 && hint1.kbd === null, JSON.stringify(hint1));
+
+      // sample every frame: has the body ever been carried? (metrics.carried), and how deep did it stretch
+      await page.evaluate(() => {
+        window.__sh = { carried: false, maxStretch: 0, frames: 0 };
+        const f = () => { const m = window.__WH__.state().metrics; window.__sh.frames++; if (m.carried) window.__sh.carried = true; window.__sh.maxStretch = Math.max(window.__sh.maxStretch, m.stretch); window.__shRaf = requestAnimationFrame(f); };
+        f();
+      });
+      await page.evaluate(() => { window.__shiftOnMouse = 0; addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse' && e.shiftKey && e.buttons) window.__shiftOnMouse++; }, true); });
+      // the path: press just right of the centre, drag up and to the right at 20 degrees, far enough to ask 1.6 x the body's maximum pull (the
+      // Dollop's maxPull is 1.79 x its radius, r px on screen), or as far as the viewport allows. The lift limit is 1.15 x maxPull.
+      const x0 = cx + 0.45 * r, y0 = cy - 0.04 * r, ang = (20 * Math.PI) / 180;
+      const reachPx = Math.min(1.6 * 1.79 * r, (vp.width - 12 - x0) / Math.cos(ang));
+      const dragFrom = (i) => [x0 + (reachPx * Math.cos(ang) * i) / 14, y0 - (reachPx * Math.sin(ang) * i) / 14];
+      console.log(`   shift path: press (${x0.toFixed(0)}, ${y0.toFixed(0)}), drag ${reachPx.toFixed(0)} px = ${(reachPx / (1.79 * r)).toFixed(2)} x maxPull (the lift limit is 1.15)`);
+      // ---- a Shift pull: past the lift limit, Shift let go mid-drag
+      let seen = await evKeys(page); let a0 = await started(page);
+      await page.mouse.move(x0, y0);
+      await page.keyboard.down('Shift');
+      await page.mouse.down();
+      await sleep(120);
+      for (let i = 1; i <= 8; i++) { await page.mouse.move(...dragFrom(i)); await sleep(50); }
+      const g0 = await waitEvent(page, seen, 'grab', { finger: 0, timeout: 40000 });
+      const g1 = await waitEvent(page, seen, 'grab', { finger: 1, timeout: 20000 });
+      const sawShift = await page.evaluate(() => window.__shiftOnMouse);
+      check('Shift + drag outward on the right side: TWO grab SoftEvents, finger 0 (the real hand) and finger 1 (the mirrored one); the page really saw shiftKey on the mouse drag', !!g0 && !!g1 && sawShift > 0, `finger 0 ${!!g0}, finger 1 ${!!g1}, shiftKey on ${sawShift} pointermoves`);
+      await page.keyboard.up('Shift');   // Shift let go mid-drag: the mirror stays until the button is up
+      for (let i = 9; i <= 14; i++) { await page.mouse.move(...dragFrom(i)); await sleep(50); }
+      const seenMid = await evKeys(page);
+      await waitUntil(page, () => { const m = window.__WH__.state().metrics; return m.grabbed && m.stretch > 0.1; }, null, 60000);
+      await sleep(600);
+      const mid = await state(page);
+      const snapsMid = mid.events.filter((e) => e.kind === 'snap' && !seen.includes(JSON.stringify(e)));
+      check('Shift let go mid-drag: both hands stay on (grabbed, real stretch, no snap yet) until the button is released', mid.metrics.grabbed === true && mid.metrics.stretch > 0.1 && snapsMid.length === 0, `stretch ${mid.metrics.stretch.toFixed(2)}, snaps so far ${snapsMid.length}`);
+      await shot(page, 'shift_pull_desktop');
+      const a1 = await started(page);
+      await page.mouse.up();
+      const s0 = await waitEvent(page, seenMid, 'snap', { finger: 0, timeout: 40000 });
+      const s1 = await waitEvent(page, seenMid, 'snap', { finger: 1, timeout: 20000 });
+      await sleep(300);
+      const a2 = await started(page);
+      check('release: TWO snap SoftEvents (fingers 0 and 1), each at a high pull level (both hands reached the body\'s maximum)', !!s0 && !!s1 && s0.intensity > 0.85 && s1.intensity > 0.85, `snap intensities ${s0?.intensity?.toFixed(2)} / ${s1?.intensity?.toFixed(2)}`);
+      check('the pair of snaps makes ONE release sound (not two)', a2.release === a1.release + 1, `audio.release ${a1.release}->${a2.release}`);
+      const sh = await page.evaluate(() => window.__sh);
+      check('a Shift pull past 1.15 x maxPull never lifts the body (metrics.carried stayed false on every frame)', sh.carried === false && sh.frames > 20, `carried ${sh.carried}, ${sh.frames} frames sampled`);
+      await waitUntil(page, () => { const m = window.__WH__.state().metrics; return !m.grabbed && m.stretch < 0.05; }, null, 60000);
+      await sleep(1500);
+      const rest1 = await state(page);
+      check('after the let-go both sides spring back (not grabbed, volume 1 +- 0.03, no stray finger)', !rest1.metrics.grabbed && Math.abs(rest1.metrics.volume - 1) < 0.03 && rest1.metrics.fingers === 0, `volume ${rest1.metrics.volume.toFixed(3)}, stretch ${rest1.metrics.stretch.toFixed(2)}`);
+
+      // ---- the same drag without Shift: a lone hand, it lifts the body (the toss), one grab, one snap
+      await page.evaluate(() => { window.__sh.carried = false; });
+      seen = await evKeys(page);
+      await page.mouse.move(x0, y0);
+      await page.mouse.down();
+      await sleep(120);
+      for (let i = 1; i <= 14; i++) { await page.mouse.move(...dragFrom(i)); await sleep(50); }
+      await waitUntil(page, () => window.__sh.carried, null, 60000);
+      const plainGrab1 = await waitEvent(page, seen, 'grab', { finger: 1, timeout: 1500 });
+      const seenPlain = await evKeys(page);
+      await page.mouse.up();
+      const ps = await waitEvent(page, seenPlain, 'snap', { timeout: 40000 });
+      const plainSnap1 = await waitEvent(page, seenPlain, 'snap', { finger: 1, timeout: 1500 });
+      check('the same drag WITHOUT Shift is a lone hand: one grab (no finger 1), the body is picked up (metrics.carried), one snap', !plainGrab1 && !plainSnap1 && !!ps && (await page.evaluate(() => window.__sh.carried)) === true, `grab finger 1 ${!!plainGrab1}, snap finger 1 ${!!plainSnap1}, snap ${ps ? ps.intensity.toFixed(2) : 'none'}`);
+      await waitUntil(page, () => { const m = window.__WH__.state().metrics; return !m.grabbed && m.stretch < 0.05; }, null, 60000);
+      await sleep(4000);
+      await page.evaluate(() => { cancelAnimationFrame(window.__shRaf); });
+    });
+
+    // the longer desktop hint at the 320 px reflow (WCAG 1.4.10): a MOUSE window (fine pointer, no touch emulation) as narrow as a phone
+    await section('shift-hint-reflow', async () => {
+      const { page, context, w } = await open({ query: '?dev=1&quality=low', ctx: { viewport: { width: 320, height: 568 } } });
+      mainWatches.push(['shift-hint-reflow', w]);
+      await wake(page);
+      await sleep(1200); await settle(page);
+      const L = await layoutOf(page);
+      const text = await page.evaluate(() => document.querySelector('.hint').textContent);
+      check('320 x 568 with a mouse: the hint is the pointer line with the Shift mention (not the touch line)', /^Click to poke/.test(text) && /Shift \+ drag pulls both sides/.test(text), text);
+      check('320 x 568 with a mouse: no scroll; the longer hint is inside the screen, not clipped, at most two lines, readable (>= 12 px), clear of the name plate, the meter ring and the capsule button',
+        L.sw <= L.iw && L.sh <= L.ih && L.hint.x >= 0 && L.hint.r <= L.iw && !L.hintClipped && L.hintLines <= 2 && L.hintFont >= 12 && !overlap(L.hint, L.name) && !overlap(L.hint, L.meter) && !overlap(L.hint, L.capsuleBtn),
+        JSON.stringify({ hint: L.hint, lines: L.hintLines, font: L.hintFont, clipped: L.hintClipped, scroll: [L.sw, L.sh], vp: [L.iw, L.ih] }));
+      await shot(page, 'hint_shift_320x568');
+      await page.setViewportSize({ width: 568, height: 320 }); await sleep(900); await settle(page);
+      const M = await layoutOf(page);
+      check('568 x 320 with a mouse (landscape phone size): the hint is inside the screen, not clipped, at most two lines, clear of the bottom row',
+        M.sw <= M.iw && M.sh <= M.ih && M.hint.x >= 0 && M.hint.r <= M.iw && !M.hintClipped && M.hintLines <= 2 && !overlap(M.hint, M.name) && !overlap(M.hint, M.meter) && !overlap(M.hint, M.capsuleBtn),
+        JSON.stringify({ hint: M.hint, lines: M.hintLines, font: M.hintFont, name: M.name }));
+      await context.close();
+    });
+
+    // a touch never mirrors, whatever the keyboard says: a phone with a keyboard attached (CDP touch events with the Shift modifier bit)
+    await section('shift-touch', async () => {
+      const { page, context, w } = await open({ query: '?dev=1&quality=low', ctx: PHONE });
+      mainWatches.push(['shift-touch', w]);
+      const cdp = await cdpFor(page);
+      await wake(page, { touch: true });
+      const hintT = await page.evaluate(() => document.querySelector('.hint').textContent);
+      check('touch hint: the touch wording, with no mention of Shift', /^Tap to poke/.test(hintT) && !/Shift/i.test(hintT), hintT);
+      const vp = page.viewportSize();
+      const B = await body(page);
+      const cx = B.x * vp.width, cy = B.y * vp.height, r = B.rPx;
+      const seen = await evKeys(page);
+      const at = (i) => ({ x: cx + 0.55 * r + i * 14, y: cy - 0.04 * r - i * 2 });
+      const SHIFT_BIT = 8;
+      await page.evaluate(() => { window.__shiftOnTouch = false; addEventListener('pointermove', (e) => { if (e.pointerType === 'touch' && e.shiftKey) window.__shiftOnTouch = true; }, true); });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: tp([at(0)]), modifiers: SHIFT_BIT });
+      await sleep(150);
+      for (let i = 1; i <= 12; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: tp([at(i)]), modifiers: SHIFT_BIT }); await sleep(50); }
+      const g0 = await waitEvent(page, seen, 'grab', { finger: 0, timeout: 40000 });
+      await sleep(400);
+      const g1 = await waitEvent(page, seen, 'grab', { finger: 1, timeout: 1500 });
+      const shiftSeen = await page.evaluate(() => window.__shiftOnTouch);
+      check('a touch drag with the Shift modifier down (the page really saw shiftKey on the touch pointer events): ONE grab (finger 0), no mirrored second hand', !!g0 && !g1 && shiftSeen === true, `grab finger 0 ${!!g0}, finger 1 ${!!g1}, page saw shiftKey on touch ${shiftSeen}`);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [], modifiers: SHIFT_BIT });
+      await sleep(800);
+      await context.close();
+    });
+
     await section('hook-deterministic', async () => {
       const { page } = D;
       const out = await page.evaluate(() => {

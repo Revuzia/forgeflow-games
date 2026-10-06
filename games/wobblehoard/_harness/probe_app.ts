@@ -436,6 +436,72 @@ function press(r: Rig, x: number, y: number, ms: number): number {
   check('snap: one to three pops follow', r.w.audio.rec.count('pop') >= 1 && r.w.audio.rec.count('pop') <= 3, String(r.w.audio.rec.count('pop')));
 }
 
+// ============================================================ Shift + drag pulls both sides (owner decision 2026-10-06; gestures.ts SHIFT)
+// The input facade passes `shift` for a mouse or a pen and drops it for a touch; the second hand makes no second voice, no second sound
+// and no second payment (driver.touch.mirrorEvent, feedback.handle's `twin`, the drain in game.ts).
+{
+  type Ty = 'mouse' | 'touch' | 'pen' | undefined;
+  const pullRig = (type: Ty, shift: boolean, o: { space?: boolean; release?: boolean } = {}): Rig & { disc: { x: number; y: number; r: number }; id: number } => {
+    const r = rig();
+    const c = centre(r), disc = r.app.host.bodyScreen()!;
+    const sx = c.x + disc.r * 0.6, sy = c.y;
+    const id = r.id++;
+    if (o.space) r.app.input.pointerDown({ id: -1000, x: c.x, y: c.y, t: clk(r), type: 'touch' });
+    r.app.input.pointerDown({ id, x: sx, y: sy, t: clk(r), type, ...(shift ? { shift: true } : {}) });
+    r.w.run(r.app, 60);
+    r.app.input.pointerMove({ id, x: sx + 40, y: sy, t: clk(r), type, ...(shift ? { shift: true } : {}) });
+    r.w.run(r.app, 60);
+    r.app.input.pointerMove({ id, x: sx + 90, y: sy - 20, t: clk(r), type });   // Shift let go mid-drag: the mirror stays
+    r.w.run(r.app, 300);
+    if (o.release !== false) { r.app.input.pointerUp({ id, x: sx + 90, y: sy - 20, t: clk(r), type }); r.w.run(r.app, 500); }
+    return Object.assign(r, { disc, id });
+  };
+  const grabsOf = (r: Rig): Array<{ slot: number; target: { x: number; y: number; z: number } }> => r.w.body.rec.of('grab').map((c) => ({ slot: c.args[0] as number, target: c.args[2] as { x: number; y: number; z: number } }));
+  const sh = pullRig('mouse', true, { release: false });
+  const g = grabsOf(sh);
+  check('shift (mouse): a Shift drag grabs on BOTH slots, the second on the opposite side (targets mirrored about the body)', g.length === 2 && g[0].slot === 0 && g[1].slot === 1 && g[0].target.x > 0.05 && g[1].target.x < -0.05 && Math.abs(g[0].target.x + g[1].target.x) < 1e-6, JSON.stringify(g));
+  check('shift (mouse): both grabs are live on the body and the moves after Shift was let go still move both', sh.w.body.grabIsActive(0) && sh.w.body.grabIsActive(1) && sh.w.body.rec.of('grabMove').some((c) => c.args[0] === 0) && sh.w.body.rec.of('grabMove').some((c) => c.args[0] === 1));
+  check('shift (mouse): ONE stretch voice (not two), and stats.pulls counts the pull once', sq(sh) === 1 && sh.w.audio.live.size === 1 && sh.app.profile.profile.stats.pulls === 1, `voices ${sq(sh)}, live ${sh.w.audio.live.size}, pulls ${sh.app.profile.profile.stats.pulls}`);
+  check('shift (mouse): the pending arc shows ONE stretch (the second hand adds none)', sh.app.pendingFill() > 0 && (() => { const one = pullRig('mouse', false, { release: false }); return Math.abs(one.app.pendingFill() - sh.app.pendingFill()) < 1e-9; })(), `pending ${sh.app.pendingFill()}`);
+  sh.app.input.pointerUp({ id: sh.id, x: sh.disc.x + sh.disc.r * 0.6 + 90, y: sh.disc.y - 20, t: clk(sh), type: 'mouse' });
+  sh.w.run(sh.app, 500);
+  check('shift (mouse): the release lets go of both grabs once each, and every voice is ended', sh.w.body.rec.count('grabRelease') === 2 && !sh.w.body.grabIsActive(0) && !sh.w.body.grabIsActive(1) && sh.w.audio.live.size === 0);
+  check('shift (mouse): the two snaps make ONE release sound, ONE thump, ONE set of pops (1..3), not two', (sh.w.body.emitted.snap ?? 0) === 2 && sh.w.audio.rec.count('release') === 1 && sh.w.haptics.rec.count('release') === 1 && sh.w.audio.rec.count('pop') >= 1 && sh.w.audio.rec.count('pop') <= 3, `snaps ${sh.w.body.emitted.snap}, release ${sh.w.audio.rec.count('release')}, pops ${sh.w.audio.rec.count('pop')}`);
+  const single = pullRig('mouse', false);
+  check('shift (mouse): the meter pays the pair ONCE: the same squish points as the same pull without Shift', Math.abs(sh.app.hoard.meter().sp - single.app.hoard.meter().sp) < 1e-9 && sh.app.hoard.meter().sp > 0.5, `${sh.app.hoard.meter().sp.toFixed(4)} vs ${single.app.hoard.meter().sp.toFixed(4)}`);
+  check('shift (mouse): the stats count one release and one pull for the pair, as for a single pull', sh.app.profile.profile.stats.releases === single.app.profile.profile.stats.releases && sh.app.profile.profile.stats.pulls === 1);
+  check('no Shift: a plain drag is the old single pull (one grab, slot 0, one release)', grabsOf(single).length === 1 && single.w.body.rec.count('grabRelease') === 1 && single.w.audio.rec.count('release') === 1);
+  const pen = pullRig('pen', true);
+  check('shift (pen): a pen mirrors like a mouse', grabsOf(pen).length === 2 && pen.w.body.rec.count('grabRelease') === 2);
+  const touch = pullRig('touch', true);
+  check('shift on a touch: never mirrors (one grab, one release, whatever the flag says)', grabsOf(touch).length === 1 && touch.w.body.rec.count('grabRelease') === 1 && !touch.w.body.grabIsActive(1));
+  const space = pullRig('mouse', true, { space: true });
+  check("shift while Space's synthetic finger holds the other slot: the plain single pull (one grab, no mirror)", grabsOf(space).length === 1 && grabsOf(space)[0].slot === 1, JSON.stringify(grabsOf(space)));
+  // everything that lets go of the body lets go of BOTH hands, exactly once
+  for (const how of ['hidden', 'context loss', 'covering panel', 'cancel'] as const) {
+    const r = pullRig('mouse', true, { release: false });
+    const before = r.w.body.rec.count('grabRelease');
+    if (how === 'hidden') r.app.setHidden(true); else if (how === 'context loss') r.app.suspend('context'); else if (how === 'covering panel') r.app.suspend('covered'); else r.app.input.pointerCancel(r.id);
+    r.w.run(r.app, 100);
+    check(`shift pull: ${how} lets go of both grabs exactly once each`, r.w.body.rec.count('grabRelease') - before === 2 && !r.w.body.grabIsActive(0) && !r.w.body.grabIsActive(1) && r.w.audio.live.size === 0);
+    r.app.input.pointerUp({ id: r.id, x: r.disc.x, y: r.disc.y, t: clk(r), type: 'mouse' });
+    r.w.run(r.app, 100);
+    check(`shift pull: a late pointerUp after ${how} does nothing`, r.w.body.rec.count('grabRelease') - before === 2);
+  }
+  // the Snap tool pauses body gestures: a Shift drag only turns the camera
+  {
+    const r = rig();
+    r.app.setTool('snap');
+    const c = centre(r), disc = r.app.host.bodyScreen()!;
+    const id = r.id++, sx = c.x + disc.r * 0.6;
+    r.app.input.pointerDown({ id, x: sx, y: c.y, t: clk(r), type: 'mouse', shift: true });
+    r.app.input.pointerMove({ id, x: sx + 60, y: c.y, t: clk(r), type: 'mouse', shift: true });
+    r.w.run(r.app, 100);
+    r.app.input.pointerUp({ id, x: sx + 60, y: c.y, t: clk(r), type: 'mouse', shift: true });
+    check('shift in the Snap tool: no grab at all (body gestures are paused), the drag turns the camera', r.w.body.rec.count('grab') === 0 && r.w.stage.rec.count('orbit') >= 1);
+  }
+}
+
 // ============================================================ orbit / zoom reach the stage; phase gating
 {
   const r = rig();

@@ -994,6 +994,117 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   check('toss (physics B3): a carry that ends without a throw clears the lift, so a later plain pull is not tossed', lifts.length === 2 && tosses.length === 1, `lifts ${lifts.length}, tosses ${tosses.length}`);
 }
 
+/* ───────────────────────── 7e. Shift + drag pulls both sides (owner decision 2026-10-06): the pointer glue, then the whole game on the REAL SoftBody ───────────────────────── */
+{
+  // ---- src/input/pointer.ts: Shift rides on mouse and pen pointer events, never on touch
+  const { attachPointerInput } = await import('../../src/input/pointer.ts');
+  const handlers = new Map<string, (e: unknown) => void>();
+  const canvas = { addEventListener: (t: string, fn: (e: unknown) => void) => { handlers.set(t, fn); }, removeEventListener: () => {}, getBoundingClientRect: () => ({ left: 10, top: 20 }), setPointerCapture: () => {}, clientHeight: 600 } as unknown as HTMLCanvasElement;
+  const g = globalThis as unknown as { document?: unknown };
+  const hadDocument = 'document' in g;
+  if (!hadDocument) g.document = { addEventListener: () => {}, removeEventListener: () => {} };
+  const calls: Array<[string, Record<string, unknown>]> = [];
+  const app = { input: { pointerDown: (p: Record<string, unknown>) => calls.push(['down', p]), pointerMove: (p: Record<string, unknown>) => calls.push(['move', p]), pointerUp: (p: Record<string, unknown>) => calls.push(['up', p]), pointerCancel: () => {}, isDown: () => true, hover: () => {}, hoverEnd: () => {}, wheel: () => {} }, unlockAudio: () => {} };
+  const detach = attachPointerInput(canvas, app as never);
+  const pev = (o: Record<string, unknown>): Record<string, unknown> => ({ pointerId: 1, clientX: 110, clientY: 120, timeStamp: 5, button: 0, buttons: 1, pointerType: 'mouse', shiftKey: false, preventDefault: () => {}, ...o });
+  const drive = (o: Record<string, unknown>): Array<[string, Record<string, unknown>]> => {
+    calls.length = 0;
+    handlers.get('pointerdown')!(pev(o)); handlers.get('pointermove')!(pev(o)); handlers.get('pointerup')!(pev(o));
+    return calls.slice();
+  };
+  const mouse = drive({ shiftKey: true }), plain = drive({}), pen = drive({ shiftKey: true, pointerType: 'pen' }), touch = drive({ shiftKey: true, pointerType: 'touch' });
+  const moveGone = (() => { calls.length = 0; handlers.get('pointermove')!(pev({ shiftKey: true, buttons: 0 })); return calls.slice(); })();
+  check('pointer glue: a mouse with Shift down passes shift: true on pointerdown, pointermove and pointerup (canvas-local coordinates)',
+    mouse.length === 3 && mouse.every(([, p]) => p.shift === true && p.type === 'mouse' && p.x === 100 && p.y === 100), JSON.stringify(mouse.map(([k, p]) => [k, p.shift])));
+  check('pointer glue: no Shift = no `shift` key at all (the sample is what it always was)', plain.length === 3 && plain.every(([, p]) => !('shift' in p)));
+  check('pointer glue: a pen with Shift mirrors like a mouse', pen.length === 3 && pen.every(([, p]) => p.shift === true && p.type === 'pen'));
+  check('pointer glue: a TOUCH never carries Shift, even with a keyboard\'s Shift down', touch.length === 3 && touch.every(([, p]) => !('shift' in p) && p.type === 'touch'));
+  check('pointer glue: a mouse button lost outside the window ends the press (pointerup) and still reports Shift', moveGone.length === 1 && moveGone[0][0] === 'up' && moveGone[0][1].shift === true);
+  detach();
+  if (!hadDocument) delete g.document;
+
+  // ---- the whole game on the real SoftBody and the real collection
+  const { SoftBody } = await import('../../src/physics/softbody.ts');
+  const { speciesTemplateGenome } = await import('../../src/data/catalog.ts');
+  const makeReal = (): { w: MockWorld; app: App; lifts: number[]; tosses: number[] } => {
+    const w = createMockWorld({ storage: null });
+    w.deps.createBody = (gg) => new SoftBody(gg) as unknown as SoftBodyLike;
+    const now = (): number => 1_700_000_000_000 + w.clock.t;
+    const collection = createCollection({ storage: null, profile: null, now, random: () => 0.4 });
+    const app = createApp({ ...w.deps, collection, epochNow: now });
+    app.resize(800, 600, 1);
+    app.setPhase('play');
+    const lifts: number[] = [], tosses: number[] = [];
+    const au = w.audio as unknown as Record<string, unknown>;
+    au.lift = () => { lifts.push(1); };
+    au.toss = () => { tosses.push(1); };
+    return { w, app, lifts, tosses };
+  };
+  interface RealPull { carried: boolean; grabs: number[]; snaps: Array<{ finger: number; I: number; held: number }>; sp: number; voices: number; releases: number; pops: number; hapticRelease: number; lifts: number; tosses: number; stats: { pulls: number; releases: number }; minYR: number; finite: boolean; sidesOut: [number, number] }
+  const realPull = (type: 'mouse' | 'touch', shift: boolean, reach = 1.8): RealPull => {
+    const { w, app, lifts, tosses } = makeReal();
+    const go = (ms: number, each?: () => void): void => { let left = ms; while (left > 1e-9) { const d = Math.min(1000 / 60, left); w.clock.t += d; app.frame(w.clock.t); each?.(); left -= d; } };
+    go(1500);
+    const body = app.body as unknown as InstanceType<typeof SoftBody>;
+    const disc = app.host.bodyScreen()!, R = body.restRadius, maxD = body.params.maxPull * R;
+    const px0 = disc.x + 0.75 * disc.r, py0 = disc.y + 0.05 * disc.r, drag = reach * maxD * (disc.r / R), x0 = body.center.x;
+    let carried = false, minY = 1e9, mnX = 1e9, mxX = -1e9, finite = true;
+    const probe = (): void => {
+      if (body.metrics.carried) carried = true;
+      const P = body.positions;
+      for (let i = 0; i < P.length; i += 3) { if (!Number.isFinite(P[i]) || !Number.isFinite(P[i + 1])) finite = false; if (P[i + 1] < minY) minY = P[i + 1]; if (P[i] < mnX) mnX = P[i]; if (P[i] > mxX) mxX = P[i]; }
+    };
+    app.input.pointerDown({ id: 7, x: px0, y: py0, t: w.clock.t, button: 0, type });
+    go(40);
+    for (let i = 1; i <= 50; i++) { app.input.pointerMove({ id: 7, x: px0 + (drag * i) / 50, y: py0, t: w.clock.t, type, shift }); go(16.7, probe); }
+    go(1000, probe);
+    // a flick (the hand swings it, 8 frames) and let go: a lone hand throws the body it carries (the toss voice), two hands never carried it
+    for (let i = 1; i <= 8; i++) { app.input.pointerMove({ id: 7, x: px0 + drag + 30 * i, y: py0 - 12 * i, t: w.clock.t, type, shift }); go(16.7, probe); }
+    app.input.pointerUp({ id: 7, x: px0 + drag + 240, y: py0 - 96, t: w.clock.t, type, shift });
+    go(3000, probe);
+    const ev = app.recentEvents();
+    const m = app.hoard.meter();
+    return {
+      carried, grabs: ev.filter((e) => e.kind === 'grab').map((e) => e.finger), snaps: ev.filter((e) => e.kind === 'snap').map((e) => ({ finger: e.finger, I: e.intensity, held: e.heldFor })),
+      sp: m.sp + m.credits * 1e3, voices: w.audio.rec.count('squishStart'), releases: w.audio.rec.count('release'), pops: w.audio.rec.count('pop'), hapticRelease: w.haptics.rec.count('release'),
+      lifts: lifts.length, tosses: tosses.length, stats: { pulls: app.profile.profile.stats.pulls, releases: app.profile.profile.stats.releases }, minYR: minY / R, finite,
+      sidesOut: [(x0 - mnX - R) / maxD, (mxX - x0 - R) / maxD],
+    };
+  };
+  const shiftPull = realPull('mouse', true), plainPull = realPull('mouse', false), touchPull = realPull('touch', true);
+  check('Shift pull (real SoftBody, through the game): two grabs (fingers 0 and 1), two snaps at the full pull level, the body stretches out on both sides and is NEVER carried (no lift, no toss) although it was asked 1.8 x maxPull',
+    !shiftPull.carried && shiftPull.grabs.join() === '0,1' && shiftPull.snaps.length === 2 && shiftPull.snaps.every((s) => s.I >= 0.95) && shiftPull.sidesOut[0] >= 0.4 && shiftPull.sidesOut[1] >= 0.4 && shiftPull.lifts === 0 && shiftPull.tosses === 0 && shiftPull.finite && shiftPull.minYR >= -0.01,
+    `carried ${shiftPull.carried}, grabs ${shiftPull.grabs}, snaps ${shiftPull.snaps.map((s) => s.I.toFixed(2))}, sides ${shiftPull.sidesOut.map((x) => x.toFixed(2))} maxPull, lifts ${shiftPull.lifts}, tosses ${shiftPull.tosses}`);
+  check('plain pull (real SoftBody, through the game): the same drag without Shift still picks the body up (metrics.carried, the lift voice once, a toss on the let-go)',
+    plainPull.carried && plainPull.grabs.join() === '0' && plainPull.snaps.length === 1 && plainPull.lifts === 1 && plainPull.tosses >= 1, `carried ${plainPull.carried}, lifts ${plainPull.lifts}, tosses ${plainPull.tosses}`);
+  check('touch with Shift (real SoftBody, through the game): never mirrors: one grab, one snap, and it lifts like any lone finger',
+    touchPull.carried && touchPull.grabs.join() === '0' && touchPull.snaps.length === 1);
+  check('Shift pull feedback: ONE stretch voice, ONE release sound, ONE thump, 1 to 3 pops, one pull and one release in the stats (as the plain pull)',
+    shiftPull.voices === 1 && shiftPull.releases === 1 && shiftPull.hapticRelease === 1 && shiftPull.pops >= 1 && shiftPull.pops <= 3 && shiftPull.stats.pulls === 1 && shiftPull.stats.releases === 1
+      && plainPull.voices === 1 && plainPull.releases === 1 && plainPull.pops === shiftPull.pops && plainPull.stats.pulls === 1,
+    `voices ${shiftPull.voices}, release ${shiftPull.releases}, thump ${shiftPull.hapticRelease}, pops ${shiftPull.pops}, stats ${JSON.stringify(shiftPull.stats)}`);
+  // THE METER: what the pair pays. The second hand's snap, fed, is a second pull inside the freshness window (tau 3 s, floor 0.03): measured here
+  // on the real collection feed with the current pay constants, then the game's own number (it feeds the pair once).
+  const extra = (gapMs: number | null): number => {
+    const snap = (finger: number, held: number): SoftEvent => ({ kind: 'snap', at: { x: 0, y: 0.4, z: 0.5 }, normal: { x: 0, y: 1, z: 0 }, intensity: 1, heldFor: held, finger });
+    const T0 = 1_700_000_000_000;
+    const sp = (second: boolean): number => {
+      let cur = T0;
+      const c = createCollection({ storage: null, profile: null, now: () => cur, random: () => 0.4 });
+      if (gapMs !== null) c.feed(snap(0, 1), T0);
+      const before = c.meter().sp;
+      cur = T0 + (gapMs ?? 0) + 10;
+      c.feed(snap(0, 1.9), cur); if (second) c.feed(snap(1, 1.9), cur);
+      const v = c.meter().sp - before; c.dispose(); return v;
+    };
+    return (sp(true) - sp(false)) / sp(false);
+  };
+  const exFresh = extra(null), ex2 = extra(2000), ex1 = extra(1000);
+  check('Shift pull meter: the pair pays ONCE: exactly the squish points of the same pull without Shift (the second hand is no touch of its own)',
+    shiftPull.sp > 0.5 && Math.abs(shiftPull.sp - plainPull.sp) < 1e-6,
+    `${shiftPull.sp.toFixed(4)} SP vs ${plainPull.sp.toFixed(4)} SP. Why: fed as a second pull the mirror would pay +${(exFresh * 100).toFixed(1)} % on a fresh pull, +${(ex2 * 100).toFixed(1)} % at a 2 s cadence, +${(ex1 * 100).toFixed(1)} % at 1 s (freshness floor 0.03 of the second pull; it would also double the pull count of a Tasks goal)`);
+}
+
 /* ───────────────────────── 8. the collection module through the port: meter feed, events, table cap ───────────────────────── */
 {
   const r = rig();

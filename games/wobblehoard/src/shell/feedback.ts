@@ -14,6 +14,9 @@
 //           body): every frame while strands >= 0.02, tension = strands; when they let go from >= 0.3 that was a break: snap: true.
 //           A body without the metric: every frame while a TACKY family (Sticky Stretch, Slime Goo) is pulled, tension = pull level;
 //           snap: true on the snap event.
+// A Shift pull (gestures.ts SHIFT) holds the body with two hands, so it has two 'grab' and two 'snap' events: the second hand's pair is flagged
+//           `twin` by the caller (driver.touch.mirrorEvent) and makes NO sound, voice, haptic, shake, fx, stat or toss: one pull, one set of
+//           feedback, panned from the real finger. The strand / tension logic reads both slots (the stronger one) and stays sane per slot.
 //   bump    the physics' own 'bump' event (stage B2: SoftBodyLike.collide on the play mat): audio.bump (rate-limited inside the engine) and
 //           a light 6 ms haptic tick, at most one every BUMP_HAPTIC_GAP_S (both bodies of one contact may report it). Pays nothing.
 //           `bumpCheck` below is the older centre-distance seam for a physics without the event.
@@ -32,7 +35,8 @@ export type StatKey = 'pokes' | 'squishes' | 'pulls' | 'releases';
 interface Voice { handle: SquishVoiceHandle; mode: 'press' | 'pull'; prevLevel: number; levelRate: number }
 
 export interface Feedback {
-  handle(ev: SoftEvent): void;
+  /** `twin`: this 'grab' / 'snap' is the mirrored second hand of a Shift pull: the first hand's event already played everything (see the header) */
+  handle(ev: SoftEvent, twin?: boolean): void;
   /** every sim step after the events: drive the held voices, the strand, lift detection, haptic squeeze pulses */
   update(dt: number): void;
   /** a voice must never outlive its finger (release events are not guaranteed): end voices of lifted fingers */
@@ -107,7 +111,7 @@ export function createFeedback(d: FeedbackDeps): Feedback {
     }
   }
 
-  function handle(ev: SoftEvent): void {
+  function handle(ev: SoftEvent, twin = false): void {
     const I = clamp01(ev.intensity);
     const f = ev.finger;
     const body = d.body();
@@ -151,12 +155,14 @@ export function createFeedback(d: FeedbackDeps): Feedback {
         d.stage.shake(0.1 + 0.4 * I);
         break;
       case 'grab':
+        if (twin) break;   // the Shift pull's second hand: no second stretch voice, no second pull in the stats
         d.bump('pulls');
         startVoice(f, 'pull', ev.at);
         wasGroundedAtGrab = body.metrics.grounded;
         lifted = false; liftSince = -1;
         break;
       case 'snap': {
+        if (twin) break;   // the Shift pull's second hand: the first hand's snap plays the release, the bubbles and the pops once
         endVoice(f);
         d.bump('releases');
         const bodyHasPress = hasPress(body.metrics);

@@ -24,9 +24,25 @@ export interface TouchState {
   resetPull(): void;
   /** seconds this finger has pressed the body (0 = not down): the squeeze in progress (visible XP, xp.ts) */
   heldFor(slot: number): number;
-  /** seconds this finger's pull has been held (0 = no grab): the stretch in progress */
+  /** seconds this finger's pull has been held (0 = no grab): the stretch in progress. 0 for a Shift pull's mirrored second hand: the pair is ONE stretch. */
   pullFor(slot: number): number;
+  /** the slot holds the mirrored second grab of a Shift pull (gestures.ts SHIFT) right now */
+  readonly mirrored: boolean[];
+  /**
+   * The SoftEvent ('grab' or 'snap') of `slot` that this sim step drains belongs to a Shift pull's mirrored second hand, whose grab / release
+   * the driver made just before the step (call it while draining, after stepCount++). The first hand carries the pull's voice, sound, haptic,
+   * pay and tasks; the second makes none of them (feedback.ts handle's `twin`, game.ts drain).
+   */
+  mirrorEvent(kind: 'grab' | 'snap', slot: number): boolean;
 }
+
+/**
+ * A Shift pull holds the body with two hands, one of them dragged by the mirror of the pointer: pressing near the top of the dome and dragging
+ * up sends the mirrored hand DOWN, far below the table. The physics has no answer for a two-handed grab target under the table (measured:
+ * 3 of 38 real-physics Shift pulls turned the mesh inside out, volume -0.97 .. 3.08; none do with this clamp), so while a Shift pair is held
+ * (and the table exists) neither hand is asked for a point lower than this many metres above it. A lone finger and two real fingers are untouched.
+ */
+export const SHIFT_FLOOR_Y = 0.02;
 
 export interface Driver {
   readonly touch: TouchState;
@@ -59,6 +75,9 @@ export function createDriver(d: DriverDeps): Driver {
   const fingerPan = [0, 0];
   const peakPress = [0, 0];
   const skipRelease = [-1, -1];
+  const mirrored = [false, false];
+  const mirrorGrabStep = [-1, -1];      // step count at which the mirrored grab's 'grab' event is drained (action time + 1)
+  const mirrorSnapStep = [-1, -1];      // the same for the 'snap' of the mirrored release
   const downAt = [0, 0];
   const grabAt = [0, 0];
   const pendingAt = [-1, -1];
@@ -66,10 +85,18 @@ export function createDriver(d: DriverDeps): Driver {
   // the pull level the driver measures: grab start (world), requested distance from it, the body's maximum pull distance (learned)
   const g0x = [0, 0], g0y = [0, 0], g0z = [0, 0], pullDist = [0, 0];
   let maxPullD = 0;   // 0 = not learned yet (CALIBRATION.defaultMaxPullR x restRadius)
+  const floorScratch: V3 = { x: 0, y: 0, z: 0 };   // the body copies the target at once, so one scratch serves every clamped call
+  /** the target as the body gets it: a Shift pair's hands never go under the table (SHIFT_FLOOR_Y); everything else as asked */
+  const handTarget = (slot: number, t: V3): V3 => {
+    if ((!mirrored[slot] && !mirrored[1 - slot]) || t.y >= SHIFT_FLOOR_Y || !d.body().gravity) return t;
+    floorScratch.x = t.x; floorScratch.y = SHIFT_FLOOR_Y; floorScratch.z = t.z;
+    return floorScratch;
+  };
   const notePull = (slot: number, t: V3): void => { pullDist[slot] = Math.hypot(t.x - g0x[slot], t.y - g0y[slot], t.z - g0z[slot]); };
 
   const touch: TouchState = {
-    fingerDown, grabActive, fingerPan, peakPress, skipRelease,
+    fingerDown, grabActive, fingerPan, peakPress, skipRelease, mirrored,
+    mirrorEvent: (kind, slot) => (slot === 0 || slot === 1) && (kind === 'grab' ? mirrorGrabStep : mirrorSnapStep)[slot] === d.stepCount(),
     contact: () => fingerDown[0] || fingerDown[1] || grabActive[0] || grabActive[1] || pendingAt[0] >= 0 || pendingAt[1] >= 0,
     pull(slot) {
       const reported = (d.body().metrics as { pull?: number }).pull;   // a live pull level from the body, if it ever reports one
@@ -85,8 +112,15 @@ export function createDriver(d: DriverDeps): Driver {
     },
     resetPull() { maxPullD = 0; pullDist[0] = pullDist[1] = 0; },
     heldFor: (slot) => (fingerDown[slot] ? Math.max(1e-6, d.simTime() - downAt[slot]) : 0),
-    pullFor: (slot) => (grabActive[slot] ? Math.max(1e-6, d.simTime() - grabAt[slot]) : 0),
+    pullFor: (slot) => (grabActive[slot] && !mirrored[slot] ? Math.max(1e-6, d.simTime() - grabAt[slot]) : 0),
   };
+
+  /** let go of a slot's grab (the caller checked it is active); a mirrored one marks its release so its 'snap' is recognised as the second hand's */
+  function endGrab(slot: Slot, body: SoftBodyLike): void {
+    grabActive[slot] = false;
+    if (mirrored[slot]) { mirrored[slot] = false; mirrorSnapStep[slot] = d.stepCount() + 1; }
+    body.grabRelease(slot);
+  }
 
   function executeUp(slot: Slot, why: 'tap' | 'release' | 'pull' | 'cancel'): void {
     pendingAt[slot] = -1;
@@ -102,7 +136,7 @@ export function createDriver(d: DriverDeps): Driver {
       case 'fingerDown': {
         if (pendingAt[a.slot] >= 0) executeUp(a.slot, pendingWhy[a.slot]);
         else if (fingerDown[a.slot]) executeUp(a.slot, 'cancel');
-        if (grabActive[a.slot]) { grabActive[a.slot] = false; body.grabRelease(a.slot); }
+        if (grabActive[a.slot]) endGrab(a.slot, body);
         body.fingerDown(a.slot, { point: a.hit.point, normal: a.hit.normal, dir: pressDirection(a.hit.normal, a.hit.dir, hasPress(body.metrics)) });
         fingerDown[a.slot] = true;
         downAt[a.slot] = d.simTime();
@@ -120,14 +154,16 @@ export function createDriver(d: DriverDeps): Driver {
         break;
       case 'grab':
         grabActive[a.slot] = true;
+        mirrored[a.slot] = a.mirrorOf !== undefined;                 // the second hand of a Shift pull (gestures.ts SHIFT)
+        if (mirrored[a.slot]) mirrorGrabStep[a.slot] = d.stepCount() + 1;
         fingerPan[a.slot] = d.panOfPoint(a.target);
         g0x[a.slot] = a.target.x; g0y[a.slot] = a.target.y; g0z[a.slot] = a.target.z; pullDist[a.slot] = 0;
         grabAt[a.slot] = d.simTime();
-        body.grab(a.slot, a.vertex, a.target);
+        body.grab(a.slot, a.vertex, handTarget(a.slot, a.target));
         break;
-      case 'grabMove': if (grabActive[a.slot]) { body.grabMove(a.slot, a.target); fingerPan[a.slot] = d.panOfPoint(a.target); notePull(a.slot, a.target); } break;
+      case 'grabMove': if (grabActive[a.slot]) { body.grabMove(a.slot, handTarget(a.slot, a.target)); fingerPan[a.slot] = d.panOfPoint(a.target); notePull(a.slot, a.target); } break;
       case 'grabRelease':
-        if (grabActive[a.slot]) { grabActive[a.slot] = false; body.grabRelease(a.slot); }
+        if (grabActive[a.slot]) endGrab(a.slot, body);
         break;
       case 'orbit':
         d.stage.orbit(TUNING.orbitSignYaw * a.dx * TUNING.orbitRadPerPx, TUNING.orbitSignPitch * a.dy * TUNING.orbitRadPerPx);
@@ -160,7 +196,7 @@ export function createDriver(d: DriverDeps): Driver {
     releaseBody() {
       const body = d.body();
       for (const s of [0, 1] as const) {
-        if (grabActive[s]) { grabActive[s] = false; try { body.grabRelease(s); } catch (e) { d.report(e); } }
+        if (grabActive[s]) { try { endGrab(s, body); } catch (e) { d.report(e); } }
         if (fingerDown[s] || pendingAt[s] >= 0) { try { executeUp(s, 'cancel'); } catch (e) { fingerDown[s] = false; pendingAt[s] = -1; d.report(e); } }
       }
     },

@@ -79,6 +79,9 @@ export interface PointerIn {
   t?: number;
   button?: number;
   type?: 'mouse' | 'touch' | 'pen';
+  /** Shift is held (src/input/pointer.ts sets it from mouse and pen events only). On the move that commits a press to a pull it pulls BOTH
+   *  sides (gestures.ts SHIFT). The facade drops it for `type: 'touch'`: a finger never mirrors. */
+  shift?: boolean;
 }
 
 export interface InputPort {
@@ -519,7 +522,11 @@ export function createGame(deps: GameDeps): Game {
       r.kind = ev.kind; r.at.x = ev.at.x; r.at.y = ev.at.y; r.at.z = ev.at.z; r.normal.x = ev.normal.x; r.normal.y = ev.normal.y; r.normal.z = ev.normal.z;
       r.intensity = ev.intensity; r.heldFor = ev.heldFor; r.finger = ev.finger;
       ringHead = (ringHead + 1) % RING; if (ringCount < RING) ringCount++;
-      feedback.handle(ev);
+      // a Shift pull's second hand (driver.touch.mirrorEvent): feedback makes no second sound for it, and it is no touch of its own: the meter,
+      // the tasks and the sparks see ONE pull (feeding it paid the pull twice, the second at the 3 percent freshness floor: INPUT_SHIFT report)
+      const twin = (ev.kind === 'snap' || ev.kind === 'grab') && b === activeBody() && driver.touch.mirrorEvent(ev.kind, ev.finger);
+      feedback.handle(ev, twin);
+      if (twin) continue;
       // visible XP: a touch kind is read before and after the feed (only these events: the meter view allocates)
       const kind = GAIN_KIND[ev.kind];
       const before = kind && L.gain.length ? meterView : null;
@@ -597,6 +604,8 @@ export function createGame(deps: GameDeps): Game {
   // ---------------------------------------------------------------- input port
   const inputLive = (): boolean => phase === 'play' && reasons.size === 0 && holds.size === 0 && !ceremonies.active;
   const ndcOf = (x: number, y: number): { x: number; y: number } => ({ x: (x / Math.max(1, viewport.w)) * 2 - 1, y: 1 - (y / Math.max(1, viewport.h)) * 2 });
+  /** the Shift flag as the gesture machine's sample field: only a mouse or pen (or an untyped scripted pointer) that holds Shift carries it */
+  const shiftOf = (p: PointerIn): { shift?: true } => (p.shift === true && p.type !== 'touch' ? { shift: true } : {});
   const input: InputPort = {
     pointerDown(p) {
       pointerNdc = ndcOf(p.x, p.y);
@@ -606,7 +615,7 @@ export function createGame(deps: GameDeps): Game {
       if (tool === 'snap') { snapDrag.set(p.id, { x: p.x, y: p.y }); emit('interaction'); return; }
       if ((p.button ?? 0) === 0 && capsules.pointerDown(p.id, p.x, p.y)) { emit('interaction'); return; }
       if (bodies.extras.length && gestures.activeCount() === 0 && !driver.touch.contact()) pickBody(p.x, p.y);
-      gestures.pointerDown({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), button: p.button ?? 0 });
+      gestures.pointerDown({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), button: p.button ?? 0, ...shiftOf(p) });
     },
     pointerMove(p) {
       pointerNdc = ndcOf(p.x, p.y);
@@ -626,7 +635,7 @@ export function createGame(deps: GameDeps): Game {
         return;
       }
       if (capsules.pointerMove(p.id, p.x, p.y)) return;
-      gestures.pointerMove({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t) });
+      gestures.pointerMove({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), ...shiftOf(p) });
     },
     pointerUp(p) {
       if (p.type && p.type !== 'mouse') pointerNdc = null;
@@ -643,7 +652,7 @@ export function createGame(deps: GameDeps): Game {
       }
       if (tool === 'snap') { snapDrag.delete(p.id); return; }
       if (capsules.pointerUp(p.id)) return;
-      gestures.pointerUp({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t) });
+      gestures.pointerUp({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), ...shiftOf(p) });
     },
     pointerCancel(id) {
       if (blade && blade.id === id) { blade = null; emit('blade', null); return; }

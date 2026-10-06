@@ -7,10 +7,19 @@
 //   down on the body and hold > 180 ms ................................ SQUISH  pressure 0.55 -> 1 over 900 ms (smoothstep)
 //   down on the body, then move > 14 px not-outward ................... RUB     fingerMove along the surface
 //   down on the body, then move > 14 px outward (cos > 0.2) ........... PULL    grab(vertex under the press) / grabMove / grabRelease
+//   ... the same pull with SHIFT held at that moment (mouse / pen) ..... PULL x2  a second grab on the OPPOSITE side (the press point reflected
+//                                                                     through the body's screen centre) on the other slot, both pulled outward
+//                                                                     by the same amount, the way two fingers do on a phone
 //   down on empty space (or right/middle button anywhere) ............. ORBIT   drag
 //   wheel, or two fingers on empty space ............................... ZOOM
 //   two fingers on the body ............................................ two body fingers: slots 0 and 1 (max 2)
 //   cancel / lost capture ............................................... everything is released cleanly
+//
+// SHIFT (owner decision 2026-10-06). `PointerSample.shift` is read ONCE, by the move that commits a press to a pull. If the other body slot is
+// free, the mirror point (press reflected through host.bodyScreen(), then shrunk x0.92 per try down to x0.5 while the ray misses the body) is
+// grabbed on that slot (`grab` with `mirrorOf`), and every later move sets its target from the real pointer reflected through the LIVE centre.
+// Slot busy (Space's synthetic finger, a second touch) or nothing hit = the plain single pull, silently. A gesture never changes mode midway:
+// Shift released later keeps the mirror, Shift pressed later does nothing; up / cancel / cancelAll / a lost body release both grabs once each.
 import type { V3 } from '../contracts.ts';
 
 export interface BodyHit { point: V3; normal: V3; dir: V3; vertex: number }
@@ -34,7 +43,8 @@ export type GestureAction =
   | { type: 'fingerMove'; slot: Slot; point: V3 }
   /** why: 'tap' | 'release' = the finger lifted; 'pull' = handing the contact over to a grab; 'cancel' = interrupted */
   | { type: 'fingerUp'; slot: Slot; why: 'tap' | 'release' | 'pull' | 'cancel' }
-  | { type: 'grab'; slot: Slot; vertex: number; target: V3 }
+  /** `mirrorOf` is set only on the second grab of a Shift pull: it is the OTHER slot of the same pointer (the real finger's). Absent otherwise. */
+  | { type: 'grab'; slot: Slot; vertex: number; target: V3; mirrorOf?: Slot }
   | { type: 'grabMove'; slot: Slot; target: V3 }
   | { type: 'grabRelease'; slot: Slot; why: 'up' | 'cancel' }
   /** dx, dy: pointer movement in px since the last sample */
@@ -69,9 +79,16 @@ export interface PointerSample {
   t: number;
   /** 0 = primary (also touch/pen contact). 1 = middle, 2 = secondary => orbit. */
   button?: number;
+  /** Shift is held (a mouse or pen event's shiftKey; the pointer glue never sets it for touch). Read only on the sample that commits a press
+   *  to a pull: true there = pull both sides. Absent / false = exactly the old machine. */
+  shift?: boolean;
 }
 
-export interface GestureSnapshot { id: number; kind: 'body' | 'orbit' | 'ignored'; mode: 'press' | 'rub' | 'pull' | 'orbit' | 'ignored'; slot: Slot | -1; squishing: boolean; pressure: number }
+export interface GestureSnapshot {
+  id: number; kind: 'body' | 'orbit' | 'ignored'; mode: 'press' | 'rub' | 'pull' | 'orbit' | 'ignored'; slot: Slot | -1; squishing: boolean; pressure: number;
+  /** the slot of this pointer's mirrored second grab (a Shift pull), or -1 */
+  mirror: Slot | -1;
+}
 
 export interface Gestures {
   pointerDown(s: PointerSample): void;
@@ -101,7 +118,14 @@ interface Ptr {
   squish: boolean;
   pressure: number;
   orbitAnnounced: boolean;
+  /** a Shift pull's second grab: its slot (-1 = none) and the surface point it holds (the camera-facing plane for its target goes through it) */
+  mslot: Slot | -1;
+  mthrough: V3 | null;
 }
+
+/** The mirror point shrinks toward the centre by this factor per try while the ray through it misses the body, down to MIRROR_MIN_SCALE. */
+const MIRROR_SHRINK = 0.92;
+const MIRROR_MIN_SCALE = 0.5;
 
 const smooth01 = (x: number): number => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
 
@@ -111,7 +135,8 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
   let tickT = 0;
   let pinch: { a: number; b: number; dist: number } | null = null;
 
-  const slotFree = (s: Slot): boolean => { for (const p of ptrs.values()) if (p.kind === 'body' && p.slot === s) return false; return true; };
+  /** a slot is busy while a body pointer owns it, or holds it as its mirrored second grab (a Shift pull) */
+  const slotFree = (s: Slot): boolean => { for (const p of ptrs.values()) if (p.kind === 'body' && (p.slot === s || p.mslot === s)) return false; return true; };
 
   function pressureAt(p: Ptr, t: number): number {
     const s = smooth01((t - p.t0 - cfg.tapMs) / cfg.rampMs);
@@ -155,7 +180,38 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
     // off the body: the finger stays where it last touched (no action)
   }
 
-  function moveBody(p: Ptr, x: number, y: number): void {
+  /**
+   * Shift pull: grab the point opposite the press on the other slot. The press point reflected through the body's screen centre is ray-tested;
+   * a miss (a lopsided silhouette) shrinks it toward the centre (x0.92 per try, down to x0.5). The other slot busy, or nothing hit: no
+   * mirror, silently (the plain single pull stands). The first target is the reflection of the pointer NOW through the same centre, on the
+   * camera-facing plane through the mirrored vertex, as the real grab's target is on its own.
+   */
+  function startMirror(p: Ptr, x: number, y: number): void {
+    const ms: Slot = p.slot === 0 ? 1 : 0;
+    if (!slotFree(ms)) return;
+    const c = host.bodyScreen();
+    if (!c) return;
+    const ox = p.sx - c.x, oy = p.sy - c.y;
+    for (let k = 1; k >= MIRROR_MIN_SCALE - 1e-9; k *= MIRROR_SHRINK) {
+      const h = host.hitTest(c.x - ox * k, c.y - oy * k);
+      if (!h) continue;
+      p.mslot = ms;
+      p.mthrough = h.point;
+      emit({ type: 'grab', slot: ms, vertex: h.vertex, target: host.planePoint(2 * c.x - x, 2 * c.y - y, h.point) ?? h.point, mirrorOf: p.slot });
+      return;
+    }
+  }
+
+  /** the mirrored grab follows the real pointer reflected through the LIVE screen centre (the body may have moved since the press) */
+  function moveMirror(p: Ptr, x: number, y: number): void {
+    if (p.mslot === -1 || !p.mthrough) return;
+    const c = host.bodyScreen();
+    if (!c) return;
+    const target = host.planePoint(2 * c.x - x, 2 * c.y - y, p.mthrough);
+    if (target) emit({ type: 'grabMove', slot: p.mslot, target });
+  }
+
+  function moveBody(p: Ptr, x: number, y: number, shift: boolean): void {
     if (p.mode === 'press') {
       if (Math.hypot(x - p.sx, y - p.sy) <= cfg.slopPx) return;
       const hit = p.hit!;
@@ -164,6 +220,7 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
         emit({ type: 'gesture', kind: 'pull', pointer: p.id, slot: p.slot });
         emit({ type: 'fingerUp', slot: p.slot, why: 'pull' });
         emit({ type: 'grab', slot: p.slot, vertex: hit.vertex, target: host.planePoint(x, y, hit.point) ?? hit.point });
+        if (shift) startMirror(p, x, y);   // Shift is read here and nowhere else: a gesture never changes mode midway
       } else {
         p.mode = 'rub';
         emit({ type: 'gesture', kind: 'rub', pointer: p.id, slot: p.slot });
@@ -178,13 +235,17 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
     } else if (p.mode === 'pull') {
       const target = host.planePoint(x, y, p.hit!.point);
       if (target) emit({ type: 'grabMove', slot: p.slot, target });
+      moveMirror(p, x, y);
     }
   }
 
   function releasePtr(p: Ptr, cancelled: boolean): void {
     if (p.kind === 'body') {
-      if (p.mode === 'pull') emit({ type: 'grabRelease', slot: p.slot, why: cancelled ? 'cancel' : 'up' });
-      else {
+      if (p.mode === 'pull') {
+        const why = cancelled ? 'cancel' : 'up';
+        emit({ type: 'grabRelease', slot: p.slot, why });
+        if (p.mslot !== -1) emit({ type: 'grabRelease', slot: p.mslot, why });   // a Shift pull lets go of both hands, exactly once each
+      } else {
         if (!cancelled && p.mode === 'press' && !p.squish) emit({ type: 'gesture', kind: 'tap', pointer: p.id, slot: p.slot });
         emit({ type: 'fingerUp', slot: p.slot, why: cancelled ? 'cancel' : p.mode === 'press' && !p.squish ? 'tap' : 'release' });
       }
@@ -200,7 +261,7 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
       if (!finite(s)) return;
       const dup = ptrs.get(s.id);
       if (dup) releasePtr(dup, true); // a missed pointerup: clean up, then start over
-      const base = { id: s.id, x: s.x, y: s.y, sx: s.x, sy: s.y, t0: s.t, tLast: s.t, squish: false, pressure: 0, orbitAnnounced: false };
+      const base = { id: s.id, x: s.x, y: s.y, sx: s.x, sy: s.y, t0: s.t, tLast: s.t, squish: false, pressure: 0, orbitAnnounced: false, mslot: -1 as Slot | -1, mthrough: null as V3 | null };
       const button = s.button ?? 0;
       const hit = button === 0 ? host.hitTest(s.x, s.y) : null;
       if (hit) {
@@ -249,7 +310,7 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
       }
       if (p.kind !== 'body') return;
       tickBody(p, s.t);
-      moveBody(p, s.x, s.y);
+      moveBody(p, s.x, s.y, s.shift === true);
     },
 
     pointerUp(s) {
@@ -258,7 +319,7 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
       if (finite(s)) {
         if (p.kind === 'body') {
           tickBody(p, s.t);
-          if (Math.hypot(s.x - p.x, s.y - p.y) >= 0.5) { p.x = s.x; p.y = s.y; moveBody(p, s.x, s.y); }
+          if (Math.hypot(s.x - p.x, s.y - p.y) >= 0.5) { p.x = s.x; p.y = s.y; moveBody(p, s.x, s.y, s.shift === true); }
         }
       }
       releasePtr(p, false);
@@ -289,7 +350,7 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
     isActive: (id) => ptrs.has(id),
     activeCount: () => ptrs.size,
     snapshot: () => [...ptrs.values()].map((p) => ({
-      id: p.id, kind: p.kind, mode: p.mode, slot: p.kind === 'body' ? p.slot : -1, squishing: p.squish, pressure: p.pressure,
+      id: p.id, kind: p.kind, mode: p.mode, slot: p.kind === 'body' ? p.slot : -1, squishing: p.squish, pressure: p.pressure, mirror: p.mslot,
     })),
   };
 }

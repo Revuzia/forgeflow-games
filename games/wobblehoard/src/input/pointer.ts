@@ -19,22 +19,25 @@ export function attachPointerInput(canvas: HTMLCanvasElement, app: PointerGlueAp
     return { x: e.clientX - r.left, y: e.clientY - r.top };
   };
   const ptype = (e: PointerEvent): 'mouse' | 'touch' | 'pen' => (e.pointerType === 'pen' ? 'pen' : e.pointerType === 'touch' ? 'touch' : 'mouse');
+  /** Shift pulls both sides (gestures.ts SHIFT): read from mouse and pen events only. A touch never carries it (a finger has no modifier,
+   *  and a phone with a keyboard attached must not make a two-finger gesture out of one). Spread into the sample: absent unless held. */
+  const shiftOf = (e: PointerEvent): { shift?: true } => (e.shiftKey && ptype(e) !== 'touch' ? { shift: true } : {});
 
   on<PointerEvent>(canvas, 'pointerdown', (e) => {
     if (e.pointerType === 'mouse' && e.button > 2) return;
     e.preventDefault();
     try { canvas.setPointerCapture(e.pointerId); } catch { /* the pointer vanished already: harmless */ }
     const p = local(e);
-    app.input.pointerDown({ id: e.pointerId, x: p.x, y: p.y, t: e.timeStamp, button: e.pointerType === 'mouse' ? e.button : 0, type: ptype(e) });
+    app.input.pointerDown({ id: e.pointerId, x: p.x, y: p.y, t: e.timeStamp, button: e.pointerType === 'mouse' ? e.button : 0, type: ptype(e), ...shiftOf(e) });
   });
 
   on<PointerEvent>(canvas, 'pointermove', (e) => {
     const p = local(e);
     if (app.input.isDown(e.pointerId)) {
       // a mouse button released outside the window or over a menu: we never got the pointerup, so end the press now
-      if (e.pointerType === 'mouse' && e.buttons === 0) { app.input.pointerUp({ id: e.pointerId, x: p.x, y: p.y, t: e.timeStamp, type: 'mouse' }); return; }
+      if (e.pointerType === 'mouse' && e.buttons === 0) { app.input.pointerUp({ id: e.pointerId, x: p.x, y: p.y, t: e.timeStamp, type: 'mouse', ...shiftOf(e) }); return; }
       e.preventDefault();
-      app.input.pointerMove({ id: e.pointerId, x: p.x, y: p.y, t: e.timeStamp, type: ptype(e) });
+      app.input.pointerMove({ id: e.pointerId, x: p.x, y: p.y, t: e.timeStamp, type: ptype(e), ...shiftOf(e) });
     } else if (e.pointerType === 'mouse' || e.pointerType === 'pen') {
       app.input.hover(p.x, p.y);
     }
@@ -42,7 +45,7 @@ export function attachPointerInput(canvas: HTMLCanvasElement, app: PointerGlueAp
 
   const up = (e: PointerEvent): void => {
     const p = local(e);
-    app.input.pointerUp({ id: e.pointerId, x: p.x, y: p.y, t: e.timeStamp, type: ptype(e) });
+    app.input.pointerUp({ id: e.pointerId, x: p.x, y: p.y, t: e.timeStamp, type: ptype(e), ...shiftOf(e) });
     app.unlockAudio(); // pointerup counts as a user gesture on desktop browsers; iOS needs touchend/click (see lifecycle.ts)
   };
   on<PointerEvent>(canvas, 'pointerup', up);

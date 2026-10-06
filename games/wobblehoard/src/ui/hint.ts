@@ -19,9 +19,12 @@ export function createHintController(idleMs: number = HINT_IDLE_MS): HintControl
 }
 
 /** Wording per input style. One line, plain words, ONE wording for the pull everywhere ("drag out to stretch": press on the squishy,
- *  then drag away from it). The keyboard line appears once a key has been used (audit finding 17). */
+ *  then drag away from it). The keyboard line appears once a key has been used (audit finding 17). The pointer line (a mouse or pen, never
+ *  a touch screen) adds the Shift pull (src/input/gestures.ts SHIFT: Shift + drag pulls both sides at once, the way two fingers do on a
+ *  phone). Pressing Shift alone does not count as a key used (keyboard.ts ignores it), so the line stays while someone holds Shift to drag.
+ *  Taps pay nothing now (owner decision 2026-10-06): the lines name what to DO, never what it earns. */
 export const HINT_TEXT = {
   touch: 'Tap to poke · hold to squish · drag out to stretch',
-  pointer: 'Click to poke · hold to squish · drag out to stretch',
+  pointer: 'Click to poke · hold to squish · drag out to stretch · Shift + drag pulls both sides',
   keyboard: 'Space to poke · hold Space to squish · arrows look around',
 } as const;
