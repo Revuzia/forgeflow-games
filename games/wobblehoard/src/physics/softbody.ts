@@ -161,7 +161,7 @@ const BOB_AMP = 0.03, BOB_HZ = 0.33;
 /** Give law exponent: depth ~ smOmega^GIVE_EXP, from deriveParams' own squashDepth 0.66 -> 0.34 over smOmega 12 -> 40 (see the constructor). */
 const GIVE_EXP = Math.log(0.34 / 0.66) / Math.log(40 / 12);
 /** Supported-body gravity is withdrawn while the centre of mass rises faster than RISE_V0 (fully at RISE_V1), m/s (see substep). */
-const RISE_V0 = 0.4, RISE_V1 = 0.8;
+const RISE_V0 = 0.05, RISE_V1 = 0.25;
 /** Seconds the table edges stay in the contact fold limit after the last finger, grab or pinned foot let go (the release transient). */
 const TABLE_FOLD_AFTER = 1.5;
 /** A triangle near a contact whose opposite vertex comes closer than SLIVER x its rest height to the edge is put back open (foldLimit). */
@@ -333,7 +333,6 @@ export class SoftBody implements SoftBodyLike {
   private readonly memOn: boolean;          // memory arm (P2)
   private readonly wm: number;              // share of the shape stiffness that relaxes: memStiff / (1 + memStiff)
   private readonly MEM: Float64Array;       // memory shape (rest frame, centred like Q)
-  private readonly MEMD: Float64Array;      // memoryStep scratch: this frame's flow of the memory, before smoothing
   private readonly plasticOn: boolean;      // memory with a yield: the edge rest lengths follow the memory (plastic set)
   private readonly sloshOn: boolean;        // slosh mode (P5)
   private slx = 0; private sly = 0; private slz = 0; private slvx = 0; private slvy = 0; private slvz = 0;
@@ -343,6 +342,7 @@ export class SoftBody implements SoftBodyLike {
   // ---- goal shape: the shape matching, the Laplacian and (when it changes size) the edges aim at QG instead of Q
   private goalOn = false;
   private readonly QG: Float64Array;
+  private readonly QGN: Float64Array;       // the goal without the tremble (what the skin's rest lengths follow; frameUpdate)
   private readonly LQG: Float64Array;
   private readonly QS: Float64Array;        // the equal-volume sphere (setFold's target), rest frame
   private readonly NRM: Float64Array;       // unit rest direction of each particle from the rest centre (tremble, slosh, burst)
@@ -576,8 +576,8 @@ export class SoftBody implements SoftBodyLike {
     this.plasticOn = this.memOn && mt0.memYield > 0;
     this.sloshOn = mt0.sloshMass > 0.01;
     this.MEM = Float64Array.from(Q);
-    this.MEMD = new Float64Array(n * 3);
     this.QG = Float64Array.from(Q);
+    this.QGN = Float64Array.from(Q);
     this.LQG = Float64Array.from(this.LQ);
     this.EL0 = Float64Array.from(this.EL);
     this.HD0 = Float64Array.from(this.HD);
@@ -1442,7 +1442,7 @@ export class SoftBody implements SoftBodyLike {
     if (this.gravityOn) {
       // ... but only the weight of a body that is NOT lifting itself off the table: the table can push, never pull, so while the centre of
       // mass rises (a squeezed body springing back) true gravity acts on it, as on any real body (see RISE_V0)
-      const ru = Math.min(1, Math.max(0, (this.vcy - RISE_V0) / (RISE_V1 - RISE_V0)));
+      const ru = Math.min(1, Math.max(0, (this.vcy - RISE_V0) / (RISE_V1 - RISE_V0))) * (this.cy > this.restCenterY ? 1 : 0);
       ay = -GRAVITY * (1 - this.supp * (1 - ru * ru * (3 - 2 * ru)));
     } else {
       // float mode: weak hover spring on the centre of mass (stiffer while a finger or a lobe holds it) + slow bob
@@ -1848,7 +1848,7 @@ export class SoftBody implements SoftBodyLike {
       return;
     }
     // QG = (Q + fold (QS - Q) + wm (MEM - Q)) x (1 + burst) + tremble along the rest normal
-    const QG = this.QG, QS = this.QS, MEM = this.MEM, NRM = this.NRM, wm = this.wm, sc = 1 + bo, TPH = this.TPH;
+    const QG = this.QG, QGN = this.QGN, QS = this.QS, MEM = this.MEM, NRM = this.NRM, wm = this.wm, sc = 1 + bo, TPH = this.TPH;
     const ph = 2 * Math.PI * TREMBLE_HZ * this.simTime;
     for (let i = 0; i < n; i++) {
       const i3 = i * 3, qx = Q[i3], qy = Q[i3 + 1], qz = Q[i3 + 2];
@@ -1856,6 +1856,7 @@ export class SoftBody implements SoftBodyLike {
       let y = qy + fd * (QS[i3 + 1] - qy) + wm * (MEM[i3 + 1] - qy);
       let z = qz + fd * (QS[i3 + 2] - qz) + wm * (MEM[i3 + 2] - qz);
       x *= sc; y *= sc; z *= sc;
+      QGN[i3] = x; QGN[i3 + 1] = y; QGN[i3 + 2] = z;
       if (ta > 0) { const o = ta * Math.sin(ph + TPH[i]); x += NRM[i3] * o; y += NRM[i3 + 1] * o; z += NRM[i3 + 2] * o; }
       QG[i3] = x; QG[i3 + 1] = y; QG[i3 + 2] = z;
     }
@@ -1868,18 +1869,19 @@ export class SoftBody implements SoftBodyLike {
     }
     this.goalOn = true;
     // the skin's rest lengths follow the goal when it changes size or shape for good (fold, burst, a plastic set); the tremble and the
-    // purely viscoelastic arm leave them alone
+    // purely viscoelastic arm leave them alone (they follow QGN, the goal without the tremble: physics round-2 fix round, MINOR-11, the
+    // plastic families' rest lengths used to follow the 17 Hz tremble)
     if (fd > 0 || bo > 0 || this.plasticOn) {
       const E3 = this.E3, EL = this.EL, ES = this.ESOFT, ss = this.p.edgeSoftStrain;
       for (let e = 0; e < this.ne; e++) {
         const a = E3[e * 2], b = E3[e * 2 + 1];
-        const l = Math.sqrt((QG[a] - QG[b]) ** 2 + (QG[a + 1] - QG[b + 1]) ** 2 + (QG[a + 2] - QG[b + 2]) ** 2);
+        const l = Math.sqrt((QGN[a] - QGN[b]) ** 2 + (QGN[a + 1] - QGN[b + 1]) ** 2 + (QGN[a + 2] - QGN[b + 2]) ** 2);
         EL[e] = l; ES[e] = l * ss;
       }
       const H3 = this.H3, HD = this.HD;
       for (let hh = 0; hh < this.nh; hh++) {
         const c = H3[hh * 2], d = H3[hh * 2 + 1];
-        HD[hh] = Math.sqrt((QG[c] - QG[d]) ** 2 + (QG[c + 1] - QG[d + 1]) ** 2 + (QG[c + 2] - QG[d + 2]) ** 2);
+        HD[hh] = Math.sqrt((QGN[c] - QGN[d]) ** 2 + (QGN[c + 1] - QGN[d + 1]) ** 2 + (QGN[c + 2] - QGN[d + 2]) ** 2);
       }
       this.edgesBent = true;
     } else if (this.edgesBent) this.restoreEdges();
@@ -1898,7 +1900,7 @@ export class SoftBody implements SoftBodyLike {
    * true rest shape (memHealTau), never strays further than memMax R0, and keeps its centre on the rest centre (no momentum). Once per frame.
    */
   private memoryStep(nsub: number): void {
-    const mt = this.mat, h = nsub * H, n = this.n, X = this.X, M = this.M, Q = this.Q, MEM = this.MEM, D = this.MEMD, R0 = this.restRadius;
+    const mt = this.mat, h = nsub * H, n = this.n, X = this.X, M = this.M, Q = this.Q, MEM = this.MEM, R0 = this.restRadius;
     const kFlow = 1 - Math.exp(-h / mt.memTau), kHeal = mt.memHealTau < 59 ? 1 - Math.exp(-h / mt.memHealTau) : 0;
     const yl = mt.memYield * R0, maxD = mt.memMax * R0;
     // the ceremony's own goal offset (fold, burst; physics round-2 fix round, MINOR-6/13): the body is MADE to take that shape, it is not a
@@ -1912,25 +1914,14 @@ export class SoftBody implements SoftBodyLike {
     const r00 = 1 - 2 * (qy * qy + qz * qz), r01 = 2 * (qx * qy - qw * qz), r02 = 2 * (qx * qz + qw * qy);
     const r10 = 2 * (qx * qy + qw * qz), r11 = 1 - 2 * (qx * qx + qz * qz), r12 = 2 * (qy * qz - qw * qx);
     const r20 = 2 * (qx * qz - qw * qy), r21 = 2 * (qy * qz + qw * qx), r22 = 1 - 2 * (qx * qx + qy * qy);
-    // 1. this frame's flow toward the current shape (beyond the yield)
+    let ox = 0, oy = 0, oz = 0;
     for (let i = 0; i < n; i++) {
       const i3 = i * 3, dx = X[i3] - cx, dy = X[i3 + 1] - cy, dz = X[i3 + 2] - cz;
       const gx = ((Q[i3] + fd * (QS[i3] - Q[i3])) * sc - Q[i3]), gy = ((Q[i3 + 1] + fd * (QS[i3 + 1] - Q[i3 + 1])) * sc - Q[i3 + 1]), gz = ((Q[i3 + 2] + fd * (QS[i3 + 2] - Q[i3 + 2])) * sc - Q[i3 + 2]);
       const px = r00 * dx + r10 * dy + r20 * dz - gx, py = r01 * dx + r11 * dy + r21 * dz - gy, pz = r02 * dx + r12 * dy + r22 * dz - gz;
-      const ex = px - MEM[i3], ey = py - MEM[i3 + 1], ez = pz - MEM[i3 + 2], len = Math.sqrt(ex * ex + ey * ey + ez * ez), excess = len - yl;
-      const k = excess > 0 && len > 1e-12 ? kFlow * excess / len : 0;
-      D[i3] = ex * k; D[i3 + 1] = ey * k; D[i3 + 2] = ez * k;
-    }
-    // 2. ... low-passed over each particle's ring (half its own, half its neighbours' mean): a dent flows in whole, but the mesh-scale
-    // zigzag of a crease the skin made under a rubbing tip is not remembered (physics round-2 fix round, MAJOR-1: putty and slime kept the
-    // crease of a rub as their plastic rest, fossilo 139 degrees 2.3 s after the lift); then healing, the reach limit and no momentum
-    const st = this.nbrStart, nb = this.nbrIdx, ni = this.nbrInv;
-    let ox = 0, oy = 0, oz = 0;
-    for (let i = 0; i < n; i++) {
-      let ax = 0, ay = 0, az = 0;
-      for (let j = st[i], e = st[i + 1]; j < e; j++) { const k3 = nb[j] * 3; ax += D[k3]; ay += D[k3 + 1]; az += D[k3 + 2]; }
-      const inv = ni[i], i3 = i * 3, on = D[i3] !== 0 || D[i3 + 1] !== 0 || D[i3 + 2] !== 0 ? 0.5 : 0;   // only where it flows (the yield holds)
-      let mx = MEM[i3] + D[i3], my = MEM[i3 + 1] + D[i3 + 1], mz = MEM[i3 + 2] + D[i3 + 2];
+      let mx = MEM[i3], my = MEM[i3 + 1], mz = MEM[i3 + 2];
+      const ex = px - mx, ey = py - my, ez = pz - mz, len = Math.sqrt(ex * ex + ey * ey + ez * ez), excess = len - yl;
+      if (excess > 0 && len > 1e-12) { const k = kFlow * excess / len; mx += ex * k; my += ey * k; mz += ez * k; }
       if (kHeal > 0) { mx += (Q[i3] - mx) * kHeal; my += (Q[i3 + 1] - my) * kHeal; mz += (Q[i3 + 2] - mz) * kHeal; }
       let fx = mx - Q[i3], fy = my - Q[i3 + 1], fz = mz - Q[i3 + 2];
       const fl = Math.sqrt(fx * fx + fy * fy + fz * fz);

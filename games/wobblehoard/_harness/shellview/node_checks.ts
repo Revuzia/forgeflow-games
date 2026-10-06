@@ -435,8 +435,9 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   for (let i = 0; i < 3; i++) {
     (r.app as unknown as { debug: { shell: { grant(n: number): boolean } } }).debug.shell.grant(1);
     await runAsync(300);
-    await r.app.capsules.openNext();
+    const op = r.app.capsules.openNext();   // resolves when its reveal ends: the stage must be stepped meanwhile
     await runAsync(3500);
+    await op;
   }
   const items = r.app.hoard.items();
   const cur = r.app.identity.itemId;

@@ -228,7 +228,8 @@ const EMISSIVE_STAGE = /* glsl */`
   vec3 jTd0 = vWPos - uTouch0.xyz, jTd1 = vWPos - uTouch1.xyz;
   float jTouch = uTouch0.w * exp(-dot(jTd0, jTd0) / (uTouchR * uTouchR)) + uTouch1.w * exp(-dot(jTd1, jTd1) / (uTouchR * uTouchR));
   jTouch = min(jTouch, 1.2);
-  jExtra += mix(uTouchCol, vec3(1.0, 0.95, 0.85), 0.35 * jTouch) * jTouch * (0.5 + 0.5 * jNdv) * 1.15;
+  // (kept apart from the jelly's own light: the low tier's deepen / saturate pass below must not recolour it, it is the same bloom on every tier)
+  vec3 jTouchE = mix(uTouchCol, vec3(1.0, 0.95, 0.85), 0.35 * jTouch) * jTouch * (0.5 + 0.5 * jNdv) * 1.15;
   jExtra += uTierCol * uTierAmt * (0.25 + 0.9 * jFres + 0.5 * jHalo);   // the tier "tell": light drifting toward the result colour
   jExtra += uMixCol * jMix * (0.16 + 0.3 * (1.0 - jFres));             // merge lineage: the other parents' colours swirl through as light
   totalEmissiveRadiance += jRim + jScat + jCore + jExtra;
@@ -246,6 +247,7 @@ const EMISSIVE_STAGE = /* glsl */`
     float jSpec = dot(totalSpecular, vec3(0.3333));
     diffuseColor.a = clamp(mix(uAlphaBase, 1.0, jFres) + jSpec * 0.45, 0.0, 1.0);
   #endif
+  totalEmissiveRadiance += jTouchE;
 }
 vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;
 `;
