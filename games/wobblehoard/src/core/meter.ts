@@ -29,7 +29,7 @@
 //                           to tell a gentle or a calm poke) and for the statistics, it stamps lastMs[0] and lastEventMs, and a hostile or
 //                           out-of-order time is refused as for any touch. It never reaches `recent` (so it cannot join a medley), never
 //                           touches the valve ledger, and never moves sp.
-//   squeeze-and-release     0.7 SP + 0.45 SP per second held (hold counted up to 3 s); a soft pop of +0.5 SP if held 1.8 s or more.
+//   squeeze-and-release     0.7 SP + 0.6 SP per second held (hold counted up to 3 s); a soft pop of +0.5 SP if held 1.8 s or more.
 //                           A "squeeze" held under 0.4 s is a tap (SoftEvent mapping, DESIGN 5.4) and pays 0: 0.39 s pays nothing, 0.41 s pays.
 //   pull-and-let-go (snap)  stretch-and-hold pays per second held, like a squeeze: pullBase + pullPerSecond per second held (hold counted up
 //                           to 3 s), when the pull stretched (snap intensity 0.35 or more); pullFail flat, whatever the hold, if it never
@@ -65,7 +65,8 @@ export const PAY = {
   /** A tap pays nothing (owner decision 2026-10-06, "short taps pay nothing"; it paid 0.8 SP before). Read by the sim and the docs, never raised. */
   poke: 0,
   squeezeBase: 0.7,
-  squeezePerSecond: 0.45,
+  /** 0.6 SP per second held (it was 0.45 until the 2026-10-06 "short taps pay nothing" decision: with taps free, the squeeze and the stretch carry the whole pace; see the header). */
+  squeezePerSecond: 0.6,
   /** A squeeze counts at most this many seconds of hold. */
   squeezeHoldCapSeconds: 3,
   softPop: 0.5,
@@ -75,7 +76,8 @@ export const PAY = {
   minSqueezeHoldSeconds: 0.4,
   /** A pull that stretched (snap intensity >= pullFullIntensity) pays pullBase + pullPerSecond x its hold (Interaction.heldS). */
   pullBase: 1.0,
-  pullPerSecond: 0.55,
+  /** 0.65 SP per second held (it was 0.55; re-tuned together with squeezePerSecond, same reason). */
+  pullPerSecond: 0.65,
   /** A pull counts at most this many seconds of hold (the same cap as a squeeze). */
   pullHoldCapSeconds: 3,
   /** @deprecated Until 2026-10-06 a stretched pull paid this flat. It is now the pull BASE (= pullBase); read pullBase and pullPerSecond. */

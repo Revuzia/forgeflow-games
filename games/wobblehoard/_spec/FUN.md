@@ -23,19 +23,32 @@ poke, squish, stretch, as today. Picking a tool changes what a touch does until 
 
 ## 2. XP (the meter) for every way of playing
 
-Owner direction, 2026-10-06: every touch should visibly earn a little, and holding should earn more the longer you hold.
+Owner direction, 2026-10-06, in two steps. First: every touch should visibly earn a little, and holding should earn more the longer
+you hold. Later the same day the owner decided, and said it was final: **short taps pay nothing.** Taps are free play; holds and
+stretches earn. That reverses point 1 as it was first written ("a quick poke always earns a little"); points 2 to 5 stand, with
+their numbers re-tuned for it (`DESIGN.md` 5.4).
 
-1. **A quick poke always earns a little.** Ordinary tapping (two or three taps a second) pays a small, visible amount. Machine-speed
-   mashing is still capped by the per-minute valve and the daily cap.
-2. **Holding earns while you hold.** A squeeze already pays per second held; a stretch held out now does too, the same way (up to
-   the same cap). While you hold, the meter ring shows a lighter **pending arc** that grows in real time and banks when you let go.
-3. **Every gain is visible.** Each paying touch sends a few sparks from the touch point into the meter ring; the ring fills with a
-   short ease. Calm effects replace the sparks with a soft glow on the ring.
-4. **Pace stays the same.** A capsule still takes about 3 to 4 minutes of active play. The pay values are re-tuned with the economy
-   simulation (`_harness/sim_economy.ts`), and `DESIGN.md` 5.4 is updated with the new numbers. MERGE_COST stays 2 unless the
-   simulated pace leaves that band.
-5. **Activities pay through the same touch kinds.** A toss pays like a pull; a stamp or a roll pays like a squeeze; cutting,
-   reconnecting, stacking and taking photos pay nothing extra.
+1. **Taps are free play.** A tap on the squishy (a quick poke, or a squeeze let go before 0.4 s) pays no squish points, sends no
+   sparks to the meter ring and does not move it, at any speed and however many. It is still a touch: the squishy still wobbles and
+   sounds, and it still counts for the statistics and for the daily tasks that ask for pokes. A touchscreen gives no force reading,
+   so there is no "light" or "hard" tap: every tap pays nothing. Earning takes a hold or a stretch.
+2. **Holding earns while you hold.** A squeeze held 0.4 s or more pays per second held (0.7 SP + 0.6 SP a second, up to 3 s, and a
+   soft pop at 1.8 s); a stretch held out pays per second held the same way (1.0 SP + 0.65 SP a second, up to the same cap). While
+   you hold, the meter ring shows a lighter **pending arc** that grows in real time and banks when you let go. Machine-speed
+   squeezing or stretching is still capped by the freshness rule, the per-minute valve and the daily cap.
+3. **Every gain is visible.** Each paying touch (a squeeze held 0.4 s or more, a stretch) sends a few sparks from the touch point
+   into the meter ring; the ring fills with a short ease. Calm effects replace the sparks with a soft glow on the ring. A tap
+   sends none: nothing was paid, so nothing is shown.
+4. **Pace stays the same.** A capsule still takes about 3 to 4 minutes of active play for a player who squeezes, stretches and mixes
+   them (3.2 to 3.7 minutes in the simulation). The squeeze and stretch pay values were re-tuned with the economy simulation
+   (`_harness/sim_economy.ts`) to make up for the taps that no longer pay, and `DESIGN.md` 5.4 is updated with the new numbers.
+   MERGE_COST stays 2 unless the simulated pace leaves its band. A player who only taps now earns nothing: that is the owner's
+   decision, and `DESIGN.md` 5.4 reports what it does to the population pace.
+5. **Activities pay through the same touch kinds.** A toss pays like a pull; a stamp or a roll pays like a squeeze (a tap-length
+   one pays nothing, like any tap); cutting, reconnecting, stacking and taking photos pay nothing extra.
+6. **The medley is a squeeze and a stretch.** The +2 SP variety bonus used to need three different kinds within 12 s, a poke among
+   them. A free tap must not unlock a paid bonus, so it is now a squeeze and a stretch within 12 s (a tap neither joins nor
+   completes it). The owner can veto this rule (`_handoff/reports/ECON_NOTAP.md`).
 
 ## 3. Build order
 

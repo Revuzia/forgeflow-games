@@ -1,7 +1,9 @@
 // WOBBLEHOARD meter feed (_spec/COLLECTION.md 9.7, 7.5; _spec/DESIGN.md 5.4): SoftEvent -> touch, the play-batch builder, the preview meter.
 //
 //   mapSoftEvent(ev, out)        the DESIGN 5.4 mapping, allocation-free:
-//                                  poke                          -> poke
+//                                  poke                          -> poke (a TAP: it is still a touch for the Tasks panel and the
+//                                                                   statistics, but the meter pays it nothing: owner decision 2026-10-06,
+//                                                                   "short taps pay nothing")
 //                                  release with heldFor >= 0.4 s -> squeeze, amount = heldFor (0..10 s)
 //                                  snap                          -> pull, amount = intensity (the pull level, 0..1), heldS = heldFor
 //                                                                   (0..10 s, the seconds the pull was held); the meter pays per

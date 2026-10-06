@@ -458,7 +458,7 @@ section('C  COLLECTION.md section 11 (practice ledger)');
       const dc = a.playCredits - b.playCredits;
       return dc > 0 ? b.threshold - b.sp + a.sp + (dc - 1) * a.threshold : a.sp - b.sp;
     };
-    let n = 0, mism = 0, worst = 0, paid = 0, zeroFull = 0, zeroShort = 0, zeroNoSnap = 0, pulls = 0, medley = 0, opened = 0, fulls = 0;
+    let n = 0, mism = 0, worst = 0, paid = 0, zeroFull = 0, zeroShort = 0, zeroNoSnap = 0, pulls = 0, medley = 0, opened = 0, fulls = 0, pokes = 0, pokePaid = 0;
     for (let i = 0; i < 900; i++) {
       T += pr() < 0.5 ? 250 + Math.floor(pr() * 600) : 600 + Math.floor(pr() * 3500);
       const k = Math.floor(pr() * 3);
@@ -475,15 +475,41 @@ section('C  COLLECTION.md section 11 (practice ledger)');
       const g = gain(b0, a0);
       if (Math.abs(g - p) > 1e-9) { mism++; worst = Math.max(worst, Math.abs(g - p)); }
       n++; if (p > 0) paid++; if (k === 2 && p > 0) pulls++;
+      if (k === 0) { pokes++; if (p !== 0 || g !== 0) pokePaid++; }   // a tap pays nothing: its preview is 0 and so is what feed then credits
       if (b0.tableFull) { fulls++; if (p === 0) zeroFull++; }
       if (k === 1 && held < 0.4 && p === 0) zeroShort++;
       if (p > 2.7) medley++;
       if (a0.playCredits >= WH_QUEUE_MAX && pr() < 0.05) { while (cp.meter().playCredits > 0) { void cp.openCapsule(); opened++; } }
     }
     off();
-    check('C08', 'previewTouch(kind, heldS, level) equals what the touch then pays through feed (pending arc = banked SP), over 900 touches with capsules, medleys, a full table and short squeezes',
-      mism === 0 && n > 700 && paid > 500 && pulls > 100 && zeroFull > 5 && zeroFull === fulls && zeroShort > 5 && zeroNoSnap > 5 && medley > 5 && opened > 0,
-      `${n} fed, ${paid} paid, ${pulls} stretches, ${medley} with a medley, ${fulls} on a full table (all 0), ${zeroShort} short squeezes (0), ${zeroNoSnap} no-snap pulls (0), ${mism} mismatches (worst ${worst})`);
+    // RE-SPECIFIED (owner decision 2026-10-06, "short taps pay nothing"): a third of these touches are pokes, which pay nothing now, so the coverage guard "paid > 500" (of about 860 fed)
+    // became "paid > 400" (482 paid); the equality gate itself (preview = what feed pays, 0 mismatches) is unchanged, and it now also covers 0 for every tap (pokes, pokePaid below)
+    check('C08', 'previewTouch(kind, heldS, level) equals what the touch then pays through feed (pending arc = banked SP), over 900 touches with capsules, medleys, a full table and short squeezes; a tap (poke, squeeze under 0.4 s) previews 0 and feed credits 0',
+      mism === 0 && n > 700 && paid > 400 && pulls > 100 && zeroFull > 5 && zeroFull === fulls && zeroShort > 5 && zeroNoSnap > 5 && medley > 5 && opened > 0 && pokes > 200 && pokePaid === 0,
+      `${n} fed, ${paid} paid, ${pulls} stretches, ${medley} with a medley, ${fulls} on a full table (all 0), ${zeroShort} short squeezes (0), ${zeroNoSnap} no-snap pulls (0), ${pokes} pokes (${pokePaid} paid), ${mism} mismatches (worst ${worst})`);
+    // OWNER DECISION: previewTouch('poke') is 0, always: any state of the meter, fresh or not, resting, with SP banked, and for the object form
+    {
+      const pm = memoryStorage(); const cq = mk(pm, 83); T += 3000;
+      const pokeZero: number[] = [];
+      for (let i = 0; i < 40; i++) { T += i % 3 === 0 ? 5000 : 400; pokeZero.push(cq.previewTouch!('poke', 0, 0), cq.previewTouch!('poke', 3, 1), cq.previewTouch!('poke', NaN, NaN), (cq.previewTouch as unknown as (q: unknown) => number)({ kind: 'poke', heldS: 2, level: 1 })); if (i % 4 === 0) cq.feed(ev('release', 0.5, 1.5), T); }
+      check('C08', "previewTouch('poke', ...) is 0 whatever the arguments, the freshness (400 ms or 5 s after anything) and the meter's state (40 calls x 4 forms, with squeezes banked in between), and so is a squeeze under 0.4 s",
+        pokeZero.every((v) => v === 0) && cq.previewTouch!('squeeze', 0.39, 0) === 0 && cq.previewTouch!('squeeze', 0.4, 0) > 0 && cq.meter().sp > 0, `${pokeZero.length} poke previews, meter ${cq.meter().sp.toFixed(2)} SP`);
+      cq.dispose();
+    }
+    // OWNER DECISION: a flood of taps fed through the collection pays nothing: no SP, no ring move, no capsule, no event but the change notifications
+    {
+      T += 10_000;
+      const cf = mk(memoryStorage(), 84);
+      const m0 = cf.meter(), before = JSON.stringify(m0);
+      const evs: string[] = []; const offE = cf.onEvent((e) => evs.push(e.type));
+      for (let i = 0; i < 1000; i++) { T += i % 5 === 0 ? 30 : 250 + (i * 13) % 700; cf.feed(ev('poke'), T); }
+      const m1 = cf.meter();
+      check('C08', 'a flood of 1000 pokes fed through the collection pays nothing: the meter view (sp, fill, credits) is exactly as it was, no capsule and no event (a tap is free play)',
+        JSON.stringify(m1) === before && m1.sp === 0 && m1.fill === 0 && m1.credits === m0.credits && evs.length === 0, `sp ${m1.sp}, fill ${m1.fill}, events [${evs.join()}]`);
+      T += 4000; cf.feed(ev('release', 0.5, 1.2), T);
+      check('C08', 'the same meter pays the first held squeeze after the flood in full (a tap flood leaves nothing behind: the squeeze pays 0.7 + 0.6 x 1.2 = 1.42 SP)', Math.abs(cf.meter().sp - 1.42) < 1e-9, `sp ${cf.meter().sp}`);
+      offE(); cf.dispose();
+    }
     // allocations: a warmed-up per-frame call (two held fingers), measured like P09. The holds and levels come from a prepared list of
     // numbers (a tagged array: the sentinel string keeps its elements boxed), so this counts previewTouch's own allocations; a caller that
     // passes a freshly computed fraction boxes that argument itself, as any JS call does
@@ -506,7 +532,7 @@ section('C  COLLECTION.md section 11 (practice ledger)');
     // a stretch held out: the pending arc grows with the hold, then stops at the cap
     const arc = [0.2, 0.6, 1, 2, 3, 4].map((h) => pt('pull', h, 0.9));
     const sq = [0.3, 0.5, 1, 1.79, 1.8, 3, 5].map((h) => pt('squeeze', h, 0));
-    check('C08', 'the pending arc grows while held: a stretch from its base by 0.55 SP a second up to 3 s, a squeeze from 0.4 s by 0.45 a second with the soft pop at 1.8 s (x freshness), then flat',
+    check('C08', 'the pending arc grows while held: a stretch from its base by 0.65 SP a second up to 3 s, a squeeze from 0.4 s by 0.6 a second with the soft pop at 1.8 s (x freshness), then flat',
       arc.every((v, i) => i === 0 || v > arc[i - 1] || (i >= 5 && v === arc[i - 1])) && sq[0] === 0 && sq.slice(1, 6).every((v, i) => v > sq[i]) && sq[6] === sq[5] && sq[4] - sq[3] > 0.4 * sq[4] / 2.65,
       `stretch ${arc.map((v) => v.toFixed(2)).join('/')}, squeeze ${sq.map((v) => v.toFixed(2)).join('/')}`);
     cp.dispose();

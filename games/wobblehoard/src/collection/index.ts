@@ -202,9 +202,11 @@ export function createCollection(deps: CollectionDeps): Collection {
     const s = store.save;
     if (s.ghostCapsules >= WH_QUEUE_MAX) return; // table full: the meter does not move
     const hold = typeof h === 'number' && h > 0 && h !== Infinity ? h : 0; // NaN, infinite, negative, missing -> 0 (as mapSoftEvent)
-    if (k === 'poke') { pv.kind = 'poke'; pv.amount = 0; pv.heldS = 0; }
+    // A tap pays nothing (owner decision 2026-10-06, "short taps pay nothing"): a poke previews 0, and so does a squeeze that would be
+    // released under 0.4 s (that release is a tap too). The meter says the same (computePay), this just skips the work.
+    if (k === 'poke') return;
     else if (k === 'squeeze') {
-      if (!(hold >= RELEASE_SQUEEZE_MIN_S)) return; // that release would not be a squeeze (the contact's poke already paid)
+      if (!(hold >= RELEASE_SQUEEZE_MIN_S)) return; // that release would not be a squeeze: it is a tap, which pays 0
       pv.kind = 'squeeze'; pv.amount = hold > MAX_SQUEEZE_SECONDS ? MAX_SQUEEZE_SECONDS : hold; pv.heldS = 0;
     } else if (k === 'pull') {
       const lv = typeof l === 'number' && l > 0 ? (l > 1 ? 1 : l) : 0;

@@ -84,7 +84,8 @@ export interface DebugOptions {
   skew?: { ms: number };
 }
 
-const POKE: SoftEvent = { kind: 'poke', at: { x: 0, y: 0.5, z: 0.5 }, normal: { x: 0, y: 0, z: 1 }, intensity: 0.5, heldFor: 0, finger: 0 };
+/** A squeeze held 1.2 s and released: what the dev meter accelerator feeds. (It fed a poke until the owner decision of 2026-10-06: a tap pays nothing now, so a poke cannot fill the meter.) */
+const SQUEEZE: SoftEvent = { kind: 'release', at: { x: 0, y: 0.5, z: 0.5 }, normal: { x: 0, y: 0, z: 1 }, intensity: 0.5, heldFor: 1.2, finger: 0 };
 
 export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: ShellDebugHook; lab: LabApi } {
   const { audio } = game;
@@ -155,8 +156,8 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       for (let i = 0; i < 600; i++) {
         const m = game.collection.meter();
         if (m.credits > c0 || m.tableFull || m.fill >= goal) break;
-        skew.ms += 2000;   // 2 s between pokes: full freshness, under the 40 SP/min valve
-        game.collection.feed(POKE, Date.now() + skew.ms);
+        skew.ms += 3000;   // 3 s between squeezes (held 1.2 s): full freshness (tau 2.4 s), about 28 SP/min, under the 40 SP/min valve
+        game.collection.feed(SQUEEZE, Date.now() + skew.ms);
       }
       return true;
     },

@@ -858,9 +858,13 @@ async function main() {
     });
 
     // ------------------------------------------------------------------------------------------------
-    // Visible XP (FUN.md 2, owner direction 2026-10-06): every paying touch sends sparks from the touch point into the meter ring, which
-    // then fills with a short ease; a held stretch shows a lighter PENDING arc that grows while it is held and banks on release; Calm
-    // effects shows no sparks (a soft glow on the ring instead).
+    // Visible XP (FUN.md 2, owner direction 2026-10-06): every PAYING touch sends sparks from the touch point into the meter ring, which
+    // then fills with a short ease; a held squeeze or stretch shows a lighter PENDING arc that grows while it is held and banks on release;
+    // Calm effects shows no sparks (a soft glow on the ring instead).
+    // OWNER DECISION 2026-10-06 ("short taps pay nothing", ECON_NOTAP): a TAP (a quick poke, a squeeze released under 0.4 s) pays NO squish points:
+    // no sparks, no glow, no pending arc, the ring does not move. The section below was RE-SPECIFIED for it (it used to poke and expect sparks and a
+    // ring move): the tap row says nothing happens, and the paying rows use a squeeze held 1.2 s (deterministic: sim stepped through the hook, like the
+    // stretch) where they used a poke. The stretch rows are unchanged. NOT RUN by the ECON_NOTAP engineer (no browser allowed): the SHELL-4 engineer runs it.
     // ------------------------------------------------------------------------------------------------
     await section('xp', async () => {
       const { page, context, w } = await open({ query: '?dev=1' });
@@ -877,26 +881,35 @@ async function main() {
           fill: window.__WH__.shell.meter().fill, source: window.__WH__.shell.xp?.().source ?? null,
         };
       });
-      // 1. one quick poke, real mouse
+      // a squeeze held for `frames` sim frames at the middle of the squishy, deterministic (sim paused and stepped through the hook, like the stretch below); the
+      // pending-arc length is sampled 4 times while it is held; the finger is let go after, and the sim stays paused (the caller resumes it)
+      const squeezeHold = (b, frames) => page.evaluate(async (b, frames) => {
+        const wh = window.__WH__; wh.pause();
+        const read = () => { const p = document.querySelector('.meter-pending'); return parseFloat((p.getAttribute('stroke-dasharray') || '0').split(/[ ,]+/)[0]); };
+        const yieldTask = () => new Promise((r) => setTimeout(r, 0));
+        wh.pointerDown(b.x, b.y - (0.3 * b.rPx) / innerHeight); wh.step(1 / 60, 8);
+        await yieldTask();
+        const samples = [];
+        for (let k = 0; k < 4; k++) { wh.step(1 / 60, Math.round(frames / 4)); await yieldTask(); samples.push(read()); }
+        const held = { samples, pressed: wh.state().metrics.fingers, pendOn: document.querySelector('.meter').dataset.pending };
+        wh.pointerUp();
+        for (let i = 0; i < 4; i++) { wh.step(1 / 60, 3); await yieldTask(); }
+        return held;
+      }, b, frames);
+      // 1. a quick TAP, real mouse: it pays nothing (the poke lands, audio.poke plays), so there are no sparks, no glow, no pending arc and the ring stays put
       const r0 = await ring();
       const B = await body(page); const vp = page.viewportSize();
+      const a0 = await started(page);
       await page.mouse.click(B.x * vp.width, B.y * vp.height - 0.3 * B.rPx);
-      const launched = await waitUntil(page, (n) => Number(document.querySelector('.sparks')?.dataset.launched ?? 0) > n, r0.sparks, 30000);
+      const poked = await waitUntil(page, (n) => window.__WH__.state().audio.started.poke > n, a0.poke, 30000);
+      await sleep(1800);   // sparks, if there were any, would have launched and landed by now
       const r1 = await ring();
-      // a still of the flight: hold the spark animations about half way while the screenshot is taken, then let them finish
-      await page.evaluate(() => { for (const a of document.getAnimations()) if (a.effect?.target?.classList?.contains('spark')) { a.pause(); a.currentTime = 200; } });
-      await page.screenshot({ path: resolve(SHOTS, 'xp_poke_sparks_desktop.png'), timeout: 240000, caret: 'hide' });
-      await page.evaluate(() => { for (const a of document.getAnimations()) if (a.effect?.target?.classList?.contains('spark')) a.play(); });
-      await sleep(1600);
-      const r2 = await ring();
-      const moved = r0.drawn - r2.drawn;
-      check('XP: one quick poke sends sparks from the touch to the ring (3 or more, compositor animations), then the ring fills with a short ease',
-        launched && r1.sparks - r0.sparks >= 3 && r2.fill > r0.fill && Math.abs(r1.drawn - r0.drawn) < 0.6 * Math.max(0.01, moved),
-        `sparks +${r1.sparks - r0.sparks} (${r1.flying} flying), drawn offset ${r0.drawn.toFixed(2)} -> ${r1.drawn.toFixed(2)} while they fly -> ${r2.drawn.toFixed(2)}, meter ${r0.fill.toFixed(4)} -> ${r2.fill.toFixed(4)}`);
-      check('XP: the poke visibly moves the ring (>= 1% of its length, the arc drawn = the meter)', moved >= 0.01 * C && Math.abs(r2.drawn - C * (1 - r2.fill)) < 0.02 * C,
-        `${(100 * moved / C).toFixed(1)}% of the ring (${moved.toFixed(2)} of ${C.toFixed(1)}); drawn ${r2.drawn.toFixed(2)} vs meter ${(C * (1 - r2.fill)).toFixed(2)}`);
-      // 2. a 3 s stretch, deterministic: press the right shoulder, drag out, hold; the pending arc grows; let go: it banks
-      await sleep(3200);   // the pull's freshness (tau 3 s) is not in play yet, and the poke's sparks are gone
+      await page.screenshot({ path: resolve(SHOTS, 'xp_tap_nothing_desktop.png'), timeout: 240000, caret: 'hide' });
+      check('XP: a quick tap pays nothing: the poke lands (audio.poke), but no spark is launched, none flies, the ring does not glow and shows no pending arc, and the meter and the ring stay exactly where they were',
+        poked && r1.sparks === r0.sparks && r1.flying === 0 && r1.glow !== 'soft' && r1.pend === 0 && r1.pendOn !== 'true' && r1.fill === r0.fill && Math.abs(r1.drawn - r0.drawn) < 1e-6 && r1.now === r0.now,
+        `poke ${poked}, sparks ${r0.sparks} -> ${r1.sparks} (${r1.flying} flying), glow ${r1.glow}, pending ${r1.pend}, meter ${r0.fill.toFixed(4)} -> ${r1.fill.toFixed(4)}, ring offset ${r0.drawn.toFixed(2)} -> ${r1.drawn.toFixed(2)}`);
+      // 2. a stretch held 3 s, deterministic: press the right shoulder, drag out, hold; the pending arc grows; let go: it banks
+      await sleep(3200);   // the pull's freshness (tau 3 s) is not in play yet
       const p0 = await ring();
       const st = await page.evaluate(async (b) => {
         const wh = window.__WH__; wh.pause();
@@ -928,21 +941,45 @@ async function main() {
         `bank ${rb.bank}; fill ${fill1.toFixed(4)} -> ${r3.fill.toFixed(4)} (+${(100 * gained).toFixed(1)}% of the ring)`);
       check('XP: the pending arc was honest: what banked matches what the arc showed at the release (within 1.5% of the ring)', Math.abs(gained - shownAtRelease) <= 0.015,
         `arc ${(100 * shownAtRelease).toFixed(1)}%, banked ${(100 * gained).toFixed(1)}%; source: ${r3.source ?? 'n/a'}`);
+      // 3. a squeeze held 1.2 s (deterministic): a growing pending arc while it is held; the release pays: sparks (3 or more, compositor animations) fly from the touch to the ring,
+      // which then fills with a short ease (a pull within 12 s before it makes this squeeze complete a medley bonus too: the preview counts it, so the arc stays honest)
+      await page.evaluate(() => { window.__WH__.pause(); });
+      await sleep(1500);
+      const q0 = await ring();
+      const sq = await squeezeHold(B, 72);
+      const launched = await waitUntil(page, (n) => Number(document.querySelector('.sparks')?.dataset.launched ?? 0) > n, q0.sparks, 30000);
+      const q1 = await ring();
+      // a still of the flight: hold the spark animations about half way while the screenshot is taken, then let them finish
+      await page.evaluate(() => { for (const a of document.getAnimations()) if (a.effect?.target?.classList?.contains('spark')) { a.pause(); a.currentTime = 200; } });
+      await page.screenshot({ path: resolve(SHOTS, 'xp_squeeze_sparks_desktop.png'), timeout: 240000, caret: 'hide' });
+      await page.evaluate(() => { for (const a of document.getAnimations()) if (a.effect?.target?.classList?.contains('spark')) a.play(); });
+      await sleep(1600);
+      const q2 = await ring();
+      const qm = sq.samples, qgrows = qm[0] > 0 && qm.every((v, i) => i === 0 || v > qm[i - 1] - 1e-6) && qm[3] > qm[0];
+      const moved = q0.drawn - q2.drawn;
+      check('XP: holding a squeeze shows a lighter pending arc that grows while it is held (a squeeze held 0.4 s or more pays; a shorter one is a tap and shows nothing)',
+        sq.pressed >= 1 && sq.pendOn === 'true' && qgrows, `pending arc ${qm.map((v) => (100 * v / C).toFixed(1) + '%').join(' -> ')} of the ring (fingers ${sq.pressed})`);
+      check('XP: letting go of a held squeeze sends sparks from the touch to the ring (3 or more, compositor animations), then the ring fills with a short ease',
+        launched && q1.sparks - q0.sparks >= 3 && q2.fill > q0.fill && Math.abs(q1.drawn - q0.drawn) < 0.6 * Math.max(0.01, moved),
+        `sparks +${q1.sparks - q0.sparks} (${q1.flying} flying), drawn offset ${q0.drawn.toFixed(2)} -> ${q1.drawn.toFixed(2)} while they fly -> ${q2.drawn.toFixed(2)}, meter ${q0.fill.toFixed(4)} -> ${q2.fill.toFixed(4)}`);
+      check('XP: the squeeze visibly moves the ring (>= 1% of its length, the arc drawn = the meter)', moved >= 0.01 * C && Math.abs(q2.drawn - C * (1 - q2.fill)) < 0.02 * C,
+        `${(100 * moved / C).toFixed(1)}% of the ring (${moved.toFixed(2)} of ${C.toFixed(1)}); drawn ${q2.drawn.toFixed(2)} vs meter ${(C * (1 - q2.fill)).toFixed(2)}`);
       // a short press that pays nothing as a squeeze: no pending arc at all (a squeeze pays from 0.4 s), nothing to bank
       await page.evaluate(() => window.__WH__.resume());
-      // 3. Calm effects: no sparks, a soft glow on the ring
+      // 4. Calm effects: no sparks, a soft glow on the ring (a squeeze held 1.2 s again, after 4 s of sim so its freshness is back to full)
       await page.evaluate(() => window.__WH__.setSetting('calm', true));
       await sleep(1500);
+      await page.evaluate(() => { const wh = window.__WH__; wh.pause(); wh.step(1 / 60, 240); });
       const c0 = await ring();
       const B2 = await body(page);
-      await page.mouse.click(B2.x * vp.width, B2.y * vp.height - 0.3 * B2.rPx);
+      await squeezeHold(B2, 72);
       const glowed = await waitUntil(page, () => document.querySelector('.meter').dataset.glow === 'soft', null, 30000);
       await page.screenshot({ path: resolve(SHOTS, 'xp_calm_glow_desktop.png'), timeout: 240000, caret: 'hide' });
       await sleep(1200);
       const c1 = await ring();
-      check('XP, Calm effects: a paying poke launches no sparks; the ring glows softly instead and still fills', glowed && c1.sparks === c0.sparks && c1.flying === 0 && c1.fill > c0.fill,
+      check('XP, Calm effects: a paying squeeze launches no sparks; the ring glows softly instead and still fills', glowed && c1.sparks === c0.sparks && c1.flying === 0 && c1.fill > c0.fill,
         `sparks ${c0.sparks} -> ${c1.sparks}, glow ${glowed}, fill ${c0.fill.toFixed(4)} -> ${c1.fill.toFixed(4)}`);
-      await page.evaluate(() => window.__WH__.setSetting('calm', false));
+      await page.evaluate(() => { window.__WH__.setSetting('calm', false); window.__WH__.resume(); });
       await context.close();
     });
 

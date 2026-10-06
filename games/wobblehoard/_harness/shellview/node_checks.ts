@@ -672,12 +672,17 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     check('CUT: the cut says it in the live region ("Cut into 2 pieces."), a haptic tick, and the Hoard, the mat and the history do not see a piece',
       notices.includes('Cut into 2 pieces.') && r.w.haptics.rec.count('poke') >= 1 && r.app.hoard.items().length === items0 && r.app.mat.count === 1 && r.app.history.current === null,
       JSON.stringify({ notices, items: r.app.hoard.items().length, mat: r.app.mat.count }));
-    // X06: cutting paid nothing; a poke on the chunk pays like a poke on a whole squishy
+    // X06: cutting paid nothing; a poke (a tap) on the chunk pays nothing, like a tap on a whole squishy; a squeeze held 1.2 s and released on it pays through collection.feed like one on a whole squishy
+    // RE-SPECIFIED (owner decision 2026-10-06, "short taps pay nothing"): this row used a poke and asserted it paid ("sp > 0"); a tap pays 0 now, so the row proves the chunk's feed path with a held
+    // squeeze instead and adds that its poke pays 0 (same intent: the chunk's touches reach the meter exactly like the whole squishy's).
     const fill0 = r.app.hoard.meter().sp;
     const chunk = xs[0].body as CutMock;
     chunk.queue({ kind: 'poke', intensity: 0.5 });
     run2(r.w, r.app, 50);
-    check('X06 shell: cutting fed the meter nothing; a poke on a chunk pays through collection.feed like one on a whole squishy', fill0 === 0 && r.app.hoard.meter().sp > 0, `sp before ${fill0}, after ${r.app.hoard.meter().sp}`);
+    const afterPoke = r.app.hoard.meter().sp;
+    chunk.queue({ kind: 'release', intensity: 0.5, heldFor: 1.2 });
+    run2(r.w, r.app, 50);
+    check('X06 shell: cutting fed the meter nothing; a poke (a tap) on a chunk pays nothing and a squeeze held 1.2 s on it pays through collection.feed, both like on a whole squishy', fill0 === 0 && afterPoke === 0 && r.app.hoard.meter().sp > 0, `sp before ${fill0}, after the poke ${afterPoke}, after the squeeze ${r.app.hoard.meter().sp}`);
     // the stopgap for checkpoint 47's self-launching chunks: a new chunk is held at its spot (moveTo) and let go after SETTLE_S
     const heldNow = chunk.held, facePiece = r.app.body as unknown as CutMock;
     run2(r.w, r.app, (SETTLE_S + 0.1) * 1000);
@@ -996,7 +1001,12 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   r.app.on('notice', (t) => notices.push(t));
   const c = r.app.input.screenCentre()!;
   for (let i = 0; i < 3; i++) { r.app.input.pointerDown({ id: 40 + i, x: c.x, y: c.y, t: r.w.clock.t }); run(r, 60); r.app.input.pointerUp({ id: 40 + i, x: c.x, y: c.y, t: r.w.clock.t }); run(r, 1200); }
-  check('feed: real pokes through the frame loop move the collection\'s practice meter (collection.feed with the drained SoftEvents)', r.app.collection.meter().fill > 0, JSON.stringify(r.app.collection.meter()));
+  // RE-SPECIFIED (owner decision 2026-10-06, "short taps pay nothing"): three real taps used to move the ring (fill > 0, a poke paid 0.8 SP); a tap pays nothing now, so they leave it at 0, and the
+  // same wiring is then shown with a held press (1.2 s) that does pay: the feed path is the same (collection.feed with the drained SoftEvents), only the pay differs.
+  const tapsPokes = r.app.profile.profile.stats.pokes;
+  check('feed: three real taps through the frame loop are counted (stats.pokes) and fed to the collection but pay nothing: the practice meter stays at 0', r.app.collection.meter().fill === 0 && r.app.hoard.meter().sp === 0 && tapsPokes >= 3, JSON.stringify({ meter: r.app.collection.meter(), pokes: tapsPokes }));
+  r.app.input.pointerDown({ id: 43, x: c.x, y: c.y, t: r.w.clock.t }); run(r, 1300); r.app.input.pointerUp({ id: 43, x: c.x, y: c.y, t: r.w.clock.t }); run(r, 1200);
+  check('feed: a held press (1.2 s) through the frame loop does move the collection\'s practice meter (collection.feed with the drained SoftEvents)', r.app.collection.meter().fill > 0, JSON.stringify(r.app.collection.meter()));
   r.app.debug.shell.grant(WH_QUEUE_MAX + 2);
   const m = r.app.collection.meter();
   check(`table cap: at ${WH_QUEUE_MAX} play capsules the table is full, the ring stays full and "Table full" is announced once (COLLECTION C-5, 9.7)`,
@@ -1007,12 +1017,15 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
 
 /* ───────────────────────── 8b. visible XP (FUN.md 2): the gain cue and the pending gain of a hold (xp.ts) ───────────────────────── */
 {
-  const { gainOf, createPending, heldPay, LEVEL_STEP } = await import('../../src/shell/xp.ts');
+  const { gainOf, createPending, heldPay, LEVEL_STEP, GAIN_EPS } = await import('../../src/shell/xp.ts');
   const { PAY } = await import('../../src/core/meter.ts');
   type MV = Parameters<typeof gainOf>[0];
   const mv = (sp: number, credits: number, threshold = 30): MV => ({ ledger: 'practice', fill: sp / threshold, sp, threshold, credits, playCredits: credits, resting: false, doneToday: false, tableFull: false, offline: false });
   check('xp gainOf: the squish points one touch added (across a capsule too; nothing when the meter did not move)',
     Math.abs(gainOf(mv(10, 0), mv(10.8, 0)) - 0.8) < 1e-9 && Math.abs(gainOf(mv(29.5, 0), mv(0.7, 1, 50)) - 1.2) < 1e-9 && gainOf(mv(5, 0), mv(5, 0)) === 0);
+  // OWNER DECISION 2026-10-06 ("short taps pay nothing"): a tap pays 0 SP, so the meter view does not move and gainOf is 0 (a bit of float noise or a backwards step is no gain either)
+  check('xp gainOf: a touch that paid nothing (a tap) has no gain: an unchanged meter, float noise under GAIN_EPS and a meter that went back all read 0, and the smallest real pay (a 0.028 SP freshness-floor squeeze) still reads as a gain',
+    gainOf(mv(7, 2), mv(7, 2)) === 0 && gainOf(mv(7, 2), mv(7 + GAIN_EPS / 2, 2)) === 0 && gainOf(mv(7, 2), mv(6.9, 2)) === 0 && Math.abs(gainOf(mv(7, 2), mv(7.028, 2)) - 0.028) < 1e-9 && GAIN_EPS === 1e-6);
   const calls: Array<[string, number, number]> = [];
   let lv = 0.503;
   const pend = createPending({ preview: (k, h, l) => { calls.push([k, h, l]); return 1.5; }, heldFor: (f) => (f === 0 ? 1.2 : 0), pullFor: (f) => (f === 1 ? 2 : 0), pullLevel: () => lv });
@@ -1025,10 +1038,26 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     JSON.stringify(calls));
   check('xp pending (no preview: the published constants): a squeeze from 0.4 s (base + per second + the soft pop), a stretched pull pullBase + pullPerSecond x hold, an unstretched one flat, none under 0.05',
     heldPay('squeeze', 0.3, 0) === 0 && Math.abs(heldPay('squeeze', 2, 0) - (PAY.squeezeBase + 2 * PAY.squeezePerSecond + PAY.softPop)) < 1e-9 && Math.abs(heldPay('pull', 2, 0.6) - (PAY.pullBase + 2 * PAY.pullPerSecond)) < 1e-9 && heldPay('pull', 2, 0.2) === PAY.pullFail && heldPay('pull', 2, 0.03) === 0 && heldPay('pull', 9, 0.6) === heldPay('pull', PAY.pullHoldCapSeconds, 0.6));
+  // OWNER DECISION: a tap has no pending arc and the two sources agree on it. The constants path (no previewTouch) and the collection's own previewTouch must give the same pending
+  // gain at a fresh meter for every hold and level, with 0 for a squeeze under 0.4 s (a tap) and for a pull at 0.05 or less, and the arc starts at the 0.4 s squeeze threshold
+  {
+    const cc = createCollection({ storage: null, profile: null });
+    const holds = [0, 0.1, 0.39, 0.3999, 0.4, 0.41, 1, 1.79, 1.8, 2.5, 3, 9], levels = [0, 0.04, 0.05, 0.06, 0.34, 0.35, 0.6, 1];
+    let worst = 0, n = 0;
+    for (const h of holds) {
+      worst = Math.max(worst, Math.abs(cc.previewTouch!('squeeze', h, 0) - heldPay('squeeze', h, 0))); n++;
+      for (const l of levels) { worst = Math.max(worst, Math.abs(cc.previewTouch!('pull', h, l) - heldPay('pull', h, l))); n++; }
+    }
+    const arcAt = (heldS: number, withPreview: boolean): number => createPending({ preview: withPreview ? (k, h, l) => cc.previewTouch!(k, h, l) : null, heldFor: (f) => (f === 0 ? heldS : 0), pullFor: () => 0, pullLevel: () => 0 }).fill(mv(0, 0, 100), 0);
+    check('xp pending: a tap pends nothing, and the constants path agrees with Collection.previewTouch (a squeeze held 0.39 s: no arc by either; 0.41 s: the same arc by both), over all holds and levels',
+      worst < 1e-9 && heldPay('squeeze', 0.39, 0) === 0 && cc.previewTouch!('poke', 0, 0) === 0 && cc.previewTouch!('squeeze', 0.39, 0) === 0 && arcAt(0.39, true) === 0 && arcAt(0.39, false) === 0
+      && arcAt(0.41, true) > 0 && Math.abs(arcAt(0.41, true) - arcAt(0.41, false)) < 1e-12 && Math.abs(arcAt(0.41, true) - (PAY.squeezeBase + PAY.squeezePerSecond * 0.41) / 100) < 1e-12, `${n} (hold, level) pairs, worst difference ${worst}`);
+    cc.dispose();
+  }
   check('xp pending: nothing pends when the table is full or the day is done',
     pend.fill({ ...mv(0, 5), tableFull: true }, 0) === 0 && pend.fill({ ...mv(0, 0), doneToday: true }, 0) === 0);
   // through the game with the real collection (its previewTouch): a 1.2 s press shows a pending arc; its release pays a squeeze, emits one
-  // 'gain' with the SP, and the arc it showed matches what banked; a poke emits a 'poke' gain
+  // 'gain' with the SP, and the arc it showed matches what banked; a poke (a tap) emits NO gain (it pays nothing: owner decision 2026-10-06)
   const r = rig();
   const gains: Array<{ kind: string; sp: number }> = [];
   r.app.on('gain', (g) => gains.push({ kind: g.kind, sp: g.sp }));
@@ -1039,9 +1068,31 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   const th = r.app.hoard.meter().threshold;
   r.app.input.pointerUp({ id: 60, x: c.x, y: c.y, t: r.w.clock.t }); run(r, 300);
   const sq = gains.find((g) => g.kind === 'squeeze');
-  check('xp through the game: a held press shows a pending arc (the collection preview), the release pays a squeeze (one gain event with its SP) and the arc matched what banked (within 10%); the press\'s first contact paid a poke',
-    r.app.pendingSource === 'collection' && shown > 0 && r.app.pendingFill() === 0 && !!sq && Math.abs(sq.sp / th - shown) <= 0.1 * shown && gains.some((g) => g.kind === 'poke'),
+  // RE-SPECIFIED (owner decision 2026-10-06, "short taps pay nothing"): the last clause said "the press's first contact paid a poke" (gains.some poke); the first contact of a press is a tap (a poke SoftEvent),
+  // which pays nothing now, so it must emit no gain: the clause is inverted, the rest of the row (pending arc, one squeeze gain, the arc matched what banked) is unchanged.
+  check('xp through the game: a held press shows a pending arc (the collection preview), the release pays a squeeze (one gain event with its SP) and the arc matched what banked (within 10%); the press\'s first contact (a poke, a tap) paid nothing and emitted no gain',
+    r.app.pendingSource === 'collection' && shown > 0 && r.app.pendingFill() === 0 && !!sq && Math.abs(sq.sp / th - shown) <= 0.1 * shown && !gains.some((g) => g.kind === 'poke') && gains.length === 1,
     `shown ${(shown * th).toFixed(2)} SP, banked ${sq ? sq.sp.toFixed(2) : 'none'} SP; gains ${gains.map((g) => g.kind).join(',')}`);
+  // OWNER DECISION 2026-10-06: real quick taps through the game (the frame loop, collection.feed, the gain read): no gain event (so no spark and no ring glow, the HUD acts on 'gain' only), no pending arc at
+  // any moment, the ring does not move, and they still count as taps (stats.pokes)
+  {
+    const t2 = rig();
+    const g2: Array<{ kind: string; sp: number }> = [];
+    t2.app.on('gain', (g) => g2.push({ kind: g.kind, sp: g.sp }));
+    const c2 = t2.app.input.screenCentre()!;
+    run(t2, 3000);
+    const m0 = JSON.stringify(t2.app.hoard.meter());
+    let pendMax = 0;
+    for (let i = 0; i < 8; i++) {
+      t2.app.input.pointerDown({ id: 80 + i, x: c2.x, y: c2.y, t: t2.w.clock.t });
+      for (let k = 0; k < 4; k++) { run(t2, 15); pendMax = Math.max(pendMax, t2.app.pendingFill()); }
+      t2.app.input.pointerUp({ id: 80 + i, x: c2.x, y: c2.y, t: t2.w.clock.t });
+      for (let k = 0; k < 8; k++) { run(t2, 100); pendMax = Math.max(pendMax, t2.app.pendingFill()); }
+    }
+    check('xp through the game: eight quick taps emit no gain event (no sparks, no ring glow), show no pending arc at any moment, leave the ring exactly where it was, and still count as taps (stats.pokes)',
+      g2.length === 0 && pendMax === 0 && JSON.stringify(t2.app.hoard.meter()) === m0 && t2.app.hoard.meter().sp === 0 && t2.app.profile.profile.stats.pokes >= 8,
+      `gains ${g2.length}, pending max ${pendMax}, meter ${JSON.stringify(t2.app.hoard.meter())}, pokes ${t2.app.profile.profile.stats.pokes}`);
+  }
 }
 
 /* ───────────────────────── 9. keyboard focus rules (audit findings 12, 13) ───────────────────────── */

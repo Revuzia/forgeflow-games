@@ -55,7 +55,7 @@ Stage B items (B1 to B9) are scheduled in [`NEXT_STEPS.md`](NEXT_STEPS.md) secti
 | Cut into pieces that each stretch and then reconnect (A, "Each cut, another size" to "Everything reconnects") | **Not in v1**: the *Jelly Lab* stretch module (NEXT_STEPS section 5). | Stretch |
 | Folds into a glowing ball, then springs back (A, "All the light in one ball") | The **merge ceremony** (section 6): two bodies converge, fold into one glowing ball, charge, spring open, reveal. Our own timing, colours and sound. | Render and audio: built (procedural fold fallback); physics drivers: round 2, in progress |
 | Three colourways of one toy (A, "Aurora. Amber. Abyssal.") | **Open owner decision D-15** (NEXT_STEPS): optional rare colourway variants. Until decided: none in v1 (5.6). | Decision |
-| Made to be touched (the owner's brief) | The meter pays for touching in *varied* ways and ignores mashing (5.4). | Logic built; not wired |
+| Made to be touched (the owner's brief) | The meter pays for holding and stretching, pays a short tap nothing (owner decision 2026-10-06) and ignores mashing (5.4). | Logic built; not wired |
 
 ## 3. Research summary
 
@@ -153,7 +153,7 @@ traders; O: 3000; P and Q: 2000), so one quantity can differ by a day or two bet
 
 ### 5.1 In nine lines
 
-1. **Touch** (poke, squeeze-and-release, pull-and-let-go, mixed) pays **squish points**; **100 SP = one free capsule** (about **3 to 4 active minutes**).
+1. **Touch** pays **squish points**: squeeze-and-release and pull-and-let-go (a hold, a stretch, or both mixed); **a short tap pays nothing** (owner decision 2026-10-06, 5.4); **100 SP = one free capsule** (about **3 to 4 active minutes** for a player who squeezes, stretches or mixes them).
 2. **Open the capsule** (squeeze it until it cracks): one random squishy of **50**, six tiers. Odds are public. Repeats are allowed.
 3. **Daily Restock**: once a day, pick 1 of 3 offered Common or Uncommon squishies (a gift, not a gate). **Two small tasks** a day (max 5 a week) each pay one capsule.
 4. **Merge**: **2 of the same species -> 1 new random squishy**, never below their tier; a finished row always moves up; after 4 duds in a row the next one moves up.
@@ -230,71 +230,87 @@ Epic and above is 15 of 50 species.
 
 ### 5.4 Earning: the Squish meter (explicit active-play model)
 
-**Owner direction, 2026-10-06** ([`FUN.md`](FUN.md) section 2): every touch earns visibly, and holding earns while you hold. Two rules changed
-that day and the pay was re-tuned with the sim so the pace stayed in its band: **a stretch held out now pays per second held, like a squeeze**
-(it paid a flat 1.8 SP), and **ordinary tapping always pays a little** (2 to 4 taps a second paid 0.25 down to 0.06 SP a tap). The numbers in
-this section come from the 2026-10-06 run of `node _harness/sim_economy.ts` (no flags; output SHA-256 without the elapsed line
-`9d030f8166038689e89c1e9d2e19957d49c1ed35f2aad55d59a9675d7a72b9b6`). **The rest of this document still quotes the 2026-10-05 canonical run of
-section 5.0** (whose hash the old rules reproduced exactly on 2026-10-06); the new rules move those figures by a few percent at most (for example
-all 50 for regular willing traders 205 / 131 days becomes 203 / 131 [sim K], first capsule 64 s becomes 63 s [sim C]) until 5.0 is re-quoted.
+**Owner direction, 2026-10-06, in two steps** ([`FUN.md`](FUN.md) section 2). First: holding earns while you hold, and ordinary tapping earns a little. Later the same day the owner
+decided, and said it was final: **short taps pay nothing.** A tap (a `poke`, or a squeeze let go before 0.4 s) pays no squish points, sends no sparks to the meter ring and does not
+move it. Squeezes held 0.4 s or more, stretches and holds still pay, and **a stretch held out pays per second held, like a squeeze** (it paid a flat 1.8 SP before that day). The
+second step reverses the "ordinary tapping always pays a little" half of the first (2 to 4 taps a second paid 0.25 down to 0.06 SP a tap, then 0.36 to 0.2 SP after a softer
+freshness) and keeps the rest. Because the taps stopped paying, the squeeze and stretch pay per second was raised so the pace stays in its band. The numbers in this section come from
+the 2026-10-06 run of `node _harness/sim_economy.ts` after that decision (no flags; output SHA-256 without the elapsed line
+`4c5d0cf26dce22d81eb76e7e9d1b4b4f767480c285abc0d3f0ac0bc52e5813c0`; the run before it, with taps paying, had `9d030f8166038689e89c1e9d2e19957d49c1ed35f2aad55d59a9675d7a72b9b6`).
+**The rest of this document still quotes the 2026-10-05 canonical run of section 5.0** (whose hash the old rules reproduced exactly on 2026-10-06); the new rules move those figures,
+and by more than a few percent now, because the assumed population has 38% pokers, who mostly tap and so earn about half as much as a player who squeezes: the median regular
+player's active minutes per capsule 3.0 becomes **3.5** (p10 2.7, p90 6.1) [sim C], the first capsule 64 s becomes **77 s** [sim C], and all 50 for regular willing traders
+205 / 131 days (2026-10-05) becomes **247 / 153** (solo / with trade) [sim K]. The shape of the results does not move (Epic+ first copies by trade 33%, by merge 2%, section L). Re-quote
+5.0 before using any of its numbers.
 
 **Meter rule (touch to squish points), as tested [sim A]:**
 
 | Touch | Pays | Notes |
 |---|---|---|
-| Poke | 0.8 SP | Needs a distinct contact; double taps under 0.25 s do not pay. **Every other poke pays at least 0.2 SP** (a quarter of a fresh poke, the freshness floor below): 2 taps a second pay 0.36 SP each, 2.5 a second 0.23, 3 or 4 a second 0.2 (they paid 0.25, 0.16, 0.11 and 0.06). |
-| Squeeze and release | 0.7 SP + 0.45 per second held (hold counted up to 3 s) | **Soft pop** +0.5 SP if held 1.8 s or more. Unchanged. |
-| **Stretch and hold, then let go** (snap) | **1.0 SP + 0.55 per second held** (hold counted up to 3 s, the squeeze's cap): 1.55 SP at 1 s, 2.1 at 2 s, 2.65 at 3 s or more | When the pull level at the release is 0.35 or more (a third of the way to the body's own limit). **0.5 SP flat**, whatever the hold, if it never stretched. The hold is the snap's `heldFor`, the seconds from the grab to the release (`softbody.ts`). Was a flat 1.8 SP until 2026-10-06. |
-| **Medley** | +2 SP | Three different kinds inside 12 s; then 25 s cooldown. |
-| **Freshness** (anti-mash) | pay x clamp((seconds since your last touch of the SAME kind / tau)^2, floor, 1) | tau: poke **0.75 s** (was 0.9), squeeze 2.4 s, pull 3.0 s. Floor: poke **0.25** (was 0.03), squeeze and pull 0.03, so mashing squeezes or pulls stays worthless. |
-| **Valve** | at most 40 SP in any rolling minute | Never binds a human playing as modelled (about 28 SP/min). It is what bounds a steady minute of tapping at 2 taps a second or more, a script, or full stretches held 3 s back to back. |
+| **Tap** (a poke, or a squeeze released under 0.4 s) | **0 SP** | At any speed, gap or count: 1000 taps pay 0. A tap is still a touch: it counts for the statistics and for the daily tasks that ask for pokes, and the meter still reports its freshness and double-tap flag for the Tasks panel (tau 0.75 s, floor 0.25, 250 ms gap: kept for that, they change no pay). A touchscreen gives no force reading, so there is no "light" or "hard" tap: every tap pays nothing. It paid 0.8 SP (then 0.2 to 0.36 SP at 2 to 4 a second) until the owner's decision. |
+| Squeeze and release | 0.7 SP + **0.6** per second held (hold counted up to 3 s): 1.3 SP at 1 s, 2.4 at 2 s, 3.0 at 3 s or more | **Soft pop** +0.5 SP if held 1.8 s or more. Held under 0.4 s it is a tap (0.39 s pays 0, 0.41 s pays). Was 0.45 per second; raised with the stretch to keep the pace (see the table below). |
+| **Stretch and hold, then let go** (snap) | **1.0 SP + 0.65 per second held** (hold counted up to 3 s, the squeeze's cap): 1.65 SP at 1 s, 2.3 at 2 s, 2.95 at 3 s or more | When the pull level at the release is 0.35 or more (a third of the way to the body's own limit). **0.5 SP flat**, whatever the hold, if it never stretched. The hold is the snap's `heldFor`, the seconds from the grab to the release (`softbody.ts`). Was a flat 1.8 SP until 2026-10-06, then 1.0 + 0.55 per second. |
+| **Medley** | +2 SP | **A squeeze and a stretch within 12 s**, in either order; then 25 s cooldown. It was "three different kinds inside 12 s", a poke among them; with taps free a free tap would have unlocked a paid bonus, so a tap neither joins nor completes it (an old save's tap entries are dropped on load). The owner can veto this rule. |
+| **Freshness** (anti-mash) | pay x clamp((seconds since your last touch of the SAME kind / tau)^2, floor, 1) | tau: squeeze 2.4 s, pull 3.0 s. Floor 0.03 for both, so mashing squeezes or stretches stays worthless. |
+| **Valve** | at most 40 SP in any rolling minute | Never binds a human playing as modelled (about 29 SP/min). It is what bounds a script: full stretches held 3 s back to back, the best-cadence squeeze, a squeeze-and-stretch cycler. |
 | **Daily cap** | 8 capsules at full rate, then 25% rate, hard stop at 12 a day from play | "Squishies need rest." Not a punishment: nothing is lost, the meter just fills slowly. |
-| **Onboarding ramp** | capsule 1, 2, 3 cost 30, 50, 75 SP, then 100 | First capsule in about **63 seconds** [sim C]. |
+| **Onboarding ramp** | capsule 1, 2, 3 cost 30, 50, 75 SP, then 100 | First capsule in about **77 seconds** for regular players [sim C] (squeezer 60, puller 63, mixed 67, poker 134 s). |
 
-`SoftEvent` mapping for SHELL (`src/collection/meterfeed.ts`): `poke` -> poke; `release` with `heldFor` >= 0.4 s -> squeeze with that hold;
+`SoftEvent` mapping for SHELL (`src/collection/meterfeed.ts`): `poke` -> poke (a tap: pays 0, still a touch); `release` with `heldFor` >= 0.4 s -> squeeze with that hold;
 `snap` -> pull with `amount = intensity` (the pull level) and `heldS = heldFor` (0 to 10 s); the meter applies the 0.35 threshold itself. The play
 report carries a pull's hold as a 4th element, `[2, level, dtMs, heldS]` (COLLECTION 7.5).
-**Pending arc** (FUN.md 2.2): while a squeeze or a stretch is held, `collection.previewTouch(kind, heldS, level)` returns the SP that touch would
+**Pending arc** (FUN.md 2): while a squeeze or a stretch is held, `collection.previewTouch(kind, heldS, level)` returns the SP that touch would
 pay if it ended now (pay, freshness, a medley it would complete, the daily rate, the valve's room; core `previewInteraction`), so the ring can show
-a growing lighter arc that banks exactly that on the release. It is pure and allocation-free.
+a growing lighter arc that banks exactly that on the release. It is pure and allocation-free. A tap has no arc: `previewTouch('poke', ...)` is 0, and so is a squeeze held under 0.4 s;
+a 0 SP touch emits no gain event, no sparks and no ring glow in the shell.
 The valve, freshness and caps are **server-side** (the client only reports touches).
 
-**Human touch model and what it pays [sim A, 400 five-minute streams per archetype; before -> after the 2026-10-06 rules]:**
+**Human touch model and what it pays [sim A, 400 five-minute streams per archetype; before -> after the tap decision and the re-tune]:** (before = the 2026-10-06 rules with taps paying, the tree at commit `19f62137`)
 
 | Archetype | Pokes / squeezes / pulls per min | SP per minute | Share of SP poke / squeeze / pull | Active minutes per capsule |
 |---|---|---|---|---|
-| Poker | 19.9 / 4.4 / 2.7 | 27.3 -> **28.0** | 57 / 26 / 17% | 3.7 -> **3.6** |
-| Squeezer | 2.7 / 14.2 / 2.8 | 28.2 -> **28.4** | 9 / 74 / 16% | 3.6 -> **3.5** |
-| Puller | 2.7 / 3.0 / 13.5 | 26.2 -> **27.4** | 10 / 18 / 72% | 3.8 -> **3.6** |
-| Mixed (varied) | 8.8 / 6.7 / 6.7 | 31.3 -> **31.8** | 26 / 37 / 38% | 3.2 -> **3.1** |
-| *Tapper* (bursts of 2 to 3 taps a second; section A only) | 66.3 / 3.7 / 3.3 | 24.9 -> **30.1** | 67 / 18 / 15% | 4.0 -> **3.3** |
-| *Holder* (every stretch held 2 to 4 s; section A only) | 2.1 / 2.5 / 10.1 | 22.6 -> **28.8** | 7 / 15 / 78% | 4.4 -> **3.5** |
+| Poker | 19.9 / 4.4 / 2.7 | 28.0 -> **13.5** | 57 / 26 / 17% -> 0 / 62 / 38% | 3.6 -> **7.4** |
+| Squeezer | 2.7 / 14.2 / 2.8 | 28.4 -> **30.8** | 9 / 74 / 16% -> 0 / 80 / 20% | 3.5 -> **3.2** |
+| Puller | 2.7 / 3.0 / 13.5 | 27.4 -> **28.8** | 10 / 18 / 72% -> 0 / 24 / 76% | 3.6 -> **3.5** |
+| Mixed (varied) | 8.8 / 6.7 / 6.7 | 31.8 -> **27.3** | 26 / 37 / 38% -> 0 / 51 / 49% | 3.1 -> **3.7** |
+| *Tapper* (bursts of 2 to 3 taps a second; section A only) | 66.3 / 3.7 / 3.3 | 30.1 -> **11.1** | 67 / 18 / 15% -> 0 / 56 / 44% | 3.3 -> **9.0** |
+| *Holder* (every stretch held 2 to 4 s; section A only) | 2.1 / 2.5 / 10.1 | 28.8 -> **31.0** | 7 / 15 / 78% -> 0 / 19 / 81% | 3.5 -> **3.2** |
 
-The pull model is unchanged in timing: a human pull is held 0.8 to 2.4 s (that hold is now paid) plus 1.0 s to reach for it. The tapper and the
-holder are the owner's two styles, measured in section A but not added to the population mix (so the macro sections compare like with like).
-Under the old rules they were the two slowest ways to play (4.0 and 4.4 minutes a capsule): exactly what the owner reported.
-Every single style earns within about 4% of the others (27.4 to 28.4 SP/min; they spread 8% before), the puller is no faster than the poker (x0.98),
-and **variety pays about 14% more** (medley). Fast tapping in bursts earns about what varied play earns.
+**The plain consequence of the owner's rule.** The four players who squeeze, stretch or mix (squeezer, puller, mixed, holder) need **3.2 to 3.7 active minutes a capsule** (by the mean and
+by the median stream), inside the 3.0 to 3.8 band, and the fastest is x1.13 the slowest. The two mostly-tapping styles earn what their few holds pay: the **poker 13.5 SP/min (7.4
+minutes a capsule)** and the **tapper 11.1 SP/min (9.0 minutes)**; a player who only taps earns **exactly 0** (probed: 50 five-minute streams, 0 SP). Nobody in the model changes how
+they play because of the rule: the archetypes still describe how people touch, and if real tappers start to hold, the population pace moves toward the paying styles'. The mixed style is
+now the slowest paying one because 40% of its touches are free taps; the medley repays part of it (it is worth about +17% to the mixed style and +7% to +9% to a squeezer or a puller:
+without it the mixed style would need 4.3 minutes a capsule, out of the band, and the puller 3.8). The holder and the tapper are the owner's two styles, measured in section A but not added to the population
+mix (so the macro sections compare like with like). **Variety no longer out-earns a single style** (the old "+14%": the free taps cost the mixed player more than the medley pays back). **Styles are no longer equal in the macro results:** the slowest archetype (the poker) takes 1.82 times as long as the fastest to finish all 50 [sim J2, trade world; it was 1.11 times], the price of "taps are free play" for a player who only taps.
 
-**Bots and fast tapping** [sim A; `probe_economy.ts` section 2]: mashing 8 pokes a second earns **0.1 SP/min** (every poke is a double tap); a poke
-every 250 ms (the fastest paid rate), full stretches held 3 s back to back (38.9 SP/min) and a scripted poke-squeeze-pull cycler at the physical
-limit are all held to the valve (**40.0 SP/min**, about 1.4 times a human). A steady minute of tapping pays 42.7 SP at 2 taps a second (held to 40),
-34.7 at 2.5, 36.6 at 3 and 48 at 4 (held to 40); before 2026-10-06 it paid 29.6, 23.7, 19.7 and 14.8. Every one is stopped by the daily cap at
-**12 capsules a day from play, versus about 10 for devoted human players** (9.9 per active day including tasks). Capsules have no cash value (no
-currency, same-tier swaps only), which removes most of the reason to farm. Sessions modelled: casual 1 to 2 x 3 to 5 min; regular about 2 x 10 to 15
-min; devoted 2 to 3 x 12 to 22 min.
+**What the re-tune changed, and why.** The first engineer's rules (taps 0, squeeze and pull pay unchanged) left the paying styles at 3.6 / 3.8 / 4.0 minutes a capsule (squeezer / puller /
+mixed): the mixed style out of the band. A grid over the squeeze and stretch constants (`squeezeBase` 0.7 to 0.9, `squeezePerSecond` 0.45 to 0.6, `pullBase` 1.0 to 1.2,
+`pullPerSecond` 0.55 to 0.7, two seed sets) showed the mixed style the binding constraint, and the smallest change that puts every paying style inside 3.0 to 3.8 with margin
+on both sides was **`squeezePerSecond` 0.45 -> 0.6 and `pullPerSecond` 0.55 -> 0.65**, the two per-second rates, with the bases (0.7 and 1.0) and the 0.5 soft pop unchanged: the
+pay moves toward holding, which is the owner's direction. The medley (+2 SP) and every other constant are unchanged.
 
-**Result [sim C, 5000 players]:** measured **3.0 active minutes per capsule** for regular players (median 3.04, was 3.08; p10 2.6, p90 3.8;
-steady touch time per capsule 3.1 to 3.6 by style; tasks lower it a little). Capsules per active day: casual 2.6, regular 7.2, devoted 9.9 (plus 1
-restock pick). **First capsule 63 s** for regular players (poker 64, squeezer 64, puller 66, mixed 58 s). A regular player's first pair of any
-species arrives after **5 capsules (10.4 active minutes)**; first triple after 14 capsules (36.5 minutes). Pure capsule birthday maths with these
-odds gives about 6.7 capsules to the first repeat (sqrt(pi / (2 x sum of squared odds)) + 2/3, my calculation); the sim's 5 is lower because the
-starter Dollop, restock picks and task capsules also create repeats. This is within the owner's band (3.0 to 3.8 minutes per capsule; 2 to 5,
-not under 1.5, not over 6), so **MERGE_COST = 2 stands** (5.6: it would flip to 3 only at about 1.5 minutes or less). The re-tune made the pace
-about 1.5% quicker, inside the model's own noise; the next lever, if a playtest asks for it, is still the capsule cost (100 SP).
+**Bots and fast tapping** [sim A; `probe_economy.ts` section 2]: **taps pay nothing at any speed**: mashing 8 taps a second earns **0 SP/min**, and so does a tap every 250 ms (it was the
+fastest paid rate: 40 SP/min, held to the valve). Machine-speed squeezing (held 0.45 s every 0.5 s) earns **5.1 SP/min** and machine-speed stretching (held 0.3 s every 0.5 s) **4.4**
+(the 0.03 freshness floor: under a fifth of a paying human, 29.0 SP/min). The best squeeze against the freshness curve (held 1.8 s every 2.4 s, **39.9**), full stretches held 3 s back to
+back (**39.2**) and a scripted tap-squeeze-stretch cycler at the physical limit (**40.0**) are all held to the valve (**40.0 SP/min**, about 1.4 times a paying human); together, a squeeze
+every 2.4 s plus a 3 s stretch every 3.3 s for 80 hours never exceeds 40 SP in any minute and never pays more than 12 capsules a day. Every one is stopped by the daily cap at
+**12 capsules a day from play, versus about 9 for devoted human players** (8.7 per active day including tasks, 10 before the tap decision). Capsules have no cash value (no currency,
+same-tier swaps only), which removes most of the reason to farm. Sessions modelled: casual 1 to 2 x 3 to 5 min; regular about 2 x 10 to 15 min; devoted 2 to 3 x 12 to 22 min.
+
+**Result [sim C, 5000 players]:** measured **3.5 active minutes per capsule** for regular players (median; p10 2.7, p90 6.1: the poker tail; it was 3.0, p10 2.6, p90 3.8), inside the owner's
+band (3.0 to 3.8) even with 38% pokers in the assumed mix. Capsules per active day: casual 2.31, regular 6.00, devoted 8.74 (it was 2.64, 7.19, 9.90; plus 1 restock pick). **First capsule 77 s**
+for regular players. A regular player's first pair of any species arrives after **5 capsules (12.5 active minutes**, it was 10.4); first triple after 14 capsules (43.2 minutes, it was 36.5).
+This is within the owner's band (2 to 5 minutes, not under 1.5, not over 6), so **MERGE_COST = 2 stands** (5.6: it would flip to 3 only at about 1.5 minutes or less; the pace is nowhere near
+that, and M = 3 would put the first mergeable set at 43.5 minutes against 12.2 [sim O]). The pace of the squeezing, stretching and mixed styles is the same as before the tap decision (3.2 to 3.7
+against 3.1 to 3.6); the slower population median comes entirely from the tapping share. The next levers, if a playtest or the owner asks for the 2026-10-05 timeline back (all 50 in
+131 days with trade), are the capsule cost (100 SP; about 85 SP would restore the regular median to about 3.0) or a bigger squeeze and stretch pay, which would push the paying styles under
+3.0 minutes: that is the owner's call, and it was not applied.
 
 **Restock and tasks.** *Restock:* once per day, 3 random Common or Uncommon species are offered (25 species pool); pick one, new ones shown first. Misses do not accumulate or punish.
-*Tasks:* 2 offered a day ("stretch one to 2x", "five soft pops in a row"), each completed task pays one capsule, **max 5 tasks a week**, tasks are style-neutral.
+*Tasks:* 2 offered a day ("stretch one to 2x", "five soft pops in a row"), each completed task pays one capsule, **max 5 tasks a week**, tasks are style-neutral. **Taps still count for the
+tasks that ask for pokes ("Twenty gentle pokes", "Ten pokes with a calm pause between"), as the owner asked, so a task capsule is the one reward a player can still reach by tapping;** it is
+bounded by the 2-a-day and 5-a-week limits (a decision for the owner, see ECON_NOTAP in the handoff reports).
 
 ### 5.5 Playstyle affinity: tested, then dropped from the drop odds
 
