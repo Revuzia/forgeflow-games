@@ -8,13 +8,17 @@
 //     solver softens the shape matching there (SoftParams.peakSoft), holds the feature's own shape with the Laplacian (bendFloor) and
 //     puts thin-part struts through it (struts.ts), so a thin feature flops and recovers instead of folding. It comes from the recipe:
 //     every bump or ridge contributes its own Gaussian widened by FLOPPY_WIDEN radians, weighted by how THIN it is (tall for its width,
-//     and narrow: DOLLOP's peak, amplitude 0.5 at width 0.35, is fully floppy; a broad swelling or a cube's rounded corner is not), so
-//     DOLLOP keeps the zone it was tuned with (0.7 rad around the peak).
+//     and narrow: a horn or an ear is fully floppy; a broad swelling or a cube's rounded corner is not).
+// A PARAMETRIC recipe (a `peak` and/or a `foot`, see src/data/shapes.ts; DOLLOP since the round-2 fix round) is evaluated with its own
+// forward map, shapePoint, so its points are placed exactly where the recipe puts them (the pinched peak packs vertices into the tip),
+// and it carries its own foot (the generic FOOT_CUT foot is not added). Its peak is floppy by definition: exp(-(theta / (PEAK_FLOPPY x
+// width))^2) of the sphere direction, which for DOLLOP (width 0.40) is the 0.7 rad zone its solver was tuned with. So the physics DOLLOP
+// is the hand-built one of 6dff62e point for point: same particles, floppy weights and struts.
 import type { Genome } from '../core/genome.ts';
 import { clamp, lerp } from '../core/rng.ts';
 import type { IcoMesh } from './mesh.ts';
 import { getSpecies } from '../data/catalog.ts';
-import { DOLLOP_RECIPE, evalShape, forEachDirection } from '../data/shapes.ts';
+import { DOLLOP_RECIPE, evalShape, forEachDirection, shapePoint } from '../data/shapes.ts';
 import type { ShapeRecipe, ShapeFeature } from '../data/shapes.ts';
 
 export interface RestShape {
@@ -24,6 +28,8 @@ export interface RestShape {
   floppy: Float64Array;
   /** Per-vertex thin feature the floppy weight belongs to (floppyFeature; -1 = none). Struts only join particles of the same feature. */
   feature: Int16Array;
+  /** Per-vertex strut weight: the floppy weight, faded out in a VALLEY between two thin features (strutWeight). Struts are built on it. */
+  strutW: Float64Array;
   /** Per-vertex mass from tributary rest area, normalised to mean 1. */
   mass: Float64Array;
   /** Nominal radius R0 (0.5 x lerp(0.8, 1.25, size)). */
@@ -71,6 +77,8 @@ const FLOPPY_WIDEN = 0.35;
  *  the width) (narrow). tuned on the 50-species smoke: a width-only or ratio-only test made cushlet's four rounded corners floppy, which
  *  softened 97% of its particles (624 of 642) and built 1560 struts. */
 const THIN_LO = 0.7, THIN_HI = 1.3, NARROW_LO = 0.4, NARROW_HI = 0.6;
+/** Floppy zone of a parametric peak in units of its width (DOLLOP: 1.75 x 0.40 = the 0.7 rad FLOPPY_SIGMA of the hand-built DOLLOP). */
+const PEAK_FLOPPY = 1.75;
 
 /** Recipe of a species (an unknown or hostile id is DOLLOP). */
 export function recipeOf(species: unknown): ShapeRecipe {
@@ -103,28 +111,60 @@ const featW = (f: ShapeFeature, dx: number, dy: number, dz: number, widen: numbe
 };
 /** Which thin feature the last floppyOf() call's weight came from (2 x feature index, + 1 for a mirror copy; -1 = none). */
 export let floppyFeature = -1;
+/** The largest floppy contribution of any OTHER thin feature (or mirror copy) at the last floppyOf() direction (0 for a lone feature). */
+export let floppySecond = 0;
 /** Floppy weight 0..1 of a direction: the thin bumps and ridges of the recipe (see the header). Sets floppyFeature. */
 export function floppyOf(r: ShapeRecipe, dx: number, dy: number, dz: number): number {
-  let fl = 0;
+  let fl = 0, f2 = 0;
   floppyFeature = -1;
+  const pk = r.peak;
+  if (pk !== undefined) {
+    const a = pk.dir, c = clamp(dx * a[0] + dy * a[1] + dz * a[2], -1, 1), q = Math.acos(c) / (PEAK_FLOPPY * pk.width);
+    fl = Math.exp(-q * q); floppyFeature = 2 * r.features.length;
+  }
+  const take = (w: number, id: number): void => {
+    if (w > fl) { f2 = fl; fl = w; floppyFeature = id; } else if (w > f2) f2 = w;
+  };
   r.features.forEach((f, k) => {
     if (f.kind === 'dent') return;
     const t = sstep(THIN_LO, THIN_HI, f.amp / f.width) * (1 - sstep(NARROW_LO, NARROW_HI, f.width));
     if (t <= 0) return;
-    const g0 = featW(f, dx, dy, dz, FLOPPY_WIDEN), g1 = f.mirrorX ? featW(f, -dx, dy, dz, FLOPPY_WIDEN) : 0;
-    if (t * g0 > fl) { fl = t * g0; floppyFeature = 2 * k; }
-    if (t * g1 > fl) { fl = t * g1; floppyFeature = 2 * k + 1; }
+    take(t * featW(f, dx, dy, dz, FLOPPY_WIDEN), 2 * k);
+    if (f.mirrorX) take(t * featW(f, -dx, dy, dz, FLOPPY_WIDEN), 2 * k + 1);
   });
+  floppySecond = f2;
   return fl;
+}
+
+/**
+ * VALLEYS BETWEEN THIN FEATURES (physics round-2 fix round). Struts are the interior of ONE thin feature (struts.ts). Where two thin
+ * features' floppy zones overlap (marigel's eight petals 45 degrees apart: the valley between two petals has floppy 0.74 from BOTH), the
+ * particle is not inside either feature: it is the body between them, which must flatten when a finger presses across the valley. A strut
+ * from a valley particle runs through the base of one petal and holds the valley floor out at its rest distance from the petal's far wall,
+ * so the pressed valley folds over that stiff point (marigel's side press: 160.7 degrees, 26 frames over 120, at the valley particle
+ * 1.96 tip radii from the finger; with no struts from particles of floppy < 0.85 the same press peaks at 89 degrees).
+ * So a particle's strut weight is its floppy weight faded by how strongly a SECOND feature claims it: x (1 - smoothstep(VALLEY_LO,
+ * VALLEY_HI, second / first)). A lone feature (DOLLOP's peak, a horn, the core of each petal, where the neighbour's weight is < 0.5 of its
+ * own) keeps its full weight, so DOLLOP's struts are exactly the ones it was tuned with; the exact saddle between two equal features gets 0.
+ */
+const VALLEY_LO = 0.5, VALLEY_HI = 0.9;
+export function strutWeight(fl: number, second: number): number {
+  return fl > 0 ? fl * (1 - sstep(VALLEY_LO, VALLEY_HI, second / fl)) : 0;
 }
 
 /**
  * Rest point for a unit direction. Writes xyz into out[o..o+2] and returns the floppy-part weight (0..1: 1 at the tip of a thin feature).
  * No state, no randomness: the same (species, direction, R0) always gives the same point. Position = u * evalShape(recipe, u) * R0, with
- * the flat foot applied.
+ * the flat foot applied (a recipe with its own foot: shapePoint(recipe, u) * R0).
  */
 export function restPoint(species: Genome['species'], dx: number, dy: number, dz: number, R0: number, out: Float64Array | number[], o: number): number {
   const rec = recipeOf(species);
+  if (rec.foot !== undefined) {
+    // parametric recipe with its own foot (DOLLOP): the recipe's map, as is
+    shapePoint(rec, dx, dy, dz, out, o);
+    out[o] *= R0; out[o + 1] *= R0; out[o + 2] *= R0;
+    return floppyOf(rec, dx, dy, dz);
+  }
   const info = shapeInfo(rec);
   const r = evalShape(rec, dx, dy, dz) * R0;
   const x = dx * r, z = dz * r;
@@ -155,10 +195,11 @@ export function buildRest(genome: Genome, mesh: IcoMesh): RestShape {
   const pg = physicsGenome(genome);
   const R0 = restRadiusOf(pg);
   const p = new Float64Array(n * 3);
-  const floppy = new Float64Array(n), feature = new Int16Array(n);
+  const floppy = new Float64Array(n), feature = new Int16Array(n), strutW = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     floppy[i] = restPoint(pg.species, mesh.dirs[i * 3], mesh.dirs[i * 3 + 1], mesh.dirs[i * 3 + 2], R0, p, i * 3);
     feature[i] = floppyFeature;
+    strutW[i] = strutWeight(floppy[i], floppySecond);
   }
   // tributary-area masses (a third of each incident triangle), mean 1
   const mass = new Float64Array(n);
@@ -184,7 +225,7 @@ export function buildRest(genome: Genome, mesh: IcoMesh): RestShape {
     if (p[i * 3 + 1] > maxY) { maxY = p[i * 3 + 1]; peak = i; }
   }
   return {
-    restLocal: p, floppy, feature, mass, restRadius: R0, restCenterY: -minY, peakVertex: peak,
+    restLocal: p, floppy, feature, strutW, mass, restRadius: R0, restCenterY: -minY, peakVertex: peak,
     restVolume: meshVolume(p, tris), height: maxY - minY,
   };
 }

@@ -106,7 +106,7 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 
 | idx | Name | Family | Look numbers (core glow / glitter / gloss / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
 |---|---|---|---|---|---|---|
-| 0 | Dollop | Jelly Gel | 0.80 / 0.30 / 0.88 / 0.78 / plain  / dot / 0.50 | 3 / 0.82 / 1.92 | Flipdome 0.10 | Ambrosel 0.052 |
+| 0 | Dollop | Jelly Gel | 0.80 / 0.30 / 0.88 / 0.78 / plain  / dot / 0.50 | 1 / 0.82 / 1.97 | Flipdome 0.10 | Ambrosel 0.052 |
 | 1 | Plumpet | Jelly Gel | 0.30 / 0.00 / 0.75 / 0.55 / plain  / oval / 0.55 | 0 / 1.04 / 2.30 | Cushlet 0.11 | Zingle 0.074 |
 | 2 | Twangle | Sticky Stretch | 0.28 / 0.00 / 0.70 / 0.50 / plain  / wide / 0.40 | 2 / 0.66 / 2.75 | Cindergoo 0.11 | Dimpla 0.089 |
 | 3 | Puddlo | Liquid Core | 0.20 / 0.00 / 0.85 / 0.45 / plain  / sleepy / 0.70 | 0 / 0.94 / 1.00 | Hooplet 0.13 | Swishel 0.053 |
@@ -161,7 +161,7 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | 37 | Cindergoo | Slime Goo | 0.88 / 0.60 / 0.97 / 0.85 / swirl 0.50 / dot / 0.55 | 4 / 0.87 / 2.62 | Twangle 0.11 | Chunkle 0.060 |
 | 38 | Selenuff | Marshmallow Puff | 0.82 / 0.65 / 0.40 / 0.33 (cap 0.40) / swirl 0.60 / sleepy / 0.60 | 3 / 1.00 / 2.29 | Nuzzo 0.11 | Acornel 0.071 |
 | 39 | Pastrel | Mochi Dough | 0.80 / 0.50 / 0.40 / 0.38 (cap 0.45) / bands 0.65 / oval / 0.55 | 3 / 0.84 / 1.38 | Crimpo 0.10 | Fossilo 0.064 |
-| 40 | Flipdome | Pop Dome | 0.85 / 0.55 / 0.85 / 0.80 / bands 0.70 / wide / 0.45 | 3 / 1.26 / 2.22 | Burrbin 0.10 | Munchip 0.106 |
+| 40 | Flipdome | Pop Dome | 0.85 / 0.55 / 0.85 / 0.80 / bands 0.70 / wide / 0.45 | 3 / 1.26 / 2.22 | Dollop 0.10 | Munchip 0.106 |
 | 41 | Caromel | Firm Silicone | 0.82 / 0.50 / 0.70 / 0.75 / swirl 0.60 / wide / 0.45 | 3 / 1.14 / 2.02 | Thudge 0.12 | Sproutle 0.073 |
 
 ### Legendary (5)

@@ -69,6 +69,12 @@ export class Core {
   private comp = 0;
   private lite = false;
   calm = false;
+  /** Multiplier on the core's size (blob and halo): the body's own pop-in scale, so a result popping out of a capsule at 0.55x does not
+   *  wear a full-size halo around a small body (it read as a big saturated aura at the burst peak). */
+  sizeMul = 1;
+  // the tier colours setStyle computed (tint() leans away from them and back without allocating)
+  private readonly baseCol = new THREE.Color(); private readonly baseHot = new THREE.Color();
+  private readonly baseHalo = new THREE.Color(); private readonly tintTmp = new THREE.Color();
 
   constructor(genome: Genome, palette: JellyPalette, scale: number, style: TierStyle) {
     this.radius = 0.17 * scale;
@@ -105,9 +111,22 @@ export class Core {
       const tc = new THREE.Color().setRGB(t[0], t[1], t[2], THREE.LinearSRGBColorSpace);
       col.lerp(tc, style.coreTint); hot.lerp(tc.clone().lerp(new THREE.Color(1, 1, 1), 0.35), style.coreTint);
     }
-    const k = style.coreTint;
-    this.halo.setColor(p.core[0] + (t[0] - p.core[0]) * k, p.core[1] + (t[1] - p.core[1]) * k, p.core[2] + (t[2] - p.core[2]) * k);
+    const k = style.coreTint, w = style.corePrism > 0 ? 0.4 : 0;   // a prism core's halo is pastel (its blob carries the spectrum)
+    const hr = p.core[0] + (t[0] - p.core[0]) * k, hg = p.core[1] + (t[1] - p.core[1]) * k, hb = p.core[2] + (t[2] - p.core[2]) * k;
+    this.halo.setColor(hr * (1 - w) + w * 0.9, hg * (1 - w) + w * 0.9, hb * (1 - w) + w);
+    this.baseHalo.setRGB(hr * (1 - w) + w * 0.9, hg * (1 - w) + w * 0.9, hb * (1 - w) + w, THREE.LinearSRGBColorSpace);
+    this.baseCol.copy(col); this.baseHot.copy(hot);
     this.blobMat.uniforms.uPrism.value = style.corePrism;
+  }
+
+  /** Lean the core (blob, hot centre, halo) toward a colour (linear rgb) by k 0..1: the merge charge's tell. k 0 = the tier colours. */
+  tint(r: number, g: number, b: number, k: number): void {
+    const col = this.blobMat.uniforms.uColor.value as THREE.Color, hot = this.blobMat.uniforms.uHot.value as THREE.Color, t = this.tintTmp;
+    t.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
+    col.copy(this.baseCol).lerp(t, k);
+    hot.copy(this.baseHot).lerp(t, k * 0.8);
+    const h = this.baseHalo;
+    this.halo.setColor(h.r + (r - h.r) * k, h.g + (g - h.g) * k, h.b + (b - h.b) * k);
   }
 
   /** Low tier: no opaque blob (nothing refracts it, so it would read as a flat coin); the soft halo + the jelly's own glow carry it. */
@@ -120,7 +139,7 @@ export class Core {
     this.comp += (squeeze - this.comp) * (1 - Math.exp(-dt * 12));
     const k = this.comp;
     const sy = 1 - 0.42 * k, sxz = 1 + 0.2 * k;
-    const r = this.radius * st.coreSize;
+    const r = this.radius * st.coreSize * this.sizeMul;
     this.blob.position.set(c.x, c.y, c.z);
     this.blob.quaternion.set(q.x, q.y, q.z, q.w);
     this.blob.scale.set(r * sxz, r * sy, r * sxz);

@@ -139,6 +139,7 @@ export class BodyView {
     this.prevSq = rawSq;
     this.smComp += (rawSq - this.smComp) * (1 - Math.exp(-dt * 14));
     this.smStretch += (Math.max(m.stretch, j.pull * 0.6 * this.grabGate) - this.smStretch) * (1 - Math.exp(-dt * 10));
+    this.core.sizeMul = this.proxy.scale;
     this.core.update(body, dt, time, this.smComp);
     const u = this.mats.uniforms;
     u.uTime.value = time;

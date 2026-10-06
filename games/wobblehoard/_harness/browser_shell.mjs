@@ -73,6 +73,18 @@ async function open({ query = '?dev=1', ctx = DESKTOP, init = null, waitTitle = 
   return { context, page, w };
 }
 const state = (page) => page.evaluate(() => window.__WH__.state());
+/** a load readout (not a check): fps over ~1.5 s of live frames, the stage's draw calls / triangles / bodies */
+async function loadNote(page, label) {
+  const r = await page.evaluate(async () => {
+    const wh = window.__WH__; wh.resume();
+    let n = 0; const t0 = performance.now();
+    await new Promise((res) => { const f = () => { n++; if (performance.now() - t0 < 1500) requestAnimationFrame(f); else res(); }; requestAnimationFrame(f); });
+    const st = wh.state(); const info = wh.shell.stageInfo();
+    return { rafFps: +(n / ((performance.now() - t0) / 1000)).toFixed(1), drawCalls: st.stage.drawCalls, tris: st.stage.triangles, bodies: info?.bodies ?? null, capsule: info?.capsule ?? null };
+  });
+  console.log(`   load ${JSON.stringify(r)} (${label})`);
+  return r;
+}
 async function fpsNote(page, label) { const f = (await state(page)).fps; fpsLog.push([label, f]); console.log(`   fps ${f} (${label})`); return f; }
 const fpsLog = [];
 const started = (page) => page.evaluate(() => window.__WH__.state().audio.started);
@@ -88,10 +100,20 @@ async function wake(page, { touch = false } = {}) {
   await page.waitForFunction(() => window.__WH__.state().phase === 'play', null, { timeout: 30000 });
   await page.waitForFunction(() => getComputedStyle(document.querySelector('.hud')).opacity === '1' && !document.querySelector('.title'), null, { timeout: 30000 });
 }
-// animations 'disabled': CSS transitions are fast-forwarded to their end state. While the rAF loop is paused (DebugHook.step) Chromium
-// produces no frames of its own, so a transition that started during stepping would otherwise be captured at its first frame (the
-// reveal plate at opacity 0).
-async function shot(page, name) { await page.screenshot({ path: resolve(SHOTS, name + '.png'), timeout: 240000, caret: 'hide', animations: 'disabled' }); }
+// settle first: while the rAF loop is paused (DebugHook.step) Chromium produces no frames of its own, so a CSS transition that started
+// during stepping would be captured at its first frame (the reveal plate at opacity 0). settle() drives frames until finite transitions
+// end. (Playwright's animations: 'disabled' did the same job but hung screenshots of the live page under heavy machine load.)
+// A live dev page is paused for the shot (the canvas keeps its last frame; no WebGL frame competes with the capture on a loaded machine)
+// and resumed after it, unless the section had paused it itself.
+async function shot(page, name) {
+  const held = await page.evaluate(() => { const s = window.__WH__?.shell; if (!s || s.paused()) return false; window.__WH__.pause(); return true; }).catch(() => false);
+  try {
+    await settle(page, 4000);
+    await page.screenshot({ path: resolve(SHOTS, name + '.png'), timeout: 240000, caret: 'hide' });
+  } finally {
+    if (held) await page.evaluate(() => window.__WH__.resume()).catch(() => {});
+  }
+}
 /** deterministic: pause the rAF loop and advance the sim (and the stage) by `seconds` in 1/60 steps, rendering once at the end */
 const stepSim = (page, seconds) => page.evaluate((s) => { window.__WH__.step(1 / 60, Math.round(s * 60)); }, seconds);
 /** step in slices until fn(state) holds (or `max` seconds pass); returns the sim seconds it took, or -1. Each slice yields a task, so the
@@ -618,6 +640,8 @@ async function main() {
     // ------------------------------------------------------------------------------------------------
     let C = null;
     await section('capsule-loop', async () => {
+      // a section that failed half-way leaves its page open and rendering: close it, or every later page competes with it for the CPU
+      if (D) { try { await D.context.close(); } catch { /* closed */ } D = null; }
       C = await open({ query: '?dev=1' });
       mainWatches.push(['capsule', C.w]);
       const { page } = C;
@@ -747,6 +771,7 @@ async function main() {
       // the hum must be live right before the skip and stopped by it (mh.stop() on a 'reveal' without 'burst'), not left to run out
       check('merge skipped: the hum was live before the skip and is stopped two frames after it (mh.stop)', humBefore >= 1 && humAfter === 0, `live merge voices ${humBefore} -> ${humAfter}`);
       await page.evaluate(() => window.__WH__.resume());
+      await loadNote(page, 'after skip-timing');
     });
 
     // ------------------------------------------------------------------------------------------------
@@ -779,6 +804,7 @@ async function main() {
       const fin = await page.evaluate(async () => { await window.__revP; await window.__openP; return { id: window.__WH__.shell.identity(), m: window.__WH__.shell.meter() }; });
       check('flash safety: the queued open was not lost (it played to the end, the capsule is spent, its result is the play body)', fin.m.credits === credits0 && !!fin.id.itemId && !fin.id.itemId.startsWith('dev-'), JSON.stringify({ itemId: fin.id.itemId, species: fin.id.species, credits: `${credits0} -> ${fin.m.credits}` }));
       await page.evaluate(() => window.__WH__.resume());
+      await loadNote(page, 'after ceremony-spacing');
     });
 
     // ------------------------------------------------------------------------------------------------
@@ -786,6 +812,7 @@ async function main() {
     // ------------------------------------------------------------------------------------------------
     await section('calm-mode', async () => {
       const { page } = C;
+      await page.evaluate(() => window.__WH__.pause());     // no live WebGL frames while clicking through the panel (the DOM still runs)
       if (!(await clickSel(page, 'button[aria-label="Settings"]', 'the gear'))) return;
       await sleep(400);
       await page.focus('#wh-calm'); await page.keyboard.press('Space'); await sleep(300);
@@ -823,6 +850,7 @@ async function main() {
     // settings migration: a slice-1 blob (no `v`) and a blob from a newer build
     // ------------------------------------------------------------------------------------------------
     await section('settings-migration', async () => {
+      if (C) { try { await C.context.close(); } catch { /* closed */ } C = null; }   // the capsule page, if a section above stopped early
       const seed = (blob) => `if (!sessionStorage.getItem('seeded')) { sessionStorage.setItem('seeded', '1'); localStorage.setItem('wobblehoard:v1:settings', ${JSON.stringify(JSON.stringify(blob))}); }`;
       {
         const { page, context, w } = await open({ query: '?dev=1', init: seed({ volume: 0.3, squishBoost: 0.9, haptics: false, shake: 0.1, gravity: false, quality: 'low' }) });

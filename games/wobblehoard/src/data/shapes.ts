@@ -14,6 +14,14 @@
 // Falloff of a feature is the CHORDAL Gaussian  g = exp(-|u - d|^2 / w^2) = exp(-2 (1 - u.d) / w^2)  (|u - d|^2 = 2 - 2 u.d),
 // which is exp(-theta^2 / w^2) for small angles theta and needs no acos. `width` w is the angle (radians) at which g = 1/e.
 // Resolution rule: a 642-vertex sim mesh has ~0.14 rad vertex spacing, so every width must be >= SHAPE_MIN_WIDTH (0.35 rad).
+//
+// PARAMETRIC RECIPES (physics round 2 fix round; additive, used by DOLLOP only). A narrow pinched point such as DOLLOP's swirl-peak
+// (5.6 cm wide 6 cm under its tip) is not a radial bump: on the sim mesh a radial bump that narrow is one or two vertices wide. The
+// hand-built DOLLOP made it by MOVING the points of the cap toward the axis, which packs the mesh's vertices into the peak. A recipe
+// with a `peak` or a `foot` (or a swirl with a `yScale`) is therefore evaluated as a MAP of sphere directions d to surface points
+// (shapePoint): the ellipsoid point (dx rx, dy ry, dz rz) scaled by the features and the swirl at d, then the peak (pinch toward its
+// axis, lift along it, lean), then the foot (a flat plane the body stands on). evalShape returns the radius of that same surface along
+// u by inverting the map (a short fixed-point iteration). A recipe without them is unchanged: r(u) above, shapePoint = u r(u).
 
 export type Vec3 = readonly [number, number, number];
 export type FeatureKind = 'bump' | 'dent' | 'ridge';
@@ -36,6 +44,8 @@ export interface ShapeFeature {
 
 /** A spiral piping ridge on the flanks (what makes DOLLOP's swirl): amp * sin(lobes * phi + twist * theta) * window(theta). theta = angle from +Y. */
 export interface ShapeSwirl {
+  /** Parametric recipes only (see the header): the swirl's share on the vertical axis (DOLLOP 0.5). Absent = 1. */
+  yScale?: number;
   amp: number;
   lobes: number;
   twist: number;
@@ -45,11 +55,24 @@ export interface ShapeSwirl {
   fadeOut: readonly [number, number];
 }
 
+/**
+ * A PEAK (parametric recipes, see the header): the point of sphere direction d, with theta = the angle between d and `dir` and
+ * g = exp(-(theta / width)^2), is pulled toward the axis (its part across `dir` x (1 - pinch g)), lifted by lift g along `dir` and
+ * shifted by lean g^2 (a curl, rest radii). DOLLOP: width 0.40, lift 0.46, pinch 0.5, lean (0.085, 0, 0.03) about +Y.
+ */
+export interface ShapePeak { dir: Vec3; width: number; lift: number; pinch: number; lean: Vec3 }
+/** A FLAT FOOT (parametric recipes): y = smooth max(y, plane) with a corner `soft` wide, and points within `snap` of the plane put on it
+ *  (the body stands on an exactly coplanar patch). All in rest radii, relative to the shape's centre. DOLLOP: plane -0.72. */
+export interface ShapeFoot { y: number; soft: number; snap: number }
+
 export interface ShapeRecipe {
   /** Base ellipsoid semi-axes [rx, ry, rz] (x = left/right, y = up, z = front toward the camera, where the eyes are). */
   radii: Vec3;
   features: readonly ShapeFeature[];
   swirl?: ShapeSwirl;
+  /** Parametric recipes only (additive; see the header). */
+  peak?: ShapePeak;
+  foot?: ShapeFoot;
 }
 
 /** Hard limits of the surface radius (units of R0). evalShape clamps to them; the catalog probe requires recipes to stay clear of them. */
@@ -109,9 +132,11 @@ function featureWeight(f: ShapeFeature, ux: number, uy: number, uz: number): num
 
 /**
  * Surface radius (units of the genome-scaled rest radius) along the UNIT direction (ux, uy, uz). Pure, allocation-free, clamped to
- * [SHAPE_R_MIN, SHAPE_R_MAX]. Position of the surface point = u * evalShape(...) * R0.
+ * [SHAPE_R_MIN, SHAPE_R_MAX]. Position of the surface point = u * evalShape(...) * R0. (A parametric recipe, see the header: the radius of
+ * its mapped surface along u, by inverting shapePoint; a mesh built from it should place its vertices with shapePoint, as the physics does.)
  */
 export function evalShape(recipe: ShapeRecipe, ux: number, uy: number, uz: number): number {
+  if (recipe.peak !== undefined || recipe.foot !== undefined || (recipe.swirl !== undefined && recipe.swirl.yScale !== undefined)) return parametricRadius(recipe, ux, uy, uz);
   const rd = recipe.radii;
   const ex = ux / rd[0], ey = uy / rd[1], ez = uz / rd[2];
   let k = 1;
@@ -129,6 +154,84 @@ export function evalShape(recipe: ShapeRecipe, ux: number, uy: number, uz: numbe
       * SW(sw.fadeIn[0], sw.fadeIn[1], theta) * (1 - SW(sw.fadeOut[0], sw.fadeOut[1], theta));
   }
   const r = k / Math.sqrt(ex * ex + ey * ey + ez * ez);
+  return r < SHAPE_R_MIN ? SHAPE_R_MIN : r > SHAPE_R_MAX ? SHAPE_R_MAX : r;
+}
+
+/** Features + swirl factor at a sphere direction (1 = the plain ellipsoid); `ky` receives the vertical one (swirl x yScale). */
+const KY = new Float64Array(1);
+function factorAt(recipe: ShapeRecipe, ux: number, uy: number, uz: number): number {
+  let k = 1;
+  const fs = recipe.features;
+  for (let i = 0; i < fs.length; i++) {
+    const f = fs[i];
+    let g = featureWeight(f, ux, uy, uz);
+    if (f.mirrorX) g += featureWeight(f, -ux, uy, uz);
+    k += f.kind === 'dent' ? -f.amp * g : f.amp * g;
+  }
+  let ky = k;
+  const sw = recipe.swirl;
+  if (sw !== undefined) {
+    const theta = Math.acos(uy < -1 ? -1 : uy > 1 ? 1 : uy);
+    const v = sw.amp * Math.sin(sw.lobes * Math.atan2(uz, ux) + sw.twist * theta) * SW(sw.fadeIn[0], sw.fadeIn[1], theta) * (1 - SW(sw.fadeOut[0], sw.fadeOut[1], theta));
+    k += v; ky += v * (sw.yScale ?? 1);
+  }
+  KY[0] = ky;
+  return k;
+}
+
+/**
+ * Surface point (rest radii, relative to the shape's centre) of the sphere direction (ux, uy, uz) into out[o..o+2]. A radial recipe gives
+ * u r(u); a parametric one (peak / foot / swirl yScale, see the header) the mapped point. Allocation-free.
+ */
+export function shapePoint(recipe: ShapeRecipe, ux: number, uy: number, uz: number, out: Float64Array | number[], o = 0): void {
+  if (recipe.peak === undefined && recipe.foot === undefined && (recipe.swirl === undefined || recipe.swirl.yScale === undefined)) {
+    const r = evalShape(recipe, ux, uy, uz);
+    out[o] = ux * r; out[o + 1] = uy * r; out[o + 2] = uz * r;
+    return;
+  }
+  const rd = recipe.radii, k = factorAt(recipe, ux, uy, uz), ky = KY[0];
+  let x = ux * rd[0] * k, y = uy * rd[1] * ky, z = uz * rd[2] * k;
+  const pk = recipe.peak;
+  if (pk !== undefined) {
+    const a = pk.dir, c = ux * a[0] + uy * a[1] + uz * a[2];
+    const th = Math.acos(c < -1 ? -1 : c > 1 ? 1 : c), q = th / pk.width, g = Math.exp(-q * q), pinch = 1 - pk.pinch * g;
+    const along = x * a[0] + y * a[1] + z * a[2];
+    x = along * a[0] + (x - along * a[0]) * pinch + a[0] * pk.lift * g + pk.lean[0] * g * g;
+    y = along * a[1] + (y - along * a[1]) * pinch + a[1] * pk.lift * g + pk.lean[1] * g * g;
+    z = along * a[2] + (z - along * a[2]) * pinch + a[2] * pk.lift * g + pk.lean[2] * g * g;
+  }
+  const ft = recipe.foot;
+  if (ft !== undefined) {
+    const fl = ft.y, kk = ft.soft;
+    y = 0.5 * (y + fl + Math.sqrt((y - fl) * (y - fl) + kk * kk));
+    if (y - fl < ft.snap) y = fl;
+  }
+  out[o] = x; out[o + 1] = y; out[o + 2] = z;
+}
+
+const PS = new Float64Array(3);
+/** Radius along u of a parametric recipe's surface: the sphere direction d whose point lies along u, by a damped fixed-point iteration
+ *  (the map compresses directions up to ~3x inside the peak, so each step is scaled by the measured compression). */
+function parametricRadius(recipe: ShapeRecipe, ux: number, uy: number, uz: number): number {
+  let dx = ux, dy = uy, dz = uz, gain = 1, pdx = 0, pdy = 0, pdz = 0, pex = 0, pey = 0, pez = 0, r = 1;
+  for (let it = 0; it < 60; it++) {
+    shapePoint(recipe, dx, dy, dz, PS, 0);
+    r = Math.sqrt(PS[0] * PS[0] + PS[1] * PS[1] + PS[2] * PS[2]) || 1e-12;
+    const ex = ux - PS[0] / r, ey = uy - PS[1] / r, ez = uz - PS[2] / r, el = Math.sqrt(ex * ex + ey * ey + ez * ez);
+    if (el < 1e-12) break;
+    if (it > 0) {
+      // compression of the map: how much the point direction moved per unit move of d on the last step
+      const mx = pex - ex, my = pey - ey, mz = pez - ez, ml = Math.sqrt(mx * mx + my * my + mz * mz), dl = Math.sqrt(pdx * pdx + pdy * pdy + pdz * pdz);
+      if (dl > 1e-15 && ml > 1e-15) { const gnew = ml / dl; gain = gnew < 0.1 ? 0.1 : gnew > 2 ? 2 : gnew; }
+    }
+    pdx = ex / gain; pdy = ey / gain; pdz = ez / gain;
+    let nx = dx + pdx, ny = dy + pdy, nz = dz + pdz;
+    const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+    nx /= nl; ny /= nl; nz /= nl;
+    pdx = nx - dx; pdy = ny - dy; pdz = nz - dz;
+    dx = nx; dy = ny; dz = nz;
+    pex = ex; pey = ey; pez = ez;
+  }
   return r < SHAPE_R_MIN ? SHAPE_R_MIN : r > SHAPE_R_MAX ? SHAPE_R_MAX : r;
 }
 
@@ -217,17 +320,17 @@ export function shapeDistance(a: ShapeRecipe, b: ShapeRecipe, n: number = 1024):
 /* ───────────────────────────────────────────────── DOLLOP ───────────────────────────────────────────────── */
 
 /**
- * DOLLOP, the slice squishy (species 0): a squat dome flattened to 0.8 in Y, a narrow raised swirl-peak at +Y leaning a little, a
- * faint spiral piping ridge on the flanks and a flat-ish foot. Fitted (grid search) against the radial profile of
- * `restPoint('dollop', ...)` in src/physics/shape.ts, the physics lane's current build: RMS error 0.012 R0 over the whole sphere, worst
- * case 0.085 R0 at the very tip of the peak (the physics peak is pinched narrower than the 0.35 rad feature-width floor allows).
- * probe_catalog.ts re-measures this against the live physics function and fails if it drifts.
+ * DOLLOP, the slice squishy (species 0): a squat dome flattened to 0.8 in Y, a narrow pinched swirl-peak at +Y curling a little toward +X,
+ * a faint spiral piping ridge on the flanks and a flat foot. A PARAMETRIC recipe (see the header): it is the hand-built physics DOLLOP
+ * (src/physics/shape.ts at 6dff62e: PEAK_SIGMA 0.40, PEAK_LIFT 0.46, PEAK_PINCH 0.5, lean 0.085 / 0.03, swirl 0.028 x 3 lobes x 6.5 twist
+ * with half of it on Y, foot plane at 0.9 x the dome's bottom = -0.72, corner 0.035, snap 0.004) written as data, so the physics rest
+ * shape is that DOLLOP point for point (probe_catalog's frozen snapshot). (Physics round 2 had fitted a radial bump of width 0.35 instead:
+ * its tip sat 6.5 cm lower and was 14.6 cm wide 6 cm under the tip against 5.6 cm, with no curl.)
  */
-export const DOLLOP_RECIPE: ShapeRecipe = shape(
-  [1, 0.8, 1],
-  [
-    bump([0.06, 1, 0.035], 0.5, 0.35),
-    dent([0, -1, 0], 0.1, 0.5),
-  ],
-  { amp: 0.028, lobes: 3, twist: 6.5, fadeIn: [0.3, 0.8], fadeOut: [1.9, 2.5] },
-);
+export const DOLLOP_RECIPE: ShapeRecipe = {
+  radii: [1, 0.8, 1],
+  features: [],
+  swirl: { amp: 0.028, lobes: 3, twist: 6.5, fadeIn: [0.3, 0.8], fadeOut: [1.9, 2.5], yScale: 0.5 },
+  peak: { dir: [0, 1, 0], width: 0.4, lift: 0.46, pinch: 0.5, lean: [0.085, 0, 0.03] },
+  foot: { y: -0.72, soft: 0.035, snap: 0.004 },
+};

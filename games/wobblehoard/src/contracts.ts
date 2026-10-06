@@ -11,14 +11,25 @@ export type TierName = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | '
 
 /* ───────────────────────────── physics (src/physics) — pure TypeScript, NO three.js import, deterministic ───────────────────────────── */
 
-/** Discrete things that happened this step. Audio, haptics, FX and screen shake all key off these. */
+/**
+ * Discrete things that happened this step. Audio, haptics, FX and screen shake all key off these.
+ *
+ * PULL INTENSITY (physics round-2 fix round, 2026-10-06). A pull is a grab: it starts with 'grab' and ends with 'snap'. The 'snap'
+ * intensity is the PULL LEVEL at the release: the distance the grab's target had been pulled from where the grab started, divided by
+ * the body's OWN maximum pull (its material family's maxPull, moved by the genome's stretch, x restRadius: about 1.7 R for jelly gel,
+ * 1.1 R firm silicone, 2.9 R sticky stretch at a neutral genome, see src/data/materials.ts; the physics clamps every pull there).
+ * So 1.0 means the body reached its own family's maxPull, for every family, and a half pull reads 0.5 whatever the material. (Until this round it was metrics.stretch at the release, the body's
+ * geometric extent: a gel pulled to its limit read 0.25, a firm silicone 0.15, a slow-rise foam 0.04, which was under the 0.05 needed
+ * for a 'snap' at all.) A 'snap' now fires when the pull level at the release is over 0.05. 'grab' itself carries no pull yet: its
+ * intensity is a fixed 0.5. metrics.stretch keeps its own meaning (the body's extent, 1 = ~2.2x its rest extent).
+ */
 export type SoftEventKind =
   | 'poke'     // a finger touched the surface (intensity = impact speed, 0..1)
   | 'press'    // a poke turned into a held squeeze (after ~0.18 s); intensity = current depth 0..1
   | 'release'  // a finger lifted while the body was compressed (intensity = compression released, 0..1; heldFor = seconds pressed)
   | 'land'     // body hit the table (intensity = impact speed, 0..1)
-  | 'grab'     // a pull started
-  | 'snap';    // a pull was let go while stretched (intensity = stretch released, 0..1)
+  | 'grab'     // a pull started (intensity 0.5, fixed: see PULL INTENSITY above)
+  | 'snap';    // a pull was let go (intensity = the pull level released, 0..1: 1 = the family's maxPull; see above)
 
 export interface SoftEvent {
   kind: SoftEventKind;

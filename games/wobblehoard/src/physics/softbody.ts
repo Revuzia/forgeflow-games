@@ -87,7 +87,7 @@ import type { SoftParams } from './params.ts';
 import { extractRotation, rayMesh } from './mathx.ts';
 import { buildStruts } from './struts.ts';
 import { getSpecies } from '../data/catalog.ts';
-import { applyMaterial, DEFAULT_FAMILY_ID, resolveMaterial } from '../data/materials.ts';
+import { applyMaterial, DEFAULT_FAMILY_ID, MATERIAL_FAMILIES, resolveMaterial } from '../data/materials.ts';
 import type { SolverMaterial } from '../data/materials.ts';
 
 /** Kinematic fingertip (ids 0 and 1). */
@@ -158,6 +158,8 @@ const REACT_REF = 20;              // metrics.reaction: push-back (m/s^2 per uni
                                    // contact impulse at ~1; at 20 a held full press reads soft 0.2-0.6, starter 0.3-0.6, firm 0.45-0.9
 const HOVER_OMEGA = 4.6, HOVER_ZETA = 0.62, HOVER_ABOVE = 0.35;
 const BOB_AMP = 0.03, BOB_HZ = 0.33;
+/** Give law exponent: depth ~ smOmega^GIVE_EXP, from deriveParams' own squashDepth 0.66 -> 0.34 over smOmega 12 -> 40 (see the constructor). */
+const GIVE_EXP = Math.log(0.34 / 0.66) / Math.log(40 / 12);
 const NEAR = 0.01;                // a particle this close to the table counts as touching it (m)
 const BLOCK_MARGIN = 0.03;         // particles this close to a fingertip are 'blocked' for the volume constraint (m)
 const LOAD_CONC = 10;              // friction normal load per touching particle is capped at this many particle-weights
@@ -415,8 +417,21 @@ export class SoftBody implements SoftBodyLike {
       const resolved = resolveMaterial(famId, g0 as Genome);
       this.family = resolved.familyId;
       // the genome is applied ONCE: through the family's band (resolveMaterial), on the physics tuning of a neutral genome
-      this.p = applyMaterial(deriveParams({ ...g0, firmness: 0.5, bounce: 0.5, stretch: 0.5 } as Genome), resolved);
+      const base = deriveParams({ ...g0, firmness: 0.5, bounce: 0.5, stretch: 0.5 } as Genome);
+      this.p = applyMaterial(base, resolved);
       this.mat = sanitizeMaterial(opts.mat ?? resolved.solver);
+      // GIVE (physics round-2 fix round): a stiffer material gives less under the same press. The fingertip is position-driven (pressure ->
+      // depth: squashDepth x thickness), and since round 2 the parameters are built on a NEUTRAL genome, so every family and every genome
+      // was pressed exactly as deep as the neutral gel: a firm silicone could only push back harder (feel distance to the gel 0.061), and a
+      // genome's firmness no longer changed its give (the starter, firmness 0.38, lost 1% of its depth: the metrics press compressed it
+      // 0.198 instead of 0.200). The law is the one deriveParams always used across the firmness range: squashDepth 0.66 -> 0.34 while
+      // smOmega 12 -> 40, i.e. depth ~ smOmega^GIVE_EXP (-0.551), applied to the body's smOmega relative to the neutral gel's:
+      //   * the GENOME part (firmness band, family-independent) both ways, as before round 2: the starter x1.03, firmness 0 x1.13, 1 x0.88;
+      //   * the FAMILY part only where the family is stiffer than the gel (firm silicone x0.76, pop dome x0.70, gummy x0.86). A softer family
+      //     keeps the gel's depth: its softness is its memory / bleed / flow, and a press deeper than the gel's was never tuned for it.
+      const so = this.p.smOmega / base.smOmega;
+      const fam0 = MATERIAL_FAMILIES[resolved.familyId].physics.smOmega / MATERIAL_FAMILIES[DEFAULT_FAMILY_ID].physics.smOmega;
+      if (so > 0 && fam0 > 0) this.p.squashDepth *= Math.pow(so / fam0, GIVE_EXP) * (fam0 > 1 ? Math.pow(fam0, GIVE_EXP) : 1);
     }
     // a parameter override (tuning, material families) only takes finite, non-negative numbers: every SoftParams field is a rate, gain,
     // compliance, length or ratio, and a NaN or a negative one would blow the solver up
@@ -586,7 +601,7 @@ export class SoftBody implements SoftBodyLike {
     this.tipSpeed = FINGER.maxSpeed * Math.min(1, Math.sqrt(642 / n));
     {
       // thin-part struts: chords through the inside of the swirl-peak (struts.ts)
-      const st = buildStruts(rest.restLocal, mesh, rest.floppy, this.p.strutTau, this.p.strutMaxR * rest.restRadius, Math.round(this.p.strutPer), this.p.strutCos, rest.feature);
+      const st = buildStruts(rest.restLocal, mesh, rest.strutW, this.p.strutTau, this.p.strutMaxR * rest.restRadius, Math.round(this.p.strutPer), this.p.strutCos, rest.feature);
       this.ns = st.count; this.S3 = st.ends3; this.SL = st.rest; this.SW = new Float64Array(this.ns);
       for (let k = 0; k < this.ns; k++) this.SW[k] = this.invM[st.ends3[k * 2] / 3] + this.invM[st.ends3[k * 2 + 1] / 3];
     }
@@ -856,6 +871,18 @@ export class SoftBody implements SoftBodyLike {
     this.emit('grab', X[v * 3], X[v * 3 + 1], X[v * 3 + 2], nrm[0], nrm[1], nrm[2], 0.5, 0, id);
   }
 
+  /**
+   * PULL LEVEL of a grab, 0..1 (physics round-2 fix round; the 'snap' intensity, contracts.ts): how far its target has been pulled from
+   * where the grab started, over this body's own maximum pull (SoftParams.maxPull x restRadius: the family's maxPull with the genome's
+   * stretch band; at a neutral genome 1.70 R for the gel, 1.13 R firm silicone, 2.85 R sticky stretch). updateGrabs clamps the pull there,
+   * so 1 = the body reached its family's maxPull. (metrics.stretch, the body's own extent, stays as it was: 0.25 for a gel at its maxPull.)
+   */
+  private pullLevel(g: Grab): number {
+    const dx = g.ex - g.t0x, dy = g.ey - g.t0y, dz = g.ez - g.t0z, maxD = this.p.maxPull * this.restRadius;
+    const l = Math.sqrt(dx * dx + dy * dy + dz * dz) / (maxD > 1e-9 ? maxD : 1e-9);
+    return l < 0 ? 0 : l > 1 - 1e-9 ? 1 : l;   // (the clamp leaves it a rounding error short of 1 at the limit)
+  }
+
   grabMove(id: 0 | 1, target: V3): void {
     const g = this.grabs[id];
     if (!g || !g.active || !target) return;
@@ -867,12 +894,14 @@ export class SoftBody implements SoftBodyLike {
     const g = this.grabs[id];
     if (!g || !g.active) return;
     g.active = false;
-    const s = this.metrics.stretch;
+    // a snap when the pull got anywhere (>= 5% of the body's own maxPull; it was metrics.stretch > 0.05 until the round-2 fix round,
+    // which a firm family pulled to its limit never reaches: slow-rise foam reads stretch 0.04 at its maxPull, so it never snapped)
+    const pl = this.pullLevel(g);
     if (!this.grabs[0].active && !this.grabs[1].active) this.pinHold = this.p.pinHold;
-    if (s > 0.05) {
+    if (pl > 0.05) {
       const v = g.anchor, X = this.X;
       const nrm = this.vertexNormal(v);
-      this.emit('snap', X[v * 3], X[v * 3 + 1], X[v * 3 + 2], nrm[0], nrm[1], nrm[2], clamp(s, 0, 1), g.holdT, id);
+      this.emit('snap', X[v * 3], X[v * 3 + 1], X[v * 3 + 2], nrm[0], nrm[1], nrm[2], pl, g.holdT, id);
     }
   }
 
@@ -1217,6 +1246,11 @@ export class SoftBody implements SoftBodyLike {
    * surface. The two constraints disagree for a crushed cone, so they alternate FINGER.foldIters times (Gauss-Seidel): one pass alone left
    * the skin up to 4.7% R inside the tip, and a single re-seat undid most of the unfolding. Pinned feet are never moved and nothing goes
    * under the table. Only the particles and edges near a tip are visited (lists built by the collision pass), so it costs little.
+   * TABLE EDGES (physics round-2 fix round): the table is a contact too. While a finger or a grab works the body, the particles on the table
+   * (y < NEAR) join the list, so the foot rim gets the same limit: a body rubbed across the table drags its foot, and when the finger slid
+   * off (f0b0s1z1, sane-gesture fuzz frame 2098) the rim edge on the table creased 137-142 degrees for 5 frames, 2.5 tip radii from the
+   * tip, out of reach of the fingertip list. With table edges in the list that run peaks at 110 (the limit); a body at rest on the table,
+   * with nothing touching it, does not pay for it.
    */
   private foldLimit(): void {
     const XP = this.XP, H3 = this.H3, HE = this.HE3, pn = this.pinned, now = this.subIdx;
@@ -1615,10 +1649,14 @@ export class SoftBody implements SoftBodyLike {
       const load = this.supp * GRAVITY * H * H * Math.min(LOAD_CONC, this.Mtot / Math.max(1, this.nearMass));
       const fload = fingerDown / Math.max(1, this.nearMass);   // a finger pressing down adds its force to the normal load
       let contacts = 0, near = 0, nearM = 0;
+      const tstamp = this.touchStamp, tnow = this.subIdx, tnear = this.nearList;
+      // the table edges join the contact fold limit while a finger or a grab works the body (see foldLimit)
+      const tfold = this.fingers[0].down || this.fingers[0].retracting || this.fingers[1].down || this.fingers[1].retracting || this.grabs[0].active || this.grabs[1].active;
       for (let i = 0; i < n * 3; i += 3) {
         const y = XP[i + 1];
         if (y >= NEAR) continue;
         near++; nearM += M[i / 3];
+        if (tfold && tstamp[i / 3] !== tnow) { tstamp[i / 3] = tnow; tnear[this.tipNearN++] = i / 3; }   // on the table: the fold limit looks here too
         let pen = load + fload;
         if (y < 0) { contacts++; pen -= y; XP[i + 1] = 0; } else {
           // tack: lifting off its REST height by less than `glue` is mostly undone (the rest pose is the equilibrium)

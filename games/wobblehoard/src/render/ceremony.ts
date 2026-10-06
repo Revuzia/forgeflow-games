@@ -531,6 +531,8 @@ export class MergeRun extends Run {
   private readonly dirX: number[] = []; private readonly dirZ: number[] = [];
   /** The ceremony framing factor over the play framing (1 = none). */
   private framing = 1;
+  /** The ball's own inner-glow colour (linear) before the charge leans it toward the tell. */
+  private readonly coreCol0: Rgb = [1, 0.5, 0.3];
   private readonly pillar: LightPillar | null;
   private readonly dome: PrismDome | null;
   private readonly rings: number[] = [];
@@ -585,6 +587,7 @@ export class MergeRun extends Run {
     let fr = this.resultView.scale;
     for (const v of this.parents) fr = Math.max(fr, v.scale);
     this.bodyScale = this.parents[0].scale;
+    { const cc = this.parents[0].mats.uniforms.uCoreCol.value; this.coreCol0[0] = cc.r; this.coreCol0[1] = cc.g; this.coreCol0[2] = cc.b; }
     const hw0 = host.viewHalfWidth(fr);    // half-width of the PLAY framing of these bodies at the pad
     this.layout = n === 2 ? 'pair' : hw0 >= 1.25 ? 'row' : 'triangle';
     // where the parents start: a short slide in on narrow frames, from ~1.2 out on desktop; then the framing that shows them whole
@@ -665,6 +668,11 @@ export class MergeRun extends Run {
       const tellOk = fam === st.tellFamily;
       const u = ball.mats.uniforms, tc = tellOk ? st.tell : NEUTRAL_TELL, p2s = p2 * p2 * (3 - 2 * p2);
       u.uTierCol.value.setRGB(tc[0], tc[1], tc[2], THREE.LinearSRGBColorSpace);
+      // the ball's inner light is its biggest colour: an ember core glowing at x2 would out-shout any tint of the jelly around it
+      if (!st.prism) {
+        ball.core.tint(tc[0], tc[1], tc[2], 0.8 * p2s);
+        u.uCoreCol.value.setRGB(this.coreCol0[0] + (tc[0] - this.coreCol0[0]) * p2s, this.coreCol0[1] + (tc[1] - this.coreCol0[1]) * p2s, this.coreCol0[2] + (tc[2] - this.coreCol0[2]) * p2s, THREE.LinearSRGBColorSpace);
+      }
       // the ball's light drifts toward the result tier colour: its own colour leans into the tell (diffuse AND absorption) while the lineage
       // swirl gives way, plus some tell light. Additive light alone only whitened a warm ball (an Uncommon read cream, an Epic pink); the
       // Mythic prism tell (white) stays light

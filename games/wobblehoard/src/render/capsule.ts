@@ -213,7 +213,7 @@ export class Capsule {
     this.tp.set(0, 0, 0); this.bp.set(0, 0, 0);
     // the halves fly OUT of the body's way at once (the result pops up right where they were: transmissive shells lingering inside it read
     // as wire hoops, the lower one as a "mouth" under the eyes) and are gone by 0.5 s
-    this.tv.set(1.5, 2.4, -1.3); this.bv.set(-1.4, 1.3, 1.1);
+    this.tv.set(2.2, 2.4, -1.6); this.bv.set(-2.1, 1.2, 1.3);
     this.tw.set(2.0, 3.2, -4.5); this.bw.set(-1.5, 2.0, 3.5);
     this.u.uStress.value = 0;
   }
@@ -282,7 +282,7 @@ export class Capsule {
       this.top.position.copy(this.tp); this.bottom.position.copy(this.bp);
       this.top.rotation.x += this.tw.x * dt; this.top.rotation.y += this.tw.y * dt; this.top.rotation.z += this.tw.z * dt;
       this.bottom.rotation.x += this.bw.x * dt; this.bottom.rotation.y += this.bw.y * dt; this.bottom.rotation.z += this.bw.z * dt;
-      const sx = Math.min(1, Math.max(0, (this.burstT - 0.12) / 0.33)), s = 1 - sx * sx * (3 - 2 * sx);
+      const sx = Math.min(1, Math.max(0, (this.burstT - 0.04) / 0.26)), s = 1 - sx * sx * (3 - 2 * sx);
       this.top.scale.setScalar(s); this.bottom.scale.setScalar(s);
       this.wad.scale.setScalar(Math.max(0, 0.125 * (1 - this.burstT * 4)));
       if (this.burstT > 0.8) { this.gone = true; this.group.visible = false; }

@@ -28,8 +28,16 @@
 //     Do NOT setBody() it (that would rebuild its view and drop its tier styling).
 //   * setCalmEffects(on): call before starting a ceremony (a running one keeps its timing, camera and particle choices; the flash governor
 //     switches at once, so turning calm ON mid-ceremony also refuses that ceremony's remaining screen ramp and rings: the safe direction).
-//   * Framing: a merge frames the pad 12% wider than the play view while it runs (eased in over the slide, eased back during T4) so the
-//     1.25x spring-open never leaves the frame; calm keeps the play framing and cuts to the result's framing at the burst.
+//   * Framing: a merge frames the pad wider than the play view by result tier (Common 1.0 .. Epic+ 1.12; a cut at its start, eased back
+//     during T4) and, on a narrow portrait frame, until both starting parents fit (up to 1.5); calm keeps only the fit and cuts back at
+//     the burst. A capsule waiting on the table is put away during a merge and fades back in beside the result (one dropped DURING a
+//     merge lands, onLand, when it fades in after it).
+//   * Flash safety across ceremonies: granted burst flashes start >= 1 s apart (the FlashGovernor); a burst inside that second is played
+//     SOFT (no screen ramp, its tell / pool / particles / dome at a quarter) and a skip inside a burst fades like the burst light. So a
+//     chain of skip + Fast-open quick pops stays at <= 2 luminance transitions per second without any help from the shell.
+//   * clearBodies() / removeBody() during a ceremony first end it at its final frame (as setBody does): the result is never orphaned.
+//     A throwing createBody leaves the stage as it was (capsule back on the table, play body visible) and the error reaches the caller.
+//     A disposed stage hands out inert handles (done resolved, resultBody null) instead of throwing.
 import * as THREE from 'three';
 import type {
   AddBodyOpts, CapsuleHandle, CapsuleRevealSpec, CeremonyHandle, CeremonyHooks, FxKind, MergeCeremonySpec, QualityTier, SoftBodyLike,

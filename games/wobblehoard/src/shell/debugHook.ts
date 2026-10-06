@@ -44,6 +44,8 @@ export interface ShellDevApi {
   /** identity of the play body */
   identity(): { genomeCode: string; species: string; nickname: string | null; tier: TierName; itemId: string | null };
   pauseReasons(): string[];
+  /** the frame loop is paused by DebugHook.pause() (stepping) */
+  paused(): boolean;
   /** the render lane's dev readout when the stage offers one (createStageDev().info): bodies, capsule, calm, ceremony, ... */
   stageInfo(): Record<string, unknown> | null;
   /** lifecycle hooks the harness exercises (context loss without a real GPU) */
@@ -177,6 +179,7 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       return { genomeCode: encodeGenome(id.genome), species: l.species, nickname: l.nickname, tier: id.tier, itemId: id.itemId };
     },
     pauseReasons: () => [...game.pauseReasons],
+    paused: () => game.paused,
     stageInfo() {
       try { const i = (game.stage as unknown as { info?: Record<string, unknown> }).info; return i ? JSON.parse(JSON.stringify(i)) as Record<string, unknown> : null; } catch { return null; }
     },

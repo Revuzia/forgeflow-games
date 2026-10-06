@@ -45,7 +45,8 @@ import { makeStarterGenome, randomGenome, quantizeGenome } from '../src/core/gen
 import type { Genome } from '../src/core/genome.ts';
 import { mulberry32 } from '../src/core/rng.ts';
 import type { V3, SoftEvent } from '../src/contracts.ts';
-import { MATERIAL_FAMILY_IDS, MATERIAL_FAMILIES } from '../src/data/materials.ts';
+import { MATERIAL_FAMILY_IDS, MATERIAL_FAMILIES, recoverySeconds95 } from '../src/data/materials.ts';
+import { CATALOG, speciesTemplateGenome } from '../src/data/catalog.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const QUICK = process.argv.includes('--quick');
@@ -62,6 +63,9 @@ const LONG = process.argv.includes('--long');
 const HOSTILE_ONLY = process.argv.includes('--hostile-only');
 const HOSTILE_STEPS = QUICK ? 300 : LONG ? 4000 : 1200;
 const HOSTILE_RUNS = LONG ? 32 : 16;
+/** `--families-hostile`: only the per-family hostile fuzz (12 families x 2 genomes x FAM_HOSTILE_STEPS frames, 2 workers). */
+const FAM_HOSTILE_ONLY = process.argv.includes('--families-hostile');
+const FAM_HOSTILE_STEPS = 1500;
 const SANE_FRAMES = QUICK ? 1500 : 6000;
 /** Round-5 limits (set from the measured before / after, see the rows): sliding gestures may not crease past this, nor any frame past 120. */
 const SLIDE_WORST_MAX = 120;
@@ -537,19 +541,8 @@ function sweepSpecs(starter: Genome): FoldSpec[] {
   out.push({ label: 'sweep/starter/tap x=.1 z=.1', genome: starter, detail: 3, spot: -1, mode: 'tap', ray: [v3(0.1, 3, 0.1), down] });
   return out;
 }
-/** Rest height of the tip (highest particle) of a genome's body after 0.5 s on the table. Physics round 2: the peak presses below are placed
- *  RELATIVE to it. They were absolute heights (0.9 / 0.96 m) fitted to the hand-built DOLLOP's tip at 1.016 m; the catalog recipe DOLLOP
- *  (one shape code path for all 50 species) has a broader, unpinched swirl-peak with its tip at 0.951 m, so 0.96 m missed it entirely. */
-/** In STARTER units (divided by restRadius / 0.5125), like the fold rays, which foldPress scales by the body's size. */
-const TOPS = new Map<Genome, number>();
-function restTop(g: Genome): number {
-  let t = TOPS.get(g);
-  if (t === undefined) { const b = new SoftBody(g); settle(b, 0.5); t = topY(b) / (b.restRadius / 0.5125); TOPS.set(g, t); }
-  return t;
-}
-/** 6 cm and 12 cm under the tip (the old 0.96 / 0.9 m on the old 1.016 m tip). */
-const UNDER6 = 0.056, UNDER12 = 0.116;
-/** Side presses at the swirl-peak, 6 and 12 cm under its tip, from 4 directions, on 5 genomes (the starter also at detail 4): with the
+/** Side presses at the swirl-peak (y = 0.9 and 0.96 m, 12 and 6 cm under its 1.016 m tip; the physics round-2 fix round restored these
+ *  absolute aims with the hand-built DOLLOP shape: a per-genome "tip - 6 / 12 cm" aim lands within 1.2 mm of them on all five genomes), from 4 directions, on 5 genomes (the starter also at detail 4): with the
  *  shell's own pressure profile (48 presses; 179 degrees / 100 frames over 120 without the contact fold limit), and as an instant
  *  pressure-1 shove (a stress case the shell never sends; 162-180 degrees at HEAD). Plus the low side press at the table rim (y = 0.05,
  *  132 degrees at HEAD). */
@@ -559,10 +552,9 @@ function shoveSpecs(starter: Genome): FoldSpec[] {
     ['firm', quantizeGenome({ ...starter, firmness: 1 })], ['small', quantizeGenome({ ...starter, size: 0 })]];
   const dirs: Array<[string, V3, V3]> = [['-x', v3(-3, 0, 0), v3(1, 0, 0)], ['+x', v3(3, 0, 0), v3(-1, 0, 0)], ['-z', v3(0, 0, -3), v3(0, 0, 1)], ['+z', v3(0, 0, 3), v3(0, 0, -1)]];
   for (const mode of ['shell', 'shove'] as const) {
-    for (const [n, g] of G) for (const detail of n === 'starter' ? [3, 4] : [3]) for (const under of [UNDER12, UNDER6]) for (const [dn, o, d] of dirs) {
-      if (mode === 'shove' && (under !== UNDER6 || (n !== 'starter' && n !== 'bouncy-big' && n !== 'soft'))) continue;   // the stress case: a subset
-      const y = restTop(g) - under;
-      out.push({ label: `${mode}/${n}${detail === 4 ? '@d4' : ''}/y=tip-${Math.round(under * 100)}cm from ${dn}`, genome: g, detail, spot: -1, mode, ray: [v3(o.x, y, o.z), d] });
+    for (const [n, g] of G) for (const detail of n === 'starter' ? [3, 4] : [3]) for (const y of [0.9, 0.96]) for (const [dn, o, d] of dirs) {
+      if (mode === 'shove' && (y !== 0.96 || (n !== 'starter' && n !== 'bouncy-big' && n !== 'soft'))) continue;   // the stress case: a subset
+      out.push({ label: `${mode}/${n}${detail === 4 ? '@d4' : ''}/y=${y} from ${dn}`, genome: g, detail, spot: -1, mode, ray: [v3(o.x, y, o.z), d] });
     }
   }
   out.push({ label: 'rim/starter/hold y=.05', genome: starter, detail: 3, spot: -1, mode: 'hold', ray: [v3(3, 0.05, 0), v3(-1, 0, 0)] });
@@ -574,8 +566,7 @@ function shoveSpecs(starter: Genome): FoldSpec[] {
  *  the contact fold limit may leave a vertex inside for a substep. */
 function tipPenetration(starter: Genome): number {
   let worst = 0;
-  const y6 = restTop(starter) - UNDER6;
-  for (const [o, d] of [[v3(-3, y6, 0), v3(1, 0, 0)], [v3(3, y6, 0), v3(-1, 0, 0)], [v3(0, y6, -3), v3(0, 0, 1)], [v3(0.2, 3, 0), v3(0, -1, 0)]] as const) {
+  for (const [o, d] of [[v3(-3, 0.96, 0), v3(1, 0, 0)], [v3(3, 0.96, 0), v3(-1, 0, 0)], [v3(0, 0.96, -3), v3(0, 0, 1)], [v3(0.2, 3, 0), v3(0, -1, 0)]] as const) {
     const b = new SoftBody(starter);
     settle(b, 0.3);
     touch(b, 0, o, d); b.fingerPressure(0, 1);
@@ -1146,10 +1137,24 @@ interface HostileResult { label: string; steps: number; fails: string[]; hashes:
  * Checked at EVERY frame: finite state, signed volume > 0, no particle 1% R under the table, valid events, no event spam, queue cap; at the
  * end (everything released, gravity on): settles within 8 s, volume 1 +/- 0.015, no triangle flipped > 120 deg vs rest, shape <= 3% R.
  */
-function hostileRun(idx: number, steps: number): HostileResult {
-  const g = quantizeGenome({ ...makeStarterGenome(), firmness: idx & 1, bounce: (idx >> 1) & 1, stretch: (idx >> 2) & 1, size: (idx >> 3) & 1 });
-  const label = `f${idx & 1}b${(idx >> 1) & 1}s${(idx >> 2) & 1}z${(idx >> 3) & 1}${idx >= 16 ? `/run${idx}` : ''}`;
-  const b = new SoftBody(g, { seed: 0xc0ffee + idx });
+/** A per-family hostile run (physics round-2 fix round): the family forced on `genome`; `elastic` families must also come back to their
+ *  rest shape (<= 3% R), a plastic or slow one (a yield, or recoverySeconds95 > 3 s: it keeps or is still healing dents by design) need not. */
+interface FamHostile { family: string; genome: Genome; label: string; elastic: boolean }
+function famHostileSpec(fi: number, gi: number): FamHostile {
+  const fam = MATERIAL_FAMILY_IDS[fi], ph = MATERIAL_FAMILIES[fam].physics, elastic = !(ph.yieldStrain > 0 || recoverySeconds95(ph) > 3);
+  if (gi === 0) {
+    // the family's first catalog species, its own template genome (its own recipe shape)
+    const d = CATALOG.find((c) => c.family === fam);
+    if (d) return { family: fam, genome: d.id === 'dollop' ? makeStarterGenome() : speciesTemplateGenome(d.id as never), label: `${fam}/${d.id}`, elastic };
+  }
+  // an extreme corner genome on the DOLLOP shape, a different corner per family
+  const idx = (fi * 7 + 5 + gi * 3) & 15;
+  return { family: fam, genome: quantizeGenome({ ...makeStarterGenome(), firmness: idx & 1, bounce: (idx >> 1) & 1, stretch: (idx >> 2) & 1, size: (idx >> 3) & 1 }), label: `${fam}/dollop f${idx & 1}b${(idx >> 1) & 1}s${(idx >> 2) & 1}z${(idx >> 3) & 1}`, elastic };
+}
+function hostileRun(idx: number, steps: number, fam?: FamHostile): HostileResult {
+  const g = fam ? fam.genome : quantizeGenome({ ...makeStarterGenome(), firmness: idx & 1, bounce: (idx >> 1) & 1, stretch: (idx >> 2) & 1, size: (idx >> 3) & 1 });
+  const label = fam ? fam.label : `f${idx & 1}b${(idx >> 1) & 1}s${(idx >> 2) & 1}z${(idx >> 3) & 1}${idx >= 16 ? `/run${idx}` : ''}`;
+  const b = fam ? new SoftBody(g, { seed: 0xc0ffee + idx, family: fam.family } as never) : new SoftBody(g, { seed: 0xc0ffee + idx });
   const R = b.restRadius, rv0 = restVolOf(b);
   const rng = mulberry32(0x5eed0000 + idx * 7919);
   const pick = (n: number): number => Math.floor(rng() * n);
@@ -1276,7 +1281,7 @@ function hostileRun(idx: number, steps: number): HostileResult {
       flipped = fl;
       if (fl > 0) fail(`${fl} triangles flipped > 120 deg vs rest once settled`);
       shapePct = shapeFit(b) * 100;
-      if (shapePct > 3) fail(`settled shape error ${shapePct.toFixed(2)}% R`);
+      if (shapePct > 3 && (!fam || fam.elastic)) fail(`settled shape error ${shapePct.toFixed(2)}% R`);
     }
   }
   hashes.push(b.stateHash());
@@ -1611,6 +1616,13 @@ function hostileRows(results: JobResult[], add: (gate: string, what: string, val
   const wf = ho.reduce((a, c) => (c.res.freeOut > a.res.freeOut ? c : a));
   add('G1', `hostile fuzz, mat corral: while NOTHING holds the body (gravity on, no grab or pinned feet, no fingertip that can have touched it at any time in the frame: bounded from the frame ends, see hostileRun) its centre never moves outward past the 2.5 m rim or past where it was let go, whichever is farther (${wf.res.label} ${wf.res.freeAt}; was 232 mm before the repair, f1b1s0z1 out to 2.73 m: a finger that was down but no longer touching the shoved body switched the corral off)`, `${f2(Math.max(0, wf.res.freeOut) * 1000, 0)} mm`, '<= 50 mm', wf.res.freeOut <= 0.05);
 }
+/** The per-family hostile fuzz rows (physics round-2 fix round): each run listed, then one gate. */
+function famHostileRows(results: JobResult[], add: (gate: string, what: string, value: string, limit: string, pass: boolean) => void, f2: (x: number, d?: number) => string): void {
+  const fh = results.filter((r): r is Extract<JobResult, { type: 'famhostile' }> => r.type === 'famhostile');
+  for (const r of fh) console.log(`  ${r.res.label.padEnd(34)} ${r.res.fails.length ? 'FAIL ' + r.res.fails.join('; ') : 'ok  '} settle ${f2(r.res.settleT, 2)} s, volume ${f2(r.res.settledVol, 4)}, flipped ${r.res.flipped}, shape ${f2(r.res.shapePct, 2)} % R${r.elastic ? '' : ' (plastic / slow: shape not gated)'}, ${r.res.events} events`);
+  const hf = fh.flatMap((r) => r.res.fails.map((f) => `${r.res.label}: ${f}`));
+  add('G1', `per-family hostile fuzz: ${MATERIAL_FAMILY_IDS.length} families x 2 genomes (the family's first species on its template genome, and an extreme corner genome on DOLLOP) x ${FAM_HOSTILE_STEPS} frames of the hostile fuzz above; every frame finite, not inverted, not under the table, valid events, no spam; then settles in 8 s with volume 1 +/- 0.015 and no flipped triangle, and an elastic family's shape back within 3% R`, hf.length ? hf.slice(0, 4).join('; ') : `0 failures (slowest settle ${f2(Math.max(...fh.map((r) => r.res.settleT)), 2)} s, worst elastic shape ${f2(Math.max(...fh.filter((r) => r.elastic).map((r) => r.res.shapePct)), 2)} % R)`, '0 failures', hf.length === 0);
+}
 /** The round-5 jobs. */
 function round5Jobs(starter: Genome): Job[] {
   const jobs: Job[] = [];
@@ -1623,10 +1635,10 @@ function round5Jobs(starter: Genome): Job[] {
 // ------------------------------------------------------------------------------------------------ worker pool
 
 type Job = { type: 'squeeze'; spec: SqueezeSpec } | { type: 'fuzz'; index: number; nEvents: number } | { type: 'fold'; spec: FoldSpec }
-  | { type: 'fold2'; spec: FoldSpec } | { type: 'foldsub'; spec: FoldSpec } | { type: 'corral'; spec: CorralSpec } | { type: 'hostile'; index: number; steps: number; replay: boolean }
+  | { type: 'fold2'; spec: FoldSpec } | { type: 'foldsub'; spec: FoldSpec } | { type: 'corral'; spec: CorralSpec } | { type: 'hostile'; index: number; steps: number; replay: boolean } | { type: 'famhostile'; fi: number; gi: number }
   | { type: 'dense'; spec: DenseSpec } | { type: 'slide'; spec: SlideSpec } | { type: 'sane'; gname: string; frames: number; seed: number };
 type JobResult = { type: 'squeeze'; res: SqueezeResult } | { type: 'fuzz'; res: { stats: FuzzStats; hash: number } } | { type: 'fold'; res: FoldResult }
-  | { type: 'fold2'; res: FoldResult } | { type: 'foldsub'; res: SubFoldResult } | { type: 'corral'; res: CorralResult } | { type: 'hostile'; res: HostileResult; replayHashes: number[] | null }
+  | { type: 'fold2'; res: FoldResult } | { type: 'foldsub'; res: SubFoldResult } | { type: 'corral'; res: CorralResult } | { type: 'hostile'; res: HostileResult; replayHashes: number[] | null } | { type: 'famhostile'; res: HostileResult; elastic: boolean }
   | { type: 'dense'; res: FoldResult } | { type: 'slide'; res: SlideResult } | { type: 'sane'; res: SaneResult };
 function runJob(j: Job): JobResult {
   switch (j.type) {
@@ -1637,6 +1649,7 @@ function runJob(j: Job): JobResult {
     case 'foldsub': return { type: 'foldsub', res: foldSubsteps(j.spec) };
     case 'corral': return { type: 'corral', res: corralRun(j.spec) };
     case 'hostile': return { type: 'hostile', res: hostileRun(j.index, j.steps), replayHashes: j.replay ? hostileRun(j.index, j.steps).hashes : null };
+    case 'famhostile': { const sp = famHostileSpec(j.fi, j.gi); return { type: 'famhostile', res: hostileRun(1000 + j.fi * 2 + j.gi, FAM_HOSTILE_STEPS, sp), elastic: sp.elastic }; }
     case 'dense': return { type: 'dense', res: densePress(j.spec) };
     case 'slide': return { type: 'slide', res: slidePress(j.spec) };
     case 'sane': return { type: 'sane', res: saneFuzz(j.gname, makeStarterGenome(), j.frames, j.seed) };
@@ -1657,7 +1670,7 @@ if (!isMainThread) {
 
 function runPool(jobs: Job[], nWorkers: number): Promise<JobResult[]> {
   // heaviest first, round robin, so the workers finish together
-  const weight = (j: Job): number => (j.type === 'sane' ? 40 : j.type === 'hostile' ? (j.replay ? 24 : 12) : j.type === 'fuzz' ? 3 : j.type === 'fold' ? (j.spec.detail >= 4 ? 4 : 1.5) : j.type === 'fold2' || j.type === 'foldsub' ? (j.spec.detail >= 4 ? 4 : 1.5) : 1);
+  const weight = (j: Job): number => (j.type === 'sane' ? 40 : j.type === 'famhostile' ? 15 : j.type === 'hostile' ? (j.replay ? 24 : 12) : j.type === 'fuzz' ? 3 : j.type === 'fold' ? (j.spec.detail >= 4 ? 4 : 1.5) : j.type === 'fold2' || j.type === 'foldsub' ? (j.spec.detail >= 4 ? 4 : 1.5) : 1);
   const order = jobs.map((j, i) => ({ j, i })).sort((a, b) => weight(b.j) - weight(a.j));
   const buckets: Array<Array<{ j: Job; i: number }>> = Array.from({ length: nWorkers }, () => []);
   order.forEach((o, k) => buckets[k % nWorkers].push(o));
@@ -1695,6 +1708,15 @@ async function main(): Promise<void> {
     console.log(`${rows.length - failed}/${rows.length} hostile-fuzz checks passed in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
     process.exit(failed ? 1 : 0);
   }
+  if (FAM_HOSTILE_ONLY) {
+    const jobs: Job[] = [];
+    for (let fi = 0; fi < MATERIAL_FAMILY_IDS.length; fi++) for (const gi of [0, 1]) jobs.push({ type: 'famhostile', fi, gi });
+    famHostileRows(await runPool(jobs, 2), add, f2);
+    for (const r of rows) console.log(`${r.pass ? 'PASS' : 'FAIL'}  ${r.gate.padEnd(4)}  ${r.what}\n          measured: ${r.value}    threshold: ${r.limit}`);
+    const failed = rows.filter((r) => !r.pass).length;
+    console.log(`${rows.length - failed}/${rows.length} per-family hostile-fuzz checks passed in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+    process.exit(failed ? 1 : 0);
+  }
   if (ROUND5_ONLY) {
     round5Rows(await runPool(round5Jobs(starter), 4), add, f2);
     for (const r of rows) console.log(`${r.pass ? 'PASS' : 'FAIL'}  ${r.gate.padEnd(4)}  ${r.what}\n          measured: ${r.value}    threshold: ${r.limit}`);
@@ -1720,10 +1742,9 @@ async function main(): Promise<void> {
     add('G1', 'raycast from +x hits the front surface with an outward normal and a nearest vertex', hit ? `n.x ${f2(hit.normal.x, 2)}, t ${f2(hit.t, 2)}, vertex ${hit.vertex}` : 'MISS', 'n.x > 0.5, t > 0', !!hit && hit.normal.x > 0.5 && hit.t > 0 && hit.vertex >= 0 && hit.vertex < b.vertexCount);
     add('G1', 'raycast aimed away from the body misses', `${b.raycast(v3(0, 5, 0), v3(0, 1, 0)) === null}`, 'true', b.raycast(v3(0, 5, 0), v3(0, 1, 0)) === null);
 
-    // poke -> press -> release (on the shoulder, outside the swirl-peak: physics round 2 moved this press from x = 0.22 to 0.3 m, because the
-    // catalog recipe DOLLOP's peak is 2.6x wider 6 cm under its tip, so 0.22 m now lands on the peak's flank)
+    // poke -> press -> release
     const tDown = clock;
-    touch(b, 0, v3(0.3, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 0.8);
+    touch(b, 0, v3(0.22, 4, 0), v3(0, -1, 0)); b.fingerPressure(0, 0.8);
     let maxRate = -9, maxComp = 0, fingersSeen = 0;
     go(b, 0.7, () => { maxRate = Math.max(maxRate, b.metrics.compressionRate); maxComp = Math.max(maxComp, b.metrics.compression); fingersSeen = Math.max(fingersSeen, b.metrics.fingers); });
     const tUp = clock;
@@ -2052,10 +2073,10 @@ async function main(): Promise<void> {
       { label: 'bouncy-big/top x=.2/tap', genome: big, detail: 3, spot: 4, mode: 'tap' }, { label: 'stretchy-small/top x=.2/tap', genome: small, detail: 3, spot: 4, mode: 'tap' },
       { label: 'f1b0s0/top x=.3/hold', genome: genomes.find((g) => g.name === 'f1b0s0')!.g, detail: 3, spot: 5, mode: 'hold' },
       { label: 'starter@d4/top x=.1/hold', genome: starter, detail: 4, spot: 2, mode: 'hold' },
-      { label: 'starter/peak shove from -x', genome: starter, detail: 3, spot: -1, mode: 'shove', ray: [v3(-3, restTop(starter) - UNDER6, 0), v3(1, 0, 0)] },
-      { label: 'starter/peak shove from +x', genome: starter, detail: 3, spot: -1, mode: 'shove', ray: [v3(3, restTop(starter) - UNDER6, 0), v3(-1, 0, 0)] },
-      { label: 'starter/peak side press (shell profile) from -x', genome: starter, detail: 3, spot: -1, mode: 'shell', ray: [v3(-3, restTop(starter) - UNDER6, 0), v3(1, 0, 0)] },
-      { label: 'starter/peak side press (shell profile) from +z', genome: starter, detail: 3, spot: -1, mode: 'shell', ray: [v3(0, restTop(starter) - UNDER6, 3), v3(0, 0, -1)] },
+      { label: 'starter/peak shove from -x', genome: starter, detail: 3, spot: -1, mode: 'shove', ray: [v3(-3, 0.96, 0), v3(1, 0, 0)] },
+      { label: 'starter/peak shove from +x', genome: starter, detail: 3, spot: -1, mode: 'shove', ray: [v3(3, 0.96, 0), v3(-1, 0, 0)] },
+      { label: 'starter/peak side press (shell profile) from -x', genome: starter, detail: 3, spot: -1, mode: 'shell', ray: [v3(-3, 0.96, 0), v3(1, 0, 0)] },
+      { label: 'starter/peak side press (shell profile) from +z', genome: starter, detail: 3, spot: -1, mode: 'shell', ray: [v3(0, 0.96, 3), v3(0, 0, -1)] },
     ];
     for (const spec of subSpecs) jobs.push({ type: 'foldsub', spec });
     for (const gn of ['starter', 'f1b1s0', 'f0b0s1', 'small', 'large']) {

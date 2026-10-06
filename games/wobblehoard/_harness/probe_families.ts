@@ -6,7 +6,7 @@
 //   * slosh: a 1 m/s sideways nudge, the liquid core's swing frequency and damping (water fill, bead squeeze);
 //   * tack: the strands signal while a fingertip pulls off a held press (sticky stretch, slime);
 //   * jam: compression under a full press with and without the family's jam (bead squeeze);
-//   * a feel vector per family from the measurements, and every pair of families at least FEEL_MIN apart.
+//   * a feel vector per family from the measurements, and every pair of families at least FEEL_MIN apart (jelly gel / firm silicone 2x).
 // Every assertion names the documented target it checks (SQUISHY_SCIENCE.md sections 3-4, materials.ts). Deterministic.
 //   node _harness/probe_families.ts            all checks, exit 1 on a failure
 //   node _harness/probe_families.ts --list     also print every family's raw measurements
@@ -246,7 +246,10 @@ for (const fam of ['waterfill', 'beadsqueeze'] as const) {
 {
   const feel = (fam: string): number[] => {
     const p = PR[fam], r = RR[fam], pk = Math.max(1e-3, p.peak);
-    return [p.e025 / pk, p.e1 / pk, p.e3 / pk, p.dent10 / Math.max(1e-3, p.dentPeak), (1 - p.volMin) * 3, Math.min(1, Math.max(p.back95, p.volBack) / 6), Math.log(r.ratio) / 3, Math.min(1, p.wobble / 4), p.strandsMax, Math.log(Math.max(1, p.force)) / 5];
+    // GIVE (axis 11, physics round-2 fix round): how deep the same full press goes (the dent at the release, rest radii / 0.4). Until the
+    // fix round every family was pressed exactly as deep (the fingertip is position-driven), so the vector had no give axis; since a
+    // stiffer material gives less (softbody.ts GIVE_EXP), the vector must see it, or a firm silicone that gives half as much reads as a gel.
+    return [p.e025 / pk, p.e1 / pk, p.e3 / pk, p.dent10 / Math.max(1e-3, p.dentPeak), (1 - p.volMin) * 3, Math.min(1, Math.max(p.back95, p.volBack) / 6), Math.log(r.ratio) / 3, Math.min(1, p.wobble / 4), p.strandsMax, Math.log(Math.max(1, p.force)) / 5, Math.min(1, p.dentPeak / 0.4)];
   };
   let best = { a: '', b: '', d: Infinity };
   const F = MATERIAL_FAMILY_IDS.map((fam) => feel(fam));
@@ -254,7 +257,24 @@ for (const fam of ['waterfill', 'beadsqueeze'] as const) {
     const d = Math.sqrt(F[i].reduce((s, v, k) => s + (v - F[j][k]) ** 2, 0) / F[i].length);
     if (d < best.d) best = { a: MATERIAL_FAMILY_IDS[i], b: MATERIAL_FAMILY_IDS[j], d };
   }
-  add(`families are pairwise distinguishable on the measured feel vector (recovery curve at 0.25 / 1 / 3 s, dent kept at 10 s, volume dip, recovery time, rate ratio, wobble, strands, held push-back; RMS over 10 axes); closest pair ${best.a} / ${best.b}`, f(best.d, 3), `>= ${FEEL_MIN}`, best.d >= FEEL_MIN);
+  if (LIST) {
+    // the distance of every pair, and on the round-2 10-axis vector (without give) for comparison
+    const rows: string[] = [];
+    for (let i = 0; i < F.length; i++) for (let j = i + 1; j < F.length; j++) {
+      const d11 = Math.sqrt(F[i].reduce((s, v, k) => s + (v - F[j][k]) ** 2, 0) / F[i].length);
+      const d10 = Math.sqrt(F[i].slice(0, 10).reduce((s, v, k) => s + (v - F[j][k]) ** 2, 0) / 10);
+      rows.push(`${d11.toFixed(3)} (10-axis ${d10.toFixed(3)}) ${MATERIAL_FAMILY_IDS[i]} / ${MATERIAL_FAMILY_IDS[j]}`);
+    }
+    console.log('closest pairs:\n  ' + rows.sort().slice(0, 8).join('\n  '));
+  }
+  add(`families are pairwise distinguishable on the measured feel vector (recovery curve at 0.25 / 1 / 3 s, dent kept at 10 s, volume dip, recovery time, rate ratio, wobble, strands, held push-back, give; RMS over 11 axes); closest pair ${best.a} / ${best.b}`, f(best.d, 3), `>= ${FEEL_MIN}`, best.d >= FEEL_MIN);
+  // physics round-2 fix round: the two elastic families the round-2 review found nearly identical (0.061) must be told apart with a margin
+  {
+    const gi = MATERIAL_FAMILY_IDS.indexOf('jellygel'), si = MATERIAL_FAMILY_IDS.indexOf('firmsilicone');
+    const d = Math.sqrt(F[gi].reduce((s, v, k) => s + (v - F[si][k]) ** 2, 0) / F[gi].length);
+    if (LIST) console.log(`feel jellygel     ${F[gi].map((x) => f(x)).join(' ')}\nfeel firmsilicone ${F[si].map((x) => f(x)).join(' ')}`);
+    add(`jelly gel and firm silicone feel different with a margin (the gel bulges and wobbles, the silicone gives less and snaps back: give ${f(PR.jellygel.dentPeak)} vs ${f(PR.firmsilicone.dentPeak)} R, push-back ${f(PR.jellygel.force, 1)} vs ${f(PR.firmsilicone.force, 1)}, left at 0.25 s ${f(PR.jellygel.e025 / Math.max(1e-3, PR.jellygel.peak))} vs ${f(PR.firmsilicone.e025 / Math.max(1e-3, PR.firmsilicone.peak))})`, f(d, 3), `>= ${2 * FEEL_MIN} (2 x the bar)`, d >= 2 * FEEL_MIN);
+  }
 }
 // 13. determinism
 {

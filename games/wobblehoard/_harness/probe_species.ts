@@ -68,6 +68,12 @@ function pressesOf(id: SpeciesId, full: boolean): Press[] {
   const flanks: Array<[string, V3]> = [['flank +x', v3(1, 0, 0)], ['flank -z', v3(0, 0, -1)], ['flank -x', v3(-1, 0, 0)], ['flank +z', v3(0, 0, 1)]];
   for (const [l, u] of full ? flanks : flanks.slice(0, 2)) out.push({ label: l, from: v3(u.x * 6, 0, u.z * 6), dir: v3(-u.x, 0, -u.z) });
   if (full) {
+    // a parametric recipe's peak (DOLLOP's pinched swirl-peak since the round-2 fix round; it is no longer a `features` bump): straight down onto it
+    const pk = d.shape.peak;
+    if (pk && pk.dir[1] > -0.3) {
+      const r = evalShape(d.shape, pk.dir[0], pk.dir[1], pk.dir[2]);
+      out.push({ label: `peak (${pk.dir.map((x) => x.toFixed(2)).join(',')})`, from: v3(pk.dir[0] * (r + 4), pk.dir[1] * (r + 4), pk.dir[2] * (r + 4)), dir: v3(-pk.dir[0], -pk.dir[1], -pk.dir[2]) });
+    }
     d.shape.features.forEach((f, k) => {
       if (f.kind === 'dent') return;
       for (const sx of f.mirrorX ? [1, -1] : [1]) {
