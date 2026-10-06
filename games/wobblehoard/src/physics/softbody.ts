@@ -507,7 +507,6 @@ export class SoftBody implements SoftBodyLike {
   private readonly u4b = new Float64Array(4);
   private readonly SDIST: Float64Array;                   // measureCut: signed distance of each particle from the plane
   private readonly NSCR: Float64Array;                    // setNeck's trial goal (the lobe swell's secant steps)
-  private readonly NPL = new Float64Array(7);              // setNeck's raw plane point, normal and t
   private readonly NKS = new Float64Array(6);              // ... and the secant's state
   private readonly CLIP = new Float64Array(4 * 3);        // measureCut: a clipped triangle (up to 4 points)
   private pendingLand = -1;                 // land impact speed waiting to be emitted this step
@@ -853,7 +852,7 @@ export class SoftBody implements SoftBodyLike {
     // CUT / stage B state back to a fresh body (the piece keeps what it was built as: its fraction and its flat face)
     this.fracNow = this.fracBuilt; this.fracFrom = this.fracBuilt; this.fracTo = this.fracBuilt; this.fracT0 = 0; this.fracDur = 0;
     this.flatK = this.chunk ? 1 : 0; this.volScale = 1; this.GB.set(this.Q);
-    this.neckOn = false; this.neckT = 0; this.neckTarget = 0; this.volNeck = 0; this.NPL.fill(0);
+    this.neckOn = false; this.neckT = 0; this.neckTarget = 0; this.volNeck = 0;
     this.vnStamp = -1; this.hashStamp = -1; this.contactWith.fill(-1000000);
     this.carried = false; this.carrier = 0; this.carryOx = 0; this.carryOy = 0; this.carryOz = 0; this.hvx = 0; this.hvy = 0; this.hvz = 0; this.phx = 0; this.phy = 0; this.phz = 0;
     this.strain.fill(1);
@@ -1294,17 +1293,14 @@ export class SoftBody implements SoftBodyLike {
    * the waist is NECK_WAIST of the cross-section's width. The volume constraint holds the volume. null (or t <= 0 eased out) releases it.
    */
   setNeck(plane: CutPlane | null, t: number): void {
-    if (plane === null || plane === undefined) { this.NPL[6] = 0; this.neckTarget = 0; return; }
+    if (plane === null || plane === undefined) { this.neckTarget = 0; return; }
     if (typeof plane !== 'object' || !plane.point || !plane.normal || !finite3(plane.point) || !finite3(plane.normal)) return;
-    // Called every frame of a neck, so it does no arithmetic and stores into a typed array only (it can run unoptimised, and there every
-    // Math.abs / min / max, division or double field store made a HeapNumber: 96-352 B a frame in some runs). frameUpdate normalises the
-    // normal and clamps t.
-    const p = plane.point, q = plane.normal, L = WORLD_LIMIT, U = 1e6, E = 1e-6;
-    if (!(p.x <= L && p.x >= -L && p.y <= L && p.y >= -L && p.z <= L && p.z >= -L) || typeof t !== 'number' || Number.isNaN(t)) return;
-    if (!(q.x <= U && q.x >= -U && q.y <= U && q.y >= -U && q.z <= U && q.z >= -U)) return;
-    if (q.x < E && q.x > -E && q.y < E && q.y > -E && q.z < E && q.z > -E) return;
-    const N = this.NPL;
-    N[0] = p.x; N[1] = p.y; N[2] = p.z; N[3] = q.x; N[4] = q.y; N[5] = q.z; N[6] = t;
+    if (!inWorld(plane.point.x, plane.point.y, plane.point.z) || typeof t !== 'number' || Number.isNaN(t)) return;
+    // (called every frame of a neck: no doubles passed to a helper, no ternary between integer bounds and t)
+    const nx = plane.normal.x, ny = plane.normal.y, nz = plane.normal.z, nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+    if (!(nl > 1e-12) || nl === Infinity) return;
+    this.npx = plane.point.x; this.npy = plane.point.y; this.npz = plane.point.z; this.nnx = nx / nl; this.nny = ny / nl; this.nnz = nz / nl;
+    this.neckTarget = Math.min(1, Math.max(0, t));
     this.neckOn = true;
   }
 
@@ -2362,12 +2358,6 @@ export class SoftBody implements SoftBodyLike {
       if (u >= 1) { this.fracNow = this.fracTo; this.fracDur = 0; }
     }
     if (this.flatK > 0) { this.flatK *= Math.exp(-h / this.roundTau); if (this.flatK < 1e-3) this.flatK = 0; }
-    if (this.neckOn) {
-      // setNeck stores the plane and t raw (NPL; it does no arithmetic): the unit normal and the clamped target here
-      const N = this.NPL, nl = Math.sqrt(N[3] * N[3] + N[4] * N[4] + N[5] * N[5]);
-      this.npx = N[0]; this.npy = N[1]; this.npz = N[2]; this.nnx = N[3] / nl; this.nny = N[4] / nl; this.nnz = N[5] / nl;
-      this.neckTarget = Math.min(1, Math.max(0, N[6]));
-    }
     if (this.neckT !== this.neckTarget) {
       this.neckT += (this.neckTarget - this.neckT) * (1 - Math.exp(-h / NECK_TAU));
       if (Math.abs(this.neckTarget - this.neckT) < 1e-4) this.neckT = this.neckTarget;
