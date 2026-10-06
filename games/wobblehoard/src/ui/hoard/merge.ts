@@ -140,6 +140,7 @@ export function createMergePad(root: HTMLElement, env: HoardEnv, o: { onMerged()
     hold.el.dataset.key = 'hold';
     status.textContent = message;
     el.append(h('div', { class: 'hmerge-foot' }, hold.el, h('p', { class: 'hmerge-help', text: 'Press and hold. Let go early and nothing happens.' })), status);
+    if (modal) el.append(modal);   // a re-render (the collection changed) keeps an open warning on top
     if (keep) el.querySelector<HTMLElement>(`[data-key="${keep}"]`)?.focus();
   }
 

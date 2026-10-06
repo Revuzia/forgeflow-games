@@ -43,6 +43,9 @@ function upgrade(w: MockWorld): { log: ReturnType<typeof recorder>; runs: FakeRu
   st.setCalmEffects = (on: boolean) => { calm = on; log.rec('setCalmEffects', on); };
   st.setBodyTier = (id: number, t: TierName) => log.rec('setBodyTier', id, t);
   st.primaryBodyId = () => primary;
+  let viewId = 100;
+  st.addBody = (_b: SoftBodyLike, _g: Genome, opts?: { position?: { x: number; y: number; z: number } }) => { log.rec('addBody', opts?.position ?? null); return ++viewId; };
+  st.removeBody = (id: number) => log.rec('removeBody', id);
   st.dropCapsule = (o?: { onLand?: () => void }) => {
     log.rec('dropCapsule');
     const c = { landed: false, squeeze: 0, removed: false };
@@ -412,6 +415,56 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     `burst gaps ${gaps.map((g) => g.toFixed(0)).join(', ')} ms; start after previous burst ${startGaps.map((g) => g.toFixed(0)).join(', ')} ms`);
   check('spacing: the wait is no longer than needed (each start within one step slice of the 1 s mark)', startGaps.every((g) => g < BURST_SPACING_MS + 60), startGaps.map((g) => g.toFixed(0)).join(', '));
   check('spacing: consecutive bursts are >= 1 s apart', gaps.length === 2 && gaps.every((g) => g >= BURST_SPACING_MS), gaps.map((g) => g.toFixed(0)).join(', '));
+}
+
+/* ───────────────────────── 5c. switch anytime + the play mat (SHELL-2b) ───────────────────────── */
+{
+  const { createPlayHistory, PLAY_KEY } = await import('../../src/shell/playHistory.ts');
+  const mem = memoryStorage();
+  const h1 = createPlayHistory(mem);
+  h1.note('g-aaaaaaaaaaaa'); h1.note('g-bbbbbbbbbbbb'); h1.note('g-aaaaaaaaaaaa'); h1.note('bad id!');
+  const h2 = createPlayHistory(mem);
+  check('play history: the play item and the recent list (newest first, no repeats, junk refused) survive a reload of the store', h2.current === 'g-aaaaaaaaaaaa' && h2.recent().join() === 'g-aaaaaaaaaaaa,g-bbbbbbbbbbbb' && !!mem.getItem(PLAY_KEY), `${h2.current} [${h2.recent().join()}]`);
+  mem.setItem(PLAY_KEY, '{"play": 42, "recent": ["ok-id", {"x":1}, "no spaces allowed"]}');
+  const h3 = createPlayHistory(mem);
+  check('play history: a hand-edited blob keeps only valid ids', h3.current === null && h3.recent().join() === 'ok-id', `${h3.current} [${h3.recent().join()}]`);
+
+  // switchTo through the real collection: at once when idle, queued during a ceremony and applied right after it
+  const r = rig();
+  const runAsync = async (ms: number, slice = 50): Promise<void> => { for (let t = 0; t < ms; t += slice) { run(r, slice); await tick(); await tick(); } };
+  for (let i = 0; i < 3; i++) {
+    (r.app as unknown as { debug: { shell: { grant(n: number): boolean } } }).debug.shell.grant(1);
+    await runAsync(300);
+    await r.app.capsules.openNext();
+    await runAsync(3500);
+  }
+  const items = r.app.hoard.items();
+  const cur = r.app.identity.itemId;
+  const other = items.find((it) => it.id !== cur)!;
+  const d1 = r.app.switchTo(other.id);
+  check('switchTo: an item of the collection becomes the play body at once (identity and history follow)', d1 === 'done' && r.app.identity.itemId === other.id && r.app.history.current === other.id, `${d1} -> ${r.app.identity.itemId}`);
+  const third = items.find((it) => it.id !== other.id)!;
+  const cat = await import('../../src/data/catalog.ts');
+  const g = speciesBaseGenome(cat.SPECIES_BY_TIER[0][2].id, 9);
+  const p = r.app.ceremonies.playReveal({ itemId: 'zz', genome: g, tier: 'common', isNew: false, copies: 2, nickname: null });
+  run(r, 100);
+  const q = r.app.switchTo(third.id);
+  const during = r.app.identity.itemId;
+  await runAsync(3000); await p; await tick(); await tick();
+  check('switchTo during a reveal: queued, then applied right after the ceremony (the reveal result first, then the asked-for one)', q === 'queued' && during !== third.id && r.app.identity.itemId === third.id, `${q}; during ${during}; after ${r.app.identity.itemId}`);
+  check('switchTo: an unknown item is refused and nothing changes', r.app.switchTo('g-nothere00000') === 'missing' && r.app.identity.itemId === third.id);
+
+  // the play mat: limit by quality (the mock stage reports med: 4), offsets apart, put back
+  const out1 = r.app.mat.add({ genome: items[0].genome, itemId: items[0].id });
+  const out2 = r.app.mat.add({ genome: items[1].genome, itemId: items[1].id });
+  const out3 = r.app.mat.add({ genome: items[2]?.genome ?? g, itemId: items[2]?.id ?? 'x-3' });
+  const out4 = r.app.mat.add({ genome: g, itemId: 'x-4' });
+  const pos = r.app.bodies.extras.map((x) => x.position);
+  const apart = pos.every((a, i) => pos.every((b, j) => i >= j || Math.hypot(a.x - b.x, a.z - b.z) > 0.5)) && pos.every((a) => Math.hypot(a.x, a.z) > 0.5);
+  check('play mat: med quality holds 4 (the play body and three brought out); a fourth is refused as "full"; every body has its own spot', out1 === null && out2 === null && out3 === null && out4 === 'full' && r.app.mat.count === 4 && apart, `${[out1, out2, out3, out4].join()} count ${r.app.mat.count} ${JSON.stringify(pos)}`);
+  const stepped = r.app.bodies.extras.map((x) => x.body);
+  r.app.mat.clear();
+  check('play mat: put back clears every extra (count 1)', r.app.mat.count === 1 && stepped.length === 3);
 }
 
 /* ───────────────────────── 6. settings: resolution, migration, newer blobs, calm default, music ───────────────────────── */

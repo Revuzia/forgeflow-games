@@ -1930,7 +1930,7 @@ export class SoftBody implements SoftBodyLike {
       let ax = 0, ay = 0, az = 0;
       for (let j = st[i], e = st[i + 1]; j < e; j++) { const k3 = nb[j] * 3; ax += D[k3]; ay += D[k3 + 1]; az += D[k3 + 2]; }
       const inv = ni[i], i3 = i * 3, on = D[i3] !== 0 || D[i3 + 1] !== 0 || D[i3 + 2] !== 0 ? 0.5 : 0;   // only where it flows (the yield holds)
-      let mx = MEM[i3] + on * (D[i3] + ax * inv), my = MEM[i3 + 1] + on * (D[i3 + 1] + ay * inv), mz = MEM[i3 + 2] + on * (D[i3 + 2] + az * inv);
+      let mx = MEM[i3] + D[i3], my = MEM[i3 + 1] + D[i3 + 1], mz = MEM[i3 + 2] + D[i3 + 2];
       if (kHeal > 0) { mx += (Q[i3] - mx) * kHeal; my += (Q[i3 + 1] - my) * kHeal; mz += (Q[i3 + 2] - mz) * kHeal; }
       let fx = mx - Q[i3], fy = my - Q[i3 + 1], fz = mz - Q[i3 + 2];
       const fl = Math.sqrt(fx * fx + fy * fy + fz * fz);
