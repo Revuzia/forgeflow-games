@@ -35,7 +35,7 @@ import {
 // ───────────────────────────── copy (the harness asserts these) ─────────────────────────────
 export const ONLINE_TEXT = {
   title: 'PLAY ONLINE',
-  hint: 'Match up with real players — bots fill every empty seat',
+  hint: 'Jump into a match, or play with friends',
   quick: 'QUICK MATCH', quickLine: 'Jump into the next open match',
   create: 'CREATE ROOM', createLine: 'Get a code to share with friends',
   join: 'JOIN ROOM', joinLine: 'Enter a friend’s 4-character code',
@@ -45,7 +45,7 @@ export const ONLINE_TEXT = {
   joinBtn: 'JOIN',
   connecting: 'CONNECTING…', finding: 'FINDING PLAYERS…', solo: 'NO ONE ELSE YET', found: 'MATCH FOUND!', joiningMatch: 'JOINING THE MATCH…',
   hostLeft: 'HOST LEFT', hostLeftLine: 'Picking a new host — hang on…',
-  botsFill: 'Bots fill any empty seats.',
+  queueLine: 'Your match starts as soon as a room is ready.',
   keepWaiting: 'KEEP WAITING', playBots: 'PLAY VS BOTS', cancel: 'CANCEL',
   room: 'ROOM', share: 'Share this code with a friend. They pick JOIN ROOM and enter it.',
   roomHint: 'Up to 8 players · bots fill the rest',
@@ -777,7 +777,7 @@ export class OnlineScreens {
     this.searchPeople.replaceChildren();
     this.searchPeople.hidden = state !== 'found';
     let line = '';
-    if (state === 'queue') line = ONLINE_TEXT.botsFill;
+    if (state === 'queue') line = ONLINE_TEXT.queueLine;
     else if (state === 'solo') line = `Nobody else is queued for ${mode === 'ffa' ? 'FREE-FOR-ALL' : 'TEAMS'} · ${rule === 'washout' ? 'WASHOUT' : 'TURF'} right now. Keep waiting, or play this match against bots.`;
     else if (state === 'connecting') line = this.lastDoor.door === 'join' ? `Joining room ${this.lastDoor.code}…` : this.lastDoor.door === 'create' ? 'Opening a room…' : 'Reaching the matchmaker…';
     else if (state === 'hostleft') line = ONLINE_TEXT.hostLeftLine;

@@ -1,6 +1,6 @@
 {
   "name": "dyefield",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "private": true,
   "type": "module",
   "description": "DYEFIELD \u2014 Harbor Cup 4 v 4 turf-paint arena. Three.js + TypeScript + Vite runtime, Blender-authored art. `npm install && npm run dev`.",
