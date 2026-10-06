@@ -74,6 +74,9 @@ export class SelectScreen {
   private readonly perkLbl: HTMLElement;
   private readonly goalsChip: HTMLElement;
   private vs = false;
+  /** ONLINE VS (lane O-LOBBY): the same re-skin for the online menu (no bots row, no palettes); `titanOnly` = an invite joiner: step 1 only */
+  private online = false;
+  private titanOnly = false;
   private botIx = 1;
   private readonly backBtn: HTMLButtonElement;
   private readonly rowHint: HTMLElement;
@@ -213,9 +216,12 @@ export class SelectScreen {
     this.profile = opts.profile ?? null;
     this.bests = opts.bests || {};
     this.vs = !!opts.vs;
+    this.online = this.vs && !!opts.online;
+    this.titanOnly = this.online && !!opts.titanOnly;
+    this.tab2.classList.toggle('bt-hidden', this.titanOnly);
     this.botIx = Math.max(0, BOT_LEVELS.indexOf(opts.bots ?? 'regular'));
     this.layer.dataset.vs = this.vs ? '1' : '';
-    this.titleEl.textContent = this.vs ? STR_VS.menu.header : STR.select.header;
+    this.titleEl.textContent = this.vs ? (this.online ? STR_VS.online.header : STR_VS.menu.header) : STR.select.header;
     this.perkLbl.textContent = this.vs ? STR_VS.menu.botsLabel : SCREENS.select.perkLabel;
     this.goalsChip.classList.toggle('bt-hidden', this.vs);
     this.buildTitanCards(this.portraits);
@@ -312,7 +318,7 @@ export class SelectScreen {
   private confirm(): void {
     const s = this.session;
     if (!s || s.done) return;
-    if (this.step === 1) {
+    if (this.step === 1 && !this.titanOnly) {
       pulse(this.titanCards[this.ti], [{ transform: 'translateY(-4%) scale(1.1)' }, { transform: '' }], 260);
       this.setStep(2, true);
       return;
@@ -323,7 +329,7 @@ export class SelectScreen {
     const titan = TITAN_IDS[this.ti];
     s.finish({
       kind: 'start', titan, biome: BIOME_IDS[this.bi],
-      perk: this.perkChoice(), palette: this.palUnlocked(titan, this.pal[titan]) ? this.pal[titan] : 0,
+      perk: this.perkChoice(), palette: !this.online && this.palUnlocked(titan, this.pal[titan]) ? this.pal[titan] : 0,
       ...(this.vs ? { bots: BOT_LEVELS[this.botIx] ?? 'regular' } : {}),
     }, flashesReduced() ? 80 : 280);
   }
@@ -343,13 +349,15 @@ export class SelectScreen {
     this.tab1.classList.toggle('on', step === 1);
     this.tab2.classList.toggle('on', step === 2);
     this.tab1.classList.toggle('done', step === 2);
-    this.stepLine.textContent = this.vs ? (step === 1 ? STR_VS.menu.step1 : STR_VS.menu.step2) : step === 1 ? STR.select.step1 : STR.select.step2;
-    this.confirmLbl.textContent = this.vs ? (step === 1 ? STR_VS.menu.confirm : STR_VS.menu.start) : step === 1 ? STR.select.confirm : STR.select.dropIn;
+    this.stepLine.textContent = this.online ? (step === 1 ? (this.titanOnly ? STR_VS.online.stepJoin : STR_VS.menu.step1) : STR_VS.online.step2)
+      : this.vs ? (step === 1 ? STR_VS.menu.step1 : STR_VS.menu.step2) : step === 1 ? STR.select.step1 : STR.select.step2;
+    this.confirmLbl.textContent = this.online ? (step === 1 && this.titanOnly ? STR_VS.online.joinGo : STR_VS.online.next)
+      : this.vs ? (step === 1 ? STR_VS.menu.confirm : STR_VS.menu.start) : step === 1 ? STR.select.confirm : STR.select.dropIn;
     this.titanRow.classList.toggle('bt-hidden', step !== 1);
     this.biomeRow.classList.toggle('bt-hidden', step !== 2);
-    this.palRow.classList.toggle('bt-hidden', step !== 1);
+    this.palRow.classList.toggle('bt-hidden', step !== 1 || this.online);        // online: the colourway is not sent to the other players
     this.deskRec.classList.toggle('bt-hidden', step !== 2);
-    this.perkRow.classList.toggle('bt-hidden', step !== 2);
+    this.perkRow.classList.toggle('bt-hidden', step !== 2 || this.online);
     if (step === 1) this.selectTitan(this.ti); else this.selectBiome(this.bi);
     if (step === 2) this.refreshBiomeBests();
     this.refreshPermit();

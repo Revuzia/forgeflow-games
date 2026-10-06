@@ -44,9 +44,18 @@ export function pvpOnIn(phase: VsPhase): boolean {
   return phase === 'takeover' || phase === 'final' || phase === 'last';
 }
 
+/** seconds HOSTILE TAKEOVER takes to ramp rival damage from 0 to 1 (a window, not a switch) */
+export const TAKEOVER_RAMP_S = 10;
+
 /** phaseMul of the PvP formula (vs_design.md §6.1): 0 in OPEN HOUSE (knockback only), 1 after 4:00. FINAL NOTICE reads VS.pvp.finalMul
  *  (its START value) without a clock, and ramps linearly to VS.pvp.finalMulEnd across the phase when a match `clock` is given. */
 export function phaseMul(phase: VsPhase, clock?: number): number {
+  if (phase === 'takeover' && clock !== undefined) {
+    // the claws come out gradually (critic: the first second of HOSTILE TAKEOVER one-shot fights already in contact): 0 -> 1 over the first TAKEOVER_RAMP_S
+    // (a clock BEFORE the phase boundary only happens when a probe sets `phase` without moving the clock: steady state, x 1)
+    const c = clock - VS.phase.openEndS;
+    return c < 0 || c >= TAKEOVER_RAMP_S ? 1 : c / TAKEOVER_RAMP_S;
+  }
   if (phase === 'final') {
     if (clock === undefined) return VS.pvp.finalMul;
     const P = VS.phase;

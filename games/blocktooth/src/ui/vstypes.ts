@@ -67,3 +67,13 @@ export function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(h.length === 3 ? h.split('').map((c) => c + c).join('') : h, 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
+
+/**
+ * SAFE RECTANGLE for every world-attached HUD piece (arrows, nameplates, tender chips): the screen minus the HUD's own panels
+ * (CRIT finding: edge nameplates sat on the clock, the seat column and the minimap). Left: the seat cards (to 24.5u);
+ * right: the KO feed + minimap column (26u); top: the phase bar / clock / rule strip (12u); bottom: the status card, ability
+ * bar and ACTIVE panel (16u). `u` = the HUD unit (max(8px, min(1vw, 1.7778vh))).
+ */
+export function safeRect(W: number, H: number, u: number): { l: number; r: number; t: number; b: number } {
+  return { l: 24.5 * u, r: Math.max(24.5 * u + 10 * u, W - 26 * u), t: 12 * u, b: Math.max(12 * u + 8 * u, H - 16 * u) };
+}

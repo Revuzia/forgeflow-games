@@ -75,7 +75,7 @@ export class TitleScreen {
   private readonly layer: HTMLDivElement;
   private readonly clock: HTMLElement;
   private readonly crawl: HTMLElement;
-  private session: ModalSession<'play' | 'goals' | 'vs'> | null = null;
+  private session: ModalSession<'play' | 'goals' | 'vs' | 'online'> | null = null;
 
   constructor(root: HTMLElement, input: Input) {
     this.input = input;
@@ -121,6 +121,8 @@ export class TitleScreen {
     const press = div('bt-title-press', L);
     press.appendChild(el('span', 'bt-title-press-main', STR.title.press));
     press.appendChild(el('span', 'bt-title-press-sub', STR.title.pressSub));
+    // the three secondary entries sit in one row: GOALS & RECORDS [G] · VS PRACTICE [V] · ONLINE VS [O]
+    const chips = div('bt-title-chips', press);
     // v2 GOALS & RECORDS [G] chip (its click must not also start the broadcast)
     const chip = el('button', 'bt-btn bt-btn-ghost bt2-goals-chip bt2-title-chip');
     chip.type = 'button';
@@ -130,7 +132,7 @@ export class TitleScreen {
     chip.appendChild(el('span', '', SCREENS.goalsChip));
     chip.addEventListener('mousedown', (ev) => { ev.preventDefault(); ev.stopPropagation(); });
     chip.addEventListener('click', (ev) => { ev.stopPropagation(); this.goals(); });
-    press.appendChild(chip);
+    chips.appendChild(chip);
     // ONLINE VS (lane B-VIEW): VS PRACTICE [V] — you + 3 bots in one city (vs_design.md §14.1)
     const vsChip = el('button', 'bt-btn bt-btn-ghost bt2-goals-chip bt2-title-chip bt-vs-chip-btn');
     vsChip.type = 'button';
@@ -140,7 +142,17 @@ export class TitleScreen {
     vsChip.appendChild(el('span', '', STR_VS.menu.chip));
     vsChip.addEventListener('mousedown', (ev) => { ev.preventDefault(); ev.stopPropagation(); });
     vsChip.addEventListener('click', (ev) => { ev.stopPropagation(); this.vsPick(); });
-    press.appendChild(vsChip);
+    chips.appendChild(vsChip);
+    // ONLINE VS (lane O-LOBBY): QUICK MATCH / CREATE ROOM / JOIN WITH CODE — 4 titans, real people first, bots fill the rest
+    const onChip = el('button', 'bt-btn bt-btn-ghost bt2-goals-chip bt2-title-chip bt-vs-chip-btn bt-online-chip-btn');
+    onChip.type = 'button';
+    onChip.tabIndex = -1;
+    onChip.dataset.v2 = 'online-chip';
+    onChip.appendChild(keyChip(STR_VS.online.key));
+    onChip.appendChild(el('span', '', STR_VS.online.chip));
+    onChip.addEventListener('mousedown', (ev) => { ev.preventDefault(); ev.stopPropagation(); });
+    onChip.addEventListener('click', (ev) => { ev.stopPropagation(); this.onlinePick(); });
+    chips.appendChild(onChip);
     onTap(L, () => this.go());
 
     const lower = div('bt-title-lower', L);
@@ -155,7 +167,7 @@ export class TitleScreen {
 
   /** v2 (TitleScreenApi, FEATURES_V2 §13.1): 'play' on ENTER / pad A / Start / click, 'goals' on G / pad X
    *  (read from UiPress.key: pad X maps to act 'reroll', which the title otherwise ignores) or the chip. */
-  run(): Promise<'play' | 'goals' | 'vs'> {
+  run(): Promise<'play' | 'goals' | 'vs' | 'online'> {
     if (this.session && !this.session.done) this.session.abort();
     this.clock.textContent = wallClock();
     // CSS crawl: title lines + a few wire headlines, duplicated so the loop is seamless
@@ -171,9 +183,10 @@ export class TitleScreen {
     }
     this.layer.classList.remove('bt-hidden');
     this.layer.classList.remove('leaving');
-    const { promise, session } = runModal<'play' | 'goals' | 'vs'>(this.layer, this.input, (p) => {
+    const { promise, session } = runModal<'play' | 'goals' | 'vs' | 'online'>(this.layer, this.input, (p) => {
       if (p.key === 'g' || p.key === 'pad:2') { this.goals(); return; }
       if (p.key === 'v' || p.key === 'pad:3') { this.vsPick(); return; }
+      if (p.key === 'o' || p.key === 'pad:4') { this.onlinePick(); return; }
       if (p.act === 'confirm' || p.act === 'alt' || p.key === 'pad:0' || p.key === 'pad:9') this.go();
     }, {
       armMs: 350,
@@ -201,6 +214,13 @@ export class TitleScreen {
     if (!s || s.done) return;
     this.layer.classList.add('leaving');
     s.finish('vs', flashesReduced() ? 120 : 380);
+  }
+
+  private onlinePick(): void {
+    const s = this.session;
+    if (!s || s.done) return;
+    this.layer.classList.add('leaving');
+    s.finish('online', flashesReduced() ? 120 : 380);
   }
 }
 

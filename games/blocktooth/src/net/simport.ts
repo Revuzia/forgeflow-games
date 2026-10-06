@@ -16,12 +16,17 @@
 //
 // Sim hooks this layer would like from B-CORE / B-DET are listed in _harness/scratch/partb/B-NET/NOTES.md.
 
-import type { BiomeId, RunMeta, TitanId, TitanInput, World } from '../core/types.ts';
+import type { BiomeId, PlayerSeat, RunMeta, TitanId, TitanInput, World } from '../core/types.ts';
 import { EMPTY_RUN_META } from '../core/types.ts';
-import { createWorld, stepWorld } from '../core/world.ts';
+import { createWorld, setViewSlot, stepWorld, stepWorldN } from '../core/world.ts';
+import { VS } from '../core/config.ts';
+import { TITANS } from '../data/titans.ts';
 import { hasPendingDraft, pickUpgrade, rollOffer } from '../upgrades/draft.ts';
-import { vsStateFlat, type HashAtom } from './vshash.ts';
-import { type Frame, type StartInfo, SEATS, INPUT_BYTES, decodeInput, cardOf } from './proto.ts';
+import { vsStandings } from '../vs/score.ts';
+import { vsLeaveSeat, vsTakeOverSeat, canTakeOverSeat } from '../vs/seats.ts';
+import type { BotLevel } from '../vs/types.ts';
+import { vsFullFlat, type HashAtom } from './vshash.ts';
+import { type Frame, type StartInfo, CARD, SEATS, INPUT_BYTES, TICK_HZ, decodeInput, cardOf } from './proto.ts';
 
 /** What the lockstep session needs from a world. W is opaque to the session. */
 export interface SimPort<W> {
@@ -37,9 +42,23 @@ export interface SimPort<W> {
   standings(w: W, lastFrame: Frame | null): Standings;
   /** test hook: perturb this world by one ulp (forced-desync scenario); never called in play */
   perturb?(w: W): void;
+  /**
+   * Catch-up budget for a world that has to replay many ticks (a replay join, a long stall): the session hands it to
+   * LockstepPeer so a heavy world (4 titans) never freezes the page. Absent = the session's own defaults.
+   */
+  catchup?: { stepBudgetMs: number; maxStepsPerPump: number };
 }
 
-export interface SeatStanding { slot: number; kind: 'human' | 'bot'; place: number; score: number }
+export interface SeatStanding {
+  slot: number; kind: 'human' | 'bot'; place: number; score: number;
+  /** VS only (the solo adapter leaves them out): what the end card, the stats bridge and the ratings read */
+  titan?: string; won?: boolean; evictions?: number; assists?: number; koCount?: number; pvpDealt?: number; peakSize?: number;
+  tonnage?: number; crownS?: number;
+  /** a human who left (the seat is a bot now): the ratings put them 4th (vs_design.md 9) */
+  left?: boolean;
+  /** this seat was a bot that a human took over mid-match: stats yes, rating no (vs_design.md 9) */
+  tookOver?: boolean;
+}
 export interface Standings {
   endTick: number;
   result: string;
@@ -71,6 +90,7 @@ export class Hasher {
 }
 
 export function hashWorld(w: World): number {
+  if (w.mode === 'vs') return hashVsWorld(w);
   const hs = new Hasher();
   const T = w.titan;
   hs.num(w.tick); hs.num(w.t); hs.num(w.nextId);
@@ -95,11 +115,23 @@ export function hashWorld(w: World): number {
   for (const p of w.city.props) { hs.bool(p.alive); if (p.lane < 0) continue; hs.num(p.x); hs.num(p.z); }
   hs.num(w.run.tonnage); hs.num(w.run.blocksLeveled); hs.num(w.run.peakRank);
   hs.str(w.run.phase); hs.str(w.run.result ?? '-');
-  if (w.mode === 'vs') {   // every seat + the world-level VS state (GATE: CORE left only the bound cursor hashed); solo never gets here
-    const a: HashAtom[] = [];
-    vsStateFlat(w, a);
-    for (let i = 0; i < a.length; i++) { const x = a[i]; if (typeof x === 'string') hs.str(x); else hs.num(x); }
-  }
+  return hs.h >>> 0;
+}
+
+/** VS world hash. NEVER reads the cursor (w.titan / w.upgrades ... point at the VIEW seat, which differs on every peer):
+ *  the world-scoped bookkeeping, the city (every building's floors + hp, every prop), then vshash.ts vsFullFlat (every
+ *  seat's whole state + the VS world + every live entity). Raw float bits, so a 1-ulp difference changes the hash. */
+function hashVsWorld(w: World): number {
+  const hs = new Hasher();
+  hs.num(w.tick); hs.num(w.t); hs.num(w.nextId);
+  for (const b of w.city.buildings) { hs.num(b.alive); hs.num(b.floorHp); hs.bool(b.collapsed); }
+  for (const p of w.city.props) { hs.bool(p.alive); hs.num(p.hp); if (p.lane < 0) continue; hs.num(p.x); hs.num(p.z); hs.num(p.heading); hs.num(p.laneS); hs.num(p.speed); hs.num(p.scared); }
+  hs.num(w.run.tonnage); hs.num(w.run.blocksLeveled); hs.num(w.run.peakRank);
+  hs.str(w.run.phase); hs.str(w.run.result ?? '-');
+  const a: HashAtom[] = [];
+  vsFullFlat(w, a);
+  // a string atom ends in a 0x1f byte, so the atoms 'ab','c' never hash like 'a','bc'
+  for (let i = 0; i < a.length; i++) { const x = a[i]; if (typeof x === 'string') { hs.str(x); hs.u32(0x1f); } else hs.num(x); }
   return hs.h >>> 0;
 }
 
@@ -177,3 +209,121 @@ export function soloWorldPort(o: SoloPortOpts): SimPort<World> {
 }
 
 export const EMPTY_FRAME_INPUTS = (): Uint8Array => new Uint8Array(SEATS * INPUT_BYTES);
+
+// ─────────────────────────────── VS adapter: 4 seats, one world ───────────────────────────────
+// The SimPort of the REAL multi-titan VS world (CORE_CONTRACT.md). lockstep.ts needs nothing from it beyond this interface.
+//
+//   * create(start)  createWorld({mode:'vs', players}) from the START message: per seat the titan id and, for a bot seat, its
+//                    difficulty (SeatInfo.botLevel 0 rookie / 1 regular / 2 veteran, default regular). The local seat the app
+//                    renders is `viewSeat()` (the cursor only; the hash never reads it).
+//   * step(w, f)     one canonical frame -> stepWorldN. Per seat: the 4-byte input word is decoded (mx, mz, flags) and the
+//                    card byte becomes TitanInput.railPick / railReroll (CARD RAIL, an EDGE: ignored on a late frame, where
+//                    the previous word is repeated, so a repeat can never pick twice). A seat whose botMask bit is set gets
+//                    `null` and the in-sim VS bot brain (src/vs/bot, per-seat BotMemory) drives it. The seat roles follow
+//                    the canonical botMask EVERY tick, so they are a pure function of the frame log (replay-safe):
+//                      bit set, seat human   -> vsLeaveSeat: a bot takes the titan on this tick (AFK, left, desynced, or a
+//                                               joiner still downloading), resuming the parked bot memory if there is one
+//                      bit clear, seat bot   -> a human takes the seat: an AFK human coming back, or a bot-seat takeover
+//                                               (vs_design.md 10: allowed until 3:00 by the net layer's JOIN_CUTOFF_TICK; the
+//                                               port never refuses what the canonical frames say)
+//   * hash(w)        hashWorld -> vshash.ts vsFullFlat: every seat, the VS world, every live entity, the city.
+//   * ended(w)       run.result !== null (the VS lane sets 'vs' when the match is decided, at the latest at the hard end).
+//   * standings      vsStandings(w): places, scores, per-seat counters; seat kind from the CANONICAL last frame.
+//   * perturb        1 ulp on seat 2's titan.x and on its (accumulate-only) tonnage: the forced-desync test hook.
+
+/** Difficulty by SeatInfo.botLevel. */
+const BOT_LEVELS: readonly BotLevel[] = ['rookie', 'regular', 'veteran'];
+export function botLevelOf(n: number | undefined): BotLevel { return n !== undefined && n >= 0 && n < BOT_LEVELS.length ? BOT_LEVELS[n | 0] : 'regular'; }
+
+/** Match length in sim ticks: the 5 s COUNTDOWN + the VS hard end (10:45 on the match clock) = 19,500. A START's endTick must be
+ *  at least this (the sim ends the match itself at the hard end; the session's cap is only a backstop). */
+export const VS_MATCH_TICKS = Math.round((VS.countdownS + VS.phase.hardEndS) * TICK_HZ);
+
+export interface VsPortOpts {
+  /** the seat the local player drives (the cursor / view only; defaults to 0). Called on every create(), so a world the
+   *  session rebuilds (stepped-down host) comes back looking at the right seat. */
+  viewSeat?: () => number;
+}
+
+export function vsWorldPort(o: VsPortOpts = {}): SimPort<World> {
+  return {
+    create(start: StartInfo): World {
+      const players: PlayerSeat[] = [];
+      for (let s = 0; s < SEATS; s++) {
+        const si = start.seats[s];
+        const id = si && (si.titan as TitanId) in TITANS ? (si.titan as TitanId) : 'molo';
+        players.push({ titan: id, bot: !si || si.kind === 'bot' ? botLevelOf(si?.botLevel) : null });
+      }
+      const w = createWorld({ mode: 'vs', players, biome: start.biome as BiomeId, seed: start.seed, view: 0 });
+      const v = o.viewSeat ? o.viewSeat() : 0;
+      if (v > 0 && v < SEATS) setViewSlot(w, v);
+      return w;
+    },
+    step(w: World, f: Frame): void {
+      const ins: (TitanInput | null)[] = [null, null, null, null];
+      const n = w.players.length;
+      for (let s = 0; s < n; s++) {
+        const P = w.players[s];
+        const bit = (f.botMask >> s) & 1;
+        if (bit === 1 && P.bot === null) {
+          vsLeaveSeat(w, s, botLevelOf(undefined));
+        } else if (bit === 0 && P.bot !== null) {
+          if (P.vs.data.left === 1) { delete P.vs.data.left; P.vs.sleeper = P.bot; P.bot = null; }   // an AFK human is back
+          else if (!(canTakeOverSeat(w, s) && vsTakeOverSeat(w, s))) { P.vs.sleeper = P.bot; P.bot = null; P.vs.data.tookOver = 1; }
+        }
+        if (P.bot !== null) continue;                                  // bot seat: the brain writes its input in vsBeginTick
+        const off = s * INPUT_BYTES;
+        const dec = decodeInput(f.inputs, off);
+        const card = ((f.lateMask >> s) & 1) === 1 ? 0 : cardOf(f.inputs, off);   // an edge: a repeated (late) word never picks
+        if (card === CARD.REROLL) dec.railReroll = true;
+        else if (card >= 1 && card <= 3) dec.railPick = card;
+        ins[s] = dec;
+      }
+      stepWorldN(w, ins);
+    },
+    tick(w: World): number { return w.tick; },
+    hash: hashWorld,
+    ended(w: World): boolean { return w.run.result !== null; },
+    standings(w: World, last: Frame | null): Standings {
+      const st = vsStandings(w);
+      const seats: SeatStanding[] = [];
+      for (let s = 0; s < w.players.length; s++) {
+        const x = st.find((e) => e.slot === s);
+        const P = w.players[s];
+        const bot = last ? ((last.botMask >> s) & 1) === 1 : P.bot !== null;
+        seats.push({
+          slot: s, kind: bot ? 'bot' : 'human', place: x ? x.place : s + 1, score: x ? x.score : 0,
+          titan: P.titanId, won: x ? x.won : false, evictions: P.vs.evictions, assists: P.vs.assists, koCount: P.vs.koCount,
+          pvpDealt: P.vs.pvpDealt, peakSize: x ? x.peakSize : 1, tonnage: P.run.tonnage, crownS: P.vs.crownS,
+          left: P.vs.data.left === 1, tookOver: P.vs.data.tookOver === 1,
+        });
+      }
+      const vs = w.vs;
+      const summary: Record<string, number | string> = {
+        result: w.run.result ?? 'time', phase: vs ? vs.phase : '-', winner: vs ? vs.winner : -1,
+        clockS: vs ? w.t - vs.startT : w.t, decided: w.run.result === null ? 0 : 1,
+        tonnage: w.run.tonnage, blocks: w.run.blocksLeveled, worldHash: hashWorld(w),
+      };
+      const body = { endTick: w.tick, result: String(summary.result), seats, summary };
+      return { ...body, hash: hashJson(body) };
+    },
+    perturb(w: World): void {
+      const P = w.players[Math.min(2, w.players.length - 1)];
+      F64[0] = P.titan.x; U32[0] ^= 1; P.titan.x = F64[0];
+      F64[0] = P.run.tonnage + 1; U32[0] ^= 1; P.run.tonnage = F64[0] - 1;
+    },
+    catchup: { stepBudgetMs: 25, maxStepsPerPump: 600 },
+  };
+}
+
+/** Build a START for the VS world (host side; the app's makeStart wraps it). endTick = the whole match + a 2 s backstop. */
+export function vsStartInfo(o: {
+  proto: number; build: string; matchId: string; seed: number; biome: string; lead?: number;
+  seats: { kind: 'human' | 'bot'; peer: string | null; name: string; titan: string; botLevel?: number }[];
+}): StartInfo {
+  return {
+    proto: o.proto, build: o.build, matchId: o.matchId, seed: o.seed, biome: o.biome, mode: 'vs',
+    seats: o.seats.map((s, slot) => ({ slot, kind: s.kind, peer: s.peer, name: s.name, titan: s.titan, botLevel: s.botLevel })),
+    endTick: VS_MATCH_TICKS + 2 * TICK_HZ, lead: o.lead ?? 4,
+  };
+}

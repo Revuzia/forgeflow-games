@@ -186,6 +186,7 @@ export class BossBar {
     this.introOn.set(true);
     this.shown = true;
     this.layer.classList.remove('bt-hidden');
+    try { document.body.dataset.vsboss = '1'; } catch { /* no DOM */ }   // the online notices sit below a live nameplate
     pulse(this.plate, [
       { transform: 'translateY(-140%)', opacity: 0 },
       { transform: 'translateY(6%)', opacity: 1, offset: 0.7 },
@@ -283,6 +284,7 @@ export class BossBar {
     if (!this.shown) return;
     this.shown = false;
     this.layer.classList.add('bt-hidden');
+    try { document.body.dataset.vsboss = ''; } catch { /* no DOM */ }
     this.layerGate.set(false);
   }
 }

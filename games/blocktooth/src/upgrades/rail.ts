@@ -102,7 +102,10 @@ export function stepRail(w: World): void {
         R.seq++;
         takeCard(w, ovf, true);            // nothing new to file: no rail, the reward is paid and stamped
       } else {
-        R.open = true; R.openedT = w.t; R.expireT = w.t + VS.rail.autoPickS; R.chest = chest;
+        // CRIT: the OPENING card is offered during the 5 s COUNTDOWN (titans frozen on their marks): its 12 s auto-pick clock starts when
+        // OPEN HOUSE does, not at tick 1, so a player reading the offer loses none of it to the countdown (every later offer: open time)
+        const base = w.vs && w.vs.phase === 'countdown' ? Math.max(w.t, w.vs.startT) : w.t;
+        R.open = true; R.openedT = w.t; R.expireT = base + VS.rail.autoPickS; R.chest = chest;
         R.seq++;
         w.events.push({ type: 'railOffer', cards: ids.slice(), chest });
       }

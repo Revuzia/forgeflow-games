@@ -26,7 +26,7 @@ type BotMod = typeof import('../bot.ts');
 type CfgMod = typeof import('../../src/core/config.ts');
 type VsStateMod = typeof import('../../src/vs/state.ts');
 
-let M_world: WorldMod, M_players: PlayersMod, M_titan: TitanMod, M_draft: DraftMod, M_bot: BotMod, M_cfg: CfgMod, M_vs: VsStateMod;
+let M_world: WorldMod, M_players: PlayersMod, M_titan: TitanMod, M_draft: DraftMod, M_bot: BotMod, M_cfg: CfgMod, M_vs: VsStateMod, M_clock: { TAKEOVER_RAMP_S?: number } = {};
 
 /** Dynamic import so a lane module that is mid-edit reports "could not load the sim" (exit 2) instead of crashing. */
 /** GATE sweeps: BT_VS_OVERRIDE='{"VS.ko.levelsLost":1,"VSX.pvpMul":2}' sets those config numbers in THIS process before any match
@@ -52,6 +52,7 @@ export async function loadSim(): Promise<string | null> {
     M_bot = await import('../bot.ts');
     M_cfg = await import('../../src/core/config.ts');
     M_vs = await import('../../src/vs/state.ts');
+    M_clock = await import('../../src/vs/clock.ts');
     applyOverrides(M_cfg, await import('../../src/vs/tune.ts'));
     return null;
   } catch (e) {
@@ -439,7 +440,8 @@ export function runDuel(cfg: DuelCfg): DuelResult {
     w.cheats.noSpawns = true;
     for (const t of vs.tenders) t.state = 'withdrawn';
     // jump to the start of HOSTILE TAKEOVER (rival damage on); the phase machine reads the clock
-    const jumpS = M_cfg.VS.phase.openEndS + 1;
+    // (+ TAKEOVER_RAMP_S: the first seconds of HOSTILE TAKEOVER ramp rival damage 0 -> 1 on purpose; the TTK gate measures steady state)
+    const jumpS = M_cfg.VS.phase.openEndS + (M_clock.TAKEOVER_RAMP_S ?? 0) + 1;
     w.t = vs.startT + jumpS;
     w.tick = Math.round(w.t / w.dt);
     const inputs: (TitanInput | null)[] = [null, null];

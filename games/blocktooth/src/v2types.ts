@@ -110,6 +110,10 @@ export interface SelectRunOpts {
   vs?: boolean;
   /** VS PRACTICE: the bot level the row opens on (default 'regular') */
   bots?: 'rookie' | 'regular' | 'veteran';
+  /** ONLINE VS (O-LOBBY): the online menu's titan + city pick (with `vs`): no bots row, no palettes */
+  online?: boolean;
+  /** an invite joiner (?room=CODE): the titan only, the host picks the city */
+  titanOnly?: boolean;
 }
 export type SelectResultV2 =
   | { kind: 'start'; titan: TitanId; biome: BiomeId; perk: PerkId | null; palette: number; bots?: 'rookie' | 'regular' | 'veteran' }

@@ -4,6 +4,7 @@ _spec/online/netcode_lab/xrun_det.py + xnode_det.mjs).
     python _harness/net/probe_xbrowser.py               # 4 configs x 18,000 ticks in Node + Chromium + Firefox + WebKit
     python _harness/net/probe_xbrowser.py --quick       # 2 configs x 3,000 ticks (dev loop)
     python _harness/net/probe_xbrowser.py --ticks 9000 --engines node,chromium
+    python _harness/net/probe_xbrowser.py --vsnet-only             # only the 4-seat VS LOCKSTEP matches (full 10:45 each)
     python _harness/net/probe_xbrowser.py --json _harness/_reports/xbrowser.json
 
 1. Bundles _harness/net/xbrowser_entry.ts (the real sim + the GATE 2 bot + the draft path) with the project's
@@ -37,9 +38,15 @@ FULL_CFGS = [
     # VS (GATE 2026-10-05): a 4-bot VS match, the whole 4-seat world hashed (src/net/vshash.ts); titan field = the lineup
     ('molo+voltkite+hearthback+briarwick', 'grideast', 1337, 'vs'),
     ('briarwick+hearthback+voltkite+molo', 'lockwater', 7, 'vs'),
+    # VS LOCKSTEP (O-PORT, gate H1 / H6 sim part): canonical frames (late repeats, AFK -> bot -> back, a bot-seat takeover, CARD RAIL
+    # bytes) through src/net/simport.ts vsWorldPort, the port's all-player hash + standings hash; runs to the match's own end
+    ('molo+voltkite+hearthback+briarwick', 'grideast', 1337, 'vsnet'),
+    ('hearthback+briarwick+molo+voltkite', 'whitestacks', 7, 'vsnet'),
+    ('voltkite+molo+briarwick+hearthback', 'lockwater', 99, 'vsnet'),
 ]
 QUICK_CFGS = [('molo', 'grideast', 1337, 'fresh'), ('briarwick', 'lockwater', 7, 'full'),
-              ('molo+voltkite+hearthback+briarwick', 'whitestacks', 99, 'vs')]
+              ('molo+voltkite+hearthback+briarwick', 'whitestacks', 99, 'vs'),
+              ('molo+voltkite+hearthback+briarwick', 'grideast', 1337, 'vsnet')]
 
 NODE_RUNNER = r"""
 import fs from 'node:fs';
@@ -47,7 +54,8 @@ globalThis.window = globalThis;
 (0, eval)(fs.readFileSync(process.argv[2], 'utf8'));
 const cfgs = JSON.parse(process.argv[3]);
 const ticks = Number(process.argv[4]);
-const runs = cfgs.map(([t, b, s, m]) => m === 'vs' ? globalThis.btProbe.runProbeVs(t, b, s, ticks) : globalThis.btProbe.runProbe(t, b, s, ticks, m));
+const vsn = Number(process.argv[5]);
+const runs = cfgs.map(([t, b, s, m]) => m === 'vsnet' ? globalThis.btProbe.runProbeVsNet(t, b, s, vsn) : m === 'vs' ? globalThis.btProbe.runProbeVs(t, b, s, ticks) : globalThis.btProbe.runProbe(t, b, s, ticks, m));
 process.stdout.write(JSON.stringify({ version: 'node ' + process.version, math: globalThis.btProbe.mathHashes(), runs }));
 """
 
@@ -76,11 +84,11 @@ def bundle():
     return js
 
 
-def run_node(js, cfgs, ticks):
+def run_node(js, cfgs, ticks, vsn):
     runner = OUT / 'xnode_runner.mjs'
     runner.write_text(NODE_RUNNER, encoding='utf-8')
     t0 = time.time()
-    p = subprocess.run(['node', str(runner), str(js), json.dumps(cfgs), str(ticks)], cwd=ROOT,
+    p = subprocess.run(['node', str(runner), str(js), json.dumps(cfgs), str(ticks), str(vsn)], cwd=ROOT,
                        capture_output=True, text=True, encoding='utf-8', errors='replace')
     if p.returncode != 0:
         return {'error': (p.stderr or p.stdout)[-1500:]}
@@ -89,7 +97,7 @@ def run_node(js, cfgs, ticks):
     return res
 
 
-def run_browser(name, launcher, cfgs, ticks):
+def run_browser(name, launcher, cfgs, ticks, vsn):
     url = (OUT / 'xbrowser.html').as_uri()
     t0 = time.time()
     b = launcher.launch()
@@ -102,7 +110,8 @@ def run_browser(name, launcher, cfgs, ticks):
         pg.wait_for_function('() => !!window.btProbe', timeout=60000)
         runs = []
         for t, bi, s, m in cfgs:
-            runs.append(pg.evaluate('([t, b, s, n, m]) => m === "vs" ? window.btProbe.runProbeVs(t, b, s, n) : window.btProbe.runProbe(t, b, s, n, m)', [t, bi, s, ticks, m]))
+            runs.append(pg.evaluate('([t, b, s, n, m, v]) => m === "vsnet" ? window.btProbe.runProbeVsNet(t, b, s, v) : m === "vs" ? window.btProbe.runProbeVs(t, b, s, n) : window.btProbe.runProbe(t, b, s, n, m)', [t, bi, s, ticks, m, vsn]))
+            log(f'  {name}: {t}/{bi}/{s}/{m} done ({runs[-1]["ticks"]} ticks, {runs[-1]["ms"] / 1000:.0f} s)')
         math = pg.evaluate('() => window.btProbe.mathHashes()')
         return {'version': f'{name} {b.version}', 'math': math, 'runs': runs, 'pageerrors': errors,
                 'wall_s': round(time.time() - t0, 1)}
@@ -135,18 +144,23 @@ def main():
     ap.add_argument('--ticks', type=int, default=None)
     ap.add_argument('--engines', default='node,chromium,firefox,webkit')
     ap.add_argument('--json', default=None)
+    ap.add_argument('--vsnet-only', action='store_true', help='only the VS lockstep configs (the whole match each)')
+    ap.add_argument('--vsnet-ticks', type=int, default=None, help='tick cap for the VS lockstep configs (default: the whole match, 19,500)')
     a = ap.parse_args()
     cfgs = [list(c) for c in (QUICK_CFGS if a.quick else FULL_CFGS)]
+    if a.vsnet_only:
+        cfgs = [c for c in cfgs if c[3] == 'vsnet']
     ticks = a.ticks or (3000 if a.quick else 18000)
+    vsn = a.vsnet_ticks or (3600 if a.quick else 19500)
     engines = [e.strip() for e in a.engines.split(',') if e.strip()]
 
     js = bundle()
     if not js:
         return 2
     results = {}
-    log(f'configs: {", ".join("/".join(map(str, c)) for c in cfgs)} x {ticks} ticks, checkpoint every 300')
+    log(f'configs: {", ".join("/".join(map(str, c)) for c in cfgs)} x {ticks} ticks (vsnet: up to {vsn}), checkpoint every 300')
     log('node: running ...')
-    results['node'] = run_node(js, cfgs, ticks)
+    results['node'] = run_node(js, cfgs, ticks, vsn)
     if 'error' in results['node']:
         log('node FAILED: ' + results['node']['error'])
         return 2
@@ -168,7 +182,7 @@ def main():
                     continue
                 log(f'{name}: running ...')
                 try:
-                    results[name] = run_browser(name, launcher, cfgs, ticks)
+                    results[name] = run_browser(name, launcher, cfgs, ticks, vsn)
                     log(f'{name}: {results[name]["version"]} {results[name]["wall_s"]} s')
                 except Exception as e:  # noqa: BLE001
                     msg = str(e).splitlines()[0][:300]
@@ -210,7 +224,7 @@ def main():
     if a.json:
         jp = pathlib.Path(a.json)
         jp.parent.mkdir(parents=True, exist_ok=True)
-        jp.write_text(json.dumps({'ticks': ticks, 'configs': cfgs, 'results': results}, indent=1), encoding='utf-8')
+        jp.write_text(json.dumps({'ticks': ticks, 'vsnet_ticks': vsn, 'configs': cfgs, 'results': results}, indent=1), encoding='utf-8')
     log('')
     if fails:
         log(f'H1 cross-browser determinism: FAIL ({len(fails)} problem(s))')

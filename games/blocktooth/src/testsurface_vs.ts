@@ -49,8 +49,22 @@ export interface BtVsDev {
   view(slot: number): number;
   /** push a raw SimEvent through the app's event routing (a view probe: no sim state changes) */
   emit(ev: Record<string, unknown>): boolean;
+  /**
+   * O-REPORT: stand in for the ONLINE layer's match context (App.vsReport) in a practice world: `humans` human seats at the start,
+   * `uids` = the account id per seat (null = bot / guest). `humanSeats` (dev emulation) turns those bot seats into IDLE human seats
+   * (bot = null) so the report sees a 2-human match like the online one would. null clears the context.
+   */
+  reportCtx(o: { matchId: string; humans: number; uids: (string | null)[]; humanSeats?: number[]; skip?: boolean } | null): boolean;
 }
-export interface BtVsSurface { state(): BtVsState | null; dom(): BtVsDom; dev?: BtVsDev }
+/** O-REPORT: what the match's result reporting did (read-only): the match id it filed under, the VS goals it earned, the portal's answer */
+export interface BtVsReport {
+  matchId: string;
+  goals: string[];
+  filing: { kind: string; already?: boolean; confirmed?: boolean; reports?: number | null; error?: string | null } | null;
+  /** the local VS ledger (lifetime grind-goal counters + VS goals earned) */
+  ledger: { matches: number; wins: number; done: string[] };
+}
+export interface BtVsSurface { state(): BtVsState | null; dom(): BtVsDom; report(): BtVsReport | null; dev?: BtVsDev }
 
 function num(v: unknown, d: number): number {
   const n = typeof v === 'number' ? v : typeof v === 'string' ? Number(v) : NaN;
@@ -114,7 +128,13 @@ export function installVsSurface(app: App, dev: boolean): { newVs: (o: { titan?:
     };
   };
 
-  const surface: BtVsSurface = { state, dom: domDigest };
+  const report = (): BtVsReport | null => {
+    const f = app.vsFiling;
+    if (!f) return null;
+    const led = app.portal.vsLedger;
+    return { matchId: f.matchId, goals: f.goals.slice(), filing: f.filing ? { ...f.filing } : null, ledger: { matches: led.matches, wins: led.wins, done: Object.keys(led.done).sort() } };
+  };
+  const surface: BtVsSurface = { state, dom: domDigest, report };
   if (dev) {
     const dv: BtVsDev = {
       jump(clockS) {
@@ -208,6 +228,15 @@ export function installVsSurface(app: App, dev: boolean): { newVs: (o: { titan?:
       view(slot) {
         const w = devw('view');
         return app.vsSetViewDev(w, Math.floor(num(slot, 0)));
+      },
+      reportCtx(o) {
+        const w = devw('reportCtx');
+        if (o === null) { app.vsReport = null; return true; }
+        if (!o || typeof o.matchId !== 'string') return false;
+        for (const s of o.humanSeats ?? []) { const P = w.players[Math.floor(s)]; if (P) P.bot = null; }
+        const uids = Array.isArray(o.uids) ? o.uids.slice(0, 4) : [];
+        app.vsReport = { matchId: o.matchId, humans: Math.max(1, Math.min(4, Math.floor(num(o.humans, 1)))), uidsBySlot: () => uids.slice(), skip: o.skip ? () => true : undefined };
+        return true;
       },
       emit(ev) {
         devw('emit');

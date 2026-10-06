@@ -81,6 +81,11 @@ interface GuestRt {
   lastResendAt: number;
   lastSendAt: number;
   ping: number; pingAt: number;
+  /** ticks this guest's seat was filled by a REPEATED word (its own stamp had not arrived): a stamp that shows up later for one of
+   *  them carries one-tick presses (hook / dash / UPROAR / card) that would otherwise be lost; they ride the next frame */
+  lateTicks: Set<number>;
+  carryEdges: number;
+  carryCard: number;
 }
 
 export interface LockstepStats {
@@ -100,6 +105,18 @@ export interface LockstepStats {
 }
 
 const ZERO4 = new Uint8Array(INPUT_BYTES);
+
+/** input-word flag bits that are one-tick edges (proto.ts encodeInput: 1 ability, 4 dash, 8 ultimate); 2 = hook held is a level */
+const EDGE_BITS = 1 | 4 | 8;
+
+/** A repeated (late) input word must never repeat its CARD byte or its press edges: a pick / reroll / hook / dash / UPROAR is an edge, not a held key. */
+function withoutCard(b: Uint8Array): Uint8Array {
+  if (b[3] === 0 && (b[2] & EDGE_BITS) === 0) return b;
+  const c = b.slice();
+  c[3] = 0;
+  c[2] &= ~EDGE_BITS;           // a repeated word carries the movement + the held bit on, but never re-fires a hook / dash / UPROAR press
+  return c;
+}
 
 function sameFrame(a: Frame, b: Frame): boolean {
   if (a.tick !== b.tick || a.lateMask !== b.lateMask || a.botMask !== b.botMask || a.inputs.length !== b.inputs.length) return false;
@@ -143,6 +160,11 @@ export class LockstepPeer<W> {
 
   // local input + stamping
   private localIn = new Uint8Array(INPUT_BYTES);
+  /** the newest CARD RAIL byte (pick / reroll) the app set that no stamped sample carried yet. The app sets it for ONE frame
+   *  (60 Hz) while samples are stamped at 30 Hz: without the latch a pick could fall between two samples and be lost. */
+  private cardLatch = 0;
+  /** the newest hook / dash / UPROAR press bits no stamped sample carried yet (see setLocalInput) */
+  private edgeLatch = 0;
   private localT0: number;
   private localTicks = 0;
   private stamped: { stamp: number; b: Uint8Array }[] = [];
@@ -206,6 +228,7 @@ export class LockstepPeer<W> {
       this.lastIn.push(ZERO4);
     }
     this.localT0 = o.now;
+    this.lastPumpAt = o.now;      // a stall BEFORE the first pump (a busy page / a late Worker clock) is this peer's own stall, not a dead authority
     this.lastAuthAt = o.now;
     this.heardAuthAt = o.now;
     this.lastAdvanceAt = o.now;
@@ -235,7 +258,26 @@ export class LockstepPeer<W> {
   roster(): SeatView[] { return this.seats.map((s) => ({ ...s })); }
 
   /** the input layer's latest sample (encoded word); stamped on the next local tick */
-  setLocalInput(b: Uint8Array): void { this.localIn.set(b.subarray(0, INPUT_BYTES)); }
+  setLocalInput(b: Uint8Array): void {
+    this.localIn.set(b.subarray(0, INPUT_BYTES));
+    this.localIn[3] = 0;
+    if (b[3] !== 0) this.cardLatch = b[3];
+    // the one-tick EDGES (hook 1, dash 4, UPROAR 8) are latched like the card byte: the app presents a press for ONE 60 Hz frame while
+    // samples are stamped at 30 Hz, so an unlatched press could fall between two samples (lost) and a held-over one would reach two
+    // ticks (a RECAST would fire its own DETONATE). Each press reaches exactly one stamp. The level bit (2: hook held) is not latched.
+    this.edgeLatch |= b[2] & EDGE_BITS;
+    this.localIn[2] &= ~EDGE_BITS;
+  }
+
+  /** the word to stamp now: the latest movement sample plus the latched card byte (consumed: one stamp carries it) */
+  private takeLocal(): Uint8Array {
+    const w = this.localIn.slice();
+    w[3] = this.cardLatch;
+    w[2] |= this.edgeLatch;
+    this.cardLatch = 0;
+    this.edgeLatch = 0;
+    return w;
+  }
 
   /** leave the match on purpose (tab closed, quit): seat -> bot for everyone */
   leave(now: number): void {
@@ -516,7 +558,7 @@ export class LockstepPeer<W> {
       if (this.nextStamp > desired + 2) continue;                       // ahead (lead fell / clock drift): skip a sample
       if (this.nextStamp < desired - 2) this.nextStamp = desired;       // behind: jump (the gap is repeated canonically)
       if (this.nextStamp < floor) this.nextStamp = floor;
-      this.stamped.push({ stamp: this.nextStamp, b: this.localIn.slice() });
+      this.stamped.push({ stamp: this.nextStamp, b: this.takeLocal() });
       this.nextStamp++;
       if (this.stamped.length > 32) this.stamped.splice(0, this.stamped.length - 32);
     }
@@ -594,7 +636,7 @@ export class LockstepPeer<W> {
     let g = this.guests.get(peer);
     if (!g) {
       g = { peer, seat, ack: 0, lastRecvAt: now, inputs: new Map(), newest: 0, lead: LEAD_START, afk: false, lastResendAt: -1e9,
-        lastSendAt: -1e9, ping: 0, pingAt: -1 };
+        lastSendAt: -1e9, ping: 0, pingAt: -1, lateTicks: new Set(), carryEdges: 0, carryCard: 0 };
       this.guests.set(peer, g);
     }
     return g;
@@ -614,7 +656,16 @@ export class LockstepPeer<W> {
     const n = p.inputs.length / INPUT_BYTES;
     for (let i = 0; i < n; i++) {
       const st = p.first + i;
-      if (st <= this.frames.length || g.inputs.has(st)) continue;
+      if (st <= this.frames.length) {
+        // too late for its own tick (the seat's previous word was repeated): its presses are carried onto the next frame, not lost
+        if (g.lateTicks.delete(st)) {
+          const o = i * INPUT_BYTES;
+          g.carryEdges |= p.inputs[o + 2] & EDGE_BITS;
+          if (p.inputs[o + 3] !== 0) g.carryCard = p.inputs[o + 3];
+        }
+        continue;
+      }
+      if (g.inputs.has(st)) continue;
       g.inputs.set(st, p.inputs.slice(i * INPUT_BYTES, (i + 1) * INPUT_BYTES));
       if (st > g.newest) g.newest = st;
     }
@@ -668,7 +719,7 @@ export class LockstepPeer<W> {
     // own input, stamped T + selfDelay (fairness)
     if (mine >= 0) {
       const st = T + this.selfDelay();
-      if (!this.ownInputs.has(st)) this.ownInputs.set(st, this.localIn.slice());
+      if (!this.ownInputs.has(st)) this.ownInputs.set(st, this.takeLocal());
     }
     const f: Frame = { tick: T, lateMask: 0, botMask: 0, inputs: new Uint8Array(SEATS * INPUT_BYTES) };
     for (const s of this.seats) {
@@ -677,17 +728,30 @@ export class LockstepPeer<W> {
       if (!human) { f.botMask |= bit; this.lastIn[s.slot] = ZERO4; continue; }
       if (s.joining && T >= s.switchTick) s.joining = false;
       let b: Uint8Array | undefined;
+      let gr: GuestRt | undefined;
       if (s.peer === this.self) {
         b = this.ownInputs.get(T);
         this.ownInputs.delete(T);
       } else {
         const g = this.guests.get(s.peer as string);
         if (!g || g.afk) { f.botMask |= bit; continue; }
+        gr = g;
         b = g.inputs.get(T);
-        if (b) g.inputs.delete(T);
+        if (b) g.inputs.delete(T); else { g.lateTicks.add(T); if (g.lateTicks.size > 240) for (const k of g.lateTicks) if (k < T - 200) g.lateTicks.delete(k); }
         for (const k of g.inputs.keys()) if (k < T) g.inputs.delete(k);
       }
-      if (!b) { b = this.lastIn[s.slot]; f.lateMask |= bit; this.stats.lateRepeats += s.peer === this.self ? 0 : 1; }
+      if (!b) { b = withoutCard(this.lastIn[s.slot]); f.lateMask |= bit; this.stats.lateRepeats += s.peer === this.self ? 0 : 1; }
+      // the presses of a stamp that arrived too late ride the next frame of that seat. A frame flagged late (lateMask bit) is a pure
+      // repeat and must carry no press and no card (a repeat never fires an edge), so a frame that carries a press is NOT a pure repeat:
+      // its late bit is cleared (the word = repeated movement + the real presses; the port fires them once). A card the seat stamped
+      // itself this frame is never overwritten (the carried one waits one more frame)
+      if (gr && (gr.carryEdges !== 0 || gr.carryCard !== 0)) {
+        b = b.slice();
+        b[2] |= gr.carryEdges;
+        gr.carryEdges = 0;
+        if (gr.carryCard !== 0 && b[3] === 0) { b[3] = gr.carryCard; gr.carryCard = 0; }
+        if (b[3] !== 0 || (b[2] & EDGE_BITS) !== 0) f.lateMask &= ~bit;
+      }
       f.inputs.set(b, s.slot * INPUT_BYTES);
       this.lastIn[s.slot] = b;
     }

@@ -1,7 +1,8 @@
 <!doctype html><meta charset="utf-8"><title>BLOCKTOOTH bridge host</title>
 <style>
 html,body{margin:0;background:#111;color:#cfc;font:12px/1.35 Consolas,monospace}
-iframe{width:100%;height:86vh;border:0;display:block;background:#000}
+#frames{display:flex;gap:2px;height:86vh}
+iframe{flex:1 1 0;min-width:0;width:100%;height:86vh;border:0;display:block;background:#000}
 #bar{padding:4px 8px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 #bar button{font:inherit}
 #log{height:calc(14vh - 30px);overflow:auto;padding:0 8px;white-space:pre;color:#9c9}
@@ -14,6 +15,7 @@ iframe{width:100%;height:86vh;border:0;display:block;background:#000}
   <button id="bOut">sign out (push identity)</button>
   <span id="count"></span>
 </div>
+<script src="/__bt_vs_rpc.js"></script>
 <script>
 /* Stands in for forgeflowgames.com (src/lib/gameBridge.ts) for BLOCKTOOTH, Phase A.
    Models the portal bridge as ONLINE_PLAN.md A.1.3 / platform.md 10.1 specify it, NOT the live portal of today.
@@ -26,43 +28,67 @@ iframe{width:100%;height:86vh;border:0;display:block;background:#000}
      sandbox=<tokens>           iframe sandbox (default = the portal's GamePlayer.tsx string; "none" = no sandbox attr)
      allow=<features>           iframe allow   (default = the portal's GamePlayer.tsx string)
      cloud=<json>               what forgeflow:load returns in signed mode (default null = no cloud save yet)
+     frames=<json>              VR gate (VS reporting): [{game:<url>, user:'u1'..'u4'|'default'|'guest', mode?:'signed'|'guest'|'silent'}, ...]
+                                several game frames side by side, each its OWN account (default: ONE frame from game=/mode=, user 'default').
+                                Give the frames DIFFERENT ORIGINS (localhost vs 127.0.0.1) so their localStorage is separate.
 
    window.__BRIDGE (read by portalcheck.py):
-     log[]      every message: {i, t, dir:'in'|'out', type, fromGame, origin, msg}
-     setMode(m) switch mode; signed/guest also PUSH forgeflow:identity (no _reqId) like onAuthStateChange
+     log[]      every message: {i, t, dir:'in'|'out', type, fromGame, frame, origin, msg}   (frame = the game frame's index, null = not a game frame)
+     setMode(m) switch mode of frame 0; signed/guest also PUSH forgeflow:identity (no _reqId) like onAuthStateChange
      cloud      the stored cloud save (forgeflow:save replaces it, as the portal's merge would for one game)
-   No network, no keys: every reply is canned.                                                              */
+     db         the VS tables (vs_rpc_mirror.cjs: a 1:1 mirror of 0008's bt_report_vs): bt_vs_matches / bt_vs_results / bt_runs /
+                bt_player_stats; every forgeflow:vs_result of a signed-in frame is run through it and acked like gameBridge.ts does
+     frames[]   {i, user, mode} per game frame
+   No network, no keys: every reply is canned (the VS reply is the mirror's).                               */
 const Q = new URLSearchParams(location.search);
 const PORTAL_SANDBOX = 'allow-scripts allow-same-origin allow-pointer-lock allow-popups allow-modals allow-forms';
 const PORTAL_ALLOW = 'autoplay; fullscreen; gamepad; pointer-lock';
 const USER = { id: '00000000-0000-4000-8000-00000000b7b7', username: 'bt_tester', avatar_url: null, level: 3 };
+const USERS = {
+  default: USER,
+  u1: { id: '00000000-0000-4000-8000-0000000000a1', username: 'vr_alpha', avatar_url: null, level: 3 },
+  u2: { id: '00000000-0000-4000-8000-0000000000a2', username: 'vr_beta', avatar_url: null, level: 3 },
+  u3: { id: '00000000-0000-4000-8000-0000000000a3', username: 'vr_gamma', avatar_url: null, level: 3 },
+  u4: { id: '00000000-0000-4000-8000-0000000000a4', username: 'vr_delta', avatar_url: null, level: 3 },
+};
+let FRAME_SPECS = null;
+try { FRAME_SPECS = Q.has('frames') ? JSON.parse(Q.get('frames')) : null; } catch (_) { FRAME_SPECS = null; }
 const B = window.__BRIDGE = {
   mode: Q.get('mode') || 'signed',
-  log: [], t0: performance.now(),
+  log: [], t0: performance.now(), frames: [],
+  db: (window.BT_VS_RPC ? new window.BT_VS_RPC.FakeBtDb() : null),
   cloud: (() => { try { return JSON.parse(Q.get('cloud') || 'null'); } catch (_) { return null; } })(),
   loadsAnswered: 0,
   ackData: { new_bests: ['tonnage', 'kills'], board_rank: { clear: 7, tonnage: 7 } },
   setMode(m) { B.mode = m; paint(); if (m === 'signed' || m === 'guest') send(identity(null)); },
 };
-const frame = document.createElement('iframe');
-function identity(reqId) {
-  const signed = B.mode === 'signed' || B.mode === 'noload';
-  const o = { type: 'forgeflow:identity', signedIn: signed, id: signed ? USER.id : null,
-              username: signed ? USER.username : null, avatar_url: signed ? USER.avatar_url : null, level: signed ? USER.level : 0 };
+// ---- frames: [{el, user, mode}] ; frame 0 follows the global mode (every existing variant is a one-frame page)
+const FR = [];
+function userOf(f) { return f.user ? USERS[f.user] || USER : null; }
+function modeOf(f) { return f === FR[0] ? B.mode : f.mode; }
+const frame = document.createElement('iframe');         // frame 0 (kept as `frame` / window.__frame: portalcheck.py's name for it)
+function frameOf(source) { return FR.find((f) => f.el.contentWindow === source) || null; }
+function identity(reqId, f) {
+  f = f || FR[0];
+  const m = modeOf(f), u = userOf(f) || USER;
+  const signed = (m === 'signed' || m === 'noload') && f.user !== 'guest';
+  const o = { type: 'forgeflow:identity', signedIn: signed, id: signed ? u.id : null,
+              username: signed ? u.username : null, avatar_url: signed ? u.avatar_url : null, level: signed ? u.level : 0 };
   if (reqId !== null && reqId !== undefined) o._reqId = reqId;
   return o;
 }
 function clone(v) { try { return JSON.parse(JSON.stringify(v)); } catch (_) { return String(v); } }
-function rec(dir, msg, e) {
+function rec(dir, msg, e, f) {
+  const fr = e ? frameOf(e.source) : (f || null);
   B.log.push({ i: B.log.length, t: Math.round(performance.now() - B.t0), dir, type: msg && msg.type,
-               fromGame: e ? e.source === frame.contentWindow : true, origin: e ? e.origin : null, msg: clone(msg) });
+               fromGame: e ? !!fr : true, frame: fr ? FR.indexOf(fr) : null, origin: e ? e.origin : null, msg: clone(msg) });
   paint();
   const line = (dir === 'in' ? '<- ' : '-> ') + (msg && msg.type) + ' ' + JSON.stringify(clone(msg)).slice(0, 220);
   const L = document.getElementById('log'); if (L) { L.textContent += line + '\n'; L.scrollTop = 1e9; }
 }
-function send(msg, target) {
+function send(msg, target, f) {
   const w = target || frame.contentWindow; if (!w) return;
-  rec('out', msg, null);
+  rec('out', msg, null, f || frameOf(w) || FR[0]);
   w.postMessage(msg, '*');
 }
 function paint() {
@@ -73,41 +99,65 @@ addEventListener('message', (e) => {
   const m = e.data;
   if (!m || typeof m !== 'object' || typeof m.type !== 'string' || !m.type.startsWith('forgeflow:')) return;
   rec('in', m, e);
-  if (e.source !== frame.contentWindow) return;          // the portal only serves its own embedded game frame
-  if (B.mode === 'silent') return;
-  const reply = (o) => send(o, e.source);
+  const f = frameOf(e.source);
+  if (!f) return;                                         // the portal only serves its own embedded game frames
+  const mode = modeOf(f);
+  if (mode === 'silent') return;
+  const u = userOf(f);
+  const isSigned = (mode === 'signed' || mode === 'noload') && f.user !== 'guest';
+  const reply = (o) => send(o, e.source, f);
+  const cloud = () => (f === FR[0] ? B.cloud : (B.clouds[u ? u.id : ''] || null));
+  const setCloud = (v) => { if (f === FR[0]) B.cloud = v; else B.clouds[u ? u.id : ''] = v; };
   switch (m.type) {
     case 'forgeflow:whoami':
-      reply(identity(m._reqId === undefined ? null : m._reqId));   // noload answers as signed
+      reply(identity(m._reqId === undefined ? null : m._reqId, f));   // noload answers as signed
       break;
     case 'forgeflow:load':
       // gameBridge.ts: a guest's load answers null (no session); signed answers the stored row
-      if (B.mode === 'noload') break;                     // the cloud read never answers: the game must never save
+      if (mode === 'noload') break;                       // the cloud read never answers: the game must never save
       B.loadsAnswered++;
-      reply({ type: 'forgeflow:save_loaded', data: B.mode === 'signed' ? clone(B.cloud) : null, _reqId: m._reqId });
+      reply({ type: 'forgeflow:save_loaded', data: isSigned ? clone(cloud()) : null, _reqId: m._reqId });
       break;
     case 'forgeflow:save':
-      if (B.mode === 'signed' || B.mode === 'noload') B.cloud = clone(m.data);
+      if (isSigned) setCloud(clone(m.data));
       break;
     case 'forgeflow:run_result':     // A-PORTAL contract (NOTES.md): {_reqId, ok, data} | {_reqId, ok:false, error, data:{error}}
-      if (B.mode === 'signed' || B.mode === 'noload') reply({ type: 'forgeflow:run_result_ack', _reqId: m._reqId, ok: true, data: clone(B.ackData) });
+      if (isSigned) reply({ type: 'forgeflow:run_result_ack', _reqId: m._reqId, ok: true, data: clone(B.ackData) });
       else reply({ type: 'forgeflow:run_result_ack', _reqId: m._reqId, ok: false, error: 'not_signed_in', data: { error: 'not_signed_in' } });
       break;
-    case 'forgeflow:vs_result':
-      if (B.mode === 'signed') reply({ type: 'forgeflow:vs_result_ack', _reqId: m._reqId, ok: true, data: { confirmed: false } });
-      else reply({ type: 'forgeflow:vs_result_ack', _reqId: m._reqId, ok: false, error: 'not_signed_in', data: { error: 'not_signed_in' } });
+    case 'forgeflow:vs_result': {
+      // gameBridge.ts handleStatsMessage: a guest gets {ok:false, error:'not_signed_in'} and NOTHING is written; a signed-in frame runs
+      // bt_report_vs as ITS account (the mirror = the SQL): a rejected report comes back {ok:false, error, data:{...}}
+      if (!isSigned || !u) { reply({ type: 'forgeflow:vs_result_ack', _reqId: m._reqId, ok: false, error: 'not_signed_in', data: { error: 'not_signed_in' } }); break; }
+      if (!B.db) { reply({ type: 'forgeflow:vs_result_ack', _reqId: m._reqId, ok: true, data: { confirmed: false } }); break; }
+      let r;
+      try { r = B.db.report(u.id, m.payload && m.payload); } catch (err) { r = { ok: false, error: String(err && err.message || err) }; }
+      if (r && r.ok === false) reply({ type: 'forgeflow:vs_result_ack', _reqId: m._reqId, ok: false, error: String(r.error || 'rejected'), data: clone(r) });
+      else reply({ type: 'forgeflow:vs_result_ack', _reqId: m._reqId, ok: true, data: clone(r) });
       break;
+    }
     default: break;                                       // score / achievement / game_over: recorded only
   }
 });
 document.getElementById('bIn').onclick = () => B.setMode('signed');
 document.getElementById('bOut').onclick = () => B.setMode('guest');
 const sb = Q.has('sandbox') ? Q.get('sandbox') : PORTAL_SANDBOX;
-if (sb !== 'none') frame.setAttribute('sandbox', sb);
-frame.setAttribute('allow', Q.has('allow') ? Q.get('allow') : PORTAL_ALLOW);
-frame.title = 'BLOCKTOOTH';
-frame.src = Q.get('game') || '../../index.html?dev=1&cine=0';
-document.body.appendChild(frame);
+B.clouds = {};
+const specs = FRAME_SPECS && FRAME_SPECS.length ? FRAME_SPECS : [{ game: Q.get('game') || '../../index.html?dev=1&cine=0', user: 'default' }];
+const holder = document.createElement('div'); holder.id = 'frames'; document.body.appendChild(holder);
+specs.forEach((spec, i) => {
+  const el = i === 0 ? frame : document.createElement('iframe');
+  if (sb !== 'none') el.setAttribute('sandbox', sb);
+  el.setAttribute('allow', Q.has('allow') ? Q.get('allow') : PORTAL_ALLOW);
+  el.title = 'BLOCKTOOTH' + (specs.length > 1 ? ' #' + (i + 1) : '');
+  const f = { el, user: spec.user || 'default', mode: spec.mode || (spec.user === 'guest' ? 'guest' : 'signed') };
+  FR.push(f);
+  B.frames.push({ i, user: f.user, mode: f.mode });
+  const u = userOf(f);
+  if (u && B.db) B.db.addProfile(u.id, u.username);
+  el.src = spec.game || Q.get('game') || '../../index.html?dev=1&cine=0';
+  holder.appendChild(el);
+});
 const L = document.createElement('div'); L.id = 'log'; document.body.appendChild(L);
 window.__frame = frame;
 paint();

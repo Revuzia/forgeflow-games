@@ -76,9 +76,14 @@ import type { VsMatchInfo } from './ui/vstypes.ts';
 import { SEAT_COLORS } from './ui/vstypes.ts';
 import { REMATCH_BIOMES, botName } from './data/strings_vs.ts';
 import { CARD, decodeInput, encodeInput } from './net/proto.ts';
+import { Room } from './net/room.ts';                       // ONLINE VS (O-LOBBY): room codes (?room=)
+import { OnlineMatch, buildInfo, cleanName, guestName, rematchCode, type Connection, type LobbyState, type Notice, type OnlineMode } from './online.ts';
+import { LobbyScreen, type MenuChoice } from './ui/lobby.ts';
+import { NetNotices } from './ui/netnotice.ts';
 import type { BotLevel } from './vs/types.ts';
 import { Broadcast, onAirSeconds, runFigures } from './ui/broadcast.ts';
-import { PortalClient, buildVersionFromUrl, mergeBests, newRunNonce, type RunFiling, type RunResultPayload } from './net/portal.ts';   // ONLINE_PLAN A.1.5 (lane A-GAME)
+import { PortalClient, buildVersionFromUrl, mergeBests, newRunNonce, newVsPracticeMatchId, resultsMajority, VsIdentityBook, type RunFiling, type RunResultPayload, type VsFiling, type VsReportCtx } from './net/portal.ts';   // ONLINE_PLAN A.1.5 (lane A-GAME) + VS reporting (O-REPORT)
+import { VS_GOAL_BY_ID, VsEventTally } from './data/vsgoals.ts';
 import { BossBar } from './ui/bossbar.ts';
 import { SelectScreen } from './ui/select.ts';
 import { DraftScreen } from './ui/draft.ts';
@@ -112,7 +117,7 @@ import { continueEndless } from './meta/endless.ts';
 
 // ─────────────────────────────── types ───────────────────────────────
 
-export type Screen = 'boot' | 'title' | 'select' | 'loading' | 'slate' | 'play' | 'draft' | 'pause' | 'end' | 'goals';
+export type Screen = 'boot' | 'title' | 'select' | 'lobby' | 'loading' | 'slate' | 'play' | 'draft' | 'pause' | 'end' | 'goals';
 
 /** Which awaited modal screen currently owns input (so it can be closed on a forced transition). */
 type Modal = 'title' | 'select' | 'slate' | 'draft' | 'pause' | 'end' | 'goals';
@@ -145,6 +150,16 @@ export interface AppParams {
   vs: boolean;
   /** `?bots=rookie|regular|veteran` for `?vs=1` (default regular) */
   bots: BotLevel | null;
+  /** ONLINE VS (O-LOBBY) `?room=CODE`: an invite link (the portal forwards it): straight to the titan pick, then JOIN that room */
+  room: string | null;
+  /** DEV (`?dev=1`): `?autostart=1&online=quick|create|join[&code=ABCD]` skips the menus into the online flow (harness) */
+  online: OnlineMode | null;
+  /** DEV: `?ns=NAME` puts the room + lobby channels in their own namespace (tests never meet real players) */
+  ns: string | null;
+  /** DEV: `?build=X` overrides the build string rooms are grouped by (version-mismatch tests) */
+  build: string | null;
+  /** DEV: `?name=X` overrides the display name */
+  uname: string | null;
 }
 
 /** ONLINE VS PRACTICE: what the select screen hands the app */
@@ -275,6 +290,15 @@ export function parseParams(search: string): AppParams {
     endless: flag('endless'),
     vs: flag('vs') || (q.get('mode') || '').toLowerCase() === 'vs',
     bots: (() => { const b = (q.get('bots') || '').toLowerCase(); return b === 'rookie' || b === 'regular' || b === 'veteran' ? b : null; })(),
+    room: Room.codeFromUrl(search),
+    online: (() => {
+      if (!flag('dev')) return null;
+      const m = (q.get('online') || '').toLowerCase();
+      return m === 'quick' || m === 'create' || m === 'join' ? (m as OnlineMode) : m === 'host' ? 'create' : null;
+    })(),
+    ns: flag('dev') ? (q.get('ns') || '').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 24) || null : null,
+    build: flag('dev') ? (q.get('build') || '').replace(/[^A-Za-z0-9_.-]/g, '').slice(0, 40) || null : null,
+    uname: flag('dev') ? cleanName(q.get('name') || '') || null : null,
   };
 }
 
@@ -507,6 +531,9 @@ export class App {
   readonly vsHud: VsHud;
   readonly railUi: CardRail;
   readonly vsEndScreen: VsEndScreen;
+  // ONLINE VS (O-LOBBY): the online menu + lobby, the in-match network notices, the live online match
+  readonly lobbyUi: LobbyScreen;
+  readonly netUi: NetNotices;
 
   // audio
   readonly audio: AudioEngine;
@@ -609,8 +636,22 @@ export class App {
   /** the seat that knocked the local one out last (the spectate view prefers it while it lives) */
   private vsKiller = -1;
   private vsEndEv: { winner: number; placements: number[]; scores: number[] } | null = null;
+  /**
+   * VS RESULT REPORTING (O-REPORT, portal.ts vsMatchEnded): the online layer sets this to the running match's context (StartInfo.matchId,
+   * the human seat count, the peers' account ids); null = offline VS PRACTICE (1 human, a match id made at load). Read once, at the end.
+   */
+  vsReport: VsReportCtx | null = null;
+  private vsTally: VsEventTally | null = null;
+  private vsMatchId = '';
+  /** the last VS result's filing (what the portal answered) + the VS goals it earned: read by the tests and the end card */
+  vsFiling: { matchId: string; goals: string[]; filing: VsFiling | null } | null = null;
   private readonly vsIn: (TitanInput | null)[] = [null, null, null, null];
   private readonly vsBuf = new Uint8Array(4);
+  /** ONLINE VS (O-LOBBY): the live online match (null offline / in solo), the player's last online request (rematch), the account-id book */
+  private online: OnlineMatch | null = null;
+  private onlineReq: { mode: OnlineMode; code: string | null; titan: TitanId; biome: BiomeId } | null = null;
+  private identityBook: VsIdentityBook | null = null;
+  private rematchVoteEnd = 0;
   /** real seconds the VS aftermath (winner roar) runs before the end card */
   private static readonly VS_END_DELAY_S = 3;
 
@@ -692,6 +733,9 @@ export class App {
     this.vsHud = new VsHud(uiRoot);
     this.railUi = new CardRail(uiRoot);
     this.vsEndScreen = new VsEndScreen(uiRoot, this.input);
+    this.lobbyUi = new LobbyScreen(uiRoot, this.input);
+    this.netUi = new NetNotices(uiRoot);
+    this.netUi.onLeave = () => { void this.leaveOnline(); };
     this.vsHud.onSpectate = (d) => this.vsCycle(d);
     this.vsHud.onLeave = () => { void this.goTitle(); };
     this.vsHud.project = (x, y, z, out) => this.vsView.projectPoint(x, y, z, out);
@@ -773,6 +817,19 @@ export class App {
     this.splash.set(LOADING.desk, 0.6);
     await yieldFrame();
     this.splash.set(LOADING.ready, 1);
+    if (this.params.autostart && this.params.online) {         // DEV (?dev=1&autostart=1&online=quick|create|join): straight into the online flow
+      const c = this._choice;
+      const mode = this.params.online;
+      const code = mode === 'create' ? (this.params.room ?? Room.makeCode()) : mode === 'join' ? (this.params.room ?? null) : null;
+      this.splash.hide();
+      await this.runOnline({ mode, code, titan: c.titan, biome: c.biome });
+      return;
+    }
+    if (!this.params.autostart && this.params.room) {          // an invite link: pick a titan, then join that room
+      this.splash.hide();
+      void this.goOnlineSelect(this.params.room);
+      return;
+    }
     if (this.params.autostart) {
       const c = this._choice;
       if (this.params.vs) {                                 // ONLINE VS (B-VIEW): ?autostart=1&vs=1 → a VS PRACTICE match
@@ -801,7 +858,7 @@ export class App {
     // pre-render the select portraits while the title is up (cached for the whole page; a no-op
     // once done) so Enter → select is instant
     if (!this.portraits) setTimeout(() => { if (ep === this.epoch && this._screen === 'title') void this.getPortraits(); }, 700);
-    let pick: 'play' | 'goals' | 'vs';
+    let pick: 'play' | 'goals' | 'vs' | 'online';
     try {
       pick = await this.titleScreen.run();
     } finally {
@@ -813,6 +870,12 @@ export class App {
       await this.runGoals(ep);
       if (ep !== this.epoch) return;
       void this.goTitle();
+      return;
+    }
+    if (pick === 'online') {         // ONLINE VS (O-LOBBY): titan + city, then QUICK MATCH / CREATE ROOM / JOIN WITH CODE
+      void this.audio.unlock();
+      this.sfx.ui('confirm');
+      void this.goOnlineSelect(null);
       return;
     }
     if (pick === 'vs') {             // ONLINE VS (B-VIEW): VS PRACTICE
@@ -1009,6 +1072,7 @@ export class App {
    * COUNTDOWN (titans on their marks). Resolves when play has begun.
    */
   async startVs(req: VsRequest): Promise<void> {
+    this.vsReport = null;                                              // VS PRACTICE is offline: 1 human + 3 bots (the online layer sets its own context)
     const titan: TitanId = isTitan(req.titan) ? req.titan : 'molo';
     const biome: BiomeId = isBiome(req.biome) ? req.biome : 'grideast';
     const seed = Number.isFinite(req.seed) ? (Math.abs(Math.floor(req.seed)) >>> 0) : freshSeed();
@@ -1054,7 +1118,17 @@ export class App {
 
   /** Pause (Esc / P / __PAUSE__ / tab hidden). Only from live play. */
   pause(): void {
+    if (this.online) {                                    // ONLINE VS: there is no pause; Esc asks LEAVE THE MATCH? and the match runs behind it
+      if (this._screen === 'play' && !this.ending && this.online.live) { if (this.netUi.leaveAsked) this.netUi.closeLeave(); else this.netUi.askLeave(); }
+      return;
+    }
     if (this._screen === 'play' && !this.ending && this.live) void this.runPause();
+  }
+
+  /** the tab got hidden / the window lost focus: solo and practice pause; an online match cannot (the titan just stands still) */
+  private autoPause(): void {
+    if (this.online) { if (this.online.live) this.online.idleInput(); return; }
+    this.pause();
   }
 
   /** Resume from the pause menu (drives the menu's own Resume path so its session closes cleanly). */
@@ -1185,19 +1259,22 @@ export class App {
   // ─────────────────────────────── loading / teardown ───────────────────────────────
 
   /** Build the world and mount every view. Returns false when superseded (epoch changed). */
-  private async loadRun(ep: number, titan: TitanId, biome: BiomeId, seed: number, meta: RunMeta, vs: VsBuild | null = null): Promise<boolean> {
+  private async loadRun(ep: number, titan: TitanId, biome: BiomeId, seed: number, meta: RunMeta, vs: VsBuild | null = null, preWorld: World | null = null): Promise<boolean> {
     this.setScreen('loading');
     this.input.mode = 'ui';
     this.splash.show(LOADING.city, 0.05);
     await yieldFrame();
     if (ep !== this.epoch) return false;
 
-    const w = vs
+    const w = preWorld ?? (vs
       ? createWorld({ mode: 'vs', biome, seed, players: vs.seats, view: vs.info.local })
-      : createWorld({ titan, biome, seed, meta });
+      : createWorld({ titan, biome, seed, meta }));
     this._world = w;
     this.vsInfo = vs ? vs.info : null;
     this.vsLocal = vs ? vs.info.local : 0;
+    this.vsTally = vs ? new VsEventTally(vs.info.local) : null;      // O-REPORT: every SimEvent of the match, in order (pushEvent)
+    this.vsMatchId = vs ? newVsPracticeMatchId(seed) : '';
+    this.vsFiling = null;
     this.resetRunState();
     this.lighting.applyBiome(BIOMES[biome]);
 
@@ -1305,6 +1382,9 @@ export class App {
     this.mounted = [];
     this._world = null;
     this.vsInfo = null;
+    if (this.online) { try { this.online.leave(); } catch (e) { console.error('[blocktooth] online leave failed', e); } this.online = null; }
+    if (this.identityBook) { try { this.identityBook.detach(); } catch { /* gone */ } }
+    try { this.netUi.show(false); this.lobbyUi.clear(); } catch (e) { console.error('[blocktooth] online ui clear failed', e); }
     try { this.vsHud.clear(); this.railUi.clear(); this.vsEndScreen.clear(); } catch (e) { console.error('[blocktooth] vs ui clear failed', e); }
     this.showHud(false);
     this.bossbar.hide();
@@ -1358,6 +1438,7 @@ export class App {
     this.markers.show(on);
     this.vsHud.show(vs);                                // ONLINE VS (B-VIEW)
     this.railUi.show(vs);
+    this.netUi.show(vs && !!this.online);               // ONLINE VS (O-LOBBY): the notices + connection overlays
   }
 
   /**
@@ -1368,6 +1449,7 @@ export class App {
   private async closeScreens(): Promise<void> {
     this.broadcast.clear();
     this.vsEndScreen.clear();
+    this.lobbyUi.clear();
     this.stopCine();
     if (this.modal === 'slate' || this.modal === 'end') this.modal = null;
     const m = this.modal;
@@ -1885,6 +1967,7 @@ export class App {
   /** One rendered frame. */
   private readonly onFrame = (alpha: number, dt: number, time: number): void => {
     this.time = time;
+    if (this.online && this.online.live) alpha = this.online.alpha;      // ONLINE VS: the session's Worker clock steps the sim, not this loop
     const f0 = performance.now();
     this.renderMs = 0;
     const P = this.prof;
@@ -1899,6 +1982,7 @@ export class App {
         if (zin !== 0) this.rig.zoomBy(zin);
         if (this.input.pressed('zoomReset')) this.rig.resetZoom();
         if (this.vsInfo && !this.ending) this.vsFrameInput();
+        if (this.online && this.online.live) this.onlineFrame(dt);
       }
       const w = this._world;
       if (w && this.live) {
@@ -1918,7 +2002,7 @@ export class App {
         }
       }
       if (this.params.dynres) {
-        const live = !!w && this.live && this._screen === 'play' && this.loop.simEnabled && !this.ending && !this._testFrozen;
+        const live = !!w && this.live && this._screen === 'play' && (this.loop.simEnabled || !!(this.online && this.online.live)) && !this.ending && !this._testFrozen;
         if (this.dynres.frame(dt, live, this.prevCpuS)) { this.core.setQuality(this.currentQuality()); if (P) P.annotate('dynres->' + this.dynres.scale); }
         if (P) P.mark('dynres');
       }
@@ -1942,6 +2026,15 @@ export class App {
    * `react` = false for still frames (loading prime, shots): no audio/app reactions.
    */
   private drawWorld(w: World, alpha: number, dt: number, time: number, events: readonly SimEvent[], react: boolean, render = true): void {
+    // ONLINE VS: the local titan is drawn where its own input will have taken it by the time the confirmed frames catch up
+    // (render-side only: the sim's numbers are put back right after the draw, so the sim and the state hash never see it)
+    const on = this.online;
+    const pr = on && on.live && react && this._screen === 'play' && !this.ending
+      ? on.beginPredict(w, dt, this.vsMode === 'own' && w.view === this.vsLocal) : null;
+    try { this.drawWorldInner(w, alpha, dt, time, events, react, render); } finally { if (pr && on) on.endPredict(pr); }
+  }
+
+  private drawWorldInner(w: World, alpha: number, dt: number, time: number, events: readonly SimEvent[], react: boolean, render = true): void {
     const f = this.fi;
     f.alpha = alpha;
     f.dt = dt;
@@ -2242,6 +2335,290 @@ export class App {
     }
   }
 
+  // ─────────────────────────────── ONLINE VS (lane O-LOBBY) ───────────────────────────────
+  //
+  // title [O] → select (titan + city; an invite link `?room=CODE` skips the city) → the menu (QUICK MATCH / CREATE ROOM / JOIN WITH
+  // CODE) → the lobby → START: the world is built from the START (src/online.ts), every view is mounted against it, THEN the links
+  // are waited for → play. The sim is stepped by the session's Worker clock (never by this app's rAF loop); this frame loop samples
+  // input, renders with an interpolation alpha + the cosmetic prediction, and shows the net notices. There is no pause online: Esc
+  // asks LEAVE THE MATCH? and the match keeps running behind it. The end card runs a 15 s REMATCH vote (same cast, new room code).
+
+  /** the display name: the signed-in account name, else GUEST-xxxx (DEV: ?name=) */
+  private onlineName(): string {
+    if (this.params.uname) return this.params.uname;
+    const u = this.portal.identity.username;
+    return (u ? cleanName(u) : '') || guestName();
+  }
+
+  /** ONLINE VS: titan + city, then the menu. `inviteCode` (from ?room=) = the titan only, then JOIN that room. */
+  async goOnlineSelect(inviteCode: string | null, initial?: Partial<SelectResume>): Promise<void> {
+    const ep = ++this.epoch;
+    await this.loadLock;
+    if (ep !== this.epoch) return;
+    await this.closeScreens();
+    if (ep !== this.epoch) return;
+    this.teardownRun();
+    this.setScreen('loading');
+    this.input.mode = 'ui';
+    this.music.play('select');
+    const pending = this.getPortraits();
+    const slow = setTimeout(() => { if (ep === this.epoch) this.splash.show(LOADING.portraits, 0.5); }, 150);
+    let portraits: Record<TitanId, string>;
+    try { portraits = await pending; } finally { clearTimeout(slow); }
+    this.splash.hide();
+    if (ep !== this.epoch) return;
+    let from: Partial<SelectResume> = initial ?? { titan: this._choice.titan, biome: this._choice.biome };
+    for (let guard = 0; guard < 16; guard++) {
+      this.setScreen('select');
+      this.modal = 'select';
+      let res: SelectResultV2 = null;
+      try {
+        res = await this.selectScreen.run({
+          portraits,
+          portraitFor: (t, pal) => this.portraitFor(t, pal),
+          profile: this._profile,
+          bests: loadBest(),
+          initial: from,
+          vs: true,
+          online: true,
+          titanOnly: !!inviteCode,
+        });
+      } finally {
+        if (this.modal === 'select') this.modal = null;
+      }
+      if (ep !== this.epoch) return;
+      if (!res || res.kind !== 'start') { this.sfx.ui('back'); void this.goTitle(); return; }
+      this.sfx.ui('confirm');
+      this._choice = { titan: res.titan, biome: res.biome, seed: this._choice.seed };
+      if (inviteCode) { await this.runOnline({ mode: 'join', code: inviteCode, titan: res.titan, biome: res.biome }); return; }
+      const ch = await this.onlineMenu(ep, res.titan, portraits);
+      if (ep !== this.epoch) return;
+      if (!ch) { from = { titan: res.titan, biome: res.biome, step: 2 }; continue; }   // BACK: the select screen on the city step
+      await this.startOnlineChoice(ch, res.titan, res.biome);
+      return;
+    }
+  }
+
+  /** the 3-way menu over the select backdrop (screen 'lobby' while it is up); null = BACK */
+  private async onlineMenu(ep: number, titan: TitanId, portraits: Record<TitanId, string>): Promise<MenuChoice | null> {
+    this.setScreen('lobby');
+    this.input.mode = 'ui';
+    this.modal = null;
+    const ch = await this.lobbyUi.openMenu({ titan, portraits, code: undefined });
+    if (ep !== this.epoch) return null;
+    if (!ch) this.sfx.ui('back'); else this.sfx.ui('confirm');
+    return ch;
+  }
+
+  private startOnlineChoice(ch: MenuChoice, titan: TitanId, biome: BiomeId): Promise<void> {
+    const code = ch.kind === 'create' ? Room.makeCode() : ch.kind === 'join' ? ch.code : null;
+    return this.runOnline({ mode: ch.kind, code, titan, biome });
+  }
+
+  /** the lobby leave button: back to the menu (same titan + city), or the title for an invite / rematch room */
+  private async backFromLobby(req: { mode: OnlineMode; titan: TitanId; biome: BiomeId }): Promise<void> {
+    if (req.mode === 'rematch' || req.mode === 'join') { void this.goTitle(); return; }
+    const ep = ++this.epoch;
+    await this.loadLock;
+    if (ep !== this.epoch) return;
+    await this.closeScreens();
+    if (ep !== this.epoch) return;
+    this.teardownRun();
+    this.setScreen('loading');
+    const portraits = await this.getPortraits();
+    if (ep !== this.epoch) return;
+    const ch = await this.onlineMenu(ep, req.titan, portraits);
+    if (ep !== this.epoch) return;
+    if (!ch) { void this.goTitle(); return; }
+    await this.startOnlineChoice(ch, req.titan, req.biome);
+  }
+
+  /** start the online flow: open the lobby, open the room, and wait for the START */
+  async runOnline(req: { mode: OnlineMode; code: string | null; titan: TitanId; biome: BiomeId; waitMs?: number; expectHumans?: number }): Promise<void> {
+    const ep = ++this.epoch;
+    await this.loadLock;
+    if (ep !== this.epoch) return;
+    await this.closeScreens();
+    if (ep !== this.epoch) return;
+    this.teardownRun();
+    this.vsReport = null;
+    this.onlineReq = { mode: req.mode, code: req.code, titan: req.titan, biome: req.biome };
+    this._choice = { titan: req.titan, biome: req.biome, seed: this._choice.seed };
+    this.setScreen('lobby');
+    this.input.mode = 'ui';
+    this.music.play('select');
+    const portraits = await this.getPortraits();
+    if (ep !== this.epoch) return;
+    const handle = this.lobbyUi.openLobby(portraits);
+    this.lobbyUi.onStartNow = () => { if (this.online) this.online.startNow(); };
+    const build = this.params.build ?? buildVersionFromUrl(location.search) ?? 'dev';
+    const m = new OnlineMatch({
+      mode: req.mode, code: req.code, titan: req.titan, biome: req.biome, name: this.onlineName(), build,
+      gameId: this.params.ns ? 'blocktooth-' + this.params.ns : undefined, waitMs: req.waitMs, expectHumans: req.expectHumans,
+      log: this.params.dev ? (msg: string) => console.log('[net] ' + msg) : undefined,
+    }, {
+      lobby: (s: LobbyState) => { if (this.online === m) handle.update(s); },
+      load: (w, info, seat) => this.loadOnlineWorld(ep, m, w, info, seat),
+      started: (info, seat, joined) => { if (this.online === m && ep === this.epoch) { handle.close(); this.enterOnlinePlay(m, info, joined); } },
+      tick: (w) => { if (this.online === m) { const ev = w.events; for (let i = 0; i < ev.length; i++) this.pushEvent(ev[i]); } },
+      notice: (n: Notice) => { if (this.online === m) this.netUi.push(n); },
+      connection: (c: Connection) => { if (this.online === m) this.netUi.setConnection(c); },
+      infoChanged: () => { if (this.online === m) this.vsHud.refreshSeats(); },
+      rebuilt: (w) => { if (this.online === m) void this.rebindOnlineWorld(ep, m, w); },
+      ended: () => { /* every peer holds the same standings; the end card reads the world */ },
+      failed: (why, where) => {
+        console.warn('[blocktooth] online', where, why);
+        if (this.online === m && where === 'match') this.netUi.push({ key: 'failed', text: why.toUpperCase().slice(0, 80), tone: 'bad', ttlMs: 8000 });
+      },
+    });
+    this.online = m;
+    (window as unknown as { __BTONLINE__?: unknown }).__BTONLINE__ = { match: () => this.online, debug: () => (this.online ? this.online.debug() : null), app: this };
+    void handle.done.then(() => {
+      if (this.online === m && !m.live && ep === this.epoch) {            // LEAVE / Esc in the lobby
+        const rq = { mode: req.mode, titan: req.titan, biome: req.biome };
+        m.leave();
+        this.online = null;
+        void this.backFromLobby(rq);
+      }
+    });
+    await m.begin();
+  }
+
+  /** the START arrived: mount every view against the world the session will adopt (its links are not waited for yet) */
+  private async loadOnlineWorld(ep: number, m: OnlineMatch, w: World, info: VsMatchInfo, seat: number): Promise<void> {
+    if (ep !== this.epoch || this.online !== m) throw new Error('cancelled');
+    const prevLock = this.loadLock;
+    let release: () => void = () => {};
+    this.loadLock = new Promise<void>((r) => { release = r; });
+    try {
+      await prevLock;
+      if (ep !== this.epoch || this.online !== m) throw new Error('cancelled');
+      const titan = info.seats[seat] ? info.seats[seat].titan : this._choice.titan;
+      const req: VsRequest = { titan, biome: info.biome, seed: info.seed, bots: 'regular' };
+      this._choice = { titan, biome: info.biome, seed: info.seed };
+      this.vsReq = req;
+      const ok = await this.loadRun(ep, titan, info.biome, info.seed, EMPTY_RUN_META, { seats: [], info, req }, w);
+      if (!ok || ep !== this.epoch || this.online !== m) throw new Error('cancelled');
+    } finally {
+      release();
+    }
+  }
+
+  /** the links are up, the sim runs: leave the lobby behind and play */
+  private enterOnlinePlay(m: OnlineMatch, info: VsMatchInfo, joined: boolean): void {
+    const w = this._world;
+    if (!w || !m.start) return;
+    const T0 = performance.now();
+    const lap = (what: string): void => { if (this.params.dev) console.log('[net] ol: enterOnlinePlay ' + what + ' +' + Math.round(performance.now() - T0) + ' ms'); };
+    const book = this.identityBook ?? (this.identityBook = new VsIdentityBook(this.portal));
+    book.attach(m.session.room, m.start.matchId);
+    lap('book');
+    this.vsReport = {
+      matchId: m.start.matchId,
+      humans: m.humansAtStart,
+      uidsBySlot: () => book.uidsBySlot(m.session.peer ? m.session.peer.roster() : []),
+      // O-REPORT: wait (<= 4 s) for the other live humans' RESULT hashes, then file only when MY hash is held by a strict majority (resultsMajority)
+      ready: () => {
+        const p = m.session.peer;
+        if (!p) return true;
+        const others = p.roster().filter((s) => s.peer && !s.left && s.peer !== m.session.room.id).length;
+        return p.results.size >= others;
+      },
+      skip: () => {
+        const me = this._world ? this._world.players[m.seat] : null;
+        const p = m.session.peer;
+        if (!me || me.bot !== null || !!(p && (p.state === 'desynced' || p.state === 'left'))) return true;
+        return !!(p && p.standings && !resultsMajority(p.standings.hash, [...p.results.values()].map((r) => r.hash)));
+      },
+    };
+    this.setScreen('play');
+    this.input.mode = 'game';
+    this.input.clearEdges();
+    lap('input');
+    this.showHud(true);
+    lap('hud');
+    this.loop.simEnabled = false;                     // the session's Worker clock steps the sim
+    this.musicAcc = MUSIC_PERIOD_S;
+    this.music.play(w.biomeId);
+    lap('music');
+    this.vsHud.refreshSeats();
+    this.netUi.setConnection(joined ? 'catchup' : 'ok');
+    void info;
+    // the session adopted the world built in beforeStart; a different object means it rebuilt: rebind
+    const sw = m.world;
+    if (sw && sw !== w) void this.rebindOnlineWorld(this.epoch, m, sw);
+  }
+
+  /** a stepped-down host's session rebuilt its world from tick 0: mount the views against the new object */
+  private async rebindOnlineWorld(ep: number, m: OnlineMatch, w: World): Promise<void> {
+    if (ep !== this.epoch || this.online !== m || !this.vsInfo) return;
+    this.live = false;
+    this.splash.show(LOADING.city, 0.4);
+    for (let i = this.mounted.length - 1; i >= 0; i--) { try { this.mounted[i].unmount(); } catch (e) { console.error('[blocktooth] unmount failed', e); } }
+    this.mounted = [];
+    this._world = w;
+    this.evA.length = 0; this.evB.length = 0;
+    for (const v of this.views) {
+      await v.mount(w);
+      this.mounted.push(v);
+      if (ep !== this.epoch || this.online !== m) return;
+    }
+    this.rig.reset(w);
+    const ph = await this.getPortraits();
+    this.vsHud.mount(w, this.vsInfo, ph);
+    this.vsHud.setCityName(BIOMES[this.vsInfo.biome].name);
+    this.railUi.clear();
+    this.live = true;
+    this.splash.hide();
+  }
+
+  /** per rendered frame while an online match runs: the input sample, the notices, the connection overlay */
+  private onlineFrame(dt: number): void {
+    const on = this.online;
+    if (!on) return;
+    if (this.netUi.leaveAsked && this.input.pressed('confirm') && !this.input.pressed('ability')) { void this.leaveOnline(); return; }
+    // a tab that was hidden through the end of the match replays it in one catch-up (the history's events are dropped): the decided
+    // world is the source of truth, so the end card never depends on having seen the `vsEnd` event
+    const dw = this._world;
+    if (dw && dw.mode === 'vs' && dw.run.result && !this.ending && on.live) this.beginVsEnding(dw);
+    if (!this.ending) {
+      const raw = this.forcedInput ?? this.input.titanInput();
+      let card = 0;
+      if (this.vsRailReroll) card = CARD.REROLL;
+      else if (this.vsRailPick >= 1 && this.vsRailPick <= 3) card = this.vsRailPick;
+      this.vsRailPick = 0; this.vsRailReroll = false;
+      on.setInput(raw, card);
+    }
+    on.session.kick();                                // a second pump driver beside the Worker clock (see OnlineSession.kick)
+    on.frame(dt);
+    this.netUi.update();
+    if (on.connection === 'catchup' || on.catchingUp) {
+      const p = on.session.peer;
+      if (p) this.netUi.setCatchup(p.confirmed > 0 ? p.simTick / p.confirmed : 0);
+    }
+  }
+
+  /** LEAVE the match / the end card: the seat becomes a bot for the others, this player returns to the title */
+  async leaveOnline(): Promise<void> {
+    const on = this.online;
+    if (on) on.leave();
+    await this.goTitle();
+  }
+
+  /** the end card's REMATCH: the same cast meets again in a new room (code derived from the old one), a fresh seed, the next city */
+  private rematchOnline(titan: TitanId, biome: BiomeId): void {
+    const on = this.online;
+    if (!on) return;
+    const w = this._world;
+    const code = rematchCode(on.roomCode ?? 'ROOM');
+    const humans = w ? w.players.filter((P) => P.bot === null && P.vs.data.left !== 1).length : on.humansAtStart;
+    const next = REMATCH_BIOMES[(Math.max(0, REMATCH_BIOMES.indexOf(biome as typeof REMATCH_BIOMES[number])) + 1) % REMATCH_BIOMES.length];
+    const left = Math.max(0, this.rematchVoteEnd - performance.now());
+    on.leave();
+    this.online = null;
+    void this.runOnline({ mode: 'rematch', code, titan, biome: next, waitMs: left + 1200, expectHumans: humans });
+  }
+
   // ─────────────────────────────── ONLINE VS (lane B-VIEW) ───────────────────────────────
 
   /** The events of the VIEW seat (and the match-level ones): what the solo HUD pieces may react to. */
@@ -2283,7 +2660,12 @@ export class App {
     if (I.pressed('pick1')) this.vsRailPick = 1;
     else if (I.pressed('pick2')) this.vsRailPick = 2;
     else if (I.pressed('pick3')) this.vsRailPick = 3;
-    if (I.pressed('reroll')) this.vsRailReroll = true;
+    if (I.pressed('reroll')) {
+      // R with no rerolls left on an open rail: say so (the sim would silently ignore the edge)
+      const w = this._world, me = w ? w.players[this.vsLocal] : null;
+      if (me && me.rail.open && w && w.view === this.vsLocal && (me.upgrades.rerolls | 0) <= 0) { this.railUi.refuseReroll(); this.sfx.ui('back'); }
+      else this.vsRailReroll = true;
+    }
     if (I.pressed('specPrev')) this.vsCycle(-1);
     if (I.pressed('specNext')) this.vsCycle(1);
     if (I.pressed('mapToggle')) this.vsHud.toggleMap();
@@ -2383,6 +2765,7 @@ export class App {
   private beginVsEnding(w: World): void {
     if (this.ending) return;
     this.ending = true;
+    this.reportVsEnd(w);
     this.endResult = null;
     this.endT = App.VS_END_DELAY_S;
     this.wantDraft = false;
@@ -2397,6 +2780,42 @@ export class App {
     if (win >= 0 && win < w.players.length) this.vsSetView(w, win);
     else if (this.vsMode !== 'own' && w.players[this.vsLocal] && !w.players[this.vsLocal].vs.eliminated) this.vsSetView(w, this.vsLocal);
     this.vsMode = win === this.vsLocal ? 'own' : 'killer';   // not 'spectate': the spectate bar and keys are off for the aftermath
+  }
+
+  /**
+   * O-REPORT: the match is decided. Update the VS ledger + post the VS goals, and (signed in) file this seat's bt_report_vs through the
+   * portal bridge. Read-only on the World. Guests / standalone / a seat a bot has now file nothing.
+   */
+  private reportVsEnd(w: World, waitedMs = 0): void {
+    try {
+      if (!this.vsInfo || w.mode !== 'vs') return;
+      const ctx = this.vsReport;
+      // online: the other peers' RESULT hashes arrive up to ~1.5 s after the end; a ghost / diverged peer is told apart by them (resultsMajority)
+      if (ctx && ctx.ready && !ctx.ready() && waitedMs < 4000) {
+        const ep = this.epoch;
+        window.setTimeout(() => { if (ep === this.epoch && this._world === w) this.reportVsEnd(w, waitedMs + 250); }, 250);
+        return;
+      }
+      const matchId = ctx ? ctx.matchId : this.vsMatchId;
+      const out = this.portal.vsMatchEnded({
+        w, slot: this.vsLocal, matchId, humans: ctx ? ctx.humans : 1,
+        uidBySlot: ctx ? ctx.uidsBySlot() : undefined, tally: this.vsTally, skip: ctx && ctx.skip ? ctx.skip() : false,
+      });
+      if (!out) return;
+      const rec: NonNullable<App['vsFiling']> = { matchId, goals: out.goals.slice(), filing: null };
+      this.vsFiling = rec;
+      for (const id of out.goals) this.toastVsGoal(id);
+      void out.filing.then((f) => { if (this.vsFiling === rec) rec.filing = f; });
+    } catch (e) {
+      console.error('[blocktooth] vs report failed', e);
+    }
+  }
+
+  /** a GOAL MET toast for one of the 8 VS goals (the toast layer holds it until the end card is closed) */
+  private toastVsGoal(id: string): void {
+    const g = VS_GOAL_BY_ID[id];
+    if (!g) return;
+    this.toasts.push({ kicker: 'GOAL MET', title: g.name, sub: g.desc.toUpperCase(), glyph: 'ribbon' });
   }
 
   /** the front page: freeze-frame photo, then the end card → REMATCH (titan swap, new seed, next city) / LEAVE */
@@ -2427,13 +2846,19 @@ export class App {
     const portraits = await this.getPortraits();
     if (ep !== this.epoch || this._world !== w) return;
     let choice: Awaited<ReturnType<VsEndScreen['open']>>;
+    if (this.online) this.rematchVoteEnd = performance.now() + VS.rematch.voteS * 1000;
     try {
-      choice = await this.vsEndScreen.open({ w, info, photo, portraits, voteS: null, end: this.vsEndEv });
+      choice = await this.vsEndScreen.open({ w, info, photo, portraits, voteS: this.online ? VS.rematch.voteS : null, end: this.vsEndEv });
     } finally {
       if (this.modal === 'end') this.modal = null;
     }
     if (ep !== this.epoch) return;
     this.sfx.ui('confirm');
+    if (this.online) {                      // ONLINE: REMATCH = the same cast in a new room (a fresh seed, the next city); LEAVE = the title
+      if (choice.kind === 'rematch') this.rematchOnline(choice.titan, info.biome);
+      else void this.leaveOnline();
+      return;
+    }
     if (choice.kind === 'rematch') {
       const r = this.vsReq;
       const next = REMATCH_BIOMES[(Math.max(0, REMATCH_BIOMES.indexOf(info.biome as typeof REMATCH_BIOMES[number])) + 1) % REMATCH_BIOMES.length];
@@ -2444,6 +2869,7 @@ export class App {
   // ─────────────────────────────── events plumbing ───────────────────────────────
 
   private pushEvent(e: SimEvent): void {
+    if (this.vsTally) this.vsTally.feed(e);
     // a rank-up (from a tick or a mutate()) holds any draft owed right now until the sting is seen
     if (e.type === 'rankUp' && !this._testFrozen && !this.ending) this.sizeUpHoldT = SIZEUP_DRAFT_HOLD_S;
     this.evA.push(e);
@@ -2479,13 +2905,15 @@ export class App {
   private installDomHooks(): void {
     // auto-pause when the tab is hidden (CONTRACT §14); never destroys the run
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.pause();
+      if (document.hidden) this.autoPause();
     });
     // …and when the window loses focus (alt-tab, another monitor, the portal page around the
     // iframe): Input already releases every held key on blur, so without this an unattended
     // titan stood still while the sim kept running and died in ~25–45 s. pause() is a no-op
     // outside live play (menus, drafts, the tabloid, the run-end aftermath).
-    window.addEventListener('blur', () => this.pause());
+    window.addEventListener('blur', () => this.autoPause());
+    // closing the tab / navigating away mid-match: tell the others at once (their seat for us becomes a bot) instead of letting them time out
+    window.addEventListener('pagehide', () => { if (this.online) { try { this.online.leave(); } catch { /* going away */ } } });
     // first user gesture unlocks audio (the engine also listens; this covers ?autostart pages)
     const unlock = () => {
       void this.audio.unlock();

@@ -6,7 +6,7 @@
 //         <- PumpClock (Worker clock: keeps the authority ticking in a hidden tab)
 //
 // Usage (app side):
-//   const s = new OnlineSession({ build, name, sim: soloWorldPort(...) /* later: vsWorldPort */, makeStart });
+//   const s = new OnlineSession({ build, name, sim: vsWorldPort({ viewSeat: () => mySeat }) /* soloWorldPort(...) for the 1-titan World */, makeStart });
 //   const ok = await s.quickMatch();                 // or s.hostCode(Room.makeCode()) / s.joinCode(code)
 //   each frame:  s.setInput(titanInput, card);  render s.world (s.peer.simTick advances on the Worker clock)
 //   events:      onEvent({type:'started'|'net'|'result'|'error'})
@@ -45,6 +45,14 @@ export interface OnlineSessionOpts<W> {
   log?: (m: string) => void;
   /** TEST HOOK (harness only): drop WebRTC signalling to `to` so that pair never connects directly (NAT emulation) */
   signalFilter?: (to: string) => boolean;
+  /** room channel namespace (default 'blocktooth'): dev / test runs use their own so they never meet real players */
+  gameId?: string;
+  /** extra presence fields this peer shows the room (the lobby reads the titan pick of every seat from them) */
+  info?: Record<string, unknown>;
+  /** app side (lane O-LOBBY): awaited with the START (and the replay-join offer) BEFORE the world is built and the links are
+   *  waited for. Load / mount the views here: the signalling listeners are already up (a faster peer's offer is answered), and
+   *  no peer starts its sim until every link is open or `connectMs` ran out, so a slow loader does not miss the countdown. */
+  beforeStart?: (r: StartResult) => Promise<void>;
 }
 
 export class OnlineSession<W> {
@@ -61,7 +69,7 @@ export class OnlineSession<W> {
 
   constructor(o: OnlineSessionOpts<W>) {
     this.o = o;
-    this.room = new Room({ build: o.build, name: o.name, client: o.client });
+    this.room = new Room({ build: o.build, name: o.name, client: o.client, gameId: o.gameId, info: o.info });
   }
 
   get world(): W | null { return this.peer ? this.peer.world : null; }
@@ -72,8 +80,9 @@ export class OnlineSession<W> {
     const r = await this.room.quickMatch({ makeStart: this.o.makeStart, waitMs, onStatus: this.onStatus });
     return r ? this.begin(r) : false;
   }
-  async hostCode(code: string): Promise<boolean> {
-    const r = await this.room.hostCode(code, { makeStart: this.o.makeStart, onStatus: this.onStatus });
+  /** `waitMs` > 0: the host (lowest id in the room) also starts after that long (the REMATCH room: bots fill whoever did not come) */
+  async hostCode(code: string, waitMs = 0): Promise<boolean> {
+    const r = await this.room.hostCode(code, { makeStart: this.o.makeStart, onStatus: this.onStatus, waitMs });
     return r ? this.begin(r) : false;
   }
   async joinCode(code: string): Promise<boolean> {
@@ -109,6 +118,9 @@ export class OnlineSession<W> {
       else if (m.t === 'result' && this.peer && m.d.standings) this.peer.results.set(m.from, m.d.standings as unknown as Standings);
     });
     const humans = r.running ? (r.running as { humans?: string[] }).humans ?? [] : start.seats.filter((s) => s.kind === 'human' && s.peer).map((s) => s.peer as string);
+    if (this.o.beforeStart) {
+      try { await this.o.beforeStart(r); } catch (err) { this.emit({ type: 'error', why: 'load failed: ' + String(err) }); this.leave(); return false; }
+    }
     mesh.connect(humans);
     const reachable = await mesh.waitOpen(humans, this.o.connectMs ?? 8000);
     const unreachable = humans.filter((h) => h !== self && !reachable.includes(h));
@@ -117,8 +129,9 @@ export class OnlineSession<W> {
     this.peer = new LockstepPeer<W>({
       self, start, sim: this.o.sim, mesh, now: now(),
       joiner: running ? { seat: running.seat ?? -1, authority: running.authority, epoch: running.epoch } : undefined,
-      maxStepsPerPump: running ? (this.o.replayStepsPerPump ?? 2000) : (this.o.stepsPerPump ?? 60),
-      stepBudgetMs: running ? 25 : 10,          // a replay / catch-up never freezes the page (Worker pumps at 60 Hz)
+      // a replay / catch-up never freezes the page (Worker pumps at 60 Hz); the world says what it can afford (SimPort.catchup)
+      maxStepsPerPump: running ? (this.o.replayStepsPerPump ?? this.o.sim.catchup?.maxStepsPerPump ?? 2000) : (this.o.stepsPerPump ?? 60),
+      stepBudgetMs: running ? (this.o.sim.catchup?.stepBudgetMs ?? 25) : 10,
       onEvent: (ev) => this.onNet(ev),
       log: this.o.log,
     });
@@ -128,6 +141,10 @@ export class OnlineSession<W> {
     this.emit({ type: 'started', start, seat: running ? (running.seat ?? -1) : seat, host: r.host, reachable, unreachable, joined: !!running });
     return true;
   }
+
+  /** pump from the app's frame loop too (lane O-LOBBY): the Worker clock is the primary driver and keeps a HIDDEN tab ticking, but if it
+   *  is late to start or starved, a visible page must not wait for it. pump() is wall-time based, so a second driver is harmless. */
+  kick(): void { this.pump(); }
 
   private pump(): void {
     const p = this.peer;

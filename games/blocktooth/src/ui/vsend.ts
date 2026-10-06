@@ -37,6 +37,8 @@ export interface VsEndData {
 export interface VsRow {
   slot: number; place: number; score: number; name: string; sign: string; bot: boolean; titan: TitanId; color: string;
   peak: number; evict: number; assist: number; pvp: number; tons: number; bids: number; out: boolean;
+  /** times this seat was knocked out (EVICTED) / the match clock (s) it was eliminated at (-1 = still standing) */
+  outs: number; outT: number;
 }
 
 /** placements 1..n for a decided match (exported for the probe) */
@@ -67,6 +69,7 @@ export function vsStandings(w: World, info: VsMatchInfo, end?: VsEndData['end'])
       titan: s ? s.titan : P.titanId, color: s ? s.color : VS.seatColors[i] ?? '#ffffff',
       peak: Math.max(P.vs.peakRank, P.run.peakRank, P.titan.rank), evict: P.vs.evictions, assist: P.vs.assists, pvp: Math.round(P.vs.pvpDealt * 100) / 100,
       tons: P.run.tonnage, bids: P.vs.tenderBids, out: P.vs.eliminated,
+      outs: P.vs.koCount, outT: P.vs.eliminated && P.vs.elimT >= 0 && V ? Math.max(0, P.vs.elimT - V.startT) : -1,
     });
   }
   rows.sort((a, b) => a.place - b.place || a.slot - b.slot);
@@ -129,19 +132,31 @@ export class VsEndScreen {
       if (url) ph.src = url;
       row.appendChild(ph);
       const who = div('bt-vsend-who', row);
-      const nm = el('b', '', (r.slot === d.info.local ? STR_VS.you + ' · ' : '') + titanTag(r.titan) + (r.bot ? ' · ' + r.name : ''));
+      // online: a human rival shows their NAME (GUEST-xxxx / account); a bot its call-sign
+      const nm = el('b', '', (r.slot === d.info.local ? STR_VS.you + ' · ' : '') + titanTag(r.titan) + (r.bot ? ' · ' + r.name : r.slot !== d.info.local && r.name && r.name !== 'YOU' ? ' · ' + r.name : ''));
       if (r.bot) nm.appendChild(el('span', 'bt-vs-chip', STR_VS.bot));
       who.appendChild(nm);
+      // KOs = knock-outs scored · OUT xN = times knocked out (same words as the seat cards) · when the seat went out (the placing rule)
       who.appendChild(el('span', '', [
         r.bot && r.sign ? r.sign : '',
         'SIZE ' + roman(r.peak),
-        r.evict + ' EV', r.assist + ' AST', r.pvp > 0 ? Math.round(r.pvp) + '% PVP' : '', Math.round(r.tons / 100) / 10 + 'K T',
+        vsFmt(STR_VS.kos, { n: r.evict }), r.outs > 0 ? vsFmt(STR_VS.outTimes, { n: r.outs }) : '',
+        r.assist + ' AST', r.pvp > 0 ? Math.round(r.pvp) + '% PVP' : '', Math.round(r.tons / 100) / 10 + 'K T',
         r.bids > 0 ? r.bids + ' BIDS' : '',
       ].filter(Boolean).join(' · ')));
+      // the placing line: WHY this seat is where it is (elimination time, or last standing)
+      const why = r.out ? (r.outT >= 0 ? vsFmt(STR_VS.end.outAt, { t: fmtMatchClock(r.outT) }) : STR_VS.end.leftTheMatch)
+        : r.place === 1 ? (bell ? STR_VS.end.standing : STR_VS.end.lastStanding) : STR_VS.end.standing;
+      who.appendChild(el('span', 'bt-vsend-why' + (r.out ? ' out' : ' in'), why));
       const sc = div('bt-vsend-score', row);
       sc.appendChild(el('b', '', fmtInt(r.score)));
       sc.appendChild(el('small', '', STR_VS.end.score));
     }
+
+    // the placing rule, in words (score never decides the winner)
+    const rule = div('bt-vsend-rule', P);
+    rule.appendChild(el('b', '', STR_VS.end.rule));
+    rule.appendChild(el('span', '', bell ? STR_VS.end.ruleBell : STR_VS.end.ruleSub));
 
     const foot = div('bt-vsend-foot', P);
     div('bt-vsend-you', foot, me.place === 1 ? STR_VS.end.you1 : vsFmt(STR_VS.end.youN, { place: STR_VS.place[Math.min(3, me.place - 1)] }));

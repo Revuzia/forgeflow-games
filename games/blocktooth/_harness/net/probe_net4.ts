@@ -1,8 +1,12 @@
 // BLOCKTOOTH - _harness/net/probe_net4.ts (lane B-NET; ONLINE_PLAN.md 6.3 gate H2, netcode.md 8 H2).
 //
-// 4 lockstep peers (src/net/lockstep.ts) in ONE Node process, each with its own World driven by the real
-// createWorld / stepWorld through src/net/simport.ts soloWorldPort (the current 1-titan World: the titan's pilot
-// rotates between the 4 seats every 10 s, so every seat's stream reaches the sim), over _harness/net/simnet.ts
+// 4 lockstep peers (src/net/lockstep.ts) in ONE Node process, each with its own World, over _harness/net/simnet.ts
+// WORLD (--world vs, the default; lane O-PORT): the REAL 4-titan VS world through src/net/simport.ts vsWorldPort (4 seats'
+//   input words incl. the CARD RAIL byte, bot seats on the in-sim VS bot brain with per-seat memory, the all-player hash of
+//   src/net/vshash.ts, bot-seat takeover, AFK -> bot -> back, standings). Each peer's world LOOKS at its own seat (viewSeat),
+//   so a hash that leaked the cursor would mismatch here. Human seats are a wandering eater that also takes cards off the rail.
+// WORLD (--world solo): the old 1-titan World through soloWorldPort (the titan's pilot rotates between the 4 seats every 10 s).
+// Both run over _harness/net/simnet.ts
 // (per-pair delay, loss, duplicates, blackouts; reliable + unreliable channels). Virtual time, 1 ms resolution; each
 // peer pumps from an emulated 30 Hz Worker timer with jitter and rare 60-150 ms stalls.
 //
@@ -31,10 +35,12 @@
 //   joinkill  a replay-joiner holding the LOWEST id joins at 0:30, then the host is killed -> the joiner is elected
 // plus codec unit checks (round trip + malformed input rejected).
 //
-// Usage: node _harness/net/probe_net4.ts                 # every scenario, 5 child processes in parallel
+// Usage: node _harness/net/probe_net4.ts                 # every scenario on the VS world, 5 child processes in parallel
 //        node _harness/net/probe_net4.ts --scenario jitter [--minutes 4] [--seed 1337] [--verbose]
-//        node _harness/net/probe_net4.ts --par 6 --minutes 4
-// Exit 0 = PASS, 1 = FAIL, 2 = the sim could not be loaded. Report -> _harness/_reports/probe_net4.json
+//        node _harness/net/probe_net4.ts --par 6 --minutes 4 --seed 7
+//        node _harness/net/probe_net4.ts --scenario jitter --full      # a whole match: the 5 s countdown + 10:45, to the sim's own end
+//        node _harness/net/probe_net4.ts --world solo                  # the previous 1-titan World
+// Exit 0 = PASS, 1 = FAIL, 2 = the sim could not be loaded. Report -> _harness/_reports/probe_net4[_<tag>].json
 
 import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, writeFileSync, existsSync } from 'node:fs';
@@ -47,7 +53,8 @@ import {
   encodeHashPkt, encodeInput, encodeInputPkt, encodeLogPkt,
 } from '../../src/net/proto.ts';
 import { LockstepPeer, type NetEvent } from '../../src/net/lockstep.ts';
-import { type SimPort, soloWorldPort } from '../../src/net/simport.ts';
+import { type SimPort, soloWorldPort, vsWorldPort, VS_MATCH_TICKS, vsStartInfo } from '../../src/net/simport.ts';
+import { CARD } from '../../src/net/proto.ts';
 import { SimNet, jitterDelay, traceDelay, type LinkModel } from './simnet.ts';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -55,8 +62,11 @@ const ROOT = resolve(HERE, '..', '..');
 const args = process.argv.slice(2);
 const opt = (n: string, d: string): string => { const i = args.indexOf(n); return i >= 0 && i + 1 < args.length ? args[i + 1] : d; };
 const flag = (n: string): boolean => args.includes(n);
-const MINUTES = Number(opt('--minutes', '4'));
+const WORLD = opt('--world', 'vs') === 'solo' ? 'solo' : 'vs';
+const FULL = flag('--full');
+const MINUTES = FULL ? (VS_MATCH_TICKS + 60) / 1800 : Number(opt('--minutes', '4'));
 const SEED = Number(opt('--seed', '1337'));
+const TAG = opt('--tag', '');
 const VERBOSE = flag('--verbose');
 const SPEED_GATE = 0.96;
 
@@ -107,6 +117,45 @@ function humanInput(seat: number, localTick: number, w: World): Uint8Array {
   const h2 = hash32(seat + 31, localTick);
   encodeInput({ mx, mz, ability: h2 % 97 === 0, abilityHeld: false, dash: h2 % 211 === 0, ultimate: h2 % 1009 === 0 }, IN_BUF);
   return IN_BUF;
+}
+
+// VS humans: a wandering eater. Read-only on the world (the harness never writes sim state): heads for the nearest standing
+// building (re-picked every 45 local ticks), swings the hook / dashes / ults now and then, and takes a card off the rail
+// ~1.5-3.5 s after an offer opens (a 1-in-6 offer gets a reroll instead). One card byte per offer, set for ONE local tick:
+// the net layer must carry it as an edge. Deterministic per (seed, seat, local tick) and the peer's own world.
+interface VsHumanRt { tx: number; tz: number; pickedSeq: number; lastCardTick: number }
+const vsHumanRt = new Map<string, VsHumanRt>();
+function vsHumanWord(peerId: string, seat: number, localTick: number, w: World): { word: Uint8Array; card: number } {
+  let rt = vsHumanRt.get(peerId);
+  if (!rt) { rt = { tx: 0, tz: 0, pickedSeq: -1, lastCardTick: -1e9 }; vsHumanRt.set(peerId, rt); }
+  const P = w.players[seat];
+  const T = P.titan;
+  if (localTick % 45 === 0 || (rt.tx === 0 && rt.tz === 0)) {
+    let best = Infinity, bx = w.city.spawn.x, bz = w.city.spawn.z;
+    const bs = w.city.buildings;
+    const skip = hash32(seat * 131 + SEED, Math.floor(localTick / 45)) % 5;   // not always the closest: spreads the eaters
+    let seen = 0;
+    for (let i = 0; i < bs.length; i++) {
+      const b = bs[i];
+      if (!(b.alive > 0)) continue;
+      const d = (b.x - T.x) * (b.x - T.x) + (b.z - T.z) * (b.z - T.z);
+      if (d < best) { if (seen++ >= skip || best === Infinity) { best = d; bx = b.x; bz = b.z; } }
+    }
+    rt.tx = bx; rt.tz = bz;
+  }
+  let mx = rt.tx - T.x, mz = rt.tz - T.z;
+  const m = Math.hypot(mx, mz) || 1; mx /= m; mz /= m;
+  const h2 = hash32(seat + 31, localTick);
+  encodeInput({ mx, mz, ability: h2 % 97 === 0, abilityHeld: false, dash: h2 % 211 === 0, ultimate: h2 % 1009 === 0 }, IN_BUF);
+  let card = 0;
+  const R = P.rail, U = P.upgrades;
+  if (R.open && U.offer && U.offer.length > 0 && R.seq !== rt.pickedSeq && w.t - R.openedT > 1.5 + (hash32(seat, R.seq) % 20) / 10) {
+    rt.pickedSeq = R.seq;
+    card = R.seq % 6 === 5 ? CARD.REROLL : 1 + (hash32(seat * 17 + SEED, R.seq) % U.offer.length);
+    rt.lastCardTick = localTick;
+  }
+  IN_BUF[3] = card;
+  return { word: IN_BUF, card };
 }
 
 // ─────────────────────────────── codec unit checks ───────────────────────────────
@@ -160,8 +209,26 @@ async function runScenario(sc: ScenarioId): Promise<ScenarioResult> {
   const info: Record<string, unknown> = {};
   const add = (id: string, ok: boolean, detail: string): void => { checks.push({ id, ok, detail }); };
 
-  const bm = await import('../bot.ts');
-  const sim: SimPort<World> = soloWorldPort({ bot: { input: bm.botInput, pick: bm.botPickUpgrade } });
+  const bm = WORLD === 'solo' ? await import('../bot.ts') : null;
+  // one port per peer: a VS world looks at the peer's OWN seat (viewSeat), so a hash that read the cursor would mismatch.
+  // The wrapper counts the CARD RAIL picks the sim reports (manual = a human's card byte got through; auto = the 12 s timer).
+  const rail = { manual: 0, auto: 0 };
+  const seatByPeer = new Map<string, number>();
+  const baseSim: SimPort<World> = bm
+    ? soloWorldPort({ bot: { input: bm.botInput, pick: bm.botPickUpgrade } })
+    : vsWorldPort();
+  const mkSim = (peerId: string): SimPort<World> => {
+    if (WORLD === 'solo') return baseSim;
+    const port = vsWorldPort({ viewSeat: () => seatByPeer.get(peerId) ?? 0 });
+    const step = port.step;
+    port.step = (w, f): void => {
+      step(w, f);
+      if (peerId !== 'p1') return;                       // one peer's world is enough to count (every peer steps the same frames)
+      for (const e of w.events) if (e.type === 'railPick') { if (e.auto) rail.auto++; else rail.manual++; }
+    };
+    return port;
+  };
+  const sim = baseSim;
 
   const endTick = Math.round(MINUTES * 60 * 30);
   let now = 0;
@@ -175,12 +242,16 @@ async function runScenario(sc: ScenarioId): Promise<ScenarioResult> {
   // joinkill: seats 0..2 are p1..p3 so the replay-joiner p0 holds the lowest id
   const idOf = (seat: number): string => (sc === 'joinkill' ? ids[seat + 1] : ids[seat]);
   const HOST = idOf(0);
-  const start: StartInfo = {
-    proto: NET_PROTO, build: 'probe', matchId: `probe-${sc}-${SEED}`, seed: SEED, biome: 'grideast', mode: 'coop1',
-    seats: Array.from({ length: SEATS }, (_, s) => ({ slot: s, kind: humanSeats.includes(s) ? 'human' as const : 'bot' as const,
-      peer: humanSeats.includes(s) ? idOf(s) : null, name: humanSeats.includes(s) ? idOf(s) : `BOT ${s}`, titan: 'molo' })),
-    endTick, lead: 4,
-  };
+  // VS lineup: one of each kit, biome by seed (all three biomes get covered across the seeds the gate runs)
+  const LINEUP = ['molo', 'voltkite', 'hearthback', 'briarwick'];
+  const BIOME = ['grideast', 'whitestacks', 'lockwater'][Math.abs(SEED) % 3];
+  const seatRows = Array.from({ length: SEATS }, (_, s) => ({ kind: humanSeats.includes(s) ? 'human' as const : 'bot' as const,
+    peer: humanSeats.includes(s) ? idOf(s) : null, name: humanSeats.includes(s) ? idOf(s) : `BOT ${s}`, titan: WORLD === 'solo' ? 'molo' : LINEUP[s], botLevel: 1 }));
+  humanSeats.forEach((s) => seatByPeer.set(idOf(s), s));
+  const start: StartInfo = WORLD === 'solo'
+    ? { proto: NET_PROTO, build: 'probe', matchId: `probe-${sc}-${SEED}`, seed: SEED, biome: 'grideast', mode: 'coop1',
+        seats: seatRows.map((r, slot) => ({ slot, kind: r.kind, peer: r.peer, name: r.name, titan: r.titan })), endTick, lead: 4 }
+    : { ...vsStartInfo({ proto: NET_PROTO, build: 'probe', matchId: `probe-${sc}-${SEED}`, seed: SEED, biome: BIOME, seats: seatRows, lead: 4 }), endTick };
 
   // link models per scenario
   const lan: LinkModel = { delay: jitterDelay(net, 8, 10) };
@@ -238,6 +309,7 @@ async function runScenario(sc: ScenarioId): Promise<ScenarioResult> {
     return null;
   };
 
+  const afkWorld: { peer: string; phase: string; bot: boolean; left: boolean; sleeper: boolean; tick: number }[] = [];
   let maxAuthLag = 0, maxHostStall = 0;
   const afkFrames: number[] = [];
   let lastBotMask3 = 0;
@@ -247,8 +319,9 @@ async function runScenario(sc: ScenarioId): Promise<ScenarioResult> {
     for (now = 0; now <= tEnd; now++) {
       // create peers due now
       for (const r of rts) if (!r.peer && now >= r.createAt) {
+        if (r.joiner) seatByPeer.set(r.id, r.joiner.seat);
         const joiner = r.joiner ? { seat: r.joiner.seat, authority: (authorityRt() as LockstepPeer<World>).self, epoch: (authorityRt() as LockstepPeer<World>).epoch } : undefined;
-        r.peer = new LockstepPeer<World>({ self: r.id, start, sim, mesh: net.mesh(r.id), now, joiner, maxStepsPerPump: Infinity,
+        r.peer = new LockstepPeer<World>({ self: r.id, start, sim: mkSim(r.id), mesh: net.mesh(r.id), now, joiner, maxStepsPerPump: Infinity,
           onEvent: (e) => { r.events.push(e); if (VERBOSE && e.type !== 'roster') console.log(`  [${(now / 1000).toFixed(2)}s] ${r.id} ${JSON.stringify(e).slice(0, 200)}`); },
           log: VERBOSE ? (m) => console.log(`  [${(now / 1000).toFixed(2)}s] ${m}`) : undefined });
       }
@@ -261,7 +334,16 @@ async function runScenario(sc: ScenarioId): Promise<ScenarioResult> {
         const p = r.peer;
         if (!p || r.killedAt >= 0 || (now >= r.stallFrom && now < r.stallTo) || now < r.nextWake) continue;
         const seat = p.mySeat();
-        if (seat >= 0) p.setLocalInput(humanInput(seat, Math.floor(now / TICK_MS), p.world));
+        if (seat >= 0) {
+          if (WORLD === 'solo') p.setLocalInput(humanInput(seat, Math.floor(now / TICK_MS), p.world));
+          else {
+            const h = vsHumanWord(r.id, seat, Math.floor(now / TICK_MS), p.world);
+            // 'late': the late guest hammers a card key on EVERY sample, so any repeated (late) word that kept its card byte
+            // would be a second pick the player never made (x.late_repeat_no_card has teeth)
+            if (sc === 'late' && r.id === lateGuest) h.word[3] = 1 + (Math.floor(now / TICK_MS) % 3);
+            p.setLocalInput(h.word);
+          }
+        }
         p.pump(now);
         // back from a freeze: the clock fired first, the queued packets land after it
         if (r.held.length && now >= r.stallTo) for (const [f, b] of r.held.splice(0)) p.receive(f, b, now);
@@ -293,6 +375,14 @@ async function runScenario(sc: ScenarioId): Promise<ScenarioResult> {
       if (sc === 'afk') {
         if (now === afkFrom) net.muteInputs.add(afkPeer);
         if (now === afkTo) net.muteInputs.delete(afkPeer);
+        // VS: what the WORLDS say about seat 3 mid-AFK and after the human is back (every live peer, its own world)
+        if (WORLD === 'vs' && (now === afkFrom + 5000 || now === afkTo + 3000)) {
+          const phase = now === afkFrom + 5000 ? 'during' : 'after';
+          for (const r of rts) if (r.peer && r.killedAt < 0 && r.peer.simTick > 0) {
+            const P = r.peer.world.players[3];
+            afkWorld.push({ peer: r.id, phase, bot: P.bot !== null, left: P.vs.data.left === 1, sleeper: P.vs.sleeper !== null, tick: r.peer.simTick });
+          }
+        }
       }
       if (sc === 'join' && auth) {
         if (!joinerCreated && auth.confirmed >= joinTick) { joinerCreated = true; mk('p3', now + 1, { seat: 3 }); info.joinRequestedAtTick = auth.confirmed; }
@@ -372,6 +462,17 @@ async function runScenario(sc: ScenarioId): Promise<ScenarioResult> {
   info.peers = peers.map(statLine);
   info.net = { sent: net.sent, dropped: net.dropped, duplicated: net.duplicated, delivered: net.delivered };
 
+  // ── VS world: the card byte got through the whole stack, and a late repeat never carries one ──
+  if (WORLD === 'vs') {
+    info.rail = { manualPicks: rail.manual, autoPicks: rail.auto };
+    const humans = humanSeats.length;
+    if (humans > 0 && sc !== 'stall' && sc !== 'hoststall') add('x.card_byte_picks', rail.manual > 0, `p1's world: ${rail.manual} manual (card byte) CARD RAIL picks, ${rail.auto} auto-picks`);
+    let lateCards = 0, lateWords = 0;
+    const lf = peers.find((r) => r.peer.frames.length > 0)?.peer.frames ?? [];
+    for (const f of lf) for (let s = 0; s < SEATS; s++) if ((f.lateMask >> s) & 1) { lateWords++; if (f.inputs[s * 4 + 3] !== 0) lateCards++; }
+    add('x.late_repeat_no_card', lateCards === 0, `${lateWords} late-repeated words in the canonical log, ${lateCards} carried a card byte`);
+  }
+
   // ── scenario gates ──
   const get = (id: string): (PeerRt & { peer: LockstepPeer<World> }) | undefined => peers.find((r) => r.id === id);
   if (sc === 'late') {
@@ -420,6 +521,11 @@ async function runScenario(sc: ScenarioId): Promise<ScenarioResult> {
     add('f.afk_bot_takes_seat', !!ev && ev.length >= 2 && onOk && offOk,
       `inputs muted ticks ${muteTick.toFixed(0)}..${unmuteTick.toFixed(0)}; canonical botMask seat3 on at ${on}, off at ${off !== undefined ? -off : 'never'}; authority events ${ev?.map((e) => (e.on ? 'on' : 'off') + '@' + e.tick).join(',')}`);
   }
+  if (sc === 'afk' && WORLD === 'vs') {
+    const dur = afkWorld.filter((x) => x.phase === 'during'), aft = afkWorld.filter((x) => x.phase === 'after');
+    add('f2.world_bot_then_human', dur.length >= 3 && dur.every((x) => x.bot && x.left) && aft.length >= 3 && aft.every((x) => !x.bot && !x.left && x.sleeper),
+      `seat 3 in every peer's own world: mid-AFK ${dur.map((x) => `${x.peer}@${x.tick}:bot=${x.bot}`).join(' ')}; after the return ${aft.map((x) => `${x.peer}@${x.tick}:bot=${x.bot},left=${x.left}`).join(' ')}`);
+  }
   if (sc === 'join') {
     const j = get('p3'), lj = get('p4');
     const joined = j?.events.find((e) => e.type === 'joined') as Extract<NetEvent, { type: 'joined' }> | undefined;
@@ -435,6 +541,10 @@ async function runScenario(sc: ScenarioId): Promise<ScenarioResult> {
     add('g.replay_join', !!joined && jCompared > 100 && jBad === 0 && before === 1 && after === 0 && !!j?.peer.finished,
       `join requested at tick ${info.joinRequestedAtTick}; ${JSON.stringify(info.join)}; joiner checkpoints vs live peers: ${jCompared} compared, ${jBad} mismatched; seat3 botMask before/after switch ${before}/${after}`);
     const rej = lj?.events.find((e) => e.type === 'joinRejected') as Extract<NetEvent, { type: 'joinRejected' }> | undefined;
+    if (WORLD === 'vs') {
+      const roles = peers.filter((r) => r.peer.finished).map((r) => { const P = r.peer.world.players[3]; return { id: r.id, bot: P.bot !== null, took: P.vs.data.tookOver === 1, parked: P.vs.sleeper !== null }; });
+      add('g2.world_takeover', roles.length >= 3 && roles.every((x) => !x.bot && x.took && x.parked), `seat 3 at the end, every peer's own world (joiner included): ${roles.map((x) => `${x.id}:bot=${x.bot},tookOver=${x.took},botMemoryParked=${x.parked}`).join(' ')}`);
+    }
     add('g.join_after_3min_refused', !!rej && rej.why === 'late', `join at tick ${info.lateJoinAtTick} -> ${rej ? 'refused: ' + rej.why : 'NOT refused'}`);
   }
   if (sc === 'stall') {
@@ -509,7 +619,7 @@ async function main(): Promise<void> {
   } else {
     const queue = list.slice();
     const self = fileURLToPath(import.meta.url);
-    const passthru = ['--minutes', String(MINUTES), '--seed', String(SEED)];
+    const passthru = ['--minutes', String(MINUTES), '--seed', String(SEED), '--world', WORLD, ...(FULL ? ['--full'] : [])];
     await new Promise<void>((done) => {
       let running = 0;
       const launch = (): void => {
@@ -535,12 +645,12 @@ async function main(): Promise<void> {
     });
   }
   const ok = codec.every((c) => c.ok) && results.every((r) => r.ok) && results.length === list.length;
-  const rep = { probe: 'probe_net4', ts: new Date().toISOString(), minutes: MINUTES, seed: SEED, ok, codec, scenarios: results.sort((a, b) => ALL.indexOf(a.scenario) - ALL.indexOf(b.scenario)) };
-  const out = resolve(ROOT, '_harness', '_reports', 'probe_net4.json');
+  const rep = { probe: 'probe_net4', world: WORLD, full: FULL, ts: new Date().toISOString(), minutes: MINUTES, seed: SEED, ok, codec, scenarios: results.sort((a, b) => ALL.indexOf(a.scenario) - ALL.indexOf(b.scenario)) };
+  const out = resolve(ROOT, '_harness', '_reports', `probe_net4${TAG ? '_' + TAG : ''}.json`);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(rep, null, 2) + '\n');
   const failed = [...codec.filter((c) => !c.ok).map((c) => c.id), ...results.flatMap((r) => r.checks.filter((c) => !c.ok).map((c) => `${r.scenario}:${c.id}`))];
-  console.log(`\nprobe_net4: ${ok ? 'PASS' : 'FAIL'} - ${results.length} scenarios x ${MINUTES} min${failed.length ? '; failing: ' + failed.join(', ') : ''}  (report ${out})`);
+  console.log(`\nprobe_net4[${WORLD}${FULL ? ' full' : ''} seed ${SEED}]: ${ok ? 'PASS' : 'FAIL'} - ${results.length} scenarios x ${MINUTES.toFixed(2)} min${failed.length ? '; failing: ' + failed.join(', ') : ''}  (report ${out})`);
   process.exit(ok ? 0 : 1);
 }
 

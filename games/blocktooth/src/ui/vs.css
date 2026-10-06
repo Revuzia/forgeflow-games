@@ -271,6 +271,9 @@
   background: rgba(27, 20, 38, .86); border: calc(var(--u) * .1) solid var(--cream); padding: calc(var(--u) * .18) calc(var(--u) * .7);
 }
 .bt-vs-rail-reroll.off { opacity: .4; cursor: default; }
+.bt-vs-rail-reroll.nope { opacity: 1; background: var(--red); border-color: var(--cream); animation: bt-vs-nope .42s ease-in-out both; }
+@keyframes bt-vs-nope { 0%, 100% { transform: translateX(0); } 18% { transform: translateX(calc(var(--u) * -.5)); } 42% { transform: translateX(calc(var(--u) * .5)); } 66% { transform: translateX(calc(var(--u) * -.3)); } 84% { transform: translateX(calc(var(--u) * .2)); } }
+.bt-reduce-flash .bt-vs-rail-reroll.nope { animation: none; }
 
 /* ───────────── VS select additions ───────────── */
 .bt-select[data-vs="1"] .bt2-perkrow .bt2-perkval { min-width: calc(var(--u) * 14); }
@@ -309,6 +312,15 @@
 .bt-vsend-who b { font-family: var(--f-display); font-weight: 400; font-size: calc(var(--u) * 1.4); letter-spacing: .04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: calc(var(--u) * .5); }
 .bt-vsend-who b .bt-vs-chip { font-size: calc(var(--u) * .5); }
 .bt-vsend-who span { font-family: var(--f-mono); font-weight: 700; font-size: calc(var(--u) * .56); letter-spacing: .06em; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bt-vsend-who span.bt-vsend-why { font-size: calc(var(--u) * .6); letter-spacing: .1em; opacity: 1; color: var(--navy); }
+.bt-vsend-who span.bt-vsend-why.out { color: var(--red); }
+.bt-vsend-who span.bt-vsend-why.in { color: #1d6b72; }
+.bt-vsend-rule {
+  display: flex; flex-direction: column; gap: calc(var(--u) * .15); padding: calc(var(--u) * .5) calc(var(--u) * 1.6); background: var(--navy); color: var(--cream);
+  font-family: var(--f-mono); text-align: center;
+}
+.bt-vsend-rule b { font-weight: 700; font-size: calc(var(--u) * .8); letter-spacing: .16em; color: var(--gold); }
+.bt-vsend-rule span { font-weight: 700; font-size: calc(var(--u) * .56); letter-spacing: .1em; opacity: .85; }
 .bt-vsend-score { text-align: right; }
 .bt-vsend-score b { display: block; font-family: var(--f-display); font-weight: 400; font-size: calc(var(--u) * 1.9); line-height: 1; }
 .bt-vsend-score small { font-family: var(--f-mono); font-weight: 700; font-size: calc(var(--u) * .5); letter-spacing: .12em; opacity: .7; }
@@ -337,3 +349,8 @@ body[data-vs="1"] .bt-alert.urgent { top: calc(var(--u) * 22); }
 
 /* keep the objective tracker out of a VS screen (the right column is the KO feed + minimap there) */
 body[data-vs="1"] .bt-v2track { display: none !important; }
+
+/* ───────────── layering (CRIT): world-attached pieces sit UNDER the HUD; the tender nameplate sits BELOW the phase strip ───────────── */
+.bt-vs-world { z-index: 8; }
+/* the PUBLIC TENDER nameplate (ui/bossbar.ts in a VS match) must not cover the phase bar / clock / rule strip at the top centre */
+body[data-vs="1"] .bt-boss { top: calc(var(--u) * 9.8); width: calc(var(--u) * 36); margin-left: calc(var(--u) * -18); }

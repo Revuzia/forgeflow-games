@@ -13,6 +13,7 @@
 import './vs.css';
 import type { UpgradeDef, World } from '../core/types.ts';
 import { UPGRADE_BY_ID } from '../data/upgrades.ts';
+import { VS } from '../core/config.ts';
 import { STR } from '../data/strings.ts';
 import { SLOT_CAP, cardSlot, isOverflowReward, slotsUsed } from '../upgrades/draft.ts';
 import { VS as STR_VS, vsFmt } from '../data/strings_vs.ts';
@@ -49,6 +50,8 @@ export class CardRail {
   private shown = false;
   private open = false;
   private hideTimer = 0;
+  /** performance.now() until which the reroll button shows its REFUSED state (no rerolls left) */
+  private refusedUntil = 0;
   /** a card was clicked / tapped (1..3) */
   onPick: ((n: number) => void) | null = null;
   /** the reroll button was clicked */
@@ -74,7 +77,17 @@ export class CardRail {
     const rr = this.reroll = div('bt-vs-rail-reroll', box);
     this.rerollT = new TextSlot(rr);
     rr.addEventListener('mousedown', (e) => e.preventDefault());
-    rr.addEventListener('click', () => { if (this.onReroll && !rr.classList.contains('off')) this.onReroll(); });
+    rr.addEventListener('click', () => { if (rr.classList.contains('off')) this.refuseReroll(); else if (this.onReroll) this.onReroll(); });
+  }
+
+  /** R (or a click) with no rerolls left: say so (the sim silently ignores it; the player pressed R and nothing happened) */
+  refuseReroll(): void {
+    this.refusedUntil = performance.now() + 1100;
+    this.reroll.classList.remove('nope');
+    void this.reroll.offsetWidth;                 // restart the shake animation
+    this.reroll.classList.add('nope');
+    this.rerollT.set(STR_VS.rail.noRerolls);
+    window.setTimeout(() => { if (performance.now() >= this.refusedUntil) this.reroll.classList.remove('nope'); }, 1150);
   }
 
   show(on: boolean): void {
@@ -101,13 +114,15 @@ export class CardRail {
     const key = String(w.cur) + ':' + R.seq + ':' + offer.join(',');
     if (key !== this.key) { this.key = key; this.build(w, offer); }
     this.setOpen(true, false);
-    const span = Math.max(0.5, R.expireT - R.openedT);
-    const left = Number.isFinite(R.expireT) ? Math.max(0, Math.min(1, (R.expireT - w.t) / span)) : 1;
+    // the ring is FULL while more than the whole auto-pick window is left (the opening card's clock starts at OPEN, not at the countdown)
+    const left = Number.isFinite(R.expireT) ? Math.max(0, Math.min(1, (R.expireT - w.t) / Math.max(0.5, VS.rail.autoPickS))) : 1;
     this.timer.set(left);
     this.timerLow.set(left < 0.25);
     const rer = Math.max(0, U.rerolls | 0);
-    this.rerollT.set('R · ' + STR_VS.rail.reroll + (rer > 0 ? ' (' + rer + ')' : ''));
+    const refused = performance.now() < this.refusedUntil;
+    this.rerollT.set(refused ? STR_VS.rail.noRerolls : 'R · ' + STR_VS.rail.reroll + (rer > 0 ? ' (' + rer + ')' : ''));
     this.reroll.classList.toggle('off', rer <= 0);
+    this.reroll.classList.toggle('nope', refused);
     const q = Math.max(0, (U.pendingDrafts | 0) + (U.chestDrafts | 0) - 1);
     this.queued.set(q > 0 ? vsFmt(STR_VS.rail.queued, { n: q }) : '');
   }
@@ -129,7 +144,7 @@ export class CardRail {
   private build(w: World, offer: readonly string[]): void {
     clearEl(this.cards);
     const R = w.pl.rail;
-    this.title.set(R.chest ? STR_VS.rail.chest : !R.openingDone && w.t < 12 ? STR_VS.rail.opening : STR_VS.rail.title);
+    this.title.set(R.chest ? STR_VS.rail.chest : R.seq <= 1 && w.vs && w.t < w.vs.startT + VS.rail.autoPickS + 2 ? STR_VS.rail.opening : STR_VS.rail.title);
     offer.forEach((id, i) => {
       const def: UpgradeDef | undefined = UPGRADE_BY_ID[id];
       const ovf = isOverflowReward(id);

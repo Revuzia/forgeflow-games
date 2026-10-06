@@ -1,20 +1,23 @@
 // BLOCKTOOTH - _harness/net/rtc4_entry.ts (lane B-NET). Browser end-to-end of the online stack in ONE page:
 // 4 OnlineSessions (src/net/session.ts) quick-match through the in-memory Realtime fake (fake_realtime.ts stands in for
 // Supabase), open a REAL WebRTC mesh (RTCPeerConnection + DataChannels, host candidates, no STUN), and play a lockstep
-// match on the real sim (soloWorldPort + the harness bot) paced by the REAL Worker clock. At 25 s the host is killed
+// match on the real sim paced by the REAL Worker clock: the REAL 4-titan VS world (vsWorldPort; default, lane O-PORT, each
+// session's world looks at its own seat; humans eat the nearest standing building and pick cards off the rail) or, with
+// world=solo, the old 1-titan World (soloWorldPort + the harness bot). At 25 s the host is killed
 // abruptly (clock stopped + every link closed, no goodbye): the survivors must elect p1, keep equal hashes, finish and
 // agree on the standings. Results -> window.__RTC4__ and POST /__report/rtc4. Driven by _harness/net/rtc4.py.
 
 import type { World } from '../../src/core/types.ts';
 import { NET_PROTO, SEATS, TICK_MS, type StartInfo } from '../../src/net/proto.ts';
 import { OnlineSession, type SessionEvent } from '../../src/net/session.ts';
-import { soloWorldPort } from '../../src/net/simport.ts';
+import { soloWorldPort, vsWorldPort, vsStartInfo } from '../../src/net/simport.ts';
 import { botInput, botPickUpgrade } from '../bot.ts';
 import { FakeHub } from './fake_realtime.ts';
 
 const qs = new URLSearchParams(location.search);
 const SECONDS = Number(qs.get('s') ?? '45');
 const KILL_AT_S = Number(qs.get('kill') ?? '25');
+const VSW = qs.get('world') !== 'solo';
 /** join=1: only 3 sessions quick-match (bot fills seat 3); the 4th joins the RUNNING match by room code at JOIN_AT_S
  *  (replay join through the session layer: presence -> running START offer -> mesh hello -> lockstep join) */
 const JOIN = qs.get('join') === '1';
@@ -29,14 +32,19 @@ const log = (m: string): void => { (out.log as string[]).push(`${(performance.no
 
 async function main(): Promise<void> {
   const hub = new FakeHub({ seed: 7, presenceDelay: [80, 600] });
-  const sim = soloWorldPort({ bot: { input: botInput, pick: botPickUpgrade } });
+  const soloSim = soloWorldPort({ bot: { input: botInput, pick: botPickUpgrade } });
   const endTick = Math.round(SECONDS * 30);
+  const LINEUP = ['molo', 'voltkite', 'hearthback', 'briarwick'];
   let n = 0;
-  const makeStart = (humans: string[]): StartInfo => ({
-    proto: NET_PROTO, build: 'rtc4', matchId: `rtc4-${++n}`, seed: 1337, biome: 'grideast', mode: 'coop1', endTick, lead: 3,
-    seats: Array.from({ length: SEATS }, (_, s) => ({ slot: s, kind: s < humans.length ? 'human' as const : 'bot' as const,
-      peer: s < humans.length ? humans[s] : null, name: humans[s] ?? `BOT ${s}`, titan: 'molo' })),
-  });
+  const makeStart = (humans: string[]): StartInfo => VSW
+    ? { ...vsStartInfo({ proto: NET_PROTO, build: 'rtc4', matchId: `rtc4-${++n}`, seed: 1337, biome: 'grideast', lead: 3,
+        seats: Array.from({ length: SEATS }, (_, s) => ({ kind: s < humans.length ? 'human' as const : 'bot' as const,
+          peer: s < humans.length ? humans[s] : null, name: humans[s] ?? `BOT ${s}`, titan: LINEUP[s], botLevel: 1 })) }), endTick }
+    : {
+      proto: NET_PROTO, build: 'rtc4', matchId: `rtc4-${++n}`, seed: 1337, biome: 'grideast', mode: 'coop1', endTick, lead: 3,
+      seats: Array.from({ length: SEATS }, (_, s) => ({ slot: s, kind: s < humans.length ? 'human' as const : 'bot' as const,
+        peer: s < humans.length ? humans[s] : null, name: humans[s] ?? `BOT ${s}`, titan: 'molo' })),
+    };
   const sessions: OnlineSession<World>[] = [];
   const events: Record<string, string[]> = {};
   const results: Record<string, { hash: number; agreed: boolean; endTick: number }> = {};
@@ -45,7 +53,9 @@ async function main(): Promise<void> {
     const tag = `s${i}`;
     events[tag] = [];
     const s: OnlineSession<World> = new OnlineSession<World>({
-      build: 'rtc4', name: tag, sim, makeStart, client: hub.client(), iceServers: [], connectMs: 8000,
+      build: 'rtc4', name: tag, makeStart,
+      // the session's world looks at the session's own seat (a hash that read the cursor would split the peers here)
+      sim: VSW ? vsWorldPort({ viewSeat: () => Math.max(0, s.start ? s.start.seats.findIndex((x) => x.peer === s.room.id) : 0) }) : soloSim, client: hub.client(), iceServers: [], connectMs: 8000,
       signalFilter: NOLINK ? (to: string) => !((s.room.id === blocked.a && to === blocked.b) || (s.room.id === blocked.b && to === blocked.a)) : undefined,
       onEvent: (e: SessionEvent) => {
         if (e.type === 'status') return;
@@ -72,10 +82,26 @@ async function main(): Promise<void> {
   out.ids = sessions.map((s) => s.room.id);
   out.matchIds = first.map((s) => s.start?.matchId ?? null);
   // inputs: each human wanders (harness only); the sim sees the quantised word through setInput
+  const pickedSeq = new Map<string, number>();
+  const picks = { manual: 0 };
   const inputTimer = setInterval(() => {
     for (const s of sessions) {
       const w = s.world;
       if (!w) continue;
+      if (VSW && s.peer) {
+        const seat = s.peer.mySeat();
+        const P = seat >= 0 ? w.players[seat] : null;
+        if (P) {
+          // eat the nearest standing building; take a card ~1.5 s after the rail offers one (ONE sample carries the card byte)
+          let best = Infinity, bx = P.titan.x, bz = P.titan.z;
+          for (const b of w.city.buildings) if (b.alive > 0) { const d = (b.x - P.titan.x) ** 2 + (b.z - P.titan.z) ** 2; if (d < best) { best = d; bx = b.x; bz = b.z; } }
+          const dx = bx - P.titan.x, dz = bz - P.titan.z, m = Math.hypot(dx, dz) || 1;
+          let card = 0;
+          if (P.rail.open && P.upgrades.offer && w.t - P.rail.openedT > 1.5 && pickedSeq.get(s.room.id) !== P.rail.seq) { pickedSeq.set(s.room.id, P.rail.seq); card = 1; picks.manual++; }
+          s.setInput({ mx: dx / m, mz: dz / m, ability: Math.floor(performance.now() / 700) % 5 === 0, abilityHeld: false, dash: false }, card);
+        }
+        continue;
+      }
       const k = Math.floor(performance.now() / 2000) + s.room.id.length;
       const a = (k * 2.399) % (Math.PI * 2);
       s.setInput({ mx: Math.cos(a), mz: Math.sin(a), ability: false, abilityHeld: false, dash: false });
@@ -125,7 +151,7 @@ async function main(): Promise<void> {
   const survivorIds = survivors.map((s) => s.room.id);
   const resHashes = survivorIds.map((id) => results[id]?.hash);
   Object.assign(out, {
-    seconds: SECONDS, endTick, killedAtTick, compared, bad, peers, events, results, candStats: st,
+    world: VSW ? 'vs' : 'solo', cardPicksSent: picks.manual, seconds: SECONDS, endTick, killedAtTick, compared, bad, peers, events, results, candStats: st,
     hubBilled: hub.billed, hubPeak60: hub.peakRolling60(),
     pass: {
       allMatched: oks.every(Boolean) && new Set(out.matchIds as string[]).size === 1,

@@ -19,7 +19,7 @@ import { CITY, VS } from '../core/config.ts';
 import { VS_BANNER, VS_NEXT, VS_RULE, VS as STR_VS, VS_TENDER_NAME, fmtMatchClock, titanTag, vsFmt } from '../data/strings_vs.ts';
 import { TITANS } from '../data/titans.ts';
 import { ClassSlot, TextSlot, VarSlot, clearEl, div, el, pulse, roman } from './dom.ts';
-import type { VsAnchor, VsFrame, VsMatchInfo, VsTenderAnchor } from './vstypes.ts';
+import { safeRect, type VsAnchor, type VsFrame, type VsMatchInfo, type VsTenderAnchor } from './vstypes.ts';
 import type { VsPhase } from '../vs/types.ts';
 
 export interface VsHudCtx {
@@ -44,7 +44,9 @@ interface TChip { root: HTMLElement; text: TextSlot; sub: TextSlot; on: ClassSlo
 
 const FEED_MAX = 6;
 const FEED_LIFE_S = 9;
-const BANNER_MS = 2600;
+const BANNER_MS = 3400;
+/** the phase banner's fade-in (CRIT: ~1 s, not a slam) */
+const BANNER_FADE_IN_MS = 1000;
 const MAP_HZ = 10;
 const COS45 = Math.SQRT1_2;
 
@@ -53,6 +55,8 @@ const PHASE_ORDER: Record<VsPhase, number> = { countdown: 0, open: 1, takeover: 
 export class VsHud {
   private readonly root: HTMLElement;
   private readonly layer: HTMLDivElement;
+  /** world-attached pieces (nameplates, edge arrows, tender chips, NO CONTEST pops): their own layer UNDER the HUD (z 8 < 10) */
+  private readonly worldLayer: HTMLDivElement;
   private info: VsMatchInfo | null = null;
   private world: World | null = null;
   private shown = false;
@@ -113,6 +117,8 @@ export class VsHud {
 
   constructor(root: HTMLElement) {
     this.root = root;
+    // created FIRST so it sits below the HUD layer in the DOM too (z-index 8 below the HUD's 10; markers are 9)
+    this.worldLayer = div('bt-layer bt-vs-world bt-hidden', root);
     const L = this.layer = div('bt-layer bt-vs bt-hidden', root);
     L.dataset.v2 = 'vs-hud';
 
@@ -135,7 +141,7 @@ export class VsHud {
     this.cv = document.createElement('canvas');
     this.mini.appendChild(this.cv);
     this.cx = this.cv.getContext('2d');
-    this.plates = div('bt-vs-plates', L);
+    this.plates = div('bt-vs-plates', this.worldLayer);
 
     // ── centre ──
     this.banner = div('bt-vs-banner', L);
@@ -191,6 +197,7 @@ export class VsHud {
   show(on: boolean): void {
     this.shown = on;
     this.layer.classList.toggle('bt-hidden', !on);
+    this.worldLayer.classList.toggle('bt-hidden', !on);
     try { document.body.dataset.vs = on ? '1' : ''; } catch { /* no DOM */ }
   }
 
@@ -281,6 +288,19 @@ export class VsHud {
       this.tchips.push({ root: c, text: new TextSlot(t), sub: new TextSlot(sub), on: new ClassSlot(c, 'on'), edge: new ClassSlot(c, 'edge'), x: NaN, y: NaN, ang: NaN, w: 0, sig: '' });
     }
     this.sortSeats(w);
+  }
+
+  /** ONLINE: the seats' names / BOT chips changed (a human dropped out and a bot took the seat, or took one back) */
+  refreshSeats(): void {
+    const info = this.info;
+    if (!info) return;
+    for (let i = 0; i < this.cards.length; i++) {
+      const s = info.seats[i], cd = this.cards[i];
+      if (!s || !cd) continue;
+      cd.name.set(s.name);
+      cd.chip.textContent = s.bot ? STR_VS.bot : STR_VS.you;
+      cd.chip.className = 'bt-vs-chip' + (s.bot ? '' : ' you') + (!s.bot && s.slot !== info.local ? ' bt-hidden' : '');
+    }
   }
 
   clear(): void {
@@ -420,11 +440,13 @@ export class VsHud {
     this.banner.style.setProperty('--ph', phase === 'open' ? 'var(--teal)' : phase === 'takeover' ? 'var(--red)' : phase === 'final' ? '#ffc21a' : phase === 'last' ? '#ff3b3b' : '#6b5a8e');
     this.banner.classList.add('on');
     this.bannerLeft = BANNER_MS;
+    // the big ghost banner FADES IN over ~1 s from the phase start (it used to slam in within 0.3 s over the fight), holds, then fades out
+    const fadeIn = Math.min(0.5, BANNER_FADE_IN_MS / BANNER_MS);
     pulse(this.banner, [
-      { transform: 'scale(1.35)', opacity: 0 },
-      { transform: 'scale(1)', opacity: 1, offset: 0.12 },
-      { transform: 'scale(1)', opacity: 1, offset: 0.82 },
-      { transform: 'scale(.96)', opacity: 0 },
+      { transform: 'scale(1.12)', opacity: 0 },
+      { transform: 'scale(1)', opacity: 0.88, offset: fadeIn },
+      { transform: 'scale(1)', opacity: 0.88, offset: 0.82 },
+      { transform: 'scale(.97)', opacity: 0 },
     ], BANNER_MS, 'ease-out');
   }
 
@@ -447,7 +469,9 @@ export class VsHud {
       cd.size.set(roman(T.rank));
       const hp = T.maxHp > 0 ? Math.max(0, Math.min(1, T.hp / T.maxHp)) : 0;
       cd.hp.set(T.alive ? hp : 0);
-      cd.ev.set(P.vs.evictions > 0 ? 'EV ' + P.vs.evictions : P.vs.koCount > 0 ? 'KO ' + P.vs.koCount : ' ');
+      // KOs n = knock-outs this seat scored; OUT xn = times it was knocked out (the old "EV n" / "KO n" read the same to a player)
+      const kos = P.vs.evictions, outs = P.vs.koCount;
+      cd.ev.set(kos > 0 || outs > 0 ? [kos > 0 ? vsFmt(STR_VS.kos, { n: kos }) : '', outs > 0 ? vsFmt(STR_VS.outTimes, { n: outs }) : ''].filter(Boolean).join(' · ') : ' ');
       cd.crown.classList.toggle('bt-hidden', i !== crown || P.vs.eliminated);
       const out = P.vs.eliminated;
       const down = !out && !T.alive;
@@ -492,7 +516,7 @@ export class VsHud {
       pn.edge.set(edge);
       pn.tiny.set(!edge && an.pxH > 0 && an.pxH < 30);
       pn.crowned.set(i === this.crown);
-      pn.name.set(s.bot ? s.name : titanTag(s.titan));
+      pn.name.set(s.name);
       pn.size.set(roman(T.rank));
       pn.sub.set(titanTag(s.titan) + ' · LV ' + T.level);
       pn.hp.set(T.maxHp > 0 ? Math.max(0, Math.min(1, T.hp / T.maxHp)) : 0);
@@ -501,9 +525,17 @@ export class VsHud {
         pn.dist.set((an.distM / pitch).toFixed(1) + ' BLK');
         if (!(Math.abs(pn.ang - an.angle) <= 0.01)) { pn.ang = an.angle; pn.ptr.style.setProperty('--ang', an.angle.toFixed(3) + 'rad'); }
       }
-      if (!(Math.abs(pn.x - an.x) <= 0.5) || !(Math.abs(pn.y - an.y) <= 0.5)) {
-        pn.x = an.x; pn.y = an.y;
-        pn.root.style.transform = 'translate3d(' + an.x.toFixed(1) + 'px,' + an.y.toFixed(1) + 'px,0)';
+      // an on-screen card stays inside the safe rectangle (never on the clock / seat column / minimap); edge arrows come clamped from VsView
+      let px = an.x, py = an.y;
+      if (!edge) {
+        const R = safeRect(window.innerWidth, window.innerHeight, this.u);
+        const u = this.u;
+        px = Math.min(R.r - 4.6 * u, Math.max(R.l + 4.6 * u, px));
+        py = Math.min(R.b, Math.max(R.t + 5.2 * u, py));
+      }
+      if (!(Math.abs(pn.x - px) <= 0.5) || !(Math.abs(pn.y - py) <= 0.5)) {
+        pn.x = px; pn.y = py;
+        pn.root.style.transform = 'translate3d(' + px.toFixed(1) + 'px,' + py.toFixed(1) + 'px,0)';
       }
     }
     for (let i = 0; i < this.tchips.length; i++) {
@@ -517,21 +549,17 @@ export class VsHud {
       const lead = T.state === 'marker' ? Math.max(0, Math.ceil(VS.tender.markerLeadS - (w.t - T.markerT))) : 0;
       ch.sub.set(T.state === 'marker' ? lead + ' S' : 'LIVE · ' + (an.distM / pitch).toFixed(1) + ' BLK');
       if (!an.onScreen && !(Math.abs(ch.ang - an.angle) <= 0.01)) { ch.ang = an.angle; ch.root.style.setProperty('--ang', an.angle.toFixed(3) + 'rad'); }
-      // keep the chip inside the screen, out of the phase bar / clock (top centre) and out of the seat-card column
+      // the chip lives INSIDE the safe rectangle: below the phase strip, clear of the seat column / KO feed / minimap / bottom panels
       const u = this.u;
-      const W = window.innerWidth;
+      const R = safeRect(window.innerWidth, window.innerHeight, u);
       if (ch.w <= 0 || ch.sig !== ch.text.node.textContent + '|' + ch.sub.node.textContent) {
         ch.sig = ch.text.node.textContent + '|' + ch.sub.node.textContent;
         const inner = ch.root.firstElementChild as HTMLElement | null;
         ch.w = inner ? inner.offsetWidth : 12 * u;
       }
-      const half = ch.w / 2 + 1.5 * u;
-      let cx = Math.max(half, Math.min(W - half, an.x));
-      let cy = an.y;
-      if (Math.abs(cx - W / 2) < 17 * u && cy < 11.5 * u) cy = 11.5 * u;
-      cy = Math.min(cy, window.innerHeight - 16 * u);   // above the status card / ability bar / ACTIVE panel
-      if (cy > 3 * u && cy < 27.5 * u) cx = Math.max(cx, 24 * u + ch.w / 2);
-      if (cy > 5.5 * u && cy < 35.5 * u) cx = Math.min(cx, W - 26 * u - ch.w / 2);   // the KO feed + minimap column (right)
+      const half = ch.w / 2 + 0.8 * u;
+      const cx = Math.max(R.l + half, Math.min(R.r - half, an.x));
+      const cy = Math.max(R.t + 1.6 * u, Math.min(R.b, an.y));
       if (!(Math.abs(ch.x - cx) <= 0.5) || !(Math.abs(ch.y - cy) <= 0.5)) {
         ch.x = cx; ch.y = cy;
         ch.root.style.transform = 'translate3d(' + cx.toFixed(1) + 'px,' + cy.toFixed(1) + 'px,0)';

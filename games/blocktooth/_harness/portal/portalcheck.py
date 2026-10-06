@@ -36,6 +36,22 @@ Checks (A.3 table + platform.md 10.1/10.2):
              book and pushed back whole; noload (negative control): load never answered -> NO forgeflow:save ever.
   standalone the game opened directly (no parent): the same run makes 0 errors, posts nothing, shows no account line.
   silent     (informational, --only silent) a portal that never answers whoami: writes are listed, not judged.
+  vr         (--only vr; headless, no GPU) the VS REPORTING gate VR (ONLINE_PLAN 6.3, lane O-REPORT): several game frames side by side in
+             ONE stand-in portal, each frame its OWN account and each running _harness/portal/vr_client.html (the real sim world of a
+             finished 4-seat VS match + the real PortalClient.vsMatchEnded, as App.reportVsEnd calls it). The stand-in runs every
+             forgeflow:vs_result through vs_rpc_mirror.cjs (a 1:1 mirror of 0008's bt_report_vs) and acks like gameBridge.ts.
+               A  2 humans + 2 bots, human 1 wins: 2 bt_vs_results rows + 1 bt_vs_matches row with winner_id set (the reports agree);
+                  exactly ONE vs_result per frame; the first ack is unconfirmed, the second confirmed
+               B  2 humans + a GUEST + 1 bot: the guest sends NOTHING (no vs_result / achievement / save), the 2 signed-in humans'
+                  rows land and the winner is still confirmed (a guest never blocks the others)
+               C  a BOT wins: 2 rows, winner_id stays NULL, no vs_wins
+               D  1 human + 3 bots (practice shape): 1 row, personal stats only (no board win, vs_solo_wins 1)
+             and per frame: the VS goals posted once each (SYNDICATED for everyone, CERTIFIED HEADLINE only for the winner).
+  vsapp      (--only vsapp; headed d3d11 like the other app variants) the REAL game: __BT__.newVs (VS PRACTICE, 1 human + 3 bots) ->
+             vs.dev.end(0) (the dev end the VS test surface has) -> ONE forgeflow:vs_result for the match (humans 1, bots 3, placement 1),
+             a bt_vs_results row in the stand-in DB, the VS goals posted once; a second match files a second report; a GUEST posts nothing;
+  real2      (--only real2) TWO real game frames = a 2-human + 2-bot match: App.vsReport (vs.dev.reportCtx) hands each frame the online-style
+             match context (idle 2nd human seat); frame 1's human wins -> 2 rows + 1 match row + winner confirmed, through the real App.
 Exit 0 pass / 1 fail / 2 could not judge. Report: _harness/_reports/portalcheck.json.
 """
 from __future__ import annotations
@@ -59,6 +75,13 @@ GAMEPLAYER = os.path.join(REPO, "src", "components", "game", "GamePlayer.tsx")
 HOST_HTML = os.path.join(HERE, "bridge_host.html")
 GOALS_TS = os.path.join(GAME_ROOT, "src", "data", "goals.ts")
 PORTAL_PATH = "/__bt_portal"
+VS_RPC_PATH = "/__bt_vs_rpc.js"
+VS_RPC_JS = os.path.join(HERE, "vs_rpc_mirror.cjs")
+VS_USERS = {"u1": "00000000-0000-4000-8000-0000000000a1", "u2": "00000000-0000-4000-8000-0000000000a2",
+            "u3": "00000000-0000-4000-8000-0000000000a3", "u4": "00000000-0000-4000-8000-0000000000a4", "default": "00000000-0000-4000-8000-00000000b7b7"}
+JUDGED = []          # set once a VS variant got as far as a decided match (so --only vr / vsapp can pass or fail)
+VS_GOAL_IDS = ("g_vs_syndicated", "g_vs_certified_headline", "g_vs_crossover_episode", "g_vs_hostile_takeover",
+               "g_vs_zoned_residential", "g_vs_network_exclusive", "g_vs_ensemble_cast", "g_vs_ratings_war")
 
 WRITE_TYPES = ("forgeflow:run_result", "forgeflow:achievement", "forgeflow:save", "forgeflow:game_over",
                "forgeflow:score", "forgeflow:level_complete", "forgeflow:vs_result")
@@ -404,13 +427,15 @@ class PortalServer:
 
         class H(http.server.BaseHTTPRequestHandler):
             def do_GET(self):
-                if urllib.parse.urlparse(self.path).path != PORTAL_PATH:
+                path = urllib.parse.urlparse(self.path).path
+                if path not in (PORTAL_PATH, VS_RPC_PATH):
                     self.send_response(404)
                     self.end_headers()
                     return
-                body = open(HOST_HTML, "rb").read()
+                is_rpc = path == VS_RPC_PATH
+                body = open(VS_RPC_JS if is_rpc else HOST_HTML, "rb").read()
                 self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Type", "text/javascript; charset=utf-8" if is_rpc else "text/html; charset=utf-8")
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
@@ -655,6 +680,333 @@ def variant_standalone(args, chk, out):
         no_errors_check(chk, L, b.errors(b.page))
 
 
+# ─────────────────────────────── VR gate: VS reporting through the stand-in ───────────────────────────────
+VR_URL_JS = "() => window.__VR__ ? { done: !!window.__VR__.done, error: window.__VR__.error } : null"
+
+
+def vr_client_url(args, **q):
+    base = args.base.rstrip("/")
+    return "%s/_harness/portal/vr_client.html?%s" % (base, urllib.parse.urlencode({k: (v if isinstance(v, str) else json.dumps(v)) for k, v in q.items()}))
+
+
+def vr_scenario(args, chk, sandbox, allow, out, label, humans, users, winner, expect, deaf=()):
+    """One finished match, one frame per human. users: ['u1','u2','guest',...] (frame k = seat k). expect: callable(ctx) -> None (adds checks)."""
+    match_id = "blocktooth:vr-%s:0001" % label.lower().replace(" ", "")
+    uids = [VS_USERS.get(u) if u in VS_USERS else None for u in users] + [None] * (4 - len(users))
+    frames = []
+    for k, u in enumerate(users):
+        my_uids = [None if (k in deaf and i != k) else x for i, x in enumerate(uids)]    # `deaf` frames never heard the others' account ids
+        game = vr_client_url(args, seed=7, biome="grideast", humans=",".join(str(i) for i in range(len(users))), slot=k,
+                             winner=winner, matchId=match_id, uids=my_uids, simS=12, tag=k)
+        frames.append({"game": game, "user": u})
+    L = "vr/" + label
+    with Browser(args, L) as b:
+        q = {"mode": "signed", "frames": json.dumps(frames), "sandbox": sandbox, "allow": allow or ""}
+        b.page.goto(PORTAL["origin"] + PORTAL_PATH + "?" + urllib.parse.urlencode(q), wait_until="load", timeout=60_000)
+        t0 = time.time()
+        res = {}
+        while time.time() - t0 < 240:
+            clients = [f for f in b.page.frames if f != b.page.main_frame and "vr_client.html" in f.url]
+            res = {}
+            for f in clients:
+                r = ev(f, VR_URL_JS, default=None)
+                tag = int(urllib.parse.parse_qs(urllib.parse.urlparse(f.url).query).get("tag", ["-1"])[0])
+                if isinstance(r, dict) and not r.get("__error"):
+                    res[tag] = (f, r)
+            if len(res) == len(users) and all(r["done"] for _, r in res.values()):
+                break
+            time.sleep(0.5)
+        ok = len(res) == len(users) and all(r["done"] for _, r in res.values())
+        chk.check("%s: every client finished its match (%d frames)" % (L, len(users)), ok,
+                  {"frames": {k: v[1] for k, v in res.items()}, "after_s": round(time.time() - t0, 1)})
+        if not ok:
+            return
+        time.sleep(1.0)                                   # let the last acks / achievement posts land in the host log
+        vr = {k: ev(f, "() => JSON.parse(JSON.stringify(window.__VR__))") for k, (f, _) in res.items()}
+        log = bridge_log(b)
+        db = ev(b.page, "() => JSON.parse(JSON.stringify({ matches: window.__BRIDGE.db.bt_vs_matches, results: window.__BRIDGE.db.bt_vs_results, runs: window.__BRIDGE.db.bt_runs, stats: window.__BRIDGE.db.bt_player_stats, titan: window.__BRIDGE.db.bt_titan_stats, calls: window.__BRIDGE.db.calls.map(c => ({uid: c.uid, ok: c.result.ok, err: c.result.error, reason: c.result.reason, conf: c.result.winner_confirmed })) }))")
+        out[L] = {"vr": vr, "db": db, "messages": summarize(log)}
+        out["judged"] = True
+        no_err = all(not (v or {}).get("error") for v in vr.values())
+        chk.check("%s: no client error" % L, no_err, {k: (v or {}).get("error") for k, v in vr.items()})
+        msgs = {k: [x for x in log if x.get("dir") == "in" and x.get("fromGame") and x.get("frame") == k] for k in range(len(users))}
+        ctx = {"vr": vr, "db": db, "log": log, "msgs": msgs, "uids": uids, "users": users, "match_id": match_id, "winner": winner}
+        expect(ctx, L)
+        no_errors_check(chk, L, b.errors(b.page))
+
+
+def vs_msgs(ctx, k, typ):
+    return [x for x in ctx["msgs"][k] if x["type"] == typ]
+
+
+def ach_of(ctx, k):
+    return [x["msg"].get("achievementSlug") for x in vs_msgs(ctx, k, "forgeflow:achievement")]
+
+
+def variant_vr(args, chk, sandbox, allow, out):
+    def A(ctx, L):
+        db, vr = ctx["db"], ctx["vr"]
+        U1, U2 = VS_USERS["u1"], VS_USERS["u2"]
+        sends = [vs_msgs(ctx, k, "forgeflow:vs_result") for k in (0, 1)]
+        chk.check("%s: exactly ONE forgeflow:vs_result per human frame" % L, all(len(x) == 1 for x in sends), {"counts": [len(x) for x in sends]})
+        chk.check("%s: 2 bt_vs_results rows (one per human) + 1 bt_vs_matches row" % L,
+                  len(db["results"]) == 2 and len(db["matches"]) == 1 and {r["user_id"] for r in db["results"]} == {U1, U2},
+                  {"results": db["results"], "matches": db["matches"]})
+        m = (list(db["matches"].values()) or [None])[0] or {}
+        chk.check("%s: the match row has winner_id = human 1 (the reports agree), humans 2, bots 2, reports 2" % L,
+                  m.get("winner_id") == U1 and m.get("humans") == 2 and m.get("bots") == 2 and m.get("reports") == 2, m)
+        chk.check("%s: both reports were accepted (no rejection) and exactly one ack confirmed the winner (the later one)" % L,
+                  [c["ok"] for c in db["calls"]] == [True, True] and sorted(bool(c["conf"]) for c in db["calls"]) == [False, True], db["calls"])
+        st1, st2 = db["stats"].get(U1, {}), db["stats"].get(U2, {})
+        chk.check("%s: vs_wins credited once, to the winner only; both got vs_matches 1; 2 bt_runs rows (mode vs)" % L,
+                  st1.get("vs_wins") == 1 and not st2.get("vs_wins") and st1.get("vs_matches") == 1 and st2.get("vs_matches") == 1
+                  and len(db["runs"]) == 2 and all(r["mode"] == "vs" for r in db["runs"]), {"stats": db["stats"], "runs": db["runs"]})
+        pay = [(vr[k] or {}).get("payload") or {} for k in (0, 1)]
+        chk.check("%s: payloads: same match_id, placements 1 and 2..4, claimed_winner = human 1 on both, titans = the seats' own" % L,
+                  pay[0].get("match_id") == pay[1].get("match_id") and pay[0].get("placement") == 1 and pay[1].get("placement") in (2, 3, 4)
+                  and pay[0].get("claimed_winner") == U1 and pay[1].get("claimed_winner") == U1
+                  and pay[0].get("titan") == "molo" and pay[1].get("titan") == "voltkite", pay)
+        a0, a1 = ach_of(ctx, 0), ach_of(ctx, 1)
+        chk.check("%s: VS goals posted once each; SYNDICATED for both, CERTIFIED HEADLINE only for the winner; every slug is a VS goal" % L,
+                  len(a0) == len(set(a0)) and len(a1) == len(set(a1)) and "g_vs_syndicated" in a0 and "g_vs_syndicated" in a1
+                  and "g_vs_certified_headline" in a0 and "g_vs_certified_headline" not in a1 and all(x in VS_GOAL_IDS for x in a0 + a1),
+                  {"winner": a0, "loser": a1})
+        bad = [x["type"] for k in (0, 1) for x in ctx["msgs"][k] if x["type"] in ("forgeflow:run_result", "forgeflow:game_over", "forgeflow:score")]
+        chk.check("%s: a VS match files no solo run_result / game_over / score" % L, not bad, bad)
+        filing = [(vr[k] or {}).get("filing") for k in (0, 1)]
+        chk.check("%s: the client parsed the acks (kind ack, no error; reports 1 then 2)" % L,
+                  all(f and f.get("kind") == "ack" and not f.get("error") for f in filing) and sorted(f.get("reports") for f in filing) == [1, 2], filing)
+
+    def Bg(ctx, L):
+        db, vr = ctx["db"], ctx["vr"]
+        U1, U2 = VS_USERS["u1"], VS_USERS["u2"]
+        gw = [x for x in ctx["msgs"][2] if x["type"] in WRITE_TYPES or x["type"] == "forgeflow:vs_result"]
+        chk.check("%s: the GUEST frame sends NOTHING (no vs_result / achievement / save / game_over)" % L, not gw, [(x["type"]) for x in gw])
+        chk.check("%s: the guest still earned its goals locally (ledger) and built no filing" % L,
+                  "g_vs_syndicated" in ((vr[2] or {}).get("ledger") or {}).get("done", []) and (vr[2] or {}).get("filing") is None, vr[2])
+        chk.check("%s: 2 rows (the two signed-in humans), 1 match row (humans 3, bots 1, reports 2)" % L,
+                  len(db["results"]) == 2 and {r["user_id"] for r in db["results"]} == {U1, U2} and len(db["matches"]) == 1
+                  and list(db["matches"].values())[0].get("humans") == 3 and list(db["matches"].values())[0].get("reports") == 2, db)
+        m = (list(db["matches"].values()) or [None])[0] or {}
+        chk.check("%s: the guest did not block the others: winner_id = human 1 is CONFIRMED" % L, m.get("winner_id") == U1, m)
+        chk.check("%s: both signed-in reports accepted" % L, [c["ok"] for c in db["calls"]] == [True, True], db["calls"])
+
+    def C(ctx, L):
+        db = ctx["db"]
+        m = (list(db["matches"].values()) or [None])[0] or {}
+        U1, U2 = VS_USERS["u1"], VS_USERS["u2"]
+        chk.check("%s: a BOT won: both human reports filed (2 rows) and winner_id stays NULL, vs_wins 0" % L,
+                  len(db["results"]) == 2 and m.get("winner_id") is None and not db["stats"].get(U1, {}).get("vs_wins") and not db["stats"].get(U2, {}).get("vs_wins"), db)
+        chk.check("%s: both humans claimed null (a bot won)" % L, all(((ctx["vr"][k] or {}).get("payload") or {}).get("claimed_winner") is None for k in (0, 1)), None)
+        chk.check("%s: nobody earned CERTIFIED HEADLINE" % L, all("g_vs_certified_headline" not in ach_of(ctx, k) for k in (0, 1)), [ach_of(ctx, 0), ach_of(ctx, 1)])
+
+    def D(ctx, L):
+        db = ctx["db"]
+        U1 = VS_USERS["u1"]
+        m = (list(db["matches"].values()) or [None])[0] or {}
+        st = db["stats"].get(U1, {})
+        chk.check("%s: 1 human + 3 bots: 1 row, match humans 1 / bots 3, NO board win (winner_id null), vs_solo_wins 1, vs_wins 0" % L,
+                  len(db["results"]) == 1 and m.get("humans") == 1 and m.get("bots") == 3 and m.get("winner_id") is None
+                  and st.get("vs_solo_wins") == 1 and not st.get("vs_wins"), db)
+        led = ((ctx["vr"][0] or {}).get("ledger") or {})
+        chk.check("%s: a practice win earns CERTIFIED HEADLINE + SYNDICATED but does not count toward the grind goals (wins 0)" % L,
+                  "g_vs_certified_headline" in ach_of(ctx, 0) and "g_vs_syndicated" in ach_of(ctx, 0) and led.get("wins") == 0, {"ach": ach_of(ctx, 0), "ledger": led})
+
+    def E(ctx, L):
+        db = ctx["db"]
+        m = (list(db["matches"].values()) or [None])[0] or {}
+        U1 = VS_USERS["u1"]
+        chk.check("%s: NEGATIVE CONTROL: a loser that never heard the winner's account id claims null -> both rows filed, winner NOT confirmed" % L,
+                  len(db["results"]) == 2 and m.get("winner_id") is None and not db["stats"].get(U1, {}).get("vs_wins"), {"matches": db["matches"], "calls": db["calls"]})
+        chk.check("%s: the deaf loser's payload says claimed_winner null, the winner's names itself" % L,
+                  ((ctx["vr"][1] or {}).get("payload") or {}).get("claimed_winner") is None and ((ctx["vr"][0] or {}).get("payload") or {}).get("claimed_winner") == U1, None)
+
+    def G(ctx, L):
+        db, vr = ctx["db"], ctx["vr"]
+        U1 = VS_USERS["u1"]
+        m = (list(db["matches"].values()) or [None])[0] or {}
+        chk.check("%s: 4 humans + 0 bots: 4 rows, 1 match row (humans 4, bots 0, reports 4), winner_id = human 1 confirmed" % L,
+                  len(db["results"]) == 4 and m.get("humans") == 4 and m.get("bots") == 0 and m.get("reports") == 4 and m.get("winner_id") == U1, db)
+        chk.check("%s: NETWORK EXCLUSIVE (win against 3 other players) for the winner only" % L,
+                  "g_vs_network_exclusive" in ach_of(ctx, 0) and all("g_vs_network_exclusive" not in ach_of(ctx, k) for k in (1, 2, 3)), [ach_of(ctx, k) for k in range(4)])
+        chk.check("%s: all four reports accepted; exactly the last ack confirmed" % L,
+                  [c["ok"] for c in db["calls"]] == [True] * 4 and sum(1 for c in db["calls"] if c["conf"]) >= 1, db["calls"])
+
+    vr_scenario(args, chk, sandbox, allow, out, "A 2 humans + 2 bots", 2, ["u1", "u2"], 0, A)
+    vr_scenario(args, chk, sandbox, allow, out, "B 2 humans + guest", 3, ["u1", "u2", "guest"], 0, Bg)
+    vr_scenario(args, chk, sandbox, allow, out, "C bot wins", 2, ["u1", "u2"], 2, C)
+    vr_scenario(args, chk, sandbox, allow, out, "D practice shape", 1, ["u1"], 0, D)
+    vr_scenario(args, chk, sandbox, allow, out, "E deaf loser", 2, ["u1", "u2"], 0, E, deaf=(1,))
+    vr_scenario(args, chk, sandbox, allow, out, "G four humans", 4, ["u1", "u2", "u3", "u4"], 0, G)
+
+
+# ─────────────────────────────── vsapp: the REAL game (VS PRACTICE) through the stand-in ───────────────────────────────
+VS_STATE_JS = "() => { try { const s = window.__BT__.vs.state(); return s ? { phase: s.phase, clock: s.clock, winner: s.winner, local: s.local } : null; } catch (e) { return { err: String(e) }; } }"
+
+
+def vsapp_match(b, fr, args, chk, L, seed, winner, jump_s=30.0):
+    """Start a VS PRACTICE match in the real game, jump the match clock, end it for `winner` with the dev end. Returns the vs.report()."""
+    r = ev(fr, "async (o) => { await window.__BT__.newVs(o); return window.__BT__.state().screen; }",
+           {"titan": "molo", "biome": "grideast", "seed": seed, "bots": "regular"})
+    if isinstance(r, dict) and r.get("__error"):
+        chk.check("%s: __BT__.newVs starts a VS PRACTICE match" % L, False, r)
+        return None
+    ok, scr = wait_screen(fr, ("play",), 90)
+    chk.check("%s: the VS match reaches play" % L, ok, {"screen": scr})
+    if not ok:
+        return None
+    ev(fr, "(c) => window.__BT__.vs.dev.jump(c)", jump_s)
+    time.sleep(0.4)
+    e = ev(fr, "(wn) => window.__BT__.vs.dev.end(wn)", winner)
+    chk.check("%s: the dev end decides the match (winner seat %d)" % (L, winner), e is True, e)
+    if e is True:
+        JUDGED.append(1)
+    t0 = time.time()
+    rep = None
+    while time.time() - t0 < 30:
+        rep = ev(fr, "() => window.__BT__.vs.report()", default=None)
+        if isinstance(rep, dict) and not rep.get("__error") and (rep.get("filing") or time.time() - t0 > 12):
+            break
+        time.sleep(0.4)
+    return rep
+
+
+def variant_vsapp(args, chk, sandbox, allow, out):
+    L = "vsapp"
+    U = VS_USERS["default"]
+    with Browser(args, L) as b:
+        fr = open_portal(b, args, "signed", sandbox, allow)
+        chk.check("%s: the game frame loads inside the cross-origin sandboxed parent" % L, fr is not None, {"frames": [f.url for f in b.page.frames]})
+        if fr is None:
+            return
+        t0 = time.time()
+        while time.time() - t0 < args.boot_timeout and ev(fr, "() => !!(window.__BT__ && window.__BT__.vs)", default=False) is not True:
+            time.sleep(0.25)
+        ok, scr = wait_screen(fr, ("title", "select"), args.boot_timeout)
+        chk.check("%s: the game boots to the title (VS test surface present)" % L, ok, {"screen": scr})
+        if not ok:
+            return
+        rep1 = vsapp_match(b, fr, args, chk, L + " match 1", 7, 0)
+        log = bridge_log(b)
+        sends = msgs_in(log, "forgeflow:vs_result")
+        chk.check("%s: match 1 (practice, human wins): exactly ONE forgeflow:vs_result" % L, len(sends) == 1, {"count": len(sends), "messages": summarize(log)})
+        p = (sends[0]["msg"].get("payload") if sends else None) or {}
+        chk.check("%s: payload: humans 1, bots 3, placement 1, claimed_winner = the signed-in account, 'blocktooth:practice:' match id, build_version null-or-string" % L,
+                  p.get("humans") == 1 and p.get("bots") == 3 and p.get("placement") == 1 and p.get("claimed_winner") == U
+                  and str(p.get("match_id", "")).startswith("blocktooth:practice:") and p.get("titan") == "molo" and p.get("biome") == "grideast", p)
+        db = ev(b.page, "() => JSON.parse(JSON.stringify({ matches: window.__BRIDGE.db.bt_vs_matches, results: window.__BRIDGE.db.bt_vs_results, stats: window.__BRIDGE.db.bt_player_stats, calls: window.__BRIDGE.db.calls.map(c => ({ ok: c.result.ok, err: c.result.error, reason: c.result.reason })) }))")
+        chk.check("%s: the stand-in DB holds 1 bt_vs_results row, 1 bt_vs_matches row (humans 1, no board winner), vs_solo_wins 1; the report was accepted" % L,
+                  len(db["results"]) == 1 and len(db["matches"]) == 1 and list(db["matches"].values())[0].get("winner_id") is None
+                  and (db["stats"].get(U) or {}).get("vs_solo_wins") == 1 and [c["ok"] for c in db["calls"]] == [True], db)
+        ach = [x["msg"].get("achievementSlug") for x in msgs_in(log, "forgeflow:achievement")]
+        chk.check("%s: VS goals posted once each (SYNDICATED + CERTIFIED HEADLINE at least), all VS ids" % L,
+                  "g_vs_syndicated" in ach and "g_vs_certified_headline" in ach and len(ach) == len(set(ach)) and all(a in VS_GOAL_IDS for a in ach), ach)
+        chk.check("%s: __BT__.vs.report(): the goals + the portal's ack (kind ack, no error)" % L,
+                  isinstance(rep1, dict) and set(ach) == set(rep1.get("goals") or []) and (rep1.get("filing") or {}).get("kind") == "ack" and not (rep1.get("filing") or {}).get("error"), rep1)
+        # a second match -> a second report, goals not re-posted
+        ev(fr, "() => { try { window.__BT__.dismiss(); } catch (e) {} }")
+        ev(fr, "async () => { try { const a = window.__BT__; if (a.goTitle) await a.goTitle(); } catch (e) {} }")
+        rep2 = vsapp_match(b, fr, args, chk, L + " match 2", 11, 2)
+        log2 = bridge_log(b)
+        sends2 = msgs_in(log2, "forgeflow:vs_result")
+        chk.check("%s: match 2 (a bot wins): a second forgeflow:vs_result, a different match id" % L,
+                  len(sends2) == 2 and sends2[0]["msg"]["payload"]["match_id"] != sends2[1]["msg"]["payload"]["match_id"], {"count": len(sends2)})
+        p2 = (sends2[1]["msg"].get("payload") if len(sends2) > 1 else None) or {}
+        chk.check("%s: match 2 payload: placement 2..4, claimed_winner null (a bot won)" % L, p2.get("placement") in (2, 3, 4) and p2.get("claimed_winner") is None, p2)
+        ach2 = [x["msg"].get("achievementSlug") for x in msgs_in(log2, "forgeflow:achievement")]
+        chk.check("%s: goals already earned are not posted again" % L, len(ach2) == len(set(ach2)) and "g_vs_certified_headline" in ach2, ach2)
+        no_errors_check(chk, L, b.errors(fr))
+    # a guest: nothing posted
+    with Browser(args, L + "-guest") as b:
+        fr = open_portal(b, args, "guest", sandbox, allow)
+        if fr is None:
+            chk.check("%s-guest: the game frame loads" % L, False, None)
+            return
+        t0 = time.time()
+        while time.time() - t0 < args.boot_timeout and ev(fr, "() => !!(window.__BT__ && window.__BT__.vs)", default=False) is not True:
+            time.sleep(0.25)
+        wait_screen(fr, ("title", "select"), args.boot_timeout)
+        rep = vsapp_match(b, fr, args, chk, L + "-guest match", 7, 0)
+        log = bridge_log(b)
+        writes = [x for x in msgs_in(log) if x["type"] in WRITE_TYPES]
+        chk.check("%s-guest: a guest's VS match posts NOTHING (no vs_result / achievement / save)" % L, not writes, [(x["type"]) for x in writes])
+        chk.check("%s-guest: the goals still land in the local ledger" % L, isinstance(rep, dict) and "g_vs_syndicated" in ((rep.get("ledger") or {}).get("done") or []), rep)
+        no_errors_check(chk, L + "-guest", b.errors(fr))
+
+
+def variant_real2(args, chk, sandbox, allow, out):
+    """TWO real game frames = a 2-human + 2-bot match as the online layer would hand it to App.reportVsEnd (App.vsReport = the match
+    context; the 2nd human is an IDLE human seat of each frame's own practice world: vs.dev.reportCtx). Frame 1's human wins."""
+    L = "real2"
+    U1, U2 = VS_USERS["u1"], VS_USERS["u2"]
+    game = game_url(args)
+    frames = [{"game": game, "user": "u1"}, {"game": game, "user": "u2"}]
+    with Browser(args, L) as b:
+        q = {"mode": "signed", "frames": json.dumps(frames), "sandbox": sandbox, "allow": allow or ""}
+        b.page.goto(PORTAL["origin"] + PORTAL_PATH + "?" + urllib.parse.urlencode(q), wait_until="load", timeout=60_000)
+        gb = urllib.parse.urlparse(args.base)
+        t0 = time.time()
+        fr = []
+        while time.time() - t0 < args.boot_timeout:
+            fr = [f for f in b.page.frames if f != b.page.main_frame and urllib.parse.urlparse(f.url).netloc == gb.netloc]
+            if len(fr) == 2 and all(ev(f, "() => !!(window.__BT__ && window.__BT__.vs)", default=False) is True for f in fr):
+                break
+            time.sleep(0.4)
+        chk.check("%s: both game frames boot (VS test surface present)" % L, len(fr) == 2, {"frames": [f.url for f in b.page.frames]})
+        if len(fr) != 2:
+            return
+        # frame order = DOM order = host frame order
+        order = sorted(fr, key=lambda f: b.page.frames.index(f))
+        mid = "blocktooth:real2:0001"
+        titans = ["molo", "voltkite"]
+        for k, f in enumerate(order):
+            r = ev(f, "async (o) => { await window.__BT__.newVs(o); return window.__BT__.state().screen; }",
+                   {"titan": titans[k], "biome": "grideast", "seed": 7 + k, "bots": "regular"})
+            chk.check("%s: frame %d starts its VS match" % (L, k), not (isinstance(r, dict) and r.get("__error")), r)
+        for k, f in enumerate(order):
+            ok, scr = wait_screen(f, ("play",), 120)
+            chk.check("%s: frame %d reaches play" % (L, k), ok, {"screen": scr})
+            if not ok:
+                return
+        for k, f in enumerate(order):
+            uids = [U1, U2, None, None] if k == 0 else [U2, U1, None, None]
+            c = ev(f, "(o) => window.__BT__.vs.dev.reportCtx(o)", {"matchId": mid, "humans": 2, "uids": uids, "humanSeats": [0, 1]})
+            chk.check("%s: frame %d gets the online match context (App.vsReport)" % (L, k), c is True, c)
+        for k, f in enumerate(order):
+            ev(f, "(c) => window.__BT__.vs.dev.jump(c)", 40.0)
+        time.sleep(0.5)
+        for k, f in enumerate(order):
+            e = ev(f, "(wn) => window.__BT__.vs.dev.end(wn)", 0 if k == 0 else 1)     # frame 0: me wins; frame 1: the OTHER human (seat 1 = U1) wins
+            chk.check("%s: frame %d decides its match" % (L, k), e is True, e)
+        JUDGED.append(1)
+        reps = {}
+        t0 = time.time()
+        while time.time() - t0 < 40:
+            reps = {k: ev(f, "() => window.__BT__.vs.report()", default=None) for k, f in enumerate(order)}
+            if all(isinstance(r, dict) and not r.get("__error") and r.get("filing") for r in reps.values()):
+                break
+            time.sleep(0.5)
+        log = bridge_log(b)
+        db = ev(b.page, "() => JSON.parse(JSON.stringify({ matches: window.__BRIDGE.db.bt_vs_matches, results: window.__BRIDGE.db.bt_vs_results, stats: window.__BRIDGE.db.bt_player_stats, calls: window.__BRIDGE.db.calls.map(c => ({ uid: c.uid, ok: c.result.ok, err: c.result.error, reason: c.result.reason, conf: c.result.winner_confirmed })) }))")
+        out[L] = {"db": db, "reports": reps, "messages": summarize(log)}
+        sends = {k: [x for x in log if x.get("dir") == "in" and x.get("fromGame") and x.get("frame") == k and x["type"] == "forgeflow:vs_result"] for k in (0, 1)}
+        chk.check("%s: exactly ONE forgeflow:vs_result per frame" % L, all(len(v) == 1 for v in sends.values()), {k: len(v) for k, v in sends.items()})
+        m = (list((db or {}).get("matches", {}).values()) or [None])[0] or {}
+        chk.check("%s: 2 bt_vs_results rows + 1 bt_vs_matches row (humans 2, bots 2, reports 2) with winner_id = human 1 (the reports agree)" % L,
+                  len(db["results"]) == 2 and len(db["matches"]) == 1 and m.get("humans") == 2 and m.get("bots") == 2 and m.get("reports") == 2 and m.get("winner_id") == U1,
+                  {"db": db})
+        chk.check("%s: both reports accepted; one ack confirmed" % L, [c["ok"] for c in db["calls"]] == [True, True] and sum(1 for c in db["calls"] if c["conf"]) == 1, db["calls"])
+        pays = {k: (v[0]["msg"].get("payload") if v else {}) for k, v in sends.items()}
+        chk.check("%s: payloads: placement 1 / 2..4, claimed_winner = human 1 on both, the frames' own titans" % L,
+                  pays[0].get("placement") == 1 and pays[1].get("placement") in (2, 3, 4) and pays[0].get("claimed_winner") == U1 and pays[1].get("claimed_winner") == U1
+                  and pays[0].get("titan") == "molo" and pays[1].get("titan") == "voltkite", pays)
+        a = {k: [x["msg"].get("achievementSlug") for x in log if x.get("dir") == "in" and x.get("frame") == k and x["type"] == "forgeflow:achievement"] for k in (0, 1)}
+        chk.check("%s: goals: both SYNDICATED; CERTIFIED HEADLINE only for the winner; the 2-human win counts toward the grind goals (ledger wins 1)" % L,
+                  "g_vs_syndicated" in a[0] and "g_vs_syndicated" in a[1] and "g_vs_certified_headline" in a[0] and "g_vs_certified_headline" not in a[1]
+                  and ((reps[0] or {}).get("ledger") or {}).get("wins") == 1, {"ach": a, "reports": reps})
+        no_errors_check(chk, L, b.errors(order[0]))
+
+
 # ─────────────────────────────── selftest (validator only) ───────────────────────────────
 def selftest():
     good = {"run_nonce": "bt-muqf6zqx-16cs49o180uy", "mode": "solo", "titan": "molo", "biome": "grideast",
@@ -703,7 +1055,7 @@ def selftest():
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     C.add_common_args(ap)
-    ap.add_argument("--only", choices=("signed", "guest", "cloud", "standalone", "silent"), default=None)
+    ap.add_argument("--only", choices=("signed", "guest", "cloud", "standalone", "silent", "vr", "vsapp", "real2"), default=None)
     ap.add_argument("--titan", default="molo", choices=TITANS)
     ap.add_argument("--biome", default="grideast", choices=BIOMES)
     ap.add_argument("--seed", type=int, default=7)
@@ -735,7 +1087,7 @@ def main():
         out["portalTsPresent"] = os.path.exists(portal_ts)
         if not out["portalTsPresent"]:
             chk.note("src/net/portal.ts is not present (A-GAME's bridge client has not landed)")
-        todo = [args.only] if args.only else ["signed", "guest", "cloud", "standalone"]
+        todo = [args.only] if args.only else ["signed", "guest", "cloud", "standalone", "vr"]
         ps = PortalServer().__enter__()
         PORTAL["origin"] = ps.origin
         for v in todo:
@@ -748,6 +1100,12 @@ def main():
                 variant_silent(args, chk, sandbox, allow, out)
             elif v == "cloud":
                 variant_cloud(args, chk, sandbox, allow, out)
+            elif v == "vr":
+                variant_vr(args, chk, sandbox, allow, out)
+            elif v == "vsapp":
+                variant_vsapp(args, chk, sandbox, allow, out)
+            elif v == "real2":
+                variant_real2(args, chk, sandbox, allow, out)
             else:
                 variant_standalone(args, chk, out)
     finally:
@@ -758,7 +1116,7 @@ def main():
         C.stop_server(server)
     out["checks"] = chk.items
     out["notes"] = chk.notes
-    ran_any = any(c["name"].endswith("reaches its end (tabloid)") and c["ok"] for c in chk.items)
+    ran_any = bool(JUDGED) or out.get("judged") or any(c["name"].endswith("reaches its end (tabloid)") and c["ok"] for c in chk.items)
     verdict = "PASS" if not chk.failed and ran_any else ("FAIL" if ran_any or chk.failed else "COULD NOT JUDGE")
     out["verdict"] = verdict
     path = C.save_report("portalcheck" + ("_" + args.only if args.only else ""), out, base=args.base,

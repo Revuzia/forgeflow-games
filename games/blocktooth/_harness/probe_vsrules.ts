@@ -30,7 +30,7 @@ import { stat } from '../src/upgrades/stats.ts';
 import { recomputeStats } from '../src/upgrades/stats.ts';
 import { queuePvp } from '../src/combat/pvp.ts';
 import { betterFirst, catchUpMul, koXp, levelGapMul, mortarFrac, pvpDamage, pvpPower, ringRadiusAt, sizeEdge, vsScoreOf } from '../src/vs/formula.ts';
-import { matchClock, phaseForClock, phaseMul } from '../src/vs/clock.ts';
+import { TAKEOVER_RAMP_S, matchClock, phaseForClock, phaseMul } from '../src/vs/clock.ts';
 import { drainQueuedPvp, pvpCc, pvpHit } from '../src/vs/pvp.ts';
 import type { PvpHit } from '../src/vs/pvp.ts';
 import { pickRingCentre, ringOf, ringOutside } from '../src/vs/ring.ts';
@@ -123,6 +123,12 @@ section('A. formula (vs_design.md §6.1)');
     near(phaseMul('final', P.takeoverEndS - 50), VS.pvp.finalMul, 1e-12, 'final ramp: clamped before its start');
     ok(phaseMul('takeover', 300) === 1 && phaseMul('last', 620) === 1 && phaseMul('open', 100) === 0, 'the clock only ramps FINAL NOTICE (takeover / last x 1, open x 0)');
     ok(VS.pvp.finalMulEnd >= VS.pvp.finalMul && VS.pvp.finalMul > 0, 'the ramp rises (deadlier as the ring closes) and never reaches 0');
+    // O-LOBBY (CRIT): HOSTILE TAKEOVER's rival damage ramps 0 -> 1 over its first TAKEOVER_RAMP_S seconds (the claws come out, not a switch)
+    ok(TAKEOVER_RAMP_S === 10, 'the takeover ramp is 10 s');
+    near(phaseMul('takeover', P.openEndS), 0, 1e-12, 'takeover ramp: 0 at 4:00');
+    near(phaseMul('takeover', P.openEndS + TAKEOVER_RAMP_S / 2), 0.5, 1e-12, 'takeover ramp: linear (0.5 at +5 s)');
+    near(phaseMul('takeover', P.openEndS + TAKEOVER_RAMP_S), 1, 1e-12, 'takeover ramp: 1 at +10 s');
+    ok(phaseMul('takeover', P.openEndS + 90) === 1 && phaseMul('takeover') === 1 && phaseMul('takeover', 12) === 1, 'takeover ramp: 1 after the ramp, without a clock, and for a phase set before its boundary (probe worlds)');
   }
   // FIXHIGH: the level-gap governor
   {

@@ -1,11 +1,20 @@
-// BLOCKTOOTH - net/vshash.ts (lane GATE, 2026-10-05). The VS part of the lockstep / cross-engine world hash.
+// BLOCKTOOTH - net/vshash.ts (lane GATE 2026-10-05, widened by lane O-PORT). The VS part of the lockstep / cross-engine world hash.
 //
 // CORE's contract left this open ("src/net/simport.ts hashWorld hashes only the cursor"): in a VS world every seat's
 // titan, build, CARD RAIL, VS record and bot memory, and the world-level VS state (phase, crown, ring, tenders, result),
 // must reach the state hash, or a desync in seat 2 would go unseen while seat 0 agrees. This file FLATTENS that state into
-// a list of numbers / strings (sorted keys, Infinity mapped to -1) that any hasher can consume, so simport.ts (lockstep)
-// and _harness/net/xbrowser_entry.ts (cross-engine gate) hash exactly the same fields. Solo worlds never call it.
+// a list of numbers / strings (sorted keys, Infinity kept as its float bits) that any hasher can consume, so simport.ts
+// (lockstep) and _harness/net/xbrowser_entry.ts (cross-engine gate) hash exactly the same fields. Solo worlds never call it.
 // Reads the world, never writes. THREE-free, no clocks, no randomness.
+//
+// Two layers:
+//   vsStateFlat(w, out)  the explicit per-seat + VS-world list (the original GATE field list, kept so older logs still read)
+//   vsFullFlat(w, out)   vsStateFlat + a GENERIC deep flatten of every plain-data container the sim owns: each seat's
+//                        titan (incl. stats + kit), upgrades, ult, tally, director, meta, rail, bot memory, sleeper and VS
+//                        record, the whole of World.vs, every live enemy / pickup / projectile / telegraph / hazard, the
+//                        boss, the map (objectives, power-ups), the gate counters. The generic walk sorts object keys, so a
+//                        field added to a container later is hashed without touching this file.
+// The cursor (w.titan / w.upgrades ...) is NEVER read here: it points at the VIEW seat, which differs per peer.
 
 import type { World } from '../core/types.ts';
 
@@ -53,4 +62,74 @@ export function vsStateFlat(w: World, out: HashAtom[]): void {
   for (const s of v.order) out.push(s);
   const vd = Object.keys(v.data).sort();
   for (const k of vd) out.push(k, v.data[k]);
+}
+
+const MAX_DEPTH = 8;
+
+/** Deep, order-independent flatten of plain data: numbers and strings as they are, booleans 0/1, null / undefined as markers,
+ *  arrays in index order, objects / Maps with SORTED keys, Sets sorted, functions skipped. Depth-capped (cycles end). */
+export function flatAny(v: unknown, out: HashAtom[], depth = 0): void {
+  switch (typeof v) {
+    case 'number': out.push(v); return;
+    case 'string': out.push(v); return;
+    case 'boolean': out.push(v ? 1 : 0); return;
+    case 'undefined': out.push('~u'); return;
+    case 'function': case 'symbol': return;
+    case 'bigint': out.push(Number(v)); return;
+    default: break;
+  }
+  if (v === null) { out.push('~n'); return; }
+  if (depth >= MAX_DEPTH) { out.push('~d'); return; }
+  if (Array.isArray(v)) {
+    out.push('[', v.length);
+    for (let i = 0; i < v.length; i++) flatAny(v[i], out, depth + 1);
+    return;
+  }
+  if (v instanceof Map) {
+    const es = [...v.entries()].map((e): [string, unknown] => [String(e[0]), e[1]]).sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+    out.push('M', v.size);
+    for (const e of es) { out.push(e[0]); flatAny(e[1], out, depth + 1); }
+    return;
+  }
+  if (v instanceof Set) {
+    out.push('S', v.size);
+    for (const k of [...v.values()].map(String).sort()) out.push(k);
+    return;
+  }
+  const o = v as Record<string, unknown>;
+  const ks = Object.keys(o).sort();
+  out.push('{', ks.length);
+  for (let i = 0; i < ks.length; i++) {
+    const x = o[ks[i]];
+    if (typeof x === 'function') continue;
+    out.push(ks[i]);
+    flatAny(x, out, depth + 1);
+  }
+}
+
+/** Entity pools: live entries only, in array order (the sim's own deterministic order), preceded by the live count. */
+function flatPool(arr: readonly { alive: boolean }[], out: HashAtom[]): void {
+  let n = 0;
+  for (let i = 0; i < arr.length; i++) if (arr[i].alive) n++;
+  out.push('P', n);
+  for (let i = 0; i < arr.length; i++) if (arr[i].alive) flatAny(arr[i], out, 1);
+}
+
+/** The whole VS lockstep state: vsStateFlat plus the generic deep walk (see the header). Never reads the cursor. */
+export function vsFullFlat(w: World, out: HashAtom[]): void {
+  if (w.mode !== 'vs' || !w.vs) return;
+  vsStateFlat(w, out);
+  out.push('full');
+  for (const p of w.players) {
+    flatAny(p.titan, out); flatAny(p.upgrades, out); flatAny(p.ult, out); flatAny(p.tally, out);
+    flatAny(p.director, out); flatAny(p.meta, out); flatAny(p.rail, out); flatAny(p.run, out);
+    flatAny(p.bot, out); flatAny(p.vs, out);
+  }
+  flatAny(w.vs, out);
+  flatPool(w.enemies, out); flatPool(w.pickups, out); flatPool(w.projectiles, out); flatPool(w.telegraphs, out); flatPool(w.hazards, out);
+  flatAny(w.boss, out);
+  flatAny(w.map, out);
+  flatAny(w.gates, out);
+  flatAny(w.run, out);
+  out.push(w.tick, w.t, w.nextId);
 }

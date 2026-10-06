@@ -109,6 +109,8 @@ export interface RoomOpts {
   clock?: () => number;
   /** inject an id (Node probe); default = time-sortable random id */
   id?: string;
+  /** extra presence fields (e.g. the titan pick) shown to everyone in the room next to id / name */
+  info?: Record<string, unknown>;
 }
 
 export type RoomMsg = { from: string; t: string; d: Record<string, unknown> };
@@ -153,6 +155,7 @@ export class Room {
     this.build = o.build;
     this.proto = o.proto ?? NET_PROTO;
     this.name = (o.name ?? '').slice(0, 24);
+    if (o.info) this.info = { ...o.info };
     this.clientFn = o.client ?? loadClient;
     this.clock = o.clock ?? nowMs;
     this.budget = new SendBudget(24, 3, this.clock);
@@ -194,7 +197,9 @@ export class Room {
     return this.sb;
   }
 
-  private meta(): PresenceMeta { return { id: this.id, proto: this.proto, build: this.build, name: this.name }; }
+  /** extra presence fields: set BEFORE joining a room (the lobby's seat cards read the titan pick from them) */
+  info: Record<string, unknown> = {};
+  private meta(): PresenceMeta { return { ...this.info, id: this.id, proto: this.proto, build: this.build, name: this.name }; }
   private compatible(m: PresenceMeta | undefined): boolean { return !!m && m.proto === this.proto && m.build === this.build; }
 
   /** Join ROOM channel `ffg:<game>:<CODE>` (subscribed + tracked on resolve). Leaves any previous room first. */
@@ -378,6 +383,8 @@ export class Room {
     let myRoom: string | null = null;
     let tracked: string | null | undefined;
     const avoid = new Set<string>();
+    /** the room of the running match this seeker chose to replay-join (its seat is offered by that match's authority) */
+    let runningRoom: string | null = null;
     const track = (): void => {
       if (tracked === myRoom) return;
       tracked = myRoom;
@@ -397,12 +404,15 @@ export class Room {
       }
       if (myRoom) {
         const here = [this.id, ...(rooms.get(myRoom) ?? [])];
+        // a running match that still has a bot seat beats waiting alone: lobby presence syncs AFTER the first decision on a real
+        // channel, so a seeker usually opened its own room a moment before the advert showed up (found against live Supabase)
+        if (running && running !== myRoom && here.length === 1) { runningRoom = running; return running; }
         // merge: move to a room with a LOWER leader when everyone here fits there
         let best: string | null = null, bestLeader = leader(here);
         for (const [r, ids] of rooms) if (r !== myRoom && ids.length + here.length <= SEATS && leader(ids) < bestLeader) { best = r; bestLeader = leader(ids); }
         return best ?? myRoom;
       }
-      if (running) return running;
+      if (running) { runningRoom = running; return running; }
       let best: string | null = null, bestLeader = '';
       for (const [r, ids] of rooms) if (ids.length < SEATS && (best === null || leader(ids) < bestLeader)) { best = r; bestLeader = leader(ids); }
       if (best) return best;
@@ -439,7 +449,9 @@ export class Room {
           if (done || !myRoom || waiting === myRoom) return;
           const room = myRoom;
           waiting = room;
-          void this.waitForStart({ makeStart: o.makeStart, waitMs: o.waitMs ?? QUICK_WAIT_MS, onStatus: o.onStatus, leaveIfRunning: true }).then((r) => {
+          // a room with a match running in it is normally a room to leave (seek elsewhere), EXCEPT the running match this seeker came
+          // for: that match's authority offers its bot seat (replay join), so wait in it
+          void this.waitForStart({ makeStart: o.makeStart, waitMs: o.waitMs ?? QUICK_WAIT_MS, onStatus: o.onStatus, leaveIfRunning: room !== runningRoom }).then((r) => {
             if (waiting === room) waiting = null;
             if (r) { close(r); return; }
             if (done) return;

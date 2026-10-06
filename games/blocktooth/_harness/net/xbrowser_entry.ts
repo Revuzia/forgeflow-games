@@ -16,6 +16,8 @@ import * as D from '../../src/core/detmath.ts';
 import { botInput, botPickUpgrade } from '../bot.ts';
 import { vsStateFlat } from '../../src/net/vshash.ts';
 import type { HashAtom } from '../../src/net/vshash.ts';
+import { vsWorldPort, vsStartInfo, hashWorld as portHash, VS_MATCH_TICKS } from '../../src/net/simport.ts';
+import { NET_PROTO, SEATS, INPUT_BYTES, CARD, encodeInput, type Frame } from '../../src/net/proto.ts';
 
 const F64 = new Float64Array(1), U32 = new Uint32Array(F64.buffer);
 class Hasher {
@@ -132,4 +134,71 @@ export function runProbeVs(lineup: string, biome: string, seed: number, ticks: n
     result: w.run.result ?? null, endT: w.t, level: lv, ms: Date.now() - t0 };
 }
 
-(globalThis as Record<string, unknown>).btProbe = { runProbe, runProbeVs, mathHashes };
+// ─────────────────────────────── VS LOCKSTEP (lane O-PORT, gate H1 / H6 sim part) ───────────────────────────────
+// The 4-seat VS match driven the way the online session drives it: CANONICAL FRAMES (lateMask, botMask, 4 x 4-byte words incl. the
+// CARD RAIL byte) through src/net/simport.ts vsWorldPort.step, hashed with the port's own all-player hash and standings. The frame log
+// is a pure function of (seed, tick) - it never reads the world - so every engine steps the same bytes:
+//   seats 0, 1  humans all match: wander words + a card pick / reroll byte about every 40 ticks (many land on an open offer)
+//   seat 2      a human who goes AFK at tick 3000 (botMask bit set, the bot takes the titan) and is back at 4500
+//   seat 3      a bot seat; a human takes it over at tick 3900 (botMask clear: the bot memory is parked) and hands it back at 12000
+//   lateMask    sparse late frames: the previous word is repeated, card byte stripped (as lockstep.ts produce() does)
+function h32(a: number, b: number): number {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x7f4a7c15, 0xc2b2ae35);
+  h ^= h >>> 15; h = Math.imul(h, 0x2c1b3c6d); h ^= h >>> 12;
+  return h >>> 0;
+}
+
+export function vsnetFrame(seed: number, tick: number, last: Uint8Array): Frame {
+  const inputs = new Uint8Array(SEATS * INPUT_BYTES);
+  let botMask = 0, lateMask = 0;
+  if (tick < 3900 || tick >= 12000) botMask |= 8;
+  if (tick >= 3000 && tick < 4500) botMask |= 4;
+  const buf = new Uint8Array(4);
+  for (let s = 0; s < SEATS; s++) {
+    if ((botMask >> s) & 1) { last.fill(0, s * 4, s * 4 + 4); continue; }
+    const late = tick > 90 && h32(seed * 31 + s, tick) % 53 === 0;
+    if (late) {
+      lateMask |= 1 << s;
+      inputs.set(last.subarray(s * 4, s * 4 + 3), s * 4);          // previous word, card byte stripped
+      continue;
+    }
+    const seg = Math.floor(tick / 50);
+    const ang = (h32(seed + s * 7919, seg) % 3600) / 3600 * Math.PI * 2;
+    const h2 = h32(seed + s + 31, tick);
+    const move = h2 % 11 !== 0;
+    let card = 0;
+    if (tick % 40 === (s * 13) % 40 && h2 % 3 !== 0) card = h2 % 17 === 0 ? CARD.REROLL : 1 + (h2 >>> 4) % 3;
+    encodeInput({ mx: move ? Math.cos(ang) : 0, mz: move ? Math.sin(ang) : 0, ability: h2 % 97 === 0, abilityHeld: false,
+      dash: h2 % 211 === 0, ultimate: h2 % 1009 === 0 }, buf, 0, card);
+    inputs.set(buf, s * 4);
+    last.set(buf, s * 4);
+    last[s * 4 + 3] = 0;
+  }
+  return { tick, lateMask, botMask, inputs };
+}
+
+export function runProbeVsNet(lineup: string, biome: string, seed: number, ticks: number, every = 300): ProbeRun {
+  const t0 = Date.now();
+  const ids = lineup.split('+');
+  const four = ids.length === 4 ? ids : [ids[0], ids[0], ids[0], ids[0]];
+  const start = vsStartInfo({ proto: NET_PROTO, build: 'xb', matchId: 'xb', seed, biome,
+    seats: four.map((t, s) => ({ kind: s === 0 || s === 1 || s === 2 ? 'human' as const : 'bot' as const, peer: s < 3 ? 'p' + s : null, name: 'S' + s, titan: t })) });
+  const sim = vsWorldPort({ viewSeat: () => seed % 4 });     // a different VIEW seat per run: the hash must not care
+  const w = sim.create(start);
+  const last = new Uint8Array(SEATS * INPUT_BYTES);
+  const cps: string[] = [];
+  let f: Frame | null = null;
+  let i = 0;
+  for (; i < ticks && !sim.ended(w); i++) {
+    f = vsnetFrame(seed, i + 1, last);
+    sim.step(w, f);
+    if ((i + 1) % every === 0) cps.push((sim.hash(w) >>> 0).toString(16).padStart(8, '0'));
+  }
+  const st = sim.standings(w, f);
+  const lv = Math.max(...w.players.map((p) => p.titan.level));
+  const final = (portHash(w) >>> 0).toString(16).padStart(8, '0') + ':' + (st.hash >>> 0).toString(16).padStart(8, '0');
+  return { titan: 'vsnet:' + four.join('+'), biome, seed, meta: 'vsnet', ticks: i, checkpointEvery: every, checkpoints: cps, final,
+    result: w.run.result ?? null, endT: w.t, level: lv, ms: Date.now() - t0 };
+}
+
+(globalThis as Record<string, unknown>).btProbe = { runProbe, runProbeVs, runProbeVsNet, VS_MATCH_TICKS, mathHashes };

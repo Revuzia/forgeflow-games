@@ -19,7 +19,7 @@ import * as THREE from 'three';
 import type { World } from '../core/types.ts';
 import type { FrameInfo, ViewCtx, ViewModule } from './viewtypes.ts';
 import { VS } from '../core/config.ts';
-import { hexToRgb, type VsAnchor, type VsFrame, type VsTenderAnchor } from '../ui/vstypes.ts';
+import { hexToRgb, safeRect, type VsAnchor, type VsFrame, type VsTenderAnchor } from '../ui/vstypes.ts';
 
 const K = 2 * Math.tan((30 * Math.PI) / 360);
 const MAX_SEATS = 4;
@@ -387,25 +387,20 @@ export class VsView implements ViewModule {
     this.edge(px, py, W, Hh, u, out);
   }
 
-  /** clamp an off-screen point to the screen edge (inset) and keep it off the seat-card column / clock / ticker */
+  /** an off-screen point -> the point where the ray from the screen centre toward it leaves the safe rectangle */
   private edge(px: number, py: number, W: number, Hh: number, u: number, out: { x: number; y: number; angle: number }): void {
+    const R = safeRect(W, Hh, u);
+    // the ray starts at the middle of the safe rectangle's height, not of the screen (the camera frames the own titan at screen centre)
     const cx = W / 2, cy = Hh / 2;
-    const insL = 3 * u, insR = 3 * u, insT = 6.5 * u, insB = 5 * u;
     let dx = px - cx, dy = py - cy;
     if (Math.abs(dx) < 1e-3 && Math.abs(dy) < 1e-3) dy = 1;
-    const tx = dx >= 0 ? (cx - insR) / Math.max(1e-6, Math.abs(dx)) : (cx - insL) / Math.max(1e-6, Math.abs(dx));
-    const ty = dy >= 0 ? (cy - insB) / Math.max(1e-6, Math.abs(dy)) : (cy - insT) / Math.max(1e-6, Math.abs(dy));
+    const ox = Math.min(R.r, Math.max(R.l, cx)), oy = Math.min(R.b, Math.max(R.t, cy));
+    const tx = dx > 0 ? (R.r - ox) / dx : dx < 0 ? (R.l - ox) / dx : Infinity;
+    const ty = dy > 0 ? (R.b - oy) / dy : dy < 0 ? (R.t - oy) / dy : Infinity;
     const t = Math.min(tx, ty);
-    let ex = cx + dx * t, ey = cy + dy * t;
-    // the seat-card column (left, x 1.6u..22.6u, top 4.5u..24u): slide the arrow down / right out of it
-    if (ex < 24.5 * u && ey > 3.5 * u && ey < 26.5 * u) { if (dx < 0 && Math.abs(dy) < Math.abs(dx) * 0.4) ey = 28 * u; else ex = 24.5 * u; }
-    // the phase bar + clock (top centre) and the bottom panels (status card, ability bar, ACTIVE panel): arrows stop short of them
-    if (Math.abs(ex - cx) < 16 * u && ey < 12 * u) ey = 12 * u;
-    if (ey > Hh - 16 * u && (ex < 25 * u || Math.abs(ex - cx) < 21 * u || ex > W - 20 * u)) ey = Hh - 16 * u;
-    // the KO feed + minimap column (right, top 5.5u..35.5u): arrows stop at its inner edge
-    if (ex > W - 26 * u && ey > 5.5 * u && ey < 35.5 * u) ex = W - 26 * u;
-    out.x = Number.isFinite(ex) ? ex : cx;
-    out.y = Number.isFinite(ey) ? ey : Hh - insB;
+    const ex = ox + dx * t, ey = oy + dy * t;
+    out.x = Number.isFinite(ex) ? Math.min(R.r, Math.max(R.l, ex)) : ox;
+    out.y = Number.isFinite(ey) ? Math.min(R.b, Math.max(R.t, ey)) : oy;
     out.angle = Math.atan2(dy, dx);
   }
 

@@ -11,6 +11,7 @@
 //   forgeflow:achievement {achievementSlug}         —
 //   forgeflow:load {slot, _reqId}                   forgeflow:save_loaded {_reqId, data}
 //   forgeflow:save {slot, data}                     —
+//   forgeflow:vs_result {_reqId, payload}           forgeflow:vs_result_ack {_reqId, ok, data}  (data = bt_report_vs's jsonb)
 //
 // Rules:
 //   * NO-OP outside the portal (window.parent === window) and until the parent answers whoami with
@@ -23,12 +24,18 @@
 //     identity every goal already in profile.done is posted once (goals earned as a guest are credited).
 //   * Run results made before the identity answer are queued (never more than 4) and sent or dropped
 //     once it arrives.
+//   * VS (ONLINE_PLAN section 2 'Confirming a VS winner', lane O-REPORT): after a match EVERY signed-in human files one
+//     forgeflow:vs_result for their OWN seat (bt_report_vs: placement, kills, tonnage, titan, city, match_id). The server
+//     counts a win on the boards only when >= 2 humans reported and every report names the same winner; 1 human + bots =
+//     personal stats only. A guest files nothing and never blocks the others. Winners are named by ACCOUNT id, so the peers
+//     swap ids over the room channel (VsIdentityBook). The 8 VS achievements (data/vsgoals.ts) are posted like solo goals.
 //
 // App-side only: DOM / postMessage / timers. Nothing here is imported by the sim.
 
-import type { BiomeId, Profile, TitanId } from '../core/types.ts';
+import type { BiomeId, Profile, TitanId, World } from '../core/types.ts';
 import { BIOME_IDS, TITAN_IDS } from '../core/types.ts';
 import { GOAL_BY_ID } from '../data/goals.ts';
+import { VS_GOAL_BY_ID, applyVsMatch, loadVsLife, mergeVsLife, sanitizeVsLife, saveVsLife, vsLifeKey, type VsEventTally, type VsLife, type VsMatchFacts } from '../data/vsgoals.ts';
 import { sanitizeProfile } from '../meta/profile.ts';
 
 /** the run-result payload `bt_submit_run(p jsonb)` takes (platform.md §8; contract in _harness/scratch/onlineA/NOTES.md) */
@@ -71,6 +78,273 @@ export type RunFiling =
   | { kind: 'sent' }                                   // posted, waiting for the ack
   | { kind: 'ack'; already: boolean; rank: number | null; error: string | null }
   | { kind: 'noack' };                                 // the portal never confirmed
+
+// ─────────────────────────────── VS match report (bt_report_vs) ───────────────────────────────
+
+/** the payload `bt_report_vs(p jsonb)` takes: one human's OWN result in a 4-seat match (supabase/migrations/0008, platform.md section 8) */
+export interface VsReportPayload {
+  match_id: string;
+  /** the server files the roll-up run as 'vs-' || md5(match_id) whatever is sent; sent anyway so the payload validates alone */
+  run_nonce: string;
+  mode: 'vs';
+  titan: TitanId;
+  biome: BiomeId;
+  /** this reporter's final place 1..4 (1 = winner) */
+  placement: number;
+  /** human seats at the START of the match (1..4); bots = 4 - humans */
+  humans: number;
+  bots: number;
+  /** account id of the winning HUMAN as this reporter saw it; null = a bot / a guest / unknown won. The winner names itself. */
+  claimed_winner: string | null;
+  /** seconds on the world clock to the end (countdown included) */
+  duration_s: number;
+  /** seconds on the MATCH clock until this seat was eliminated or the match ended */
+  survived_s: number;
+  level: number;
+  peak_level: number;
+  peak_rank: number;
+  kills: number;
+  crushed: number;
+  tonnage: number;
+  blocks: number;
+  bosses: number;
+  gate_kills: number;
+  /** distinct rival titans this seat knocked out (0..3) */
+  titans_eaten: number;
+  build_version: string | null;
+}
+
+/** what the app tells the portal client about a finished VS match (the sim world + who the seats were) */
+export interface VsMatchInput {
+  /** the finished VS world (run.result 'vs'); read-only here */
+  w: World;
+  /** the LOCAL human's seat */
+  slot: number;
+  /** StartInfo.matchId online; offline practice makes one (newVsPracticeMatchId) */
+  matchId: string;
+  /** human seats at the START of the match (online: StartInfo seats of kind human; practice: 1) */
+  humans: number;
+  /** account id of each seat's human (null / missing = a bot, a guest, or an id not heard); the local seat is filled from the bridge identity */
+  uidBySlot?: ReadonlyArray<string | null | undefined>;
+  /** every SimEvent of the match fed in order (the HOSTILE TAKEOVER goal needs it); null = not tracked */
+  tally?: VsEventTally | null;
+  /** my seat was handed to a bot (left / desynced / disconnected): no report, no goals */
+  skip?: boolean;
+}
+
+/**
+ * The ONLINE layer's description of the running match (set on `App.vsReport` when a match starts; offline VS PRACTICE leaves it null).
+ * Read once, when the match is decided.
+ */
+export interface VsReportCtx {
+  /** StartInfo.matchId (every peer derives the same id) */
+  matchId: string;
+  /** human seats at the START (StartInfo seats of kind 'human'); bots = 4 - humans */
+  humans: number;
+  /** account id per seat from VsIdentityBook.uidsBySlot (null = bot / guest / not heard) */
+  uidsBySlot(): (string | null)[];
+  /** online: true once the other live humans' RESULT hashes are in (the report waits for it, at most 4 s; absent = report at once) */
+  ready?(): boolean;
+  /** true once MY seat is a bot (left / desynced / disconnected) or `!resultsMajority(myHash, otherPeersResultHashes)` (a ghost match):
+   *  nothing is filed and no goals are earned */
+  skip?(): boolean;
+}
+
+/**
+ * Should this client file its result? `mine` = my standings hash, `others` = the hashes of the other peers' RESULT messages I received.
+ * A peer whose world diverged (it never joined the WebRTC mesh and played a ghost match alone; a desync nobody caught) holds a hash that
+ * a STRICT majority of the known results does not share: it must not file. No other result seen = nothing contradicts me (a lone
+ * survivor of an abandoned match, or results that never arrived): file. Two humans disagreeing 1 v 1: nobody can tell, nobody files.
+ */
+export function resultsMajority(mine: number, others: ReadonlyArray<number>): boolean {
+  if (others.length === 0) return true;
+  let same = 1;
+  for (const h of others) if (h === mine) same++;
+  return same * 2 > others.length + 1;
+}
+
+/** what the end card shows for the filed VS result */
+export type VsFiling =
+  | { kind: 'sent' }
+  | { kind: 'ack'; already: boolean; confirmed: boolean; reports: number | null; error: string | null }
+  | { kind: 'noack' };
+
+export interface VsMatchOutcome {
+  /** VS goal ids this match newly earned (already saved to the local ledger; posted when signed in) */
+  goals: string[];
+  facts: VsMatchFacts;
+  /** what was (or would be) filed; null when the seat is not reportable (bad seat count) */
+  payload: VsReportPayload | null;
+  /** resolves with the portal's answer; null when nothing was sent (standalone / silent parent / guest / not reportable) */
+  filing: Promise<VsFiling | null>;
+}
+
+const BIOME_MAX_BLOCKS: Record<BiomeId, number> = { grideast: 240, whitestacks: 182, lockwater: 208 };   // 0008 bt__validate_run
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** a match id the RPC accepts (8..80 chars) and every peer derives identically from StartInfo.matchId */
+export function normalizeMatchId(id: string): string {
+  let s = String(id).replace(/[^A-Za-z0-9_.:-]/g, '_');
+  if (!s.startsWith('blocktooth:')) s = 'blocktooth:' + s;
+  return s.slice(0, 80);
+}
+
+/** offline VS PRACTICE (1 human + 3 bots) files personal stats under a match id of its own */
+export function newVsPracticeMatchId(seed: number): string {
+  return normalizeMatchId(`practice:${seed >>> 0}:${newRunNonce()}`);
+}
+
+function hash36(s: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193) >>> 0;
+  return h.toString(36);
+}
+
+/** the local seat's facts for the goals + the report, or null when the match is not decided / the seat is not a human's any more */
+export function vsFactsOf(i: VsMatchInput): VsMatchFacts | null {
+  const w = i.w, vs = w.vs;
+  if (w.mode !== 'vs' || !vs || vs.phase !== 'over' || vs.winner < 0 || w.run.result !== 'vs') return null;
+  const P = w.players[i.slot];
+  if (!P || i.skip || P.bot !== null || P.vs.data.left === 1) return null;
+  const humans = Math.max(1, Math.min(w.players.length, Math.floor(i.humans)));
+  return {
+    titan: P.titanId,
+    finished: true,
+    won: vs.winner === i.slot,
+    humans,
+    koCount: Math.max(0, Math.floor(P.vs.koCount)),
+    evictions: Math.max(0, Math.floor(P.vs.evictions)),
+    crownKos: i.tally ? i.tally.crownKos : 0,
+  };
+}
+
+/** the bt_report_vs payload for the local seat (null when the seat is not reportable: not a 4-seat match / no place) */
+export function buildVsReport(i: VsMatchInput, myUid: string | null, buildVersion: string | null): VsReportPayload | null {
+  const w = i.w, vs = w.vs;
+  const facts = vsFactsOf(i);
+  if (!facts || !vs || w.players.length !== 4) return null;
+  const P = w.players[i.slot];
+  // a human who TOOK OVER a bot seat mid-match is not one of the START humans the server counts (`humans` is fixed by the first report):
+  // their report could take another human's slot (match_full). Their goals still count; nothing is filed.
+  if (P.vs.data.tookOver === 1) return null;
+  const place = Math.floor(P.vs.place);
+  if (!(place >= 1 && place <= 4)) return null;
+  const matchId = normalizeMatchId(i.matchId);
+  const endT = vs.endT >= 0 ? vs.endT : w.t;
+  const duration = Math.max(5, Math.floor(endT));
+  const out = P.vs.eliminated && P.vs.elimT >= 0 ? P.vs.elimT : endT;
+  const survived = Math.max(0, Math.min(43200, Math.floor(out - vs.startT)));
+  // the winner, named by ACCOUNT id: me (the winner names itself), a human whose id I heard, else null (bot / guest / unknown)
+  let claimed: string | null = null;
+  if (vs.winner === i.slot) claimed = myUid;
+  else {
+    const W = w.players[vs.winner];
+    const u = i.uidBySlot ? i.uidBySlot[vs.winner] : null;
+    if (W && W.bot === null && W.vs.data.left !== 1 && typeof u === 'string' && UUID_RE.test(u)) claimed = u.toLowerCase();
+  }
+  // The server's plausibility bounds (0008 bt__validate_run) were fit to SOLO runs. A strong VS seat can exceed them (measured over
+  // 2 016 simulated seats: 15 seats above the level bound, and the biggest tonnage reached 0.83 of its bound), and a rejected
+  // report would also lose the WINNER's row (no row for the named winner = no confirmation for anyone). So the roll-up figures are
+  // capped to the bound; `peak_level` (checked only to 0..250) keeps the real level. A VS-specific bound would let these caps go.
+  const kills = Math.max(0, Math.min(500 + 30 * duration, Math.floor(P.titan.kills)));
+  const realLevel = Math.max(1, Math.floor(P.titan.level));
+  const level = Math.min(realLevel, Math.min(250, 40 + Math.floor(duration / 30)));
+  const tonnage = Math.max(0, Math.min(12_000_000 + 20_000 * duration, Math.round(P.run.tonnage)));
+  return {
+    match_id: matchId,
+    run_nonce: 'vs-' + hash36(matchId) + hash36(matchId.split('').reverse().join('')),
+    mode: 'vs',
+    titan: P.titanId,
+    biome: w.biomeId,
+    placement: place,
+    humans: facts.humans,
+    bots: w.players.length - facts.humans,
+    claimed_winner: claimed,
+    duration_s: duration,
+    survived_s: survived,
+    level,
+    peak_level: Math.min(250, realLevel),
+    peak_rank: Math.max(0, Math.min(4, Math.floor(Math.max(P.vs.peakRank, P.titan.rank)))),
+    kills,
+    crushed: Math.max(0, Math.min(kills, Math.floor(P.titan.crushed || 0))),
+    tonnage,
+    blocks: Math.max(0, Math.min(BIOME_MAX_BLOCKS[w.biomeId] ?? 208, Math.floor(P.run.blocksLeveled))),
+    bosses: 0,
+    gate_kills: Math.max(0, Math.min(4, Math.floor(P.vs.tenderTop))),
+    titans_eaten: i.tally ? Math.min(3, i.tally.rivalsKo.size) : Math.max(0, Math.min(3, Math.floor(P.vs.evictions))),
+    build_version: buildVersion,
+  };
+}
+
+// ─────────────────────────────── account ids between the peers ───────────────────────────────
+
+/** the slice of net/room.ts `Room` the id exchange uses (a fake implements it in the probes) */
+export interface RoomLike {
+  readonly id: string;
+  send(t: string, d?: Record<string, unknown>): boolean;
+  onMsg(cb: (m: { from: string; t: string; d: Record<string, unknown> }) => void): () => void;
+}
+
+/**
+ * Winners are named by ACCOUNT id, but the lockstep peers only know each other's room peer ids. Each signed-in peer announces
+ * `{m: matchId, u: accountId}` on the room channel (message type 'uid': one tiny Supabase broadcast, no stream) and records the
+ * others'. Guests announce nothing. A lie can only withhold a confirmation: the RPC needs the named winner to have reported
+ * place 1 and named ITSELF, so nobody can be handed a win.
+ */
+export class VsIdentityBook {
+  private readonly portal: PortalClient;
+  private room: RoomLike | null = null;
+  private matchId = '';
+  private off: (() => void) | null = null;
+  private readonly byPeer = new Map<string, string>();
+  private readonly replied = new Set<string>();
+  constructor(portal: PortalClient) { this.portal = portal; }
+
+  /** start listening on `room` for this match (idempotent per room) and announce my id */
+  attach(room: RoomLike, matchId: string): void {
+    this.detach();
+    this.room = room;
+    this.matchId = normalizeMatchId(matchId);
+    this.off = room.onMsg((m) => this.onMsg(m));
+    this.announce();
+  }
+
+  detach(): void {
+    if (this.off) { try { this.off(); } catch { /* gone */ } }
+    this.off = null;
+    this.room = null;
+  }
+
+  /** (re)announce my account id (no-op unless signed in) */
+  announce(): boolean {
+    const id = this.portal.identity.id;
+    const r = this.room;
+    if (!r || !this.portal.signedIn || !id) return false;
+    return r.send('uid', { m: this.matchId, u: id });
+  }
+
+  private onMsg(m: { from: string; t: string; d: Record<string, unknown> }): void {
+    if (m.t !== 'uid' || m.d.m !== this.matchId || typeof m.d.u !== 'string' || !UUID_RE.test(m.d.u)) return;
+    const fresh = !this.byPeer.has(m.from);
+    this.byPeer.set(m.from, m.d.u.toLowerCase());
+    // a peer I had not heard (it joined late / my first announce raced its subscribe): tell it my id once
+    if (fresh && !this.replied.has(m.from)) { this.replied.add(m.from); this.announce(); }
+  }
+
+  /** account id of a room peer (null = a guest / not heard) */
+  uidOf(peer: string | null | undefined): string | null {
+    if (!peer) return null;
+    if (this.room && peer === this.room.id) return this.portal.identity.id;
+    return this.byPeer.get(peer) ?? null;
+  }
+
+  /** account id per seat from a roster of {slot, peer} (humans only; bots / unknown = null) */
+  uidsBySlot(seats: ReadonlyArray<{ slot: number; peer: string | null }>, n = 4): (string | null)[] {
+    const out: (string | null)[] = new Array(n).fill(null);
+    for (const s of seats) if (s.slot >= 0 && s.slot < n) out[s.slot] = this.uidOf(s.peer);
+    return out;
+  }
+}
 
 /** standalone = no parent frame · waiting = whoami asked · silent = the parent never answered */
 export type PortalState = 'standalone' | 'waiting' | 'silent' | 'guest' | 'signedIn';
@@ -221,9 +495,16 @@ export class PortalClient {
   private cloudLoadFor: string | null = null;
   private loadTimer = 0;
   private readonly acks = new Map<string, { resolve(v: RunFiling): void; timer: number; clear: boolean }>();
+  private readonly vsAcks = new Map<string, { resolve(v: VsFiling): void; timer: number }>();
   private queue: { payload: RunResultPayload; resolve(v: RunFiling | null): void }[] = [];
+  /** reports made before the identity answered: built AT FLUSH (the winner names itself by the account id, unknown until then) */
+  private vsQueue: { input: VsMatchInput; resolve(v: VsFiling | null): void }[] = [];
+  /** the VS ledger (lifetime wins for the grind goals + the VS goals earned): localStorage + the cloud save's `vs` key */
+  private vsLife: VsLife = loadVsLife();
+  /** match ids already filed this page (a VS match is filed once) */
+  private readonly vsFiled = new Set<string>();
   /** debugging / harness counters (window.__BTPORTAL__) */
-  readonly stats = { runResults: 0, achievements: 0, saves: 0, loads: 0, whoami: 0, gameOver: 0, lastRun: null as RunResultPayload | null };
+  readonly stats = { runResults: 0, achievements: 0, saves: 0, loads: 0, whoami: 0, gameOver: 0, vsResults: 0, lastRun: null as RunResultPayload | null, lastVs: null as VsReportPayload | null };
 
   constructor(hooks: PortalHooks) {
     this.hooks = hooks;
@@ -269,6 +550,7 @@ export class PortalClient {
     switch (d.type) {
       case 'forgeflow:identity': this.onIdentity(readIdentity(d)); break;
       case 'forgeflow:run_result_ack': this.onAck(d); break;
+      case 'forgeflow:vs_result_ack': this.onVsAck(d); break;
       case 'forgeflow:save_loaded': this.onSaveLoaded(d); break;
       default: break;
     }
@@ -302,7 +584,7 @@ export class PortalClient {
   /** a goal was met (slug = the goal id the portal seeded for game 52) */
   achievement(goalId: string): void {
     if (this._state !== 'signedIn' || !this._identity.id) return;
-    if (!hasOwn(GOAL_BY_ID, goalId)) return;
+    if (!hasOwn(GOAL_BY_ID, goalId) && !hasOwn(VS_GOAL_BY_ID, goalId)) return;
     let sent = this.sentAch.get(this._identity.id);
     if (!sent) { sent = new Set(); this.sentAch.set(this._identity.id, sent); }
     if (sent.has(goalId)) return;
@@ -318,6 +600,7 @@ export class PortalClient {
     let done: string[] = [];
     try { done = Object.keys(this.hooks.getProfile().done).sort(); } catch { done = []; }
     for (const id of done) this.achievement(id);
+    for (const id of Object.keys(this.vsLife.done).sort()) this.achievement(id);   // VS goals earned as a guest / offline
   }
 
   // ─────────────────────────────── run results ───────────────────────────────
@@ -359,6 +642,13 @@ export class PortalClient {
       if (this._state === 'signedIn') this.sendRun(it.payload).then(it.resolve, () => it.resolve(null));
       else it.resolve(null);
     }
+    const vq = this.vsQueue;
+    this.vsQueue = [];
+    for (const it of vq) {
+      const payload = this._state === 'signedIn' ? this.vsPayload(it.input) : null;
+      if (payload) this.sendVs(payload).then(it.resolve, () => it.resolve(null));
+      else it.resolve(null);
+    }
   }
 
   private onAck(d: Record<string, unknown>): void {
@@ -375,6 +665,73 @@ export class PortalClient {
     const reason = str(data.reason);
     const err = baseErr && reason ? `${baseErr} (${reason})` : baseErr;
     w.resolve({ kind: 'ack', already: data.already === true, rank: rank !== null && rank >= 1 ? Math.floor(rank) : null, error: err });
+  }
+
+  // ─────────────────────────────── VS match end ───────────────────────────────
+
+  /** the local VS ledger (lifetime grind-goal counters + the VS goals earned); a copy */
+  get vsLedger(): VsLife { return sanitizeVsLife(this.vsLife); }
+
+  /**
+   * A VS match was decided. (1) The local ledger is updated and the VS goals this match earned are saved and posted (posting is a
+   * no-op until signed in; the sign-in catch-up covers a guest's goals). (2) Signed in: ONE forgeflow:vs_result for the local seat.
+   * Guests, standalone and a parent that never answered file nothing. Once per match id. null = nothing to do (undecided world,
+   * a seat a bot has now, or this match was already handled).
+   */
+  vsMatchEnded(i: VsMatchInput): VsMatchOutcome | null {
+    const facts = vsFactsOf(i);
+    if (!facts) return null;
+    const matchId = normalizeMatchId(i.matchId);
+    if (this.vsFiled.has(matchId)) return null;
+    this.vsFiled.add(matchId);
+    const res = applyVsMatch(this.vsLife, facts, Date.now());
+    this.vsLife = res.life;
+    saveVsLife(this.vsLife);
+    for (const id of res.newly) this.achievement(id);
+    if (res.newly.length) this.saveCloud();
+    // the winner names itself, so the one account id this client owns is bound into the payload
+    const payload = this.vsPayload(i);
+    let filing: Promise<VsFiling | null> = Promise.resolve(null);
+    if (this._state === 'waiting') {
+      filing = new Promise((resolve) => {
+        this.vsQueue.push({ input: i, resolve });
+        while (this.vsQueue.length > QUEUE_MAX) this.vsQueue.shift()?.resolve(null);
+      });
+    } else if (this._state === 'signedIn' && payload) {
+      filing = this.sendVs(payload);
+    }
+    return { goals: res.newly, facts, payload, filing };
+  }
+
+  /** the payload as of NOW (the winner names itself by the bridge identity, so it needs the signed-in id) */
+  private vsPayload(i: VsMatchInput): VsReportPayload | null {
+    const myUid = this._state === 'signedIn' ? this._identity.id : null;
+    return buildVsReport(i, myUid, buildVersionFromUrl(typeof location !== 'undefined' ? location.search : ''));
+  }
+
+  private sendVs(payload: VsReportPayload): Promise<VsFiling> {
+    const reqId = this.nextReq('vs');
+    this.stats.vsResults++;
+    this.stats.lastVs = payload;
+    post({ type: 'forgeflow:vs_result', _reqId: reqId, payload });
+    return new Promise((resolve) => {
+      const timer = window.setTimeout(() => { this.vsAcks.delete(reqId); resolve({ kind: 'noack' }); }, ACK_WAIT_MS);
+      this.vsAcks.set(reqId, { resolve, timer });
+    });
+  }
+
+  private onVsAck(d: Record<string, unknown>): void {
+    const reqId = typeof d._reqId === 'string' ? d._reqId : '';
+    const w = this.vsAcks.get(reqId);
+    if (!w) return;
+    this.vsAcks.delete(reqId);
+    window.clearTimeout(w.timer);
+    const data = (d.data && typeof d.data === 'object' ? d.data : {}) as Record<string, unknown>;
+    const baseErr = str(data.error) ?? (typeof d.error === 'string' ? d.error : null);
+    const reason = str(data.reason);
+    const err = baseErr && reason ? `${baseErr} (${reason})` : baseErr;
+    const reports = num(data.reports);
+    w.resolve({ kind: 'ack', already: data.already === true, confirmed: data.winner_confirmed === true, reports: reports !== null ? Math.floor(reports) : null, error: err });
   }
 
   // ─────────────────────────────── cloud profile ───────────────────────────────
@@ -417,6 +774,10 @@ export class PortalClient {
       if (blob) {
         merged = mergeProfiles(local, sanitizeProfile(blob.profile));
         mergedBests = mergeBests(localBests, bestsOf(blob.best));
+        if (blob.vs !== undefined) {                       // the VS ledger: counters max, goals union (never lowers a local value)
+          const mv = mergeVsLife(this.vsLife, sanitizeVsLife(blob.vs));
+          if (vsLifeKey(mv) !== vsLifeKey(this.vsLife)) { this.vsLife = mv; saveVsLife(mv); }
+        }
       }
       if (snapshotKey(merged, mergedBests) !== before) this.hooks.adopt(merged, mergedBests);
     } catch (e) {
@@ -434,6 +795,6 @@ export class PortalClient {
     let profile: Profile, best: Record<string, number>;
     try { profile = sanitizeProfile(this.hooks.getProfile()); best = bestsOf(this.hooks.getBests()); } catch { return; }
     this.stats.saves++;
-    post({ type: 'forgeflow:save', slot: SLOT, data: { [SAVE_KEY]: { v: 1, profile, best } } });
+    post({ type: 'forgeflow:save', slot: SLOT, data: { [SAVE_KEY]: { v: 1, profile, best, vs: sanitizeVsLife(this.vsLife) } } });
   }
 }
