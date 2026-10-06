@@ -96,6 +96,32 @@ export default function GamePlayer({ game }: Props) {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
+  // 2026-10-06 — ESC KEYBOARD LOCK, from the top frame. game_controls.js (inside the game iframe) asks for Keyboard Lock on
+  // Escape when its Fullscreen button is used, so a TAP of Esc reaches the game (pause menu) and only press-and-hold exits
+  // fullscreen -- but Chromium rejects navigator.keyboard.lock() from a subframe ("lock() must be called from a primary
+  // top-level browsing context"; the bar swallows the error), so on the portal Esc just left fullscreen. Measured on the live site:
+  // lock from inside the iframe = InvalidStateError, lock from this frame = OK. So the lock lives here: whenever the iframe
+  // (or the player container) is the fullscreen element, take the lock; release it when fullscreen ends. No-op where Keyboard
+  // Lock is unsupported (Firefox/Safari keep their default Esc behaviour).
+  useEffect(() => {
+    const kb = (navigator as unknown as { keyboard?: { lock?: (keys: string[]) => Promise<void>; unlock?: () => void } }).keyboard;
+    if (!kb || typeof kb.lock !== "function") return;
+    const onFs = () => {
+      const fs = document.fullscreenElement;
+      const ours = !!fs && (fs === iframeRef.current || fs === containerRef.current ||
+        (containerRef.current ? containerRef.current.contains(fs) : false));
+      try {
+        if (ours) { void kb.lock!(["Escape"]).catch(() => {}); }
+        else if (typeof kb.unlock === "function") { kb.unlock(); }
+      } catch { /* unsupported / blocked: keep the browser default */ }
+    };
+    document.addEventListener("fullscreenchange", onFs);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFs);
+      try { if (typeof kb.unlock === "function") kb.unlock(); } catch { /* ignore */ }
+    };
+  }, []);
+
   const startGame = () => {
     setShowPreroll(false);
     // Initialize game-to-portal bridge (scores, achievements, saves, play time)
