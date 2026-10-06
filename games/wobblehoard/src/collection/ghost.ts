@@ -21,7 +21,7 @@ import { MERGE_COST, MERGE_DAILY_CAP, MERGE_OUTPUT_LOCK_HOURS, previewMerge, rol
 import { SPECIES, getSpecies, speciesBaseGenome, tierIndexOf } from '../data/catalog.ts';
 import type { SpeciesId } from '../data/catalog.ts';
 import {
-  GENTLE_POKE_FRESHNESS, GHOST_CAP, HOUR_MS, SNAP_TASK_INTENSITY, SOFT_POP_STREAK_S, SQUEEZE_TASK_DEFAULT_S, STRETCH_2X_INTENSITY,
+  GENTLE_POKE_FRESHNESS, GHOST_CAP, HOUR_MS, SNAP_TASK_INTENSITY, SOFT_POP_STREAK_S, SQUEEZE_TASK_DEFAULT_S, STRETCH_FULL_INTENSITY,
   TASK_CAPSULE_CAP, TIDY_MAX, WH_QUEUE_MAX,
 } from './constants.ts';
 import { oddsDigest } from './oddsDigest.ts';
@@ -70,7 +70,7 @@ export function bumpTasks(progress: Record<string, number>, tasks: readonly Task
     if (t.metric === 'pokes' && paid === 'poke' && !d.doubleTap) { if (t.param ? (gapSincePokeS === null || gapSincePokeS >= t.param) : d.freshness >= GENTLE_POKE_FRESHNESS) n++; }
     if (t.metric === 'squeezes' && paid === 'squeeze' && amount >= (t.param ?? SQUEEZE_TASK_DEFAULT_S)) n++;
     if (t.metric === 'snaps' && paid === 'pull' && amount >= SNAP_TASK_INTENSITY) n++;
-    if (t.metric === 'stretch' && paid === 'pull' && amount >= STRETCH_2X_INTENSITY) n++;
+    if (t.metric === 'stretch' && paid === 'pull' && amount >= STRETCH_FULL_INTENSITY) n++;
     if (t.metric === 'medleys' && d.medley > 0) n++;
     if (t.metric === 'softPops' && paid === 'squeeze') {
       const sk = streakKey(t.id);

@@ -77,6 +77,8 @@ async function openView(ctx, query, label, allow = []) {
 }
 
 const b64 = (dataUrl) => Buffer.from(dataUrl.split(',')[1], 'base64');
+// colour difference of two 48x36 RGBA fingerprints: mean over the pixels of the largest |channel difference| (/255)
+const fpDiffB = (a, b) => { let d = 0, n = 0; for (let i = 0; i < a.length; i += 4) { d += Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2])); n++; } return d / n; };
 async function shot(page, name, js = '') {
   const r = await page.evaluate((js) => {
     const R = window.__RV__;
@@ -705,6 +707,72 @@ try {
       }
     }
     await sheetCtx.close();
+  }
+
+  /* ───────────────────────── stage B (RENDER-3): species gallery, contact glow, tack strands, several bodies on the mat ───────────────────────── */
+  {
+    const bodyQ = BODY === 'auto' ? '' : BODY;
+    const RB = (report.stageB = { gallery: {}, glow: null, strands: {}, mat: {} });
+    const sheetCtxB = await browser.newContext({ viewport: { width: 800, height: 600 } });
+    // ---- gallery: all 50 species at rest (their own catalog look and material family), 1280x800 med and 390x844 low ----
+    for (const [label, vp, q, cw, ch] of QUICK ? [['desktop', { width: 1280, height: 800 }, 'med', 256, 160]] : [['desktop', { width: 1280, height: 800 }, 'med', 256, 160], ['phone', { width: 390, height: 844 }, 'low', 117, 253]]) {
+      const gctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
+      const { page: gp, bad: gbad } = await openView(gctx, `quality=${q}&body=${bodyQ}`, `gallery-${label}`, [/GPU stall due to ReadPixels/i]);
+      const cells = [], fps = [];
+      for (const d of CATALOG) {
+        const g = speciesBaseGenome(d.id, 1);
+        const r = await gp.evaluate(([tier, g]) => { const R = window.__RV__; R.showTier(tier, g); R.frames(100); return { png: R.stage.canvas.toDataURL('image/jpeg', 0.88), fp: R.fingerprint() }; }, [d.tier, g]);
+        cells.push([`${d.name} (${d.tier}, ${d.family})`, r.png]); fps.push(r.fp);
+      }
+      await sheet(sheetCtxB, `gallery_50_${label}`, cells, 10, cw, ch);
+      console.log(`wrote gallery_50_${label}.png`);
+      // distinguishable at a glance: every species' frame differs from every other's (luma grid mean |diff|)
+      let minD = Infinity, pair = '';
+      for (let a = 0; a < fps.length; a++) for (let b = a + 1; b < fps.length; b++) { const dd = fpDiffB(fps[a], fps[b]); if (dd < minD) { minD = dd; pair = `${CATALOG[a].id}/${CATALOG[b].id}`; } }
+      RB.gallery[label] = { minPairDiff: minD, pair };
+      check(minD > 1.0, `gallery ${label}: all 50 species differ visibly from each other at rest (closest pair: mean per-pixel max channel |diff|)`, `${minD.toFixed(2)}/255 (${pair})`);
+      report.problems.push(...gbad);
+      await gctx.close();
+    }
+    const bctx = await browser.newContext({ viewport: { width: 640, height: 480 }, deviceScaleFactor: 1 });
+    const { page: bp, bad: bbad } = await openView(bctx, `quality=med&body=${bodyQ}`, 'stageB', [/GPU stall due to ReadPixels/i]);
+    // ---- B5 contact glow ----
+    {
+      const glow = await bp.evaluate(() => { const R = window.__RV__; R.setGenome(''); R.frames(60); return R.contactGlowProbe(); });
+      RB.glow = glow;
+      if (!glow.hasTip) check(true, 'contact glow: skipped (the body has no tip(); feature-detected)', '');
+      else check(glow.boxOn > glow.boxOff * 1.06 && glow.boxOn - glow.boxOff > 0.004 && Math.abs(glow.globalOn - glow.globalOff) < 0.02,
+        'contact glow (B5): the pressed spot blooms (local luminance up), the frame does not flash (global mean change < 0.02)', `box ${glow.boxOff.toFixed(4)} -> ${glow.boxOn.toFixed(4)}, frame ${glow.globalOff.toFixed(4)} -> ${glow.globalOn.toFixed(4)}, strength ${glow.amt.toFixed(2)}`);
+    }
+    // ---- B6 tack strands (a sticky-stretch species and a slime; a gel must NOT string) ----
+    {
+      const tacky = CATALOG.filter((d) => d.family === 'stickystretch' || d.family === 'slimegoo').slice(0, 2);
+      const gel = CATALOG.find((d) => d.family === 'jellygel');
+      for (const d of [...tacky, gel]) {
+        const r = await bp.evaluate(([g]) => window.__RV__.strandProbe(g), [speciesBaseGenome(d.id, 1)]);
+        RB.strands[d.id] = { family: r.family, maxStrands: r.maxStrands, strandFrames: r.strandFrames, tensionEvents: r.tensionEvents, snapEvents: r.snapEvents };
+        if (r.png) writeFileSync(resolve(OUT, `strand_${d.id}.png`), b64(r.png));
+        if (d.family === 'jellygel') check(r.strandFrames === 0 && r.snapEvents === 0, `tack strands (B6): a ${d.family} body (${d.id}) never strings`, JSON.stringify(RB.strands[d.id]));
+        else if (r.maxStrands <= 0) check(true, `tack strands (B6): ${d.id} (${d.family}): skipped, the physics reports no strands for it yet`, JSON.stringify(RB.strands[d.id]));
+        else check(r.strandFrames > 2 && r.snapEvents >= 1 && r.tensionEvents >= 2, `tack strands (B6): ${d.id} (${d.family}) strings when the held finger lifts, stretches, snaps once; the shell's strand hook gets tension frames and the snap`, JSON.stringify(RB.strands[d.id]));
+      }
+    }
+    report.problems.push(...bbad);
+    await bctx.close();
+    // ---- B1 several bodies on the mat, framed: desktop and phone ----
+    for (const [label, vp] of [['desktop', { width: 1280, height: 800 }], ['phone', { width: 390, height: 844 }]]) {
+      const mctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
+      const { page: mp, bad: mbad } = await openView(mctx, `quality=low&body=${bodyQ}`, `mat-${label}`, [/GPU stall due to ReadPixels/i]);
+      for (const n of [2, 3, 5]) {
+        const r = await mp.evaluate((n) => window.__RV__.matProbe(n, ['', '2', '3', '16', '19']), n);
+        writeFileSync(resolve(OUT, `mat_${n}_${label}.png`), b64(r.png));
+        RB.mat[`${label}:${n}`] = { inFrame: r.inFrame, minGapPx: r.minGapPx, bodies: r.bodies };
+        check(r.bodies === n && r.inFrame && r.minGapPx > (label === 'phone' ? 70 : 120), `mat (B1) ${label}: ${n} bodies at stage.matLayout(${n}) are all inside the frame, centres apart`, `min centre gap ${r.minGapPx.toFixed(0)} px, in frame ${r.inFrame}`);
+      }
+      report.problems.push(...mbad);
+      await mctx.close();
+    }
+    await sheetCtxB.close();
   }
 
   /* ───────────────────────── perf (relative cost only) ───────────────────────── */

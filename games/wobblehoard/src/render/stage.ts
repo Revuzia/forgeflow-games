@@ -56,10 +56,24 @@ import { QualityGovernor, TIERS } from './quality.ts';
 import { safeTier } from './rarity.ts';
 import { ScreenFx } from './screenfx.ts';
 import { Table, PALETTE } from './table.ts';
+import type { StrandEvent } from './strands.ts';
 
 type RoundTwo = Required<Pick<StageLike, 'addBody' | 'removeBody' | 'clearBodies' | 'primaryBodyId' | 'setBodyTier' | 'setCalmEffects' | 'dropCapsule' | 'playCapsuleReveal' | 'playMergeCeremony'>>;
 
-export interface StageDev extends Omit<StageLike, keyof RoundTwo>, RoundTwo {
+/**
+ * Stage B additions (render lane; proposed as additive StageLike members, typed here until src/contracts.ts takes them):
+ *   * onStrand: the tack-strand hook for the shell's strand voice (stage B6). Called every frame a strand stretches (snap false: call
+ *     audio.strand({ tension })) and once when it snaps (snap true: audio.strand({ tension: 0, snap: true })). bodyId = the stage's id.
+ *   * matLayout(n): render offsets for n (1..5) squishies out on the mat at once (stage B1) with readable spacing for the current frame
+ *     (a row or two on desktop, staggered rows on a portrait phone), for addBody(..., { position }). With 2..5 bodies visible the camera
+ *     frames them all by itself.
+ */
+export interface StageExtras {
+  onStrand: ((bodyId: number, e: StrandEvent) => void) | null;
+  matLayout(n: number): V3[];
+}
+
+export interface StageDev extends Omit<StageLike, keyof RoundTwo>, RoundTwo, StageExtras {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene: THREE.Scene;
   /** renderer.info snapshot: live geometries / textures / programs and the last frame's calls / triangles. */
@@ -90,7 +104,7 @@ const INERT_CAPSULE: CapsuleHandle = Object.freeze({
 });
 const farFirst = (a: BodyView, b: BodyView): number => b.sortDepth - a.sortDepth;
 
-function buildStage(canvas: HTMLCanvasElement): StageLike {
+function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
@@ -215,11 +229,29 @@ function buildStage(canvas: HTMLCanvasElement): StageLike {
     yaw += (tYaw - yaw) * k;
     pitch += (tPitch - pitch) * k;
     zoomF += (tZoom - zoomF) * k;
-    camScale += ((framing ?? bodyScale) - camScale) * (1 - Math.exp(-dt * 4));
+    // stage B1: with 2..5 bodies out on the mat, frame them all (their table extents, plus a margin) and aim at their middle
+    let want = framing ?? bodyScale, multi = false, mx = 0, mz = 0;
+    if (!director.active) {
+      let n = 0, x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+      for (const v of views) {
+        if (!v.visible) continue;
+        n++;
+        const c = v.proxy.center, r = v.proxy.restRadius * 1.25;
+        if (c.x - r < x0) x0 = c.x - r; if (c.x + r > x1) x1 = c.x + r; if (c.z - r < z0) z0 = c.z - r; if (c.z + r > z1) z1 = c.z + r;
+      }
+      if (n >= 2) {
+        multi = true;
+        const hwPer = Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect)) * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect;
+        want = Math.max(want, ((x1 - x0) / 2 + 0.1 + 0.35 * (z1 - z0) / 2) / hwPer);
+        mx = (x0 + x1) / 2; mz = (z0 + z1) / 2;
+      }
+    }
+    camScale += (want - camScale) * (1 - Math.exp(-dt * 4));
     // follow the primary body gently (it can drift when shoved or floating); a ceremony keeps the pad centred
     let wx = 0, wy = TARGET_Y * camScale, wz = 0;
     const p = primary();
-    if (p && !director.active) {
+    if (multi) { wx = mx; wz = mz * 0.8; wy = TARGET_Y * bodyScale; }   // the bodies stand on the table whatever the zoom: aim at their middle
+    else if (p && !director.active) {
       const c = p.proxy.center;
       wx = c.x * 0.6; wz = c.z * 0.6;
       wy = TARGET_Y * camScale + Math.max(0, c.y - TARGET_Y * camScale) * 0.7;
@@ -305,9 +337,21 @@ function buildStage(canvas: HTMLCanvasElement): StageLike {
 
   applySize();
 
-  const stage: StageLike & RoundTwo = {
+  const stage: StageLike & RoundTwo & StageExtras = {
     canvas,
     camera,
+    onStrand: null,
+
+    matLayout(n) {
+      const k = Math.max(1, Math.min(5, Math.floor(Number.isFinite(n) ? n : 1))), s = bodyScale, out: V3[] = [];
+      const portrait = camera.aspect < 0.9;
+      // [x, z] in body-scale units: neighbours ~1.2 apart (a body is ~1 wide), back rows behind front ones on a narrow frame
+      const L: number[] = portrait
+        ? [[0, 0], [-0.42, 0.42, 0.48, -0.5], [-0.62, -0.75, 0.62, -0.75, 0, 0.5], [-0.62, -0.8, 0.62, -0.8, -0.62, 0.55, 0.62, 0.55], [-0.62, -1.15, 0.62, -1.15, 0, -0.15, -0.62, 0.85, 0.62, 0.85]][k - 1]
+        : [[0, 0], [-0.64, 0, 0.64, 0], [-1.25, 0, 0, 0, 1.25, 0], [-0.66, -0.7, 0.66, -0.7, -0.66, 0.5, 0.66, 0.5], [-1.25, -0.75, 0, -0.75, 1.25, -0.75, -0.64, 0.5, 0.64, 0.5]][k - 1];
+      for (let i = 0; i < L.length; i += 2) out.push({ x: L[i] * s, y: 0, z: L[i + 1] * s });
+      return out;
+    },
 
     setBody(body, genome) {
       if (disposed) return;
@@ -401,6 +445,9 @@ function buildStage(canvas: HTMLCanvasElement): StageLike {
       for (const v of depthOrder) { const c = v.proxy.center; v.sortDepth = (camera.position.x - c.x) ** 2 + (camera.position.y - c.y) ** 2 + (camera.position.z - c.z) ** 2; }
       depthOrder.sort(farFirst);
       for (let i = 0; i < depthOrder.length; i++) depthOrder[i].jelly.mesh.renderOrder = 10 + Math.min(0.99, i * 0.01);
+      // tack strands -> the shell's strand voice (stage B6)
+      const hook = stage.onStrand;
+      if (hook) for (const v of views) { const ev = v.strands.events; for (let i = 0; i < ev.length; i++) { try { hook(v.id, ev[i]); } catch { /* a hook must never break a frame */ } } }
       capsule?.update(d * ts, time);
       revealCap?.update(d * ts, time);
       particles.update(d * ts, time);
@@ -506,7 +553,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike {
 }
 
 /** The stage (StageLike, every round-2 member). */
-export function createStage(canvas: HTMLCanvasElement): StageLike {
+export function createStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   return buildStage(canvas);
 }
 

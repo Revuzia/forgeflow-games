@@ -724,6 +724,91 @@ const RV = {
     return { interruptedResolved, disposedResolved, secondFinished, rejected };
   },
 
+  /**
+   * Stage B5 contact glow at ONE frozen pose: press the body, then render the same frame with the glow as driven and with it forced off;
+   * luminance in a small box around the fingertip and over the whole frame.
+   */
+  contactGlowProbe(): { hasTip: boolean; boxOn: number; boxOff: number; globalOn: number; globalOff: number; amt: number } {
+    const v = stage.views.find((w) => w.id === stage.primaryBodyId());
+    if (!v) return { hasTip: false, boxOn: 0, boxOff: 0, globalOn: 0, globalOff: 0, amt: 0 };
+    RV.press(0.05, 0.12, 0.9, 0.5); RV.frames(40);
+    const t = v.proxy.tip(0);
+    const u = v.mats.uniforms, w0 = u.uTouch0.value.w;
+    const box = (): number => {
+      if (!t) return 0;
+      const p = new THREE.Vector3(t.x, t.y, t.z).project(stage.camera);
+      const cx = Math.round((p.x * 0.5 + 0.5) * canvas.width), cy = Math.round((1 - (p.y * 0.5 + 0.5)) * canvas.height), r = Math.max(4, Math.round(canvas.height * 0.05));
+      stage.render();
+      const c2 = document.createElement('canvas'); c2.width = canvas.width; c2.height = canvas.height;
+      const x = c2.getContext('2d', { willReadFrequently: true }); if (!x) return 0;
+      x.drawImage(canvas, 0, 0);
+      const d = x.getImageData(Math.max(0, cx - r), Math.max(0, cy - r), 2 * r, 2 * r).data;
+      let s = 0; for (let i = 0; i < d.length; i += 4) s += 0.2126 * LUMA_LUT[d[i]] + 0.7152 * LUMA_LUT[d[i + 1]] + 0.0722 * LUMA_LUT[d[i + 2]];
+      return s / (d.length / 4);
+    };
+    const boxOn = box(), globalOn = RV.lumaNow();
+    u.uTouch0.value.w = 0; u.uTouch1.value.w = 0;
+    const boxOff = box(), globalOff = RV.lumaNow();
+    u.uTouch0.value.w = w0;
+    RV.release(); RV.frames(30);
+    return { hasTip: !!t, boxOn, boxOff, globalOn, globalOff, amt: w0 };
+  },
+  /** Stage B6 tack strands: press a body for `holdS`, lift, step; what the strand did and what the shell's strand hook received. */
+  strandProbe(g: Genome, holdS = 0.6, shotAt = 0.12): { family: string; maxStrands: number; strandFrames: number; tensionEvents: number; snapEvents: number; maxLen: number; png: string | null } {
+    setupBody(g); RV.frames(60);
+    const v = stage.views.find((w) => w.id === stage.primaryBodyId());
+    const fam = v ? v.mats.familyId : '?';
+    let tensionEvents = 0, snapEvents = 0;
+    stage.onStrand = (_id, e): void => { if (e.snap) snapEvents++; else tensionEvents++; };
+    RV.press(0.0, 0.1, 0.8, 0.3); RV.frames(Math.round(holdS * 60));
+    RV.release();
+    let maxStrands = 0, strandFrames = 0, png: string | null = null;
+    for (let i = 0; i < 90; i++) {
+      frame(1 / 60, true);
+      maxStrands = Math.max(maxStrands, (body.metrics.strands as number | undefined) ?? 0);
+      if (v && v.strands.active) strandFrames++;
+      if (png === null && i >= Math.round(shotAt * 60) && v && v.strands.active) png = canvas.toDataURL('image/png');
+    }
+    stage.onStrand = null;
+    return { family: fam, maxStrands, strandFrames, tensionEvents, snapEvents, maxLen: 0, png };
+  },
+  /** Stage B1: n bodies out on the mat at stage.matLayout(n); their silhouettes on screen once the camera has framed them. */
+  matProbe(n: number, seeds: string[]): { boxes: number[][]; inFrame: boolean; minGapPx: number; png: string; bodies: number } {
+    stage.clearBodies();
+    const pos = stage.matLayout(n);
+    const all: SoftBodyLike[] = [];
+    for (let k = 0; k < pos.length; k++) {
+      const g = genomeFromParam(seeds[k % seeds.length] ?? '');
+      const b = makeBody(g);
+      all.push(b);
+      stage.addBody(b, g, { tier: 'common', position: pos[k] });
+    }
+    if (all.length) body = all[0];
+    // every body settles (the viewer's frame() only steps the play body)
+    for (let i = 0; i < 150; i++) {
+      for (const b of all) { b.step(1 / 60); events.length = 0; b.drainEvents(events); }
+      time += 1 / 60; frameNo++;
+      stage.update(1 / 60, { time, pointerNdc: null });
+    }
+    stage.render();
+    const cam = stage.camera, pv = new THREE.Vector3(), W = canvas.clientWidth || canvas.width, H = canvas.clientHeight || canvas.height;
+    const boxes: number[][] = [];
+    let inFrame = true;
+    for (const v of stage.views) {
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      const P = v.proxy.positions;
+      for (let i = 0; i < P.length; i += 3) { pv.set(P[i], P[i + 1], P[i + 2]).project(cam); const sx = (pv.x * 0.5 + 0.5) * W, sy = (1 - (pv.y * 0.5 + 0.5)) * H; x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); }
+      boxes.push([x0, y0, x1, y1]);
+      if (x0 < 0 || y0 < 0 || x1 > W || y1 > H) inFrame = false;
+    }
+    let minGap = Infinity;
+    for (let a = 0; a < boxes.length; a++) for (let b = a + 1; b < boxes.length; b++) {
+      const A = boxes[a], B = boxes[b];
+      minGap = Math.min(minGap, Math.hypot((A[0] + A[2]) / 2 - (B[0] + B[2]) / 2, (A[1] + A[3]) / 2 - (B[1] + B[3]) / 2));
+    }
+    return { boxes, inFrame, minGapPx: minGap, png: RV.snapshot(), bodies: stage.views.length };
+  },
+
   stats() { return stage.stats(); },
   memory() { return stage.memory(); },
   info() { return stage.info; },

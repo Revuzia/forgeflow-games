@@ -587,11 +587,12 @@ section('P  practice economy, feed, storage');
   bumpTasks(prog, all, 'squeeze', 1.9, det({ paidAs: 'squeeze' }), null);            // streak 2
   bumpTasks(prog, all, 'squeeze', 0.5, det({ paidAs: 'squeeze' }), null);            // streak reset
   bumpTasks(prog, all, 'pull', 0.36, det({ paidAs: 'pull', medley: 2 }), null);      // snap + medley
-  bumpTasks(prog, all, 'pull', 0.9, det({ paidAs: 'pull' }), null);                  // snap + stretch (placeholder 0.8)
+  bumpTasks(prog, all, 'pull', 0.94, det({ paidAs: 'pull' }), null);                 // snap, but short of its limit: no stretch
+  bumpTasks(prog, all, 'pull', 1.0, det({ paidAs: 'pull' }), null);                  // snap + stretch (pulled to its maxPull)
   bumpTasks(prog, all, 'squeeze', 0.3, det({ paidAs: 'poke', freshness: 1 }), 3);    // a short squeeze is paid as a poke
   check('P06', 'task counters follow COLLECTION 7.10 (gentle and calm pokes, slow and long squeezes, the soft-pop streak and its reset, snaps, stretch, medleys, a short squeeze counts as a poke)',
     prog[def('gentle-pokes-20').id] === 2 && prog['pokes-sleepy-10'] === 2 && prog['slow-squeezes-5'] === 3 && prog['squeeze-long-3'] === 1 && prog['soft-pops-5'] === 2
-    && prog['soft-pops-5#streak'] === 0 && prog['snaps-3'] === 2 && prog['stretch-double'] === 1 && prog['medley-1'] === 1, JSON.stringify(prog));
+    && prog['soft-pops-5#streak'] === 0 && prog['snaps-3'] === 3 && prog['stretch-double'] === 1 && prog['medley-1'] === 1, JSON.stringify(prog));
   // the flow, on a raw save
   const monday = Math.floor(T0 / DAY_MS);
   const s6 = emptyHoard('taskdevice00001');

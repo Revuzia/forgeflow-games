@@ -123,13 +123,13 @@ export interface TaskDef {
   /** What the server counts in the touch log, and how many (the shell shows a progress bar toward `target`). */
   metric: 'stretch' | 'softPops' | 'pokes' | 'squeezes' | 'medleys' | 'snaps';
   target: number;
-  /** Optional qualifier of the metric, e.g. stretch factor 2 = "to double its size". */
+  /** Optional qualifier of the metric, e.g. seconds held for 'squeezes'. */
   param?: number;
 }
 
 /** The pool tasks are drawn from. Kind-neutral wording, no timers, nothing to lose. */
 export const TASK_DEFS: readonly TaskDef[] = [
-  { id: 'stretch-double', text: 'Stretch one to twice its size', metric: 'stretch', target: 1, param: 2 },
+  { id: 'stretch-double', text: 'Stretch one as far as it will go', metric: 'stretch', target: 1 }, // id kept: offers are seeded by id
   { id: 'soft-pops-5', text: 'Five soft pops in a row', metric: 'softPops', target: 5 },
   { id: 'gentle-pokes-20', text: 'Twenty gentle pokes', metric: 'pokes', target: 20 },
   { id: 'slow-squeezes-5', text: 'Five slow squeezes, a second each', metric: 'squeezes', target: 5, param: 1 },

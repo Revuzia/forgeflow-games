@@ -241,6 +241,8 @@ body[data-phase="title"] .play-target, body[data-phase="error"] .play-target { v
   transition: opacity .25s ease, transform .3s var(--ease), visibility 0s linear .3s;
 }
 .plate[data-show="true"] { opacity: 1; visibility: visible; transform: translate(-50%, 0); transition-delay: 0s; }
+/* wide screens: the top bar's middle is free (wordmark left, buttons right), so the plate sits in it and clears a tall result's top */
+@media (min-width: 900px) and (min-height: 421px) { .plate { top: calc(var(--safe-t) + 10px); } }
 .plate[data-tier="uncommon"] { border-color: var(--wh-lagoon); }
 .plate[data-tier="rare"] { border-color: var(--wh-edge); }
 .plate[data-tier="epic"] { border-color: var(--wh-coral); }

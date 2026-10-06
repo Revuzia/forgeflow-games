@@ -16,6 +16,9 @@ import { JellyMaterials } from './material.ts';
 import { genomePalette, type JellyPalette } from './oklch.ts';
 import type { TierSpec } from './quality.ts';
 import { RarityFx, TIER_STYLES, type TierStyle } from './rarity.ts';
+import { TackStrands } from './strands.ts';
+
+type TipSphere = { x: number; y: number; z: number; r: number; depth: number };
 
 export class BodyView {
   readonly id: number;
@@ -53,6 +56,11 @@ export class BodyView {
   faceHidden = false;
   /** Squared camera distance of the body centre (the stage's back-to-front ordering of the translucent jellies). */
   sortDepth = 0;
+  /** Tack strands (stage B6): built only when this body first strings. */
+  readonly strands: TackStrands;
+  // contact glow (stage B5): eased strength per finger, last tip position
+  private readonly touchAmt = new Float32Array(2);
+  private tipsLive = false;
   private spec: TierSpec;
   private smComp = 0; private smStretch = 0; private prevSq = 0; private sqRate = 0; private touchGate = 0; private grabGate = 0;
   private calm = false;
@@ -74,7 +82,8 @@ export class BodyView {
     this.decals = new Decals(quad);
     this.applyPoolColour();
     this.rarity = new RarityFx(this.style, { scale: this.scale, seed: genome.seed, mapper: this.jelly.mapper, palette: this.palette });
-    this.group.add(this.jelly.mesh, this.core.group, this.face.group, this.fx.group, this.decals.shadow, this.decals.pool, this.rarity.group);
+    this.strands = new TackStrands(hub, this.palette.body);
+    this.group.add(this.jelly.mesh, this.core.group, this.face.group, this.fx.group, this.decals.shadow, this.decals.pool, this.rarity.group, this.strands.group);
     this.group.frustumCulled = false;
     this.update(0, 0, null, null, 0, 0);
   }
@@ -165,8 +174,36 @@ export class BodyView {
       this.decals.setColorRGB(b[0] + (t[0] - b[0]) * tell, b[1] + (t[1] - b[1]) * tell, b[2] + (t[2] - b[2]) * tell);
     }
     this.decals.update(dt, time, fp, floatT, this.style, this.calm, this.extraPool);
+    // fingertips (SoftBodyLike.tip, optional; it allocates, so only while a finger is down or just lifted): contact glow + tack strands
+    let tip0: TipSphere | null = null, tip1: TipSphere | null = null;
+    if (m.fingers > 0 || this.tipsLive) { tip0 = this.proxy.tip(0); tip1 = this.proxy.tip(1); }
+    this.tipsLive = !!tip0 || !!tip1;
+    this.touchGlow(dt, tip0, tip1);
+    this.strands.update(dt, this.proxy, m.strands, tip0, tip1, this.calm);
+    for (let i = 0; i < this.strands.snapsAt.length; i += 3) {   // a strand snapped: a few tiny bubbles where it broke
+      this.snapAt.x = this.strands.snapsAt[i]; this.snapAt.y = this.strands.snapsAt[i + 1]; this.snapAt.z = this.strands.snapsAt[i + 2];
+      this.fx.spawn('bubbles', this.snapAt, 0);
+    }
     if (camera) this.rarity.frameFit = Math.min(1, Math.max(0.72, camera.aspect / 0.75));
     this.rarity.update(dt, time, body, fp.rx, fp.rz, floatT);
+  }
+
+  private readonly snapAt = { x: 0, y: 0, z: 0 };
+
+  /**
+   * Contact glow ("touch the light", stage B5): where a fingertip presses, the jelly blooms softly in its CORE colour, with the press
+   * depth (attack ~0.1 s, release ~0.2 s). A local light, not a flash (gate G7 unchanged); calm effects halve it.
+   */
+  private touchGlow(dt: number, t0: TipSphere | null, t1: TipSphere | null): void {
+    const u = this.mats.uniforms, k = this.calm ? 0.45 : 0.9;
+    for (let f = 0; f < 2; f++) {
+      const t = f === 0 ? t0 : t1, v = f === 0 ? u.uTouch0.value : u.uTouch1.value;
+      const target = t ? Math.min(1, Math.max(0, t.depth * 1.3)) : 0;
+      const a = this.touchAmt[f];
+      this.touchAmt[f] = a + (target - a) * (1 - Math.exp(-dt * (target > a ? 10 : 5)));
+      if (t) { v.x = t.x; v.y = t.y; v.z = t.z; u.uTouchR.value = Math.max(0.06 * this.scale, t.r * 2.2); }
+      v.w = this.touchAmt[f] * k;
+    }
   }
 
   dispose(): void {
@@ -174,5 +211,6 @@ export class BodyView {
     this.disposed = true;
     this.group.removeFromParent();
     this.jelly.dispose(); this.core.dispose(); this.face.dispose(); this.fx.dispose(); this.mats.dispose(); this.decals.dispose(); this.rarity.dispose();
+    this.strands.dispose();
   }
 }

@@ -472,7 +472,7 @@ The draft only knows `kind`, `amount` and the meter's own detail, so each task m
 | `softPops` | longest streak of consecutive squeezes each held 1.8 s or more; a shorter squeeze resets it | my reading of "in a row" [U] |
 | `medleys` | the meter paid a medley bonus | |
 | `snaps` | a pull with snap intensity at least 0.35 | |
-| `stretch` (param 2) | a pull with intensity at least `STRETCH_2X_INTENSITY` | **[U] open dependency:** `Interaction.amount` for a pull is the snap intensity, not the stretch factor, and `app.ts` notes the real body tops out near stretch 0.3. PHYS must measure the intensity that means "twice its size". Until it does, **remove `stretch-double` from `TASK_DEFS`** (the offers are seeded, so removing a task reshuffles offers once, before launch) or leave it with the placeholder 0.8 and accept that it may be unreachable. |
+| `stretch` | a pull with intensity at least `STRETCH_FULL_INTENSITY` (0.95) | Settled by physics round 2: a snap's intensity is the pull level, grab distance / the body's own family `maxPull` (1.0 at the limit, where the physics clamps), so every family can reach it. Only the stretchy family can reach twice its size, so the task reads "Stretch one as far as it will go" (id `stretch-double` kept, because offers are seeded by id). |
 
 ### 7.11 Account lifecycle
 
@@ -1274,7 +1274,7 @@ export interface HostDeps { /** test seam only: in production the host uses the 
 export const WH_QUEUE_MAX = 5;            // unopened play capsules waiting on the table (DESIGN 6.1)
 export const MAX_EVENTS_PER_BATCH = 120;
 export const BANK_MAX_MS = 300_000;       // at most 5 minutes of buffered play are accepted late
-export const STRETCH_2X_INTENSITY = 0.8;  // UNVERIFIED: the snap intensity that means "stretched to twice its size"; PHYS must measure it (see COLLECTION.md 9.4)
+export const STRETCH_FULL_INTENSITY = 0.95;  // the snap intensity (pull level, 1.0 = the family's maxPull) that counts as "as far as it will go"
 
 const secureUnit = (log?: number[]) => (): number => { const u = new Uint32Array(1); webcrypto.getRandomValues(u); const x = u[0] / 4294967296; log?.push(x); return x; };
 const u32 = (): number => { const u = new Uint32Array(1); webcrypto.getRandomValues(u); return u[0]; };

@@ -21,11 +21,10 @@
 //   poke                    0.8 SP. Needs a distinct contact: a poke less than 250 ms after the previous poke pays nothing.
 //   squeeze-and-release     0.7 SP + 0.45 SP per second held (hold counted up to 3 s); a soft pop of +0.5 SP if held 1.8 s or more.
 //                           (a "squeeze" held under 0.4 s is just a poke: SoftEvent mapping, DESIGN 5.4)
-//   pull-and-let-go (snap)  1.8 SP; 0.5 SP if it never stretched (snap intensity under 0.35). PROVISIONAL threshold: the slice body was
-//                           measured to top out near 0.3 snap intensity even on a hard pull (src/app.ts stretchFull note), which would pay
-//                           every pull the 0.5 rate and undo the Puller pace. The physics rewrite decides the real figure; then set this
-//                           from measured gestures (or rescale snap intensity in the contract) and re-run the sim. probe_economy.ts prints
-//                           the snap intensity the live body reaches on scripted pulls next to this threshold (informative, not a gate).
+//   pull-and-let-go (snap)  1.8 SP; 0.5 SP if it never stretched (snap intensity under 0.35). Since physics round 2 the snap intensity
+//                           is the pull level (grab distance / the body's own family maxPull; 1.0 = pulled to its limit, measured 1.000
+//                           on a full pull and 0.500 on a half pull for all 12 families), so 0.35 means "pulled about a third of the way
+//                           to its limit". The slice body topped out near 0.3, which paid every pull the 0.5 rate; that is fixed.
 //   medley                  +2 SP when three different kinds land within 12 s, then a 25 s cooldown.
 //   freshness (anti-mash)   pay x clamp((seconds since your last touch of the SAME kind / tau)^2, 0.03, 1); tau poke 0.9, squeeze 2.4, pull 3.0 s.
 //   valve                   at most 40 SP credited in any rolling minute (checked at 500 ms resolution over a 60.5 s window, so it is never looser than 60 s).
@@ -54,7 +53,7 @@ export const PAY = {
   pull: 1.8,
   /** What a pull pays when it never stretched. */
   pullFail: 0.5,
-  /** Snap intensity at or above which a pull pays in full. PROVISIONAL until measured on the rewritten body (see the header). */
+  /** Snap intensity (pull level, 1.0 = the family's maxPull) at or above which a pull pays in full (see the header). */
   pullFullIntensity: 0.35,
   medley: 2,
 } as const;

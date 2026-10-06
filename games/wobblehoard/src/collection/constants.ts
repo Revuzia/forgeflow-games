@@ -58,9 +58,11 @@ export const TIDY_MAX = 10;
 /** Parents kept on a merged ghost (MERGE_COST is 2 or 3; this bounds a stored row). */
 export const PARENTS_MAX = 3;
 
-/** [U] COLLECTION 7.10: the pull intensity that means "stretched to twice its size". Placeholder until PHYS measures it; the
- *  'stretch-double' task may be unreachable on the current body. */
-export const STRETCH_2X_INTENSITY = 0.8;
+/** COLLECTION 7.10: the snap intensity that counts as "stretched as far as it will go". Since physics round 2 a snap's intensity is
+ *  the pull level, grab distance / the family's own maxPull (1.0 = at its limit; the physics clamps there), measured 1.000 on a full
+ *  pull for all 12 families and 0.500 on a half pull, so every species can complete the task (only the stretchy family reaches 2x
+ *  its size, which is why the task no longer says "twice"). */
+export const STRETCH_FULL_INTENSITY = 0.95;
 /** COLLECTION 7.10: a 'softPops' streak counts squeezes held at least this long; 'snaps' counts pulls at least this intense. */
 export const SOFT_POP_STREAK_S = 1.8;
 export const SNAP_TASK_INTENSITY = 0.35;

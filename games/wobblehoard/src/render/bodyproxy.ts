@@ -178,6 +178,14 @@ export class BodyProxy implements SoftBodyLike {
     mm.kinetic = Math.min(1, imm.kinetic + tr * 0.5);
   }
 
+  /** The fingertip sphere (SoftBodyLike.tip, optional: null when the body has none), moved by the render offset. Allocates (contract). */
+  tip(id: 0 | 1): { x: number; y: number; z: number; r: number; depth: number } | null {
+    const t = typeof this.inner.tip === 'function' ? this.inner.tip(id) : null;
+    if (!t) return null;
+    t.x += this.offset.x; t.y += this.offset.y; t.z += this.offset.z;
+    return t;
+  }
+
   // ---- everything else passes straight through ----
   step(dt: number): void { this.inner.step(dt); }
   raycast(origin: V3, dir: V3): RayHit | null {
