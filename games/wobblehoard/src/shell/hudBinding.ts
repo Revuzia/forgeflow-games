@@ -8,6 +8,10 @@ import { createAnnouncer } from '../ui/announcer.ts';
 import type { Announcer } from '../ui/announcer.ts';
 import { h, isCoarsePointer, prefersReducedMotion } from '../ui/dom.ts';
 import { createSparks } from '../ui/sparks.ts';
+import { createToyTray } from '../ui/toyTray.ts';
+import type { ToolId, ToyTray } from '../ui/toyTray.ts';
+import { createCutBar } from '../ui/cutBar.ts';
+import { createSnapBar, paintTint } from '../ui/snapBar.ts';
 import type { Sparks } from '../ui/sparks.ts';
 import { tierLabel } from '../ui/gem.ts';
 import { createHud } from '../ui/hud.ts';
@@ -38,6 +42,8 @@ export interface UiBinding {
   readonly hoard: HoardUi;
   /** visible XP: the gain sparks (none under Calm effects or reduced motion: the ring glows instead) */
   readonly sparks: Sparks;
+  /** the toy tray (FUN.md 1) */
+  readonly toys: ToyTray;
   toast(text: string, ms?: number): void;
   /** Escape outside a ceremony: close what is open (settings, the plate); true = something closed */
   escape(): boolean;
@@ -85,7 +91,11 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     returnFocus: () => (g.phase === 'play' ? play.el : null),
   }));
   hoardUi = hoard;
-  hud.slot.append(hoard.button, hoard.matChip);
+  // ---- the toy tray (FUN.md 1): the Toys button sits beside the Hoard button; the Cut tool shows only when the physics can cut
+  const toys = createToyTray(root, { onPick: (t) => g.setTool(t) });
+  hud.slot.append(hoard.button, toys.button, hoard.matChip);
+  const toolsNow = (): ToolId[] => (g.cut.supported ? ['hand', 'cut', 'snap'] : ['hand', 'snap']);
+  toys.setAvailable(toolsNow());
   hoard.button.addEventListener('click', () => { if (p.isOpen()) p.close('escape'); }, { capture: true });
   off.push(warmSpeciesIcons());
 
@@ -227,21 +237,121 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   );
   { const n = g.collection.loadNotice(); if (n) { toast(n, 6000); announcer.say(n); } }
 
+  // ---- tools: the Cut bar and its blade line, Snap's bar and backdrop tint, and the Save
+  const cutBar = createCutBar(root, {
+    onSplit: () => { const r = g.cut.splitInTwo(); if (r === 'miss') announcer.say('Nothing to cut there.'); },
+    onReconnect: () => { if (!g.cut.reconnectAll(!g.settings.skipAnimations)) announcer.say('It is in one piece.'); },
+    onDone: () => g.setTool('hand'),
+  });
+  let tintX = 0, tintY = 0;
+  const placeTint = (): void => {
+    const c = canvas.getBoundingClientRect();
+    const b = g.bodies.extras.length ? null : g.host.bodyScreen();
+    tintX = b ? b.x : c.width / 2; tintY = b ? b.y : c.height * 0.55;
+    snap.place(c.left + tintX, c.top + tintY, c.width, c.height);
+  };
+  const slug = (t: string): string => t.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'squishy';
+  const dateTag = (): string => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const download = (blob: Blob, name: string): void => {
+    const url = URL.createObjectURL(blob);
+    const a = h('a', { attrs: { href: url, download: name } });
+    a.hidden = true;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  };
+  let lastPhoto = '', saving = false;
+  // Save: the button shows "Saving…" and the shutter dims first (a paint), then, in the next task, ONE clean frame is rendered and read in
+  // that same task (the drawing buffer is not preserved), composited with the tint when there is one, and encoded. The PNG encode can hold
+  // the main thread (measured: seconds under the software GL of the test machine), so a second click while saving does nothing.
+  const savePhoto = (): void => {
+    if (saving) return;
+    saving = true;
+    snap.setSaving(true);
+    snap.shutter(g.settings.calm);
+    window.setTimeout(capturePhoto, 40);
+  };
+  const capturePhoto = (): void => {
+    const cv = g.stage.canvas;
+    const name = `squish-keeper-${slug(g.label.species)}-${dateTag()}.png`;
+    const done = (): void => { saving = false; snap.setSaving(false); };
+    if (g.tool !== 'snap') { done(); return; }
+    try {
+      placeTint();
+      g.stageUpdate(0, true);   // ONE clean frame now: the HUD is hidden and the drawing buffer is read in this same task
+      let src: HTMLCanvasElement = cv;
+      const t = snap.tint;
+      if (t.color) {
+        const c2 = document.createElement('canvas');
+        c2.width = cv.width; c2.height = cv.height;
+        const x = c2.getContext('2d');
+        if (x) {
+          x.drawImage(cv, 0, 0);
+          const k = cv.width / Math.max(1, cv.clientWidth);
+          paintTint(x, cv.width, cv.height, tintX * k, tintY * k, t.color);
+          src = c2;
+        }
+      }
+      src.toBlob((blob) => {
+        done();
+        if (!blob) { toast('The photo could not be made. Try again.'); return; }
+        lastPhoto = name;
+        download(blob, name);
+        announcer.say('Photo saved.');
+      }, 'image/png');
+    } catch (e) { console.error(e); done(); toast('The photo could not be made. Try again.'); }
+  };
+  const snap = createSnapBar(root, { onSave: savePhoto, onDone: () => g.setTool('hand'), onTint: (t) => { announcer.say(`Backdrop: ${t.label}`); } });
+  const TOOL_LINES: Record<ToolId, string> = {
+    hand: 'Hand: poke, squish, stretch.',
+    cut: 'Cut: swipe across a squishy to cut it. Split in two and Reconnect all are buttons.',
+    snap: 'Snap: drag to turn the camera, then Save photo. Escape goes back.',
+  };
+  let piecesKey = '';
+  off.push(
+    g.on('tool', (t) => {
+      toys.setTool(t);
+      document.body.dataset.tool = t;
+      cutBar.show(t === 'cut');
+      if (t === 'snap') { placeTint(); snap.show(true); } else snap.show(false);
+      if (t === 'hand' && (document.activeElement === document.body || !document.activeElement || root.contains(document.activeElement) && (document.activeElement as HTMLElement).closest('.cutbar, .snapbar'))) toys.button.focus({ preventScroll: true });
+      announcer.say(TOOL_LINES[t]);
+    }),
+    g.on('blade', (b) => {
+      if (!b) { cutBar.setBlade(null); return; }
+      const c = canvas.getBoundingClientRect();
+      cutBar.setBlade({ x0: c.left + b.x0, y0: c.top + b.y0, x1: c.left + b.x1, y1: c.top + b.y1 });
+    }),
+    g.on('cut', (r) => { if (r === 'miss') announcer.say('Swipe across the squishy to cut it.'); }),
+    g.on('identity', () => toys.setAvailable(toolsNow())),
+    g.onStep(() => {
+      if (g.tool !== 'cut') return;
+      const k = `${g.cut.pieces},${g.cut.maxPieces},${g.cut.busy}`;
+      if (k !== piecesKey) { piecesKey = k; cutBar.setPieces(g.cut.pieces, g.cut.maxPieces, g.cut.busy); }
+    }),
+    () => { cutBar.destroy(); snap.destroy(); toys.destroy(); },
+  );
+  document.body.dataset.tool = g.tool;
+  void lastPhoto;
+
   // ---- the play target follows the squishy on screen (CSSOM writes only; re-placed every frame while it has focus)
   let placeRaf = 0;
   const place = (): void => { play.place(g.host.bodyScreen()); };
   const placeLoop = (): void => { placeRaf = 0; place(); if (play.focused) placeRaf = requestAnimationFrame(placeLoop); };
   const onFocus = (): void => { if (!placeRaf) placeRaf = requestAnimationFrame(placeLoop); };
   play.el.addEventListener('focus', onFocus);
-  const placeTimer = window.setInterval(place, 250);
+  const placeTimer = window.setInterval(() => { place(); if (g.tool === 'snap') placeTint(); }, 250);
   const onTab = (e: KeyboardEvent): void => { if (e.key === 'Tab') document.body.dataset.kbd = '1'; };
   window.addEventListener('keydown', onTab, { capture: true, passive: true });
 
   return {
-    hud, panel: p, play, plate, announcer, hoard, sparks, toast,
+    hud, panel: p, play, plate, announcer, hoard, sparks, toys, toast,
     escape() {
+      if (toys.escape()) return true;
       if (p.isOpen()) { p.close('escape'); return true; }
       if (hoard.escape()) return true;
+      if (g.tool !== 'hand') { g.setTool('hand'); return true; }   // Snap and Cut: Escape puts the Hand back
       if (plate.shown) { plate.hide(); return true; }
       return false;
     },

@@ -74,8 +74,18 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
   };
   setMuted(o.muted);
 
+  // a long species name shrinks to fit the name tag (down to 12 px) before it is ever cut off with an ellipsis (a phone's bottom row)
+  const NAME_MIN = 12;
+  const fitName = (): void => {
+    nameEl.style.fontSize = '';
+    if (!nameEl.clientWidth) return;
+    let size = parseFloat(getComputedStyle(nameEl).fontSize) || 19;
+    while (nameEl.scrollWidth > nameEl.clientWidth + 0.5 && size > NAME_MIN) { size -= 0.5; nameEl.style.fontSize = `${size}px`; }
+  };
   const setLabel = (l: HudLabel): void => {
     nameEl.textContent = l.species;
+    nameEl.title = l.species;
+    requestAnimationFrame(fitName);
     tierEl.textContent = tierLabel(l.tier);
     setGem(gem, l.tier);
     nickEl.textContent = l.nickname ? `“${l.nickname}”` : '';
@@ -101,7 +111,7 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
   fitHint();
   // The HUD root is fixed full-screen, so a ResizeObserver on it fires after every viewport / orientation change, once layout
   // and the media queries are up to date (a window 'resize' listener can run too early). It never resizes itself, so no loop.
-  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => fitHint()) : null;
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { fitHint(); fitName(); }) : null;
   if (ro) ro.observe(el); else window.addEventListener('resize', fitHint);
   void document.fonts?.ready.then(fitHint);
 

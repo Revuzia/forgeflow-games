@@ -810,11 +810,29 @@ try {
       await mctx.close();
     }
     // ---- the meter-full capsule lands clear of the HUD's bottom 72 CSS px (default safe inset) and, wherever the frame allows, of the body ----
-    if (ON('capspot')) for (const [vw, vh, mustClearBody] of [[568, 320, true], [320, 256, true], [844, 390, true], [1280, 800, true], [390, 844, false]]) {
+    // (the last two: a tall phone with the shell's real HUD rows, ~96 px on top and ~200 px at the bottom; a round and a wide species)
+    // ---- the Hoard preview with the mat out (setBody + the mat bodies re-added): the framing eases, it never jumps in and back out ----
+    if (ON('mat')) for (const [label, vp] of [['desktop', { width: 1280, height: 800 }], ['phone', { width: 390, height: 844 }]]) {
+      const sctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
+      const { page: sp2, bad: sbad } = await openView(sctx, `quality=low&body=${bodyQ}`, `swap-${label}`, [/GPU stall due to ReadPixels/i]);
+      const r = await sp2.evaluate(() => window.__RV__.swapProbe());
+      RB.mat[`swap:${label}`] = r;
+      // (eased: under 2% of the framing per frame; it may settle by up to 1% on the first frame, the earlier snap jumped ~10% in)
+      check(r.maxStep < 0.02 * r.before && r.minDuring >= Math.min(r.before, r.after) - 0.01 * r.before,
+        `mat ${label}: a play-body swap with bodies on the mat (the Hoard preview) eases the framing from where it was (no jump in and back out)`,
+        `framing ${r.before.toFixed(3)} -> ${r.after.toFixed(3)}, largest step per frame ${r.maxStep.toFixed(4)}, lowest during ${r.minDuring.toFixed(3)}, every 10th frame ${r.series.map((x) => x.toFixed(3)).join(',')}`);
+      report.problems.push(...sbad);
+      await sctx.close();
+    }
+    if (ON('capspot')) for (const [vw, vh, mustClearBody, ins, sp] of [[568, 320, true], [320, 256, true], [844, 390, true], [1280, 800, true], [390, 844, false],
+      [390, 844, true, { top: 96, bottom: 200 }, ''], [390, 844, true, { top: 96, bottom: 200 }, 'crimpo']]) {
       const cctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
       const { page: cp, bad: cbad } = await openView(cctx, `quality=low&body=${bodyQ}`, `capspot-${vw}x${vh}`, [/GPU stall due to ReadPixels/i]);
-      const r = await cp.evaluate(() => {
-        const R = window.__RV__; R.setGenome(''); R.frames(120); R.dropCapsule(); R.frames(150);
+      const r = await cp.evaluate(([ins, g]) => {
+        const R = window.__RV__;
+        if (ins) R.stage.setSafeInsets(ins);
+        if (g) R.setGenomeObject(g); else R.setGenome('');
+        R.frames(120); R.dropCapsule(); R.frames(150);
         const ci = R.capsuleInfo(), W = R.stage.canvas.clientWidth, H = R.stage.canvas.clientHeight, cam = R.stage.camera;
         const v = R.stage.views[0], Q = v.proxy.positions, P = new (cam.position.constructor)();
         let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
@@ -823,11 +841,13 @@ try {
         const cap = p ? [p.x - rr * 0.75, p.y - rr * 1.4, p.x + rr * 0.75, p.y + rr * 1.4] : null;
         const ov = cap ? Math.max(0, Math.min(cap[2], x1) - Math.max(cap[0], x0)) * Math.max(0, Math.min(cap[3], y1) - Math.max(cap[1], y0)) : -1;
         return { W, H, landed: ci.landed, cap: cap && cap.map(Math.round), body: [x0, y0, x1, y1].map(Math.round), overlapPx2: Math.round(ov), png: R.snapshot() };
-      });
-      writeFileSync(resolve(OUT, `capspot_${vw}x${vh}.png`), b64(r.png));
-      const okBottom = !!r.cap && r.cap[3] <= r.H - 72 && r.cap[0] >= 0 && r.cap[2] <= r.W && r.cap[1] >= 0;
+      }, [ins ?? null, sp ? speciesBaseGenome(sp, 1) : null]);
+      const tag = ins ? `${vw}x${vh}_hud${sp ? '_' + sp : ''}` : `${vw}x${vh}`;
+      writeFileSync(resolve(OUT, `capspot_${tag}.png`), b64(r.png));
+      const bot = ins ? ins.bottom : 72, top = ins ? ins.top : 0;
+      const okBottom = !!r.cap && r.cap[3] <= r.H - bot && r.cap[0] >= 0 && r.cap[2] <= r.W && r.cap[1] >= top;
       check(r.landed && okBottom && (!mustClearBody || r.overlapPx2 === 0),
-        `capsule spot ${vw}x${vh}: inside the frame, clear of the bottom 72 CSS px${mustClearBody ? ' and of the body' : ' (narrow portrait: in front of the body, its face uncovered)'}`,
+        `capsule spot ${vw}x${vh}${ins ? ` with the HUD's insets (top ${top}, bottom ${bot})${sp ? ', ' + sp : ''}` : ''}: inside the frame, clear of the ${ins ? 'HUD rows' : 'bottom 72 CSS px'}${mustClearBody ? ' and of the body' : ' (narrow portrait: in front of the body, its face uncovered)'}`,
         `capsule ${JSON.stringify(r.cap)}, body ${JSON.stringify(r.body)}, overlap ${r.overlapPx2} px2, frame ${r.W}x${r.H}`);
       report.problems.push(...cbad);
       await cctx.close();

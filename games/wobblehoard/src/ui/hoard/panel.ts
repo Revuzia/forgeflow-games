@@ -564,6 +564,7 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
     open(t) {
       if (env.busy()) { env.announce('The Hoard opens when this is done.'); env.whenIdle(() => ui.open(t)); return; }
       if (!open) lastFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (!open) { try { env.beforeOpen?.(); } catch (e) { console.error(e); } }
       open = true;
       el.hidden = false; el.dataset.open = 'true';
       button.setAttribute('aria-expanded', 'true');

@@ -1071,14 +1071,17 @@ export class SoftBody implements SoftBodyLike {
 
   /**
    * PULL LEVEL of a grab, 0..1 (physics round-2 fix round; the 'snap' intensity and metrics.pull, contracts.ts): how far its target has been
-   * pulled from where the grab started RELATIVE TO THE BODY (minus how far the body's centre of mass has moved since: a body dragged along
-   * is not stretched; the verifier's MINOR-8: boingle pulled 2 R moved 0.5 R and still read 1.0), over this body's own maximum pull
-   * (SoftParams.maxPull x restRadius: the family's maxPull with the genome's stretch band; at a neutral genome 1.70 R for the gel, 1.13 R firm
-   * silicone, 2.85 R sticky stretch). updateGrabs clamps the pull there, so 1 = the body reached its family's maxPull with its feet held.
-   * (metrics.stretch, the body's own extent, stays as it was: 0.25 for a gel at its maxPull.)
+   * pulled from where the grab started, over this body's own maximum pull (SoftParams.maxPull x restRadius: the family's maxPull with the
+   * genome's stretch band; at a neutral genome 1.70 R for the gel, 1.13 R firm silicone, 2.85 R sticky stretch). updateGrabs clamps the pull
+   * there, so 1 = the body reached its family's maxPull, for every family, and a half pull reads 0.5. Relative to the body's BASE: on the
+   * table the grab pins the feet, so the base does not move and nothing is subtracted; with nothing pinned (floating) the body's centre
+   * travel since the grab is subtracted, so a body dragged along is not a stretch (the verifier's MINOR-8). (Physics round 3: subtracting
+   * the centre's travel on the table too, as fix round 2 did, also removed the stretch itself, because a stretched body's centre moves
+   * toward the hand: a pull to the limit read 0.31-0.78 and a half pull 0.14-0.41.)
    */
   private pullLevel(g: Grab): number {
-    const dx = g.ex - g.t0x - (this.cx - g.c0x), dy = g.ey - g.t0y - (this.cy - g.c0y), dz = g.ez - g.t0z - (this.cz - g.c0z), maxD = this.p.maxPull * this.restRadius;
+    const tk = this.pinCount > 0 ? 0 : 1;   // (an integer factor: no int / double ternary)
+    const dx = g.ex - g.t0x - (this.cx - g.c0x) * tk, dy = g.ey - g.t0y - (this.cy - g.c0y) * tk, dz = g.ez - g.t0z - (this.cz - g.c0z) * tk, maxD = this.p.maxPull * this.restRadius;
     const l = Math.sqrt(dx * dx + dy * dy + dz * dz) / (maxD > 1e-9 ? maxD : 1e-9);
     return l < 0 ? 0 : l > 1 - 1e-9 ? 1 : l;   // (the clamp leaves it a rounding error short of 1 at the limit)
   }
@@ -1598,7 +1601,9 @@ export class SoftBody implements SoftBodyLike {
     const n = this.n, X = this.X, V = this.V, M = this.M;
     let sx = 0, sz = 0, svx = 0, svz = 0;
     for (let i = 0; i < n; i++) { const m = M[i], i3 = i * 3; sx += m * X[i3]; sz += m * X[i3 + 2]; svx += m * V[i3]; svz += m * V[i3 + 2]; }
-    const im = 1 / this.Mtot, cx = sx * im, cz = sz * im;
+    // about the body's HOME (the origin for the play body; its spot for a body built `at` one: a mat squishy or a piece keeps its own dead
+    // zone and rim around where it was put, instead of being glided into the play body's)
+    const im = 1 / this.Mtot, cx = sx * im - this.homeX, cz = sz * im - this.homeZ;
     const r = Math.sqrt(cx * cx + cz * cz);
     if (!(r > p.matR0) || (rimOnly && !(r >= p.matRim))) return;
     const ux = cx / r, uz = cz / r, rim = r >= p.matRim, w = rim ? 1 : smooth01((r - p.matR0) / Math.max(1e-6, p.matRamp));
@@ -1842,7 +1847,8 @@ export class SoftBody implements SoftBodyLike {
     // MAT CORRAL (the cheap dead-zone test on the last substep's centre is done here, inline, so the call only happens outside it): off while
     // something HOLDS the body (a grab, the pinned feet, a fingertip touching it); while a finger is down but its tip touches nothing (the
     // body was shoved out from under it) only the rim acts, so a nudge cannot carry the body off the mat past a finger that is merely down
-    if (this.gravityOn && !grabbing && !this.moveOn && this.pinCount === 0 && this.cx * this.cx + this.cz * this.cz > this.p.matR0 * this.p.matR0 * 0.81) {
+    const hdx = this.cx - this.homeX, hdz = this.cz - this.homeZ;   // (about the body's home: see matCorral)
+    if (this.gravityOn && !grabbing && !this.moveOn && this.pinCount === 0 && hdx * hdx + hdz * hdz > this.p.matR0 * this.p.matR0 * 0.81) {
       const a0 = f0.down || f0.retracting, a1 = f1.down || f1.retracting;
       if (!(a0 && f0.touching) && !(a1 && f1.touching)) this.matCorral(a0 || a1);
     }
@@ -2785,11 +2791,11 @@ export class SoftBody implements SoftBodyLike {
     // (written out, not pullLevel(): a double returned from a call this large function does not inline is boxed, one HeapNumber per frame)
     {
       let pl = 0;
-      const maxD = Math.max(1e-9, this.p.maxPull * this.restRadius);
+      const maxD = Math.max(1e-9, this.p.maxPull * this.restRadius), tk = this.pinCount > 0 ? 0 : 1;   // (see pullLevel: the base's travel)
       for (let k = 0; k < 2; k++) {
         const g = this.grabs[k];
         if (!g.active) continue;
-        const dx = g.ex - g.t0x - (this.cx - g.c0x), dy = g.ey - g.t0y - (this.cy - g.c0y), dz = g.ez - g.t0z - (this.cz - g.c0z);
+        const dx = g.ex - g.t0x - (this.cx - g.c0x) * tk, dy = g.ey - g.t0y - (this.cy - g.c0y) * tk, dz = g.ez - g.t0z - (this.cz - g.c0z) * tk;
         const l = Math.sqrt(dx * dx + dy * dy + dz * dz) / maxD;
         if (l > pl) pl = l;
       }

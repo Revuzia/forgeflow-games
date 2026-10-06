@@ -29,7 +29,11 @@ export interface PlayIdentity {
  *    * `shared` (stage B2, the physics offers `collide`): it was built AT its mat spot in the play body's world space, is drawn where it
  *      simulates (`position` is the origin) and pushes against the other shared bodies through `collide`.
  *  `id` is the stage's view id (it changes on a re-add). */
-export interface ExtraBody { id: number; body: SoftBodyLike; genome: Genome; tier: TierName; itemId: string | null; position: V3; shared: boolean }
+export interface ExtraBody {
+  id: number; body: SoftBodyLike; genome: Genome; tier: TierName; itemId: string | null; position: V3; shared: boolean;
+  /** CUT (cut.ts): a piece of the play squishy (an eyeless chunk), not a squishy brought out of the Hoard; the mat ignores it */
+  piece?: boolean;
+}
 
 export interface BodyManager {
   readonly body: SoftBodyLike;
@@ -38,18 +42,23 @@ export interface BodyManager {
   /** Build a body for this genome without committing anything (throws whatever createBody throws). */
   build(genome: Genome): SoftBodyLike;
   /** Atomic swap to a new genome (or to a body built with `build`). Returns false (and changes nothing) when construction failed. */
-  swapTo(genome: Genome, opts?: { itemId?: string | null; nickname?: string | null; body?: SoftBodyLike }): boolean;
+  swapTo(genome: Genome, opts?: { itemId?: string | null; nickname?: string | null; body?: SoftBodyLike; silent?: boolean }): boolean;
   /** Adopt a body the STAGE already shows as its primary (a ceremony result). Never calls stage.setBody. */
   adopt(body: SoftBodyLike, genome: Genome, opts?: { itemId?: string | null; nickname?: string | null; tier?: TierName }): void;
   /** Stage B seam: another shell-owned body on the mat (stage.addBody). Returns the stage id, or -1 when the stage cannot.
    *  `shared`: the body lives in the play body's world space (built at its spot) and takes part in body-to-body contact. */
-  addExtra(body: SoftBodyLike, genome: Genome, opts?: { tier?: TierName; position?: V3; itemId?: string | null; shared?: boolean }): number;
+  addExtra(body: SoftBodyLike, genome: Genome, opts?: { tier?: TierName; position?: V3; itemId?: string | null; shared?: boolean; piece?: boolean; chunk?: boolean }): number;
   removeExtra(id: number): void;
   /** Move the extras that stand APART to new render offsets (in order; shared ones keep their place): their views are re-added there;
    *  the physics bodies are kept. */
   placeExtras(positions: readonly V3[]): void;
+  /** the stage's view id of a body (the play body: the stage's primary; an extra: its id), or null */
+  viewIdOf(body: SoftBodyLike): number | null;
   /** bodies that push against each other every step (body.collide; 0 when fewer than two can) */
   readonly contactBodies: number;
+  /** A ghost takes no part in body-to-body contact (a cut piece flowing into another must not shove it away); off again with false.
+   *  A body that leaves the manager stops being a ghost. */
+  setGhost(body: SoftBodyLike, on: boolean): void;
   /** One sim step: body.collide(others) for every body in contact (stage B2, before any step), then step the play body and the extras. */
   step(dt: number): void;
 }
@@ -59,7 +68,8 @@ export interface BodyManagerDeps {
   stage: StageLike;
   initial: { body: SoftBodyLike; identity: PlayIdentity };
   beforeSwap(): void;
-  afterSwap(identity: PlayIdentity, body: SoftBodyLike): void;
+  /** silent: the same squishy in another body (a cut piece, whole again): no identity announcement, no history note */
+  afterSwap(identity: PlayIdentity, body: SoftBodyLike, silent: boolean): void;
   report(e: unknown): void;
 }
 
@@ -82,10 +92,12 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
   const extras: ExtraBody[] = [];
   // stage B2: who collides with whom, rebuilt when the mat or the play body changes (so a step allocates nothing)
   let contacts: Array<{ b: SoftBodyLike; others: SoftBodyLike[] }> = [];
+  const ghosts = new Set<SoftBodyLike>();
   const rebuildContacts = (): void => {
+    for (const g of ghosts) if (g !== body && !extras.some((x) => x.body === g)) ghosts.delete(g);
     const all: SoftBodyLike[] = [];
-    if (typeof body.collide === 'function') all.push(body);
-    for (const x of extras) if (x.shared && typeof x.body.collide === 'function') all.push(x.body);
+    if (typeof body.collide === 'function' && !ghosts.has(body)) all.push(body);
+    for (const x of extras) if (x.shared && typeof x.body.collide === 'function' && !ghosts.has(x.body)) all.push(x.body);
     contacts = all.length >= 2 ? all.map((b) => ({ b, others: all.filter((o) => o !== b) })) : [];
   };
 
@@ -93,16 +105,16 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
   /** (re)show one extra's view at its position; false when the stage cannot */
   const showExtra = (x: ExtraBody): boolean => {
     if (!d.stage.addBody) return false;
-    try { x.id = d.stage.addBody(x.body, x.genome, { tier: x.tier, position: x.position }); return x.id >= 0; } catch (e) { d.report(e); return false; }
+    try { x.id = d.stage.addBody(x.body, x.genome, x.piece ? { tier: x.tier, position: x.position, chunk: true } : { tier: x.tier, position: x.position }); return x.id >= 0; } catch (e) { d.report(e); return false; }
   };
-  const commit = (b: SoftBodyLike, id: PlayIdentity, viaStage: boolean): void => {
+  const commit = (b: SoftBodyLike, id: PlayIdentity, viaStage: boolean, silent = false): void => {
     try { d.beforeSwap(); } catch (e) { d.report(e); }
     if (viaStage) d.stage.setBody(b, id.genome);   // setBody = clearBodies + addBody: the mat's views go with it ...
     body = b;
     identity = id;
     if (viaStage) { styleTier(d.stage, id.tier); for (const x of extras) showExtra(x); }   // ... so they come straight back
     rebuildContacts();
-    try { d.afterSwap(identity, body); } catch (e) { d.report(e); }
+    try { d.afterSwap(identity, body, silent); } catch (e) { d.report(e); }
   };
 
   return {
@@ -113,7 +125,7 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
     swapTo(genome, opts = {}) {
       try {
         const b = opts.body ?? d.createBody(genome);
-        commit(b, { genome, tier: tierOfGenome(genome), itemId: opts.itemId ?? null, nickname: opts.nickname ?? null }, true);
+        commit(b, { genome, tier: tierOfGenome(genome), itemId: opts.itemId ?? null, nickname: opts.nickname ?? null }, true, !!opts.silent);
         return true;
       } catch (e) { d.report(e); return false; }
     },
@@ -123,7 +135,7 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
     addExtra(b, genome, opts = {}) {
       const shared = !!opts.shared;
       const p = shared ? { x: 0, y: 0, z: 0 } : opts.position ?? { x: 0, y: 0, z: 0 };
-      const x: ExtraBody = { id: -1, body: b, genome, tier: opts.tier ?? tierOfGenome(genome), itemId: opts.itemId ?? null, position: { x: p.x, y: p.y, z: p.z }, shared };
+      const x: ExtraBody = { id: -1, body: b, genome, tier: opts.tier ?? tierOfGenome(genome), itemId: opts.itemId ?? null, position: { x: p.x, y: p.y, z: p.z }, shared, piece: !!opts.piece };
       if (!showExtra(x)) return -1;
       extras.push(x);
       rebuildContacts();
@@ -145,7 +157,17 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
         showExtra(x);
       }
     },
+    viewIdOf(b) {
+      if (b === body) { try { return d.stage.primaryBodyId?.() ?? null; } catch { return null; } }
+      const x = extras.find((e) => e.body === b);
+      return x ? x.id : null;
+    },
     get contactBodies() { return contacts.length; },
+    setGhost(b, on) {
+      if (on === ghosts.has(b)) return;
+      if (on) ghosts.add(b); else ghosts.delete(b);
+      rebuildContacts();
+    },
     step(dt) {
       for (let i = 0; i < contacts.length; i++) { const c = contacts[i]; try { c.b.collide!(c.others); } catch (e) { d.report(e); } }
       body.step(dt);

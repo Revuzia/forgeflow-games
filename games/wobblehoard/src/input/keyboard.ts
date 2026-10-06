@@ -1,5 +1,5 @@
 // Keyboard glue. Space = poke the centre (hold it to squish: it is a synthetic pointer at the body's centre, so it runs the SAME gesture
-// code as a finger), G = gravity <-> float, M = mute, H = the Hoard, Escape = close the panel. Extras for people who cannot drag: arrow keys orbit,
+// code as a finger), G = gravity <-> float, M = mute, H = the Hoard, T = the toy tray, C = the Cut tool, [ ] = switch, Escape = close the panel. Extras for people who cannot drag: arrow keys orbit,
 // + / - zoom. During a ceremony Space, Enter and Escape skip it (after the 350 ms gate).
 //
 // Focus rules (WCAG 2.1.1 / 2.1.4; audit findings 12 and 13):
@@ -28,6 +28,10 @@ export interface KeyboardOptions {
   onHoard?(): void;
   /** [ and ]: switch the play squishy (the HUD quick switcher); same rules as G and M */
   onSwitch?(dir: -1 | 1): void;
+  /** T: open the toy tray (FUN.md 1); same rules as G and M */
+  onToys?(): void;
+  /** C: the Cut tool on or off (CUT.md 1); same rules as G and M */
+  onCut?(): void;
 }
 
 interface KeyEventLike extends Event {
@@ -83,6 +87,19 @@ export function attachKeyboard(target: KeyTarget, app: Pick<App, 'input' | 'phas
       if (e.repeat || !shortcuts()) return;
       opts.onKeyUsed?.();
       opts.onSwitch(key === ']' ? 1 : -1);
+      return;
+    }
+    if ((key === 't' || key === 'T') && opts.onToys) {
+      if (e.repeat || !shortcuts()) return;
+      e.preventDefault();   // the tray takes focus: the key must not type into it
+      opts.onKeyUsed?.();
+      opts.onToys();
+      return;
+    }
+    if ((key === 'c' || key === 'C') && opts.onCut) {
+      if (e.repeat || !shortcuts() || app.input.live === false) return;
+      opts.onKeyUsed?.();
+      opts.onCut();
       return;
     }
     if ((key === 'h' || key === 'H') && opts.onHoard) {

@@ -41,6 +41,10 @@
 //
 // Stage B and CUT (_spec/CUT.md), how the shell drives them (all optional StageLike members, every one implemented here):
 //   * matLayout(n) -> offsets for addBody(..., { position }); with 2+ bodies visible the camera frames them all (pieces of a cut too).
+//     setBody() on a stage that shows bodies (a swap: the Hoard preview, a quick switch) eases from the current framing instead of
+//     snapping to one body, so re-adding the mat bodies right after keeps the group framing without a jump; after clearBodies it snaps.
+//   * The meter-full capsule stands clear of setSafeInsets' HUD rows and of every body's screen box; where no full-size spot is clean (a
+//     tall phone with ~200 px of HUD rows) it stands smaller (down to 0.46x) beside the body, and grows back to full when a reveal takes it.
 //   * setSafeInsets({ bottom, ... }): the HUD's CSS px; onStrand(bodyId, e): the strand voice (tack strands and the cut's parting strand).
 //   * A cut: every frame of the neck, body.setNeck(plane, t) (PHYS) and stage.setCutSeam(bodyId, plane, t) (the warm seam glow, plane in
 //     the body's world space). At t = 1: removeBody(id), addBody(piece, genome, { tier, chunk }) for each piece (chunk: no face, same
@@ -62,6 +66,12 @@ import { Capsule, CAPSULE_HEIGHT } from './capsule.ts';
 
 /** The capsule's radius (capsule.ts R): its footprint for the landing-spot choice. */
 const CAP_R = 0.24;
+/** The capsule-spot search: sizes tried in turn, sides, depths and side gaps (x body scale), in-front spots ([x share, z x gap]). */
+const SPOT_SIZES = [1, 0.8, 0.66, 0.55, 0.46];
+const SIDES = [1, -1];
+const SPOT_DEPTHS = [0.15, 0, -0.25, -0.5];
+const SPOT_GAPS = [0.14, 0.06, 0.26];
+const FRONT: readonly (readonly [number, number])[] = [[0.45, 1], [0.5, 1], [0.45, 2], [0, 2.2], [0, 3.2], [0.3, 3.9], [0.3, 2.6], [0.3, 1.6]];
 import { CeremonyDirector, type CeremonyHost } from './ceremony.ts';
 import { CutFx } from './cutfx.ts';
 import { createDecalGeometry } from './decals.ts';
@@ -205,6 +215,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   const safe = { top: 0, right: 0, bottom: 72, left: 0 };
   const spotBoxes: number[][] = [], spotBox = [0, 0, 0, 0], spotV = new THREE.Vector3();
   let spotReframes = false;
+  /** setBody of a swap: the new primary does not snap the camera framing (it eases from where it is). */
+  let keepFraming = false;
 
   const primary = (): BodyView | null => { for (const v of views) if (v.id === primaryId) return v; return null; };
   const viewById = (id: number): BodyView | null => { for (const v of views) if (v.id === id) return v; return null; };
@@ -212,12 +224,13 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
 
   /**
    * Where the meter-full capsule lands, chosen ON SCREEN: the first spot (in this order) whose capsule stays inside the frame minus the
-   * shell's safe insets (setSafeInsets: the HUD rows; by default the bottom 72 CSS px) and clear of every visible body's screen box:
-   * beside the bodies on the right, on the left, behind them to a side, in front of them. If none is clean (a tiny frame) the least bad
-   * one wins. During a ceremony the primary may be sliding off (capsule reveal) or hidden (merge): the spots are around the PAD, where
-   * the result lands (a unit body there).
+   * shell's safe insets (setSafeInsets: its HUD rows; by default the bottom 72 CSS px) and clear of every visible body's screen box:
+   * beside the bodies on the right, on the left (closest clean offset first, at four depths), behind them to a side, in front of them.
+   * If no spot is clean at full size (a tall phone whose HUD rows take the bottom ~200 px, the body filling the width) the same search
+   * runs with a smaller capsule (0.8x, 0.66x, 0.55x, 0.46x); only if none of those is clean either does the least bad spot win. During a
+   * ceremony the primary may be sliding off (capsule reveal) or hidden (merge): the spots are around the PAD (a unit body there).
    */
-  function capsuleSpot(p: BodyView | null): { x: number; z: number } {
+  function capsuleSpot(p: BodyView | null): { x: number; z: number; size: number } {
     const sc = p ? p.scale : 1;
     camera.updateMatrixWorld();
     // the bodies' table extents (world) and screen boxes
@@ -241,46 +254,58 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       if (!Number.isFinite(x0)) { x0 = -0.5 * sc; x1 = 0.5 * sc; z0 = -0.5 * sc; z1 = 0.5 * sc; }
       zc = p.proxy.center.z;
     }
-    const gap = CAP_R + 0.14 * sc, cx = (x0 + x1) / 2;
-    const cands = [
-      x1 + gap, zc + 0.15 * sc, x1 + gap, zc, x1 + gap, zc - 0.25 * sc,
-      x0 - gap, zc + 0.15 * sc, x0 - gap, zc, x0 - gap, zc - 0.25 * sc,
-      x1 + gap * 0.4, z0 - gap, x0 - gap * 0.4, z0 - gap,
-      cx + 0.45 * (x1 - x0), z1 + gap, x1 + gap * 0.5, z1 + gap, cx + 0.45 * (x1 - x0), z1 + gap * 2, cx, z1 + gap * 2.2, cx, z1 + gap * 3.2,
-      cx + 0.3 * (x1 - x0), z1 + gap * 3.9, cx + 0.3 * (x1 - x0), z1 + gap * 2.6, cx + 0.3 * (x1 - x0), z1 + gap * 1.6,
-    ];
     // with 2..5 bodies out the camera frames the capsule too (updateCamera): a spot beside the group is never "off the frame" sideways
     spotReframes = spotBoxes.length >= 2;
-    let best = 0, bestBad = Infinity;
-    for (let i = 0; i < cands.length; i += 2) {
-      const bad = spotBadness(cands[i], cands[i + 1], cands[i + 1] < zc ? 2 : 0.6);
-      if (bad < bestBad - 1e-6) { bestBad = bad; best = i; }
-      if (bad <= 0) break;
+    const cx = (x0 + x1) / 2;
+    let bx = x1 + CAP_R + 0.14 * sc, bz = zc, bs = 1, bestBad = Infinity;
+    const tryAt = (x: number, z: number, size: number): boolean => {
+      const bad = spotBadness(x, z, z < zc ? 2 : 0.6, size) + (1 - size) * 4;   // (between equally bad spots, the bigger capsule)
+      if (bad < bestBad - 1e-6) { bestBad = bad; bx = x; bz = z; bs = size; }
+      return bad - (1 - size) * 4 <= 0;
+    };
+    for (const size of SPOT_SIZES) {
+      const r = CAP_R * size, gap = r + 0.14 * sc;
+      // beside: right, then left, at four depths; the usual gap first, then a tighter one, then a wider one
+      for (const g of SPOT_GAPS) for (const side of SIDES) for (const dz of SPOT_DEPTHS) {
+        const x = side > 0 ? x1 + r + g * sc : x0 - r - g * sc;
+        if (tryAt(x, zc + dz * sc, size)) return { x: bx, z: bz, size: bs };
+      }
+      // behind to a side, then in front (lower in the picture)
+      if (tryAt(x1 + gap * 0.4, z0 - gap, size) || tryAt(x0 - gap * 0.4, z0 - gap, size)) return { x: bx, z: bz, size: bs };
+      for (const [fx, fz] of FRONT) if (tryAt(cx + fx * (x1 - x0), z1 + fz * gap, size)) return { x: bx, z: bz, size: bs };
     }
-    return { x: cands[best], z: cands[best + 1] };
+    return { x: bx, z: bz, size: bs };
   }
   /**
-   * How badly a capsule standing at (x, z) breaks the rules, in CSS px: outside the safe frame (x3) + overlap with a body box (0 = clean),
-   * the overlap weighted by `hideW`: a capsule BEHIND a body is hidden by it (2), one in front only covers a little of it (0.6).
+   * How badly a capsule of `size` standing at (x, z) breaks the rules, in CSS px: outside the safe frame (x3) + overlap with a body box
+   * (0 = clean). The overlap is weighted by `hideW`: a capsule BEHIND a body is hidden by it (2); one in front covers the face (the upper
+   * 65% of the box, 0.6) or, less badly, the foot (0.2).
    */
-  function spotBadness(x: number, z: number, hideW: number): number {
+  function spotBadness(x: number, z: number, hideW: number, size: number): number {
     // the capsule's silhouette box: its centre +- its projected radius / half-height
-    spotV.set(x, CAPSULE_HEIGHT / 2, z).project(camera);
+    const hh = CAPSULE_HEIGHT * size;
+    spotV.set(x, hh / 2, z).project(camera);
     const cx = (spotV.x * 0.5 + 0.5) * cssW, cy = (1 - (spotV.y * 0.5 + 0.5)) * cssH;
-    spotV.set(x + CAP_R, CAPSULE_HEIGHT / 2, z).project(camera);
+    spotV.set(x + CAP_R * size, hh / 2, z).project(camera);
     const rx = Math.abs((spotV.x * 0.5 + 0.5) * cssW - cx);
-    spotV.set(x, CAPSULE_HEIGHT, z).project(camera);
+    spotV.set(x, hh, z).project(camera);
     const ry = Math.abs((1 - (spotV.y * 0.5 + 0.5)) * cssH - cy);
     const b = spotBox; b[0] = cx - rx; b[2] = cx + rx; b[1] = cy - ry; b[3] = cy + ry;
     const W = cssW, H = cssH, m = 6;
+    // the tap circle (CapsuleHandle.screenPoint: 1.35x the projected radius) is wider than the silhouette: it must stay on screen too
+    spotV.set(x, (CAPSULE_HEIGHT / 2 + CAP_R) * size, z).project(camera);
+    const rh = Math.max(rx, Math.max(20, Math.abs((1 - (spotV.y * 0.5 + 0.5)) * cssH - cy) * 1.35));
     // off the safe frame counts 3x: a capsule half under the HUD or off the edge cannot be tapped; a little overlap only hides some of it
     let bad = 3 * (Math.max(0, safe.top + m - b[1]) + Math.max(0, b[3] - (H - safe.bottom - m)));
-    if (!spotReframes) bad += 3 * (Math.max(0, safe.left + m - b[0]) + Math.max(0, b[2] - (W - safe.right - m)));
+    if (!spotReframes) bad += 3 * (Math.max(0, safe.left + m - (cx - rh)) + Math.max(0, cx + rh - (W - safe.right - m)));
     for (const o of spotBoxes) {
-      // in front of a body only its upper 65% (the face) counts: covering its foot on a narrow phone is the lesser evil
-      const top = o[1], bot = hideW < 1 ? o[1] + 0.65 * (o[3] - o[1]) : o[3];
-      const ox = Math.min(b[2], o[2]) - Math.max(b[0], o[0]), oy = Math.min(b[3], bot) - Math.max(b[1], top);
-      if (ox > 0 && oy > 0) bad += hideW * Math.sqrt(ox * oy);
+      const ox = Math.min(b[2], o[2]) - Math.max(b[0], o[0]);
+      if (ox <= 0) continue;
+      if (hideW >= 1) { const oy = Math.min(b[3], o[3]) - Math.max(b[1], o[1]); if (oy > 0) bad += hideW * Math.sqrt(ox * oy); continue; }
+      const face = o[1] + 0.65 * (o[3] - o[1]);
+      const oyF = Math.min(b[3], face) - Math.max(b[1], o[1]), oyL = Math.min(b[3], o[3]) - Math.max(b[1], face);
+      if (oyF > 0) bad += hideW * Math.sqrt(ox * oyF);
+      if (oyL > 0) bad += 0.2 * Math.sqrt(ox * oyL);
     }
     return bad;
   }
@@ -308,7 +333,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     if (pos) v.proxy.setOffset(pos.x, pos.y, pos.z);
     scene.add(v.group);
     views.push(v);
-    if (primaryId === null) { primaryId = v.id; bodyScale = v.scale; if (!director.active) camScale = bodyScale; }
+    if (primaryId === null) { primaryId = v.id; bodyScale = v.scale; if (!director.active && !keepFraming) camScale = bodyScale; }
     return v;
   }
   function removeView(v: BodyView): void {
@@ -413,6 +438,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       if (!c) { c = new Capsule(hub, quad, !TIERS[tier].transmission); c.calm = calm; c.appear(0, 0.25, undefined, 0.2); scene.add(c.group); capsuleId++; }
       capsule = null;
       revealCap = c;
+      c.sizeGoal = 1;                      // a capsule stood small beside the body grows back to full as the reveal slides it to the pad
       return c;
     },
     releaseCapsule(c) { if (revealCap === c) discardRevealCapsule(); else if (capsule === c) discardCapsule(); },
@@ -429,6 +455,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       capsuleParked = false;
       const p = primary(), spot = capsuleSpot(p), cb = parkedOnLand;
       parkedOnLand = null;
+      capsule.setSize(spot.size);
       capsule.appear(spot.x, spot.z, cb ?? undefined);   // fades back in beside the result (onLand only if it was dropped DURING the merge)
     },
     addToScene: (o) => { scene.add(o); },
@@ -484,10 +511,15 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     setBody(body, genome) {
       if (disposed) return;
       director.abort();
+      // a SWAP (bodies were showing: the Hoard's preview, a quick switch) eases from the current framing, so a mat group the shell
+      // re-adds right after keeps its framing without the camera jumping in and back out; the first body after an empty stage snaps
+      const swap = views.length > 0;
       stage.clearBodies();
+      keepFraming = swap;
       const v = addView(body, genome, 'common', false);
-      primaryId = v.id; bodyScale = v.scale; camScale = bodyScale; framing = null;
-      tgt.set(body.center.x * 0.6, TARGET_Y * bodyScale, body.center.z * 0.6);
+      keepFraming = false;
+      primaryId = v.id; bodyScale = v.scale; framing = null;
+      if (!swap) { camScale = bodyScale; tgt.set(body.center.x * 0.6, TARGET_Y * bodyScale, body.center.z * 0.6); }
       governor.resetWindow(24);
     },
 
@@ -537,6 +569,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       const p = primary();
       const spot = capsuleSpot(p);
       const x = opts?.at?.x ?? spot.x, z = opts?.at?.z ?? spot.z;
+      c.setSize(opts?.at ? 1 : spot.size);
       c.calm = calm;
       if (director.kind === 'merge') {     // the pad is busy: it waits out of sight and fades in beside the result when the merge ends
         c.placeStanding(x, z); c.group.visible = false; c.touchedDown = false; capsuleParked = true; parkedOnLand = opts?.onLand ?? null;

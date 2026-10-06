@@ -107,7 +107,9 @@ export async function boot(): Promise<(() => void) | null> {
       collection: hoard,
       epochNow,
       // the play mat with contact (mat.ts): a whole squishy built at its mat spot is the face piece of frac 1 (contracts.ts PieceOpts)
-      createBody: (g, o) => (o?.at ? new (SoftBody as unknown as SoftBodyCtor)(g, { piece: { frac: 1, chunk: false, at: o.at } }) : new SoftBody(g)),
+      // CUT (cut.ts): one piece of a cut squishy, built with the contract's PieceOpts
+      createBody: (g, o) => (o?.piece ? new (SoftBody as unknown as SoftBodyCtor)(g, { piece: o.piece })
+        : o?.at ? new (SoftBody as unknown as SoftBodyCtor)(g, { piece: { frac: 1, chunk: false, at: o.at } }) : new SoftBody(g)),
       createStage,
       createAudio,
       genome: cfg.genomeParam ? genomeFromParam(cfg.genomeParam) : undefined,
@@ -141,7 +143,7 @@ export async function boot(): Promise<(() => void) | null> {
 
   // ---- input + lifecycle
   const detachPointer = attachPointerInput(canvas, g);
-  const detachKeys = attachKeyboard(window, g, { onEscape: () => ui.escape(), shortcutsEnabled: () => g.settings.shortcuts, onKeyUsed: () => ui.keyUsed(), onHoard: () => { if (g.phase === 'play') ui.hoard.toggle(); }, onSwitch: (dir) => { if (g.phase === 'play' && !ui.hoard.isOpen) ui.switchBy(dir); } });
+  const detachKeys = attachKeyboard(window, g, { onEscape: () => ui.escape(), shortcutsEnabled: () => g.settings.shortcuts, onKeyUsed: () => ui.keyUsed(), onHoard: () => { if (g.phase === 'play') ui.hoard.toggle(); }, onSwitch: (dir) => { if (g.phase === 'play' && !ui.hoard.isOpen) ui.switchBy(dir); }, onToys: () => { if (g.phase === 'play' && !ui.hoard.isOpen) ui.toys.toggle(); }, onCut: () => { if (g.phase === 'play' && !ui.hoard.isOpen && g.cut.supported) g.setTool(g.tool === 'cut' ? 'hand' : 'cut'); } });
   const detachLife = attachLifecycle(g);
 
   // another tab changed the settings: follow it (the 'storage' event fires in the OTHER tabs only)

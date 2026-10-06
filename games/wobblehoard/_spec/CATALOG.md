@@ -117,8 +117,8 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | 8 | Wisplet | Marshmallow Puff | 0.15 / 0.00 / 0.30 / 0.20 (cap 0.40) / plain  / sleepy / 0.60 | 2 / 0.86 / 1.56 | Crimpo 0.14 | Glugbean 0.086 |
 | 9 | Cushlet | Marshmallow Puff | 0.15 / 0.00 / 0.30 / 0.18 (cap 0.40) / plain  / sleepy / 0.70 | 4 / 1.30 / 1.92 | Plumpet 0.11 | Thudge 0.078 |
 | 10 | Crimpo | Mochi Dough | 0.30 / 0.00 / 0.30 / 0.26 (cap 0.45) / plain  / dot / 0.55 | 2 / 0.92 / 1.62 | Pastrel 0.09 | Ambrosel 0.056 |
-| 11 | Thumbly | Mochi Dough | 0.30 / 0.00 / 0.35 / 0.28 (cap 0.45) / plain  / oval / 0.50 | 2 / 1.32 / 1.63 | Glugbean 0.13 | Wisplet 0.090 |
-| 12 | Boingle | Firm Silicone | 0.30 / 0.00 / 0.55 / 0.35 / plain  / wide / 0.40 | 2 / 0.78 / 1.61 | Tidelume 0.17 | Wrigglo 0.062 |
+| 11 | Thumbly | Mochi Dough | 0.30 / 0.00 / 0.35 / 0.28 (cap 0.45) / plain  / oval / 0.50 | 2 / 1.31 / 1.65 | Glugbean 0.13 | Wisplet 0.090 |
+| 12 | Boingle | Firm Silicone | 0.30 / 0.00 / 0.55 / 0.35 / plain  / wide / 0.40 | 2 / 0.84 / 1.59 | Taffelin 0.15 | Wrigglo 0.062 |
 | 13 | Dimpla | Pop Dome | 0.25 / 0.00 / 0.70 / 0.45 / plain  / dot / 0.35 | 1 / 1.01 / 1.58 | Dollop 0.11 | Boingle 0.082 |
 
 ### Uncommon (11)
@@ -156,7 +156,7 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 
 | idx | Name | Family | Look numbers (core glow / glitter / gloss / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
 |---|---|---|---|---|---|---|
-| 35 | Taffelin | Sticky Stretch | 0.84 / 0.55 / 0.85 / 0.85 / swirl 0.60 / oval / 0.50 | 3 / 1.23 / 2.27 | Tidelume 0.09 | Glimglop 0.055 |
+| 35 | Taffelin | Sticky Stretch | 0.84 / 0.55 / 0.85 / 0.85 / swirl 0.60 / oval / 0.50 | 3 / 1.22 / 2.13 | Tidelume 0.09 | Glimglop 0.055 |
 | 36 | Rattlebead | Bead Squeeze | 0.80 / 0.60 / 0.60 / 0.41 (cap 0.50) / bands 0.70 / wide / 0.50 | 4 / 0.97 / 2.42 | Somnuff 0.11 | Marigel 0.061 |
 | 37 | Cindergoo | Slime Goo | 0.88 / 0.60 / 0.97 / 0.85 / swirl 0.50 / dot / 0.55 | 4 / 0.87 / 2.62 | Twangle 0.11 | Chunkle 0.060 |
 | 38 | Selenuff | Marshmallow Puff | 0.82 / 0.65 / 0.40 / 0.33 (cap 0.40) / swirl 0.60 / sleepy / 0.60 | 3 / 1.00 / 2.29 | Nuzzo 0.11 | Acornel 0.071 |
@@ -178,8 +178,8 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 
 | idx | Name | Family | Look numbers (core glow / glitter / gloss / translucency / pattern / eyes / size) | Shape (features / volume / height) | Closest silhouette | Closest colour |
 |---|---|---|---|---|---|---|
-| 47 | Skeinara | Sticky Stretch | 1.00 / 1.00 / 0.98 / 0.95 / swirl 0.80 / oval / 0.65 | 5 / 1.26 / 2.59 | Taffelin 0.13 | Selenuff 0.072 |
-| 48 | Constello | Bead Squeeze | 1.00 / 1.00 / 0.90 / 0.43 (cap 0.50) / speckle 0.95 / wide / 0.70 | 5 / 1.27 / 2.39 | Acornel 0.15 | Hooplet 0.091 |
+| 47 | Skeinara | Sticky Stretch | 1.00 / 1.00 / 0.98 / 0.95 / swirl 0.80 / oval / 0.65 | 5 / 1.26 / 2.59 | Zingle 0.14 | Selenuff 0.072 |
+| 48 | Constello | Bead Squeeze | 1.00 / 1.00 / 0.90 / 0.43 (cap 0.50) / speckle 0.95 / wide / 0.70 | 5 / 1.18 / 2.40 | Acornel 0.12 | Hooplet 0.091 |
 | 49 | Prismelo | Gummy Jelly | 1.00 / 1.00 / 0.98 / 0.95 / bands 0.90 / oval / 0.60 | 5 / 1.34 / 2.74 | Burrbin 0.10 | Nuzzo 0.058 |
 
 ## Feel of each family (physics scores 0 to 1, from `src/data/materials.ts`)

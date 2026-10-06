@@ -338,3 +338,91 @@ body[data-ceremony] .qswitch, body[data-hoard="open"] .qswitch, body[data-hoard=
   .qs-btn:nth-child(n+5) { display: none; }
   body[data-switch="true"] .meter-state { max-width: 100px; }
 }
+
+/* ---------- the toy tray (FUN.md 1): the Toys button beside the Hoard button, a small menu above it ---------- */
+.toys-btn {
+  position: relative; min-height: var(--tap); min-width: var(--tap); display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px 6px 8px; border-radius: 16px; border: 1px solid var(--wh-edge);
+  background: var(--wh-panel); color: var(--wh-cream); font: inherit; font-weight: 800; font-size: 15px; cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .35); touch-action: manipulation;
+}
+.toys-btn:hover, .toys-btn[aria-expanded="true"] { border-color: var(--wh-amber); }
+.toys-btn:not([data-tool="hand"]) { border-color: var(--wh-amber); color: var(--wh-amber); }
+.toys-btn-icon { display: inline-grid; place-items: center; }
+.tool-icon { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.toys {
+  position: fixed; z-index: 7; left: 50%; bottom: calc(var(--safe-b) + 78px); transform: translateX(-50%);
+  width: min(300px, calc(100vw - 2 * var(--gutter))); padding: 10px; border-radius: 18px;
+  background: var(--wh-panel); border: 1px solid var(--wh-edge); box-shadow: 0 14px 36px rgba(0, 0, 0, .5); pointer-events: auto;
+}
+.toys[hidden] { display: none; }
+.toys-title { margin: 2px 6px 8px; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--wh-cream-dim); }
+.toys-list { display: grid; gap: 6px; }
+.toy {
+  display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 6px 12px; border-radius: 12px; width: 100%; text-align: left;
+  border: 1px solid transparent; background: var(--wh-track); color: var(--wh-cream); font: inherit; cursor: pointer;
+}
+.toy:hover, .toy:focus-visible { border-color: var(--wh-amber); }
+.toy[aria-checked="true"] { border-color: var(--wh-amber); background: color-mix(in srgb, var(--wh-amber) 16%, var(--wh-track)); }
+.toy[aria-checked="true"] .tool-icon { color: var(--wh-amber); }
+.toy-text { display: grid; gap: 1px; }
+.toy-label { font-weight: 900; font-size: 16px; }
+.toy-hint { font-size: 13px; color: var(--wh-cream-dim); }
+
+/* ---------- the Cut tool: its bar, the blade line, a crosshair over the stage ---------- */
+body[data-tool="cut"] #stage, body[data-tool="cut"] #stage:active { cursor: crosshair; }
+body[data-tool="cut"] .qswitch, body[data-tool="cut"] .hint, body[data-tool="snap"] .hint { visibility: hidden; }
+.cutbar {
+  position: fixed; z-index: 5; left: 50%; bottom: calc(var(--safe-b) + 84px); transform: translateX(-50%);
+  width: min(560px, calc(100vw - 2 * var(--gutter))); padding: 10px 12px; border-radius: 16px;
+  background: var(--wh-panel); border: 1px solid var(--wh-edge); box-shadow: 0 10px 28px rgba(0, 0, 0, .45); pointer-events: auto;
+}
+.cutbar[hidden] { display: none; }
+.cutbar-row { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.cutbar-text { margin: 0 2px 8px; font-weight: 800; font-size: 14px; }
+.cutbar-count { font-size: 13px; font-weight: 800; color: var(--wh-amber); white-space: nowrap; }
+.cutbar-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.cutbar-acts .act-btn { min-height: var(--tap); }
+.blade { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 4; pointer-events: none !important; overflow: visible; }
+.blade-glow { stroke: var(--wh-amber); stroke-width: 9; stroke-linecap: round; opacity: .3; }
+.blade-line { stroke: var(--wh-cream); stroke-width: 2; stroke-linecap: round; }
+
+/* ---------- Snap (photo mode): no HUD, a small bar, the backdrop tint over the live canvas ---------- */
+body[data-tool="snap"] .hud, body[data-tool="snap"] .plate, body[data-tool="snap"] .toast, body[data-tool="snap"] .sparks,
+body[data-tool="snap"] .net-banner, body[data-tool="snap"] .play-target, body[data-tool="snap"] .toys { visibility: hidden; }
+.snap-tint { position: fixed; inset: 0; pointer-events: none; mix-blend-mode: soft-light; }
+.snap-tint[hidden] { display: none; }
+.snap-shade { position: fixed; inset: 0; z-index: 6; pointer-events: none !important; background: var(--wh-ink); opacity: 0; transition: opacity .22s ease-out; }
+.snap-shade[data-on="true"] { opacity: .28; transition-duration: .08s; }
+.snapbar {
+  position: fixed; z-index: 7; left: 50%; bottom: calc(var(--safe-b) + 16px); transform: translateX(-50%);
+  width: min(520px, calc(100vw - 2 * var(--gutter))); padding: 10px 12px 12px; border-radius: 18px;
+  background: var(--wh-panel); border: 1px solid var(--wh-edge); box-shadow: 0 12px 30px rgba(0, 0, 0, .45); pointer-events: auto;
+}
+.snapbar[hidden] { display: none; }
+.snapbar-text { margin: 0 2px 8px; font-size: 13px; font-weight: 700; color: var(--wh-cream-dim); }
+.snapbar-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.snapbar-label { font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--wh-cream-dim); }
+.snap-tints { display: flex; gap: 6px; flex-wrap: wrap; }
+.snap-tint-btn {
+  display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap); padding: 4px 12px 4px 6px; border-radius: 999px;
+  border: 1px solid var(--wh-edge); background: var(--wh-track); color: var(--wh-cream); font: inherit; font-weight: 800; font-size: 14px; cursor: pointer;
+}
+.snap-tint-btn[aria-checked="true"] { border-color: var(--wh-amber); box-shadow: 0 0 0 2px color-mix(in srgb, var(--wh-amber) 45%, transparent); }
+.snap-swatch { width: 26px; height: 26px; border-radius: 50%; background: var(--sw); border: 2px solid var(--wh-cream); }
+.snapbar-acts { display: flex; gap: 8px; }
+.snapbar-acts .cta-btn { flex: 1; }
+@media (prefers-reduced-motion: reduce) { .snap-shade { display: none; } }
+body[data-calm="true"] .snap-shade { display: none; }
+
+/* ---------- phones: the bottom row gains the Toys button (icon only) and the Hoard button shows its glyph and count ---------- */
+@media (max-width: 480px) {
+  .toys-btn { padding: 6px 9px; }
+  .toys-btn-word { display: none; }
+}
+@media (max-width: 380px) {
+  .hoard-btn .hoard-glyph { width: 22px; height: 22px; }
+}
+
+/* the ring's state line would peek out under the desktop card's bottom edge: the card says what matters there */
+@media (min-width: 640px) { body[data-hoard="card"] .meter-state { visibility: hidden; } }

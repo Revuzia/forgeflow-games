@@ -82,6 +82,8 @@ export function createMat(d: MatDeps): Mat {
     const o = L[0];
     return L.slice(1, n).map((p) => ({ x: p.x - o.x, y: p.y - o.y, z: p.z - o.z }));
   }
+  /** the squishies brought out (a cut's pieces are extras too, but they are the play squishy: cut.ts) */
+  const outs = (): ExtraBody[] => d.bodies.extras.filter((x) => !x.piece);
   const relayout = (): void => { d.bodies.placeExtras(offsets(d.bodies.extras.length + 1)); };
   /** body-to-body contact exists (the physics offers collide on the play body) */
   const contact = (): boolean => typeof d.bodies.body.collide === 'function';
@@ -91,14 +93,14 @@ export function createMat(d: MatDeps): Mat {
   };
 
   const mat: Mat = {
-    get count() { return d.bodies.extras.length + 1; },
+    get count() { return outs().length + 1; },
     get limit() { return limit(); },
-    get itemIds() { return d.bodies.extras.map((x) => x.itemId ?? ''); },
-    has: (id) => id !== null && d.bodies.extras.some((x) => x.itemId === id),
+    get itemIds() { return outs().map((x) => x.itemId ?? ''); },
+    has: (id) => id !== null && outs().some((x) => x.itemId === id),
     refusal(item) {
       if (!d.stage.addBody) return 'unsupported';
       if (item && item.itemId !== null && (mat.has(item.itemId))) return 'already';
-      if (d.bodies.extras.length + 1 >= limit()) return 'full';
+      if (d.bodies.extras.length + 1 >= limit()) return 'full';   // pieces of a cut count too: the frame has room for so many bodies
       if (d.bodies.extras.length > 0 && d.frameMs() > busyMs) return 'busy';
       return null;
     },
@@ -123,7 +125,7 @@ export function createMat(d: MatDeps): Mat {
       return null;
     },
     remove(itemId) {
-      const x: ExtraBody | undefined = d.bodies.extras.find((e) => e.itemId === itemId);
+      const x: ExtraBody | undefined = outs().find((e) => e.itemId === itemId);
       if (!x) return false;
       d.beforeChange();
       d.bodies.removeExtra(x.id);
@@ -132,9 +134,10 @@ export function createMat(d: MatDeps): Mat {
       return true;
     },
     clear() {
-      if (!d.bodies.extras.length) return;
+      const xs = outs();
+      if (!xs.length) return;
       d.beforeChange();
-      for (const x of d.bodies.extras.slice()) d.bodies.removeExtra(x.id);
+      for (const x of xs) d.bodies.removeExtra(x.id);
       notify();
     },
     onChange(fn) { listeners = listeners.concat(fn); return () => { listeners = listeners.filter((f) => f !== fn); }; },

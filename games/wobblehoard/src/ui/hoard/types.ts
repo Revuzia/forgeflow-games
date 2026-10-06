@@ -66,6 +66,8 @@ export interface HoardEnv {
     onChange(fn: () => void): () => void;
   };
 
+  /** the Hoard is about to open: a cut squishy goes back together first (CUT.md 2.2), animated when the stage stays in view */
+  beforeOpen?(): void;
   /** keep the stage's input away while a panel covers it */
   holdInput(on: boolean): void;
   /** the panel covers the whole stage (phone): pause the sim and the sound under it */

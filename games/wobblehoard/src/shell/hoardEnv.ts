@@ -105,6 +105,11 @@ export function createHoardEnv(g: Game, d: HoardEnvDeps): HoardEnv {
       clear: () => g.mat.clear(),
       onChange: (fn) => g.mat.onChange(fn),
     },
+    beforeOpen() {
+      // the squishy stays in view beside the desktop panel (animated, 1.2 s); a phone's full sheet covers it (at once)
+      g.setTool('hand');
+      g.cut.reconnectAll(window.innerWidth >= 640 && !g.settings.skipAnimations);
+    },
     holdInput: (on) => g.holdInput('hoard', on),
     cover: (on) => { if (on) g.suspend('covered'); else g.unsuspend('covered'); },
     announce: d.announce,

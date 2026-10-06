@@ -50,6 +50,10 @@ export interface ShellDevApi {
   stageInfo(): Record<string, unknown> | null;
   /** SHELL-2b: the practice shelf as the harness checks it */
   hoardState(): { owned: number; items: Array<{ id: string; species: string; name: string; tier: string; seen: boolean; fav: boolean; locked: boolean; origin: string }>; restockClaimed: boolean; tasks: Array<{ id: string; text: string; progress: number; target: number; done: boolean; claimed: boolean }>; mergesToday: number; credits: number; tidyPairs: number; tidyPairsAll: number };
+  /** the toy tray and the Cut tool: the tool in hand, whether the physics can cut, the pieces and their shares of the whole */
+  tools(): { tool: string; cutSupported: boolean; pieces: number; fracs: number[]; busy: boolean; maxPieces: number; extras: number; pieceViews: number; body: { x: number; y: number; z: number; r: number; frac: number }; cam: { x: number; y: number; z: number } | null };
+  /** a Cut-tool swipe from (x0, y0) to (x1, y1), 0..1 over the canvas like pointerDown (the result: 'cut', 'miss', 'small', ...) */
+  cutSwipe(x0: number, y0: number, x1: number, y1: number): string;
   /** the play mat's frame-time guard in ms (mat.ts FRAME_BUSY_MS by default); the harness lifts it on SwiftShader */
   matBusyMs(ms: number): void;
   /** move the collection's epoch clock one day ahead (the dev skew): a new UTC day for the meter's daily cap, the gift, tasks and merges */
@@ -217,6 +221,15 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       };
     },
     matBusyMs: (ms) => game.mat.setBusyLimit(ms),
+    tools: () => {
+      const b = game.bodies.body, c = b.center, cam = (game.stage.camera as unknown as { position?: { x: number; y: number; z: number } } | null)?.position;
+      return {
+        tool: game.tool, cutSupported: game.cut.supported, pieces: game.cut.pieces, fracs: game.cut.fracs(), busy: game.cut.busy, maxPieces: game.cut.maxPieces,
+        extras: game.bodies.extras.length, pieceViews: game.bodies.extras.filter((x) => x.piece).length,
+        body: { x: c.x, y: c.y, z: c.z, r: b.restRadius, frac: b.frac ?? 1 }, cam: cam ? { x: cam.x, y: cam.y, z: cam.z } : null,
+      };
+    },
+    cutSwipe: (x0, y0, x1, y1) => { const v = vp(); return game.cut.swipe(x0 * v.w, y0 * v.h, x1 * v.w, y1 * v.h); },
     nextDay() {
       if (!o.skew) return false;
       o.skew.ms += 86_400_000;

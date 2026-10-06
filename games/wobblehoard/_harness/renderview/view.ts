@@ -992,6 +992,34 @@ const RV = {
     return out;
   },
 
+  /**
+   * The Hoard's preview with squishies out on the mat (the shell's focusInstance): setBody(another body) and the mat bodies re-added at
+   * once, as the shell does. The camera framing (camScale) per frame must ease from where it was, never jump in and back out.
+   */
+  swapProbe(): { before: number; after: number; series: number[]; maxStep: number; minDuring: number } {
+    stage.clearBodies();
+    setupBody(genomeFromParam(''));
+    const pos = stage.matLayout(3);
+    const extras: { b: SoftBodyLike; g: Genome; p: V3 }[] = [];
+    for (let k = 1; k < 3; k++) { const g = genomeFromParam(String(k * 3)); const b = makeBody(g); extras.push({ b, g, p: pos[k] }); stage.addBody(b, g, { tier: 'common', position: pos[k] }); }
+    const stepAll = (): void => { body.step(1 / 60); for (const x of extras) x.b.step(1 / 60); time += 1 / 60; frameNo++; stage.update(1 / 60, { time, pointerNdc: null }); };
+    for (let i = 0; i < 240; i++) stepAll();
+    const before = stage.info.camScale;
+    // the swap: a new play body (a different species and size), then the mat bodies straight back
+    const g2 = speciesBaseGenome('glugbean', 3);
+    body = makeBody(g2); genome = g2;
+    stage.setBody(body, g2);
+    for (const x of extras) stage.addBody(x.b, x.g, { tier: 'common', position: x.p });
+    const series: number[] = [];
+    for (let i = 0; i < 150; i++) { stepAll(); series.push(stage.info.camScale); }
+    let maxStep = Math.abs(series[0] - before), minDuring = Math.min(before, ...series);
+    for (let i = 1; i < series.length; i++) maxStep = Math.max(maxStep, Math.abs(series[i] - series[i - 1]));
+    stage.render();
+    const after = series[series.length - 1];
+    stage.clearBodies(); setupBody(genomeFromParam(''));
+    return { before, after, series: series.filter((_, i) => i % 10 === 0), maxStep, minDuring };
+  },
+
   stats() { return stage.stats(); },
   memory() { return stage.memory(); },
   info() { return stage.info; },

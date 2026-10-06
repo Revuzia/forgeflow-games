@@ -22,10 +22,16 @@ export type TierName = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | '
  * geometric extent: a gel pulled to its limit read 0.25, a firm silicone 0.15, a slow-rise foam 0.04, which was under the 0.05 needed
  * for a 'snap' at all.) A 'snap' now fires when the pull level at the release is over 0.05. 'grab' itself carries no pull yet: its
  * intensity is a fixed 0.5. metrics.stretch keeps its own meaning (the body's extent, 1 = ~2.2x its rest extent).
- * TRANSLATION-FREE (physics round-2 fix round 2, 2026-10-06; the meaning is unchanged for a body whose feet hold): the distance is measured
- * relative to the body, i.e. minus how far the body's centre of mass moved since the grab started, so dragging a whole body along is
- * not a stretch. The same pull level is now reported LIVE as SoftMetrics.pull while a grab is active. Consumers use the snap intensity
- * and metrics.pull AS IS (0..1, 1 = the family's maxPull): no 1/stretch rescale.
+ * MEANING, decided (physics round 3, 2026-10-06, for the shell's node check): the pull level is HOW FAR THE GRAB TARGET WAS PULLED, OVER
+ * maxPull, measured from the body's BASE. On the table a grab pins the feet, so the base does not move and nothing is subtracted: a half
+ * pull reads 0.50 and a pull to the family's limit 1.00 for EVERY family (measured on each family's first catalog species, template genome,
+ * pulled sideways and upward: 0.50 / 1.00 in all 12). With nothing pinned (a floating body) the centre's travel since the grab started is
+ * subtracted, so dragging a whole body along is not a stretch. Not "how much the body itself stretched": that is metrics.stretch, which at
+ * the limit reads only 0.02 (pop dome) to 0.46 (slime goo), so a meter threshold of 0.35 or a daily "as far as it will go" at 0.95 keyed
+ * off it would be unreachable for most families. (Fix round 2 briefly subtracted the centre's travel on the table too; a stretched body's
+ * centre moves toward the hand, so that removed the stretch itself: a limit pull read 0.31-0.78, a half pull 0.14-0.41. Withdrawn.)
+ * The same pull level is reported LIVE as SoftMetrics.pull while a grab is active. Consumers use the snap intensity and metrics.pull AS IS
+ * (0..1, 1 = the family's maxPull): no 1/stretch rescale.
  */
 export type SoftEventKind =
   | 'poke'     // a finger touched the surface (intensity = impact speed, 0..1)
@@ -62,8 +68,9 @@ export interface SoftMetrics {
   strands?: number;         // 0..1 sticky strings while a fingertip pulls off a tacky body (sticky stretch, slime, mochi); the renderer draws thin strands from the tip, audio ticks
   slosh?: number;           // 0..1 how far the liquid / bead core is swinging inside the shell (water fill, bead squeeze); 0 for every other family
   /** Physics fix round 2 (optional; consumers treat undefined as "not reported"). The live PULL LEVEL (see PULL INTENSITY above) of the
-   *  deeper active grab: the grab target's distance from where the grab started, minus the body's own travel (translation-free), over the
-   *  body's own maximum pull; 1 = its family's maxPull. 0 when nothing is grabbed. The 'snap' intensity is this value at the release. */
+   *  deeper active grab: the grab target's distance from where the grab started (minus the body's travel only when nothing pins its feet,
+   *  i.e. floating), over the body's own maximum pull; 1 = its family's maxPull, 0.5 = a half pull. 0 when nothing is grabbed. The 'snap'
+   *  intensity is this value at the release. */
   pull?: number;
   /** Stage B item B3 (optional): true while a pull past the body's maximum has picked it up off the mat and the hand carries it
    *  (SoftBody: a grab target asked for more than 1.15 x maxPull). Letting go throws it with the hand's velocity and fires a full 'snap'
@@ -93,7 +100,9 @@ export interface PieceOpts {
   cutNormal?: V3;
   /** Initial centre of mass (m) and velocity (m/s). SoftBody: the piece is placed with its centre at `at` (never below its own resting
    *  height: it is lifted onto the table), all its particles at `vel` (clamped like nudge); reset() puts it back at (at.x, at.z) on the table.
-   *  Its volume is exactly frac x the whole's (detail 3), whatever its mesh (pieces under 0.35 use detail 2); smOmega x 1 / cbrt(frac). */
+   *  Its volume is exactly frac x the whole's (detail 3), whatever its mesh (pieces under 0.35 use detail 2); smOmega x 1 / cbrt(frac).
+   *  The mat corral (its 0.6 m dead zone and 2.5 m rim) works about (at.x, at.z), the body's home: a whole squishy built at its mat spot
+   *  ({ frac: 1, chunk: false, at }, the shell's play mat) stays at its spot instead of being glided into the play body (physics round 3). */
   at?: V3;
   vel?: V3;
 }
@@ -151,7 +160,7 @@ export interface SoftBodyLike {
   /** 0..1: morph the goal into a waisted peanut along the plane (eased, volume held; 1 = a thin waist ready to part); null releases.
    *  SoftBody (physics fix round 2): the goal's waist at t = 1 is 0.3 of the cross-section's width over a Gaussian of 0.42 R either side
    *  (CUT.md's 0.15, and a narrower pinch, creased the goal itself); the lobes swell to keep the goal's volume. Measured at the shell's timing
-   *  (a 0.25 s pinch, 0.1 s at t = 1) on all 50 species x 2 genomes: waist 0.31 of the body's width on average, no crease past 120 degrees,
+   *  (a 0.25 s pinch, 0.1 s at t = 1) on all 50 species x 2 genomes: waist 0.33 of the body's width on average, no crease past 120 degrees,
    *  volume within 3 % (6 % for the air-bleed families). On the table the waist sits at the bottom of the cross-section (the foot stays down);
    *  the neck band is in the contact fold limit while it forms. Swap in the pieces at t = 1: HELD at t = 1 for a second, 12 of 100 bodies
    *  crease past 120 degrees. */

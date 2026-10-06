@@ -16,8 +16,10 @@
 //   ceremonies.ts    reveal + merge on the stage, beat -> sound / haptics, skip gate, result adoption
 //   game.ts          this file: phases, the frame, the input port, lifecycle (hidden / context loss / covered), listeners
 import type {
-  Settings, SoftBodyLike, SoftEvent, SoftMetrics, SquishAudio, StageFrameInput, StageLike, TierName, V3,
+  PieceOpts, Settings, SoftBodyLike, SoftEvent, SoftMetrics, SquishAudio, StageFrameInput, StageLike, TierName, V3,
 } from '../contracts.ts';
+import type { Cutter, CutResult } from './cut.ts';
+import { createCutter } from './cut.ts';
 import type { Genome, SquishyInstance } from '../core/genome.ts';
 import { genomeEquals } from '../core/genome.ts';
 import { clamp } from '../core/rng.ts';
@@ -61,6 +63,10 @@ import type { Gain, GainKind, Pending } from './xp.ts';
 import { createPending, gainOf } from './xp.ts';
 
 export type Phase = 'boot' | 'title' | 'play' | 'error';
+/** The toy tray's tools (FUN.md 1): the Hand (poke, squish, stretch), the Cut tool (CUT.md), Snap (photo mode: drags orbit, nothing pokes). */
+export type Tool = 'hand' | 'cut' | 'snap';
+/** A tab hidden longer than this reconnects a cut squishy when it comes back (CUT.md 2.2). */
+export const HIDDEN_RECONNECT_MS = 60_000;
 /** Why the sim and the audio are paused: the tab is hidden, the GL context is lost, a full-screen panel covers the stage. */
 export type PauseReason = 'hidden' | 'context' | 'covered';
 
@@ -99,8 +105,8 @@ export interface InputPort {
 
 export interface GameDeps {
   /** `opts.at` (the play mat with body-to-body contact): build the squishy standing at this world point. A physics that cannot place a
-   *  body ignores it (the mat then keeps that body apart: mat.ts). */
-  createBody(genome: Genome, opts?: { at?: V3 }): SoftBodyLike;
+   *  body ignores it (the mat then keeps that body apart: mat.ts). `opts.piece` (CUT): build one piece of a cut squishy (PieceOpts). */
+  createBody(genome: Genome, opts?: { at?: V3; piece?: PieceOpts }): SoftBodyLike;
   createStage(canvas: HTMLCanvasElement): StageLike;
   createAudio(): SquishAudio;
   /** handed to createStage; node tests omit it */
@@ -142,6 +148,12 @@ export interface ShellEvents {
   notice: (text: string) => void;
   /** visible XP (FUN.md 2): a touch paid squish points (where it was on the canvas, CSS px): the sparks or the calm glow */
   gain: (g: Gain) => void;
+  /** the toy tray's tool changed */
+  tool: (t: Tool) => void;
+  /** the Cut tool's blade: a swipe in progress over the canvas (CSS px), or its end (null) */
+  blade: (b: { x0: number; y0: number; x1: number; y1: number } | null) => void;
+  /** a swipe, a Split in two or a Reconnect all ended: what happened (the cutter says the line itself) */
+  cut: (r: CutResult | 'joined') => void;
 }
 
 /** What the HUD shows: the catalog species name (audit finding 19), the tier, and a nickname only when the item has one. */
@@ -181,6 +193,11 @@ export interface Game {
   pendingFill(): number;
   /** where the pending figure comes from: the collection's own preview, or the published pay constants (until ECON's preview lands) */
   readonly pendingSource: 'collection' | 'constants';
+  /** the toy tray (FUN.md 1): the tool in hand; setTool('cut') does nothing while the physics cannot cut */
+  readonly tool: Tool;
+  setTool(t: Tool): void;
+  /** CUT: the piece manager of the play squishy */
+  readonly cut: Cutter;
   /** the play squishy that survives reloads, and the recently played ones (the HUD quick switcher) */
   readonly history: PlayHistory;
   /**
@@ -258,7 +275,7 @@ export function createGame(deps: GameDeps): Game {
   // listener lists are arrays, copied on write: emitting iterates a stable snapshot without allocating one
   const L: { [K in keyof ShellEvents]: Array<ShellEvents[K]> } = {
     interaction: [], settings: [], identity: [], mute: [], phase: [], meter: [],
-    capsuleReady: [], message: [], ceremony: [], paused: [], notice: [], gain: [],
+    capsuleReady: [], message: [], ceremony: [], paused: [], notice: [], gain: [], tool: [], blade: [], cut: [],
   };
   const emit = <K extends keyof ShellEvents>(k: K, ...a: Parameters<ShellEvents[K]>): void => {
     const fs = L[k];
@@ -339,15 +356,15 @@ export function createGame(deps: GameDeps): Game {
     createBody: deps.createBody, stage, report,
     initial: { body: body0, identity: { genome: genome0, tier: tierOfGenome(genome0), itemId: playItem0 ? playItem0.id : genomeEquals(genome0, instance.genome) ? instance.id : null, nickname: playItem0 ? null : nicknameOf(genome0) } },
     beforeSwap() { releaseEverything(); },
-    afterSwap(id, b) {
-      if (!focusing) history.note(id.itemId);   // a card preview is not a switch
+    afterSwap(id, b, silent) {
+      if (!focusing && !silent) history.note(id.itemId);   // a card preview is not a switch
       b.gravity = S().gravity;
       stage.setFloatMode(!S().gravity);
       ringCount = 0; ringHead = 0;
       feedback.resetBody();
       driver.touch.resetPull();   // the new body has its own maximum pull (learned again from its snaps)
       needsRender = true;
-      emit('identity', id, labelOf(id));
+      if (!silent) emit('identity', id, labelOf(id));
     },
   });
   styleTier(stage, bodies.identity.tier);
@@ -358,7 +375,7 @@ export function createGame(deps: GameDeps): Game {
   const ceremonies: Ceremonies = createCeremonies({
     stage, audio, haptics, bodies, createBody: deps.createBody, now: () => clock.now(),
     calm: () => S().calm, skipAnimations: () => S().skipAnimations, fastOpen: () => S().fastOpen,
-    beforeStart: () => { releaseEverything(); try { mat.clear(); } catch (e) { report(e); } },   // a ceremony shows its own bodies
+    beforeStart: () => { leaving(); setTool('hand'); try { mat.clear(); } catch (e) { report(e); } },   // a ceremony shows its own bodies
     markSeen: (ids) => { try { collection.markSeen(ids); } catch (e) { report(e); } },
     ui: {
       start: (kind) => emit('ceremony', { type: 'start', kind }),
@@ -387,6 +404,40 @@ export function createGame(deps: GameDeps): Game {
     beforeChange: () => { releaseEverything(); active = null; },
     report,
   });
+
+  // ---- CUT (cut.ts): the play squishy's pieces; the toy tray's tool
+  let tool: Tool = 'hand';
+  const cut: Cutter = createCutter({
+    bodies, stage, audio, haptics, createBody: deps.createBody,
+    quality: () => { try { return stage.stats().tier; } catch { return 'low'; } },
+    calm: () => S().calm, gravity: () => S().gravity, simTime: () => simTime, viewport: () => viewport,
+    activeBody, touching: () => driver.touch.contact(),
+    beforeChange: () => { releaseEverything(); active = null; },
+    clearMat: () => { const n = mat.count - 1; try { mat.clear(); } catch (e) { report(e); } return n; },
+    panOf: (p) => panOfPoint(p),
+    say: (t) => emit('notice', t),
+    report,
+  });
+  /** leaving puts a cut squishy back together at once (CUT.md 2.2: a switch, a card, a ceremony; the body is replaced right after) */
+  function leaving(): void {
+    releaseEverything();
+    try { cut.reconnectAll(false); } catch (e) { report(e); }
+  }
+  function setTool(t: Tool): void {
+    const want: Tool = t === 'cut' && !cut.supported ? 'hand' : t;
+    if (want === tool) return;
+    releaseEverything();
+    if (blade) { blade = null; emit('blade', null); }
+    snapDrag.clear();
+    tool = want;
+    if (tool === 'snap') { try { capsules.putAway(); } catch (e) { report(e); } }   // a clean frame: the capsule comes back after
+    else { try { capsules.sync(); } catch (e) { report(e); } }
+    needsRender = true;
+    emit('tool', tool);
+  }
+  // the Cut tool's swipe, and Snap's drag-to-orbit (every other gesture is paused while those tools are in hand)
+  let blade: { id: number; x0: number; y0: number; x1: number; y1: number } | null = null;
+  const snapDrag = new Map<number, { x: number; y: number }>();
   /** a press on the mat: the nearest body under it becomes the one the fingers act on (only between touches) */
   function pickBody(x: number, y: number): void {
     const cam = stage.camera;
@@ -497,6 +548,7 @@ export function createGame(deps: GameDeps): Game {
     drain();
     timers.run(simTime);
     feedback.update(dt);
+    try { cut.update(dt); } catch (e) { report(e); }
     capsules.update();
     ceremonies.update();   // a queued ceremony starts once the 1 s burst spacing has passed (flash safety)
     for (let i = 0; i < stepHooks.length; i++) { try { stepHooks[i](dt, simTime); } catch (e) { report(e); } }
@@ -550,6 +602,8 @@ export function createGame(deps: GameDeps): Game {
       pointerNdc = ndcOf(p.x, p.y);
       if (phase !== 'play' || reasons.size > 0 || holds.size > 0) return;
       if (ceremonies.active) { ceremonies.tapSkip(); return; }
+      if (tool === 'cut') { if (!blade && (p.button ?? 0) === 0) { blade = { id: p.id, x0: p.x, y0: p.y, x1: p.x, y1: p.y }; emit('interaction'); emit('blade', { x0: p.x, y0: p.y, x1: p.x, y1: p.y }); } return; }
+      if (tool === 'snap') { snapDrag.set(p.id, { x: p.x, y: p.y }); emit('interaction'); return; }
       if ((p.button ?? 0) === 0 && capsules.pointerDown(p.id, p.x, p.y)) { emit('interaction'); return; }
       if (bodies.extras.length && gestures.activeCount() === 0 && !driver.touch.contact()) pickBody(p.x, p.y);
       gestures.pointerDown({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), button: p.button ?? 0 });
@@ -557,16 +611,45 @@ export function createGame(deps: GameDeps): Game {
     pointerMove(p) {
       pointerNdc = ndcOf(p.x, p.y);
       if (phase !== 'play') return;
+      if (tool === 'cut') { if (blade && blade.id === p.id) { blade.x1 = p.x; blade.y1 = p.y; emit('blade', { x0: blade.x0, y0: blade.y0, x1: p.x, y1: p.y }); } return; }
+      if (tool === 'snap') {
+        const q = snapDrag.get(p.id);
+        if (!q || !inputLive()) return;
+        if (snapDrag.size >= 2) {
+          // two fingers: the change of their spread zooms (spread growing = closer)
+          let a: { x: number; y: number } | null = null, b: { x: number; y: number } | null = null;
+          for (const [id, v] of snapDrag) { if (id === p.id) continue; if (!a) a = v; else if (!b) b = v; }
+          if (a) { const d0 = Math.hypot(q.x - a.x, q.y - a.y), d1 = Math.hypot(p.x - a.x, p.y - a.y); driver.onAction({ type: 'zoom', delta: d0 - d1, source: 'pinch' }); }
+          void b;
+        } else driver.onAction({ type: 'orbit', dx: p.x - q.x, dy: p.y - q.y });
+        q.x = p.x; q.y = p.y;
+        return;
+      }
       if (capsules.pointerMove(p.id, p.x, p.y)) return;
       gestures.pointerMove({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t) });
     },
     pointerUp(p) {
       if (p.type && p.type !== 'mouse') pointerNdc = null;
       if (phase !== 'play') return;
+      if (tool === 'cut') {
+        if (!blade || blade.id !== p.id) return;
+        const b = blade;
+        blade = null;
+        emit('blade', null);
+        if (!inputLive()) return;
+        const r = cut.swipe(b.x0, b.y0, p.x, p.y);
+        emit('cut', r);
+        return;
+      }
+      if (tool === 'snap') { snapDrag.delete(p.id); return; }
       if (capsules.pointerUp(p.id)) return;
       gestures.pointerUp({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t) });
     },
-    pointerCancel(id) { if (!capsules.pointerCancel(id)) gestures.pointerCancel(id, clock.now()); },
+    pointerCancel(id) {
+      if (blade && blade.id === id) { blade = null; emit('blade', null); return; }
+      if (snapDrag.delete(id)) return;
+      if (!capsules.pointerCancel(id)) gestures.pointerCancel(id, clock.now());
+    },
     hover(x, y) { pointerNdc = ndcOf(x, y); },
     hoverEnd() { pointerNdc = null; },
     wheel(deltaPx) { if (inputLive()) gestures.wheel(deltaPx); },
@@ -580,6 +663,7 @@ export function createGame(deps: GameDeps): Game {
   };
 
   // ---------------------------------------------------------------- body swaps (atomic) and the Hoard seams
+  let hiddenAt = 0;
   let focused: { previous: PlayIdentity; previousBody: SoftBodyLike } | null = null;
   let focusing = false;
   let pendingSwitch: string | null = null;
@@ -587,6 +671,7 @@ export function createGame(deps: GameDeps): Game {
     const it = hoard.item(itemId);
     if (!it) return 'missing';
     if (focused) { const f = focused; focused = null; void f; }   // a card was open: the switch replaces whatever it previewed
+    leaving();
     try { mat.remove(itemId); } catch (e) { report(e); }
     return bodies.swapTo(it.genome, { itemId: it.id, nickname: null }) ? 'done' : 'failed';
   }
@@ -597,6 +682,7 @@ export function createGame(deps: GameDeps): Game {
     switchNow(id);
   }
   function setGenome(g: Genome, opts: { itemId?: string | null; nickname?: string | null } = {}): boolean {
+    leaving();
     return bodies.swapTo(g, { itemId: opts.itemId ?? (genomeEquals(g, instance.genome) ? instance.id : null), nickname: opts.nickname ?? nicknameOf(g) });
   }
 
@@ -651,6 +737,9 @@ export function createGame(deps: GameDeps): Game {
     get capsules() { return capsules; },
     get mat() { return mat; },
     pendingFill: () => (phase === 'play' && reasons.size === 0 ? pending.fill(meterView, epochNow()) : 0),
+    get tool() { return tool; },
+    setTool,
+    get cut() { return cut; },
     get pendingSource() { return pending.source; },
     get ceremonies() { return ceremonies; },
     get clock() { return clock; },
@@ -666,7 +755,7 @@ export function createGame(deps: GameDeps): Game {
     },
     setPhase(p) {
       if (p === phase) return;
-      if (phase === 'play' && p !== 'play') releaseEverything();
+      if (phase === 'play' && p !== 'play') { releaseEverything(); setTool('hand'); }
       phase = p;
       emit('phase', p);
     },
@@ -687,6 +776,7 @@ export function createGame(deps: GameDeps): Game {
     setMuted,
     setGenome,
     focusInstance(item) {
+      leaving();   // a card preview shows another squishy: the cut one goes back together first (CUT.md 2.2)
       const prev = { previous: bodies.identity, previousBody: bodies.body };
       focusing = true;
       const ok = bodies.swapTo(item.genome, { itemId: item.itemId ?? null, nickname: item.nickname ?? null });
@@ -710,7 +800,11 @@ export function createGame(deps: GameDeps): Game {
       return switchNow(itemId);
     },
     unlockAudio,
-    setHidden(h) { setPaused('hidden', h); },
+    setHidden(h) {
+      if (h && !reasons.has('hidden')) hiddenAt = now();
+      if (!h && reasons.has('hidden') && now() - hiddenAt > HIDDEN_RECONNECT_MS) { try { cut.reconnectAll(false); } catch (e) { report(e); } }
+      setPaused('hidden', h);
+    },
     suspend(r) { setPaused(r, true); },
     unsuspend(r) { setPaused(r, false); },
     holdInput(reason, on) {
