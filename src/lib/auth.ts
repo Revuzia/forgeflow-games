@@ -141,26 +141,43 @@ export async function setOnlineStatus(userId: string, online: boolean, gameSlug?
 
 // ── Leaderboard Season ──
 // Based on CrazyGames: weekly seasons reset Monday 7AM UTC
-
-export function getCurrentSeasonWeek(): string {
-  const now = new Date();
-  // Get Monday of current week
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  return `${monday.getFullYear()}-W${String(Math.ceil((monday.getDate() + new Date(monday.getFullYear(), 0, 1).getDay()) / 7)).padStart(2, "0")}`;
+//
+// MUST stay identical to public.ff_season_week() (0011): the server stamps every score with that string and the
+// Leaderboards page filters by this one. It is the ISO-8601 week of (now UTC - 7h), formatted 'YYYY-Www', e.g.
+// "2026-W41". (The old version derived the week from the day-of-month, so the same string came back every month.)
+export function getCurrentSeasonWeek(now: Date = new Date()): string {
+  const shifted = new Date(now.getTime() - 7 * 3_600_000); // the week turns over Monday 07:00 UTC
+  const d = new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate()));
+  const dow = d.getUTCDay() || 7; // Mon=1 .. Sun=7
+  d.setUTCDate(d.getUTCDate() + 4 - dow); // the Thursday of this ISO week decides the ISO year
+  const isoYear = d.getUTCFullYear();
+  const week = Math.ceil(((d.getTime() - Date.UTC(isoYear, 0, 1)) / 86_400_000 + 1) / 7);
+  return `${isoYear}-W${String(week).padStart(2, "0")}`;
 }
 
-export async function submitScore(userId: string, gameId: number, score: number) {
-  const season = getCurrentSeasonWeek();
-  const { error } = await supabase.from("leaderboard_scores").upsert({
-    user_id: userId,
-    game_id: gameId,
-    score,
-    season_week: season,
-  }, {
-    onConflict: "user_id,game_id",
-  });
-  if (error) console.error("Score submit error:", error);
+export type SubmitScoreResult = { ok: boolean; improved?: boolean; score?: number; season_week?: string; error?: string };
+
+/**
+ * File a leaderboard score. Server-side only (public.submit_score, 0011): the server takes the player from the
+ * session, stamps the season, and keeps the HIGHEST score per player + game + season, so a lower score or an
+ * out-of-order arrival can never clobber a best. Resolves to the server's answer; never throws.
+ */
+export async function submitScore(gameId: number, score: number): Promise<SubmitScoreResult | null> {
+  if (!Number.isFinite(score)) return null;
+  const p_score = Math.min(2147483647, Math.max(0, Math.round(score)));
+  try {
+    const { data, error } = await supabase.rpc("submit_score", { p_game_id: gameId, p_score });
+    if (error) {
+      console.warn("[leaderboard] submit_score failed:", error.message);
+      return null;
+    }
+    const res = data as SubmitScoreResult | null;
+    if (res && res.ok === false) console.warn("[leaderboard] submit_score refused:", res.error);
+    return res;
+  } catch (e) {
+    console.warn("[leaderboard] submit_score threw:", e);
+    return null;
+  }
 }
 
 // ── Recently Played (works without account via localStorage) ──

@@ -28,6 +28,12 @@
  *   Only slugs listed in GAME_STATS_RPC are routed; for every other game the
  *   two stats messages are ignored. A guest gets an ack with
  *   {ok:false, error:"not_signed_in"} so the game never waits on it.
+ *
+ * 2026-10-05 (Part 2) - leaderboard scores and play activity are SERVER-written only; a player never writes them:
+ *   forgeflow:score / level_complete / game_over -> rpc submit_score (keep-highest per season)
+ *   Play start + a 120 s ticker -> rpc record_play 'start' / 'tick' (the server times it; the client sends no seconds)
+ *   Every handler that needs the player waits for the Play-time auth read (userReady) first, so a message posted in
+ *   the first few hundred ms after Play is no longer dropped for a signed-in player.
  */
 
 import { mergePreservingKeys, REPLACE_MARKER } from "./saveMerge";
@@ -44,6 +50,11 @@ let currentGameId: number | null = null;
 let currentGameSlug: string | null = null;
 let playStartTime: number | null = null;
 let playTimeInterval: ReturnType<typeof setInterval> | null = null;
+const ACTIVITY_TICK_MS = 120_000; // how often a signed-in Play pings record_play('tick')
+// Bumped by every init/destroy. A callback that outlives its Play (slow getUser, late timer) compares and stands down.
+let playSeq = 0;
+// Users whose record_play('start') already went out in THIS Play: play_count counts Plays, not sign-ins.
+const startedFor = new Set<string>();
 // Resolves once the first auth read after Play has landed, so a forgeflow:whoami
 // that arrives early is not answered "signed out" for a signed-in player.
 let userReady: Promise<void> = Promise.resolve();
@@ -55,6 +66,9 @@ export function initGameBridge(gameSlug: string, gameId: number) {
   currentGameSlug = gameSlug;
   currentGameId = gameId;
   playStartTime = Date.now();
+  const seq = ++playSeq;
+  startedFor.clear();
+  stopActivityTicker(); // init without a destroy in between: never leave the previous Play's ticker running
 
   // Track recently played (works for guests too)
   addRecentlyPlayed(gameSlug);
@@ -74,31 +88,20 @@ export function initGameBridge(gameSlug: string, gameId: number) {
   // Get user for authenticated features
   authReadDone = false;
   userReady = supabase.auth.getUser().then(({ data: { user } }) => {
+    if (seq !== playSeq) return; // this Play was torn down (or replaced) while the read was in flight
     if (user) {
       if (currentUserId !== user.id) identityCache = null;
       currentUserId = user.id;
       setOnlineStatus(user.id, true, gameSlug);
 
-      // 2026-05-06 — log the recently-played row IMMEDIATELY on game start.
-      // Previously we only upserted every 5 minutes, so a quick play left
-      // no trace and the profile's "Recently Played" list stayed empty.
-      // Subsequent ticks update last_played_at + total_play_seconds; this
-      // first call is the one that establishes the row.
-      supabase.from("user_game_activity").upsert({
-        user_id: currentUserId,
-        game_id: currentGameId,
-        last_played_at: new Date().toISOString(),
-        total_play_seconds: 0,
-        play_count: 1,
-      }, { onConflict: "user_id,game_id" });
-
-      // Activity refresh every 5 min (no XP side-effect; see startActivityTicker).
-      startActivityTicker();
+      // Log the Play IMMEDIATELY (record_play 'start') so even a quick play leaves a
+      // row for "Recently Played" and the leaderboards; the ticker then adds play time.
+      startPlay(user.id);
     } else {
       currentUserId = null; // signed out since an earlier Play in this tab
     }
   }).catch(() => { /* auth read failed: stay a guest; the listener can still sign us in */ })
-    .finally(() => { authReadDone = true; });
+    .finally(() => { if (seq === playSeq) authReadDone = true; });
 
   // Listen for messages from game iframe
   window.addEventListener("message", handleGameMessage);
@@ -119,14 +122,9 @@ function applyAuthUser(nextId: string | null) {
   identityCache = null;
   if (nextId) {
     setOnlineStatus(nextId, true, currentGameSlug ?? undefined);
-    supabase.from("user_game_activity").upsert({
-      user_id: nextId,
-      game_id: currentGameId,
-      last_played_at: new Date().toISOString(),
-      total_play_seconds: 0,
-      play_count: 1,
-    }, { onConflict: "user_id,game_id" });
-    startActivityTicker();
+    startPlay(nextId);
+  } else {
+    stopActivityTicker(); // signed out: nothing to record (and no session to record it with) until someone signs in
   }
   pushIdentity();
 }
@@ -138,18 +136,43 @@ function applyAuthUser(nextId: string | null) {
 // points the user has unlocked. Activity row is still refreshed
 // for "Recently Played" tracking — just no XP side-effect.
 function startActivityTicker() {
-  if (playTimeInterval) clearInterval(playTimeInterval);
-  playTimeInterval = setInterval(() => {
-    if (currentUserId) {
-      supabase.from("user_game_activity").upsert({
-        user_id: currentUserId,
-        game_id: currentGameId,
-        last_played_at: new Date().toISOString(),
-        total_play_seconds: Math.floor((Date.now() - (playStartTime || Date.now())) / 1000),
-        play_count: 1,
-      }, { onConflict: "user_id,game_id" });
-    }
-  }, 300_000);
+  stopActivityTicker(); // one interval at a time: a sign-in change can never leave a second one counting
+  const seq = playSeq;
+  const timer = setInterval(() => {
+    if (seq !== playSeq) { clearInterval(timer); return; } // outlived its Play
+    if (currentUserId) void recordPlay("tick");
+  }, ACTIVITY_TICK_MS);
+  playTimeInterval = timer;
+}
+
+function stopActivityTicker() {
+  if (playTimeInterval) { clearInterval(playTimeInterval); playTimeInterval = null; }
+}
+
+// The signed-in user is now known for this Play: send 'start' once per user per Play, then keep the ticker going.
+function startPlay(userId: string) {
+  if (!startedFor.has(userId)) {
+    startedFor.add(userId);
+    void recordPlay("start");
+  }
+  startActivityTicker();
+}
+
+/**
+ * Play activity is written by the SERVER (public.record_play, 0011): 'start' = a new Play (play_count + 1, row
+ * created if needed), 'tick' = the server adds the seconds since the last event from its own clock. The client
+ * never reports seconds. Awaited, error-logged, never throws.
+ */
+async function recordPlay(event: "start" | "tick"): Promise<void> {
+  const gameId = currentGameId;
+  if (gameId == null) return;
+  try {
+    const { data, error } = await supabase.rpc("record_play", { p_game_id: gameId, p_event: event });
+    if (error) console.warn("[bridge] record_play failed:", error.message);
+    else if (data && (data as { ok?: boolean }).ok === false) console.warn("[bridge] record_play refused:", (data as { error?: string }).error);
+  } catch (e) {
+    console.warn("[bridge] record_play threw:", e);
+  }
 }
 
 async function buildIdentity(): Promise<Record<string, unknown>> {
@@ -232,7 +255,8 @@ function handleStatsMessage(kind: "run" | "vs", payload: Record<string, any>) {
 
 export function destroyGameBridge() {
   window.removeEventListener("message", handleGameMessage);
-  if (playTimeInterval) clearInterval(playTimeInterval);
+  playSeq++; // anything still in flight from this Play (getUser, a queued message, a timer) now stands down
+  stopActivityTicker();
   if (authSub) { authSub.unsubscribe(); authSub = null; }
 
   // Set offline
@@ -243,6 +267,23 @@ export function destroyGameBridge() {
   currentGameSlug = null;
   currentGameId = null;
   playStartTime = null;
+}
+
+/**
+ * Run fn for the signed-in player once this Play's auth read has landed. getUser() after Play takes a few hundred
+ * ms and a game posts its first score / achievement / save much sooner: reading currentUserId synchronously used to
+ * drop those silently. Callbacks queue on the one userReady promise, so order per message type is preserved; a
+ * guest (no user) or a Play that was torn down meanwhile writes nothing and throws nothing. The game id is the one
+ * current when the message ARRIVED, so a message can never be filed under a different game.
+ */
+function whenSignedIn(fn: (userId: string, gameId: number) => void) {
+  const seq = playSeq;
+  const gameId = currentGameId;
+  if (gameId == null) return;
+  userReady.then(() => {
+    if (seq !== playSeq || !currentUserId) return;
+    fn(currentUserId, gameId);
+  });
 }
 
 // The iframe the current message actually came from — remembered so replies
@@ -271,10 +312,8 @@ function handleGameMessage(event: MessageEvent) {
 
   switch (type) {
     case "forgeflow:score":
-      // Game reports a score for the leaderboard
-      if (currentUserId && currentGameId && numScore != null) {
-        submitScore(currentUserId, currentGameId, numScore);
-      }
+      // Game reports a score for the leaderboard (the server keeps the highest per season)
+      if (numScore != null) whenSignedIn((_uid, gameId) => { submitScore(gameId, numScore); });
       break;
 
     case "forgeflow:achievement":
@@ -282,8 +321,9 @@ function handleGameMessage(event: MessageEvent) {
       // The SDK prefers slug because games don't know DB ids at build time.
       // Slug only, always scoped to the CURRENT game (the old numeric-id path was
       // unscoped and no shipped game sends it). All XP/unlock logic is server-side.
-      if (currentUserId && currentGameId && typeof payload.achievementSlug === "string") {
-        unlockAchievementBySlug(currentGameId, payload.achievementSlug);
+      if (typeof payload.achievementSlug === "string") {
+        const slug: string = payload.achievementSlug;
+        whenSignedIn((_uid, gameId) => { unlockAchievementBySlug(gameId, slug); });
       }
       break;
 
@@ -293,44 +333,46 @@ function handleGameMessage(event: MessageEvent) {
       // achievements (by design). Games that want XP for "completed level N"
       // should declare it as an achievement (`level_5`, `world_1` etc.) and
       // grant it via ForgeFlow.unlockAchievement().
-      if (currentUserId && numScore != null) {
-        submitScore(currentUserId, currentGameId!, numScore);
-      }
+      if (numScore != null) whenSignedIn((_uid, gameId) => { submitScore(gameId, numScore); });
       break;
 
     case "forgeflow:game_over":
       // Game over — submit final score (0 is legitimate)
-      if (currentUserId && numScore != null) {
-        submitScore(currentUserId, currentGameId!, numScore);
-      }
+      if (numScore != null) whenSignedIn((_uid, gameId) => { submitScore(gameId, numScore); });
       break;
 
     case "forgeflow:save":
       // Cloud save
-      if (currentUserId && currentGameId && payload.data) {
-        saveGameData(currentUserId, currentGameId, payload.data, payload.slot || 1);
+      if (payload.data) {
+        const saveData = payload.data;
+        const saveSlot = payload.slot || 1;
+        whenSignedIn((uid, gameId) => { saveGameData(uid, gameId, saveData, saveSlot); });
       }
       break;
 
-    case "forgeflow:load":
+    case "forgeflow:load": {
       // Load cloud save — respond back to game. Echo _reqId so the SDK can
       // correlate concurrent loads to their Promise resolvers.
-      if (currentUserId && currentGameId) {
-        const reqId = payload._reqId;
-        loadGameData(currentUserId, currentGameId, payload.slot || 1).then(data => {
-          // reply to the frame the request actually CAME from, at its origin —
-          // the first-iframe-in-DOM + "*" pair could hand a save payload to
-          // the wrong embed
-          if (gameFrame?.contentWindow) {
-            gameFrame.contentWindow.postMessage({
+      const reqId = payload._reqId;
+      const loadSlot = payload.slot || 1;
+      // reply to the frame the request actually CAME from, at its origin —
+      // the first-iframe-in-DOM + "*" pair could hand a save payload to
+      // the wrong embed. Captured now: the reply may run after a later message.
+      const frame = gameFrame;
+      const origin = gameFrameOrigin;
+      whenSignedIn((uid, gameId) => {
+        loadGameData(uid, gameId, loadSlot).then(data => {
+          if (frame?.contentWindow) {
+            frame.contentWindow.postMessage({
               type: "forgeflow:save_loaded",
               data,
               _reqId: reqId,
-            }, gameFrameOrigin);
+            }, origin);
           }
         });
-      }
+      });
       break;
+    }
 
     case "forgeflow:whoami": {
       // Who is signed in — display data only (nameplates, "sign in to save").
