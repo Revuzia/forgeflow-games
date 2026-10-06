@@ -104,7 +104,14 @@ export interface CutBase {
   calm?: boolean;
   /** Level multiplier (0..1) from the rate limiter (a busy run of cuts gets softer). Default 1. */
   level?: number;
+  /** The squishy's own pitch ratio (genome size; 1 = base, as for every other voice): scales the frequencies and the bubble
+   *  sizes, never the level. Default 1. */
+  pitch?: number;
 }
+
+/** The squishy's pitch ratio (clamped 0.5..2, like voices.ts pitchOf) times the +/-3% per-call variation; always consumes
+ *  exactly one rng draw, as before the pitch existed, so every later random draw of a voice is unchanged. */
+function pitchJit(p: CutBase): number { return clamp(fin(p.pitch, 1), 0.5, 2) * jit(p); }
 
 /** The +/-3% per-call variation; always consumes exactly one rng draw. */
 function jit(p: CutBase): number {
@@ -176,7 +183,7 @@ export function cutSlice(ctx: Ctx, out: AudioNode, t0: number, p: CutSliceParams
   const F = FLAV[cutFlavour(p.family)];
   const calm = p.calm === true;
   const N = neckLen(p.neckS);
-  const k = sliceSize(p.frac) * jit(p);
+  const k = sliceSize(p.frac) * pitchJit(p);
   const r = p.rng;
   const bag = new Bag(ctx, out, 'cut', p.pan ?? 0);
   // a quick neck is a little snappier, a slow one a little softer (+1 dB at 0.12 s, -1 dB at 0.6 s): otherwise the loudest
@@ -309,7 +316,9 @@ export function cutPop(ctx: Ctx, out: AudioNode, t0: number, p: CutPopParams): V
   const fl = cutFlavour(p.family);
   const F = FLAV[fl];
   const calm = p.calm === true;
-  const k = popSize(p.frac) * jit(p);
+  const size = popSize(p.frac);
+  const pj = pitchJit(p);
+  const k = size * pj;
   const r = p.rng;
   const bag = new Bag(ctx, out, 'cutPop', p.pan ?? 0);
   const A = dbToGain(LVC.pop + F.popTrim + (calm ? CUT_CALM_DB - 2 : 0)) * clamp(fin(p.level, 1), 0, 1);
@@ -330,7 +339,7 @@ export function cutPop(ctx: Ctx, out: AudioNode, t0: number, p: CutPopParams): V
   let endT = pluck(og.gain, t, A, att, F.popTau);
 
   // the body: the pieces spring apart, a low round thump below the music's register (its partials carry it on phone speakers)
-  const fT = 175 * Math.sqrt(k) * Math.sqrt(F.popF);
+  const fT = 175 * Math.sqrt(size * F.popF) * pj;
   const th = bag.osc('sine', fT, t);
   th.setPeriodicWave(harmonicWave(ctx, 'cutThump', [1, 0.45, 0.15]));
   th.frequency.setValueAtTime(fT, t);
@@ -371,7 +380,7 @@ export function cutPop(ctx: Ctx, out: AudioNode, t0: number, p: CutPopParams): V
   // 1-3 tiny bubbles (pitched by the piece; never above 4.2 kHz, so a small, crisp piece is not shrill)
   const nb = calm ? 1 + Math.floor(r() * 2) : 1 + Math.floor(r() * 3);
   for (let i = 0; i < nb; i++) {
-    const rad = Math.max(rlog(r, 0.0009, 0.002) / Math.pow(k, 0.6), 3.26 / 4200);
+    const rad = Math.max(rlog(r, 0.0009, 0.002) / (Math.pow(size, 0.6) * pj), 3.26 / 4200);
     endT = Math.max(endT, bubble(ctx, mix, t + rr(r, 0.018, 0.08) + 0.022 * i, rad, A * rr(r, 0.3, 0.55), 0.35));
   }
   // the first oscillator lives until the last bubble has rung out (the bag must not free itself under a ringing bubble)
@@ -395,7 +404,8 @@ export function rejoin(ctx: Ctx, out: AudioNode, t0: number, p: RejoinParams): V
   const calm = p.calm === true;
   const all = p.all === true;
   const m = all ? 1 : cutFrac(p.frac);
-  const j = jit(p);
+  // (the squishy's pitch moves the blorp; the whole-again run stays in the music's key)
+  const j = pitchJit(p);
   const r = p.rng;
   const bag = new Bag(ctx, out, 'rejoin', p.pan ?? 0);
   const lvl = clamp(fin(p.level, 1), 0, 1);
@@ -415,14 +425,14 @@ export function rejoin(ctx: Ctx, out: AudioNode, t0: number, p: RejoinParams): V
   let endT = t;
   for (let i = 0; i < nb; i++) {
     // (radii from 1.8 mm: these merge bubbles stay under ~2.3 kHz even as they chirp, gloopy rather than bright)
-    endT = Math.max(endT, bubble(ctx, mix, t + rr(r, 0, 0.05), rlog(r, 0.0018, 0.0036) * Math.sqrt(z), A * rr(r, 0.25, 0.45), 0.3));
+    endT = Math.max(endT, bubble(ctx, mix, t + rr(r, 0, 0.05), rlog(r, 0.0018, 0.0036) * Math.sqrt(z) / j, A * rr(r, 0.25, 0.45), 0.3));
   }
   // (the squelch is the blorp's onset: loud enough that the voice is near its peak from the first moments, soft-edged and
   // below 1.2 kHz so it never reads as a crack)
   const sq = bag.noise(r, t, t + 0.14);
-  const sbp = bag.biquad('bandpass', 1000 / z, 2.5);
-  sbp.frequency.setValueAtTime(1000 / z, t);
-  sbp.frequency.exponentialRampToValueAtTime(480 / z, t + 0.07);
+  const sbp = bag.biquad('bandpass', (1000 / z) * j, 2.5);
+  sbp.frequency.setValueAtTime((1000 / z) * j, t);
+  sbp.frequency.exponentialRampToValueAtTime((480 / z) * j, t + 0.07);
   const slp = bag.biquad('lowpass', 1600, 0.6);
   const sg = bag.gain(0);
   sq.connect(sbp); sbp.connect(slp); slp.connect(sg); sg.connect(mix);
@@ -435,9 +445,9 @@ export function rejoin(ctx: Ctx, out: AudioNode, t0: number, p: RejoinParams): V
   o.frequency.setValueAtTime(f0 * 1.32, t1);
   o.frequency.setTargetAtTime(f0, t1, 0.03);
   o.frequency.setTargetAtTime(f0 * 1.05, t1 + 0.12, 0.08);
-  const lp = bag.biquad('lowpass', 2400 / z, 1.2);
-  lp.frequency.setValueAtTime(2400 / z, t1);
-  lp.frequency.setTargetAtTime(700 / z, t1, 0.06);
+  const lp = bag.biquad('lowpass', (2400 / z) * j, 1.2);
+  lp.frequency.setValueAtTime((2400 / z) * j, t1);
+  lp.frequency.setTargetAtTime((700 / z) * j, t1, 0.06);
   const wob = bag.gain(1);
   const lfo = bag.osc('sine', (13 - 4 * m) * rr(r, 0.93, 1.07), t1);
   const wd = bag.gain(0);
@@ -448,7 +458,7 @@ export function rejoin(ctx: Ctx, out: AudioNode, t0: number, p: RejoinParams): V
   o.connect(lp); lp.connect(wob); wob.connect(og); og.connect(mix);
   endT = Math.max(endT, pluck(og.gain, t1, A / 1.32, calm ? 0.02 : 0.008, D / 4.2));
   // "p": one bubble closes it
-  endT = Math.max(endT, bubble(ctx, mix, t1 + D * rr(r, 0.7, 0.85), rlog(r, 0.0025, 0.0035) * Math.sqrt(z), A * 0.32, 0.25));
+  endT = Math.max(endT, bubble(ctx, mix, t1 + D * rr(r, 0.7, 0.85), rlog(r, 0.0025, 0.0035) * Math.sqrt(z) / j, A * 0.32, 0.25));
 
   if (all) {
     // whole again: a gentle rising run of tuned bubbles (the music's own bubble voice, D major pentatonic) over a soft glow

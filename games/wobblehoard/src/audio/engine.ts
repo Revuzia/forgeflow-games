@@ -693,6 +693,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       if (!a) return;
       const base = {
         rng: makeRng(a.seed), jitter: a.jitter, frac: cutFrac(p.frac), pan: clamp(fin(p.pan, 0), -1, 1), calm: p.calm === true,
+        pitch: clamp(fin(p.pitch, 1), 0.5, 2),
         family: typeof p.family === 'string' ? p.family : undefined, level: lv,
       };
       try {
@@ -718,6 +719,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       try {
         registerFx(rejoinVoice(a.c, chain!.plain, a.t0, {
           rng: makeRng(a.seed), jitter: a.jitter, frac: cutFrac(p.frac), all, pan: clamp(fin(p.pan, 0), -1, 1), calm: p.calm === true, level: lv,
+          pitch: clamp(fin(p.pitch, 1), 0.5, 2),
         }), 'rejoin', a.t0);
       } catch { dropped++; }
     },

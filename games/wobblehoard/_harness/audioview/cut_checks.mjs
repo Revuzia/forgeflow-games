@@ -129,8 +129,8 @@ export async function cutChecks(env) {
     }
     check(g, `every flavour / piece size / neck / calm x 2 seeds + 12 seeds (${n} renders): peak in -20..-1 dBFS, no click (max step < 0.25, edges <= 0.25), tail < -60 dBFS, > 6 kHz < 15%`, lo >= -20 && hi <= -1 && mj < 0.25 && ej <= 0.25 && tail < -60 && hf < 0.15, `peak ${f1(lo)}..${f1(hi)} dBFS, step ${f3(mj)}, edges ${f3(ej)}, worst tail ${f1(tail)} dBFS, > 6 kHz ${f2(hf * 100)}%`, 'in window');
     const hostile = { 'cut slice': { frac: 'NaN', neckS: 'Infinity', family: 42, calm: 'yes' }, 'cut pop': { frac: '-Infinity', family: null }, rejoin: { frac: 'NaN', all: 'no' }, 'rejoin all': { frac: 'Infinity', all: true, calm: 'NaN' } }[name];
-    const hm = metrics((await render({ ...S.spec, params: hostile, pan: 'NaN', jitter: 'NaN' })).x, SR);
-    check(g, 'hostile params (NaN/Infinity frac, neckS, family, NaN pan): finite, peak <= -1 dBFS', hm.badSamples === 0 && hm.peakDb <= -1, `${hm.badSamples} bad, ${f1(hm.peakDb)} dBFS`, 'ok');
+    const hm = metrics((await render({ ...S.spec, params: hostile, pan: 'NaN', jitter: 'NaN', pitch: 'NaN' })).x, SR);
+    check(g, 'hostile params (NaN/Infinity frac, neckS, family, NaN pan and pitch): finite, peak <= -1 dBFS', hm.badSamples === 0 && hm.peakDb <= -1, `${hm.badSamples} bad, ${f1(hm.peakDb)} dBFS`, 'ok');
     const pn = await render({ ...S.spec, channels: 2, pan: -1 });
     const eL = pn.chans[0].reduce((a, v) => a + v * v, 0), eR = pn.chans[1].reduce((a, v) => a + v * v, 0);
     check(g, 'pan -1: left >= 12 dB louder than right', 10 * Math.log10((eL + 1e-20) / (eR + 1e-20)) >= 12, `${f1(10 * Math.log10((eL + 1e-20) / (eR + 1e-20)))} dB`, '>= 12');
@@ -178,6 +178,28 @@ export async function cutChecks(env) {
       bLo = Math.min(bLo, a.bubbles); bHi = Math.max(bHi, a.bubbles); cLo = Math.min(cLo, c.bubbles); cHi = Math.max(cHi, c.bubbles);
     }
     check(g, 'separate: 1-3 tiny bubbles after the pop (1-2 when calm), every flavour x 20 seeds', bLo >= 1 && bHi <= 3 && cLo >= 1 && cHi <= 2, `${bLo}..${bHi} (calm ${cLo}..${cHi})`, '1..3, calm 1..2');
+    // the squishy's own pitch ratio (genome size; contract `pitch?`): frequencies and bubble sizes move, the level does not.
+    // Same seed, no jitter: the spectral centroid (60-9000 Hz) at pitch 1.25 over pitch 0.8 (x1.5625 expected where nothing is
+    // capped; the slice's band is capped at 3 kHz, whole again keeps its run in the music's key). Thresholds set before measuring.
+    {
+      const P = [['slice', { voice: 'cutSlice', params: { frac: 0.4, family: 'jellygel', neckS: 0.25 }, secs: 1.2 }, 1.15], ['pop', { voice: 'cutPop', params: { frac: 0.4, family: 'jellygel' }, secs: 0.8 }, 1.3],
+        ['rejoin', { voice: 'rejoin', params: { frac: 0.5 }, secs: 1.2 }, 1.3], ['whole again', { voice: 'rejoin', params: { frac: 1, all: true }, secs: 2 }, 1.1]];
+      const rows = [];
+      for (const [name, spec, min] of P) {
+        const c = async (pitch) => dominant(judged(await render({ ...spec, seed: 68, jitter: 1, pitch })), SR, { fLo: 60, fHi: 9000 }).centroidHz;
+        const lo = await c(0.8), hi = await c(1.25);
+        rows.push({ name, lo, hi, r: hi / lo, min });
+      }
+      let pLo = Infinity, pHi = -Infinity, n = 0;
+      for (const pitch of [0.7, 0.8, 1.25, 1.43]) for (const f of FL) {
+        for (const spec of [{ voice: 'cutSlice', params: { frac: 0.3, family: FAM[f], neckS: 0.25 }, secs: 1.2 }, { voice: 'cutPop', params: { frac: 0.3, family: FAM[f] }, secs: 0.8 }]) {
+          const m = metrics(judged(await render({ ...spec, seed: 69, pitch })), SR); pLo = Math.min(pLo, m.peakDb); pHi = Math.max(pHi, m.peakDb); n++;
+        }
+        if (f === 'gel') for (const params of [{ frac: 0.3 }, { frac: 1 }, { frac: 1, all: true }]) { const m = metrics(judged(await render({ voice: 'rejoin', params, seed: 69, pitch, secs: 2 })), SR); pLo = Math.min(pLo, m.peakDb); pHi = Math.max(pHi, m.peakDb); n++; }
+      }
+      check(g, 'the squishy\'s pitch (contract `pitch?`): pitch 0.8 -> 1.25 moves every voice up (centroid ratio >= x1.15 slice, x1.3 pop and rejoin, x1.1 whole again), and every voice at pitch 0.7 / 0.8 / 1.25 / 1.43 x every flavour stays in -20..-1 dBFS peak', rows.every((q) => q.r >= q.min) && pLo >= -20 && pHi <= -1, rows.map((q) => `${q.name} ${f1(q.lo)} -> ${f1(q.hi)} Hz (x${f2(q.r)})`).join(', ') + `; peaks ${f1(pLo)}..${f1(pHi)} dBFS (${n} renders)`, 'x1.15 / 1.3 / 1.3 / 1.1, -20..-1');
+      info.pitch = { rows, pLo, pHi };
+    }
     // rejoin: a bigger merged piece is lower and longer
     const rj = [];
     for (const frac of [0.125, 0.25, 0.5, 1]) { const r = await render({ voice: 'rejoin', params: { frac }, seed: 65, secs: 1.2, jitter: 1 }); const x = judged(r); rj.push({ frac, hz: dominant(x, SR, { fLo: 150, fHi: 900 }).hz, s: span(x, 30), pk: metrics(x, SR).peakDb }); }

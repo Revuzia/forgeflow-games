@@ -775,6 +775,10 @@ and "gentle" are design intents, not findings. The recipes are our own; nothing 
 | `cut?({ phase: 'separate', frac, family?, pan?, calm? })` | The pieces part: a soft pop with 1-3 tiny bubbles; its pitch follows `frac` (1/8 of the whole sounds x1.74 higher than a half). |
 | `rejoin?({ frac, all?, pan?, calm? })` | Two pieces flowed together: a gloopy "blorp" sized by `frac`, the merged piece's fraction of the whole (bigger = lower, longer, fuller). `all: true`: the squishy is whole again; adds a gentle rising flourish. |
 
+`pitch?` (both calls, added to the contract after the first CUT report): the squishy's own pitch ratio (genome size, default 1,
+clamped 0.5-2) scales every frequency and bubble size like the other voices' pitch, never the level (whole again keeps its run in
+the music's key); probe: pitch 0.8 -> 1.25 moves the centroid x1.42 (slice), x1.52 (pop), x1.42 (rejoin), x1.13 (whole again),
+and every voice x flavour at pitch 0.7 / 0.8 / 1.25 / 1.43 peaks at -14.2..-7.5 dBFS (60 renders; `--only-cut` 65/65).
 `stats().started` gained `cut` (slices), `cutPop` (separation pops) and `rejoin`; `detailStats().throttled` gained `cut` and
 `rejoin` (calls the rate limiter swallowed). Both voices go to the plain bus (`squishBoost` does not change them) and make room
 in the music like every other effect (`registerFx`, the 4.5 s activity hold). The CUT kinds take their per-kind starting phase
