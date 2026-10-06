@@ -15,7 +15,7 @@ import type { Rgb } from './oklch.ts';
 const SEG = 14;          // rings along the strand
 const RAD = 6;           // vertices around
 /** Fingertip pull-away speed after the lift (m/s), and how long a strand may get before it snaps whatever the physics says (x restRadius). */
-const PULL_SPEED = 0.85, MAX_LEN = 1.1;
+const PULL_SPEED = 1.3, MAX_LEN = 1.4;
 /** It snaps when the physics' strands signal has thinned to this fraction of its peak. */
 const SNAP_AT = 0.22;
 const SNAP_S = 0.16;     // the two halves spring back over this long
@@ -142,8 +142,11 @@ export class TackStrands {
   /** Snapped this frame at (x, y, z) (the view spawns the bubbles). */
   readonly snapsAt: number[] = [];
 
-  constructor(hub: EnvHub, bodyColour: Rgb) {
-    this.hub = hub; this.colour = bodyColour;
+  constructor(hub: EnvHub, bodyColour: Rgb, paleColour: Rgb) {
+    this.hub = hub;
+    // a pulled thread is thin, so it reads paler and clearer than the body (the jelly's "stretched goes pale"), and it has to read
+    // against the body behind it
+    this.colour = [bodyColour[0] + (paleColour[0] - bodyColour[0]) * 0.45, bodyColour[1] + (paleColour[1] - bodyColour[1]) * 0.45, bodyColour[2] + (paleColour[2] - bodyColour[2]) * 0.45];
     this.group.frustumCulled = false;
   }
 
@@ -155,9 +158,9 @@ export class TackStrands {
     // the body's own colour, glossy and see-through: a thin pulled thread of the same jelly
     const m = new THREE.MeshPhysicalMaterial({
       color: new THREE.Color().setRGB(c[0], c[1], c[2], THREE.LinearSRGBColorSpace), roughness: 0.12, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05,
-      transparent: true, opacity: 0.82, depthWrite: false, fog: false,
+      transparent: true, opacity: 0.9, depthWrite: false, fog: false,
     });
-    m.emissive.setRGB(c[0] * 0.35, c[1] * 0.35, c[2] * 0.35, THREE.LinearSRGBColorSpace);
+    m.emissive.setRGB(c[0] * 0.5, c[1] * 0.5, c[2] * 0.5, THREE.LinearSRGBColorSpace);
     this.hub.apply(m, 1.2);
     this.mat = m;
     this.strands = [new Strand(m), new Strand(m)];
@@ -192,7 +195,7 @@ export class TackStrands {
         // the finger lifts up and away: a press made from the camera pulls straight back at it, which would show the strand end-on, so the
         // pull leans upward (it reads as a string rising off the skin from any orbit)
         const pl = Math.hypot(dx, dy, dz) || 1;
-        s.start(a, 0.45 * dx / pl, 0.45 * dy / pl + 1, 0.45 * dz / pl, Math.max(this.tipR[f], 0.01) * 0.6, Math.max(0.012, this.tipR[f] * 0.32));
+        s.start(a, 0.45 * dx / pl, 0.45 * dy / pl + 1, 0.45 * dz / pl, Math.max(this.tipR[f], 0.01) * 0.6, Math.max(0.012, this.tipR[f] * 0.4));
       }
       this.hadTip[f] = false; this.held[f] = 0;
     }

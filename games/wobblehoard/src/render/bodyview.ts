@@ -27,6 +27,8 @@ export class BodyView {
   readonly palette: JellyPalette;
   readonly group = new THREE.Group();
   readonly scale: number;
+  /** Horizontal reach of the rest silhouette from the body centre (world units, >= restRadius): what the camera must fit. */
+  readonly restHalfW: number;
   /** The stage steps owned bodies itself (ceremony bodies); the shell steps the others. */
   owned: boolean;
   tier: TierName;
@@ -72,6 +74,10 @@ export class BodyView {
     this.proxy = new BodyProxy(inner);
     this.palette = renderPalette(genome);
     this.scale = inner.restRadius / 0.5;
+    // the rest silhouette's horizontal reach from the centre (a wide dumpling or a long bean reaches well past restRadius): framing
+    let hw = inner.restRadius;
+    { const P = inner.positions, c = inner.center; for (let i = 0; i < P.length; i += 3) { const d = Math.hypot(P[i] - c.x, P[i + 2] - c.z); if (d > hw) hw = d; } }
+    this.restHalfW = hw;
     this.mats = new JellyMaterials(genome, this.palette, this.scale, hub, this.style);
     this.jelly = new JellyView(this.proxy, this.mats.get(spec.tier), spec.fineFreq);
     this.jelly.mesh.renderOrder = 10;
@@ -82,7 +88,7 @@ export class BodyView {
     this.decals = new Decals(quad);
     this.applyPoolColour();
     this.rarity = new RarityFx(this.style, { scale: this.scale, seed: genome.seed, mapper: this.jelly.mapper, palette: this.palette });
-    this.strands = new TackStrands(hub, this.palette.body);
+    this.strands = new TackStrands(hub, this.palette.body, this.palette.pale);
     this.group.add(this.jelly.mesh, this.core.group, this.face.group, this.fx.group, this.decals.shadow, this.decals.pool, this.rarity.group, this.strands.group);
     this.group.frustumCulled = false;
     this.update(0, 0, null, null, 0, 0);
@@ -201,7 +207,7 @@ export class BodyView {
       const target = t ? Math.min(1, Math.max(0, t.depth * 1.3)) : 0;
       const a = this.touchAmt[f];
       this.touchAmt[f] = a + (target - a) * (1 - Math.exp(-dt * (target > a ? 10 : 5)));
-      if (t) { v.x = t.x; v.y = t.y; v.z = t.z; u.uTouchR.value = Math.max(0.05 * this.scale, t.r * 1.25); }
+      if (t) { v.x = t.x; v.y = t.y; v.z = t.z; u.uTouchR.value = Math.max(0.05 * this.scale, t.r * 1.5); }
       v.w = this.touchAmt[f] * k;
     }
   }

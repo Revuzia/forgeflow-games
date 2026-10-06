@@ -64,8 +64,11 @@ export function createMeterRing(parent: HTMLElement, o: { onOpen(): void }): Met
     class: 'meter', attrs: { role: 'meter', 'aria-label': 'Squish meter', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0', 'aria-valuetext': '0%, toward the next capsule' },
   }, svg, count);
   const btnCount = h('span', { class: 'capsule-btn-count' });
+  // the capsule dock (SHELL-2b): one little capsule per waiting capsule, up to WH_QUEUE_MAX shown; the first is the one on the table
+  const pips = h('span', { class: 'capsule-pips', attrs: { 'aria-hidden': 'true' } });
   const openButton = h('button', { class: 'capsule-btn', attrs: { type: 'button', hidden: '' }, on: { click: () => o.onOpen() } },
-    h('span', { class: 'capsule-btn-label', text: 'Open' }), btnCount);
+    pips, h('span', { class: 'capsule-btn-label', text: 'Open' }), btnCount);
+  let pipCount = -1;
   const state = h('p', { class: 'meter-state', attrs: { 'aria-hidden': 'true' } });
   const el = h('div', { class: 'meter-cluster' }, state, openButton, meter);
   parent.append(el);
@@ -93,7 +96,13 @@ export function createMeterRing(parent: HTMLElement, o: { onOpen(): void }): Met
       state.textContent = stateText;
       state.hidden = !stateText;
       el.dataset.state = m.offline ? 'offline' : m.tableFull ? 'full' : m.doneToday ? 'done' : m.resting ? 'resting' : 'normal';
-      btnCount.textContent = credits > 1 ? String(credits) : '';
+      btnCount.textContent = credits > 5 ? `+${credits - 5}` : '';
+      if (pipCount !== credits) {
+        pipCount = credits;
+        pips.textContent = '';
+        for (let i = 0; i < Math.min(5, credits); i++) pips.append(h('span', { class: i === 0 ? 'pip first' : 'pip' }));
+      }
+      openButton.dataset.full = String(m.tableFull);
       openButton.setAttribute('aria-label', `Open a capsule (${credits} waiting)`);
       openButton.hidden = credits <= 0;
       openButton.disabled = busy;

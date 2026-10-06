@@ -26,12 +26,12 @@ import { detectEnv, safeLocalStorage } from '../core/settings.ts';
 import type { ProfileStore } from '../core/save.ts';
 import { createProfileStore } from '../core/save.ts';
 import type { BodyHost } from '../input/camera.ts';
-import { createBodyHost } from '../input/camera.ts';
+import { cameraRay, createBodyHost, pxToNdc, raycastAt } from '../input/camera.ts';
 import type { Gestures } from '../input/gestures.ts';
 import { createGestures } from '../input/gestures.ts';
 import type { Haptics } from '../input/haptics.ts';
 import { createHaptics } from '../input/haptics.ts';
-import type { BodyManager, PlayIdentity } from './bodies.ts';
+import type { BodyManager, ExtraBody, PlayIdentity } from './bodies.ts';
 import { createBodyManager, styleTier, tierOfGenome } from './bodies.ts';
 import type { Capsules } from './capsules.ts';
 import { createCapsules } from './capsules.ts';
@@ -49,6 +49,10 @@ import type { Feedback } from './feedback.ts';
 import { createFeedback } from './feedback.ts';
 import { TUNING } from './feel.ts';
 import { createLoop } from './loop.ts';
+import type { Mat } from './mat.ts';
+import { createMat } from './mat.ts';
+import type { PlayHistory } from './playHistory.ts';
+import { createPlayHistory } from './playHistory.ts';
 import type { SettingsController } from './settingsCtl.ts';
 import { createSettingsController } from './settingsCtl.ts';
 
@@ -163,9 +167,20 @@ export interface Game {
   /** SHELL-2b seam: the full collection module (stacks, items, previewMerge / merge, hearts, prefs, restock, tasks) */
   readonly hoard: Collection;
   readonly capsules: Capsules;
+  /** stage B1: squishies brought out of the Hoard onto the mat beside the play body */
+  readonly mat: Mat;
+  /** the play squishy that survives reloads, and the recently played ones (the HUD quick switcher) */
+  readonly history: PlayHistory;
+  /**
+   * Switch the play squishy to a collection item, in one action (SHELL-2b). 'queued': a ceremony runs (or waits), and the switch applies
+   * right after it ends; 'missing': no such item; 'failed': its body could not be built (nothing changed).
+   */
+  switchTo(itemId: string): 'done' | 'queued' | 'missing' | 'failed';
   readonly ceremonies: Ceremonies;
   readonly clock: GestureClock;
   readonly simTime: number;
+  /** the collection's epoch clock (ms; the dev meter accelerator pushes it ahead): lock times are on it */
+  epochNow(): number;
   /** the last 32 SoftEvents, oldest first (copies) */
   recentEvents(): SoftEvent[];
   setPhase(p: Phase): void;
@@ -241,7 +256,10 @@ export function createGame(deps: GameDeps): Game {
   const releaseHooks = new Set<() => void>();
 
   // ---- modules: construct in dependency order; a failure part-way disposes what was built (audit finding 7) ----
-  const genome0: Genome = deps.genome ?? instance.genome;
+  // the play squishy of the last visit (playHistory.ts), when the collection still has it; else the stored starter
+  const history = createPlayHistory(storage);
+  const playItem0 = !deps.genome && deps.collection && history.current ? deps.collection.item(history.current) : null;
+  const genome0: Genome = deps.genome ?? playItem0?.genome ?? instance.genome;
   const audio = deps.createAudio();
   let stage: StageLike;
   let body0: SoftBodyLike;
@@ -282,18 +300,23 @@ export function createGame(deps: GameDeps): Game {
   });
   const S = (): ResolvedSettings => settingsCtl.settings;
 
-  const host = createBodyHost({ camera: () => stage.camera, body: () => bodies.body, viewport: () => viewport });
+  // ---- the play mat (mat.ts): fingers act on the body a press hits. `active` = that body when it is an extra (null = the play body).
+  let active: ExtraBody | null = null;
+  const ORIGIN: V3 = { x: 0, y: 0, z: 0 };
+  const activeBody = (): SoftBodyLike => (active ? active.body : bodies.body);
+  const activeGenome = (): Genome => (active ? active.genome : bodies.identity.genome);
+  const host = createBodyHost({ camera: () => stage.camera, body: activeBody, viewport: () => viewport, offset: () => (active ? active.position : ORIGIN) });
   const panOfNdc = (x: number): number => clamp(x * TUNING.panMax, -TUNING.panMax, TUNING.panMax);
   const panOfPoint = (p: V3): number => { const n = host.ndcOf(p); return n ? panOfNdc(n.x) : 0; };
 
   const driver: Driver = createDriver({
-    body: () => bodies.body, stage, simTime: () => simTime, stepCount: () => stepCount, panOfPoint,
+    body: activeBody, stage, simTime: () => simTime, stepCount: () => stepCount, panOfPoint,
     extraSquish: () => S().extraSquish, interact: () => emit('interaction'), dirty: () => { needsRender = true; }, report,
   });
   const gestures: Gestures = createGestures(host, (a) => driver.onAction(a));
 
   const feedback: Feedback = createFeedback({
-    audio, haptics, stage, touch: driver.touch, timers, body: () => bodies.body, genome: () => bodies.identity.genome,
+    audio, haptics, stage, touch: driver.touch, timers, body: activeBody, genome: activeGenome,
     simTime: () => simTime, stepCount: () => stepCount, gravity: () => S().gravity, panOfPoint, bump: (k) => profile.bump(k), report,
   });
 
@@ -302,9 +325,10 @@ export function createGame(deps: GameDeps): Game {
 
   bodies = createBodyManager({
     createBody: deps.createBody, stage, report,
-    initial: { body: body0, identity: { genome: genome0, tier: tierOfGenome(genome0), itemId: genomeEquals(genome0, instance.genome) ? instance.id : null, nickname: nicknameOf(genome0) } },
+    initial: { body: body0, identity: { genome: genome0, tier: tierOfGenome(genome0), itemId: playItem0 ? playItem0.id : genomeEquals(genome0, instance.genome) ? instance.id : null, nickname: playItem0 ? null : nicknameOf(genome0) } },
     beforeSwap() { releaseEverything(); },
     afterSwap(id, b) {
+      if (!focusing) history.note(id.itemId);   // a card preview is not a switch
       b.gravity = S().gravity;
       stage.setFloatMode(!S().gravity);
       ringCount = 0; ringHead = 0;
@@ -322,12 +346,12 @@ export function createGame(deps: GameDeps): Game {
   const ceremonies: Ceremonies = createCeremonies({
     stage, audio, haptics, bodies, createBody: deps.createBody, now: () => clock.now(),
     calm: () => S().calm, skipAnimations: () => S().skipAnimations, fastOpen: () => S().fastOpen,
-    beforeStart: () => releaseEverything(),
+    beforeStart: () => { releaseEverything(); try { mat.clear(); } catch (e) { report(e); } },   // a ceremony shows its own bodies
     markSeen: (ids) => { try { collection.markSeen(ids); } catch (e) { report(e); } },
     ui: {
       start: (kind) => emit('ceremony', { type: 'start', kind }),
       reveal: (info) => emit('ceremony', { type: 'reveal', info }),
-      end: (info) => { emit('ceremony', { type: 'end', info }); capsules.sync(); },
+      end: (info) => { emit('ceremony', { type: 'end', info }); capsules.sync(); queueMicrotask(applyPendingSwitch); },
     },
     report,
   });
@@ -342,6 +366,30 @@ export function createGame(deps: GameDeps): Game {
     report,
   });
   const offCollection = collection.onChange(() => capsules.sync());
+
+  // ---- the play mat (stage B1)
+  const mat: Mat = createMat({
+    bodies, stage, createBody: deps.createBody, gravity: () => S().gravity,
+    quality: () => { try { return stage.stats().tier; } catch { return 'low'; } },
+    frameMs: () => { try { return stage.stats().frameMsEma; } catch { return 0; } },
+    beforeChange: () => { releaseEverything(); active = null; },
+    report,
+  });
+  /** a press on the mat: the nearest body under it becomes the one the fingers act on (only between touches) */
+  function pickBody(x: number, y: number): void {
+    const cam = stage.camera;
+    if (!cam) return;
+    try { cam.updateMatrixWorld(); } catch { /* a mock camera */ }
+    const n = pxToNdc(x, y, viewport);
+    const r = cameraRay(cam, n.x, n.y);
+    let best: ExtraBody | null = null, bestT = Infinity;
+    const h0 = raycastAt(bodies.body, r.origin, r.dir, ORIGIN);
+    if (h0) bestT = h0.t;
+    for (const xb of bodies.extras) { const h = raycastAt(xb.body, r.origin, r.dir, xb.position); if (h && h.t < bestT) { bestT = h.t; best = xb; } }
+    if (bestT === Infinity || best === active) return;   // a miss keeps the last body (an orbit or a pull from the air)
+    active = best;
+    try { feedback.resetBody(); } catch (e) { report(e); }
+  }
   const offEvents = collection.onEvent((e) => { if (e.type === 'notice') emit('notice', e.text); else if (e.type === 'external') capsules.sync(); });
 
   // ---------------------------------------------------------------- release / lifecycle
@@ -370,9 +418,11 @@ export function createGame(deps: GameDeps): Game {
   }
 
   // ---------------------------------------------------------------- the simulation step (shared by the rAF loop and DebugHook.step)
-  function drain(): void {
+  /** drain one body's events. Positions stay in that body's own space (the host maps the ACTIVE body's to the screen; a land on another
+   *  mat body pans as if it were the active one: close enough for a thud). Every body's touches feed the meter. */
+  function drainBody(b: SoftBodyLike): void {
     evBuf.length = 0;
-    bodies.body.drainEvents(evBuf);
+    b.drainEvents(evBuf);
     for (let i = 0; i < evBuf.length; i++) {
       const ev = evBuf[i];
       const r = ring[ringHead];
@@ -382,6 +432,11 @@ export function createGame(deps: GameDeps): Game {
       feedback.handle(ev);
       try { collection.feed(ev, epochNow()); } catch (e) { report(e); }
     }
+  }
+  function drain(): void {
+    drainBody(bodies.body);
+    const xs = bodies.extras;
+    for (let i = 0; i < xs.length; i++) drainBody(xs[i].body);
     feedback.sweep();
   }
 
@@ -449,6 +504,7 @@ export function createGame(deps: GameDeps): Game {
       if (phase !== 'play' || reasons.size > 0 || holds.size > 0) return;
       if (ceremonies.active) { ceremonies.tapSkip(); return; }
       if ((p.button ?? 0) === 0 && capsules.pointerDown(p.id, p.x, p.y)) { emit('interaction'); return; }
+      if (bodies.extras.length && gestures.activeCount() === 0 && !driver.touch.contact()) pickBody(p.x, p.y);
       gestures.pointerDown({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), button: p.button ?? 0 });
     },
     pointerMove(p) {
@@ -478,6 +534,21 @@ export function createGame(deps: GameDeps): Game {
 
   // ---------------------------------------------------------------- body swaps (atomic) and the Hoard seams
   let focused: { previous: PlayIdentity; previousBody: SoftBodyLike } | null = null;
+  let focusing = false;
+  let pendingSwitch: string | null = null;
+  function switchNow(itemId: string): 'done' | 'missing' | 'failed' {
+    const it = hoard.item(itemId);
+    if (!it) return 'missing';
+    if (focused) { const f = focused; focused = null; void f; }   // a card was open: the switch replaces whatever it previewed
+    try { mat.remove(itemId); } catch (e) { report(e); }
+    return bodies.swapTo(it.genome, { itemId: it.id, nickname: null }) ? 'done' : 'failed';
+  }
+  function applyPendingSwitch(): void {
+    if (!pendingSwitch || ceremonies.active || ceremonies.pending) return;
+    const id = pendingSwitch;
+    pendingSwitch = null;
+    switchNow(id);
+  }
   function setGenome(g: Genome, opts: { itemId?: string | null; nickname?: string | null } = {}): boolean {
     return bodies.swapTo(g, { itemId: opts.itemId ?? (genomeEquals(g, instance.genome) ? instance.id : null), nickname: opts.nickname ?? nicknameOf(g) });
   }
@@ -531,9 +602,11 @@ export function createGame(deps: GameDeps): Game {
     get collection() { return collection; },
     get hoard() { return hoard; },
     get capsules() { return capsules; },
+    get mat() { return mat; },
     get ceremonies() { return ceremonies; },
     get clock() { return clock; },
     get simTime() { return simTime; },
+    epochNow: () => epochNow(),
     recentEvents() {
       const out: SoftEvent[] = [];
       for (let i = 0; i < ringCount; i++) {
@@ -566,7 +639,10 @@ export function createGame(deps: GameDeps): Game {
     setGenome,
     focusInstance(item) {
       const prev = { previous: bodies.identity, previousBody: bodies.body };
-      if (!bodies.swapTo(item.genome, { itemId: item.itemId ?? null, nickname: item.nickname ?? null })) return false;
+      focusing = true;
+      const ok = bodies.swapTo(item.genome, { itemId: item.itemId ?? null, nickname: item.nickname ?? null });
+      focusing = false;
+      if (!ok) return false;
       if (!focused) focused = prev;
       return true;
     },
@@ -577,6 +653,13 @@ export function createGame(deps: GameDeps): Game {
       return bodies.swapTo(f.previous.genome, { body: f.previousBody, itemId: f.previous.itemId, nickname: f.previous.nickname });
     },
     playMerge: (parents, result) => ceremonies.playMerge(parents, result),
+    get history() { return history; },
+    switchTo(itemId) {
+      if (!hoard.item(itemId)) return 'missing';
+      if (ceremonies.active || ceremonies.pending) { pendingSwitch = itemId; return 'queued'; }
+      pendingSwitch = null;
+      return switchNow(itemId);
+    },
     unlockAudio,
     setHidden(h) { setPaused('hidden', h); },
     suspend(r) { setPaused(r, true); },
@@ -618,7 +701,7 @@ export function createGame(deps: GameDeps): Game {
     },
   };
   // forward settings changes (after construction, so the first apply does not notify)
-  settingsCtl.onChange((s) => emit('settings', s));
+  settingsCtl.onChange((s) => { for (const xb of bodies.extras) { try { xb.body.gravity = s.gravity; } catch { /* optional */ } } emit('settings', s); });
 
   settingsCtl.apply(true);
   capsules.sync();

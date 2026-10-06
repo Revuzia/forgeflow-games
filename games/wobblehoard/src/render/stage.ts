@@ -46,7 +46,10 @@ import type {
 import type { Genome } from '../core/genome.ts';
 import { clamp } from '../core/rng.ts';
 import { BodyView } from './bodyview.ts';
-import { Capsule } from './capsule.ts';
+import { Capsule, CAPSULE_HEIGHT } from './capsule.ts';
+
+/** The capsule's radius (capsule.ts R): its footprint for the landing-spot choice. */
+const CAP_R = 0.24;
 import { CeremonyDirector, type CeremonyHost } from './ceremony.ts';
 import { createDecalGeometry } from './decals.ts';
 import { EnvHub, KEY_DIR, RIM_DIR } from './env.ts';
@@ -64,6 +67,7 @@ type RoundTwo = Required<Pick<StageLike, 'addBody' | 'removeBody' | 'clearBodies
  * Stage B additions (render lane; proposed as additive StageLike members, typed here until src/contracts.ts takes them):
  *   * onStrand: the tack-strand hook for the shell's strand voice (stage B6). Called every frame a strand stretches (snap false: call
  *     audio.strand({ tension })) and once when it snaps (snap true: audio.strand({ tension: 0, snap: true })). bodyId = the stage's id.
+ *   * setSafeInsets({ top, right, bottom, left }): CSS px the HUD covers; the meter-full capsule lands clear of them (default bottom 72).
  *   * matLayout(n): render offsets for n (1..5) squishies out on the mat at once (stage B1) with readable spacing for the current frame
  *     (a row or two on desktop, staggered rows on a portrait phone), for addBody(..., { position }). With 2..5 bodies visible the camera
  *     frames them all by itself.
@@ -71,6 +75,11 @@ type RoundTwo = Required<Pick<StageLike, 'addBody' | 'removeBody' | 'clearBodies
 export interface StageExtras {
   onStrand: ((bodyId: number, e: StrandEvent) => void) | null;
   matLayout(n: number): V3[];
+  /**
+   * The CSS px at each edge of the canvas that the shell's HUD covers (default { top: 0, right: 0, bottom: 72, left: 0 }); missing or
+   * non-finite fields keep their value. The meter-full capsule lands clear of them (and of every body's screen box) at any aspect.
+   */
+  setSafeInsets(insets: { top?: number; right?: number; bottom?: number; left?: number }): void;
 }
 
 export interface StageDev extends Omit<StageLike, keyof RoundTwo>, RoundTwo, StageExtras {
@@ -167,24 +176,97 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   let capsuleParked = false;           // a merge put the waiting capsule away while it runs
   let parkedOnLand: (() => void) | null = null;   // a capsule dropped DURING a merge lands (onLand) when it fades in after it
   let capsuleId = 0;
+  /** CSS px of the frame the shell's HUD covers (setSafeInsets); the meter-full capsule never lands under them. */
+  const safe = { top: 0, right: 0, bottom: 72, left: 0 };
+  const spotBoxes: number[][] = [], spotBox = [0, 0, 0, 0], spotV = new THREE.Vector3();
+  let spotReframes = false;
 
   const primary = (): BodyView | null => { for (const v of views) if (v.id === primaryId) return v; return null; };
   const fitDistance = (): number => camScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect));
 
   /**
-   * Where the meter-full capsule lands: beside the primary body when the frame is wide enough to show it whole, else in front of it.
-   * During a ceremony the primary may be sliding off (capsule reveal) or hidden (merge): the capsule goes beside the PAD, where the result lands.
+   * Where the meter-full capsule lands, chosen ON SCREEN: the first spot (in this order) whose capsule stays inside the frame minus the
+   * shell's safe insets (setSafeInsets: the HUD rows; by default the bottom 72 CSS px) and clear of every visible body's screen box:
+   * beside the bodies on the right, on the left, behind them to a side, in front of them. If none is clean (a tiny frame) the least bad
+   * one wins. During a ceremony the primary may be sliding off (capsule reveal) or hidden (merge): the spots are around the PAD, where
+   * the result lands (a unit body there).
    */
   function capsuleSpot(p: BodyView | null): { x: number; z: number } {
-    const sc = p ? p.scale : 1, cx = p && !director.active ? p.proxy.center.x : 0;
-    const R = 0.24, D = fitDistance(), hw = D * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect;
-    for (const zf of [0.15, 0, -0.2]) {
-      const z = zf * sc, hwz = hw * Math.max(0.3, (D - z) / D);          // half-width of the frame at that depth
-      const x = Math.min(0.95 * sc, hwz * 0.86 - R * 1.3);
-      if (x >= 0.7 * sc) return { x: cx + x, z };
+    const sc = p ? p.scale : 1;
+    camera.updateMatrixWorld();
+    // the bodies' table extents (world) and screen boxes
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity, zc = 0;
+    spotBoxes.length = 0;
+    if (director.active || !p) { x0 = -0.5 * sc; x1 = 0.5 * sc; z0 = -0.5 * sc; z1 = 0.5 * sc; spotBoxes.push(screenBox(x0, 0, z0, x1, 1.1 * sc, z1, [0, 0, 0, 0])); }
+    else {
+      for (const v of views) {
+        if (!v.visible) continue;
+        const j = v.jelly;
+        x0 = Math.min(x0, j.minX); x1 = Math.max(x1, j.maxX); z0 = Math.min(z0, j.minZ); z1 = Math.max(z1, j.maxZ);
+        // the body's silhouette box on screen (its skin vertices, not its world box: that one's corners overhang the silhouette a lot)
+        const P = v.proxy.positions, b = [Infinity, Infinity, -Infinity, -Infinity];
+        for (let i = 0; i < P.length; i += 3) {
+          spotV.set(P[i], P[i + 1], P[i + 2]).project(camera);
+          const sx = (spotV.x * 0.5 + 0.5) * cssW, sy = (1 - (spotV.y * 0.5 + 0.5)) * cssH;
+          if (sx < b[0]) b[0] = sx; if (sx > b[2]) b[2] = sx; if (sy < b[1]) b[1] = sy; if (sy > b[3]) b[3] = sy;
+        }
+        spotBoxes.push(b);
+      }
+      if (!Number.isFinite(x0)) { x0 = -0.5 * sc; x1 = 0.5 * sc; z0 = -0.5 * sc; z1 = 0.5 * sc; }
+      zc = p.proxy.center.z;
     }
-    const zf = 1.85 * sc, hwf = hw * Math.max(0.3, (D - zf) / D);
-    return { x: cx + Math.max(0, hwf * 0.9 - R * 1.25), z: zf };                         // narrow portrait frame: in front of it, lower in the picture
+    const gap = CAP_R + 0.14 * sc, cx = (x0 + x1) / 2;
+    const cands = [
+      x1 + gap, zc + 0.15 * sc, x1 + gap, zc, x1 + gap, zc - 0.25 * sc,
+      x0 - gap, zc + 0.15 * sc, x0 - gap, zc, x0 - gap, zc - 0.25 * sc,
+      x1 + gap * 0.4, z0 - gap, x0 - gap * 0.4, z0 - gap,
+      cx + 0.45 * (x1 - x0), z1 + gap, x1 + gap * 0.5, z1 + gap, cx + 0.45 * (x1 - x0), z1 + gap * 2, cx, z1 + gap * 2.2, cx, z1 + gap * 3.2,
+      cx + 0.3 * (x1 - x0), z1 + gap * 3.9, cx + 0.3 * (x1 - x0), z1 + gap * 2.6, cx + 0.3 * (x1 - x0), z1 + gap * 1.6,
+    ];
+    // with 2..5 bodies out the camera frames the capsule too (updateCamera): a spot beside the group is never "off the frame" sideways
+    spotReframes = spotBoxes.length >= 2;
+    let best = 0, bestBad = Infinity;
+    for (let i = 0; i < cands.length; i += 2) {
+      const bad = spotBadness(cands[i], cands[i + 1], cands[i + 1] < zc ? 2 : 0.6);
+      if (bad < bestBad - 1e-6) { bestBad = bad; best = i; }
+      if (bad <= 0) break;
+    }
+    return { x: cands[best], z: cands[best + 1] };
+  }
+  /**
+   * How badly a capsule standing at (x, z) breaks the rules, in CSS px: outside the safe frame (x3) + overlap with a body box (0 = clean),
+   * the overlap weighted by `hideW`: a capsule BEHIND a body is hidden by it (2), one in front only covers a little of it (0.6).
+   */
+  function spotBadness(x: number, z: number, hideW: number): number {
+    // the capsule's silhouette box: its centre +- its projected radius / half-height
+    spotV.set(x, CAPSULE_HEIGHT / 2, z).project(camera);
+    const cx = (spotV.x * 0.5 + 0.5) * cssW, cy = (1 - (spotV.y * 0.5 + 0.5)) * cssH;
+    spotV.set(x + CAP_R, CAPSULE_HEIGHT / 2, z).project(camera);
+    const rx = Math.abs((spotV.x * 0.5 + 0.5) * cssW - cx);
+    spotV.set(x, CAPSULE_HEIGHT, z).project(camera);
+    const ry = Math.abs((1 - (spotV.y * 0.5 + 0.5)) * cssH - cy);
+    const b = spotBox; b[0] = cx - rx; b[2] = cx + rx; b[1] = cy - ry; b[3] = cy + ry;
+    const W = cssW, H = cssH, m = 6;
+    // off the safe frame counts 3x: a capsule half under the HUD or off the edge cannot be tapped; a little overlap only hides some of it
+    let bad = 3 * (Math.max(0, safe.top + m - b[1]) + Math.max(0, b[3] - (H - safe.bottom - m)));
+    if (!spotReframes) bad += 3 * (Math.max(0, safe.left + m - b[0]) + Math.max(0, b[2] - (W - safe.right - m)));
+    for (const o of spotBoxes) {
+      // in front of a body only its upper 65% (the face) counts: covering its foot on a narrow phone is the lesser evil
+      const top = o[1], bot = hideW < 1 ? o[1] + 0.65 * (o[3] - o[1]) : o[3];
+      const ox = Math.min(b[2], o[2]) - Math.max(b[0], o[0]), oy = Math.min(b[3], bot) - Math.max(b[1], top);
+      if (ox > 0 && oy > 0) bad += hideW * Math.sqrt(ox * oy);
+    }
+    return bad;
+  }
+  /** Screen box [x0, y0, x1, y1] (CSS px) of a world-space box. */
+  function screenBox(ax: number, ay: number, az: number, bx: number, by: number, bz: number, out: number[]): number[] {
+    out[0] = Infinity; out[1] = Infinity; out[2] = -Infinity; out[3] = -Infinity;
+    for (let k = 0; k < 8; k++) {
+      spotV.set(k & 1 ? bx : ax, k & 2 ? by : ay, k & 4 ? bz : az).project(camera);
+      const sx = (spotV.x * 0.5 + 0.5) * cssW, sy = (1 - (spotV.y * 0.5 + 0.5)) * cssH;
+      if (sx < out[0]) out[0] = sx; if (sx > out[2]) out[2] = sx; if (sy < out[1]) out[1] = sy; if (sy > out[3]) out[3] = sy;
+    }
+    return out;
   }
 
   function applySize(): void {
@@ -236,13 +318,22 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       for (const v of views) {
         if (!v.visible) continue;
         n++;
-        const c = v.proxy.center, r = v.proxy.restRadius * 1.25;
+        const c = v.proxy.center, r = Math.max(v.proxy.restRadius * 1.25, v.restHalfW * 1.12);
         if (c.x - r < x0) x0 = c.x - r; if (c.x + r > x1) x1 = c.x + r; if (c.z - r < z0) z0 = c.z - r; if (c.z + r > z1) z1 = c.z + r;
       }
+      // a capsule standing on the mat beside the group is framed with it
+      if (n >= 2 && capsule && !capsuleParked && capsule.group.visible) {
+        const q = capsule.pos;
+        if (q.x - CAP_R < x0) x0 = q.x - CAP_R; if (q.x + CAP_R > x1) x1 = q.x + CAP_R; if (q.z - CAP_R < z0) z0 = q.z - CAP_R; if (q.z + CAP_R > z1) z1 = q.z + CAP_R;
+      }
+      const hwPer = Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect)) * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect;
+      // one body: a wide species (a half-moon dumpling, a long bean) must fit a narrow portrait frame whole (its rest reach + a margin)
+      const p1 = n === 1 ? primary() : null;
+      if (p1) want = Math.max(want, (p1.restHalfW * 1.06 + 0.05 * p1.scale) / hwPer);
       if (n >= 2) {
         multi = true;
-        const hwPer = Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect)) * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect;
-        want = Math.max(want, ((x1 - x0) / 2 + 0.1 + 0.35 * (z1 - z0) / 2) / hwPer);
+        // a portrait frame has height to spare: depth (which reads as height on screen) costs little zoom there
+        want = Math.max(want, ((x1 - x0) / 2 + 0.1 + (camera.aspect < 0.9 ? 0.12 : 0.35) * (z1 - z0) / 2) / hwPer);
         mx = (x0 + x1) / 2; mz = (z0 + z1) / 2;
       }
     }
@@ -342,13 +433,18 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     camera,
     onStrand: null,
 
+    setSafeInsets(insets) {
+      if (!insets) return;
+      for (const k of ['top', 'right', 'bottom', 'left'] as const) { const v = insets[k]; if (typeof v === 'number' && Number.isFinite(v)) safe[k] = Math.max(0, v); }
+    },
+
     matLayout(n) {
       const k = Math.max(1, Math.min(5, Math.floor(Number.isFinite(n) ? n : 1))), s = bodyScale, out: V3[] = [];
       const portrait = camera.aspect < 0.9;
       // [x, z] in body-scale units: neighbours ~1.2 apart (a body is ~1 wide), back rows behind front ones on a narrow frame
       const L: number[] = portrait
-        ? [[0, 0], [-0.42, 0.42, 0.48, -0.5], [-0.62, -0.75, 0.62, -0.75, 0, 0.5], [-0.62, -0.8, 0.62, -0.8, -0.62, 0.55, 0.62, 0.55], [-0.62, -1.15, 0.62, -1.15, 0, -0.15, -0.62, 0.85, 0.62, 0.85]][k - 1]
-        : [[0, 0], [-0.64, 0, 0.64, 0], [-1.25, 0, 0, 0, 1.25, 0], [-0.66, -0.7, 0.66, -0.7, -0.66, 0.5, 0.66, 0.5], [-1.25, -0.75, 0, -0.75, 1.25, -0.75, -0.64, 0.5, 0.64, 0.5]][k - 1];
+        ? [[0, 0], [-0.4, 0.55, 0.45, -0.75], [-0.55, -1.0, 0.55, -1.0, 0, 0.7], [-0.55, -1.15, 0.55, -1.15, -0.55, 0.8, 0.55, 0.8], [-0.58, -1.7, 0.58, -1.7, 0, -0.35, -0.58, 1.05, 0.58, 1.05]][k - 1]
+        : [[0, 0], [-0.64, 0, 0.64, 0], [-1.25, 0, 0, 0, 1.25, 0], [-0.66, -0.7, 0.66, -0.7, -0.66, 0.5, 0.66, 0.5], [-1.3, -0.85, 0, -0.85, 1.3, -0.85, -0.68, 0.55, 0.68, 0.55]][k - 1];
       for (let i = 0; i < L.length; i += 2) out.push({ x: L[i] * s, y: 0, z: L[i + 1] * s });
       return out;
     },

@@ -14,7 +14,7 @@ import * as THREE from 'three';
 import type { Genome } from '../core/genome.ts';
 import { mulberry32, lerp } from '../core/rng.ts';
 import type { QualityTier } from '../contracts.ts';
-import { tintShare, type JellyPalette, type Rgb } from './oklch.ts';
+import { genomePalette, tintShare, type JellyPalette, type Rgb } from './oklch.ts';
 import { NOISE_GLSL } from './shaderlib.ts';
 import { KEY_DIR, RIM_DIR, type EnvHub } from './env.ts';
 import { TIERS } from './quality.ts';
@@ -66,6 +66,8 @@ export interface JellyUniforms {
   uTouchR: { value: number };
   /** Colour constancy against the studio's sodium-amber key (multiplies the body's own colour; luminance-neutral). */
   uWB: { value: THREE.Vector3 };
+  /** The contact glow's colour: the genome's own core colour (before colour harmony: a small local bloom never muddies the body). */
+  uTouchCol: { value: THREE.Color };
   /** Family micro-texture (foam pores, dusted mochi, bead lumps): bump strength and frequency over the rest direction. */
   uGrain: { value: number };
   uGrainFreq: { value: number };
@@ -105,7 +107,7 @@ uniform float uAurora, uIri, uTwoTone, uTierAmt, uTierTint, uMixAmt;
 uniform vec3 uTone2Col, uTierCol, uMixCol;
 uniform vec4 uTouch0, uTouch1;
 uniform float uTouchR, uGrain, uGrainFreq, uPaleMul, uBeads;
-uniform vec3 uWB;
+uniform vec3 uWB, uTouchCol;
 vec3 jBumpN(vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDirection) {
   vec3 vSigmaX = normalize(dFdx(surf_pos.xyz));
   vec3 vSigmaY = normalize(dFdy(surf_pos.xyz));
@@ -225,7 +227,8 @@ const EMISSIVE_STAGE = /* glsl */`
   // contact glow (stage B5, "touch the light"): a soft bloom of the CORE's colour where a fingertip presses, on top of the pressure blush
   vec3 jTd0 = vWPos - uTouch0.xyz, jTd1 = vWPos - uTouch1.xyz;
   float jTouch = uTouch0.w * exp(-dot(jTd0, jTd0) / (uTouchR * uTouchR)) + uTouch1.w * exp(-dot(jTd1, jTd1) / (uTouchR * uTouchR));
-  jExtra += uCoreCol * jTouch * (0.45 + 0.55 * jNdv) * 0.85;
+  jTouch = min(jTouch, 1.2);
+  jExtra += mix(uTouchCol, vec3(1.0, 0.95, 0.85), 0.35 * jTouch) * jTouch * (0.5 + 0.5 * jNdv) * 1.15;
   jExtra += uTierCol * uTierAmt * (0.25 + 0.9 * jFres + 0.5 * jHalo);   // the tier "tell": light drifting toward the result colour
   jExtra += uMixCol * jMix * (0.16 + 0.3 * (1.0 - jFres));             // merge lineage: the other parents' colours swirl through as light
   totalEmissiveRadiance += jRim + jScat + jCore + jExtra;
@@ -351,7 +354,7 @@ export class JellyMaterials {
       uAurora: { value: 0 }, uIri: { value: 0 }, uTwoTone: { value: 0 }, uTone2Col: { value: lin(palette.tone2) },
       uTierCol: { value: lin(style.tell) }, uTierAmt: { value: 0 }, uTierTint: { value: 0 }, uMixCol: { value: lin(palette.body) }, uMixAmt: { value: 0 },
       uTouch0: { value: new THREE.Vector4(0, -10, 0, 0) }, uTouch1: { value: new THREE.Vector4(0, -10, 0, 0) }, uTouchR: { value: 0.12 * scale },
-      uGrain: { value: 0 }, uGrainFreq: { value: 24 }, uPaleMul: { value: 1 }, uBeads: { value: fam === 'beadsqueeze' ? 1 : 0 }, uWB: { value: new THREE.Vector3(1, 1, 1) },
+      uGrain: { value: 0 }, uGrainFreq: { value: 24 }, uPaleMul: { value: 1 }, uBeads: { value: fam === 'beadsqueeze' ? 1 : 0 }, uWB: { value: new THREE.Vector3(1, 1, 1) }, uTouchCol: { value: lin(genomePalette(genome).core) },
     };
     this.palette = palette;
     this.scale = scale;

@@ -87,6 +87,15 @@ export interface BodyHostOptions {
   camera(): CameraLike | null;
   body(): SoftBodyLike | null;
   viewport(): Viewport;
+  /** Render offset of that body (stage.addBody position; the play mat): the body simulates at its own origin and is DRAWN here. Default 0. */
+  offset?(): V3;
+}
+
+const ZERO: V3 = { x: 0, y: 0, z: 0 };
+
+/** Raycast one body drawn at render offset `off` (the mat): the ray is moved into the body's own space. Hit points are body-space. */
+export function raycastAt(body: SoftBodyLike, origin: V3, dir: V3, off: V3): { point: V3; normal: V3; vertex: number; t: number } | null {
+  return body.raycast(off === ZERO || (off.x === 0 && off.y === 0 && off.z === 0) ? origin : { x: origin.x - off.x, y: origin.y - off.y, z: origin.z - off.z }, dir);
 }
 
 export interface BodyHost extends GestureHost {
@@ -97,6 +106,9 @@ export interface BodyHost extends GestureHost {
 }
 
 export function createBodyHost(o: BodyHostOptions): BodyHost {
+  const off = (): V3 => (o.offset ? o.offset() : ZERO);
+  /** a body-space point in world (render) space */
+  const world = (p: V3): V3 => { const d = off(); return d.x === 0 && d.y === 0 && d.z === 0 ? p : { x: p.x + d.x, y: p.y + d.y, z: p.z + d.z }; };
   const refresh = (): CameraLike | null => {
     const c = o.camera();
     if (c && c.updateMatrixWorld) c.updateMatrixWorld();
@@ -115,11 +127,12 @@ export function createBodyHost(o: BodyHostOptions): BodyHost {
     const cam = refresh();
     if (!body || !cam) return null;
     const vp = o.viewport();
-    const c = projectToNdc(cam, body.center);
+    const bc = world(body.center);
+    const c = projectToNdc(cam, bc);
     if (!c) return null;
     const right = cameraRight(cam);
     const R = body.restRadius;
-    const e = projectToNdc(cam, { x: body.center.x + right.x * R, y: body.center.y + right.y * R, z: body.center.z + right.z * R });
+    const e = projectToNdc(cam, { x: bc.x + right.x * R, y: bc.y + right.y * R, z: bc.z + right.z * R });
     const cp = toPx(c, vp);
     const r = e ? Math.abs(toPx(e, vp).x - cp.x) : 0;
     return { x: cp.x, y: cp.y, r };
@@ -130,7 +143,7 @@ export function createBodyHost(o: BodyHostOptions): BodyHost {
       const body = o.body();
       const r = ray(x, y);
       if (!body || !r) return null;
-      const h = body.raycast(r.origin, r.dir);
+      const h = raycastAt(body, r.origin, r.dir, off());
       if (!h) return null;
       return { point: h.point, normal: h.normal, dir: r.dir, vertex: h.vertex };
     },
@@ -138,7 +151,10 @@ export function createBodyHost(o: BodyHostOptions): BodyHost {
     planePoint(x, y, through): V3 | null {
       const r = ray(x, y);
       if (!r) return null;
-      return rayPlane(r.origin, r.dir, through, cameraForward(r.cam));
+      // `through` and the answer are body-space (grab targets): intersect in world space, then move back
+      const d = off();
+      const hit = rayPlane(r.origin, r.dir, world(through), cameraForward(r.cam));
+      return hit ? { x: hit.x - d.x, y: hit.y - d.y, z: hit.z - d.z } : null;
     },
     screenCentre() {
       const d = bodyScreen();
@@ -146,7 +162,7 @@ export function createBodyHost(o: BodyHostOptions): BodyHost {
     },
     ndcOf(p) {
       const cam = refresh();
-      return cam ? projectToNdc(cam, p) : null;
+      return cam ? projectToNdc(cam, world(p)) : null;
     },
   };
 }

@@ -766,11 +766,37 @@ try {
       for (const n of [2, 3, 5]) {
         const r = await mp.evaluate((n) => window.__RV__.matProbe(n, ['', '2', '3', '16', '19']), n);
         writeFileSync(resolve(OUT, `mat_${n}_${label}.png`), b64(r.png));
-        RB.mat[`${label}:${n}`] = { inFrame: r.inFrame, minGapPx: r.minGapPx, bodies: r.bodies };
-        check(r.bodies === n && r.inFrame && r.minGapPx > (label === 'phone' ? 70 : 120), `mat (B1) ${label}: ${n} bodies at stage.matLayout(${n}) are all inside the frame, centres apart`, `min centre gap ${r.minGapPx.toFixed(0)} px, in frame ${r.inFrame}`);
+        const widths = r.boxes.map((q) => q[2] - q[0]).sort((a, b) => a - b), medW = widths[Math.floor(widths.length / 2)];
+        RB.mat[`${label}:${n}`] = { inFrame: r.inFrame, minGapPx: r.minGapPx, medianBodyPx: medW, bodies: r.bodies };
+        check(r.bodies === n && r.inFrame && r.minGapPx > 0.45 * medW && medW > (label === 'phone' ? 60 : 150),
+          `mat (B1) ${label}: ${n} bodies at stage.matLayout(${n}) all inside the frame, readable (centres >= 0.45 body widths apart, bodies >= ${label === 'phone' ? 60 : 150} px wide)`,
+          `min centre gap ${r.minGapPx.toFixed(0)} px, median body ${medW.toFixed(0)} px, in frame ${r.inFrame}`);
       }
       report.problems.push(...mbad);
       await mctx.close();
+    }
+    // ---- the meter-full capsule lands clear of the HUD's bottom 72 CSS px (default safe inset) and, wherever the frame allows, of the body ----
+    for (const [vw, vh, mustClearBody] of [[568, 320, true], [320, 256, true], [844, 390, true], [1280, 800, true], [390, 844, false]]) {
+      const cctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
+      const { page: cp, bad: cbad } = await openView(cctx, `quality=low&body=${bodyQ}`, `capspot-${vw}x${vh}`, [/GPU stall due to ReadPixels/i]);
+      const r = await cp.evaluate(() => {
+        const R = window.__RV__; R.setGenome(''); R.frames(120); R.dropCapsule(); R.frames(150);
+        const ci = R.capsuleInfo(), W = R.stage.canvas.clientWidth, H = R.stage.canvas.clientHeight, cam = R.stage.camera;
+        const v = R.stage.views[0], Q = v.proxy.positions, P = new (cam.position.constructor)();
+        let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+        for (let i = 0; i < Q.length; i += 3) { P.set(Q[i], Q[i + 1], Q[i + 2]).project(cam); const sx = (P.x * 0.5 + 0.5) * W, sy = (1 - (P.y * 0.5 + 0.5)) * H; x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); }
+        const p = ci.point, rr = p ? p.r / 1.35 : 0;
+        const cap = p ? [p.x - rr * 0.75, p.y - rr * 1.4, p.x + rr * 0.75, p.y + rr * 1.4] : null;
+        const ov = cap ? Math.max(0, Math.min(cap[2], x1) - Math.max(cap[0], x0)) * Math.max(0, Math.min(cap[3], y1) - Math.max(cap[1], y0)) : -1;
+        return { W, H, landed: ci.landed, cap: cap && cap.map(Math.round), body: [x0, y0, x1, y1].map(Math.round), overlapPx2: Math.round(ov), png: R.snapshot() };
+      });
+      writeFileSync(resolve(OUT, `capspot_${vw}x${vh}.png`), b64(r.png));
+      const okBottom = !!r.cap && r.cap[3] <= r.H - 72 && r.cap[0] >= 0 && r.cap[2] <= r.W && r.cap[1] >= 0;
+      check(r.landed && okBottom && (!mustClearBody || r.overlapPx2 === 0),
+        `capsule spot ${vw}x${vh}: inside the frame, clear of the bottom 72 CSS px${mustClearBody ? ' and of the body' : ' (narrow portrait: in front of the body, its face uncovered)'}`,
+        `capsule ${JSON.stringify(r.cap)}, body ${JSON.stringify(r.body)}, overlap ${r.overlapPx2} px2, frame ${r.W}x${r.H}`);
+      report.problems.push(...cbad);
+      await cctx.close();
     }
     await sheetCtxB.close();
   }

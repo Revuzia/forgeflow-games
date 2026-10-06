@@ -51,6 +51,8 @@ export interface Capsules {
   /** per frame (ms clock): the squeeze progress, the slow-reply wobble */
   update(): void;
   /** the DOM twin: open the next capsule (no hold) */
+  /** take the capsule off the table for a reveal that is not this capsule's (a gift): it comes back after the ceremony (sync) */
+  putAway(): void;
   openNext(): Promise<void>;
   /** where the capsule is on screen (CSS px), for the harness and the HUD */
   screenPoint(): { x: number; y: number; r: number } | null;
@@ -185,6 +187,7 @@ export function createCapsules(d: CapsulesDeps): Capsules {
       }
     },
     openNext: () => open(cap),
+    putAway() { if (cap && !opening) { hold = null; try { cap.remove(); } catch { /* gone */ } cap = null; } },
     screenPoint() { try { return cap ? cap.screenPoint() : null; } catch { return null; } },
     cancelHold() { if (hold) { hold = null; try { cap?.setSqueeze(0); } catch { /* gone */ } } },
   };

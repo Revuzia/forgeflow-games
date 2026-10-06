@@ -16,7 +16,14 @@ import { PLATE_MS, createRevealPlate, plateText } from '../ui/revealPlate.ts';
 import type { RevealPlate } from '../ui/revealPlate.ts';
 import { createSettingsPanel } from '../ui/settingsPanel.ts';
 import type { SettingsPanel } from '../ui/settingsPanel.ts';
+import { createHoard } from '../ui/hoard/panel.ts';
+import type { HoardUi } from '../ui/hoard/panel.ts';
+import { createQuickSwitch } from '../ui/quickSwitch.ts';
+import type { SwitchChoice } from '../ui/quickSwitch.ts';
+import { warmSpeciesIcons } from '../ui/speciesIcon.ts';
 import type { Game, PlayLabel } from './game.ts';
+import { createHoardEnv } from './hoardEnv.ts';
+import '../ui/hoard.css';
 
 export interface UiBinding {
   readonly hud: Hud;
@@ -24,11 +31,15 @@ export interface UiBinding {
   readonly play: PlayTarget;
   readonly plate: RevealPlate;
   readonly announcer: Announcer;
+  /** SHELL-2b: the Hoard (shelf, card, gift, today, merge pad, Tidy-up) */
+  readonly hoard: HoardUi;
   toast(text: string, ms?: number): void;
   /** Escape outside a ceremony: close what is open (settings, the plate); true = something closed */
   escape(): boolean;
   /** a key reached the toy: the Keys line and the keyboard hint wording */
   keyUsed(): void;
+  /** [ / ]: switch to the oldest / the newest squishy of the quick switcher */
+  switchBy(dir: -1 | 1): void;
   destroy(): void;
 }
 
@@ -36,11 +47,12 @@ export const labelText = (l: PlayLabel): string => `${l.species}, ${tierLabel(l.
 
 export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, env: SettingsEnv, o: { onPlay(): void }): UiBinding {
   const off: Array<() => void> = [];
+  let hoardUi: HoardUi | null = null;
   const announcer = createAnnouncer(root);
   let panel: SettingsPanel | null = null;
   const hud = createHud(root, {
     label: g.label, muted: g.muted,
-    onGear: () => panel?.toggle(),
+    onGear: () => { if (hoardUi?.isOpen) hoardUi.close(); panel?.toggle(); },
     onMute: () => g.toggleMute(),
     onOpenCapsule: () => { g.unlockAudio(); void g.capsules.openNext(); },
   });
@@ -60,6 +72,40 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     escapeFocusTo: () => (g.phase === 'play' ? play.el : null),
   });
   const p: SettingsPanel = panel;
+
+  // ---- the Hoard (SHELL-2b): its HUD button and the play mat's "put back" chip live in the HUD's bottom-centre slot
+  const hoard: HoardUi = createHoard(root, createHoardEnv(g, {
+    announce: (t) => announcer.say(t),
+    toast: (t) => toast(t),
+    returnFocus: () => (g.phase === 'play' ? play.el : null),
+  }));
+  hoardUi = hoard;
+  hud.slot.append(hoard.button, hoard.matChip);
+  hoard.button.addEventListener('click', () => { if (p.isOpen()) p.close('escape'); }, { capture: true });
+  off.push(warmSpeciesIcons());
+
+  // ---- the quick switcher (SHELL-2b): the squishies played lately, then the hearted ones, one tap to play with
+  const pick = (id: string): void => {
+    const r = g.switchTo(id);
+    if (r === 'queued') announcer.say('Switching when this is done.');
+    else if (r !== 'done') toast('That one could not come out. Try another.');
+  };
+  const qs = createQuickSwitch(hud.el, pick);
+  const choices = (): SwitchChoice[] => {
+    const cur = g.identity.itemId;
+    const out: SwitchChoice[] = [];
+    const add = (id: string): void => {
+      if (id === cur || out.some((c) => c.id === id)) return;
+      const it = g.hoard.item(id);
+      if (it) out.push({ id: it.id, species: it.species, name: it.name, tier: it.tier as TierName });
+    };
+    for (const id of g.history.recent()) add(id);
+    for (const it of g.hoard.items()) if (it.fav) add(it.id);
+    return out;
+  };
+  const refreshSwitch = (): void => qs.set(choices());
+  refreshSwitch();
+  off.push(g.on('identity', () => refreshSwitch()), g.hoard.onChange(() => refreshSwitch()), () => qs.destroy());
 
   let toastEl: HTMLElement | null = null;
   let toastTimer = 0;
@@ -118,19 +164,25 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   window.addEventListener('keydown', onTab, { capture: true, passive: true });
 
   return {
-    hud, panel: p, play, plate, announcer, toast,
+    hud, panel: p, play, plate, announcer, hoard, toast,
     escape() {
       if (p.isOpen()) { p.close('escape'); return true; }
+      if (hoard.escape()) return true;
       if (plate.shown) { plate.hide(); return true; }
       return false;
     },
     keyUsed() { document.body.dataset.kbd = '1'; if (!isCoarsePointer()) hud.setHintMode('keyboard'); },
+    switchBy(dir) {
+      const list = choices().slice(0, 4);
+      if (!list.length) { announcer.say('No other squishy to switch to yet.'); return; }
+      pick((dir > 0 ? list[0] : list[list.length - 1]).id);
+    },
     destroy() {
       for (const f of off.splice(0)) f();
       clearInterval(placeTimer); clearTimeout(toastTimer); cancelAnimationFrame(placeRaf);
       play.el.removeEventListener('focus', onFocus);
       window.removeEventListener('keydown', onTab, { capture: true });
-      toastEl?.remove(); hud.destroy(); p.destroy(); play.destroy(); plate.destroy(); announcer.destroy();
+      toastEl?.remove(); hoard.destroy(); hud.destroy(); p.destroy(); play.destroy(); plate.destroy(); announcer.destroy();
     },
   };
 }

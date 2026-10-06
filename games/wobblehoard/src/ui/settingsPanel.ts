@@ -81,7 +81,7 @@ export function createSettingsPanel(root: HTMLElement, o: SettingsPanelOptions):
   const calm = toggle('wh-calm', 'Calm effects', 'calm', 'No camera moves, flashes or shake; fewer sparkles.');
   const skip = toggle('wh-skip', 'Skip animations', 'skipAnimations', 'Go straight to what came out.');
   const fast = toggle('wh-fast', 'Fast open', 'fastOpen', 'Quick pop for repeats.');
-  const keys = toggle('wh-keys', 'Keyboard shortcuts', 'shortcuts', 'G gravity, M sound.');
+  const keys = toggle('wh-keys', 'Keyboard shortcuts', 'shortcuts', 'G gravity, M sound, H Hoard, [ ] switch squishy.');
 
   // gravity <-> float segmented control (radio group)
   const radio = (value: 'table' | 'float', label: string): { el: HTMLElement; input: HTMLInputElement } => {
@@ -101,7 +101,7 @@ export function createSettingsPanel(root: HTMLElement, o: SettingsPanelOptions):
 
   const title = h('h2', { class: 'panel-title', text: 'Settings', attrs: { id: 'wh-settings-title', tabindex: '-1' } });
   const closeBtn = h('button', { class: 'icon-btn', attrs: { type: 'button', 'aria-label': 'Close settings', title: 'Close (Esc)' } }, icon('close'));
-  const keyLine = h('p', { class: 'row-hint keys', text: 'Keys: Tab to the squishy · Space pokes · arrows look around · + / − zoom · G gravity · M sound · Esc closes' });
+  const keyLine = h('p', { class: 'row-hint keys', text: 'Keys: Tab to the squishy · Space pokes · arrows look around · + / − zoom · G gravity · M sound · H Hoard · [ ] switch squishy · Esc closes' });
   const body = h('div', { class: 'panel-body' },
     h('h3', { class: 'panel-group', text: 'Sound' }), volume.row, music.row, boost.row,
     h('h3', { class: 'panel-group', text: 'Feel' }), extra.row, haptics.row, gravityRow,

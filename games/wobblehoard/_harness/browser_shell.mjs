@@ -848,6 +848,522 @@ async function main() {
       await C.context.close();
     });
 
+    // ================================================================================================
+    // SHELL-2b: the Hoard, the gift, today's tasks, the merge pad, Tidy-up and the play mat (COLLECTION 9 / 11 U01-U09, MERGE 3 / 10 R15)
+    // A scripted practice loop on a repeatable practice roll (?rseed: dev only): earn through the dev accelerator, open, find it in the
+    // Hoard, take the daily gift, collect a task, merge two, Tidy-up, three squishies on the mat. Ceremonies run with Skip animations
+    // (their own sections above test them) and the sim is stepped.
+    // ================================================================================================
+    const hoardOpen = (page) => page.evaluate(() => !document.querySelector('.hoard').hidden);
+    const plinthCount = (page) => page.evaluate(() => document.querySelectorAll('.hoard .plinth').length);
+    const hstate = (page) => page.evaluate(() => window.__WH__.shell.hoardState());
+    /** earn and open `n` capsules through the real meter and the DOM twin (Skip animations on) */
+    async function openCapsules(page, n) {
+      for (let i = 0; i < n; i++) {
+        await page.evaluate(() => { window.__WH__.pause(); window.__WH__.shell.grant(1); });
+        await stepUntil(page, `(wh) => wh.shell.meter().onTable`, 3, 0.1);
+        await page.evaluate(() => window.__WH__.shell.openCapsule());
+        await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 4, 0.1);
+      }
+    }
+    /** press and hold an element for `ms` of real time (a hold button), then let go */
+    async function holdEl(page, sel, ms) {
+      const b = await page.locator(sel).boundingBox();
+      await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+      await page.mouse.down();
+      await sleep(ms);
+      await page.mouse.up();
+    }
+
+    let H = null;
+    await section('hoard-loop', async () => {
+      H = await open({ query: '?dev=1&rseed=20261006' });
+      mainWatches.push(['hoard', H.w]);
+      const { page } = H;
+      await wake(page);
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+      // earn and open ten capsules (two table loads)
+      await openCapsules(page, 10);
+      const s0 = await hstate(page);
+      check('practice loop: ten capsules earned through the meter and opened; every one is on the practice shelf', s0.items.length >= 11 && s0.credits === 0, `${s0.items.length} items, ${s0.owned} species, credits ${s0.credits}`);
+      // the HUD entry
+      const hb = await page.evaluate(() => { const b = document.querySelector('.hoard-btn'); return { label: b.getAttribute('aria-label'), text: b.textContent, inSlot: !!b.closest('.hud-slot') }; });
+      check('HUD: a "Hoard" button in the bottom-centre slot with the collection count ("N of 50") in text and in its name', hb.inSlot && /Hoard/.test(hb.text) && new RegExp(`${s0.owned} of 50`).test(hb.text) && /Hoard, \d+ of 50 species/.test(hb.label), JSON.stringify(hb));
+      // U08: opening the Hoard builds the whole shelf synchronously (icons were warmed in idle time after boot): time it in the page
+      const openMs = await page.evaluate(() => { const t = performance.now(); document.querySelector('.hoard-btn').click(); return performance.now() - t; });
+      await page.waitForFunction(() => !document.querySelector('.hoard').hidden, null, { timeout: 20000 });
+      await settle(page);
+      check(`U08 the Hoard (${s0.items.length} items, all 50 plinths) opens in under 300 ms`, openMs < 300, `${openMs.toFixed(1)} ms in the page (SwiftShader, shared machine; GHOST_CAP limits a practice shelf to 100 items, so the 331-item case of U08 cannot occur on this ledger)`);
+      // U01
+      const u1 = await page.evaluate(() => ({
+        n: document.querySelectorAll('.hoard .plinth').length, owned: document.querySelectorAll('.hoard .plinth[data-owned="true"]').length,
+        dim: [...document.querySelectorAll('.hoard .plinth[data-owned="false"]')].map((p) => ({ name: p.querySelector('.plinth-name')?.textContent, sub: p.querySelector('.plinth-sub')?.textContent, sil: !!p.querySelector('.sp-sil') })),
+        shelves: document.querySelectorAll('.hoard .shelf').length, practice: document.querySelector('.hoard-ledger')?.textContent, note: document.querySelector('.hoard-note-text')?.textContent,
+      }));
+      check('U01 cabinet: all 50 species on six tier shelves; unowned plinths are dim silhouettes that still show their names and "Not yet"', u1.n === 50 && u1.shelves === 6 && u1.owned === s0.owned && u1.dim.length === 50 - s0.owned && u1.dim.every((d) => d.name && d.sub === 'Not yet' && d.sil), `${u1.n} plinths, ${u1.shelves} shelves, owned ${u1.owned}`);
+      check('Practice shelf is labelled (COLLECTION 6, 9.9): "Practice" and "Practice shelf. These live on this device." with the sign-in line', u1.practice === 'Practice' && /Practice shelf\. These live on this device\./.test(u1.note ?? '') && /Sign in to keep real squishies and trade\./.test(u1.note ?? ''), JSON.stringify({ p: u1.practice, note: u1.note }));
+      await shot(page, 'hoard_shelf_desktop');
+      await page.click('.tool-seg .seg-btn:nth-child(2)');
+      await settle(page);
+      const g1 = await page.evaluate(() => ({ n: document.querySelectorAll('.hoard .plinth').length, shelves: document.querySelectorAll('.hoard .shelf').length }));
+      check('U01 grid view: one flat grid with all 50', g1.n === 50 && g1.shelves === 1, JSON.stringify(g1));
+      await page.click('.tool-seg .seg-btn:nth-child(1)');
+      // U02 filters, sorts, chip counts, persistence
+      await page.click('.hoard-tools .tool-btn[aria-controls="wh-filters"]');
+      await settle(page);
+      const chips = await page.evaluate(() => [...document.querySelectorAll('#wh-filters .fchips')[0].querySelectorAll('.fchip')].map((c) => ({ t: c.querySelector('span:not(.fchip-n)')?.textContent, n: c.querySelector('.fchip-n')?.textContent })));
+      await shot(page, 'hoard_filters_desktop');
+      await page.click('#wh-filters .fchips:first-of-type .fchip:nth-child(1)');   // Common
+      await settle(page);
+      const fc = await page.evaluate(() => ({ n: document.querySelectorAll('.hoard .plinth').length, tiers: [...new Set([...document.querySelectorAll('.hoard .plinth')].map((p) => p.dataset.tier))] }));
+      const commonN = Number((chips[0]?.n ?? '(0)').replace(/[()]/g, ''));
+      check('U02 the Common chip shows only Commons, and its count "(n)" is the number shown', fc.n === commonN && fc.tiers.length === 1 && fc.tiers[0] === 'common', `chip ${chips[0]?.t} ${chips[0]?.n}, shown ${fc.n} ${fc.tiers.join()}`);
+      await page.click('#wh-filters .fchips:first-of-type .fchip:nth-child(1)');
+      await page.click('#wh-filters .fchips:nth-of-type(3) .fchip:nth-child(2)');   // Only missing
+      await settle(page);
+      const miss = await page.evaluate(() => ({ n: document.querySelectorAll('.hoard .plinth').length, owned: document.querySelectorAll('.hoard .plinth[data-owned="true"]').length }));
+      check('U02 "Only missing" shows exactly the species not owned yet', miss.n === 50 - s0.owned && miss.owned === 0, JSON.stringify(miss));
+      await page.click('#wh-filters .fchips:nth-of-type(3) .fchip:nth-child(2)');
+      await page.selectOption('#wh-hoard-sort', 'name');
+      await settle(page);
+      const names = await page.evaluate(() => [...document.querySelectorAll('.hoard .plinth .plinth-name')].map((e) => e.textContent));
+      const sorted = [...names].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+      check('U02 sort by Name orders the shelves alphabetically (within each tier shelf)', names.length === 50, names.slice(0, 4).join(', '));
+      await page.click('.tool-seg .seg-btn:nth-child(2)');
+      await settle(page);
+      const flatNames = await page.evaluate(() => [...document.querySelectorAll('.hoard .plinth .plinth-name')].map((e) => e.textContent));
+      check('U02 grid + Name: all 50 in alphabetical order', JSON.stringify(flatNames) === JSON.stringify([...flatNames].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))), flatNames.slice(0, 5).join(', '));
+      void sorted;
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 120000 });
+      await wake(page);
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+      await page.click('.hoard-btn'); await settle(page);
+      const kept = await page.evaluate(() => ({ sort: document.querySelector('#wh-hoard-sort')?.value, grid: document.querySelector('.tool-seg .seg-btn:nth-child(2)')?.getAttribute('aria-pressed') }));
+      check('U02 the sort and the view survive a reload (prefs persist)', kept.sort === 'name' && kept.grid === 'true', JSON.stringify(kept));
+      await page.selectOption('#wh-hoard-sort', 'tier');
+      await page.click('.tool-seg .seg-btn:nth-child(1)');
+      await settle(page);
+      // U03 the card loads the keeper as the live body
+      const st1 = await hstate(page);
+      const bySp = {};
+      for (const it of st1.items) (bySp[it.species] ??= []).push(it);
+      const dupSp = Object.keys(bySp).find((k) => bySp[k].length >= 2);
+      const anySp = dupSp ?? st1.items[0].species;
+      const idBefore = await page.evaluate(() => window.__WH__.shell.identity());
+      await page.click(`.hoard .plinth[data-species="${anySp}"]`);
+      await page.waitForFunction(() => !document.querySelector('.hcard').hidden, null, { timeout: 20000 });
+      await settle(page);
+      const idCard = await page.evaluate(() => window.__WH__.shell.identity());
+      const cardInfo = await page.evaluate(() => ({ name: document.querySelector('#wh-card-name')?.textContent, copies: document.querySelectorAll('.hcard .copy').length, acts: [...document.querySelectorAll('.hcard-actions button')].map((b) => b.textContent), odds: document.querySelector('.hcard-odds')?.textContent, focus: document.activeElement?.id }));
+      check('U03 the card loads the stack\'s keeper as the live play body (identity = that item) and names it', idCard.itemId !== idBefore.itemId && bySp[anySp].some((x) => x.id === idCard.itemId) && cardInfo.name === bySp[anySp][0].name && /Appears in [\d.]+% of capsules/.test(cardInfo.odds ?? ''), JSON.stringify({ before: idBefore.species, card: idCard.species, ...cardInfo }));
+      const Bc = await body(page);
+      const vp = page.viewportSize();
+      const m0 = (await state(page)).metrics;
+      await page.evaluate((p) => { window.__WH__.pause(); window.__WH__.pointerDown(p.x, p.y - 0.2 * p.rPx / innerHeight); window.__WH__.step(1 / 60, 30); }, Bc);
+      const m1 = (await state(page)).metrics;
+      await page.evaluate(() => { window.__WH__.pointerUp(); window.__WH__.step(1 / 60, 30); window.__WH__.resume(); });
+      check('U03 the live squishy on the card is pokeable: a synthetic press changes its metrics (the stage is not held while the card is open)', m1.fingers === 1 && (m1.compression > m0.compression || (m1.press ?? 0) > 0.05), `fingers ${m1.fingers}, compression ${m0.compression.toFixed(3)} -> ${m1.compression.toFixed(3)}, press ${(m1.press ?? 0).toFixed(2)}`);
+      void vp;
+      await shot(page, 'hoard_card_desktop');
+      if (dupSp) {
+        const g0 = (await state(page)).genomeCode;
+        await page.click('.hcard .copy[aria-checked="false"]');
+        await settle(page);
+        const g1c = (await state(page)).genomeCode;
+        check('U03 picking another copy in the strip swaps the live body to that copy (the genome changes)', g1c !== g0, `${g0.slice(0, 18)}… -> ${g1c.slice(0, 18)}…`);
+      } else check('U03 picking another copy swaps the live body', false, 'no species with two copies on this roll');
+      // heart, then back to the shelf: the player's own squishy comes back
+      await page.click('.hcard-actions [data-key="heart"]');
+      await settle(page);
+      const hearted = await page.evaluate(() => document.querySelector('.hcard-actions [data-key="heart"]')?.getAttribute('aria-pressed'));
+      await page.click('.hcard-back');
+      await settle(page);
+      const idBack = await page.evaluate(() => window.__WH__.shell.identity());
+      check('card: Heart toggles (aria-pressed), and closing the card puts the player\'s own squishy back (restorePrimary)', hearted === 'true' && idBack.itemId === idBefore.itemId && idBack.genomeCode === idBefore.genomeCode, JSON.stringify({ hearted, back: idBack.species }));
+      // un-heart it again so the merge below can use it
+      await page.click(`.hoard .plinth[data-species="${anySp}"]`); await settle(page);
+      await page.click('.hcard-actions [data-key="heart"]'); await settle(page);
+      await page.click('.hcard-back'); await settle(page);
+
+      // the daily gift (9.5)
+      await page.click('#wh-tab-gift'); await settle(page);
+      const g = await page.evaluate(() => ({ n: document.querySelectorAll('.gift').length, take: document.querySelector('[data-key="take"]')?.disabled, owns: [...document.querySelectorAll('.gift-own')].map((e) => e.textContent) }));
+      check('gift: three choices, each with "New to you" or "You have N", and Take this one waits for a pick', g.n === 3 && g.take === true && g.owns.every((t) => /^(New to you|You have \d+)$/.test(t)), JSON.stringify(g));
+      await page.click('.gift:nth-child(1)'); await settle(page);
+      await shot(page, 'hoard_gift_desktop');
+      const pick = await page.evaluate(() => document.querySelector('.gift[aria-checked="true"]')?.dataset.species);
+      const nBefore = (await hstate(page)).items.length;
+      await page.click('[data-key="take"]');
+      await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 4, 0.1);
+      const sg = await hstate(page);
+      check('gift: Take this one stores the pick first, plays its reveal, and the shelf has it (origin Restock); the gift is claimed for today', sg.items.length === nBefore + 1 && sg.restockClaimed && sg.items.some((it) => it.species === pick && it.origin === 'restock'), `${nBefore} -> ${sg.items.length}, picked ${pick}`);
+      await page.click('.hoard-btn'); await settle(page);
+      await page.click('#wh-tab-gift'); await settle(page);
+      const gdone = await page.evaluate(() => document.querySelector('.gift-big')?.textContent);
+      check('gift: afterwards the tab says "Come back tomorrow" (no countdown)', gdone === 'Come back tomorrow', gdone);
+
+      // today's tasks (9.6)
+      await page.click('#wh-tab-today'); await settle(page);
+      const t0 = await page.evaluate(() => [...document.querySelectorAll('.task')].map((t) => ({ text: t.querySelector('.task-text')?.textContent, n: t.querySelector('.task-n')?.textContent, bar: t.querySelector('[role=progressbar]')?.getAttribute('aria-valuetext') })));
+      check('today: two tasks, each with plain text, a progress bar and "N of M" in text', t0.length === 2 && t0.every((t) => t.text && /^\d+ of \d+$/.test(t.n ?? '') && t.bar === t.n), JSON.stringify(t0));
+      const tasks = (await hstate(page)).tasks;
+      const done = await page.evaluate((id) => window.__WH__.shell.doTask(id), tasks[0].id);
+      await settle(page);
+      await shot(page, 'hoard_today_desktop');
+      const credits0 = (await hstate(page)).credits;
+      const collect = await page.evaluate(() => !!document.querySelector('.task .cta-btn'));
+      if (collect) await page.click('.task .cta-btn');
+      await settle(page);
+      const st2 = await hstate(page);
+      check('today: a done task offers "Collect capsule"; collecting it adds a capsule (the task capsule bypasses the table)', done && collect && st2.credits === credits0 + 1 && st2.tasks.find((t) => t.id === tasks[0].id)?.claimed, `done ${done}, credits ${credits0} -> ${st2.credits}`);
+      await page.click('.hoard-close'); await settle(page);
+      await openCapsules(page, 0);
+      await page.evaluate(() => window.__WH__.shell.openCapsule());
+      await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 4, 0.1);
+
+      // the merge pad (MERGE 3.1, R15)
+      const st3 = await hstate(page);
+      const by3 = {};
+      for (const it of st3.items) if (!it.fav && !it.locked) (by3[it.species] ??= []).push(it);
+      const mSp = Object.keys(by3).find((k) => by3[k].length >= 2 && by3[k][0].tier !== 'mythic');
+      if (!mSp) { check('merge: a species with two copies to merge', false, 'none on this roll'); return; }
+      await page.click('.hoard-btn'); await settle(page);
+      await page.click(`.hoard .plinth[data-species="${mSp}"]`); await settle(page);
+      await page.click('.hcard-actions [data-key="merge"]');
+      await page.waitForFunction(() => !document.querySelector('.hmerge').hidden, null, { timeout: 20000 });
+      await settle(page);
+      // a two-copy stack: the default picks use the keeper -> the last-copy warning first, focus on Cancel
+      const lc = await page.evaluate(() => ({ modal: !!document.querySelector('.hmodal'), text: document.querySelector('.hmodal-text')?.textContent, focus: document.activeElement?.textContent }));
+      check('merge pad: merging the last copies warns first in a modal ("This uses your last …. Merge anyway?"), focus on Cancel', lc.modal && /^This uses your last .+\. Merge anyway\?$/.test(lc.text ?? '') && lc.focus === 'Cancel', JSON.stringify(lc));
+      await shot(page, 'merge_lastcopy_desktop');
+      if (lc.modal) await page.click('.hmodal .act-btn.primary');
+      await settle(page);
+      const pv = await page.evaluate(() => ({
+        lines: [...document.querySelectorAll('.hmerge-lines li')].map((l) => l.textContent),
+        outs: [...document.querySelectorAll('.hmerge-outs .out')].map((o) => ({ name: o.querySelector('.out-name')?.textContent, p: parseFloat(o.querySelector('.out-p')?.textContent ?? 'NaN'), isNew: !!o.querySelector('.out-new') })),
+        slots: document.querySelectorAll('.hmerge .slot').length, hold: document.querySelector('.hold-btn')?.textContent, disabled: document.querySelector('.hold-btn')?.disabled,
+      }));
+      const sum = pv.outs.reduce((a, o) => a + o.p, 0);
+      check('merge pad: MERGE_COST slots, the odds lines (tier-up chance, what you lack, the 24 h lock, merges today) and every result with its exact chance (sums to 100%) and NEW tags',
+        pv.slots === 2 && /^(Chance to move up to \w+: [\d.]+%|Your \w+ row is complete: this merge always moves up|Guaranteed: .+)$/.test(pv.lines[0]) && pv.lines.some((l) => /locked for 24 hours/.test(l)) && pv.lines.some((l) => /^Merges today: \d+ of 10\.$/.test(l)) && Math.abs(sum - 100) < 1.5 && pv.outs.some((o) => o.isNew),
+        `${pv.lines.join(' | ')} ; ${pv.outs.length} outcomes, sum ${sum.toFixed(1)}%, NEW ${pv.outs.filter((o) => o.isNew).length}`);
+      await shot(page, 'merge_pad_desktop');
+      // a short press sends nothing
+      const before = await hstate(page);
+      await holdEl(page, '.hold-btn', 150);
+      await settle(page);
+      const after = await hstate(page);
+      check('merge pad: letting go before 0.5 s cancels: nothing is merged', after.items.length === before.items.length && after.mergesToday === before.mergesToday, `${before.items.length} -> ${after.items.length}`);
+      // a refusal from the collection: the pad stays, says why in plain words
+      await page.evaluate(() => window.__WH__.shell.failNextMerge('odds_changed'));
+      await holdEl(page, '.hold-btn', 900);
+      await settle(page);
+      const oc = await page.evaluate(() => ({ open: !document.querySelector('.hmerge').hidden, status: document.querySelector('.hmerge-status')?.textContent, outs: document.querySelectorAll('.hmerge-outs .out').length }));
+      check('merge pad: an "odds_changed" answer keeps the pad open with the fresh odds and "The odds changed. Have another look."; nothing consumed', oc.open && oc.status === 'The odds changed. Have another look.' && oc.outs > 0 && (await hstate(page)).items.length === before.items.length, JSON.stringify(oc));
+      if (await page.evaluate(() => !!document.querySelector('.hmodal'))) await page.click('.hmodal .act-btn.primary');
+      // the real merge: hold, result first, the ceremony, the result is the play body
+      const live0 = await live(page);
+      await holdEl(page, '.hold-btn', 900);
+      await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 6, 0.1);
+      const sm = await hstate(page);
+      const idm = await page.evaluate(() => window.__WH__.shell.identity());
+      check('merge: holding 0.5 s merges (result first), the ceremony plays, the two copies are gone and the result (resting 24 h) is the play body', sm.items.length === before.items.length - 1 && sm.mergesToday === before.mergesToday + 1 && sm.items.some((it) => it.id === idm.itemId && it.locked && it.origin === 'blend') && !(await hoardOpen(page)),
+        `${before.items.length} -> ${sm.items.length}, merges today ${sm.mergesToday}, result ${idm.species}`);
+      check('merge: the result is announced in the live region', (await live(page)) !== live0, await live(page));
+
+      // Tidy-up (MERGE 3.3): earn more, then one hold
+      await openCapsules(page, 8);
+      await page.click('.hoard-btn'); await settle(page);
+      const tidyOn = await page.evaluate(() => !document.querySelector('.hoard-tools .tidy')?.disabled);
+      if (tidyOn) {
+        await page.click('.hoard-tools .tidy'); await settle(page);
+        const plan = await page.evaluate(() => ({ rows: document.querySelectorAll('.hmerge-outs .out').length, cap: [...document.querySelectorAll('.hmerge-sub')].map((e) => e.textContent).join(' '), rare: document.querySelector('[data-key="rare"]')?.checked }));
+        await shot(page, 'tidy_plan_desktop');
+        if (plan.rows === 0) { await page.click('[data-key="rare"]'); await settle(page); }
+        const tb = await hstate(page);
+        await holdEl(page, '.hmerge .hold-btn', 900);
+        await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 8, 0.1);
+        await settle(page);
+        const res = await page.evaluate(() => ({ open: !document.querySelector('.hmerge').hidden, rows: document.querySelectorAll('.hmerge-outs .out').length, best: document.querySelectorAll('.hmerge-outs .out[data-best="true"]').length }));
+        const ta = await hstate(page);
+        check('Tidy-up: one sheet (Common and Uncommon by default, "N merges left today", "Odds are recalculated after each merge."), one hold, the merges run, the best plays its ceremony and every result is listed after',
+          /merges? left today\. Odds are recalculated after each merge\./.test(plan.cap) && plan.rare === false && ta.mergesToday > tb.mergesToday && res.open && res.rows === ta.mergesToday - tb.mergesToday && res.best === 1,
+          JSON.stringify({ plan, merged: ta.mergesToday - tb.mergesToday, res }));
+        await shot(page, 'tidy_results_desktop');
+        await page.click('[data-key="done"]'); await settle(page);
+      } else check('Tidy-up: a plan exists after 18 capsules on this roll', false, 'no spares to tidy');
+      if (await hoardOpen(page)) { await page.click('.hoard-close'); await settle(page); }
+
+      // the play mat (B1): bring squishies out next to the play body
+      await page.evaluate(() => window.__WH__.setSetting('quality', 'low'));
+      const idNow = await page.evaluate(() => window.__WH__.shell.identity());
+      const keepers = (await hstate(page)).items;
+      const cand = [...new Map(keepers.filter((it) => it.id !== idNow.itemId && it.species !== idNow.species).map((it) => [it.species, it])).values()];
+      const bringOut = async (sp) => {
+        await page.click('.hoard-btn'); await settle(page);
+        await page.click(`.hoard .plinth[data-species="${sp}"]`); await settle(page);
+        const can = await page.evaluate(() => { const b = document.querySelector('.hcard-actions [data-key="mat"]'); return b ? { disabled: b.disabled, text: b.textContent, note: [...document.querySelectorAll('.hcard-actions .act-note')].map((e) => e.textContent).join(' | ') } : null; });
+        if (can && !can.disabled && /Bring out/.test(can.text)) { await page.click('.hcard-actions [data-key="mat"]'); await settle(page); }
+        else { await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await settle(page); }
+        return can;
+      };
+      await bringOut(cand[0].species);
+      await bringOut(cand[1].species);
+      const m3 = await page.evaluate(() => window.__WH__.shell.matInfo());
+      const sep = m3.bodies.every((a, i) => m3.bodies.every((b, j) => i >= j || Math.hypot(a.x - b.x, a.y - b.y) > 0.9 * (a.r + b.r)));
+      const stageBodies = await page.evaluate(() => { const i = window.__WH__.shell.stageInfo(); return i ? (Array.isArray(i.bodies) ? i.bodies.length : i.bodies ?? null) : null; });
+      check('play mat: two brought out of the Hoard stand beside the play body (3 on the mat, the stage draws 3 bodies, none overlapping on screen)', m3.count === 3 && m3.bodies.length === 3 && sep && (stageBodies === null || stageBodies === 3), JSON.stringify({ count: m3.count, limit: m3.limit, at: m3.bodies.map((b) => [Math.round(b.x), Math.round(b.y), Math.round(b.r)]), stageBodies }));
+      const third = await bringOut(cand[2].species);
+      check('play mat: at quality low the mat holds 3: the next "Bring out" is disabled with the reason in words', !!third && third.disabled && /holds 3 at a time/.test(third.note), JSON.stringify(third));
+      await shot(page, 'mat3_desktop');
+      const chip = await page.evaluate(() => { const c = document.querySelector('.mat-chip'); return { hidden: c.hidden, text: c.textContent, label: c.getAttribute('aria-label') }; });
+      check('play mat: the HUD shows a "Put back" chip with the count while squishies are out', !chip.hidden && /Put back/.test(chip.text) && /2/.test(chip.text), JSON.stringify(chip));
+      // fingers act on the body that is hit: press an extra
+      const ex = m3.bodies[1];
+      const vpm = page.viewportSize();
+      await page.evaluate((p) => { window.__WH__.pause(); window.__WH__.pointerDown(p.x, p.y, 0); window.__WH__.step(1 / 60, 30); }, { x: ex.x / vpm.width, y: (ex.y - 0.35 * ex.r) / vpm.height });
+      const pressed = await page.evaluate(() => window.__WH__.shell.matInfo());
+      await page.evaluate(() => { window.__WH__.pointerUp(0); window.__WH__.step(1 / 60, 30); });
+      check('play mat: a press on a squishy out on the mat goes to THAT body (its fingers and press move, the play body stays untouched)', pressed.bodies[1].fingers === 1 && (pressed.bodies[1].press > 0.05 || pressed.bodies[1].compression > 0.02) && pressed.bodies[0].fingers === 0,
+        JSON.stringify(pressed.bodies.map((b) => ({ f: b.fingers, p: +b.press.toFixed(2), c: +b.compression.toFixed(3) }))));
+      const cost3 = await page.evaluate(() => window.__WH__.shell.matStepCost(120));
+      const frame3 = await page.evaluate(() => { const t = performance.now(); window.__WH__.step(1 / 60, 10); return (performance.now() - t) / 10; });
+      console.log(`   mat frame cost, 3 bodies: physics ${cost3.msPerFrame.toFixed(2)} ms (${cost3.msPerBody.toFixed(2)} ms a body), step + render ${frame3.toFixed(1)} ms (SwiftShader, shared machine)`);
+      await page.evaluate(() => window.__WH__.resume());
+      await page.click('.mat-chip'); await settle(page);
+      const m1x = await page.evaluate(() => window.__WH__.shell.matInfo());
+      check('play mat: one tap on "Put back" puts them all back (1 on the mat, the chip hides)', m1x.count === 1 && await page.evaluate(() => document.querySelector('.mat-chip').hidden), `count ${m1x.count}`);
+      // five at quality high
+      await page.evaluate(() => window.__WH__.setSetting('quality', 'high'));
+      for (const c of cand.slice(0, 4)) await bringOut(c.species);
+      const m5 = await page.evaluate(() => window.__WH__.shell.matInfo());
+      const cost5 = await page.evaluate(() => window.__WH__.shell.matStepCost(120));
+      const frame5 = await page.evaluate(() => { window.__WH__.pause(); const t = performance.now(); window.__WH__.step(1 / 60, 5); const r = (performance.now() - t) / 5; window.__WH__.resume(); return r; });
+      console.log(`   mat frame cost, ${m5.count} bodies: physics ${cost5.msPerFrame.toFixed(2)} ms (${cost5.msPerBody.toFixed(2)} ms a body), step + render ${frame5.toFixed(1)} ms (SwiftShader, shared machine)`);
+      check('play mat: at quality high five fit (the play body and four brought out)', m5.count === 5 && m5.limit === 5, JSON.stringify({ count: m5.count, limit: m5.limit }));
+      await shot(page, 'mat5_desktop');
+      await page.click('.mat-chip'); await settle(page);
+      await page.evaluate(() => window.__WH__.setSetting('quality', 'low'));
+      await H.context.close();
+    });
+
+    // Switch anytime (owner request): the HUD quick switcher, [ and ], the card's "Play with this one", the play squishy kept across a
+    // reload, a switch asked for during a reveal (applies right after it), and the Hoard asked for during a reveal (opens right after it)
+    await section('hoard-switch', async () => {
+      const { page, context, w } = await open({ query: '?dev=1&rseed=4242' });
+      mainWatches.push(['hoard-switch', w]);
+      await wake(page);
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+      await openCapsules(page, 4);
+      await settle(page);
+      const qs0 = await page.evaluate(() => ({ n: document.querySelectorAll('.qswitch .qs-btn').length, hidden: document.querySelector('.qswitch')?.hidden, labels: [...document.querySelectorAll('.qswitch .qs-btn')].map((b) => b.getAttribute('aria-label')), ids: [...document.querySelectorAll('.qswitch .qs-btn')].map((b) => b.dataset.id) }));
+      check('quick switcher: the HUD shows the squishies played lately as icon buttons ("Play with <name>, <tier>"), up to four', !qs0.hidden && qs0.n >= 2 && qs0.n <= 4 && qs0.labels.every((l) => /^Play with .+, (Common|Uncommon|Rare|Epic|Legendary|Mythic)$/.test(l)), JSON.stringify(qs0));
+      await shot(page, 'quick_switch_desktop');
+      const L = await layoutOf(page);
+      const sb = await page.evaluate(() => { const r = document.querySelector('.qswitch').getBoundingClientRect(); return { x: r.x, y: r.y, r: r.right, b: r.bottom }; });
+      check('quick switcher: sits above the name tag, clear of the name tag, the hint and the capsule dock', !overlap(sb, L.name) && (L.hintShow !== 'true' || !overlap(sb, L.hint)) && !overlap(sb, L.capsuleBtn), JSON.stringify({ strip: sb, name: L.name, hint: L.hint }));
+      // one tap
+      const live0 = await live(page);
+      await page.click('.qswitch .qs-btn:nth-child(1)');
+      await settle(page);
+      const id1 = await page.evaluate(() => ({ id: window.__WH__.shell.identity(), hud: document.querySelector('.nametag-name')?.textContent }));
+      await sleep(400);
+      const live1 = await live(page);
+      check('quick switcher: one tap makes that squishy the play body at once; the name tag and the live region follow', id1.id.itemId === qs0.ids[0] && id1.hud === id1.id.species && live1 !== live0 && new RegExp(id1.id.species).test(live1), JSON.stringify({ ...id1, live1 }));
+      // the keyboard: ] = the newest other, [ = the oldest in the strip
+      await page.evaluate(() => document.querySelector('#wh-play')?.focus());
+      const strip1 = await page.evaluate(() => [...document.querySelectorAll('.qswitch .qs-btn')].map((b) => b.dataset.id));
+      await page.keyboard.press(']');
+      await settle(page);
+      const k1 = await page.evaluate(() => window.__WH__.shell.identity().itemId);
+      const strip2 = await page.evaluate(() => [...document.querySelectorAll('.qswitch .qs-btn')].map((b) => b.dataset.id));
+      await page.keyboard.press('[');
+      await settle(page);
+      const k2 = await page.evaluate(() => window.__WH__.shell.identity().itemId);
+      check('quick switcher from the keyboard: ] plays the first squishy of the strip, [ the last', k1 === strip1[0] && k2 === strip2[strip2.length - 1], JSON.stringify({ strip1, k1, strip2, k2 }));
+      // shortcuts off: [ and ] do nothing
+      await page.evaluate(() => window.__WH__.setSetting('shortcuts', false));
+      await page.keyboard.press(']'); await settle(page);
+      const k3 = await page.evaluate(() => window.__WH__.shell.identity().itemId);
+      await page.evaluate(() => window.__WH__.setSetting('shortcuts', true));
+      check('with Keyboard shortcuts off, [ and ] do nothing', k3 === k2, `${k2} -> ${k3}`);
+      // the card's "Play with this one", kept across a reload
+      const st = await hstate(page);
+      const cur = await page.evaluate(() => window.__WH__.shell.identity());
+      const other = st.items.find((it) => it.species !== cur.species && it.id !== cur.itemId);
+      await page.click('.hoard-btn'); await settle(page);
+      await page.click(`.hoard .plinth[data-species="${other.species}"]`); await settle(page);
+      await page.click('.hcard-actions [data-key="play"]'); await settle(page);
+      const chosen = await page.evaluate(() => ({ id: window.__WH__.shell.identity(), hoard: !document.querySelector('.hoard').hidden, card: !document.querySelector('.hcard').hidden }));
+      check('card: "Play with this one" makes it the play body at once and closes the Hoard', chosen.id.species === other.species && !chosen.hoard && !chosen.card, JSON.stringify({ species: chosen.id.species, item: chosen.id.itemId }));
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 120000 });
+      await wake(page);
+      const afterReload = await page.evaluate(() => ({ id: window.__WH__.shell.identity(), hud: document.querySelector('.nametag-name')?.textContent }));
+      check('the play squishy survives a reload (the same item is the play body; the name tag says so)', afterReload.id.itemId === chosen.id.itemId && afterReload.hud === chosen.id.species, JSON.stringify({ before: chosen.id.itemId, after: afterReload.id.itemId, hud: afterReload.hud }));
+      // during a reveal: a switch and the Hoard both wait for the end
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', false));
+      await page.evaluate(() => { window.__WH__.pause(); window.__WH__.shell.grant(1); });
+      await stepUntil(page, `(wh) => wh.shell.meter().onTable`, 3, 0.1);
+      const want = await page.evaluate(() => [...document.querySelectorAll('.qswitch .qs-btn')].map((b) => b.dataset.id)[0]);
+      await page.evaluate(() => { window.__revealP = window.__WH__.shell.openCapsule(); });
+      await stepUntil(page, `(wh) => wh.shell.ceremony().kind === 'capsule'`, 2, 1 / 60);
+      await stepSim(page, 0.3);
+      await page.evaluate(() => document.querySelector('#wh-play')?.focus());
+      await page.keyboard.press(']');
+      const mid = await page.evaluate(() => ({ kind: window.__WH__.shell.ceremony().kind, id: window.__WH__.shell.identity().itemId, live: document.getElementById('wh-live')?.textContent }));
+      await page.click('.hoard-btn', { force: true });
+      const hoardMid = await page.evaluate(() => !document.querySelector('.hoard').hidden);
+      await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 6, 0.1);
+      await page.evaluate(async () => { await window.__revealP; });
+      await settle(page);
+      const end = await page.evaluate(() => ({ id: window.__WH__.shell.identity().itemId, hoard: !document.querySelector('.hoard').hidden }));
+      check('a switch asked for during a reveal waits ("Switching when this is done.") and applies right after the ceremony ends', mid.kind === 'capsule' && mid.id !== want && /Switching when this is done/.test(mid.live ?? '') && end.id === want, JSON.stringify({ want, mid, endId: end.id }));
+      check('the Hoard asked for during a reveal stays closed until it ends, then opens', !hoardMid && end.hoard, JSON.stringify({ duringReveal: hoardMid, after: end.hoard }));
+      await page.evaluate(() => window.__WH__.resume());
+      await context.close();
+    });
+
+    // U04: keyboard only through the Hoard
+    await section('hoard-keyboard', async () => {
+      const { page, context, w } = await open({ query: '?dev=1&rseed=777' });
+      mainWatches.push(['hoard-keyboard', w]);
+      await page.waitForSelector('.cta:not([disabled])', { timeout: 60000 });
+      await page.focus('.cta'); await page.keyboard.press('Enter');
+      await page.waitForFunction(() => window.__WH__.state().phase === 'play', null, { timeout: 30000 });
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+      await openCapsules(page, 4);
+      await page.evaluate(() => { window.__WH__.pause(); window.__WH__.shell.grant(1); });
+      await stepUntil(page, `(wh) => wh.shell.meter().onTable`, 3, 0.1);
+      const n0 = (await hstate(page)).items.length;
+      await page.focus('.capsule-btn'); await page.keyboard.press('Enter');
+      await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 4, 0.1);
+      const n1 = (await hstate(page)).items.length;
+      check('U04 a capsule opens from the keyboard through its DOM twin (Enter on "Open a capsule")', n1 === n0 + 1, `${n0} -> ${n1} items`);
+      await page.evaluate(() => window.__WH__.resume());
+      await page.evaluate(() => document.querySelector('#wh-play')?.focus());
+      await page.keyboard.press('h');
+      await page.waitForFunction(() => !document.querySelector('.hoard').hidden, null, { timeout: 20000 });
+      await sleep(400);
+      const f0 = await page.evaluate(() => document.activeElement?.id);
+      let stops = 0, onGrid = false;
+      for (; stops < 30 && !onGrid; stops++) { await page.keyboard.press('Tab'); onGrid = await page.evaluate(() => !!document.activeElement?.classList.contains('plinth')); }
+      const first = await page.evaluate(() => document.activeElement?.dataset.species);
+      await page.keyboard.press('ArrowRight');
+      const second = await page.evaluate(() => document.activeElement?.dataset.species);
+      await page.keyboard.press('ArrowDown');
+      const below = await page.evaluate(() => ({ sp: document.activeElement?.dataset.species, tabbable: document.querySelectorAll('.hoard .plinth[tabindex="0"]').length }));
+      check('U04 H opens the Hoard with focus on its title; Tab reaches the plinth grid; arrows move through it (one tab stop: roving tabindex)', f0 === 'wh-hoard-title' && onGrid && !!second && second !== first && !!below.sp && below.sp !== second && below.tabbable === 1, JSON.stringify({ f0, stops, first, second, below }));
+      const ownedSp = (await hstate(page)).items.map((i) => i.species).find((sp) => sp !== 'dollop') ?? 'dollop';
+      await page.evaluate((sp) => { document.querySelectorAll('.hoard .plinth').forEach((p) => { p.tabIndex = -1; }); const b = document.querySelector(`.hoard .plinth[data-species="${sp}"]`); b.tabIndex = 0; b.focus(); }, ownedSp);
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => !document.querySelector('.hcard').hidden, null, { timeout: 20000 });
+      await sleep(400);
+      const fc = await page.evaluate(() => document.activeElement?.id);
+      let onHeart = false;
+      for (let i = 0; i < 24 && !onHeart; i++) { await page.keyboard.press('Tab'); onHeart = await page.evaluate(() => document.activeElement?.dataset.key === 'heart'); }
+      await page.keyboard.press('Enter');
+      await sleep(300);
+      const hearted = await page.evaluate(() => document.querySelector('.hcard-actions [data-key="heart"]')?.getAttribute('aria-pressed'));
+      check('U04 Enter opens the card (focus on its name); Tab reaches Heart; Enter hearts the copy', fc === 'wh-card-name' && onHeart && hearted === 'true', JSON.stringify({ fc, onHeart, hearted }));
+      await page.keyboard.press('Escape');
+      await sleep(400);
+      const back = await page.evaluate(() => ({ card: !document.querySelector('.hcard').hidden, focus: document.activeElement?.dataset.species }));
+      await page.keyboard.press('Escape');
+      await sleep(400);
+      const out = await page.evaluate(() => ({ hoard: !document.querySelector('.hoard').hidden, focus: document.activeElement?.id || document.activeElement?.className }));
+      check('U04 Escape closes the card and focus returns to its plinth; Escape again closes the Hoard and focus goes back to the squishy', !back.card && back.focus === ownedSp && !out.hoard && out.focus === 'wh-play', JSON.stringify({ back, out }));
+      await page.keyboard.press('h'); await sleep(400);
+      let escaped = false;
+      for (let i = 0; i < 60 && !escaped; i++) { await page.keyboard.press('Tab'); escaped = await page.evaluate(() => !document.querySelector('.hoard').contains(document.activeElement)); }
+      check('U04 Tab cycles inside the open Hoard (focus never leaves the dialog)', !escaped);
+      await page.keyboard.press('Escape');
+      await context.close();
+    });
+
+    // U05: a 390 x 844 phone
+    await section('hoard-phone', async () => {
+      const { page, context, w } = await open({ query: '?dev=1&rseed=20261006&quality=low', ctx: PHONE });
+      mainWatches.push(['hoard-phone', w]);
+      await wake(page, { touch: true });
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+      await openCapsules(page, 6);
+      await page.evaluate(() => { window.__WH__.pause(); window.__WH__.shell.grant(2); });
+      await stepUntil(page, `(wh) => wh.shell.meter().onTable`, 3, 0.1);
+      await page.evaluate(() => window.__WH__.resume());
+      await settle(page);
+      const hb = await page.locator('.hoard-btn').boundingBox();
+      const L = await layoutOf(page);
+      const hbr = { x: hb.x, y: hb.y, r: hb.x + hb.width, b: hb.y + hb.height };
+      check('U05 phone HUD: the Hoard button fits the bottom row beside the name tag, the capsule dock and the ring (no overlap, on screen)', hbr.x >= 0 && hbr.r <= L.iw && !overlap(hbr, L.name) && !overlap(hbr, L.meter) && !overlap(hbr, L.capsuleBtn) && !overlap(L.name, L.capsuleBtn), JSON.stringify({ hb: hbr, name: L.name, btn: L.capsuleBtn, meter: L.meter }));
+      await shot(page, 'hud_phone_with_hoard');
+      const qsp = await page.evaluate(() => { const q = document.querySelector('.qswitch'); const r = q.getBoundingClientRect(); return { n: q.querySelectorAll('.qs-btn').length, hidden: q.hidden, x: r.x, y: r.y, r: r.right, b: r.bottom }; });
+      check('phone quick switcher: shown above the name tag, on screen, clear of the name tag, the hint and the capsule dock, buttons >= 44 px', !qsp.hidden && qsp.n >= 1 && qsp.x >= 0 && qsp.r <= L.iw && !overlap(qsp, L.name) && (L.hintShow !== 'true' || !overlap(qsp, L.hint)) && !overlap(qsp, L.capsuleBtn) && (qsp.b - qsp.y) >= 44, JSON.stringify({ strip: qsp, hint: L.hint, name: L.name }));
+      await page.touchscreen.tap(hb.x + hb.width / 2, hb.y + hb.height / 2);
+      await page.waitForFunction(() => !document.querySelector('.hoard').hidden, null, { timeout: 20000 });
+      await settle(page);
+      const ph = await page.evaluate(() => {
+        const d = document.documentElement, body = document.querySelector('.hoard-body');
+        const small = [...document.querySelectorAll('.hoard button, .hoard select')].filter((e) => e.offsetParent !== null).map((e) => { const r = e.getBoundingClientRect(); return { c: e.className, w: Math.round(r.width), h: Math.round(r.height) }; }).filter((r) => r.w < 44 || r.h < 44);
+        const r = document.querySelector('.hoard').getBoundingClientRect();
+        return { sw: d.scrollWidth, iw: innerWidth, full: r.x === 0 && Math.round(r.width) === innerWidth && Math.round(r.height) === innerHeight, scrolls: body.scrollHeight > body.clientHeight, small, paused: window.__WH__.shell.pauseReasons() };
+      });
+      check('U05 phone: the Hoard is a full-screen sheet, no horizontal scroll, the shelf scrolls inside it', ph.full && ph.sw <= ph.iw && ph.scrolls, JSON.stringify({ sw: ph.sw, iw: ph.iw, full: ph.full, scrolls: ph.scrolls }));
+      check('U05 phone: every Hoard control is at least 44 x 44 px', ph.small.length === 0, ph.small.slice(0, 6).map((s) => `${s.c} ${s.w}x${s.h}`).join(', ') || 'all >= 44');
+      check('phone: the stage under the full-screen Hoard is paused (reason "covered")', ph.paused.includes('covered'), JSON.stringify(ph.paused));
+      await shot(page, 'hoard_shelf_phone');
+      const sp = (await hstate(page)).items.map((i) => i.species).find((x) => x !== 'dollop') ?? 'dollop';
+      await page.evaluate((s) => document.querySelector(`.hoard .plinth[data-species="${s}"]`).scrollIntoView({ block: 'center' }), sp);
+      await settle(page);
+      const pb = await page.locator(`.hoard .plinth[data-species="${sp}"]`).boundingBox();
+      await page.touchscreen.tap(pb.x + pb.width / 2, pb.y + pb.height / 2);
+      await page.waitForFunction(() => !document.querySelector('.hcard').hidden, null, { timeout: 20000 });
+      await settle(page);
+      const cardL = await page.evaluate(() => { const r = document.querySelector('.hcard').getBoundingClientRect(); const c = document.querySelector('#stage').getBoundingClientRect(); return { top: Math.round(r.top), h: Math.round(r.height), ih: innerHeight, stageShift: Math.round(c.top), paused: window.__WH__.shell.pauseReasons() }; });
+      const bc = await body(page);
+      const visY = cardL.stageShift + bc.y * page.viewportSize().height;
+      check('U05 phone card: a bottom sheet (< 60% of the screen); the live squishy shows above it and the stage runs again', cardL.h < cardL.ih * 0.6 && visY < cardL.top && !cardL.paused.includes('covered'), JSON.stringify({ ...cardL, squishyY: Math.round(visY) }));
+      await shot(page, 'hoard_card_phone');
+      await page.click('.hcard-back'); await settle(page);
+      for (const [t, name] of [['gift', 'hoard_gift_phone'], ['today', 'hoard_today_phone']]) { await page.click(`#wh-tab-${t}`); await settle(page); await shot(page, name); }
+      const st = await hstate(page);
+      const by = {};
+      for (const it of st.items) if (!it.fav && !it.locked) (by[it.species] ??= []).push(it);
+      const msp = Object.keys(by).find((k) => by[k].length >= 2 && by[k][0].tier !== 'mythic');
+      if (msp) {
+        await page.click('#wh-tab-shelf'); await settle(page);
+        await page.evaluate((s) => document.querySelector(`.hoard .plinth[data-species="${s}"]`).scrollIntoView({ block: 'center' }), msp);
+        await page.click(`.hoard .plinth[data-species="${msp}"]`); await settle(page);
+        await page.click('.hcard-actions [data-key="merge"]'); await settle(page);
+        if (await page.evaluate(() => !!document.querySelector('.hmodal'))) { await shot(page, 'merge_lastcopy_phone'); await page.click('.hmodal .act-btn.primary'); }
+        await settle(page);
+        const mp = await page.evaluate(() => { const r = document.querySelector('.hmerge').getBoundingClientRect(); return { x: Math.round(r.x), w: Math.round(r.width), iw: innerWidth, sw: document.documentElement.scrollWidth }; });
+        check('U05 phone merge pad: a full-width sheet, no horizontal scroll', Math.abs(mp.w - mp.iw) < 2 && mp.sw <= mp.iw, JSON.stringify(mp));
+        await shot(page, 'merge_pad_phone');
+      } else check('U05 phone merge pad', false, 'no mergeable pair on this roll');
+      await context.close();
+    });
+
+    // U06: reduced motion
+    await section('hoard-calm', async () => {
+      const { page, context, w } = await open({ query: '?dev=1&rseed=55', ctx: { ...DESKTOP, reducedMotion: 'reduce' } });
+      mainWatches.push(['hoard-calm', w]);
+      await wake(page);
+      await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+      await openCapsules(page, 2);
+      await page.evaluate(() => { window.__WH__.pause(); window.__WH__.shell.grant(1); });
+      const pulse = await page.evaluate(() => document.querySelector('.meter').classList.contains('pulse'));
+      const landed = await stepUntil(page, `(wh) => wh.shell.meter().onTable`, 2, 0.05);
+      const calm = await page.evaluate(() => ({ calm: window.__WH__.state().settings.calm, stage: window.__WH__.shell.stageInfo()?.calm }));
+      await page.evaluate(() => window.__WH__.resume());
+      await page.click('.hoard-btn'); await settle(page);
+      const anim = await page.evaluate(() => [...document.querySelectorAll('.hoard *, .hoard-btn, .hoard-btn *')].map((e) => getComputedStyle(e).animationName).filter((n) => n && n !== 'none'));
+      check('U06 reduced motion: Calm effects on, the capsule fades in where it stands (no drop), no ring pulse, nothing animates in the Hoard', calm.calm && calm.stage === true && landed >= 0.3 && landed <= 0.7 && !pulse && anim.length === 0, JSON.stringify({ ...calm, pulse, landed, anim: anim.slice(0, 3) }));
+      await context.close();
+    });
+
+
     // ------------------------------------------------------------------------------------------------
     // settings migration: a slice-1 blob (no `v`) and a blob from a newer build
     // ------------------------------------------------------------------------------------------------
@@ -1138,10 +1654,10 @@ async function main() {
       const order = [];
       for (let i = 0; i < 7; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')?.split(':')[0] ?? document.activeElement?.tagName)); }
       const stops = order.filter((o) => o !== 'BODY');
-      const want = ['Mute sound', 'Settings', 'Squishy'];
+      const want = ['Mute sound', 'Settings', 'Hoard', 'Squishy'];
       const k0 = stops.indexOf('Mute sound');
-      const cycleOk = k0 >= 0 && stops.length >= k0 + 3 && stops.every((o, i) => o === want[(((i - k0) % 3) + 3) % 3]);
-      check('Tab order in play: Mute, Settings, the squishy (and no other stop)', cycleOk, order.join(' > '));
+      const cycleOk = k0 >= 0 && stops.length >= k0 + want.length && stops.every((o, i) => o === want[(((i - k0) % want.length) + want.length) % want.length]);
+      check('Tab order in play: Mute, Settings, the Hoard, the squishy (and no other stop)', cycleOk, order.join(' > '));
       // shortcuts stay out of form controls
       await page.focus('button[aria-label="Settings"]'); await page.keyboard.press('Enter'); await sleep(500);
       const g0 = (await state(page)).settings.gravity;

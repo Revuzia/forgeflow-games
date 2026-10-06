@@ -1,5 +1,5 @@
 // Keyboard glue. Space = poke the centre (hold it to squish: it is a synthetic pointer at the body's centre, so it runs the SAME gesture
-// code as a finger), G = gravity <-> float, M = mute, Escape = close the panel. Extras for people who cannot drag: arrow keys orbit,
+// code as a finger), G = gravity <-> float, M = mute, H = the Hoard, Escape = close the panel. Extras for people who cannot drag: arrow keys orbit,
 // + / - zoom. During a ceremony Space, Enter and Escape skip it (after the 350 ms gate).
 //
 // Focus rules (WCAG 2.1.1 / 2.1.4; audit findings 12 and 13):
@@ -24,6 +24,10 @@ export interface KeyboardOptions {
   shortcutsEnabled?(): boolean;
   /** a key reached the toy (the hint switches to keyboard wording) */
   onKeyUsed?(): void;
+  /** H: open or close the Hoard (COLLECTION 9.1); a single-letter shortcut like G and M (same rules) */
+  onHoard?(): void;
+  /** [ and ]: switch the play squishy (the HUD quick switcher); same rules as G and M */
+  onSwitch?(dir: -1 | 1): void;
 }
 
 interface KeyEventLike extends Event {
@@ -75,6 +79,17 @@ export function attachKeyboard(target: KeyTarget, app: Pick<App, 'input' | 'phas
       return;
     }
     if (inControl) return; // letters, arrows and +/- belong to a focused control (a slider's arrows, a select's typeahead)
+    if ((key === '[' || key === ']') && opts.onSwitch) {
+      if (e.repeat || !shortcuts()) return;
+      opts.onKeyUsed?.();
+      opts.onSwitch(key === ']' ? 1 : -1);
+      return;
+    }
+    if ((key === 'h' || key === 'H') && opts.onHoard) {
+      if (e.repeat || !shortcuts()) return;
+      opts.onHoard();
+      return;
+    }
     if (key === 'g' || key === 'G' || key === 'm' || key === 'M') {
       if (e.repeat || !shortcuts() || app.input.live === false) return;   // live: no ceremony, nothing suspended (context loss)
       opts.onKeyUsed?.();

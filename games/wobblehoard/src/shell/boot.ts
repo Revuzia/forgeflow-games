@@ -10,6 +10,7 @@ import { SETTINGS_KEY, detectEnv, parseSettingsText, safeLocalStorage } from '..
 import type { StorageSubscribe } from '../core/save.ts';
 import { createProfileStore } from '../core/save.ts';
 import { createCollection } from '../collection/index.ts';
+import { mulberry32 } from '../core/rng.ts';
 import { attachKeyboard } from '../input/keyboard.ts';
 import { attachLifecycle } from '../input/lifecycle.ts';
 import { attachPointerInput } from '../input/pointer.ts';
@@ -96,7 +97,9 @@ export async function boot(): Promise<(() => void) | null> {
       import('../audio/engine.ts'),
     ]);
     profile = createProfileStore(storage, { subscribe });
-    hoard = createCollection({ storage, profile: profile.profile, subscribe, now: epochNow });
+    // DEV ONLY: ?dev=1&rseed=N makes the practice rolls repeatable (the harness's scripted practice loop); a build never reads it
+    const rseed = import.meta.env.DEV && cfg.dev ? Number(new URLSearchParams(location.search).get('rseed')) : NaN;
+    hoard = createCollection({ storage, profile: profile.profile, subscribe, now: epochNow, random: Number.isFinite(rseed) && rseed > 0 ? mulberry32(rseed >>> 0) : undefined });
     game = createGame({
       canvas,
       storage,
@@ -137,7 +140,7 @@ export async function boot(): Promise<(() => void) | null> {
 
   // ---- input + lifecycle
   const detachPointer = attachPointerInput(canvas, g);
-  const detachKeys = attachKeyboard(window, g, { onEscape: () => ui.escape(), shortcutsEnabled: () => g.settings.shortcuts, onKeyUsed: () => ui.keyUsed() });
+  const detachKeys = attachKeyboard(window, g, { onEscape: () => ui.escape(), shortcutsEnabled: () => g.settings.shortcuts, onKeyUsed: () => ui.keyUsed(), onHoard: () => { if (g.phase === 'play') ui.hoard.toggle(); }, onSwitch: (dir) => { if (g.phase === 'play' && !ui.hoard.isOpen) ui.switchBy(dir); } });
   const detachLife = attachLifecycle(g);
 
   // another tab changed the settings: follow it (the 'storage' event fires in the OTHER tabs only)

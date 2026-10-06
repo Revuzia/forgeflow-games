@@ -48,6 +48,16 @@ export interface ShellDevApi {
   paused(): boolean;
   /** the render lane's dev readout when the stage offers one (createStageDev().info): bodies, capsule, calm, ceremony, ... */
   stageInfo(): Record<string, unknown> | null;
+  /** SHELL-2b: the practice shelf as the harness checks it */
+  hoardState(): { owned: number; items: Array<{ id: string; species: string; name: string; tier: string; seen: boolean; fav: boolean; locked: boolean; origin: string }>; restockClaimed: boolean; tasks: Array<{ id: string; text: string; progress: number; target: number; done: boolean; claimed: boolean }>; mergesToday: number; credits: number };
+  /** feed synthetic touches through the REAL collection.feed path until today's task `id` is done (clock pushed ahead like fill) */
+  doTask(id: string): boolean;
+  /** the next collection.merge answers this refusal (test seam for the pad's refusal handling, e.g. 'odds_changed') */
+  failNextMerge(code: string): void;
+  /** every body on the mat: the play body first, then the extras, with where it is drawn on screen (CSS px) and its touch metrics */
+  matInfo(): { count: number; limit: number; bodies: Array<{ itemId: string | null; x: number; y: number; r: number; fingers: number; compression: number; press: number; active: boolean }> };
+  /** physics cost per frame (ms) for the bodies now on the mat: bodies.step(1/60) x n, timed */
+  matStepCost(steps?: number): { bodies: number; msPerFrame: number; msPerBody: number };
   /** lifecycle hooks the harness exercises (context loss without a real GPU) */
   suspend(reason: 'hidden' | 'context' | 'covered'): void;
   unsuspend(reason: 'hidden' | 'context' | 'covered'): void;
@@ -182,6 +192,81 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
     paused: () => game.paused,
     stageInfo() {
       try { const i = (game.stage as unknown as { info?: Record<string, unknown> }).info; return i ? JSON.parse(JSON.stringify(i)) as Record<string, unknown> : null; } catch { return null; }
+    },
+    hoardState() {
+      const c = game.hoard;
+      const now = game.epochNow();
+      return {
+        owned: c.stacks().filter((st) => st.copies > 0).length,
+        items: c.items().map((it) => ({ id: it.id, species: it.species, name: it.name, tier: it.tier, seen: it.seen, fav: it.fav, locked: it.lockedUntil !== null && it.lockedUntil > now, origin: it.origin })),
+        restockClaimed: c.restock().claimed,
+        tasks: c.tasks().map((t) => ({ id: t.def.id, text: t.def.text, progress: t.progress, target: t.target, done: t.done, claimed: t.claimed })),
+        mergesToday: c.practice().mergesToday,
+        credits: c.meter().credits,
+      };
+    },
+    doTask(id) {
+      const skew = o.skew;
+      if (!skew) return false;
+      const row = () => game.hoard.tasks().find((t) => t.def.id === id);
+      const t0 = row();
+      if (!t0) return false;
+      const ev = (kind: SoftEvent['kind'], intensity: number, heldFor: number): SoftEvent => ({ kind, at: { x: 0, y: 0.5, z: 0.5 }, normal: { x: 0, y: 0, z: 1 }, intensity, heldFor, finger: 0 });
+      const m = t0.def.metric, param = t0.def.param ?? 0;
+      for (let i = 0; i < 80 && !row()!.done; i++) {
+        skew.ms += 2500;
+        const t = Date.now() + skew.ms;
+        if (m === 'pokes') game.hoard.feed(ev('poke', 0.5, 0), t);
+        else if (m === 'squeezes') game.hoard.feed(ev('release', 0.5, Math.max(0.5, param) + 0.6), t);
+        else if (m === 'softPops') game.hoard.feed(ev('release', 0.5, 2.2), t);
+        else if (m === 'snaps') game.hoard.feed(ev('snap', 0.6, 0.5), t);
+        else if (m === 'stretch') game.hoard.feed(ev('snap', 1, 0.8), t);
+        else if (m === 'medleys') { game.hoard.feed(ev('poke', 0.5, 0), t); game.hoard.feed(ev('release', 0.5, 1.2), t + 2000); game.hoard.feed(ev('snap', 0.6, 0.5), t + 4000); skew.ms += 4000; }
+      }
+      return !!row()?.done;
+    },
+    failNextMerge(code) {
+      const c = game.hoard as unknown as { merge: (ids: readonly string[], d: string) => Promise<unknown> };
+      const orig = c.merge;
+      c.merge = (ids, d) => {
+        c.merge = orig;
+        const pv = game.hoard.previewMerge(ids);
+        return Promise.resolve({ ok: false, ledger: 'practice', error: code, preview: pv.ok ? pv.preview : undefined, digest: pv.ok ? pv.digest : undefined, message: undefined });
+      };
+    },
+    matInfo() {
+      const list: Array<{ itemId: string | null; x: number; y: number; r: number; fingers: number; compression: number; press: number; active: boolean }> = [];
+      const cam = game.stage.camera;
+      try { cam.updateMatrixWorld(); } catch { /* ignore */ }
+      const vpx = vp();
+      const proj = (p: { x: number; y: number; z: number }): { x: number; y: number } | null => {
+        const v = p as unknown as { x: number; y: number; z: number };
+        const w = { x: v.x, y: v.y, z: v.z };
+        const e = cam.matrixWorldInverse.elements, m = cam.projectionMatrix.elements;
+        const vx = e[0] * w.x + e[4] * w.y + e[8] * w.z + e[12], vy = e[1] * w.x + e[5] * w.y + e[9] * w.z + e[13], vz = e[2] * w.x + e[6] * w.y + e[10] * w.z + e[14];
+        const cx = m[0] * vx + m[4] * vy + m[8] * vz + m[12], cy = m[1] * vx + m[5] * vy + m[9] * vz + m[13], cw = m[3] * vx + m[7] * vy + m[11] * vz + m[15];
+        if (!(cw > 1e-6)) return null;
+        return { x: (cx / cw * 0.5 + 0.5) * vpx.w, y: (0.5 - cy / cw * 0.5) * vpx.h };
+      };
+      const add = (b: typeof game.body, off: { x: number; y: number; z: number }, itemId: string | null, isActive: boolean): void => {
+        const c0 = b.center;
+        const pc = proj({ x: c0.x + off.x, y: c0.y + off.y, z: c0.z + off.z });
+        const pe = proj({ x: c0.x + off.x + b.restRadius, y: c0.y + off.y, z: c0.z + off.z });
+        list.push({ itemId, x: pc ? pc.x : -1, y: pc ? pc.y : -1, r: pc && pe ? Math.abs(pe.x - pc.x) : 0, fingers: b.metrics.fingers, compression: b.metrics.compression, press: b.metrics.press ?? 0, active: isActive });
+      };
+      const extras = game.bodies.extras;
+      const activeBody = game.host.bodyScreen();
+      void activeBody;
+      add(game.body, { x: 0, y: 0, z: 0 }, game.identity.itemId, false);
+      for (const xb of extras) add(xb.body, xb.position, xb.itemId, false);
+      return { count: game.mat.count, limit: game.mat.limit, bodies: list };
+    },
+    matStepCost(steps = 120) {
+      const n = game.bodies.extras.length + 1;
+      const t0 = performance.now();
+      for (let i = 0; i < steps; i++) game.bodies.step(1 / 60);
+      const ms = (performance.now() - t0) / steps;
+      return { bodies: n, msPerFrame: ms, msPerBody: ms / n };
     },
     suspend: (r) => game.suspend(r),
     unsuspend: (r) => game.unsuspend(r),
