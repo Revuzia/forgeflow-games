@@ -19,8 +19,8 @@
     "probe:render": "node _harness/browser_render.mjs",
     "probe:shell": "node _harness/browser_shell.mjs",
     "probe:browser": "npm run probe:audio && npm run probe:render && npm run probe:shell",
-    "deploy:dry": "npm run build && python ../../pipeline/deploy_game.py --game-dir dist --slug wobblehoard --dry-run",
-    "deploy": "npm run check && npm run build && python ../../pipeline/deploy_game.py --game-dir dist --slug wobblehoard"
+    "deploy:dry": "npm run build && python ../../pipeline/deploy_game.py --game-dir dist --slug squish-keeper --dry-run",
+    "deploy": "npm run check && npm run build && python ../../pipeline/deploy_game.py --game-dir dist --slug squish-keeper"
   },
   "dependencies": {
     "three": "0.186.0"
