@@ -51,6 +51,41 @@ export default function AchievementsPage() {
   const filtered = filter === "all" ? achievements : achievements.filter(a => a.tier === filter);
   const totalPoints = achievements.filter(a => unlockedIds.has(a.id)).reduce((sum, a) => sum + a.points, 0);
 
+  // Group the (filtered) achievements by game for a per-game layout
+  const groups = (() => {
+    const m = new Map<string, { title: string; slug: string | null; items: any[] }>();
+    for (const a of filtered) {
+      const key = a.games?.slug || "_other";
+      if (!m.has(key)) m.set(key, { title: a.games?.title || "Other", slug: a.games?.slug || null, items: [] });
+      m.get(key)!.items.push(a);
+    }
+    return [...m.values()].sort((x, y) => {
+      const ux = x.items.filter((a) => unlockedIds.has(a.id)).length;
+      const uy = y.items.filter((a) => unlockedIds.has(a.id)).length;
+      return uy - ux || x.title.localeCompare(y.title);
+    });
+  })();
+
+  function renderAch(ach: any) {
+    const unlocked = unlockedIds.has(ach.id);
+    const tier = TIER_CONFIG[ach.tier] || TIER_CONFIG.bronze;
+    return (
+      <div key={ach.id} className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${unlocked ? "bg-surface-800 border-surface-600/50" : "bg-surface-800/50 border-surface-600/20 opacity-60"}`}>
+        <div className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shrink-0" style={{ backgroundColor: tier.color + "20", color: tier.color }}>
+          {unlocked ? "✓" : ach.points}
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-semibold text-gray-200 truncate">{ach.secret && !unlocked ? "???" : ach.name}</p>
+            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ color: tier.color, backgroundColor: tier.color + "15" }}>{tier.label}</span>
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5 truncate">{ach.secret && !unlocked ? "Secret achievement" : ach.description}</p>
+        </div>
+        <span className="text-xs text-gray-500 font-semibold shrink-0">{ach.points} XP</span>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8">
       <div className="flex items-center justify-between mb-6">
@@ -88,40 +123,28 @@ export default function AchievementsPage() {
         </div>
       )}
 
-      {/* Achievements grid */}
+      {/* Achievements — grouped by game */}
       {filtered.length === 0 ? (
         <div className="text-center py-16">
-          <p className="text-gray-400">No achievements yet. Games will add achievements as they're built!</p>
+          <p className="text-gray-400">No achievements yet. Games add achievements as they're wired up!</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {filtered.map((ach) => {
-            const unlocked = unlockedIds.has(ach.id);
-            const tier = TIER_CONFIG[ach.tier] || TIER_CONFIG.bronze;
+        <div className="space-y-8">
+          {groups.map((g) => {
+            const unlockedCount = g.items.filter((a) => unlockedIds.has(a.id)).length;
             return (
-              <div
-                key={ach.id}
-                className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${unlocked ? "bg-surface-800 border-surface-600/50" : "bg-surface-800/50 border-surface-600/20 opacity-60"}`}
-              >
-                <div
-                  className="w-12 h-12 rounded-xl flex items-center justify-center text-lg font-bold shrink-0"
-                  style={{ backgroundColor: tier.color + "20", color: tier.color }}
-                >
-                  {unlocked ? "✓" : ach.points}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-gray-200 truncate">{ach.secret && !unlocked ? "???" : ach.name}</p>
-                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded" style={{ color: tier.color, backgroundColor: tier.color + "15" }}>
-                      {tier.label}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-0.5 truncate">{ach.secret && !unlocked ? "Secret achievement" : ach.description}</p>
-                  {ach.games && (
-                    <a href={`/games/${ach.games.slug}`} className="text-[10px] text-brand-orange hover:underline">{ach.games.title}</a>
+              <div key={g.slug || "_other"}>
+                <div className="flex items-center justify-between mb-3 px-1">
+                  {g.slug ? (
+                    <a href={`/games/${g.slug}`} className="font-display font-semibold text-lg text-white hover:text-brand-orange transition-colors">{g.title}</a>
+                  ) : (
+                    <span className="font-display font-semibold text-lg text-white">{g.title}</span>
                   )}
+                  <span className="text-xs text-gray-500">{unlockedCount}/{g.items.length} unlocked</span>
                 </div>
-                <span className="text-xs text-gray-500 font-semibold shrink-0">{ach.points} XP</span>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {g.items.map(renderAch)}
+                </div>
               </div>
             );
           })}

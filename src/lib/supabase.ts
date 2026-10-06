@@ -19,7 +19,10 @@ export type Game = {
   game_url: string;
   controls_keyboard: string | null;
   controls_gamepad: string | null;
+  /** Legacy boolean (pre-migration). Kept for back-compat; mobile_support wins. */
   has_mobile_support: boolean;
+  /** 'full' | 'partial' | 'none' — see supabase/migrations/0007_games_mobile_support.sql */
+  mobile_support: "full" | "partial" | "none" | null;
   difficulty: string;
   play_count: number;
   rating_sum: number;

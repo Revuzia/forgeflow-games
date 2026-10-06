@@ -1,4 +1,6 @@
 import type { Game } from "../../lib/supabase";
+import { getMobileSupport, MOBILE_BADGE } from "../../lib/mobile";
+import useIsTouchDevice from "../../hooks/useIsTouchDevice";
 
 type Props = {
   game: Game;
@@ -27,22 +29,44 @@ function getRating(game: Game): string {
   return avg.toFixed(1);
 }
 
+function PhoneIcon({ className = "w-3 h-3" }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" />
+    </svg>
+  );
+}
+
 export default function GameCard({ game, size = "md" }: Props) {
   const accentColor = GENRE_COLORS[game.genre] || "#00d4ff";
   const imgHeight = size === "lg" ? "h-56" : size === "sm" ? "h-32" : "h-40";
+
+  // 2026-09-15: honest mobile labelling. Touch-playable games get a chip in the
+  // same visual language as the genre chip; on a touch device the games that
+  // WON'T work are de-emphasised and labelled rather than hidden, so a phone
+  // visitor can still browse the whole catalog without being misled.
+  const mobile = getMobileSupport(game);
+  const badge = mobile === "none" ? null : MOBILE_BADGE[mobile];
+  const isTouch = useIsTouchDevice();
+  const deEmphasised = isTouch && mobile === "none";
 
   // 2026-04-17: enforce uniform card heights regardless of description length.
   // Info block is a fixed-height flex column so all cards in a grid align.
   const infoMinH = size === "lg" ? "min-h-[112px]" : size === "sm" ? "min-h-[64px]" : "min-h-[96px]";
 
   return (
-    <a href={`/games/${game.slug}`} className="game-card block flex flex-col h-full">
+    <a
+      href={`/games/${game.slug}`}
+      className={`game-card block flex flex-col h-full ${deEmphasised ? "opacity-60" : ""}`}
+    >
       {/* Thumbnail */}
       <div className={`relative ${imgHeight} overflow-hidden flex-shrink-0`}>
         <img
           src={game.thumbnail_url || PLACEHOLDER_THUMB}
           alt={game.title}
-          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+          className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-110 ${
+            deEmphasised ? "grayscale-[0.5]" : ""
+          }`}
           loading="lazy"
         />
         {/* Play overlay */}
@@ -60,6 +84,28 @@ export default function GameCard({ game, size = "md" }: Props) {
         >
           {game.genre.replace("_", " ")}
         </div>
+        {/* Mobile-support chip (same chip language as the genre chip) */}
+        {badge ? (
+          <div
+            className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider
+                       flex items-center gap-1 backdrop-blur-sm"
+            style={{ backgroundColor: badge.color + "20", color: badge.color, border: `1px solid ${badge.color}40` }}
+            title={badge.long}
+            aria-label={badge.long}
+          >
+            <PhoneIcon />
+            {badge.short}
+          </div>
+        ) : deEmphasised ? (
+          <div
+            className="absolute bottom-2 right-2 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider
+                       bg-surface-900/80 text-surface-500 border border-surface-600/50 backdrop-blur-sm"
+            title="Desktop only — needs a keyboard and mouse"
+            aria-label="Desktop only"
+          >
+            Desktop only
+          </div>
+        ) : null}
       </div>
 
       {/* Info — uniform height regardless of description presence */}
