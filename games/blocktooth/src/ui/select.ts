@@ -77,6 +77,9 @@ export class SelectScreen {
   /** ONLINE VS (lane O-LOBBY): the same re-skin for the online menu (no bots row, no palettes); `titanOnly` = an invite joiner: step 1 only */
   private online = false;
   private titanOnly = false;
+  /** O-POLISH: the online walk's two halves: the TITAN screen (titan only, CONTINUE) and the CITY screen (city only) */
+  private stageTitan = false;
+  private cityOnly = false;
   private botIx = 1;
   private readonly backBtn: HTMLButtonElement;
   private readonly rowHint: HTMLElement;
@@ -217,7 +220,10 @@ export class SelectScreen {
     this.bests = opts.bests || {};
     this.vs = !!opts.vs;
     this.online = this.vs && !!opts.online;
-    this.titanOnly = this.online && !!opts.titanOnly;
+    this.stageTitan = this.online && opts.onlineStage === 'titan';
+    this.cityOnly = this.online && opts.onlineStage === 'city';
+    this.titanOnly = this.online && (!!opts.titanOnly || this.stageTitan);
+    this.tab1.classList.toggle('bt-hidden', this.cityOnly);
     this.tab2.classList.toggle('bt-hidden', this.titanOnly);
     this.botIx = Math.max(0, BOT_LEVELS.indexOf(opts.bots ?? 'regular'));
     this.layer.dataset.vs = this.vs ? '1' : '';
@@ -238,7 +244,7 @@ export class SelectScreen {
     this.perkIx = Math.max(0, PERK_VALUES.indexOf(perk ?? null));
     this.clock.textContent = wallClock();
     this.layer.classList.remove('bt-hidden');
-    const step: Step = init.step === 2 && !this.resumeWasEsc(from, init) ? 2 : 1;
+    const step: Step = this.cityOnly ? 2 : this.titanOnly ? 1 : init.step === 2 && !this.resumeWasEsc(from, init) ? 2 : 1;
     this.row = 'cards';
     this.setStep(step, false);
     const row = init.row;
@@ -337,8 +343,8 @@ export class SelectScreen {
   private back(): void {
     const s = this.session;
     if (!s || s.done) return;
-    if (this.step === 2) { this.setStep(1, true); return; }
-    this.resume = { titan: TITAN_IDS[this.ti], biome: BIOME_IDS[this.bi] };
+    if (this.step === 2 && !this.cityOnly) { this.setStep(1, true); return; }
+    if (!this.cityOnly) this.resume = { titan: TITAN_IDS[this.ti], biome: BIOME_IDS[this.bi] };
     s.finish(null, 0);
   }
 
@@ -349,9 +355,9 @@ export class SelectScreen {
     this.tab1.classList.toggle('on', step === 1);
     this.tab2.classList.toggle('on', step === 2);
     this.tab1.classList.toggle('done', step === 2);
-    this.stepLine.textContent = this.online ? (step === 1 ? (this.titanOnly ? STR_VS.online.stepJoin : STR_VS.menu.step1) : STR_VS.online.step2)
+    this.stepLine.textContent = this.online ? (this.cityOnly ? STR_VS.online.stepCity : step === 1 ? (this.stageTitan ? STR_VS.online.stepTitan : this.titanOnly ? STR_VS.online.stepJoin : STR_VS.menu.step1) : STR_VS.online.step2)
       : this.vs ? (step === 1 ? STR_VS.menu.step1 : STR_VS.menu.step2) : step === 1 ? STR.select.step1 : STR.select.step2;
-    this.confirmLbl.textContent = this.online ? (step === 1 && this.titanOnly ? STR_VS.online.joinGo : STR_VS.online.next)
+    this.confirmLbl.textContent = this.online ? (this.cityOnly ? STR_VS.online.cityGo : step === 1 && this.titanOnly ? (this.stageTitan ? STR_VS.online.next : STR_VS.online.joinGo) : STR_VS.online.next)
       : this.vs ? (step === 1 ? STR_VS.menu.confirm : STR_VS.menu.start) : step === 1 ? STR.select.confirm : STR.select.dropIn;
     this.titanRow.classList.toggle('bt-hidden', step !== 1);
     this.biomeRow.classList.toggle('bt-hidden', step !== 2);
@@ -689,7 +695,7 @@ export class SelectScreen {
   }
 
   private selectBiome(i: number): void {
-    const changed = i !== this.bi || this.lore.dataset.for !== 'b:' + BIOME_IDS[i];
+    const changed = i !== this.bi || this.lore.dataset.for !== 'b:' + BIOME_IDS[i] + (this.vs ? ':vs' : '');
     this.bi = i;
     this.biomeCards.forEach((c, j) => {
       c.classList.toggle('is-sel', j === i);
@@ -702,7 +708,7 @@ export class SelectScreen {
   private renderBiomeLore(def: BiomeDef, i: number): void {
     const L = this.lore;
     clearEl(L);
-    L.dataset.for = 'b:' + def.id;
+    L.dataset.for = 'b:' + def.id + (this.vs ? ':vs' : '');
     L.style.setProperty('--c1', def.palette.sign);
     L.style.setProperty('--c2', def.palette.road);
     L.style.setProperty('--glow', def.palette.signB);
@@ -732,21 +738,24 @@ export class SelectScreen {
       const m = div('bt-resp-meter', r);
       for (let i = 1; i <= 5; i++) div(i <= lvl ? 'on' : '', m);
     }
-    const boss = BOSSES[def.boss];
     const kit = div('bt-lore-kit', L);
-    const r = div('bt-kit-row boss', kit);
-    const h = div('bt-kit-head', r);
-    h.appendChild(el('span', 'bt-kit-tag', STR.select.containment));
-    h.appendChild(el('b', 'bt-kit-name', boss ? boss.name : def.boss.toUpperCase()));
-    div('bt-kit-desc', r, boss ? `${boss.title}. ${STR.select.meterHint} ${boss.meterName}.` : '');
-    if (boss && boss.attacks.length) {
-      const pr = div('bt-lore-procs', r);
-      for (const ph of [1, 2, 3] as const) {
-        const names = boss.attacks.filter((a) => a.phase === ph).map((a) => a.name);
-        if (!names.length) continue;
-        const line = div('bt-lore-proc', pr);
-        line.appendChild(el('b', '', fmt(STR.select.phase, { n: ph })));
-        line.appendChild(el('span', '', names.join(' · ')));
+    // the CONTAINMENT ASSET is the solo boss of the zone: a VS match (practice or online) has none (it has the public tender), so the block is solo-only
+    if (!this.vs) {
+      const boss = BOSSES[def.boss];
+      const r = div('bt-kit-row boss', kit);
+      const h = div('bt-kit-head', r);
+      h.appendChild(el('span', 'bt-kit-tag', STR.select.containment));
+      h.appendChild(el('b', 'bt-kit-name', boss ? boss.name : def.boss.toUpperCase()));
+      div('bt-kit-desc', r, boss ? `${boss.title}. ${STR.select.meterHint} ${boss.meterName}.` : '');
+      if (boss && boss.attacks.length) {
+        const pr = div('bt-lore-procs', r);
+        for (const ph of [1, 2, 3] as const) {
+          const names = boss.attacks.filter((a) => a.phase === ph).map((a) => a.name);
+          if (!names.length) continue;
+          const line = div('bt-lore-proc', pr);
+          line.appendChild(el('b', '', fmt(STR.select.phase, { n: ph })));
+          line.appendChild(el('span', '', names.join(' · ')));
+        }
       }
     }
     const c = div('bt-kit-row', kit);

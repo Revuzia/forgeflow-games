@@ -86,12 +86,14 @@ export class OnlineSession<W> {
     return r ? this.begin(r) : false;
   }
   async joinCode(code: string): Promise<boolean> {
-    const r = await this.room.joinCode(code, { onStatus: this.onStatus });
+    const r = await this.room.joinCode(code, { makeStart: this.o.makeStart, onStatus: this.onStatus });
     return r ? this.begin(r) : false;
   }
   /** the D8 "Start now with bots" button */
   startNow(): void { this.room.startNow(); }
   cancel(): void { this.room.cancel(); }
+  /** extra fields on this peer's room presence (lane O-POLISH: the quick-match host's start deadline) */
+  publish(extra: Record<string, unknown>): void { this.room.publish(extra); }
 
   /** the input layer's sample for this frame (quantised exactly as the wire carries it) */
   setInput(inp: TitanInput, card = 0): void {

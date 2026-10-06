@@ -12,7 +12,10 @@ import { SEATS, NET_PROTO } from '../../src/net/proto.ts';
 import { vsStartInfo } from '../../src/net/simport.ts';
 import { phaseMul, TAKEOVER_RAMP_S } from '../../src/vs/clock.ts';
 import { safeRect } from '../../src/ui/vstypes.ts';
-import { asTitan, buildInfo, cleanName, rematchCode } from '../../src/online.ts';
+import { OnlineMatch, asTitan, buildInfo, cleanName, rematchCode, type LobbyState, type OnlineHooks, type OnlineMode } from '../../src/online.ts';
+import type { RoomStatus } from '../../src/net/room.ts';
+import { vsGoalLines } from '../../src/ui/vstypes.ts';
+import { VS as STR_VS, vsFmt } from '../../src/data/strings_vs.ts';
 
 let pass = 0, fail = 0;
 function ok(cond: boolean, name: string, detail = ''): void {
@@ -75,6 +78,111 @@ ok(start.mode === 'vs' && start.seats.length === 4, 'START is a 4-seat VS match'
   ok(Math.abs(phaseMul('takeover', P.openEndS + TAKEOVER_RAMP_S / 2) - 0.5) < 1e-12, 'takeover ramp is linear');
   ok(phaseMul('takeover', P.openEndS + TAKEOVER_RAMP_S) === 1 && phaseMul('takeover', P.openEndS + 100) === 1, 'takeover ramp reaches 1 and stays');
   ok(phaseMul('open', 100) === 0 && phaseMul('last', 620) === 1, 'the other phases are untouched');
+}
+
+
+// ── the lobby view-model (O-POLISH): who is "host", what a JOIN that has not found a host shows, leavers, the quick-match deadline ──
+// OnlineMatch.pushLobby() is driven here with a FAKE room (presence + humans) and hand-written RoomStatus values: no network, no timers.
+interface Fake { id: string; room: string; humans(): string[]; presence(): Record<string, Record<string, unknown>>; strangers(): string[] }
+interface Priv { session: { room: Fake; publish(x: Record<string, unknown>): void }; lastStatus: RoomStatus | null; tLook: number; pushLobby(): void; publishDeadline(s: RoomStatus): void }
+function lobbyRig(mode: OnlineMode, me: string): { m: OnlineMatch; p: Priv; last: () => LobbyState; pub: Record<string, unknown>[]; set: (humans: string[], meta: Record<string, Record<string, unknown>>, host: boolean, waitLeftMs?: number) => void } {
+  const states: LobbyState[] = [];
+  const hooks = { lobby: (s: LobbyState) => states.push(s), notice() {}, connection() {}, infoChanged() {}, rebuilt() {}, ended() {}, failed() {}, started() {}, tick() {}, load: async () => {} } as unknown as OnlineHooks;
+  const m = new OnlineMatch({ mode, code: mode === 'quick' ? null : 'ABCD', titan: 'molo', biome: 'grideast', name: 'ME', build: 'probe' }, hooks);
+  const pub: Record<string, unknown>[] = [];
+  const room: Fake = { id: me, room: 'ABCD', humans: () => [], presence: () => ({}), strangers: () => [] };
+  const p = m as unknown as Priv;
+  p.session = { room, publish: (x) => { pub.push(x); } };
+  const set = (humans: string[], meta: Record<string, Record<string, unknown>>, host: boolean, waitLeftMs = 0): void => {
+    room.humans = () => humans.slice();
+    room.presence = () => { const o: Record<string, Record<string, unknown>> = {}; for (const h of humans) o[h] = { id: h, ...(meta[h] ?? {}) }; return o; };
+    p.lastStatus = { phase: 'waiting', room: 'ABCD', host, humans: humans.slice(), waitLeftMs };
+    p.pushLobby();
+  };
+  return { m, p, last: () => states[states.length - 1], pub, set };
+}
+const META: Record<string, Record<string, unknown>> = { a: { name: 'ALICE', titan: 'voltkite', biome: 'whitestacks' }, b: { name: 'ME', titan: 'molo', biome: 'grideast' } };
+{
+  // L1: JOIN WITH CODE, nothing in the room: the channel's lowest id is the joiner itself ("host" to the room layer) - NO host UI
+  const R = lobbyRig('join', 'b');
+  R.set(['b'], META, true);
+  let s = R.last();
+  ok(s.phase === 'looking', 'L1: a joiner alone first LOOKS for the room', s.phase);
+  ok(!s.host && !s.canStartNow && !s.seats[0].host, 'L1: no host UI (no HOST chip, no START) while no host has been seen', JSON.stringify([s.host, s.canStartNow, s.seats[0].host]));
+  ok(s.city === null, 'L1: no city until a host is seen');
+  R.p.tLook = performance.now() - 9000;
+  R.set(['b'], META, true);
+  s = R.last();
+  ok(s.phase === 'noroom' && !s.host && !s.canStartNow, 'L1: after ~8 s: ROOM NOT FOUND (still no host UI)', s.phase);
+  // the host arrives later: the lobby becomes the normal guest lobby (it kept listening)
+  R.set(['a', 'b'], META, false);
+  s = R.last();
+  ok(s.phase === 'waiting' && !s.host && s.seats[0].host && s.seats[0].id === 'a', 'L1: when the host shows up the guest lobby opens at once', s.phase);
+  ok(s.city === 'whitestacks', 'F4: the host\'s city is read from its presence', String(s.city));
+
+  // L2: the host leaves: the promoted guest keeps the host phase + START, never "room not found", and its old seat says "ALICE LEFT"
+  R.p.tLook = performance.now() - 60000;               // (an old look timer must not matter once a host was seen)
+  R.set(['b'], META, true);
+  s = R.last();
+  ok(s.phase === 'waiting' && s.host && s.canStartNow, 'L2: the promoted host stays in the host phase with START NOW WITH BOTS', JSON.stringify([s.phase, s.host, s.canStartNow]));
+  ok(s.hostLeft, 'L2: the lobby knows the host left (it says so)');
+  ok(s.seats[0].host && s.seats[0].me && s.seats[1].open && s.seats[1].left === 'ALICE', 'L2: the departed host\'s seat is an OPEN seat that remembers who left', JSON.stringify(s.seats[1]));
+  R.set(['b'], META, true);
+  ok(R.last().phase === 'waiting', 'L2: ...and it never flips to noroom later');
+  // a newcomer fills the seat: the label goes away
+  R.set(['b', 'c'], { ...META, c: { name: 'CARA', titan: 'hearthback' } }, true);
+  s = R.last();
+  ok(!s.seats[1].open && s.seats[1].left === null, 'L2: a newcomer takes the open seat');
+}
+{
+  // CREATE: the creator is the host from the start (no looking phase), a guest leaving leaves an "X LEFT" seat
+  const R = lobbyRig('create', 'a');
+  R.set(['a'], META, true);
+  let s = R.last();
+  ok(s.phase === 'waiting' && s.host && s.canStartNow && !s.hostLeft, 'create: the host lobby is the normal host phase');
+  R.set(['a', 'b'], META, true);
+  R.set(['a'], META, true);
+  s = R.last();
+  ok(s.seats[1].left === 'ME' && s.phase === 'waiting' && !s.hostLeft, 'create: a leaving guest leaves "X LEFT" and nothing else changes');
+}
+{
+  // F1: the guest's countdown reads the HOST's published deadline, never its own clock
+  const G = lobbyRig('quick', 'b');
+  G.set(['a', 'b'], { a: { name: 'ALICE', titan: 'voltkite', startAt: Date.now() + 7400 }, b: META.b }, false, 20000);
+  ok(G.last().waitLeftS === 8, 'F1: the guest shows the host\'s deadline (ceil(7.4) = 8), not its own 20 s clock', String(G.last().waitLeftS));
+  G.set(['a', 'b'], { a: { name: 'ALICE', titan: 'voltkite' }, b: META.b }, false, 20000);
+  ok(G.last().waitLeftS === null, 'F1: no published deadline -> the guest dial hides');
+  G.set(['a', 'b'], { a: { name: 'ALICE', startAt: Date.now() - 5000 }, b: META.b }, false, 20000);
+  ok(G.last().waitLeftS === 0, 'F1: a deadline already past clamps to 0');
+  G.set(['a', 'b'], { a: { name: 'ALICE', startAt: Date.now() + 999000 }, b: META.b }, false, 20000);
+  ok((G.last().waitLeftS ?? 99) <= 20, 'F1: a wild clock skew never shows more than the whole wait');
+  const H = lobbyRig('quick', 'a');
+  H.set(['a', 'b'], META, true, 12300);
+  ok(H.last().waitLeftS === 13, 'F1: the host reads its own clock', String(H.last().waitLeftS));
+  // the host publishes its deadline once per room (and again only when it moves by > 1.5 s)
+  const st = (waitLeftMs: number): RoomStatus => ({ phase: 'waiting', room: 'QX1', host: true, humans: ['a'], waitLeftMs });
+  const t0 = Date.now();
+  H.p.publishDeadline(st(12000));
+  H.p.publishDeadline(st(11700));
+  ok(H.pub.length === 1 && typeof H.pub[0].startAt === 'number' && Math.abs((H.pub[0].startAt as number) - (t0 + 12000)) < 400, 'F1: the host publishes startAt = now + waitLeft, once', JSON.stringify(H.pub));
+  H.p.publishDeadline(st(6000));
+  ok(H.pub.length === 2, 'F1: ...and again when its clock jumps (a new room / host)');
+  H.p.publishDeadline({ ...st(5000), host: false });
+  ok(H.pub.length === 2, 'F1: a guest publishes nothing');
+}
+
+// ── F2: every notice string lives in strings_vs.ts ──
+{
+  const N = STR_VS.notice;
+  ok(vsFmt(N.dropped, { name: 'ALICE' }) === 'ALICE DROPPED OUT — A BOT IS DRIVING', 'F2: the DROPPED OUT notice is a strings_vs line');
+  ok(vsFmt(N.unreach, { n: 2, who: N.players }).includes('2 PLAYERS') && vsFmt(N.hostLeft, { name: 'BOB' }).startsWith('HOST LEFT'), 'F2: the migration / reachability notices fill from strings_vs');
+}
+
+// ── V1: the VS goals the report returns become GOALS MET lines for the end card ──
+{
+  const L = vsGoalLines(['g_vs_syndicated', 'g_vs_certified_headline', 'g_nope']);
+  ok(L.length === 2 && L[0].name === 'SYNDICATED' && L[1].desc.length > 0 && L.every((x) => x.id.startsWith('g_vs_')), 'V1: vsGoalLines resolves the earned ids (an unknown id is dropped)', JSON.stringify(L));
+  ok(vsGoalLines([]).length === 0, 'V1: no goals -> no strip');
 }
 
 console.log(`probe_lobby: ${pass} passed, ${fail} failed`);

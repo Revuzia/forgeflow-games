@@ -6,6 +6,17 @@
 
 import type { BiomeId, TitanId } from '../core/types.ts';
 import type { BotLevel } from '../vs/types.ts';
+import { VS_GOAL_BY_ID } from '../data/vsgoals.ts';
+
+/** a VS goal earned in this match, resolved for display (the GOALS MET strip of the end card) */
+export interface VsGoalLine { id: string; name: string; desc: string }
+
+/** goal ids (what the report returns) -> the lines the end card shows; an unknown id is dropped */
+export function vsGoalLines(ids: readonly string[]): VsGoalLine[] {
+  const out: VsGoalLine[] = [];
+  for (const id of ids) { const g = VS_GOAL_BY_ID[id]; if (g) out.push({ id, name: g.name, desc: g.desc }); }
+  return out;
+}
 
 export interface VsSeatInfo {
   slot: number;

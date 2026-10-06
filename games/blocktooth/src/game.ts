@@ -73,7 +73,7 @@ import { VsHud } from './ui/vshud.ts';                   // ONLINE VS (B-VIEW)
 import { CardRail } from './ui/rail.ts';
 import { VsEndScreen } from './ui/vsend.ts';
 import type { VsMatchInfo } from './ui/vstypes.ts';
-import { SEAT_COLORS } from './ui/vstypes.ts';
+import { SEAT_COLORS, vsGoalLines } from './ui/vstypes.ts';
 import { REMATCH_BIOMES, botName } from './data/strings_vs.ts';
 import { CARD, decodeInput, encodeInput } from './net/proto.ts';
 import { Room } from './net/room.ts';                       // ONLINE VS (O-LOBBY): room codes (?room=)
@@ -83,7 +83,7 @@ import { NetNotices } from './ui/netnotice.ts';
 import type { BotLevel } from './vs/types.ts';
 import { Broadcast, onAirSeconds, runFigures } from './ui/broadcast.ts';
 import { PortalClient, buildVersionFromUrl, mergeBests, newRunNonce, newVsPracticeMatchId, resultsMajority, VsIdentityBook, type RunFiling, type RunResultPayload, type VsFiling, type VsReportCtx } from './net/portal.ts';   // ONLINE_PLAN A.1.5 (lane A-GAME) + VS reporting (O-REPORT)
-import { VS_GOAL_BY_ID, VsEventTally } from './data/vsgoals.ts';
+import { VsEventTally } from './data/vsgoals.ts';
 import { BossBar } from './ui/bossbar.ts';
 import { SelectScreen } from './ui/select.ts';
 import { DraftScreen } from './ui/draft.ts';
@@ -2350,7 +2350,8 @@ export class App {
     return (u ? cleanName(u) : '') || guestName();
   }
 
-  /** ONLINE VS: titan + city, then the menu. `inviteCode` (from ?room=) = the titan only, then JOIN that room. */
+  /** ONLINE VS: the titan, then FIND A FIGHT (QUICK MATCH / CREATE ROOM -> the city -> the lobby; JOIN WITH CODE -> the code -> the lobby: a
+   *  joiner never picks a city, the host does). `inviteCode` (from ?room=) = the titan only, then JOIN that room. */
   async goOnlineSelect(inviteCode: string | null, initial?: Partial<SelectResume>): Promise<void> {
     const ep = ++this.epoch;
     await this.loadLock;
@@ -2369,34 +2370,63 @@ export class App {
     if (ep !== this.epoch) return;
     let from: Partial<SelectResume> = initial ?? { titan: this._choice.titan, biome: this._choice.biome };
     for (let guard = 0; guard < 16; guard++) {
-      this.setScreen('select');
-      this.modal = 'select';
-      let res: SelectResultV2 = null;
-      try {
-        res = await this.selectScreen.run({
-          portraits,
-          portraitFor: (t, pal) => this.portraitFor(t, pal),
-          profile: this._profile,
-          bests: loadBest(),
-          initial: from,
-          vs: true,
-          online: true,
-          titanOnly: !!inviteCode,
-        });
-      } finally {
-        if (this.modal === 'select') this.modal = null;
-      }
+      const res = await this.onlineSelectStep(ep, portraits, { initial: from, stage: inviteCode ? 'invite' : 'titan' });
       if (ep !== this.epoch) return;
-      if (!res || res.kind !== 'start') { this.sfx.ui('back'); void this.goTitle(); return; }
+      if (!res) { this.sfx.ui('back'); void this.goTitle(); return; }
       this.sfx.ui('confirm');
       this._choice = { titan: res.titan, biome: res.biome, seed: this._choice.seed };
       if (inviteCode) { await this.runOnline({ mode: 'join', code: inviteCode, titan: res.titan, biome: res.biome }); return; }
-      const ch = await this.onlineMenu(ep, res.titan, portraits);
-      if (ep !== this.epoch) return;
-      if (!ch) { from = { titan: res.titan, biome: res.biome, step: 2 }; continue; }   // BACK: the select screen on the city step
-      await this.startOnlineChoice(ch, res.titan, res.biome);
-      return;
+      const r = await this.onlineMenuFlow(ep, portraits, res.titan, res.biome);
+      if (r === 'stale') return;
+      if (r === 'done') return;
+      from = { titan: res.titan, biome: res.biome };            // BACK from FIND A FIGHT: the titan screen again
     }
+  }
+
+  /** one pass of the select screen in its online skins: the TITAN (or an invite's JOIN THE ROOM), or the CITY (QUICK MATCH / CREATE ROOM only) */
+  private async onlineSelectStep(ep: number, portraits: Record<TitanId, string>, o: { initial: Partial<SelectResume>; stage: 'titan' | 'invite' | 'city' }): Promise<{ titan: TitanId; biome: BiomeId } | null> {
+    this.lobbyUi.clear();                                // the FIND A FIGHT menu is still up when the city step follows it
+    this.setScreen('select');
+    this.modal = 'select';
+    this.input.mode = 'ui';
+    let res: SelectResultV2 = null;
+    try {
+      res = await this.selectScreen.run({
+        portraits,
+        portraitFor: (t, pal) => this.portraitFor(t, pal),
+        profile: this._profile,
+        bests: loadBest(),
+        initial: o.initial,
+        vs: true,
+        online: true,
+        titanOnly: o.stage === 'invite',
+        onlineStage: o.stage === 'city' ? 'city' : o.stage === 'titan' ? 'titan' : undefined,
+      });
+    } finally {
+      if (this.modal === 'select') this.modal = null;
+    }
+    if (ep !== this.epoch) return null;
+    if (!res || res.kind !== 'start') return null;
+    return { titan: res.titan, biome: res.biome };
+  }
+
+  /** FIND A FIGHT: the 3-way menu, and what each choice needs next. 'back' = the menu was backed out of (the caller decides where to go) */
+  private async onlineMenuFlow(ep: number, portraits: Record<TitanId, string>, titan: TitanId, biome: BiomeId): Promise<'done' | 'back' | 'stale'> {
+    for (let guard = 0; guard < 16; guard++) {
+      const ch = await this.onlineMenu(ep, titan, portraits);
+      if (ep !== this.epoch) return 'stale';
+      if (!ch) return 'back';
+      if (ch.kind === 'join') { await this.startOnlineChoice(ch, titan, biome); return 'done'; }    // a joiner never picks the city: the host does
+      // QUICK MATCH / CREATE ROOM: the city (used when this peer hosts the match); BACK returns to the menu
+      const city = await this.onlineSelectStep(ep, portraits, { initial: { titan, biome, step: 2 }, stage: 'city' });
+      if (ep !== this.epoch) return 'stale';
+      if (!city) { this.sfx.ui('back'); continue; }
+      this.sfx.ui('confirm');
+      this._choice = { titan, biome: city.biome, seed: this._choice.seed };
+      await this.startOnlineChoice(ch, titan, city.biome);
+      return 'done';
+    }
+    return 'back';
   }
 
   /** the 3-way menu over the select backdrop (screen 'lobby' while it is up); null = BACK */
@@ -2415,9 +2445,9 @@ export class App {
     return this.runOnline({ mode: ch.kind, code, titan, biome });
   }
 
-  /** the lobby leave button: back to the menu (same titan + city), or the title for an invite / rematch room */
+  /** the lobby's LEAVE / BACK: FIND A FIGHT again (same titan) - for a joined room too; the title only for a rematch room */
   private async backFromLobby(req: { mode: OnlineMode; titan: TitanId; biome: BiomeId }): Promise<void> {
-    if (req.mode === 'rematch' || req.mode === 'join') { void this.goTitle(); return; }
+    if (req.mode === 'rematch') { void this.goTitle(); return; }
     const ep = ++this.epoch;
     await this.loadLock;
     if (ep !== this.epoch) return;
@@ -2427,10 +2457,23 @@ export class App {
     this.setScreen('loading');
     const portraits = await this.getPortraits();
     if (ep !== this.epoch) return;
-    const ch = await this.onlineMenu(ep, req.titan, portraits);
-    if (ep !== this.epoch) return;
-    if (!ch) { void this.goTitle(); return; }
-    await this.startOnlineChoice(ch, req.titan, req.biome);
+    const r = await this.onlineMenuFlow(ep, portraits, req.titan, req.biome);
+    if (r === 'back') void this.goTitle();
+  }
+
+  /** RETRY on ROOM NOT FOUND: leave that room's channel, wait for it to be gone (a same-name channel is reused while it still closes), look again */
+  private retrying = false;
+  private async retryOnline(): Promise<void> {
+    const m = this.online, rq = this.onlineReq;
+    if (!m || !rq || m.live || this.retrying) return;
+    const ep = this.epoch;
+    this.retrying = true;
+    try {
+      m.leave();                                         // this.online stays m: a BACK pressed meanwhile still takes the normal leave path
+      await new Promise<void>((r) => setTimeout(r, 1200));
+      if (ep !== this.epoch || this.online !== m) return;
+    } finally { this.retrying = false; }
+    void this.runOnline({ mode: rq.mode, code: rq.code, titan: rq.titan, biome: rq.biome });
   }
 
   /** start the online flow: open the lobby, open the room, and wait for the START */
@@ -2451,6 +2494,7 @@ export class App {
     if (ep !== this.epoch) return;
     const handle = this.lobbyUi.openLobby(portraits);
     this.lobbyUi.onStartNow = () => { if (this.online) this.online.startNow(); };
+    this.lobbyUi.onRetry = () => { void this.retryOnline(); };
     const build = this.params.build ?? buildVersionFromUrl(location.search) ?? 'dev';
     const m = new OnlineMatch({
       mode: req.mode, code: req.code, titan: req.titan, biome: req.biome, name: this.onlineName(), build,
@@ -2804,18 +2848,17 @@ export class App {
       if (!out) return;
       const rec: NonNullable<App['vsFiling']> = { matchId, goals: out.goals.slice(), filing: null };
       this.vsFiling = rec;
-      for (const id of out.goals) this.toastVsGoal(id);
+      this.showVsGoals(out.goals);
       void out.filing.then((f) => { if (this.vsFiling === rec) rec.filing = f; });
     } catch (e) {
       console.error('[blocktooth] vs report failed', e);
     }
   }
 
-  /** a GOAL MET toast for one of the 8 VS goals (the toast layer holds it until the end card is closed) */
-  private toastVsGoal(id: string): void {
-    const g = VS_GOAL_BY_ID[id];
-    if (!g) return;
-    this.toasts.push({ kicker: 'GOAL MET', title: g.name, sub: g.desc.toUpperCase(), glyph: 'ribbon' });
+  /** the VS goals this match earned -> the GOALS MET strip on the end card. (They used to be GOAL MET toasts, but the toast layer is hidden behind the
+   *  end card and its queue is dropped by teardownRun on every way out of it, so none was ever seen.) */
+  private showVsGoals(ids: readonly string[]): void {
+    this.vsEndScreen.setGoals(vsGoalLines(ids));
   }
 
   /** the front page: freeze-frame photo, then the end card → REMATCH (titan swap, new seed, next city) / LEAVE */

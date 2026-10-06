@@ -17,7 +17,7 @@ import { VS as STR_VS, fmtMatchClock, titanTag, vsFmt } from '../data/strings_vs
 import { VS } from '../core/config.ts';
 import type { Input } from '../core/input.ts';
 import { type ModalSession, type UiPress, clearEl, div, el, fmtInt, keyChip, onTap, roman, runModal, flashesReduced } from './dom.ts';
-import type { VsMatchInfo } from './vstypes.ts';
+import type { VsGoalLine, VsMatchInfo } from './vstypes.ts';
 import { buildBug } from './menus.ts';
 
 export type VsEndChoice = { kind: 'rematch'; titan: TitanId } | { kind: 'leave' };
@@ -78,6 +78,9 @@ export function vsStandings(w: World, info: VsMatchInfo, end?: VsEndData['end'])
 
 export class VsEndScreen {
   private readonly input: Input;
+  /** the goals earned this match (set by the app when the report is filed: it can land before OR after the card opens) */
+  private goals: VsGoalLine[] = [];
+  private goalsEl: HTMLDivElement | null = null;
   private readonly layer: HTMLDivElement;
   private paper: HTMLDivElement;
   private session: ModalSession<VsEndChoice> | null = null;
@@ -153,6 +156,11 @@ export class VsEndScreen {
       sc.appendChild(el('small', '', STR_VS.end.score));
     }
 
+    // GOALS MET: the VS goals this match earned (the old GOAL MET toasts were dropped with the toast queue on every exit from the card)
+    this.goalsEl = div('bt-vsend-goals bt-hidden', P);
+    this.goalsEl.dataset.v2 = 'vs-goals';
+    this.renderGoals();
+
     // the placing rule, in words (score never decides the winner)
     const rule = div('bt-vsend-rule', P);
     rule.appendChild(el('b', '', STR_VS.end.rule));
@@ -192,12 +200,38 @@ export class VsEndScreen {
       const tick = (): void => {
         const left = Math.max(0, Math.ceil(d.voteS! - (performance.now() - t0) / 1000));
         vote.textContent = vsFmt(STR_VS.end.voteIn, { n: left });
-        if (left <= 0 && !this.swapOn) this.finish({ kind: 'leave' });
+        // the vote is a window for the REMATCH room, not a timeout: the card stays until the player acts (REMATCH still works after it:
+        // it joins a room that already started or opens a fresh one)
+        if (left <= 0) { vote.textContent = STR_VS.end.voteClosed; window.clearInterval(this.voteTimer); }
       };
       tick();
       this.voteTimer = window.setInterval(tick, 250);
     }
     return promise;
+  }
+
+  /** the GOALS MET strip: callable at any time (the report is filed once the other peers' RESULT hashes are in, which can be after the card opened) */
+  setGoals(list: readonly VsGoalLine[]): void {
+    this.goals = list.slice();
+    this.renderGoals();
+  }
+
+  private renderGoals(): void {
+    const g = this.goalsEl;
+    if (!g) return;
+    clearEl(g);
+    g.classList.toggle('bt-hidden', this.goals.length === 0);
+    if (!this.goals.length) return;
+    const k = div('bt-vsend-goalk', g);
+    k.appendChild(el('b', '', STR_VS.end.goalsKicker));
+    k.appendChild(el('small', '', STR_VS.end.goalsSub));
+    const list = div('bt-vsend-goallist', g);
+    for (const x of this.goals) {
+      const c = div('bt-vsend-goal', list);
+      c.dataset.id = x.id;
+      c.appendChild(el('b', '', x.name));
+      c.appendChild(el('span', '', x.desc.toUpperCase()));
+    }
   }
 
   private swapEl: HTMLDivElement | null = null;
@@ -282,6 +316,8 @@ export class VsEndScreen {
 
   /** abandon without resolving (a forced transition) */
   clear(): void {
+    this.goals = [];
+    this.renderGoals();
     if (this.session && !this.session.done) this.session.abort();
     window.clearInterval(this.voteTimer); window.clearInterval(this.swapTimer);
     this.layer.classList.add('bt-hidden');

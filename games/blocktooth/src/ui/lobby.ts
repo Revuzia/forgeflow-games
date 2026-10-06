@@ -14,6 +14,7 @@ import type { TitanId } from '../core/types.ts';
 import type { Input } from '../core/input.ts';
 import { VS as STR_VS, titanTag, vsFmt } from '../data/strings_vs.ts';
 import { VS } from '../core/config.ts';
+import { BIOMES } from '../data/biomes.ts';
 import type { LobbyState } from '../online.ts';
 import { buildBug } from './menus.ts';
 import { type ModalSession, type UiPress, TextSlot, clearEl, div, el, keyChip, onTap, pulse, runModal, flashesReduced, wrapIndex } from './dom.ts';
@@ -47,12 +48,17 @@ const CODE_LEN = 4;
 export class LobbyScreen {
   /** the host's START NOW WITH BOTS button */
   onStartNow: (() => void) | null = null;
+  /** RETRY (ROOM NOT FOUND): look for the room again */
+  onRetry: (() => void) | null = null;
   private readonly input: Input;
   private readonly layer: HTMLDivElement;
   // header
   private readonly kicker: HTMLElement;
   private readonly title: HTMLElement;
   private readonly sub: HTMLElement;
+  /** the host's city (right end of the header) */
+  private readonly cityBox: HTMLDivElement;
+  private readonly cityName: HTMLElement;
   // menu view
   private readonly menuBox: HTMLDivElement;
   private readonly items: HTMLButtonElement[] = [];
@@ -66,6 +72,7 @@ export class LobbyScreen {
   private readonly side: HTMLDivElement;
   private readonly codeBig: HTMLDivElement;
   private readonly inviteTxt: HTMLElement;
+  private readonly inviteLbl: HTMLElement;
   private readonly roomPanel: HTMLDivElement;
   private readonly dial: HTMLDivElement;
   private readonly dialNum: TextSlot;
@@ -73,6 +80,8 @@ export class LobbyScreen {
   private readonly note: HTMLDivElement;
   private readonly foot: HTMLDivElement;
   private readonly leaveBtn: HTMLButtonElement;
+  private readonly leaveLbl: HTMLElement;
+  private readonly retryBtn: HTMLButtonElement;
   private readonly copyBtn: HTMLButtonElement;
   private readonly copyLbl: HTMLElement;
   private readonly startBtn: HTMLButtonElement;
@@ -102,6 +111,11 @@ export class LobbyScreen {
     this.kicker = div('bt-lob-kicker', ht);
     this.title = div('bt-lob-title', ht);
     this.sub = div('bt-lob-sub', ht);
+    this.cityBox = div('bt-lob-city bt-hidden', head);
+    this.cityBox.dataset.v2 = 'lobby-city';
+    this.cityBox.appendChild(el('small', '', S.city));
+    this.cityName = el('b');
+    this.cityBox.appendChild(this.cityName);
 
     const body = div('bt-lob-body', L);
 
@@ -140,7 +154,8 @@ export class LobbyScreen {
     this.roomPanel = div('bt-lob-room', this.side);
     this.roomPanel.appendChild(el('small', '', S.roomCode));
     this.codeBig = div('bt-lob-codebig', this.roomPanel);
-    this.roomPanel.appendChild(el('small', '', S.invite));
+    this.inviteLbl = el('small', '', S.invite);
+    this.roomPanel.appendChild(this.inviteLbl);
     this.inviteTxt = div('bt-lob-invite', this.roomPanel);
     this.dial = div('bt-lob-dial', this.side);
     this.dialNum = new TextSlot(div('bt-lob-dialnum', this.dial));
@@ -158,7 +173,9 @@ export class LobbyScreen {
       this.foot.appendChild(b);
       return { b, l };
     };
-    this.leaveBtn = mk('bt-btn-ghost', S.leave, 'ESC', () => this.leave()).b;
+    const lv = mk('bt-btn-ghost', S.leave, 'ESC', () => this.leave());
+    this.leaveBtn = lv.b; this.leaveLbl = lv.l;
+    this.retryBtn = mk('bt-btn-coral', S.retry, 'R', () => this.retry()).b;
     const c = mk('bt-btn-ghost', S.copy, 'C', () => this.copyInvite());
     this.copyBtn = c.b; this.copyLbl = c.l;
     this.startBtn = mk('bt-btn-coral', S.startNow, 'ENTER', () => this.startNow()).b;
@@ -277,7 +294,8 @@ export class LobbyScreen {
     const { session } = runModal<'leave'>(this.layer, this.input, (p) => {
       if (p.act === 'back') this.leave();
       else if (p.key === 'c') this.copyInvite();
-      else if (p.act === 'confirm') this.startNow();
+      else if (p.key === 'r') this.retry();
+      else if (p.act === 'confirm') { if (this.lastState && this.lastState.phase === 'noroom') this.retry(); else this.startNow(); }
     }, { armMs: 200, onClose: () => { this.session = null; } });
     this.session = session as ModalSession<unknown>;
     return {
@@ -295,6 +313,11 @@ export class LobbyScreen {
   private startNow(): void {
     const s = this.lastState;
     if (this.view === 'lobby' && s && s.canStartNow && this.onStartNow) this.onStartNow();
+  }
+
+  private retry(): void {
+    const s = this.lastState;
+    if (this.view === 'lobby' && s && s.phase === 'noroom' && this.onRetry) this.onRetry();
   }
 
   private copyInvite(): void {
@@ -338,7 +361,7 @@ export class LobbyScreen {
       case 'seeking':
         title = S.seeking;
         sub = s.waitLeftS !== null && s.waitLeftS > 0 ? vsFmt(S.seekingSub, { n: filled, s: s.waitLeftS }) : vsFmt(S.seekingNow, { n: filled });
-        if (!s.host && s.waitLeftS !== null) sub = vsFmt(S.guestSeekSub, { n: filled });
+        if (!s.host && s.waitLeftS === null) sub = vsFmt(S.guestSeekSub, { n: filled });
         break;
       case 'waiting':
         if (s.mode === 'rematch') { title = S.rematch; sub = vsFmt(S.rematchSub, { n: filled }); }
@@ -349,11 +372,15 @@ export class LobbyScreen {
       case 'loading': title = S.starting; sub = s.loading ? vsFmt(S.loadingN, { n: s.loading.ready, m: s.loading.total }) : S.startingWait; break;
       case 'full': title = S.full; sub = S.fullSub; break;
       case 'version': title = S.version; sub = S.versionSub; break;
-      case 'noroom': title = S.roomGuest; sub = S.noHost; break;
+      case 'looking': title = vsFmt(S.lookingTitle, { code: s.code ?? '' }); sub = S.lookingSub; break;
+      case 'noroom': title = S.noRoomTitle; sub = vsFmt(S.noRoomSub, { code: s.code ?? '' }); break;
       case 'error': title = S.errorTitle; sub = s.error ? S.errorSub : S.errorSub; break;
       default: break;
     }
+    const city = s.city && BIOMES[s.city as keyof typeof BIOMES] ? BIOMES[s.city as keyof typeof BIOMES].name.toUpperCase() : '';
     this.kicker.textContent = S.lobbyKicker;
+    this.cityBox.classList.toggle('bt-hidden', !city);
+    if (city && this.cityName.textContent !== city) this.cityName.textContent = city;
     this.title.textContent = title;
     this.sub.textContent = sub;
     this.layer.dataset.phase = s.phase;
@@ -364,16 +391,16 @@ export class LobbyScreen {
     for (let i = 0; i < this.seatNodes.length; i++) {
       const n = this.seatNodes[i], seat = s.seats[i];
       if (!seat) continue;
-      const key = seat.open ? 'open' : seat.id + '|' + seat.titan + '|' + seat.name + '|' + seat.host + '|' + seat.me;
-      const searching = s.phase === 'seeking' || s.phase === 'connecting';
+      const key = seat.open ? 'open|' + (seat.left ?? '') : seat.id + '|' + seat.titan + '|' + seat.name + '|' + seat.host + '|' + seat.me;
+      const searching = s.phase === 'seeking' || s.phase === 'connecting' || s.phase === 'looking';
       if (n.key !== key + '|' + searching) {
         const wasOpen = n.key.startsWith('open');
         n.key = key + '|' + searching;
         n.root.classList.toggle('open', seat.open);
         n.root.classList.toggle('me', seat.me);
         if (seat.open) {
-          n.name.set(S.open);
-          n.state.set(searching ? S.openSeek : S.openSub);
+          n.name.set(seat.left !== null ? vsFmt(S.seatLeft, { name: seat.left || S.guest }) : S.open);
+          n.state.set(seat.left !== null ? S.seatLeftSub : searching ? S.openSeek : S.openSub);
           n.tag.set(' ');
           n.img.removeAttribute('src');
           n.img.style.visibility = 'hidden';
@@ -397,6 +424,10 @@ export class LobbyScreen {
       this.codeBig.textContent = '';
       for (const ch of (s.code ?? '').slice(0, 12)) this.codeBig.appendChild(el('i', '', ch));
       this.inviteTxt.textContent = s.inviteUrl ?? '';
+      // a joiner that has not found the room has nothing to invite anyone to yet: just the code (to check it)
+      const noInvite = s.phase === 'looking' || s.phase === 'noroom';
+      this.inviteLbl.classList.toggle('bt-hidden', noInvite);
+      this.inviteTxt.classList.toggle('bt-hidden', noInvite);
     }
     const showDial = s.phase === 'seeking' && s.waitLeftS !== null;
     this.dial.classList.toggle('bt-hidden', !showDial);
@@ -412,6 +443,7 @@ export class LobbyScreen {
     else if (s.phase === 'full') { note = S.fullSub; bad = true; }
     else if (s.phase === 'error') { note = S.errorSub + (s.error ? ' · ' + s.error.slice(0, 90).toUpperCase() : ''); bad = true; }
     else if (s.phase === 'noroom') { note = S.noHost; }
+    else if (s.hostLeft) { note = S.hostLeftNote; }
     else if (s.strangers > 0) { note = vsFmt(S.versionOthers, { n: s.strangers }); bad = true; }
     this.note.textContent = note;
     this.note.classList.toggle('bt-hidden', note === '');
@@ -419,8 +451,11 @@ export class LobbyScreen {
     // buttons
     const busy = s.phase === 'starting' || s.phase === 'loading';
     this.startBtn.classList.toggle('bt-hidden', !s.canStartNow);
-    this.copyBtn.classList.toggle('bt-hidden', !room || busy);
+    this.retryBtn.classList.toggle('bt-hidden', s.phase !== 'noroom');
+    this.copyBtn.classList.toggle('bt-hidden', !room || busy || s.phase === 'looking' || s.phase === 'noroom');
     this.leaveBtn.classList.toggle('bt-hidden', false);
+    const backLbl = s.phase === 'noroom' ? S.back : S.leave;
+    if (this.leaveLbl.textContent !== backLbl) this.leaveLbl.textContent = backLbl;
   }
 
   private buildSeats(): void {
@@ -452,6 +487,7 @@ export class LobbyScreen {
   private render(): void {
     const v = this.view;
     this.layer.dataset.view = v;
+    if (v !== 'lobby') this.cityBox.classList.add('bt-hidden');
     this.menuBox.classList.toggle('bt-hidden', v !== 'menu');
     this.codeBox.classList.toggle('bt-hidden', v !== 'code');
     this.lobbyBox.classList.toggle('bt-hidden', v !== 'lobby');

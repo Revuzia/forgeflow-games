@@ -114,6 +114,9 @@ export interface SelectRunOpts {
   online?: boolean;
   /** an invite joiner (?room=CODE): the titan only, the host picks the city */
   titanOnly?: boolean;
+  /** ONLINE VS (O-POLISH): the online walk is TITAN (this screen, titan only) -> FIND A FIGHT -> CITY (this screen again, city only; QUICK MATCH / CREATE ROOM
+   *  only: a joiner never picks a city). Needs `online`. */
+  onlineStage?: 'titan' | 'city';
 }
 export type SelectResultV2 =
   | { kind: 'start'; titan: TitanId; biome: BiomeId; perk: PerkId | null; palette: number; bots?: 'rookie' | 'regular' | 'veteran' }

@@ -209,6 +209,7 @@ export class Room {
     if (this.channel && this.room === room) return room;
     if (this.channel) { const old = this.channel; this.channel = null; try { void old.untrack(); void sb.removeChannel(old); } catch { /* gone */ } }
     this.room = room;
+    this.roomExtra = {};
     const ch = sb.channel('ffg:' + this.gameId + ':' + room, { config: { broadcast: { self: false, ack: false }, presence: { key: this.id } } });
     this.channel = ch;
     ch.on('broadcast', { event: 'msg' }, ((m: { payload?: { from?: string; t?: string; d?: unknown } }) => {
@@ -270,6 +271,13 @@ export class Room {
     this.sentMsgs++;
     void this.channel.send({ type: 'broadcast', event: 'msg', payload: { from: this.id, t, d: d ?? {} } });
     return true;
+  }
+
+  /** extra fields on this peer's ROOM presence (O-POLISH: the quick-match host's `startAt` deadline, read by the guests' countdown); cleared with the room */
+  private roomExtra: Record<string, unknown> = {};
+  publish(extra: Record<string, unknown>): void {
+    this.roomExtra = { ...this.roomExtra, ...extra };
+    if (this.channel && !this.started) void this.channel.track({ ...this.meta(), ...this.roomExtra } as Record<string, unknown>);
   }
 
   /** "Start now with bots" (D8 button): the host starts on its next check */
@@ -369,7 +377,9 @@ export class Room {
   /** Join a room by code. Resolves at START (or with `running` when the match is already on: replay-join). */
   async joinCode(code: string, o: WaitOpts = {}): Promise<StartResult | null> {
     await this.joinRoom(code);
-    return this.waitForStart({ onStatus: o.onStatus });
+    // `makeStart` lets a guest that BECOMES the lowest id (the host left the lobby) start the match; waitMs stays 0, so a joiner never
+    // starts anything on its own except through startNow() / a full room (the lobby offers START only once it has seen a host)
+    return this.waitForStart({ onStatus: o.onStatus, makeStart: o.makeStart });
   }
 
   /**
@@ -472,7 +482,7 @@ export class Room {
 
   private leaveRoomOnly(): void {
     const sb = this.sb, ch = this.channel;
-    this.channel = null; this.room = null;
+    this.channel = null; this.room = null; this.roomExtra = {};
     if (ch && sb) { try { void ch.untrack(); void sb.removeChannel(ch); } catch { /* gone */ } }
   }
 

@@ -315,6 +315,20 @@
 .bt-vsend-who span.bt-vsend-why { font-size: calc(var(--u) * .6); letter-spacing: .1em; opacity: 1; color: var(--navy); }
 .bt-vsend-who span.bt-vsend-why.out { color: var(--red); }
 .bt-vsend-who span.bt-vsend-why.in { color: #1d6b72; }
+.bt-vsend-goals {
+  display: flex; align-items: center; gap: calc(var(--u) * 1.2); padding: calc(var(--u) * .5) calc(var(--u) * 1.6); background: #fff3c9; border-top: calc(var(--u) * .2) solid var(--ink);
+  border-bottom: calc(var(--u) * .2) solid var(--ink);
+}
+.bt-vsend-goalk { flex: 0 0 auto; display: flex; flex-direction: column; font-family: var(--f-mono); color: var(--red); }
+.bt-vsend-goalk b { font-family: var(--f-display); font-weight: 400; font-size: calc(var(--u) * 1.5); letter-spacing: .08em; line-height: 1; }
+.bt-vsend-goalk small { font-weight: 700; font-size: calc(var(--u) * .5); letter-spacing: .14em; color: var(--navy); opacity: .7; }
+.bt-vsend-goallist { flex: 1 1 auto; display: flex; flex-wrap: wrap; gap: calc(var(--u) * .5); min-width: 0; }
+.bt-vsend-goal {
+  display: flex; flex-direction: column; gap: calc(var(--u) * .05); min-width: 0; padding: calc(var(--u) * .25) calc(var(--u) * .7); background: var(--navy); color: var(--cream);
+  border-left: calc(var(--u) * .35) solid var(--coral);
+}
+.bt-vsend-goal b { font-family: var(--f-display); font-weight: 400; font-size: calc(var(--u) * 1.05); letter-spacing: .06em; line-height: 1.1; }
+.bt-vsend-goal span { font-family: var(--f-mono); font-weight: 700; font-size: calc(var(--u) * .5); letter-spacing: .06em; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: calc(var(--u) * 24); }
 .bt-vsend-rule {
   display: flex; flex-direction: column; gap: calc(var(--u) * .15); padding: calc(var(--u) * .5) calc(var(--u) * 1.6); background: var(--navy); color: var(--cream);
   font-family: var(--f-mono); text-align: center;

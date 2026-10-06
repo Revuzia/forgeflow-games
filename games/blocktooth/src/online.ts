@@ -17,7 +17,7 @@
 import type { BiomeId, TitanId, TitanInput, World } from './core/types.ts';
 import { TITAN_IDS } from './core/types.ts';
 import { VS, titanSpeed } from './core/config.ts';
-import { botName } from './data/strings_vs.ts';
+import { VS as STR_VS, botName, titanTag, vsFmt } from './data/strings_vs.ts';
 import { NET_PROTO, SEATS, TICK_MS, type StartInfo } from './net/proto.ts';
 import { OnlineSession, type SessionEvent } from './net/session.ts';
 import { QUICK_WAIT_MS, type PresenceMeta, type RoomStatus, type StartResult } from './net/room.ts';
@@ -36,9 +36,12 @@ export interface LobbySeat {
   titan: TitanId | null;
   host: boolean;
   me: boolean;
+  /** an open seat whose player left the lobby (name; '' = unknown): the card says "X LEFT · SEAT OPEN" instead of a plain open seat */
+  left: string | null;
 }
 
-export type LobbyPhase = 'connecting' | 'seeking' | 'waiting' | 'starting' | 'loading' | 'full' | 'version' | 'error' | 'noroom';
+/** 'looking' / 'noroom': JOIN WITH CODE and no host has been seen in that room yet (looking for ~8 s, then ROOM NOT FOUND while still listening) */
+export type LobbyPhase = 'connecting' | 'seeking' | 'looking' | 'waiting' | 'starting' | 'loading' | 'full' | 'version' | 'error' | 'noroom';
 
 export interface LobbyState {
   mode: OnlineMode;
@@ -58,6 +61,10 @@ export interface LobbyState {
   /** while the START is being loaded: how many humans have finished loading (null = not loading) */
   loading: { ready: number; total: number } | null;
   error: string | null;
+  /** the city (biome id) the room's host picked: published in the host's presence, shown in the lobby header (null = no host seen yet) */
+  city: string | null;
+  /** this peer was promoted to host because the host left the lobby (the lobby says so; START stays available) */
+  hostLeft: boolean;
 }
 
 export interface Notice {
@@ -110,7 +117,12 @@ export interface OnlineHooks {
   failed(why: string, where: 'lobby' | 'match'): void;
 }
 
+const N = STR_VS.notice;
 const TICK_S = TICK_MS / 1000;
+/** JOIN WITH CODE: how long the lobby shows LOOKING FOR ROOM before it says ROOM NOT FOUND (it keeps listening either way) */
+const LOOK_MS = 8000;
+/** an open seat keeps its "X LEFT" label this long */
+const LEFT_SHOW_MS = 60000;
 /** prediction: the local titan is drawn this far (s) ahead of the confirmed state, at most */
 const PREDICT_MAX_S = 0.28;
 const PREDICT_BLEND_PER_S = 11;
@@ -175,7 +187,7 @@ export function buildInfo(start: StartInfo, seat: number): VsMatchInfo {
   for (let slot = 0; slot < SEATS; slot++) {
     const s = start.seats[slot];
     const bot = !s || s.kind === 'bot';
-    const nm = bot ? botName(slot, start.seed) : { unit: slot === seat ? 'YOU' : cleanName(s.name) || 'PLAYER', sign: '' };
+    const nm = bot ? botName(slot, start.seed) : { unit: slot === seat ? 'YOU' : cleanName(s.name) || N.player, sign: '' };
     seats.push({
       slot, titan: asTitan(s ? s.titan : null) ?? 'molo', name: nm.unit, sign: nm.sign, bot,
       level: bot ? botLevelOf(s ? s.botLevel : undefined) : null, color: VS.seatColors[slot] ?? '#ffffff',
@@ -218,7 +230,18 @@ export class OnlineMatch {
   private lobbyTimer = 0;
   private lobbyPhaseOverride: LobbyPhase | null = null;
   private lobbyError: string | null = null;
-  private tAlone = 0;
+  /** JOIN: when this peer started looking for a host (the 8 s LOOKING -> ROOM NOT FOUND timer) */
+  private tLook = 0;
+  /** has this peer EVER seen another compatible human in the room? (a promoted host must not fall back to "room not found") */
+  private sawOther = false;
+  /** the humans seen in this room (id -> name) and when each one left: the open seats of leavers say "X LEFT" */
+  private seen = new Map<string, string>();
+  private gone: { id: string; name: string; at: number }[] = [];
+  private prevHost: string | null = null;
+  private promoted = false;
+  /** quick match host: the deadline last published in the room presence */
+  private pubRoom: string | null = null;
+  private pubAt = 0;
   private pre: { matchId: string; w: World } | null = null;
   private inner!: SimPort<World>;
   private rematchPoll = 0;
@@ -272,7 +295,7 @@ export class OnlineMatch {
       build: o.build,
       name: o.name,
       gameId: o.gameId,
-      info: { titan: o.titan },
+      info: { titan: o.titan, biome: o.biome },
       sim: port,
       makeStart: (humans) => this.makeStart(humans),
       onEvent: (e) => this.onSession(e),
@@ -342,7 +365,7 @@ export class OnlineMatch {
         const m = pres[id] as PresenceMeta | undefined;
         const t = asTitan(m ? m.titan : null) ?? (id === room.id ? o.titan : 'molo');
         used.add(t);
-        seats.push({ kind: 'human', peer: id, name: cleanName(m ? m.name : '') || 'PLAYER', titan: t });
+        seats.push({ kind: 'human', peer: id, name: cleanName(m ? m.name : '') || N.player, titan: t });
       } else seats.push({ kind: 'bot', peer: null, name: '', titan: 'molo', botLevel: 1 });
     }
     // the bots play the titans no human picked (in TITAN_IDS order), then repeat
@@ -419,6 +442,7 @@ export class OnlineMatch {
     switch (e.type) {
       case 'status':
         this.lastStatus = e.status;
+        this.publishDeadline(e.status);
         if (!this.live) this.pushLobby();
         break;
       case 'started': {
@@ -433,7 +457,7 @@ export class OnlineMatch {
         this.pingPoll = window.setInterval(() => this.pollPing(), 1000);
         if (this.info) this.hooks.started(this.info, this.seat, e.joined);
         this.opts.log?.('ol: started hook done @' + Math.round(performance.now()));
-        if (e.unreachable.length > 0) this.say('unreach', 'COULDN’T REACH ' + e.unreachable.length + ' PLAYER' + (e.unreachable.length > 1 ? 'S' : '') + ' DIRECTLY — A BOT PLAYS THEIR SEAT', 'warn', 6000);
+        if (e.unreachable.length > 0) this.say('unreach', vsFmt(N.unreach, { n: e.unreachable.length, who: e.unreachable.length > 1 ? N.players : N.player }), 'warn', 6000);
         break;
       }
       case 'net': this.onNet(e.ev); break;
@@ -448,8 +472,8 @@ export class OnlineMatch {
       case 'authority': {
         if (ev.epoch <= 0) break;
         const me = ev.id === this.session.room.id;
-        if (me) this.say('auth', 'HOST LEFT — YOU ARE NOW RUNNING THE CLOCK', 'warn', 6500);
-        else this.say('auth', 'HOST LEFT — ' + this.nameOfPeer(ev.id) + ' IS NOW RUNNING THE CLOCK', 'warn', 6500);
+        if (me) this.say('auth', N.hostLeftYou, 'warn', 6500);
+        else this.say('auth', vsFmt(N.hostLeft, { name: this.nameOfPeer(ev.id) }), 'warn', 6500);
         break;
       }
       case 'late': {
@@ -487,10 +511,10 @@ export class OnlineMatch {
     const st = this.start;
     if (st) {
       const s = st.seats.find((x) => x.peer === id);
-      if (s) return cleanName(s.name) || 'PLAYER';
+      if (s) return cleanName(s.name) || N.player;
     }
     const m = this.session.room.presence()[id];
-    return cleanName(m ? m.name : '') || 'PLAYER';
+    return cleanName(m ? m.name : '') || N.player;
   }
 
   private say(key: string, text: string, tone: Notice['tone'], ttlMs: number): void {
@@ -502,6 +526,19 @@ export class OnlineMatch {
 
   // ─────────────────────────────── the lobby ───────────────────────────────
 
+  /** QUICK MATCH host: put the bots-fill deadline in the room presence (wall clock) so the guests' countdown shows THIS room's clock
+   *  (a guest's own waitForStart clock starts when it arrived, 5-15 s after the host's: it showed 20 while the host showed 15) */
+  private publishDeadline(st: RoomStatus): void {
+    if (this.opts.mode !== 'quick' || !this.session) return;
+    if (st.phase !== 'waiting' || !st.host || !st.room) { if (st.room !== this.pubRoom) this.pubAt = 0; return; }
+    const at = Date.now() + st.waitLeftMs;
+    if (this.pubRoom === st.room && this.pubAt > 0 && Math.abs(at - this.pubAt) < 1500) return;
+    this.pubRoom = st.room;
+    this.pubAt = at;
+    try { this.session.publish({ startAt: at }); } catch { /* not joined */ }
+  }
+
+  /** the lobby's view of "who is here": seats, leavers, and what a JOIN that has not found a host yet shows */
   private pushLobby(force?: LobbyPhase): void {
     if (force) this.lobbyPhaseOverride = force;
     const o = this.opts;
@@ -509,17 +546,42 @@ export class OnlineMatch {
     const st = this.lastStatus;
     const pres = room ? room.presence() : {};
     const humans = st ? st.humans : room ? room.humans() : [];
+    const now = performance.now();
+    const myId = room ? room.id : null;
+    // ── who has been here: a promoted host must not fall back to "room not found" (it has seen a host), and an open seat remembers its leaver
+    if (o.mode !== 'quick') {
+      for (const id of humans) {
+        if (id === myId) continue;
+        this.sawOther = true;
+        const m = pres[id] as PresenceMeta | undefined;
+        this.seen.set(id, cleanName(m ? m.name : '') || N.player);
+        this.gone = this.gone.filter((g) => g.id !== id);
+      }
+      for (const [id, name] of this.seen) {
+        if (!humans.includes(id)) { this.seen.delete(id); this.gone.push({ id, name, at: now }); }
+      }
+      if (this.gone.length) this.gone = this.gone.filter((g) => now - g.at < LEFT_SHOW_MS);
+      const h0 = humans[0] ?? null;
+      if (this.prevHost && this.prevHost !== myId && h0 === myId && !humans.includes(this.prevHost)) this.promoted = true;
+      if (humans.length > 1 && h0 !== myId) this.promoted = false;       // someone older is the host again
+      if (h0 && h0 !== this.prevHost) this.opts.log?.('ol: lobby host ' + this.prevHost + ' -> ' + h0 + ' (me ' + myId + ', humans ' + humans.join(',') + ')');
+      if (h0) this.prevHost = h0;
+    }
     const seats: LobbySeat[] = [];
+    const leavers = this.gone.slice().sort((a, b) => b.at - a.at);
     for (let i = 0; i < SEATS; i++) {
       const id = humans[i] ?? null;
       if (id) {
         const m = pres[id] as PresenceMeta | undefined;
-        seats.push({ slot: i, open: false, id, name: cleanName(m ? m.name : '') || (room && id === room.id ? cleanName(o.name) : 'PLAYER'),
-          titan: asTitan(m ? m.titan : null) ?? (room && id === room.id ? o.titan : null), host: i === 0, me: !!room && id === room.id });
-      } else seats.push({ slot: i, open: true, id: null, name: '', titan: null, host: false, me: false });
+        seats.push({ slot: i, open: false, id, name: cleanName(m ? m.name : '') || (room && id === room.id ? cleanName(o.name) : N.player),
+          titan: asTitan(m ? m.titan : null) ?? (room && id === room.id ? o.titan : null), host: i === 0, me: !!room && id === room.id, left: null });
+      } else {
+        const lv = leavers.shift();
+        seats.push({ slot: i, open: true, id: null, name: '', titan: null, host: false, me: false, left: lv ? lv.name : null });
+      }
     }
     const filled = seats.filter((s) => !s.open).length;
-    const host = !!st && st.host;
+    let host = !!st && st.host;
     let phase: LobbyPhase = this.lobbyPhaseOverride ?? 'connecting';
     if (!this.lobbyPhaseOverride || this.lobbyPhaseOverride === 'connecting') {
       if (!st) phase = 'connecting';
@@ -528,20 +590,42 @@ export class OnlineMatch {
       else if (st.phase === 'starting' || st.phase === 'started') phase = 'starting';
       else phase = o.mode === 'quick' ? 'seeking' : 'waiting';
     }
-    // a joiner alone in the room: nobody has opened it (yet)
-    if (phase === 'waiting' && o.mode === 'join' && filled <= 1) {
-      this.tAlone = this.tAlone || performance.now();
-      if (performance.now() - this.tAlone > 8000) phase = 'noroom';
-    } else this.tAlone = 0;
+    // JOIN WITH CODE and no host seen yet (a mistyped / not-yet-opened room): the lowest id in an EMPTY channel is the joiner itself, so
+    // the room layer calls it "host" - the lobby must not show host UI for it. LOOKING for LOOK_MS, then ROOM NOT FOUND (still listening).
+    // Only a peer that has never seen another human goes here: a promoted host (the host left) keeps the normal host phase + START.
+    if (phase === 'waiting' && o.mode === 'join' && !this.sawOther) {
+      this.tLook = this.tLook || now;
+      phase = now - this.tLook > LOOK_MS ? 'noroom' : 'looking';
+      host = false;
+      for (const x of seats) x.host = false;
+    }
     // a room I cannot play in (another version / full / the matchmaker is down): I am nobody's host there
     if (phase === 'version' || phase === 'full' || phase === 'error') for (const x of seats) x.host = false;
     const strangers = room ? room.strangers().length : 0;
     const code = o.mode === 'quick' ? null : (room && room.room) || o.code;
-    const waitLeftS = o.mode === 'quick' && st && (st.phase === 'waiting') ? Math.ceil(st.waitLeftMs / 1000) : null;
+    // the bots-fill countdown: the host reads its own clock, a guest the DEADLINE THE HOST PUBLISHED (hidden until it arrives)
+    let waitLeftS: number | null = null;
+    if (o.mode === 'quick' && st && st.phase === 'waiting') {
+      if (st.host) waitLeftS = Math.ceil(st.waitLeftMs / 1000);
+      else {
+        const hm = humans.length ? (pres[humans[0]] as PresenceMeta | undefined) : undefined;
+        const at = hm && typeof hm.startAt === 'number' ? hm.startAt : 0;
+        if (at > 0) waitLeftS = Math.max(0, Math.min(Math.ceil((o.quickWaitMs ?? QUICK_WAIT_MS) / 1000), Math.ceil((at - Date.now()) / 1000)));
+      }
+    }
+    // the city the room's host picked (published in its presence next to the titan pick); unknown until a host is seen
+    let city: string | null = null;
+    if (phase !== 'looking' && phase !== 'noroom' && phase !== 'connecting') {
+      const hid = humans.length ? humans[0] : null;
+      const hm = hid ? (pres[hid] as PresenceMeta | undefined) : undefined;
+      if (hid && hid === myId) city = o.biome;
+      else if (hm && typeof hm.biome === 'string' && hm.biome) city = hm.biome;
+    }
     this.hooks.lobby({
       mode: o.mode, phase, code, inviteUrl: code ? inviteUrl(code) : null, seats, filled, host,
       canStartNow: host && (phase === 'seeking' || phase === 'waiting'), waitLeftS, strangers, error: this.lobbyError,
       loading: phase === 'loading' && this.loadTotal > 1 ? { ready: this.readySet.size, total: this.loadTotal } : null,
+      city, hostLeft: this.promoted && host,
     });
   }
 
@@ -610,9 +694,9 @@ export class OnlineMatch {
     }
     // stalls: the sim did not advance for STALL_MS while this tab is visible and the match is not over
     if (p.simTick === 0) this.lastTickAt = now;        // a slow first tick (the match is still loading its first frames) is not a lost connection
-    if (p.simTick !== this.lastTick) { this.lastTick = p.simTick; this.lastTickAt = now; if (this.connection === 'lost') { this.setConnection('ok'); this.say('rec', 'RECONNECTED', 'good', 2500); } }
+    if (p.simTick !== this.lastTick) { this.lastTick = p.simTick; this.lastTickAt = now; if (this.connection === 'lost') { this.setConnection('ok'); this.say('rec', N.reconnected, 'good', 2500); } }
     else if (!p.finished && !w.run.result && p.state !== 'desynced' && p.state !== 'left' && !document.hidden && now - this.lastTickAt > STALL_MS) {
-      if (this.connection === 'ok' || this.connection === 'lagging') { this.setConnection('lost'); this.sayKeyed('rec', 'CONNECTION LOST — TRYING TO RECONNECT…', 'bad', 6000); }
+      if (this.connection === 'ok' || this.connection === 'lagging') { this.setConnection('lost'); this.sayKeyed('rec', N.reconnecting, 'bad', 6000); }
     }
     if (catching && this.connection === 'ok' && behind > 45) this.setConnection('catchup');
     else if (!catching && this.connection === 'catchup') this.setConnection('ok');
@@ -623,23 +707,23 @@ export class OnlineMatch {
     const p = this.session.peer;
     const me = i === this.seat;
     const seatInfo = info ? info.seats[i] : null;
-    const titan = seatInfo ? (seatInfo.titan === 'voltkite' ? 'VOLT-KITE' : seatInfo.titan.toUpperCase()) : 'A TITAN';
+    const titan = seatInfo ? titanTag(seatInfo.titan) : N.aTitan;
     if (bot) {
-      if (me) this.say('mine', 'A BOT TOOK YOUR SEAT', 'bad', 7000);
-      else this.say('flip' + i, (seatInfo && !seatInfo.bot ? seatInfo.name : 'A PLAYER') + ' DROPPED OUT — A BOT IS DRIVING', 'warn', 5000);
+      if (me) this.say('mine', N.botTookYours, 'bad', 7000);
+      else this.say('flip' + i, vsFmt(N.dropped, { name: seatInfo && !seatInfo.bot ? seatInfo.name : N.aPlayer }), 'warn', 5000);
     } else if (me) {
-      if (tookOver) this.say('mine', 'YOU TOOK OVER A BOT — ' + titan, 'good', 6000);
-      else this.say('mine', 'YOU ARE BACK IN CONTROL', 'good', 4000);
+      if (tookOver) this.say('mine', vsFmt(N.youTookOver, { titan }), 'good', 6000);
+      else this.say('mine', N.youAreBack, 'good', 4000);
     } else {
       // name of whoever sits there now (the roster maps seat -> room peer -> presence name)
-      let name = 'A PLAYER';
+      let name: string = N.aPlayer;
       if (p) { const r = p.roster()[i]; if (r && r.peer) name = this.nameOfPeer(r.peer); }
-      this.say('flip' + i, tookOver ? name + ' TOOK OVER ' + titan : name + ' IS BACK IN CONTROL', 'info', 5000);
+      this.say('flip' + i, vsFmt(tookOver ? N.tookOver : N.back, { name, titan }), 'info', 5000);
     }
     // the HUD's seat cards: a human now / a bot now
     if (seatInfo && info) {
       if (!bot && !me) {
-        let name = 'PLAYER';
+        let name: string = N.player;
         if (p) { const r = p.roster()[i]; if (r && r.peer) name = this.nameOfPeer(r.peer); }
         seatInfo.name = name; seatInfo.sign = ''; seatInfo.bot = false; seatInfo.level = null;
       } else if (!bot && me) {
@@ -662,11 +746,11 @@ export class OnlineMatch {
     if (rtt < 0) return;
     if (rtt > PING_WARN_MS) {
       this.pingHigh++;
-      if (this.pingHigh >= 3 && !this.pingWarned) { this.pingWarned = true; this.sayKeyed('ping', 'HIGH PING ' + Math.round(rtt) + ' MS — YOUR MOVES MAY ARRIVE LATE', 'warn', 8000); }
-      else if (this.pingWarned) this.sayKeyed('ping', 'HIGH PING ' + Math.round(rtt) + ' MS — YOUR MOVES MAY ARRIVE LATE', 'warn', 4000);
+      if (this.pingHigh >= 3 && !this.pingWarned) { this.pingWarned = true; this.sayKeyed('ping', vsFmt(N.ping, { ms: Math.round(rtt) }), 'warn', 8000); }
+      else if (this.pingWarned) this.sayKeyed('ping', vsFmt(N.ping, { ms: Math.round(rtt) }), 'warn', 4000);
     } else {
       this.pingHigh = 0;
-      if (this.pingWarned && rtt < PING_CLEAR_MS) { this.pingWarned = false; this.sayKeyed('ping', 'PING IS BACK TO NORMAL', 'good', 2500); }
+      if (this.pingWarned && rtt < PING_CLEAR_MS) { this.pingWarned = false; this.sayKeyed('ping', N.pingOk, 'good', 2500); }
     }
   }
 
