@@ -3,12 +3,12 @@
 // when it exists and loads, else the dev stub), then drives deterministic scripted scenarios and exposes window.__RV__.
 //   ?genome=<seed|g1.code>  ?quality=low|med|high|auto  ?state=rest|press|stretch|float|bounce  ?body=stub|real  ?loop=1 (live rAF)
 import * as THREE from 'three';
-import { createStageDev, type StageDev } from '../../src/render/stage.ts';
+import { createStageDev, type StageDev } from '../../src/render/stageDev.ts';
 import { StubBody } from '../../src/render/stubBody.ts';
 import { genomeFromParam, type Genome } from '../../src/core/genome.ts';
-import type { CapsuleHandle, CeremonyHandle, FxKind, QualityTier, SoftBodyCtor, SoftBodyLike, SoftEvent, TierName, V3 } from '../../src/contracts.ts';
+import type { CapsuleHandle, CeremonyHandle, CutPlane, FxKind, QualityTier, SoftBodyCtor, SoftBodyLike, SoftEvent, TierName, V3 } from '../../src/contracts.ts';
 import { capsuleDuration, mergeDuration } from '../../src/render/ceremony.ts';
-import { speciesBaseGenome } from '../../src/data/catalog.ts';
+import { getSpecies, speciesBaseGenome } from '../../src/data/catalog.ts';
 
 type BodyKind = 'real' | 'stub';
 const params = new URLSearchParams(location.search);
@@ -119,12 +119,20 @@ const lumaCanvas = document.createElement('canvas');
 lumaCanvas.width = 64; lumaCanvas.height = 48;
 const lumaCtx = lumaCanvas.getContext('2d', { willReadFrequently: true });
 /** Mean RELATIVE luminance (linear light, 0..1) of the canvas as it is right now (call right after a render). */
+/** The same luminance in each cell of a 3x3 grid, from the last meanLuma() call (local flashes: the frame centre must not be busier than the whole). */
+const lastGrid = new Float64Array(9);
 function meanLuma(): number {
   if (!lumaCtx) return 0;
   lumaCtx.drawImage(canvas, 0, 0, 64, 48);
   const d = lumaCtx.getImageData(0, 0, 64, 48).data;
   let s = 0;
-  for (let i = 0; i < d.length; i += 4) s += 0.2126 * LUMA_LUT[d[i]] + 0.7152 * LUMA_LUT[d[i + 1]] + 0.0722 * LUMA_LUT[d[i + 2]];
+  lastGrid.fill(0);
+  for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+    const l = 0.2126 * LUMA_LUT[d[i]] + 0.7152 * LUMA_LUT[d[i + 1]] + 0.0722 * LUMA_LUT[d[i + 2]];
+    s += l;
+    lastGrid[Math.min(2, Math.floor(((p / 64) | 0) / 16)) * 3 + Math.min(2, Math.floor((p % 64) / 21.34))] += l;
+  }
+  for (let k = 0; k < 9; k++) lastGrid[k] /= (64 * 48) / 9;
   return s / (d.length / 4);
 }
 interface BeatRec { beat: string; t: number; tier: string; frame: number }
@@ -274,7 +282,7 @@ const RV = {
     beats: BeatRec[]; doneResolved: boolean; resultVisibleAtEnd: boolean; fingerprint: number[]; bodiesAtEnd: number; ramps: number; camRange: number; resultClock: number;
     finalState: { ceremony: boolean; capsule: boolean; screenLight: number; cameraFx: { dist: number; yaw: number; pitch: number }; primaryIsResult: boolean };
     stats: Record<string, number>; drivers: typeof driverSpy; native: boolean[]; foldMax: number; resultHiddenFrames: number; particlesDropped: number;
-    minTopPx: number; minSidePx: number;
+    minTopPx: number; minSidePx: number; grids: number[][];
   }> {
     const dt = o.dt ?? 1 / 30;
     driverMode = o.drivers ?? 'auto';
@@ -308,7 +316,7 @@ const RV = {
         }
       }
     };
-    const lumas: number[] = [];
+    const lumas: number[] = [], grids: number[][] = [];
     let maxLight = 0, maxParticles = 0, frames = 0, skippedAt = -1, activeAfterSkip = -1, activeFrames = 0, ramps = 0, prevLight = 0, camMove = 0;
     while (h.active && frames < 3000) {
       if (o.skipAt !== undefined && skippedAt < 0 && frames * dt >= o.skipAt) {
@@ -324,7 +332,7 @@ const RV = {
       }
       frame(dt);
       watch();
-      lumas.push(meanLuma());
+      lumas.push(meanLuma()); grids.push(Array.from(lastGrid));
       const L = stage.info.screenLight;
       maxLight = Math.max(maxLight, L); maxParticles = Math.max(maxParticles, stage.info.particles);
       if (L > 0.01 && prevLight <= 0.01) ramps++;
@@ -343,7 +351,7 @@ const RV = {
       duration, budget, frames: natural ? activeFrames : skippedAt, seconds: (natural ? activeFrames : skippedAt) * dt, skippedAtFrame: skippedAt, activeAfterSkip, lumas, maxLight, maxParticles,
       beats: cer.beats.slice(), doneResolved, resultVisibleAtEnd: !!stage.primaryBodyId() && stage.info.bodies === 1, fingerprint: fp, bodiesAtEnd: stage.info.bodies, ramps, camRange: camMove,
       resultClock: stage.views.find((v) => v.id === h.resultBodyId)?.clock ?? -1,
-      stats, drivers: { ...driverSpy }, native, foldMax, resultHiddenFrames, particlesDropped: stage.info.particlesDropped - dropped0, minTopPx, minSidePx,
+      stats, drivers: { ...driverSpy }, native, foldMax, resultHiddenFrames, particlesDropped: stage.info.particlesDropped - dropped0, minTopPx, minSidePx, grids,
       finalState: { ceremony: stage.info.ceremony, capsule: stage.info.capsule, screenLight: stage.info.screenLight, cameraFx: { ...stage.info.cameraFx }, primaryIsResult: stage.primaryBodyId() === h.resultBodyId },
     };
   },
@@ -1018,6 +1026,305 @@ const RV = {
     const after = series[series.length - 1];
     stage.clearBodies(); setupBody(genomeFromParam(''));
     return { before, after, series: series.filter((_, i) => i % 10 === 0), maxStep, minDuring };
+  },
+
+  /**
+   * CUT with the REAL soft body and the shell's own call order (src/shell/cut.ts + bodies.ts): per cut, every frame of the neck
+   * body.setNeck(plane, t) + stage.setCutSeam(view, plane, t); at the end the cut body is replaced by two pieces built with
+   * new SoftBody(g, { piece }), the FACE piece through stage.setBody (bodies.swapTo: clearBodies + addBody, then every chunk's view straight
+   * back) and the chunk through stage.addBody({ chunk: true }), then stage.partPieces; the pieces collide with each other (bodies.step),
+   * the new chunk is held at its lobe for 0.8 s (moveTo); Reconnect all = setFrac on every piece + setBridge each frame + moveTo, then the chunks
+   * are removed and a fresh WHOLE body replaces the face piece through setBody. Returns what the checks and the filmstrips need.
+   * `swipes` = for each cut, where across the biggest piece the swipe goes (in rest radii from its centre: 0 = through the middle).
+   */
+  realCutProbe(o: { species: string; seed?: number; swipes: number[]; /** each cut splits the biggest piece so that its smaller part is about this share of the WHOLE (0 = use `swipes`) */ autoSmall?: number; calm?: boolean; dt?: number; gapS?: number; reconnect?: boolean; record?: boolean; shots?: boolean }): {
+    skipped: boolean; family: string; lumas: number[]; light: number[]; marks: string[]; cutsDone: number; refused: number; maxPieces: number; maxStrands: number; maxBridges: number; maxGlow: number;
+    strandEvents: number; snapEvents: number; seamCarry: number[]; minTopPx: number; minTopByPhase: Record<string, number>; framed: { pieces: number; inFrame: boolean; minPx: number }; viewsAtEnd: number; facesAtEnd: number; piecesAtEnd: number;
+    shots: Record<string, string>; ms: number;
+  } {
+    const out = { skipped: false, family: '', lumas: [] as number[], light: [] as number[], marks: [] as string[], cutsDone: 0, refused: 0, maxPieces: 1, maxStrands: 0, maxBridges: 0, maxGlow: 0,
+      strandEvents: 0, snapEvents: 0, seamCarry: [] as number[], minTopPx: Infinity, minTopByPhase: {} as Record<string, number>, framed: { pieces: 0, inFrame: true, minPx: Infinity }, viewsAtEnd: 0, facesAtEnd: 0, piecesAtEnd: 0, shots: {} as Record<string, string>, ms: 0 };
+    if (!RealBody) { out.skipped = true; return out; }
+    const SB = RealBody, t0 = performance.now();
+    const dt = o.dt ?? 1 / 30, g = speciesBaseGenome(o.species as Parameters<typeof speciesBaseGenome>[0], o.seed ?? 1), def = getSpecies(g.species), fam = def ? def.family : 'jellygel', tier = (def ? def.tier : 'common') as TierName;
+    out.family = fam;
+    const NECK_S: Record<string, number> = { firmsilicone: 0.4, popdome: 0.4, putty: 0.34, mochidough: 0.34, slowrise: 0.3, marshmallow: 0.3, stickystretch: 0.3, slimegoo: 0.3 };
+    const smooth = (x: number): number => { const t = x < 0 ? 0 : x > 1 ? 1 : x; return t * t * (3 - 2 * t); };
+    const unit = (a: V3): V3 | null => { const l = Math.hypot(a.x, a.y, a.z); return l > 1e-9 ? { x: a.x / l, y: a.y / l, z: a.z / l } : null; };
+    const cross = (a: V3, b: V3): V3 => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
+    const dot = (a: V3, b: V3): number => a.x * b.x + a.y * b.y + a.z * b.z;
+    interface Piece { body: SoftBodyLike; chunk: boolean; frac: number; id: number | null; ghost: boolean }
+    stage.clearBodies(); stage.setCalmEffects(!!o.calm);
+    const whole = new SB(g);
+    body = whole; genome = g;
+    stage.setBody(whole, g); stage.setBodyTier(stage.primaryBodyId() ?? -1, tier);
+    let list: Piece[] = [{ body: whole, chunk: false, frac: 1, id: null, ghost: false }];
+    let playBody: SoftBodyLike = whole;
+    const viewOf = (p: Piece): number | null => (p.body === playBody ? stage.primaryBodyId() : p.id);
+    let settling: { p: Piece; until: number }[] = [];
+    let tStart = -1;
+    const pv = new THREE.Vector3();
+    let phase = 'neck';
+    const watchTop = (): void => {
+      const chh = canvas.clientHeight || canvas.height;
+      let low = out.minTopByPhase[phase] ?? Infinity;
+      for (const v of stage.views) { const P = v.proxy.positions; for (let i = 0; i < P.length; i += 3) { pv.set(P[i], P[i + 1], P[i + 2]).project(stage.camera); const sy = (1 - (pv.y * 0.5 + 0.5)) * chh; if (sy < low) low = sy; } }
+      out.minTopByPhase[phase] = low;
+      if (phase === 'reconnect' && low < out.minTopPx) out.minTopPx = low;
+    };
+    const step = (record = true): void => {
+      const act = list.filter((p) => !p.ghost && typeof p.body.collide === 'function');
+      if (act.length >= 2) for (const p of act) p.body.collide!(act.filter((q) => q !== p).map((q) => q.body));
+      for (const p of list) { p.body.step(dt); events.length = 0; p.body.drainEvents(events); }
+      time += dt; frameNo++;
+      for (const s of settling.slice()) if (time >= s.until) { try { s.p.body.moveTo?.(null); } catch { /* optional */ } settling = settling.filter((x) => x !== s); }
+      stage.update(dt, { time, pointerNdc: null });
+      if (record && (o.record ?? true)) { stage.render(); out.lumas.push(meanLuma()); out.light.push(stage.info.screenLight); }
+      const c = stage.info.cut;
+      out.maxGlow = Math.max(out.maxGlow, c.glow); out.maxStrands = Math.max(out.maxStrands, c.strands); out.maxBridges = Math.max(out.maxBridges, c.bridges); out.maxPieces = Math.max(out.maxPieces, list.length);
+      if (tStart >= 0) watchTop();
+    };
+    const shot = (name: string): void => { if (o.shots) { stage.render(); out.shots[name] = canvas.toDataURL('image/jpeg', 0.9); } };
+    stage.onStrand = (_id, e): void => { if (e.snap) out.snapEvents++; else out.strandEvents++; };
+    for (let i = 0; i < 90; i++) step(false);
+    const swapTo = (face: Piece): void => {
+      stage.setBody(face.body, g); playBody = face.body; body = face.body;
+      stage.setBodyTier(stage.primaryBodyId() ?? -1, tier);
+      for (const x of list) if (x.body !== playBody) x.id = stage.addBody(x.body, g, { tier, position: { x: 0, y: 0, z: 0 }, chunk: true });
+    };
+    const planeFor = (p: Piece, dx: number): CutPlane | null => {
+      const cam = stage.camera; cam.updateMatrixWorld();
+      const c = new THREE.Vector3(p.body.center.x, p.body.center.y, p.body.center.z).project(cam);
+      const r = new THREE.Vector3(p.body.center.x + p.body.restRadius * dx, p.body.center.y, p.body.center.z).project(cam);
+      const ray = (nx: number, ny: number): V3 => { const v = new THREE.Vector3(nx, ny, 0.5).unproject(cam); v.sub(cam.position).normalize(); return { x: v.x, y: v.y, z: v.z }; };
+      const n = unit(cross(ray(r.x, c.y + 0.5), ray(r.x, c.y - 0.5)));
+      return n ? { point: { x: cam.position.x, y: cam.position.y, z: cam.position.z }, normal: n } : null;
+    };
+    const faceAnchor = (b: SoftBodyLike): V3 => {
+      const f = b.frame ?? { x: 0, y: 0, z: 0, w: 1 }, v = { x: 0, y: 0.08 * b.restRadius, z: 0.9 * b.restRadius };
+      const tx = f.y * v.z - f.z * v.y + f.w * v.x, ty = f.z * v.x - f.x * v.z + f.w * v.y, tz = f.x * v.y - f.y * v.x + f.w * v.z;
+      return { x: b.center.x + v.x + 2 * (f.y * tz - f.z * ty), y: b.center.y + v.y + 2 * (f.z * tx - f.x * tz), z: b.center.z + v.z + 2 * (f.x * ty - f.y * tx) };
+    };
+    const lobes = (b: SoftBodyLike, plane: CutPlane): { a: V3; b: V3 } | null => {
+      const P = b.positions, n = b.vertexCount; let ax = 0, ay = 0, az = 0, na = 0, bx = 0, by = 0, bz = 0, nb = 0;
+      for (let i = 0; i < n; i++) { const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2]; if ((x - plane.point.x) * plane.normal.x + (y - plane.point.y) * plane.normal.y + (z - plane.point.z) * plane.normal.z >= 0) { ax += x; ay += y; az += z; na++; } else { bx += x; by += y; bz += z; nb++; } }
+      return na && nb ? { a: { x: ax / na, y: ay / na, z: az / na }, b: { x: bx / nb, y: by / nb, z: bz / nb } } : null;
+    };
+    const cutOnce = (dx0: number): boolean => {
+      const p = [...list].sort((a, b) => b.frac - a.frac)[0];
+      let dx = dx0;
+      if (o.autoSmall) {   // the swipe whose smaller part is closest to the wanted share (what a player aims for to reach 6 pieces: unequal cuts)
+        let best = Infinity;
+        for (let k = -26; k <= 26; k++) {
+          const d = k * 0.04, pl = planeFor(p, d), f = pl ? p.body.measureCut!(pl) : null;
+          if (f === null) continue;
+          const err = Math.abs(Math.min(f, 1 - f) * p.frac - o.autoSmall);
+          if (err < best) { best = err; dx = d; }
+        }
+      }
+      const plane = planeFor(p, dx);
+      const fa = plane ? p.body.measureCut!(plane) : null;
+      if (!plane || fa === null || Math.min(fa, 1 - fa) * p.frac < 1 / 8 - 1e-6 || list.length + 1 > 6) { out.refused++; return false; }
+      const neckS = NECK_S[fam] ?? 0.25;
+      let faceA = false;
+      if (!p.chunk) { const sd = dot({ x: faceAnchor(p.body).x - plane.point.x, y: faceAnchor(p.body).y - plane.point.y, z: faceAnchor(p.body).z - plane.point.z }, plane.normal); faceA = Math.abs(sd) < 0.03 * p.body.restRadius ? fa >= 0.5 : sd >= 0; }
+      const view = viewOf(p), tc = time;
+      if (tStart < 0) tStart = time;
+      phase = 'neck';
+      while (time - tc < neckS + 0.08) {
+        const k = smooth((time - tc) / neckS);
+        p.body.setNeck!(plane, k); if (view !== null) stage.setCutSeam!(view, plane, k);
+        step();
+      }
+      const B = p.body;
+      B.setNeck!(null, 0); if (view !== null) stage.setCutSeam!(view, null, 0);
+      const fA = p.frac * fa, fB = p.frac * (1 - fa), lc = lobes(B, plane) ?? { a: B.center, b: B.center }, n = plane.normal, push = 0.22;
+      const faceHere = faceA && !p.chunk, faceThere = !faceA && !p.chunk;
+      const pa = new SB(g, { piece: { frac: fA, chunk: !faceHere, cutNormal: { x: -n.x, y: -n.y, z: -n.z }, at: lc.a, vel: { x: n.x * push, y: 0, z: n.z * push } } });
+      const pb = new SB(g, { piece: { frac: fB, chunk: !faceThere, cutNormal: { x: n.x, y: n.y, z: n.z }, at: lc.b, vel: { x: -n.x * push, y: 0, z: -n.z * push } } });
+      const A: Piece = { body: pa, chunk: !faceHere, frac: fA, id: null, ghost: false }, Bp: Piece = { body: pb, chunk: !faceThere, frac: fB, id: null, ghost: false };
+      if (!p.chunk) {
+        const face = faceA ? A : Bp;
+        list = [face, faceA ? Bp : A, ...list.filter((x) => x !== p)];
+        swapTo(face);
+      } else {
+        if (p.id !== null) stage.removeBody(p.id);
+        list = list.flatMap((q) => (q === p ? [A, Bp] : [q]));
+        for (const q of [A, Bp]) q.id = stage.addBody(q.body, g, { tier, position: { x: 0, y: 0, z: 0 }, chunk: true });
+      }
+      for (const [q, c, s] of [[A, lc.a, 1], [Bp, lc.b, -1]] as [Piece, V3, number][]) if (q.chunk) { try { q.body.moveTo?.({ x: c.x + s * n.x * 0.06, y: c.y, z: c.z + s * n.z * 0.06 }, 4); settling.push({ p: q, until: time + 0.8 }); } catch { /* optional */ } }
+      const ia = viewOf(A), ib = viewOf(Bp);
+      if (ia !== null && ib !== null) stage.partPieces!(ia, ib);
+      // the seam must be carried over onto the new pieces by now (one frame later): their views' seam strength
+      stage.update(0, { time, pointerNdc: null });
+      out.seamCarry.push(Math.max(0, ...stage.views.map((v) => v.seamAmount)));
+      phase = 'pieces';
+      out.cutsDone++; out.marks.push(`cut ${out.cutsDone}@${(time - tStart).toFixed(2)}`);
+      return true;
+    };
+    for (let c = 0; c < o.swipes.length; c++) {
+      if (cutOnce(o.swipes[c])) for (let i = 0, n = Math.round((o.gapS ?? 0.45) / dt); i < n; i++) step();
+      if (c === 0) shot('cut1');
+    }
+    for (let i = 0; i < Math.round(1.0 / dt); i++) step();
+    shot('pieces');
+    // framed: every piece inside the frame once the camera has framed them
+    {
+      const cam = stage.camera, W = canvas.clientWidth || canvas.width, H = canvas.clientHeight || canvas.height;
+      out.framed.pieces = stage.views.length;
+      for (const v of stage.views) {
+        let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+        const P = v.proxy.positions;
+        for (let i = 0; i < P.length; i += 3) { pv.set(P[i], P[i + 1], P[i + 2]).project(cam); const sx = (pv.x * 0.5 + 0.5) * W, sy = (1 - (pv.y * 0.5 + 0.5)) * H; x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); }
+        if (x0 < 0 || y0 < 0 || x1 > W || y1 > H) out.framed.inFrame = false;
+        out.framed.minPx = Math.min(out.framed.minPx, x1 - x0);
+      }
+    }
+    if (o.reconnect !== false && list.length > 1) {
+      phase = 'reconnect';
+      const face = list[0], secs = 1.2;
+      face.body.setFrac!(1, secs);
+      for (const q of list.slice(1)) { q.body.setFrac!(1 / 8, secs); q.ghost = true; }
+      const tr = time;
+      while (time - tr < secs) {
+        const k = smooth((time - tr) / secs);
+        for (const q of list.slice(1)) { stage.setBridge!(viewOf(face)!, viewOf(q)!, k); q.body.moveTo?.(face.body.center, 1.6); }
+        step();
+        if (Math.abs((time - tr) - secs * 0.4) < dt / 2) shot('reconnect');
+      }
+      for (const q of list.slice(1)) { stage.setBridge!(viewOf(face)!, viewOf(q)!, 0); try { q.body.moveTo?.(null); } catch { /* optional */ } }
+      for (const q of list.slice(1)) if (q.id !== null) stage.removeBody(q.id);
+      const nb = new SB(g);
+      list = [{ body: nb, chunk: false, frac: 1, id: null, ghost: false }];
+      swapTo(list[0]);
+      out.marks.push(`whole@${(time - tStart).toFixed(2)}`);
+    }
+    for (let i = 0; i < Math.round(1.0 / dt); i++) step();
+    shot('whole');
+    stage.onStrand = null;
+    out.viewsAtEnd = stage.views.length; out.facesAtEnd = stage.views.filter((v) => !v.chunk).length; out.piecesAtEnd = list.length;
+    if (!Number.isFinite(out.minTopPx)) out.minTopPx = 0;
+    stage.setCalmEffects(false); stage.clearBodies(); setupBody(genome);
+    out.ms = performance.now() - t0;
+    return out;
+  },
+
+  /** n frames without rendering; the stage's camera framing (info.camScale) after each. */
+  camTrace(n: number, dt = 1 / 60): number[] { const s: number[] = []; for (let i = 0; i < n; i++) { frame(dt, false); s.push(stage.info.camScale); } return s; },
+
+  /** The frame is opaque: how many pixels of the WebGL drawing buffer have alpha < 255 (the page's CSS gradient would show through them). */
+  opaqueProbe(): { w: number; h: number; notOpaque: number } {
+    stage.render();
+    const gl = stage.renderer.getContext() as WebGL2RenderingContext, w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, buf = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    let n = 0;
+    for (let i = 3; i < buf.length; i += 4) if (buf[i] < 255) n++;
+    return { w, h, notOpaque: n };
+  },
+
+  /** createBody that throws inside playCapsuleReveal / playMergeCeremony: the stage must be exactly as it was (plus the capsule that stood on the table). */
+  throwProbe(): { capsule: Record<string, unknown>; merge: Record<string, unknown> } {
+    const res = { capsule: {} as Record<string, unknown>, merge: {} as Record<string, unknown> };
+    const snap = (): { views: number; visible: number; children: number; ceremony: boolean } => ({ views: stage.views.length, visible: stage.views.filter((v) => v.visible).length, children: stage.scene.children.length, ceremony: stage.info.ceremony });
+    for (const kind of ['capsule', 'merge'] as const) {
+      stage.clearBodies(); setupBody(genomeFromParam(''));
+      RV.frames(10);
+      let cap: CapsuleHandle | null = null;
+      if (kind === 'capsule') { cap = stage.dropCapsule(); RV.frames(70); }
+      const before = snap();
+      let n = 0, threw = '';
+      const cb = (g2: Genome): SoftBodyLike => { n++; if (kind === 'capsule' || n === 2) throw new Error('createBody boom'); return makeBody(g2); };
+      try {
+        if (kind === 'capsule') stage.playCapsuleReveal({ result: { genome: resultGenome('legendary'), tier: 'legendary' }, createBody: cb, capsule: cap ?? undefined });
+        else stage.playMergeCeremony({ parents: parentGenomes(2).map((g2) => ({ genome: g2 })), result: { genome: resultGenome('mythic'), tier: 'mythic' }, createBody: cb });
+      } catch (e) { threw = String(e); }
+      RV.frames(20, 1 / 30, true);
+      const after = snap();
+      const primary = stage.views.find((v) => v.id === stage.primaryBodyId());
+      const r = kind === 'capsule' ? res.capsule : res.merge;
+      Object.assign(r, { threw, before, after, primaryVisible: !!primary && primary.visible, capsuleStanding: stage.info.capsule, capsuleTappable: cap ? cap.landed && !!cap.screenPoint() : null });
+      if (cap) cap.remove();
+    }
+    stage.clearBodies(); setupBody(genomeFromParam(''));
+    return res;
+  },
+
+  /** clearBodies / removeBody / setBody while a ceremony runs: no dangling primary, done resolves, nothing is left half-built. */
+  async misuseProbe(): Promise<Record<string, { done: boolean; primaryHasView: boolean; bodies: number; resultInViews: boolean }>> {
+    const out: Record<string, { done: boolean; primaryHasView: boolean; bodies: number; resultInViews: boolean }> = {};
+    for (const act of ['clearBodies', 'removeResult', 'setBody']) {
+      stage.clearBodies(); setupBody(genomeFromParam(''));
+      const h = stage.playMergeCeremony({ parents: parentGenomes(2).map((g2) => ({ genome: g2 })), result: { genome: resultGenome('epic'), tier: 'epic' }, createBody: makeBody });
+      RV.frames(30, 1 / 30);
+      if (act === 'clearBodies') stage.clearBodies();
+      else if (act === 'removeResult') stage.removeBody(h.resultBodyId ?? -1);
+      else { const g2 = genomeFromParam('2'); const b2 = makeBody(g2); body = b2; stage.setBody(b2, g2); }
+      for (let k = 0; k < 300 && h.active; k++) frame(1 / 30, k % 10 === 0);
+      const done = await Promise.race([h.done.then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 500))]);
+      const prim = stage.primaryBodyId();
+      out[act] = { done, primaryHasView: prim === null ? stage.views.length === 0 : stage.views.some((v) => v.id === prim), bodies: stage.views.length, resultInViews: stage.views.some((v) => v.id === h.resultBodyId) };
+    }
+    stage.clearBodies(); setupBody(genomeFromParam(''));
+    return out;
+  },
+
+  /** The tier-up merge's last frames: live particles right before the ceremony ends and one frame after (the sparkles must live out their lives). */
+  async particleTail(): Promise<{ before: number; after: number }> {
+    stage.clearBodies(); setupBody(genomeFromParam('')); stage.setCalmEffects(false);
+    RV.merge('epic', 2, true);
+    const h = cer.handle as CeremonyHandle;
+    let before = 0;
+    for (let k = 0; k < 600 && h.active; k++) { before = stage.info.particles; frame(1 / 30, false); }
+    const after = stage.info.particles;
+    if (h.resultBody) body = h.resultBody;
+    await h.done;
+    return { before, after };
+  },
+
+  /** The camera framing (stage.info.camScale) through a ceremony: its smallest and largest value relative to the first frame. */
+  camThrough(kind: 'merge' | 'capsule', tier: TierName): { min: number; max: number; first: number; last: number } {
+    stage.clearBodies(); setupBody(genomeFromParam('')); stage.setCalmEffects(false); RV.frames(120);
+    // (parents and result are the SAME squishy, so the framing of their size cannot change by itself: only a tier widening would show)
+    if (kind === 'merge') { const g2 = genomeFromParam(''); resetCer('merge', tier, mergeDuration(tier, { tierUp: false, calm: false })); cer.handle = stage.playMergeCeremony({ parents: [{ genome: g2 }, { genome: g2 }], result: { genome: g2, tier, isNew: true }, createBody: makeBody }, hooksFor); } else RV.capsuleReveal(tier);
+    const h = cer.handle as CeremonyHandle;
+    const first = stage.info.camScale; let lo = first, hi = first;
+    for (let k = 0; k < 800 && h.active; k++) { frame(1 / 30, false); lo = Math.min(lo, stage.info.camScale); hi = Math.max(hi, stage.info.camScale); }
+    if (h.resultBody) body = h.resultBody;
+    return { min: lo, max: hi, first, last: stage.info.camScale };
+  },
+
+  /** How close the Mythic prism dome's rim comes to the frame's sides during a whole ceremony (CSS px; negative = it crosses a side). */
+  domeMargin(kind: 'merge' | 'capsule', tier: TierName = 'mythic'): { minMarginPx: number; atFrame: number; rx: number } {
+    stage.clearBodies(); setupBody(genomeFromParam('')); stage.setCalmEffects(false); RV.frames(40, 1 / 30);
+    if (kind === 'merge') RV.merge(tier, 2, false); else RV.capsuleReveal(tier);
+    const h = cer.handle as CeremonyHandle, W = canvas.clientWidth || canvas.width, P = new THREE.Vector3();
+    let minM = Infinity, at = -1, rx = 0;
+    for (let f = 1; f <= 600 && h.active; f++) {
+      frame(1 / 30, false);
+      stage.scene.traverse((o) => {
+        if (o.renderOrder !== 26 || !o.visible || !(o as THREE.Mesh).isMesh) return;
+        for (const sx of [-1, 1]) { P.set(o.position.x + sx * o.scale.x, 0, o.position.z).project(stage.camera); const px = (P.x * 0.5 + 0.5) * W, m = sx < 0 ? px : W - px; if (m < minM) { minM = m; at = f; rx = o.scale.x; } }
+      });
+    }
+    if (h.resultBody) body = h.resultBody;
+    return { minMarginPx: Number.isFinite(minM) ? minM : 1e9, atFrame: at, rx };
+  },
+
+  /**
+   * How far a tier's halo reaches on a narrow frame: the mean absolute difference of the frame's two edge columns (6 px) with the tier FX on and
+   * hidden, over the rows the body occupies. 0 = the halo never reaches the frame's sides.
+   */
+  haloEdge(tier: TierName, seedOrGenome: string | number | Genome = ''): { edge: number; w: number; h: number } {
+    RV.showTier(tier, seedOrGenome); RV.frames(100);
+    const grab = (): Uint8ClampedArray => { stage.render(); const c2 = document.createElement('canvas'); c2.width = canvas.width; c2.height = canvas.height; const x2 = c2.getContext('2d', { willReadFrequently: true }); if (!x2) return new Uint8ClampedArray(0); x2.drawImage(canvas, 0, 0); return x2.getImageData(0, 0, canvas.width, canvas.height).data; };
+    const on = grab();
+    const v = stage.views[0];
+    const was = v.rarity.group.visible; v.rarity.group.visible = false;
+    const off = grab();
+    v.rarity.group.visible = was;
+    const W = canvas.width, H = canvas.height; let s = 0, n = 0;
+    for (let y = Math.round(H * 0.25); y < Math.round(H * 0.75); y++) for (const x of [0, 1, 2, 3, 4, 5, W - 6, W - 5, W - 4, W - 3, W - 2, W - 1]) { const i = (y * W + x) * 4; s += (Math.abs(on[i] - off[i]) + Math.abs(on[i + 1] - off[i + 1]) + Math.abs(on[i + 2] - off[i + 2])) / 3; n++; }
+    return { edge: n ? s / n : 0, w: W, h: H };
   },
 
   stats() { return stage.stats(); },

@@ -1,10 +1,14 @@
 // CUT visuals (_spec/CUT.md section 4, RENDER): what the stage draws BETWEEN bodies while a squishy is cut and put back together.
-//   * the PARTING STRAND (StageLike.partPieces): right after the swap at neck t = 1 a strand of the same jelly hangs between the two new
-//     pieces, stretches as they separate, thins (its volume is conserved), necks and SNAPS, both halves springing back into their pieces.
-//     How far it stretches is the family's tack x stringiness (resolveMaterial(...).physics): long for sticky stretch and slime, barely
-//     there for gel; calm effects halve it. Drawn with the tack-strand renderer (strands.ts StrandTube) between two moving anchors.
-//   * the RECONNECT BRIDGE (StageLike.setBridge): a glowing neck of the jelly between two bodies, thin at t = 0+, as thick as the smaller
-//     body's waist at t = 1, flaring where it joins each body, with a soft warm glow spot on each body where it joins (uSpot).
+//   * the PARTING STRANDS (StageLike.partPieces): right after the swap at neck t = 1 up to three threads of the same jelly hang between the two
+//     new pieces, anchored at different spots of the cut faces; they stretch as the pieces separate, thin (volume conserved) and flare where
+//     they leave the faces, sag, and SNAP one after another, each half springing back into its piece. How many and how long is the family's
+//     tack x stringiness (resolveMaterial(...).physics): three long threads for sticky stretch and slime, one short wisp for gel; a strand
+//     also snaps by the clock (a thread thins as it ages) because the shell only holds the pieces a hand's width apart. Calm effects halve
+//     it. Drawn with the tack-strand renderer (strands.ts StrandTube) between two moving anchors.
+//   * the RECONNECT BRIDGE (StageLike.setBridge): a glowing neck of the jelly between two bodies, as thick as the smaller body's waist,
+//     flaring where it joins each body, with a soft warm glow spot on each body where it joins (uSpot). It is there from the moment the
+//     shell asks for it (the shell's own t eases in slowly, the pieces close within a fraction of a second: a neck that waited for t would
+//     only show once the bodies already overlap), and sinks into the bodies as they merge.
 //   * the CUT SEAM itself lives in the jelly shader (uSeam, BodyView.setSeam); this file only carries a seam over from a body that was cut
 //     to the two pieces that replace it, so the glow fades out instead of vanishing in one frame.
 // Every light here is a GLOW, never a flash: eased in and out (attack >= 0.12 s, release >= 0.2 s), capped, softer in calm mode, and held
@@ -17,10 +21,11 @@ import { StrandTube, type StrandEvent } from './strands.ts';
 const SEG = 24;          // rings along a tube
 const RAD = 12;           // vertices around
 const SNAP_S = 0.16;     // a snapped strand's halves spring back over this long
-/** A parting strand that never reaches its length (the pieces barely move apart) snaps anyway after this long. */
-const PART_MAX_S = 1.1;
-/** Most bridges / strands alive at once (CUT.md: at most 6 pieces, so 5 bridges in a Reconnect all). */
-const MAX_TUBES = 8;
+/** Threads per parting (the tack decides how many are used) and where each hangs on the cut faces: [sideways, up] as a tilt of the facing direction. */
+const PART_STRANDS = 3;
+const TILT: readonly (readonly [number, number])[] = [[0, 0], [0.34, 0.22], [-0.34, 0]];
+/** Most tubes alive at once: 3 partings of 3 threads + 5 bridges of a Reconnect all (CUT.md: at most 6 pieces). */
+const MAX_TUBES = 16;
 
 /** One pooled tube of the shared strand renderer (strands.ts StrandTube) with its own material: a thin piece of the same jelly. */
 class Tube {
@@ -31,8 +36,8 @@ class Tube {
 
   constructor(hub: EnvHub) {
     // glossy, see-through, its own colour plus a glow (the colours are set per use, no new material)
-    this.mat = new THREE.MeshPhysicalMaterial({ roughness: 0.12, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05, transparent: true, opacity: 0.9, depthWrite: false, fog: false });
-    hub.apply(this.mat, 1.2);
+    this.mat = new THREE.MeshPhysicalMaterial({ roughness: 0.1, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.04, transparent: true, opacity: 0.9, depthWrite: false, fog: false });
+    hub.apply(this.mat, 1.4);
     this.t = new StrandTube(this.mat, SEG, RAD);
   }
 
@@ -83,13 +88,23 @@ function capEnds(r: Float32Array, ua: number, ub: number): void {
 
 const smooth01 = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
-interface Parting {
-  tube: Tube; a: BodyView; b: BodyView; ia: number; ib: number;
-  age: number; maxLen: number; r0: number; L0: number; snapping: boolean; snapT: number; snapLen: number; done: boolean;
+/** One thread of a parting. */
+interface Thread {
+  tube: Tube; ia: number; ib: number;
   /** The last anchor points (a body removed mid-strand: it springs back from there). */
   ax: number; ay: number; az: number; bx: number; by: number; bz: number;
-  /** The pull axis (a -> b, unit) and the length drawn last frame (0 = the cut faces still overlap: nothing to draw yet). */
-  dx: number; dy: number; dz: number; drawnLen: number;
+  /** Thickness, the length it started with, the length it snaps at, the age it snaps at, a wobble phase. */
+  r0: number; L0: number; Lref: number; maxLen: number; T: number; phase: number;
+  snapping: boolean; snapT: number; snapLen: number; done: boolean;
+  /** The unit direction a -> b of the last frame (the snapped halves retract along it) and how far along the thread has thinned (0..1). */
+  dx: number; dy: number; dz: number; prog: number;
+}
+interface Parting {
+  threads: Thread[]; a: BodyView; b: BodyView; age: number; done: boolean;
+  /** The pull axis (a -> b, unit), last frame. */
+  px: number; py: number; pz: number;
+  /** The snap event of this parting went out. */
+  announced: boolean; seen: boolean;
 }
 interface Bridge {
   tube: Tube; a: BodyView; b: BodyView; target: number; amt: number; fading: boolean;
@@ -138,35 +153,49 @@ export class CutFx {
     for (const b of this.bridges) if (b.a === v || b.b === v) { b.fading = true; b.target = 0; }
   }
 
-  /** partPieces(a, b): a strand between two freshly cut pieces (and the cut's seam carried over onto both, fading). */
+  /** partPieces(a, b): threads between two freshly cut pieces (and the cut's seam carried over onto both, fading). */
   part(a: BodyView, b: BodyView): void {
     if (a === b) return;
     const s = this.lastSeam;
     if (s.age < 0.5 && s.amt > 0.02) for (const v of [a, b]) v.carrySeam(s.nx, s.ny, s.nz, s.d, s.amt);
     for (const p of this.partings) if (!p.done && ((p.a === a && p.b === b) || (p.a === b && p.b === a))) return;
-    const tube = this.take();
-    if (!tube) return;
-    // the strand runs between the two CUT FACES: the skin of each piece that faces the other one
-    const d = this.dir;
-    axis(a, b, d);
-    const ia = facingVertex(a, d[0], d[1], d[2]), ib = facingVertex(b, -d[0], -d[1], -d[2]);
-    const R = Math.min(a.liveRadius, b.liveRadius);
     // tack x stringiness: sticky stretch 0.81, slime 0.75, mochi 0.13, gummy 0.12, gel 0.05, foam / dome / beads ~0
     const k = Math.min(1, Math.max(0, a.mats.tack * (0.35 + 0.65 * a.mats.stringiness)));
     const calmK = this.calm ? 0.5 : 1;
+    const n = k >= 0.5 ? PART_STRANDS : k >= 0.12 ? 2 : 1;
+    if (this.free.length + (MAX_TUBES - this.pool.length) < n) return;   // (the pool is spoken for: no strand this time, the cut still parts)
+    const d = this.dir;
+    axis(a, b, d);
+    // sideways (horizontal, across the pull axis): where the second and third thread hang on the faces
+    let lx = -d[2], lz = d[0];
+    const ll = Math.hypot(lx, lz);
+    if (ll < 1e-4) { lx = 1; lz = 0; } else { lx /= ll; lz /= ll; }
+    const R = Math.min(a.liveRadius, b.liveRadius);
     const P = a.proxy.positions, Q = b.proxy.positions;
-    const gap0 = Math.max(0, (Q[ib * 3] - P[ia * 3]) * d[0] + (Q[ib * 3 + 1] - P[ia * 3 + 1]) * d[1] + (Q[ib * 3 + 2] - P[ia * 3 + 2]) * d[2]);
-    const L0 = Math.max(gap0, 0.06 * R);
-    this.partings.push({
-      tube, a, b, ia, ib, age: 0, maxLen: L0 + R * (0.1 + 1.5 * k) * calmK, r0: R * (0.05 + 0.1 * k), L0,
-      snapping: false, snapT: 0, snapLen: 0, done: false, ax: P[ia * 3], ay: P[ia * 3 + 1], az: P[ia * 3 + 2], bx: Q[ib * 3], by: Q[ib * 3 + 1], bz: Q[ib * 3 + 2],
-      dx: d[0], dy: d[1], dz: d[2], drawnLen: 0,
-    });
     const c = a.palette.body, pl = a.palette.pale;
-    // gel: a barely-there wisp (clear and thin); a tacky body: its own colour, glossy
-    // see-through like the jelly it is pulled from, lit from inside a little by the body's own colour
-    tube.paint(c[0] + (pl[0] - c[0]) * 0.35, c[1] + (pl[1] - c[1]) * 0.35, c[2] + (pl[2] - c[2]) * 0.35, 0.4 + 0.35 * Math.min(1, k / 0.5), c[0] * 0.55, c[1] * 0.55, c[2] * 0.55);
-    tube.mesh.visible = false;   // shown once the cut faces have parted
+    const threads: Thread[] = [];
+    for (let j = 0; j < n; j++) {
+      const tube = this.take();
+      if (!tube) break;
+      const t = TILT[j];
+      // the strand runs between the two CUT FACES: the skin of each piece that faces the other one, off to a side for the later threads
+      const ia = facingVertex(a, d[0] + lx * t[0], d[1] + t[1], d[2] + lz * t[0]), ib = facingVertex(b, -d[0] + lx * t[0], -d[1] + t[1], -d[2] + lz * t[0]);
+      const gap0 = Math.max(0, (Q[ib * 3] - P[ia * 3]) * d[0] + (Q[ib * 3 + 1] - P[ia * 3 + 1]) * d[1] + (Q[ib * 3 + 2] - P[ia * 3 + 2]) * d[2]);
+      const L0 = Math.max(gap0, 0.06 * R);
+      const side = j === 0 ? 1 : 0.7;
+      threads.push({
+        tube, ia, ib, L0, Lref: Math.max(gap0, 0.4 * R), maxLen: L0 + R * (0.1 + 1.5 * k) * calmK * (1 - 0.12 * j), r0: R * (0.032 + 0.06 * k) * side,
+        T: (0.24 + 0.85 * k) * (1 + 0.22 * j) * (this.calm ? 0.7 : 1), phase: j * 2.1,
+        ax: P[ia * 3], ay: P[ia * 3 + 1], az: P[ia * 3 + 2], bx: Q[ib * 3], by: Q[ib * 3 + 1], bz: Q[ib * 3 + 2],
+        snapping: false, snapT: 0, snapLen: 0, done: false, dx: d[0], dy: d[1], dz: d[2], prog: 0,
+      });
+      // gel: a barely-there wisp (clear and thin); a tacky body: its own colour, glossy, see-through like the jelly it is pulled from, lit
+      // from inside a little by the body's own colour
+      tube.paint(c[0] + (pl[0] - c[0]) * 0.12, c[1] + (pl[1] - c[1]) * 0.12, c[2] + (pl[2] - c[2]) * 0.12, 0.35 + 0.4 * Math.min(1, k / 0.5), c[0] * 0.3, c[1] * 0.3, c[2] * 0.3);
+      tube.mesh.visible = false;   // shown once the cut faces have parted
+    }
+    if (!threads.length) return;
+    this.partings.push({ threads, a, b, age: 0, done: false, px: d[0], py: d[1], pz: d[2], announced: false, seen: false });
   }
 
   /** setBridge(a, b, t): t 0..1 (0 = let it go). */
@@ -183,7 +212,8 @@ export class CutFx {
       const c = a.palette.body;
       tube.paint(c[0], c[1], c[2], 0.88, 0, 0, 0);
     }
-    br.target = tt; br.fading = false;
+    // present at once (see the header): the shell's t only decides how it ends
+    br.target = tt > 0 ? Math.max(tt, 0.72) : 0; br.fading = false;
   }
 
   /**
@@ -193,67 +223,90 @@ export class CutFx {
   update(dt: number, govK: number): void {
     this.events.length = 0; this.eventBody.length = 0;
     this.lastSeam.age += dt;
-    let ev = 0, glow = 0;
-    // ---- parting strands ----
+    let ev = 0, glow = 0, strands = 0;
+    // ---- parting threads ----
     const d = this.dir;
     for (let i = this.partings.length - 1; i >= 0; i--) {
       const p = this.partings[i];
-      if (p.done) { this.give(p.tube); this.partings.splice(i, 1); continue; }   // (not per frame: once per strand)
+      if (p.done) { for (const th of p.threads) this.give(th.tube); this.partings.splice(i, 1); continue; }
       p.age += dt;
-      const live = !p.snapping && p.a.visible && p.b.visible && !p.a.isDisposed && !p.b.isDisposed;
-      if (live) {
-        const P = p.a.proxy.positions, Q = p.b.proxy.positions;
-        p.ax = P[p.ia * 3]; p.ay = P[p.ia * 3 + 1]; p.az = P[p.ia * 3 + 2];
-        p.bx = Q[p.ib * 3]; p.by = Q[p.ib * 3 + 1]; p.bz = Q[p.ib * 3 + 2];
-        axis(p.a, p.b, d); p.dx = d[0]; p.dy = d[1]; p.dz = d[2];
-      }
-      // its length: how far the two cut faces have parted along the pull axis (<= 0: they still overlap, nothing shows yet)
-      const L = (p.bx - p.ax) * p.dx + (p.by - p.ay) * p.dy + (p.bz - p.az) * p.dz;
-      if (!p.snapping && (!live || L >= p.maxLen || p.age >= PART_MAX_S)) {
-        p.snapping = true; p.snapT = 0; p.snapLen = Math.max(0, L);
-        if (ev < this.evPool.length) {
-          const e = this.evPool[ev++]; e.finger = 0; e.tension = 0; e.snap = true; e.x = (p.ax + p.bx) / 2; e.y = (p.ay + p.by) / 2; e.z = (p.az + p.bz) / 2;
-          this.events.push(e); this.eventBody.push(p.a.id);
+      const live = p.a.visible && p.b.visible && !p.a.isDisposed && !p.b.isDisposed;
+      if (live) { axis(p.a, p.b, d); p.px = d[0]; p.py = d[1]; p.pz = d[2]; }
+      let allDone = true;
+      for (let j = 0; j < p.threads.length; j++) {
+        const th = p.threads[j];
+        if (th.done) continue;
+        allDone = false;
+        if (live && !th.snapping) {
+          const P = p.a.proxy.positions, Q = p.b.proxy.positions;
+          th.ax = P[th.ia * 3]; th.ay = P[th.ia * 3 + 1]; th.az = P[th.ia * 3 + 2];
+          th.bx = Q[th.ib * 3]; th.by = Q[th.ib * 3 + 1]; th.bz = Q[th.ib * 3 + 2];
+        }
+        // its length: how far the two anchors have parted along the pull axis (<= 0: the cut faces still overlap, nothing shows yet)
+        const L = (th.bx - th.ax) * p.px + (th.by - th.ay) * p.py + (th.bz - th.az) * p.pz;
+        const r = th.tube.radii;
+        if (!th.snapping) {
+          // thinning: by how far it has stretched or how long it has hung, whichever is more (a thread thins as it ages)
+          const stretch = Math.min(1, Math.max(0, (L - th.L0) / Math.max(1e-3, th.maxLen - th.L0)));
+          th.prog = Math.max(stretch, Math.min(1, p.age / th.T));
+          if (!live || L >= th.maxLen || p.age >= th.T) {
+            th.snapping = true; th.snapT = 0; th.snapLen = Math.max(0, Math.hypot(th.bx - th.ax, th.by - th.ay, th.bz - th.az));
+            th.dx = th.bx - th.ax; th.dy = th.by - th.ay; th.dz = th.bz - th.az;
+            const l = Math.hypot(th.dx, th.dy, th.dz);
+            if (l > 1e-5) { th.dx /= l; th.dy /= l; th.dz /= l; } else { th.dx = p.px; th.dy = p.py; th.dz = p.pz; }
+            if (!p.announced && ev < this.evPool.length) {   // (one snap event per parting, whatever it looked like: the shell's strand voice owns the sound)
+              p.announced = true;
+              const e = this.evPool[ev++]; e.finger = 0; e.tension = 0; e.snap = true; e.x = (th.ax + th.bx) / 2; e.y = (th.ay + th.by) / 2; e.z = (th.az + th.bz) / 2;
+              this.events.push(e); this.eventBody.push(p.a.id);
+            }
+          }
+        }
+        // the tube is drawn from INSIDE one piece to inside the other (its open ends hide in the jelly)
+        const e0 = Math.min(0.2 * p.a.liveRadius, th.r0 * 2.4);
+        if (th.snapping) {
+          th.snapT += dt;
+          if (this.calm || th.snapT >= SNAP_S || th.snapLen <= 0) { th.done = true; th.tube.mesh.visible = false; continue; }
+          // split in the middle: each half pulls back into its own piece, thinning to nothing
+          const sp = th.snapT / SNAP_S, k = 1 - sp;
+          const thin = Math.sqrt(Math.max(0.05, th.Lref / Math.max(th.snapLen, 1e-3)));
+          for (let s = 0; s <= SEG; s++) {
+            const u = s / SEG, half = u < 0.5 ? u / 0.5 : (1 - u) / 0.5;   // 0 at the ends .. 1 at the middle
+            r[s] = th.r0 * Math.min(1, thin) * 0.5 * k * Math.max(0, 1 - half * (0.4 + 0.6 * sp) * 1.6) * (1 + 1.0 * Math.pow(1 - half, 5));
+          }
+          th.tube.build(th.ax - th.dx * e0, th.ay - th.dy * e0, th.az - th.dz * e0, th.ax + th.dx * (th.snapLen + e0), th.ay + th.dy * (th.snapLen + e0), th.az + th.dz * (th.snapLen + e0), 0.14 * k * th.snapLen);
+          strands++;
+          continue;
+        }
+        if (L <= 0.01 * p.a.liveRadius) {   // the faces have not parted yet
+          th.tube.mesh.visible = false;
+        } else {
+          p.seen = true;
+          // anchor to anchor (a thread leans: the faces slide past each other as they part), reaching e0 into each piece
+          let ux = th.bx - th.ax, uy = th.by - th.ay, uz = th.bz - th.az;
+          const len = Math.hypot(ux, uy, uz) || 1e-4;
+          ux /= len; uy /= len; uz /= len;
+          const Ltot = len + 2 * e0, prog = th.prog;
+          // volume conserved (n x the first length = 1 / sqrt(n) as thick), a deep thin neck as it ages, a soft skirt where it leaves each face,
+          // a slow swelling along it (gooey strings are never a ruled cylinder)
+          const volK = Math.min(1.15, Math.sqrt(Math.max(0.1, th.Lref / Math.max(len, 1e-3))));
+          const neck = 1 - 0.86 * Math.pow(prog, 1.2);
+          for (let s = 0; s <= SEG; s++) {
+            const u = s / SEG, w = 4 * u * (1 - u);
+            const skirt = Math.pow(1 - w, 2.4);
+            const swell = 1 + 0.16 * Math.sin(u * 9.4 + th.phase) * w;
+            r[s] = th.r0 * volK * (1 + 1.2 * skirt) * (1 - (1 - neck) * Math.pow(w, 1.1)) * swell;
+          }
+          capEnds(r, e0 / Ltot, 1 - e0 / Ltot);
+          th.tube.build(th.ax - ux * e0, th.ay - uy * e0, th.az - uz * e0, th.bx + ux * e0, th.by + uy * e0, th.bz + uz * e0, 0.12 + 0.1 * prog);
+          th.tube.mesh.visible = true;
+          strands++;
+          if (j === 0 && ev < this.evPool.length) {
+            const e = this.evPool[ev++]; e.finger = 0; e.tension = 1 - 0.7 * prog; e.snap = false; e.x = (th.ax + th.bx) / 2; e.y = (th.ay + th.by) / 2; e.z = (th.az + th.bz) / 2;
+            this.events.push(e); this.eventBody.push(p.a.id);
+          }
         }
       }
-      const r = p.tube.radii;
-      // the tube is drawn from INSIDE one piece to inside the other (its open ends hide in the jelly)
-      const e0 = Math.min(0.2 * p.a.liveRadius, p.r0 * 2.2);
-      if (p.snapping) {
-        p.snapT += dt;
-        if (this.calm || p.snapT >= SNAP_S || p.snapLen <= 0) { p.done = true; p.tube.mesh.visible = false; continue; }
-        // split in the middle: each half pulls back into its own piece, thinning to nothing
-        const sp = p.snapT / SNAP_S, k = 1 - sp;
-        const thin = Math.sqrt(Math.max(0.05, p.L0 / Math.max(p.snapLen, 1e-3)));
-        for (let s = 0; s <= SEG; s++) {
-          const u = s / SEG, half = u < 0.5 ? u / 0.5 : (1 - u) / 0.5;   // 0 at the ends .. 1 at the middle
-          r[s] = p.r0 * thin * k * Math.max(0, 1 - half * (0.4 + 0.6 * sp) * 1.6) * (1 + 0.9 * Math.pow(1 - half, 6));
-        }
-        p.tube.build(p.ax - p.dx * e0, p.ay - p.dy * e0, p.az - p.dz * e0, p.ax + p.dx * (p.snapLen + e0), p.ay + p.dy * (p.snapLen + e0), p.az + p.dz * (p.snapLen + e0), 0.1 * k);
-        continue;
-      }
-      if (L <= 0.01 * p.a.liveRadius) {   // the faces have not parted yet
-        p.tube.mesh.visible = false; p.drawnLen = 0;
-      } else {
-        // stretching: volume conserved (n x the first length = 1 / sqrt(n) as thick), the neck deepens with the stretch, a blob at each face
-        const thin = Math.min(1.6, Math.sqrt(Math.max(0.05, p.L0 / Math.max(L, 1e-3))));
-        const stretch = Math.min(1, Math.max(0, (L - p.L0) / Math.max(1e-3, p.maxLen - p.L0)));
-        const Ltot = L + 2 * e0;
-        for (let s = 0; s <= SEG; s++) {
-          const u = s / SEG, w = 4 * u * (1 - u);
-          // never fatter than the parted gap allows (a short fresh strand is a stubby neck, not a ring)
-          // a soft catenary-like thinning toward the middle (no hard collar where it leaves each face)
-          const flare = Math.pow(1 - w, 2);
-          r[s] = Math.min(p.r0 * thin * (1 - 0.7 * stretch * w) * (1 + 0.9 * flare), 0.18 * Ltot + 0.5 * p.r0);
-        }
-        capEnds(r, e0 / Ltot, 1 - e0 / Ltot);
-        p.tube.build(p.ax - p.dx * e0, p.ay - p.dy * e0, p.az - p.dz * e0, p.ax + p.dx * (L + e0), p.ay + p.dy * (L + e0), p.az + p.dz * (L + e0), 0.12 * stretch);
-        p.tube.mesh.visible = true; p.drawnLen = L;
-        if (ev < this.evPool.length) {
-          const e = this.evPool[ev++]; e.finger = 0; e.tension = 1 - 0.7 * stretch; e.snap = false; e.x = p.ax + p.dx * L * 0.5; e.y = p.ay + p.dy * L * 0.5; e.z = p.az + p.dz * L * 0.5;
-          this.events.push(e); this.eventBody.push(p.a.id);
-        }
-      }
+      if (allDone) p.done = true;
     }
     // ---- reconnect bridges ----
     const calmK = this.calm ? 0.55 : 1;
@@ -303,12 +356,12 @@ export class CutFx {
       if (!b.b.isDisposed) b.b.setSpot(b.tx, b.ty, b.tz, g * 0.8);
       glow = Math.max(glow, g);
     }
-    this.live.strands = this.partings.length; this.live.bridges = this.bridges.length; this.live.glow = glow;
+    this.live.strands = strands; this.live.bridges = this.bridges.length; this.live.glow = glow;
   }
 
-  /** Everything off at once (clearBodies / setBody / dispose). */
+  /** Everything off at once (clearBodies / dispose). */
   clear(): void {
-    for (const p of this.partings) this.give(p.tube);
+    for (const p of this.partings) for (const th of p.threads) this.give(th.tube);
     for (const b of this.bridges) this.give(b.tube);
     this.partings.length = 0; this.bridges.length = 0; this.lastSeam.age = 1e9;
     this.live.strands = 0; this.live.bridges = 0; this.live.glow = 0;

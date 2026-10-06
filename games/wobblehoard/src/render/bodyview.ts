@@ -29,6 +29,8 @@ export class BodyView {
   readonly scale: number;
   /** Horizontal reach of the rest silhouette from the body centre (world units, >= restRadius): what the camera must fit. */
   readonly restHalfW: number;
+  /** Height of the rest silhouette above the table (world units): what the camera must fit vertically (x growth). */
+  readonly restH: number;
   /** The stage steps owned bodies itself (ceremony bodies); the shell steps the others. */
   owned: boolean;
   tier: TierName;
@@ -94,6 +96,7 @@ export class BodyView {
     let hw = inner.restRadius;
     { const P = inner.positions, c = inner.center; for (let i = 0; i < P.length; i += 3) { const d = Math.hypot(P[i] - c.x, P[i + 2] - c.z); if (d > hw) hw = d; } }
     this.restHalfW = hw;
+    { const P = inner.positions; let top = 0, low = Infinity; for (let i = 1; i < P.length; i += 3) { if (P[i] > top) top = P[i]; if (P[i] < low) low = P[i]; } this.restH = Math.max(0.1, top - (Number.isFinite(low) ? low : 0)); }
     this.mats = new JellyMaterials(genome, this.palette, this.scale, hub, this.style);
     this.jelly = new JellyView(this.proxy, this.mats.get(spec.tier), spec.fineFreq);
     this.jelly.mesh.renderOrder = 10;
@@ -174,7 +177,7 @@ export class BodyView {
     // CUT: a piece growing or shrinking (setFrac: a reconnect) keeps its core, glows and contact light in proportion
     const fr = this.proxy.inner.frac, fs = typeof fr === 'number' && Number.isFinite(fr) && fr > 0 ? Math.min(3, Math.max(0.3, Math.cbrt(fr / this.frac0))) : 1;
     this.core.sizeMul = this.proxy.scale * fs;
-    this.sizeK = fs * this.proxy.scale;
+    this.sizeK = fs * this.proxy.scale; this.fracK = fs;
     this.core.update(body, dt, time, this.smComp);
     const u = this.mats.uniforms;
     u.uTime.value = time;
@@ -245,6 +248,9 @@ export class BodyView {
   /** The body's current size (rest radius x its frac growth since the view was built): what the CUT strand and bridge are sized by. */
   get liveRadius(): number { return this.proxy.restRadius * this.sizeK; }
   private sizeK = 1;
+  private fracK = 1;
+  /** How far a piece has grown or shrunk since the view was built (setFrac: a reconnect), as a length factor: 1 for an ordinary body. The stage frames by it. */
+  get growth(): number { return this.fracK; }
   /** CUT bridge: a soft glow spot where the reconnect neck joins this body (world position, strength 0..1; 0 = off). */
   setSpot(x: number, y: number, z: number, w: number): void { this.mats.uniforms.uSpot.value.set(x, y, z, Math.max(0, Math.min(1, w))); }
 

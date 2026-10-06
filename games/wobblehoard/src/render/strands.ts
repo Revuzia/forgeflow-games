@@ -78,9 +78,15 @@ export class StrandTube {
     ux /= ul; uy /= ul; uz /= ul;
     const vx = dy * uz - dz * uy, vy = dz * ux - dx * uz, vz = dx * uy - dy * ux;
     const P = this.pos, N = this.nrm, r = this.radii, al = this.along, seg = this.seg, rad = this.rad;
+    // the sag hangs DOWN across the strand (gravity pulls the middle toward the table, perpendicular to its own direction); a strand that
+    // runs straight up or down has no "down across it", so it bows sideways instead (it never reads as a ruled line)
+    let gx = dy * dx, gy = -1 + dy * dy, gz = dy * dz;
+    const gl = Math.hypot(gx, gy, gz);
+    let gs = 0.4 + 0.6 * gl;
+    if (gl < 0.35) { gx = ux; gy = uy; gz = uz; gs = 0.5; } else { gx /= gl; gy /= gl; gz /= gl; }
     for (let s = 0; s <= seg; s++) {
-      const u = s / seg, f = al ? al[s] : u, sg = sag * L * 4 * u * (1 - u);
-      const cx = ax + dx * f * L, cy = ay + dy * f * L - sg, cz = az + dz * f * L;
+      const u = s / seg, f = al ? al[s] : u, sg = sag * L * gs * 4 * u * (1 - u);
+      const cx = ax + dx * f * L + gx * sg, cy = ay + dy * f * L + gy * sg, cz = az + dz * f * L + gz * sg;
       for (let k = 0; k < rad; k++) {
         const a = (k / rad) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
         const nx = ux * ca + vx * sa, ny = uy * ca + vy * sa, nz = uz * ca + vz * sa;
@@ -134,7 +140,8 @@ class Strand {
   build(ax: number, ay: number, az: number, tension: number, maxLen: number): void {
     const L = this.snapping ? this.snapLen : this.len;
     // volume conservation: a strand pulled to n x its first length is 1 / sqrt(n) as thick; the physics' tension thins it further
-    const thin = Math.sqrt(Math.max(0.05, (this.r0 * 4) / Math.max(L, 1e-3))) * (0.45 + 0.55 * tension);
+    // (never fatter than it started: a short fresh strand used to start as a wide wedge)
+    const thin = Math.sqrt(Math.min(1, Math.max(0.05, (this.r0 * 5) / Math.max(L, 1e-3)))) * (0.45 + 0.55 * tension);
     const stretch = Math.min(1, L / Math.max(1e-3, maxLen));
     const sp = this.snapping ? this.snapT / SNAP_S : 0;   // 0..1 while the halves retract
     const r = this.tube.radii, al = this.alongBuf;
@@ -142,7 +149,7 @@ class Strand {
       const u = s / SEG;
       let along = u;
       let rr = this.r0 * thin * (1 - 0.82 * stretch * 4 * u * (1 - u));       // the neck deepens as it stretches
-      rr *= 1 + 0.9 * Math.pow(1 - u, 6) + 0.6 * Math.pow(u, 8);             // a blob where it leaves the skin, a bead at the tip
+      rr *= 1 + 0.8 * Math.pow(1 - u, 8) + 0.5 * Math.pow(u, 8);             // a short skirt where it leaves the skin, a bead at the tip
       if (this.snapping) {
         // split at the middle: the A half pulls back toward the skin, the tip half toward the tip, both thinning to nothing
         const half = u < 0.5 ? u / 0.5 : (u - 0.5) / 0.5;

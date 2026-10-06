@@ -23,8 +23,10 @@
 //     a reveal is independent and survives it), and the jelly honours the material family's translucency cap at every tier (node-side).
 // SwiftShader is a CPU rasteriser: only the RELATIVE cost between tiers means anything here.
 import { startVite, launch, ROOT } from './pw.mjs';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdirSync, writeFileSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { resolve, join } from 'node:path';
 import { makeStarterGenome } from '../src/core/genome.ts';
 import { drawnTranslucency } from '../src/render/material.ts';
 import { CATALOG, speciesBaseGenome } from '../src/data/catalog.ts';
@@ -40,7 +42,8 @@ const QUICK = !!flag('quick', false);
 const NO_PERF = QUICK || !!flag('no-perf', false);
 // --only=a,b,...: run only these sections (iteration; the default runs everything). Sections: main, phone, sky, lifecycle, r2 (governor,
 // multi-body API, 3-body leak, capsule drop / ownership), cer (every ceremony: budget, beats, flash, escalation; skip; calm; tier-up,
-// 3 parents, drivers, done), chains, rarity, film, gallery, glow, strands, mat, capspot, cut, perf
+// 3 parents, drivers, done), chains, rarity, film, gallery, glow, strands, mat, capspot, cut, bundle (vite build + grep: no dev stage member in
+// production), perf
 const ONLY = typeof flag('only', '') === 'string' ? String(flag('only', '')).split(',').filter(Boolean) : [];
 const ON = (name) => ONLY.length === 0 || ONLY.includes(name);
 const PORT = 5364;
@@ -226,6 +229,29 @@ try {
     await pctx.close();
   }
 
+  /* ───────────────────────── the production bundle: no dev stage member ships from src/render (verifier finding 11) ───────────────────────── */
+  if (ON('bundle')) {
+    // `vite build` to a temp folder, then grep the output. The stage's dev members (renderer, scene, views, flash, memory(), loseContext(), restoreContext(), info) live behind
+    // import.meta.env.DEV, createStageDev lives in src/render/stageDev.ts (the harnesses import it, the game never does), and the stub body / the renderview page are harness-only.
+    const out = join(tmpdir(), `wh-render-bundle-${process.pid}`);
+    rmSync(out, { recursive: true, force: true });
+    const b = spawnSync(process.execPath, [resolve(ROOT, 'node_modules/vite/bin/vite.js'), 'build', '--outDir', out, '--emptyOutDir'], { cwd: ROOT, encoding: 'utf8', timeout: 300000 });
+    const files = []; const walk = (d) => { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) walk(p); else files.push(p); } };
+    let built = b.status === 0; try { walk(out); } catch { built = false; }
+    const text = files.filter((f) => /.(js|html|css|json)$/.test(f)).map((f) => ({ f, s: readFileSync(f, 'utf8') }));
+    const NAMES = ['createStageDev', 'StubBody', 'stubBody', 'renderview', '__RV__', 'lifecycle3', 'particlesDropped', 'screenLight', 'contextLost', 'cameraFx: {'];
+    const found = NAMES.filter((k) => text.some((x) => x.s.includes(k)));
+    // loseContext / restoreContext: only three's own forceContextLoss / forceContextRestore (one each, in the stage chunk: two WEBGL_lose_context lookups) and the shell's WebGL probe in the index chunk may use them (our dev members would add one more of each)
+    const count = (re) => text.reduce((a, x) => a + (x.s.match(re) ?? []).length, 0);
+    const lose = count(/.loseContext()/g), restore = count(/.restoreContext()/g), ext = count(/WEBGL_lose_context/g);
+    const stageChunk = text.find((x) => /stage-/.test(x.f));
+    const stageExt = stageChunk ? (stageChunk.s.match(/WEBGL_lose_context/g) ?? []).length : -1;
+    report.bundle = { built, files: files.length, found, lose, restore, ext, stageExt };
+    check(built && found.length === 0 && lose <= 2 && restore <= 1 && stageExt <= 2, 'production bundle (vite build + grep): none of createStageDev / StubBody / renderview / __RV__ / lifecycle3 / the stage readout (info, screenLight, particlesDropped) / contextLost ships; loseContext / restoreContext appear only inside three.js (one forceContextLoss, one forceContextRestore) and the WebGL probe of the shell',
+      `built ${built}, ${files.length} files, dev names found: [${found.join(', ')}], .loseContext() x${lose}, .restoreContext() x${restore}, WEBGL_lose_context x${ext} (stage chunk x${stageExt})${built ? '' : ' ' + String(b.stderr || b.stdout).slice(-300)}`);
+    rmSync(out, { recursive: true, force: true });
+  }
+
   /* ───────────────────────── the set: a seamless dusk gradient at every aspect ratio and camera pitch ───────────────────────── */
   if (ON('sky'))
   // (round-2 fix: the distance fog of the ground beyond the mat saturated to one flat colour band whose lower end read as a hard edge across the
@@ -299,10 +325,12 @@ try {
 
     // context loss / restore: Chromium logs its own CONTEXT_LOST warnings here, which are expected
     const cctx = await browser.newContext({ viewport: { width: 320, height: 240 }, deviceScaleFactor: 1 });
-    const { page: cp, bad: cbad } = await openView(cctx, `quality=low&body=${BODY === 'auto' ? '' : BODY}`, 'contextloss', [/CONTEXT_LOST|context lost|Context Lost|context restored|WebGL: /i]);
+    // (only the context-lost / restored notices are expected; an INVALID_OPERATION "object does not belong to this context" is the stale-dispose bug of verifier finding 13)
+    const { page: cp, bad: cbad } = await openView(cctx, `quality=low&body=${BODY === 'auto' ? '' : BODY}`, 'contextloss', [/CONTEXT_LOST|context lost|Context Lost|context restored|WebGL: .*(lost|restored)/i]);
     const cl = await cp.evaluate(() => window.__RV__.contextLossTest());
     console.log('  ' + cl.log.join('\n  '));
     check(cl.ok, 'webglcontextlost / restored: nothing throws, the stage renders again afterwards');
+    check(!cbad.some((m) => /INVALID_OPERATION|does not belong/i.test(m)), 'after a context loss and restore, disposing the objects made before the loss logs no "does not belong to this context" warnings (verifier finding 13: about 30)', `${cbad.filter((m) => /INVALID_OPERATION|does not belong/i.test(m)).length} warnings`);
     report.problems.push(...cbad);
     await cctx.close();
 
@@ -470,6 +498,37 @@ try {
     check(capOwn.opening.point === null && !capOwn.opening.hit && !capOwn.opening.landed && capOwn.h2.landed && capOwn.h2.hit && capOwn.h2.onScreen && capOwn.bodies === 1,
       'the reveal owns its capsule (handle reads as opening, squeeze / remove ignored); a capsule dropped DURING a reveal lands on screen and stays tappable after it', JSON.stringify(capOwn));
     await rp.evaluate(() => { const R = window.__RV__; R.stage.clearBodies(); R.setGenome(''); R.frames(2); });
+
+    // ---- D2. the canvas is OPAQUE (verifier finding 2): the WebGL buffer is composited over the page's CSS gradient, so any pixel with alpha < 255 shows
+    // it through (a lighter halo with a straight quad edge under a waiting capsule, black holes in every toDataURL capture). Three always makes its own
+    // context with alpha, so the blending of every draw (decal shadows, the transmissive jelly) has to leave alpha at 1.
+    {
+      const o1 = await rp.evaluate(() => { const R = window.__RV__; R.stage.clearBodies(); R.setGenome(''); R.frames(40); R.dropCapsule(); R.frames(80); const a = R.opaqueProbe(); R.capsule?.remove(); R.frames(2); return a; });
+      const o2 = await rp.evaluate(() => {
+        const R = window.__RV__; R.stage.clearBodies(); R.setGenome(''); R.frames(30, 1 / 30); R.setCalm(true);
+        R.capsuleReveal('common'); let burst = -1;
+        for (let k = 0; k < 120 && R.cerState().active; k++) { R.frames(1, 1 / 30); const b = R.cerState().beats.find((x) => x.beat === 'burst'); if (b && burst < 0) burst = k; if (burst >= 0 && k >= burst + 9) break; }
+        const a = R.opaqueProbe(); R.skipCer(); R.frames(8, 1 / 30); R.setCalm(false); return a;
+      });
+      R2.opaque = { idleCapsule: o1, calmBurst: o2 };
+      check(o1.notOpaque === 0 && o2.notOpaque === 0, 'the canvas is opaque: no pixel with alpha < 255 under a waiting capsule or at a calm reveal burst + 9 frames (the page gradient never shows through)', `${o1.notOpaque} of ${o1.w * o1.h} / ${o2.notOpaque} of ${o2.w * o2.h}`);
+    }
+    // ---- D3. a createBody that throws inside play*(): the stage is exactly as it was (the capsule is back on the table, tappable; the pillar / dome / hidden bodies are gone) ----
+    {
+      const tp = await rp.evaluate(() => window.__RV__.throwProbe());
+      R2.throwing = tp;
+      const cp = tp.capsule, mg = tp.merge;
+      check(cp.threw.includes('boom') && cp.after.ceremony === false && cp.after.views === cp.before.views && cp.primaryVisible && cp.capsuleStanding === true && cp.capsuleTappable === true && cp.after.children === cp.before.children
+        && mg.threw.includes('boom') && mg.after.ceremony === false && mg.after.views === mg.before.views && mg.primaryVisible && mg.after.children === mg.before.children,
+      'createBody throwing inside playCapsuleReveal (Legendary: no pillar leaks, the capsule stays on the table and tappable) and playMergeCeremony (Mythic: no dome, no orphan parents, the play body visible): the stage is as it was', JSON.stringify({ capsule: { before: cp.before, after: cp.after, tappable: cp.capsuleTappable }, merge: { before: mg.before, after: mg.after } }));
+    }
+    // ---- D4. clearBodies / removeBody / setBody while a ceremony runs: no dangling primary id, done resolves ----
+    {
+      const mp = await rp.evaluate(() => window.__RV__.misuseProbe());
+      R2.misuse = mp;
+      check(Object.values(mp).every((x) => x.done && x.primaryHasView) && mp.clearBodies.bodies === 0 && mp.setBody.bodies === 1,
+        'clearBodies / removeBody(result) / setBody during a merge ends it at its final frame: done resolves, primaryBodyId() never points at a removed view (verifier finding 3)', JSON.stringify(mp));
+    }
     }
 
     // ---- E. ceremonies: durations vs budget, beats, flash windows, skip, calm ----
@@ -583,6 +642,12 @@ try {
       check(Math.abs(q.seconds - 0.8) <= 0.08 && q.bodiesAtEnd === 1, 'quick pop (common, fast open): 0.8 s', `${q.seconds.toFixed(2)} s`);
     }
 
+    {
+      const pt = await rp.evaluate(() => window.__RV__.particleTail());
+      R2.particleTail = pt;
+      check(pt.before >= 8 && pt.after >= pt.before - 2, 'a natural end does not clear the particles: the sparkles of a tier-up merge are alive on its last frame and still there one frame later (verifier finding 5: 16 -> 0 in one frame)', `${pt.before} -> ${pt.after}`);
+    }
+
     // ceremony drivers: FEATURE-DETECTED. 'native' = bodies that implement setFold / tremble / burstOpen (the dev stub; PHYS may add them to
     // the real body at any time) must be driven through them; 'puppet' = the same drivers hidden, the render lane's procedural puppet folds the ball
     {
@@ -640,6 +705,20 @@ try {
         `Calm ${kind} ${tier}: duration x0.65 (${calm.seconds.toFixed(2)} s), no screen light / ramp, no camera move, no slow-motion, particles x0.3, rings become fades`,
         `camera ${calm.camRange.toExponential(0)} vs ${norm.camRange.toFixed(2)} normal, burst particles ${cs.burstParticles} (expected ${ESC.calmParticles[ti]}), live particles ${calm.maxParticles} vs ${norm.maxParticles}, time scale ${cs.minTimeScale}, rings ${cs.rings} fades ${cs.fades}, ramps ${cs.ramps}`);
     }
+    // Calm is calmer where it counts (verifier finding 10): in a 3x3 grid of the frame the compressed calm reveal made 4 transitions of >= 0.1 relative swing in 1 s in the
+    // frame centre against 2-3 in normal mode (the result appeared in one frame, the tremble and twinkle still ran). Calm may not be busier than normal in ANY cell.
+    {
+      const rel = (a, b) => Math.abs(a - b) >= 0.1 && Math.min(a, b) < 0.8;
+      const zzRel = (L) => { const idx = []; let dir = 0, pivot = L[0]; for (let k = 1; k < L.length; k++) { const v = L[k]; if (dir === 0) { if (v > pivot && rel(v, pivot)) { dir = 1; pivot = v; idx.push(k); } else if (v < pivot && rel(v, pivot)) { dir = -1; pivot = v; idx.push(k); } } else if (dir === 1) { if (v > pivot) pivot = v; else if (rel(v, pivot)) { dir = -1; pivot = v; idx.push(k); } } else { if (v < pivot) pivot = v; else if (rel(v, pivot)) { dir = 1; pivot = v; idx.push(k); } } } return idx; };
+      const worstCell = (r) => { let w = 0; for (let k = 0; k < 9; k++) w = Math.max(w, worstWindow(zzRel(r.grids.map((g) => g[k])), DT)); return w; };
+      const local = {};
+      for (const [kind, tier] of QUICK ? [['capsule', 'mythic']] : [['capsule', 'rare'], ['capsule', 'epic'], ['capsule', 'legendary'], ['capsule', 'mythic'], ['merge', 'mythic']]) {
+        const n = await run({ kind, tier, dt: DT, calm: false }), cl = await run({ kind, tier, dt: DT, calm: true });
+        local[`${kind}:${tier}`] = { normal: worstCell(n), calm: worstCell(cl) };
+      }
+      R2.localFlash = local;
+      check(Object.values(local).every((x) => x.calm <= 3 && x.calm <= x.normal + 1), 'Calm is no busier than normal in any 3x3 cell of the frame (transitions of >= 0.1 relative swing in any 1 s: calm <= 3 and <= normal + 1)', Object.entries(local).map(([k, v]) => `${k} calm ${v.calm} / normal ${v.normal}`).join(', '));
+    }
     await rp.evaluate(() => { const R = window.__RV__; R.setCalm(false); R.stage.clearBodies(); R.setGenome(''); R.frames(2); });
     }
     report.problems.push(...rbad);
@@ -670,6 +749,12 @@ try {
       }
       const dmin = Math.min(...fps.slice(1).map((f, i) => fpDiff(fps[i], f)));
       check(dmin > 1.2, 'rarity sheet: every tier differs visibly from the previous one', `min adjacent mean |diff| ${dmin.toFixed(2)}/255`);
+      // the Common merge makes no camera move (DESIGN 6.3 camera column: none); verifier: the merge widening was applied to every tier (12% for Common)
+      {
+        const cc = await sp.evaluate(() => window.__RV__.camThrough('merge', 'common'));
+        R2.camCommonMerge = cc;
+        check(cc.max <= cc.first * 1.04 && cc.min >= cc.first * 0.96, 'a Common merge keeps the play framing: the camera framing stays within 4% of its first frame from press to settle (1280x800; the old widening was 12%)', `first ${cc.first.toFixed(3)}, min ${cc.min.toFixed(3)}, max ${cc.max.toFixed(3)}, last ${cc.last.toFixed(3)}`);
+      }
       console.log('wrote rarity_sheet.png');
       await sctx.close();
       report.problems.push(...sbad);
@@ -688,6 +773,17 @@ try {
         return { landedFrames: f, info: c, whole: !!c.point && c.point.x - c.point.r >= 0 && c.point.x + c.point.r <= vw && c.point.y - c.point.r >= 0 && c.point.y + c.point.r <= vh, png: R.snapshot() };
       });
       R2.multi.capsulePhone = { landedFrames: capP.landedFrames, info: capP.info, whole: capP.whole };
+      // the tier halos never reach the sides of the narrow frame (verifier: the Mythic dome and the Rare / Epic auras touched the frame sides on 390x844)
+      {
+        const he = {};
+        for (const tier of ['rare', 'epic', 'legendary', 'mythic']) he[tier] = (await pp2.evaluate((tier) => window.__RV__.haloEdge(tier), tier)).edge;
+        R2.haloEdge = he;
+        // ... nor does the Mythic dome of a ceremony swell past them (before the cap it crossed both sides by 111 px (capsule) / 153 px (merge) on 390x844 low)
+        const dm = { merge: await pp2.evaluate(() => window.__RV__.domeMargin('merge')), capsule: await pp2.evaluate(() => window.__RV__.domeMargin('capsule')) };
+        R2.domeMargin = dm;
+        check(dm.merge.minMarginPx >= 0 && dm.capsule.minMarginPx >= 0, 'phone 390x844: the Mythic prism dome of a merge and of a capsule reveal stays inside the sides of the frame through the whole ceremony (rim margin >= 0 px; it crossed both sides by up to 153 px)', `merge ${dm.merge.minMarginPx.toFixed(0)} px (dome radius ${dm.merge.rx.toFixed(2)} at frame ${dm.merge.atFrame}), capsule ${dm.capsule.minMarginPx.toFixed(0)} px`);
+        check(Object.values(he).every((v) => v <= 0.75), 'phone 390x844: no tier halo (Rare aura, Epic ring, Legendary pillar glow, Mythic dome) reaches the sides of the frame (mean |difference| of the 6 px edge columns with the tier FX on / hidden <= 0.75/255)', Object.entries(he).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(', '));
+      }
       // MERGE_COST 3 on a narrow portrait frame (the triangle layout; the wide frames above used the row)
       const m3p = await pp2.evaluate(() => window.__RV__.runCeremony({ kind: 'merge', tier: 'epic', dt: 1 / 30, parents: 3, settle: 10 }));
       check(Math.abs(m3p.seconds - MER_BUDGET_EPIC) <= 0.1 * MER_BUDGET_EPIC && m3p.bodiesAtEnd === 1 && m3p.beats.length === 6 && m3p.doneResolved && m3p.maxLight <= 0.25 + 1e-6 && m3p.minTopPx >= 0,
@@ -824,33 +920,79 @@ try {
       report.problems.push(...sbad);
       await sctx.close();
     }
-    if (ON('capspot')) for (const [vw, vh, mustClearBody, ins, sp] of [[568, 320, true], [320, 256, true], [844, 390, true], [1280, 800, true], [390, 844, false],
-      [390, 844, true, { top: 96, bottom: 200 }, ''], [390, 844, true, { top: 96, bottom: 200 }, 'crimpo']]) {
+    // The shell's REAL HUD rows (measured on the real app at every size: _handoff/reports/RENDER_R.md): the top bar ends at 56 CSS px, the bottom row starts
+    // 74 px (portrait) / 77 px (landscape) above the bottom edge. The capsule stands BESIDE the squishy at every size, clear of those rows and of the body: on a narrow
+    // portrait frame the camera pulls back a little (<= 1.2x, 1.32x for a very wide species) and the capsule stands a little smaller, never in front of the body (the owner's phone report).
+    const HUD_P = { top: 56, bottom: 74 }, HUD_L = { top: 56, bottom: 77 };
+    if (ON('capspot')) for (const [vw, vh, ins, sp] of [[568, 320, HUD_L, ''], [320, 256, HUD_L, ''], [844, 390, HUD_L, ''], [1280, 800, HUD_L, ''], [390, 844, null, ''],
+      [390, 844, HUD_P, ''], [360, 640, HUD_P, ''], [412, 915, HUD_P, ''], [320, 568, HUD_P, ''],
+      [390, 844, HUD_P, 'crimpo'], [390, 844, HUD_P, 'twangle'], [390, 844, HUD_P, 'wrigglo'], [320, 568, HUD_P, 'cushlet'], [844, 390, HUD_L, 'crimpo']]) {
       const cctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
       const { page: cp, bad: cbad } = await openView(cctx, `quality=low&body=${bodyQ}`, `capspot-${vw}x${vh}`, [/GPU stall due to ReadPixels/i]);
       const r = await cp.evaluate(([ins, g]) => {
         const R = window.__RV__;
         if (ins) R.stage.setSafeInsets(ins);
         if (g) R.setGenomeObject(g); else R.setGenome('');
-        R.frames(120); R.dropCapsule(); R.frames(150);
-        const ci = R.capsuleInfo(), W = R.stage.canvas.clientWidth, H = R.stage.canvas.clientHeight, cam = R.stage.camera;
-        const v = R.stage.views[0], Q = v.proxy.positions, P = new (cam.position.constructor)();
-        let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-        for (let i = 0; i < Q.length; i += 3) { P.set(Q[i], Q[i + 1], Q[i + 2]).project(cam); const sx = (P.x * 0.5 + 0.5) * W, sy = (1 - (P.y * 0.5 + 0.5)) * H; x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); }
+        R.frames(120);
+        const W = R.stage.canvas.clientWidth, H = R.stage.canvas.clientHeight, cam = R.stage.camera;
+        const box = () => {
+          const v = R.stage.views[0], Q = v.proxy.positions, P = new (cam.position.constructor)();
+          let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+          for (let i = 0; i < Q.length; i += 3) { P.set(Q[i], Q[i + 1], Q[i + 2]).project(cam); const sx = (P.x * 0.5 + 0.5) * W, sy = (1 - (P.y * 0.5 + 0.5)) * H; x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); }
+          return [x0, y0, x1, y1];
+        };
+        const b0 = box();
+        R.dropCapsule();
+        const tr = R.camTrace(150, 1 / 60);
+        R.frames(1);
+        let maxStep = 0; for (let i = 1; i < tr.length; i++) maxStep = Math.max(maxStep, Math.abs(tr[i] - tr[i - 1]) / tr[i - 1]);
+        const ci = R.capsuleInfo(), b = box();
         const p = ci.point, rr = p ? p.r / 1.35 : 0;
         const cap = p ? [p.x - rr * 0.75, p.y - rr * 1.4, p.x + rr * 0.75, p.y + rr * 1.4] : null;
-        const ov = cap ? Math.max(0, Math.min(cap[2], x1) - Math.max(cap[0], x0)) * Math.max(0, Math.min(cap[3], y1) - Math.max(cap[1], y0)) : -1;
-        return { W, H, landed: ci.landed, cap: cap && cap.map(Math.round), body: [x0, y0, x1, y1].map(Math.round), overlapPx2: Math.round(ov), png: R.snapshot() };
+        const ov = cap ? Math.max(0, Math.min(cap[2], b[2]) - Math.max(cap[0], b[0])) * Math.max(0, Math.min(cap[3], b[3]) - Math.max(cap[1], b[1])) : -1;
+        return { W, H, landed: ci.landed, hit: ci.hit, cap: cap && cap.map(Math.round), body: b.map(Math.round), bodyBefore: b0.map(Math.round), overlapPx2: Math.round(ov), maxStep, size: R.stage.info.cap?.size ?? -1, camScale: tr[tr.length - 1], camScale0: tr[0], png: R.snapshot() };
       }, [ins ?? null, sp ? speciesBaseGenome(sp, 1) : null]);
-      const tag = ins ? `${vw}x${vh}_hud${sp ? '_' + sp : ''}` : `${vw}x${vh}`;
+      const tag = `${vw}x${vh}${ins ? '_hud' : ''}${sp ? '_' + sp : ''}`;
       writeFileSync(resolve(OUT, `capspot_${tag}.png`), b64(r.png));
       const bot = ins ? ins.bottom : 72, top = ins ? ins.top : 0;
       const okBottom = !!r.cap && r.cap[3] <= r.H - bot && r.cap[0] >= 0 && r.cap[2] <= r.W && r.cap[1] >= top;
-      check(r.landed && okBottom && (!mustClearBody || r.overlapPx2 === 0),
-        `capsule spot ${vw}x${vh}${ins ? ` with the HUD's insets (top ${top}, bottom ${bot})${sp ? ', ' + sp : ''}` : ''}: inside the frame, clear of the ${ins ? 'HUD rows' : 'bottom 72 CSS px'}${mustClearBody ? ' and of the body' : ' (narrow portrait: in front of the body, its face uncovered)'}`,
-        `capsule ${JSON.stringify(r.cap)}, body ${JSON.stringify(r.body)}, overlap ${r.overlapPx2} px2, frame ${r.W}x${r.H}`);
+      const bw = r.body[2] - r.body[0], bw0 = r.bodyBefore[2] - r.bodyBefore[0], inFrame = r.body[0] >= 0 && r.body[2] <= r.W;
+      RB.mat[`capspot:${tag}`] = { cap: r.cap, body: r.body, bodyBefore: r.bodyBefore, size: r.size, maxStep: r.maxStep };
+      // body keeps >= 74% of its width (the pull-back is <= 1.2x: 83%, up to 1.32x = 76% for a very wide species; a little less when the aim shifts), the whole body stays in the frame, the camera eases (< 2% per frame), and the capsule is tappable
+      check(r.landed && r.hit && okBottom && r.overlapPx2 === 0 && inFrame && bw >= 0.74 * bw0 && r.maxStep < 0.02,
+        `capsule spot ${vw}x${vh}${ins ? ` with the shell's HUD rows (top ${top}, bottom ${bot})` : ''}${sp ? ', ' + sp : ''}: BESIDE the squishy, clear of the HUD rows and of the body, the body keeps its size (>= 74%) and the camera eases`,
+        `capsule ${JSON.stringify(r.cap)} (size ${r.size.toFixed(2)}), body ${JSON.stringify(r.body)} (was ${bw0.toFixed(0)} px wide, now ${bw.toFixed(0)}), overlap ${r.overlapPx2} px2, largest camera step ${(r.maxStep * 100).toFixed(2)}%/frame, frame ${r.W}x${r.H}`);
       report.problems.push(...cbad);
       await cctx.close();
+    }
+    // every one of the 50 species on the 390x844 phone with the shell's real HUD rows: the capsule beside it, clear of the body and of the HUD rows, the body in the frame
+    if (ON('capspot')) {
+      const actx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+      const { page: ap2, bad: abad2 } = await openView(actx, `quality=low&body=${bodyQ}`, 'capspot-all', [/GPU stall due to ReadPixels/i]);
+      const ids = CATALOG.map((d) => d.id);
+      const res = [];
+      for (const id of ids) {
+        const r = await ap2.evaluate(([g, ins]) => {
+          const R = window.__RV__;
+          R.stage.setSafeInsets(ins); R.setGenomeObject(g); R.frames(60);
+          const W = R.stage.canvas.clientWidth, H = R.stage.canvas.clientHeight, cam = R.stage.camera;
+          const box = () => { const v = R.stage.views[0], Q = v.proxy.positions, P = new (cam.position.constructor)(); let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; for (let i = 0; i < Q.length; i += 3) { P.set(Q[i], Q[i + 1], Q[i + 2]).project(cam); const sx = (P.x * 0.5 + 0.5) * W, sy = (1 - (P.y * 0.5 + 0.5)) * H; x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); } return [x0, y0, x1, y1]; };
+          const b0 = box(); R.dropCapsule(); R.camTrace(120, 1 / 60); R.frames(1);
+          const ci = R.capsuleInfo(), b = box(), p = ci.point, rr = p ? p.r / 1.35 : 0;
+          const cap = p ? [p.x - rr * 0.75, p.y - rr * 1.4, p.x + rr * 0.75, p.y + rr * 1.4] : null;
+          const ov = cap ? Math.max(0, Math.min(cap[2], b[2]) - Math.max(cap[0], b[0])) * Math.max(0, Math.min(cap[3], b[3]) - Math.max(cap[1], b[1])) : -1;
+          const size = R.stage.info.cap?.size ?? -1; R.capsule?.remove(); R.frames(2);
+          return { landed: ci.landed, hit: ci.hit, cap: cap && cap.map(Math.round), body: b.map(Math.round), w0: Math.round(b0[2] - b0[0]), ov: Math.round(ov), size, H };
+        }, [speciesBaseGenome(id, 1), HUD_P]);
+        const bw = r.body[2] - r.body[0];
+        const ok = r.landed && r.hit && !!r.cap && r.cap[3] <= r.H - HUD_P.bottom && r.cap[1] >= HUD_P.top && r.cap[0] >= 0 && r.cap[2] <= 390 && r.ov === 0 && r.body[0] >= 0 && r.body[2] <= 390 && bw >= 0.74 * r.w0;
+        res.push({ id, ok, ...r, bw });
+      }
+      const bad = res.filter((x) => !x.ok);
+      RB.mat['capspot:all50'] = { failed: bad.map((x) => x.id), sizes: Object.fromEntries(res.map((x) => [x.id, +x.size.toFixed(2)])) };
+      check(bad.length === 0, 'capsule spot, 390x844 with the HUD rows of the real shell, ALL 50 species: beside the squishy, clear of the body and of the HUD rows, the body in the frame and >= 74% of its width', bad.length ? bad.map((x) => `${x.id} cap ${JSON.stringify(x.cap)} body ${JSON.stringify(x.body)} ov ${x.ov} size ${x.size.toFixed(2)} w ${x.bw}/${x.w0}`).join('; ') : `smallest capsule ${Math.min(...res.map((x) => x.size)).toFixed(2)}, mean ${(res.reduce((a, x) => a + x.size, 0) / res.length).toFixed(2)}, widest pull-back to ${(Math.min(...res.map((x) => x.bw / x.w0)) * 100).toFixed(0)}% of the body's width`);
+      report.problems.push(...abad2);
+      await actx.close();
     }
     await sheetCtxB.close();
   }
@@ -896,6 +1038,30 @@ try {
       check(r.snapEvents >= r.cutsDone && (name !== 'sticky' || r.strandEvents >= 5 * r.cutsDone),
         `CUT parting strand (${name}): one strand per cut, stretched then snapped once each; the shell's strand hook hears it`, `snaps ${r.snapEvents}, stretch frames ${r.strandEvents}, cuts ${r.cutsDone}`);
       check(r.framed.inFrame && r.framed.pieces === 6 && r.framed.minPx >= 40, `CUT (${name}): 6 pieces on the mat, all inside the 640x480 frame`, JSON.stringify({ pieces: r.framed.pieces, minPx: r.framed.minPx }));
+    }
+    // ---- 2b. the SAME with the REAL soft body and the shell's own call order (src/shell/cut.ts + bodies.ts): the face piece swaps in through setBody (bodies.swapTo),
+    // the chunk through addBody({ chunk }), partPieces, the pieces collide, a Reconnect all = setFrac + setBridge + moveTo each frame, then a fresh whole body via setBody.
+    // (the stub flow above removes and adds bodies instead: it never exercised setBody with a cut's seam and bridges in flight, nor a piece GROWING under the camera)
+    {
+      const slimeId = CATALOG.find((d) => d.family === 'slimegoo').id;
+      for (const [name, sp, calm, shots] of QUICK ? [['sticky', 'twangle', false, true]] : [['sticky', 'twangle', false, true], ['gel', 'dollop', false, false], ['putty', 'thudge', false, false], ['slime_calm', slimeId, true, false]]) {
+        const r = await xp.evaluate(([sp, calm, shots, dt]) => window.__RV__.realCutProbe({ species: sp, swipes: [0, 0, 0, 0, 0], autoSmall: 0.14, calm, dt, shots, gapS: 0.45 }), [sp, calm, shots, DTc]);
+        if (r.skipped) { check(true, 'CUT real-body flow: skipped (the real soft body did not load; feature-detected)'); break; }
+        for (const [k, jpg] of Object.entries(r.shots)) writeFileSync(resolve(OUT, `cutreal_${name}_${k}.jpg`), b64(jpg));
+        const w = ww(zz(r.lumas), DTc), w02 = ww(zz(r.lumas, 0.02), DTc), lo = Math.min(...r.lumas), hi = Math.max(...r.lumas), maxLight = Math.max(0, ...r.light);
+        RC.runs['real_' + name] = { family: r.family, transitions1s: w, transitions1s_at_0_02: w02, luma: [lo, hi], maxLight, cutsDone: r.cutsDone, refused: r.refused, maxPieces: r.maxPieces, maxStrands: r.maxStrands, maxBridges: r.maxBridges, maxGlow: r.maxGlow, strandEvents: r.strandEvents, snapEvents: r.snapEvents, seamCarry: r.seamCarry, minTopPx: r.minTopPx, minTopByPhase: r.minTopByPhase, framed: r.framed, viewsAtEnd: r.viewsAtEnd, facesAtEnd: r.facesAtEnd, marks: r.marks.join(' ') };
+        check(w <= 3 && maxLight === 0 && r.cutsDone >= 5 && r.maxPieces <= 6 && r.viewsAtEnd === 1 && r.facesAtEnd === 1 && r.piecesAtEnd === 1 && r.maxBridges >= 1,
+          `CUT X09 with the real body (${name}, ${r.family}): 5+ rapid cuts and a Reconnect all in the shell's own call order: <= 3 luminance transitions in any 1 s, no screen flash, <= 6 pieces, a bridge per join, whole again with ONE view and ONE face`,
+          `worst 1 s window ${w} (${w02} at 0.02), luma ${lo.toFixed(3)}..${hi.toFixed(3)}, screen light ${maxLight}, cuts ${r.cutsDone} (refused ${r.refused}), pieces <= ${r.maxPieces}, glow <= ${r.maxGlow.toFixed(2)}, threads <= ${r.maxStrands}, bridges <= ${r.maxBridges}, views at end ${r.viewsAtEnd}`);
+        // the cut's seam glow rides over the swap onto the new pieces (setBody must not wipe it: it used to clearBodies() the cut effects) and fades there
+        check(r.seamCarry.length >= 5 && r.seamCarry.every((v) => v > 0.05), `CUT seam (${name}): the neck's seam glow is carried over the swap onto the new pieces at every cut (setBody keeps it)`, `seam strength on the new pieces right after each swap: ${r.seamCarry.map((v) => v.toFixed(2)).join(' ')}`);
+        // the threads between the parting pieces: three for sticky / slime (two when calm), at most one wisp for gel; each snaps once (the shell's strand voice hears it)
+        const tacky = r.family === 'stickystretch' || r.family === 'slimegoo';
+        check(tacky ? r.maxStrands >= 2 && r.snapEvents >= r.cutsDone - 1 && r.strandEvents >= 5 : r.maxStrands <= 1,
+          `CUT parting threads (${name}, ${r.family}): ${tacky ? 'several threads hang between the pieces (>= 2), each cut hangs a thread that stretches and snaps' : 'at most one wisp'}`, `threads <= ${r.maxStrands}, stretch frames ${r.strandEvents}, snaps ${r.snapEvents}`);
+        // a piece that GROWS while the others flow into it (setFrac up) stays inside the frame (the framing follows its growth), and the 6 pieces are framed whole
+        check(r.framed.inFrame && r.framed.pieces >= 5 && r.framed.minPx >= 30 && r.minTopPx >= -2, `CUT framing (${name}): the pieces (up to 6) are inside the 640x480 frame, and the face piece never leaves the top of it while it grows back to full size`, `pieces ${r.framed.pieces}, smallest ${r.framed.minPx.toFixed(0)} px, highest point while it grows ${r.minTopPx.toFixed(0)} px from the top (neck ${(r.minTopByPhase.neck ?? 0).toFixed(0)}, pieces ${(r.minTopByPhase.pieces ?? 0).toFixed(0)})`);
+      }
     }
     report.problems.push(...xbad);
     await cctx.close();

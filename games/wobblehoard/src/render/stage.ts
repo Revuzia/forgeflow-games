@@ -3,7 +3,7 @@
 // two parents plus the result during a ceremony), the capsule, the shared particle system, and the ceremony director.
 // `createStage(canvas)` implements StageLike (src/contracts.ts). In a DEV build (Vite dev server: the harness, ?dev=1) the same object also
 // carries a few dev-only members (renderer access, memory counters, context-loss helpers, the `info` readout, the ceremony internals);
-// they sit behind `import.meta.env.DEV`, so `vite build` drops them. `createStageDev` is the typed accessor the render harness uses.
+// they sit behind `import.meta.env.DEV`, so `vite build` drops them. `createStageDev` (src/render/stageDev.ts, imported by the harnesses only) is the typed accessor.
 //
 // Camera conventions (the SHELL lane reads these):
 //   orbit(dYaw, dPitch): radians, OrbitControls feel: pass (dx * k, dy * k) of a pointer drag and the scene turns with the finger.
@@ -68,10 +68,17 @@ import { Capsule, CAPSULE_HEIGHT } from './capsule.ts';
 const CAP_R = 0.24;
 /** The capsule-spot search: sizes tried in turn, sides, depths and side gaps (x body scale), in-front spots ([x share, z x gap]). */
 const SPOT_SIZES = [1, 0.8, 0.66, 0.55, 0.46];
+/**
+ * The most the camera may pull back (x the framing it would use without the capsule) to make room for a waiting capsule BESIDE the squishy
+ * on a narrow portrait frame. A frame where that costs more has the capsule stand smaller beside the body instead (never in front of it).
+ */
+const REFRAME_MAX = 1.2;
+/** ... and the most it may pull back for a very wide species (a long bean that fills a narrow frame) before the capsule has to stand in front or behind it. */
+const REFRAME_WIDE = 1.32;
 const SIDES = [1, -1];
 const SPOT_DEPTHS = [0.15, 0, -0.25, -0.5];
 const SPOT_GAPS = [0.14, 0.06, 0.26];
-const FRONT: readonly (readonly [number, number])[] = [[0.45, 1], [0.5, 1], [0.45, 2], [0, 2.2], [0, 3.2], [0.3, 3.9], [0.3, 2.6], [0.3, 1.6]];
+const FRONT: readonly (readonly [number, number])[] = [[0.45, 1], [0.5, 1], [0.45, 2], [0, 2.2], [0, 3.2], [0.3, 3.9], [0.3, 2.6], [0.3, 1.6], [0.5, 4.8], [0.5, 6], [0.5, 7.5]];
 import { CeremonyDirector, type CeremonyHost } from './ceremony.ts';
 import { CutFx } from './cutfx.ts';
 import { createDecalGeometry } from './decals.ts';
@@ -107,6 +114,8 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo | keyof StageEx
     contextLost: boolean; pixelRatio: number; drawingBuffer: [number, number]; eyeLook: number[] | null;
     bodies: number; primary: number | null; ceremony: boolean; particles: number; calm: boolean; screenLight: number; capsule: boolean; cameraFx: { dist: number; yaw: number; pitch: number };
     particlesDropped: number; camScale: number; cut: { strands: number; bridges: number; glow: number };
+    /** The standing capsule's table spot and size (null when none): the harness checks where it landed. */
+    cap: { x: number; z: number; size: number } | null;
   };
   readonly views: readonly BodyView[];
   readonly flash: FlashGovernor;
@@ -221,6 +230,64 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   const primary = (): BodyView | null => { for (const v of views) if (v.id === primaryId) return v; return null; };
   const viewById = (id: number): BodyView | null => { for (const v of views) if (v.id === id) return v; return null; };
   const fitDistance = (): number => camScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect));
+  /** Half the world width the frame shows at the table centre at the rest framing (a body of scale 1 is 1 wide). */
+  const hwPerNow = (): number => Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect)) * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect;
+  /** What framingFor returns (one reused object: no allocation). */
+  const frameOut = { want: 1, multi: false, mx: 0, mz: 0 };
+  /**
+   * The framing (a scale over the rest framing of a unit body) the visible bodies need, and the middle of the group they stand in; with
+   * `withCap` also a capsule of size `cs` standing at (cx, cz): it counts as one more body, so with a single squishy on a narrow portrait
+   * frame the camera pulls back and aims between the two. (Several bodies: their table extents plus a margin; one body alone: a wide
+   * species still fits a narrow frame whole.) Used by the camera every frame and by the capsule's spot search.
+   */
+  function framingFor(withCap: boolean, cx: number, cz: number, cs: number): typeof frameOut {
+    const pv = primary();
+    let want = framing ?? bodyScale * (pv ? pv.growth : 1), n = 0, bcx = 0;   // (a piece that grew since it was built: setFrac)
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;          // a mat of bodies: generous reach
+    let tx0 = Infinity, tx1 = -Infinity, tz0 = Infinity, tz1 = -Infinity;      // one body and a capsule: its silhouette's reach
+    for (const v of views) {
+      if (!v.visible) continue;
+      n++;
+      const gk = v.growth, c = v.proxy.center, r = Math.max(v.proxy.restRadius * 1.25, v.restHalfW * 1.12) * gk, t = (v.restHalfW * 1.06 + 0.05 * v.scale) * gk;
+      bcx = c.x;
+      if (c.x - r < x0) x0 = c.x - r; if (c.x + r > x1) x1 = c.x + r; if (c.z - r < z0) z0 = c.z - r; if (c.z + r > z1) z1 = c.z + r;
+      if (c.x - t < tx0) tx0 = c.x - t; if (c.x + t > tx1) tx1 = c.x + t; if (c.z - t < tz0) tz0 = c.z - t; if (c.z + t > tz1) tz1 = c.z + t;
+    }
+    if (withCap) {
+      const r = CAP_R * cs;
+      if (cx - r < x0) x0 = cx - r; if (cx + r > x1) x1 = cx + r; if (cz - r < z0) z0 = cz - r; if (cz + r > z1) z1 = cz + r;
+      if (cx - r < tx0) tx0 = cx - r; if (cx + r > tx1) tx1 = cx + r; if (cz - r < tz0) tz0 = cz - r; if (cz + r > tz1) tz1 = cz + r;
+    }
+    const hwPer = hwPerNow();
+    // a piece that grew in a reconnect (setFrac) must fit the frame's height too, a tall one above all: its rest height above the table, against what the
+    // frame shows above the aim point (the bodies' own jumps never count: only the rest height, so a toss does not move the camera)
+    // (a body in the middle of a cut has its lobes swell up by ~30% while the neck forms: that headroom too, except in calm mode, which moves no camera)
+    { let hTop = 0; for (const v of views) {
+        if (!v.visible) continue;
+        const sk = calm ? 0 : Math.min(1, v.seamAmount / 0.85), grew = v.growth > 1.02;
+        if (grew || sk > 0.02) hTop = Math.max(hTop, v.restH * v.growth * (1 + 0.45 * sk) * (grew ? 1.15 : 1));
+      }
+      want = Math.max(want, hTop / (TARGET_Y + 0.85 * hwPer / Math.max(0.2, camera.aspect))); }
+    // one body: a wide species (a half-moon dumpling, a long bean) must fit a narrow portrait frame whole (its rest reach + a margin)
+    const p1 = n === 1 ? primary() : null;
+    if (p1) want = Math.max(want, ((p1.restHalfW * 1.06 + 0.05 * p1.scale) * p1.growth) / hwPer);
+    let multi = false, mx = 0, mz = 0;
+    const solo = n === 1 && withCap;
+    if (n + (withCap ? 1 : 0) >= 2) {
+      const ax0 = solo ? tx0 : x0, ax1 = solo ? tx1 : x1, az0 = solo ? tz0 : z0, az1 = solo ? tz1 : z1;
+      // a lone squishy whose capsule already fits the frame at the single-body framing (a wide frame) keeps the camera where it is: no pull-back,
+      // no sideways shift (only a narrow portrait frame needs both)
+      const fits = solo && Math.max(bcx - ax0, ax1 - bcx) + 0.06 <= want * hwPer;
+      multi = !fits;
+      // a portrait frame has height to spare: depth (which reads as height on screen) costs little zoom there
+      if (!fits) {
+        want = Math.max(want, ((ax1 - ax0) / 2 + (solo ? 0.06 : 0.1) + (camera.aspect < 0.9 ? 0.12 : 0.35) * (az1 - az0) / 2) / hwPer);
+        mx = (ax0 + ax1) / 2; mz = (az0 + az1) / 2;
+      }
+    }
+    frameOut.want = want; frameOut.multi = multi; frameOut.mx = mx; frameOut.mz = mz;
+    return frameOut;
+  }
 
   /**
    * Where the meter-full capsule lands, chosen ON SCREEN: the first spot (in this order) whose capsule stays inside the frame minus the
@@ -254,23 +321,35 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       if (!Number.isFinite(x0)) { x0 = -0.5 * sc; x1 = 0.5 * sc; z0 = -0.5 * sc; z1 = 0.5 * sc; }
       zc = p.proxy.center.z;
     }
-    // with 2..5 bodies out the camera frames the capsule too (updateCamera): a spot beside the group is never "off the frame" sideways
-    spotReframes = spotBoxes.length >= 2;
+    // outside a ceremony the camera frames a waiting capsule WITH the bodies (updateCamera: it pulls back to make room, up to REFRAME_MAX), so
+    // a spot beside them is never "off the frame" sideways; one that would cost a bigger pull-back than that is rejected (a smaller capsule
+    // beside the body instead: never one in front of it just because the frame is narrow)
+    spotReframes = !director.active && !!p;
+    const baseWant = spotReframes ? framingFor(false, 0, 0, 1).want : 1;
     const cx = (x0 + x1) / 2;
-    let bx = x1 + CAP_R + 0.14 * sc, bz = zc, bs = 1, bestBad = Infinity;
+    let bx = x1 + CAP_R + 0.14 * sc, bz = zc, bs = 1, bestBad = Infinity, maxRatio = REFRAME_MAX;
     const tryAt = (x: number, z: number, size: number): boolean => {
-      const bad = spotBadness(x, z, z < zc ? 2 : 0.6, size) + (1 - size) * 4;   // (between equally bad spots, the bigger capsule)
+      let pen = 0;
+      if (spotReframes) { const ratio = framingFor(true, x, z, size).want / Math.max(1e-6, baseWant); if (ratio > maxRatio) pen = (ratio - maxRatio) * 2000; }
+      const bad = spotBadness(x, z, z < zc ? 2 : 0.6, size) + pen + (1 - size) * 4;   // (between equally bad spots, the bigger capsule)
       if (bad < bestBad - 1e-6) { bestBad = bad; bx = x; bz = z; bs = size; }
       return bad - (1 - size) * 4 <= 0;
     };
-    for (const size of SPOT_SIZES) {
-      const r = CAP_R * size, gap = r + 0.14 * sc;
-      // beside: right, then left, at four depths; the usual gap first, then a tighter one, then a wider one
-      for (const g of SPOT_GAPS) for (const side of SIDES) for (const dz of SPOT_DEPTHS) {
-        const x = side > 0 ? x1 + r + g * sc : x0 - r - g * sc;
-        if (tryAt(x, zc + dz * sc, size)) return { x: bx, z: bz, size: bs };
+    // beside the bodies first, at every size (a smaller capsule beside the squishy beats a big one in front of it): right, then left, at four
+    // depths; the usual gap first, then a tighter one, then a wider one
+    for (const wide of spotReframes ? [false, true] : [false]) {
+      maxRatio = wide ? REFRAME_WIDE : REFRAME_MAX;
+      for (const size of SPOT_SIZES) {
+        const r = CAP_R * size;
+        for (const g of SPOT_GAPS) for (const side of SIDES) for (const dz of SPOT_DEPTHS) {
+          const x = side > 0 ? x1 + r + g * sc : x0 - r - g * sc;
+          if (tryAt(x, zc + dz * sc, size)) return { x: bx, z: bz, size: bs };
+        }
       }
-      // behind to a side, then in front (lower in the picture)
+    }
+    // nothing beside is clean (a very wide body): behind to a side, then in front (lower in the picture)
+    for (const size of SPOT_SIZES) {
+      const gap = CAP_R * size + 0.14 * sc;
       if (tryAt(x1 + gap * 0.4, z0 - gap, size) || tryAt(x0 - gap * 0.4, z0 - gap, size)) return { x: bx, z: bz, size: bs };
       for (const [fx, fz] of FRONT) if (tryAt(cx + fx * (x1 - x0), z1 + fz * gap, size)) return { x: bx, z: bz, size: bs };
     }
@@ -298,12 +377,14 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     // off the safe frame counts 3x: a capsule half under the HUD or off the edge cannot be tapped; a little overlap only hides some of it
     let bad = 3 * (Math.max(0, safe.top + m - b[1]) + Math.max(0, b[3] - (H - safe.bottom - m)));
     if (!spotReframes) bad += 3 * (Math.max(0, safe.left + m - (cx - rh)) + Math.max(0, cx + rh - (W - safe.right - m)));
+    // (the overlap test works on the box grown by a small margin: a capsule that only just clears a body's box still reads as touching it)
+    const gm = 8;
     for (const o of spotBoxes) {
-      const ox = Math.min(b[2], o[2]) - Math.max(b[0], o[0]);
+      const ox = Math.min(b[2] + gm, o[2]) - Math.max(b[0] - gm, o[0]);
       if (ox <= 0) continue;
-      if (hideW >= 1) { const oy = Math.min(b[3], o[3]) - Math.max(b[1], o[1]); if (oy > 0) bad += hideW * Math.sqrt(ox * oy); continue; }
+      if (hideW >= 1) { const oy = Math.min(b[3] + gm, o[3]) - Math.max(b[1] - gm, o[1]); if (oy > 0) bad += hideW * Math.sqrt(ox * oy); continue; }
       const face = o[1] + 0.65 * (o[3] - o[1]);
-      const oyF = Math.min(b[3], face) - Math.max(b[1], o[1]), oyL = Math.min(b[3], o[3]) - Math.max(b[1], face);
+      const oyF = Math.min(b[3] + gm, face) - Math.max(b[1] - gm, o[1]), oyL = Math.min(b[3] + gm, o[3]) - Math.max(b[1] - gm, face);
       if (oyF > 0) bad += hideW * Math.sqrt(ox * oyF);
       if (oyL > 0) bad += 0.2 * Math.sqrt(ox * oyL);
     }
@@ -343,6 +424,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     v.dispose();
     if (primaryId === v.id) { primaryId = views.length ? views[0].id : null; }
   }
+  function removeAllViews(): void { while (views.length) removeView(views[views.length - 1]); primaryId = null; }
   function discardCapsule(): void { if (capsule) { capsule.dispose(); capsule = null; } capsuleParked = false; }
   function discardRevealCapsule(): void { if (revealCap) { revealCap.dispose(); revealCap = null; } }
 
@@ -366,30 +448,15 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     // stage B1: with 2..5 bodies out on the mat, frame them all (their table extents, plus a margin) and aim at their middle
     let want = framing ?? bodyScale, multi = false, mx = 0, mz = 0;
     if (!director.active) {
-      let n = 0, x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-      for (const v of views) {
-        if (!v.visible) continue;
-        n++;
-        const c = v.proxy.center, r = Math.max(v.proxy.restRadius * 1.25, v.restHalfW * 1.12);
-        if (c.x - r < x0) x0 = c.x - r; if (c.x + r > x1) x1 = c.x + r; if (c.z - r < z0) z0 = c.z - r; if (c.z + r > z1) z1 = c.z + r;
-      }
-      // a capsule standing on the mat beside the group is framed with it
-      if (n >= 2 && capsule && !capsuleParked && capsule.group.visible) {
-        const q = capsule.pos;
-        if (q.x - CAP_R < x0) x0 = q.x - CAP_R; if (q.x + CAP_R > x1) x1 = q.x + CAP_R; if (q.z - CAP_R < z0) z0 = q.z - CAP_R; if (q.z + CAP_R > z1) z1 = q.z + CAP_R;
-      }
-      const hwPer = Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect)) * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect;
-      // one body: a wide species (a half-moon dumpling, a long bean) must fit a narrow portrait frame whole (its rest reach + a margin)
-      const p1 = n === 1 ? primary() : null;
-      if (p1) want = Math.max(want, (p1.restHalfW * 1.06 + 0.05 * p1.scale) / hwPer);
-      if (n >= 2) {
-        multi = true;
-        // a portrait frame has height to spare: depth (which reads as height on screen) costs little zoom there
-        want = Math.max(want, ((x1 - x0) / 2 + 0.1 + (camera.aspect < 0.9 ? 0.12 : 0.35) * (z1 - z0) / 2) / hwPer);
-        mx = (x0 + x1) / 2; mz = (z0 + z1) / 2;
-      }
+      // a capsule standing on the mat beside the squishy (or the group) is framed with it
+      const c = capsule && !capsuleParked && capsule.group.visible ? capsule : null;
+      const f = c ? framingFor(true, c.pos.x, c.pos.z, c.size) : framingFor(false, 0, 0, 1);
+      want = f.want; multi = f.multi; mx = f.mx; mz = f.mz;
     }
-    camScale += (want - camScale) * (1 - Math.exp(-dt * 4));
+    // (quicker while a neck forms: the lobes of a cut body swell within a third of a second)
+    let necking = false;
+    if (!calm) for (const v of views) if (v.visible && v.seamAmount > 0.02) { necking = true; break; }
+    camScale += (want - camScale) * (1 - Math.exp(-dt * (necking ? 14 : 4)));
     // follow the primary body gently (it can drift when shoved or floating); a ceremony keeps the pad centred
     let wx = 0, wy = TARGET_Y * camScale, wz = 0;
     const p = primary();
@@ -514,7 +581,9 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       // a SWAP (bodies were showing: the Hoard's preview, a quick switch) eases from the current framing, so a mat group the shell
       // re-adds right after keeps its framing without the camera jumping in and back out; the first body after an empty stage snaps
       const swap = views.length > 0;
-      stage.clearBodies();
+      // (not clearBodies(): a CUT swaps the face piece in with setBody right where the cut body's seam glow and the bridges are, and they
+      // must carry over the swap, not be wiped with it; each removed view still hands its seam to cut.bodyRemoved)
+      removeAllViews();
       keepFraming = swap;
       const v = addView(body, genome, 'common', false);
       keepFraming = false;
@@ -532,7 +601,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     // a running ceremony owns its bodies (and adopts the result at its end): removing bodies under it first ends it at its final frame,
     // exactly as setBody does, so the result is never orphaned (a primary id pointing at a removed view)
     removeBody(id) { const v = views.find((x) => x.id === id); if (!v) return; if (director.active) director.abort(); if (views.includes(v)) removeView(v); },
-    clearBodies() { director.abort(); while (views.length) removeView(views[views.length - 1]); primaryId = null; cut.clear(); },
+    clearBodies() { director.abort(); removeAllViews(); cut.clear(); },
     primaryBodyId() { return primaryId; },
     setBodyTier(id, t) { views.find((x) => x.id === id)?.setTier(safeTier(t)); },
     setCalmEffects(on) {
@@ -727,7 +796,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
             pixelRatio: renderer.getPixelRatio(), drawingBuffer: [canvas.width, canvas.height] as [number, number],
             eyeLook: p ? Array.from(p.face.lookOut) : null,
             bodies: views.length, primary: primaryId, ceremony: director.active, particles: particles.count, calm, screenLight: screen.lightAlpha, capsule: !!capsule || !!revealCap, cameraFx,
-            particlesDropped: particles.dropped, camScale, cut: { ...cut.live },
+            particlesDropped: particles.dropped, camScale, cut: { ...cut.live }, cap: capsule ? { x: capsule.pos.x, z: capsule.pos.z, size: capsule.size } : null,
           };
         },
       },
@@ -739,9 +808,4 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
 /** The stage (StageLike, every round-2 member). */
 export function createStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   return buildStage(canvas);
-}
-
-/** The same stage with its dev members typed (render harness; the members exist only in a DEV build). */
-export function createStageDev(canvas: HTMLCanvasElement): StageDev {
-  return buildStage(canvas) as StageDev;
 }

@@ -305,7 +305,11 @@ abstract class Run implements CeremonyHandle {
    * it grows (strength / swept area), so it never adds a second luminance peak right after the burst flash (the flash probe counts those).
    */
   protected expandDome(dome: PrismDome, x: number, z: number, r0: number, h0: number, s0: number, age: number, t: number): void {
-    const g = smooth(0, 0.6, age), rx = r0 * (1 + 0.9 * g), ry = h0 * (1 + 0.8 * g);
+    const g = smooth(0, 0.6, age);
+    let rx = r0 * (1 + 0.9 * g), ry = h0 * (1 + 0.8 * g);
+    // it never swells past the sides of the frame (a narrow portrait phone shows ~1.5 m: the full 1.9x dome crossed both sides by 110..150 px)
+    const room = 0.92 * this.host.viewHalfWidth() - Math.abs(x);
+    if (rx > room) { const k = Math.max(r0 * 0.9, room) / rx; rx *= k; ry *= Math.max(k, 0.8); }
     dome.set(x, z, rx, ry, s0 * ((r0 * h0) / (rx * ry)) * (1 - smooth(0.4, 1.4, age)), t);
   }
 
@@ -591,7 +595,9 @@ export class MergeRun extends Run {
     const hw0 = host.viewHalfWidth(fr);    // half-width of the PLAY framing of these bodies at the pad
     this.layout = n === 2 ? 'pair' : hw0 >= 1.25 ? 'row' : 'triangle';
     // where the parents start: a short slide in on narrow frames, from ~1.2 out on desktop; then the framing that shows them whole
-    const reach = Math.max(0.5 * fr, Math.min(1.55, hw0 * 0.9 - 0.15));
+    // (on a frame wide enough for the pair at the play framing they start where both fit it: the Common merge then makes no camera move at all, DESIGN 6.3;
+    // starting further out (1.24 m on desktop) widened the framing by 18% for every tier and eased it back at the reveal)
+    const reach = Math.max(0.5 * fr, Math.min(1.55, hw0 * 0.9 - 0.15, hw0 - 0.58 * fr - 0.02));
     const need = this.layout === 'row' ? 0 : (this.layout === 'pair' ? reach : reach * 0.97) + 0.58 * fr;
     const fit = Math.min(1.5, Math.max(1, need / Math.max(0.2, hw0)));
     const framing = Math.max(fit, this.calm ? 1 : MERGE_FRAMING[i]);
