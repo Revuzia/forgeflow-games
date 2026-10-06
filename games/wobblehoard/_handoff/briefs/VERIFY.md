@@ -103,3 +103,37 @@ penetration, no fold beyond the probe limits at the clamp; determinism (the same
 **Lens C, quiet performance.** Run **alone**: the orchestrator guarantees no other heavy job. `perf47.ts`, `perf.ts` workloads A and B for every
 family, then 2, 4 and 6 whole bodies with `collide`, and 6 pieces versus 2 whole bodies (`CUT.md` X08). Report the load average or
 CPU usage before and after, mean and p99 ms per frame, and the 2.0 ms bar. State plainly which numbers meet the bar and which do not.
+
+## ECON: "short taps pay nothing" (owner decision 2026-10-06; reverses the earlier "ordinary tapping always earns")
+
+Independent re-check of the economy change. A tap (the 'poke' SoftEvent, and a squeeze released under 0.4 s) pays 0 SP, makes no spark and does
+not move the meter ring; squeezes held >= 0.4 s, stretches and holds pay as before (re-tuned so the pace holds). Work in a snapshot, no browser.
+1. **Hunt for any path where a tap still pays**: the poke rule, the double-tap gap, freshness, the medley bonus (an unpaid tap must not unlock it),
+   a squeeze under 0.4 s, `previewTouch` (the pending arc), the ghost economy and restock/task rewards, the shell's `xp.ts` constants path, the
+   server SQL drafts in COLLECTION and TRADE (quoted pay values must match the code; they stay marked NOT APPLIED).
+2. **Re-run the economy simulation yourself** (`_harness/sim_economy.ts`) from a clean copy and compare with the engineer's table: median active
+   minutes per capsule for the squeezing, pulling and mixed archetypes in the 3.0 to 3.8 band; what a pure tapper now earns (it should be 0:
+   report it plainly); bots and the per-minute valve and daily cap still bound machine-speed play. If the pace left the band, MERGE_COST = 2
+   depends on it: say so.
+3. Probes: `probe_economy`, `probe_collection`, `probe_merge`, `shellview/node_checks.ts`, `probe_app`, `tsc`: counts and failures verbatim. Every
+   check the engineer re-specified needs a written reason in its report; check each reason is honest (not a loosened threshold in disguise).
+4. Docs and quotes: DESIGN 5.4, FUN.md section 2, and every place that quotes a pay value agree with `meter.ts`.
+
+## SHELL input: Shift + drag pulls both sides on PC (owner decision 2026-10-06)
+
+Independent re-check of the gesture change in `src/input/gestures.ts`, `pointer.ts` and the shell glue (`game.ts` PointerIn, `driver.ts`).
+1. **Differential test**: the pre-change gesture machine (`git show HEAD:games/wobblehoard/src/input/gestures.ts`, the commit the task names) and the
+   new one must emit identical actions for at least 20,000 random pointer sequences that never set `shift` (taps, squishes, rubs, pulls, orbit,
+   two fingers, cancels). Any difference is a MAJOR regression.
+2. **Mirror fuzz**: random sequences with Shift on and off (set before the press, set during the press, released mid-drag), Space's synthetic
+   pointer holding the other slot, a second touch, cancels, `cancelAll`, a hit test that fails at the mirror point, the body moving. Invariants:
+   every emitted `grab` is later released exactly once; no action after `cancelAll`; no stuck slot (a later press always gets a slot); a mirror
+   never starts when the other slot is busy; touch (non-mouse) never mirrors; the mirrored target is the reflection of the real one through the
+   body's screen centre; determinism.
+3. **Real physics**: drive the real `SoftBody` from the gesture actions (as `driver.ts` does): a Shift pull past 1.15 x maxPull never sets
+   `metrics.carried` and stretches to the maximum on both sides; a plain one-finger pull still lifts; no NaN, fold or penetration; the meter pays
+   a Shift pull as one pull (report the numbers).
+4. In a real browser if the render tree is stable (your own port, at most one browser): Playwright mouse + `keyboard.down('Shift')` on the real
+   game: both sides stretch, release restores, the hint line mentions Shift on desktop only. If the render lane's in-progress edits break the
+   page, say so and rely on 1 to 3.
+5. `probe_gestures`, `shellview/node_checks.ts`, `probe_app`, `tsc`: counts and failures verbatim.
