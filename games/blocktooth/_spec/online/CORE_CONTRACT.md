@@ -318,6 +318,8 @@ is false).
   (`RESUME/g2_fresh.txt`: molo/grideast `e9d2c850`, briarwick/lockwater `c678febb`; `RESUME/g2_full.txt`: `2b22b988`,
   `d5c43fb2`), 12/12 clears each, and the whole log is identical to the baseline apart from wall / ms timing. The only
   violation is the known seed-sensitive `bot died in 0 of 12 runs`.
+  (Re-frozen 2026-10-06 after BRIARWICK's Size I lash floor was removed: the briarwick/lockwater hashes are now `4e31ce66`
+  (fresh) and `75411b17` (full); the molo hashes `e9d2c850` / `2b22b988` are unchanged.)
 * Every other probe, new tree vs a `git archive HEAD` copy run side by side (`out_new` / `out_head`): ai, boss3, city,
   combat, econ, endless, evo, gk, icons, map, meta, titan, ult, upg produce identical logs and exit codes (apart from
   timing). Pre-existing, unchanged: `city` rc 1 ("generateCity too slow" under CPU load), `map` rc 1 (whitestacks

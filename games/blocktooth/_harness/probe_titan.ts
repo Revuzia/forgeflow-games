@@ -470,7 +470,7 @@ for (const id of TITANS) {
   }
   // L6 (fb3 v3): a steady whip under an imprecise stick — the titan walks in place (re-placed every tick) while the stick
   // wobbles ±25° around one heading, re-rolled every 0.5 s (probe_balance's player-like steering); two equal clusters
-  // (3 foes each, 4-7 H: Size I reaches 12.5 m) at ±20°, both always inside the arc. Consecutive lashes keep to one lane (median swing ≤ 10°, ≤ 1 swing > 20°), every
+  // (3 foes each, 4-7 H) at ±20°, both always inside the arc. Consecutive lashes keep to one lane (median swing ≤ 10°, ≤ 1 swing > 20°), every
   // crack within the arc of the stick + 25° (a wind-up commits 0.2 s before a re-roll), each hits ≥ 2 foes. Control:
   // goodFrac 0 / trackN 0 (always the single best lane) must swing > 20° at least 3 times on this field (else the field proves nothing).
   {
@@ -796,7 +796,6 @@ for (const [rank, strength] of [[0, 3], [2, 12], [4, 12]] as const) {
     ['hearthback', 'hook', `heals ${pct(HEARTH.ventHealFrac)}`], ['hearthback', 'hook', `${HEARTH.ventCdS} s cooldown`],
     ['briarwick', 'auto', `Every ${BRIAR.lashEveryS.toFixed(1)} s`],
     ['briarwick', 'auto', `${BRIAR.lashLenH} body-heights long (${(BRIAR.lashLenH * BRIAR.size1LenMul).toFixed(1)} at Size I), ${BRIAR.lashDmg} dmg`],
-    ['briarwick', 'auto', `at Size I it always reaches ${BRIAR.size1ReachM} m`],   // CFIX 2026-09-30: Size I lash floor (added fact)
     ['briarwick', 'auto', `within ${BRIAR.aimArcDeg}° of where you are heading`],   // fb3 2026-09-30: forward-arc aim (added fact)
     ['briarwick', 'auto', `ripen in ${BRIAR.ripenS} s`], ['briarwick', 'auto', `${BRIAR.burstDmg} dmg, tangles`],
     ['briarwick', 'auto', `hits ${pct(BRIAR.linkBonus)} harder`],

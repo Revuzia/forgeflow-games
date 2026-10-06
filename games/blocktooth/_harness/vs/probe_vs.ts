@@ -205,9 +205,9 @@ function nativeBotLanded(): boolean {
 interface SoloRun { name: string; meta: string; titan: string; biome: string; want: string; got: string | null; ok: boolean; ms: number }
 const SOLO_BASELINES: { meta: 'fresh' | 'full'; titan: string; biome: string; hash: string; file: string }[] = [
   { meta: 'fresh', titan: 'molo', biome: 'grideast', hash: 'e9d2c850', file: 'g2_fresh.txt' },
-  { meta: 'fresh', titan: 'briarwick', biome: 'lockwater', hash: 'c678febb', file: 'g2_fresh.txt' },
+  { meta: 'fresh', titan: 'briarwick', biome: 'lockwater', hash: '4e31ce66', file: 'g2_fresh.txt' },
   { meta: 'full', titan: 'molo', biome: 'grideast', hash: '2b22b988', file: 'g2_full.txt' },
-  { meta: 'full', titan: 'briarwick', biome: 'lockwater', hash: 'd5c43fb2', file: 'g2_full.txt' },
+  { meta: 'full', titan: 'briarwick', biome: 'lockwater', hash: '75411b17', file: 'g2_full.txt' },
 ];
 function checkBaselinesAgainstFiles(): string[] {
   // the hashes above are only trustworthy while they equal what the frozen RESUME logs say

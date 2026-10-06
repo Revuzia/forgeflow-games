@@ -147,7 +147,7 @@ export const TITANS: Record<TitanId, TitanDef> = {
     auto: {
       id: 'vineLash',
       name: 'BURR LASH',
-      desc: 'Every 1.0 s: a vine whip off the horns, 3.2 body-heights long (5.8 at Size I), 14 dmg to everything in it (at Size I it always reaches 12.5 m, out to the shooters). On the move it cracks only ahead, within 45° of where you are heading, down a line through foes, and keeps working the same line while it still hits; stand still (or get hemmed in) and it whips whatever is around you. It plants a seed pod where it lands. Pods ripen in 2 s and burst when anything touches them: 18 dmg, tangles foes, heals you a little, and sets off ripe pods nearby — each link hits 10% harder.',
+      desc: 'Every 1.0 s: a vine whip off the horns, 3.2 body-heights long (5.8 at Size I), 14 dmg to everything in it. On the move it cracks only ahead, within 45° of where you are heading, down a line through foes, and keeps working the same line while it still hits; stand still (or get hemmed in) and it whips whatever is around you. It plants a seed pod where it lands. Pods ripen in 2 s and burst when anything touches them: 18 dmg, tangles foes, heals you a little, and sets off ripe pods nearby — each link hits 10% harder.',
     },
     hook: {
       id: 'popUpPark',

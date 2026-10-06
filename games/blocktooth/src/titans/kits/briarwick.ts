@@ -66,11 +66,10 @@ export const BRIAR = {
   idleAnyDir: 1,           // 1: with the stick idle the whip cracks in any direction (the titan then turns to face it)
   keepS: 2.0,              // the last crack's lane counts for this long (s)
   windS: 0.2,              // the horn wind-up: the lane is committed this long before the crack (kit.lashWind; view)
-  // Size I lash floor (m from the titan's centre, before × vineLength × attackRange): the Size I shooters stand at their
-  // range off the titan's SURFACE (android 9, squad 12 + 0.2 H; ai/enemies.ts reach/surfDist), so the lash reaches
-  // size1ReachM + the titan's radius. Measured (critic 2026-09-30): at H 1.2 the 6.9 m lash reached 0 of 101 shooter
-  // shots fired from 7.97-12.27 m. From about H 2.3 the lash formula itself is longer and the floor stops mattering.
-  size1ReachM: 12.5,
+  // (No Size I lash floor. A critic-fix floor of 12.5 m + radius, added 2026-09-30 so the lash reached Size I shooters,
+  // made the Size I lash ~13 m = ~11 body heights at LV 1 (a bit under half the screen width), against the designed
+  // 3.2 H x 1.8 = 5.76 H = 6.9 m; owner 2026-10-05: "its bugged and shoots across the screen, ensure its range is what it
+  // should be". The lash is lashLenH x size1LenMul x H at every Size; see reach().)
   // ── pods ──
   podRH: 0.3,              // footprint (view / hazard shape) × H at plant time
   podLifeS: 9,
@@ -139,21 +138,17 @@ export function init(): Record<string, number> {
   };
 }
 
-/** Auto-attack (BURR LASH) reach (m) right now, incl. the Size I floor (size1ReachM). */
+/** Auto-attack (BURR LASH) reach (m) right now: the designed 3.2 H (x 1.8 at Size I), x vineLength x attackRange.
+ *  The drawn whip, the crack strip and the damage lane are all exactly this long (what you see is what you hit). */
 export function reach(w: World): number {
-  const T = w.titan;
-  let len = BRIAR.lashLenH * s1(w, BRIAR.size1LenMul) * T.height;
-  if (T.rank === 0) len = Math.max(len, BRIAR.size1ReachM + Math.max(0, T.radius));
-  return len * Math.max(0.1, S(w, 'vineLength')) * Math.max(0.1, S(w, 'attackRange'));
-}
-
-/** Drop-latch reach (m) — pickups.ts latches drops inside ~1.2 × this (kits/index kitLatchReach). The lash formula
- *  WITHOUT the Size I floor (Gate 2026-09-30): the floor is a combat fix for the Size I shooters' standoff; feeding it
- *  to the pickup latch too roughly doubled BRIARWICK's Size I vacuum radius and sped its growth (probe_meta perk band
- *  'Size III at 189 s, outside 210-380 s'). */
-export function latchReach(w: World): number {
   return BRIAR.lashLenH * s1(w, BRIAR.size1LenMul) * w.titan.height
     * Math.max(0.1, S(w, 'vineLength')) * Math.max(0.1, S(w, 'attackRange'));
+}
+
+/** Drop-latch reach (m) — pickups.ts latches drops inside ~1.2 x this (kits/index kitLatchReach). The lash formula
+ *  (reach() since the Size I floor was removed 2026-10-05; the floor had been kept out of the latch, Gate 2026-09-30). */
+export function latchReach(w: World): number {
+  return reach(w);
 }
 
 function podCap(w: World): number { return Math.max(1, Math.floor(S(w, 'turretCap'))); }
