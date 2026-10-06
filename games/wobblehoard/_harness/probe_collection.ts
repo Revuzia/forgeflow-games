@@ -685,9 +685,11 @@ section('P  practice economy, feed, storage');
   const prog: Record<string, number> = {};
   const def = (id: string) => TASK_DEFS.find((t) => t.id === id)!;
   const all = TASK_DEFS.slice();
-  bumpTasks(prog, all, 'poke', 0, det({ paidAs: 'poke', freshness: 0.6 }), 2);        // gentle + calm
-  bumpTasks(prog, all, 'poke', 0, det({ paidAs: 'poke', freshness: 0.2 }), 0.5);      // neither
-  bumpTasks(prog, all, 'poke', 0, det({ paidAs: 'poke', doubleTap: true }), 0.1);     // double tap: nothing
+  // owner decision 2026-10-06 ("short taps pay nothing", tasks included): no task asks for a tap and a tap counts toward none
+  bumpTasks(prog, all, 'poke', 0, det({ paidAs: 'poke', freshness: 0.6 }), 2);
+  bumpTasks(prog, all, 'poke', 0, det({ paidAs: 'poke', freshness: 0.2 }), 0.5);
+  bumpTasks(prog, all, 'poke', 0, det({ paidAs: 'poke', doubleTap: true }), 0.1);
+  const afterTaps = Object.values(prog).every((v) => v === 0);
   bumpTasks(prog, all, 'squeeze', 1.0, det({ paidAs: 'squeeze' }), null);            // slow squeeze (>= 1 s)
   bumpTasks(prog, all, 'squeeze', 2.1, det({ paidAs: 'squeeze' }), null);            // slow + long + soft-pop streak 1
   bumpTasks(prog, all, 'squeeze', 1.9, det({ paidAs: 'squeeze' }), null);            // streak 2
@@ -696,9 +698,9 @@ section('P  practice economy, feed, storage');
   bumpTasks(prog, all, 'pull', 0.94, det({ paidAs: 'pull' }), null);                 // snap, but short of its limit: no stretch
   bumpTasks(prog, all, 'pull', 1.0, det({ paidAs: 'pull' }), null);                  // snap + stretch (pulled to its maxPull)
   bumpTasks(prog, all, 'squeeze', 0.3, det({ paidAs: 'poke', freshness: 1 }), 3);    // a short squeeze is paid as a poke
-  check('P06', 'task counters follow COLLECTION 7.10 (gentle and calm pokes, slow and long squeezes, the soft-pop streak and its reset, snaps, stretch, medleys, a short squeeze counts as a poke)',
-    prog[def('gentle-pokes-20').id] === 2 && prog['pokes-sleepy-10'] === 2 && prog['slow-squeezes-5'] === 3 && prog['squeeze-long-3'] === 1 && prog['soft-pops-5'] === 2
-    && prog['soft-pops-5#streak'] === 0 && prog['snaps-3'] === 3 && prog['stretch-double'] === 1 && prog['medley-1'] === 1, JSON.stringify(prog));
+  check('P06', 'task counters follow COLLECTION 7.10 (a tap or a double tap counts toward no task and no task asks for one: owner decision 2026-10-06; quick, slow and long squeezes, the soft-pop streak and its reset, snaps, stretch, medleys; a short squeeze is a tap and counts for nothing). Re-specified from "gentle and calm pokes count": the owner decided taps earn nothing, tasks included',
+    afterTaps && TASK_DEFS.every((t) => t.metric !== 'pokes') && prog['quick-squeezes-10'] === 4 && prog['slow-squeezes-5'] === 3 && prog['squeeze-long-3'] === 1 && prog['soft-pops-5'] === 2
+    && prog['soft-pops-5#streak'] === 0 && prog['snaps-3'] === 3 && prog['stretch-double'] === 1 && prog['stretch-3'] === 1 && prog['medley-1'] === 1, JSON.stringify(prog));
   // the flow, on a raw save
   const monday = Math.floor(T0 / DAY_MS);
   const s6 = emptyHoard('taskdevice00001');
@@ -727,19 +729,23 @@ section('P  practice economy, feed, storage');
   }
   check('P06', `at most ${TASKS_MAX_PER_WEEK} task capsules a week ("weekly_limit"); the table row then says so`,
     claimed === TASKS_MAX_PER_WEEK && weekly === 'weekly_limit' && ghostTaskRows(s6, (tday + 3) * DAY_MS).every((r) => r.weeklyLimitReached), `${claimed} claimed, then ${weekly}`);
-  // through the feed: find a day that offers gentle pokes and poke gently
+  // through the feed: find a day that offers the quick squeezes; a flood of taps completes nothing and pays no capsule, ten squeezes complete it
   let dayP = monday, dev = '';
   T = T0;
   const m6 = memoryStorage();
   const c6 = mk(m6, 6);
   dev = stored(m6).deviceId;
-  for (let k = 0; k < 400 && !practiceTasksFor(dev, dayP).some((t) => t.id === 'gentle-pokes-20'); k++) dayP++;
+  for (let k = 0; k < 400 && !practiceTasksFor(dev, dayP).some((t) => t.id === 'quick-squeezes-10'); k++) dayP++;
   T = dayP * DAY_MS + 3600_000;
-  for (let i = 0; i < 25; i++) { T += 1500; c6.feed(ev('poke'), T); }
-  const row6 = c6.tasks().find((t) => t.def.id === 'gentle-pokes-20');
-  const got6 = row6 ? await c6.completeTask('gentle-pokes-20') : null;
-  check('P06', 'through the feed: 25 gentle pokes complete "Twenty gentle pokes" and the task pays a capsule',
-    !!row6 && row6.done && row6.progress === 20 && !!got6 && got6.ok && c6.meter().credits >= 1, row6 ? `${row6.progress}/${row6.target}` : 'no such day');
+  for (let i = 0; i < 200; i++) { T += 1500; c6.feed(ev('poke'), T); }
+  const afterTapsRows = c6.tasks().map((t) => t.progress);
+  const credits0 = c6.meter().credits, fill0 = c6.meter().fill;
+  for (let i = 0; i < 12; i++) { T += 3000; c6.feed(ev('release', 0.5, 1.0), T); }
+  const row6 = c6.tasks().find((t) => t.def.id === 'quick-squeezes-10');
+  const got6 = row6 ? await c6.completeTask('quick-squeezes-10') : null;
+  check('P06', 'through the feed: 200 taps complete no task, move no task counter, pay no capsule and leave the meter at 0; 12 squeezes held 1 s complete "Ten quick squeezes" and the task pays a capsule (was: 25 gentle pokes completed "Twenty gentle pokes": re-specified, the owner decided taps earn nothing, tasks included)',
+    afterTapsRows.every((p) => p === 0) && credits0 === 0 && fill0 === 0 && !!row6 && row6.done && row6.progress === 10 && !!got6 && got6.ok && c6.meter().credits >= 1,
+    row6 ? `taps: counters ${afterTapsRows.join('/')}, credits ${credits0}, fill ${fill0}; squeezes: ${row6.progress}/${row6.target}` : 'no such day');
   c6.dispose();
 
   // P07 hearts and seen

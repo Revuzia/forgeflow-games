@@ -810,7 +810,7 @@ header('8. rarity tables: odds, visual language, reveal budgets, haptics');
 header('9. _spec/CATALOG.md is exactly what the data generates');
 {
   let onDisk = '';
-  try { onDisk = readFileSync(CATALOG_DOC_PATH, 'utf8'); } catch { onDisk = ''; }
+  try { onDisk = readFileSync(CATALOG_DOC_PATH, 'utf8').replace(/\r\n/g, '\n'); } catch { onDisk = ''; }   // git's autocrlf checkout (Windows) makes the working copy CRLF; the committed bytes, and the generator, are LF
   const want = renderCatalogDoc();
   const a = onDisk.split('\n'), b = want.split('\n');
   let first = -1; for (let i = 0; i < Math.max(a.length, b.length); i++) if (a[i] !== b[i]) { first = i; break; }

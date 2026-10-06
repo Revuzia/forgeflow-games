@@ -308,9 +308,7 @@ against 3.1 to 3.6); the slower population median comes entirely from the tappin
 3.0 minutes: that is the owner's call, and it was not applied.
 
 **Restock and tasks.** *Restock:* once per day, 3 random Common or Uncommon species are offered (25 species pool); pick one, new ones shown first. Misses do not accumulate or punish.
-*Tasks:* 2 offered a day ("stretch one to 2x", "five soft pops in a row"), each completed task pays one capsule, **max 5 tasks a week**, tasks are style-neutral. **Taps still count for the
-tasks that ask for pokes ("Twenty gentle pokes", "Ten pokes with a calm pause between"), as the owner asked, so a task capsule is the one reward a player can still reach by tapping;** it is
-bounded by the 2-a-day and 5-a-week limits (a decision for the owner, see ECON_NOTAP in the handoff reports).
+*Tasks:* 2 offered a day ("stretch one to 2x", "five soft pops in a row"), each completed task pays one capsule, **max 5 tasks a week**, tasks are style-neutral. **No task asks for a tap and a tap counts toward none** (owner decision 2026-10-06: taps earn nothing, tasks included; the two poke tasks, "Twenty gentle pokes" and "Ten pokes with a calm pause between", were replaced by "Ten quick squeezes" and "Stretch three of them as far as they will go", and the medley task now reads "Squeeze and pull within twelve seconds"): a task capsule can no longer be reached by tapping.
 
 ### 5.5 Playstyle affinity: tested, then dropped from the drop odds
 

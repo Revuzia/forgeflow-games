@@ -475,10 +475,10 @@ The draft only knows `kind`, `amount` and the meter's own detail, so each task m
 
 | Metric | Counted when | Notes |
 |---|---|---|
-| `pokes` | a poke (a tap; since "short taps pay nothing" of 2026-10-06 it pays no SP, but it still counts here, as it does for the statistics) that is not a double-tap; with no `param`, freshness at least 0.5 ("gentle": with the poke tau of 0.75 s, a gap of 0.53 s or more; the meter still reports `detail.freshness` and `detail.doubleTap` for a tap for this); with `param` p, at least p seconds since the previous poke ("calm pause") | A task capsule is the one thing a tap can still lead to (2 tasks offered a day, 5 a week): see ECON_NOTAP in the handoff reports |
+| `pokes` | **no task uses this metric any more** (owner decision 2026-10-06: short taps pay nothing, tasks included; the poke tasks "Twenty gentle pokes" and "Ten pokes with a calm pause between" were replaced by `squeezes` "Ten quick squeezes" and `stretch` "Stretch three of them as far as they will go"). The counter name stays in `TaskDef.metric` and the draft's aggregates so a saved or server-side counter keeps its name; a tap counts toward no task | A tap leads to no capsule at all now: the meter pays it nothing and no task counts it |
 | `squeezes` | a squeeze with hold at least `param` seconds (default 0.4) | "slow squeezes" p = 1, "long squeezes" p = 2 |
 | `softPops` | longest streak of consecutive squeezes each held 1.8 s or more; a shorter squeeze resets it | my reading of "in a row" [U] |
-| `medleys` | the meter paid a medley bonus (since 2026-10-06 "short taps pay nothing": a squeeze and a stretch within 12 s; a tap neither joins nor completes it) | The task text still says "Poke, squeeze and pull within twelve seconds": a poke in it is harmless but no longer needed |
+| `medleys` | the meter paid a medley bonus (since 2026-10-06 "short taps pay nothing": a squeeze and a stretch within 12 s; a tap neither joins nor completes it) | The task text now reads "Squeeze and pull within twelve seconds" (it said "Poke, squeeze and pull ...") |
 | `snaps` | a pull with snap intensity at least 0.35 | |
 | `stretch` | a pull with intensity at least `STRETCH_FULL_INTENSITY` (0.95) | Settled by physics round 2: a snap's intensity is the pull level, grab distance / the body's own family `maxPull` (1.0 at the limit, where the physics clamps), so every family can reach it. Only the stretchy family can reach twice its size, so the task reads "Stretch one as far as it will go" (id `stretch-double` kept, because offers are seeded by id). |
 

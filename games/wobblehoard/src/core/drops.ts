@@ -127,15 +127,15 @@ export interface TaskDef {
   param?: number;
 }
 
-/** The pool tasks are drawn from. Kind-neutral wording, no timers, nothing to lose. */
+/** The pool tasks are drawn from. Kind-neutral wording, no timers, nothing to lose. No task asks for a tap (owner decision 2026-10-06: short taps earn nothing, a task capsule included); the 'pokes' metric stays in the type only so a saved or server-side counter keeps a name. */
 export const TASK_DEFS: readonly TaskDef[] = [
   { id: 'stretch-double', text: 'Stretch one as far as it will go', metric: 'stretch', target: 1 }, // id kept: offers are seeded by id
   { id: 'soft-pops-5', text: 'Five soft pops in a row', metric: 'softPops', target: 5 },
-  { id: 'gentle-pokes-20', text: 'Twenty gentle pokes', metric: 'pokes', target: 20 },
+  { id: 'quick-squeezes-10', text: 'Ten quick squeezes', metric: 'squeezes', target: 10 }, // was 'Twenty gentle pokes': taps earn nothing, tasks included (owner, 2026-10-06)
   { id: 'slow-squeezes-5', text: 'Five slow squeezes, a second each', metric: 'squeezes', target: 5, param: 1 },
-  { id: 'medley-1', text: 'Poke, squeeze and pull within twelve seconds', metric: 'medleys', target: 1 },
+  { id: 'medley-1', text: 'Squeeze and pull within twelve seconds', metric: 'medleys', target: 1 }, // a tap no longer counts toward the medley
   { id: 'snaps-3', text: 'Let three stretches snap back', metric: 'snaps', target: 3 },
-  { id: 'pokes-sleepy-10', text: 'Ten pokes with a calm pause between', metric: 'pokes', target: 10, param: 1 },
+  { id: 'stretch-3', text: 'Stretch three of them as far as they will go', metric: 'stretch', target: 3 }, // was 'Ten pokes with a calm pause between' (owner, 2026-10-06)
   { id: 'squeeze-long-3', text: 'Three long squeezes, two seconds each', metric: 'squeezes', target: 3, param: 2 },
 ];
 
