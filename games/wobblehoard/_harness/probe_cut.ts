@@ -389,6 +389,65 @@ function depthInside(a: SoftBody, b: SoftBody): number {
   add(`B3 pick up and toss (dollop): a pull asked to 1.6 x maxPull lifts it (metrics.carried, not grounded while carried; centre up to ${f(hy, 2)} m), a flick and let go: a full snap, it flies, lands ('land') and settles inside the mat`, `lifted ${lifted}, grounded while carried ${!carriedGrounded ? 'never' : 'yes'}, snap ${f(snaps[snaps.length - 1]?.intensity ?? 0, 2)}, lands ${landed}, farthest ${f(far, 2)} m, at rest ${b.metrics.kinetic < 0.02}, moved from ${f(p0.x, 2)} to ${f(b.center.x, 2)}`, 'true, never, 1, >= 1, <= 2.6 m, true', lifted && !carriedGrounded && (snaps[snaps.length - 1]?.intensity ?? 0) === 1 && landed >= 1 && far <= 2.6 && b.metrics.kinetic < 0.02);
 }
 
+// ---- B3b: only a LONE hand picks a body up (the owner: "I could squish two sides and pull, now it LIFTS the squishy", session 2)
+// Every way two fingers can be on a body while one of them pulls past LIFT_OVER x maxPull must stretch it and hold it to the mat (never
+// metrics.carried); a lone finger still lifts it; the two-handed state outlives the first finger up and ends with the last one.
+{
+  const ids: SpeciesId[] = ['dollop', 'wrigglo', 'cushlet', 'twangle', 'chunkle', 'munchip'];
+  const modes = ['two grabs, opposite sides', 'press one side + grab the other', 'press the top (Space) + grab a side', 'two grabs, one lifts early'] as const;
+  let two = 0, twoLifted = 0, loneLifted = 0, afterLatchLifted = 0, worstAir = 0;
+  const bad: string[] = [];
+  const hitAt = (b: SoftBody, ux: number, uy: number): ReturnType<SoftBody['raycast']> => {
+    const R = b.restRadius, c = b.center, l = Math.hypot(ux, uy) || 1, nx = ux / l, ny = uy / l;
+    const o = v3(c.x + nx * 4 * R, Math.max(0.02, c.y + ny * 4 * R), c.z), t = v3(c.x + nx * 0.5 * R, c.y + ny * 0.5 * R, c.z);
+    const dx = t.x - o.x, dy = t.y - o.y, dl = Math.hypot(dx, dy) || 1;
+    return b.raycast(o, v3(dx / dl, dy / dl, 0));
+  };
+  for (const id of ids) {
+    const g = speciesTemplateGenome(id);
+    for (const mode of modes) {
+      const b = new SoftBody(g);
+      run(b, 0.5);
+      const R = b.restRadius, D = 1.6 * b.params.maxPull * R, hA = hitAt(b, 1, 0.05)!, hB = hitAt(b, -1, 0.05)!, hT = hitAt(b, 0.03, 1)!;
+      b.grab(0, hA.vertex, hA.point);
+      if (mode === 'two grabs, opposite sides' || mode === 'two grabs, one lifts early') b.grab(1, hB.vertex, hB.point);
+      if (mode === 'press one side + grab the other') b.fingerDown(1, { point: hB.point, normal: hB.normal, dir: v3(-hB.normal.x, -hB.normal.y, -hB.normal.z) });
+      if (mode === 'press the top (Space) + grab a side') b.fingerDown(1, { point: hT.point, normal: hT.normal, dir: v3(0, -1, 0) });
+      let lifted = false;
+      for (let s = 0, t = 0; t < 2.6; s++) {
+        const k = D * Math.min(1, t / 0.8);
+        b.grabMove(0, v3(hA.point.x + k, hA.point.y, hA.point.z));
+        if (mode === 'two grabs, opposite sides') b.grabMove(1, v3(hB.point.x - k, hB.point.y, hB.point.z));
+        if (mode === 'two grabs, one lifts early') { if (t < 1.0) b.grabMove(1, v3(hB.point.x - k, hB.point.y, hB.point.z)); else if (t < 1.0 + DT) b.grabRelease(1); }
+        if (mode.startsWith('press')) b.fingerPressure(1, 0.55 + 0.45 * Math.min(1, Math.max(0, (t - 0.18) / 0.9)));
+        b.step(DT); t = (s + 1) * DT;
+        if (b.metrics.carried) lifted = true;
+        let lo = 1e9; for (let i = 1; i < b.positions.length; i += 3) lo = Math.min(lo, b.positions[i]);
+        worstAir = Math.max(worstAir, lo);
+      }
+      two++; if (lifted) { twoLifted++; bad.push(`${id}: ${mode}`); }
+      // everyone lets go, the body settles, then a LONE pull past the limit must lift it again (the latch ended with the last finger up)
+      b.grabRelease(0); if (mode.startsWith('press')) b.fingerUp(1); if (mode === 'two grabs, opposite sides') b.grabRelease(1);
+      run(b, 2.5);
+      const a2 = hitAt(b, 1, 0.05)!;
+      b.grab(0, a2.vertex, a2.point);
+      let again = false;
+      for (let s = 0, t = 0; t < 1.2; s++) { const k = D * Math.min(1, t / 0.8); b.grabMove(0, v3(a2.point.x + k, a2.point.y, a2.point.z)); b.step(DT); t = (s + 1) * DT; if (b.metrics.carried) again = true; }
+      if (!again) afterLatchLifted++;   // counts the FAILURES to lift
+      if (mode === 'two grabs, opposite sides') {
+        // and a lone finger on a fresh body lifts it (control: the toss survived)
+        const c = new SoftBody(g); run(c, 0.5);
+        const h = hitAt(c, 1, 0.05)!; c.grab(0, h.vertex, h.point);
+        let l = false; for (let s = 0, t = 0; t < 1.2; s++) { const k = D * Math.min(1, t / 0.8); c.grabMove(0, v3(h.point.x + k, h.point.y, h.point.z)); c.step(DT); t = (s + 1) * DT; if (c.metrics.carried) l = true; }
+        if (!l) loneLifted++;   // failures to lift
+      }
+    }
+  }
+  add(`B3b two fingers never pick a body up: ${ids.length} species x ${modes.length} two-handed pulls asked to 1.6 x maxPull (two grabs on opposite sides, a press + a grab, a top press (Space) + a grab, two grabs with one lifting early) never set metrics.carried; the lowest particle never leaves the table by more than 10 mm; the next lone pull lifts again (the latch ends with the last finger up); a lone pull on a fresh body of each species still lifts it`,
+    `lifted ${twoLifted} of ${two}${bad.length ? ` (${bad.slice(0, 4).join('; ')})` : ''}; lowest particle up to ${f(worstAir * 1000, 1)} mm; lone pull after a two-handed one failed to lift ${afterLatchLifted}; lone pull on a fresh body failed to lift ${loneLifted}`,
+    '0 lifted, <= 10 mm, 0, 0', twoLifted === 0 && worstAir <= 0.01 && afterLatchLifted === 0 && loneLifted === 0);
+}
+
 // ---- X08: perf, 6 pieces vs 2 whole bodies
 {
   const g = speciesTemplateGenome('dollop');

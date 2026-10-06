@@ -73,8 +73,10 @@ export interface SoftMetrics {
    *  intensity is this value at the release. */
   pull?: number;
   /** Stage B item B3 (optional): true while a pull past the body's maximum has picked it up off the mat and the hand carries it
-   *  (SoftBody: a grab target asked for more than 1.15 x maxPull). Letting go throws it with the hand's velocity and fires a full 'snap'
-   *  (intensity 1); it then flies, lands ('land') and squashes. metrics.grounded is false while carried. */
+   *  (SoftBody: a grab target asked for more than 1.15 x maxPull, by a LONE hand: while two fingers are on the body, a pinch, a press with
+   *  a pull, a pull from both sides, it is stretched to its maximum and stays on the mat, and stays so until every finger is up). Letting go
+   *  throws it with the hand's velocity and fires a full 'snap' (intensity 1); it then flies, lands ('land') and squashes.
+   *  metrics.grounded is false while carried. */
   carried?: boolean;
 }
 

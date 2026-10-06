@@ -25,6 +25,10 @@ player text in COMMON.md still apply unchanged.
   `taskkill`). `spawn('npx', ...)`, `spawnSync('npx', ...)` and `process.kill(-pid)` do NOT work on Windows: do not use them in new
   code. Known leftover: `_harness/browser_shell.mjs` (the `vite build` step near line 2513) still uses `spawnSync('npx', ...)`; the SHELL
   lane makes it portable (`process.execPath` + `node_modules/vite/bin/vite.js`).
+- **`npx` is unreliable here.** In the PowerShell tool `npx` fails with "StandardOutputEncoding is only supported when standard output is
+  redirected" and **leaves a stale exit code (0)**, so a failed check can look green. Call the tools directly:
+  `node node_modules/typescript/bin/tsc --noEmit -p tsconfig.json` (about 4 s; prints nothing when clean, exit 1 on errors; verified to
+  catch a deliberate error) and `node node_modules/vite/bin/vite.js build ...`. Always check the real output, not just `$LASTEXITCODE`.
 - **Ports** are unchanged: render 5364, shell 5366, audio 5367, physics 5368, verifiers 5370 to 5373. Use only your own.
 - **Kill everything you start.** `taskkill /PID <pid> /T /F` or `Stop-Process -Id <pid> -Force`. Before you finish, check for strays:
   `Get-CimInstance Win32_Process | ? { $_.CommandLine -match 'vite|_harness|headless_shell|ms-playwright' } | select ProcessId,Name`.

@@ -353,6 +353,7 @@ export class SoftBody implements SoftBodyLike {
   private bodyId = 0;                       // a per-process id (collide's contact memory); not part of the state hash
   // ---- B3 pick up and toss
   private carried = false;
+  private twoHanded = false;           // two fingers have been on the body since the last time none was: no pick up (see updateGrabs)
   private carrier = 0;                 // the grab (0 | 1) whose hand carries the body
   private carryOx = 0; private carryOy = 0; private carryOz = 0;      // the body's centre relative to the hand while carried
   private hvx = 0; private hvy = 0; private hvz = 0;                  // the hand's smoothed velocity (m/s)
@@ -854,7 +855,7 @@ export class SoftBody implements SoftBodyLike {
     this.flatK = this.chunk ? 1 : 0; this.volScale = 1; this.GB.set(this.Q);
     this.neckOn = false; this.neckT = 0; this.neckTarget = 0; this.volNeck = 0;
     this.vnStamp = -1; this.hashStamp = -1; this.contactWith.fill(-1000000);
-    this.carried = false; this.carrier = 0; this.carryOx = 0; this.carryOy = 0; this.carryOz = 0; this.hvx = 0; this.hvy = 0; this.hvz = 0; this.phx = 0; this.phy = 0; this.phz = 0;
+    this.carried = false; this.twoHanded = false; this.carrier = 0; this.carryOx = 0; this.carryOy = 0; this.carryOz = 0; this.hvx = 0; this.hvy = 0; this.hvz = 0; this.phx = 0; this.phy = 0; this.phz = 0;
     this.strain.fill(1);
     this.syncOutputs();
   }
@@ -1786,6 +1787,12 @@ export class SoftBody implements SoftBodyLike {
   private updateGrabs(): void {
     const ease = 1 - Math.exp(-35 * H);
     const maxD = this.p.maxPull * this.restRadius;
+    // B3: only a LONE hand picks the body up. While two fingers are on it (a pinch, a squish with a pull, a pull from both sides) a pull
+    // past the limit stretches the body to its maximum and holds it to the mat, as it did before pick up existed (the owner: "squish two
+    // sides and pull ... now it LIFTS the squishy"). The latch stays until every finger is up, so lifting one finger of a two-handed
+    // stretch does not hoist the body by the other.
+    const on0 = this.grabs[0].active || this.fingers[0].down, on1 = this.grabs[1].active || this.fingers[1].down;
+    if (on0 && on1) this.twoHanded = true; else if (!on0 && !on1) this.twoHanded = false;
     for (let k = 0; k < 2; k++) {
       const g = this.grabs[k];
       if (!g.active) continue;
@@ -1794,7 +1801,7 @@ export class SoftBody implements SoftBodyLike {
       g.ex += (g.rx - g.ex) * ease; g.ey += (g.ry - g.ey) * ease; g.ez += (g.rz - g.ez) * ease;
       // B3 PICK UP: a hand that asks for more than LIFT_OVER x the body's maxPull (the raw target, not the clamped one) unsticks the body from
       // the mat and carries it (on the table only; a floating body is already in the hand's reach)
-      if (!this.carried && this.gravityOn) {
+      if (!this.carried && this.gravityOn && !this.twoHanded) {
         const rx = g.rx - g.t0x, ry = g.ry - g.t0y, rz = g.rz - g.t0z, lim = LIFT_OVER * maxD;
         if (rx * rx + ry * ry + rz * rz > lim * lim) this.startCarry(k);
       }

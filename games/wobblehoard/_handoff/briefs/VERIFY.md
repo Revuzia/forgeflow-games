@@ -89,6 +89,17 @@ stack of 5 whole bodies for 10 s (sag allowed, sinking or tunnelling not); NaN, 
 the same hash); zero allocation per step in steady state with 2, 4 and 6 bodies; no piece folds, hops or tunnels (the probe_softbody limits per
 piece); volume conservation through every cut and reconnect.
 
+**Lens B, addendum: the two-handed pick-up rule (session 2, owner report "squish two sides and pull now LIFTS the squishy").** The fix is a
+latch in `softbody.ts` `updateGrabs` (`twoHanded`): only a lone hand may start a carry (a grab target asked past `LIFT_OVER` x maxPull); while
+two fingers (a press or a grab on each slot) are on the body it is stretched and held to the mat, and the latch lasts until every finger is up.
+Break it: every ordering of fingerDown / fingerPressure / grab / grabMove / fingerUp / grabRelease on slots 0 and 1 (random sequences, at least
+10,000, plus the hand-written cases: two grabs on opposite sides, press + grab, top press (Space) + grab, one finger lifting early, the second
+finger arriving after the first pull is already past the limit, a carry in progress when a second finger lands, a release hand-over) on all 50
+species x 3 genomes. Required: `metrics.carried` is never set by a pull that started while two fingers were on the body; the latch is never
+stuck (a lone pull after every finger was up always lifts); a carry that began one-handed still hands over and throws as before; no NaN, no
+penetration, no fold beyond the probe limits at the clamp; determinism (the same script twice gives the same hash); no allocation per step.
+`_harness/probe_cut.ts` has the permanent row (B3b); the saved repro is in the orchestrator's scratch (`lift/lift_repro.ts`), do not rely on it.
+
 **Lens C, quiet performance.** Run **alone**: the orchestrator guarantees no other heavy job. `perf47.ts`, `perf.ts` workloads A and B for every
 family, then 2, 4 and 6 whole bodies with `collide`, and 6 pieces versus 2 whole bodies (`CUT.md` X08). Report the load average or
 CPU usage before and after, mean and p99 ms per frame, and the 2.0 ms bar. State plainly which numbers meet the bar and which do not.
