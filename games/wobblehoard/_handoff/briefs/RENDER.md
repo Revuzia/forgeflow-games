@@ -1,5 +1,7 @@
 # RENDER lane brief: finish the render fix round and RENDER-3, then the cut visuals
 
+> **Session 2 (2026-10-06): read RESUME.md right after COMMON.md. It supersedes the paths, the machine rules and the "where the previous engineer stopped" parts below (the work moved to the owner's Windows PC). Verification charters: VERIFY.md.**
+
 **You own:** `src/render/**`, `_harness/renderview/**`, `_harness/browser_render.mjs`, and additive render members in `src/contracts.ts`.
 Your port is 5364. Your scratch folder is `scratchpad/render4/`. The previous engineer's drafts are in `scratchpad/render3/`.
 

@@ -1,5 +1,7 @@
 # AUDIO lane brief: the cut and reconnect voices, and one music fix
 
+> **Session 2 (2026-10-06): read RESUME.md right after COMMON.md. It supersedes the paths, the machine rules and the "where the previous engineer stopped" parts below (the work moved to the owner's Windows PC). Verification charters: VERIFY.md.**
+
 **You own:**
 - `src/audio/**`
 - `_harness/probe_audio.mjs`, `_harness/audioview/**`

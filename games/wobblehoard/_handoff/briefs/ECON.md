@@ -1,5 +1,7 @@
 # ECON lane brief: XP that rewards every way of playing (owner request, `_spec/FUN.md` section 2)
 
+> **Session 2 (2026-10-06): read RESUME.md right after COMMON.md. It supersedes the paths, the machine rules and the "where the previous engineer stopped" parts below (the work moved to the owner's Windows PC). Verification charters: VERIFY.md.**
+
 **You own:**
 - `src/core/meter.ts` and `src/collection/meterfeed.ts`
 - `src/collection/index.ts` and `src/collection/types.ts` (only for the new preview member)

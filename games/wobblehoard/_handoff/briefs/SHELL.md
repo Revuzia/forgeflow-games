@@ -1,5 +1,7 @@
 # SHELL lane brief: finish SHELL-2b, add the visible XP feedback
 
+> **Session 2 (2026-10-06): read RESUME.md right after COMMON.md. It supersedes the paths, the machine rules and the "where the previous engineer stopped" parts below (the work moved to the owner's Windows PC). Verification charters: VERIFY.md.**
+
 **You own:**
 - `src/shell/**`, `src/ui/**` (including `src/ui/hoard/**`), `src/input/**`, `src/main.ts`, `src/app.ts`, `index.html`
 - `src/core/settings.ts`

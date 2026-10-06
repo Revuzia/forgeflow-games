@@ -3,6 +3,7 @@
 // node_modules if present, else from the global install, and Chromium comes from PLAYWRIGHT_BROWSERS_PATH.
 import { createRequire } from 'node:module';
 import { execSync, spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -33,19 +34,33 @@ async function up(url) {
   try { const r = await fetch(url); return r.ok; } catch { return false; }
 }
 
+const IS_WIN = process.platform === 'win32';
+const VITE_BIN = resolve(ROOT, 'node_modules', 'vite', 'bin', 'vite.js');
+
+/** Kill a child started by startVite: the whole process group on POSIX, the process tree on Windows (no process groups there). */
+function killTree(child) {
+  try {
+    if (IS_WIN) execSync(`taskkill /pid ${child.pid} /T /F`, { stdio: 'ignore' });
+    else process.kill(-child.pid);
+  } catch { /* gone */ }
+}
+
 /** Start `vite` on `port` (or reuse one already answering there). Returns { url, stop }. */
 export async function startVite(port = 5360, { preview = false } = {}) {
   const url = `http://localhost:${port}/`;
   if (await up(url)) return { url, stop: () => {} };
-  const args = ['vite', ...(preview ? ['preview'] : []), '--port', String(port), '--strictPort'];
-  const child = spawn('npx', args, { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
+  const viteArgs = [...(preview ? ['preview'] : []), '--port', String(port), '--strictPort'];
+  // Run vite's own entry with this node: `spawn('npx')` fails on Windows (npx is npx.cmd there).
+  const child = existsSync(VITE_BIN)
+    ? spawn(process.execPath, [VITE_BIN, ...viteArgs], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], detached: !IS_WIN, windowsHide: true })
+    : spawn('npx', ['vite', ...viteArgs], { cwd: ROOT, stdio: ['ignore', 'pipe', 'pipe'], detached: !IS_WIN, windowsHide: true });
   let log = '';
   child.stdout.on('data', (d) => { log += d; });
   child.stderr.on('data', (d) => { log += d; });
   const t0 = Date.now();
   while (!(await up(url))) {
-    if (Date.now() - t0 > 60000) { try { process.kill(-child.pid); } catch { /* gone */ } throw new Error('vite did not start:\n' + log); }
+    if (Date.now() - t0 > 60000) { killTree(child); throw new Error('vite did not start:\n' + log); }
     await new Promise((r) => setTimeout(r, 250));
   }
-  return { url, stop: () => { try { process.kill(-child.pid); } catch { /* gone */ } } };
+  return { url, stop: () => killTree(child) };
 }

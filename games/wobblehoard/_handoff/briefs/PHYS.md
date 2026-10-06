@@ -1,5 +1,7 @@
 # PHYS lane brief: finish the round-2 fix round, then body contact, toss and the cut primitives
 
+> **Session 2 (2026-10-06): read RESUME.md right after COMMON.md. It supersedes the paths, the machine rules and the "where the previous engineer stopped" parts below (the work moved to the owner's Windows PC). Verification charters: VERIFY.md.**
+
 **You own:**
 - `src/physics/**`
 - `src/data/shapes.ts`, and the `shape` fields of species in `src/data/catalog.ts` (silhouettes only; regenerate `_spec/CATALOG.md`
