@@ -272,13 +272,13 @@ export function createMergePad(root: HTMLElement, env: HoardEnv, o: { onMerged()
       mode = 'merge'; species = sp; ids = defaults(sp); picking = -1; confirmedLast = false; message = ''; opener = from ?? null; tidyDone = null;
       el.hidden = false; scrim.hidden = false; el.dataset.mode = 'merge';
       renderMerge();
-      requestAnimationFrame(() => { if (!modal) el.querySelector<HTMLElement>('#wh-merge-title')?.focus(); });
+      if (!modal) el.querySelector<HTMLElement>('#wh-merge-title')?.focus();   // at once; a last-copy warning (a microtask) then takes it
     },
     openTidy(from) {
       mode = 'tidy'; opener = from ?? null; tidyDone = null; message = '';
       el.hidden = false; scrim.hidden = false; el.dataset.mode = 'tidy';
       renderTidy();
-      requestAnimationFrame(() => el.querySelector<HTMLElement>('#wh-merge-title')?.focus());
+      el.querySelector<HTMLElement>('#wh-merge-title')?.focus();
     },
     close(silent = false) {
       if (mode === null) return;

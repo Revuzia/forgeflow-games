@@ -229,3 +229,66 @@ export function buildRest(genome: Genome, mesh: IcoMesh): RestShape {
     restVolume: meshVolume(p, tris), height: maxY - minY,
   };
 }
+
+/**
+ * CUT (_spec/CUT.md 4.3): the rest shape of a CHUNK, an eyeless piece of a cut squishy: a rounded blob (a slightly squat ellipsoid, 1.1 x 0.85 x
+ * 1.1, with the flat foot every shape stands on) of radius `R0` (the piece's own nominal radius: the whole's x cbrt(frac)). No thin features:
+ * every floppy and strut weight is 0. The FLAT CUT FACE is not part of the rest shape (a chunk rounds over with time, CUT.md 1): flatPoints()
+ * gives the same mesh with the face cut flat, which the solver uses as a goal that eases to this rest shape.
+ */
+export function buildChunkRest(mesh: IcoMesh, R0: number): RestShape {
+  const n = mesh.vertexCount, p = new Float64Array(n * 3);
+  // the blob's own lowest point and foot plane (same flat-foot rule as restPoint)
+  const ry = 0.85, floor = -ry + FOOT_CUT * 2 * ry, k = FOOT_SOFT;
+  for (let i = 0; i < n; i++) {
+    const dx = mesh.dirs[i * 3], dy = mesh.dirs[i * 3 + 1], dz = mesh.dirs[i * 3 + 2];
+    const r = 1 / Math.sqrt((dx / 1.1) ** 2 + (dy / ry) ** 2 + (dz / 1.1) ** 2);
+    let y = dy * r;
+    y = 0.5 * (y + floor + Math.sqrt((y - floor) * (y - floor) + k * k));
+    if (y - floor < 0.004) y = floor;
+    p[i * 3] = dx * r * R0; p[i * 3 + 1] = y * R0; p[i * 3 + 2] = dz * r * R0;
+  }
+  const mass = new Float64Array(n), tris = mesh.tris;
+  for (let t = 0; t < tris.length; t += 3) {
+    const a = tris[t], b = tris[t + 1], c = tris[t + 2];
+    const ux = p[b * 3] - p[a * 3], uy = p[b * 3 + 1] - p[a * 3 + 1], uz = p[b * 3 + 2] - p[a * 3 + 2];
+    const vx = p[c * 3] - p[a * 3], vy = p[c * 3 + 1] - p[a * 3 + 1], vz = p[c * 3 + 2] - p[a * 3 + 2];
+    const area = 0.5 * Math.hypot(uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx) / 3;
+    mass[a] += area; mass[b] += area; mass[c] += area;
+  }
+  let msum = 0;
+  for (let i = 0; i < n; i++) msum += mass[i];
+  for (let i = 0; i < n; i++) mass[i] = (mass[i] * n) / msum;
+  let cx = 0, cy = 0, cz = 0;
+  for (let i = 0; i < n; i++) { cx += mass[i] * p[i * 3]; cy += mass[i] * p[i * 3 + 1]; cz += mass[i] * p[i * 3 + 2]; }
+  cx /= n; cy /= n; cz /= n;
+  let minY = Infinity, maxY = -Infinity, peak = 0;
+  for (let i = 0; i < n; i++) {
+    p[i * 3] -= cx; p[i * 3 + 1] -= cy; p[i * 3 + 2] -= cz;
+    if (p[i * 3 + 1] < minY) minY = p[i * 3 + 1];
+    if (p[i * 3 + 1] > maxY) { maxY = p[i * 3 + 1]; peak = i; }
+  }
+  return {
+    restLocal: p, floppy: new Float64Array(n), feature: new Int16Array(n).fill(-1), strutW: new Float64Array(n), mass, restRadius: R0,
+    restCenterY: -minY, peakVertex: peak, restVolume: meshVolume(p, tris), height: maxY - minY,
+  };
+}
+
+/**
+ * The FLAT CUT FACE of a chunk (CUT.md 1): `rest` (rest-local, centred) with every point beyond the plane at `depth` x R0 along the unit
+ * normal (nx, ny, nz) pulled onto that plane (a smooth max of width `soft` R0, like the foot), then scaled about the centre to the rest
+ * volume (so the goal that eases from it to the rest shape never asks for another volume). Writes into `out`.
+ */
+export function flatPoints(rest: Float64Array, tris: Uint32Array, R0: number, nx: number, ny: number, nz: number, out: Float64Array): void {
+  const n = rest.length / 3, depth = 0.55 * R0, soft = 0.06 * R0;
+  for (let i = 0; i < n; i++) {
+    const x = rest[i * 3], y = rest[i * 3 + 1], z = rest[i * 3 + 2], s = x * nx + y * ny + z * nz;
+    // smooth min(s, depth): points past the face plane come down onto it
+    const sm = 0.5 * (s + depth - Math.sqrt((s - depth) * (s - depth) + soft * soft));
+    const d = sm - s;
+    out[i * 3] = x + nx * d; out[i * 3 + 1] = y + ny * d; out[i * 3 + 2] = z + nz * d;
+  }
+  const v0 = meshVolume(rest, tris), v1 = meshVolume(out, tris);
+  const k = v1 > 1e-12 ? Math.cbrt(v0 / v1) : 1;
+  for (let i = 0; i < out.length; i++) out[i] *= k;
+}

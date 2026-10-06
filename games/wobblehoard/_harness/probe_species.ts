@@ -421,7 +421,10 @@ if (!isMainThread) {
       const what = kind === 'pull'
         ? `FULL PULL AND RELEASE, ${f} (${done.length} pulls on ${sp} species x template / soft corner: top, +x / +z flanks, peak, every feature tip; to 1.1 x maxPull over 0.8 s, held 0.7 s, let go, 2 s after)`
         : `RUBS AND SLIDES, ${f} (${done.length} on ${sp} species x template / soft corner: the shell's camera-plane rub at 4 points x ${QUICK ? 2 : 4} screen angles at 2.5 m/s, slides toward the table from 3 low points x 3 angles; outward drags skipped)`;
-      add(`${what}: sharpest crease (${w.c.id} ${w.c.g} ${w.r.label}), frames over 120 deg, left at rest (${rw.c.id} ${rw.c.g} ${rw.r.label}), missed rays`, `${w.r.worst.toFixed(0)} deg, ${f120} frames${bad.length ? ` (${bad.length} failing: ${bad.slice(0, 3).map((x) => `${x.c.id} ${x.c.g} ${x.r.label} ${x.r.worst.toFixed(0)}/${x.r.f120}/${x.r.rest.toFixed(0)}`).join('; ')})` : ''}, rest ${rw.r.rest.toFixed(0)} deg, ${all.length - done.length} missed`, `<= ${SLIDE_WORST_MAX} deg, 0 frames, rest <= ${lim} deg${lim > FOLD_REST_MAX ? ' (slow or plastic family)' : ''}, 0 missed`, bad.length === 0 && all.length === done.length);
+      // a rub's contact point is a fixed spot in the game camera's view (probe_softbody's points, scaled by R): on a narrow or small species
+      // some of them lie outside the silhouette and the ray misses: counted, not gated (the verifier's rub set had 76 such on templates)
+      const missOk = kind === 'rub' || all.length === done.length;
+      add(`${what}: sharpest crease (${w.c.id} ${w.c.g} ${w.r.label}), frames over 120 deg, left at rest (${rw.c.id} ${rw.c.g} ${rw.r.label}), missed rays${kind === 'rub' ? ' (not gated: points outside the silhouette)' : ''}`, `${w.r.worst.toFixed(0)} deg, ${f120} frames${bad.length ? ` (${bad.length} failing: ${bad.slice(0, 3).map((x) => `${x.c.id} ${x.c.g} ${x.r.label} ${x.r.worst.toFixed(0)}/${x.r.f120}/${x.r.rest.toFixed(0)}`).join('; ')})` : ''}, rest ${rw.r.rest.toFixed(0)} deg, ${all.length - done.length} missed`, `<= ${SLIDE_WORST_MAX} deg, 0 frames, rest <= ${lim} deg${lim > FOLD_REST_MAX ? ' (slow or plastic family)' : ''}${kind === 'rub' ? '' : ', 0 missed'}`, bad.length === 0 && missOk);
     }
   }
   let failed = 0;

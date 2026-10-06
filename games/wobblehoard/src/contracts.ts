@@ -65,6 +65,10 @@ export interface SoftMetrics {
    *  deeper active grab: the grab target's distance from where the grab started, minus the body's own travel (translation-free), over the
    *  body's own maximum pull; 1 = its family's maxPull. 0 when nothing is grabbed. The 'snap' intensity is this value at the release. */
   pull?: number;
+  /** Stage B item B3 (optional): true while a pull past the body's maximum has picked it up off the mat and the hand carries it
+   *  (SoftBody: a grab target asked for more than 1.15 x maxPull). Letting go throws it with the hand's velocity and fires a full 'snap'
+   *  (intensity 1); it then flies, lands ('land') and squashes. metrics.grounded is false while carried. */
+  carried?: boolean;
 }
 
 export interface RayHit { point: V3; normal: V3; vertex: number; t: number }
@@ -87,7 +91,9 @@ export interface PieceOpts {
   chunk: boolean;
   /** World-space outward normal of the fresh cut face. */
   cutNormal?: V3;
-  /** Initial centre of mass (m) and velocity (m/s). */
+  /** Initial centre of mass (m) and velocity (m/s). SoftBody: the piece is placed with its centre at `at` (never below its own resting
+   *  height: it is lifted onto the table), all its particles at `vel` (clamped like nudge); reset() puts it back at (at.x, at.z) on the table.
+   *  Its volume is exactly frac x the whole's (detail 3), whatever its mesh (pieces under 0.35 use detail 2); smOmega x 1 / cbrt(frac). */
   at?: V3;
   vel?: V3;
 }
@@ -142,12 +148,22 @@ export interface SoftBodyLike {
   readonly frac?: number;
   /** Pure: the volume fraction (of this body) on the plane's 'a' side, or null when the plane misses the body. */
   measureCut?(plane: CutPlane): number | null;
-  /** 0..1: morph the goal into a waisted peanut along the plane (eased, volume held; 1 = a thin waist ready to part); null releases. */
+  /** 0..1: morph the goal into a waisted peanut along the plane (eased, volume held; 1 = a thin waist ready to part); null releases.
+   *  SoftBody (physics fix round 2): the goal's waist at t = 1 is 0.3 of the cross-section's width over a Gaussian of 0.42 R either side
+   *  (CUT.md's 0.15, and a narrower pinch, creased the goal itself); the lobes swell to keep the goal's volume. Measured at the shell's timing
+   *  (a 0.25 s pinch, 0.1 s at t = 1) on all 50 species x 2 genomes: waist 0.31 of the body's width on average, no crease past 120 degrees,
+   *  volume within 3 % (6 % for the air-bleed families). On the table the waist sits at the bottom of the cross-section (the foot stays down);
+   *  the neck band is in the contact fold limit while it forms. Swap in the pieces at t = 1: HELD at t = 1 for a second, 12 of 100 bodies
+   *  crease past 120 degrees. */
   setNeck?(plane: CutPlane | null, t: number): void;
   /** Grow or shrink the rest volume smoothly to a new fraction of the whole over `seconds` (reconnect growth, the giver's shrink). */
   setFrac?(frac: number, seconds: number): void;
   /** Soft body-to-body contact (stage B item B2) against `others` this frame: pushes particles apart on both sides and emits 'bump'.
-   *  Call once per frame before step(), with every other body on the mat. */
+   *  Call once per frame before step(), with every other body on the mat. SoftBody (physics fix round 2): positions pushed apart half each
+   *  along the other body's vertex normal, the approaching part of the relative velocity removed (inelastic; per particle and for the two
+   *  bodies as wholes, so a stack does not sink), the sliding part damped (friction), a separating part halved (tack). 'bump' fires at the
+   *  START of a contact (none with that body in the last 0.2 s) closing faster than 0.35 m/s: intensity = approach speed / 3 m/s, at = the
+   *  mean contact point, normal = the mean contact normal (pointing out of the other body), finger = -1. Only SoftBody instances collide. */
   collide?(others: readonly SoftBodyLike[]): void;
 
   /** External shove (screen-bump, drop-in). World-space velocity change applied to every particle. */

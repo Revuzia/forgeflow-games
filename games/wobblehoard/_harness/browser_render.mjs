@@ -283,6 +283,10 @@ try {
     const hSelf = (await cdp.send('Runtime.getHeapUsage')).usedSize - h0;
     await lp.evaluate(() => window.__RV__.releaseObjects());
     check(hSelf > 200 * 1024, 'heap probe is sensitive (retaining 20000 objects moves the number)', `+${(hSelf / 1024).toFixed(0)} KB`);
+    // warm the MEASURED path itself first (body.step + stage.update, no render): the 30 rendered warm-up frames above leave the
+    // optimizing compiler's first-time code and feedback for these 900 frames, which read as ~130 KB of "growth" that a second pass
+    // does not repeat (steady state measured at -1..+7 KB per 900 frames, scratchpad/render4/alloc_probe.mjs)
+    await lp.evaluate(() => window.__RV__.churn(300, false, false));
     h0 = await heapNow();
     await lp.evaluate(() => window.__RV__.churn(900, false, false));
     const h1 = await heapNow();
@@ -328,6 +332,9 @@ try {
   /* ───────────────────────── round 2: multi-body, rarity, ceremonies, flash safety (DESIGN 5.3, 6.x) ───────────────────────── */
   if (ON('r2') || ON('cer') || ON('chains') || ON('rarity') || ON('film')) {
     const TIERS6 = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
+    const rgbDiff = (a, b) => { let d = 0; for (let i = 0; i < a.length; i += 4) d += (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2])) / 3; return d / (a.length / 4); };
+    const lumaGrid = (fp) => { const o = new Float32Array(24 * 18); for (let y = 0; y < 36; y++) for (let x = 0; x < 48; x++) { const i = (y * 48 + x) * 4; o[(y >> 1) * 24 + (x >> 1)] += (0.2126 * fp[i] + 0.7152 * fp[i + 1] + 0.0722 * fp[i + 2]) / 4; } return o; };
+    const fpDiff = (a, b) => { const A = lumaGrid(a), B = lumaGrid(b); let d = 0; for (let i = 0; i < A.length; i++) d += Math.abs(A[i] - B[i]); return d / A.length; };
     const CAP_BUDGET = { common: 1.6, uncommon: 2.0, rare: 2.6, epic: 3.2, legendary: 3.9, mythic: 4.5 };
     const MER_BUDGET = { common: 2.2, uncommon: 2.6, rare: 3.2, epic: 3.8, legendary: 4.5, mythic: 5.2 };
     const MER_BUDGET_EPIC = MER_BUDGET.epic;
@@ -603,9 +610,6 @@ try {
     // last ceremony frame), mean |diff| <= 1.5/255 per channel for EVERY tier. Each body view runs its own clock and skip() fast-forwards the
     // result's clock to the natural end, so time-phased idle effects (Mythic hue cycle, satellites, core pulse, blink) line up; what is left is
     // the soft body's own settle after the landing vs a reset body (sub-millimetre).
-    const rgbDiff = (a, b) => { let d = 0; for (let i = 0; i < a.length; i += 4) d += (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2])) / 3; return d / (a.length / 4); };
-    const lumaGrid = (fp) => { const o = new Float32Array(24 * 18); for (let y = 0; y < 36; y++) for (let x = 0; x < 48; x++) { const i = (y * 48 + x) * 4; o[(y >> 1) * 24 + (x >> 1)] += (0.2126 * fp[i] + 0.7152 * fp[i + 1] + 0.0722 * fp[i + 2]) / 4; } return o; };
-    const fpDiff = (a, b) => { const A = lumaGrid(a), B = lumaGrid(b); let d = 0; for (let i = 0; i < A.length; i++) d += Math.abs(A[i] - B[i]); return d / A.length; };
     for (const kind of ['capsule', 'merge']) {
       for (const tier of QUICK ? ['mythic'] : TIERS6) {
         const budget = (kind === 'capsule' ? CAP_BUDGET : MER_BUDGET)[tier];
@@ -775,7 +779,7 @@ try {
     }
     // ---- B6 tack strands (a sticky-stretch species and a slime; a gel must NOT string) ----
     if (ON('strands')) {
-      const tacky = CATALOG.filter((d) => d.family === 'stickystretch' || d.family === 'slimegoo').slice(0, 2);
+      const tacky = [CATALOG.find((d) => d.family === 'stickystretch'), CATALOG.find((d) => d.family === 'slimegoo')];
       const gel = CATALOG.find((d) => d.family === 'jellygel');
       for (const d of [...tacky, gel]) {
         const r = await bp.evaluate(([g]) => window.__RV__.strandProbe(g), [speciesBaseGenome(d.id, 1)]);
@@ -868,7 +872,8 @@ try {
       check(w <= 3 && maxLight === 0 && r.cutsDone === 10 && r.maxPieces <= 6 && r.wholeAtEnd && r.facesAtEnd === 1 && r.maxBridges >= 2,
         `CUT X09 (${name}): 10 rapid cuts + Reconnect all: <= 3 luminance transitions in any 1 s, no screen flash, never more than 6 pieces, whole again with one face`,
         `worst 1 s window ${w} transitions (${w02} at 0.02), luma ${lo.toFixed(3)}..${hi.toFixed(3)}, screen light ${maxLight}, cuts ${r.cutsDone}, reconnects ${r.reconnects}, pieces <= ${r.maxPieces}, glow <= ${r.maxGlow.toFixed(2)}, strands <= ${r.maxStrands}, bridges <= ${r.maxBridges}`);
-      check(r.snapEvents >= r.cutsDone && (name !== 'sticky' || r.strandEvents >= 10 * r.cutsDone),
+      // (the sticky strand is visible for >= 5 frames per cut at 30 fps: it parts, stretches to ~1.3 piece radii and snaps in a few tenths)
+      check(r.snapEvents >= r.cutsDone && (name !== 'sticky' || r.strandEvents >= 5 * r.cutsDone),
         `CUT parting strand (${name}): one strand per cut, stretched then snapped once each; the shell's strand hook hears it`, `snaps ${r.snapEvents}, stretch frames ${r.strandEvents}, cuts ${r.cutsDone}`);
       check(r.framed.inFrame && r.framed.pieces === 6 && r.framed.minPx >= 40, `CUT (${name}): 6 pieces on the mat, all inside the 640x480 frame`, JSON.stringify({ pieces: r.framed.pieces, minPx: r.framed.minPx }));
     }

@@ -151,7 +151,8 @@ export class CutFx {
     });
     const c = a.palette.body, pl = a.palette.pale;
     // gel: a barely-there wisp (clear and thin); a tacky body: its own colour, glossy
-    tube.paint(c[0] + (pl[0] - c[0]) * 0.45, c[1] + (pl[1] - c[1]) * 0.45, c[2] + (pl[2] - c[2]) * 0.45, 0.45 + 0.45 * Math.min(1, k / 0.5), c[0] * 0.4, c[1] * 0.4, c[2] * 0.4);
+    // see-through like the jelly it is pulled from, lit from inside a little by the body's own colour
+    tube.paint(c[0] + (pl[0] - c[0]) * 0.35, c[1] + (pl[1] - c[1]) * 0.35, c[2] + (pl[2] - c[2]) * 0.35, 0.4 + 0.35 * Math.min(1, k / 0.5), c[0] * 0.55, c[1] * 0.55, c[2] * 0.55);
     tube.mesh.visible = false;   // shown once the cut faces have parted
   }
 
@@ -228,7 +229,9 @@ export class CutFx {
         for (let s = 0; s <= SEG; s++) {
           const u = s / SEG, w = 4 * u * (1 - u);
           // never fatter than the parted gap allows (a short fresh strand is a stubby neck, not a ring)
-          r[s] = Math.min(p.r0 * thin * (1 - 0.8 * stretch * w) * (1 + 0.8 * Math.pow(1 - u, 6) + 0.8 * Math.pow(u, 6)), 0.18 * Ltot + 0.5 * p.r0);
+          // a soft catenary-like thinning toward the middle (no hard collar where it leaves each face)
+          const flare = Math.pow(1 - w, 2);
+          r[s] = Math.min(p.r0 * thin * (1 - 0.7 * stretch * w) * (1 + 0.9 * flare), 0.18 * Ltot + 0.5 * p.r0);
         }
         p.tube.build(p.ax - p.dx * e0, p.ay - p.dy * e0, p.az - p.dz * e0, p.ax + p.dx * (L + e0), p.ay + p.dy * (L + e0), p.az + p.dz * (L + e0), 0.12 * stretch);
         p.tube.mesh.visible = true; p.drawnLen = L;

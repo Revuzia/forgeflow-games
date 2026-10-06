@@ -540,7 +540,8 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
   const trap = (e: KeyboardEvent): void => {
     if (e.key !== 'Tab' || !open) return;
     const scope = pad.isOpen ? pad.el : card ? cardEl : el;
-    const f = [...scope.querySelectorAll<HTMLElement>('button:not([disabled]), select, [tabindex="0"], input:not([disabled])')].filter((x) => x.offsetParent !== null || x === document.activeElement);
+    // the tab stops only: a roving grid or radio group keeps its other members at tabindex -1 (they are not first or last stops)
+    const f = [...scope.querySelectorAll<HTMLElement>('button:not([disabled]), select, [tabindex="0"], input:not([disabled])')].filter((x) => x.tabIndex >= 0 && (x.offsetParent !== null || x === document.activeElement));
     if (!f.length) return;
     const first = f[0], last = f[f.length - 1];
     if (!scope.contains(document.activeElement)) { e.preventDefault(); first.focus(); return; }
@@ -568,7 +569,8 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
       button.setAttribute('aria-expanded', 'true');
       layoutCover();
       showTab(t ?? 'shelf');   // the HUD button and H always open on the shelf (the tab dots say where a gift or a task waits)
-      requestAnimationFrame(() => { if (open && !card) title.focus(); });
+      // focus at once (the dialog is shown): a focus deferred to the next animation frame waits a second or more on a slow device
+      if (!card) title.focus();
     },
     close() {
       if (!open) return;
@@ -595,7 +597,7 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
       el.hidden = true; el.dataset.open = 'false';
       layoutCover();
       renderCard();
-      requestAnimationFrame(() => cardEl.querySelector<HTMLElement>('#wh-card-name')?.focus());
+      cardEl.querySelector<HTMLElement>('#wh-card-name')?.focus();
     },
     escape() {
       if (pad.escape()) return true;

@@ -737,7 +737,7 @@ async function main() {
       const a2 = await started(page);
       check('merge T3/T4: burst() at the burst beat, then the plate with TIER UP and NEW', shownAt >= 0 && (a2.mergeBurst ?? 0) === (a0.mergeBurst ?? 0) + 1 && plate.banner && plate.chip === 'NEW', JSON.stringify(plate));
       await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null`, 6, 0.1);
-      const res = await page.evaluate(async () => { const r = await window.__mergeP; return { r, id: window.__WH__.shell.identity() }; });
+      const res = await page.evaluate(async () => { const r = await Promise.race([window.__mergeP, new Promise((ok) => setTimeout(() => ok({ result: 'timed out' }), 5000))]); return { r, id: window.__WH__.shell.identity() }; });
       check('merge end: the result body is adopted as the play body (identity = the decided result)', res.id.genomeCode === res.r.result && res.id.species === plate.name, JSON.stringify(res));
       await page.evaluate(() => window.__WH__.resume());
     });
@@ -770,11 +770,13 @@ async function main() {
       await page.evaluate(() => { window.__mergeP = window.__WH__.shell.merge({ tierUp: false, isNew: false }); });
       await stepSim(page, 0.45);
       const humBefore = await page.evaluate(() => window.__WH__.state().audio.liveKinds?.merge ?? 0);
+      // the key goes to the play surface (a focused control such as the capsule button owns Space: it would press the button instead)
+      await page.evaluate(() => { const a = document.activeElement; if (a && a !== document.body) a.blur(); });
       await page.keyboard.press('Space');                    // a key during a ceremony = skip
       await stepSim(page, 2 / 60);
       const humAfter = await page.evaluate(() => window.__WH__.state().audio.liveKinds?.merge ?? 0);
-      await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null`, 1, 1 / 60);
-      await page.evaluate(async () => { await window.__mergeP; });
+      await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null`, 6, 1 / 30);   // ends at once when skipped; never hang on a paused sim
+      await page.evaluate(async () => { await Promise.race([window.__mergeP, new Promise((r) => setTimeout(r, 5000))]); });
       const a1 = await started(page);
       check('merge skipped before T3 (Space at 0.45 s): no burst, the motif plays instead (reveal +1)', (a1.merge ?? 0) === (a0.merge ?? 0) + 1 && (a1.mergeBurst ?? 0) === (a0.mergeBurst ?? 0) && (a1.reveal ?? 0) === (a0.reveal ?? 0) + 1, `merge +${(a1.merge ?? 0) - (a0.merge ?? 0)} burst +${(a1.mergeBurst ?? 0) - (a0.mergeBurst ?? 0)} reveal +${(a1.reveal ?? 0) - (a0.reveal ?? 0)}`);
       // the hum must be live right before the skip and stopped by it (mh.stop() on a 'reveal' without 'burst'), not left to run out
@@ -810,7 +812,7 @@ async function main() {
         toBurst >= 0 && req.skipped && next >= 0 && startGap >= 1000 && burstGap >= 1000, `credits at the request ${req.credits}; burst -> next start ${startGap.toFixed(0)} ms, burst -> burst ${burstGap.toFixed(0)} ms; beats ${bs.map((b) => b.beat).join(',')}`);
       check('flash safety: the wait is only the spacing (the next start comes within 0.1 s of the 1.0 s mark)', startGap < 1100, `${startGap.toFixed(0)} ms`);
       await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 8, 0.1);
-      const fin = await page.evaluate(async () => { await window.__revP; await window.__openP; return { id: window.__WH__.shell.identity(), m: window.__WH__.shell.meter() }; });
+      const fin = await page.evaluate(async () => { const to = () => new Promise((ok) => setTimeout(ok, 5000)); await Promise.race([window.__revP, to()]); await Promise.race([window.__openP, to()]); return { id: window.__WH__.shell.identity(), m: window.__WH__.shell.meter() }; });
       check('flash safety: the queued open was not lost (it played to the end, the capsule is spent, its result is the play body)', fin.m.credits === credits0 && !!fin.id.itemId && !fin.id.itemId.startsWith('dev-'), JSON.stringify({ itemId: fin.id.itemId, species: fin.id.species, credits: `${credits0} -> ${fin.m.credits}` }));
       await page.evaluate(() => window.__WH__.resume());
       await loadNote(page, 'after ceremony-spacing');
@@ -1206,8 +1208,9 @@ async function main() {
       } else check('Tidy-up: a plan exists after up to 16 more capsules on this roll', false, 'no spares to tidy');
       if (await hoardOpen(page)) { await hclick(page, '.hoard-close'); await settle(page); }
 
-      // the play mat (B1): bring squishies out next to the play body
-      await page.evaluate(() => window.__WH__.setSetting('quality', 'low'));
+      // the play mat (B1): bring squishies out next to the play body. The mat's frame-time guard ("The mat is busy enough right now" over
+      // 30 ms a frame) is lifted here: SwiftShader on a shared machine is always over it; the limits by quality tier still apply
+      await page.evaluate(() => { window.__WH__.setSetting('quality', 'low'); window.__WH__.shell.matBusyMs(1e9); });
       const idNow = await page.evaluate(() => window.__WH__.shell.identity());
       const keepers = (await hstate(page)).items;
       const cand = [...new Map(keepers.filter((it) => it.id !== idNow.itemId && it.species !== idNow.species).map((it) => [it.species, it])).values()];
@@ -1230,11 +1233,14 @@ async function main() {
       check('play mat: two brought out of the Hoard stand beside the play body (3 on the mat, the stage draws 3 bodies, none overlapping on screen, all in frame)', m3.count === 3 && m3.bodies.length === 3 && sep && onScreen && (stageBodies === null || stageBodies === 3), JSON.stringify({ count: m3.count, limit: m3.limit, at: m3.bodies.map((b) => [Math.round(b.x), Math.round(b.y), Math.round(b.r)]), stageBodies }));
       const third = await bringOut(cand[2].species);
       check('play mat: at quality low the mat holds 3: the next "Bring out" is disabled with the reason in words', !!third && third.disabled && /holds 3 at a time/.test(third.note), JSON.stringify(third));
+      await stepSim(page, 2.5);   // the card's live preview re-framed the camera on one body: let it frame the group again
       await shot(page, 'mat3_desktop');
       const chip = await page.evaluate(() => { const c = document.querySelector('.mat-chip'); return { hidden: c.hidden, text: c.textContent, label: c.getAttribute('aria-label') }; });
       check('play mat: the HUD shows a "Put back" chip with the count while squishies are out', !chip.hidden && /Put back/.test(chip.text) && /2/.test(chip.text), JSON.stringify(chip));
-      // fingers act on the body that is hit: press an extra
-      const ex = m3.bodies[1];
+      // fingers act on the body that is hit: press an extra. Measured again first: the third "Bring out" above opened a card, whose live
+      // preview swapped the play body twice (setBody re-frames the camera on the single body, then it eases out to the group again)
+      const m3b = await page.evaluate(() => window.__WH__.shell.matInfo());
+      const ex = m3b.bodies[1];
       const vpm = page.viewportSize();
       await page.evaluate((p) => { window.__WH__.pause(); window.__WH__.pointerDown(p.x, p.y, 0); window.__WH__.step(1 / 60, 30); }, { x: ex.x / vpm.width, y: (ex.y - 0.35 * ex.r) / vpm.height });
       const pressed = await page.evaluate(() => window.__WH__.shell.matInfo());
@@ -1333,7 +1339,7 @@ async function main() {
       await hclick(page, '.hoard-btn', { force: true });
       const hoardMid = await page.evaluate(() => !document.querySelector('.hoard').hidden);
       await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 6, 0.1);
-      await page.evaluate(async () => { await window.__revealP; });
+      await page.evaluate(async () => { await Promise.race([window.__revealP, new Promise((ok) => setTimeout(ok, 5000))]); });
       await settle(page);
       const end = await page.evaluate(() => ({ id: window.__WH__.shell.identity().itemId, hoard: !document.querySelector('.hoard').hidden }));
       check('a switch asked for during a reveal waits ("Switching when this is done.") and applies right after the ceremony ends', mid.kind === 'capsule' && mid.id !== want && /Switching when this is done/.test(mid.live ?? '') && end.id === want, JSON.stringify({ want, mid, endId: end.id }));
@@ -1849,7 +1855,8 @@ async function main() {
       // leaves the document (BODY) and the cycle starts there: judge the cycle of real stops, which must be exactly these three, in order.)
       await page.evaluate(() => document.activeElement.blur());
       const order = [];
-      for (let i = 0; i < 7; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')?.split(':')[0] ?? document.activeElement?.tagName)); }
+      // a stop's name up to its first ':' or ',' (the Hoard button's name goes on with the count: "Hoard, 3 of 50 species, ...")
+      for (let i = 0; i < 7; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')?.split(/[:,]/)[0] ?? document.activeElement?.tagName)); }
       const stops = order.filter((o) => o !== 'BODY');
       const want = ['Mute sound', 'Settings', 'Hoard', 'Squishy'];
       const k0 = stops.indexOf('Mute sound');

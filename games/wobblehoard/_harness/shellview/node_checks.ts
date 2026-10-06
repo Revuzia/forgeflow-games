@@ -528,6 +528,21 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
       app3.bodies.extras.length === 1 && !app3.bodies.extras[0].shared && Math.hypot(app3.bodies.extras[0].position.x, app3.bodies.extras[0].position.z) > 0.5 && collided === 0 && app3.bodies.contactBodies === 0, `collided ${collided}`);
     app2.dispose(); app3.dispose();
   }
+  // the mat's frame-time guard: with the stage's frame time average over FRAME_BUSY_MS a second squishy is refused as 'busy' (the browser
+  // harness lifts it through the dev hook because SwiftShader is always over it)
+  {
+    const { FRAME_BUSY_MS } = await import('../../src/shell/mat.ts');
+    const r4 = rig();
+    const st = r4.w.stage as unknown as { stats: () => { drawCalls: number; triangles: number; tier: string; frameMsEma: number } };
+    const base = st.stats.bind(st);
+    st.stats = () => ({ ...base(), tier: 'high', frameMsEma: FRAME_BUSY_MS + 15 });
+    const ga = speciesBaseGenome(cat.SPECIES_BY_TIER[0][3].id, 11), gb = speciesBaseGenome(cat.SPECIES_BY_TIER[1][0].id, 12);
+    const b1 = r4.app.mat.add({ genome: ga, itemId: 'busy-a' }), b2 = r4.app.mat.add({ genome: gb, itemId: 'busy-b' });
+    r4.app.mat.setBusyLimit(1e9);
+    const b3 = r4.app.mat.add({ genome: gb, itemId: 'busy-b' });
+    check(`play mat: over ${FRAME_BUSY_MS} ms a frame the next squishy is refused as "busy" (the first always comes out); lifting the guard lets it out`, b1 === null && b2 === 'busy' && b3 === null, `${b1}, ${b2}, ${b3}`);
+    r4.app.dispose();
+  }
 }
 
 /* ───────────────────────── 6. settings: resolution, migration, newer blobs, calm default, music ───────────────────────── */

@@ -666,7 +666,9 @@ export class MergeRun extends Run {
       ball.core.boost = 1.0 + 1.1 * p2;
       const fam = host.flash.tint(host.now(), st.tellFamily);
       const tellOk = fam === st.tellFamily;
-      const u = ball.mats.uniforms, tc = tellOk ? st.tell : NEUTRAL_TELL, p2s = p2 * p2 * (3 - 2 * p2);
+      // the tell lands by ~55% of the charge and holds there: the halfway mix of a warm ball and a cool tell (apricot + lagoon cyan) is a
+      // grey-cream, so it must not linger (RENDER-3 filmstrip: an Uncommon charge still read cream at mid-charge)
+      const u = ball.mats.uniforms, tc = tellOk ? st.tell : NEUTRAL_TELL, p2s = smooth(0, 0.55, p2);
       u.uTierCol.value.setRGB(tc[0], tc[1], tc[2], THREE.LinearSRGBColorSpace);
       // the ball's inner light is its biggest colour: an ember core glowing at x2 would out-shout any tint of the jelly around it
       if (!st.prism) {
@@ -676,7 +678,7 @@ export class MergeRun extends Run {
       // the ball's light drifts toward the result tier colour: its own colour leans into the tell (diffuse AND absorption) while the lineage
       // swirl gives way, plus some tell light. Additive light alone only whitened a warm ball (an Uncommon read cream, an Epic pink); the
       // Mythic prism tell (white) stays light
-      u.uTierTint.value = st.prism ? 0 : 0.62 * p2s;
+      u.uTierTint.value = st.prism ? 0 : 0.72 * p2s;
       u.uTierAmt.value = (st.prism ? 0.95 : 0.4) * p2s;
       u.uMixAmt.value = 0.7 * (1 - p2s);
       ball.extraPool = 0.5 * p2; ball.extraPoolTell = tellOk ? p2 : 0;

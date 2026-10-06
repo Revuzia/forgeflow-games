@@ -211,9 +211,9 @@ export class Capsule {
   burst(gain = 1): void {
     this.burstT = 0; this.burstGain = gain;
     this.tp.set(0, 0, 0); this.bp.set(0, 0, 0);
-    // the halves fly OUT of the body's way at once (the result pops up right where they were: transmissive shells lingering inside it read
-    // as wire hoops, the lower one as a "mouth" under the eyes) and are gone by 0.5 s
-    this.tv.set(2.2, 2.4, -1.6); this.bv.set(-2.1, 1.2, 1.3);
+    // the halves fly OUT of the body's way at once and shrink away within 0.14 s (the result pops up right where they were: transmissive
+    // shells lingering over it read as wire hoops, the lower one as a "mouth" under the eyes; at burst + 0.1 s they were still 86% size)
+    this.tv.set(3.2, 2.6, -2.0); this.bv.set(-3.0, 1.0, 1.8);
     this.tw.set(2.0, 3.2, -4.5); this.bw.set(-1.5, 2.0, 3.5);
     this.u.uStress.value = 0;
   }
@@ -282,9 +282,10 @@ export class Capsule {
       this.top.position.copy(this.tp); this.bottom.position.copy(this.bp);
       this.top.rotation.x += this.tw.x * dt; this.top.rotation.y += this.tw.y * dt; this.top.rotation.z += this.tw.z * dt;
       this.bottom.rotation.x += this.bw.x * dt; this.bottom.rotation.y += this.bw.y * dt; this.bottom.rotation.z += this.bw.z * dt;
-      const sx = Math.min(1, Math.max(0, (this.burstT - 0.04) / 0.26)), s = 1 - sx * sx * (3 - 2 * sx);
+      const sx = Math.min(1, Math.max(0, this.burstT / 0.14)), s = (1 - sx) * (1 - sx);   // fast at first: a glassy pop, then gone
       this.top.scale.setScalar(s); this.bottom.scale.setScalar(s);
-      this.wad.scale.setScalar(Math.max(0, 0.125 * (1 - this.burstT * 4)));
+      // the wad inside goes at once: the result's face pops up exactly where it sat (lingering, it read as a pink "mouth" under the eyes)
+      this.wad.scale.setScalar(Math.max(0, 0.125 * (1 - this.burstT * 14)));
       if (this.burstT > 0.8) { this.gone = true; this.group.visible = false; }
     }
     // decals under it

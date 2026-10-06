@@ -926,7 +926,11 @@ const RV = {
     {
       const fp = pieces.find((p) => p.face) ?? pieces[0];
       let near: Piece | null = null, nd = Infinity;
-      for (const p of pieces) if (p !== fp) { const d = Math.hypot(p.b.center.x - fp.b.center.x, p.b.center.z - fp.b.center.z); if (d < nd) { nd = d; near = p; } }
+      // the nearest piece that is not already touching it (the neck reaches across a gap; overlapping bodies are joined already)
+      for (const p of pieces) if (p !== fp) {
+        const d = Math.hypot(p.b.center.x - fp.b.center.x, p.b.center.z - fp.b.center.z), apart = d > 1.15 * (p.b.restRadius + fp.b.restRadius);
+        if ((apart ? d : d + 100) < nd) { nd = apart ? d : d + 100; near = p; }
+      }
       if (near) {
         const n = Math.round(0.35 / dt);
         for (let k = 1; k <= n; k++) { stage.setBridge(fp.id, near.id, 0.85 * k / n); step(); }

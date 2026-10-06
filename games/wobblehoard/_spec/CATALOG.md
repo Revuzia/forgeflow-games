@@ -110,14 +110,14 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | 1 | Plumpet | Jelly Gel | 0.30 / 0.00 / 0.75 / 0.55 / plain  / oval / 0.55 | 0 / 1.04 / 2.30 | Crumbit 0.09 | Zingle 0.074 |
 | 2 | Twangle | Sticky Stretch | 0.28 / 0.00 / 0.70 / 0.50 / plain  / wide / 0.40 | 2 / 0.66 / 2.75 | Cindergoo 0.11 | Dimpla 0.089 |
 | 3 | Puddlo | Liquid Core | 0.20 / 0.00 / 0.85 / 0.45 / plain  / sleepy / 0.70 | 0 / 0.94 / 1.00 | Hooplet 0.13 | Swishel 0.053 |
-| 4 | Glugbean | Liquid Core | 0.30 / 0.00 / 0.80 / 0.55 / plain  / oval / 0.45 | 2 / 0.87 / 1.38 | Pastrel 0.14 | Cindergoo 0.085 |
+| 4 | Glugbean | Liquid Core | 0.30 / 0.00 / 0.80 / 0.55 / plain  / oval / 0.45 | 2 / 0.87 / 1.38 | Thumbly 0.13 | Cindergoo 0.085 |
 | 5 | Crumbit | Bead Squeeze | 0.25 / 0.00 / 0.40 / 0.30 (cap 0.50) / plain  / wide / 0.50 | 2 / 0.85 / 2.32 | Plumpet 0.09 | Wisplet 0.086 |
 | 6 | Chunkle | Gummy Jelly | 0.25 / 0.00 / 0.70 / 0.60 / plain  / dot / 0.50 | 2 / 1.03 / 2.78 | Marigel 0.15 | Marigel 0.057 |
 | 7 | Munchip | Gummy Jelly | 0.30 / 0.00 / 0.65 / 0.65 / plain  / oval / 0.45 | 2 / 0.68 / 1.94 | Nuzzo 0.12 | Gloopsy 0.090 |
 | 8 | Wisplet | Marshmallow Puff | 0.15 / 0.00 / 0.30 / 0.20 (cap 0.40) / plain  / sleepy / 0.60 | 2 / 0.86 / 1.56 | Crimpo 0.14 | Glugbean 0.086 |
 | 9 | Cushlet | Marshmallow Puff | 0.15 / 0.00 / 0.30 / 0.18 (cap 0.40) / plain  / sleepy / 0.70 | 4 / 1.30 / 1.92 | Plumpet 0.11 | Thudge 0.078 |
-| 10 | Crimpo | Mochi Dough | 0.30 / 0.00 / 0.30 / 0.26 (cap 0.45) / plain  / dot / 0.55 | 2 / 0.92 / 1.62 | Pastrel 0.10 | Ambrosel 0.056 |
-| 11 | Thumbly | Mochi Dough | 0.30 / 0.00 / 0.35 / 0.28 (cap 0.45) / plain  / oval / 0.50 | 2 / 1.26 / 1.62 | Glugbean 0.15 | Wisplet 0.090 |
+| 10 | Crimpo | Mochi Dough | 0.30 / 0.00 / 0.30 / 0.26 (cap 0.45) / plain  / dot / 0.55 | 2 / 0.92 / 1.62 | Pastrel 0.09 | Ambrosel 0.056 |
+| 11 | Thumbly | Mochi Dough | 0.30 / 0.00 / 0.35 / 0.28 (cap 0.45) / plain  / oval / 0.50 | 2 / 1.32 / 1.63 | Glugbean 0.13 | Wisplet 0.090 |
 | 12 | Boingle | Firm Silicone | 0.30 / 0.00 / 0.55 / 0.35 / plain  / wide / 0.40 | 2 / 0.78 / 1.61 | Tidelume 0.17 | Wrigglo 0.062 |
 | 13 | Dimpla | Pop Dome | 0.25 / 0.00 / 0.70 / 0.45 / plain  / dot / 0.35 | 1 / 1.01 / 1.58 | Dollop 0.11 | Boingle 0.082 |
 
@@ -130,9 +130,9 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | 16 | Swishel | Liquid Core | 0.58 / 0.25 / 0.90 / 0.70 / plain  / sleepy / 0.60 | 1 / 0.81 / 1.54 | Dollop 0.15 | Puddlo 0.053 |
 | 17 | Granulo | Bead Squeeze | 0.50 / 0.30 / 0.45 / 0.34 (cap 0.50) / plain  / wide / 0.40 | 3 / 0.62 / 2.45 | Marigel 0.11 | Caromel 0.080 |
 | 18 | Sproutle | Gummy Jelly | 0.55 / 0.20 / 0.75 / 0.75 / plain  / oval / 0.50 | 1 / 0.91 / 2.28 | Diademo 0.11 | Caromel 0.073 |
-| 19 | Wrigglo | Slime Goo | 0.55 / 0.25 / 0.95 / 0.70 / plain  / dot / 0.60 | 2 / 0.61 / 1.69 | Crimpo 0.13 | Gloopsy 0.061 |
+| 19 | Wrigglo | Slime Goo | 0.55 / 0.25 / 0.95 / 0.70 / plain  / dot / 0.60 | 2 / 0.68 / 1.47 | Crimpo 0.13 | Gloopsy 0.061 |
 | 20 | Acornel | Marshmallow Puff | 0.45 / 0.15 / 0.30 / 0.24 (cap 0.40) / plain  / sleepy / 0.45 | 2 / 1.19 / 2.64 | Spirelo 0.11 | Selenuff 0.071 |
-| 21 | Capnap | Slow-Rise Foam | 0.50 / 0.10 / 0.35 / 0.15 (cap 0.30) / plain  / sleepy / 0.55 | 6 / 1.00 / 2.06 | Dimpla 0.14 | Selenuff 0.075 |
+| 21 | Capnap | Slow-Rise Foam | 0.50 / 0.10 / 0.35 / 0.15 (cap 0.30) / plain  / sleepy / 0.55 | 6 / 1.03 / 2.03 | Dimpla 0.13 | Selenuff 0.075 |
 | 22 | Knubby | Mochi Dough | 0.45 / 0.10 / 0.35 / 0.32 (cap 0.45) / plain  / dot / 0.50 | 2 / 0.83 / 2.00 | Plumpet 0.13 | Pastrel 0.094 |
 | 23 | Kneadle | Bounce Putty | 0.50 / 0.20 / 0.60 / 0.15 (cap 0.30) / plain  / oval / 0.50 | 2 / 0.96 / 1.82 | Thudge 0.13 | Hushpuff 0.059 |
 | 24 | Hooplet | Firm Silicone | 0.55 / 0.25 / 0.70 / 0.50 / plain  / wide / 0.45 | 2 / 0.85 / 1.14 | Dimpla 0.11 | Petalop 0.056 |
@@ -160,7 +160,7 @@ Each lane is one column (A to F) of the family-by-tier grid in `_spec/DESIGN.md`
 | 36 | Rattlebead | Bead Squeeze | 0.80 / 0.60 / 0.60 / 0.41 (cap 0.50) / bands 0.70 / wide / 0.50 | 4 / 0.97 / 2.42 | Somnuff 0.11 | Marigel 0.061 |
 | 37 | Cindergoo | Slime Goo | 0.88 / 0.60 / 0.97 / 0.85 / swirl 0.50 / dot / 0.55 | 4 / 0.87 / 2.62 | Twangle 0.11 | Chunkle 0.060 |
 | 38 | Selenuff | Marshmallow Puff | 0.82 / 0.65 / 0.40 / 0.33 (cap 0.40) / swirl 0.60 / sleepy / 0.60 | 3 / 1.00 / 2.29 | Nuzzo 0.11 | Acornel 0.071 |
-| 39 | Pastrel | Mochi Dough | 0.80 / 0.50 / 0.40 / 0.38 (cap 0.45) / bands 0.65 / oval / 0.55 | 2 / 0.78 / 1.50 | Crimpo 0.10 | Fossilo 0.064 |
+| 39 | Pastrel | Mochi Dough | 0.80 / 0.50 / 0.40 / 0.38 (cap 0.45) / bands 0.65 / oval / 0.55 | 2 / 0.80 / 1.52 | Crimpo 0.09 | Fossilo 0.064 |
 | 40 | Flipdome | Pop Dome | 0.85 / 0.55 / 0.85 / 0.80 / bands 0.70 / wide / 0.45 | 3 / 1.26 / 2.22 | Dollop 0.10 | Munchip 0.106 |
 | 41 | Caromel | Firm Silicone | 0.82 / 0.50 / 0.70 / 0.75 / swirl 0.60 / wide / 0.45 | 3 / 1.14 / 2.02 | Thudge 0.12 | Sproutle 0.073 |
 
