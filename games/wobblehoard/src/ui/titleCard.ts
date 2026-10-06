@@ -14,13 +14,17 @@ export interface TitleCard {
   isShown(): boolean;
 }
 
-const WORD = 'WOBBLEHOARD';
+const WORD = 'SQUISH KEEPER';
 export const CTA_LABEL = 'Wake it up';
 
 export function createTitleCard(root: HTMLElement, o: { onStart(viaKeyboard: boolean): void }): TitleCard {
-  const letters = [...WORD].map((ch, i) => {
+  const n = WORD.replace(/ /g, '').length;
+  let k = 0;
+  const letters = [...WORD].map((ch) => {
+    if (ch === ' ') return h('span', { class: 'title-gap' });
     const s = h('span', { class: 'title-letter', text: ch });
-    s.style.setProperty('--i', String(i));   // CSSOM, allowed by a strict style-src (an inline style="" attribute is not)
+    s.style.setProperty('--i', String(k++));   // CSSOM, allowed by a strict style-src (an inline style="" attribute is not)
+    s.style.setProperty('--n', String(n - 1));
     return s;
   });
   const mark = h('div', { class: 'title-mark', attrs: { 'aria-hidden': 'true' } }, ...letters);
@@ -28,7 +32,7 @@ export function createTitleCard(root: HTMLElement, o: { onStart(viaKeyboard: boo
   const button = h('button', { class: 'cta', attrs: { type: 'button', disabled: '', 'aria-busy': 'true' } },
     h('span', { class: 'cta-label', text: 'Warming up…' }));
   const fine = h('p', { class: 'title-fine', text: 'Sound on for the full squish.' });
-  const el = h('div', { class: 'title', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'WOBBLEHOARD, a squishy toy. Press the button to start.' } },
+  const el = h('div', { class: 'title', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Squish Keeper, a squishy toy. Press the button to start.' } },
     h('div', { class: 'title-top' }, mark, promise),
     h('div', { class: 'title-bottom' }, button, fine));
   root.append(el);

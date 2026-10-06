@@ -48,6 +48,8 @@ async function section(name, fn) {
   console.log(`   (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/** the game's wordmark (renamed by the owner on 2026-10-06 from WOBBLEHOARD; internal ids such as the storage keys and __WH__ keep the old name) */
+const GAME_MARK = 'SQUISH KEEPER';
 
 // ------------------------------------------------------------------ page helpers
 function watch(page) {
@@ -259,8 +261,8 @@ async function main() {
         h1: document.querySelector('h1')?.textContent, viewport: document.querySelector('meta[name=viewport]')?.content, theme: document.querySelector('meta[name=theme-color]')?.content,
         hudHidden: getComputedStyle(document.querySelector('.hud')).visibility,
       }));
-      check('title card: wordmark, one-line promise, one big input-neutral button "Wake it up" (enabled once loaded; audit finding 17)', t.mark === 'WOBBLEHOARD' && t.btn === 'Wake it up' && t.disabled === false && !!t.promise && t.role === 'dialog', JSON.stringify(t));
-      check('index.html: viewport-fit=cover, theme-color is the ink token, one h1 for assistive tech', /viewport-fit=cover/.test(t.viewport) && t.theme === '#14102a' && t.h1 === 'WOBBLEHOARD');
+      check('title card: wordmark, one-line promise, one big input-neutral button "Wake it up" (enabled once loaded; audit finding 17)', (t.mark ?? '').replace(/\s/g, '') === GAME_MARK.replace(/\s/g, '') && t.btn === 'Wake it up' && t.disabled === false && !!t.promise && t.role === 'dialog', JSON.stringify(t));
+      check('index.html: viewport-fit=cover, theme-color is the ink token, one h1 for assistive tech', /viewport-fit=cover/.test(t.viewport) && t.theme === '#14102a' && t.h1 === GAME_MARK);
       check('title card: the HUD is not shown (or reachable) underneath it', t.hudHidden === 'hidden');
       const a0 = await state(page);
       check('audio is locked before the gesture (nothing created before unlock)', a0.audio.state === 'locked' || a0.audio.state === 'suspended', a0.audio.state);
@@ -309,7 +311,7 @@ async function main() {
         ring: getComputedStyle(document.querySelector('.play-target')).boxShadow,
       }));
       check('HUD: wordmark, gear + mute, the catalog species name "Dollop" with its tier gem and label "Common" (audit finding 19), a meter ring (role=meter)',
-        hud.wordmark === 'WOBBLEHOARD' && hud.name === 'Dollop' && /common/i.test(hud.tier) && hud.gem && hud.gear && hud.mute && hud.meter === '0', JSON.stringify(hud));
+        hud.wordmark === GAME_MARK && hud.name === 'Dollop' && /common/i.test(hud.tier) && hud.gem && hud.gear && hud.mute && hud.meter === '0', JSON.stringify(hud));
       check('HUD hint: pointer wording with the one pull wording ("drag out to stretch")', hud.hintShow === 'true' && /^Click to poke/.test(hud.hint) && /drag out to stretch/.test(hud.hint), hud.hint);
       check('a mouse start does not park a focus ring on the squishy', hud.focus !== 'wh-play' && hud.ring === 'none', `${hud.focus} / ${hud.ring}`);
       const sig = await canvasSig(page);
@@ -854,6 +856,11 @@ async function main() {
     // Hoard, take the daily gift, collect a task, merge two, Tidy-up, three squishies on the mat. Ceremonies run with Skip animations
     // (their own sections above test them) and the sim is stepped.
     // ================================================================================================
+    /** a click that stops the section with a diagnosis (what covers the element) when it cannot happen */
+    async function hclick(page, sel, opts) {
+      if (opts && opts.force) { await page.click(sel, opts); return; }
+      if (!(await clickSel(page, sel, sel))) throw new Error(`could not click ${sel}`);
+    }
     const hoardOpen = (page) => page.evaluate(() => !document.querySelector('.hoard').hidden);
     const plinthCount = (page) => page.evaluate(() => document.querySelectorAll('.hoard .plinth').length);
     const hstate = (page) => page.evaluate(() => window.__WH__.shell.hoardState());
@@ -862,7 +869,7 @@ async function main() {
       for (let i = 0; i < n; i++) {
         await page.evaluate(() => { window.__WH__.pause(); window.__WH__.shell.grant(1); });
         await stepUntil(page, `(wh) => wh.shell.meter().onTable`, 3, 0.1);
-        await page.evaluate(() => window.__WH__.shell.openCapsule());
+        await page.evaluate(() => { void window.__WH__.shell.openCapsule(); });   // not awaited: the ceremony needs the steps below
         await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 4, 0.1);
       }
     }
@@ -903,33 +910,33 @@ async function main() {
       check('U01 cabinet: all 50 species on six tier shelves; unowned plinths are dim silhouettes that still show their names and "Not yet"', u1.n === 50 && u1.shelves === 6 && u1.owned === s0.owned && u1.dim.length === 50 - s0.owned && u1.dim.every((d) => d.name && d.sub === 'Not yet' && d.sil), `${u1.n} plinths, ${u1.shelves} shelves, owned ${u1.owned}`);
       check('Practice shelf is labelled (COLLECTION 6, 9.9): "Practice" and "Practice shelf. These live on this device." with the sign-in line', u1.practice === 'Practice' && /Practice shelf\. These live on this device\./.test(u1.note ?? '') && /Sign in to keep real squishies and trade\./.test(u1.note ?? ''), JSON.stringify({ p: u1.practice, note: u1.note }));
       await shot(page, 'hoard_shelf_desktop');
-      await page.click('.tool-seg .seg-btn:nth-child(2)');
+      await hclick(page, '.tool-seg .seg-btn:nth-child(2)');
       await settle(page);
       const g1 = await page.evaluate(() => ({ n: document.querySelectorAll('.hoard .plinth').length, shelves: document.querySelectorAll('.hoard .shelf').length }));
       check('U01 grid view: one flat grid with all 50', g1.n === 50 && g1.shelves === 1, JSON.stringify(g1));
-      await page.click('.tool-seg .seg-btn:nth-child(1)');
+      await hclick(page, '.tool-seg .seg-btn:nth-child(1)');
       // U02 filters, sorts, chip counts, persistence
-      await page.click('.hoard-tools .tool-btn[aria-controls="wh-filters"]');
+      await hclick(page, '.hoard-tools .tool-btn[aria-controls="wh-filters"]');
       await settle(page);
       const chips = await page.evaluate(() => [...document.querySelectorAll('#wh-filters .fchips')[0].querySelectorAll('.fchip')].map((c) => ({ t: c.querySelector('span:not(.fchip-n)')?.textContent, n: c.querySelector('.fchip-n')?.textContent })));
       await shot(page, 'hoard_filters_desktop');
-      await page.click('#wh-filters .fchips:first-of-type .fchip:nth-child(1)');   // Common
+      await hclick(page, '#wh-filters .fchips:first-of-type .fchip:nth-child(1)');   // Common
       await settle(page);
       const fc = await page.evaluate(() => ({ n: document.querySelectorAll('.hoard .plinth').length, tiers: [...new Set([...document.querySelectorAll('.hoard .plinth')].map((p) => p.dataset.tier))] }));
       const commonN = Number((chips[0]?.n ?? '(0)').replace(/[()]/g, ''));
       check('U02 the Common chip shows only Commons, and its count "(n)" is the number shown', fc.n === commonN && fc.tiers.length === 1 && fc.tiers[0] === 'common', `chip ${chips[0]?.t} ${chips[0]?.n}, shown ${fc.n} ${fc.tiers.join()}`);
-      await page.click('#wh-filters .fchips:first-of-type .fchip:nth-child(1)');
-      await page.click('#wh-filters .fchips:nth-of-type(3) .fchip:nth-child(2)');   // Only missing
+      await hclick(page, '#wh-filters .fchips:first-of-type .fchip:nth-child(1)');
+      await hclick(page, '#wh-filters .fchips:nth-of-type(3) .fchip:nth-child(2)');   // Only missing
       await settle(page);
       const miss = await page.evaluate(() => ({ n: document.querySelectorAll('.hoard .plinth').length, owned: document.querySelectorAll('.hoard .plinth[data-owned="true"]').length }));
       check('U02 "Only missing" shows exactly the species not owned yet', miss.n === 50 - s0.owned && miss.owned === 0, JSON.stringify(miss));
-      await page.click('#wh-filters .fchips:nth-of-type(3) .fchip:nth-child(2)');
+      await hclick(page, '#wh-filters .fchips:nth-of-type(3) .fchip:nth-child(2)');
       await page.selectOption('#wh-hoard-sort', 'name');
       await settle(page);
       const names = await page.evaluate(() => [...document.querySelectorAll('.hoard .plinth .plinth-name')].map((e) => e.textContent));
       const sorted = [...names].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
       check('U02 sort by Name orders the shelves alphabetically (within each tier shelf)', names.length === 50, names.slice(0, 4).join(', '));
-      await page.click('.tool-seg .seg-btn:nth-child(2)');
+      await hclick(page, '.tool-seg .seg-btn:nth-child(2)');
       await settle(page);
       const flatNames = await page.evaluate(() => [...document.querySelectorAll('.hoard .plinth .plinth-name')].map((e) => e.textContent));
       check('U02 grid + Name: all 50 in alphabetical order', JSON.stringify(flatNames) === JSON.stringify([...flatNames].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))), flatNames.slice(0, 5).join(', '));
@@ -938,11 +945,11 @@ async function main() {
       await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 120000 });
       await wake(page);
       await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
-      await page.click('.hoard-btn'); await settle(page);
+      await hclick(page, '.hoard-btn'); await settle(page);
       const kept = await page.evaluate(() => ({ sort: document.querySelector('#wh-hoard-sort')?.value, grid: document.querySelector('.tool-seg .seg-btn:nth-child(2)')?.getAttribute('aria-pressed') }));
       check('U02 the sort and the view survive a reload (prefs persist)', kept.sort === 'name' && kept.grid === 'true', JSON.stringify(kept));
       await page.selectOption('#wh-hoard-sort', 'tier');
-      await page.click('.tool-seg .seg-btn:nth-child(1)');
+      await hclick(page, '.tool-seg .seg-btn:nth-child(1)');
       await settle(page);
       // U03 the card loads the keeper as the live body
       const st1 = await hstate(page);
@@ -951,7 +958,7 @@ async function main() {
       const dupSp = Object.keys(bySp).find((k) => bySp[k].length >= 2);
       const anySp = dupSp ?? st1.items[0].species;
       const idBefore = await page.evaluate(() => window.__WH__.shell.identity());
-      await page.click(`.hoard .plinth[data-species="${anySp}"]`);
+      await hclick(page, `.hoard .plinth[data-species="${anySp}"]`);
       await page.waitForFunction(() => !document.querySelector('.hcard').hidden, null, { timeout: 20000 });
       await settle(page);
       const idCard = await page.evaluate(() => window.__WH__.shell.identity());
@@ -968,43 +975,43 @@ async function main() {
       await shot(page, 'hoard_card_desktop');
       if (dupSp) {
         const g0 = (await state(page)).genomeCode;
-        await page.click('.hcard .copy[aria-checked="false"]');
+        await hclick(page, '.hcard .copy[aria-checked="false"]');
         await settle(page);
         const g1c = (await state(page)).genomeCode;
         check('U03 picking another copy in the strip swaps the live body to that copy (the genome changes)', g1c !== g0, `${g0.slice(0, 18)}… -> ${g1c.slice(0, 18)}…`);
       } else check('U03 picking another copy swaps the live body', false, 'no species with two copies on this roll');
       // heart, then back to the shelf: the player's own squishy comes back
-      await page.click('.hcard-actions [data-key="heart"]');
+      await hclick(page, '.hcard-actions [data-key="heart"]');
       await settle(page);
       const hearted = await page.evaluate(() => document.querySelector('.hcard-actions [data-key="heart"]')?.getAttribute('aria-pressed'));
-      await page.click('.hcard-back');
+      await hclick(page, '.hcard-back');
       await settle(page);
       const idBack = await page.evaluate(() => window.__WH__.shell.identity());
       check('card: Heart toggles (aria-pressed), and closing the card puts the player\'s own squishy back (restorePrimary)', hearted === 'true' && idBack.itemId === idBefore.itemId && idBack.genomeCode === idBefore.genomeCode, JSON.stringify({ hearted, back: idBack.species }));
       // un-heart it again so the merge below can use it
-      await page.click(`.hoard .plinth[data-species="${anySp}"]`); await settle(page);
-      await page.click('.hcard-actions [data-key="heart"]'); await settle(page);
-      await page.click('.hcard-back'); await settle(page);
+      await hclick(page, `.hoard .plinth[data-species="${anySp}"]`); await settle(page);
+      await hclick(page, '.hcard-actions [data-key="heart"]'); await settle(page);
+      await hclick(page, '.hcard-back'); await settle(page);
 
       // the daily gift (9.5)
-      await page.click('#wh-tab-gift'); await settle(page);
+      await hclick(page, '#wh-tab-gift'); await settle(page);
       const g = await page.evaluate(() => ({ n: document.querySelectorAll('.gift').length, take: document.querySelector('[data-key="take"]')?.disabled, owns: [...document.querySelectorAll('.gift-own')].map((e) => e.textContent) }));
       check('gift: three choices, each with "New to you" or "You have N", and Take this one waits for a pick', g.n === 3 && g.take === true && g.owns.every((t) => /^(New to you|You have \d+)$/.test(t)), JSON.stringify(g));
-      await page.click('.gift:nth-child(1)'); await settle(page);
+      await hclick(page, '.gift:nth-child(1)'); await settle(page);
       await shot(page, 'hoard_gift_desktop');
       const pick = await page.evaluate(() => document.querySelector('.gift[aria-checked="true"]')?.dataset.species);
       const nBefore = (await hstate(page)).items.length;
-      await page.click('[data-key="take"]');
+      await hclick(page, '[data-key="take"]');
       await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 4, 0.1);
       const sg = await hstate(page);
       check('gift: Take this one stores the pick first, plays its reveal, and the shelf has it (origin Restock); the gift is claimed for today', sg.items.length === nBefore + 1 && sg.restockClaimed && sg.items.some((it) => it.species === pick && it.origin === 'restock'), `${nBefore} -> ${sg.items.length}, picked ${pick}`);
-      await page.click('.hoard-btn'); await settle(page);
-      await page.click('#wh-tab-gift'); await settle(page);
+      await hclick(page, '.hoard-btn'); await settle(page);
+      await hclick(page, '#wh-tab-gift'); await settle(page);
       const gdone = await page.evaluate(() => document.querySelector('.gift-big')?.textContent);
       check('gift: afterwards the tab says "Come back tomorrow" (no countdown)', gdone === 'Come back tomorrow', gdone);
 
       // today's tasks (9.6)
-      await page.click('#wh-tab-today'); await settle(page);
+      await hclick(page, '#wh-tab-today'); await settle(page);
       const t0 = await page.evaluate(() => [...document.querySelectorAll('.task')].map((t) => ({ text: t.querySelector('.task-text')?.textContent, n: t.querySelector('.task-n')?.textContent, bar: t.querySelector('[role=progressbar]')?.getAttribute('aria-valuetext') })));
       check('today: two tasks, each with plain text, a progress bar and "N of M" in text', t0.length === 2 && t0.every((t) => t.text && /^\d+ of \d+$/.test(t.n ?? '') && t.bar === t.n), JSON.stringify(t0));
       const tasks = (await hstate(page)).tasks;
@@ -1013,13 +1020,13 @@ async function main() {
       await shot(page, 'hoard_today_desktop');
       const credits0 = (await hstate(page)).credits;
       const collect = await page.evaluate(() => !!document.querySelector('.task .cta-btn'));
-      if (collect) await page.click('.task .cta-btn');
+      if (collect) await hclick(page, '.task .cta-btn');
       await settle(page);
       const st2 = await hstate(page);
       check('today: a done task offers "Collect capsule"; collecting it adds a capsule (the task capsule bypasses the table)', done && collect && st2.credits === credits0 + 1 && st2.tasks.find((t) => t.id === tasks[0].id)?.claimed, `done ${done}, credits ${credits0} -> ${st2.credits}`);
-      await page.click('.hoard-close'); await settle(page);
+      await hclick(page, '.hoard-close'); await settle(page);
       await openCapsules(page, 0);
-      await page.evaluate(() => window.__WH__.shell.openCapsule());
+      await page.evaluate(() => { void window.__WH__.shell.openCapsule(); });   // not awaited: the ceremony needs the steps below
       await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 4, 0.1);
 
       // the merge pad (MERGE 3.1, R15)
@@ -1028,16 +1035,16 @@ async function main() {
       for (const it of st3.items) if (!it.fav && !it.locked) (by3[it.species] ??= []).push(it);
       const mSp = Object.keys(by3).find((k) => by3[k].length >= 2 && by3[k][0].tier !== 'mythic');
       if (!mSp) { check('merge: a species with two copies to merge', false, 'none on this roll'); return; }
-      await page.click('.hoard-btn'); await settle(page);
-      await page.click(`.hoard .plinth[data-species="${mSp}"]`); await settle(page);
-      await page.click('.hcard-actions [data-key="merge"]');
+      await hclick(page, '.hoard-btn'); await settle(page);
+      await hclick(page, `.hoard .plinth[data-species="${mSp}"]`); await settle(page);
+      await hclick(page, '.hcard-actions [data-key="merge"]');
       await page.waitForFunction(() => !document.querySelector('.hmerge').hidden, null, { timeout: 20000 });
       await settle(page);
       // a two-copy stack: the default picks use the keeper -> the last-copy warning first, focus on Cancel
       const lc = await page.evaluate(() => ({ modal: !!document.querySelector('.hmodal'), text: document.querySelector('.hmodal-text')?.textContent, focus: document.activeElement?.textContent }));
       check('merge pad: merging the last copies warns first in a modal ("This uses your last …. Merge anyway?"), focus on Cancel', lc.modal && /^This uses your last .+\. Merge anyway\?$/.test(lc.text ?? '') && lc.focus === 'Cancel', JSON.stringify(lc));
       await shot(page, 'merge_lastcopy_desktop');
-      if (lc.modal) await page.click('.hmodal .act-btn.primary');
+      if (lc.modal) await hclick(page, '.hmodal .act-btn.primary');
       await settle(page);
       const pv = await page.evaluate(() => ({
         lines: [...document.querySelectorAll('.hmerge-lines li')].map((l) => l.textContent),
@@ -1061,7 +1068,7 @@ async function main() {
       await settle(page);
       const oc = await page.evaluate(() => ({ open: !document.querySelector('.hmerge').hidden, status: document.querySelector('.hmerge-status')?.textContent, outs: document.querySelectorAll('.hmerge-outs .out').length }));
       check('merge pad: an "odds_changed" answer keeps the pad open with the fresh odds and "The odds changed. Have another look."; nothing consumed', oc.open && oc.status === 'The odds changed. Have another look.' && oc.outs > 0 && (await hstate(page)).items.length === before.items.length, JSON.stringify(oc));
-      if (await page.evaluate(() => !!document.querySelector('.hmodal'))) await page.click('.hmodal .act-btn.primary');
+      if (await page.evaluate(() => !!document.querySelector('.hmodal'))) await hclick(page, '.hmodal .act-btn.primary');
       // the real merge: hold, result first, the ceremony, the result is the play body
       const live0 = await live(page);
       await holdEl(page, '.hold-btn', 900);
@@ -1074,13 +1081,13 @@ async function main() {
 
       // Tidy-up (MERGE 3.3): earn more, then one hold
       await openCapsules(page, 8);
-      await page.click('.hoard-btn'); await settle(page);
+      await hclick(page, '.hoard-btn'); await settle(page);
       const tidyOn = await page.evaluate(() => !document.querySelector('.hoard-tools .tidy')?.disabled);
       if (tidyOn) {
-        await page.click('.hoard-tools .tidy'); await settle(page);
+        await hclick(page, '.hoard-tools .tidy'); await settle(page);
         const plan = await page.evaluate(() => ({ rows: document.querySelectorAll('.hmerge-outs .out').length, cap: [...document.querySelectorAll('.hmerge-sub')].map((e) => e.textContent).join(' '), rare: document.querySelector('[data-key="rare"]')?.checked }));
         await shot(page, 'tidy_plan_desktop');
-        if (plan.rows === 0) { await page.click('[data-key="rare"]'); await settle(page); }
+        if (plan.rows === 0) { await hclick(page, '[data-key="rare"]'); await settle(page); }
         const tb = await hstate(page);
         await holdEl(page, '.hmerge .hold-btn', 900);
         await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 8, 0.1);
@@ -1091,9 +1098,9 @@ async function main() {
           /merges? left today\. Odds are recalculated after each merge\./.test(plan.cap) && plan.rare === false && ta.mergesToday > tb.mergesToday && res.open && res.rows === ta.mergesToday - tb.mergesToday && res.best === 1,
           JSON.stringify({ plan, merged: ta.mergesToday - tb.mergesToday, res }));
         await shot(page, 'tidy_results_desktop');
-        await page.click('[data-key="done"]'); await settle(page);
+        await hclick(page, '[data-key="done"]'); await settle(page);
       } else check('Tidy-up: a plan exists after 18 capsules on this roll', false, 'no spares to tidy');
-      if (await hoardOpen(page)) { await page.click('.hoard-close'); await settle(page); }
+      if (await hoardOpen(page)) { await hclick(page, '.hoard-close'); await settle(page); }
 
       // the play mat (B1): bring squishies out next to the play body
       await page.evaluate(() => window.__WH__.setSetting('quality', 'low'));
@@ -1101,10 +1108,10 @@ async function main() {
       const keepers = (await hstate(page)).items;
       const cand = [...new Map(keepers.filter((it) => it.id !== idNow.itemId && it.species !== idNow.species).map((it) => [it.species, it])).values()];
       const bringOut = async (sp) => {
-        await page.click('.hoard-btn'); await settle(page);
-        await page.click(`.hoard .plinth[data-species="${sp}"]`); await settle(page);
+        await hclick(page, '.hoard-btn'); await settle(page);
+        await hclick(page, `.hoard .plinth[data-species="${sp}"]`); await settle(page);
         const can = await page.evaluate(() => { const b = document.querySelector('.hcard-actions [data-key="mat"]'); return b ? { disabled: b.disabled, text: b.textContent, note: [...document.querySelectorAll('.hcard-actions .act-note')].map((e) => e.textContent).join(' | ') } : null; });
-        if (can && !can.disabled && /Bring out/.test(can.text)) { await page.click('.hcard-actions [data-key="mat"]'); await settle(page); }
+        if (can && !can.disabled && /Bring out/.test(can.text)) { await hclick(page, '.hcard-actions [data-key="mat"]'); await settle(page); }
         else { await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await settle(page); }
         return can;
       };
@@ -1131,7 +1138,7 @@ async function main() {
       const frame3 = await page.evaluate(() => { const t = performance.now(); window.__WH__.step(1 / 60, 10); return (performance.now() - t) / 10; });
       console.log(`   mat frame cost, 3 bodies: physics ${cost3.msPerFrame.toFixed(2)} ms (${cost3.msPerBody.toFixed(2)} ms a body), step + render ${frame3.toFixed(1)} ms (SwiftShader, shared machine)`);
       await page.evaluate(() => window.__WH__.resume());
-      await page.click('.mat-chip'); await settle(page);
+      await hclick(page, '.mat-chip'); await settle(page);
       const m1x = await page.evaluate(() => window.__WH__.shell.matInfo());
       check('play mat: one tap on "Put back" puts them all back (1 on the mat, the chip hides)', m1x.count === 1 && await page.evaluate(() => document.querySelector('.mat-chip').hidden), `count ${m1x.count}`);
       // five at quality high
@@ -1143,7 +1150,7 @@ async function main() {
       console.log(`   mat frame cost, ${m5.count} bodies: physics ${cost5.msPerFrame.toFixed(2)} ms (${cost5.msPerBody.toFixed(2)} ms a body), step + render ${frame5.toFixed(1)} ms (SwiftShader, shared machine)`);
       check('play mat: at quality high five fit (the play body and four brought out)', m5.count === 5 && m5.limit === 5, JSON.stringify({ count: m5.count, limit: m5.limit }));
       await shot(page, 'mat5_desktop');
-      await page.click('.mat-chip'); await settle(page);
+      await hclick(page, '.mat-chip'); await settle(page);
       await page.evaluate(() => window.__WH__.setSetting('quality', 'low'));
       await H.context.close();
     });
@@ -1165,7 +1172,7 @@ async function main() {
       check('quick switcher: sits above the name tag, clear of the name tag, the hint and the capsule dock', !overlap(sb, L.name) && (L.hintShow !== 'true' || !overlap(sb, L.hint)) && !overlap(sb, L.capsuleBtn), JSON.stringify({ strip: sb, name: L.name, hint: L.hint }));
       // one tap
       const live0 = await live(page);
-      await page.click('.qswitch .qs-btn:nth-child(1)');
+      await hclick(page, '.qswitch .qs-btn:nth-child(1)');
       await settle(page);
       const id1 = await page.evaluate(() => ({ id: window.__WH__.shell.identity(), hud: document.querySelector('.nametag-name')?.textContent }));
       await sleep(400);
@@ -1192,9 +1199,9 @@ async function main() {
       const st = await hstate(page);
       const cur = await page.evaluate(() => window.__WH__.shell.identity());
       const other = st.items.find((it) => it.species !== cur.species && it.id !== cur.itemId);
-      await page.click('.hoard-btn'); await settle(page);
-      await page.click(`.hoard .plinth[data-species="${other.species}"]`); await settle(page);
-      await page.click('.hcard-actions [data-key="play"]'); await settle(page);
+      await hclick(page, '.hoard-btn'); await settle(page);
+      await hclick(page, `.hoard .plinth[data-species="${other.species}"]`); await settle(page);
+      await hclick(page, '.hcard-actions [data-key="play"]'); await settle(page);
       const chosen = await page.evaluate(() => ({ id: window.__WH__.shell.identity(), hoard: !document.querySelector('.hoard').hidden, card: !document.querySelector('.hcard').hidden }));
       check('card: "Play with this one" makes it the play body at once and closes the Hoard', chosen.id.species === other.species && !chosen.hoard && !chosen.card, JSON.stringify({ species: chosen.id.species, item: chosen.id.itemId }));
       await page.reload({ waitUntil: 'load' });
@@ -1213,7 +1220,7 @@ async function main() {
       await page.evaluate(() => document.querySelector('#wh-play')?.focus());
       await page.keyboard.press(']');
       const mid = await page.evaluate(() => ({ kind: window.__WH__.shell.ceremony().kind, id: window.__WH__.shell.identity().itemId, live: document.getElementById('wh-live')?.textContent }));
-      await page.click('.hoard-btn', { force: true });
+      await hclick(page, '.hoard-btn', { force: true });
       const hoardMid = await page.evaluate(() => !document.querySelector('.hoard').hidden);
       await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 6, 0.1);
       await page.evaluate(async () => { await window.__revealP; });
@@ -1325,18 +1332,18 @@ async function main() {
       const visY = cardL.stageShift + bc.y * page.viewportSize().height;
       check('U05 phone card: a bottom sheet (< 60% of the screen); the live squishy shows above it and the stage runs again', cardL.h < cardL.ih * 0.6 && visY < cardL.top && !cardL.paused.includes('covered'), JSON.stringify({ ...cardL, squishyY: Math.round(visY) }));
       await shot(page, 'hoard_card_phone');
-      await page.click('.hcard-back'); await settle(page);
-      for (const [t, name] of [['gift', 'hoard_gift_phone'], ['today', 'hoard_today_phone']]) { await page.click(`#wh-tab-${t}`); await settle(page); await shot(page, name); }
+      await hclick(page, '.hcard-back'); await settle(page);
+      for (const [t, name] of [['gift', 'hoard_gift_phone'], ['today', 'hoard_today_phone']]) { await hclick(page, `#wh-tab-${t}`); await settle(page); await shot(page, name); }
       const st = await hstate(page);
       const by = {};
       for (const it of st.items) if (!it.fav && !it.locked) (by[it.species] ??= []).push(it);
       const msp = Object.keys(by).find((k) => by[k].length >= 2 && by[k][0].tier !== 'mythic');
       if (msp) {
-        await page.click('#wh-tab-shelf'); await settle(page);
+        await hclick(page, '#wh-tab-shelf'); await settle(page);
         await page.evaluate((s) => document.querySelector(`.hoard .plinth[data-species="${s}"]`).scrollIntoView({ block: 'center' }), msp);
-        await page.click(`.hoard .plinth[data-species="${msp}"]`); await settle(page);
-        await page.click('.hcard-actions [data-key="merge"]'); await settle(page);
-        if (await page.evaluate(() => !!document.querySelector('.hmodal'))) { await shot(page, 'merge_lastcopy_phone'); await page.click('.hmodal .act-btn.primary'); }
+        await hclick(page, `.hoard .plinth[data-species="${msp}"]`); await settle(page);
+        await hclick(page, '.hcard-actions [data-key="merge"]'); await settle(page);
+        if (await page.evaluate(() => !!document.querySelector('.hmodal'))) { await shot(page, 'merge_lastcopy_phone'); await hclick(page, '.hmodal .act-btn.primary'); }
         await settle(page);
         const mp = await page.evaluate(() => { const r = document.querySelector('.hmerge').getBoundingClientRect(); return { x: Math.round(r.x), w: Math.round(r.width), iw: innerWidth, sw: document.documentElement.scrollWidth }; });
         check('U05 phone merge pad: a full-width sheet, no horizontal scroll', Math.abs(mp.w - mp.iw) < 2 && mp.sw <= mp.iw, JSON.stringify(mp));
@@ -1357,7 +1364,7 @@ async function main() {
       const landed = await stepUntil(page, `(wh) => wh.shell.meter().onTable`, 2, 0.05);
       const calm = await page.evaluate(() => ({ calm: window.__WH__.state().settings.calm, stage: window.__WH__.shell.stageInfo()?.calm }));
       await page.evaluate(() => window.__WH__.resume());
-      await page.click('.hoard-btn'); await settle(page);
+      await hclick(page, '.hoard-btn'); await settle(page);
       const anim = await page.evaluate(() => [...document.querySelectorAll('.hoard *, .hoard-btn, .hoard-btn *')].map((e) => getComputedStyle(e).animationName).filter((n) => n && n !== 'none'));
       check('U06 reduced motion: Calm effects on, the capsule fades in where it stands (no drop), no ring pulse, nothing animates in the Hoard', calm.calm && calm.stage === true && landed >= 0.3 && landed <= 0.7 && !pulse && anim.length === 0, JSON.stringify({ ...calm, pulse, landed, anim: anim.slice(0, 3) }));
       await context.close();
@@ -1583,8 +1590,8 @@ async function main() {
       mainWatches.push(['reflow', w]);
       const titleAt = async (W, H) => {
         await page.setViewportSize({ width: W, height: H }); await sleep(700);
-        const t = await page.evaluate(() => { const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; }; return { iw: innerWidth, ih: innerHeight, sw: document.documentElement.scrollWidth, cta: r('.cta'), mark: r('.title-mark'), promise: r('.title-promise') }; });
-        check(`reflow ${W}x${H} title card: no horizontal scroll; wordmark, tagline and the button all on screen`, t.sw <= t.iw && t.cta.b <= t.ih && t.cta.y >= 0 && t.mark.x >= 0 && t.mark.r <= t.iw && t.promise.r <= t.iw && t.promise.x >= 0 && t.promise.b <= t.cta.y, JSON.stringify(t));
+        const t = await page.evaluate(() => { const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; }; const lines = new Set([...document.querySelectorAll('.title-mark > span')].filter((e) => e.getBoundingClientRect().width > 0).map((e) => Math.round(e.getBoundingClientRect().top / 4))).size; return { iw: innerWidth, ih: innerHeight, sw: document.documentElement.scrollWidth, cta: r('.cta'), mark: r('.title-mark'), promise: r('.title-promise'), markLines: lines }; });
+        check(`reflow ${W}x${H} title card: no horizontal scroll; wordmark (one line), tagline and the button all on screen`, t.sw <= t.iw && t.cta.b <= t.ih && t.cta.y >= 0 && t.mark.x >= 0 && t.mark.r <= t.iw && t.markLines === 1 && t.promise.r <= t.iw && t.promise.x >= 0 && t.promise.b <= t.cta.y, JSON.stringify(t));
         await shot(page, `title_${W}x${H}`);
       };
       await titleAt(320, 568); await titleAt(568, 320); await titleAt(320, 256);

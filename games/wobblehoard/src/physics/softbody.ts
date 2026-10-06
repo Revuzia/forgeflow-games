@@ -160,6 +160,12 @@ const HOVER_OMEGA = 4.6, HOVER_ZETA = 0.62, HOVER_ABOVE = 0.35;
 const BOB_AMP = 0.03, BOB_HZ = 0.33;
 /** Give law exponent: depth ~ smOmega^GIVE_EXP, from deriveParams' own squashDepth 0.66 -> 0.34 over smOmega 12 -> 40 (see the constructor). */
 const GIVE_EXP = Math.log(0.34 / 0.66) / Math.log(40 / 12);
+/** Supported-body gravity is withdrawn while the centre of mass rises faster than RISE_V0 (fully at RISE_V1), m/s (see substep). */
+const RISE_V0 = 0.4, RISE_V1 = 0.8;
+/** Seconds the table edges stay in the contact fold limit after the last finger, grab or pinned foot let go (the release transient). */
+const TABLE_FOLD_AFTER = 1.5;
+/** A triangle near a contact whose opposite vertex comes closer than SLIVER x its rest height to the edge is put back open (foldLimit). */
+const SLIVER = 0.2;
 const NEAR = 0.01;                // a particle this close to the table counts as touching it (m)
 const BLOCK_MARGIN = 0.03;         // particles this close to a fingertip are 'blocked' for the volume constraint (m)
 const LOAD_CONC = 10;              // friction normal load per touching particle is capped at this many particle-weights
@@ -292,6 +298,7 @@ export class SoftBody implements SoftBodyLike {
   private readonly hingeList: Int32Array;   // the hinges near a fingertip this substep (hingeCount of them)
   private hingeCount = 0;
   private readonly HD: Float64Array;        // rest distance between the two opposite vertices
+  private readonly HP: Float64Array;        // rest distance of each opposite vertex from the hinge's edge line (2 per hinge; the sliver floor)
   private readonly HW: Float64Array;        // their inverse-mass sum
   private readonly valence: Float32Array;
   private readonly nbrStart: Int32Array;    // CSR adjacency (vertex -> neighbours) for the Laplacian term
@@ -326,6 +333,7 @@ export class SoftBody implements SoftBodyLike {
   private readonly memOn: boolean;          // memory arm (P2)
   private readonly wm: number;              // share of the shape stiffness that relaxes: memStiff / (1 + memStiff)
   private readonly MEM: Float64Array;       // memory shape (rest frame, centred like Q)
+  private readonly MEMD: Float64Array;      // memoryStep scratch: this frame's flow of the memory, before smoothing
   private readonly plasticOn: boolean;      // memory with a yield: the edge rest lengths follow the memory (plastic set)
   private readonly sloshOn: boolean;        // slosh mode (P5)
   private slx = 0; private sly = 0; private slz = 0; private slvx = 0; private slvy = 0; private slvz = 0;
@@ -361,6 +369,8 @@ export class SoftBody implements SoftBodyLike {
   private readonly pinned: Uint8Array;      // foot particles glued to the table while a lobe is pulled
   private pinCount = 0;
   private pinHold = 0;
+ private kinSoft = 1;                     // kinetic fingertip friction multiplier of a family softer than the gel (constructor)
+  private tableFoldT = 0;                   // seconds the table edges stay in the contact fold limit (TABLE_FOLD_AFTER after the last touch)
   private readonly sums = new Float64Array(25);
   private readonly A9 = new Float64Array(9);
   private readonly qr = new Float64Array([0, 0, 0, 1]);
@@ -432,6 +442,12 @@ export class SoftBody implements SoftBodyLike {
       const so = this.p.smOmega / base.smOmega;
       const fam0 = MATERIAL_FAMILIES[resolved.familyId].physics.smOmega / MATERIAL_FAMILIES[DEFAULT_FAMILY_ID].physics.smOmega;
       if (so > 0 && fam0 > 0) this.p.squashDepth *= Math.pow(so / fam0, GIVE_EXP) * (fam0 > 1 ? Math.pow(fam0, GIVE_EXP) : 1);
+      // KINETIC FRICTION OF A SOFT FAMILY (physics round-2 fix round): FINGER.frictionKinetic was tuned on the gel, so a rub drags the
+      // skin with a force the gel's stiffness holds without creasing. A family softer than the gel (shape stiffness ~ smOmega^2) takes
+      // the same drag with (gel / family)^2 more shear: slime (9.5 vs 23) buckled its lower flank 2-4 tip radii from a 2.5 m/s rub
+      // (176-179 degrees, the verifier's MAJOR-1). So the sliding coefficient scales with the stiffness ratio squared, at most 1 (the
+      // gel and stiffer families keep theirs; static friction, which holds a pressing tip, is unchanged).
+      this.kinSoft = fam0 < 1 ? fam0 * fam0 : 1;
     }
     // a parameter override (tuning, material families) only takes finite, non-negative numbers: every SoftParams field is a rate, gain,
     // compliance, length or ratio, and a NaN or a negative one would blow the solver up
@@ -487,8 +503,18 @@ export class SoftBody implements SoftBodyLike {
       const nh = mesh.hinges.length / 4;
       this.nh = nh;
       this.H3 = new Int32Array(nh * 2); this.HD = new Float64Array(nh); this.HW = new Float64Array(nh); this.HE3 = new Int32Array(nh * 2);
+      this.HP = new Float64Array(nh * 2);
       for (let h = 0; h < nh; h++) {
         const c = mesh.hinges[h * 4 + 2], d = mesh.hinges[h * 4 + 3];
+        {
+          const a = mesh.hinges[h * 4], b = mesh.hinges[h * 4 + 1];
+          const ex = Q[b * 3] - Q[a * 3], ey = Q[b * 3 + 1] - Q[a * 3 + 1], ez = Q[b * 3 + 2] - Q[a * 3 + 2], el = Math.sqrt(ex * ex + ey * ey + ez * ez) || 1;
+          for (let k = 0; k < 2; k++) {
+            const v = k === 0 ? c : d, vx = Q[v * 3] - Q[a * 3], vy = Q[v * 3 + 1] - Q[a * 3 + 1], vz = Q[v * 3 + 2] - Q[a * 3 + 2];
+            const cx = vy * ez - vz * ey, cy = vz * ex - vx * ez, cz = vx * ey - vy * ex;
+            this.HP[h * 2 + k] = Math.sqrt(cx * cx + cy * cy + cz * cz) / el;
+          }
+        }
         this.HE3[h * 2] = mesh.hinges[h * 4] * 3; this.HE3[h * 2 + 1] = mesh.hinges[h * 4 + 1] * 3;
         this.H3[h * 2] = c * 3; this.H3[h * 2 + 1] = d * 3;
         this.HD[h] = Math.sqrt((Q[c * 3] - Q[d * 3]) ** 2 + (Q[c * 3 + 1] - Q[d * 3 + 1]) ** 2 + (Q[c * 3 + 2] - Q[d * 3 + 2]) ** 2);
@@ -550,6 +576,7 @@ export class SoftBody implements SoftBodyLike {
     this.plasticOn = this.memOn && mt0.memYield > 0;
     this.sloshOn = mt0.sloshMass > 0.01;
     this.MEM = Float64Array.from(Q);
+    this.MEMD = new Float64Array(n * 3);
     this.QG = Float64Array.from(Q);
     this.LQG = Float64Array.from(this.LQ);
     this.EL0 = Float64Array.from(this.EL);
@@ -647,7 +674,7 @@ export class SoftBody implements SoftBodyLike {
     this.simTime = 0; this.subIdx = 0; this.touchStamp.fill(-1); this.hingeStamp.fill(-1); this.tipNearN = 0; this.hingeCount = 0;
     for (const f of this.fingers) f.clear();
     for (const g of this.grabs) g.clear();
-    this.pinned.fill(0); this.pinCount = 0; this.pinHold = 0;
+    this.pinned.fill(0); this.pinCount = 0; this.pinHold = 0; this.tableFoldT = 0;
     this.events.length = 0;
     this.lastEvent.fill(-10);
     this.pendingLand = -1;
@@ -1253,7 +1280,7 @@ export class SoftBody implements SoftBodyLike {
    * with nothing touching it, does not pay for it.
    */
   private foldLimit(): void {
-    const XP = this.XP, H3 = this.H3, HE = this.HE3, pn = this.pinned, now = this.subIdx;
+    const XP = this.XP, H3 = this.H3, HE = this.HE3, HP = this.HP, pn = this.pinned, now = this.subIdx;
     // the edges touching a near particle, each once
     const near = this.nearList, nc = this.tipNearN, hs = this.hingeStart, ho = this.hingeOf, hst = this.hingeStamp, hl = this.hingeList;
     let hc = 0;
@@ -1280,6 +1307,21 @@ export class SoftBody implements SoftBodyLike {
         const td = dx * ex + dy * ey + dz * ez;
         dx -= td * ex; dy -= td * ey; dz -= td * ez;
         const lc = Math.sqrt(cx * cx + cy * cy + cz * cz), ld = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        // SLIVER (physics round-2 fix round): a triangle squeezed flat into a line (its opposite vertex within SLIVER of its rest height
+        // from the edge) has no defined side, so it cannot be "unfolded"; it is put back open, on the far side of the edge from its
+        // neighbour, at SLIVER of its rest height. (A free rim particle dragged past a pinned edge by a full pull of sticky stretch lay
+        // exactly on the edge's line: 180 degrees to the fold meter for 47 frames.)
+        {
+          const sc = lc < SLIVER * HP[h * 2] && !pn[c / 3] && ld > 1e-9, sd = !sc && ld < SLIVER * HP[h * 2 + 1] && !pn[d / 3] && lc > 1e-9;
+          if (sc || sd) {
+            const v = sc ? c : d, tv = sc ? tc : td, lo = sc ? ld : lc, hmin = SLIVER * HP[h * 2 + (sc ? 0 : 1)];
+            const ox = (sc ? dx : cx) / lo, oy = (sc ? dy : cy) / lo, oz = (sc ? dz : cz) / lo;
+            XP[v] = XP[a] + tv * ex - ox * hmin; XP[v + 1] = XP[a + 1] + tv * ey - oy * hmin; XP[v + 2] = XP[a + 2] + tv * ez - oz * hmin;
+            if (XP[v + 1] < 0) XP[v + 1] = 0;
+            opened = true;
+            continue;
+          }
+        }
         if (lc < 1e-9 || ld < 1e-9) continue;
         const ucx = cx / lc, ucy = cy / lc, ucz = cz / lc, udx = dx / ld, udy = dy / ld, udz = dz / ld;
         if (ucx * udx + ucy * udy + ucz * udz <= cosMin) continue;    // the interior angle is wide enough: not folded
@@ -1293,15 +1335,33 @@ export class SoftBody implements SoftBodyLike {
         let wl = Math.sqrt(wx * wx + wy * wy + wz * wz);
         if (wl < 1e-9) { wx = ey * mz - ez * my; wy = ez * mx - ex * mz; wz = ex * my - ey * mx; wl = Math.sqrt(wx * wx + wy * wy + wz * wz); if (wl < 1e-9) continue; }
         wx /= wl; wy /= wl; wz /= wl;
-        opened = true;
-        // c and d at the same distances from the edge, at +-half the minimum angle from the bisector
-        if (!pn[c / 3]) {
-          XP[c] = XP[a] + tc * ex + lc * (mx * ch + wx * sh); XP[c + 1] = XP[a + 1] + tc * ey + lc * (my * ch + wy * sh); XP[c + 2] = XP[a + 2] + tc * ez + lc * (mz * ch + wz * sh);
-          if (XP[c + 1] < 0) XP[c + 1] = 0;
-        }
-        if (!pn[d / 3]) {
-          XP[d] = XP[a] + td * ex + ld * (mx * ch - wx * sh); XP[d + 1] = XP[a + 1] + td * ey + ld * (my * ch - wy * sh); XP[d + 2] = XP[a + 2] + td * ez + ld * (mz * ch - wz * sh);
-          if (XP[d + 1] < 0) XP[d + 1] = 0;
+        // c and d at the same distances from the edge, at +-half the minimum angle from the bisector ...
+        const cyN = XP[a + 1] + tc * ey + lc * (my * ch + wy * sh), dyN = XP[a + 1] + td * ey + ld * (my * ch - wy * sh);
+        let cFix = pn[c / 3] !== 0, dFix = pn[d / 3] !== 0;
+        if (cFix && dFix) continue;
+        if (!cFix && !dFix) { if (cyN < 0) cFix = true; else if (dyN < 0) dFix = true; }
+        if (!cFix && !dFix) {
+          opened = true;
+          XP[c] = XP[a] + tc * ex + lc * (mx * ch + wx * sh); XP[c + 1] = cyN; XP[c + 2] = XP[a + 2] + tc * ez + lc * (mz * ch + wz * sh);
+          XP[d] = XP[a] + td * ex + ld * (mx * ch - wx * sh); XP[d + 1] = dyN; XP[d + 2] = XP[a + 2] + td * ez + ld * (mz * ch - wz * sh);
+        } else {
+          // ... unless one of them cannot move (a pinned foot, or the table under it): then the OTHER turns the whole way, away from it.
+          // (Physics round-2 fix round. Turning only half, or turning a vertex that lies flat on the table into the table, left a foot
+          // triangle folded flat over its pinned neighbour on the table: 180 degrees at the trailing foot of a full pull.) In the exactly
+          // flat case (both half-planes the same), the free vertex turns UP, off the table.
+          opened = true;
+          const fv = cFix ? d : c, tf = cFix ? td : tc, lf = cFix ? ld : lc;
+          const ox = cFix ? ucx : udx, oy = cFix ? ucy : udy, oz = cFix ? ucz : udz;    // the fixed half-plane
+          const fx0 = cFix ? udx : ucx, fy0 = cFix ? udy : ucy, fz0 = cFix ? udz : ucz;  // the free one
+          const pf = fx0 * ox + fy0 * oy + fz0 * oz;
+          let vx = fx0 - ox * pf, vy = fy0 - oy * pf, vz = fz0 - oz * pf;
+          let vl = Math.sqrt(vx * vx + vy * vy + vz * vz);
+          if (vl < 1e-6) { vx = ey * oz - ez * oy; vy = ez * ox - ex * oz; vz = ex * oy - ey * ox; vl = Math.sqrt(vx * vx + vy * vy + vz * vz); if (vy < 0) { vx = -vx; vy = -vy; vz = -vz; } }
+          if (vl < 1e-9) continue;
+          vx /= vl; vy /= vl; vz /= vl;
+          const s2 = Math.sqrt(Math.max(0, 1 - cosMin * cosMin));
+          XP[fv] = XP[a] + tf * ex + lf * (ox * cosMin + vx * s2); XP[fv + 1] = XP[a + 1] + tf * ey + lf * (oy * cosMin + vy * s2); XP[fv + 2] = XP[a + 2] + tf * ez + lf * (oz * cosMin + vz * s2);
+          if (XP[fv + 1] < 0) XP[fv + 1] = 0;
         }
       }
       // back onto the fingertip surfaces (radially), never under the table
@@ -1380,7 +1440,10 @@ export class SoftBody implements SoftBodyLike {
     // Friction still sees the true normal load (see the table pass).
     let ax = 0, ay = 0, az = 0;
     if (this.gravityOn) {
-      ay = -GRAVITY * (1 - this.supp);
+      // ... but only the weight of a body that is NOT lifting itself off the table: the table can push, never pull, so while the centre of
+      // mass rises (a squeezed body springing back) true gravity acts on it, as on any real body (see RISE_V0)
+      const ru = Math.min(1, Math.max(0, (this.vcy - RISE_V0) / (RISE_V1 - RISE_V0)));
+      ay = -GRAVITY * (1 - this.supp * (1 - ru * ru * (3 - 2 * ru)));
     } else {
       // float mode: weak hover spring on the centre of mass (stiffer while a finger or a lobe holds it) + slow bob
       const boost = 1 + 2.5 * nFingers + (grabbing ? 3 : 0);
@@ -1588,14 +1651,16 @@ export class SoftBody implements SoftBodyLike {
       // static / kinetic friction: skin that would slip under the tip by more than friction x penetration this substep is sliding, and
       // is only held back by the kinetic coefficient, which takes over as the tip itself slides sideways (across its travel direction:
       // a press moves the tip only along it). See FINGER.frictionKinetic.
-      const muF = this.p.fingerFriction;
-      let muK = muF;
-      {
-        const al = fdx * f.dx + fdy * f.dy + fdz * f.dz;
-        const lx = fdx - al * f.dx, ly = fdy - al * f.dy, lz = fdz - al * f.dz;
-        const slide = Math.sqrt(lx * lx + ly * ly + lz * lz) / (H * FINGER.frictionSlide * this.restRadius);
-        if (slide > 0) { const s = slide >= 1 ? 1 : slide * slide * (3 - 2 * slide); muK = muF + (FINGER.frictionKinetic * (muF / FINGER.friction) - muF) * s; }
-      }
+      // TACK NEEDS DWELL (physics round-2 fix round, MAJOR-1): a sticky family grips a fingertip that rests on it (fingerFriction up to
+      // 1.8x the gel's), but adhesion builds with contact time, and a sliding tip gives none. So while the tip slides, the static grip
+      // falls back to the gel's (FINGER.friction) and the kinetic drag to the gel's FINGER.frictionKinetic (never above a family's own),
+      // scaled down for a family softer than the gel (kinSoft). With the tack kept on a rubbing tip, slime bulldozed its lower flank into
+      // 167-179 degree wrinkles (wrigglo, 2.5 m/s rubs: 109 frames over 120 in one rub); with the gel's grip, 0.
+      const muF = this.p.fingerFriction, muG = Math.min(muF, FINGER.friction);
+      const al = fdx * f.dx + fdy * f.dy + fdz * f.dz;
+      const lx = fdx - al * f.dx, ly = fdy - al * f.dy, lz = fdz - al * f.dz;
+      const slu = Math.min(1, Math.sqrt(lx * lx + ly * ly + lz * lz) / (H * FINGER.frictionSlide * this.restRadius)), sls = slu * slu * (3 - 2 * slu);
+      const muS = muF + (muG - muF) * sls, muK = muF + (FINGER.frictionKinetic * (muG / FINGER.friction) * this.kinSoft - muF) * sls;
       let hit = false;
       const rn2 = r2 * FINGER.foldNear * FINGER.foldNear, stamp = this.touchStamp, now = this.subIdx, near = this.nearList;
       for (let i = 0; i < n * 3; i += 3) {
@@ -1626,7 +1691,7 @@ export class SoftBody implements SoftBodyLike {
         const tx = ux - un * nx, ty = uy - un * ny, tz = uz - un * nz;
         const tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
         if (tl > 1e-12) {
-          const k2 = tl <= muF * pen ? 1 : muK * pen / tl;
+          const k2 = tl <= muS * pen ? 1 : muK * pen / tl;
           XP[i] -= tx * k2; XP[i + 1] -= ty * k2; XP[i + 2] -= tz * k2;
         }
         if (XP[i + 1] < y0) fingerDown += M[i / 3] * (y0 - XP[i + 1]);
@@ -1650,8 +1715,11 @@ export class SoftBody implements SoftBodyLike {
       const fload = fingerDown / Math.max(1, this.nearMass);   // a finger pressing down adds its force to the normal load
       let contacts = 0, near = 0, nearM = 0;
       const tstamp = this.touchStamp, tnow = this.subIdx, tnear = this.nearList;
-      // the table edges join the contact fold limit while a finger or a grab works the body (see foldLimit)
-      const tfold = this.fingers[0].down || this.fingers[0].retracting || this.fingers[1].down || this.fingers[1].retracting || this.grabs[0].active || this.grabs[1].active;
+      // the table edges join the contact fold limit while a finger, a grab or the pinned feet work the body and for TABLE_FOLD_AFTER after
+      // (the release transient: a full pull let go snaps back onto its glued foot; see foldLimit)
+      const worked = this.fingers[0].down || this.fingers[0].retracting || this.fingers[1].down || this.fingers[1].retracting || this.grabs[0].active || this.grabs[1].active || this.pinCount > 0;
+      this.tableFoldT = worked ? TABLE_FOLD_AFTER : Math.max(0, this.tableFoldT - H);
+      const tfold = this.tableFoldT > 0;
       for (let i = 0; i < n * 3; i += 3) {
         const y = XP[i + 1];
         if (y >= NEAR) continue;
@@ -1830,9 +1898,13 @@ export class SoftBody implements SoftBodyLike {
    * true rest shape (memHealTau), never strays further than memMax R0, and keeps its centre on the rest centre (no momentum). Once per frame.
    */
   private memoryStep(nsub: number): void {
-    const mt = this.mat, h = nsub * H, n = this.n, X = this.X, M = this.M, Q = this.Q, MEM = this.MEM, R0 = this.restRadius;
+    const mt = this.mat, h = nsub * H, n = this.n, X = this.X, M = this.M, Q = this.Q, MEM = this.MEM, D = this.MEMD, R0 = this.restRadius;
     const kFlow = 1 - Math.exp(-h / mt.memTau), kHeal = mt.memHealTau < 59 ? 1 - Math.exp(-h / mt.memHealTau) : 0;
     const yl = mt.memYield * R0, maxD = mt.memMax * R0;
+    // the ceremony's own goal offset (fold, burst; physics round-2 fix round, MINOR-6/13): the body is MADE to take that shape, it is not a
+    // deformation the material should remember. Measured against the goal without it, a burst with fingers down no longer sets a fold
+    // into putty for good (fossilo 153 degrees, over 120 for 9 s).
+    const fd = this.fold, sc = 1 + this.burstO, QS = this.QS;
     let cx = 0, cy = 0, cz = 0;
     for (let i = 0; i < n; i++) { const m = M[i]; cx += m * X[i * 3]; cy += m * X[i * 3 + 1]; cz += m * X[i * 3 + 2]; }
     cx /= this.Mtot; cy /= this.Mtot; cz /= this.Mtot;
@@ -1840,13 +1912,25 @@ export class SoftBody implements SoftBodyLike {
     const r00 = 1 - 2 * (qy * qy + qz * qz), r01 = 2 * (qx * qy - qw * qz), r02 = 2 * (qx * qz + qw * qy);
     const r10 = 2 * (qx * qy + qw * qz), r11 = 1 - 2 * (qx * qx + qz * qz), r12 = 2 * (qy * qz - qw * qx);
     const r20 = 2 * (qx * qz - qw * qy), r21 = 2 * (qy * qz + qw * qx), r22 = 1 - 2 * (qx * qx + qy * qy);
-    let ox = 0, oy = 0, oz = 0;
+    // 1. this frame's flow toward the current shape (beyond the yield)
     for (let i = 0; i < n; i++) {
       const i3 = i * 3, dx = X[i3] - cx, dy = X[i3 + 1] - cy, dz = X[i3 + 2] - cz;
-      const px = r00 * dx + r10 * dy + r20 * dz, py = r01 * dx + r11 * dy + r21 * dz, pz = r02 * dx + r12 * dy + r22 * dz;
-      let mx = MEM[i3], my = MEM[i3 + 1], mz = MEM[i3 + 2];
-      const ex = px - mx, ey = py - my, ez = pz - mz, len = Math.sqrt(ex * ex + ey * ey + ez * ez), excess = len - yl;
-      if (excess > 0 && len > 1e-12) { const k = kFlow * excess / len; mx += ex * k; my += ey * k; mz += ez * k; }
+      const gx = ((Q[i3] + fd * (QS[i3] - Q[i3])) * sc - Q[i3]), gy = ((Q[i3 + 1] + fd * (QS[i3 + 1] - Q[i3 + 1])) * sc - Q[i3 + 1]), gz = ((Q[i3 + 2] + fd * (QS[i3 + 2] - Q[i3 + 2])) * sc - Q[i3 + 2]);
+      const px = r00 * dx + r10 * dy + r20 * dz - gx, py = r01 * dx + r11 * dy + r21 * dz - gy, pz = r02 * dx + r12 * dy + r22 * dz - gz;
+      const ex = px - MEM[i3], ey = py - MEM[i3 + 1], ez = pz - MEM[i3 + 2], len = Math.sqrt(ex * ex + ey * ey + ez * ez), excess = len - yl;
+      const k = excess > 0 && len > 1e-12 ? kFlow * excess / len : 0;
+      D[i3] = ex * k; D[i3 + 1] = ey * k; D[i3 + 2] = ez * k;
+    }
+    // 2. ... low-passed over each particle's ring (half its own, half its neighbours' mean): a dent flows in whole, but the mesh-scale
+    // zigzag of a crease the skin made under a rubbing tip is not remembered (physics round-2 fix round, MAJOR-1: putty and slime kept the
+    // crease of a rub as their plastic rest, fossilo 139 degrees 2.3 s after the lift); then healing, the reach limit and no momentum
+    const st = this.nbrStart, nb = this.nbrIdx, ni = this.nbrInv;
+    let ox = 0, oy = 0, oz = 0;
+    for (let i = 0; i < n; i++) {
+      let ax = 0, ay = 0, az = 0;
+      for (let j = st[i], e = st[i + 1]; j < e; j++) { const k3 = nb[j] * 3; ax += D[k3]; ay += D[k3 + 1]; az += D[k3 + 2]; }
+      const inv = ni[i], i3 = i * 3, on = D[i3] !== 0 || D[i3 + 1] !== 0 || D[i3 + 2] !== 0 ? 0.5 : 0;   // only where it flows (the yield holds)
+      let mx = MEM[i3] + on * (D[i3] + ax * inv), my = MEM[i3 + 1] + on * (D[i3 + 1] + ay * inv), mz = MEM[i3 + 2] + on * (D[i3 + 2] + az * inv);
       if (kHeal > 0) { mx += (Q[i3] - mx) * kHeal; my += (Q[i3 + 1] - my) * kHeal; mz += (Q[i3 + 2] - mz) * kHeal; }
       let fx = mx - Q[i3], fy = my - Q[i3 + 1], fz = mz - Q[i3 + 2];
       const fl = Math.sqrt(fx * fx + fy * fy + fz * fz);

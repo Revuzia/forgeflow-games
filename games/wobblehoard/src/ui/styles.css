@@ -414,11 +414,12 @@ body[data-kbd="1"] .keys { display: block; }
 }
 .title[data-leaving="true"] { opacity: 0; pointer-events: none; }
 .title-top, .title-bottom { display: grid; justify-items: center; gap: 14px; }
-.title-mark { display: flex; justify-content: center; font-size: clamp(28px, 9.2vw, 84px); font-weight: 900; line-height: 1; letter-spacing: .04em; filter: drop-shadow(0 4px 0 var(--wh-ink)); }
+.title-mark { display: flex; justify-content: center; font-size: clamp(26px, 8.2vw, 80px); font-weight: 900; line-height: 1; letter-spacing: .04em; filter: drop-shadow(0 4px 0 var(--wh-ink)); }
+.title-gap { display: inline-block; width: .32em; }
 .title-letter {
   display: inline-block;
   color: var(--wh-amber);
-  color: color-mix(in srgb, var(--wh-amber), var(--wh-coral) calc(var(--i) * 9%));
+  color: color-mix(in srgb, var(--wh-amber), var(--wh-coral) calc(var(--i) / var(--n) * 100%));
   transform-origin: 50% 100%;
   animation: wob 2.8s ease-in-out infinite;
   animation-delay: calc(var(--i) * -0.17s);

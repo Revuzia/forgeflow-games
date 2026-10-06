@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "WOBBLEHOARD — a 3D soft-body squishy collectible toy. Poke it, squash it, let go. Three.js + TypeScript + Vite, procedural WebAudio. `npm install && npm run dev`.",
+  "description": "Squish Keeper (working folder: wobblehoard) — a 3D soft-body squishy collectible toy. Poke it, squash it, let go. Three.js + TypeScript + Vite, procedural WebAudio. `npm install && npm run dev`.",
   "engines": {
     "node": ">=22.18"
   },

@@ -59,7 +59,7 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
 
   let mode: 'touch' | 'pointer' | 'keyboard' = isCoarsePointer() ? 'touch' : 'pointer';
   const hintEl = h('p', { class: 'hint', text: HINT_TEXT[mode], attrs: { 'data-show': 'true' } });
-  const wordmark = h('h1', { class: 'wordmark', text: 'WOBBLEHOARD' });
+  const wordmark = h('h1', { class: 'wordmark', text: 'SQUISH KEEPER' });
   const top = h('div', { class: 'hud-top' }, wordmark, h('div', { class: 'hud-actions' }, muteBtn, gear));
   const slot = h('div', { class: 'hud-slot', attrs: { 'data-slot': 'hoard' } });
   const bottom = h('div', { class: 'hud-bottom' }, nameTag, slot);

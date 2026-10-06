@@ -61,7 +61,7 @@ export async function boot(): Promise<(() => void) | null> {
   const cfg = readUrl(location.search);
 
   if (!webgl2Available()) {
-    fail(root, 'This device can’t draw the squishy', 'WOBBLEHOARD needs WebGL2 for its 3D jelly. Try a recent Chrome, Safari, Firefox or Edge, and make sure hardware acceleration is switched on.');
+    fail(root, 'This device can’t draw the squishy', 'Squish Keeper needs WebGL2 for its 3D jelly. Try a recent Chrome, Safari, Firefox or Edge, and make sure hardware acceleration is switched on.');
     window.__whBooted = true;
     return null;
   }

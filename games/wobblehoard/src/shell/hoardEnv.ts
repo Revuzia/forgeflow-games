@@ -75,7 +75,7 @@ export function createHoardEnv(g: Game, d: HoardEnvDeps): HoardEnv {
       const r = g.switchTo(it.id);
       return r === 'done' || r === 'queued';
     },
-    playItemId: () => g.identity.itemId,
+    playItemId: () => g.history.current ?? g.identity.itemId,   // the committed play squishy (the card preview is not it)
     async revealClaim(r: ClaimOk) {
       g.capsules.putAway();   // the gift's reveal makes its own capsule: the waiting one comes back after it
       await g.ceremonies.playReveal(itemView(r.item, r.is_new, r.copies, r.quick), { capsule: null });

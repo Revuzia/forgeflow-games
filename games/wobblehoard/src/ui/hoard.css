@@ -1,4 +1,4 @@
-/* WOBBLEHOARD Hoard (SHELL-2b): the HUD entry, the shelf panel, the detail card, the gift and today panes, the merge pad and Tidy-up.
+/* Squish Keeper Hoard (SHELL-2b): the HUD entry, the shelf panel, the detail card, the gift and today panes, the merge pad and Tidy-up.
    Tokens only (--wh-*), system fonts, inline SVG. Imported by src/shell/hudBinding.ts (src/ui/hoard/** may import only .ts modules). */
 
 /* ---------- HUD: Hoard button, mat chip, capsule dock ---------- */
@@ -51,7 +51,8 @@ body:not([data-calm="true"]) .hoard-btn[data-dot="true"] .hoard-btn-dot { animat
   box-shadow: 0 24px 60px rgba(0, 0, 0, .55); overflow: hidden;
   touch-action: pan-y; -webkit-user-select: none; user-select: none;
 }
-body[data-hoard="open"] .hud-top, body[data-hoard="open"] .hint { visibility: hidden; }
+/* the panel is modal: the HUD and a reveal plate under it would only peek out around its edges */
+body[data-hoard="open"] .hud, body[data-hoard="open"] .plate, body[data-hoard="card"] .plate, body[data-hoard="open"] .dev { visibility: hidden; }
 .hoard-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 12px 14px 8px 20px; }
 .hoard-head-l { display: flex; align-items: baseline; gap: 10px; }
 .hoard-title { margin: 0; font-size: 24px; font-weight: 900; letter-spacing: .02em; }
