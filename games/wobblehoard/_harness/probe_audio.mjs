@@ -3,6 +3,7 @@
 //   round 3 (music bed + interaction voices): --no-round3 skips it, --only3 runs only it (offline + its live engine part)
 //   audio-4 (the music's room under play, through the real engine run offline): part of round 3; --no-room skips it,
 //   --only-room runs only it
+//   CUT & RECONNECT (cut / rejoin voices, _spec/CUT.md): part of a full run; --no-cut skips it, --only-cut runs only it
 // Renders every voice offline in Chromium (OfflineAudioContext, 48 kHz) through the SAME master chain the game uses,
 // analyses the samples in Node, writes WAV + spectrogram PNG per voice to _harness/_renders/ (gitignored), prints a table
 // and exits 1 on any failed check. Nobody on the build machine can listen: every number here is a measurement.
@@ -15,6 +16,7 @@ import {
 import { ceremonyChecks } from './audioview/ceremony_checks.mjs';
 import { round3Checks } from './audioview/music_checks.mjs';
 import { roomChecks } from './audioview/room_checks.mjs';
+import { cutChecks } from './audioview/cut_checks.mjs';
 
 const args = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => { const [k, v] = a.slice(2).split('='); return [k, v ?? true]; }));
 const PORT = Number(args.port ?? 5363);
@@ -22,7 +24,8 @@ const OUT = resolve(ROOT, '_harness', '_renders');
 mkdirSync(OUT, { recursive: true });
 const only = args.voices ? String(args.voices).split(',') : null;
 const onlyRoom = !!args['only-room'];
-const only3 = !!args.only3 || onlyRoom;
+const onlyCut = !!args['only-cut'];
+const only3 = !!args.only3 || onlyRoom || onlyCut;
 
 /* ───────────────────────── checks bookkeeping ───────────────────────── */
 const checks = [];
@@ -370,14 +373,14 @@ async function main() {
     }
     // round 3 runs after the round-1/2 live tests, so their conditions are exactly what they were before round 3 (the long
     // music renders below leave a lot of garbage behind)
-    if (!only && !args['no-round3']) {
+    if (!only && !args['no-round3'] && !onlyCut) {
       try {
         await page.goto(`${vite.url}_harness/audioview/index.html`);
         await page.waitForFunction(() => window.AV && window.AV.ready, null, { timeout: 60000 });
         if (!onlyRoom) extra.round3 = await round3Checks({ page, check, OUT });
       } catch (e) { check('round 3', 'round-3 offline gates ran', false, String(e && e.stack || e), 'no exception'); }
     }
-    if (!only && !args['no-round3'] && !args['no-room']) {
+    if (!only && !args['no-round3'] && !args['no-room'] && !onlyCut) {
       try {
         // audio-4: pumping, isolated separation and the exposed gate through the REAL engine run offline (fresh page)
         await page.goto(`${vite.url}_harness/audioview/index.html`);
@@ -385,7 +388,16 @@ async function main() {
         extra.room = await roomChecks({ page, check, OUT });
       } catch (e) { check('room under play', 'audio-4 room checks ran', false, String(e && e.stack || e), 'no exception'); }
     }
-    if (!args['no-engine'] && !only && !args['no-round3'] && !onlyRoom) {
+    if (!only && !args['no-cut'] && !onlyRoom && (!args.only3 || onlyCut)) {
+      try {
+        // CUT & RECONNECT: the slice, the separation pop, the rejoin and whole-again voices; rate limit, calm, families, and
+        // their room in the music through the real engine run offline (fresh page)
+        await page.goto(`${vite.url}_harness/audioview/index.html`);
+        await page.waitForFunction(() => window.AV && window.AV.ready, null, { timeout: 60000 });
+        extra.cut = await cutChecks({ page, check, OUT });
+      } catch (e) { check('cut', 'CUT & RECONNECT checks ran', false, String(e && e.stack || e), 'no exception'); }
+    }
+    if (!args['no-engine'] && !only && !args['no-round3'] && !onlyRoom && !onlyCut) {
       try {
         // round 3 live engine: music bed + interaction voices, on a fresh page (clean counters)
         await page.goto(`${vite.url}_harness/audioview/index.html`);
@@ -431,6 +443,13 @@ async function main() {
           const st3 = out3.started;
           check('lab page', 'round-3 controls start their voices (music session, bump, lift, toss, one held strand + its snap)', st3.music >= 1 && st3.bump >= 1 && st3.lift >= 1 && st3.toss >= 1 && st3.strand === 1 && st3.strandSnap === 1, JSON.stringify({ music: st3.music, bump: st3.bump, lift: st3.lift, toss: st3.toss, strand: st3.strand, strandSnap: st3.strandSnap }), 'all >= 1, strand 1, snap 1');
           await page.uncheck('#musicOn');
+        }
+        if (!args['no-cut']) {
+          // CUT row: a cut (slice, then the separation pop after the neck), a rejoin, whole again
+          for (const v of ['cut', 'rejoin', 'all']) { await page.click(`button[data-x="${v}"]`); await page.waitForTimeout(700); }
+          const outC = JSON.parse(await page.textContent('#out'));
+          const sc = outC.started;
+          check('lab page', 'CUT controls start their voices (one slice, its separation pop, a rejoin, whole again)', sc.cut === 1 && sc.cutPop === 1 && sc.rejoin === 2, JSON.stringify({ cut: sc.cut, cutPop: sc.cutPop, rejoin: sc.rejoin }), 'cut 1, cutPop 1, rejoin 2');
         }
       } catch (e) { check('lab page', 'lab page ran', false, String(e && e.stack || e), 'no exception'); }
     }

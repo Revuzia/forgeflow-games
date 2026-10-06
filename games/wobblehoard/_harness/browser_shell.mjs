@@ -264,6 +264,11 @@ async function main() {
       check('title card: wordmark, one-line promise, one big input-neutral button "Wake it up" (enabled once loaded; audit finding 17)', (t.mark ?? '').replace(/\s/g, '') === GAME_MARK.replace(/\s/g, '') && t.btn === 'Wake it up' && t.disabled === false && !!t.promise && t.role === 'dialog', JSON.stringify(t));
       check('index.html: viewport-fit=cover, theme-color is the ink token, one h1 for assistive tech', /viewport-fit=cover/.test(t.viewport) && t.theme === '#14102a' && t.h1 === GAME_MARK);
       check('title card: the HUD is not shown (or reachable) underneath it', t.hudHidden === 'hidden');
+      // the three wordmark checks (the owner's rename to Squish Keeper, 2026-10-06): exact text, not whitespace-folded
+      const marks = await page.evaluate(() => ({ titleMark: document.querySelector('.title-mark')?.textContent, h1: [...document.querySelectorAll('h1')].map((e) => e.textContent), wordmark: document.querySelector('.wordmark')?.textContent }));
+      check("wordmark: the title card's .title-mark textContent is exactly 'SQUISHKEEPER' (one letter per span, the gap is a spacer)", marks.titleMark === 'SQUISHKEEPER', JSON.stringify(marks.titleMark));
+      check("wordmark: the page's h1 reads exactly 'SQUISH KEEPER' (and there is one h1)", marks.h1.length === 1 && marks.h1[0] === 'SQUISH KEEPER', JSON.stringify(marks.h1));
+      check("wordmark: the HUD's .wordmark reads exactly 'SQUISH KEEPER'", marks.wordmark === 'SQUISH KEEPER', JSON.stringify(marks.wordmark));
       const a0 = await state(page);
       check('audio is locked before the gesture (nothing created before unlock)', a0.audio.state === 'locked' || a0.audio.state === 'suspended', a0.audio.state);
       const sig0 = await canvasSig(page);
@@ -850,6 +855,95 @@ async function main() {
       await C.context.close();
     });
 
+    // ------------------------------------------------------------------------------------------------
+    // Visible XP (FUN.md 2, owner direction 2026-10-06): every paying touch sends sparks from the touch point into the meter ring, which
+    // then fills with a short ease; a held stretch shows a lighter PENDING arc that grows while it is held and banks on release; Calm
+    // effects shows no sparks (a soft glow on the ring instead).
+    // ------------------------------------------------------------------------------------------------
+    await section('xp', async () => {
+      const { page, context, w } = await open({ query: '?dev=1' });
+      mainWatches.push(['xp', w]);
+      await wake(page);
+      const C = 2 * Math.PI * 23;   // the ring's circumference in its own units (meterRing.ts R = 23)
+      const ring = () => page.evaluate(() => {
+        const f = document.querySelector('.meter-fill'), p = document.querySelector('.meter-pending'), m = document.querySelector('.meter');
+        return {
+          attr: parseFloat(f.getAttribute('stroke-dashoffset')), drawn: parseFloat(getComputedStyle(f).strokeDashoffset), now: Number(m.getAttribute('aria-valuenow')),
+          pend: parseFloat((p.getAttribute('stroke-dasharray') || '0').split(/[ ,]+/)[0]), pendOn: m.dataset.pending ?? null, bank: m.dataset.bank ?? null, glow: m.dataset.glow ?? null,
+          sparks: Number(document.querySelector('.sparks')?.dataset.launched ?? 0),
+          flying: document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.target?.classList?.contains('spark')).length,
+          fill: window.__WH__.shell.meter().fill, source: window.__WH__.shell.xp?.().source ?? null,
+        };
+      });
+      // 1. one quick poke, real mouse
+      const r0 = await ring();
+      const B = await body(page); const vp = page.viewportSize();
+      await page.mouse.click(B.x * vp.width, B.y * vp.height - 0.3 * B.rPx);
+      const launched = await waitUntil(page, (n) => Number(document.querySelector('.sparks')?.dataset.launched ?? 0) > n, r0.sparks, 30000);
+      const r1 = await ring();
+      // a still of the flight: hold the spark animations about half way while the screenshot is taken, then let them finish
+      await page.evaluate(() => { for (const a of document.getAnimations()) if (a.effect?.target?.classList?.contains('spark')) { a.pause(); a.currentTime = 200; } });
+      await page.screenshot({ path: resolve(SHOTS, 'xp_poke_sparks_desktop.png'), timeout: 240000, caret: 'hide' });
+      await page.evaluate(() => { for (const a of document.getAnimations()) if (a.effect?.target?.classList?.contains('spark')) a.play(); });
+      await sleep(1600);
+      const r2 = await ring();
+      const moved = r0.drawn - r2.drawn;
+      check('XP: one quick poke sends sparks from the touch to the ring (3 or more, compositor animations), then the ring fills with a short ease',
+        launched && r1.sparks - r0.sparks >= 3 && r2.fill > r0.fill && Math.abs(r1.drawn - r0.drawn) < 0.6 * Math.max(0.01, moved),
+        `sparks +${r1.sparks - r0.sparks} (${r1.flying} flying), drawn offset ${r0.drawn.toFixed(2)} -> ${r1.drawn.toFixed(2)} while they fly -> ${r2.drawn.toFixed(2)}, meter ${r0.fill.toFixed(4)} -> ${r2.fill.toFixed(4)}`);
+      check('XP: the poke visibly moves the ring (>= 1% of its length, the arc drawn = the meter)', moved >= 0.01 * C && Math.abs(r2.drawn - C * (1 - r2.fill)) < 0.02 * C,
+        `${(100 * moved / C).toFixed(1)}% of the ring (${moved.toFixed(2)} of ${C.toFixed(1)}); drawn ${r2.drawn.toFixed(2)} vs meter ${(C * (1 - r2.fill)).toFixed(2)}`);
+      // 2. a 3 s stretch, deterministic: press the right shoulder, drag out, hold; the pending arc grows; let go: it banks
+      await sleep(3200);   // the pull's freshness (tau 3 s) is not in play yet, and the poke's sparks are gone
+      const p0 = await ring();
+      const st = await page.evaluate(async (b) => {
+        const wh = window.__WH__; wh.pause();
+        const rr = b.rPx / innerWidth;
+        const read = () => { const p = document.querySelector('.meter-pending'); return parseFloat((p.getAttribute('stroke-dasharray') || '0').split(/[ ,]+/)[0]); };
+        const yieldTask = () => new Promise((r) => setTimeout(r, 0));
+        wh.pointerDown(b.x + 0.62 * rr, b.y - 0.04); wh.step(1 / 60, 8);
+        for (let i = 1; i <= 12; i++) { wh.pointerMove(b.x + 0.62 * rr + i * 0.022, b.y - 0.04 - i * 0.006); wh.step(1 / 60, 3); }
+        await yieldTask();
+        const samples = [];
+        for (let k = 0; k < 6; k++) { wh.step(1 / 60, 30); await yieldTask(); samples.push(read()); }   // 6 x 0.5 s
+        return { samples, grabbed: wh.state().metrics.grabbed, pendOn: document.querySelector('.meter').dataset.pending, nowBefore: Number(document.querySelector('.meter').getAttribute('aria-valuenow')) };
+      }, B);
+      await page.screenshot({ path: resolve(SHOTS, 'xp_stretch_pending_desktop.png'), timeout: 240000, caret: 'hide' });
+      const sm = st.samples;
+      const grows = sm[0] > 0 && sm[1] > sm[0] && sm[2] > sm[1] && sm.every((v, i) => i === 0 || v >= sm[i - 1] - 1e-6);
+      check('XP: holding a stretch for 3 s shows a lighter pending arc on the ring that grows while it is held',
+        st.grabbed && st.pendOn === 'true' && grows, `pending arc ${sm.map((v) => (100 * v / C).toFixed(1) + '%').join(' -> ')} of the ring (grabbed ${st.grabbed})`);
+      const fill1 = (await ring()).fill;
+      await page.evaluate(async () => { const wh = window.__WH__; wh.pointerUp(); for (let i = 0; i < 4; i++) { wh.step(1 / 60, 3); await new Promise((r) => setTimeout(r, 0)); } });
+      const rb = await ring();
+      await sleep(600);
+      await page.screenshot({ path: resolve(SHOTS, 'xp_stretch_banked_desktop.png'), timeout: 240000, caret: 'hide' });
+      await sleep(1400);
+      const r3 = await ring();
+      const gained = r3.fill - fill1, shownAtRelease = sm[sm.length - 1] / C;
+      check('XP: letting go banks it: the release pays, the arc is marked banked and the fill grows over it (then the arc is gone)',
+        rb.bank === 'paid' && gained > 0 && r3.pendOn !== 'true' && r3.pend === 0 && Math.abs(r3.drawn - C * (1 - r3.fill)) < 0.02 * C,
+        `bank ${rb.bank}; fill ${fill1.toFixed(4)} -> ${r3.fill.toFixed(4)} (+${(100 * gained).toFixed(1)}% of the ring)`);
+      check('XP: the pending arc was honest: what banked matches what the arc showed at the release (within 1.5% of the ring)', Math.abs(gained - shownAtRelease) <= 0.015,
+        `arc ${(100 * shownAtRelease).toFixed(1)}%, banked ${(100 * gained).toFixed(1)}%; source: ${r3.source ?? 'n/a'}`);
+      // a short press that pays nothing as a squeeze: no pending arc at all (a squeeze pays from 0.4 s), nothing to bank
+      await page.evaluate(() => window.__WH__.resume());
+      // 3. Calm effects: no sparks, a soft glow on the ring
+      await page.evaluate(() => window.__WH__.setSetting('calm', true));
+      await sleep(1500);
+      const c0 = await ring();
+      const B2 = await body(page);
+      await page.mouse.click(B2.x * vp.width, B2.y * vp.height - 0.3 * B2.rPx);
+      const glowed = await waitUntil(page, () => document.querySelector('.meter').dataset.glow === 'soft', null, 30000);
+      await page.screenshot({ path: resolve(SHOTS, 'xp_calm_glow_desktop.png'), timeout: 240000, caret: 'hide' });
+      await sleep(1200);
+      const c1 = await ring();
+      check('XP, Calm effects: a paying poke launches no sparks; the ring glows softly instead and still fills', glowed && c1.sparks === c0.sparks && c1.flying === 0 && c1.fill > c0.fill,
+        `sparks ${c0.sparks} -> ${c1.sparks}, glow ${glowed}, fill ${c0.fill.toFixed(4)} -> ${c1.fill.toFixed(4)}`);
+      await page.evaluate(() => window.__WH__.setSetting('calm', false));
+      await context.close();
+    });
+
     // ================================================================================================
     // SHELL-2b: the Hoard, the gift, today's tasks, the merge pad, Tidy-up and the play mat (COLLECTION 9 / 11 U01-U09, MERGE 3 / 10 R15)
     // A scripted practice loop on a repeatable practice roll (?rseed: dev only): earn through the dev accelerator, open, find it in the
@@ -1078,6 +1172,15 @@ async function main() {
       check('merge: holding 0.5 s merges (result first), the ceremony plays, the two copies are gone and the result (resting 24 h) is the play body', sm.items.length === before.items.length - 1 && sm.mergesToday === before.mergesToday + 1 && sm.items.some((it) => it.id === idm.itemId && it.locked && it.origin === 'blend') && !(await hoardOpen(page)),
         `${before.items.length} -> ${sm.items.length}, merges today ${sm.mergesToday}, result ${idm.species}`);
       check('merge: the result is announced in the live region', (await live(page)) !== live0, await live(page));
+      // the lock (MERGE 3.2): the new squishy rests 24 h; its copy on the card says so in text ("free in 24 h")
+      const outSp = sm.items.find((it) => it.id === idm.itemId)?.species;
+      if (outSp) {
+        await hclick(page, '.hoard-btn'); await settle(page);
+        await hclick(page, `.hoard .plinth[data-species="${outSp}"]`); await settle(page);
+        const lockTag = await page.evaluate((id) => document.querySelector(`.hcard .copy[data-key="c-${id}"]`)?.getAttribute('aria-label') ?? '', idm.itemId);
+        check('merge: the result rests 24 h, and its copy on the card says so in words ("free in 24 h", origin Merge)', /free in 2[34] h/.test(lockTag) && /Merge/.test(lockTag), lockTag);
+        await hclick(page, '.hcard [data-key="x"]'); await settle(page);   // the card's close closes the Hoard
+      }
 
       // Tidy-up (MERGE 3.3): earn more, then one hold
       await openCapsules(page, 8);
@@ -1165,7 +1268,7 @@ async function main() {
       await openCapsules(page, 4);
       await settle(page);
       const qs0 = await page.evaluate(() => ({ n: document.querySelectorAll('.qswitch .qs-btn').length, hidden: document.querySelector('.qswitch')?.hidden, labels: [...document.querySelectorAll('.qswitch .qs-btn')].map((b) => b.getAttribute('aria-label')), ids: [...document.querySelectorAll('.qswitch .qs-btn')].map((b) => b.dataset.id) }));
-      check('quick switcher: the HUD shows the squishies played lately as icon buttons ("Play with <name>, <tier>"), up to four', !qs0.hidden && qs0.n >= 2 && qs0.n <= 4 && qs0.labels.every((l) => /^Play with .+, (Common|Uncommon|Rare|Epic|Legendary|Mythic)$/.test(l)), JSON.stringify(qs0));
+      check('quick switcher: the HUD shows the squishies played lately (and the hearted ones) as icon buttons ("Play with <name>, <tier>"), up to five', !qs0.hidden && qs0.n >= 2 && qs0.n <= 5 && qs0.labels.every((l) => /^Play with .+, (Common|Uncommon|Rare|Epic|Legendary|Mythic)$/.test(l)), JSON.stringify(qs0));
       await shot(page, 'quick_switch_desktop');
       const L = await layoutOf(page);
       const sb = await page.evaluate(() => { const r = document.querySelector('.qswitch').getBoundingClientRect(); return { x: r.x, y: r.y, r: r.right, b: r.bottom }; });
@@ -1286,6 +1389,34 @@ async function main() {
       for (let i = 0; i < 60 && !escaped; i++) { await page.keyboard.press('Tab'); escaped = await page.evaluate(() => !document.querySelector('.hoard').contains(document.activeElement)); }
       check('U04 Tab cycles inside the open Hoard (focus never leaves the dialog)', !escaped);
       await page.keyboard.press('Escape');
+      // MERGE R15 from the keyboard: a plinth, Enter, Tab to Merge, Enter; the last-copy warning (focus on Cancel, Tab to Merge anyway);
+      // then Enter HELD 0.5 s on "Hold to merge" merges (a quick press does nothing)
+      const mergeable = async () => { const st = await hstate(page); const by = {}; for (const it of st.items) if (!it.fav && !it.locked) (by[it.species] ??= []).push(it); return Object.keys(by).find((k) => by[k].length >= 2 && by[k][0].tier !== 'mythic') ?? null; };
+      let msp = await mergeable();
+      for (let i = 0; i < 8 && !msp; i++) { await openCapsules(page, 1); msp = await mergeable(); }
+      await page.evaluate(() => window.__WH__.resume());
+      if (msp) {
+        await page.evaluate(() => document.querySelector('#wh-play')?.focus());
+        await page.keyboard.press('h'); await sleep(500);
+        await page.evaluate((sp) => { document.querySelectorAll('.hoard .plinth').forEach((p) => { p.tabIndex = -1; }); const b = document.querySelector(`.hoard .plinth[data-species="${sp}"]`); b.tabIndex = 0; b.focus(); }, msp);
+        await page.keyboard.press('Enter'); await sleep(500);
+        let onMerge = false;
+        for (let i = 0; i < 24 && !onMerge; i++) { await page.keyboard.press('Tab'); onMerge = await page.evaluate(() => document.activeElement?.dataset.key === 'merge'); }
+        await page.keyboard.press('Enter'); await sleep(600);
+        const modal = await page.evaluate(() => ({ modal: !!document.querySelector('.hmodal'), focus: document.activeElement?.textContent }));
+        if (modal.modal) { await page.keyboard.press('Tab'); await page.keyboard.press('Enter'); await sleep(400); }
+        const before = await hstate(page);
+        let onHold = await page.evaluate(() => document.activeElement?.classList.contains('hold-btn'));
+        for (let i = 0; i < 24 && !onHold; i++) { await page.keyboard.press('Tab'); onHold = await page.evaluate(() => document.activeElement?.classList.contains('hold-btn')); }
+        await page.keyboard.press('Enter'); await sleep(300);
+        const quick = await hstate(page);
+        await page.keyboard.down('Enter'); await sleep(900); await page.keyboard.up('Enter');
+        await waitUntil(page, (n) => window.__WH__.shell.hoardState().mergesToday > n && window.__WH__.shell.ceremony().kind === null, before.mergesToday, 30000);
+        const after = await hstate(page);
+        check('MERGE R15 keyboard: Enter on a plinth, Tab to Merge, Enter opens the pad (the last-copy warning takes focus on Cancel); a quick Enter on "Hold to merge" does nothing, Enter held 0.5 s merges',
+          onMerge && onHold && (!modal.modal || modal.focus === 'Cancel') && quick.mergesToday === before.mergesToday && after.mergesToday === before.mergesToday + 1,
+          JSON.stringify({ msp, onMerge, modal, onHold, merges: `${before.mergesToday} -> ${quick.mergesToday} -> ${after.mergesToday}` }));
+      } else check('MERGE R15 keyboard: a mergeable pair on this roll', false, 'none after 13 capsules');
       await context.close();
     });
 
@@ -1370,6 +1501,30 @@ async function main() {
       await context.close();
     });
 
+
+    // U07: offline, signed in (COLLECTION 9.7 / 9.9). The practice ledger is never offline, so the dev seam fakes the server state on the
+    // collection's meter: the banner, the ring's "Waiting for connection" while it keeps previewing touches, no toast storm, "Reconnected".
+    await section('hoard-offline', async () => {
+      const { page, context, w } = await open({ query: '?dev=1&rseed=99' });
+      mainWatches.push(['hoard-offline', w]);
+      await wake(page);
+      await page.evaluate(() => { window.__toasts = 0; new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains('toast')) window.__toasts++; }).observe(document.getElementById('ui'), { childList: true }); });
+      await page.evaluate(() => window.__WH__.shell.forceOffline(true));
+      await sleep(500);
+      const s1 = await page.evaluate(() => ({ banner: !document.querySelector('.net-banner').hidden, text: document.querySelector('.net-banner').textContent, state: document.querySelector('.meter-state')?.textContent, live: document.getElementById('wh-live')?.textContent, fill: window.__WH__.shell.meter().fill }));
+      const B = await body(page); const vp = page.viewportSize();
+      for (let i = 0; i < 4; i++) { await page.mouse.click(B.x * vp.width + (i - 2) * 8, B.y * vp.height - 0.3 * B.rPx); await sleep(1100); }
+      const s2 = await page.evaluate(() => ({ fill: window.__WH__.shell.meter().fill, toasts: window.__toasts, banner: !document.querySelector('.net-banner').hidden }));
+      await shot(page, 'offline_desktop');
+      check('U07 offline: the banner says "Offline. Your Hoard is read-only until we reconnect.", the ring says "Waiting for connection" and keeps previewing touches, no error toast storm',
+        s1.banner && s1.text === 'Offline. Your Hoard is read-only until we reconnect.' && s1.state === 'Waiting for connection' && /Offline/.test(s1.live ?? '') && s2.banner && s2.fill > s1.fill && s2.toasts === 0,
+        JSON.stringify({ ...s1, fillAfter: s2.fill, toasts: s2.toasts }));
+      await page.evaluate(() => window.__WH__.shell.forceOffline(false));
+      await sleep(500);
+      const s3 = await page.evaluate(() => ({ banner: !document.querySelector('.net-banner').hidden, state: document.querySelector('.meter-state')?.textContent ?? '', live: document.getElementById('wh-live')?.textContent }));
+      check('U07 reconnected: the banner goes, the ring state line clears and "Reconnected" is announced', !s3.banner && !/Waiting/.test(s3.state) && /Reconnected/.test(s3.live ?? ''), JSON.stringify(s3));
+      await context.close();
+    });
 
     // ------------------------------------------------------------------------------------------------
     // settings migration: a slice-1 blob (no `v`) and a blob from a newer build
@@ -1615,6 +1770,32 @@ async function main() {
         check(`reflow ${W}x${H} settings: the panel is inside the viewport, scrolls inside itself, and no label is cut off`,
           inside(P.panel) && P.sw <= P.iw && clipped.length === 0 && P.labels.length >= 10 && P.panelScroll.sh >= P.panelScroll.ch, `panel ${JSON.stringify(P.panel)}, clipped ${clipped.map((l) => l.t).join(', ') || 'none'}, labels ${P.labels.length}, scroll ${P.panelScroll.sh}/${P.panelScroll.ch}`);
         await shot(page, `settings_${W}x${H}`);
+        await page.keyboard.press('Escape'); await sleep(400);
+        // the Hoard at this size (WCAG 1.4.10, COLLECTION 9.10): the HUD button on screen and clear of the bottom row; the sheet inside the
+        // viewport with no horizontal scroll, its header, tabs and tools inside it, every plinth name whole; at 320 x 568 also the card
+        const hb = await page.evaluate(() => { const b = document.querySelector('.hoard-btn').getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; });
+        await page.evaluate(() => document.querySelector('.hoard-btn').click());
+        await sleep(900); await settle(page);
+        const sheet = () => page.evaluate((sel) => {
+          const el = document.querySelector(sel); const r = el.getBoundingClientRect();
+          const cut = [...el.querySelectorAll('.plinth-name, .hcard-name, .act-btn span, .tool-btn span, .hoard-tab span')].filter((n) => n.getClientRects().length && n.scrollWidth > n.clientWidth + 1).map((n) => n.textContent);
+          const outside = [...el.querySelectorAll('button, select, h2, p')].filter((e) => { const b = e.getBoundingClientRect(); return b.width > 0 && (b.left < r.left - 0.5 || b.right > r.right + 0.5); }).map((e) => e.className || e.tagName);
+          return { x: Math.round(r.x), r: Math.round(r.right), y: Math.round(r.y), b: Math.round(r.bottom), sw: document.documentElement.scrollWidth, iw: innerWidth, ih: innerHeight, esw: el.scrollWidth, ecw: el.clientWidth, cut, outside: outside.slice(0, 4) };
+        }, sel);
+        let sel = '.hoard';
+        const HL = await sheet();
+        check(`reflow ${W}x${H} Hoard: the HUD button is on screen and clear of the bottom row; the sheet fits the viewport (no horizontal scroll), nothing sticks out of it, no name or label cut off`,
+          inside(hb) && !overlap(hb, L.name) && !overlap(hb, L.meter) && !overlap(hb, L.capsuleBtn) && HL.sw <= HL.iw && HL.x >= 0 && HL.r <= HL.iw && HL.esw <= HL.ecw + 1 && HL.outside.length === 0 && HL.cut.length === 0, JSON.stringify({ hb, ...HL }));
+        await shot(page, `hoard_${W}x${H}`);
+        if (W === 320 && H === 568) {
+          await page.evaluate(() => document.querySelector('.hoard .plinth[data-owned="true"]')?.click());
+          await sleep(900); await settle(page);
+          sel = '.hcard';
+          const CL = await sheet();
+          check(`reflow ${W}x${H} Hoard card: inside the viewport, no horizontal scroll, nothing sticks out, no label cut off`, CL.sw <= CL.iw && CL.x >= 0 && CL.r <= CL.iw && CL.esw <= CL.ecw + 1 && CL.outside.length === 0 && CL.cut.length === 0, JSON.stringify(CL));
+          await shot(page, `hoard_card_${W}x${H}`);
+          await page.keyboard.press('Escape'); await sleep(400);
+        }
         await page.keyboard.press('Escape'); await sleep(400);
       }
       await context.close();

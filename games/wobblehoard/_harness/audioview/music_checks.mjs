@@ -658,6 +658,19 @@ export async function round3Checks(env) {
     const padS = dec(await ev('renderMusic', { ...base, layers: { pad: 1, mallet: 0 }, rooms: stairs }));
     const deep = gainDb(padP.x, padS.x, T2 + 0.1, T2 + 0.3), mid = gainDb(padP.x, padS.x, T2 + 2.6, T2 + 3.5), after = gainDb(padP.x, padS.x, T2 + 8, T2 + 9);
     check(g, 'overlapping dips stack as a staircase: the deepest active hold wins, then (once it ends) the next, then none', Math.abs(deep - PD) <= 1.5 && Math.abs(mid - (-6 * K.ROOM_PAD_SHARE)) <= 1 && Math.abs(after) < 0.3, `pad ${f1(deep)} dB (deep), ${f1(mid)} dB (shallow), ${f2(after)} dB after`, `${f1(PD)}, ${f1(-6 * K.ROOM_PAD_SHARE)}, 0`);
+    {
+      // CUT round fix: at music volume 1 the pad's dip deepens by the whole +6 dB boost (music.ts roomPadShare), so under an
+      // effect the pad sits exactly at its default-volume level. Before, the pad's share deepened by only 0.72 x the boost
+      // (-21.6 dB for +6 dB): 1.7 dB louder than at the default, and two large, low-pitched pops sat under it (the
+      // independent audio-3 verifier's music-1 placements).
+      const roomsHi = [{ from: T, until: T + 0.8, db: RD - 6, gainDb: 6 }];
+      const padHi = dec(await ev('renderMusic', { ...base, music: 1, layers: { pad: 1, mallet: 0 }, rooms: roomsHi }));
+      const melHi = dec(await ev('renderMusic', { ...base, music: 1, layers: { pad: 0, mallet: 1 }, rooms: roomsHi }));
+      const aPad = gainDb(padR.x, padHi.x, T + 0.1, T + 0.8), aMel = gainDb(melR.x, melHi.x, T + 0.06, T + 0.8);
+      const share = await page.evaluate(async () => { const M = await import('/src/audio/music.ts'); return { s0: M.roomPadShare(0), d6: M.roomPadShare(6) * (M.ROOM_DB - 6), want6: M.ROOM_PAD_SHARE * M.ROOM_DB - 6 }; });
+      check(g, 'music volume 1 (+6 dB): under a full dip the pad and the melody sit at their default-volume level (pad dip = 0.72 x ROOM_DB - 6 dB; it used to be 1.7 dB louder)', Math.abs(aPad) <= 0.3 && Math.abs(aMel) <= 0.3 && Math.abs(share.s0 - K.ROOM_PAD_SHARE) < 1e-12 && Math.abs(share.d6 - share.want6) < 1e-9, `pad ${f2(aPad)} dB, melody ${f2(aMel)} dB over the default's dipped level; pad dip at +6 dB ${f2(share.d6)} dB (0.72 x ROOM_DB - 6 = ${f2(share.want6)})`, '0 +/- 0.3 dB');
+      info.music.roomHi = { aPad, aMel, ...share };
+    }
     const rule = await page.evaluate(async () => {
       const M = await import('/src/audio/music.ts');
       const one = M.oneShotRoom('poke', 10, 10.004, 10.3), slow = M.oneShotRoom('lift', 10, 10.004, 10.3, 0.06), none = M.oneShotRoom('reveal', 10, 10.004, 11);

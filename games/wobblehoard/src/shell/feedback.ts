@@ -13,7 +13,9 @@
 //           body): every frame while strands >= 0.02, tension = strands; when they let go from >= 0.3 that was a break: snap: true.
 //           A body without the metric: every frame while a TACKY family (Sticky Stretch, Slime Goo) is pulled, tension = pull level;
 //           snap: true on the snap event.
-//   bump    SEAM ONLY: needs two bodies touching (stage B). `bumpCheck` is the place: the rising edge of distance(cA, cB) < 0.95 (rA + rB).
+//   bump    the physics' own 'bump' event (stage B2: SoftBodyLike.collide on the play mat): audio.bump (rate-limited inside the engine) and
+//           a light 6 ms haptic tick, at most one every BUMP_HAPTIC_GAP_S (both bodies of one contact may report it). Pays nothing.
+//           `bumpCheck` below is the older centre-distance seam for a physics without the event.
 import type { SoftBodyLike, SoftEvent, SquishAudio, SquishVoiceHandle, StageLike, V3 } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { pitchRatio } from '../core/genome.ts';
@@ -57,6 +59,8 @@ export interface FeedbackDeps {
 }
 
 const TACKY = new Set<string>(['stickystretch', 'slimegoo']);
+/** one light bump haptic per this many seconds of sim time */
+const BUMP_HAPTIC_GAP_S = 0.12;
 /** metrics.strands: a strand voice runs from STRAND_ON; strings that let go from STRAND_BREAK or more broke (a snap), weaker ones just fade */
 const STRAND_ON = 0.02, STRAND_BREAK = 0.3;
 
@@ -69,6 +73,7 @@ export function createFeedback(d: FeedbackDeps): Feedback {
   let lifted = false, liftSince = -1, wasGroundedAtGrab = false;
   let strandOn = false, strandLast = 0;
   let pcx = 0, pcy = 0, pcz = 0, vx = 0, vy = 0, vz = 0, haveC = false;
+  let bumpHapticAt = -1e9;
   /** live pull level of finger f: the driver's (round-2 body), or the rescaled stretch (a body without press) */
   const pullNow = (f: number): number => (hasPress(d.body().metrics) ? touch.pull(f) : stretchPullLevel(d.body().metrics.stretch));
   const tacky = (): boolean => { try { const g = d.genome(); return !!getSpecies(g.species) && TACKY.has(familyOf(g.species)); } catch { return false; } };
@@ -129,6 +134,13 @@ export function createFeedback(d: FeedbackDeps): Feedback {
           d.stage.spawnFx('bubbles', ev.at, Math.max(I, fx));
           pops(1 + Math.min(2, Math.floor(fx * 2.999)), ev.at, Math.max(I, 0.3 + 0.3 * fx));
         }
+        break;
+      }
+      case 'bump': {
+        // two squishies on the mat pushed into each other (the event's body may be any of them: the pan follows the contact point)
+        if (d.audio.bump) { try { d.audio.bump({ intensity: I, pitch: pitch(), pan: d.panOfPoint(ev.at) }); } catch (e) { d.report(e); } }
+        const t = d.simTime();
+        if (I > 0.05 && t - bumpHapticAt >= BUMP_HAPTIC_GAP_S) { bumpHapticAt = t; d.haptics.pop(); }
         break;
       }
       case 'land':

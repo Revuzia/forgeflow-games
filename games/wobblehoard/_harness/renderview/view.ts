@@ -809,6 +809,172 @@ const RV = {
     return { boxes, inFrame, minGapPx: minGap, png: RV.snapshot(), bodies: stage.views.length };
   },
 
+  /**
+   * CUT faces: the same body added whole and as a chunk (AddBodyOpts.chunk). Dark "ink" pixels in the upper half of its screen box (the
+   * eyes) with and without, and the face group's visibility. `kind` 'real' uses makeBody (the real soft body when it loads), 'stub' a
+   * stub piece built with PieceOpts (chunk).
+   */
+  chunkFaceProbe(g: Genome, kind: 'real' | 'stub'): { whole: number; chunk: number; mask: number; faceVisible: boolean[]; pngWhole: string; pngChunk: string } {
+    const out = { whole: 0, chunk: 0, mask: 0, faceVisible: [] as boolean[], pngWhole: '', pngChunk: '' };
+    const W = canvas.width, H = canvas.height;
+    const c2 = document.createElement('canvas'); c2.width = W; c2.height = H;
+    const x = c2.getContext('2d', { willReadFrequently: true });
+    const grab = (): Uint8ClampedArray => { stage.render(); if (!x) return new Uint8ClampedArray(W * H * 4); x.drawImage(canvas, 0, 0); return x.getImageData(0, 0, W, H).data; };
+    let mask: Uint8Array | null = null;
+    for (const asChunk of [false, true]) {
+      stage.clearBodies();
+      // the SAME body both times (only AddBodyOpts.chunk differs): the real soft body, or a stub piece
+      const b: SoftBodyLike = kind === 'stub' ? new StubBody(g, { piece: { frac: 0.6, chunk: false } }) : makeBody(g);
+      body = b;
+      const id = stage.addBody(b, g, { tier: 'common', chunk: asChunk });
+      for (let i = 0; i < 90; i++) { b.step(1 / 60); events.length = 0; b.drainEvents(events); time += 1 / 60; frameNo++; stage.update(1 / 60, { time, pointerNdc: null }); }
+      const v = stage.views.find((w) => w.id === id);
+      out.faceVisible.push(!!v && v.face.group.visible);
+      const img = grab();
+      if (!asChunk && v) {
+        // the eyes' footprint: where hiding the face changes the frame
+        v.face.group.visible = false; const noFace = grab(); v.face.group.visible = true;
+        mask = new Uint8Array(W * H);
+        for (let i = 0, p = 0; i < img.length; i += 4, p++) if (Math.abs(img[i] - noFace[i]) + Math.abs(img[i + 1] - noFace[i + 1]) + Math.abs(img[i + 2] - noFace[i + 2]) > 45) { mask[p] = 1; out.mask++; }
+        stage.render();
+      }
+      // dark eye ink inside that footprint
+      let ink = 0;
+      if (mask) for (let i = 0, p = 0; i < img.length; i += 4, p++) if (mask[p] && 0.2126 * img[i] + 0.7152 * img[i + 1] + 0.0722 * img[i + 2] < 24) ink++;
+      if (asChunk) { out.chunk = ink; out.pngChunk = canvas.toDataURL('image/png'); } else { out.whole = ink; out.pngWhole = canvas.toDataURL('image/png'); }
+    }
+    stage.clearBodies(); setupBody(genome);
+    return out;
+  },
+
+  /**
+   * CUT (_spec/CUT.md X09 and the render items): cut a squishy again and again, then Reconnect all, the way the shell will drive it:
+   * per cut the neck forms over 0.25 s (body.setNeck + stage.setCutSeam), at t = 1 the body is swapped for two pieces (stub pieces built
+   * with PieceOpts: the face stays on one, the other is a chunk) and stage.partPieces(a, b); at the piece limit (6) the two smallest
+   * reconnect first (stage.setBridge over 0.4 s, the giver shrinks into the receiver). Then Reconnect all: every chunk bridges into the
+   * face piece over 1.2 s. Per-frame mean luminance and screen light, the most pieces, shots at the telling moments.
+   */
+  cutProbe(o: { genome: Genome; cuts?: number; gapS?: number; calm?: boolean; dt?: number; shots?: boolean }): {
+    lumas: number[]; light: number[]; maxPieces: number; cutsDone: number; reconnects: number; strandEvents: number; snapEvents: number;
+    maxGlow: number; maxStrands: number; maxBridges: number; piecesAtEnd: number; wholeAtEnd: boolean; facesAtEnd: number; marks: string[];
+    shots: Record<string, string>; framed: { pieces: number; inFrame: boolean; minPx: number; boxes: number[][] };
+  } {
+    const dt = o.dt ?? 1 / 30, g = o.genome, cuts = o.cuts ?? 10, gap = o.gapS ?? 0.15;
+    stage.clearBodies(); stage.setCalmEffects(!!o.calm);
+    type Piece = { id: number; b: StubBody; frac: number; face: boolean };
+    const pieces: Piece[] = [];
+    const add = (b: StubBody, frac: number, face: boolean): Piece => { const id = stage.addBody(b, g, { tier: 'common', chunk: !face }); const p = { id, b, frac, face }; pieces.push(p); return p; };
+    add(new StubBody(g), 1, true);
+    body = pieces[0].b;
+    const lumas: number[] = [], light: number[] = [], marks: string[] = [], shots: Record<string, string> = {};
+    let strandEvents = 0, snapEvents = 0, maxGlow = 0, maxStrands = 0, maxBridges = 0, maxPieces = 1, cutsDone = 0, reconnects = 0, f = 0;
+    stage.onStrand = (_id, e): void => { if (e.snap) snapEvents++; else strandEvents++; };
+    const step = (record = true): void => {
+      for (const p of pieces) { p.b.step(dt); events.length = 0; p.b.drainEvents(events); }
+      time += dt; frameNo++; f++;
+      stage.update(dt, { time, pointerNdc: null });
+      if (record) { stage.render(); lumas.push(meanLuma()); light.push(stage.info.screenLight); }
+      const c = stage.info.cut;
+      maxGlow = Math.max(maxGlow, c.glow); maxStrands = Math.max(maxStrands, c.strands); maxBridges = Math.max(maxBridges, c.bridges);
+      maxPieces = Math.max(maxPieces, pieces.length);
+    };
+    const shot = (name: string): void => { if (o.shots) { stage.render(); shots[name] = canvas.toDataURL('image/jpeg', 0.9); } };
+    for (let i = 0; i < 30; i++) step(false);
+    const centreOf = (p: Piece): V3 => ({ x: p.b.center.x, y: p.b.center.y, z: p.b.center.z });
+    /** giver -> receiver over `secs`: the bridge rises, the giver shrinks into the receiver and slides to it, then it is removed */
+    const reconnect = (pairs: [Piece, Piece][], secs: number, shotName = ''): void => {
+      for (const [r, gv] of pairs) { gv.b.setFrac(0.02, secs); r.b.setFrac(r.frac + gv.frac, secs); gv.b.moveTo(centreOf(r), 0.6); }
+      const n = Math.round(secs / dt);
+      for (let k = 1; k <= n; k++) {
+        const t = k / n;
+        for (const [r, gv] of pairs) stage.setBridge(r.id, gv.id, Math.min(1, t / 0.5));
+        step();
+        if (shotName && k === Math.round(n * 0.45)) shot(shotName);
+      }
+      for (const [r, gv] of pairs) { r.frac += gv.frac; stage.setBridge(r.id, gv.id, 0); stage.removeBody(gv.id); pieces.splice(pieces.indexOf(gv), 1); reconnects++; }
+      marks.push(`reconnect x${pairs.length}@${(f * dt).toFixed(2)}`);
+    };
+    for (let c = 0; c < cuts; c++) {
+      if (pieces.length >= 6) {   // the piece limit: the two smallest flow back together first
+        const sorted = [...pieces].sort((a, b) => a.frac - b.frac);
+        const gv = sorted[0].face ? sorted[1] : sorted[0], r = sorted.find((p) => p !== gv) as Piece;
+        reconnect([[r, gv]], 0.4, c === 6 ? 'bridge_mid' : '');
+      }
+      const src = [...pieces].sort((a, b) => b.frac - a.frac)[0];
+      if (src.frac < 0.25) { marks.push(`refused@${(f * dt).toFixed(2)}`); for (let i = 0; i < Math.round(0.4 / dt); i++) step(); continue; }
+      const ang = c * 1.9 + 0.4, n = { x: Math.cos(ang), y: 0, z: Math.sin(ang) };
+      const plane = { point: centreOf(src), normal: n };
+      const nS = Math.round(0.25 / dt);
+      for (let k = 1; k <= nS; k++) {
+        const t = k / nS;
+        src.b.setNeck(plane, t); stage.setCutSeam(src.id, plane, t);
+        step();
+        if (c === 0 && k === Math.round(nS * 0.7)) shot('seam_neck');
+      }
+      // the swap at t = 1: two pieces at the lobes, springing apart; the face stays on the side of the eyes (here: the 'a' side)
+      const R = src.b.restRadius, half = src.frac / 2, cc = centreOf(src);
+      const mk = (sgn: number, chunk: boolean): StubBody => new StubBody(g, { piece: { frac: half, chunk, cutNormal: { x: -sgn * n.x, y: 0, z: -sgn * n.z }, at: { x: cc.x + sgn * n.x * R * 0.42, y: 0, z: cc.z + sgn * n.z * R * 0.42 }, vel: { x: sgn * n.x * 0.9, y: 0, z: sgn * n.z * 0.9 } } });
+      stage.removeBody(src.id); pieces.splice(pieces.indexOf(src), 1);
+      const a = add(mk(1, !src.face), half, src.face), b = add(mk(-1, true), half, false);
+      stage.partPieces(a.id, b.id);
+      cutsDone++; marks.push(`cut ${cutsDone}@${(f * dt).toFixed(2)}`);
+      for (let i = 0; i < Math.round(gap / dt); i++) { step(); if (c === 0 && i === Math.round(0.12 / dt)) shot('parting_strand'); }
+    }
+    for (let i = 0; i < Math.round(1.2 / dt); i++) step();
+    shot('pieces');
+    // every piece inside the frame once the camera has framed them (screen boxes of their skins), and how big the smallest one reads
+    const framed = { pieces: pieces.length, inFrame: true, minPx: Infinity, boxes: [] as number[][] };
+    {
+      const cam = stage.camera, pv = new THREE.Vector3(), W = canvas.clientWidth || canvas.width, H = canvas.clientHeight || canvas.height;
+      for (const v of stage.views) {
+        let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+        const P = v.proxy.positions;
+        for (let i = 0; i < P.length; i += 3) { pv.set(P[i], P[i + 1], P[i + 2]).project(cam); const sx = (pv.x * 0.5 + 0.5) * W, sy = (1 - (pv.y * 0.5 + 0.5)) * H; x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); }
+        framed.boxes.push([x0, y0, x1, y1].map(Math.round));
+        if (x0 < 0 || y0 < 0 || x1 > W || y1 > H) framed.inFrame = false;
+        framed.minPx = Math.min(framed.minPx, x1 - x0);
+      }
+    }
+    // Reconnect all: every chunk into the face piece at once, 1.2 s
+    const facePiece = pieces.find((p) => p.face) ?? pieces[0];
+    const others = pieces.filter((p) => p !== facePiece);
+    if (others.length) reconnect(others.map((gv) => [facePiece, gv] as [Piece, Piece]), 1.2, 'reconnect_all');
+    for (let i = 0; i < Math.round(1.0 / dt); i++) step();
+    shot('whole_again');
+    stage.onStrand = null;
+    const facesAtEnd = stage.views.filter((v) => !v.chunk).length;
+    const out = { lumas, light, maxPieces, cutsDone, reconnects, strandEvents, snapEvents, maxGlow, maxStrands, maxBridges, piecesAtEnd: pieces.length, wholeAtEnd: pieces.length === 1 && Math.abs(pieces[0].frac - 1) < 1e-6, facesAtEnd, marks, shots, framed };
+    stage.setCalmEffects(false); stage.clearBodies(); setupBody(genome);
+    return out;
+  },
+
+  /** CUT frame budget (render side): 6 pieces (1 face + 5 chunks, 1/6 each) vs 2 whole bodies, same genome, synchronous ms per frame. */
+  cutCost(g: Genome, rounds = 3): { twoWhole: number[]; sixPieces: number[]; drawCalls: { two: number; six: number }; triangles: { two: number; six: number } } {
+    const out = { twoWhole: [] as number[], sixPieces: [] as number[], drawCalls: { two: 0, six: 0 }, triangles: { two: 0, six: 0 } };
+    const build = (six: boolean): StubBody[] => {
+      stage.clearBodies();
+      const bs: StubBody[] = [];
+      const n = six ? 6 : 2;
+      for (let k = 0; k < n; k++) {
+        const a = (k / n) * Math.PI * 2, rr = six ? 0.55 : 0.6;
+        const b = six ? new StubBody(g, { piece: { frac: 1 / 6, chunk: k > 0, cutNormal: { x: Math.cos(a), y: 0, z: Math.sin(a) }, at: { x: Math.cos(a) * rr, y: 0, z: Math.sin(a) * rr } } })
+          : new StubBody(g, { piece: { frac: 1, chunk: false, at: { x: (k ? 1 : -1) * rr, y: 0, z: 0 } } });
+        stage.addBody(b, g, { tier: 'common', chunk: six && k > 0 });
+        bs.push(b);
+      }
+      for (let i = 0; i < 40; i++) { for (const b of bs) b.step(1 / 60); time += 1 / 60; stage.update(1 / 60, { time, pointerNdc: null }); }
+      return bs;
+    };
+    for (let r = 0; r < rounds; r++) for (const six of [false, true]) {
+      build(six); stage.render();
+      const ms = RV.timeRender(3), st = stage.stats();
+      (six ? out.sixPieces : out.twoWhole).push(ms);
+      if (six) { out.drawCalls.six = st.drawCalls; out.triangles.six = st.triangles; } else { out.drawCalls.two = st.drawCalls; out.triangles.two = st.triangles; }
+    }
+    stage.clearBodies(); setupBody(genome);
+    return out;
+  },
+
   stats() { return stage.stats(); },
   memory() { return stage.memory(); },
   info() { return stage.info; },

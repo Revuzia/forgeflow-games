@@ -4,11 +4,13 @@
 // Statistical checks use Z = 5 standard errors: with seeded (hence fixed) streams a pass is reproducible, and a real bug that moves a probability by
 // even a few percent relative fails by a wide margin at the sample sizes below.
 import { readFileSync } from 'node:fs';
+import { Worker } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { mulberry32 } from '../src/core/rng.ts';
 import {
-  createMeter, addInteraction, sanitizeMeter, capsuleThreshold, dailyRateFor, dailyStatus, meterFill, PAY, POKE_MIN_GAP_MS, FRESHNESS_FLOOR,
+  createMeter, addInteraction, previewInteraction, sanitizeMeter, capsuleThreshold, dailyRateFor, dailyStatus, meterFill, PAY, POKE_MIN_GAP_MS, FRESHNESS_FLOOR,
+  FRESHNESS_FLOORS, FRESHNESS_TAU_SECONDS,
   VALVE_SP_PER_MINUTE, CAPSULE_RAMP, CAPSULE_COST, DAILY_FULL_RATE_CAPSULES, DAILY_REDUCED_RATE, DAILY_HARD_STOP_CAPSULES, DAY_MS, MEDLEY_COOLDOWN_MS, MAX_T_MS,
 } from '../src/core/meter.ts';
 import type { MeterState, TouchKind, Interaction } from '../src/core/meter.ts';
@@ -27,7 +29,7 @@ import type { SpeciesId } from '../src/data/catalog.ts';
 import { encodeGenome, decodeGenome, genomeEquals } from '../src/core/genome.ts';
 import type { Genome } from '../src/core/genome.ts';
 import { bodyLab, labDistance } from '../src/data/palette.ts';
-import { BEHAV, playStream, buildCatalog, bitsetWords, bitsetHas, setMasks, swapCountCore } from './sim_economy.ts';
+import { BEHAV, BEHAV_EXTRA, measureStyle, playStream, buildCatalog, bitsetWords, bitsetHas, setMasks, swapCountCore } from './sim_economy.ts';
 
 let bad = 0;
 const check = (name: string, ok: boolean, extra = ''): void => { if (!ok) bad++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra ? '  ' + extra : ''}`); };
@@ -51,16 +53,32 @@ check('squeeze held 1 s pays 0.7 + 0.45 = 1.15 SP', near(one('squeeze', 1).spGai
 check('squeeze hold is counted up to 3 s (held 2.5 s pays 0.7 + 1.125 + soft pop 0.5 = 2.325; held 9 s pays 0.7 + 1.35 + 0.5 = 2.55)', near(one('squeeze', 2.5).spGained, 2.325) && near(one('squeeze', 9).spGained, 2.55));
 check('soft pop: held 1.8 s earns +0.5 SP, held 1.79 s does not', near(one('squeeze', 1.8).spGained - one('squeeze', 1.79).spGained, 0.45 * 0.01 + 0.5));
 check('a squeeze held under 0.4 s is paid as a poke', near(one('squeeze', 0.2).spGained, 0.8) && one('squeeze', 0.2).detail.paidAs === 'poke');
-check('a pull that stretched (snap intensity >= 0.35) pays 1.8 SP, one that never stretched 0.5 SP', near(one('pull', 0.35).spGained, 1.8) && near(one('pull', 0.34).spGained, 0.5) && near(one('pull', 1).spGained, 1.8));
+// RE-SPECIFIED 2026-10-06 (owner, FUN.md 2.2: "dragging out to stretch and holding it should slowly give XP"): a stretched pull no longer
+// pays a flat 1.8 SP; it pays 1.0 + 0.55 per second held (Interaction.heldS = the snap's heldFor), hold counted up to 3 s.
+const pullH = (level: number, heldS: unknown): number => addInteraction(createMeter(), { kind: 'pull', amount: level, heldS: heldS as number, tMs: T0 }).spGained;
+check('stretch-and-hold pays per second held: a stretched pull (level >= 0.35) pays 1.0 + 0.55 x hold (held 0 / 1 / 2 s: 1.0 / 1.55 / 2.1 SP)',
+  near(pullH(0.35, 0), 1.0) && near(pullH(1, 1), 1.55) && near(pullH(0.6, 2), 2.1) && PAY.pullBase === 1.0 && PAY.pullPerSecond === 0.55);
+check('the pull hold is counted up to 3 s, like a squeeze (held 3 s and 9 s both pay 2.65 SP)', near(pullH(0.8, 3), 2.65) && near(pullH(0.8, 9), 2.65) && PAY.pullHoldCapSeconds === PAY.squeezeHoldCapSeconds);
+check('a pull that never stretched (level under 0.35) pays the flat 0.5 SP whatever the hold (0 s, 3 s, 10 s)', [0, 3, 10].every((h) => near(pullH(0.34, h), 0.5)) && near(pullH(0.1, 2), 0.5));
+check('a pull without a hold, or with a NaN / negative / infinite one, pays the base only (never more)', near(addInteraction(createMeter(), { kind: 'pull', amount: 1, tMs: T0 }).spGained, 1.0) && [NaN, -2, Infinity, -Infinity, 'x', null].every((h) => near(pullH(1, h), 1.0)) && near(pullH(1, 1e300), 2.65));
+check('heldS is a pull field only: a poke and a squeeze ignore it (the squeeze hold is its amount)', near(addInteraction(createMeter(), { kind: 'poke', amount: 0, heldS: 3, tMs: T0 }).spGained, 0.8) && near(addInteraction(createMeter(), { kind: 'squeeze', amount: 1, heldS: 3, tMs: T0 }).spGained, 1.15));
 // freshness
 {
   const s1 = one('poke', 0).state;
   const at = (dtMs: number): number => addInteraction(s1, { kind: 'poke', amount: 0, tMs: T0 + dtMs }).spGained;
   check('freshness: a second poke 0.9 s later pays in full', near(at(900), 0.8));
-  check('freshness: 0.45 s later pays x(0.5)^2 = 0.25', near(at(450), 0.2));
-  check('freshness: 0.3 s later pays x(1/3)^2', near(at(300), 0.8 / 9));
+  // RE-SPECIFIED 2026-10-06 (owner, FUN.md 2.1: "a quick poke should give a little bit of XP"): the poke freshness is tau 0.75 s with a
+  // floor of 0.25 (was tau 0.9 s, floor 0.03, which paid 0.07 to 0.11 SP a tap at 3 to 4 taps a second).
+  check('poke freshness tau 0.75 s: 0.75 s later pays in full, 0.45 s later x(0.6)^2 = 0.288 SP, 0.5 s later (2 taps a second) x(2/3)^2 = 0.356 SP', near(at(750), 0.8) && near(at(450), 0.8 * 0.36) && near(at(500), 0.8 * 4 / 9) && FRESHNESS_TAU_SECONDS[0] === 0.75);
+  check('ordinary tapping always pays a little: a poke 0.25 to 0.375 s after the last (3 to 4 taps a second) pays the floor, a quarter of a fresh poke (0.2 SP)', [250, 300, 333, 375].every((ms) => near(at(ms), 0.2)) && FRESHNESS_FLOORS[0] === 0.25);
+  check('every paid poke (0.25 s or more after the last) pays at least 0.2 SP; between 2 and 4 taps a second 0.2 to 0.36 SP', [250, 260, 280, 400, 450, 499].every((ms) => at(ms) >= 0.2 - 1e-12 && at(ms) <= 0.8 * 4 / 9 + 1e-12) && at(249) === 0);
   check(`double-tap gate: a poke under ${POKE_MIN_GAP_MS} ms after the last poke pays nothing`, at(100) === 0 && addInteraction(s1, { kind: 'poke', amount: 0, tMs: T0 + 100 }).detail.doubleTap);
-  check('freshness floor is 0.03', near(FRESHNESS_FLOOR, 0.03));
+  check('freshness floors: poke 0.25, squeeze and pull 0.03 (FRESHNESS_FLOOR is the squeeze and pull floor)', FRESHNESS_FLOORS.join() === '0.25,0.03,0.03' && near(FRESHNESS_FLOOR, 0.03));
+  {
+    const sq0 = one('squeeze', 1).state, pl0 = addInteraction(createMeter(), { kind: 'pull', amount: 1, heldS: 1, tMs: T0 }).state;
+    check('squeezes and pulls keep the 0.03 floor: one 0.3 s after the last of its kind pays 3% (mashing them stays worthless)',
+      near(addInteraction(sq0, { kind: 'squeeze', amount: 1, tMs: T0 + 300 }).spGained, 1.15 * 0.03) && near(addInteraction(pl0, { kind: 'pull', amount: 1, heldS: 1, tMs: T0 + 300 }).spGained, 1.55 * 0.03));
+  }
   const sq = one('squeeze', 1).state;
   check('freshness tau is per kind: a squeeze 1.2 s after a squeeze pays x(0.5)^2 of 1.15', near(addInteraction(sq, { kind: 'squeeze', amount: 1, tMs: T0 + 1200 }).spGained, 1.15 * 0.25));
   check('freshness is per kind: a poke right after a squeeze is not penalised', near(addInteraction(sq, { kind: 'poke', amount: 0, tMs: T0 + 50 }).spGained, 0.8));
@@ -116,19 +134,39 @@ const varied = archSp[3], styles = archSp.slice(0, 3);
 check('every single-style player earns within 15% of the others (DESIGN 5.4: about 15%)', Math.max(...styles) / Math.min(...styles) <= 1.15, `${f1(Math.min(...styles))}..${f1(Math.max(...styles))} SP/min`);
 check('variety pays: the varied (medley) player out-earns every single style, by about 15%', styles.every((x) => varied > x) && varied / mean(styles) >= 1.08 && varied / mean(styles) <= 1.3, `varied ${f1(varied)} vs mean ${f1(mean(styles))} = x${f2(varied / mean(styles))}`);
 check('minutes per capsule at 100 SP are in the owner band (3.0 to 4.0 for single styles, DESIGN 5.4: 3.6-3.8; mixed 3.2)', styles.every((x) => 100 / x >= 3.3 && 100 / x <= 4.0) && 100 / varied >= 3.0 && 100 / varied <= 3.5, styles.map((x) => f1(100 / x)).join('/') + ' / ' + f1(100 / varied));
-/** SP per minute of a fixed-interval single-kind stream for 60 s through the real meter. */
+{
+  // the owner's 2026-10-06 styles (FUN.md 2): a fast tapper (bursts of 2-3 taps a second) and a stretch-and-hold player (every stretch
+  // held 2-4 s), measured the same way (sim section A); they are not in the macro population
+  const extra = BEHAV_EXTRA.map((b, i) => ({ name: b.name, sp: measureStyle(b, BEHAV.length + i).spPerMin }));
+  for (const e of extra) console.log(`${e.name.padEnd(9)} | ${f1(e.sp).padStart(5)} | ${f1(100 / e.sp)}`);
+  const all = [...archSp, ...extra.map((e) => e.sp)];
+  check('every style, the tapper and the stretch-and-holder included, needs 3.0 to 3.8 active minutes a capsule, and none is more than 20% faster than another', all.every((x) => 100 / x >= 3.0 && 100 / x <= 3.8) && Math.max(...all) / Math.min(...all) <= 1.2,
+    `${all.map((x) => f1(100 / x)).join('/')} min (poker/squeezer/puller/mixed/tapper/holder), fastest/slowest x${f2(Math.max(...all) / Math.min(...all))}`);
+  check('a puller is not faster than a poker by more than 10% (and the stretch-and-holder not by more than 10% over the poker either)', archSp[2] / archSp[0] <= 1.1 && extra[1].sp / archSp[0] <= 1.1, `puller/poker x${f2(archSp[2] / archSp[0])}, holder/poker x${f2(extra[1].sp / archSp[0])}`);
+}
+/** SP per minute of a fixed-interval single-kind stream for 60 s through the real meter. A pull is held 80% of the interval (at most 3 s). */
 function metronome(kind: TouchKind, intervalMs: number, seconds = 60, amount = kind === 'squeeze' ? 1 : kind === 'pull' ? 1 : 0): { perMin: number; maxWindow: number } {
   let s = createMeter(), t = T0, total = 0;
   const log: Array<[number, number]> = [];
-  for (; t < T0 + seconds * 1000; t += intervalMs) { const r = addInteraction(s, { kind, amount, tMs: t, dayKey: 0 }); s = r.state; total += r.spGained; if (r.spGained > 0) log.push([t, r.spGained]); }
+  const heldS = kind === 'pull' ? Math.min(3, (0.8 * intervalMs) / 1000) : undefined;
+  for (; t < T0 + seconds * 1000; t += intervalMs) { const r = addInteraction(s, { kind, amount, heldS, tMs: t, dayKey: 0 }); s = r.state; total += r.spGained; if (r.spGained > 0) log.push([t, r.spGained]); }
   let mx = 0, lo = 0, acc = 0;
   for (let i = 0; i < log.length; i++) { acc += log[i][1]; while (log[i][0] - log[lo][0] > 60000) acc -= log[lo++][1]; mx = Math.max(mx, acc); }
   return { perMin: total / (seconds / 60), maxWindow: mx };
 }
 console.log('single-kind pokes at a fixed rate (SP/min, share of the varied human):');
-const rates = [12, 10, 8, 6, 5, 4, 3, 2, 1.1];
+const rates = [12, 10, 8, 6, 5, 4, 3, 2.5, 2, 1.1];
 const mashRows = rates.map((hz) => { const m = metronome('poke', 1000 / hz); return { hz, ...m }; });
-for (const r of mashRows) console.log(`   ${String(r.hz).padStart(4)} pokes/s: ${f2(r.perMin).padStart(6)} SP/min = ${pct(r.perMin / varied, 0).padStart(4)} of varied play${r.hz >= 5 ? '' : r.hz > 2 ? '   (informational: a scripted macro, not mashing)' : '   (a paced clicker is just playing; the valve and the daily cap bound it)'}`);
+for (const r of mashRows) console.log(`   ${String(r.hz).padStart(4)} pokes/s: ${f2(r.perMin).padStart(6)} SP/min = ${pct(r.perMin / varied, 0).padStart(4)} of varied play${r.hz >= 5 ? '   (double taps: only the first poke pays)' : r.hz >= 2 ? `   (ordinary fast tapping, ${f2(r.perMin / (60 * r.hz))} SP a tap; a steady minute of it is held by the valve)` : '   (a paced clicker is just playing; the valve and the daily cap bound it)'}`);
+check('ordinary fast tapping (2, 2.5, 3 and 4 taps a second, steady) pays at least 0.2 SP a tap, and the valve holds a steady minute of it to 40 SP', mashRows.filter((r) => r.hz >= 2 && r.hz <= 4).every((r) => r.perMin / (60 * r.hz) >= 0.2 - 1e-9 || near(r.perMin, VALVE_SP_PER_MINUTE, 1e-6)) && mashRows.every((r) => r.perMin <= VALVE_SP_PER_MINUTE + 1e-6 && r.maxWindow <= VALVE_SP_PER_MINUTE + 1e-6),
+  mashRows.filter((r) => r.hz >= 2 && r.hz <= 4).map((r) => `${r.hz}/s ${f2(r.perMin)} SP/min`).join(', '));
+{
+  // the first few taps of a burst, before the valve has anything to say: the per-tap pay the owner sees
+  let st = addInteraction(createMeter(), { kind: 'poke', amount: 0, tMs: T0 }).state;
+  const per: number[] = [];
+  for (let i = 1, tb = T0; i <= 6; i++) { tb += i % 2 ? 333 : 500; const r = addInteraction(st, { kind: 'poke', amount: 0, tMs: tb }); per.push(r.spGained); st = r.state; }
+  check('a burst of taps at 2 to 3 a second pays every tap 0.2 to 0.36 SP (was 0.11 to 0.25)', per.every((x) => x >= 0.2 - 1e-12 && x <= 0.36), per.map(f2).join(' '));
+}
 check('MASHING earns at most 45% of varied play per minute (any rate of 5 to 12 pokes a second)', mashRows.filter((r) => r.hz >= 5).every((r) => r.perMin <= 0.45 * varied), `worst ${f2(Math.max(...mashRows.filter((r) => r.hz >= 5).map((r) => r.perMin)))} SP/min = ${pct(Math.max(...mashRows.filter((r) => r.hz >= 5).map((r) => r.perMin)) / varied, 1)}`);
 check('mashing squeezes (every 0.3 s) or pulls (every 0.3 s) is also worthless (<= 45%)', ['squeeze', 'pull'].every((k) => metronome(k as TouchKind, 300).perMin <= 0.45 * varied), `squeeze ${f2(metronome('squeeze', 300).perMin)}, pull ${f2(metronome('pull', 300).perMin)} SP/min`);
 check('no single-kind stream, at any pace, is paid more than the valve (40 SP/min), and no 60 s window ever exceeds 40 SP', [250, 300, 500, 900, 1000, 1500, 2400, 3000].every((ms) => (['poke', 'squeeze', 'pull'] as TouchKind[]).every((k) => { const m = metronome(k, ms, 300); return m.perMin <= VALVE_SP_PER_MINUTE + 1e-6 && m.maxWindow <= VALVE_SP_PER_MINUTE + 1e-6; })));
@@ -137,6 +175,9 @@ check('no single-kind stream, at any pace, is paid more than the valve (40 SP/mi
   const rng = mulberry32(99);
   const cyc = playStream(BEHAV[0], rng, 600, 'cycle');
   check('a poke-squeeze-pull cycler at the physical limit reaches the valve and no more (about 40 SP/min)', cyc.sp / 10 >= 38 && cyc.sp / 10 <= 40.0001, `${f2(cyc.sp / 10)} SP/min`);
+  const tap4 = playStream(BEHAV[0], rng, 600, 'tap4'), hold = playStream(BEHAV[0], rng, 600, 'holdbot'), mash = playStream(BEHAV[0], rng, 600, 'mash');
+  check('bots: a poke every 250 ms (the fastest paid rate) and full stretches held 3 s back to back are held to the valve (<= 40 SP/min); 8 pokes a second earn ~0',
+    tap4.sp / 10 <= 40.0001 && hold.sp / 10 <= 40.0001 && mash.sp / 10 < 0.2, `tap4 ${f2(tap4.sp / 10)}, held stretches ${f2(hold.sp / 10)}, mash ${f2(mash.sp / 10)} SP/min`);
 }
 // daily cap
 {
@@ -203,7 +244,7 @@ header('3. meter: JSON round trip, hostile inputs, invariants');
   const rng = mulberry32(2024);
   const kinds: TouchKind[] = ['poke', 'squeeze', 'pull'];
   const evs: Interaction[] = []; let t = T0;
-  for (let i = 0; i < 3000; i++) { t += Math.floor(100 + rng() * 2500); const k = kinds[Math.floor(rng() * 3)]; evs.push({ kind: k, amount: k === 'squeeze' ? rng() * 4 : k === 'pull' ? rng() : 0, tMs: t }); }
+  for (let i = 0; i < 3000; i++) { t += Math.floor(100 + rng() * 2500); const k = kinds[Math.floor(rng() * 3)]; evs.push({ kind: k, amount: k === 'squeeze' ? rng() * 4 : k === 'pull' ? rng() : 0, heldS: k === 'pull' ? rng() * 4 : undefined, tMs: t }); }
   let a = createMeter(), b = createMeter(), same = true, caps = 0;
   for (let i = 0; i < evs.length; i++) {
     const ra = addInteraction(a, evs[i]);
@@ -213,6 +254,55 @@ header('3. meter: JSON round trip, hostile inputs, invariants');
     a = ra.state; b = rb.state; caps += ra.capsulesEarned;
   }
   check('state survives JSON round-trip before every call (bit-identical results over 3000 touches)', same, `${caps} capsules`);
+  {
+    // previewInteraction is the pending arc: it must equal what addInteraction then pays, for every touch, including the medley, the
+    // valve, the daily rate and refusals, and it must not touch the state
+    const pr = mulberry32(31);
+    let st = createMeter(), tt = T0, diff = 0, worst = 0, n = 0, medleys = 0, valved = 0, rested = 0;
+    for (let i = 0; i < 20000; i++) {
+      tt += pr() < 0.6 ? Math.floor(150 + pr() * 900) : Math.floor(pr() * 4000);
+      const k = kinds[Math.floor(pr() * 3)];
+      const ev: Interaction = { kind: k, amount: k === 'squeeze' ? pr() * 4 : k === 'pull' ? pr() : 0, heldS: k === 'pull' ? pr() * 4 : undefined, tMs: pr() < 0.01 ? tt - 5000 : tt };
+      const before = JSON.stringify(st);
+      const p = previewInteraction(st, ev);
+      if (JSON.stringify(st) !== before) { diff++; break; }
+      const r = addInteraction(st, ev);
+      if (p !== r.spGained) { diff++; worst = Math.max(worst, Math.abs(p - r.spGained)); }
+      if (r.detail.medley > 0) medleys++; if (r.detail.valveClamped) valved++; if (r.detail.dailyRate < 1) rested++;
+      st = r.state; n++;
+    }
+    check('previewInteraction(state, ev) === addInteraction(state, ev).spGained on 20 000 random touches (medleys, valve cuts, the 25% and 0% daily rate, out-of-order refusals), and never changes the state',
+      diff === 0 && medleys > 100 && valved > 100 && rested > 100, `${n} touches, ${medleys} medleys, ${valved} valve cuts, ${rested} at a reduced rate, ${diff} mismatches (worst ${worst})`);
+    const garbage = [null, undefined, {}, { kind: 'tap', amount: 1, tMs: T0 }, { kind: 'pull', amount: NaN, heldS: NaN, tMs: NaN }, { kind: 'pull', amount: 1, heldS: 1e300, tMs: T0 }];
+    check('previewInteraction never throws on garbage and answers 0 for a refused touch', garbage.every((g) => { try { const v = previewInteraction(createMeter(), g as unknown as Interaction); return Number.isFinite(v) && v >= 0; } catch { return false; } }) && previewInteraction(createMeter(), garbage[4] as unknown as Interaction) === 0);
+    // allocation: exact new-space growth of 20 000 preview calls on a busy meter (the HUD calls it once a frame per held finger), measured
+    // in a worker thread: a fresh isolate whose type feedback has seen only well-formed touches, as in the game (this probe's own hostile
+    // calls make V8 fall back to generic code that boxes numbers, which would measure the probe, not the meter)
+    const alloc = await new Promise<{ best: number; recent: number; valve: number; sum: number }>((res, rej) => {
+      const code = `
+        const { parentPort, workerData } = require('node:worker_threads');
+        const v8 = require('node:v8');
+        import(workerData.url).then((m) => {
+          const newUsed = () => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
+          let st = m.createMeter(), t = 1.7e12;
+          for (let i = 0; i < 300; i++) { t += 4000; st = m.addInteraction(st, { kind: ['poke', 'squeeze', 'pull'][i % 3], amount: i % 3 === 1 ? 2.2 : 0.8, heldS: 1.3, tMs: t }).state; }
+          const qs = [];
+          for (let i = 0; i < 64; i++) qs.push({ kind: ['squeeze', 'pull', 'poke'][i % 3], amount: i % 3 === 0 ? 0.5 + i / 30 : 0.8, heldS: i / 20, tMs: t + 400 });
+          const acc = new Float64Array(1);
+          const loop = (n) => { let a = 0; for (let i = 0; i < n; i++) a += m.previewInteraction(st, qs[i & 63]); acc[0] += a; };
+          for (let k = 0; k < 200; k++) loop(2000);
+          const b = []; for (let k = 0; k < 6; k++) { const u = newUsed(); b.push(newUsed() - u); }
+          let best = Infinity;
+          for (let w = 0; w < 8; w++) { const u = newUsed(); loop(20000); const d = newUsed() - u - b[5]; if (d >= 0 && d < best) best = d; }
+          parentPort.postMessage({ best, recent: st.recent.length, valve: st.valve.length, sum: acc[0] });
+        });`;
+      const w = new Worker(code, { eval: true, workerData: { url: new URL('../src/core/meter.ts', import.meta.url).href } });
+      w.once('message', (m) => { res(m); void w.terminate(); });
+      w.once('error', rej);
+    });
+    const best = alloc.best, sink = alloc.sum;
+    check('previewInteraction allocates nothing: exact new-space growth over 20 000 calls on a busy meter (fresh worker isolate)', best <= 64 && sink > 0, `${best} B per 20 000 calls (state: ${alloc.recent} recent, ${alloc.valve} valve buckets; previews summed ${f1(sink)} SP)`);
+  }
   check('sanitizeMeter(state) is the identity on a valid state, and tolerates garbage', JSON.stringify(sanitizeMeter(JSON.parse(JSON.stringify(a)))) === JSON.stringify(a) && [null, undefined, 5, 'x', {}, [], { v: 1, sp: 'x', earned: -4 }, { v: 2 }].every((g) => { const s = sanitizeMeter(g); return s.v === 1 && Number.isFinite(s.sp) && s.sp >= 0; }));
   // a state saved under a clock that ran ahead must not freeze the meter: sanitizeMeter(saved, now) pulls every stored time back to now
   {
@@ -241,7 +331,7 @@ header('3. meter: JSON round trip, hostile inputs, invariants');
   for (let i = 0; i < 40000; i++) {
     const pick = <T>(a: T[]): T => a[Math.floor(rng() * a.length)];
     const hostile = rng() < 0.5;
-    const ev = (hostile ? { kind: pick(kindsAll), amount: pick(wild), tMs: rng() < 0.3 ? pick(wild) : tNow, dayKey: rng() < 0.2 ? pick(wild) : undefined } : { kind: pick(['poke', 'squeeze', 'pull']), amount: rng() * 4, tMs: tNow }) as unknown as Interaction;
+    const ev = (hostile ? { kind: pick(kindsAll), amount: pick(wild), heldS: rng() < 0.5 ? pick(wild) : undefined, tMs: rng() < 0.3 ? pick(wild) : tNow, dayKey: rng() < 0.2 ? pick(wild) : undefined } : { kind: pick(['poke', 'squeeze', 'pull']), amount: rng() * 4, heldS: rng() * 4, tMs: tNow }) as unknown as Interaction;
     tNow += Math.floor(rng() * 1500);
     let r;
     try { r = addInteraction(s, ev); } catch { threw++; continue; }
@@ -253,7 +343,7 @@ header('3. meter: JSON round trip, hostile inputs, invariants');
     lastEarned = st.earned; s = st;
     if (r.spGained > 0 && typeof ev.tMs === 'number') windowLog.push([ev.tMs, r.spGained]);
   }
-  check('40000 random and hostile calls (NaN, Infinity, negative, 1e300, unknown kinds, null) never throw', threw === 0);
+  check('40000 random and hostile calls (NaN, Infinity, negative, 1e300 amounts, holds and times, unknown kinds, null) never throw', threw === 0);
   check('every call leaves a valid state; refused calls return the very same state; spGained is finite and >= 0', okInv, why);
   check('hostile calls are refused rather than paid (some were refused)', refused > 1000, `${refused} refused`);
   let mx = 0, lo = 0, acc = 0;

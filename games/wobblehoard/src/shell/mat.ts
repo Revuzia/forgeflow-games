@@ -1,10 +1,15 @@
 // The play mat (stage B1, NEXT_STEPS B1): bring 2 to 5 squishies out of the Hoard at once.
 //
-//   * The play body stays where it is (drawn at the origin, its own corral); every squishy brought out is an EXTRA body (bodies.ts) with
-//     its own physics origin and corral, DRAWN at a render offset (stage.addBody position). Body-to-body contact does not exist yet
-//     (a later physics round), so the offsets keep them apart: the render lane's stage.matLayout(n) when it offers one (a row on a wide
-//     frame, staggered rows on a portrait phone; the camera frames them all by itself), else a plain row. The layout is shifted so the
-//     play body's slot is the origin.
+//   * The play body stays where it is (drawn at the origin, its own corral); every squishy brought out is an EXTRA body (bodies.ts) at a
+//     mat spot: the render lane's stage.matLayout(n) when it offers one (a row on a wide frame, staggered rows on a portrait phone; the
+//     camera frames them all by itself), else a plain row, shifted so the play body's slot is the origin.
+//   * Without body-to-body contact in the physics the extra simulates at its own origin (its own corral) and is DRAWN at its spot (a
+//     render offset, stage.addBody position): the offsets keep them apart.
+//   * With contact (stage B2: the play body offers SoftBodyLike.collide) the extra is BUILT at its spot in the play body's world space
+//     (createBody(genome, { at }): boot.ts passes a whole-squishy piece, PieceOpts { frac: 1, chunk: false, at }) and drawn where it
+//     simulates; bodies.ts then has every such body call collide(others) once per frame before it steps, and their 'bump' events go to
+//     audio.bump and a light haptic (feedback.ts). A physics that offers collide but not the `at` placement (the body comes back at the
+//     origin) keeps the apart mode for that body: bodies stacked inside each other must never collide.
 //   * Fingers act on whichever body the press hits (game.ts picks the body; the gesture host then works in that body's space).
 //   * How many: by quality tier (low 3, med 4, high 5, the play body included) and by the measured frame cost: when the stage's frame
 //     time average is already over FRAME_BUSY_MS nothing more comes out ("The mat is busy enough right now").
@@ -42,7 +47,8 @@ export interface Mat {
 export interface MatDeps {
   bodies: BodyManager;
   stage: StageLike;
-  createBody(g: Genome): SoftBodyLike;
+  /** `at`: build the body standing at this world point (shared space; ignored by a physics that cannot place a body) */
+  createBody(g: Genome, opts?: { at?: V3 }): SoftBodyLike;
   gravity(): boolean;
   quality(): QualityTier;
   frameMs(): number;
@@ -74,6 +80,12 @@ export function createMat(d: MatDeps): Mat {
     return L.slice(1, n).map((p) => ({ x: p.x - o.x, y: p.y - o.y, z: p.z - o.z }));
   }
   const relayout = (): void => { d.bodies.placeExtras(offsets(d.bodies.extras.length + 1)); };
+  /** body-to-body contact exists (the physics offers collide on the play body) */
+  const contact = (): boolean => typeof d.bodies.body.collide === 'function';
+  /** the body stands at `at` (built in shared space), within a quarter of its radius */
+  const placedAt = (b: SoftBodyLike, at: V3): boolean => {
+    try { const c = b.center; return Math.hypot(c.x - at.x, c.z - at.z) < 0.25 * Math.max(0.05, b.restRadius); } catch { return false; }
+  };
 
   const mat: Mat = {
     get count() { return d.bodies.extras.length + 1; },
@@ -90,14 +102,19 @@ export function createMat(d: MatDeps): Mat {
     add(item) {
       const why = mat.refusal(item);
       if (why) return why;
-      let b: SoftBodyLike;
-      try { b = d.createBody(item.genome); } catch (e) { d.report(e); return 'failed'; }
-      try { b.gravity = d.gravity(); } catch { /* optional */ }
-      d.beforeChange();
       const n = d.bodies.extras.length + 2;
       const pos = offsets(n);
+      const spot = pos[n - 2];
+      // shared space when the physics has contact: the play body's world point of this spot (its slot is the origin)
+      const want = contact();
+      const at = want ? { x: spot.x, y: d.bodies.body.center.y, z: spot.z } : undefined;   // the centre of mass at the play body's height
+      let b: SoftBodyLike;
+      try { b = d.createBody(item.genome, at ? { at } : undefined); } catch (e) { d.report(e); return 'failed'; }
+      try { b.gravity = d.gravity(); } catch { /* optional */ }
+      const shared = !!at && typeof b.collide === 'function' && placedAt(b, at);
+      d.beforeChange();
       d.bodies.placeExtras(pos);
-      const id = d.bodies.addExtra(b, item.genome, { tier: item.tier, position: pos[n - 2], itemId: item.itemId });
+      const id = d.bodies.addExtra(b, item.genome, { tier: item.tier, position: spot, itemId: item.itemId, shared });
       if (id < 0) { relayout(); return 'failed'; }
       notify();
       return null;

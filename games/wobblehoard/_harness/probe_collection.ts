@@ -14,7 +14,7 @@ import type { SoftEvent, SoftEventKind } from '../src/contracts.ts';
 import { GENOME_VERSION, encodeGenome, genomeEquals, makeStarterGenome, newInstance } from '../src/core/genome.ts';
 import type { Genome, SquishyInstance } from '../src/core/genome.ts';
 import { mulberry32 } from '../src/core/rng.ts';
-import { addInteraction, createMeter, DAY_MS } from '../src/core/meter.ts';
+import { addInteraction, createMeter, DAY_MS, previewInteraction } from '../src/core/meter.ts';
 import type { Interaction, InteractionDetail, MeterState } from '../src/core/meter.ts';
 import { TASK_DEFS, TASKS_MAX_PER_WEEK, RESTOCK_POOL, weekKeyOf } from '../src/core/drops.ts';
 import { TIER_ODDS, TIER_COUNT } from '../src/core/rarity.ts';
@@ -383,30 +383,43 @@ section('C  COLLECTION.md section 11 (practice ledger)');
 
   // C07 meterfeed
   const out7: MappedTouch = createMappedTouch();
-  const map = (e: SoftEvent): string => (mapSoftEvent(e, out7) ? `${out7.kind}:${Number(out7.amount.toFixed(3))}` : '-');
+  // RE-SPECIFIED 2026-10-06 (owner, FUN.md 2.2: a stretch held out pays per second): a snap now also carries its hold (heldS = heldFor,
+  // clamped 0..10 s like a squeeze hold), shown after '@'; the table's other rows are unchanged
+  const map = (e: SoftEvent): string => (mapSoftEvent(e, out7) ? `${out7.kind}:${Number(out7.amount.toFixed(3))}${out7.kind === 'pull' ? '@' + Number(out7.heldS.toFixed(3)) : out7.heldS !== 0 ? '@!' : ''}` : '-');
   const table: Array<[SoftEvent, string]> = [
     [ev('poke', 0.3), 'poke:0'], [ev('release', 0.5, 0.39), '-'], [ev('release', 0.5, 0.4), 'squeeze:0.4'], [ev('release', 0.5, 2.5), 'squeeze:2.5'],
-    [ev('release', 0.5, 12), 'squeeze:10'], [ev('release', 0.5, NaN), '-'], [ev('release', 0.5, Infinity), '-'], [ev('snap', 0.2), 'pull:0.2'], [ev('snap', 0.35), 'pull:0.35'],
-    [ev('snap', 1.5), 'pull:1'], [ev('snap', -1), 'pull:0'], [ev('snap', NaN), '-'], [ev('press', 0.9, 1), '-'], [ev('land', 0.9), '-'], [ev('grab', 0.9), '-'],
+    [ev('release', 0.5, 12), 'squeeze:10'], [ev('release', 0.5, NaN), '-'], [ev('release', 0.5, Infinity), '-'], [ev('snap', 0.2), 'pull:0.2@0'], [ev('snap', 0.35), 'pull:0.35@0'],
+    [ev('snap', 1.5), 'pull:1@0'], [ev('snap', -1), 'pull:0@0'], [ev('snap', NaN), '-'], [ev('press', 0.9, 1), '-'], [ev('land', 0.9), '-'], [ev('grab', 0.9), '-'],
+    [ev('snap', 0.8, 2.5), 'pull:0.8@2.5'], [ev('snap', 0.8, 12), 'pull:0.8@10'], [ev('snap', 0.8, NaN), 'pull:0.8@0'], [ev('snap', 0.8, -3), 'pull:0.8@0'], [ev('snap', 0.8, Infinity), 'pull:0.8@0'],
   ];
   const got = table.map(([e]) => map(e));
-  check('C07', 'meterfeed maps SoftEvents as DESIGN 5.4 says (poke; release >= 0.4 s -> squeeze with the hold, capped 10 s; snap -> pull with the intensity, clamped 0..1; press, land, grab, short release, NaN -> nothing)',
+  check('C07', 'meterfeed maps SoftEvents as DESIGN 5.4 says (poke; release >= 0.4 s -> squeeze with the hold, capped 10 s; snap -> pull with the intensity, clamped 0..1, and its hold heldFor, clamped 0..10 s (not finite = 0); press, land, grab, short release, NaN -> nothing)',
     got.every((g, i) => g === table[i][1]), got.join(' '));
   const buf = createTouchBuffer(1000);
   const br = mulberry32(8);
   const pushed: number[] = [];
   let tt = T0;
-  for (let i = 0; i < 700; i++) { tt += br() < 0.1 ? -500 : Math.floor(br() * 900); const k = Math.floor(br() * 3); pushed.push(k); buf.push(k, br(), tt); }
+  const pushedHold: number[] = [];
+  for (let i = 0; i < 700; i++) { tt += br() < 0.1 ? -500 : Math.floor(br() * 900); const k = Math.floor(br() * 3); pushed.push(k); const h = br() * 12 - 1; pushedHold.push(k === 2 ? Math.min(10, Math.max(0, h)) : -1); buf.push(k, br(), tt, h); }
   const kindsOut: number[] = [];
-  let maxLen = 0, ordered = true, batches = 0;
+  let maxLen = 0, ordered = true, batches = 0, holdsOk = true, ints: Interaction[] = [];
+  const inter0 = buf.interactions();
   for (let b = buf.batch(); b; b = buf.batch()) {
     batches++; maxLen = Math.max(maxLen, b.length);
     if (b[0][2] !== 0) ordered = false;
-    for (let i = 0; i < b.length; i++) { kindsOut.push(b[i][0]); if (i && b[i][2] < b[i - 1][2]) ordered = false; if (!Number.isInteger(b[i][2])) ordered = false; }
+    for (let i = 0; i < b.length; i++) {
+      kindsOut.push(b[i][0]); if (i && b[i][2] < b[i - 1][2]) ordered = false; if (!Number.isInteger(b[i][2])) ordered = false;
+      const want = pushedHold[kindsOut.length - 1];
+      if (want < 0 ? b[i].length !== 3 : b[i].length !== 4 || b[i][3] !== want) holdsOk = false;   // a pull carries its clamped hold, nothing else does
+    }
     buf.consume(b.length);
   }
+  ints = inter0;
+  const holdsInter = ints.every((it, i) => (it.kind === 'pull' ? it.heldS === pushedHold[i] : it.heldS === undefined));
   check('C07', `the batch builder never exceeds ${MAX_EVENTS_PER_BATCH} touches, never reorders (dtMs from 0, whole ms, never decreasing, even when the clock steps back), loses none`,
     maxLen <= MAX_EVENTS_PER_BATCH && ordered && kindsOut.join() === pushed.join() && buf.size === 0, `${batches} batches, longest ${maxLen}`);
+  check('C07', 'a pull is reported with its hold as a 4th element [2, level, dtMs, heldS] (clamped 0..10 s), the other kinds as [kind, amount, dtMs]; the preview fold sees the same holds',
+    holdsOk && holdsInter && ints.length === 700);
   const ob = createTouchBuffer(10);
   for (let i = 0; i < 15; i++) ob.push(i % 3, 1, T0 + i * 1000);
   const dropped = ob.dropBefore(T0 + 12_000);
@@ -418,19 +431,86 @@ section('C  COLLECTION.md section 11 (practice ledger)');
   for (let s = 0; s < 60; s++) {
     const touches: Interaction[] = [];
     let t8 = T0 + s * 1e7;
-    for (let i = 0; i < 300; i++) { t8 += 200 + Math.floor(mr() * 3000); const k = Math.floor(mr() * 3); touches.push({ kind: (['poke', 'squeeze', 'pull'] as const)[k], amount: k === 1 ? mr() * 3 : mr(), tMs: t8 }); }
+    for (let i = 0; i < 300; i++) { t8 += 200 + Math.floor(mr() * 3000); const k = Math.floor(mr() * 3); touches.push({ kind: (['poke', 'squeeze', 'pull'] as const)[k], amount: k === 1 ? mr() * 3 : mr(), heldS: k === 2 ? mr() * 4 : undefined, tMs: t8 }); }
     const server = foldMeter(createMeter(), touches);
     const k = Math.floor(mr() * touches.length);
     const acked = foldMeter(createMeter(), touches.slice(0, k));
     if (JSON.stringify(foldMeter(acked, touches.slice(k))) !== JSON.stringify(server) || JSON.stringify(foldMeter(server, [])) !== JSON.stringify(server)) foldOk = false;
     const pv = createPreviewMeter();
-    for (const x of touches) pv.touch(x);
+    for (const x of touches) { if (pv.pending(x) !== addInteraction(pv.state, x).spGained) previewOk = false; pv.touch(x); }
     if (JSON.stringify(pv.state) !== JSON.stringify(server)) previewOk = false;
     pv.reconcile(JSON.parse(JSON.stringify(acked)), touches.slice(k));
     if (JSON.stringify(pv.state) !== JSON.stringify(server) || pv.optimisticCapsules !== 0) previewOk = false;
   }
   check('C08', 'for 60 random streams: fold(addInteraction, serverMeter, unacked) equals the server meter, and with nothing unacked it IS the server meter', foldOk);
-  check('C08', 'the preview meter equals the fold of its own touches, and after reconcile(serverMeter, unacked) the same state', previewOk);
+  check('C08', 'the preview meter equals the fold of its own touches (and pending(touch) equals what that touch then pays), and after reconcile(serverMeter, unacked) the same state', previewOk);
+
+  // C08 the pending preview (FUN.md 2.2): collection.previewTouch(kind, heldS, level) is what the touch in progress pays when it ends now
+  {
+    T = T0 + 20 * DAY_MS;
+    const mp = memoryStorage();
+    const cp = mk(mp, 81);
+    const pr = mulberry32(81);
+    const pt = cp.previewTouch!.bind(cp);
+    let changes = 0;
+    const off = cp.onChange(() => { changes++; });
+    const gain = (b: ReturnType<Collection['meter']>, a: ReturnType<Collection['meter']>): number => {
+      const dc = a.playCredits - b.playCredits;
+      return dc > 0 ? b.threshold - b.sp + a.sp + (dc - 1) * a.threshold : a.sp - b.sp;
+    };
+    let n = 0, mism = 0, worst = 0, paid = 0, zeroFull = 0, zeroShort = 0, zeroNoSnap = 0, pulls = 0, medley = 0, opened = 0, fulls = 0;
+    for (let i = 0; i < 900; i++) {
+      T += pr() < 0.5 ? 250 + Math.floor(pr() * 600) : 600 + Math.floor(pr() * 3500);
+      const k = Math.floor(pr() * 3);
+      const held = k === 0 ? 0 : pr() * 4.2;
+      const level = k === 2 ? (pr() < 0.1 ? pr() * 0.05 : pr()) : 0;
+      const kind = (['poke', 'squeeze', 'pull'] as const)[k];
+      const b0 = cp.meter();
+      const c0 = changes;
+      const p = pt(kind, held, level);
+      if (changes !== c0 || JSON.stringify(cp.meter()) !== JSON.stringify(b0)) { mism++; break; } // a preview changes nothing
+      if (k === 2 && level <= 0.05) { if (p === 0) zeroNoSnap++; else mism++; continue; } // the physics fires no snap: nothing to feed
+      cp.feed(k === 0 ? ev('poke') : k === 1 ? ev('release', 0.5, held) : ev('snap', level, held), T);
+      const a0 = cp.meter();
+      const g = gain(b0, a0);
+      if (Math.abs(g - p) > 1e-9) { mism++; worst = Math.max(worst, Math.abs(g - p)); }
+      n++; if (p > 0) paid++; if (k === 2 && p > 0) pulls++;
+      if (b0.tableFull) { fulls++; if (p === 0) zeroFull++; }
+      if (k === 1 && held < 0.4 && p === 0) zeroShort++;
+      if (p > 2.7) medley++;
+      if (a0.playCredits >= WH_QUEUE_MAX && pr() < 0.05) { while (cp.meter().playCredits > 0) { void cp.openCapsule(); opened++; } }
+    }
+    off();
+    check('C08', 'previewTouch(kind, heldS, level) equals what the touch then pays through feed (pending arc = banked SP), over 900 touches with capsules, medleys, a full table and short squeezes',
+      mism === 0 && n > 700 && paid > 500 && pulls > 100 && zeroFull > 5 && zeroFull === fulls && zeroShort > 5 && zeroNoSnap > 5 && medley > 5 && opened > 0,
+      `${n} fed, ${paid} paid, ${pulls} stretches, ${medley} with a medley, ${fulls} on a full table (all 0), ${zeroShort} short squeezes (0), ${zeroNoSnap} no-snap pulls (0), ${mism} mismatches (worst ${worst})`);
+    // allocations: a warmed-up per-frame call (two held fingers), measured like P09. The holds and levels come from a prepared list of
+    // numbers (a tagged array: the sentinel string keeps its elements boxed), so this counts previewTouch's own allocations; a caller that
+    // passes a freshly computed fraction boxes that argument itself, as any JS call does
+    const newUsedP = (): number => { for (const sp of v8.getHeapSpaceStatistics()) if (sp.space_name === 'new_space') return sp.space_used_size; return NaN; };
+    const accP = new Float64Array(1);
+    const HS: unknown[] = []; for (let i = 0; i < 256; i++) HS.push(0.4 + (i % 250) * 0.0123); HS.push('sentinel');
+    const LV: unknown[] = []; for (let i = 0; i < 256; i++) LV.push(0.3 + (i % 97) * 0.0071); LV.push('sentinel');
+    const frame = (nf: number): void => { let a = 0; for (let i = 0; i < nf; i++) { a += pt('pull', HS[i & 255] as number, LV[i & 255] as number); a += pt('squeeze', HS[(i + 7) & 255] as number, 0); } accP[0] += a; };
+    for (let w = 0; w < 100; w++) frame(1000);
+    const bw: number[] = []; for (let k = 0; k < 6; k++) { const u0 = newUsedP(); bw.push(newUsedP() - u0); }
+    let bestP = Infinity;
+    for (let w = 0; w < 8; w++) { const u0 = newUsedP(); frame(10000); const dd = newUsedP() - u0 - bw[5]; if (dd >= 0 && dd < bestP) bestP = dd; }
+    T += 5000;
+    check('C08', 'previewTouch allocates nothing: exact new-space growth over 20 000 calls (10 000 frames with a held stretch and a held squeeze)', bestP <= 64 && accP[0] > 0, `${bestP} B per 20 000 calls`);
+    const objForm = (pt as unknown as (q: unknown) => number)({ kind: 'pull', amount: 0.8, heldS: 2, level: 0.8, tMs: 123 });
+    const garbage = [pt('pull', NaN, NaN), pt('squeeze', -1, 0), pt('tap' as never, 1, 1), pt(undefined as never, 1, 1), (pt as unknown as (q: unknown) => number)(null), pt('pull', Infinity, 7)];
+    check('C08', 'previewTouch also takes one object { kind, heldS, level } (the shell\'s feature-detecting call), and answers garbage with a finite number, never throwing',
+      objForm === pt('pull', 2, 0.8) && objForm > 0 && garbage.every((v) => Number.isFinite(v) && v >= 0) && garbage[0] === 0 && garbage[2] === 0 && garbage[5] === pt('pull', 0, 1),
+      `object form ${objForm.toFixed(3)} SP; garbage ${garbage.map((v) => v.toFixed(2)).join(' ')}`);
+    // a stretch held out: the pending arc grows with the hold, then stops at the cap
+    const arc = [0.2, 0.6, 1, 2, 3, 4].map((h) => pt('pull', h, 0.9));
+    const sq = [0.3, 0.5, 1, 1.79, 1.8, 3, 5].map((h) => pt('squeeze', h, 0));
+    check('C08', 'the pending arc grows while held: a stretch from its base by 0.55 SP a second up to 3 s, a squeeze from 0.4 s by 0.45 a second with the soft pop at 1.8 s (x freshness), then flat',
+      arc.every((v, i) => i === 0 || v > arc[i - 1] || (i >= 5 && v === arc[i - 1])) && sq[0] === 0 && sq.slice(1, 6).every((v, i) => v > sq[i]) && sq[6] === sq[5] && sq[4] - sq[3] > 0.4 * sq[4] / 2.65,
+      `stretch ${arc.map((v) => v.toFixed(2)).join('/')}, squeeze ${sq.map((v) => v.toFixed(2)).join('/')}`);
+    cp.dispose();
+  }
 
   // C09 no outgoing message, and the guard the bridge will use
   const g = globalThis as Record<string, unknown>;

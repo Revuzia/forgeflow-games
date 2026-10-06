@@ -3,17 +3,21 @@
 //   mapSoftEvent(ev, out)        the DESIGN 5.4 mapping, allocation-free:
 //                                  poke                          -> poke
 //                                  release with heldFor >= 0.4 s -> squeeze, amount = heldFor (0..10 s)
-//                                  snap                          -> pull, amount = intensity (0..1); under 0.35 the meter pays the
-//                                                                   "never stretched" rate itself (pass the intensity as is)
+//                                  snap                          -> pull, amount = intensity (the pull level, 0..1), heldS = heldFor
+//                                                                   (0..10 s, the seconds the pull was held); the meter pays per
+//                                                                   second held, or under 0.35 the "never stretched" rate itself
+//                                                                   (pass the intensity as is)
 //                                  press, land, grab, a short release, any non-finite number -> not a touch
 //   createTouchBuffer(cap)       the in-memory play buffer of the (planned) sync engine: typed-array ring, allocation-free push,
-//                                batches of at most 120 [kind, amount, dtMs] with dtMs relative to the batch's first touch and
-//                                never decreasing. Touches are never written to storage (7.7).
+//                                batches of at most 120 [kind, amount, dtMs] (a pull carries its hold too: [2, level, dtMs, heldS])
+//                                with dtMs relative to the batch's first touch and never decreasing. Touches are never written to
+//                                storage (7.7).
 //   foldMeter / createPreviewMeter   the preview ring: the same addInteraction as the server, folded over the touches it has not
-//                                acknowledged yet (9.7: preview = fold(addInteraction, serverMeter, unacked)).
+//                                acknowledged yet (9.7: preview = fold(addInteraction, serverMeter, unacked)); pending(it) is what a
+//                                touch in progress would add (core previewInteraction), for the pending arc.
 import type { SoftEvent } from '../contracts.ts';
 import type { Interaction, MeterState, TouchKind } from '../core/meter.ts';
-import { addInteraction, createMeter, meterFill, sanitizeMeter } from '../core/meter.ts';
+import { addInteraction, createMeter, meterFill, previewInteraction, sanitizeMeter } from '../core/meter.ts';
 import { MAX_EVENTS_PER_BATCH, MAX_PULL_INTENSITY, MAX_SQUEEZE_SECONDS, RELEASE_SQUEEZE_MIN_S, TOUCH_BUFFER_CAP } from './constants.ts';
 
 export const KIND_POKE = 0;
@@ -22,27 +26,35 @@ export const KIND_PULL = 2;
 /** Touch kinds by wire index (the play report's 0..2). */
 export const TOUCH_KINDS_BY_INDEX: readonly TouchKind[] = ['poke', 'squeeze', 'pull'];
 
-/** A reusable touch record (the caller owns one and passes it to every mapSoftEvent call). */
-export interface MappedTouch { kind: TouchKind; kindIdx: number; amount: number }
-export const createMappedTouch = (): MappedTouch => ({ kind: 'poke', kindIdx: KIND_POKE, amount: 0 });
+/** A reusable touch record (the caller owns one and passes it to every mapSoftEvent call). `heldS` = a pull's hold in seconds (0 for a
+ *  poke or a squeeze, whose hold is `amount`). */
+export interface MappedTouch { kind: TouchKind; kindIdx: number; amount: number; heldS: number }
+export const createMappedTouch = (): MappedTouch => ({ kind: 'poke', kindIdx: KIND_POKE, amount: 0, heldS: 0 });
+
+/** A grab released at a pull level of this or less fires no 'snap' at all (softbody.ts grabRelease), so it is no touch: previewTouch says 0. */
+export const SNAP_MIN_LEVEL = 0.05;
+/** A pull's hold, seconds: the same 0..10 s clamp as a squeeze hold (COLLECTION 7.5); NaN, infinite, negative or missing = 0 (the pull
+ *  still pays its base, as core/meter.ts does with such a hold). */
+export const clampHold = (h: unknown): number => (typeof h === 'number' && h > 0 && h !== Infinity ? (h > MAX_SQUEEZE_SECONDS ? MAX_SQUEEZE_SECONDS : h) : 0);
 
 /** Map one SoftEvent to a touch (DESIGN 5.4). Writes into `out` and returns true, or returns false (not a touch). Allocation-free. */
 export function mapSoftEvent(ev: SoftEvent, out: MappedTouch): boolean {
   if (!ev) return false;
   switch (ev.kind) {
     case 'poke':
-      out.kind = 'poke'; out.kindIdx = KIND_POKE; out.amount = 0;
+      out.kind = 'poke'; out.kindIdx = KIND_POKE; out.amount = 0; out.heldS = 0;
       return true;
     case 'release': {
       const h = ev.heldFor;
       if (typeof h !== 'number' || !(h >= RELEASE_SQUEEZE_MIN_S) || h === Infinity) return false; // NaN and short holds fail the test
-      out.kind = 'squeeze'; out.kindIdx = KIND_SQUEEZE; out.amount = h > MAX_SQUEEZE_SECONDS ? MAX_SQUEEZE_SECONDS : h;
+      out.kind = 'squeeze'; out.kindIdx = KIND_SQUEEZE; out.amount = h > MAX_SQUEEZE_SECONDS ? MAX_SQUEEZE_SECONDS : h; out.heldS = 0;
       return true;
     }
     case 'snap': {
       const i = ev.intensity;
       if (typeof i !== 'number' || !Number.isFinite(i)) return false;
       out.kind = 'pull'; out.kindIdx = KIND_PULL; out.amount = i < 0 ? 0 : i > MAX_PULL_INTENSITY ? MAX_PULL_INTENSITY : i;
+      out.heldS = clampHold(ev.heldFor);
       return true;
     }
     default:
@@ -52,21 +64,23 @@ export function mapSoftEvent(ev: SoftEvent, out: MappedTouch): boolean {
 
 /* ───────────────────────────────────────────────── the play buffer and batch builder ───────────────────────────────────────────────── */
 
-/** One reported touch: [kind 0..2, amount, dtMs] (COLLECTION 7.5). */
-export type PlayEvent = [kind: 0 | 1 | 2, amount: number, dtMs: number];
+/** One reported touch: [kind 0..2, amount, dtMs], and a pull's hold in seconds as a 4th element (COLLECTION 7.5). */
+export type PlayEvent = [kind: 0 | 1 | 2, amount: number, dtMs: number, heldS?: number];
 
 export interface TouchBuffer {
   /** Touches held. */
   readonly size: number;
   /** Touches dropped because the buffer was full (the oldest go first). */
   readonly overflowed: number;
-  /** Append one touch. tMs (epoch ms) is clamped so it never goes below the previous touch. Allocation-free. */
-  push(kindIdx: number, amount: number, tMs: number): void;
+  /** Append one touch. tMs (epoch ms) is clamped so it never goes below the previous touch; heldS = a pull's hold (ignored for the
+   *  other kinds). Allocation-free. */
+  push(kindIdx: number, amount: number, tMs: number, heldS?: number): void;
   /** Drop every touch older than cutoffMs (outside the 5-minute bank they would not be paid). */
   dropBefore(cutoffMs: number): number;
   /**
    * The oldest touches as one batch (at most `max`, never more than 120): dtMs is relative to the first touch of the batch, rounded to
-   * whole ms, never decreasing. Nothing is removed: call consume(batch.length) when the server acknowledged it. null when empty.
+   * whole ms, never decreasing; a pull carries its hold as a 4th element. Nothing is removed: call consume(batch.length) when the server
+   * acknowledged it. null when empty.
    */
   batch(max?: number): PlayEvent[] | null;
   /** Epoch time of the oldest held touch (NaN when empty). */
@@ -83,6 +97,7 @@ export function createTouchBuffer(cap: number = TOUCH_BUFFER_CAP): TouchBuffer {
   const kinds = new Uint8Array(n);
   const amounts = new Float64Array(n);
   const times = new Float64Array(n);
+  const holds = new Float64Array(n);
   let head = 0; // index of the oldest
   let size = 0;
   let overflowed = 0;
@@ -91,7 +106,7 @@ export function createTouchBuffer(cap: number = TOUCH_BUFFER_CAP): TouchBuffer {
   return {
     get size() { return size; },
     get overflowed() { return overflowed; },
-    push(kindIdx, amount, tMs) {
+    push(kindIdx, amount, tMs, heldS) {
       if (kindIdx !== 0 && kindIdx !== 1 && kindIdx !== 2) return;
       let t = typeof tMs === 'number' && Number.isFinite(tMs) ? tMs : lastT;
       if (!Number.isFinite(t)) return;
@@ -102,6 +117,7 @@ export function createTouchBuffer(cap: number = TOUCH_BUFFER_CAP): TouchBuffer {
       kinds[i] = kindIdx;
       amounts[i] = typeof amount === 'number' && Number.isFinite(amount) ? amount : 0;
       times[i] = t;
+      holds[i] = kindIdx === KIND_PULL ? clampHold(heldS) : 0;
       size++;
     },
     dropBefore(cutoffMs) {
@@ -120,7 +136,7 @@ export function createTouchBuffer(cap: number = TOUCH_BUFFER_CAP): TouchBuffer {
         let dt = Math.round(times[i] - t0);
         if (dt < prev) dt = prev;
         prev = dt;
-        out.push([kinds[i] as 0 | 1 | 2, amounts[i], dt]);
+        out.push(kinds[i] === KIND_PULL ? [KIND_PULL, amounts[i], dt, holds[i]] : [kinds[i] as 0 | 1, amounts[i], dt]);
       }
       return out;
     },
@@ -132,7 +148,10 @@ export function createTouchBuffer(cap: number = TOUCH_BUFFER_CAP): TouchBuffer {
     },
     interactions() {
       const out: Interaction[] = [];
-      for (let k = 0; k < size; k++) { const i = at(k); out.push({ kind: TOUCH_KINDS_BY_INDEX[kinds[i]], amount: amounts[i], tMs: times[i] }); }
+      for (let k = 0; k < size; k++) {
+        const i = at(k);
+        out.push(kinds[i] === KIND_PULL ? { kind: 'pull', amount: amounts[i], heldS: holds[i], tMs: times[i] } : { kind: TOUCH_KINDS_BY_INDEX[kinds[i]], amount: amounts[i], tMs: times[i] });
+      }
       return out;
     },
     clear() { head = 0; size = 0; },
@@ -155,6 +174,8 @@ export interface PreviewMeter {
   readonly optimisticCapsules: number;
   /** One local touch. Returns the capsules it earned in the preview. */
   touch(it: Interaction): number;
+  /** What `it` would add if it ended now (core previewInteraction on the previewed meter): the pending arc of a held touch. Pure, allocation-free. */
+  pending(it: Interaction): number;
   /** A server reply: its meter, and the touches still unacknowledged (oldest first). */
   reconcile(serverMeter: unknown, unacked: readonly Interaction[]): void;
   fill(): number;
@@ -172,6 +193,7 @@ export function createPreviewMeter(initial?: unknown, nowMs?: number): PreviewMe
       optimistic += r.capsulesEarned;
       return r.capsulesEarned;
     },
+    pending(it) { return previewInteraction(state, it); },
     reconcile(serverMeter, unacked) {
       state = foldMeter(sanitizeMeter(serverMeter), unacked);
       optimistic = 0;

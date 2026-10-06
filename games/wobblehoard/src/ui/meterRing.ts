@@ -4,6 +4,10 @@
 //     table full, offline.
 //   * At a new capsule: ONE pulse (400 ms, ease-out, single, never repeating); none under Calm effects or reduced motion.
 //   * Capsule button: "Open a capsule (3 waiting)" for assistive tech, "Open" + the count on screen; the 3D capsule is never the only way.
+//   * Visible XP (FUN.md 2): the fill eases (0.4 s) a moment AFTER the touch, when its sparks land (hold(ms)); aria-valuenow follows at
+//     once. A lighter PENDING arc continues the fill while a squeeze or a stretch is held (setPending) and banks on release
+//     (bankPending(true): the fill grows over it, then it fades) or fades away if nothing was paid. glow(): the Calm-effects cue instead of
+//     sparks, a soft glow on the ring (a fade, never a pulse). A fill that wraps past a capsule runs to the top first, then starts again.
 import { COPY } from '../collection/copy.ts';
 import { h } from './dom.ts';
 
@@ -14,7 +18,21 @@ export interface MeterView {
 export interface MeterRing {
   readonly el: HTMLElement;
   readonly openButton: HTMLButtonElement;
+  /** the ring itself (where the sparks fly to) */
+  readonly ring: HTMLElement;
   set(m: MeterView): void;
+  /** keep the visible fill where it is for `ms` (sparks in flight); a set() meanwhile lands when they do */
+  hold(ms: number): void;
+  /** the pending gain of the touch being held, as a fraction of the ring (0 = none) */
+  setPending(frac: number): void;
+  /** the held touch ended: true = it paid (the arc banks), false = it fades away */
+  bankPending(paid: boolean): void;
+  /** the Calm-effects gain cue: a soft glow on the ring (no sparks); also the catch when sparks land */
+  glow(soft: boolean): void;
+  /** the fill as drawn now, 0..1 (the harness reads it) */
+  readonly shownFill: number;
+  /** the pending arc as drawn now, 0..1 of the ring */
+  readonly shownPending: number;
   pulse(calm: boolean): void;
   /** disable the button while a ceremony runs (the ring stays) */
   setBusy(busy: boolean): void;
@@ -50,6 +68,10 @@ export function createMeterRing(parent: HTMLElement, o: { onOpen(): void }): Met
   fill.setAttribute('stroke-dasharray', `${C.toFixed(2)} ${C.toFixed(2)}`);
   fill.setAttribute('stroke-dashoffset', C.toFixed(2));
   fill.setAttribute('transform', 'rotate(-90 28 28)');
+  // the pending arc (visible XP): drawn under the fill, from where the fill is drawn to fill + pending
+  const pend = mk('meter-pending');
+  pend.setAttribute('stroke-dasharray', `0 ${C.toFixed(2)}`);
+  pend.setAttribute('transform', 'rotate(-90 28 28)');
   // a neutral capsule glyph in the middle (two halves and a seam): the capsule never shows a tier
   const glyph = document.createElementNS(SVG_NS, 'path');
   glyph.setAttribute('d', 'M28 15c7 0 10.5 6 10.5 13S35 41 28 41s-10.5-6-10.5-13S21 15 28 15z');
@@ -57,7 +79,7 @@ export function createMeterRing(parent: HTMLElement, o: { onOpen(): void }): Met
   const seam = document.createElementNS(SVG_NS, 'path');
   seam.setAttribute('d', 'M17.6 28h20.8');
   seam.setAttribute('class', 'meter-seam');
-  svg.append(track, fill, glyph, seam);
+  svg.append(track, pend, fill, glyph, seam);
 
   const count = h('span', { class: 'meter-count', attrs: { 'aria-hidden': 'true' } });
   const meter = h('div', {
@@ -79,15 +101,85 @@ export function createMeterRing(parent: HTMLElement, o: { onOpen(): void }): Met
   let stateText = '';
   let pulseTimer = 0;
 
+  // ---- the drawn fill (visible XP): eased by CSS, landed when the sparks do ----
+  let drawn = 0;            // the fill as drawn (0..1)
+  let target = 0;           // the collection's fill
+  let targetCredits = 0;
+  let drawnCredits = -1;
+  let holdUntil = 0;
+  let applyTimer = 0, wrapTimer = 0, glowTimer = 0, bankTimer = 0;
+  let queued = false;
+  let pending = 0;          // the pending arc as drawn (fraction of the ring)
+  const nowMs = (): number => performance.now();
+  const drawFill = (f: number, instant = false): void => {
+    if (instant) fill.dataset.instant = 'true'; else delete fill.dataset.instant;
+    fill.setAttribute('stroke-dashoffset', (C * (1 - f)).toFixed(2));
+    if (instant) void fill.getBoundingClientRect();   // commit the jump before the transition comes back
+    drawn = f;
+    if (pending > 0) drawPending(pending);
+  };
+  const drawPending = (p: number): void => {
+    const len = Math.max(0, Math.min(p, 1 - drawn));
+    pend.setAttribute('stroke-dasharray', `${(len * C).toFixed(2)} ${C.toFixed(2)}`);
+    pend.setAttribute('stroke-dashoffset', (-drawn * C).toFixed(2));
+  };
+  const apply = (): void => {
+    applyTimer = 0;
+    const wait = holdUntil - nowMs();
+    if (wait > 1) { applyTimer = window.setTimeout(apply, wait); return; }
+    const wrapped = drawnCredits >= 0 && targetCredits > drawnCredits && target < drawn;
+    drawnCredits = targetCredits;
+    if (wrapped && !document.body.matches('[data-calm="true"]')) {
+      // a capsule was earned on the way: run to the top, then start again from empty
+      clearTimeout(wrapTimer);
+      drawFill(1);
+      wrapTimer = window.setTimeout(() => { drawFill(0, true); drawFill(target); }, 380);
+      return;
+    }
+    clearTimeout(wrapTimer);
+    drawFill(target, wrapped);
+  };
+  const schedule = (): void => {
+    if (queued) return;
+    queued = true;
+    // a microtask: the gain cue of the same touch (emitted right after the feed that changed the meter) can still ask for a hold
+    queueMicrotask(() => { queued = false; if (!applyTimer) apply(); });
+  };
+
   return {
-    el, openButton,
+    el, openButton, ring: meter,
+    get shownFill() { return drawn; },
+    get shownPending() { return pending > 0 ? Math.max(0, Math.min(pending, 1 - drawn)) : 0; },
+    hold(ms) { holdUntil = Math.max(holdUntil, nowMs() + Math.max(0, ms)); },
+    setPending(p) {
+      const v = Math.max(0, Math.min(1, p));
+      clearTimeout(bankTimer);
+      meter.dataset.pending = v > 0 ? 'true' : 'false';
+      delete meter.dataset.bank;
+      pending = v;
+      drawPending(v);
+    },
+    bankPending(paid) {
+      if (pending <= 0) return;
+      meter.dataset.bank = paid ? 'paid' : 'none';
+      clearTimeout(bankTimer);
+      // paid: the fill grows over the arc (it lands with the sparks), then what is left fades; unpaid: it fades now
+      bankTimer = window.setTimeout(() => { pending = 0; pend.setAttribute('stroke-dasharray', `0 ${C.toFixed(2)}`); meter.dataset.pending = 'false'; delete meter.dataset.bank; }, paid ? 900 : 320);
+    },
+    glow(soft) {
+      meter.dataset.glow = soft ? 'soft' : 'catch';
+      clearTimeout(glowTimer);
+      glowTimer = window.setTimeout(() => { delete meter.dataset.glow; }, soft ? 900 : 320);
+    },
     set(m) {
       const pct = Math.round(Math.min(1, Math.max(0, m.fill)) * 100);
+      target = Math.min(1, Math.max(0, m.fill));
+      targetCredits = m.credits;
       if (pct !== shown) {
         shown = pct;
-        fill.setAttribute('stroke-dashoffset', (C * (1 - pct / 100)).toFixed(2));
         meter.setAttribute('aria-valuenow', String(pct));
       }
+      if (Math.abs(target - drawn) > 1e-4 || drawnCredits !== targetCredits) schedule();
       credits = m.credits;
       stateText = stateLine(m);
       meter.setAttribute('aria-valuetext', `${pct}%${credits > 0 ? `, ${credits} capsule${credits === 1 ? '' : 's'} waiting` : ', toward the next capsule'}${stateText ? `. ${stateText}` : ''}`);
@@ -117,6 +209,6 @@ export function createMeterRing(parent: HTMLElement, o: { onOpen(): void }): Met
     },
     setBusy(b) { busy = b; openButton.disabled = b || credits <= 0; },
     get stateText() { return stateText; },
-    destroy() { clearTimeout(pulseTimer); el.remove(); },
+    destroy() { clearTimeout(pulseTimer); clearTimeout(applyTimer); clearTimeout(wrapTimer); clearTimeout(glowTimer); clearTimeout(bankTimer); el.remove(); },
   };
 }

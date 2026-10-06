@@ -360,6 +360,22 @@ export interface StageLike {
   dropCapsule?(opts?: { onLand?: () => void; at?: V3 }): CapsuleHandle;
   playCapsuleReveal?(spec: CapsuleRevealSpec, hooks?: CeremonyHooks): CeremonyHandle;
   playMergeCeremony?(spec: MergeCeremonySpec, hooks?: CeremonyHooks): CeremonyHandle;
+
+  /* ── stage B and CUT, render lane (RENDER-3, 2026-10-06; optional and additive; src/render/stage.ts implements every one) ── */
+  /** Stage B1: render offsets (`AddBodyOpts.position`) for n (1..5) squishies out on the mat at once, spaced for the current frame (rows
+   *  on a wide frame, staggered rows on a portrait phone). With 2 or more bodies visible the camera frames them all by itself. */
+  matLayout?(n: number): V3[];
+  /** CSS px at each canvas edge that the shell's HUD covers (default { top: 0, right: 0, bottom: 72, left: 0 }); missing or non-finite
+   *  fields keep their value. The meter-full capsule lands clear of them, and of every body, at any aspect. */
+  setSafeInsets?(insets: { top?: number; right?: number; bottom?: number; left?: number }): void;
+  /** Stage B6: the tack-strand hook for the shell's strand voice. Called every frame a strand stretches (snap false: call
+   *  `audio.strand({ tension })`) and once when it snaps (snap true: `audio.strand({ tension: 0, snap: true })`). Also fires for the
+   *  CUT parting strand (finger 0). (x, y, z) = where it is, world space. null = no hook. */
+  onStrand?: ((bodyId: number, e: { finger: 0 | 1; tension: number; snap: boolean; x: number; y: number; z: number }) => void) | null;
+  /** CUT (optional): the two pieces of a cut have just been added (right after the swap at neck t = 1): a strand of the same jelly
+   *  stretches between them as they separate and snaps (long for sticky stretch and slime, barely there for gel; shorter in calm),
+   *  render-owned from here; `onStrand` reports it with bodyId = aId. Unknown ids are ignored. */
+  partPieces?(aId: number, bId: number): void;
 }
 
 /* ───────────────────────────── shell (src/main.ts, input, ui) ───────────────────────────── */

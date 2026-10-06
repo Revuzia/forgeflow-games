@@ -7,6 +7,7 @@ import * as D from '/src/audio/dsp.ts';
 import * as C from '/src/audio/ceremony.ts';
 import * as M from '/src/audio/music.ts';
 import * as I3 from '/src/audio/interact.ts';
+import * as CT from '/src/audio/cut.ts';
 import { runEngineTests } from './engine_tests.js';
 import { runEngineTests3 } from './engine_tests3.js';
 import { runEngineOffline } from './engine_offline.js';
@@ -158,6 +159,18 @@ async function renderVoice(spec) {
       endOverride = end;
       break;
     }
+    // CUT (cut.ts): the slice, the separation pop, the rejoin (params: frac, family, neckS, calm, all, level)
+    case 'cutSlice': voice = CT.cutSlice(ctx, out, t0, base); break;
+    case 'cutPop': voice = CT.cutPop(ctx, out, t0, base); break;
+    case 'rejoin': voice = CT.rejoin(ctx, out, t0, base); break;
+    case 'cutSeq': {
+      // a whole cut as the shell plays it: the slice at t0, the separation pop when the neck parts (t0 + neckS)
+      const sl = CT.cutSlice(ctx, out, t0, base);
+      const pp = CT.cutPop(ctx, out, t0 + CT.neckLen(base.neckS), { ...base, rng: D.makeRng((spec.seed ?? 1) + 101) });
+      voice = sl;
+      endOverride = Math.max(sl.endTime, pp.endTime);
+      break;
+    }
     case 'meterFull': voice = C.meterFull(ctx, out, t0, base); break;
     case 'grab': voice = C.grab(ctx, out, t0, base); break;
     case 'crack': voice = C.crack(ctx, out, t0, base); break;
@@ -182,7 +195,7 @@ async function renderVoice(spec) {
   if (spec.waitEnded) await new Promise((r) => setTimeout(r, 80));   // let the 'ended' events of the render arrive
   const chans = [];
   for (let c = 0; c < buf.numberOfChannels; c++) chans.push(b64(buf.getChannelData(c)));
-  return { sr, n: buf.length, channels: chans, t0, endTime: endOverride ?? voice.endTime, script: script && { events: script.events, endAt: script.endAt, marks: script.marks }, counters: { ...D.nodeCounters }, alive: voice.alive, voiceEnd: voice.endTime };
+  return { sr, n: buf.length, channels: chans, t0, endTime: endOverride ?? voice.endTime, script: script && { events: script.events, endAt: script.endAt, marks: script.marks }, counters: { ...D.nodeCounters }, alive: voice.alive, voiceEnd: voice.endTime, onset: voice.onset ?? 0, bubbles: voice.bubbles };
 }
 
 /** Full ceremonies, scheduled exactly as the time map at the top of ceremony.ts says. spec: { kind: 'capsule'|'merge', tier, calm, tierUp, isNew, mythicVariant, seed, secs } */
@@ -283,7 +296,7 @@ async function renderMusic(spec) {
     plan(secs + 1);
     for (const q of (spec.rooms ?? []).slice().sort((a, b) => a.from - b.from)) {
       const s = sessions.find((x) => x.bed && x.start <= q.from && (x.stop ?? Infinity) > q.from);
-      if (s) s.bed.makeRoom(q.from, q.until, q.db);
+      if (s) s.bed.makeRoom(q.from, q.until, q.db, q.gainDb === undefined ? {} : { gainDb: q.gainDb });
     }
   }
   const buf = await ctx.startRendering();
@@ -364,7 +377,7 @@ async function renderMix(spec) {
   let nRooms = 0;
   if (bed) {
     asks.sort((a, b) => a.t - b.t);
-    const ask = (r) => { if (r) { bed.makeRoom(r.from, r.until, r.db, { at: r.at, atk: r.atk }); nRooms++; } };
+    const ask = (r) => { if (r) { bed.makeRoom(r.from, r.until, r.db, { at: r.at, atk: r.atk, gainDb: r.gainDb }); nRooms++; } };
     for (const q of asks) {
       if (q.req) { ask(q.req(q.t)); continue; }
       // the engine's call time: a fast effect onto music that is up was called ROOM_CLEAR_S earlier (engine.ts accept)
@@ -468,13 +481,19 @@ async function simulateMusic(spec) {
   };
 }
 
+/** The pure cut limiter (cut.ts CutLimiter), driven with synthetic times: [{ t, kind }] -> [{ t, kind, out }] (null = skipped). */
+function cutLimiterRun(calls) {
+  const L = new CT.CutLimiter();
+  return { out: calls.map((c) => ({ t: c.t, kind: c.kind, out: L.admit(c.kind, c.t) })), throttled: L.throttled };
+}
+
 /** The pure bump limiter, driven with synthetic times: [{ t, intensity }] -> [{ t, out }] (out null = skipped). */
 function bumpLimiterRun(calls) {
   const L = new I3.BumpLimiter();
   return { out: calls.map((c) => ({ t: c.t, in: c.intensity, out: L.admit(c.intensity, c.t) })), throttled: L.throttled };
 }
 
-window.AV = { ready: true, SR, renderVoice, renderCeremony, renderDuck, runEngineTests, runEngineTests3, runEngineOffline, renderMusic, renderMix, renderMusicBubbles, simulateMusic, composeOnly, bumpLimiterRun, strandAmRange, consts: {
+window.AV = { ready: true, SR, renderVoice, renderCeremony, renderDuck, runEngineTests, runEngineTests3, runEngineOffline, renderMusic, renderMix, renderMusicBubbles, simulateMusic, composeOnly, bumpLimiterRun, cutLimiterRun, strandAmRange, consts: {
   TIERS: C.TIERS, CAPSULE_BUDGET_S: C.CAPSULE_BUDGET_S, MERGE_BUDGET_S: C.MERGE_BUDGET_S, PRE_ROLL_S: C.PRE_ROLL_S, REVEAL_DEFAULT_S: C.REVEAL_DEFAULT_S,
   MERGE_CHARGE_S: C.MERGE_CHARGE_S, MERGE_BURST_S: C.MERGE_BURST_S, BURST_GAP_S: C.BURST_GAP_S, CALM_SCALE: C.CALM_SCALE, MYTHIC_MOTIFS: C.MYTHIC_MOTIFS,
 }, musicConsts: {
@@ -486,7 +505,8 @@ window.AV = { ready: true, SR, renderVoice, renderCeremony, renderDuck, runEngin
   SQUISH_ROOM_RATE: M.SQUISH_ROOM_RATE, SQUISH_ROOM_MIN_RATE: M.SQUISH_ROOM_MIN_RATE, STRAND_ROOM_T: M.STRAND_ROOM_T, STRAND_ROOM_MIN_T: M.STRAND_ROOM_MIN_T,
   FIELDS: M.FIELDS, FIELD_NEXT: M.FIELD_NEXT, FIELD_BARS: M.FIELD_BARS,
 }, limiterConsts: { MIN_INTENSITY: I3.BumpLimiter.MIN_INTENSITY, MIN_GAP_S: I3.BumpLimiter.MIN_GAP_S, CAPACITY: I3.BumpLimiter.CAPACITY, REFILL_PER_S: I3.BumpLimiter.REFILL_PER_S, RECENT_S: I3.BumpLimiter.RECENT_S },
-  strandConsts: { SILENCE_S: I3.STRAND_SILENCE_S, STOP_S: I3.STRAND_STOP_S } };
+  strandConsts: { SILENCE_S: I3.STRAND_SILENCE_S, STOP_S: I3.STRAND_STOP_S },
+  cutConsts: { FLAVOURS: CT.CUT_FLAVOURS, FAMILY_FLAVOUR: CT.FAMILY_FLAVOUR, REJOIN_RUN: CT.REJOIN_RUN, CALM_DB: CT.CUT_CALM_DB, SLICE: CT.CutLimiter.SLICE, POP: CT.CutLimiter.POP, REJOIN: CT.CutLimiter.REJOIN, ALL_GAP_S: CT.CutLimiter.ALL_GAP_S } };
 window.AV.noteOnsets = (tier, durationS, calm, burst) => { const ti = C.tierIdx(tier); const lay = C.layout(ti, durationS, !!calm, !!burst); return { lay, onsets: C.noteOnsets(ti, lay) }; };
 
 /* ───────────── human-facing sound lab (live engine) ───────────── */
@@ -524,6 +544,22 @@ for (const b of document.querySelectorAll('button[data-r]')) {
   const up = () => { if (!held) return; held = false; audio.strand({ tension: Math.min(1, (performance.now() - t0) / 1200), snap: true, pitch: state.pitch }); };
   el.addEventListener('pointerup', up);
   el.addEventListener('pointercancel', up);
+}
+{
+  // cut and reconnect: a cut is the slice ('start') and, when the neck parts, the separation pop ('separate')
+  const cv = () => ({ family: $('cutFam').value, frac: +$('frac').value, neckS: +$('neck').value, calm: $('cutCalm').checked });
+  const upd = () => { $('fracV').textContent = (+$('frac').value).toFixed(2); $('neckV').textContent = (+$('neck').value).toFixed(2); };
+  for (const id of ['frac', 'neck']) $(id).addEventListener('input', upd);
+  for (const b of document.querySelectorAll('button[data-x]')) {
+    b.addEventListener('pointerdown', async () => {
+      await unlock();
+      const p = cv(), v = b.dataset.x;
+      if (v === 'cut') { audio.cut({ phase: 'start', ...p }); setTimeout(() => audio.cut({ phase: 'separate', ...p }), p.neckS * 1000); }
+      else if (v === 'sep') audio.cut({ phase: 'separate', ...p });
+      else if (v === 'rejoin') audio.rejoin({ frac: p.frac, calm: p.calm });
+      else audio.rejoin({ frac: 1, all: true, calm: p.calm });
+    });
+  }
 }
 $('unlock').addEventListener('click', unlock);
 for (const b of document.querySelectorAll('button[data-v]')) {

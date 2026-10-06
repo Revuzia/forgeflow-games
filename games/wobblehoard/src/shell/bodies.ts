@@ -7,6 +7,8 @@
 //     primary), so adopt does NOT call stage.setBody (render handover, STAGE_API_FOR_SHELL 9).
 //   * Both run the same beforeSwap / afterSwap hooks (release fingers, end voices, clear the event ring; apply gravity, fire listeners).
 //   * step(dt) steps the play body and every extra body the shell added (the stage steps only the bodies it created itself). No allocation.
+//     With body-to-body contact (stage B2, SoftBodyLike.collide, feature-detected), every body in shared space first calls
+//     collide(others) once, before any of them steps.
 import type { SoftBodyLike, StageLike, TierName, V3 } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { getSpecies, tierOf } from '../data/catalog.ts';
@@ -21,9 +23,13 @@ export interface PlayIdentity {
   nickname: string | null;
 }
 
-/** A shell-owned body on the play mat beside the play body (stage B1). It simulates at its own origin (its own corral) and is DRAWN at
- *  `position` (AddBodyOpts.position); the play body is always drawn at the origin. `id` is the stage's view id (it changes on a re-add). */
-export interface ExtraBody { id: number; body: SoftBodyLike; genome: Genome; tier: TierName; itemId: string | null; position: V3 }
+/** A shell-owned body on the play mat beside the play body (stage B1). Two ways to stand on the mat:
+ *    * apart (no body-to-body contact in the physics): it simulates at its own origin (its own corral) and is DRAWN at `position`
+ *      (AddBodyOpts.position); the play body is always drawn at the origin;
+ *    * `shared` (stage B2, the physics offers `collide`): it was built AT its mat spot in the play body's world space, is drawn where it
+ *      simulates (`position` is the origin) and pushes against the other shared bodies through `collide`.
+ *  `id` is the stage's view id (it changes on a re-add). */
+export interface ExtraBody { id: number; body: SoftBodyLike; genome: Genome; tier: TierName; itemId: string | null; position: V3; shared: boolean }
 
 export interface BodyManager {
   readonly body: SoftBodyLike;
@@ -35,11 +41,16 @@ export interface BodyManager {
   swapTo(genome: Genome, opts?: { itemId?: string | null; nickname?: string | null; body?: SoftBodyLike }): boolean;
   /** Adopt a body the STAGE already shows as its primary (a ceremony result). Never calls stage.setBody. */
   adopt(body: SoftBodyLike, genome: Genome, opts?: { itemId?: string | null; nickname?: string | null; tier?: TierName }): void;
-  /** Stage B seam: another shell-owned body on the mat (stage.addBody). Returns the stage id, or -1 when the stage cannot. */
-  addExtra(body: SoftBodyLike, genome: Genome, opts?: { tier?: TierName; position?: V3; itemId?: string | null }): number;
+  /** Stage B seam: another shell-owned body on the mat (stage.addBody). Returns the stage id, or -1 when the stage cannot.
+   *  `shared`: the body lives in the play body's world space (built at its spot) and takes part in body-to-body contact. */
+  addExtra(body: SoftBodyLike, genome: Genome, opts?: { tier?: TierName; position?: V3; itemId?: string | null; shared?: boolean }): number;
   removeExtra(id: number): void;
-  /** Move the extras to new render offsets (in order): their views are re-added there; the physics bodies are kept. */
+  /** Move the extras that stand APART to new render offsets (in order; shared ones keep their place): their views are re-added there;
+   *  the physics bodies are kept. */
   placeExtras(positions: readonly V3[]): void;
+  /** bodies that push against each other every step (body.collide; 0 when fewer than two can) */
+  readonly contactBodies: number;
+  /** One sim step: body.collide(others) for every body in contact (stage B2, before any step), then step the play body and the extras. */
   step(dt: number): void;
 }
 
@@ -69,6 +80,14 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
   let body = d.initial.body;
   let identity = d.initial.identity;
   const extras: ExtraBody[] = [];
+  // stage B2: who collides with whom, rebuilt when the mat or the play body changes (so a step allocates nothing)
+  let contacts: Array<{ b: SoftBodyLike; others: SoftBodyLike[] }> = [];
+  const rebuildContacts = (): void => {
+    const all: SoftBodyLike[] = [];
+    if (typeof body.collide === 'function') all.push(body);
+    for (const x of extras) if (x.shared && typeof x.body.collide === 'function') all.push(x.body);
+    contacts = all.length >= 2 ? all.map((b) => ({ b, others: all.filter((o) => o !== b) })) : [];
+  };
 
   /** viaStage: hand the body to the stage first (setBody may throw: then the play body is unchanged and the error propagates). */
   /** (re)show one extra's view at its position; false when the stage cannot */
@@ -82,6 +101,7 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
     body = b;
     identity = id;
     if (viaStage) { styleTier(d.stage, id.tier); for (const x of extras) showExtra(x); }   // ... so they come straight back
+    rebuildContacts();
     try { d.afterSwap(identity, body); } catch (e) { d.report(e); }
   };
 
@@ -101,28 +121,33 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
       commit(b, { genome, tier: opts.tier ?? tierOfGenome(genome), itemId: opts.itemId ?? null, nickname: opts.nickname ?? null }, false);
     },
     addExtra(b, genome, opts = {}) {
-      const p = opts.position ?? { x: 0, y: 0, z: 0 };
-      const x: ExtraBody = { id: -1, body: b, genome, tier: opts.tier ?? tierOfGenome(genome), itemId: opts.itemId ?? null, position: { x: p.x, y: p.y, z: p.z } };
+      const shared = !!opts.shared;
+      const p = shared ? { x: 0, y: 0, z: 0 } : opts.position ?? { x: 0, y: 0, z: 0 };
+      const x: ExtraBody = { id: -1, body: b, genome, tier: opts.tier ?? tierOfGenome(genome), itemId: opts.itemId ?? null, position: { x: p.x, y: p.y, z: p.z }, shared };
       if (!showExtra(x)) return -1;
       extras.push(x);
+      rebuildContacts();
       return x.id;
     },
     removeExtra(id) {
       const i = extras.findIndex((x) => x.id === id);
       if (i < 0) return;
       extras.splice(i, 1);
+      rebuildContacts();
       try { d.stage.removeBody?.(id); } catch (e) { d.report(e); }
     },
     placeExtras(positions) {
       for (let i = 0; i < extras.length; i++) {
         const x = extras[i], p = positions[i];
-        if (!p || (p.x === x.position.x && p.y === x.position.y && p.z === x.position.z)) continue;
+        if (x.shared || !p || (p.x === x.position.x && p.y === x.position.y && p.z === x.position.z)) continue;
         try { d.stage.removeBody?.(x.id); } catch (e) { d.report(e); }
         x.position = { x: p.x, y: p.y, z: p.z };
         showExtra(x);
       }
     },
+    get contactBodies() { return contacts.length; },
     step(dt) {
+      for (let i = 0; i < contacts.length; i++) { const c = contacts[i]; try { c.b.collide!(c.others); } catch (e) { d.report(e); } }
       body.step(dt);
       for (let i = 0; i < extras.length; i++) extras[i].body.step(dt);
     },

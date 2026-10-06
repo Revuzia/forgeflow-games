@@ -55,6 +55,10 @@ import type { PlayHistory } from './playHistory.ts';
 import { createPlayHistory } from './playHistory.ts';
 import type { SettingsController } from './settingsCtl.ts';
 import { createSettingsController } from './settingsCtl.ts';
+import type { MeterView } from '../collection/types.ts';
+import { projectToNdc } from '../input/camera.ts';
+import type { Gain, GainKind, Pending } from './xp.ts';
+import { createPending, gainOf } from './xp.ts';
 
 export type Phase = 'boot' | 'title' | 'play' | 'error';
 /** Why the sim and the audio are paused: the tab is hidden, the GL context is lost, a full-screen panel covers the stage. */
@@ -94,7 +98,9 @@ export interface InputPort {
 }
 
 export interface GameDeps {
-  createBody(genome: Genome): SoftBodyLike;
+  /** `opts.at` (the play mat with body-to-body contact): build the squishy standing at this world point. A physics that cannot place a
+   *  body ignores it (the mat then keeps that body apart: mat.ts). */
+  createBody(genome: Genome, opts?: { at?: V3 }): SoftBodyLike;
   createStage(canvas: HTMLCanvasElement): StageLike;
   createAudio(): SquishAudio;
   /** handed to createStage; node tests omit it */
@@ -134,6 +140,8 @@ export interface ShellEvents {
   paused: (reasons: readonly PauseReason[]) => void;
   /** a polite status line from the collection (table full, resting, done for today, a save problem) */
   notice: (text: string) => void;
+  /** visible XP (FUN.md 2): a touch paid squish points (where it was on the canvas, CSS px): the sparks or the calm glow */
+  gain: (g: Gain) => void;
 }
 
 /** What the HUD shows: the catalog species name (audit finding 19), the tier, and a nickname only when the item has one. */
@@ -169,6 +177,10 @@ export interface Game {
   readonly capsules: Capsules;
   /** stage B1: squishies brought out of the Hoard onto the mat beside the play body */
   readonly mat: Mat;
+  /** visible XP (FUN.md 2): the pending gain of the squeeze or stretch being held, as a fraction of the ring (0 = none). Cheap; call per step. */
+  pendingFill(): number;
+  /** where the pending figure comes from: the collection's own preview, or the published pay constants (until ECON's preview lands) */
+  readonly pendingSource: 'collection' | 'constants';
   /** the play squishy that survives reloads, and the recently played ones (the HUD quick switcher) */
   readonly history: PlayHistory;
   /**
@@ -246,7 +258,7 @@ export function createGame(deps: GameDeps): Game {
   // listener lists are arrays, copied on write: emitting iterates a stable snapshot without allocating one
   const L: { [K in keyof ShellEvents]: Array<ShellEvents[K]> } = {
     interaction: [], settings: [], identity: [], mute: [], phase: [], meter: [],
-    capsuleReady: [], message: [], ceremony: [], paused: [], notice: [],
+    capsuleReady: [], message: [], ceremony: [], paused: [], notice: [], gain: [],
   };
   const emit = <K extends keyof ShellEvents>(k: K, ...a: Parameters<ShellEvents[K]>): void => {
     const fs = L[k];
@@ -392,6 +404,32 @@ export function createGame(deps: GameDeps): Game {
   }
   const offEvents = collection.onEvent((e) => { if (e.type === 'notice') emit('notice', e.text); else if (e.type === 'external') capsules.sync(); });
 
+  // ---- visible XP (FUN.md 2, xp.ts): the meter view cached (refreshed on change, so the per-step pending read allocates nothing)
+  let meterView: MeterView | null = null;
+  const readMeter = (): void => { try { meterView = hoard.meter(); } catch (e) { report(e); meterView = null; } };
+  readMeter();
+  const offMeterView = hoard.onChange(readMeter);
+  const pending: Pending = createPending({
+    collection: hoard,
+    heldFor: (f) => driver.touch.heldFor(f),
+    pullFor: (f) => driver.touch.pullFor(f),
+    pullLevel: (f) => driver.touch.pull(f),
+  });
+  const GAIN_KIND: Partial<Record<SoftEvent['kind'], GainKind>> = { poke: 'poke', release: 'squeeze', snap: 'pull' };
+  /** a fed touch paid: where it was on the canvas (the event's point, drawn at `off`) */
+  function emitGain(ev: SoftEvent, kind: GainKind, sp: number, off: V3): void {
+    pending.paid(kind, epochNow());
+    let x: number | null = null, y: number | null = null;
+    try {
+      const cam = stage.camera;
+      if (cam) {
+        const n = projectToNdc(cam, { x: ev.at.x + off.x, y: ev.at.y + off.y, z: ev.at.z + off.z });
+        if (n && Math.abs(n.x) <= 1.2 && Math.abs(n.y) <= 1.2) { x = (n.x + 1) * 0.5 * viewport.w; y = (1 - n.y) * 0.5 * viewport.h; }
+      }
+    } catch { /* a mock camera */ }
+    emit('gain', { kind, sp, x, y });
+  }
+
   // ---------------------------------------------------------------- release / lifecycle
   function releaseEverything(): void {
     try { gestures.cancelAll(clock.now()); } catch (e) { report(e); }
@@ -420,7 +458,7 @@ export function createGame(deps: GameDeps): Game {
   // ---------------------------------------------------------------- the simulation step (shared by the rAF loop and DebugHook.step)
   /** drain one body's events. Positions stay in that body's own space (the host maps the ACTIVE body's to the screen; a land on another
    *  mat body pans as if it were the active one: close enough for a thud). Every body's touches feed the meter. */
-  function drainBody(b: SoftBodyLike): void {
+  function drainBody(b: SoftBodyLike, off: V3): void {
     evBuf.length = 0;
     b.drainEvents(evBuf);
     for (let i = 0; i < evBuf.length; i++) {
@@ -430,13 +468,21 @@ export function createGame(deps: GameDeps): Game {
       r.intensity = ev.intensity; r.heldFor = ev.heldFor; r.finger = ev.finger;
       ringHead = (ringHead + 1) % RING; if (ringCount < RING) ringCount++;
       feedback.handle(ev);
+      // visible XP: a touch kind is read before and after the feed (only these events: the meter view allocates)
+      const kind = GAIN_KIND[ev.kind];
+      const before = kind && L.gain.length ? meterView : null;
       try { collection.feed(ev, epochNow()); } catch (e) { report(e); }
+      if (before && kind) {
+        readMeter();
+        const sp = meterView ? gainOf(before, meterView) : 0;
+        if (sp > 1e-6) emitGain(ev, kind, sp, off);
+      }
     }
   }
   function drain(): void {
-    drainBody(bodies.body);
+    drainBody(bodies.body, ORIGIN);
     const xs = bodies.extras;
-    for (let i = 0; i < xs.length; i++) drainBody(xs[i].body);
+    for (let i = 0; i < xs.length; i++) drainBody(xs[i].body, xs[i].position);
     feedback.sweep();
   }
 
@@ -603,6 +649,8 @@ export function createGame(deps: GameDeps): Game {
     get hoard() { return hoard; },
     get capsules() { return capsules; },
     get mat() { return mat; },
+    pendingFill: () => (phase === 'play' && reasons.size === 0 ? pending.fill(meterView, epochNow()) : 0),
+    get pendingSource() { return pending.source; },
     get ceremonies() { return ceremonies; },
     get clock() { return clock; },
     get simTime() { return simTime; },
@@ -692,7 +740,7 @@ export function createGame(deps: GameDeps): Game {
       loop.stop();
       try { ceremonies.abort(); } catch (e) { report(e); }
       releaseEverything();
-      try { offCollection(); offEvents(); capsules.dispose(); collection.flush(); collection.dispose(); } catch (e) { report(e); }
+      try { offCollection(); offEvents(); offMeterView(); capsules.dispose(); collection.flush(); collection.dispose(); } catch (e) { report(e); }
       try { profile.dispose(); } catch (e) { report(e); }
       for (const k of Object.keys(L) as Array<keyof ShellEvents>) L[k] = [];
       stepHooks = []; releaseHooks.clear();

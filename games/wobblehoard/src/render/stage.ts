@@ -51,6 +51,7 @@ import { Capsule, CAPSULE_HEIGHT } from './capsule.ts';
 /** The capsule's radius (capsule.ts R): its footprint for the landing-spot choice. */
 const CAP_R = 0.24;
 import { CeremonyDirector, type CeremonyHost } from './ceremony.ts';
+import { CutFx } from './cutfx.ts';
 import { createDecalGeometry } from './decals.ts';
 import { EnvHub, KEY_DIR, RIM_DIR } from './env.ts';
 import { FlashGovernor } from './flash.ts';
@@ -64,25 +65,14 @@ import type { StrandEvent } from './strands.ts';
 type RoundTwo = Required<Pick<StageLike, 'addBody' | 'removeBody' | 'clearBodies' | 'primaryBodyId' | 'setBodyTier' | 'setCalmEffects' | 'dropCapsule' | 'playCapsuleReveal' | 'playMergeCeremony'>>;
 
 /**
- * Stage B additions (render lane; proposed as additive StageLike members, typed here until src/contracts.ts takes them):
- *   * onStrand: the tack-strand hook for the shell's strand voice (stage B6). Called every frame a strand stretches (snap false: call
- *     audio.strand({ tension })) and once when it snaps (snap true: audio.strand({ tension: 0, snap: true })). bodyId = the stage's id.
- *   * setSafeInsets({ top, right, bottom, left }): CSS px the HUD covers; the meter-full capsule lands clear of them (default bottom 72).
- *   * matLayout(n): render offsets for n (1..5) squishies out on the mat at once (stage B1) with readable spacing for the current frame
- *     (a row or two on desktop, staggered rows on a portrait phone), for addBody(..., { position }). With 2..5 bodies visible the camera
- *     frames them all by itself.
+ * Stage B and CUT members (StageLike, optional there; every one implemented here): onStrand (B6 strand hook), setSafeInsets (HUD insets
+ * for the capsule spot), matLayout (B1 offsets for 1..5 bodies), setCutSeam / partPieces / setBridge (CUT visuals). See src/contracts.ts.
  */
-export interface StageExtras {
+export type StageExtras = Required<Pick<StageLike, 'matLayout' | 'setSafeInsets' | 'setCutSeam' | 'setBridge' | 'partPieces'>> & {
   onStrand: ((bodyId: number, e: StrandEvent) => void) | null;
-  matLayout(n: number): V3[];
-  /**
-   * The CSS px at each edge of the canvas that the shell's HUD covers (default { top: 0, right: 0, bottom: 72, left: 0 }); missing or
-   * non-finite fields keep their value. The meter-full capsule lands clear of them (and of every body's screen box) at any aspect.
-   */
-  setSafeInsets(insets: { top?: number; right?: number; bottom?: number; left?: number }): void;
-}
+};
 
-export interface StageDev extends Omit<StageLike, keyof RoundTwo>, RoundTwo, StageExtras {
+export interface StageDev extends Omit<StageLike, keyof RoundTwo | keyof StageExtras>, RoundTwo, StageExtras {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene: THREE.Scene;
   /** renderer.info snapshot: live geometries / textures / programs and the last frame's calls / triangles. */
@@ -94,7 +84,7 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo>, RoundTwo, Sta
     fineVertices: number; tier: QualityTier; mode: QualityTier | 'auto'; fx: { bubbles: number; glitter: number; puffs: number } | null;
     contextLost: boolean; pixelRatio: number; drawingBuffer: [number, number]; eyeLook: number[] | null;
     bodies: number; primary: number | null; ceremony: boolean; particles: number; calm: boolean; screenLight: number; capsule: boolean; cameraFx: { dist: number; yaw: number; pitch: number };
-    particlesDropped: number; camScale: number;
+    particlesDropped: number; camScale: number; cut: { strands: number; bridges: number; glow: number };
   };
   readonly views: readonly BodyView[];
   readonly flash: FlashGovernor;
@@ -112,6 +102,27 @@ const INERT_CAPSULE: CapsuleHandle = Object.freeze({
   setSqueeze(): void { /* gone */ }, wobble(): void { /* gone */ }, remove(): void { /* gone */ },
 });
 const farFirst = (a: BodyView, b: BodyView): number => b.sortDepth - a.sortDepth;
+
+/** Empty the 'dispose' listener list of a three object (EventDispatcher keeps them in `_listeners`). */
+function dropDispose(o: unknown): void {
+  const l = (o as { _listeners?: Record<string, unknown[]> } | null)?._listeners;
+  if (l && l.dispose) l.dispose.length = 0;
+}
+/** Every geometry, material and texture (material slots and shader uniforms) reachable from `root`: see the stage's onRestored. */
+function dropStaleDisposeListeners(root: THREE.Object3D): void {
+  const tex = (v: unknown): void => { if (v && (v as THREE.Texture).isTexture) dropDispose(v); };
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.geometry) dropDispose(m.geometry);
+    const mats = Array.isArray(m.material) ? m.material : m.material ? [m.material] : [];
+    for (const mat of mats) {
+      dropDispose(mat);
+      for (const k of Object.keys(mat)) tex((mat as unknown as Record<string, unknown>)[k]);
+      const un = (mat as THREE.ShaderMaterial).uniforms;
+      if (un) for (const k of Object.keys(un)) tex(un[k]?.value);
+    }
+  });
+}
 
 function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
@@ -141,6 +152,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   const particles = new Particles(360, 33);
   scene.add(particles.mesh);
   const flash = new FlashGovernor();
+  const cut = new CutFx(hub);          // CUT: parting strands and reconnect bridges (the seam glow is in each body's jelly)
+  scene.add(cut.group);
 
   const governor = new QualityGovernor();
   let tier = governor.tier;
@@ -182,6 +195,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   let spotReframes = false;
 
   const primary = (): BodyView | null => { for (const v of views) if (v.id === primaryId) return v; return null; };
+  const viewById = (id: number): BodyView | null => { for (const v of views) if (v.id === id) return v; return null; };
   const fitDistance = (): number => camScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect));
 
   /**
@@ -276,8 +290,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     camera.updateProjectionMatrix();
   }
 
-  function addView(body: SoftBodyLike, genome: Genome, t: TierName, owned: boolean, pos?: V3): BodyView {
-    const v = new BodyView(nextId++, body, genome, t, TIERS[tier], hub, quad, owned);
+  function addView(body: SoftBodyLike, genome: Genome, t: TierName, owned: boolean, pos?: V3, chunk = false): BodyView {
+    const v = new BodyView(nextId++, body, genome, t, TIERS[tier], hub, quad, owned, chunk);
     v.setCalm(calm);
     if (pos) v.proxy.setOffset(pos.x, pos.y, pos.z);
     scene.add(v.group);
@@ -288,6 +302,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   function removeView(v: BodyView): void {
     const i = views.indexOf(v);
     if (i >= 0) views.splice(i, 1);
+    cut.bodyRemoved(v);
     v.dispose();
     if (primaryId === v.id) { primaryId = views.length ? views[0].id : null; }
   }
@@ -419,6 +434,11 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   const onLost = (e: Event): void => { e.preventDefault(); lost = true; };
   const onRestored = (): void => {
     lost = false;
+    // three rebuilt its GL bookkeeping (new attribute / texture / program maps), but every geometry, material and texture made BEFORE the
+    // loss still carries the OLD maps' 'dispose' listeners: disposing it later would delete GL objects of the dead context (Chrome logs an
+    // INVALID_OPERATION "object does not belong to this context" warning for each). Drop them now, before anything renders and registers
+    // the new ones (three's own restore handler ran first: it was added to the canvas first).
+    dropStaleDisposeListeners(scene);
     // three re-uploads geometry, textures and programs by itself; the baked environment cube is a render target, so bake it again
     try { hub.rebuild(renderer); } catch { /* a second loss mid-restore: the next restore rebuilds it */ }
     governor.resetWindow(30);
@@ -461,14 +481,14 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
 
     addBody(body, genome, opts?: AddBodyOpts) {
       if (disposed) return -1;
-      const v = addView(body, genome, safeTier(opts?.tier), false, opts?.position);
+      const v = addView(body, genome, safeTier(opts?.tier), false, opts?.position, !!opts?.chunk);
       governor.resetWindow(24);
       return v.id;
     },
     // a running ceremony owns its bodies (and adopts the result at its end): removing bodies under it first ends it at its final frame,
     // exactly as setBody does, so the result is never orphaned (a primary id pointing at a removed view)
     removeBody(id) { const v = views.find((x) => x.id === id); if (!v) return; if (director.active) director.abort(); if (views.includes(v)) removeView(v); },
-    clearBodies() { director.abort(); while (views.length) removeView(views[views.length - 1]); primaryId = null; },
+    clearBodies() { director.abort(); while (views.length) removeView(views[views.length - 1]); primaryId = null; cut.clear(); },
     primaryBodyId() { return primaryId; },
     setBodyTier(id, t) { views.find((x) => x.id === id)?.setTier(safeTier(t)); },
     setCalmEffects(on) {
@@ -477,7 +497,23 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       particles.setTwinkle(!calm);
       if (capsule) capsule.calm = calm;
       if (revealCap) revealCap.calm = calm;
+      cut.calm = calm;
       if (calm) { cameraFx.dist = 1; cameraFx.yaw = 0; cameraFx.pitch = 0; screen.stopRamp(); }
+    },
+
+    setCutSeam(bodyId, plane, t) {
+      if (disposed) return;
+      for (const v of views) if (v.id === bodyId) { v.setSeam(plane, Number.isFinite(t) ? t : 0); return; }
+    },
+    partPieces(aId, bId) {
+      if (disposed) return;
+      const a = viewById(aId), b = viewById(bId);
+      if (a && b) cut.part(a, b);
+    },
+    setBridge(aId, bId, t) {   // (called every frame of a reconnect: no allocation)
+      if (disposed) return;
+      const a = viewById(aId), b = viewById(bId);
+      if (a && b) cut.bridge(a, b, t);
     },
 
     dropCapsule(opts) {
@@ -541,9 +577,16 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       for (const v of depthOrder) { const c = v.proxy.center; v.sortDepth = (camera.position.x - c.x) ** 2 + (camera.position.y - c.y) ** 2 + (camera.position.z - c.z) ** 2; }
       depthOrder.sort(farFirst);
       for (let i = 0; i < depthOrder.length; i++) depthOrder[i].jelly.mesh.renderOrder = 10 + Math.min(0.99, i * 0.01);
-      // tack strands -> the shell's strand voice (stage B6)
+      // CUT glows (seam, bridge): calm halves them, and for a second after a granted ceremony flash they stay low (the flash governor)
+      const govK = (calm ? 0.5 : 1) * (flash.sinceFlash(time) < 1 ? 0.35 : 1);
+      for (const v of views) v.glowK = govK;
+      cut.update(d, govK);
+      // tack strands (stage B6) and the CUT parting strands -> the shell's strand voice
       const hook = stage.onStrand;
-      if (hook) for (const v of views) { const ev = v.strands.events; for (let i = 0; i < ev.length; i++) { try { hook(v.id, ev[i]); } catch { /* a hook must never break a frame */ } } }
+      if (hook) {
+        for (const v of views) { const ev = v.strands.events; for (let i = 0; i < ev.length; i++) { try { hook(v.id, ev[i]); } catch { /* a hook must never break a frame */ } } }
+        for (let i = 0; i < cut.events.length; i++) { try { hook(cut.eventBody[i], cut.events[i]); } catch { /* idem */ } }
+      }
       capsule?.update(d * ts, time);
       revealCap?.update(d * ts, time);
       particles.update(d * ts, time);
@@ -605,7 +648,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       canvas.removeEventListener('webglcontextrestored', onRestored, false);
       while (views.length) removeView(views[views.length - 1]);
       discardCapsule(); discardRevealCapsule();
-      table.dispose(); quad.dispose(); screen.dispose(); particles.dispose();
+      table.dispose(); quad.dispose(); screen.dispose(); particles.dispose(); cut.dispose();
       hub.dispose();
       renderer.dispose();
     },
@@ -639,7 +682,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
             pixelRatio: renderer.getPixelRatio(), drawingBuffer: [canvas.width, canvas.height] as [number, number],
             eyeLook: p ? Array.from(p.face.lookOut) : null,
             bodies: views.length, primary: primaryId, ceremony: director.active, particles: particles.count, calm, screenLight: screen.lightAlpha, capsule: !!capsule || !!revealCap, cameraFx,
-            particlesDropped: particles.dropped, camScale,
+            particlesDropped: particles.dropped, camScale, cut: { ...cut.live },
           };
         },
       },

@@ -19,7 +19,7 @@ import { mulberry32 } from '../src/core/rng.ts';
 import { CATALOG } from '../src/data/catalog.ts';
 import { TIER_ODDS, TIER_SPECIES_COUNTS, TIER_NAMES as TIER_DISPLAY, TIERS, tierIndex } from '../src/core/rarity.ts';
 import {
-  addInteraction, createMeter, PAY as METER_PAY, FRESHNESS_TAU_SECONDS, VALVE_SP_PER_MINUTE, CAPSULE_RAMP, CAPSULE_COST,
+  addInteraction, createMeter, PAY as METER_PAY, FRESHNESS_TAU_SECONDS, FRESHNESS_FLOORS, VALVE_SP_PER_MINUTE, CAPSULE_RAMP, CAPSULE_COST,
   DAILY_FULL_RATE_CAPSULES, DAILY_REDUCED_RATE, DAILY_HARD_STOP_CAPSULES, MEDLEY_WINDOW_MS, MEDLEY_COOLDOWN_MS,
 } from '../src/core/meter.ts';
 import type { TouchKind } from '../src/core/meter.ts';
@@ -111,36 +111,56 @@ const pop32 = (v: number): number => { v = v - ((v >>> 1) & 0x55555555); v = (v 
 const KIND_NAMES: readonly TouchKind[] = ['poke', 'squeeze', 'pull'];
 const TAU = FRESHNESS_TAU_SECONDS;
 const VALVE_PER_MIN = VALVE_SP_PER_MINUTE;
-const PAY = { poke: METER_PAY.poke, squeezeBase: METER_PAY.squeezeBase, squeezePerSec: METER_PAY.squeezePerSecond, squeezeHoldCap: METER_PAY.squeezeHoldCapSeconds, softPop: METER_PAY.softPop, pull: METER_PAY.pull, pullFail: METER_PAY.pullFail, medley: METER_PAY.medley, medleyCooldown: MEDLEY_COOLDOWN_MS / 1000, medleyWindow: MEDLEY_WINDOW_MS / 1000 };
+const PAY = { poke: METER_PAY.poke, squeezeBase: METER_PAY.squeezeBase, squeezePerSec: METER_PAY.squeezePerSecond, squeezeHoldCap: METER_PAY.squeezeHoldCapSeconds, softPop: METER_PAY.softPop, pullBase: METER_PAY.pullBase, pullPerSec: METER_PAY.pullPerSecond, pullHoldCap: METER_PAY.pullHoldCapSeconds, pullFail: METER_PAY.pullFail, medley: METER_PAY.medley, medleyCooldown: MEDLEY_COOLDOWN_MS / 1000, medleyWindow: MEDLEY_WINDOW_MS / 1000 };
 
-export interface Behaviour { name: string; kindP: number[]; stick: number; }
+/**
+ * A touch style. The four BEHAV archetypes are the macro population (their SP/min drives every later section). Optional fields describe
+ * the owner's 2026-10-06 styles (FUN.md 2), measured in section A only (they are not in the population mix):
+ *   pokeGap  [lo, hi] s between pokes (default 0.7 to 1.5 s); pauseP the chance of a 1-4 s look-around after a touch (default 0.3);
+ *   pullHold [lo, hi] s a pull is held, grab to release (default 0.8 to 2.4 s).
+ */
+export interface Behaviour { name: string; kindP: number[]; stick: number; pokeGap?: [number, number]; pauseP?: number; pullHold?: [number, number]; }
 export const BEHAV: Behaviour[] = [
   { name: 'poker', kindP: [0.74, 0.16, 0.10], stick: 0.50 },
   { name: 'squeezer', kindP: [0.14, 0.72, 0.14], stick: 0.50 },
   { name: 'puller', kindP: [0.14, 0.16, 0.70], stick: 0.45 },
   { name: 'mixed', kindP: [0.40, 0.30, 0.30], stick: 0.0 },
 ];
+/** Section A extra styles (not in the population): a fast tapper (bursts of 2 to 3 taps a second) and a stretch-and-hold player. */
+export const BEHAV_EXTRA: Behaviour[] = [
+  { name: 'tapper', kindP: [0.90, 0.05, 0.05], stick: 0.90, pokeGap: [1 / 3, 0.5], pauseP: 0.08 },
+  { name: 'holder', kindP: [0.14, 0.16, 0.70], stick: 0.45, pullHold: [2.0, 4.0] },
+];
 
 export interface Stream { sp: number; byKind: number[]; n: number[]; seconds: number; }
-/** Plays `seconds` of touching (or until `stopAtSp` SP). bot='mash' = 8 pokes/s; bot='cycle' = poke,squeeze,pull at the physical limit. Pays through the real meter. */
-export function playStream(beh: Behaviour, rng: Rng, seconds: number, bot: '' | 'mash' | 'cycle', stopAtSp = Infinity, pace = 1): Stream {
+export type Bot = '' | 'mash' | 'cycle' | 'tap4' | 'holdbot';
+/**
+ * Plays `seconds` of touching (or until `stopAtSp` SP). Pays through the real meter. Bots: 'mash' = 8 pokes/s; 'cycle' = poke, squeeze,
+ * pull at the physical limit; 'tap4' = a poke every 250 ms (the fastest rate the double-tap gate pays); 'holdbot' = a full stretch held
+ * 3 s, let go, grabbed again 0.3 s later. A pull's hold (grab to release) is the snap's heldFor: the human pull of the 0.8-2.4 s hold
+ * takes 1.0 s more to reach for and grab (the same draws and the same timing as before the per-second pull pay).
+ */
+export function playStream(beh: Behaviour, rng: Rng, seconds: number, bot: Bot, stopAtSp = Infinity, pace = 1): Stream {
   const out: Stream = { sp: 0, byKind: [0, 0, 0], n: [0, 0, 0], seconds: 0 };
   let meter = createMeter();
   let t = 0, last = -1, cyc = 0;
+  const pg = beh.pokeGap ?? [0.7, 1.5], ph = beh.pullHold ?? [0.8, 2.4], pauseP = beh.pauseP ?? 0.3;
   while (t < seconds && out.sp < stopAtSp) {
     let kind: number, dur: number, hold = 0, success = true;
     if (bot === 'mash') { kind = 0; dur = 0.125; }
-    else if (bot === 'cycle') { kind = cyc++ % 3; dur = kind === 0 ? 0.25 : kind === 1 ? 0.7 : 1.3; hold = kind === 1 ? 0.45 : 0; }
+    else if (bot === 'tap4') { kind = 0; dur = 0.25; }
+    else if (bot === 'holdbot') { kind = 2; hold = 3; dur = 3.3; }
+    else if (bot === 'cycle') { kind = cyc++ % 3; dur = kind === 0 ? 0.25 : kind === 1 ? 0.7 : 1.3; hold = kind === 1 ? 0.45 : kind === 2 ? 1.0 : 0; }
     else {
       kind = last >= 0 && rng() < beh.stick ? last : pickIdx(beh.kindP, 1, rng);
-      if (kind === 0) dur = 0.7 + 0.8 * rng();
+      if (kind === 0) dur = pg[0] + (pg[1] - pg[0]) * rng();
       else if (kind === 1) { hold = 0.5 + 2.1 * rng(); dur = hold + 0.9; }
-      else { dur = 0.8 + 1.6 * rng() + 1.0; success = rng() < 0.85; }
-      if (rng() < 0.3) dur += 1 + 3 * rng(); // looking around, orbiting the camera
+      else { hold = ph[0] + (ph[1] - ph[0]) * rng(); dur = hold + 1.0; success = rng() < 0.85; }
+      if (rng() < pauseP) dur += 1 + 3 * rng(); // looking around, orbiting the camera
       dur /= pace;
     }
     t += dur; last = kind;
-    const r = addInteraction(meter, { kind: KIND_NAMES[kind], amount: kind === 0 ? 0 : kind === 1 ? hold : success ? 0.8 : 0.1, tMs: Math.round(t * 1000), dayKey: 0 });
+    const r = addInteraction(meter, { kind: KIND_NAMES[kind], amount: kind === 0 ? 0 : kind === 1 ? hold : success ? 0.8 : 0.1, heldS: kind === 2 ? hold : undefined, tMs: Math.round(t * 1000), dayKey: 0 });
     meter = r.state;
     out.sp += r.spGained; out.byKind[kind] += r.spGained; out.n[kind]++;
   }
@@ -148,22 +168,28 @@ export function playStream(beh: Behaviour, rng: Rng, seconds: number, bot: '' | 
   return out;
 }
 
-export interface Micro { spPerMin: number[]; share: number[][]; perMin: number[][]; botMash: number; botCycle: number; firstSec: number[]; spreadP: number[][]; }
+export interface MicroRow { spPerMin: number; share: number[]; perMin: number[]; spreadP: number[]; }
+/** 400 five-minute streams of one style through the real meter (seeded by `seedIdx`, as the population archetypes always were). */
+export function measureStyle(b: Behaviour, seedIdx: number): MicroRow {
+  const rng = mulberry32(0x1234 + seedIdx * 77);
+  const per: number[] = [];
+  const tot = { sp: 0, byKind: [0, 0, 0], n: [0, 0, 0], seconds: 0 };
+  for (let k = 0; k < 400; k++) { const s = playStream(b, rng, 300, '', Infinity); per.push(s.sp / (s.seconds / 60)); tot.sp += s.sp; tot.seconds += s.seconds; for (let q = 0; q < 3; q++) { tot.byKind[q] += s.byKind[q]; tot.n[q] += s.n[q]; } }
+  return { spPerMin: tot.sp / (tot.seconds / 60), share: tot.byKind.map((x) => x / tot.sp), perMin: tot.n.map((x) => x / (tot.seconds / 60)), spreadP: [quantile(per, 0.1), quantile(per, 0.5), quantile(per, 0.9)] };
+}
+export interface Micro { spPerMin: number[]; share: number[][]; perMin: number[][]; botMash: number; botCycle: number; botTap4: number; botHold: number; firstSec: number[]; spreadP: number[][]; extra: MicroRow[]; }
 export function runMicro(): Micro {
-  const m: Micro = { spPerMin: [], share: [], perMin: [], botMash: 0, botCycle: 0, firstSec: [], spreadP: [] };
+  const m: Micro = { spPerMin: [], share: [], perMin: [], botMash: 0, botCycle: 0, botTap4: 0, botHold: 0, firstSec: [], spreadP: [], extra: [] };
   BEHAV.forEach((b, i) => {
-    const rng = mulberry32(0x1234 + i * 77);
-    const per: number[] = [];
-    const tot = { sp: 0, byKind: [0, 0, 0], n: [0, 0, 0], seconds: 0 };
-    for (let k = 0; k < 400; k++) { const s = playStream(b, rng, 300, '', Infinity); per.push(s.sp / (s.seconds / 60)); tot.sp += s.sp; tot.seconds += s.seconds; for (let q = 0; q < 3; q++) { tot.byKind[q] += s.byKind[q]; tot.n[q] += s.n[q]; } }
-    m.spPerMin.push(tot.sp / (tot.seconds / 60));
-    m.share.push(tot.byKind.map((x) => x / tot.sp));
-    m.perMin.push(tot.n.map((x) => x / (tot.seconds / 60)));
-    m.spreadP.push([quantile(per, 0.1), quantile(per, 0.5), quantile(per, 0.9)]);
+    const r = measureStyle(b, i);
+    m.spPerMin.push(r.spPerMin); m.share.push(r.share); m.perMin.push(r.perMin); m.spreadP.push(r.spreadP);
   });
   const rb = mulberry32(99);
   m.botMash = playStream(BEHAV[0], rb, 600, 'mash').sp / 10;
   m.botCycle = playStream(BEHAV[0], rb, 600, 'cycle').sp / 10;
+  m.botTap4 = playStream(BEHAV[0], rb, 600, 'tap4').sp / 10;
+  m.botHold = playStream(BEHAV[0], rb, 600, 'holdbot').sp / 10;
+  m.extra = BEHAV_EXTRA.map((b, i) => measureStyle(b, BEHAV.length + i));
   return m;
 }
 
@@ -726,13 +752,14 @@ const epicPlus = (p: Player): number => p.tierOwned[3] + p.tierOwned[4] + p.tier
 
 function secMicro(): void {
   header('A. ACTIVE PLAY: what touching pays (micro-sim of human touch streams; every archetype, 400 x 5-minute streams)');
-  console.log(`Meter rule: poke ${PAY.poke} SP | squeeze+release ${PAY.squeezeBase} +${PAY.squeezePerSec}/s held (hold counted up to ${PAY.squeezeHoldCap} s), soft-pop +${PAY.softPop} if held >= 1.8 s | pull-and-let-go ${PAY.pull} (${PAY.pullFail} if it never stretched) | MEDLEY +${PAY.medley} (3 kinds within ${PAY.medleyWindow} s, cooldown ${PAY.medleyCooldown} s) | anti-mash freshness (tau ${TAU.join('/')} s, squared, floor 0.03) | valve ${VALVE_PER_MIN} SP/min`);
+  console.log(`Meter rule: poke ${PAY.poke} SP | squeeze+release ${PAY.squeezeBase} +${PAY.squeezePerSec}/s held (hold counted up to ${PAY.squeezeHoldCap} s), soft-pop +${PAY.softPop} if held >= 1.8 s | stretch-and-hold, let go: ${PAY.pullBase} +${PAY.pullPerSec}/s held (up to ${PAY.pullHoldCap} s; ${PAY.pullFail} flat if it never stretched) | MEDLEY +${PAY.medley} (3 kinds within ${PAY.medleyWindow} s, cooldown ${PAY.medleyCooldown} s) | anti-mash freshness (tau ${TAU.join('/')} s, squared, floor ${FRESHNESS_FLOORS.join('/')}) | valve ${VALVE_PER_MIN} SP/min`);
   console.log(lpad('archetype', 10) + '| touches/min: poke squeeze pull | SP/min  (p10 / p50 / p90 of 5-min streams) | SP share poke/squeeze/pull | min per capsule @ cost ' + BASE.capsuleCost);
-  BEHAV.forEach((b, i) => {
-    console.log(`${lpad(b.name, 10)}| ${pad(f1(MICRO.perMin[i][0]), 21)} ${pad(f1(MICRO.perMin[i][1]), 6)} ${pad(f1(MICRO.perMin[i][2]), 4)} | ${pad(f1(MICRO.spPerMin[i]), 6)}  (${f1(MICRO.spreadP[i][0])} / ${f1(MICRO.spreadP[i][1])} / ${f1(MICRO.spreadP[i][2])}) | ${MICRO.share[i].map((x) => pc0(x)).join(' / ')} | ${f1(BASE.capsuleCost / MICRO.spPerMin[i])}`);
-  });
+  const row = (name: string, r: MicroRow): void => console.log(`${lpad(name, 10)}| ${pad(f1(r.perMin[0]), 21)} ${pad(f1(r.perMin[1]), 6)} ${pad(f1(r.perMin[2]), 4)} | ${pad(f1(r.spPerMin), 6)}  (${f1(r.spreadP[0])} / ${f1(r.spreadP[1])} / ${f1(r.spreadP[2])}) | ${r.share.map((x) => pc0(x)).join(' / ')} | ${f1(BASE.capsuleCost / r.spPerMin)}`);
+  BEHAV.forEach((b, i) => row(b.name, { spPerMin: MICRO.spPerMin[i], share: MICRO.share[i], perMin: MICRO.perMin[i], spreadP: MICRO.spreadP[i] }));
+  console.log('extra styles (section A only, not in the population mix): tapper = bursts of 2-3 taps a second; holder = every stretch held 2-4 s');
+  BEHAV_EXTRA.forEach((b, i) => row(b.name, MICRO.extra[i]));
   const avg = mean(MICRO.spPerMin.slice(0, 3));
-  console.log(`bots: 8 pokes/s mash earns ${f1(MICRO.botMash)} SP/min, a poke-squeeze-pull cycler at the physical limit earns ${f1(MICRO.botCycle)} SP/min (valve ${VALVE_PER_MIN}); humans ${f1(avg)} SP/min. Daily cap: ${BASE.dailyCapsCap} capsules at full rate, then ${BASE.overRate * 100}% rate up to ${BASE.dailyCapsCap + BASE.hardExtraCaps} total per day => a bot running 24 h gets at most ${BASE.dailyCapsCap + BASE.hardExtraCaps} capsules/day from play (a devoted human averages ~9 incl. tasks).`);
+  console.log(`bots: 8 pokes/s mash earns ${f1(MICRO.botMash)} SP/min, a poke every 250 ms (the fastest paid rate) ${f1(MICRO.botTap4)}, full stretches held 3 s back to back ${f1(MICRO.botHold)}, a poke-squeeze-pull cycler at the physical limit ${f1(MICRO.botCycle)} SP/min (valve ${VALVE_PER_MIN}); humans ${f1(avg)} SP/min. Daily cap: ${BASE.dailyCapsCap} capsules at full rate, then ${BASE.overRate * 100}% rate up to ${BASE.dailyCapsCap + BASE.hardExtraCaps} total per day => a bot running 24 h gets at most ${BASE.dailyCapsCap + BASE.hardExtraCaps} capsules/day from play (a devoted human averages ~9 incl. tasks).`);
   console.log(`onboarding ramp: capsule 1/2/3 cost ${BASE.onboardRamp.map((x) => Math.round(x * BASE.capsuleCost)).join('/')} SP (then ${BASE.capsuleCost}); session model: casual 1-2 x 3-5 min, regular ~2 x 10-15, devoted 2-3 x 12-22`);
 }
 

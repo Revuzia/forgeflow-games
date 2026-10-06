@@ -75,9 +75,24 @@ export interface JellyUniforms {
   uBeads: { value: number };
   /** Family x "stretched regions go paler": 1 = the gel's. */
   uPaleMul: { value: number };
+  // CUT (_spec/CUT.md): the seam glow along a cut plane while the waist forms, and the reconnect bridge's glow where it joins the body
+  /** The cut plane, render world space: xyz unit normal, w = dot(normal, point). */
+  uSeam: { value: THREE.Vector4 };
+  /** Seam glow strength 0..1 (0 = off) and its half-width (world units). */
+  uSeamAmt: { value: number };
+  uSeamW: { value: number };
+  /** The warm colour of the seam and the bridge glow (linear). */
+  uSeamCol: { value: THREE.Color };
+  /** A soft glow spot (the bridge's end on this body): xyz world position, w strength 0..1; radius uSpotR. */
+  uSpot: { value: THREE.Vector4 };
+  uSpotR: { value: number };
 }
 
 const lin = (c: Rgb): THREE.Color => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.LinearSRGBColorSpace);
+/** The CUT seam / bridge glow colour (linear): a warm amber-white with a little of the body's own core colour in it. */
+export function seamColour(core: Rgb): Rgb {
+  return [1.0 * 0.75 + core[0] * 0.25, 0.62 * 0.75 + core[1] * 0.25, 0.34 * 0.75 + core[2] * 0.25];
+}
 
 const VERT_PARS = /* glsl */`
 attribute float aStrain;
@@ -108,6 +123,9 @@ uniform vec3 uTone2Col, uTierCol, uMixCol;
 uniform vec4 uTouch0, uTouch1;
 uniform float uTouchR, uGrain, uGrainFreq, uPaleMul, uBeads;
 uniform vec3 uWB, uTouchCol;
+uniform vec4 uSeam, uSpot;
+uniform float uSeamAmt, uSeamW, uSpotR;
+uniform vec3 uSeamCol;
 vec3 jBumpN(vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDirection) {
   vec3 vSigmaX = normalize(dFdx(surf_pos.xyz));
   vec3 vSigmaY = normalize(dFdy(surf_pos.xyz));
@@ -230,6 +248,12 @@ const EMISSIVE_STAGE = /* glsl */`
   jTouch = min(jTouch, 1.2);
   // (kept apart from the jelly's own light: the low tier's deepen / saturate pass below must not recolour it, it is the same bloom on every tier)
   vec3 jTouchE = mix(uTouchCol, vec3(1.0, 0.95, 0.85), 0.35 * jTouch) * jTouch * (0.5 + 0.5 * jNdv) * 1.15;
+  // CUT: a thin warm seam along the cut plane (a band, brightest at its centre line) and the bridge's glow spot; zero when unused
+  float jSeamD = (dot(vWPos, uSeam.xyz) - uSeam.w) / max(uSeamW, 1e-4);
+  vec3 jSd = vWPos - uSpot.xyz;
+  // the seam: a hot thin core line with a soft warm falloff either side, brightest where the skin faces you
+  float jSeam = uSeamAmt * (exp(-jSeamD * jSeamD) + 0.3 * exp(-jSeamD * jSeamD / 9.0)) + uSpot.w * exp(-dot(jSd, jSd) / max(uSpotR * uSpotR, 1e-6));
+  jTouchE += uSeamCol * min(jSeam, 1.3) * (0.55 + 0.45 * jNdv) * 2.4;
   jExtra += uTierCol * uTierAmt * (0.25 + 0.9 * jFres + 0.5 * jHalo);   // the tier "tell": light drifting toward the result colour
   jExtra += uMixCol * jMix * (0.16 + 0.3 * (1.0 - jFres));             // merge lineage: the other parents' colours swirl through as light
   totalEmissiveRadiance += jRim + jScat + jCore + jExtra;
@@ -320,6 +344,9 @@ export class JellyMaterials {
   /** The species' material family's surface (resolveMaterial(family, genome).look): roughness, sheen, grain, thickness, blush, pale. */
   readonly look: ResolvedLook;
   readonly familyId: string;
+  /** The family's surface tack and stringiness (0..1, resolveMaterial(...).physics): how far the CUT parting strand stretches. */
+  readonly tack: number;
+  readonly stringiness: number;
   /** Share of the transmission the body keeps (1 = a glassy body; set per tier style in applyStyleUniforms). */
   private opacityKeep = 1;
   private readonly famKeep: number;
@@ -329,7 +356,9 @@ export class JellyMaterials {
     this.genome = genome;
     const fam = familyOfGenome(genome);
     this.familyId = fam;
-    this.look = resolveMaterial(fam, genome).look;
+    const resolved = resolveMaterial(fam, genome);
+    this.look = resolved.look;
+    this.tack = resolved.physics.tack; this.stringiness = resolved.physics.stringiness;
     // how much transmission the body keeps: an opaque family keeps 30..65% (LookBounds cap 0.3 .. 0.5)
     // ... and a clear-castable family whose character is frosted (silicone 0.25, pop dome 0.35 reference translucency) keeps 50..64%
     const cap = translucencyMaxOf(fam), ref = isMaterialFamilyId(fam) ? MATERIAL_FAMILIES[fam].look.translucency : 0.82;
@@ -357,6 +386,8 @@ export class JellyMaterials {
       uTierCol: { value: lin(style.tell) }, uTierAmt: { value: 0 }, uTierTint: { value: 0 }, uMixCol: { value: lin(palette.body) }, uMixAmt: { value: 0 },
       uTouch0: { value: new THREE.Vector4(0, -10, 0, 0) }, uTouch1: { value: new THREE.Vector4(0, -10, 0, 0) }, uTouchR: { value: 0.12 * scale },
       uGrain: { value: 0 }, uGrainFreq: { value: 24 }, uPaleMul: { value: 1 }, uBeads: { value: fam === 'beadsqueeze' ? 1 : 0 }, uWB: { value: new THREE.Vector3(1, 1, 1) }, uTouchCol: { value: lin(genomePalette(genome).core) },
+      uSeam: { value: new THREE.Vector4(0, 1, 0, -100) }, uSeamAmt: { value: 0 }, uSeamW: { value: 0.03 * scale },
+      uSeamCol: { value: lin(seamColour(genomePalette(genome).core)) }, uSpot: { value: new THREE.Vector4(0, -10, 0, 0) }, uSpotR: { value: 0.15 * scale },
     };
     this.palette = palette;
     this.scale = scale;
@@ -456,7 +487,7 @@ export class JellyMaterials {
         // page's CSS background showed through the jelly (lighter halos, holes in toDataURL captures). The jelly's pixels are opaque.
         .replace('#include <opaque_fragment>', '#include <opaque_fragment>\n#ifndef WH_LOW\n  gl_FragColor.a = 1.0;\n#endif');
     };
-    m.customProgramCacheKey = () => `wh-jelly-v3-${this.pattern}-${low ? 'low' : 'full'}`;
+    m.customProgramCacheKey = () => `wh-jelly-v4-${this.pattern}-${low ? 'low' : 'full'}`;
     return m;
   }
 

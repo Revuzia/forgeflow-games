@@ -26,7 +26,7 @@ PostgREST, the Edge Function, Deno, the portal, any UI.
 2. **A real squishy exists only on the server.** Every instance has a server-minted UUID. A local save is never promoted: a guest keeps a *Practice shelf* of "ghost" items that live on the device and are never sent anywhere. Nothing a guest does can be claimed on sign-in except the player's own settings.
 3. **The server runs the game's own code.** `meter.ts`, `drops.ts`, `merge.ts`, `catalog.ts`, `genome.ts`, `rarity.ts` run unchanged in a small TypeScript host (a Supabase Edge Function is the recommendation, section 7.2). The host decides; the database function that commits the result enforces every invariant it can check without running game math (ownership, locks, caps, tier rules, genome code integrity, conservation).
 4. **Five operations and reads.** `wh_hello`, `wh_report_play`, `wh_open_capsule`, `wh_claim_restock`, `wh_complete_task`, plus the reads `wh_state`, `wh_inventory` and `wh_op_status` (the stored answers of the player's own keys, 7.7). Merge (`wh_merge`, `wh_tidy`) is in `MERGE.md`. Every mutating call carries a client-generated idempotency key; a retry returns the stored answer.
-5. **Touch is validated by time, not by trust.** The client reports touches as `[kind, amount, dtMs]`. The host lays the batch out so its last touch is "now", drops anything that would land before the last accepted touch or outside a 5-minute bank, and runs `addInteraction` over what is left. Measured here: a forged 24-minute stream sent as 12 back-to-back batches earns **2 capsules**; a forged 25-minute stream (1500 pokes, one second apart) accepted at face value earns **9** (section 7.5) [V].
+5. **Touch is validated by time, not by trust.** The client reports touches as `[kind, amount, dtMs]` (a pull adds its hold in seconds, `[2, level, dtMs, heldS]`, since the 2026-10-06 per-second stretch pay, DESIGN 5.4). The host lays the batch out so its last touch is "now", drops anything that would land before the last accepted touch or outside a 5-minute bank, and runs `addInteraction` over what is left. Measured here: a forged 24-minute stream sent as 12 back-to-back batches earns **2 capsules**; a forged 25-minute stream (1500 pokes, one second apart) accepted at face value earns **9** (section 7.5) [V].
 6. **Randomness is a CSPRNG function, with the three draws logged.** `rollCapsule` and `rollMerge` accept a function as their random source, so the host passes `crypto.getRandomValues` and records the draws. Replaying a logged roll reproduced the result **2000 of 2000** times for capsules and for merges [V]. There is no 32-bit seed to recover.
 7. **Concurrency is optimistic, per account.** Every state-changing call bumps `wh_accounts.version`; the host reads, decides, commits at `expect_version`, and starts over on `conflict`. Parallel callers cannot double-open a capsule or double-merge a pair [V].
 8. **Local-first means the device is a cache for signed-in players.** The Hoard opens instantly from a compact mirror (33 KB for 331 items, 100 KB for 1000 [V]) and is read-only until the server answers.
@@ -109,6 +109,7 @@ export interface Collection {
   meter(): { fill: number; credits: number; resting: boolean; doneToday: boolean; tableFull: boolean; offline: boolean };
   onChange(fn: () => void): () => void;
   feed(ev: SoftEvent, tMs: number): void;                  // call from the frame loop where the shell already drains SoftEvents for audio and haptics
+  previewTouch?(kind: 'poke' | 'squeeze' | 'pull', heldS: number, level: number): number;   // the pending arc while a touch is held (9.7)
   openCapsule(): Promise<OpenResult>;                      // result first; see section 10
   restock(): { offer: SpeciesId[]; claimed: boolean };  claimRestock(pick: SpeciesId): Promise<ClaimResult>;
   tasks(): { def: TaskDef; progress: number; done: boolean; claimed: boolean }[];  completeTask(id: string): Promise<void>;
@@ -256,7 +257,7 @@ interface Stack {
 
 **Can:** keep the Practice shelf visible; keep settings and prefs; skip the first-capsule hint if the player already opened practice capsules (a pure UI decision).
 **Cannot (by design):** promote any ghost item, copy local meter progress, count practice capsules, or import the local starter. Reason: every import path is a forgery path; a hand-edited localStorage would otherwise become a Mythic.
-**Optional, not adopted:** a one-time welcome grant of up to 3 capsule credits (the length of the onboarding ramp 30 + 50 + 75 SP, about 64 s to the first one [DESIGN 5.4]) when a guest signs in having opened 3 practice capsules, with the server meter's `earned` advanced by the same number so the ramp is not paid twice. It is bounded (3), once per account, and saves about five minutes of play; it needs one more commit function. Recommendation: skip it.
+**Optional, not adopted:** a one-time welcome grant of up to 3 capsule credits (the length of the onboarding ramp 30 + 50 + 75 SP, about 63 s to the first one [DESIGN 5.4]) when a guest signs in having opened 3 practice capsules, with the server meter's `earned` advanced by the same number so the ramp is not paid twice. It is bounded (3), once per account, and saves about five minutes of play; it needs one more commit function. Recommendation: skip it.
 
 ### 6.4 Sign-in nudges
 
@@ -335,7 +336,7 @@ All mutating calls require `idem`. The host's reply is the JSON shown; a replay 
 | `wh_hello` | host | none | `{ok, created}` | Creates the account and one starter Dollop if absent (idempotent by existence). | `frozen`, `no_user` |
 | `wh_state` | SQL rpc | none | version, `public_id`, handle, `server_now_ms`, `server_day`, meter, credits, merges today, restock claimed today, task state and progress, trading readiness, kill-switch flags | Everything. | `not_signed_in`, `no_account` |
 | `wh_inventory` | SQL rpc | `{after?: uuid, limit?: 1..200}` | `{items: [...], next}` (keyset pagination by id) | Everything (own rows only). | `bad_payload` |
-| `wh_report_play` | host | `{idem, events: [[kind 0..2, amount, dtMs], ...] up to 120}` | `{ok, credits, version, paid_sp, accepted, clipped, queue_full, meter:{sp, earned, day_capsules}, server_now_ms, week}` | The time placement, the whole meter, the queue cap, the task counters. | `bad_payload`, `frozen`, `busy`, `idem_reuse` |
+| `wh_report_play` | host | `{idem, events: [[kind 0..2, amount, dtMs, heldS?], ...] up to 120}` (`heldS` on pulls only) | `{ok, credits, version, paid_sp, accepted, clipped, queue_full, meter:{sp, earned, day_capsules}, server_now_ms, week}` | The time placement, the whole meter, the queue cap, the task counters. | `bad_payload`, `frozen`, `busy`, `idem_reuse` |
 | `wh_open_capsule` | host | `{idem}` (opens the oldest credit) | `{ok, item_id, species_idx, tier_idx, genome_code, is_new, copies, source, credits_left, version}` | Tier, species, genome seed (CSPRNG), the genome, the id, `is_new` and `copies` from the database. | `no_capsule`, `frozen`, `busy`, `idem_reuse` |
 | `wh_claim_restock` | host | `{idem, pick: SpeciesId}` | `{ok, item_id, species_idx, tier_idx, genome_code, is_new, copies, version}` | The three offered species from `daySeed(uid, serverDay, 'restock')` (refuses any other pick), the day, the once-a-day rule, the genome. | `not_offered`, `already_claimed`, `wrong_day`, `frozen` |
 | `wh_complete_task` | host | `{idem, task_id}` | `{ok, credits, version}` | Today's two tasks from `daySeed(uid, serverDay, 'tasks')`, progress from the server's own counters, `claimTask` (once a day, 5 a week). | `not_offered`, `not_done` (with `progress`, `target`), `already_claimed`, `weekly_limit` |
@@ -350,7 +351,7 @@ The reference implementation is `host_play` below (Appendix B has the whole file
 
 ```ts
   /* ---------------- wh_report_play ---------------- */
-  type Ev = [kind: 0 | 1 | 2, amount: number, dtMs: number];
+  type Ev = [kind: 0 | 1 | 2, amount: number, dtMs: number, heldS?: number];   // heldS: a pull's hold, grab to release (2026-10-06, DESIGN 5.4)
   const KIND: TouchKind[] = ['poke', 'squeeze', 'pull'];
   function bump(progress: Record<string, any>, tasks: TaskDef[], k: TouchKind, amount: number, d: { freshness: number; doubleTap: boolean; medley: number; paidAs?: TouchKind }, gapSincePokeS: number | null): void {
     for (const t of tasks) {
@@ -373,7 +374,8 @@ The reference implementation is `host_play` below (Appendix B has the whole file
     let prev = -1; const evs: Ev[] = [];
     for (const e of req.events) {
       if (!Array.isArray(e) || ![0, 1, 2].includes(e[0]) || !Number.isFinite(e[1]) || !Number.isInteger(e[2]) || e[2] < prev || e[2] < 0) return { ok: false, error: 'bad_payload' };
-      prev = e[2]; evs.push([e[0], Math.min(e[0] === 2 ? 1 : 10, Math.max(0, e[1])), e[2]]);
+      if (e.length > 4 || (e.length === 4 && (e[0] !== 2 || !Number.isFinite(e[3])))) return { ok: false, error: 'bad_payload' };   // only a pull carries a hold
+      prev = e[2]; evs.push([e[0], Math.min(e[0] === 2 ? 1 : 10, Math.max(0, e[1])), e[2], e[0] === 2 ? Math.min(10, Math.max(0, e[3] ?? 0)) : 0]);
     }
     return withRetry(uid, req.idem, req, async () => {
       const st = await call('wh__read_state', { uid }); if (!st.ok) return st;
@@ -389,7 +391,7 @@ The reference implementation is `host_play` below (Appendix B has the whole file
       let credits = 0, paid = 0, lastPoke: number | null = meter.lastMs[0], accepted = 0, lastT = st.last_event_ms; let stoppedFull = false;
       for (const { e, t: tm } of placed) {
         if (Number(st.credits_play) + credits >= WH_QUEUE_MAX) { stoppedFull = true; break; }       // table full: accrual pauses (nothing is lost, the touches are simply not paid)
-        const r = addInteraction(meter, { kind: KIND[e[0]], amount: e[1], tMs: tm, dayKey: Math.floor(tm / DAY_MS) });
+        const r = addInteraction(meter, { kind: KIND[e[0]], amount: e[1], heldS: e[3], tMs: tm, dayKey: Math.floor(tm / DAY_MS) });
         if (r.detail.refused) continue;
         bump(progress, tasks, KIND[e[0]], e[1], r.detail, KIND[e[0]] === 'poke' && lastPoke !== null ? (tm - lastPoke) / 1000 : null);
         if (KIND[e[0]] === 'poke') lastPoke = tm;
@@ -403,9 +405,11 @@ The reference implementation is `host_play` below (Appendix B has the whole file
 
 **The rule in words.** The batch is laid out so that its **last touch is "now" on the server clock**, keeping every spacing the client reported. A touch is dropped if it would land at or before the last accepted touch (`last_event_ms`) or more than 5 minutes (`BANK_MAX_MS`) in the past. The commit function independently refuses a `last_event_ms` that is in the future (more than 2 s ahead of the database clock) or older than the stored one. Consequence: **you cannot report more play time than has actually passed.**
 
-**Measured [V].** `meter.ts` fed 1500 pokes reported one second apart (a forged 25-minute stream) as one request earns **9 capsules** (the daily hard stop is 12). Through the host, 12 back-to-back 120-event batches claiming 24 minutes in a few real milliseconds were **clipped (1320 of 1440 events dropped) and earned 2 capsules**. A scripted cycler at 3.3 s per touch reaches the daily 12 after 68 reported minutes: that is real-time play and is held by the valve and the cap exactly as DESIGN 5.4 says.
+**Measured [V].** `meter.ts` fed 1500 pokes reported one second apart (a forged 25-minute stream) as one request earns **9 capsules** (the daily hard stop is 12). Through the host, 12 back-to-back 120-event batches claiming 24 minutes in a few real milliseconds were **clipped (1320 of 1440 events dropped) and earned 2 capsules**. A scripted cycler at 3.3 s per touch reaches the daily 12 after 68 reported minutes: that is real-time play and is held by the valve and the cap exactly as DESIGN 5.4 says. *Re-checked on `meter.ts` alone with the 2026-10-06 rules:* the 1500-poke stream still earns 9 capsules; a poke-squeeze-pull cycler at 3.3 s per touch whose squeezes are held 2.5 s reaches the 12 after about 60 minutes when its pulls are held 2.5 s too, and about 76 when they are not (the same script on the old rules: about 65); the 68 above was measured through the host and was not re-run.
 
-**Other rules in the host.** At most 120 events per request, `dtMs` non-decreasing, kinds 0 to 2 only, amounts clamped (squeeze 0 to 10 s, pull 0 to 1); the table-full rule (C-5): once credits reach 5 the host stops processing the batch, answers `queue_full: true` and the meter does not move.
+**Other rules in the host.** At most 120 events per request, `dtMs` non-decreasing, kinds 0 to 2 only, amounts clamped (squeeze 0 to 10 s, pull 0 to 1, a pull's hold 0 to 10 s; a hold on any other kind, or a fifth element, is `bad_payload`); the table-full rule (C-5): once credits reach 5 the host stops processing the batch, answers `queue_full: true` and the meter does not move.
+
+**2026-10-06 edit (ECON lane), not re-run.** For the per-second stretch pay (DESIGN 5.4, FUN.md 2.2) a pull now reports its hold as a 4th element and the host passes it to `addInteraction` as `heldS` (this section and Appendix B). The meter itself is probed (`probe_economy.ts`, `probe_collection.ts`), but neither the host suite (Appendix C) nor the SQL suite has been re-run against this draft since; re-run both before it is applied anywhere (gate G9). The draft stays **NOT APPLIED**. The SQL needs no change: it stores the meter as JSON and checks counters, never pay values.
 
 **Offline buffering.** The client may hold up to 5 minutes of touches **in memory** while offline or while a request is in flight and send them later; anything older than the bank is simply not paid. Touches are never written to storage, so a reload loses the unsent ones (7.7). Batch every 30 to 45 s while touching, on `visibilitychange: hidden`, and just before opening a capsule.
 
@@ -416,12 +420,12 @@ No check can tell a perfect macro that runs in real time from a human; DESIGN ri
 | # | Check | Catches | In the reference host? |
 |---|---|---|---|
 | P1 | Time budget (above): last touch is now, no overlap, 5-minute bank | Time compression, instant farming, two devices claiming the same minutes | **Yes** [V] |
-| P2 | `addInteraction`'s own freshness, double-tap gate, valve (40 SP/min) and daily cap (8 full, 4 at 25%, stop at 12) | Mashing (0.1 SP/min), cyclers held to 40 SP/min | **Yes** (the code itself) |
+| P2 | `addInteraction`'s own freshness, double-tap gate, valve (40 SP/min) and daily cap (8 full, 4 at 25%, stop at 12) | Mashing faster than 4 a second (0.1 SP/min: double taps); a poke script every 250 ms, full stretches held 3 s back to back and poke-squeeze-pull cyclers all held to the valve, 40 SP/min (2026-10-06 rules, DESIGN 5.4) | **Yes** (the code itself) |
 | P3 | Credits equal the meter counter (`earned` rose by exactly `add_credits`), `dayCapsules <= 12`, unopened plus new `<= 5`, `add_credits <= 3` | A host bug or a forged commit | **Yes** (SQL, `wh_bad_play`) [V] |
 | P4 | Batch size 120, ordered `dtMs`, finite amounts, valid kinds | Junk, overflow | **Yes** [V] |
 | P5 | Per-account call rate (for example 1 request per 2 s): add `wh_accounts.last_batch_at` and refuse earlier calls in `wh__commit_play` | Cost abuse (request floods) | **No** [proposed]; the time budget already makes floods pay nothing |
 | P6 | Regularity score: the coefficient of variation of inter-touch intervals over 40 or more touches; a perfect cycler is under 0.02, a person is above about 0.15 [U: my estimate, unmeasured]. Action: set a `suspect` flag, pay at 25%, show it in the ops view, never ban automatically | Naive scripted cyclers | **No** [proposed] |
-| P7 | Physical limits: more than 12 touches per second sustained, more than 3 pulls per second, a squeeze hold longer than the gap since the previous touch plus 3 s (two fingers) | Fabricated spacing | **No** [proposed] |
+| P7 | Physical limits: more than 12 touches per second sustained, more than 3 pulls per second, a squeeze or pull hold longer than the gap since the previous touch plus 3 s (two fingers) | Fabricated spacing, fabricated holds (a stretch pays per second held since 2026-10-06; freshness already pays a pull reported 0.5 s after the last one only 3%) | **No** [proposed] |
 | P8 | No cash value: capsules have no sale price and trade is same-tier only (DESIGN 5.4) | Removes most of the reason to farm | By design |
 
 **Residual risk.** A randomised real-time macro at the physical limit earns the daily cap: 12 capsules a day against about 10 for a devoted human (DESIGN 5.4), so one macro account gains roughly 20% over the keenest player. The real exposure is **many accounts**: every account is a new 12-capsule stream. That is why trading is gated (default off, 2 days and 10 capsules to start, 3 trades a day, 1 per partner a day: TRADE.md sections 6 and 9) and why the ops view watches account creation bursts and one-sided flows.
@@ -467,7 +471,7 @@ The draft only knows `kind`, `amount` and the meter's own detail, so each task m
 
 | Metric | Counted when | Notes |
 |---|---|---|
-| `pokes` | a paid poke that is not a double-tap; with no `param`, freshness at least 0.5 ("gentle"); with `param` p, at least p seconds since the previous poke ("calm pause") | |
+| `pokes` | a paid poke that is not a double-tap; with no `param`, freshness at least 0.5 ("gentle": with the poke tau of 0.75 s since 2026-10-06, a gap of 0.53 s or more; it was 0.64 s); with `param` p, at least p seconds since the previous poke ("calm pause") | |
 | `squeezes` | a squeeze with hold at least `param` seconds (default 0.4) | "slow squeezes" p = 1, "long squeezes" p = 2 |
 | `softPops` | longest streak of consecutive squeezes each held 1.8 s or more; a shorter squeeze resets it | my reading of "in a row" [U] |
 | `medleys` | the meter paid a medley bonus | |
@@ -572,7 +576,8 @@ A "Today" panel with the two tasks of the day (`dailyTasks`): plain text, a prog
 * **Ring:** around the HUD gem, `meterFill(previewMeter)`. The preview runs the same `addInteraction` as the server on the client's own touches and is **reconciled** on every `wh_report_play` reply: `preview = fold(addInteraction, serverMeter, unackedEvents)`; the ring eases to the corrected value over 400 ms, never jumps backwards visibly by more than the unacked events.
 * **At 100%:** one ring pulse (400 ms, ease-out, single, never repeating), `audio.meterFull?.({ quiet })` (quieter mid-squeeze), `stage.dropCapsule?.()`, haptic ticks (DESIGN 6.2). Reduced motion: the capsule fades in at the HUD instead of dropping.
 * **States:** normal; **resting** ("Squishies are resting, filling slowly": daily rate 25%, tinted dim, announced once politely); **done for today** ("They'll be ready tomorrow", the 12-a-day hard stop: the ring stays full of tomorrow, nothing lost); **table full**; **offline** ("Waiting for connection", the ring keeps previewing and the touches buffer for up to 5 minutes).
-* **Mapping `SoftEvent` to `Interaction`** (DESIGN 5.4; `meterfeed.ts`): `poke` becomes a poke; `release` with `heldFor >= 0.4` becomes a squeeze with `amount = heldFor`; `snap` with `intensity >= 0.35` becomes a pull with `amount = intensity`, and below that a pull at the quarter rate (the meter handles the rate: pass the intensity as is). Contact times are kept as `dtMs` offsets from the first event of the batch.
+* **Mapping `SoftEvent` to `Interaction`** (DESIGN 5.4; `meterfeed.ts`): `poke` becomes a poke; `release` with `heldFor >= 0.4` becomes a squeeze with `amount = heldFor`; `snap` becomes a pull with `amount = intensity` (the pull level) and `heldS = heldFor` (the seconds from the grab to the release, 0 to 10 s): at a level of 0.35 or more the meter pays per second held, below that the flat "never stretched" rate (the meter handles the rate: pass the intensity as is). Contact times are kept as `dtMs` offsets from the first event of the batch; a pull's hold rides as a 4th element.
+* **Pending arc** (FUN.md 2.2, 2026-10-06): while a squeeze or a stretch is held, the ring shows a lighter arc of `collection.previewTouch(kind, heldS, level)`, the SP that touch would pay if it ended now (core `previewInteraction`: pay, freshness, a medley it would complete, the daily rate, the valve's room; 0 on a full table). It banks exactly that on the release unless another touch lands first. Pure and allocation-free; the real ledger's preview meter has the same `pending(it)`.
 
 ### 9.8 Species icons
 
@@ -638,8 +643,8 @@ IDs map to probes and manual checks. "Probe" means a plain-node file in `_harnes
 | C04 | `buildStacks`: the copies sum to the item count; `spares = copies - 1`; the keeper is the first hearted else the oldest; shuffling the input changes nothing; real and ghost items never share a stack |
 | C05 | Account switch and sign-out remove the mirror and the pending ops of the old account; prefs and ghosts stay |
 | C06 | 331 items serialise to under 40 KB and 1000 to under 110 KB (compact rows) |
-| C07 | `meterfeed`: the mapping table of section 9.7 on synthetic `SoftEvent`s; the batch builder never exceeds 120 events or reorders `dtMs` |
-| C08 | The preview meter reconciles: for random streams, `fold(addInteraction, serverMeter, unacked)` equals the server meter when nothing is unacked |
+| C07 | `meterfeed`: the mapping table of section 9.7 on synthetic `SoftEvent`s (a snap's hold included); the batch builder never exceeds 120 events or reorders `dtMs`, and a pull carries its clamped hold |
+| C08 | The preview meter reconciles: for random streams, `fold(addInteraction, serverMeter, unacked)` equals the server meter when nothing is unacked; the pending preview (`previewTouch`, `pending`) equals what the touch then pays, and allocates nothing |
 | C09 | No outgoing message ever contains a ghost id (scan every `forgeflow:rpc` the fake bridge sees) |
 | C10 | `probe_collection_imports.ts`: the import rules of section 3.2 hold |
 | C11 | Hostile storage: a save whose `pending` holds forged entries (with or without extra fields such as item ids, picks or touches) makes the client send nothing on load except one `wh_op_status` with keys; a merge, Tidy-up, restock or trade is never sent without a fresh in-session confirmation |
@@ -706,7 +711,7 @@ Steps 1 to 5 need no server and can ship first as a practice-only Hoard.
 * **Not run anywhere real:** Supabase (RLS through PostgREST, `SECURITY DEFINER` ownership, default privileges as the stub imitates them), Edge Functions, Deno import behaviour, the portal bridge, every UI.
 * **[G]** Supabase Edge Function limits and pricing; Deno accepting `.ts` relative imports; `supabase functions deploy` bundling files outside `supabase/functions`; localStorage quota (about 5 MB); that anonymous sign-ins exist (see NEXT_STEPS D-4).
 * **[U]** the 5-minute bank and the 5-capsule table cap are my numbers; the regularity thresholds in P6 are guesses; `STRETCH_2X_INTENSITY`; icon render cost; the sizes in section 12.
-* The slice-1 `app.ts` notes the real body's stretch tops out near 0.3 and its release intensities run 0.35 to 0.57; the meter's thresholds (0.4 s hold, 0.35 snap) assume those (DESIGN risk 12). `probe_economy.ts` now prints the snap intensity of scripted pulls on the current body (informative): on 2026-10-05, 0.31 at 1.5 x the rest radius and 0.41 at 2.2 x, so the 0.35 threshold is provisional (`meter.ts`). Re-measure with the real meter on a device.
+* The slice-1 `app.ts` notes the real body's stretch tops out near 0.3 and its release intensities run 0.35 to 0.57; the meter's thresholds (0.4 s hold, 0.35 snap) assume those (DESIGN risk 12). `probe_economy.ts` now prints the snap intensity of scripted pulls on the current body (informative): on 2026-10-05, 0.31 at 1.5 x the rest radius and 0.41 at 2.2 x. Since physics round 2 the snap intensity is the pull level (1.0 = the family's maxPull): on 2026-10-06 the starter read 0.28 at 0.5 x, 0.56 at 1.0 x, 0.84 at 1.5 x and 1.00 at 2.2 x, so 0.35 means "pulled about a third of the way". Re-measure with the real meter on a device.
 * **The 2026-10-05 revisions** (the scoped revocation and the privilege audit of A.0, A.2 and A.7, `wh_op_status`, the `wh_rate` buckets, the Tidy-up sub-key and its host check) **ran on a scratch PostgreSQL 16 only** (170/170 SQL, 37/37 host, 2026-10-05 [V]). Re-run both suites after any edit to an appendix, and on staging before the migration is applied anywhere (gate G9).
 * **[G/U]** whether the Supabase API gateway can be given a request-body limit for PostgREST calls, and what its default is (TRADE.md 7.4).
 * **Owner questions** that this module depends on are collected in `NEXT_STEPS.md`: hosting (D-6), age gating (D-5), account requirements (D-4), telemetry (D-9).
@@ -1311,7 +1316,7 @@ export function createHost(db: Db, deps: HostDeps = {}) {
   }
 
   /* ---------------- wh_report_play ---------------- */
-  type Ev = [kind: 0 | 1 | 2, amount: number, dtMs: number];
+  type Ev = [kind: 0 | 1 | 2, amount: number, dtMs: number, heldS?: number];   // heldS: a pull's hold, grab to release (2026-10-06, DESIGN 5.4)
   const KIND: TouchKind[] = ['poke', 'squeeze', 'pull'];
   function bump(progress: Record<string, any>, tasks: TaskDef[], k: TouchKind, amount: number, d: { freshness: number; doubleTap: boolean; medley: number; paidAs?: TouchKind }, gapSincePokeS: number | null): void {
     for (const t of tasks) {
@@ -1334,7 +1339,8 @@ export function createHost(db: Db, deps: HostDeps = {}) {
     let prev = -1; const evs: Ev[] = [];
     for (const e of req.events) {
       if (!Array.isArray(e) || ![0, 1, 2].includes(e[0]) || !Number.isFinite(e[1]) || !Number.isInteger(e[2]) || e[2] < prev || e[2] < 0) return { ok: false, error: 'bad_payload' };
-      prev = e[2]; evs.push([e[0], Math.min(e[0] === 2 ? 1 : 10, Math.max(0, e[1])), e[2]]);
+      if (e.length > 4 || (e.length === 4 && (e[0] !== 2 || !Number.isFinite(e[3])))) return { ok: false, error: 'bad_payload' };   // only a pull carries a hold
+      prev = e[2]; evs.push([e[0], Math.min(e[0] === 2 ? 1 : 10, Math.max(0, e[1])), e[2], e[0] === 2 ? Math.min(10, Math.max(0, e[3] ?? 0)) : 0]);
     }
     return withRetry(uid, req.idem, req, async () => {
       const st = await call('wh__read_state', { uid }); if (!st.ok) return st;
@@ -1350,7 +1356,7 @@ export function createHost(db: Db, deps: HostDeps = {}) {
       let credits = 0, paid = 0, lastPoke: number | null = meter.lastMs[0], accepted = 0, lastT = st.last_event_ms; let stoppedFull = false;
       for (const { e, t: tm } of placed) {
         if (Number(st.credits_play) + credits >= WH_QUEUE_MAX) { stoppedFull = true; break; }       // table full: accrual pauses (nothing is lost, the touches are simply not paid)
-        const r = addInteraction(meter, { kind: KIND[e[0]], amount: e[1], tMs: tm, dayKey: Math.floor(tm / DAY_MS) });
+        const r = addInteraction(meter, { kind: KIND[e[0]], amount: e[1], heldS: e[3], tMs: tm, dayKey: Math.floor(tm / DAY_MS) });
         if (r.detail.refused) continue;
         bump(progress, tasks, KIND[e[0]], e[1], r.detail, KIND[e[0]] === 'poke' && lastPoke !== null ? (tm - lastPoke) / 1000 : null);
         if (KIND[e[0]] === 'poke') lastPoke = tm;

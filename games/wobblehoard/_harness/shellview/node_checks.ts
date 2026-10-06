@@ -466,6 +466,64 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   const stepped = r.app.bodies.extras.map((x) => x.body);
   r.app.mat.clear();
   check('play mat: put back clears every extra (count 1)', r.app.mat.count === 1 && stepped.length === 3);
+
+  // stage B2 (body-to-body contact, feature-detected): a physics whose bodies offer collide() and can be built at a point. The extras are
+  // built AT their mat spot (shared space, drawn at the origin), every body calls collide(others) once per frame BEFORE any body steps,
+  // and a 'bump' event goes to audio.bump and a light haptic (not twice inside 0.12 s); the meter pays nothing for it.
+  {
+    const w2 = createMockWorld({ storage: null });
+    upgrade(w2);
+    const order: string[] = [];
+    const base = w2.deps.createBody;
+    let seq = 0;
+    w2.deps.createBody = (gg, o) => {
+      const b = base(gg) as ReturnType<typeof base> & { stepCalls: number; center: { x: number; y: number; z: number } };
+      const name = `b${seq++}`;
+      if (o?.at) { b.center.x = o.at.x; b.center.y = o.at.y; b.center.z = o.at.z; }
+      (b as SoftBodyLike & { collide?: (others: readonly SoftBodyLike[]) => void }).collide = (others) => { order.push(`collide ${name} ${others.length}`); };
+      const st = b.step.bind(b);
+      b.step = (dt: number) => { order.push(`step ${name}`); st(dt); };
+      return b;
+    };
+    const audioRec = w2.audio as unknown as Record<string, unknown>;
+    const bumps: unknown[] = [];
+    audioRec.bump = (pp: unknown) => { bumps.push(pp); };
+    const coll2 = createCollection({ storage: null, profile: null, now: () => 1_700_000_000_000 + w2.clock.t, random: () => 0.4 });
+    const app2 = createApp({ ...w2.deps, collection: coll2, epochNow: () => 1_700_000_000_000 + w2.clock.t });
+    app2.resize(800, 600, 1); app2.setPhase('play');
+    const ga = speciesBaseGenome(cat.SPECIES_BY_TIER[0][3].id, 11), gb = speciesBaseGenome(cat.SPECIES_BY_TIER[1][0].id, 12);
+    const a1 = app2.mat.add({ genome: ga, itemId: 'mat-a' }), a2 = app2.mat.add({ genome: gb, itemId: 'mat-b' });
+    const xs = app2.bodies.extras;
+    const placed = xs.every((x) => x.shared && x.position.x === 0 && x.position.z === 0 && Math.hypot(x.body.center.x, x.body.center.z) > 0.5);
+    order.length = 0;
+    w2.run(app2, 1000 / 60);
+    const firstStep = order.findIndex((e) => e.startsWith('step'));
+    const collides = order.filter((e) => e.startsWith('collide'));
+    check('stage B2: with collide() and placement the extras are built at their mat spots (shared space, drawn where they simulate); each of the 3 bodies calls collide(the 2 others) once per frame, before any body steps',
+      a1 === null && a2 === null && placed && app2.bodies.contactBodies === 3 && collides.length === 3 && collides.every((e) => e.endsWith(' 2')) && firstStep === 3, order.join(' | '));
+    const fill0 = app2.collection.meter().fill;
+    const pops0 = w2.haptics.rec.count('pop');
+    const xb = xs[0].body as unknown as { queue(ev: Partial<SoftEvent> & { kind: SoftEvent['kind'] }): void };
+    xb.queue({ kind: 'bump', intensity: 0.6 });
+    (app2.body as unknown as { queue(ev: Partial<SoftEvent> & { kind: SoftEvent['kind'] }): void }).queue({ kind: 'bump', intensity: 0.6 });
+    w2.run(app2, 1000 / 60);
+    check('stage B2: a bump event (from either body) plays audio.bump with its intensity, one light haptic tick for the pair, and pays nothing',
+      bumps.length === 2 && (bumps[0] as { intensity: number }).intensity === 0.6 && w2.haptics.rec.count('pop') === pops0 + 1 && app2.collection.meter().fill === fill0,
+      `bumps ${bumps.length}, haptic ticks +${w2.haptics.rec.count('pop') - pops0}, fill ${fill0} -> ${app2.collection.meter().fill}`);
+    // a physics with collide but without placement (the body comes back at the origin): kept apart, never collides inside another body
+    const w3 = createMockWorld({ storage: null });
+    upgrade(w3);
+    const base3 = w3.deps.createBody;
+    let collided = 0;
+    w3.deps.createBody = (gg) => { const b = base3(gg); (b as SoftBodyLike & { collide?: () => void }).collide = () => { collided++; }; return b; };
+    const app3 = createApp({ ...w3.deps, collection: createCollection({ storage: null, profile: null, now: () => 1_700_000_000_000 + w3.clock.t }), epochNow: () => 1_700_000_000_000 + w3.clock.t });
+    app3.resize(800, 600, 1); app3.setPhase('play');
+    app3.mat.add({ genome: ga, itemId: 'mat-a' });
+    w3.run(app3, 50);
+    check('stage B2: collide() without placement keeps the extra apart (render offset, no contact) instead of colliding two bodies at one spot',
+      app3.bodies.extras.length === 1 && !app3.bodies.extras[0].shared && Math.hypot(app3.bodies.extras[0].position.x, app3.bodies.extras[0].position.z) > 0.5 && collided === 0 && app3.bodies.contactBodies === 0, `collided ${collided}`);
+    app2.dispose(); app3.dispose();
+  }
 }
 
 /* ───────────────────────── 6. settings: resolution, migration, newer blobs, calm default, music ───────────────────────── */

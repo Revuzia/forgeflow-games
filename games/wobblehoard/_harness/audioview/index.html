@@ -49,6 +49,17 @@
   <button data-r="toss">Toss</button>
   <button id="strand" class="hold">Strand (hold to stretch, let go = snap)</button>
 </div>
+<h1 style="font-size:16px;margin-top:18px">Cut and reconnect</h1>
+<div class="row">
+  <label>family<select id="cutFam"><option>jellygel</option><option>gummy</option><option>waterfill</option><option>stickystretch</option><option>slimegoo</option><option>slowrise</option><option>marshmallow</option><option>beadsqueeze</option><option>putty</option><option>mochidough</option><option>firmsilicone</option><option>popdome</option></select></label>
+  <label>smaller piece <span id="fracV">0.50</span><input id="frac" type="range" min="0.125" max="1" step="0.005" value="0.5"></label>
+  <label>neck (s) <span id="neckV">0.25</span><input id="neck" type="range" min="0.1" max="0.8" step="0.01" value="0.25"></label>
+  <label><span>calm</span><input id="cutCalm" type="checkbox"></label>
+  <button data-x="cut">Cut (slice, then separate)</button>
+  <button data-x="sep">Separate only</button>
+  <button data-x="rejoin">Rejoin</button>
+  <button data-x="all">Reconnect all (whole again)</button>
+</div>
 <h1 style="font-size:16px;margin-top:18px">Reveal and merge ceremony</h1>
 <div class="row">
   <label>tier<select id="tier"><option>common</option><option>uncommon</option><option>rare</option><option>epic</option><option>legendary</option><option>mythic</option></select></label>

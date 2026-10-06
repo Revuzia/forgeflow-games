@@ -18,6 +18,7 @@ import {
   oneShotRoom, roomClearDelay, squishRoom, strandRoom, type RoomRequest,
 } from './music.ts';
 import { BumpLimiter, bump, lift, strand, strandSnap, toss, type StrandVoice } from './interact.ts';
+import { CutLimiter, cutFrac, cutPop, cutSlice, neckLen, rejoin as rejoinVoice } from './cut.ts';
 
 export const MAX_VOICES = 24;
 /** Hard ceiling including voices that are fading out after being stolen. */
@@ -25,7 +26,7 @@ const MAX_ALIVE = MAX_VOICES + 16;
 const LOOKAHEAD = 0.004;
 const GOLDEN = 0.6180339887498949;
 const KINDS = ['poke', 'squish', 'release', 'land', 'pop', 'blend', 'meterFull', 'capsule', 'reveal', 'merge', 'mergeBurst', 'duck',
-  'bump', 'lift', 'toss', 'strand', 'strandSnap', 'music'] as const;
+  'bump', 'lift', 'toss', 'strand', 'strandSnap', 'music', 'cut', 'cutPop', 'rejoin'] as const;
 type Kind = (typeof KINDS)[number];
 
 export interface CreateAudioOptions {
@@ -98,8 +99,12 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
   /** The last 128 tick costs (ms): detailStats() reports their p99 and max (the cumulative max also counts JIT warm-up). */
   const tickRing = new Float64Array(128);
   const bumpLimiter = new BumpLimiter();
-  const throttled: Record<string, number> = { bump: 0, strand: 0 };
+  const throttled: Record<string, number> = { bump: 0, strand: 0, cut: 0, rejoin: 0 };
   let strandV: StrandVoice | null = null;
+  /* CUT: one limiter for the slice, the separation pop and the rejoin; the slice is monophonic (a new one fades the last) */
+  const cutLimiter = new CutLimiter();
+  const rejoinLimiter = new CutLimiter();
+  let sliceV: VoiceGroup | null = null;
   let lastStrandUpd = -1e9;
   const perfS = (): number => (typeof performance !== 'undefined' ? performance.now() / 1000 : 0);
 
@@ -187,7 +192,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
   const musicBoostDb = (): number => Math.max(0, 20 * Math.log10(Math.max(musicGain(settings.music), 1e-6)));
 
   function askRoom(q: RoomRequest): void {
-    if (musicInst) musicInst.makeRoom(q.from, q.until, q.db, { at: q.at, atk: q.atk });
+    if (musicInst) musicInst.makeRoom(q.from, q.until, q.db, { at: q.at, atk: q.atk, gainDb: q.gainDb });
   }
 
   /** Make room for a one-shot effect `g` of `kind` that starts at `t0` (its `onset`, if it declares one, delays the full
@@ -669,6 +674,48 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
       lastStrandUpd = perfS();
       try { v.update({ tension: T, pan }); } catch { /* never throw into the render loop */ }
       if (musicInst) musicRoomHeld(strandRoom(ctx.currentTime, T, musicBoostDb()));
+    },
+
+    /* ───── CUT (_spec/CUT.md; cut.ts) ───── */
+
+    cut(p) {
+      if (!p || typeof p !== 'object' || (p.phase !== 'start' && p.phase !== 'separate')) { dropped++; return; }
+      if (!ctx || disposed || !ready()) { dropped++; tryResume(); return; }
+      const slice = p.phase === 'start';
+      const lv = cutLimiter.admit(slice ? 'slice' : 'pop', perfS());
+      throttled.cut = cutLimiter.throttled;
+      if (lv === null) return;
+      const a = accept(slice ? 'cut' : 'cutPop');
+      if (!a) return;
+      const base = {
+        rng: makeRng(a.seed), jitter: a.jitter, frac: cutFrac(p.frac), pan: clamp(fin(p.pan, 0), -1, 1), calm: p.calm === true,
+        family: typeof p.family === 'string' ? p.family : undefined, level: lv,
+      };
+      try {
+        if (slice) {
+          // monophonic: ten quick cuts never stack ten tears
+          if (sliceV && sliceV.alive && !sliceV.dying) sliceV.kill(0.04);
+          const g = cutSlice(a.c, chain!.plain, a.t0, { ...base, neckS: neckLen(p.neckS) });
+          registerFx(g, 'cut', a.t0);
+          sliceV = g;
+        } else registerFx(cutPop(a.c, chain!.plain, a.t0, base), 'cutPop', a.t0);
+      } catch { dropped++; }
+    },
+
+    rejoin(p) {
+      if (!p || typeof p !== 'object') { dropped++; return; }
+      if (!ctx || disposed || !ready()) { dropped++; tryResume(); return; }
+      const all = p.all === true;
+      const lv = rejoinLimiter.admit(all ? 'all' : 'rejoin', perfS());
+      throttled.rejoin = rejoinLimiter.throttled;
+      if (lv === null) return;
+      const a = accept('rejoin');
+      if (!a) return;
+      try {
+        registerFx(rejoinVoice(a.c, chain!.plain, a.t0, {
+          rng: makeRng(a.seed), jitter: a.jitter, frac: cutFrac(p.frac), all, pan: clamp(fin(p.pan, 0), -1, 1), calm: p.calm === true, level: lv,
+        }), 'rejoin', a.t0);
+      } catch { dropped++; }
     },
 
     detailStats() {

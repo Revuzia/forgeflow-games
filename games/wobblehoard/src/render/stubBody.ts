@@ -6,7 +6,7 @@
 //   * a gaussian pull toward a world target (grab), a table plane, gravity with a bounce, and a float-mode hover.
 // strain[] is computed from the real edge lengths, so the pressure blush gets honest numbers. Not shipped: nothing in the
 // game imports this file.
-import type { FingerDownArgs, RayHit, SoftBodyLike, SoftEvent, SoftMetrics, V3 } from '../contracts.ts';
+import type { CutPlane, FingerDownArgs, PieceOpts, RayHit, SoftBodyLike, SoftEvent, SoftMetrics, V3 } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { clamp, lerp } from '../core/rng.ts';
 import { buildGeodesic } from './geodesic.ts';
@@ -51,12 +51,21 @@ export class StubBody implements SoftBodyLike {
   private trembleAmp = 0;
   private burstX = 0; private burstV = 0;
   private moveGoal: V3 | null = null; private moveK = 1;
+  // CUT (dev stand-in for the physics' cut primitives, so the render harness can drive the cut visuals): a piece's volume fraction,
+  // a puppet waist along a plane, a smooth volume change, where it rests on the table
+  private fracNow = 1; private fracGoal = 1; private fracRate = 0;
+  private neckOn = false; private neckT = 0;
+  private readonly neckP = { x: 0, y: 0, z: 0 }; private readonly neckN = { x: 1, y: 0, z: 0 };
+  private homeX = 0; private homeZ = 0;
 
-  constructor(genome: Genome, opts?: { detail?: number; seed?: number }) {
-    const detail = opts?.detail ?? 3;
+  constructor(genome: Genome, opts?: { detail?: number; seed?: number; piece?: PieceOpts }) {
+    const piece = opts?.piece;
+    const pf = piece && Number.isFinite(piece.frac) ? clamp(piece.frac, 0.125, 1) : 1;
+    const detail = opts?.detail ?? (pf < 0.35 ? 2 : 3);
     const geo = buildGeodesic(Math.pow(2, detail));
     this.vertexCount = geo.vertexCount;
-    this.R = 0.5 * lerp(0.8, 1.25, genome.size);
+    this.R = 0.5 * lerp(0.8, 1.25, genome.size) * Math.cbrt(pf);
+    this.fracNow = this.fracGoal = pf; this.fracBuilt = pf;
     this.restRadius = this.R;
     const n = this.vertexCount, R = this.R;
     this.indices = Uint32Array.from(geo.indices);
@@ -71,6 +80,18 @@ export class StubBody implements SoftBodyLike {
       const floor = -R * 0.72, k = 0.035 * R;
       y = 0.5 * (y + floor + Math.sqrt((y - floor) * (y - floor) + k * k));
       rest[i * 3] = dx * R * (1 - 0.5 * w); rest[i * 3 + 1] = y; rest[i * 3 + 2] = dz * R * (1 - 0.5 * w);
+      if (piece?.chunk) {
+        // an eyeless chunk: a rounded lump (no peak) with a flat cut face toward cutNormal
+        let ny = dy * R * 0.82;
+        ny = 0.5 * (ny + floor + Math.sqrt((ny - floor) * (ny - floor) + k * k));
+        let x = dx * R, z = dz * R;
+        const cn = piece.cutNormal, cl = cn ? Math.hypot(cn.x, cn.y, cn.z) : 0;
+        if (cn && cl > 1e-6) {
+          const nx = cn.x / cl, nyy = cn.y / cl, nz = cn.z / cl, along = x * nx + ny * nyy + z * nz, cap = 0.55 * R;
+          if (along > cap) { const dd = along - cap; x -= nx * dd; ny -= nyy * dd; z -= nz * dd; }
+        }
+        rest[i * 3] = x; rest[i * 3 + 1] = ny; rest[i * 3 + 2] = z;
+      }
     }
     let mx = 0, my = 0, mz = 0;
     for (let i = 0; i < n; i++) { mx += rest[i * 3]; my += rest[i * 3 + 1]; mz += rest[i * 3 + 2]; }
@@ -105,8 +126,37 @@ export class StubBody implements SoftBodyLike {
       }
     }
     this.restVolume = this.volumeOf(rest);
+    if (piece?.at && Number.isFinite(piece.at.x) && Number.isFinite(piece.at.z)) { this.homeX = piece.at.x; this.homeZ = piece.at.z; }
     this.reset();
+    if (piece?.vel) { this.vx = piece.vel.x || 0; this.vy = piece.vel.y || 0; this.vz = piece.vel.z || 0; }
   }
+
+  /** CUT: the volume fraction of the whole squishy this body holds. */
+  get frac(): number { return this.fracNow; }
+  /** CUT: the fraction of this body on the plane's 'a' side (by vertex count: a stand-in), null when the plane misses it. */
+  measureCut(plane: CutPlane): number | null {
+    const P = this.positions, n = this.vertexCount, N = plane.normal, l = Math.hypot(N.x, N.y, N.z) || 1;
+    let a = 0;
+    for (let i = 0; i < n; i++) if (((P[i * 3] - plane.point.x) * N.x + (P[i * 3 + 1] - plane.point.y) * N.y + (P[i * 3 + 2] - plane.point.z) * N.z) / l >= 0) a++;
+    return a === 0 || a === n ? null : a / n;
+  }
+  /** CUT: a puppet waist along the plane (t 0..1: 1 = a thin waist), lobes pushed apart; null releases it. */
+  setNeck(plane: CutPlane | null, t: number): void {
+    if (!plane) { this.neckOn = false; this.neckT = 0; return; }
+    const N = plane.normal, l = Math.hypot(N.x, N.y, N.z) || 1;
+    this.neckOn = true; this.neckT = clamp(t, 0, 1);
+    this.neckP.x = plane.point.x - this.cx; this.neckP.y = plane.point.y - this.cy; this.neckP.z = plane.point.z - this.cz;
+    this.neckN.x = N.x / l; this.neckN.y = N.y / l; this.neckN.z = N.z / l;
+  }
+  /** CUT: grow / shrink to a new fraction of the whole over `seconds` (the rest shape scales by the cube root). */
+  setFrac(frac: number, seconds: number): void {
+    this.fracGoal = clamp(Number.isFinite(frac) ? frac : this.fracNow, 0.02, 1.2);
+    this.fracRate = Math.abs(this.fracGoal - this.fracNow) / Math.max(1e-3, Number.isFinite(seconds) ? seconds : 0.4);
+  }
+
+  /** The fraction the rest shape was BUILT at (the constructor's piece.frac): setFrac scales from there. */
+  private fracGoalAtBuild0(): number { return this.fracBuilt; }
+  private fracBuilt = 1;
 
   private volumeOf(p: Float32Array): number {
     let v = 0;
@@ -119,7 +169,7 @@ export class StubBody implements SoftBodyLike {
   }
 
   reset(): void {
-    this.cx = 0; this.cz = 0; this.cy = this.gravity ? this.restFloorY : this.R + 0.35;
+    this.cx = this.homeX; this.cz = this.homeZ; this.cy = this.gravity ? this.restFloorY : this.R + 0.35;
     this.vx = this.vy = this.vz = 0;
     this.sq = this.sqv = 0; this.peakX = this.peakZ = this.peakVX = this.peakVZ = 0;
     this.tiltX = this.tiltZ = this.tiltVX = this.tiltVZ = 0;
@@ -190,6 +240,10 @@ export class StubBody implements SoftBodyLike {
 
   private sub(h: number): void {
     this.t += h;
+    if (this.fracNow !== this.fracGoal) {
+      const st = this.fracRate * h;
+      this.fracNow = Math.abs(this.fracGoal - this.fracNow) <= st ? this.fracGoal : this.fracNow + Math.sign(this.fracGoal - this.fracNow) * st;
+    }
     this.foldT += (this.foldGoal - this.foldT) * (1 - Math.exp(-h * 7));
     this.burstV += (-260 * this.burstX - 7 * this.burstV) * h;
     this.burstX = clamp(this.burstX + this.burstV * h, -0.8, 0.6);
@@ -230,7 +284,7 @@ export class StubBody implements SoftBodyLike {
       this.vy -= 9.8 * h;
       this.cy += this.vy * h;
       // lowest point (cheap estimate: rest floor, squashed along the axis)
-      const floorY = this.restFloorY * (1 - this.foldT) + this.R * 0.8 * this.foldT;
+      const floorY = (this.restFloorY * (1 - this.foldT) + this.R * 0.8 * this.foldT) * Math.cbrt(this.fracNow / this.fracBuilt);
       const low = this.cy - floorY * (1 + this.burstX) * (1 - this.sq * Math.abs(this.ay) + 0.5 * this.sq * (1 - Math.abs(this.ay)));
       if (low < 0) {
         this.cy -= low;
@@ -268,9 +322,21 @@ export class StubBody implements SoftBodyLike {
     const fo = this.foldT, Rf = R * 0.8, bsc = 1 + this.burstX, tr = this.trembleAmp * R * 0.012;
     const gdx = this.gtx - this.gx, gdy = this.gty - this.gy, gdz = this.gtz - this.gz;
     const gsig = 0.3 * R, ginv = 1 / (2 * gsig * gsig);
+    const fsc = Math.cbrt(this.fracNow / Math.max(1e-6, this.fracGoalAtBuild0())), nk = this.neckOn ? this.neckT : 0;
+    const nN = this.neckN, nP = this.neckP, nW = 0.28 * R;
     let minY = 1e9;
     for (let i = 0; i < n; i++) {
-      let x = rest[i * 3], y = rest[i * 3 + 1], z = rest[i * 3 + 2];
+      let x = rest[i * 3] * fsc, y = rest[i * 3 + 1] * fsc, z = rest[i * 3 + 2] * fsc;
+      if (nk > 1e-3) {
+        // the waist: pinch toward the plane's normal axis near the plane, push the two lobes apart (volume roughly kept)
+        const s = (x - nP.x) * nN.x + (y - nP.y) * nN.y + (z - nP.z) * nN.z;
+        const px = x - s * nN.x, py = y - s * nN.y, pz = z - s * nN.z;          // the point's projection on the plane
+        const ax0 = nP.x - ((nP.x) * nN.x + (nP.y) * nN.y + (nP.z) * nN.z) * nN.x, ay0 = nP.y - ((nP.x) * nN.x + (nP.y) * nN.y + (nP.z) * nN.z) * nN.y, az0 = nP.z - ((nP.x) * nN.x + (nP.y) * nN.y + (nP.z) * nN.z) * nN.z;
+        const pinch = 0.85 * nk * Math.exp(-(s / nW) * (s / nW));
+        x = ax0 + (px - ax0) * (1 - pinch) + s * nN.x; y = ay0 + (py - ay0) * (1 - pinch) + s * nN.y; z = az0 + (pz - az0) * (1 - pinch) + s * nN.z;
+        const push = 0.12 * R * nk * Math.sign(s) * (1 - Math.exp(-Math.abs(s) / nW));
+        x += nN.x * push; y += nN.y * push; z += nN.z * push;
+      }
       const rdx = this.restDir[i * 3], rdy = this.restDir[i * 3 + 1], rdz = this.restDir[i * 3 + 2];
       if (fo > 1e-3) { x += (rdx * Rf - x) * fo; y += (rdy * Rf - y) * fo; z += (rdz * Rf - z) * fo; }   // fold into an equal-volume ball
       if (bsc !== 1) { x *= bsc; y *= bsc; z *= bsc; }

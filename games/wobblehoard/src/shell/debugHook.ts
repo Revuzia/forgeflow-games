@@ -58,6 +58,11 @@ export interface ShellDevApi {
   matInfo(): { count: number; limit: number; bodies: Array<{ itemId: string | null; x: number; y: number; r: number; fingers: number; compression: number; press: number; active: boolean }> };
   /** physics cost per frame (ms) for the bodies now on the mat: bodies.step(1/60) x n, timed */
   matStepCost(steps?: number): { bodies: number; msPerFrame: number; msPerBody: number };
+  /** U07 test seam: the collection's meter reads `offline` (a signed-in player lost the connection); false = back. The practice ledger
+   *  itself is never offline, so the harness fakes the server state here (dev only). */
+  forceOffline(on: boolean): void;
+  /** visible XP: where the pending figure comes from (the collection's preview or the published constants) and the pending fill now */
+  xp(): { source: 'collection' | 'constants'; pending: number };
   /** lifecycle hooks the harness exercises (context loss without a real GPU) */
   suspend(reason: 'hidden' | 'context' | 'covered'): void;
   unsuspend(reason: 'hidden' | 'context' | 'covered'): void;
@@ -267,6 +272,14 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       for (let i = 0; i < steps; i++) game.bodies.step(1 / 60);
       const ms = (performance.now() - t0) / steps;
       return { bodies: n, msPerFrame: ms, msPerBody: ms / n };
+    },
+    xp: () => ({ source: game.pendingSource, pending: game.pendingFill() }),
+    forceOffline(on) {
+      const c = game.hoard as unknown as { meter: () => ReturnType<typeof game.hoard.meter>; __meter?: () => ReturnType<typeof game.hoard.meter> };
+      if (!c.__meter) c.__meter = c.meter;
+      const orig = c.__meter;
+      c.meter = on ? () => ({ ...orig.call(game.hoard), offline: true }) : orig;
+      game.capsules.sync();
     },
     suspend: (r) => game.suspend(r),
     unsuspend: (r) => game.unsuspend(r),

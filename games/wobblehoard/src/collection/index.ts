@@ -13,6 +13,7 @@
 //   const profile = createProfileStore(storage, { subscribe });                       // first: the starter ghost then keeps its id
 //   const collection = createCollection({ storage, profile: profile.profile, subscribe });
 //   frame loop: for each drained SoftEvent -> collection.feed(ev, nowMs)              // any ms clock; anchored to the epoch inside
+//   while a squeeze or a stretch is held: collection.previewTouch?.(kind, heldS, level) -> the pending arc's SP (pure, allocation-free)
 //   collection.onChange(rerender); collection.onEvent((e) => e.type === 'capsule' ? stage.dropCapsule?.() ... )
 //   const r = await collection.openCapsule(); then stage.playCapsuleReveal with r.item.genome / r.tier_idx / r.is_new; then markSeen([r.item_id])
 //   merge: previewMerge(ids) -> hold -> merge(ids, preview.digest); MergeCeremonySpec.parents = r.parents (the consumed copies are
@@ -20,18 +21,18 @@
 //   pagehide / visibilitychange hidden -> collection.flush(); focus -> collection.sync(); teardown -> collection.dispose()
 import type { SoftEvent } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
-import type { Interaction } from '../core/meter.ts';
-import { DAY_MS, capsuleThreshold, dailyRateFor, dailyStatus, meterFill } from '../core/meter.ts';
+import type { Interaction, TouchKind } from '../core/meter.ts';
+import { DAY_MS, capsuleThreshold, dailyRateFor, dailyStatus, meterFill, previewInteraction } from '../core/meter.ts';
 import { MERGE_DAILY_CAP } from '../core/merge.ts';
 import type { Profile, StorageSubscribe } from '../core/save.ts';
 import type { StorageLike } from '../core/settings.ts';
 import type { SpeciesId } from '../data/catalog.ts';
-import { GHOST_CAP, HOARD_KEY, TIDY_MAX, WH_QUEUE_MAX } from './constants.ts';
+import { GHOST_CAP, HOARD_KEY, MAX_SQUEEZE_SECONDS, RELEASE_SQUEEZE_MIN_S, TIDY_MAX, WH_QUEUE_MAX } from './constants.ts';
 import {
   createFeedOutcome, dayOf, ghostClaimRestock, ghostCompleteTask, ghostFeed, ghostMerge, ghostOpen, ghostPreviewMerge, ghostRestockView, ghostTaskRows,
   ghostTidy, mergesToday,
 } from './ghost.ts';
-import { createMappedTouch, mapSoftEvent } from './meterfeed.ts';
+import { SNAP_MIN_LEVEL, clampHold, createMappedTouch, mapSoftEvent } from './meterfeed.ts';
 import { mergeErrorCopy, openErrorCopy, restockErrorCopy, taskErrorCopy } from './copy.ts';
 import { buildStacks, defaultMergeInputs, tidyCandidates } from './stacks.ts';
 import { FLAG_FAV, FLAG_SEEN, createHoardStore, rowToItem, sanitizePrefs } from './store.ts';
@@ -147,7 +148,7 @@ export function createCollection(deps: CollectionDeps): Collection {
 
   // ---- feed: the frame loop's hot path ----
   const touch = createMappedTouch();
-  const scratch: Interaction = { kind: 'poke', amount: 0, tMs: 0 };
+  const scratch: Interaction = { kind: 'poke', amount: 0, heldS: 0, tMs: 0 };
   const outcome = createFeedOutcome();
   // [clock offset, last fed time] in a typed array: plain `let` doubles in a closure would box a number on every paid touch
   const clk = new Float64Array([NaN, -Infinity]);
@@ -167,6 +168,7 @@ export function createCollection(deps: CollectionDeps): Collection {
     if (disposed || !mapSoftEvent(ev, touch)) return; // not a touch: no work, no allocation
     scratch.kind = touch.kind;
     scratch.amount = touch.amount;
+    scratch.heldS = touch.heldS;
     scratch.tMs = epochOf(tMs);
     const s = store.save;
     ghostFeed(s, scratch, outcome);
@@ -184,6 +186,38 @@ export function createCollection(deps: CollectionDeps): Collection {
     lastRate = rate;
     store.markDirty(); // the meter moved (items did not: the item caches stay valid)
     notify();
+  };
+
+  // ---- the pending preview (FUN.md 2.2): what the touch in progress would pay if it ended now. Pure: reads the meter, writes nothing
+  // but its own scratch record; the same mapping as mapSoftEvent and the feed's clock (never earlier than the last fed touch). ----
+  // The work writes its answer into a typed array and the method itself stays tiny, so the engine inlines it into the caller's frame
+  // loop and the returned number is never boxed: no allocation at all per call (probe_collection C08 measures it).
+  const pv: Interaction = { kind: 'poke', amount: 0, heldS: 0, tMs: 0 };
+  const pvOut = new Float64Array(1);
+  const previewInto = (kind: unknown, heldS: unknown, level: unknown): void => {
+    pvOut[0] = 0;
+    if (disposed) return;
+    let k: unknown = kind, h: unknown = heldS, l: unknown = level;
+    if (kind !== null && typeof kind === 'object') { const q = kind as { kind?: unknown; heldS?: unknown; level?: unknown }; k = q.kind; h = q.heldS; l = q.level; } // the one-object form
+    const s = store.save;
+    if (s.ghostCapsules >= WH_QUEUE_MAX) return; // table full: the meter does not move
+    const hold = typeof h === 'number' && h > 0 && h !== Infinity ? h : 0; // NaN, infinite, negative, missing -> 0 (as mapSoftEvent)
+    if (k === 'poke') { pv.kind = 'poke'; pv.amount = 0; pv.heldS = 0; }
+    else if (k === 'squeeze') {
+      if (!(hold >= RELEASE_SQUEEZE_MIN_S)) return; // that release would not be a squeeze (the contact's poke already paid)
+      pv.kind = 'squeeze'; pv.amount = hold > MAX_SQUEEZE_SECONDS ? MAX_SQUEEZE_SECONDS : hold; pv.heldS = 0;
+    } else if (k === 'pull') {
+      const lv = typeof l === 'number' && l > 0 ? (l > 1 ? 1 : l) : 0;
+      if (!(lv > SNAP_MIN_LEVEL)) return; // no snap would fire
+      pv.kind = 'pull'; pv.amount = lv; pv.heldS = clampHold(hold);
+    } else return;
+    const wall = now();
+    pv.tMs = clk[1] > wall ? clk[1] : wall;
+    pvOut[0] = previewInteraction(s.ghostMeter, pv);
+  };
+  const previewTouch = (kind: TouchKind | { kind?: unknown; heldS?: unknown; level?: unknown }, heldS?: number, level?: number): number => {
+    previewInto(kind, heldS, level);
+    return pvOut[0];
   };
 
   const meter = (): MeterView => {
@@ -223,6 +257,7 @@ export function createCollection(deps: CollectionDeps): Collection {
       return () => { eventListeners = eventListeners.filter((f) => f !== fn); };
     },
     feed,
+    previewTouch,
     openCapsule(): Promise<OpenResult> {
       if (!isPractice(ledger)) return Promise.resolve(unavailable('unavailable'));
       const r = ghostOpen(store.save, ctx());

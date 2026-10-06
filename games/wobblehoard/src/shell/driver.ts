@@ -22,6 +22,10 @@ export interface TouchState {
   learnPull(slot: number, snapIntensity: number): void;
   /** a new play body: forget the learned maximum pull */
   resetPull(): void;
+  /** seconds this finger has pressed the body (0 = not down): the squeeze in progress (visible XP, xp.ts) */
+  heldFor(slot: number): number;
+  /** seconds this finger's pull has been held (0 = no grab): the stretch in progress */
+  pullFor(slot: number): number;
 }
 
 export interface Driver {
@@ -56,6 +60,7 @@ export function createDriver(d: DriverDeps): Driver {
   const peakPress = [0, 0];
   const skipRelease = [-1, -1];
   const downAt = [0, 0];
+  const grabAt = [0, 0];
   const pendingAt = [-1, -1];
   const pendingWhy: Array<'tap' | 'release'> = ['tap', 'tap'];
   // the pull level the driver measures: grab start (world), requested distance from it, the body's maximum pull distance (learned)
@@ -79,6 +84,8 @@ export function createDriver(d: DriverDeps): Driver {
       else if (I >= 0.98 && (maxPullD === 0 || maxPullD > dist)) maxPullD = dist;   // clamped at its limit: the limit is at most dist
     },
     resetPull() { maxPullD = 0; pullDist[0] = pullDist[1] = 0; },
+    heldFor: (slot) => (fingerDown[slot] ? Math.max(1e-6, d.simTime() - downAt[slot]) : 0),
+    pullFor: (slot) => (grabActive[slot] ? Math.max(1e-6, d.simTime() - grabAt[slot]) : 0),
   };
 
   function executeUp(slot: Slot, why: 'tap' | 'release' | 'pull' | 'cancel'): void {
@@ -115,6 +122,7 @@ export function createDriver(d: DriverDeps): Driver {
         grabActive[a.slot] = true;
         fingerPan[a.slot] = d.panOfPoint(a.target);
         g0x[a.slot] = a.target.x; g0y[a.slot] = a.target.y; g0z[a.slot] = a.target.z; pullDist[a.slot] = 0;
+        grabAt[a.slot] = d.simTime();
         body.grab(a.slot, a.vertex, a.target);
         break;
       case 'grabMove': if (grabActive[a.slot]) { body.grabMove(a.slot, a.target); fingerPan[a.slot] = d.panOfPoint(a.target); notePull(a.slot, a.target); } break;

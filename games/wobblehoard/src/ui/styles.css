@@ -173,6 +173,21 @@ body {
 .meter.pulse { animation: wh-pulse .4s ease-out 1; }
 @keyframes wh-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--wh-amber) 70%, transparent); } 100% { box-shadow: 0 0 0 16px transparent; } }
 .meter-cluster[data-state="resting"] .meter-fill, .meter-cluster[data-state="done"] .meter-fill { stroke: var(--wh-cream-dim); }
+/* visible XP (FUN.md 2): the pending arc of a held squeeze or stretch (lighter, under the fill), the bank, the glow, the sparks */
+.meter-fill[data-instant="true"] { transition: none; }
+.meter-pending { fill: none; stroke: var(--wh-cream); stroke-width: 5; stroke-linecap: round; opacity: 0; transition: opacity .18s linear; }
+.meter[data-pending="true"] .meter-pending { opacity: .62; }
+.meter[data-bank="paid"] .meter-pending { opacity: 0; transition: opacity .3s linear .62s; }
+.meter[data-bank="none"] .meter-pending { opacity: 0; transition: opacity .3s linear; }
+.meter { transition: box-shadow .35s ease-out; }
+.meter[data-glow="catch"] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--wh-amber) 55%, transparent), 0 0 18px 2px color-mix(in srgb, var(--wh-amber) 45%, transparent); transition-duration: .08s; }
+.meter[data-glow="soft"] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--wh-amber) 45%, transparent), 0 0 26px 8px color-mix(in srgb, var(--wh-amber) 38%, transparent); transition-duration: .3s; }
+.sparks { position: fixed; inset: 0; z-index: 4; pointer-events: none !important; overflow: hidden; contain: strict; }
+.spark {
+  position: absolute; left: -11px; top: -4px; width: 22px; height: 8px; border-radius: 4px; opacity: 0; will-change: transform, opacity;
+  background: linear-gradient(to left, #fff 0 18%, var(--wh-cream) 30%, var(--wh-amber) 58%, color-mix(in srgb, var(--wh-amber) 0%, transparent));
+  box-shadow: 0 0 10px 2px color-mix(in srgb, var(--wh-amber) 55%, transparent);
+}
 .meter-state {
   position: absolute; right: 0; bottom: calc(100% + 6px); width: max-content;
   margin: 0; max-width: min(46vw, 260px); padding: 4px 10px; border-radius: 10px; text-align: right;
@@ -497,12 +512,22 @@ body[data-kbd="1"] .keys { display: block; }
   font-weight: 800; font-size: 15px; pointer-events: none;
 }
 
+/* the offline banner (COLLECTION 9.9): quiet, under the top bar, never over the squishy's middle */
+.net-banner {
+  position: fixed; z-index: 5; left: 50%; top: calc(var(--safe-t) + 64px); transform: translateX(-50%); max-width: calc(100vw - 32px);
+  padding: 8px 14px; border-radius: 12px; background: var(--wh-panel); border: 1px solid var(--wh-edge); color: var(--wh-cream);
+  font-weight: 700; font-size: 14px; text-align: center; pointer-events: none !important;
+}
+.net-banner[hidden] { display: none; }
+
 /* ---------- reduced motion: no wobble, no breathing, no sliding; fades only, and short ---------- */
 body[data-calm="true"] .meter.pulse { animation: none; }
 body[data-calm="true"] .plate { transform: translate(-50%, 0); transition: opacity .2s linear, visibility 0s linear .2s; }
 @media (prefers-reduced-motion: reduce) {
   .title-letter, .cta, .meter.pulse { animation: none !important; }
   .meter-fill { transition: none; }
+  .meter, .meter-pending { transition-duration: .2s !important; transition-delay: 0s !important; }
+  .sparks { display: none; }
   .plate { transform: translate(-50%, 0) !important; transition: opacity .2s linear, visibility 0s linear .2s; }
   .panel { transform: none !important; transition: opacity .12s linear, visibility 0s linear .12s; }
   .panel[data-open="true"] { transition-delay: 0s; }

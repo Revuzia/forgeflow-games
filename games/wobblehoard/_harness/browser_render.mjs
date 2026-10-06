@@ -36,6 +36,11 @@ const flag = (name, dflt) => { const a = args.find((x) => x.startsWith(`--${name
 const BODY = flag('body', 'auto');
 const QUICK = !!flag('quick', false);
 const NO_PERF = QUICK || !!flag('no-perf', false);
+// --only=a,b,...: run only these sections (iteration; the default runs everything). Sections: main, phone, sky, lifecycle, r2 (governor,
+// multi-body API, 3-body leak, capsule drop / ownership), cer (every ceremony: budget, beats, flash, escalation; skip; calm; tier-up,
+// 3 parents, drivers, done), chains, rarity, film, gallery, glow, strands, mat, capspot, cut, perf
+const ONLY = typeof flag('only', '') === 'string' ? String(flag('only', '')).split(',').filter(Boolean) : [];
+const ON = (name) => ONLY.length === 0 || ONLY.includes(name);
 const PORT = 5364;
 const OUT = resolve(ROOT, '_shots/render');
 const REPORT_DIR = resolve(ROOT, '_harness/_reports');
@@ -104,6 +109,7 @@ async function sheet(ctx, name, cells, cols, cw, ch) {
 
 try {
   /* ───────────────────────── main session: poses, tiers, eyes, fx, genomes ───────────────────────── */
+  if (ON('main')) {
   const W = 720, H = 540;
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
   const { page, bad } = await openView(ctx, `quality=med&body=${BODY === 'auto' ? '' : BODY}`, 'main');
@@ -204,9 +210,10 @@ try {
   console.log('wrote contact_sheet_6.png');
   report.problems.push(...bad);
   await ctx.close();
+  }
 
   /* ───────────────────────── phone viewport ───────────────────────── */
-  {
+  if (ON('phone')) {
     const pctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
     const { page: pp, bad: pbad } = await openView(pctx, `quality=med&body=${BODY === 'auto' ? '' : BODY}`, 'phone');
     await shot(pp, 'phone_390x844');
@@ -218,6 +225,7 @@ try {
   }
 
   /* ───────────────────────── the set: a seamless dusk gradient at every aspect ratio and camera pitch ───────────────────────── */
+  if (ON('sky'))
   // (round-2 fix: the distance fog of the ground beyond the mat saturated to one flat colour band whose lower end read as a hard edge across the
   // top of the frame, and the sky glow had a kink at the horizon). Bodies and the felt mat hidden; 8x8 block luminance. A vertical seam = a
   // step between neighbouring block columns; a band edge / kink = a large second difference down a column (a smooth gradient has a small one
@@ -242,7 +250,7 @@ try {
   }
 
   /* ───────────────────────── lifecycle: leaks, dispose, context loss, allocation, auto tier ───────────────────────── */
-  {
+  if (ON('lifecycle')) {
     const lctx = await browser.newContext({ viewport: { width: 320, height: 240 }, deviceScaleFactor: 1 });
     const { page: lp, bad: lbad } = await openView(lctx, `quality=low&body=${BODY === 'auto' ? '' : BODY}`, 'lifecycle');
 
@@ -316,7 +324,7 @@ try {
   }
 
   /* ───────────────────────── round 2: multi-body, rarity, ceremonies, flash safety (DESIGN 5.3, 6.x) ───────────────────────── */
-  {
+  if (ON('r2') || ON('cer') || ON('chains') || ON('rarity') || ON('film')) {
     const TIERS6 = ['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'];
     const CAP_BUDGET = { common: 1.6, uncommon: 2.0, rare: 2.6, epic: 3.2, legendary: 3.9, mythic: 4.5 };
     const MER_BUDGET = { common: 2.2, uncommon: 2.6, rare: 3.2, epic: 3.8, legendary: 4.5, mythic: 5.2 };
@@ -330,6 +338,7 @@ try {
     const rctx = await browser.newContext({ viewport: { width: 320, height: 240 }, deviceScaleFactor: 1 });
     const { page: rp, bad: rbad } = await openView(rctx, `quality=low&body=${bodyQ}`, 'round2', [/GPU stall due to ReadPixels/i]);
 
+    if (ON('r2')) {
     // ---- 0. the material family's translucency cap (CONTRACT 11): the jelly never draws an opaque family clearer than its cap, at any tier ----
     {
       let over = 0, n = 0, capped = 0;
@@ -440,6 +449,7 @@ try {
     check(capOwn.opening.point === null && !capOwn.opening.hit && !capOwn.opening.landed && capOwn.h2.landed && capOwn.h2.hit && capOwn.h2.onScreen && capOwn.bodies === 1,
       'the reveal owns its capsule (handle reads as opening, squeeze / remove ignored); a capsule dropped DURING a reveal lands on screen and stays tappable after it', JSON.stringify(capOwn));
     await rp.evaluate(() => { const R = window.__RV__; R.stage.clearBodies(); R.setGenome(''); R.frames(2); });
+    }
 
     // ---- E. ceremonies: durations vs budget, beats, flash windows, skip, calm ----
     // A luminance transition = a direction flip of the per-frame mean RELATIVE luminance (linear light, 0..1) after a swing of at least FLASH_THR.
@@ -480,6 +490,7 @@ try {
       const okT = dLen === 0 ? s.minTimeScale === 1 && s.dipSeconds === 0 : Math.abs(s.minTimeScale - dScale) <= 0.01 && s.dipSeconds >= dLen && s.dipSeconds <= dLen + 0.2;
       return { ok: okP && okR && okC && okT && s.ramps === 1 && r.particlesDropped === 0, txt: `particles ${s.burstParticles}/${ESC.particles[i]}, rings ${s.rings}/${ESC.rings[i]}, push ${(s.push * 100).toFixed(1)}%/${ESC.push[i] * 100}%, pull-back ${(s.pull * 100).toFixed(1)}%/${ESC.pull[i] * 100}%, arc ${s.arcDeg.toFixed(1)}/${ESC.arc[i]} deg, time scale ${s.minTimeScale.toFixed(2)} for ${s.dipSeconds.toFixed(2)} s / ${dScale} for ${dLen} s, light ramps ${s.ramps}, dropped ${r.particlesDropped}` };
     };
+    if (ON('cer')) {
     for (const kind of ['capsule', 'merge']) {
       for (const tier of tiersToRun) {
         const r = await run({ kind, tier, dt: DT });
@@ -506,12 +517,13 @@ try {
       }
     }
     check(worstTransitions <= 3, 'FLASH PROBE: no 1 s window of any capsule / merge ceremony has more than 3 luminance transitions', `worst ${worstTransitions} (${worstWhere}), threshold ${FLASH_THR} mean linear luminance`);
+    }
 
     // CHAINED ceremonies (the independent verifier's adversarial sequences): skip a bright reveal right after its burst and open the next
     // one at once (Fast open), five quick pops back to back, a queue of capsules each skipped, three Epics in a row. The burst light is
     // governed ACROSS ceremonies (granted flashes >= 1 s apart; a refused burst is played soft) and a skip inside a burst fades like the burst
     // light: the same <= 3 transitions per rolling second must hold for the whole chain (target <= 2).
-    {
+    if (ON('chains')) {
       const CH = {
         mythicSkipThenQuickCommon: [{ kind: 'capsule', tier: 'mythic', skipAt: 1.73 }, { kind: 'capsule', tier: 'common', quick: true, startAt: 1.81 }],
         mythicSkipThenQuickUncommon: [{ kind: 'capsule', tier: 'mythic', skipAt: 1.73 }, { kind: 'capsule', tier: 'uncommon', quick: true, startAt: 1.81 }],
@@ -535,6 +547,7 @@ try {
       check(worstChain <= 3, 'FLASH PROBE, CHAINED ceremonies (skip + Fast open, 5 quick pops, a skipped queue, 3 Epics): <= 3 luminance transitions in any 1 s', `worst ${worstChain} (${worstChainAt}); per chain ${Object.entries(chains).map(([k, v]) => `${k} ${v.transitions1s}`).join(', ')}`);
     }
 
+    if (ON('cer')) {
     // tier-up accent (+0.4 s), 3-parent merge, quick pop
     for (const tier of QUICK ? ['mythic'] : ['rare', 'epic', 'mythic']) {
       const r = await run({ kind: 'merge', tier, dt: DT, tierUp: true });
@@ -610,11 +623,12 @@ try {
         `camera ${calm.camRange.toExponential(0)} vs ${norm.camRange.toFixed(2)} normal, burst particles ${cs.burstParticles} (expected ${ESC.calmParticles[ti]}), live particles ${calm.maxParticles} vs ${norm.maxParticles}, time scale ${cs.minTimeScale}, rings ${cs.rings} fades ${cs.fades}, ramps ${cs.ramps}`);
     }
     await rp.evaluate(() => { const R = window.__RV__; R.setCalm(false); R.stage.clearBodies(); R.setGenome(''); R.frames(2); });
+    }
     report.problems.push(...rbad);
     await rctx.close();
 
     // ---- F. rarity ladder reads from the object: one body per tier, desktop + phone ----
-    {
+    if (ON('rarity')) {
       const sctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
       const { page: sp, bad: sbad } = await openView(sctx, `quality=med&body=${bodyQ}`, 'rarity', [/GPU stall due to ReadPixels/i]);
       const cells = [], fps = [];
@@ -669,7 +683,7 @@ try {
     }
 
     // ---- G. filmstrips: 6 tiers x 7 beats for both ceremonies, 1280x800 (med) and 390x844 (low) ----
-    if (!QUICK) {
+    if (!QUICK && ON('film')) {
       const PRE = { common: 0, uncommon: 0, rare: 0.3, epic: 0.5, legendary: 0.8, mythic: 1.0 };
       const MERGE_BURST_AT = { common: 1.3, uncommon: 1.5, rare: 1.8, epic: 2.1, legendary: 2.4, mythic: 2.8 };   // = audio MERGE_CHARGE_S
       const timesFor = (kind, t) => {
@@ -715,7 +729,7 @@ try {
     const RB = (report.stageB = { gallery: {}, glow: null, strands: {}, mat: {} });
     const sheetCtxB = await browser.newContext({ viewport: { width: 800, height: 600 } });
     // ---- gallery: all 50 species at rest (their own catalog look and material family), 1280x800 med and 390x844 low ----
-    for (const [label, vp, q, cw, ch] of QUICK ? [['desktop', { width: 1280, height: 800 }, 'med', 256, 160]] : [['desktop', { width: 1280, height: 800 }, 'med', 256, 160], ['phone', { width: 390, height: 844 }, 'low', 117, 253]]) {
+    if (ON('gallery')) for (const [label, vp, q, cw, ch] of QUICK ? [['desktop', { width: 1280, height: 800 }, 'med', 256, 160]] : [['desktop', { width: 1280, height: 800 }, 'med', 256, 160], ['phone', { width: 390, height: 844 }, 'low', 117, 253]]) {
       const gctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
       const { page: gp, bad: gbad } = await openView(gctx, `quality=${q}&body=${bodyQ}`, `gallery-${label}`, [/GPU stall due to ReadPixels/i]);
       const cells = [], fps = [];
@@ -734,10 +748,11 @@ try {
       report.problems.push(...gbad);
       await gctx.close();
     }
+    if (ON('glow') || ON('strands')) {
     const bctx = await browser.newContext({ viewport: { width: 640, height: 480 }, deviceScaleFactor: 1 });
     const { page: bp, bad: bbad } = await openView(bctx, `quality=med&body=${bodyQ}`, 'stageB', [/GPU stall due to ReadPixels/i]);
     // ---- B5 contact glow ----
-    {
+    if (ON('glow')) {
       const glow = await bp.evaluate(() => { const R = window.__RV__; R.setGenome(''); R.frames(60); return R.contactGlowProbe(); });
       RB.glow = glow;
       if (!glow.hasTip) check(true, 'contact glow: skipped (the body has no tip(); feature-detected)', '');
@@ -745,7 +760,7 @@ try {
         'contact glow (B5): the pressed spot blooms (local luminance up), the frame does not flash (global mean change < 0.02)', `box ${glow.boxOff.toFixed(4)} -> ${glow.boxOn.toFixed(4)}, frame ${glow.globalOff.toFixed(4)} -> ${glow.globalOn.toFixed(4)}, strength ${glow.amt.toFixed(2)}`);
     }
     // ---- B6 tack strands (a sticky-stretch species and a slime; a gel must NOT string) ----
-    {
+    if (ON('strands')) {
       const tacky = CATALOG.filter((d) => d.family === 'stickystretch' || d.family === 'slimegoo').slice(0, 2);
       const gel = CATALOG.find((d) => d.family === 'jellygel');
       for (const d of [...tacky, gel]) {
@@ -759,8 +774,9 @@ try {
     }
     report.problems.push(...bbad);
     await bctx.close();
+    }
     // ---- B1 several bodies on the mat, framed: desktop and phone ----
-    for (const [label, vp] of [['desktop', { width: 1280, height: 800 }], ['phone', { width: 390, height: 844 }]]) {
+    if (ON('mat')) for (const [label, vp] of [['desktop', { width: 1280, height: 800 }], ['phone', { width: 390, height: 844 }]]) {
       const mctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
       const { page: mp, bad: mbad } = await openView(mctx, `quality=low&body=${bodyQ}`, `mat-${label}`, [/GPU stall due to ReadPixels/i]);
       for (const n of [2, 3, 5]) {
@@ -776,7 +792,7 @@ try {
       await mctx.close();
     }
     // ---- the meter-full capsule lands clear of the HUD's bottom 72 CSS px (default safe inset) and, wherever the frame allows, of the body ----
-    for (const [vw, vh, mustClearBody] of [[568, 320, true], [320, 256, true], [844, 390, true], [1280, 800, true], [390, 844, false]]) {
+    if (ON('capspot')) for (const [vw, vh, mustClearBody] of [[568, 320, true], [320, 256, true], [844, 390, true], [1280, 800, true], [390, 844, false]]) {
       const cctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
       const { page: cp, bad: cbad } = await openView(cctx, `quality=low&body=${bodyQ}`, `capspot-${vw}x${vh}`, [/GPU stall due to ReadPixels/i]);
       const r = await cp.evaluate(() => {
@@ -801,8 +817,72 @@ try {
     await sheetCtxB.close();
   }
 
+  /* ───────────────────────── CUT visuals (_spec/CUT.md): chunks, seam, parting strand, bridge, 6 pieces framed, the X09 flash gate ───────────────────────── */
+  if (ON('cut')) {
+    const bodyQ = BODY === 'auto' ? '' : BODY;
+    const RC = (report.cut = { faces: {}, runs: {}, framing: {}, cost: null });
+    const zz = (L, thr = 0.04) => {
+      const idx = []; let dir = 0, pivot = L[0];
+      for (let k = 1; k < L.length; k++) {
+        const v = L[k];
+        if (dir === 0) { if (v - pivot >= thr) { dir = 1; pivot = v; idx.push(k); } else if (pivot - v >= thr) { dir = -1; pivot = v; idx.push(k); } }
+        else if (dir === 1) { if (v > pivot) pivot = v; else if (pivot - v >= thr) { dir = -1; pivot = v; idx.push(k); } }
+        else { if (v < pivot) pivot = v; else if (v - pivot >= thr) { dir = 1; pivot = v; idx.push(k); } }
+      }
+      return idx;
+    };
+    const ww = (idx, dt) => { let w = 0; for (let i = 0; i < idx.length; i++) { let n = 0; for (let j = i; j < idx.length && idx[j] - idx[i] < 1 / dt; j++) n++; w = Math.max(w, n); } return w; };
+    const cctx = await browser.newContext({ viewport: { width: 640, height: 480 }, deviceScaleFactor: 1 });
+    const { page: xp, bad: xbad } = await openView(cctx, `quality=med&body=${bodyQ}`, 'cut', [/GPU stall due to ReadPixels/i]);
+    // ---- 1. a piece drawn without a face (AddBodyOpts.chunk): the real body and a stub piece, whole vs chunk ----
+    for (const kind of ['real', 'stub']) {
+      const r = await xp.evaluate(([g, kind]) => window.__RV__.chunkFaceProbe(g, kind), [speciesBaseGenome('dollop', 1), kind]);
+      writeFileSync(resolve(OUT, `cut_face_whole_${kind}.png`), b64(r.pngWhole));
+      writeFileSync(resolve(OUT, `cut_chunk_${kind}.png`), b64(r.pngChunk));
+      RC.faces[kind] = { inkWhole: r.whole, inkChunk: r.chunk, eyeFootprint: r.mask, faceVisible: r.faceVisible };
+      check(r.faceVisible[0] === true && r.faceVisible[1] === false && r.mask >= 30 && r.whole >= 0.3 * r.mask && r.chunk <= 0.05 * r.whole,
+        `CUT: a ${kind} body added with { chunk: true } is drawn without a face (dark eye pixels inside the eyes' footprint: whole vs chunk, same body)`, `eye footprint ${r.mask} px, dark ink ${r.whole} -> ${r.chunk}, face visible ${r.faceVisible.join('/')}`);
+    }
+    // ---- 2. X09: 10 rapid cuts (seam, swap, parting strand; at 6 pieces the two smallest reconnect first) and a Reconnect all ----
+    const DTc = 1 / 30;
+    for (const [name, sp, calm] of QUICK ? [['sticky', 'twangle', false]] : [['sticky', 'twangle', false], ['gel', 'dollop', false], ['slime_calm', CATALOG.find((d) => d.family === 'slimegoo').id, true]]) {
+      const r = await xp.evaluate(([g, calm, shots, dt]) => window.__RV__.cutProbe({ genome: g, cuts: 10, calm, shots, dt }), [speciesBaseGenome(sp, 1), calm, name === 'sticky', DTc]);
+      for (const [k, jpg] of Object.entries(r.shots)) writeFileSync(resolve(OUT, `cut_${name}_${k}.jpg`), b64(jpg));
+      const w = ww(zz(r.lumas), DTc), w02 = ww(zz(r.lumas, 0.02), DTc), maxLight = Math.max(0, ...r.light);
+      const lo = Math.min(...r.lumas), hi = Math.max(...r.lumas);
+      RC.runs[name] = { transitions1s: w, transitions1s_at_0_02: w02, maxLight, luma: [lo, hi], cutsDone: r.cutsDone, reconnects: r.reconnects, maxPieces: r.maxPieces, maxGlow: r.maxGlow, maxStrands: r.maxStrands, maxBridges: r.maxBridges, strandEvents: r.strandEvents, snapEvents: r.snapEvents, piecesAtEnd: r.piecesAtEnd, facesAtEnd: r.facesAtEnd, framed: r.framed, marks: r.marks.join(' ') };
+      check(w <= 3 && maxLight === 0 && r.cutsDone === 10 && r.maxPieces <= 6 && r.wholeAtEnd && r.facesAtEnd === 1 && r.maxBridges >= 2,
+        `CUT X09 (${name}): 10 rapid cuts + Reconnect all: <= 3 luminance transitions in any 1 s, no screen flash, never more than 6 pieces, whole again with one face`,
+        `worst 1 s window ${w} transitions (${w02} at 0.02), luma ${lo.toFixed(3)}..${hi.toFixed(3)}, screen light ${maxLight}, cuts ${r.cutsDone}, reconnects ${r.reconnects}, pieces <= ${r.maxPieces}, glow <= ${r.maxGlow.toFixed(2)}, strands <= ${r.maxStrands}, bridges <= ${r.maxBridges}`);
+      check(r.snapEvents >= r.cutsDone && (name !== 'sticky' || r.strandEvents >= 10 * r.cutsDone),
+        `CUT parting strand (${name}): one strand per cut, stretched then snapped once each; the shell's strand hook hears it`, `snaps ${r.snapEvents}, stretch frames ${r.strandEvents}, cuts ${r.cutsDone}`);
+      check(r.framed.inFrame && r.framed.pieces === 6 && r.framed.minPx >= 40, `CUT (${name}): 6 pieces on the mat, all inside the 640x480 frame`, JSON.stringify({ pieces: r.framed.pieces, minPx: r.framed.minPx }));
+    }
+    report.problems.push(...xbad);
+    await cctx.close();
+    // ---- 3. 6 pieces framed on desktop and phone (stills of the whole sequence on desktop) ----
+    for (const [label, vp, q] of [['desktop', { width: 1280, height: 800 }, 'med'], ['phone', { width: 390, height: 844 }, 'low']]) {
+      if (QUICK && label === 'phone') continue;
+      const dctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
+      const { page: dp, bad: dbad } = await openView(dctx, `quality=${q}&body=${bodyQ}`, `cut-${label}`, [/GPU stall due to ReadPixels/i]);
+      const r = await dp.evaluate(([g, dt]) => window.__RV__.cutProbe({ genome: g, cuts: 5, calm: false, shots: true, dt }), [speciesBaseGenome('twangle', 1), DTc]);
+      for (const [k, jpg] of Object.entries(r.shots)) writeFileSync(resolve(OUT, `cut_${label}_${k}.jpg`), b64(jpg));
+      RC.framing[label] = r.framed;
+      check(r.framed.inFrame && r.framed.pieces === 6 && r.framed.minPx >= (label === 'phone' ? 30 : 60), `CUT ${label}: 6 pieces framed (all inside ${vp.width}x${vp.height}, the smallest >= ${label === 'phone' ? 30 : 60} px wide)`, JSON.stringify({ pieces: r.framed.pieces, minPx: r.framed.minPx, boxes: r.framed.boxes }));
+      if (label === 'desktop') {
+        const cost = await dp.evaluate((g) => window.__RV__.cutCost(g, 3), speciesBaseGenome('twangle', 1));
+        const best = (a) => Math.min(...a);
+        RC.cost = { ...cost, ratio: best(cost.sixPieces) / best(cost.twoWhole) };
+        check(RC.cost.ratio <= 1.5, 'CUT frame budget (render): 6 pieces cost <= 1.5x two whole bodies (1280x800 med, best of 3)',
+          `6 pieces ${best(cost.sixPieces).toFixed(0)} ms vs 2 whole ${best(cost.twoWhole).toFixed(0)} ms (x${RC.cost.ratio.toFixed(2)}), draw calls ${cost.drawCalls.six} vs ${cost.drawCalls.two}, triangles ${cost.triangles.six} vs ${cost.triangles.two}`);
+      }
+      report.problems.push(...dbad);
+      await dctx.close();
+    }
+  }
+
   /* ───────────────────────── perf (relative cost only) ───────────────────────── */
-  if (!NO_PERF) {
+  if (!NO_PERF && ON('perf')) {
     const pctx = await browser.newContext({ viewport: { width: 480, height: 360 }, deviceScaleFactor: 1 });
     // the synchronous timing uses gl.readPixels, which makes Chromium print a harmless "GPU stall" performance warning
     const { page: pp, bad: pbad } = await openView(pctx, `quality=med&body=${BODY === 'auto' ? '' : BODY}`, 'perf', [/GPU stall due to ReadPixels/i]);

@@ -4,7 +4,7 @@
 //
 // DEV ONLY (import.meta.env.DEV, so `vite build` drops the import and the module): ?dev=1 exposes window.__WH__ (debugHook.ts) and the
 // stats overlay; ?lab=1 adds the sound lab. A production build contains no hook, no lab and no /__shot poster (audit findings 6 / 20).
-import type { QualityTier, Settings } from '../contracts.ts';
+import type { QualityTier, Settings, SoftBodyCtor } from '../contracts.ts';
 import { genomeFromParam } from '../core/genome.ts';
 import { SETTINGS_KEY, detectEnv, parseSettingsText, safeLocalStorage } from '../core/settings.ts';
 import type { StorageSubscribe } from '../core/save.ts';
@@ -106,7 +106,8 @@ export async function boot(): Promise<(() => void) | null> {
       profile,
       collection: hoard,
       epochNow,
-      createBody: (g) => new SoftBody(g),
+      // the play mat with contact (mat.ts): a whole squishy built at its mat spot is the face piece of frac 1 (contracts.ts PieceOpts)
+      createBody: (g, o) => (o?.at ? new (SoftBody as unknown as SoftBodyCtor)(g, { piece: { frac: 1, chunk: false, at: o.at } }) : new SoftBody(g)),
       createStage,
       createAudio,
       genome: cfg.genomeParam ? genomeFromParam(cfg.genomeParam) : undefined,

@@ -56,6 +56,20 @@ export class BodyView {
   clock = 0;
   /** Hide the eyes (a merge parent pressed in BEHIND another one: its eyes would show through the front jelly as stray extra eyes). */
   faceHidden = false;
+  /**
+   * CUT (AddBodyOpts.chunk): an eyeless piece of a cut squishy. Same jelly material, colour, pattern and core glow, sized by its own body;
+   * no face, and the squishy's world-space tier FX (aura, dome, pillar, motes, stars) stay with the face piece.
+   */
+  readonly chunk: boolean;
+  /** 0..1, set by the stage every frame: every CUT glow on this body is held down by it (calm effects, a recent ceremony flash). */
+  glowK = 1;
+  // CUT seam (setCutSeam): the plane in the BODY's world space (the render offset is added per frame), eased strength
+  private readonly seamN = new THREE.Vector3(0, 1, 0);
+  private seamD = 0;
+  private seamTarget = 0;
+  private seamAmt = 0;
+  /** The body's volume fraction when the view was built (SoftBodyLike.frac, CUT; 1 when absent): its size follows frac from there. */
+  private readonly frac0: number;
   /** Squared camera distance of the body centre (the stage's back-to-front ordering of the translucent jellies). */
   sortDepth = 0;
   /** Tack strands (stage B6): built only when this body first strings. */
@@ -68,9 +82,11 @@ export class BodyView {
   private calm = false;
   private shown = true;
   private disposed = false;
+  get isDisposed(): boolean { return this.disposed; }
 
-  constructor(id: number, inner: SoftBodyLike, genome: Genome, tier: TierName, spec: TierSpec, hub: EnvHub, quad: THREE.BufferGeometry, owned: boolean) {
-    this.id = id; this.genome = genome; this.tier = tier; this.style = TIER_STYLES[tier]; this.spec = spec; this.owned = owned;
+  constructor(id: number, inner: SoftBodyLike, genome: Genome, tier: TierName, spec: TierSpec, hub: EnvHub, quad: THREE.BufferGeometry, owned: boolean, chunk = false) {
+    this.id = id; this.genome = genome; this.tier = tier; this.style = TIER_STYLES[tier]; this.spec = spec; this.owned = owned; this.chunk = chunk;
+    this.frac0 = typeof inner.frac === 'number' && Number.isFinite(inner.frac) && inner.frac > 0 ? inner.frac : 1;
     this.proxy = new BodyProxy(inner);
     this.palette = renderPalette(genome);
     this.scale = inner.restRadius / 0.5;
@@ -91,6 +107,7 @@ export class BodyView {
     this.strands = new TackStrands(hub, this.palette.body, this.palette.pale);
     this.group.add(this.jelly.mesh, this.core.group, this.face.group, this.fx.group, this.decals.shadow, this.decals.pool, this.rarity.group, this.strands.group);
     this.group.frustumCulled = false;
+    if (chunk) { this.faceHidden = true; this.face.group.visible = false; this.rarity.group.visible = false; }
     this.update(0, 0, null, null, 0, 0);
   }
 
@@ -154,7 +171,10 @@ export class BodyView {
     this.prevSq = rawSq;
     this.smComp += (rawSq - this.smComp) * (1 - Math.exp(-dt * 14));
     this.smStretch += (Math.max(m.stretch, j.pull * 0.6 * this.grabGate) - this.smStretch) * (1 - Math.exp(-dt * 10));
-    this.core.sizeMul = this.proxy.scale;
+    // CUT: a piece growing or shrinking (setFrac: a reconnect) keeps its core, glows and contact light in proportion
+    const fr = this.proxy.inner.frac, fs = typeof fr === 'number' && Number.isFinite(fr) && fr > 0 ? Math.min(3, Math.max(0.3, Math.cbrt(fr / this.frac0))) : 1;
+    this.core.sizeMul = this.proxy.scale * fs;
+    this.sizeK = fs * this.proxy.scale;
     this.core.update(body, dt, time, this.smComp);
     const u = this.mats.uniforms;
     u.uTime.value = time;
@@ -171,7 +191,16 @@ export class BodyView {
     // the happy squint is the RELEASE expression: while a finger or a grab still holds the body, a wobble of the squeeze (negative rate)
     // must not trigger it, the eyes stay wide (CONTRACT 7: widen when squeezed, squint into happy arcs on release)
     const rate = Math.min(this.sqRate, m.compressionRate);
-    this.face.update(dt, time, pointer, camera, this.smComp, m.fingers > 0 || m.grabbed ? Math.max(0, rate) : rate);
+    if (!this.chunk) this.face.update(dt, time, pointer, camera, this.smComp, m.fingers > 0 || m.grabbed ? Math.max(0, rate) : rate);
+    // CUT seam: eased in (~0.1 s) and out (~0.2 s): a glow, never a step
+    const sk = this.seamTarget * this.glowK;
+    this.seamAmt += (sk - this.seamAmt) * (1 - Math.exp(-dt * (sk > this.seamAmt ? 10 : 5)));
+    if (this.seamAmt < 1e-3 && sk <= 0) this.seamAmt = 0;
+    const off = this.proxy.offset, su = u.uSeam.value;
+    su.set(this.seamN.x, this.seamN.y, this.seamN.z, this.seamD + this.seamN.x * off.x + this.seamN.y * off.y + this.seamN.z * off.z);
+    u.uSeamAmt.value = this.seamAmt;
+    u.uSeamW.value = 0.03 * this.scale * fs;
+    u.uSpotR.value = 0.16 * this.scale * fs;
     this.fx.update(dt, time, body);
     const tell = Math.min(1, Math.max(0, this.extraPoolTell)) * Math.min(1, this.extraPool * 2);
     if (tell !== this.poolTellNow) {   // the ceremony light on the table, in the tier colour (no allocation: the setter copies)
@@ -195,6 +224,29 @@ export class BodyView {
   }
 
   private readonly snapAt = { x: 0, y: 0, z: 0 };
+
+  /** CUT seam (stage.setCutSeam): the plane in the body's world space, t 0..1 (0 or a null plane: the glow eases out). */
+  setSeam(plane: { point: V3; normal: V3 } | null, t: number): void {
+    const n = plane?.normal, p = plane?.point;
+    const l = n ? Math.hypot(n.x, n.y, n.z) : 0;
+    if (!n || !p || !(l > 1e-6) || !Number.isFinite(l) || !Number.isFinite(p.x + p.y + p.z) || !(t > 0)) { this.seamTarget = 0; return; }
+    this.seamN.set(n.x / l, n.y / l, n.z / l);
+    this.seamD = this.seamN.x * p.x + this.seamN.y * p.y + this.seamN.z * p.z;
+    const x = Math.min(1, t / 0.45);
+    this.seamTarget = 0.9 * x * x * (3 - 2 * x);   // rises with the waist, full well before the pieces part
+  }
+  /** The seam of the body this piece was cut from, carried over at its current strength, fading out (render world space). */
+  carrySeam(nx: number, ny: number, nz: number, d: number, amt: number): void {
+    const off = this.proxy.offset;
+    this.seamN.set(nx, ny, nz); this.seamD = d - (nx * off.x + ny * off.y + nz * off.z);
+    this.seamAmt = Math.max(this.seamAmt, amt); this.seamTarget = 0;
+  }
+  get seamAmount(): number { return this.seamAmt; }
+  /** The body's current size (rest radius x its frac growth since the view was built): what the CUT strand and bridge are sized by. */
+  get liveRadius(): number { return this.proxy.restRadius * this.sizeK; }
+  private sizeK = 1;
+  /** CUT bridge: a soft glow spot where the reconnect neck joins this body (world position, strength 0..1; 0 = off). */
+  setSpot(x: number, y: number, z: number, w: number): void { this.mats.uniforms.uSpot.value.set(x, y, z, Math.max(0, Math.min(1, w))); }
 
   /**
    * Contact glow ("touch the light", stage B5): where a fingertip presses, the jelly blooms softly in its CORE colour, with the press

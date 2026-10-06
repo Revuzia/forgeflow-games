@@ -14,7 +14,8 @@ export interface QuickSwitch {
   destroy(): void;
 }
 
-export const QUICK_MAX = 4;
+/** the owner's requirement: the last five played and hearted squishies */
+export const QUICK_MAX = 5;
 
 export function createQuickSwitch(parent: HTMLElement, onPick: (id: string) => void): QuickSwitch {
   const el = h('div', { class: 'qswitch', attrs: { role: 'group', 'aria-label': 'Switch squishy', hidden: '' } });

@@ -23,11 +23,11 @@ const SR = 48000;
 const f1 = (v) => (Number.isFinite(v) ? v.toFixed(1) : String(v));
 const f2 = (v) => (Number.isFinite(v) ? v.toFixed(2) : String(v));
 const db = (p) => 10 * Math.log10(Math.max(p, 1e-30));
-const pct = (arr, p) => { const s = Float64Array.from(arr).sort(); return s.length ? s[Math.min(s.length - 1, Math.max(0, Math.round(p * (s.length - 1))))] : NaN; };
+export const pct = (arr, p) => { const s = Float64Array.from(arr).sort(); return s.length ? s[Math.min(s.length - 1, Math.max(0, Math.round(p * (s.length - 1))))] : NaN; };
 const dec = (s) => { const b = Buffer.from(s, 'base64'); return new Float32Array(b.buffer, b.byteOffset, b.length / 4).slice(); };
 
 /** BS.1770 K-weighting at 48 kHz (shelf + RLB high-pass), direct form I. */
-function kWeight(x) {
+export function kWeight(x) {
   const st = [
     [[1.53512485958697, -2.69169618940638, 1.19839281085285], [1, -1.69065929318241, 0.73248077421585]],
     [[1.0, -2.0, 1.0], [1, -1.99004745483398, 0.99007225036621]],
@@ -45,7 +45,7 @@ function kWeight(x) {
   return y;
 }
 /** Mean square over `win` s windows every `hop` s in [from, to]: [{ t (centre), p }]. */
-function msFrames(x, win, hop, from = 0, to = x.length / SR) {
+export function msFrames(x, win, hop, from = 0, to = x.length / SR) {
   const W = Math.round(win * SR), H = Math.round(hop * SR);
   const c = new Float64Array(x.length + 1);
   for (let i = 0; i < x.length; i++) c[i + 1] = c[i] + x[i] * x[i];
@@ -64,7 +64,7 @@ function bandsOf(p) { const e = new Float64Array(BANDS.length); for (let k = 1; 
 
 /** Separation of an effect (fx stem) over the music in [t0, t1]: in-band (70% bands, 2048 frames hop 256 within 20 dB of the
  *  loudest), K and A over the effect's 20 ms frames (hop 5 ms) within 10 dB of its loudest. */
-function separation(fx, mu, fxK, muK, t0, t1) {
+export function separation(fx, mu, fxK, muK, t0, t1) {
   const N = 2048, H = 256;
   const s0 = Math.max(0, Math.round(t0 * SR) - N / 2), s1 = Math.min(fx.length - N, Math.round(t1 * SR));
   const F = [], Mm = [];
@@ -94,7 +94,7 @@ function separation(fx, mu, fxK, muK, t0, t1) {
  *  being within 10 dB of its own peak (K-weighted 5 ms frames); 0 when the music was not dipped first. Measured against the
  *  same music with no play (the verifier's version compared with the 300 ms before the call, which also fires on a note
  *  that simply decays); an effect that finds the music already down (an earlier effect's hold) has no exposure of its own. */
-function exposure(fxK, muK, refK, call, end) {
+export function exposure(fxK, muK, refK, call, end) {
   const mf = msFrames(muK, 0.005, 0.0025, call, call + 0.6), rf = msFrames(refK, 0.005, 0.0025, call, call + 0.6);
   const ff = msFrames(fxK, 0.005, 0.0025, call, Math.min(end, call + 0.6));
   const fpk = Math.max(...ff.map((q) => q.p));

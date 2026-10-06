@@ -567,7 +567,7 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
       el.hidden = false; el.dataset.open = 'true';
       button.setAttribute('aria-expanded', 'true');
       layoutCover();
-      showTab(t ?? tab);
+      showTab(t ?? 'shelf');   // the HUD button and H always open on the shelf (the tab dots say where a gift or a task waits)
       requestAnimationFrame(() => { if (open && !card) title.focus(); });
     },
     close() {

@@ -6,7 +6,9 @@ import type { TierName } from '../contracts.ts';
 import type { SettingsEnv } from '../core/settings.ts';
 import { createAnnouncer } from '../ui/announcer.ts';
 import type { Announcer } from '../ui/announcer.ts';
-import { h, isCoarsePointer } from '../ui/dom.ts';
+import { h, isCoarsePointer, prefersReducedMotion } from '../ui/dom.ts';
+import { createSparks } from '../ui/sparks.ts';
+import type { Sparks } from '../ui/sparks.ts';
 import { tierLabel } from '../ui/gem.ts';
 import { createHud } from '../ui/hud.ts';
 import type { Hud } from '../ui/hud.ts';
@@ -18,12 +20,13 @@ import { createSettingsPanel } from '../ui/settingsPanel.ts';
 import type { SettingsPanel } from '../ui/settingsPanel.ts';
 import { createHoard } from '../ui/hoard/panel.ts';
 import type { HoardUi } from '../ui/hoard/panel.ts';
-import { createQuickSwitch } from '../ui/quickSwitch.ts';
+import { QUICK_MAX, createQuickSwitch } from '../ui/quickSwitch.ts';
 import type { SwitchChoice } from '../ui/quickSwitch.ts';
 import { warmSpeciesIcons } from '../ui/speciesIcon.ts';
 import type { Game, PlayLabel } from './game.ts';
 import { createHoardEnv } from './hoardEnv.ts';
 import '../ui/hoard.css';
+import { COPY } from '../collection/copy.ts';
 
 export interface UiBinding {
   readonly hud: Hud;
@@ -33,6 +36,8 @@ export interface UiBinding {
   readonly announcer: Announcer;
   /** SHELL-2b: the Hoard (shelf, card, gift, today, merge pad, Tidy-up) */
   readonly hoard: HoardUi;
+  /** visible XP: the gain sparks (none under Calm effects or reduced motion: the ring glows instead) */
+  readonly sparks: Sparks;
   toast(text: string, ms?: number): void;
   /** Escape outside a ceremony: close what is open (settings, the plate); true = something closed */
   escape(): boolean;
@@ -103,9 +108,46 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     for (const it of g.hoard.items()) if (it.fav) add(it.id);
     return out;
   };
-  const refreshSwitch = (): void => qs.set(choices());
+  // the HUD rows the 3D capsule must not land under (render lane's optional setSafeInsets): the top bar, and the bottom row with the quick
+  // switcher above it when it shows; reported on change only
+  let insetKey = '';
+  const reportInsets = (): void => {
+    const st = g.stage;
+    if (typeof st.setSafeInsets !== 'function') return;
+    const ih = window.innerHeight;
+    if (!(ih > 0)) return;
+    const topBar = hud.el.querySelector<HTMLElement>('.hud-top')?.getBoundingClientRect();
+    let bottomTop = ih;
+    for (const e of [hud.el.querySelector<HTMLElement>('.hud-bottom'), qs.el]) {
+      if (!e || e.hidden) continue;
+      const r = e.getBoundingClientRect();
+      if (r.height > 0) bottomTop = Math.min(bottomTop, r.top);
+    }
+    const top = topBar && topBar.height > 0 ? Math.round(topBar.bottom) : 0;
+    const bottom = Math.round(Math.max(0, ih - bottomTop));
+    const k = `${top},${bottom}`;
+    if (k === insetKey) return;
+    insetKey = k;
+    try { st.setSafeInsets({ top, bottom }); } catch (e) { console.error(e); }
+  };
+  const refreshSwitch = (): void => { qs.set(choices()); reportInsets(); };
   refreshSwitch();
+  window.addEventListener('resize', reportInsets);
+  off.push(() => window.removeEventListener('resize', reportInsets));
   off.push(g.on('identity', () => refreshSwitch()), g.hoard.onChange(() => refreshSwitch()), () => qs.destroy());
+
+  // ---- offline (COLLECTION 9.9, signed in): a quiet banner while the connection is gone, the ring keeps previewing; "Reconnected" once
+  const netBanner = h('p', { class: 'net-banner', text: COPY.offline, attrs: { hidden: '', 'aria-hidden': 'true' } });   // the live region says it
+  root.append(netBanner);
+  let offline = false;
+  const netState = (gone: boolean): void => {
+    if (gone === offline) return;
+    offline = gone;
+    netBanner.hidden = !gone;
+    document.body.dataset.offline = String(gone);
+    announcer.say(gone ? COPY.offline : COPY.reconnected);
+  };
+  off.push(() => netBanner.remove());
 
   let toastEl: HTMLElement | null = null;
   let toastTimer = 0;
@@ -131,7 +173,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     g.on('mute', (m) => { hud.setMuted(m); announcer.say(m ? 'Sound off' : 'Sound on'); }),
     g.on('identity', (_id, l) => { hud.setLabel(l); setPlayLabel(l); if (!g.ceremonies.active) announcer.say(`Your squishy: ${labelText(l)}`); }),
     g.on('interaction', () => { hud.interact(); if (plate.shown && !g.ceremonies.active) plate.hide(); }),
-    g.on('meter', (m) => { hud.meter.set(m); }),
+    g.on('meter', (m) => { hud.meter.set(m); netState(m.offline); }),
     g.on('capsuleReady', (n) => { hud.meter.pulse(g.settings.calm); announcer.say(n > 1 ? `A capsule is ready. ${n} waiting.` : 'A capsule is ready.'); }),
     g.on('message', (t) => { toast(t); announcer.say(t); }),
     g.on('notice', (t) => { announcer.say(t); }),
@@ -147,10 +189,42 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     g.onStep(() => { if (plate.shown && !g.ceremonies.active && g.clock.now() - plateAt >= PLATE_MS) plate.hide(); }),
     g.on('phase', (ph) => {
       document.body.dataset.phase = ph;
-      if (ph === 'play') { hud.setActive(true); o.onPlay(); }
+      if (ph === 'play') { hud.setActive(true); o.onPlay(); requestAnimationFrame(reportInsets); }
     }),
   );
   hud.meter.set(g.capsules.reading);
+
+  // ---- visible XP (FUN.md 2): sparks from the touch to the ring (or a soft glow under Calm effects), and the pending arc of a hold
+  const sparks = createSparks(root);
+  let gainedAt = -1;          // the step a touch last paid (the release of a held touch banks its arc)
+  let steps = 0;
+  let pendShown = 0, bankWait = 0;
+  const BANK_WAIT_STEPS = 8;  // a held touch's release event may come a few steps after the finger lifts
+  off.push(
+    g.on('gain', (e) => {
+      gainedAt = steps;
+      const calm = g.settings.calm || prefersReducedMotion();
+      const r = hud.meter.ring.getBoundingClientRect();
+      if (calm || e.x === null || e.y === null || !r.width) { hud.meter.glow(true); return; }
+      const c = canvas.getBoundingClientRect();
+      const n = Math.min(6, Math.max(3, Math.round(2.5 + e.sp * 1.2)));   // a poke 3, a squeeze or a stretch 4 to 6
+      const ms = sparks.burst(c.left + e.x, c.top + e.y, r.left + r.width / 2, r.top + r.height / 2, n);
+      if (ms > 0) { hud.meter.hold(ms); window.setTimeout(() => hud.meter.glow(false), ms); } else hud.meter.glow(true);
+    }),
+    g.onStep(() => {
+      steps++;
+      const p = g.pendingFill();
+      if (p > 0) {
+        bankWait = 0;
+        if (pendShown === 0 || Math.abs(p - pendShown) >= 0.002) { hud.meter.setPending(p); pendShown = p; }
+      } else if (pendShown > 0) {
+        // the hold ended: bank it when its release paid (now or within a few steps), else let it fade
+        if (gainedAt >= steps - 1) { hud.meter.bankPending(true); pendShown = 0; bankWait = 0; }
+        else if (++bankWait >= BANK_WAIT_STEPS) { hud.meter.bankPending(false); pendShown = 0; bankWait = 0; }
+      }
+    }),
+    () => sparks.destroy(),
+  );
   { const n = g.collection.loadNotice(); if (n) { toast(n, 6000); announcer.say(n); } }
 
   // ---- the play target follows the squishy on screen (CSSOM writes only; re-placed every frame while it has focus)
@@ -164,7 +238,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   window.addEventListener('keydown', onTab, { capture: true, passive: true });
 
   return {
-    hud, panel: p, play, plate, announcer, hoard, toast,
+    hud, panel: p, play, plate, announcer, hoard, sparks, toast,
     escape() {
       if (p.isOpen()) { p.close('escape'); return true; }
       if (hoard.escape()) return true;
@@ -173,7 +247,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     },
     keyUsed() { document.body.dataset.kbd = '1'; if (!isCoarsePointer()) hud.setHintMode('keyboard'); },
     switchBy(dir) {
-      const list = choices().slice(0, 4);
+      const list = choices().slice(0, QUICK_MAX);
       if (!list.length) { announcer.say('No other squishy to switch to yet.'); return; }
       pick((dir > 0 ? list[0] : list[list.length - 1]).id);
     },

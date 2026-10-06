@@ -244,6 +244,68 @@ export async function runEngineTests3() {
       check('with music off and nothing retiring, the music timer is stopped (no ticks)', audio.detailStats().music.ticks === ticks, `${audio.detailStats().music.ticks - ticks} ticks in 0.5 s`, '0');
     }
 
+    /* ───── 8b. CUT & RECONNECT live: no-ops before unlock, hostile arguments, a storm with the music on, no leak ───── */
+    {
+      const before = caught.length, ctxBefore = spy.count;
+      const fresh = createAudio({ seed: 909 });
+      safe('cut (locked)', () => fresh.cut({ phase: 'start', frac: 0.5 }));
+      safe('cut sep (locked)', () => fresh.cut({ phase: 'separate', frac: 0.5 }));
+      safe('rejoin (locked)', () => fresh.rejoin({ frac: 1, all: true }));
+      check('before unlock(): cut / rejoin are safe no-ops (no exception, no AudioContext, counted as dropped)', caught.length === before && spy.count === ctxBefore && fresh.stats().dropped === 3, `${caught.length - before} exceptions, ${spy.count - ctxBefore} contexts, dropped ${fresh.stats().dropped}`, '0, 0, 3');
+      safe('dispose fresh', () => fresh.dispose());
+    }
+    {
+      await drain(audio, 3000);
+      const before = caught.length;
+      const bad = [NaN, -1, 5, Infinity, -Infinity, undefined, null, '0.5', {}, 1e9, -1e9];
+      for (const v of bad) {
+        safe('cut', () => audio.cut({ phase: 'start', frac: v, neckS: v, family: v, pan: v, calm: v }));
+        safe('cut sep', () => audio.cut({ phase: 'separate', frac: v, family: v, pan: v, calm: v }));
+        safe('cut phase', () => audio.cut({ phase: v, frac: 0.5 }));
+        safe('rejoin', () => audio.rejoin({ frac: v, all: v, pan: v, calm: v }));
+        await sleep(40);
+      }
+      safe('cut()', () => audio.cut()); safe('rejoin()', () => audio.rejoin());
+      await sleep(900);
+      const st = audio.stats();
+      check('cut / rejoin with hostile parameters (NaN, Infinity, strings, objects, 1e9, missing, a wrong phase): 0 exceptions, output finite and <= 0.9', caught.length === before && Number.isFinite(st.peak) && st.peak <= 0.9, `${caught.length - before} exceptions, peak ${st.peak.toFixed(3)}`, '0, <= 0.9');
+    }
+    {
+      await drain(audio, 3000);
+      audio.setMusic({ on: true });
+      await sleep(400);
+      const createdA = tr.stat.created, disconnA = tr.stat.disconnected;
+      const c0 = audio.stats().started, th0 = audio.detailStats().throttled;
+      let issued = 0, maxLive = 0, maxNodes = 0, maxPeak = 0, nan = false;
+      const fams = ['jellygel', 'slimegoo', 'marshmallow', 'beadsqueeze', 'putty', 'popdome', 'nonsense'];
+      const t0 = performance.now();
+      while (issued < 1500) {
+        for (let b = 0; b < 15 && issued < 1500; b++, issued++) {
+          const k = issued % 5, fam = fams[issued % fams.length];
+          if (k === 0) audio.cut({ phase: 'start', frac: 0.125 + (issued % 7) / 16, neckS: 0.1 + (issued % 4) / 10, family: fam, calm: issued % 3 === 0 });
+          else if (k === 1) audio.cut({ phase: 'separate', frac: 0.125 + (issued % 7) / 16, family: fam });
+          else if (k === 2) audio.rejoin({ frac: (issued % 8) / 8 });
+          else if (k === 3) audio.rejoin({ frac: 1, all: true });
+          else audio.poke({ intensity: 0.4 });
+        }
+        const s = audio.stats();
+        maxLive = Math.max(maxLive, s.live); maxNodes = Math.max(maxNodes, s.liveNodes);
+        if (!Number.isFinite(s.peak)) nan = true; else maxPeak = Math.max(maxPeak, s.peak);
+        await sleep(12);
+      }
+      const issueS = (performance.now() - t0) / 1000;
+      const c1 = audio.stats().started, th1 = audio.detailStats().throttled;
+      audio.setMusic({ on: false });
+      await sleep(3000);
+      await drain(audio, 6000);
+      await sleep(300);
+      const s1 = audio.stats(), d1 = audio.detailStats();
+      const played = { cut: c1.cut - c0.cut, cutPop: c1.cutPop - c0.cutPop, rejoin: c1.rejoin - c0.rejoin };
+      info.cutStorm = { issued, issueS, maxLive, maxNodes, maxPeak, played, throttled: { cut: th1.cut - th0.cut, rejoin: th1.rejoin - th0.rejoin }, created: tr.stat.created - createdA, disconnected: tr.stat.disconnected - disconnA };
+      check(`1500 cut / rejoin / poke triggers in ${issueS.toFixed(1)} s with the music on: the limiters thin them (slices <= 3 + 1.5/s, pops <= 3 + 2/s), live groups and nodes bounded, output finite and <= 0.9`, played.cut <= 3 + 1.5 * issueS + 1 && played.cutPop <= 3 + 2 * issueS + 1 && maxLive <= MAX_VOICES + 16 && maxNodes < 6000 && !nan && maxPeak <= 0.9, `played ${played.cut} slices, ${played.cutPop} pops, ${played.rejoin} rejoins; throttled ${th1.cut - th0.cut} / ${th1.rejoin - th0.rejoin}; max ${maxLive} groups, ${maxNodes} nodes, peak ${maxPeak.toFixed(3)}`, 'thinned, bounded');
+      check(`... then music off and drained: 0 live groups, 0 live nodes, no music session; the API-surface tracker holds only the ${CHAIN_NODES} master-chain nodes`, s1.live === 0 && s1.liveNodes === 0 && d1.music.sessions === 0 && tr.live.size === CHAIN_NODES, `${s1.live} groups, ${s1.liveNodes} nodes, ${d1.music.sessions} sessions; tracker ${tr.live.size} live`, `0 / 0 / 0, ${CHAIN_NODES}`);
+    }
+
     /* ───── 9. a realistic session: music + play at a human pace + a ceremony ───── */
     {
       audio.setMusic({ on: true });

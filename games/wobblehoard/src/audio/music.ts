@@ -61,8 +61,22 @@ export const DUCK_RELEASE_TC = 0.5;
 export const ROOM_DB = -24;
 /** The dip is split: the melody (mallets, their echoes, the bubbles: tonal transients in the effects' own 0.4-2.4 kHz band,
  *  the part that most often covers a soft effect) takes the full ROOM_DB; the dark breathing pad this share of it in dB
- *  (-17.3 dB), so a soft carpet stays under the play instead of the music vanishing altogether. */
+ *  (-17.3 dB), so a soft carpet stays under the play instead of the music vanishing altogether. (At a music volume above
+ *  the default the pad's share grows: roomPadShare.) */
 export const ROOM_PAD_SHARE = 0.72;
+/**
+ * The pad's share of a dip (dB per dB of the melody's dip) when the music volume is `musicGainDb` above its default (CUT
+ * round fix). The melody's dip deepens by the whole volume boost (roomDb: ROOM_DB - boost); the pad's must too, or the pad
+ * under an effect is louder than at the default level: with a fixed 0.72 share it deepened by only 0.72 x the boost (at
+ * music 1: -21.6 dB for a +6 dB boost, 1.7 dB louder than at the default), and two large, low-pitched pops sat under the pad
+ * (the independent audio-3 verifier's music-1 placements). Now the pad's full dip is ROOM_PAD_SHARE * ROOM_DB - boost
+ * (-23.3 dB at music 1: exactly its default level under an effect), and a partial dip (a held squish or strand between its
+ * thresholds) keeps the same proportion. 0.72 at the default volume, unchanged there.
+ */
+export function roomPadShare(musicGainDb = 0): number {
+  const g = Math.max(0, fin(musicGainDb, 0));
+  return (ROOM_PAD_SHARE * -ROOM_DB + g) / (-ROOM_DB + g);
+}
 /** The melody's dip is fast (a mallet note already ringing is the masker to remove)... */
 export const ROOM_ATTACK_TC = 0.0015;
 /** ... the pad's is gentle: a sustained chord cut in a few ms would itself be heard as a gate (seen as a vertical splatter
@@ -100,7 +114,7 @@ export const ROOM_RISE_LEAD_S = 0.005;
  *  slow-onset voices never wait. The cost: the first fast effect after a rest sounds 12 ms later. */
 export const ROOM_CLEAR_S = 0.012;
 export const ROOM_CLEAR_ABOVE_DB = -6;
-export const ROOM_CLEAR_KINDS: ReadonlySet<string> = new Set(['poke', 'release', 'land', 'pop', 'bump', 'strandSnap', 'meterFull', 'capsule']);
+export const ROOM_CLEAR_KINDS: ReadonlySet<string> = new Set(['poke', 'release', 'land', 'pop', 'bump', 'strandSnap', 'meterFull', 'capsule', 'cutPop', 'rejoin']);
 /** The extra start delay (s) of an effect of `kind` when the music's room level is `roomLevelDb` (MusicBed.roomLevelAt). */
 export function roomClearDelay(kind: string, roomLevelDb: number): number {
   return ROOM_CLEAR_KINDS.has(kind) && fin(roomLevelDb, 0) > ROOM_CLEAR_ABOVE_DB ? ROOM_CLEAR_S : 0;
@@ -110,6 +124,8 @@ export function roomClearDelay(kind: string, roomLevelDb: number): number {
 export const ROOM_KINDS: Readonly<Record<string, number>> = {
   poke: ROOM_DB, pop: ROOM_DB, blend: ROOM_DB, meterFull: ROOM_DB, capsule: ROOM_DB, strandSnap: ROOM_DB,
   release: ROOM_DB, land: ROOM_DB, bump: ROOM_DB, lift: ROOM_DB, toss: ROOM_DB,
+  // CUT (cut.ts): the slice (a slow onset: it declares one), the separation pop and the rejoin blorp (fast: they clear the way)
+  cut: ROOM_DB, cutPop: ROOM_DB, rejoin: ROOM_DB,
 };
 /** Held voices: each update holds its depth this long plus the activity tail ROOM_TAIL_S (so a rubbing squish that dips
  *  and swells frame by frame keeps the deepest dip instead of tremoloing the music). Held requests are rounded (depth down
@@ -145,8 +161,10 @@ export function strandRoomDb(tension: number, musicGainDb = 0): number {
   return a * (ROOM_DB - Math.max(0, fin(musicGainDb, 0)));
 }
 /** One request for room (MusicBed.makeRoom): planned at the call time `from`, the dip itself from `at` (>= from) until
- *  `until`, `db` deep, going down with time constant `atk` (melody; the pad never faster than ROOM_PAD_ATTACK_TC). */
-export interface RoomRequest { from: number; at: number; until: number; db: number; atk: number }
+ *  `until`, `db` deep, going down with time constant `atk` (melody; the pad never faster than ROOM_PAD_ATTACK_TC).
+ *  `gainDb`: the music volume's gain above its default that `db` already includes (the pad's share follows it:
+ *  roomPadShare). */
+export interface RoomRequest { from: number; at: number; until: number; db: number; atk: number; gainDb?: number }
 /**
  * What a one-shot of `kind` asks for (the engine and the offline mix renders both use this): called at `callT`, sounding
  * from `startT` to `endT`; `onset` (s, 0 for a fast onset) is when the voice starts to be heard (VoiceGroup.onset). Empty
@@ -157,20 +175,20 @@ export function oneShotRoom(kind: string, callT: number, startT: number, endT: n
   if (db === null) return [];
   const o = Math.max(0, fin(onset, 0));
   const at = o > 0 ? Math.max(callT, fin(startT, callT) + o - ROOM_RISE_LEAD_S) : callT;
-  return [{ from: callT, at, until: fin(endT, callT) + ROOM_TAIL_S, db, atk: ROOM_ATTACK_TC }];
+  return [{ from: callT, at, until: fin(endT, callT) + ROOM_TAIL_S, db, atk: ROOM_ATTACK_TC, gainDb: Math.max(0, fin(musicGainDb, 0)) }];
 }
-function heldRoom(t: number, db: number, atk: number): RoomRequest | null {
+function heldRoom(t: number, db: number, atk: number, musicGainDb: number): RoomRequest | null {
   const d = fin(db, 0);
   if (!(d < -0.05)) return null;
-  return { from: t, at: t, until: Math.ceil((t + HELD_ROOM_HOLD_S + ROOM_TAIL_S) / HELD_ROOM_GRID_S) * HELD_ROOM_GRID_S, db: Math.floor(d * 2) / 2, atk };
+  return { from: t, at: t, until: Math.ceil((t + HELD_ROOM_HOLD_S + ROOM_TAIL_S) / HELD_ROOM_GRID_S) * HELD_ROOM_GRID_S, db: Math.floor(d * 2) / 2, atk, gainDb: Math.max(0, fin(musicGainDb, 0)) };
 }
 /** What one update of the held squish at `t` asks for (by its |rate|), or null for none. */
 export function squishRoom(t: number, rate: number, musicGainDb = 0): RoomRequest | null {
-  return heldRoom(t, squishRoomDb(rate, musicGainDb), ROOM_ATTACK_TC);
+  return heldRoom(t, squishRoomDb(rate, musicGainDb), ROOM_ATTACK_TC, musicGainDb);
 }
 /** What one update of the held strand at `t` asks for (by its tension), or null for none. */
 export function strandRoom(t: number, tension: number, musicGainDb = 0): RoomRequest | null {
-  return heldRoom(t, strandRoomDb(tension, musicGainDb), STRAND_ROOM_TC);
+  return heldRoom(t, strandRoomDb(tension, musicGainDb), STRAND_ROOM_TC, musicGainDb);
 }
 /** At most this many bars in a row without a mallet note (a long rest reads as the music having stopped). */
 export const MAX_REST_BARS = 2;
@@ -609,6 +627,8 @@ export class MusicBed {
   private holds: RoomHold[] = [];
   private roomSegs: RoomSeg[] = [];
   private fastUsed = false;
+  /** The pad's share of the current dips (roomPadShare at the music volume the latest request was made for). */
+  private padShare = ROOM_PAD_SHARE;
   private stoppedAt = Infinity;
   private endT = Infinity;
   private freed = false;
@@ -776,13 +796,15 @@ export class MusicBed {
    * and plans the level as a staircase: at every moment the deepest active hold wins (a soft call never cuts a deeper one
    * short); going down follows the hold's attack, going back up is a dB-linear return (ROOM_RETURN_S for the full depth)
    * built from short setTargetAtTime steps. Only this node's own future plan (from `from`) is ever cancelled and
-   * setTargetAtTime always starts from the current value, so the gain never jumps.
+   * setTargetAtTime always starts from the current value, so the gain never jumps. `opts.gainDb` (the music volume's gain
+   * above its default, already included in `db`) sets the pad's share (roomPadShare: its dip deepens by the whole boost).
    */
-  makeRoom(from: number, until: number, db: number = ROOM_DB, opts: { at?: number; atk?: number } = {}): void {
+  makeRoom(from: number, until: number, db: number = ROOM_DB, opts: { at?: number; atk?: number; gainDb?: number } = {}): void {
     if (this.freed) return;
     const a = Math.max(0, fin(from, 0), this.roomFrom);
     const d = clamp(fin(db, ROOM_DB), -30, 0);
     if (!(d < -0.05)) return;
+    if (opts.gainDb !== undefined) this.padShare = roomPadShare(opts.gainDb);
     const at = Math.max(a, fin(opts.at, a));
     const b = Math.min(Math.max(at + 0.02, fin(until, at)), at + ROOM_MAX_HOLD_S);
     const atk = clamp(fin(opts.atk, ROOM_ATTACK_TC), 0.0005, 0.25);
@@ -827,7 +849,7 @@ export class MusicBed {
         const s = out[i], end = i + 1 < out.length ? out[i + 1].t : Infinity;
         if (s.rate === 0) {
           pm.setTargetAtTime(dbToGain(s.db), s.t, s.tc);
-          pp.setTargetAtTime(dbToGain(s.db * ROOM_PAD_SHARE), s.t, Math.max(s.tc, ROOM_PAD_ATTACK_TC));
+          pp.setTargetAtTime(dbToGain(s.db * this.padShare), s.t, Math.max(s.tc, ROOM_PAD_ATTACK_TC));
           continue;
         }
         for (let k = 0; k < 400; k++) {
@@ -835,7 +857,7 @@ export class MusicBed {
           if (tk >= end - 1e-9) break;
           const d = Math.min(s.to, s.db + s.rate * (k + 1) * ROOM_STEP_S);
           pm.setTargetAtTime(dbToGain(d), tk, s.tc);
-          pp.setTargetAtTime(dbToGain(d * ROOM_PAD_SHARE), tk, s.tc);
+          pp.setTargetAtTime(dbToGain(d * this.padShare), tk, s.tc);
           if (d >= s.to) break;
         }
       }

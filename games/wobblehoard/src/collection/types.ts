@@ -9,7 +9,7 @@
 // (COLLECTION 10, MERGE 7) is the same for both ledgers; they add `ledger` and the decoded `item`.
 import type { SoftEvent } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
-import type { MeterState } from '../core/meter.ts';
+import type { MeterState, TouchKind } from '../core/meter.ts';
 import type { TaskDef, TaskState } from '../core/drops.ts';
 import type { MergePreviewOk } from '../core/merge.ts';
 import type { TierId } from '../core/rarity.ts';
@@ -368,6 +368,19 @@ export interface Collection {
   onEvent(fn: (e: CollectionEvent) => void): () => void;
   /** Every SoftEvent, from the frame loop. `tMs` = the shell's ms clock (performance.now() or Date.now()). Allocation-free when the event is not a touch. */
   feed(ev: SoftEvent, tMs: number): void;
+  /**
+   * PENDING PREVIEW (FUN.md 2.2, added 2026-10-06 by the ECON lane): the SP the touch in progress would pay if it ended now, as `feed`
+   * would credit it: the meter's pay table (core/meter.ts DESIGN 5.4), freshness, a medley bonus it would complete, the daily rate, the
+   * valve's room, and 0 when the table is full or the day is done. The shell draws the growing "pending arc" from it every frame while a
+   * squeeze or a stretch is held; the arc then banks exactly what it showed, unless something else is fed before the release.
+   *   kind 'squeeze': heldS = seconds pressed so far; under 0.4 s 0 (that release is not a squeeze; the contact's poke has already paid).
+   *   kind 'pull':    heldS = seconds since the grab, level = the live pull level 0..1 (1 = the family's maxPull, as the snap will
+   *                   report it); level 0.35 or more pays per second held, less the flat "never stretched" rate, 0.05 or less 0 (no snap).
+   *   kind 'poke':    what a poke now would pay (heldS and level ignored).
+   * Not a touch: nothing is fed or stored. Pure and allocation-free; any number may be NaN or out of range (clamped, never throws).
+   * Also accepts the arguments as one object { kind, heldS, level } (other fields ignored), the form a feature-detecting caller passes.
+   */
+  previewTouch?(kind: TouchKind, heldS: number, level: number): number;
   /** Opens the oldest waiting capsule (result first: animate afterwards, COLLECTION 10). */
   openCapsule(): Promise<OpenResult>;
   restock(): RestockView;
