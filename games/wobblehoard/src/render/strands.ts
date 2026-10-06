@@ -49,7 +49,7 @@ class Strand {
     const idx: number[] = [];
     for (let s = 0; s < SEG; s++) for (let k = 0; k < RAD; k++) {
       const a = s * RAD + k, b = s * RAD + ((k + 1) % RAD), c = (s + 1) * RAD + k, d = (s + 1) * RAD + ((k + 1) % RAD);
-      idx.push(a, c, b, b, c, d);
+      idx.push(a, b, c, b, d, c);   // counter-clockwise seen from outside (the ring runs from u toward v = dir x u)
     }
     this.geo.setIndex(idx);
     this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));

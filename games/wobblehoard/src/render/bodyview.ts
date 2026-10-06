@@ -201,7 +201,7 @@ export class BodyView {
       const target = t ? Math.min(1, Math.max(0, t.depth * 1.3)) : 0;
       const a = this.touchAmt[f];
       this.touchAmt[f] = a + (target - a) * (1 - Math.exp(-dt * (target > a ? 10 : 5)));
-      if (t) { v.x = t.x; v.y = t.y; v.z = t.z; u.uTouchR.value = Math.max(0.06 * this.scale, t.r * 2.2); }
+      if (t) { v.x = t.x; v.y = t.y; v.z = t.z; u.uTouchR.value = Math.max(0.05 * this.scale, t.r * 1.25); }
       v.w = this.touchAmt[f] * k;
     }
   }
