@@ -57,7 +57,7 @@ export function createSnapBar(root: HTMLElement, o: { onSave(): void; onDone(): 
   save.addEventListener('click', () => o.onSave());
   done.addEventListener('click', () => o.onDone());
   const el = h('div', { class: 'snapbar', attrs: { role: 'group', 'aria-label': 'Photo', hidden: '' } },
-    h('p', { class: 'snapbar-text', text: 'Drag to turn, pinch or scroll to zoom.' }),
+    h('p', { class: 'snapbar-text', text: 'Drag to turn (right-drag with a mouse), pinch or scroll to zoom.' }),
     h('div', { class: 'snapbar-row' }, h('span', { class: 'snapbar-label', text: 'Backdrop' }), tints),
     h('div', { class: 'snapbar-acts' }, save, done));
   // the tint must blend with the CANVAS: #ui is a fixed layer (its own stacking context), so the overlay sits beside it, just before it

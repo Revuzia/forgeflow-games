@@ -494,11 +494,22 @@ function press(r: Rig, x: number, y: number, ms: number): number {
     r.app.setTool('snap');
     const c = centre(r), disc = r.app.host.bodyScreen()!;
     const id = r.id++, sx = c.x + disc.r * 0.6;
-    r.app.input.pointerDown({ id, x: sx, y: c.y, t: clk(r), type: 'mouse', shift: true });
-    r.app.input.pointerMove({ id, x: sx + 60, y: c.y, t: clk(r), type: 'mouse', shift: true });
+    // RE-SPECIFIED (owner decision 2026-10-06: with a mouse only the RIGHT button turns the view): this drag was a left drag; the intent (body gestures are paused, Shift or not, and the drag turns the camera) is unchanged
+    r.app.input.pointerDown({ id, x: sx, y: c.y, t: clk(r), type: 'mouse', button: 2, shift: true });
+    r.app.input.pointerMove({ id, x: sx + 60, y: c.y, t: clk(r), type: 'mouse', button: 2, shift: true });
     r.w.run(r.app, 100);
-    r.app.input.pointerUp({ id, x: sx + 60, y: c.y, t: clk(r), type: 'mouse', shift: true });
-    check('shift in the Snap tool: no grab at all (body gestures are paused), the drag turns the camera', r.w.body.rec.count('grab') === 0 && r.w.stage.rec.count('orbit') >= 1);
+    r.app.input.pointerUp({ id, x: sx + 60, y: c.y, t: clk(r), type: 'mouse', button: 2, shift: true });
+    check('shift in the Snap tool: no grab at all (body gestures are paused), the right-button drag turns the camera', r.w.body.rec.count('grab') === 0 && r.w.stage.rec.count('orbit') >= 1);
+    // and the same drag with the LEFT mouse button does nothing in the Snap tool either (a finger still turns it)
+    const o0 = r.w.stage.rec.count('orbit'), idL = r.id++, idT = r.id++;
+    r.app.input.pointerDown({ id: idL, x: sx, y: c.y, t: clk(r), type: 'mouse', button: 0 });
+    r.app.input.pointerMove({ id: idL, x: sx + 60, y: c.y, t: clk(r), type: 'mouse', button: 0 });
+    r.app.input.pointerUp({ id: idL, x: sx + 60, y: c.y, t: clk(r), type: 'mouse', button: 0 });
+    const o1 = r.w.stage.rec.count('orbit');
+    r.app.input.pointerDown({ id: idT, x: sx, y: c.y, t: clk(r), type: 'touch', button: 0 });
+    r.app.input.pointerMove({ id: idT, x: sx + 60, y: c.y, t: clk(r), type: 'touch', button: 0 });
+    r.app.input.pointerUp({ id: idT, x: sx + 60, y: c.y, t: clk(r), type: 'touch', button: 0 });
+    check('snap tool: a mouse LEFT drag does not turn the camera (owner decision 2026-10-06), a finger drag still does', o1 === o0 && r.w.stage.rec.count('orbit') > o1);
   }
 }
 
@@ -510,6 +521,17 @@ function press(r: Rig, x: number, y: number, ms: number): number {
   r.app.input.pointerUp({ id: 7, x: 90, y: 60, t: clk(r) });
   const o = r.w.stage.rec.of('orbit');
   check('orbit: empty-space drag reaches stage.orbit with a finger-following sign (drag right = +yaw, down = +pitch)', o.length === 1 && (o[0].args[0] as number) > 0 && (o[0].args[1] as number) > 0 && r.w.body.rec.count('fingerDown') === 0);
+  // owner decision 2026-10-06: a MOUSE turns the view with the right (or middle) button only; its left button on empty space does nothing; a finger and a pen are unchanged
+  const oc = (): number => r.w.stage.rec.of('orbit').length;
+  const drag = (type: 'mouse' | 'touch' | 'pen' | undefined, button: number): number => {
+    const before = oc(), id = 20 + r.id++;
+    r.app.input.pointerDown({ id, x: 40, y: 40, t: clk(r), type, button });
+    r.app.input.pointerMove({ id, x: 90, y: 60, t: clk(r), type, button });
+    r.app.input.pointerUp({ id, x: 90, y: 60, t: clk(r), type, button });
+    return oc() - before;
+  };
+  check('orbit: a mouse LEFT drag on empty space does nothing through the facade; the mouse RIGHT and MIDDLE buttons, a finger, a pen and an untyped pointer still turn the view',
+    drag('mouse', 0) === 0 && drag('mouse', 2) === 1 && drag('mouse', 1) === 1 && drag('touch', 0) === 1 && drag('pen', 0) === 1 && drag(undefined, 0) === 1 && r.w.body.rec.count('fingerDown') === 0);
   r.app.input.wheel(100); r.app.input.wheel(-100);
   const z = r.w.stage.rec.of('zoom').map((c) => c.args[0] as number);
   check('wheel zoom: deltaY > 0 = away (positive) one notch per 100 px', z.length === 2 && z[0] === 1 && z[1] === -1);

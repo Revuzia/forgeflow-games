@@ -10,7 +10,8 @@
 //   ... the same pull with SHIFT held at that moment (mouse / pen) ..... PULL x2  a second grab on the OPPOSITE side (the press point reflected
 //                                                                     through the body's screen centre) on the other slot, both pulled outward
 //                                                                     by the same amount, the way two fingers do on a phone
-//   down on empty space (or right/middle button anywhere) ............. ORBIT   drag
+//   down on empty space with a FINGER or a PEN, or the right/middle mouse button anywhere ... ORBIT   drag
+//   a LEFT mouse click on empty space .................................. nothing (owner decision 2026-10-06: with a mouse only the right button turns the view)
 //   wheel, or two fingers on empty space ............................... ZOOM
 //   two fingers on the body ............................................ two body fingers: slots 0 and 1 (max 2)
 //   cancel / lost capture ............................................... everything is released cleanly
@@ -79,6 +80,9 @@ export interface PointerSample {
   t: number;
   /** 0 = primary (also touch/pen contact). 1 = middle, 2 = secondary => orbit. */
   button?: number;
+  /** What the pointer is. Only 'mouse' changes anything: its LEFT button on empty space does nothing (it used to turn the camera; the owner wants
+   *  only the right button to). Absent (a synthetic pointer, the debug hook, the Space key) = as a finger: empty space turns the view. */
+  type?: 'mouse' | 'touch' | 'pen';
   /** Shift is held (a mouse or pen event's shiftKey; the pointer glue never sets it for touch). Read only on the sample that commits a press
    *  to a pull: true there = pull both sides. Absent / false = exactly the old machine. */
   shift?: boolean;
@@ -273,6 +277,9 @@ export function createGestures(host: GestureHost, emit: (a: GestureAction) => vo
         emit({ type: 'fingerPressure', slot, target: cfg.tapPressure });
         return;
       }
+      // a LEFT mouse click on empty space does nothing: with a mouse only the right (or middle) button turns the view (owner decision 2026-10-06).
+      // The pointer stays known (as ignored) so its move and up are swallowed; a finger or a pen still drags empty space to turn.
+      if (button === 0 && s.type === 'mouse') { ptrs.set(s.id, { ...base, kind: 'ignored', mode: 'ignored', slot: 0, hit: null }); return; }
       // empty space (or a non-primary button): orbit, or pinch-zoom when a second empty-space finger arrives
       let orbiting = 0;
       for (const q of ptrs.values()) if (q.kind === 'orbit') orbiting++;

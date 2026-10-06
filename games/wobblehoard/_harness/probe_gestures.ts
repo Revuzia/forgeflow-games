@@ -185,6 +185,31 @@ for (const [px, expect] of [[0, 'tap'], [8, 'tap'], [13.9, 'tap'], [14, 'tap'], 
   const mid = rig();
   mid.g.pointerDown(S(1, 400, 300, 0, 1)); mid.g.pointerMove(S(1, 400, 330, 30));
   check('middle button on the body = orbit', mid.of('fingerDown').length === 0 && mid.of('orbit').length === 1);
+  // owner decision 2026-10-06: with a MOUSE only the right (or middle) button turns the view; a LEFT click on empty space does nothing. A finger, a pen and a sample
+  // with no type (the debug hook, the Space key) still drag empty space to turn: the old orbit rows above (no type) are unchanged on purpose.
+  const SM = (id: number, x: number, y: number, t: number, button = 0, type: 'mouse' | 'touch' | 'pen' = 'mouse'): PointerSample => ({ id, x, y, t, button, type });
+  const ml = rig();
+  ml.g.pointerDown(SM(1, 100, 100, 0)); ml.g.pointerMove(SM(1, 130, 100, 16)); ml.g.pointerMove(SM(1, 160, 120, 32));
+  const heldMs = ml.g.activeCount();
+  ml.g.pointerUp(SM(1, 160, 120, 48));
+  check('mouse: a LEFT drag on empty space does nothing (no orbit, no finger, no gesture notice, no zoom) and leaves no pointer behind after the up (owner decision 2026-10-06: only the right button turns the view with a mouse)',
+    ml.log.length === 0 && heldMs === 1 && ml.g.activeCount() === 0, ml.types().join());
+  const mr = rig();
+  mr.g.pointerDown(SM(1, 100, 100, 0, 2)); mr.g.pointerMove(SM(1, 130, 100, 16, 2));
+  const mm = rig();
+  mm.g.pointerDown(SM(1, 100, 100, 0, 1)); mm.g.pointerMove(SM(1, 100, 130, 16, 1));
+  check('mouse: the RIGHT and the MIDDLE button on empty space still turn the view (orbit announced once, dx / dy as before)',
+    mr.of('orbit').length === 1 && (mr.of('orbit')[0] as { dx: number }).dx === 30 && mm.of('orbit').length === 1 && (mm.of('orbit')[0] as { dy: number }).dy === 30 && kinds(mr) === 'orbit' && kinds(mm) === 'orbit');
+  const mt = rig(), mp = rig();
+  mt.g.pointerDown(SM(1, 100, 100, 0, 0, 'touch')); mt.g.pointerMove(SM(1, 130, 100, 16, 0, 'touch'));
+  mp.g.pointerDown(SM(1, 100, 100, 0, 0, 'pen')); mp.g.pointerMove(SM(1, 130, 100, 16, 0, 'pen'));
+  check('a finger or a pen still drags empty space to turn the view (only a mouse\'s left button is switched off)', mt.of('orbit').length === 1 && mp.of('orbit').length === 1);
+  const mb = rig();
+  mb.g.pointerDown(SM(1, 400, 300, 0)); mb.g.pointerUp(SM(1, 400, 300, 100));
+  check('mouse: a LEFT click on the squishy still pokes it (fingerDown, tap, fingerUp)', mb.types().join() === 'fingerDown,fingerPressure,gesture:tap,fingerUp');
+  const mx = rig();
+  mx.g.pointerDown(SM(1, 100, 100, 0)); mx.g.pointerDown(SM(2, 110, 100, 5, 2)); mx.g.pointerMove(SM(2, 140, 100, 20, 2)); mx.g.pointerMove(SM(1, 160, 100, 25));
+  check('mouse: a left press on empty space does not stop a right-button drag from turning the view, and its own moves stay silent', mx.of('orbit').length === 1 && (mx.of('orbit')[0] as { dx: number }).dx === 30 && mx.types().join() === 'gesture:orbit,orbit');
   const w = rig();
   w.g.wheel(100); w.g.wheel(-250); w.g.wheel(9999); w.g.wheel(0); w.g.wheel(NaN);
   const z = w.of('zoom') as Array<{ delta: number; source: string }>;

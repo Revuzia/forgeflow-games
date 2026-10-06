@@ -612,10 +612,10 @@ export function createGame(deps: GameDeps): Game {
       if (phase !== 'play' || reasons.size > 0 || holds.size > 0) return;
       if (ceremonies.active) { ceremonies.tapSkip(); return; }
       if (tool === 'cut') { if (!blade && (p.button ?? 0) === 0) { blade = { id: p.id, x0: p.x, y0: p.y, x1: p.x, y1: p.y }; emit('interaction'); emit('blade', { x0: p.x, y0: p.y, x1: p.x, y1: p.y }); } return; }
-      if (tool === 'snap') { snapDrag.set(p.id, { x: p.x, y: p.y }); emit('interaction'); return; }
+      if (tool === 'snap') { if (p.type === 'mouse' && (p.button ?? 0) === 0) return; snapDrag.set(p.id, { x: p.x, y: p.y }); emit('interaction'); return; }   // a mouse turns the view with the RIGHT button only (owner decision 2026-10-06)
       if ((p.button ?? 0) === 0 && capsules.pointerDown(p.id, p.x, p.y)) { emit('interaction'); return; }
       if (bodies.extras.length && gestures.activeCount() === 0 && !driver.touch.contact()) pickBody(p.x, p.y);
-      gestures.pointerDown({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), button: p.button ?? 0, ...shiftOf(p) });
+      gestures.pointerDown({ id: p.id, x: p.x, y: p.y, t: clock.eventTime(p.t), button: p.button ?? 0, type: p.type, ...shiftOf(p) });
     },
     pointerMove(p) {
       pointerNdc = ndcOf(p.x, p.y);

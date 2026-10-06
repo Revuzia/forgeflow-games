@@ -306,7 +306,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   const TOOL_LINES: Record<ToolId, string> = {
     hand: 'Hand: poke, squish, stretch.',
     cut: 'Cut: swipe across a squishy to cut it. Split in two and Reconnect all are buttons.',
-    snap: 'Snap: drag to turn the camera, then Save photo. Escape goes back.',
+    snap: 'Snap: drag to turn the camera (right-drag with a mouse), then Save photo. Escape goes back.',
   };
   let piecesKey = '';
   off.push(

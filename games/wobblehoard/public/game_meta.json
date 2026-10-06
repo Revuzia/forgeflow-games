@@ -5,7 +5,7 @@
   "genre": "arcade",
   "sub_genre": "soft-body squishy toy",
   "difficulty": "easy",
-  "controls_keyboard": "Mouse: click = poke · hold = squish · press on the squishy and drag outward = pull · drag empty space (or right-drag) = turn the view · wheel = zoom. Keys: SPACE tap = poke · SPACE hold = squish · ARROW KEYS turn the view · + / - zoom · G gravity / float · M mute · ESC close the settings panel",
+  "controls_keyboard": "Mouse: click = poke · hold = squish · press on the squishy and drag outward = pull · SHIFT + that drag = pull both sides · right-drag = turn the view · wheel = zoom. Keys: SPACE tap = poke · SPACE hold = squish · ARROW KEYS turn the view · + / - zoom · G gravity / float · M mute · ESC close the settings panel",
   "controls_touch": "Tap = poke · press and hold = squish · press on the squishy and drag outward = pull · drag empty space = turn the view · pinch = zoom · two fingers on the squishy = pinch it",
   "controls_gamepad": "",
   "tags": [

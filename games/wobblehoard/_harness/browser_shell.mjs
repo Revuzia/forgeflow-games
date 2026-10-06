@@ -433,17 +433,33 @@ async function main() {
       const afterPull = await state(page);
       check('after the snap the body is back (volume 1 +- 0.03, not grabbed)', !afterPull.metrics.grabbed && Math.abs(afterPull.metrics.volume - 1) < 0.03, `volume ${afterPull.metrics.volume.toFixed(3)}`);
 
-      // orbit by dragging empty space; the body does not get poked
+      // owner decision 2026-10-06: with a mouse only the RIGHT button turns the view. A LEFT drag on empty space does nothing (no turn, no poke) ...
       seen = await evKeys(page); a0 = await started(page);
-      const s0 = await canvasSig(page);
+      // (the camera's ANGLE around the squishy is the measure: the squishy keeps wobbling, its eyes follow the mouse and the camera eases sideways to follow
+      // the body, so neither an image difference nor the camera position is ever still; a turn changes yaw or pitch, following does not)
+      const camOf = () => page.evaluate(() => { const k = window.__WH__.shell.tools(); if (!k.cam) return null; const dx = k.cam.x - k.body.x, dz = k.cam.z - k.body.z; return { yaw: Math.atan2(dx, dz), pitch: Math.atan2(k.cam.y - k.body.y, Math.hypot(dx, dz)) }; });
+      const camMoved = (p, q) => !p || !q ? true : Math.abs(p.yaw - q.yaw) > 0.02 || Math.abs(p.pitch - q.pitch) > 0.02;
+      const cL0 = await camOf();
       await page.mouse.move(90, 140);
       await page.mouse.down();
       for (let i = 1; i <= 12; i++) { await page.mouse.move(90 + i * 22, 140 + i * 3); await sleep(35); }
       await page.mouse.up();
+      await sleep(1500);
+      const cL1 = await camOf();
+      const aL = await started(page);
+      check('orbit: a LEFT-button drag on empty space does NOT turn the view (the camera does not move) and does not poke the body (owner decision 2026-10-06)', !camMoved(cL0, cL1) && aL.poke === a0.poke, `camera ${JSON.stringify(cL0)} -> ${JSON.stringify(cL1)}`);
+      // ... and the RIGHT-button drag on empty space turns the view; the body does not get poked
+      const s0 = await canvasSig(page);
+      const cR0 = await camOf();
+      await page.mouse.move(90, 140);
+      await page.mouse.down({ button: 'right' });
+      for (let i = 1; i <= 12; i++) { await page.mouse.move(90 + i * 22, 140 + i * 3); await sleep(35); }
+      await page.mouse.up({ button: 'right' });
       await sleep(2500);
       const s1 = await canvasSig(page);
       const a8 = await started(page);
-      check('orbit: dragging empty space turns the view (image changes) without poking the body', sigDiff(s0, s1) > 1.2 && a8.poke === a0.poke, `mean abs diff ${sigDiff(s0, s1).toFixed(2)}`);
+      const cR1 = await camOf();
+      check('orbit: a RIGHT-button drag on empty space turns the view (image changes, the camera moves) without poking the body (RE-SPECIFIED from a left drag: owner decision 2026-10-06)', sigDiff(s0, s1) > 1.2 && camMoved(cR0, cR1) && a8.poke === a0.poke, `mean abs diff ${sigDiff(s0, s1).toFixed(2)}, camera moved ${camMoved(cR0, cR1)}`);
       await shot(page, 'orbit_desktop');
 
       // wheel zoom on empty space
