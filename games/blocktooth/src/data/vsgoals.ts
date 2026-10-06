@@ -41,9 +41,9 @@ export const VS_GOALS: readonly VsGoalDef[] = [
   { id: 'g_vs_crossover_episode', name: 'CROSSOVER EPISODE', desc: 'Knock out a rival titan', tier: 'bronze' },
   { id: 'g_vs_hostile_takeover', name: 'HOSTILE TAKEOVER', desc: 'Knock out the FRONT PAGE titan (the leader)', tier: 'silver' },
   { id: 'g_vs_zoned_residential', name: 'ZONED RESIDENTIAL', desc: 'Win a VS match without being knocked out', tier: 'gold' },
-  { id: 'g_vs_network_exclusive', name: 'NETWORK EXCLUSIVE', desc: 'Win a VS match against 3 other players', tier: 'gold' },
-  { id: 'g_vs_ensemble_cast', name: 'ENSEMBLE CAST', desc: 'Win a VS match with each of the four titans (with another player in the match)', tier: 'diamond' },
-  { id: 'g_vs_ratings_war', name: 'RATINGS WAR', desc: 'Win 10 VS matches with other players in the match', tier: 'gold' },
+  { id: 'g_vs_network_exclusive', name: 'NETWORK EXCLUSIVE', desc: 'Win a full 4-player online lobby', tier: 'gold' },
+  { id: 'g_vs_ensemble_cast', name: 'ENSEMBLE CAST', desc: 'Win an online VS match with each of the four titans', tier: 'diamond' },
+  { id: 'g_vs_ratings_war', name: 'RATINGS WAR', desc: 'Win 10 online VS matches', tier: 'gold' },
 ];
 
 export const VS_GOAL_BY_ID: Readonly<Record<string, VsGoalDef>> = Object.fromEntries(VS_GOALS.map((g) => [g.id, g]));

@@ -30,7 +30,7 @@
 import { hypot } from '../core/detmath.ts';
 import type { BossState, GateId, GatesState, GateSlot, RankIndex, World } from '../core/types.ts';
 import { GATE_IDS, GATE_OF_SLOT } from '../core/types.ts';
-import { ENDLESS, GATES, GATE_HP_AT_RANK, GATE_HP_MUL } from '../core/config.ts';
+import { ENDLESS, GATES, GATE_HP_AT_RANK, GATE_HP_MUL, VS } from '../core/config.ts';
 import { BIOMES } from '../data/biomes.ts';
 // The boss toolkit and titansim are imported as NAMESPACES (members read at call time): probe_combat replaces
 // both modules with recording stubs that export only the names combat uses, and this module sits in its import
@@ -109,6 +109,13 @@ export function sizeLocked(w: World): boolean {
 export function gateSpawnMul(w: World): number {
   const b = liveHomeGate(w);
   if (!b) return 1;
+  if (w.mode === 'vs') {
+    // ONLINE VS (BOSSHP): the rig is shared and a tender now lasts minutes, so only the seats WORKING it get the thinner budget (its own adds are
+    // the artillery); a seat out of the rig's reach keeps full PvE food, or the fight would starve every titan that is not in it
+    const R = (b.data.ringR > 0 ? b.data.ringR : 14) * VS.tender.nearRingMul;
+    if (hypot(w.titan.x - b.x, w.titan.z - b.z) > R) return 1;
+    return VS.tender.spawnMulNear;   // and the seats in the fight keep that fraction of the PvE food (its adds are XP + pressure, the fight must not stall growth)
+  }
   const base = GATES.spawnMul[b.id as GateId] ?? 1;
   return base * (1 + GATES.pressure.budgetPer * w.gates.pressure);
 }

@@ -15,7 +15,7 @@ import { safeRect } from '../../src/ui/vstypes.ts';
 import { OnlineMatch, asTitan, buildInfo, cleanName, rematchCode, type LobbyState, type OnlineHooks, type OnlineMode } from '../../src/online.ts';
 import type { RoomStatus } from '../../src/net/room.ts';
 import { vsGoalLines } from '../../src/ui/vstypes.ts';
-import { VS as STR_VS, vsFmt } from '../../src/data/strings_vs.ts';
+import { VS as STR_VS, RIVAL_HANDLES, rivalHandles, vsFmt } from '../../src/data/strings_vs.ts';
 
 let pass = 0, fail = 0;
 function ok(cond: boolean, name: string, detail = ''): void {
@@ -54,8 +54,28 @@ ok(infoA.seats.length === SEATS && infoA.local === 0 && infoB.local === 1, 'info
 ok(infoA.seats[0].name === 'YOU' && infoA.seats[1].name === 'GUEST-4F9K' && infoB.seats[0].name === 'ALICE' && infoB.seats[1].name === 'YOU', 'info: the local seat reads YOU, rivals their own names');
 ok(!infoA.seats[0].bot && !infoA.seats[1].bot && infoA.seats[2].bot && infoA.seats[3].bot, 'info: bot flags');
 ok(infoA.seats[2].level === 'regular' && infoA.seats[3].level === 'veteran' && infoA.seats[0].level === null, 'info: bot levels from SeatInfo.botLevel');
-ok(infoA.seats[2].name.startsWith('UNIT ') && infoA.seats[2].sign.length > 0, 'info: bots get a UNIT n + call-sign', infoA.seats[2].name + ' / ' + infoA.seats[2].sign);
-ok(infoA.seats[2].name === infoB.seats[2].name && infoA.seats[3].sign === infoB.seats[3].sign, 'info: the same bot names on every peer');
+// (replaced 'bots get a UNIT n + call-sign' / 'the same bot call-signs on every peer': a driven seat now reads as a player)
+ok(RIVAL_HANDLES.includes(infoA.seats[2].name) && RIVAL_HANDLES.includes(infoA.seats[3].name) && infoA.seats[2].sign === '' && !/UNIT/.test(infoA.seats[2].name), 'info: driven seats get an ordinary player handle, no UNIT n / call-sign', infoA.seats[2].name + ' / ' + infoA.seats[3].name);
+ok(infoA.seats[2].name === infoB.seats[2].name && infoA.seats[3].name === infoB.seats[3].name, 'info: the same seat names on every peer');
+ok(new Set(infoA.seats.map((s) => s.name === 'YOU' ? 'ALICE' : s.name)).size === 4 && new Set(infoB.seats.map((s) => s.name === 'YOU' ? 'GUEST-4F9K' : s.name)).size === 4, 'info: seat names are unique within a match');
+// the handle pool: >= 60, ASCII upper-case, <= 14 characters (cleanName-stable), no 'BOT' anywhere, deterministic, unique per match, never a human's name
+{
+  ok(RIVAL_HANDLES.length >= 60 && new Set(RIVAL_HANDLES).size === RIVAL_HANDLES.length, 'handles: >= 60 distinct names', String(RIVAL_HANDLES.length));
+  ok(RIVAL_HANDLES.every((h) => /^[A-Z0-9_]{3,14}$/.test(h) && !/BOT/.test(h)), 'handles: A-Z 0-9 _ only, 3..14 chars, never the word BOT');
+  let uniq = true, det = true, avoidOk = true;
+  for (let seed = 0; seed < 4000; seed++) {
+    const a = rivalHandles(seed, [1, 2, 3]), b = rivalHandles(seed, [1, 2, 3]);
+    if (new Set([a[1], a[2], a[3]]).size !== 3) uniq = false;
+    if (a[1] !== b[1] || a[2] !== b[2] || a[3] !== b[3]) det = false;
+    const c = rivalHandles(seed, [2, 3], [a[2], 'GUEST-4F9K']);
+    if (c[2] === a[2] || c[3] === a[2] || c[2] === c[3]) avoidOk = false;
+  }
+  ok(uniq && det, 'handles: 4000 seeds -> three distinct names, same names on every call');
+  ok(avoidOk, 'handles: a human seat name is never handed to a driven seat');
+  const seen = new Set<string>();
+  for (let seed = 0; seed < 4000; seed++) { const a = rivalHandles(seed, [1, 2, 3]); seen.add(a[1]); seen.add(a[2]); seen.add(a[3]); }
+  ok(seen.size >= 50, 'handles: the pool is well spread over seeds', String(seen.size));
+}
 ok(new Set(infoA.seats.map((s) => s.color)).size === 4 && infoA.seats[0].color === VS.seatColors[0], 'info: 4 distinct seat colours');
 ok(infoA.biome === 'grideast' && infoA.seed === 1337, 'info: city + seed come from START');
 ok(start.endTick >= Math.round((VS.countdownS + VS.phase.hardEndS) * 30), 'START endTick covers the whole match', String(start.endTick));
@@ -124,7 +144,7 @@ const META: Record<string, Record<string, unknown>> = { a: { name: 'ALICE', tita
   R.p.tLook = performance.now() - 60000;               // (an old look timer must not matter once a host was seen)
   R.set(['b'], META, true);
   s = R.last();
-  ok(s.phase === 'waiting' && s.host && s.canStartNow, 'L2: the promoted host stays in the host phase with START NOW WITH BOTS', JSON.stringify([s.phase, s.host, s.canStartNow]));
+  ok(s.phase === 'waiting' && s.host && s.canStartNow, 'L2: the promoted host stays in the host phase with START NOW', JSON.stringify([s.phase, s.host, s.canStartNow]));
   ok(s.hostLeft, 'L2: the lobby knows the host left (it says so)');
   ok(s.seats[0].host && s.seats[0].me && s.seats[1].open && s.seats[1].left === 'ALICE', 'L2: the departed host\'s seat is an OPEN seat that remembers who left', JSON.stringify(s.seats[1]));
   R.set(['b'], META, true);
@@ -174,7 +194,7 @@ const META: Record<string, Record<string, unknown>> = { a: { name: 'ALICE', tita
 // ── F2: every notice string lives in strings_vs.ts ──
 {
   const N = STR_VS.notice;
-  ok(vsFmt(N.dropped, { name: 'ALICE' }) === 'ALICE DROPPED OUT — A BOT IS DRIVING', 'F2: the DROPPED OUT notice is a strings_vs line');
+  ok(vsFmt(N.dropped, { name: 'ALICE' }) === 'ALICE LEFT THE MATCH', 'F2: the leave notice is a strings_vs line (replaced the old DROPPED OUT ... A BOT IS DRIVING text)');
   ok(vsFmt(N.unreach, { n: 2, who: N.players }).includes('2 PLAYERS') && vsFmt(N.hostLeft, { name: 'BOB' }).startsWith('HOST LEFT'), 'F2: the migration / reachability notices fill from strings_vs');
 }
 

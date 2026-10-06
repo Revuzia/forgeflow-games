@@ -133,7 +133,7 @@ export class TitleScreen {
     chip.addEventListener('mousedown', (ev) => { ev.preventDefault(); ev.stopPropagation(); });
     chip.addEventListener('click', (ev) => { ev.stopPropagation(); this.goals(); });
     chips.appendChild(chip);
-    // ONLINE VS (lane B-VIEW): VS PRACTICE [V] — you + 3 bots in one city (vs_design.md §14.1)
+    // ONLINE VS (lane B-VIEW): VS PRACTICE [V] — you + three rivals in one city (vs_design.md §14.1)
     const vsChip = el('button', 'bt-btn bt-btn-ghost bt2-goals-chip bt2-title-chip bt-vs-chip-btn');
     vsChip.type = 'button';
     vsChip.tabIndex = -1;
@@ -143,7 +143,7 @@ export class TitleScreen {
     vsChip.addEventListener('mousedown', (ev) => { ev.preventDefault(); ev.stopPropagation(); });
     vsChip.addEventListener('click', (ev) => { ev.stopPropagation(); this.vsPick(); });
     chips.appendChild(vsChip);
-    // ONLINE VS (lane O-LOBBY): QUICK MATCH / CREATE ROOM / JOIN WITH CODE — 4 titans, real people first, bots fill the rest
+    // ONLINE VS (lane O-LOBBY): QUICK MATCH / CREATE ROOM / JOIN WITH CODE — 4 titans, find a match, every seat filled
     const onChip = el('button', 'bt-btn bt-btn-ghost bt2-goals-chip bt2-title-chip bt-vs-chip-btn bt-online-chip-btn');
     onChip.type = 'button';
     onChip.tabIndex = -1;

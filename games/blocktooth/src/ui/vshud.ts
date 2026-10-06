@@ -1,7 +1,7 @@
 // BLOCKTOOTH ONLINE VS — the VS HUD (lane B-VIEW; vs_design.md §3, §6.2, §11, §12).
 //
 //   top centre   phase stamp (OPEN HOUSE / HOSTILE TAKEOVER / FINAL NOTICE / LAST CALL) + the match clock + "NEXT PHASE IN"
-//   left         4 SEAT CARDS (portrait, name + BOT chip, LV, SIZE numeral, evictions, HP bar, FRONT PAGE crown),
+//   left         4 SEAT CARDS (portrait, name + YOU chip on your own seat, LV, SIZE numeral, evictions, HP bar, FRONT PAGE crown),
 //                ordered live by standing (level, then XP); EVICTED / OUT states ride the card
 //   right        KO feed (evictions, eliminations, crown changes, tenders, the ring) and the MINIMAP (rotated to the
 //                camera's 45 degrees: rivals, tenders, power-ups, the cordon, the FRONT PAGE star; M enlarges it)
@@ -234,8 +234,9 @@ export class VsHud {
       const nm = div('bt-vs-seat-name', main);
       const nameB = el('b');
       nm.appendChild(nameB);
-      const chip = el('span', 'bt-vs-chip' + (s.bot ? '' : ' you'), s.bot ? STR_VS.bot : STR_VS.you);
-      if (!s.bot && s.slot !== info.local) chip.classList.add('bt-hidden');
+      // only YOUR seat carries a chip: every rival reads as a player (name + titan), whoever or whatever drives the seat
+      const chip = el('span', 'bt-vs-chip you', STR_VS.you);
+      if (s.slot !== info.local) chip.classList.add('bt-hidden');
       nm.appendChild(chip);
       const crown = el('span', 'bt-vs-chip crown bt-hidden', '★ ' + STR_VS.crown);
       nm.appendChild(crown);
@@ -290,7 +291,7 @@ export class VsHud {
     this.sortSeats(w);
   }
 
-  /** ONLINE: the seats' names / BOT chips changed (a human dropped out and a bot took the seat, or took one back) */
+  /** ONLINE: the seats' names changed (a player joined a seat mid-match) */
   refreshSeats(): void {
     const info = this.info;
     if (!info) return;
@@ -298,8 +299,8 @@ export class VsHud {
       const s = info.seats[i], cd = this.cards[i];
       if (!s || !cd) continue;
       cd.name.set(s.name);
-      cd.chip.textContent = s.bot ? STR_VS.bot : STR_VS.you;
-      cd.chip.className = 'bt-vs-chip' + (s.bot ? '' : ' you') + (!s.bot && s.slot !== info.local ? ' bt-hidden' : '');
+      cd.chip.textContent = STR_VS.you;
+      cd.chip.className = 'bt-vs-chip you' + (s.slot !== info.local ? ' bt-hidden' : '');
     }
   }
 
@@ -398,7 +399,7 @@ export class VsHud {
     if (specOn) {
       this.specPlace.set(myVs && myVs.eliminated ? vsFmt(STR_VS.eliminatedYou, { place: STR_VS.place[Math.max(0, Math.min(3, (myVs.place || 4) - 1))] }) : STR_VS.out);
       const s = info.seats[w.view];
-      if (s) { this.specName.set(titanTag(s.titan) + (s.bot ? ' · ' + s.name + (s.sign ? ' — ' + s.sign : '') : '')); this.spec.style.setProperty('--seat', s.color); }
+      if (s) { this.specName.set(titanTag(s.titan) + (s.slot === info.local ? '' : ' · ' + s.name)); this.spec.style.setProperty('--seat', s.color); }
     }
 
     // feed lifetime

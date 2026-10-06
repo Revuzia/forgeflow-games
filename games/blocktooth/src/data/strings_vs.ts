@@ -1,5 +1,5 @@
 // BLOCKTOOTH ONLINE VS ("ZONING DISPUTE") — all on-screen copy, in the WARD-7 tabloid voice (lane B-VIEW).
-// vs_design.md §3 (banners), §9-§11 (placement, KO / spectate / end card), §10 (bot call-signs). Pure data + tiny
+// vs_design.md §3 (banners), §9-§11 (placement, KO / spectate / end card), §10 (rival handles). Pure data + tiny
 // formatters: THREE-free, DOM-free. Every string here is user-visible; nothing in the sim reads this file.
 
 import type { GateId, TitanId } from '../core/types.ts';
@@ -44,7 +44,6 @@ export const VS = {
   /** the countdown's last beat */
   go: 'GO',
   you: 'YOU',
-  bot: 'BOT',
   crown: 'FRONT PAGE',
   out: 'OUT',
   /** seat-card badges (were KO / EV: ambiguous). KOs = knock-outs this seat SCORED; OUT x = times it was knocked out */
@@ -109,9 +108,9 @@ export const VS = {
     step2: 'STEP 2 OF 2 — PICK THE CITY',
     confirm: 'NEXT',
     start: 'START THE DISPUTE',
-    botsLabel: 'RIVAL BOTS',
-    botsHint: 'YOU + 3 BOTS · THE OTHER THREE TITANS',
-    levels: { rookie: 'ROOKIE', regular: 'REGULAR', veteran: 'VETERAN' },
+    skillLabel: 'RIVAL SKILL',
+    skillHint: 'THE OTHER THREE TITANS',
+    levels: { rookie: 'EASY', regular: 'REGULAR', veteran: 'HARD' },
     levelNote: {
       rookie: 'SLOW TO REACT · DODGES LESS · FIGHTS ONLY WHEN AHEAD',
       regular: 'THE DEFAULT ROOM',
@@ -132,10 +131,10 @@ export const VS = {
     joinGo: 'JOIN THE ROOM',
     menuKicker: 'ZONING DISPUTE · ONLINE',
     menuTitle: 'FIND A FIGHT',
-    menuSub: 'FOUR TITANS · REAL PEOPLE FIRST · BOTS FILL EVERY EMPTY SEAT',
+    menuSub: 'FOUR TITANS · ONE CITY · JUMP IN',
     yourPick: 'YOUR APPLICANT',
     quick: 'QUICK MATCH',
-    quickSub: 'FIND RIVALS NOW · BOTS FILL THE EMPTY SEATS AFTER 20 S',
+    quickSub: 'FIND PLAYERS NOW · THE MATCH STARTS IN ABOUT 20 S',
     create: 'CREATE ROOM',
     createSub: 'GET A 4-LETTER CODE AND INVITE FRIENDS',
     join: 'JOIN WITH CODE',
@@ -145,11 +144,11 @@ export const VS = {
     codeShort: 'A ROOM CODE HAS 4 LETTERS',
     lobbyKicker: 'ZONING DISPUTE · APPLICANT LOBBY',
     connecting: 'CONNECTING TO THE MATCHMAKER…',
-    seeking: 'LOOKING FOR RIVALS',
-    seekingSub: '{n} OF 4 SEATS FILLED · BOTS TAKE THE EMPTY ONES IN {s} S',
-    seekingNow: '{n} OF 4 SEATS FILLED · STARTING WITH BOTS…',
+    seeking: 'FINDING PLAYERS',
+    seekingSub: '{n} OF 4 SEATS FILLED · MATCH STARTS IN {s} S',
+    seekingNow: '{n} OF 4 SEATS FILLED · STARTING…',
     roomHost: 'ROOM OPEN — SHARE THE CODE',
-    roomHostSub: '{n} OF 4 SEATS FILLED · EMPTY SEATS BECOME BOTS · START WHEN READY',
+    roomHostSub: '{n} OF 4 SEATS FILLED · START WHEN READY',
     roomGuest: 'IN THE ROOM — WAITING FOR THE HOST',
     roomGuestSub: '{n} OF 4 SEATS FILLED · THE HOST STARTS THE MATCH',
     guestSeekSub: '{n} OF 4 SEATS FILLED · THE HOST STARTS WHEN READY',
@@ -158,7 +157,7 @@ export const VS = {
     startingWait: 'WAITING FOR THE OTHER PLAYERS TO LOAD…',
     loadingN: '{n} OF {m} PLAYERS READY — THE COUNTDOWN STARTS WHEN EVERYONE IS',
     rematch: 'REMATCH ROOM — GATHERING THE SAME CAST',
-    rematchSub: '{n} OF 4 SEATS FILLED · BOTS TAKE THE EMPTY ONES',
+    rematchSub: '{n} OF 4 SEATS FILLED · THE MATCH STARTS SOON',
     full: 'THAT ROOM IS FULL OR ALREADY PLAYING',
     fullSub: 'GO BACK AND START A NEW ROOM, OR TRY QUICK MATCH',
     version: 'THAT ROOM RUNS A DIFFERENT VERSION OF THE GAME',
@@ -171,7 +170,7 @@ export const VS = {
     retry: 'RETRY',
     back: 'BACK',
     seatLeft: '{name} LEFT',
-    seatLeftSub: 'SEAT OPEN · A BOT FILLS IT',
+    seatLeftSub: 'SEAT OPEN · WAITING FOR A PLAYER',
     hostLeftNote: 'THE HOST LEFT — YOU ARE NOW THE HOST · START WHEN READY',
     city: 'CITY',
     versionOthers: '{n} PLAYER(S) NEARBY RUN ANOTHER VERSION — RELOAD TO PLAY WITH THEM',
@@ -185,35 +184,35 @@ export const VS = {
     copy: 'COPY INVITE LINK',
     copied: 'COPIED',
     copyFail: 'SELECT AND COPY THE LINK ABOVE',
-    startNow: 'START NOW WITH BOTS',
+    startNow: 'START NOW',
     leave: 'LEAVE',
     host: 'HOST',
     you: 'YOU',
-    open: 'OPEN SEAT',
-    openSub: 'A BOT FILLS IT',
+    open: 'SEAT OPEN',
+    openSub: 'WAITING FOR A PLAYER',
     openSeek: 'SEARCHING…',
     guest: 'GUEST',
-    botsFill: 'BOTS FILL IN',
+    botsFill: 'SEC TO START',
     seatFilled: 'SEAT FILLED',
   },
   /** in-match notices (the sim is the source of every one of them) */
   notice: {
     hostLeftYou: 'HOST LEFT — YOU ARE NOW RUNNING THE CLOCK',
     hostLeft: 'HOST LEFT — {name} IS NOW RUNNING THE CLOCK',
-    botTookYours: 'A BOT TOOK YOUR SEAT',
-    botTookYoursAfk: 'NO INPUT FROM YOU — A BOT TOOK YOUR SEAT',
-    botTookYoursDesync: 'CONNECTION PROBLEM — A BOT TOOK YOUR SEAT',
+    botTookYours: 'YOU’RE AWAY — YOUR SEAT IS ON AUTOPILOT',
+    botTookYoursAfk: 'NO INPUT FROM YOU — YOUR SEAT IS ON AUTOPILOT',
+    botTookYoursDesync: 'CONNECTION PROBLEM — YOUR SEAT IS ON AUTOPILOT',
     youAreBack: 'YOU ARE BACK IN CONTROL',
-    youTookOver: 'YOU TOOK OVER A BOT — {titan}',
-    botTook: '{name} LEFT — A BOT TOOK THE SEAT',
-    dropped: '{name} DROPPED OUT — A BOT IS DRIVING',
-    unreach: 'COULDN’T REACH {n} {who} DIRECTLY — A BOT PLAYS THEIR SEAT',
+    youTookOver: 'YOU JOINED THE MATCH — {titan}',
+    botTook: '{name} LEFT THE MATCH',
+    dropped: '{name} LEFT THE MATCH',
+    unreach: 'COULDN’T REACH {n} {who} DIRECTLY — THEIR SEAT IS ON AUTOPILOT',
     player: 'PLAYER',
     players: 'PLAYERS',
     aTitan: 'A TITAN',
-    away: '{name} IS AWAY — A BOT IS DRIVING',
+    away: '{name} IS AWAY',
     back: '{name} IS BACK IN CONTROL',
-    tookOver: '{name} TOOK OVER {titan}',
+    tookOver: '{name} JOINED THE MATCH — {titan}',
     ping: 'HIGH PING {ms} MS — YOUR MOVES MAY ARRIVE LATE',
     pingOk: 'PING IS BACK TO NORMAL',
     lag: 'THE CONNECTION IS LAGGING',
@@ -221,9 +220,9 @@ export const VS = {
     reconnected: 'RECONNECTED',
     catchingUp: 'CATCHING UP WITH THE MATCH…',
     desyncTitle: 'CONNECTION PROBLEM',
-    desyncSub: 'YOUR GAME FELL OUT OF STEP — A BOT NOW DRIVES YOUR SEAT. THE MATCH GOES ON WITHOUT YOU.',
+    desyncSub: 'YOUR GAME FELL OUT OF STEP — YOUR SEAT IS ON AUTOPILOT. THE MATCH GOES ON WITHOUT YOU.',
     leaveTitle: 'LEAVE THE MATCH?',
-    leaveSub: 'A BOT TAKES YOUR SEAT AND THE MATCH GOES ON WITHOUT YOU',
+    leaveSub: 'YOUR SEAT GOES ON AUTOPILOT AND THE MATCH GOES ON WITHOUT YOU',
     leaveYes: 'LEAVE',
     leaveNo: 'KEEP PLAYING',
     leaveHint: 'ENTER TO LEAVE · ESC TO KEEP PLAYING',
@@ -260,21 +259,48 @@ export const VS = {
   },
 } as const;
 
-/** original handler call-signs for the bots (vs_design.md §10). Cosmetic, picked by seat + seed; never names a real person. */
-export const BOT_CALLSIGNS: readonly string[] = [
-  'LOOSE PERMIT', 'NIGHT SHIFT', 'RED TAPE', 'PETTY CASH', 'STAY OF DEMOLITION', 'GRANDFATHERED',
-  'VARIANCE', 'OVERTIME', 'HARD HAT', 'FINE PRINT', 'LAST STOP', 'SMALL CLAIMS',
+/**
+ * Player handles for the seats the sim drives. The match never says which seats are people: a driven seat shows an ordinary
+ * gamertag, exactly like a human's GUEST-xxxx / account name does. All original (no real person, brand, slur or game character),
+ * upper-case A-Z 0-9 _ only and at most 14 characters, so each one survives online.ts cleanName() unchanged.
+ */
+export const RIVAL_HANDLES: readonly string[] = [
+  'NIGHTOWL77', 'KAIJU_KEV', 'MUNCHMASTER', 'GRIDLOCK', 'TOASTBANDIT', 'PIXELPUNK', 'LAGSPIKE', 'DEEP_FRYER',
+  'SALTYBISCUIT', 'MOSSBACK', 'CRUMBLECORE', 'ZEROHOUR', 'WAFFLE_TANK', 'OXBOW', 'TINYTYRANT', 'GLITCHWITCH',
+  'DUSTBUNNY', 'FERALFOX', 'NOODLE_ARM', 'STOMPY', 'BACKSTABBATH', 'LOWPOLY_LOU', 'CINDERBLOCK', 'JUNKYARD_J',
+  'HOTDOGHERO', 'QUIETSTORM', 'MR_RUBBLE', 'ASHENFANG', 'SKYSCRAPER_S', 'TURBO_TOAD', 'VOIDWALKER', 'PEPPERJACK',
+  'OLD_MAN_KAIJU', 'SNACKATTACK', 'ROOFTOP_RAT', 'BLOCKHEAD_99', 'MIDNIGHTMOSS', 'BIGSTOMP', 'RUBBLERUNNER', 'SPRAYPAINTER',
+  'CRASHCART', 'THUNDERTHUMB', 'EXOSKELETON', 'NEONNOODLE', 'DRIFT_KING_X', 'TACOTUESDAY', 'LATEFEE', 'SWEATERWEATHER',
+  'PANICBUTTON', 'GOBLIN_MODE', 'CAPSLOCKCAT', 'HEAVYSLEEPER', 'DIRTYDOZER', 'URBANLEGEND', 'FIRSTBITE', 'SLEEPYSHARK',
+  'COLDCUTS', 'WRECKSHOP', 'SIR_SQUISH', 'LUCKYLOBSTER', 'TRASHPANDA', 'KRAKENCOOKIE', 'DONUTDESTROYER', 'GAMMAGRIT',
+  'OVERCLOCKED', 'VIBECHECK', 'SOUPSPOON', 'HARDRESET', 'ANGRYTOASTER', 'TEAMKILLER', 'MAJORLAG', 'SLOWBURN',
 ];
 
-/** "UNIT 9 — LOOSE PERMIT": slot + seed pick a stable call-sign (a human seat keeps its own name) */
-export function botName(slot: number, seed: number): { unit: string; sign: string } {
+/** strides coprime with RIVAL_HANDLES.length (72), so a match's driven seats walk the pool without ever repeating */
+const HANDLE_STRIDES = [5, 7, 11, 13, 17, 19, 23, 25, 29, 31, 35, 37] as const;
+
+/**
+ * The handles of a match's driven seats: `slots` (ascending seat numbers) -> one handle each. Deterministic in (seed, slots), so every
+ * peer shows the same names; unique within the match and never equal to a name in `avoid` (the human seats' names, which every peer
+ * reads from the same START). Pure data: nothing in the sim reads it.
+ */
+export function rivalHandles(seed: number, slots: readonly number[], avoid: readonly string[] = []): Record<number, string> {
   let h = Math.imul((seed >>> 0) ^ 0x9e3779b1, 0x85ebca6b) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
   h = (h ^ (h >>> 16)) >>> 0;
-  // the three bots of a match must read as different units: slot spreads the unit number, the hash the call-sign
-  const unit = 2 + ((h + slot * 3) % 8);
-  const sign = BOT_CALLSIGNS[((h >>> 8) + slot * 5) % BOT_CALLSIGNS.length];
-  return { unit: 'UNIT ' + unit, sign };
+  const n = RIVAL_HANDLES.length;
+  const stride = HANDLE_STRIDES[(h >>> 20) % HANDLE_STRIDES.length];
+  const taken = new Set(avoid.map((x) => x.toUpperCase()));
+  const out: Record<number, string> = {};
+  let k = 0;
+  for (const slot of slots) {
+    let idx = ((h >>> 3) + k * stride + slot) % n;
+    for (let g = 0; g < n && taken.has(RIVAL_HANDLES[idx]); g++) idx = (idx + 1) % n;
+    out[slot] = RIVAL_HANDLES[idx];
+    taken.add(RIVAL_HANDLES[idx]);
+    k++;
+  }
+  return out;
 }
 
 export function fmtMatchClock(s: number): string {

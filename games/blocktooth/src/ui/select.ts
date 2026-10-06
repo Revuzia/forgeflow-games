@@ -69,12 +69,12 @@ export class SelectScreen {
   private readonly permit: NextUnlockPanel;
   private readonly confirmBtn: HTMLButtonElement;
   private readonly confirmLbl: HTMLElement;
-  // ONLINE VS (lane B-VIEW): VS PRACTICE re-skins this screen (opts.vs): the perk row becomes RIVAL BOTS
+  // ONLINE VS (lane B-VIEW): VS PRACTICE re-skins this screen (opts.vs): the perk row becomes RIVAL SKILL
   private readonly titleEl: HTMLElement;
   private readonly perkLbl: HTMLElement;
   private readonly goalsChip: HTMLElement;
   private vs = false;
-  /** ONLINE VS (lane O-LOBBY): the same re-skin for the online menu (no bots row, no palettes); `titanOnly` = an invite joiner: step 1 only */
+  /** ONLINE VS (lane O-LOBBY): the same re-skin for the online menu (no rival-skill row, no palettes); `titanOnly` = an invite joiner: step 1 only */
   private online = false;
   private titanOnly = false;
   /** O-POLISH: the online walk's two halves: the TITAN screen (titan only, CONTINUE) and the CITY screen (city only) */
@@ -228,7 +228,7 @@ export class SelectScreen {
     this.botIx = Math.max(0, BOT_LEVELS.indexOf(opts.bots ?? 'regular'));
     this.layer.dataset.vs = this.vs ? '1' : '';
     this.titleEl.textContent = this.vs ? (this.online ? STR_VS.online.header : STR_VS.menu.header) : STR.select.header;
-    this.perkLbl.textContent = this.vs ? STR_VS.menu.botsLabel : SCREENS.select.perkLabel;
+    this.perkLbl.textContent = this.vs ? STR_VS.menu.skillLabel + ' · ' + STR_VS.menu.skillHint : SCREENS.select.perkLabel;
     this.goalsChip.classList.toggle('bt-hidden', this.vs);
     this.buildTitanCards(this.portraits);
     const init = opts.initial ?? {};

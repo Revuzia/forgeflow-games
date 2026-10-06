@@ -827,7 +827,7 @@ def variant_vr(args, chk, sandbox, allow, out):
         m = (list(db["matches"].values()) or [None])[0] or {}
         chk.check("%s: 4 humans + 0 bots: 4 rows, 1 match row (humans 4, bots 0, reports 4), winner_id = human 1 confirmed" % L,
                   len(db["results"]) == 4 and m.get("humans") == 4 and m.get("bots") == 0 and m.get("reports") == 4 and m.get("winner_id") == U1, db)
-        chk.check("%s: NETWORK EXCLUSIVE (win against 3 other players) for the winner only" % L,
+        chk.check("%s: NETWORK EXCLUSIVE (win a full 4-player online lobby) for the winner only" % L,
                   "g_vs_network_exclusive" in ach_of(ctx, 0) and all("g_vs_network_exclusive" not in ach_of(ctx, k) for k in (1, 2, 3)), [ach_of(ctx, k) for k in range(4)])
         chk.check("%s: all four reports accepted; exactly the last ack confirmed" % L,
                   [c["ok"] for c in db["calls"]] == [True] * 4 and sum(1 for c in db["calls"] if c["conf"]) >= 1, db["calls"])

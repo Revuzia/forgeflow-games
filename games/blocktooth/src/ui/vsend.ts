@@ -1,10 +1,10 @@
 // BLOCKTOOTH ONLINE VS — the front-page END CARD + REMATCH (lane B-VIEW; vs_design.md §9, §11).
 //
 // "ZONING DISPUTE · FINAL EDITION": the headline ("MOLO WINS ZONING DISPUTE IN 9:12"), the freeze-frame photo, the
-// standings 1st..4th (portrait, name + BOT chip, peak Size, the VS SCORE and its line items), what the local player
+// standings 1st..4th (portrait, name, peak Size, the VS SCORE and its line items), what the local player
 // did, and two buttons: REMATCH (ENTER / R) and LEAVE (ESC). REMATCH opens the 10 s TITAN SWAP window (pick an applicant
 // with ← →, ENTER locks in; the timer locks the current pick) and resolves { kind: 'rematch', titan }; the app starts the
-// next match (new seed, the biome rotated GRID-EAST → WHITE STACKS → LOCKWATER, bots refill every other seat).
+// next match (new seed, the biome rotated GRID-EAST → WHITE STACKS → LOCKWATER, every other seat refills).
 // Online (B-NET) the same screen shows the 15 s vote (`voteS`); offline VS PRACTICE has no vote timer.
 //
 // Standings come from the sim: PlayerVs.place (1..4 once decided), else World.vs.winner + the reversed elimination
@@ -115,8 +115,7 @@ export class VsEndScreen {
     mast.appendChild(el('span', '', 'WARD-7 · THE FRONT PAGE'));
     mast.appendChild(el('small', '', STR_VS.end.kicker));
     const head = div('bt-vsend-head', P);
-    const wname = winner.bot ? titanTag(winner.titan) : (winner.slot === d.info.local ? STR_VS.you : titanTag(winner.titan));
-    const hlName = winner.slot === d.info.local ? titanTag(winner.titan) : wname;
+    const hlName = titanTag(winner.titan);
     div('bt-vsend-hl', head, vsFmt(bell ? STR_VS.end.timeout : STR_VS.end.win, { name: hlName, t: fmtMatchClock(dur) }));
     div('bt-vsend-sub', head, STR_VS.end.winSub + ' · ' + (me.place === 1 ? STR_VS.end.you1 : vsFmt(STR_VS.end.youN, { place: STR_VS.place[Math.min(3, me.place - 1)] })));
 
@@ -135,13 +134,11 @@ export class VsEndScreen {
       if (url) ph.src = url;
       row.appendChild(ph);
       const who = div('bt-vsend-who', row);
-      // online: a human rival shows their NAME (GUEST-xxxx / account); a bot its call-sign
-      const nm = el('b', '', (r.slot === d.info.local ? STR_VS.you + ' · ' : '') + titanTag(r.titan) + (r.bot ? ' · ' + r.name : r.slot !== d.info.local && r.name && r.name !== 'YOU' ? ' · ' + r.name : ''));
-      if (r.bot) nm.appendChild(el('span', 'bt-vs-chip', STR_VS.bot));
+      // every rival shows titan + NAME (GUEST-xxxx / account / player handle), no chip; your own row keeps YOU
+      const nm = el('b', '', (r.slot === d.info.local ? STR_VS.you + ' · ' : '') + titanTag(r.titan) + (r.slot !== d.info.local && r.name && r.name !== 'YOU' ? ' · ' + r.name : ''));
       who.appendChild(nm);
       // KOs = knock-outs scored · OUT xN = times knocked out (same words as the seat cards) · when the seat went out (the placing rule)
       who.appendChild(el('span', '', [
-        r.bot && r.sign ? r.sign : '',
         'SIZE ' + roman(r.peak),
         vsFmt(STR_VS.kos, { n: r.evict }), r.outs > 0 ? vsFmt(STR_VS.outTimes, { n: r.outs }) : '',
         r.assist + ' AST', r.pvp > 0 ? Math.round(r.pvp) + '% PVP' : '', Math.round(r.tons / 100) / 10 + 'K T',

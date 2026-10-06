@@ -1,9 +1,9 @@
 // BLOCKTOOTH ONLINE VS — in-match network notices + overlays (lane O-LOBBY).
 //
-//   notices   a small stack under the phase strip: "HOST LEFT — YOU ARE NOW RUNNING THE CLOCK", "A BOT TOOK YOUR SEAT",
-//             "YOU TOOK OVER A BOT — MOLO", "HIGH PING 240 MS …" (same key replaces its line)
+//   notices   a small stack under the phase strip: "HOST LEFT — YOU ARE NOW RUNNING THE CLOCK", "YOU’RE AWAY — YOUR SEAT IS ON AUTOPILOT",
+//             "YOU JOINED THE MATCH — MOLO", "HIGH PING 240 MS …" (same key replaces its line)
 //   chip      LAGGING while late frames pile up
-//   overlays  CONNECTION LOST (reconnecting), CONNECTION PROBLEM (the game fell out of step: a bot has the seat, LEAVE),
+//   overlays  CONNECTION LOST (reconnecting), CONNECTION PROBLEM (the game fell out of step: the seat is on autopilot, LEAVE),
 //             CATCHING UP (a replay join / a tab that was hidden), LEAVE THE MATCH? (the match does NOT pause behind it)
 //
 // Pure DOM, driven by the app (online.ts hooks). The sim is never touched.

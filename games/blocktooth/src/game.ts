@@ -74,7 +74,7 @@ import { CardRail } from './ui/rail.ts';
 import { VsEndScreen } from './ui/vsend.ts';
 import type { VsMatchInfo } from './ui/vstypes.ts';
 import { SEAT_COLORS, vsGoalLines } from './ui/vstypes.ts';
-import { REMATCH_BIOMES, botName } from './data/strings_vs.ts';
+import { REMATCH_BIOMES, rivalHandles } from './data/strings_vs.ts';
 import { CARD, decodeInput, encodeInput } from './net/proto.ts';
 import { Room } from './net/room.ts';                       // ONLINE VS (O-LOBBY): room codes (?room=)
 import { OnlineMatch, buildInfo, cleanName, guestName, rematchCode, type Connection, type LobbyState, type Notice, type OnlineMode } from './online.ts';
@@ -317,9 +317,10 @@ function buildVs(req: VsRequest): VsBuild {
     seats: [{ slot: 0, titan: req.titan, name: 'YOU', sign: '', bot: false, level: null, color: VS.seatColors[0] ?? SEAT_COLORS[0] }],
     local: 0, biome: req.biome, seed: req.seed, palettes: [pal, 0, 0, 0],
   };
+  const handles = rivalHandles(req.seed, [1, 2, 3]);
   vsBotTitans(req.titan).forEach((t, k) => {
     const slot = k + 1;
-    const nm = botName(slot, req.seed);
+    const nm = { unit: handles[slot], sign: '' };
     seats.push({ titan: t, meta: { ...EMPTY_RUN_META, unlocked: [], perk: null, palette: 0 }, bot: req.bots });
     info.seats.push({ slot, titan: t, name: nm.unit, sign: nm.sign, bot: true, level: req.bots, color: VS.seatColors[slot] ?? SEAT_COLORS[slot] });
   });

@@ -1168,6 +1168,8 @@ export const UI_BIND = {
 // Times are MATCH-CLOCK seconds (= world.t - World.vs.startT; the 5 s COUNTDOWN is world.t 0..VS.countdownS).
 // VP-tuned (gate VP, GATE lane 2026-10-05, 36 matches = 12 seeds x 3 cities, REGULAR bots, all 7 VP rules PASS): cityScale 1.3, pacing.surgeMul 1.8,
 // catchUp 0.15/3/0.1/0.3, ko.levelsLost 1, pvp.finalMul 0.5, tender.lumpBasis 'trailing', director.rebuildPace 2 / rebuildCrewsMul 2 / rebuildRadiusMul 0.6.
+// BOSSHP (2026-10-06, owner: "boss fights in online should have a lot more HP"): VS.tender hpMul 3.7 / 4.6 / 3.5 + hpPerExtraTitan 1 + dps caps 0.012 / 0.03 (fractions of max HP) = 75 / 90 / 105 s fights (were 22 / 26 / 28 s), arrivals 0:25 then queued (gapS), lumps 8 / 9 / 6.5,
+// spawnMulNear 1.6, pacing.surgeMul 1.7 -> 1.55, catchUp.aheadPerLevel .14 / aheadMin .25: re-tuned so all 7 VP rules still pass on 36 matches (and on two more seed sets).
 // FIXHIGH (2026-10-05, after the real-key critic saw FINAL NOTICE last 35 s and the 7:00 leader never lose): pvp.finalMul 0.2 -> finalMulEnd 0.8 ramp, pvp.lvGap level-gap governor, crown.levelsLost 3 / bountyLevels 3, tender.leaderShareCap 0.5.
 export const VS = {
   maxPlayers: 4,
@@ -1183,10 +1185,10 @@ export const VS = {
   seatColors: ['#ff5a6e', '#4dabff', '#ffc93c', '#b57bff'] as readonly string[],
   /** pacing overrides the VS world reads INSTEAD of config XP_STRETCH / PACE_STRETCH / the RANK_SCHEDULE_S band (§3).
    *  Sim code calls xpToNextFor / cumXpAtFor / paceStretchFor (below); solo returns the shipped values. */
-  pacing: { xpStretch: 1, paceStretch: 1, scheduleBand: false, surgeFromS: 240, surgeMul: 1.7, buildingDmgMul: 1 },   // surgeMul 1.8 -> 1.7 (FIXHIGH): the tender / crown / level-gap changes put more titans at Size V by 7:00 and the 7:00 floors gate (>= 35 %) fell to 33 %; at 1.7 the min is 40 % over 36 matches, LV@7:00 median 31
+  pacing: { xpStretch: 1, paceStretch: 1, scheduleBand: false, surgeFromS: 240, surgeMul: 1.55, buildingDmgMul: 1 },   // surgeMul 1.8 -> 1.7 (FIXHIGH): the tender / crown / level-gap changes put more titans at Size V by 7:00 and the 7:00 floors gate (>= 35 %) fell to 33 %; at 1.7 the min is 40 % over 36 matches, LV@7:00 median 31
   /** leader-relative catch-up XP (§6.2 rule 2): growth XP x min(max, 1 + perLevel x (leaderLevel - myLevel)); the LEADER's
    *  growth XP x max(aheadMin, 1 - aheadPerLevel x (its levels above 2nd place)) (0 = off). GATE tuning knobs (VP gate). */
-  catchUp: { perLevel: 0.15, max: 3, aheadPerLevel: 0.1, aheadMin: 0.3 },
+  catchUp: { perLevel: 0.15, max: 3, aheadPerLevel: 0.14, aheadMin: 0.25 },   // BOSSHP: ahead 0.1 / 0.3 -> 0.14 / 0.25 (with surgeMul 1.7 -> 1.55): the 80-110 s tender fights pay their XP as lumps, so the eaten-XP surge shrinks and the runaway leader (Size V by 6:30, floors < 35 %) is braked harder
   /** FRONT PAGE crown (§6.2 rule 3): live from the start of HOSTILE TAKEOVER */
   crown: { fromS: 240, heatMul: 1.3, uproarMul: 1.5, bountyLevels: 3, levelsLost: 3 },
   // (crown.bountyLevels = HEADLINE STOLEN: the killer of the crown holder banks this many XP bars of ITS OWN level; crown.levelsLost = the levels the
@@ -1228,20 +1230,30 @@ export const VS = {
   /** PUBLIC TENDER (§4.2): the 3 gatekeepers as shared reward events (no rank locks in VS) */
   tender: {
     gates: [
-      { gate: 'stencil1', atS: 105 },               // 1:45
-      { gate: 'cordon2', atS: 210 },                // 3:30
-      { gate: 'switchboard5', atS: 330 },           // 5:30
+      { gate: 'stencil1', atS: 25 },                // 0:25 (BOSSHP: the fights are 3-4x longer now, so all three must fit before 7:00)
+      { gate: 'cordon2', atS: 90 },                 // 1:30 (earliest; the queue pushes it behind the previous rig)
+      { gate: 'switchboard5', atS: 190 },           // 3:10 (earliest; the queue pushes it behind the previous rig)
     ] as readonly { gate: GateId; atS: number }[],
     markerLeadS: 15,                                // marker + minimap ping this long before the rig walks in
     spawnRingMul: 1.5,                              // >= 1.5 x the trailing titan's spawn ring from every titan
     nearRingMul: 2,                                 // "attended" = a titan within 2 x spawn ring
-    hpPerExtraTitan: 0.6,                           // HP x (1 + 0.6 x (titans near - 1))
+    hpPerExtraTitan: 1,                             // HP x (1 + 1 x (titans near - 1)): HP follows the crowd 1:1, so a lone titan on a rig is not 1.4x as long as a trio (was 0.6; BOSSHP)
+    /** BOSSHP: the VS rig's HP = the gate's solo HP x hpMul[gate] x the crowd scale. 1 = the old fight (22-28 s median); 3.7 / 4.6 / 3.5 = 75-110 s (3-4 attackers ~90 s). Per tender, because the titans hit harder the later the rig walks in. */
+    hpMul: { stencil1: 3.7, cordon2: 4.6, switchboard5: 3.5 } as Record<string, number>,
+    /** BOSSHP: PvE spawn budget x for the titans working a live rig (solo's GATES.spawnMul 0.35-0.45 thinned the food of EVERY seat while the rig was up; at minutes per fight that starved the fighters' growth: LV@4:00 11 vs 14). Seats out of the rig's reach: x 1. */
+    spawnMulNear: 1.6,
+    /** BOSSHP: a tender whose turn comes while the previous rig is still up WAITS (never two rigs): its arrival is pushed to (the previous payout + gapS) and its marker goes up markerLeadS before that. */
+    gapS: 15,
+    /** BOSSHP: a tender not yet UP by this match-clock second is dropped (BID WITHDRAWN, nothing paid), and a live rig leaves at it: no rig in LAST CALL. */
+    dropAfterS: 540,
+    /** BOSSHP: FATIGUE. After fatigueFromS seconds up, every titan hit on the rig deals x (1 + overrun / fatigueRampS): a lone titan on a rig finishes in ~3-3.7 min (measured, the other 3 seats idle: 145-183 s / 166-226 s for STENCIL / CORDON); 3-4 titans finish in ~100 s, mostly before it bites. */
+    fatigueFromS: 110, fatigueRampS: 40,
     retargetS: 4, retargetWindowS: 5,               // hunts the titan that dealt the most damage in the last 5 s; switch <= every 4 s
-    dpsCapBaseFrac: 0.06, dpsCapPerAttacker: 0.5, dpsCapMaxFrac: 0.12,   // global tumbling-1 s window (solo: 6 % per titan)
+    dpsCapBaseFrac: 0.012, dpsCapPerAttacker: 0.5, dpsCapMaxFrac: 0.03,   // global tumbling-1 s window (solo: 6 % per titan). BOSSHP: 0.06 / 0.12 -> 0.012 / 0.03 (the cap is a fraction of max HP, so it must come DOWN with the HP: at 0.06 a 4-titan pile-on kills in 8 s whatever the HP)
     hitCapFrac: 0.4,                                // per victim, unchanged from GATES.hitCap
     minShareFrac: 0.15, minShareDmgFrac: 0.05,      // any titan that dealt >= 5 % gets >= 15 % of the XP lump
     leaderShareCap: 0.5,                            // the XP lump a titan AT / ABOVE the top level of the others may bank is capped at this share (1 = off); the excess goes to the seats below it, weighted 1 + their level deficit (the tender is a catch-up event, not a snowball)
-    lump: { stencil1: 2, cordon2: 2.5, switchboard5: 3 } as Record<string, number>,   // XP lump, in levels of the xp bar (see lumpBasis)
+    lump: { stencil1: 8, cordon2: 9, switchboard5: 6.5 } as Record<string, number>,   // XP lump, in levels of the xp bar (see lumpBasis). BOSSHP: was 2 / 2.5 / 3. A fight is now 75-110 s, not 25 s, and the titans working the rig eat less meanwhile, so the lumps are 4x / 3.6x / 2.2x (the LAST one stays small: a 7.5-bar lump paid at ~5:40 made the trailing titan +15 LV and a Size V city-eater by 6:30, floors 12-20 %)
     lumpBasis: 'trailing' as 'recipient' | 'trailing',   // 'recipient': a bar of the seat's OWN level; 'trailing': the lowest live seat's bar (the same XP for everyone x share)
     ignoredWithdrawS: 60,                           // BID WITHDRAWN
     rewardUproar: 40,                               // = GATES.reward.uproar, x share

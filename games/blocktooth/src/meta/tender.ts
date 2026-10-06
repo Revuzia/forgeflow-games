@@ -13,8 +13,11 @@
 //               quadrant nearest to it that is >= spawnRingMul x its spawn ring from EVERY live titan (a pure scan of
 //               the road grid, ties by grid index) -> t.x / t.z / t.spawnSlot / t.markerT, event `tenderMarker` (p -1),
 //               state 'marker'. The trailing titan gets first crack, and everyone can see it coming.
+//               BOSSHP QUEUE: tender k waits (pending) until tender k-1 is paid / withdrawn, and its arrival `atS` is pushed to
+//               (that moment + VS.tender.gapS) when it is later than scheduled, so two rigs are never up together; a tender
+//               not up by VS.tender.dropAfterS is dropped (BID WITHDRAWN, no rig in LAST CALL) and a live rig leaves then.
 //     marker    at `atS` (and while no other boss is alive: one rig at a time) spawn the rig at the marker, opening on the
-//               NEAREST live titan: max HP = the gate's solo HP at the Size it guards x (1 + hpPerExtraTitan x
+//               NEAREST live titan: max HP = the gate's solo HP at the Size it guards x VS.tender.hpMul[gate] x (1 + hpPerExtraTitan x
 //               (titans within nearRingMul x spawn ring - 1)); when the walk-in ends the head-count is taken again and
 //               the HP re-scaled once (nobody can hurt it during the intro). Event `tenderSpawn`, state 'live'.
 //     live      mirror the rig into t.dmg / t.recent / t.targetSlot / t.retargetT; ignoredS counts the seconds with no live
@@ -134,7 +137,8 @@ function titansNear(w: World, x: number, z: number, r: number): number {
 /** The gate's solo HP at the Size it guards x the crowd scale for `near` titans. */
 function tenderHp(id: GateId, near: number): number {
   const rank = Math.max(0, gateHomeSlot(id) - 1) as 0 | 1 | 2;
-  return gateHpFor(id, rank, 0) * (1 + VS.tender.hpPerExtraTitan * Math.max(0, near - 1));
+  const mul = VS.tender.hpMul[id];
+  return gateHpFor(id, rank, 0) * (mul > 0 ? mul : 1) * (1 + VS.tender.hpPerExtraTitan * Math.max(0, near - 1));
 }
 
 /** The rig of tender `t` (the live w.boss that carries its mark), or null. */
@@ -148,12 +152,34 @@ export function stepTenders(w: World): void {
   const vs = w.vs;
   if (!vs || vs.phase === 'over' || vs.phase === 'countdown') return;
   const clock = clockOf(w);
-  for (let k = 0; k < vs.tenders.length; k++) stepTender(w, vs.tenders[k], clock);
+  for (let k = 0; k < vs.tenders.length; k++) stepTender(w, vs.tenders, k, clock);
 }
 
-function stepTender(w: World, t: TenderState, clock: number): void {
+/** QUEUE: tender k (k >= 1) does not start before tender k-1 is resolved; its arrival is pushed to (that resolution + gapS). */
+function holdNext(w: World, k: number): void {
+  const vs = w.vs;
+  if (!vs || k + 1 >= vs.tenders.length) return;
+  const nx = vs.tenders[k + 1];
+  if (nx.state !== 'pending') return;
+  nx.atS = Math.max(nx.atS, clockOf(w) + VS.tender.gapS);
+}
+
+/** Drop a tender that never got its turn (BID WITHDRAWN, nothing paid): the same close-out the unattended rig gets. */
+function drop(w: World, ts: readonly TenderState[], k: number): void {
+  const t = ts[k];
+  t.state = 'withdrawn';
+  const shares: number[] = [];
+  for (let i = 0; i < w.players.length; i++) shares.push(0);
+  emitAs(w, -1, { type: 'tenderPaid', gate: t.gate, shares, top: -1 });
+  holdNext(w, k);
+}
+
+function stepTender(w: World, ts: readonly TenderState[], k: number, clock: number): void {
+  const t = ts[k];
   if (t.state === 'paid' || t.state === 'withdrawn') return;
+  if (t.state !== 'live' && clock >= VS.tender.dropAfterS) { drop(w, ts, k); return; }   // too late to open a bid: no rig in LAST CALL
   if (t.state === 'pending') {
+    if (k > 0 && ts[k - 1].state !== 'paid' && ts[k - 1].state !== 'withdrawn') return;   // one rig at a time: wait for the previous bid to close
     if (clock < t.atS - VS.tender.markerLeadS) return;
     const slot = lastPlaceSlot(w);
     if (slot < 0) return;
@@ -178,6 +204,7 @@ function stepTender(w: World, t: TenderState, clock: number): void {
     b.data.ringR = ring;
     b.data.baseHp = tenderHp(t.gate, 1);
     b.data.introDone = 0;
+    b.data.spawnT = w.t;                             // FATIGUE clock (bosses/index.ts damageBoss)
     t.state = 'live'; t.spawnT = w.t; t.targetSlot = open; t.retargetT = w.t; t.ignoredS = 0;
     for (let i = 0; i < 4; i++) { t.dmg[i] = 0; t.recent[i] = 0; }
     ADDS.set(b, []);
@@ -186,11 +213,13 @@ function stepTender(w: World, t: TenderState, clock: number): void {
   }
   // live
   const b = rigOf(w, t);
-  if (!b) { finish(w, t, null); return; }            // the boss slot was taken over / cleared: settle with what was dealt
+  if (!b) { finish(w, t, null); holdNext(w, k); return; }            // the boss slot was taken over / cleared: settle with what was dealt
   if (!b.alive) {
     if (b.hp <= 1e-6) payout(w, t, b); else finish(w, t, b);
+    holdNext(w, k);
     return;
   }
+  if (clock >= VS.tender.dropAfterS) { withdraw(w, t, b); holdNext(w, k); return; }   // LAST CALL: the rig leaves
   // the walk-in just ended: take the head-count once and re-scale the HP (the rig was untouchable until now)
   if (b.introT <= 0 && !(b.data.introDone > 0)) {
     b.data.introDone = 1;
@@ -213,7 +242,7 @@ function stepTender(w: World, t: TenderState, clock: number): void {
   if (titansNear(w, b.x, b.z, R) > 0) t.ignoredS = 0;
   else {
     t.ignoredS += w.dt;
-    if (t.ignoredS >= VS.tender.ignoredWithdrawS - 1e-9) withdraw(w, t, b);
+    if (t.ignoredS >= VS.tender.ignoredWithdrawS - 1e-9) { withdraw(w, t, b); holdNext(w, k); }
   }
 }
 

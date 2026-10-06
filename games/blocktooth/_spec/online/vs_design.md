@@ -81,10 +81,10 @@ Timeline (world seconds; **[proposal]** values, to be tuned by the VS pacing lan
 |---|---|---|---|
 | -0:05-0:00 | COUNTDOWN | Titans visible and frozen in their quadrants; seat cards slide in | `ZONING DISPUTE — FOUR APPLICANTS, ONE CITY` |
 | 0:00-4:00 | **OPEN HOUSE** | No rival damage. Rival hits SHOVE only (knockback, no HP). The city is the race. | `OPEN HOUSE — EAT FIRST, ASK LATER` |
-| 1:45 | PUBLIC TENDER 1 | STENCIL-1 arrives (marker 15 s ahead) | `PUBLIC TENDER: STENCIL-1 — BIDS BY DAMAGE` |
-| 3:30 | PUBLIC TENDER 2 | CORDON-2 arrives | |
+| 0:25 | PUBLIC TENDER 1 | STENCIL-1 arrives (marker 15 s ahead). A fight is 80-110 s; the next rig arrives 15 s after the last one is paid (never two at once) | `PUBLIC TENDER: STENCIL-1 — BIDS BY DAMAGE` |
+| ~2:00 | PUBLIC TENDER 2 | CORDON-2 arrives (queued behind tender 1) | |
 | 4:00-7:00 | **HOSTILE TAKEOVER** | Rival damage on. A KO = **EVICTED**: respawn in 5 s, −2 levels (never below the current Size). The FRONT PAGE crown goes live. | `HOSTILE TAKEOVER — THE CLAWS ARE OUT` |
-| 5:30 | PUBLIC TENDER 3 | SWITCHBOARD-5 arrives | |
+| ~3:50 | PUBLIC TENDER 3 | SWITCHBOARD-5 arrives (queued behind tender 2); paid before 7:00 in every measured match | |
 | 7:00-10:00 | **FINAL NOTICE** | No respawns (a KO = eliminated). The **CONDEMNATION ORDER** ring closes in 3 steps. Repair crews switch to demolition. | `FINAL NOTICE — THE CITY IS CONDEMNED` |
 | 10:00-10:45 | **LAST CALL** | The ring closes to its last circle. Ring damage climbs every 5 s. Hard end at 10:45 (tie-break, §9). | `LAST CALL` |
 
@@ -121,20 +121,25 @@ Options considered:
 | **Shared gatekeeper as a reward event (PUBLIC TENDER)** | **Chosen.** It pulls titans together (natural third-party fights), still uses the 3 authored rigs, and never blocks growth. |
 
 ### 4.2 PUBLIC TENDER (the shared gatekeeper events)
-* **When**: STENCIL-1 at 1:45, CORDON-2 at 3:30, SWITCHBOARD-5 at 5:30. Each rig is roughly level-matched to the
+* **When** (BOSSHP, 2026-10-06): STENCIL-1 at 0:25, then CORDON-2 and SWITCHBOARD-5 each 15 s after the previous rig is paid (earliest 1:30 / 3:10;
+  measured medians 2:02 / 3:50). The fights are long now (see HP / DPS cap), so one rig is up at a time and the next one queues; a tender not
+  up by 9:00 is dropped. Each rig is roughly level-matched to the
   ungoverned curve (its solo role is the LV 7/16/27 ceiling, `GATEKEEPERS.md §3.1-§3.3`; the 10-minute curve hits
   LV 6/15/26 at 90/210/360 s, `config.ts:44`). [inferred]
 * **Where**: a crosswalk in the **last-place titan's quadrant** (lowest level; ties go to fewer KOs), at least 1.5 ×
   that titan's spawn ring from every titan. The marker and its minimap ping appear 15 s ahead for everyone. The
   trailing titan gets first crack, and everyone can see that coming.
-* **HP**: solo HP × (1 + 0.6 × (titans within 2 × spawn ring when it spawns − 1)), recomputed once when the intro
-  ends. **[proposal]**
+* **HP** (BOSSHP: "boss fights in online should have a lot more HP"): solo HP × `VS.tender.hpMul[gate]` (3.7 / 4.6 / 3.5) × (1 + 1.0 × (titans within 2 × spawn ring when it
+  spawns − 1)), recomputed once when the intro ends. Measured fight length (rig live to paid, REGULAR bots, 36 matches): 82 / 96 / 108 s median
+  (was 22 / 26 / 28 s), 3-4 attackers median 97 s; a lone attacker (the other three seats idle) 145-183 s / 166-226 s on STENCIL / CORDON.
+  FATIGUE: after 110 s up, every titan hit on the rig deals × (1 + overrun / 40 s), so no fight drags on. **[measured]**
 * **Target choice**: the rig hunts the titan with the most damage dealt to it in the last 5 s (it starts on the
   nearest titan). It switches at most every 4 s, and the switch is telegraphed by the rig's head/turret turning, so
   tanking is a choice.
 * **DPS cap**: the solo per-titan window (6 % of maxHp per 1 s, `config.ts:991-992`) becomes a **global** window
-  of 6 % × (1 + 0.5 × (attackers − 1)), capped at 12 %. A 4-titan pile-on still lasts about 10-20 s. That leaves time
-  for the fight around the rig.
+  of 1.2 % × (1 + 0.5 × (attackers − 1)), capped at 3 % (BOSSHP: it was 6 % / 12 %, which at the new HP would have capped the fight at 8-17 s
+  whatever the HP: the cap is a FRACTION of max HP). A 4-titan pile-on takes at least ~35 s. That leaves time for the fight around the rig.
+  While a rig is up, only the titans working it (within 2 × spawn ring) get the thinner PvE spawn budget (`VS.tender.spawnMulNear`); everyone else eats normally.
 * **Hit cap**: the solo 40 % hit cap (`config.ts:986-987`) stays, applied per victim.
 * **Reward, split by damage share** (the "bids"):
   * the XP lump the solo breach would have given (`breachTo` top-up, `titansim.ts:637`) × share, with a minimum of

@@ -2,7 +2,7 @@
 //
 //   MENU    QUICK MATCH · CREATE ROOM · JOIN WITH CODE (4 letter tiles, type or paste) · BACK
 //   LOBBY   the four seats filling (portrait, name, titan pick, HOST / YOU chips; guests are GUEST-xxxx, signed-in players show
-//           their account name), the 20 s quick-match countdown ("BOTS FILL IN n S") with START NOW WITH BOTS for the host, the
+//           their account name), the 20 s quick-match countdown ("MATCH STARTS IN n S") with START NOW for the host, the
 //           room code + invite link for a room (COPY INVITE LINK), the version-mismatch / room-full / no-host / matchmaker-down
 //           messages, and a LOADING state while the START is being turned into a city.
 //
@@ -46,7 +46,7 @@ const ITEMS: { kind: 'quick' | 'create' | 'join'; title: string; sub: string }[]
 const CODE_LEN = 4;
 
 export class LobbyScreen {
-  /** the host's START NOW WITH BOTS button */
+  /** the host's START NOW button */
   onStartNow: (() => void) | null = null;
   /** RETRY (ROOM NOT FOUND): look for the room again */
   onRetry: (() => void) | null = null;

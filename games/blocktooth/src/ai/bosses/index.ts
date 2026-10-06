@@ -1087,6 +1087,10 @@ export function damageBoss(w: World, part: number, dmg: number, opts: DamageOpts
     if (vs) {
       // VS: ONE global window shared by every attacker, scaled by how many seats are working the rig this window
       if (w.cur >= 0 && w.cur < 4) b.data.winMask = (b.data.winMask ?? 0) | (1 << w.cur);
+      // FATIGUE (BOSSHP): a rig that has been up longer than fatigueFromS TIRES: titan damage x (1 + overrun / fatigueRampS), so even a lone titan
+      // on a rig finishes inside ~3.5 min (the cap below still bounds the rate)
+      const upS = w.t - (b.data.spawnT ?? w.t);
+      if (upS > VS.tender.fatigueFromS) d *= 1 + (upS - VS.tender.fatigueFromS) / VS.tender.fatigueRampS;
       capFrac = Math.min(VS.tender.dpsCapMaxFrac, VS.tender.dpsCapBaseFrac * (1 + VS.tender.dpsCapPerAttacker * (windowAttackers(b) - 1)));
     }
     const room = Math.max(0, capFrac * b.maxHp - G.dpsWin);

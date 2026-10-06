@@ -17,7 +17,7 @@
 import type { BiomeId, TitanId, TitanInput, World } from './core/types.ts';
 import { TITAN_IDS } from './core/types.ts';
 import { VS, titanSpeed } from './core/config.ts';
-import { VS as STR_VS, botName, titanTag, vsFmt } from './data/strings_vs.ts';
+import { VS as STR_VS, rivalHandles, titanTag, vsFmt } from './data/strings_vs.ts';
 import { NET_PROTO, SEATS, TICK_MS, type StartInfo } from './net/proto.ts';
 import { OnlineSession, type SessionEvent } from './net/session.ts';
 import { QUICK_WAIT_MS, type PresenceMeta, type RoomStatus, type StartResult } from './net/room.ts';
@@ -181,13 +181,22 @@ export function rematchCode(code: string): string {
   return (base.slice(0, 9) + 'R' + String(Math.min(99, n))).slice(0, 12);
 }
 
-/** START -> the app-side description of the match (names, bots, colours); `seat` is the local human's seat */
+/** START -> the app-side description of the match (names, seat kinds, colours); `seat` is the local human's seat. A seat the sim drives
+ *  gets an ordinary player handle (rivalHandles: the same on every peer, unique, never a human seat's name) and no chip. */
 export function buildInfo(start: StartInfo, seat: number): VsMatchInfo {
   const seats: VsSeatInfo[] = [];
+  const isAi = (slot: number): boolean => { const s = start.seats[slot]; return !s || s.kind === 'bot'; };
+  const aiSlots: number[] = [];
+  const humanNames: string[] = [];
+  for (let slot = 0; slot < SEATS; slot++) {
+    if (isAi(slot)) aiSlots.push(slot);
+    else humanNames.push(cleanName(start.seats[slot].name) || N.player);
+  }
+  const handles = rivalHandles(start.seed, aiSlots, humanNames);
   for (let slot = 0; slot < SEATS; slot++) {
     const s = start.seats[slot];
-    const bot = !s || s.kind === 'bot';
-    const nm = bot ? botName(slot, start.seed) : { unit: slot === seat ? 'YOU' : cleanName(s.name) || N.player, sign: '' };
+    const bot = isAi(slot);
+    const nm = bot ? { unit: handles[slot], sign: '' } : { unit: slot === seat ? 'YOU' : cleanName(s.name) || N.player, sign: '' };
     seats.push({
       slot, titan: asTitan(s ? s.titan : null) ?? 'molo', name: nm.unit, sign: nm.sign, bot,
       level: bot ? botLevelOf(s ? s.botLevel : undefined) : null, color: VS.seatColors[slot] ?? '#ffffff',
@@ -341,7 +350,7 @@ export class OnlineMatch {
     try { this.session?.leave(); } catch { /* gone */ }
   }
 
-  /** the D8 "START NOW WITH BOTS" button (host only; the room layer ignores it for a guest) */
+  /** the D8 "START NOW" button (host only; the room layer ignores it for a guest) */
   startNow(): void { try { this.session.startNow(); } catch { /* not started */ } }
 
   private stopTimers(): void {
@@ -710,7 +719,7 @@ export class OnlineMatch {
     const titan = seatInfo ? titanTag(seatInfo.titan) : N.aTitan;
     if (bot) {
       if (me) this.say('mine', N.botTookYours, 'bad', 7000);
-      else this.say('flip' + i, vsFmt(N.dropped, { name: seatInfo && !seatInfo.bot ? seatInfo.name : N.aPlayer }), 'warn', 5000);
+      else this.say('flip' + i, vsFmt(N.dropped, { name: seatInfo && seatInfo.name && seatInfo.name !== 'YOU' ? seatInfo.name : N.aPlayer }), 'warn', 5000);
     } else if (me) {
       if (tookOver) this.say('mine', vsFmt(N.youTookOver, { titan }), 'good', 6000);
       else this.say('mine', N.youAreBack, 'good', 4000);
@@ -731,8 +740,8 @@ export class OnlineMatch {
       } else if (bot && me) {
         seatInfo.bot = true;
       } else if (bot) {
-        const nm = botName(i, this.start ? this.start.seed : 0);
-        seatInfo.name = nm.unit; seatInfo.sign = nm.sign; seatInfo.bot = true; seatInfo.level = 'regular';
+        // a human left: the seat plays on under their name (nobody is told who or what drives it)
+        seatInfo.bot = true; seatInfo.level = 'regular';
       } else seatInfo.bot = false;
       this.hooks.infoChanged(info);
     }
