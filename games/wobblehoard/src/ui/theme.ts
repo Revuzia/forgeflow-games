@@ -41,6 +41,13 @@ export const CONTRAST_PAIRS: ReadonlyArray<{ name: string; fg: string; bg: strin
   { name: 'error text on ink', fg: DERIVED.danger, bg: PALETTE.ink, min: 4.5 },
   { name: 'control edge on panel', fg: DERIVED.edge, bg: DERIVED.panel, min: 3 },
   { name: 'control edge on track', fg: DERIVED.edge, bg: DERIVED.track, min: 1.5 },
+  // the Hoard (SHELL-2b, COLLECTION 9.10 / U09): plinth and gift counts in amber on the ink plinths, links in lagoon on the panel,
+  // the tier gem frames and copy tags on the plinths and swatches
+  { name: 'Hoard: count text (amber) on ink plinth', fg: PALETTE.amber, bg: PALETTE.ink, min: 4.5 },
+  { name: 'Hoard: link text (lagoon) on panel', fg: PALETTE.lagoon, bg: DERIVED.panel, min: 4.5 },
+  { name: 'Hoard: dim name of an unowned plinth (cream-dim) on panel', fg: DERIVED.creamDim, bg: DERIVED.panel, min: 4.5 },
+  { name: 'Hoard: tag text (cream-dim) on ink', fg: DERIVED.creamDim, bg: PALETTE.ink, min: 4.5 },
+  { name: 'Hoard: plinth frame (edge) on ink', fg: DERIVED.edge, bg: PALETTE.ink, min: 3 },
 ];
 
 /** CSS custom properties, kebab-cased: ink -> --wh-ink, creamDim -> --wh-cream-dim. */
