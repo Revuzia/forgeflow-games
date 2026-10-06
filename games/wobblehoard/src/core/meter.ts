@@ -18,27 +18,36 @@
 // PREVIEW for the HUD ring: it runs the same addInteraction on its own touches with Date.now() times and is reconciled with the server's
 // meter on every reply (fold the unacknowledged touches over the server state). Pass sanitizeMeter(saved, Date.now()) when loading a saved preview so a state from a skewed clock cannot freeze it.
 //
-// The rules (every number below is DESIGN 5.4 and is the reference behaviour of _harness/sim_economy.ts). Owner direction 2026-10-06
-// (_spec/FUN.md 2): every touch earns visibly, and holding earns per second, a squeeze and a stretch alike.
-//   poke                    0.8 SP. Needs a distinct contact: a poke less than 250 ms after the previous poke pays nothing (double tap).
-//                           Ordinary tapping always pays a little: with the poke freshness (tau 0.75 s, floor 0.25, below) a poke 0.25 s
-//                           or more after the last one pays at least 0.2 SP (2 taps a second pay 0.36 SP each, 3 or 4 a second 0.2 SP each).
+// The rules (every number below is DESIGN 5.4 and is the reference behaviour of _harness/sim_economy.ts).
+// OWNER DECISION 2026-10-06 (given in chat, final): "short taps pay nothing". A tap pays NO squish points: the 'poke' SoftEvent, and a
+// "squeeze" released under 0.4 s (which this module has always paid as a poke), are free play, at any speed. Holds and stretches earn. A
+// touchscreen gives no force reading, so there is no "light versus hard" tap: every tap pays nothing. This deliberately REVERSES the owner's
+// earlier direction of the same day (_spec/FUN.md 2 point 1, "ordinary tapping always earns"; ECON checkpoint 41). What stayed from that
+// direction: holding earns per second, a squeeze and a stretch alike.
+//   poke (a tap)            0 SP (PAY.poke = 0): whatever the gap since the last tap, whatever the freshness, 1 tap or 1000. Free play.
+//                           It is still a TOUCH: it counts for the Tasks panel (ghost.ts bumpTasks reads detail.freshness and detail.doubleTap
+//                           to tell a gentle or a calm poke) and for the statistics, it stamps lastMs[0] and lastEventMs, and a hostile or
+//                           out-of-order time is refused as for any touch. It never reaches `recent` (so it cannot join a medley), never
+//                           touches the valve ledger, and never moves sp.
 //   squeeze-and-release     0.7 SP + 0.45 SP per second held (hold counted up to 3 s); a soft pop of +0.5 SP if held 1.8 s or more.
-//                           (a "squeeze" held under 0.4 s is just a poke: SoftEvent mapping, DESIGN 5.4)
-//   pull-and-let-go (snap)  stretch-and-hold pays per second held, like a squeeze: 1.0 SP + 0.55 SP per second held (hold counted up to
-//                           3 s, so 1.55 SP at 1 s, 2.1 at 2 s, 2.65 at 3 s and more), when the pull stretched (snap intensity 0.35 or
-//                           more); 0.5 SP flat, whatever the hold, if it never stretched (under 0.35). The hold is Interaction.heldS = the
-//                           snap's heldFor, the seconds from the grab to the release (softbody.ts grab/updateGrabs/grabRelease).
+//                           A "squeeze" held under 0.4 s is a tap (SoftEvent mapping, DESIGN 5.4) and pays 0: 0.39 s pays nothing, 0.41 s pays.
+//   pull-and-let-go (snap)  stretch-and-hold pays per second held, like a squeeze: pullBase + pullPerSecond per second held (hold counted up
+//                           to 3 s), when the pull stretched (snap intensity 0.35 or more); pullFail flat, whatever the hold, if it never
+//                           stretched (under 0.35). The hold is Interaction.heldS = the snap's heldFor, the seconds from the grab to the
+//                           release (softbody.ts grab/updateGrabs/grabRelease).
 //                           Since physics round 2 the snap intensity is the pull level (grab distance / the body's own family maxPull;
 //                           1.0 = pulled to its limit, measured 1.000 on a full pull and 0.500 on a half pull for all 12 families), so 0.35
 //                           means "pulled about a third of the way to its limit". The stretch test is the level AT THE RELEASE: the event
-//                           does not say how long the level was over 0.35, so the whole hold counts once the release is stretched.
-//   medley                  +2 SP when three different kinds land within 12 s, then a 25 s cooldown.
-//   freshness (anti-mash)   pay x clamp((seconds since your last touch of the SAME kind / tau)^2, floor, 1); tau poke 0.75, squeeze 2.4,
-//                           pull 3.0 s; floor poke 0.25, squeeze and pull 0.03 (mashing squeezes or pulls stays worthless).
+//                           does not say how long the level was over 0.35, so the whole hold counted once the release is stretched.
+//   medley                  +PAY.medley SP when the two PAID kinds, a squeeze and a pull, both land within 12 s, then a 25 s cooldown. (It was
+//                           "three different kinds"; with taps free it could be unlocked by a free tap, so a tap neither joins nor completes
+//                           a medley.) The Tasks panel's medley task reads detail.medley, so it stays reachable.
+//   freshness (anti-mash)   pay x clamp((seconds since your last touch of the SAME kind / tau)^2, floor, 1); tau squeeze 2.4, pull 3.0 s;
+//                           floor 0.03 (mashing squeezes or pulls stays worthless). Index 0 (the tap: tau 0.75 s, floor 0.25, and the
+//                           250 ms double-tap gap) multiplies a base of 0 now; it is KEPT, and reported in `detail`, only because the Tasks
+//                           panel (ghost.ts, not this lane's file) counts "gentle" and "calm" pokes with it.
 //   valve                   at most 40 SP credited in any rolling minute (checked at 500 ms resolution over a 60.5 s window, so it is never looser than 60 s).
-//                           Fast tapping is bounded here: steady tapping at 2 or 4 a second would pay 43 or 48 SP/min and is held to 40,
-//                           as is a script at the fastest paid rate (a poke every 250 ms) or full stretches held 3 s back to back.
+//                           It bounds machine-speed play: full stretches held 3 s back to back, and a squeeze-and-pull script at the physical limit.
 //   capsule thresholds      the 1st, 2nd and 3rd capsule cost 30, 50, 75 SP; every later one 100 SP.
 //   daily cap               8 capsules a day at full rate, the next 4 at 25% rate, then a hard stop at 12 a day from play ("squishies need rest":
 //                           nothing is lost, the meter simply fills slowly and then waits for tomorrow). The day is a UTC day unless the caller passes `dayKey`.
@@ -53,7 +62,8 @@ const KIND_INDEX: Readonly<Record<TouchKind, number>> = { poke: 0, squeeze: 1, p
 
 /** Payouts in SP (DESIGN 5.4). */
 export const PAY = {
-  poke: 0.8,
+  /** A tap pays nothing (owner decision 2026-10-06, "short taps pay nothing"; it paid 0.8 SP before). Read by the sim and the docs, never raised. */
+  poke: 0,
   squeezeBase: 0.7,
   squeezePerSecond: 0.45,
   /** A squeeze counts at most this many seconds of hold. */
@@ -77,15 +87,19 @@ export const PAY = {
   medley: 2,
 } as const;
 
-/** A poke closer than this to the previous poke is not a distinct contact and pays nothing. */
+/** A tap closer than this to the previous tap is a "double tap" (detail.doubleTap). Taps pay nothing now, so this gap changes no pay: it is
+ *  kept only because the Tasks panel (ghost.ts bumpTasks) does not count a double tap as a poke. */
 export const POKE_MIN_GAP_MS = 250;
-/** Freshness time constants, seconds, by kind index (poke, squeeze, pull). */
+/** Freshness time constants, seconds, by kind index (poke, squeeze, pull). Index 0 multiplies a base of 0 (taps are free): it is kept, and
+ *  reported in detail.freshness, only for the Tasks panel's "gentle poke" count. The squeeze (index 1) and pull (index 2) values are the live ones. */
 export const FRESHNESS_TAU_SECONDS: readonly number[] = [0.75, 2.4, 3.0];
-/** Freshness floors by kind index (poke, squeeze, pull): ordinary tapping always pays at least a quarter of a fresh poke; mashing
- *  squeezes or pulls stays worthless. */
+/** Freshness floors by kind index (poke, squeeze, pull). Index 0: see FRESHNESS_TAU_SECONDS (Tasks panel only, no pay). Mashing squeezes or pulls
+ *  stays worthless (0.03). */
 export const FRESHNESS_FLOORS: readonly number[] = [0.25, 0.03, 0.03];
 /** The squeeze and pull freshness floor (FRESHNESS_FLOORS[1] and [2]); the poke floor is FRESHNESS_FLOORS[0]. */
 export const FRESHNESS_FLOOR = 0.03;
+/** The kinds that PAY and so can make a medley: a squeeze (index 1) and a pull (index 2), as a bit mask over the kind index. */
+const MEDLEY_KINDS_MASK = (1 << 1) | (1 << 2);
 export const MEDLEY_WINDOW_MS = 12000;
 export const MEDLEY_COOLDOWN_MS = 25000;
 export const VALVE_SP_PER_MINUTE = 40;
@@ -112,11 +126,12 @@ export interface MeterState {
   sp: number;
   /** Capsules earned from play, lifetime (drives the 30/50/75/100 ramp). Task and restock capsules are not counted here. */
   earned: number;
-  /** Time of the last touch of each kind (poke, squeeze, pull), ms; null = never. */
+  /** Time of the last touch of each kind (poke, squeeze, pull), ms; null = never. The poke slot (a tap) feeds no pay; the Tasks panel reads it. */
   lastMs: [number | null, number | null, number | null];
-  /** Time of the last accepted interaction; later calls with an earlier time are refused. null = none yet. */
+  /** Time of the last accepted interaction (a tap included); later calls with an earlier time are refused. null = none yet. */
   lastEventMs: number | null;
-  /** Touches inside the medley window, as [tMs, kind index]. At most a few dozen entries. */
+  /** PAID touches inside the medley window, as [tMs, kind index] (1 = squeeze, 2 = pull; a tap is never recorded: an older save's index-0
+   *  entries are dropped on load and by the next touch). At most a few dozen entries. */
   recent: Array<[number, number]>;
   /** Earliest time the next medley bonus can pay (ms); 0 = ready. */
   medleyReadyMs: number;
@@ -150,7 +165,8 @@ export function sanitizeMeter(x: unknown, nowMs?: number): MeterState {
     const earned = Math.floor(num(o.earned, 0, 1e9, 0));
     const lm = Array.isArray(o.lastMs) ? o.lastMs : [];
     const recent: Array<[number, number]> = [];
-    if (Array.isArray(o.recent)) for (const r of o.recent.slice(-64)) if (Array.isArray(r) && typeof r[0] === 'number' && Number.isFinite(r[0]) && (r[1] === 0 || r[1] === 1 || r[1] === 2)) recent.push([cap(r[0]), r[1]]);
+    // (an index-0 entry is a tap from a save made before taps became free: it no longer counts toward a medley, so it is dropped)
+    if (Array.isArray(o.recent)) for (const r of o.recent.slice(-64)) if (Array.isArray(r) && typeof r[0] === 'number' && Number.isFinite(r[0]) && (r[1] === 1 || r[1] === 2)) recent.push([cap(r[0]), r[1]]);
     const valve: Array<[number, number]> = [];
     const nowBucket = now !== null ? Math.floor(now / VALVE_BUCKET_MS) : Infinity;
     if (Array.isArray(o.valve)) for (const r of o.valve.slice(-VALVE_BUCKETS)) if (Array.isArray(r) && typeof r[0] === 'number' && Number.isFinite(r[0]) && typeof r[1] === 'number' && Number.isFinite(r[1]) && r[1] >= 0) {
@@ -174,8 +190,8 @@ export function sanitizeMeter(x: unknown, nowMs?: number): MeterState {
 export interface Interaction {
   kind: TouchKind;
   /**
-   * poke: ignored.
-   * squeeze: seconds the finger was held (SoftEvent.heldFor of the release), counted up to 3 s.
+   * poke: ignored (a tap pays nothing).
+   * squeeze: seconds the finger was held (SoftEvent.heldFor of the release), counted up to 3 s; under 0.4 s it is a tap and pays nothing.
    * pull: the snap intensity 0..1 (SoftEvent.intensity); 0.35 or more pays per second held (`heldS`), less pays the "never stretched" rate.
    */
   amount: number;
@@ -194,16 +210,17 @@ export interface Interaction {
 export interface InteractionDetail {
   /** Set when the call was refused: the state is unchanged and nothing was paid. */
   refused?: 'bad-kind' | 'bad-time' | 'out-of-order';
-  /** The kind that was actually paid (a squeeze held under 0.4 s is paid as a poke). */
+  /** The kind the touch counted as (a squeeze held under 0.4 s is a tap: 'poke', which pays nothing). */
   paidAs?: TouchKind;
-  /** SP before freshness, daily rate and valve (soft pop included). */
+  /** SP before freshness, daily rate and valve (soft pop included). 0 for a tap. */
   base: number;
+  /** The freshness factor of the touch's kind. For a tap it multiplies a base of 0 (no pay); it is reported for the Tasks panel's gentle-poke count. */
   freshness: number;
   /** Medley bonus included in spGained. */
   medley: number;
   /** Daily rate applied: 1, 0.25 or 0. */
   dailyRate: number;
-  /** True when the poke came within POKE_MIN_GAP_MS of the previous poke and so paid nothing. */
+  /** True when a tap came within POKE_MIN_GAP_MS of the previous tap. Changes no pay (a tap pays nothing); the Tasks panel does not count a double tap. */
   doubleTap: boolean;
   /** True when the valve cut the payout. */
   valveClamped: boolean;
@@ -247,7 +264,7 @@ function computePay(state: MeterState, ev: Interaction, c: PayCalc): NonNullable
   if (state.lastEventMs !== null && t < state.lastEventMs) return 'out-of-order';
   const amountRaw = typeof ev.amount === 'number' && Number.isFinite(ev.amount) ? ev.amount : 0;
 
-  // a short squeeze is a poke (DESIGN 5.4 SoftEvent mapping)
+  // a short squeeze is a tap (DESIGN 5.4 SoftEvent mapping), and a tap pays nothing
   let paid: TouchKind = kind;
   if (kind === 'squeeze' && amountRaw < PAY.minSqueezeHoldSeconds) paid = 'poke';
   const ki = KIND_INDEX[paid];
@@ -261,9 +278,9 @@ function computePay(state: MeterState, ev: Interaction, c: PayCalc): NonNullable
   let base: number;
   let doubleTap = false;
   if (paid === 'poke') {
-    base = PAY.poke;
+    base = PAY.poke; // 0: a tap is free play (owner decision 2026-10-06), at any gap and any freshness
     const lastPoke = state.lastMs[0];
-    if (lastPoke !== null && t - lastPoke < POKE_MIN_GAP_MS) { base = 0; doubleTap = true; }
+    if (lastPoke !== null && t - lastPoke < POKE_MIN_GAP_MS) doubleTap = true; // reported for the Tasks panel only: it changes no pay
   } else if (paid === 'squeeze') {
     const hold = clamp(amountRaw, 0, PAY.squeezeHoldCapSeconds);
     base = PAY.squeezeBase + PAY.squeezePerSecond * hold;
@@ -287,14 +304,16 @@ function computePay(state: MeterState, ev: Interaction, c: PayCalc): NonNullable
   }
   let pay = base * freshness;
 
-  // ---- medley (the window as addInteraction keeps it: the touches of the last 12 s plus this one) ----
+  // ---- medley: a squeeze and a pull, the two PAID kinds, within the window (the touches of the last 12 s plus this one). A tap is not a
+  // paid kind: it can neither complete a medley nor stand in for one of its two touches (and an index-0 entry an older state still holds is
+  // masked out below). ----
   let medley = 0;
   let medleyReadyMs = state.medleyReadyMs;
-  if (t >= medleyReadyMs) {
+  if (ki !== 0 && t >= medleyReadyMs) {
     let mask = 1 << ki;
     const rec = state.recent, from = t - MEDLEY_WINDOW_MS;
     for (let i = 0; i < rec.length; i++) if (rec[i][0] >= from) mask |= 1 << rec[i][1];
-    if (mask === 7) { medley = PAY.medley; medleyReadyMs = t + MEDLEY_COOLDOWN_MS; }
+    if ((mask & MEDLEY_KINDS_MASK) === MEDLEY_KINDS_MASK) { medley = PAY.medley; medleyReadyMs = t + MEDLEY_COOLDOWN_MS; }
   }
   pay += medley;
 
@@ -321,10 +340,10 @@ export function addInteraction(state: MeterState, ev: Interaction): InteractionR
   const { paid, ki, t, dayKey, bucket, pay } = c;
   let dayCapsules = c.dayCapsules;
 
-  // ---- the medley window and the valve ledger (new arrays: the input state is never mutated) ----
+  // ---- the medley window and the valve ledger (new arrays: the input state is never mutated). Only PAID touches enter the window. ----
   const recent: Array<[number, number]> = [];
-  for (const r of state.recent) if (r[0] >= t - MEDLEY_WINDOW_MS) recent.push(r);
-  recent.push([t, ki]);
+  for (const r of state.recent) if (r[0] >= t - MEDLEY_WINDOW_MS && r[1] !== 0) recent.push(r);
+  if (ki !== 0) recent.push([t, ki]);
   const valve: Array<[number, number]> = [];
   for (const r of state.valve) if (r[0] > bucket - VALVE_BUCKETS) valve.push([r[0], r[1]]);
   if (pay > 0) {
@@ -358,7 +377,8 @@ export function addInteraction(state: MeterState, ev: Interaction): InteractionR
 /**
  * What addInteraction(state, ev).spGained would be, without building the new state: pay, freshness, the medley bonus this touch would
  * complete, the daily rate and the valve's room, all included (so a pending arc banks exactly what it showed, if nothing else happens
- * before the release). 0 for a refused touch. Pure and allocation-free: the HUD calls it every frame while a squeeze or a stretch is held.
+ * before the release). 0 for a refused touch and for a tap (a poke, or a squeeze under 0.4 s). Pure and allocation-free: the HUD calls it
+ * every frame while a squeeze or a stretch is held.
  */
 export function previewInteraction(state: MeterState, ev: Interaction): number {
   return computePay(state, ev, CALC) === null ? CALC.pay : 0;

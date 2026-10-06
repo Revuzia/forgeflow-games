@@ -5,8 +5,8 @@
 //
 // SINGLE SOURCE OF TRUTH. The game rules are IMPORTED, not copied:
 //   * the roster (tiers, order, counts) is src/data/catalog.ts; the public odds and tier counts are src/core/rarity.ts;
-//   * every touch of the micro-sim goes through src/core/meter.ts addInteraction (pay, freshness, double-tap gate, medley, valve, daily cap);
-//     the macro model reads the capsule ramp and the daily-cap numbers from the same module;
+//   * every touch of the micro-sim goes through src/core/meter.ts addInteraction (pay, freshness, medley, valve, daily cap; a tap pays nothing,
+//     owner decision 2026-10-06 "short taps pay nothing"); the macro model reads the capsule ramp and the daily-cap numbers from the same module;
 //   * capsule rolls and the Daily Restock are src/core/drops.ts rollCapsule / restockOffer, task limits from the same file;
 //   * every merge is src/core/merge.ts mergeOddsCore + mergeDrawCore (the very functions previewMerge / rollMerge call), MERGE_COST included.
 // What stays local is only what is NOT game logic: player behaviour, trading and the toy exploit ring. Hypothetical catalogs (section Q) and the
@@ -106,8 +106,9 @@ const lpad = (s: string | number, n: number): string => String(s).padEnd(n);
 const pop32 = (v: number): number => { v = v - ((v >>> 1) & 0x55555555); v = (v & 0x33333333) + ((v >>> 2) & 0x33333333); return Math.imul((v + (v >>> 4)) & 0x0f0f0f0f, 0x01010101) >>> 24; };
 
 /* ───────────────────────────── ACTIVE-PLAY MICRO-SIM: touches -> squish points ───────────────────────────── */
-// Every simulated touch is fed to the REAL meter (src/core/meter.ts addInteraction). The rules it applies (DESIGN 5.4): pay per poke / squeeze /
-// pull, soft pop, MEDLEY bonus, FRESHNESS (anti-mash), the 250 ms double-tap gate, the per-minute VALVE and the daily cap. Nothing is copied here.
+// Every simulated touch is fed to the REAL meter (src/core/meter.ts addInteraction). The rules it applies (DESIGN 5.4): pay per squeeze / pull (a
+// poke, a TAP, pays 0 since the owner decision of 2026-10-06), soft pop, MEDLEY bonus (a squeeze and a pull within 12 s), FRESHNESS (anti-mash),
+// the per-minute VALVE and the daily cap. Nothing is copied here.
 const KIND_NAMES: readonly TouchKind[] = ['poke', 'squeeze', 'pull'];
 const TAU = FRESHNESS_TAU_SECONDS;
 const VALVE_PER_MIN = VALVE_SP_PER_MINUTE;
@@ -118,6 +119,10 @@ const PAY = { poke: METER_PAY.poke, squeezeBase: METER_PAY.squeezeBase, squeezeP
  * the owner's 2026-10-06 styles (FUN.md 2), measured in section A only (they are not in the population mix):
  *   pokeGap  [lo, hi] s between pokes (default 0.7 to 1.5 s); pauseP the chance of a 1-4 s look-around after a touch (default 0.3);
  *   pullHold [lo, hi] s a pull is held, grab to release (default 0.8 to 2.4 s).
+ * BEHAVIOUR vs PAY: since the owner decision of 2026-10-06 ("short taps pay nothing") a poke pays 0, so a 'poker' or a 'tapper' (a style that
+ * is mostly taps) earns only through its few holds and stretches. The archetypes still describe how people TOUCH; they were not redefined, so the
+ * table shows the plain consequence of the rule (section A prints it). Nobody here adapts their play to the rule: if real tappers start
+ * holding, the population pace moves toward the paying archetypes' pace.
  */
 export interface Behaviour { name: string; kindP: number[]; stick: number; pokeGap?: [number, number]; pauseP?: number; pullHold?: [number, number]; }
 export const BEHAV: Behaviour[] = [
@@ -133,12 +138,13 @@ export const BEHAV_EXTRA: Behaviour[] = [
 ];
 
 export interface Stream { sp: number; byKind: number[]; n: number[]; seconds: number; }
-export type Bot = '' | 'mash' | 'cycle' | 'tap4' | 'holdbot';
+export type Bot = '' | 'mash' | 'cycle' | 'tap4' | 'holdbot' | 'sqmash' | 'sqbot' | 'pullmash';
 /**
- * Plays `seconds` of touching (or until `stopAtSp` SP). Pays through the real meter. Bots: 'mash' = 8 pokes/s; 'cycle' = poke, squeeze,
- * pull at the physical limit; 'tap4' = a poke every 250 ms (the fastest rate the double-tap gate pays); 'holdbot' = a full stretch held
- * 3 s, let go, grabbed again 0.3 s later. A pull's hold (grab to release) is the snap's heldFor: the human pull of the 0.8-2.4 s hold
- * takes 1.0 s more to reach for and grab (the same draws and the same timing as before the per-second pull pay).
+ * Plays `seconds` of touching (or until `stopAtSp` SP). Pays through the real meter. Bots: 'mash' = 8 taps/s; 'tap4' = a tap every 250 ms
+ * (the old fastest paid rate; taps pay 0 now); 'cycle' = tap, squeeze, pull at the physical limit; 'holdbot' = a full stretch held 3 s,
+ * let go, grabbed again 0.3 s later; 'sqmash' = a squeeze held 0.45 s every 0.5 s (machine-speed squeezing); 'sqbot' = the squeeze that
+ * best beats the freshness curve, held 1.8 s (the soft pop) every 2.4 s (one tau); 'pullmash' = a stretch held 0.3 s every 0.5 s (machine-speed
+ * pulling). A pull's hold (grab to release) is the snap's heldFor: the human pull of the 0.8-2.4 s hold takes 1.0 s more to reach for and grab.
  */
 export function playStream(beh: Behaviour, rng: Rng, seconds: number, bot: Bot, stopAtSp = Infinity, pace = 1): Stream {
   const out: Stream = { sp: 0, byKind: [0, 0, 0], n: [0, 0, 0], seconds: 0 };
@@ -149,6 +155,9 @@ export function playStream(beh: Behaviour, rng: Rng, seconds: number, bot: Bot, 
     let kind: number, dur: number, hold = 0, success = true;
     if (bot === 'mash') { kind = 0; dur = 0.125; }
     else if (bot === 'tap4') { kind = 0; dur = 0.25; }
+    else if (bot === 'sqmash') { kind = 1; hold = 0.45; dur = 0.5; }
+    else if (bot === 'sqbot') { kind = 1; hold = 1.8; dur = 2.4; }
+    else if (bot === 'pullmash') { kind = 2; hold = 0.3; dur = 0.5; }
     else if (bot === 'holdbot') { kind = 2; hold = 3; dur = 3.3; }
     else if (bot === 'cycle') { kind = cyc++ % 3; dur = kind === 0 ? 0.25 : kind === 1 ? 0.7 : 1.3; hold = kind === 1 ? 0.45 : kind === 2 ? 1.0 : 0; }
     else {
@@ -177,9 +186,9 @@ export function measureStyle(b: Behaviour, seedIdx: number): MicroRow {
   for (let k = 0; k < 400; k++) { const s = playStream(b, rng, 300, '', Infinity); per.push(s.sp / (s.seconds / 60)); tot.sp += s.sp; tot.seconds += s.seconds; for (let q = 0; q < 3; q++) { tot.byKind[q] += s.byKind[q]; tot.n[q] += s.n[q]; } }
   return { spPerMin: tot.sp / (tot.seconds / 60), share: tot.byKind.map((x) => x / tot.sp), perMin: tot.n.map((x) => x / (tot.seconds / 60)), spreadP: [quantile(per, 0.1), quantile(per, 0.5), quantile(per, 0.9)] };
 }
-export interface Micro { spPerMin: number[]; share: number[][]; perMin: number[][]; botMash: number; botCycle: number; botTap4: number; botHold: number; firstSec: number[]; spreadP: number[][]; extra: MicroRow[]; }
+export interface Micro { spPerMin: number[]; share: number[][]; perMin: number[][]; botMash: number; botCycle: number; botTap4: number; botHold: number; botSqMash: number; botSq: number; botPullMash: number; firstSec: number[]; spreadP: number[][]; extra: MicroRow[]; }
 export function runMicro(): Micro {
-  const m: Micro = { spPerMin: [], share: [], perMin: [], botMash: 0, botCycle: 0, botTap4: 0, botHold: 0, firstSec: [], spreadP: [], extra: [] };
+  const m: Micro = { spPerMin: [], share: [], perMin: [], botMash: 0, botCycle: 0, botTap4: 0, botHold: 0, botSqMash: 0, botSq: 0, botPullMash: 0, firstSec: [], spreadP: [], extra: [] };
   BEHAV.forEach((b, i) => {
     const r = measureStyle(b, i);
     m.spPerMin.push(r.spPerMin); m.share.push(r.share); m.perMin.push(r.perMin); m.spreadP.push(r.spreadP);
@@ -189,6 +198,9 @@ export function runMicro(): Micro {
   m.botCycle = playStream(BEHAV[0], rb, 600, 'cycle').sp / 10;
   m.botTap4 = playStream(BEHAV[0], rb, 600, 'tap4').sp / 10;
   m.botHold = playStream(BEHAV[0], rb, 600, 'holdbot').sp / 10;
+  m.botSqMash = playStream(BEHAV[0], rb, 600, 'sqmash').sp / 10;
+  m.botSq = playStream(BEHAV[0], rb, 600, 'sqbot').sp / 10;
+  m.botPullMash = playStream(BEHAV[0], rb, 600, 'pullmash').sp / 10;
   m.extra = BEHAV_EXTRA.map((b, i) => measureStyle(b, BEHAV.length + i));
   return m;
 }
@@ -752,14 +764,17 @@ const epicPlus = (p: Player): number => p.tierOwned[3] + p.tierOwned[4] + p.tier
 
 function secMicro(): void {
   header('A. ACTIVE PLAY: what touching pays (micro-sim of human touch streams; every archetype, 400 x 5-minute streams)');
-  console.log(`Meter rule: poke ${PAY.poke} SP | squeeze+release ${PAY.squeezeBase} +${PAY.squeezePerSec}/s held (hold counted up to ${PAY.squeezeHoldCap} s), soft-pop +${PAY.softPop} if held >= 1.8 s | stretch-and-hold, let go: ${PAY.pullBase} +${PAY.pullPerSec}/s held (up to ${PAY.pullHoldCap} s; ${PAY.pullFail} flat if it never stretched) | MEDLEY +${PAY.medley} (3 kinds within ${PAY.medleyWindow} s, cooldown ${PAY.medleyCooldown} s) | anti-mash freshness (tau ${TAU.join('/')} s, squared, floor ${FRESHNESS_FLOORS.join('/')}) | valve ${VALVE_PER_MIN} SP/min`);
+  console.log(`Meter rule: TAPS PAY ${PAY.poke} SP (a poke, or a squeeze released under 0.4 s; owner decision 2026-10-06) | squeeze+release ${PAY.squeezeBase} +${PAY.squeezePerSec}/s held (hold counted up to ${PAY.squeezeHoldCap} s), soft-pop +${PAY.softPop} if held >= 1.8 s | stretch-and-hold, let go: ${PAY.pullBase} +${PAY.pullPerSec}/s held (up to ${PAY.pullHoldCap} s; ${PAY.pullFail} flat if it never stretched) | MEDLEY +${PAY.medley} (a squeeze and a pull within ${PAY.medleyWindow} s, cooldown ${PAY.medleyCooldown} s) | anti-mash freshness for squeezes and pulls (tau ${TAU.slice(1).join('/')} s, squared, floor ${FRESHNESS_FLOORS.slice(1).join('/')}) | valve ${VALVE_PER_MIN} SP/min`);
   console.log(lpad('archetype', 10) + '| touches/min: poke squeeze pull | SP/min  (p10 / p50 / p90 of 5-min streams) | SP share poke/squeeze/pull | min per capsule @ cost ' + BASE.capsuleCost);
   const row = (name: string, r: MicroRow): void => console.log(`${lpad(name, 10)}| ${pad(f1(r.perMin[0]), 21)} ${pad(f1(r.perMin[1]), 6)} ${pad(f1(r.perMin[2]), 4)} | ${pad(f1(r.spPerMin), 6)}  (${f1(r.spreadP[0])} / ${f1(r.spreadP[1])} / ${f1(r.spreadP[2])}) | ${r.share.map((x) => pc0(x)).join(' / ')} | ${f1(BASE.capsuleCost / r.spPerMin)}`);
   BEHAV.forEach((b, i) => row(b.name, { spPerMin: MICRO.spPerMin[i], share: MICRO.share[i], perMin: MICRO.perMin[i], spreadP: MICRO.spreadP[i] }));
   console.log('extra styles (section A only, not in the population mix): tapper = bursts of 2-3 taps a second; holder = every stretch held 2-4 s');
   BEHAV_EXTRA.forEach((b, i) => row(b.name, MICRO.extra[i]));
-  const avg = mean(MICRO.spPerMin.slice(0, 3));
-  console.log(`bots: 8 pokes/s mash earns ${f1(MICRO.botMash)} SP/min, a poke every 250 ms (the fastest paid rate) ${f1(MICRO.botTap4)}, full stretches held 3 s back to back ${f1(MICRO.botHold)}, a poke-squeeze-pull cycler at the physical limit ${f1(MICRO.botCycle)} SP/min (valve ${VALVE_PER_MIN}); humans ${f1(avg)} SP/min. Daily cap: ${BASE.dailyCapsCap} capsules at full rate, then ${BASE.overRate * 100}% rate up to ${BASE.dailyCapsCap + BASE.hardExtraCaps} total per day => a bot running 24 h gets at most ${BASE.dailyCapsCap + BASE.hardExtraCaps} capsules/day from play (a devoted human averages ~9 incl. tasks).`);
+  // the PAYING archetypes are the ones that hold and stretch: squeezer, puller, mixed (the poker and the tapper are mostly taps, which pay nothing)
+  const payers = [1, 2, 3].map((i) => MICRO.spPerMin[i]);
+  const avg = mean(payers);
+  console.log(`paying styles (squeezer / puller / mixed) need ${payers.map((x) => f1(BASE.capsuleCost / x)).join(' / ')} active min per capsule (band 3.0 to 3.8; fastest/slowest x${f2(Math.max(...payers) / Math.min(...payers))}); the mostly-tapping styles (poker / tapper) earn ${f1(MICRO.spPerMin[0])} / ${f1(MICRO.extra[0].spPerMin)} SP/min = ${f1(BASE.capsuleCost / MICRO.spPerMin[0])} / ${f1(BASE.capsuleCost / MICRO.extra[0].spPerMin)} min per capsule: their only income is the few holds and stretches they also do`);
+  console.log(`bots: 8 taps/s mash earns ${f1(MICRO.botMash)} SP/min and a tap every 250 ms ${f1(MICRO.botTap4)} (taps pay nothing at any speed); machine-speed squeezing (held 0.45 s every 0.5 s) ${f1(MICRO.botSqMash)} and stretching (held 0.3 s every 0.5 s) ${f1(MICRO.botPullMash)} SP/min (freshness floor); the best squeeze against the freshness curve (held 1.8 s every 2.4 s) ${f1(MICRO.botSq)}, full stretches held 3 s back to back ${f1(MICRO.botHold)}, a tap-squeeze-pull cycler at the physical limit ${f1(MICRO.botCycle)} SP/min (valve ${VALVE_PER_MIN}); paying humans ${f1(avg)} SP/min. Daily cap: ${BASE.dailyCapsCap} capsules at full rate, then ${BASE.overRate * 100}% rate up to ${BASE.dailyCapsCap + BASE.hardExtraCaps} total per day => a bot running 24 h gets at most ${BASE.dailyCapsCap + BASE.hardExtraCaps} capsules/day from play (a devoted human averages ~9 incl. tasks).`);
   console.log(`onboarding ramp: capsule 1/2/3 cost ${BASE.onboardRamp.map((x) => Math.round(x * BASE.capsuleCost)).join('/')} SP (then ${BASE.capsuleCost}); session model: casual 1-2 x 3-5 min, regular ~2 x 10-15, devoted 2-3 x 12-22`);
 }
 
