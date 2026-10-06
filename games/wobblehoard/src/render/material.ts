@@ -224,7 +224,11 @@ const EMISSIVE_STAGE = /* glsl */`
   // soft knee above 0.45: a bright (high-tier, high-coreGlow, squeezed) core keeps rising but saturates in its own hue, never clips to white
   float jC = jHalo * uCoreAmt;
   jC = jC < 0.45 ? jC : 0.45 + (jC - 0.45) / (1.0 + (jC - 0.45) / 0.35);
-  vec3 jCore = uCoreCol * jC * (0.55 + 0.45 * jNdv);
+  // the core's light reaches the skin THROUGH the jelly: its crisp heart keeps the core colour, the wide fringe takes on the body's own
+  // hue (a gold heart in a ruby goo reads ruby around it, not orange all over; RENDER-3 gallery: bright cores had turned every warm
+  // Legendary into the same orange fireball)
+  vec3 jBodyN = diffuseColor.rgb / max(max(diffuseColor.r, diffuseColor.g), max(diffuseColor.b, 1e-3));
+  vec3 jCore = uCoreCol * jC * (0.55 + 0.45 * jNdv) * mix(jBodyN, vec3(1.0), 0.35 + 0.65 * jHalo);
   vec3 jExtra = vec3(0.0);
   if (uAurora > 0.001) {          // Legendary: slow aurora CURTAINS drifting inside the body, sodium amber low -> rose -> lagoon high
     float jw = whNoise3(vRest * 1.5 + vec3(0.0, uTime * 0.05, uTime * 0.03));

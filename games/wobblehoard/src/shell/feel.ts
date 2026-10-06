@@ -15,7 +15,9 @@
 //     0.000-0.013 at the lift, and the physics fires `release` only for compression > 0.08 (softbody.ts fingerUp). Release events carry the
 //     release bloop AND the meter's squeeze credit (collection/meterfeed.ts: release with heldFor >= 0.4 s), so retiring the bend today
 //     would make most squeezes silent at the lift and pay nothing. Contract request (physics): fire `release` on max(compression, press)
-//     at the lift; then set `bendWithPress` to false (node_checks.ts says when the measurement allows it).
+//     at the lift; then set `bendWithPress` to false (node_checks.ts says when the measurement allows it). 2026-10-06: physics fix round 2
+//     releases on max(compression, press) (13 of 13 without the bend), but the bend STAYS for the squash into the table (a dome press
+//     without it only dents: compression 0.00 in the browser's held-squish checks); node_checks.ts now only requires that it may go.
 //
 // THE PULL SIGNAL (physics round 2, contracts.ts "PULL INTENSITY"): one 0..1 scale everywhere, the PULL LEVEL = how far the grab's
 // target has been pulled from where the grab started, over the body's own maximum pull (1 = its family's maxPull, for every family).
@@ -58,7 +60,9 @@ export const CALIBRATION = {
   /** Press-direction bend: on up-facing hits (normal.y above lo) the finger travel is bent toward straight down, fully at hi. */
   pressDownLo: TUNING.pressDownLo,
   pressDownHi: TUNING.pressDownHi,
-  /** Keep the bend for bodies that report `press` (see the header: 12/13 vs 3/13 release events). */
+  /** Keep the bend for bodies that report `press`. Physics fix round 2 (2026-10-06) fires `release` on max(compression, press), so the
+   *  releases no longer need it (node_checks.ts: 13 of 13 without it), but it stays for the FEEL: a press on the dome goes DOWN and squashes
+   *  the toy into the table (without it the same hold only dents the dome: compression 0.00 in the browser checks). */
   bendWithPress: true,
   /** Release FX on a body WITHOUT `press`: bubbles + pops above this release intensity (the slice body reported 0.35-0.57 for a hard squeeze). */
   bubbleAt: TUNING.bubbleAt,

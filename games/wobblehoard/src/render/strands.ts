@@ -29,26 +29,31 @@ export interface StrandBody {
   readonly restRadius: number;
 }
 
-class Strand {
+/**
+ * The strand renderer: a tube of the jelly from A to B, one radius per ring and an optional per-ring position along it (0..1; a snapping
+ * strand's halves bunch toward their ends), sagging a little in the middle. Positions and normals are rebuilt in place (no allocation).
+ * The tack strands below and the CUT parting strand / reconnect bridge (cutfx.ts) all draw with it.
+ */
+export class StrandTube {
   readonly mesh: THREE.Mesh;
+  /** Radius per ring (seg + 1), world units. */
+  readonly radii: Float32Array;
+  /** Where each ring sits along A..B (0..1), or null: evenly spaced. */
+  along: Float32Array | null = null;
+  private readonly seg: number;
+  private readonly rad: number;
   private readonly geo = new THREE.BufferGeometry();
-  private readonly pos = new Float32Array((SEG + 1) * RAD * 3);
-  private readonly nrm = new Float32Array((SEG + 1) * RAD * 3);
-  active = false;
-  snapping = false;
-  anchor = -1;                  // the sim vertex the strand hangs from (it rides the body)
-  dx = 0; dy = 0; dz = 1;       // pull direction (unit)
-  len = 0;                      // current length (world units)
-  peak = 0;                     // the strands signal's peak while this strand lives
-  snapT = 0;
-  r0 = 0.02;
-  // the snapped length the halves retract from
-  private snapLen = 0;
+  private readonly pos: Float32Array;
+  private readonly nrm: Float32Array;
 
-  constructor(mat: THREE.Material) {
+  constructor(mat: THREE.Material, seg = SEG, rad = RAD) {
+    this.seg = seg; this.rad = rad;
+    this.radii = new Float32Array(seg + 1);
+    this.pos = new Float32Array((seg + 1) * rad * 3);
+    this.nrm = new Float32Array((seg + 1) * rad * 3);
     const idx: number[] = [];
-    for (let s = 0; s < SEG; s++) for (let k = 0; k < RAD; k++) {
-      const a = s * RAD + k, b = s * RAD + ((k + 1) % RAD), c = (s + 1) * RAD + k, d = (s + 1) * RAD + ((k + 1) % RAD);
+    for (let s = 0; s < seg; s++) for (let k = 0; k < rad; k++) {
+      const a = s * rad + k, b = s * rad + ((k + 1) % rad), c = (s + 1) * rad + k, d = (s + 1) * rad + ((k + 1) % rad);
       idx.push(a, b, c, b, d, c);   // counter-clockwise seen from outside (the ring runs from u toward v = dir x u)
     }
     this.geo.setIndex(idx);
@@ -61,65 +66,97 @@ class Strand {
     this.mesh.visible = false;
   }
 
-  start(anchor: number, dx: number, dy: number, dz: number, len0: number, r0: number): void {
-    this.active = true; this.snapping = false; this.anchor = anchor;
-    const l = Math.hypot(dx, dy, dz) || 1;
-    this.dx = dx / l; this.dy = dy / l; this.dz = dz / l;
-    this.len = len0; this.peak = 0; this.snapT = 0; this.r0 = r0;
-    this.mesh.visible = true;
-  }
-
-  snap(): void { this.snapping = true; this.snapT = 0; this.snapLen = this.len; }
-
-  stop(): void { this.active = false; this.snapping = false; this.mesh.visible = false; }
-
-  /**
-   * Rebuild the tube from anchor point A along the pull direction. `tension` 0..1 thins it; necking narrows the middle as it stretches.
-   * While snapping, the two halves (A side and tip side) shrink back toward their ends.
-   */
-  build(ax: number, ay: number, az: number, tension: number, maxLen: number): void {
-    const P = this.pos, N = this.nrm, d = this.dirTmp;
-    d[0] = this.dx; d[1] = this.dy; d[2] = this.dz;
-    // an orthonormal frame around the pull direction
-    let ux = -d[2], uy = 0, uz = d[0];
+  /** Rebuild from A to B; `sag` x length x 4u(1 - u) pulls the middle down. */
+  build(ax: number, ay: number, az: number, bx: number, by: number, bz: number, sag: number): void {
+    let dx = bx - ax, dy = by - ay, dz = bz - az;
+    const L = Math.hypot(dx, dy, dz) || 1e-4;
+    dx /= L; dy /= L; dz /= L;
+    // an orthonormal frame around the direction
+    let ux = -dz, uy = 0, uz = dx;
     let ul = Math.hypot(ux, uy, uz);
     if (ul < 1e-4) { ux = 1; uy = 0; uz = 0; ul = 1; }
     ux /= ul; uy /= ul; uz /= ul;
-    const vx = d[1] * uz - d[2] * uy, vy = d[2] * ux - d[0] * uz, vz = d[0] * uy - d[1] * ux;
-    const L = this.snapping ? this.snapLen : this.len;
-    // volume conservation: a strand pulled to n x its first length is 1 / sqrt(n) as thick; the physics' tension thins it further
-    const thin = Math.sqrt(Math.max(0.05, (this.r0 * 4) / Math.max(L, 1e-3))) * (0.45 + 0.55 * tension);
-    const stretch = Math.min(1, L / Math.max(1e-3, maxLen));
-    const sp = this.snapping ? this.snapT / SNAP_S : 0;   // 0..1 while the halves retract
-    for (let s = 0; s <= SEG; s++) {
-      const u = s / SEG;
-      // centre line: straight along the pull, sagging a little under its own weight in the middle
-      let along = u * L;
-      let r = this.r0 * thin * (1 - 0.82 * stretch * 4 * u * (1 - u));       // the neck deepens as it stretches
-      r *= 1 + 0.9 * Math.pow(1 - u, 6) + 0.6 * Math.pow(u, 8);             // a blob where it leaves the skin, a bead at the tip
-      if (this.snapping) {
-        // split at the middle: the A half pulls back toward the skin, the tip half toward the tip, both thinning to nothing
-        const half = u < 0.5 ? u / 0.5 : (u - 0.5) / 0.5;
-        const k = 1 - sp;
-        along = u < 0.5 ? half * 0.5 * L * k : L - (1 - half) * 0.5 * L * k;
-        r *= k * (u < 0.5 ? 1 - 0.9 * half : 0.1 + 0.9 * half);
-      }
-      const sag = -0.18 * L * 4 * u * (1 - u) * (this.snapping ? 1 - sp : 1);
-      const cx = ax + d[0] * along, cy = ay + d[1] * along + sag, cz = az + d[2] * along;
-      for (let k = 0; k < RAD; k++) {
-        const a = (k / RAD) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+    const vx = dy * uz - dz * uy, vy = dz * ux - dx * uz, vz = dx * uy - dy * ux;
+    const P = this.pos, N = this.nrm, r = this.radii, al = this.along, seg = this.seg, rad = this.rad;
+    for (let s = 0; s <= seg; s++) {
+      const u = s / seg, f = al ? al[s] : u, sg = sag * L * 4 * u * (1 - u);
+      const cx = ax + dx * f * L, cy = ay + dy * f * L - sg, cz = az + dz * f * L;
+      for (let k = 0; k < rad; k++) {
+        const a = (k / rad) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
         const nx = ux * ca + vx * sa, ny = uy * ca + vy * sa, nz = uz * ca + vz * sa;
-        const o = (s * RAD + k) * 3;
-        P[o] = cx + nx * r; P[o + 1] = cy + ny * r; P[o + 2] = cz + nz * r;
+        const o = (s * rad + k) * 3;
+        P[o] = cx + nx * r[s]; P[o + 1] = cy + ny * r[s]; P[o + 2] = cz + nz * r[s];
         N[o] = nx; N[o + 1] = ny; N[o + 2] = nz;
       }
     }
     (this.geo.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
     (this.geo.getAttribute('normal') as THREE.BufferAttribute).needsUpdate = true;
   }
-  private readonly dirTmp = new Float32Array(3);
 
   dispose(): void { this.geo.dispose(); }
+}
+
+class Strand {
+  readonly tube: StrandTube;
+  get mesh(): THREE.Mesh { return this.tube.mesh; }
+  active = false;
+  snapping = false;
+  anchor = -1;                  // the sim vertex the strand hangs from (it rides the body)
+  dx = 0; dy = 0; dz = 1;       // pull direction (unit)
+  len = 0;                      // current length (world units)
+  peak = 0;                     // the strands signal's peak while this strand lives
+  snapT = 0;
+  r0 = 0.02;
+  // the snapped length the halves retract from
+  private snapLen = 0;
+  private readonly alongBuf = new Float32Array(SEG + 1);
+
+  constructor(mat: THREE.Material) {
+    this.tube = new StrandTube(mat, SEG, RAD);
+  }
+
+  start(anchor: number, dx: number, dy: number, dz: number, len0: number, r0: number): void {
+    this.active = true; this.snapping = false; this.anchor = anchor;
+    const l = Math.hypot(dx, dy, dz) || 1;
+    this.dx = dx / l; this.dy = dy / l; this.dz = dz / l;
+    this.len = len0; this.peak = 0; this.snapT = 0; this.r0 = r0;
+    this.tube.mesh.visible = true;
+  }
+
+  snap(): void { this.snapping = true; this.snapT = 0; this.snapLen = this.len; }
+
+  stop(): void { this.active = false; this.snapping = false; this.tube.mesh.visible = false; }
+
+  /**
+   * Rebuild the tube from anchor point A along the pull direction. `tension` 0..1 thins it; necking narrows the middle as it stretches.
+   * While snapping, the two halves (A side and tip side) shrink back toward their ends.
+   */
+  build(ax: number, ay: number, az: number, tension: number, maxLen: number): void {
+    const L = this.snapping ? this.snapLen : this.len;
+    // volume conservation: a strand pulled to n x its first length is 1 / sqrt(n) as thick; the physics' tension thins it further
+    const thin = Math.sqrt(Math.max(0.05, (this.r0 * 4) / Math.max(L, 1e-3))) * (0.45 + 0.55 * tension);
+    const stretch = Math.min(1, L / Math.max(1e-3, maxLen));
+    const sp = this.snapping ? this.snapT / SNAP_S : 0;   // 0..1 while the halves retract
+    const r = this.tube.radii, al = this.alongBuf;
+    for (let s = 0; s <= SEG; s++) {
+      const u = s / SEG;
+      let along = u;
+      let rr = this.r0 * thin * (1 - 0.82 * stretch * 4 * u * (1 - u));       // the neck deepens as it stretches
+      rr *= 1 + 0.9 * Math.pow(1 - u, 6) + 0.6 * Math.pow(u, 8);             // a blob where it leaves the skin, a bead at the tip
+      if (this.snapping) {
+        // split at the middle: the A half pulls back toward the skin, the tip half toward the tip, both thinning to nothing
+        const half = u < 0.5 ? u / 0.5 : (u - 0.5) / 0.5;
+        const k = 1 - sp;
+        along = u < 0.5 ? half * 0.5 * k : 1 - (1 - half) * 0.5 * k;
+        rr *= k * (u < 0.5 ? 1 - 0.9 * half : 0.1 + 0.9 * half);
+      }
+      r[s] = rr; al[s] = along;
+    }
+    this.tube.along = al;
+    this.tube.build(ax, ay, az, ax + this.dx * L, ay + this.dy * L, az + this.dz * L, 0.18 * (this.snapping ? 1 - sp : 1));
+  }
+
+  dispose(): void { this.tube.dispose(); }
 }
 
 /** The strands of ONE body view (the stage keeps one per view; nothing is built until the body first strings). */

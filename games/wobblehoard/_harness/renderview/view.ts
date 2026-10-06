@@ -913,15 +913,28 @@ const RV = {
       }
       // the swap at t = 1: two pieces at the lobes, springing apart; the face stays on the side of the eyes (here: the 'a' side)
       const R = src.b.restRadius, half = src.frac / 2, cc = centreOf(src);
-      const mk = (sgn: number, chunk: boolean): StubBody => new StubBody(g, { piece: { frac: half, chunk, cutNormal: { x: -sgn * n.x, y: 0, z: -sgn * n.z }, at: { x: cc.x + sgn * n.x * R * 0.42, y: 0, z: cc.z + sgn * n.z * R * 0.42 }, vel: { x: sgn * n.x * 0.9, y: 0, z: sgn * n.z * 0.9 } } });
+      const mk = (sgn: number, chunk: boolean): StubBody => new StubBody(g, { piece: { frac: half, chunk, cutNormal: { x: -sgn * n.x, y: 0, z: -sgn * n.z }, at: { x: cc.x + sgn * n.x * R * 0.42, y: 0, z: cc.z + sgn * n.z * R * 0.42 }, vel: { x: sgn * n.x * 1.8, y: 0, z: sgn * n.z * 1.8 } } });
       stage.removeBody(src.id); pieces.splice(pieces.indexOf(src), 1);
       const a = add(mk(1, !src.face), half, src.face), b = add(mk(-1, true), half, false);
       stage.partPieces(a.id, b.id);
       cutsDone++; marks.push(`cut ${cutsDone}@${(f * dt).toFixed(2)}`);
-      for (let i = 0; i < Math.round(gap / dt); i++) { step(); if (c === 0 && i === Math.round(0.12 / dt)) shot('parting_strand'); }
+      for (let i = 0; i < Math.round(gap / dt); i++) { step(); if (c === 0 && i === Math.round(0.1 / dt)) shot('parting_strand'); }
     }
     for (let i = 0; i < Math.round(1.2 / dt); i++) step();
     shot('pieces');
+    // a bridge between the face piece and its nearest piece as they stand (the neck reaching across before they touch), then let go
+    {
+      const fp = pieces.find((p) => p.face) ?? pieces[0];
+      let near: Piece | null = null, nd = Infinity;
+      for (const p of pieces) if (p !== fp) { const d = Math.hypot(p.b.center.x - fp.b.center.x, p.b.center.z - fp.b.center.z); if (d < nd) { nd = d; near = p; } }
+      if (near) {
+        const n = Math.round(0.35 / dt);
+        for (let k = 1; k <= n; k++) { stage.setBridge(fp.id, near.id, 0.85 * k / n); step(); }
+        shot('bridge');
+        for (let k = 1; k <= n; k++) { stage.setBridge(fp.id, near.id, 0.85 * (1 - k / n)); step(); }
+        stage.setBridge(fp.id, near.id, 0);
+      }
+    }
     // every piece inside the frame once the camera has framed them (screen boxes of their skins), and how big the smallest one reads
     const framed = { pieces: pieces.length, inFrame: true, minPx: Infinity, boxes: [] as number[][] };
     {

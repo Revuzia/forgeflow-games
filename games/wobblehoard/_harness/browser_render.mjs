@@ -29,6 +29,8 @@ import { makeStarterGenome } from '../src/core/genome.ts';
 import { drawnTranslucency } from '../src/render/material.ts';
 import { CATALOG, speciesBaseGenome } from '../src/data/catalog.ts';
 import { translucencyMaxOf } from '../src/data/materials.ts';
+import { StubBody } from '../src/render/stubBody.ts';
+import { BodyProxy } from '../src/render/bodyproxy.ts';
 
 process.env.WH_FROZEN ??= '1'; // no HMR / watcher: another lane's edit must not reload the page mid-run
 const args = process.argv.slice(2);
@@ -347,6 +349,18 @@ try {
         for (const add of [0, 0.1, 0.15, 0.18, 0.2]) { const t = drawnTranslucency(g, add); n++; if (t > cap + 1e-9) over++; if (cap < 1) capped++; }
       }
       check(over === 0 && capped > 0, 'jelly translucency honours the material family cap at every rarity tier (50 species x 12 seeds x 5 tier additions)', `${over} over the cap of ${n} (${capped} in capped families)`);
+    }
+    // ---- 0b. BodyProxy forwards EVERY SoftMetrics field generically (node-side): strands, slosh, pull and fields nobody has named yet ----
+    {
+      const inner = new StubBody(makeStarterGenome());
+      const m = inner.metrics;
+      m.strands = 0.42; m.slosh = 0.31; m.pull = 0.77; m.futureField = 0.5;
+      const px = new BodyProxy(inner);
+      m.strands = 0.6; m.pull = 0.25;
+      px.sync(1 / 60, 0);
+      const got = px.metrics;
+      check(got.strands === 0.6 && got.slosh === 0.31 && got.pull === 0.25 && got.futureField === 0.5 && got.compression === m.compression,
+        'BodyProxy forwards every SoftMetrics field (strands, slosh, pull, unknown future ones), live each sync', JSON.stringify({ strands: got.strands, slosh: got.slosh, pull: got.pull, futureField: got.futureField }));
     }
 
     // ---- A. FlashGovernor, driven directly with adversarial sequences ----

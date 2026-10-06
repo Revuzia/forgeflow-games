@@ -315,3 +315,26 @@ body[data-hoard="open"] .hud, body[data-hoard="open"] .plate, body[data-hoard="c
 .qs-icon { width: 38px; height: 38px; }
 body[data-ceremony] .qswitch, body[data-hoard="open"] .qswitch, body[data-hoard="card"] .qswitch { visibility: hidden; }
 @media (max-width: 900px) { body[data-switch="true"] .hint { bottom: calc(var(--safe-b) + 146px); } }
+/* a phone: the five switcher buttons (44 px targets) and the ring's state line ("Squishies are resting, ...") share one height, so the
+   state line narrows to the ring's column and wraps; the capsule button keeps its word "Open" but drops the little capsule pips (the
+   ring's "x2" says how many wait), so the name tag keeps room for the squishy's name. Under 381 px the word goes and the pips stay. */
+@media (max-width: 480px) {
+  .qswitch { gap: 4px; }
+  .qs-btn { width: 44px; height: 44px; padding: 2px; }
+  .qs-icon { width: 34px; height: 34px; }
+  body[data-switch="true"] .meter-state { max-width: 112px; text-align: right; }
+}
+@media (max-width: 480px) and (min-width: 381px) {
+  .capsule-pips { display: none; }
+  .capsule-btn { padding: 0 13px; }
+}
+@media (max-width: 480px) {
+  .hud-bottom { gap: 7px; }
+  .nametag { padding: 7px 10px 8px; }
+  .nametag-name { font-size: 17px; }
+  .hoard-btn { padding: 6px 8px 6px 6px; }
+}
+@media (max-width: 359px) {
+  .qs-btn:nth-child(n+5) { display: none; }
+  body[data-switch="true"] .meter-state { max-width: 100px; }
+}

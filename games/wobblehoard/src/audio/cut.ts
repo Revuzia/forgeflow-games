@@ -80,8 +80,8 @@ const FLAV: Readonly<Record<CutFlavour, Flav>> = {
   sticky: { band: [430, 1350], q: 3, grains: [28, 210], grainS: 0.0028, bubbles: 72, bubR: 1.4, squelch: 1, string: 0.85, strHz: [560, 1500], slipHz: [22, 95], tail: 1.0, crunch: 0, lp: 5200, popF: 0.9, popTau: 0.026, popAtt: 0.002, air: 0.22, trim: -2, popTrim: -0.5 },
   // slow-rise foam, marshmallow: muffled. Everything under a 1.1 kHz low-pass, soft slow grains, few bubbles, a puffy pop.
   foam: { band: [380, 1050], q: 2, grains: [22, 130], grainS: 0.004, bubbles: 14, bubR: 1.15, squelch: 0.75, string: 0, strHz: [0, 0], slipHz: [0, 0], tail: 0.3, crunch: 0, lp: 1100, popF: 0.88, popTau: 0.024, popAtt: 0.0035, air: 0.5, trim: 5.8, popTrim: -0.5 },
-  // bead squeeze: a slight crunch. A lower, grittier tear with bead ticks scattered through it, and ticks at the pop.
-  beads: { band: [560, 1600], q: 3, grains: [80, 380], grainS: 0.0015, bubbles: 10, bubR: 1, squelch: 0.4, string: 0, strHz: [0, 0], slipHz: [0, 0], tail: 0.14, crunch: 14, lp: 6500, popF: 1.04, popTau: 0.014, popAtt: 0.001, air: 0.35, trim: 1, popTrim: 0 },
+  // bead squeeze: a slight crunch. A darker, grittier (wider) tear with bead ticks scattered through it, ticks at the pop.
+  beads: { band: [450, 1250], q: 2.5, grains: [80, 380], grainS: 0.0015, bubbles: 8, bubR: 1, squelch: 0.4, string: 0, strHz: [0, 0], slipHz: [0, 0], tail: 0.14, crunch: 16, lp: 4500, popF: 1.04, popTau: 0.014, popAtt: 0.001, air: 0.35, trim: 2, popTrim: 0 },
   // putty, mochi dough: slow and sharp. A dense, dry, darker tear (short grains, little water), a dull pop.
   dough: { band: [520, 1500], q: 5, grains: [100, 560], grainS: 0.0011, bubbles: 7, bubR: 1, squelch: 0.45, string: 0, strHz: [0, 0], slipHz: [0, 0], tail: 0.1, crunch: 0, lp: 3200, popF: 0.94, popTau: 0.02, popAtt: 0.0015, air: 0.12, trim: 3, popTrim: -0.5 },
   // firm silicone, pop dome: it resists. A tight, higher tear with a short rubbery squeak, a snappy pop with a recoil.
@@ -181,7 +181,10 @@ export function cutSlice(ctx: Ctx, out: AudioNode, t0: number, p: CutSliceParams
   const bag = new Bag(ctx, out, 'cut', p.pan ?? 0);
   // a quick neck is a little snappier, a slow one a little softer (+1 dB at 0.12 s, -1 dB at 0.6 s): otherwise the loudest
   // moment of a long slice (more grains, more bubbles) stands well above a short one's
-  const A = dbToGain(LVC.slice + F.trim + (calm ? CUT_CALM_DB : 0)) * clamp(fin(p.level, 1), 0, 1) * clamp(Math.pow(0.25 / N, 0.15), 0.8, 1.25);
+  // A smaller piece is a lighter slice too (-1.4 dB at 1/8, +0.7 dB at the whole): its band sits higher and would otherwise be
+  // the brightest, loudest thing in the lane.
+  const A = dbToGain(LVC.slice + F.trim + (calm ? CUT_CALM_DB : 0)) * clamp(fin(p.level, 1), 0, 1) * clamp(Math.pow(0.25 / N, 0.15), 0.8, 1.25)
+    * clamp(Math.pow(cutFrac(p.frac) / 0.5, 0.12), 0.8, 1.1);
   const tN = t + N;
   const ly = (k2: 'tear' | 'hiss' | 'squelch' | 'bubbles' | 'string' | 'crunch'): number => clamp(fin(p.layers?.[k2], 1), 0, 4);
   // progress shape: the voice builds as the waist thins (soft at first: about -20 dB of its peak a tenth of the way in)
@@ -198,9 +201,10 @@ export function cutSlice(ctx: Ctx, out: AudioNode, t0: number, p: CutSliceParams
   //    accelerating crackle of torn-fibre micro-grains. The grains gate the noise BEFORE the band-pass, so each grain stays
   //    inside the band (gating after it smeared every grain down to the low end).
   const n1 = bag.noise(r, t, endT + 0.02);
-  const bpA = bag.biquad('bandpass', F.band[0] * k, F.q);
-  bpA.frequency.setValueAtTime(F.band[0] * k, t);
-  bpA.frequency.exponentialRampToValueAtTime(Math.min(F.band[1] * k, 5000), tN);
+  const bpA = bag.biquad('bandpass', Math.min(F.band[0] * k, 1600), F.q);
+  bpA.frequency.setValueAtTime(Math.min(F.band[0] * k, 1600), t);
+  // (the top is capped at 3 kHz: a small, firm piece would otherwise climb into a hiss)
+  bpA.frequency.exponentialRampToValueAtTime(Math.min(F.band[1] * k, 3000), tN);
   const gA = bag.gain(0), gC = bag.gain(0);
   n1.connect(gA); n1.connect(gC); gA.connect(bpA); gC.connect(bpA); bpA.connect(mix);
   const C = A * 0.75 * Math.sqrt(F.q) * ly('hiss');    // a narrower band passes less noise: the hiss keeps its level
@@ -237,7 +241,7 @@ export function cutSlice(ctx: Ctx, out: AudioNode, t0: number, p: CutSliceParams
   for (const [mul, q, lv] of [[0.5, 6, 1], [1.15, 5, 0.6]] as const) {
     const bp = bag.biquad('bandpass', F.band[0] * mul * k, q);
     bp.frequency.setValueAtTime(F.band[0] * mul * k, t);
-    bp.frequency.exponentialRampToValueAtTime(Math.min(F.band[1] * mul * k, 5000), tN);
+    bp.frequency.exponentialRampToValueAtTime(Math.min(F.band[1] * mul * k, 3000), tN);
     const g = bag.gain(lv * 1.6);
     flutter.connect(bp); bp.connect(g); g.connect(gB);
   }
@@ -265,7 +269,7 @@ export function cutSlice(ctx: Ctx, out: AudioNode, t0: number, p: CutSliceParams
     for (const v of times) {
       const pr = (v - t) / N;
       const rad = rlog(r, 0.0012, 0.004) * lerp(1.25, 0.7, pr) * F.bubR / k;
-      endT = Math.max(endT, bubble(ctx, mix, v, Math.max(rad, 0.0008), A * 0.42 * amp(pr) * rr(r, 0.7, 1) * ly('bubbles'), 0.35));
+      endT = Math.max(endT, bubble(ctx, mix, v, Math.max(rad, 0.001), A * 0.42 * amp(pr) * rr(r, 0.7, 1) * ly('bubbles'), 0.35));
     }
   }
 
@@ -282,7 +286,7 @@ export function cutSlice(ctx: Ctx, out: AudioNode, t0: number, p: CutSliceParams
     const n = Math.max(1, Math.round(F.crunch * (calm ? 0.6 : 1) * rr(r, 0.8, 1.2)));
     for (let i = 0; i < n; i++) {
       const u = t + N * rr(r, 0.3, 1.0);
-      const f = Math.min(rr(r, 2100, 3400) * Math.min(k, 1.25), 4200);
+      const f = Math.min(rr(r, 2100, 3400) * Math.min(k, 1.25), 3600);
       endT = Math.max(endT, beadTick(bag, mix, r, u, f, A * rr(r, 0.22, 0.38) * amp((u - t) / N) * (calm ? 0.75 : 1) * ly('crunch')));
     }
   }
@@ -361,7 +365,7 @@ export function cutPop(ctx: Ctx, out: AudioNode, t0: number, p: CutPopParams): V
     endT = Math.max(endT, e);
   } else if (fl === 'beads') {
     const n = calm ? 2 : 3 + Math.floor(r() * 3);
-    for (let i = 0; i < n; i++) endT = Math.max(endT, beadTick(bag, mix, r, t + rr(r, 0.004, 0.06), Math.min(rr(r, 2100, 3300) * Math.min(k, 1.25), 4200), A * rr(r, 0.3, 0.55) * (calm ? 0.5 : 1)));
+    for (let i = 0; i < n; i++) endT = Math.max(endT, beadTick(bag, mix, r, t + rr(r, 0.004, 0.06), Math.min(rr(r, 2100, 3300) * Math.min(k, 1.25), 3600), A * rr(r, 0.3, 0.55) * (calm ? 0.5 : 1)));
   }
 
   // 1-3 tiny bubbles (pitched by the piece; never above 4.2 kHz, so a small, crisp piece is not shrill)

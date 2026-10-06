@@ -1621,7 +1621,10 @@ function famHostileRows(results: JobResult[], add: (gate: string, what: string, 
   const fh = results.filter((r): r is Extract<JobResult, { type: 'famhostile' }> => r.type === 'famhostile');
   for (const r of fh) console.log(`  ${r.res.label.padEnd(34)} ${r.res.fails.length ? 'FAIL ' + r.res.fails.join('; ') : 'ok  '} settle ${f2(r.res.settleT, 2)} s, volume ${f2(r.res.settledVol, 4)}, flipped ${r.res.flipped}, shape ${f2(r.res.shapePct, 2)} % R${r.elastic ? '' : ' (plastic / slow: shape not gated)'}, ${r.res.events} events`);
   const hf = fh.flatMap((r) => r.res.fails.map((f) => `${r.res.label}: ${f}`));
-  add('G1', `per-family hostile fuzz: ${MATERIAL_FAMILY_IDS.length} families x 2 genomes (the family's first species on its template genome, and an extreme corner genome on DOLLOP) x ${FAM_HOSTILE_STEPS} frames of the hostile fuzz above; every frame finite, not inverted, not under the table, valid events, no spam; then settles in 8 s with volume 1 +/- 0.015 and no flipped triangle, and an elastic family's shape back within 3% R`, hf.length ? hf.slice(0, 4).join('; ') : `0 failures (slowest settle ${f2(Math.max(...fh.map((r) => r.res.settleT)), 2)} s, worst elastic shape ${f2(Math.max(...fh.filter((r) => r.elastic).map((r) => r.res.shapePct)), 2)} % R)`, '0 failures', hf.length === 0);
+  // physics fix round 2 (the verifier's MINOR-15): part of the default run (fewer frames under --quick), and every 4th run is replayed
+  const rep = fh.filter((r) => r.replayHashes), det = rep.every((r) => r.replayHashes!.length === r.res.hashes.length && r.replayHashes!.every((h, i) => h === r.res.hashes[i]));
+  if (rep.length) add('G1', `per-family hostile fuzz determinism: ${rep.length} runs replayed (${rep.map((r) => r.res.label).join(', ')}) -> identical stateHash at every checkpoint`, `${det}`, 'true', det);
+  add('G1', `per-family hostile fuzz: ${MATERIAL_FAMILY_IDS.length} families x 2 genomes (the family's first species on its template genome, and an extreme corner genome on DOLLOP) x ${fh[0]?.res.steps ?? FAM_HOSTILE_STEPS} frames of the hostile fuzz above; every frame finite, not inverted, not under the table, valid events, no spam; then settles in 8 s with volume 1 +/- 0.015 and no flipped triangle, and an elastic family's shape back within 3% R`, hf.length ? hf.slice(0, 4).join('; ') : `0 failures (slowest settle ${f2(Math.max(...fh.map((r) => r.res.settleT)), 2)} s, worst elastic shape ${f2(Math.max(...fh.filter((r) => r.elastic).map((r) => r.res.shapePct)), 2)} % R)`, '0 failures', hf.length === 0);
 }
 /** The round-5 jobs. */
 function round5Jobs(starter: Genome): Job[] {
@@ -1635,10 +1638,10 @@ function round5Jobs(starter: Genome): Job[] {
 // ------------------------------------------------------------------------------------------------ worker pool
 
 type Job = { type: 'squeeze'; spec: SqueezeSpec } | { type: 'fuzz'; index: number; nEvents: number } | { type: 'fold'; spec: FoldSpec }
-  | { type: 'fold2'; spec: FoldSpec } | { type: 'foldsub'; spec: FoldSpec } | { type: 'corral'; spec: CorralSpec } | { type: 'hostile'; index: number; steps: number; replay: boolean } | { type: 'famhostile'; fi: number; gi: number }
+  | { type: 'fold2'; spec: FoldSpec } | { type: 'foldsub'; spec: FoldSpec } | { type: 'corral'; spec: CorralSpec } | { type: 'hostile'; index: number; steps: number; replay: boolean } | { type: 'famhostile'; fi: number; gi: number; steps?: number; replay?: boolean }
   | { type: 'dense'; spec: DenseSpec } | { type: 'slide'; spec: SlideSpec } | { type: 'sane'; gname: string; frames: number; seed: number };
 type JobResult = { type: 'squeeze'; res: SqueezeResult } | { type: 'fuzz'; res: { stats: FuzzStats; hash: number } } | { type: 'fold'; res: FoldResult }
-  | { type: 'fold2'; res: FoldResult } | { type: 'foldsub'; res: SubFoldResult } | { type: 'corral'; res: CorralResult } | { type: 'hostile'; res: HostileResult; replayHashes: number[] | null } | { type: 'famhostile'; res: HostileResult; elastic: boolean }
+  | { type: 'fold2'; res: FoldResult } | { type: 'foldsub'; res: SubFoldResult } | { type: 'corral'; res: CorralResult } | { type: 'hostile'; res: HostileResult; replayHashes: number[] | null } | { type: 'famhostile'; res: HostileResult; elastic: boolean; replayHashes?: number[] | null }
   | { type: 'dense'; res: FoldResult } | { type: 'slide'; res: SlideResult } | { type: 'sane'; res: SaneResult };
 function runJob(j: Job): JobResult {
   switch (j.type) {
@@ -1649,7 +1652,10 @@ function runJob(j: Job): JobResult {
     case 'foldsub': return { type: 'foldsub', res: foldSubsteps(j.spec) };
     case 'corral': return { type: 'corral', res: corralRun(j.spec) };
     case 'hostile': return { type: 'hostile', res: hostileRun(j.index, j.steps), replayHashes: j.replay ? hostileRun(j.index, j.steps).hashes : null };
-    case 'famhostile': { const sp = famHostileSpec(j.fi, j.gi); return { type: 'famhostile', res: hostileRun(1000 + j.fi * 2 + j.gi, FAM_HOSTILE_STEPS, sp), elastic: sp.elastic }; }
+    case 'famhostile': {
+      const sp = famHostileSpec(j.fi, j.gi), steps = j.steps ?? FAM_HOSTILE_STEPS;
+      return { type: 'famhostile', res: hostileRun(1000 + j.fi * 2 + j.gi, steps, sp), elastic: sp.elastic, replayHashes: j.replay ? hostileRun(1000 + j.fi * 2 + j.gi, steps, famHostileSpec(j.fi, j.gi)).hashes : null };
+    }
     case 'dense': return { type: 'dense', res: densePress(j.spec) };
     case 'slide': return { type: 'slide', res: slidePress(j.spec) };
     case 'sane': return { type: 'sane', res: saneFuzz(j.gname, makeStarterGenome(), j.frames, j.seed) };
@@ -1710,7 +1716,7 @@ async function main(): Promise<void> {
   }
   if (FAM_HOSTILE_ONLY) {
     const jobs: Job[] = [];
-    for (let fi = 0; fi < MATERIAL_FAMILY_IDS.length; fi++) for (const gi of [0, 1]) jobs.push({ type: 'famhostile', fi, gi });
+    for (let fi = 0; fi < MATERIAL_FAMILY_IDS.length; fi++) for (const gi of [0, 1]) jobs.push({ type: 'famhostile', fi, gi, replay: (fi * 2 + gi) % 4 === 0 });
     famHostileRows(await runPool(jobs, 2), add, f2);
     for (const r of rows) console.log(`${r.pass ? 'PASS' : 'FAIL'}  ${r.gate.padEnd(4)}  ${r.what}\n          measured: ${r.value}    threshold: ${r.limit}`);
     const failed = rows.filter((r) => !r.pass).length;
@@ -2092,6 +2098,8 @@ async function main(): Promise<void> {
     for (const spec of denseSpecs(starter)) jobs.push({ type: 'dense', spec });
     // round 5: sliding fingers (camera-plane rubs, slides toward the table, two fingers holding and rubbing) and the sane-gesture fuzz
     jobs.push(...round5Jobs(starter));
+    // physics fix round 2: the per-family hostile fuzz in the default run (MINOR-15), every 4th run replayed for determinism
+    for (let fi = 0; fi < MATERIAL_FAMILY_IDS.length; fi++) for (const gi of [0, 1]) jobs.push({ type: 'famhostile', fi, gi, steps: QUICK ? 400 : FAM_HOSTILE_STEPS, replay: (fi * 2 + gi) % 4 === 0 });
     const t1 = performance.now();
     const results = await runPool(jobs, nWorkers);
     const secs = (performance.now() - t1) / 1000;
@@ -2172,6 +2180,7 @@ async function main(): Promise<void> {
       add('G1', `dense press matrix (${dn.length} presses: 48 points over the upper surface and the flanks x tap / hold / rub x the starter and the soft corners f0b0s0z0, f0b0s1z1; was 132 deg and 7 frames over 120 at the start of the repair, all at the peak base): sharpest crease (${wdn.label}), frames over 120 deg (most in one press: ${ldn.label}), missed rays`, `${f2(wdn.worst, 0)} deg, ${dn.reduce((a, c) => a + c.f120, 0)} frames (max ${ldn.f120}), ${dn.filter((r) => r.missed).length} missed`, '<= 115 deg, 0 frames, 0', wdn.worst <= 115 && dn.every((r) => r.f120 === 0 && !r.missed));
       add('G1', `dense press matrix: left at rest after the lift (${rdn.label}); edges over 90 deg, inward triangles`, `${f2(rdn.restWorst, 0)} deg, ${dn.reduce((a, c) => a + c.restN90, 0)}, ${dn.reduce((a, c) => a + c.restInward, 0)}`, `<= ${FOLD_REST_MAX} deg, 0, 0`, rdn.restWorst <= FOLD_REST_MAX && dn.every((r) => r.restN90 === 0 && r.restInward === 0));
       round5Rows(results, add, f2);
+      famHostileRows(results, add, f2);
       const cr = results.filter((r): r is Extract<JobResult, { type: 'corral' }> => r.type === 'corral').map((r) => r.res);
       const one = cr.filter((r) => r.kind !== 'hammer'), ham = cr.filter((r) => r.kind === 'hammer');
       const wo = one.reduce((a, c) => (c.max > a.max ? c : a)), wh = ham.reduce((a, c) => (c.max > a.max ? c : a));

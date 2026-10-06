@@ -38,6 +38,18 @@
 //   * clearBodies() / removeBody() during a ceremony first end it at its final frame (as setBody does): the result is never orphaned.
 //     A throwing createBody leaves the stage as it was (capsule back on the table, play body visible) and the error reaches the caller.
 //     A disposed stage hands out inert handles (done resolved, resultBody null) instead of throwing.
+//
+// Stage B and CUT (_spec/CUT.md), how the shell drives them (all optional StageLike members, every one implemented here):
+//   * matLayout(n) -> offsets for addBody(..., { position }); with 2+ bodies visible the camera frames them all (pieces of a cut too).
+//   * setSafeInsets({ bottom, ... }): the HUD's CSS px; onStrand(bodyId, e): the strand voice (tack strands and the cut's parting strand).
+//   * A cut: every frame of the neck, body.setNeck(plane, t) (PHYS) and stage.setCutSeam(bodyId, plane, t) (the warm seam glow, plane in
+//     the body's world space). At t = 1: removeBody(id), addBody(piece, genome, { tier, chunk }) for each piece (chunk: no face, same
+//     jelly), then partPieces(aId, bId): the parting strand, render-owned, and the seam carried over onto both cut faces, fading.
+//   * A reconnect: setBridge(receiverId, giverId, t) every frame (t 0..1, eased here), body.setFrac on both (PHYS), then removeBody(giver)
+//     (the bridge eases out by itself; setBridge(a, b, 0) also lets it go).
+//   * Every CUT light is a glow (eased in and out, capped), halved in calm mode and held low for 1 s after a granted ceremony flash.
+//   * After a WebGL context restore the stale three 'dispose' listeners of every pre-loss object are dropped (no INVALID_OPERATION
+//     warnings when those objects are disposed later).
 import * as THREE from 'three';
 import type {
   AddBodyOpts, CapsuleHandle, CapsuleRevealSpec, CeremonyHandle, CeremonyHooks, FxKind, MergeCeremonySpec, QualityTier, SoftBodyLike,

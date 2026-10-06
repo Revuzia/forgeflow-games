@@ -49,7 +49,11 @@ export interface ShellDevApi {
   /** the render lane's dev readout when the stage offers one (createStageDev().info): bodies, capsule, calm, ceremony, ... */
   stageInfo(): Record<string, unknown> | null;
   /** SHELL-2b: the practice shelf as the harness checks it */
-  hoardState(): { owned: number; items: Array<{ id: string; species: string; name: string; tier: string; seen: boolean; fav: boolean; locked: boolean; origin: string }>; restockClaimed: boolean; tasks: Array<{ id: string; text: string; progress: number; target: number; done: boolean; claimed: boolean }>; mergesToday: number; credits: number };
+  hoardState(): { owned: number; items: Array<{ id: string; species: string; name: string; tier: string; seen: boolean; fav: boolean; locked: boolean; origin: string }>; restockClaimed: boolean; tasks: Array<{ id: string; text: string; progress: number; target: number; done: boolean; claimed: boolean }>; mergesToday: number; credits: number; tidyPairs: number; tidyPairsAll: number };
+  /** the play mat's frame-time guard in ms (mat.ts FRAME_BUSY_MS by default); the harness lifts it on SwiftShader */
+  matBusyMs(ms: number): void;
+  /** move the collection's epoch clock one day ahead (the dev skew): a new UTC day for the meter's daily cap, the gift, tasks and merges */
+  nextDay(): boolean;
   /** feed synthetic touches through the REAL collection.feed path until today's task `id` is done (clock pushed ahead like fill) */
   doTask(id: string): boolean;
   /** the next collection.merge answers this refusal (test seam for the pad's refusal handling, e.g. 'odds_changed') */
@@ -208,7 +212,16 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
         tasks: c.tasks().map((t) => ({ id: t.def.id, text: t.def.text, progress: t.progress, target: t.target, done: t.done, claimed: t.claimed })),
         mergesToday: c.practice().mergesToday,
         credits: c.meter().credits,
+        tidyPairs: c.tidyPlan({ includeRare: false }).length,
+        tidyPairsAll: c.tidyPlan({ includeRare: true }).length,
       };
+    },
+    matBusyMs: (ms) => game.mat.setBusyLimit(ms),
+    nextDay() {
+      if (!o.skew) return false;
+      o.skew.ms += 86_400_000;
+      game.capsules.sync();
+      return true;
     },
     doTask(id) {
       const skew = o.skew;

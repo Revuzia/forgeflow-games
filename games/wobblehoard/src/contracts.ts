@@ -22,11 +22,16 @@ export type TierName = 'common' | 'uncommon' | 'rare' | 'epic' | 'legendary' | '
  * geometric extent: a gel pulled to its limit read 0.25, a firm silicone 0.15, a slow-rise foam 0.04, which was under the 0.05 needed
  * for a 'snap' at all.) A 'snap' now fires when the pull level at the release is over 0.05. 'grab' itself carries no pull yet: its
  * intensity is a fixed 0.5. metrics.stretch keeps its own meaning (the body's extent, 1 = ~2.2x its rest extent).
+ * TRANSLATION-FREE (physics round-2 fix round 2, 2026-10-06; the meaning is unchanged for a body whose feet hold): the distance is measured
+ * relative to the body, i.e. minus how far the body's centre of mass moved since the grab started, so dragging a whole body along is
+ * not a stretch. The same pull level is now reported LIVE as SoftMetrics.pull while a grab is active. Consumers use the snap intensity
+ * and metrics.pull AS IS (0..1, 1 = the family's maxPull): no 1/stretch rescale.
  */
 export type SoftEventKind =
   | 'poke'     // a finger touched the surface (intensity = impact speed, 0..1)
   | 'press'    // a poke turned into a held squeeze (after ~0.18 s); intensity = current depth 0..1
-  | 'release'  // a finger lifted while the body was compressed (intensity = compression released, 0..1; heldFor = seconds pressed)
+  | 'release'  // a finger lifted while the body was squeezed (intensity = max(compression, that finger's press) released, 0..1, fired over
+               // 0.08; heldFor = seconds pressed). Since physics fix round 2 a single-finger dent (high press, low compression) releases too
   | 'land'     // body hit the table (intensity = impact speed, 0..1)
   | 'grab'     // a pull started (intensity 0.5, fixed: see PULL INTENSITY above)
   | 'snap'     // a pull was let go (intensity = the pull level released, 0..1: 1 = the family's maxPull; see above)
@@ -56,6 +61,10 @@ export interface SoftMetrics {
   reaction?: number;        // 0..1 normalised summed finger-projection correction: how hard the body pushes back (a firmness signal for audio and haptics)
   strands?: number;         // 0..1 sticky strings while a fingertip pulls off a tacky body (sticky stretch, slime, mochi); the renderer draws thin strands from the tip, audio ticks
   slosh?: number;           // 0..1 how far the liquid / bead core is swinging inside the shell (water fill, bead squeeze); 0 for every other family
+  /** Physics fix round 2 (optional; consumers treat undefined as "not reported"). The live PULL LEVEL (see PULL INTENSITY above) of the
+   *  deeper active grab: the grab target's distance from where the grab started, minus the body's own travel (translation-free), over the
+   *  body's own maximum pull; 1 = its family's maxPull. 0 when nothing is grabbed. The 'snap' intensity is this value at the release. */
+  pull?: number;
 }
 
 export interface RayHit { point: V3; normal: V3; vertex: number; t: number }
@@ -234,10 +243,10 @@ export interface SquishAudio {
   strand?(p: { tension: number; snap?: boolean; pitch?: number; pan?: number }): void;
   /** CUT (optional): the slice. phase 'start' when the waist begins to form (a wet slice that lasts `neckS` seconds), 'separate'
    *  when the pieces part (a soft pop). frac = the smaller piece's fraction of the whole (smaller sounds higher). */
-  cut?(p: { phase: 'start' | 'separate'; frac: number; neckS?: number; family?: string; pan?: number; calm?: boolean }): void;
+  cut?(p: { phase: 'start' | 'separate'; frac: number; neckS?: number; family?: string; pan?: number; calm?: boolean; /** the squishy's own pitch ratio (genome size), as for the other voices; default 1 */ pitch?: number }): void;
   /** CUT (optional): two pieces flowed back together (a gloopy "blorp" sized by the merged fraction); all = the Reconnect-all
    *  flourish as the squishy becomes whole again. */
-  rejoin?(p: { frac: number; all?: boolean; pan?: number; calm?: boolean }): void;
+  rejoin?(p: { frac: number; all?: boolean; pan?: number; calm?: boolean; /** the squishy's own pitch ratio (genome size); default 1 */ pitch?: number }): void;
   /** Harness readout for the round-3 parts: music scheduler state and cost, and how many calls the rate limiters swallowed. */
   detailStats?(): {
     music: { on: boolean; playing: boolean; sessions: number; field: number; liveNotes: number; maxLiveNotes: number; notes: number; dropped: number; ticks: number; tickMsMean: number; tickMsMax: number; tickMsRecentP99: number; tickMsRecentMax: number; ducked: boolean; volume: number };

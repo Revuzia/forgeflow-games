@@ -409,8 +409,9 @@ export function createGame(deps: GameDeps): Game {
   const readMeter = (): void => { try { meterView = hoard.meter(); } catch (e) { report(e); meterView = null; } };
   readMeter();
   const offMeterView = hoard.onChange(readMeter);
+  const previewTouch = hoard.previewTouch;
   const pending: Pending = createPending({
-    collection: hoard,
+    preview: typeof previewTouch === 'function' ? (k, h, l) => previewTouch.call(hoard, k, h, l) : null,
     heldFor: (f) => driver.touch.heldFor(f),
     pullFor: (f) => driver.touch.pullFor(f),
     pullLevel: (f) => driver.touch.pull(f),

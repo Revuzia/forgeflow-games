@@ -11,7 +11,21 @@
 //   * a short fuzz (600 frames: fingers anywhere on the body, pressure flicker, slides, grab-pulls, nudges, dt 1/120..1/20): every frame
 //     finite, not inverted, not under the table (> -1% R), and settled (kinetic < 0.02) within 6 s of the release;
 //   * determinism (one fuzz replayed per family) and perf: step() mean per family on its heaviest species (most struts) while pressed.
-//   node _harness/probe_species.ts [--quick] [--only id,id] [--list]
+// Physics fix round 2 (the round-2 verifier's MAJOR-1..3: the round-5 sliding, release and hop fixes had been tuned on the gel only, and
+// these rows did not exist), on every species, per material family:
+//   * HOP AFTER RELEASE: a top press (x + 0.1 R, straight down) held 1.2 s with the shell's profile and with pressure 1 at once, released,
+//     2 s after, on the template and on the soft (f0 b1 s1 z1) and hard (f1 b0 s0 z0) corner genomes: no particle more than 10 mm above
+//     the table, during the press or after it (the verifier's hop.ts: 64 of 300 presses left the table, ambrosel by 211 mm);
+//   * FULL PULL AND RELEASE ("stretch it as far as it will go"): grab the top, the +x and +z flanks, every feature tip and the peak, drag
+//     the target straight out to 1.1 x the body's maxPull over 0.8 s, hold 0.7 s, release, 2 s after (the verifier's pullset.ts: 111 of
+//     608 pulls creased the foot rim at the release);
+//   * RUBS (the shell's camera-plane rub of probe_softbody's round-5 rows: the game camera's ray, the shell's pressure capped at 0.7, a
+//     straight 2.5 m/s slide in the screen plane, outward drags skipped since the shell makes them pulls) at 4 contact points x 4 screen
+//     angles, and SLIDES toward the table from the lower half of the visible body (3 points x 3 downward / sideways angles x 1 and 2.5 m/s),
+//     both on the template and the soft corner (the verifier's rubset.ts: 35 of 445 template rubs over 120 degrees, slime 14 of 37).
+//   Limits: probe_softbody's round-5 sliding limits (sharpest crease <= 120 deg, 0 frames over 120), left at rest <= 60 deg (plastic or
+//   slow families <= 90, as the press matrix). Per family, so a family that creases is named.
+//   node _harness/probe_species.ts [--quick] [--only id,id] [--list] [--rows=hop,pull,rub,base]
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { fileURLToPath } from 'node:url';
 import { SoftBody } from '../src/physics/softbody.ts';
@@ -20,6 +34,7 @@ import type { SpeciesId } from '../src/data/catalog.ts';
 import { MATERIAL_FAMILIES, MATERIAL_FAMILY_IDS, recoverySeconds95 } from '../src/data/materials.ts';
 import { evalShape } from '../src/data/shapes.ts';
 import { mulberry32 } from '../src/core/rng.ts';
+import { quantizeGenome } from '../src/core/genome.ts';
 import type { Genome } from '../src/core/genome.ts';
 import type { V3 } from '../src/contracts.ts';
 
@@ -28,6 +43,10 @@ const QUICK = process.argv.includes('--quick');
 const LIST = process.argv.includes('--list');
 const ONLY = process.argv.find((a) => a.startsWith('--only='))?.slice(7).split(',') ?? null;
 const FOLD_REST_MAX = 60, PRESS_WORST_MAX = 115, FUZZ_FRAMES = QUICK ? 300 : 600;
+/** `--rows=hop,pull,rub,base`: only those groups of rows (all by default; `base` = settle, press matrix, fuzz, perf). */
+const ROWS = (process.argv.find((a) => a.startsWith('--rows='))?.slice(7) ?? 'base,hop,pull,rub').split(',');
+/** Physics fix round 2 limits: the hop bound (lowest particle above the table, m) and the sliding-contact limits of probe_softbody round 5. */
+const HOP_MAX = 0.01, SLIDE_WORST_MAX = 120;
 const v3 = (x: number, y: number, z: number): V3 => ({ x, y, z });
 
 interface Meter { pairs: Int32Array; N: Float64Array }
@@ -183,20 +202,154 @@ function perfOf(id: SpeciesId): number {
   return best;
 }
 
+// ------------------------------------------------------------------------------------------------ physics fix round 2 rows
+/** The template genome and the two corners these rows use (the verifier's: soft = firmness 0, bounce 1, stretch 1, size 1; hard = the opposite). */
+function cornerOf(id: SpeciesId, gn: string): Genome {
+  const t = speciesTemplateGenome(id);
+  return gn === 'soft' ? quantizeGenome({ ...t, firmness: 0, bounce: 1, stretch: 1, size: 1 }) : gn === 'hard' ? quantizeGenome({ ...t, firmness: 1, bounce: 0, stretch: 0, size: 0 }) : t;
+}
+const norm3 = (x: number, y: number, z: number): V3 => { const l = Math.hypot(x, y, z) || 1; return v3(x / l, y / l, z / l); };
+const towards = (from: V3, p: V3): V3 => norm3(p.x - from.x, p.y - from.y, p.z - from.z);
+/** The shell's pressure profile; a rub caps it at 0.7 (gestures.ts). */
+const shellRub = (t: number, rub: boolean): number => { const p = shellP(t); return rub && t > 0.15 ? Math.min(p, 0.7) : p; };
+const slowOrPlastic = (fam: string): boolean => { const ph = MATERIAL_FAMILIES[fam as keyof typeof MATERIAL_FAMILIES].physics; return ph.yieldStrain > 0 || recoverySeconds95(ph) > 3; };
+
+interface HopRes { id: string; family: string; rows: Array<{ g: string; prof: string; during: number; after: number; missed: boolean }> }
+/** HOP AFTER RELEASE: the verifier's hop.ts on one species (3 genomes x 2 pressure profiles). */
+function hopOf(id: SpeciesId): HopRes {
+  const out: HopRes = { id, family: '', rows: [] };
+  for (const gn of ['template', 'soft', 'hard']) for (const prof of ['shell', 'instant']) {
+    const b = new SoftBody(cornerOf(id, gn));
+    out.family = (b as unknown as { family: string }).family;
+    for (let i = 0; i < 30; i++) b.step(DT);
+    const R = b.restRadius, h = b.raycast(v3(b.center.x + 0.1 * R, 6 * R, b.center.z), v3(0, -1, 0));
+    const r = { g: gn, prof, during: 0, after: 0, missed: !h };
+    if (h) {
+      b.fingerDown(0, { point: h.point, normal: h.normal, dir: v3(0, -1, 0) });
+      for (let s = 0, t = 0; t < 3.2; s++) {
+        if (t < 1.2) b.fingerPressure(0, prof === 'instant' ? 1 : shellP(t)); else if (t < 1.2 + DT) b.fingerUp(0);
+        b.step(DT); t = (s + 1) * DT;
+        const my = minY(b);
+        if (t < 1.2) { if (my > r.during) r.during = my; } else if (my > r.after) r.after = my;
+      }
+    }
+    out.rows.push(r);
+  }
+  return out;
+}
+
+interface Pt { label: string; u: V3 }
+/** Pull points: the top, the +x and +z flanks, the peak, every feature tip that is not under the body (the verifier's pullset.ts). */
+function pullPointsOf(id: SpeciesId): Pt[] {
+  const d = CATALOG.find((x) => x.id === id)!;
+  const out: Pt[] = [{ label: 'top', u: v3(0.03, 1, 0.05) }, { label: 'flank +x', u: v3(1, 0, 0) }, { label: 'flank +z', u: v3(0, 0, 1) }];
+  const pk = d.shape.peak;
+  if (pk) out.push({ label: 'peak', u: v3(pk.dir[0], pk.dir[1], pk.dir[2]) });
+  d.shape.features.forEach((f, k) => {
+    if (f.kind === 'dent') return;
+    for (const sx of f.mirrorX ? [1, -1] : [1]) { const u = v3(f.dir[0] * sx, f.dir[1], f.dir[2]); if (u.y >= -0.3) out.push({ label: `f${k}${sx < 0 ? "'" : ''} tip`, u }); }
+  });
+  return out;
+}
+interface SlideRes { label: string; missed: boolean; skipped: boolean; worst: number; f120: number; rest: number; restN90: number }
+interface ContactRes { id: string; family: string; kind: 'pull' | 'rub'; g: string; res: SlideRes[] }
+/** FULL PULL AND RELEASE on one body: grab the surface under the point, target straight out to 1.1 x maxPull over 0.8 s, hold 0.7 s, let go. */
+function pullOne(g: Genome, id: SpeciesId, p: Pt): SlideRes {
+  const d = CATALOG.find((x) => x.id === id)!;
+  const b = new SoftBody(g), m = meter(b);
+  for (let i = 0; i < 30; i++) b.step(DT);
+  const R = b.restRadius, c = b.center, r = Math.min(1.9, evalShape(d.shape, p.u.x, p.u.y, p.u.z)) + 3;
+  const o = v3(c.x + p.u.x * r * R, Math.max(0.02, c.y + p.u.y * r * R), c.z + p.u.z * r * R), tg = v3(c.x + p.u.x * 0.5 * R, c.y + p.u.y * 0.5 * R, c.z + p.u.z * 0.5 * R);
+  const h = b.raycast(o, towards(o, tg));
+  const res: SlideRes = { label: p.label, missed: !h, skipped: false, worst: 0, f120: 0, rest: 0, restN90: 0 };
+  if (!h) return res;
+  const D = 1.1 * b.params.maxPull * R, P0 = h.point;
+  b.grab(0, h.vertex, P0);
+  for (let s = 0, t = 0; t < 3.5; s++) {
+    if (t < 0.8) { const k = D * (t / 0.8); b.grabMove(0, v3(P0.x + p.u.x * k, Math.max(0.03, P0.y + p.u.y * k), P0.z + p.u.z * k)); }
+    else if (t >= 1.5 && t < 1.5 + DT) b.grabRelease(0);
+    b.step(DT); t = (s + 1) * DT;
+    const fo = fold(b, m);
+    if (!Number.isFinite(fo)) { res.worst = 999; res.f120++; break; }
+    if (fo > res.worst) res.worst = fo;
+    if (fo > 120) res.f120++;
+  }
+  res.rest = fold(b, m);
+  return res;
+}
+/** One camera-plane rub (probe_softbody slidePress, the verifier's rubset.ts): the game camera's ray through c + (u.x R, u.y 1.3 R (u.y <= 0:
+ *  u.y R), u.z R), from 0.15 s a straight slide in the screen plane at `ang` degrees and `sp` m/s, lifted at 1.2 s, 2.3 s after. */
+function rubOne(g: Genome, u: V3, ang: number, sp: number, label: string): SlideRes {
+  const b = new SoftBody(g), m = meter(b);
+  for (let i = 0; i < 30; i++) b.step(DT);
+  const R = b.restRadius, c = b.center, k0 = R / 0.5125, cam = v3(0, 1.6 * k0, 2.6 * k0);
+  const at = (q: V3): V3 => v3(c.x + q.x * R, q.y > 0 ? c.y + q.y * 1.3 * R : c.y + q.y * R, c.z + q.z * R);
+  const d0 = towards(cam, at(u)), h = b.raycast(cam, d0);
+  const res: SlideRes = { label, missed: !h, skipped: false, worst: 0, f120: 0, rest: 0, restN90: 0 };
+  if (!h) return res;
+  const rl = Math.hypot(d0.z, d0.x), right = v3(-d0.z / rl, 0, d0.x / rl);
+  const up = v3(right.y * d0.z - right.z * d0.y, right.z * d0.x - right.x * d0.z, right.x * d0.y - right.y * d0.x);
+  const a = (ang * Math.PI) / 180, ca = Math.cos(a), sa = Math.sin(a);
+  const mv = v3(right.x * ca + up.x * sa, right.y * ca + up.y * sa, right.z * ca + up.z * sa);
+  const o = v3(h.point.x - c.x, h.point.y - c.y, h.point.z - c.z), ox = o.x * right.x + o.y * right.y + o.z * right.z, oy = o.x * up.x + o.y * up.y + o.z * up.z;
+  if ((ca * ox + sa * oy) / (Math.hypot(ox, oy) || 1) > 0.2) { res.skipped = true; return res; }   // outward: a pull in the shell
+  b.fingerDown(0, { point: h.point, normal: h.normal, dir: d0 });
+  for (let s = 0, t = 0; t < 3.5; s++) {
+    if (t < 1.2) {
+      b.fingerPressure(0, shellRub(t, true));
+      if (t > 0.15) { const k = sp * (t - 0.15), q = v3(h.point.x + mv.x * k, h.point.y + mv.y * k, h.point.z + mv.z * k), hq = b.raycast(cam, towards(cam, q)); if (hq) b.fingerMove(0, hq.point); }
+    } else if (t < 1.2 + DT) b.fingerUp(0);
+    b.step(DT); t = (s + 1) * DT;
+    const fo = fold(b, m);
+    if (!Number.isFinite(fo)) { res.worst = 999; res.f120++; break; }
+    if (fo > res.worst) res.worst = fo;
+    if (fo > 120) res.f120++;
+  }
+  res.rest = fold(b, m);
+  return res;
+}
+const RUB_PTS: Array<[string, V3]> = [['top-front', v3(0.05, 0.83, 0.56)], ['front-mid', v3(0, 0.3, 0.95)], ['front-left', v3(-0.6, 0.45, 0.65)], ['front-right-low', v3(0.6, -0.1, 0.8)]];
+const SLIDE_PTS: Array<[string, V3]> = [['low-left', v3(-0.55, -0.05, 0.8)], ['low-mid', v3(0.05, -0.2, 0.95)], ['low-right', v3(0.7, 0.1, 0.7)]];
+function contactOf(id: SpeciesId, kind: 'pull' | 'rub', gn: string): ContactRes {
+  const g = cornerOf(id, gn);
+  const out: ContactRes = { id, family: (new SoftBody(g) as unknown as { family: string }).family, kind, g: gn, res: [] };
+  if (kind === 'pull') for (const p of pullPointsOf(id)) out.res.push(pullOne(g, id, p));
+  else {
+    for (const [l, u] of RUB_PTS) for (const ang of QUICK ? [0, 180] : [0, 90, 180, 270]) out.res.push(rubOne(g, u, ang, 2.5, `rub ${l} ${ang}`));
+    for (const [l, u] of SLIDE_PTS) for (const ang of [180, 270, 315]) for (const sp of QUICK ? [2.5] : [1, 2.5]) out.res.push(rubOne(g, u, ang, sp, `slide ${l} ${ang} ${sp}`));
+  }
+  return out;
+}
+
+type Job = { kind: 'genome'; id: SpeciesId; gi: number; full: boolean } | { kind: 'hop'; id: SpeciesId } | { kind: 'pull' | 'rub'; id: SpeciesId; g: string };
+type Res = { kind: 'genome'; r: GenomeRes } | { kind: 'hop'; r: HopRes } | { kind: 'contact'; r: ContactRes };
+function runJob(j: Job): Res {
+  if (j.kind === 'genome') return { kind: 'genome', r: runGenome(j.id, j.gi, j.full) };
+  if (j.kind === 'hop') return { kind: 'hop', r: hopOf(j.id) };
+  return { kind: 'contact', r: contactOf(j.id, j.kind, j.g) };
+}
+
 if (!isMainThread) {
-  const jobs = workerData as Array<{ id: SpeciesId; gi: number; full: boolean }>;
-  for (const j of jobs) parentPort!.postMessage(runGenome(j.id, j.gi, j.full));
+  const jobs = workerData as Job[];
+  for (const j of jobs) parentPort!.postMessage(runJob(j));
   parentPort!.postMessage(null);
 } else {
   const t0 = performance.now();
   const species = CATALOG.filter((d) => !ONLY || ONLY.includes(d.id)).map((d) => d.id);
-  const jobs: Array<{ id: SpeciesId; gi: number; full: boolean }> = [];
-  for (const id of species) for (const gi of [0, 1, 2]) jobs.push({ id, gi, full: gi === 0 });
-  const NW = 3, results: GenomeRes[] = [];
+  const jobs: Job[] = [];
+  if (ROWS.includes('base')) for (const id of species) for (const gi of [0, 1, 2]) jobs.push({ kind: 'genome', id, gi, full: gi === 0 });
+  if (ROWS.includes('hop')) for (const id of species) jobs.push({ kind: 'hop', id });
+  for (const kind of ['pull', 'rub'] as const) if (ROWS.includes(kind)) for (const id of species) for (const g of ['template', 'soft']) jobs.push({ kind, id, g });
+  // heaviest first (a rub job is ~3x a genome job), round robin, so the workers finish together
+  const weight = (j: Job): number => (j.kind === 'rub' ? 6 : j.kind === 'pull' ? 3 : j.kind === 'hop' ? 2 : 1);
+  const order = jobs.map((j, i) => ({ j, i })).sort((a, b) => weight(b.j) - weight(a.j) || a.i - b.i).map((x) => x.j);
+  const NW = 3, results: GenomeRes[] = [], hops: HopRes[] = [], contacts: ContactRes[] = [];
   await Promise.all(Array.from({ length: NW }, (_, w) => new Promise<void>((resolve, reject) => {
-    const mine = jobs.filter((_, i) => i % NW === w);
+    const mine = order.filter((_, i) => i % NW === w);
     const wk = new Worker(fileURLToPath(import.meta.url), { workerData: mine, argv: process.argv.slice(2) });
-    wk.on('message', (m: GenomeRes | null) => { if (m === null) { void wk.terminate(); resolve(); } else results.push(m); });
+    wk.on('message', (m: Res | null) => {
+      if (m === null) { void wk.terminate(); resolve(); } else if (m.kind === 'genome') results.push(m.r); else if (m.kind === 'hop') hops.push(m.r); else contacts.push(m.r);
+    });
     wk.on('error', reject);
   })));
   results.sort((a, b) => species.indexOf(a.id as SpeciesId) - species.indexOf(b.id as SpeciesId) || a.genome.localeCompare(b.genome));
@@ -209,12 +362,12 @@ if (!isMainThread) {
   const add = (what: string, value: string, limit: string, pass: boolean): void => { rows.push({ what, value, limit, pass }); };
   const worstBy = <T>(xs: T[], f: (x: T) => number): T => xs.reduce((a, c) => (f(c) > f(a) ? c : a));
   const n = results.length;
-  {
+  if (n > 0) {
     const bad = results.filter((r) => r.settleNaN || r.hop > 0.001 || r.creep > 0.005 || r.kinetic >= 0.02 || r.restFold > FOLD_REST_MAX);
     const wh = worstBy(results, (r) => r.hop), wc = worstBy(results, (r) => r.creep), wf = worstBy(results, (r) => r.restFold);
     add(`settle 3 s on the table (${n} bodies: ${species.length} species x template + 2 seeds): no hop, no creep, at rest, rest fold`, `hop max ${(wh.hop * 1000).toFixed(2)} mm (${wh.id} ${wh.genome}), creep max ${(wc.creep * 1000).toFixed(2)} mm (${wc.id} ${wc.genome}), rest fold max ${wf.restFold.toFixed(0)} deg (${wf.id}); failing: ${bad.map((r) => `${r.id} ${r.genome}`).join(', ') || 'none'}`, `hop <= 1 mm, creep <= 5 mm, kinetic < 0.02, rest <= ${FOLD_REST_MAX} deg`, bad.length === 0);
   }
-  {
+  if (n > 0) {
     const all = results.flatMap((r) => r.presses.map((p) => ({ r, p })));
     const done = all.filter((x) => !x.p.missed);
     const w = worstBy(done, (x) => x.p.worst), f120 = done.reduce((a, x) => a + x.p.f120, 0), missed = all.filter((x) => x.p.missed);
@@ -230,12 +383,12 @@ if (!isMainThread) {
     const vb = done.filter((x) => { const lo = Math.min(0.85, 1 - MATERIAL_FAMILIES[x.r.family as keyof typeof MATERIAL_FAMILIES].physics.volBleedMax - 0.05); return x.p.volMin < lo || x.p.volMax > 1.15; });
     add('press matrix: volume inside the family band (CONTRACT 4.2: min(0.85, 1 - volBleedMax - 0.05) .. 1.15)', vb.length ? vb.slice(0, 4).map((x) => `${x.r.id} ${x.p.label} ${x.p.volMin.toFixed(2)}..${x.p.volMax.toFixed(2)}`).join('; ') : `all ${done.length} in band`, 'all', vb.length === 0);
   }
-  {
+  if (n > 0) {
     const bad = results.filter((r) => r.fuzz.fails.length || !r.fuzz.settled);
     const wp = results.reduce((a, c) => (c.fuzz.minPen < a.fuzz.minPen ? c : a));
     add(`short fuzz (${n} bodies x ${FUZZ_FRAMES} frames: fingers anywhere, pressure flicker, slides, grab-pulls, nudges, dt 1/120..1/20): finite, not inverted, never under the table (> -1% R), settled within 6 s; one replay per family identical`, bad.length ? bad.slice(0, 5).map((r) => `${r.id} ${r.genome}: ${r.fuzz.fails.join('; ') || 'not settled'}`).join(' | ') : `0 failures (deepest ${(wp.fuzz.minPen * 100).toFixed(2)}% R, ${wp.id})`, '0 failures', bad.length === 0);
   }
-  {
+  if (ROWS.includes('base')) {
     const fams = MATERIAL_FAMILY_IDS.filter((f) => species.some((id) => CATALOG.find((d) => d.id === id)!.family === f));
     const heavy = (f: string): SpeciesId => {
       const ids = species.filter((id) => CATALOG.find((d) => d.id === id)!.family === f);
@@ -246,6 +399,30 @@ if (!isMainThread) {
     const ref2 = perfOf('dollop'), refMs = Math.min(ref, ref2);
     const w = worstBy(perf, (x) => x.ms);
     add(`perf: step() mean at 60 Hz frames per family on its heaviest species (most thin-part struts), a finger pressed (best of 3 x 300 steps; the machine is shared, so the DOLLOP starter is measured before and after in the same process: ${refMs.toFixed(2)} ms)`, perf.map((x) => `${x.f} ${x.ms.toFixed(2)} (${x.id}, x${(x.ms / refMs).toFixed(2)})`).join(', '), `most expensive (${w.f}) <= 2.0 ms`, w.ms <= 2.0);
+  }
+  // ---- physics fix round 2 rows
+  if (hops.length) {
+    const all = hops.flatMap((h) => h.rows.map((r) => ({ h, r })));
+    const bad = all.filter((x) => x.r.missed || x.r.during > HOP_MAX || x.r.after > HOP_MAX);
+    const wa = worstBy(all, (x) => x.r.after), wd = worstBy(all, (x) => x.r.during);
+    const fams = MATERIAL_FAMILY_IDS.filter((f) => hops.some((h) => h.family === f));
+    add(`HOP AFTER RELEASE (${all.length} presses: ${hops.length} species x template / soft / hard corner x the shell's profile and pressure 1 at once; a top press held 1.2 s, released, 2 s after; was 64 of 300 off the table, ambrosel 211 mm): lowest particle above the table after the release (worst ${wa.h.id} ${wa.r.g} ${wa.r.prof}) and during the press (worst ${wd.h.id} ${wd.r.g} ${wd.r.prof}); per family the worst after: ${fams.map((f) => `${f} ${(Math.max(...all.filter((x) => x.h.family === f).map((x) => x.r.after)) * 1000).toFixed(1)}`).join(', ')} mm`, `${(wa.r.after * 1000).toFixed(1)} mm, ${(wd.r.during * 1000).toFixed(1)} mm; ${bad.length} presses over${bad.length ? ': ' + bad.slice(0, 5).map((x) => `${x.h.id} ${x.r.g} ${x.r.prof} ${(x.r.after * 1000).toFixed(0)} / ${(x.r.during * 1000).toFixed(0)} mm${x.r.missed ? ' MISSED' : ''}`).join('; ') : ''}`, `<= ${HOP_MAX * 1000} mm each, none missed`, bad.length === 0);
+  }
+  for (const kind of ['pull', 'rub'] as const) {
+    const cs = contacts.filter((c) => c.kind === kind);
+    if (!cs.length) continue;
+    const fams = MATERIAL_FAMILY_IDS.filter((f) => cs.some((c) => c.family === f));
+    for (const f of fams) {
+      const all = cs.filter((c) => c.family === f).flatMap((c) => c.res.map((r) => ({ c, r }))).filter((x) => !x.r.skipped);
+      const done = all.filter((x) => !x.r.missed), lim = slowOrPlastic(f) ? 90 : FOLD_REST_MAX;
+      const w = worstBy(done, (x) => x.r.worst), rw = worstBy(done, (x) => x.r.rest);
+      const bad = done.filter((x) => x.r.worst > SLIDE_WORST_MAX || x.r.f120 > 0 || x.r.rest > lim);
+      const f120 = done.reduce((a, x) => a + x.r.f120, 0), sp = new Set(all.map((x) => x.c.id)).size;
+      const what = kind === 'pull'
+        ? `FULL PULL AND RELEASE, ${f} (${done.length} pulls on ${sp} species x template / soft corner: top, +x / +z flanks, peak, every feature tip; to 1.1 x maxPull over 0.8 s, held 0.7 s, let go, 2 s after)`
+        : `RUBS AND SLIDES, ${f} (${done.length} on ${sp} species x template / soft corner: the shell's camera-plane rub at 4 points x ${QUICK ? 2 : 4} screen angles at 2.5 m/s, slides toward the table from 3 low points x 3 angles; outward drags skipped)`;
+      add(`${what}: sharpest crease (${w.c.id} ${w.c.g} ${w.r.label}), frames over 120 deg, left at rest (${rw.c.id} ${rw.c.g} ${rw.r.label}), missed rays`, `${w.r.worst.toFixed(0)} deg, ${f120} frames${bad.length ? ` (${bad.length} failing: ${bad.slice(0, 3).map((x) => `${x.c.id} ${x.c.g} ${x.r.label} ${x.r.worst.toFixed(0)}/${x.r.f120}/${x.r.rest.toFixed(0)}`).join('; ')})` : ''}, rest ${rw.r.rest.toFixed(0)} deg, ${all.length - done.length} missed`, `<= ${SLIDE_WORST_MAX} deg, 0 frames, rest <= ${lim} deg${lim > FOLD_REST_MAX ? ' (slow or plastic family)' : ''}, 0 missed`, bad.length === 0 && all.length === done.length);
+    }
   }
   let failed = 0;
   for (const r of rows) { if (!r.pass) failed++; console.log(`${r.pass ? 'PASS' : 'FAIL'}  ${r.what}\n          measured: ${r.value}    threshold: ${r.limit}`); }

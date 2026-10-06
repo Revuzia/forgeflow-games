@@ -115,9 +115,14 @@ export const ROOM_RISE_LEAD_S = 0.005;
 export const ROOM_CLEAR_S = 0.012;
 export const ROOM_CLEAR_ABOVE_DB = -6;
 export const ROOM_CLEAR_KINDS: ReadonlySet<string> = new Set(['poke', 'release', 'land', 'pop', 'bump', 'strandSnap', 'meterFull', 'capsule', 'cutPop', 'rejoin']);
-/** The extra start delay (s) of an effect of `kind` when the music's room level is `roomLevelDb` (MusicBed.roomLevelAt). */
-export function roomClearDelay(kind: string, roomLevelDb: number): number {
-  return ROOM_CLEAR_KINDS.has(kind) && fin(roomLevelDb, 0) > ROOM_CLEAR_ABOVE_DB ? ROOM_CLEAR_S : 0;
+/** The extra start delay (s) of an effect of `kind` when the music's room level is `roomLevelDb` (MusicBed.roomLevelAt) and
+ *  the music volume is `musicGainDb` above its default. CUT round fix: the delay grows with the volume boost (x2 at +6 dB,
+ *  music 1): at the slider's top two large, low-pitched pops onto a pad that was up still measured 4.8 / 6.2 dB in-band in
+ *  the independent verifier's music-1 placements after the pad's dip was corrected (roomPadShare); what covered them was the
+ *  undipped pad of the moments before the call. 24 ms of clearing removes it (in-band >= 8 dB on that set). The cost: at
+ *  music 1 the first fast effect after a rest sounds 24 ms late (12 ms at the default volume, as before). */
+export function roomClearDelay(kind: string, roomLevelDb: number, musicGainDb = 0): number {
+  return ROOM_CLEAR_KINDS.has(kind) && fin(roomLevelDb, 0) > ROOM_CLEAR_ABOVE_DB ? ROOM_CLEAR_S * (1 + Math.max(0, fin(musicGainDb, 0)) / 6) : 0;
 }
 /** Which one-shots make room, and how deep (dB). The engine and the offline mix renders both read this table (and
  *  roomDb() / oneShotRoom() below). The ceremony voices (reveal, merge) keep the slow duck; capsule beats get both. */

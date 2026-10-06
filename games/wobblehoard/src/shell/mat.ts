@@ -42,6 +42,8 @@ export interface Mat {
   /** put every extra back (one tap) */
   clear(): void;
   onChange(fn: () => void): () => void;
+  /** the frame-time guard (default FRAME_BUSY_MS); the dev hook lifts it for the harness (SwiftShader is always slower than that) */
+  setBusyLimit(ms: number): void;
 }
 
 export interface MatDeps {
@@ -69,6 +71,7 @@ export function createMat(d: MatDeps): Mat {
   let listeners: Array<() => void> = [];
   const notify = (): void => { for (const f of listeners) { try { f(); } catch (e) { d.report(e); } } };
   const limit = (): number => MAT_LIMIT[d.quality()] ?? 3;
+  let busyMs = FRAME_BUSY_MS;
 
   /** offsets for the extras so that the play body's slot is the origin */
   function offsets(n: number): V3[] {
@@ -96,7 +99,7 @@ export function createMat(d: MatDeps): Mat {
       if (!d.stage.addBody) return 'unsupported';
       if (item && item.itemId !== null && (mat.has(item.itemId))) return 'already';
       if (d.bodies.extras.length + 1 >= limit()) return 'full';
-      if (d.bodies.extras.length > 0 && d.frameMs() > FRAME_BUSY_MS) return 'busy';
+      if (d.bodies.extras.length > 0 && d.frameMs() > busyMs) return 'busy';
       return null;
     },
     add(item) {
@@ -135,6 +138,7 @@ export function createMat(d: MatDeps): Mat {
       notify();
     },
     onChange(fn) { listeners = listeners.concat(fn); return () => { listeners = listeners.filter((f) => f !== fn); }; },
+    setBusyLimit(ms) { busyMs = Number.isFinite(ms) && ms > 0 ? ms : FRAME_BUSY_MS; },
   };
   return mat;
 }

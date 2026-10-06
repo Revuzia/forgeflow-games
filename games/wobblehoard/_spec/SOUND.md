@@ -1,8 +1,10 @@
 # WOBBLEHOARD — sound design and measurements
 
 **Nobody has listened to any of this yet, including the round-3 music bed and its fix (the room dips, the breathing pad,
-the louder strand, the retuned bubbles) and the audio-4 fix (the music held down while you play instead of pumping, the
-slow-onset dips, the 12 ms clear-the-way delay, the strand's corrected AM, the unlock retry).** The machine that built it has no speakers and no human ears were involved.
+the louder strand, the retuned bubbles), the audio-4 fix (the music held down while you play instead of pumping, the
+slow-onset dips, the 12 ms clear-the-way delay, the strand's corrected AM, the unlock retry) and the CUT round (the slice, the
+separation pop, the rejoin "blorp" and the whole-again flourish; the pad's dip and the clearing delay at a music volume above
+the default).** The machine that built it has no speakers and no human ears were involved.
 Every claim below is a measurement (levels, durations, pitch trajectories, spectrograms viewed as images) or a design
 intent. "Sounds soft/wet/cute" is **unverified**; the checklists at the end are for the first person who plugs in
 headphones. Treat the numbers as "the synthesis does what the design says", not as "it sounds good".
@@ -22,10 +24,12 @@ downloaded or copied waveforms; the designs are ours and are not modelled on any
 | `src/audio/engine.ts` | `createAudio(opts?)`: lazy context, polyphony cap, stealing, settings, stats, pause; round 3: music sessions + ducking, bump limiter, held strand |
 | `src/audio/music.ts` | round 3: the generative music bed. `Composer` (pure, seeded score) + `MusicBed` (one playing session: lookahead scheduler, pad, felt mallet with its own echo, bubble graces, duck, fades) |
 | `src/audio/interact.ts` | round 3: `bump`, `BumpLimiter`, `lift`, `toss`, `strand` (held), `strandSnap` |
+| `src/audio/cut.ts` | CUT round: `cutSlice` (cut phase 'start'), `cutPop` (phase 'separate'), `rejoin` (+ `all`), the six cut flavours (`FAMILY_FLAVOUR`), `CutLimiter` |
 | `_harness/probe_audio.mjs` | gate G2 + sanity + engine stress (Chromium). `node _harness/probe_audio.mjs` (add `--voices=poke,pop` to iterate; `--no-engine` skips the ~2 min live part, `--no-ceremony` skips the round-2 gates, `--skip-voices` skips round 1, `--no-round3` skips round 3, `--only3` runs only round 3; audio-4 fix: `--no-room` skips the real-engine room checks, `--only-room` runs only them; a full run takes ~10 min on an idle machine, 30+ on this loaded container) |
 | `_harness/audioview/engine_offline.js`, `play_scenarios.mjs`, `room_checks.mjs` | audio-4 fix: the REAL engine (`createAudio()`) run on an OfflineAudioContext with its timers locked to the audio clock (adapted from the independent audio-3 verifier's driver), seeded play scenarios (continuous, sparse, bursts, isolated placements) and the gates on them: pumping, isolated separation, the exposed gate, the clear-the-way latency |
+| `_harness/audioview/cut_checks.mjs` | CUT round: the gates of the cut / rejoin voices (levels and clicks over every flavour, piece size, neck and calm; what the parameters do; each family distinct; calm softer; the rate limit, pure and through the real engine; separation from the music through the real engine at music 0.45 and 1). `node _harness/probe_audio.mjs --only-cut` runs only them (~10 min on this loaded container), `--no-cut` skips them; a full run includes them |
 | `_harness/audioview/` | `index.html` sound lab (live engine, buttons/sliders, ceremony controls; round 3: music toggle + volume, bump/lift/toss, hold-to-stretch strand), `view.js` offline render API (voices, full ceremonies, duck; round 3: `renderMusic`, `renderMix`, `simulateMusic`, `composeOnly`, `bumpLimiterRun`), `engine_tests.js`, `engine_tests3.js` (round-3 live engine), `ceremony_checks.mjs` (round-2 gates), `music_checks.mjs` (round-3 gates), `analysis.mjs` (FFT, metrics, pitch tracker, spectral peaks/spread, PNG/WAV writers) |
-| `_harness/_renders/` (gitignored) | per voice: `<v>.wav`, `<v>.png` spectrogram, `<v>_min/_max.wav`, `<v>_pitch0.80/1.25.wav`; `all_voices.wav` (every voice in order, 0.5 s apart); `report.json`, `engine_report.json`; round 2: `reveal_<tier>.png/.wav`, `reveal_mythic_v0..2`, `ceremony_capsule_<tier>`, `ceremony_merge_<tier>`, `merge_charge_*`, `meterFull`, `capsule_*`; round 3: `music_seed1_90s.wav`, `music_seed2_90s.wav`, `music_seed1_30s.png`, `music_seed2_30s.png`, `music_startstop.png`, `music_duck.png`, `mix.wav/.png`, `bump/lift/toss/strand/strandSnap.wav/.png`, `strand_orphan.png`, `round3_voices.wav`, `engine_report3.json`; round-3 fix: `mix_sweep.wav/.png` (music + effects at random pitch and timing), `mix_sweep_music.png` (the music stem with its room dips), `music_room.png`, `strand_real.png` (the strand alone at realistic call rates); audio-4 fix: `room_sparse_music.png` (the music stem under sparse play, real engine), `room_sparse_mix.wav`, `room_bursts_mix.wav` (master output of sparse / burst play with the music), `room_sparse_gain.csv` (the music's gain over the music alone, 50 ms frames) |
+| `_harness/_renders/` (gitignored) | per voice: `<v>.wav`, `<v>.png` spectrogram, `<v>_min/_max.wav`, `<v>_pitch0.80/1.25.wav`; `all_voices.wav` (every voice in order, 0.5 s apart); `report.json`, `engine_report.json`; round 2: `reveal_<tier>.png/.wav`, `reveal_mythic_v0..2`, `ceremony_capsule_<tier>`, `ceremony_merge_<tier>`, `merge_charge_*`, `meterFull`, `capsule_*`; round 3: `music_seed1_90s.wav`, `music_seed2_90s.wav`, `music_seed1_30s.png`, `music_seed2_30s.png`, `music_startstop.png`, `music_duck.png`, `mix.wav/.png`, `bump/lift/toss/strand/strandSnap.wav/.png`, `strand_orphan.png`, `round3_voices.wav`, `engine_report3.json`; round-3 fix: `mix_sweep.wav/.png` (music + effects at random pitch and timing), `mix_sweep_music.png` (the music stem with its room dips), `music_room.png`, `strand_real.png` (the strand alone at realistic call rates); audio-4 fix: `room_sparse_music.png` (the music stem under sparse play, real engine), `room_sparse_mix.wav`, `room_bursts_mix.wav` (master output of sparse / burst play with the music), `room_sparse_gain.csv` (the music's gain over the music alone, 50 ms frames); CUT round: `cut_slice.png/.wav`, `cut_pop`, `rejoin`, `rejoin_all` (the canonical calls), `cut_gel` / `cut_sticky` / `cut_foam` / `cut_beads` / `cut_dough` / `cut_firm` `.png/.wav` (a whole cut per flavour: the slice, then the separation pop), `cut_storm.png/.wav` (10 cuts in 2 s through the real engine), `cut_story_mix.wav/.png` (six cuts, three rejoins and whole again over the music, real engine), `cut_voices.wav` (every CUT render in order, 0.5 s apart) |
 
 ## Master chain
 
@@ -464,8 +468,12 @@ carry about equal energy, the pad's spread over time (it breathes and fills rest
   `roomClearDelay`, `ROOM_*`); the engine and the offline mix renders call the same functions.
 * **How deep.** The melody (mallets, echoes, bubbles: tonal transients in the effects' own band, the part that most often
   covers a soft effect) dips 24 dB, the pad 0.72 of that in dB (17.3 dB), so a soft dark carpet stays under the play. With
-  the music slider above 0.45 the dip deepens by the music's extra gain (at 1: 30 dB / 21.6 dB), so the music under an effect
-  is never louder than at the default level. (Unchanged by the audio-4 fix.)
+  the music slider above 0.45 both dips deepen by the music's whole extra gain (at 1: 30 dB / 23.3 dB), so the music under an
+  effect is never louder than at the default level. CUT-round fix: the pad used to deepen by only 0.72 of the extra gain (at 1:
+  21.6 dB, i.e. 1.7 dB louder under an effect than at the default level, which contradicted this rule); now its share follows
+  the volume (`music.ts roomPadShare`: the full pad dip is 0.72 x ROOM_DB - boost, a partial dip keeps the proportion).
+  Probe: at music 1 the pad and the melody under a full dip sit at their default-volume level (see "Cut and reconnect",
+  measured).
 * **How fast down.** Attack time constant 1.5 ms for the melody (a note already ringing is the masker to remove), 6 ms for
   the pad (a sustained chord cut in 1.5 ms showed a splatter stripe at every dip onset in the spectrogram), starting 4 ms
   before the effect (the engine schedules every effect that far ahead of the call).
@@ -481,7 +489,11 @@ carry about equal energy, the pad's spread over time (it breathes and fills rest
     Before, a soft pop landing ~25 ms after a note began measured 8.4 LU over its loudest 20 ms frames: the frames that
     straddle its onset still held the undipped note (no causal dip can remove what was heard before the call). During play
     the music is already down and effects keep the 4 ms lookahead; slow-onset voices never wait. **Cost: the first tap after
-    a rest sounds 12 ms later than the others** (probe: 16.0 / 4.0 / 4.0 ms for music up / down / off).
+    a rest sounds 12 ms later than the others** (probe: 16.0 / 4.0 / 4.0 ms for music up / down / off). CUT-round fix: the
+    wait grows with the music volume above its default (`ROOM_CLEAR_S x (1 + boost / 6 dB)`: 24 ms at music 1, probe 28 ms
+    after the call), because at the slider's top two large, low-pitched pops onto a pad that was up still sat under it after
+    the pad fix (the independent verifier's music-1 placements; numbers in "Cut and reconnect", measured). The separation
+    pop and the rejoin wait the same way.
 * **How it comes back (audio-4 fix).** After the last hold the music returns **dB-linearly** (a fade: 24 dB in 2.0 s on the
   melody, 17.3 dB in 2.0 s on the pad, `ROOM_RETURN_S`), built from 0.2 s `setTargetAtTime` steps toward that line (setTarget
   only, so a later re-plan can take over anywhere without a jump). It was an exponential release (time constants 0.6 / 0.9 s),
@@ -748,6 +760,256 @@ inside the tap, and it runs.
 of its depth 33 ms after the call; back within 1 dB 1.90 s after the hold ends (before 1.88 s), at most 0.32 dB per 20 ms
 (before 1.04: the old exponential release's first jump), untouched outside (0.000 dB); staircase -17.3 / -4.3 / -0.00 dB.
 
+## Cut and reconnect (CUT round): the slice, the separation pop, the rejoin, whole again
+
+**Unheard, like everything else here.** `_spec/CUT.md` sections 1-4: a squishy is sliced along a swipe (the waist pinches for
+about 0.25 s, the pieces part), pieces can be cut again, and pieces flow back together one by one or all at once. Every claim
+below is a measurement from rendered samples or a spectrogram PNG I looked at; "wet", "stringy", "crisp", "muffled", "gloopy"
+and "gentle" are design intents, not findings. The recipes are our own; nothing is sampled or modelled on the reference clip.
+
+### API (optional members of `SquishAudio`, exactly the signatures in `src/contracts.ts`, marked CUT)
+
+| Member | What it does |
+|---|---|
+| `cut?({ phase: 'start', frac, neckS?, family?, pan?, calm? })` | The waist starts to form: a wet slice that lasts `neckS` (default 0.25 s, clamped 0.08-1.5 s) and climbs in pitch as the waist thins. `frac` = the smaller piece's fraction of the whole squishy (0.05..1; smaller = a little higher and lighter), `family` = the material family id (src/data/materials.ts; unknown = jelly gel). |
+| `cut?({ phase: 'separate', frac, family?, pan?, calm? })` | The pieces part: a soft pop with 1-3 tiny bubbles; its pitch follows `frac` (1/8 of the whole sounds x1.74 higher than a half). |
+| `rejoin?({ frac, all?, pan?, calm? })` | Two pieces flowed together: a gloopy "blorp" sized by `frac`, the merged piece's fraction of the whole (bigger = lower, longer, fuller). `all: true`: the squishy is whole again; adds a gentle rising flourish. |
+
+`stats().started` gained `cut` (slices), `cutPop` (separation pops) and `rejoin`; `detailStats().throttled` gained `cut` and
+`rejoin` (calls the rate limiter swallowed). Both voices go to the plain bus (`squishBoost` does not change them) and make room
+in the music like every other effect (`registerFx`, the 4.5 s activity hold). The CUT kinds take their per-kind starting phase
+from a stream of their own, so adding them changed none of the earlier voices' per-call seeds (a session with the same seed and
+no cuts is bit-for-bit what it was; the probe's pumping numbers below are identical to the audio-4 ones).
+
+### Flavours (CUT.md section 3)
+
+| Flavour | Families | Slice | Separation pop |
+|---|---|---|---|
+| gel (crisp) | jellygel, gummy, waterfill | a bright tear 750 -> 2100 Hz (Q 4.5), short clean grains 70 -> 420 /s, a lively bubble stream (38 /s), short tail (0.14 neck) | a clean, bright plup, breath of air |
+| sticky (longer, stringier) | stickystretch, slimegoo | a lower, wetter tear 430 -> 1350 Hz, many bigger (lower) bubbles (72 /s, x1.4 radius), and a stick-slip string from 0.3 of the neck that keeps stretching to 1.85 necks (560 -> 1500 Hz, slips 22 -> 95 /s) | softer, lower plup with a 130 ms stringy creak climbing behind it |
+| foam (muffled) | slowrise, marshmallow | everything under a 1.1 kHz low-pass: a soft, slow tear 380 -> 1050 Hz, few bubbles | a puffy, low-passed pop |
+| beads (a slight crunch) | beadsqueeze | a darker, wider, gritty tear 450 -> 1250 Hz (Q 2.5) with 16 bead ticks (2.1-3.4 kHz decaying sines, 3-6 ms) scattered through it | 3-5 bead ticks on the pop |
+| dough (slow, sharp, dry) | putty, mochidough | a dense, dry tear (1.1 ms grains up to 560 /s, Q 5), almost no water, 3.2 kHz low-pass | a dull pop |
+| firm (it resists) | firmsilicone, popdome | a tight, high tear 950 -> 2600 Hz (Q 6) with a short rubbery squeak (1250 -> 2500 Hz, fast slips) late in the neck; the shell gives it the longer 0.4 s neck | a snappy pop with a quick recoil flick |
+
+### The slice (`cut.ts cutSlice`, phase 'start')
+
+* **Tear.** Seeded noise feeds (a) a continuous hiss (0 -> 0.3 at 0.3 of the neck -> full at 0.9) and (b) a Poisson stream of
+  torn-fibre micro-grains (1.1-4 ms, 30% attack; rate accelerating from the flavour's low to its high rate with progress^1.4;
+  each 0.6-1 x the progress envelope 0.07 + 0.93 u^1.3, so about -20 dB of its peak a tenth of the way in), both through one
+  band-pass whose centre glides exponentially from the flavour's low to its high band edge x size (start capped at 1.6 kHz, top
+  at 3 kHz) over the neck: the pitch rises as the waist thins. The grains gate the noise before the filter (gating after it
+  smeared every grain down to 50 Hz in the first spectrograms).
+* **Squelch.** The same noise with an irregular flutter (13-19 Hz and 23-31 Hz) through two formants at 0.5x (Q 6) and 1.15x
+  (Q 5) of the tear band, climbing with it; up to 0.25 at 0.3 of the neck, full at 0.88, then an exponential fade over the tail.
+* **Bubbles.** A Poisson stream (rate x 0.3 -> 1 over the neck), at least two per slice; radii 1.2-4 mm x (1.25 -> 0.7 over the
+  neck) / size, so they rise as it thins; never smaller than 1 mm.
+* **String** (sticky, firm) and **crunch** (beads) as in the table. Through a 160 Hz high-pass and the flavour's low-pass.
+* **Size and speed.** Size = (0.5 / frac)^0.25 x the +/-3% per-call jitter (1/8: x1.41); a smaller piece is also a lighter
+  slice (level x (frac / 0.5)^0.12: -1.4 dB at 1/8), a quick neck a little snappier ((0.25 / neckS)^0.15: +1 dB at 0.12 s).
+* **Room.** It builds over the neck, so it declares an onset (0.1 of the neck, about -20 dB of its peak): the music's dip waits
+  for that. A later dip (0.3 of the neck, where it is within ~10 dB) was tried and measured: a muffled slice's early part then
+  sat over the full music (in-band 9.0 dB at music 0.45 and 1.3 dB at music 1, isolated cuts), so the music makes way as the
+  slice is first heard and its exposed gate is reported, not gated (like the toss).
+
+### The separation pop (`cutPop`, phase 'separate')
+
+* **Plup:** a [1, .28, .08] tone at 880 Hz x size x flavour (0.88-1.18; <= 2.6 kHz) gliding 0.8 -> 1.12 of that (time
+  constant 12 ms): a rounded blip rising as the cavity between the pieces opens, no hard click; attack 0.8-3.5 ms, decay 11-26
+  ms by flavour. Size = (0.5 / frac)^0.4: 1/8 x1.74, 1/4 x1.32, 1/2 x1, whole x0.76.
+* **Body:** the pieces spring apart: a [1, .45, .15] thump at 175 Hz x sqrt(size x flavour), falling x0.72 (20 ms), 0.55 of the
+  plup's level, decay 18 ms; it sits below the music's register (the pad starts at D4, 294 Hz).
+* **Air:** band-passed noise at 1.5 kHz x size, 8 ms (none when calm). **Flavour:** as in the table.
+* **Bubbles:** 1-3 (calm 1-2), radius 0.9-2 mm / size^0.6, never above 4.2 kHz, 18-80 ms after the pop.
+
+### The rejoin (`rejoin`)
+
+* Size z = (frac / 0.5)^0.35 (whole: 1.27, 1/8: 0.62); the tone settles near 1.05 x 290 Hz / z (measured: whole 246 Hz, 1/8
+  527 Hz); length 0.22 + 0.22 frac s; level -17 .. -13.5 dB (dry) by sqrt(frac).
+* **"bl"**: the necks touch: 3 + round(3 frac) merge bubbles (1.8-3.6 mm x sqrt(z), under ~2.3 kHz even as they chirp) in the
+  first 50 ms, and a soft squelch (noise band-passed 1000 / z -> 480 / z Hz in 70 ms, Q 2.5, low-passed 1.6 kHz; 5 ms attack).
+* **"orp"** (from 12 ms): a [1, .5, .22, .09] tone at 1.32 x the pitch gliding down to it (30 ms) and settling 5% up, through a
+  low-pass closing 2400 / z -> 700 / z Hz (the blob darkening), wobbling (13 - 4 frac Hz, depth 0.32 dying away in ~0.12 s);
+  attack 8 ms (calm 20). **"p"**: one closing bubble (2.5-3.5 mm) at 0.7-0.85 of its length.
+* **Whole again (`all`)**: from 0.16 s a run of six tuned bubbles D5 E5 F#5 A5 B5 D6 (the music's own bubble, 1% settle; D major
+  pentatonic, inside the collection every music field uses) 65 ms apart, over a soft glow from 0.28 s (D5 + A5 sines, 4.8 Hz
+  +/-6 cent vibrato) that swells for 0.25 s and has faded 0.95 s after it began (the voice ends about 1.25 s after the call). Calm: four bubbles, 85 ms apart, softer and shorter. It has nothing of the
+  merge ceremony burst (no noise "foomp" or crack, no bells, no tier motif) and nothing of the blender's bell flourish (no
+  inharmonic partials).
+
+### Rate limit and calm
+
+* **`CutLimiter`** (pure; the engine keeps one for cuts and one for rejoins): slices at least 0.1 s apart, a burst of 3 then
+  1.5 per second; separation pops 0.06 s apart, 3 then 1.5 /s; rejoins 0.08 s apart, 3 then 3 /s. Each accepted call of the same
+  kind in the last 1 s (rejoins 0.6 s) makes the next one softer (x 1 / (1 + 0.3 n); rejoins 0.25 n). Whole again always plays,
+  but not twice within 0.6 s. The engine also keeps the slice monophonic: a new slice fades the one still sounding (40 ms).
+* **Calm** (DESIGN 6.6): 4 dB softer (the pop 6 dB), slower grain edges, darker (slice low-pass <= 3 kHz, pop <= 1.4 kHz), fewer
+  bubbles, no breath of air, softer ticks and string, slower rejoin attack, a shorter and softer flourish.
+
+### What was measured (CUT round)
+
+`node _harness/probe_audio.mjs --only-cut` runs this round's 63 checks (64 with the page-error check; ~10 min on this loaded
+container); a full run includes them. Last full run: **641 of 643 checks pass** (the 573 of the audio-4 fix + 70 new: 63 CUT
+checks, the music-volume-1 pad check, the music-volume-1 latency check, 4 live-engine CUT checks in `engine_tests3.js` and the
+lab page's CUT row). The two failures are the load-sensitive live playout checks again (round 1 "30 taps/s": 2 fallback events,
+20 ms over 7.5 s; round 3 "9 s realistic session": 2 events over 9.0 s), with the container at a load average of 12-15 from the
+other lanes; neither plays a CUT voice. Re-run right after on the same code, both groups passed in full: the round-1 live engine
+group 51/51 (0 fallback events over 7.6 s) and a round-3-only run 190/190 (0 fallback events over 9.0 s).
+
+**Levels** (post-chain, master 1; canonical: jelly gel, frac 0.5, neck 0.25 s; the "whole space" is every flavour x piece size
+x neck x calm, two seeds each, plus 12 seeds at the canonical call):
+
+| Voice | peak | active RMS | active | whole space: peak (renders) | max step | > 6 kHz |
+|---|---|---|---|---|---|---|
+| slice | -12.8 dBFS | -26.6 | 240 ms | -18.9 .. -5.3 (228) | 0.185 | <= 2.19% |
+| separation pop | -11.0 | -23.9 | 75 ms | -17.8 .. -9.4 (108) | 0.112 | <= 0.07% |
+| rejoin (frac 0.5) | -9.2 | -25.3 | 280 ms | -16.3 .. -7.5 (32) | 0.052 | 0.00% |
+| rejoin all | -6.8 | -24.2 | 850 ms | -13.7 .. -7.2 (18) | 0.049 | 0.00% |
+
+Every render: start/end sample and the steps within 2 ms of either end 0.000-0.035 (wet and dry; gate 0.25), tail at the
+declared end -101 dBFS or lower, |DC| < 1e-5, finite with hostile arguments, pan -1 >= 211 dB left, the same seed identical to
+1e-5. (Before the band and bubble caps a small, firm or gel piece's loudest moment reached a 0.248 sample step: high-frequency
+noise at -6 dBFS, not a click, but too close to the gate; the caps and the lighter small pieces brought it to 0.185.)
+
+**What the parameters do.** The slice's centroid (250-5000 Hz) over the last third of the neck vs the first: gel x1.61, sticky
+x1.25, foam x1.47, beads x1.46, dough x1.84, firm x1.54 (gate >= 1.2). Its span within 30 dB of its loudest 10 ms follows the
+neck: 0.18 / 0.27 / 0.49 / 1.00 s for necks of 0.15 / 0.25 / 0.5 / 1.0 s. The pop's plup by piece size 1/8, 1/4, 1/2, whole:
+1559, 1207, 926, 703 Hz (monotonic; 1/8 vs 1/2 x1.68); the slice's centroid 2672, 2373, 2098, 1788 Hz. 1-3 bubbles after every
+pop (1-2 calm), every flavour x 20 seeds. The rejoin by merged fraction 1/8, 1/4, 1/2, whole: 527, 410, 316, 246 Hz, 0.24 ->
+0.38 s. Whole again: the run measures 585.8 / 658.3 / 739.5 / 878.1 / 987.6 / 1175.6 Hz (D5..D6, -4..+1 cents) and lasts 0.5 s
+longer than a plain rejoin. Not the merge burst: 2.5-8 kHz energy in the first 30 ms 38.9 dB under the burst's (both at their
+own levels), 1/3-octave profiles 28.0 dB (whole again) and 21.4 dB (rejoin) RMS apart.
+
+**Each family distinct.** Slice spectra (3 seeds averaged) pairwise 3.8-17.7 dB RMS apart (closest sticky/dough; gate 3 dB);
+pop spectra 4.0-13.5 dB (closest gel/firm; gate 2 dB). Sticky's slice spans 0.44 s against gel's 0.28 s; centroids gel 2241,
+sticky 1254, foam 954 Hz; foam's share of energy above 2 kHz is -22.7 dB (slice) and -26.0 dB (pop) against gel's -2.8 / -3.2
+dB; beads' slice has 5.3 short 2-4.2 kHz transients against gel's 1.0. The thresholds of the two pairwise checks were set before
+measuring; the first design failed them (gel and beads 2.4-2.9 dB apart: the beads' tear was a gel tear with ticks), and the
+beads were redesigned (a darker, wider tear, fewer bubbles, more ticks), not the thresholds.
+
+**Calm.** For every voice and flavour, 3 seeds each: peak and active RMS at least 2.7 dB lower (worst -2.8 dB peak, -2.7 dB RMS;
+gate -2.5), no larger sample step, no higher centroid. (A first calm with longer grains came out as loud as the normal slice in
+dough: a longer grain rings a narrow band up higher. Calm now keeps the grains' length and slows their edges.)
+
+**Rate limit.** Pure: 10 cuts in 2 s (a start and a separate each, 0.2 s apart) play 5 slices at 1.00 / 0.77 / 0.63 / 0.53 /
+0.77 and 5 pops likewise; 6 rejoins in 0.25 s play 3 (1.00 / 0.80 / 0.67) and whole again plays, a second whole again 0.2 s
+later does not, everything is back at full level after 3 s of quiet. Real engine offline (no music): the 10 cuts peak at -8.9
+dBFS against -7.3 for one cut alone, their loudest 0.5 s RMS -25.9 against -27.0 dBFS, at most 3 voice groups alive, 5 slices
+and 5 pops played, 10 calls throttled. Live engine (`engine_tests3.js`): 1500 cut / rejoin / poke calls in 1.6 s with the music
+on played 5 slices, 5 pops and 10 rejoins (590 + 590 throttled), at most 35 groups and 392 nodes, peak 0.541, and drained back
+to 0 groups, 0 nodes and the 10 chain nodes at the API surface; cut / rejoin before `unlock()` are counted no-ops (no context);
+hostile arguments: 0 exceptions.
+
+**Separation from the music** (real engine run offline, `engine_offline.js`; each cut, pop alone, rejoin or whole again placed
+8-9.5 s after the last, onto music at full level; random family, piece size 1/8-1/2, neck 0.18-0.45 s, 25% calm; the probe's
+measures from "What was measured (audio-4 fix)"):
+
+| | placements | in-band worst (median) | K worst (median) | A worst | exposed gate (max, ms) |
+|---|---|---|---|---|---|
+| music 0.45, 3 engine seeds x 200 s | 85 (25 cuts, 34 pops, 16 rejoins, 10 whole again) | 12.0 dB (43.2), a calm rejoin | 12.3 LU (24.7), a calm gel pop | 13.1 dB, 0 under 10 | pop 10, rejoin 27, whole again 30 (gate 40); slice 230 (median 118), reported |
+| music 1, seed 55 x 160 s | 23 | 12.8 dB, a calm marshmallow slice | 13.8 LU | 10.2 dB | |
+
+Per kind at music 0.45 (worst in-band / K / A): slice 15.6 dB / 15.9 LU / 17.1 dB, pop 17.7 / 12.3 / 17.0, rejoin 12.0 / 15.8 /
+13.1, whole again 20.4 / 20.7 / 20.5. The rejoin's "orp" first started 35 ms in: its exposed gate measured 42 ms (whole again
+55 ms); it now starts 12 ms in.
+
+**The music-volume-1 fix** (the independent audio-3 verifier's pre-existing minor). Two changes, each measured on the verifier's
+own music-1 placement set (its scenario 704, engine seed 55, 41 isolated effects, its `ana_place.mjs`), re-run through the real
+engine with identical effect seeds:
+
+| | in-band: worst, under 8 dB | K: worst, under 10 LU | A: worst, under 10 dB | medians in-band / K / A |
+|---|---|---|---|---|
+| before (HEAD) | 4.5 dB (a large, low pop, 630/794 Hz bands), 2 (pops 4.5 and 6.0) | 8.2 LU, 3 | 9.1 dB, 4 | 38.7 / 22.3 / 19.8 |
+| pad dip = 0.72 x ROOM_DB - boost only | 4.7 dB, 2 (4.7, 6.2) | 8.6 LU, 2 | 9.4 dB, 1 | 40.1 / 23.4 / 21.5 |
+| + clearing delay x2 at music 1 (this code) | 12.5 dB, 0 | 10.2 LU, 0 | 9.4 dB, 1 (a strand) | 43.0 / 25.9 / 24.1 |
+
+The pad fix alone moved those two pops by only 0.2 dB: what covered them was the undipped pad of the 15-25 ms before and around
+the call (for the first of them the pad was up with the lift field's F#5, 740 Hz, in the pop's own band), which no dip can
+remove; at music 1 that pad is 6 dB louder. Doubling the clear-the-way delay at music 1 (24 ms instead of 12) gives the pad's 6 ms dip time to act first.
+Probe: the pad and the melody under a full dip at music 1 sit at their default-volume level (0.00 / -0.00 dB; the pad's dip
+-23.28 dB = 0.72 x ROOM_DB - 6); a poke onto music that is up starts 28.0 ms after its call at music 1 (16.0 at the default,
+4.0 with the music down or off). The probe's own isolated music-1 set (17 placements): in-band worst 16.3 dB (was 11.2), K 19.1
+LU (was 14.9), A 10.6 dB (was 6.7); the round-3 renderMix sweep at music 1: in-band 13.5 dB (was 11.8), K 13.1 LU (was 12.1).
+
+**Pumping still holds.** At the default volume nothing changed (the probe, engine seed 11: sparse / bursts / dense gain std
+2.09 / 2.23 / 2.14 dB, 1 s loudness change p90 6.0 / 6.3 / 6.0 LU against 9.8 for the music alone, back within 1 dB 6.74 / 6.57 /
+6.49 s after the last effect: identical to the audio-4 numbers). At music 1 (the verifier's scenarios and its `ana_pump.mjs`,
+before -> after): sparse std 2.49 -> 2.12 dB, dip-and-swell cycles 18 -> 9 /min, 1 s change p90 5.4 -> 6.0 LU; bursts 2.61 ->
+2.27 dB, 18 -> 11 /min, 5.7 -> 6.3 LU; dense 2.55 -> 2.19 dB, 18 -> 9 /min, 5.4 -> 6.0 LU (music alone 9.8 LU); the music's
+level during play (p50 of its gain over the same music alone) -22.2 -> -23.9 dB: 6 dB deeper than at the default volume
+(-17.9 dB), so under play the music sits at the same absolute level whatever the slider says.
+
+### Findings that shaped the CUT round
+
+* **Gate the noise before the band-pass.** Torn-fibre grains gated after the filter spread every grain down to 50 Hz (vertical
+  stripes in every slice spectrogram); gating the noise first keeps each grain inside the climbing band.
+* **The loudest moment of a noisy voice is a max statistic.** The first slices ranged 12 dB in peak over the parameter space
+  (random grains, sometimes no bubble at all in a short neck): the level now rides on the continuous hiss and squelch, the grains
+  vary 0.6-1 instead of 0.35-1, there are always at least two bubbles, and a quick neck / a big piece are trimmed by +-1 dB.
+* **A dip that waits for a building sound costs separation.** See the slice's room above (9.0 / 1.3 dB in-band).
+* **A fixed starting-phase draw per voice kind shifts every seed.** Adding three kinds to the engine's per-kind round-robin
+  consumed three more draws of the engine's seeded stream at creation and changed every later voice's per-call seed (the
+  first comparison with HEAD differed in every effect). The CUT kinds now draw from a stream of their own.
+* **At music 1 the pad was not what covered the low pops.** See the table above: the pre-call pad was.
+
+### When the shell should call what (CUT)
+
+| Call | When | From |
+|---|---|---|
+| `cut({ phase: 'start', frac, neckS, family, pan, calm })` | once, when the waist starts to form (the shell starts `setNeck`) | `frac` = the smaller side's share of the WHOLE squishy (`measureCut` of the body x the body's own `frac`), `neckS` = the neck time the shell animates (about 0.25 s; 0.4 s for firm silicone and pop dome), `family` = the genome's material family id, `pan` = `panOfPoint(cut centre)`, `calm` = Calm effects |
+| `cut({ phase: 'separate', frac, family, pan, calm })` | once, when the neck parts (the t = 1 swap to two pieces) | same values |
+| `rejoin({ frac, pan, calm })` | each time a piece has flowed into another (the giver removed) | `frac` = the merged piece's share of the whole |
+| `rejoin({ frac: 1, all: true, pan, calm })` | once, when the squishy is whole again (the end of Reconnect all, or the reconnect that makes it whole); the per-piece merges of Reconnect all may call `rejoin({ frac })` each: the limiter keeps 3 | |
+| nothing | a refused cut (too small, too many pieces), the instant reconnect when the squishy is off screen | |
+
+The separation pop of sticky and slime already carries a short stringy creak, and the slice a stretching string: do not also
+drive `strand()` for the strand drawn between the parting pieces (the two would double up).
+
+### What a human should listen for (CUT)
+
+Play `cut_gel.wav`, `cut_sticky.wav`, `cut_foam.wav`, `cut_beads.wav`, `cut_dough.wav`, `cut_firm.wav` (a whole cut each: the
+slice, then the pop), `rejoin.wav`, `rejoin_all.wav`, `cut_storm.wav` (10 cuts in 2 s) and `cut_story_mix.wav` (six cuts, three
+rejoins and whole again over the music), or use the "Cut and reconnect" row of the sound lab.
+
+- [ ] **Slice**: does it read as a wet jelly being cut (a squelchy tear whose pitch climbs as the waist thins), or as paper
+      tearing, static, or a zipper? Does its length feel tied to the pinch on screen?
+- [ ] **Families**: gel crisp, slime long and stringy, marshmallow muffled, beads with a slight crunch, putty dry and dense, pop
+      dome rubbery: can you tell them apart blind? Is the slime's string charming or a creaky door?
+- [ ] **Separation pop**: a soft "plup" as the pieces part, not a drum hit, a thud or a UI click? Does a small chunk sound
+      smaller (higher) than a half? Are the 1-3 tiny bubbles a nice wet tail or fussy?
+- [ ] **Rejoin**: a gloopy "blorp" (two blobs flowing into one), not a burp, a boing or a drum? Do bigger merges sound bigger?
+- [ ] **Whole again**: a gentle, rising "complete" flourish that is clearly not the merge ceremony or the blender's finish? Is
+      the soft glow under it too long or too sweet? In tune with the music when it is on?
+- [ ] **10 quick cuts**: does it thin out and soften gracefully, or does the cut-off of the previous slice sound chopped?
+- [ ] **Calm**: softer and rounder, still clearly the same family?
+- [ ] **Music**: the music makes way as the slice starts (it waits until the slice is first heard). Does the dip ever arrive
+      noticeably before the slice is audible?
+
+### Known issues (CUT round)
+
+* CUT: **unheard.** Every word of character above ("wet", "stringy", "crisp", "muffled", "gloopy", "gentle") is a design intent.
+* CUT: **the slice's exposed gate is reported, not gated**: the music is >= 8 dB down up to 230 ms (median 118) before a slice is
+  within 10 dB of its own peak, because the slice builds over the whole neck and the dip starts when it is first heard (about
+  -20 dB). A later dip failed the in-band gate (above). Whether the music audibly leaves before the slice is there is unverified.
+* CUT: **no `pitch`**: the contract's `cut` / `rejoin` take no genome pitch ratio, so a big and a small squishy cut the same way
+  apart from the piece's fraction. An optional `pitch?` on both (additive) would let them follow the genome like every other
+  voice; not added (contracts.ts is not in the audio lane).
+* CUT: **one slice at a time**: two squishies cut within one neck time share the slice (the first is faded in 40 ms). Slices and
+  pops have separate token buckets: a throttled slice can still get its pop, and the other way round.
+* CUT: `frac` must be the share of the WHOLE squishy; a piece's body-local share would make pieces of pieces sound too big.
+* CUT: the dough (putty, mochi) and firm (silicone, pop dome) flavours are my reading of CUT.md section 3; the brief named only
+  gel, sticky, foam and beads.
+* CUT: the separation pop's body (175 Hz x size) is below what phone speakers play; its plup (700-1560 Hz) and partials carry it.
+* CUT: whole again is tuned to D major pentatonic without the per-call jitter (in tune with every music field); its soft glow (a
+  sustained fifth for ~1 s) may read as too sweet. The tuned bubbles show the same broadband onset stripes in a spectrogram as the
+  music's own bubbles (no click by the probe's step measures).
+* CUT: the rejoin glides down like the poke's and the land's bodies, slower and with merge bubbles and a wobble; on a phone
+  speaker it may still be heard as a slow "thup".
+* CUT: muted cut / rejoin calls still spend the limiter's tokens (harmless: nothing plays).
+* Music-volume-1 fix: at music 1 the first fast effect after a rest now sounds 24 ms later than the others (28 ms after its
+  call instead of 4; at the default level 12 ms later, as before). The verifier's music-1 set still has one A-weighted placement under 10 dB (a strand, 9.4 dB) and
+  its worst K-weighted placement is 10.2 LU; these were not changed.
+
 ## What a human should listen for (first listen)
 
 Play `_harness/_renders/all_voices.wav` (poke, squish, release, land, pop, blend, 0.5 s apart) and the `_min` / `_max` /
@@ -835,6 +1097,7 @@ snap), or use the round-3 row of the sound lab (music toggle and slider, Bump, L
 ## Known issues and caveats
 
 * Unverified by ear (above). All tuning was done from spectrograms and numbers.
+* CUT round: the cut and rejoin voices have their own list, "Known issues (CUT round)" in "Cut and reconnect".
 * The chain's compressor is Chromium-tuned (release 12 ms). Other browsers' `DynamicsCompressorNode` may treat very short
   events differently; levels could differ by a few dB for the 2-5 ms pop click. Not tested outside Chromium 141.
 * Headless playout has a null sink: "0 fallback events" is evidence for the 30 taps/s case on this container, not a
@@ -873,6 +1136,9 @@ snap), or use the round-3 row of the sound lab (music toggle and slider, Bump, L
   K-weighted 1 of 67 placements falls under 10 LU (worst 9.2 LU: a 0.3 land, the same kind of onset collision with a 6 dB louder pre-onset note).
   (Audio-4 fix: the verifier then found 2.8 LU (a soft release on a ringing note) and the new isolated test 5.0 LU (a bump);
   with the 12 ms clear-the-way delay they measure 13.5 and 13.8 LU, and the sweep 12.1 LU, 0 of 67 under 10.)
+  (CUT round: the verifier's music-1 set still had two large, low-pitched pops at 4.5 / 6.0 dB in-band and the pad's dip
+  deepened by only 0.72 of the boost; the pad now dips by the whole boost and the clearing delay doubles at music 1: 12.5 dB
+  worst in-band on that set, 0 under 8 dB; see "Cut and reconnect", measured.)
 * Round 3: the loudness check is my own definition (K- and A-weighted level of the effect over the music, summed over the
   effect's own loudest 20 ms frames, within 10 dB of its loudest). EBU short-term loudness (3 s) would dilute a 45 ms pop to
   nothing; a 100 ms window caps short effects because it includes undipped music before the onset. Gating every placement

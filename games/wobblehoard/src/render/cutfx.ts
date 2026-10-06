@@ -1,8 +1,8 @@
 // CUT visuals (_spec/CUT.md section 4, RENDER): what the stage draws BETWEEN bodies while a squishy is cut and put back together.
 //   * the PARTING STRAND (StageLike.partPieces): right after the swap at neck t = 1 a strand of the same jelly hangs between the two new
-//     pieces, stretches as they separate, thins (its volume is conserved), necks and SNAPS, both halves springing back (a few tiny bubbles).
+//     pieces, stretches as they separate, thins (its volume is conserved), necks and SNAPS, both halves springing back into their pieces.
 //     How far it stretches is the family's tack x stringiness (resolveMaterial(...).physics): long for sticky stretch and slime, barely
-//     there for gel; calm effects halve it. The tack-strand renderer's look (strands.ts), drawn between two moving anchors.
+//     there for gel; calm effects halve it. Drawn with the tack-strand renderer (strands.ts StrandTube) between two moving anchors.
 //   * the RECONNECT BRIDGE (StageLike.setBridge): a glowing neck of the jelly between two bodies, thin at t = 0+, as thick as the smaller
 //     body's waist at t = 1, flaring where it joins each body, with a soft warm glow spot on each body where it joins (uSpot).
 //   * the CUT SEAM itself lives in the jelly shader (uSeam, BodyView.setSeam); this file only carries a seam over from a body that was cut
@@ -12,7 +12,7 @@
 import * as THREE from 'three';
 import type { BodyView } from './bodyview.ts';
 import type { EnvHub } from './env.ts';
-import type { StrandEvent } from './strands.ts';
+import { StrandTube, type StrandEvent } from './strands.ts';
 
 const SEG = 16;          // rings along a tube
 const RAD = 8;           // vertices around
@@ -22,57 +22,21 @@ const PART_MAX_S = 1.1;
 /** Most bridges / strands alive at once (CUT.md: at most 6 pieces, so 5 bridges in a Reconnect all). */
 const MAX_TUBES = 8;
 
-/** A straight tube from A to B with a radius per ring (SEG + 1) and a sag; positions and normals rebuilt in place. */
+/** One pooled tube of the shared strand renderer (strands.ts StrandTube) with its own material: a thin piece of the same jelly. */
 class Tube {
-  readonly mesh: THREE.Mesh;
   readonly mat: THREE.MeshPhysicalMaterial;
-  private readonly geo = new THREE.BufferGeometry();
-  private readonly pos = new Float32Array((SEG + 1) * RAD * 3);
-  private readonly nrm = new Float32Array((SEG + 1) * RAD * 3);
-  readonly radii = new Float32Array(SEG + 1);
+  private readonly t: StrandTube;
+  get mesh(): THREE.Mesh { return this.t.mesh; }
+  get radii(): Float32Array { return this.t.radii; }
 
   constructor(hub: EnvHub) {
-    const idx: number[] = [];
-    for (let s = 0; s < SEG; s++) for (let k = 0; k < RAD; k++) {
-      const a = s * RAD + k, b = s * RAD + ((k + 1) % RAD), c = (s + 1) * RAD + k, d = (s + 1) * RAD + ((k + 1) % RAD);
-      idx.push(a, b, c, b, d, c);
-    }
-    this.geo.setIndex(idx);
-    this.geo.setAttribute('position', new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage));
-    this.geo.setAttribute('normal', new THREE.BufferAttribute(this.nrm, 3).setUsage(THREE.DynamicDrawUsage));
-    this.geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e4);
-    // a thin piece of the same jelly: glossy, see-through, its own colour plus a glow (the colours are set per use, no new material)
+    // glossy, see-through, its own colour plus a glow (the colours are set per use, no new material)
     this.mat = new THREE.MeshPhysicalMaterial({ roughness: 0.12, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.05, transparent: true, opacity: 0.9, depthWrite: false, fog: false });
     hub.apply(this.mat, 1.2);
-    this.mesh = new THREE.Mesh(this.geo, this.mat);
-    this.mesh.frustumCulled = false;
-    this.mesh.renderOrder = 11;   // just after the jellies (10.xx)
-    this.mesh.visible = false;
+    this.t = new StrandTube(this.mat, SEG, RAD);
   }
 
-  build(ax: number, ay: number, az: number, bx: number, by: number, bz: number, sag: number): void {
-    let dx = bx - ax, dy = by - ay, dz = bz - az;
-    const L = Math.hypot(dx, dy, dz) || 1e-4;
-    dx /= L; dy /= L; dz /= L;
-    let ux = -dz, uy = 0, uz = dx, ul = Math.hypot(ux, uy, uz);
-    if (ul < 1e-4) { ux = 1; uy = 0; uz = 0; ul = 1; }
-    ux /= ul; uy /= ul; uz /= ul;
-    const vx = dy * uz - dz * uy, vy = dz * ux - dx * uz, vz = dx * uy - dy * ux;
-    const P = this.pos, N = this.nrm, r = this.radii;
-    for (let s = 0; s <= SEG; s++) {
-      const u = s / SEG, sg = sag * L * 4 * u * (1 - u);
-      const cx = ax + dx * u * L, cy = ay + dy * u * L - sg, cz = az + dz * u * L;
-      for (let k = 0; k < RAD; k++) {
-        const a = (k / RAD) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
-        const nx = ux * ca + vx * sa, ny = uy * ca + vy * sa, nz = uz * ca + vz * sa;
-        const o = (s * RAD + k) * 3;
-        P[o] = cx + nx * r[s]; P[o + 1] = cy + ny * r[s]; P[o + 2] = cz + nz * r[s];
-        N[o] = nx; N[o + 1] = ny; N[o + 2] = nz;
-      }
-    }
-    (this.geo.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
-    (this.geo.getAttribute('normal') as THREE.BufferAttribute).needsUpdate = true;
-  }
+  build(ax: number, ay: number, az: number, bx: number, by: number, bz: number, sag: number): void { this.t.build(ax, ay, az, bx, by, bz, sag); }
 
   /** The jelly colour (linear), its opacity, and a glow (linear rgb x strength). */
   paint(r: number, g: number, b: number, opacity: number, er: number, eg: number, eb: number): void {
@@ -81,7 +45,7 @@ class Tube {
     this.mat.opacity = opacity;
   }
 
-  dispose(hub: EnvHub): void { hub.release(this.mat); this.mat.dispose(); this.geo.dispose(); }
+  dispose(hub: EnvHub): void { hub.release(this.mat); this.mat.dispose(); this.t.dispose(); }
 }
 
 /** The vertex of `v` furthest along (dx, dy, dz) from its centre (its render positions): the skin facing that way. */
@@ -236,7 +200,6 @@ export class CutFx {
         if (ev < this.evPool.length) {
           const e = this.evPool[ev++]; e.finger = 0; e.tension = 0; e.snap = true; e.x = (p.ax + p.bx) / 2; e.y = (p.ay + p.by) / 2; e.z = (p.az + p.bz) / 2;
           this.events.push(e); this.eventBody.push(p.a.id);
-          if (!this.calm && p.drawnLen > 0 && p.r0 > 0.03 * p.a.scale && !p.a.isDisposed) p.a.fx.spawn('bubbles', e, 0);   // a tacky strand breaks with a few tiny bubbles
         }
       }
       const r = p.tube.radii;

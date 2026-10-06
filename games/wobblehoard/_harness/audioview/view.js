@@ -381,7 +381,7 @@ async function renderMix(spec) {
     for (const q of asks) {
       if (q.req) { ask(q.req(q.t)); continue; }
       // the engine's call time: a fast effect onto music that is up was called ROOM_CLEAR_S earlier (engine.ts accept)
-      const call = q.t - M.roomClearDelay(q.kind, bed.roomLevelAt(q.t - M.ROOM_CLEAR_S));
+      const call = q.t - M.roomClearDelay(q.kind, bed.roomLevelAt(q.t - M.ROOM_CLEAR_S * (1 + gdb / 6)), gdb);
       for (const r of M.oneShotRoom(q.kind, call, q.at, q.end, q.onset, gdb)) ask(r);
     }
     bed.pollDuck(secs + 1);

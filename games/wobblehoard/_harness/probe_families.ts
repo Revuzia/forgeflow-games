@@ -180,6 +180,14 @@ for (const fam of ['jellygel', 'firmsilicone', 'gummy'] as const) {
   const p = PR[fam];
   add(`${fam}: recovers within 0.5 s of the release and keeps its volume (SQUISHY_SCIENCE 4: "noise level within 0.5 s", nu ~0.5)`, `shape error at +0.5 s ${f(p.e05)} R (dent ${f(p.peak)}), volume min ${f(p.volMin)}`, '<= 0.03 R, >= 0.97', p.e05 <= 0.03 && p.volMin >= 0.97);
 }
+// 1b. SIGNATURE ROWS of the three firm / elastic families (physics fix round 2, the verifier's MINOR-5: swapping firm silicone's and gummy's
+// physics passed every row, and pop dome had no row of its own). Relative to the gel measured the same way (same press, same body):
+{
+  const g = PR.jellygel, fs = PR.firmsilicone, gu = PR.gummy, pd = PR.popdome;
+  add(`firmsilicone: "pushes back hard, snaps back instantly and keeps rebounding" (materials.ts): gives at most 0.6 x the gel's dent, keeps wobbling (>= 2 visible oscillations), back within 0.4 s`, `dent ${f(fs.dentPeak)} R = ${f(fs.dentPeak / g.dentPeak, 2)} x the gel's ${f(g.dentPeak)}, wobble ${fs.wobble}, back95 ${f(fs.back95, 2)} s`, '<= 0.6 x, >= 2, <= 0.4 s', fs.dentPeak <= 0.6 * g.dentPeak && fs.wobble >= 2 && fs.back95 <= 0.4);
+  add(`gummy: "a quick, slightly sticky spring-back with very little wobble" (materials.ts): gives 0.7..1 x the gel's dent, no visible wobble (<= 1), back within 0.5 s`, `dent ${f(gu.dentPeak)} R = ${f(gu.dentPeak / g.dentPeak, 2)} x the gel's, wobble ${gu.wobble}, back95 ${f(gu.back95, 2)} s`, '0.7..1 x, <= 1, <= 0.5 s', gu.dentPeak >= 0.7 * g.dentPeak && gu.dentPeak <= g.dentPeak && gu.wobble <= 1 && gu.back95 <= 0.5);
+  add(`popdome: "a stiff silicone dome that resists, then gives under a firm press and springs straight back" (materials.ts): gives at most 0.6 x the gel's dent, its volume dips >= 3% under the press (firm silicone: <= 1%) and is back within 1 s`, `dent ${f(pd.dentPeak / g.dentPeak, 2)} x the gel's, volume min ${f(pd.volMin)} (firm silicone ${f(fs.volMin)}), back at ${f(pd.volBack, 2)} s`, '<= 0.6 x, <= 0.97 (silicone >= 0.99), <= 1 s', pd.dentPeak <= 0.6 * g.dentPeak && pd.volMin <= 0.97 && fs.volMin >= 0.99 && pd.volBack <= 1);
+}
 // 2. slow rise
 {
   const p = PR.slowrise, target = recoverySeconds95(doc('slowrise').physics);
@@ -249,7 +257,9 @@ for (const fam of ['waterfill', 'beadsqueeze'] as const) {
     // GIVE (axis 11, physics round-2 fix round): how deep the same full press goes (the dent at the release, rest radii / 0.4). Until the
     // fix round every family was pressed exactly as deep (the fingertip is position-driven), so the vector had no give axis; since a
     // stiffer material gives less (softbody.ts GIVE_EXP), the vector must see it, or a firm silicone that gives half as much reads as a gel.
-    return [p.e025 / pk, p.e1 / pk, p.e3 / pk, p.dent10 / Math.max(1e-3, p.dentPeak), (1 - p.volMin) * 3, Math.min(1, Math.max(p.back95, p.volBack) / 6), Math.log(r.ratio) / 3, Math.min(1, p.wobble / 4), p.strandsMax, Math.log(Math.max(1, p.force)) / 5, Math.min(1, p.dentPeak / 0.4)];
+    // (WOBBLE axis over 6 since physics fix round 2: over 4 it saturated, the gel's 4 visible oscillations and the firm silicone's 5 both read 1;
+    // the verifier's MINOR-5)
+    return [p.e025 / pk, p.e1 / pk, p.e3 / pk, p.dent10 / Math.max(1e-3, p.dentPeak), (1 - p.volMin) * 3, Math.min(1, Math.max(p.back95, p.volBack) / 6), Math.log(r.ratio) / 3, Math.min(1, p.wobble / 6), p.strandsMax, Math.log(Math.max(1, p.force)) / 5, Math.min(1, p.dentPeak / 0.4)];
   };
   let best = { a: '', b: '', d: Infinity };
   const F = MATERIAL_FAMILY_IDS.map((fam) => feel(fam));

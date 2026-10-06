@@ -163,8 +163,12 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   check(`calibration (real SoftBody): with the press bend a 1.4 s squeeze releases on ${withBend.n}/${withBend.of} hit points, without it on ${without.n}/${without.of}`,
     withBend.of >= 10 && withBend.n >= without.n, `body reports press: ${withBend.hasPress}`);
   const bendStillNeeded = without.n < Math.ceil(0.75 * without.of);
-  check(`calibration: CALIBRATION.bendWithPress=${CALIBRATION.bendWithPress} matches the measurement (bend still needed: ${bendStillNeeded}; retire it once releases happen without it)`,
-    CALIBRATION.bendWithPress === bendStillNeeded || !withBend.hasPress);
+  // Re-specified 2026-10-06 (SHELL-3): the bend was kept only for the release events; physics fix round 2 releases on max(compression,
+  // press), so the releases no longer need it (13/13 without it). It stays for the FEEL: a press on the dome goes down and squashes the toy
+  // into the table (the browser checks 'held squish' / 'hook hold': compression 0.00 without the bend). So: the bend may stay on; it may
+  // be off only when the releases happen without it.
+  check(`calibration: CALIBRATION.bendWithPress=${CALIBRATION.bendWithPress} is allowed by the measurement (releases without the bend: ${!bendStillNeeded}; the bend stays for the squash into the table)`,
+    CALIBRATION.bendWithPress || !bendStillNeeded || !withBend.hasPress);
   // THE PULL SIGNAL (feel.ts): a round-2 snap carries the contract's pull level; the shell uses it as is, and the driver's live measure
   // (requested distance from the grab's start over the learned maximum) lands on the same scale
   const pullTo = (dist: number): { snap: number; stretch: number } => {
@@ -652,6 +656,45 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   check('the starter ghost keeps the shell\'s starter id (the collection was given no profile here: its own starter)', r.app.hoard.items().length === 1 && r.app.hoard.items()[0].species === 'dollop');
 }
 
+/* ───────────────────────── 8b. visible XP (FUN.md 2): the gain cue and the pending gain of a hold (xp.ts) ───────────────────────── */
+{
+  const { gainOf, createPending, heldPay, LEVEL_STEP } = await import('../../src/shell/xp.ts');
+  const { PAY } = await import('../../src/core/meter.ts');
+  type MV = Parameters<typeof gainOf>[0];
+  const mv = (sp: number, credits: number, threshold = 30): MV => ({ ledger: 'practice', fill: sp / threshold, sp, threshold, credits, playCredits: credits, resting: false, doneToday: false, tableFull: false, offline: false });
+  check('xp gainOf: the squish points one touch added (across a capsule too; nothing when the meter did not move)',
+    Math.abs(gainOf(mv(10, 0), mv(10.8, 0)) - 0.8) < 1e-9 && Math.abs(gainOf(mv(29.5, 0), mv(0.7, 1, 50)) - 1.2) < 1e-9 && gainOf(mv(5, 0), mv(5, 0)) === 0);
+  const calls: Array<[string, number, number]> = [];
+  let lv = 0.503;
+  const pend = createPending({ preview: (k, h, l) => { calls.push([k, h, l]); return 1.5; }, heldFor: (f) => (f === 0 ? 1.2 : 0), pullFor: (f) => (f === 1 ? 2 : 0), pullLevel: () => lv });
+  const fr = pend.fill(mv(0, 0), 0);
+  lv = 0.506; pend.fill(mv(0, 0), 0);
+  lv = 0.531; pend.fill(mv(0, 0), 0);
+  const pulls = calls.filter((c) => c[0] === 'pull');
+  check('xp pending: Collection.previewTouch is called positionally (kind, heldS, level); the level stays the same number until it moves by LEVEL_STEP; the arc = summed SP / threshold',
+    calls[0][0] === 'squeeze' && calls[0][1] === 1.2 && pulls[0][1] === 2 && pulls[0][2] === pulls[1][2] && pulls[2][2] !== pulls[1][2] && Math.abs(pulls[2][2] - 0.53) < LEVEL_STEP && Math.abs(fr - 3 / 30) < 1e-9 && pend.source === 'collection',
+    JSON.stringify(calls));
+  check('xp pending (no preview: the published constants): a squeeze from 0.4 s (base + per second + the soft pop), a stretched pull pullBase + pullPerSecond x hold, an unstretched one flat, none under 0.05',
+    heldPay('squeeze', 0.3, 0) === 0 && Math.abs(heldPay('squeeze', 2, 0) - (PAY.squeezeBase + 2 * PAY.squeezePerSecond + PAY.softPop)) < 1e-9 && Math.abs(heldPay('pull', 2, 0.6) - (PAY.pullBase + 2 * PAY.pullPerSecond)) < 1e-9 && heldPay('pull', 2, 0.2) === PAY.pullFail && heldPay('pull', 2, 0.03) === 0 && heldPay('pull', 9, 0.6) === heldPay('pull', PAY.pullHoldCapSeconds, 0.6));
+  check('xp pending: nothing pends when the table is full or the day is done',
+    pend.fill({ ...mv(0, 5), tableFull: true }, 0) === 0 && pend.fill({ ...mv(0, 0), doneToday: true }, 0) === 0);
+  // through the game with the real collection (its previewTouch): a 1.2 s press shows a pending arc; its release pays a squeeze, emits one
+  // 'gain' with the SP, and the arc it showed matches what banked; a poke emits a 'poke' gain
+  const r = rig();
+  const gains: Array<{ kind: string; sp: number }> = [];
+  r.app.on('gain', (g) => gains.push({ kind: g.kind, sp: g.sp }));
+  const c = r.app.input.screenCentre()!;
+  run(r, 3000);
+  r.app.input.pointerDown({ id: 60, x: c.x, y: c.y, t: r.w.clock.t }); run(r, 1200);
+  const shown = r.app.pendingFill();
+  const th = r.app.hoard.meter().threshold;
+  r.app.input.pointerUp({ id: 60, x: c.x, y: c.y, t: r.w.clock.t }); run(r, 300);
+  const sq = gains.find((g) => g.kind === 'squeeze');
+  check('xp through the game: a held press shows a pending arc (the collection preview), the release pays a squeeze (one gain event with its SP) and the arc matched what banked (within 10%); the press\'s first contact paid a poke',
+    r.app.pendingSource === 'collection' && shown > 0 && r.app.pendingFill() === 0 && !!sq && Math.abs(sq.sp / th - shown) <= 0.1 * shown && gains.some((g) => g.kind === 'poke'),
+    `shown ${(shown * th).toFixed(2)} SP, banked ${sq ? sq.sp.toFixed(2) : 'none'} SP; gains ${gains.map((g) => g.kind).join(',')}`);
+}
+
 /* ───────────────────────── 9. keyboard focus rules (audit findings 12, 13) ───────────────────────── */
 {
   const r = rig({ round2: false });
@@ -680,6 +723,23 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   check('keyboard: Space on the play target presses the squishy (synthetic pointer through the gesture code)', sp.defaultPrevented && r.app.input.isDown(KEY_POINTER_ID));
   target.dispatchEvent(Object.assign(new Event('keyup'), { key: ' ', code: 'Space' }));
   r.w.run(r.app, 300);
+  // [ and ] (the quick switcher): only on a play surface, only with shortcuts on, never in a form control
+  const sw: number[] = [];
+  const t2 = new EventTarget();
+  const on2 = { v: true };
+  attachKeyboard(t2, r.app, { onEscape: () => false, shortcutsEnabled: () => on2.v, onSwitch: (d) => sw.push(d) });
+  const key2 = (k: string, t: object): void => {
+    const e = Object.assign(new Event('keydown', { cancelable: true }), { key: k, code: k === ']' ? 'BracketRight' : 'BracketLeft', repeat: false, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false });
+    Object.defineProperty(e, 'target', { value: t });
+    t2.dispatchEvent(e);
+  };
+  const input = { tagName: 'INPUT', getAttribute: () => null };
+  key2(']', select); key2('[', input);
+  const inControls = sw.length;
+  key2(']', play); key2('[', play);
+  on2.v = false; key2(']', play);
+  check('keyboard: ] and [ switch the squishy on the play target (newest +1, oldest -1), never in a form control, and not with shortcuts off',
+    inControls === 0 && sw.join() === '1,-1', `in controls ${inControls}, calls ${sw.join()}`);
 }
 
 /* ───────────────────────── 10. boot failure part-way disposes audio and stage (audit finding 7) ───────────────────────── */

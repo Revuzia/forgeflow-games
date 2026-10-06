@@ -204,7 +204,11 @@ export async function roomChecks(env) {
     const call = (t) => Math.ceil(t / Q - 1e-9) * Q;
     const o1 = onsetMs(on.fx, call(3.0)), o2 = onsetMs(on.fx, call(3.5)), o3 = onsetMs(off.fx, call(3.0));
     check(g, 'latency: a poke onto music that is up starts 16 ms after its call (the music clears the way first), a poke while the music is already down or off 4 ms after (as before)', Math.abs(o1 - 16) <= 1.5 && Math.abs(o2 - 4) <= 1.5 && Math.abs(o3 - 4) <= 1.5, `music up ${f1(o1)} ms, music down ${f1(o2)} ms, music off ${f1(o3)} ms`, '16, 4, 4 (+/- 1.5)');
-    info.latency = { up: o1, down: o2, off: o3 };
+    // CUT round fix: the clearing delay grows with the music volume above its default (x2 at music 1: 24 ms)
+    const hi = await run({ secs: 4.2, seed: 11, music: 1, events: evs, want: ['fx'] });
+    const o4 = onsetMs(hi.fx, call(3.0)), o5 = onsetMs(hi.fx, call(3.5));
+    check(g, 'latency at music volume 1: a poke onto music that is up waits 24 ms more (28 ms after its call: the louder music needs longer to clear), one while it is down 4 ms', Math.abs(o4 - 28) <= 1.5 && Math.abs(o5 - 4) <= 1.5, `music up ${f1(o4)} ms, music down ${f1(o5)} ms`, '28, 4 (+/- 1.5)');
+    info.latency = { up: o1, down: o2, off: o3, upHi: o4, downHi: o5 };
   }
 
   /* ═════════════════════════ 2 + 3. isolated placements: separation and the exposed gate ═════════════════════════ */

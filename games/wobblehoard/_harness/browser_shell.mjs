@@ -1182,8 +1182,9 @@ async function main() {
         await hclick(page, '.hcard [data-key="x"]'); await settle(page);   // the card's close closes the Hoard
       }
 
-      // Tidy-up (MERGE 3.3): earn more, then one hold
-      await openCapsules(page, 8);
+      // Tidy-up (MERGE 3.3): earn more (a new day first: the meter's 12-a-day stop was reached above), then one hold
+      await page.evaluate(() => window.__WH__.shell.nextDay());
+      for (let i = 0; i < 16 && (await hstate(page)).tidyPairsAll === 0; i++) await openCapsules(page, 1);
       await hclick(page, '.hoard-btn'); await settle(page);
       const tidyOn = await page.evaluate(() => !document.querySelector('.hoard-tools .tidy')?.disabled);
       if (tidyOn) {
@@ -1202,7 +1203,7 @@ async function main() {
           JSON.stringify({ plan, merged: ta.mergesToday - tb.mergesToday, res }));
         await shot(page, 'tidy_results_desktop');
         await hclick(page, '[data-key="done"]'); await settle(page);
-      } else check('Tidy-up: a plan exists after 18 capsules on this roll', false, 'no spares to tidy');
+      } else check('Tidy-up: a plan exists after up to 16 more capsules on this roll', false, 'no spares to tidy');
       if (await hoardOpen(page)) { await hclick(page, '.hoard-close'); await settle(page); }
 
       // the play mat (B1): bring squishies out next to the play body
@@ -1220,10 +1221,13 @@ async function main() {
       };
       await bringOut(cand[0].species);
       await bringOut(cand[1].species);
+      await stepSim(page, 2.5);   // the camera eases out to frame the group (2.5 s of game time; SwiftShader frames are too slow to wait for live)
       const m3 = await page.evaluate(() => window.__WH__.shell.matInfo());
       const sep = m3.bodies.every((a, i) => m3.bodies.every((b, j) => i >= j || Math.hypot(a.x - b.x, a.y - b.y) > 0.9 * (a.r + b.r)));
+      const vpw = page.viewportSize();
+      const onScreen = m3.bodies.every((b) => b.x - 0.6 * b.r >= 0 && b.x + 0.6 * b.r <= vpw.width && b.y > 0 && b.y < vpw.height);
       const stageBodies = await page.evaluate(() => { const i = window.__WH__.shell.stageInfo(); return i ? (Array.isArray(i.bodies) ? i.bodies.length : i.bodies ?? null) : null; });
-      check('play mat: two brought out of the Hoard stand beside the play body (3 on the mat, the stage draws 3 bodies, none overlapping on screen)', m3.count === 3 && m3.bodies.length === 3 && sep && (stageBodies === null || stageBodies === 3), JSON.stringify({ count: m3.count, limit: m3.limit, at: m3.bodies.map((b) => [Math.round(b.x), Math.round(b.y), Math.round(b.r)]), stageBodies }));
+      check('play mat: two brought out of the Hoard stand beside the play body (3 on the mat, the stage draws 3 bodies, none overlapping on screen, all in frame)', m3.count === 3 && m3.bodies.length === 3 && sep && onScreen && (stageBodies === null || stageBodies === 3), JSON.stringify({ count: m3.count, limit: m3.limit, at: m3.bodies.map((b) => [Math.round(b.x), Math.round(b.y), Math.round(b.r)]), stageBodies }));
       const third = await bringOut(cand[2].species);
       check('play mat: at quality low the mat holds 3: the next "Bring out" is disabled with the reason in words', !!third && third.disabled && /holds 3 at a time/.test(third.note), JSON.stringify(third));
       await shot(page, 'mat3_desktop');
@@ -1244,14 +1248,16 @@ async function main() {
       await hclick(page, '.mat-chip'); await settle(page);
       const m1x = await page.evaluate(() => window.__WH__.shell.matInfo());
       check('play mat: one tap on "Put back" puts them all back (1 on the mat, the chip hides)', m1x.count === 1 && await page.evaluate(() => document.querySelector('.mat-chip').hidden), `count ${m1x.count}`);
-      // five at quality high
-      await page.evaluate(() => window.__WH__.setSetting('quality', 'high'));
+      // five at quality high (the mat's frame-time guard is lifted for this: SwiftShader on a shared machine is always over 30 ms a frame)
+      await page.evaluate(() => { window.__WH__.setSetting('quality', 'high'); window.__WH__.shell.matBusyMs(1e9); });
       for (const c of cand.slice(0, 4)) await bringOut(c.species);
+      await stepSim(page, 2.5);
       const m5 = await page.evaluate(() => window.__WH__.shell.matInfo());
+      const in5 = m5.bodies.every((b) => b.x - 0.6 * b.r >= 0 && b.x + 0.6 * b.r <= vpw.width && b.y > 0 && b.y < vpw.height);
       const cost5 = await page.evaluate(() => window.__WH__.shell.matStepCost(120));
       const frame5 = await page.evaluate(() => { window.__WH__.pause(); const t = performance.now(); window.__WH__.step(1 / 60, 5); const r = (performance.now() - t) / 5; window.__WH__.resume(); return r; });
       console.log(`   mat frame cost, ${m5.count} bodies: physics ${cost5.msPerFrame.toFixed(2)} ms (${cost5.msPerBody.toFixed(2)} ms a body), step + render ${frame5.toFixed(1)} ms (SwiftShader, shared machine)`);
-      check('play mat: at quality high five fit (the play body and four brought out)', m5.count === 5 && m5.limit === 5, JSON.stringify({ count: m5.count, limit: m5.limit }));
+      check('play mat: at quality high five fit (the play body and four brought out), all in frame', m5.count === 5 && m5.limit === 5 && in5, JSON.stringify({ count: m5.count, limit: m5.limit, at: m5.bodies.map((b) => [Math.round(b.x), Math.round(b.y), Math.round(b.r)]) }));
       await shot(page, 'mat5_desktop');
       await hclick(page, '.mat-chip'); await settle(page);
       await page.evaluate(() => window.__WH__.setSetting('quality', 'low'));
@@ -1306,7 +1312,7 @@ async function main() {
       await hclick(page, `.hoard .plinth[data-species="${other.species}"]`); await settle(page);
       await hclick(page, '.hcard-actions [data-key="play"]'); await settle(page);
       const chosen = await page.evaluate(() => ({ id: window.__WH__.shell.identity(), hoard: !document.querySelector('.hoard').hidden, card: !document.querySelector('.hcard').hidden }));
-      check('card: "Play with this one" makes it the play body at once and closes the Hoard', chosen.id.species === other.species && !chosen.hoard && !chosen.card, JSON.stringify({ species: chosen.id.species, item: chosen.id.itemId }));
+      check('card: "Play with this one" makes it the play body at once and closes the Hoard', st.items.find((it) => it.id === chosen.id.itemId)?.species === other.species && chosen.id.itemId !== cur.itemId && !chosen.hoard && !chosen.card, JSON.stringify({ species: chosen.id.species, item: chosen.id.itemId, wanted: other.species }));
       await page.reload({ waitUntil: 'load' });
       await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 120000 });
       await wake(page);
@@ -1322,6 +1328,7 @@ async function main() {
       await stepSim(page, 0.3);
       await page.evaluate(() => document.querySelector('#wh-play')?.focus());
       await page.keyboard.press(']');
+      await sleep(450);   // the live region speaks after its 250 ms merge window (announcer.ts); the paused reveal does not move meanwhile
       const mid = await page.evaluate(() => ({ kind: window.__WH__.shell.ceremony().kind, id: window.__WH__.shell.identity().itemId, live: document.getElementById('wh-live')?.textContent }));
       await hclick(page, '.hoard-btn', { force: true });
       const hoardMid = await page.evaluate(() => !document.querySelector('.hoard').hidden);
@@ -1436,8 +1443,9 @@ async function main() {
       const hbr = { x: hb.x, y: hb.y, r: hb.x + hb.width, b: hb.y + hb.height };
       check('U05 phone HUD: the Hoard button fits the bottom row beside the name tag, the capsule dock and the ring (no overlap, on screen)', hbr.x >= 0 && hbr.r <= L.iw && !overlap(hbr, L.name) && !overlap(hbr, L.meter) && !overlap(hbr, L.capsuleBtn) && !overlap(L.name, L.capsuleBtn), JSON.stringify({ hb: hbr, name: L.name, btn: L.capsuleBtn, meter: L.meter }));
       await shot(page, 'hud_phone_with_hoard');
-      const qsp = await page.evaluate(() => { const q = document.querySelector('.qswitch'); const r = q.getBoundingClientRect(); return { n: q.querySelectorAll('.qs-btn').length, hidden: q.hidden, x: r.x, y: r.y, r: r.right, b: r.bottom }; });
-      check('phone quick switcher: shown above the name tag, on screen, clear of the name tag, the hint and the capsule dock, buttons >= 44 px', !qsp.hidden && qsp.n >= 1 && qsp.x >= 0 && qsp.r <= L.iw && !overlap(qsp, L.name) && (L.hintShow !== 'true' || !overlap(qsp, L.hint)) && !overlap(qsp, L.capsuleBtn) && (qsp.b - qsp.y) >= 44, JSON.stringify({ strip: qsp, hint: L.hint, name: L.name }));
+      const qsp = await page.evaluate(() => { const q = document.querySelector('.qswitch'); const r = q.getBoundingClientRect(); const st = document.querySelector('.meter-state'); const sr = st && !st.hidden ? st.getBoundingClientRect() : null; const nm = document.querySelector('.nametag-name'); return { n: q.querySelectorAll('.qs-btn').length, hidden: q.hidden, x: r.x, y: r.y, r: r.right, b: r.bottom, state: sr ? { x: sr.x, y: sr.y, r: sr.right, b: sr.bottom, t: st.textContent } : null, nameCut: nm.scrollWidth > nm.clientWidth + 1, name: nm.textContent }; });
+      check('phone quick switcher: five, shown above the name tag, on screen, clear of the name tag, the hint, the capsule dock and the ring\'s state line, buttons >= 44 px', !qsp.hidden && qsp.n === 5 && qsp.x >= 0 && qsp.r <= L.iw && !overlap(qsp, L.name) && (L.hintShow !== 'true' || !overlap(qsp, L.hint)) && !overlap(qsp, L.capsuleBtn) && !overlap(qsp, qsp.state) && (qsp.b - qsp.y) >= 44, JSON.stringify({ strip: qsp, hint: L.hint, name: L.name }));
+      check('phone HUD: the play squishy\'s name is not cut off on the name tag', !qsp.nameCut, qsp.name);
       await page.touchscreen.tap(hb.x + hb.width / 2, hb.y + hb.height / 2);
       await page.waitForFunction(() => !document.querySelector('.hoard').hidden, null, { timeout: 20000 });
       await settle(page);
@@ -1514,6 +1522,7 @@ async function main() {
       const s1 = await page.evaluate(() => ({ banner: !document.querySelector('.net-banner').hidden, text: document.querySelector('.net-banner').textContent, state: document.querySelector('.meter-state')?.textContent, live: document.getElementById('wh-live')?.textContent, fill: window.__WH__.shell.meter().fill }));
       const B = await body(page); const vp = page.viewportSize();
       for (let i = 0; i < 4; i++) { await page.mouse.click(B.x * vp.width + (i - 2) * 8, B.y * vp.height - 0.3 * B.rPx); await sleep(1100); }
+      await waitUntil(page, (f) => window.__WH__.shell.meter().fill > f, s1.fill, 30000);   // SwiftShader frames are slow on a loaded machine
       const s2 = await page.evaluate(() => ({ fill: window.__WH__.shell.meter().fill, toasts: window.__toasts, banner: !document.querySelector('.net-banner').hidden }));
       await shot(page, 'offline_desktop');
       check('U07 offline: the banner says "Offline. Your Hoard is read-only until we reconnect.", the ring says "Waiting for connection" and keeps previewing touches, no error toast storm',
@@ -1745,7 +1754,7 @@ async function main() {
       mainWatches.push(['reflow', w]);
       const titleAt = async (W, H) => {
         await page.setViewportSize({ width: W, height: H }); await sleep(700);
-        const t = await page.evaluate(() => { const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; }; const lines = new Set([...document.querySelectorAll('.title-mark > span')].filter((e) => e.getBoundingClientRect().width > 0).map((e) => Math.round(e.getBoundingClientRect().top / 4))).size; return { iw: innerWidth, ih: innerHeight, sw: document.documentElement.scrollWidth, cta: r('.cta'), mark: r('.title-mark'), promise: r('.title-promise'), markLines: lines }; });
+        const t = await page.evaluate(() => { const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; }; const lines = new Set([...document.querySelectorAll('.title-mark > span')].filter((e) => e.getBoundingClientRect().width > 0).map((e) => Math.round(e.offsetTop / 4))).size; return { iw: innerWidth, ih: innerHeight, sw: document.documentElement.scrollWidth, cta: r('.cta'), mark: r('.title-mark'), promise: r('.title-promise'), markLines: lines }; });
         check(`reflow ${W}x${H} title card: no horizontal scroll; wordmark (one line), tagline and the button all on screen`, t.sw <= t.iw && t.cta.b <= t.ih && t.cta.y >= 0 && t.mark.x >= 0 && t.mark.r <= t.iw && t.markLines === 1 && t.promise.r <= t.iw && t.promise.x >= 0 && t.promise.b <= t.cta.y, JSON.stringify(t));
         await shot(page, `title_${W}x${H}`);
       };

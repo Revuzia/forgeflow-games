@@ -49,6 +49,10 @@ export interface SoftParams {
    *  is mostly pulled back, so small springs-back never peel the foot (no hop); a real launch still leaves. It acts over the FULL
    *  thickness since the tack pass was fixed (it used to stop at the 1 cm NEAR band, so 0.02 meant 0.01). */
   glue: number;
+  /** PEEL DAMPING ('no hop off the table'; physics round-2 fix round): the largest share of the body's upward centre-of-mass speed removed per
+   *  substep while its tacky foot is being peeled off the table (softbody.ts, the tack pass). materials.ts scales it with the family's tack
+   *  (SolverScale.groundDamp: it had no SoftParams field, so applyMaterial dropped it, the verifier's MINOR-9). */
+  groundDamp: number;
   /** How deep a finger may press, as a fraction of the body thickness (firmer and bouncier = shallower). */
   squashDepth: number;
   /** Stiffness multiplier (shape matching + Laplacian) at the very tip of the swirl-peak: lower = floppier. */
@@ -119,6 +123,10 @@ export function deriveParams(genome: Genome): SoftParams {
     tableMu: 1.5,
     // tuned: 0.008 left a 10 cm hop for firm bouncy bodies, 0.02 removes it (and larger values change nothing)
     glue: 0.02,
+    // tuned (probe_species 'hop after release' row, the verifier's hop.ts: 50 species x 3 genomes x 2 pressure profiles): 0.25 with the ramp
+    // at 0.1..0.5 x glue also caught the firm bouncy starter's mild peel and took its peak wobble to tau 3.4 s; 0.35 at 0.35..0.75 x glue
+    // leaves every wobble row as it was and, with the goal-based support (softbody.ts), no press of the 300 hops
+    groundDamp: 0.35,
     // tuned: a firm or bouncy toy resists a finger, and a deep squash of a bouncy body is the one thing that still hops
     squashDepth: lerp(0.66, 0.34, f) * lerp(1, 0.78, b),
     // tuned: below ~0.15 the tip no longer bends further (the finger reach, not the stiffness, limits the flop)
@@ -214,8 +222,10 @@ export const FINGER = {
    *  moves every substep; with HEAD's friction 4 passes left 192 frames over 120 in the 180 rubs, 8 passes 20. With the rest of the fix in place
    *  4 also passes the probe's round-5 rows (worst 111-112 deg instead of 110): 8 is kept as margin. The passes stop early once one finds
    *  nothing folded (a plain press: one pass), so it costs nothing where nothing folds (step() / the probe's reference kernel: HEAD
-   *  0.79-0.84, now 0.80-0.84). */
-  foldIters: 8,
+   *  0.79-0.84, now 0.80-0.84). Raised to 16 (fix round 2, the verifier's rub set on real catalog bodies): a rub sliding down a soft
+   *  memory body toward the table crumples 12-18 edges at once (putty fossilo, slime gloopsy, wrigglo), and 8 passes left 2-4 frames at
+   *  122-152 degrees; 16 hold them at 110. Same early stop, so a press that folds nothing still pays one pass. */
+  foldIters: 16,
   /** A fingertip sphere's lowest point stays at least this many rest radii above the table (was 0: only out of the table). A low press or
    *  a slide toward the table otherwise pinched the foot rim between the sphere and the table: the table always wins and the rim was
    *  held folded at the fold limit (110) for the whole slide, then snapped past 150 degrees at the lift. 0.12 R keeps a pinch-free gap

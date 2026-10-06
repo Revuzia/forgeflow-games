@@ -28,6 +28,7 @@ const GOLDEN = 0.6180339887498949;
 const KINDS = ['poke', 'squish', 'release', 'land', 'pop', 'blend', 'meterFull', 'capsule', 'reveal', 'merge', 'mergeBurst', 'duck',
   'bump', 'lift', 'toss', 'strand', 'strandSnap', 'music', 'cut', 'cutPop', 'rejoin'] as const;
 type Kind = (typeof KINDS)[number];
+const CUT_KINDS: ReadonlySet<string> = new Set(['cut', 'cutPop', 'rejoin']);
 
 export interface CreateAudioOptions {
   /** Seed of the engine's variation stream (default fixed: two runs of the same session sound the same). */
@@ -78,7 +79,10 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
   const engRng = makeRng((opts.seed ?? 0x57a15b00) >>> 0);
   // per-kind golden-ratio round-robin: consecutive calls of one kind are always >= ~2.3% apart in pitch
   const phase: Record<Kind, number> = {} as Record<Kind, number>;
-  for (const k of KINDS) phase[k] = engRng();
+  // (the CUT kinds draw their starting phase from a stream of their own, so adding them left every earlier voice's per-call
+  // seeds exactly as they were: a session with the same seed and no cuts sounds bit-for-bit as before)
+  const cutPhaseRng = makeRng(((opts.seed ?? 0x57a15b00) ^ 0x0c070c07) >>> 0);
+  for (const k of KINDS) phase[k] = CUT_KINDS.has(k) ? cutPhaseRng() : engRng();
 
   const now = (): number => (ctx ? ctx.currentTime : 0);
 
@@ -310,7 +314,7 @@ export function createAudio(opts: CreateAudioOptions = {}): SquishAudio {
     stealIfNeeded();
     const t = ctx.currentTime;
     let t0 = t + LOOKAHEAD;
-    if (musicInst) { try { t0 += roomClearDelay(kind, musicInst.roomLevelAt(t)); } catch { /* closed */ } }
+    if (musicInst) { try { t0 += roomClearDelay(kind, musicInst.roomLevelAt(t), musicBoostDb()); } catch { /* closed */ } }
     return { c: ctx, t0, seed, jitter: 1 + 0.03 * (2 * phase[kind] - 1) };
   }
 

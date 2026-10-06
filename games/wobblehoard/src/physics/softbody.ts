@@ -132,6 +132,7 @@ class Grab {
   p0: Float64Array;            // world positions of the patch at grab time (the patch translates with the hand)
   anchor = 0;                  // grabbed vertex
   t0x = 0; t0y = 0; t0z = 0;   // target at grab time (the pull is measured from here)
+  c0x = 0; c0y = 0; c0z = 0;   // the body's centre of mass at grab time (the pull level is measured relative to the body: translation-free)
   rx = 0; ry = 0; rz = 0;      // raw target (grabMove)
   ex = 0; ey = 0; ez = 0;      // eased target
   ramp = 0;
@@ -141,7 +142,7 @@ class Grab {
   clear(): void {
     this.active = false; this.count = 0; this.anchor = 0;
     this.verts.fill(0); this.weights.fill(0); this.p0.fill(0);
-    this.t0x = 0; this.t0y = 0; this.t0z = 0; this.rx = 0; this.ry = 0; this.rz = 0; this.ex = 0; this.ey = 0; this.ez = 0;
+    this.t0x = 0; this.t0y = 0; this.t0z = 0; this.c0x = 0; this.c0y = 0; this.c0z = 0; this.rx = 0; this.ry = 0; this.rz = 0; this.ex = 0; this.ey = 0; this.ez = 0;
     this.ramp = 0; this.holdT = 0;
   }
 }
@@ -160,11 +161,23 @@ const HOVER_OMEGA = 4.6, HOVER_ZETA = 0.62, HOVER_ABOVE = 0.35;
 const BOB_AMP = 0.03, BOB_HZ = 0.33;
 /** Give law exponent: depth ~ smOmega^GIVE_EXP, from deriveParams' own squashDepth 0.66 -> 0.34 over smOmega 12 -> 40 (see the constructor). */
 const GIVE_EXP = Math.log(0.34 / 0.66) / Math.log(40 / 12);
-/** Supported-body gravity is withdrawn while the centre of mass rises faster than RISE_V0 (fully at RISE_V1), m/s (see substep). */
-const RISE_V0 = 0.05, RISE_V1 = 0.25;
+/** Supported gravity is withdrawn as the lowest point of the shape-matching goal rises from 0 to GOAL_FLOAT x restRadius above the table
+ *  (a body whose own shape no longer reaches the table is not carried by it; see substep). */
+const GOAL_FLOAT = 0.03;
+/** Peel damping (the tack pass) ramps in while the most-lifted foot particle still inside the tack layer is PEEL_LO .. PEEL_HI x glue up. */
+const PEEL_LO = 0.35, PEEL_HI = 0.75;
 /** Seconds the table edges stay in the contact fold limit after the last finger, grab or pinned foot let go (the release transient). */
 const TABLE_FOLD_AFTER = 1.5;
-/** A triangle near a contact whose opposite vertex comes closer than SLIVER x its rest height to the edge is put back open (foldLimit). */
+/** Substeps the skin a fingertip had near it stays in the contact fold limit after it left the tip's reach (0.5 s; x the family's own
+ *  recovery time over 0.5 s, up to 6x, for a family with a memory arm: see the constructor and substep). */
+const TIP_FOLD_AFTER = 180;
+/** foldLimit makes another pass only while some hinge was folded past the limit by more than this (cosine of the interior angle: ~0.6 deg
+ *  at the limit). A held press keeps a few hinges a hair over the limit every substep, and chasing those cost 3-5 passes of the whole list
+ *  per substep (somnuff held at 0.7: 11 000 -> 3 100 hinge checks per frame; physics fix round 2, MAJOR-4). */
+const FOLD_DEEP = 0.01;
+/** While the table edges are in the contact fold limit, so is the foot rim: every particle less than TABLE_FOLD_BAND x restRadius up. */
+const TABLE_FOLD_BAND = 0.08;
+/** A triangle at the table whose opposite vertex comes closer than SLIVER x its rest height to the edge is put back open (foldLimit). */
 const SLIVER = 0.2;
 const NEAR = 0.01;                // a particle this close to the table counts as touching it (m)
 const BLOCK_MARGIN = 0.03;         // particles this close to a fingertip are 'blocked' for the volume constraint (m)
@@ -251,6 +264,7 @@ export class SoftBody implements SoftBodyLike {
   readonly frame = { x: 0, y: 0, z: 0, w: 1 };
   readonly metrics: SoftMetrics = {
     compression: 0, compressionRate: 0, stretch: 0, volume: 1, kinetic: 0, grounded: true, fingers: 0, grabbed: false, press: 0, reaction: 0, strands: 0, slosh: 0,
+    pull: 0,
   };
   readonly restRadius: number;
   /** Harness-only counters (not part of SoftBodyLike). `safetyResets` must stay 0: it counts emergency non-finite recoveries. */
@@ -289,7 +303,10 @@ export class SoftBody implements SoftBodyLike {
   private readonly hingeAlpha: number;
   private readonly H3: Int32Array;          // hinge opposite-vertex pairs (pre-multiplied by 3)
   private readonly HE3: Int32Array;         // hinge edge endpoints (pre-multiplied by 3)
-  private readonly touchStamp: Int32Array;  // substep index at which each particle was last near a fingertip (FINGER.foldNear)
+  private readonly touchStamp: Int32Array;  // substep index at which each particle was last put in the fold limit's list (dedupe)
+  private readonly tipStamp: Int32Array;    // substep index at which each particle was last near a fingertip (FINGER.foldNear)
+  private lastTipSub = -1000000;            // the last substep a fingertip was down or retracting
+  private readonly tipFoldSubs: number;     // how long the skin a tip had near it stays in the fold limit (TIP_FOLD_AFTER, per family)
   private readonly nearList: Int32Array;    // those particles this substep (tipNearN of them), in scan order
   private tipNearN = 0;
   private readonly hingeStart: Int32Array;  // CSR: vertex -> the interior edges (hinges) it belongs to (as edge, or as opposite vertex)
@@ -369,8 +386,10 @@ export class SoftBody implements SoftBodyLike {
   private readonly pinned: Uint8Array;      // foot particles glued to the table while a lobe is pulled
   private pinCount = 0;
   private pinHold = 0;
- private kinSoft = 1;                     // kinetic fingertip friction multiplier of a family softer than the gel (constructor)
+  private kinSoft = 1;                      // kinetic fingertip friction multiplier of a family softer than the gel (constructor)
   private tableFoldT = 0;                   // seconds the table edges stay in the contact fold limit (TABLE_FOLD_AFTER after the last touch)
+  private goalBottom = 0;                   // lowest point of the shape-matching goal in the last substep (supported gravity, see substep)
+  private peelK = 0;                        // share of the upward centre-of-mass speed the peeling tack removes per substep (the tack pass)
   private readonly sums = new Float64Array(25);
   private readonly A9 = new Float64Array(9);
   private readonly qr = new Float64Array([0, 0, 0, 1]);
@@ -481,6 +500,7 @@ export class SoftBody implements SoftBodyLike {
     this.GRAD = new Float64Array(n * 3);
     this.pinned = new Uint8Array(n);
     this.touchStamp = new Int32Array(n).fill(-1);
+    this.tipStamp = new Int32Array(n).fill(-1000000);
     this.nearList = new Int32Array(n);
     this.WV = new Float64Array(n);
     this.H0 = new Float64Array(n);
@@ -574,6 +594,11 @@ export class SoftBody implements SoftBodyLike {
     this.memOn = mt0.memStiff >= MEM_MIN;
     this.wm = this.memOn ? mt0.memStiff / (1 + mt0.memStiff) : 0;
     this.plasticOn = this.memOn && mt0.memYield > 0;
+    // a family with a memory arm recovers its shape over memTau (1 + memStiff) s (SQUISHY_SCIENCE 3.1: putty 3 s, slime 3.2 s, beads 0.75 s),
+    // and a crumple the fold limit held under the tip is still there that long: the fold-limit hold after the tip leaves lasts as long
+    // (TIP_FOLD_AFTER at least, 6x at most); with 0.5 s for every family, putty and slime flipped 1-2 frames past 150 degrees exactly 0.5 s
+    // after the lift
+    this.tipFoldSubs = Math.round(TIP_FOLD_AFTER * (this.memOn ? Math.min(6, Math.max(1, mt0.memTau * (1 + mt0.memStiff) / 0.5)) : 1));
     this.sloshOn = mt0.sloshMass > 0.01;
     this.MEM = Float64Array.from(Q);
     this.QG = Float64Array.from(Q);
@@ -671,16 +696,16 @@ export class SoftBody implements SoftBodyLike {
     }
     this.keAcc = 0; this.keSubs = 0; this.prevCompression = 0; this.reactAcc = 0;
     this.lastAxisX = 0; this.lastAxisY = 1; this.lastAxisZ = 0; this.lastAxisT = -10;
-    this.simTime = 0; this.subIdx = 0; this.touchStamp.fill(-1); this.hingeStamp.fill(-1); this.tipNearN = 0; this.hingeCount = 0;
+    this.simTime = 0; this.subIdx = 0; this.touchStamp.fill(-1); this.tipStamp.fill(-1000000); this.lastTipSub = -1000000; this.hingeStamp.fill(-1); this.tipNearN = 0; this.hingeCount = 0;
     for (const f of this.fingers) f.clear();
     for (const g of this.grabs) g.clear();
-    this.pinned.fill(0); this.pinCount = 0; this.pinHold = 0; this.tableFoldT = 0;
+    this.pinned.fill(0); this.pinCount = 0; this.pinHold = 0; this.tableFoldT = 0; this.peelK = 0; this.goalBottom = 0;
     this.events.length = 0;
     this.lastEvent.fill(-10);
     this.pendingLand = -1;
     const m = this.metrics;
     m.compression = 0; m.compressionRate = 0; m.stretch = 0; m.volume = 1; m.kinetic = 0; m.grounded = this.gravityOn; m.fingers = 0; m.grabbed = false;
-    m.press = 0; m.reaction = 0; m.strands = 0; m.slosh = 0;
+    m.press = 0; m.reaction = 0; m.strands = 0; m.slosh = 0; m.pull = 0;
     // material and ceremony state back to a fresh body
     this.vt = 1; this.MEM.set(this.Q); this.QG.set(this.Q); this.LQG.set(this.LQ);
     this.EL.set(this.EL0); this.HD.set(this.HD0);
@@ -854,7 +879,12 @@ export class SoftBody implements SoftBodyLike {
   fingerUp(id: 0 | 1): void {
     const f = this.fingers[id];
     if (!f || !f.down) return;
-    const comp = this.metrics.compression;
+    // 'release' on max(compression, press) (physics round-2 fix round, the shell's contract request): a single-finger dent the global
+    // compression barely sees (a side press on the swirl-peak: compression < 0.1, press ~1) is a squeeze too. The press is THIS finger's own
+    // indentation (finalize's metrics.press is the deeper of the two), and only while its tip is in the skin.
+    let own = 0;
+    if (f.touching) { const span = f.depthMax - f.lift; if (span > 1e-6) own = (clamp(f.depth, 0, 1) * f.depthMax * f.share - f.lift) / span; }
+    const comp = Math.max(this.metrics.compression, clamp(own, 0, 1));
     if (f.contacted && comp > 0.08) {
       const front = f.depth * f.depthMax;
       this.emit('release', f.px + f.dx * front, f.py + f.dy * front, f.pz + f.dz * front, f.nx, f.ny, f.nz, comp, f.holdT, id);
@@ -894,18 +924,21 @@ export class SoftBody implements SoftBodyLike {
     }
     this.pinHold = this.p.pinHold;
     g.t0x = tx; g.t0y = ty; g.t0z = tz; g.rx = tx; g.ry = ty; g.rz = tz; g.ex = tx; g.ey = ty; g.ez = tz;
+    g.c0x = this.center.x; g.c0y = this.center.y; g.c0z = this.center.z;
     const nrm = this.vertexNormal(v);
     this.emit('grab', X[v * 3], X[v * 3 + 1], X[v * 3 + 2], nrm[0], nrm[1], nrm[2], 0.5, 0, id);
   }
 
   /**
-   * PULL LEVEL of a grab, 0..1 (physics round-2 fix round; the 'snap' intensity, contracts.ts): how far its target has been pulled from
-   * where the grab started, over this body's own maximum pull (SoftParams.maxPull x restRadius: the family's maxPull with the genome's
-   * stretch band; at a neutral genome 1.70 R for the gel, 1.13 R firm silicone, 2.85 R sticky stretch). updateGrabs clamps the pull there,
-   * so 1 = the body reached its family's maxPull. (metrics.stretch, the body's own extent, stays as it was: 0.25 for a gel at its maxPull.)
+   * PULL LEVEL of a grab, 0..1 (physics round-2 fix round; the 'snap' intensity and metrics.pull, contracts.ts): how far its target has been
+   * pulled from where the grab started RELATIVE TO THE BODY (minus how far the body's centre of mass has moved since: a body dragged along
+   * is not stretched; the verifier's MINOR-8: boingle pulled 2 R moved 0.5 R and still read 1.0), over this body's own maximum pull
+   * (SoftParams.maxPull x restRadius: the family's maxPull with the genome's stretch band; at a neutral genome 1.70 R for the gel, 1.13 R firm
+   * silicone, 2.85 R sticky stretch). updateGrabs clamps the pull there, so 1 = the body reached its family's maxPull with its feet held.
+   * (metrics.stretch, the body's own extent, stays as it was: 0.25 for a gel at its maxPull.)
    */
   private pullLevel(g: Grab): number {
-    const dx = g.ex - g.t0x, dy = g.ey - g.t0y, dz = g.ez - g.t0z, maxD = this.p.maxPull * this.restRadius;
+    const dx = g.ex - g.t0x - (this.cx - g.c0x), dy = g.ey - g.t0y - (this.cy - g.c0y), dz = g.ez - g.t0z - (this.cz - g.c0z), maxD = this.p.maxPull * this.restRadius;
     const l = Math.sqrt(dx * dx + dy * dy + dz * dz) / (maxD > 1e-9 ? maxD : 1e-9);
     return l < 0 ? 0 : l > 1 - 1e-9 ? 1 : l;   // (the clamp leaves it a rounding error short of 1 at the limit)
   }
@@ -1235,9 +1268,10 @@ export class SoftBody implements SoftBodyLike {
     for (let h = 0; h < this.ns; h++) {
       const c = S3[h * 2], d = S3[h * 2 + 1];
       const dx = XP[c] - XP[d], dy = XP[c + 1] - XP[d + 1], dz = XP[c + 2] - XP[d + 2];
-      const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      const lo = lim * SL[h];
-      if (len >= lo || len < 1e-9) continue;
+      const lo = lim * SL[h], d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 >= lo * lo) continue;
+      const len = Math.sqrt(d2);
+      if (len < 1e-9) continue;
       const sc = (lo - len) / ((SW[h] + aS) * len);
       const wc = invM[c / 3] * sc, wd = invM[d / 3] * sc;
       XP[c] += dx * wc; XP[c + 1] += dy * wc; XP[c + 2] += dz * wc;
@@ -1252,9 +1286,9 @@ export class SoftBody implements SoftBodyLike {
     for (let h = 0; h < nh; h++) {
       const c = H3[h * 2], d = H3[h * 2 + 1];
       const dx = XP[c] - XP[d], dy = XP[c + 1] - XP[d + 1], dz = XP[c + 2] - XP[d + 2];
-      const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      const lo = lim * HD[h];
-      if (len >= lo) continue;
+      const lo = lim * HD[h], d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 >= lo * lo) continue;          // (no square root for the ~all hinges that are open wide enough)
+      const len = Math.sqrt(d2);
       if (len < 1e-9) continue;
       const sc = (lo - len) / ((HW[h] + aHg) * len);
       const wc = invM[c / 3] * sc, wd = invM[d / 3] * sc;
@@ -1290,9 +1324,9 @@ export class SoftBody implements SoftBodyLike {
     }
     this.hingeCount = hc;
     const half = (Math.PI - (FINGER.foldMaxDeg * Math.PI) / 180) / 2;   // half the smallest allowed interior angle at an edge
-    const ch = Math.cos(half), sh = Math.sin(half), cosMin = Math.cos(2 * half);
+    const ch = Math.cos(half), sh = Math.sin(half), cosMin = Math.cos(2 * half), deepCos = cosMin + FOLD_DEEP;
     for (let it = 0; it < FINGER.foldIters; it++) {
-      let opened = false;
+      let opened = false, deep = false;
       for (let q = 0; q < hc; q++) {
         const h = hl[q], c = H3[h * 2], d = H3[h * 2 + 1], a = HE[h * 2], b = HE[h * 2 + 1];
         // edge direction e, and the parts of (c - a), (d - a) perpendicular to it: the two half-planes of the hinge
@@ -1310,21 +1344,25 @@ export class SoftBody implements SoftBodyLike {
         // SLIVER (physics round-2 fix round): a triangle squeezed flat into a line (its opposite vertex within SLIVER of its rest height
         // from the edge) has no defined side, so it cannot be "unfolded"; it is put back open, on the far side of the edge from its
         // neighbour, at SLIVER of its rest height. (A free rim particle dragged past a pinned edge by a full pull of sticky stretch lay
-        // exactly on the edge's line: 180 degrees to the fold meter for 47 frames.)
-        {
+        // exactly on the edge's line: 180 degrees to the fold meter for 47 frames.) Only at the TABLE (an edge with an end on it): under a
+        // fingertip a thin cone squeezed onto the sphere has slivers by design, and opening them there creased the detail-4 swirl-peak
+        // under the hard side shove (168 degrees; the probe's shove row, 0 frames over 120 without the rule there).
+        if (XP[a + 1] < NEAR || XP[b + 1] < NEAR) {
           const sc = lc < SLIVER * HP[h * 2] && !pn[c / 3] && ld > 1e-9, sd = !sc && ld < SLIVER * HP[h * 2 + 1] && !pn[d / 3] && lc > 1e-9;
           if (sc || sd) {
             const v = sc ? c : d, tv = sc ? tc : td, lo = sc ? ld : lc, hmin = SLIVER * HP[h * 2 + (sc ? 0 : 1)];
             const ox = (sc ? dx : cx) / lo, oy = (sc ? dy : cy) / lo, oz = (sc ? dz : cz) / lo;
             XP[v] = XP[a] + tv * ex - ox * hmin; XP[v + 1] = XP[a + 1] + tv * ey - oy * hmin; XP[v + 2] = XP[a + 2] + tv * ez - oz * hmin;
             if (XP[v + 1] < 0) XP[v + 1] = 0;
-            opened = true;
+            opened = true; deep = true;
             continue;
           }
         }
         if (lc < 1e-9 || ld < 1e-9) continue;
         const ucx = cx / lc, ucy = cy / lc, ucz = cz / lc, udx = dx / ld, udy = dy / ld, udz = dz / ld;
-        if (ucx * udx + ucy * udy + ucz * udz <= cosMin) continue;    // the interior angle is wide enough: not folded
+        const cdu = ucx * udx + ucy * udy + ucz * udz;
+        if (cdu <= cosMin) continue;    // the interior angle is wide enough: not folded
+        if (cdu > deepCos) deep = true;
         // bisector m of the two half-planes, and w: in their plane, perpendicular to m, toward c
         let mx = ucx + udx, my = ucy + udy, mz = ucz + udz;
         const ml = Math.sqrt(mx * mx + my * my + mz * mz);
@@ -1379,8 +1417,9 @@ export class SoftBody implements SoftBodyLike {
           if (XP[i3 + 1] < 0) XP[i3 + 1] = 0;
         }
       }
-      // nothing was folded this pass: the re-seat above was the last thing to do (most substeps of a press end here, after one pass)
-      if (!opened) break;
+      // nothing was folded this pass, or nothing by more than FOLD_DEEP: the re-seat above was the last thing to do (most substeps of a
+      // press end here, after one pass)
+      if (!opened || !deep) break;
     }
   }
 
@@ -1440,10 +1479,15 @@ export class SoftBody implements SoftBodyLike {
     // Friction still sees the true normal load (see the table pass).
     let ax = 0, ay = 0, az = 0;
     if (this.gravityOn) {
-      // ... but only the weight of a body that is NOT lifting itself off the table: the table can push, never pull, so while the centre of
-      // mass rises (a squeezed body springing back) true gravity acts on it, as on any real body (see RISE_V0)
-      const ru = Math.min(1, Math.max(0, (this.vcy - RISE_V0) / (RISE_V1 - RISE_V0))) * (this.cy > this.restCenterY ? 1 : 0);
-      ay = -GRAVITY * (1 - this.supp * (1 - ru * ru * (3 - 2 * ru)));
+      // ... but only while the body's own shape stands on the table: the table carries a body, it never holds one up. When the lowest point of
+      // the shape-matching goal (the shape the body is being pulled into, around its current centre) rises above the table, the body is being
+      // lifted off its feet by its own springing back, and its weight acts (fully once the goal floats GOAL_FLOAT R up). Position-based, so it
+      // is conservative: a wobble on the foot keeps its energy (a velocity-gated version, 'gravity only while rising above rest', took
+      // energy out of every cycle and killed the starter's wobble: n_osc 1). It is what stops a squeezed MEMORY body (its goal is still the
+      // squashed shape, which no longer reaches the table) from springing its centre up and hovering off the table (crumbit, beads, 28-36 mm).
+      // (Physics round-2 fix round, MAJOR-3; the peel damping in the tack pass is the other half.)
+      const gu = this.goalBottom / (GOAL_FLOAT * this.restRadius), gf = gu <= 0 ? 0 : gu >= 1 ? 1 : gu * gu * (3 - 2 * gu);
+      ay = -GRAVITY * (1 - this.supp * (1 - gf));
     } else {
       // float mode: weak hover spring on the centre of mass (stiffer while a finger or a lobe holds it) + slow bob
       const boost = 1 + 2.5 * nFingers + (grabbing ? 3 : 0);
@@ -1464,6 +1508,7 @@ export class SoftBody implements SoftBodyLike {
 
     // ---- shape matching (global): c, A = sum m p q^T, R, goals, soft pull
     let r00 = 1, r01 = 0, r02 = 0, r10 = 0, r11 = 1, r12 = 0, r20 = 0, r21 = 0, r22 = 1;
+    let gbOut = 0;
     {
       let sx = 0, sy = 0, sz = 0;
       let a00 = 0, a01 = 0, a02 = 0, a10 = 0, a11 = 0, a12 = 0, a20 = 0, a21 = 0, a22 = 0;
@@ -1502,6 +1547,7 @@ export class SoftBody implements SoftBodyLike {
         const ux = N9[0] * bx + N9[1] * by + N9[2] * bz, uy = N9[3] * bx + N9[4] * by + N9[5] * bz, uz = N9[6] * bx + N9[7] * by + N9[8] * bz;
         smx = slK * (r00 * ux + r01 * uy + r02 * uz); smy = slK * (r10 * ux + r11 * uy + r12 * uz); smz = slK * (r20 * ux + r21 * uy + r22 * uz);
       }
+      let gb = Infinity;
       for (let i = 0; i < n; i++) {
         const i3 = i * 3;
         const qx_ = QG[i3], qy_ = QG[i3 + 1], qz_ = QG[i3 + 2];
@@ -1514,10 +1560,13 @@ export class SoftBody implements SoftBodyLike {
           gx += nx * d - smx; gy += ny * d - smy; gz += nz * d - smz;
         }
         GOAL[i3] = gx; GOAL[i3 + 1] = gy; GOAL[i3 + 2] = gz;
+        if (gy < gb) gb = gy;
         const k = K * soft[i];
         XP[i3] += (gx - XP[i3]) * k; XP[i3 + 1] += (gy - XP[i3 + 1]) * k; XP[i3 + 2] += (gz - XP[i3 + 2]) * k;
       }
+      gbOut = gb;
     }
+    this.goalBottom = gbOut;   // (assigned once, outside the block: a double reassigned in a branch of this function is boxed)
 
     // ---- Laplacian shape memory (local): pull each particle toward mean(neighbours) + R (q_i - mean(q_neighbours))
     // (every other substep with twice the gain: it is a soft smoothing term and this saves ~8% of the step)
@@ -1662,11 +1711,18 @@ export class SoftBody implements SoftBodyLike {
       const slu = Math.min(1, Math.sqrt(lx * lx + ly * ly + lz * lz) / (H * FINGER.frictionSlide * this.restRadius)), sls = slu * slu * (3 - 2 * slu);
       const muS = muF + (muG - muF) * sls, muK = muF + (FINGER.frictionKinetic * (muG / FINGER.friction) * this.kinSoft - muF) * sls;
       let hit = false;
-      const rn2 = r2 * FINGER.foldNear * FINGER.foldNear, stamp = this.touchStamp, now = this.subIdx, near = this.nearList;
+      const rn2 = r2 * FINGER.foldNear * FINGER.foldNear, stamp = this.touchStamp, now = this.subIdx, near = this.nearList, tst = this.tipStamp;
+      const hold = this.tipFoldSubs;
+      this.lastTipSub = now;
       for (let i = 0; i < n * 3; i += 3) {
         const dx = XP[i] - cx, dy = XP[i + 1] - cy, dz = XP[i + 2] - cz;
         const d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 >= rn2) continue;
+        if (d2 >= rn2) {
+          // the skin the tip had near it a moment ago (its wake) stays in the fold limit (tipFoldSubs; see the release transient below)
+          if (now - tst[i / 3] <= hold && stamp[i / 3] !== now) { stamp[i / 3] = now; near[this.tipNearN++] = i / 3; }
+          continue;
+        }
+        tst[i / 3] = now;
         if (stamp[i / 3] !== now) { stamp[i / 3] = now; near[this.tipNearN++] = i / 3; }   // near the tip: the fold limit looks here
         if (d2 >= r2) continue;
         hit = true;
@@ -1707,6 +1763,15 @@ export class SoftBody implements SoftBodyLike {
           clamp(closing / POKE_NORM, 0.05, 1), 0, k);
       }
     }
+    // RELEASE TRANSIENT OF A FINGERTIP (physics round-2 fix round, MAJOR-1): skin a rub crumpled under the tip is held at the fold limit
+    // while the tip is near it (7-18 edges at 110 degrees); once the tip slid on, or lifted and retracted out of reach, the crumple sprang
+    // back unconstrained and flipped past 150 degrees for 1-5 frames (the verifier's rub set: putty, slime, beads, mochi, water fill). So the
+    // skin a tip had near it stays in the fold limit for tipFoldSubs substeps after the tip left it: the tip's wake while it slides (above),
+    // all of it after the lift (here).
+    if (!(f0.down || f0.retracting || f1.down || f1.retracting) && this.subIdx - this.lastTipSub <= this.tipFoldSubs) {
+      const stamp = this.touchStamp, now = this.subIdx, near = this.nearList, tst = this.tipStamp, hold = this.tipFoldSubs;
+      for (let i = 0; i < n; i++) if (now - tst[i] <= hold && stamp[i] !== now) { stamp[i] = now; near[this.tipNearN++] = i; }
+    }
     {
       const mu = this.p.tableMu, glue = this.p.glue * (this.restRadius / 0.5) * (1 - this.fold), H0 = this.H0;   // the tack layer scales with the body (and lets go of a folding one)
       // normal-load proxy for Coulomb friction: this substep's penetration plus the supported weight (g h^2 per
@@ -1720,9 +1785,13 @@ export class SoftBody implements SoftBodyLike {
       const worked = this.fingers[0].down || this.fingers[0].retracting || this.fingers[1].down || this.fingers[1].retracting || this.grabs[0].active || this.grabs[1].active || this.pinCount > 0;
       this.tableFoldT = worked ? TABLE_FOLD_AFTER : Math.max(0, this.tableFoldT - H);
       const tfold = this.tableFoldT > 0;
+      // ... and with them the foot rim just above the table (TABLE_FOLD_BAND; physics round-2 fix round 2, MAJOR-2): a full pull drags the
+      // body over its pinned feet, and the rim particle one row up (2-4 cm, above the NEAR band) buckled at 151-179 degrees for up to 60
+      // frames (capnap, pastrel, petalop, taffelin on the soft corner genome)
+      const band = tfold ? TABLE_FOLD_BAND * this.restRadius : 0;
       for (let i = 0; i < n * 3; i += 3) {
         const y = XP[i + 1];
-        if (y >= NEAR) continue;
+        if (y >= NEAR) { if (y < band && tstamp[i / 3] !== tnow) { tstamp[i / 3] = tnow; tnear[this.tipNearN++] = i / 3; } continue; }
         near++; nearM += M[i / 3];
         if (tfold && tstamp[i / 3] !== tnow) { tstamp[i / 3] = tnow; tnear[this.tipNearN++] = i / 3; }   // on the table: the fold limit looks here too
         let pen = load + fload;
@@ -1741,14 +1810,27 @@ export class SoftBody implements SoftBodyLike {
       // The tack layer must be as thick as `glue`, not only as thick as the NEAR band the loop above looks at: a foot particle kicked up
       // by 7 mm in one substep (the shape memory pulls the rim up when the body is stretched tall) starts at y < NEAR, lands above NEAR,
       // is never seen again and the whole foot peels off the table (a hop of 10 cm after a hard release of a large or firm body).
+      // PEEL DAMPING (physics round-2 fix round, MAJOR-3; the old SoftParams.groundDamp, which materials.ts scales with the tack): a tacky foot
+      // being peeled off the table holds the body back. While the foot is still in the tack layer and its most-lifted particle is PEEL_LO ..
+      // PEEL_HI x glue up (before the tack pulls it back), up to groundDamp of the body's upward centre-of-mass speed is removed per substep
+      // (dampPass): the table pulls through the tack. A body whose foot stays down (the starter's hard release peels 0.35 x glue at most)
+      // never feels it, so its wobble on the foot is untouched; a stiff body on a few foot particles (marigel's 6) that springs back at
+      // 1.8 m/s no longer leaves the table (it flew 126 mm), it stretches up on its foot and wobbles. Off while a grab or the pinned feet hold
+      // the body (the hand is in charge), and once the whole foot is out of the layer (a real launch, a nudge, a toss: it flies).
+      let peel = 0, held = 0;
       {
         const foot = this.foot;
         for (let j = 0; j < foot.length; j++) {
           const i = foot[j], y = XP[i * 3 + 1];
-          if (y < NEAR) continue;
           const lift = y - H0[i];
+          if (lift < glue) { held++; if (lift > peel) peel = lift; }
+          if (y < NEAR) continue;
           if (lift < glue) { const k = lift / glue; XP[i * 3 + 1] = H0[i] + lift * k * k; }
         }
+      }
+      {
+        const pu = held > 0 && glue > 1e-9 && !grabbing && this.pinCount === 0 ? (peel / glue - PEEL_LO) / (PEEL_HI - PEEL_LO) : 0;
+        this.peelK = this.p.groundDamp * (pu <= 0 ? 0 : pu >= 1 ? 1 : pu * pu * (3 - 2 * pu));
       }
       // glued feet (a lobe is being pulled, or was just let go): hold them exactly where they were
       if (this.pinCount > 0) {
@@ -1868,10 +1950,13 @@ export class SoftBody implements SoftBodyLike {
       LQG[i3] = QG[i3] - mx * inv; LQG[i3 + 1] = QG[i3 + 1] - my * inv; LQG[i3 + 2] = QG[i3 + 2] - mz * inv;
     }
     this.goalOn = true;
-    // the skin's rest lengths follow the goal when it changes size or shape for good (fold, burst, a plastic set); the tremble and the
-    // purely viscoelastic arm leave them alone (they follow QGN, the goal without the tremble: physics round-2 fix round, MINOR-11, the
-    // plastic families' rest lengths used to follow the 17 Hz tremble)
-    if (fd > 0 || bo > 0 || this.plasticOn) {
+    // the skin's rest lengths follow the goal when it changes size or shape (fold, burst, the memory arm); the tremble leaves them alone
+    // (they follow QGN, the goal without the tremble: physics round-2 fix round, MINOR-11, the plastic families' rest lengths used to follow
+    // the 17 Hz tremble). The purely VISCOELASTIC arm (slime, sticky stretch, slow-rise, marshmallow: memory, no yield) follows too since the
+    // fix round 2 (MAJOR-1): its goal holds the deformation for memTau, and a skin at its rest lengths around a goal that is pushed together
+    // can only buckle (a rubbed slime crumpled 7-11 edges past 90 degrees and flipped when the fold limit let go; with the rest lengths on
+    // the goal it does not crumple)
+    if (fd > 0 || bo > 0 || this.memOn) {
       const E3 = this.E3, EL = this.EL, ES = this.ESOFT, ss = this.p.edgeSoftStrain;
       for (let e = 0; e < this.ne; e++) {
         const a = E3[e * 2], b = E3[e * 2 + 1];
@@ -1977,7 +2062,9 @@ export class SoftBody implements SoftBodyLike {
         d01 = 0.5 * (l01 + l10); d02 = 0.5 * (l02 + l20); d12 = 0.5 * (l12 + l21);
       }
     }
-    this.vcx = vcx; this.vcy = vcy; this.vcz = vcz;
+    // peel damping (see the tack pass): the table pulls the body back through a peeling tacky foot, uniformly (no deformation)
+    const gdv = vcy > 0 ? vcy * this.peelK : 0;
+    this.vcx = vcx; this.vcy = vcy - gdv; this.vcz = vcz;
 
     // self-righting torque (a weeble: it flops over but rights itself) + angular damping of the rigid spin
     const q = this.qr;
@@ -2005,7 +2092,7 @@ export class SoftBody implements SoftBodyLike {
       const nl = dQ * Math.sqrt(sp2);
       const ga = Math.min(0.9, dAff + nl), gr = Math.min(0.9, dRes + nl);
       vx += -ga * avx - gr * (ivx - avx) - dr * vx + (awy * rz - awz * ry);
-      vy += -ga * avy - gr * (ivy - avy) - dr * vy + (awz * rx - awx * rz);
+      vy += -ga * avy - gr * (ivy - avy) - dr * vy + (awz * rx - awx * rz) - gdv;
       vz += -ga * avz - gr * (ivz - avz) - dr * vz + (awx * ry - awy * rx);
       const s2 = vx * vx + vy * vy + vz * vz;
       if (s2 > vmax2) { const s = MAX_SPEED / Math.sqrt(s2); vx *= s; vy *= s; vz *= s; }
@@ -2142,6 +2229,20 @@ export class SoftBody implements SoftBodyLike {
     m.grounded = this.nearCount >= 3;
     m.fingers = nf;
     m.grabbed = this.grabs[0].active || this.grabs[1].active;
+    // pull: the live PULL LEVEL (pullLevel: translation-free, 1 = the family's maxPull) of the deeper of the active grabs, 0 without one
+    // (written out, not pullLevel(): a double returned from a call this large function does not inline is boxed, one HeapNumber per frame)
+    {
+      let pl = 0;
+      const maxD = Math.max(1e-9, this.p.maxPull * this.restRadius);
+      for (let k = 0; k < 2; k++) {
+        const g = this.grabs[k];
+        if (!g.active) continue;
+        const dx = g.ex - g.t0x - (this.cx - g.c0x), dy = g.ey - g.t0y - (this.cy - g.c0y), dz = g.ez - g.t0z - (this.cz - g.c0z);
+        const l = Math.sqrt(dx * dx + dy * dy + dz * dz) / maxD;
+        if (l > pl) pl = l;
+      }
+      m.pull = pl > 1 - 1e-9 ? 1 : pl;
+    }
     // press: the deepest current fingertip indentation, as a fraction of that finger's safe depth (the seating lift is not indentation);
     // only while the tip is actually in the skin. reaction: the push-back the fingertips met, a force (mass x penetration / H^2 per
     // substep, averaged over the step) mapped to 0..1 by REACT_REF, so a firm body pushes back harder than a soft one at the same depth.

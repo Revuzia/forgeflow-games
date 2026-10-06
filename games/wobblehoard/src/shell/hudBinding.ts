@@ -108,8 +108,8 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     for (const it of g.hoard.items()) if (it.fav) add(it.id);
     return out;
   };
-  // the HUD rows the 3D capsule must not land under (render lane's optional setSafeInsets): the top bar, and the bottom row with the quick
-  // switcher above it when it shows; reported on change only
+  // the HUD rows the 3D capsule must not land under (render lane's optional setSafeInsets): the top bar and the bottom row (the quick
+  // switcher above the name tag covers only the left edge; counting it would leave the capsule too little room); on change only
   let insetKey = '';
   const reportInsets = (): void => {
     const st = g.stage;
@@ -118,7 +118,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     if (!(ih > 0)) return;
     const topBar = hud.el.querySelector<HTMLElement>('.hud-top')?.getBoundingClientRect();
     let bottomTop = ih;
-    for (const e of [hud.el.querySelector<HTMLElement>('.hud-bottom'), qs.el]) {
+    for (const e of [hud.el.querySelector<HTMLElement>('.hud-bottom')]) {
       if (!e || e.hidden) continue;
       const r = e.getBoundingClientRect();
       if (r.height > 0) bottomTop = Math.min(bottomTop, r.top);
