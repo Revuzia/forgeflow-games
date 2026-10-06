@@ -99,6 +99,12 @@
   </div>
 </div>
 
+<!-- ForgeFlow shared controls bar (bottom-right: Fullscreen [F], Mute, Pause, Report Bug). The portal has no fullscreen
+     button of its own (removed 2026-07-10): every game ships this bar. GAME_CONFIG must exist BEFORE the script loads.
+     touch:false = BLOCKTOOTH is desktop-only (no virtual stick over the game); mute_hotkey:false = M is the online-VS
+     minimap key here (the bar's Mute button still works). Page-level script, runs before any game code. -->
+<script>window.GAME_CONFIG = { touch: false, mute_hotkey: false };</script>
+<script src="./game_controls.js?v=3.1"></script>
 <script>
   // Boot guard (classic script, runs before the module graph): if the module graph fails to
   // load or throws before src/main.ts takes over, show the fatal card instead of a dead page.

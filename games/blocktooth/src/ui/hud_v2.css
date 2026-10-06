@@ -11,7 +11,7 @@
 .bt-v2toasts { z-index: 55; }
 
 /* ───────── moved v1 HUD pieces (hud.ts): zoom hint up to 9.2u, clear of the ACTIVE panel ───────── */
-.bt-hud .bt-zoomhint { bottom: calc(var(--u) * 9.2); }
+.bt-hud .bt-zoomhint { bottom: calc(var(--u) * 9.2 + 6px); }
 
 /* ───────────────────────────── shared glyph ───────────────────────────── */
 .bt-glyph { display: block; overflow: visible; }
@@ -157,7 +157,7 @@
 
 /* ───────────────────────────── ACTIVE panel (§4.4) ───────────────────────────── */
 .bt-active {
-  position: absolute; right: calc(var(--u) * 1.6); bottom: calc(var(--u) * 3.3); width: calc(var(--u) * 17); height: calc(var(--u) * 5.4);
+  position: absolute; right: calc(var(--u) * 1.6); bottom: calc(var(--u) * 3.3 + 6px); width: calc(var(--u) * 17); height: calc(var(--u) * 5.4);   /* +6px: clear of the ForgeFlow controls bar */
   display: flex; align-items: center; gap: calc(var(--u) * .55); padding: 0 calc(var(--u) * .6);
   background: var(--cream); color: var(--navy); border: calc(var(--u) * .2) solid var(--ink);
   box-shadow: calc(var(--u) * .4) calc(var(--u) * .4) 0 rgba(27, 20, 38, .6);

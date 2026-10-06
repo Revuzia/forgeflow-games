@@ -339,7 +339,7 @@
 
 /* ticker crawl (bottom) */
 .bt-ticker {
-  position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--u) * 2.35);
+  position: absolute; left: 0; right: 142px; bottom: 0; height: calc(var(--u) * 2.35);   /* right: the ForgeFlow controls bar (126 px wide, bottom-right) sits in the gap */
   display: flex; align-items: stretch; background: var(--navy); border-top: calc(var(--u) * .18) solid var(--coral);
 }
 .bt-ticker-label {
@@ -861,7 +861,7 @@
   letter-spacing: .04em; background: rgba(12, 20, 38, .92); padding: calc(var(--u) * .18) calc(var(--u) * .9);
   border-top: calc(var(--u) * .1) solid rgba(79, 179, 176, .55);
 }
-.bt-title-lower .bt-ticker { position: relative; }
+.bt-title-lower .bt-ticker { position: relative; right: auto; margin-right: 142px; }   /* same gap for the controls bar as in play */
 .bt-title.leaving { animation: bt-title-out .38s ease-in both; }
 @keyframes bt-title-out { to { opacity: 0; transform: scale(1.04); filter: brightness(2); } }
 
