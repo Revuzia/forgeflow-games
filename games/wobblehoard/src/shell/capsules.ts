@@ -8,7 +8,9 @@
 //     Every frame: setSqueeze(held / 0.5 s); capsuleBeat 'grab' at the press and again at 0.18 s. At 1 it opens; a quick tap (<= 250 ms,
 //     < 14 px) opens too; letting go in between cancels (setSqueeze(0)). Never while the play body is being touched.
 //   * Open: collection.openCapsule() first (result first), then the ceremony with that capsule. Over 1.5 s waiting: it keeps wobbling;
-//     at 10 s: "Still working. Your capsule is safe." A refusal melts back (setSqueeze 0) with the collection's message.
+//     at 10 s: "Still working. Your capsule is safe." A refusal melts back (setSqueeze 0) with the collection's message. An open asked
+//     for while a ceremony runs or waits is not refused: its reveal queues behind (ceremonies.ts, 1 s after the last burst). No capsule
+//     drops while a ceremony runs or waits.
 //   * The DOM twin (the HUD button, Enter / Space on it) calls openNext(): the 3D object is never the only way (COLLECTION 9.10).
 import type { CapsuleHandle, SquishAudio, StageLike } from '../contracts.ts';
 import type { Haptics } from '../input/haptics.ts';
@@ -71,6 +73,8 @@ export interface CapsulesDeps {
 }
 
 export function createCapsules(d: CapsulesDeps): Capsules {
+  /** a ceremony runs or waits for its start (the 1 s burst spacing): no new drop, no new open */
+  const busy = (): boolean => d.ceremonies.active || d.ceremonies.pending;
   let reading: MeterReading = safeRead();
   let credits = reading.credits;
   let cap: CapsuleHandle | null = null;
@@ -83,13 +87,14 @@ export function createCapsules(d: CapsulesDeps): Capsules {
   }
 
   function dropIfNeeded(): void {
-    if (cap || opening || d.ceremonies.active || credits <= 0 || !d.stage.dropCapsule) return;
+    if (cap || opening || busy() || credits <= 0 || !d.stage.dropCapsule) return;
     try { cap = d.stage.dropCapsule({ onLand: () => { try { d.haptics.pattern?.(CAPSULE_LAND_HAPTIC); } catch { /* optional */ } } }); }
     catch (e) { d.report(e); cap = null; }
   }
 
   async function open(c: CapsuleHandle | null): Promise<void> {
-    if (opening || d.ceremonies.active || credits <= 0) return;
+    // not refused while a ceremony runs or waits: the result is decided now and the reveal queues behind it (ceremonies.ts spacing)
+    if (opening || credits <= 0) return;
     opening = true;
     hold = null;
     try { c?.setSqueeze(1); } catch { /* gone */ }
@@ -136,7 +141,7 @@ export function createCapsules(d: CapsulesDeps): Capsules {
     get opening() { return opening; },
     get holding() { return hold !== null; },
     pointerDown(id, x, y) {
-      if (!cap || opening || d.ceremonies.active) return false;
+      if (!cap || opening || busy()) return false;
       let hit = false;
       try { hit = cap.landed && cap.hitTest(x, y); } catch { hit = false; }
       if (!hit) return false;

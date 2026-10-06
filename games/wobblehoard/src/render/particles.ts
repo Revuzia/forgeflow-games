@@ -35,6 +35,7 @@ varying vec2 vUv;
 varying vec4 vCol;
 varying float vKind;
 uniform float uTime;
+uniform float uTwinkle;   // 1 = star points twinkle, 0 = steady (calm effects: no pulses)
 void main() {
   vec2 p = vUv;
   float r = length(p);
@@ -47,7 +48,7 @@ void main() {
     if (r > 1.0) discard;
     float star = max(0.0, 1.0 - 7.0 * abs(p.x * p.y)) * (1.0 - smoothstep(0.5, 1.0, r));
     a = star * 0.9 + 1.1 * exp(-r * r * 14.0);
-    a *= 0.8 + 0.2 * sin(uTime * 2.0 + vCol.r * 20.0);
+    a *= 0.8 + 0.2 * uTwinkle * sin(uTime * 2.0 + vCol.r * 20.0);
   } else if (vKind < 2.5) {                // streak
     float along = clamp(1.0 - abs(p.x), 0.0, 1.0);
     a = pow(along, 1.5) * exp(-p.y * p.y * 7.0);
@@ -122,7 +123,7 @@ export class Particles {
     this.aColA = new THREE.InstancedBufferAttribute(this.aCol, 4).setUsage(THREE.DynamicDrawUsage);
     this.geo.setAttribute('aPos', this.aPosA); this.geo.setAttribute('aVel', this.aVelA); this.geo.setAttribute('aCol', this.aColA);
     this.mat = new THREE.ShaderMaterial({
-      vertexShader: VERT, fragmentShader: FRAG, uniforms: { uTime: { value: 0 } },
+      vertexShader: VERT, fragmentShader: FRAG, uniforms: { uTime: { value: 0 }, uTwinkle: { value: 1 } },
       transparent: true, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false,
     });
     this.mesh = new THREE.Mesh(this.geo, this.mat);
@@ -132,6 +133,9 @@ export class Particles {
   }
 
   get count(): number { return this.n; }
+
+  /** Star points twinkle (true) or hold steady (calm effects). */
+  setTwinkle(on: boolean): void { this.mat.uniforms.uTwinkle.value = on ? 1 : 0; }
 
   clear(): void { this.n = 0; this.geo.instanceCount = 0; this.mesh.visible = false; }
 

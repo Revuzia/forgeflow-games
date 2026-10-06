@@ -395,6 +395,7 @@ export function createGame(deps: GameDeps): Game {
     timers.run(simTime);
     feedback.update(dt);
     capsules.update();
+    ceremonies.update();   // a queued ceremony starts once the 1 s burst spacing has passed (flash safety)
     for (let i = 0; i < stepHooks.length; i++) { try { stepHooks[i](dt, simTime); } catch (e) { report(e); } }
   }
 

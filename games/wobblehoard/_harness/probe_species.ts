@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { SoftBody } from '../src/physics/softbody.ts';
 import { CATALOG, speciesBaseGenome, speciesTemplateGenome } from '../src/data/catalog.ts';
 import type { SpeciesId } from '../src/data/catalog.ts';
-import { MATERIAL_FAMILIES, MATERIAL_FAMILY_IDS } from '../src/data/materials.ts';
+import { MATERIAL_FAMILIES, MATERIAL_FAMILY_IDS, recoverySeconds95 } from '../src/data/materials.ts';
 import { evalShape } from '../src/data/shapes.ts';
 import { mulberry32 } from '../src/core/rng.ts';
 import type { Genome } from '../src/core/genome.ts';
@@ -216,9 +216,11 @@ if (!isMainThread) {
     add(`press matrix (${all.length} presses: top, flanks, every feature tip; the shell's pressure profile, held 1.2 s): sharpest crease (${w.r.id} ${w.r.genome} ${w.p.label}), frames over 120 deg, missed rays`, `${w.p.worst.toFixed(0)} deg, ${f120} frames, ${missed.length} missed${missed.length ? ' (' + missed.slice(0, 3).map((x) => `${x.r.id} ${x.p.label}`).join('; ') + ')' : ''}`, `<= ${PRESS_WORST_MAX} deg, 0, 0`, w.p.worst <= PRESS_WORST_MAX && f120 === 0 && missed.length === 0 && done.every((x) => !x.p.nan));
     // a plastic family (a yield: putty, mochi dough, bead squeeze) KEEPS a dent by design (dentHoldDepth), and the rim of a kept dent is a
     // sharper bend than the rest shape: for those the limit is the probe_softbody one for a tucked-under flap (no edge past 90 degrees)
-    const plastic = (fam: string): boolean => MATERIAL_FAMILIES[fam as keyof typeof MATERIAL_FAMILIES].physics.yieldStrain > 0;
-    const restBad = done.filter((x) => x.p.rest > (plastic(x.r.family) ? 90 : FOLD_REST_MAX));
-    add(`press matrix: left at rest 1.5 s after the lift (worst: ${rest.r.id} ${rest.r.genome} ${rest.p.label}, own rest ${rest.r.restFold.toFixed(0)} deg)`, `${rest.p.rest.toFixed(0)} deg${restBad.length ? '; over: ' + restBad.slice(0, 4).map((x) => `${x.r.id} ${x.p.label} ${x.p.rest.toFixed(0)}`).join('; ') : ''}`, `<= ${FOLD_REST_MAX} deg (plastic families, which keep a dent by design: <= 90)`, restBad.length === 0);
+    // ... and so does a SLOW family 1.5 s after the lift (recoverySeconds95 > 3 s: slow rise, mochi, putty, slime, beads are still recovering
+    // their dent by design, materials.ts): same limit
+    const slowOrPlastic = (fam: string): boolean => { const ph = MATERIAL_FAMILIES[fam as keyof typeof MATERIAL_FAMILIES].physics; return ph.yieldStrain > 0 || recoverySeconds95(ph) > 3; };
+    const restBad = done.filter((x) => x.p.rest > (slowOrPlastic(x.r.family) ? 90 : FOLD_REST_MAX));
+    add(`press matrix: left at rest 1.5 s after the lift (worst: ${rest.r.id} ${rest.r.genome} ${rest.p.label}, own rest ${rest.r.restFold.toFixed(0)} deg)`, `${rest.p.rest.toFixed(0)} deg${restBad.length ? '; over: ' + restBad.slice(0, 4).map((x) => `${x.r.id} ${x.p.label} ${x.p.rest.toFixed(0)}`).join('; ') : ''}`, `<= ${FOLD_REST_MAX} deg (plastic or slow families, which keep or are still healing a dent by design: <= 90)`, restBad.length === 0);
     const vb = done.filter((x) => { const lo = Math.min(0.85, 1 - MATERIAL_FAMILIES[x.r.family as keyof typeof MATERIAL_FAMILIES].physics.volBleedMax - 0.05); return x.p.volMin < lo || x.p.volMax > 1.15; });
     add('press matrix: volume inside the family band (CONTRACT 4.2: min(0.85, 1 - volBleedMax - 0.05) .. 1.15)', vb.length ? vb.slice(0, 4).map((x) => `${x.r.id} ${x.p.label} ${x.p.volMin.toFixed(2)}..${x.p.volMax.toFixed(2)}`).join('; ') : `all ${done.length} in band`, 'all', vb.length === 0);
   }

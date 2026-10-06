@@ -54,6 +54,9 @@ export interface JellyUniforms {
   uTone2Col: { value: THREE.Color };
   uTierCol: { value: THREE.Color };
   uTierAmt: { value: number };
+  /** 0..1: the body's own colour (diffuse AND the transmission absorption) leans toward uTierCol: the merge charge's tell, which additive
+   *  light alone could not carry (it only whitened a warm ball). */
+  uTierTint: { value: number };
   uMixCol: { value: THREE.Color };
   uMixAmt: { value: number };
 }
@@ -84,9 +87,10 @@ varying vec3 vRest;
 varying vec3 vWPos;
 uniform float uTime, uCompress, uStretch, uBlushAmt, uPatStrength, uCoreAmt, uCoreRadius, uRimAmt, uScatter, uAlphaBase;
 uniform vec3 uBlushCol, uPaleCol, uPatA, uPatB, uRimCol, uGlowCol, uKeyCol, uCoreCol, uSeed, uRimDir, uKeyDir, uCoreWorld;
-uniform float uAurora, uIri, uTwoTone, uTierAmt, uMixAmt;
+uniform float uAurora, uIri, uTwoTone, uTierAmt, uTierTint, uMixAmt;
 uniform vec3 uTone2Col, uTierCol, uMixCol;
 float jBlush = 0.0;
+float jTwo = 0.0;
 float jPale = 0.0;
 float jMix = 0.0;
 ${NOISE_GLSL}
@@ -115,8 +119,10 @@ const COLOR_STAGE = /* glsl */`
   float jBd = sin(vRest.y * 10.0 + 1.4 * whNoise3(vRest * 2.5 + uSeed * 9.0) + uSeed.y * 6.2832);
   diffuseColor.rgb = mix(diffuseColor.rgb, uPatA, smoothstep(0.15, 0.55, jBd) * uPatStrength);
 #endif
-  // rarity: Epic's two-tone gradient body (a second hue blooms toward the top)
-  diffuseColor.rgb = mix(diffuseColor.rgb, uTone2Col, 0.7 * uTwoTone * smoothstep(-0.15, 0.85, vRest.y + 0.3 * whNoise3(vRest * 2.0 + uSeed * 5.0)));
+  // rarity: Epic's two-tone gradient body (a second hue blooms toward the top). The diffuse mix alone barely shows on a translucent body
+  // (the transmission carries its colour) or on a frosted one (the glow does): jTwo also tints the absorption and adds a little light
+  jTwo = 0.7 * uTwoTone * smoothstep(-0.15, 0.85, vRest.y + 0.3 * whNoise3(vRest * 2.0 + uSeed * 5.0));
+  diffuseColor.rgb = mix(diffuseColor.rgb, uTone2Col, jTwo);
   // merge ceremony: the parents' colours swirl together (lineage)
   float jMixSw = smoothstep(-0.2, 0.6, sin(atan(vRest.z, vRest.x) * 2.0 + vRest.y * 6.0 + uTime * 0.9 + 1.3 * whNoise3(vRest * 2.5)));
   jMix = uMixAmt * jMixSw;
@@ -129,6 +135,7 @@ const COLOR_STAGE = /* glsl */`
   jPale = clamp((jStr + uStretch * 0.5) * uBlushAmt, 0.0, 1.0);
   diffuseColor.rgb = mix(diffuseColor.rgb, uBlushCol, jBlush * 0.75);
   diffuseColor.rgb = mix(diffuseColor.rgb, uPaleCol, jPale * 0.6);
+  diffuseColor.rgb = mix(diffuseColor.rgb, uTierCol, uTierTint);
 }
 `;
 
@@ -138,6 +145,7 @@ float jNdv0 = clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0);
 float jThick = (0.32 + 0.68 * jNdv0) * (1.0 - 0.55 * jPale + 0.12 * jBlush);
 float jAtt = (1.0 + 1.8 * jPale) / (1.0 + 0.9 * jBlush);
 ${THREE.ShaderChunk.transmission_fragment
+    .replace('material.attenuationColor = attenuationColor;', 'material.attenuationColor = mix(mix(attenuationColor, uTone2Col, jTwo), uTierCol, uTierTint);')
     .replace('material.thickness = thickness;', 'material.thickness = thickness * jThick;')
     .replace('material.attenuationDistance = attenuationDistance;', 'material.attenuationDistance = attenuationDistance * jAtt;')}
 `;
@@ -180,6 +188,7 @@ const EMISSIVE_STAGE = /* glsl */`
     jExtra += jfilm * (0.08 + 0.9 * jFres) * 0.55 * uIri;
     totalSpecular *= mix(vec3(1.0), 0.55 + jfilm, 0.6 * uIri);
   }
+  jExtra += uTone2Col * jTwo * (0.1 + 0.25 * (1.0 - jFres));            // Epic two-tone: the second hue also glows a little from inside
   jExtra += uTierCol * uTierAmt * (0.25 + 0.9 * jFres + 0.5 * jHalo);   // the tier "tell": light drifting toward the result colour
   jExtra += uMixCol * jMix * (0.16 + 0.3 * (1.0 - jFres));             // merge lineage: the other parents' colours swirl through as light
   totalEmissiveRadiance += jRim + jScat + jCore + jExtra;
@@ -247,7 +256,7 @@ export class JellyMaterials {
       uRimDir: { value: RIM_DIR.clone() }, uKeyDir: { value: KEY_DIR.clone() },
       uCoreWorld: { value: new THREE.Vector3() },
       uAurora: { value: 0 }, uIri: { value: 0 }, uTwoTone: { value: 0 }, uTone2Col: { value: lin(palette.tone2) },
-      uTierCol: { value: lin(style.tell) }, uTierAmt: { value: 0 }, uMixCol: { value: lin(palette.body) }, uMixAmt: { value: 0 },
+      uTierCol: { value: lin(style.tell) }, uTierAmt: { value: 0 }, uTierTint: { value: 0 }, uMixCol: { value: lin(palette.body) }, uMixAmt: { value: 0 },
     };
     this.palette = palette;
     this.scale = scale;
@@ -323,9 +332,12 @@ export class JellyMaterials {
         .replace('#include <common>', '#include <common>\n' + FRAG_PARS)
         .replace('#include <color_fragment>', COLOR_STAGE)
         .replace('#include <transmission_fragment>', TRANSMISSION)
-        .replace('vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;', EMISSIVE_STAGE);
+        .replace('vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;', EMISSIVE_STAGE)
+        // three writes the transmission alpha (< 1) UNBLENDED for an opaque transmissive material, and the canvas has an alpha channel: the
+        // page's CSS background showed through the jelly (lighter halos, holes in toDataURL captures). The jelly's pixels are opaque.
+        .replace('#include <opaque_fragment>', '#include <opaque_fragment>\n#ifndef WH_LOW\n  gl_FragColor.a = 1.0;\n#endif');
     };
-    m.customProgramCacheKey = () => `wh-jelly-v1-${this.pattern}-${low ? 'low' : 'full'}`;
+    m.customProgramCacheKey = () => `wh-jelly-v2-${this.pattern}-${low ? 'low' : 'full'}`;
     return m;
   }
 

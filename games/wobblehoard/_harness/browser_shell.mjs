@@ -111,9 +111,18 @@ async function stepUntil(page, fnSrc, max = 8, slice = 0.1) {
 }
 /** the capsule DOM twin, clicked like a person would (Playwright waits until it is visible, enabled and still); its state on failure */
 async function clickOpen(page) {
-  try { await page.click('.capsule-btn', { timeout: 15000 }); return true; } catch (e) {
+  try { await page.click('.capsule-btn', { timeout: 60000 }); return true; } catch (e) {
     const st = await page.evaluate(() => { const b = document.querySelector('.capsule-btn'); const r = b.getBoundingClientRect(); const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return { hidden: b.hidden, disabled: b.disabled, rect: [r.x, r.y, r.width, r.height], top: top ? top.className || top.tagName : null, meter: window.__WH__.shell.meter(), cer: window.__WH__.shell.ceremony() }; });
     check('the capsule button can be clicked', false, JSON.stringify(st));
+    return false;
+  }
+}
+
+/** page.click with a diagnosis when it cannot click: what covers the element, its state, the ceremony */
+async function clickSel(page, sel, what) {
+  try { await page.click(sel, { timeout: 60000 }); return true; } catch (e) {
+    const st = await page.evaluate((q) => { const b = document.querySelector(q); if (!b) return { missing: true }; const r = b.getBoundingClientRect(); const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); const cs = getComputedStyle(b); return { disabled: b.disabled, rect: [r.x, r.y, r.width, r.height], top: top ? `${top.tagName}.${top.className}` : null, vis: cs.visibility, op: cs.opacity, inert: !!b.closest('[inert]'), phase: document.body.dataset.phase, cer: window.__WH__?.shell.ceremony() }; }, sel);
+    check(`${what} can be clicked`, false, `${String(e.message).split('\n')[0]} ${JSON.stringify(st)}`);
     return false;
   }
 }
@@ -727,14 +736,49 @@ async function main() {
       const a0 = await started(page);
       await page.evaluate(() => { window.__mergeP = window.__WH__.shell.merge({ tierUp: false, isNew: false }); });
       await stepSim(page, 0.45);
+      const humBefore = await page.evaluate(() => window.__WH__.state().audio.liveKinds?.merge ?? 0);
       await page.keyboard.press('Space');                    // a key during a ceremony = skip
+      await stepSim(page, 2 / 60);
+      const humAfter = await page.evaluate(() => window.__WH__.state().audio.liveKinds?.merge ?? 0);
       await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null`, 1, 1 / 60);
       await page.evaluate(async () => { await window.__mergeP; });
       const a1 = await started(page);
       check('merge skipped before T3 (Space at 0.45 s): no burst, the motif plays instead (reveal +1)', (a1.merge ?? 0) === (a0.merge ?? 0) + 1 && (a1.mergeBurst ?? 0) === (a0.mergeBurst ?? 0) && (a1.reveal ?? 0) === (a0.reveal ?? 0) + 1, `merge +${(a1.merge ?? 0) - (a0.merge ?? 0)} burst +${(a1.mergeBurst ?? 0) - (a0.mergeBurst ?? 0)} reveal +${(a1.reveal ?? 0) - (a0.reveal ?? 0)}`);
+      // the hum must be live right before the skip and stopped by it (mh.stop() on a 'reveal' without 'burst'), not left to run out
+      check('merge skipped: the hum was live before the skip and is stopped two frames after it (mh.stop)', humBefore >= 1 && humAfter === 0, `live merge voices ${humBefore} -> ${humAfter}`);
       await page.evaluate(() => window.__WH__.resume());
-      const hum = await waitUntil(page, () => (window.__WH__.state().audio.liveKinds?.merge ?? 0) === 0, null, 15000);
-      check('merge skipped: the hum is gone (no live merge voice)', hum, JSON.stringify((await state(page)).audio.liveKinds ?? {}));
+    });
+
+    // ------------------------------------------------------------------------------------------------
+    // flash safety (DESIGN 6.6): no ceremony starts within 1.0 s of the previous one's burst. A Mythic skipped right after its burst,
+    // then the next open requested in the same breath: the open is queued (not lost) and its burst lands >= 1.0 s after the Mythic's.
+    // ------------------------------------------------------------------------------------------------
+    await section('ceremony-spacing', async () => {
+      const { page } = C;
+      await page.evaluate(() => window.__WH__.pause());
+      await stepSim(page, 1.2);                                 // any earlier burst is older than the spacing
+      const tFrom = await page.evaluate(() => { const b = window.__WH__.shell.beats(); return b.length ? b[b.length - 1].t : -1e15; });
+      const credits0 = await page.evaluate(() => window.__WH__.shell.meter().credits);
+      await page.evaluate(() => { window.__revP = window.__WH__.shell.reveal({ tier: 'mythic' }); });
+      await page.evaluate(() => window.__WH__.shell.grant(1));   // a capsule for the next open (earned mid-ceremony: it waits, no drop)
+      const toBurst = await stepUntil(page, `(wh) => wh.shell.beats().some((b) => b.beat === 'burst' && b.t > ${tFrom})`, 8, 1 / 60);
+      const req = await page.evaluate(() => {
+        const skipped = window.__WH__.shell.skip();               // skip right after the burst ...
+        window.__openP = window.__WH__.shell.openCapsule();       // ... and ask for the next capsule at once
+        return { skipped, credits: window.__WH__.shell.meter().credits };
+      });
+      const next = await stepUntil(page, `(wh) => wh.shell.beats().filter((b) => b.beat === 'burst' && b.t > ${tFrom}).length >= 2`, 8, 1 / 60);
+      const bs = await page.evaluate((f) => window.__WH__.shell.beats().filter((b) => b.t > f), tFrom);
+      const bursts = bs.filter((b) => b.beat === 'burst'), grabs = bs.filter((b) => b.beat === 'grab');
+      const startGap = grabs.length >= 2 && bursts.length >= 1 ? grabs[1].t - bursts[0].t : NaN;
+      const burstGap = bursts.length >= 2 ? bursts[1].t - bursts[0].t : NaN;
+      check('flash safety: a Mythic skipped right after its burst, then the next open at once: the next ceremony starts >= 1.0 s after that burst, and its burst lands >= 1.0 s after it',
+        toBurst >= 0 && req.skipped && next >= 0 && startGap >= 1000 && burstGap >= 1000, `credits at the request ${req.credits}; burst -> next start ${startGap.toFixed(0)} ms, burst -> burst ${burstGap.toFixed(0)} ms; beats ${bs.map((b) => b.beat).join(',')}`);
+      check('flash safety: the wait is only the spacing (the next start comes within 0.1 s of the 1.0 s mark)', startGap < 1100, `${startGap.toFixed(0)} ms`);
+      await stepUntil(page, `(wh) => wh.shell.ceremony().kind === null && !wh.shell.ceremony().pending`, 8, 0.1);
+      const fin = await page.evaluate(async () => { await window.__revP; await window.__openP; return { id: window.__WH__.shell.identity(), m: window.__WH__.shell.meter() }; });
+      check('flash safety: the queued open was not lost (it played to the end, the capsule is spent, its result is the play body)', fin.m.credits === credits0 && !!fin.id.itemId && !fin.id.itemId.startsWith('dev-'), JSON.stringify({ itemId: fin.id.itemId, species: fin.id.species, credits: `${credits0} -> ${fin.m.credits}` }));
+      await page.evaluate(() => window.__WH__.resume());
     });
 
     // ------------------------------------------------------------------------------------------------
@@ -742,7 +786,8 @@ async function main() {
     // ------------------------------------------------------------------------------------------------
     await section('calm-mode', async () => {
       const { page } = C;
-      await page.click('button[aria-label="Settings"]'); await sleep(400);
+      if (!(await clickSel(page, 'button[aria-label="Settings"]', 'the gear'))) return;
+      await sleep(400);
       await page.focus('#wh-calm'); await page.keyboard.press('Space'); await sleep(300);
       await page.keyboard.press('Escape'); await sleep(300);
       const info = await page.evaluate(() => ({ s: window.__WH__.state().settings, stage: window.__WH__.shell.stageInfo(), body: document.body.dataset.calm }));

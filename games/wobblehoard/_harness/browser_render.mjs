@@ -342,7 +342,7 @@ try {
     const fp = await rp.evaluate(() => window.__RV__.flashProbe());
     R2.flash = fp;
     check(fp.flashesIn1s <= 2 && fp.maxAlpha <= 0.25 + 1e-9, 'FlashGovernor: 12 flash requests inside 1 s grant <= 2, alpha capped at 0.25', `granted ${fp.flashesIn1s}, max alpha ${fp.maxAlpha}`);
-    check(fp.stack[0] === true && fp.stack[1] === false && fp.stack[3] === false, 'FlashGovernor: a flash is never stacked inside the 480 ms ramp, never 3 in a window', JSON.stringify(fp.stack));
+    check(fp.stack[0] === true && fp.stack[1] === false && fp.stack[2] === false && fp.stack[3] === false && fp.stack[4] === true, 'FlashGovernor: granted flashes start >= 1 s apart (never stacked, never more than 2 in any second)', JSON.stringify(fp.stack));
     check(fp.rings[0] === true && fp.rings[1] === false && fp.rings[2] === true && fp.rings[3] === false, 'FlashGovernor: shock rings are >= 500 ms apart', JSON.stringify(fp.rings));
     check(fp.tints[0] === 'coral' && fp.tints[1] !== 'cyan' && fp.tints[3] !== 'cyan' && fp.tints[4] === 'cyan', 'FlashGovernor: ember-coral and lagoon-cyan never alternate faster than 2 Hz', JSON.stringify(fp.tints));
     check(fp.calmFlash === 0 && fp.calmRing === false, 'FlashGovernor: calm mode grants no flash and no ring', `${fp.calmFlash} ${fp.calmRing}`);
@@ -504,6 +504,34 @@ try {
       }
     }
     check(worstTransitions <= 3, 'FLASH PROBE: no 1 s window of any capsule / merge ceremony has more than 3 luminance transitions', `worst ${worstTransitions} (${worstWhere}), threshold ${FLASH_THR} mean linear luminance`);
+
+    // CHAINED ceremonies (the independent verifier's adversarial sequences): skip a bright reveal right after its burst and open the next
+    // one at once (Fast open), five quick pops back to back, a queue of capsules each skipped, three Epics in a row. The burst light is
+    // governed ACROSS ceremonies (granted flashes >= 1 s apart; a refused burst is played soft) and a skip inside a burst fades like the burst
+    // light: the same <= 3 transitions per rolling second must hold for the whole chain (target <= 2).
+    {
+      const CH = {
+        mythicSkipThenQuickCommon: [{ kind: 'capsule', tier: 'mythic', skipAt: 1.73 }, { kind: 'capsule', tier: 'common', quick: true, startAt: 1.81 }],
+        mythicSkipThenQuickUncommon: [{ kind: 'capsule', tier: 'mythic', skipAt: 1.73 }, { kind: 'capsule', tier: 'uncommon', quick: true, startAt: 1.81 }],
+        legendarySkipThenQuickUncommon: [{ kind: 'capsule', tier: 'legendary', skipAt: 1.53 }, { kind: 'capsule', tier: 'uncommon', quick: true, startAt: 1.61 }],
+        mergeMythicSkipThenQuickUncommon: [{ kind: 'merge', tier: 'mythic', skipAt: 2.88 }, { kind: 'capsule', tier: 'uncommon', quick: true, startAt: 2.96 }],
+        mythicSkipThenCommon: [{ kind: 'capsule', tier: 'mythic', skipAt: 1.70 }, { kind: 'capsule', tier: 'common', startAt: 1.70 }],
+        quickPops5Common: [0, 1, 2, 3, 4].map(() => ({ kind: 'capsule', tier: 'common', quick: true, gap: 0 })),
+        quickPops5Uncommon: [0, 1, 2, 3, 4].map(() => ({ kind: 'capsule', tier: 'uncommon', quick: true, gap: 0 })),
+        rareQueueSkipped: [0, 1, 2, 3].map(() => ({ kind: 'capsule', tier: 'rare', skipAt: 1.0, gap: 0.05 })),
+        epicCapsules3: [0, 1, 2].map(() => ({ kind: 'capsule', tier: 'epic', gap: 0 })),
+      };
+      const chains = {};
+      let worstChain = 0, worstChainAt = '';
+      for (const [name, seq] of Object.entries(QUICK ? { mythicSkipThenQuickCommon: CH.mythicSkipThenQuickCommon, quickPops5Uncommon: CH.quickPops5Uncommon } : CH)) {
+        const r = await rp.evaluate(([seq, dt]) => window.__RV__.runChain(seq, dt), [seq, DT]);
+        const w = worstWindow(zigzag(r.lumas), DT);
+        chains[name] = { transitions1s: w, transitions1s_at_0_02: worstWindow(zigzagT(r.lumas, 0.02), DT), ramps: r.light.filter((v, i) => v > 0.01 && (i === 0 || r.light[i - 1] <= 0.01)).length, maxLight: Math.max(...r.light), marks: r.marks.join(' ') };
+        if (w > worstChain) { worstChain = w; worstChainAt = name; }
+      }
+      R2.chains = chains;
+      check(worstChain <= 3, 'FLASH PROBE, CHAINED ceremonies (skip + Fast open, 5 quick pops, a skipped queue, 3 Epics): <= 3 luminance transitions in any 1 s', `worst ${worstChain} (${worstChainAt}); per chain ${Object.entries(chains).map(([k, v]) => `${k} ${v.transitions1s}`).join(', ')}`);
+    }
 
     // tier-up accent (+0.4 s), 3-parent merge, quick pop
     for (const tier of QUICK ? ['mythic'] : ['rare', 'epic', 'mythic']) {

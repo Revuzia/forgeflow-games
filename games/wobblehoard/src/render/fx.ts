@@ -172,12 +172,13 @@ const GLITTER_FRAG = /* glsl */`
 varying vec2 vUv;
 varying vec3 vTw;
 uniform float uTime;
+uniform float uTwinkle;   // 1 = the specks twinkle; 0 = steady at their mean brightness (calm effects: no pulses)
 uniform vec3 uColor;
 void main() {
   vec2 p = vUv;
   float r = length(p);
   if (r > 1.0) discard;
-  float tw = pow(0.5 + 0.5 * sin(uTime * vTw.y + vTw.x * 6.2832), 5.0);
+  float tw = mix(0.25, pow(0.5 + 0.5 * sin(uTime * vTw.y + vTw.x * 6.2832), 5.0), uTwinkle);
   float star = max(0.0, 1.0 - 7.0 * abs(p.x * p.y)) * (1.0 - smoothstep(0.55, 1.0, r));
   float core = exp(-r * r * 12.0);
   float a = (star * 0.85 + core * 1.1) * (0.18 + 1.7 * tw) * vTw.z;
@@ -188,6 +189,7 @@ void main() {
 `;
 
 class Glitter {
+  twinkle = true;
   readonly mesh: THREE.Mesh;
   private readonly geo: THREE.InstancedBufferGeometry;
   private readonly mat: THREE.ShaderMaterial;
@@ -215,7 +217,7 @@ class Glitter {
     this.geo.setAttribute('aPos', this.aPosA);
     this.geo.setAttribute('aTw', this.aTwA);
     this.mat = new THREE.ShaderMaterial({
-      vertexShader: GLITTER_VERT, fragmentShader: GLITTER_FRAG, uniforms: { uTime: { value: 0 }, uColor: { value: color } },
+      vertexShader: GLITTER_VERT, fragmentShader: GLITTER_FRAG, uniforms: { uTime: { value: 0 }, uTwinkle: { value: 1 }, uColor: { value: color } },
       transparent: true, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false,
     });
     this.mesh = new THREE.Mesh(this.geo, this.mat);
@@ -314,6 +316,7 @@ class Glitter {
       o++;
     }
     this.mat.uniforms.uTime.value = time;
+    this.mat.uniforms.uTwinkle.value = this.twinkle ? 1 : 0;
     this.aPosA.needsUpdate = true; this.aTwA.needsUpdate = true;
     this.geo.instanceCount = o;
     this.mesh.visible = o > 0;
@@ -528,6 +531,7 @@ export class Fx {
     this.glow = 0.85 + 0.9 * (body ? body.metrics.kinetic : 0);
     this.bubbles.update(dt, time);
     const drift = this.style.drift && !this.calm;
+    this.glitter.twinkle = !this.calm;
     this.glitter.update(dt, time, body, this.glow, drift);
     if (this.style.sparkTrail && !this.calm && dt > 0) {   // Legendary: a short spark trail rising off the body
       this.trailT += dt;

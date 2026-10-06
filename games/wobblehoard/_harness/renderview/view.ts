@@ -8,6 +8,7 @@ import { StubBody } from '../../src/render/stubBody.ts';
 import { genomeFromParam, type Genome } from '../../src/core/genome.ts';
 import type { CapsuleHandle, CeremonyHandle, FxKind, QualityTier, SoftBodyCtor, SoftBodyLike, SoftEvent, TierName, V3 } from '../../src/contracts.ts';
 import { capsuleDuration, mergeDuration } from '../../src/render/ceremony.ts';
+import { speciesBaseGenome } from '../../src/data/catalog.ts';
 
 type BodyKind = 'real' | 'stub';
 const params = new URLSearchParams(location.search);
@@ -156,7 +157,8 @@ function cerBody(g: Genome): SoftBodyLike {
     has(t, k) { return !hidden.has(k) && Reflect.has(t, k); },
   });
 }
-const PARENT_SEEDS = ['', '3', '8'];
+/** Merge parents as in play: MERGE_COST squishies of ONE species (rollMerge refuses mixed species), here three DOLLOPs of different seeds. */
+const parentGenomes = (n: number): Genome[] => [0, 1, 2].slice(0, n).map((k) => speciesBaseGenome('dollop', 101 + k));
 function resultGenome(tier: TierName): Genome { return genomeFromParam(String(['', '2', '5', '19', '16', '8'][['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'].indexOf(tier)] ?? '')); }
 const hooksFor = { onBeat(beat: string, info: { t: number; tier: TierName }): void { cer.beats.push({ beat, t: info.t, tier: info.tier, frame: frameNo }); } };
 function resetCer(kind: string, tier: TierName, duration: number): void {
@@ -346,6 +348,43 @@ const RV = {
     };
   },
   async awaitDone(): Promise<boolean> { if (!cer.handle) return false; await cer.handle.done; return true; },
+  /**
+   * Ceremonies CHAINED the way a fast-tapping player can chain them (tap-to-skip, Fast-open quick pops, a queue of capsules): each step
+   * starts at `startAt` (seconds from the chain start) or `gap` seconds after the previous one ended, and is skipped `skipAt` seconds after
+   * its own start. Per-frame mean luminance for the flash probe; the result of each ceremony is adopted as the play body, as the shell does.
+   */
+  runChain(seq: { kind: 'capsule' | 'merge'; tier: TierName; quick?: boolean; skipAt?: number; startAt?: number; gap?: number }[], dt = 1 / 30): { lumas: number[]; marks: string[]; light: number[] } {
+    stage.clearBodies(); stage.setCalmEffects(false);
+    setupBody(genomeFromParam(''));
+    for (let i = 0; i < 30; i++) frame(dt);
+    const lumas: number[] = [], light: number[] = [], marks: string[] = [];
+    let f = 0, cur: CeremonyHandle | null = null, curStart = 0, idx = 0, skipped = false, endAt = -1;
+    const start = (st: (typeof seq)[number]): void => {
+      const hooks = { onBeat: (bt: string): void => { marks.push(`${bt}@${(f * dt).toFixed(2)}`); } };
+      cur = st.kind === 'capsule'
+        ? stage.playCapsuleReveal({ result: { genome: resultGenome(st.tier), tier: st.tier }, createBody: makeBody, quick: !!st.quick }, hooks)
+        : stage.playMergeCeremony({ parents: parentGenomes(2).map((g) => ({ genome: g })), result: { genome: resultGenome(st.tier), tier: st.tier }, createBody: makeBody }, hooks);
+      curStart = f * dt; skipped = false; endAt = -1; marks.push(`START ${st.kind}:${st.tier}${st.quick ? ':quick' : ''}@${(f * dt).toFixed(2)}`);
+    };
+    start(seq[0]); idx = 1;
+    for (; f < 30 * 14; f++) {
+      const t = f * dt, s = seq[idx - 1], h = cur as CeremonyHandle | null;
+      if (!h) break;
+      if (s && s.skipAt !== undefined && !skipped && t - curStart >= s.skipAt) { h.skip(); skipped = true; marks.push(`skip@${t.toFixed(2)}`); }
+      if (!h.active && endAt < 0) endAt = t;
+      const nx = seq[idx];
+      if (nx) {
+        const due = nx.startAt !== undefined ? t >= nx.startAt - 1e-9 : endAt >= 0 && t >= endAt + (nx.gap ?? 0) - 1e-9;
+        if (due) { if (h.resultBody) body = h.resultBody; start(nx); idx++; }
+      } else if (endAt >= 0 && t > endAt + 0.8) break;
+      if (!h.active && h.resultBody && body !== h.resultBody) body = h.resultBody;
+      frame(dt);
+      lumas.push(meanLuma()); light.push(stage.info.screenLight);
+    }
+    const h = cur as CeremonyHandle | null;
+    if (h && h.resultBody) body = h.resultBody;
+    return { lumas, marks, light };
+  },
   /** Lose and restore the WebGL context on a SECOND stage; none of it may throw, and it must render again afterwards. */
   async contextLossTest(): Promise<{ ok: boolean; log: string[] }> {
     const log: string[] = [];
@@ -487,7 +526,7 @@ const RV = {
     const D = mergeDuration(tier, { tierUp, calm: stage.info.calm });
     resetCer('merge', tier, D);
     cer.tierUp = tierUp; cer.quick = false;
-    const ps = PARENT_SEEDS.slice(0, parents).map((sd) => ({ genome: genomeFromParam(sd), tier: 'common' as TierName }));
+    const ps = parentGenomes(parents).map((g) => ({ genome: g, tier: 'common' as TierName }));
     cer.handle = stage.playMergeCeremony({ parents: ps, result: { genome: g, tier, tierUp, isNew: true }, createBody: cerBody }, hooksFor);
     return cer.handle.duration;
   },
@@ -536,8 +575,8 @@ const RV = {
     for (let i = 0; i < 12; i++) { const r = f.flash(10 + i * 0.08, 0.6); if (r > 0) { granted++; a = Math.max(a, r); } }
     out.flashesIn1s = granted; out.maxAlpha = a;
     // stacked within the 480 ms ramp must be refused
-    f.reset(); const first = f.flash(20, 0.2), second = f.flash(20.2, 0.2), third = f.flash(20.6, 0.2), fourth = f.flash(20.9, 0.2);
-    out.stack = [first > 0, second > 0, third > 0, fourth > 0];
+    f.reset(); const first = f.flash(20, 0.2), second = f.flash(20.2, 0.2), third = f.flash(20.6, 0.2), fourth = f.flash(20.9, 0.2), fifth = f.flash(21.0, 0.2);
+    out.stack = [first > 0, second > 0, third > 0, fourth > 0, fifth > 0];
     // rings
     f.reset(); const r1 = f.ring(30), r2 = f.ring(30.2), r3 = f.ring(30.55), r4 = f.ring(30.7);
     out.rings = [r1, r2, r3, r4];

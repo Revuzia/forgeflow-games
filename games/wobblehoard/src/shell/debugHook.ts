@@ -32,8 +32,13 @@ export interface ShellDevApi {
   openCapsule(): Promise<void>;
   /** the dev merge entry (MERGE 7 order, result decided here instead of by a server): MERGE_COST parents + a result */
   merge(o?: { parents?: string[]; result?: string; species?: string; tierUp?: boolean; isNew?: boolean }): Promise<{ parents: string[]; result: string; tier: TierName }>;
-  /** the ceremony now: kind, elapsed ms, planned duration s */
-  ceremony(): { kind: 'capsule' | 'merge' | null; elapsedMs: number; duration: number };
+  /** the dev reveal entry: play the capsule reveal of a chosen item (a catalog species of `tier`; decides and stores nothing: no
+   *  collection draw, so no rollCapsule). quick: a repeat Common's quick pop. Queued like any ceremony (burst spacing). */
+  reveal(o?: { tier?: TierName; species?: string; isNew?: boolean; quick?: boolean }): Promise<{ genome: string; tier: TierName }>;
+  /** the ceremony now: kind, elapsed ms, planned duration s, a request queued behind it / the burst spacing */
+  ceremony(): { kind: 'capsule' | 'merge' | null; elapsedMs: number; duration: number; pending: boolean };
+  /** the last ceremony beats with their game-clock times in ms (the flash-safety spacing check reads it) */
+  beats(): Array<{ kind: 'capsule' | 'merge'; beat: string; t: number }>;
   /** skip like a tap (honours the 350 ms gate); true = consumed */
   skip(): boolean;
   /** identity of the play body */
@@ -105,7 +110,7 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
     return (await r.json()) as { ok: boolean; path?: string };
   });
 
-  let mergeSeq = 0;
+  let mergeSeq = 0, revealSeq = 0;
   const shell: ShellDevApi = {
     meter() {
       const m = game.capsules.reading;
@@ -155,7 +160,17 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       });
       return { parents: parents.map((g) => encodeGenome(g)), result: encodeGenome(result), tier };
     },
-    ceremony: () => ({ kind: game.ceremonies.kind, elapsedMs: game.ceremonies.elapsedMs(), duration: game.ceremonies.duration }),
+    async reveal(opt = {}) {
+      const want = opt.tier ?? 'common';
+      const species = (opt.species && getSpecies(opt.species) ? opt.species : SPECIES_BY_TIER[tierIndex(want)][0].id) as SpeciesId;
+      const genome = speciesBaseGenome(species, 0x5e7 + 131 * (++revealSeq));
+      const tier = tierOf(species);
+      const isNew = opt.quick ? false : (opt.isNew ?? true);
+      await game.ceremonies.playReveal({ itemId: `dev-reveal-${revealSeq}`, genome, tier, isNew, copies: isNew ? 1 : 2, nickname: null, quickEligible: opt.quick ? true : undefined });
+      return { genome: encodeGenome(genome), tier };
+    },
+    ceremony: () => ({ kind: game.ceremonies.kind, elapsedMs: game.ceremonies.elapsedMs(), duration: game.ceremonies.duration, pending: game.ceremonies.pending }),
+    beats: () => game.ceremonies.recentBeats().map((b) => ({ kind: b.kind, beat: b.beat, t: b.t })),
     skip: () => game.input.skip(),
     identity() {
       const id = game.identity, l = game.label;

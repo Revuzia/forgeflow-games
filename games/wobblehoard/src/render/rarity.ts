@@ -65,7 +65,8 @@ const base = (name: TierName, index: number, tell: Rgb, family: TintFamily): Tie
 
 export const TIER_STYLES: Record<TierName, TierStyle> = {
   common: { ...base('common', 0, hexLin(0xfff1d6), 'other'), rim: 0.8, coreMul: 0.7, haloMul: 0.8, poolMul: 0.62 },
-  uncommon: { ...base('uncommon', 1, hexLin(0x59d6e6), 'cyan'), translucencyAdd: 0.1, rim: 1.0, coreMul: 1.05, coreWarm: 0.5, poolMul: 1.25, poolTint: 0.85, sparkleBase: 0.2 },
+  // Uncommon read too close to Common (only the lagoon pool and a few flecks): a warmer, brighter core, a clearer pool, more flecks, a touch more rim
+  uncommon: { ...base('uncommon', 1, hexLin(0x59d6e6), 'cyan'), translucencyAdd: 0.1, rim: 1.12, coreMul: 1.22, coreWarm: 0.8, poolMul: 1.6, poolTint: 0.85, sparkleBase: 0.34 },
   rare: {
     ...base('rare', 2, hexLin(0x8a5cf0), 'other'), translucencyAdd: 0.15, attenuation: 0.8, rim: 1.35, swirlFloor: 0.8,
     coreMul: 1.15, coreSize: 1.18, corePulseHz: 0.36, corePulseAmp: 0.16, haloMul: 1.1, poolMul: 0.95, poolTint: 0.3, rimHalo: 0.5, sparkleBase: 0.45,
@@ -198,6 +199,8 @@ export class RarityFx {
   /** Draw-call relevant counters for the probe. */
   readonly live = { aura: false, dome: false, pillar: false, orbiters: 0, stars: 0 };
   calm = false;
+  /** 0.72..1: the aura and dome shrink a little on narrow (portrait) frames, where the play framing puts the body at ~75% of the width. */
+  frameFit = 1;
   /** 0..1 fade-in multiplier for all effects (used by the ceremonies to bring the aura in after the reveal). */
   strength = 1;
   private style: TierStyle;
@@ -305,14 +308,14 @@ export class RarityFx {
     // aura: soft rim halo hugging the silhouette
     if (this.aura && st.rimHalo > 0) {
       const tint = st.prism ? spectrum(time * 0.05, this.col) : st.tell;
-      const g = this.ctx.palette.glow;
-      this.aura.setColor(tint[0] * 0.8 + g[0] * 0.2, tint[1] * 0.8 + g[1] * 0.2, tint[2] * 0.8 + g[2] * 0.2);   // the TIER colour dominates (it is the tell)
-      this.aura.set(c.x, c.y, c.z, R * 1.85, 0.38 * st.rimHalo * k);
+      const g = this.ctx.palette.glow, w = st.prism ? 0.4 : 0;   // the prism aura is a pastel (a pure spectrum sample read as a plain green or blue halo)
+      this.aura.setColor((tint[0] * 0.8 + g[0] * 0.2) * (1 - w) + w * 0.9, (tint[1] * 0.8 + g[1] * 0.2) * (1 - w) + w * 0.9, (tint[2] * 0.8 + g[2] * 0.2) * (1 - w) + w);   // the TIER colour dominates (it is the tell)
+      this.aura.set(c.x, c.y, c.z, R * 1.85 * this.frameFit, 0.38 * st.rimHalo * k);
     }
     // dome (Mythic): a soft light dome standing on the table
     if (this.dome && st.dome > 0) {
       const breathe = calm ? 1 : 0.82 + 0.18 * Math.sin(time * Math.PI * 2 * 0.2);
-      this.dome.set(c.x, c.z, R * 1.5, R * 1.7 + (c.y - 0.4 * sc) * 0.2, 0.9 * st.dome * breathe * k, time);
+      this.dome.set(c.x, c.z, R * Math.max(1.2, 1.5 * this.frameFit), R * 1.7 + (c.y - 0.4 * sc) * 0.2, 0.9 * st.dome * breathe * k, time);
     }
     // pillar (Legendary): a faint light pillar on idle
     if (this.pillar && st.pillar > 0) {
@@ -323,7 +326,9 @@ export class RarityFx {
       if (!this.follow) { this.fx = c.x; this.fy = c.y; this.fz = c.z; this.follow = true; }
       const kf = 1 - Math.exp(-dt * 6);
       this.fx += (c.x - this.fx) * kf; this.fy += (c.y - this.fy) * kf; this.fz += (c.z - this.fz) * kf;
-      const lagVx = (c.x - this.fx) / 0.17, lagVz = (c.z - this.fz) / 0.17;   // the follower lags: motes trail when the body moves
+      let lagVx = (c.x - this.fx) / 0.17, lagVz = (c.z - this.fz) / 0.17;   // the follower lags: motes trail when the body moves
+      const lagS = Math.hypot(lagVx, lagVz), lagMax = 1.2 * sc;            // ... but a body sliding off for a reveal moves at ~7 m/s: capped,
+      if (lagS > lagMax) { lagVx *= lagMax / lagS; lagVz *= lagMax / lagS; } // or its motes stretch into laser lines across the frame
       const trailing = Math.hypot(lagVx, lagVz) > 0.25;
       const tint = st.tell;
       for (let i = 0; i < this.nMotes; i++) {
@@ -373,6 +378,7 @@ export class RarityFx {
       }
       (this.lineGeo?.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
       this.lineMat.opacity = 0.32 * k * br;
+      this.stars.setTwinkle(!calm);
       this.stars.update(0, time);
       this.live.stars = n;
     }

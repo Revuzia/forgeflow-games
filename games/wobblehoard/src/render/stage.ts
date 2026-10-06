@@ -1,7 +1,9 @@
+/// <reference types="vite/client" />
 // WOBBLEHOARD stage: owns the WebGLRenderer, the camera rig, the set, and a LIST of body views (multi-body: the play squishy, or
 // two parents plus the result during a ceremony), the capsule, the shared particle system, and the ceremony director.
-// `createStage(canvas)` implements StageLike (src/contracts.ts). `createStageDev` returns the same object with a few extra dev-only
-// members (renderer access, memory counters, context-loss helpers, the ceremony internals) for the render harness.
+// `createStage(canvas)` implements StageLike (src/contracts.ts). In a DEV build (Vite dev server: the harness, ?dev=1) the same object also
+// carries a few dev-only members (renderer access, memory counters, context-loss helpers, the `info` readout, the ceremony internals);
+// they sit behind `import.meta.env.DEV`, so `vite build` drops them. `createStageDev` is the typed accessor the render harness uses.
 //
 // Camera conventions (the SHELL lane reads these):
 //   orbit(dYaw, dPitch): radians, OrbitControls feel: pass (dx * k, dy * k) of a pointer drag and the scene turns with the finger.
@@ -68,6 +70,7 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo>, RoundTwo {
 }
 
 const TARGET_Y = 0.42;
+const NO_LEAK: [number, number, number] = [1, 1, 1];
 
 /** What a disposed stage hands out instead of throwing: a ceremony that is already over (done resolved, no result) / a capsule that is gone. */
 const INERT_CEREMONY: CeremonyHandle = Object.freeze({
@@ -79,7 +82,7 @@ const INERT_CAPSULE: CapsuleHandle = Object.freeze({
 });
 const farFirst = (a: BodyView, b: BodyView): number => b.sortDepth - a.sortDepth;
 
-export function createStageDev(canvas: HTMLCanvasElement): StageDev {
+function buildStage(canvas: HTMLCanvasElement): StageLike {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
@@ -127,7 +130,6 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   let floatMode = false, floatT = 0;
   let calm = false;
   let disposed = false, lost = false;
-  let loseExt: WEBGL_lose_context | null = null;
   let lastRenderMs = 0;
   let lastCalls = 0, lastTris = 0;
   let stageTime = 0;
@@ -140,6 +142,8 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
   let nextId = 1;
   let capsule: Capsule | null = null;   // the meter-full capsule out on the table (the shell's CapsuleHandle points at it)
   let revealCap: Capsule | null = null; // the capsule a running reveal took over (opening; owned by the ceremony until it releases it)
+  let capsuleParked = false;           // a merge put the waiting capsule away while it runs
+  let parkedOnLand: (() => void) | null = null;   // a capsule dropped DURING a merge lands (onLand) when it fades in after it
   let capsuleId = 0;
 
   const primary = (): BodyView | null => { for (const v of views) if (v.id === primaryId) return v; return null; };
@@ -183,7 +187,7 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     v.dispose();
     if (primaryId === v.id) { primaryId = views.length ? views[0].id : null; }
   }
-  function discardCapsule(): void { if (capsule) { capsule.dispose(); capsule = null; } }
+  function discardCapsule(): void { if (capsule) { capsule.dispose(); capsule = null; } capsuleParked = false; }
   function discardRevealCapsule(): void { if (revealCap) { revealCap.dispose(); revealCap = null; } }
 
   function applyTier(t: QualityTier): void {
@@ -247,21 +251,37 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     takeCapsule() {
       discardRevealCapsule();
       let c = capsule;
-      if (!c) { c = new Capsule(hub, quad, !TIERS[tier].transmission); c.placeStanding(0, 0.25); scene.add(c.group); capsuleId++; }
+      // no capsule out (a reveal without a meter-full drop): one fades in at the pad (popping in, it was a luminance step of its own)
+      if (!c) { c = new Capsule(hub, quad, !TIERS[tier].transmission); c.calm = calm; c.appear(0, 0.25, undefined, 0.2); scene.add(c.group); capsuleId++; }
       capsule = null;
       revealCap = c;
       return c;
     },
     releaseCapsule(c) { if (revealCap === c) discardRevealCapsule(); else if (capsule === c) discardCapsule(); },
+    returnCapsule(c) {
+      if (revealCap !== c) return;
+      revealCap = null;
+      if (capsule) discardCapsule();     // (a new drop arrived meanwhile: the returned one wins, it was there first)
+      capsule = c; c.setCrack(0, 0, NO_LEAK, false); c.setSqueeze(0);
+    },
+    parkCapsule(on) {
+      if (!capsule) return;
+      if (on) { capsuleParked = true; capsule.group.visible = false; capsule.touchedDown = false; return; }
+      if (!capsuleParked) return;
+      capsuleParked = false;
+      const p = primary(), spot = capsuleSpot(p), cb = parkedOnLand;
+      parkedOnLand = null;
+      capsule.appear(spot.x, spot.z, cb ?? undefined);   // fades back in beside the result (onLand only if it was dropped DURING the merge)
+    },
     addToScene: (o) => { scene.add(o); },
     removeFromScene: (o) => { scene.remove(o); },
-    crossfade(seconds) {
+    crossfade(seconds, shape) {
       if (disposed || lost) return;            // nothing to snapshot (dispose / a lost context): the jump is a plain cut
       renderer.render(scene, camera);          // the current state, into the framebuffer we are about to snapshot
-      screen.beginCrossfade(renderer, seconds);
+      screen.beginCrossfade(renderer, seconds, shape);
     },
     shake(a) { if (!calm) stage.shake(a); },
-    viewHalfWidth: () => fitDistance() * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect,
+    viewHalfWidth: (scale?: number) => (scale === undefined ? fitDistance() : fitDistance() * scale / camScale) * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect,
   };
   const director = new CeremonyDirector(host);
 
@@ -277,13 +297,9 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
 
   applySize();
 
-  const stage: StageDev = {
+  const stage: StageLike & RoundTwo = {
     canvas,
     camera,
-    renderer,
-    scene,
-    get views() { return views; },
-    flash,
 
     setBody(body, genome) {
       if (disposed) return;
@@ -301,14 +317,19 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       governor.resetWindow(24);
       return v.id;
     },
-    removeBody(id) { const v = views.find((x) => x.id === id); if (v) removeView(v); },
-    clearBodies() { while (views.length) removeView(views[views.length - 1]); primaryId = null; },
+    // a running ceremony owns its bodies (and adopts the result at its end): removing bodies under it first ends it at its final frame,
+    // exactly as setBody does, so the result is never orphaned (a primary id pointing at a removed view)
+    removeBody(id) { const v = views.find((x) => x.id === id); if (!v) return; if (director.active) director.abort(); if (views.includes(v)) removeView(v); },
+    clearBodies() { director.abort(); while (views.length) removeView(views[views.length - 1]); primaryId = null; },
     primaryBodyId() { return primaryId; },
     setBodyTier(id, t) { views.find((x) => x.id === id)?.setTier(safeTier(t)); },
     setCalmEffects(on) {
       calm = !!on; flash.calm = calm;
       for (const v of views) v.setCalm(calm);
-      if (calm) { cameraFx.dist = 1; cameraFx.yaw = 0; cameraFx.pitch = 0; screen.setLight(0, 0, 0, 0); }
+      particles.setTwinkle(!calm);
+      if (capsule) capsule.calm = calm;
+      if (revealCap) revealCap.calm = calm;
+      if (calm) { cameraFx.dist = 1; cameraFx.yaw = 0; cameraFx.pitch = 0; screen.stopRamp(); }
     },
 
     dropCapsule(opts) {
@@ -320,7 +341,10 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
       const p = primary();
       const spot = capsuleSpot(p);
       const x = opts?.at?.x ?? spot.x, z = opts?.at?.z ?? spot.z;
-      if (calm) c.appear(x, z, opts?.onLand); else c.drop(x, z, opts?.onLand);   // calm / reduced motion: it fades in, no drop
+      c.calm = calm;
+      if (director.kind === 'merge') {     // the pad is busy: it waits out of sight and fades in beside the result when the merge ends
+        c.placeStanding(x, z); c.group.visible = false; c.touchedDown = false; capsuleParked = true; parkedOnLand = opts?.onLand ?? null;
+      } else if (calm) c.appear(x, z, opts?.onLand); else c.drop(x, z, opts?.onLand);   // calm / reduced motion: it fades in, no drop
       scene.add(c.group);
       const sp = { x: 0, y: 0, r: 0 };
       const handle: CapsuleHandle = {
@@ -438,37 +462,47 @@ export function createStageDev(canvas: HTMLCanvasElement): StageDev {
     stats() {
       return { drawCalls: lastCalls, triangles: lastTris, tier: governor.tier, frameMsEma: governor.frameMsEma };
     },
-
-    memory() {
-      const i = renderer.info;
-      return { geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0, calls: i.render.calls, triangles: i.render.triangles };
-    },
-
-    loseContext() {
-      loseExt ??= renderer.getContext().getExtension('WEBGL_lose_context');   // must be fetched BEFORE the loss: a lost context returns null
-      if (!loseExt) return false;
-      loseExt.loseContext();
-      return true;
-    },
-    restoreContext() {
-      if (!loseExt) return false;
-      loseExt.restoreContext();
-      return true;
-    },
-    get info() {
-      const p = primary();
-      return {
-        fineVertices: p?.jelly.fineCount ?? 0, tier: governor.tier, mode: governor.mode, fx: p?.fx.counts ?? null, contextLost: lost,
-        pixelRatio: renderer.getPixelRatio(), drawingBuffer: [canvas.width, canvas.height] as [number, number],
-        eyeLook: p ? Array.from(p.face.lookOut) : null,
-        bodies: views.length, primary: primaryId, ceremony: director.active, particles: particles.count, calm, screenLight: screen.lightAlpha, capsule: !!capsule || !!revealCap, cameraFx,
-        particlesDropped: particles.dropped, camScale,
-      };
-    },
   };
+  // DEV ONLY: `vite build` replaces import.meta.env.DEV with false and drops this block (and everything only it references)
+  if (import.meta.env.DEV) {
+    let loseExt: WEBGL_lose_context | null = null;
+    Object.defineProperties(stage, {
+      renderer: { value: renderer },
+      scene: { value: scene },
+      views: { get: () => views },
+      flash: { value: flash },
+      memory: { value: () => { const i = renderer.info; return { geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0, calls: i.render.calls, triangles: i.render.triangles }; } },
+      loseContext: {
+        value: () => {
+          loseExt ??= renderer.getContext().getExtension('WEBGL_lose_context');   // must be fetched BEFORE the loss: a lost context returns null
+          if (!loseExt) return false;
+          loseExt.loseContext(); return true;
+        },
+      },
+      restoreContext: { value: () => { if (!loseExt) return false; loseExt.restoreContext(); return true; } },
+      info: {
+        get: () => {
+          const p = primary();
+          return {
+            fineVertices: p?.jelly.fineCount ?? 0, tier: governor.tier, mode: governor.mode, fx: p?.fx.counts ?? null, contextLost: lost,
+            pixelRatio: renderer.getPixelRatio(), drawingBuffer: [canvas.width, canvas.height] as [number, number],
+            eyeLook: p ? Array.from(p.face.lookOut) : null,
+            bodies: views.length, primary: primaryId, ceremony: director.active, particles: particles.count, calm, screenLight: screen.lightAlpha, capsule: !!capsule || !!revealCap, cameraFx,
+            particlesDropped: particles.dropped, camScale,
+          };
+        },
+      },
+    });
+  }
   return stage;
 }
 
+/** The stage (StageLike, every round-2 member). */
 export function createStage(canvas: HTMLCanvasElement): StageLike {
-  return createStageDev(canvas);
+  return buildStage(canvas);
+}
+
+/** The same stage with its dev members typed (render harness; the members exist only in a DEV build). */
+export function createStageDev(canvas: HTMLCanvasElement): StageDev {
+  return buildStage(canvas) as StageDev;
 }

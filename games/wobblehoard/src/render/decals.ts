@@ -89,6 +89,9 @@ export class Decals {
       vertexShader: DECAL_VERT, fragmentShader: SHADOW_FRAG, uniforms: { uStrength: { value: 1 }, uSoft: { value: 1 } },
       transparent: false, depthWrite: false, depthTest: true, toneMapped: false, fog: false,
       blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
+      // the canvas keeps an alpha channel: blend the colour only and leave the destination alpha (opaque) alone, or the page's CSS background
+      // shows through the shadow as a lighter halo with the decal quad's straight edges
+      blendEquationAlpha: THREE.AddEquation, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
       polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1,
     });
     this.shadow = new THREE.Mesh(quad, this.shadowMat);

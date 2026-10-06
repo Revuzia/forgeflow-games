@@ -315,6 +315,10 @@ export class SoftBody implements SoftBodyLike {
   readonly family: string;
   private readonly mat: SolverMaterial;
   private readonly bleedOn: boolean;        // volume target (P1)
+  // material scalars the per-substep code reads, cached as plain number fields (no object loads, no calls with double arguments in the
+  // large substep / finalize functions: V8 does not inline into them, and a double passed to a call is boxed: measured 16-288 B per frame)
+  private readonly jamK: number; private readonly volFloor: number; private readonly volOutK: number; private readonly volInK: number;
+  private readonly tackS: number; private readonly strandsTau: number; private readonly strandsGain: number; private readonly bleedF: number;
   private vt = 1;                           // current volume target V* / V0 (air bleed), in [volFloor, 1]
   private readonly volS0: number;           // the volume constraint's own scale S0 (volAlphaT = volKappa * S0)
   private readonly memOn: boolean;          // memory arm (P2)
@@ -523,6 +527,9 @@ export class SoftBody implements SoftBodyLike {
     // material family switches and the goal-shape buffers
     const mt0 = this.mat;
     this.bleedOn = 1 - mt0.volFloor >= BLEED_MIN;
+    this.jamK = 6 * mt0.jam; this.volFloor = mt0.volFloor; this.bleedF = this.bleedOn ? 1 : 0;
+    this.volOutK = 1 - Math.exp(-H / mt0.volOutTau); this.volInK = 1 - Math.exp(-H / mt0.volInTau);
+    this.tackS = mt0.tack > TACK_STRANDS ? mt0.tack : 0; this.strandsTau = 0.08 + 0.2 * mt0.stringiness; this.strandsGain = mt0.tack * (0.5 + 0.5 * mt0.stringiness);
     this.memOn = mt0.memStiff >= MEM_MIN;
     this.wm = this.memOn ? mt0.memStiff / (1 + mt0.memStiff) : 0;
     this.plasticOn = this.memOn && mt0.memYield > 0;
@@ -1383,10 +1390,10 @@ export class SoftBody implements SoftBodyLike {
       r00 = 1 - 2 * (yy + zz); r01 = 2 * (xy - wz); r02 = 2 * (xz + wy);
       r10 = 2 * (xy + wz); r11 = 1 - 2 * (xx + zz); r12 = 2 * (yz - wx);
       r20 = 2 * (xz - wy); r21 = 2 * (yz + wx); r22 = 1 - 2 * (xx + yy);
-      let K = this.smK;
+      // jam (bead jamming, foam densification): stiffness x (1 + 6 jam c^2), c = the compression of the last frame. Computed for every body
+      // (jamK = 0 gives exactly smK) because a value reassigned in a branch of this function is boxed (one HeapNumber per substep)
+      const cj = this.prevCompression, w2j = this.smW2 * (1 + this.jamK * cj * cj), K = w2j / (1 + w2j);
       const soft = this.softW, QG = this.goalOn ? this.QG : Q;
-      // jam (bead jamming, foam densification): stiffness x (1 + 6 jam c^2), c = metrics.compression of the last frame
-      if (this.mat.jam > 0) { const c = this.metrics.compression, w2 = this.smW2 * (1 + 6 * this.mat.jam * c * c); K = w2 / (1 + w2); }
       // slosh mode (liquid, beads): the shell's goal bulges along the liquid's offset s, 3 mu (s . n) n (an odd field: no net shift)
       const slK = this.sloshOn ? 3 * this.mat.sloshMass : 0, NRM = this.NRM, slx = this.slx, sly = this.sly, slz = this.slz;
       // ... minus its mass-weighted mean (R NN R^T s, NN = mean of n n^T at rest): on a lopsided body (fins, a tail) the raw field moved the
@@ -1479,17 +1486,18 @@ export class SoftBody implements SoftBodyLike {
         S += w * (GRAD[i3] * GRAD[i3] + GRAD[i3 + 1] * GRAD[i3 + 1] + GRAD[i3 + 2] * GRAD[i3 + 2]);
       }
       S /= v6 * v6;
-      let aEff = this.volAlphaT;
+      // bottom-out of the air bleed (below; db = 0 for an incompressible family, so aEff = volAlphaT exactly). No branch-reassigned doubles
+      // in this function: they are boxed (measured 2 HeapNumbers per substep for every compressible family)
+      const vNow = vol6 / v6, vf = this.volFloor;
+      const xb = Math.min(1, Math.max(0, (vf + 0.12 - vNow) / 0.14)), db = xb * xb * (3 - 2 * xb) * this.bleedF;
+      const aEff = this.volAlphaT * (1 - db) + 0.5 * this.volS0 * db;
       if (this.bleedOn) {
         // AIR BLEED (SQUISHY_SCIENCE 3.2): while something loads the body its volume target falls toward the squeezed volume (air leaves,
         // with volOutTau), and always returns toward 1 (air comes back through the skin, volInTau): the constraint holds the body at V*, so it
         // cannot re-inflate faster than air returns (the slow rise). Near the floor the spring stiffens back to incompressible (bottom-out).
-        const mt = this.mat, vNow = vol6 / v6;
-        const xb = clamp((mt.volFloor + 0.12 - vNow) / 0.14, 0, 1), db = xb * xb * (3 - 2 * xb);
-        aEff = aEff * (1 - db) + 0.5 * this.volS0 * db;
-        if ((a0 || a1 || grabbing) && vNow < this.vt - 0.003) this.vt += (Math.max(vNow, mt.volFloor) - this.vt) * (1 - Math.exp(-H / mt.volOutTau));
-        this.vt += (1 - this.vt) * (1 - Math.exp(-H / mt.volInTau));
-        if (this.vt < mt.volFloor) this.vt = mt.volFloor; else if (this.vt > 1) this.vt = 1;
+        const vo = (a0 || a1 || grabbing) && vNow < this.vt - 0.003 ? this.volOutK : 0;   // air leaves only while loaded
+        const v1 = this.vt + (Math.max(vNow, vf) - this.vt) * vo;
+        this.vt = Math.min(1, Math.max(vf, v1 + (1 - v1) * this.volInK));
       }
       const sc = (-C / (S + aEff)) / v6;
       for (let i = 0; i < n; i++) {
@@ -2039,14 +2047,13 @@ export class SoftBody implements SoftBodyLike {
     // >= 0.1 s pulls away (its 50 ms retract), then the strings thin out with a time constant of 0.08 + 0.2 x stringiness s (they snap within
     // ~0.3-0.6 s, like the staggered bonds of the prototype, SQUISHY_SCIENCE 3.7)
     {
-      const mt = this.mat;
-      if (mt.tack > TACK_STRANDS) {
+      if (this.tackS > 0) {
         const ff0 = this.fingers[0], ff1 = this.fingers[1];
         if ((ff0.retracting && ff0.contacted && ff0.holdT >= 0.1) || (ff1.retracting && ff1.contacted && ff1.holdT >= 0.1)) this.strandsT = 1;
-        else if (this.strandsT > 0) { this.strandsT *= Math.exp(-dt / (0.08 + 0.2 * mt.stringiness)); if (this.strandsT < 1e-3) this.strandsT = 0; }
-        m.strands = clamp(mt.tack * (0.5 + 0.5 * mt.stringiness) * this.strandsT, 0, 1);
+        else if (this.strandsT > 0) { this.strandsT *= Math.exp(-dt / this.strandsTau); if (this.strandsT < 1e-3) this.strandsT = 0; }
+        m.strands = Math.min(1, this.strandsGain * this.strandsT);
       } else m.strands = 0;
-      m.slosh = this.sloshOn ? clamp(Math.sqrt(this.slx * this.slx + this.sly * this.sly + this.slz * this.slz) / (0.35 * this.restRadius), 0, 1) : 0;
+      m.slosh = this.sloshOn ? Math.min(1, Math.sqrt(this.slx * this.slx + this.sly * this.sly + this.slz * this.slz) / (0.35 * this.restRadius)) : 0;
     }
     const sp = Math.sqrt(this.vcx * this.vcx + this.vcy * this.vcy + this.vcz * this.vcz);
     if (sp > this.debug.maxSpeed) this.debug.maxSpeed = sp;

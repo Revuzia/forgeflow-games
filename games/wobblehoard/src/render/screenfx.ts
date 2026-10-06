@@ -1,6 +1,7 @@
 // Screen-space helpers for the ceremonies, drawn last: the single additive LIGHT RAMP of a burst (screen alpha capped at 0.25 by
 // the FlashGovernor) and the 120 ms CROSSFADE used by skip() (a snapshot of the last frame fading out over the new one).
 import * as THREE from 'three';
+import { FLASH_ATTACK_S, FLASH_DECAY_S, rampEnvelope } from './flash.ts';
 
 const VERT = /* glsl */`
 varying vec2 vUv;
@@ -33,6 +34,12 @@ export class ScreenFx {
   private snapshot: THREE.FramebufferTexture | null = null;
   private fadeT = 0;
   private fadeLen = 0.12;
+  /** 'linear' (the plain 120 ms skip) or 'decay' (a skip inside a burst: the snapshot fades like the burst light, (1 - t)^2). */
+  private fadeShape: 'linear' | 'decay' = 'linear';
+  // the ONE light ramp of a burst runs here, on its own clock, so a skip, an abort or the next ceremony never cuts its 400 ms decay short
+  private rampAge = -1;
+  private rampAmp = 0;
+  private readonly rampCol = new THREE.Color();
   /** Current additive screen alpha (for the probe). */
   lightAlpha = 0;
 
@@ -59,8 +66,17 @@ export class ScreenFx {
     this.light.visible = alpha > 0.002;
   }
 
+  /** Start the burst's light ramp (attack 80 ms, decay 400 ms): `alpha` is what the FlashGovernor granted; display-space colour. */
+  startRamp(alpha: number, r: number, g: number, b: number): void {
+    this.rampAge = 0; this.rampAmp = alpha; this.rampCol.setRGB(r, g, b, THREE.LinearSRGBColorSpace);
+    this.setLight(r, g, b, 0);
+  }
+  /** Cut the ramp (calm switched on, dispose). */
+  stopRamp(): void { this.rampAge = -1; this.setLight(0, 0, 0, 0); }
+  get ramping(): boolean { return this.rampAge >= 0; }
+
   /** Grab the framebuffer as it is RIGHT NOW (call right after a render to the screen) and start fading it out. */
-  beginCrossfade(renderer: THREE.WebGLRenderer, seconds: number): boolean {
+  beginCrossfade(renderer: THREE.WebGLRenderer, seconds: number, shape: 'linear' | 'decay' = 'linear'): boolean {
     try {
       const size = renderer.getDrawingBufferSize(new THREE.Vector2());
       if (!this.snapshot || this.snapshot.image.width !== size.x || this.snapshot.image.height !== size.y) {
@@ -69,7 +85,7 @@ export class ScreenFx {
       }
       renderer.copyFramebufferToTexture(this.snapshot);
       this.fadeMat.uniforms.uTex.value = this.snapshot;
-      this.fadeLen = Math.max(0.02, seconds); this.fadeT = this.fadeLen;
+      this.fadeLen = Math.max(0.02, seconds); this.fadeT = this.fadeLen; this.fadeShape = shape;
       this.fadeMat.uniforms.uAlpha.value = 1; this.fade.visible = true;
       return true;
     } catch { this.fade.visible = false; return false; }
@@ -80,9 +96,14 @@ export class ScreenFx {
   update(dt: number): void {
     if (this.fade.visible) {
       this.fadeT -= dt;
-      const a = Math.max(0, this.fadeT / this.fadeLen);
-      this.fadeMat.uniforms.uAlpha.value = a;
-      if (a <= 0) this.fade.visible = false;
+      const lin = Math.max(0, this.fadeT / this.fadeLen);
+      this.fadeMat.uniforms.uAlpha.value = this.fadeShape === 'decay' ? lin * lin : lin;
+      if (lin <= 0) this.fade.visible = false;
+    }
+    if (this.rampAge >= 0) {
+      this.rampAge += dt;
+      if (this.rampAge >= FLASH_ATTACK_S + FLASH_DECAY_S) this.stopRamp();
+      else { const c = this.rampCol; this.setLight(c.r, c.g, c.b, this.rampAmp * rampEnvelope(this.rampAge)); }
     }
   }
 

@@ -164,6 +164,7 @@ export class BodyView {
       this.decals.setColorRGB(b[0] + (t[0] - b[0]) * tell, b[1] + (t[1] - b[1]) * tell, b[2] + (t[2] - b[2]) * tell);
     }
     this.decals.update(dt, time, fp, floatT, this.style, this.calm, this.extraPool);
+    if (camera) this.rarity.frameFit = Math.min(1, Math.max(0.72, camera.aspect / 0.75));
     this.rarity.update(dt, time, body, fp.rx, fp.rz, floatT);
   }
 

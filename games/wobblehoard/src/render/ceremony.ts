@@ -17,7 +17,7 @@ import type { Genome } from '../core/genome.ts';
 import { mulberry32 } from '../core/rng.ts';
 import type { BodyView } from './bodyview.ts';
 import type { Capsule } from './capsule.ts';
-import { FlashGovernor, rampEnvelope } from './flash.ts';
+import type { FlashGovernor } from './flash.ts';
 import { linearToSrgb, genomePalette, type Rgb } from './oklch.ts';
 import type { EmitSpec, Particles } from './particles.ts';
 import { LightPillar, PrismDome, TIER_STYLES, safeTier, spectrum, tierIndex, type TierStyle } from './rarity.ts';
@@ -30,6 +30,11 @@ export const TIER_UP_ACCENT_S = 0.4;
 export const QUICK_POP_S = 0.8;
 export const CALM_DURATION_SCALE = 0.65;
 export const SKIP_CROSSFADE_S = 0.12;
+/** How long a burst's light lasts (ramp 80 + 400 ms, the tier tell released over 0.5 s): a skip inside it fades instead of cutting. */
+const BURST_LIGHT_S = 0.6;
+/** The burst's own light when the governor refused the flash (a chained ceremony inside 1 s of the last flash) / in calm mode. */
+const SOFT_BURST_GAIN = 0.25;
+const CALM_BURST_GAIN = 0.45;
 
 export function capsuleDuration(tier: TierName, o: { quick?: boolean; calm?: boolean } = {}): number {
   const base = o.quick && tierIndex(tier) <= 1 ? QUICK_POP_S : CAPSULE_BUDGET_S[tier];
@@ -58,20 +63,20 @@ const RING_GAIN = [1, 0.5, 0.3];
 const PUSH = [0, 0.02, 0.04, 0.06, -0.07, 0.05];  // distance factor change (negative = the Legendary pull-back reveal)
 const ARC_DEG = [0, 0, 6, 10, 15, 25];
 const DIP: [number, number][] = [[1, 0], [1, 0], [1, 0], [0.6, 0.25], [0.5, 0.35], [0.4, 0.5]];  // [time scale, seconds]
-const FLASH_AMP = [0.1, 0.12, 0.15, 0.18, 0.2, 0.23];
+const FLASH_AMP = [0.1, 0.12, 0.15, 0.17, 0.18, 0.19];   // Legendary / Mythic were 0.20 / 0.23: their dome, pillar and tell add plenty
 const KICK = [0, 0.08, 0.16, 0.28, 0.42, 0.55];   // merge burst camera kick (stage.shake units)
 const LEAK = [0.45, 0.6, 0.8, 1.0, 1.15, 1.2];    // crack light strength
 /**
- * Merge framing: the whole ceremony is framed this much WIDER than the play view (eased in while the parents slide to the pad, eased
- * back to the result's own framing during T4), so the burst (the result springs open to 1.25x and rises) stays inside the frame on a
- * 16:10 desktop as well as on a portrait phone. Not a 6.3 camera move: the push / arc of the escalation table are layered on top of it.
- * Calm mode keeps the play framing (no camera moves at all) and pops the result more gently instead.
+ * Merge framing: the ceremony is framed this much WIDER than the play view (by result tier; a cut at the start, which is a scene change
+ * anyway, eased back to the result's own framing during T4), so the burst (the result springs open to 1.25x and rises) stays inside the
+ * frame. On a narrow (portrait) frame it is also widened until the starting parents fit side by side, so they never start clipped.
+ * Not a 6.3 camera move: the push / arc of the escalation table are layered on top. Calm: only the fit (a cut), no tier widening.
  */
-const MERGE_FRAMING = 1.12;
+const MERGE_FRAMING = [1.0, 1.04, 1.08, 1.12, 1.12, 1.12];   // by result tier, as the 6.3 escalation (Common: no camera change at all)
 /** The T3 spring-open of the puppet: pre-compressed to 0.8x, overshoots to 1.25x (DESIGN 6.4), settles; calm: 0.9x -> 1.12x. */
 const POP = { x0: -0.2, v0: 6.0 }, POP_CALM = { x0: -0.1, v0: 2.8 };
 /** How fast the merge result rises from the burst (m/s): ~0.15 above the pad before it lands (calm: a small lift). */
-const HOP_VY = 1.7, HOP_VY_CALM = 0.9;
+const HOP_VY = [0.9, 1.1, 1.4, 1.7, 1.7, 1.7], HOP_VY_CALM = 0.9;   // by tier: the Common result only lifts a little (no extra framing for it)
 /**
  * The merge result at the burst carries on the charged ball's light: the TIER tell glows through it and is released within 0.5 s, and
  * the parents' lineage colour swirls through as a lighter accent fading over 0.9 s (a heavy or long mix of two far-apart hues, e.g. a
@@ -79,6 +84,12 @@ const HOP_VY = 1.7, HOP_VY_CALM = 0.9;
  */
 const TELL_AT_BURST = [0.55, 0.58, 0.6, 0.42, 0.6, 0.42];   // Epic: coral over a green or teal body turns khaki; Legendary gold and Mythic white are bright already
 const MIX_AT_BURST = 0.25;
+/** The capsule result's tier tell at the burst (Epic: coral over a green or teal body turns khaki; Mythic white is bright already). */
+const CAP_TELL_AT_BURST = [0.26, 0.28, 0.3, 0.18, 0.3, 0.2];
+/** The capsule result grows out of the capsule: [start scale, seconds]; soft / calm bursts: from smaller, slower (no one-frame pop). */
+const POP_IN: [number, number] = [0.55, 0.3], POP_IN_SOFT: [number, number] = [0.3, 0.5];
+/** The crack light while the governor refuses the opposite colour family (coral vs lagoon must not alternate faster than 2 Hz). */
+const NEUTRAL_TELL: Rgb = [1, 0.88, 0.68];
 
 const smooth = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
@@ -101,16 +112,20 @@ export interface CeremonyHost {
   takeCapsule(): Capsule;
   /** The reveal is done with its capsule: remove and dispose it. */
   releaseCapsule(c: Capsule): void;
+  /** The reveal could not start (createBody threw): the capsule goes back on the table as the waiting, tappable one. */
+  returnCapsule(c: Capsule): void;
+  /** A merge needs the pad: a capsule waiting on the table is put away while it runs (true) and fades back in beside the result (false). */
+  parkCapsule(on: boolean): void;
   /** Add world-space scene objects (dome, pillar) owned by a run; removed with removeFromScene. */
   addToScene(o: THREE.Object3D): void;
   removeFromScene(o: THREE.Object3D): void;
-  /** Render the current state to the screen and start a crossfade snapshot of it. */
-  crossfade(seconds: number): void;
+  /** Render the current state to the screen and start a crossfade snapshot of it ('decay': fades like the burst light, (1 - t)^2). */
+  crossfade(seconds: number, shape?: 'linear' | 'decay'): void;
   /** Camera framing: ease toward a body scale (the result's, from its burst on); null = the primary body's. `snap` jumps there. */
   setFraming(scale: number | null, snap?: boolean): void;
   shake(a: number): void;
-  /** World half-width of the frame at the table centre at the rest framing (so a ceremony can start its bodies inside the picture). */
-  viewHalfWidth(): number;
+  /** World half-width of the frame at the table centre at the rest framing of bodies of `scale` (default: the current framing). */
+  viewHalfWidth(scale?: number): number;
 }
 
 /**
@@ -142,9 +157,15 @@ abstract class Run implements CeremonyHandle {
    * What the run actually did, for the probe to hold against the DESIGN 6.3 escalation table: burst particles emitted, rings / calm fades
    * spawned, the deepest push (+) or pull-back (-) and the widest arc, the lowest time scale and how long it stayed under 1, screen ramps.
    */
-  readonly stats = { burstParticles: 0, rings: 0, fades: 0, push: 0, pull: 0, arcDeg: 0, minTimeScale: 1, dipSeconds: 0, ramps: 0 };
-  // flash ramp
-  private rampStart = -1; private rampAmp = 0;
+  readonly stats = { burstParticles: 0, rings: 0, fades: 0, push: 0, pull: 0, arcDeg: 0, minTimeScale: 1, dipSeconds: 0, ramps: 0, softBurst: 0 };
+  /**
+   * The burst's OWN light (result tier tell, extra pool light, burst particles, dome / pillar burst, rings, the capsule's pool flash) is
+   * scaled by this: 1 when the FlashGovernor granted the burst its screen ramp, SOFT_BURST_GAIN when it refused (a chained ceremony
+   * bursting inside 1 s of the last flash), CALM_BURST_GAIN in calm mode. Set at the burst.
+   */
+  protected gain = 1;
+  /** Run time of the burst (-1 before it). */
+  protected burstAtT = -1;
 
   protected readonly host: CeremonyHost;
   private readonly hooks: CeremonyHooks | undefined;
@@ -168,7 +189,11 @@ abstract class Run implements CeremonyHandle {
 
   skip(): void {
     if (this.finished || this.skipping) return;
-    this.host.crossfade(SKIP_CROSSFADE_S);
+    // a skip inside the burst light must not cut its decay short (a 120 ms drop is a second, sharper flash): the snapshot then fades like
+    // the burst light itself, (1 - t)^2 over what is left of it; the screen ramp keeps its own clock in ScreenFx. Otherwise 120 ms, linear.
+    const since = this.burstAtT >= 0 ? this.t - this.burstAtT : Infinity;
+    if (since < BURST_LIGHT_S) this.host.crossfade(Math.max(SKIP_CROSSFADE_S, BURST_LIGHT_S - since), 'decay');
+    else this.host.crossfade(SKIP_CROSSFADE_S, 'linear');
     this.finalize(true);
     // the final reveal frame, exactly: the result's own clock (every time-phased idle effect reads it) jumps to where the natural
     // ending will have it once the 120 ms crossfade is over, and the framing snaps to the result (the crossfade hides the cut)
@@ -186,7 +211,6 @@ abstract class Run implements CeremonyHandle {
     this.t += dt;
     const raw = this.tick(dt);
     const ts = this.calm ? 1 : raw;   // calm: no slow-motion
-    this.updateRamp();
     const st = this.stats, cf = this.host.cameraFx;
     st.push = Math.max(st.push, 1 - cf.dist); st.pull = Math.max(st.pull, cf.dist - 1); st.arcDeg = Math.max(st.arcDeg, Math.abs(cf.yaw) * 180 / Math.PI);
     st.minTimeScale = Math.min(st.minTimeScale, raw, ts);   // raw: what the run itself animated with (the result's hop), ts: what physics got
@@ -195,22 +219,26 @@ abstract class Run implements CeremonyHandle {
     return ts;
   }
 
-  protected end(): void { if (this.finished) return; this.finished = true; this.host.screen.setLight(0, 0, 0, 0); this.resolveDone(); }
+  protected end(): void { if (this.finished) return; this.finished = true; this.resolveDone(); }
 
   protected abstract tick(dt: number): number;
   protected abstract finalize(skipped: boolean): void;
 
-  /** The ONE light ramp of a burst (attack 80 ms, decay 400 ms), through the flash governor. */
+  /**
+   * The ONE light ramp of a burst (attack 80 ms, decay 400 ms), through the flash governor; ScreenFx runs it on its own clock. Call FIRST
+   * at the burst: it decides `gain` for everything else the burst lights up.
+   */
   protected startRamp(): void {
+    this.burstAtT = this.t;
     const a = this.host.flash.flash(this.host.now(), FLASH_AMP[this.style.index]);
-    if (a > 0) { this.rampStart = this.t; this.rampAmp = a; this.stats.ramps++; }
-  }
-  private updateRamp(): void {
-    if (this.rampStart < 0) return;
-    const e = rampEnvelope(this.t - this.rampStart);
-    const c = lightColour(this.style, this.t, this.tmp);
-    this.host.screen.setLight(c[0], c[1], c[2], this.rampAmp * e);
-    if (this.t - this.rampStart > 0.5) { this.rampStart = -1; this.host.screen.setLight(0, 0, 0, 0); }
+    if (a > 0) {
+      const c = lightColour(this.style, this.t, this.tmp);
+      this.host.screen.startRamp(a, c[0], c[1], c[2]);
+      this.stats.ramps++; this.gain = 1;
+    } else {
+      this.gain = this.calm ? CALM_BURST_GAIN : SOFT_BURST_GAIN;
+      if (!this.calm) this.stats.softBurst = 1;
+    }
   }
 
   /** push / pull-back / arc camera offsets: rise over `rise` s from `t0`, hold, fall over the last `fall` s before `tEnd`. */
@@ -226,7 +254,7 @@ abstract class Run implements CeremonyHandle {
 
   /** The 6.3 particle table at the burst, plus the staggered rings (>= 500 ms apart, fades in calm mode). */
   protected burstParticles(cx: number, cy: number, cz: number, scale: number): void {
-    const P = this.host.particles, i = this.style.index, rng = this.rng, k = this.calm ? 0.3 : 1;
+    const P = this.host.particles, i = this.style.index, rng = this.rng, k = this.calm ? 0.3 : 1, ga = this.gain;   // ga: a soft burst's motes are dimmer, not fewer (6.3 counts)
     const before = P.emitted;
     const tell = this.style.tell;
     const mix = (t: number, w: number): number => t * (1 - w) + w;
@@ -238,27 +266,27 @@ abstract class Run implements CeremonyHandle {
     for (let j = 0, n = Math.round(MOTES[i] * k); j < n; j++) {
       const z = rng() * 2 - 1, a = rng() * Math.PI * 2, rr = Math.sqrt(1 - z * z), sp = (0.7 + 1.7 * rng()) * scale;
       const c = col(j);
-      P.emit({ x: cx, y: cy, z: cz, vx: rr * Math.cos(a) * sp, vy: Math.abs(z) * sp * 0.9 + 0.4 * scale, vz: rr * Math.sin(a) * sp, life: 0.6 + 0.6 * rng(), size: (0.018 + 0.022 * rng()) * scale, kind: 0, r: c[0], g: c[1], b: c[2], a: 0.9, drag: 1.3, grav: 0.8 });
+      P.emit({ x: cx, y: cy, z: cz, vx: rr * Math.cos(a) * sp, vy: Math.abs(z) * sp * 0.9 + 0.4 * scale, vz: rr * Math.sin(a) * sp, life: 0.6 + 0.6 * rng(), size: (0.018 + 0.022 * rng()) * scale, kind: 0, r: c[0], g: c[1], b: c[2], a: 0.9 * ga, drag: 1.3, grav: 0.8 });
     }
     for (let j = 0, n = Math.round(GLITTER[i] * k); j < n; j++) {
       const a = rng() * Math.PI * 2, sp = (0.5 + 0.9 * rng()) * scale;
-      P.emit({ x: cx, y: cy, z: cz, vx: Math.cos(a) * sp, vy: (0.6 + 0.9 * rng()) * scale, vz: Math.sin(a) * sp, life: 0.8 + 0.5 * rng(), size: 0.02 * scale, kind: 1, r: 1, g: 0.95, b: 0.85, a: 0.9, drag: 1.2, grav: 0.5 });
+      P.emit({ x: cx, y: cy, z: cz, vx: Math.cos(a) * sp, vy: (0.6 + 0.9 * rng()) * scale, vz: Math.sin(a) * sp, life: 0.8 + 0.5 * rng(), size: 0.02 * scale, kind: 1, r: 1, g: 0.95, b: 0.85, a: 0.9 * ga, drag: 1.2, grav: 0.5 });
     }
     for (let j = 0, n = Math.round(SPIRAL[i] * k); j < n; j++) {   // Epic: spiral trails
       const a = (j / Math.max(1, n)) * Math.PI * 2 + rng() * 0.4, c = col(j);
       const tx = -Math.sin(a), tz = Math.cos(a);
-      P.emit({ x: cx + Math.cos(a) * 0.2 * scale, y: cy, z: cz + Math.sin(a) * 0.2 * scale, vx: (tx * 2.6 + Math.cos(a) * 0.9) * scale, vy: (0.8 + 0.6 * rng()) * scale, vz: (tz * 2.6 + Math.sin(a) * 0.9) * scale, life: 0.8 + 0.3 * rng(), size: 0.03 * scale, kind: 2, r: c[0], g: c[1], b: c[2], a: 0.9, drag: 1.1 });
+      P.emit({ x: cx + Math.cos(a) * 0.2 * scale, y: cy, z: cz + Math.sin(a) * 0.2 * scale, vx: (tx * 2.6 + Math.cos(a) * 0.9) * scale, vy: (0.8 + 0.6 * rng()) * scale, vz: (tz * 2.6 + Math.sin(a) * 0.9) * scale, life: 0.8 + 0.3 * rng(), size: 0.03 * scale, kind: 2, r: c[0], g: c[1], b: c[2], a: 0.9 * ga, drag: 1.1 });
     }
     for (let rb = 0, nr = Math.round(RIBBONS[i] * (this.calm ? 0.34 : 1)); rb < nr; rb++) {   // Legendary: three aurora ribbons
       for (let j = 0; j < 14; j++) {
         const a = rb * 2.094 + j * 0.34, h = 0.05 + j * 0.085;
         const aur = 0.5 + 0.5 * Math.sin(j * 0.5 + rb);
-        P.emit({ x: cx + Math.cos(a) * 0.32 * scale, y: cy * 0.3 + h * scale, z: cz + Math.sin(a) * 0.32 * scale, vx: -Math.sin(a) * 2.0 * scale, vy: 0.9 * scale, vz: Math.cos(a) * 2.0 * scale, life: 0.9 + 0.5 * (j / 14), size: 0.034 * scale, kind: 2, r: 1.0 - 0.6 * aur, g: 0.62 + 0.2 * aur, b: 0.2 + 0.65 * aur, a: 0.85, drag: 1.0 });
+        P.emit({ x: cx + Math.cos(a) * 0.32 * scale, y: cy * 0.3 + h * scale, z: cz + Math.sin(a) * 0.32 * scale, vx: -Math.sin(a) * 2.0 * scale, vy: 0.9 * scale, vz: Math.cos(a) * 2.0 * scale, life: 0.9 + 0.5 * (j / 14), size: 0.034 * scale, kind: 2, r: 1.0 - 0.6 * aur, g: 0.62 + 0.2 * aur, b: 0.2 + 0.65 * aur, a: 0.85 * ga, drag: 1.0 });
       }
     }
     for (let j = 0, n = Math.round(STARS[i] * k); j < n; j++) {     // Mythic: star points
       const z = rng() * 2 - 1, a = rng() * Math.PI * 2, rr = Math.sqrt(1 - z * z), sp = (0.5 + 0.8 * rng()) * scale, c = spectrum(rng(), this.tmp);
-      P.emit({ x: cx, y: cy, z: cz, vx: rr * Math.cos(a) * sp, vy: (Math.abs(z) * 0.8 + 0.2) * sp, vz: rr * Math.sin(a) * sp, life: 1.6 + 0.6 * rng(), size: 0.034 * scale, kind: 1, r: c[0] * 0.5 + 0.5, g: c[1] * 0.5 + 0.5, b: c[2] * 0.5 + 0.5, a: 0.95, drag: 1.8, fade: 2 });
+      P.emit({ x: cx, y: cy, z: cz, vx: rr * Math.cos(a) * sp, vy: (Math.abs(z) * 0.8 + 0.2) * sp, vz: rr * Math.sin(a) * sp, life: 1.6 + 0.6 * rng(), size: 0.034 * scale, kind: 1, r: c[0] * 0.5 + 0.5, g: c[1] * 0.5 + 0.5, b: c[2] * 0.5 + 0.5, a: 0.95 * ga, drag: 1.8, fade: 2 });
     }
     this.stats.burstParticles += P.emitted - before;
   }
@@ -325,7 +353,7 @@ export class CapsuleRun extends Run {
     const b0 = 0.35 * ks, b1 = 0.3 * ks + P, b2 = 0.35 * ks;
     this.tb = { b0, b1, b2, b3: D - (b0 + b1 + b2), burstAt: b0 + b1, revealAt: b0 + b1 + b2 };
     this.cap = host.takeCapsule();
-    if (!this.cap.landed && this.cap.group.visible === false) this.cap.placeStanding(0, 0.25);
+    if (!this.cap.landed && this.cap.group.visible === false) this.cap.appear(0, 0.25);
     this.sq0 = this.cap.squeezeAmount;
     this.others = host.allViews().filter((v) => v.visible);
     this.keep = !!spec.keepCurrent;
@@ -335,8 +363,17 @@ export class CapsuleRun extends Run {
     if (this.pillar) host.addToScene(this.pillar.mesh);
     if (this.dome) host.addToScene(this.dome.mesh);
     this.rings = this.ringSchedule(this.tb.burstAt);
-    // prepay the result's GPU cost now, hidden: the burst frame must not hitch
-    this.resultView = host.createOwned(spec.result.genome, spec.createBody, tier);
+    // prepay the result's GPU cost now, hidden: the burst frame must not hitch. A throwing createBody leaves the stage as it was:
+    // pillar / dome out of the scene, the capsule back on the table (tappable again), the play body untouched; then the error goes up.
+    try {
+      this.resultView = host.createOwned(spec.result.genome, spec.createBody, tier);
+    } catch (e) {
+      if (this.pillar) { host.removeFromScene(this.pillar.mesh); this.pillar.dispose(); }
+      if (this.dome) { host.removeFromScene(this.dome.mesh); this.dome.dispose(); }
+      host.returnCapsule(this.cap);
+      this.finished = true; this.resolveDone();
+      throw e;
+    }
     this.resultView.setVisible(false);
     this.resultView.rarity.strength = 0;
     this.beat('grab');
@@ -346,9 +383,10 @@ export class CapsuleRun extends Run {
     const { b0, b1, burstAt } = this.tb;
     const t = this.t, st = this.style, i = st.index, host = this.host, cap = this.cap;
     // --- the player's current squishy slides off; the capsule slides to the centre ---
-    const slide = smooth(0, 0.5 * this.ks, t);
+    const slide = smooth(0, Math.max(0.38, 0.5 * this.ks), t);   // never a fast exit, not even in a 0.8 s quick pop (a step in the frame's light)
     if (this.keep) for (const v of this.others) v.proxy.offset.x = this.asideX * v.scale * slide;
-    else for (const v of this.others) { v.proxy.offset.x = -3.4 * slide; if (slide >= 1) v.setVisible(false); }
+    // ... its own aura, dome and motes fade as it leaves (a bright Mythic sliding out in 0.2 s of a quick pop was a luminance drop of its own)
+    else for (const v of this.others) { v.proxy.offset.x = -3.4 * slide; v.rarity.strength = 1 - slide; if (slide >= 1) v.setVisible(false); }
     cap.slideTo(0, 0.25, 1 - Math.exp(-dt * 7));
     this.cx = cap.pos.x; this.cz = cap.pos.z;
     // --- B0: grab ---
@@ -361,9 +399,9 @@ export class CapsuleRun extends Run {
       this.beat('crack');
       const p1 = clamp01((t - b0) / b1);
       const fam = host.flash.tint(host.now(), st.tellFamily);
-      const tell: Rgb = fam === st.tellFamily ? st.tell : [1, 0.88, 0.68];
+      const tell: Rgb = fam === st.tellFamily ? st.tell : NEUTRAL_TELL;
       const crack = smooth(0, 0.7, p1);
-      const leak = LEAK[i] * (i >= 3 ? Math.pow(p1, 1.6) : smooth(0.05, 1, p1));   // Epic and up: a slow ramp, not a pulse
+      const leak = LEAK[i] * (this.calm ? 0.7 : 1) * (i >= 3 ? Math.pow(p1, 1.6) : smooth(0.05, 1, p1));   // Epic and up: a slow ramp, not a pulse
       cap.setCrack(crack, leak, tell, st.prism);
       cap.setSqueeze(1);
       if (!this.calm) cap.wobble(Math.sin(t * 61) * dt * (6 + 22 * p1 * p1));
@@ -395,15 +433,15 @@ export class CapsuleRun extends Run {
         ts = 1 - (1 - dipScale) * w;
       }
       this.tickResult(dt * ts, dt);
-      cap.setCrack(1, Math.max(0, LEAK[i] * (1 - (t - burstAt) * 2.2)), st.tell, st.prism);
+      cap.setCrack(1, Math.max(0, LEAK[i] * this.gain * (1 - (t - burstAt) * 2.2)), st.tell, st.prism);
       // rings
       while (this.ringIdx < this.rings.length && t >= this.rings[this.ringIdx]) {
         this.ringIdx++;
         const v = this.resultView;
-        if (v) this.spawnRing(v, this.cx, this.cz, RING_GAIN[this.ringIdx - 1] ?? 0.3);
+        if (v) this.spawnRing(v, this.cx, this.cz, (RING_GAIN[this.ringIdx - 1] ?? 0.3) * this.gain);
       }
-      if (this.pillar) this.pillar.set(this.cx, this.cz, 0.22 + 0.5 * (t - burstAt), 3.2, st.tell, 0.2 * Math.max(0, 1 - (t - burstAt) * 1.3));
-      if (this.dome) this.expandDome(this.dome, this.cx, this.cz, 0.62, 0.8, 0.85, t - burstAt, t);
+      if (this.pillar) this.pillar.set(this.cx, this.cz, 0.22 + 0.5 * (t - burstAt), 3.2, st.tell, 0.2 * this.gain * Math.max(0, 1 - (t - burstAt) * 1.3));
+      if (this.dome) this.expandDome(this.dome, this.cx, this.cz, 0.62, 0.8, 0.85 * this.gain, t - burstAt, t);
     }
     if (t >= this.tb.revealAt) this.beat('reveal');
     // the 6.3 camera column, exactly (Common: none): push / pull-back / arc from the burst, eased back before the end
@@ -415,18 +453,18 @@ export class CapsuleRun extends Run {
     this.burst = true;
     this.beat('burst');
     const host = this.host;
-    this.cap.burst();
+    this.startRamp();                      // first: it decides how much light this burst may make (gain)
+    this.cap.burst(this.gain);
     host.particles.attractK = 0;
     host.particles.clear();
-    // the result view appears at the capsule and drops out
+    // the result view appears at the capsule and drops out (calm and soft bursts: it grows in from smaller, over longer: no one-frame pop)
     const v = this.resultView as BodyView;
     v.setVisible(true);
-    this.drop = { y: 0.3, vy: 0.6, bounces: 0, landed: false, age: 0 };
+    this.drop = { y: this.calm ? 0.12 : 0.3, vy: this.calm ? 0 : 0.6, bounces: this.calm ? 1 : 0, landed: false, age: 0 };
     v.proxy.setOffset(this.cx, this.drop.y, this.cz);
-    v.proxy.scale = 0.55;
+    v.proxy.scale = this.gain < 1 ? POP_IN_SOFT[0] : POP_IN[0];
     host.setFraming(v.scale, this.calm);   // calm: no camera moves, the framing cuts to the result under the burst instead of easing
     this.burstParticles(this.cx, 0.4, this.cz, v.scale);
-    this.startRamp();
     this.cap.wobble(0);
   }
 
@@ -435,7 +473,8 @@ export class CapsuleRun extends Run {
     if (!v) return;
     const d = this.drop, off = v.proxy.offset;
     d.age += dt;
-    v.proxy.scale = 0.55 + 0.45 * smooth(0, 0.3, d.age);
+    const pop = this.gain < 1 ? POP_IN_SOFT : POP_IN;
+    v.proxy.scale = pop[0] + (1 - pop[0]) * smooth(0, pop[1], d.age);
     off.x += (0 - off.x) * (1 - Math.exp(-dt * 5)); off.z += (0 - off.z) * (1 - Math.exp(-dt * 5));
     this.cx = off.x; this.cz = off.z;
     d.vy -= 9.8 * dt; d.y += d.vy * dt;
@@ -450,17 +489,19 @@ export class CapsuleRun extends Run {
       }
     }
     off.y = d.y;
-    this.fadeIn = Math.min(1, this.fadeIn + realDt / 0.3);   // the result's tier FX arrive UNDER the burst light, so the scene only dims after the flash
+    // the result's tier FX arrive UNDER the burst light, so the scene only dims after the flash (soft / calm: slower, there is no flash)
+    this.fadeIn = Math.min(1, this.fadeIn + realDt / (this.gain < 1 ? 0.7 : 0.3));
     v.rarity.strength = smooth(0, 1, this.fadeIn);
     const u = v.mats.uniforms;
-    u.uTierAmt.value = Math.max(0, (0.26 + 0.02 * this.style.index) * (1 - d.age / 0.9));
+    u.uTierAmt.value = Math.max(0, CAP_TELL_AT_BURST[this.style.index] * this.gain * (1 - d.age / 0.9));
     u.uTierCol.value.setRGB(this.style.tell[0], this.style.tell[1], this.style.tell[2], THREE.LinearSRGBColorSpace);
-    v.extraPool = Math.max(0, 0.5 * (1 - d.age / 1.2)); v.extraPoolTell = 1;
+    v.extraPool = Math.max(0, 0.5 * this.gain * (1 - d.age / 1.2)); v.extraPoolTell = 1;
   }
 
   protected finalize(skipped: boolean): void {
     const host = this.host;
-    host.particles.attractK = 0; host.particles.clear();
+    host.particles.attractK = 0;
+    if (skipped) host.particles.clear();   // a natural end lets the last motes / sparkles live out their own short lives
     host.cameraFx.dist = 1; host.cameraFx.yaw = 0; host.cameraFx.pitch = 0;
     this.cap.hide(); host.releaseCapsule(this.cap);
     if (this.pillar) { host.removeFromScene(this.pillar.mesh); this.pillar.dispose(); }
@@ -474,7 +515,6 @@ export class CapsuleRun extends Run {
     v.rarity.strength = 1; v.extraPool = 0; v.extraPoolTell = 0; v.core.boost = 0;
     v.mats.uniforms.uTierAmt.value = 0; v.mats.uniforms.uMixAmt.value = 0;
     host.makePrimary(v);
-    host.screen.setLight(0, 0, 0, 0);
   }
 }
 
@@ -487,6 +527,10 @@ export class MergeRun extends Run {
   private readonly b: { t0: number; t1: number; t2: number; t3: number; t4: number; a1: number; a2: number; a3: number; a4: number };
   private readonly ks: number;
   private readonly start: { x: number; z: number }[] = [];
+  /** Each parent's slide axis (unit, toward the pad), precomputed: no per-frame objects. */
+  private readonly dirX: number[] = []; private readonly dirZ: number[] = [];
+  /** The ceremony framing factor over the play framing (1 = none). */
+  private framing = 1;
   private readonly pillar: LightPillar | null;
   private readonly dome: PrismDome | null;
   private readonly rings: number[] = [];
@@ -518,23 +562,47 @@ export class MergeRun extends Run {
     const T4 = D - (T0 + T1 + T2 + T3);
     this.b = { t0: 0, t1: T0, t2: T0 + T1, t3: T0 + T1 + T2, t4: T0 + T1 + T2 + T3, a1: T0, a2: T1, a3: T2, a4: T4 };
     this.others = host.allViews().filter((v) => v.visible);
-    for (const v of this.others) v.setVisible(false);
     const n = Math.max(2, Math.min(3, spec.parents.length));
-    const hw = host.viewHalfWidth();
-    this.layout = n === 2 ? 'pair' : hw >= 1.25 ? 'row' : 'triangle';
+    // create every body first (a throwing createBody must leave the stage exactly as it was), then hide the others and lay out
+    try {
+      for (let k = 0; k < n; k++) {
+        const p = spec.parents[k] ?? spec.parents[0];
+        this.parents.push(host.createOwned(p.genome, spec.createBody, p.tier ?? 'common'));
+      }
+      this.resultView = host.createOwned(spec.result.genome, spec.createBody, tier);   // prepay the result's GPU cost now, hidden
+    } catch (e) {
+      for (const v of this.parents) host.removeView(v);
+      this.parents.length = 0;
+      if (this.resultView) host.removeView(this.resultView);
+      this.resultView = null;
+      this.finished = true; this.resolveDone();
+      throw e;
+    }
+    for (const v of this.others) v.setVisible(false);
+    host.parkCapsule(true);                // a capsule waiting on the table would stand in the parents' way: away until the end
+    this.resultView.setVisible(false);
+    this.resultView.rarity.strength = 0;
+    let fr = this.resultView.scale;
+    for (const v of this.parents) fr = Math.max(fr, v.scale);
+    this.bodyScale = this.parents[0].scale;
+    const hw0 = host.viewHalfWidth(fr);    // half-width of the PLAY framing of these bodies at the pad
+    this.layout = n === 2 ? 'pair' : hw0 >= 1.25 ? 'row' : 'triangle';
+    // where the parents start: a short slide in on narrow frames, from ~1.2 out on desktop; then the framing that shows them whole
+    const reach = Math.max(0.5 * fr, Math.min(1.55, hw0 * 0.9 - 0.15));
+    const need = this.layout === 'row' ? 0 : (this.layout === 'pair' ? reach : reach * 0.97) + 0.58 * fr;
+    const fit = Math.min(1.5, Math.max(1, need / Math.max(0.2, hw0)));
+    const framing = Math.max(fit, this.calm ? 1 : MERGE_FRAMING[i]);
+    host.setFraming(framing * fr, true);  // a cut: the merge starts a new scene (every play body hides), so no zoom move is seen
+    const hw = hw0 * framing;
     for (let k = 0; k < n; k++) {
-      const p = spec.parents[k] ?? spec.parents[0];
-      // start inside the picture: on a portrait phone the half-width at the pad is ~0.76, so the parents start ~0.5 out (mostly in view)
-      // and slide the short way in; on desktop they come from ~1.2
-      const reach = Math.max(0.45, Math.min(1.55, hw * 0.9 - 0.15));
       if (this.layout === 'pair') this.start.push({ x: k === 0 ? -reach : reach, z: 0 });
       else if (this.layout === 'row') this.start.push({ x: k === 0 ? 0 : (k === 1 ? -1 : 1) * Math.max(0.9, hw * 0.95 - 0.3), z: 0 });
       else { const ang = Math.PI / 2 + (k * 2 * Math.PI) / 3; this.start.push({ x: Math.cos(ang) * reach * 0.97, z: Math.sin(ang) * 1.2 }); }
-      const v = host.createOwned(p.genome, spec.createBody, p.tier ?? 'common');
-      v.proxy.setOffset(this.start[k].x, 0, this.start[k].z);
-      this.parents.push(v);
+      const s = this.start[k], l = Math.hypot(s.x, s.z);
+      this.dirX.push(l > 1e-6 ? s.x / l : 1); this.dirZ.push(l > 1e-6 ? s.z / l : 0);   // the middle of a row sits on the pad: its axis is the row
+      this.parents[k].proxy.setOffset(s.x, 0, s.z);
     }
-    this.bodyScale = this.parents[0].scale;
+    this.framing = framing;
     // the parents' lineage colour: the average of the others' body colours swirls through the ball
     const avg: Rgb = [0, 0, 0];
     const mixFrom = spec.parents.length > 1 ? spec.parents.slice(1) : spec.parents;   // the ball itself is the first parent
@@ -544,20 +612,7 @@ export class MergeRun extends Run {
     this.dome = i === 5 ? new PrismDome() : null;
     if (this.pillar) host.addToScene(this.pillar.mesh);
     if (this.dome) host.addToScene(this.dome.mesh);
-    // prepay the result's GPU cost now, hidden
-    this.resultView = host.createOwned(spec.result.genome, spec.createBody, tier);
-    this.resultView.setVisible(false);
-    this.resultView.rarity.strength = 0;
-    // the ceremony framing (see MERGE_FRAMING): eased in while the parents slide to the pad; calm keeps the play framing
-    let fr = this.resultView.scale;
-    for (const p of this.parents) fr = Math.max(fr, p.scale);
-    if (!this.calm) host.setFraming(MERGE_FRAMING * fr);
     this.beat('press');
-  }
-
-  private dirOf(k: number): { x: number; z: number } {
-    const s = this.start[k]; const l = Math.hypot(s.x, s.z);
-    return l > 1e-6 ? { x: s.x / l, z: s.z / l } : { x: 1, z: 0 };    // the middle of a row sits on the pad: its axis is the row
   }
 
   protected tick(dt: number): number {
@@ -576,11 +631,12 @@ export class MergeRun extends Run {
       const squash = 1 - smooth(b.t1 + b.a2 * 0.25, b.t2, t);
       const sideX = row ? Math.abs(this.start[1].x + (-gap - this.start[1].x) * slide) * (1 - foldP) : 0;
       for (let k = 0; k < n; k++) {
-        const v = this.parents[k], s = this.start[k], d = this.dirOf(k);
+        const v = this.parents[k], s = this.start[k], dx = this.dirX[k], dz = this.dirZ[k];
         const middle = row && k === 0;
-        const px = middle ? 0 : (s.x + (d.x * gap - s.x) * slide) * (1 - foldP), pz = middle ? 0 : (s.z + (d.z * gap - s.z) * slide) * (1 - foldP);
+        const px = middle ? 0 : (s.x + (dx * gap - s.x) * slide) * (1 - foldP), pz = middle ? 0 : (s.z + (dz * gap - s.z) * slide) * (1 - foldP);
         v.proxy.offset.x = px; v.proxy.offset.z = pz;
-        v.proxy.squashAx = d.x; v.proxy.squashAz = d.z; v.proxy.squashAmt = squash; v.proxy.squashTwoSided = middle;
+        v.proxy.squashAx = dx; v.proxy.squashAz = dz; v.proxy.squashAmt = squash; v.proxy.squashTwoSided = middle;
+        v.rarity.strength = 1 - foldP;          // the parents' own tier aura gives way to the ball (the RESULT tier's tell is the charge's story)
         v.proxy.squashPlane = row ? sideX * 0.5 : Math.hypot(px, pz) * (n === 2 ? 1 : 0.85);
         // triangle (narrow frames): the back pair overlaps the front parent on screen from the first frame, and their eyes would show
         // through its jelly as stray extra eyes; they keep them closed
@@ -601,15 +657,20 @@ export class MergeRun extends Run {
       const p2 = clamp01((t - b.t2) / b.a3);
       const ball = this.parents[0];
       this.ballCx = ball.proxy.center.x; this.ballCy = ball.proxy.center.y; this.ballCz = ball.proxy.center.z;
-      ball.proxy.tremble(this.calm ? 0.15 + 0.2 * p2 : 0.2 + 0.8 * p2);
+      ball.proxy.tremble(this.calm ? 0 : 0.2 + 0.8 * p2);   // calm: no tremble at all
       ball.proxy.charge = 0.3 + 0.7 * p2;
       ball.proxy.scale = 1 - 0.1 * p2;
       ball.core.boost = 1.0 + 1.1 * p2;
       const fam = host.flash.tint(host.now(), st.tellFamily);
       const tellOk = fam === st.tellFamily;
-      const u = ball.mats.uniforms;
-      u.uTierCol.value.setRGB(tellOk ? st.tell[0] : 1, tellOk ? st.tell[1] : 0.88, tellOk ? st.tell[2] : 0.68, THREE.LinearSRGBColorSpace);
-      u.uTierAmt.value = 0.95 * p2 * p2 * (3 - 2 * p2);          // the light drifts toward the result tier colour
+      const u = ball.mats.uniforms, tc = tellOk ? st.tell : NEUTRAL_TELL, p2s = p2 * p2 * (3 - 2 * p2);
+      u.uTierCol.value.setRGB(tc[0], tc[1], tc[2], THREE.LinearSRGBColorSpace);
+      // the ball's light drifts toward the result tier colour: its own colour leans into the tell (diffuse AND absorption) while the lineage
+      // swirl gives way, plus some tell light. Additive light alone only whitened a warm ball (an Uncommon read cream, an Epic pink); the
+      // Mythic prism tell (white) stays light
+      u.uTierTint.value = st.prism ? 0 : 0.62 * p2s;
+      u.uTierAmt.value = (st.prism ? 0.95 : 0.4) * p2s;
+      u.uMixAmt.value = 0.7 * (1 - p2s);
       ball.extraPool = 0.5 * p2; ball.extraPoolTell = tellOk ? p2 : 0;
       // motes spiral inward
       const P = host.particles;
@@ -645,10 +706,10 @@ export class MergeRun extends Run {
       while (this.ringIdx < this.rings.length && t >= this.rings[this.ringIdx]) {
         this.ringIdx++;
         const v = this.resultView;
-        if (v) this.spawnRing(v, 0, 0, RING_GAIN[this.ringIdx - 1] ?? 0.3);
+        if (v) this.spawnRing(v, 0, 0, (RING_GAIN[this.ringIdx - 1] ?? 0.3) * this.gain);
       }
-      if (this.pillar) this.pillar.set(0, 0, 0.25 + 0.5 * (t - b.t3), 3.2, st.tell, 0.2 * Math.max(0, 1 - (t - b.t3) * 1.2));
-      if (this.dome) this.expandDome(this.dome, 0, 0, 0.7, 0.9, 0.8, t - b.t3, t);
+      if (this.pillar) this.pillar.set(0, 0, 0.25 + 0.5 * (t - b.t3), 3.2, st.tell, 0.2 * this.gain * Math.max(0, 1 - (t - b.t3) * 1.2));
+      if (this.dome) this.expandDome(this.dome, 0, 0, 0.7, 0.9, 0.8 * this.gain, t - b.t3, t);
       // tier-up accent: a rising ladder of star sparkles in the new colour over the last 0.4 s
       if (this.spec.result.tierUp && !this.sparkled && t >= this.duration - 0.4 * this.ks) {
         this.sparkled = true;
@@ -672,6 +733,7 @@ export class MergeRun extends Run {
     this.burst = true;
     const host = this.host, st = this.style, i = st.index;
     this.beat('burst');
+    this.startRamp();                      // first: it decides how much light this burst may make (gain)
     host.particles.attractK = 0;
     host.particles.clear();
     for (const p of this.parents) { host.removeView(p); }
@@ -686,12 +748,12 @@ export class MergeRun extends Run {
     const mix = v.mats.uniforms;
     mix.uMixCol.value.setRGB(this.mixCol[0], this.mixCol[1], this.mixCol[2], THREE.LinearSRGBColorSpace);
     mix.uMixAmt.value = MIX_AT_BURST;
-    mix.uTierAmt.value = TELL_AT_BURST[i];
+    mix.uTierAmt.value = TELL_AT_BURST[i] * this.gain;
+    mix.uTierTint.value = 0;
     v.extraPoolTell = 1;
-    this.drop = { y: 0, vy: this.calm ? HOP_VY_CALM : HOP_VY, landed: false, age: 0, hopped: true };
+    this.drop = { y: 0, vy: this.calm ? HOP_VY_CALM : HOP_VY[i], landed: false, age: 0, hopped: true };
     this.rings.push(...this.ringSchedule(this.b.t3));
     this.burstParticles(0, this.ballCy, 0, v.scale);
-    this.startRamp();
     host.shake(KICK[i]);
   }
 
@@ -715,18 +777,20 @@ export class MergeRun extends Run {
       }
       off.y = d.y;
     }
-    this.fadeIn = Math.min(1, this.fadeIn + realDt / 0.3);   // the result's tier FX arrive UNDER the burst light, so the scene only dims after the flash
+    // the result's tier FX arrive UNDER the burst light, so the scene only dims after the flash (soft / calm: slower, there is no flash)
+    this.fadeIn = Math.min(1, this.fadeIn + realDt / (this.gain < 1 ? 0.7 : 0.3));
     v.rarity.strength = smooth(0, 1, this.fadeIn);
     const fall = 1 - smooth(0, 0.5, d.age);   // the tell is RELEASED by the burst (rings, pool, motes carry it on); the body is its own colour by ~0.5 s
-    u.uTierAmt.value = TELL_AT_BURST[this.style.index] * fall;
+    u.uTierAmt.value = TELL_AT_BURST[this.style.index] * this.gain * fall;
     u.uMixAmt.value = MIX_AT_BURST * (1 - smooth(0, 0.9, d.age));
-    v.extraPool = Math.max(0, 1.0 * (1 - d.age / 1.2));
+    v.extraPool = Math.max(0, this.gain * (1 - d.age / 1.2));
     v.core.boost = Math.max(0, 0.5 * (1 - d.age / 0.7));
   }
 
   protected finalize(skipped: boolean): void {
     const host = this.host;
-    host.particles.attractK = 0; host.particles.clear();
+    host.particles.attractK = 0;
+    if (skipped) host.particles.clear();   // a natural end lets the last motes / tier-up sparkles live out their own short lives
     host.cameraFx.dist = 1; host.cameraFx.yaw = 0; host.cameraFx.pitch = 0;
     if (this.pillar) { host.removeFromScene(this.pillar.mesh); this.pillar.dispose(); }
     if (this.dome) { host.removeFromScene(this.dome.mesh); this.dome.dispose(); }
@@ -738,9 +802,9 @@ export class MergeRun extends Run {
     v.proxy.setOffset(0, 0, 0); v.proxy.scale = 1; v.proxy.popFrom(0, 0);
     if (skipped || !this.drop.landed) v.proxy.inner.reset();
     v.rarity.strength = 1; v.extraPool = 0; v.extraPoolTell = 0; v.core.boost = 0;
-    v.mats.uniforms.uTierAmt.value = 0; v.mats.uniforms.uMixAmt.value = 0;
+    v.mats.uniforms.uTierAmt.value = 0; v.mats.uniforms.uMixAmt.value = 0; v.mats.uniforms.uTierTint.value = 0;
     host.makePrimary(v);
-    host.screen.setLight(0, 0, 0, 0);
+    host.parkCapsule(false);               // a waiting capsule fades back in beside the result
   }
 }
 
@@ -753,6 +817,8 @@ export class CeremonyDirector {
 
   get active(): boolean { return !!this.run && this.run.active; }
   get current(): CeremonyHandle | null { return this.run && this.run.active ? this.run : null; }
+  /** Which ceremony is running, if any. */
+  get kind(): 'capsule' | 'merge' | null { return this.run && this.run.active ? (this.run instanceof MergeRun ? 'merge' : 'capsule') : null; }
 
   startCapsule(spec: CapsuleRevealSpec, hooks?: CeremonyHooks): CeremonyHandle {
     this.abort();

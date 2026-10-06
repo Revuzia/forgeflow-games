@@ -80,6 +80,8 @@ export class Capsule {
    * fade-in is complete; the same moment `onLand` fires. Until then the capsule is not tappable (screenPoint null).
    */
   touchedDown = false;
+  /** Calm effects: no rattle while squeezed, no rocking wobble kicks. */
+  calm = false;
   gone = false;
   burstT = -1;
   private readonly u: CapsuleUniforms;
@@ -106,8 +108,10 @@ export class Capsule {
   private readonly tp = new THREE.Vector3(); private readonly bp = new THREE.Vector3();
   private readonly fp: Footprint = { cx: 0, cz: 0, rx: R, rz: R, lowY: 0, compression: 0, stretch: 0 };
   private leak = 0;
+  private burstGain = 1;
   /** Calm-mode appearance (DESIGN 6.2 reduced motion): 0..1 fade-in instead of the drop. */
   private fade = 1;
+  private fadeS = 0.45;
   private baseOpacity = 1;
 
   constructor(hub: EnvHub, quad: THREE.BufferGeometry, lowTier: boolean) {
@@ -174,9 +178,9 @@ export class Capsule {
     this.top.visible = this.bottom.visible = true;
   }
   /** Calm / reduced motion (DESIGN 6.2): no drop, no bounce, no wobble; it fades in where it stands (0.45 s), then `landCb` fires. */
-  appear(x: number, z: number, landCb?: () => void): void {
+  appear(x: number, z: number, landCb?: () => void, seconds = 0.45): void {
     this.placeStanding(x, z);
-    this.fade = 0; this.touchedDown = false; this.onLand = landCb ?? null;
+    this.fade = 0; this.fadeS = Math.max(0.05, seconds); this.touchedDown = false; this.onLand = landCb ?? null;
     this.applyFade();
   }
   private applyFade(): void {
@@ -201,13 +205,15 @@ export class Capsule {
     this.decals.setColor([0.6 + (c[0] - 0.6) * Math.min(1, leak), 0.55 + (c[1] - 0.55) * Math.min(1, leak), 0.9 + (c[2] - 0.9) * Math.min(1, leak)]);
   }
   /** Shake it a little: the wobble spring takes a kick. */
-  wobble(kick: number): void { this.rockV += kick; }
+  wobble(kick: number): void { if (!this.calm) this.rockV += kick; }
 
-  /** The shell halves fly apart (B2). */
-  burst(): void {
-    this.burstT = 0;
+  /** The shell halves fly apart (B2). `gain` scales the light the burst throws on the table (a soft, governed burst: less). */
+  burst(gain = 1): void {
+    this.burstT = 0; this.burstGain = gain;
     this.tp.set(0, 0, 0); this.bp.set(0, 0, 0);
-    this.tv.set(0.75, 2.5, -0.5); this.bv.set(-0.55, 1.4, 0.4);
+    // the halves fly OUT of the body's way at once (the result pops up right where they were: transmissive shells lingering inside it read
+    // as wire hoops, the lower one as a "mouth" under the eyes) and are gone by 0.5 s
+    this.tv.set(1.5, 2.4, -1.3); this.bv.set(-1.4, 1.3, 1.1);
     this.tw.set(2.0, 3.2, -4.5); this.bw.set(-1.5, 2.0, 3.5);
     this.u.uStress.value = 0;
   }
@@ -229,7 +235,7 @@ export class Capsule {
     if (this.gone) return;
     this.time = time;
     if (this.fade < 1) {
-      this.fade = Math.min(1, this.fade + dt / 0.45);
+      this.fade = Math.min(1, this.fade + dt / this.fadeS);
       this.applyFade();
       if (this.fade >= 1) { this.touchedDown = true; this.onLand?.(); this.onLand = null; }
     }
@@ -254,7 +260,7 @@ export class Capsule {
     this.rock += this.rockV * dt;
     // squeeze: squash a little and rattle
     const sq = this.squeeze;
-    const rattle = sq * sq * 0.05 * Math.sin(time * 58) ;
+    const rattle = this.calm ? 0 : sq * sq * 0.05 * Math.sin(time * 58);
     const sy = 1 - 0.14 * sq, sxz = 1 + 0.07 * sq;
     this.u.uStress.value = this.burstT < 0 ? Math.min(1, sq * 1.4) * (this.u.uCrack.value < 0.05 ? 1 : 0.3) : 0;
     if (this.burstT < 0) {
@@ -276,15 +282,15 @@ export class Capsule {
       this.top.position.copy(this.tp); this.bottom.position.copy(this.bp);
       this.top.rotation.x += this.tw.x * dt; this.top.rotation.y += this.tw.y * dt; this.top.rotation.z += this.tw.z * dt;
       this.bottom.rotation.x += this.bw.x * dt; this.bottom.rotation.y += this.bw.y * dt; this.bottom.rotation.z += this.bw.z * dt;
-      const s = Math.max(0, 1 - Math.max(0, this.burstT - 0.7) / 0.45);
+      const sx = Math.min(1, Math.max(0, (this.burstT - 0.12) / 0.33)), s = 1 - sx * sx * (3 - 2 * sx);
       this.top.scale.setScalar(s); this.bottom.scale.setScalar(s);
       this.wad.scale.setScalar(Math.max(0, 0.125 * (1 - this.burstT * 4)));
-      if (this.burstT > 1.2) { this.gone = true; this.group.visible = false; }
+      if (this.burstT > 0.8) { this.gone = true; this.group.visible = false; }
     }
     // decals under it
     this.fp.cx = this.pos.x; this.fp.cz = this.pos.z; this.fp.lowY = Math.max(0, this.y - REST_Y);
     this.fp.compression = this.squeeze * 0.4;
-    this.decals.update(dt, time, this.fp, 0, null, true, this.burstT < 0 ? Math.min(1, this.leak) * 1.1 : Math.max(0, 1 - this.burstT * 2));
+    this.decals.update(dt, time, this.fp, 0, null, true, this.burstT < 0 ? Math.min(1, this.leak) * 1.1 : Math.max(0, 1 - this.burstT * 2) * this.burstGain);
     this.decals.pool.visible = this.decals.pool.visible && this.leak > 0.02;
   }
 

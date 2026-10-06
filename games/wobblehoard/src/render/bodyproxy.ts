@@ -169,10 +169,13 @@ export class BodyProxy implements SoftBodyLike {
     const pc = Math.min(1, f * 0.35 + this.charge * 0.45 + pressed * 0.7);
     const sk = 1 - 0.1 * pc;
     for (let i = 0; i < n; i++) so[i] = S[i] * sk;
-    const m = this.metrics, im = inner.metrics;
-    m.compression = Math.max(im.compression, pc); m.compressionRate = im.compressionRate; m.stretch = im.stretch; m.volume = im.volume;
-    m.kinetic = Math.min(1, im.kinetic + tr * 0.5); m.grounded = im.grounded; m.fingers = im.fingers; m.grabbed = im.grabbed;
-    m.press = im.press; m.reaction = im.reaction;
+    // every metric the body reports passes through, INCLUDING fields this file does not know yet (PHYS adds optional ones: press,
+    // reaction, strands, slosh, ...): a generic copy (for..in over the same object every frame: no allocation), then the two the puppet adds to
+    const m = this.metrics as unknown as Record<string, unknown>, im = inner.metrics as unknown as Record<string, unknown>;
+    for (const key in im) m[key] = im[key];
+    const mm = this.metrics, imm = inner.metrics;
+    mm.compression = Math.max(imm.compression, pc);
+    mm.kinetic = Math.min(1, imm.kinetic + tr * 0.5);
   }
 
   // ---- everything else passes straight through ----

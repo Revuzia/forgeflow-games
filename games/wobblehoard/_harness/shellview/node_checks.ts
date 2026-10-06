@@ -14,7 +14,7 @@ import { speciesBaseGenome, tierOf } from '../../src/data/catalog.ts';
 import { KEY_POINTER_ID, attachKeyboard } from '../../src/input/keyboard.ts';
 import { CALIBRATION, pressDirection, releaseFxLevel } from '../../src/shell/feel.ts';
 import { createCollection, WH_QUEUE_MAX } from '../../src/collection/index.ts';
-import { SKIP_GATE_MS } from '../../src/shell/ceremonies.ts';
+import { BURST_SPACING_MS, SKIP_GATE_MS } from '../../src/shell/ceremonies.ts';
 import { createMockWorld, recorder } from '../mocks.ts';
 import type { MockWorld } from '../mocks.ts';
 
@@ -364,6 +364,36 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   run(r7, 3000); await pc;
   const durs = r7.fake.log.of('playCapsuleReveal').map((x) => x.args[1] as number);
   check('quick pop: a repeat Uncommon is full length without Fast open, 0.8 s with it; a repeat Common is always 0.8 s', durs.join() === '2,0.8,0.8', durs.join());
+}
+
+/* ───────────────────────── 5b. flash safety: no ceremony starts within 1 s of the previous burst (DESIGN 6.6) ───────────────────────── */
+{
+  const r = rig();
+  const cat = await import('../../src/data/catalog.ts');
+  const mythic = speciesBaseGenome(cat.SPECIES_BY_TIER[5][0].id, 5);
+  const common = speciesBaseGenome(cat.SPECIES_BY_TIER[0][1].id, 6);
+  // step in slices and let the promise continuations run between them (a ceremony ends in `await handle.done`)
+  const runAsync = async (ms: number, slice = 50): Promise<void> => { for (let t = 0; t < ms; t += slice) { run(r, slice); await tick(); await tick(); } };
+  const p1 = r.app.ceremonies.playReveal({ itemId: 'm1', genome: mythic, tier: 'mythic', isNew: true, copies: 1, nickname: null });
+  let guard = 0;
+  while (!r.app.ceremonies.recentBeats().some((b) => b.beat === 'burst') && guard++ < 200) await runAsync(20, 20);
+  r.app.input.skip();                                   // skipped right after its burst (past the 350 ms gate)
+  const repeat = { genome: common, tier: 'common' as TierName, isNew: false, copies: 3, nickname: null, quickEligible: true };
+  const p2 = r.app.ceremonies.playReveal({ ...repeat, itemId: 'c1' });   // the next open, at once
+  const p3 = r.app.ceremonies.playReveal({ ...repeat, itemId: 'c2' });   // and a back-to-back quick pop behind it
+  const pendingAtOnce = r.app.ceremonies.pending;
+  await runAsync(6000);
+  await p1; await p2; await p3;
+  const bs = r.app.ceremonies.recentBeats();
+  const bursts = bs.filter((b) => b.beat === 'burst').map((b) => b.t);
+  const starts = bs.filter((b) => b.beat === 'grab').map((b) => b.t);
+  const gaps = bursts.slice(1).map((t, i) => t - bursts[i]);
+  const startGaps = starts.slice(1).map((t, i) => t - bursts[i]);
+  check(`spacing: a Mythic skipped right after its burst, then two quick pops requested at once: each starts >= ${BURST_SPACING_MS} ms after the previous burst, none is lost`,
+    pendingAtOnce && bursts.length === 3 && starts.length === 3 && startGaps.every((g) => g >= BURST_SPACING_MS) && !r.app.ceremonies.pending && r.app.identity.itemId === 'c2',
+    `burst gaps ${gaps.map((g) => g.toFixed(0)).join(', ')} ms; start after previous burst ${startGaps.map((g) => g.toFixed(0)).join(', ')} ms`);
+  check('spacing: the wait is no longer than needed (each start within one step slice of the 1 s mark)', startGaps.every((g) => g < BURST_SPACING_MS + 60), startGaps.map((g) => g.toFixed(0)).join(', '));
+  check('spacing: consecutive bursts are >= 1 s apart', gaps.length === 2 && gaps.every((g) => g >= BURST_SPACING_MS), gaps.map((g) => g.toFixed(0)).join(', '));
 }
 
 /* ───────────────────────── 6. settings: resolution, migration, newer blobs, calm default, music ───────────────────────── */

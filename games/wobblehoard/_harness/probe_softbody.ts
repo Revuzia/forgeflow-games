@@ -540,10 +540,11 @@ function sweepSpecs(starter: Genome): FoldSpec[] {
 /** Rest height of the tip (highest particle) of a genome's body after 0.5 s on the table. Physics round 2: the peak presses below are placed
  *  RELATIVE to it. They were absolute heights (0.9 / 0.96 m) fitted to the hand-built DOLLOP's tip at 1.016 m; the catalog recipe DOLLOP
  *  (one shape code path for all 50 species) has a broader, unpinched swirl-peak with its tip at 0.951 m, so 0.96 m missed it entirely. */
+/** In STARTER units (divided by restRadius / 0.5125), like the fold rays, which foldPress scales by the body's size. */
 const TOPS = new Map<Genome, number>();
 function restTop(g: Genome): number {
   let t = TOPS.get(g);
-  if (t === undefined) { const b = new SoftBody(g); settle(b, 0.5); t = topY(b); TOPS.set(g, t); }
+  if (t === undefined) { const b = new SoftBody(g); settle(b, 0.5); t = topY(b) / (b.restRadius / 0.5125); TOPS.set(g, t); }
   return t;
 }
 /** 6 cm and 12 cm under the tip (the old 0.96 / 0.9 m on the old 1.016 m tip). */
@@ -1337,7 +1338,7 @@ function familyAllocCheck(starter: Genome): Array<{ fam: string; bytes: number }
     let i = 0;
     const frame = (): void => { b.fingerMove(0, rub[i % 2400]); b.fingerPressure(0, prs[(i % 2400) + 1] as number); i++; b.step(DT); ev.length = 0; b.drainEvents(ev); };
     touch(b, 0, v3(0.15, 4, 0), v3(0, -1, 0));
-    for (let k = 0; k < 900; k++) frame();
+    for (let k = 0; k < 3000; k++) frame();   // 50 s: each family's first body in this process still tiers up (900 frames left ~1.8 KB / frame for all, gel included)
     let best = Infinity;
     for (let w = 0; w < 3; w++) { const u0 = newUsed(); for (let k = 0; k < 120; k++) frame(); const d = newUsed() - u0; if (d >= 0 && d < best) best = d; }
     out.push({ fam, bytes: best - base });
@@ -2139,8 +2140,8 @@ async function main(): Promise<void> {
       add('G1', `fold sweep of the verifier that found the transient folds (${sw.length} presses: starter, soft, firm, bouncy-big, stretchy-small; taps and holds x = 0 .. 0.25; was 171-180 deg at x = 0.2 / 0.25): sharpest crease (${ws.label}), frames over 120 deg, missed rays`, `${f2(ws.worst, 0)} deg, ${sw.reduce((a, c) => a + c.f120, 0)} frames, ${sw.filter((r) => r.missed).length} missed`, '<= 115 deg, 0 frames, 0', ws.worst <= 115 && sw.every((r) => r.f120 === 0 && !r.missed));
       add('G1', `fold sweep: left at rest 3 s after the finger lifted (${wr.label}); edges over 90 deg, inward triangles`, `${f2(wr.restWorst, 0)} deg, ${sw.reduce((a, c) => a + c.restN90, 0)}, ${sw.reduce((a, c) => a + c.restInward, 0)}`, `<= ${FOLD_REST_MAX} deg, 0, 0`, wr.restWorst <= FOLD_REST_MAX && sw.every((r) => r.restN90 === 0 && r.restInward === 0));
       const wsv = sh.reduce((a, c) => (c.worst > a.worst ? c : a)), wrim = rim.reduce((a, c) => (c.worst > a.worst ? c : a)), wsp = sp.reduce((a, c) => (c.worst > a.worst ? c : a));
-      add('G1', `side press at the swirl-peak with the shell's pressure profile (${sp.length} presses: 5 genomes + detail 4, 6 / 12 cm under the tip, 4 directions; a fingertip wider than the peak crushed it flat: 179 deg, 100 frames over 120 without the contact fold limit): sharpest crease (${wsp.label}), frames over 120 deg, rest`, `${f2(wsp.worst, 0)} deg, ${sp.reduce((a, c) => a + c.f120, 0)} frames, rest ${f2(Math.max(...sp.map((r) => r.restWorst)), 0)} deg`, '<= 120 deg, 0 frames, rest <= 60', wsp.worst <= 120 && sp.every((r) => r.f120 === 0 && !r.missed && r.restN90 === 0 && r.restWorst <= FOLD_REST_MAX));
-      add('G1', `hard side shove at the swirl-peak (pressure 1 at once, 6 cm under its tip, 4 directions x 3 genomes + detail 4: ${sh.length} presses, a stress case the shell never sends, its own presses are the row above; a fingertip wider than the peak crushed it flat: 162-180 deg at HEAD): sharpest crease (${wsv.label}), frames over 120 deg, rest`, `${f2(wsv.worst, 0)} deg, ${sh.reduce((a, c) => a + c.f120, 0)} frames, rest ${f2(Math.max(...sh.map((r) => r.restWorst)), 0)} deg`, '<= 115 deg, 0 frames, rest <= 60', wsv.worst <= 115 && sh.every((r) => r.f120 === 0 && !r.missed && r.restN90 === 0 && r.restWorst <= FOLD_REST_MAX));
+      add('G1', `side press at the swirl-peak with the shell's pressure profile (${sp.length} presses: 5 genomes + detail 4, 6 / 12 cm under the tip, 4 directions; a fingertip wider than the peak crushed it flat: 179 deg, 100 frames over 120 without the contact fold limit): sharpest crease (${wsp.label}), frames over 120 deg, rest`, `${f2(wsp.worst, 0)} deg, ${sp.reduce((a, c) => a + c.f120, 0)} frames, rest ${f2(Math.max(...sp.map((r) => r.restWorst)), 0)} deg; missed ${sp.filter((r) => r.missed).map((r) => r.label).join(', ') || 'none'}; edges over 90 at rest ${sp.reduce((a, c) => a + c.restN90, 0)}`, '<= 120 deg, 0 frames, rest <= 60, none missed, 0', wsp.worst <= 120 && sp.every((r) => r.f120 === 0 && !r.missed && r.restN90 === 0 && r.restWorst <= FOLD_REST_MAX));
+      add('G1', `hard side shove at the swirl-peak (pressure 1 at once, 6 cm under its tip, 4 directions x 3 genomes + detail 4: ${sh.length} presses, a stress case the shell never sends, its own presses are the row above; a fingertip wider than the peak crushed it flat: 162-180 deg at HEAD): sharpest crease (${wsv.label}), frames over 120 deg, rest`, `${f2(wsv.worst, 0)} deg, ${sh.reduce((a, c) => a + c.f120, 0)} frames, rest ${f2(Math.max(...sh.map((r) => r.restWorst)), 0)} deg; missed ${sh.filter((r) => r.missed).map((r) => r.label).join(', ') || 'none'}; edges over 90 at rest ${sh.reduce((a, c) => a + c.restN90, 0)}`, '<= 115 deg, 0 frames, rest <= 60, none missed, 0', wsv.worst <= 115 && sh.every((r) => r.f120 === 0 && !r.missed && r.restN90 === 0 && r.restWorst <= FOLD_REST_MAX));
       add('G1', `low side press at the table rim (y = 0.05, hold; 132 deg at HEAD): sharpest crease (${wrim.label}), frames over 120 deg`, `${f2(wrim.worst, 0)} deg, ${rim.reduce((a, c) => a + c.f120, 0)} frames`, '<= 120 deg, 0 frames', wrim.worst <= 120 && rim.every((r) => r.f120 === 0 && !r.missed));
       const sb = results.filter((r): r is Extract<JobResult, { type: 'foldsub' }> => r.type === 'foldsub').map((r) => r.res);
       const wsb = sb.reduce((a, c) => (c.worst > a.worst ? c : a));
