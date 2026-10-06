@@ -500,7 +500,7 @@ async function main() {
         log.hold = { comp, voices: held.audio.started.squish - s0.audio.started.squish, fingers: held.metrics.fingers, volume: held.metrics.volume };
         wh.pointerUp();
         for (let i = 0; i < 20; i++) { wh.step(1 / 60, 1); notePress(); }
-        log.press = { hasPress, peakPress };
+        log.press = { hasPress, peakPress, reaction: typeof wh.state().metrics.reaction === 'number' };
         const rel = wh.state();
         log.release = { releases: rel.audio.started.release - s0.audio.started.release, pops: rel.audio.started.pop - s0.audio.started.pop, kinds: rel.events.map((e) => e.kind), maxIntensity: rel.events.filter((e) => e.kind === 'release').at(-1)?.intensity ?? 0 };
         wh.step(1 / 60, 240);
@@ -547,6 +547,8 @@ async function main() {
         const want = P.hasPress ? Math.max(P.peakPress, I) >= 0.7 : I > 0.3;
         check('hook release: bubbles pop only after a deep squeeze (press >= 0.7 with metrics.press, else intensity > 0.3), never more than 3', out.afterRelease.pops <= 3 && (want ? out.afterRelease.pops >= 1 : out.afterRelease.pops === 0), `press ${P.hasPress ? P.peakPress.toFixed(2) : 'n/a'}, intensity ${I.toFixed(2)}, expected ${want ? 'pops' : 'none'}, pops ${out.afterRelease.pops}`);
       }
+      check('press-driven path is live: the play body reports metrics.press and metrics.reaction, so the squelch (max(compression, press)), the bubbles (peak press) and the pull (contract pull level) run on the contract scales, not the slice fallbacks',
+        out.press.hasPress && out.press.reaction && out.press.peakPress > 0.5, JSON.stringify(out.press));
       check('hook release: the body recovers (volume 1 +- 0.015, compression ~ 0)', Math.abs(out.rest.volume - 1) < 0.015 && out.rest.compression < 0.05 && out.rest.fingers === 0, JSON.stringify(out.rest));
       check('hook pull: outward drag grabs and stretches (stretch > 0.08), stretch voice started, no stray release bloop', out.pull.grabbed && out.pull.stretch > 0.08 && out.pull.voices >= 1 && out.pull.kinds.includes('grab') && out.pull.volume > 0.85 && out.pull.volume < 1.15, JSON.stringify(out.pull));
       check('hook snap: letting go emits snap + exactly one audio release', out.snap.kinds.includes('snap') && out.snap.releases === 1, JSON.stringify(out.snap));

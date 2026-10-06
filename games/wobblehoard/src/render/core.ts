@@ -7,7 +7,9 @@
 import * as THREE from 'three';
 import type { SoftBodyLike } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
-import type { JellyPalette } from './oklch.ts';
+import { tintShare, type JellyPalette, type Rgb } from './oklch.ts';
+
+const WARM: Rgb = [1.0, 0.45, 0.12];
 import type { TierStyle } from './rarity.ts';
 import { HaloQuad } from './halo.ts';
 import { NOISE_GLSL } from './shaderlib.ts';
@@ -105,13 +107,15 @@ export class Core {
     const col = this.blobMat.uniforms.uColor.value as THREE.Color, hot = this.blobMat.uniforms.uHot.value as THREE.Color;
     col.setRGB(p.core[0], p.core[1], p.core[2], THREE.LinearSRGBColorSpace);
     hot.setRGB(p.coreHot[0], p.coreHot[1], p.coreHot[2], THREE.LinearSRGBColorSpace);
-    if (style.coreWarm > 0) { col.lerp(new THREE.Color(1.0, 0.45, 0.12), style.coreWarm); hot.lerp(new THREE.Color(1.0, 0.8, 0.5), style.coreWarm); }
-    const t = style.tell;
-    if (style.coreTint > 0) {
+    // the tier's tints, each scaled by its colour harmony with the body (tintShare: a far hue would muddy the jelly)
+    const warm = style.coreWarm * tintShare(WARM, p);
+    if (warm > 0) { col.lerp(new THREE.Color(1.0, 0.45, 0.12), warm); hot.lerp(new THREE.Color(1.0, 0.8, 0.5), warm); }
+    const t = style.tell, k = style.coreTint * tintShare(t, p);
+    if (k > 0) {
       const tc = new THREE.Color().setRGB(t[0], t[1], t[2], THREE.LinearSRGBColorSpace);
-      col.lerp(tc, style.coreTint); hot.lerp(tc.clone().lerp(new THREE.Color(1, 1, 1), 0.35), style.coreTint);
+      col.lerp(tc, k); hot.lerp(tc.clone().lerp(new THREE.Color(1, 1, 1), 0.35), k);
     }
-    const k = style.coreTint, w = style.corePrism > 0 ? 0.4 : 0;   // a prism core's halo is pastel (its blob carries the spectrum)
+    const w = style.corePrism > 0 ? 0.4 : 0;   // a prism core's halo is pastel (its blob carries the spectrum)
     const hr = p.core[0] + (t[0] - p.core[0]) * k, hg = p.core[1] + (t[1] - p.core[1]) * k, hb = p.core[2] + (t[2] - p.core[2]) * k;
     this.halo.setColor(hr * (1 - w) + w * 0.9, hg * (1 - w) + w * 0.9, hb * (1 - w) + w);
     this.baseHalo.setRGB(hr * (1 - w) + w * 0.9, hg * (1 - w) + w * 0.9, hb * (1 - w) + w, THREE.LinearSRGBColorSpace);

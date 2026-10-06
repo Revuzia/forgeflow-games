@@ -22,11 +22,11 @@ import { familyOf, getSpecies } from '../data/catalog.ts';
 import type { Haptics } from '../input/haptics.ts';
 import type { SimTimers } from './clock.ts';
 import type { TouchState } from './driver.ts';
-import { clamp01, hasPress, pullLevel, pullScale, releaseFxLevel, squeezeDepth } from './feel.ts';
+import { clamp01, hasPress, releaseFxLevel, snapPullLevel, squeezeDepth, stretchPullLevel } from './feel.ts';
 
 export type StatKey = 'pokes' | 'squishes' | 'pulls' | 'releases';
 
-interface Voice { handle: SquishVoiceHandle; mode: 'press' | 'pull'; prevStretch: number; stretchRate: number }
+interface Voice { handle: SquishVoiceHandle; mode: 'press' | 'pull'; prevLevel: number; levelRate: number }
 
 export interface Feedback {
   handle(ev: SoftEvent): void;
@@ -69,6 +69,8 @@ export function createFeedback(d: FeedbackDeps): Feedback {
   let lifted = false, liftSince = -1, wasGroundedAtGrab = false;
   let strandOn = false, strandLast = 0;
   let pcx = 0, pcy = 0, pcz = 0, vx = 0, vy = 0, vz = 0, haveC = false;
+  /** live pull level of finger f: the driver's (round-2 body), or the rescaled stretch (a body without press) */
+  const pullNow = (f: number): number => (hasPress(d.body().metrics) ? touch.pull(f) : stretchPullLevel(d.body().metrics.stretch));
   const tacky = (): boolean => { try { const g = d.genome(); return !!getSpecies(g.species) && TACKY.has(familyOf(g.species)); } catch { return false; } };
 
   function endVoice(f: number, fade?: number): void {
@@ -85,7 +87,7 @@ export function createFeedback(d: FeedbackDeps): Feedback {
     const handle = d.audio.squishStart({ pitch: pitch() * (mode === 'pull' ? 1.12 : 1), pan });
     if (!handle) return;
     touch.fingerPan[f] = pan;
-    voices[f] = { handle, mode, prevStretch: d.body().metrics.stretch, stretchRate: 0 };
+    voices[f] = { handle, mode, prevLevel: pullNow(f), levelRate: 0 };
   }
 
   /** one to three bubble pops, 40-120 ms apart */
@@ -144,7 +146,9 @@ export function createFeedback(d: FeedbackDeps): Feedback {
       case 'snap': {
         endVoice(f);
         d.bump('releases');
-        const S = pullLevel(I, hasPress(body.metrics)); // how hard the pull was, 0..1 (CALIBRATION.stretchFull)
+        const bodyHasPress = hasPress(body.metrics);
+        const S = snapPullLevel(I, bodyHasPress);   // the contract's pull level (feel.ts "THE PULL SIGNAL")
+        if (bodyHasPress && (f === 0 || f === 1)) touch.learnPull(f, I);
         d.audio.release({ compression: S, pitch: pitch(), pan: d.panOfPoint(ev.at) });
         d.haptics.release();
         d.stage.shake(0.1 + 0.4 * S);
@@ -188,11 +192,11 @@ export function createFeedback(d: FeedbackDeps): Feedback {
       let r: number;
       if (v.mode === 'press') { comp = depth; r = m.compressionRate; }
       else {
-        const raw = (m.stretch - v.prevStretch) / Math.max(dt, 1e-3);
-        v.stretchRate += (clamp(raw, -12, 12) - v.stretchRate) * 0.35;
-        v.prevStretch = m.stretch;
-        const k = pullScale(hasPress(m)); // 1 / stretchFull while the rescale applies (feel.ts CALIBRATION)
-        comp = m.stretch * k; r = v.stretchRate * k;
+        const lvl = pullNow(f);   // the live pull level, 0..1 (feel.ts "THE PULL SIGNAL")
+        const raw = (lvl - v.prevLevel) / Math.max(dt, 1e-3);
+        v.levelRate += (clamp(raw, -12, 12) - v.levelRate) * 0.35;
+        v.prevLevel = lvl;
+        comp = lvl; r = v.levelRate;
       }
       if (Math.abs(r) > Math.abs(rate)) rate = r;
       try { v.handle.update({ compression: clamp01(comp), rate: Number.isFinite(r) ? r : 0, pan: touch.fingerPan[f] }); } catch (e) { d.report(e); }
@@ -219,7 +223,7 @@ export function createFeedback(d: FeedbackDeps): Feedback {
           strandLast = 0;   // weaker strings: stop calling, the engine fades the held voice itself
         }
       } else if (grabbed && tacky()) {
-        const tension = pullLevel(m.stretch, hasPress(m));
+        const tension = Math.max(touch.grabActive[0] ? pullNow(0) : 0, touch.grabActive[1] ? pullNow(1) : 0);
         if (tension >= STRAND_ON || strandOn) {
           strandOn = true;
           try { d.audio.strand({ tension, pitch: pitch(), pan: d.panOfPoint(c) }); } catch (e) { d.report(e); }

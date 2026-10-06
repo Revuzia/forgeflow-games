@@ -14,12 +14,12 @@ import * as THREE from 'three';
 import type { Genome } from '../core/genome.ts';
 import { mulberry32, lerp } from '../core/rng.ts';
 import type { QualityTier } from '../contracts.ts';
-import type { JellyPalette, Rgb } from './oklch.ts';
+import { tintShare, type JellyPalette, type Rgb } from './oklch.ts';
 import { NOISE_GLSL } from './shaderlib.ts';
 import { KEY_DIR, RIM_DIR, type EnvHub } from './env.ts';
 import { TIERS } from './quality.ts';
 import { getSpecies } from '../data/catalog.ts';
-import { resolveMaterial, translucencyMaxOf, type ResolvedLook } from '../data/materials.ts';
+import { MATERIAL_FAMILIES, isMaterialFamilyId, resolveMaterial, translucencyMaxOf, type ResolvedLook } from '../data/materials.ts';
 import type { TierStyle } from './rarity.ts';
 
 const PATTERN_ID: Record<Genome['pattern'], number> = { plain: 0, speckle: 1, swirl: 2, bands: 3 };
@@ -64,9 +64,13 @@ export interface JellyUniforms {
   uTouch0: { value: THREE.Vector4 };
   uTouch1: { value: THREE.Vector4 };
   uTouchR: { value: number };
+  /** Colour constancy against the studio's sodium-amber key (multiplies the body's own colour; luminance-neutral). */
+  uWB: { value: THREE.Vector3 };
   /** Family micro-texture (foam pores, dusted mochi, bead lumps): bump strength and frequency over the rest direction. */
   uGrain: { value: number };
   uGrainFreq: { value: number };
+  /** 1 = the grain is a bead bed (round lumps), 0 = pores / powder noise. */
+  uBeads: { value: number };
   /** Family x "stretched regions go paler": 1 = the gel's. */
   uPaleMul: { value: number };
 }
@@ -100,7 +104,8 @@ uniform vec3 uBlushCol, uPaleCol, uPatA, uPatB, uRimCol, uGlowCol, uKeyCol, uCor
 uniform float uAurora, uIri, uTwoTone, uTierAmt, uTierTint, uMixAmt;
 uniform vec3 uTone2Col, uTierCol, uMixCol;
 uniform vec4 uTouch0, uTouch1;
-uniform float uTouchR, uGrain, uGrainFreq, uPaleMul;
+uniform float uTouchR, uGrain, uGrainFreq, uPaleMul, uBeads;
+uniform vec3 uWB;
 vec3 jBumpN(vec3 surf_pos, vec3 surf_norm, vec2 dHdxy, float faceDirection) {
   vec3 vSigmaX = normalize(dFdx(surf_pos.xyz));
   vec3 vSigmaY = normalize(dFdy(surf_pos.xyz));
@@ -115,6 +120,12 @@ float jTwo = 0.0;
 float jPale = 0.0;
 float jMix = 0.0;
 ${NOISE_GLSL}
+float jBeadH(vec3 q) {
+  vec3 c = floor(q), f = fract(q);
+  vec3 r = whHash33(c);
+  float d = length(f - (0.4 + 0.2 * r)) / (0.3 + 0.1 * r.z);
+  return sqrt(max(0.0, 1.0 - d * d));
+}
 float jSpeckleLayer(vec3 d, float scale, float seed) {
   vec3 q = d * scale + seed;
   vec3 c = floor(q);
@@ -157,6 +168,7 @@ const COLOR_STAGE = /* glsl */`
   diffuseColor.rgb = mix(diffuseColor.rgb, uBlushCol, jBlush * 0.75);
   diffuseColor.rgb = mix(diffuseColor.rgb, uPaleCol, jPale * 0.6);
   diffuseColor.rgb = mix(diffuseColor.rgb, uTierCol, uTierTint);
+  diffuseColor.rgb *= uWB;
 }
 `;
 
@@ -166,7 +178,7 @@ float jNdv0 = clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0);
 float jThick = (0.32 + 0.68 * jNdv0) * (1.0 - 0.55 * jPale + 0.12 * jBlush);
 float jAtt = (1.0 + 1.8 * jPale) / (1.0 + 0.9 * jBlush);
 ${THREE.ShaderChunk.transmission_fragment
-    .replace('material.attenuationColor = attenuationColor;', 'material.attenuationColor = mix(mix(attenuationColor, uTone2Col, jTwo), uTierCol, uTierTint);')
+    .replace('material.attenuationColor = attenuationColor;', 'material.attenuationColor = min(mix(mix(attenuationColor, uTone2Col, jTwo), uTierCol, uTierTint) * uWB, vec3(1.0));')
     .replace('material.thickness = thickness;', 'material.thickness = thickness * jThick;')
     .replace('material.attenuationDistance = attenuationDistance;', 'material.attenuationDistance = attenuationDistance * jAtt;')}
 `;
@@ -251,17 +263,43 @@ export function drawnTranslucency(g: Genome, tierAdd = 0): number {
 export function familyOfGenome(g: Genome): string { return getSpecies(g.species)?.family ?? 'jellygel'; }
 
 /** Grain frequency over the rest direction per family: foam pores fine, dusted mochi medium, a bead bed coarse lumps. */
-const GRAIN_FREQ: Record<string, number> = { slowrise: 30, marshmallow: 18, mochidough: 22, putty: 26, beadsqueeze: 9, firmsilicone: 30, popdome: 20 };
+const GRAIN_FREQ: Record<string, number> = { slowrise: 30, marshmallow: 18, mochidough: 22, putty: 26, beadsqueeze: 6, firmsilicone: 30, popdome: 20 };
 
 // the family's micro-texture: a bump from noise over the REST direction (it rides the deformation), only where the family has grain
 const GRAIN_STAGE = /* glsl */`
 #include <normal_fragment_maps>
+#define GRAIN_AMP 0.022
 if (uGrain > 0.001) {
-  float jH = whNoise3(vRest * uGrainFreq) + 0.5 * whNoise3(vRest * uGrainFreq * 2.3 + 4.1);
-  vec2 jdH = vec2(dFdx(jH), dFdy(jH)) * uGrain * 0.45;
-  normal = jBumpN(-vViewPosition, normal, jdH, faceDirection);
+  vec3 jq = vRest * uGrainFreq;
+  // fade the grain out before it aliases (cells smaller than ~3 px: a far or small body, the phone's low tier)
+  float jFade = 1.0 - smoothstep(0.2, 0.45, length(fwidth(jq)));
+  if (jFade > 0.0) {
+    // height in world units, slope = its screen derivative over the surface's own screen derivative (a real bump, any distance)
+    // pores / powder: two octaves of noise; a bead bed: round caps, one per cell (beads pressing up under the skin)
+    float jH = uBeads > 0.5 ? jBeadH(jq) * 1.6 : whNoise3(jq) + 0.5 * whNoise3(jq * 2.3 + 4.1);
+    jH *= uGrain * uCoreRadius * GRAIN_AMP * jFade;
+    vec3 jPx = dFdx(-vViewPosition), jPy = dFdy(-vViewPosition);
+    vec2 jdH = vec2(dFdx(jH) / max(length(jPx), 1e-6), dFdy(jH) / max(length(jPy), 1e-6));
+    normal = jBumpN(-vViewPosition, normal, jdH, faceDirection);
+  }
 }
 `;
+
+/**
+ * Colour constancy: the studio's key softbox is sodium amber (env.ts, [1, 0.74, 0.42]); under it a dusty-mauve foam read tan and a sage
+ * dome khaki in the 50-species gallery. The body's own colour (diffuse, its patterns and blushes) is pre-balanced against a share of the
+ * key's tint, luminance kept, so each species' catalog colour survives the warm light while the room keeps its mood.
+ */
+const KEY_TINT: Rgb = [1.0, 0.74, 0.42];
+/** Transmission share kept by the most opaque family (cap 0.3: slow-rise foam, putty); rises to 1 at cap 1. */
+const OPAQUE_KEEP = 0.3;
+/** White-balance strength: a clear jelly (its colour is the transmission's) takes a little, an opaque skin (its colour is its lit diffuse) the most. */
+const WB_CLEAR = 0.3, WB_OPAQUE = 1.3;
+function whiteBalance(k: number, out: THREE.Vector3): THREE.Vector3 {
+  const r = Math.pow(KEY_TINT[0], -k), g = Math.pow(KEY_TINT[1], -k), b = Math.pow(KEY_TINT[2], -k);
+  const y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return out.set(r / y, g / y, b / y);
+}
 
 export class JellyMaterials {
   readonly uniforms: JellyUniforms;
@@ -277,6 +315,9 @@ export class JellyMaterials {
   /** The species' material family's surface (resolveMaterial(family, genome).look): roughness, sheen, grain, thickness, blush, pale. */
   readonly look: ResolvedLook;
   readonly familyId: string;
+  /** Share of the transmission the body keeps (1 = a glassy body; set per tier style in applyStyleUniforms). */
+  private opacityKeep = 1;
+  private readonly famKeep: number;
 
   constructor(genome: Genome, palette: JellyPalette, scale: number, hub: EnvHub, style: TierStyle) {
     this.hub = hub;
@@ -284,6 +325,11 @@ export class JellyMaterials {
     const fam = familyOfGenome(genome);
     this.familyId = fam;
     this.look = resolveMaterial(fam, genome).look;
+    // how much transmission the body keeps: an opaque family keeps 30..65% (LookBounds cap 0.3 .. 0.5)
+    // ... and a clear-castable family whose character is frosted (silicone 0.25, pop dome 0.35 reference translucency) keeps 50..64%
+    const cap = translucencyMaxOf(fam), ref = isMaterialFamilyId(fam) ? MATERIAL_FAMILIES[fam].look.translucency : 0.82;
+    this.famKeep = cap < 1 ? OPAQUE_KEEP + (1 - OPAQUE_KEEP) * Math.max(0, Math.min(1, (cap - 0.3) / 0.7))
+      : 1 - 0.5 * Math.max(0, Math.min(1, (0.6 - ref) / 0.35));
     this.style = style;
     this.pattern = PATTERN_ID[genome.pattern] ?? 0;
     if (this.pattern === 0 && style.swirlFloor > 0) this.pattern = 2;       // Rare and up: a plain body gets a swirl layer
@@ -305,7 +351,7 @@ export class JellyMaterials {
       uAurora: { value: 0 }, uIri: { value: 0 }, uTwoTone: { value: 0 }, uTone2Col: { value: lin(palette.tone2) },
       uTierCol: { value: lin(style.tell) }, uTierAmt: { value: 0 }, uTierTint: { value: 0 }, uMixCol: { value: lin(palette.body) }, uMixAmt: { value: 0 },
       uTouch0: { value: new THREE.Vector4(0, -10, 0, 0) }, uTouch1: { value: new THREE.Vector4(0, -10, 0, 0) }, uTouchR: { value: 0.12 * scale },
-      uGrain: { value: 0 }, uGrainFreq: { value: 24 }, uPaleMul: { value: 1 },
+      uGrain: { value: 0 }, uGrainFreq: { value: 24 }, uPaleMul: { value: 1 }, uBeads: { value: fam === 'beadsqueeze' ? 1 : 0 }, uWB: { value: new THREE.Vector3(1, 1, 1) },
     };
     this.palette = palette;
     this.scale = scale;
@@ -330,10 +376,17 @@ export class JellyMaterials {
     u.uGrainFreq.value = GRAIN_FREQ[this.familyId] ?? 24;
     u.uAurora.value = s.aurora; u.uIri.value = s.iri; u.uTwoTone.value = s.twoTone;
     u.uTierCol.value.setRGB(s.tell[0], s.tell[1], s.tell[2], THREE.LinearSRGBColorSpace);
-    const pc = this.palette.core, k = s.coreTint;
+    const pc = this.palette.core, k = s.coreTint * tintShare(s.tell, this.palette);
     u.uCoreCol.value.setRGB(pc[0] + (s.tell[0] - pc[0]) * k, pc[1] + (s.tell[1] - pc[1]) * k, pc[2] + (s.tell[2] - pc[2]) * k, THREE.LinearSRGBColorSpace);
     u.uPatStrength.value = this.patternStrength();
-    u.uScatter.value = 0.14 + 0.2 * drawnTranslucency(g, s.translucencyAdd) + 0.1 * lk.subsurface;
+    const t = drawnTranslucency(g, s.translucencyAdd);
+    u.uScatter.value = 0.14 + 0.2 * t + 0.1 * lk.subsurface;
+    // a body of a clear family whose genome is only half-translucent (t < 0.65: a frosted dome, a cloudy gummy) keeps a little less
+    // transmission than the glassy ones; the less it keeps, the more its colour is its own lit skin, which the white balance protects
+    this.opacityKeep = this.famKeep * (1 - 0.6 * Math.max(0, Math.min(1, (0.65 - t) / 0.35)));
+    const opq = Math.max(0, Math.min(1, (1 - this.opacityKeep) / (1 - OPAQUE_KEEP)));
+    whiteBalance(WB_CLEAR + (WB_OPAQUE - WB_CLEAR) * opq, u.uWB.value);
+    u.uAlphaBase.value = 0.94 - 0.07 * t + 0.05 * opq;                       // low tier: an opaque skin is (almost) opaque there too
   }
 
   /** Re-style for another rarity tier (rebuilds the GPU materials: a pattern define may change). */
@@ -370,7 +423,10 @@ export class JellyMaterials {
       m.transmission = 0;
       m.clearcoatRoughness = Math.max(m.clearcoatRoughness, 0.16);   // soften the softbox reflection: it is the only thing that shows through here
     } else {
-      m.transmission = lerp(0.62, 1, t);
+      // an opaque family (foam, marshmallow, mochi, putty, bead bed: LookBounds cap < 1) lets much less light through: its colour comes
+      // from its own lit skin and inner glow, not from the felt seen through it (a 62%-transmissive "marshmallow" was a tinted glass
+      // over the amber key pool and read tan whatever its colour)
+      m.transmission = lerp(0.62, 1, t) * this.opacityKeep;
       m.thickness = (0.45 + 0.35 * t) * this.scale * lk.thickness;
       m.attenuationColor = lin(p.attenuation);
       m.attenuationDistance = lerp(0.3, 1.0, t) * this.scale * this.style.attenuation;

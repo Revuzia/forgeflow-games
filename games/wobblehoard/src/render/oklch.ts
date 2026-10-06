@@ -35,6 +35,30 @@ export function oklchToLinear(L: number, C: number, hDeg: number): Rgb {
   return [clamp01(r), clamp01(g), clamp01(b)];
 }
 
+/** LINEAR sRGB to OKLCH [L, C, h degrees]. */
+export function linearToOklch(c: Rgb): [number, number, number] {
+  const l = Math.cbrt(0.4122214708 * c[0] + 0.5363325363 * c[1] + 0.0514459929 * c[2]);
+  const m = Math.cbrt(0.2119034982 * c[0] + 0.6806995451 * c[1] + 0.1073969566 * c[2]);
+  const s = Math.cbrt(0.0883024619 * c[0] + 0.2817188376 * c[1] + 0.6299787005 * c[2]);
+  const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
+  const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s, B = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+  return [L, Math.hypot(A, B), ((Math.atan2(B, A) / DEG) % 360 + 360) % 360];
+}
+
+/**
+ * Colour harmony between a LIGHT inside / under the body (its core, a tier's tint) and the body colour: 0 while the light's hue is
+ * within 35 degrees of the body's, rising to 1 at 110 degrees and beyond. A light far round the wheel from the body mixes with it to
+ * mud (an amber core in a sage or teal jelly reads olive-brown, a coral one in a green jelly brown), so such lights are drawn paler.
+ * A near-white light (OKLCH chroma under 0.03) is never far. `bodyHue` is the body's OKLCH hue (JellyPalette.hue).
+ */
+export function hueFar(light: Rgb, bodyHue: number): number {
+  const [, C, h] = linearToOklch(light);
+  if (C < 0.03) return 0;
+  const d = Math.abs(((h - bodyHue) % 360 + 540) % 360 - 180);
+  const t = clamp01((d - 35) / 75);
+  return t * t * (3 - 2 * t) * clamp01((C - 0.03) / 0.05);
+}
+
 /** Linear -> sRGB-encoded 0..1 (only used by tests / debug printing). */
 export const linearToSrgb = (v: number): number => (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055);
 
@@ -52,6 +76,9 @@ export interface JellyPalette {
   pool: Rgb;          // light pool tint (fake caustic)
   glitter: Rgb;       // glitter tint
   dust: Rgb;          // landing dust tint
+  /** OKLCH hue (degrees) and chroma of the body colour (for colour-harmony decisions). */
+  hue: number;
+  chroma: number;
 }
 
 const mix3 = (a: Rgb, b: Rgb, t: number): Rgb => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
@@ -82,5 +109,26 @@ export function genomePalette(g: Genome): JellyPalette {
   const pool = oklchToLinear(0.74, Math.min(0.26, C * 1.5), h - 4);
   const glitter = mix3(oklchToLinear(0.97, 0.05, h + 12), [1, 0.93, 0.78], 0.55);
   const dust = mix3(oklchToLinear(0.86, 0.06, h + 10), [0.95, 0.85, 0.75], 0.5);
-  return { body, attenuation, blush, pale, patA, tone2, patB, glow, core, coreHot, pool, glitter, dust };
+  return { body, attenuation, blush, pale, patA, tone2, patB, glow, core, coreHot, pool, glitter, dust, hue: hk, chroma: C };
 }
+
+/**
+ * The palette the renderer DRAWS with: genomePalette (which stays the catalog's colour record, CATALOG.md swatches) with colour harmony
+ * applied to the inner light. A core whose hue sits far round the wheel from the body's (hueFar) glows paler and leans toward the body
+ * hue, so it lights the jelly from inside without muddying it (measured on the 50-species gallery: sage, teal and emerald bodies with
+ * the Common amber core read olive-brown before). Near cores are unchanged (the starter's ember-coral core in an apricot body).
+ */
+export function renderPalette(g: Genome): JellyPalette {
+  const p = genomePalette(g);
+  const far = hueFar(p.core, p.hue);
+  if (far <= 0) return p;
+  const [cL, cC, cH] = linearToOklch(p.core);
+  const dh = ((p.hue - cH) % 360 + 540) % 360 - 180;
+  const h2 = cH + dh * 0.45 * far;
+  const core = oklchToLinear(Math.min(0.82, cL + 0.06 * far), cC * (1 - 0.68 * far), h2);
+  const coreHot = oklchToLinear(0.95, 0.08 * (1 - 0.5 * far), h2 + 8);
+  return { ...p, core, coreHot };
+}
+
+/** How much of a tier's tint (TierStyle.coreTint / coreWarm) a body takes: all of it near the body hue, 40% of it far round the wheel. */
+export const tintShare = (light: Rgb, p: JellyPalette): number => 1 - 0.6 * hueFar(light, p.hue);

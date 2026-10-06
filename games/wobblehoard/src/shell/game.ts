@@ -309,6 +309,7 @@ export function createGame(deps: GameDeps): Game {
       stage.setFloatMode(!S().gravity);
       ringCount = 0; ringHead = 0;
       feedback.resetBody();
+      driver.touch.resetPull();   // the new body has its own maximum pull (learned again from its snaps)
       needsRender = true;
       emit('identity', id, labelOf(id));
     },

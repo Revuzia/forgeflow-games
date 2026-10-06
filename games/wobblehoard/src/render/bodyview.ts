@@ -13,7 +13,7 @@ import { Face } from './face.ts';
 import { Fx } from './fx.ts';
 import { JellyView } from './jelly.ts';
 import { JellyMaterials } from './material.ts';
-import { genomePalette, type JellyPalette } from './oklch.ts';
+import { renderPalette, type JellyPalette } from './oklch.ts';
 import type { TierSpec } from './quality.ts';
 import { RarityFx, TIER_STYLES, type TierStyle } from './rarity.ts';
 import { TackStrands } from './strands.ts';
@@ -70,7 +70,7 @@ export class BodyView {
   constructor(id: number, inner: SoftBodyLike, genome: Genome, tier: TierName, spec: TierSpec, hub: EnvHub, quad: THREE.BufferGeometry, owned: boolean) {
     this.id = id; this.genome = genome; this.tier = tier; this.style = TIER_STYLES[tier]; this.spec = spec; this.owned = owned;
     this.proxy = new BodyProxy(inner);
-    this.palette = genomePalette(genome);
+    this.palette = renderPalette(genome);
     this.scale = inner.restRadius / 0.5;
     this.mats = new JellyMaterials(genome, this.palette, this.scale, hub, this.style);
     this.jelly = new JellyView(this.proxy, this.mats.get(spec.tier), spec.fineFreq);

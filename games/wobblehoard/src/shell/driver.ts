@@ -3,7 +3,7 @@
 // (or was cancelled): no release bloop" marker.
 import type { SoftBodyLike, StageLike, V3 } from '../contracts.ts';
 import type { GestureAction, Slot } from '../input/gestures.ts';
-import { TUNING, hasPress, pressDirection, squishPressure } from './feel.ts';
+import { CALIBRATION, TUNING, clamp01, hasPress, pressDirection, squishPressure } from './feel.ts';
 
 export interface TouchState {
   readonly fingerDown: boolean[];
@@ -15,6 +15,13 @@ export interface TouchState {
   readonly skipRelease: number[];
   /** any finger or grab on the play body */
   contact(): boolean;
+  /** live PULL LEVEL of a finger's grab, 0..1 (feel.ts "THE PULL SIGNAL"): metrics.pull when the body reports it, else the driver's own
+   *  measure (requested target distance from the grab's start over the learned maximum pull). Keeps the last value after the release. */
+  pull(slot: number): number;
+  /** a snap of that finger came back with the body's pull level: learn the body's maximum pull distance from it */
+  learnPull(slot: number, snapIntensity: number): void;
+  /** a new play body: forget the learned maximum pull */
+  resetPull(): void;
 }
 
 export interface Driver {
@@ -51,10 +58,27 @@ export function createDriver(d: DriverDeps): Driver {
   const downAt = [0, 0];
   const pendingAt = [-1, -1];
   const pendingWhy: Array<'tap' | 'release'> = ['tap', 'tap'];
+  // the pull level the driver measures: grab start (world), requested distance from it, the body's maximum pull distance (learned)
+  const g0x = [0, 0], g0y = [0, 0], g0z = [0, 0], pullDist = [0, 0];
+  let maxPullD = 0;   // 0 = not learned yet (CALIBRATION.defaultMaxPullR x restRadius)
+  const notePull = (slot: number, t: V3): void => { pullDist[slot] = Math.hypot(t.x - g0x[slot], t.y - g0y[slot], t.z - g0z[slot]); };
 
   const touch: TouchState = {
     fingerDown, grabActive, fingerPan, peakPress, skipRelease,
     contact: () => fingerDown[0] || fingerDown[1] || grabActive[0] || grabActive[1] || pendingAt[0] >= 0 || pendingAt[1] >= 0,
+    pull(slot) {
+      const reported = (d.body().metrics as { pull?: number }).pull;   // a live pull level from the body, if it ever reports one
+      if (typeof reported === 'number' && grabActive[slot]) return clamp01(reported);
+      const md = maxPullD > 0 ? maxPullD : CALIBRATION.defaultMaxPullR * Math.max(1e-6, d.body().restRadius);
+      return clamp01(pullDist[slot] / md);
+    },
+    learnPull(slot, I) {
+      const dist = pullDist[slot];
+      if (!(dist > 1e-6) || !Number.isFinite(I)) return;
+      if (I > 0.05 && I < 0.98) maxPullD = dist / I;                       // an unclamped snap: the distance it read is exactly dist
+      else if (I >= 0.98 && (maxPullD === 0 || maxPullD > dist)) maxPullD = dist;   // clamped at its limit: the limit is at most dist
+    },
+    resetPull() { maxPullD = 0; pullDist[0] = pullDist[1] = 0; },
   };
 
   function executeUp(slot: Slot, why: 'tap' | 'release' | 'pull' | 'cancel'): void {
@@ -90,9 +114,10 @@ export function createDriver(d: DriverDeps): Driver {
       case 'grab':
         grabActive[a.slot] = true;
         fingerPan[a.slot] = d.panOfPoint(a.target);
+        g0x[a.slot] = a.target.x; g0y[a.slot] = a.target.y; g0z[a.slot] = a.target.z; pullDist[a.slot] = 0;
         body.grab(a.slot, a.vertex, a.target);
         break;
-      case 'grabMove': if (grabActive[a.slot]) { body.grabMove(a.slot, a.target); fingerPan[a.slot] = d.panOfPoint(a.target); } break;
+      case 'grabMove': if (grabActive[a.slot]) { body.grabMove(a.slot, a.target); fingerPan[a.slot] = d.panOfPoint(a.target); notePull(a.slot, a.target); } break;
       case 'grabRelease':
         if (grabActive[a.slot]) { grabActive[a.slot] = false; body.grabRelease(a.slot); }
         break;

@@ -12,7 +12,7 @@ import type { Genome } from '../../src/core/genome.ts';
 import { SETTINGS_KEY, defaultSettings, loadSettings, memoryStorage, resolveSettings, saveSettings } from '../../src/core/settings.ts';
 import { speciesBaseGenome, tierOf } from '../../src/data/catalog.ts';
 import { KEY_POINTER_ID, attachKeyboard } from '../../src/input/keyboard.ts';
-import { CALIBRATION, pressDirection, releaseFxLevel } from '../../src/shell/feel.ts';
+import { CALIBRATION, pressDirection, releaseFxLevel, snapPullLevel, squeezeDepth } from '../../src/shell/feel.ts';
 import { createCollection, WH_QUEUE_MAX } from '../../src/collection/index.ts';
 import { BURST_SPACING_MS, SKIP_GATE_MS } from '../../src/shell/ceremonies.ts';
 import { createMockWorld, recorder } from '../mocks.ts';
@@ -162,18 +162,36 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   const bendStillNeeded = without.n < Math.ceil(0.75 * without.of);
   check(`calibration: CALIBRATION.bendWithPress=${CALIBRATION.bendWithPress} matches the measurement (bend still needed: ${bendStillNeeded}; retire it once releases happen without it)`,
     CALIBRATION.bendWithPress === bendStillNeeded || !withBend.hasPress);
-  // the stretch scale: a full pull (grab 2.2 rest radii out)
-  const b = new SoftBody(g);
-  for (let i = 0; i < 60; i++) b.step(1 / 60);
-  let v = 0, mx = -1e9;
-  for (let i = 0; i < b.vertexCount; i++) { const x = b.positions[i * 3]; if (x > mx) { mx = x; v = i; } }
-  const p0 = { x: b.positions[v * 3], y: b.positions[v * 3 + 1], z: b.positions[v * 3 + 2] };
-  b.grab(0, v, p0);
-  let maxS = 0;
-  for (let i = 1; i <= 90; i++) { b.grabMove(0, { x: p0.x + 2.2 * b.restRadius * Math.min(1, i / 60), y: p0.y, z: p0.z }); b.step(1 / 60); maxS = Math.max(maxS, b.metrics.stretch); }
-  const onContract = maxS >= 0.8;
-  check(`calibration: a full pull reports stretch ${maxS.toFixed(2)} (contract scale ~1 at 2.2x); rescaleStretchWithPress=${CALIBRATION.rescaleStretchWithPress} matches (still needed: ${!onContract})`,
-    CALIBRATION.rescaleStretchWithPress === !onContract);
+  // THE PULL SIGNAL (feel.ts): a round-2 snap carries the contract's pull level; the shell uses it as is, and the driver's live measure
+  // (requested distance from the grab's start over the learned maximum) lands on the same scale
+  const pullTo = (dist: number): { snap: number; stretch: number } => {
+    const b = new SoftBody(g);
+    for (let i = 0; i < 60; i++) b.step(1 / 60);
+    let v = 0, mx = -1e9;
+    for (let i = 0; i < b.vertexCount; i++) { const x = b.positions[i * 3]; if (x > mx) { mx = x; v = i; } }
+    const p0 = { x: b.positions[v * 3], y: b.positions[v * 3 + 1], z: b.positions[v * 3 + 2] };
+    b.grab(0, v, p0);
+    let maxS = 0;
+    for (let i = 1; i <= 90; i++) { b.grabMove(0, { x: p0.x + dist * b.restRadius * Math.min(1, i / 60), y: p0.y, z: p0.z }); b.step(1 / 60); maxS = Math.max(maxS, b.metrics.stretch); }
+    const out: SoftEvent[] = []; b.drainEvents(out); b.grabRelease(0); b.step(1 / 60); b.drainEvents(out);
+    return { snap: out.find((e) => e.kind === 'snap')?.intensity ?? -1, stretch: maxS };
+  };
+  const full = pullTo(2.2), half = pullTo(0.85);
+  check(`pull signal: a full pull snaps at pull level ${full.snap.toFixed(3)} and a half pull (0.85 R of the gel's 1.7 R) at ${half.snap.toFixed(3)}; metrics.stretch reads only ${full.stretch.toFixed(2)} at the full pull, so the shell takes the snap as is (snapPullLevel = intensity, no 1/stretchFull)`,
+    full.snap >= 0.95 && half.snap > 0.35 && half.snap < 0.65 && snapPullLevel(full.snap, true) === full.snap && snapPullLevel(half.snap, true) === half.snap);
+  // the press-driven path is the live one: the real body reports press and reaction, and the squelch depth follows press past compression
+  {
+    const b = new SoftBody(g);
+    for (let i = 0; i < 30; i++) b.step(1 / 60);
+    const host = createBodyHost({ camera: () => cam, body: () => b, viewport: () => ({ w: W, h: H }) });
+    const disc = host.bodyScreen()!;
+    const hit = host.hitTest(disc.x, disc.y - 0.5 * disc.r)!;
+    b.fingerDown(0, { point: hit.point, normal: hit.normal, dir: pressDirection(hit.normal, hit.dir, true) });
+    for (let i = 0; i < 40; i++) { b.fingerPressure(0, 0.8); b.step(1 / 60); }
+    const m = b.metrics;
+    check(`press-driven path: the real body reports press ${typeof m.press === 'number' ? m.press.toFixed(2) : 'n/a'} and reaction ${typeof m.reaction === 'number' ? m.reaction.toFixed(2) : 'n/a'}; the squelch depth is max(compression ${m.compression.toFixed(2)}, press), bubbles key off press (bubbleAt unused)`,
+      typeof m.press === 'number' && typeof m.reaction === 'number' && squeezeDepth(m) === Math.max(m.compression, m.press) && releaseFxLevel(0.9, 0, true) === releaseFxLevel(0, 0.9, true));
+  }
 }
 
 /* ───────────────────────── 1. fatal-frame path (audit finding 0) ───────────────────────── */
@@ -457,6 +475,28 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   const lv = [releaseFxLevel(0.25, 0.5, true), releaseFxLevel(0.25, 0.8, true), releaseFxLevel(0.9, 0, true), releaseFxLevel(0.25, 0.9, false), releaseFxLevel(0.35, 0, false)];
   check('release FX: with metrics.press a gentle press (peak 0.5) stays quiet and a deep one (0.8) bubbles; without press, intensity 0.25 stays quiet and 0.35 bubbles',
     lv[0] === 0 && lv[1] > 0 && lv[2] > 0 && lv[3] === 0 && lv[4] > 0, lv.map((v) => v.toFixed(3)).join(', '));
+}
+
+/* ───────────────────────── 7c. the driver's live pull level (feel.ts THE PULL SIGNAL) ───────────────────────── */
+{
+  const { createDriver } = await import('../../src/shell/driver.ts');
+  const fakeBody = { restRadius: 0.5, metrics: { press: 0 } as Record<string, number>, grab() {}, grabMove() {}, grabRelease() {}, fingerDown() {}, fingerUp() {}, fingerMove() {}, fingerPressure() {} };
+  const drv = createDriver({ body: () => fakeBody as never, stage: {} as never, simTime: () => 0, stepCount: () => 0, panOfPoint: () => 0, extraSquish: () => false, interact: () => {}, dirty: () => {}, report: () => {} });
+  const at = (x: number) => ({ x, y: 0.5, z: 0 });
+  drv.onAction({ type: 'grab', slot: 0, vertex: 1, target: at(0) } as never);
+  drv.onAction({ type: 'grabMove', slot: 0, target: at(0.425) } as never);
+  const before = drv.touch.pull(0);                     // 0.425 over the default 1.7 R x 0.5 = 0.85: 0.5
+  drv.onAction({ type: 'grabRelease', slot: 0 } as never);
+  drv.touch.learnPull(0, 0.25);                          // the body said: that was a quarter of its maximum (its max is 1.7 world units)
+  drv.onAction({ type: 'grab', slot: 0, vertex: 1, target: at(0) } as never);
+  drv.onAction({ type: 'grabMove', slot: 0, target: at(0.85) } as never);
+  const after = drv.touch.pull(0);                       // 0.85 of 1.7: 0.5
+  drv.onAction({ type: 'grabMove', slot: 0, target: at(3) } as never);
+  const clamped = drv.touch.pull(0);
+  fakeBody.metrics.pull = 0.42;
+  const reported = drv.touch.pull(0);
+  check('pull signal (driver): before any snap the default maximum (1.7 R); a snap teaches the body\'s own maximum; 1 at the limit; a body that reports metrics.pull is read directly',
+    Math.abs(before - 0.5) < 1e-9 && Math.abs(after - 0.5) < 1e-9 && clamped === 1 && reported === 0.42, [before, after, clamped, reported].map((x) => x.toFixed(3)).join(', '));
 }
 
 /* ───────────────────────── 7b. round 3: the strand voice follows metrics.strands when the body reports it ───────────────────────── */

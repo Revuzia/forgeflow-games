@@ -3,18 +3,29 @@
 //
 // CALIBRATION rules
 //   * Each compensation names the metric that would retire it and is applied only through the functions below.
-//   * The round-2 metric `press` (contracts.ts SoftMetrics.press) is the guard: a body that reports it is driven on the CONTRACT scales
-//     wherever `press` actually replaces the compensation (squelch depth, release FX).
-//   * Two compensations are NOT replaced by `press` and stay on for every body until physics changes (measured with the real SoftBody at
-//     checkpoint 24, 2026-10-05, default camera 1280x800, Dollop, scratch script calib2.ts; re-measured by _harness/shellview/node_checks.ts,
-//     which fails loudly when the physics changes enough to retire them; the checkpoint-29 physics gives 10 of 13 and 3 of 13, stretch 0.32):
-//       - the press-direction bend: without it a squeeze of 1.4 s gave a `release` event on 3 of 13 hit points, with it on 12 of 13
-//         (release needs compression > 0.08 along the press axis at lift: contract 4.1). Release events are what blooping, bubbles AND the
-//         meter's squeeze credit (DESIGN 5.4) hang on, so retiring the bend today would make most squeezes pay nothing.
-//       - the stretch rescale: a full pull (grab target 2.2 rest radii out) reports metrics.stretch 0.30 and snap 0.28, while the contract
-//         says 1 = pulled to about 2.2x. Without the rescale every pull sounds and looks like a third of a pull.
-//     Set `bendWithPress` / `rescaleStretchWithPress` to false to drive a press-reporting body purely on the contract (the SHELL-2a brief's
-//     literal reading); the node checks print what that costs.
+//   * The round-2 metric `press` (contracts.ts SoftMetrics.press, real on every body since physics round 2) is the guard: a body that
+//     reports it is driven on the CONTRACT scales: the squelch from max(compression, press), the release bubbles from the deepest press of
+//     the touch (bubblePressAt), the pull from the contract's PULL LEVEL (below). bubbleAt and stretchFull apply ONLY to a body without
+//     `press` (the slice body and the probe mocks).
+//   * ONE compensation stays on for every body: the press-direction bend (pressDownLo / pressDownHi, `bendWithPress`). It is not a sound
+//     or meter scale but the finger's travel direction: on an up-facing hit the finger pushes DOWN into the toy on the table instead of
+//     along the line of sight. Measured with the physics-round-2 SoftBody (Dollop, 1280x800 default camera, a 1.4 s squeeze on 13 hit
+//     points; _harness/shellview/node_checks.ts re-measures it every run): with the bend 12 of 13 squeezes end in a `release` event,
+//     without it 3 of 13. Every up-facing hit (normal.y > 0.4, most of the visible body) dents fully (press 1.00) but reads compression
+//     0.000-0.013 at the lift, and the physics fires `release` only for compression > 0.08 (softbody.ts fingerUp). Release events carry the
+//     release bloop AND the meter's squeeze credit (collection/meterfeed.ts: release with heldFor >= 0.4 s), so retiring the bend today
+//     would make most squeezes silent at the lift and pay nothing. Contract request (physics): fire `release` on max(compression, press)
+//     at the lift; then set `bendWithPress` to false (node_checks.ts says when the measurement allows it).
+//
+// THE PULL SIGNAL (physics round 2, contracts.ts "PULL INTENSITY"): one 0..1 scale everywhere, the PULL LEVEL = how far the grab's
+// target has been pulled from where the grab started, over the body's own maximum pull (1 = its family's maxPull, for every family).
+//   * 'snap' intensity IS the pull level at the release: used as is (no 1/stretchFull rescale; that saturated every pull over ~30%).
+//   * The held pull voice, the strand tension and the pull FX need it LIVE. The body does not report a live pull level (SoftBody's
+//     pullLevel() is private; contract request: SoftMetrics.pull), so the driver computes the same quantity from what it sends: the
+//     distance of the requested grab target from the grab's start, over the body's maximum pull distance, LEARNED from the body's own
+//     snaps (maxD = distance / snap intensity for an unclamped snap; DEFAULT_MAX_PULL_R x restRadius until the first one). A body that
+//     reports `metrics.pull` is read directly. metrics.stretch (the body's extent: 0.04-0.40 at a full pull depending on the family) is no
+//     longer a pull signal for a press-reporting body.
 import type { SoftMetrics, V3 } from '../contracts.ts';
 import { clamp } from '../core/rng.ts';
 
@@ -55,9 +66,10 @@ export const CALIBRATION = {
   /** Release FX on a body WITH `press`: the deepest press of the touch (0..1 of the safe depth) gates the bubbles (contract scale). */
   bubblePressAt: 0.7,
   bubblePressFull: 1,
-  /** Stretch rescale: stretch / stretchFull drives the pull sound and FX (a full pull reads ~1). */
+  /** Body WITHOUT press only: stretch / stretchFull (and the snap intensity, then metrics.stretch at the release) is the pull level. */
   stretchFull: TUNING.stretchFull,
-  rescaleStretchWithPress: true,
+  /** The pull level's maximum distance, in rest radii, until the body's first snap teaches the real one (contracts.ts: ~1.7 R jelly gel). */
+  defaultMaxPullR: 1.7,
 } as const;
 
 export const clamp01 = (v: number): number => (Number.isFinite(v) ? (v < 0 ? 0 : v > 1 ? 1 : v) : 0);
@@ -80,11 +92,11 @@ export function pressDirection(normal: V3, dir: V3, bodyHasPress: boolean): V3 {
   return { x: x / l, y: y / l, z: z / l };
 }
 
-/** Multiplier from metrics.stretch to "pull level" (1 / stretchFull while the rescale applies, else 1). */
-export const pullScale = (bodyHasPress: boolean): number => (bodyHasPress && !CALIBRATION.rescaleStretchWithPress ? 1 : 1 / CALIBRATION.stretchFull);
+/** A body without press (slice semantics): metrics.stretch, or a snap intensity (then the stretch at the release), as a pull level. */
+export const stretchPullLevel = (stretch: number): number => clamp01(stretch / CALIBRATION.stretchFull);
 
-/** 0..1 "how hard was that pull" from a stretch value (metrics.stretch or a snap intensity). */
-export const pullLevel = (stretch: number, bodyHasPress: boolean): number => clamp01(stretch * pullScale(bodyHasPress));
+/** 0..1 pull level of a 'snap' (contracts.ts PULL INTENSITY): the intensity itself on a round-2 body, rescaled stretch on a slice body. */
+export const snapPullLevel = (intensity: number, bodyHasPress: boolean): number => (bodyHasPress ? clamp01(intensity) : stretchPullLevel(intensity));
 
 /**
  * Release FX level: 0 = no bubbles, else 0..1 (how many pops: 1 + floor(level * 2.999)). Without `press`: the release intensity against
