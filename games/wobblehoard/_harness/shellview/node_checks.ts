@@ -170,6 +170,25 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   // be off only when the releases happen without it.
   check(`calibration: CALIBRATION.bendWithPress=${CALIBRATION.bendWithPress} is allowed by the measurement (releases without the bend: ${!bendStillNeeded}; the bend stays for the squash into the table)`,
     CALIBRATION.bendWithPress || !bendStillNeeded || !withBend.hasPress);
+  // physics checkpoint 47 re-check: a press on the top of the dome, held 1.4 s, with and without the bend: compression and press peaks, and
+  // the release events (ONE release per press either way: the meter is fed one event, its intensity max(compression, press), never a sum)
+  const domePress = (bend: boolean): { comp: number; press: number; releases: number; relI: number } => {
+    const b = new SoftBody(g);
+    for (let i = 0; i < 30; i++) b.step(1 / 60);
+    const host = createBodyHost({ camera: () => cam, body: () => b, viewport: () => ({ w: W, h: H }) });
+    const disc = host.bodyScreen()!;
+    const hit = host.hitTest(disc.x, disc.y - 0.8 * disc.r)!;
+    b.fingerDown(0, { point: hit.point, normal: hit.normal, dir: bend ? pressDirection(hit.normal, hit.dir, false) : hit.dir });
+    let comp = 0, press = 0;
+    for (let i = 0; i < 84; i++) { b.fingerPressure(0, 0.55 + 0.45 * smooth((i / 60 - 0.18) / 0.9)); b.step(1 / 60); comp = Math.max(comp, b.metrics.compression); press = Math.max(press, b.metrics.press ?? 0); }
+    const out: SoftEvent[] = [];
+    b.drainEvents(out); b.fingerUp(0); for (let i = 0; i < 3; i++) b.step(1 / 60); b.drainEvents(out);
+    const rel = out.filter((e) => e.kind === 'release');
+    return { comp, press, releases: rel.length, relI: rel[0]?.intensity ?? 0 };
+  };
+  const domeBend = domePress(true), domeFlat = domePress(false);
+  check(`calibration (checkpoint 47): a dome-top press peaks at compression ${domeBend.comp.toFixed(2)} / press ${domeBend.press.toFixed(2)} with the bend, ${domeFlat.comp.toFixed(2)} / ${domeFlat.press.toFixed(2)} without; one release each (intensity ${domeBend.relI.toFixed(2)} / ${domeFlat.relI.toFixed(2)})`,
+    domeBend.releases === 1 && domeFlat.releases === 1 && domeBend.relI <= Math.max(domeBend.comp, domeBend.press) + 0.05);
   // THE PULL SIGNAL (feel.ts): a round-2 snap carries the contract's pull level; the shell uses it as is, and the driver's live measure
   // (requested distance from the grab's start over the learned maximum) lands on the same scale
   const pullTo = (dist: number): { snap: number; stretch: number } => {
@@ -548,11 +567,11 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
 
 /* ───────────────────────── 5d. CUT & RECONNECT, the shell side (CUT.md 1, 2, 4; cut.ts) against cut-capable mock bodies ───────────────────────── */
 {
-  const { createCutter, PIECE_MIN, JOIN_ALL_S, JOIN_HOLD_S, JOIN_S, NECK_DEFAULT_S, NECK_HOLD_S, HOME_MAX_S } = await import('../../src/shell/cut.ts');
+  const { createCutter, PIECE_MIN, JOIN_ALL_S, JOIN_HOLD_S, JOIN_S, NECK_DEFAULT_S, NECK_HOLD_S, HOME_MAX_S, SETTLE_S } = await import('../../src/shell/cut.ts');
   const { createBodyManager } = await import('../../src/shell/bodies.ts');
   const { createMockBody } = await import('../mocks.ts');
   type V = { x: number; y: number; z: number };
-  type CutMock = ReturnType<typeof createMockBody> & { frac: number; piece: { frac: number; chunk: boolean; cutNormal?: V; at?: V } | null; necks: number; lastNeck: number; trembles: number[]; fracCalls: Array<[number, number]>; moved: number; whole: boolean };
+  type CutMock = ReturnType<typeof createMockBody> & { frac: number; piece: { frac: number; chunk: boolean; cutNormal?: V; at?: V } | null; necks: number; lastNeck: number; trembles: number[]; fracCalls: Array<[number, number]>; moved: number; whole: boolean; held: boolean };
   /** a mock body that can be cut: a sphere of radius 0.5 cbrt(frac) at its centre; measureCut is the exact sphere-cap share */
   const cutBody = (g: Genome, o: { at?: V; piece?: { frac: number; chunk: boolean; cutNormal?: V; at?: V } } = {}): CutMock => {
     const b = createMockBody(g) as CutMock;
@@ -580,7 +599,8 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     // moveTo: a spring toward the point on the table (the mock slides 1.5 m/s while stepped, horizontally, like the physics on the table)
     let goal: V | null = null;
     m.collide = () => { /* stage B2 contact: the manager's contact lists are what the checks read */ };
-    m.moveTo = (pt: V | null) => { if (pt) b.moved++; goal = pt ? { ...pt } : null; };
+    b.held = false;
+    m.moveTo = (pt: V | null) => { if (pt) b.moved++; goal = pt ? { ...pt } : null; b.held = !!pt; };
     const baseStep = b.step.bind(b);
     m.step = (dt: number) => {
       baseStep(dt);
@@ -658,6 +678,11 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     chunk.queue({ kind: 'poke', intensity: 0.5 });
     run2(r.w, r.app, 50);
     check('X06 shell: cutting fed the meter nothing; a poke on a chunk pays through collection.feed like one on a whole squishy', fill0 === 0 && r.app.hoard.meter().sp > 0, `sp before ${fill0}, after ${r.app.hoard.meter().sp}`);
+    // the stopgap for checkpoint 47's self-launching chunks: a new chunk is held at its spot (moveTo) and let go after SETTLE_S
+    const heldNow = chunk.held, facePiece = r.app.body as unknown as CutMock;
+    run2(r.w, r.app, (SETTLE_S + 0.1) * 1000);
+    check('CUT: a new chunk is held at its spot (moveTo, a little apart from its twin) and let go after SETTLE_S; the face piece is not held',
+      heldNow && chunk.moved >= 1 && !chunk.held && !facePiece.held, `held ${heldNow} -> ${chunk.held}, face held ${facePiece.held}`);
     // the touch-to-join: a finger on the chunk held against the face piece for JOIN_HOLD_S joins them (a bridge, setFrac up / down, rejoin)
     const C = chunk.center as V, F = play.center as V;
     C.x = F.x + 0.6; C.y = F.y; C.z = F.z;
@@ -933,6 +958,35 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   check('strand (metrics.strands): one call per step while the strings hold (tension = strands), ONE snap when strong strings let go, silent at rest',
     quiet === 0 && held >= 10 && steady && broke, `rest ${quiet}, held ${held}, last ${JSON.stringify(snapCall)}`);
   check('strand (metrics.strands): weak strings (< 0.3) that let go just stop calling (no snap)', weak.length >= 5 && weak.every((c) => !c.snap), `${weak.length} calls, snaps ${weak.filter((c) => c.snap).length}`);
+}
+
+/* ───────────────────────── 7d. physics B3 toss: lift on the rising edge of metrics.carried, toss on the throw's snap ───────────────────────── */
+{
+  const r = rig({ round2: false });
+  const lifts: unknown[] = [], tosses: Array<{ speed: number }> = [];
+  const au = r.w.audio as unknown as Record<string, unknown>;
+  au.lift = (p: unknown) => { lifts.push(p); };
+  au.toss = (p: { speed: number }) => { tosses.push(p); };
+  const b = r.w.body;
+  const m = b.metrics as unknown as { carried?: boolean };
+  const c = b.center as { x: number; y: number; z: number };
+  m.carried = false; run(r, 100);
+  const rest = lifts.length + tosses.length;
+  m.carried = true; run(r, 50);
+  const lifted = lifts.length;
+  run(r, 200);
+  const once = lifts.length === 1;
+  for (let i = 0; i < 6; i++) { c.x += 0.05; run(r, 1000 / 60); }   // the hand swings it: 3 m/s
+  b.queue({ kind: 'snap', intensity: 1, finger: 0 });
+  c.x += 0.05; m.carried = false; run(r, 50);
+  const toss = tosses.at(-1);
+  check('toss (physics B3): lift once on the rising edge of metrics.carried; the snap that ends the carry plays toss with the throw speed (|v| / 4 m/s)',
+    rest === 0 && lifted === 1 && once && tosses.length === 1 && !!toss && toss.speed > 0.5 && toss.speed <= 1, `lifts ${lifts.length}, tosses ${JSON.stringify(tosses)}`);
+  // carried, then put down without a throw: a later plain pull's snap is not a toss
+  m.carried = true; run(r, 50); m.carried = false; run(r, 50);
+  for (let i = 0; i < 6; i++) { c.x += 0.05; run(r, 1000 / 60); }
+  b.queue({ kind: 'snap', intensity: 0.6, finger: 0 }); run(r, 50);
+  check('toss (physics B3): a carry that ends without a throw clears the lift, so a later plain pull is not tossed', lifts.length === 2 && tosses.length === 1, `lifts ${lifts.length}, tosses ${tosses.length}`);
 }
 
 /* ───────────────────────── 8. the collection module through the port: meter feed, events, table cap ───────────────────────── */

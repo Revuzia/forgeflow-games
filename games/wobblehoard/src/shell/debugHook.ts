@@ -63,7 +63,7 @@ export interface ShellDevApi {
   /** the next collection.merge answers this refusal (test seam for the pad's refusal handling, e.g. 'odds_changed') */
   failNextMerge(code: string): void;
   /** every body on the mat: the play body first, then the extras, with where it is drawn on screen (CSS px) and its touch metrics */
-  matInfo(): { count: number; limit: number; bodies: Array<{ itemId: string | null; x: number; y: number; r: number; fingers: number; compression: number; press: number; active: boolean }> };
+  matInfo(): { count: number; limit: number; bodies: Array<{ itemId: string | null; x: number; y: number; r: number; fingers: number; compression: number; press: number; active: boolean; carried: boolean; w: [number, number, number] }> };
   /** physics cost per frame (ms) for the bodies now on the mat: bodies.step(1/60) x n, timed */
   matStepCost(steps?: number): { bodies: number; msPerFrame: number; msPerBody: number };
   /** U07 test seam: the collection's meter reads `offline` (a signed-in player lost the connection); false = back. The practice ledger
@@ -266,7 +266,7 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       };
     },
     matInfo() {
-      const list: Array<{ itemId: string | null; x: number; y: number; r: number; fingers: number; compression: number; press: number; active: boolean }> = [];
+      const list: Array<{ itemId: string | null; x: number; y: number; r: number; fingers: number; compression: number; press: number; active: boolean; carried: boolean; w: [number, number, number] }> = [];
       const cam = game.stage.camera;
       try { cam.updateMatrixWorld(); } catch { /* ignore */ }
       const vpx = vp();
@@ -283,7 +283,7 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
         const c0 = b.center;
         const pc = proj({ x: c0.x + off.x, y: c0.y + off.y, z: c0.z + off.z });
         const pe = proj({ x: c0.x + off.x + b.restRadius, y: c0.y + off.y, z: c0.z + off.z });
-        list.push({ itemId, x: pc ? pc.x : -1, y: pc ? pc.y : -1, r: pc && pe ? Math.abs(pe.x - pc.x) : 0, fingers: b.metrics.fingers, compression: b.metrics.compression, press: b.metrics.press ?? 0, active: isActive });
+        list.push({ itemId, x: pc ? pc.x : -1, y: pc ? pc.y : -1, r: pc && pe ? Math.abs(pe.x - pc.x) : 0, fingers: b.metrics.fingers, compression: b.metrics.compression, press: b.metrics.press ?? 0, active: isActive, carried: b.metrics.carried === true, w: [c0.x + off.x, c0.y + off.y, c0.z + off.z] });
       };
       const extras = game.bodies.extras;
       const activeBody = game.host.bodyScreen();

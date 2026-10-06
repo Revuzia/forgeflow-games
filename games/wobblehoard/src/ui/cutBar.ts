@@ -41,7 +41,7 @@ export function createCutBar(root: HTMLElement, o: { onSplit(): void; onReconnec
     show(on) { el.hidden = !on; if (!on) svg.style.display = 'none'; },
     setPieces(n, max, busy) {
       count.textContent = n > 1 ? `${n} pieces` : '';
-      text.textContent = n >= max ? "That's as many pieces as it can make." : n > 1 ? 'Swipe to cut again, or push pieces together to join them.' : 'Swipe across a squishy to cut it.';
+      text.textContent = n >= max ? "That's as many pieces as it can make." : n > 1 ? 'Swipe to cut again. With the Hand, push pieces together to join them.' : 'Swipe across a squishy to cut it.';
       split.disabled = busy || n >= max;
       join.disabled = busy || n <= 1;
     },

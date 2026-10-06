@@ -14,8 +14,8 @@ import type { BodyView } from './bodyview.ts';
 import type { EnvHub } from './env.ts';
 import { StrandTube, type StrandEvent } from './strands.ts';
 
-const SEG = 16;          // rings along a tube
-const RAD = 8;           // vertices around
+const SEG = 24;          // rings along a tube
+const RAD = 12;           // vertices around
 const SNAP_S = 0.16;     // a snapped strand's halves spring back over this long
 /** A parting strand that never reaches its length (the pieces barely move apart) snaps anyway after this long. */
 const PART_MAX_S = 1.1;
@@ -66,6 +66,19 @@ function axis(a: BodyView, b: BodyView, out: Float32Array): void {
   const l = Math.hypot(x, y, z);
   if (l < 1e-6) { x = 1; y = 0; z = 0; } else { x /= l; y /= l; z /= l; }
   out[0] = x; out[1] = y; out[2] = z;
+}
+
+/**
+ * Round the tube's ends off where they reach inside the bodies (ring u < ua and u > ub): the jelly is see-through and drawn first, so a
+ * flat open end inside it would show through as a glass bar's cut face; a rounded tip reads as the neck growing out of the jelly.
+ */
+function capEnds(r: Float32Array, ua: number, ub: number): void {
+  const n = r.length - 1;
+  for (let s = 0; s <= n; s++) {
+    const u = s / n;
+    if (u < ua && ua > 1e-4) { const t = u / ua; r[s] *= Math.sqrt(Math.max(0, 1 - (1 - t) * (1 - t))); }
+    else if (u > ub && ub < 1 - 1e-4) { const t = (1 - u) / (1 - ub); r[s] *= Math.sqrt(Math.max(0, 1 - (1 - t) * (1 - t))); }
+  }
 }
 
 const smooth01 = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -233,6 +246,7 @@ export class CutFx {
           const flare = Math.pow(1 - w, 2);
           r[s] = Math.min(p.r0 * thin * (1 - 0.7 * stretch * w) * (1 + 0.9 * flare), 0.18 * Ltot + 0.5 * p.r0);
         }
+        capEnds(r, e0 / Ltot, 1 - e0 / Ltot);
         p.tube.build(p.ax - p.dx * e0, p.ay - p.dy * e0, p.az - p.dz * e0, p.ax + p.dx * (L + e0), p.ay + p.dy * (L + e0), p.az + p.dz * (L + e0), 0.12 * stretch);
         p.tube.mesh.visible = true; p.drawnLen = L;
         if (ev < this.evPool.length) {
@@ -277,6 +291,7 @@ export class CutFx {
         const u = s / SEG, w = Math.pow(Math.sin(Math.PI * u), 1.4);
         r[s] = (rEnd + (rMid - rEnd) * w) * vis;
       }
+      { const lt = Math.hypot(b.bx - b.ax, b.by - b.ay, b.bz - b.az) || 1, ea = Math.min(0.6 * b.ra, rEnd * 1.1), eb = Math.min(0.6 * b.rb, rEnd * 1.1); capEnds(r, Math.min(0.45, ea / lt), Math.max(0.55, 1 - eb / lt)); }
       b.tube.build(b.ax, b.ay, b.az, b.bx, b.by, b.bz, 0);
       b.tube.mesh.visible = vis > 0.01;
       // the glow: warm light inside the neck, and a soft spot on each body where it joins; capped, eased, governed

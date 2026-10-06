@@ -40,8 +40,8 @@ export const PIECE_MIN = 1 / 8;
 /** The neck (pinch) by material family (CUT.md 3): firm ones resist, plastic ones cut slow and sharp, the rest about 0.25 s. */
 export const NECK_S: Readonly<Record<string, number>> = { firmsilicone: 0.4, popdome: 0.4, putty: 0.34, mochidough: 0.34, slowrise: 0.3, marshmallow: 0.3, stickystretch: 0.3, slimegoo: 0.3 };
 export const NECK_DEFAULT_S = 0.25;
-/** Held at t = 1 before the swap (the physics measured its neck at a 0.1 s hold; longer creases). */
-export const NECK_HOLD_S = 0.1;
+/** Held at t = 1 before the swap (physics checkpoint 47: swap within about 0.1 s of t = 1; held a second, 12 of 100 bodies crease). */
+export const NECK_HOLD_S = 0.08;
 /** Two pieces held together this long (a finger on one of them) reconnect. */
 export const JOIN_HOLD_S = 0.4;
 export const JOIN_S = 0.5;
@@ -49,6 +49,13 @@ export const JOIN_ALL_S = 1.2;
 /** After the last join, a face piece further than HOME_NEAR from the middle glides there first, for at most HOME_MAX_S. */
 export const HOME_NEAR = 0.06;
 export const HOME_MAX_S = 1.6;
+/** A new CHUNK is held at its spot (moveTo, stiffness 4) this long after the parting, a little apart from its twin along the cut normal:
+ *  physics checkpoint 47 builds chunk pieces that push themselves away from their cut face at 1.5..14 m/s in their first ~0.3 s (measured
+ *  in node on 12 families: dimpla 12, chunkle 8.6, Dollop 1.6 m/s; a face piece does not). Held for 0.8 s they part by ~0.1 m. A STOPGAP
+ *  until the physics fixes the chunk build: moveTo is horizontal on the table, so a chunk whose cut face is DOWN (a level cut's top piece)
+ *  still launches upward. A finger on the piece, a join or the glide home lets go of it at once. */
+export const SETTLE_S = 0.8;
+export const SETTLE_GAP = 0.06;
 /** A swipe shorter than this (CSS px) is not a cut. */
 export const MIN_SWIPE_PX = 24;
 /** Pieces touch when their centres are closer than this times the sum of their current radii. */
@@ -144,6 +151,18 @@ export function createCutter(d: CutDeps): Cutter {
   let anim: Anim | null = null;
   let contact: { a: Piece; b: Piece; since: number } | null = null;
   let wobbleUntil = -1, wobbling: SoftBodyLike | null = null;
+  let settling: Array<{ body: SoftBodyLike; until: number }> = [];
+  const hold = (b: SoftBodyLike, p: V3): void => {
+    if (typeof b.moveTo !== 'function') return;
+    try { b.moveTo(p, 4); settling.push({ body: b, until: d.simTime() + SETTLE_S }); } catch (e) { d.report(e); }
+  };
+  const unhold = (b: SoftBodyLike): void => {
+    const i = settling.findIndex((x) => x.body === b);
+    if (i < 0) return;
+    settling.splice(i, 1);
+    try { b.moveTo?.(null); } catch { /* optional */ }
+  };
+  const unholdAll = (): void => { for (const x of settling.slice()) unhold(x.body); };
   const genome = (): Genome => d.bodies.identity.genome;
   const tier = (): TierName => d.bodies.identity.tier;
   const family = (): string => { try { const g = genome(); return getSpecies(g.species) ? familyOf(g.species) : 'jellygel'; } catch { return 'jellygel'; } };
@@ -199,7 +218,7 @@ export function createCutter(d: CutDeps): Cutter {
     const n = plane.normal;
     // the face goes with the side that held the eyes' anchor when the cut began (the larger side when the cut ran through it)
     const faceA = a.faceA;
-    const push = 0.35;
+    const push = 0.22;   // m/s apart: enough to read as parting; more spreads the pieces so far that a portrait phone frames them tiny
     let pa: SoftBodyLike, pb: SoftBodyLike;
     try {
       pa = d.createBody(g, { piece: { frac: fA, chunk: !(faceA && !p.chunk), cutNormal: { x: -n.x, y: -n.y, z: -n.z }, at: lc.a, vel: { x: n.x * push, y: 0, z: n.z * push } } });
@@ -228,6 +247,8 @@ export function createCutter(d: CutDeps): Cutter {
       d.bodies.addExtra(pb, g, { tier: tier(), shared: true, piece: true, itemId: null });
       pieces = pieces.flatMap((q) => (q === p ? [A, Bp] : [q]));
     }
+    if (A.chunk) hold(pa, { x: lc.a.x + n.x * SETTLE_GAP, y: lc.a.y, z: lc.a.z + n.z * SETTLE_GAP });
+    if (Bp.chunk) hold(pb, { x: lc.b.x - n.x * SETTLE_GAP, y: lc.b.y, z: lc.b.z - n.z * SETTLE_GAP });
     try { const ia = d.bodies.viewIdOf(pa), ib = d.bodies.viewIdOf(pb); if (ia !== null && ib !== null) d.stage.partPieces?.(ia, ib); } catch (e) { d.report(e); }
     try { d.audio.cut?.({ phase: 'separate', frac: Math.min(fA, fB), family: family(), pan: d.panOf(B.center), calm: d.calm(), pitch: pitch() }); } catch (e) { d.report(e); }
     try { d.haptics.poke(); } catch { /* optional */ }
@@ -261,6 +282,7 @@ export function createCutter(d: CutDeps): Cutter {
     if (!face || (face.body === d.bodies.body && face.frac >= 1 && face.built >= 1)) { pieces = []; return; }
     const c = face.body.center;
     if (glide && typeof face.body.moveTo === 'function' && Math.hypot(c.x, c.z) > HOME_NEAR) {
+      unhold(face.body);
       pieces = [face];
       face.frac = 1;
       try { face.body.moveTo({ x: 0, y: c.y, z: 0 }, 1.2); } catch (e) { d.report(e); swapWhole(face); return; }
@@ -273,6 +295,7 @@ export function createCutter(d: CutDeps): Cutter {
   function swapWhole(face: Piece): void {
     const g = genome(), id = d.bodies.identity;
     pieces = [];
+    unholdAll();
     try { face.body.moveTo?.(null); } catch { /* optional */ }
     let b: SoftBodyLike;
     try { b = d.createBody(g); }
@@ -286,6 +309,7 @@ export function createCutter(d: CutDeps): Cutter {
     const recv = aFace ? a : bFace ? b : a.frac >= b.frac ? a : b;
     const giver = recv === a ? b : a;
     contact = null;
+    unhold(recv.body); unhold(giver.body);
     if (typeof recv.body.setFrac !== 'function') { joined(recv, giver, false); return; }
     try { recv.body.setFrac(Math.min(1, recv.frac + giver.frac), JOIN_S); giver.body.setFrac?.(PIECE_MIN, JOIN_S); } catch (e) { d.report(e); }
     d.bodies.setGhost(giver.body, true);   // it flows INTO the receiver: no contact push between them (it would shove the receiver away)
@@ -379,6 +403,7 @@ export function createCutter(d: CutDeps): Cutter {
       abortAnim();
       if (pieces.length <= 1) { pieces = []; return false; }
       contact = null;
+      unholdAll();
       const face = pieces[0];
       const canAnimate = animated && typeof face.body.setFrac === 'function';
       if (!canAnimate) { finishAll(false); return true; }
@@ -390,6 +415,10 @@ export function createCutter(d: CutDeps): Cutter {
     update() {
       const t = d.simTime();
       if (wobbling && t >= wobbleUntil) { try { wobbling.tremble?.(0); } catch { /* optional */ } wobbling = null; }
+      if (settling.length) {
+        const act = d.touching() ? d.activeBody() : null;
+        for (const x of settling.slice()) if (t >= x.until || x.body === act || !pieces.some((p) => p.body === x.body)) unhold(x.body);
+      }
       const a = anim;
       if (a && a.kind === 'neck') {
         const k = smooth((t - a.t0) / a.neckS);
@@ -455,7 +484,7 @@ export function createCutter(d: CutDeps): Cutter {
       }
     },
     isPiece: (b) => pieces.some((p) => p.body === b),
-    dispose() { abortAnim(); pieces = []; contact = null; },
+    dispose() { abortAnim(); unholdAll(); pieces = []; contact = null; },
   };
   return cutter;
 }
