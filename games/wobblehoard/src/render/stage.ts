@@ -224,6 +224,15 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   const safe = { top: 0, right: 0, bottom: 72, left: 0 };
   const spotBoxes: number[][] = [], spotBox = [0, 0, 0, 0], spotV = new THREE.Vector3();
   let spotReframes = false;
+  /** resize() has run: the frame's real size is known (before that the canvas is 1 x 1 CSS px and no capsule spot can be chosen). */
+  let sized = false;
+  /** A dropCapsule() before the first resize (a capsule already waiting when the game boots): placed on the first update after it. */
+  let pendingDrop: (() => void) | null = null;
+  /** The waiting capsule was placed by the caller (dropCapsule `at`): never re-placed. */
+  let capFixed = false;
+  /** Seconds until the waiting capsule's spot is re-checked (the frame, the HUD rows or the bodies changed under it); < 0 = nothing to check. */
+  let capRecheck = -1;
+  const CAP_RECHECK_S = 0.7;
   /** setBody of a swap: the new primary does not snap the camera framing (it eases from where it is). */
   let keepFraming = false;
 
@@ -408,7 +417,10 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     camera.updateProjectionMatrix();
   }
 
+  /** The frame, the HUD rows or the bodies changed: a waiting capsule's spot is checked again once things have settled (see replaceCapsule). */
+  function markCapSpot(): void { if (capsule && !capFixed) capRecheck = CAP_RECHECK_S; }
   function addView(body: SoftBodyLike, genome: Genome, t: TierName, owned: boolean, pos?: V3, chunk = false): BodyView {
+    markCapSpot();
     const v = new BodyView(nextId++, body, genome, t, TIERS[tier], hub, quad, owned, chunk);
     v.setCalm(calm);
     if (pos) v.proxy.setOffset(pos.x, pos.y, pos.z);
@@ -418,6 +430,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     return v;
   }
   function removeView(v: BodyView): void {
+    markCapSpot();
     const i = views.indexOf(v);
     if (i >= 0) views.splice(i, 1);
     cut.bodyRemoved(v);
@@ -425,7 +438,22 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     if (primaryId === v.id) { primaryId = views.length ? views[0].id : null; }
   }
   function removeAllViews(): void { while (views.length) removeView(views[views.length - 1]); primaryId = null; }
-  function discardCapsule(): void { if (capsule) { capsule.dispose(); capsule = null; } capsuleParked = false; }
+  function discardCapsule(): void { if (capsule) { capsule.dispose(); capsule = null; } capsuleParked = false; pendingDrop = null; capFixed = false; capRecheck = -1; }
+  /**
+   * A waiting capsule whose spot went bad since it was chosen (the phone turned, the HUD rows moved, another squishy or the pieces of a
+   * cut now stand where it does) glides to the best spot for the frame as it is now: standing, over ~0.4 s. A spot that is still clean
+   * (inside the safe frame, clear of every body) is left alone. Never while it is held, opening, parked, falling, or was placed by the caller.
+   */
+  function replaceCapsule(): void {
+    const c = capsule;
+    if (!c || capFixed || capsuleParked || pendingDrop || !sized || !c.group.visible || c.gone || !c.landed || c.burstT >= 0 || c.squeezeAmount > 0.01) return;
+    const p = primary(), spot = capsuleSpot(p);
+    // (capsuleSpot just filled spotBoxes / spotReframes: how bad is where it stands now, by the same measure)
+    const zc = p && !director.active ? p.proxy.center.z : 0;
+    const now = spotBadness(c.pos.x, c.pos.z, c.pos.z < zc ? 2 : 0.6, c.size);
+    if (now <= 0.5 && c.size >= spot.size - 0.02) return;
+    if (Math.hypot(spot.x - c.pos.x, spot.z - c.pos.z) > 0.03 || Math.abs(spot.size - c.size) > 0.04) c.glideTo(spot.x, spot.z, spot.size);
+  }
   function discardRevealCapsule(): void { if (revealCap) { revealCap.dispose(); revealCap = null; } }
 
   function applyTier(t: QualityTier): void {
@@ -503,7 +531,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       let c = capsule;
       // no capsule out (a reveal without a meter-full drop): one fades in at the pad (popping in, it was a luminance step of its own)
       if (!c) { c = new Capsule(hub, quad, !TIERS[tier].transmission); c.calm = calm; c.appear(0, 0.25, undefined, 0.2); scene.add(c.group); capsuleId++; }
-      capsule = null;
+      capsule = null; pendingDrop = null; capFixed = false; capRecheck = -1;
       revealCap = c;
       c.sizeGoal = 1;                      // a capsule stood small beside the body grows back to full as the reveal slides it to the pad
       return c;
@@ -561,7 +589,9 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
 
     setSafeInsets(insets) {
       if (!insets) return;
-      for (const k of ['top', 'right', 'bottom', 'left'] as const) { const v = insets[k]; if (typeof v === 'number' && Number.isFinite(v)) safe[k] = Math.max(0, v); }
+      let changed = false;
+      for (const k of ['top', 'right', 'bottom', 'left'] as const) { const v = insets[k]; if (typeof v === 'number' && Number.isFinite(v) && Math.max(0, v) !== safe[k]) { safe[k] = Math.max(0, v); changed = true; } }
+      if (changed) markCapSpot();   // (a waiting capsule that now stands under the HUD glides out from under it)
     },
 
     matLayout(n) {
@@ -635,14 +665,19 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       capsule = new Capsule(hub, quad, !TIERS[tier].transmission);
       const c = capsule;
       const id = ++capsuleId;
-      const p = primary();
-      const spot = capsuleSpot(p);
-      const x = opts?.at?.x ?? spot.x, z = opts?.at?.z ?? spot.z;
-      c.setSize(opts?.at ? 1 : spot.size);
-      c.calm = calm;
-      if (director.kind === 'merge') {     // the pad is busy: it waits out of sight and fades in beside the result when the merge ends
-        c.placeStanding(x, z); c.group.visible = false; c.touchedDown = false; capsuleParked = true; parkedOnLand = opts?.onLand ?? null;
-      } else if (calm) c.appear(x, z, opts?.onLand); else c.drop(x, z, opts?.onLand);   // calm / reduced motion: it fades in, no drop
+      capFixed = !!opts?.at;
+      // where it stands is chosen on screen (capsuleSpot), which needs the frame's real size: a capsule dropped before the first resize() (one
+      // already waiting when the game boots, the shell drops it while it is built) is placed on the first update after it, not on a 1 x 1 frame
+      const place = (): void => {
+        if (capsule !== c) return;
+        const spot = opts?.at ? { x: opts.at.x, z: opts.at.z, size: 1 } : capsuleSpot(primary());
+        c.setSize(spot.size);
+        c.calm = calm;
+        if (director.kind === 'merge') {     // the pad is busy: it waits out of sight and fades in beside the result when the merge ends
+          c.placeStanding(spot.x, spot.z); c.group.visible = false; c.touchedDown = false; capsuleParked = true; parkedOnLand = opts?.onLand ?? null;
+        } else if (calm) c.appear(spot.x, spot.z, opts?.onLand); else c.drop(spot.x, spot.z, opts?.onLand);   // calm / reduced motion: it fades in, no drop
+      };
+      if (sized || opts?.at) place(); else { c.calm = calm; c.group.visible = false; pendingDrop = place; }
       scene.add(c.group);
       const sp = { x: 0, y: 0, r: 0 };
       const handle: CapsuleHandle = {
@@ -677,6 +712,10 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       const ts = director.update(d);
       floatT += ((floatMode ? 1 : 0) - floatT) * (1 - Math.exp(-d * 5));
       updateCamera(d, time);
+      // a capsule dropped before the frame had a size lands now (the camera is up to date for it); a waiting one is re-checked once the frame,
+      // the HUD rows or the bodies have stopped changing
+      if (pendingDrop && sized) { const f = pendingDrop; pendingDrop = null; f(); }
+      else if (capRecheck >= 0) { capRecheck -= d; if (capRecheck < 0 && !director.active) replaceCapsule(); else if (capRecheck < 0) capRecheck = CAP_RECHECK_S; }
       table.update(camera);
       for (const v of views) {
         v.clock += d;                     // every view ages, hidden ones too (a ceremony result is created hidden at t = 0)
@@ -721,7 +760,9 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     },
 
     resize(width, height, devicePixelRatio) {
-      cssW = Math.max(1, Math.floor(width)); cssH = Math.max(1, Math.floor(height));
+      const w = Math.max(1, Math.floor(width)), h = Math.max(1, Math.floor(height));
+      if (sized && (w !== cssW || h !== cssH)) markCapSpot();   // (turned or resized: a waiting capsule is re-placed for the new frame)
+      cssW = w; cssH = h; sized = true;
       dpr = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;
       applySize();
       governor.resetWindow(10);

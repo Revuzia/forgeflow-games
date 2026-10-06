@@ -201,7 +201,18 @@ export class Capsule {
     this.pos.set(x, 0, z); this.y = REST_Y * this.sz; this.vy = 0; this.landed = true; this.touchedDown = true; this.rock = 0; this.rockV = 0;
     this.group.visible = true; this.gone = false; this.burstT = -1;
   }
-  slideTo(x: number, z: number, k: number): void { this.pos.x += (x - this.pos.x) * k; this.pos.z += (z - this.pos.z) * k; }
+  slideTo(x: number, z: number, k: number): void { this.glide = null; this.pos.x += (x - this.pos.x) * k; this.pos.z += (z - this.pos.z) * k; }
+  /**
+   * A standing capsule moves to a new table spot and size (the frame, the HUD insets or the bodies changed under it): it glides there over
+   * ~0.4 s, standing, instead of jumping. (No effect on a capsule that is falling, opening or bursting.)
+   */
+  glideTo(x: number, z: number, size: number): void {
+    if (!Number.isFinite(x + z + size)) return;
+    this.glide = { x, z }; this.sizeGoal = Math.min(1, Math.max(0.4, size));
+  }
+  private glide: { x: number; z: number } | null = null;
+  /** True while a glideTo is under way. */
+  get gliding(): boolean { return this.glide !== null; }
 
   setSqueeze(p: number): void { this.squeeze = Number.isFinite(p) ? Math.min(1, Math.max(0, p)) : 0; }
   get squeezeAmount(): number { return this.squeeze; }
@@ -249,6 +260,14 @@ export class Capsule {
       if (this.fade >= 1) { this.touchedDown = true; this.onLand?.(); this.onLand = null; }
     }
     this.u.uTimeC.value = time;
+    if (this.glide) {
+      if (this.burstT >= 0 || !this.landed) this.glide = null;
+      else {
+        const k = 1 - Math.exp(-dt * 6);
+        this.pos.x += (this.glide.x - this.pos.x) * k; this.pos.z += (this.glide.z - this.pos.z) * k;
+        if (Math.abs(this.glide.x - this.pos.x) < 0.004 && Math.abs(this.glide.z - this.pos.z) < 0.004) { this.pos.x = this.glide.x; this.pos.z = this.glide.z; this.glide = null; }
+      }
+    }
     if (this.sz !== this.sizeGoal) {
       this.sz += (this.sizeGoal - this.sz) * (1 - Math.exp(-dt * 6));
       if (Math.abs(this.sz - this.sizeGoal) < 1e-3) this.sz = this.sizeGoal;

@@ -239,7 +239,9 @@ try {
     const files = []; const walk = (d) => { for (const f of readdirSync(d)) { const p = join(d, f); if (statSync(p).isDirectory()) walk(p); else files.push(p); } };
     let built = b.status === 0; try { walk(out); } catch { built = false; }
     const text = files.filter((f) => /.(js|html|css|json)$/.test(f)).map((f) => ({ f, s: readFileSync(f, 'utf8') }));
-    const NAMES = ['createStageDev', 'StubBody', 'stubBody', 'renderview', '__RV__', 'lifecycle3', 'particlesDropped', 'screenLight', 'contextLost', 'cameraFx: {'];
+    // (measured by a positive control: the same build with the dev flag on, NODE_ENV=development --mode development, contains particlesDropped, screenLight, contextLost,
+    // fineVertices, eyeLook, `restoreContext:` and `loseContext:` once each and one more .loseContext() / .restoreContext() / WEBGL_lose_context than the production build)
+    const NAMES = ['createStageDev', 'StubBody', 'stubBody', 'renderview', '__RV__', 'lifecycle3', 'particlesDropped', 'screenLight', 'contextLost', 'cameraFx: {', 'fineVertices', 'eyeLook', 'restoreContext:', 'loseContext:'];
     const found = NAMES.filter((k) => text.some((x) => x.s.includes(k)));
     // loseContext / restoreContext: only three's own forceContextLoss / forceContextRestore (one each, in the stage chunk: two WEBGL_lose_context lookups) and the shell's WebGL probe in the index chunk may use them (our dev members would add one more of each)
     const count = (re) => text.reduce((a, x) => a + (x.s.match(re) ?? []).length, 0);
@@ -625,6 +627,20 @@ try {
       }
       R2.chains = chains;
       check(worstChain <= 3, 'FLASH PROBE, CHAINED ceremonies (skip + Fast open, 5 quick pops, a skipped queue, 3 Epics): <= 3 luminance transitions in any 1 s', `worst ${worstChain} (${worstChainAt}); per chain ${Object.entries(chains).map(([k, v]) => `${k} ${v.transitions1s}`).join(', ')}`);
+      // the same chains at 60 fps (the verifier's own frame rate: a swing of >= 0.04 mean linear luminance is a transition, > 3 in any rolling second fails; the
+      // target is 2): the four chains that breached it (4 transitions in 0.87 s) plus the five quick pops, which sat exactly at the limit
+      {
+        const DT60 = 1 / 60, c60 = {};
+        let worst60 = 0, at60 = '';
+        for (const name of QUICK ? ['mythicSkipThenQuickCommon'] : ['mythicSkipThenQuickCommon', 'mythicSkipThenQuickUncommon', 'legendarySkipThenQuickUncommon', 'mergeMythicSkipThenQuickUncommon', 'quickPops5Common']) {
+          const r = await rp.evaluate(([seq, dt]) => window.__RV__.runChain(seq, dt), [CH[name], DT60]);
+          const w = worstWindow(zigzag(r.lumas), DT60);
+          c60[name] = { transitions1s: w, ramps: r.light.filter((v, i) => v > 0.01 && (i === 0 || r.light[i - 1] <= 0.01)).length, maxLight: Math.max(...r.light) };
+          if (w > worst60) { worst60 = w; at60 = name; }
+        }
+        R2.chains60 = c60;
+        check(worst60 <= 2, 'FLASH PROBE, CHAINED ceremonies at 60 fps (the verifier\'s MAJOR 1 repros: Mythic / Legendary capsule or Mythic merge skipped, then a Fast-open quick pop; five quick pops): at most 2 luminance transitions in any 1 s (limit 3)', `worst ${worst60} (${at60}); per chain ${Object.entries(c60).map(([k, v]) => `${k} ${v.transitions1s} (ramps ${v.ramps}, light <= ${v.maxLight.toFixed(3)})`).join(', ')}`);
+      }
     }
 
     if (ON('cer')) {
@@ -993,6 +1009,40 @@ try {
       check(bad.length === 0, 'capsule spot, 390x844 with the HUD rows of the real shell, ALL 50 species: beside the squishy, clear of the body and of the HUD rows, the body in the frame and >= 74% of its width', bad.length ? bad.map((x) => `${x.id} cap ${JSON.stringify(x.cap)} body ${JSON.stringify(x.body)} ov ${x.ov} size ${x.size.toFixed(2)} w ${x.bw}/${x.w0}`).join('; ') : `smallest capsule ${Math.min(...res.map((x) => x.size)).toFixed(2)}, mean ${(res.reduce((a, x) => a + x.size, 0) / res.length).toFixed(2)}, widest pull-back to ${(Math.min(...res.map((x) => x.bw / x.w0)) * 100).toFixed(0)}% of the body's width`);
       report.problems.push(...abad2);
       await actx.close();
+    }
+    // A capsule that is ALREADY WAITING when the game boots: the shell drops it while it builds the game, before the stage's first resize(). Measured on the real app
+    // (390x844, the real HUD rows): it stood in FRONT of the squishy, full size, against the frame's right edge (z 3.4); a capsule dropped during play stood beside it,
+    // smaller (z 0.15, size 0.66). The stage now places it on the first update after the frame has a size. (Here: a fresh stage, the HUD rows set first as the shell's HUD
+    // binding does, the capsule dropped, THEN resize().)
+    if (ON('capspot')) {
+      const bctx = await browser.newContext({ viewport: { width: 640, height: 480 }, deviceScaleFactor: 1 });
+      const { page: bp2, bad: bbad2 } = await openView(bctx, `quality=low&body=${bodyQ}`, 'capspot-boot', [/GPU stall due to ReadPixels/i]);
+      const rows = [];
+      for (const [vw, vh, ins, sp] of [[390, 844, HUD_P, 'dollop'], [390, 844, HUD_P, 'crimpo'], [360, 640, HUD_P, 'dollop'], [320, 568, HUD_P, 'cushlet'], [844, 390, HUD_L, 'dollop'], [568, 320, HUD_L, 'dollop'], [1280, 800, HUD_L, 'dollop']]) {
+        const r = await bp2.evaluate(([g, vw, vh, ins]) => window.__RV__.bootDropProbe({ genome: g, w: vw, h: vh, insets: ins }), [speciesBaseGenome(sp, 1), vw, vh, ins]);
+        writeFileSync(resolve(OUT, `capboot_${vw}x${vh}_${sp}.png`), b64(r.png));
+        const beside = !!r.cap && (r.cap[0] >= r.body[2] - 2 || r.cap[2] <= r.body[0] + 2);
+        const inside = !!r.cap && r.cap[3] <= vh - ins.bottom && r.cap[1] >= ins.top && r.cap[0] >= 0 && r.cap[2] <= vw;
+        rows.push({ vw, vh, sp, ok: !r.beforeResize.landed && !r.beforeResize.point && r.landed && r.hit && inside && r.ov === 0 && beside && r.body[0] >= 0 && r.body[2] <= vw, r, beside });
+      }
+      RB.mat['capboot'] = rows.map((x) => ({ vw: x.vw, vh: x.vh, sp: x.sp, cap: x.r.cap, body: x.r.body, size: x.r.size, z: x.r.z }));
+      const badBoot = rows.filter((x) => !x.ok);
+      check(badBoot.length === 0, 'a capsule already waiting at boot (dropped before the stage has a size) lands, once the frame is sized, BESIDE the squishy, clear of it and of the HUD rows, tappable, never in front or full size against an edge (390x844 x2, 360x640, 320x568, 844x390, 568x320, 1280x800)',
+        badBoot.length ? badBoot.map((x) => `${x.vw}x${x.vh} ${x.sp}: cap ${JSON.stringify(x.r.cap)} body ${JSON.stringify(x.r.body)} z ${x.r.z.toFixed(2)} size ${x.r.size.toFixed(2)} ov ${x.r.ov} landed ${x.r.landed} before ${JSON.stringify(x.r.beforeResize)}`).join('; ') : rows.map((x) => `${x.vw}x${x.vh} ${x.sp} z ${x.r.z.toFixed(2)} size ${x.r.size.toFixed(2)}`).join(', '));
+      report.problems.push(...bbad2);
+      await bctx.close();
+      // ... and a WAITING capsule when the frame, the HUD rows or the squishy change under it: it glides to a clean spot by itself (rotate the phone, a taller HUD row, a wide species switched in)
+      const lctx = await browser.newContext({ viewport: { width: 640, height: 480 }, deviceScaleFactor: 1 });
+      const { page: lp2, bad: lbad2 } = await openView(lctx, `quality=low&body=${bodyQ}`, 'capspot-live', [/GPU stall due to ReadPixels/i]);
+      const L = await lp2.evaluate((o) => window.__RV__.capLiveProbe(o), { genome: speciesBaseGenome('dollop', 1), w1: 1280, h1: 800, ins1: HUD_L, w2: 390, h2: 844, ins2: HUD_P, bottom3: 200, wide: speciesBaseGenome('crimpo', 1) });
+      ['desktop', 'phone', 'phone_hud200', 'phone_wide'].forEach((n, i) => writeFileSync(resolve(OUT, `caplive_${n}.png`), b64(L.pngs[i])));
+      const okAt = (r, ins, W) => !!r.cap && r.landed && r.hit && r.cap[3] <= r.H - ins.bottom && r.cap[1] >= ins.top && r.cap[0] >= 0 && r.cap[2] <= W && r.ov === 0;
+      const stepsOk = [okAt(L.r0, HUD_L, 1280), okAt(L.r1, HUD_P, 390), okAt(L.r2, { top: HUD_P.top, bottom: 200 }, 390), okAt(L.r3, { top: HUD_P.top, bottom: 200 }, 390)];
+      RB.mat['caplive'] = { r0: L.r0.cap, r1: L.r1.cap, r2: L.r2.cap, r3: L.r3.cap, moved: L.moved };
+      check(stepsOk.every(Boolean), 'a WAITING capsule stays clean when the world changes under it: the frame is turned from 1280x800 to 390x844, the HUD bottom row grows to 200 px, a wide squishy is switched in (it glides to a spot inside the frame, above the rows, clear of the body, still tappable)',
+        `ok ${stepsOk.join('/')}; caps ${[L.r0, L.r1, L.r2, L.r3].map((r) => JSON.stringify(r.cap)).join(' ')}; bodies ${[L.r0, L.r1, L.r2, L.r3].map((r) => JSON.stringify(r.body)).join(' ')}; moved ${L.moved.map((m) => m.toFixed(2)).join(', ')} m`);
+      report.problems.push(...lbad2);
+      await lctx.close();
     }
     await sheetCtxB.close();
   }

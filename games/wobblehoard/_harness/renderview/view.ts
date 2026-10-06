@@ -173,6 +173,22 @@ function resetCer(kind: string, tier: TierName, duration: number): void {
   cer.kind = kind; cer.tier = tier; cer.beats = []; cer.lumas = []; cer.frames = 0; cer.duration = duration; cer.startFrame = frameNo;
 }
 
+/** What the capsule-spot checks measure on stage `s` (a W x H frame): the standing capsule's box and the bodies' union box in CSS px, their overlap area, its size and table z. */
+interface CapReport { landed: boolean; hit: boolean; cap: number[] | null; body: number[]; ov: number; size: number; z: number; x: number; W: number; H: number }
+function capReport(s: StageDev, hd: CapsuleHandle, W: number, H: number): CapReport {
+  const cam = s.camera, P = new THREE.Vector3();
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const v of s.views) {
+    if (!v.visible) continue;
+    const Q = v.proxy.positions;
+    for (let i = 0; i < Q.length; i += 3) { P.set(Q[i], Q[i + 1], Q[i + 2]).project(cam); const sx = (P.x * 0.5 + 0.5) * W, sy = (1 - (P.y * 0.5 + 0.5)) * H; x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy); }
+  }
+  const p = hd.screenPoint(), rr = p ? p.r / 1.35 : 0;
+  const cap = p ? [p.x - rr * 0.75, p.y - rr * 1.4, p.x + rr * 0.75, p.y + rr * 1.4] : null;
+  const ov = cap ? Math.max(0, Math.min(cap[2], x1) - Math.max(cap[0], x0)) * Math.max(0, Math.min(cap[3], y1) - Math.max(cap[1], y0)) : -1;
+  return { landed: hd.landed, hit: !!p && hd.hitTest(p.x, p.y), cap: cap && cap.map(Math.round), body: [x0, y0, x1, y1].map(Math.round), ov: Math.round(ov), size: s.info.cap?.size ?? -1, z: s.info.cap?.z ?? 0, x: s.info.cap?.x ?? 0, W, H };
+}
+
 const RV = {
   get bodyKind() { return bodyKind; },
   get bodyError() { return bodyError; },
@@ -375,7 +391,7 @@ const RV = {
       curStart = f * dt; skipped = false; endAt = -1; marks.push(`START ${st.kind}:${st.tier}${st.quick ? ':quick' : ''}@${(f * dt).toFixed(2)}`);
     };
     start(seq[0]); idx = 1;
-    for (; f < 30 * 14; f++) {
+    for (; f < Math.round(14 / dt); f++) {
       const t = f * dt, s = seq[idx - 1], h = cur as CeremonyHandle | null;
       if (!h) break;
       if (s && s.skipAt !== undefined && !skipped && t - curStart >= s.skipAt) { h.skip(); skipped = true; marks.push(`skip@${t.toFixed(2)}`); }
@@ -1207,6 +1223,62 @@ const RV = {
     stage.setCalmEffects(false); stage.clearBodies(); setupBody(genome);
     out.ms = performance.now() - t0;
     return out;
+  },
+
+  /**
+   * A capsule dropped BEFORE the stage has a size: the shell drops one that is already waiting while it builds the game, before its first resize()
+   * (and, before this was fixed, it was placed on a 1 x 1 frame: in FRONT of the squishy, full size, against the frame's edge). A fresh stage on
+   * a temporary canvas, the HUD rows set first as the shell's HUD binding does, the capsule dropped, THEN resize(); where does it stand?
+   */
+  bootDropProbe(o: { genome: Genome; w: number; h: number; insets: { top?: number; bottom?: number; left?: number; right?: number }; steps?: number; /** no capsule at all: the body's own box at this frame (what the capsule's pull-back is measured against) */ baseline?: boolean }): CapReport & { beforeResize: { landed: boolean; point: boolean }; png: string } {
+    const c2 = document.createElement('canvas'); c2.width = o.w; c2.height = o.h;
+    c2.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    document.body.appendChild(c2);
+    const s2 = createStageDev(c2);
+    try {
+      s2.setSafeInsets(o.insets);
+      const b = makeBody(o.genome); s2.setBody(b, o.genome);
+      const hd = o.baseline ? ({ landed: false, screenPoint: () => null, hitTest: () => false, id: 0, setSqueeze() {}, wobble() {}, remove() {} } as CapsuleHandle) : s2.dropCapsule!();
+      const beforeResize = { landed: hd.landed, point: !!hd.screenPoint() };
+      s2.resize(o.w, o.h, 1);
+      let tt = 0;
+      for (let i = 0; i < (o.steps ?? 240); i++) { b.step(1 / 60); events.length = 0; b.drainEvents(events); tt += 1 / 60; s2.update(1 / 60, { time: tt, pointerNdc: null }); }
+      s2.render();
+      return { ...capReport(s2, hd, o.w, o.h), beforeResize, png: c2.toDataURL('image/png') };
+    } finally { s2.dispose(); c2.remove(); }
+  },
+  /**
+   * A WAITING capsule when the frame, the HUD rows or the bodies change under it (the phone is turned, the HUD grows a row, another squishy is
+   * switched in): it glides to a clean spot by itself. Reports after the first landing, after a resize, after the HUD's bottom row grows and
+   * after the squishy is swapped for a wide species.
+   */
+  capLiveProbe(o: { genome: Genome; w1: number; h1: number; ins1: { top?: number; bottom?: number }; w2: number; h2: number; ins2: { top?: number; bottom?: number }; bottom3: number; wide: Genome }): { r0: CapReport; r1: CapReport; r2: CapReport; r3: CapReport; pngs: string[]; moved: number[] } {
+    const c2 = document.createElement('canvas'); c2.width = o.w1; c2.height = o.h1;
+    c2.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    document.body.appendChild(c2);
+    const s2 = createStageDev(c2);
+    try {
+      s2.resize(o.w1, o.h1, 1); s2.setSafeInsets(o.ins1);
+      let b = makeBody(o.genome); s2.setBody(b, o.genome);
+      let tt = 0;
+      const run = (n: number): void => { for (let i = 0; i < n; i++) { b.step(1 / 60); events.length = 0; b.drainEvents(events); tt += 1 / 60; s2.update(1 / 60, { time: tt, pointerNdc: null }); } s2.render(); };
+      run(60);
+      const hd = s2.dropCapsule!();
+      run(240);
+      const r0 = capReport(s2, hd, o.w1, o.h1), pngs: string[] = [c2.toDataURL('image/png')], moved: number[] = [];
+      let pos0 = { x: r0.x, z: r0.z };
+      const note = (r: CapReport): void => { moved.push(Math.hypot(r.x - pos0.x, r.z - pos0.z)); pos0 = { x: r.x, z: r.z }; };
+      s2.resize(o.w2, o.h2, 1); s2.setSafeInsets(o.ins2);
+      run(300);
+      const r1 = capReport(s2, hd, o.w2, o.h2); pngs.push(c2.toDataURL('image/png')); note(r1);
+      s2.setSafeInsets({ bottom: o.bottom3 });
+      run(300);
+      const r2 = capReport(s2, hd, o.w2, o.h2); pngs.push(c2.toDataURL('image/png')); note(r2);
+      b = makeBody(o.wide); s2.setBody(b, o.wide);
+      run(360);
+      const r3 = capReport(s2, hd, o.w2, o.h2); pngs.push(c2.toDataURL('image/png')); note(r3);
+      return { r0, r1, r2, r3, pngs, moved };
+    } finally { s2.dispose(); c2.remove(); }
   },
 
   /** n frames without rendering; the stage's camera framing (info.camScale) after each. */
