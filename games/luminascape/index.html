@@ -159,6 +159,8 @@
   .ttmini:hover{ background:rgba(255,255,255,.65); }
   .ttmini.ttdel:hover{ background:#e8b8ad; }
 </style>
+<script src="game_controls.js?v=1789530264"></script>
+<!-- page-level control bar + FFG_DEVICE touch layer; MUST load before game code -->
 <script type="importmap">
 { "imports": {
   "three": "./assets/vendor/three.module.js",
@@ -188,6 +190,7 @@ img{-webkit-user-drag:none;user-drag:none}
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -1241,7 +1244,12 @@ function pickTerrain(clientX,clientY){
 function showBrushAt(p,rOverride){ const wzArmed=(typeof weather!=='undefined'&&weather.placingZone)||(typeof _wzPlacing!=='undefined'&&_wzPlacing); if(!p||(brush.mode==='off'&&!wzArmed)){brushRing.visible=false;return;} const _r=rOverride||( (typeof _wzPlacing!=='undefined'&&_wzPlacing)?_wzR:brush.radius ); _drapeBrush(p.x,p.z,_r); brushRing.visible=true; const _tint=(wzArmed&&typeof WZ!=='undefined')?_wzColor(WZ.kind):0xffffff; _brRingMat.color.setHex(_tint); _brFillMat.uniforms.uCol.value.setHex(_tint); }
 
 /* ---------- GLB asset loader (foundation; full placement is chunk 6) ---------- */
+/* Draco: mesh-only compression for large GLBs. type:"js" decoder (no COOP/COEP). */
+const _lumDraco=new DRACOLoader(manager);
+_lumDraco.setDecoderPath('assets/vendor/three/examples/jsm/libs/draco/');
+_lumDraco.setDecoderConfig({type:'js'});
 const GL=new GLTFLoader(manager);
+GL.setDRACOLoader(_lumDraco);
 const MODELS={};
 const PLACEABLES={
   Trees:['tree_oak','tree_default','tree_detailed','tree_fat','tree_tall','tree_thin','tree_small','tree_simple','tree_blocks','tree_plateau','tree_cone','tree_pineDefaultA','tree_pineDefaultB','tree_pineRoundA','tree_pineRoundB','tree_pineRoundC','tree_pineRoundD','tree_pineRoundE','tree_pineSmallA','tree_pineSmallB','tree_pineTallA','tree_pineTallB','tree_pineGroundA','tree_palm','tree_palmDetailedTall','tree_palmTall','tree_palmShort','tree_palmBend','tree_oak_fall','tree_default_fall','tree_detailed_fall','tree_fat_fall','tree_cone_fall','tree_tall_fall'],

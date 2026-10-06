@@ -434,6 +434,8 @@ img{-webkit-user-drag:none}
   </div>
 </div>
 
+<script src="game_controls.js?v=1789530264"></script>
+<!-- page-level control bar + FFG_DEVICE touch layer; MUST load before game code -->
 <script type="importmap">
 { "imports": {
   "three": "./assets/vendor/three.module.js",
@@ -444,6 +446,7 @@ img{-webkit-user-drag:none}
 <script type="module">
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { clone as skeletonClone } from 'three/addons/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';   // merge the 400 decorative trees into 2 draw calls (graphics-perf pass)
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -1103,7 +1106,11 @@ function loadAll(onDone){
   mgr.onProgress=(u,l,t)=>{ lfill.style.width=Math.round(l/t*100)+'%'; };
   mgr.onLoad=finish;
   mgr.onError=u=>{ __report('asset',u); };
+  const _wwDraco=new DRACOLoader(mgr);
+  _wwDraco.setDecoderPath('assets/vendor/three/examples/jsm/libs/draco/');
+  _wwDraco.setDecoderConfig({type:'js'});
   const loader=new GLTFLoader(mgr);
+  loader.setDRACOLoader(_wwDraco);
   for(const name of MODEL_LIST){
     loader.load(`assets/models/${name}.glb`, g=>{ MODELS[name]=g.scene; if(g.animations&&g.animations.length) ANIMS[name]=g.animations;
       g.scene.traverse(m=>{ if(m.isMesh){ m.castShadow=true; m.receiveShadow=true; if(m.material){ m.material.metalness=0; m.material.side=THREE.DoubleSide; _stripDegenMaps(m.material); for(const _t of [m.material.map,m.material.emissiveMap,m.material.normalMap]) if(_t){ _t.anisotropy=_maxAniso; _t.needsUpdate=true; }   // DoubleSide: thin/open Kenney meshes no longer vanish when seen from behind; anisotropy: sharp at grazing angles
@@ -1202,13 +1209,12 @@ function _buildWorldImpl(){
   for(const [cx,cz,r] of [[-16,-10,1.2],[40,40,-0.8]]){ const c=place("Carriage",cx,cz,{targetH:2.8,rotY:r,tint:'#7a5230'}); if(c) addSolid(c); }
 
   // LOTS of layered procedural trees across the bigger map (thin TRUNK collider so you can't walk through, foliage is pass-through)
-  { const _treeSpecs=[]; for(let i=0;i<400;i++){ const a=rand(0,TAU), rad=rand(12,602); const x=Math.cos(a)*rad, z=Math.sin(a)*rad;   // spread over the huge map
+  { for(let i=0;i<400;i++){ const a=rand(0,TAU), rad=rand(12,602); const x=Math.cos(a)*rad, z=Math.sin(a)*rad;   // spread over the huge map
       if(Math.abs(x)<6||Math.abs(z)<6) continue; if(x>-16&&x<16&&z>4&&z<28) continue;
       if(isInWater(x,z,7)) continue;   // never plant a tree on/at a lake or river (7u = trunk + a dry bank)
       if(swampMask(x,z)>0.35||desertMask(x,z)>0.35||iceMask(x,z)>0.35||darkMask(x,z)>0.35) continue;   // 🗺️ no leafy green forest trees in the swamp/desert/ICE/dark rings — those biomes get their own props
-      const h=rand(5,8.5); _treeSpecs.push({x,z,h}); trunkSolid(x,z,0.6,h*0.42);
-      const _cp=new THREE.Group(); _cp.position.set(x,h*0.5,z); world.add(_cp); addNode(_cp,x,z,{item:'wood',amount:2,respawn:30,label:'🪓 Chop for wood'}); }   // every green (non-fruit) forest tree is now choppable for wood — the merged VISUAL stays for perf, an invisible proxy carries the chop interaction
-    mergeDecorTrees(_treeSpecs);   // -> 2 merged meshes instead of ~4,800 individual ones
+      const h=rand(5,8.5); const t=_resourceTree(x,z,h); if(!t) continue; t.traverse(m=>{if(m.isMesh)m.castShadow=false;}); world.add(t);
+      addNode(t,x,z,{item:'wood',amount:2,respawn:30,label:'🪓 Chop for wood',solid:'trunk'}); }   // INDIVIDUAL choppable trees (no longer merged) — a chopped tree now FADES OUT + stops colliding like every other resource node, then regrows on the respawn timer (was a baked merge with an invisible proxy that never depleted). frustum-culled so only nearby trees draw. PERF: shadows OFF on these (400 shadow-casting trees was ~3,600 casters + a doubled shadow pass = the merge's original reason; the merged decor barely cast tree shadows anyway, so the look is unchanged while the shadow pass returns to baseline).
   }
   for(let i=0;i<560;i++){ const a=rand(0,TAU), rad=rand(8,606); const x=Math.cos(a)*rad, z=Math.sin(a)*rad;
     if(isInWater(x,z,3)) continue;   // no grass tufts / flowers floating on the water

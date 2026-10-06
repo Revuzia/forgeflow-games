@@ -727,6 +727,29 @@ def refresh_portal_prerender():
     return False
 
 
+def _entry_page_problem(game_dir):
+    """Why the root index.html must NOT be uploaded, or None. A page that is cut off mid-statement parses as a script syntax error
+    and the game sits on its loading screen forever. Happened 2026-09-15/16: an agent patch read-and-rewrote the two big single-file
+    games (wanderwild 947 KB, luminascape 702 KB) through a size-capped tool, wrote back ~400 KB ending in a literal
+    '/* truncated */', and deploy_game.py shipped both to the live site (both published games dead until 2026-10-06).
+    Checked: an HTML page must end with </html>, and no page may end with the truncation marker. Override only on purpose with
+    ALLOW_UNTERMINATED_ENTRY=1."""
+    fp = Path(game_dir) / "index.html"
+    if not fp.exists():
+        return None
+    try:
+        text = fp.read_text(encoding="utf-8", errors="ignore")
+    except Exception:
+        return None
+    tail = text.rstrip()
+    if tail.endswith("/* truncated */"):
+        return f"{fp} ends with the literal '/* truncated */' marker (a size-capped tool cut it off)"
+    head = text[:2000].lower()
+    if ("<!doctype html" in head or "<html" in head) and not tail.lower().endswith("</html>"):
+        return f"{fp} is an HTML page that does not end with </html> (last 60 chars: {tail[-60:]!r}); it looks truncated"
+    return None
+
+
 def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, refresh_portal=True,
                status=None):
     """Deploy a single game: optional cover-gen, R2 upload, Supabase upsert,
@@ -761,6 +784,14 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, r
             _safe_print(f"  Reason: {_pin.get('note', 'staged content is not cleared for live')}")
             _safe_print("  Deploy this slug from its release branch/worktree, or set ALLOW_STAGED_DEPLOY=1 to override intentionally.")
             return {"ok": False, "uploaded": 0, "total": 0, "url": None, "reason": "staged-content guard"}
+
+    # ── truncated entry page guard (2026-10-06): never publish an index.html that was cut off ──────────
+    _trunc = _entry_page_problem(game_dir)
+    if _trunc and not os.environ.get("ALLOW_UNTERMINATED_ENTRY"):
+        _safe_print(f"ABORT: {_trunc}")
+        _safe_print("  Restore the full page (git show HEAD:<path>) and re-apply the real edits, then deploy again.")
+        _safe_print("  Intentional override (the page really has no closing tag): set ALLOW_UNTERMINATED_ENTRY=1.")
+        return {"ok": False, "uploaded": 0, "total": 0, "url": None, "reason": "truncated entry page"}
 
     metadata = {}
     if metadata_path:
