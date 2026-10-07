@@ -1,11 +1,42 @@
 [
   {
-    "id": "fx_vfx_hit",
+    "id": "fx_fighter_a_a1_hit",
     "layers": [
       {
         "type": "burst",
         "count": 8,
-        "color": "#ffcc88"
+        "life": [
+          0.2,
+          0.4
+        ],
+        "speed": [
+          2,
+          5
+        ],
+        "spreadDeg": 60,
+        "size": [
+          0.3,
+          0.05
+        ],
+        "color": [
+          "#ffcc88",
+          "team"
+        ],
+        "alpha": [
+          1,
+          0
+        ],
+        "blend": "add",
+        "texture": "spark"
+      },
+      {
+        "type": "flash",
+        "delay": 0.05,
+        "at": "target",
+        "radius": 1.5,
+        "life": 0.15,
+        "color": "element",
+        "intensity": 2
       }
     ],
     "duration": 0.4

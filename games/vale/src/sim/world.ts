@@ -11,14 +11,13 @@
 // Determinism: entities live in one array in creation (= id) order and every system iterates it
 // front to back; ids are never reused; removal is deferred to the end of the tick.
 
-import type { CatalogT, MapDefT, ModeDefT, QueueDefT, RulesParamsT } from '../contracts/catalog.ts';
+import type { CatalogT, DamageTypeT, MapDefT, ModeDefT, QueueDefT, RulesParamsT } from '../contracts/catalog.ts';
 import type {
-  Command, EntityId, EntityKind, MatchResult, MatchSetup, ObjectiveTimerView, PlayerId, SimEvent, TeamId, WorldView,
-  DamageTypeT,
+  Command, EntityId, EntityKind, MatchResult, MatchSetup, ObjectiveTimerView, PingKind, PlayerId, SimEvent, TeamId, WorldView,
 } from '../contracts/sim.ts';
 import { TICK_DT } from '../contracts/sim.ts';
 import { indexCatalog, resolveRules, type CatalogIndex } from './catalog_index.ts';
-import { Entity, NEUTRAL_TEAM, Player, TeamState } from './entity.ts';
+import { Entity, Player, TeamState } from './entity.ts';
 import { NavGrid } from './nav.ts';
 import { createStreams, type RngStreams } from './rng.ts';
 import { Vision } from './vision.ts';
@@ -50,6 +49,11 @@ export interface WorldHooks {
   spawn: ((w: World, e: Entity) => void)[];
   /** veto damage (structure protection, spawn shields). Any false ⇒ the hit is ignored. */
   canDamage: ((w: World, src: Entity | null, dst: Entity) => boolean)[];
+  /**
+   * Scale a hit before mitigation (after the crit multiplier): tower ramp, per-kind damage tuning.
+   * Each returns the new pre-mitigation amount; they chain in registration order.
+   */
+  modifyDamage: ((w: World, src: Entity | null, dst: Entity, raw: number, dtype: DamageTypeT, isAttack: boolean) => number)[];
   /** handlers for command types core does not own (buy, sell, undo, swapItems, recall, ping, surrenderVote, practice) */
   command: Partial<Record<Command['type'], (w: World, p: Player, cmd: Command) => void>>;
   /** idle target-acquisition score (lower = preferred; Infinity = never). null = core default. */
@@ -60,6 +64,9 @@ export interface WorldHooks {
 /**
  * Uniform grid of linked lists in typed arrays, rebuilt from scratch when positions changed
  * (O(n), no allocation once warmed up). Holds live units only (no projectiles/zones/corpses).
+ * Arrays are refilled by index, never via `length = 0` + push: V8 trims a truncated array's
+ * backing store, so that pattern reallocates on every refill (measured 2.5× slower, most of the
+ * sim's GC churn).
  */
 export class SpatialHash {
   readonly cell: number;
@@ -67,7 +74,8 @@ export class SpatialHash {
   readonly rows: number;
   private head: Int32Array;
   private next: Int32Array;
-  private ents: Entity[] = [];
+  private ents: (Entity | null)[] = [];
+  private count = 0;
   maxRadius = 0;
 
   constructor(sizeX: number, sizeY: number, cell = 4) {
@@ -80,19 +88,23 @@ export class SpatialHash {
 
   rebuild(list: readonly Entity[]): void {
     this.head.fill(-1);
-    const ents = this.ents; ents.length = 0;
+    const ents = this.ents;
+    let k = 0;
     let maxR = 0;
     for (let i = 0; i < list.length; i++) {
       const e = list[i];
       if (!e.alive || e.removed || e.kind === 'projectile' || e.kind === 'zone') continue;
-      const k = ents.length;
-      ents.push(e);
+      ents[k] = e;
       if (k >= this.next.length) { const nn = new Int32Array(this.next.length * 2); nn.set(this.next); this.next = nn; }
       const c = this.cellIndex(e.x, e.y);
       this.next[k] = this.head[c];
       this.head[c] = k;
       if (e.radius > maxR) maxR = e.radius;
+      k++;
     }
+    // drop references past the live count so removed entities can be collected
+    for (let i = k; i < this.count; i++) ents[i] = null;
+    this.count = k;
     this.maxRadius = maxR;
   }
 
@@ -103,26 +115,59 @@ export class SpatialHash {
     return cy * this.cols + cx;
   }
 
-  /** units whose circle touches the circle (x, y, r); clears and fills `out`, returns the count */
+  /**
+   * Units whose circle touches the circle (x, y, r): writes them to out[0..n) and returns n.
+   * Entries of `out` at index ≥ n are stale — iterate by the returned count, never by out.length.
+   */
   query(x: number, y: number, r: number, out: Entity[]): number {
-    out.length = 0;
     const reach = r + this.maxRadius;
     let x0 = Math.floor((x - reach) / this.cell), x1 = Math.floor((x + reach) / this.cell);
     let y0 = Math.floor((y - reach) / this.cell), y1 = Math.floor((y + reach) / this.cell);
     if (x0 < 0) x0 = 0; if (y0 < 0) y0 = 0;
     if (x1 >= this.cols) x1 = this.cols - 1; if (y1 >= this.rows) y1 = this.rows - 1;
     const ents = this.ents, next = this.next, head = this.head;
+    let n = 0;
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
         for (let k = head[cy * this.cols + cx]; k !== -1; k = next[k]) {
-          const e = ents[k];
+          const e = ents[k]!;
           const rr = r + e.radius;
           const dx = e.x - x, dy = e.y - y;
-          if (dx * dx + dy * dy <= rr * rr) out.push(e);
+          if (dx * dx + dy * dy <= rr * rr) out[n++] = e;
         }
       }
     }
-    return out.length;
+    return n;
+  }
+}
+
+// ── command validation ──────────────────────────────────────────────────────────────────────────
+const PING_KINDS: ReadonlySet<PingKind> = new Set<PingKind>(['alert', 'danger', 'onMyWay', 'missing', 'assist', 'push', 'vision', 'objective', 'retreat']);
+const finite = (v: unknown): boolean => typeof v === 'number' && Number.isFinite(v);
+const optFinite = (v: unknown): boolean => v === undefined || finite(v);
+const optInt = (v: unknown): boolean => v === undefined || Number.isInteger(v);
+/**
+ * Shape check for a command from outside the sim (UI, network, bots). Commands are untrusted
+ * input: a NaN coordinate would become a NaN position (lost from the spatial hash, poisoning the
+ * digest) and a fractional slot index would write stray keys onto the inventory arrays. Unknown
+ * slot/item/action strings are fine here — their handlers refuse them.
+ */
+export function validCommand(c: unknown): c is Command {
+  if (!c || typeof c !== 'object') return false;
+  const o = c as Record<string, unknown>;
+  switch (o.type) {
+    case 'move': return finite(o.x) && finite(o.y) && (o.attackMove === undefined || typeof o.attackMove === 'boolean');
+    case 'attack': return Number.isInteger(o.target);
+    case 'stop': case 'undo': case 'recall': return true;
+    case 'cast': return typeof o.slot === 'string' && optFinite(o.x) && optFinite(o.y) && optInt(o.target);
+    case 'levelUp': return typeof o.slot === 'string';
+    case 'buy': return typeof o.item === 'string';
+    case 'sell': return Number.isInteger(o.slot);
+    case 'swapItems': return Number.isInteger(o.a) && Number.isInteger(o.b);
+    case 'ping': return PING_KINDS.has(o.kind as PingKind) && finite(o.x) && finite(o.y) && optInt(o.target);
+    case 'surrenderVote': return typeof o.yes === 'boolean';
+    case 'practice': return typeof o.action === 'string';
+    default: return false;
   }
 }
 
@@ -160,7 +205,7 @@ export class World implements WorldView {
   /** set whenever a unit moved/spawned/died since the last rebuild */
   hashDirty = true;
   events: SimEvent[] = [];
-  readonly hooks: WorldHooks = { death: [], damage: [], spawn: [], canDamage: [], command: {}, acquireScore: null };
+  readonly hooks: WorldHooks = { death: [], damage: [], spawn: [], canDamage: [], modifyDamage: [], command: {}, acquireScore: null };
   /** time = tick·TICK_DT + timeOffset (modes set a negative offset for a pre-game countdown) */
   timeOffset = 0;
   /** practice: cooldowns are not started */
@@ -212,6 +257,8 @@ export class World implements WorldView {
   create(kind: EntityKind, def: string, team: TeamId): Entity {
     const e = new Entity(this.nextId++, kind, def, team);
     e.spawnTime = this.time;
+    // own team sees it from the first tick (vision only rebuilds at 10 Hz)
+    if (team >= 0 && team < 31) e.visibleMask = 1 << team;
     this.entities.push(e);
     this.byId.set(e.id, e);
     this.hashDirty = true;
@@ -248,8 +295,11 @@ export class World implements WorldView {
 
   // ── events / commands ─────────────────────────────────────────────────────────────────────
   emit(ev: SimEvent): void { this.events.push(ev); }
-  /** queue a command for a seat; applied in the next tick's 'commands' phase */
-  command(player: PlayerId, cmd: Command): void { this.cmdQueue.push({ player, cmd }); }
+  /** queue a command for a seat; applied in the next tick's 'commands' phase (malformed ones are dropped) */
+  command(player: PlayerId, cmd: Command): void {
+    if (!Number.isInteger(player) || !validCommand(cmd)) return;
+    this.cmdQueue.push({ player, cmd });
+  }
   /** drain queued commands (the core 'commands' system calls this) */
   takeCommands(): { player: PlayerId; cmd: Command }[] {
     const q = this.cmdQueue;
@@ -300,17 +350,20 @@ export class World implements WorldView {
 
   // ── spatial queries ───────────────────────────────────────────────────────────────────────
   ensureHash(): void { if (this.hashDirty) { this.hash.rebuild(this.entities); this.hashDirty = false; } }
-  /** live units touching the circle (x, y, r); clears and fills `out` */
+  /** live units touching the circle (x, y, r) → out[0..n), returns n (iterate by the count; see SpatialHash.query) */
   query(x: number, y: number, r: number, out: Entity[]): number {
     this.ensureHash();
     return this.hash.query(x, y, r, out);
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────────────────────
-  /** relation of b as seen from a: 0 self, 1 ally, 2 enemy (neutral units are enemies of everyone) */
+  /**
+   * relation of b as seen from a: 0 self, 1 ally, 2 enemy. Neutral units (monsters, pickups,
+   * neutral dummies) are enemies of every team and allies of each other, so a monster's area
+   * ability never hits its campmates and camps never fight each other.
+   */
   relation(a: Entity, b: Entity): 0 | 1 | 2 {
     if (a === b) return 0;
-    if (a.team === NEUTRAL_TEAM || b.team === NEUTRAL_TEAM) return a.team === b.team && a.team !== NEUTRAL_TEAM ? 1 : 2;
     return a.team === b.team ? 1 : 2;
   }
   /** the fighter credited for an entity's actions (itself, or the fighter that owns a summon) */

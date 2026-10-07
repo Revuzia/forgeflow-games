@@ -19,7 +19,7 @@ import type { TeamId } from '../contracts/sim.ts';
 import { ST_INVISIBLE, type Entity } from './entity.ts';
 import { pointInPolygon, polygonAabb, type Aabb, type Poly } from './math.ts';
 
-/** fighters have no sightRange record; this is their sight radius in metres */
+/** fighters' sight radius in metres when FighterDef.sightRange is omitted */
 export const FIGHTER_SIGHT = 12;
 /** ticks between rebuilds (30 Hz / 3 = 10 Hz) */
 export const VISION_INTERVAL_TICKS = 3;
@@ -80,7 +80,8 @@ export class Vision {
     const key = Math.round(radius * 100);
     let s = this.stamps.get(key);
     if (s) return s;
-    const rc = radius / this.cell;
+    // nothing lies beyond the map diagonal: an absurd sightRange must not build a giant stamp
+    const rc = Math.min(radius / this.cell, Math.hypot(this.w, this.h) + 1);
     const n = Math.ceil(rc);
     const offs: number[] = [];
     for (let dy = -n; dy <= n; dy++) for (let dx = -n; dx <= n; dx++) if (dx * dx + dy * dy <= rc * rc + 0.25) offs.push(dx, dy);

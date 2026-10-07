@@ -1,8 +1,16 @@
 {
   "allow": [
-    "Vale"
+    "Vale",
+    "Lantern"
   ],
   "why": {
-    "Vale": "the product name (fixture)"
+    "Vale": "the product name (fixture)",
+    "Lantern": "allowed as a map name only (fixture)"
+  },
+  "scope": {
+    "Lantern": [
+      "maps[].name",
+      "strings"
+    ]
   }
 }

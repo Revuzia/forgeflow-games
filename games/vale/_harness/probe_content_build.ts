@@ -9,7 +9,9 @@
 //   * --check writes nothing; --allow-missing-assets downgrades a missing asset to a warning and
 //     leaves the ref untouched;
 //   * negative cases fail with file + JSON path in the message: unknown key, broken cross-refs,
-//     missing asset, Git LFS pointer, recipe sum, blank kit text, base-skin ownership, deny-listed names;
+//     missing asset, Git LFS pointer, recipe sum, UnitDef.behavior vocabulary, pickup grant effects
+//     (and their defaults in the output), nav grid size, blank kit text, base-skin ownership,
+//     deny-listed names;
 //   * names_check rules (multi-word, non-dictionary, strict, allowlist, prose vs name, normalization).
 // Fixture ids are placeholders (fx_*). Pass --keep to leave the temp dirs for inspection.
 
@@ -149,12 +151,47 @@ try {
     j.kit.a2.present = { anim: 'crit' };
     j.kit.ult.effects[1].then[0].form = 'fx_form_zz';
   }), ['unknown vfx id "fx_vfx_nope"', 'unknown audio cue "fx_cue_nope"', '$.kit.a2.present.anim', 'unknown clip role "crit"', 'unknown form (kit.passive.forms) "fx_form_zz"']);
+  neg('VFX layer vocabulary (§9.5)', (c) => editJson(join(c, 'vfx.json'), (j) => {
+    j[0].layers[0].lifetime = 1; j[0].layers[0].texture = 'sparkle'; j[0].layers[1].color = 'red';
+    j[0].layers.push({ type: 'tornado' });
+  }), ['vfx.json $[0].layers[0].lifetime: unknown key "lifetime" for a burst layer', 'vfx.json $[0].layers[0].texture: expected one of', 'vfx.json $[0].layers[1].color', 'vfx.json $[0].layers[2].type: unknown layer type "tornado"']);
   neg('missing asset', (c) => editJson(join(c, 'roles.json'), (j) => { j[0].icon = 'assets/ui/fx_missing.png'; }),
     ['roles.json $[0].icon', 'asset not found: "assets/ui/fx_missing.png"']);
   neg('Git LFS pointer instead of a GLB', (_c, root) => writeFileSync(join(root, 'art/out/units/fx_unit.glb'), 'version https://git-lfs.github.com/spec/v1\noid sha256:00\nsize 1\n'),
     ['units.json $[0].art.model', 'Git LFS pointer']);
   neg('recipe does not sum', (c) => editJson(join(c, 'items.json'), (j) => { j[1].cost = 500; }),
     ['items.json $[1].cost', 'recipe does not sum']);
+  // UnitDef.behavior is free-form in the schema: the build checks it against the sim's vocabulary
+  neg('behavior keys / values (src/sim/units/behavior_keys.ts)', (c) => editJson(join(c, 'units.json'), (j) => {
+    j[1].behavior = { targetRules: 'sniper', aggroRange: 7, damageMult: { fighter: 2, castle: 3 } };   // structure
+    j[2].behavior = { leash: 'far', leashh: 3, priority: ['fighter'] };                                 // monster
+    j[0].behavior = { priority: ['fighterAttacker', 'castle'] };                                         // minion
+  }), ['units.json $[1].behavior.targetRules: expected "tower" or "none"', 'units.json $[1].behavior.aggroRange: behavior "aggroRange" is not read for structure units',
+    'units.json $[1].behavior.damageMult.castle: unknown entity kind "castle"', 'units.json $[2].behavior.leash: expected a number',
+    'unknown behavior key for a monster "leashh" — did you mean "leash"?', 'units.json $[2].behavior.priority: behavior "priority" is not read for monster units',
+    'units.json $[0].behavior.priority[1]: unknown priority token "castle"']);
+  neg('pickup grant effects are schema-checked', (c) => editJson(join(c, 'units.json'), (j) => {
+    j.push({ ...j[2], id: 'fx_unit_orb', name: 'Fixture Orb', kind: 'pickup', attack: undefined, onTakedownTeamBuff: undefined, abilities: [],
+      behavior: { grant: [{ op: 'heal', amount: 100, to: 'everyone' }, { op: 'teleport' }] } });
+  }), ['units.json $[3].behavior.grant[0].to', 'units.json $[3].behavior.grant[1]']);
+  neg('nav grid too fine for the map', (c) => editJson(join(c, 'maps/fx_map_a.json'), (j) => { j.navCell = 0.02; }),
+    ['maps/fx_map_a.json $.navCell', 'nav cells']);
+  {
+    const c = fixtureCopy((cc) => editJson(join(cc, 'units.json'), (j) => {
+      j.push({ ...j[2], id: 'fx_unit_orb', name: 'Fixture Orb', kind: 'pickup', attack: undefined, onTakedownTeamBuff: undefined, abilities: [],
+        behavior: { gold: 10, grant: [{ op: 'projectile', speed: 10, range: 5, width: 1, onHit: [{ op: 'damage', amount: 5, type: 'true' }] }] } });
+    }));
+    const out3 = join(TMP, 'out-grant');
+    const r = run(['--content', c, '--out', out3, '--design', DESIGN]);
+    check(r.code === 0, 'a pickup with grant effects builds', r.out);
+    if (r.code === 0) {
+      const m = readJson<CatalogManifest>(join(out3, 'manifest.json'));
+      const built = readJson<any>(join(out3, m.schemas['1'].catalog));
+      const g = built.units.find((u: { id: string }) => u.id === 'fx_unit_orb')?.behavior.grant[0];
+      check(g && g.from === 'self' && g.toward === 'dir' && g.pierce === 0 && g.onHit[0].to === 'hit',
+        'pickup grant effects ship with their schema defaults (the sim relies on them)', JSON.stringify(g));
+    }
+  }
   neg('blank kit text', (c) => editJson(join(c, 'fighters/fx_fighter_a.json'), (j) => { j.kit.a2.desc = '   '; }),
     ['$.kit.a2.desc: blank desc']);
   neg('base skin not starter-owned', (c) => editJson(join(c, 'store.json'), (j) => { j.starterOwnership = []; }),
@@ -164,6 +201,13 @@ try {
     editJson(join(c, 'skins/fx_fighter_a.json'), (j) => { j[1].name = 'Ember'; });
     editJson(join(c, 'items.json'), (j) => { j[0].desc = 'Forged near the Quorvath gate.'; });
   }, ['fighters/fx_fighter_a.json $.name: deny-listed name', 'fighters/fx_fighter_a.json $.title: deny-listed name', 'skins/fx_fighter_a.json $[1].name: deny-listed name', 'items.json $[0].desc: deny-listed name']);
+  neg('scoped allowlist outside its scope', (c) => editJson(join(c, 'fighters/fx_fighter_a.json'), (j) => { j.name = 'Lantern'; }),
+    ['fighters/fx_fighter_a.json $.name: deny-listed name', 'entire name equals a protected name']);
+  {
+    const c = fixtureCopy((cc) => editJson(join(cc, 'maps/fx_map_a.json'), (j) => { j.name = 'The Lantern'; }));
+    const r = run(['--check', '--content', c, '--design', DESIGN]);
+    check(r.code === 0, 'scoped allowlist: a map may be called "The Lantern"', r.out);
+  }
   {
     // prose use of a strict dictionary word ("ember" in lore) must NOT be flagged
     const c = fixtureCopy((cc) => editJson(join(cc, 'fighters/fx_fighter_a.json'), (j) => { j.lore = 'Carries an ember of the old fire, through the vale.'; }));
@@ -202,6 +246,9 @@ try {
   check(hit('Ember').length === 1 && hit('Ember Knight').length === 1 && hit('an ember glows', 'prose').length === 0, 'strict dictionary word flagged inside names only');
   check(hit('Marrow').length === 1, 'NAMES_NOT_USED "(strict)" heading makes its section strict');
   check(hit('Vale').length === 0, 'allowlisted entry is ignored');
+  const at = (text: string, where?: string): number => checkNames([{ path: 'p', text, kind: 'name', at: where }], deny).length;
+  check(at('Lantern', 'maps[].name') === 0 && at('Lantern', 'strings.fx_label') === 0, 'scoped allowlist: allowed at its scope patterns (and below them)');
+  check(at('Lantern', 'fighters[].name') === 1 && at('Lantern') === 1 && at('Lantern', 'maps[].lanes[].name') === 1, 'scoped allowlist: still flagged everywhere else');
   check(hit('Fen Hollow').length === 1 && hit('Hollowfen').length === 1, 'NAMES_NOT_USED "A / B" bullets yield both names');
   const md = parseNamesNotUsed('# Fighters (strict)\n- **Ab Cd** — why\n* [Ef](http://x) (note)\n  - Gh: nested\nnot a bullet\n');
   check(JSON.stringify(md.map((e) => [e.category, e.name, e.strict])) === JSON.stringify([['not_used/fighters', 'Ab Cd', true], ['not_used/fighters', 'Ef', true], ['not_used/fighters', 'Gh', true]]),

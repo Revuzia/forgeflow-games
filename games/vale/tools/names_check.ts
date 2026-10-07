@@ -16,7 +16,11 @@
 //                                   Text after ' — ', ' – ', ' - ', ': ' or ' (' is commentary; 'A / B'
 //                                   lists two names. A heading containing '(strict)' makes it strict.
 //   <design>/names_allowlist.json   { "allow": ["Rift", …], "why": {"Rift": "owner-chosen mode name"},
-//                                     "strict": ["<cat>", …] }        (why expected, strict optional)
+//                                     "scope": {"Rift": ["modes[].name", "strings"]},
+//                                     "strict": ["<cat>", …] }        (why expected; scope, strict optional)
+//                                   A scoped name is allowed only where the checked string's catalog path
+//                                   (NameInput.at, e.g. "modes[].name") equals a scope pattern or lies
+//                                   under it; everywhere else its normal tier applies. `[]` = any index.
 //
 // NORMALIZATION (protected names and checked text alike): Unicode NFKD, combining marks dropped
 // (é → e), a few letters folded (æ → ae, ø → o, ß → ss), apostrophe look-alikes unified, a possessive
@@ -49,7 +53,11 @@ export const DEFAULT_DESIGN_DIR = resolve(PROJECT_ROOT, '_design');
 const DICTIONARY_FILE = resolve(TOOLS_DIR, 'data', 'english_words.txt');
 
 export type TextKind = 'name' | 'prose';
-export interface NameInput { path: string; text: string; kind?: TextKind }
+export interface NameInput {
+  path: string; text: string; kind?: TextKind;
+  /** catalog path pattern of the string ("modes[].name", "strings.ui_play"), for scoped allowlist entries */
+  at?: string;
+}
 export type HitReason = 'multi_word' | 'non_dictionary' | 'strict' | 'exact_name';
 export type Tier = 'anywhere' | 'in_names' | 'exact_name' | 'ignored';
 export interface NameHit {
@@ -65,6 +73,8 @@ export interface DenyEntry {
   variants: string[][];
   /** all separators removed; used for entire-name comparisons */
   squashed: string;
+  /** scoped allowlist: catalog path patterns where this entry is NOT flagged */
+  allowedAt?: string[];
 }
 
 export interface DenyList {
@@ -190,18 +200,23 @@ export function loadDenyList(designDir: string = DEFAULT_DESIGN_DIR): DenyList {
     }
   }
 
-  const allow = new Set<string>();
+  /** normalized name → null (allowed everywhere) or the scope patterns where it is allowed */
+  const allow = new Map<string, string[] | null>();
   const allowFile = resolve(designDir, 'names_allowlist.json');
   if (existsSync(allowFile)) {
     sources.push(rel(allowFile));
-    const j = readJson(allowFile) as { allow?: unknown; strict?: unknown; why?: unknown };
+    const j = readJson(allowFile) as { allow?: unknown; strict?: unknown; why?: unknown; scope?: unknown };
     if (!j || typeof j !== 'object' || !Array.isArray(j.allow)) throw new Error(`names_check: ${rel(allowFile)} must be { "allow": ["Name", …], "why": { … } }`);
     const why = (j.why && typeof j.why === 'object') ? j.why as Record<string, unknown> : {};
+    const scope = (j.scope && typeof j.scope === 'object') ? j.scope as Record<string, unknown> : {};
     for (const a of j.allow) {
       if (typeof a !== 'string') continue;
-      allow.add(nameTokens(a).join(' '));
+      const sc = scope[a];
+      if (sc !== undefined && !(Array.isArray(sc) && sc.every((x) => typeof x === 'string'))) warnings.push(`${rel(allowFile)}: scope["${a}"] must be an array of catalog path patterns — treated as allowed everywhere`);
+      allow.set(nameTokens(a).join(' '), Array.isArray(sc) && sc.every((x) => typeof x === 'string') ? sc as string[] : null);
       if (!(a in why)) warnings.push(`${rel(allowFile)}: "${a}" is allowlisted without a "why"`);
     }
+    for (const k of Object.keys(scope)) if (!j.allow.includes(k)) warnings.push(`${rel(allowFile)}: scope["${k}"] has no matching "allow" entry — ignored`);
     strictList(j.strict);
   }
 
@@ -223,7 +238,8 @@ export function loadDenyList(designDir: string = DEFAULT_DESIGN_DIR): DenyList {
 
     let tier: Tier;
     let reason: HitReason | null;
-    if (allow.has(canon.join(' '))) { tier = 'ignored'; reason = null; }
+    const allowed = allow.get(canon.join(' '));
+    if (allowed === null) { tier = 'ignored'; reason = null; }
     else if (r.exactOnly) { tier = 'exact_name'; reason = 'exact_name'; }
     else if (canon.length > 1) { tier = 'anywhere'; reason = 'multi_word'; }
     else if (!isDictionaryWord(canon[0])) { tier = 'anywhere'; reason = 'non_dictionary'; }
@@ -231,6 +247,7 @@ export function loadDenyList(designDir: string = DEFAULT_DESIGN_DIR): DenyList {
     else { tier = 'exact_name'; reason = 'exact_name'; }
 
     const entry: DenyEntry = { name: r.name, category: r.category, source: r.source, tier, reason, variants, squashed: wholeForm(canon) };
+    if (allowed) entry.allowedAt = allowed;
     entries.push(entry);
     if (tier === 'ignored') continue;
     const w = whole.get(entry.squashed) ?? [];
@@ -244,10 +261,15 @@ export function loadDenyList(designDir: string = DEFAULT_DESIGN_DIR): DenyList {
       }
     }
   }
-  return { entries, strictCategories: [...strict].sort(), allow: [...allow].sort(), sources, warnings, index, whole };
+  return { entries, strictCategories: [...strict].sort(), allow: [...allow.keys()].sort(), sources, warnings, index, whole };
 }
 
 let cachedDefault: DenyList | null = null;
+
+/** "modes[].name" covers itself and anything below it ("strings" covers "strings.ui_play"). */
+export function scopeCovers(pattern: string, at: string): boolean {
+  return at === pattern || at.startsWith(pattern + '.') || at.startsWith(pattern + '[');
+}
 
 /** Every protected-name hit in `strings`. `kind` defaults to 'name' (the stricter reading). */
 export function checkNames(strings: readonly NameInput[], list?: DenyList): NameHit[] {
@@ -260,6 +282,7 @@ export function checkNames(strings: readonly NameInput[], list?: DenyList): Name
     const reported = new Set<DenyEntry>();
     const report = (entry: DenyEntry): void => {
       if (reported.has(entry)) return;
+      if (entry.allowedAt && s.at !== undefined && entry.allowedAt.some((p) => scopeCovers(p, s.at as string))) return;
       reported.add(entry);
       hits.push({ path: s.path, text: s.text, kind, protectedName: entry.name, category: entry.category, source: entry.source, reason: entry.reason as HitReason });
     };
@@ -311,6 +334,8 @@ function main(argv: string[]): number {
       console.log(`${cat}${list.strictCategories.includes(cat) ? ' (strict)' : ''}: ${n('anywhere')} anywhere, ${n('in_names')} in names, ${n('exact_name')} exact-name, ${n('ignored')} allowlisted`);
       const ign = es.filter((e) => e.tier === 'ignored');
       if (ign.length) console.log(`  allowlisted: ${ign.map((e) => e.name).join(', ')}`);
+      const scoped = es.filter((e) => e.allowedAt);
+      if (scoped.length) console.log(`  allowlisted only at: ${scoped.map((e) => `${e.name} → ${e.allowedAt?.join(' | ')}`).join('; ')}`);
     }
     return 0;
   }
@@ -320,4 +345,7 @@ function main(argv: string[]): number {
   return hits.length ? 1 : 0;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = main(process.argv.slice(2));
+// run as a CLI only when executed directly (probes import this module); Windows paths compare case-insensitively
+const invokedPath = process.argv[1] ? resolve(process.argv[1]) : '';
+const selfPath = fileURLToPath(import.meta.url);
+if (process.platform === 'win32' ? invokedPath.toLowerCase() === selfPath.toLowerCase() : invokedPath === selfPath) process.exitCode = main(process.argv.slice(2));

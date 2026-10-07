@@ -1,0 +1,241 @@
+{
+  "id": "_proof_mannequin",
+  "fighter": "_proof_mannequin",
+  "skin": false,
+  "parts": {
+    "bind_body": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": []
+    },
+    "tris_body": 7000,
+    "tris_helmet": 866,
+    "tris_visor_up": 388,
+    "tris_bevor": 494,
+    "tris_eye_slit": 272,
+    "tris_crest": 320,
+    "tris_crest_saddle": 240,
+    "tris_breastplate": 1238,
+    "tris_backplate": 1134,
+    "tris_gorget": 632,
+    "tris_chest_gem": 160,
+    "tris_gem_setting": 176,
+    "tris_belt": 540,
+    "tris_buckle": 392,
+    "tris_tasset.L": 292,
+    "tris_tasset.R": 308,
+    "tris_pauldron.L": 781,
+    "tris_pauldron_glow.L": 216,
+    "tris_lame0.L": 388,
+    "tris_lame1.L": 383,
+    "tris_pauldron.R": 792,
+    "tris_pauldron_glow.R": 216,
+    "tris_lame0.R": 383,
+    "tris_lame1.R": 411,
+    "tris_bracer.L": 480,
+    "tris_greave.L": 634,
+    "tris_kneecop.L": 502,
+    "tris_kneefan.L": 336,
+    "tris_cuisse.L": 556,
+    "tris_bracer.R": 480,
+    "tris_greave.R": 634,
+    "tris_kneecop.R": 502,
+    "tris_kneefan.R": 336,
+    "tris_cuisse.R": 556,
+    "tris_tabard_f": 776,
+    "tris_tabard_b": 776,
+    "tris_sword_blade": 360,
+    "tris_sword_rune": 176,
+    "tris_sword_guard": 300,
+    "tris_sword_grip": 340,
+    "tris_sword_pommel": 128,
+    "armour_conform": {
+      "covered": 1679,
+      "culled_faces": 1303,
+      "body_tris_before": 7000,
+      "body_tris_after": 5697
+    },
+    "validate__proof_mannequin": "14524->14518"
+  },
+  "uv_coverage": 0.551,
+  "bake": {
+    "base": 2.92,
+    "rough_metal": 1.42,
+    "normal": 1.75,
+    "ao": 11.44,
+    "normal_fixed_px": 5622,
+    "pack_save": 0.41,
+    "total": 18.12
+  },
+  "tris": 24585,
+  "mesh_top_m": 1.947,
+  "clips": {
+    "idle": {
+      "frames": 72,
+      "duration_s": 2.4,
+      "loop": true,
+      "impact": null
+    },
+    "run": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": true,
+      "impact": null,
+      "run_ref_speed": 3.6,
+      "stride_m": 1.2,
+      "cycle_s": 0.667
+    },
+    "attack1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "attack2": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a1": {
+      "frames": 30,
+      "duration_s": 1.0,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a2": {
+      "frames": 30,
+      "duration_s": 1.0,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a3": {
+      "frames": 35,
+      "duration_s": 1.1667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_ult": {
+      "frames": 50,
+      "duration_s": 1.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "death": {
+      "frames": 50,
+      "duration_s": 1.6667,
+      "loop": false,
+      "impact": null
+    },
+    "recall": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null
+    },
+    "idle_lobby": {
+      "frames": 96,
+      "duration_s": 3.2,
+      "loop": true,
+      "impact": null
+    },
+    "victory": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": false,
+      "impact": null
+    },
+    "channel": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    },
+    "dash": {
+      "frames": 15,
+      "duration_s": 0.5,
+      "loop": false,
+      "impact": null
+    },
+    "stunned": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    }
+  },
+  "glb_bytes_raw": 3673340,
+  "optimize": {
+    "ok": true,
+    "before": 3673340,
+    "after": 3486076
+  },
+  "glb_bytes": 3486076,
+  "renders": {
+    "files": {
+      "portrait": "art/out/_proof/portrait.png",
+      "icon": "art/out/_proof/icon.png",
+      "splash": "art/out/_proof/splash.png",
+      "turntable": "art/renders/_proof/turntable.png"
+    },
+    "seconds": {
+      "portrait": 41.56,
+      "icon": 2.54,
+      "splash": 37.98,
+      "turntable": 16.3
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "facing": [
+      0,
+      1
+    ],
+    "bindBox": [
+      [
+        -0.746,
+        0,
+        -0.209
+      ],
+      [
+        0.746,
+        1.947,
+        0.933
+      ]
+    ],
+    "headY": 1.639,
+    "accentPct": 3.73,
+    "accentTopHalfPct": 99.5,
+    "heightPx1080": 106,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 15,
+    "out": "art/renders/_proof/three__proof_mannequin.png",
+    "seconds": 11.6,
+    "exit": 0,
+    "clip_sheet": "art/renders/_proof/three_clips__proof_mannequin.png"
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.15,
+      "model": 13.56,
+      "lows_bind": 3.56,
+      "uv": 10.19,
+      "bake": 18.12,
+      "clips": 0.23,
+      "export": 1.95,
+      "optimize": 0.47,
+      "render": 104.05,
+      "three_qa": 34.23,
+      "cache": 0.06
+    },
+    "total_s": 186.63
+  },
+  "run_ref_speed": 3.6,
+  "height_m": 1.85
+}

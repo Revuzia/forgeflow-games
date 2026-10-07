@@ -17,6 +17,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import bpy  # noqa: E402,F401  (first: the bpy wheel registers mathutils on import)
 from mathutils import Vector  # noqa: E402
 
 from common import anim, body, fighter, materials, mesh, rig  # noqa: E402
@@ -32,7 +33,7 @@ PROPORTIONS = rig.proportions()            # the default heroic biped
 SHAPE = body.shape(feet=False, chest=1.04, forearm=1.08)
 PALETTE = materials.palette(
     metal="#9aa3b0", metal_dark="#3d4654", trim="#c99a45", cloth="#2d5f8f", cloth2="#e3d8bd",
-    under="#33363f", leather="#6e4a30", leather_dark="#3a2a1f", accent="#6fe6ff",
+    under="#33363f", leather="#5a3b27", leather_dark="#33241a", accent="#6fe6ff",
 )
 # collection / draft background colours (FighterDef.palette) — used by the portrait backdrop
 CARD = {"primary": "#24476b", "secondary": "#c99a45"}
@@ -65,7 +66,7 @@ def model(ctx) -> list:
     parts = body.humanoid_parts(info, SHAPE, col=col)
     for p in parts:
         nm = p.name
-        mat = M["leather"] if nm.startswith("b_hand") else M["skin"] if nm == "b_head" else M["under"]
+        mat = M["leather"] if nm.startswith("b_hand") else M["under"]   # head is fully helmeted
         mesh.set_material(p, mat)
     for s in ("L", "R"):
         b = body.boot(info, s, col=col, cuff=True, height=0.30, name=f"b_boot.{s}")
@@ -74,7 +75,7 @@ def model(ctx) -> list:
     hi = mesh.union_fillet(parts, voxel=0.0055, fillet=0.03, name="body_high", col=col)
     ctx.body_high = hi
     ctx.targets = [hi]
-    P.append(fighter.Part("body", high=hi, tris=7600, bind="auto", uv_weight=1.0))
+    P.append(fighter.Part("body", high=hi, tris=7000, bind="auto", uv_weight=0.8))
 
     # ── helmet: closed sallet with crest ridge, flared tail, brow and accent visor slit ───────
     hb = J["head_base"]
@@ -87,30 +88,69 @@ def model(ctx) -> list:
         brow = 0.008 * math.exp(-((v - 76) / 6) ** 2) * max(0.0, math.cos(math.radians(u))) ** 2
         return ridge + tail + brow
 
-    helm = mesh.plate(Spherical(hc), [(0, -180, 180), (40, -180, 180), (80, -180, 180), (104, -180, 180),
-                                      (122, -180, 180)],
-                      target=ctx.targets, offset=0.022, thickness=0.010, cols=28, smooth_iters=10,
+    helm = mesh.plate(Spherical(hc), [(0, -180, 180), (40, -180, 180), (80, -180, 180), (110, -180, 180),
+                                      (136, -180, 180)],
+                      target=ctx.targets, offset=0.022, thickness=0.010, cols=28, smooth_iters=10, rows_n=13,
                       shape_fn=helm_shape, rim=0.012, rim_height=0.004, wrap=True, name="helmet", col=col,
                       mat=M["metal"], rim_mat=M["trim"])
-    P.append(fighter.Part("helmet", low=helm, bind="bone:head"))
-    # visor slit (accent): a thin band hugging the helmet front at eye level
+    P.append(fighter.Part("helmet", low=helm, bind="bone:head", uv_weight=1.6))
+    # visor (upper plate) + bevor (lower plate) leave an eye slit; the accent glows in the gap
+    hproj = Spherical(hc)
+    visor_up = mesh.plate(hproj, [(60, -72, 72), (72, -80, 80), (83, -82, 82)], target=[helm], offset=0.008,
+                          thickness=0.008, cols=16, smooth_iters=4, rows_n=5, rim=0.008,
+                          name="visor_up", col=col, mat=M["metal"], rim_mat=M["trim"])
+    P.append(fighter.Part("visor_up", low=visor_up, bind="bone:head"))
+
+    def snout(u, v, r):
+        return 0.016 * max(0.0, math.cos(math.radians(u))) ** 4 * mesh.smoothstep(92, 118, v)
+
+    bevor = mesh.plate(hproj, [(89, -82, 82), (108, -76, 76), (126, -60, 60), (138, -34, 34)], target=[helm],
+                       offset=0.008, thickness=0.008, cols=16, smooth_iters=4, rows_n=7, shape_fn=snout, rim=0.008,
+                       name="bevor", col=col, mat=M["metal"], rim_mat=M["trim"])
+    P.append(fighter.Part("bevor", low=bevor, bind="bone:head"))
     vis = []
-    for i in range(9):
-        u = -48 + 96 * i / 8
-        o, d = Spherical(hc).ray(u, 86)
-        r = mesh._surface_r(mesh.bvh_of([helm]), o, d, 0.5) or 0.12
-        vis.append(o + d * (r + 0.0015))
-    visor = mesh.sweep(vis, [(0.007, 0.0028)] * len(vis), segments=8, caps=("round", "round"),
-                       up=(0, 0, 1), name="visor", col=col)
+    htree = mesh.bvh_of([helm])
+    for i in range(11):
+        u = -70 + 140 * i / 10
+        o, d = hproj.ray(u, 86)
+        r = mesh._surface_r(htree, o, d, 0.5) or 0.12
+        vis.append(o + d * (r + 0.004))
+    visor = mesh.sweep(vis, [(0.0045, 0.0025)] * len(vis), segments=8, caps=("round", "round"),
+                       up=(0, 0, 1), name="eye_slit", col=col)
     mesh.set_material(visor, M["accent"])
-    P.append(fighter.Part("visor", low=visor, bind="bone:head"))
+    P.append(fighter.Part("eye_slit", low=visor, bind="bone:head"))
+    # crest fin along the helmet's centre line (strong top-down silhouette cue)
+    hb_tree = mesh.bvh_of([helm])
+    crest_pts = []
+    for i in range(9):
+        v = -38 + 92 * i / 8                          # polar angle: front (-) over the top to the back (+)
+        u = 0 if v < 0 else 180
+        o, d = Spherical(hc).ray(u, abs(v))
+        r = mesh._surface_r(hb_tree, o, d, 0.5) or 0.13
+        crest_pts.append(o + d * (r - 0.004))
+    # accent crest: the team-tinted crown read from the gameplay camera (bible: accent in the top half)
+    hgt = [0.008, 0.024, 0.036, 0.044, 0.046, 0.042, 0.034, 0.022, 0.008]
+    wid = [0.006, 0.010, 0.012, 0.013, 0.013, 0.013, 0.012, 0.010, 0.006]
+    crest = mesh.loft([{"p": p, "rx": w, "ry": h, "ry2": 0.004, "exp": 2.4} for p, h, w in zip(crest_pts, hgt, wid)],
+                      segments=8, caps=("point", "point"), up=(0, 0, 1), name="crest", col=col, rings=16)
+    mesh.set_material(crest, M["accent"])
+    P.append(fighter.Part("crest", low=crest, bind="bone:head"))
+    # trim saddle the crest sits in (keeps a gold read along the helmet ridge)
+    sad = mesh.loft([{"p": p, "rx": w + 0.006, "ry": 0.006, "ry2": 0.004, "exp": 3.0}
+                     for p, w in zip(crest_pts, wid)], segments=6, caps=("round", "round"), up=(0, 0, 1),
+                    name="crest_saddle", col=col, rings=14)
+    mesh.set_material(sad, M["trim"])
+    P.append(fighter.Part("crest_saddle", low=sad, bind="bone:head"))
 
     # ── cuirass: breastplate (keel ridge, trim rim) + back plate ─────────────────────────────
     nb, s1, s0 = J["neck_base"], J["spine1"], J["spine0"]
     axis = Cylindrical((0, 0.0, 0), (0, 0, 1), ref=(0, -1, 0))
 
     def keel(u, v, r):
-        return 0.010 * math.exp(-(u / 14.0) ** 2) * mesh.smoothstep(s0.z, s1.z + 0.1, v)
+        # medial ridge (peascod keel) + a waist taper below it: the cuirass reads as forged, not a slab
+        ridge = 0.018 * math.exp(-(u / 20.0) ** 2) * mesh.smoothstep(s0.z, s1.z + 0.08, v)
+        taper = -0.010 * (1 - mesh.smoothstep(s0.z + 0.03, s1.z, v)) * min(1.0, abs(u) / 60.0)
+        return ridge + taper
 
     breast = mesh.plate(axis, [(nb.z - 0.030, -38, 38), (nb.z - 0.065, -70, 70), (s1.z + 0.10, -86, 86),
                                (s1.z - 0.02, -82, 82), (s0.z + 0.035, -70, 70)],
@@ -124,21 +164,31 @@ def model(ctx) -> list:
                        rim=0.014, name="backplate", col=col, mat=M["metal"], rim_mat=M["trim"])
     P.append(fighter.Part("backplate", low=backp, bind=("zblend", "spine", "chest", s1.z - 0.05, s1.z + 0.05)))
     ctx.targets = [hi, breast, backp]
+    # ── gorget: neck guard bridging helmet and cuirass (chest -> neck blend); projected onto the
+    #    cuirass so its flared hem rests ON the plates instead of cutting through their rims ─────
+    nb0 = J["neck_base"]
+    ncyl = Cylindrical((0, nb0.y + 0.005, 0), (0, 0, 1), ref=(0, -1, 0))
+    gor = mesh.plate(ncyl, [(hb.z - 0.005, -180, 180), (nb0.z - 0.01, -180, 180), (nb0.z - 0.045, -180, 180)],
+                     target=ctx.targets, offset=0.012, thickness=0.008, cols=24, smooth_iters=6, wrap=True,
+                     shape_fn=lambda u, v, r: 0.03 * mesh.smoothstep(nb0.z, nb0.z - 0.045, v), row_step=0.02,
+                     rim=0.008, name="gorget", col=col, mat=M["metal"], rim_mat=M["trim"])
+    P.append(fighter.Part("gorget", low=gor, bind=("zblend", "chest", "neck", nb0.z - 0.03, hb.z - 0.01)))
+
 
     # chest core gem (accent): a faceted lozenge on the keel
     gz = s1.z + 0.09
     o, d = axis.ray(0, gz)
     r = mesh._surface_r(mesh.bvh_of([breast]), o, d, 0.6) or 0.15
     gp = o + d * r
-    gem = mesh.loft([{"p": gp + V((0, 0.0, 0.040)), "rx": 0.004, "ry": 0.004},
-                     {"p": gp + V((0, -0.010, 0.0)), "rx": 0.026, "ry": 0.010, "exp": 1.3},
-                     {"p": gp + V((0, 0.0, -0.040)), "rx": 0.004, "ry": 0.004}],
+    gem = mesh.loft([{"p": gp + V((0, 0.0, 0.050)), "rx": 0.005, "ry": 0.004},
+                     {"p": gp + V((0, -0.013, 0.0)), "rx": 0.032, "ry": 0.012, "exp": 1.3},
+                     {"p": gp + V((0, 0.0, -0.050)), "rx": 0.005, "ry": 0.004}],
                     segments=8, caps=("point", "point"), up=(0, -1, 0), name="chest_gem", col=col)
     mesh.shade(gem, smooth=False)
     mesh.set_material(gem, M["accent"])
     P.append(fighter.Part("chest_gem", low=gem, bind="bone:chest"))
     # gem setting (trim ring)
-    ring_pts = [gp + V((math.cos(a) * 0.034, -0.002, math.sin(a) * 0.050)) for a in
+    ring_pts = [gp + V((math.cos(a) * 0.041, -0.002, math.sin(a) * 0.061)) for a in
                 [2 * math.pi * i / 16 for i in range(17)]]
     setting = mesh.sweep(ring_pts, [(0.006, 0.006)] * 17, segments=8, caps=(None, None), up=(0, -1, 0),
                          name="gem_setting", col=col)
@@ -149,16 +199,16 @@ def model(ctx) -> list:
     # ── belt (leather band projected over body + cuirass) with a trim buckle ─────────────────
     bz0, bz1 = s0.z - 0.035, s0.z + 0.035
     belt = mesh.plate(axis, [(bz1, -180, 180), (bz0, -180, 180)], target=ctx.targets, offset=0.008,
-                      thickness=0.008, cols=40, smooth_iters=6, wrap=True, rim=0.006, rim_height=0.002,
+                      thickness=0.008, cols=30, smooth_iters=6, wrap=True, rim=0.006, rim_height=0.002,
                       name="belt", col=col, mat=M["leather"])
     P.append(fighter.Part("belt", low=belt, bind="bone:hips"))
     o, d = axis.ray(0, s0.z)
     r = mesh._surface_r(mesh.bvh_of([belt]), o, d, 0.6) or 0.15
-    bp = o + d * (r - 0.002)
+    bp = o + d * (r + 0.003)                      # proud of the tabard top edge
     buckle = mesh.loft([{"p": bp + V((0, 0, -0.045)), "rx": 0.050, "ry": 0.009, "exp": 4.0},
                         {"p": bp + V((0, -0.004, 0.0)), "rx": 0.058, "ry": 0.012, "exp": 4.0},
                         {"p": bp + V((0, 0, 0.045)), "rx": 0.050, "ry": 0.009, "exp": 4.0}],
-                       segments=16, caps=("flat", "flat"), up=(0, -1, 0), name="buckle", col=col)
+                       segments=10, caps=("flat", "flat"), up=(0, -1, 0), name="buckle", col=col)
     mesh.bevel(buckle, 0.003, 2, angle=30)
     mesh.set_material(buckle, M["trim"])
     P.append(fighter.Part("buckle", low=buckle, bind="bone:hips"))
@@ -182,17 +232,30 @@ def model(ctx) -> list:
         proj = Spherical(c, up=up, front=(0, -1, 0))
         lo, hi_ = (-70, 250) if sx > 0 else (-250, 70)
         dome = mesh.plate(proj, [(0, lo, hi_), (30, lo, hi_), (58, lo + 10 * sx, hi_ - 10 * sx)],
-                          target=ctx.targets, offset=0.030, thickness=0.011, cols=22, smooth_iters=16,
+                          target=ctx.targets, offset=0.030, thickness=0.011, cols=22, smooth_iters=16, rows_n=7,
                           rim=0.013, name=f"pauldron.{s}", col=col, mat=M["metal"], rim_mat=M["trim"])
-        lames = [dome]
+        bind = ("dblend", f"shoulder.{s}", f"upper_arm.{s}", c, -up, 0.04, 0.12)
+        P.append(fighter.Part(f"pauldron.{s}", low=dome, bind=bind))
+        # accent ridge strip over the dome (front -> back): the big top-down team read
+        dtree = mesh.bvh_of([dome])
+        strip_pts = []
+        for i in range(11):
+            t = -46 + 92 * i / 10
+            o, d = proj.ray(0 if t < 0 else 180, abs(t) + 1e-3)
+            r = mesh._surface_r(dtree, o, d, 0.5) or 0.12
+            strip_pts.append(o + d * (r + 0.001))
+        sw = [0.010, 0.016, 0.019, 0.020, 0.020, 0.020, 0.020, 0.020, 0.019, 0.016, 0.010]
+        stripe = mesh.loft([{"p": p, "rx": w, "ry": 0.0045, "ry2": 0.003, "exp": 3.0} for p, w in zip(strip_pts, sw)],
+                           segments=6, caps=("round", "round"), up=tuple(up), name=f"pauldron_glow.{s}", col=col,
+                           rings=12)
+        mesh.set_material(stripe, M["accent"])
+        P.append(fighter.Part(f"pauldron_glow.{s}", low=stripe, bind=bind))
+        # overlapping lames are separate parts so the exploded bake never confuses the layers
         for i, (v0, v1, off) in enumerate(((52, 70, 0.040), (64, 82, 0.046))):
             lame = mesh.plate(proj, [(v0, lo + 30 * sx, hi_ - 30 * sx), (v1, lo + 34 * sx, hi_ - 34 * sx)],
                               target=ctx.targets, offset=off, thickness=0.008, cols=18, smooth_iters=10,
                               rim=0.008, name=f"lame{i}.{s}", col=col, mat=M["metal"], rim_mat=M["trim"])
-            lames.append(lame)
-        pd = mesh.join(lames, f"pauldron.{s}")
-        P.append(fighter.Part(f"pauldron.{s}", low=pd,
-                              bind=("dblend", f"shoulder.{s}", f"upper_arm.{s}", c, -up, 0.04, 0.12)))
+            P.append(fighter.Part(f"lame{i}.{s}", low=lame, bind=bind))
 
     # ── bracers (forearm) with flared cuffs, greaves + knee cops ─────────────────────────────
     for s, sx in (("L", 1), ("R", -1)):
@@ -212,40 +275,83 @@ def model(ctx) -> list:
         kn, an = J[f"knee.{s}"], J[f"ankle.{s}"]
         sl = (an - kn).length
         cyl = Cylindrical(kn, (an - kn).normalized(), ref=(0, -1, 0))
-        gr = mesh.plate(cyl, [(sl * 0.10, -105, 105), (sl * 0.45, -112, 112), (sl * 0.66, -100, 100)],
-                        target=ctx.targets, offset=0.014, thickness=0.009, cols=14, smooth_iters=10,
-                        shape_fn=lambda u, v, r: 0.008 * math.exp(-(u / 18.0) ** 2),
-                        rim=0.010, name=f"greave.{s}", col=col, mat=M["metal"], rim_mat=M["trim"])
+
+        def greave_shape(u, v, r, sl=sl):
+            ridge = 0.013 * math.exp(-(u / 13.0) ** 2) * (1 - 0.5 * mesh.smoothstep(sl * 0.5, sl * 0.7, v))
+            flare = 0.016 * (1 - mesh.smoothstep(sl * 0.08, sl * 0.24, v))       # bell under the knee cop
+            return ridge + flare
+
+        gr = mesh.plate(cyl, [(sl * 0.10, -112, 112), (sl * 0.45, -116, 116), (sl * 0.70, -104, 104)],
+                        target=ctx.targets, offset=0.014, thickness=0.009, cols=18, smooth_iters=10,
+                        shape_fn=greave_shape, rim=0.010, name=f"greave.{s}", col=col,
+                        mat=M["dark_metal"], rim_mat=M["trim"])
         P.append(fighter.Part(f"greave.{s}", low=gr, bind=f"bone:shin.{s}"))
+        # poleyn: a flattened, taller-than-wide cop with a vertical ridge (not a ball) + outer fan wing
         kproj = Spherical(kn + V((0, 0.035, 0.010)), up=(0, -1, 0.25), front=(0, 0, 1))
         o, d = kproj.ray(0, 0)
         R = (mesh._surface_r(mesh.bvh_of(ctx.targets), o, d, 0.3) or 0.1) + 0.016
-        kc = mesh.plate(kproj, [(0, -180, 180), (30, -180, 180), (58, -180, 180)], target=None,
-                        r_fn=lambda u, v, r, R=R: R * (1.0 - 0.06 * mesh.smoothstep(20, 58, v)),
-                        offset=0.0, thickness=0.009, cols=18, smooth_iters=0, wrap=True, rim=0.009,
-                        name=f"kneecop.{s}", col=col, mat=M["metal"], rim_mat=M["trim"])
+
+        def cop_r(u, v, r, R=R):
+            su, cu = math.sin(math.radians(u)), math.cos(math.radians(u))
+            sv, cv = math.sin(math.radians(v)), math.cos(math.radians(v))
+            A, B, C = R, R * 0.92, R * 1.32                     # depth, width, height semi-axes
+            e = 1.0 / math.sqrt((sv * su / B) ** 2 + (sv * cu / C) ** 2 + (cv / A) ** 2)
+            ridge = 0.009 * math.exp(-(su / 0.22) ** 2) * (1 - mesh.smoothstep(25, 60, v))
+            point = 0.012 * max(0.0, -cu) ** 3 * mesh.smoothstep(25, 55, v)    # drops to a point below
+            return e + ridge + point
+
+        kc = mesh.plate(kproj, [(0, -180, 180), (22, -180, 180), (44, -180, 180), (60, -180, 180)], target=None,
+                        r_fn=cop_r, offset=0.0, thickness=0.009, cols=24, smooth_iters=0, wrap=True, rim=0.009,
+                        rows_n=8, name=f"kneecop.{s}", col=col, mat=M["metal"], rim_mat=M["trim"])
         P.append(fighter.Part(f"kneecop.{s}", low=kc, bind=f"bone:shin.{s}"))
+        uo = -90 if sx > 0 else 90                               # outer side of this knee
+
+        def fan_r(u, v, r, R=R, uo=uo):
+            k = math.cos(math.radians((u - uo) * 1.6))
+            return R * (0.98 + 0.05 * mesh.smoothstep(40, 80, v)) + 0.010 * max(0.0, k) ** 2
+
+        fan = mesh.plate(kproj, [(38, uo - 34, uo + 34), (62, uo - 44, uo + 44), (84, uo - 30, uo + 30)],
+                         target=None, r_fn=fan_r, offset=0.0, thickness=0.008, cols=12, smooth_iters=0,
+                         rim=0.008, rows_n=6, name=f"kneefan.{s}", col=col, mat=M["metal"], rim_mat=M["trim"])
+        P.append(fighter.Part(f"kneefan.{s}", low=fan, bind=f"bone:shin.{s}"))
+        # cuisses: blackened steel over the front/outer thigh (fills the leg, keeps the legs dark)
+        hp = J[f"hip.{s}"]
+        tl = (kn - hp).length
+        tcyl = Cylindrical(hp, (kn - hp).normalized(), ref=(0, -1, 0))   # axis points down: +u is -X
+
+        def cuisse_shape(u, v, r, tl=tl):
+            return 0.006 * math.exp(-(u / 16.0) ** 2) + 0.006 * mesh.smoothstep(tl * 0.66, tl * 0.84, v)
+
+        def urange(a, b):                                      # (front-inner a, outer-back b) per side
+            return (-b, a) if sx > 0 else (-a, b)
+
+        cu = mesh.plate(tcyl, [(tl * 0.26, *urange(40, 125)), (tl * 0.55, *urange(48, 132)),
+                               (tl * 0.82, *urange(40, 118))],   # stops above the poleyn (no overlap)
+                        target=ctx.targets, offset=0.016, thickness=0.009, cols=16, smooth_iters=12,
+                        shape_fn=cuisse_shape, rim=0.010, name=f"cuisse.{s}", col=col,
+                        mat=M["dark_metal"], rim_mat=M["trim"])
+        P.append(fighter.Part(f"cuisse.{s}", low=cu, bind=f"bone:thigh.{s}"))
 
     # ── tabards (cloth on x_ chains): front and back, pointed hems ───────────────────────────
     avoid = [hi]
     fr_top = []
     for i in range(7):
-        u = -26 + 52 * i / 6
+        u = -38 + 76 * i / 6
         o, d = axis.ray(u, bz0 + 0.004)
         r = mesh._surface_r(mesh.bvh_of([belt]), o, d, 0.6) or 0.16
-        fr_top.append(o + d * (r + 0.003))
-    tab_f = mesh.cloth_panel(fr_top, 0.40, folds=3, fold_depth=0.010, flare=0.06,
+        fr_top.append(o + d * (r + 0.006))   # clear the belt rim (z-fights in three otherwise)
+    tab_f = mesh.cloth_panel(fr_top, 0.44, folds=3, fold_depth=0.011, flare=0.06,
                              hem=lambda u: 0.22 * (1 - abs(2 * u - 1)), avoid=avoid, clearance=0.03,
                              out_dir=(0, -1, 0), name="tabard_f", col=col, seed=1)
     mesh.set_material(tab_f, M["cloth"])
     P.append(fighter.Part("tabard_f", low=tab_f, bind=("chain", "tabard_f", "hips")))
     bk_top = []
     for i in range(7):
-        u = 180 - 30 + 60 * i / 6
+        u = 180 - 40 + 80 * i / 6
         o, d = axis.ray(u, bz0 + 0.004)
         r = mesh._surface_r(mesh.bvh_of([belt]), o, d, 0.6) or 0.16
-        bk_top.append(o + d * (r + 0.003))
-    tab_b = mesh.cloth_panel(bk_top, 0.46, folds=4, fold_depth=0.012, flare=0.07,
+        bk_top.append(o + d * (r + 0.009))
+    tab_b = mesh.cloth_panel(bk_top, 0.52, folds=4, fold_depth=0.013, flare=0.07,
                              hem=lambda u: 0.15 * (1 - abs(2 * u - 1)), avoid=avoid, clearance=0.03,
                              out_dir=(0, 1, 0), name="tabard_b", col=col, seed=2)
     mesh.set_material(tab_b, M["cloth"])
@@ -259,21 +365,21 @@ def model(ctx) -> list:
 def sword(ctx) -> list:
     M, col = ctx.mats, ctx.col
     blade = mesh.loft([
-        {"p": (0, 0, 0.095), "rx": 0.0075, "ry": 0.030, "exp": 1.6},
-        {"p": (0, 0, 0.16), "rx": 0.0070, "ry": 0.034, "exp": 1.4},
-        {"p": (0, 0, 0.55), "rx": 0.0060, "ry": 0.031, "exp": 1.3},
-        {"p": (0, 0, 0.80), "rx": 0.0050, "ry": 0.024, "exp": 1.3},
-        {"p": (0, 0, 0.90), "rx": 0.0035, "ry": 0.012, "exp": 1.3},
-    ], segments=12, caps=("flat", "point"), up=(0, -1, 0), name="sw_blade", col=col, rings=26)
+        {"p": (0, 0, 0.095), "rx": 0.0085, "ry": 0.036, "exp": 1.6},
+        {"p": (0, 0, 0.16), "rx": 0.0080, "ry": 0.042, "exp": 1.4},
+        {"p": (0, 0, 0.50), "rx": 0.0070, "ry": 0.040, "exp": 1.3},
+        {"p": (0, 0, 0.70), "rx": 0.0060, "ry": 0.032, "exp": 1.3},
+        {"p": (0, 0, 0.80), "rx": 0.0040, "ry": 0.016, "exp": 1.3},
+    ], segments=10, caps=("flat", "point"), up=(0, -1, 0), name="sw_blade", col=col, rings=16)
     mesh.set_material(blade, M["metal"])
-    rune = mesh.loft([{"p": (0.0062, 0, 0.17), "rx": 0.0012, "ry": 0.004},
-                      {"p": (0.0058, 0, 0.62), "rx": 0.0012, "ry": 0.004},
-                      {"p": (0.0048, 0, 0.74), "rx": 0.0010, "ry": 0.002}],
-                     segments=6, caps=("round", "point"), up=(0, -1, 0), name="sw_rune", col=col)
-    rune2 = mesh.loft([{"p": (-0.0062, 0, 0.17), "rx": 0.0012, "ry": 0.004},
-                       {"p": (-0.0058, 0, 0.62), "rx": 0.0012, "ry": 0.004},
-                       {"p": (-0.0048, 0, 0.74), "rx": 0.0010, "ry": 0.002}],
-                      segments=6, caps=("round", "point"), up=(0, -1, 0), name="sw_rune2", col=col)
+    rune = mesh.loft([{"p": (0.0072, 0, 0.17), "rx": 0.0012, "ry": 0.005},
+                      {"p": (0.0066, 0, 0.56), "rx": 0.0012, "ry": 0.005},
+                      {"p": (0.0055, 0, 0.66), "rx": 0.0010, "ry": 0.002}],
+                     segments=4, caps=("round", "point"), up=(0, -1, 0), name="sw_rune", col=col, rings=6)
+    rune2 = mesh.loft([{"p": (-0.0072, 0, 0.17), "rx": 0.0012, "ry": 0.005},
+                       {"p": (-0.0066, 0, 0.56), "rx": 0.0012, "ry": 0.005},
+                       {"p": (-0.0055, 0, 0.66), "rx": 0.0010, "ry": 0.002}],
+                      segments=4, caps=("round", "point"), up=(0, -1, 0), name="sw_rune2", col=col, rings=6)
     rune = mesh.join([rune, rune2], "sw_rune")
     mesh.set_material(rune, M["accent"])
     guard_pts = [(0, -0.115, 0.115), (0, -0.07, 0.092), (0, 0, 0.085), (0, 0.07, 0.092), (0, 0.115, 0.115)]
@@ -285,7 +391,7 @@ def sword(ctx) -> list:
     for i in range(9):
         z = -0.085 + 0.165 * i / 8
         grip_st.append({"p": (0, 0, z), "rx": 0.0165 + (0.0025 if i % 2 else 0.0), "ry": 0.0185 + (0.0025 if i % 2 else 0)})
-    grip = mesh.loft(grip_st, segments=12, caps=("flat", "flat"), up=(0, -1, 0), name="sw_grip", col=col, rings=40,
+    grip = mesh.loft(grip_st, segments=10, caps=("flat", "flat"), up=(0, -1, 0), name="sw_grip", col=col, rings=17,
                      smooth_path=False)
     mesh.set_material(grip, M["leather"])
     pommel = mesh.loft([{"p": (0, 0, -0.085), "rx": 0.014, "ry": 0.014},
@@ -304,6 +410,18 @@ def sword(ctx) -> list:
             fighter.Part("sword_guard", low=guard, bind="bone:prop.R"),
             fighter.Part("sword_grip", low=grip, bind="bone:prop.R"),
             fighter.Part("sword_pommel", low=pommel, bind="bone:prop.R")]
+
+
+def chain_config(ctx) -> list:
+    """Tabards: hang with gravity, follow-through on the hips, and get pushed by the thighs."""
+    def push_front(p):
+        return 0.8 * max(0.0, p.get("thigh.L", (0, 0, 0))[0], p.get("thigh.R", (0, 0, 0))[0])
+
+    def push_back(p):
+        return 0.8 * max(0.0, -min(p.get("thigh.L", (0, 0, 0))[0], p.get("thigh.R", (0, 0, 0))[0]))
+
+    return [anim.ChainCfg(ctx.chains["tabard_f"], gravity=0.7, drive=push_front),
+            anim.ChainCfg(ctx.chains["tabard_b"], gravity=0.7, drive=push_back)]
 
 
 def clip_overrides(ctx) -> dict:

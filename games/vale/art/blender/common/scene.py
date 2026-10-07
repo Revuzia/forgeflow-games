@@ -56,6 +56,23 @@ def parse_args(add=None, argv=None) -> argparse.Namespace:
     return p.parse_args(script_args() if argv is None else argv)
 
 
+# ── version tolerance ────────────────────────────────────────────────────────────────────────────
+def op_kwargs(op, **kw) -> dict:
+    """Keep only the keyword arguments operator `op` (e.g. bpy.ops.export_scene.gltf) declares in
+    THIS Blender: option names drift between 5.1 and 5.2 (and add-on updates). Dropped options are
+    logged once, so a renamed option degrades to the default instead of crashing the build."""
+    try:
+        props = set(op.get_rna_type().properties.keys())
+    except Exception:
+        return kw
+    keep = {k: v for k, v in kw.items() if k in props}
+    dropped = sorted(set(kw) - set(keep))
+    if dropped:
+        log(f"{op.idname_py() if hasattr(op, 'idname_py') else op}: options not in Blender "
+            f"{bpy.app.version_string}, using defaults: {dropped}")
+    return keep
+
+
 # ── determinism ──────────────────────────────────────────────────────────────────────────────────
 def seed_of(*parts) -> int:
     return zlib.crc32("|".join(str(p) for p in parts).encode("utf-8")) & 0xFFFFFFFF

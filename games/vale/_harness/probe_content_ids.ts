@@ -7,10 +7,11 @@
 // then greps src/** (except src/contracts/) for any of them as a whole quoted string: '…', "…" or `…`.
 // Any hit fails: code must read ids from the catalog, never name them.
 //
-// Not counted as ids (code vocabulary, allowed by §0): ids shorter than 4 characters, and any id
-// that equals an enum/literal value of the zod contract (rule kinds, queue kinds, effect ops,
-// status kinds, slots, clip roles, tags …), harvested from the schema itself so the list cannot
-// drift. Such collisions are printed as notes so content authors can rename them if they want.
+// Not counted as ids (code vocabulary, allowed by §0): ids shorter than 4 characters; any id that
+// equals an enum/literal value of the zod contract (rule kinds, queue kinds, effect ops, status
+// kinds, slots, clip roles, tags …), harvested from the schema itself so the list cannot drift;
+// and the fixed internal mode/queue/map/pool ids of CONTRACT §9.6 (code may name them, never branch
+// on them — that half is review's job). Skipped ids are printed as notes.
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
@@ -23,6 +24,12 @@ const ROOT = resolve(HARNESS, '..');
 const SRC = join(ROOT, 'src');
 const EXCLUDED = [join(SRC, 'contracts')];
 const MIN_LEN = 4;
+/** CONTRACT §9.6 — keep in sync with the contract text */
+const FIXED_INTERNAL_IDS = new Set([
+  'rift', 'bridge', 'fray',
+  'rift_standard', 'rift_quick', 'rift_ranked', 'rift_coop', 'bridge_standard', 'fray_standard', 'custom', 'practice',
+  'map_rift', 'map_bridge', 'map_fray',
+]);
 
 let failures = 0;
 const fail = (msg: string): void => { failures++; console.error(`FAIL ${msg}`); };
@@ -128,13 +135,16 @@ if (existsSync(contentDir)) {
 const vocab = schemaVocabulary();
 const short: string[] = [];
 const vocabHits: string[] = [];
+const fixedHits: string[] = [];
 const checked: string[] = [];
 for (const id of ids.keys()) {
   if (id.length < MIN_LEN) short.push(id);
+  else if (FIXED_INTERNAL_IDS.has(id)) fixedHits.push(id);
   else if (vocab.has(id)) vocabHits.push(id);
   else checked.push(id);
 }
 if (vocabHits.length) console.log(`note: ${vocabHits.length} content id(s) equal contract vocabulary and are not grepped: ${vocabHits.sort().join(', ')}`);
+if (fixedHits.length) console.log(`note: ${fixedHits.length} fixed internal id(s) (§9.6) are not grepped: ${fixedHits.sort().join(', ')}`);
 
 // self-test the matcher so a regex mistake cannot turn this probe into a silent pass
 {
@@ -159,5 +169,5 @@ if (checked.length) {
   }
 }
 
-console.log(`${failures ? 'FAIL' : 'PASS'} probe_content_ids: ${checked.length} ids (${fixtureCount} fixture, ${contentFiles} content/ files; ${short.length} short + ${vocabHits.length} vocabulary skipped) × ${files.length} src files, ${hits} hit(s)`);
+console.log(`${failures ? 'FAIL' : 'PASS'} probe_content_ids: ${checked.length} ids (${fixtureCount} fixture, ${contentFiles} content/ files; ${short.length} short + ${vocabHits.length} vocabulary + ${fixedHits.length} §9.6 skipped) × ${files.length} src files, ${hits} hit(s)`);
 process.exitCode = failures ? 1 : 0;

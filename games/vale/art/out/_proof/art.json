@@ -1,0 +1,38 @@
+{
+  "model": "assets/_proof/_proof_mannequin.glb",
+  "portrait": "assets/_proof/portrait.png",
+  "splash": "assets/_proof/splash.png",
+  "icon": "assets/_proof/icon.png",
+  "height": 1.95,
+  "scale": 1,
+  "runRefSpeed": 3.6,
+  "clips": {
+    "idle": "idle",
+    "run": "run",
+    "attack1": "attack1",
+    "attack2": "attack2",
+    "cast_a1": "cast_a1",
+    "cast_a2": "cast_a2",
+    "cast_a3": "cast_a3",
+    "cast_ult": "cast_ult",
+    "death": "death",
+    "recall": "recall",
+    "idle_lobby": "idle_lobby",
+    "victory": "victory",
+    "channel": "channel",
+    "dash": "dash",
+    "stunned": "stunned"
+  },
+  "sockets": {
+    "origin": "root",
+    "chest": "chest",
+    "head": "head",
+    "hand_r": "hand.R",
+    "hand_l": "hand.L",
+    "weapon_r": "prop.R",
+    "weapon_l": "prop.L",
+    "foot_r": "foot.R",
+    "foot_l": "foot.L"
+  },
+  "accentMaterial": "accent"
+}

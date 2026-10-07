@@ -1,7 +1,8 @@
 // VALE sim — damage, healing, shields, deaths (CONTRACT §5.2).
 //
 // Damage pipeline, in order:
-//   veto (invulnerable / hooks.canDamage) → crit (combat stream; ×critDamage) → mitigation
+//   veto (invulnerable / hooks.canDamage) → crit (combat stream; ×critDamage) → hooks.modifyDamage
+//   (tower ramp, per-kind tuning) → mitigation
 //   (armor for phys, resist for magic: % pen first, then flat pen, never below 0; true skips it)
 //   → shields absorb (soonest-expiring first) → hp → bookkeeping (assists, recap log, stats)
 //   → event → vamp heal (lifesteal on basic attacks, omnivamp on everything) → triggers → death.
@@ -10,12 +11,14 @@
 //
 // Kill credit: the damaging entity is the `killer` in the death event; the fighter credited for
 // it (itself, or a summon's owner) gets the kill. Assists: every other player whose fighter (or
-// summon) damaged or debuffed the victim in the last ASSIST_WINDOW seconds.
+// summon) damaged or debuffed the victim in the last rules.tuning.assistWindow (ASSIST_WINDOW) s.
 // Core counts K/D/A and team kills for fighter deaths; gold/streaks/bounties belong to economy
 // (hooks.death), which may fill `ev.gold` on the event object before the tick ends.
 
-import type { DamageTypeT, PlayerId } from '../contracts/sim.ts';
+import type { DamageTypeT } from '../contracts/catalog.ts';
+import type { PlayerId } from '../contracts/sim.ts';
 import { DamageLog, type EffectCtx, type Entity } from './entity.ts';
+import { computeStats } from './stats.ts';
 import { clearStatuses, removeStatusKind } from './status.ts';
 import { checkLowHp, fireTrigger } from './triggers.ts';
 import type { DeathEvent, World } from './world.ts';
@@ -62,6 +65,8 @@ export interface DamageOpts {
 export function dealDamage(w: World, src: Entity | null, dst: Entity, raw: number, dtype: DamageTypeT, opts: DamageOpts = {}): number {
   if (!dst.alive || !(raw > 0) || dst.kind === 'projectile' || dst.kind === 'zone') return 0;
   if (dst.invulnerable) return 0;
+  if (dst.statsDirty) computeStats(w, dst);
+  if (src && src.statsDirty) computeStats(w, src);
   const veto = w.hooks.canDamage;
   for (let i = 0; i < veto.length; i++) if (!veto[i](w, src, dst)) return 0;
 
@@ -70,6 +75,9 @@ export function dealDamage(w: World, src: Entity | null, dst: Entity, raw: numbe
   else if (opts.canCrit && src && src.stats.crit > 0) crit = w.rng.combat.chance(src.stats.crit);
   let amount = raw;
   if (crit && src) amount *= src.stats.critDamage;
+  const mods = w.hooks.modifyDamage;
+  for (let i = 0; i < mods.length; i++) amount = mods[i](w, src, dst, amount, dtype, !!opts.isAttack);
+  if (!(amount > 0)) return 0;
   const preMit = amount;
   amount = mitigated(src, dst, amount, dtype);
   if (!(amount > 0)) return 0;
@@ -142,6 +150,7 @@ export function dealDamage(w: World, src: Entity | null, dst: Entity, raw: numbe
 /** heal; returns the effective amount. `power`: apply the healer's healShieldPower (not for vamp). */
 export function heal(w: World, src: Entity | null, dst: Entity, amount: number, power = true): number {
   if (!dst.alive || !(amount > 0)) return 0;
+  if (src && src.statsDirty) computeStats(w, src);
   if (power && src) amount *= 1 + src.stats.healShieldPower;
   if (dst.grievous > 0) amount *= 1 - dst.grievous;
   const eff = Math.min(amount, dst.maxHp - dst.hp);
@@ -156,6 +165,7 @@ export function heal(w: World, src: Entity | null, dst: Entity, amount: number, 
 /** add a timed shield; returns the amount granted */
 export function addShield(w: World, src: Entity | null, dst: Entity, amount: number, duration: number): number {
   if (!dst.alive || !(amount > 0) || !(duration > 0)) return 0;
+  if (src && src.statsDirty) computeStats(w, src);
   if (src) amount *= 1 + src.stats.healShieldPower;
   dst.shields.push({ amount, remaining: duration, src: src ? src.id : -1 });
   dst.shield += amount;
@@ -193,12 +203,12 @@ export function noteAssist(w: World, src: Entity | null, dst: Entity): void {
   if (p < dst.assistT.length) dst.assistT[p] = w.time;
 }
 
-/** players (excluding the killer's) who contributed against the victim within ASSIST_WINDOW */
+/** players (excluding the killer's) who contributed against the victim within the assist window */
 export function assistsOf(w: World, victim: Entity, killerPlayer: PlayerId | -1): PlayerId[] {
   const out: PlayerId[] = [];
   const a = victim.assistT;
   if (!a) return out;
-  const since = w.time - ASSIST_WINDOW;
+  const since = w.time - (w.rules.tuning?.assistWindow ?? ASSIST_WINDOW);
   for (let p = 0; p < a.length; p++) {
     if (p === killerPlayer || a[p] < since) continue;
     const pl = w.players[p];
@@ -218,6 +228,7 @@ export function killEntity(w: World, victim: Entity, killer: Entity | null, dept
   victim.targetable = false;
   victim.hp = 0;
   victim.deathTime = w.time;
+  victim.lifeSeq++;
   victim.cast = null; victim.dash = null; victim.height = 0;
   victim.atkWindup = -1; victim.atkTarget = -1; victim.atkAnim = 0;
   victim.vx = 0; victim.vy = 0;
@@ -228,6 +239,7 @@ export function killEntity(w: World, victim: Entity, killer: Entity | null, dept
   if (victim.buffs.length) { victim.buffs.length = 0; victim.statsDirty = true; }
   clearStatuses(w, victim);
   w.hashDirty = true;
+  if (victim.navBlockR > 0) { w.nav.removeObstacle(victim.x, victim.y, victim.navBlockR); victim.navBlockR = 0; }
 
   const credit = w.creditFighter(killer);
   const killerPlayer: PlayerId | -1 = credit && credit.player && credit.team !== victim.team ? credit.player.player : -1;

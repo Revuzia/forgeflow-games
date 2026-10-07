@@ -33,23 +33,28 @@ export function shapeView(s: ShapeT): Entity['shape'] {
   }
 }
 
-/** units inside a shape matching a filter, nearest first then id; fresh array (callers run effects) */
+const shapeCand: Entity[] = [];
+/**
+ * Units inside a shape matching a filter: nearest first then id (areas, maxTargets keeps the
+ * nearest), or plain id order (`byId`, zones). Returns a fresh array — callers run effects over it,
+ * which may query again — but the broad-phase scratch is shared (zones call this every tick).
+ */
 export function unitsInShape(w: World, caster: Entity, shape: ShapeT, ox: number, oy: number, dx: number, dy: number,
-  filter: EffOf<'area'>['filter'], max = Infinity): Entity[] {
-  const cand: Entity[] = [];
-  w.query(ox, oy, shapeReach(shape), cand);
+  filter: EffOf<'area'>['filter'], max = Infinity, byId = false): Entity[] {
+  const n = w.query(ox, oy, shapeReach(shape), shapeCand);
   const out: Entity[] = [];
-  const d2: number[] = [];
-  for (const u of cand) {
+  for (let i = 0; i < n; i++) {
+    const u = shapeCand[i];
     if (!matchesFilter(w, caster, u, filter)) continue;
     if (!inShape(shape, u.x, u.y, u.radius, ox, oy, dx, dy)) continue;
     out.push(u);
   }
-  for (const u of out) d2.push((u.x - ox) * (u.x - ox) + (u.y - oy) * (u.y - oy));
-  const idx = out.map((_, i) => i).sort((a, b) => d2[a] - d2[b] || out[a].id - out[b].id);
-  const sorted = idx.map((i) => out[i]);
-  if (sorted.length > max) sorted.length = max;
-  return sorted;
+  if (out.length > 1) {
+    if (byId) out.sort((a, b) => a.id - b.id);
+    else out.sort((a, b) => ((a.x - ox) * (a.x - ox) + (a.y - oy) * (a.y - oy)) - ((b.x - ox) * (b.x - ox) + (b.y - oy) * (b.y - oy)) || a.id - b.id);
+  }
+  if (out.length > max) out.length = max;
+  return out;
 }
 
 export function doArea(w: World, eff: EffOf<'area'>, ctx: EffectCtx): void {
@@ -90,10 +95,12 @@ export function spawnZone(w: World, eff: EffOf<'zone'>, ctx: EffectCtx): Entity 
   z.stateDuration = duration;
   const zd: ZoneData = {
     eff, ctx: { ...ctx, px: z.x, py: z.y, depth: ctx.depth + 1 }, shape: eff.shape, remaining: duration,
-    delay: eff.delay, tickAcc: 0, follow: eff.follow ? anchorUnit(ctx, eff.at) : null, dirX: ctx.dx, dirY: ctx.dy,
+    delay: eff.delay, tickAcc: 0, follow: null, followLife: 0, dirX: ctx.dx, dirY: ctx.dy,
     inside: new Set(), next: new Set(), active: eff.delay <= 0,
   };
   if (zd.active) zd.tickAcc = eff.interval;
+  const f = eff.follow ? anchorUnit(ctx, eff.at) : null;
+  if (f) { zd.follow = f; zd.followLife = f.lifeSeq; }
   z.zone = zd;
   if (eff.blocks && eff.blocks !== 'none') w.blockingZones.push(z);
   const p = eff.present;
@@ -123,6 +130,20 @@ export function zoneBlocks(w: World, u: Entity, x: number, y: number): boolean {
   return false;
 }
 
+/** a following zone tracks its unit for that unit's current life only (a respawn does not drag it to base) */
+function following(zd: ZoneData): boolean { return !!zd.follow && zd.follow.alive && zd.follow.lifeSeq === zd.followLife; }
+
+/** keep following zones glued to their unit after movement (registered after movementSystem) */
+export function syncFollowingZones(w: World): void {
+  const list = w.entities;
+  for (let i = 0; i < list.length; i++) {
+    const z = list[i];
+    if (z.kind !== 'zone' || z.removed || !z.zone || !following(z.zone)) continue;
+    z.x = z.zone.follow!.x; z.y = z.zone.follow!.y;
+    z.zone.ctx.px = z.x; z.zone.ctx.py = z.y;
+  }
+}
+
 /** the 'zones' phase: scheduled tasks, then every zone */
 export function zoneSystem(w: World): void {
   w.runDueTasks();
@@ -133,9 +154,7 @@ export function zoneSystem(w: World): void {
     const z = list[i];
     if (z.kind !== 'zone' || z.removed || !z.zone) continue;
     const zd = z.zone;
-    if (zd.follow) {
-      if (zd.follow.alive) { z.x = zd.follow.x; z.y = zd.follow.y; zd.ctx.px = z.x; zd.ctx.py = z.y; }
-    }
+    if (following(zd)) { z.x = zd.follow!.x; z.y = zd.follow!.y; zd.ctx.px = z.x; zd.ctx.py = z.y; }
     if (!zd.active) {
       zd.delay -= dt;
       if (zd.delay > 1e-9) continue;
@@ -144,8 +163,7 @@ export function zoneSystem(w: World): void {
     }
     z.stateTime += dt;
     // membership + onEnter
-    const inside = unitsInShape(w, zd.ctx.caster, zd.shape, z.x, z.y, zd.dirX, zd.dirY, zd.eff.filter);
-    inside.sort((a, b) => a.id - b.id);
+    const inside = unitsInShape(w, zd.ctx.caster, zd.shape, z.x, z.y, zd.dirX, zd.dirY, zd.eff.filter, Infinity, true);
     const next = zd.next; next.clear();
     for (const u of inside) {
       next.add(u.id);

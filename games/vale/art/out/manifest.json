@@ -1,0 +1,253 @@
+{
+  "format": 1,
+  "generator": "art/build.py check",
+  "contract": "CONTRACT \u00a712",
+  "glb": [
+    {
+      "path": "art/out/_proof/_proof_mannequin.glb",
+      "kind": "fighter",
+      "id": "_proof_mannequin",
+      "bytes": 3481524,
+      "tris": 24650,
+      "joints": 28,
+      "clips": [
+        {
+          "name": "attack1",
+          "duration": 0.8333,
+          "frames30": 25,
+          "channels": 24
+        },
+        {
+          "name": "attack2",
+          "duration": 0.8333,
+          "frames30": 25,
+          "channels": 24
+        },
+        {
+          "name": "cast_a1",
+          "duration": 1,
+          "frames30": 30,
+          "channels": 24
+        },
+        {
+          "name": "cast_a2",
+          "duration": 1,
+          "frames30": 30,
+          "channels": 24
+        },
+        {
+          "name": "cast_a3",
+          "duration": 1.1667,
+          "frames30": 35,
+          "channels": 24
+        },
+        {
+          "name": "cast_ult",
+          "duration": 1.6667,
+          "frames30": 50,
+          "channels": 24
+        },
+        {
+          "name": "channel",
+          "duration": 1.3333,
+          "frames30": 40,
+          "channels": 24
+        },
+        {
+          "name": "dash",
+          "duration": 0.5,
+          "frames30": 15,
+          "channels": 25
+        },
+        {
+          "name": "death",
+          "duration": 1.6667,
+          "frames30": 50,
+          "channels": 24
+        },
+        {
+          "name": "idle",
+          "duration": 2.4,
+          "frames30": 72,
+          "channels": 24
+        },
+        {
+          "name": "idle_lobby",
+          "duration": 3.2,
+          "frames30": 96,
+          "channels": 24
+        },
+        {
+          "name": "recall",
+          "duration": 2,
+          "frames30": 60,
+          "channels": 25
+        },
+        {
+          "name": "run",
+          "duration": 0.6667,
+          "frames30": 20,
+          "channels": 26
+        },
+        {
+          "name": "stunned",
+          "duration": 1.3333,
+          "frames30": 40,
+          "channels": 24
+        },
+        {
+          "name": "victory",
+          "duration": 2,
+          "frames30": 60,
+          "channels": 24
+        }
+      ],
+      "materials": [
+        "body",
+        "accent"
+      ],
+      "textures": [
+        {
+          "name": "_proof_mannequin_normal",
+          "mime": "image/png",
+          "size": [
+            1024,
+            1024
+          ]
+        },
+        {
+          "name": "_proof_mannequin_orm",
+          "mime": "image/png",
+          "size": [
+            1024,
+            1024
+          ]
+        },
+        {
+          "name": "_proof_mannequin_base",
+          "mime": "image/jpeg",
+          "size": [
+            1024,
+            1024
+          ]
+        }
+      ],
+      "extras": {
+        "vale_rig": "VALE_BIPED_1",
+        "vale_kind": "fighter",
+        "vale_id": "_proof_mannequin",
+        "vale_fighter": "_proof_mannequin",
+        "vale_height": 1.85,
+        "vale_run_ref_speed": 3.6
+      },
+      "ok": true,
+      "errors": [],
+      "warnings": []
+    },
+    {
+      "path": "art/out/_proof/_proof_mannequin_ember.glb",
+      "kind": "skin",
+      "id": "_proof_mannequin_ember",
+      "bytes": 3235148,
+      "tris": 24650,
+      "joints": 28,
+      "clips": [],
+      "materials": [
+        "accent",
+        "body"
+      ],
+      "textures": [
+        {
+          "name": "_proof_mannequin_ember_normal",
+          "mime": "image/png",
+          "size": [
+            1024,
+            1024
+          ]
+        },
+        {
+          "name": "_proof_mannequin_ember_orm",
+          "mime": "image/png",
+          "size": [
+            1024,
+            1024
+          ]
+        },
+        {
+          "name": "_proof_mannequin_ember_base",
+          "mime": "image/jpeg",
+          "size": [
+            1024,
+            1024
+          ]
+        }
+      ],
+      "extras": {
+        "vale_rig": "VALE_BIPED_1",
+        "vale_kind": "skin",
+        "vale_id": "_proof_mannequin_ember",
+        "vale_fighter": "_proof_mannequin",
+        "vale_height": 1.85,
+        "vale_run_ref_speed": 3.6
+      },
+      "ok": true,
+      "errors": [],
+      "warnings": []
+    }
+  ],
+  "images": [
+    {
+      "path": "art/out/_proof/_proof_mannequin_ember_portrait.png",
+      "bytes": 342880,
+      "size": [
+        512,
+        512
+      ]
+    },
+    {
+      "path": "art/out/_proof/_proof_mannequin_ember_splash.png",
+      "bytes": 1135367,
+      "size": [
+        1600,
+        900
+      ]
+    },
+    {
+      "path": "art/out/_proof/icon.png",
+      "bytes": 31958,
+      "size": [
+        128,
+        128
+      ]
+    },
+    {
+      "path": "art/out/_proof/portrait.png",
+      "bytes": 354911,
+      "size": [
+        512,
+        512
+      ]
+    },
+    {
+      "path": "art/out/_proof/sky.hdr",
+      "bytes": 1752096,
+      "size": [
+        2048,
+        1024
+      ]
+    },
+    {
+      "path": "art/out/_proof/splash.png",
+      "bytes": 1227817,
+      "size": [
+        1600,
+        900
+      ]
+    }
+  ],
+  "summary": {
+    "glb": 2,
+    "failed": 0,
+    "bytes_total": 11561701
+  }
+}

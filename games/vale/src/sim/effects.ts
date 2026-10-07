@@ -16,8 +16,9 @@
 //
 // Defaults worth knowing: filters default to enemies + fighters/minions/monsters/summons (never
 // structures, wards or pickups unless `structures: true`); `repeat` runs its first iteration
-// immediately and the rest every `interval` seconds while the caster lives; a `cooldown` op's
-// `percent` reduces the REMAINING cooldown; `gold` credits the caster's player.
+// immediately and the rest every `interval` seconds while the caster lives (a death ends it for
+// good, even if the caster respawns before the next one); a `cooldown` op's `percent` reduces the
+// REMAINING cooldown; `gold` credits the caster's player, × goldMult and rounded.
 
 import type { ConditionT, EffectT, ScalingT } from '../contracts/catalog.ts';
 import type { EffectCtx, Entity, PresentT, SourceRef } from './entity.ts';
@@ -28,6 +29,7 @@ import { addResource, addShield, dealDamage, heal } from './combat.ts';
 import { doBlink, displaceUnit, startDash } from './movement.ts';
 import { spawnProjectiles } from './projectiles.ts';
 import { getScript } from './scripts/index.ts';
+import { computeStats } from './stats.ts';
 import { summonUnits } from './spawn.ts';
 import {
   addCounter, applyBuff, applyMark, applyStatus, counterValue, hasStatus, markStacks, setForm, takeMark,
@@ -177,6 +179,7 @@ export function runEffects(w: World, list: readonly EffectT[] | undefined, ctx: 
 
 export function runEffect(w: World, eff: EffectT, ctx: EffectCtx): void {
   const c = ctx.caster;
+  if (c.statsDirty) computeStats(w, c); // ratios read the caster's current stats
   switch (eff.op) {
     case 'damage': {
       const t = resolveTo(ctx, eff.to);
@@ -246,8 +249,10 @@ export function runEffect(w: World, eff: EffectT, ctx: EffectCtx): void {
       if (eff.count <= 0) return;
       runEffects(w, eff.effects, ctx);
       if (eff.interval <= 0) { for (let i = 1; i < eff.count; i++) runEffects(w, eff.effects, ctx); return; }
+      // later iterations belong to this life of the caster: dying ends them, even if it respawns
+      const life = c.lifeSeq;
       for (let i = 1; i < eff.count; i++) {
-        w.schedule(eff.interval * i, () => { if (c.alive) runEffects(w, eff.effects, ctx); });
+        w.schedule(eff.interval * i, () => { if (c.alive && c.lifeSeq === life) runEffects(w, eff.effects, ctx); });
       }
       return;
     }
@@ -259,7 +264,11 @@ export function runEffect(w: World, eff: EffectT, ctx: EffectCtx): void {
     }
     case 'gold': {
       const f = w.creditFighter(c);
-      if (f && f.player) grantGold(w, f.player.player, eff.amount, 'passive', c.x, c.y);
+      // a map pickup's grant list runs with the pickup's unit id as its source
+      const reason: GoldReason = w.idx.units.get(ctx.source.id)?.kind === 'pickup' ? 'pickup' : 'passive';
+      // every gold amount is whole: × goldMult, then rounded (CONTRACT §5.6)
+      const amount = Math.round(eff.amount * w.rules.goldMult);
+      if (f && f.player && amount !== 0) grantGold(w, f.player.player, amount, reason, c.x, c.y);
       return;
     }
     case 'script': {

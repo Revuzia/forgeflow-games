@@ -100,9 +100,22 @@ class G:
 
     @property
     def obj(self):
+        """Object-space texture coordinate. When a mesh carries the `vale_obj` point attribute
+        (bake.py writes it before exploding/joining bake sources) that position is used instead,
+        so procedural textures stay put while parts are moved apart for baking."""
         if self._coord is None:
-            self._coord = self.n("ShaderNodeTexCoord")
-        return self._coord.outputs["Object"]
+            tc = self.n("ShaderNodeTexCoord")
+            at = self.n("ShaderNodeAttribute")
+            at.attribute_name = "vale_obj"
+            has = self.n("ShaderNodeAttribute")
+            has.attribute_name = "vale_has"
+            mx = self.n("ShaderNodeMix")
+            mx.data_type = "VECTOR"
+            self.link(has.outputs["Fac"], mx.inputs[0])
+            self.link(tc.outputs["Object"], mx.inputs[4])
+            self.link(at.outputs["Vector"], mx.inputs[5])
+            self._coord = mx
+        return self._coord.outputs[1]
 
     @property
     def geo(self):
@@ -199,7 +212,7 @@ class G:
         self.link(vec if vec is not None else self.obj, s.inputs[0])
         return s.outputs["Z"]
 
-    def ao(self, distance=0.05, samples=16, local=True):
+    def ao(self, distance=0.05, samples=8, local=True):
         a = self.n("ShaderNodeAmbientOcclusion")
         a.samples = samples
         a.only_local = local
@@ -286,8 +299,8 @@ def edge_cavity(g: G, color, edge_col, cavity_col, edge=0.6, cavity=0.75, ao_dis
 
 
 # ── material library ────────────────────────────────────────────────────────────────────────────
-def painted_metal(name: str, pal: dict, key: str = "metal", grad=None, metallic: float = 0.9,
-                  rough: float = 0.38, brushed: float = 1.0, edge: float = 0.85, cavity: float = 0.8,
+def painted_metal(name: str, pal: dict, key: str = "metal", grad=None, metallic: float = 0.8,
+                  rough: float = 0.46, brushed: float = 1.0, edge: float = 0.85, cavity: float = 0.8,
                   hammered: float = 0.0) -> bpy.types.Material:
     m, g = _new(name)
     base = shade_hex(pal[key])
@@ -413,8 +426,8 @@ def standard_set(pal: dict, grad: dict | None = None, prefix: str = "") -> dict:
     grad = grad if grad is not None else dict(DEFAULT_GRADIENT)
     return {
         "metal": painted_metal(prefix + "metal", pal, "metal", grad),
-        "trim": painted_metal(prefix + "trim", pal, "trim", grad, metallic=1.0, rough=0.32, brushed=0.6, edge=1.0),
-        "dark_metal": painted_metal(prefix + "dark_metal", pal, "metal_dark", grad, metallic=0.85, rough=0.45),
+        "trim": painted_metal(prefix + "trim", pal, "trim", grad, metallic=0.9, rough=0.38, brushed=0.6, edge=1.0),
+        "dark_metal": painted_metal(prefix + "dark_metal", pal, "metal_dark", grad, metallic=0.75, rough=0.5),
         "cloth": cloth(prefix + "cloth", pal, "cloth", grad),
         "cloth2": cloth(prefix + "cloth2", pal, "cloth2", grad),
         "under": cloth(prefix + "under", pal, "under", grad, weave_scale=180.0),

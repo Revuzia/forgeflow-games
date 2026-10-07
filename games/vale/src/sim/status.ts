@@ -31,7 +31,7 @@ import {
 import { interruptCast, swapSlotDef } from './abilities.ts';
 import { noteAssist } from './combat.ts';
 import { interruptDash } from './movement.ts';
-import { markStatsDirty } from './stats.ts';
+import { computeStats, markStatsDirty } from './stats.ts';
 import { fireTrigger } from './triggers.ts';
 import { ranked, resolveScaling, runEffects } from './effects.ts';
 import type { World } from './world.ts';
@@ -112,6 +112,7 @@ export function applyStatus(w: World, src: Entity | null, dst: Entity, kind: Sta
   if (!dst.alive || !(duration > 0)) return false;
   if ((dst.ccMask & ST_UNSTOPPABLE) !== 0 && UNSTOPPABLE_IGNORES.has(kind)) return false;
   const hostile = src !== null && w.relation(src, dst) === 2;
+  if (dst.statsDirty) computeStats(w, dst);
   if (hostile && TENACITY_KINDS.has(kind)) duration *= 1 - dst.stats.tenacity;
   if (!(duration > 0)) return false;
   const power = opts.power ?? DEFAULT_STATUS_POWER[kind] ?? 1;

@@ -10,8 +10,9 @@
 // Targets: taunt forces the taunter; an attack order chases its target; attack-move and idle
 // units (autoAttack) acquire the best enemy in range — lowest acquireScore (hooks.acquireScore,
 // default: nearest, structures and wards last). Units that are moving, casting, dashing,
-// disarmed, feared or hard-CC'd do not start attacks; losing the target or getting CC'd during
-// the windup cancels the attack (the cooldown still runs, as with any started attack).
+// disarmed, feared or hard-CC'd do not start attacks; losing the target (dead or untargetable) or
+// getting CC'd during the windup cancels the attack (the cooldown still runs, as with any started
+// attack).
 
 import { TICK_DT } from '../contracts/sim.ts';
 import type { EffectT } from '../contracts/catalog.ts';
@@ -149,7 +150,7 @@ export function attackSystem(w: World): void {
     if (e.atkAnim > 0) e.atkAnim -= dt;
     if (e.atkWindup >= 0) {
       const t = w.live(e.atkTarget);
-      if (!t || !canAttack(e) || e.cast || e.dash) { e.atkWindup = -1; e.atkAnim = 0; continue; }
+      if (!t || !t.targetable || !canAttack(e) || e.cast || e.dash) { e.atkWindup = -1; e.atkAnim = 0; continue; }
       e.atkWindup -= dt;
       if (e.atkWindup <= 1e-9) { e.atkWindup = -1; releaseAttack(w, e, t); }
       continue;

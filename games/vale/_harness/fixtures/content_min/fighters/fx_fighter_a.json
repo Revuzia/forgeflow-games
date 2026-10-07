@@ -119,7 +119,7 @@
             }
           ],
           "present": {
-            "vfx": "fx_vfx_hit",
+            "vfx": "fx_fighter_a_a1_hit",
             "sfx": "fx_cue_hit"
           }
         }
@@ -247,7 +247,7 @@
             }
           ],
           "present": {
-            "vfx": "fx_vfx_hit",
+            "vfx": "fx_fighter_a_a1_hit",
             "telegraph": "everyone"
           }
         },

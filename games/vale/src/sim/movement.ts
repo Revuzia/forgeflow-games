@@ -4,9 +4,14 @@
 // Goals: a move order walks to its point; attack/cast orders chase until in range (attack.ts and
 // abilities.ts start the action once in range); taunt chases the taunter; fear walks away from
 // its source. Units do not walk while winding up an attack, while casting (unless
-// canMoveWhileCasting / channel.canMove), while rooted or hard-CC'd.
+// canMoveWhileCasting / channel.canMove), while rooted or hard-CC'd. A move order cancels an
+// attack windup and a channel (unless channel.canMove) but never a cast windup: the cast
+// resolves and the walk starts after it.
 // Paths: straight line when line-of-walk holds (rechecked every few ticks), else A* + string
-// pulling (nav.ts); recomputed when the goal moves > REPATH_DIST or progress stalls.
+// pulling (nav.ts); recomputed when the goal moves > REPATH_DIST or progress stalls. While
+// walking, waypoints that are already in line of walk are skipped, and a walker that makes no
+// progress for NO_PROGRESS_TICKS (jostled in a crowd, a body parked on a corner node) treats a
+// near waypoint as reached or recomputes its route.
 // Separation: overlapping mobile units push each other apart softly (half the overlap per tick,
 // less when idle); structures are hard circles. Walls win: a step into a blocked cell slides
 // along the free axis or stops. Blocking zones act like walls for the units they block.
@@ -21,7 +26,7 @@
 
 import { TICK_DT } from '../contracts/sim.ts';
 import type { ActionState } from '../contracts/sim.ts';
-import { attackRange, attackable, inAttackRange } from './attack.ts';
+import { attackable, inAttackRange } from './attack.ts';
 import { castInRange, interruptCast } from './abilities.ts';
 import { matchesFilter, onEffectHit, runEffects, withHit } from './effects.ts';
 import {
@@ -39,20 +44,26 @@ import { zoneBlocks } from './zones.ts';
 export const REPATH_DIST = 1;
 /** ticks between straight-line re-validation of a direct route */
 const DIRECT_RECHECK_TICKS = 10;
+/** ticks between runtime waypoint skips (line-of-walk to the waypoint after the current one) */
+const SKIP_CHECK_TICKS = 5;
+/** ticks of walking without progress before the walker gives up on its waypoint / route */
+const NO_PROGRESS_TICKS = 15;
+/** a blocked waypoint closer than this (m) is treated as reached */
+const WAYPOINT_GIVE_UP = 2;
 /** peak height (m) of airborne arcs */
 const KNOCK_ARC = 1.2;
 const near: Entity[] = [];
+const passT: number[] = [];
+const passU: Entity[] = [];
 const tmp = { x: 0, y: 0 };
 
 // ── orders ──────────────────────────────────────────────────────────────────────────────────────
 export function issueMove(w: World, e: Entity, x: number, y: number, attackMove: boolean): void {
   const m = w.mapDef.size;
   x = Math.max(0, Math.min(m[0] - 1e-3, x)); y = Math.max(0, Math.min(m[1] - 1e-3, y));
+  // a windup always finishes (the walk starts after release); a channel ends unless it allows moving
   const cs = e.cast;
-  if (cs) {
-    const keep = cs.phase === 'windup' ? !!cs.def.canMoveWhileCasting : !!cs.def.channel?.canMove;
-    if (!keep) interruptCast(w, e, false);
-  }
+  if (cs && cs.phase === 'channel' && !cs.def.channel?.canMove) interruptCast(w, e, false);
   if (!attackMove) e.atkWindup = -1;
   e.order = attackMove ? ORDER_ATTACK_MOVE : ORDER_MOVE;
   e.orderX = x; e.orderY = y; e.orderTarget = -1; e.pendingSlot = -1;
@@ -158,19 +169,24 @@ function advanceDash(w: World, e: Entity): void {
     const mx = (px + nx) * 0.5, my = (py + ny) * 0.5;
     const half = Math.sqrt((nx - px) * (nx - px) + (ny - py) * (ny - py)) * 0.5;
     const n = w.query(mx, my, half + width, near);
-    // resolve in path order
-    const found: { t: number; u: Entity }[] = [];
+    // resolve in path order (t, then id); scratch arrays, copied only when something was passed
+    passT.length = 0; passU.length = 0;
     for (let i = 0; i < n; i++) {
       const u = near[i];
       if (u === e || ds.passed.includes(u.id)) continue;
       if (!matchesFilter(w, e, u, eff.passFilter)) continue;
       const rr = width + u.radius;
       if (segPointDist2(px, py, nx, ny, u.x, u.y) > rr * rr) continue;
-      const th = segmentCircleT(px, py, nx, ny, u.x, u.y, rr);
-      found.push({ t: th < 0 ? 0 : th, u });
+      const th0 = segmentCircleT(px, py, nx, ny, u.x, u.y, rr);
+      const th = th0 < 0 ? 0 : th0;
+      let j = passT.length;
+      passT.push(th); passU.push(u);
+      while (j > 0 && (passT[j - 1] > th || (passT[j - 1] === th && passU[j - 1].id > u.id))) { passT[j] = passT[j - 1]; passU[j] = passU[j - 1]; j--; }
+      passT[j] = th; passU[j] = u;
     }
-    found.sort((a, b) => a.t - b.t || a.u.id - b.u.id);
-    for (const { t: th, u } of found) {
+    const ts = passT.length > 0 ? passT.slice() : passT, us = passU.length > 0 ? passU.slice() : passU; // effects below may re-enter
+    for (let k = 0; k < us.length; k++) {
+      const th = ts[k], u = us[k];
       ds.passed.push(u.id);
       if (eff.stopOnFirstHit) {
         // stop just short of the unit
@@ -211,7 +227,8 @@ export function doBlink(w: World, eff: EffOf<'blink'>, ctx: EffectCtx): void {
     tx = l > 1e-6 ? e.x + (dx / l) * d : e.x; ty = l > 1e-6 ? e.y + (dy / l) * d : e.y;
   }
   if (!w.nav.walkable(tx, ty)) {
-    if (!w.nav.nearestWalkable(tx, ty, tmp)) return;
+    // nearest open spot; a tie goes to the caster's side of the wall
+    if (!w.nav.nearestWalkable(tx, ty, tmp, 64, e.x, e.y)) return;
     tx = tmp.x; ty = tmp.y;
   }
   const fx = e.x, fy = e.y;
@@ -317,7 +334,7 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   let budget = speed * TICK_DT;
   if (budget <= 0) return;
   const nav = w.nav;
-  const r = Math.min(e.radius, nav.cell * 0.9);
+  const r = Math.min(e.radius, nav.cell * 0.45);
   const goalMoved = !(Math.abs(gx - e.pathGoalX) + Math.abs(gy - e.pathGoalY) <= REPATH_DIST);
   if (goalMoved || (e.path.length === 0 && --e.pathCheck <= 0)) {
     e.pathGoalX = gx; e.pathGoalY = gy;
@@ -325,6 +342,16 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
     if (nav.lineOfWalk(e.x, e.y, gx, gy, r)) { e.path.length = 0; e.pathCheck = DIRECT_RECHECK_TICKS; }
     else if (!nav.findPath(e.x, e.y, gx, gy, e.path, r)) { e.path.length = 0; e.pathCheck = DIRECT_RECHECK_TICKS; return; }
   }
+  // runtime string pulling: crowds push walkers off the pulled line, and a body parked on a corner
+  // node would block everyone aiming at it — so skip every waypoint we can already walk past
+  if (e.path.length > 0 && --e.skipCheck <= 0) {
+    e.skipCheck = SKIP_CHECK_TICKS;
+    while ((e.pathIdx + 1) * 2 < e.path.length && nav.lineOfWalk(e.x, e.y, e.path[e.pathIdx * 2 + 2], e.path[e.pathIdx * 2 + 3], r)) e.pathIdx++;
+  }
+  const onPath = e.path.length > 0 && e.pathIdx * 2 < e.path.length;
+  const aimX = onPath ? e.path[e.pathIdx * 2] : gx, aimY = onPath ? e.path[e.pathIdx * 2 + 1] : gy;
+  const aimD0 = Math.sqrt((aimX - e.x) * (aimX - e.x) + (aimY - e.y) * (aimY - e.y));
+  const want = Math.min(budget, aimD0);
   let x = e.x, y = e.y;
   // walk the waypoint list within this tick's budget
   for (let guard = 0; guard < 4 && budget > 1e-9; guard++) {
@@ -343,16 +370,27 @@ function stepToward(w: World, e: Entity, gx: number, gy: number): void {
   // soft separation, then walls, then blocking zones
   separate(w, e, x, y, 0.5);
   let nx = tmp.x, ny = tmp.y;
-  if (!nav.walkable(nx, ny)) {
+  // a unit standing in a blocked cell (an obstacle appeared under it) may walk out freely
+  if (nav.walkable(e.x, e.y) && !nav.walkable(nx, ny)) {
     if (nav.walkable(nx, e.y)) ny = e.y;
     else if (nav.walkable(e.x, ny)) nx = e.x;
     else if (nav.walkable(x, y)) { nx = x; ny = y; }
     else { nx = e.x; ny = e.y; e.pathGoalX = NaN; }
   }
   if (w.blockingZones.length > 0 && zoneBlocks(w, e, nx, ny) && !zoneBlocks(w, e, e.x, e.y)) { nx = e.x; ny = e.y; }
+  // progress watchdog: jostled in place (separation cancelling the step) for NO_PROGRESS_TICKS →
+  // a near waypoint counts as reached, otherwise the route is recomputed from here
+  const aimD1 = Math.sqrt((aimX - nx) * (aimX - nx) + (aimY - ny) * (aimY - ny));
+  if (want > 1e-6 && aimD0 - aimD1 < want * 0.25) {
+    if (++e.noProgress >= NO_PROGRESS_TICKS) {
+      e.noProgress = 0;
+      if (onPath && aimD1 < WAYPOINT_GIVE_UP && (e.pathIdx + 1) * 2 < e.path.length) e.pathIdx++;
+      else { e.pathGoalX = NaN; e.pathCheck = 0; }
+    }
+  } else e.noProgress = 0;
   const mdx = nx - e.x, mdy = ny - e.y;
   const moved = Math.sqrt(mdx * mdx + mdy * mdy);
-  if (moved < 1e-6) { e.pathGoalX = NaN; return; } // stuck: repath next tick
+  if (moved < 1e-6) { if (--e.pathCheck <= 0) { e.pathGoalX = NaN; e.pathCheck = DIRECT_RECHECK_TICKS; } return; } // stuck: repath soon
   e.facing = Math.atan2(mdy, mdx);
   e.vx = mdx / TICK_DT; e.vy = mdy / TICK_DT;
   setPos(w, e, nx, ny);
@@ -432,5 +470,3 @@ export function finalizeStates(w: World): void {
   }
 }
 
-/** attackRange re-exported for unit AI convenience */
-export { attackRange };

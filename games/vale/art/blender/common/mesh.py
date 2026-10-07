@@ -457,7 +457,7 @@ def skin_body(nodes, edges, radii, name="skin_body", col=None, subdiv: int = 2, 
     me.from_pydata([tuple(n) for n in nodes], [tuple(e) for e in edges], [])
     obj = scene.new_object(name, me, col)
     m = obj.modifiers.new("Skin", "SKIN")
-    m.branch_smoothness = branch_smooth
+    m.branch_smoothing = branch_smooth
     m.use_smooth_shade = True
     for i, sv in enumerate(me.skin_vertices[0].data):
         r = radii[i]
@@ -639,7 +639,8 @@ def plate(proj: Projection, rows, target=None, offset: float = 0.015, thickness:
           rim: float = 0.0, rim_height: float = 0.004, bevel_w: float = 0.004, bevel_segments: int = 1,
           row_step: float = 0.03,
           wrap: bool = False, far: float = 1.0, name: str = "plate", col=None,
-          weighted: bool = True, mat=None, rim_mat=None) -> bpy.types.Object:
+          weighted: bool = True, mat=None, rim_mat=None, inner: bool = False,
+          rows_n: int | None = None) -> bpy.types.Object:
     """Armour plate conformed to `target` (a BVHTree or object list) along `proj` rays.
 
     rows: [(v, u_min, u_max), ...] top to bottom (outline as per-row u ranges; values are
@@ -647,7 +648,8 @@ def plate(proj: Projection, rows, target=None, offset: float = 0.015, thickness:
     r = (surface distance + offset) smoothed `smooth_iters` times (rigid-looking metal), never
         closer than `offset * 0.6` to the surface, never below `min_r`; `r_fn(u, v, r)` may
         replace it (pure parametric shapes) and `shape_fn(u, v, r)` adds relief (ridges, flares).
-    The shell is solidified inward by `thickness`; `rim` > 0 raises a border band of that width
+    The shell gets an inward edge wall of `thickness` (inner=True adds the hidden inner shell too,
+    for plates seen from behind); `rim` > 0 raises a border band of that width
     (classic plate edge); edges get a bevel; normals are face-weighted (crisp hard surface).
     """
     tree = target if isinstance(target, BVHTree) or target is None else bvh_of(target)
@@ -655,6 +657,7 @@ def plate(proj: Projection, rows, target=None, offset: float = 0.015, thickness:
     vs = [r[0] for r in rows]
     # resample the outline to a regular number of rows
     nv = max(4, int(abs(vs[-1] - vs[0]) / row_step) + 1) if isinstance(proj, Cylindrical) else max(4, int(n_rows * 1.5))
+    nv = rows_n or nv
     tv = [i / (nv - 1) for i in range(nv)]
     keys_v = [(i / (n_rows - 1), r[0]) for i, r in enumerate(rows)]
     keys_u0 = [(i / (n_rows - 1), r[1]) for i, r in enumerate(rows)]
@@ -699,7 +702,7 @@ def plate(proj: Projection, rows, target=None, offset: float = 0.015, thickness:
     bm = bmesh.new()
     verts = []
     for i in range(nr):
-        row = []
+        rays, rs = [], []
         for j in range(nc):
             u, v = grid_uv[i][j]
             r = grid_r[i][j]
@@ -707,14 +710,20 @@ def plate(proj: Projection, rows, target=None, offset: float = 0.015, thickness:
                 r = r_fn(u, v, r)
             if shape_fn:
                 r = r + shape_fn(u, v, r)
-            o, d = proj.ray(u, v)
-            row.append(bm.verts.new(o + d * max(r, 1e-4)))
-        verts.append(row)
+            rays.append(proj.ray(u, v))
+            rs.append(max(r, 1e-4))
+        # a pole row (every ray identical, e.g. Spherical v = 0) must collapse to ONE apex: per-column
+        # radii along the same ray otherwise leave collinear sliver faces with flipped shading normals
+        d0 = rays[0][1]
+        if all((o - rays[0][0]).length < 1e-7 and d.dot(d0) > 1 - 1e-9 for o, d in rays):
+            rs = [sum(rs) / len(rs)] * len(rs)
+        verts.append([bm.verts.new(o + d * r) for (o, d), r in zip(rays, rs)])
     for i in range(nr - 1):
         for j in range(nc if wrap else nc - 1):
             j2 = (j + 1) % nc
             bm.faces.new((verts[i][j], verts[i][j2], verts[i + 1][j2], verts[i + 1][j]))
     bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bmesh.ops.dissolve_degenerate(bm, dist=1e-6, edges=bm.edges[:])
     # outward orientation: normals should point away from the projection centre
     bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
     bm.faces.ensure_lookup_table()
@@ -732,7 +741,14 @@ def plate(proj: Projection, rows, target=None, offset: float = 0.015, thickness:
         obj.data.materials.append(mat)
         if rim_mat is not None:
             obj.data.materials.append(rim_mat)
-    solidify(obj, thickness, offset=-1.0, even=False)
+    m = obj.modifiers.new("Solidify", "SOLIDIFY")
+    m.thickness = thickness
+    m.offset = -1.0
+    m.use_rim = True
+    m.use_rim_only = not inner          # game plates: no hidden inner shell (halves the tris)
+    m.use_even_offset = False
+    m.use_quality_normals = True
+    apply_modifiers(obj)
     if bevel_w > 0:
         bevel(obj, bevel_w, bevel_segments, angle=40)
     shade(obj, True)
@@ -994,3 +1010,103 @@ def transfer_weights(src, dst) -> None:
     scene.select_only([dst], dst)
     bpy.ops.object.modifier_apply(modifier=m.name)
     limit_weights(dst)
+
+
+def conform_under_armour(body, covers, reach: float = 0.075, cull_reach: float = 0.06, tilt: float = 32.0,
+                         cull: bool = True, keep_ring: int = 1) -> dict:
+    """Make the body move WITH the armour that hides it, and drop body faces nobody can see.
+
+    Bone-heat weights on the body and the plates' own (rigid / zblend / dblend) weights disagree
+    near joints, so in a pose the under-suit pushes through a plate (e.g. the shoulder blades
+    through the back plate when the arms come forward). For every body vertex five rays (the
+    normal + four tilted by `tilt` degrees) are cast against the covering parts in the rest pose:
+      * coverage = share of rays that hit a cover within `reach` metres; vertices with coverage
+        >= 0.6 blend their weights toward the covering polygon's weights (fully at 1.0), so skin
+        and plate share one deformation;
+      * faces whose vertices are ALL fully covered within `cull_reach` are deleted (they can never
+        be seen, and their triangles are free for visible detail), except a `keep_ring` of faces
+        around everything still visible so plate gaps never show daylight.
+    `covers`: objects already bound (vertex groups set). Returns stats.
+    """
+    from mathutils.bvhtree import BVHTree
+    verts, polys, owner = [], [], []
+    for ci, o in enumerate(covers):
+        base = len(verts)
+        mw = o.matrix_world
+        verts.extend(mw @ v.co for v in o.data.vertices)
+        for p in o.data.polygons:
+            polys.append([base + i for i in p.vertices])
+            owner.append((ci, tuple(p.vertices)))
+    if not polys:
+        return {"covered": 0, "culled_faces": 0}
+    tree = BVHTree.FromPolygons(verts, polys)
+    cover_w = []
+    for o in covers:
+        names = {g.index: g.name for g in o.vertex_groups}
+        cover_w.append([{names[g.group]: g.weight for g in v.groups if g.weight > 1e-4} for v in o.data.vertices])
+    me = body.data
+    mw = body.matrix_world
+    nmat = mw.to_3x3().inverted().transposed()
+    groups = {g.name: g for g in body.vertex_groups}
+    gname = {g.index: g.name for g in body.vertex_groups}
+    full = [False] * len(me.vertices)
+    covered = 0
+    ct, st = math.cos(math.radians(tilt)), math.sin(math.radians(tilt))
+    for v in me.vertices:
+        p = mw @ v.co
+        n = (nmat @ v.normal).normalized()
+        t1 = n.orthogonal().normalized()
+        t2 = n.cross(t1)
+        dirs = [n] + [(n * ct + t * st).normalized() for t in (t1, -t1, t2, -t2)]
+        hits, near, best = 0, 0, None
+        for d in dirs:
+            loc, _nrm, idx, dist = tree.ray_cast(p + d * 1e-4, d, reach)
+            if loc is None:
+                continue
+            hits += 1
+            near += dist <= cull_reach
+            if best is None or dist < best[0]:
+                best = (dist, idx)
+        cov = hits / len(dirs)
+        full[v.index] = near == len(dirs)
+        if cov < 0.6 or best is None:
+            continue
+        ci, pv = owner[best[1]]
+        tw: dict[str, float] = {}
+        for vi in pv:
+            for b, w in cover_w[ci][vi].items():
+                tw[b] = tw.get(b, 0.0) + w / len(pv)
+        if not tw:
+            continue
+        s = smoothstep(0.6, 1.0, cov)
+        cur = {gname[g.group]: g.weight for g in v.groups if g.weight > 1e-4}
+        new = {b: cur.get(b, 0.0) * (1 - s) + tw.get(b, 0.0) * s for b in set(cur) | set(tw)}
+        tot = sum(new.values()) or 1.0
+        for g in list(v.groups):
+            body.vertex_groups[g.group].remove([v.index])
+        for b, w in new.items():
+            if w / tot > 1e-3:
+                if b not in groups:
+                    groups[b] = body.vertex_groups.new(name=b)
+                    gname[groups[b].index] = b
+                groups[b].add([v.index], w / tot, "REPLACE")
+        covered += 1
+    limit_weights(body)
+    culled = 0
+    if cull:
+        bm = obj_bm(body)
+        bm.faces.ensure_lookup_table()
+        dead = {f.index for f in bm.faces if all(full[v.index] for v in f.verts)}
+        for _ in range(keep_ring):                       # keep one ring around the visible region
+            edge = {f.index for f in bm.faces if f.index in dead and any(
+                lf.index not in dead for v in f.verts for lf in v.link_faces)}
+            dead -= edge
+        geom = [bm.faces[i] for i in sorted(dead)]
+        culled = len(geom)
+        if geom:
+            bmesh.ops.delete(bm, geom=geom, context="FACES")
+            # vertex groups follow bmesh deform layer automatically
+            bm.to_mesh(me)
+            me.update()
+        bm.free()
+    return {"covered": covered, "culled_faces": culled}

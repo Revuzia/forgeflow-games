@@ -4,7 +4,8 @@
 // (item1..6):
 //   validate (rank > 0, not busy, CC gates, cooldown/charges/recast lock, cost, target filter +
 //   visibility) → out of range? remember the cast as an ORDER_CAST and walk into range →
-//   windup (castTime; hard CC / silence cancel it, nothing is spent) → release: pay cost, start
+//   windup (castTime; hard CC / silence cancel it, and a unit target that died or became
+//   untargetable makes it fizzle — nothing is spent either way) → release: pay cost, start
 //   cooldown, break invisibility, run `effects` (or enter the channel) → abilityCast triggers.
 // Channels: `onTick` every `interval`; `effects` run when the channel COMPLETES; interruptible
 // channels end on hard CC/silence; a move order ends a channel unless `canMove`.
@@ -17,11 +18,11 @@
 // the ult's rank r needs level ≥ ultLevels[r − 1]. One skill point per level.
 
 import type { AbilityDefT, SlotT } from '../contracts/catalog.ts';
-import { TICK_DT, type EntityId, type SeatSetup } from '../contracts/sim.ts';
+import { TICK_DT, type EntityId } from '../contracts/sim.ts';
 import type { AbilityCoreT } from './catalog_index.ts';
 import { makeCtx, matchesFilter, onEffectHit, ranked, runEffects } from './effects.ts';
 import {
-  AbilitySlot, ORDER_CAST, ORDER_NONE, SLOT_A1, SLOT_INDEX, SLOT_ITEM1, SLOT_SPELL1, SLOT_ULT, type Entity, type SourceRef,
+  AbilitySlot, ORDER_CAST, ORDER_NONE, SLOT_A1, SLOT_INDEX, SLOT_ITEM1, SLOT_NAMES, SLOT_SPELL1, SLOT_ULT, type Entity, type SourceRef,
 } from './entity.ts';
 import { breakInvisibility, canCast } from './status.ts';
 import { markStatsDirty, computeStats } from './stats.ts';
@@ -29,15 +30,18 @@ import { addPassive, fireTrigger, removePassives } from './triggers.ts';
 import type { World } from './world.ts';
 
 export type CastResult = 'ok' | 'moving' | 'no_slot' | 'dead' | 'rank' | 'busy' | 'cc' | 'silenced' | 'cooldown' | 'cost' | 'target';
+/** channel onTick runs at most this many times in one sim step */
+export const MAX_CHANNEL_TICKS_PER_STEP = 16;
 
 // ── slot setup ──────────────────────────────────────────────────────────────────────────────────
-export function setupFighterSlots(w: World, e: Entity, seat: SeatSetup): void {
+/** kit a1..ult + battle spells (`spells[k]` → spell1/spell2; null leaves the slot empty) */
+export function setupFighterSlots(w: World, e: Entity, spells: readonly (string | null)[]): void {
   const f = e.fighter;
   if (!f) return;
   const kit = [f.kit.a1, f.kit.a2, f.kit.a3, f.kit.ult];
   for (let i = 0; i < 4; i++) e.slots[SLOT_A1 + i] = new AbilitySlot(SLOT_A1 + i, 'ability', kit[i]);
   for (let k = 0; k < 2; k++) {
-    const id = seat.loadout.spells[k];
+    const id = spells[k];
     const def = id ? w.idx.spells.get(id) : undefined;
     if (def) { const s = new AbilitySlot(SLOT_SPELL1 + k, 'spell', def); s.rank = 1; e.slots[SLOT_SPELL1 + k] = s; }
   }
@@ -80,6 +84,48 @@ export function equipItem(w: World, e: Entity, index: number, itemId: string | n
     if (def.consumable) p.itemCharges[index] = def.consumable.charges;
   }
   markStatsDirty(e);
+}
+
+/**
+ * Swap two inventory slots WITHOUT re-equipping: the items keep their active's cooldown, charges,
+ * recharge and recast state and their passives keep trigger cooldowns (re-equipping would reset
+ * all of that — a free refresh from a hotkey). Pure relabelling: slot objects, item arrays and
+ * passive keys move together.
+ */
+export function swapItemSlots(w: World, e: Entity, a: number, b: number): void {
+  const p = e.player;
+  if (!p || a === b || a < 0 || b < 0 || a >= 6 || b >= 6) return;
+  const ia = SLOT_ITEM1 + a, ib = SLOT_ITEM1 + b;
+  const sa = e.slots[ia], sb = e.slots[ib];
+  e.slots[ia] = sb; e.slots[ib] = sa;
+  if (sb) { sb.index = ia; sb.slot = SLOT_NAMES[ia]; }
+  if (sa) { sa.index = ib; sa.slot = SLOT_NAMES[ib]; }
+  const it = p.items[a]; p.items[a] = p.items[b]; p.items[b] = it;
+  const ch = p.itemCharges[a]; p.itemCharges[a] = p.itemCharges[b]; p.itemCharges[b] = ch;
+  const cd = p.itemCooldowns[a]; p.itemCooldowns[a] = p.itemCooldowns[b]; p.itemCooldowns[b] = cd;
+  const ka = `item:${a}`, kb = `item:${b}`;
+  for (const pi of e.passives) { if (pi.key === ka) pi.key = kb; else if (pi.key === kb) pi.key = ka; }
+  markStatsDirty(e);
+}
+
+/** an item active's timing state, to carry across an unequip/re-equip of the same item (shop undo) */
+export interface ItemSlotTimer { item: string; at: number; cooldown: number; charges: number | undefined; rechargeTimer: number }
+export function itemSlotTimer(w: World, e: Entity, index: number): ItemSlotTimer | null {
+  const s = e.slots[SLOT_ITEM1 + index];
+  if (!s || !s.itemId) return null;
+  return { item: s.itemId, at: w.time, cooldown: s.cooldown, charges: s.charges, rechargeTimer: s.rechargeTimer };
+}
+/** re-apply a saved timer to the item now in `index` (if it is the same item), minus the time since */
+export function restoreItemSlotTimer(w: World, e: Entity, index: number, t: ItemSlotTimer | null): void {
+  const s = e.slots[SLOT_ITEM1 + index];
+  if (!t || !s || s.itemId !== t.item) return;
+  const dt = Math.max(0, w.time - t.at);
+  s.cooldown = Math.max(0, t.cooldown - dt);
+  if (s.maxCharges !== undefined && t.charges !== undefined) {
+    s.charges = t.charges;
+    s.rechargeTimer = s.charges < s.maxCharges ? Math.max(1e-6, t.rechargeTimer - dt) : 0;
+  }
+  if (e.player) e.player.itemCooldowns[index] = s.cooldown;
 }
 
 // ── numbers ─────────────────────────────────────────────────────────────────────────────────────
@@ -195,13 +241,18 @@ export function tryCast(w: World, e: Entity, slotIndex: number, x?: number, y?: 
   } else if (tk === 'self') {
     target = e;
     if (x === undefined) { px = e.x; py = e.y; }
-  } else if (tk === 'point' && def.targeting.minRange) {
-    const dx = px - e.x, dy = py - e.y;
-    const d = Math.sqrt(dx * dx + dy * dy);
-    if (d < def.targeting.minRange) {
-      const ux = d > 1e-6 ? dx / d : Math.cos(e.facing), uy = d > 1e-6 ? dy / d : Math.sin(e.facing);
-      px = e.x + ux * def.targeting.minRange; py = e.y + uy * def.targeting.minRange;
+  } else if (tk === 'point') {
+    if (def.targeting.minRange) {
+      const dx = px - e.x, dy = py - e.y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < def.targeting.minRange) {
+        const ux = d > 1e-6 ? dx / d : Math.cos(e.facing), uy = d > 1e-6 ? dy / d : Math.sin(e.facing);
+        px = e.x + ux * def.targeting.minRange; py = e.y + uy * def.targeting.minRange;
+      }
     }
+    // a ground target is on the map (an off-map point could never be walked into range)
+    const S = w.mapDef.size;
+    px = Math.max(0, Math.min(S[0] - 1e-3, px)); py = Math.max(0, Math.min(S[1] - 1e-3, py));
   }
   if (!castInRange(e, def, target, px, py)) {
     e.order = ORDER_CAST;
@@ -219,7 +270,7 @@ function startCast(w: World, e: Entity, s: AbilitySlot, def: AbilityCoreT, targe
   e.atkWindup = -1;
   e.atkAnim = 0;
   if (e.order === ORDER_CAST) { e.order = ORDER_NONE; e.pendingSlot = -1; }
-  e.cast = { slot: s, def, ctx, phase: 'windup', t: 0, dur: def.castTime, tickAcc: 0, recast: s.recastDef !== null };
+  e.cast = { slot: s, def, ctx, phase: 'windup', t: 0, dur: def.castTime, tickAcc: 0, recast: s.recastDef !== null, targetLife: target ? target.lifeSeq : 0 };
   e.actionSeq++;
   w.emit({ e: 'cast', t: w.time, src: e.id, slot: s.slot, ability: def.id, x: px, y: py, target: target ? target.id : undefined, castTime: def.castTime });
   if (def.castTime <= 0) releaseCast(w, e);
@@ -241,6 +292,12 @@ function releaseCast(w: World, e: Entity): void {
   const cs = e.cast;
   if (!cs) return;
   const s = cs.slot, def = cs.def, ctx = cs.ctx;
+  // a unit-targeted cast whose target died, left the store or became untargetable during the
+  // windup fizzles like a CC-cancelled windup: nothing is paid, no cooldown, no hit on a corpse
+  if (def.targeting.kind === 'unit') {
+    const t = ctx.target;
+    if (!t || t.removed || !t.alive || t.lifeSeq !== cs.targetLife || (t !== e && !t.targetable)) { e.cast = null; return; }
+  }
   if (s && !payCost(e, s, def)) { e.cast = null; return; }
   if (s) commitCooldown(w, e, s, def, cs.recast);
   breakInvisibility(w, e);
@@ -259,7 +316,9 @@ function releaseCast(w: World, e: Entity): void {
 
 function consumeItemCharge(w: World, e: Entity, s: AbilitySlot): void {
   const p = e.player;
-  if (!p || !s.itemId) return;
+  // the slot must still hold this item's active (the shop cancels casts of items it removes;
+  // this guards any other path from spending a charge of whatever sits there now)
+  if (!p || !s.itemId || e.slots[s.index] !== s) return;
   const idx = s.index - SLOT_ITEM1;
   const def = w.idx.items.get(s.itemId);
   if (!def || !def.consumable) return;
@@ -369,10 +428,12 @@ export function castSystem(w: World): void {
     const ch = cs.def.channel!;
     if (ch.interval && ch.onTick) {
       cs.tickAcc += dt;
-      while (cs.tickAcc + 1e-9 >= ch.interval && e.cast === cs) {
+      // sub-tick intervals run several times per tick; the cap keeps a typo (1e-6) from hanging the sim
+      for (let n = 0; cs.tickAcc + 1e-9 >= ch.interval && e.cast === cs && n < MAX_CHANNEL_TICKS_PER_STEP; n++) {
         cs.tickAcc -= ch.interval;
         runEffects(w, ch.onTick, cs.ctx);
       }
+      if (cs.tickAcc > ch.interval) cs.tickAcc = ch.interval;
     }
     if (e.cast === cs && cs.t + 1e-9 >= cs.dur) {
       e.cast = null;

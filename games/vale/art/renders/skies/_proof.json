@@ -1,0 +1,38 @@
+{
+  "render_s": 29.87,
+  "mean_sky_lum": 1.0,
+  "max": 5.87,
+  "scale": 0.18129,
+  "total_s": 30.87,
+  "sun_dir_three": [
+    -0.4755,
+    0.5592,
+    0.6791
+  ],
+  "params": {
+    "sun_elevation_deg": 34,
+    "sun_azimuth_deg": 125,
+    "sky_type": "MULTIPLE_SCATTERING",
+    "turbidity": 2.6,
+    "air": 1.0,
+    "ozone": 1.0,
+    "cloud_cover": 0.5,
+    "cloud_scale": 1.0,
+    "cloud_height": 1.0,
+    "cloud_softness": 0.2,
+    "cloud_tint": "#fff4e6",
+    "sky_tint": "#ffffff",
+    "ground": "#59604c",
+    "sun_disc": false,
+    "exposure": 0.0,
+    "seed": 3,
+    "size": [
+      2048,
+      1024
+    ],
+    "samples": 16,
+    "target_mean": 1.0
+  },
+  "out": "art/out/_proof/sky.hdr",
+  "bytes": 1752096
+}

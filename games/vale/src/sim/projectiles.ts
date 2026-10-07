@@ -6,11 +6,13 @@
 // Skillshots move `speed × dt` per tick and test the swept segment against unit circles inflated
 // by width/2, so nothing tunnels at high speed. Hits along one step resolve in path order (then
 // id). `pierce` = how many units it passes through: 0 stops at the first hit. `stopAtWalls` ends
-// it at the last walkable point. `returns`: at max range it flies back to the caster (it may hit
+// it at the last point before a map wall (structures are not walls here; with `structures: true`
+// in its filter it hits them like units). `returns`: at max range it flies back to the caster (it may hit
 // the same units again on the way back) and ends on reaching them. `toward: 'point'` caps the
 // flight at the aimed point. `spreadDeg` + `count` fan copies evenly across the spread.
 // Homing projectiles (`homing` with toward 'target', and every ranged basic attack) chase their
-// target and hit only it; if it dies they fly to its last position and end there.
+// target and hit only it; if it dies or turns untargetable they fly to its last position and end
+// there without a hit.
 // `onHit` runs with hit = the unit and end = the contact point; `onEnd` with end = the final
 // position (also after a stopping hit).
 
@@ -67,7 +69,7 @@ export function spawnProjectiles(w: World, eff: EffOf<'projectile'>, ctx: Effect
     p.facing = a;
     p.vx = dx * eff.speed; p.vy = dy * eff.speed;
     const pd: ProjData = {
-      attack: false, eff, ctx, src: c, target: homing && target ? target.id : -1, homing,
+      attack: false, eff, ctx, src: c, target: homing && target ? target.id : -1, targetLife: target ? target.lifeSeq : 0, homing,
       speed: eff.speed, range: homing ? eff.range : Math.max(0, maxDist), traveled: 0, width: eff.width,
       pierceLeft: eff.pierce, hits: [], returning: false, stopAtWalls: !!eff.stopAtWalls,
       dirX: dx, dirY: dy, tx: target ? target.x : ox + dx * maxDist, ty: target ? target.y : oy + dy * maxDist,
@@ -89,7 +91,7 @@ export function spawnAttackProjectile(w: World, src: Entity, target: Entity, cri
   p.facing = Math.atan2(dy, dx);
   p.vx = (dx / l) * speed; p.vy = (dy / l) * speed;
   p.proj = {
-    attack: true, eff: null, ctx: empCtx, src, target: target.id, homing: true, speed, range: Infinity, traveled: 0, width: 0.3,
+    attack: true, eff: null, ctx: empCtx, src, target: target.id, targetLife: target.lifeSeq, homing: true, speed, range: Infinity, traveled: 0, width: 0.3,
     pierceLeft: 0, hits: [], returning: false, stopAtWalls: false, dirX: dx / l, dirY: dy / l, tx: target.x, ty: target.y,
     crit, dtype, empower: empower ? empower.slice() : null, empowerSrc: '',
   };
@@ -124,7 +126,10 @@ export function projectileSystem(w: World): void {
     const step = pd.speed * dt;
 
     if (pd.homing) {
-      const t = w.live(pd.target);
+      let t = w.live(pd.target);
+      // died (and respawned) mid-flight, or turned untargetable (untargetable units cannot be hit):
+      // the shot is lost and flies on to the last known spot
+      if (t && (t.lifeSeq !== pd.targetLife || (!t.targetable && t !== pd.src))) { t = null; pd.target = -1; }
       if (t) { pd.tx = t.x; pd.ty = t.y; }
       const dx = pd.tx - p.x, dy = pd.ty - p.y;
       const d = Math.sqrt(dx * dx + dy * dy);
@@ -159,8 +164,10 @@ export function projectileSystem(w: World): void {
     const sx = p.x, sy = p.y;
     let ex = sx + pd.dirX * adv, ey = sy + pd.dirY * adv;
     let wallStop = false;
-    if (pd.stopAtWalls && !w.nav.walkable(ex, ey)) {
-      w.nav.raycast(sx, sy, ex, ey, tmp);
+    // map walls only: a structure's path-clearance disc is not a wall (filters decide whether
+    // a projectile hits structures)
+    if (pd.stopAtWalls && !w.nav.wallFree(ex, ey)) {
+      w.nav.raycast(sx, sy, ex, ey, tmp, true);
       ex = tmp.x; ey = tmp.y; wallStop = true;
     }
 

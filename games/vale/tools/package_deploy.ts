@@ -11,11 +11,12 @@
 // uploaded and served). Before copying it verifies what a broken deploy would only show in a
 // player's browser: index.html exists, the client build carries no content and no source maps, the
 // manifest parses, every catalog it lists exists with the sha256 it claims, and every asset ref in
-// those catalogs exists in catalog/assets/. Exit 0 ok · 1 verification failed · 2 usage.
+// those catalogs exists in catalog/assets/. It refuses an --out it would be dangerous to delete
+// (see unsafeOut). Exit 0 ok · 1 verification failed · 2 usage or unsafe --out.
 
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, parse, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { CatalogManifest } from '../src/contracts/manifest.ts';
 
@@ -36,7 +37,7 @@ function parseArgs(argv: string[]): Opts | string {
 }
 
 const fmt = (n: number): string => n < 1024 ? `${n} B` : n < 1048576 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1048576).toFixed(2)} MB`;
-const show = (p: string): string => { const r = relative(ROOT, p); return (r.startsWith('..') ? p : r).replace(/\\/g, '/'); };
+const show = (p: string): string => { const r = relative(ROOT, p); return (r.startsWith('..') ? p : r || '.').replace(/\\/g, '/'); };
 
 function listFiles(dir: string, base = dir): { rel: string; bytes: number }[] {
   const out: { rel: string; bytes: number }[] = [];
@@ -77,9 +78,35 @@ function verify(o: Opts): string[] {
   return errs;
 }
 
+/**
+ * `--out` is deleted and rebuilt, so it must never be a directory this tool did not make: refuse the
+ * filesystem root, the project or any folder containing it, anything overlapping --dist/--catalog
+ * (cpSync into itself), and any existing non-empty folder that is not a previous deploy
+ * (`--out src` would otherwise erase the sources).
+ */
+function unsafeOut(o: Opts): string | null {
+  const out = resolve(o.out);
+  const within = (child: string, parent: string): boolean => child === parent || child.startsWith(parent.endsWith(sep) ? parent : parent + sep);
+  if (out === parse(out).root) return 'is a filesystem root';
+  if (within(ROOT, out)) return 'contains the project';
+  for (const [flag, d] of [['--dist', o.dist], ['--catalog', o.catalog]] as const) {
+    const dd = resolve(d);
+    if (within(out, dd) || within(dd, out)) return `overlaps ${flag} ${show(dd)}`;
+  }
+  if (existsSync(out)) {
+    if (!statSync(out).isDirectory()) return 'exists and is not a directory';
+    if (readdirSync(out).length > 0 && !(existsSync(join(out, 'index.html')) && existsSync(join(out, 'catalog', 'manifest.json')))) {
+      return 'exists, is not empty and is not a previous deploy (no index.html + catalog/manifest.json) — delete it yourself if you mean it';
+    }
+  }
+  return null;
+}
+
 function main(argv: string[]): number {
   const o = parseArgs(argv);
   if (typeof o === 'string') { console.error(o); return o.startsWith('usage') ? 0 : 2; }
+  const bad = unsafeOut(o);
+  if (bad) { console.error(`error --out ${show(resolve(o.out))} ${bad}; refusing to delete it\n\nFAILED: deploy/ not assembled`); return 2; }
   const errs = verify(o);
   if (errs.length) { for (const e of errs) console.error(`error ${e}`); console.error(`\nFAILED: deploy/ not assembled`); return 1; }
 

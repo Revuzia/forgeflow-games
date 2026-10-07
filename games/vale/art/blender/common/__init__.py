@@ -22,3 +22,5 @@ Modules:
     fighter    the per-fighter pipeline that ties all of the above together
     imageops   numpy image helpers (no Pillow: Blender's Python on Windows ships without it)
 """
+
+import bpy  # noqa: F401,E402  (with the `bpy` wheel, mathutils/bmesh exist only after bpy is imported)

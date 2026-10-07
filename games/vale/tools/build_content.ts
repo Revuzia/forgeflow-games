@@ -44,10 +44,14 @@
 // cross-references (roles, resources, units, item components, skins → fighters, offers → skins and
 // currencies, shelves → offers, queues → modes, modes → maps, map music, mode slots, team buffs,
 // setup defaults/paths, cues/vfx used by `present`, clip roles used by `present.anim`, form ids,
-// script ids → src/sim/scripts/<id>.ts) · required fighter clips (§12) · every fighter has a base
+// script ids → src/sim/scripts/<id>.ts) · VFX layer vocabulary (§9.5: types, keys, values; preset
+// naming is a warning) · required fighter clips (§12) · every fighter has a base
 // skin in store.starterOwnership · every asset ref resolves · deny-listed names (tools/names_check.ts)
 // · item recipes (component costs ≤ total, no cycles) · kit completeness (passive + a1 a2 a3 ult,
-// each with icon, non-blank desc, ai hint) · map coordinates inside the map.
+// each with icon, non-blank desc, ai hint) · map coordinates inside the map · nav grid size ·
+// UnitDef.behavior against the sim's vocabulary (src/sim/units/behavior_keys.ts: known keys for the
+// unit's kind, value shapes, priority tokens); pickup `grant` effects are zod-parsed like every
+// other effect list and emitted WITH their defaults (the schema types behavior as free-form).
 
 import { createHash } from 'node:crypto';
 import {
@@ -56,7 +60,8 @@ import {
 } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Catalog, ClipRole, SCHEMA_VERSION, type CatalogT } from '../src/contracts/catalog.ts';
+import { Catalog, ClipRole, Effect, SCHEMA_VERSION, type CatalogT } from '../src/contracts/catalog.ts';
+import { BEHAVIOR_KEYS, DAMAGE_MULT_KINDS, PRIORITY_TOKENS } from '../src/sim/units/behavior_keys.ts';
 import { MANIFEST_FORMAT, MANIFEST_PRODUCT, type CatalogManifest, type ManifestHistoryEntry } from '../src/contracts/manifest.ts';
 import { checkNames, DEFAULT_DESIGN_DIR, formatHit, loadDenyList, type NameInput, type TextKind } from './names_check.ts';
 import { MIGRATIONS, type CatalogData, type MigrationRegistry } from './schema_migrations.ts';
@@ -503,6 +508,11 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
   c.units.forEach((u, i) => {
     if (u.onTakedownTeamBuff !== undefined && !teamBuffs.has(u.onTakedownTeamBuff)) dg.err(['units', i, 'onTakedownTeamBuff'], unknownRef('team buff', u.onTakedownTeamBuff, teamBuffs));
     walkRecord(u, ['units', i], { clips: new Set(Object.keys(u.art.clips)), clipOwner: `unit ${u.id} art.clips`, forms: null });
+    checkBehavior(u, ['units', i, 'behavior'], dg);
+    // effect lists inside behavior (pickup grants) get the same reference checks as any other
+    for (const [k, v] of Object.entries(u.behavior)) {
+      if (Array.isArray(v) && BEHAVIOR_KEYS[u.kind]?.[k] === 'effects') walkRecord(v, ['units', i, 'behavior', k], { clips: null, clipOwner: 'pickup grants use generic clip roles', forms: null });
+    }
   });
   c.teamBuffs.forEach((t, i) => walkRecord(t, ['teamBuffs', i], { clips: null, clipOwner: 'team buffs use generic clip roles', forms: null }));
 
@@ -527,6 +537,10 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
     m.pickups.forEach((pk, j) => needUnit([...p, 'pickups', j, 'unit'], pk.unit, 'pickup'));
     // every coordinate on the sim plane must be inside the map (CONTRACT §2)
     const [W, H] = m.size;
+    // the sim allocates ~40 bytes per nav cell (walls, obstacles, components, A* scratch): a navCell
+    // typo (0.05 for 0.5) must fail here, not as an out-of-memory tab
+    const cells = Math.ceil(W / m.navCell) * Math.ceil(H / m.navCell);
+    if (cells > MAX_NAV_CELLS) dg.err([...p, 'navCell'], `navCell ${m.navCell} gives ${cells.toLocaleString('en')} nav cells for a ${W}×${H} map (max ${MAX_NAV_CELLS.toLocaleString('en')}); use a larger cell`);
     const inside = (path: Seg[], v: readonly [number, number]): void => {
       if (!(v[0] >= 0 && v[0] <= W && v[1] >= 0 && v[1] <= H)) dg.err(path, `point (${v[0]}, ${v[1]}) is outside the map (0..${W}, 0..${H})`);
     };
@@ -594,6 +608,105 @@ function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void 
   for (const [id, path] of scriptFirstUse) {
     if (!existsSync(join(opts.scriptsDir, `${id}.ts`))) dg.err(path, `script "${id}" has no ${displayPath(join(opts.scriptsDir, `${id}.ts`))} (unknown script ids are a content build error)`);
   }
+}
+
+// ── 3a. UnitDef.behavior (CONTRACT §5.4) ──────────────────────────────────────────────────────────
+const MAX_NAV_CELLS = 2_000_000;
+const EffectList = Effect.array();
+/** validate one unit's behavior against the sim's vocabulary; parses effect lists in place (defaults applied) */
+function checkBehavior(u: CatalogT['units'][number], path: Seg[], dg: Diagnostics): void {
+  const b = u.behavior as Record<string, unknown>;
+  const allowed: Record<string, string> = { ...BEHAVIOR_KEYS.any, ...(BEHAVIOR_KEYS[u.kind] ?? {}) };
+  for (const [k, v] of Object.entries(b)) {
+    const p = [...path, k];
+    const shape = allowed[k];
+    if (!shape) {
+      const readFor = Object.entries(BEHAVIOR_KEYS).filter(([, keys]) => k in keys).map(([kind]) => kind);
+      dg.err(p, readFor.length ? `behavior "${k}" is not read for ${u.kind} units (only: ${readFor.join(', ')})`
+        : unknownRef(`behavior key for a ${u.kind}`, k, Object.keys(allowed)));
+      continue;
+    }
+    switch (shape) {
+      case 'number': if (typeof v !== 'number' || !Number.isFinite(v)) dg.err(p, `expected a number, got ${JSON.stringify(v)}`); break;
+      case 'boolean': if (typeof v !== 'boolean') dg.err(p, `expected true or false, got ${JSON.stringify(v)}`); break;
+      case 'targetRules': if (v !== 'tower' && v !== 'none') dg.err(p, `expected "tower" or "none", got ${JSON.stringify(v)}`); break;
+      case 'priority':
+        if (!Array.isArray(v)) { dg.err(p, `expected an array of priority tokens (${PRIORITY_TOKENS.join(', ')})`); break; }
+        v.forEach((t, j) => { if (typeof t !== 'string' || !PRIORITY_TOKENS.includes(t)) dg.err([...p, j], unknownRef('priority token', t, PRIORITY_TOKENS)); });
+        break;
+      case 'kindMults':
+        if (!isObj(v)) { dg.err(p, `expected { <entity kind>: multiplier } (kinds: ${DAMAGE_MULT_KINDS.join(', ')})`); break; }
+        for (const [kind, m] of Object.entries(v)) {
+          if (!DAMAGE_MULT_KINDS.includes(kind)) dg.err([...p, kind], unknownRef('entity kind', kind, DAMAGE_MULT_KINDS));
+          else if (typeof m !== 'number' || !Number.isFinite(m) || m < 0) dg.err([...p, kind], `expected a non-negative multiplier, got ${JSON.stringify(m)}`);
+        }
+        break;
+      case 'effects': {
+        const r = EffectList.safeParse(v);
+        if (!r.success) reportIssues(r.error.issues as unknown as IssueLike[], p, dg);
+        else b[k] = r.data;   // emitted parsed: the sim relies on defaulted fields (`to`, `pierce`, …)
+        break;
+      }
+    }
+  }
+}
+
+// ── 3b. VFX layer vocabulary (CONTRACT §9.5) ──────────────────────────────────────────────────────
+// VfxDef.layers is z.record(unknown) in the schema; §9.5 is its real contract. The renderer ignores
+// unknown keys, so the build is the only place a typo ("lifetime", "colour") gets caught.
+type VfxKind = 'num' | 'range' | 'pair' | 'color' | 'color2' | 'blend' | 'texture' | 'meshShape' | 'decalShape' | 'at';
+const VFX_COMMON: Record<string, VfxKind> = { delay: 'num', at: 'at' };
+const VFX_LAYERS: Record<string, Record<string, VfxKind>> = {
+  burst: { count: 'num', life: 'range', speed: 'range', spreadDeg: 'num', size: 'pair', color: 'color2', alpha: 'pair', gravity: 'num', drag: 'num', blend: 'blend', texture: 'texture' },
+  trail: { width: 'num', life: 'num', color: 'color', alpha: 'num', texture: 'texture', blend: 'blend' },
+  ring: { radius: 'pair', width: 'num', life: 'num', color: 'color', alpha: 'pair', blend: 'blend' },
+  beam: { width: 'num', life: 'num', color: 'color', texture: 'texture', blend: 'blend' },
+  flash: { radius: 'num', life: 'num', color: 'color', intensity: 'num' },
+  mesh: { shape: 'meshShape', scale: 'pair', life: 'num', color: 'color', alpha: 'pair', spinDeg: 'num', blend: 'blend' },
+  decal: { shape: 'decalShape', radius: 'num', life: 'num', color: 'color', alpha: 'pair', texture: 'texture' },
+};
+const VFX_ENUMS: Partial<Record<VfxKind, string[]>> = {
+  blend: ['add', 'alpha'],
+  texture: ['spark', 'glow', 'smoke', 'shard', 'ring', 'streak', 'petal', 'ember', 'drop', 'rune', 'crack', 'dust', 'mote'],
+  meshShape: ['orb', 'blade', 'shard', 'cone', 'pillar', 'disc', 'spiral', 'crescent', 'spike'],
+  decalShape: ['circle', 'ring', 'cone', 'rect', 'line'],
+  at: ['origin', 'target', 'path', 'ground'],
+};
+const isColor = (v: unknown): boolean => typeof v === 'string' && (/^#[0-9a-fA-F]{6}$/.test(v) || v === 'team' || v === 'element');
+const isNumPair = (v: unknown): boolean => Array.isArray(v) && v.length === 2 && v.every((x) => typeof x === 'number' && Number.isFinite(x));
+function vfxValueError(kind: VfxKind, v: unknown): string | null {
+  switch (kind) {
+    case 'num': return typeof v === 'number' && Number.isFinite(v) ? null : 'expected a number';
+    case 'range': return isNumPair(v) ? ((v as number[])[0] <= (v as number[])[1] ? null : 'range is [min, max] with min ≤ max') : 'expected a [min, max] range';
+    case 'pair': return isNumPair(v) ? null : 'expected a [start, end] pair';
+    case 'color': return isColor(v) ? null : 'expected "#rrggbb", "team" or "element"';
+    case 'color2': return Array.isArray(v) && v.length === 2 && v.every(isColor) ? null : 'expected two colors [start, end] ("#rrggbb" | "team" | "element")';
+    default: {
+      const allowed = VFX_ENUMS[kind] ?? [];
+      return typeof v === 'string' && allowed.includes(v) ? null : `expected one of ${allowed.join(' | ')}`;
+    }
+  }
+}
+function checkVfx(c: CatalogT, dg: Diagnostics): void {
+  const fighterIds = c.fighters.map((f) => f.id);
+  c.vfx.forEach((v, i) => {
+    if (!v.id.startsWith('lib_') && !fighterIds.some((f) => v.id.startsWith(`${f}_`))) {
+      dg.warn(['vfx', i, 'id'], `"${v.id}" follows neither "lib_*" (shared) nor "<fighter>_<slot>_*" (bespoke) (CONTRACT §9.5)`);
+    }
+    v.layers.forEach((layer, j) => {
+      const p: Seg[] = ['vfx', i, 'layers', j];
+      const type = layer.type;
+      const spec = typeof type === 'string' ? VFX_LAYERS[type] : undefined;
+      if (!spec) { dg.err([...p, 'type'], `unknown layer type ${JSON.stringify(type)} (§9.5: ${Object.keys(VFX_LAYERS).join(', ')})`); return; }
+      for (const [k, val] of Object.entries(layer)) {
+        if (k === 'type') continue;
+        const kind = spec[k] ?? VFX_COMMON[k];
+        if (!kind) { dg.err([...p, k], `unknown key "${k}" for a ${type} layer (§9.5 keys: ${[...Object.keys(spec), ...Object.keys(VFX_COMMON)].join(', ')})`); continue; }
+        const e = vfxValueError(kind, val);
+        if (e) dg.err([...p, k], `${e}, got ${JSON.stringify(val)}`);
+      }
+    });
+  });
 }
 
 // ── 4. assets ───────────────────────────────────────────────────────────────────────────────────
@@ -694,7 +807,9 @@ const PROSE_KEYS = new Set(['desc', 'lore', 'job', 'body', 'sub', 'contract', 'n
 function collectNames(data: Record<string, unknown>): { inputs: NameInput[]; paths: Seg[][] } {
   const inputs: NameInput[] = [];
   const paths: Seg[][] = [];
-  const add = (path: Seg[], text: string, kind: TextKind): void => { paths.push(path); inputs.push({ path: String(paths.length - 1), text, kind }); };
+  // `at` is the path as a scope pattern ("modes[].name") for scoped allowlist entries
+  const at = (path: Seg[]): string => path.map((s, i) => typeof s === 'number' ? '[]' : i === 0 ? s : `.${s}`).join('');
+  const add = (path: Seg[], text: string, kind: TextKind): void => { paths.push(path); inputs.push({ path: String(paths.length - 1), text, kind, at: at(path) }); };
   for (const [fam, v] of Object.entries(data)) {
     if (fam === 'vfx' || fam === 'audio') continue;            // engine data, never shown as text
     if (fam === 'botNames') { if (Array.isArray(v)) v.forEach((s, i) => typeof s === 'string' && add([fam, i], s, 'name')); continue; }
@@ -827,7 +942,7 @@ export function buildContent(opts: BuildOptions): BuildResult {
   if (!parsed.success) reportIssues(parsed.error.issues as unknown as IssueLike[], [], dg);
   const data = (parsed.success ? parsed.data : raw) as Record<string, unknown>;
 
-  if (parsed.success) semanticChecks(parsed.data, opts, dg);
+  if (parsed.success) { semanticChecks(parsed.data, opts, dg); checkVfx(parsed.data, dg); }
   else if (!opts.quiet) dg.fileWarn('(build)', 'schema errors present — cross-reference checks are skipped until they are fixed');
 
   // assets + names run on raw data too, so one pass shows as many problems as possible
@@ -946,4 +1061,7 @@ export function runCli(argv: string[]): number {
   return 0;
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) process.exitCode = runCli(process.argv.slice(2));
+// run as a CLI only when executed directly (probes import this module); Windows paths compare case-insensitively
+const invokedPath = process.argv[1] ? resolve(process.argv[1]) : '';
+const selfPath = fileURLToPath(import.meta.url);
+if (process.platform === 'win32' ? invokedPath.toLowerCase() === selfPath.toLowerCase() : invokedPath === selfPath) process.exitCode = runCli(process.argv.slice(2));

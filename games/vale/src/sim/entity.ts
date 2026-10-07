@@ -11,7 +11,7 @@
 
 import type {
   FighterDefT, UnitDefT, ResourceDefT, PassiveDefT, StatKeyT, SlotT, StatusKindT, DamageTypeT, ShapeT,
-  EffectT, StatBlockT, TeamBuffDefT, Trigger, Present, Condition,
+  EffectT, StatBlockT, TeamBuffDefT, Trigger, Present,
 } from '../contracts/catalog.ts';
 import type {
   EntityView, EntityKind, ActionState, StatusView, BuffView, AbilityView, PlayerView, TeamView, FighterStatsView,
@@ -23,7 +23,6 @@ import type { AbilityCoreT } from './catalog_index.ts';
 export type PresentT = z.infer<typeof Present>;
 export type TriggerT = z.infer<typeof Trigger>;
 export type TriggerOn = TriggerT['on'];
-export type ConditionT = z.infer<typeof Condition>;
 export type EffOf<K extends EffectT['op']> = Extract<EffectT, { op: K }>;
 export type AttackDefT = FighterDefT['attack'];
 
@@ -127,7 +126,8 @@ export class AbilitySlot implements AbilityView {
   recastWindow: number | undefined = undefined;
   ready = false; canLevel = false;
   // internal
-  readonly index: number;
+  /** index into Entity.slots (item slots change it when the inventory is reordered) */
+  index: number;
   kind: 'ability' | 'spell' | 'item';
   /** the record this slot was built from (kit ability, spell, item active) */
   baseDef: AbilityCoreT;
@@ -178,7 +178,7 @@ export interface PassiveInst {
   kind: SourceRef['kind'];
   /** source id for events/buff sources (passive id) */
   id: string;
-  /** removal key ('kit', 'item:2', 'boon:fx_boon', 'team:<buff>') */
+  /** removal key ('kit', 'item:<slot>', 'boon:<id>', 'team:<buff>') */
   key: string;
   triggers: TriggerInst[];
   /** contributes passive.stats (+ statsPerLevel) */
@@ -197,6 +197,8 @@ export interface CastState {
   dur: number;
   tickAcc: number;
   recast: boolean;
+  /** lifeSeq of ctx.target at cast start (a target that died and respawned is a different target) */
+  targetLife: number;
 }
 
 export interface DashState {
@@ -219,6 +221,8 @@ export interface ProjData {
   ctx: EffectCtx | null;
   src: Entity;
   target: EntityId;
+  /** lifeSeq of the homing target at launch: a target that died (even if it respawned) is gone */
+  targetLife: number;
   homing: boolean;
   speed: number; range: number; traveled: number; width: number;
   pierceLeft: number;
@@ -243,6 +247,8 @@ export interface ZoneData {
   delay: number;
   tickAcc: number;
   follow: Entity | null;
+  /** lifeSeq of `follow` when the zone attached: after its death the zone stays where it was */
+  followLife: number;
   dirX: number; dirY: number;
   inside: Set<EntityId>;
   next: Set<EntityId>;
@@ -313,6 +319,9 @@ export class Entity implements EntityView {
   removeAt = -1;
   spawnTime = 0;
   deathTime = -1;
+  /** deaths so far: work scheduled for "this life" (repeat iterations) compares it, so a respawn
+   *  in between does not resurrect it */
+  lifeSeq = 0;
   fighter: FighterDefT | null = null;
   unit: UnitDefT | null = null;
   player: Player | null = null;
@@ -369,8 +378,14 @@ export class Entity implements EntityView {
   pathGoalX = NaN; pathGoalY = NaN;
   /** ticks until the straight-line check toward the goal is redone */
   pathCheck = 0;
+  /** ticks until the runtime waypoint skip is retried */
+  skipCheck = 0;
+  /** consecutive ticks of walking without real progress toward the current waypoint */
+  noProgress = 0;
   /** static blocker (structures): never moves, pushes units out */
   static = false;
+  /** radius this entity blocks in the nav grid (structures; 0 = none) — removed on death */
+  navBlockR = 0;
   // bookkeeping
   /** per-player last time (s) they damaged or debuffed this entity (assist window) */
   assistT: Float64Array | null = null;

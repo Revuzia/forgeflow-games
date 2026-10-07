@@ -354,6 +354,8 @@ export const FighterDef = z.object({
   attack: z.object({ range: z.number().positive(), windup: z.number().positive().max(0.9), damageType: DamageType.default('phys'),
     projectileSpeed: z.number().positive().optional(), present: Present.optional() }).strict(),
   collisionRadius: z.number().positive().default(0.55),
+  /** CHANGED(SIM), additive: sight radius in metres (fog of war). Omitted = the sim default (12). */
+  sightRange: z.number().positive().optional(),
   kit: z.object({ passive: PassiveDef, a1: AbilityDef, a2: AbilityDef, a3: AbilityDef, ult: AbilityDef }).strict(),
   art: FighterArt,
   ai: z.object({ style: z.enum(['frontline', 'diver', 'skirmisher', 'artillery', 'burst', 'sustain', 'warden', 'marksman']),
@@ -500,6 +502,16 @@ export const RulesParams = z.object({
   placementPoints: z.array(z.number()).optional(),
   bounty: z.object({ kill: z.number(), assistShare: z.number(), streakStep: z.number(), streakMax: z.number(), shutdownMax: z.number() }).strict(),
   abilityRanks: z.object({ basicMax: z.number().int(), ultLevels: z.array(z.number().int()) }).strict(),
+  /** CHANGED(SIM), additive: balance knobs the sim used to hard-code. Every key is optional; an
+   *  omitted key keeps the CONTRACT §5.5/§5.6 default shown in brackets. Queues override key by key. */
+  tuning: z.object({
+    assistWindow: z.number().nonnegative().optional(),         // s a hit/debuff counts toward an assist [10]
+    xpShareRange: z.number().nonnegative().optional(),         // m around a death within which XP is shared [16]
+    killXpFraction: z.number().nonnegative().optional(),       // fighter kill XP = this × the victim's level step [0.6]
+    multiKillWindow: z.number().nonnegative().optional(),      // s between one killer's takedowns of a multikill [10]
+    fountainHealPerSec: z.number().nonnegative().optional(),   // fraction of max hp (and pool resource) per s in the fountain [0.15]
+    suddenDeathRespawnMult: z.number().positive().optional(),  // respawn-timer multiplier in sudden death [1.5]
+  }).strict().optional(),
 }).strict();
 
 export const ModeDef = z.object({

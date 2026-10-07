@@ -1,0 +1,17 @@
+{
+  "_comment": "Sky presets for `python3 art/build.py sky <id>`. The style bible owns the values per map; `out` is relative to art/out. Keys: see art/blender/common/sky.py DEFAULTS.",
+  "_proof": {
+    "out": "_proof/sky.hdr",
+    "sun_elevation_deg": 34,
+    "sun_azimuth_deg": 125,
+    "turbidity": 2.6,
+    "cloud_cover": 0.5,
+    "cloud_scale": 1.0,
+    "cloud_softness": 0.2,
+    "cloud_tint": "#fff4e6",
+    "sky_tint": "#ffffff",
+    "ground": "#59604c",
+    "exposure": 0.0,
+    "seed": 3
+  }
+}

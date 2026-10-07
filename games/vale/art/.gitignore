@@ -1,0 +1,4 @@
+# Blender scratch: .blend snapshots for `build.py portraits`, bake temp files
+.cache/
+# raw renders before denoise/composite
+renders/**/*_raw.png
