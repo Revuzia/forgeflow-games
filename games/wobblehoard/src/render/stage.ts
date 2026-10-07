@@ -275,6 +275,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
         if (!v.visible) continue;
         const sk = calm ? 0 : Math.min(1, v.seamAmount / 0.85), grew = v.growth > 1.02;
         if (grew || sk > 0.02) hTop = Math.max(hTop, v.restH * v.growth * (1 + 0.45 * sk) * (grew ? 1.15 : 1));
+        // REMOVE-WHEN-PHYSICS-FIXED (the next line is a stopgap, not render logic; delete it once the neck morph no longer stands the lobes up to 2.0 - 2.9x their rest height)
         // STOPGAP (the generator is PHYS, see _handoff/reports/RENDER_R.md "PART C"): while the neck forms the volume the waist gives up goes UP, and for putty / slow-rise /
         // firm silicone the lobes stand 2.0x / 2.2x / 2.9x their rest height and the new pieces are thrown up to 1.3 m for ~0.6 s (measured, real body, real shell). The frame
         // follows the LIVE top of a body that still shows its seam, so those pieces are not cut off by the top of the frame (never more than 2.0x the rest height); a body whose
@@ -574,6 +575,13 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       screen.beginCrossfade(renderer, seconds, shape);
     },
     shake(a) { if (!calm) stage.shake(a); },
+    // the camera's own geometry (updateCamera: aim at TARGET_Y x the framing, distance = fitDistance x zoom, pitch): a point h above the table at the pad projects
+    // to ndcY = q cos(p) / ((d - q sin(p)) tan(fov/2)) with q = h - aim; solving ndcY = 1 - margin for the framing scale gives the closed form below
+    framingForHeight: (h: number, margin = 0.04) => {
+      const T = Math.tan((camera.fov * Math.PI) / 360), D0 = Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect)) * zoomF;
+      const cp = Math.cos(pitch), sp = Math.sin(pitch), yt = (1 - margin) * T, k = cp + yt * sp;
+      return (h * k) / (yt * D0 + TARGET_Y * k);
+    },
     viewHalfWidth: (scale?: number) => (scale === undefined ? fitDistance() : fitDistance() * scale / camScale) * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect,
   };
   const director = new CeremonyDirector(host);

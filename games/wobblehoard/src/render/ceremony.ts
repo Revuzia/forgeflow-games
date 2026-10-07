@@ -73,10 +73,23 @@ const LEAK = [0.45, 0.6, 0.8, 1.0, 1.15, 1.2];    // crack light strength
  * Not a 6.3 camera move: the push / arc of the escalation table are layered on top. Calm: only the fit (a cut), no tier widening.
  */
 const MERGE_FRAMING = [1.0, 1.04, 1.08, 1.12, 1.12, 1.12];   // by result tier, as the 6.3 escalation (Common: no camera change at all)
+/**
+ * The burst's PEAK must fit the frame whole, whatever the result's own height: the result springs open to this many times its rest height
+ * (1.30 measured on the real soft body, 1.25 on the puppet's spring; the starter DOLLOP's Common burst topped out at 1.342 x its rest height
+ * with the 0.9 m/s hop) and the hop lifts it a little more. The merge framing is at least the framing that shows that peak with the margin
+ * below (of the frame's half height: 4% = 2% of its height) under the top edge. Only a tall result or a frame short for its width makes
+ * this bind (the Common merge of the starter on a 4:3 frame widened from 1.026 to 1.057, inside the 4% the harness allows a Common merge);
+ * it is a floor under the tier table above, which already covers the other tiers' bursts.
+ */
+const BURST_OVERSHOOT = 1.3, BURST_TOP_MARGIN = 0.04;
 /** The T3 spring-open of the puppet: pre-compressed to 0.8x, overshoots to 1.25x (DESIGN 6.4), settles; calm: 0.9x -> 1.12x. */
 const POP = { x0: -0.2, v0: 6.0 }, POP_CALM = { x0: -0.1, v0: 2.8 };
-/** How fast the merge result rises from the burst (m/s): ~0.15 above the pad before it lands (calm: a small lift). */
-const HOP_VY = [0.9, 1.1, 1.4, 1.7, 1.7, 1.7], HOP_VY_CALM = 0.9;   // by tier: the Common result only lifts a little (no extra framing for it)
+/**
+ * How fast the merge result rises from the burst (m/s): ~0.15 above the pad before it lands. Calm: no lift at all (the result appears on the pad and settles): the
+ * 0.9 m/s hop carried the bright body up through the top-centre cell of the frame and back, which made the calm Mythic merge 4 local luminance transitions in 1 s (the
+ * harness cell metric, 320x240), the same as the normal one; with no hop it is 2 (calm = reduced motion, DESIGN 6.6).
+ */
+const HOP_VY = [0.9, 1.1, 1.4, 1.7, 1.7, 1.7], HOP_VY_CALM = 0;   // by tier: the Common result only lifts a little (no extra framing for it)
 /**
  * The merge result at the burst carries on the charged ball's light: the TIER tell glows through it and is released within 0.5 s, and
  * the parents' lineage colour swirls through as a lighter accent fading over 0.9 s (a heavy or long mix of two far-apart hues, e.g. a
@@ -126,6 +139,11 @@ export interface CeremonyHost {
   shake(a: number): void;
   /** World half-width of the frame at the table centre at the rest framing of bodies of `scale` (default: the current framing). */
   viewHalfWidth(scale?: number): number;
+  /**
+   * The framing (camera scale) at which a point `h` m above the table at the pad lands `margin` (of the frame's half height) under the top of
+   * the frame, at the camera's current pitch and zoom: how much headroom a body of that height needs (the merge burst's peak).
+   */
+  framingForHeight(h: number, margin?: number): number;
 }
 
 /**
@@ -600,7 +618,10 @@ export class MergeRun extends Run {
     const reach = Math.max(0.5 * fr, Math.min(1.55, hw0 * 0.9 - 0.15, hw0 - 0.58 * fr - 0.02));
     const need = this.layout === 'row' ? 0 : (this.layout === 'pair' ? reach : reach * 0.97) + 0.58 * fr;
     const fit = Math.min(1.5, Math.max(1, need / Math.max(0.2, hw0)));
-    const framing = Math.max(fit, this.calm ? 1 : MERGE_FRAMING[i]);
+    // the burst's peak (the spring-open and the hop) inside the top of the frame, from the result's own rest height (calm: a gentler pop, no widening)
+    const peakH = this.resultView.restH * BURST_OVERSHOOT + (HOP_VY[i] * HOP_VY[i]) / (2 * 9.8);
+    const top = this.calm ? 1 : Math.min(1.5, host.framingForHeight(peakH, BURST_TOP_MARGIN) / fr);
+    const framing = Math.max(fit, this.calm ? 1 : MERGE_FRAMING[i], top);
     host.setFraming(framing * fr, true);  // a cut: the merge starts a new scene (every play body hides), so no zoom move is seen
     const hw = hw0 * framing;
     for (let k = 0; k < n; k++) {
