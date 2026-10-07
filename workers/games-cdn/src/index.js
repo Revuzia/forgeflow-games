@@ -84,9 +84,14 @@ export default {
     // change under their name: cache them for a year, immutable, so a relaunch
     // (a home-screen icon included) re-downloads nothing. Opt-in per game: an
     // unhashed name that merely looks hashed must never be pinned.
-    const IMMUTABLE_HASHED_GAMES = new Set(["dyefield"]);
-    const hashed = IMMUTABLE_HASHED_GAMES.has(key.split("/")[0]) &&
+    const IMMUTABLE_HASHED_GAMES = new Set(["dyefield", "rimfall"]);
+    const game = key.split("/")[0];
+    const hashed = IMMUTABLE_HASHED_GAMES.has(game) &&
       /\/assets\/[^/]+-[A-Za-z0-9_-]{8}\.[a-z0-9]+$/.test(key);
+    // 2026-10-07 (Rimfall): JSON in these games is release pointers and catalogs. A cached
+    // pointer keeps serving the previous release after a deploy or rollback, so it is
+    // never cached. Opt-in per game: other games' JSON keeps the 1-day default.
+    const NO_STORE_JSON_GAMES = new Set(["rimfall"]);
 
     // HTML: no-store (Cloudflare's edge cache will not retain). Assets: 1 day.
     // 2026-05-05 — switched HTML from no-cache to no-store + private after
@@ -99,6 +104,8 @@ export default {
       headers.set("expires", "0");
     } else if (hashed) {
       headers.set("cache-control", "public, max-age=31536000, immutable");
+    } else if (ext === "json" && NO_STORE_JSON_GAMES.has(game)) {
+      headers.set("cache-control", "no-store");
     } else if (ext === "js") {
       headers.set("cache-control", "no-store, no-cache, must-revalidate, private");
       headers.set("pragma", "no-cache");
