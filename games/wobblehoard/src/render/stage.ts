@@ -275,6 +275,11 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
         if (!v.visible) continue;
         const sk = calm ? 0 : Math.min(1, v.seamAmount / 0.85), grew = v.growth > 1.02;
         if (grew || sk > 0.02) hTop = Math.max(hTop, v.restH * v.growth * (1 + 0.45 * sk) * (grew ? 1.15 : 1));
+        // STOPGAP (the generator is PHYS, see _handoff/reports/RENDER_R.md "PART C"): while the neck forms the volume the waist gives up goes UP, and for putty / slow-rise /
+        // firm silicone the lobes stand 2.0x / 2.2x / 2.9x their rest height and the new pieces are thrown up to 1.3 m for ~0.6 s (measured, real body, real shell). The frame
+        // follows the LIVE top of a body that still shows its seam, so those pieces are not cut off by the top of the frame (never more than 2.0x the rest height); a body whose
+        // neck stays low (sticky, gel, mochi, marshmallow ...) is not affected: its live top is below the headroom above
+        if (sk > 0.02) hTop = Math.max(hTop, Math.min(v.jelly.maxY * 1.05, v.restH * v.growth * 2.0));
       }
       want = Math.max(want, hTop / (TARGET_Y + 0.85 * hwPer / Math.max(0.2, camera.aspect))); }
     // one body: a wide species (a half-moon dumpling, a long bean) must fit a narrow portrait frame whole (its rest reach + a margin)
@@ -335,11 +340,19 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     // beside the body instead: never one in front of it just because the frame is narrow)
     spotReframes = !director.active && !!p;
     const baseWant = spotReframes ? framingFor(false, 0, 0, 1).want : 1;
+    const baseDist = Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect)) * zoomF;   // the camera's distance at a framing of 1
     const cx = (x0 + x1) / 2;
     let bx = x1 + CAP_R + 0.14 * sc, bz = zc, bs = 1, bestBad = Infinity, maxRatio = REFRAME_MAX;
     const tryAt = (x: number, z: number, size: number): boolean => {
       let pen = 0;
-      if (spotReframes) { const ratio = framingFor(true, x, z, size).want / Math.max(1e-6, baseWant); if (ratio > maxRatio) pen = (ratio - maxRatio) * 2000; }
+      if (spotReframes) {
+        const f = framingFor(true, x, z, size);
+        let ratio = f.want / Math.max(1e-6, baseWant);
+        // (the camera also aims between the body and a capsule standing in front of it, which moves it forward and the body further from it:
+        // that shrinks the body too, by about depth / distance; a spot that costs more than the limit counts that, not only the zoom)
+        if (f.multi && f.mz > 0) ratio *= 1 + (f.mz * 0.8 * Math.cos(yaw) * Math.cos(pitch)) / (f.want * baseDist);
+        if (ratio > maxRatio) pen = (ratio - maxRatio) * 2000;
+      }
       const bad = spotBadness(x, z, z < zc ? 2 : 0.6, size) + pen + (1 - size) * 4;   // (between equally bad spots, the bigger capsule)
       if (bad < bestBad - 1e-6) { bestBad = bad; bx = x; bz = z; bs = size; }
       return bad - (1 - size) * 4 <= 0;

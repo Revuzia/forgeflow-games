@@ -1044,6 +1044,22 @@ try {
       report.problems.push(...lbad2);
       await lctx.close();
     }
+    if (ON('capspot') || ON('capturn')) {
+      const tctx = await browser.newContext({ viewport: { width: 640, height: 480 }, deviceScaleFactor: 1 });
+      const { page: lp2, bad: lbad2 } = await openView(tctx, `quality=low&body=${bodyQ}`, 'capspot-turn', [/GPU stall due to ReadPixels/i]);
+      const okAt = (r, ins, W) => !!r.cap && r.landed && r.hit && r.cap[3] <= r.H - ins.bottom && r.cap[1] >= ins.top && r.cap[0] >= 0 && r.cap[2] <= W && r.ov === 0;
+      // the phone turned there and back (and a smaller phone, a short landscape one): the capsule is inside the frame, above the HUD rows, clear of the body after every turn
+      // (measured on the real 390x844 shell too: scratch runs/O1d_real_rotate.log)
+      const TURN = [{ w: 390, h: 844, ins: HUD_P }, { w: 844, h: 390, ins: HUD_L }, { w: 390, h: 844, ins: HUD_P }, { w: 360, h: 640, ins: HUD_P }, { w: 568, h: 320, ins: HUD_L }, { w: 390, h: 844, ins: HUD_P }];
+      const T = await lp2.evaluate((o) => window.__RV__.capTurnProbe(o), { genome: speciesBaseGenome('dollop', 1), steps: TURN });
+      T.pngs.forEach((p, i) => writeFileSync(resolve(OUT, `capturn_${i}_${TURN[i].w}x${TURN[i].h}.png`), b64(p)));
+      const turnOk = T.reports.map((r, i) => okAt(r, TURN[i].ins, TURN[i].w) && r.body[0] >= 0 && r.body[2] <= TURN[i].w);
+      RB.mat['capturn'] = T.reports.map((r, i) => ({ frame: `${TURN[i].w}x${TURN[i].h}`, cap: r.cap, body: r.body, size: r.size, camScale: +T.camScale[i].toFixed(3) }));
+      check(turnOk.every(Boolean), 'a WAITING capsule through a phone turned there and back (390x844 > 844x390 > 390x844 > 360x640 > 568x320 > 390x844): after every turn it is inside the frame, above the HUD rows, clear of the body, tappable, and the body is in the frame',
+        T.reports.map((r, i) => `${TURN[i].w}x${TURN[i].h} ${turnOk[i] ? 'ok' : 'BAD'} cap ${JSON.stringify(r.cap)} (size ${r.size.toFixed(2)}) body ${JSON.stringify(r.body)}`).join('; '));
+      report.problems.push(...lbad2);
+      await tctx.close();
+    }
     await sheetCtxB.close();
   }
 
@@ -1111,6 +1127,12 @@ try {
           `CUT parting threads (${name}, ${r.family}): ${tacky ? 'several threads hang between the pieces (>= 2), each cut hangs a thread that stretches and snaps' : 'at most one wisp'}`, `threads <= ${r.maxStrands}, stretch frames ${r.strandEvents}, snaps ${r.snapEvents}`);
         // a piece that GROWS while the others flow into it (setFrac up) stays inside the frame (the framing follows its growth), and the 6 pieces are framed whole
         check(r.framed.inFrame && r.framed.pieces >= 5 && r.framed.minPx >= 30 && r.minTopPx >= -2, `CUT framing (${name}): the pieces (up to 6) are inside the 640x480 frame, and the face piece never leaves the top of it while it grows back to full size`, `pieces ${r.framed.pieces}, smallest ${r.framed.minPx.toFixed(0)} px, highest point while it grows ${r.minTopPx.toFixed(0)} px from the top (neck ${(r.minTopByPhase.neck ?? 0).toFixed(0)}, pieces ${(r.minTopByPhase.pieces ?? 0).toFixed(0)})`);
+        // ... and through the NECK and the first second after the parting: a body whose neck stays low (sticky, gel, slime) is never cut off by the top of the frame. The PUTTY / slow-rise /
+        // firm-silicone families are NOT gated here: the physics' neck morph stands their lobes up to 2.0x / 2.2x / 2.9x the rest height and throws the new pieces up to 1.3 m for ~0.6 s
+        // (measured on the real shell too: _handoff/reports/RENDER_R.md PART C, a PHYS issue); the stage's headroom stopgap (stage.ts framingFor) only limits the cut-off
+        const nk = r.minTopByPhase.neck ?? 0, pc = r.minTopByPhase.pieces ?? 0;
+        if (r.family === 'putty') console.log(`KNOWN (PHYS, not gated) CUT neck/pieces vs the frame top (${name}, ${r.family}): lobes reach ${nk.toFixed(0)} px / pieces ${pc.toFixed(0)} px from the top of the 640x480 frame (negative = cut off)`);
+        else check(nk >= -2 && pc >= -2, `CUT framing through the neck and the parting (${name}, ${r.family}): the lobes and the new pieces are never cut off by the top of the frame`, `neck ${nk.toFixed(0)} px, pieces ${pc.toFixed(0)} px from the top`);
       }
     }
     report.problems.push(...xbad);

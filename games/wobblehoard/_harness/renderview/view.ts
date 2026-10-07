@@ -1053,13 +1053,13 @@ const RV = {
    * are removed and a fresh WHOLE body replaces the face piece through setBody. Returns what the checks and the filmstrips need.
    * `swipes` = for each cut, where across the biggest piece the swipe goes (in rest radii from its centre: 0 = through the middle).
    */
-  realCutProbe(o: { species: string; seed?: number; swipes: number[]; /** each cut splits the biggest piece so that its smaller part is about this share of the WHOLE (0 = use `swipes`) */ autoSmall?: number; calm?: boolean; dt?: number; gapS?: number; reconnect?: boolean; record?: boolean; shots?: boolean }): {
+  realCutProbe(o: { species: string; seed?: number; swipes: number[]; /** each cut splits the biggest piece so that its smaller part is about this share of the WHOLE (0 = use `swipes`) */ autoSmall?: number; calm?: boolean; dt?: number; gapS?: number; reconnect?: boolean; record?: boolean; shots?: boolean; /** FILMSTRIP: scheduled stills through the FIRST cut (neck half / end, right after the separation, +0.12 / 0.3 / 0.6 / 1.0 s) and the Reconnect all (bridge at 0.06 / 0.15 / 0.25 / 0.4 / 0.6 / 0.95 s, whole again), keys film_a.. */ film?: boolean }): {
     skipped: boolean; family: string; lumas: number[]; light: number[]; marks: string[]; cutsDone: number; refused: number; maxPieces: number; maxStrands: number; maxBridges: number; maxGlow: number;
     strandEvents: number; snapEvents: number; seamCarry: number[]; minTopPx: number; minTopByPhase: Record<string, number>; framed: { pieces: number; inFrame: boolean; minPx: number }; viewsAtEnd: number; facesAtEnd: number; piecesAtEnd: number;
-    shots: Record<string, string>; ms: number;
+    shots: Record<string, string>; ms: number; /** per frame from the first cut on: [seconds, lowest vertex y of any piece, highest vertex y, phase] (world metres above the table) */ ys: [number, number, number, string][]; restTop: number;
   } {
     const out = { skipped: false, family: '', lumas: [] as number[], light: [] as number[], marks: [] as string[], cutsDone: 0, refused: 0, maxPieces: 1, maxStrands: 0, maxBridges: 0, maxGlow: 0,
-      strandEvents: 0, snapEvents: 0, seamCarry: [] as number[], minTopPx: Infinity, minTopByPhase: {} as Record<string, number>, framed: { pieces: 0, inFrame: true, minPx: Infinity }, viewsAtEnd: 0, facesAtEnd: 0, piecesAtEnd: 0, shots: {} as Record<string, string>, ms: 0 };
+      strandEvents: 0, snapEvents: 0, seamCarry: [] as number[], minTopPx: Infinity, minTopByPhase: {} as Record<string, number>, framed: { pieces: 0, inFrame: true, minPx: Infinity }, viewsAtEnd: 0, facesAtEnd: 0, piecesAtEnd: 0, shots: {} as Record<string, string>, ms: 0, ys: [] as [number, number, number, string][], restTop: 0 };
     if (!RealBody) { out.skipped = true; return out; }
     const SB = RealBody, t0 = performance.now();
     const dt = o.dt ?? 1 / 30, g = speciesBaseGenome(o.species as Parameters<typeof speciesBaseGenome>[0], o.seed ?? 1), def = getSpecies(g.species), fam = def ? def.family : 'jellygel', tier = (def ? def.tier : 'common') as TierName;
@@ -1081,6 +1081,8 @@ const RV = {
     let tStart = -1;
     const pv = new THREE.Vector3();
     let phase = 'neck';
+    const sched: [number, string][] = [];
+    const film = (at: number, name: string): void => { if (o.film) { sched.push([at, name]); sched.sort((a, b) => a[0] - b[0]); } };
     const watchTop = (): void => {
       const chh = canvas.clientHeight || canvas.height;
       let low = out.minTopByPhase[phase] ?? Infinity;
@@ -1095,14 +1097,16 @@ const RV = {
       time += dt; frameNo++;
       for (const s of settling.slice()) if (time >= s.until) { try { s.p.body.moveTo?.(null); } catch { /* optional */ } settling = settling.filter((x) => x !== s); }
       stage.update(dt, { time, pointerNdc: null });
+      while (sched.length && time >= sched[0][0] - 1e-9) { const nm = sched.shift()![1]; shot(nm); }
       if (record && (o.record ?? true)) { stage.render(); out.lumas.push(meanLuma()); out.light.push(stage.info.screenLight); }
       const c = stage.info.cut;
       out.maxGlow = Math.max(out.maxGlow, c.glow); out.maxStrands = Math.max(out.maxStrands, c.strands); out.maxBridges = Math.max(out.maxBridges, c.bridges); out.maxPieces = Math.max(out.maxPieces, list.length);
-      if (tStart >= 0) watchTop();
+      if (tStart >= 0) { watchTop(); let lo = Infinity, hi = -Infinity; for (const v of stage.views) { const P = v.proxy.positions; for (let i = 1; i < P.length; i += 3) { if (P[i] < lo) lo = P[i]; if (P[i] > hi) hi = P[i]; } } out.ys.push([time - tStart, lo, hi, phase]); }
     };
     const shot = (name: string): void => { if (o.shots) { stage.render(); out.shots[name] = canvas.toDataURL('image/jpeg', 0.9); } };
     stage.onStrand = (_id, e): void => { if (e.snap) out.snapEvents++; else out.strandEvents++; };
     for (let i = 0; i < 90; i++) step(false);
+    { let hi = -Infinity; for (const v of stage.views) { const P = v.proxy.positions; for (let i = 1; i < P.length; i += 3) if (P[i] > hi) hi = P[i]; } out.restTop = hi; }
     const swapTo = (face: Piece): void => {
       stage.setBody(face.body, g); playBody = face.body; body = face.body;
       stage.setBodyTier(stage.primaryBodyId() ?? -1, tier);
@@ -1147,6 +1151,7 @@ const RV = {
       const view = viewOf(p), tc = time;
       if (tStart < 0) tStart = time;
       phase = 'neck';
+      if (out.cutsDone === 0) { film(tc + neckS * 0.5, 'film_a_neck_half'); film(tc + neckS * 0.97, 'film_b_neck_end'); }
       while (time - tc < neckS + 0.08) {
         const k = smooth((time - tc) / neckS);
         p.body.setNeck!(plane, k); if (view !== null) stage.setCutSeam!(view, plane, k);
@@ -1171,6 +1176,7 @@ const RV = {
       for (const [q, c, s] of [[A, lc.a, 1], [Bp, lc.b, -1]] as [Piece, V3, number][]) if (q.chunk) { try { q.body.moveTo?.({ x: c.x + s * n.x * 0.06, y: c.y, z: c.z + s * n.z * 0.06 }, 4); settling.push({ p: q, until: time + 0.8 }); } catch { /* optional */ } }
       const ia = viewOf(A), ib = viewOf(Bp);
       if (ia !== null && ib !== null) stage.partPieces!(ia, ib);
+      if (out.cutsDone === 0) { const ts = time; film(ts + dt * 0.5, 'film_c_apart_0'); film(ts + 0.12, 'film_d_apart_120ms'); film(ts + 0.3, 'film_e_apart_300ms'); film(ts + 0.6, 'film_f_apart_600ms'); film(ts + 1.0, 'film_g_apart_1s'); }
       // the seam must be carried over onto the new pieces by now (one frame later): their views' seam strength
       stage.update(0, { time, pointerNdc: null });
       out.seamCarry.push(Math.max(0, ...stage.views.map((v) => v.seamAmount)));
@@ -1202,6 +1208,7 @@ const RV = {
       face.body.setFrac!(1, secs);
       for (const q of list.slice(1)) { q.body.setFrac!(1 / 8, secs); q.ghost = true; }
       const tr = time;
+      film(tr + 0.06, 'film_h1_bridge_0.06'); film(tr + 0.15, 'film_h2_bridge_0.15'); film(tr + 0.25, 'film_h3_bridge_0.25'); film(tr + 0.4, 'film_i1_bridge_0.4'); film(tr + 0.6, 'film_i2_bridge_0.6'); film(tr + 0.95, 'film_j_bridge_end');
       while (time - tr < secs) {
         const k = smooth((time - tr) / secs);
         for (const q of list.slice(1)) { stage.setBridge!(viewOf(face)!, viewOf(q)!, k); q.body.moveTo?.(face.body.center, 1.6); }
@@ -1214,6 +1221,7 @@ const RV = {
       list = [{ body: nb, chunk: false, frac: 1, id: null, ghost: false }];
       swapTo(list[0]);
       out.marks.push(`whole@${(time - tStart).toFixed(2)}`);
+      film(time + 0.3, 'film_k_whole');
     }
     for (let i = 0; i < Math.round(1.0 / dt); i++) step();
     shot('whole');
@@ -1278,6 +1286,33 @@ const RV = {
       run(360);
       const r3 = capReport(s2, hd, o.w2, o.h2); pngs.push(c2.toDataURL('image/png')); note(r3);
       return { r0, r1, r2, r3, pngs, moved };
+    } finally { s2.dispose(); c2.remove(); }
+  },
+
+  /**
+   * A phone turned there and back: a WAITING capsule through a list of frames (each with its own HUD rows), the way the shell's resize and its HUD
+   * binding report them (stage.resize then setSafeInsets). One report per step, after the capsule has had time to settle.
+   */
+  capTurnProbe(o: { genome: Genome; steps: { w: number; h: number; ins: { top?: number; bottom?: number } }[]; settle?: number }): { reports: CapReport[]; pngs: string[]; camScale: number[] } {
+    const first = o.steps[0];
+    const c2 = document.createElement('canvas'); c2.width = first.w; c2.height = first.h;
+    c2.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    document.body.appendChild(c2);
+    const s2 = createStageDev(c2);
+    try {
+      s2.resize(first.w, first.h, 1); s2.setSafeInsets(first.ins);
+      const b = makeBody(o.genome); s2.setBody(b, o.genome);
+      let tt = 0;
+      const run = (n: number): void => { for (let i = 0; i < n; i++) { b.step(1 / 60); events.length = 0; b.drainEvents(events); tt += 1 / 60; s2.update(1 / 60, { time: tt, pointerNdc: null }); } s2.render(); };
+      run(60);
+      const hd = s2.dropCapsule!();
+      const reports: CapReport[] = [], pngs: string[] = [], camScale: number[] = [];
+      o.steps.forEach((st, i) => {
+        if (i > 0) { s2.resize(st.w, st.h, 1); s2.setSafeInsets(st.ins); }
+        run(o.settle ?? 240);
+        reports.push(capReport(s2, hd, st.w, st.h)); pngs.push(c2.toDataURL('image/png')); camScale.push(s2.info.camScale);
+      });
+      return { reports, pngs, camScale };
     } finally { s2.dispose(); c2.remove(); }
   },
 
@@ -1369,13 +1404,17 @@ const RV = {
   domeMargin(kind: 'merge' | 'capsule', tier: TierName = 'mythic'): { minMarginPx: number; atFrame: number; rx: number } {
     stage.clearBodies(); setupBody(genomeFromParam('')); stage.setCalmEffects(false); RV.frames(40, 1 / 30);
     if (kind === 'merge') RV.merge(tier, 2, false); else RV.capsuleReveal(tier);
-    const h = cer.handle as CeremonyHandle, W = canvas.clientWidth || canvas.width, P = new THREE.Vector3();
+    const h = cer.handle as CeremonyHandle, W = canvas.clientWidth || canvas.width, P = new THREE.Vector3(), wp = new THREE.Vector3(), ws = new THREE.Vector3();
     let minM = Infinity, at = -1, rx = 0;
     for (let f = 1; f <= 600 && h.active; f++) {
       frame(1 / 30, false);
       stage.scene.traverse((o) => {
-        if (o.renderOrder !== 26 || !o.visible || !(o as THREE.Mesh).isMesh) return;
-        for (const sx of [-1, 1]) { P.set(o.position.x + sx * o.scale.x, 0, o.position.z).project(stage.camera); const px = (P.x * 0.5 + 0.5) * W, m = sx < 0 ? px : W - px; if (m < minM) { minM = m; at = f; rx = o.scale.x; } }
+        if (o.renderOrder !== 26 || !(o as THREE.Mesh).isMesh) return;
+        // only a dome that is DRAWN: it and every ancestor visible (a ceremony result view that is still hidden carries a Mythic dome mesh whose own flag is on;
+        // it counted against the frame sides at frame 1 although nothing was drawn), at its WORLD position and scale (the result's dome rides its body's offset / scale)
+        for (let q: THREE.Object3D | null = o; q; q = q.parent) if (!q.visible) return;
+        o.updateWorldMatrix(true, false); wp.setFromMatrixPosition(o.matrixWorld); o.getWorldScale(ws);
+        for (const sx of [-1, 1]) { P.set(wp.x + sx * ws.x, 0, wp.z).project(stage.camera); const px = (P.x * 0.5 + 0.5) * W, m = sx < 0 ? px : W - px; if (m < minM) { minM = m; at = f; rx = ws.x; } }
       });
     }
     if (h.resultBody) body = h.resultBody;
