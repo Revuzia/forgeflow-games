@@ -5,7 +5,7 @@
 // random_bench (bench swap + reroll), fray ffa_pick (placement grants), custom lobby (rules
 // override reaches the sim), practice smoke; plus same-seed determinism.
 import { check, finish, section } from './fixtures/sim_fixture.ts';
-import { countOf, harness, lastOf, PROBE_TIME_LIMIT, runFlow, type FlowResult, type Harness } from './fixtures/session_fixture.ts';
+import { countOf, harness, lastOf, PROBE_TIME_LIMIT, runFlow, sessionCatalog, type FlowResult, type Harness } from './fixtures/session_fixture.ts';
 import type { DraftAction, DraftState, SessionEvent } from '../src/contracts/session.ts';
 import type { MatchSetup } from '../src/contracts/sim.ts';
 import { checkInvariants } from '../src/session/economy.ts';
@@ -253,6 +253,17 @@ section('practice: solo on the mode map, practice switches, practice commands, l
   check('practice without a preset: a solo blind pick', h2.session.draftView()?.phase === 'pick' && h2.session.draftView()?.seats.length === 1);
   h2.clock.advanceUntil(() => h2.session.phase === 'loading', 30_000);
   check('…which times out into a random fighter and loads', h2.session.phase === 'loading' && !!lastOf(h2, 'loading')?.setup.seats[0].fighter);
+});
+
+section('without a time limit, a match reaches the core (fixture bots push; first of seeds 1–6)', () => {
+  let found: FlowResult | null = null;
+  for (let seed = 1; seed <= 6 && !found; seed++) {
+    const h = harness({ catalog: sessionCatalog({ timeLimit: false }), seed });
+    const r = runFlow(h, { queue: 'fx_s_bridge' }, { maxGameSeconds: 900 });
+    if (r.ok && r.result?.reason === 'core') found = r;
+  }
+  if (found) report('bridge to the core', found);
+  check("a 'core' end with a winner, reported through post-game", !!found && found.result!.winningTeam >= 0 && found.postgame!.grants.lines.length > 0);
 });
 
 section('determinism: same seed, same flow → same setup and same match', () => {

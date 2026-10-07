@@ -1,0 +1,42 @@
+[
+  {
+    "id": "shadehold",
+    "name": "Shadehold",
+    "contract": "Holds the top road alone. Win your duel or stay even, keep your Needles standing, and arrive at the big fights as a front line.",
+    "icon": "assets/ui/icons/roles/shadehold.svg",
+    "color": "#A096DC",
+    "assign": { "lane": "road_high", "jungle": false, "support": false, "order": 1 }
+  },
+  {
+    "id": "grovehunter",
+    "name": "Grovehunter",
+    "contract": "Has no road. Hunt the camps in the Dialwood, catch enemies who walk too far up a road, and lead your team to the big objectives.",
+    "icon": "assets/ui/icons/roles/grovehunter.svg",
+    "color": "#8FBF6A",
+    "assign": { "lane": null, "jungle": true, "support": false, "order": 2 }
+  },
+  {
+    "id": "dialcross",
+    "name": "Dialcross",
+    "contract": "Holds the short centre road across the Seat. Clear your wave fast, then cross to a side road and turn its fight before the enemy can follow.",
+    "icon": "assets/ui/icons/roles/dialcross.svg",
+    "color": "#5FC6C4",
+    "assign": { "lane": "road_seat", "jungle": false, "support": false, "order": 3 }
+  },
+  {
+    "id": "shaftlight",
+    "name": "Shaftlight",
+    "contract": "Shares the bottom road with your Lampglass. Last-hit every Wick you can, stay behind your front line, and become the team's steady damage late in the match.",
+    "icon": "assets/ui/icons/roles/shaftlight.svg",
+    "color": "#F08F86",
+    "assign": { "lane": "road_low", "jungle": false, "support": false, "order": 4 }
+  },
+  {
+    "id": "lampglass",
+    "name": "Lampglass",
+    "contract": "Shares the bottom road and leaves the gold to your Shaftlight. Shield and heal them, start or stop fights, and light up the map so your team sees danger first.",
+    "icon": "assets/ui/icons/roles/lampglass.svg",
+    "color": "#D8D47E",
+    "assign": { "lane": "road_low", "jungle": false, "support": true, "order": 5 }
+  }
+]

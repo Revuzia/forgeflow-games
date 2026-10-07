@@ -40,7 +40,13 @@ export const DEFAULT_BINDS: Readonly<Record<string, string>> = {
   attackMove: 'KeyA', stop: 'KeyS', cameraLock: 'KeyY', centerCamera: 'Space', selfCastMod: 'AltLeft',
 };
 
+/** the defaults, in the canonical key order normalizeSettings produces (stable JSON) */
 export function defaultSettings(): Settings {
+  const d = rawDefaults();
+  return normalizeSettings(d, d);
+}
+
+function rawDefaults(): Settings {
   return {
     video: { preset: 'high', ...VIDEO_LADDER.high, fpsCap: 0, fullscreen: false },
     audio: { master: 0.8, music: 0.6, sfx: 0.8, voice: 0.9, ui: 0.7, ambience: 0.6, muteInBackground: true },
@@ -119,31 +125,35 @@ export function normalizeSettings(raw: unknown, base: Settings = defaultSettings
 }
 
 /**
- * Settings after a partial patch (section by section; binds merge key by key). A patch that sets
- * `video.preset` applies that preset first and then any explicit ladder values in the same patch;
- * a patch that only changes ladder values re-detects the preset (usually → 'custom').
+ * Settings after a partial patch (section by section; binds merge key by key). Sections arrive whole
+ * (Partial<Settings> is shallow), so only ladder values that DIFFER from the current ones count as
+ * edits: a new `video.preset` applies its ladder first, then any edited ladder values; edited ladder
+ * values re-detect the preset (usually → 'custom'); 'custom' keeps the values.
  */
 export function patchSettings(cur: Settings, patch: Partial<Settings>): Settings {
   const p = (patch ?? {}) as Partial<Settings>;
   let video = cur.video;
+  let preset = cur.video.preset;
   if (p.video) {
     const pv = p.video as Partial<Settings['video']>;
-    if (pv.preset && pv.preset !== cur.video.preset) video = applyPreset(video, pv.preset);
-    video = { ...video, ...pv, preset: video.preset };
+    const edited = LADDER_KEYS.filter((k) => pv[k] !== undefined && pv[k] !== cur.video[k]);
+    const rest: Partial<Settings['video']> = { ...pv };
+    for (const k of LADDER_KEYS) delete rest[k];
+    delete rest.preset;
+    video = { ...cur.video, ...rest };
+    if (pv.preset && pv.preset !== cur.video.preset) { video = applyPreset(video, pv.preset); preset = pv.preset; }
+    const v = video as unknown as Record<string, unknown>;
+    for (const k of edited) v[k] = pv[k];
+    if (edited.length) preset = detectPreset(video);
   }
   const merged = {
-    video,
+    video: { ...video, preset },
     audio: { ...cur.audio, ...(p.audio ?? {}) },
     controls: { ...cur.controls, ...(p.controls ?? {}), binds: { ...cur.controls.binds, ...((p.controls as Partial<Settings['controls']> | undefined)?.binds ?? {}) } },
     access: { ...cur.access, ...(p.access ?? {}) },
     gameplay: { ...cur.gameplay, ...(p.gameplay ?? {}) },
   };
   const out = normalizeSettings(merged, cur);
-  if (p.video) {
-    const asked = (p.video as Partial<Settings['video']>).preset;
-    const ladderTouched = LADDER_KEYS.some((k) => k in (p.video as object));
-    if (!asked || ladderTouched) out.video.preset = detectPreset(out.video);
-    else out.video.preset = asked;
-  }
+  if (out.video.preset !== 'custom' && detectPreset(out.video) !== out.video.preset) out.video.preset = detectPreset(out.video);
   return out;
 }

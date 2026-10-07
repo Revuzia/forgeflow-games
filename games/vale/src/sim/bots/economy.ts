@@ -81,44 +81,66 @@ export class Economy {
     return null;
   }
 
-  /** the next purchase toward `goal` that is affordable right now (null: none) */
-  private step(w: World, p: Player, goal: string): { buy: string | null; full: boolean } {
-    const q = quoteBuy(w, p, goal);
-    if (q.ok) return { buy: goal, full: false };
-    if (q.reason === 'unique' || q.reason === 'pool' || q.reason === 'unknown') { this.skip.add(goal); return { buy: null, full: false }; }
-    if (q.reason === 'slots') return { buy: null, full: true };
-    // pick the most valuable affordable missing component
-    const counts = this.owned(p);
-    let best: string | null = null, bestCost = -1, full = false;
+  /** the inventory as a multiset (only what sits in the bag: components inside a finished item are spent) */
+  private bag(p: Player): Map<string, number> {
+    const m = new Map<string, number>();
+    for (const id of p.items) if (id) m.set(id, (m.get(id) ?? 0) + 1);
+    return m;
+  }
+
+  /**
+   * Walk `goal`'s recipe the way the shop prices it (an owned component is consumed; a missing one is
+   * looked for one level down): `buy` = the most valuable missing piece affordable now, `cheapest` =
+   * the cheapest missing piece at all, `full` = a piece is affordable but the bag has no room.
+   */
+  private walk(w: World, p: Player, goal: string): { buy: string | null; cheapest: number; full: boolean } {
+    const counts = this.bag(p);
+    let buy: string | null = null, bestCost = -1, cheapest = Infinity, full = false;
     const visit = (id: string, depth: number): void => {
       const it = this.k.idx.items.get(id);
       if (!it || depth > 6) return;
       for (const c of it.components) {
         const n = counts.get(c) ?? 0;
         if (n > 0) { counts.set(c, n - 1); continue; }
-        const qc = quoteBuy(w, p, c);
         const cost = this.k.idx.items.get(c)?.cost ?? 0;
-        if (qc.ok) { if (cost > bestCost) { bestCost = cost; best = c; } }
+        const qc = quoteBuy(w, p, c, false);
+        if (qc.price < cheapest) cheapest = qc.price;
+        if (qc.ok) { if (cost > bestCost) { bestCost = cost; buy = c; } }
         else if (qc.reason === 'slots') full = true;
         visit(c, depth + 1);
       }
     };
     visit(goal, 0);
-    return { buy: best, full: best === null && full };
+    return { buy, cheapest, full };
+  }
+
+  /** the next purchase toward `goal` that is affordable right now (null: none) */
+  private step(w: World, p: Player, goal: string): { buy: string | null; full: boolean } {
+    const q = quoteBuy(w, p, goal);
+    if (q.ok) return { buy: goal, full: false };
+    if (q.reason === 'unique' || q.reason === 'pool' || q.reason === 'unknown') { this.skip.add(goal); return { buy: null, full: false }; }
+    if (q.reason === 'slots') return { buy: null, full: true };
+    const r = this.walk(w, p, goal);
+    return { buy: r.buy, full: r.buy === null && r.full };
   }
 
   /** the cheapest price that would make progress (for "go shopping" decisions) */
   nextPrice(w: World, p: Player): number {
     const g = this.goal(w, p);
     if (!g) return Infinity;
-    const it = this.k.idx.items.get(g);
-    if (!it) return Infinity;
-    let cheapest = quoteBuy(w, p, g, false).price;
-    for (const c of it.components) {
-      const ci = this.k.idx.items.get(c);
-      if (ci && ci.cost < cheapest && !p.items.includes(c)) cheapest = ci.cost;
-    }
-    return cheapest;
+    const whole = quoteBuy(w, p, g, false);
+    if (whole.reason === 'unique' || whole.reason === 'pool' || whole.reason === 'unknown') return Infinity;
+    return Math.min(whole.price, this.walk(w, p, g).cheapest);
+  }
+
+  /** would a shop visit buy something right now (gold-wise)? */
+  canBuyNow(w: World, p: Player): boolean {
+    const g = this.goal(w, p);
+    if (!g) return false;
+    const whole = quoteBuy(w, p, g, false);
+    if (whole.ok) return true;
+    if (whole.reason !== 'gold' && whole.reason !== 'slots') return false;
+    return this.walk(w, p, g).buy !== null || p.gold >= whole.price;
   }
 
   /** buy / sell while the shop is reachable; at most one command every few ticks */

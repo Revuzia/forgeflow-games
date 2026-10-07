@@ -245,6 +245,8 @@ export interface StructInfo {
   readonly isCore: boolean;
   /** comes back after it falls (MapDef structure `respawn`) */
   readonly respawns: boolean;
+  /** seconds until it comes back (0: never) */
+  readonly respawnTime: number;
 }
 export interface CampInfo {
   readonly id: string; readonly index: number; readonly x: number; readonly y: number;
@@ -376,6 +378,24 @@ const STYLE_STATS: Readonly<Record<Style, StatW>> = {
   skirmisher: { ad: 1, attackSpeed: 40, crit: 35, lifesteal: 40, hp: 0.04, armor: 0.3, haste: 0.4, omnivamp: 40 },
   sustain: { ad: 0.7, ap: 0.7, hp: 0.06, omnivamp: 50, lifesteal: 30, hpRegen: 4, armor: 0.3, resist: 0.3, haste: 0.4 },
 };
+
+/** value points of a stat block for a fighter (items, boons) */
+export function statValue(stats: StatBlockT | undefined, prof: FighterProfile): number {
+  if (!stats) return 0;
+  const st = STYLE_STATS[prof.style];
+  const magic = prof.scaling === 'magic';
+  let v = 0;
+  for (const k in stats) {
+    const amount = (stats as Record<string, number | undefined>)[k] ?? 0;
+    let wgt = (st as Record<string, number | undefined>)[k] ?? 0;
+    if (k === 'ad' && magic) wgt = Math.min(wgt, 0.15);
+    else if (k === 'ap' && !magic) wgt = Math.min(wgt, 0.1);
+    else if (k === 'ap' && magic && wgt === 0) wgt = 0.7;
+    else if (k === 'ad' && !magic && wgt === 0) wgt = 0.4;
+    v += amount * wgt;
+  }
+  return v;
+}
 
 export function itemValue(it: ItemDefT, prof: FighterProfile): number {
   const st = STYLE_STATS[prof.style];
@@ -513,7 +533,7 @@ export function buildKnowledge(catalog: CatalogT, setup: MatchSetup, idx?: Catal
       structs.push({
         id: st.id, unit: st.unit, team: st.team, x: st.at[0], y: st.at[1], lane, s, attacks,
         range: u?.attack?.range ?? 0, radius: u?.collisionRadius ?? 1, isCore: core !== undefined && (st.unit === core || st.id === core),
-        respawns: st.respawn !== undefined && st.respawn > 0,
+        respawns: st.respawn !== undefined && st.respawn > 0, respawnTime: st.respawn ?? 0,
       });
     }
   }

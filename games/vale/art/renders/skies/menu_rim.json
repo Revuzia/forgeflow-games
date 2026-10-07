@@ -1,0 +1,67 @@
+{
+  "render_s": 25.72,
+  "mean_sky_lum": 1.0,
+  "max": 17.61,
+  "scale": 0.20089,
+  "total_s": 26.12,
+  "sun_dir_three": [
+    -0.8937,
+    0.309,
+    0.3253
+  ],
+  "sun_dir_bible": [
+    -0.8937,
+    0.309,
+    0.3253
+  ],
+  "sun_dir_check": true,
+  "out": "art/out/maps/menu_rim/sky.hdr",
+  "bytes": 1687306,
+  "lighting_source": "tokens.json grade.maps.menu (fog: distance); sunDir recomputed from bearing 250 / elevation 18 and checked against tokens sun.dir: True",
+  "sun_dir_tokens": [
+    -0.8937,
+    0.309,
+    0.3253
+  ],
+  "sun_dir_matches_tokens": true,
+  "lighting": "art/out/maps/menu_rim/lighting.json",
+  "previews": {
+    "equirect": "art/renders/skies/menu_rim.png",
+    "views": "art/renders/skies/menu_rim_views.png"
+  },
+  "ambient": 0.8,
+  "preset": {
+    "_name": "The Rim at the Split Hour - low sun from the left, cool west / warm east",
+    "tokens": "menu",
+    "out": "maps/menu_rim/sky.hdr",
+    "size": [
+      2048,
+      1024
+    ],
+    "sun_bearing_deg": 250,
+    "sun_elevation_deg": 18,
+    "sky_type": "MULTIPLE_SCATTERING",
+    "air": 1.0,
+    "aerosol": 1.6,
+    "ozone": 1.0,
+    "altitude_m": 300,
+    "cloud_kind": "cumulus",
+    "cloud_cover": 0.42,
+    "cloud_scale": 0.9,
+    "cloud_softness": 0.18,
+    "cloud_opacity": 0.9,
+    "cloud_tint": "#ffe8d0",
+    "cloud_shadow_tint": "#8f9ab3",
+    "sky_tint": "#ffffff",
+    "split": {
+      "west": "#b8c6d9",
+      "east": "#d9c2a0",
+      "strength": 0.45
+    },
+    "ground": "#8c8577",
+    "sun_disc": false,
+    "exposure": 0.0,
+    "samples": 16,
+    "seed": 250
+  }
+}

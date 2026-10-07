@@ -1,0 +1,385 @@
+{
+  "id": "vale_grade_01",
+  "file": "art/out/grade/vale_grade_01.cube",
+  "size": 33,
+  "sha256": "44e531c20b0a810616e55c3e1d15947c2da85ed33b966bc7d80abc18c4594111",
+  "bytes": 970651,
+  "input": "Khronos PBR Neutral tone-mapped display sRGB (exposure 1.0)",
+  "spec": {
+    "id": "vale_grade_01",
+    "size": 33,
+    "ops": [
+      {
+        "op": "lift",
+        "rgb": [
+          -0.004,
+          0.0,
+          0.012
+        ]
+      },
+      {
+        "op": "gamma",
+        "rgb": [
+          1.0,
+          1.0,
+          0.985
+        ],
+        "note": "out = in^(1/gamma)"
+      },
+      {
+        "op": "gain",
+        "rgb": [
+          1.025,
+          1.0,
+          0.975
+        ]
+      },
+      {
+        "op": "contrast",
+        "amount": 1.06,
+        "pivot": 0.42,
+        "softToeShoulder": true
+      },
+      {
+        "op": "satByLuma",
+        "bands": [
+          [
+            0.0,
+            0.15,
+            0.85
+          ],
+          [
+            0.15,
+            0.6,
+            1.05
+          ],
+          [
+            0.6,
+            0.85,
+            1.0
+          ],
+          [
+            0.85,
+            1.0,
+            0.92
+          ]
+        ],
+        "featherLuma": 0.05
+      },
+      {
+        "op": "hueSat",
+        "space": "HSV",
+        "featherDeg": 8,
+        "bands": [
+          {
+            "hue": [
+              75,
+              150
+            ],
+            "sat": 0.88,
+            "why": "foliage recedes, never competes with heal"
+          },
+          {
+            "hue": [
+              170,
+              200
+            ],
+            "sat": 0.9
+          },
+          {
+            "hue": [
+              200,
+              225
+            ],
+            "sat": 0.85,
+            "onlyIfValueBelow": 0.85,
+            "why": "world chroma near ally azure is suppressed; emissive accents (V >= 0.85) untouched"
+          },
+          {
+            "hue": [
+              25,
+              50
+            ],
+            "sat": 0.85,
+            "onlyIfValueBelow": 0.85,
+            "why": "world chroma near harm marigold is suppressed"
+          }
+        ]
+      },
+      {
+        "op": "hueShift",
+        "space": "HSV",
+        "hue": [
+          75,
+          150
+        ],
+        "deg": -5,
+        "featherDeg": 8
+      },
+      {
+        "op": "gamutSoftClip",
+        "space": "OKLCH",
+        "kneeChroma": 0.2,
+        "maxChroma": 0.24
+      }
+    ],
+    "protect": {
+      "value": [
+        0.8,
+        0.85
+      ],
+      "sat": [
+        0.25,
+        0.4
+      ]
+    }
+  },
+  "verify": {
+    "colours": {
+      "self": {
+        "hex": "#F4EFE2",
+        "full_value_trilinear": 1.3,
+        "full_value_tetrahedral": 1.3,
+        "full_value_out": "#FFFAEA",
+        "as_is_trilinear": 1.97,
+        "as_is_tetrahedral": 1.97,
+        "as_is_out": "#FAF1E1",
+        "pass": true
+      },
+      "ally": {
+        "hex": "#3F9CFF",
+        "full_value_trilinear": 1.51,
+        "full_value_tetrahedral": 1.51,
+        "full_value_out": "#3E9FF9",
+        "as_is_trilinear": 1.51,
+        "as_is_tetrahedral": 1.51,
+        "as_is_out": "#3E9FF9",
+        "pass": true
+      },
+      "enemy": {
+        "hex": "#FF9A1F",
+        "full_value_trilinear": 1.06,
+        "full_value_tetrahedral": 1.06,
+        "full_value_out": "#FF9D1E",
+        "as_is_trilinear": 1.06,
+        "as_is_tetrahedral": 1.06,
+        "as_is_out": "#FF9D1E",
+        "pass": true
+      },
+      "neutral": {
+        "hex": "#A9A49A",
+        "full_value_trilinear": 1.41,
+        "full_value_tetrahedral": 1.41,
+        "full_value_out": "#FEF8E7",
+        "as_is_trilinear": 2.14,
+        "as_is_tetrahedral": 2.09,
+        "as_is_out": "#B0A99C",
+        "pass": true
+      },
+      "self_deutan": {
+        "hex": "#FBF8F0",
+        "full_value_trilinear": 1.66,
+        "full_value_tetrahedral": 1.66,
+        "full_value_out": "#FFFCF1",
+        "as_is_trilinear": 1.6,
+        "as_is_tetrahedral": 1.6,
+        "as_is_out": "#FEF9ED",
+        "pass": true
+      },
+      "ally_deutan": {
+        "hex": "#2FA8FF",
+        "full_value_trilinear": 1.97,
+        "full_value_tetrahedral": 1.97,
+        "full_value_out": "#2DABF9",
+        "as_is_trilinear": 1.97,
+        "as_is_tetrahedral": 1.97,
+        "as_is_out": "#2DABF9",
+        "pass": true
+      },
+      "enemy_deutan": {
+        "hex": "#FFC21F",
+        "full_value_trilinear": 1.4,
+        "full_value_tetrahedral": 1.4,
+        "full_value_out": "#FFC61E",
+        "as_is_trilinear": 1.4,
+        "as_is_tetrahedral": 1.4,
+        "as_is_out": "#FFC61E",
+        "pass": true
+      },
+      "self_protan": {
+        "hex": "#FBF8F0",
+        "full_value_trilinear": 1.66,
+        "full_value_tetrahedral": 1.66,
+        "full_value_out": "#FFFCF1",
+        "as_is_trilinear": 1.6,
+        "as_is_tetrahedral": 1.6,
+        "as_is_out": "#FEF9ED",
+        "pass": true
+      },
+      "ally_protan": {
+        "hex": "#3F9CFF",
+        "full_value_trilinear": 1.51,
+        "full_value_tetrahedral": 1.51,
+        "full_value_out": "#3E9FF9",
+        "as_is_trilinear": 1.51,
+        "as_is_tetrahedral": 1.51,
+        "as_is_out": "#3E9FF9",
+        "pass": true
+      },
+      "enemy_protan": {
+        "hex": "#FFC21F",
+        "full_value_trilinear": 1.4,
+        "full_value_tetrahedral": 1.4,
+        "full_value_out": "#FFC61E",
+        "as_is_trilinear": 1.4,
+        "as_is_tetrahedral": 1.4,
+        "as_is_out": "#FFC61E",
+        "pass": true
+      },
+      "self_tritan": {
+        "hex": "#FBF8F0",
+        "full_value_trilinear": 1.66,
+        "full_value_tetrahedral": 1.66,
+        "full_value_out": "#FFFCF1",
+        "as_is_trilinear": 1.6,
+        "as_is_tetrahedral": 1.6,
+        "as_is_out": "#FEF9ED",
+        "pass": true
+      },
+      "ally_tritan": {
+        "hex": "#2FA8FF",
+        "full_value_trilinear": 1.97,
+        "full_value_tetrahedral": 1.97,
+        "full_value_out": "#2DABF9",
+        "as_is_trilinear": 1.97,
+        "as_is_tetrahedral": 1.97,
+        "as_is_out": "#2DABF9",
+        "pass": true
+      },
+      "enemy_tritan": {
+        "hex": "#FF3D6E",
+        "full_value_trilinear": 0.5,
+        "full_value_tetrahedral": 0.5,
+        "full_value_out": "#FF3B6C",
+        "as_is_trilinear": 0.5,
+        "as_is_tetrahedral": 0.5,
+        "as_is_out": "#FF3B6C",
+        "pass": true
+      },
+      "seat_I_crimson": {
+        "hex": "#B2354A",
+        "full_value_trilinear": 0.53,
+        "full_value_tetrahedral": 0.53,
+        "full_value_out": "#FF4A68",
+        "as_is_trilinear": 2.99,
+        "as_is_tetrahedral": 2.99,
+        "as_is_out": "#BF3147",
+        "pass": true
+      },
+      "seat_II_olive": {
+        "hex": "#767305",
+        "full_value_trilinear": 0.23,
+        "full_value_tetrahedral": 0.23,
+        "full_value_out": "#FFF90C",
+        "as_is_trilinear": 1.05,
+        "as_is_tetrahedral": 1.06,
+        "as_is_out": "#7A7406",
+        "pass": true
+      },
+      "seat_III_lime": {
+        "hex": "#D9FF17",
+        "full_value_trilinear": 1.49,
+        "full_value_tetrahedral": 1.49,
+        "full_value_out": "#E1FF17",
+        "as_is_trilinear": 1.49,
+        "as_is_tetrahedral": 1.49,
+        "as_is_out": "#E1FF17",
+        "pass": true
+      },
+      "seat_IV_green": {
+        "hex": "#20A04E",
+        "full_value_trilinear": 0.24,
+        "full_value_tetrahedral": 0.24,
+        "full_value_out": "#31FF7A",
+        "as_is_trilinear": 2.18,
+        "as_is_tetrahedral": 2.18,
+        "as_is_out": "#2AA549",
+        "pass": true
+      },
+      "seat_V_cyan": {
+        "hex": "#26F3FF",
+        "full_value_trilinear": 2.28,
+        "full_value_tetrahedral": 2.28,
+        "full_value_out": "#24F4F9",
+        "as_is_trilinear": 2.28,
+        "as_is_tetrahedral": 2.28,
+        "as_is_out": "#24F4F9",
+        "pass": true
+      },
+      "seat_VI_blue": {
+        "hex": "#19AFFE",
+        "full_value_trilinear": 2.3,
+        "full_value_tetrahedral": 2.3,
+        "full_value_out": "#17B3F9",
+        "as_is_trilinear": 2.28,
+        "as_is_tetrahedral": 2.28,
+        "as_is_out": "#17B3F9",
+        "pass": true
+      },
+      "seat_VII_indigo": {
+        "hex": "#7273F5",
+        "full_value_trilinear": 0.86,
+        "full_value_tetrahedral": 0.86,
+        "full_value_out": "#7A78F9",
+        "as_is_trilinear": 0.71,
+        "as_is_tetrahedral": 0.71,
+        "as_is_out": "#7573F1",
+        "pass": true
+      },
+      "seat_VIII_violet": {
+        "hex": "#8121FC",
+        "full_value_trilinear": 0.87,
+        "full_value_tetrahedral": 0.87,
+        "full_value_out": "#871FF9",
+        "as_is_trilinear": 0.83,
+        "as_is_tetrahedral": 0.83,
+        "as_is_out": "#851FF7",
+        "pass": true
+      },
+      "seat_IX_plum": {
+        "hex": "#993F94",
+        "full_value_trilinear": 0.68,
+        "full_value_tetrahedral": 0.68,
+        "full_value_out": "#FF69F2",
+        "as_is_trilinear": 1.91,
+        "as_is_tetrahedral": 1.91,
+        "as_is_out": "#A33C96",
+        "pass": true
+      },
+      "seat_X_rose": {
+        "hex": "#DC6294",
+        "full_value_trilinear": 0.28,
+        "full_value_tetrahedral": 0.28,
+        "full_value_out": "#FF72AB",
+        "as_is_trilinear": 1.8,
+        "as_is_tetrahedral": 1.8,
+        "as_is_out": "#E46193",
+        "pass": true
+      }
+    },
+    "worst_full_value": 2.3,
+    "pass": true
+  },
+  "interp_de2000_tetra_vs_analytic": {
+    "mean": 0.054,
+    "p99": 0.518,
+    "max": 1.117
+  },
+  "grade_strength_de2000": {
+    "mean": 1.89,
+    "p95": 3.52
+  },
+  "previews": [
+    "art/renders/grade/vale_grade_01_chart.png"
+  ]
+}

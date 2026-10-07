@@ -1,0 +1,155 @@
+{
+  "$comment": "VALE modes (CONTRACT §4, §5.5, §9.6). Each mode = map + pick format + a complete RulesParams; queues layer overrides on top (queues.json). Rationale and every number's calibration: _design/sections/modes_economy.md.",
+  "modes": [
+    {
+      "id": "rift",
+      "name": "RIFT",
+      "tagline": "Three roads, one Hourbell",
+      "desc": "Five against five on three roads. Draft your team, hold the jungle and its prizes, and silence the enemy Hourbell.",
+      "map": "map_rift",
+      "teams": 2,
+      "perTeam": 5,
+      "pick": "draft",
+      "roles": true,
+      "card": { "art": "assets/ui/modes/rift_card.webp", "accent": "#EDE6D6", "glyph": "assets/ui/modes/rift_glyph.svg" },
+      "rules": {
+        "$comment": "Target 22-28 min. First wave 0:30, a wave every 30 s, a Greatwick every 3rd wave, Brightwicks every 2nd wave from 15:00, Wicks level up every 90 s. Sudden death 40:00 is a backstop, not a pace setter.",
+        "startLevel": 1,
+        "maxLevel": 18,
+        "startGold": 480,
+        "passiveGoldPerSec": 2.2,
+        "passiveGoldStart": 30,
+        "goldMult": 1,
+        "xpMult": 1,
+        "xpTable": [240, 320, 400, 480, 560, 640, 720, 800, 880, 960, 1040, 1120, 1200, 1280, 1360, 1440, 1520],
+        "respawn": { "base": 6, "perLevel": 2.4, "max": 50, "lateGameRampAt": 1500, "lateGameMult": 1.25 },
+        "shopAccess": "base",
+        "recall": true,
+        "recallTime": 7,
+        "fountainHeals": true,
+        "itemPool": "rift",
+        "minionWaves": {
+          "first": 30,
+          "interval": 30,
+          "upgradeEvery": 90,
+          "composition": [
+            { "unit": "shieldwick", "count": 3 },
+            { "unit": "glimwick", "count": 3 },
+            { "unit": "greatwick", "count": 1, "everyNth": 3 },
+            { "unit": "brightwick", "count": 1, "everyNth": 2, "from": 900 }
+          ]
+        },
+        "structures": true,
+        "jungle": true,
+        "surrender": { "earliest": 720, "votesNeeded": 0.8 },
+        "suddenDeathAt": 2400,
+        "end": { "kind": "core", "coreStructure": "hourbell" },
+        "bounty": { "kill": 280, "assistShare": 0.5, "streakStep": 70, "streakMax": 490, "shutdownMax": 490 },
+        "abilityRanks": { "basicMax": 5, "ultLevels": [6, 11, 16] },
+        "tuning": {
+          "assistWindow": 9,
+          "xpShareRange": 15,
+          "killXpFraction": 0.55,
+          "multiKillWindow": 9,
+          "fountainHealPerSec": 0.12,
+          "suddenDeathRespawnMult": 1.5
+        }
+      }
+    },
+    {
+      "id": "bridge",
+      "name": "BRIDGE",
+      "tagline": "One road over the gorge",
+      "desc": "Five against five on one long road. Fighters come by lot, nobody can recall, and you shop only at home or while you wait to return.",
+      "map": "map_bridge",
+      "teams": 2,
+      "perTeam": 5,
+      "pick": "random_bench",
+      "roles": false,
+      "card": { "art": "assets/ui/modes/bridge_card.webp", "accent": "#EDE6D6", "glyph": "assets/ui/modes/bridge_glyph.svg" },
+      "rules": {
+        "$comment": "Target 14-20 min. Level 3 and 1,300 Gleam at the start; waves every 25 s from 0:20; XP doubled on a cheaper table because five share one road; no recall, the base fountain heals slowly and only inside the base circle, Sapglass on the span is the real sustain. Sudden death at 20:00.",
+        "startLevel": 3,
+        "maxLevel": 18,
+        "startGold": 1300,
+        "passiveGoldPerSec": 3.4,
+        "passiveGoldStart": 20,
+        "goldMult": 1,
+        "xpMult": 2,
+        "xpTable": [200, 260, 320, 380, 440, 500, 560, 620, 680, 740, 800, 860, 920, 980, 1040, 1100, 1160],
+        "respawn": { "base": 6, "perLevel": 1.5, "max": 32, "lateGameRampAt": 840, "lateGameMult": 1.2 },
+        "shopAccess": "base_or_dead",
+        "recall": false,
+        "fountainHeals": true,
+        "itemPool": "bridge",
+        "minionWaves": {
+          "first": 20,
+          "interval": 25,
+          "upgradeEvery": 60,
+          "composition": [
+            { "unit": "shieldwick", "count": 3 },
+            { "unit": "glimwick", "count": 3 },
+            { "unit": "greatwick", "count": 1, "everyNth": 3 },
+            { "unit": "brightwick", "count": 1, "everyNth": 2, "from": 720 }
+          ]
+        },
+        "structures": true,
+        "jungle": false,
+        "surrender": { "earliest": 480, "votesNeeded": 0.8 },
+        "suddenDeathAt": 1200,
+        "end": { "kind": "core", "coreStructure": "hourbell" },
+        "bounty": { "kill": 250, "assistShare": 0.6, "streakStep": 50, "streakMax": 350, "shutdownMax": 350 },
+        "abilityRanks": { "basicMax": 5, "ultLevels": [6, 11, 16] },
+        "tuning": {
+          "assistWindow": 10,
+          "xpShareRange": 18,
+          "killXpFraction": 0.5,
+          "multiKillWindow": 10,
+          "fountainHealPerSec": 0.08,
+          "suddenDeathRespawnMult": 1.5
+        }
+      }
+    },
+    {
+      "id": "fray",
+      "name": "FRAY",
+      "tagline": "Ten hours, no sides",
+      "desc": "Ten fighters, no teams, four lives each. Score takedowns, outlast the rest, and finish high on the Hour Board.",
+      "map": "map_fray",
+      "teams": 10,
+      "perTeam": 1,
+      "pick": "ffa_pick",
+      "roles": false,
+      "card": { "art": "assets/ui/modes/fray_card.webp", "accent": "#EDE6D6", "glyph": "assets/ui/modes/fray_glyph.svg" },
+      "playerColors": ["#B2354A", "#767305", "#D9FF17", "#20A04E", "#26F3FF", "#19AFFE", "#7273F5", "#8121FC", "#993F94", "#DC6294"],
+      "rules": {
+        "$comment": "Target 9-11 min. Every seat is its own team (session). Start at level 6 (ultimate ready) with 1,400 Gleam; income is passive Gleam, takedowns and Gleam Sunmotes; one shared Lampwright cart. 4 lives, first to 14 takedowns, else 11:00. Respawn 4-9 s at the safest hour-mark. placementPoints feed the Hour Board season tally (the sim does not read them).",
+        "startLevel": 6,
+        "maxLevel": 16,
+        "startGold": 1400,
+        "passiveGoldPerSec": 4,
+        "passiveGoldStart": 0,
+        "goldMult": 1,
+        "xpMult": 1,
+        "xpTable": [240, 320, 400, 480, 560, 640, 720, 800, 880, 960, 1040, 1120, 1200, 1280, 1360, 1440, 1520],
+        "respawn": { "base": 4, "perLevel": 0.4, "max": 9 },
+        "shopAccess": "shops",
+        "recall": false,
+        "fountainHeals": false,
+        "itemPool": "fray",
+        "structures": false,
+        "jungle": false,
+        "end": { "kind": "last_standing_or_score", "lives": 4, "killScore": 14, "timeLimit": 660 },
+        "placementPoints": [10, 8, 6, 4, 2, 0, 0, 0, 0, 0],
+        "bounty": { "kill": 200, "assistShare": 0.5, "streakStep": 40, "streakMax": 320, "shutdownMax": 320 },
+        "abilityRanks": { "basicMax": 5, "ultLevels": [6, 11, 16] },
+        "tuning": {
+          "assistWindow": 8,
+          "xpShareRange": 16,
+          "killXpFraction": 0.9,
+          "multiKillWindow": 8
+        }
+      }
+    }
+  ]
+}

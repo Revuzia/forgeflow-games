@@ -1,0 +1,64 @@
+{
+  "render_s": 12.78,
+  "mean_sky_lum": 1.0,
+  "max": 3.2,
+  "scale": 0.18862,
+  "total_s": 12.9,
+  "sun_dir_three": [
+    -0.0239,
+    0.9976,
+    0.0655
+  ],
+  "sun_dir_bible": [
+    -0.0239,
+    0.9976,
+    0.0655
+  ],
+  "sun_dir_check": true,
+  "out": "art/out/maps/map_fray/sky.hdr",
+  "bytes": 168732,
+  "lighting_source": "tokens.json grade.maps.fray (fog: none); sunDir recomputed from bearing 200 / elevation 86 and checked against tokens sun.dir: True",
+  "sun_dir_tokens": [
+    -0.0239,
+    0.9976,
+    0.0655
+  ],
+  "sun_dir_matches_tokens": true,
+  "lighting": "art/out/maps/map_fray/lighting.json",
+  "previews": {
+    "equirect": "art/renders/skies/map_fray.png",
+    "views": "art/renders/skies/map_fray_views.png"
+  },
+  "ambient": 0.55,
+  "preset": {
+    "_name": "Noonplate - the Shadowless Noon, high clean sky with thin cirrus",
+    "tokens": "fray",
+    "out": "maps/map_fray/sky.hdr",
+    "size": [
+      1024,
+      512
+    ],
+    "sun_bearing_deg": 200,
+    "sun_elevation_deg": 86,
+    "sky_type": "MULTIPLE_SCATTERING",
+    "air": 0.9,
+    "aerosol": 0.5,
+    "ozone": 1.2,
+    "altitude_m": 300,
+    "cloud_kind": "cirrus",
+    "cloud_cover": 0.08,
+    "cloud_scale": 0.8,
+    "cloud_softness": 0.3,
+    "cloud_opacity": 0.55,
+    "cloud_stretch": 9.0,
+    "cloud_angle_deg": 28,
+    "cloud_tint": "#ffffff",
+    "cloud_shadow_tint": "#dfe6f0",
+    "sky_tint": "#fffaf4",
+    "ground": "#4a4744",
+    "sun_disc": false,
+    "exposure": 0.0,
+    "samples": 16,
+    "seed": 86
+  }
+}

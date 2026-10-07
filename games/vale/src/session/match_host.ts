@@ -113,7 +113,7 @@ export class LocalMatchHost implements MatchClient {
   leave(): void {
     if (this._ended || this._left) return;
     this._left = true;
-    this.drive(this.you);
+    if (!this.drivers.has(this.you)) this.drive(this.you);
     this.opts.onForfeit?.();
   }
 

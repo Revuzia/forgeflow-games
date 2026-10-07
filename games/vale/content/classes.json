@@ -1,0 +1,44 @@
+[
+  {
+    "id": "class_plinth",
+    "name": "Plinth",
+    "desc": "Stands at the front and takes the hits. Plinths start fights, pin enemies in place and keep allies behind them safe.",
+    "icon": "assets/ui/icons/classes/class_plinth.svg",
+    "shape": "Block: widest at the shoulders (at least 1.4 times the hips), flat crown, square stance."
+  },
+  {
+    "id": "class_breaker",
+    "name": "Breaker",
+    "desc": "Fights up close and stays standing. Breakers trade blow for blow, crack the front line and wear down anyone who lingers near them.",
+    "icon": "assets/ui/icons/classes/class_breaker.svg",
+    "shape": "Inverted wedge: heavy shoulders narrowing to the feet, one oversized weapon carried on one side."
+  },
+  {
+    "id": "class_striker",
+    "name": "Striker",
+    "desc": "Picks one target and ends it quickly. Strikers slip past the front line, hit hard in a short window and get out again.",
+    "icon": "assets/ui/icons/classes/class_striker.svg",
+    "shape": "Forward diagonal: narrow body leaning 10 to 15 degrees into the run, asymmetric points."
+  },
+  {
+    "id": "class_slinger",
+    "name": "Slinger",
+    "desc": "Deals steady damage from range. Slingers grow strongest late and need space and cover to keep firing.",
+    "icon": "assets/ui/icons/classes/class_slinger.svg",
+    "shape": "Horizontal: a long weapon held across the body (bow, sling, spear-thrower; never a firearm)."
+  },
+  {
+    "id": "class_caster",
+    "name": "Caster",
+    "desc": "Shapes the fight with abilities. Casters land bursts, lay down zones and lock enemies in place from a distance.",
+    "icon": "assets/ui/icons/classes/class_caster.svg",
+    "shape": "Line plus disc: a tall vertical body topped by a headpiece, hood or halo."
+  },
+  {
+    "id": "class_tender",
+    "name": "Tender",
+    "desc": "Keeps allies alive and the fight in their favour. Tenders heal, shield, speed up and spot for the team.",
+    "icon": "assets/ui/icons/classes/class_tender.svg",
+    "shape": "Round and open, carrying a light vessel (a lamp, bell or glass) at the chest or in hand."
+  }
+]

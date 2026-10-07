@@ -454,6 +454,41 @@ fixture bot (`_harness/fixtures/fixture_bot.ts`).
 - Login seam: `IdentityProvider` + `ProfileStore`; local implementations persist to
   `localStorage['vale.profile.v1']` (try/catch; in-memory fallback).
 
+CHANGED(SESSION), additive (no existing signature changed; `src/contracts/session.ts` marks each):
+- `QueueRequest.preset?: { fighter, role?, skin? }` — required by `role_preset` queues (queue time pick),
+  optional for practice (skips the solo pick); `skin` applies only if owned.
+- `'queue'` event optional fields: `readyTimer`, `readyMax`, `accepted`, `total` (ready check) and
+  `reason` (`declined | timeout | cancelled | dodged`), `lockout` (seconds) on `declined`/`idle`.
+- `DraftState.trades?` — pending finalize trade requests involving the viewer.
+- Optional `Session` methods (feature-check before calling): `declineMatch()`, `setPartyBots(n)`,
+  `playAgain()`.
+Semantics of `LocalSession` (`src/session/`, details in each file header):
+- Flow: `queue()` → searching (2–6 s, `estimate` shown) → found (10 s ready check; bots accept) →
+  `acceptMatch()` → draft → `loading` (progress 0, then 1 once the sim is built) → `matchReady()` →
+  `match` → post-game. `cancelQueue()` = cancel while searching (free), decline during the ready
+  check, dodge during a matchmade draft (lockout). Declines/timeouts/dodges lock re-queueing for
+  5 s × 2^(n−1) (max 60 s), reset by accepting. Custom lobbies and practice skip search + ready check.
+- Protocol = `queue.pick ?? mode.pick` (all five implemented in `session/draft.ts`); practice uses
+  `role_preset` with `preset`, else a solo `blind` pick. Every open seat is a bot; FFA modes give
+  every seat its own team. Bot difficulty `by_rating` → < 1350 novice, < 1650 adept, else veteran.
+- `MatchClient` (LocalMatchHost): 30 Hz fixed step; one `pump` runs ≤ 8 × max(1, timeScale) ticks and
+  drops older backlog. Time scale 0..16 in practice/custom; matchmade queues stay at 1 (dev flag
+  aside). `leave()` = forfeit: the seat goes to a bot, the session books a `reason: 'abandon'` loss
+  (rating loss, history) with no currency/XP.
+- Grants: the first `earnedOnly` currency; `min(cap, win|loss + perMinute × whole minutes)` + Fray
+  `placement[p−1]`; first win of the UTC day adds `grants.win` currency and `grants.xpWin` XP; account
+  level L→L+1 needs 100 + 25 × (L − 1) XP. Practice/custom queues and bots never earn.
+  `GrantSummary.lines[].label` is a string key (`victory`, `defeat`, `minutes_played`, `cap`,
+  `placement`, `first_win`, `first_win_xp`, `account_xp`, `no_rewards`, `left_match`) the UI localizes.
+- Ratings: Glicko-2 (τ 0.5; 1500/350/0.06), rating period = one match, team games vs one composite
+  opponent (mean rating, RMS RD); bots count as 1200/1500/1800 by difficulty (`by_rating`: your own
+  rating), RD 80. Provisional (no tier) until `ranked.placementGames`.
+- Profile schema 1; `migrateProfile` upgrades schema 0 (prototype saves) and refuses newer schemas
+  (the session then runs in memory and never overwrites that save).
+- Probes: `_harness/probe_session_{units,draft,flows,queue,economy,botslane}.ts` on the synthetic
+  `_harness/fixtures/session_fixture.ts` (roles with `assign`, ranks, store, a queue per kind), driven
+  by `ManualClock` + `MemoryProfileStore`. The BOTS lane is linked only in `src/session/bots_link.ts`.
+
 ## §8 Economy, ownership, rating (lane SESSION)
 - Currency is earned by play only (`CurrencyDef.earnedOnly`). Grants come from
   `QueueDef.grants` (win/loss base + per-minute, capped; Fray adds `grants.placement[placement-1]`)

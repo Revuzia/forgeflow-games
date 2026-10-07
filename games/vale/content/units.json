@@ -1,0 +1,593 @@
+{
+  "$comment": "VALE units (CONTRACT §5.4; behavior keys ONLY from src/sim/units/behavior_keys.ts). Wicks level up with wave time (growth applies); camps, structures and pickups always spawn at level 1, so their stats are written for the moment they matter. Structure counts per road, camp timers and pickup timers are recommendations for the MAPS lane in _design/sections/modes_economy.md §Units.",
+  "units": [
+    {
+      "id": "shieldwick",
+      "name": "Shieldwick",
+      "kind": "minion",
+      "base": { "hp": 460, "ad": 13, "armor": 0, "resist": 0, "attackSpeed": 1.1, "moveSpeed": 3.25 },
+      "growth": { "hp": 22, "ad": 0.8, "armor": 1.5, "resist": 1 },
+      "attack": { "range": 1.4, "windup": 0.35, "damageType": "phys",
+        "present": { "anim": "attack1", "sfx": "c_swing_light", "hitVfx": "lib_hit_phys_light", "hitSfx": "c_hit_phys_light" } },
+      "collisionRadius": 0.45,
+      "bounty": { "gold": 21, "xp": 56 },
+      "behavior": { "aggroRange": 7, "chaseRange": 10, "callForHelpRange": 9 },
+      "sightRange": 9,
+      "art": { "model": "assets/units/shieldwick.glb", "height": 1.1, "instanced": true,
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "death": "death" } }
+    },
+    {
+      "id": "glimwick",
+      "name": "Glimwick",
+      "kind": "minion",
+      "base": { "hp": 290, "ad": 22, "armor": 0, "resist": 0, "attackSpeed": 0.7, "moveSpeed": 3.25 },
+      "growth": { "hp": 12, "ad": 1.4, "resist": 1 },
+      "attack": { "range": 5, "windup": 0.3, "damageType": "phys", "projectileSpeed": 14,
+        "present": { "anim": "attack1", "vfx": "lib_bolt_lumen", "sfx": "c_shot_bolt_lumen", "hitVfx": "lib_hit_phys_light", "hitSfx": "c_hit_phys_light" } },
+      "collisionRadius": 0.4,
+      "bounty": { "gold": 15, "xp": 30 },
+      "behavior": { "aggroRange": 8, "chaseRange": 11, "callForHelpRange": 9 },
+      "sightRange": 9,
+      "art": { "model": "assets/units/glimwick.glb", "height": 1.0, "instanced": true,
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "death": "death" } }
+    },
+    {
+      "id": "greatwick",
+      "name": "Greatwick",
+      "kind": "minion",
+      "base": { "hp": 880, "ad": 38, "armor": 15, "resist": 0, "attackSpeed": 0.65, "moveSpeed": 3.2 },
+      "growth": { "hp": 40, "ad": 2, "armor": 1, "resist": 1 },
+      "attack": { "range": 6.5, "windup": 0.4, "damageType": "phys", "projectileSpeed": 12,
+        "present": { "anim": "attack1", "vfx": "lib_lob", "sfx": "c_thrown", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_hit_phys_heavy" } },
+      "collisionRadius": 0.65,
+      "bounty": { "gold": 50, "xp": 90 },
+      "behavior": {
+        "aggroRange": 9, "chaseRange": 11, "callForHelpRange": 9,
+        "priority": ["fighterAttacker", "structure", "minion", "summon", "fighter"],
+        "damageMult": { "structure": 2 }
+      },
+      "sightRange": 10,
+      "art": { "model": "assets/units/greatwick.glb", "height": 1.5, "instanced": true,
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "death": "death" } }
+    },
+    {
+      "id": "brightwick",
+      "name": "Brightwick",
+      "kind": "minion",
+      "base": { "hp": 1200, "ad": 45, "armor": 30, "resist": 30, "attackSpeed": 0.8, "moveSpeed": 3.3 },
+      "growth": { "hp": 45, "ad": 2.2, "armor": 1, "resist": 1 },
+      "attack": { "range": 1.8, "windup": 0.4, "damageType": "phys",
+        "present": { "anim": "attack1", "sfx": "c_swing_heavy", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_hit_phys_heavy" } },
+      "collisionRadius": 0.7,
+      "bounty": { "gold": 70, "xp": 110 },
+      "behavior": { "aggroRange": 7, "chaseRange": 10, "callForHelpRange": 10, "damageMult": { "structure": 1.5, "minion": 1.25 } },
+      "sightRange": 10,
+      "art": { "model": "assets/units/brightwick.glb", "height": 1.7, "instanced": true,
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "death": "death" } }
+    },
+
+    {
+      "id": "needle_outer",
+      "name": "Outer Needle",
+      "kind": "structure",
+      "base": { "hp": 3200, "ad": 150, "armor": 40, "resist": 40, "attackSpeed": 0.83, "moveSpeed": 0 },
+      "attack": { "range": 7.5, "windup": 0.2, "damageType": "phys", "projectileSpeed": 22,
+        "present": { "anim": "attack1", "vfx": "lib_needle_shot", "sfx": "c_needle_shot", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_needle_hit" } },
+      "collisionRadius": 1.1,
+      "bounty": { "gold": 120, "goldGlobal": 80, "xp": 100 },
+      "behavior": { "targetRules": "tower", "callForHelpRange": 9.5, "rampPerHit": 0.35, "rampMax": 1.05, "rampReset": 3, "damageMult": { "minion": 1.4, "summon": 1.4 } },
+      "sightRange": 12,
+      "art": { "model": "assets/units/needle_outer.glb", "height": 7, "icon": "assets/units/needle_outer_icon.png",
+        "clips": { "idle": "idle", "attack1": "attack1", "death": "death" } }
+    },
+    {
+      "id": "needle_inner",
+      "name": "Inner Needle",
+      "kind": "structure",
+      "base": { "hp": 3600, "ad": 170, "armor": 50, "resist": 50, "attackSpeed": 0.83, "moveSpeed": 0 },
+      "attack": { "range": 7.5, "windup": 0.2, "damageType": "phys", "projectileSpeed": 22,
+        "present": { "anim": "attack1", "vfx": "lib_needle_shot", "sfx": "c_needle_shot", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_needle_hit" } },
+      "collisionRadius": 1.1,
+      "bounty": { "gold": 140, "goldGlobal": 100, "xp": 140 },
+      "behavior": { "targetRules": "tower", "callForHelpRange": 9.5, "rampPerHit": 0.35, "rampMax": 1.05, "rampReset": 3, "damageMult": { "minion": 1.4, "summon": 1.4 } },
+      "sightRange": 12,
+      "art": { "model": "assets/units/needle_inner.glb", "height": 7.5, "icon": "assets/units/needle_inner_icon.png",
+        "clips": { "idle": "idle", "attack1": "attack1", "death": "death" } }
+    },
+    {
+      "id": "needle_bell",
+      "name": "Bell Needle",
+      "kind": "structure",
+      "base": { "hp": 2800, "ad": 190, "armor": 60, "resist": 60, "attackSpeed": 0.9, "moveSpeed": 0 },
+      "attack": { "range": 7.5, "windup": 0.2, "damageType": "phys", "projectileSpeed": 24,
+        "present": { "anim": "attack1", "vfx": "lib_needle_shot", "sfx": "c_needle_shot", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_needle_hit" } },
+      "collisionRadius": 1.1,
+      "bounty": { "gold": 50, "goldGlobal": 50, "xp": 100 },
+      "behavior": { "targetRules": "tower", "callForHelpRange": 9.5, "rampPerHit": 0.4, "rampMax": 1.2, "rampReset": 3, "damageMult": { "minion": 1.4, "summon": 1.4 } },
+      "sightRange": 12,
+      "art": { "model": "assets/units/needle_bell.glb", "height": 6.5, "icon": "assets/units/needle_bell_icon.png",
+        "clips": { "idle": "idle", "attack1": "attack1", "death": "death" } }
+    },
+    {
+      "id": "lantern",
+      "name": "Lantern",
+      "kind": "structure",
+      "base": { "hp": 3000, "ad": 0, "armor": 25, "resist": 25, "attackSpeed": 0, "moveSpeed": 0 },
+      "collisionRadius": 1.5,
+      "bounty": { "gold": 50, "goldGlobal": 60, "xp": 100 },
+      "behavior": { "targetRules": "none" },
+      "sightRange": 10,
+      "onTakedownTeamBuff": "lanternwake",
+      "art": { "model": "assets/units/lantern.glb", "height": 4.5, "icon": "assets/units/lantern_icon.png",
+        "clips": { "idle": "idle", "death": "death" } }
+    },
+    {
+      "id": "hourbell",
+      "name": "Hourbell",
+      "kind": "structure",
+      "base": { "hp": 4500, "ad": 0, "armor": 20, "resist": 20, "attackSpeed": 0, "moveSpeed": 0 },
+      "collisionRadius": 2.6,
+      "bounty": { "gold": 0, "xp": 0 },
+      "behavior": { "targetRules": "none" },
+      "sightRange": 14,
+      "art": { "model": "assets/units/hourbell.glb", "height": 9, "icon": "assets/units/hourbell_icon.png",
+        "clips": { "idle": "idle", "death": "death" } }
+    },
+
+    {
+      "id": "glasshorn",
+      "name": "Glasshorn",
+      "kind": "monster",
+      "base": { "hp": 1700, "ad": 55, "armor": 15, "resist": 20, "attackSpeed": 0.6, "moveSpeed": 3.4 },
+      "attack": { "range": 2.2, "windup": 0.4, "damageType": "phys",
+        "present": { "anim": "attack1", "sfx": "c_swing_heavy", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_monster_hit" } },
+      "collisionRadius": 0.9,
+      "bounty": { "gold": 90, "xp": 150 },
+      "abilities": [
+        {
+          "id": "glasshorn_bellow",
+          "name": "Glass Bellow",
+          "desc": "The Glasshorn lowers its antlers and bellows in a cone: 45 magic damage and a 25% slow for 1.5 s.",
+          "icon": "assets/ui/icons/abilities/glasshorn_bellow.svg",
+          "maxRank": 1,
+          "cooldown": 8,
+          "targeting": { "kind": "direction", "range": 5, "indicator": { "kind": "cone", "radius": 5, "angleDeg": 70 } },
+          "castTime": 0.4,
+          "effects": [
+            { "op": "area", "shape": { "kind": "cone", "radius": 5, "angleDeg": 70 }, "at": "self", "delay": 0.6,
+              "onHit": [
+                { "op": "damage", "amount": 45, "type": "magic", "to": "hit" },
+                { "op": "status", "status": "slow", "duration": 1.5, "power": 0.25, "to": "hit" }
+              ],
+              "present": { "vfx": "lib_cone_sweep", "sfx": "c_monster_roar", "telegraph": "everyone" } }
+          ],
+          "ai": { "use": ["damage", "cc"] },
+          "present": { "anim": "cast_a1" }
+        }
+      ],
+      "behavior": { "leash": 9, "resetRegen": 0.3 },
+      "sightRange": 8,
+      "onTakedownTeamBuff": "clearglass",
+      "art": { "model": "assets/units/glasshorn.glb", "height": 2.2, "icon": "assets/units/glasshorn_icon.png",
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "cast_a1": "cast_a1", "death": "death" } }
+    },
+    {
+      "id": "resinback",
+      "name": "Resinback",
+      "kind": "monster",
+      "base": { "hp": 1800, "ad": 62, "armor": 20, "resist": 10, "attackSpeed": 0.6, "moveSpeed": 3.3 },
+      "attack": { "range": 2, "windup": 0.4, "damageType": "phys",
+        "present": { "anim": "attack1", "sfx": "c_swing_heavy", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_monster_hit" } },
+      "collisionRadius": 1.0,
+      "bounty": { "gold": 90, "xp": 150 },
+      "abilities": [
+        {
+          "id": "resinback_spit",
+          "name": "Resin Spit",
+          "desc": "Spits a pool of burning resin that lands after 0.5 s and burns for 3 s: 12 magic damage every 0.5 s to anyone inside.",
+          "icon": "assets/ui/icons/abilities/resinback_spit.svg",
+          "maxRank": 1,
+          "cooldown": 9,
+          "targeting": { "kind": "point", "range": 6, "indicator": { "kind": "circle", "radius": 2 } },
+          "castTime": 0.4,
+          "effects": [
+            { "op": "zone", "id": "resinback_pool", "shape": { "kind": "circle", "radius": 2 }, "at": "point",
+              "duration": 3, "interval": 0.5, "delay": 0.5,
+              "onTick": [ { "op": "damage", "amount": 12, "type": "magic", "to": "hit" } ],
+              "present": { "vfx": "lib_zone_ember", "sfx": "c_zone_loop", "telegraph": "everyone" } }
+          ],
+          "ai": { "use": ["damage", "zone"] },
+          "present": { "anim": "cast_a1" }
+        }
+      ],
+      "behavior": { "leash": 9, "resetRegen": 0.3 },
+      "sightRange": 8,
+      "onTakedownTeamBuff": "resinburn",
+      "art": { "model": "assets/units/resinback.glb", "height": 1.8, "icon": "assets/units/resinback_icon.png",
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "cast_a1": "cast_a1", "death": "death" } }
+    },
+    {
+      "id": "gloamoth",
+      "name": "Gloamoth",
+      "kind": "monster",
+      "base": { "hp": 900, "ad": 32, "armor": 0, "resist": 10, "attackSpeed": 0.75, "moveSpeed": 3.4 },
+      "attack": { "range": 4.5, "windup": 0.3, "damageType": "magic", "projectileSpeed": 12,
+        "present": { "anim": "attack1", "vfx": "lib_orb_lumen", "sfx": "c_shot_bolt_lumen", "hitVfx": "lib_hit_magic", "hitSfx": "c_hit_magic" } },
+      "collisionRadius": 0.6,
+      "bounty": { "gold": 45, "xp": 70 },
+      "behavior": { "leash": 8, "resetRegen": 0.3 },
+      "sightRange": 8,
+      "art": { "model": "assets/units/gloamoth.glb", "height": 1.6,
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "death": "death" } }
+    },
+    {
+      "id": "gloamoth_little",
+      "name": "Little Gloamoth",
+      "kind": "monster",
+      "base": { "hp": 300, "ad": 14, "armor": 0, "resist": 5, "attackSpeed": 0.8, "moveSpeed": 3.6 },
+      "attack": { "range": 1.2, "windup": 0.25, "damageType": "magic",
+        "present": { "anim": "attack1", "hitVfx": "lib_hit_magic", "hitSfx": "c_hit_magic" } },
+      "collisionRadius": 0.35,
+      "bounty": { "gold": 12, "xp": 22 },
+      "behavior": { "leash": 8, "resetRegen": 0.3 },
+      "sightRange": 6,
+      "art": { "model": "assets/units/gloamoth_little.glb", "height": 0.8, "instanced": true,
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "death": "death" } }
+    },
+    {
+      "id": "stilltusk",
+      "name": "Stilltusk",
+      "kind": "monster",
+      "base": { "hp": 1300, "ad": 48, "armor": 20, "resist": 10, "attackSpeed": 0.65, "moveSpeed": 3.4 },
+      "attack": { "range": 1.6, "windup": 0.35, "damageType": "phys",
+        "present": { "anim": "attack1", "sfx": "c_swing_heavy", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_monster_hit" } },
+      "collisionRadius": 0.8,
+      "bounty": { "gold": 60, "xp": 90 },
+      "abilities": [
+        {
+          "id": "stilltusk_stamp",
+          "name": "Still Stamp",
+          "desc": "Rears and stamps after 0.7 s: 40 physical damage and a 30% slow for 1 s around it.",
+          "icon": "assets/ui/icons/abilities/stilltusk_stamp.svg",
+          "maxRank": 1,
+          "cooldown": 10,
+          "targeting": { "kind": "none", "range": 2.5, "indicator": { "kind": "circle", "radius": 2.5 } },
+          "castTime": 0.3,
+          "effects": [
+            { "op": "area", "shape": { "kind": "circle", "radius": 2.5 }, "at": "self", "delay": 0.7,
+              "onHit": [
+                { "op": "damage", "amount": 40, "type": "phys", "to": "hit" },
+                { "op": "status", "status": "slow", "duration": 1, "power": 0.3, "to": "hit" }
+              ],
+              "present": { "vfx": "lib_slam_ground", "sfx": "c_slam", "telegraph": "everyone" } }
+          ],
+          "ai": { "use": ["damage", "cc"] },
+          "present": { "anim": "cast_a1" }
+        }
+      ],
+      "behavior": { "leash": 8, "resetRegen": 0.3 },
+      "sightRange": 8,
+      "art": { "model": "assets/units/stilltusk.glb", "height": 1.4,
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "cast_a1": "cast_a1", "death": "death" } }
+    },
+    {
+      "id": "stilltusk_young",
+      "name": "Young Stilltusk",
+      "kind": "monster",
+      "base": { "hp": 480, "ad": 20, "armor": 10, "resist": 5, "attackSpeed": 0.75, "moveSpeed": 3.5 },
+      "attack": { "range": 1.3, "windup": 0.3, "damageType": "phys",
+        "present": { "anim": "attack1", "hitVfx": "lib_hit_phys_light", "hitSfx": "c_hit_phys_light" } },
+      "collisionRadius": 0.5,
+      "bounty": { "gold": 18, "xp": 30 },
+      "behavior": { "leash": 8, "resetRegen": 0.3 },
+      "sightRange": 6,
+      "art": { "model": "assets/units/stilltusk_young.glb", "height": 0.9, "instanced": true,
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "death": "death" } }
+    },
+    {
+      "id": "stray_numeral",
+      "name": "Stray Numeral",
+      "kind": "monster",
+      "base": { "hp": 1500, "ad": 42, "armor": 35, "resist": 35, "attackSpeed": 0.55, "moveSpeed": 3.0 },
+      "attack": { "range": 1.8, "windup": 0.45, "damageType": "phys",
+        "present": { "anim": "attack1", "sfx": "c_swing_heavy", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_monster_hit" } },
+      "collisionRadius": 0.9,
+      "bounty": { "gold": 70, "xp": 100 },
+      "abilities": [
+        {
+          "id": "stray_topple",
+          "name": "Topple",
+          "desc": "The numeral tips over toward its target after 0.9 s: 70 physical damage and a 0.5 s stun in a 4 m line.",
+          "icon": "assets/ui/icons/abilities/stray_topple.svg",
+          "maxRank": 1,
+          "cooldown": 11,
+          "targeting": { "kind": "direction", "range": 4, "indicator": { "kind": "rect", "length": 4, "width": 2 } },
+          "castTime": 0.4,
+          "effects": [
+            { "op": "area", "shape": { "kind": "rect", "length": 4, "width": 2 }, "at": "self", "delay": 0.9,
+              "onHit": [
+                { "op": "damage", "amount": 70, "type": "phys", "to": "hit" },
+                { "op": "status", "status": "stun", "duration": 0.5, "to": "hit" }
+              ],
+              "present": { "vfx": "lib_line_cleave", "sfx": "c_slam", "telegraph": "everyone" } }
+          ],
+          "ai": { "use": ["damage", "cc"] },
+          "present": { "anim": "cast_a1" }
+        }
+      ],
+      "behavior": { "leash": 8, "resetRegen": 0.3 },
+      "sightRange": 8,
+      "art": { "model": "assets/units/stray_numeral.glb", "height": 2.4,
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "cast_a1": "cast_a1", "death": "death" } }
+    },
+    {
+      "id": "stray_tick",
+      "name": "Stray Tick",
+      "kind": "monster",
+      "base": { "hp": 380, "ad": 18, "armor": 15, "resist": 15, "attackSpeed": 0.8, "moveSpeed": 3.5 },
+      "attack": { "range": 1.2, "windup": 0.3, "damageType": "phys",
+        "present": { "anim": "attack1", "hitVfx": "lib_hit_phys_light", "hitSfx": "c_hit_phys_light" } },
+      "collisionRadius": 0.4,
+      "bounty": { "gold": 15, "xp": 25 },
+      "behavior": { "leash": 8, "resetRegen": 0.3 },
+      "sightRange": 6,
+      "art": { "model": "assets/units/stray_tick.glb", "height": 1.0, "instanced": true,
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "death": "death" } }
+    },
+
+    {
+      "id": "sunsplinter",
+      "name": "Sunsplinter",
+      "kind": "monster",
+      "base": { "hp": 4200, "ad": 90, "armor": 30, "resist": 30, "attackSpeed": 0.5, "moveSpeed": 3.0 },
+      "attack": { "range": 6, "windup": 0.4, "damageType": "magic", "projectileSpeed": 16,
+        "present": { "anim": "attack1", "vfx": "lib_shard_volley", "sfx": "c_shot_bolt_lumen", "hitVfx": "lib_hit_magic", "hitSfx": "c_hit_magic" } },
+      "collisionRadius": 1.4,
+      "bounty": { "gold": 100, "goldGlobal": 75, "xp": 250 },
+      "abilities": [
+        {
+          "id": "sunsplinter_shard_rain",
+          "name": "Shard Rain",
+          "desc": "Marks a circle under its target; 1 s later glass shards land there for 110 magic damage.",
+          "icon": "assets/ui/icons/abilities/sunsplinter_shard_rain.svg",
+          "maxRank": 1,
+          "cooldown": 7,
+          "targeting": { "kind": "point", "range": 9, "indicator": { "kind": "circle", "radius": 2.5 } },
+          "castTime": 0.3,
+          "effects": [
+            { "op": "area", "shape": { "kind": "circle", "radius": 2.5 }, "at": "point", "delay": 1.0,
+              "onHit": [ { "op": "damage", "amount": 110, "type": "magic", "to": "hit" } ],
+              "present": { "vfx": "lib_burst_lumen", "sfx": "c_burst_lumen", "telegraph": "everyone" } }
+          ],
+          "ai": { "use": ["damage", "poke"] },
+          "present": { "anim": "cast_a1" }
+        },
+        {
+          "id": "sunsplinter_noon_glare",
+          "name": "Noon Glare",
+          "desc": "Charges for 1.2 s, then flares in a ring from 3.5 m to 7 m: 100 magic damage and a 30% slow for 1.5 s. Stand close or stand clear.",
+          "icon": "assets/ui/icons/abilities/sunsplinter_noon_glare.svg",
+          "maxRank": 1,
+          "cooldown": 12,
+          "targeting": { "kind": "none", "range": 7, "indicator": { "kind": "ring", "radius": 7, "inner": 3.5 } },
+          "castTime": 0.4,
+          "effects": [
+            { "op": "area", "shape": { "kind": "ring", "radius": 7, "inner": 3.5 }, "at": "self", "delay": 1.2,
+              "onHit": [
+                { "op": "damage", "amount": 100, "type": "magic", "to": "hit" },
+                { "op": "status", "status": "slow", "duration": 1.5, "power": 0.3, "to": "hit" }
+              ],
+              "present": { "vfx": "lib_ring_pulse", "sfx": "c_cast_charge", "telegraph": "everyone" } }
+          ],
+          "ai": { "use": ["damage", "cc", "zone"] },
+          "present": { "anim": "cast_a2" }
+        },
+        {
+          "id": "sunsplinter_splinter_spray",
+          "name": "Splinter Spray",
+          "desc": "Turns its broken tip toward its target and sprays a 60 degree cone after 0.9 s: 130 physical damage and a short knockback.",
+          "icon": "assets/ui/icons/abilities/sunsplinter_splinter_spray.svg",
+          "maxRank": 1,
+          "cooldown": 9,
+          "targeting": { "kind": "direction", "range": 6, "indicator": { "kind": "cone", "radius": 6, "angleDeg": 60 } },
+          "castTime": 0.3,
+          "effects": [
+            { "op": "area", "shape": { "kind": "cone", "radius": 6, "angleDeg": 60 }, "at": "self", "delay": 0.9,
+              "onHit": [
+                { "op": "damage", "amount": 130, "type": "phys", "to": "hit" },
+                { "op": "displace", "mode": "knockback", "distance": 1.5, "duration": 0.25, "to": "hit" }
+              ],
+              "present": { "vfx": "lib_cone_sweep", "sfx": "c_cast_lumen", "telegraph": "everyone" } }
+          ],
+          "ai": { "use": ["damage", "cc"] },
+          "present": { "anim": "cast_a3" }
+        }
+      ],
+      "behavior": { "leash": 12, "resetRegen": 0.3 },
+      "sightRange": 10,
+      "onTakedownTeamBuff": "splinters",
+      "art": { "model": "assets/units/sunsplinter.glb", "height": 3.2, "icon": "assets/units/sunsplinter_icon.png",
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "cast_a1": "cast_a1", "cast_a2": "cast_a2", "cast_a3": "cast_a3", "death": "death" } }
+    },
+    {
+      "id": "longshade",
+      "name": "Longshade",
+      "kind": "monster",
+      "base": { "hp": 12000, "ad": 150, "armor": 60, "resist": 50, "attackSpeed": 0.55, "moveSpeed": 3.2 },
+      "attack": { "range": 3, "windup": 0.45, "damageType": "phys",
+        "present": { "anim": "attack1", "sfx": "c_swing_heavy", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_monster_hit" } },
+      "collisionRadius": 2.0,
+      "bounty": { "gold": 100, "goldGlobal": 200, "xp": 500 },
+      "passive": {
+        "id": "longshade_lengthen",
+        "name": "Lengthening",
+        "desc": "Every 8 s it spends taking damage, Longshade gains +15 attack and +5 armor for 20 s, stacking up to 8 times. A long fight makes it stronger.",
+        "icon": "assets/ui/icons/abilities/longshade_lengthen.svg",
+        "triggers": [
+          {
+            "on": "damageTaken",
+            "cooldown": 8,
+            "effects": [
+              { "op": "buff", "id": "longshade_lengthen", "duration": 20, "stats": { "ad": 15, "armor": 5 }, "maxStacks": 8, "to": "self",
+                "present": { "vfx": "lib_empower" } }
+            ]
+          }
+        ]
+      },
+      "abilities": [
+        {
+          "id": "longshade_shadow_sweep",
+          "name": "Shadow Sweep",
+          "desc": "Drags its shadow through a wide arc after 1 s: 200 physical damage and a 2.5 m knockback in a 120 degree cone.",
+          "icon": "assets/ui/icons/abilities/longshade_shadow_sweep.svg",
+          "maxRank": 1,
+          "cooldown": 8,
+          "targeting": { "kind": "direction", "range": 6, "indicator": { "kind": "cone", "radius": 6, "angleDeg": 120 } },
+          "castTime": 0.4,
+          "effects": [
+            { "op": "area", "shape": { "kind": "cone", "radius": 6, "angleDeg": 120 }, "at": "self", "delay": 1.0,
+              "onHit": [
+                { "op": "damage", "amount": 200, "type": "phys", "to": "hit" },
+                { "op": "displace", "mode": "knockback", "distance": 2.5, "duration": 0.3, "to": "hit" }
+              ],
+              "present": { "vfx": "lib_cone_sweep", "sfx": "c_swing_heavy", "telegraph": "everyone" } }
+          ],
+          "ai": { "use": ["damage", "cc"] },
+          "present": { "anim": "cast_a1" }
+        },
+        {
+          "id": "longshade_long_dark",
+          "name": "Long Dark",
+          "desc": "Pools shadow under a distant target. After 1 s it darkens for 4 s: 40 magic damage every 0.5 s and a 35% slow inside.",
+          "icon": "assets/ui/icons/abilities/longshade_long_dark.svg",
+          "maxRank": 1,
+          "cooldown": 13,
+          "targeting": { "kind": "point", "range": 10, "indicator": { "kind": "circle", "radius": 3.5 } },
+          "castTime": 0.4,
+          "effects": [
+            { "op": "zone", "id": "longshade_dark", "shape": { "kind": "circle", "radius": 3.5 }, "at": "point",
+              "duration": 4, "interval": 0.5, "delay": 1.0,
+              "onTick": [
+                { "op": "damage", "amount": 40, "type": "magic", "to": "hit" },
+                { "op": "status", "status": "slow", "duration": 0.6, "power": 0.35, "to": "hit" }
+              ],
+              "present": { "vfx": "lib_zone_shade", "sfx": "c_zone_loop", "telegraph": "everyone" } }
+          ],
+          "ai": { "use": ["damage", "zone"] },
+          "present": { "anim": "cast_a2" }
+        },
+        {
+          "id": "longshade_eclipse_slam",
+          "name": "Eclipse Slam",
+          "desc": "Rises for 1.6 s, then slams: 320 magic damage and a 1 s stun to everyone within 5 m. Run while it rises.",
+          "icon": "assets/ui/icons/abilities/longshade_eclipse_slam.svg",
+          "maxRank": 1,
+          "cooldown": 16,
+          "targeting": { "kind": "none", "range": 5, "indicator": { "kind": "circle", "radius": 5 } },
+          "castTime": 0.5,
+          "effects": [
+            { "op": "area", "shape": { "kind": "circle", "radius": 5 }, "at": "self", "delay": 1.6,
+              "onHit": [
+                { "op": "damage", "amount": 320, "type": "magic", "to": "hit" },
+                { "op": "status", "status": "stun", "duration": 1, "to": "hit" }
+              ],
+              "present": { "vfx": "lib_slam_ground", "sfx": "c_slam", "telegraph": "everyone" } }
+          ],
+          "ai": { "use": ["damage", "cc"] },
+          "present": { "anim": "cast_a3" }
+        }
+      ],
+      "behavior": { "leash": 13, "resetRegen": 0.3 },
+      "sightRange": 10,
+      "onTakedownTeamBuff": "long_shade",
+      "art": { "model": "assets/units/longshade.glb", "height": 4.2, "icon": "assets/units/longshade_icon.png",
+        "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "cast_a1": "cast_a1", "cast_a2": "cast_a2", "cast_a3": "cast_a3", "death": "death" } }
+    },
+
+    {
+      "id": "sapglass",
+      "name": "Sapglass",
+      "kind": "pickup",
+      "base": { "hp": 1, "ad": 0, "attackSpeed": 0, "moveSpeed": 0 },
+      "collisionRadius": 0.6,
+      "behavior": {
+        "grant": [
+          { "op": "heal", "amount": { "base": 110, "maxHp": 0.1 }, "to": "self" },
+          { "op": "resource", "amount": { "base": 50, "maxRes": 0.1 } }
+        ]
+      },
+      "sightRange": 1,
+      "art": { "model": "assets/units/sapglass.glb", "height": 1.0, "icon": "assets/units/sapglass_icon.png",
+        "clips": { "idle": "idle" } }
+    },
+    {
+      "id": "sunmote_mend",
+      "name": "Mending Sunmote",
+      "kind": "pickup",
+      "base": { "hp": 1, "ad": 0, "attackSpeed": 0, "moveSpeed": 0 },
+      "collisionRadius": 0.6,
+      "behavior": {
+        "grant": [
+          { "op": "heal", "amount": { "base": 120, "maxHp": 0.12 }, "to": "self" },
+          { "op": "resource", "amount": { "base": 60, "maxRes": 0.12 } }
+        ]
+      },
+      "sightRange": 1,
+      "art": { "model": "assets/units/sunmote_mend.glb", "height": 1.0, "icon": "assets/units/sunmote_mend_icon.png",
+        "clips": { "idle": "idle" } }
+    },
+    {
+      "id": "sunmote_quick",
+      "name": "Quick Sunmote",
+      "kind": "pickup",
+      "base": { "hp": 1, "ad": 0, "attackSpeed": 0, "moveSpeed": 0 },
+      "collisionRadius": 0.6,
+      "behavior": {
+        "grant": [
+          { "op": "status", "status": "haste", "duration": 4, "power": 0.3, "to": "self" },
+          { "op": "buff", "id": "sunmote_quick_rush", "duration": 4, "stats": { "attackSpeed": 0.2 }, "to": "self",
+            "present": { "vfx": "lib_haste" } }
+        ]
+      },
+      "sightRange": 1,
+      "art": { "model": "assets/units/sunmote_quick.glb", "height": 1.0, "icon": "assets/units/sunmote_quick_icon.png",
+        "clips": { "idle": "idle" } }
+    },
+    {
+      "id": "sunmote_gleam",
+      "name": "Gleam Sunmote",
+      "kind": "pickup",
+      "base": { "hp": 1, "ad": 0, "attackSpeed": 0, "moveSpeed": 0 },
+      "collisionRadius": 0.6,
+      "behavior": { "gold": 120 },
+      "sightRange": 1,
+      "art": { "model": "assets/units/sunmote_gleam.glb", "height": 1.0, "icon": "assets/units/sunmote_gleam_icon.png",
+        "clips": { "idle": "idle" } }
+    },
+
+    {
+      "id": "sparring_post",
+      "name": "Sparring Post",
+      "kind": "minion",
+      "base": { "hp": 6000, "ad": 0, "armor": 30, "resist": 30, "attackSpeed": 0, "moveSpeed": 0 },
+      "collisionRadius": 0.6,
+      "bounty": { "gold": 0, "xp": 0 },
+      "behavior": { "dummy": true },
+      "sightRange": 2,
+      "art": { "model": "assets/units/sparring_post.glb", "height": 1.9,
+        "clips": { "idle": "idle", "death": "death" } }
+    },
+    {
+      "id": "hooded_lamp",
+      "name": "Hooded Lamp",
+      "kind": "ward",
+      "base": { "hp": 3, "ad": 0, "attackSpeed": 0, "moveSpeed": 0 },
+      "collisionRadius": 0.25,
+      "bounty": { "gold": 20, "xp": 0 },
+      "behavior": { "invisible": true },
+      "sightRange": 9,
+      "art": { "model": "assets/units/hooded_lamp.glb", "height": 0.8, "icon": "assets/units/hooded_lamp_icon.png",
+        "clips": { "idle": "idle" } }
+    }
+  ]
+}

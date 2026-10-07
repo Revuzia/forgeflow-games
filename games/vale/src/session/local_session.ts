@@ -120,6 +120,8 @@ export class LocalSession implements Session {
   private draftTimer: (() => void) | null = null;
   private host: LocalMatchHost | null = null;
   private persistOk = true;
+  /** matchReady() arrived before the sim was built (a listener on the first 'loading' event) */
+  private readyEarly = false;
 
   constructor(o: LocalSessionOptions) {
     this.opts = o;
@@ -300,16 +302,20 @@ export class LocalSession implements Session {
     return id ? this.p.ratings[id]?.rating ?? GLICKO.rating : GLICKO.rating;
   }
 
+  /** plan the match and open its draft; any failure returns to idle with an 'error' (never a stuck phase) */
   private beginDraft(req: QueueRequest, queue: QueueDefT): void {
     try {
-      this.pending = this.planMatch(req, queue);
+      this.openDraft(this.pending = this.planMatch(req, queue));
     } catch (err) {
+      this.stopDraft();
       this.pending = null;
       this._phase = 'idle';
       this.error(`draft: ${err instanceof Error ? err.message : String(err)}`);
-      return;
     }
-    const pd = this.pending;
+  }
+
+  private openDraft(pd: Pending): void {
+    const { req, queue } = pd;
     const seats = this.draftSeats(pd);
     const draft = queue.draft;
     const finalize = pd.protocol === 'role_preset' ? draft?.finalizeSeconds ?? DRAFT_DEFAULTS.presetFinalize : draft?.finalizeSeconds ?? DRAFT_DEFAULTS.finalize;
@@ -334,7 +340,7 @@ export class LocalSession implements Session {
         if (!loadCache.has(k)) {
           const pick = this.opts.pickLoadout !== undefined ? this.opts.pickLoadout : BOTS_LINK.pickLoadout;
           let l: LoadoutChoice | null = null;
-          try { l = pick ? pick(this.catalog, f, pd.rules, this.draftRng.nextU32()) : null; } catch { l = null; }
+          try { l = pick ? pick(this.catalog, f, pd.rules, this.draftRng.nextU32(), s.role) : null; } catch { l = null; }
           loadCache.set(k, sanitizeLoadout(this.catalog, pd.rules, l ?? undefined));
         }
         return loadCache.get(k)!;
@@ -348,6 +354,8 @@ export class LocalSession implements Session {
     this.draftHost = host;
     this._phase = 'draft';
     host.start();
+    // a preset skin (QueueRequest.preset.skin) is applied like a finalize choice: owned skins of that fighter only
+    if (req.preset?.skin && this.draftHost === host) host.act(pd.you, { a: 'skin', skin: req.preset.skin });
     if (this.draftHost === host && !host.done) this.draftTimer = this.clock.every(DRAFT_TICK_MS, () => host.advance(DRAFT_TICK_MS / 1000));
   }
 
@@ -448,11 +456,19 @@ export class LocalSession implements Session {
     const host = this.draftHost, pd = this.pending;
     this.stopDraft();
     if (!host || !pd) return;
-    const simQueue = findQueue(pd.simCatalog, pd.queue.id)!;
-    const setup = buildMatchSetup({
-      catalog: pd.simCatalog, queue: simQueue, mode: pd.mode, map: pd.map, final: host.final(), difficulty: pd.difficulty,
-      seed: this.rng.nextU32(), matchId: this.ids.next('match'), practice: pd.req.practice,
-    });
+    let setup: MatchSetup;
+    try {
+      const simQueue = findQueue(pd.simCatalog, pd.queue.id)!;
+      setup = buildMatchSetup({
+        catalog: pd.simCatalog, queue: simQueue, mode: pd.mode, map: pd.map, final: host.final(), difficulty: pd.difficulty,
+        seed: this.rng.nextU32(), matchId: this.ids.next('match'), practice: pd.req.practice,
+      });
+    } catch (err) {
+      this.pending = null;
+      this._phase = 'idle';
+      this.error(`match setup: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
     pd.setup = setup;
     this.enterLoading(pd, setup);
   }
@@ -460,6 +476,7 @@ export class LocalSession implements Session {
   // ── loading + match ──────────────────────────────────────────────────────────────────────────
   private enterLoading(pd: Pending, setup: MatchSetup): void {
     this._phase = 'loading';
+    this.readyEarly = false;
     this.emit({ type: 'loading', setup, progress: 0 });
     const free = pd.queue.kind === 'practice' || pd.queue.kind === 'custom' || this.opts.dev === true;
     const bots = this.opts.bots !== undefined ? this.opts.bots : BOTS_LINK.bots?.(pd.simCatalog, setup) ?? null;
@@ -478,11 +495,13 @@ export class LocalSession implements Session {
     }
     this.host = host;
     this.emit({ type: 'loading', setup, progress: 1 });
+    if (this.readyEarly && this.host === host) { this.readyEarly = false; this.matchReady(); }
   }
 
   currentMatch(): MatchClient | null { return this._phase === 'loading' || this._phase === 'match' ? this.host : null; }
 
   matchReady(): void {
+    if (this._phase === 'loading' && !this.host) { this.readyEarly = true; return; }   // called from the progress-0 event
     if (this._phase !== 'loading' || !this.host) { this.error('matchReady: nothing is loading'); return; }
     this.host.start();
     this._phase = 'match';
@@ -509,7 +528,7 @@ export class LocalSession implements Session {
     this.host?.dispose();
     this.host = null;
     this._phase = 'postgame';
-    this.emit({ type: 'postgame', result, grants, you: pd.you });
+    this.emit({ type: 'postgame', result: structuredClone(result), grants: structuredClone(grants), you: pd.you });
   }
 
   /** Glicko-2 update for ranked queues (ratings.ts); returns the rating delta */

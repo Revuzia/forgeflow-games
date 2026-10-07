@@ -1,0 +1,66 @@
+{
+  "$comment": "VALE team buffs (CONTRACT §5.4 camps/objectives/structures; WORLD glossary). A unit's onTakedownTeamBuff grants one of these to every fighter of the killing team (stats + passives) and to its Wicks (minionStats). Granting an id the team already holds refreshes its duration (sim core.ts addTeamBuff). Splinters is designed to stack to 3; the sim currently refreshes instead (SIM request in _design/sections/modes_economy.md).",
+  "teamBuffs": [
+    {
+      "id": "clearglass",
+      "name": "Clearglass",
+      "desc": "From the Glasshorn, for 90 s: your whole team gains +10 ability haste and +1.5 resource regeneration per second.",
+      "icon": "assets/ui/icons/team_buffs/clearglass.svg",
+      "duration": 90,
+      "stats": { "haste": 10, "resRegen": 1.5 }
+    },
+    {
+      "id": "resinburn",
+      "name": "Resinburn",
+      "desc": "From the Resinback, for 90 s: your team's basic attacks on fighters and monsters burn for 3 magic hits over 2 s and slow briefly. Once every 3 s per target.",
+      "icon": "assets/ui/icons/team_buffs/resinburn.svg",
+      "duration": 90,
+      "passives": [
+        {
+          "id": "resinburn_ignite",
+          "name": "Resinburn",
+          "desc": "Basic attacks on fighters and monsters burn for 3 hits of 4 + 2 per level magic damage over 2 s and slow by 10% for 1 s. Once every 3 s per target.",
+          "icon": "assets/ui/icons/team_buffs/resinburn.svg",
+          "triggers": [
+            {
+              "on": "attackHit",
+              "perTargetCooldown": 3,
+              "filter": { "enemies": true, "fighters": true, "monsters": true, "minions": false, "summons": false },
+              "effects": [
+                { "op": "repeat", "count": 3, "interval": 1, "effects": [
+                  { "op": "damage", "amount": { "base": 4, "level": 2 }, "type": "magic", "to": "hit" }
+                ] },
+                { "op": "status", "status": "slow", "duration": 1, "power": 0.1, "to": "hit" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "splinters",
+      "name": "Splinters",
+      "desc": "From the Sunsplinter, for 4:00: your team gains +5% armor and resist penetration and +5 ability haste. The next Sunsplinter you take renews it.",
+      "icon": "assets/ui/icons/team_buffs/splinters.svg",
+      "duration": 240,
+      "stats": { "armorPenPct": 0.05, "magicPenPct": 0.05, "haste": 5 }
+    },
+    {
+      "id": "long_shade",
+      "name": "The Long Shade",
+      "desc": "From Longshade, for 2:30: your team gains +25 attack, +40 power and +10% tenacity. Your Wicks march tougher, harder-hitting and faster.",
+      "icon": "assets/ui/icons/team_buffs/long_shade.svg",
+      "duration": 150,
+      "stats": { "ad": 25, "ap": 40, "tenacity": 0.1 },
+      "minionStats": { "hp": 400, "ad": 30, "armor": 25, "resist": 25, "moveSpeedPct": 0.1 }
+    },
+    {
+      "id": "lanternwake",
+      "name": "Lanternwake",
+      "desc": "You broke an enemy Lantern. For 4:00 your Wicks on every road gain +120 health, +10 attack and +10 armor and resist.",
+      "icon": "assets/ui/icons/team_buffs/lanternwake.svg",
+      "duration": 240,
+      "minionStats": { "hp": 120, "ad": 10, "armor": 10, "resist": 10 }
+    }
+  ]
+}

@@ -74,6 +74,8 @@ export abstract class BotBase {
   pMoveX = 0; pMoveY = 0; pMove = false;
   pFight: Entity | null = null;
   pSiege: Entity | null = null;
+  /** the structure outranks the fight target (endgame) */
+  pSiegeFirst = false;
   pFarm = 0;
   pMonsters = false;
   pMonsterX = 0; pMonsterY = 0;
@@ -674,7 +676,12 @@ export abstract class BotBase {
     const dodging = this.dodge();
     // 2. abilities
     if (this.useAbilities() || dodging) return;
-    // 3. fight
+    // 3. fight (an endgame structure first)
+    const sf = this.pSiege;
+    if (this.pSiegeFirst && sf && sf.alive && sf.targetable && attackable(w, e, sf) && !(this.pFight && this.pFight.alive && inAttackRange(e, this.pFight))) {
+      this.attack(sf);
+      return;
+    }
     const f = this.pFight;
     if (f && f.alive && attackable(w, e, f)) {
       const towerOk = this.pDive || f.kind !== 'fighter' || this.towerSafe(f.x, f.y, 0.2) || inAttackRange(e, f);

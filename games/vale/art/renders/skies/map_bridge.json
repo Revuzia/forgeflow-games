@@ -1,0 +1,62 @@
+{
+  "render_s": 10.54,
+  "mean_sky_lum": 1.0,
+  "max": 5.12,
+  "scale": 0.16347,
+  "total_s": 10.72,
+  "sun_dir_three": [
+    -0.2376,
+    0.7193,
+    0.6528
+  ],
+  "sun_dir_bible": [
+    -0.2376,
+    0.7193,
+    0.6528
+  ],
+  "sun_dir_check": true,
+  "out": "art/out/maps/map_bridge/sky.hdr",
+  "bytes": 495781,
+  "lighting_source": "tokens.json grade.maps.bridge (fog: gorge); sunDir recomputed from bearing 200 / elevation 46 and checked against tokens sun.dir: True",
+  "sun_dir_tokens": [
+    -0.2376,
+    0.7193,
+    0.6528
+  ],
+  "sun_dir_matches_tokens": true,
+  "lighting": "art/out/maps/map_bridge/lighting.json",
+  "previews": {
+    "equirect": "art/renders/skies/map_bridge.png",
+    "views": "art/renders/skies/map_bridge_views.png"
+  },
+  "ambient": 0.7,
+  "preset": {
+    "_name": "Needlespan - the Long Light (low warm evening), altocumulus with warm-lit undersides",
+    "tokens": "bridge",
+    "out": "maps/map_bridge/sky.hdr",
+    "size": [
+      1024,
+      512
+    ],
+    "sun_bearing_deg": 200,
+    "sun_elevation_deg": 46,
+    "sky_type": "MULTIPLE_SCATTERING",
+    "air": 1.2,
+    "aerosol": 2.2,
+    "ozone": 1.0,
+    "altitude_m": 300,
+    "cloud_kind": "altocumulus",
+    "cloud_cover": 0.45,
+    "cloud_scale": 1.15,
+    "cloud_softness": 0.14,
+    "cloud_opacity": 0.88,
+    "cloud_tint": "#ffe4c4",
+    "cloud_shadow_tint": "#d29a86",
+    "sky_tint": "#fff0de",
+    "ground": "#5e6c93",
+    "sun_disc": false,
+    "exposure": 0.0,
+    "samples": 16,
+    "seed": 200
+  }
+}

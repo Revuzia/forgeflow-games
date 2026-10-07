@@ -69,14 +69,16 @@ const FRAY_RULES: Raw = Object.fromEntries(Object.entries({
 
 /** probe matches end by a real condition within this much game time */
 export const PROBE_TIME_LIMIT = 40;
-const fastEnd = (kind: string, extra: Raw = {}): Raw => ({ end: { kind, ...extra, timeLimit: PROBE_TIME_LIMIT } });
+const fastEnd = (kind: string, extra: Raw = {}, limit = PROBE_TIME_LIMIT): Raw => ({ end: { kind, ...extra, timeLimit: limit } });
 const GRANTS = { win: 30, loss: 10, perMinute: 2, cap: 60, xpWin: 120, xpLoss: 60 };
 const NO_GRANTS = { win: 0, loss: 0, perMinute: 0, cap: 0, xpWin: 0, xpLoss: 0 };
 const DRAFT = { bansPerTeam: 2, pickSeconds: 8, banSeconds: 6, finalizeSeconds: 4 };
 
-export function sessionCatalog(o: { timeLimit?: boolean } = {}): CatalogT {
-  const coreEnd = o.timeLimit === false ? {} : fastEnd('core', { coreStructure: 'fx_core' });
-  const frayEnd = o.timeLimit === false ? {} : fastEnd('last_standing_or_score', { lives: 2, killScore: 4 });
+/** `timeLimit`: false = the modes' own end rules only; a number = that queue time limit (default PROBE_TIME_LIMIT) */
+export function sessionCatalog(o: { timeLimit?: boolean | number } = {}): CatalogT {
+  const limit = typeof o.timeLimit === 'number' ? o.timeLimit : PROBE_TIME_LIMIT;
+  const coreEnd = o.timeLimit === false ? {} : fastEnd('core', { coreStructure: 'fx_core' }, limit);
+  const frayEnd = o.timeLimit === false ? {} : fastEnd('last_standing_or_score', { lives: 2, killScore: 4 }, limit);
   const raw = rawCatalog({
     fighters: SESSION_FIGHTERS,
     units: UNITS, items: ITEMS, teamBuffs: TEAM_BUFFS,
@@ -224,10 +226,11 @@ export function runFlow(h: Harness, req: QueueRequest, o: { driver?: (s: DraftSt
   client.setTimeScale(16);
   // each pump of 1/30 s at time scale 16 runs 16 ticks
   const pumps = Math.ceil(((o.maxGameSeconds ?? PROBE_TIME_LIMIT + 30) * 30) / 16) + 10;
-  for (let i = 0; i < pumps && h.session.phase === 'match'; i++) client.pump(1 / 30);
+  const phase = (): string => h.session.phase;   // a getter: re-read after every pump
+  for (let i = 0; i < pumps && phase() === 'match'; i++) client.pump(1 / 30);
   out.gameSeconds = client.view.time;
   const pg = lastOf(h, 'postgame');
-  if (h.session.phase !== 'postgame' || !pg) { out.why = `no post-game (phase ${h.session.phase}, t ${client.view.time.toFixed(1)})`; return out; }
+  if (phase() !== 'postgame' || !pg) { out.why = `no post-game (phase ${phase()}, t ${client.view.time.toFixed(1)})`; return out; }
   out.postgame = pg; out.result = pg.result; out.ok = true;
   return out;
 }

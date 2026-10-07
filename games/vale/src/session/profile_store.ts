@@ -70,7 +70,7 @@ export function newProfile(ctx: ProfileContext, identity?: Identity): Profile {
   const id = identity ?? newLocalIdentity(ctx.token(), ctx.defaultName(), ctx.nowIso());
   const p: Profile = {
     schema: PROFILE_SCHEMA, identity: { ...id }, level: 1, xp: 0, wallet: {}, ledger: [], owned: [], equipped: {}, loadouts: {},
-    ratings: {}, history: [], settings: defaultSettings(), seenCatalogVersion: ctx.catalog.version, tutorialsSeen: [],
+    ratings: {}, history: [], firstWinAt: undefined, settings: defaultSettings(), seenCatalogVersion: ctx.catalog.version, tutorialsSeen: [],
   };
   grantStarterSkins(p, ctx.catalog, ctx);
   grantStarterWallet(p, ctx.catalog, ctx);
@@ -125,7 +125,7 @@ export const MIGRATIONS: Readonly<Record<number, (raw: Blob, ctx: ProfileContext
       : newLocalIdentity(ctx.token(), name, ctx.nowIso());
     const p: Profile = {
       schema: PROFILE_SCHEMA, identity, level: Math.max(1, Math.floor(num(v0.level, 1))), xp: Math.max(0, Math.floor(num(v0.xp, 0))),
-      wallet: {}, ledger: [], owned: [], equipped: {}, loadouts: {}, ratings: {}, history: [],
+      wallet: {}, ledger: [], owned: [], equipped: {}, loadouts: {}, ratings: {}, history: [], firstWinAt: undefined,
       settings: normalizeSettings(v0.settings), seenCatalogVersion: undefined, tutorialsSeen: Array.isArray(v0.tutorials) ? v0.tutorials.filter((t) => typeof t === 'string') : [],
     };
     for (const [cur, amount] of Object.entries(isObj(v0.coins) ? v0.coins : {})) {

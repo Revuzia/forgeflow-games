@@ -324,10 +324,10 @@ export function botSetup(modeId: string, queueId: string, mapId: string, seats: 
 }
 
 /** Rift 5 v 5 with role-correct lineups (team 0 RIFT_LINEUP, team 1 RIFT_LINEUP_B) */
-export function riftBotSetup(o: { seed?: number; difficulty?: Difficulty; difficulties?: [Difficulty, Difficulty]; spells?: (fighter: string, role: string) => string[] } = {}): MatchSetup {
+export function riftBotSetup(o: { seed?: number; difficulty?: Difficulty; difficulties?: [Difficulty, Difficulty]; spells?: (fighter: string, role: string) => string[]; swap?: boolean } = {}): MatchSetup {
   const seats: BSeat[] = [];
   for (const team of [0, 1]) {
-    const lineup = team === 0 ? RIFT_LINEUP : RIFT_LINEUP_B;
+    const lineup = (team === 0) !== !!o.swap ? RIFT_LINEUP : RIFT_LINEUP_B;
     for (const s of lineup) {
       seats.push({ fighter: s.fighter, team, role: s.role, difficulty: o.difficulties ? o.difficulties[team] : o.difficulty,
         spells: o.spells ? o.spells(s.fighter, s.role) : s.role === 'fx_role_jungle' ? ['fx_spell_smite', 'fx_spell_blink'] : ['fx_spell_blink', 'fx_spell_heal'] });

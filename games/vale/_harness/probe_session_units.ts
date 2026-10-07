@@ -62,6 +62,11 @@ section('settings: defaults, ladder, patching', () => {
   check("changing a ladder value by hand → 'custom'", p1.video.preset === 'custom' && p1.video.shadows === 3);
   const p2 = patchSettings(p1, { video: { preset: 'low' } as never });
   check('choosing a preset applies its ladder', p2.video.preset === 'low' && p2.video.renderScale === 0.75);
+  const p4 = patchSettings(s, { video: { ...s.video, preset: 'ultra' } });
+  check('a whole-section patch that only changes the preset applies that preset (UI pattern)', p4.video.preset === 'ultra' && p4.video.maxDpr === 2 && p4.video.shadows === 3);
+  const p5 = patchSettings(p4, { video: { ...p4.video, fpsCap: 60 } });
+  check('non-ladder video fields keep the preset', p5.video.preset === 'ultra' && p5.video.fpsCap === 60);
+  check('default settings are in canonical (normalized) key order', JSON.stringify(normalizeSettings(s)) === JSON.stringify(s));
   const p3 = patchSettings(s, { audio: { master: 7 } as never, controls: { binds: { a1: 'KeyZ' } } as never });
   check('patches clamp values and merge binds key by key', p3.audio.master === 1 && p3.controls.binds.a1 === 'KeyZ' && p3.controls.binds.a2 === 'KeyW' && p3.video.preset === 'high');
   const g = normalizeSettings({ video: { shadows: 9, antialias: 'fxaa' }, access: { colorblind: 'tritan', uiScale: -4 }, junk: true });

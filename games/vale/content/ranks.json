@@ -1,0 +1,12 @@
+{
+  "$comment": "VALE ranked tiers (CONTRACT §8; STYLE_BIBLE Ranks row; WORLD §4.3). Glicko-2 scale, every new record starts at 1500 (RD 350) and stays provisional (no tier) for queue.ranked.placementGames matches. Tier = the highest minRating <= rating; listed ascending. Thresholds aim at roughly 10/20/25/22/14/7/2 % of an sd-250 population around 1500 (see _design/sections/modes_economy.md).",
+  "ranks": [
+    { "id": "rank_lamplit", "name": "Lamplit", "minRating": 0, "color": "#8A6248", "emblem": "assets/ui/icons/ranks/rank_lamplit.svg" },
+    { "id": "rank_greylight", "name": "Greylight", "minRating": 1175, "color": "#7D8A9E", "emblem": "assets/ui/icons/ranks/rank_greylight.svg" },
+    { "id": "rank_rosewake", "name": "Rosewake", "minRating": 1375, "color": "#D9897F", "emblem": "assets/ui/icons/ranks/rank_rosewake.svg" },
+    { "id": "rank_clearmorn", "name": "Clearmorn", "minRating": 1525, "color": "#8FB8E0", "emblem": "assets/ui/icons/ranks/rank_clearmorn.svg" },
+    { "id": "rank_highsun", "name": "Highsun", "minRating": 1675, "color": "#E8D39A", "emblem": "assets/ui/icons/ranks/rank_highsun.svg" },
+    { "id": "rank_noonward", "name": "Noonward", "minRating": 1825, "color": "#F4EEDD", "emblem": "assets/ui/icons/ranks/rank_noonward.svg" },
+    { "id": "rank_unshadowed", "name": "Unshadowed", "minRating": 2000, "color": "#FFFFFF", "emblem": "assets/ui/icons/ranks/rank_unshadowed.svg" }
+  ]
+}

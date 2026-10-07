@@ -1,0 +1,13 @@
+{
+  "sunDir": [
+    -0.3531,
+    0.788,
+    0.5043
+  ],
+  "sunColor": "#FFEBD8",
+  "sunIntensity": 3.0,
+  "ambient": 0.65,
+  "fogColor": "#9AA7B4",
+  "fogDensity": 0.035,
+  "exposure": 1.0
+}

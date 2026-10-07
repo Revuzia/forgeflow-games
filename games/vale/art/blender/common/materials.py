@@ -256,15 +256,35 @@ def _new(name: str) -> tuple[bpy.types.Material, G]:
 
 # ── shared painted cues ─────────────────────────────────────────────────────────────────────────
 def value_gradient(g: G, color, grad: dict | None):
-    """Multiply `color` by a Z ramp: `low` at z0 (feet) -> `high` at z1 (head)."""
+    """Multiply `color` by a Z ramp: `low` at z0 (feet) -> `high` at z1 (head); or, when the
+    gradient has `stops` [(z_frac, mult), ...] (bible_gradient), a piecewise ramp over the height."""
     if not grad:
         return color
     z = g.sep_z()
     span = max(1e-3, grad["z1"] - grad["z0"])
     t = g.math("MULTIPLY", g.math("SUBTRACT", z, grad["z0"]), 1.0 / span, clamp=True)
+    if grad.get("stops"):
+        r = g.n("ShaderNodeValToRGB")
+        cr = r.color_ramp
+        cr.interpolation = "B_SPLINE"
+        while len(cr.elements) > 1:
+            cr.elements.remove(cr.elements[-1])
+        for i, (pos, mult) in enumerate(grad["stops"]):
+            e = cr.elements[0] if i == 0 else cr.elements.new(pos)
+            e.position = pos
+            e.color = (mult / 2.0, mult / 2.0, mult / 2.0, 1.0)       # ramp colours clamp at 1: store x/2
+        g.link(t, r.inputs["Fac"])
+        v = g.math("MULTIPLY", g.n("ShaderNodeRGBToBW") and _bw(g, r.outputs["Color"]), 2.0)
+        return _mul_scalar(g, color, v)
     t = g.math("POWER", t, grad.get("gamma", 1.0))
     v = g.math("ADD", g.math("MULTIPLY", t, grad["high"] - grad["low"]), grad["low"])
     return _mul_scalar(g, color, v)
+
+
+def _bw(g: G, col):
+    sep = g.n("ShaderNodeSeparateColor")
+    g.link(col, sep.inputs["Color"])
+    return sep.outputs["Red"]
 
 
 def _mul_scalar(g: G, color, s):
@@ -406,12 +426,20 @@ def gem(name: str, pal: dict, key: str = "gem", strength: float = 3.0) -> bpy.ty
     return m
 
 
-def accent(pal: dict, key: str = "accent", strength: float = 2.0) -> bpy.types.Material:
+ACCENT_REST_EMISSIVE = 0.8      # bible: the accent holds readability colour BELOW bloom (<= 0.8) at rest;
+                                 # the renderer raises it to >= 1.5 only in wind-ups ("a glow is a warning")
+
+
+def accent(pal: dict, key: str = "accent", strength: float = ACCENT_REST_EMISSIVE,
+           base_value: float = 0.22) -> bpy.types.Material:
     """The REQUIRED emissive readability material (CONTRACT §12). The renderer tints its emissive
-    with the team/player colour; the authored colour is what portraits show."""
+    with the team/player colour; the authored colour is what portraits show. The base colour is a
+    dark, desaturated glass so the EMISSION carries the colour (a bright base would push the lit
+    accent over the bloom threshold and wash the tint toward white)."""
     m, g = _new("accent")
     col = shade_hex(pal[key])
-    g.set_bsdf(color=shade_hex(pal[key], 0.85, 0.6), rough=0.35, metal=0.0, emission=col, emission_strength=strength)
+    g.set_bsdf(color=shade_hex(pal[key], base_value, 0.35), rough=0.25, metal=0.0, emission=col,
+               emission_strength=min(strength, ACCENT_REST_EMISSIVE))
     return m
 
 

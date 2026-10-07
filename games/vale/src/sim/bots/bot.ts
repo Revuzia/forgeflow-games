@@ -44,6 +44,7 @@ export class Bot extends BotBase implements BotController {
   private followRollAt = -1e9;
   private recallTriedAt = -1e9;
   private campTarget = -1;
+  private tradeRestUntil = 0;
   // situation (5 Hz)
   hpF = 1;
   nearE = 0;
@@ -102,7 +103,7 @@ export class Bot extends BotBase implements BotController {
   }
 
   private clearPlan(): void {
-    this.pMove = false; this.pFight = null; this.pSiege = null; this.pFarm = 0; this.pMonsters = false; this.pAggro = 0; this.pDive = false;
+    this.pMove = false; this.pFight = null; this.pSiege = null; this.pSiegeFirst = false; this.pFarm = 0; this.pMonsters = false; this.pAggro = 0; this.pDive = false;
   }
 
   // ── situation ─────────────────────────────────────────────────────────────────────────────────
@@ -155,6 +156,17 @@ export class Bot extends BotBase implements BotController {
       if (wgt > 0 && (ls.x - e.x) ** 2 + (ls.y - e.y) ** 2 <= R * R) powE += this.power(f) * wgt * 0.6;
     }
     this.nearE = nE; this.nearA = nA;
+    if (this.k.ffa) {
+      // free-for-all: nobody is allied — weigh me against the strongest single threat, plus a
+      // share of the others (they may turn on me, or on each other)
+      let top = 0, rest = 0;
+      for (const f of tp.enemyFighters) {
+        if (!this.isNoticed(f) || this.dist2(f, e.x, e.y) > R * R) continue;
+        const pw = this.power(f);
+        if (pw > top) { rest += top; top = pw; } else rest += pw;
+      }
+      powE = top + rest * 0.35;
+    }
     this.adv = powA / Math.max(1, powA + powE);
     // tower aggro: an enemy tower shooting me
     this.towerAggro = false;
@@ -211,8 +223,10 @@ export class Bot extends BotBase implements BotController {
     let recall = 0;
     if (kind !== 'fray') {
       if (base) {
-        if (atBase && (hpF < 0.9 || (this.p.canShop && this.p.gold >= nextPrice))) recall = 0.92;
-        else if (hpF < 0.36 + this.diff.recallBias && this.nearE === 0) recall = 0.74;
+        // without a recall the walk home is the cost: only go when nearly out (attrition modes)
+        const lowAt = (k.rules.recall ? 0.36 : 0.22) + this.diff.recallBias;
+        if (atBase && (hpF < 0.9 || (this.p.canShop && this.eco.canBuyNow(this.w, this.p)))) recall = 0.92;
+        else if (hpF < lowAt && this.nearE === 0) recall = 0.74;
         else if (k.rules.recall && this.p.gold >= Math.max(nextPrice, 1100) && this.nearE === 0 && hpF < 0.8) recall = 0.5;
         else if (k.rules.recall && this.p.gold >= Math.max(nextPrice, 1700) && this.nearE === 0) recall = 0.46;
         else if (k.rules.recall && resF < 0.12 && this.nearE === 0) recall = 0.5;
@@ -229,11 +243,15 @@ export class Bot extends BotBase implements BotController {
     // farm
     if (this.jungle) consider('farm', 0.45);
     else if (kind === 'rift' && b && b.phase !== 'early' && this.nearbyCamp(25) >= 0 && this.perc.enemyUnits.length === 0) consider('farm', 0.3);
-    // trade
+    // trade: only with an edge (hp lead, their cooldowns spent, them low), short, then a breather
     const le = this.laneEnemy;
-    if (le && hpF > 0.55 && this.adv >= 0.45 && this.towerSafe(le.x, le.y, 0.5) && (this.mode === 'lane' || this.mode === 'trade' || this.mode === 'push')) {
-      const spent = this.diff.knowsCooldowns ? this.m.spentAbilities(le.id, now) * 0.05 : 0;
-      consider('trade', 0.48 + 0.3 * (hpF - le.hp / Math.max(1, le.maxHp)) + spent);
+    if (this.mode === 'trade' && now - this.modeSince > 3.5) this.tradeRestUntil = now + 6;
+    if (le && hpF > 0.55 && this.adv >= 0.45 && now >= this.tradeRestUntil && this.towerSafe(le.x, le.y, 0.5) &&
+      (this.mode === 'lane' || this.mode === 'trade' || this.mode === 'push')) {
+      const leF = le.hp / Math.max(1, le.maxHp);
+      const spent = this.diff.knowsCooldowns ? this.m.spentAbilities(le.id, now) : 0;
+      const edge = (hpF - leF) + spent * 0.12 + (leF < 0.45 ? 0.2 : 0) + (this.adv - 0.5);
+      if (edge >= 0.12 || this.mode === 'trade') consider('trade', 0.42 + Math.min(0.25, edge));
     }
     // all-in
     const kt = this.killTarget;
@@ -245,7 +263,16 @@ export class Bot extends BotBase implements BotController {
     // push / group / defend / objective / roam (team intents)
     if (b) {
       const follow = this.follows ? 1 : 0;
-      if (kind === 'bridge' || kind === 'brawl') consider('push', b.siege ? 0.5 : 0.35);
+      if (b.rush) {
+        // at the open core / a gate: hitting it beats chasing heroes
+        const coreOpen = !!b.siege && !!this.m.structInfo(b.siege)?.isCore;
+        const r = coreOpen ? 32 : 16;
+        const near = !!b.siege && b.siege.alive && b.siege.targetable && this.dist2(e, b.siege.x, b.siege.y) < r * r;
+        consider('push', near && hpF > 0.2 ? 0.92 : hpF > 0.35 ? 0.79 : 0.5);
+      }
+      else if (b.stage) consider('push', hpF > 0.5 ? 0.66 : 0.4);
+      else if (b.window && b.siege && hpF > 0.4 && (!this.jungle || b.phase !== 'early')) consider('push', 0.72);
+      else if (kind === 'bridge' || kind === 'brawl') consider('push', b.siege ? 0.5 : 0.35);
       else if (b.group && follow && (!this.jungle || b.phase === 'late')) consider('push', 0.56);
       else if (this.lane >= 0 && b.push[this.lane] > 0 && !this.jungle) consider('push', 0.3 + 0.2 * b.push[this.lane]);
       const d = this.lane >= 0 ? b.defend[this.lane] : 0;
@@ -379,11 +406,16 @@ export class Bot extends BotBase implements BotController {
     this.holdX = x; this.holdY = y;
   }
 
-  /** fight back what is hitting me (any mode that is not running away) */
+  /** fight back an enemy fighter that is attacking me (any mode that is not running away) */
   private selfDefense(): void {
-    if (this.recentDps <= 0) return;
-    const f = this.nearestEnemyFighter(this.prof.attackRange + 3);
-    if (f && this.hpF > 0.4 && this.towerSafe(f.x, f.y, 0)) { this.pFight = f; this.pAggro = Math.max(this.pAggro, 0.5); }
+    if (this.recentDps <= 0 || this.hpF <= 0.4) return;
+    const e = this.e, reach = this.prof.attackRange + 3;
+    for (const f of this.perc.enemyFighters) {
+      if (f.atkTarget !== e.id || !this.isNoticed(f) || this.dist2(f, e.x, e.y) > reach * reach) continue;
+      if (!this.towerSafe(f.x, f.y, 0)) continue;
+      this.pFight = f; this.pAggro = Math.max(this.pAggro, 0.5);
+      return;
+    }
   }
 
   private execLane(): void {
@@ -391,8 +423,9 @@ export class Bot extends BotBase implements BotController {
     this.pMove = true; this.pMoveX = this.holdX; this.pMoveY = this.holdY;
     this.pFarm = 1;
     this.pAggro = this.hpF > 0.5 ? 0.3 : 0.15;
-    // a wave crashing into my tower with no enemy champion around: clear it
+    // a wave crashing into my tower with no enemy champion around: clear it; one-lane modes always shove
     if (this.nearE === 0 && this.perc.enemyN[Math.max(0, this.lane)] >= 4 && this.perc.ownN[Math.max(0, this.lane)] <= 1) this.pFarm = 2;
+    if (this.k.kind === 'bridge' || this.k.kind === 'brawl') this.pFarm = 2;
     this.selfDefense();
   }
 
@@ -477,12 +510,31 @@ export class Bot extends BotBase implements BotController {
     this.pMove = true;
     const siege = grouped && b && b.siege && b.siege.alive ? b.siege : this.nextEnemyStructure(lane);
     let mx = this.holdX, my = this.holdY;
+    if (b && b.stage) {
+      // gathering for the final push: wait at the staging point, fight what comes
+      this.pMoveX = b.groupX; this.pMoveY = b.groupY;
+      this.pFarm = 2;
+      const f = this.pickFightTarget(9);
+      if (f && this.adv >= 0.45 && this.towerSafe(f.x, f.y, 0)) { this.pFight = f; this.pAggro = 0.7; }
+      return;
+    }
+    const rushR = siege && this.m.structInfo(siege)?.isCore ? 32 : 16;
+    if (b && b.rush && siege && siege.alive && siege.targetable && this.dist2(e, siege.x, siege.y) < rushR * rushR) {
+      // endgame: the structure first; only peel an enemy that is hitting me
+      this.pSiege = siege; this.pSiegeFirst = true;
+      this.pMoveX = siege.x; this.pMoveY = siege.y;
+      for (const f of this.perc.enemyFighters) {
+        if (f.atkTarget === e.id && this.isNoticed(f) && inAttackRange(e, f) && f.hp < f.maxHp * 0.3) { this.pFight = f; this.pAggro = 0.8; break; }
+      }
+      return;
+    }
     if (siege && siege.alive && siege.targetable) {
       const info = this.m.structInfo(siege);
       const attacks = !!info?.attacks;
       const alliesNear = this.alliesNear(siege.x, siege.y, 12);
       const enemiesNear = this.enemiesNear(siege.x, siege.y, 12);
-      const canHit = !attacks || this.minionsTanking(siege) >= 2 || (alliesNear >= 3 && enemiesNear === 0 && siege.hp < siege.maxHp * 0.35);
+      const window = !!b && b.window;
+      const canHit = !attacks || this.minionsTanking(siege) >= 2 || (enemiesNear === 0 && (alliesNear >= 3 || (window && alliesNear >= 2)) && this.hpF > 0.45);
       if (canHit) { this.pSiege = siege; mx = siege.x; my = siege.y; }
       else if (grouped && b) {
         // wait for the wave on our side of it
@@ -685,11 +737,14 @@ export class Bot extends BotBase implements BotController {
   private nextEnemyStructure(lane: number): Entity | null {
     const l = this.k.lanes[lane];
     if (!l) return null;
+    const b = this.brain;
     let best: Entity | null = null, bp = Infinity;
     for (const st of this.perc.enemyStructs) {
       if (!st.alive || !st.targetable) continue;
       const info = this.m.structInfo(st);
       if (!info) continue;
+      // a structure that comes back is only worth hitting when the core can follow
+      if (info.respawns && b && b.towersLeft > 0) continue;
       const p = info.lane === lane ? progress(l, this.team, info.s) : info.lane < 0 ? l.length + 1 : Infinity;
       if (p < bp) { bp = p; best = st; }
     }

@@ -27,6 +27,8 @@ export class BotMatch {
   telegraphs: Telegraph[] = [];
   /** enemy fighter → estimated time each of a1..ult is back (cast events seen by some team) */
   readonly castSeen = new Map<EntityId, Float64Array>();
+  /** map structure id → when it last fell */
+  readonly structDownAt = new Map<string, number>();
   /** Fray: bot seat → the seat it is hunting (caps dog-piles on one human) */
   readonly ffaTarget = new Map<PlayerId, PlayerId>();
   private evArr: SimEvent[] | null = null;
@@ -43,13 +45,14 @@ export class BotMatch {
     this.castSeen.clear();
     this.ffaTarget.clear();
     this.structCache.clear();
+    this.structDownAt.clear();
     this.percs = [];
     this.brains = [];
     const lanes = this.k.lanes.length;
     for (let t = 0; t < w.teams.length; t++) {
       const tp = new TeamPerc(t, lanes);
       this.percs.push(tp);
-      this.brains.push(this.k.ffa || this.k.kind === 'practice' ? null : new TeamBrain(t, this.k, tp));
+      this.brains.push(this.k.ffa || this.k.kind === 'practice' ? null : new TeamBrain(t, this.k, tp, this.structDownAt));
     }
   }
 
@@ -112,6 +115,12 @@ export class BotMatch {
           // what an observer knows: the ability's listed cooldown at a rank its level allows
           const rank = Math.max(1, Math.min(s.baseDef.maxRank, Math.ceil(src.level / 2)));
           arrT[si] = ev.t + ev.castTime + ranked(s.def.cooldown, rank);
+          break;
+        }
+        case 'structure': {
+          // public: when a structure fell (gates come back after their respawn time)
+          const v = w.entity(ev.id);
+          if (v) { const info = this.structInfo(v); if (info) this.structDownAt.set(info.id, ev.t); }
           break;
         }
         case 'death': {

@@ -87,6 +87,12 @@ export class TeamBrain {
   baseThreat = 0; baseX = 0; baseY = 0;
   phase: 'early' | 'mid' | 'late' = 'early';
   group = false;
+  /** endgame push: gates/core are open; commit everyone */
+  rush = false;
+  /** a won fight: the enemy is short of bodies — take structures now */
+  window = false;
+  /** endgame, not committed yet: gather at the group point, do not start on the gates */
+  stage = false;
   groupX = 0; groupY = 0;
   siege: Entity | null = null;
   siegeLane = -1;
@@ -98,8 +104,13 @@ export class TeamBrain {
   /** enemy fighters not seen for a while (danger of pushing deep) */
   missing = 0;
 
-  constructor(team: number, k: Knowledge, perc: TeamPerc) {
-    this.team = team; this.k = k; this.perc = perc;
+  /** shared with the match: map structure id → when it fell */
+  readonly downAt: ReadonlyMap<string, number>;
+  /** enemy towers (non-respawning, non-core structures) still standing */
+  towersLeft = 0;
+
+  constructor(team: number, k: Knowledge, perc: TeamPerc, downAt: ReadonlyMap<string, number> = new Map()) {
+    this.team = team; this.k = k; this.perc = perc; this.downAt = downAt;
     const n = k.lanes.length;
     this.push = new Float64Array(n); this.defend = new Float64Array(n);
     this.defendX = new Float64Array(n); this.defendY = new Float64Array(n);
@@ -215,6 +226,8 @@ export class TeamBrain {
     }
     const single = k.kind === 'bridge' || k.kind === 'brawl';
     let group = single;
+    this.window = aliveDiff >= 2 || (this.aliveEnemies <= 1 && this.aliveAllies >= 2);
+    if (this.window) group = true;
     if (k.kind === 'rift') {
       if (this.phase === 'late') group = true;
       else if (this.phase === 'mid') group = (enemyLost > 0 && aliveDiff >= 1) || aliveDiff >= 2 || levelDiff >= 8 || w.time >= 900;
@@ -224,15 +237,20 @@ export class TeamBrain {
     let towersLeft = 0;
     for (const e of tp.enemyStructs) {
       const info = this.structInfoOf(e);
-      if (info && info.lane >= 0 && !this.respawning(info)) towersLeft++;
+      if (info && !info.isCore && !this.respawning(info)) towersLeft++;
     }
+    this.towersLeft = towersLeft;
+    // the team's centre of mass (living fighters)
+    let cx = 0, cy = 0, cn = 0;
+    for (const f of tp.allyFighters) if (f.alive) { cx += f.x; cy += f.y; cn++; }
+    if (cn > 0) { cx /= cn; cy /= cn; } else { cx = this.groupX; cy = this.groupY; }
     for (const e of tp.enemyStructs) {
       if (!e.alive || !e.targetable) continue;
       const info = this.structInfoOf(e);
       if (!info) continue;
       let score: number;
       if (info.isCore) score = 1000;
-      else if (this.respawning(info)) score = towersLeft === 0 ? 500 - Math.hypot(e.x - this.groupX, e.y - this.groupY) * 0.1 : -1;
+      else if (this.respawning(info)) score = towersLeft === 0 ? 500 - Math.hypot(e.x - cx, e.y - cy) * 0.5 - (e.hp / Math.max(1, e.maxHp)) * 20 : -1;
       else {
         // the least-pushed lane first: towers nearer our side score higher
         const l = info.lane >= 0 ? k.lanes[info.lane] : null;
@@ -243,6 +261,35 @@ export class TeamBrain {
     }
     this.siege = bestScore >= 0 ? best : null;
     this.siegeLane = bestInfo ? bestInfo.lane : -1;
+    // endgame: every tower that guards the core is down — gates (they come back) and the core must
+    // fall in one push. The team first gathers at the staging point; it commits once most of it is
+    // there (or the enemy is short of bodies), and at once when a gate is already down (its respawn
+    // clock is running) or the core is open.
+    this.stage = false;
+    this.rush = false;
+    const endgame = !!this.siege && !!bestInfo && (bestInfo.isCore || (bestInfo.respawns && towersLeft === 0));
+    if (endgame) {
+      group = true;
+      let gatesTotal = 0, gatesUp = 0;
+      for (const st of k.structs) if (st.team !== this.team && st.respawns) gatesTotal++;
+      for (const e of tp.enemyStructs) { const info = this.structInfoOf(e); if (info && info.respawns && e.alive) gatesUp++; }
+      // a gate already down only starts the clock if enough of its respawn time is left to finish
+      let clock = bestInfo!.isCore;
+      const now = w.time;
+      for (const st of k.structs) {
+        if (st.team === this.team || !st.respawns) continue;
+        const down = this.downAt.get(st.id);
+        if (down === undefined) continue;
+        const left = down + st.respawnTime - now;
+        if (left > 0 && left >= Math.min(40, st.respawnTime * 0.6)) clock = true;
+      }
+      void gatesUp; void gatesTotal;
+      let ready = 0;
+      for (const f of tp.allyFighters) if (f.alive && f.hp > f.maxHp * 0.5 && (f.x - this.groupX) ** 2 + (f.y - this.groupY) ** 2 < 18 * 18) ready++;
+      const need = Math.min(4, Math.max(1, this.aliveAllies));
+      if (clock || ready >= need || this.aliveEnemies <= 2) this.rush = aliveDiff >= -1 || this.aliveEnemies <= 2;
+      else this.stage = true;
+    }
     this.group = group && !!this.siege;
     if (this.siege) {
       const s = this.siege;
@@ -268,6 +315,9 @@ export class TeamBrain {
   private thinkObjective(w: World, aa: number, ae: number): void {
     this.objective = null;
     if (this.k.kind !== 'rift') return;
+    // never while the base is under siege or the team is closing the game
+    if (this.baseThreat >= 0.4 || this.rush || this.stage) return;
+    for (let i = 0; i < this.defend.length; i++) if (this.defend[i] >= 0.7) return;
     const now = w.time;
     for (const c of this.k.camps) {
       if (!c.objective) continue;

@@ -1,0 +1,58 @@
+[
+  {
+    "id": "res_light",
+    "name": "Light",
+    "desc": "Stored light. Abilities spend it; it refills slowly on its own and quickly at your base.",
+    "color": "#8F86F0",
+    "model": "pool",
+    "max": 300,
+    "maxPerLevel": 40,
+    "regen": 1.6,
+    "regenPerLevel": 0.14,
+    "startFull": true
+  },
+  {
+    "id": "res_tally",
+    "name": "Tally",
+    "desc": "Builds as you attack, take hits and land abilities. Some abilities spend it. It drains after a few seconds out of combat.",
+    "color": "#E8C27A",
+    "model": "build",
+    "max": 100,
+    "maxPerLevel": 0,
+    "regen": 0,
+    "regenPerLevel": 0,
+    "startFull": false,
+    "gainOnAttack": 6,
+    "gainOnHitTaken": 2,
+    "gainOnAbilityHit": 5,
+    "decayDelay": 6,
+    "decayPerSec": 8
+  },
+  {
+    "id": "res_heat",
+    "name": "Heat",
+    "desc": "Abilities add Heat instead of spending it. A full bar overheats you: no abilities for a moment while it vents. It cools when you stop casting.",
+    "color": "#D96A4A",
+    "model": "heat",
+    "max": 100,
+    "maxPerLevel": 0,
+    "regen": 0,
+    "regenPerLevel": 0,
+    "startFull": false,
+    "decayDelay": 1.2,
+    "decayPerSec": 16,
+    "overheatLock": 2.5
+  },
+  {
+    "id": "res_unlit",
+    "name": "Unlit",
+    "desc": "No resource. Abilities are limited by their cooldowns alone.",
+    "color": "#8F8A80",
+    "model": "none",
+    "max": 0,
+    "maxPerLevel": 0,
+    "regen": 0,
+    "regenPerLevel": 0,
+    "startFull": false
+  }
+]

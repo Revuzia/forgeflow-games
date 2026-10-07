@@ -1,0 +1,62 @@
+{
+  "render_s": 14.21,
+  "mean_sky_lum": 1.0,
+  "max": 3.2,
+  "scale": 0.15791,
+  "total_s": 14.4,
+  "sun_dir_three": [
+    -0.3531,
+    0.788,
+    0.5043
+  ],
+  "sun_dir_bible": [
+    -0.3531,
+    0.788,
+    0.5043
+  ],
+  "sun_dir_check": true,
+  "out": "art/out/maps/map_rift/sky.hdr",
+  "bytes": 439902,
+  "lighting_source": "tokens.json grade.maps.rift (fog: heightMist); sunDir recomputed from bearing 215 / elevation 52 and checked against tokens sun.dir: True",
+  "sun_dir_tokens": [
+    -0.3531,
+    0.788,
+    0.5043
+  ],
+  "sun_dir_matches_tokens": true,
+  "lighting": "art/out/maps/map_rift/lighting.json",
+  "previews": {
+    "equirect": "art/renders/skies/map_rift.png",
+    "views": "art/renders/skies/map_rift_views.png"
+  },
+  "ambient": 0.65,
+  "preset": {
+    "_name": "Hourfall - the Split Hour (stalled mid-afternoon)",
+    "tokens": "rift",
+    "out": "maps/map_rift/sky.hdr",
+    "size": [
+      1024,
+      512
+    ],
+    "sun_bearing_deg": 215,
+    "sun_elevation_deg": 52,
+    "sky_type": "MULTIPLE_SCATTERING",
+    "air": 1.0,
+    "aerosol": 1.4,
+    "ozone": 1.0,
+    "altitude_m": 300,
+    "cloud_kind": "cumulus",
+    "cloud_cover": 0.35,
+    "cloud_scale": 0.6,
+    "cloud_softness": 0.22,
+    "cloud_opacity": 0.9,
+    "cloud_tint": "#fff6ec",
+    "cloud_shadow_tint": "#9aa6bb",
+    "sky_tint": "#fbfbff",
+    "ground": "#8a8478",
+    "sun_disc": false,
+    "exposure": 0.0,
+    "samples": 16,
+    "seed": 215
+  }
+}
