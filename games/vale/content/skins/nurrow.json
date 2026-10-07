@@ -1,0 +1,36 @@
+[
+  {
+    "id": "nurrow_base",
+    "fighter": "nurrow",
+    "name": "Nurrow",
+    "tier": "base",
+    "model": "assets/fighters/nurrow/nurrow.glb",
+    "portrait": "assets/fighters/nurrow/portrait.png",
+    "splash": "assets/fighters/nurrow/splash.png",
+    "desc": "Nurrow under her lacquered snuffer hat and carved sleeping-face mask, a curved snuffer-blade at her hip and a felt mantle trailing behind.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "nurrow_noon_fair",
+    "fighter": "nurrow",
+    "name": "Noon Fair Snuffer",
+    "tier": "standard",
+    "model": "assets/fighters/nurrow/nurrow_noon_fair.glb",
+    "portrait": "assets/fighters/nurrow/nurrow_noon_fair_portrait.png",
+    "splash": "assets/fighters/nurrow/nurrow_noon_fair_splash.png",
+    "desc": "The snuffer hat painted with lacquer moths in rose-lilac and chalk, dressed for the Shadowless Noon fair. The mask has painted half-lids.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "nurrow_shadeprint",
+    "fighter": "nurrow",
+    "name": "Shadeprint Snuffer",
+    "tier": "deluxe",
+    "model": "assets/fighters/nurrow/nurrow_shadeprint.glb",
+    "portrait": "assets/fighters/nurrow/nurrow_shadeprint_portrait.png",
+    "splash": "assets/fighters/nurrow/nurrow_shadeprint_splash.png",
+    "vfxTint": "#6C5BA8",
+    "desc": "An ink hat with a light rim over a pale mask, printed in ink and light. Her lullabies leave violet shadows.",
+    "releasedIn": "2026.10.0"
+  }
+]

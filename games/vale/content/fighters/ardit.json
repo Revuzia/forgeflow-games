@@ -1,0 +1,529 @@
+{
+  "id": "ardit",
+  "name": "Ardit",
+  "title": "Pavise bearer",
+  "class": "class_plinth",
+  "role": "grovehunter",
+  "secondaryRole": "lampglass",
+  "resource": "res_light",
+  "job": "Tilts a pane of dawnglass that disarms the fighters swinging at his team.",
+  "difficulty": 1,
+  "lore": "Ardit's pavise was a window once, the east pane of a Spire stair, taken down when the stair was cleared for the Dawn Arch road. He carried the glass out on his back and has not set it down since. Aubade children are told that a wall is a thing that waits; Ardit is a wall that turns, tilting the morning into the eyes of whoever lifts a blade. He apologises to the people he disarms. He means it, and he does it again a moment later. The dawn is on his side, and he will hold it open for anyone standing behind him.",
+  "tags": [
+    "aubade",
+    "melee",
+    "frontline",
+    "protector",
+    "disarm",
+    "aura"
+  ],
+  "base": {
+    "hp": 670,
+    "hpRegen": 1.8,
+    "res": 30,
+    "ad": 58,
+    "armor": 36,
+    "resist": 32,
+    "attackSpeed": 0.64,
+    "moveSpeed": 3.35
+  },
+  "growth": {
+    "hp": 108,
+    "hpRegen": 0.16,
+    "res": 8,
+    "ad": 3,
+    "armor": 4.8,
+    "resist": 2,
+    "attackSpeed": 0.02
+  },
+  "attack": {
+    "range": 1.9,
+    "windup": 0.34,
+    "damageType": "phys",
+    "present": {
+      "sfx": "c_swing_light",
+      "hitVfx": "lib_hit_phys_light",
+      "hitSfx": "c_hit_phys_light"
+    }
+  },
+  "collisionRadius": 0.68,
+  "kit": {
+    "passive": {
+      "id": "ardit_turned_blades",
+      "name": "Turned Blades",
+      "icon": "assets/ui/icons/abilities/ardit_turned_blades.svg",
+      "desc": "Each time Ardit disarms an enemy fighter (at most once per 1.5 s from each enemy), he gains {triggers.0.effects.0.stats.armor} armor and magic resist for 5 s. This stacks up to 3 times.",
+      "triggers": [
+        {
+          "on": "statusApplied",
+          "filter": {
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "perTargetCooldown": 1.5,
+          "cond": {
+            "kind": "targetHasStatus",
+            "status": "disarm"
+          },
+          "effects": [
+            {
+              "op": "buff",
+              "id": "ardit_turned",
+              "duration": 5,
+              "to": "self",
+              "stats": {
+                "armor": 12,
+                "resist": 12
+              },
+              "maxStacks": 3
+            }
+          ]
+        }
+      ],
+      "present": {
+        "vfx": "lib_empower"
+      }
+    },
+    "a1": {
+      "id": "ardit_lancing_run",
+      "name": "Lancing Run",
+      "icon": "assets/ui/icons/abilities/ardit_lancing_run.svg",
+      "desc": "Ardit runs up to 7 m behind the pavise and stops at the first enemy fighter he meets. They take {effects.0.onPass.0.amount} magic damage and are knocked airborne for 0.75 s.",
+      "maxRank": 5,
+      "cooldown": [
+        14,
+        13,
+        12,
+        11,
+        10
+      ],
+      "cost": [
+        60,
+        65,
+        70,
+        75,
+        80
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 7,
+        "indicator": {
+          "kind": "rect",
+          "length": 7,
+          "width": 1.6
+        }
+      },
+      "castTime": 0.15,
+      "effects": [
+        {
+          "op": "dash",
+          "mode": "direction",
+          "distance": 7,
+          "speed": 16,
+          "stopOnFirstHit": true,
+          "passFilter": {
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "passWidth": 0.8,
+          "onPass": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  70,
+                  105,
+                  140,
+                  175,
+                  210
+                ],
+                "ap": 0.5,
+                "bonusHp": 0.03
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "displace",
+              "mode": "airborne_in_place",
+              "distance": 0,
+              "duration": 0.75,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_dash_trail"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "engage",
+          "gapclose",
+          "cc"
+        ]
+      },
+      "present": {
+        "anim": "cast_a1",
+        "sfx": "c_dash",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "everyone"
+      }
+    },
+    "a2": {
+      "id": "ardit_glare",
+      "name": "Glare",
+      "icon": "assets/ui/icons/abilities/ardit_glare.svg",
+      "desc": "Ardit tilts the pavise to catch the dawn. Enemies in a 5 m, 70° cone take {effects.0.onHit.0.amount} magic damage, are slowed by 25% for 1.5 s and are disarmed for {effects.0.onHit.2.duration}.",
+      "maxRank": 5,
+      "cooldown": [
+        13,
+        12.5,
+        12,
+        11.5,
+        11
+      ],
+      "cost": [
+        60,
+        65,
+        70,
+        75,
+        80
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 5,
+        "indicator": {
+          "kind": "cone",
+          "radius": 5,
+          "angleDeg": 70
+        }
+      },
+      "castTime": 0.3,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "cone",
+            "radius": 5,
+            "angleDeg": 70
+          },
+          "at": "self",
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  55,
+                  85,
+                  115,
+                  145,
+                  175
+                ],
+                "ap": 0.5
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1.5,
+              "power": 0.25,
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "disarm",
+              "duration": [
+                1.05,
+                1.15,
+                1.25,
+                1.35,
+                1.45
+              ],
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "ardit_a2_glare",
+            "sfx": "c_cast_lumen",
+            "telegraph": "everyone"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "cc",
+          "damage"
+        ]
+      },
+      "present": {
+        "anim": "cast_a2",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "everyone"
+      }
+    },
+    "a3": {
+      "id": "ardit_spire_strike",
+      "name": "Spire Strike",
+      "icon": "assets/ui/icons/abilities/ardit_spire_strike.svg",
+      "desc": "Ardit drives the pavise's spire into the ground. Enemies within 2.5 m take {effects.0.onHit.0.amount} magic damage (60% more against monsters) and are slowed by 20% for 1.5 s.",
+      "maxRank": 5,
+      "cooldown": [
+        8,
+        7.5,
+        7,
+        6.5,
+        6
+      ],
+      "cost": [
+        40,
+        45,
+        50,
+        55,
+        60
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "self",
+        "indicator": {
+          "kind": "circle",
+          "radius": 2.5
+        }
+      },
+      "castTime": 0.25,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 2.5
+          },
+          "at": "self",
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  60,
+                  95,
+                  130,
+                  165,
+                  200
+                ],
+                "ap": 0.55
+              },
+              "type": "magic",
+              "to": "hit",
+              "monsterMult": 1.6
+            },
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1.5,
+              "power": 0.2,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_slam_ground",
+            "sfx": "c_slam"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "waveclear"
+        ]
+      },
+      "present": {
+        "anim": "cast_a3",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "ally_only"
+      }
+    },
+    "ult": {
+      "id": "ardit_muster",
+      "name": "Muster",
+      "icon": "assets/ui/icons/abilities/ardit_muster.svg",
+      "desc": "Ardit raises the pavise as a beacon for 5 s. Allied fighters within 6 m, himself included, gain 20% move speed and {effects.0.onTick.0.statScaling.armor} armor and magic resist, and every enemy fighter that enters the 6 m radius is disarmed for 1 s.",
+      "maxRank": 3,
+      "cooldown": [
+        110,
+        95,
+        80
+      ],
+      "cost": 100,
+      "costKind": "res",
+      "targeting": {
+        "kind": "self",
+        "indicator": {
+          "kind": "circle",
+          "radius": 6
+        }
+      },
+      "castTime": 0.35,
+      "effects": [
+        {
+          "op": "zone",
+          "id": "ardit_muster",
+          "shape": {
+            "kind": "circle",
+            "radius": 6
+          },
+          "at": "self",
+          "duration": 5,
+          "interval": 0.5,
+          "follow": true,
+          "filter": {
+            "enemies": false,
+            "allies": true,
+            "self": true,
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "onTick": [
+            {
+              "op": "buff",
+              "id": "ardit_muster_ward",
+              "duration": 0.75,
+              "to": "hit",
+              "stats": {
+                "moveSpeedPct": 0.2
+              },
+              "statScaling": {
+                "armor": {
+                  "base": [
+                    25,
+                    35,
+                    45
+                  ]
+                },
+                "resist": {
+                  "base": [
+                    25,
+                    35,
+                    45
+                  ]
+                }
+              }
+            }
+          ],
+          "present": {
+            "vfx": "ardit_ult_muster",
+            "sfx": "c_zone_loop",
+            "telegraph": "ally_only"
+          }
+        },
+        {
+          "op": "zone",
+          "id": "ardit_muster_edge",
+          "shape": {
+            "kind": "circle",
+            "radius": 6
+          },
+          "at": "self",
+          "duration": 5,
+          "interval": 0.5,
+          "follow": true,
+          "filter": {
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "onTick": [],
+          "onEnter": [
+            {
+              "op": "status",
+              "status": "disarm",
+              "duration": 1,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "telegraph": "everyone"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "buff",
+          "cc",
+          "zone"
+        ],
+        "minTargets": 2
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_windup",
+        "telegraph": "everyone"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/ardit/ardit.glb",
+    "portrait": "assets/fighters/ardit/portrait.png",
+    "splash": "assets/fighters/ardit/splash.png",
+    "icon": "assets/fighters/ardit/icon.png",
+    "height": 2.35,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "frontline",
+    "preferredRange": 2,
+    "comboOrder": [
+      "a2",
+      "a1",
+      "a3",
+      "ult"
+    ]
+  },
+  "palette": {
+    "primary": "#CFCAC0",
+    "secondary": "#8496A8"
+  }
+}

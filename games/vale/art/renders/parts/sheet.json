@@ -1,0 +1,79 @@
+{
+  "parts": [
+    {
+      "key": "cowl",
+      "label": "cowl (hood down)",
+      "tris": 3030,
+      "build_s": 1.68
+    },
+    {
+      "key": "wrap",
+      "label": "head wrap",
+      "tris": 5391,
+      "build_s": 2.09
+    },
+    {
+      "key": "mantle_shawl",
+      "label": "mantle shawl + clasp",
+      "tris": 3092,
+      "build_s": 0.55
+    },
+    {
+      "key": "mantle_capelet",
+      "label": "mantle capelet",
+      "tris": 2246,
+      "build_s": 0.65
+    },
+    {
+      "key": "bracer_wood",
+      "label": "bracer wood",
+      "tris": 1024,
+      "build_s": 0.55
+    },
+    {
+      "key": "bracer_stone",
+      "label": "bracer stone",
+      "tris": 1052,
+      "build_s": 0.51
+    },
+    {
+      "key": "bracer_leather",
+      "label": "bracer leather",
+      "tris": 960,
+      "build_s": 0.58
+    },
+    {
+      "key": "bracer_wrap",
+      "label": "bracer wrap",
+      "tris": 1920,
+      "build_s": 0.64
+    },
+    {
+      "key": "greave",
+      "label": "greaves + knees",
+      "tris": 4248,
+      "build_s": 2.84
+    },
+    {
+      "key": "boots",
+      "label": "boot trim wrapped / low",
+      "tris": 2976,
+      "build_s": 1.25
+    },
+    {
+      "key": "hammer",
+      "label": "hammer / maul",
+      "tris": 2728,
+      "build_s": 0.08
+    },
+    {
+      "key": "shield",
+      "label": "round shield",
+      "tris": 1840,
+      "build_s": 0.05
+    }
+  ],
+  "build_s": 11.5,
+  "render_s": 32.8,
+  "total_s": 46.9
+}

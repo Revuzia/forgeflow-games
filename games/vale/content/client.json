@@ -1,0 +1,93 @@
+{
+  "$comment": "VALE client layer (CONTRACT §4 ClientDef, §10). nav = the six top-level screens (icons: assets/ui/icons/nav/<id>.svg, UI icon lane). modeSlots = the Mode Dial in order: RIFT, BRIDGE, FRAY, then the reserved 'uncarved hour' (WORLD §3: a designed tile, carved by adding a record here). home = headline + feature + tiles; screen ids and params are documented in _design/sections/client_hud.md §2. menuScene = the Rim at the Split Hour (STYLE_BIBLE Menu mood). tips = loading-screen and idle tips, WORLD tone, every number checked against modes.json / queues.json / team_buffs.json.",
+  "nav": [
+    { "screen": "home", "label": "Home", "icon": "assets/ui/icons/nav/home.svg" },
+    { "screen": "play", "label": "Play", "icon": "assets/ui/icons/nav/play.svg" },
+    { "screen": "collection", "label": "Collection", "icon": "assets/ui/icons/nav/collection.svg" },
+    { "screen": "shop", "label": "Shop", "icon": "assets/ui/icons/nav/shop.svg" },
+    { "screen": "profile", "label": "Profile", "icon": "assets/ui/icons/nav/profile.svg" },
+    { "screen": "settings", "label": "Settings", "icon": "assets/ui/icons/nav/settings.svg" }
+  ],
+  "modeSlots": [
+    { "mode": "rift", "status": "live", "note": "Hourfall · 5v5 · about 25 min" },
+    { "mode": "bridge", "status": "live", "note": "Needlespan · 5v5 · about 17 min" },
+    { "mode": "fray", "status": "live", "note": "Noonplate · 10 fighters · about 10 min" },
+    { "mode": null, "status": "reserved", "label": "The uncarved hour", "note": "A new mode will be cut here." }
+  ],
+  "home": {
+    "headline": "Long light on the Vale",
+    "sub": "Pick a mode, take your side of the dial, and fight for the hour you want to keep.",
+    "feature": {
+      "art": "assets/ui/home/feature.webp",
+      "title": "Three roads, one Hourbell",
+      "body": "Draft five fighters, hold the Dialwood and silence the enemy Hourbell on Hourfall. Matches run about 25 minutes.",
+      "cta": { "label": "Play RIFT", "screen": "play", "params": { "mode": "rift" } }
+    },
+    "tiles": [
+      {
+        "id": "ranked_season",
+        "title": "Ranked season",
+        "body": "Ranked RIFT opens at account level 20. Your first 5 matches place you on the ladder.",
+        "art": "assets/ui/home/tile_ranked.webp",
+        "screen": "play",
+        "params": { "mode": "rift", "queue": "rift_ranked" }
+      },
+      {
+        "id": "almanac_teaser",
+        "title": "The Almanac",
+        "body": "A season of rewards is being written. It is not open yet.",
+        "art": "assets/ui/home/tile_almanac.webp",
+        "screen": "profile",
+        "params": { "tab": "overview" }
+      },
+      {
+        "id": "practice_tool",
+        "title": "Sparring practice",
+        "body": "Try any fighter alone on the full map. Add gold and levels, set up training targets, refresh cooldowns.",
+        "art": "assets/ui/home/tile_practice.webp",
+        "screen": "practice",
+        "params": {}
+      },
+      {
+        "id": "collection_highlight",
+        "title": "Your collection",
+        "body": "Every fighter is free to play. Skins change how a fighter looks, never how they play.",
+        "art": "assets/ui/home/tile_collection.webp",
+        "screen": "collection",
+        "params": { "tab": "skins" }
+      }
+    ]
+  },
+  "menuScene": {
+    "model": "assets/maps/menu_rim/scene.glb",
+    "sky": "assets/maps/menu_rim/sky.hdr",
+    "lut": "assets/grade/vale_grade_01.cube"
+  },
+  "tips": [
+    "By default, allies glow azure and enemies glow marigold on every map. Settings let you change both.",
+    "A glow on an enemy fighter is a warning. When their light flares, an ability is on its way.",
+    "Enemy danger areas are brightest at the edge. Step out before the circle closes.",
+    "Hold the scoreboard key to see every fighter's items and levels. Let go and it closes.",
+    "Unspent Gleam fights for no one. Recall when you can afford a full item.",
+    "Recall takes about 7 s. Start it somewhere an enemy cannot reach in that time.",
+    "Needlegrass hides you from enemies outside it. An enemy standing in the same grass can still see you.",
+    "A Needle's shadow ring shows how far it can strike. Stay outside it unless you mean to break it.",
+    "A Lantern holds a road's stored light. When it falls, your team gains Lanternwake until it relights 4:00 later.",
+    "The Glasshorn gives your whole team Clearglass for 90 s: faster cooldowns and quicker Light regeneration.",
+    "The Resinback gives your team Resinburn for 90 s. Basic attacks on fighters burn and slow them briefly.",
+    "Each Sunsplinter you take adds a Splinter for your team. Longshade, late in the match, gives the living team the Long Shade for sieging.",
+    "Your ultimate unlocks at level 6, then ranks up at levels 11 and 16.",
+    "BRIDGE has no recall. Take the Mending Sunmotes that fall on the span, and shop at home or while you wait to return.",
+    "In BRIDGE, a swap sends your fighter to the Lot for a teammate to take. You can also draw again once.",
+    "FRAY gives you four lives. First to 12 takedowns or the last one standing wins, and the Hour Board ranks the rest.",
+    "The Lampwright cart on the Noonplate is shared by all ten. Shop between fights, not during them.",
+    "Physical damage numbers are chalk and magic damage numbers are orchid-rose. Armor shrinks the first, resist the second.",
+    "Numerals in ink with a pale halo are damage that ignores armor and resist.",
+    "Pings are how your team talks. Say what you see before the fight, not during it.",
+    "After a fall, the recap lists the damage you took in the last 15 s. Read it once, then carry on.",
+    "Your first win of each day pays a bonus on top of the usual Candles.",
+    "Ranked opens at account level 20. Until then, Quick and Draft are the places to learn.",
+    "Quick cast fires an ability the moment you press its key. Turn it on under Settings, Controls.",
+    "Colourblind modes change the ally and enemy colours and add a shape to each. Find them under Settings, Accessibility."
+  ]
+}

@@ -1,0 +1,35 @@
+[
+  {
+    "id": "ardit_base",
+    "fighter": "ardit",
+    "name": "Ardit",
+    "tier": "base",
+    "model": "assets/fighters/ardit/ardit.glb",
+    "portrait": "assets/fighters/ardit/portrait.png",
+    "splash": "assets/fighters/ardit/splash.png",
+    "desc": "Ardit in chalk and blued steel under a flat-crowned helm, the dawnglass pavise on his left arm and the spire tip catching the light.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "ardit_chalkline",
+    "fighter": "ardit",
+    "name": "Chalkline Pavise",
+    "tier": "standard",
+    "model": "assets/fighters/ardit/ardit_chalkline.glb",
+    "portrait": "assets/fighters/ardit/ardit_chalkline_portrait.png",
+    "splash": "assets/fighters/ardit/ardit_chalkline_splash.png",
+    "desc": "Ink-grey steel with chalk line-work drawn across the pavise frame, in the style of the Aubade chalk drawings. The glass stays clear.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "ardit_first_bell",
+    "fighter": "ardit",
+    "name": "First Bell Pavise",
+    "tier": "deluxe",
+    "model": "assets/fighters/ardit/ardit_first_bell.glb",
+    "portrait": "assets/fighters/ardit/ardit_first_bell_portrait.png",
+    "splash": "assets/fighters/ardit/ardit_first_bell_splash.png",
+    "desc": "The pavise is etched with ten hour-marks, one for each seat of the Shadowless Noon, over pale dial-stone armour and dark greaves. A small glass bell hangs above the spire tip.",
+    "releasedIn": "2026.10.0"
+  }
+]

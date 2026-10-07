@@ -1,0 +1,35 @@
+[
+  {
+    "id": "lisvel_base",
+    "fighter": "lisvel",
+    "name": "Lisvel",
+    "tier": "base",
+    "model": "assets/fighters/lisvel/lisvel.glb",
+    "portrait": "assets/fighters/lisvel/portrait.png",
+    "splash": "assets/fighters/lisvel/splash.png",
+    "desc": "Lisvel with her ash longbow level across her body, a flat glass visor band and a gull-feather quiver at the hip.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "lisvel_gorgewalk",
+    "fighter": "lisvel",
+    "name": "Gorgewalk Longbow",
+    "tier": "standard",
+    "model": "assets/fighters/lisvel/lisvel_gorgewalk.glb",
+    "portrait": "assets/fighters/lisvel/lisvel_gorgewalk_portrait.png",
+    "splash": "assets/fighters/lisvel/lisvel_gorgewalk_splash.png",
+    "desc": "Slate-grey limbs bound with rigid gorge-rope and an iron-pinned quiver, as carried by the keepers of the Needlespan gorge.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "lisvel_almanac",
+    "fighter": "lisvel",
+    "name": "Almanac Longbow",
+    "tier": "deluxe",
+    "model": "assets/fighters/lisvel/lisvel_almanac.glb",
+    "portrait": "assets/fighters/lisvel/lisvel_almanac_portrait.png",
+    "splash": "assets/fighters/lisvel/lisvel_almanac_splash.png",
+    "desc": "Parchment-printed limbs and ink fletching from the season almanac. The arrows are fletched with rigid page-cut plates.",
+    "releasedIn": "2026.10.0"
+  }
+]

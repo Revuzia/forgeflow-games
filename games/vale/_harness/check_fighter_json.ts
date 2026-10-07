@@ -6,7 +6,9 @@
 //
 // Checks (exit 1 on any error, 0 when clean):
 //   * zod: content/fighters/<id>.json with FighterDef, content/skins/<id>.json with z.array(SkinDef),
-//     content/vfx_fighters_*.json with z.array(VfxDef) (the per-half bespoke presets LEAD merges);
+//     content/vfx.json and any content/vfx_fighters_*.json (per-half bespoke presets not merged yet) with z.array(VfxDef)
+//     plus the CONTRACT §9.5 layer vocabulary (types, keys, enums, value shapes) and the emissive tiers
+//     (the "$comment" tier T0-T4 caps a flash's intensity; white only at T4);
 //   * file names: fighter id == file name; every skin's `fighter` == its file name; exactly one
 //     `<id>_base` skin of tier "base"; skin ids `<id>_<variant>`;
 //   * refs: class / role / secondaryRole / resource exist in content/{classes,roles,resources}.json;
@@ -82,13 +84,9 @@ const DECAL_SHAPES = ['circle', 'ring', 'cone', 'rect', 'line'];
 const isColor = (v: unknown): boolean => typeof v === 'string' && (/^#[0-9a-fA-F]{6}$/.test(v) || v === 'team' || v === 'element');
 const isPair = (v: unknown): boolean => Array.isArray(v) && v.length === 2 && v.every((x) => typeof x === 'number' && Number.isFinite(x));
 
-for (const name of readdirSync(CONTENT).filter((n) => /^vfx_fighters_.*\.json$/.test(n)).sort()) {
-  const file = `content/${name}`;
-  const r = z.array(VfxDef).safeParse(readJson(join(CONTENT, name)));
-  if (!r.success) { err(file, `VfxDef[] schema:\n${zodIssues(r.error)}`); continue; }
-  for (const v of r.data) {
-    if (vfxIds.has(v.id)) err(file, `vfx id "${v.id}" already exists in content/vfx.json`);
-    vfxIds.add(v.id);
+/** CONTRACT §9.5 vocabulary: layer types, keys, enums and value shapes */
+function checkVfxLayers(file: string, list: z.infer<typeof VfxDef>[]): void {
+  for (const v of list) {
     v.layers.forEach((l, j) => {
       const where = `${v.id}.layers[${j}]`;
       const keys = VFX_LAYERS[l.type as string];
@@ -103,6 +101,52 @@ for (const name of readdirSync(CONTENT).filter((n) => /^vfx_fighters_.*\.json$/.
       }
     });
   }
+}
+
+// the merged library: every bespoke `<fighter>_<slot>_<word>` preset (and every lib_*) gets the same vocabulary check
+if (existsSync(join(CONTENT, 'vfx.json'))) {
+  const r = z.array(VfxDef).safeParse(readJson(join(CONTENT, 'vfx.json')));
+  if (!r.success) err('content/vfx.json', `VfxDef[] schema:\n${zodIssues(r.error)}`);
+  else {
+    const seen = new Set<string>();
+    for (const v of r.data) { if (seen.has(v.id)) err('content/vfx.json', `duplicate vfx id "${v.id}"`); seen.add(v.id); }
+    checkVfxLayers('content/vfx.json', r.data);
+  }
+}
+// emissive tiers (STYLE_BIBLE "VFX": caps T0-T4 0.8 · 1.5 · 3 · 6 · >= 10, only T4 reaches white). Each preset's "$comment" starts
+// with its tier ("T3 · Lumen · ..."); the check reads the raw file because readJson() strips comments.
+const TIER_CAP = [0.8, 1.5, 3, 6, Infinity];
+function checkVfxTiers(file: string, raw: unknown): void {
+  if (!Array.isArray(raw)) return;
+  for (const v of raw as { id?: string; $comment?: string; layers?: { type?: string; color?: unknown; intensity?: number }[] }[]) {
+    const id = v.id ?? '?';
+    const m = /^T([0-4])\b/.exec(v.$comment ?? '');
+    if (!m) { warn(file, `${id}: no tier ("T0".."T4") at the start of its "$comment"`); continue; }
+    const tier = Number(m[1]);
+    let maxFlash = 0;
+    (v.layers ?? []).forEach((l, j) => {
+      const cols = Array.isArray(l.color) ? l.color : [l.color];
+      if (tier < 4 && cols.some((c) => typeof c === 'string' && c.toUpperCase() === '#FFFFFF')) err(file, `${id}.layers[${j}]: white is T4 only (this preset is T${tier})`);
+      if (l.type === 'flash' && typeof l.intensity === 'number') {
+        maxFlash = Math.max(maxFlash, l.intensity);
+        if (l.intensity > TIER_CAP[tier] + 1e-9) err(file, `${id}.layers[${j}]: flash intensity ${l.intensity} exceeds the T${tier} cap ${TIER_CAP[tier]}`);
+      }
+    });
+    if (tier === 4 && maxFlash < 10) warn(file, `${id}: a T4 preset should reach an emissive of 10 or more (its brightest flash is ${maxFlash})`);
+  }
+}
+if (existsSync(join(CONTENT, 'vfx.json'))) checkVfxTiers('content/vfx.json', JSON.parse(readFileSync(join(CONTENT, 'vfx.json'), 'utf8').replace(/^\ufeff/, '')));
+// per-half files not merged yet (vfx_fighters_*.json): same check, ids must not collide with vfx.json
+for (const name of readdirSync(CONTENT).filter((n) => /^vfx_fighters_.*\.json$/.test(n)).sort()) {
+  const file = `content/${name}`;
+  const r = z.array(VfxDef).safeParse(readJson(join(CONTENT, name)));
+  if (!r.success) { err(file, `VfxDef[] schema:\n${zodIssues(r.error)}`); continue; }
+  for (const v of r.data) {
+    if (vfxIds.has(v.id)) err(file, `vfx id "${v.id}" already exists in content/vfx.json`);
+    vfxIds.add(v.id);
+  }
+  checkVfxLayers(file, r.data);
+  checkVfxTiers(file, JSON.parse(readFileSync(join(CONTENT, name), 'utf8').replace(/^\ufeff/, '')));
 }
 
 // ── placeholders (src/ui/format.ts semantics) ─────────────────────────────────────────────────

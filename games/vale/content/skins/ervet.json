@@ -1,0 +1,35 @@
+[
+  {
+    "id": "ervet_base",
+    "fighter": "ervet",
+    "name": "Ervet",
+    "tier": "base",
+    "model": "assets/fighters/ervet/ervet.glb",
+    "portrait": "assets/fighters/ervet/portrait.png",
+    "splash": "assets/fighters/ervet/splash.png",
+    "desc": "Ervet in her blued-steel mantle and slit glass visor, the translucent dawnglass greatsword carried point-low at her right side.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "ervet_stillwater",
+    "fighter": "ervet",
+    "name": "Stillwater Blade",
+    "tier": "standard",
+    "model": "assets/fighters/ervet/ervet_stillwater.glb",
+    "portrait": "assets/fighters/ervet/ervet_stillwater_portrait.png",
+    "splash": "assets/fighters/ervet/ervet_stillwater_splash.png",
+    "desc": "A river-glass blade and wet-stone armour, the colours of the Fallen Shaft shallows.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "ervet_lamplit",
+    "fighter": "ervet",
+    "name": "Lamplit Blade",
+    "tier": "deluxe",
+    "model": "assets/fighters/ervet/ervet_lamplit.glb",
+    "portrait": "assets/fighters/ervet/ervet_lamplit_portrait.png",
+    "splash": "assets/fighters/ervet/ervet_lamplit_splash.png",
+    "desc": "A smoked lampresin blade and walnut armour. A small lamp cage hangs from the pommel.",
+    "releasedIn": "2026.10.0"
+  }
+]

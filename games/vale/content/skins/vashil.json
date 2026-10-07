@@ -1,0 +1,35 @@
+[
+  {
+    "id": "vashil_base",
+    "fighter": "vashil",
+    "name": "Vashil",
+    "tier": "base",
+    "model": "assets/fighters/vashil/vashil.glb",
+    "portrait": "assets/fighters/vashil/portrait.png",
+    "splash": "assets/fighters/vashil/splash.png",
+    "desc": "Vashil tall and straight in chalk-pale robes, a halo of seven small glass bells on a chalk ring above his visor and a long striking rod in hand.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "vashil_chalkline",
+    "fighter": "vashil",
+    "name": "Chalkline Bells",
+    "tier": "standard",
+    "model": "assets/fighters/vashil/vashil_chalkline.glb",
+    "portrait": "assets/fighters/vashil/vashil_chalkline_portrait.png",
+    "splash": "assets/fighters/vashil/vashil_chalkline_splash.png",
+    "desc": "An ink-grey robe with chalk line-work drawn on it, in the style of the Aubade chalk drawings. The bells stay clear glass.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "vashil_first_bell",
+    "fighter": "vashil",
+    "name": "First Bell Halo",
+    "tier": "deluxe",
+    "model": "assets/fighters/vashil/vashil_first_bell.glb",
+    "portrait": "assets/fighters/vashil/vashil_first_bell_portrait.png",
+    "splash": "assets/fighters/vashil/vashil_first_bell_splash.png",
+    "desc": "Ten bells instead of seven, one for each hour-mark of the Shadowless Noon, over a pale dial-stone robe and a dark hem.",
+    "releasedIn": "2026.10.0"
+  }
+]

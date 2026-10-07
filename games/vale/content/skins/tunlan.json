@@ -1,0 +1,36 @@
+[
+  {
+    "id": "tunlan_base",
+    "fighter": "tunlan",
+    "name": "Tunlan",
+    "tier": "base",
+    "model": "assets/fighters/tunlan/tunlan.glb",
+    "portrait": "assets/fighters/tunlan/portrait.png",
+    "splash": "assets/fighters/tunlan/splash.png",
+    "desc": "Tunlan under her wide flat lampshade hat, a lamp hanging before her carved mask and long jointed fingers ready for the shadow gestures.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "tunlan_noon_fair",
+    "fighter": "tunlan",
+    "name": "Noon Fair Puppets",
+    "tier": "standard",
+    "model": "assets/fighters/tunlan/tunlan_noon_fair.glb",
+    "portrait": "assets/fighters/tunlan/tunlan_noon_fair_portrait.png",
+    "splash": "assets/fighters/tunlan/tunlan_noon_fair_splash.png",
+    "desc": "A painted paper lampshade hat in rose-lilac and chalk, dressed for the Shadowless Noon fair. Two rigid puppet rods hang at her belt.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "tunlan_lamplit",
+    "fighter": "tunlan",
+    "name": "Lamplit Shadows",
+    "tier": "deluxe",
+    "model": "assets/fighters/tunlan/tunlan_lamplit.glb",
+    "portrait": "assets/fighters/tunlan/tunlan_lamplit_portrait.png",
+    "splash": "assets/fighters/tunlan/tunlan_lamplit_splash.png",
+    "vfxTint": "#6A5C7A",
+    "desc": "A walnut shade-hat with lampresin panels. Her shadows fall in muted violet.",
+    "releasedIn": "2026.10.0"
+  }
+]

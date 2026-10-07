@@ -1,0 +1,36 @@
+[
+  {
+    "id": "sukri_base",
+    "fighter": "sukri",
+    "name": "Sukri",
+    "tier": "base",
+    "model": "assets/fighters/sukri/sukri.glb",
+    "portrait": "assets/fighters/sukri/portrait.png",
+    "splash": "assets/fighters/sukri/splash.png",
+    "desc": "Sukri in thick rigid wraps and a wide round hood, a glass cup of noon light swinging from the crook of his walking staff.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "sukri_stillwater",
+    "fighter": "sukri",
+    "name": "Stillwater Wanderer",
+    "tier": "standard",
+    "model": "assets/fighters/sukri/sukri_stillwater.glb",
+    "portrait": "assets/fighters/sukri/sukri_stillwater_portrait.png",
+    "splash": "assets/fighters/sukri/sukri_stillwater_splash.png",
+    "desc": "Wet-stone wraps and a river-glass cup, with rigid reed plates on the hood, the colours of the Fallen Shaft shallows.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "sukri_shadeprint",
+    "fighter": "sukri",
+    "name": "Shadeprint Wanderer",
+    "tier": "deluxe",
+    "model": "assets/fighters/sukri/sukri_shadeprint.glb",
+    "portrait": "assets/fighters/sukri/sukri_shadeprint_portrait.png",
+    "splash": "assets/fighters/sukri/sukri_shadeprint_splash.png",
+    "vfxTint": "#6C5BA8",
+    "desc": "Ink wraps with light rims and a pale hood, printed in ink and light. The cup holds violet light.",
+    "releasedIn": "2026.10.0"
+  }
+]

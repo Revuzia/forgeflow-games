@@ -8,6 +8,8 @@
     python3 art/build.py map <id> | maps         # art/blender/maps/<id>.py
     python3 art/build.py sky <id> | skies        # art/blender/sky.py -- --id <id> (sky_presets.json)
     python3 art/build.py portraits [<id>]        # re-render portrait/splash/icon/turntable from .cache
+                                                 #   (--only splash --scale 0.5 = a quick PREVIEW)
+    python3 art/build.py parts [--keys mask_]    # the parts-library sheet -> art/renders/parts/sheet.png
     python3 art/build.py check                   # validate every GLB in art/out, write art/out/manifest.json
     python3 art/build.py all                     # fighters, units, maps, skies, then check
 
@@ -493,6 +495,8 @@ def main(argv: list[str]) -> int:
         return rc
     if what == "portraits":
         return run_script(os.path.join(BLENDER_DIR, "portraits.py"), passthru)
+    if what == "parts":
+        return run_script(os.path.join(BLENDER_DIR, "parts_sheet.py"), passthru)
     if what == "all":
         rc = 0
         for sub in ("fighters", "units", "maps"):

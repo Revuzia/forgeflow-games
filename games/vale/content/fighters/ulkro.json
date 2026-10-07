@@ -1,0 +1,473 @@
+{
+  "id": "ulkro",
+  "name": "Ulkro",
+  "title": "Dart hunter",
+  "class": "class_slinger",
+  "role": "shaftlight",
+  "secondaryRole": "grovehunter",
+  "resource": "res_tally",
+  "job": "Never stops moving: every stride she runs loads her next throw.",
+  "difficulty": 3,
+  "lore": "Ulkro has never stood still long enough to be asked where she is from. The Hourless say she was born on the rim road, between one footstep and the next, and she does nothing to correct them. She keeps a long spear-thrower on her left arm and a quiver of darts she calls the evening's worth, because she believes a throw is only as good as the ground you crossed before it. Stop her, and she is a hunter like any other. Let her run, and the dial itself begins to lean her way.",
+  "tags": [
+    "hourless",
+    "ranged",
+    "marksman",
+    "mobility",
+    "run_up",
+    "tally"
+  ],
+  "base": {
+    "hp": 590,
+    "hpRegen": 1.3,
+    "ad": 60,
+    "armor": 26,
+    "resist": 30,
+    "attackSpeed": 0.67,
+    "moveSpeed": 3.5
+  },
+  "growth": {
+    "hp": 93,
+    "hpRegen": 0.12,
+    "ad": 3.2,
+    "armor": 4,
+    "resist": 1.3,
+    "attackSpeed": 0.03
+  },
+  "attack": {
+    "range": 5.4,
+    "windup": 0.28,
+    "damageType": "phys",
+    "projectileSpeed": 22,
+    "present": {
+      "vfx": "lib_arrow",
+      "sfx": "c_thrown",
+      "hitVfx": "lib_hit_phys_light",
+      "hitSfx": "c_hit_phys_light"
+    }
+  },
+  "collisionRadius": 0.5,
+  "kit": {
+    "passive": {
+      "id": "ulkro_run_up",
+      "name": "Run-up",
+      "icon": "assets/ui/icons/abilities/ulkro_run_up.svg",
+      "desc": "Every 4 m Ulkro runs adds a Run-up stack, up to 4; stacks fade 8 s after the last one. While Long Run is active, every 3 m she runs also sends a dart at the nearest enemy fighter within 7 m for {triggers.1.effects.0.onHit.0.onHit.0.amount} physical damage.",
+      "triggers": [
+        {
+          "on": "moveDistance",
+          "interval": 4,
+          "effects": [
+            {
+              "op": "counter",
+              "counter": "ulkro_runup",
+              "add": 1,
+              "max": 4,
+              "duration": 8
+            }
+          ]
+        },
+        {
+          "on": "moveDistance",
+          "interval": 3,
+          "cond": {
+            "kind": "inForm",
+            "form": "long_run"
+          },
+          "effects": [
+            {
+              "op": "area",
+              "shape": {
+                "kind": "circle",
+                "radius": 7
+              },
+              "at": "self",
+              "filter": {
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "maxTargets": 1,
+              "onHit": [
+                {
+                  "op": "projectile",
+                  "speed": 24,
+                  "range": 9,
+                  "width": 0.5,
+                  "from": "self",
+                  "toward": "target",
+                  "pierce": 0,
+                  "homing": true,
+                  "onHit": [
+                    {
+                      "op": "damage",
+                      "amount": {
+                        "base": 12,
+                        "level": 2,
+                        "bonusAd": 0.25
+                      },
+                      "type": "phys",
+                      "to": "hit"
+                    }
+                  ],
+                  "present": {
+                    "vfx": "lib_arrow",
+                    "sfx": "c_thrown"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "forms": {
+        "long_run": {
+          "name": "Long Run",
+          "stats": {
+            "moveSpeedPct": 0.35
+          },
+          "present": {
+            "vfx": "lib_haste"
+          }
+        }
+      },
+      "present": {
+        "vfx": "lib_mark_stack"
+      }
+    },
+    "a1": {
+      "id": "ulkro_hurl",
+      "name": "Hurl",
+      "icon": "assets/ui/icons/abilities/ulkro_hurl.svg",
+      "desc": "Ulkro throws a long dart up to 10 m. The first enemy it hits takes {effects.0.onHit.0.amount} physical damage, plus 25% more for every Run-up stack she holds. The throw spends all her stacks.",
+      "maxRank": 5,
+      "cooldown": [
+        8,
+        7.5,
+        7,
+        6.5,
+        6
+      ],
+      "cost": 0,
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 10,
+        "indicator": {
+          "kind": "rect",
+          "length": 10,
+          "width": 0.6
+        }
+      },
+      "castTime": 0.3,
+      "effects": [
+        {
+          "op": "projectile",
+          "speed": 30,
+          "range": 10,
+          "width": 0.6,
+          "from": "self",
+          "toward": "dir",
+          "pierce": 0,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  55,
+                  85,
+                  115,
+                  145,
+                  175
+                ],
+                "bonusAd": 0.7
+              },
+              "type": "phys",
+              "to": "hit"
+            },
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  55,
+                  85,
+                  115,
+                  145,
+                  175
+                ],
+                "bonusAd": 0.7,
+                "perCounter": {
+                  "counter": "ulkro_runup",
+                  "per": 0.25
+                }
+              },
+              "type": "phys",
+              "to": "hit"
+            },
+            {
+              "op": "counter",
+              "counter": "ulkro_runup",
+              "add": 0,
+              "reset": true
+            }
+          ],
+          "present": {
+            "vfx": "lib_arrow",
+            "sfx": "c_proj_whoosh"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "poke"
+        ],
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_a1",
+        "sfx": "c_thrown",
+        "hitVfx": "lib_hit_phys_heavy",
+        "hitSfx": "c_hit_phys_heavy",
+        "telegraph": "ally_only"
+      }
+    },
+    "a2": {
+      "id": "ulkro_bound",
+      "name": "Bound",
+      "icon": "assets/ui/icons/abilities/ulkro_bound.svg",
+      "desc": "Ulkro leaps up to 4 m and gains 2 Run-up stacks.",
+      "maxRank": 5,
+      "cooldown": [
+        11,
+        10.5,
+        10,
+        9.5,
+        9
+      ],
+      "cost": 0,
+      "costKind": "res",
+      "targeting": {
+        "kind": "point",
+        "range": 4,
+        "indicator": {
+          "kind": "rect",
+          "length": 4,
+          "width": 1
+        }
+      },
+      "castTime": 0.1,
+      "effects": [
+        {
+          "op": "dash",
+          "mode": "toPoint",
+          "distance": 4,
+          "speed": 16,
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_leap"
+          }
+        },
+        {
+          "op": "counter",
+          "counter": "ulkro_runup",
+          "add": 2,
+          "max": 4,
+          "duration": 8
+        }
+      ],
+      "ai": {
+        "use": [
+          "escape",
+          "gapclose"
+        ]
+      },
+      "present": {
+        "anim": "cast_a2",
+        "sfx": "c_dash"
+      }
+    },
+    "a3": {
+      "id": "ulkro_hamstring_dart",
+      "name": "Hamstring Dart",
+      "icon": "assets/ui/icons/abilities/ulkro_hamstring_dart.svg",
+      "desc": "Ulkro darts an enemy within 6 m for {effects.0.amount} physical damage. They are slowed by 40% for {effects.1.duration} and revealed for 4 s.",
+      "maxRank": 5,
+      "cooldown": [
+        12,
+        11.5,
+        11,
+        10.5,
+        10
+      ],
+      "cost": 35,
+      "costKind": "res",
+      "targeting": {
+        "kind": "unit",
+        "range": 6,
+        "indicator": {
+          "kind": "circle",
+          "radius": 6
+        }
+      },
+      "castTime": 0.2,
+      "effects": [
+        {
+          "op": "damage",
+          "amount": {
+            "base": [
+              40,
+              55,
+              70,
+              85,
+              100
+            ],
+            "bonusAd": 0.4
+          },
+          "type": "phys",
+          "to": "target"
+        },
+        {
+          "op": "status",
+          "status": "slow",
+          "duration": [
+            1.6,
+            1.8,
+            2,
+            2.2,
+            2.4
+          ],
+          "power": 0.4,
+          "to": "target"
+        },
+        {
+          "op": "reveal",
+          "duration": 4,
+          "to": "target"
+        }
+      ],
+      "ai": {
+        "use": [
+          "cc",
+          "poke"
+        ]
+      },
+      "present": {
+        "anim": "cast_a3",
+        "sfx": "c_thrown",
+        "hitVfx": "lib_reveal_mark",
+        "hitSfx": "c_slow"
+      }
+    },
+    "ult": {
+      "id": "ulkro_long_run",
+      "name": "Long Run",
+      "icon": "assets/ui/icons/abilities/ulkro_long_run.svg",
+      "desc": "For {effects.1.duration} Ulkro runs 35% faster, and every 3 m she runs a dart flies at the nearest enemy fighter within 7 m. The darts grow with her level and Attack.",
+      "maxRank": 3,
+      "cooldown": [
+        90,
+        80,
+        70
+      ],
+      "cost": 40,
+      "costKind": "res",
+      "targeting": {
+        "kind": "self"
+      },
+      "castTime": 0.2,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 1.5
+          },
+          "at": "self",
+          "filter": {
+            "enemies": false,
+            "self": true
+          },
+          "onHit": [],
+          "present": {
+            "vfx": "ulkro_ult_run",
+            "sfx": "c_buff",
+            "telegraph": "none"
+          }
+        },
+        {
+          "op": "form",
+          "form": "long_run",
+          "duration": 5
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "buff",
+          "engage"
+        ]
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_windup",
+        "telegraph": "none"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/ulkro/ulkro.glb",
+    "portrait": "assets/fighters/ulkro/portrait.png",
+    "splash": "assets/fighters/ulkro/splash.png",
+    "icon": "assets/fighters/ulkro/icon.png",
+    "height": 1.85,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "marksman",
+    "preferredRange": 5.4,
+    "comboOrder": [
+      "a2",
+      "a1",
+      "a3",
+      "ult"
+    ]
+  },
+  "palette": {
+    "primary": "#6B6052",
+    "secondary": "#A39C8C"
+  }
+}

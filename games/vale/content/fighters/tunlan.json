@@ -1,0 +1,458 @@
+{
+  "id": "tunlan",
+  "name": "Tunlan",
+  "title": "Shadow puppeteer",
+  "class": "class_caster",
+  "role": "dialcross",
+  "secondaryRole": "shaftlight",
+  "resource": "res_heat",
+  "job": "Throws lamp-shadows of beasts over the enemy line and sends them running.",
+  "difficulty": 2,
+  "lore": "At the Noon Fair, Tunlan's lamp-shadow of a hound made a whole street flinch, and she has been working out ever since how much further a shadow can go. Serenade puppeteers have always thrown beasts on the walls of the Lamp Dome for the children. Tunlan throws them over an enemy line, wide and tall and sudden, and the line remembers every old fear it ever had. She wears a hat like a lampshade and never uses the word frightening. She says the shadows are only asking people to go somewhere else.",
+  "tags": [
+    "serenade",
+    "ranged",
+    "mage",
+    "fear",
+    "heat",
+    "control"
+  ],
+  "base": {
+    "hp": 575,
+    "hpRegen": 1.3,
+    "ad": 53,
+    "armor": 26,
+    "resist": 30,
+    "attackSpeed": 0.64,
+    "moveSpeed": 3.35
+  },
+  "growth": {
+    "hp": 93,
+    "hpRegen": 0.11,
+    "ad": 2.8,
+    "armor": 4,
+    "resist": 1.3,
+    "attackSpeed": 0.02
+  },
+  "attack": {
+    "range": 5.2,
+    "windup": 0.3,
+    "damageType": "magic",
+    "projectileSpeed": 18,
+    "present": {
+      "vfx": "lib_bolt_shade",
+      "sfx": "c_shot_bolt_shade",
+      "hitVfx": "lib_hit_magic",
+      "hitSfx": "c_hit_magic"
+    }
+  },
+  "collisionRadius": 0.55,
+  "kit": {
+    "passive": {
+      "id": "tunlan_startle",
+      "name": "Startle",
+      "icon": "assets/ui/icons/abilities/tunlan_startle.svg",
+      "desc": "The first time each 8 s that Tunlan hits an enemy fighter with an ability, they are slowed by 40% for 1 s.",
+      "triggers": [
+        {
+          "on": "abilityHit",
+          "filter": {
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "perTargetCooldown": 8,
+          "effects": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1,
+              "power": 0.4,
+              "to": "hit"
+            }
+          ]
+        }
+      ],
+      "present": {
+        "vfx": "lib_slow_glass"
+      }
+    },
+    "a1": {
+      "id": "tunlan_hound_shadow",
+      "name": "Hound Shadow",
+      "icon": "assets/ui/icons/abilities/tunlan_hound_shadow.svg",
+      "desc": "A shadow hound runs 9 m along the ground, dealing {effects.0.onHit.0.amount} magic damage to every enemy it touches and sending them running in fear for {effects.0.onHit.1.duration}.",
+      "maxRank": 5,
+      "cooldown": [
+        9,
+        8.5,
+        8,
+        7.5,
+        7
+      ],
+      "cost": 20,
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 9,
+        "indicator": {
+          "kind": "rect",
+          "length": 9,
+          "width": 0.9
+        }
+      },
+      "castTime": 0.3,
+      "effects": [
+        {
+          "op": "projectile",
+          "speed": 14,
+          "range": 9,
+          "width": 0.9,
+          "from": "self",
+          "toward": "dir",
+          "pierce": 5,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  60,
+                  90,
+                  120,
+                  150,
+                  180
+                ],
+                "ap": 0.6
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "fear",
+              "duration": [
+                0.4,
+                0.5,
+                0.6,
+                0.7,
+                0.8
+              ],
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "tunlan_a1_hound",
+            "sfx": "c_proj_whoosh"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "cc",
+          "damage",
+          "waveclear"
+        ],
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_a1",
+        "sfx": "c_cast_shade",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "everyone"
+      }
+    },
+    "a2": {
+      "id": "tunlan_hand_shadow",
+      "name": "Hand Shadow",
+      "icon": "assets/ui/icons/abilities/tunlan_hand_shadow.svg",
+      "desc": "A shadow hand grips an enemy within 7 m for {effects.0.amount} magic damage and a 60% slow that fades over 1.5 s. A feared enemy is stunned for {effects.1.then.0.duration} instead of slowed.",
+      "maxRank": 5,
+      "cooldown": [
+        11,
+        10.5,
+        10,
+        9.5,
+        9
+      ],
+      "cost": 25,
+      "costKind": "res",
+      "targeting": {
+        "kind": "unit",
+        "range": 7,
+        "indicator": {
+          "kind": "circle",
+          "radius": 7
+        }
+      },
+      "castTime": 0.25,
+      "effects": [
+        {
+          "op": "damage",
+          "amount": {
+            "base": [
+              70,
+              105,
+              140,
+              175,
+              210
+            ],
+            "ap": 0.6
+          },
+          "type": "magic",
+          "to": "target"
+        },
+        {
+          "op": "if",
+          "cond": {
+            "kind": "targetHasStatus",
+            "status": "fear"
+          },
+          "then": [
+            {
+              "op": "status",
+              "status": "stun",
+              "duration": [
+                0.8,
+                0.9,
+                1,
+                1.1,
+                1.2
+              ],
+              "to": "target"
+            }
+          ],
+          "else": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1.5,
+              "power": 0.6,
+              "to": "target",
+              "decay": true
+            }
+          ]
+        }
+      ],
+      "ai": {
+        "use": [
+          "cc",
+          "damage",
+          "poke"
+        ]
+      },
+      "present": {
+        "anim": "cast_a2",
+        "sfx": "c_cast_shade",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic"
+      }
+    },
+    "a3": {
+      "id": "tunlan_lamp_flare",
+      "name": "Lamp Flare",
+      "icon": "assets/ui/icons/abilities/tunlan_lamp_flare.svg",
+      "desc": "Tunlan flares her lamp: enemies within 3 m are pushed back 1.5 m and slowed by 30% for {effects.0.onHit.1.duration}.",
+      "maxRank": 5,
+      "cooldown": [
+        13,
+        12,
+        11,
+        10,
+        9
+      ],
+      "cost": 20,
+      "costKind": "res",
+      "targeting": {
+        "kind": "self",
+        "indicator": {
+          "kind": "circle",
+          "radius": 3
+        }
+      },
+      "castTime": 0.15,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 3
+          },
+          "at": "self",
+          "onHit": [
+            {
+              "op": "displace",
+              "mode": "knockback",
+              "distance": 1.5,
+              "duration": 0.25,
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": [
+                1,
+                1.25,
+                1.5,
+                1.75,
+                2
+              ],
+              "power": 0.3,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_ring_pulse",
+            "sfx": "c_burst_shade"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "escape",
+          "cc"
+        ]
+      },
+      "present": {
+        "anim": "cast_a3",
+        "telegraph": "ally_only"
+      }
+    },
+    "ult": {
+      "id": "tunlan_shadow_play",
+      "name": "Shadow Play",
+      "icon": "assets/ui/icons/abilities/tunlan_shadow_play.svg",
+      "desc": "After 0.6 s an enormous shadow beast fills a 9 m, 50° cone, dealing {effects.0.onHit.0.amount} magic damage and sending enemies running in fear for {effects.0.onHit.1.duration}.",
+      "maxRank": 3,
+      "cooldown": [
+        110,
+        95,
+        80
+      ],
+      "cost": 30,
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 9,
+        "indicator": {
+          "kind": "cone",
+          "radius": 9,
+          "angleDeg": 50
+        }
+      },
+      "castTime": 0.3,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "cone",
+            "radius": 9,
+            "angleDeg": 50
+          },
+          "at": "self",
+          "delay": 0.6,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  150,
+                  250,
+                  350
+                ],
+                "ap": 0.8
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "fear",
+              "duration": [
+                1.25,
+                1.5,
+                1.75
+              ],
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "tunlan_ult_play",
+            "sfx": "c_ult_release",
+            "telegraph": "everyone"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "cc",
+          "damage",
+          "engage"
+        ],
+        "minTargets": 2
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_windup",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "everyone"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/tunlan/tunlan.glb",
+    "portrait": "assets/fighters/tunlan/portrait.png",
+    "splash": "assets/fighters/tunlan/splash.png",
+    "icon": "assets/fighters/tunlan/icon.png",
+    "height": 2.05,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "burst",
+    "preferredRange": 6.5,
+    "comboOrder": [
+      "a1",
+      "a2",
+      "ult",
+      "a3"
+    ]
+  },
+  "palette": {
+    "primary": "#463C38",
+    "secondary": "#B49A78"
+  }
+}

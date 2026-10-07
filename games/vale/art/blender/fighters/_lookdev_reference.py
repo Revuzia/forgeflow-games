@@ -52,16 +52,16 @@ SHAPE = body.shape(girth=1.04, torso_w=1.08, torso_d=1.05, chest=1.1, waist=0.94
 # 3 ── palette (bible vocabulary) + value gradient ──────────────────────────────────────────────
 MATERIAL_SET = "bible"
 PALETTE = materials.bible_palette(
-    chalk="#d6cfbe",       # carved mask (the brightest value: the head reads first)
-    cloth2="#a9a190",      # hood + collar linen (top band, a step below the mask)
-    stone="#aaa395",       # honed dialstone pauldrons + blade
-    cloth="#77746b",       # tunic (middle band)
+    chalk="#e2dccb",       # carved mask (the brightest value: the head reads first)
+    cloth2="#c2baa8",      # hood, collar + face wrap linen (top band, a step below the mask)
+    stone="#bdb6a7",       # honed dialstone pauldrons + blade
+    cloth="#827d72",       # tunic (middle band)
     felt="#71524a",        # drapes: madder felt (an extra palette role, see extra_materials)
     wood="#9a7b5b",        # bracers, clasp, grip (pale ash)
     wood_dark="#5b4231",
-    leather="#4a382c",     # belt, harness, boots
-    under="#34312e",       # legs
-    ironstone="#463c35",   # greaves, knees, tassets, blade spine
+    leather="#69503f",     # belt, harness, boots (feet band: lineup_qa L* 20-35 on screen)
+    under="#4d4842",       # legs
+    ironstone="#5e5148",   # greaves, knees, tassets, blade spine
     dawnglass="#a9c4dc", lampresin="#c98a3c",
     accent="#3f9cff",      # authored as Dawn azure; the renderer tints it per viewer
 )
@@ -83,13 +83,13 @@ MOTION = anim.motion_profile(weight="heavy", weapon="two_hand", stance="wide", r
 # 5 ── skins: palette swaps + optional geometry, same rig, same accent locations ──────────────────
 SKINS = [
     {"id": "_lookdev_reference_dawn",            # Aubade-born look: chalk + dawnglass visor, cool linen
-     "palette": {"chalk": "#d3d2c9", "cloth2": "#c6c9c6", "cloth": "#6f7a84", "stone": "#a9adb0",
-                 "wood": "#a89070", "leather": "#3d3a38", "under": "#2f3236", "ironstone": "#3f4246",
+     "palette": {"chalk": "#e0dfd6", "cloth2": "#cfd2cf", "cloth": "#7b8690", "stone": "#bcc0c3",
+                 "wood": "#a89070", "leather": "#5a5450", "under": "#494c51", "ironstone": "#595c61",
                  "dawnglass": "#b4cde3"},
      "extra": {"visor": True}, "card": {"primary": "#24364a", "secondary": "#b4cde3"}},
     {"id": "_lookdev_reference_dusk",            # Serenade-born look: ochre sandstone, walnut, lampresin
-     "palette": {"chalk": "#c8ab84", "cloth2": "#b7a083", "cloth": "#7a5a45", "stone": "#9a7f62",
-                 "wood": "#6d4c34", "leather": "#3f2d22", "under": "#33291f", "ironstone": "#43352d",
+     "palette": {"chalk": "#d6bb93", "cloth2": "#c9b294", "cloth": "#86644e", "stone": "#b09373",
+                 "wood": "#6d4c34", "leather": "#5d4334", "under": "#4b3d2f", "ironstone": "#5d4a3e",
                  "lampresin": "#cf8e3e"},
      "extra": {"resin_brow": True}, "card": {"primary": "#3a2a20", "secondary": "#cf8e3e"}},
 ]
@@ -124,7 +124,9 @@ def model(ctx) -> list:
         nm = p.name
         if nm.startswith("b_hand"):
             mesh.set_material(p, M["leather"])
-        elif nm.startswith(("b_torso", "b_arm", "b_head", "b_neck")):   # head + neck: a linen face wrap under the mask
+        elif nm.startswith(("b_head", "b_neck")):          # a light linen face wrap under the mask (never a void)
+            mesh.set_material(p, M["cloth2"])
+        elif nm.startswith(("b_torso", "b_arm")):
             mesh.set_material(p, M["cloth"])
         else:
             mesh.set_material(p, M["under"])
@@ -172,8 +174,8 @@ def model(ctx) -> list:
 
     # 7c collar: a rolled heavy-linen scarf gathered around the neck, dipping into a cowl at the front
     nb = J["neck_base"]
-    collar = kit.scarf(ctx, M["cloth2"], [hi], z=nb.z - 0.004, lift=0.0, thick=0.032, depth=0.046, cowl=0.045,
-                       bunch=0.12, bunches=6, n=36, segments=10, name="collar", col=col)
+    collar = kit.scarf(ctx, M["cloth2"], [hi], z=nb.z + 0.004, lift=0.0, thick=0.028, depth=0.040, cowl=0.085,
+                       bunch=0.24, bunches=7, back_rise=0.02, n=40, segments=10, name="collar", col=col)
     P.append(fighter.Part("collar", low=collar, bind=("zblend", "chest", "neck", nb.z - 0.07, nb.z + 0.03), uv_weight=1.1))
     ctx.targets = [hi, collar]
 
@@ -444,27 +446,45 @@ def clip_overrides(ctx) -> dict:
             (0.47, hold, "out"), (0.70, hold, "linear"), (0.86, anim.lerp_pose(hold, g, 0.6), "inout"), (1.0, g, "settle")]
     out["cast_ult"] = anim.Clip("cast_ult", N, False, anim.drag(anim.keyed(keys), N, {"head": 1.5, "neck": 1.0}),
                                 impact=anim.IMPACT)
-    # victory — lift the blade, plant it tip-down in front, both hands on the grip, chest proud
-    lift = _two_hand(g, dict(hips=(-4, 0, 0), spine=(-6, 0, 0), chest=(-8, 0, 0), head=(-8, 0, 0)),
-                     hips=(0.0, 0.0, 0.0), rel=(0.32, -0.40, 0.40), aim=(0.0, -0.2, 0.98))
-    plant = _two_hand(g, dict(hips=(-2, -4, 0), spine=(-4, -2, 0), chest=(-8, -2, 0), neck=(-4, 3, 0), head=(-9, 4, 0)),
-                      hips=(0.0, 0.02, -0.02), rel=(0.42, -0.62, -0.38), pole=(-0.9, 0.2, -0.3),
-                      aim=(-0.08, -0.30, -0.95), grip=-0.12)
-    plant["ik"]["hand.L"] = HandTarget(to_prop=("prop.R", -0.13), pole=(0.9, 0.2, -0.3))
+    # victory — the hero hold: the off hand lets go, the blade swings up overhead one-handed, then
+    # comes down to rest on the right shoulder; left fist on the hip, chest up, head turned to camera.
+    # (A key WITHOUT 'hand.L' fades the off hand from IK to FK smoothly: no pop between to_prop and rel.)
+    def one_hand(torso, hips, rel, aim, pole=(-0.9, 0.3, -0.3), left=None, feet=None):
+        p = anim.add(g, anim.P(**torso))
+        ik = {k: v for k, v in g["ik"].items() if k not in ("hand.L",)}
+        ik["hand.R"] = HandTarget(rel=rel, pole=pole)
+        ik["aim.R"] = Aim(aim)
+        if left is not None:
+            ik["hand.L"] = left
+        if feet:
+            ik.update(feet)
+        p["ik"] = ik
+        hx, hy, hz = g.get("hips_loc", (0, 0, 0))
+        p["hips_loc"] = (hx + hips[0], hy + hips[1], hz + hips[2])
+        return p
+
+    gather = one_hand(dict(hips=(10, 6, 0), spine=(8, 4, 0), chest=(6, 4, 0), head=(-6, 0, 0)), (0.0, 0.02, -0.08),
+                      (0.10, -0.50, -0.50), (-0.20, -0.45, 0.87))
+    lift = one_hand(dict(hips=(-4, -6, 0), spine=(-6, -4, 0), chest=(-10, -4, 0), neck=(-4, 0, 0), head=(-12, 0, 0)),
+                    (0.0, 0.0, 0.02), (0.18, -0.12, 0.96), (0.10, 0.25, 0.96), pole=(-0.8, -0.3, 0.3),
+                    left=HandTarget(rel=(0.42, -0.30, -0.40), pole=(1.0, 0.3, -0.2)))
+    hero = one_hand(dict(hips=(-2, -12, 2), spine=(-3, -5, 0), chest=(-8, -3, 0), neck=(-3, 10, 0), head=(-7, 12, 2)),
+                    (0.0, 0.01, -0.012), (0.10, -0.32, -0.26), (-0.40, 0.58, 0.71), pole=(-0.9, 0.2, -0.4),
+                    left=HandTarget(rel=(0.24, 0.05, -0.64), pole=(1.0, 0.45, 0.0)),
+                    feet=step(dy_l=-0.10, dy_r=0.04))
     N = 60
-    keys = [(0.0, g, "linear"), (0.16, anim.lerp_pose(g, lift, 0.5), "inout"), (0.28, lift, "out"),
-            (0.42, plant, "accel"), (0.50, anim.lerp_pose(lift, plant, 1.04), "out"), (0.62, plant, "settle"),
-            (1.0, plant, "linear")]
+    keys = [(0.0, g, "linear"), (0.14, gather, "inout"), (0.32, lift, "out"), (0.46, hero, "accel"),
+            (0.53, anim.lerp_pose(lift, hero, 1.04), "out"), (0.64, hero, "settle"), (1.0, hero, "linear")]
     base = anim.keyed(keys)
 
     def victory(t):
         p = base(t)
-        if t > 0.62:
-            k = min(1.0, (t - 0.62) / 0.15)
+        if t > 0.64:
+            k = min(1.0, (t - 0.64) / 0.12)
             p = anim.add(p, anim.P(chest=(1.0 * k * anim.osc(t, 2), 0, 0), head=(0.6 * k * anim.osc(t, 2, 0.15), 0, 0)))
         return p
 
-    out["victory"] = anim.Clip("victory", N, False, anim.drag(victory, N, {"head": 2.0, "neck": 1.0}))
+    out["victory"] = anim.Clip("victory", N, False, anim.drag(victory, N, {"head": 2.0, "neck": 1.0, "hand.L": 2.0}))
 
     # idle_lobby — the blade rests tip-down at the right side, right hand on the grip, left fist on the
     # hip; weight shifts and a slow look-around (loops, 96 frames). Clean head and shoulders for the

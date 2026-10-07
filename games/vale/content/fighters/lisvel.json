@@ -1,0 +1,554 @@
+{
+  "id": "lisvel",
+  "name": "Lisvel",
+  "title": "Morning archer",
+  "class": "class_slinger",
+  "role": "shaftlight",
+  "secondaryRole": "lampglass",
+  "resource": "res_light",
+  "job": "Shoots from far back and leaves lines of morning light her team can run along.",
+  "difficulty": 1,
+  "lore": "Lisvel believes that light is a road. She stands at the back of the fight with an ash longbow as long as she is tall and draws a line of morning from her feet to the far side of the dial, and then she lets her friends run along it. Aubade archers are taught to hit what they aim at. Lisvel was taught to give the wind somewhere to go. She hums when she shoots, always the first four notes of the dawn song, and always stops before the fifth, in case someone behind her wants to finish it.",
+  "tags": [
+    "aubade",
+    "ranged",
+    "marksman",
+    "haste",
+    "pierce",
+    "range"
+  ],
+  "base": {
+    "hp": 595,
+    "hpRegen": 1.4,
+    "res": 20,
+    "ad": 61,
+    "armor": 26,
+    "resist": 30,
+    "attackSpeed": 0.68,
+    "moveSpeed": 3.35
+  },
+  "growth": {
+    "hp": 94,
+    "hpRegen": 0.12,
+    "res": 5,
+    "ad": 3.3,
+    "armor": 4.2,
+    "resist": 1.3,
+    "attackSpeed": 0.03
+  },
+  "attack": {
+    "range": 5.9,
+    "windup": 0.28,
+    "damageType": "phys",
+    "projectileSpeed": 22,
+    "present": {
+      "vfx": "lib_arrow",
+      "sfx": "c_shot_bow",
+      "hitVfx": "lib_hit_phys_light",
+      "hitSfx": "c_hit_phys_light"
+    }
+  },
+  "collisionRadius": 0.5,
+  "kit": {
+    "passive": {
+      "id": "lisvel_reach_of_morning",
+      "name": "Reach of Morning",
+      "icon": "assets/ui/icons/abilities/lisvel_reach_of_morning.svg",
+      "desc": "Each ability that hits an enemy fighter adds 0.4 m to Lisvel's attack range for 5 s, up to 3 times (once per 1.5 s from each enemy).",
+      "triggers": [
+        {
+          "on": "abilityHit",
+          "filter": {
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "perTargetCooldown": 1.5,
+          "effects": [
+            {
+              "op": "buff",
+              "id": "lisvel_reach",
+              "duration": 5,
+              "to": "self",
+              "stats": {
+                "range": 0.4
+              },
+              "maxStacks": 3
+            }
+          ]
+        }
+      ],
+      "present": {
+        "vfx": "lib_empower"
+      }
+    },
+    "a1": {
+      "id": "lisvel_dawn_line",
+      "name": "Dawn Line",
+      "icon": "assets/ui/icons/abilities/lisvel_dawn_line.svg",
+      "desc": "Lisvel looses an arrow up to 10 m that passes through every enemy on its path, dealing {effects.2.onHit.0.amount} physical damage to each. The path stays lit for 3 s: allies on it, Lisvel included, move {effects.0.onTick.0.power} faster, and enemies crossing it are slowed by 15%.",
+      "maxRank": 5,
+      "cooldown": [
+        11,
+        10.5,
+        10,
+        9.5,
+        9
+      ],
+      "cost": [
+        55,
+        60,
+        65,
+        70,
+        75
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 10,
+        "indicator": {
+          "kind": "rect",
+          "length": 10,
+          "width": 0.7
+        }
+      },
+      "castTime": 0.25,
+      "effects": [
+        {
+          "op": "zone",
+          "id": "lisvel_line_haste",
+          "shape": {
+            "kind": "rect",
+            "length": 10,
+            "width": 1.2
+          },
+          "at": "self",
+          "duration": 3,
+          "interval": 0.5,
+          "filter": {
+            "enemies": false,
+            "allies": true,
+            "self": true,
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "onTick": [
+            {
+              "op": "status",
+              "status": "haste",
+              "duration": 0.75,
+              "power": 0.25,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lisvel_a1_line",
+            "sfx": "c_zone_loop",
+            "telegraph": "ally_only"
+          }
+        },
+        {
+          "op": "zone",
+          "id": "lisvel_line_snare",
+          "shape": {
+            "kind": "rect",
+            "length": 10,
+            "width": 1.2
+          },
+          "at": "self",
+          "duration": 3,
+          "interval": 0.5,
+          "onTick": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 0.75,
+              "power": 0.15,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "telegraph": "ally_only"
+          }
+        },
+        {
+          "op": "projectile",
+          "speed": 28,
+          "range": 10,
+          "width": 0.7,
+          "from": "self",
+          "toward": "dir",
+          "pierce": 5,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  55,
+                  85,
+                  115,
+                  145,
+                  175
+                ],
+                "bonusAd": 0.7
+              },
+              "type": "phys",
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_arrow",
+            "sfx": "c_proj_whoosh"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "poke",
+          "damage",
+          "buff",
+          "waveclear"
+        ],
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_a1",
+        "sfx": "c_shot_bow",
+        "hitVfx": "lib_hit_phys_light",
+        "hitSfx": "c_hit_phys_light",
+        "telegraph": "ally_only"
+      }
+    },
+    "a2": {
+      "id": "lisvel_backstep",
+      "name": "Backstep",
+      "icon": "assets/ui/icons/abilities/lisvel_backstep.svg",
+      "desc": "Lisvel hops 3 m away from the cursor. Her next attack within 3 s reaches 2 m farther and slows the target by 25% for 1.5 s.",
+      "maxRank": 5,
+      "cooldown": [
+        10,
+        9.5,
+        9,
+        8.5,
+        8
+      ],
+      "cost": [
+        30,
+        32,
+        34,
+        36,
+        38
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 3,
+        "indicator": {
+          "kind": "rect",
+          "length": 3,
+          "width": 0.8
+        }
+      },
+      "castTime": 0.1,
+      "effects": [
+        {
+          "op": "dash",
+          "mode": "away",
+          "distance": 3,
+          "speed": 16,
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_dash_trail"
+          }
+        },
+        {
+          "op": "buff",
+          "id": "lisvel_backstep_shot",
+          "duration": 3,
+          "to": "self",
+          "empowerAttacks": {
+            "count": 1,
+            "rangeBonus": 2,
+            "effects": [
+              {
+                "op": "status",
+                "status": "slow",
+                "duration": 1.5,
+                "power": 0.25,
+                "to": "hit"
+              }
+            ]
+          },
+          "present": {
+            "vfx": "lib_empower"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "escape",
+          "buff"
+        ]
+      },
+      "present": {
+        "anim": "cast_a2",
+        "sfx": "c_dash"
+      }
+    },
+    "a3": {
+      "id": "lisvel_morning_draw",
+      "name": "Morning Draw",
+      "icon": "assets/ui/icons/abilities/lisvel_morning_draw.svg",
+      "desc": "Lisvel draws faster, gaining 30/35/40/45/50% attack speed for 4 s.",
+      "maxRank": 5,
+      "cooldown": [
+        16,
+        15,
+        14,
+        13,
+        12
+      ],
+      "cost": [
+        40,
+        42,
+        44,
+        46,
+        48
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "self"
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "buff",
+          "id": "lisvel_draw",
+          "duration": 4,
+          "to": "self",
+          "statScaling": {
+            "attackSpeed": {
+              "base": [
+                0.3,
+                0.35,
+                0.4,
+                0.45,
+                0.5
+              ]
+            }
+          },
+          "present": {
+            "vfx": "lib_empower"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "buff"
+        ]
+      },
+      "present": {
+        "anim": "cast_a3",
+        "sfx": "c_buff"
+      }
+    },
+    "ult": {
+      "id": "lisvel_sun_corridor",
+      "name": "Sun Corridor",
+      "icon": "assets/ui/icons/abilities/lisvel_sun_corridor.svg",
+      "desc": "After 0.75 s a 14 m by 3 m shaft of light lands, dealing {effects.0.onHit.0.amount} physical damage and slowing enemies by 40%. It stays for 5 s: allies inside move 30% faster, and Lisvel gains 20% attack speed while she stands in it.",
+      "maxRank": 3,
+      "cooldown": [
+        100,
+        85,
+        70
+      ],
+      "cost": 100,
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 14,
+        "indicator": {
+          "kind": "rect",
+          "length": 14,
+          "width": 3
+        }
+      },
+      "castTime": 0.35,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "rect",
+            "length": 14,
+            "width": 3
+          },
+          "at": "self",
+          "delay": 0.75,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  130,
+                  220,
+                  310
+                ],
+                "bonusAd": 0.9
+              },
+              "type": "phys",
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1.5,
+              "power": 0.4,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lisvel_ult_corridor",
+            "sfx": "c_ult_release",
+            "telegraph": "everyone"
+          }
+        },
+        {
+          "op": "zone",
+          "id": "lisvel_corridor_haste",
+          "shape": {
+            "kind": "rect",
+            "length": 14,
+            "width": 3
+          },
+          "at": "self",
+          "duration": 5,
+          "interval": 0.5,
+          "delay": 0.75,
+          "filter": {
+            "enemies": false,
+            "allies": true,
+            "self": true,
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "onTick": [
+            {
+              "op": "status",
+              "status": "haste",
+              "duration": 0.75,
+              "power": 0.3,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "telegraph": "ally_only"
+          }
+        },
+        {
+          "op": "zone",
+          "id": "lisvel_corridor_draw",
+          "shape": {
+            "kind": "rect",
+            "length": 14,
+            "width": 3
+          },
+          "at": "self",
+          "duration": 5,
+          "interval": 0.5,
+          "delay": 0.75,
+          "filter": {
+            "enemies": false,
+            "self": true
+          },
+          "onTick": [
+            {
+              "op": "buff",
+              "id": "lisvel_corridor_draw",
+              "duration": 0.75,
+              "to": "hit",
+              "stats": {
+                "attackSpeed": 0.2
+              }
+            }
+          ],
+          "present": {
+            "telegraph": "none"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "buff",
+          "zone"
+        ],
+        "minTargets": 1
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_windup",
+        "hitVfx": "lib_hit_phys_heavy",
+        "hitSfx": "c_hit_phys_heavy",
+        "telegraph": "everyone"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/lisvel/lisvel.glb",
+    "portrait": "assets/fighters/lisvel/portrait.png",
+    "splash": "assets/fighters/lisvel/splash.png",
+    "icon": "assets/fighters/lisvel/icon.png",
+    "height": 1.85,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "marksman",
+    "preferredRange": 5.9,
+    "comboOrder": [
+      "a1",
+      "a2",
+      "a3",
+      "ult"
+    ]
+  },
+  "palette": {
+    "primary": "#D8D2C2",
+    "secondary": "#8E9AA6"
+  }
+}

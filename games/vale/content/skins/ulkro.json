@@ -1,0 +1,35 @@
+[
+  {
+    "id": "ulkro_base",
+    "fighter": "ulkro",
+    "name": "Ulkro",
+    "tier": "base",
+    "model": "assets/fighters/ulkro/ulkro.glb",
+    "portrait": "assets/fighters/ulkro/portrait.png",
+    "splash": "assets/fighters/ulkro/splash.png",
+    "desc": "Ulkro in a deep hood with the spear-thrower across her forearm and a fan of darts standing in the quiver on her back.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "ulkro_highrim",
+    "fighter": "ulkro",
+    "name": "Highrim Thrower",
+    "tier": "standard",
+    "model": "assets/fighters/ulkro/ulkro_highrim.glb",
+    "portrait": "assets/fighters/ulkro/ulkro_highrim_portrait.png",
+    "splash": "assets/fighters/ulkro/ulkro_highrim_splash.png",
+    "desc": "Sandstone wraps, a bleached thrower and pale dart shafts, wind-carved like the high rim of the dial.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "ulkro_long_evening",
+    "fighter": "ulkro",
+    "name": "Long Evening Darts",
+    "tier": "deluxe",
+    "model": "assets/fighters/ulkro/ulkro_long_evening.glb",
+    "portrait": "assets/fighters/ulkro/ulkro_long_evening_portrait.png",
+    "splash": "assets/fighters/ulkro/ulkro_long_evening_splash.png",
+    "desc": "A plum hood and smoked-amber dart heads from the Serenade dusk festival. A rigid lacquered fan stands behind the quiver.",
+    "releasedIn": "2026.10.0"
+  }
+]

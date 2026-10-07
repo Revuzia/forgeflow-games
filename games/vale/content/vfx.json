@@ -498,5 +498,343 @@
       {"type": "ring", "at": "origin", "radius": [0.4, 0.8], "width": 0.1, "life": 0.6, "color": "team", "alpha": [0.7, 0], "blend": "add", "delay": 0.12},
       {"type": "burst", "at": "origin", "count": 40, "life": [0.6, 1.0], "speed": [1, 2.5], "spreadDeg": 40, "size": [0.14, 0.03], "color": ["team", "#FFF4DA"], "alpha": [1, 0], "gravity": -3, "drag": 1.2, "blend": "add", "texture": "mote"}
     ]
+  },
+  {
+    "$comment": "T4 · Lumen · Domefall landing: white core flash (T4 only), a stone dome-shell rising and splitting, team edge ring thrown out brightest, chips + crack",
+    "id": "marund_ult_domefall", "duration": 1.4, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "ground", "radius": 1.2, "life": 0.12, "color": "#FFFFFF", "intensity": 11},
+      {"type": "mesh", "at": "ground", "shape": "disc", "scale": [0.3, 1], "life": 0.35, "color": "element", "alpha": [0.9, 0], "spinDeg": 0, "blend": "alpha"},
+      {"type": "ring", "at": "ground", "radius": [0.3, 1], "width": 0.24, "life": 0.35, "color": "team", "alpha": [1, 0], "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [0.25, 0.85], "width": 0.1, "life": 0.35, "color": "team", "alpha": [0.7, 0], "blend": "add", "delay": 0.08},
+      {"type": "burst", "at": "ground", "count": 28, "life": [0.3, 0.6], "speed": [3, 7], "spreadDeg": 170, "size": [0.14, 0.06], "color": ["#8A8478", "#57544E"], "alpha": [1, 1], "gravity": 11, "drag": 1.2, "blend": "alpha", "texture": "shard", "delay": 0.04},
+      {"type": "decal", "at": "ground", "shape": "circle", "radius": 1, "life": 1.3, "color": "#24262C", "alpha": [0.6, 0], "texture": "crack", "delay": 0.05},
+      {"type": "burst", "at": "ground", "count": 10, "life": [0.5, 0.8], "speed": [0.2, 0.6], "spreadDeg": 180, "size": [0.6, 1.2], "color": ["#6E6A62", "#57544E"], "alpha": [0.45, 0], "gravity": -0.2, "drag": 2.5, "blend": "alpha", "texture": "dust", "delay": 0.3}
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · Shelter Dome: a held team edge ring at the dome wall (the no-entry line is the brightest thing), faint lampresin wash inside, motes rising (help is up)",
+    "id": "marund_a2_dome", "duration": 1, "teamTint": true,
+    "layers": [
+      {"type": "ring", "at": "ground", "radius": [1, 1], "width": 0.12, "life": 1, "color": "team", "alpha": [1, 1], "blend": "add"},
+      {"type": "decal", "at": "ground", "shape": "circle", "radius": 1, "life": 1, "color": "element", "alpha": [0.25, 0.25], "texture": "glow"},
+      {"type": "mesh", "at": "ground", "shape": "disc", "scale": [1, 1], "life": 1, "color": "team", "alpha": [0.12, 0.12], "spinDeg": 0, "blend": "add"},
+      {"type": "burst", "at": "ground", "count": 8, "life": [0.6, 1], "speed": [0.2, 0.5], "spreadDeg": 30, "size": [0.08, 0.02], "color": ["#F1E2C6", "team"], "alpha": [0.8, 0], "gravity": -1.5, "drag": 1, "blend": "add", "texture": "mote"}
+    ]
+  },
+  {
+    "$comment": "T3 · Shade · Settled Account: ink chains drawn inward (a ring closing on Burdam), heavy chips at the feet, a tally-mark spike flash",
+    "id": "burdam_ult_account", "duration": 1.2, "teamTint": true,
+    "layers": [
+      {"type": "ring", "at": "ground", "radius": [1, 0.15], "width": 0.18, "life": 0.4, "color": "team", "alpha": [1, 0.3], "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [1.05, 0.2], "width": 0.3, "life": 0.4, "color": "#101216", "alpha": [0.8, 0.2], "blend": "alpha"},
+      {"type": "mesh", "at": "origin", "shape": "spike", "scale": [0.6, 1.1], "life": 0.3, "color": "team", "alpha": [1, 0], "spinDeg": 0, "blend": "add", "delay": 0.3},
+      {"type": "flash", "at": "origin", "radius": 1, "life": 0.08, "color": "team", "intensity": 6, "delay": 0.3},
+      {"type": "burst", "at": "ground", "count": 20, "life": [0.3, 0.6], "speed": [3, 7], "spreadDeg": 170, "size": [0.14, 0.06], "color": ["#8A8478", "#57544E"], "alpha": [1, 1], "gravity": 11, "drag": 1.2, "blend": "alpha", "texture": "shard", "delay": 0.32},
+      {"type": "decal", "at": "ground", "shape": "circle", "radius": 0.35, "life": 1.1, "color": "#24262C", "alpha": [0.6, 0], "texture": "crack", "delay": 0.32}
+    ]
+  },
+  {
+    "$comment": "T1 · Lumen · glass track: a strip of ground glass (cool chalk crack decal) with a thin team keyline; glints along it",
+    "id": "rishal_a1_track", "duration": 1, "teamTint": true,
+    "layers": [
+      {"type": "decal", "at": "ground", "shape": "rect", "radius": 1, "life": 1, "color": "#DCE8EE", "alpha": [0.35, 0.35], "texture": "crack"},
+      {"type": "decal", "at": "ground", "shape": "line", "radius": 1, "life": 1, "color": "team", "alpha": [0.6, 0.6], "texture": "streak"},
+      {"type": "burst", "at": "ground", "count": 8, "life": [0.3, 0.6], "speed": [0.05, 0.2], "spreadDeg": 160, "size": [0.06, 0.02], "color": ["#DCE8EE", "team"], "alpha": [0.8, 0], "gravity": 0, "drag": 1, "blend": "add", "texture": "shard"}
+    ]
+  },
+  {
+    "$comment": "T3 · Lumen · Long Glint: the long track lands as a bright team blade line (danger edge brightest), glass shards fan out of it, chalk-white glints",
+    "id": "rishal_ult_glint", "duration": 1.2, "teamTint": true,
+    "layers": [
+      {"type": "decal", "at": "ground", "shape": "rect", "radius": 1, "life": 1.2, "color": "#DCE8EE", "alpha": [0.45, 0.2], "texture": "crack"},
+      {"type": "decal", "at": "ground", "shape": "line", "radius": 1, "life": 1.2, "color": "team", "alpha": [0.9, 0.5], "texture": "streak"},
+      {"type": "mesh", "at": "path", "shape": "crescent", "scale": [0.6, 1.4], "life": 0.25, "color": "team", "alpha": [1, 0], "spinDeg": 0, "blend": "add"},
+      {"type": "flash", "at": "origin", "radius": 0.8, "life": 0.06, "color": "team", "intensity": 6},
+      {"type": "burst", "at": "path", "count": 30, "life": [0.25, 0.5], "speed": [2, 5], "spreadDeg": 120, "size": [0.14, 0.04], "color": ["team", "#DCE8EE"], "alpha": [1, 0], "gravity": 4, "drag": 1.5, "blend": "add", "texture": "shard"}
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · Resin Shot pool: warm resin floor (element tone) with a glass sheen, team edge ring tightening as it sets",
+    "id": "odrum_a1_resin", "duration": 1.5, "teamTint": true,
+    "layers": [
+      {"type": "decal", "at": "ground", "shape": "circle", "radius": 1, "life": 1.5, "color": "element", "alpha": [0.55, 0.7], "texture": "drop"},
+      {"type": "ring", "at": "ground", "radius": [1, 0.95], "width": 0.08, "life": 1.5, "color": "team", "alpha": [0.6, 1], "blend": "add"},
+      {"type": "burst", "at": "ground", "count": 6, "life": [0.4, 0.8], "speed": [0.05, 0.15], "spreadDeg": 160, "size": [0.12, 0.05], "color": ["#F1E2C6", "element"], "alpha": [0.7, 0], "gravity": 0.5, "drag": 1, "blend": "alpha", "texture": "drop"}
+    ]
+  },
+  {
+    "$comment": "T3 · Lumen · Amber Hour: the great resin ball splashes down (chips out), a wide resin pool whose team edge brightens as it sets, a hard flash when it sets",
+    "id": "odrum_ult_amber", "duration": 2, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "ground", "radius": 1, "life": 0.08, "color": "team", "intensity": 6},
+      {"type": "decal", "at": "ground", "shape": "circle", "radius": 1, "life": 2, "color": "element", "alpha": [0.6, 0.75], "texture": "drop"},
+      {"type": "ring", "at": "ground", "radius": [0.6, 1], "width": 0.14, "life": 0.3, "color": "team", "alpha": [1, 0.6], "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [1, 1], "width": 0.1, "life": 2, "color": "team", "alpha": [0.6, 1], "blend": "add", "delay": 0.3},
+      {"type": "burst", "at": "ground", "count": 24, "life": [0.3, 0.6], "speed": [3, 6], "spreadDeg": 160, "size": [0.16, 0.06], "color": ["element", "#57544E"], "alpha": [1, 1], "gravity": 11, "drag": 1.2, "blend": "alpha", "texture": "drop"},
+      {"type": "mesh", "at": "ground", "shape": "spiral", "scale": [0.9, 0.9], "life": 2, "color": "team", "alpha": [0.2, 0.35], "spinDeg": 60, "blend": "add"}
+    ]
+  },
+  {
+    "$comment": "T3 · Shade · Driving Hour eruption: ink column out of the ground with a team rim, root bands pinned at the edge, chips thrown out (harm is out)",
+    "id": "dunsom_ult_drive", "duration": 1.3, "teamTint": true,
+    "layers": [
+      {"type": "mesh", "at": "ground", "shape": "pillar", "scale": [0.5, 1.2], "life": 0.45, "color": "#101216", "alpha": [0.95, 0], "spinDeg": 0, "blend": "alpha"},
+      {"type": "mesh", "at": "ground", "shape": "pillar", "scale": [0.56, 1.25], "life": 0.45, "color": "team", "alpha": [0.6, 0], "spinDeg": 0, "blend": "add"},
+      {"type": "flash", "at": "ground", "radius": 1, "life": 0.08, "color": "team", "intensity": 6},
+      {"type": "ring", "at": "ground", "radius": [0.3, 1], "width": 0.2, "life": 0.35, "color": "team", "alpha": [1, 0], "blend": "add"},
+      {"type": "mesh", "at": "ground", "shape": "spiral", "scale": [1, 0.8], "life": 1.2, "color": "#101216", "alpha": [0.8, 0], "spinDeg": 40, "blend": "alpha", "delay": 0.1},
+      {"type": "burst", "at": "ground", "count": 20, "life": [0.3, 0.6], "speed": [3, 7], "spreadDeg": 170, "size": [0.14, 0.06], "color": ["#8A8478", "#57544E"], "alpha": [1, 1], "gravity": 11, "drag": 1.2, "blend": "alpha", "texture": "shard", "delay": 0.05},
+      {"type": "decal", "at": "ground", "shape": "circle", "radius": 1, "life": 1.2, "color": "#101216", "alpha": [0.6, 0], "texture": "smoke", "delay": 0.05}
+    ]
+  },
+  {
+    "$comment": "T1 · Lumen · Hung Lamp: a small dawnglass lamp riding at the bearer's chest, soft team ring at the light's edge, motes rising (help is up)",
+    "id": "ilsheta_a2_lamp", "duration": 1, "teamTint": true,
+    "layers": [
+      {"type": "mesh", "at": "target", "shape": "orb", "scale": [0.22, 0.22], "life": 1, "color": "#DCE8EE", "alpha": [0.9, 0.9], "spinDeg": 0, "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [1, 1], "width": 0.05, "life": 1, "color": "team", "alpha": [0.55, 0.55], "blend": "add"},
+      {"type": "burst", "at": "target", "count": 6, "life": [0.5, 0.9], "speed": [0.3, 0.7], "spreadDeg": 30, "size": [0.08, 0.02], "color": ["#DCE8EE", "team"], "alpha": [0.8, 0], "gravity": -2, "drag": 1, "blend": "add", "texture": "mote"}
+    ]
+  },
+  {
+    "$comment": "T3 · Lumen · Every Window Lit: a lamp kindles on each bearer (bright orb, team halo), a ring of light settling at their feet, motes streaming up",
+    "id": "ilsheta_ult_lamps", "duration": 1.2, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "target", "radius": 0.8, "life": 0.1, "color": "team", "intensity": 5},
+      {"type": "mesh", "at": "target", "shape": "orb", "scale": [0.1, 0.3], "life": 1.2, "color": "#DCE8EE", "alpha": [1, 0.9], "spinDeg": 0, "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [0.4, 1], "width": 0.08, "life": 0.5, "color": "team", "alpha": [0.9, 0.4], "blend": "add"},
+      {"type": "burst", "at": "target", "count": 14, "life": [0.6, 1], "speed": [0.6, 1.3], "spreadDeg": 40, "size": [0.1, 0.02], "color": ["team", "#DCE8EE"], "alpha": [1, 0], "gravity": -3, "drag": 1.2, "blend": "add", "texture": "mote"}
+    ]
+  },
+  {
+    "$comment": "T2 · Shade · Plant Shard shadow: a long hard-edged ink strip with a team keyline; the toppling edge (far end) carries the brightest line",
+    "id": "hesmi_a1_shadow", "duration": 1, "teamTint": true,
+    "layers": [
+      {"type": "decal", "at": "ground", "shape": "rect", "radius": 1, "life": 1, "color": "#101216", "alpha": [0.55, 0.55], "texture": "smoke"},
+      {"type": "decal", "at": "ground", "shape": "line", "radius": 1, "life": 1, "color": "team", "alpha": [0.85, 0.85], "texture": "streak"},
+      {"type": "mesh", "at": "origin", "shape": "shard", "scale": [0.8, 0.8], "life": 1, "color": "#57544E", "alpha": [1, 1], "spinDeg": 0, "blend": "alpha"}
+    ]
+  },
+  {
+    "$comment": "T4 · Shade · Felled Shard: a needle-stone pillar drops (ink body, team rim), white core flash on impact (T4 only), chips + crack + dust out",
+    "id": "hesmi_ult_shard", "duration": 1.5, "teamTint": true,
+    "layers": [
+      {"type": "mesh", "at": "ground", "shape": "pillar", "scale": [0.6, 0.6], "life": 0.75, "color": "#2B2A33", "alpha": [0.2, 1], "spinDeg": 0, "blend": "alpha"},
+      {"type": "ring", "at": "ground", "radius": [1, 1], "width": 0.12, "life": 0.75, "color": "team", "alpha": [0.4, 1], "blend": "add"},
+      {"type": "flash", "at": "ground", "radius": 1.2, "life": 0.12, "color": "#FFFFFF", "intensity": 10, "delay": 0.75},
+      {"type": "ring", "at": "ground", "radius": [0.3, 1], "width": 0.22, "life": 0.35, "color": "team", "alpha": [1, 0], "blend": "add", "delay": 0.75},
+      {"type": "burst", "at": "ground", "count": 30, "life": [0.3, 0.6], "speed": [3, 7], "spreadDeg": 170, "size": [0.14, 0.06], "color": ["#8A8478", "#57544E"], "alpha": [1, 1], "gravity": 11, "drag": 1.2, "blend": "alpha", "texture": "shard", "delay": 0.78},
+      {"type": "decal", "at": "ground", "shape": "circle", "radius": 1, "life": 0.7, "color": "#24262C", "alpha": [0.7, 0], "texture": "crack", "delay": 0.78},
+      {"type": "burst", "at": "ground", "count": 10, "life": [0.5, 0.8], "speed": [0.2, 0.6], "spreadDeg": 180, "size": [0.6, 1.2], "color": ["#6E6A62", "#57544E"], "alpha": [0.45, 0], "gravity": -0.2, "drag": 2.5, "blend": "alpha", "texture": "dust", "delay": 1}
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · Vent: heat released as a pale glass shimmer ring with embers thrown out (harm is out), no white",
+    "id": "kemdo_a3_vent", "duration": 0.7, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "origin", "radius": 0.6, "life": 0.06, "color": "team", "intensity": 3},
+      {"type": "ring", "at": "ground", "radius": [0.2, 1], "width": 0.16, "life": 0.3, "color": "team", "alpha": [1, 0], "blend": "add"},
+      {"type": "burst", "at": "origin", "count": 18, "life": [0.25, 0.45], "speed": [3, 6], "spreadDeg": 40, "size": [0.1, 0.03], "color": ["#F1E2C6", "team"], "alpha": [1, 0], "gravity": 0, "drag": 2, "blend": "add", "texture": "ember"},
+      {"type": "burst", "at": "origin", "count": 8, "life": [0.4, 0.7], "speed": [0.5, 1.2], "spreadDeg": 60, "size": [0.4, 0.9], "color": ["#DCE8EE", "#8A8478"], "alpha": [0.3, 0], "gravity": -1, "drag": 1.5, "blend": "alpha", "texture": "smoke"}
+    ]
+  },
+  {
+    "$comment": "T3 · Lumen · Held Focus: the lens beam from Kemdo to the spot, a burning team ring tightening on the target, embers; true-damage numerals carry the second code",
+    "id": "kemdo_ult_focus", "duration": 1, "teamTint": true,
+    "layers": [
+      {"type": "beam", "at": "origin", "width": 0.18, "life": 1, "color": "team", "texture": "glow", "blend": "add"},
+      {"type": "ring", "at": "target", "radius": [1, 0.85], "width": 0.14, "life": 1, "color": "team", "alpha": [1, 1], "blend": "add"},
+      {"type": "decal", "at": "target", "shape": "circle", "radius": 1, "life": 1, "color": "#24262C", "alpha": [0.45, 0.45], "texture": "ember"},
+      {"type": "flash", "at": "target", "radius": 0.6, "life": 0.06, "color": "team", "intensity": 6},
+      {"type": "burst", "at": "target", "count": 10, "life": [0.3, 0.6], "speed": [0.5, 1.5], "spreadDeg": 90, "size": [0.08, 0.02], "color": ["team", "#F1E2C6"], "alpha": [1, 0], "gravity": -1, "drag": 1.2, "blend": "add", "texture": "ember"}
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · Glare: the dawnglass pane tilts and throws a cone of cold light, a team edge sweeps the arc, glints fall (harm is out)",
+    "id": "ardit_a2_glare", "duration": 0.7, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "origin", "radius": 0.7, "life": 0.06, "color": "team", "intensity": 3},
+      {"type": "mesh", "at": "origin", "shape": "crescent", "scale": [0.6, 1.4], "life": 0.2, "color": "#DCE8EE", "alpha": [0.9, 0], "spinDeg": 60, "blend": "add"},
+      {"type": "decal", "at": "ground", "shape": "cone", "radius": 1, "life": 0.55, "color": "team", "alpha": [0.5, 0], "texture": "streak"},
+      {"type": "burst", "at": "origin", "count": 14, "life": [0.15, 0.3], "speed": [4, 7], "spreadDeg": 70, "size": [0.16, 0.04], "color": ["#DCE8EE", "team"], "alpha": [0.9, 0], "gravity": 0, "drag": 2.5, "blend": "add", "texture": "streak"},
+      {"type": "burst", "at": "ground", "count": 8, "life": [0.25, 0.4], "speed": [2, 4], "spreadDeg": 160, "size": [0.09, 0.04], "color": ["#F1E2C6", "#8A8478"], "alpha": [1, 1], "gravity": 11, "drag": 1.2, "blend": "alpha", "texture": "shard", "delay": 0.05}
+    ]
+  },
+  {
+    "$comment": "T3 · Lumen · Muster: the pavise raised as a beacon, a held team edge at the 6 m line (the disarm edge is the brightest thing), a pale spire of light, glass motes rising (help is up)",
+    "id": "ardit_ult_muster", "duration": 1.2, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "origin", "radius": 1.0, "life": 0.1, "color": "team", "intensity": 5},
+      {"type": "ring", "at": "ground", "radius": [1, 1], "width": 0.14, "life": 1.2, "color": "team", "alpha": [1, 1], "blend": "add"},
+      {"type": "decal", "at": "ground", "shape": "circle", "radius": 1, "life": 1.2, "color": "#DCE8EE", "alpha": [0.18, 0.18], "texture": "glow"},
+      {"type": "mesh", "at": "origin", "shape": "spike", "scale": [0.5, 1.4], "life": 1.0, "color": "#DCE8EE", "alpha": [0.6, 0.0], "spinDeg": 0, "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [0.3, 1], "width": 0.1, "life": 0.4, "color": "team", "alpha": [0.9, 0], "blend": "add"},
+      {"type": "burst", "at": "ground", "count": 16, "life": [0.6, 1.1], "speed": [0.2, 0.6], "spreadDeg": 40, "size": [0.1, 0.02], "color": ["#F1E2C6", "team"], "alpha": [0.9, 0], "gravity": -1.5, "drag": 1, "blend": "add", "texture": "mote"}
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · Shatter shard field: a scatter of cracked glass on the ground under a thin team keyline, glints, chips thrown at the start (harm is out)",
+    "id": "ervet_a3_shatter", "duration": 1.0, "teamTint": true,
+    "layers": [
+      {"type": "decal", "at": "ground", "shape": "circle", "radius": 1, "life": 1.0, "color": "#DCE8EE", "alpha": [0.35, 0.35], "texture": "crack"},
+      {"type": "ring", "at": "ground", "radius": [1, 1], "width": 0.08, "life": 1.0, "color": "team", "alpha": [0.85, 0.85], "blend": "add"},
+      {"type": "burst", "at": "ground", "count": 14, "life": [0.3, 0.6], "speed": [0.05, 0.3], "spreadDeg": 160, "size": [0.08, 0.03], "color": ["#DCE8EE", "team"], "alpha": [0.9, 0], "gravity": 0, "drag": 1, "blend": "add", "texture": "shard"},
+      {"type": "burst", "at": "ground", "count": 8, "life": [0.25, 0.4], "speed": [2.5, 5], "spreadDeg": 170, "size": [0.12, 0.05], "color": ["#8A8478", "#57544E"], "alpha": [1, 1], "gravity": 11, "drag": 1.2, "blend": "alpha", "texture": "shard", "delay": 0.02}
+    ]
+  },
+  {
+    "$comment": "T4 · Lumen · Whole Again landing: white core flash (T4 only), the oversized blade reforms as a glass spike rising from the point of impact, team edge ring thrown out brightest, chips + crack",
+    "id": "ervet_ult_whole", "duration": 1.4, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "ground", "radius": 1.2, "life": 0.12, "color": "#FFFFFF", "intensity": 11},
+      {"type": "mesh", "at": "ground", "shape": "blade", "scale": [0.4, 1.2], "life": 0.5, "color": "#DCE8EE", "alpha": [0.95, 0], "spinDeg": 0, "blend": "add"},
+      {"type": "mesh", "at": "ground", "shape": "disc", "scale": [0.3, 1], "life": 0.3, "color": "#DCE8EE", "alpha": [0.9, 0], "spinDeg": 0, "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [0.3, 1], "width": 0.24, "life": 0.35, "color": "team", "alpha": [1, 0], "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [0.25, 0.85], "width": 0.1, "life": 0.35, "color": "team", "alpha": [0.7, 0], "blend": "add", "delay": 0.08},
+      {"type": "burst", "at": "ground", "count": 40, "life": [0.3, 0.6], "speed": [4, 9], "spreadDeg": 150, "size": [0.16, 0.04], "color": ["team", "#DCE8EE"], "alpha": [1, 0], "gravity": 5, "drag": 1.5, "blend": "add", "texture": "shard"},
+      {"type": "burst", "at": "ground", "count": 24, "life": [0.3, 0.6], "speed": [3, 7], "spreadDeg": 170, "size": [0.14, 0.06], "color": ["#8A8478", "#57544E"], "alpha": [1, 1], "gravity": 11, "drag": 1.2, "blend": "alpha", "texture": "shard", "delay": 0.04},
+      {"type": "decal", "at": "ground", "shape": "circle", "radius": 1, "life": 1.3, "color": "#24262C", "alpha": [0.6, 0], "texture": "crack", "delay": 0.05},
+      {"type": "burst", "at": "ground", "count": 10, "life": [0.5, 0.8], "speed": [0.2, 0.6], "spreadDeg": 180, "size": [0.6, 1.2], "color": ["#6E6A62", "#57544E"], "alpha": [0.45, 0], "gravity": -0.2, "drag": 2.5, "blend": "alpha", "texture": "dust", "delay": 0.3}
+    ]
+  },
+  {
+    "$comment": "T2 · Shade · Lullaby Dart: a slim ink dart with a team rim and a smoke wake that sinks, soft motes drifting down behind it",
+    "id": "nurrow_a2_lullaby", "duration": 0.7, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "origin", "radius": 0.4, "life": 0.05, "color": "team", "intensity": 1.8},
+      {"type": "mesh", "at": "path", "shape": "spike", "scale": [0.4, 0.4], "life": 0.7, "color": "#101216", "alpha": [1, 1], "spinDeg": 0, "blend": "alpha"},
+      {"type": "mesh", "at": "path", "shape": "spike", "scale": [0.44, 0.44], "life": 0.7, "color": "team", "alpha": [0.5, 0.5], "spinDeg": 0, "blend": "add"},
+      {"type": "trail", "at": "path", "width": 0.2, "life": 0.3, "color": "#1A1C22", "alpha": 0.45, "texture": "smoke", "blend": "alpha"},
+      {"type": "burst", "at": "path", "count": 8, "life": [0.4, 0.7], "speed": [0.1, 0.3], "spreadDeg": 160, "size": [0.08, 0.02], "color": ["team", "#B7B4BE"], "alpha": [0.8, 0], "gravity": 1.5, "drag": 1, "blend": "add", "texture": "mote"}
+    ]
+  },
+  {
+    "$comment": "T2 · Shade · asleep: an ink hood of smoke settles over the head under a team rim, petals of felt sink slowly past the shoulders; no sparks",
+    "id": "nurrow_a2_drowse", "duration": 1.0, "teamTint": true,
+    "layers": [
+      {"type": "burst", "at": "target", "count": 12, "life": [0.6, 1.0], "speed": [0.05, 0.25], "spreadDeg": 360, "size": [0.25, 0.45], "color": ["#101216", "#1A1C22"], "alpha": [0.7, 0], "gravity": 0.4, "drag": 2, "blend": "alpha", "texture": "smoke"},
+      {"type": "ring", "at": "target", "radius": [0.6, 0.6], "width": 0.05, "life": 1.0, "color": "team", "alpha": [0.6, 0.2], "blend": "add"},
+      {"type": "burst", "at": "target", "count": 8, "life": [0.7, 1.0], "speed": [0.1, 0.3], "spreadDeg": 120, "size": [0.1, 0.05], "color": ["#B7B4BE", "team"], "alpha": [0.8, 0], "gravity": 1.2, "drag": 1, "blend": "add", "texture": "petal"}
+    ]
+  },
+  {
+    "$comment": "T3 · Shade · Lull the Rest: a dusk of ink falls over the whole circle and settles, team rim brightest at the edge, felt petals sinking; the chosen target is left in clear light",
+    "id": "nurrow_ult_lull", "duration": 1.5, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "ground", "radius": 1.0, "life": 0.1, "color": "team", "intensity": 5},
+      {"type": "ring", "at": "ground", "radius": [0.3, 1], "width": 0.16, "life": 0.45, "color": "team", "alpha": [1, 0], "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [1, 1], "width": 0.08, "life": 1.4, "color": "team", "alpha": [0.7, 0.4], "blend": "add", "delay": 0.1},
+      {"type": "burst", "at": "ground", "count": 36, "life": [0.5, 0.9], "speed": [2, 5], "spreadDeg": 150, "size": [0.5, 1.1], "color": ["#101216", "#1A1C22"], "alpha": [0.85, 0], "gravity": 0.4, "drag": 2.2, "blend": "alpha", "texture": "smoke"},
+      {"type": "decal", "at": "ground", "shape": "circle", "radius": 1, "life": 1.4, "color": "#101216", "alpha": [0.6, 0], "texture": "smoke", "delay": 0.05},
+      {"type": "burst", "at": "ground", "count": 20, "life": [0.8, 1.3], "speed": [0.3, 1.0], "spreadDeg": 170, "size": [0.12, 0.05], "color": ["#B7B4BE", "team"], "alpha": [0.9, 0], "gravity": 1.0, "drag": 1.2, "blend": "add", "texture": "petal", "delay": 0.1}
+    ]
+  },
+  {
+    "$comment": "T1 · Lumen · Dawn Line: a long strip of morning light on the ground with a thin team keyline, motes drifting up along it (help is up)",
+    "id": "lisvel_a1_line", "duration": 1.0, "teamTint": true,
+    "layers": [
+      {"type": "decal", "at": "ground", "shape": "rect", "radius": 1, "life": 1.0, "color": "#F1E2C6", "alpha": [0.28, 0.28], "texture": "streak"},
+      {"type": "decal", "at": "ground", "shape": "line", "radius": 1, "life": 1.0, "color": "team", "alpha": [0.6, 0.6], "texture": "streak"},
+      {"type": "burst", "at": "ground", "count": 12, "life": [0.5, 0.9], "speed": [0.1, 0.4], "spreadDeg": 40, "size": [0.08, 0.02], "color": ["#F1E2C6", "team"], "alpha": [0.8, 0], "gravity": -1.5, "drag": 1, "blend": "add", "texture": "mote"}
+    ]
+  },
+  {
+    "$comment": "T3 · Lumen · Sun Corridor: a wide shaft of light lands along the lane, pale light at the core and a team edge brightest on both sides, motes lifting; no white (T3)",
+    "id": "lisvel_ult_corridor", "duration": 1.4, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "origin", "radius": 1.0, "life": 0.1, "color": "team", "intensity": 5},
+      {"type": "decal", "at": "ground", "shape": "rect", "radius": 1, "life": 1.4, "color": "#F1E2C6", "alpha": [0.45, 0.2], "texture": "glow"},
+      {"type": "decal", "at": "ground", "shape": "line", "radius": 1, "life": 1.4, "color": "team", "alpha": [0.9, 0.5], "texture": "streak"},
+      {"type": "mesh", "at": "ground", "shape": "pillar", "scale": [0.6, 0.8], "life": 0.6, "color": "#F1E2C6", "alpha": [0.5, 0], "spinDeg": 0, "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [0.3, 1], "width": 0.14, "life": 0.4, "color": "team", "alpha": [1, 0], "blend": "add"},
+      {"type": "burst", "at": "ground", "count": 28, "life": [0.6, 1.1], "speed": [0.4, 1.4], "spreadDeg": 60, "size": [0.1, 0.02], "color": ["#F1E2C6", "team"], "alpha": [0.9, 0], "gravity": -2, "drag": 1, "blend": "add", "texture": "mote", "delay": 0.05},
+      {"type": "burst", "at": "ground", "count": 10, "life": [0.3, 0.5], "speed": [3, 6], "spreadDeg": 170, "size": [0.12, 0.05], "color": ["#8A8478", "#57544E"], "alpha": [1, 1], "gravity": 11, "drag": 1.2, "blend": "alpha", "texture": "shard", "delay": 0.04}
+    ]
+  },
+  {
+    "$comment": "T3 · Lumen · Long Run: team side-streaks peel off the stride and a ring at the feet, dust and chips kicked up behind; a held streak while the form lasts",
+    "id": "ulkro_ult_run", "duration": 1.2, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "origin", "radius": 0.8, "life": 0.08, "color": "team", "intensity": 4},
+      {"type": "ring", "at": "ground", "radius": [0.3, 1], "width": 0.12, "life": 0.35, "color": "team", "alpha": [1, 0], "blend": "add"},
+      {"type": "burst", "at": "origin", "count": 24, "life": [0.3, 0.6], "speed": [2.5, 5], "spreadDeg": 25, "size": [0.26, 0.05], "color": ["team", "#DCE8EE"], "alpha": [0.9, 0], "gravity": 0, "drag": 3, "blend": "add", "texture": "streak"},
+      {"type": "burst", "at": "origin", "count": 12, "life": [0.3, 0.55], "speed": [1.5, 3], "spreadDeg": 150, "size": [0.3, 0.7], "color": ["#6E6A62", "#57544E"], "alpha": [0.5, 0], "gravity": -0.2, "drag": 2.5, "blend": "alpha", "texture": "dust"},
+      {"type": "burst", "at": "origin", "count": 8, "life": [0.25, 0.45], "speed": [2, 4], "spreadDeg": 170, "size": [0.1, 0.05], "color": ["#8A8478", "#57544E"], "alpha": [1, 1], "gravity": 11, "drag": 1.2, "blend": "alpha", "texture": "shard", "delay": 0.02},
+      {"type": "trail", "at": "path", "width": 0.35, "life": 0.3, "color": "team", "alpha": 0.4, "texture": "streak", "blend": "add"}
+    ]
+  },
+  {
+    "$comment": "T2 · Shade · Hound Shadow: a low ink hound leaping along the ground, a team rim on its back and two bright eye-points, a smoke wake that sinks (harm is out)",
+    "id": "tunlan_a1_hound", "duration": 0.9, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "origin", "radius": 0.5, "life": 0.05, "color": "team", "intensity": 2.0},
+      {"type": "mesh", "at": "path", "shape": "crescent", "scale": [0.7, 0.7], "life": 0.9, "color": "#101216", "alpha": [1, 1], "spinDeg": 0, "blend": "alpha"},
+      {"type": "mesh", "at": "path", "shape": "crescent", "scale": [0.76, 0.76], "life": 0.9, "color": "team", "alpha": [0.55, 0.55], "spinDeg": 0, "blend": "add"},
+      {"type": "burst", "at": "path", "count": 2, "life": [0.3, 0.5], "speed": [0.0, 0.1], "spreadDeg": 20, "size": [0.12, 0.1], "color": ["team", "team"], "alpha": [1, 0.6], "gravity": 0, "drag": 1, "blend": "add", "texture": "spark"},
+      {"type": "trail", "at": "path", "width": 0.5, "life": 0.35, "color": "#1A1C22", "alpha": 0.5, "texture": "smoke", "blend": "alpha"},
+      {"type": "burst", "at": "path", "count": 12, "life": [0.25, 0.45], "speed": [0.2, 0.6], "spreadDeg": 360, "size": [0.22, 0.4], "color": ["#1A1C22", "#101216"], "alpha": [0.6, 0], "gravity": 0.6, "drag": 2, "blend": "alpha", "texture": "smoke"}
+    ]
+  },
+  {
+    "$comment": "T4 · Shade · Shadow Play: white core flash on the lamp (T4 only), an enormous ink beast fills the cone under a bright team rim, claws and teeth as ink spikes, the ground goes dark",
+    "id": "tunlan_ult_play", "duration": 1.5, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "origin", "radius": 1.2, "life": 0.12, "color": "#FFFFFF", "intensity": 10},
+      {"type": "mesh", "at": "ground", "shape": "cone", "scale": [0.5, 1.0], "life": 0.6, "color": "#101216", "alpha": [0.95, 0], "spinDeg": 0, "blend": "alpha"},
+      {"type": "mesh", "at": "ground", "shape": "cone", "scale": [0.55, 1.05], "life": 0.6, "color": "team", "alpha": [0.5, 0], "spinDeg": 0, "blend": "add"},
+      {"type": "mesh", "at": "ground", "shape": "spike", "scale": [0.3, 0.9], "life": 0.5, "color": "#101216", "alpha": [0.9, 0], "spinDeg": 0, "blend": "alpha", "delay": 0.05},
+      {"type": "decal", "at": "ground", "shape": "cone", "radius": 1, "life": 1.3, "color": "#101216", "alpha": [0.65, 0], "texture": "smoke"},
+      {"type": "ring", "at": "ground", "radius": [0.3, 1], "width": 0.2, "life": 0.4, "color": "team", "alpha": [1, 0], "blend": "add"},
+      {"type": "burst", "at": "ground", "count": 36, "life": [0.4, 0.8], "speed": [3, 8], "spreadDeg": 60, "size": [0.5, 1.1], "color": ["#101216", "#1A1C22"], "alpha": [0.85, 0], "gravity": 0.4, "drag": 2.2, "blend": "alpha", "texture": "smoke"},
+      {"type": "burst", "at": "ground", "count": 20, "life": [0.3, 0.55], "speed": [4, 8], "spreadDeg": 70, "size": [0.12, 0.05], "color": ["#101216", "#101216"], "alpha": [1, 1], "gravity": 10, "drag": 1.2, "blend": "alpha", "texture": "drop", "delay": 0.05}
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · Peal: a ring of sound lands as two team rings with a quiet centre, glass motes shaken off the ring (harm is out)",
+    "id": "vashil_a1_peal", "duration": 0.8, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "ground", "radius": 0.6, "life": 0.05, "color": "team", "intensity": 2.4},
+      {"type": "ring", "at": "ground", "radius": [0.55, 1], "width": 0.16, "life": 0.35, "color": "team", "alpha": [1, 0], "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [0.45, 0.9], "width": 0.07, "life": 0.35, "color": "team", "alpha": [0.6, 0], "blend": "add", "delay": 0.08},
+      {"type": "decal", "at": "ground", "shape": "ring", "radius": 1, "life": 0.7, "color": "#DCE8EE", "alpha": [0.35, 0], "texture": "ring"},
+      {"type": "burst", "at": "ground", "count": 16, "life": [0.25, 0.45], "speed": [2.5, 4.5], "spreadDeg": 40, "size": [0.1, 0.03], "color": ["#DCE8EE", "team"], "alpha": [0.9, 0], "gravity": 0, "drag": 2, "blend": "add", "texture": "mote"}
+    ]
+  },
+  {
+    "$comment": "T3 · Lumen · Morning Toll: a great bell strikes the ground, three team rings roll out brightest at the edge, glass shards thrown up and chips thrown out; plays at every toll",
+    "id": "vashil_ult_toll", "duration": 1.2, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "ground", "radius": 1.0, "life": 0.1, "color": "team", "intensity": 5},
+      {"type": "mesh", "at": "ground", "shape": "disc", "scale": [0.3, 1], "life": 0.25, "color": "#DCE8EE", "alpha": [0.8, 0], "spinDeg": 0, "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [0.3, 1], "width": 0.22, "life": 0.4, "color": "team", "alpha": [1, 0], "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [0.25, 0.9], "width": 0.1, "life": 0.4, "color": "team", "alpha": [0.7, 0], "blend": "add", "delay": 0.08},
+      {"type": "ring", "at": "ground", "radius": [0.2, 0.8], "width": 0.06, "life": 0.4, "color": "team", "alpha": [0.5, 0], "blend": "add", "delay": 0.16},
+      {"type": "burst", "at": "ground", "count": 28, "life": [0.3, 0.6], "speed": [3, 7], "spreadDeg": 160, "size": [0.14, 0.04], "color": ["#DCE8EE", "team"], "alpha": [1, 0], "gravity": 6, "drag": 1.5, "blend": "add", "texture": "shard"},
+      {"type": "burst", "at": "ground", "count": 12, "life": [0.3, 0.55], "speed": [3, 6], "spreadDeg": 170, "size": [0.13, 0.06], "color": ["#8A8478", "#57544E"], "alpha": [1, 1], "gravity": 11, "drag": 1.2, "blend": "alpha", "texture": "shard", "delay": 0.04},
+      {"type": "decal", "at": "ground", "shape": "circle", "radius": 1, "life": 1.0, "color": "#24262C", "alpha": [0.5, 0], "texture": "crack", "delay": 0.05}
+    ]
+  },
+  {
+    "$comment": "T2 · Lumen · Spare Hour: a held pale ring at the 6 m line and a soft glass shell on each bearer, motes rising (help is up); nothing can touch them for a breath",
+    "id": "sukri_passive_spare", "duration": 1.0, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "ground", "radius": 0.8, "life": 0.08, "color": "team", "intensity": 3},
+      {"type": "ring", "at": "ground", "radius": [0.3, 1], "width": 0.12, "life": 0.5, "color": "team", "alpha": [0.9, 0.3], "blend": "add"},
+      {"type": "mesh", "at": "target", "shape": "orb", "scale": [1.0, 1.15], "life": 1.0, "color": "#DCE8EE", "alpha": [0.45, 0.2], "spinDeg": 0, "blend": "add"},
+      {"type": "burst", "at": "target", "count": 12, "life": [0.5, 0.9], "speed": [0.3, 0.8], "spreadDeg": 40, "size": [0.1, 0.02], "color": ["#DCE8EE", "team"], "alpha": [0.9, 0], "gravity": -2, "drag": 1.2, "blend": "add", "texture": "mote"}
+    ]
+  },
+  {
+    "$comment": "T3 · Lumen · Gather In: a wide team ring closing in on Sukri (help is in), motes streaming up the cup, a pale shell on each ally, dust settling at the end",
+    "id": "sukri_ult_gather", "duration": 1.3, "teamTint": true,
+    "layers": [
+      {"type": "flash", "at": "origin", "radius": 1.0, "life": 0.1, "color": "team", "intensity": 5},
+      {"type": "ring", "at": "ground", "radius": [1, 0.2], "width": 0.16, "life": 0.5, "color": "team", "alpha": [0.9, 0], "blend": "add"},
+      {"type": "ring", "at": "ground", "radius": [0.8, 0.15], "width": 0.08, "life": 0.5, "color": "team", "alpha": [0.6, 0], "blend": "add", "delay": 0.08},
+      {"type": "mesh", "at": "target", "shape": "orb", "scale": [1.0, 1.15], "life": 1.0, "color": "#DCE8EE", "alpha": [0.45, 0.2], "spinDeg": 0, "blend": "add"},
+      {"type": "burst", "at": "ground", "count": 22, "life": [0.5, 0.9], "speed": [0.4, 1.2], "spreadDeg": 50, "size": [0.1, 0.02], "color": ["#DCE8EE", "team"], "alpha": [0.9, 0], "gravity": -2.2, "drag": 1.2, "blend": "add", "texture": "mote"},
+      {"type": "burst", "at": "ground", "count": 10, "life": [0.4, 0.7], "speed": [1, 2.5], "spreadDeg": 170, "size": [0.4, 0.9], "color": ["#6E6A62", "#57544E"], "alpha": [0.45, 0], "gravity": -0.2, "drag": 2.5, "blend": "alpha", "texture": "dust", "delay": 0.3}
+    ]
   }
 ]

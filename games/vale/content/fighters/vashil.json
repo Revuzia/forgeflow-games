@@ -1,0 +1,531 @@
+{
+  "id": "vashil",
+  "name": "Vashil",
+  "title": "Bell ringer",
+  "class": "class_caster",
+  "role": "dialcross",
+  "secondaryRole": "shaftlight",
+  "resource": "res_light",
+  "job": "Rings wide notes over the enemy front line; anyone struck by two of them stops cold.",
+  "difficulty": 1,
+  "lore": "Vashil keeps seven small bells on a chalk ring above his visor and strikes them with a rod as long as his arm. Every one of them is tuned a little wrong on purpose. A bell struck once makes people turn. A bell struck twice makes them stop. He learned this in the Glass Belfry, ringing the morning change for a valley that never found its morning, and the only third stroke he rings is the one that ends the fight. He is polite, quick and a little early to everything. His bells are early too.",
+  "tags": [
+    "aubade",
+    "ranged",
+    "mage",
+    "stun",
+    "hum",
+    "zone"
+  ],
+  "base": {
+    "hp": 570,
+    "hpRegen": 1.3,
+    "res": 80,
+    "ad": 53,
+    "armor": 26,
+    "resist": 30,
+    "attackSpeed": 0.64,
+    "moveSpeed": 3.35
+  },
+  "growth": {
+    "hp": 92,
+    "hpRegen": 0.11,
+    "res": 6,
+    "ad": 2.8,
+    "armor": 4,
+    "resist": 1.3,
+    "attackSpeed": 0.02
+  },
+  "attack": {
+    "range": 5.3,
+    "windup": 0.3,
+    "damageType": "magic",
+    "projectileSpeed": 18,
+    "present": {
+      "vfx": "lib_bolt_lumen",
+      "sfx": "c_shot_bolt_lumen",
+      "hitVfx": "lib_hit_magic",
+      "hitSfx": "c_hit_magic"
+    }
+  },
+  "collisionRadius": 0.55,
+  "kit": {
+    "passive": {
+      "id": "vashil_hum",
+      "name": "Hum",
+      "icon": "assets/ui/icons/abilities/vashil_hum.svg",
+      "desc": "Vashil's abilities leave an enemy fighter humming for 3 s. Hitting a humming enemy with another ability stuns them for 0.75 s and ends the hum, and that enemy cannot hum again for 8 s.",
+      "triggers": [
+        {
+          "on": "abilityHit",
+          "filter": {
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "cond": {
+            "kind": "all",
+            "conds": [
+              {
+                "kind": "targetHasMark",
+                "mark": "vashil_hum"
+              },
+              {
+                "kind": "not",
+                "cond": {
+                  "kind": "targetHasMark",
+                  "mark": "vashil_hushed"
+                }
+              }
+            ]
+          },
+          "effects": [
+            {
+              "op": "consumeMark",
+              "mark": "vashil_hum",
+              "perStack": [
+                {
+                  "op": "status",
+                  "status": "stun",
+                  "duration": 0.75,
+                  "to": "hit"
+                }
+              ],
+              "to": "hit"
+            },
+            {
+              "op": "mark",
+              "mark": "vashil_hushed",
+              "duration": 8,
+              "stacks": 1,
+              "max": 1,
+              "to": "hit"
+            }
+          ]
+        },
+        {
+          "on": "abilityHit",
+          "filter": {
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "cond": {
+            "kind": "all",
+            "conds": [
+              {
+                "kind": "not",
+                "cond": {
+                  "kind": "targetHasMark",
+                  "mark": "vashil_hum"
+                }
+              },
+              {
+                "kind": "not",
+                "cond": {
+                  "kind": "targetHasMark",
+                  "mark": "vashil_hushed"
+                }
+              }
+            ]
+          },
+          "effects": [
+            {
+              "op": "mark",
+              "mark": "vashil_hum",
+              "duration": 3,
+              "stacks": 1,
+              "max": 1,
+              "to": "hit"
+            }
+          ]
+        }
+      ],
+      "present": {
+        "vfx": "lib_mark_stack"
+      }
+    },
+    "a1": {
+      "id": "vashil_peal",
+      "name": "Peal",
+      "icon": "assets/ui/icons/abilities/vashil_peal.svg",
+      "desc": "After 0.4 s a ring of sound lands at a point up to 9 m away. Enemies between 1.5 m and 3.5 m from its centre take {effects.0.onHit.0.amount} magic damage and are slowed by 30% for 1.5 s; the centre stays quiet.",
+      "maxRank": 5,
+      "cooldown": [
+        9,
+        8.5,
+        8,
+        7.5,
+        7
+      ],
+      "cost": [
+        55,
+        60,
+        65,
+        70,
+        75
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "point",
+        "range": 9,
+        "indicator": {
+          "kind": "ring",
+          "radius": 3.5,
+          "inner": 1.5
+        }
+      },
+      "castTime": 0.2,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "ring",
+            "radius": 3.5,
+            "inner": 1.5
+          },
+          "at": "point",
+          "delay": 0.4,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  60,
+                  95,
+                  130,
+                  165,
+                  200
+                ],
+                "ap": 0.6
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1.5,
+              "power": 0.3,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "vashil_a1_peal",
+            "sfx": "c_cast_lumen",
+            "telegraph": "everyone"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "poke",
+          "damage",
+          "cc",
+          "waveclear"
+        ],
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_a1",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "everyone"
+      }
+    },
+    "a2": {
+      "id": "vashil_glass_chime",
+      "name": "Glass Chime",
+      "icon": "assets/ui/icons/abilities/vashil_glass_chime.svg",
+      "desc": "Vashil strikes a fast chime-bolt that flies up to 9 m and deals {effects.0.onHit.0.amount} magic damage to the first enemy it hits.",
+      "maxRank": 5,
+      "cooldown": [
+        7,
+        6.5,
+        6,
+        5.5,
+        5
+      ],
+      "cost": [
+        40,
+        42,
+        44,
+        46,
+        48
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 9,
+        "indicator": {
+          "kind": "rect",
+          "length": 9,
+          "width": 0.6
+        }
+      },
+      "castTime": 0.2,
+      "effects": [
+        {
+          "op": "projectile",
+          "speed": 26,
+          "range": 9,
+          "width": 0.6,
+          "from": "self",
+          "toward": "dir",
+          "pierce": 0,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  60,
+                  90,
+                  120,
+                  150,
+                  180
+                ],
+                "ap": 0.55
+              },
+              "type": "magic",
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_bolt_lumen",
+            "sfx": "c_proj_whoosh"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "poke",
+          "damage"
+        ],
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_a2",
+        "sfx": "c_cast_lumen",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "ally_only"
+      }
+    },
+    "a3": {
+      "id": "vashil_ring_out",
+      "name": "Ring Out",
+      "icon": "assets/ui/icons/abilities/vashil_ring_out.svg",
+      "desc": "Vashil swings the rod: enemies in a 3.5 m, 90° cone take {effects.0.onHit.0.amount} magic damage and are pushed back 2 m.",
+      "maxRank": 5,
+      "cooldown": [
+        10,
+        9.5,
+        9,
+        8.5,
+        8
+      ],
+      "cost": [
+        45,
+        50,
+        55,
+        60,
+        65
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 3.5,
+        "indicator": {
+          "kind": "cone",
+          "radius": 3.5,
+          "angleDeg": 90
+        }
+      },
+      "castTime": 0.2,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "cone",
+            "radius": 3.5,
+            "angleDeg": 90
+          },
+          "at": "self",
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  50,
+                  80,
+                  110,
+                  140,
+                  170
+                ],
+                "ap": 0.5
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "displace",
+              "mode": "knockback",
+              "distance": 2,
+              "duration": 0.25,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_cone_sweep",
+            "sfx": "c_cast_lumen"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "escape",
+          "cc",
+          "damage"
+        ]
+      },
+      "present": {
+        "anim": "cast_a3",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "ally_only"
+      }
+    },
+    "ult": {
+      "id": "vashil_morning_toll",
+      "name": "Morning Toll",
+      "icon": "assets/ui/icons/abilities/vashil_morning_toll.svg",
+      "desc": "Vashil tolls a great bell over a 4.5 m area up to 9 m away, three times, 0.75 s apart. Each toll deals {effects.0.effects.0.onHit.0.amount} magic damage, and the second toll stuns through Hum.",
+      "maxRank": 3,
+      "cooldown": [
+        100,
+        85,
+        70
+      ],
+      "cost": 100,
+      "costKind": "res",
+      "targeting": {
+        "kind": "point",
+        "range": 9,
+        "indicator": {
+          "kind": "circle",
+          "radius": 4.5
+        }
+      },
+      "castTime": 0.3,
+      "effects": [
+        {
+          "op": "repeat",
+          "count": 3,
+          "interval": 0.75,
+          "effects": [
+            {
+              "op": "area",
+              "shape": {
+                "kind": "circle",
+                "radius": 4.5
+              },
+              "at": "point",
+              "delay": 0.5,
+              "onHit": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": [
+                      90,
+                      140,
+                      190
+                    ],
+                    "ap": 0.45
+                  },
+                  "type": "magic",
+                  "to": "hit"
+                }
+              ],
+              "present": {
+                "vfx": "vashil_ult_toll",
+                "sfx": "c_ult_release",
+                "telegraph": "everyone"
+              }
+            }
+          ]
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "cc",
+          "zone"
+        ],
+        "minTargets": 2,
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_windup",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "everyone"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/vashil/vashil.glb",
+    "portrait": "assets/fighters/vashil/portrait.png",
+    "splash": "assets/fighters/vashil/splash.png",
+    "icon": "assets/fighters/vashil/icon.png",
+    "height": 2.05,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "artillery",
+    "preferredRange": 7,
+    "comboOrder": [
+      "a1",
+      "a2",
+      "a3",
+      "ult"
+    ]
+  },
+  "palette": {
+    "primary": "#E1DCCF",
+    "secondary": "#A7B5C2"
+  }
+}

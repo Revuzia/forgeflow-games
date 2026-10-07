@@ -1,0 +1,776 @@
+{
+  "id": "ervet",
+  "name": "Ervet",
+  "title": "Glass blade",
+  "class": "class_breaker",
+  "role": "shadehold",
+  "secondaryRole": "dialcross",
+  "resource": "res_light",
+  "job": "Shatters her own blade into the enemy line, fights fast with the hilt, then swings it whole again.",
+  "difficulty": 2,
+  "lore": "Ervet cast her greatsword in dawnglass to be unbreakable, and spent a year finding out she had made it wrong. A blade that cannot break cannot be mended, and a blade that cannot be mended cannot be handed on. Now she breaks it herself, on purpose, in front of whoever stands closest, and fights with what is left in her fist. The shards sing when they land. She says that is the sound of an idea ending, and the whole blade is the sound of it starting again. Aubade duelists argue about whether that is craft or showing off. Ervet does not argue; she has a sword to put back together.",
+  "tags": [
+    "aubade",
+    "melee",
+    "bruiser",
+    "forms",
+    "shatter",
+    "airborne"
+  ],
+  "base": {
+    "hp": 645,
+    "hpRegen": 1.7,
+    "res": 30,
+    "ad": 63,
+    "armor": 31,
+    "resist": 30,
+    "attackSpeed": 0.65,
+    "moveSpeed": 3.45
+  },
+  "growth": {
+    "hp": 105,
+    "hpRegen": 0.15,
+    "res": 6,
+    "ad": 3.5,
+    "armor": 4.5,
+    "resist": 1.8,
+    "attackSpeed": 0.025
+  },
+  "attack": {
+    "range": 2,
+    "windup": 0.36,
+    "damageType": "phys",
+    "present": {
+      "sfx": "c_swing_heavy",
+      "hitVfx": "lib_hit_phys_heavy",
+      "hitSfx": "c_hit_phys_heavy"
+    }
+  },
+  "collisionRadius": 0.6,
+  "kit": {
+    "passive": {
+      "id": "ervet_dawnglass_edge",
+      "name": "Dawnglass Edge",
+      "icon": "assets/ui/icons/abilities/ervet_dawnglass_edge.svg",
+      "desc": "Ervet's attacks deal an extra 2% of her max Health as magic damage. With the blade whole she has +15 armor and magic resist; in Hilt form she has 15 less than her base armor and resist, but moves 20% faster and attacks 30% faster (reach 1.7 m).",
+      "stats": {
+        "armor": 15,
+        "resist": 15
+      },
+      "triggers": [
+        {
+          "on": "attackHit",
+          "effects": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": 0,
+                "maxHp": 0.02
+              },
+              "type": "magic",
+              "to": "hit"
+            }
+          ]
+        },
+        {
+          "on": "attackHit",
+          "cond": {
+            "kind": "inForm",
+            "form": "great"
+          },
+          "effects": [
+            {
+              "op": "mark",
+              "mark": "ervet_cleaved",
+              "duration": 0.5,
+              "stacks": 1,
+              "max": 1,
+              "to": "hit"
+            },
+            {
+              "op": "area",
+              "shape": {
+                "kind": "cone",
+                "radius": 3.5,
+                "angleDeg": 120
+              },
+              "at": "self",
+              "onHit": [
+                {
+                  "op": "if",
+                  "cond": {
+                    "kind": "not",
+                    "cond": {
+                      "kind": "targetHasMark",
+                      "mark": "ervet_cleaved"
+                    }
+                  },
+                  "then": [
+                    {
+                      "op": "damage",
+                      "amount": {
+                        "base": 0,
+                        "ad": 0.6
+                      },
+                      "type": "phys",
+                      "to": "hit"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "forms": {
+        "hilt": {
+          "name": "Hilt",
+          "stats": {
+            "moveSpeedPct": 0.2,
+            "attackSpeed": 0.3,
+            "armor": -30,
+            "resist": -30
+          },
+          "attackRange": 1.7,
+          "kit": {
+            "a1": {
+              "id": "ervet_quick_jab",
+              "name": "Quick Jab",
+              "icon": "assets/ui/icons/abilities/ervet_quick_jab.svg",
+              "desc": "Ervet jabs with the hilt, dashing 3 m and stopping at the first enemy for {effects.0.onPass.0.amount} magic damage.",
+              "maxRank": 5,
+              "cooldown": [
+                7,
+                6.5,
+                6,
+                5.5,
+                5
+              ],
+              "cost": [
+                30,
+                32,
+                34,
+                36,
+                38
+              ],
+              "costKind": "res",
+              "targeting": {
+                "kind": "direction",
+                "range": 3,
+                "indicator": {
+                  "kind": "rect",
+                  "length": 3,
+                  "width": 1.2
+                }
+              },
+              "castTime": 0.1,
+              "effects": [
+                {
+                  "op": "dash",
+                  "mode": "direction",
+                  "distance": 3,
+                  "speed": 18,
+                  "stopOnFirstHit": true,
+                  "passWidth": 0.7,
+                  "onPass": [
+                    {
+                      "op": "damage",
+                      "amount": {
+                        "base": [
+                          55,
+                          80,
+                          105,
+                          130,
+                          155
+                        ],
+                        "ap": 0.4,
+                        "bonusHp": 0.02
+                      },
+                      "type": "magic",
+                      "to": "hit"
+                    }
+                  ],
+                  "present": {
+                    "anim": "dash",
+                    "vfx": "lib_dash_trail"
+                  }
+                }
+              ],
+              "ai": {
+                "use": [
+                  "gapclose",
+                  "damage",
+                  "engage"
+                ]
+              },
+              "present": {
+                "anim": "cast_a1",
+                "sfx": "c_dash",
+                "hitVfx": "lib_hit_magic",
+                "hitSfx": "c_hit_magic",
+                "telegraph": "ally_only"
+              }
+            },
+            "a2": {
+              "id": "ervet_shard_kick",
+              "name": "Shard Kick",
+              "icon": "assets/ui/icons/abilities/ervet_shard_kick.svg",
+              "desc": "Ervet kicks three shards in a 30° fan up to 6 m. Each deals {effects.0.onHit.0.amount} magic damage and slows by 15% for 1.5 s.",
+              "maxRank": 5,
+              "cooldown": [
+                8,
+                7.5,
+                7,
+                6.5,
+                6
+              ],
+              "cost": [
+                35,
+                38,
+                41,
+                44,
+                47
+              ],
+              "costKind": "res",
+              "targeting": {
+                "kind": "direction",
+                "range": 6,
+                "indicator": {
+                  "kind": "cone",
+                  "radius": 6,
+                  "angleDeg": 30
+                }
+              },
+              "castTime": 0.2,
+              "effects": [
+                {
+                  "op": "projectile",
+                  "speed": 20,
+                  "range": 6,
+                  "width": 0.5,
+                  "from": "self",
+                  "toward": "dir",
+                  "pierce": 0,
+                  "spreadDeg": 30,
+                  "count": 3,
+                  "onHit": [
+                    {
+                      "op": "damage",
+                      "amount": {
+                        "base": [
+                          40,
+                          60,
+                          80,
+                          100,
+                          120
+                        ],
+                        "ap": 0.3
+                      },
+                      "type": "magic",
+                      "to": "hit"
+                    },
+                    {
+                      "op": "status",
+                      "status": "slow",
+                      "duration": 1.5,
+                      "power": 0.15,
+                      "to": "hit"
+                    }
+                  ],
+                  "present": {
+                    "vfx": "lib_shard_volley",
+                    "sfx": "c_proj_whoosh"
+                  }
+                }
+              ],
+              "ai": {
+                "use": [
+                  "damage",
+                  "poke",
+                  "waveclear"
+                ],
+                "leadTarget": true
+              },
+              "present": {
+                "anim": "cast_a2",
+                "sfx": "c_swing_light",
+                "hitVfx": "lib_hit_magic",
+                "hitSfx": "c_hit_magic",
+                "telegraph": "ally_only"
+              }
+            },
+            "a3": {
+              "id": "ervet_reform",
+              "name": "Reform",
+              "icon": "assets/ui/icons/abilities/ervet_reform.svg",
+              "desc": "Ervet swings the blade whole again before its time, dealing {effects.0.onHit.0.amount} magic damage to enemies within 2 m.",
+              "maxRank": 5,
+              "cooldown": 5,
+              "cost": 0,
+              "costKind": "none",
+              "targeting": {
+                "kind": "self",
+                "indicator": {
+                  "kind": "circle",
+                  "radius": 2
+                }
+              },
+              "castTime": 0.2,
+              "effects": [
+                {
+                  "op": "area",
+                  "shape": {
+                    "kind": "circle",
+                    "radius": 2
+                  },
+                  "at": "self",
+                  "onHit": [
+                    {
+                      "op": "damage",
+                      "amount": {
+                        "base": [
+                          50,
+                          75,
+                          100,
+                          125,
+                          150
+                        ],
+                        "ap": 0.4
+                      },
+                      "type": "magic",
+                      "to": "hit"
+                    }
+                  ],
+                  "present": {
+                    "vfx": "lib_burst_lumen",
+                    "sfx": "c_burst_lumen"
+                  }
+                },
+                {
+                  "op": "form",
+                  "form": "hilt"
+                }
+              ],
+              "ai": {
+                "use": [
+                  "damage",
+                  "buff"
+                ]
+              },
+              "present": {
+                "anim": "cast_a3",
+                "hitVfx": "lib_hit_magic",
+                "hitSfx": "c_hit_magic",
+                "telegraph": "ally_only"
+              }
+            }
+          }
+        },
+        "great": {
+          "name": "Great Blade",
+          "attackRange": 2.6
+        }
+      },
+      "present": {
+        "vfx": "lib_empower"
+      }
+    },
+    "a1": {
+      "id": "ervet_heavy_arc",
+      "name": "Heavy Arc",
+      "icon": "assets/ui/icons/abilities/ervet_heavy_arc.svg",
+      "desc": "Ervet sweeps the blade through a 3.5 m, 140° arc, dealing {effects.0.onHit.0.amount} magic damage and slowing enemies by 25% for 1.5 s.",
+      "maxRank": 5,
+      "cooldown": [
+        9,
+        8.5,
+        8,
+        7.5,
+        7
+      ],
+      "cost": [
+        45,
+        50,
+        55,
+        60,
+        65
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 3.5,
+        "indicator": {
+          "kind": "cone",
+          "radius": 3.5,
+          "angleDeg": 140
+        }
+      },
+      "castTime": 0.3,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "cone",
+            "radius": 3.5,
+            "angleDeg": 140
+          },
+          "at": "self",
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  70,
+                  105,
+                  140,
+                  175,
+                  210
+                ],
+                "ap": 0.5,
+                "bonusHp": 0.03
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1.5,
+              "power": 0.25,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_cone_sweep",
+            "sfx": "c_swing_heavy"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "waveclear",
+          "poke"
+        ]
+      },
+      "present": {
+        "anim": "cast_a1",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "ally_only"
+      }
+    },
+    "a2": {
+      "id": "ervet_glass_guard",
+      "name": "Glass Guard",
+      "icon": "assets/ui/icons/abilities/ervet_glass_guard.svg",
+      "desc": "Ervet braces behind the blade and shields herself for {effects.0.amount} for 2 s.",
+      "maxRank": 5,
+      "cooldown": [
+        14,
+        13,
+        12,
+        11,
+        10
+      ],
+      "cost": [
+        50,
+        55,
+        60,
+        65,
+        70
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "self"
+      },
+      "castTime": 0.1,
+      "effects": [
+        {
+          "op": "shield",
+          "amount": {
+            "base": [
+              30,
+              45,
+              60,
+              75,
+              90
+            ],
+            "maxHp": 0.1
+          },
+          "duration": 2,
+          "to": "self"
+        }
+      ],
+      "ai": {
+        "use": [
+          "shield",
+          "buff"
+        ],
+        "castWhenSelfHpBelow": 0.7
+      },
+      "present": {
+        "anim": "cast_a2",
+        "vfx": "lib_shield_up",
+        "sfx": "c_shield"
+      }
+    },
+    "a3": {
+      "id": "ervet_shatter",
+      "name": "Shatter",
+      "icon": "assets/ui/icons/abilities/ervet_shatter.svg",
+      "desc": "Ervet smashes the blade into the ground: enemies within 3 m take {effects.0.onHit.0.amount} magic damage and are slowed by 40% for 1.5 s. Shards slow by 20% for 2 s and the blade breaks into its Hilt for up to 6 s.",
+      "maxRank": 5,
+      "cooldown": [
+        16,
+        15,
+        14,
+        13,
+        12
+      ],
+      "cost": [
+        60,
+        65,
+        70,
+        75,
+        80
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "self",
+        "indicator": {
+          "kind": "circle",
+          "radius": 3
+        }
+      },
+      "castTime": 0.3,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 3
+          },
+          "at": "self",
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  80,
+                  120,
+                  160,
+                  200,
+                  240
+                ],
+                "ap": 0.6
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1.5,
+              "power": 0.4,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_slam_ground",
+            "sfx": "c_slam"
+          }
+        },
+        {
+          "op": "zone",
+          "id": "ervet_shards",
+          "shape": {
+            "kind": "circle",
+            "radius": 3
+          },
+          "at": "self",
+          "duration": 2,
+          "interval": 0.5,
+          "onTick": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 0.75,
+              "power": 0.2,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "ervet_a3_shatter",
+            "telegraph": "ally_only"
+          }
+        },
+        {
+          "op": "form",
+          "form": "hilt",
+          "duration": 6
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "cc",
+          "waveclear"
+        ]
+      },
+      "present": {
+        "anim": "cast_a3",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "ally_only"
+      }
+    },
+    "ult": {
+      "id": "ervet_whole_again",
+      "name": "Whole Again",
+      "icon": "assets/ui/icons/abilities/ervet_whole_again.svg",
+      "desc": "Ervet leaps up to 6 m. Where she lands, enemies within 3.5 m take {effects.0.onArrive.0.onHit.0.amount} magic damage and are knocked airborne for 0.75 s, and the blade reforms oversized for 6 s: her attacks reach 0.6 m farther and cleave a 120° arc.",
+      "maxRank": 3,
+      "cooldown": [
+        100,
+        85,
+        70
+      ],
+      "cost": 100,
+      "costKind": "res",
+      "targeting": {
+        "kind": "point",
+        "range": 6,
+        "indicator": {
+          "kind": "circle",
+          "radius": 3.5
+        }
+      },
+      "castTime": 0.3,
+      "effects": [
+        {
+          "op": "dash",
+          "mode": "toPoint",
+          "distance": 6,
+          "speed": 14,
+          "onArrive": [
+            {
+              "op": "area",
+              "shape": {
+                "kind": "circle",
+                "radius": 3.5
+              },
+              "at": "self",
+              "onHit": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": [
+                      150,
+                      250,
+                      350
+                    ],
+                    "ap": 0.7,
+                    "bonusHp": 0.05
+                  },
+                  "type": "magic",
+                  "to": "hit"
+                },
+                {
+                  "op": "displace",
+                  "mode": "airborne_in_place",
+                  "distance": 0,
+                  "duration": 0.75,
+                  "to": "hit"
+                }
+              ],
+              "present": {
+                "vfx": "ervet_ult_whole",
+                "sfx": "c_ult_release"
+              }
+            },
+            {
+              "op": "form",
+              "form": "great",
+              "duration": 6
+            }
+          ],
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_leap"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "engage",
+          "cc",
+          "damage"
+        ],
+        "minTargets": 2
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_windup",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "everyone"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/ervet/ervet.glb",
+    "portrait": "assets/fighters/ervet/portrait.png",
+    "splash": "assets/fighters/ervet/splash.png",
+    "icon": "assets/fighters/ervet/icon.png",
+    "height": 2.1,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "skirmisher",
+    "preferredRange": 2,
+    "comboOrder": [
+      "a1",
+      "a3",
+      "a2",
+      "ult"
+    ]
+  },
+  "palette": {
+    "primary": "#B9C4CC",
+    "secondary": "#5D6B7C"
+  }
+}

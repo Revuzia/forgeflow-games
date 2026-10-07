@@ -70,7 +70,7 @@
       "id": "kemdo_long_thrust",
       "name": "Long Thrust",
       "icon": "assets/ui/icons/abilities/kemdo_long_thrust.svg",
-      "desc": "Kemdo thrusts along a 4.5 m line, dealing {effects.0.onHit.0.amount} physical damage. Slowed enemies also take {effects.0.onHit.1.then.0.amount} true damage (half against monsters).",
+      "desc": "Kemdo thrusts along a 4.5 m line, dealing {effects.0.onHit.0.amount} physical damage. Slowed enemies also take {effects.0.onHit.1.then.0.amount} damage that ignores armor and resist (half against monsters).",
       "maxRank": 5,
       "cooldown": [
         7,
@@ -348,7 +348,7 @@
       "id": "kemdo_held_focus",
       "name": "Held Focus",
       "icon": "assets/ui/icons/abilities/kemdo_held_focus.svg",
-      "desc": "Kemdo focuses the stopped sun on an enemy fighter within 6 m for 3 s. A 2 m spot follows them and deals {effects.0.onTick.0.amount} true damage every 0.5 s to every enemy in it, and Kemdo gains {effects.1.stats.omnivamp} omnivamp for the duration.",
+      "desc": "Kemdo focuses the stopped sun on an enemy fighter within 6 m for 3 s. A 2 m spot follows them and deals {effects.0.onTick.0.amount} damage that ignores armor and resist every 0.5 s to every enemy in it, and Kemdo gains {effects.1.stats.omnivamp} omnivamp for the duration.",
       "maxRank": 3,
       "cooldown": [
         100,

@@ -1,0 +1,248 @@
+{
+  "camera": {
+    "pitchDeg": 52.0,
+    "vfovDeg": 26.0,
+    "distance": 28.5,
+    "resolution": [
+      1920,
+      1080
+    ],
+    "light": "fighter key view 225/45 x0.9 sun + map_rift sky ambient, PBR Neutral + vale_grade_01"
+  },
+  "fighters": {
+    "_lookdev_reference": {
+      "glb": "art/out/_lookdev/_lookdev_reference.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 150,
+          "valueBands": {
+            "top": 62.6,
+            "mid": 47.9,
+            "bottom": 14.0
+          },
+          "accentPct": 2.14,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.14
+        },
+        "90": {
+          "heightPx": 128,
+          "valueBands": {
+            "top": 56.5,
+            "mid": 36.9,
+            "bottom": 14.7
+          },
+          "accentPct": 2.6,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.6
+        },
+        "180": {
+          "heightPx": 117,
+          "valueBands": {
+            "top": 55.4,
+            "mid": 35.9,
+            "bottom": 15.1
+          },
+          "accentPct": 2.01,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.01
+        },
+        "270": {
+          "heightPx": 170,
+          "valueBands": {
+            "top": 62.4,
+            "mid": 45.6,
+            "bottom": 11.9
+          },
+          "accentPct": 2.22,
+          "accentTopHalfShare": 0.321,
+          "accentTopHalfPctOfFighter": 0.71
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.6,
+      "accentOk": false
+    },
+    "_lookdev_reference_dawn": {
+      "glb": "art/out/_lookdev/_lookdev_reference_dawn.glb",
+      "idleAction": "idle",
+      "facings": {
+        "0": {
+          "heightPx": 150,
+          "valueBands": {
+            "top": 64.1,
+            "mid": 52.1,
+            "bottom": 14.1
+          },
+          "accentPct": 2.14,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.14
+        },
+        "90": {
+          "heightPx": 128,
+          "valueBands": {
+            "top": 67.4,
+            "mid": 39.7,
+            "bottom": 14.3
+          },
+          "accentPct": 2.6,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.6
+        },
+        "180": {
+          "heightPx": 117,
+          "valueBands": {
+            "top": 62.9,
+            "mid": 38.2,
+            "bottom": 14.8
+          },
+          "accentPct": 2.01,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.01
+        },
+        "270": {
+          "heightPx": 170,
+          "valueBands": {
+            "top": 63.0,
+            "mid": 50.8,
+            "bottom": 12.1
+          },
+          "accentPct": 2.22,
+          "accentTopHalfShare": 0.321,
+          "accentTopHalfPctOfFighter": 0.71
+        }
+      },
+      "clipsFrom": "_lookdev_reference",
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.6,
+      "accentOk": false
+    },
+    "_proof_mannequin": {
+      "glb": "art/out/_proof/_proof_mannequin.glb",
+      "idleAction": "idle.001",
+      "facings": {
+        "0": {
+          "heightPx": 118,
+          "valueBands": {
+            "top": 65.5,
+            "mid": 39.4,
+            "bottom": 20.9
+          },
+          "accentPct": 1.77,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.77
+        },
+        "90": {
+          "heightPx": 119,
+          "valueBands": {
+            "top": 63.1,
+            "mid": 39.4,
+            "bottom": 22.4
+          },
+          "accentPct": 2.72,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.72
+        },
+        "180": {
+          "heightPx": 148,
+          "valueBands": {
+            "top": 77.3,
+            "mid": 45.5,
+            "bottom": 19.9
+          },
+          "accentPct": 1.45,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 1.45
+        },
+        "270": {
+          "heightPx": 120,
+          "valueBands": {
+            "top": 63.4,
+            "mid": 41.2,
+            "bottom": 17.1
+          },
+          "accentPct": 2.57,
+          "accentTopHalfShare": 1.0,
+          "accentTopHalfPctOfFighter": 2.57
+        }
+      },
+      "valueGradientOk": false,
+      "valueGradientMonotone": true,
+      "accentPctMax": 2.72,
+      "accentOk": true
+    }
+  },
+  "facings": [
+    0,
+    90,
+    180,
+    270
+  ],
+  "pairs": [
+    {
+      "a": "_lookdev_reference",
+      "b": "_lookdev_reference_dawn",
+      "sameFighter": true,
+      "iou64": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64Max": 1.0,
+      "iou64_norm": {
+        "0": 1.0,
+        "90": 1.0,
+        "180": 1.0,
+        "270": 1.0
+      },
+      "iou64NormMax": 1.0,
+      "ok": true
+    },
+    {
+      "a": "_lookdev_reference",
+      "b": "_proof_mannequin",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.652,
+        "90": 0.58,
+        "180": 0.675,
+        "270": 0.564
+      },
+      "iou64Max": 0.675,
+      "iou64_norm": {
+        "0": 0.408,
+        "90": 0.123,
+        "180": 0.276,
+        "270": 0.149
+      },
+      "iou64NormMax": 0.408,
+      "ok": true
+    },
+    {
+      "a": "_lookdev_reference_dawn",
+      "b": "_proof_mannequin",
+      "sameFighter": false,
+      "iou64": {
+        "0": 0.652,
+        "90": 0.58,
+        "180": 0.675,
+        "270": 0.564
+      },
+      "iou64Max": 0.675,
+      "iou64_norm": {
+        "0": 0.408,
+        "90": 0.123,
+        "180": 0.276,
+        "270": 0.149
+      },
+      "iou64NormMax": 0.408,
+      "ok": true
+    }
+  ],
+  "silhouetteOk": true,
+  "sheet": "art/renders/lineup/lookdev_proof_check.png",
+  "seconds": 36.2
+}

@@ -1,0 +1,481 @@
+{
+  "id": "nurrow",
+  "name": "Nurrow",
+  "title": "Lull singer",
+  "class": "class_striker",
+  "role": "grovehunter",
+  "secondaryRole": "dialcross",
+  "resource": "res_tally",
+  "job": "Sings everyone around her target to sleep and takes the one left awake.",
+  "difficulty": 3,
+  "lore": "Nurrow sang the Lamp Dome's children to sleep for eleven evenings, and on the twelfth she noticed that the quiet in the street was bigger than the song. The lull belongs to her now. She walks the Dialwood at dusk with a snuffer-blade at her hip and a hat shaped like the cap that puts out a lamp, and when a crowd gathers around the one she wants, it forgets to stay awake. She is gentle about it. Serenade neighbours leave bread on their sills for her and do not ask what she does with the quiet she collects.",
+  "tags": [
+    "serenade",
+    "melee",
+    "assassin",
+    "sleep",
+    "isolation",
+    "tally"
+  ],
+  "base": {
+    "hp": 585,
+    "hpRegen": 1.4,
+    "ad": 62,
+    "armor": 27,
+    "resist": 30,
+    "attackSpeed": 0.67,
+    "moveSpeed": 3.55
+  },
+  "growth": {
+    "hp": 95,
+    "hpRegen": 0.12,
+    "ad": 3.4,
+    "armor": 4.2,
+    "resist": 1.4,
+    "attackSpeed": 0.03
+  },
+  "attack": {
+    "range": 1.7,
+    "windup": 0.3,
+    "damageType": "phys",
+    "present": {
+      "sfx": "c_swing_light",
+      "hitVfx": "lib_hit_phys_light",
+      "hitSfx": "c_hit_phys_light"
+    }
+  },
+  "collisionRadius": 0.5,
+  "kit": {
+    "passive": {
+      "id": "nurrow_quiet_kill",
+      "name": "Quiet Kill",
+      "icon": "assets/ui/icons/abilities/nurrow_quiet_kill.svg",
+      "desc": "When Nurrow gets a takedown, every enemy fighter within 5 m of her falls asleep for 1 s. Damage wakes a sleeper.",
+      "triggers": [
+        {
+          "on": "takedown",
+          "effects": [
+            {
+              "op": "area",
+              "shape": {
+                "kind": "circle",
+                "radius": 5
+              },
+              "at": "self",
+              "filter": {
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "onHit": [
+                {
+                  "op": "status",
+                  "status": "sleep",
+                  "duration": 1,
+                  "to": "hit"
+                }
+              ],
+              "present": {
+                "vfx": "nurrow_a2_drowse",
+                "sfx": "c_cast_shade"
+              }
+            }
+          ]
+        }
+      ],
+      "present": {
+        "vfx": "lib_ring_pulse"
+      }
+    },
+    "a1": {
+      "id": "nurrow_felt_step",
+      "name": "Felt Step",
+      "icon": "assets/ui/icons/abilities/nurrow_felt_step.svg",
+      "desc": "Nurrow lunges up to 4 m toward a point and stops at the first enemy fighter she reaches, dealing {effects.0.onPass.0.amount} magic damage.",
+      "maxRank": 5,
+      "cooldown": [
+        10,
+        9.5,
+        9,
+        8.5,
+        8
+      ],
+      "cost": 0,
+      "costKind": "res",
+      "targeting": {
+        "kind": "point",
+        "range": 4,
+        "indicator": {
+          "kind": "rect",
+          "length": 4,
+          "width": 1.2
+        }
+      },
+      "castTime": 0.1,
+      "effects": [
+        {
+          "op": "dash",
+          "mode": "toPoint",
+          "distance": 4,
+          "speed": 18,
+          "stopOnFirstHit": true,
+          "passFilter": {
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "passWidth": 0.7,
+          "onPass": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  60,
+                  90,
+                  120,
+                  150,
+                  180
+                ],
+                "ap": 0.5,
+                "bonusAd": 0.4
+              },
+              "type": "magic",
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_dash_trail"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "gapclose",
+          "damage",
+          "engage"
+        ]
+      },
+      "present": {
+        "anim": "cast_a1",
+        "sfx": "c_dash",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "ally_only"
+      }
+    },
+    "a2": {
+      "id": "nurrow_lullaby_dart",
+      "name": "Lullaby Dart",
+      "icon": "assets/ui/icons/abilities/nurrow_lullaby_dart.svg",
+      "desc": "Nurrow throws a dart up to 8 m. The first enemy fighter it hits falls asleep for {effects.0.onHit.0.duration}. The dart deals no damage. Damage wakes the sleeper, with no bonus on waking.",
+      "maxRank": 5,
+      "cooldown": [
+        12,
+        11.5,
+        11,
+        10.5,
+        10
+      ],
+      "cost": 0,
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 8,
+        "indicator": {
+          "kind": "rect",
+          "length": 8,
+          "width": 0.6
+        }
+      },
+      "castTime": 0.25,
+      "effects": [
+        {
+          "op": "projectile",
+          "speed": 22,
+          "range": 8,
+          "width": 0.6,
+          "from": "self",
+          "toward": "dir",
+          "pierce": 0,
+          "filter": {
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "onHit": [
+            {
+              "op": "status",
+              "status": "sleep",
+              "duration": [
+                1.05,
+                1.15,
+                1.25,
+                1.35,
+                1.45
+              ],
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "nurrow_a2_lullaby",
+            "sfx": "c_proj_whoosh"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "cc",
+          "poke"
+        ],
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_a2",
+        "sfx": "c_cast_shade",
+        "hitVfx": "nurrow_a2_drowse",
+        "hitSfx": "c_slow",
+        "telegraph": "everyone"
+      }
+    },
+    "a3": {
+      "id": "nurrow_snuff",
+      "name": "Snuff",
+      "icon": "assets/ui/icons/abilities/nurrow_snuff.svg",
+      "desc": "Nurrow snuffs an adjacent enemy for {effects.0.amount} magic damage and silences them for {effects.1.duration}.",
+      "maxRank": 5,
+      "cooldown": [
+        9,
+        8.5,
+        8,
+        7.5,
+        7
+      ],
+      "cost": 35,
+      "costKind": "res",
+      "targeting": {
+        "kind": "unit",
+        "range": 2,
+        "indicator": {
+          "kind": "circle",
+          "radius": 2
+        }
+      },
+      "castTime": 0.15,
+      "effects": [
+        {
+          "op": "damage",
+          "amount": {
+            "base": [
+              70,
+              105,
+              140,
+              175,
+              210
+            ],
+            "ap": 0.6,
+            "bonusAd": 0.3
+          },
+          "type": "magic",
+          "to": "target"
+        },
+        {
+          "op": "status",
+          "status": "silence",
+          "duration": [
+            0.8,
+            0.9,
+            1,
+            1.1,
+            1.2
+          ],
+          "to": "target"
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "cc"
+        ]
+      },
+      "present": {
+        "anim": "cast_a3",
+        "sfx": "c_swing_light",
+        "hitVfx": "lib_silence",
+        "hitSfx": "c_hit_magic"
+      }
+    },
+    "ult": {
+      "id": "nurrow_lull_the_rest",
+      "name": "Lull the Rest",
+      "icon": "assets/ui/icons/abilities/nurrow_lull_the_rest.svg",
+      "desc": "Nurrow names an enemy fighter within 6 m and lunges at them for {effects.1.onArrive.0.amount} magic damage. Every other enemy fighter within 5 m of that target falls asleep for 2 s.",
+      "maxRank": 3,
+      "cooldown": [
+        110,
+        95,
+        80
+      ],
+      "cost": 0,
+      "costKind": "res",
+      "targeting": {
+        "kind": "unit",
+        "range": 6,
+        "filter": {
+          "minions": false,
+          "monsters": false,
+          "summons": false
+        },
+        "indicator": {
+          "kind": "circle",
+          "radius": 5
+        }
+      },
+      "castTime": 0.25,
+      "effects": [
+        {
+          "op": "mark",
+          "mark": "nurrow_chosen",
+          "duration": 3,
+          "stacks": 1,
+          "max": 1,
+          "to": "target"
+        },
+        {
+          "op": "dash",
+          "mode": "toTarget",
+          "distance": 6,
+          "speed": 20,
+          "onArrive": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  150,
+                  250,
+                  350
+                ],
+                "ap": 0.7,
+                "bonusAd": 0.5
+              },
+              "type": "magic",
+              "to": "target"
+            },
+            {
+              "op": "area",
+              "shape": {
+                "kind": "circle",
+                "radius": 5
+              },
+              "at": "target",
+              "filter": {
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "onHit": [
+                {
+                  "op": "if",
+                  "cond": {
+                    "kind": "not",
+                    "cond": {
+                      "kind": "targetHasMark",
+                      "mark": "nurrow_chosen"
+                    }
+                  },
+                  "then": [
+                    {
+                      "op": "status",
+                      "status": "sleep",
+                      "duration": 2,
+                      "to": "hit"
+                    }
+                  ]
+                }
+              ],
+              "present": {
+                "vfx": "nurrow_ult_lull",
+                "sfx": "c_ult_release",
+                "telegraph": "everyone"
+              }
+            }
+          ],
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_dash_trail"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "engage",
+          "cc",
+          "damage"
+        ],
+        "minTargets": 2
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_windup",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "everyone"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/nurrow/nurrow.glb",
+    "portrait": "assets/fighters/nurrow/portrait.png",
+    "splash": "assets/fighters/nurrow/splash.png",
+    "icon": "assets/fighters/nurrow/icon.png",
+    "height": 1.8,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "burst",
+    "preferredRange": 2,
+    "comboOrder": [
+      "a2",
+      "a1",
+      "a3",
+      "ult"
+    ]
+  },
+  "palette": {
+    "primary": "#3E3440",
+    "secondary": "#8C6F5A"
+  }
+}

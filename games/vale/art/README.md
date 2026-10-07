@@ -17,6 +17,8 @@ python3 art/build.py unit <id> | units
 python3 art/build.py map <id>  | maps
 python3 art/build.py sky <id>  | skies  # presets in art/blender/sky_presets.json
 python3 art/build.py portraits [<id>]   # re-render portrait/splash/icon/turntable from art/.cache
+python3 art/build.py portraits <id> --only splash --scale 0.5   # PREVIEW -> art/renders/<sub>/preview_*.png
+python3 art/build.py parts [--keys mask_,hood_]                 # the PARTS SHEET -> art/renders/parts/sheet.png
 python3 art/build.py check              # validate every GLB + art.json in art/out, write art/out/manifest.json
 python3 art/build.py all                # fighters, units, maps, skies, check
 python3 art/tools/lineup_qa.py -- a.glb b.glb ... [--name roster]    # readability QA (see below)
@@ -44,8 +46,12 @@ art/blender/common/               the shared library (one module per concern)
   body.py       parametric humanoid base body (lofted anatomy) + boots/fists
   mesh.py       lofts/sweeps, voxel union with junction fillets, conformed plates, cloth panels
                 (sculpted folds, rolled hems), carved slabs (blades, tablets), decimation, skin weights
-  kit.py        BIBLE KIT: carved masks + beak, glass visors, hoods, scarves, mantles, stone slab
-                pauldrons, limb shells, heavy drapes, accent inlays, crests, sundial clasps
+  kit.py        BIBLE KIT (low level): carved masks + beak, glass visors, hoods, scarves, mantles,
+                stone slab pauldrons, limb shells, heavy drapes, accent inlays, crests, sundial clasps
+  parts.py      SHARED FIGHTER PARTS LIBRARY (what fighters compose from): masks x6, visors x3, hoods,
+                cowl, wrap, halo, collar, mantles, stole, pauldrons stone/wood/cloth, bracers x4,
+                greaves, gloves (fingers/mitt/wrap, fist/open), boots + trim, belt/pouch/lamp/strap/
+                satchel, tabard/skirt/cape (own x_ chains), and the weapon/prop set (see below)
   materials.py  bible material vocabulary (honed stone, chalk, ironstone, dawnglass, lampresin,
                 carved wood, heavy cloth, waxed leather, ink, accent), baked-in painted shading,
                 value gradient; the legacy metal set (proof only)
@@ -59,7 +65,8 @@ art/blender/common/               the shared library (one module per concern)
   fighter.py    Part / Context / binding helpers;  pipeline.py: the fighter build
 art/blender/fighters/<id>.py      one hand-authored script per fighter (+ skins), from _template.py
 art/blender/fighters/_lookdev_reference.py   the BIBLE REFERENCE fighter (sets the bar; not roster)
-art/blender/fighters/_template.py            the PRODUCTION TEMPLATE (runnable caster demo)
+art/blender/fighters/_template.py            the PRODUCTION TEMPLATE on parts.py (runnable caster demo)
+art/blender/parts_sheet.py        renders the parts catalog (art/renders/parts/sheet.png + sheet.json)
 art/blender/fighters/_proof_mannequin.py     the pre-bible technical proof (metal; legacy materials)
 art/grade/                        vale_grade_01 LUT library (gradelib.py) + generator
 art/tools/optimize.mjs            gltf-transform: dedup, drop rest tracks, resample, prune, --fighter =
@@ -110,34 +117,63 @@ Fighters add roles with `extra_materials(ctx)` (the reference adds a madder `fel
 palette values; they never add metal or a single saturated full-body colour, and keep team hues
 (azure 200-225 deg, marigold 25-50 deg) out of albedo above 40 % saturation.
 
+## The parts library (`common/parts.py`)
+
+The 16 roster fighters are COMPOSED from one library so their masks, cloth, armour and weapons share
+one hand, one bevel language and one material vocabulary. Catalog: `art/renders/parts/sheet.png`
+(`python3 art/build.py parts`, ~3 min). Every builder has the same contract:
+
+```python
+P += parts.<builder>(ctx, <style/kind>, mat="<role>", accent=None|True|{...}, bevel=0.03, ...)  # -> [fighter.Part]
+```
+
+* **materials by role name** (`ctx.mats[role]`, the bible vocabulary below) so skins are palette swaps;
+* **`bevel`** = the visible rounded edge band, clamped to the bible's 2-4 cm and to 45 % of the form's
+  thickness (thin cloth gets a rolled hem instead);
+* **`accent`** = the optional carved-glass inlay/fin slot in the `accent` material; builders that sit in
+  the bottom half log a warning (bible: accents in the top half);
+* **binding** comes with each Part: rigid (`bone:head`, `bone:prop.R`), two-bone blends (zblend/dblend),
+  skinned (`auto`, `transfer` = copy the body's weights) or an x_ chain; drapery (tabard, skirt, cape,
+  chain-lantern) ADDS its own <= 2-bone x_ chain while modelling and `parts.chain_configs(ctx)` gives the
+  matching secondary motion (chain roles from the name: `*_f` front, `*_b` back, `cape*`, `*_hang`);
+* **conform order matters**: parts conform to `ctx.targets` (body + mask + collar/mantle + belt as they
+  are added): body -> face -> hood -> collar/mantle -> pauldrons -> belt -> drapery -> limbs -> props;
+* **props** are modelled in prop space and placed with `hand="R"|"L"` (`hand=None` = prop space for
+  back carry / sheets); weapon builders add their VFX tip socket (`socket="x_blade_tip"`).
+
+| Family | Builders (styles) |
+|---|---|
+| faces | `mask(style= oval \| plate \| slit \| half \| beak \| keel)` (+ `eye_scale`, `scale`, any facet key) · `visor(style= band \| chimney \| dome)` |
+| head | `hood(style= deep \| peaked \| wide)` · `cowl()` (hood down) · `head_wrap()` · `crest_fin()` · `halo(style= disc \| ring)` |
+| shoulders | `collar()` · `mantle(style= shawl \| capelet)` (+ sundial `clasp`) · `stole()` · `pauldron(kind= stone \| wood \| cloth, sides=)` |
+| limbs | `bracer(kind= wood \| stone \| leather \| wrap)` · `greave(kind= ironstone \| wood)` + knee blocks · `glove(style= fingers \| mitt \| wrap, pose= fist \| open)` · `boot(side, style)` (fused into the body) + `boot_trim(style= heavy \| tall \| wrapped \| low)` |
+| waist | `belt(buckle= plate \| dial \| knot, pouches=[(u, size)], lamp=u)` · `pouch()` · `lantern()` · `strap(path)` · `satchel()` |
+| drapery | `tabard(cut= point \| straight \| swallow, chest=)` · `skirt(panels=)` · `cape(cut= round \| straight \| swallow \| point)` |
+| weapons | `sword` · `greatblade` · `spear` · `staff(head= lens \| vessel \| spire)` · `bow` (+ `quiver_back`) · `twin_blades` · `hammer` · `maul` · `chain_lantern` (swings on x_*_hang) · `focus_orb` · `round_shield` · `discs` (+ hip holster) · `shards` (+ bandolier) |
+
 ## The production template (`fighters/_template.py`)
 
-Copy it to `fighters/<id>.py`; the file is organised in this order (the shared pipeline runs it):
+Copy it to `fighters/<id>.py` and fill each numbered section FROM THE BRIEF (`_design/fighters/<id>.md`
+when it exists, else the fighter's entry in `_design/ROSTER.md` §3). The template's docstring holds the
+brief -> code map, the sign-off checklist and the output list; in short:
 
-0. **brief** — `ID` (== file name == content id), `TITLE`, `ROLE_MASS`, `ORIGIN` (aubade visor /
-   serenade mask / hourless wrap)
-1. **proportions** — `PROPORTIONS` (heroic, 6-6.5 heads; height class 1.6 / 1.9 / 2.4 m) + `SHAPE`
-2. **body** — `body.humanoid_parts` + `body.boot`, fused by `mesh.union_fillet`, materials by region
-3. **face** — `kit.carved_mask` (+ `kit.mask_beak`) | `kit.glass_visor` | `kit.hood`
-4. **armour / cloth / props** — `kit.slab_pauldron`, `kit.limb_shell`, `kit.scarf`, `kit.mantle`,
-   `kit.drape`, `mesh.slab` (blades, tablets: `bands` for spine / blade / glass edge), `mesh.loft`, `mesh.plate`
-5. **palette** — `PALETTE = materials.bible_palette(...)` from the brief + `CARD` (UI colours)
-6. **value gradient** — `VALUE_GRADIENT_STOPS`; choose palette values per band
-7. **accent placement** — inlays/fins in the top half only (crown, shoulders, chest, weapon head)
-8. **motion** — `MOTION = anim.motion_profile(weight, weapon, stance, run_ref_speed, blocks=BLOCKS)`
-   (`BLOCKS` override the arm blocks: guard, run_fwd, run_back, lobby, ...) + `clip_overrides(ctx)`:
-   cast_a1 / a2 / a3 / ult must be four DISTINCT gestures (impact at 40 % via `anim.strike_keys`)
-9. **skins** — `SKINS = [{"id": "<id>_<variant>", "palette": {...}, "extra": {...}, "card": {...}}]`;
-   `model()` reads `ctx.skin["extra"]` for skin-only geometry; same rig, clips, silhouette class
-   (height +-5 %, footprint +-10 %), accent locations and value gradient
-10. **export** — automatic: `<id>.glb` with every clip; `<skin_id>.glb` mesh + skeleton only (the
-    client plays the BASE GLB's clips on skins by bone name); art.json; skins.json
-11. **renders** — automatic; `SPLASH` overrides pose/camera/map (render.SPLASH_DEFAULTS)
+| Brief (ROSTER.md entry) | Template section |
+|---|---|
+| header `Name · Class (id)`, Title, Origin, `palette a / b` | **0 BRIEF**: `ID`, `TITLE`, `ROLE_MASS` (class -> mass), `ORIGIN` (face rule), `CARD` |
+| `Silhouette (<mass>, <height>)` | **1 PROPORTIONS**: height class 1.6 / 1.9 / 2.4 m, shoulder/hip ratio, `SHAPE` |
+| silhouette bullets | **2 BODY** (under-suit, `parts.boot` fused) + **4 PARTS** |
+| origin + the mask/visor bullet | **3 FACE**: `parts.mask(style)` / `parts.visor(style)` / `parts.head_wrap` |
+| `Hook at 96 px` | **4 PARTS**: the hook part first and big; **7 ACCENT**: `accent=True` on the part the hook names |
+| `Weapon: <kind>, <hold>` | **4** `parts.<weapon>(hand=, socket=)` + **8** `MOTION = anim.motion_profile(weight, weapon, stance, run_ref_speed)` |
+| kit: Passive / A1 / A2 / A3 / Ultimate | **8** `clip_overrides()`: cast_a1 / cast_a2 / cast_a3 / cast_ult = four DISTINCT gestures acting out the ability, `anim.strike_keys` (impact at 40 %), multiples of 5 frames |
+| Presentation | `SOCKETS` (VFX attach bones) only |
+| `Skins: *Name* (tier) ... Extra geometry: ...` | **9** `SKINS = [{"id": "<id>_<variant>", "palette": {...}, "extra": {...}, "card": {...}}]`; `model()` reads `ctx.skin["extra"]` |
+| (automatic) | **10** export: `<id>.glb`, `<skin_id>.glb` (mesh + skeleton; the client plays the base clips by bone name), art.json, skins.json · **11** renders: splash/portrait/icon/turntable (`SPLASH` overrides) |
 
-The per-fighter **checklist** is at the top of `_template.py` (tris 10-25k; GLB <= 1.2 MB; rig;
-<= 2 sway bones per drapery; required clips, multiples of 5, impact at 40 %, loops closed; run foot
-slide; four distinct ability gestures; silhouette IoU <= 0.80; facing from above; value bands;
-accent <= 5 % top half; banned motifs; splash composition; portrait/icon; art.json copied verbatim).
+Order inside `model()` is the conform order above. Palette values are chosen per VALUE BAND (top quarter
+L* 70-85, middle 45-65, feet 20-35 ON SCREEN: lineup_qa measures it; the look-dev reference failed it
+at first with dark boots and a mid-grey hood). Skins keep the rig, clips, silhouette class (height +-5 %,
+footprint +-10 %), accent locations and value gradient.
 
 ### `art.json` = exactly a `FighterArt` (zod `.strict()`, `src/contracts/catalog.ts`)
 
@@ -253,17 +289,26 @@ the real WebP in Chromium.
 ## Renders (`render.fighter_renders`, bible conventions)
 
 * **Lighting:** ONE sun behind-left of the camera at the bible's fighter key (view 225 deg / 45 deg,
-  0.9 x the map sun, the map's sun colour), the map's sky HDR as fill (ambient 0.65), a soft
-  painterly rim from behind-right. **Khronos PBR Neutral** view transform, then the locked
-  **vale_grade_01** LUT applied in numpy: the game's exact chain.
-* **Splash 1600x900:** the victory hold, FRONT three-quarter (camera on the fighter's left; the
-  fighter faces screen-left into the frame), subject centred at ~73 % of the width (grid columns
-  7-12; UI owns 1-6), feet grounded with a shadow-catcher shadow, slight hero angle.
+  0.9 x the map sun, the map's sun colour), the map's sky HDR as fill (ambient 0.65), and a
+  **warm/cool rim pair** from behind the subject: cool dawn azure on the screen-left (Aubade) edge,
+  warm lamp marigold on the screen-right (Serenade) edge (desaturated; they light the fighter only,
+  never the painted world). **Khronos PBR Neutral** view transform, then the locked **vale_grade_01**
+  LUT applied in numpy: the game's exact chain.
+* **Splash 1600x900:** a heroic hold (the victory end pose; `SPLASH = {"clip", "t"}`), FRONT
+  three-quarter (camera on the fighter's left; the fighter faces screen-left into the frame), subject
+  centred at ~72 % of the width (grid columns 7-12; UI owns 1-6), 60 mm hero angle from hip height
+  (the horizon sits low, the fighter towers), feet grounded with a shadow-catcher shadow. Post before
+  the grade: a 1-3 px light wrap from the plate, a soft bloom of the brightest sky, a gentle vignette.
 * **Painted map backdrop:** `render.map_backdrop` builds soft set dressing INSIDE the shifted
-  camera frustum: Aubade spires (stacked chalk tiers, dawnglass belfries) screen-left, Serenade
-  domes on banded drums screen-right, the fallen needle, the dial floor with paving and converging
-  hour-lines, aerial haze by distance; rendered under the map sky (`art/out/maps/<map>/sky.hdr`)
-  at 3/4 size, Kuwahara-painted, softened and composited under the fighter.
+  camera frustum, all in aerial perspective (every surface fades to the horizon haze by distance):
+  the dial's far rim as a low ridge, Aubade spires (stacked chalk tiers, dawnglass belfries) in three
+  depth layers screen-left (quiet, behind the UI half), Serenade domes on banded drums screen-right,
+  the fallen needle, the honed dial floor with 5 m slabs and wide hour-lines radiating from the
+  gnomon's foot; rendered under the map sky (`art/out/maps/<map>/sky.hdr`) at 3/4 size,
+  Kuwahara-painted, softened and composited under the fighter.
+* **Previews:** `build.py portraits <id> --only splash[,portrait,icon] --scale 0.5` re-renders from the
+  cached .blend in ~25 s into `art/renders/<sub>/preview_*.png` (shipped files untouched). Pose,
+  camera, rim and backdrop changes need no rebuild; palette and model changes do.
 * **Portrait 512²:** head and shoulders, three-quarter, the lobby idle (weapon away from the face).
 * **Icon 128²:** mask close-up on a painted sky; reads at a glance.
 * **Turntable** (QA): 8 angles + run contact, attack1 impact, cast_ult impact, death end.

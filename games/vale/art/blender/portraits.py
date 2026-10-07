@@ -3,6 +3,7 @@
 
     python3 art/build.py portraits            # every cached fighter
     python3 art/build.py portraits <id> [--fast]
+    python3 art/build.py portraits <id> --only splash --scale 0.5   # PREVIEW (art/renders/.../preview_*.png)
 
 Skin portraits/splashes need the skin's materials, so they are rendered by the fighter build
 (`build.py fighter <id> --skin <skin>`), not here.
@@ -29,7 +30,7 @@ def load_spec(fid: str):
     return m
 
 
-def render_cached(fid: str, fast: bool) -> dict:
+def render_cached(fid: str, fast: bool, only=None, scale: float = 1.0) -> dict:
     spec = load_spec(fid)
     P = pipeline.paths(spec)
     bpy.ops.wm.open_mainfile(filepath=P["cache"])
@@ -43,17 +44,21 @@ def render_cached(fid: str, fast: bool) -> dict:
             chains.setdefault(m.group(1), []).append((int(m.group(2)), b.name))
     ctx.chains = {k: [n for _, n in sorted(v)] for k, v in chains.items()}
     objs = [arm] + [o for o in bpy.context.scene.objects if o.type == "MESH" and o.parent == arm and not o.hide_render]
-    return render.fighter_renders(ctx, objs, P, None, fast=fast)
+    return render.fighter_renders(ctx, objs, P, None, fast=fast, only=only, scale=scale)
 
 
 def main():
-    args = scene.parse_args(lambda p: p.add_argument("ids", nargs="*"))
+    def extra(p):
+        p.add_argument("ids", nargs="*")
+        p.add_argument("--scale", type=float, default=1.0, help="!= 1: preview renders (shipped files untouched)")
+    args = scene.parse_args(extra)
+    only = {x for x in args.only.split(",") if x} or None
     ids = args.ids or [os.path.splitext(os.path.basename(p))[0]
                        for p in sorted(glob.glob(os.path.join(scene.CACHE_DIR, "fighters", "*.blend")))]
     if not ids:
         print("[vale-art] no cached fighters in art/.cache/fighters - build a fighter first")
     for fid in ids:
-        res = render_cached(fid, args.fast)
+        res = render_cached(fid, args.fast, only, args.scale)
         scene.log(f"portraits {fid}: {res['seconds']}")
 
 

@@ -254,14 +254,27 @@ if (!skinOnly && gltf.animations.length) {
       for (const s of ['L', 'R']) {
         // planted = ball on the ground and the ankle level (heel-strike / toe-off roll excluded)
         const toeLo = Math.min(...toes[s].map((p) => p.y));
-        const cand = toes[s].map((p) => p.y < toeLo + 0.012);
+        const cand = toes[s].map((p) => p.y < toeLo + 0.04);     // stance: the ball within 4 cm of its lowest (swing clears >= 7 cm; a heel-strike dip is tolerated)
         const ankLo = Math.min(...track[s].filter((_, f) => cand[f]).map((p) => p.y));
         const planted = track[s].map((p, f) => cand[f] && Math.abs(p.y - ankLo) < 0.025);
+        if (process.env.VALE_RUN_DEBUG) console.log(s, track[s].map((p, f) => `${f}:${p.y.toFixed(3)}/${toes[s][f].y.toFixed(3)}/${p.z.toFixed(3)}${planted[f] ? '*' : ''}`).join(' '));
         const lvl = track[s].map((p) => p.y);
+        // central difference over 3 planted frames; light fighters (short contact, ~2 flat frames at
+        // 30 fps) fall back to a forward difference over 2 consecutive level planted frames
+        let central = 0;
         for (let f = 1; f < n; f++) {
           if (planted[f - 1] && planted[f] && planted[f + 1] && Math.abs(lvl[f + 1] - lvl[f - 1]) < 0.004) {
             const v = -(track[s][f + 1].z - track[s][f - 1].z) / (2 * dt);
             errs.push(Math.abs(v - runRef) / runRef);
+            central++;
+          }
+        }
+        if (!central) {
+          for (let f = 0; f < n; f++) {
+            if (planted[f] && planted[f + 1] && Math.abs(lvl[f + 1] - lvl[f]) < 0.003) {
+              const v = -(track[s][f + 1].z - track[s][f].z) / dt;
+              errs.push(Math.abs(v - runRef) / runRef);
+            }
           }
         }
       }

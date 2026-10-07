@@ -10,11 +10,11 @@
       "empty_groups": []
     },
     "tris_body": 5598,
-    "tris_mask": 1560,
+    "tris_mask": 1596,
     "tris_mask_beak": 304,
     "tris_hood": 1562,
     "tris_crest_fin": 320,
-    "tris_collar": 720,
+    "tris_collar": 800,
     "tris_pauldron.L": 864,
     "tris_pauldron_inlay.L": 180,
     "tris_pauldron.R": 864,
@@ -42,24 +42,24 @@
     "tris_gn_wraps": 96,
     "tris_gn_pommel": 180,
     "armour_conform": {
-      "covered": 898,
+      "covered": 900,
       "culled_faces": 466,
       "body_tris_before": 5598,
       "body_tris_after": 5132
     },
-    "validate__lookdev_reference": "12826->12815"
+    "validate__lookdev_reference": "12884->12873"
   },
-  "uv_coverage": 0.624,
+  "uv_coverage": 0.611,
   "bake": {
-    "base": 5.96,
-    "rough_metal": 3.53,
-    "normal": 7.44,
-    "ao": 17.34,
-    "normal_fixed_px": 3510,
-    "pack_save": 0.77,
-    "total": 35.27
+    "base": 5.93,
+    "rough_metal": 3.23,
+    "normal": 6.89,
+    "ao": 15.89,
+    "normal_fixed_px": 2657,
+    "pack_save": 0.36,
+    "total": 32.49
   },
-  "tris": 20879,
+  "tris": 20995,
   "mesh_top_m": 1.969,
   "clips": {
     "idle": {
@@ -102,8 +102,8 @@
       "impact": 0.4
     },
     "cast_a3": {
-      "frames": 40,
-      "duration_s": 1.3333,
+      "frames": 35,
+      "duration_s": 1.1667,
       "loop": false,
       "impact": 0.4
     },
@@ -156,13 +156,27 @@
       "impact": null
     }
   },
-  "glb_bytes_raw": 3487912,
+  "glb_bytes_raw": 3488400,
   "optimize": {
     "ok": true,
-    "before": 3487912,
-    "after": 1070856
+    "before": 3488400,
+    "after": 1079240
   },
-  "glb_bytes": 1070856,
+  "glb_bytes": 1079240,
+  "three_load_test": {
+    "ok": true,
+    "log": [
+      "[three] /home/user/forgeflow-games/games/vale/art/out/_lookdev/_lookdev_reference.glb (1054 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: _lookdev_reference_base 1024x1024 109K, _lookdev_reference_normal 1024x1024 39K, _lookdev_reference_orm 1024x1024 109K",
+      "  skinned meshes: _lookdev_reference(17502v), _lookdev_reference_accent(408v)",
+      "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_blade_tip thighL shinL footL toeL thighR shinR footR toeR x_drape_b_1 x_drape_f_1)",
+      "  clips: attack1:1.000s/22tr, attack2:1.000s/22tr, cast_a1:1.167s/23tr, cast_a2:1.167s/22tr, cast_a3:1.167s/22tr, cast_ult:2.000s/24tr, channel:1.333s/22tr, dash:0.667s/23tr, death:2.000s/22tr, idle:2.400s/22tr, idle_lobby:3.200s/22tr, recall:2.000s/23tr, run:0.800s/24tr, stunned:1.333s/22tr, victory:2.000s/22tr",
+      "  tracks checked: 337; materials: body, accent; textures: body.map=1024x1024, body.normalMap=1024x1024, body.roughnessMap=1024x1024, body.metalnessMap=1024x1024, body.aoMap=1024x1024",
+      "  tris: 20995; bind-pose bounds (three units, Y up): 1.64 x 1.97 x 1.65; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.45",
+      "  run: 24 f, planted samples 6, max foot-speed error 1.1%",
+      "[three] OK: skeleton binds, every clip track targets an existing bone, mixer + clone work"
+    ]
+  },
   "renders": {
     "files": {
       "splash": "art/out/_lookdev/splash.png",
@@ -171,10 +185,10 @@
       "turntable": "art/renders/_lookdev/turntable.png"
     },
     "seconds": {
-      "splash": 98.82,
-      "portrait": 53.99,
-      "icon": 7.66,
-      "turntable": 28.11
+      "splash": 80.03,
+      "portrait": 50.99,
+      "icon": 8.13,
+      "turntable": 23.98
     }
   },
   "three_qa": {
@@ -197,35 +211,36 @@
       ]
     ],
     "headY": 1.642,
-    "accentPct": 3.63,
-    "accentTopHalfPct": 99.2,
-    "heightPx1080": 107,
+    "accentPct": 3.57,
+    "accentTopHalfPct": 98.5,
+    "heightPx1080": 105,
     "size": [
       2400,
       900
     ],
     "clips": 15,
     "out": "art/renders/_lookdev/three__lookdev_reference.png",
-    "seconds": 10.1,
+    "seconds": 11.2,
     "exit": 0,
     "clip_sheet": "art/renders/_lookdev/three_clips__lookdev_reference.png"
   },
   "timings": {
     "steps_s": {
-      "rig": 0.01,
-      "materials": 0.83,
-      "model": 16.81,
-      "lows_bind": 7.03,
-      "uv": 15.99,
-      "bake": 35.28,
-      "clips": 0.55,
-      "export": 2.99,
-      "optimize": 1.09,
-      "render": 188.67,
-      "three_qa": 39.89,
-      "cache": 0.07
+      "rig": 0.0,
+      "materials": 0.74,
+      "model": 15.62,
+      "lows_bind": 6.04,
+      "uv": 17.4,
+      "bake": 32.49,
+      "clips": 0.46,
+      "export": 2.78,
+      "optimize": 1.18,
+      "load_test": 0.27,
+      "render": 163.22,
+      "three_qa": 39.59,
+      "cache": 0.1
     },
-    "total_s": 309.31
+    "total_s": 279.97
   },
   "run_ref_speed": 3.45,
   "height_m": 1.9
