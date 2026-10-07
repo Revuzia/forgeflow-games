@@ -1,0 +1,35 @@
+[
+  {
+    "id": "marund_base",
+    "fighter": "marund",
+    "name": "Marund",
+    "tier": "base",
+    "model": "assets/fighters/marund/marund.glb",
+    "portrait": "assets/fighters/marund/portrait.png",
+    "splash": "assets/fighters/marund/splash.png",
+    "desc": "Marund in his working ironstone dome-cap, walnut mask and felt apron, lampresin windows lit.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "marund_gorgewalk",
+    "fighter": "marund",
+    "name": "Gorgewalk Mason",
+    "tier": "standard",
+    "model": "assets/fighters/marund/marund_gorgewalk.glb",
+    "portrait": "assets/fighters/marund/marund_gorgewalk_portrait.png",
+    "splash": "assets/fighters/marund/marund_gorgewalk_splash.png",
+    "desc": "A slate cowl bound with iron bands and rigid gorge-rope, as worn by the keepers of the Needlespan gorge. A coil of rope sits on his left shoulder.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "marund_long_evening",
+    "fighter": "marund",
+    "name": "Long Evening Cowl",
+    "tier": "deluxe",
+    "model": "assets/fighters/marund/marund_long_evening.glb",
+    "portrait": "assets/fighters/marund/marund_long_evening_portrait.png",
+    "splash": "assets/fighters/marund/marund_long_evening_splash.png",
+    "desc": "Plum lacquer and smoked-amber windows from the Serenade dusk festival, with a small lamp finial set on the cowl's flat top.",
+    "releasedIn": "2026.10.0"
+  }
+]

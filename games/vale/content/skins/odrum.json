@@ -1,0 +1,36 @@
+[
+  {
+    "id": "odrum_base",
+    "fighter": "odrum",
+    "name": "Odrum",
+    "tier": "base",
+    "model": "assets/fighters/odrum/odrum.glb",
+    "portrait": "assets/fighters/odrum/portrait.png",
+    "splash": "assets/fighters/odrum/splash.png",
+    "desc": "Odrum under his domed felt cap and carved ochre mask, the walnut yoke level across his shoulders.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "odrum_noon_fair",
+    "fighter": "odrum",
+    "name": "Noon Fair Yoke",
+    "tier": "standard",
+    "model": "assets/fighters/odrum/odrum_noon_fair.glb",
+    "portrait": "assets/fighters/odrum/odrum_noon_fair_portrait.png",
+    "splash": "assets/fighters/odrum/odrum_noon_fair_splash.png",
+    "desc": "A rose-lilac lacquered yoke hung with painted paper lanterns and rigid ribbons, dressed for the Shadowless Noon fair.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "odrum_shadeprint",
+    "fighter": "odrum",
+    "name": "Shadeprint Yoke",
+    "tier": "deluxe",
+    "model": "assets/fighters/odrum/odrum_shadeprint.glb",
+    "portrait": "assets/fighters/odrum/odrum_shadeprint_portrait.png",
+    "splash": "assets/fighters/odrum/odrum_shadeprint_splash.png",
+    "vfxTint": "#7A6BB0",
+    "desc": "Ink-wash below, pale above, with light-rimmed edges; his resin pots become ink pots and his pools set in violet.",
+    "releasedIn": "2026.10.0"
+  }
+]

@@ -274,7 +274,7 @@ def value_gradient(g: G, color, grad: dict | None):
             e.position = pos
             e.color = (mult / 2.0, mult / 2.0, mult / 2.0, 1.0)       # ramp colours clamp at 1: store x/2
         g.link(t, r.inputs["Fac"])
-        v = g.math("MULTIPLY", g.n("ShaderNodeRGBToBW") and _bw(g, r.outputs["Color"]), 2.0)
+        v = g.math("MULTIPLY", _bw(g, r.outputs["Color"]), 2.0)
         return _mul_scalar(g, color, v)
     t = g.math("POWER", t, grad.get("gamma", 1.0))
     v = g.math("ADD", g.math("MULTIPLY", t, grad["high"] - grad["low"]), grad["low"])
@@ -464,4 +464,248 @@ def standard_set(pal: dict, grad: dict | None = None, prefix: str = "") -> dict:
         "skin": skin(prefix + "skin", pal, "skin", grad),
         "wood": wood(prefix + "wood", pal, "wood", grad),
         "accent": accent(pal),
+    }
+
+
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+# BIBLE MATERIAL VOCABULARY (STYLE_BIBLE "World"/"Look rules", WORLD.md §2, tokens.json `fighter`)
+#
+# Fighters are made of the Vale's own materials, never metal: honed stone (dialstone, chalk
+# limestone, ochre sandstone, ironstone), dawnglass (cool glass) and lampresin (warm amber resin),
+# carved wood (pale ash, walnut), heavy cloth (linen, felt) and waxed leather. BANNED on fighters:
+# metallic bevels, gold filigree, gems, gears, clock hands, glowing runes (the only emissive is the
+# `accent`, a carved glass inlay holding the readability colour below bloom).
+#
+# Shading is baked into the base colour so the hand-painted read survives any PBR light
+# (tokens.json fighter.bakeIntoBaseColor = {aoStrength 0.6, curvature 0.4, topDownGradient 0.15}):
+#   * cavity darkening   local AO (creases, carved recesses, fold valleys)        x curvature
+#   * edge chalking      Bevel-node edge mask on CONVEX edges (2-4 cm bevels catch a chalky
+#                        highlight: the bevel is the brushstroke)                   x curvature
+#   * top-light gradient each form is lighter where it faces up (world normal Z)    +-15 %
+#   * value gradient     whole-figure Z ramp: light crown, dark feet (bible_gradient)
+#   * whole-body AO      baked on the assembled low and multiplied into the base colour by
+#                        bake.bake_asset(ao_into_base=0.6)
+# Metallic is 0 everywhere; roughness stays in the 0.35-0.95 band (glass 0.12-0.2 is the only
+# glossy surface). Colours come from the fighter's palette dict (keys below), so skins are swaps.
+# ════════════════════════════════════════════════════════════════════════════════════════════════
+BIBLE_BAKE = {"ao": 0.6, "curvature": 0.4, "top": 0.15}
+
+BIBLE_PALETTE = {
+    # honed stone family
+    "chalk": "#e4ddcd",        # chalk limestone (Aubade spires) - the light top band
+    "stone": "#aaa498",        # dialstone (neutral honed stone)
+    "sandstone": "#c3a47a",    # ochre sandstone (Serenade)
+    "ironstone": "#4b4039",    # dark warm ironstone - boots, greaves, the dark feet band
+    # glass / resin (non-emissive; the accent is the only glow)
+    "dawnglass": "#a9c4dc",    # cool translucent glass (Aubade)
+    "lampresin": "#c98a3c",    # warm amber resin (Serenade)
+    # carved wood
+    "wood": "#a08262",         # pale ash
+    "wood_dark": "#5c4231",    # walnut
+    # cloth + leather
+    "cloth": "#8d8a80",        # heavy linen / felt (main drapery)
+    "cloth2": "#d6cfbf",       # light linen (hood, lining)
+    "under": "#3a3735",        # dark under-suit (legs)
+    "leather": "#5e4636",      # waxed leather
+    "ink": "#17181b",          # carved recesses (mask eyes): ink-dark, never pure black
+    # readability accent (renderer tints it with self / ally / enemy / seat colour)
+    "accent": "#3f9cff",
+}
+# Piecewise Z ramp (fraction of the fighter height -> multiplier) used with bible palettes: the
+# feet sink to ~0.62 and the crown lifts to 1.06 (bible: top quarter L* 70-85, feet 20-35).
+BIBLE_GRADIENT_STOPS = [(0.0, 0.62), (0.12, 0.70), (0.30, 0.84), (0.55, 0.95), (0.80, 1.02), (1.0, 1.06)]
+
+
+def bible_palette(**overrides) -> dict:
+    """The bible vocabulary palette with fighter overrides (unknown keys are allowed: extra roles)."""
+    p = dict(BIBLE_PALETTE)
+    p.update(overrides)
+    return p
+
+
+def bible_gradient(height: float, stops=None) -> dict:
+    return {"z0": 0.0, "z1": float(height), "stops": list(stops or BIBLE_GRADIENT_STOPS)}
+
+
+def edge_mask(g: G, radius: float = 0.02, gain: float = 6.0, samples: int = 8):
+    """0..1 mask on rounded edges: 1 - dot(bevel-rounded normal, true normal) (Cycles Bevel node,
+    works in bakes on any mesh density, unlike Pointiness)."""
+    bv = g.n("ShaderNodeBevel")
+    bv.samples = samples
+    bv.inputs["Radius"].default_value = radius
+    dp = g.n("ShaderNodeVectorMath")
+    dp.operation = "DOT_PRODUCT"
+    g.link(bv.outputs["Normal"], dp.inputs[0])
+    g.link(g.geo.outputs["Normal"], dp.inputs[1])
+    e = g.math("SUBTRACT", 1.0, dp.outputs["Value"])
+    return g.math("MULTIPLY", e, gain, clamp=True)
+
+
+def top_light(g: G, color, amount: float = BIBLE_BAKE["top"]):
+    """Multiply by 1 + amount * world normal Z: every form is lit from the top (painted key)."""
+    if amount <= 0:
+        return color
+    sep = g.n("ShaderNodeSeparateXYZ")
+    g.link(g.geo.outputs["Normal"], sep.inputs[0])
+    v = g.math("ADD", 1.0, g.math("MULTIPLY", sep.outputs["Z"], amount))
+    return _mul_scalar(g, color, v)
+
+
+def paint(g: G, color, hexcol: str, grad, curvature: float = BIBLE_BAKE["curvature"], edge_radius: float = 0.02,
+          edge_gain: float = 6.0, cavity_dist: float = 0.05, chalk=(1.45, 0.55), cavity=(0.42, 1.1),
+          top: float = BIBLE_BAKE["top"], edge_boost: float = 1.0):
+    """The bible's baked-in shading over `color`: cavity darkening, convex edge chalking, top light,
+    value gradient. Returns (colour socket, edge mask socket)."""
+    ao = g.ao(distance=cavity_dist, samples=8)
+    cav = g.ramp(ao, [(0.30, 1.0), (0.88, 0.0)])
+    c = g.mix(color, shade_hex(hexcol, cavity[0], cavity[1]), g.math("MULTIPLY", cav, min(1.0, curvature * 1.6)))
+    e = edge_mask(g, edge_radius, edge_gain)
+    convex = g.ramp(ao, [(0.72, 0.0), (0.95, 1.0)])           # concave edges are occluded: no chalk there
+    e = g.math("MULTIPLY", e, convex)
+    c = g.mix(c, shade_hex(hexcol, chalk[0], chalk[1]), g.math("MULTIPLY", e, min(1.0, curvature * 1.5 * edge_boost)))
+    c = top_light(g, c, top)
+    c = value_gradient(g, c, grad)
+    return c, e
+
+
+def honed_stone(name: str, pal: dict, key: str = "stone", grad=None, rough: float = 0.62, chisel: float = 1.0,
+                speckle: float = 0.0, veins: float = 0.0, scale: float = 1.0) -> bpy.types.Material:
+    """Honed stone (dialstone / chalk / sandstone / ironstone): soft painted blotches, faint chisel
+    facets, pores, optional oxidised speckle (ironstone) and veins; chalky worn edges."""
+    m, g = _new(name)
+    hexcol = pal[key]
+    c = painted_breakup(g, shade_hex(hexcol), amount=0.09, scale=2.2 * scale)
+    if chisel > 0:      # broad flat chisel facets: each Voronoi cell a slightly different value
+        vc = g.voronoi(scale=7.0 * scale, feature="F1")
+        c = g.mix(c, g.ramp(vc.outputs["Color"], [(0.0, 0.94), (1.0, 1.05)]), 0.6 * chisel, "MULTIPLY")
+    if veins > 0:
+        w = g.wave(g.mapping(g.obj, scale=(1.0, 0.6, 1.4)), scale=3.0 * scale, kind="BANDS", direction="Z",
+                   distortion=9.0, detail=4.0)
+        c = g.mix(c, shade_hex(hexcol, 0.78, 1.1), g.math("MULTIPLY", g.ramp(w.outputs["Fac"], [(0.0, 1.0), (0.06, 0.0)]), veins))
+    if speckle > 0:
+        sp = g.voronoi(scale=60.0 * scale, feature="F1")
+        dots = g.ramp(sp.outputs["Distance"], [(0.0, 1.0), (0.12, 0.0)])
+        c = g.mix(c, shade_hex(hexcol, 1.25, 1.6, -0.02), g.math("MULTIPLY", dots, 0.55 * speckle))
+    c, e = paint(g, c, hexcol, grad)
+    pores = g.noise(scale=140.0 * scale, detail=3.0, rough=0.6)
+    vb = g.voronoi(scale=7.0 * scale, feature="DISTANCE_TO_EDGE")
+    h = g.math("ADD", g.math("MULTIPLY", pores.outputs["Fac"], 0.5),
+               g.math("MULTIPLY", g.ramp(vb.outputs["Distance"], [(0.0, 0.0), (0.08, 1.0)]), 0.5 * chisel))
+    r = g.mixf(rough, min(0.95, rough + 0.12), e)              # chalked edges are matte
+    g.set_bsdf(color=c, rough=r, metal=0.0, normal=g.bump(h, strength=0.10, distance=0.004))
+    return m
+
+
+def glass(name: str, pal: dict, key: str = "dawnglass", grad=None, rough: float = 0.16, depth: float = 0.5,
+          inclusions: float = 0.4) -> bpy.types.Material:
+    """Dawnglass / lampresin as an OPAQUE glossy dielectric with painted depth: a deeper core tone,
+    bright catch-light edges (the bevel mask), soft internal streaks and suspended inclusions.
+    Not emissive (a glow is a warning: only `accent` emits)."""
+    m, g = _new(name)
+    hexcol = pal[key]
+    st = g.noise(g.mapping(g.obj, scale=(1.0, 1.0, 3.0)), scale=6.0, detail=2.0, rough=0.5, distortion=1.5)
+    core = g.mix(shade_hex(hexcol, 0.62, 1.15), shade_hex(hexcol, 1.05, 0.9), g.ramp(st.outputs["Fac"], [(0.3, 0.0), (0.7, 1.0)]))
+    if inclusions > 0:
+        sp = g.voronoi(scale=45.0, feature="F1")
+        dots = g.ramp(sp.outputs["Distance"], [(0.0, 1.0), (0.08, 0.0)])
+        core = g.mix(core, shade_hex(hexcol, 1.35, 0.6), g.math("MULTIPLY", dots, inclusions))
+    ao = g.ao(distance=0.04, samples=8)
+    c = g.mix(core, shade_hex(hexcol, 0.35, 1.2), g.math("MULTIPLY", g.ramp(ao, [(0.3, 1.0), (0.9, 0.0)]), depth))
+    e = edge_mask(g, 0.012, 8.0)
+    c = g.mix(c, shade_hex(hexcol, 1.6, 0.45), g.math("MULTIPLY", e, 0.7))
+    c = top_light(g, c, 0.2)
+    c = value_gradient(g, c, grad)
+    g.set_bsdf(color=c, rough=g.mixf(rough, rough + 0.1, e), metal=0.0, specular=0.6,
+               normal=g.bump(st.outputs["Fac"], strength=0.04, distance=0.002))
+    return m
+
+
+def carved_wood(name: str, pal: dict, key: str = "wood", grad=None, rough: float = 0.58, axis: str = "Z",
+                grain_scale: float = 1.0) -> bpy.types.Material:
+    """Carved wood: long grain along `axis`, gouge marks, worn pale edges, dark cavities."""
+    m, g = _new(name)
+    hexcol = pal[key]
+    sc = (1.0, 1.0, 0.07) if axis == "Z" else ((0.07, 1.0, 1.0) if axis == "X" else (1.0, 0.07, 1.0))
+    vec = g.mapping(g.obj, scale=sc)
+    rings = g.wave(vec, scale=26.0 * grain_scale, kind="RINGS", direction=axis, distortion=7.0, detail=3.0)
+    c = g.mix(shade_hex(hexcol, 0.80, 1.08), shade_hex(hexcol, 1.10, 0.95), g.ramp(rings.outputs["Fac"], [(0.15, 0.0), (0.85, 1.0)]))
+    gouge = g.noise(g.mapping(g.obj, scale=(1.0, 1.0, 4.0)), scale=24.0, detail=1.0, rough=0.3)
+    c = g.mix(c, shade_hex(hexcol, 0.88), g.math("MULTIPLY", g.ramp(gouge.outputs["Fac"], [(0.45, 0.0), (0.7, 1.0)]), 0.5))
+    c = painted_breakup(g, c, amount=0.08, scale=3.0)
+    c, e = paint(g, c, hexcol, grad, chalk=(1.35, 0.7))
+    h = g.math("ADD", g.math("MULTIPLY", rings.outputs["Fac"], 0.6), g.math("MULTIPLY", gouge.outputs["Fac"], 0.4))
+    g.set_bsdf(color=c, rough=g.mixf(rough, rough + 0.12, e), metal=0.0, normal=g.bump(h, strength=0.12, distance=0.003))
+    return m
+
+
+def heavy_cloth(name: str, pal: dict, key: str = "cloth", grad=None, rough: float = 0.9, weave: float = 1.0,
+                felt: float = 0.0) -> bpy.types.Material:
+    """Heavy linen / felt: a faint coarse weave, fold valleys darkened (wide local AO), fold crests
+    and rolled hems chalked by the edge mask; very matte."""
+    m, g = _new(name)
+    hexcol = pal[key]
+    c = painted_breakup(g, shade_hex(hexcol), amount=0.10, scale=2.6, hue=0.01)
+    if weave > 0:
+        wx = g.wave(scale=150.0, direction="X", profile="SIN")
+        wz = g.wave(scale=150.0, direction="Z", profile="SIN")
+        wv = g.math("MULTIPLY", wx.outputs["Fac"], wz.outputs["Fac"])
+        c = g.mix(c, shade_hex(hexcol, 0.88), g.math("MULTIPLY", wv, 0.35 * weave))
+    else:
+        wv = g.noise(scale=200.0).outputs["Fac"]
+    if felt > 0:
+        fz = g.noise(scale=60.0, detail=6.0, rough=0.7)
+        c = g.mix(c, shade_hex(hexcol, 1.1, 0.9), g.math("MULTIPLY", fz.outputs["Fac"], 0.3 * felt))
+    c, e = paint(g, c, hexcol, grad, cavity_dist=0.08, edge_radius=0.015, chalk=(1.3, 0.75), cavity=(0.45, 1.15))
+    g.set_bsdf(color=c, rough=rough, metal=0.0, normal=g.bump(wv, strength=0.05, distance=0.001))
+    return m
+
+
+def waxed_leather(name: str, pal: dict, key: str = "leather", grad=None, rough: float = 0.5) -> bpy.types.Material:
+    m, g = _new(name)
+    hexcol = pal[key]
+    c = painted_breakup(g, shade_hex(hexcol), amount=0.12, scale=4.0, hue=0.01)
+    grain = g.noise(scale=150.0, detail=6.0, rough=0.7)
+    c = g.mix(c, shade_hex(hexcol, 0.8), g.math("MULTIPLY", g.ramp(grain.outputs["Fac"], [(0.4, 0.0), (0.65, 1.0)]), 0.4))
+    c, e = paint(g, c, hexcol, grad, edge_radius=0.008, chalk=(1.4, 0.7))
+    g.set_bsdf(color=c, rough=g.mixf(rough, rough + 0.2, e), metal=0.0,
+               normal=g.bump(grain.outputs["Fac"], strength=0.1, distance=0.002))
+    return m
+
+
+def ink(name: str, pal: dict, key: str = "ink") -> bpy.types.Material:
+    """Carved recess paint (mask eyes, deep grooves): near-black, matte, no gradient."""
+    m, g = _new(name)
+    n = g.noise(scale=30.0)
+    c = g.mix(shade_hex(pal[key]), shade_hex(pal[key], 1.4), g.math("MULTIPLY", n.outputs["Fac"], 0.3))
+    g.set_bsdf(color=c, rough=0.8, metal=0.0)
+    return m
+
+
+def bible_set(pal: dict, grad: dict | None = None, prefix: str = "") -> dict:
+    """Fighter material roles in the bible's vocabulary (all non-metallic):
+      chalk, stone, sandstone, ironstone   honed stone family
+      dawnglass, lampresin                  glass / resin (glossy, NOT emissive)
+      wood, wood_dark                       carved wood (grain along Z by default)
+      cloth, cloth2, under                  heavy cloth (main drapery, light linen, dark under-suit)
+      leather, ink                          waxed leather; carved-recess paint
+      accent                                REQUIRED emissive readability inlay (<= 0.8 at rest)
+    Keys missing from `pal` fall back to BIBLE_PALETTE."""
+    p = dict(BIBLE_PALETTE)
+    p.update(pal)
+    gr = grad
+    return {
+        "chalk": honed_stone(prefix + "chalk", p, "chalk", gr, rough=0.66, chisel=0.7),
+        "stone": honed_stone(prefix + "stone", p, "stone", gr, rough=0.6, chisel=1.0),
+        "sandstone": honed_stone(prefix + "sandstone", p, "sandstone", gr, rough=0.7, chisel=0.8, veins=0.25),
+        "ironstone": honed_stone(prefix + "ironstone", p, "ironstone", gr, rough=0.72, chisel=0.8, speckle=0.6),
+        "dawnglass": glass(prefix + "dawnglass", p, "dawnglass", gr, rough=0.14),
+        "lampresin": glass(prefix + "lampresin", p, "lampresin", gr, rough=0.2, inclusions=0.6),
+        "wood": carved_wood(prefix + "wood", p, "wood", gr),
+        "wood_dark": carved_wood(prefix + "wood_dark", p, "wood_dark", gr, rough=0.5),
+        "cloth": heavy_cloth(prefix + "cloth", p, "cloth", gr),
+        "cloth2": heavy_cloth(prefix + "cloth2", p, "cloth2", gr, weave=0.7),
+        "under": heavy_cloth(prefix + "under", p, "under", gr, weave=0.5, felt=1.0),
+        "leather": waxed_leather(prefix + "leather", p, "leather", gr),
+        "ink": ink(prefix + "ink", p),
+        "accent": accent(p),
     }

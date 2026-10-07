@@ -1,0 +1,231 @@
+{
+  "id": "_template",
+  "fighter": "_template",
+  "skin": false,
+  "parts": {
+    "bind_body": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": []
+    },
+    "tris_body": 5600,
+    "tris_mask": 1588,
+    "tris_visor": 624,
+    "tris_hood": 1656,
+    "tris_spire": 176,
+    "tris_halo": 336,
+    "tris_halo_inlay": 492,
+    "tris_collar": 1032,
+    "tris_sash": 420,
+    "tris_robe_f": 698,
+    "tris_robe_b": 612,
+    "tris_bracer.L": 252,
+    "tris_bracer.R": 252,
+    "tris_staff": 272,
+    "tris_staff_head": 336,
+    "tris_staff_lens": 168,
+    "armour_conform": {
+      "covered": 602,
+      "culled_faces": 302,
+      "body_tris_before": 5600,
+      "body_tris_after": 5298
+    },
+    "validate__template": "9587->9584"
+  },
+  "uv_coverage": 0.618,
+  "bake": {
+    "base": 4.88,
+    "rough_metal": 3.79,
+    "normal": 4.72,
+    "ao": 6.69,
+    "normal_fixed_px": 5804,
+    "pack_save": 0.6,
+    "total": 20.84
+  },
+  "tris": 14209,
+  "mesh_top_m": 2.177,
+  "clips": {
+    "idle": {
+      "frames": 72,
+      "duration_s": 2.4,
+      "loop": true,
+      "impact": null
+    },
+    "run": {
+      "frames": 16,
+      "duration_s": 0.5333,
+      "loop": true,
+      "impact": null,
+      "run_ref_speed": 3.5,
+      "stride_m": 0.933,
+      "cycle_s": 0.533
+    },
+    "attack1": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "attack2": {
+      "frames": 20,
+      "duration_s": 0.6667,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a1": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a2": {
+      "frames": 25,
+      "duration_s": 0.8333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_a3": {
+      "frames": 30,
+      "duration_s": 1.0,
+      "loop": false,
+      "impact": 0.4
+    },
+    "cast_ult": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": false,
+      "impact": 0.4
+    },
+    "death": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": false,
+      "impact": null
+    },
+    "recall": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": true,
+      "impact": null
+    },
+    "idle_lobby": {
+      "frames": 96,
+      "duration_s": 3.2,
+      "loop": true,
+      "impact": null
+    },
+    "victory": {
+      "frames": 60,
+      "duration_s": 2.0,
+      "loop": false,
+      "impact": null
+    },
+    "channel": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    },
+    "dash": {
+      "frames": 15,
+      "duration_s": 0.5,
+      "loop": false,
+      "impact": null
+    },
+    "stunned": {
+      "frames": 40,
+      "duration_s": 1.3333,
+      "loop": true,
+      "impact": null
+    }
+  },
+  "glb_bytes_raw": 3037440,
+  "optimize": {
+    "ok": true,
+    "before": 3037440,
+    "after": 892688
+  },
+  "glb_bytes": 892688,
+  "three_load_test": {
+    "ok": false,
+    "log": [
+      "[three] /home/user/forgeflow-games/games/vale/art/out/_template/_template.glb (872 KiB; extensions: EXT_texture_webp, KHR_mesh_quantization)",
+      "  webp: _template_base 1024x1024 139K, _template_normal 1024x1024 43K, _template_orm 1024x1024 105K",
+      "  skinned meshes: _template(11984v), _template_accent(252v)",
+      "  bones: 27 (root hips spine chest neck head shoulderL upper_armL forearmL handL propL shoulderR upper_armR forearmR handR propR x_staff_tip thighL shinL footL toeL thighR shinR footR toeR x_robe_b_1 x_robe_f_1)",
+      "  clips: attack1:0.667s/22tr, attack2:0.667s/22tr, cast_a1:0.833s/22tr, cast_a2:0.833s/22tr, cast_a3:1.000s/22tr, cast_ult:1.333s/22tr, channel:1.333s/22tr, dash:0.500s/23tr, death:1.333s/22tr, idle:2.400s/22tr, idle_lobby:3.200s/22tr, recall:2.000s/22tr, run:0.533s/24tr, stunned:1.333s/22tr, victory:2.000s/22tr",
+      "  tracks checked: 333; materials: body, accent; textures: body.map=1024x1024, body.normalMap=1024x1024, body.roughnessMap=1024x1024, body.metalnessMap=1024x1024, body.aoMap=1024x1024",
+      "  tris: 14209; bind-pose bounds (three units, Y up): 1.54 x 2.18 x 1.86; facing (-0.00, 1.00); head bone y 1.64; runRefSpeed 3.5",
+      "  run: 16 f, planted samples 0, max foot-speed error null%",
+      "[three] FAIL (1)",
+      "  - run: no planted-foot frames found"
+    ]
+  },
+  "renders": {
+    "files": {
+      "splash": "art/out/_template/splash.png",
+      "portrait": "art/out/_template/portrait.png",
+      "icon": "art/out/_template/icon.png",
+      "turntable": "art/renders/_template/turntable.png"
+    },
+    "seconds": {
+      "splash": 80.79,
+      "portrait": 34.46,
+      "icon": 4.52,
+      "turntable": 24.81
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "facing": [
+      0,
+      1
+    ],
+    "bindBox": [
+      [
+        -0.771,
+        0,
+        -0.663
+      ],
+      [
+        0.771,
+        2.177,
+        1.202
+      ]
+    ],
+    "headY": 1.642,
+    "accentPct": 1.09,
+    "accentTopHalfPct": 100,
+    "heightPx1080": 117,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 15,
+    "out": "art/renders/_template/three__template.png",
+    "seconds": 13.3,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.01,
+      "materials": 0.82,
+      "model": 9.49,
+      "lows_bind": 6.04,
+      "uv": 18.13,
+      "bake": 20.84,
+      "clips": 0.4,
+      "export": 3.65,
+      "optimize": 1.78,
+      "load_test": 0.47,
+      "render": 144.7,
+      "three_qa": 13.55,
+      "cache": 0.07
+    },
+    "total_s": 220.04
+  },
+  "run_ref_speed": 3.5,
+  "height_m": 1.9
+}

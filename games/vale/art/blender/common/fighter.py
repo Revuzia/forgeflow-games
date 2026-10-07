@@ -54,6 +54,7 @@ class Context:
     chains: dict = field(default_factory=dict)
     skin: dict | None = None                 # the skin being built (None = base)
     palette: dict = field(default_factory=dict)
+    gradient: dict | None = None             # the value gradient the materials were built with
     body_high: bpy.types.Object | None = None
     targets: list = field(default_factory=list)
     args: object = None

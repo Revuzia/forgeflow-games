@@ -41,8 +41,9 @@ for (const f of files) {
       for (const k of ['model', 'portrait', 'splash']) if (s[k] && !assetExists(s[k])) errs.push(`[${i}].${k} ${s[k]} not in art/out`);
     }
   }
-  // ids starting with '_' (the technical proof) are not game content: the Id regex may reject them
-  const proof = rel.includes('/_proof/');
+  // technical builds (art/out/_<name>/: the proof, the look-dev reference, the template demo) use ids
+  // starting with '_' that are not game content: the Id regex may reject them
+  const proof = /(^|\/)out\/_[^/]+\//.test(rel);
   const real = proof ? errs.filter((e) => !/\bid\b|fighter:/.test(e)) : errs;
   if (real.length) { bad++; console.log(`[art.json] FAIL ${rel}`); for (const e of real) console.log(`   - ${e}`); }
   else console.log(`[art.json] OK   ${rel}${errs.length ? ` (proof-only id warnings: ${errs.length})` : ''}`);

@@ -1,0 +1,1832 @@
+{
+  "$comment": "VALE items (CONTRACT §4 ItemDef, §5.6 shop). Frames: starter/consumable/basic without components = Slate (1 tick); basic WITH components = Verdigris (2); core = Gloam (3); apex = Noonlit (4, one per fighter: uniqueGroup noonlit); boots = Slate base, Verdigris upgrades. cost is the TOTAL price incl. components. Pools: rift = all but noon_tonic; bridge = no starters, no fray tonic; fray = Verdigris + boots + noon_tonic only (finished pieces, no wards, no Gloam/Noonlit). Build trees, class builds and calibration: _design/sections/items_setup.md. Validated by _harness/probe_items.ts.",
+  "items": [
+    {
+      "id": "notched_blade",
+      "name": "Notched Blade",
+      "desc": "A road start for attack fighters. Each Wick or monster you finish heals you for 6 health.",
+      "icon": "assets/ui/icons/items/notched_blade.svg",
+      "tier": "starter",
+      "cost": 430,
+      "stats": {
+        "ad": 8,
+        "hp": 80
+      },
+      "passives": [
+        {
+          "id": "notched_blade_keep_fed",
+          "name": "Keep Fed",
+          "desc": "Each Wick or monster you finish heals you for 6 health.",
+          "icon": "assets/ui/icons/items/notched_blade.svg",
+          "triggers": [
+            {
+              "on": "kill",
+              "filter": {
+                "enemies": true,
+                "fighters": false,
+                "minions": true,
+                "monsters": true,
+                "summons": false
+              },
+              "effects": [
+                {
+                  "op": "heal",
+                  "amount": 6,
+                  "to": "self"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "uniqueGroup": "starter",
+      "tags": [
+        "attack",
+        "sustain"
+      ],
+      "pools": [
+        "rift"
+      ]
+    },
+    {
+      "id": "reading_lens",
+      "name": "Reading Lens",
+      "desc": "A road start for casters. When one of your abilities hits an enemy fighter, heal 10 + 1 per level. Once every 6 s.",
+      "icon": "assets/ui/icons/items/reading_lens.svg",
+      "tier": "starter",
+      "cost": 430,
+      "stats": {
+        "ap": 12,
+        "hp": 60,
+        "resRegen": 0.25
+      },
+      "passives": [
+        {
+          "id": "reading_lens_steady_glow",
+          "name": "Steady Glow",
+          "desc": "When one of your abilities hits an enemy fighter, heal 10 + 1 per level. Once every 6 s.",
+          "icon": "assets/ui/icons/items/reading_lens.svg",
+          "triggers": [
+            {
+              "on": "abilityHit",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "cooldown": 6,
+              "effects": [
+                {
+                  "op": "heal",
+                  "amount": {
+                    "base": 10,
+                    "level": 1
+                  },
+                  "to": "self"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "uniqueGroup": "starter",
+      "tags": [
+        "magic",
+        "sustain"
+      ],
+      "pools": [
+        "rift"
+      ]
+    },
+    {
+      "id": "ironstone_guard",
+      "name": "Ironstone Guard",
+      "desc": "A road start for front lines and Tenders. When an enemy fighter damages you, gain a shield of 20 + 4 per level for 2 s. Once every 10 s.",
+      "icon": "assets/ui/icons/items/ironstone_guard.svg",
+      "tier": "starter",
+      "cost": 430,
+      "stats": {
+        "hp": 120,
+        "hpRegen": 1.2
+      },
+      "passives": [
+        {
+          "id": "ironstone_guard_brace",
+          "name": "Brace",
+          "desc": "When an enemy fighter damages you, gain a shield of 20 + 4 per level for 2 s. Once every 10 s.",
+          "icon": "assets/ui/icons/items/ironstone_guard.svg",
+          "triggers": [
+            {
+              "on": "damageTaken",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "cooldown": 10,
+              "effects": [
+                {
+                  "op": "shield",
+                  "amount": {
+                    "base": 20,
+                    "level": 4
+                  },
+                  "duration": 2,
+                  "to": "self"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "vfx": "lib_shield_up",
+            "sfx": "c_shield"
+          }
+        }
+      ],
+      "uniqueGroup": "starter",
+      "tags": [
+        "defense",
+        "support"
+      ],
+      "pools": [
+        "rift"
+      ]
+    },
+    {
+      "id": "grove_sickle",
+      "name": "Grove Sickle",
+      "desc": "For the jungle. Basic attacks on monsters deal 20 + 3 per level bonus magic damage and heal you for 6 + 1 per level.",
+      "icon": "assets/ui/icons/items/grove_sickle.svg",
+      "tier": "starter",
+      "cost": 350,
+      "stats": {
+        "hpRegen": 0.8
+      },
+      "passives": [
+        {
+          "id": "grove_sickle_grove_work",
+          "name": "Grove Work",
+          "desc": "Basic attacks on monsters deal 20 + 3 per level bonus magic damage and heal you for 6 + 1 per level.",
+          "icon": "assets/ui/icons/items/grove_sickle.svg",
+          "triggers": [
+            {
+              "on": "attackHit",
+              "filter": {
+                "enemies": true,
+                "fighters": false,
+                "minions": false,
+                "monsters": true,
+                "summons": false
+              },
+              "effects": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": 20,
+                    "level": 3
+                  },
+                  "type": "magic",
+                  "to": "hit"
+                },
+                {
+                  "op": "heal",
+                  "amount": {
+                    "base": 6,
+                    "level": 1
+                  },
+                  "to": "self"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "hitVfx": "lib_hit_magic"
+          }
+        }
+      ],
+      "uniqueGroup": "starter",
+      "tags": [
+        "jungle",
+        "sustain"
+      ],
+      "pools": [
+        "rift"
+      ]
+    },
+    {
+      "id": "sap_flask",
+      "name": "Sap Flask",
+      "desc": "Drink to heal 12 health at once and every second after, 120 in all over 9 s. Holds up to 5.",
+      "icon": "assets/ui/icons/items/sap_flask.svg",
+      "tier": "consumable",
+      "cost": 50,
+      "stats": {},
+      "active": {
+        "id": "sap_flask_drink",
+        "name": "Drink",
+        "desc": "Heal 12 health at once and every second after, 120 in all over 9 s.",
+        "icon": "assets/ui/icons/items/sap_flask.svg",
+        "maxRank": 1,
+        "cooldown": 1,
+        "cost": 0,
+        "costKind": "none",
+        "targeting": {
+          "kind": "none"
+        },
+        "castTime": 0,
+        "effects": [
+          {
+            "op": "repeat",
+            "count": 10,
+            "interval": 1,
+            "effects": [
+              {
+                "op": "heal",
+                "amount": 12,
+                "to": "self"
+              }
+            ]
+          }
+        ],
+        "ai": {
+          "use": [
+            "heal"
+          ],
+          "castWhenSelfHpBelow": 0.55
+        },
+        "present": {
+          "vfx": "lib_heal_rise",
+          "sfx": "c_heal"
+        }
+      },
+      "consumable": {
+        "charges": 1,
+        "maxStack": 5
+      },
+      "tags": [
+        "sustain"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ],
+      "sellRatio": 0.4
+    },
+    {
+      "id": "spare_lamp",
+      "name": "Spare Lamp",
+      "desc": "Set a Hooded Lamp up to 7 m away. Enemies cannot see it, and it shows 9 m around it for 2:30. You keep 3 lit; a 4th puts out your oldest. Holds up to 2.",
+      "icon": "assets/ui/icons/items/spare_lamp.svg",
+      "tier": "consumable",
+      "cost": 75,
+      "stats": {},
+      "active": {
+        "id": "spare_lamp_set",
+        "name": "Set a Lamp",
+        "desc": "Set a Hooded Lamp up to 7 m away that shows 9 m around it for 2:30.",
+        "icon": "assets/ui/icons/items/spare_lamp.svg",
+        "maxRank": 1,
+        "cooldown": 1,
+        "cost": 0,
+        "costKind": "none",
+        "targeting": {
+          "kind": "point",
+          "range": 7,
+          "indicator": {
+            "kind": "circle",
+            "radius": 0.6
+          }
+        },
+        "castTime": 0,
+        "effects": [
+          {
+            "op": "summon",
+            "unit": "hooded_lamp",
+            "count": 1,
+            "duration": 150,
+            "at": "point",
+            "maxAlive": 3
+          }
+        ],
+        "ai": {
+          "use": [
+            "vision"
+          ]
+        },
+        "present": {
+          "vfx": "lib_summon_rise",
+          "sfx": "c_summon"
+        }
+      },
+      "consumable": {
+        "charges": 1,
+        "maxStack": 2
+      },
+      "tags": [
+        "vision",
+        "utility"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ],
+      "sellRatio": 0.4
+    },
+    {
+      "id": "noon_tonic",
+      "name": "Noon Tonic",
+      "desc": "Drink to heal 70 + 6% of your max health at once and move 25% faster for 2 s. 6 s between drinks. Holds up to 3.",
+      "icon": "assets/ui/icons/items/noon_tonic.svg",
+      "tier": "consumable",
+      "cost": 60,
+      "stats": {},
+      "active": {
+        "id": "noon_tonic_drink",
+        "name": "Quick Draught",
+        "desc": "Heal 70 + 6% of your max health at once and move 25% faster for 2 s.",
+        "icon": "assets/ui/icons/items/noon_tonic.svg",
+        "maxRank": 1,
+        "cooldown": 6,
+        "cost": 0,
+        "costKind": "none",
+        "targeting": {
+          "kind": "none"
+        },
+        "castTime": 0,
+        "effects": [
+          {
+            "op": "heal",
+            "amount": {
+              "base": 70,
+              "maxHp": 0.06
+            },
+            "to": "self"
+          },
+          {
+            "op": "status",
+            "status": "haste",
+            "duration": 2,
+            "power": 0.25,
+            "to": "self"
+          }
+        ],
+        "ai": {
+          "use": [
+            "heal"
+          ],
+          "castWhenSelfHpBelow": 0.5
+        },
+        "present": {
+          "vfx": "lib_heal_rise",
+          "sfx": "c_heal"
+        }
+      },
+      "consumable": {
+        "charges": 1,
+        "maxStack": 3
+      },
+      "tags": [
+        "sustain",
+        "speed"
+      ],
+      "pools": [
+        "fray"
+      ],
+      "sellRatio": 0.4
+    },
+    {
+      "id": "chalk_knife",
+      "name": "Chalk Knife",
+      "desc": "A plain blade. +10 attack. Builds into attack items.",
+      "icon": "assets/ui/icons/items/chalk_knife.svg",
+      "tier": "basic",
+      "cost": 350,
+      "stats": {
+        "ad": 10
+      },
+      "tags": [
+        "attack"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "glass_lens",
+      "name": "Glass Lens",
+      "desc": "A clear lens that gathers light. +20 power. Builds into magic items.",
+      "icon": "assets/ui/icons/items/glass_lens.svg",
+      "tier": "basic",
+      "cost": 420,
+      "stats": {
+        "ap": 20
+      },
+      "tags": [
+        "magic"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "ochre_brick",
+      "name": "Ochre Brick",
+      "desc": "A block of warm sandstone. +150 health. Builds into most defensive items.",
+      "icon": "assets/ui/icons/items/ochre_brick.svg",
+      "tier": "basic",
+      "cost": 400,
+      "stats": {
+        "hp": 150
+      },
+      "tags": [
+        "defense"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "felt_vest",
+      "name": "Felt Vest",
+      "desc": "Thick felt against blades. +15 armor.",
+      "icon": "assets/ui/icons/items/felt_vest.svg",
+      "tier": "basic",
+      "cost": 300,
+      "stats": {
+        "armor": 15
+      },
+      "tags": [
+        "defense"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "linen_wrap",
+      "name": "Linen Wrap",
+      "desc": "Pale linen against spells. +20 resist.",
+      "icon": "assets/ui/icons/items/linen_wrap.svg",
+      "tier": "basic",
+      "cost": 380,
+      "stats": {
+        "resist": 20
+      },
+      "tags": [
+        "defense"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "taut_cord",
+      "name": "Taut Cord",
+      "desc": "A bowstring pulled tight. +12% attack speed.",
+      "icon": "assets/ui/icons/items/taut_cord.svg",
+      "tier": "basic",
+      "cost": 300,
+      "stats": {
+        "attackSpeed": 0.12
+      },
+      "tags": [
+        "attack"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "hand_bell",
+      "name": "Hand Bell",
+      "desc": "Rings the hour a little sooner. +10 ability haste.",
+      "icon": "assets/ui/icons/items/hand_bell.svg",
+      "tier": "basic",
+      "cost": 280,
+      "stats": {
+        "haste": 10
+      },
+      "tags": [
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "lamp_oil",
+      "name": "Lamp Oil",
+      "desc": "Keeps a lamp burning. +0.8 Light regeneration per second.",
+      "icon": "assets/ui/icons/items/lamp_oil.svg",
+      "tier": "basic",
+      "cost": 280,
+      "stats": {
+        "resRegen": 0.8
+      },
+      "tags": [
+        "utility"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "whetted_knife",
+      "name": "Whetted Knife",
+      "desc": "+18 attack and +8 armor penetration.",
+      "icon": "assets/ui/icons/items/whetted_knife.svg",
+      "tier": "basic",
+      "cost": 900,
+      "components": [
+        "chalk_knife",
+        "chalk_knife"
+      ],
+      "stats": {
+        "ad": 18,
+        "armorPen": 8
+      },
+      "tags": [
+        "attack"
+      ],
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "banded_club",
+      "name": "Banded Club",
+      "desc": "+15 attack and +180 health.",
+      "icon": "assets/ui/icons/items/banded_club.svg",
+      "tier": "basic",
+      "cost": 1000,
+      "components": [
+        "chalk_knife",
+        "ochre_brick"
+      ],
+      "stats": {
+        "ad": 15,
+        "hp": 180
+      },
+      "tags": [
+        "attack",
+        "defense"
+      ],
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "glint_sling",
+      "name": "Glint Sling",
+      "desc": "+18% attack speed and +12% critical strike chance.",
+      "icon": "assets/ui/icons/items/glint_sling.svg",
+      "tier": "basic",
+      "cost": 950,
+      "components": [
+        "taut_cord",
+        "taut_cord"
+      ],
+      "stats": {
+        "attackSpeed": 0.18,
+        "crit": 0.12
+      },
+      "tags": [
+        "attack",
+        "crit"
+      ],
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "bellglass",
+      "name": "Bellglass",
+      "desc": "+30 power and +10 ability haste.",
+      "icon": "assets/ui/icons/items/bellglass.svg",
+      "tier": "basic",
+      "cost": 900,
+      "components": [
+        "glass_lens",
+        "hand_bell"
+      ],
+      "stats": {
+        "ap": 30,
+        "haste": 10
+      },
+      "tags": [
+        "magic",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "burning_glass",
+      "name": "Burning Glass",
+      "desc": "+35 power and +8 magic penetration.",
+      "icon": "assets/ui/icons/items/burning_glass.svg",
+      "tier": "basic",
+      "cost": 1050,
+      "components": [
+        "glass_lens",
+        "glass_lens"
+      ],
+      "stats": {
+        "ap": 35,
+        "magicPen": 8
+      },
+      "tags": [
+        "magic"
+      ],
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "felt_coat",
+      "name": "Felt Coat",
+      "desc": "+180 health and +20 armor.",
+      "icon": "assets/ui/icons/items/felt_coat.svg",
+      "tier": "basic",
+      "cost": 900,
+      "components": [
+        "felt_vest",
+        "ochre_brick"
+      ],
+      "stats": {
+        "hp": 180,
+        "armor": 20
+      },
+      "tags": [
+        "defense"
+      ],
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "linen_hood",
+      "name": "Linen Hood",
+      "desc": "+180 health and +22 resist.",
+      "icon": "assets/ui/icons/items/linen_hood.svg",
+      "tier": "basic",
+      "cost": 950,
+      "components": [
+        "linen_wrap",
+        "ochre_brick"
+      ],
+      "stats": {
+        "hp": 180,
+        "resist": 22
+      },
+      "tags": [
+        "defense"
+      ],
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "ironstone_mantle",
+      "name": "Ironstone Mantle",
+      "desc": "When an enemy fighter damages you, gain 4 armor and 4 resist for 4 s, stacking up to 5 times (one stack every 0.5 s at most).",
+      "icon": "assets/ui/icons/items/ironstone_mantle.svg",
+      "tier": "core",
+      "cost": 2600,
+      "components": [
+        "felt_coat",
+        "felt_coat"
+      ],
+      "stats": {
+        "hp": 400,
+        "armor": 60
+      },
+      "passives": [
+        {
+          "id": "ironstone_mantle_patience",
+          "name": "Stone Patience",
+          "desc": "When an enemy fighter damages you, gain 4 armor and 4 resist for 4 s, stacking up to 5 times.",
+          "icon": "assets/ui/icons/items/ironstone_mantle.svg",
+          "triggers": [
+            {
+              "on": "damageTaken",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "cooldown": 0.5,
+              "effects": [
+                {
+                  "op": "buff",
+                  "id": "ironstone_mantle_patience",
+                  "duration": 4,
+                  "stats": {
+                    "armor": 4,
+                    "resist": 4
+                  },
+                  "maxStacks": 5,
+                  "to": "self"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "uniqueGroup": "ironstone_mantle",
+      "tags": [
+        "defense"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "warning_bell",
+      "name": "Warning Bell",
+      "desc": "Take 6 hits from enemy fighters, each within 3 s of the last, and the bell rings: enemies within 4 m take 30 + 4% of your bonus health as magic damage and are slowed 30% for 1.5 s.",
+      "icon": "assets/ui/icons/items/warning_bell.svg",
+      "tier": "core",
+      "cost": 2650,
+      "components": [
+        "linen_hood",
+        "linen_wrap",
+        "hand_bell"
+      ],
+      "stats": {
+        "hp": 350,
+        "resist": 55,
+        "haste": 10
+      },
+      "passives": [
+        {
+          "id": "warning_bell_alarm",
+          "name": "Alarm",
+          "desc": "Every 6th hit you take from enemy fighters, each within 3 s of the last, rings out: enemies within 4 m take 30 + 4% bonus health magic damage and are slowed 30% for 1.5 s.",
+          "icon": "assets/ui/icons/items/warning_bell.svg",
+          "triggers": [
+            {
+              "on": "damageTaken",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "cooldown": 0.4,
+              "effects": [
+                {
+                  "op": "counter",
+                  "counter": "warning_bell_hits",
+                  "add": 1,
+                  "max": 6,
+                  "duration": 3
+                },
+                {
+                  "op": "if",
+                  "cond": {
+                    "kind": "counterAtLeast",
+                    "counter": "warning_bell_hits",
+                    "n": 6
+                  },
+                  "then": [
+                    {
+                      "op": "counter",
+                      "counter": "warning_bell_hits",
+                      "add": 0,
+                      "reset": true
+                    },
+                    {
+                      "op": "area",
+                      "shape": {
+                        "kind": "circle",
+                        "radius": 4
+                      },
+                      "at": "self",
+                      "delay": 0,
+                      "filter": {
+                        "enemies": true,
+                        "fighters": true,
+                        "minions": true,
+                        "monsters": true,
+                        "summons": true
+                      },
+                      "onHit": [
+                        {
+                          "op": "damage",
+                          "amount": {
+                            "base": 30,
+                            "bonusHp": 0.04
+                          },
+                          "type": "magic",
+                          "to": "hit"
+                        },
+                        {
+                          "op": "status",
+                          "status": "slow",
+                          "duration": 1.5,
+                          "power": 0.3,
+                          "to": "hit"
+                        }
+                      ],
+                      "present": {
+                        "vfx": "lib_ring_pulse",
+                        "sfx": "c_burst_lumen",
+                        "hitVfx": "lib_slow_glass"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "uniqueGroup": "warning_bell",
+      "tags": [
+        "defense",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "dialcutter",
+      "name": "Dialcutter",
+      "desc": "Each ability you cast gives you 6 attack and 3% move speed for 5 s, stacking up to 4 times.",
+      "icon": "assets/ui/icons/items/dialcutter.svg",
+      "tier": "core",
+      "cost": 2800,
+      "components": [
+        "banded_club",
+        "chalk_knife",
+        "hand_bell"
+      ],
+      "stats": {
+        "ad": 40,
+        "hp": 300,
+        "haste": 15
+      },
+      "passives": [
+        {
+          "id": "dialcutter_pace",
+          "name": "Gathering Pace",
+          "desc": "Each ability you cast gives you 6 attack and 3% move speed for 5 s, stacking up to 4 times.",
+          "icon": "assets/ui/icons/items/dialcutter.svg",
+          "triggers": [
+            {
+              "on": "abilityCast",
+              "cooldown": 0.5,
+              "effects": [
+                {
+                  "op": "buff",
+                  "id": "dialcutter_pace",
+                  "duration": 5,
+                  "stats": {
+                    "ad": 6,
+                    "moveSpeedPct": 0.03
+                  },
+                  "maxStacks": 4,
+                  "to": "self",
+                  "present": {
+                    "vfx": "lib_empower"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "uniqueGroup": "dialcutter",
+      "tags": [
+        "attack",
+        "defense",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "shadecut",
+      "name": "Shadecut",
+      "desc": "Damaging an enemy fighter below 40% health deals 20 + 8% of its missing health as bonus physical damage. Once every 6 s per fighter.",
+      "icon": "assets/ui/icons/items/shadecut.svg",
+      "tier": "core",
+      "cost": 2800,
+      "components": [
+        "whetted_knife",
+        "whetted_knife"
+      ],
+      "stats": {
+        "ad": 50,
+        "armorPen": 18,
+        "haste": 10
+      },
+      "passives": [
+        {
+          "id": "shadecut_cut_short",
+          "name": "Cut Short",
+          "desc": "Damaging an enemy fighter below 40% health deals 20 + 8% of its missing health as bonus physical damage. Once every 6 s per fighter.",
+          "icon": "assets/ui/icons/items/shadecut.svg",
+          "triggers": [
+            {
+              "on": "damageDealt",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "perTargetCooldown": 6,
+              "cond": {
+                "kind": "targetHpBelow",
+                "pct": 0.4
+              },
+              "effects": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": 20,
+                    "targetMissingHp": 0.08
+                  },
+                  "type": "phys",
+                  "to": "hit"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "hitVfx": "lib_hit_phys_heavy",
+            "hitSfx": "c_hit_phys_heavy"
+          }
+        }
+      ],
+      "uniqueGroup": "shadecut",
+      "tags": [
+        "attack",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "splitlight_bow",
+      "name": "Splitlight Bow",
+      "desc": "Every third basic attack, each within 4 s of the last, deals 15 + 35% bonus attack as extra physical damage. The extra hit can crit.",
+      "icon": "assets/ui/icons/items/splitlight_bow.svg",
+      "tier": "core",
+      "cost": 2900,
+      "components": [
+        "glint_sling",
+        "chalk_knife",
+        "chalk_knife"
+      ],
+      "stats": {
+        "ad": 40,
+        "crit": 0.25,
+        "attackSpeed": 0.12
+      },
+      "passives": [
+        {
+          "id": "splitlight_bow_count",
+          "name": "Count of Three",
+          "desc": "Every third basic attack, each within 4 s of the last, deals 15 + 35% bonus attack as extra physical damage that can crit.",
+          "icon": "assets/ui/icons/items/splitlight_bow.svg",
+          "triggers": [
+            {
+              "on": "attackHit",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": true,
+                "monsters": true,
+                "summons": true
+              },
+              "effects": [
+                {
+                  "op": "counter",
+                  "counter": "splitlight_count",
+                  "add": 1,
+                  "max": 3,
+                  "duration": 4
+                },
+                {
+                  "op": "if",
+                  "cond": {
+                    "kind": "counterAtLeast",
+                    "counter": "splitlight_count",
+                    "n": 3
+                  },
+                  "then": [
+                    {
+                      "op": "counter",
+                      "counter": "splitlight_count",
+                      "add": 0,
+                      "reset": true
+                    },
+                    {
+                      "op": "damage",
+                      "amount": {
+                        "base": 15,
+                        "bonusAd": 0.35
+                      },
+                      "type": "phys",
+                      "to": "hit",
+                      "canCrit": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "present": {
+            "hitVfx": "lib_crit",
+            "hitSfx": "c_crit"
+          }
+        }
+      ],
+      "uniqueGroup": "splitlight_bow",
+      "tags": [
+        "attack",
+        "crit"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "focal_lens",
+      "name": "Focal Lens",
+      "desc": "Your first ability hit on an enemy fighter every 8 s deals 40 + 3 per level + 15% power as bonus magic damage.",
+      "icon": "assets/ui/icons/items/focal_lens.svg",
+      "tier": "core",
+      "cost": 2800,
+      "components": [
+        "bellglass",
+        "glass_lens",
+        "lamp_oil"
+      ],
+      "stats": {
+        "ap": 90,
+        "haste": 15,
+        "resRegen": 0.6
+      },
+      "passives": [
+        {
+          "id": "focal_lens_point",
+          "name": "Burning Point",
+          "desc": "Your first ability hit on an enemy fighter every 8 s deals 40 + 3 per level + 15% power as bonus magic damage.",
+          "icon": "assets/ui/icons/items/focal_lens.svg",
+          "triggers": [
+            {
+              "on": "abilityHit",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "perTargetCooldown": 8,
+              "effects": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": 40,
+                    "level": 3,
+                    "ap": 0.15
+                  },
+                  "type": "magic",
+                  "to": "hit"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "hitVfx": "lib_hit_magic",
+            "hitSfx": "c_hit_magic"
+          }
+        }
+      ],
+      "uniqueGroup": "focal_lens",
+      "tags": [
+        "magic",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "inkglass_rod",
+      "name": "Inkglass Rod",
+      "desc": "Ability hits on enemy fighters lower their resist by 15% for 4 s.",
+      "icon": "assets/ui/icons/items/inkglass_rod.svg",
+      "tier": "core",
+      "cost": 2800,
+      "components": [
+        "burning_glass",
+        "ochre_brick",
+        "glass_lens"
+      ],
+      "stats": {
+        "ap": 70,
+        "hp": 250,
+        "magicPen": 10
+      },
+      "passives": [
+        {
+          "id": "inkglass_rod_shade",
+          "name": "Ink Shade",
+          "desc": "Ability hits on enemy fighters lower their resist by 15% for 4 s.",
+          "icon": "assets/ui/icons/items/inkglass_rod.svg",
+          "triggers": [
+            {
+              "on": "abilityHit",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "effects": [
+                {
+                  "op": "status",
+                  "status": "resist_shred",
+                  "duration": 4,
+                  "power": 0.15,
+                  "to": "hit"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "uniqueGroup": "inkglass_rod",
+      "tags": [
+        "magic",
+        "defense"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "kindly_lamp",
+      "name": "Kindly Lamp",
+      "desc": "When you cast an ability, you and allied fighters within 6 m move 15% faster and gain a shield of 20 + 4 per level for 2 s. Once every 6 s.",
+      "icon": "assets/ui/icons/items/kindly_lamp.svg",
+      "tier": "core",
+      "cost": 2400,
+      "components": [
+        "bellglass",
+        "lamp_oil",
+        "ochre_brick"
+      ],
+      "stats": {
+        "ap": 35,
+        "healShieldPower": 0.1,
+        "haste": 15,
+        "hp": 150,
+        "resRegen": 0.8
+      },
+      "passives": [
+        {
+          "id": "kindly_lamp_kind_light",
+          "name": "Kind Light",
+          "desc": "When you cast an ability, you and allied fighters within 6 m move 15% faster and gain a shield of 20 + 4 per level for 2 s. Once every 6 s.",
+          "icon": "assets/ui/icons/items/kindly_lamp.svg",
+          "triggers": [
+            {
+              "on": "abilityCast",
+              "cooldown": 6,
+              "effects": [
+                {
+                  "op": "area",
+                  "shape": {
+                    "kind": "circle",
+                    "radius": 6
+                  },
+                  "at": "self",
+                  "delay": 0,
+                  "filter": {
+                    "enemies": false,
+                    "allies": true,
+                    "self": true,
+                    "fighters": true,
+                    "minions": false,
+                    "monsters": false,
+                    "summons": false
+                  },
+                  "onHit": [
+                    {
+                      "op": "status",
+                      "status": "haste",
+                      "duration": 2,
+                      "power": 0.15,
+                      "to": "hit"
+                    },
+                    {
+                      "op": "shield",
+                      "amount": {
+                        "base": 20,
+                        "level": 4
+                      },
+                      "duration": 2,
+                      "to": "hit"
+                    }
+                  ],
+                  "present": {
+                    "vfx": "lib_ring_pulse",
+                    "sfx": "c_shield",
+                    "hitVfx": "lib_shield_up"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "uniqueGroup": "kindly_lamp",
+      "tags": [
+        "support",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "sunstring",
+      "name": "Sunstring",
+      "desc": "Basic attacks deal 15 + 2.5% of the target's current health as bonus magic damage (60% against Wicks and monsters). You can carry one Noonlit item.",
+      "icon": "assets/ui/icons/items/sunstring.svg",
+      "tier": "apex",
+      "cost": 3400,
+      "components": [
+        "glint_sling",
+        "glint_sling",
+        "chalk_knife"
+      ],
+      "stats": {
+        "ad": 30,
+        "attackSpeed": 0.45,
+        "crit": 0.2,
+        "lifesteal": 0.06
+      },
+      "passives": [
+        {
+          "id": "sunstring_glare",
+          "name": "Noon Glare",
+          "desc": "Basic attacks deal 15 + 2.5% of the target's current health as bonus magic damage (60% against Wicks and monsters).",
+          "icon": "assets/ui/icons/items/sunstring.svg",
+          "triggers": [
+            {
+              "on": "attackHit",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": true,
+                "monsters": true,
+                "summons": true
+              },
+              "effects": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": 15,
+                    "targetCurrentHp": 0.025
+                  },
+                  "type": "magic",
+                  "to": "hit",
+                  "minionMult": 0.6,
+                  "monsterMult": 0.6
+                }
+              ]
+            }
+          ],
+          "present": {
+            "hitVfx": "lib_hit_magic"
+          }
+        }
+      ],
+      "uniqueGroup": "noonlit",
+      "tags": [
+        "attack",
+        "crit",
+        "onhit",
+        "sustain"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "noonglass",
+      "name": "Noonglass",
+      "desc": "Ability hits mark enemy fighters for 6 s. The third mark bursts for 50 + 20% power + 4% of their max health as magic damage. You can carry one Noonlit item.",
+      "icon": "assets/ui/icons/items/noonglass.svg",
+      "tier": "apex",
+      "cost": 3500,
+      "components": [
+        "burning_glass",
+        "bellglass",
+        "glass_lens"
+      ],
+      "stats": {
+        "ap": 110,
+        "haste": 15,
+        "magicPenPct": 0.15
+      },
+      "passives": [
+        {
+          "id": "noonglass_gather",
+          "name": "Gather Light",
+          "desc": "Ability hits mark enemy fighters for 6 s (one mark every 0.25 s). The third mark bursts for 50 + 20% power + 4% of their max health as magic damage.",
+          "icon": "assets/ui/icons/items/noonglass.svg",
+          "triggers": [
+            {
+              "on": "abilityHit",
+              "filter": {
+                "enemies": true,
+                "fighters": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "cooldown": 0.25,
+              "effects": [
+                {
+                  "op": "mark",
+                  "mark": "noonglass_light",
+                  "duration": 6,
+                  "stacks": 1,
+                  "max": 3,
+                  "to": "hit"
+                },
+                {
+                  "op": "if",
+                  "cond": {
+                    "kind": "targetHasMark",
+                    "mark": "noonglass_light",
+                    "min": 3
+                  },
+                  "then": [
+                    {
+                      "op": "consumeMark",
+                      "mark": "noonglass_light",
+                      "perStack": [],
+                      "to": "hit"
+                    },
+                    {
+                      "op": "damage",
+                      "amount": {
+                        "base": 50,
+                        "ap": 0.2,
+                        "targetMaxHp": 0.04
+                      },
+                      "type": "magic",
+                      "to": "hit"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "present": {
+            "hitVfx": "lib_burst_lumen",
+            "hitSfx": "c_burst_lumen"
+          }
+        }
+      ],
+      "uniqueGroup": "noonlit",
+      "tags": [
+        "magic",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "seatstone",
+      "name": "Seatstone",
+      "desc": "Active: gain a shield of 12% of your max health for 3 s. After 0.4 s the ground within 4.5 m cracks: enemies take 50 + 4% of your bonus health as magic damage and are slowed 40%, fading over 2 s. 60 s cooldown. You can carry one Noonlit item.",
+      "icon": "assets/ui/icons/items/seatstone.svg",
+      "tier": "apex",
+      "cost": 3300,
+      "components": [
+        "felt_coat",
+        "linen_hood",
+        "ochre_brick"
+      ],
+      "stats": {
+        "hp": 600,
+        "armor": 35,
+        "resist": 35,
+        "haste": 10
+      },
+      "active": {
+        "id": "seatstone_hold",
+        "name": "Hold Ground",
+        "desc": "Gain a shield of 12% of your max health for 3 s. After 0.4 s, enemies within 4.5 m take 50 + 4% bonus health magic damage and are slowed 40%, fading over 2 s.",
+        "icon": "assets/ui/icons/items/seatstone.svg",
+        "maxRank": 1,
+        "cooldown": 60,
+        "cost": 0,
+        "costKind": "none",
+        "targeting": {
+          "kind": "none",
+          "indicator": {
+            "kind": "circle",
+            "radius": 4.5
+          }
+        },
+        "castTime": 0.2,
+        "effects": [
+          {
+            "op": "shield",
+            "amount": {
+              "base": 0,
+              "maxHp": 0.12
+            },
+            "duration": 3,
+            "to": "self"
+          },
+          {
+            "op": "area",
+            "shape": {
+              "kind": "circle",
+              "radius": 4.5
+            },
+            "at": "self",
+            "delay": 0.4,
+            "filter": {
+              "enemies": true,
+              "fighters": true,
+              "minions": true,
+              "monsters": true,
+              "summons": true
+            },
+            "onHit": [
+              {
+                "op": "damage",
+                "amount": {
+                  "base": 50,
+                  "bonusHp": 0.04
+                },
+                "type": "magic",
+                "to": "hit"
+              },
+              {
+                "op": "status",
+                "status": "slow",
+                "duration": 2,
+                "power": 0.4,
+                "decay": true,
+                "to": "hit"
+              }
+            ],
+            "present": {
+              "vfx": "lib_slam_ground",
+              "sfx": "c_slam",
+              "telegraph": "everyone"
+            }
+          }
+        ],
+        "ai": {
+          "use": [
+            "cc",
+            "engage",
+            "shield"
+          ],
+          "minTargets": 1
+        },
+        "present": {
+          "vfx": "lib_shield_up",
+          "sfx": "c_shield"
+        }
+      },
+      "uniqueGroup": "noonlit",
+      "tags": [
+        "defense",
+        "utility"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "hourcleaver",
+      "name": "Hourcleaver",
+      "desc": "When damage drops you below 35% health, gain a shield of 100 + 35% of your bonus health and 30% tenacity for 3 s. Once every 60 s. You can carry one Noonlit item.",
+      "icon": "assets/ui/icons/items/hourcleaver.svg",
+      "tier": "apex",
+      "cost": 3400,
+      "components": [
+        "banded_club",
+        "whetted_knife",
+        "hand_bell"
+      ],
+      "stats": {
+        "ad": 50,
+        "hp": 250,
+        "haste": 15,
+        "omnivamp": 0.05
+      },
+      "passives": [
+        {
+          "id": "hourcleaver_last_hour",
+          "name": "Last Hour",
+          "desc": "When damage drops you below 35% health, gain a shield of 100 + 35% of your bonus health and 30% tenacity for 3 s. Once every 60 s.",
+          "icon": "assets/ui/icons/items/hourcleaver.svg",
+          "triggers": [
+            {
+              "on": "lowHp",
+              "cond": {
+                "kind": "selfHpBelow",
+                "pct": 0.35
+              },
+              "cooldown": 60,
+              "effects": [
+                {
+                  "op": "shield",
+                  "amount": {
+                    "base": 100,
+                    "bonusHp": 0.35
+                  },
+                  "duration": 3,
+                  "to": "self"
+                },
+                {
+                  "op": "buff",
+                  "id": "hourcleaver_last_hour",
+                  "duration": 3,
+                  "stats": {
+                    "tenacity": 0.3
+                  },
+                  "to": "self"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "vfx": "lib_shield_up",
+            "sfx": "c_shield"
+          }
+        }
+      ],
+      "uniqueGroup": "noonlit",
+      "tags": [
+        "attack",
+        "defense",
+        "sustain",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "shelter_lamp",
+      "name": "Shelter Lamp",
+      "desc": "Active: you and allied fighters within 7 m gain a shield of 60 + 10 per level + 25% power for 2.5 s. 75 s cooldown. You can carry one Noonlit item.",
+      "icon": "assets/ui/icons/items/shelter_lamp.svg",
+      "tier": "apex",
+      "cost": 3000,
+      "components": [
+        "bellglass",
+        "linen_hood",
+        "lamp_oil"
+      ],
+      "stats": {
+        "ap": 40,
+        "healShieldPower": 0.15,
+        "haste": 20,
+        "hp": 200,
+        "resist": 20
+      },
+      "active": {
+        "id": "shelter_lamp_shelter",
+        "name": "Shelter",
+        "desc": "You and allied fighters within 7 m gain a shield of 60 + 10 per level + 25% power for 2.5 s.",
+        "icon": "assets/ui/icons/items/shelter_lamp.svg",
+        "maxRank": 1,
+        "cooldown": 75,
+        "cost": 0,
+        "costKind": "none",
+        "targeting": {
+          "kind": "none",
+          "indicator": {
+            "kind": "circle",
+            "radius": 7
+          }
+        },
+        "castTime": 0.15,
+        "effects": [
+          {
+            "op": "area",
+            "shape": {
+              "kind": "circle",
+              "radius": 7
+            },
+            "at": "self",
+            "delay": 0,
+            "filter": {
+              "enemies": false,
+              "allies": true,
+              "self": true,
+              "fighters": true,
+              "minions": false,
+              "monsters": false,
+              "summons": false
+            },
+            "onHit": [
+              {
+                "op": "shield",
+                "amount": {
+                  "base": 60,
+                  "level": 10,
+                  "ap": 0.25
+                },
+                "duration": 2.5,
+                "to": "hit"
+              }
+            ],
+            "present": {
+              "vfx": "lib_ring_pulse",
+              "hitVfx": "lib_shield_up",
+              "telegraph": "ally_only"
+            }
+          }
+        ],
+        "ai": {
+          "use": [
+            "shield",
+            "buff"
+          ]
+        },
+        "present": {
+          "vfx": "lib_shield_up",
+          "sfx": "c_shield"
+        }
+      },
+      "uniqueGroup": "noonlit",
+      "tags": [
+        "support",
+        "haste",
+        "defense"
+      ],
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "road_sandals",
+      "name": "Road Sandals",
+      "desc": "+0.25 m/s move speed. Upgrades into one of three pairs.",
+      "icon": "assets/ui/icons/items/road_sandals.svg",
+      "tier": "boots",
+      "cost": 300,
+      "stats": {
+        "moveSpeed": 0.25
+      },
+      "uniqueGroup": "boots",
+      "tags": [
+        "speed"
+      ],
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "dust_runners",
+      "name": "Dust Runners",
+      "desc": "+0.42 m/s move speed and +25% attack speed.",
+      "icon": "assets/ui/icons/items/dust_runners.svg",
+      "tier": "boots",
+      "cost": 1050,
+      "components": [
+        "road_sandals"
+      ],
+      "stats": {
+        "moveSpeed": 0.42,
+        "attackSpeed": 0.25
+      },
+      "uniqueGroup": "boots",
+      "tags": [
+        "speed",
+        "attack"
+      ],
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "felt_treads",
+      "name": "Felt Treads",
+      "desc": "+0.42 m/s move speed, +12 armor, +12 resist and +15% tenacity.",
+      "icon": "assets/ui/icons/items/felt_treads.svg",
+      "tier": "boots",
+      "cost": 1100,
+      "components": [
+        "road_sandals"
+      ],
+      "stats": {
+        "moveSpeed": 0.42,
+        "armor": 12,
+        "resist": 12,
+        "tenacity": 0.15
+      },
+      "uniqueGroup": "boots",
+      "tags": [
+        "speed",
+        "defense"
+      ],
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "chalk_slippers",
+      "name": "Chalk Slippers",
+      "desc": "+0.42 m/s move speed, +10 ability haste and +8 magic penetration.",
+      "icon": "assets/ui/icons/items/chalk_slippers.svg",
+      "tier": "boots",
+      "cost": 1050,
+      "components": [
+        "road_sandals"
+      ],
+      "stats": {
+        "moveSpeed": 0.42,
+        "haste": 10,
+        "magicPen": 8
+      },
+      "uniqueGroup": "boots",
+      "tags": [
+        "speed",
+        "magic",
+        "haste"
+      ],
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    }
+  ]
+}

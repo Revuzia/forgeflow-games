@@ -1,0 +1,35 @@
+[
+  {
+    "id": "rishal_base",
+    "fighter": "rishal",
+    "name": "Rishal",
+    "tier": "base",
+    "model": "assets/fighters/rishal/rishal.glb",
+    "portrait": "assets/fighters/rishal/portrait.png",
+    "splash": "assets/fighters/rishal/splash.png",
+    "desc": "Rishal with his gull-grey crest, blade-shaped dawnglass visor and two reversed glass knives.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "rishal_chalkline",
+    "fighter": "rishal",
+    "name": "Chalkline Runner",
+    "tier": "standard",
+    "model": "assets/fighters/rishal/rishal_chalkline.glb",
+    "portrait": "assets/fighters/rishal/rishal_chalkline_portrait.png",
+    "splash": "assets/fighters/rishal/rishal_chalkline_splash.png",
+    "desc": "Ink-grey steel drawn over with chalk line-work, the way Aubade children sketch runners on the spire walls.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "rishal_lamplit",
+    "fighter": "rishal",
+    "name": "Lamplit Visor",
+    "tier": "deluxe",
+    "model": "assets/fighters/rishal/rishal_lamplit.glb",
+    "portrait": "assets/fighters/rishal/rishal_lamplit_portrait.png",
+    "splash": "assets/fighters/rishal/rishal_lamplit_splash.png",
+    "desc": "A smoked lampresin visor and walnut armour borrowed from the evening side, with a small lamp cage on the crest.",
+    "releasedIn": "2026.10.0"
+  }
+]

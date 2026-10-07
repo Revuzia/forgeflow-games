@@ -1,0 +1,537 @@
+{
+  "id": "dunsom",
+  "name": "Dunsom",
+  "title": "Dusk herder",
+  "class": "class_caster",
+  "role": "dialcross",
+  "secondaryRole": "lampglass",
+  "resource": "res_light",
+  "job": "Moves the enemy where his team wants them: pulled into the pool, pushed off the carry.",
+  "difficulty": 3,
+  "lore": "Before the light stopped, Dunsom drove his village's flocks home every dusk. The dusk never ended, so the flocks never went in, and he grew very good at moving things that did not want to be moved. He walks with a lantern hung from the hook of a crook taller than he is, and he speaks to enemies the way he once spoke to goats: kindly, firmly and without any doubt about where they will end up. He believes every quarrel can be settled if everyone simply stands in the right place.",
+  "tags": [
+    "serenade",
+    "ranged",
+    "mage",
+    "displacement",
+    "control",
+    "root"
+  ],
+  "base": {
+    "hp": 580,
+    "hpRegen": 1.3,
+    "res": 80,
+    "ad": 54,
+    "armor": 26,
+    "resist": 30,
+    "attackSpeed": 0.64,
+    "moveSpeed": 3.35
+  },
+  "growth": {
+    "hp": 94,
+    "hpRegen": 0.11,
+    "res": 5,
+    "ad": 2.9,
+    "armor": 4,
+    "resist": 1.3,
+    "attackSpeed": 0.02
+  },
+  "attack": {
+    "range": 5.2,
+    "windup": 0.3,
+    "damageType": "magic",
+    "projectileSpeed": 18,
+    "present": {
+      "vfx": "lib_bolt_shade",
+      "sfx": "c_shot_bolt_shade",
+      "hitVfx": "lib_hit_magic",
+      "hitSfx": "c_hit_magic"
+    }
+  },
+  "collisionRadius": 0.55,
+  "kit": {
+    "passive": {
+      "id": "dunsom_settling",
+      "name": "Settling",
+      "icon": "assets/ui/icons/abilities/dunsom_settling.svg",
+      "desc": "Enemies Dunsom displaces are Settled for {triggers.0.effects.0.duration}. Each time his abilities damage a Settled enemy, they take 12 bonus magic damage, plus 3 per level and 10% of his Power.",
+      "triggers": [
+        {
+          "on": "statusApplied",
+          "filter": {},
+          "cond": {
+            "kind": "targetHasStatus",
+            "status": "airborne"
+          },
+          "effects": [
+            {
+              "op": "mark",
+              "mark": "dunsom_settled",
+              "duration": 3,
+              "stacks": 1,
+              "max": 1,
+              "to": "hit"
+            }
+          ]
+        }
+      ],
+      "present": {
+        "vfx": "lib_mark_stack"
+      }
+    },
+    "a1": {
+      "id": "dunsom_draw_in",
+      "name": "Draw In",
+      "icon": "assets/ui/icons/abilities/dunsom_draw_in.svg",
+      "desc": "After 0.4 s, enemies within 3 m of a point up to 9 m away take {effects.0.onHit.0.amount} magic damage and are drawn up to 2 m toward its centre.",
+      "maxRank": 5,
+      "cooldown": [
+        8,
+        7.5,
+        7,
+        6.5,
+        6
+      ],
+      "cost": [
+        60,
+        65,
+        70,
+        75,
+        80
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "point",
+        "range": 9,
+        "indicator": {
+          "kind": "circle",
+          "radius": 3
+        }
+      },
+      "castTime": 0.25,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 3
+          },
+          "at": "point",
+          "delay": 0.4,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  70,
+                  110,
+                  150,
+                  190,
+                  230
+                ],
+                "ap": 0.6
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "if",
+              "cond": {
+                "kind": "targetHasMark",
+                "mark": "dunsom_settled"
+              },
+              "then": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": 12,
+                    "level": 3,
+                    "ap": 0.1
+                  },
+                  "type": "magic",
+                  "to": "hit"
+                }
+              ]
+            },
+            {
+              "op": "displace",
+              "mode": "toward_point",
+              "distance": 2,
+              "duration": 0.25,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_burst_shade",
+            "sfx": "c_burst_shade",
+            "telegraph": "everyone"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "cc",
+          "poke",
+          "waveclear"
+        ],
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_a1",
+        "sfx": "c_cast_shade",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "everyone"
+      }
+    },
+    "a2": {
+      "id": "dunsom_crook_sweep",
+      "name": "Crook Sweep",
+      "icon": "assets/ui/icons/abilities/dunsom_crook_sweep.svg",
+      "desc": "Dunsom sweeps a wave of dusk 7 m along the ground. Every enemy it touches takes {effects.0.onHit.0.amount} magic damage and is pushed up to 2.5 m toward the point he aimed at.",
+      "maxRank": 5,
+      "cooldown": [
+        11,
+        10.5,
+        10,
+        9.5,
+        9
+      ],
+      "cost": 70,
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 7,
+        "indicator": {
+          "kind": "rect",
+          "length": 7,
+          "width": 2
+        }
+      },
+      "castTime": 0.3,
+      "effects": [
+        {
+          "op": "projectile",
+          "speed": 24,
+          "range": 7,
+          "width": 2,
+          "from": "self",
+          "toward": "dir",
+          "pierce": 20,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  80,
+                  120,
+                  160,
+                  200,
+                  240
+                ],
+                "ap": 0.55
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "if",
+              "cond": {
+                "kind": "targetHasMark",
+                "mark": "dunsom_settled"
+              },
+              "then": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": 12,
+                    "level": 3,
+                    "ap": 0.1
+                  },
+                  "type": "magic",
+                  "to": "hit"
+                }
+              ]
+            },
+            {
+              "op": "displace",
+              "mode": "toward_point",
+              "distance": 2.5,
+              "duration": 0.3,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_orb_shade",
+            "sfx": "c_proj_whoosh"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "cc",
+          "waveclear"
+        ]
+      },
+      "present": {
+        "anim": "cast_a2",
+        "sfx": "c_cast_shade",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "everyone"
+      }
+    },
+    "a3": {
+      "id": "dunsom_step_through_dusk",
+      "name": "Step Through Dusk",
+      "icon": "assets/ui/icons/abilities/dunsom_step_through_dusk.svg",
+      "desc": "Dunsom steps through the dusk and reappears up to {effects.0.distance} away.",
+      "maxRank": 5,
+      "cooldown": [
+        15,
+        14,
+        13,
+        12,
+        11
+      ],
+      "cost": 60,
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 4,
+        "indicator": {
+          "kind": "rect",
+          "length": 4,
+          "width": 0.8
+        }
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "blink",
+          "distance": 4,
+          "to": "point"
+        }
+      ],
+      "ai": {
+        "use": [
+          "escape",
+          "gapclose"
+        ]
+      },
+      "present": {
+        "anim": "cast_a3",
+        "vfx": "lib_blink",
+        "sfx": "c_blink",
+        "telegraph": "ally_only"
+      }
+    },
+    "ult": {
+      "id": "dunsom_driving_hour",
+      "name": "Driving Hour",
+      "icon": "assets/ui/icons/abilities/dunsom_driving_hour.svg",
+      "desc": "Dunsom picks a point within 9 m. Every enemy within 5 m of him is hurled up to 5 m toward it, and 0.6 s later the point erupts: enemies within 2.5 m take {effects.2.onHit.0.amount} magic damage and are rooted for 1.25 s.",
+      "maxRank": 3,
+      "cooldown": [
+        120,
+        100,
+        80
+      ],
+      "cost": 100,
+      "costKind": "res",
+      "targeting": {
+        "kind": "point",
+        "range": 9,
+        "indicator": {
+          "kind": "circle",
+          "radius": 2.5
+        }
+      },
+      "castTime": 0.35,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 5
+          },
+          "at": "self",
+          "onHit": [
+            {
+              "op": "mark",
+              "mark": "dunsom_driven",
+              "duration": 0.5,
+              "stacks": 1,
+              "max": 1,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_ring_pulse",
+            "sfx": "c_ult_release",
+            "telegraph": "everyone"
+          }
+        },
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 14
+          },
+          "at": "point",
+          "onHit": [
+            {
+              "op": "if",
+              "cond": {
+                "kind": "targetHasMark",
+                "mark": "dunsom_driven"
+              },
+              "then": [
+                {
+                  "op": "consumeMark",
+                  "mark": "dunsom_driven",
+                  "perStack": [],
+                  "to": "hit"
+                },
+                {
+                  "op": "displace",
+                  "mode": "toward_point",
+                  "distance": 5,
+                  "duration": 0.5,
+                  "to": "hit"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "telegraph": "none"
+          }
+        },
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 2.5
+          },
+          "at": "point",
+          "delay": 0.6,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  200,
+                  300,
+                  400
+                ],
+                "ap": 0.8
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "if",
+              "cond": {
+                "kind": "targetHasMark",
+                "mark": "dunsom_settled"
+              },
+              "then": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": 12,
+                    "level": 3,
+                    "ap": 0.1
+                  },
+                  "type": "magic",
+                  "to": "hit"
+                }
+              ]
+            },
+            {
+              "op": "status",
+              "status": "root",
+              "duration": 1.25,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "dunsom_ult_drive",
+            "sfx": "c_burst_shade",
+            "telegraph": "everyone"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "cc",
+          "engage",
+          "damage"
+        ],
+        "minTargets": 2
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_windup",
+        "telegraph": "everyone"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/dunsom/dunsom.glb",
+    "portrait": "assets/fighters/dunsom/portrait.png",
+    "splash": "assets/fighters/dunsom/splash.png",
+    "icon": "assets/fighters/dunsom/icon.png",
+    "height": 2.05,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "artillery",
+    "preferredRange": 7,
+    "comboOrder": [
+      "a1",
+      "a2",
+      "ult",
+      "a3"
+    ]
+  },
+  "palette": {
+    "primary": "#4E4A5C",
+    "secondary": "#A48F6E"
+  }
+}

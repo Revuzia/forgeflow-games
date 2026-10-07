@@ -1,5 +1,5 @@
 {
-  "$comment": "VALE units (CONTRACT §5.4; behavior keys ONLY from src/sim/units/behavior_keys.ts). Wicks level up with wave time (growth applies); camps, structures and pickups always spawn at level 1, so their stats are written for the moment they matter. Structure counts per road, camp timers and pickup timers are recommendations for the MAPS lane in _design/sections/modes_economy.md §Units.",
+  "$comment": "VALE units (CONTRACT §5.4; behavior keys ONLY from src/sim/units/behavior_keys.ts). Wicks level up with wave time (growth applies); camps, structures and pickups always spawn at level 1, so their stats are written for the moment they matter. Placement counts, requires chains, camp/pickup timers and respawns for the MAPS lane: _design/sections/modes_economy.md §9. Order matters for practice: the FIRST unit with behavior.dummy is the training dummy.",
   "units": [
     {
       "id": "shieldwick",
@@ -125,7 +125,7 @@
       "id": "hourbell",
       "name": "Hourbell",
       "kind": "structure",
-      "base": { "hp": 4500, "ad": 0, "armor": 20, "resist": 20, "attackSpeed": 0, "moveSpeed": 0 },
+      "base": { "hp": 4500, "hpRegen": 6, "ad": 0, "armor": 20, "resist": 20, "attackSpeed": 0, "moveSpeed": 0 },
       "collisionRadius": 2.6,
       "bounty": { "gold": 0, "xp": 0 },
       "behavior": { "targetRules": "none" },
@@ -413,7 +413,7 @@
       "id": "longshade",
       "name": "Longshade",
       "kind": "monster",
-      "base": { "hp": 12000, "ad": 150, "armor": 60, "resist": 50, "attackSpeed": 0.55, "moveSpeed": 3.2 },
+      "base": { "hp": 14000, "ad": 150, "armor": 60, "resist": 50, "attackSpeed": 0.55, "moveSpeed": 3.2 },
       "attack": { "range": 3, "windup": 0.45, "damageType": "phys",
         "present": { "anim": "attack1", "sfx": "c_swing_heavy", "hitVfx": "lib_hit_phys_heavy", "hitSfx": "c_monster_hit" } },
       "collisionRadius": 2.0,
@@ -456,16 +456,16 @@
           "present": { "anim": "cast_a1" }
         },
         {
-          "id": "longshade_long_dark",
-          "name": "Long Dark",
-          "desc": "Pools shadow under a distant target. After 1 s it darkens for 4 s: 40 magic damage every 0.5 s and a 35% slow inside.",
-          "icon": "assets/ui/icons/abilities/longshade_long_dark.svg",
+          "id": "longshade_pooled_shade",
+          "name": "Pooled Shade",
+          "desc": "Pools shade under a distant target. After 1 s it darkens for 4 s: 40 magic damage every 0.5 s and a 35% slow inside.",
+          "icon": "assets/ui/icons/abilities/longshade_pooled_shade.svg",
           "maxRank": 1,
           "cooldown": 13,
           "targeting": { "kind": "point", "range": 10, "indicator": { "kind": "circle", "radius": 3.5 } },
           "castTime": 0.4,
           "effects": [
-            { "op": "zone", "id": "longshade_dark", "shape": { "kind": "circle", "radius": 3.5 }, "at": "point",
+            { "op": "zone", "id": "longshade_pooled_shade_zone", "shape": { "kind": "circle", "radius": 3.5 }, "at": "point",
               "duration": 4, "interval": 0.5, "delay": 1.0,
               "onTick": [
                 { "op": "damage", "amount": 40, "type": "magic", "to": "hit" },
@@ -477,10 +477,10 @@
           "present": { "anim": "cast_a2" }
         },
         {
-          "id": "longshade_eclipse_slam",
-          "name": "Eclipse Slam",
-          "desc": "Rises for 1.6 s, then slams: 320 magic damage and a 1 s stun to everyone within 5 m. Run while it rises.",
-          "icon": "assets/ui/icons/abilities/longshade_eclipse_slam.svg",
+          "id": "longshade_full_length",
+          "name": "Full Length",
+          "desc": "Rears to its full length for 1.6 s, then crashes down: 320 magic damage and a 1 s stun to everyone within 5 m. Run while it rises.",
+          "icon": "assets/ui/icons/abilities/longshade_full_length.svg",
           "maxRank": 1,
           "cooldown": 16,
           "targeting": { "kind": "none", "range": 5, "indicator": { "kind": "circle", "radius": 5 } },
@@ -504,22 +504,6 @@
         "clips": { "idle": "idle", "run": "run", "attack1": "attack1", "cast_a1": "cast_a1", "cast_a2": "cast_a2", "cast_a3": "cast_a3", "death": "death" } }
     },
 
-    {
-      "id": "sapglass",
-      "name": "Sapglass",
-      "kind": "pickup",
-      "base": { "hp": 1, "ad": 0, "attackSpeed": 0, "moveSpeed": 0 },
-      "collisionRadius": 0.6,
-      "behavior": {
-        "grant": [
-          { "op": "heal", "amount": { "base": 110, "maxHp": 0.1 }, "to": "self" },
-          { "op": "resource", "amount": { "base": 50, "maxRes": 0.1 } }
-        ]
-      },
-      "sightRange": 1,
-      "art": { "model": "assets/units/sapglass.glb", "height": 1.0, "icon": "assets/units/sapglass_icon.png",
-        "clips": { "idle": "idle" } }
-    },
     {
       "id": "sunmote_mend",
       "name": "Mending Sunmote",

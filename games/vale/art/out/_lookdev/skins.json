@@ -1,0 +1,16 @@
+[
+  {
+    "id": "_lookdev_reference_dawn",
+    "fighter": "_lookdev_reference",
+    "model": "assets/_lookdev/_lookdev_reference_dawn.glb",
+    "portrait": "assets/_lookdev/_lookdev_reference_dawn_portrait.png",
+    "splash": "assets/_lookdev/_lookdev_reference_dawn_splash.png"
+  },
+  {
+    "id": "_lookdev_reference_dusk",
+    "fighter": "_lookdev_reference",
+    "model": "assets/_lookdev/_lookdev_reference_dusk.glb",
+    "portrait": "assets/_lookdev/_lookdev_reference_dusk_portrait.png",
+    "splash": "assets/_lookdev/_lookdev_reference_dusk_splash.png"
+  }
+]

@@ -1,0 +1,525 @@
+{
+  "id": "rishal",
+  "name": "Rishal",
+  "title": "Glass runner",
+  "class": "class_striker",
+  "role": "dialcross",
+  "secondaryRole": "grovehunter",
+  "resource": "res_heat",
+  "job": "Cuts lines of glass through the back line and is gone before anyone can answer.",
+  "difficulty": 3,
+  "lore": "Rishal carried messages between the spires of the Glass Belfry until he got bored of stairs. Now he runs the long way across the dial, and wherever his feet strike the stone a thin road of dawnglass sets behind him. Aubade engineers have asked him to slow down so they can study it. He has not. He talks fast, decides faster and treats every fight as a race he is already winning. His two glass knives are older than he is; he says they were a gift, and changes the story each time.",
+  "tags": [
+    "aubade",
+    "melee",
+    "assassin",
+    "mobility",
+    "heat",
+    "marks"
+  ],
+  "base": {
+    "hp": 590,
+    "hpRegen": 1.4,
+    "ad": 62,
+    "armor": 28,
+    "resist": 30,
+    "attackSpeed": 0.68,
+    "moveSpeed": 3.55
+  },
+  "growth": {
+    "hp": 96,
+    "hpRegen": 0.12,
+    "ad": 3.4,
+    "armor": 4.2,
+    "resist": 1.4,
+    "attackSpeed": 0.03
+  },
+  "attack": {
+    "range": 1.7,
+    "windup": 0.3,
+    "damageType": "phys",
+    "present": {
+      "sfx": "c_swing_light",
+      "hitVfx": "lib_hit_phys_light",
+      "hitSfx": "c_hit_phys_light"
+    }
+  },
+  "collisionRadius": 0.5,
+  "kit": {
+    "passive": {
+      "id": "rishal_split_glass",
+      "name": "Split Glass",
+      "icon": "assets/ui/icons/abilities/rishal_split_glass.svg",
+      "desc": "Enemies who cross Rishal's glass tracks are Cut (up to 3, for 5 s). His next basic attack on a Cut enemy spends every Cut: each deals {triggers.0.effects.0.perStack.0.amount} bonus physical damage and vents 8 Heat.",
+      "triggers": [
+        {
+          "on": "attackHit",
+          "cond": {
+            "kind": "targetHasMark",
+            "mark": "rishal_cut"
+          },
+          "effects": [
+            {
+              "op": "consumeMark",
+              "mark": "rishal_cut",
+              "to": "hit",
+              "perStack": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": 18,
+                    "level": 2.3,
+                    "bonusAd": 0.1
+                  },
+                  "type": "phys",
+                  "to": "hit"
+                },
+                {
+                  "op": "resource",
+                  "amount": -8
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "present": {
+        "vfx": "lib_crit"
+      }
+    },
+    "a1": {
+      "id": "rishal_glass_dash",
+      "name": "Glass Dash",
+      "icon": "assets/ui/icons/abilities/rishal_glass_dash.svg",
+      "desc": "Rishal dashes 5 m and leaves a glass track on the ground behind him for 3 s. Enemies on the track when it forms, and enemies who step onto it later, take {effects.0.onEnter.0.amount} physical damage and are Cut. Holds 2 charges.",
+      "maxRank": 5,
+      "cooldown": 0.5,
+      "cost": 15,
+      "costKind": "res",
+      "charges": {
+        "max": 2,
+        "recharge": [
+          9,
+          8,
+          7,
+          6,
+          5
+        ]
+      },
+      "targeting": {
+        "kind": "direction",
+        "range": 5,
+        "indicator": {
+          "kind": "rect",
+          "length": 5,
+          "width": 1
+        }
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "zone",
+          "id": "rishal_track",
+          "shape": {
+            "kind": "rect",
+            "length": 5,
+            "width": 1
+          },
+          "at": "self",
+          "duration": 3,
+          "interval": 1,
+          "onTick": [],
+          "onEnter": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  45,
+                  70,
+                  95,
+                  120,
+                  145
+                ],
+                "bonusAd": 0.5
+              },
+              "type": "phys",
+              "to": "hit"
+            },
+            {
+              "op": "mark",
+              "mark": "rishal_cut",
+              "duration": 5,
+              "stacks": 1,
+              "max": 3,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "rishal_a1_track",
+            "telegraph": "ally_only"
+          }
+        },
+        {
+          "op": "dash",
+          "mode": "direction",
+          "distance": 5,
+          "speed": 16,
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_dash_trail"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "gapclose",
+          "damage",
+          "escape"
+        ]
+      },
+      "present": {
+        "anim": "cast_a1",
+        "sfx": "c_dash",
+        "hitVfx": "lib_hit_phys_light",
+        "hitSfx": "c_hit_phys_light",
+        "telegraph": "ally_only"
+      }
+    },
+    "a2": {
+      "id": "rishal_glint_cut",
+      "name": "Glint Cut",
+      "icon": "assets/ui/icons/abilities/rishal_glint_cut.svg",
+      "desc": "Rishal slashes an adjacent enemy twice, {effects.0.effects.0.amount} physical damage each. A Cut target is also slowed by 60%, fading over 1 s.",
+      "maxRank": 5,
+      "cooldown": [
+        7,
+        6.5,
+        6,
+        5.5,
+        5
+      ],
+      "cost": 25,
+      "costKind": "res",
+      "targeting": {
+        "kind": "unit",
+        "range": 2,
+        "indicator": {
+          "kind": "circle",
+          "radius": 2
+        }
+      },
+      "castTime": 0.15,
+      "effects": [
+        {
+          "op": "repeat",
+          "count": 2,
+          "interval": 0.2,
+          "effects": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  40,
+                  60,
+                  80,
+                  100,
+                  120
+                ],
+                "bonusAd": 0.55
+              },
+              "type": "phys",
+              "to": "target"
+            }
+          ]
+        },
+        {
+          "op": "if",
+          "cond": {
+            "kind": "targetHasMark",
+            "mark": "rishal_cut"
+          },
+          "then": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1,
+              "power": 0.6,
+              "to": "target",
+              "decay": true
+            }
+          ]
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage"
+        ]
+      },
+      "present": {
+        "anim": "cast_a2",
+        "sfx": "c_swing_light",
+        "hitVfx": "lib_hit_phys_light",
+        "hitSfx": "c_hit_phys_light",
+        "telegraph": "ally_only"
+      }
+    },
+    "a3": {
+      "id": "rishal_feint",
+      "name": "Feint",
+      "icon": "assets/ui/icons/abilities/rishal_feint.svg",
+      "desc": "Rishal springs 4 m in the opposite direction to his aim, then lays a glass track over the ground he covered: enemies on it, or who step onto it within 3 s, take {effects.0.onArrive.0.onEnter.0.amount} physical damage and are Cut.",
+      "maxRank": 5,
+      "cooldown": [
+        14,
+        13,
+        12,
+        11,
+        10
+      ],
+      "cost": 20,
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 4,
+        "indicator": {
+          "kind": "rect",
+          "length": 4,
+          "width": 1
+        }
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "dash",
+          "mode": "away",
+          "distance": 4,
+          "speed": 14,
+          "onArrive": [
+            {
+              "op": "zone",
+              "id": "rishal_feint_track",
+              "shape": {
+                "kind": "rect",
+                "length": 4,
+                "width": 1
+              },
+              "at": "self",
+              "duration": 3,
+              "interval": 1,
+              "onTick": [],
+              "onEnter": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": [
+                      45,
+                      70,
+                      95,
+                      120,
+                      145
+                    ],
+                    "bonusAd": 0.5
+                  },
+                  "type": "phys",
+                  "to": "hit"
+                },
+                {
+                  "op": "mark",
+                  "mark": "rishal_cut",
+                  "duration": 5,
+                  "stacks": 1,
+                  "max": 3,
+                  "to": "hit"
+                }
+              ],
+              "present": {
+                "vfx": "rishal_a1_track",
+                "telegraph": "ally_only"
+              }
+            }
+          ],
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_dash_trail"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "escape"
+        ]
+      },
+      "present": {
+        "anim": "cast_a3",
+        "sfx": "c_dash",
+        "hitVfx": "lib_hit_phys_light",
+        "hitSfx": "c_hit_phys_light",
+        "telegraph": "ally_only"
+      }
+    },
+    "ult": {
+      "id": "rishal_long_glint",
+      "name": "Long Glint",
+      "icon": "assets/ui/icons/abilities/rishal_long_glint.svg",
+      "desc": "Rishal rushes 9 m, unstoppable. Every enemy he passes takes {effects.1.onPass.0.amount} physical damage, gains 3 Cuts and is slowed by 50% for 1 s. The whole line stays a glass track for 4 s that Cuts enemies who step onto it.",
+      "maxRank": 3,
+      "cooldown": [
+        100,
+        85,
+        70
+      ],
+      "cost": 30,
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 9,
+        "indicator": {
+          "kind": "rect",
+          "length": 9,
+          "width": 1.5
+        }
+      },
+      "castTime": 0.2,
+      "effects": [
+        {
+          "op": "zone",
+          "id": "rishal_long_track",
+          "shape": {
+            "kind": "rect",
+            "length": 9,
+            "width": 1.5
+          },
+          "at": "self",
+          "duration": 4,
+          "interval": 1,
+          "onTick": [],
+          "onEnter": [
+            {
+              "op": "mark",
+              "mark": "rishal_cut",
+              "duration": 5,
+              "stacks": 1,
+              "max": 3,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "rishal_ult_glint",
+            "telegraph": "ally_only"
+          }
+        },
+        {
+          "op": "dash",
+          "mode": "direction",
+          "distance": 9,
+          "speed": 18,
+          "unstoppable": true,
+          "passWidth": 0.75,
+          "onPass": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  150,
+                  250,
+                  350
+                ],
+                "bonusAd": 1
+              },
+              "type": "phys",
+              "to": "hit"
+            },
+            {
+              "op": "mark",
+              "mark": "rishal_cut",
+              "duration": 5,
+              "stacks": 3,
+              "max": 3,
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1,
+              "power": 0.5,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_dash_trail"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "engage",
+          "gapclose"
+        ]
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_release",
+        "hitVfx": "lib_crit",
+        "hitSfx": "c_crit",
+        "telegraph": "everyone"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/rishal/rishal.glb",
+    "portrait": "assets/fighters/rishal/portrait.png",
+    "splash": "assets/fighters/rishal/splash.png",
+    "icon": "assets/fighters/rishal/icon.png",
+    "height": 1.8,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "diver",
+    "preferredRange": 2,
+    "comboOrder": [
+      "a1",
+      "a2",
+      "ult",
+      "a3"
+    ]
+  },
+  "palette": {
+    "primary": "#9AA6B4",
+    "secondary": "#D9D4C8"
+  }
+}

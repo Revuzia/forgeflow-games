@@ -1,0 +1,39 @@
+{
+  "model": "assets/_template/_template.glb",
+  "portrait": "assets/_template/portrait.png",
+  "splash": "assets/_template/splash.png",
+  "icon": "assets/_template/icon.png",
+  "height": 2.18,
+  "scale": 1,
+  "runRefSpeed": 3.5,
+  "clips": {
+    "idle": "idle",
+    "run": "run",
+    "attack1": "attack1",
+    "attack2": "attack2",
+    "cast_a1": "cast_a1",
+    "cast_a2": "cast_a2",
+    "cast_a3": "cast_a3",
+    "cast_ult": "cast_ult",
+    "death": "death",
+    "recall": "recall",
+    "idle_lobby": "idle_lobby",
+    "victory": "victory",
+    "channel": "channel",
+    "dash": "dash",
+    "stunned": "stunned"
+  },
+  "sockets": {
+    "origin": "root",
+    "chest": "chest",
+    "head": "head",
+    "hand_r": "hand.R",
+    "hand_l": "hand.L",
+    "weapon_r": "prop.R",
+    "weapon_l": "prop.L",
+    "foot_r": "foot.R",
+    "foot_l": "foot.L",
+    "weapon_tip": "x_staff_tip"
+  },
+  "accentMaterial": "accent"
+}

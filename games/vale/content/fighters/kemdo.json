@@ -1,0 +1,490 @@
+{
+  "id": "kemdo",
+  "name": "Kemdo",
+  "title": "Burning glass",
+  "class": "class_breaker",
+  "role": "grovehunter",
+  "secondaryRole": "shadehold",
+  "resource": "res_heat",
+  "job": "Dives one target, empties her Heat bar in two seconds, vents and goes again.",
+  "difficulty": 2,
+  "lore": "Kemdo ground her glaive's lens herself from a pane of fallen dawnglass, and it took her a year. Held at the right angle it gathers the stopped sun into a single burning point, and Kemdo has spent a great deal of time finding the right angle. She belongs to no side and sells her heat to whichever camp pays in food and quiet. She runs hot, cools fast and does not hold grudges, which makes her restful company between fights and unbearable during them.",
+  "tags": [
+    "hourless",
+    "melee",
+    "bruiser",
+    "diver",
+    "heat",
+    "true_damage"
+  ],
+  "base": {
+    "hp": 640,
+    "hpRegen": 1.6,
+    "ad": 64,
+    "armor": 33,
+    "resist": 32,
+    "attackSpeed": 0.65,
+    "moveSpeed": 3.45
+  },
+  "growth": {
+    "hp": 104,
+    "hpRegen": 0.14,
+    "ad": 3.7,
+    "armor": 4.5,
+    "resist": 1.8,
+    "attackSpeed": 0.025
+  },
+  "attack": {
+    "range": 2.1,
+    "windup": 0.36,
+    "damageType": "phys",
+    "present": {
+      "sfx": "c_swing_heavy",
+      "hitVfx": "lib_hit_phys_heavy",
+      "hitSfx": "c_hit_phys_heavy"
+    }
+  },
+  "collisionRadius": 0.6,
+  "kit": {
+    "passive": {
+      "id": "kemdo_cooling_kill",
+      "name": "Cooling Kill",
+      "icon": "assets/ui/icons/abilities/kemdo_cooling_kill.svg",
+      "desc": "When Kemdo takes part in an enemy fighter's takedown, all her Heat vents at once. It does not shorten an overheat already under way.",
+      "triggers": [
+        {
+          "on": "takedown",
+          "effects": [
+            {
+              "op": "resource",
+              "amount": -100
+            }
+          ]
+        }
+      ],
+      "present": {
+        "vfx": "lib_burst_lumen"
+      }
+    },
+    "a1": {
+      "id": "kemdo_long_thrust",
+      "name": "Long Thrust",
+      "icon": "assets/ui/icons/abilities/kemdo_long_thrust.svg",
+      "desc": "Kemdo thrusts along a 4.5 m line, dealing {effects.0.onHit.0.amount} physical damage. Slowed enemies also take {effects.0.onHit.1.then.0.amount} true damage (half against monsters).",
+      "maxRank": 5,
+      "cooldown": [
+        7,
+        6.5,
+        6,
+        5.5,
+        5
+      ],
+      "cost": 20,
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 4.5,
+        "indicator": {
+          "kind": "rect",
+          "length": 4.5,
+          "width": 1.2
+        }
+      },
+      "castTime": 0.25,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "rect",
+            "length": 4.5,
+            "width": 1.2
+          },
+          "at": "self",
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  70,
+                  100,
+                  130,
+                  160,
+                  190
+                ],
+                "bonusAd": 0.8
+              },
+              "type": "phys",
+              "to": "hit"
+            },
+            {
+              "op": "if",
+              "cond": {
+                "kind": "targetHasStatus",
+                "status": "slow"
+              },
+              "then": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": [
+                      10,
+                      15,
+                      20,
+                      25,
+                      30
+                    ],
+                    "targetMaxHp": 0.05
+                  },
+                  "type": "true",
+                  "to": "hit",
+                  "monsterMult": 0.5
+                }
+              ]
+            }
+          ],
+          "present": {
+            "vfx": "lib_line_cleave",
+            "sfx": "c_swing_heavy",
+            "telegraph": "ally_only"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "poke",
+          "waveclear"
+        ]
+      },
+      "present": {
+        "anim": "cast_a1",
+        "hitVfx": "lib_hit_phys_heavy",
+        "hitSfx": "c_hit_phys_heavy",
+        "telegraph": "ally_only"
+      }
+    },
+    "a2": {
+      "id": "kemdo_heat_shimmer",
+      "name": "Heat Shimmer",
+      "icon": "assets/ui/icons/abilities/kemdo_heat_shimmer.svg",
+      "desc": "Kemdo dashes 5 m and leaves a heat shimmer along her path for 2 s that slows enemies inside by 25%.",
+      "maxRank": 5,
+      "cooldown": [
+        12,
+        11,
+        10,
+        9,
+        8
+      ],
+      "cost": 25,
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 5,
+        "indicator": {
+          "kind": "rect",
+          "length": 5,
+          "width": 1.2
+        }
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "zone",
+          "id": "kemdo_shimmer",
+          "shape": {
+            "kind": "rect",
+            "length": 5,
+            "width": 1.2
+          },
+          "at": "self",
+          "duration": 2,
+          "interval": 0.25,
+          "onTick": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 0.4,
+              "power": 0.25,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_zone_glass",
+            "telegraph": "ally_only"
+          }
+        },
+        {
+          "op": "dash",
+          "mode": "direction",
+          "distance": 5,
+          "speed": 15,
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_dash_trail"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "gapclose",
+          "cc",
+          "escape"
+        ]
+      },
+      "present": {
+        "anim": "cast_a2",
+        "sfx": "c_dash",
+        "telegraph": "ally_only"
+      }
+    },
+    "a3": {
+      "id": "kemdo_vent",
+      "name": "Vent",
+      "icon": "assets/ui/icons/abilities/kemdo_vent.svg",
+      "desc": "Kemdo releases 50 Heat in a 3 m blast: enemies take {effects.1.onHit.0.amount} physical damage and are knocked back 1 m, and she gains {effects.2.statScaling.armor} armor and magic resist for 1.5 s. Vent costs no Heat and can be cast while overheated.",
+      "maxRank": 5,
+      "cooldown": [
+        12,
+        11,
+        10,
+        9,
+        8
+      ],
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "self",
+        "indicator": {
+          "kind": "circle",
+          "radius": 3
+        }
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "resource",
+          "amount": -50
+        },
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 3
+          },
+          "at": "self",
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  60,
+                  90,
+                  120,
+                  150,
+                  180
+                ],
+                "bonusAd": 0.5
+              },
+              "type": "phys",
+              "to": "hit"
+            },
+            {
+              "op": "displace",
+              "mode": "knockback",
+              "distance": 1,
+              "duration": 0.2,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "kemdo_a3_vent",
+            "sfx": "c_burst_lumen",
+            "telegraph": "ally_only"
+          }
+        },
+        {
+          "op": "buff",
+          "id": "kemdo_vented",
+          "duration": 1.5,
+          "to": "self",
+          "statScaling": {
+            "armor": {
+              "base": [
+                20,
+                25,
+                30,
+                35,
+                40
+              ]
+            },
+            "resist": {
+              "base": [
+                20,
+                25,
+                30,
+                35,
+                40
+              ]
+            }
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "waveclear",
+          "buff"
+        ]
+      },
+      "present": {
+        "anim": "cast_a3",
+        "hitVfx": "lib_hit_phys_heavy",
+        "hitSfx": "c_hit_phys_heavy",
+        "telegraph": "ally_only"
+      }
+    },
+    "ult": {
+      "id": "kemdo_held_focus",
+      "name": "Held Focus",
+      "icon": "assets/ui/icons/abilities/kemdo_held_focus.svg",
+      "desc": "Kemdo focuses the stopped sun on an enemy fighter within 6 m for 3 s. A 2 m spot follows them and deals {effects.0.onTick.0.amount} true damage every 0.5 s to every enemy in it, and Kemdo gains {effects.1.stats.omnivamp} omnivamp for the duration.",
+      "maxRank": 3,
+      "cooldown": [
+        100,
+        85,
+        70
+      ],
+      "cost": 30,
+      "costKind": "res",
+      "targeting": {
+        "kind": "unit",
+        "range": 6,
+        "filter": {
+          "minions": false,
+          "monsters": false,
+          "summons": false
+        },
+        "indicator": {
+          "kind": "circle",
+          "radius": 6
+        }
+      },
+      "castTime": 0.25,
+      "effects": [
+        {
+          "op": "zone",
+          "id": "kemdo_focus",
+          "shape": {
+            "kind": "circle",
+            "radius": 2
+          },
+          "at": "target",
+          "follow": true,
+          "duration": 3,
+          "interval": 0.5,
+          "onTick": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  30,
+                  45,
+                  60
+                ],
+                "bonusAd": 0.15
+              },
+              "type": "true",
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "kemdo_ult_focus",
+            "sfx": "c_zone_loop",
+            "telegraph": "everyone"
+          }
+        },
+        {
+          "op": "buff",
+          "id": "kemdo_focus_drink",
+          "duration": 3,
+          "to": "self",
+          "stats": {
+            "omnivamp": 0.25
+          },
+          "present": {
+            "vfx": "lib_empower"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "engage"
+        ]
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_release",
+        "hitVfx": "lib_hit_true",
+        "hitSfx": "c_hit_true",
+        "telegraph": "everyone"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/kemdo/kemdo.glb",
+    "portrait": "assets/fighters/kemdo/portrait.png",
+    "splash": "assets/fighters/kemdo/splash.png",
+    "icon": "assets/fighters/kemdo/icon.png",
+    "height": 2.1,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "diver",
+    "preferredRange": 2,
+    "comboOrder": [
+      "a2",
+      "a1",
+      "ult",
+      "a3"
+    ]
+  },
+  "palette": {
+    "primary": "#8A7A66",
+    "secondary": "#D7C9A6"
+  }
+}

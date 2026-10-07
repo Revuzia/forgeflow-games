@@ -1,0 +1,9 @@
+[
+  {
+    "id": "_template_dusk",
+    "fighter": "_template",
+    "model": "assets/_template/_template_dusk.glb",
+    "portrait": "assets/_template/_template_dusk_portrait.png",
+    "splash": "assets/_template/_template_dusk_splash.png"
+  }
+]

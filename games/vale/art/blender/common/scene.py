@@ -206,10 +206,19 @@ def rel(path: str) -> str:
     return os.path.relpath(path, GAME_DIR).replace("\\", "/")
 
 
+def _json_default(o):
+    """numpy scalars / arrays (QA metrics) -> plain JSON values."""
+    if hasattr(o, "item") and callable(o.item) and getattr(o, "shape", None) == ():
+        return o.item()
+    if hasattr(o, "tolist"):
+        return o.tolist()
+    raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
+
+
 def write_json(path: str, data) -> None:
     ensure_dir(os.path.dirname(path))
     with open(path, "w", encoding="utf-8", newline="\n") as f:
-        json.dump(data, f, indent=2, sort_keys=False)
+        json.dump(data, f, indent=2, sort_keys=False, default=_json_default)
         f.write("\n")
 
 

@@ -1,0 +1,35 @@
+[
+  {
+    "id": "ilsheta_base",
+    "fighter": "ilsheta",
+    "name": "Ilsheta",
+    "tier": "base",
+    "model": "assets/fighters/ilsheta/ilsheta.glb",
+    "portrait": "assets/fighters/ilsheta/portrait.png",
+    "splash": "assets/fighters/ilsheta/splash.png",
+    "desc": "Ilsheta in her hooded linen mantle and lamp-chimney visor, the dawnglass lamp at her chest.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "ilsheta_stillwater",
+    "fighter": "ilsheta",
+    "name": "Stillwater Lamp",
+    "tier": "standard",
+    "model": "assets/fighters/ilsheta/ilsheta_stillwater.glb",
+    "portrait": "assets/fighters/ilsheta/ilsheta_stillwater_portrait.png",
+    "splash": "assets/fighters/ilsheta/ilsheta_stillwater_splash.png",
+    "desc": "A sea-glass lamp and a wet-stone mantle, with reed plates ringing the visor, from the shallows of the Fallen Shaft.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "ilsheta_first_bell",
+    "fighter": "ilsheta",
+    "name": "First Bell Lamp",
+    "tier": "deluxe",
+    "model": "assets/fighters/ilsheta/ilsheta_first_bell.glb",
+    "portrait": "assets/fighters/ilsheta/ilsheta_first_bell_portrait.png",
+    "splash": "assets/fighters/ilsheta/ilsheta_first_bell_splash.png",
+    "desc": "The honour of the year's first bell: a pale dial-stone mantle carved with ten hour-marks over a dark hem, and a small glass bell inside the lamp.",
+    "releasedIn": "2026.10.0"
+  }
+]

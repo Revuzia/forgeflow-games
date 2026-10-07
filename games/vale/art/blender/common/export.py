@@ -71,8 +71,10 @@ def node_exe() -> str | None:
     return shutil.which("node") or shutil.which("node.exe")
 
 
-def optimize(path: str, out: str | None = None, quantize: bool = False) -> dict:
-    """Run art/tools/optimize.mjs in place (or to `out`). Returns {'ok', 'before', 'after'}."""
+def optimize(path: str, out: str | None = None, quantize: bool = False, fighter: bool = False) -> dict:
+    """Run art/tools/optimize.mjs in place (or to `out`). `fighter=True` adds the shipping compression
+    (KHR_mesh_quantization + EXT_texture_webp + int16 rotation tracks; budget <= 1.2 MB per fighter
+    GLB). Returns {'ok', 'before', 'after'}."""
     out = out or path
     script = os.path.join(scene.TOOLS_DIR, "optimize.mjs")
     node = node_exe()
@@ -80,7 +82,7 @@ def optimize(path: str, out: str | None = None, quantize: bool = False) -> dict:
     if not node or not os.path.isfile(script):
         scene.log("optimize: node or optimize.mjs missing - GLB left as exported")
         return {"ok": False, "before": before, "after": before}
-    args = [node, script, path, out] + (["--quantize"] if quantize else [])
+    args = [node, script, path, out] + (["--quantize"] if quantize else []) + (["--fighter"] if fighter else [])
     r = subprocess.run(args, cwd=scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
     if r.returncode != 0:
         scene.log(f"optimize failed ({r.returncode}): {r.stderr.strip()[:800]}")
@@ -133,3 +135,21 @@ def three_qa(glb: str, out_png: str, clips: bool = False, sky: str | None = None
     scene.log(f"three QA {os.path.basename(out_png)}: facing={rep.get('facing')} heightPx1080={rep.get('heightPx1080')} "
               f"accent={rep.get('accentPct')}% (top half {rep.get('accentTopHalfPct')}%) in {rep.get('seconds')}s")
     return rep
+
+
+def load_test(glb: str, skin: bool = False, budget_kb: int | None = 1172) -> dict:
+    """three r186 GLTFLoader in Node (art/tools/three_load_test.mjs): parses the compressed GLB,
+    validates the WebP images and the size budget, binds the skeleton, plays every clip (loop seams,
+    run foot slide). Returns {'ok', 'log'} or {'ok': False, 'skipped': reason}."""
+    script = os.path.join(scene.TOOLS_DIR, "three_load_test.mjs")
+    node = node_exe()
+    if not node or not os.path.isfile(script):
+        return {"ok": False, "skipped": "node or three_load_test.mjs missing"}
+    args = [node, script, glb] + (["--skin-only"] if skin else []) + (["--budget-kb", str(budget_kb)] if budget_kb else [])
+    r = subprocess.run(args, cwd=scene.GAME_DIR, capture_output=True, text=True, encoding="utf-8")
+    log = (r.stdout + r.stderr).strip()
+    ok = r.returncode == 0
+    scene.log(f"three load test {os.path.basename(glb)}: {'OK' if ok else 'FAIL'}")
+    if not ok:
+        scene.log(log[-1200:])
+    return {"ok": ok, "log": log.splitlines()[-12:]}

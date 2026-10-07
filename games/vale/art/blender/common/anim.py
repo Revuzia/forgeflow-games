@@ -189,6 +189,58 @@ def lerp_pose(a: dict, b: dict, t: float) -> dict:
     return out
 
 
+def lerp_pose_w(a: dict, b: dict, t: float, weights: dict | None = None) -> dict:
+    """lerp_pose with per-bone / per-IK-target factors: `weights` maps a bone name, 'hips_loc' or an
+    IK key ('hand.L', 'aim.R', 'foot.L') to its own t. Successive breaking of joints: hips and
+    spine at 0.6 while the arm is at 0.2 = the hips lead the strike; head at 0.6 of the follow =
+    the head drags. Factors may lie outside 0..1 (anticipation counters, overshoots)."""
+    if not weights:
+        return lerp_pose(a, b, t)
+    keys = set(a) | set(b)
+    out = {}
+    for k in keys:
+        if k == "ik":
+            ia, ib = a.get("ik", {}), b.get("ik", {})
+            res = {}
+            for n in set(ia) | set(ib):
+                tt = weights.get(n, t)
+                if n in ia and n in ib:
+                    res[n] = ia[n].lerp(ib[n], tt) if not isinstance(ia[n], Aim) else ia[n].lerp(ib[n], min(1.0, max(0.0, tt)))
+                elif n in ia:
+                    res[n] = _faded(ia[n], 1.0 - min(1.0, max(0.0, tt)))
+                else:
+                    res[n] = _faded(ib[n], min(1.0, max(0.0, tt)))
+            out["ik"] = res
+            continue
+        tt = weights.get(k, t)
+        va = a.get(k, (0.0, 0.0, 0.0))
+        vb = b.get(k, (0.0, 0.0, 0.0))
+        out[k] = tuple(va[i] + (vb[i] - va[i]) * tt for i in range(3))
+    return out
+
+
+def drag(sample: Callable[[float], dict], frames: int, lags: dict, loop: bool = False) -> Callable[[float], dict]:
+    """Overlap by TIME: the listed bones / IK keys sample the clip `lags[name]` frames late (> 0,
+    drag) or early (< 0, lead). Use only on parts that do not carry the weapon (head, neck, a free
+    off hand, x_ props) so the 40 % impact stays exact. Loops wrap; one-shots clamp."""
+    def out(t: float) -> dict:
+        p = dict(sample(t))
+        cache: dict = {}
+        for name, lag in lags.items():
+            tt = t - lag / frames
+            tt = tt % 1.0 if loop else min(1.0, max(0.0, tt))
+            q = cache.get(tt)
+            if q is None:
+                q = cache[tt] = sample(tt)
+            if name in q.get("ik", {}):
+                p["ik"] = dict(p.get("ik", {}))
+                p["ik"][name] = q["ik"][name]
+            elif name in q:
+                p[name] = q[name]
+        return p
+    return out
+
+
 @dataclass
 class FootTarget:
     """Planted/animated foot: `ankle` offset (m, world) from the rest ankle, `pitch` (deg, + toes
@@ -259,6 +311,7 @@ class Aim:
     weight: float = 1.0
 
     def lerp(self, o: "Aim", t: float) -> "Aim":
+        t = max(0.0, min(1.0, t))                 # aims never extrapolate (slerp past the target flips)
         a, b = V(self.dir).normalized(), V(o.dir).normalized()
         if a.dot(b) < -0.999:
             d = a.lerp(b, t) + a.orthogonal() * 1e-3
@@ -634,9 +687,10 @@ def arm_block(profile: dict, key: str, blend: float | None = None, key2: str | N
     """IK + aim dict for arm block `key` (optionally blended toward key2 by `blend`) adapted to the
     profile's weapon type."""
     w = profile["weapon"]
-    blk = ONE_HAND[key]
+    table = dict(ONE_HAND, **(profile.get("blocks") or {}))      # per-fighter arm blocks (motion profile)
+    blk = table[key]
     if key2 is not None:
-        b2 = ONE_HAND[key2]
+        b2 = table[key2]
         t = blend
         lerp3 = lambda a, b: tuple(a[i] + (b[i] - a[i]) * t for i in range(3)) if a and b else (a or b)  # noqa
         blk = tuple(lerp3(blk[i], b2[i]) for i in range(5))
@@ -770,7 +824,8 @@ def gen_run(profile: dict) -> Clip:
         yaw = -7.0 * amp * math.cos(2 * math.pi * q)
         roll = 3.5 * amp * math.sin(2 * math.pi * (q - c / 2))
         ch_yaw = 9.0 * amp * math.cos(2 * math.pi * q)
-        sw = arm_amp * math.cos(2 * math.pi * q)               # + = left leg forward -> right arm forward
+        sw = arm_amp * math.cos(2 * math.pi * (q - 0.03))      # + = left leg forward -> right arm forward;
+                                                                # arms trail the hips by ~0.6 frame (overlap)
         pose = merge(arms_relaxed(), P(
             hips=(lean * 0.45, yaw, roll), spine=(lean * 0.25, ch_yaw * 0.4, -roll * 0.6),
             chest=(lean * 0.25 + 1.5 * math.cos(4 * math.pi * q), ch_yaw * 0.6, -roll * 0.3),
@@ -887,35 +942,77 @@ def _bow_draw(i: int) -> dict:
     return {"ik": {"hand.L": L, "hand.R": R, "aim.L": Aim((0.0, -0.15, 1.0))}}
 
 
+HEAVY = {"light": 0.7, "medium": 1.0, "heavy": 1.35}      # weight drop multiplier per class
+
+
+def strike_keys(profile: dict, wind: dict, hit: dict, follow: dict, guard_pose: dict | None = None) -> list:
+    """The VALE strike timing (impact EXACTLY at 40 %) from three blocked poses:
+
+        0.00 guard
+        0.08 counter     anticipation of the anticipation: torso dips 10 % AWAY from the wind-up
+        0.22 wind        the wind-up (ease in-out)
+        0.29 coil        moving hold: the wind-up drifts 8 % further, slowing in (never a freeze)
+        0.34 drive       hips and spine lead (60 / 45 %), chest 30 %, the weapon trails (18 %)
+        0.40 IMPACT      accelerating into the hit; the weight drops (hips down, knees bend)
+        0.46 hold        impact hold: 25 % drift toward the follow-through so the hit READS
+        0.58 follow      follow-through; head, neck and a free off hand drag (60-70 %)
+        0.78 recover     half way back to guard
+        1.00 guard       `settle` ease: a ~6 % overshoot that dies out (weight settling)
+    Use for bespoke clips too: anim.Clip(name, N, False, anim.keyed(strike_keys(...)), impact=anim.IMPACT)."""
+    g = guard_pose if guard_pose is not None else guard(profile)
+    hv = HEAVY[profile["weight"]]
+    still = {"hand.R": 0.0, "hand.L": 0.0, "aim.R": 0.0, "aim.L": 0.0, "foot.L": 0.0, "foot.R": 0.0}
+    counter = _with_hips(lerp_pose_w(g, wind, -0.10, still), (0.0, 0.0, -0.012 * hv))
+    coil = lerp_pose_w(g, wind, 1.08, {"aim.R": 1.0, "aim.L": 1.0, "foot.L": 1.0, "foot.R": 1.0})
+    drive = lerp_pose_w(coil, hit, 0.18, {"hips": 0.6, "spine": 0.45, "chest": 0.3, "hips_loc": 0.5,
+                                          "foot.L": 0.7, "foot.R": 0.7, "thigh.L": 0.6, "thigh.R": 0.6})
+    hit2 = _with_hips(hit, (0.0, 0.0, -0.018 * hv))
+    hold = _with_hips(lerp_pose(hit, follow, 0.25), (0.0, 0.0, -0.024 * hv))
+    fol = _with_hips(lerp_pose_w(hit, follow, 1.0, {"head": 0.6, "neck": 0.7, "hand.L": 0.65, "aim.L": 0.65}),
+                     (0.0, 0.0, -0.010 * hv))
+    rec = lerp_pose(follow, g, 0.5)
+    return [(0.0, g, "linear"), (0.08, counter, "inout"), (0.22, wind, "inout"), (0.29, coil, "out"),
+            (0.34, drive, "in"), (IMPACT, hit2, "accel"), (0.46, hold, "out"), (0.58, fol, "out"),
+            (0.78, rec, "inout"), (1.0, g, "settle")]
+
+
 def gen_strike(name: str, kind: str, profile: dict, base_frames: int = 25, step: float = 0.0) -> Clip:
-    """anticipation (0 -> 24 %) -> strike (accelerating) -> IMPACT at 40 % -> overshoot/follow
-    (52 %) -> recover to guard (100 %). `step` moves the lead foot forward on impact (m)."""
+    """Blocked gesture (wind, hit, follow) on the VALE strike timing (strike_keys): counter-move
+    anticipation, coil, hips-first drive, impact at 40 % with a weight drop and an impact hold,
+    dragging follow-through, settle. `step` moves the lead foot forward on impact (m). The head
+    and neck trail by 1.5 / 1 frames (drag)."""
     N = frames_for(base_frames, profile)
-    g = guard(profile)
     wind, hit, follow = gesture_keys(profile, kind, step)
-    keys = [(0.0, g, "linear"), (0.24, wind, "inout"), (IMPACT, hit, "accel"), (0.52, follow, "out"),
-            (0.70, lerp_pose(follow, g, 0.35), "inout"), (1.0, g, "inout")]
-    return Clip(name, N, False, keyed(keys), impact=IMPACT)
+    fn = keyed(strike_keys(profile, wind, hit, follow))
+    return Clip(name, N, False, drag(fn, N, {"head": 1.5, "neck": 1.0}), impact=IMPACT)
 
 
 def gen_ult(profile: dict) -> Clip:
-    """Channel-raise: gather/crouch (0-28 %) -> raise + release at 40 % -> hold the channel with a
-    tremble -> settle back to guard."""
+    """Channel-raise: counter rise -> deep gather (0-30 %) with a moving hold -> release snapping to
+    the raise at 40 % (+5 % overshoot) -> hold the channel with a tremble -> settle back to guard."""
     N = frames_for(50, profile)
     g = guard(profile)
+    hv = HEAVY[profile["weight"]]
     pw, ph, pf = gesture_keys(profile, "raise")
-    keys = [(0.0, g, "linear"), (0.28, pw, "inout"), (IMPACT, ph, snap), (0.72, pf, "inout"), (1.0, g, "inout")]
+    still = {"hand.R": 0.0, "hand.L": 0.0, "aim.R": 0.0, "aim.L": 0.0, "foot.L": 0.0, "foot.R": 0.0}
+    counter = _with_hips(lerp_pose_w(g, pw, -0.12, still), (0.0, 0.0, 0.012))
+    gather = _with_hips(lerp_pose(g, pw, 1.08), (0.0, 0.0, -0.02 * hv))
+    gather2 = _with_hips(lerp_pose(g, pw, 1.14), (0.0, 0.0, -0.028 * hv))
+    over = _with_hips(lerp_pose_w(pw, ph, 1.05, {"aim.R": 1.0, "aim.L": 1.0}), (0.0, 0.0, 0.01))
+    keys = [(0.0, g, "linear"), (0.10, counter, "inout"), (0.28, gather, "inout"), (0.34, gather2, "out"),
+            (IMPACT, ph, snap), (0.47, over, "out"), (0.56, ph, "inout"), (0.74, pf, "inout"),
+            (0.88, lerp_pose(pf, g, 0.6), "inout"), (1.0, g, "settle")]
     base = keyed(keys)
 
     def sample(t):
         p = base(t)
-        if 0.4 < t < 0.75:
-            k = math.sin(math.pi * (t - 0.4) / 0.35)
+        if 0.47 < t < 0.76:
+            k = math.sin(math.pi * (t - 0.47) / 0.29)
             p = add(p, P(chest=(0.8 * k * osc(t, 7), 0, 0), head=(0.6 * k * osc(t, 9), 0, 0)))
             p = _nudge_hands(p, (0, 0, 0.01 * k * osc(t, 9)), (0, 0, 0.01 * k * osc(t, 9, 0.3)))
         return p
 
-    return Clip("cast_ult", N, False, sample, impact=IMPACT)
+    return Clip("cast_ult", N, False, drag(sample, N, {"head": 1.5, "neck": 1.0}), impact=IMPACT)
 
 
 def gen_death(profile: dict, skel: Skeleton) -> Clip:
@@ -1007,7 +1104,10 @@ def gen_victory(profile: dict) -> Clip:
                P(hips=(-4, -8, 0), spine=(-6, -4, 0), chest=(-7, -6, 0), neck=(-3, 4, 0), head=(-5, 6, 0),
                  shoulder_R=(0, 0, -10)), arm_block(profile, "victory"))
     up["hips_loc"] = (0.0, 0.0, -0.01)
-    base = keyed([(0.0, g, "linear"), (0.22, crouch, "inout"), (0.40, up, "back"), (1.0, up, "linear")])
+    crouch2 = _with_hips(lerp_pose(g, crouch, 1.12), (0, 0, -0.008))
+    base = keyed([(0.0, g, "linear"), (0.18, crouch, "inout"), (0.25, crouch2, "out"), (0.40, up, "back"),
+                  (1.0, up, "linear")])
+    base = drag(base, N, {"head": 2.0, "neck": 1.0})
 
     def sample(t):
         p = base(t)
@@ -1089,6 +1189,7 @@ class ChainCfg:
     inertia: float = 0.8           # deg of swing per m/s² of root acceleration along the bone Z
     drive: Callable | None = None  # f(pose) -> extra X degrees on the first bone (e.g. thigh push)
     limit: tuple = (-75.0, 75.0)
+    floor: float | None = 0.03     # chain tails stay above this height (None = off)
 
 
 def _chain_state(skel: Skeleton, pose: dict, cfg: ChainCfg, angles=None):
@@ -1159,7 +1260,34 @@ def secondary_motion(skel: Skeleton, poses: list, cfgs: list, loop: bool) -> lis
         for f in range(n):
             for j, b in enumerate(cfg.bones):
                 out[f][b] = (rec[f][j], 0.0, 0.0)
+            if cfg.floor is not None:
+                _keep_above_floor(skel, out[f], cfg)
     return out
+
+
+def _keep_above_floor(skel: Skeleton, pose: dict, cfg: "ChainCfg") -> None:
+    """Scale the chain's swing back toward its parent-aligned rest until every chain tail stays
+    above `cfg.floor` (a hanging drape must never swing through the ground, e.g. lying in `death`)."""
+    def lowest(k):
+        work = dict(pose)
+        for b in cfg.bones:
+            a = pose[b]
+            work[b] = (a[0] * k, a[1] * k, a[2] * k)
+        M = skel.fk(work)
+        return min((M[b] @ V((0.0, skel.length[b], 0.0))).z for b in cfg.bones), work
+    z, _ = lowest(1.0)
+    if z >= cfg.floor:
+        return
+    lo, hi = 0.0, 1.0
+    for _ in range(7):
+        mid = 0.5 * (lo + hi)
+        if lowest(mid)[0] >= cfg.floor:
+            lo = mid
+        else:
+            hi = mid
+    for b in cfg.bones:
+        a = pose[b]
+        pose[b] = (a[0] * lo, a[1] * lo, a[2] * lo)
 
 
 # ── writing actions ────────────────────────────────────────────────────────────────────────────

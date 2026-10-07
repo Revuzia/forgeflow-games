@@ -1,0 +1,611 @@
+{
+  "id": "marund",
+  "name": "Marund",
+  "title": "Dome mason",
+  "class": "class_plinth",
+  "role": "lampglass",
+  "secondaryRole": "shadehold",
+  "resource": "res_light",
+  "job": "Raises a dome no enemy can step into, so the ally who got caught has three safe seconds.",
+  "difficulty": 1,
+  "lore": "Marund raised half the drum walls of the Lamp Dome with his own maul, and he still tests a finished course by knocking on it. Serenade masons say a dome is not done until someone has sheltered under it, so he brings the habit into every fight: he finds whoever is most frightened and builds the evening around them. He speaks slowly, laughs at his own jokes before he reaches the end of them, and has never let an Aubade runner past a wall he set. The stopped evening suits him. There is always time to lay one more course.",
+  "tags": [
+    "serenade",
+    "melee",
+    "frontline",
+    "protector",
+    "zone",
+    "displacement",
+    "shield"
+  ],
+  "base": {
+    "hp": 680,
+    "hpRegen": 1.8,
+    "res": 40,
+    "ad": 58,
+    "armor": 36,
+    "resist": 32,
+    "attackSpeed": 0.64,
+    "moveSpeed": 3.35
+  },
+  "growth": {
+    "hp": 110,
+    "hpRegen": 0.16,
+    "res": 10,
+    "ad": 3,
+    "armor": 4.8,
+    "resist": 2,
+    "attackSpeed": 0.02
+  },
+  "attack": {
+    "range": 1.9,
+    "windup": 0.34,
+    "damageType": "phys",
+    "present": {
+      "sfx": "c_swing_heavy",
+      "hitVfx": "lib_hit_phys_heavy",
+      "hitSfx": "c_hit_phys_heavy"
+    }
+  },
+  "collisionRadius": 0.68,
+  "kit": {
+    "passive": {
+      "id": "marund_hearthside",
+      "name": "Hearthside",
+      "icon": "assets/ui/icons/abilities/marund_hearthside.svg",
+      "desc": "Allied fighters within 5 m of Marund, himself included, regenerate 0.4% of Marund's max Health every second.",
+      "triggers": [
+        {
+          "on": "interval",
+          "interval": 1,
+          "effects": [
+            {
+              "op": "area",
+              "shape": {
+                "kind": "circle",
+                "radius": 5
+              },
+              "at": "self",
+              "filter": {
+                "enemies": false,
+                "allies": true,
+                "self": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "onHit": [
+                {
+                  "op": "heal",
+                  "amount": {
+                    "base": 0,
+                    "maxHp": 0.004
+                  },
+                  "to": "hit"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "a1": {
+      "id": "marund_shoulder_in",
+      "name": "Shoulder In",
+      "icon": "assets/ui/icons/abilities/marund_shoulder_in.svg",
+      "desc": "Marund charges up to 4.5 m and stops at the first enemy, dealing {effects.0.onPass.0.amount} magic damage and knocking them back 2 m. The target is slowed by 30% for 1.5 s, or rooted for 1.25 s instead if it is Mortared (this spends the Mortar).",
+      "maxRank": 5,
+      "cooldown": [
+        12,
+        11.5,
+        11,
+        10.5,
+        10
+      ],
+      "cost": [
+        50,
+        55,
+        60,
+        65,
+        70
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 4.5,
+        "indicator": {
+          "kind": "rect",
+          "length": 4.5,
+          "width": 1.4
+        }
+      },
+      "castTime": 0.15,
+      "effects": [
+        {
+          "op": "dash",
+          "mode": "direction",
+          "distance": 4.5,
+          "speed": 14,
+          "stopOnFirstHit": true,
+          "passWidth": 0.7,
+          "onPass": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  70,
+                  105,
+                  140,
+                  175,
+                  210
+                ],
+                "ap": 0.5,
+                "bonusHp": 0.02
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "if",
+              "cond": {
+                "kind": "targetHasMark",
+                "mark": "marund_mortar"
+              },
+              "then": [
+                {
+                  "op": "consumeMark",
+                  "mark": "marund_mortar",
+                  "perStack": [],
+                  "to": "hit"
+                },
+                {
+                  "op": "status",
+                  "status": "root",
+                  "duration": 1.25,
+                  "to": "hit"
+                }
+              ],
+              "else": [
+                {
+                  "op": "status",
+                  "status": "slow",
+                  "duration": 1.5,
+                  "power": 0.3,
+                  "to": "hit"
+                }
+              ]
+            },
+            {
+              "op": "displace",
+              "mode": "knockback",
+              "distance": 2,
+              "duration": 0.3,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_dash_trail"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "engage",
+          "gapclose",
+          "cc",
+          "damage"
+        ]
+      },
+      "present": {
+        "anim": "cast_a1",
+        "sfx": "c_dash",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "everyone"
+      }
+    },
+    "a2": {
+      "id": "marund_shelter_dome",
+      "name": "Shelter Dome",
+      "icon": "assets/ui/icons/abilities/marund_shelter_dome.svg",
+      "desc": "Marund raises a 3 m dome around himself for {effects.1.duration}. Enemies inside are pushed 2.5 m away from him, and no enemy can walk in while it stands; allies come and go freely. Allied fighters inside, Marund included, gain {effects.1.onTick.0.statScaling.armor} armor and magic resist.",
+      "maxRank": 5,
+      "cooldown": [
+        16,
+        15,
+        14,
+        13,
+        12
+      ],
+      "cost": [
+        70,
+        75,
+        80,
+        85,
+        90
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "self",
+        "indicator": {
+          "kind": "circle",
+          "radius": 3
+        }
+      },
+      "castTime": 0.25,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 3
+          },
+          "at": "self",
+          "onHit": [
+            {
+              "op": "displace",
+              "mode": "knockback",
+              "distance": 2.5,
+              "duration": 0.25,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_ring_pulse",
+            "sfx": "c_slam"
+          }
+        },
+        {
+          "op": "zone",
+          "id": "marund_dome",
+          "shape": {
+            "kind": "circle",
+            "radius": 3
+          },
+          "at": "self",
+          "duration": [
+            2.5,
+            2.75,
+            3,
+            3.25,
+            3.5
+          ],
+          "interval": 0.5,
+          "filter": {
+            "enemies": false,
+            "allies": true,
+            "self": true,
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "blocks": "enemies",
+          "onTick": [
+            {
+              "op": "buff",
+              "id": "marund_dome_ward",
+              "duration": 0.75,
+              "to": "hit",
+              "statScaling": {
+                "armor": {
+                  "base": [
+                    20,
+                    25,
+                    30,
+                    35,
+                    40
+                  ]
+                },
+                "resist": {
+                  "base": [
+                    20,
+                    25,
+                    30,
+                    35,
+                    40
+                  ]
+                }
+              }
+            }
+          ],
+          "present": {
+            "vfx": "marund_a2_dome",
+            "sfx": "c_zone_loop",
+            "telegraph": "everyone"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "zone",
+          "cc",
+          "buff"
+        ]
+      },
+      "present": {
+        "anim": "cast_a2",
+        "sfx": "c_shield",
+        "telegraph": "everyone"
+      }
+    },
+    "a3": {
+      "id": "marund_mortar_pail",
+      "name": "Mortar Pail",
+      "icon": "assets/ui/icons/abilities/marund_mortar_pail.svg",
+      "desc": "Marund lobs wet mortar up to 8 m. After 0.5 s, enemies within 2 m take {effects.0.onHit.0.amount} magic damage, are slowed by 35% for 1.5 s and are Mortared for 4 s. Shoulder In roots a Mortared enemy.",
+      "maxRank": 5,
+      "cooldown": [
+        9,
+        8.5,
+        8,
+        7.5,
+        7
+      ],
+      "cost": [
+        55,
+        60,
+        65,
+        70,
+        75
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "point",
+        "range": 8,
+        "indicator": {
+          "kind": "circle",
+          "radius": 2
+        }
+      },
+      "castTime": 0.25,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 2
+          },
+          "at": "point",
+          "delay": 0.5,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  60,
+                  95,
+                  130,
+                  165,
+                  200
+                ],
+                "ap": 0.6
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1.5,
+              "power": 0.35,
+              "to": "hit"
+            },
+            {
+              "op": "mark",
+              "mark": "marund_mortar",
+              "duration": 4,
+              "stacks": 1,
+              "max": 1,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_slam_ground",
+            "sfx": "c_slam",
+            "telegraph": "ally_only"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "poke",
+          "cc",
+          "waveclear"
+        ],
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_a3",
+        "sfx": "c_thrown",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "ally_only"
+      }
+    },
+    "ult": {
+      "id": "marund_domefall",
+      "name": "Domefall",
+      "icon": "assets/ui/icons/abilities/marund_domefall.svg",
+      "desc": "Marund leaps up to 7 m, unstoppable. Where he lands, enemies within 3.5 m take {effects.0.onArrive.0.onHit.0.amount} magic damage, are flung 2.5 m outward and are stunned for 1 s, and allied fighters there, Marund included, gain a {effects.0.onArrive.1.onHit.0.amount} shield for 3 s.",
+      "maxRank": 3,
+      "cooldown": [
+        100,
+        85,
+        70
+      ],
+      "cost": 100,
+      "costKind": "res",
+      "targeting": {
+        "kind": "point",
+        "range": 7,
+        "indicator": {
+          "kind": "circle",
+          "radius": 3.5
+        }
+      },
+      "castTime": 0.3,
+      "effects": [
+        {
+          "op": "dash",
+          "mode": "toPoint",
+          "distance": 7,
+          "speed": 12,
+          "unstoppable": true,
+          "onArrive": [
+            {
+              "op": "area",
+              "shape": {
+                "kind": "circle",
+                "radius": 3.5
+              },
+              "at": "self",
+              "onHit": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": [
+                      150,
+                      250,
+                      350
+                    ],
+                    "ap": 0.7
+                  },
+                  "type": "magic",
+                  "to": "hit"
+                },
+                {
+                  "op": "displace",
+                  "mode": "knockback",
+                  "distance": 2.5,
+                  "duration": 0.35,
+                  "to": "hit"
+                },
+                {
+                  "op": "status",
+                  "status": "stun",
+                  "duration": 1,
+                  "to": "hit"
+                }
+              ],
+              "present": {
+                "vfx": "marund_ult_domefall",
+                "sfx": "c_ult_release"
+              }
+            },
+            {
+              "op": "area",
+              "shape": {
+                "kind": "circle",
+                "radius": 3.5
+              },
+              "at": "self",
+              "filter": {
+                "enemies": false,
+                "allies": true,
+                "self": true,
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "onHit": [
+                {
+                  "op": "shield",
+                  "amount": {
+                    "base": [
+                      80,
+                      130,
+                      180
+                    ],
+                    "maxHp": 0.08
+                  },
+                  "duration": 3,
+                  "to": "hit"
+                }
+              ],
+              "present": {
+                "vfx": "lib_shield_up",
+                "sfx": "c_shield"
+              }
+            }
+          ],
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_leap"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "engage",
+          "cc",
+          "shield",
+          "damage"
+        ],
+        "minTargets": 2
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_windup",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "everyone"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/marund/marund.glb",
+    "portrait": "assets/fighters/marund/portrait.png",
+    "splash": "assets/fighters/marund/splash.png",
+    "icon": "assets/fighters/marund/icon.png",
+    "height": 2.35,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "warden",
+    "preferredRange": 2,
+    "comboOrder": [
+      "a3",
+      "a1",
+      "a2",
+      "ult"
+    ]
+  },
+  "palette": {
+    "primary": "#6E6358",
+    "secondary": "#A58A6C"
+  }
+}

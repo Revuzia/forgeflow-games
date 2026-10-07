@@ -1,0 +1,554 @@
+{
+  "id": "burdam",
+  "name": "Burdam",
+  "title": "Grudge holder",
+  "class": "class_breaker",
+  "role": "shadehold",
+  "secondaryRole": "grovehunter",
+  "resource": "res_tally",
+  "job": "Stays on whoever hurt him and makes every one of them pay it back at once.",
+  "difficulty": 1,
+  "lore": "Burdam keeps the ledger for a dome-village on the east rim, and the scored mask he wears is that ledger: one cut for every debt owed to his people. He is a generous host and a terrible creditor. Strike him once and he will remember the day, the hour and the angle of the light. Serenade children are told that he has never forgotten a slight, which is not quite true; he has forgiven three. He carries an ironstone cleaver as tall as he is, mostly so that nobody asks about the other ledger.",
+  "tags": [
+    "serenade",
+    "melee",
+    "bruiser",
+    "sustain",
+    "marks",
+    "pull"
+  ],
+  "base": {
+    "hp": 650,
+    "hpRegen": 1.7,
+    "ad": 64,
+    "armor": 34,
+    "resist": 32,
+    "attackSpeed": 0.66,
+    "moveSpeed": 3.45
+  },
+  "growth": {
+    "hp": 106,
+    "hpRegen": 0.15,
+    "ad": 3.6,
+    "armor": 4.6,
+    "resist": 1.8,
+    "attackSpeed": 0.025
+  },
+  "attack": {
+    "range": 2,
+    "windup": 0.36,
+    "damageType": "phys",
+    "present": {
+      "sfx": "c_swing_heavy",
+      "hitVfx": "lib_hit_phys_heavy",
+      "hitSfx": "c_hit_phys_heavy"
+    }
+  },
+  "collisionRadius": 0.62,
+  "kit": {
+    "passive": {
+      "id": "burdam_long_memory",
+      "name": "Long Memory",
+      "icon": "assets/ui/icons/abilities/burdam_long_memory.svg",
+      "desc": "When an enemy fighter damages Burdam, they gain a Grudge stack for 6 s (up to 5; at most one stack per 0.5 s from each enemy). Burdam's basic attacks against a Grudge-bearer heal him for 1.2% of his max Health and give him {triggers.1.effects.1.amount} Tally.",
+      "triggers": [
+        {
+          "on": "damageTaken",
+          "filter": {
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "perTargetCooldown": 0.5,
+          "effects": [
+            {
+              "op": "mark",
+              "mark": "burdam_grudge",
+              "duration": 6,
+              "stacks": 1,
+              "max": 5,
+              "to": "hit"
+            }
+          ]
+        },
+        {
+          "on": "attackHit",
+          "cond": {
+            "kind": "targetHasMark",
+            "mark": "burdam_grudge"
+          },
+          "effects": [
+            {
+              "op": "heal",
+              "amount": {
+                "base": 0,
+                "maxHp": 0.012
+              },
+              "to": "self"
+            },
+            {
+              "op": "resource",
+              "amount": 8
+            }
+          ]
+        }
+      ],
+      "present": {
+        "vfx": "lib_mark_stack"
+      }
+    },
+    "a1": {
+      "id": "burdam_bear_down",
+      "name": "Bear Down",
+      "icon": "assets/ui/icons/abilities/burdam_bear_down.svg",
+      "desc": "Burdam lunges up to 5 m at an enemy and chops them for {effects.0.onArrive.0.amount} physical damage. A Grudge-bearer is also slowed by 40% for 1.5 s.",
+      "maxRank": 5,
+      "cooldown": [
+        10,
+        9.5,
+        9,
+        8.5,
+        8
+      ],
+      "cost": 0,
+      "costKind": "res",
+      "targeting": {
+        "kind": "unit",
+        "range": 5,
+        "indicator": {
+          "kind": "circle",
+          "radius": 5
+        }
+      },
+      "castTime": 0.1,
+      "effects": [
+        {
+          "op": "dash",
+          "mode": "toTarget",
+          "distance": 5,
+          "speed": 15,
+          "onArrive": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  60,
+                  90,
+                  120,
+                  150,
+                  180
+                ],
+                "bonusAd": 0.8
+              },
+              "type": "phys",
+              "to": "target"
+            },
+            {
+              "op": "if",
+              "cond": {
+                "kind": "targetHasMark",
+                "mark": "burdam_grudge"
+              },
+              "then": [
+                {
+                  "op": "status",
+                  "status": "slow",
+                  "duration": 1.5,
+                  "power": 0.4,
+                  "to": "target"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_dash_trail"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "gapclose",
+          "damage",
+          "engage"
+        ]
+      },
+      "present": {
+        "anim": "cast_a1",
+        "sfx": "c_dash",
+        "hitVfx": "lib_hit_phys_heavy",
+        "hitSfx": "c_hit_phys_heavy",
+        "telegraph": "ally_only"
+      }
+    },
+    "a2": {
+      "id": "burdam_stubborn",
+      "name": "Stubborn",
+      "icon": "assets/ui/icons/abilities/burdam_stubborn.svg",
+      "desc": "For 3 s Burdam gains {effects.0.statScaling.armor} armor and magic resist and 30% tenacity. When it ends he stamps, dealing {effects.0.onExpire.0.onHit.0.amount} physical damage to enemies within 3 m.",
+      "maxRank": 5,
+      "cooldown": [
+        14,
+        13,
+        12,
+        11,
+        10
+      ],
+      "cost": 30,
+      "costKind": "res",
+      "targeting": {
+        "kind": "self",
+        "indicator": {
+          "kind": "circle",
+          "radius": 3
+        }
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "buff",
+          "id": "burdam_stubborn",
+          "duration": 3,
+          "to": "self",
+          "stats": {
+            "tenacity": 0.3
+          },
+          "statScaling": {
+            "armor": {
+              "base": [
+                25,
+                30,
+                35,
+                40,
+                45
+              ]
+            },
+            "resist": {
+              "base": [
+                25,
+                30,
+                35,
+                40,
+                45
+              ]
+            }
+          },
+          "onExpire": [
+            {
+              "op": "area",
+              "shape": {
+                "kind": "circle",
+                "radius": 3
+              },
+              "at": "self",
+              "onHit": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": [
+                      50,
+                      80,
+                      110,
+                      140,
+                      170
+                    ],
+                    "bonusAd": 0.5
+                  },
+                  "type": "phys",
+                  "to": "hit"
+                }
+              ],
+              "present": {
+                "vfx": "lib_slam_ground",
+                "sfx": "c_slam"
+              }
+            }
+          ],
+          "present": {
+            "vfx": "lib_empower"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "buff"
+        ]
+      },
+      "present": {
+        "anim": "cast_a2",
+        "sfx": "c_buff",
+        "hitVfx": "lib_hit_phys_heavy",
+        "hitSfx": "c_hit_phys_heavy",
+        "telegraph": "ally_only"
+      }
+    },
+    "a3": {
+      "id": "burdam_old_wound",
+      "name": "Old Wound",
+      "icon": "assets/ui/icons/abilities/burdam_old_wound.svg",
+      "desc": "Burdam cleaves a 4 m, 100° arc for {effects.0.onHit.0.amount} physical damage. Grudge-bearers hit take {effects.0.onHit.1.then.0.amount} more physical damage and are slowed by 50%, fading over 2 s.",
+      "maxRank": 5,
+      "cooldown": [
+        8,
+        7.5,
+        7,
+        6.5,
+        6
+      ],
+      "cost": 40,
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 4,
+        "indicator": {
+          "kind": "cone",
+          "radius": 4,
+          "angleDeg": 100
+        }
+      },
+      "castTime": 0.25,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "cone",
+            "radius": 4,
+            "angleDeg": 100
+          },
+          "at": "self",
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  70,
+                  105,
+                  140,
+                  175,
+                  210
+                ],
+                "bonusAd": 0.9
+              },
+              "type": "phys",
+              "to": "hit"
+            },
+            {
+              "op": "if",
+              "cond": {
+                "kind": "targetHasMark",
+                "mark": "burdam_grudge"
+              },
+              "then": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": [
+                      20,
+                      30,
+                      40,
+                      50,
+                      60
+                    ],
+                    "bonusAd": 0.27
+                  },
+                  "type": "phys",
+                  "to": "hit"
+                },
+                {
+                  "op": "status",
+                  "status": "slow",
+                  "duration": 2,
+                  "power": 0.5,
+                  "to": "hit",
+                  "decay": true
+                }
+              ]
+            }
+          ],
+          "present": {
+            "vfx": "lib_cone_sweep",
+            "sfx": "c_swing_heavy",
+            "telegraph": "ally_only"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "waveclear",
+          "cc"
+        ]
+      },
+      "present": {
+        "anim": "cast_a3",
+        "hitVfx": "lib_hit_phys_heavy",
+        "hitSfx": "c_hit_phys_heavy",
+        "telegraph": "ally_only"
+      }
+    },
+    "ult": {
+      "id": "burdam_settled_account",
+      "name": "Settled Account",
+      "icon": "assets/ui/icons/abilities/burdam_settled_account.svg",
+      "desc": "Every Grudge-bearer within 7 m is dragged 3 m toward Burdam and stunned for 0.5 s. Each pays {effects.0.onHit.0.then.0.perStack.0.amount} physical damage per Grudge stack, and Burdam heals 3% of his max Health per stack. This spends the Grudges.",
+      "maxRank": 3,
+      "cooldown": [
+        90,
+        75,
+        60
+      ],
+      "cost": 0,
+      "costKind": "res",
+      "targeting": {
+        "kind": "none",
+        "indicator": {
+          "kind": "circle",
+          "radius": 7
+        }
+      },
+      "castTime": 0.35,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 7
+          },
+          "at": "self",
+          "filter": {
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "onHit": [
+            {
+              "op": "if",
+              "cond": {
+                "kind": "targetHasMark",
+                "mark": "burdam_grudge"
+              },
+              "then": [
+                {
+                  "op": "consumeMark",
+                  "mark": "burdam_grudge",
+                  "to": "hit",
+                  "perStack": [
+                    {
+                      "op": "damage",
+                      "amount": {
+                        "base": [
+                          40,
+                          65,
+                          90
+                        ],
+                        "bonusAd": 0.25
+                      },
+                      "type": "phys",
+                      "to": "hit"
+                    },
+                    {
+                      "op": "heal",
+                      "amount": {
+                        "base": 0,
+                        "maxHp": 0.03
+                      },
+                      "to": "self"
+                    }
+                  ]
+                },
+                {
+                  "op": "displace",
+                  "mode": "pull",
+                  "distance": 3,
+                  "duration": 0.3,
+                  "to": "hit"
+                },
+                {
+                  "op": "status",
+                  "status": "stun",
+                  "duration": 0.5,
+                  "to": "hit"
+                }
+              ]
+            }
+          ],
+          "present": {
+            "vfx": "burdam_ult_account",
+            "sfx": "c_ult_release",
+            "telegraph": "everyone"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "cc",
+          "engage"
+        ],
+        "minTargets": 1
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_windup",
+        "hitVfx": "lib_hit_phys_heavy",
+        "hitSfx": "c_hit_phys_heavy",
+        "telegraph": "everyone"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/burdam/burdam.glb",
+    "portrait": "assets/fighters/burdam/portrait.png",
+    "splash": "assets/fighters/burdam/splash.png",
+    "icon": "assets/fighters/burdam/icon.png",
+    "height": 2.15,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "skirmisher",
+    "preferredRange": 2,
+    "comboOrder": [
+      "a1",
+      "a3",
+      "a2",
+      "ult"
+    ]
+  },
+  "palette": {
+    "primary": "#5E4F45",
+    "secondary": "#9A7B62"
+  }
+}

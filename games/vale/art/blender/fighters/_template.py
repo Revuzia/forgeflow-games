@@ -1,29 +1,65 @@
-"""_template — copy to art/blender/fighters/<id>.py to start a fighter. Runnable as a demo:
+"""_template — the VALE PRODUCTION TEMPLATE for one fighter (+ its skins). Copy, rename, fill.
 
-    python3 art/build.py fighter _template --fast       # -> art/out/_template/ (ids starting with _ stay out of fighters/)
+    cp art/blender/fighters/_template.py art/blender/fighters/<id>.py     # then set ID = "<id>"
+    python3 art/build.py fighter <id> --fast --no-skins     # iterate (fast bake/renders)
+    python3 art/build.py fighter <id> --clip-sheet           # full build: base + every skin
+    python3 art/tools/lineup_qa.py -- art/out/fighters/*/*.glb   # roster readability (IoU, value, accent)
 
-A fighter script is DATA + hand-authored modelling sections; the shared pipeline does the rest
-(common/pipeline.py): rig -> model -> bind -> UV -> bake -> clips -> GLB -> optimise -> renders
--> skins -> report. Sections, in order:
+As shipped it is a runnable demo (an Aubade CASTER: line + disc) that writes to art/out/_template/
+(ids starting with `_` never enter art/out/fighters/). The bible reference that sets the quality
+bar is fighters/_lookdev_reference.py (a Serenade-faced BREAKER); read both before starting.
 
-  1. identity        ID (must equal the file name and content/fighters/<id>.json), OUT_SUBDIR (only
-                     for technical builds; fighters use art/out/fighters/<id>/)
-  2. proportions     rig.proportions(...) — drives the VALE_BIPED_1 rest pose; skins may NOT change it
-  3. shape           body.shape(...) — girth/limb multipliers for the fused base body
-  4. palette         materials.palette(...) — every colour the materials use (style bible drives it);
-                     CARD = FighterDef.palette (portrait / splash backdrop)
-  5. motion          anim.motion_profile(weight, weapon, stance, run_ref_speed) — the standard clip
-                     generators read it; run_ref_speed goes to FighterDef.art.runRefSpeed
-  6. rig_extras      x_ chains (capes, tails, ears, hair, wings) and x_ sockets
-  7. model           hand-authored sections returning fighter.Part list (body, armour, cloth, props,
-                     accent). Branch on ctx.skin for skin-only geometry.
-  8. chain_config    secondary motion for the x_ chains (gravity, springs, drivers)
-  9. clip_overrides  bespoke clips: replace any generated clip or add optional ones
- 10. SKINS           alternate palettes (+ optional extra geometry) exported as separate GLBs that
-                     share the rig (no clips: the client plays the base GLB's clips by bone name)
+LAW: _design/STYLE_BIBLE.md ("Fighters", "Look rules"), tokens.json `fighter`, WORLD.md §2 (faces,
+materials), CONTRACT §12 (rig, clips, budgets, outputs), VOCAB.md (asset paths).
 
-Rules: no primitive shapes as final art (use lofts/plates/cloth/union_fillet), deterministic (use
-scene.rng(...) for any variation), budgets 10–25k tris, one 1024² texture set + `accent`.
+FILE STRUCTURE (sections in this order; the shared pipeline in common/pipeline.py runs them):
+   0 brief            ID / TITLE / ROLE_MASS / ORIGIN from content/fighters/<id>.json + the roster brief
+   1 proportions      PROPORTIONS (heroic: 6-6.5 heads, head 0.29-0.31 m at 1.9 m) + SHAPE (big hands,
+                      big feet). Height class: compact 1.6 / standard 1.9 / large 2.4 m. Skins NEVER change it.
+   2 body             body.humanoid_parts + boots, fused by mesh.union_fillet (materials by region)
+   3 face             kit.carved_mask (+ kit.mask_beak) | kit.glass_visor | kit.hood wrap. No bare face, no hair
+   4 armour/cloth/props   kit.slab_pauldron, kit.limb_shell, kit.mantle, kit.drape, mesh.slab, mesh.loft/plate;
+                      bevels 2-4 cm (the brushstroke); NO metal, gems, gold filigree, gears, clock hands, runes
+   5 palette          PALETTE = materials.bible_palette(...) in the bible's vocabulary (chalk, stone,
+                      sandstone, ironstone, dawnglass, lampresin, wood, wood_dark, cloth, cloth2, under,
+                      leather, ink, accent); CARD = FighterDef.palette (UI backdrop colours)
+   6 value gradient   VALUE_GRADIENT_STOPS (Z ramp); palette values chosen per band: top quarter L* 70-85,
+                      middle 45-65, feet 20-35 ON SCREEN (lineup_qa measures it)
+   7 accent           the `accent` material only, <= 5 % of the silhouette, all in the top half (crown,
+                      shoulders, chest, weapon head), as carved glass inlays/fins - never a gem shape
+   8 motion           MOTION = anim.motion_profile(weight, weapon, stance, run_ref_speed, blocks=BLOCKS)
+                      + clip_overrides(ctx): cast_a1/a2/a3/ult are DISTINCT gestures (use
+                      anim.strike_keys for the 40 % impact timing); victory ends in a hold; idle_lobby loops
+   9 skins            SKINS: <id>_<variant> palette swaps + optional `extra` geometry flags read in model();
+                      same rig, same clips (the client plays the base GLB's clips by bone name), same
+                      silhouette class (height +-5 %, footprint +-10 %), same accent locations, same gradient
+  10 export           automatic: GLB (KHR_mesh_quantization + EXT_texture_webp + int16 rotations) <= 1.2 MB,
+                      art.json (exact FighterArt, zod .strict()), skins.json (SkinDef asset fields)
+  11 renders          automatic (common/render.py): splash 1600x900 (front three-quarter, subject in grid
+                      columns 7-12, painted map backdrop, sun behind-left of camera), portrait 512² (head and
+                      shoulders), icon 128² (mask close-up), turntable QA; SPLASH tunes pose/camera/map
+
+OUTPUT FILES (VOCAB.md; art/out/... maps 1:1 to assets/... in the catalog):
+  art/out/fighters/<id>/<id>.glb  portrait.png  splash.png  icon.png  art.json  skins.json
+  art/out/fighters/<id>/<skin_id>.glb  <skin_id>_portrait.png  <skin_id>_splash.png
+  (the base skin id is `<id>_base` in content and points at the base files)
+  QA: art/renders/fighters/<id>/turntable.png, three_<id>.png, three_clips_<id>.png, build_report_<id>.json
+
+PER-FIGHTER CHECKLIST (sign-off; numbers from build_report_<id>.json, three QA and lineup_qa):
+  [ ] tris 10-25k (base and every skin)                     [ ] GLB <= 1.2 MB (base and every skin)
+  [ ] rig check passes (VALE_BIPED_1 + x_ only)              [ ] <= 2 sway bones per drapery (rigid drapery)
+  [ ] every required clip: idle run attack1 attack2 cast_a1 cast_a2 cast_a3 cast_ult death recall
+      idle_lobby victory; attack/cast frames multiple of 5, impact at 40 %; loops closed (three_load_test)
+  [ ] run foot slide < 8 % at runRefSpeed (three_load_test)  [ ] death ends at rest on the ground
+  [ ] cast_a1/a2/a3/ult read as four different gestures in three_clips_<id>.png
+  [ ] silhouette: role mass reads in black at 64 px; IoU <= 0.80 against every roster fighter
+  [ ] facing readable from above (mask beak, asymmetric shoulder, weapon side)
+  [ ] value gradient on screen: top 70-85, middle 45-65, feet 20-35 L* (lineup_qa valueBands)
+  [ ] accent <= 5 % of the silhouette, >= 90 % of it in the top half, never the brightest at rest
+  [ ] no banned motifs (metal bevels, gold, gems, gears, clock hands, glowing runes, teal-and-gold)
+  [ ] splash: front three-quarter, subject in columns 7-12, feet grounded, sun behind-left, map backdrop
+  [ ] portrait 512² head and shoulders; icon 128² reads at a glance (mask + crown)
+  [ ] art.json copied verbatim into content/fighters/<id>.json `art`; skins.json fields into content/skins/<id>.json
 """
 from __future__ import annotations
 
@@ -36,177 +72,228 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import bpy  # noqa: E402,F401  (first: the bpy wheel registers mathutils on import)
 from mathutils import Vector  # noqa: E402
 
-from common import anim, body, fighter, materials, mesh, rig  # noqa: E402
+from common import anim, body, fighter, kit, materials, mesh, rig  # noqa: E402
+from common.anim import Aim, HandTarget  # noqa: E402
 from common.mesh import Cylindrical, Spherical  # noqa: E402
 
 V = Vector
 
-# 1 ── identity ──────────────────────────────────────────────────────────────────────────────────
-ID = "_template"
-TITLE = "Template Wanderer"
+# 0 ── brief ────────────────────────────────────────────────────────────────────────────────────
+ID = "_template"                      # == file name == content/fighters/<id>.json id (lower_snake_case)
+TITLE = "Template Caster"
+ROLE_MASS = "caster"                  # plinth | breaker | striker | slinger | caster | tender (bible: role is mass)
+ORIGIN = "aubade"                     # aubade (glass visor) | serenade (carved mask) | hourless (wrap / hood)
 
-# 2 ── proportions (VALE_BIPED_1 rest pose; metres) ─────────────────────────────────────────────
-PROPORTIONS = rig.proportions(height=1.80, shoulder_width=0.44, hip_width=0.22, leg=0.85, arm=0.57,
-                              head=0.245, spine_curve=0.02, a_pose_deg=45.0)
+# 1 ── proportions + shape (heroic: 6.3 heads, big hands and feet) ─────────────────────────────────
+PROPORTIONS = rig.proportions(height=1.9, head=0.30, neck=0.065, shoulder_width=0.44, hip_width=0.20, leg=0.85,
+                              arm=0.60, hand=0.20, foot=0.29, ankle_height=0.09, spine_curve=0.02, stance=0.03)
+SHAPE = body.shape(girth=0.96, chest=0.98, waist=0.9, hips=0.96, arm=0.95, forearm=1.1, hand=1.45, leg=0.92,
+                   neck=1.2, head_w=1.1, head_d=1.06, feet=False)
 
-# 3 ── base body shape ───────────────────────────────────────────────────────────────────────────
-SHAPE = body.shape(girth=0.95, chest=0.98, waist=0.95, arm=0.95, forearm=1.0, leg=0.97, feet=False, hand=1.2)
+# 5 ── palette (bible vocabulary; values picked per value band) + card ─────────────────────────────
+MATERIAL_SET = "bible"                # honed stone / glass / wood / cloth; NO metal
+PALETTE = materials.bible_palette(
+    chalk="#d8d3c6",                  # headpiece spire + mask (top band, brightest)
+    dawnglass="#a9c4dc",              # visor + halo disc + staff lens (cool glass, NOT emissive)
+    cloth2="#b9b6ac",                 # hood wrap + collar (top band)
+    cloth="#6c7480",                  # robe (middle band)
+    wood="#a68a68",                   # staff + bracers (pale ash)
+    leather="#3e3936", under="#2e3034",   # boots + legs (feet band)
+    accent="#3f9cff",                 # authored Dawn azure; the renderer tints it per viewer
+)
+CARD = {"primary": "#24364a", "secondary": "#a9c4dc"}
 
-# 4 ── palette (hex, style bible) + card colours ─────────────────────────────────────────────────
-PALETTE = materials.palette(cloth="#55306b", cloth2="#d9c9a3", under="#2b2a33", leather="#5b3f2a",
-                            leather_dark="#33241a", metal="#8e8a80", trim="#b98f45", skin="#c58f6e",
-                            wood="#6d4a2e", gem="#8ff0d0", accent="#8ff0d0")
-CARD = {"primary": "#3b2350", "secondary": "#8ff0d0"}
+# 6 ── value gradient (fraction of height -> multiplier) ─────────────────────────────────────────
+VALUE_GRADIENT_STOPS = [(0.0, 0.62), (0.12, 0.70), (0.30, 0.84), (0.55, 0.95), (0.80, 1.02), (1.0, 1.06)]
 
-# 5 ── motion profile ────────────────────────────────────────────────────────────────────────────
-MOTION = anim.motion_profile(weight="light", weapon="staff", stance="neutral", run_ref_speed=3.4)
+# 8 ── motion profile (+ per-fighter arm blocks over anim.ONE_HAND) ──────────────────────────────
+BLOCKS = {}                           # e.g. {"guard": ((rel), (pole), (aim), (off rel), (off pole))}
+MOTION = anim.motion_profile(weight="light", weapon="staff", stance="neutral", run_ref_speed=3.5, blocks=BLOCKS)
 
-# 10 ── skins (palette swaps + optional extra geometry; same rig) ────────────────────────────────
+# 10/11 ── export + render settings ─────────────────────────────────────────────────────────────
+SOCKETS = {"weapon_tip": "x_staff_tip"}          # FighterArt.sockets extras (VFX attach points)
+SPLASH = {"map": "map_rift", "clip": "idle_lobby", "t": 0.0}   # see common/render.py SPLASH_DEFAULTS
+TEXTURE_SIZE = 1024
+GLB_COMPRESS = True                   # quantize + WebP + int16 rotations (fighter budget <= 1.2 MB)
+
+# 9 ── skins: <id>_<variant>; palette swaps + optional extra geometry; same rig/clips/accent places ─
 SKINS = [
-    {"id": "_template_frost", "palette": {"cloth": "#2f5f7a", "cloth2": "#e8eef2", "trim": "#c9d6e0",
-                                           "accent": "#9fe0ff", "gem": "#9fe0ff"},
-     "card": {"primary": "#1d3546", "secondary": "#9fe0ff"}, "extra": {"mantle_spikes": True}},
+    {"id": "_template_dusk",
+     "palette": {"chalk": "#cbb08c", "cloth2": "#a8927a", "cloth": "#6e4f3f", "dawnglass": "#c98a3c",
+                 "wood": "#6d4c34", "leather": "#3b2c22", "under": "#30281f"},
+     "extra": {"resin_lantern": True},           # model() reads ctx.skin["extra"]
+     "card": {"primary": "#3a2a20", "secondary": "#c98a3c"}},
 ]
 
 
-# 6 ── rig extras ────────────────────────────────────────────────────────────────────────────────
+# 6b ── rig extras: x_ chains (<= 2 sway bones per drapery) and x_ sockets ─────────────────────────
 def rig_extras(ctx) -> None:
     J = ctx.info.joints
-    nb = J["neck_base"]
-    top = V((0, nb.y + 0.11, nb.z - 0.05))
-    ctx.chains["cape"] = rig.add_chain(ctx.info, "cape", "chest",
-                                       [top, top + V((0, 0.04, -0.38)), top + V((0, 0.08, -0.78)),
-                                        top + V((0, 0.12, -1.12))], z_hint=(0, 1, 0))
-    rig.add_socket(ctx.info, "x_staff_tip", "prop.R", rig.prop_matrix(ctx.info, "prop.R") @ V((0, 0, 0.95)))
+    zt = J["spine0"].z - 0.06
+    ctx.chains["robe_f"] = rig.add_chain(ctx.info, "robe_f", "hips", [V((0, -0.14, zt)), V((0, -0.17, zt - 0.62))])
+    ctx.chains["robe_b"] = rig.add_chain(ctx.info, "robe_b", "hips", [V((0, 0.15, zt)), V((0, 0.19, zt - 0.66))],
+                                         z_hint=(0, 1, 0))
+    rig.add_socket(ctx.info, "x_staff_tip", "prop.R", rig.prop_matrix(ctx.info, "prop.R") @ V((0, 0, 1.02)))
 
 
-# 7 ── model: hand-authored sections ────────────────────────────────────────────────────────────
+# 2-4, 7 ── model ─────────────────────────────────────────────────────────────────────────────
 def model(ctx) -> list:
     info, M, col = ctx.info, ctx.mats, ctx.col
     J = info.joints
-    P = []
     extra = (ctx.skin or {}).get("extra", {})
+    P = []
 
-    # 7a body: lofted anatomy fused into one sculpt (face/hands in skin, suit in `under`)
+    # 2 body: fused sculpt; materials by region (robe torso/arms, dark legs, leather hands + boots)
     parts = body.humanoid_parts(info, SHAPE, col=col)
     for p in parts:
-        mesh.set_material(p, M["skin"] if p.name in ("b_head",) or p.name.startswith("b_hand") else M["under"])
+        mat = M["leather"] if p.name.startswith("b_hand") else M["cloth"] if p.name.startswith(("b_torso", "b_arm")) \
+            else M["under"]
+        mesh.set_material(p, mat)
     for s in ("L", "R"):
-        b = body.boot(info, s, col=col, cuff=True, height=0.34, name=f"b_boot.{s}")
-        mesh.set_material(b, M["leather_dark"])
+        b = body.boot(info, s, col=col, cuff=True, height=0.32, width=1.2, name=f"b_boot.{s}")
+        mesh.set_material(b, M["leather"])
         parts.append(b)
-    hi = mesh.union_fillet(parts, voxel=0.0055, fillet=0.03, name="body_high", col=col)
-    ctx.targets = [hi]
-    P.append(fighter.Part("body", high=hi, tris=8000, bind="auto", uv_weight=1.0))
+    hi = mesh.union_fillet(parts, voxel=0.0058, fillet=0.03, name="body_high", col=col)
+    ctx.body_high, ctx.targets = hi, [hi]
+    P.append(fighter.Part("body", high=hi, tris=5600, bind="auto", uv_weight=0.85))
 
-    # 7b hood: a conformed cloth shell around the head, open at the face
+    # 3 face (Aubade): carved chalk mask + a dawnglass visor band; a cloth wrap hood around it
+    mask = kit.carved_mask(ctx, M["chalk"], M["ink"], target=[hi], lift=0.014, eye=(26.0, 88.0, 13.0, 4.0), col=col)
+    P.append(fighter.Part("mask", low=mask, bind="bone:head", uv_weight=1.6))
+    visor = kit.glass_visor(ctx, M["dawnglass"], [mask], v0=79.0, v1=96.0, lift=0.005, col=col)
+    P.append(fighter.Part("visor", low=visor, bind="bone:head", uv_weight=1.2))
+    hood = kit.hood(ctx, M["cloth2"], target=[hi, mask], lift=0.03, open_deg=68.0, peak=0.0, folds=6, col=col)
     hb = J["head_base"]
-    hood = mesh.plate(Spherical(V((0, hb.y + 0.01, hb.z + 0.09))),
-                      [(0, -180, 180), (60, -180, 180), (95, -140, 140), (125, -120, 120)],
-                      target=ctx.targets, offset=0.03, thickness=0.012, cols=26, rows_n=10, smooth_iters=12,
-                      shape_fn=lambda u, v, r: 0.03 * max(0.0, -math.cos(math.radians(u))) * mesh.smoothstep(40, 120, v),
-                      rim=0.012, rim_height=0.003, bevel_w=0.003, name="hood", col=col,
-                      mat=M["cloth"], rim_mat=M["cloth2"], inner=True)
-    P.append(fighter.Part("hood", low=hood, bind=("zblend", "neck", "head", hb.z - 0.04, hb.z + 0.02), uv_weight=1.3))
+    P.append(fighter.Part("hood", low=hood, bind=("zblend", "neck", "head", hb.z - 0.06, hb.z + 0.02), uv_weight=1.2))
 
-    # 7c sash + belt: plates projected over the body
+    # 4a caster "line + disc": a chalk spire headpiece (line) and a dawnglass dial halo (disc)
+    hc, hr = kit.head_frame(info)
+    top = kit.surface(Spherical(hc), 0, 1e-3, mesh.bvh_of([hood]), -0.01)
+    spire = mesh.loft([{"p": top, "rx": 0.05, "ry": 0.04, "exp": 2.2},
+                       {"p": top + V((0, 0.01, 0.10)), "rx": 0.035, "ry": 0.03, "exp": 2.2},
+                       {"p": top + V((0, 0.02, 0.24)), "rx": 0.006, "ry": 0.006}], segments=8, caps=("flat", "point"),
+                      up=(0, -1, 0), name="spire", col=col)
+    mesh.set_material(spire, M["chalk"])
+    P.append(fighter.Part("spire", low=spire, bind="bone:head"))
+    hcen = hc + V((0, 0.17, 0.06))
+    halo = mesh.loft([{"p": hcen + V((0, -0.012, 0)), "rx": 0.20, "ry": 0.20, "exp": 2.0},
+                      {"p": hcen + V((0, 0.012, 0)), "rx": 0.20, "ry": 0.20, "exp": 2.0}], segments=28,
+                     caps=("flat", "flat"), up=(0, 0, 1), name="halo", col=col, smooth_path=False, rings=2)
+    mesh.bevel(halo, 0.008, 2, angle=30)
+    mesh.set_material(halo, M["dawnglass"])
+    P.append(fighter.Part("halo", low=halo, bind="bone:head", uv_weight=0.8))
+
+    # 7 accent: an inlay ring on the halo's face + a strip up the spire (top half only, <= 5 %)
+    ring = [hcen + V((math.cos(a) * 0.17, -0.016, math.sin(a) * 0.17)) for a in [2 * math.pi * i / 24 for i in range(25)]]
+    acc = mesh.sweep(ring, [(0.016, 0.006)] * 25, segments=6, caps=(None, None), up=(0, -1, 0), name="halo_inlay",
+                     col=col)
+    mesh.cleanup(acc, merge=1e-4)
+    mesh.set_material(acc, M["accent"])
+    P.append(fighter.Part("halo_inlay", low=acc, bind="bone:head"))
+
+    # 4b collar + robe drapes (rigid drapery on one-bone chains) + sash
+    nb = J["neck_base"]
+    collar = kit.scarf(ctx, M["cloth2"], [hi], z=nb.z - 0.004, thick=0.03, depth=0.044, cowl=0.04, bunch=0.12,
+                       name="collar", col=col)
+    P.append(fighter.Part("collar", low=collar, bind=("zblend", "chest", "neck", nb.z - 0.07, nb.z + 0.03)))
+    axis = Cylindrical((0, 0, 0), (0, 0, 1), ref=(0, -1, 0))
     s0 = J["spine0"]
-    axis = Cylindrical((0, 0, 0), (0, 0, 1))
-    belt = mesh.plate(axis, [(s0.z + 0.03, -180, 180), (s0.z - 0.04, -180, 180)], target=ctx.targets, offset=0.008,
-                      thickness=0.006, cols=36, wrap=True, rim=0.006, name="belt", col=col, mat=M["leather"],
-                      rim_mat=M["trim"])
-    P.append(fighter.Part("belt", low=belt, bind="bone:hips"))
+    sash = mesh.plate(axis, [(s0.z + 0.04, -180, 180), (s0.z - 0.05, -180, 180)], target=[hi], offset=0.014,
+                      thickness=0.016, cols=30, smooth_iters=8, wrap=True, bevel_w=0.006, name="sash", col=col,
+                      mat=M["cloth2"])
+    P.append(fighter.Part("sash", low=sash, bind="bone:hips"))
+    st = mesh.bvh_of([sash])
+    z = s0.z - 0.05
+    for nm, u0, u1, L, out in (("robe_f", -36, 36, 0.62, (0, -1, 0)), ("robe_b", 140, 220, 0.68, (0, 1, 0))):
+        top = [kit.surface(axis, u0 + (u1 - u0) * i / 6, z, st, 0.006) for i in range(7)]
+        d = kit.drape(top, L, M["cloth"], folds=3, fold_depth=0.016, flare=0.08, avoid=[hi], clearance=0.035,
+                      hem=lambda u: 0.05 * math.sin(math.pi * u), out_dir=out, name=nm, col=col, seed=len(nm))
+        P.append(fighter.Part(nm, low=d, bind=("chain", nm, "hips")))
 
-    # 7d bracers
+    # 4c bracers (carved ash)
     for s in ("L", "R"):
-        el, wr = J[f"elbow.{s}"], J[f"wrist.{s}"]
-        fa = (wr - el).length
-        br = mesh.plate(Cylindrical(el, (wr - el).normalized(), ref=(0, 0, 1)),
-                        [(fa * 0.35, -180, 180), (fa * 0.98, -180, 180)], target=ctx.targets, offset=0.01,
-                        thickness=0.006, cols=16, wrap=True, rim=0.008, name=f"bracer.{s}", col=col,
-                        mat=M["leather"], rim_mat=M["trim"])
+        br = kit.limb_shell(ctx, f"elbow.{s}", f"wrist.{s}", M["wood"], [hi], t0=0.3, t1=0.97, thickness=0.02,
+                            bevel_w=0.008, cols=14, name=f"bracer.{s}", col=col)
         P.append(fighter.Part(f"bracer.{s}", low=br, bind=f"bone:forearm.{s}"))
 
-    # 7e cape on the x_cape chain (cloth panel hanging from the shoulders)
-    nb = J["neck_base"]
-    top = [V((x, nb.y + 0.10 + 0.25 * x * x, nb.z - 0.04 - 0.3 * abs(x))) for x in (-0.20, -0.12, -0.04, 0.04, 0.12, 0.20)]
-    cape = mesh.cloth_panel(top, 1.05, folds=5, fold_depth=0.016, flare=0.14, out_dir=(0, 1, 0),
-                            hem=lambda u: 0.06 * math.sin(math.pi * u), avoid=ctx.targets, clearance=0.04,
-                            name="cape", col=col, seed=4, rows=16)
-    mesh.set_material(cape, M["cloth"])
-    P.append(fighter.Part("cape", low=cape, bind=("chain", "cape", "chest")))
-    # cloak clasp at the collar (accent, chest/top half): a second, always-visible readability spot
-    o, d = Cylindrical((0, 0, 0), (0, 0, 1)).ray(0, nb.z - 0.06)
-    cz = o + d * ((mesh._surface_r(mesh.bvh_of(ctx.targets), o, d, 0.6) or 0.14) + 0.012)
-    clasp = mesh.loft([{"p": cz + V((0, 0.006, 0.045)), "rx": 0.008, "ry": 0.006},
-                       {"p": cz + V((0, -0.008, 0.0)), "rx": 0.042, "ry": 0.014, "exp": 1.4},
-                       {"p": cz + V((0, 0.006, -0.045)), "rx": 0.008, "ry": 0.006}],
-                      segments=8, caps=("point", "point"), up=(0, -1, 0), name="clasp", col=col)
-    mesh.shade(clasp, smooth=False)
-    mesh.set_material(clasp, M["accent"])
-    P.append(fighter.Part("clasp", low=clasp, bind="bone:chest"))
-
-    # 7f skin-only geometry example
-    if extra.get("mantle_spikes"):
-        for s, sx in (("L", 1), ("R", -1)):
-            sh = J[f"shoulder.{s}"]
-            spike = mesh.loft([{"p": sh + V((0, 0.02, 0.06)), "rx": 0.03, "ry": 0.03},
-                               {"p": sh + V((0.06 * sx, 0.03, 0.16)), "rx": 0.012, "ry": 0.012}],
-                              segments=8, caps=("flat", "point"), name=f"spike.{s}", col=col)
-            mesh.set_material(spike, M["trim"])
-            P.append(fighter.Part(f"spike.{s}", low=spike, bind=f"bone:shoulder.{s}"))
-
-    # 7g prop: staff on prop.R (prop space: grip at origin, shaft +Z, face -Y), crystal = accent
-    shaft = mesh.loft([{"p": (0, 0, -0.75), "rx": 0.014, "ry": 0.014}, {"p": (0, 0, 0.0), "rx": 0.017, "ry": 0.017},
-                       {"p": (0.01, 0, 0.62), "rx": 0.015, "ry": 0.015}, {"p": (-0.03, 0, 0.86), "rx": 0.02, "ry": 0.02}],
-                      segments=10, caps=("round", "round"), name="staff", col=col, rings=24)
+    # 4d prop: staff on prop.R (prop space: grip at the origin, shaft +Z, face -Y)
+    shaft = mesh.loft([{"p": (0, 0, -0.78), "rx": 0.016, "ry": 0.016}, {"p": (0, 0, 0.0), "rx": 0.02, "ry": 0.02},
+                       {"p": (0, 0, 0.80), "rx": 0.018, "ry": 0.018}], segments=8, caps=("round", "flat"),
+                      name="staff", col=col, rings=14)
     mesh.set_material(shaft, M["wood"])
-    claw = mesh.loft([{"p": (-0.03, 0, 0.84), "rx": 0.03, "ry": 0.03}, {"p": (0.0, 0, 0.92), "rx": 0.045, "ry": 0.04},
-                      {"p": (0.02, 0, 1.02), "rx": 0.02, "ry": 0.02}], segments=10, caps=("flat", "point"),
-                     name="staff_head", col=col)
-    mesh.set_material(claw, M["trim"])
-    # the accent must READ at the game camera (bible: ~2-6 % of the silhouette, top half): the build
-    # warns below 1.5 % (three QA accentPct). A thumbnail-sized gem is invisible at 100 px.
-    crystal = mesh.loft([{"p": (0.0, 0, 0.88), "rx": 0.006, "ry": 0.006},
-                         {"p": (0.0, -0.002, 0.97), "rx": 0.068, "ry": 0.06, "exp": 1.2},
-                         {"p": (0.0, 0, 1.10), "rx": 0.006, "ry": 0.006}], segments=6, caps=("point", "point"),
-                        name="staff_crystal", col=col)
-    mesh.shade(crystal, smooth=False)
-    mesh.set_material(crystal, M["accent"])
+    head = mesh.loft([{"p": (0, 0, 0.78), "rx": 0.03, "ry": 0.03}, {"p": (0, 0, 0.84), "rx": 0.075, "ry": 0.022, "exp": 2.6},
+                      {"p": (0, 0, 1.0), "rx": 0.085, "ry": 0.024, "exp": 2.6}, {"p": (0, 0, 1.06), "rx": 0.03, "ry": 0.02}],
+                     segments=12, caps=("flat", "round"), up=(0, -1, 0), name="staff_head", col=col)
+    mesh.set_material(head, M["chalk"])
+    if extra.get("resin_lantern"):               # 9: skin-only geometry: a lampresin vessel replaces the lens
+        lens = mesh.loft([{"p": (0, 0, 0.86), "rx": 0.03, "ry": 0.03}, {"p": (0, 0, 0.92), "rx": 0.055, "ry": 0.055},
+                          {"p": (0, 0, 0.99), "rx": 0.04, "ry": 0.04}], segments=12, caps=("round", "round"),
+                         up=(0, -1, 0), name="staff_lens", col=col)
+        mesh.set_material(lens, M["lampresin"])
+    else:
+        lens = mesh.loft([{"p": (0, 0.0, 0.92), "rx": 0.06, "ry": 0.008}, {"p": (0, -0.012, 0.92), "rx": 0.062, "ry": 0.012},
+                          {"p": (0, -0.022, 0.92), "rx": 0.05, "ry": 0.006}], segments=14, caps=("flat", "round"),
+                         up=(0, 0, 1), name="staff_lens", col=col, smooth_path=False, rings=3)
+        mesh.set_material(lens, M["dawnglass"])
     mw = rig.prop_matrix(info, "prop.R")
-    for o in (shaft, claw, crystal):
+    for o in (shaft, head, lens):
         o.data.transform(mw)
-    P += [fighter.Part("staff", low=shaft, bind="bone:prop.R"), fighter.Part("staff_head", low=claw, bind="bone:prop.R"),
-          fighter.Part("staff_crystal", low=crystal, bind="bone:prop.R")]
+    P += [fighter.Part("staff", low=shaft, bind="bone:prop.R"), fighter.Part("staff_head", low=head, bind="bone:prop.R"),
+          fighter.Part("staff_lens", low=lens, bind="bone:prop.R")]
     return P
 
 
-# 8 ── secondary motion for x_ chains ────────────────────────────────────────────────────────────
+# 8b ── secondary motion for the x_ chains ─────────────────────────────────────────────────────
 def chain_config(ctx) -> list:
-    def push(p):  # legs swinging back push the cape back
-        return 0.6 * max(0.0, -min(p.get("thigh.L", (0, 0, 0))[0], p.get("thigh.R", (0, 0, 0))[0]))
-    return [anim.ChainCfg(ctx.chains["cape"], gravity=0.85, stiffness=110.0, damping=12.0, inertia=0.9, drive=push, limit=(-55.0, 55.0))]
+    def push_f(p):
+        return 0.7 * max(0.0, p.get("thigh.L", (0, 0, 0))[0], p.get("thigh.R", (0, 0, 0))[0])
+
+    def push_b(p):
+        return 0.7 * max(0.0, -min(p.get("thigh.L", (0, 0, 0))[0], p.get("thigh.R", (0, 0, 0))[0]))
+
+    return [anim.ChainCfg(ctx.chains["robe_f"], gravity=0.8, drive=push_f, limit=(-55.0, 55.0)),
+            anim.ChainCfg(ctx.chains["robe_b"], gravity=0.8, drive=push_b, limit=(-55.0, 55.0))]
 
 
-# 9 ── bespoke clips ─────────────────────────────────────────────────────────────────────────────
+# 8c ── bespoke clips: each ability a DISTINCT gesture; impact at 40 % (anim.strike_keys) ──────────
 def clip_overrides(ctx) -> dict:
-    """Replace or add clips. Helpers: anim.guard, anim.gesture_keys, anim.keyed, anim.P, anim.osc,
-    anim.HandTarget/Aim/FootTarget. Impact at 40 %, frame counts multiple of 5, loops close."""
+    """Generated: attack1/attack2 (staff strikes), cast_a1 = thrust (the lens aimed forward),
+    cast_a3 = sweep. Bespoke here: cast_a2 = the staff butt driven into the ground (a ring pulse),
+    cast_ult = the halo raised overhead on the staff (wide stance, both hands)."""
     prof = MOTION
     g = anim.guard(prof)
-    # a bespoke ultimate: staff planted overhead, spun once, slammed at 40 %
-    wind, hit, follow = anim.gesture_keys(prof, "slam")
-    spin = anim.add(wind, anim.P(hips=(0, 40, 0), chest=(0, 30, 0)))
+
+    def two_hand(torso, hips, rel, aim, grip=0.36, pole=(-0.9, 0.3, -0.3)):
+        p = anim.add(g, anim.P(**torso))
+        ik = dict(g["ik"])
+        ik["hand.R"] = HandTarget(rel=rel, pole=pole)
+        ik["aim.R"] = Aim(aim)
+        ik["hand.L"] = HandTarget(to_prop=("prop.R", grip), pole=(0.8, 0.4, -0.4))
+        p["ik"] = ik
+        hx, hy, hz = g.get("hips_loc", (0, 0, 0))
+        p["hips_loc"] = (hx + hips[0], hy + hips[1], hz + hips[2])
+        return p
+
+    out = {}
+    wind = two_hand(dict(hips=(-4, 0, 0), spine=(-6, 0, 0), chest=(-8, 0, 0), head=(-6, 0, 0)), (0, 0.02, 0.03),
+                    (0.30, -0.35, 0.10), (0.0, 0.15, 0.99))
+    hit = two_hand(dict(hips=(14, 0, 0), spine=(10, 0, 0), chest=(8, 0, 0), head=(-8, 0, 0)), (0, -0.04, -0.10),
+                   (0.30, -0.55, -0.20), (0.0, 0.10, 0.99))
+    fol = two_hand(dict(hips=(15, 0, 0), spine=(11, 0, 0), chest=(9, 0, 0), head=(-9, 0, 0)), (0, -0.05, -0.11),
+                   (0.30, -0.56, -0.24), (0.0, 0.10, 0.99))
+    N = anim.frames_for(30, prof)
+    out["cast_a2"] = anim.Clip("cast_a2", N, False, anim.drag(anim.keyed(anim.strike_keys(prof, wind, hit, fol, g)), N,
+                                                               {"head": 1.5, "neck": 1.0}), impact=anim.IMPACT)
+    wind = two_hand(dict(hips=(10, 0, 0), spine=(10, 0, 0), chest=(8, 0, 0), head=(6, 0, 0)), (0, 0.02, -0.10),
+                    (0.30, -0.50, -0.55), (0.0, -0.3, -0.95))
+    hit = two_hand(dict(hips=(-6, 0, 0), spine=(-8, 0, 0), chest=(-12, 0, 0), head=(-16, 0, 0)), (0, 0, 0.02),
+                   (0.30, -0.15, 0.95), (0.0, -0.05, 1.0))
+    fol = two_hand(dict(hips=(-5, 0, 0), spine=(-7, 0, 0), chest=(-10, 0, 0), head=(-14, 0, 0)), (0, 0, 0.01),
+                   (0.30, -0.18, 0.92), (0.0, -0.08, 1.0))
     N = anim.frames_for(50, prof)
-    ult = anim.Clip("cast_ult", N, False, anim.keyed([(0.0, g, "linear"), (0.18, spin, "inout"), (0.30, wind, "inout"),
-                                                       (anim.IMPACT, hit, "accel"), (0.55, follow, "out"),
-                                                       (1.0, g, "inout")]), impact=anim.IMPACT)
-    # an optional taunt: a loopable sway with the staff held high
-    def taunt_pose(t):
-        return anim.add(g, anim.P(hips=(0, 6 * anim.osc(t, 1), 0), chest=(0, 10 * anim.osc(t, 1), 0),
-                                  head=(-4, -8 * anim.osc(t, 1), 0)))
-    taunt = anim.Clip("taunt", 60, True, taunt_pose)
-    return {"cast_ult": ult, "taunt": taunt}
+    out["cast_ult"] = anim.Clip("cast_ult", N, False, anim.drag(anim.keyed(anim.strike_keys(prof, wind, hit, fol, g)), N,
+                                                                 {"head": 1.5, "neck": 1.0}), impact=anim.IMPACT)
+    return out
 
 
 if __name__ == "__main__":

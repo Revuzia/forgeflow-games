@@ -1,5 +1,5 @@
 {
-  "$comment": "VALE team buffs (CONTRACT §5.4 camps/objectives/structures; WORLD glossary). A unit's onTakedownTeamBuff grants one of these to every fighter of the killing team (stats + passives) and to its Wicks (minionStats). Granting an id the team already holds refreshes its duration (sim core.ts addTeamBuff). Splinters is designed to stack to 3; the sim currently refreshes instead (SIM request in _design/sections/modes_economy.md).",
+  "$comment": "VALE team buffs (CONTRACT §5.4 camps/objectives/structures; WORLD glossary). A unit's onTakedownTeamBuff grants one of these to every fighter of the killing team (stats + passives) and to its Wicks (minionStats). Granting an id the team already holds refreshes its duration (sim core.ts addTeamBuff). Splinters is designed to stack to 3; the sim currently refreshes instead (SIM/LEAD request: _design/sections/modes_economy.md §10).",
   "teamBuffs": [
     {
       "id": "clearglass",

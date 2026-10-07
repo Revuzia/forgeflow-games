@@ -1,0 +1,529 @@
+{
+  "id": "odrum",
+  "name": "Odrum",
+  "title": "Amber setter",
+  "class": "class_slinger",
+  "role": "shaftlight",
+  "secondaryRole": "shadehold",
+  "resource": "res_light",
+  "job": "Pours resin under the enemy front line; whoever is still standing in it when it sets is stuck.",
+  "difficulty": 2,
+  "lore": "Odrum tends the resin pans that feed the lamps of the east rim, and he learned early that warm lampresin goes where you pour it and stays where it sets. He carries two pots on a walnut yoke and a sling that doubles as a ladle. Serenade cooks complain that he talks about resin at dinner; Aubade runners complain that their boots are still stuck to the Noonline. He is patient in the way of people who wait for things to harden, and he has never once hurried a shot.",
+  "tags": [
+    "serenade",
+    "ranged",
+    "marksman",
+    "zone",
+    "root",
+    "shred"
+  ],
+  "base": {
+    "hp": 600,
+    "hpRegen": 1.4,
+    "res": 20,
+    "ad": 60,
+    "armor": 27,
+    "resist": 30,
+    "attackSpeed": 0.66,
+    "moveSpeed": 3.35
+  },
+  "growth": {
+    "hp": 96,
+    "hpRegen": 0.12,
+    "res": 5,
+    "ad": 3.2,
+    "armor": 4.2,
+    "resist": 1.3,
+    "attackSpeed": 0.03
+  },
+  "attack": {
+    "range": 5.6,
+    "windup": 0.3,
+    "damageType": "phys",
+    "projectileSpeed": 20,
+    "present": {
+      "vfx": "lib_arrow",
+      "sfx": "c_thrown",
+      "hitVfx": "lib_hit_phys_light",
+      "hitSfx": "c_hit_phys_light"
+    }
+  },
+  "collisionRadius": 0.55,
+  "kit": {
+    "passive": {
+      "id": "odrum_cracked_amber",
+      "name": "Cracked Amber",
+      "icon": "assets/ui/icons/abilities/odrum_cracked_amber.svg",
+      "desc": "When Odrum roots an enemy, or slows one that is already rooted, the amber cracks: they lose {triggers.0.effects.0.power} armor and {triggers.0.effects.1.power} magic resist for 2.5 s (once per 2 s per enemy).",
+      "triggers": [
+        {
+          "on": "statusApplied",
+          "filter": {},
+          "perTargetCooldown": 2,
+          "cond": {
+            "kind": "targetHasStatus",
+            "status": "root"
+          },
+          "effects": [
+            {
+              "op": "status",
+              "status": "armor_shred",
+              "duration": 2.5,
+              "power": 0.2,
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "resist_shred",
+              "duration": 2.5,
+              "power": 0.2,
+              "to": "hit"
+            }
+          ]
+        }
+      ],
+      "present": {
+        "vfx": "lib_hit_phys_heavy"
+      }
+    },
+    "a1": {
+      "id": "odrum_resin_shot",
+      "name": "Resin Shot",
+      "icon": "assets/ui/icons/abilities/odrum_resin_shot.svg",
+      "desc": "Odrum lobs resin up to 9 m. It lands after 0.5 s as a 2.5 m pool that slows enemies by 35%. After 1.5 s it sets: enemies still inside take {effects.0.onExpire.0.onHit.0.amount} physical damage and are rooted for 1 s.",
+      "maxRank": 5,
+      "cooldown": [
+        11,
+        10.5,
+        10,
+        9.5,
+        9
+      ],
+      "cost": [
+        60,
+        65,
+        70,
+        75,
+        80
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "point",
+        "range": 9,
+        "indicator": {
+          "kind": "circle",
+          "radius": 2.5
+        }
+      },
+      "castTime": 0.25,
+      "effects": [
+        {
+          "op": "zone",
+          "id": "odrum_resin",
+          "shape": {
+            "kind": "circle",
+            "radius": 2.5
+          },
+          "at": "point",
+          "delay": 0.5,
+          "duration": 1.5,
+          "interval": 0.25,
+          "onTick": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 0.4,
+              "power": 0.35,
+              "to": "hit"
+            }
+          ],
+          "onExpire": [
+            {
+              "op": "area",
+              "shape": {
+                "kind": "circle",
+                "radius": 2.5
+              },
+              "at": "end",
+              "onHit": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": [
+                      70,
+                      110,
+                      150,
+                      190,
+                      230
+                    ],
+                    "bonusAd": 0.7
+                  },
+                  "type": "phys",
+                  "to": "hit"
+                },
+                {
+                  "op": "status",
+                  "status": "root",
+                  "duration": 1,
+                  "to": "hit"
+                }
+              ],
+              "present": {
+                "vfx": "lib_root_bind",
+                "sfx": "c_root"
+              }
+            }
+          ],
+          "present": {
+            "vfx": "odrum_a1_resin",
+            "sfx": "c_thrown",
+            "telegraph": "everyone"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "cc",
+          "zone",
+          "damage",
+          "waveclear"
+        ],
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_a1",
+        "sfx": "c_thrown",
+        "hitVfx": "lib_hit_phys_light",
+        "hitSfx": "c_hit_phys_light",
+        "telegraph": "everyone"
+      }
+    },
+    "a2": {
+      "id": "odrum_swing_out",
+      "name": "Swing Out",
+      "icon": "assets/ui/icons/abilities/odrum_swing_out.svg",
+      "desc": "Odrum whirls the sling: enemies within 3 m take {effects.0.onHit.0.amount} physical damage and are slowed by 30% for 1.5 s, and he gains 25% move speed for 1.5 s.",
+      "maxRank": 5,
+      "cooldown": [
+        9,
+        8.5,
+        8,
+        7.5,
+        7
+      ],
+      "cost": 50,
+      "costKind": "res",
+      "targeting": {
+        "kind": "self",
+        "indicator": {
+          "kind": "circle",
+          "radius": 3
+        }
+      },
+      "castTime": 0.2,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 3
+          },
+          "at": "self",
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  60,
+                  90,
+                  120,
+                  150,
+                  180
+                ],
+                "bonusAd": 0.6
+              },
+              "type": "phys",
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1.5,
+              "power": 0.3,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_ring_pulse",
+            "sfx": "c_swing_heavy",
+            "telegraph": "ally_only"
+          }
+        },
+        {
+          "op": "status",
+          "status": "haste",
+          "duration": 1.5,
+          "power": 0.25,
+          "to": "self"
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "waveclear",
+          "escape",
+          "cc"
+        ]
+      },
+      "present": {
+        "anim": "cast_a2",
+        "hitVfx": "lib_hit_phys_light",
+        "hitSfx": "c_hit_phys_light",
+        "telegraph": "ally_only"
+      }
+    },
+    "a3": {
+      "id": "odrum_step_and_load",
+      "name": "Step and Load",
+      "icon": "assets/ui/icons/abilities/odrum_step_and_load.svg",
+      "desc": "Odrum hops up to 3.5 m. His next basic attack within 3 s carries a resin pellet: {effects.1.empowerAttacks.effects.0.amount} bonus physical damage and a 25% slow for 1.5 s.",
+      "maxRank": 5,
+      "cooldown": [
+        12,
+        11,
+        10,
+        9,
+        8
+      ],
+      "cost": 40,
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 3.5,
+        "indicator": {
+          "kind": "rect",
+          "length": 3.5,
+          "width": 0.8
+        }
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "dash",
+          "mode": "toPoint",
+          "distance": 3.5,
+          "speed": 14,
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_dash_trail"
+          }
+        },
+        {
+          "op": "buff",
+          "id": "odrum_load",
+          "duration": 3,
+          "to": "self",
+          "empowerAttacks": {
+            "count": 1,
+            "resetAttack": true,
+            "effects": [
+              {
+                "op": "damage",
+                "amount": {
+                  "base": [
+                    30,
+                    50,
+                    70,
+                    90,
+                    110
+                  ],
+                  "bonusAd": 0.4
+                },
+                "type": "phys",
+                "to": "hit"
+              },
+              {
+                "op": "status",
+                "status": "slow",
+                "duration": 1.5,
+                "power": 0.25,
+                "to": "hit"
+              }
+            ]
+          },
+          "present": {
+            "vfx": "lib_empower"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "escape",
+          "damage"
+        ]
+      },
+      "present": {
+        "anim": "cast_a3",
+        "sfx": "c_dash",
+        "telegraph": "ally_only"
+      }
+    },
+    "ult": {
+      "id": "odrum_amber_hour",
+      "name": "Amber Hour",
+      "icon": "assets/ui/icons/abilities/odrum_amber_hour.svg",
+      "desc": "Odrum hurls a great ball of resin up to 12 m. It lands after 0.75 s as a 5 m pool that slows enemies by 45%. After 2 s it sets: everyone still inside takes {effects.0.onExpire.0.onHit.0.amount} physical damage and is rooted for 1.5 s, so the whole group cracks.",
+      "maxRank": 3,
+      "cooldown": [
+        110,
+        95,
+        80
+      ],
+      "cost": 100,
+      "costKind": "res",
+      "targeting": {
+        "kind": "point",
+        "range": 12,
+        "indicator": {
+          "kind": "circle",
+          "radius": 5
+        }
+      },
+      "castTime": 0.35,
+      "effects": [
+        {
+          "op": "zone",
+          "id": "odrum_amber",
+          "shape": {
+            "kind": "circle",
+            "radius": 5
+          },
+          "at": "point",
+          "delay": 0.75,
+          "duration": 2,
+          "interval": 0.25,
+          "onTick": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 0.4,
+              "power": 0.45,
+              "to": "hit"
+            }
+          ],
+          "onExpire": [
+            {
+              "op": "area",
+              "shape": {
+                "kind": "circle",
+                "radius": 5
+              },
+              "at": "end",
+              "onHit": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": [
+                      200,
+                      325,
+                      450
+                    ],
+                    "bonusAd": 0.9
+                  },
+                  "type": "phys",
+                  "to": "hit"
+                },
+                {
+                  "op": "status",
+                  "status": "root",
+                  "duration": 1.5,
+                  "to": "hit"
+                }
+              ],
+              "present": {
+                "vfx": "lib_root_bind",
+                "sfx": "c_root"
+              }
+            }
+          ],
+          "present": {
+            "vfx": "odrum_ult_amber",
+            "sfx": "c_ult_release",
+            "telegraph": "everyone"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "cc",
+          "zone",
+          "damage"
+        ],
+        "minTargets": 2,
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_windup",
+        "hitVfx": "lib_hit_phys_heavy",
+        "hitSfx": "c_hit_phys_heavy",
+        "telegraph": "everyone"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/odrum/odrum.glb",
+    "portrait": "assets/fighters/odrum/portrait.png",
+    "splash": "assets/fighters/odrum/splash.png",
+    "icon": "assets/fighters/odrum/icon.png",
+    "height": 1.9,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "marksman",
+    "preferredRange": 5.6,
+    "comboOrder": [
+      "a1",
+      "a3",
+      "a2",
+      "ult"
+    ]
+  },
+  "palette": {
+    "primary": "#7A6550",
+    "secondary": "#BBA27F"
+  }
+}

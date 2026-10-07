@@ -1,0 +1,660 @@
+{
+  "id": "ilsheta",
+  "name": "Ilsheta",
+  "title": "Lamp hanger",
+  "class": "class_tender",
+  "role": "lampglass",
+  "resource": "res_light",
+  "job": "Hangs a healing lamp on the ally in the most trouble; the light follows them wherever they run.",
+  "difficulty": 1,
+  "lore": "In the Glass Belfry every window has a lamp, and Ilsheta was the girl who climbed the ladders to light them. When the morning stopped she kept climbing, because someone ought to. She hangs dawnglass lamps on people now: on runners heading out, on the wounded coming back, on anyone who looks lost. Aubade elders find her too gentle for the war. Serenade fighters find her lamps following them across the Noonline long after they thought they had escaped her. She is quick, tidy and never late.",
+  "tags": [
+    "aubade",
+    "ranged",
+    "support",
+    "heal",
+    "shield",
+    "vision"
+  ],
+  "base": {
+    "hp": 570,
+    "hpRegen": 1.3,
+    "res": 100,
+    "ad": 52,
+    "armor": 26,
+    "resist": 30,
+    "attackSpeed": 0.63,
+    "moveSpeed": 3.35
+  },
+  "growth": {
+    "hp": 92,
+    "hpRegen": 0.11,
+    "res": 10,
+    "ad": 2.8,
+    "armor": 4,
+    "resist": 1.3,
+    "attackSpeed": 0.02
+  },
+  "attack": {
+    "range": 5.4,
+    "windup": 0.3,
+    "damageType": "magic",
+    "projectileSpeed": 18,
+    "present": {
+      "vfx": "lib_bolt_lumen",
+      "sfx": "c_shot_bolt_lumen",
+      "hitVfx": "lib_hit_magic",
+      "hitSfx": "c_hit_magic"
+    }
+  },
+  "collisionRadius": 0.5,
+  "kit": {
+    "passive": {
+      "id": "ilsheta_warm_hands",
+      "name": "Warm Hands",
+      "icon": "assets/ui/icons/abilities/ilsheta_warm_hands.svg",
+      "desc": "Ilsheta's heals restore 40% more to allies who are stunned, rooted, slowed, airborne, asleep, feared or taunted, and give them 15% move speed for 1.5 s (once per 4 s per ally).",
+      "triggers": [],
+      "present": {
+        "vfx": "lib_heal_rise"
+      }
+    },
+    "a1": {
+      "id": "ilsheta_glint_bolt",
+      "name": "Glint Bolt",
+      "icon": "assets/ui/icons/abilities/ilsheta_glint_bolt.svg",
+      "desc": "Ilsheta throws a dawnglass bolt up to 9 m. The first enemy hit takes {effects.0.onHit.0.amount} magic damage and is slowed by 25% for 1.5 s.",
+      "maxRank": 5,
+      "cooldown": [
+        7,
+        6.5,
+        6,
+        5.5,
+        5
+      ],
+      "cost": [
+        50,
+        55,
+        60,
+        65,
+        70
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "direction",
+        "range": 9,
+        "indicator": {
+          "kind": "rect",
+          "length": 9,
+          "width": 0.6
+        }
+      },
+      "castTime": 0.25,
+      "effects": [
+        {
+          "op": "projectile",
+          "speed": 18,
+          "range": 9,
+          "width": 0.6,
+          "from": "self",
+          "toward": "dir",
+          "pierce": 0,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  60,
+                  95,
+                  130,
+                  165,
+                  200
+                ],
+                "ap": 0.6
+              },
+              "type": "magic",
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 1.5,
+              "power": 0.25,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_bolt_lumen",
+            "sfx": "c_proj_whoosh"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "poke",
+          "damage"
+        ],
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_a1",
+        "sfx": "c_cast_lumen",
+        "hitVfx": "lib_hit_magic",
+        "hitSfx": "c_hit_magic",
+        "telegraph": "ally_only"
+      }
+    },
+    "a2": {
+      "id": "ilsheta_hung_lamp",
+      "name": "Hung Lamp",
+      "icon": "assets/ui/icons/abilities/ilsheta_hung_lamp.svg",
+      "desc": "Ilsheta hangs a lamp on an allied fighter or herself for 4 s. Every 0.5 s it heals allied fighters within 3 m of its bearer for {effects.0.onTick.0.amount}, and enemies in its light are revealed and slowed by 10%.",
+      "maxRank": 5,
+      "cooldown": [
+        14,
+        13,
+        12,
+        11,
+        10
+      ],
+      "cost": [
+        70,
+        75,
+        80,
+        85,
+        90
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "unit",
+        "range": 8,
+        "filter": {
+          "enemies": false,
+          "allies": true,
+          "self": true,
+          "minions": false,
+          "monsters": false,
+          "summons": false
+        },
+        "indicator": {
+          "kind": "circle",
+          "radius": 3
+        }
+      },
+      "castTime": 0.2,
+      "effects": [
+        {
+          "op": "zone",
+          "id": "ilsheta_lamp",
+          "shape": {
+            "kind": "circle",
+            "radius": 3
+          },
+          "at": "target",
+          "follow": true,
+          "duration": 4,
+          "interval": 0.5,
+          "filter": {
+            "enemies": false,
+            "allies": true,
+            "self": true,
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "onTick": [
+            {
+              "op": "heal",
+              "amount": {
+                "base": [
+                  10,
+                  14,
+                  18,
+                  22,
+                  26
+                ],
+                "ap": 0.06
+              },
+              "to": "hit"
+            },
+            {
+              "op": "if",
+              "cond": {
+                "kind": "any",
+                "conds": [
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "stun"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "root"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "slow"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "airborne"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "sleep"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "fear"
+                  },
+                  {
+                    "kind": "targetHasStatus",
+                    "status": "taunt"
+                  }
+                ]
+              },
+              "then": [
+                {
+                  "op": "heal",
+                  "amount": {
+                    "base": [
+                      4,
+                      5.6,
+                      7.2,
+                      8.8,
+                      10.4
+                    ],
+                    "ap": 0.024
+                  },
+                  "to": "hit"
+                },
+                {
+                  "op": "if",
+                  "cond": {
+                    "kind": "not",
+                    "cond": {
+                      "kind": "targetHasMark",
+                      "mark": "ilsheta_warmed"
+                    }
+                  },
+                  "then": [
+                    {
+                      "op": "status",
+                      "status": "haste",
+                      "duration": 1.5,
+                      "power": 0.15,
+                      "to": "hit"
+                    },
+                    {
+                      "op": "mark",
+                      "mark": "ilsheta_warmed",
+                      "duration": 4,
+                      "stacks": 1,
+                      "max": 1,
+                      "to": "hit"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "present": {
+            "vfx": "ilsheta_a2_lamp",
+            "sfx": "c_heal",
+            "telegraph": "ally_only"
+          }
+        },
+        {
+          "op": "zone",
+          "id": "ilsheta_lamp_glare",
+          "shape": {
+            "kind": "circle",
+            "radius": 3
+          },
+          "at": "target",
+          "follow": true,
+          "duration": 4,
+          "interval": 0.5,
+          "onTick": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 0.6,
+              "power": 0.1,
+              "to": "hit"
+            },
+            {
+              "op": "reveal",
+              "duration": 0.6,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "telegraph": "none"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "heal"
+        ],
+        "castWhenTargetHpBelow": 0.75
+      },
+      "present": {
+        "anim": "cast_a2",
+        "sfx": "c_heal",
+        "telegraph": "ally_only"
+      }
+    },
+    "a3": {
+      "id": "ilsheta_dawnglass_shell",
+      "name": "Dawnglass Shell",
+      "icon": "assets/ui/icons/abilities/ilsheta_dawnglass_shell.svg",
+      "desc": "Ilsheta shields an allied fighter or herself for {effects.0.amount} for 2.5 s and gives them 20% move speed for 1 s.",
+      "maxRank": 5,
+      "cooldown": [
+        12,
+        11.5,
+        11,
+        10.5,
+        10
+      ],
+      "cost": [
+        60,
+        65,
+        70,
+        75,
+        80
+      ],
+      "costKind": "res",
+      "targeting": {
+        "kind": "unit",
+        "range": 7,
+        "filter": {
+          "enemies": false,
+          "allies": true,
+          "self": true,
+          "minions": false,
+          "monsters": false,
+          "summons": false
+        },
+        "indicator": {
+          "kind": "circle",
+          "radius": 7
+        }
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "shield",
+          "amount": {
+            "base": [
+              60,
+              95,
+              130,
+              165,
+              200
+            ],
+            "ap": 0.45
+          },
+          "duration": 2.5,
+          "to": "target"
+        },
+        {
+          "op": "status",
+          "status": "haste",
+          "duration": 1,
+          "power": 0.2,
+          "to": "target"
+        }
+      ],
+      "ai": {
+        "use": [
+          "shield"
+        ],
+        "castWhenTargetHpBelow": 0.7
+      },
+      "present": {
+        "anim": "cast_a3",
+        "vfx": "lib_shield_up",
+        "sfx": "c_shield",
+        "telegraph": "ally_only"
+      }
+    },
+    "ult": {
+      "id": "ilsheta_every_window_lit",
+      "name": "Every Window Lit",
+      "icon": "assets/ui/icons/abilities/ilsheta_every_window_lit.svg",
+      "desc": "Ilsheta lights a lamp on every allied fighter within 9 m, herself included, for 5 s. Each lamp heals its bearer for {effects.0.onHit.0.effects.0.amount} every 0.5 s (Warm Hands applies) and reveals enemy fighters within 2.5 m of it.",
+      "maxRank": 3,
+      "cooldown": [
+        120,
+        100,
+        80
+      ],
+      "cost": 100,
+      "costKind": "res",
+      "targeting": {
+        "kind": "none",
+        "indicator": {
+          "kind": "circle",
+          "radius": 9
+        }
+      },
+      "castTime": 0.3,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 9
+          },
+          "at": "self",
+          "filter": {
+            "enemies": false,
+            "allies": true,
+            "self": true,
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "onHit": [
+            {
+              "op": "repeat",
+              "count": 10,
+              "interval": 0.5,
+              "effects": [
+                {
+                  "op": "heal",
+                  "amount": {
+                    "base": [
+                      16,
+                      24,
+                      32
+                    ],
+                    "ap": 0.08
+                  },
+                  "to": "hit"
+                },
+                {
+                  "op": "if",
+                  "cond": {
+                    "kind": "any",
+                    "conds": [
+                      {
+                        "kind": "targetHasStatus",
+                        "status": "stun"
+                      },
+                      {
+                        "kind": "targetHasStatus",
+                        "status": "root"
+                      },
+                      {
+                        "kind": "targetHasStatus",
+                        "status": "slow"
+                      },
+                      {
+                        "kind": "targetHasStatus",
+                        "status": "airborne"
+                      },
+                      {
+                        "kind": "targetHasStatus",
+                        "status": "sleep"
+                      },
+                      {
+                        "kind": "targetHasStatus",
+                        "status": "fear"
+                      },
+                      {
+                        "kind": "targetHasStatus",
+                        "status": "taunt"
+                      }
+                    ]
+                  },
+                  "then": [
+                    {
+                      "op": "heal",
+                      "amount": {
+                        "base": [
+                          6.4,
+                          9.6,
+                          12.8
+                        ],
+                        "ap": 0.032
+                      },
+                      "to": "hit"
+                    },
+                    {
+                      "op": "if",
+                      "cond": {
+                        "kind": "not",
+                        "cond": {
+                          "kind": "targetHasMark",
+                          "mark": "ilsheta_warmed"
+                        }
+                      },
+                      "then": [
+                        {
+                          "op": "status",
+                          "status": "haste",
+                          "duration": 1.5,
+                          "power": 0.15,
+                          "to": "hit"
+                        },
+                        {
+                          "op": "mark",
+                          "mark": "ilsheta_warmed",
+                          "duration": 4,
+                          "stacks": 1,
+                          "max": 1,
+                          "to": "hit"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "op": "zone",
+              "id": "ilsheta_window",
+              "shape": {
+                "kind": "circle",
+                "radius": 2.5
+              },
+              "at": "hit",
+              "follow": true,
+              "duration": 5,
+              "interval": 0.5,
+              "filter": {
+                "minions": false,
+                "monsters": false,
+                "summons": false
+              },
+              "onTick": [
+                {
+                  "op": "reveal",
+                  "duration": 0.6,
+                  "to": "hit"
+                }
+              ],
+              "present": {
+                "vfx": "ilsheta_ult_lamps",
+                "telegraph": "ally_only"
+              }
+            }
+          ],
+          "present": {
+            "vfx": "lib_heal_rise",
+            "sfx": "c_ult_release"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "heal"
+        ],
+        "minTargets": 2
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_windup",
+        "telegraph": "ally_only"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/ilsheta/ilsheta.glb",
+    "portrait": "assets/fighters/ilsheta/portrait.png",
+    "splash": "assets/fighters/ilsheta/splash.png",
+    "icon": "assets/fighters/ilsheta/icon.png",
+    "height": 1.72,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "sustain",
+    "preferredRange": 6,
+    "comboOrder": [
+      "a3",
+      "a2",
+      "a1",
+      "ult"
+    ]
+  },
+  "palette": {
+    "primary": "#C9D3D6",
+    "secondary": "#E8E2D2"
+  }
+}

@@ -1,0 +1,756 @@
+{
+  "$comment": "VALE setup layer (CONTRACT §4 SetupDef, §5.3 loadouts). Before a match each player takes 2 battle spells and, in RIFT and BRIDGE, 2 boons from ONE path (SESSION/UI enforce the one-path rule; the sim only checks pools and slot counts, so a mixed pair is never stronger than its two parts). FRAY: 5 spells and no boons. Pools: empty = every pool, listed explicitly here. Rules, numbers and calibration: _design/sections/items_setup.md.",
+  "spells": [
+    {
+      "id": "glint_step",
+      "name": "Glint Step",
+      "desc": "Blink up to 4.5 m toward the target point.",
+      "icon": "assets/ui/icons/setup/glint_step.svg",
+      "maxRank": 1,
+      "cooldown": 270,
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "point",
+        "range": 0,
+        "indicator": {
+          "kind": "circle",
+          "radius": 4.5
+        }
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "blink",
+          "distance": 4.5,
+          "to": "point"
+        }
+      ],
+      "ai": {
+        "use": [
+          "escape",
+          "gapclose"
+        ]
+      },
+      "present": {
+        "vfx": "lib_blink",
+        "sfx": "c_blink"
+      },
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "saplight",
+      "name": "Saplight",
+      "desc": "Heal 80 + 16 per level. Allied fighters within 6 m heal 40 + 8 per level.",
+      "icon": "assets/ui/icons/setup/saplight.svg",
+      "maxRank": 1,
+      "cooldown": 220,
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "none",
+        "indicator": {
+          "kind": "circle",
+          "radius": 6
+        }
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "heal",
+          "amount": {
+            "base": 80,
+            "level": 16
+          },
+          "to": "self"
+        },
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 6
+          },
+          "at": "self",
+          "delay": 0,
+          "filter": {
+            "enemies": false,
+            "allies": true,
+            "self": false,
+            "fighters": true,
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "onHit": [
+            {
+              "op": "heal",
+              "amount": {
+                "base": 40,
+                "level": 8
+              },
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "hitVfx": "lib_heal_rise"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "heal"
+        ],
+        "castWhenSelfHpBelow": 0.35
+      },
+      "present": {
+        "vfx": "lib_heal_rise",
+        "sfx": "c_heal"
+      },
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "hairline",
+      "name": "Hairline",
+      "desc": "Crack an enemy fighter within 6 m: deal 20 + 8 per level damage that ignores armor and resist, and for 4 s its armor and resist are 20% lower and healing on it is 40% weaker.",
+      "icon": "assets/ui/icons/setup/hairline.svg",
+      "maxRank": 1,
+      "cooldown": 180,
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "unit",
+        "range": 6,
+        "filter": {
+          "enemies": true,
+          "fighters": true,
+          "minions": false,
+          "monsters": false,
+          "summons": false
+        }
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "damage",
+          "amount": {
+            "base": 20,
+            "level": 8
+          },
+          "type": "true",
+          "to": "target"
+        },
+        {
+          "op": "status",
+          "status": "armor_shred",
+          "duration": 4,
+          "power": 0.2,
+          "to": "target"
+        },
+        {
+          "op": "status",
+          "status": "resist_shred",
+          "duration": 4,
+          "power": 0.2,
+          "to": "target"
+        },
+        {
+          "op": "status",
+          "status": "grievous",
+          "duration": 4,
+          "power": 0.4,
+          "to": "target"
+        }
+      ],
+      "ai": {
+        "use": [
+          "damage",
+          "execute"
+        ],
+        "castWhenTargetHpBelow": 0.6
+      },
+      "present": {
+        "vfx": "lib_mark_stack",
+        "sfx": "c_cast_shade",
+        "hitVfx": "lib_hit_true",
+        "hitSfx": "c_hit_true"
+      },
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "hourstrike",
+      "name": "Hourstrike",
+      "desc": "Strike a monster or Wick within 5 m for 450 + 30 per level damage that ignores armor and resist, and heal 60 + 6 per level. Holds 2 charges; one returns every 90 s.",
+      "icon": "assets/ui/icons/setup/hourstrike.svg",
+      "maxRank": 1,
+      "cooldown": 15,
+      "cost": 0,
+      "costKind": "none",
+      "charges": {
+        "max": 2,
+        "recharge": 90
+      },
+      "targeting": {
+        "kind": "unit",
+        "range": 5,
+        "filter": {
+          "enemies": true,
+          "fighters": false,
+          "minions": true,
+          "monsters": true,
+          "summons": true
+        }
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "damage",
+          "amount": {
+            "base": 450,
+            "level": 30
+          },
+          "type": "true",
+          "to": "target"
+        },
+        {
+          "op": "heal",
+          "amount": {
+            "base": 60,
+            "level": 6
+          },
+          "to": "self"
+        }
+      ],
+      "ai": {
+        "use": [
+          "execute"
+        ],
+        "castWhenTargetHpBelow": 0.3
+      },
+      "present": {
+        "vfx": "lib_burst_lumen",
+        "sfx": "c_hit_true",
+        "hitVfx": "lib_hit_true"
+      },
+      "pools": [
+        "rift"
+      ]
+    },
+    {
+      "id": "running_light",
+      "name": "Running Light",
+      "desc": "Move 45% faster, fading over 6 s.",
+      "icon": "assets/ui/icons/setup/running_light.svg",
+      "maxRank": 1,
+      "cooldown": 200,
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "none"
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "status",
+          "status": "haste",
+          "duration": 6,
+          "power": 0.45,
+          "decay": true,
+          "to": "self"
+        }
+      ],
+      "ai": {
+        "use": [
+          "escape",
+          "gapclose"
+        ]
+      },
+      "present": {
+        "vfx": "lib_haste",
+        "sfx": "c_buff"
+      },
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "shake_loose",
+      "name": "Shake Loose",
+      "desc": "Break free of roots and ignore stuns, roots and knockbacks for 0.5 s, then gain 50% tenacity for 3 s and move 25% faster for 1.5 s. You cannot cast it while stunned, airborne, asleep, taunted or feared.",
+      "icon": "assets/ui/icons/setup/shake_loose.svg",
+      "maxRank": 1,
+      "cooldown": 210,
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "none"
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "status",
+          "status": "unstoppable",
+          "duration": 0.5,
+          "to": "self"
+        },
+        {
+          "op": "buff",
+          "id": "shake_loose_grit",
+          "duration": 3,
+          "stats": {
+            "tenacity": 0.5
+          },
+          "to": "self"
+        },
+        {
+          "op": "status",
+          "status": "haste",
+          "duration": 1.5,
+          "power": 0.25,
+          "to": "self"
+        }
+      ],
+      "ai": {
+        "use": [
+          "escape"
+        ]
+      },
+      "present": {
+        "vfx": "lib_empower",
+        "sfx": "c_buff"
+      },
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "glass_pane",
+      "name": "Glass Pane",
+      "desc": "Gain a shield of 90 + 20 per level for 2.5 s.",
+      "icon": "assets/ui/icons/setup/glass_pane.svg",
+      "maxRank": 1,
+      "cooldown": 180,
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "none"
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "shield",
+          "amount": {
+            "base": 90,
+            "level": 20
+          },
+          "duration": 2.5,
+          "to": "self"
+        }
+      ],
+      "ai": {
+        "use": [
+          "shield"
+        ],
+        "castWhenSelfHpBelow": 0.4
+      },
+      "present": {
+        "vfx": "lib_shield_up",
+        "sfx": "c_shield"
+      },
+      "pools": [
+        "rift",
+        "bridge",
+        "fray"
+      ]
+    },
+    {
+      "id": "calling_bell",
+      "name": "Calling Bell",
+      "desc": "You and allied fighters within 7 m move 20% faster for 3 s, and enemy fighters within 9 m are revealed for 4 s.",
+      "icon": "assets/ui/icons/setup/calling_bell.svg",
+      "maxRank": 1,
+      "cooldown": 150,
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "none",
+        "indicator": {
+          "kind": "circle",
+          "radius": 9
+        }
+      },
+      "castTime": 0.2,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 7
+          },
+          "at": "self",
+          "delay": 0,
+          "filter": {
+            "enemies": false,
+            "allies": true,
+            "self": true,
+            "fighters": true,
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "onHit": [
+            {
+              "op": "status",
+              "status": "haste",
+              "duration": 3,
+              "power": 0.2,
+              "to": "hit"
+            }
+          ]
+        },
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 9
+          },
+          "at": "self",
+          "delay": 0,
+          "filter": {
+            "enemies": true,
+            "fighters": true,
+            "minions": false,
+            "monsters": false,
+            "summons": true
+          },
+          "onHit": [
+            {
+              "op": "reveal",
+              "duration": 4,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "hitVfx": "lib_reveal_mark"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "buff",
+          "vision"
+        ]
+      },
+      "present": {
+        "vfx": "lib_ring_pulse",
+        "sfx": "c_burst_lumen"
+      },
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    }
+  ],
+  "spellSlots": 2,
+  "boons": [
+    {
+      "id": "first_cut",
+      "name": "First Cut",
+      "desc": "Your first damage to an enemy fighter deals an extra 12 + 3 per level damage that ignores armor and resist. Once every 10 s per fighter.",
+      "icon": "assets/ui/icons/setup/first_cut.svg",
+      "triggers": [
+        {
+          "on": "damageDealt",
+          "filter": {
+            "enemies": true,
+            "fighters": true,
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "perTargetCooldown": 10,
+          "effects": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": 12,
+                "level": 3
+              },
+              "type": "true",
+              "to": "hit"
+            }
+          ]
+        }
+      ],
+      "present": {
+        "hitVfx": "lib_hit_true"
+      },
+      "path": "shadeline",
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "keen_edge",
+      "name": "Keen Edge",
+      "desc": "Your damage ignores 6% of the target's armor and resist.",
+      "icon": "assets/ui/icons/setup/keen_edge.svg",
+      "stats": {
+        "armorPenPct": 0.06,
+        "magicPenPct": 0.06
+      },
+      "triggers": [],
+      "path": "shadeline",
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "next_hour",
+      "name": "Next Hour",
+      "desc": "When you take down an enemy fighter, your ability cooldowns drop by 20% of the time left and you move 25% faster for 2 s.",
+      "icon": "assets/ui/icons/setup/next_hour.svg",
+      "triggers": [
+        {
+          "on": "takedown",
+          "effects": [
+            {
+              "op": "cooldown",
+              "slot": "all_abilities",
+              "percent": 0.2
+            },
+            {
+              "op": "status",
+              "status": "haste",
+              "duration": 2,
+              "power": 0.25,
+              "to": "self"
+            }
+          ]
+        }
+      ],
+      "present": {
+        "vfx": "lib_haste"
+      },
+      "path": "shadeline",
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "dense_stone",
+      "name": "Dense Stone",
+      "desc": "+50 health, and 10 more for each level after the first (220 at level 18).",
+      "icon": "assets/ui/icons/setup/dense_stone.svg",
+      "stats": {
+        "hp": 50
+      },
+      "statsPerLevel": {
+        "hp": 10
+      },
+      "triggers": [],
+      "path": "warmstone",
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "second_shadow",
+      "name": "Second Shadow",
+      "desc": "When damage drops you below 35% health, gain a shield of 50 + 14 per level for 3 s. Once every 75 s.",
+      "icon": "assets/ui/icons/setup/second_shadow.svg",
+      "triggers": [
+        {
+          "on": "lowHp",
+          "cond": {
+            "kind": "selfHpBelow",
+            "pct": 0.35
+          },
+          "cooldown": 75,
+          "effects": [
+            {
+              "op": "shield",
+              "amount": {
+                "base": 50,
+                "level": 14
+              },
+              "duration": 3,
+              "to": "self"
+            }
+          ]
+        }
+      ],
+      "present": {
+        "vfx": "lib_shield_up",
+        "sfx": "c_shield"
+      },
+      "path": "warmstone",
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "slow_heat",
+      "name": "Slow Heat",
+      "desc": "While you are below 60% health, heal 3 + 1% of your max health every 4 s.",
+      "icon": "assets/ui/icons/setup/slow_heat.svg",
+      "triggers": [
+        {
+          "on": "interval",
+          "interval": 4,
+          "cond": {
+            "kind": "selfHpBelow",
+            "pct": 0.6
+          },
+          "effects": [
+            {
+              "op": "heal",
+              "amount": {
+                "base": 3,
+                "maxHp": 0.01
+              },
+              "to": "self"
+            }
+          ]
+        }
+      ],
+      "path": "warmstone",
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "quick_hour",
+      "name": "Quick Hour",
+      "desc": "+6 ability haste, rising by 0.4 for each level after the first (12.8 at level 18).",
+      "icon": "assets/ui/icons/setup/quick_hour.svg",
+      "stats": {
+        "haste": 6
+      },
+      "statsPerLevel": {
+        "haste": 0.4
+      },
+      "triggers": [],
+      "path": "hourturn",
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "long_stride",
+      "name": "Long Stride",
+      "desc": "+4% move speed.",
+      "icon": "assets/ui/icons/setup/long_stride.svg",
+      "stats": {
+        "moveSpeedPct": 0.04
+      },
+      "triggers": [],
+      "path": "hourturn",
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    },
+    {
+      "id": "echo_bell",
+      "name": "Echo Bell",
+      "desc": "Every 4th ability you cast, each within 20 s of the last, takes 1.5 s off all your ability cooldowns.",
+      "icon": "assets/ui/icons/setup/echo_bell.svg",
+      "triggers": [
+        {
+          "on": "abilityCast",
+          "effects": [
+            {
+              "op": "counter",
+              "counter": "echo_bell_casts",
+              "add": 1,
+              "max": 4,
+              "duration": 20
+            },
+            {
+              "op": "if",
+              "cond": {
+                "kind": "counterAtLeast",
+                "counter": "echo_bell_casts",
+                "n": 4
+              },
+              "then": [
+                {
+                  "op": "counter",
+                  "counter": "echo_bell_casts",
+                  "add": 0,
+                  "reset": true
+                },
+                {
+                  "op": "cooldown",
+                  "slot": "all_abilities",
+                  "seconds": 1.5
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "path": "hourturn",
+      "pools": [
+        "rift",
+        "bridge"
+      ]
+    }
+  ],
+  "boonSlots": 2,
+  "paths": [
+    {
+      "id": "shadeline",
+      "name": "Shadeline",
+      "desc": "Strike first and finish fights: bonus damage, penetration and a reset on takedowns.",
+      "color": "#8C86C8",
+      "icon": "assets/ui/icons/paths/shadeline.svg"
+    },
+    {
+      "id": "warmstone",
+      "name": "Warmstone",
+      "desc": "Stay standing: more health, a shield when you are low and slow healing.",
+      "color": "#C9905E",
+      "icon": "assets/ui/icons/paths/warmstone.svg"
+    },
+    {
+      "id": "hourturn",
+      "name": "Hourturn",
+      "desc": "Move and cast more often: ability haste, move speed and cooldown refunds.",
+      "color": "#6FB7D6",
+      "icon": "assets/ui/icons/paths/hourturn.svg"
+    }
+  ],
+  "defaults": {
+    "spells": [
+      "glint_step",
+      "saplight"
+    ],
+    "boons": [
+      "dense_stone",
+      "second_shadow"
+    ]
+  }
+}

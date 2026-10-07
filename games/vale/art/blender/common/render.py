@@ -17,6 +17,7 @@ import os
 import time
 
 import bpy
+import numpy as np
 from mathutils import Vector
 
 from . import anim, imageops, scene
@@ -25,7 +26,7 @@ V = Vector
 LOOK = "AgX - Medium High Contrast"
 
 
-def setup(w: int, h: int, samples: int, transparent: bool = True, noise: float = 0.02):
+def setup(w: int, h: int, samples: int, transparent: bool = True, noise: float = 0.02, view: str = "AgX"):
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     c = sc.cycles
@@ -51,9 +52,9 @@ def setup(w: int, h: int, samples: int, transparent: bool = True, noise: float =
     sc.render.image_settings.file_format = "PNG"
     sc.render.image_settings.color_mode = "RGBA"
     sc.render.image_settings.color_depth = "8"
-    sc.view_settings.view_transform = "AgX"
+    sc.view_settings.view_transform = view
     try:
-        sc.view_settings.look = LOOK
+        sc.view_settings.look = LOOK if view == "AgX" else "None"
     except TypeError:
         sc.view_settings.look = "None"
     sc.view_settings.exposure = 0.0
@@ -207,83 +208,490 @@ def pose_frame(arm, profile: dict, clip: str, frame: int | None = None, chains=N
     return c
 
 
+SPLASH_DEFAULTS = {
+    # STYLE_BIBLE "Menu mood"/"Grid": the 3D subject owns columns 7-12 (right half), UI columns 1-6.
+    "map": "map_rift",          # backdrop theme + sky (art/out/maps/<map>/sky.hdr)
+    "clip": "victory", "t": 0.9,                # splash pose (the fighter's REAL clip set)
+    "yaw": 26.0,                # FRONT three-quarter: camera on the character's left (+X), the
+                                # fighter faces screen-left, into the frame, toward the UI side
+    "pitch": -3.0,              # slight hero angle (camera a little below the chest)
+    "lens": 50.0, "x": 0.73,    # subject centre at 73 % of the width (columns 7-12 at 1600 px)
+    "fill": 0.86,               # subject height / frame height
+    "portrait_clip": "idle_lobby", "portrait_t": 0.0, "portrait_yaw": 28.0,
+    "icon_yaw": 24.0,
+    "key_az": 225.0, "key_el": 45.0,            # bible: the fighter key at view 225 deg / 45 deg
+    "sun": 3.0, "ambient": 0.65,                # lighting.json (sunIntensity, ambient)
+}
+
+
+def _splash_cfg(spec, skin) -> dict:
+    c = dict(SPLASH_DEFAULTS)
+    c.update(getattr(spec, "SPLASH", {}) or {})
+    c.update((skin or {}).get("splash", {}) or {})
+    return c
+
+
+def map_lighting(map_id: str) -> dict:
+    lj = scene.read_json(os.path.join(scene.OUT_DIR, "maps", map_id, "lighting.json"), {}) or {}
+    return {"sunColor": lj.get("sunColor", "#FFEBD8"), "sunIntensity": float(lj.get("sunIntensity", 3.0)),
+            "ambient": float(lj.get("ambient", 0.65)), "fogColor": lj.get("fogColor", "#9AA7B4"),
+            "sky": os.path.join(scene.OUT_DIR, "maps", map_id, "sky.hdr")}
+
+
+def sky_world(hdr: str, strength: float = 0.65, rot_z_deg: float = 0.0, camera_strength: float | None = None):
+    """World = the map's baked sky HDR (mean radiance 1.0, sun disc off). `camera_strength` makes
+    the sky the camera sees brighter/darker than the light it casts (backdrop plates)."""
+    sc = bpy.context.scene
+    w = bpy.data.worlds.get("vale_sky_world") or bpy.data.worlds.new("vale_sky_world")
+    sc.world = w
+    w.use_nodes = True
+    nt = w.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputWorld")
+    tc = nt.nodes.new("ShaderNodeTexCoord")
+    mp = nt.nodes.new("ShaderNodeMapping")
+    mp.inputs["Rotation"].default_value = (0.0, 0.0, math.radians(rot_z_deg))
+    nt.links.new(tc.outputs["Generated"], mp.inputs["Vector"])
+    env = nt.nodes.new("ShaderNodeTexEnvironment")
+    if os.path.isfile(hdr):
+        env.image = bpy.data.images.load(hdr, check_existing=True)
+    nt.links.new(mp.outputs["Vector"], env.inputs["Vector"])
+    bg = nt.nodes.new("ShaderNodeBackground")
+    bg.inputs["Strength"].default_value = strength
+    nt.links.new(env.outputs["Color"], bg.inputs["Color"])
+    if camera_strength is None:
+        nt.links.new(bg.outputs["Background"], out.inputs["Surface"])
+    else:
+        bg2 = nt.nodes.new("ShaderNodeBackground")
+        bg2.inputs["Strength"].default_value = camera_strength
+        nt.links.new(env.outputs["Color"], bg2.inputs["Color"])
+        lp = nt.nodes.new("ShaderNodeLightPath")
+        mx = nt.nodes.new("ShaderNodeMixShader")
+        nt.links.new(lp.outputs["Is Camera Ray"], mx.inputs[0])
+        nt.links.new(bg.outputs["Background"], mx.inputs[1])
+        nt.links.new(bg2.outputs["Background"], mx.inputs[2])
+        nt.links.new(mx.outputs["Shader"], out.inputs["Surface"])
+    return w
+
+
+def view_dir_light(cam, az_deg: float, el_deg: float) -> V:
+    """Unit vector TOWARD the light for a view-relative bearing: 0 = along the view direction, angles
+    clockwise seen from above (90 right, 180 behind the camera, 225 behind-left), elevation up."""
+    f = cam.matrix_world.to_3x3() @ V((0, 0, -1))
+    f.z = 0
+    f.normalize()
+    a = -math.radians(az_deg)                         # clockwise from above = negative about +Z
+    h = V((f.x * math.cos(a) - f.y * math.sin(a), f.x * math.sin(a) + f.y * math.cos(a), 0.0))
+    e = math.radians(el_deg)
+    return V((h.x * math.cos(e), h.y * math.cos(e), math.sin(e))).normalized()
+
+
+def sun_lamp(direction: V, strength: float, color, angle_deg: float = 2.0, name: str = "vale_key_sun"):
+    ld = bpy.data.lights.get(name) or bpy.data.lights.new(name, "SUN")
+    ld.type = "SUN"
+    ld.energy = strength
+    ld.color = color
+    ld.angle = math.radians(angle_deg)
+    ob = bpy.data.objects.get(name) or bpy.data.objects.new(name, ld)
+    if ob.name not in bpy.context.scene.collection.objects:
+        bpy.context.scene.collection.objects.link(ob)
+    ob.rotation_euler = (-direction).to_track_quat("-Z", "Y").to_euler()
+    ob.hide_render = False
+    return ob
+
+
+def bible_lights(cam, cfg: dict, light: dict, rim: float = 1.0, scale: float = 1.0) -> list:
+    """STYLE_BIBLE lighting for fighter art: ONE sun behind-left of the camera (view 225 deg / 45 deg,
+    the map's sun colour and intensity) + a soft painterly rim from behind-right so the silhouette
+    separates from the painted backdrop. The sky HDR is the fill (ambient)."""
+    clear_lights()
+    for o in list(bpy.context.scene.objects):
+        if o.type == "LIGHT" and o.name.startswith("vale_key_sun"):
+            o.hide_render = True
+    sun = sun_lamp(view_dir_light(cam, cfg["key_az"], cfg["key_el"]), light["sunIntensity"] * 0.9 * cfg["sun"] / 3.0,
+                   scene.hex_rgb(light["sunColor"]))
+    out = [sun]
+    if rim > 0:
+        d = view_dir_light(cam, 140.0, 24.0)
+        f = cam.matrix_world.to_3x3() @ V((0, 0, -1))
+        tgt = cam.location + f * 5.0 * scale
+        out.append(_area("vale_rim", tgt + d * 3.0 * scale, tgt, 260.0 * rim * scale * scale, (1.0, 0.94, 0.86), 1.6 * scale))
+    return out
+
+
+def posed_bounds(objs) -> tuple:
+    """World AABB of the evaluated (posed, deformed) meshes."""
+    bpy.context.view_layer.update()
+    dg = bpy.context.evaluated_depsgraph_get()
+    lo, hi = V((1e9, 1e9, 1e9)), V((-1e9, -1e9, -1e9))
+    for o in objs:
+        if o.type != "MESH":
+            continue
+        ev = o.evaluated_get(dg)
+        me = ev.to_mesh()
+        mw = ev.matrix_world
+        for v in me.vertices:
+            p = mw @ v.co
+            lo = V((min(lo.x, p.x), min(lo.y, p.y), min(lo.z, p.z)))
+            hi = V((max(hi.x, p.x), max(hi.y, p.y), max(hi.z, p.z)))
+        ev.to_mesh_clear()
+    return lo, hi
+
+
+# ── map-themed painted backdrops ───────────────────────────────────────────────────────────────
+def _haze_mat(name: str, base_hex: str, haze_hex: str, haze_dist: float, rough: float = 0.8, dial: bool = False,
+              dial_center=(0.0, 0.0)):
+    """Diffuse material that fades to the haze colour with camera distance (aerial perspective
+    without volumes). `dial` paints the Hourfall floor: honed paving, radial hour-lines every 15
+    degrees and concentric bands around `dial_center`."""
+    m = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+    m.use_nodes = True
+    nt = m.node_tree
+    nt.nodes.clear()
+    out = nt.nodes.new("ShaderNodeOutputMaterial")
+    bsdf = nt.nodes.new("ShaderNodeBsdfPrincipled")
+    bsdf.inputs["Roughness"].default_value = rough
+    col = nt.nodes.new("ShaderNodeRGB")
+    col.outputs[0].default_value = (*scene.hex_rgb(base_hex), 1.0)
+    cur = col.outputs[0]
+    if dial:
+        tc = nt.nodes.new("ShaderNodeTexCoord")
+        sep = nt.nodes.new("ShaderNodeSeparateXYZ")
+        nt.links.new(tc.outputs["Object"], sep.inputs[0])
+        dx = nt.nodes.new("ShaderNodeMath"); dx.operation = "SUBTRACT"
+        nt.links.new(sep.outputs["X"], dx.inputs[0]); dx.inputs[1].default_value = dial_center[0]
+        dy = nt.nodes.new("ShaderNodeMath"); dy.operation = "SUBTRACT"
+        nt.links.new(sep.outputs["Y"], dy.inputs[0]); dy.inputs[1].default_value = dial_center[1]
+        ang = nt.nodes.new("ShaderNodeMath"); ang.operation = "ARCTAN2"
+        nt.links.new(dy.outputs[0], ang.inputs[0]); nt.links.new(dx.outputs[0], ang.inputs[1])
+        k = nt.nodes.new("ShaderNodeMath"); k.operation = "MULTIPLY"
+        nt.links.new(ang.outputs[0], k.inputs[0]); k.inputs[1].default_value = 12.0       # 24 hour-lines
+        sn = nt.nodes.new("ShaderNodeMath"); sn.operation = "SINE"
+        nt.links.new(k.outputs[0], sn.inputs[0])
+        ab = nt.nodes.new("ShaderNodeMath"); ab.operation = "ABSOLUTE"
+        nt.links.new(sn.outputs[0], ab.inputs[0])
+        line = nt.nodes.new("ShaderNodeMapRange")
+        line.inputs["From Min"].default_value = 0.0
+        line.inputs["From Max"].default_value = 0.06
+        line.inputs["To Min"].default_value = 0.55
+        line.inputs["To Max"].default_value = 1.0
+        nt.links.new(ab.outputs[0], line.inputs["Value"])
+        ln = nt.nodes.new("ShaderNodeVectorMath"); ln.operation = "LENGTH"
+        cmb = nt.nodes.new("ShaderNodeCombineXYZ")
+        nt.links.new(dx.outputs[0], cmb.inputs[0]); nt.links.new(dy.outputs[0], cmb.inputs[1])
+        nt.links.new(cmb.outputs[0], ln.inputs[0])
+        rg = nt.nodes.new("ShaderNodeMath"); rg.operation = "SINE"
+        rk = nt.nodes.new("ShaderNodeMath"); rk.operation = "MULTIPLY"
+        nt.links.new(ln.outputs["Value"], rk.inputs[0]); rk.inputs[1].default_value = 0.35
+        nt.links.new(rk.outputs[0], rg.inputs[0])
+        band = nt.nodes.new("ShaderNodeMapRange")
+        band.inputs["From Min"].default_value = 0.92
+        band.inputs["From Max"].default_value = 1.0
+        band.inputs["To Min"].default_value = 1.0
+        band.inputs["To Max"].default_value = 0.8
+        nt.links.new(rg.outputs[0], band.inputs["Value"])
+        noise = nt.nodes.new("ShaderNodeTexNoise")
+        noise.inputs["Scale"].default_value = 0.08
+        noise.inputs["Detail"].default_value = 3.0
+        nm = nt.nodes.new("ShaderNodeMapRange")
+        nm.inputs["To Min"].default_value = 0.86
+        nm.inputs["To Max"].default_value = 1.08
+        nt.links.new(noise.outputs["Fac"], nm.inputs["Value"])
+        m1 = nt.nodes.new("ShaderNodeMath"); m1.operation = "MULTIPLY"
+        nt.links.new(line.outputs["Result"], m1.inputs[0]); nt.links.new(band.outputs["Result"], m1.inputs[1])
+        m2 = nt.nodes.new("ShaderNodeMath"); m2.operation = "MULTIPLY"
+        nt.links.new(m1.outputs[0], m2.inputs[0]); nt.links.new(nm.outputs["Result"], m2.inputs[1])
+        mix = nt.nodes.new("ShaderNodeMix"); mix.data_type = "RGBA"; mix.blend_type = "MULTIPLY"
+        mix.inputs[0].default_value = 1.0
+        nt.links.new(cur, mix.inputs[6])
+        cc = nt.nodes.new("ShaderNodeCombineColor")
+        for i in range(3):
+            nt.links.new(m2.outputs[0], cc.inputs[i])
+        nt.links.new(cc.outputs[0], mix.inputs[7])
+        cur = mix.outputs[2]
+        brick = nt.nodes.new("ShaderNodeTexBrick")                      # honed paving slabs (2.4 x 1.2 m)
+        brick.inputs["Scale"].default_value = 0.42
+        brick.inputs["Mortar Size"].default_value = 0.012
+        brick.inputs["Color1"].default_value = (1, 1, 1, 1)
+        brick.inputs["Color2"].default_value = (0.9, 0.9, 0.9, 1)
+        brick.inputs["Mortar"].default_value = (0.62, 0.62, 0.62, 1)
+        nt.links.new(tc.outputs["Object"], brick.inputs["Vector"])
+        mb = nt.nodes.new("ShaderNodeMix"); mb.data_type = "RGBA"; mb.blend_type = "MULTIPLY"
+        mb.inputs[0].default_value = 1.0
+        nt.links.new(cur, mb.inputs[6])
+        nt.links.new(brick.outputs["Color"], mb.inputs[7])
+        cur = mb.outputs[2]
+    nt.links.new(cur, bsdf.inputs["Base Color"])
+    cam = nt.nodes.new("ShaderNodeCameraData")
+    fog = nt.nodes.new("ShaderNodeMath"); fog.operation = "DIVIDE"
+    nt.links.new(cam.outputs["View Distance"], fog.inputs[0]); fog.inputs[1].default_value = -haze_dist
+    ex = nt.nodes.new("ShaderNodeMath"); ex.operation = "EXPONENT"
+    nt.links.new(fog.outputs[0], ex.inputs[0])
+    inv = nt.nodes.new("ShaderNodeMath"); inv.operation = "SUBTRACT"; inv.use_clamp = True
+    inv.inputs[0].default_value = 1.0
+    nt.links.new(ex.outputs[0], inv.inputs[1])
+    em = nt.nodes.new("ShaderNodeEmission")
+    em.inputs["Color"].default_value = (*scene.hex_rgb(haze_hex), 1.0)
+    em.inputs["Strength"].default_value = 1.0
+    mx = nt.nodes.new("ShaderNodeMixShader")
+    nt.links.new(inv.outputs[0], mx.inputs[0])
+    nt.links.new(bsdf.outputs["BSDF"], mx.inputs[1])
+    nt.links.new(em.outputs["Emission"], mx.inputs[2])
+    nt.links.new(mx.outputs["Shader"], out.inputs["Surface"])
+    return m
+
+
+def _bd_obj(o, col):
+    for c in list(o.users_collection):
+        c.objects.unlink(o)
+    col.objects.link(o)
+    return o
+
+
+def frustum_tan(cam) -> tuple[float, float]:
+    """Horizontal tangent range the camera sees (sensor fit AUTO, landscape or square, with shift_x)."""
+    half = (cam.data.sensor_width / 2) / cam.data.lens
+    off = cam.data.shift_x * cam.data.sensor_width / cam.data.lens
+    return -half + off, half + off
+
+
+def map_backdrop(map_id: str, cam, seed: int = 3):
+    """Soft distant set dressing for the map theme, placed INSIDE the camera's (shifted) frustum:
+    Aubade spires stand screen-LEFT in the UI half, Serenade domes screen-RIGHT behind the subject
+    (WORLD.md: Aubade west = screen-left), the fallen needle lies across the far dial, and the
+    dial's hour-lines converge in the mid-ground. Returns the collection (delete it after use)."""
+    from . import mesh
+    col = scene.collection("_backdrop")
+    rnd = scene.rng("backdrop", map_id, seed)
+    f = cam.matrix_world.to_3x3() @ V((0, 0, -1))
+    f.z = 0
+    f.normalize()
+    r = V((f.y, -f.x, 0.0))                                   # camera right on the ground plane
+    c0 = V((cam.location.x, cam.location.y, 0.0))
+    t0, t1 = frustum_tan(cam)
+    mid = t0 + 0.5 * (t1 - t0)
+    haze = "#c4cfd9" if map_id != "map_bridge" else "#d9cbb6"
+    stone_c, glass_c, dome_c = "#9da2a6", "#8aa0b6", "#9a8068"      # mid values: silhouettes against the bright horizon
+    floor = mesh.loft([{"p": (0, 0, -0.02), "rx": 0.01, "ry": 0.01}, {"p": (0, 0, -0.01), "rx": 520, "ry": 520}],
+                      segments=96, caps=("flat", "flat"), name="bd_floor", col=col, smooth_path=False, rings=2)
+    dial_c = c0 + f * 42.0 + r * (42.0 * (mid - 0.1))
+    mesh.set_material(floor, _haze_mat("bd_floor_mat", "#a8a08c", haze, 230.0, 0.85, dial=True,
+                                       dial_center=(dial_c.x, dial_c.y)))
+    objs = [floor]
+
+    def at(dist, tan):
+        return c0 + f * dist + r * (dist * tan)
+
+    spire_m = _haze_mat("bd_spire_mat", stone_c, haze, 650.0, 0.7)
+    glass_m = _haze_mat("bd_glass_mat", glass_c, haze, 650.0, 0.3)
+    n_sp = 5
+    for i in range(n_sp):                                      # Aubade: stacked chalk spires, screen-left
+        tan = t0 + 0.04 + (mid - 0.10 - t0) * (i + rnd.uniform(0.1, 0.9)) / n_sp
+        dist = rnd.uniform(240, 480)
+        base = at(dist, tan)
+        hgt = rnd.uniform(18, 40) * (1.5 if i == 2 else 1.0)
+        w = hgt * rnd.uniform(0.06, 0.085)
+        tiers = rnd.choice([3, 4])
+        z = 0.0
+        for k in range(tiers):                                 # square tiers with setbacks: stacked, not a cone
+            tw = w * (1.0 - 0.17 * k)
+            th = hgt * (0.42 if k == 0 else 0.46 / tiers)
+            tier = mesh.loft([{"p": base + V((0, 0, z)), "rx": tw, "ry": tw, "exp": 3.6},
+                              {"p": base + V((0, 0, z + th)), "rx": tw * 0.93, "ry": tw * 0.93, "exp": 3.6}],
+                             segments=8, caps=("flat", "flat"), up=(0, -1, 0), name=f"bd_spire{i}_{k}", col=col,
+                             smooth_path=False, rings=2)
+            mesh.set_material(tier, spire_m)
+            objs.append(tier)
+            z += th
+        sp = mesh.loft([{"p": base + V((0, 0, z)), "rx": w * 0.5, "ry": w * 0.5, "exp": 3.0},
+                        {"p": base + V((0, 0, hgt)), "rx": w * 0.03, "ry": w * 0.03, "exp": 2.0}], segments=8,
+                       caps=("flat", "point"), up=(0, -1, 0), name=f"bd_spire{i}", col=col, smooth_path=False, rings=3)
+        mesh.set_material(sp, spire_m)
+        objs.append(sp)
+        if i % 2 == 0:                                         # a dawnglass belfry tier
+            gz = hgt * 0.42 * 1.02
+            gl = mesh.loft([{"p": base + V((0, 0, gz)), "rx": w * 0.86, "ry": w * 0.86, "exp": 3.6},
+                            {"p": base + V((0, 0, gz + hgt * 0.10)), "rx": w * 0.86, "ry": w * 0.86, "exp": 3.6}],
+                           segments=8, caps=("flat", "flat"), up=(0, -1, 0), name=f"bd_belfry{i}", col=col,
+                           smooth_path=False, rings=2)
+            mesh.set_material(gl, glass_m)
+            objs.append(gl)
+    dome_m = _haze_mat("bd_dome_mat", dome_c, haze, 650.0, 0.75)
+    for i in range(3):                                         # Serenade: banded drums + domes, screen-right
+        tan = mid + 0.04 + (t1 - mid) * (i + rnd.uniform(0.25, 0.75)) / 3
+        dist = rnd.uniform(270, 380)
+        base = at(dist, tan)
+        R = rnd.uniform(9, 14)
+        st = [{"p": base, "rx": R * 1.35, "ry": R * 1.35, "exp": 2.0},
+              {"p": base + V((0, 0, R * 0.18)), "rx": R * 1.35, "ry": R * 1.35, "exp": 2.0},       # plinth
+              {"p": base + V((0, 0, R * 0.19)), "rx": R * 1.0, "ry": R * 1.0, "exp": 2.0},
+              {"p": base + V((0, 0, R * 0.50)), "rx": R * 1.0, "ry": R * 1.0, "exp": 2.0},          # drum
+              {"p": base + V((0, 0, R * 0.51)), "rx": R * 1.06, "ry": R * 1.06, "exp": 2.0},        # band
+              {"p": base + V((0, 0, R * 0.56)), "rx": R * 1.06, "ry": R * 1.06, "exp": 2.0},
+              {"p": base + V((0, 0, R * 0.57)), "rx": R * 0.97, "ry": R * 0.97, "exp": 2.0}]
+        dm = mesh.loft(st, segments=24, caps=("flat", "round"), up=(0, -1, 0), name=f"bd_dome{i}", col=col,
+                       cap_len=0.66, smooth_path=False, rings=8)
+        mesh.set_material(dm, dome_m)
+        top = base + V((0, 0, R * 0.57 + R * 0.97 * 0.66))
+        ln = mesh.loft([{"p": top - V((0, 0, 0.5)), "rx": R * 0.16, "ry": R * 0.16},
+                        {"p": top + V((0, 0, R * 0.22)), "rx": R * 0.14, "ry": R * 0.14},
+                        {"p": top + V((0, 0, R * 0.45)), "rx": R * 0.02, "ry": R * 0.02}], segments=10,
+                       caps=("flat", "point"), up=(0, -1, 0), name=f"bd_lantern{i}", col=col, smooth_path=False, rings=3)
+        mesh.set_material(ln, dome_m)
+        objs += [dm, ln]
+    # the fallen needle: a long tapered shaft, its broken base raised on the far rim, tip on the dial
+    a = at(470, t0 + 0.42 * (t1 - t0))
+    b = at(430, t1 + 0.10)
+    nd = mesh.loft([{"p": a + V((0, 0, 12)), "rx": 4.5, "ry": 4.5, "exp": 3.0},
+                    {"p": a.lerp(b, 0.5) + V((0, 0, 6)), "rx": 3.4, "ry": 3.4, "exp": 3.0},
+                    {"p": b + V((0, 0, 1)), "rx": 1.4, "ry": 1.4, "exp": 3.0}], segments=8, caps=("flat", "point"),
+                   up=(0, 0, 1), name="bd_needle", col=col, smooth_path=False, rings=6)
+    mesh.set_material(nd, _haze_mat("bd_needle_mat", "#8a847a", haze, 700.0, 0.8))
+    objs.append(nd)
+    for o in objs:
+        _bd_obj(o, col)
+    return col
+
+
+def backdrop_plate(cam, cfg: dict, light: dict, w: int, h: int, path: str, fast: bool, paint_r: int = 2) -> np.ndarray:
+    """Render the painted map backdrop through `cam` (subject hidden), Kuwahara-painted, softened,
+    returned at (w, h) display sRGB (Khronos PBR Neutral, ungraded)."""
+    hidden = [o for o in bpy.context.scene.objects if o.type == "MESH" and not o.hide_render]
+    for o in hidden:
+        o.hide_render = True
+    clip_end = cam.data.clip_end
+    cam.data.clip_end = 3000.0                                 # the set dressing stands 200-420 m away
+    col = map_backdrop(cfg["map"], cam)
+    sw, sh = max(160, (w * 3) // 4), max(90, (h * 3) // 4)
+    setup(sw, sh, 16 if fast else 48, transparent=False, noise=0.05, view="Khronos PBR Neutral")
+    render(path)
+    plate = imageops.load(path)
+    os.remove(path)
+    plate = imageops.kuwahara(plate, paint_r)
+    plate = imageops.gaussian(plate, 0.8)
+    plate = imageops.resize(plate, w, h)
+    for o in list(col.objects):
+        me = o.data
+        bpy.data.objects.remove(o, do_unlink=True)
+        if me and me.users == 0:
+            bpy.data.meshes.remove(me)
+    bpy.data.collections.remove(col)
+    cam.data.clip_end = clip_end
+    for o in hidden:
+        o.hide_render = False
+    np_ = imageops.np
+    # painterly canvas tooth + a soft top-down light falloff
+    tooth = imageops.value_noise(w, h, max(8, w // 5), 17)
+    plate[..., :3] *= (0.975 + 0.05 * tooth[..., None])
+    yy = np_.linspace(0, 1, h, dtype=np_.float32)[:, None, None]
+    plate[..., :3] *= (1.02 - 0.06 * yy)
+    plate[..., 3] = 1.0
+    return plate
+
+
+def _fit_camera(cam, lo: V, hi: V, yaw: float, pitch: float, lens: float, fill: float, aspect: float, x_frac: float,
+                y_center: float | None = None):
+    """Aim a perspective camera at the subject box from (yaw, pitch) so its height fills `fill` of the
+    frame, then shift it horizontally so the subject's centre sits at `x_frac` of the width."""
+    cam.data.lens = lens
+    cam.data.sensor_fit = "AUTO"
+    cam.data.sensor_width = 36.0
+    hgt = hi.z - lo.z
+    ctr = V(((lo.x + hi.x) / 2, (lo.y + hi.y) / 2, y_center if y_center is not None else (lo.z + hi.z) / 2))
+    sw = 36.0
+    vfov = 2 * math.atan((sw / 2) / lens / max(aspect, 1.0)) if aspect >= 1 else 2 * math.atan((sw / 2) / lens)
+    dist = hgt / fill / (2 * math.tan(vfov / 2)) + 0.5 * max(hi.x - lo.x, hi.y - lo.y) * 0.5
+    look_at(cam, ctr, orbit(ctr, dist, yaw, pitch))
+    cam.data.shift_x = -(x_frac - 0.5) * (1.0 if aspect >= 1 else aspect)
+    cam.data.shift_y = 0.0
+    bpy.context.view_layer.update()
+    return ctr, dist
+
+
 def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bool = False) -> dict:
+    """Portrait 512², icon 128², splash 1600x900 (+ turntable QA) with the bible conventions:
+      * front three-quarter (camera on the fighter's left, the fighter faces screen-left into frame)
+      * ONE sun behind-left of the camera (view 225 deg / 45 deg) + the map sky as fill + a soft rim
+      * splash subject in columns 7-12 (centre ~73 % of the width), feet grounded with a real shadow
+      * painted map-themed backdrop (map sky + distant spires left, domes right, the dial floor)
+      * Khronos PBR Neutral view transform, then the locked vale_grade_01 LUT (the game's chain)."""
     spec = ctx.spec
     arm = ctx.info.armature
     prof = spec.MOTION
-    card = (skin or {}).get("card") or getattr(spec, "CARD", {"primary": "#2a3a52", "secondary": "#c9a04e"})
+    cfg = _splash_cfg(spec, skin)
+    light = map_lighting(cfg["map"])
     pre = f"{skin['id']}_" if skin else ""
-    H = spec.PROPORTIONS["height"]
     chains = spec.chain_config(ctx) if hasattr(spec, "chain_config") else [anim.ChainCfg(b) for b in ctx.chains.values()]
     for o in bpy.context.scene.objects:
         if o.type == "MESH" and o not in objs:
             o.hide_render = True
-    S = 16 if fast else 1
+    S = 8 if fast else 1
     clips = fighter_clips(ctx)
-    rim_col = scene.hex_rgb(card.get("secondary", "#c9a04e"))
-    rim_col = tuple(0.55 + 0.45 * c / max(rim_col) for c in rim_col) if max(rim_col) > 0 else (1, 1, 1)
-    out = {}
-    T = {}
+    out, T = {}, {}
+    cam = camera(lens=50)
+    sky_world(light["sky"], light["ambient"], camera_strength=1.0)
 
-    # portrait (512²: bust, lobby pose — weapon rested, head toward camera)
-    pose_frame(arm, prof, "idle_lobby", frame=0, chains=chains, clips=clips)
+    # ── splash 1600x900 ──
+    pose_frame(arm, prof, cfg["clip"], t=cfg["t"], chains=chains, clips=clips)
+    lo, hi = posed_bounds(objs)
+    lo.z = min(lo.z, 0.0)
+    _fit_camera(cam, lo, hi, cfg["yaw"], cfg["pitch"], cfg["lens"], cfg["fill"], 16 / 9, cfg["x"])
+    bible_lights(cam, cfg, light, rim=1.0, scale=1.6)
+    t0 = time.perf_counter()
+    plate = backdrop_plate(cam, cfg, light, 1600, 900, os.path.join(P["renders"], f"{pre}_plate.png"), fast)
+    g = ground(catcher=True, size=60.0)
+    setup(1600, 900, max(16, 64 // S), view="Khronos PBR Neutral")
+    raw_s = os.path.join(P["renders"], f"{pre}splash_raw.png")
+    render(raw_s)
+    imageops.denoise(raw_s, 2.0)
+    fg = imageops.load(raw_s)
+    comp = imageops.grade(imageops.over(fg, plate))
+    out["splash"] = imageops.save(comp, os.path.join(P["out"], f"{pre}splash.png"), alpha=False)
+    g.hide_render = True
+    T["splash"] = round(time.perf_counter() - t0, 2)
+
+    # ── portrait 512² (head and shoulders, three-quarter, front) ──
+    t0 = time.perf_counter()
+    pose_frame(arm, prof, cfg["portrait_clip"], t=cfg["portrait_t"], chains=chains, clips=clips)
     head = bone_pos(arm, "head")
-    k = H / 1.85
-    tgt = head - V((0, 0, 0.085 * k))
-    cam = camera(lens=85)
-    look_at(cam, tgt, orbit(tgt, 2.05 * k, -24, 5))
-    clear_lights()
-    three_point(tgt, 0.8 * k, rim=rim_col, yaw=-24, key_e=170, fill_e=45, rim_e=300)
-    world((0.16, 0.18, 0.22), 0.45)
-    setup(768, 768, max(16, 128 // S))
+    neck = bone_pos(arm, "neck")
+    H = spec.PROPORTIONS["height"]
+    top = posed_bounds(objs)[1].z
+    plo = V((head.x - 0.3, head.y - 0.3, neck.z - 0.30 * H / 1.9))
+    phi = V((head.x + 0.3, head.y + 0.3, min(top, head.z + 0.36 * H / 1.9) + 0.03))
+    _fit_camera(cam, plo, phi, cfg["portrait_yaw"], 6.0, 85.0, 0.92, 1.0, 0.5)
+    bible_lights(cam, cfg, light, rim=0.8, scale=0.8)
+    pplate = backdrop_plate(cam, cfg, light, 512, 512, os.path.join(P["renders"], f"{pre}_pplate.png"), fast, paint_r=2)
+    setup(768, 768, max(16, 72 // S), view="Khronos PBR Neutral")
     raw = os.path.join(P["renders"], f"{pre}portrait_raw.png")
-    T["portrait"] = render(raw)
+    render(raw)
     imageops.denoise(raw)
     fg = imageops.premul_resize(imageops.load(raw), 512, 512)
-    bg = imageops.painted_backdrop(512, 512, card["primary"], card["secondary"], glow=(0.5, 0.4))
-    out["portrait"] = imageops.save(imageops.over(fg, bg), os.path.join(P["out"], f"{pre}portrait.png"))
+    out["portrait"] = imageops.save(imageops.grade(imageops.over(fg, pplate)), os.path.join(P["out"], f"{pre}portrait.png"),
+                                    alpha=False)
+    T["portrait"] = round(time.perf_counter() - t0, 2)
 
-    # icon (128²: head close-up)
+    # ── icon 128² (head close-up: the mask and crown read at a glance) ──
     if not skin:
-        # frame the crown (crest / horns / hat) inside the icon: centre between the head bone and the
-        # measured top of the rest mesh
-        top = max((o.matrix_world @ v.co).z for o in objs if o.type == "MESH" for v in o.data.vertices)
-        ic = V((head.x, head.y, 0.5 * (head.z + top) - 0.02 * k))
-        span = max(0.30 * k, top - head.z + 0.10 * k)
-        look_at(cam, ic, orbit(ic, max(1.18 * k, span * 3.6), -20, 5))
-        setup(256, 256, max(16, 96 // S))
+        t0 = time.perf_counter()
+        ilo = V((head.x - 0.2, head.y - 0.2, head.z - 0.16 * H / 1.9))
+        ihi = V((head.x + 0.2, head.y + 0.2, min(top, head.z + 0.34 * H / 1.9) + 0.02))
+        _fit_camera(cam, ilo, ihi, cfg["icon_yaw"], 3.0, 85.0, 0.9, 1.0, 0.5)
+        bible_lights(cam, cfg, light, rim=1.2, scale=0.6)
+        setup(256, 256, max(16, 96 // S), view="Khronos PBR Neutral")
         raw_i = os.path.join(P["renders"], "icon_raw.png")
-        T["icon"] = render(raw_i)
+        render(raw_i)
         imageops.denoise(raw_i)
         fg = imageops.premul_resize(imageops.load(raw_i), 128, 128)
-        bg = imageops.painted_backdrop(128, 128, card["primary"], card["secondary"], glow=(0.5, 0.45), glow_size=0.7)
-        out["icon"] = imageops.save(imageops.over(fg, bg), os.path.join(P["out"], "icon.png"))
+        sky = imageops.resize(pplate, 128, 128)
+        sky[..., :3] = sky[..., :3] * 0.85 + 0.05
+        out["icon"] = imageops.save(imageops.grade(imageops.over(fg, sky)), os.path.join(P["out"], "icon.png"), alpha=False)
+        T["icon"] = round(time.perf_counter() - t0, 2)
 
-    # splash (1600×900: low three-quarter, victory hold, shadow-catcher ground, painted sky)
-    pose_frame(arm, prof, "victory", t=0.8, chains=chains, clips=clips)
-    # hero framing: low three-quarter, the figure fills the frame height on the right third
-    # (crown to boots in frame; a raised weapon may leave the top edge — splash art, not a sheet)
-    tgt = V((0, 0, 0.745 * H))                     # thighs up to the raised fist; the blade may exit
-    cam = camera(lens=50)
-    look_at(cam, tgt, orbit(tgt, 5.1 * k, -32, -8))
-    cam.data.shift_x = -0.19                       # subject on the right third
-    cam.data.shift_y = 0.0
-    clear_lights()
-    three_point(V((0, 0, 1.0 * k)), 1.15 * k, rim=rim_col, key_e=300, fill_e=45, rim_e=800, yaw=-32)
-    g = ground(catcher=True)
-    world(scene.hex_rgb(card["primary"]), 0.55, top=tuple(min(1, c * 1.8 + 0.05) for c in scene.hex_rgb(card["primary"])))
-    setup(1600, 900, max(16, 128 // S))
-    raw_s = os.path.join(P["renders"], f"{pre}splash_raw.png")
-    T["splash"] = render(raw_s)
-    imageops.denoise(raw_s, 2.0)
-    cam.data.shift_x = 0.0
-    cam.data.shift_y = 0.0
-    fg = imageops.load(raw_s)
-    bg = splash_backdrop(1600, 900, card["primary"], card["secondary"])
-    out["splash"] = imageops.save(imageops.over(fg, bg), os.path.join(P["out"], f"{pre}splash.png"))
-    g.hide_render = True
-
-    # turntable contact sheet (QA): 8 angles + 4 clip key poses
+    for o in list(bpy.context.scene.objects):
+        if o.type == "LIGHT" and o.name.startswith("vale_key_sun"):
+            o.hide_render = True
+    cam.data.shift_x = cam.data.shift_y = 0.0
     if not skin:
         T["turntable"], out["turntable"] = turntable(ctx, P, chains, fast)
     for f in ("portrait_raw", "icon_raw", "splash_raw"):
@@ -292,23 +700,6 @@ def fighter_renders(ctx, objs, P: dict, skin, fast: bool = False, clip_sheet: bo
             os.remove(p)
     anim.apply_pose(arm, {})
     return {"files": {k: scene.rel(v) for k, v in out.items()}, "seconds": T}
-
-
-def splash_backdrop(w: int, h: int, primary: str, secondary: str) -> "imageops.np.ndarray":
-    np = imageops.np
-    bg = imageops.painted_backdrop(w, h, primary, secondary, seed=11, glow=(0.66, 0.46), glow_size=0.55)
-    # horizon haze + ground darkening (atmospheric depth behind the shadow catcher)
-    yy = np.linspace(0, 1, h, dtype=np.float32)[:, None]
-    hz = 0.60
-    haze = np.exp(-((yy - hz) / 0.07) ** 2)
-    s = np.array(scene.hex_srgb(secondary), np.float32)
-    bg[..., :3] = bg[..., :3] * (1 - 0.35 * haze[..., None]) + (s * 0.6 + 0.25)[None, None, :] * 0.35 * haze[..., None]
-    ground_mask = np.clip((yy - hz) / 0.4, 0, 1)
-    bg[..., :3] *= (1 - 0.45 * ground_mask[..., None])
-    clouds = imageops.value_noise(w, h, 7, 21) * 0.6 + imageops.value_noise(w, h, 17, 22) * 0.4
-    cm = np.clip((clouds - 0.5) * 2.2, 0, 1) * np.clip((hz - yy) / hz, 0, 1)
-    bg[..., :3] = bg[..., :3] * (1 - 0.18 * cm[..., None]) + 0.18 * cm[..., None] * (s * 0.5 + 0.4)[None, None, :]
-    return bg
 
 
 def turntable(ctx, P: dict, chains, fast: bool) -> tuple:

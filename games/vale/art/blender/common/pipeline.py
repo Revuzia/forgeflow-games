@@ -64,7 +64,15 @@ def _palette(spec, skin) -> dict:
     return pal
 
 
+def _bible(spec) -> bool:
+    """Bible-vocabulary materials (honed stone, glass, carved wood, heavy cloth; no metal) are the
+    production default; the pre-bible proof mannequin keeps the legacy set (MATERIAL_SET='legacy')."""
+    return getattr(spec, "MATERIAL_SET", "bible") == "bible"
+
+
 def _gradient(spec) -> dict:
+    if _bible(spec):
+        return materials.bible_gradient(spec.PROPORTIONS["height"], getattr(spec, "VALUE_GRADIENT_STOPS", None))
     g = dict(materials.DEFAULT_GRADIENT)
     g["z1"] = spec.PROPORTIONS["height"]
     g.update(getattr(spec, "VALUE_GRADIENT", {}) or {})
@@ -220,7 +228,9 @@ def build(spec, args, skin=None) -> dict:
         if errs:
             raise SystemExit(f"rig errors: {errs}")
     with T.step("materials"):
-        ctx.mats = materials.standard_set(ctx.palette, _gradient(spec))
+        ctx.gradient = _gradient(spec)
+        ctx.mats = (materials.bible_set(ctx.palette, ctx.gradient) if _bible(spec)
+                    else materials.standard_set(ctx.palette, ctx.gradient))
         if hasattr(spec, "extra_materials"):
             ctx.mats.update(spec.extra_materials(ctx) or {})
     with T.step("model"):
@@ -238,7 +248,9 @@ def build(spec, args, skin=None) -> dict:
     if not args.no_bake:
         with T.step("bake"):
             res = bake.bake_asset(body, highs, tex_dir, name=tex_name, size=size,
-                                  fast=args.fast, ao_extra=[accent] if accent else [])
+                                  fast=args.fast, ao_extra=[accent] if accent else [],
+                                  ao_into_base=getattr(spec, "AO_INTO_BASE",
+                                                       materials.BIBLE_BAKE["ao"] if _bible(spec) else 0.0))
             report["bake"] = res["timings"]
     for o in list(bpy.data.objects):
         if o is not None and any(c.name == src.name for c in o.users_collection):
@@ -272,8 +284,11 @@ def build(spec, args, skin=None) -> dict:
         report["glb_bytes_raw"] = os.path.getsize(glb)
     if not args.no_optimize:
         with T.step("optimize"):
-            report["optimize"] = export.optimize(glb)
+            report["optimize"] = export.optimize(glb, fighter=getattr(spec, "GLB_COMPRESS", True))
     report["glb_bytes"] = os.path.getsize(glb)
+    with T.step("load_test"):
+        report["three_load_test"] = export.load_test(glb, skin=skin is not None,
+                                                     budget_kb=1172 if getattr(spec, "GLB_COMPRESS", True) else None)
     if skin is None:
         frag = art_fragment(spec, clips_info, report["mesh_top_m"])
         scene.write_json(os.path.join(P["out"], "art.json"), frag)

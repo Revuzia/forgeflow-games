@@ -11,7 +11,7 @@
 //   Report: facing (bind-pose toe direction, must be +Z), heightPx1080 at default zoom,
 //   accentPct (accent share of the silhouette at the game camera, 8 facings) and accentTopHalfPct.
 //
-// Sheet (one PNG): row 1 = 8 facings at the GAMEPLAY camera (pitch 54°, vFOV 24°, 29 m, the bible
+// Sheet (one PNG): row 1 = 8 facings at the GAMEPLAY camera (pitch 52°, vFOV 26°, 28.5 m, the bible
 // numbers) cropped at 1080p pixel scale (so the fighter is exactly as many px tall as in play);
 // row 2 = idle/run/attack1 impact/cast_ult impact/death end at the gameplay camera + team tints;
 // row 3 = close 3/4 views (front, back, profile) with the baked maps for texture QA.
@@ -151,8 +151,8 @@ try {
     o.updateMatrixWorld(true);
     return o;
   }
-  // gameplay camera (bible §5): pitch 54° below horizontal, vFOV 24°, 29 m, looking -Z
-  const GAME = { pitch: 54 * Math.PI / 180, fov: 24, dist: 29 };
+  // gameplay camera (STYLE_BIBLE "In-game camera", tokens.json camera): pitch 52°, vFOV 26°, 28.5 m, looking -Z
+  const GAME = { pitch: 52 * Math.PI / 180, fov: 26, dist: 28.5 };
   function gameCam(target, cell = CELL) {
     const c = new THREE.PerspectiveCamera(GAME.fov, 1920 / 1080, 1, 200);
     c.position.set(target.x, target.y + Math.sin(GAME.pitch) * GAME.dist, target.z + Math.cos(GAME.pitch) * GAME.dist);

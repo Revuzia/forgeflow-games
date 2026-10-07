@@ -2,7 +2,7 @@
 // VALE art: load a fighter GLB with three.js r186 GLTFLoader in plain Node and check that it
 // will work in the client (CONTRACT §9 characters, §12 rig/clips).
 //
-//   node art/tools/three_load_test.mjs art/out/_proof/_proof_mannequin.glb [--skin-only]
+//   node art/tools/three_load_test.mjs art/out/_proof/_proof_mannequin.glb [--skin-only] [--budget-kb 1172]
 //
 // Checks: parses; SkinnedMesh(es) bound to one skeleton with every VALE_BIPED_1 bone; inverse
 // bind matrices invertible; skin indices in range and weights normalised; required clips present;
@@ -27,7 +27,7 @@ const REQUIRED = ['idle', 'run', 'attack1', 'attack2', 'cast_a1', 'cast_a2', 'ca
   'idle_lobby', 'victory'];
 
 const args = process.argv.slice(2);
-const file = args.find((a) => !a.startsWith('--'));
+const file = args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--budget-kb');
 const skinOnly = args.includes('--skin-only');
 if (!file) {
   console.error('usage: node art/tools/three_load_test.mjs file.glb [--skin-only]');
@@ -43,11 +43,26 @@ const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 const jlen = buf.readUInt32LE(12);
 const gltfJson = JSON.parse(buf.subarray(20, 20 + jlen).toString('utf8'));
 const bin = buf.subarray(20 + jlen + 8);
-function imgSize(i) {
+function imgBytes(i) {
   const img = gltfJson.images?.[i];
-  if (!img || img.bufferView === undefined) return [1, 1];
+  if (!img || img.bufferView === undefined) return null;
   const bv = gltfJson.bufferViews[img.bufferView];
-  const b = bin.subarray(bv.byteOffset ?? 0, (bv.byteOffset ?? 0) + bv.byteLength);
+  return bin.subarray(bv.byteOffset ?? 0, (bv.byteOffset ?? 0) + bv.byteLength);
+}
+function webpSize(b) {
+  // RIFF....WEBP + VP8 (lossy) | VP8L (lossless) | VP8X (extended)
+  if (b.length < 30 || b.toString('ascii', 0, 4) !== 'RIFF' || b.toString('ascii', 8, 12) !== 'WEBP') return null;
+  const fourcc = b.toString('ascii', 12, 16);
+  if (fourcc === 'VP8 ') return [b.readUInt16LE(26) & 0x3fff, b.readUInt16LE(28) & 0x3fff];
+  if (fourcc === 'VP8L') { const v = b.readUInt32LE(21); return [(v & 0x3fff) + 1, ((v >> 14) & 0x3fff) + 1]; }
+  if (fourcc === 'VP8X') return [1 + b.readUIntLE(24, 3), 1 + b.readUIntLE(27, 3)];
+  return null;
+}
+function imgSize(i) {
+  const b = imgBytes(i);
+  if (!b) return [1, 1];
+  const w = webpSize(b);
+  if (w) return w;
   if (b[0] === 0x89) return [b.readUInt32BE(16), b.readUInt32BE(20)];
   for (let k = 2; k < b.length - 9;) {
     if (b[k] !== 0xff) { k++; continue; }
@@ -60,13 +75,19 @@ function imgSize(i) {
 }
 
 class StubTextures {
-  constructor(parser) { this.parser = parser; this.name = 'vale_stub_textures'; }
+  // registered under the texture-extension names too, so it REPLACES GLTFLoader's built-in
+  // EXT_texture_webp / EXT_texture_avif / KHR_texture_basisu handlers (no image decoders in Node;
+  // three_snapshot.mjs decodes the real WebP in Chromium)
+  constructor(parser, name = 'vale_stub_textures') { this.parser = parser; this.name = name; }
   loadTexture(index) {
     const def = this.parser.json.textures[index];
-    const [w, h] = imgSize(def.source);
+    const ext = def.extensions ?? {};
+    const srcIdx = ext.EXT_texture_webp?.source ?? ext.EXT_texture_avif?.source ?? ext.KHR_texture_basisu?.source ?? def.source;
+    const [w, h] = imgSize(srcIdx);
     const tex = new THREE.DataTexture(new Uint8Array(4), 1, 1);
     tex.userData.sourceSize = [w, h];
-    tex.name = gltfJson.images?.[def.source]?.name ?? `tex${index}`;
+    tex.name = gltfJson.images?.[srcIdx]?.name ?? `tex${index}`;
+    tex.userData.mimeType = gltfJson.images?.[srcIdx]?.mimeType;
     tex.flipY = false;
     tex.needsUpdate = true;
     return Promise.resolve(tex);
@@ -74,7 +95,24 @@ class StubTextures {
 }
 
 const loader = new GLTFLoader();
-loader.register((parser) => new StubTextures(parser));
+for (const n of ['EXT_texture_webp', 'EXT_texture_avif', 'KHR_texture_basisu', 'vale_stub_textures']) {
+  loader.register((parser) => new StubTextures(parser, n));
+}
+// EXT_texture_webp: declared, and every image it points at really is a WebP with sane dimensions
+const extUsed = gltfJson.extensionsUsed ?? [];
+const webpInfo = [];
+if (extUsed.includes('EXT_texture_webp')) {
+  for (const t of gltfJson.textures ?? []) {
+    const si = t.extensions?.EXT_texture_webp?.source;
+    if (si === undefined) { errors.push(`texture ${t.name ?? ''} lacks EXT_texture_webp.source`); continue; }
+    const im = gltfJson.images[si];
+    const wh = webpSize(imgBytes(si) ?? Buffer.alloc(0));
+    if (im.mimeType !== 'image/webp' || !wh) errors.push(`image ${im.name}: not a valid WebP (${im.mimeType})`);
+    else webpInfo.push(`${im.name} ${wh.join('x')} ${(imgBytes(si).length / 1024).toFixed(0)}K`);
+  }
+}
+const budgetKb = args.includes('--budget-kb') ? Number(args[args.indexOf('--budget-kb') + 1]) : null;
+if (budgetKb && buf.length > budgetKb * 1024) errors.push(`GLB is ${(buf.length / 1024).toFixed(0)} KiB > budget ${budgetKb} KiB`);
 const gltf = await new Promise((res, rej) => loader.parse(ab, '', res, rej));
 const root = gltf.scene;
 root.updateMatrixWorld(true);
@@ -240,7 +278,8 @@ if (!skinOnly && gltf.animations.length) {
 const size = bindSize;
 let tris = 0;
 root.traverse((o) => { if (o.isMesh) tris += (o.geometry.index ? o.geometry.index.count : o.geometry.getAttribute('position').count) / 3; });
-console.log(`[three] ${file}`);
+console.log(`[three] ${file} (${(buf.length / 1024).toFixed(0)} KiB; extensions: ${extUsed.join(', ') || '-'})`);
+if (webpInfo.length) console.log(`  webp: ${webpInfo.join(', ')}`);
 console.log(`  skinned meshes: ${skinned.map((m) => `${m.name}(${m.geometry.getAttribute('position').count}v)`).join(', ')}`);
 console.log(`  bones: ${boneNames.size} (${[...boneNames].join(' ')})`);
 console.log(`  clips: ${gltf.animations.map((c) => `${c.name}:${c.duration.toFixed(3)}s/${c.tracks.length}tr`).join(', ')}`);

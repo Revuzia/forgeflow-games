@@ -1,0 +1,575 @@
+{
+  "id": "hesmi",
+  "name": "Hesmi",
+  "title": "Shard bearer",
+  "class": "class_plinth",
+  "role": "shadehold",
+  "secondaryRole": "grovehunter",
+  "resource": "res_unlit",
+  "job": "Plants shards of the fallen needle whose shadows slow the enemy, then fall on them.",
+  "difficulty": 2,
+  "lore": "When the needle fell, it broke into more pieces than anyone has counted, and Hesmi has spent her life carrying them. She keeps no side's hour. She walks the rim with three shards strapped to her back, and wherever she plants one it casts the shadow the needle should have cast, long and dark and pointing away from her. The Hourless say the shards remember the time. Hesmi says they are just heavy. She is slow to speak, slower to anger, and almost impossible to move.",
+  "tags": [
+    "hourless",
+    "melee",
+    "tank",
+    "zone",
+    "stun",
+    "cooldowns"
+  ],
+  "base": {
+    "hp": 690,
+    "hpRegen": 1.9,
+    "ad": 60,
+    "armor": 38,
+    "resist": 32,
+    "attackSpeed": 0.62,
+    "moveSpeed": 3.35
+  },
+  "growth": {
+    "hp": 112,
+    "hpRegen": 0.17,
+    "ad": 3.2,
+    "armor": 5,
+    "resist": 2,
+    "attackSpeed": 0.02
+  },
+  "attack": {
+    "range": 1.8,
+    "windup": 0.36,
+    "damageType": "phys",
+    "present": {
+      "sfx": "c_swing_heavy",
+      "hitVfx": "lib_hit_phys_heavy",
+      "hitSfx": "c_hit_phys_heavy"
+    }
+  },
+  "collisionRadius": 0.68,
+  "kit": {
+    "passive": {
+      "id": "hesmi_shade_fed",
+      "name": "Shade-Fed",
+      "icon": "assets/ui/icons/abilities/hesmi_shade_fed.svg",
+      "desc": "Hesmi's basic attacks against Shaded enemies deal {triggers.0.effects.0.amount} bonus physical damage (60% against monsters). While Stand Firm lasts, enemy fighters who hit her become Shaded.",
+      "triggers": [
+        {
+          "on": "attackHit",
+          "cond": {
+            "kind": "targetHasMark",
+            "mark": "hesmi_shaded"
+          },
+          "effects": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": 10,
+                "targetMaxHp": 0.03
+              },
+              "type": "phys",
+              "to": "hit",
+              "monsterMult": 0.6
+            }
+          ]
+        },
+        {
+          "on": "damageTaken",
+          "filter": {
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "cond": {
+            "kind": "counterAtLeast",
+            "counter": "hesmi_standfirm",
+            "n": 1
+          },
+          "effects": [
+            {
+              "op": "mark",
+              "mark": "hesmi_shaded",
+              "duration": 3,
+              "stacks": 1,
+              "max": 1,
+              "to": "hit"
+            }
+          ]
+        }
+      ],
+      "present": {
+        "vfx": "lib_mark_stack"
+      }
+    },
+    "a1": {
+      "id": "hesmi_plant_shard",
+      "name": "Plant Shard",
+      "icon": "assets/ui/icons/abilities/hesmi_plant_shard.svg",
+      "desc": "Hesmi drives a shard into the ground up to 6 m away. For 3 s it casts a 9 m by 2.5 m shadow pointing away from her: enemies in it are slowed by 25% and Shaded. Then the shard topples along its shadow: enemies still in it take {effects.0.onExpire.0.onHit.0.amount} physical damage and are stunned for 0.75 s.",
+      "maxRank": 5,
+      "cooldown": [
+        12,
+        11,
+        10,
+        9,
+        8
+      ],
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "point",
+        "range": 6,
+        "indicator": {
+          "kind": "rect",
+          "length": 9,
+          "width": 2.5
+        }
+      },
+      "castTime": 0.3,
+      "effects": [
+        {
+          "op": "zone",
+          "id": "hesmi_shadow",
+          "shape": {
+            "kind": "rect",
+            "length": 9,
+            "width": 2.5
+          },
+          "at": "point",
+          "duration": 3,
+          "interval": 0.5,
+          "onTick": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 0.6,
+              "power": 0.25,
+              "to": "hit"
+            },
+            {
+              "op": "mark",
+              "mark": "hesmi_shaded",
+              "duration": 3,
+              "stacks": 1,
+              "max": 1,
+              "to": "hit"
+            }
+          ],
+          "onExpire": [
+            {
+              "op": "area",
+              "shape": {
+                "kind": "rect",
+                "length": 9,
+                "width": 2.5
+              },
+              "at": "end",
+              "onHit": [
+                {
+                  "op": "damage",
+                  "amount": {
+                    "base": [
+                      80,
+                      120,
+                      160,
+                      200,
+                      240
+                    ],
+                    "bonusHp": 0.04
+                  },
+                  "type": "phys",
+                  "to": "hit"
+                },
+                {
+                  "op": "status",
+                  "status": "stun",
+                  "duration": 0.75,
+                  "to": "hit"
+                }
+              ],
+              "present": {
+                "vfx": "lib_slam_ground",
+                "sfx": "c_slam"
+              }
+            }
+          ],
+          "present": {
+            "vfx": "hesmi_a1_shadow",
+            "sfx": "c_zone_loop",
+            "telegraph": "everyone"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "cc",
+          "zone",
+          "damage",
+          "waveclear"
+        ],
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_a1",
+        "sfx": "c_slam",
+        "hitVfx": "lib_hit_phys_heavy",
+        "hitSfx": "c_hit_phys_heavy",
+        "telegraph": "everyone"
+      }
+    },
+    "a2": {
+      "id": "hesmi_shoulder_the_stone",
+      "name": "Shoulder the Stone",
+      "icon": "assets/ui/icons/abilities/hesmi_shoulder_the_stone.svg",
+      "desc": "Hesmi lunges 4.5 m. Enemies she passes take {effects.0.onPass.0.amount} physical damage, are knocked 1.5 m aside and become Shaded.",
+      "maxRank": 5,
+      "cooldown": [
+        11,
+        10.5,
+        10,
+        9.5,
+        9
+      ],
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "direction",
+        "range": 4.5,
+        "indicator": {
+          "kind": "rect",
+          "length": 4.5,
+          "width": 1.6
+        }
+      },
+      "castTime": 0.1,
+      "effects": [
+        {
+          "op": "dash",
+          "mode": "direction",
+          "distance": 4.5,
+          "speed": 13,
+          "passWidth": 0.8,
+          "onPass": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  60,
+                  90,
+                  120,
+                  150,
+                  180
+                ],
+                "bonusHp": 0.03
+              },
+              "type": "phys",
+              "to": "hit"
+            },
+            {
+              "op": "displace",
+              "mode": "knockback",
+              "distance": 1.5,
+              "duration": 0.25,
+              "to": "hit"
+            },
+            {
+              "op": "mark",
+              "mark": "hesmi_shaded",
+              "duration": 3,
+              "stacks": 1,
+              "max": 1,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "anim": "dash",
+            "vfx": "lib_dash_trail"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "engage",
+          "gapclose",
+          "damage",
+          "cc"
+        ]
+      },
+      "present": {
+        "anim": "cast_a2",
+        "sfx": "c_dash",
+        "hitVfx": "lib_hit_phys_heavy",
+        "hitSfx": "c_hit_phys_heavy",
+        "telegraph": "everyone"
+      }
+    },
+    "a3": {
+      "id": "hesmi_stand_firm",
+      "name": "Stand Firm",
+      "icon": "assets/ui/icons/abilities/hesmi_stand_firm.svg",
+      "desc": "For 2.5 s Hesmi gains {effects.0.statScaling.armor} armor and magic resist and 30% tenacity. Enemy fighters who hit her meanwhile become Shaded.",
+      "maxRank": 5,
+      "cooldown": [
+        16,
+        15,
+        14,
+        13,
+        12
+      ],
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "self"
+      },
+      "castTime": 0,
+      "effects": [
+        {
+          "op": "buff",
+          "id": "hesmi_firm",
+          "duration": 2.5,
+          "to": "self",
+          "stats": {
+            "tenacity": 0.3
+          },
+          "statScaling": {
+            "armor": {
+              "base": [
+                30,
+                35,
+                40,
+                45,
+                50
+              ]
+            },
+            "resist": {
+              "base": [
+                30,
+                35,
+                40,
+                45,
+                50
+              ]
+            }
+          },
+          "present": {
+            "vfx": "lib_shield_up"
+          }
+        },
+        {
+          "op": "counter",
+          "counter": "hesmi_standfirm",
+          "add": 1,
+          "max": 1,
+          "duration": 2.5
+        }
+      ],
+      "ai": {
+        "use": [
+          "buff"
+        ]
+      },
+      "present": {
+        "anim": "cast_a3",
+        "sfx": "c_buff",
+        "telegraph": "ally_only"
+      }
+    },
+    "ult": {
+      "id": "hesmi_felled_shard",
+      "name": "Felled Shard",
+      "icon": "assets/ui/icons/abilities/hesmi_felled_shard.svg",
+      "desc": "Hesmi drops a great shard at a point within 9 m. After 0.75 s, enemies under it (2 m) take {effects.0.onHit.0.amount} physical damage and are stunned for 1.25 s. It then throws a 12 m by 5 m shadow for 5 s that slows enemies by 40% and Shades them, while allied fighters in it gain 15% move speed.",
+      "maxRank": 3,
+      "cooldown": [
+        110,
+        95,
+        80
+      ],
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "point",
+        "range": 9,
+        "indicator": {
+          "kind": "circle",
+          "radius": 2
+        }
+      },
+      "castTime": 0.35,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 2
+          },
+          "at": "point",
+          "delay": 0.75,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  150,
+                  250,
+                  350
+                ],
+                "bonusHp": 0.06
+              },
+              "type": "phys",
+              "to": "hit"
+            },
+            {
+              "op": "status",
+              "status": "stun",
+              "duration": 1.25,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "hesmi_ult_shard",
+            "sfx": "c_ult_release",
+            "telegraph": "everyone"
+          }
+        },
+        {
+          "op": "zone",
+          "id": "hesmi_great_shadow",
+          "shape": {
+            "kind": "rect",
+            "length": 12,
+            "width": 5
+          },
+          "at": "point",
+          "delay": 0.75,
+          "duration": 5,
+          "interval": 0.5,
+          "onTick": [
+            {
+              "op": "status",
+              "status": "slow",
+              "duration": 0.6,
+              "power": 0.4,
+              "to": "hit"
+            },
+            {
+              "op": "mark",
+              "mark": "hesmi_shaded",
+              "duration": 3,
+              "stacks": 1,
+              "max": 1,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "vfx": "lib_zone_shade",
+            "telegraph": "everyone"
+          }
+        },
+        {
+          "op": "zone",
+          "id": "hesmi_great_shadow_ally",
+          "shape": {
+            "kind": "rect",
+            "length": 12,
+            "width": 5
+          },
+          "at": "point",
+          "delay": 0.75,
+          "duration": 5,
+          "interval": 0.5,
+          "filter": {
+            "enemies": false,
+            "allies": true,
+            "self": true,
+            "minions": false,
+            "monsters": false,
+            "summons": false
+          },
+          "onTick": [
+            {
+              "op": "status",
+              "status": "haste",
+              "duration": 0.6,
+              "power": 0.15,
+              "to": "hit"
+            }
+          ],
+          "present": {
+            "telegraph": "none"
+          }
+        }
+      ],
+      "ai": {
+        "use": [
+          "cc",
+          "zone",
+          "engage",
+          "damage"
+        ],
+        "minTargets": 2,
+        "leadTarget": true
+      },
+      "present": {
+        "anim": "cast_ult",
+        "sfx": "c_ult_windup",
+        "hitVfx": "lib_hit_phys_heavy",
+        "hitSfx": "c_hit_phys_heavy",
+        "telegraph": "everyone"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/hesmi/hesmi.glb",
+    "portrait": "assets/fighters/hesmi/portrait.png",
+    "splash": "assets/fighters/hesmi/splash.png",
+    "icon": "assets/fighters/hesmi/icon.png",
+    "height": 2.3,
+    "scale": 1,
+    "runRefSpeed": 3.6,
+    "clips": {
+      "idle": "idle",
+      "run": "run",
+      "attack1": "attack1",
+      "attack2": "attack2",
+      "cast_a1": "cast_a1",
+      "cast_a2": "cast_a2",
+      "cast_a3": "cast_a3",
+      "cast_ult": "cast_ult",
+      "death": "death",
+      "recall": "recall",
+      "idle_lobby": "idle_lobby",
+      "victory": "victory",
+      "crit": "crit",
+      "spawn": "spawn",
+      "stunned": "stunned",
+      "dash": "dash",
+      "taunt": "taunt"
+    },
+    "sockets": {
+      "origin": "root",
+      "chest": "chest",
+      "head": "head",
+      "hand_r": "hand.R",
+      "hand_l": "hand.L",
+      "weapon": "prop.R",
+      "weapon_r": "prop.R",
+      "weapon_l": "prop.L",
+      "foot_r": "foot.R",
+      "foot_l": "foot.L"
+    },
+    "accentMaterial": "accent"
+  },
+  "ai": {
+    "style": "frontline",
+    "preferredRange": 2,
+    "comboOrder": [
+      "a2",
+      "a1",
+      "a3",
+      "ult"
+    ]
+  },
+  "palette": {
+    "primary": "#5C5A63",
+    "secondary": "#8C8478"
+  }
+}

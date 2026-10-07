@@ -1,0 +1,35 @@
+[
+  {
+    "id": "kemdo_base",
+    "fighter": "kemdo",
+    "name": "Kemdo",
+    "tier": "base",
+    "model": "assets/fighters/kemdo/kemdo.glb",
+    "portrait": "assets/fighters/kemdo/portrait.png",
+    "splash": "assets/fighters/kemdo/splash.png",
+    "desc": "Kemdo hooded in heavy rigid wraps, the burning-glass lens of her glaive angled up at the sun.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "kemdo_highrim",
+    "fighter": "kemdo",
+    "name": "Highrim Glaive",
+    "tier": "standard",
+    "model": "assets/fighters/kemdo/kemdo_highrim.glb",
+    "portrait": "assets/fighters/kemdo/kemdo_highrim_portrait.png",
+    "splash": "assets/fighters/kemdo/kemdo_highrim_splash.png",
+    "desc": "A frame of wind-scoured sandstone and pale wraps, from the high rim where the light is harshest.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "kemdo_long_evening",
+    "fighter": "kemdo",
+    "name": "Long Evening Lens",
+    "tier": "deluxe",
+    "model": "assets/fighters/kemdo/kemdo_long_evening.glb",
+    "portrait": "assets/fighters/kemdo/kemdo_long_evening_portrait.png",
+    "splash": "assets/fighters/kemdo/kemdo_long_evening_splash.png",
+    "desc": "Plum wraps, a smoked-amber frame and a lilac-tinted lens from the Serenade dusk festival, with rigid lacquer tassel plates.",
+    "releasedIn": "2026.10.0"
+  }
+]

@@ -1,0 +1,35 @@
+[
+  {
+    "id": "burdam_base",
+    "fighter": "burdam",
+    "name": "Burdam",
+    "tier": "base",
+    "model": "assets/fighters/burdam/burdam.glb",
+    "portrait": "assets/fighters/burdam/portrait.png",
+    "splash": "assets/fighters/burdam/splash.png",
+    "desc": "Burdam in oxidised-iron pauldrons and his scored ledger mask, the notched cleaver on his shoulder.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "burdam_stillwater",
+    "fighter": "burdam",
+    "name": "Stillwater Cleaver",
+    "tier": "standard",
+    "model": "assets/fighters/burdam/burdam_stillwater.glb",
+    "portrait": "assets/fighters/burdam/burdam_stillwater_portrait.png",
+    "splash": "assets/fighters/burdam/burdam_stillwater_splash.png",
+    "desc": "Wet basalt armour with river-glass inlays and rigid reed plates, from the shallows of the Fallen Shaft.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "burdam_almanac",
+    "fighter": "burdam",
+    "name": "Almanac Ledger",
+    "tier": "deluxe",
+    "model": "assets/fighters/burdam/burdam_almanac.glb",
+    "portrait": "assets/fighters/burdam/burdam_almanac_portrait.png",
+    "splash": "assets/fighters/burdam/burdam_almanac_splash.png",
+    "desc": "Pauldrons printed like ruled pages, day-marks down the cleaver's back and a rigid almanac board hung at his belt.",
+    "releasedIn": "2026.10.0"
+  }
+]

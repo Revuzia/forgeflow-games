@@ -175,3 +175,89 @@ def grid(cells: list, cols: int, pad: int = 4, bg=(0.11, 0.12, 0.14)) -> np.ndar
         y, x = pad + r * (h + pad), pad + k * (w + pad)
         out[y:y + h, x:x + w] = over(c, out[y:y + h, x:x + w]) if c.shape[2] == 4 else c
     return out
+
+
+def box_mean(a: np.ndarray, r: int) -> np.ndarray:
+    """Mean over a (2r+1)² box (edge-clamped), any channel count, via integral images."""
+    p = np.pad(a, ((r + 1, r), (r + 1, r)) + ((0, 0),) * (a.ndim - 2), mode="edge").astype(np.float64)
+    c = p.cumsum(0).cumsum(1)
+    k = 2 * r + 1
+    s = c[k:, k:] - c[:-k, k:] - c[k:, :-k] + c[:-k, :-k]
+    return (s / (k * k)).astype(np.float32)
+
+
+def kuwahara(arr: np.ndarray, r: int = 3) -> np.ndarray:
+    """Painterly Kuwahara filter on RGB(A): each pixel takes the mean of the least-varied of its four
+    (r+1)² quadrants -> flat brushed patches with crisp edges (the painted backdrop look)."""
+    rgb = arr[..., :3].astype(np.float32)
+    lum = rgb @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+    H, W = lum.shape
+    q = r // 2 + 1
+    m = box_mean(rgb, q)
+    m2 = box_mean(lum[..., None] ** 2, q)[..., 0]
+    ml = box_mean(lum[..., None], q)[..., 0]
+    var = m2 - ml * ml
+    best = np.full((H, W), np.inf, np.float32)
+    out = np.zeros_like(rgb)
+    for dy, dx in ((-q, -q), (-q, q), (q, -q), (q, q)):
+        ys = np.clip(np.arange(H) + dy, 0, H - 1)
+        xs = np.clip(np.arange(W) + dx, 0, W - 1)
+        v = var[ys][:, xs]
+        mm = m[ys][:, xs]
+        sel = v < best
+        best = np.where(sel, v, best)
+        out = np.where(sel[..., None], mm, out)
+    res = arr.copy()
+    res[..., :3] = out
+    return res
+
+
+def gaussian(arr: np.ndarray, sigma: float) -> np.ndarray:
+    """Separable gaussian blur (numpy), edge-clamped."""
+    if sigma <= 0:
+        return arr
+    r = max(1, int(sigma * 3))
+    x = np.arange(-r, r + 1, dtype=np.float32)
+    k = np.exp(-(x * x) / (2 * sigma * sigma))
+    k /= k.sum()
+    out = arr.astype(np.float32)
+    for axis in (0, 1):
+        pad = [(0, 0)] * out.ndim
+        pad[axis] = (r, r)
+        p = np.pad(out, pad, mode="edge")
+        acc = np.zeros_like(out)
+        for i, w in enumerate(k):
+            sl = [slice(None)] * out.ndim
+            sl[axis] = slice(i, i + out.shape[axis])
+            acc += w * p[tuple(sl)]
+        out = acc
+    return out
+
+
+def grade(arr: np.ndarray, lut_path: str | None = None) -> np.ndarray:
+    """Apply the locked vale_grade_01 LUT (art/out/grade/vale_grade_01.cube) to a display-sRGB image
+    that was rendered with the 'Khronos PBR Neutral' view transform (the game's tone mapper):
+    exactly the game's post order (tone map -> LUT). Alpha is kept."""
+    import importlib.util
+    lut_path = lut_path or os.path.join(scene.OUT_DIR, "grade", "vale_grade_01.cube")
+    if not os.path.isfile(lut_path):
+        scene.log(f"grade: {lut_path} missing - image left ungraded")
+        return arr
+    spec = importlib.util.spec_from_file_location("vale_gradelib", os.path.join(scene.ART_DIR, "grade", "gradelib.py"))
+    gl = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gl)
+    global _LUT
+    try:
+        lut = _LUT
+    except NameError:
+        lut = _LUT = gl.read_cube(lut_path)
+    out = arr.copy()
+    out[..., :3] = np.clip(gl.apply_lut(arr[..., :3], lut, "trilinear"), 0, 1).astype(np.float32)
+    return out
+
+
+def srgb_lstar(rgb: np.ndarray) -> np.ndarray:
+    """CIE L* (D65) of display sRGB (..., 3) in 0..1."""
+    c = np.where(rgb <= 0.04045, rgb / 12.92, ((rgb + 0.055) / 1.055) ** 2.4)
+    y = c @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+    return np.where(y > 216 / 24389, 116 * np.cbrt(y) - 16, y * 24389 / 27)

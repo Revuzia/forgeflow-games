@@ -602,6 +602,20 @@ class Spherical(Projection):
         d = self.up * math.cos(po) + (self.f * math.cos(az) + self.s * math.sin(az)) * math.sin(po)
         return self.c.copy(), d.normalized()
 
+    def uv(self, p) -> tuple[float, float]:
+        """Inverse of ray(): (azimuth u, polar v) in degrees of world point `p` around the centre."""
+        d = (V(p) - self.c)
+        if d.length < 1e-9:
+            return 0.0, 0.0
+        d.normalize()
+        v = math.degrees(math.acos(max(-1.0, min(1.0, d.dot(self.up)))))
+        u = math.degrees(math.atan2(d.dot(self.s), d.dot(self.f)))
+        return u, v
+
+    def point(self, u, v, r):
+        o, d = self.ray(u, v)
+        return o + d * r
+
 
 def bvh_of(objs) -> BVHTree:
     bm = bmesh.new()
@@ -772,12 +786,16 @@ def _raise_rim_sheet(bm: bmesh.types.BMesh, width: float, height: float) -> list
 def cloth_panel(top_pts, length: float, folds: int = 4, fold_depth: float = 0.012, flare: float = 0.05,
                 hem=None, out_dir=(0, -1, 0), down=(0, 0, -1), thickness: float = 0.006, cols: int = 14,
                 rows: int = 12, avoid=None, clearance: float = 0.015, sway: float = 0.0,
-                name: str = "cloth", col=None, seed: int = 0) -> bpy.types.Object:
+                name: str = "cloth", col=None, seed: int = 0, fold_sharp: float = 0.0,
+                hem_bevel: float = 0.0, fold_top: float = 0.25) -> bpy.types.Object:
     """Hanging cloth panel from an attachment curve (tabards, loincloths, capes, sashes).
 
     top_pts: points along the attachment line (left to right as seen from the front)
     hem(u) -> extra length factor (0..1+) along the width, e.g. a pointed or swallow-tail cut
-    folds: vertical folds whose depth grows toward the hem; flare pushes the hem outward
+    folds: vertical folds whose depth grows toward the hem (from `fold_top` x depth at the top);
+           flare pushes the hem outward
+    fold_sharp 0..1: SCULPTED folds (heavy cloth): broad rounded crests, pinched valleys
+    hem_bevel: rounds the solidified panel's rim (a rolled hem, 2-4 cm brushstroke on heavy cloth)
     avoid: BVHTree/objects the cloth must clear by `clearance` (pushed along `out_dir`)
     """
     tree = avoid if isinstance(avoid, BVHTree) or avoid is None else bvh_of(avoid)
@@ -796,8 +814,12 @@ def cloth_panel(top_pts, length: float, folds: int = 4, fold_depth: float = 0.01
             L = length * (1.0 + (hem(u) if hem else 0.0))
             p = tp + dn * (v * L)
             p += out * (flare * v * v)
-            amp = fold_depth * (0.25 + 0.75 * v)
-            p += out * (amp * math.sin(2 * math.pi * (folds * u + phases[0])))
+            amp = fold_depth * (fold_top + (1.0 - fold_top) * v)
+            f = math.sin(2 * math.pi * (folds * u + phases[0]))
+            if fold_sharp > 0:          # crest broad, valley pinched: x' = 1 - (1 - x)^p
+                x01 = 1.0 - (1.0 - 0.5 * (f + 1.0)) ** (1.0 + 2.5 * fold_sharp)
+                f = 2.0 * x01 - 1.0
+            p += out * (amp * f)
             p += out * (amp * 0.35 * math.sin(2 * math.pi * (folds * 2.1 * u + phases[1])))
             if sway:
                 side = (top[-1] - top[0]).normalized()
@@ -823,7 +845,81 @@ def cloth_panel(top_pts, length: float, folds: int = 4, fold_depth: float = 0.01
         bmesh.ops.reverse_faces(bm, faces=bm.faces)
     obj = bm_to_obj(bm, name, col)
     solidify(obj, thickness, offset=-1.0)
+    if hem_bevel > 0:
+        bevel(obj, min(hem_bevel, thickness * 0.49), 1, angle=50)
     shade(obj, True)
+    return obj
+
+
+# ── carved slabs (blades, fins, tablets, shields): thick, bevelled, no primitives ────────────────
+def slab(rows, thickness=0.03, cols: int = 8, rows_n: int | None = None, bevel_w: float = 0.012,
+         bevel_segments: int = 3, bevel_angle: float = 30.0, name: str = "slab", col=None, mat=None,
+         bands: list | None = None) -> bpy.types.Object:
+    """A thick carved slab between two edge curves, built in the YZ plane (thickness along X):
+    prop space for blades (grip at the origin, main axis +Z, edge toward -Y).
+
+    rows: [(z, y_a, y_b), ...] stations along +Z; y_a is the back/spine edge, y_b the front/cutting
+          edge; values are resampled smoothly (`rows_n` rows). A station with y_a == y_b is a tip.
+    thickness: metres, or fn(u, v) -> metres with u 0..1 from edge a to edge b and v 0..1 along Z
+          (taper a blade from a thick spine to a thin edge).
+    The two faces are joined by a rim wall; `bevel_w` rounds every edge sharper than `bevel_angle`
+    with `bevel_segments` (bible: 2-4 cm bevels as brushstrokes; thin edges clamp automatically).
+    bands: optional [(u_max, mat), ...] across the slab (sorted by u_max, last = 1.0): a face takes
+    the first band whose u_max is above its u, e.g. [(0.16, ironstone), (0.86, stone), (1.0, glass)]
+    = an ironstone spine, a honed-stone blade and a dawnglass edge."""
+    n = rows_n or max(6, len(rows) * 3)
+    keys_z = [(i / (len(rows) - 1), r[0]) for i, r in enumerate(rows)]
+    keys_a = [(i / (len(rows) - 1), r[1]) for i, r in enumerate(rows)]
+    keys_b = [(i / (len(rows) - 1), r[2]) for i, r in enumerate(rows)]
+    tfn = thickness if callable(thickness) else (lambda u, v, t=thickness: t)
+    bm = bmesh.new()
+    F, B, U = [], [], []
+    for i in range(n):
+        v = i / (n - 1)
+        z, ya, yb = profile(keys_z, v), profile(keys_a, v), profile(keys_b, v)
+        rf, rb, ru = [], [], []
+        for j in range(cols + 1):
+            u = j / cols
+            y = ya + (yb - ya) * u
+            t = max(1e-4, tfn(u, v)) * 0.5
+            rf.append(bm.verts.new((t, y, z)))
+            rb.append(bm.verts.new((-t, y, z)))
+            ru.append(u)
+        F.append(rf)
+        B.append(rb)
+        U.append(ru)
+    side = {}
+    for i in range(n - 1):
+        for j in range(cols):
+            f1 = bm.faces.new((F[i][j], F[i][j + 1], F[i + 1][j + 1], F[i + 1][j]))
+            f2 = bm.faces.new((B[i][j], B[i + 1][j], B[i + 1][j + 1], B[i][j + 1]))
+            side[f1] = side[f2] = (j + 0.5) / cols
+    ring = [(0, j) for j in range(cols + 1)] + [(i, cols) for i in range(1, n)] + \
+           [(n - 1, j) for j in range(cols - 1, -1, -1)] + [(i, 0) for i in range(n - 2, 0, -1)]
+    for k in range(len(ring)):
+        (i0, j0), (i1, j1) = ring[k], ring[(k + 1) % len(ring)]
+        try:
+            f = bm.faces.new((F[i0][j0], B[i0][j0], B[i1][j1], F[i1][j1]))
+            side[f] = 0.5 * (j0 + j1) / cols
+        except ValueError:
+            pass
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-5)
+    bmesh.ops.dissolve_degenerate(bm, dist=1e-6, edges=bm.edges[:])
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    if bands:
+        for f in bm.faces:
+            u = side.get(f, 0.5)
+            f.material_index = next((i for i, (um, _) in enumerate(bands) if u <= um), len(bands) - 1)
+    obj = bm_to_obj(bm, name, col)
+    if bands:
+        for _, m in bands:
+            obj.data.materials.append(m)
+    elif mat is not None:
+        obj.data.materials.append(mat)
+    if bevel_w > 0:
+        bevel(obj, bevel_w, bevel_segments, angle=bevel_angle)
+    shade(obj, True)
+    weighted_normals(obj)
     return obj
 
 

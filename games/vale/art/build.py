@@ -60,7 +60,9 @@ TRI_BUDGET = {"fighter": (10_000, 25_000), "skin": (10_000, 25_000), "minion": (
               "ward": (0, 4_000), "pickup": (0, 4_000), "landmark": (0, 60_000), "map": (0, 700_000)}
 TEX_MAX = {"fighter": 1024, "skin": 1024, "landmark": 2048, "map": 2048}
 TEX_DEFAULT = 1024
-BYTES_MAX = {"fighter": 6_000_000, "skin": 4_500_000, "minion": 1_500_000, "monster": 3_000_000,
+# fighter/skin: 1.2 MB with the shipping compression (KHR_mesh_quantization + EXT_texture_webp + int16
+# rotation tracks, art/tools/optimize.mjs --fighter); technical builds (ids starting with '_') only warn
+BYTES_MAX = {"fighter": 1_200_000, "skin": 1_200_000, "minion": 1_500_000, "monster": 3_000_000,
              "structure": 4_000_000, "map": 48_000_000}
 
 
@@ -127,6 +129,10 @@ class GLB:
         out = []
         for k in range(a["count"]):
             out.extend(struct.unpack_from("<" + fmt * comps, self.bin, base + k * stride))
+        if a.get("normalized"):                     # KHR_mesh_quantization / int16 rotation tracks
+            div = {5122: 32767.0, 5120: 127.0, 5123: 65535.0, 5121: 255.0}.get(a["componentType"], 1.0)
+            lo = -1.0 if a["componentType"] in (5122, 5120) else 0.0
+            out = [max(lo, v / div) for v in out]
         return out
 
     def image_bytes(self, img: dict) -> bytes:
@@ -136,6 +142,17 @@ class GLB:
 
 
 def image_size(b: bytes) -> tuple[int, int] | None:
+    if b[:4] == b"RIFF" and b[8:12] == b"WEBP":          # EXT_texture_webp (VP8 / VP8L / VP8X)
+        cc = b[12:16]
+        if cc == b"VP8 ":
+            w, h = struct.unpack("<HH", b[26:30])
+            return (w & 0x3FFF, h & 0x3FFF)
+        if cc == b"VP8L":
+            v = struct.unpack("<I", b[21:25])[0]
+            return ((v & 0x3FFF) + 1, ((v >> 14) & 0x3FFF) + 1)
+        if cc == b"VP8X":
+            return (1 + int.from_bytes(b[24:27], "little"), 1 + int.from_bytes(b[27:30], "little"))
+        return None
     if b[:8] == b"\x89PNG\r\n\x1a\n":
         return struct.unpack(">II", b[16:24])
     if b[:2] == b"\xff\xd8":
@@ -357,7 +374,7 @@ def check_glb(path: str) -> dict:
             warns.append(f"texture {t['name']} {t['size']} is not power-of-two")
     bmax = BYTES_MAX.get(kind)
     if bmax and g.bytes > bmax:
-        errs.append(f"{g.bytes / 1e6:.2f} MB > {kind} budget {bmax / 1e6:.1f} MB")
+        (warns if gid.startswith("_") else errs).append(f"{g.bytes / 1e6:.2f} MB > {kind} budget {bmax / 1e6:.1f} MB")
     if kind in ("fighter", "skin"):
         d = os.path.dirname(path)
         pre = "" if kind == "fighter" else f"{gid}_"

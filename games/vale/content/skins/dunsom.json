@@ -1,0 +1,35 @@
+[
+  {
+    "id": "dunsom_base",
+    "fighter": "dunsom",
+    "name": "Dunsom",
+    "tier": "base",
+    "model": "assets/fighters/dunsom/dunsom.glb",
+    "portrait": "assets/fighters/dunsom/portrait.png",
+    "splash": "assets/fighters/dunsom/splash.png",
+    "desc": "Dunsom in his broad felt hood-rim and carved mask, the lantern swinging from his crook.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "dunsom_highrim",
+    "fighter": "dunsom",
+    "name": "Highrim Herder",
+    "tier": "standard",
+    "model": "assets/fighters/dunsom/dunsom_highrim.glb",
+    "portrait": "assets/fighters/dunsom/dunsom_highrim_portrait.png",
+    "splash": "assets/fighters/dunsom/dunsom_highrim_splash.png",
+    "desc": "A pale hood of wind-carved sandstone and a bleached walnut crook, weathered on the high rim where the wind never stops.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "dunsom_almanac",
+    "fighter": "dunsom",
+    "name": "Almanac Crook",
+    "tier": "deluxe",
+    "model": "assets/fighters/dunsom/dunsom_almanac.glb",
+    "portrait": "assets/fighters/dunsom/dunsom_almanac_portrait.png",
+    "splash": "assets/fighters/dunsom/dunsom_almanac_splash.png",
+    "desc": "A hood printed with tables of the day and an ink-black crook hung with folded almanac pages.",
+    "releasedIn": "2026.10.0"
+  }
+]

@@ -1,0 +1,36 @@
+[
+  {
+    "id": "hesmi_base",
+    "fighter": "hesmi",
+    "name": "Hesmi",
+    "tier": "base",
+    "model": "assets/fighters/hesmi/hesmi.glb",
+    "portrait": "assets/fighters/hesmi/portrait.png",
+    "splash": "assets/fighters/hesmi/splash.png",
+    "desc": "Hesmi in layered rigid wraps and a deep hood, three needle-stone shards racked on her back.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "hesmi_gorgewalk",
+    "fighter": "hesmi",
+    "name": "Gorgewalk Shards",
+    "tier": "standard",
+    "model": "assets/fighters/hesmi/hesmi_gorgewalk.glb",
+    "portrait": "assets/fighters/hesmi/hesmi_gorgewalk_portrait.png",
+    "splash": "assets/fighters/hesmi/hesmi_gorgewalk_splash.png",
+    "desc": "Slate shards bound with rigid gorge-rope and iron pins, and slate wraps for the long walk across the Needlespan.",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "hesmi_shadeprint",
+    "fighter": "hesmi",
+    "name": "Shadeprint Shards",
+    "tier": "deluxe",
+    "model": "assets/fighters/hesmi/hesmi_shadeprint.glb",
+    "portrait": "assets/fighters/hesmi/hesmi_shadeprint_portrait.png",
+    "splash": "assets/fighters/hesmi/hesmi_shadeprint_splash.png",
+    "vfxTint": "#6C5BA8",
+    "desc": "Ink shards with light-rimmed edges over pale wraps; her shadows fall in deep violet.",
+    "releasedIn": "2026.10.0"
+  }
+]

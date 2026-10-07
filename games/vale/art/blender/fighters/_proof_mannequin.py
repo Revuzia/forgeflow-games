@@ -38,6 +38,8 @@ PALETTE = materials.palette(
 # collection / draft background colours (FighterDef.palette) — used by the portrait backdrop
 CARD = {"primary": "#24476b", "secondary": "#c99a45"}
 MOTION = anim.motion_profile(weight="medium", weapon="one_hand", stance="guard", run_ref_speed=3.6)
+MATERIAL_SET = "legacy"                    # predates the style bible (metal + gold trims): kept as the
+                                           # technical proof only; production fighters use the bible set
 SKINS = [
     # skins: alternate palettes on the same rig (+ optional extra geometry via ctx.skin in model())
     {"id": "_proof_mannequin_ember", "palette": {"cloth": "#7a3b1d", "trim": "#d8b25a", "metal": "#5b5f66",

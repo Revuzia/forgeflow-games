@@ -1,0 +1,131 @@
+{
+  "id": "_lookdev_reference_dawn",
+  "fighter": "_lookdev_reference",
+  "skin": true,
+  "parts": {
+    "bind_body": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": []
+    },
+    "tris_body": 5598,
+    "tris_mask": 1560,
+    "tris_mask_beak": 304,
+    "tris_visor": 640,
+    "tris_hood": 1562,
+    "tris_crest_fin": 320,
+    "tris_collar": 720,
+    "tris_pauldron.L": 864,
+    "tris_pauldron_inlay.L": 180,
+    "tris_pauldron.R": 864,
+    "tris_pauldron_inlay.R": 180,
+    "tris_harness": 384,
+    "tris_clasp": 360,
+    "tris_clasp_gnomon": 120,
+    "tris_belt": 648,
+    "tris_buckle": 288,
+    "tris_lantern": 288,
+    "tris_lantern_frame": 472,
+    "tris_tasset.L": 316,
+    "tris_tasset.R": 316,
+    "tris_drape_f": 618,
+    "tris_drape_b": 630,
+    "tris_bracer.L": 320,
+    "tris_greave.L": 636,
+    "tris_knee.L": 240,
+    "tris_bracer.R": 320,
+    "tris_greave.R": 636,
+    "tris_knee.R": 240,
+    "tris_gn_blade": 1428,
+    "tris_gn_guard": 248,
+    "tris_gn_grip": 420,
+    "tris_gn_wraps": 96,
+    "tris_gn_pommel": 180,
+    "armour_conform": {
+      "covered": 898,
+      "culled_faces": 466,
+      "body_tris_before": 5598,
+      "body_tris_after": 5132
+    },
+    "validate__lookdev_reference": "13144->13133"
+  },
+  "uv_coverage": 0.614,
+  "bake": {
+    "base": 8.32,
+    "rough_metal": 5.15,
+    "normal": 10.37,
+    "ao": 29.84,
+    "normal_fixed_px": 3610,
+    "pack_save": 0.36,
+    "total": 54.34
+  },
+  "tris": 21519,
+  "mesh_top_m": 1.969,
+  "glb_bytes_raw": 3068572,
+  "optimize": {
+    "ok": true,
+    "before": 3068572,
+    "after": 915552
+  },
+  "glb_bytes": 915552,
+  "renders": {
+    "files": {
+      "splash": "art/out/_lookdev/_lookdev_reference_dawn_splash.png",
+      "portrait": "art/out/_lookdev/_lookdev_reference_dawn_portrait.png"
+    },
+    "seconds": {
+      "splash": 125.99,
+      "portrait": 115.64
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "facing": [
+      0,
+      1
+    ],
+    "bindBox": [
+      [
+        -0.819,
+        0,
+        -0.248
+      ],
+      [
+        0.819,
+        1.969,
+        1.406
+      ]
+    ],
+    "headY": 1.642,
+    "accentPct": 3.46,
+    "accentTopHalfPct": 100,
+    "heightPx1080": 105,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/_lookdev/three__lookdev_reference_dawn.png",
+    "seconds": 16,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.01,
+      "materials": 0.82,
+      "model": 16.48,
+      "lows_bind": 6.59,
+      "uv": 15.84,
+      "bake": 54.34,
+      "export": 0.2,
+      "optimize": 1.06,
+      "render": 241.74,
+      "three_qa": 16.25
+    },
+    "total_s": 353.43
+  },
+  "run_ref_speed": 3.45,
+  "height_m": 1.9
+}
