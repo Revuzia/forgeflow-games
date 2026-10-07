@@ -107,3 +107,17 @@ games/hit-parade/_research/audio/_*.log
 games/hit-parade/_research/environment/unitypackage_listings/
 games/hit-parade/_research/environment/texlists/
 games/hit-parade/runtime/lab/assets/
+
+# 2026-10-07 — VALE (games/vale): Vite/TS lane-brawler + Blender-authored art (art/out GLBs ARE tracked).
+# Client build, content build, deploy staging, shots, reports and python caches are not.
+games/vale/node_modules/
+games/vale/dist/
+games/vale/dist-catalog/
+games/vale/deploy/
+games/vale/_harness/_shots/
+games/vale/_harness/_reports/
+games/vale/_harness/__pycache__/
+games/vale/art/**/__pycache__/
+games/vale/audio/**/__pycache__/
+games/vale/art/_cache/
+games/vale/audio/_cache/

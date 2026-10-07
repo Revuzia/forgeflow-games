@@ -1,0 +1,35 @@
+{
+  "name": "vale",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "VALE — an original lane-brawler (Rift 5v5, Bridge, Fray). Three.js + TypeScript + Vite client, Blender-authored art, catalog-driven content. `npm install && npm run content && npm run dev`.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "content": "node tools/build_content.ts",
+    "content:check": "node tools/build_content.ts --check",
+    "package": "node tools/package_deploy.ts",
+    "probe": "node _harness/run_probes.ts",
+    "check": "npm run typecheck && npm run content:check && npm run probe"
+  },
+  "dependencies": {
+    "@preact/signals": "2.11.3",
+    "n8ao": "2.0.1",
+    "postprocessing": "6.39.5",
+    "preact": "11.0.0",
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
+    "@types/node": "^22.10.0",
+    "@types/three": "0.186.0",
+    "meshoptimizer": "1.3.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.3",
+    "zod": "4.6.5"
+  }
+}
