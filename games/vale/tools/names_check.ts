@@ -3,39 +3,41 @@
 // Used by tools/build_content.ts on every name/title/label and every player-facing prose string.
 // Also a CLI for the design team:
 //   node tools/names_check.ts "Some Fighter Name" "another string"   → prints hits, exit 1 on a hit
-//   node tools/names_check.ts --prose "a sentence of tooltip text"    → check as prose (see RULE)
-//   node tools/names_check.ts --list                                  → what is flagged / inert, per category
+//   node tools/names_check.ts --prose "a sentence of tooltip text"    → check as prose (see TIERS)
+//   node tools/names_check.ts --list                                  → per category: flagged / exact / inert
 //   --design <dir>  read the lists from <dir> instead of _design/
 //
 // INPUTS (all optional; a missing file contributes nothing — build_content warns when none exist):
-//   <design>/research/protected_names.json   { "categories": { "<cat>": ["Name", {"name": "Name"}, …] },
-//                                              "strict": ["<cat>", …] }            (strict: optional)
-//   <design>/NAMES_NOT_USED.md               '- Name' bullets under '#' headings; category =
-//                                              'not_used/<heading-slug>'. Text after ' — ', ' – ', ' - ',
-//                                              ': ' or ' (' is commentary and ignored. A heading that
-//                                              contains '(strict)' makes its category strict.
-//   <design>/names_allowlist.json            { "allow": ["Rift", "Vale", …], "why": {"Rift": "…"},
-//                                              "strict": ["<cat>", …] }            (why/strict optional)
+//   <design>/research/protected_names.json
+//       { "categories": { "<cat>": ["Name", {"name": "Name"}, …] },   whole-word / whole-phrase entries
+//         "exact_only": { "<cat>": ["Name", …] },                        ordinary words: entire-name only
+//         "strict": ["<cat>", …] }                                       optional
+//   <design>/NAMES_NOT_USED.md      '- Name' bullets under '#' headings → category 'not_used/<heading-slug>'.
+//                                   Text after ' — ', ' – ', ' - ', ': ' or ' (' is commentary; 'A / B'
+//                                   lists two names. A heading containing '(strict)' makes it strict.
+//   <design>/names_allowlist.json   { "allow": ["Rift", …], "why": {"Rift": "owner-chosen mode name"},
+//                                     "strict": ["<cat>", …] }        (why expected, strict optional)
 //
-// NORMALIZATION (both the protected names and the checked text): Unicode NFKD, combining marks
-// dropped (é → e), a few ligatures/letters folded (æ → ae, ø → o, ß → ss), every apostrophe-like
-// character unified, a possessive "'s" dropped, other apostrophes removed (Kai'Sa → kaisa), every
-// other non-letter/digit is a word break, lowercase. Matching is whole-word on that token stream.
-// A protected name also matches with its apostrophes read as spaces (Kog'Maw ~ "Kog Maw"/"Kog-Maw")
-// and, when multi-word, written as one word ("Baron Nashor" ~ "BaronNashor").
+// NORMALIZATION (protected names and checked text alike): Unicode NFKD, combining marks dropped
+// (é → e), a few letters folded (æ → ae, ø → o, ß → ss), apostrophe look-alikes unified, a possessive
+// "'s" dropped, other apostrophes removed (Kai'Sa → kaisa), any other non-letter/digit is a word
+// break, lowercase. A protected name also matches with its apostrophes read as word breaks
+// (Kog'Maw ~ "Kog Maw" / "Kog-Maw") and, when it has several words, written as one ("Baron Nashor"
+// ~ "BaronNashor"). A NAME is also compared as a whole with every separator removed ("Kai Sa" ~
+// "Kaisa"), and a leading "the" is ignored for entire-name comparisons.
 //
-// RULE (why: many protected names are ordinary English — "Rift" is the owner-chosen mode name,
-// "Vale" is the product, "Dragon" is a word — so blindly matching every entry would block plain
-// English while adding no originality protection):
-//   * an entry whose normalized form is in the allowlist is ignored entirely;
-//   * a MULTI-WORD entry ("Summoner's Rift", "Infinity Edge") is flagged anywhere: names and prose;
-//   * a SINGLE-WORD entry that is NOT a plain English dictionary word ("Teemo") is flagged anywhere;
-//   * a SINGLE-WORD dictionary word ("Jinx", "Herald") is flagged only when its category is
-//     STRICT, and then only in NAME fields (a fighter called "Jinx" fails; a tooltip saying
-//     "jinx" does not);
-//   * any other single dictionary word is inert (listed by --list so the design team can see it).
-// The dictionary is tools/data/english_words.txt (SCOWL size ≤ 50, no proper nouns). Do not edit
-// it to silence a hit — add the name to the allowlist with a `why`, or rename the content.
+// TIERS (why: many protected names are ordinary English — "Rift" is the owner-chosen mode name,
+// "Herald" and "Dragon" are words — so matching every entry everywhere would block plain English
+// without protecting anything; but an entire name that IS a shipped champion's name is a copy):
+//   anywhere    multi-word entries ("Summoner's Rift") and single words that are NOT plain English
+//               dictionary words ("Teemo"): whole-word match in names AND prose.
+//   in names    single dictionary words in a STRICT category: whole-word match inside name fields
+//               (a skin "Jinx Reborn" fails), never in prose (a tooltip "jinx" passes).
+//   exact name  every other single dictionary word, and every `exact_only` entry: flagged only when an
+//               ENTIRE name equals it ("Thresh" as a fighter name fails, "Iron Thresh" does not).
+//   ignored     anything whose normalized form is in names_allowlist.json `allow`.
+// The dictionary is tools/data/english_words.txt (SCOWL size ≤ 50, no proper nouns). Never edit it
+// to silence a hit — allowlist the name with a `why`, or rename the content.
 
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
@@ -48,7 +50,8 @@ const DICTIONARY_FILE = resolve(TOOLS_DIR, 'data', 'english_words.txt');
 
 export type TextKind = 'name' | 'prose';
 export interface NameInput { path: string; text: string; kind?: TextKind }
-export type HitReason = 'multi_word' | 'non_dictionary' | 'strict';
+export type HitReason = 'multi_word' | 'non_dictionary' | 'strict' | 'exact_name';
+export type Tier = 'anywhere' | 'in_names' | 'exact_name' | 'ignored';
 export interface NameHit {
   path: string; text: string; kind: TextKind;
   protectedName: string; category: string; source: string; reason: HitReason;
@@ -56,24 +59,26 @@ export interface NameHit {
 
 export interface DenyEntry {
   name: string; category: string; source: string;
-  /** canonical token form (first variant) + alternates; all matched as contiguous token runs */
-  variants: string[][];
-  flagName: boolean; flagProse: boolean;
+  tier: Tier;
   reason: HitReason | null;
-  /** why it is inert, when reason is null */
-  inertWhy?: 'allowlisted' | 'dictionary_word';
+  /** canonical token form first, then alternates; matched as contiguous token runs */
+  variants: string[][];
+  /** all separators removed; used for entire-name comparisons */
+  squashed: string;
 }
 
 export interface DenyList {
-  entries: DenyEntry[];             // every entry, flagged or inert
+  entries: DenyEntry[];
   strictCategories: string[];
   allow: string[];
   /** files actually read (relative to the project root when inside it) */
   sources: string[];
   /** malformed lines etc. — surfaced by build_content as warnings */
   warnings: string[];
-  /** first token → candidate (entry, variant) pairs, flagged entries only */
+  /** first token → (entry, variant) for 'anywhere' and 'in_names' entries */
   index: Map<string, { entry: DenyEntry; variant: string[] }[]>;
+  /** squashed form → entries, for entire-name comparisons (every non-ignored entry) */
+  whole: Map<string, DenyEntry[]>;
 }
 
 // ── normalization ───────────────────────────────────────────────────────────────────────────────
@@ -91,8 +96,12 @@ const split = (s: string): string[] => s.split(/[^\p{L}\p{N}]+/u).filter(Boolean
 export function nameTokens(text: string): string[] {
   return split(fold(text).replace(/'s(?![\p{L}\p{N}])/gu, '').replace(/'/g, ''));
 }
-function apostropheAsSpaceTokens(text: string): string[] {
+function apostropheAsBreakTokens(text: string): string[] {
   return split(fold(text).replace(/'s(?![\p{L}\p{N}])/gu, '').replace(/'/g, ' '));
+}
+/** entire-name form: tokens without a leading "the", joined with nothing */
+function wholeForm(tokens: string[]): string {
+  return (tokens[0] === 'the' && tokens.length > 1 ? tokens.slice(1) : tokens).join('');
 }
 
 // ── dictionary ──────────────────────────────────────────────────────────────────────────────────
@@ -108,7 +117,7 @@ export function isDictionaryWord(word: string): boolean {
 const rel = (p: string): string => { const r = relative(PROJECT_ROOT, p); return r.startsWith('..') ? p : r.replace(/\\/g, '/'); };
 
 function readJson(file: string): unknown {
-  try { return JSON.parse(readFileSync(file, 'utf8')); } catch (e) {
+  try { return JSON.parse(readFileSync(file, 'utf8').replace(/^﻿/, '')); } catch (e) {
     throw new Error(`names_check: cannot parse ${rel(file)}: ${e instanceof Error ? e.message : String(e)}`);
   }
 }
@@ -139,35 +148,44 @@ export function parseNamesNotUsed(md: string): { category: string; name: string;
   return out;
 }
 
+interface RawEntry { name: string; category: string; source: string; exactOnly: boolean }
+
+function readCategoryMap(v: unknown, file: string, key: string, exactOnly: boolean, out: RawEntry[], warnings: string[]): void {
+  if (v === undefined) return;
+  if (!v || typeof v !== 'object' || Array.isArray(v)) { warnings.push(`${file}: "${key}" must be { "<category>": [names] } — skipped`); return; }
+  for (const [cat, list] of Object.entries(v as Record<string, unknown>)) {
+    if (!Array.isArray(list)) { warnings.push(`${file} ${key}.${cat} is not an array — skipped`); continue; }
+    list.forEach((x, i) => {
+      const name = typeof x === 'string' ? x : (x && typeof x === 'object' && typeof (x as { name?: unknown }).name === 'string') ? (x as { name: string }).name : null;
+      if (name === null) warnings.push(`${file} ${key}.${cat}[${i}] is neither a string nor {name} — skipped`);
+      else out.push({ name, category: cat, source: file, exactOnly });
+    });
+  }
+}
+
 export function loadDenyList(designDir: string = DEFAULT_DESIGN_DIR): DenyList {
   const sources: string[] = [];
   const warnings: string[] = [];
-  const raw: { name: string; category: string; source: string }[] = [];
+  const raw: RawEntry[] = [];
   const strict = new Set<string>();
+  const strictList = (v: unknown): void => { if (Array.isArray(v)) for (const c of v) if (typeof c === 'string') strict.add(c); };
 
   const protectedFile = resolve(designDir, 'research', 'protected_names.json');
   if (existsSync(protectedFile)) {
-    sources.push(rel(protectedFile));
-    const j = readJson(protectedFile) as { categories?: unknown; strict?: unknown };
-    if (!j || typeof j !== 'object' || !j.categories || typeof j.categories !== 'object') {
-      throw new Error(`names_check: ${rel(protectedFile)} must be { "categories": { "<cat>": ["Name", …] } }`);
-    }
-    for (const [cat, list] of Object.entries(j.categories as Record<string, unknown>)) {
-      if (!Array.isArray(list)) { warnings.push(`${rel(protectedFile)} categories.${cat} is not an array — skipped`); continue; }
-      list.forEach((v, i) => {
-        const name = typeof v === 'string' ? v : (v && typeof v === 'object' && typeof (v as { name?: unknown }).name === 'string') ? (v as { name: string }).name : null;
-        if (name === null) warnings.push(`${rel(protectedFile)} categories.${cat}[${i}] is neither a string nor {name} — skipped`);
-        else raw.push({ name, category: cat, source: rel(protectedFile) });
-      });
-    }
-    if (Array.isArray(j.strict)) for (const c of j.strict) if (typeof c === 'string') strict.add(c);
+    const f = rel(protectedFile);
+    sources.push(f);
+    const j = readJson(protectedFile) as { categories?: unknown; exact_only?: unknown; strict?: unknown };
+    if (!j || typeof j !== 'object' || !j.categories) throw new Error(`names_check: ${f} must be { "categories": { "<cat>": ["Name", …] } }`);
+    readCategoryMap(j.categories, f, 'categories', false, raw, warnings);
+    readCategoryMap(j.exact_only, f, 'exact_only', true, raw, warnings);
+    strictList(j.strict);
   }
 
   const notUsedFile = resolve(designDir, 'NAMES_NOT_USED.md');
   if (existsSync(notUsedFile)) {
     sources.push(rel(notUsedFile));
     for (const e of parseNamesNotUsed(readFileSync(notUsedFile, 'utf8'))) {
-      raw.push({ name: e.name, category: e.category, source: rel(notUsedFile) });
+      raw.push({ name: e.name, category: e.category, source: rel(notUsedFile), exactOnly: false });
       if (e.strict) strict.add(e.category);
     }
   }
@@ -178,36 +196,47 @@ export function loadDenyList(designDir: string = DEFAULT_DESIGN_DIR): DenyList {
     sources.push(rel(allowFile));
     const j = readJson(allowFile) as { allow?: unknown; strict?: unknown; why?: unknown };
     if (!j || typeof j !== 'object' || !Array.isArray(j.allow)) throw new Error(`names_check: ${rel(allowFile)} must be { "allow": ["Name", …], "why": { … } }`);
-    for (const a of j.allow) if (typeof a === 'string') allow.add(nameTokens(a).join(' '));
-    if (Array.isArray(j.strict)) for (const c of j.strict) if (typeof c === 'string') strict.add(c);
     const why = (j.why && typeof j.why === 'object') ? j.why as Record<string, unknown> : {};
-    for (const a of j.allow) if (typeof a === 'string' && !(a in why)) warnings.push(`${rel(allowFile)}: "${a}" is allowlisted without a "why"`);
+    for (const a of j.allow) {
+      if (typeof a !== 'string') continue;
+      allow.add(nameTokens(a).join(' '));
+      if (!(a in why)) warnings.push(`${rel(allowFile)}: "${a}" is allowlisted without a "why"`);
+    }
+    strictList(j.strict);
   }
 
   const entries: DenyEntry[] = [];
   const index = new Map<string, { entry: DenyEntry; variant: string[] }[]>();
+  const whole = new Map<string, DenyEntry[]>();
   const seen = new Set<string>();
   for (const r of raw) {
     const canon = nameTokens(r.name);
     if (canon.length === 0) { warnings.push(`${r.source}: protected name "${r.name}" has no letters/digits — skipped`); continue; }
-    const key = `${r.category}\u0000${canon.join(' ')}`;
+    const key = `${r.category}\u0000${r.exactOnly ? 'x' : 'c'}\u0000${canon.join(' ')}`;
     if (seen.has(key)) continue;
     seen.add(key);
 
     const variants: string[][] = [canon];
-    const alt = apostropheAsSpaceTokens(r.name);
+    const alt = apostropheAsBreakTokens(r.name);
     if (alt.join(' ') !== canon.join(' ')) variants.push(alt);
     if (canon.length > 1) variants.push([canon.join('')]);
 
-    const entry: DenyEntry = { name: r.name, category: r.category, source: r.source, variants, flagName: false, flagProse: false, reason: null };
-    if (allow.has(canon.join(' '))) entry.inertWhy = 'allowlisted';
-    else if (canon.length > 1) { entry.reason = 'multi_word'; entry.flagName = entry.flagProse = true; }
-    else if (!isDictionaryWord(canon[0])) { entry.reason = 'non_dictionary'; entry.flagName = entry.flagProse = true; }
-    else if (strict.has(r.category)) { entry.reason = 'strict'; entry.flagName = true; }
-    else entry.inertWhy = 'dictionary_word';
-    entries.push(entry);
+    let tier: Tier;
+    let reason: HitReason | null;
+    if (allow.has(canon.join(' '))) { tier = 'ignored'; reason = null; }
+    else if (r.exactOnly) { tier = 'exact_name'; reason = 'exact_name'; }
+    else if (canon.length > 1) { tier = 'anywhere'; reason = 'multi_word'; }
+    else if (!isDictionaryWord(canon[0])) { tier = 'anywhere'; reason = 'non_dictionary'; }
+    else if (strict.has(r.category)) { tier = 'in_names'; reason = 'strict'; }
+    else { tier = 'exact_name'; reason = 'exact_name'; }
 
-    if (entry.reason) {
+    const entry: DenyEntry = { name: r.name, category: r.category, source: r.source, tier, reason, variants, squashed: wholeForm(canon) };
+    entries.push(entry);
+    if (tier === 'ignored') continue;
+    const w = whole.get(entry.squashed) ?? [];
+    w.push(entry);
+    whole.set(entry.squashed, w);
+    if (tier === 'anywhere' || tier === 'in_names') {
       for (const v of variants) {
         const list = index.get(v[0]) ?? [];
         list.push({ entry, variant: v });
@@ -215,7 +244,7 @@ export function loadDenyList(designDir: string = DEFAULT_DESIGN_DIR): DenyList {
       }
     }
   }
-  return { entries, strictCategories: [...strict].sort(), allow: [...allow].sort(), sources, warnings, index };
+  return { entries, strictCategories: [...strict].sort(), allow: [...allow].sort(), sources, warnings, index, whole };
 }
 
 let cachedDefault: DenyList | null = null;
@@ -224,31 +253,36 @@ let cachedDefault: DenyList | null = null;
 export function checkNames(strings: readonly NameInput[], list?: DenyList): NameHit[] {
   const deny = list ?? (cachedDefault ??= loadDenyList());
   const hits: NameHit[] = [];
-  if (deny.index.size === 0) return hits;
+  if (deny.whole.size === 0) return hits;
   for (const s of strings) {
     const kind: TextKind = s.kind ?? 'name';
     const toks = nameTokens(s.text);
     const reported = new Set<DenyEntry>();
+    const report = (entry: DenyEntry): void => {
+      if (reported.has(entry)) return;
+      reported.add(entry);
+      hits.push({ path: s.path, text: s.text, kind, protectedName: entry.name, category: entry.category, source: entry.source, reason: entry.reason as HitReason });
+    };
+    // whole-word / whole-phrase runs
     for (let i = 0; i < toks.length; i++) {
       const cands = deny.index.get(toks[i]);
       if (!cands) continue;
       for (const { entry, variant } of cands) {
-        if (reported.has(entry)) continue;
-        if (kind === 'name' ? !entry.flagName : !entry.flagProse) continue;
+        if (entry.tier === 'in_names' && kind !== 'name') continue;
         if (i + variant.length > toks.length) continue;
         let ok = true;
         for (let k = 1; k < variant.length; k++) if (toks[i + k] !== variant[k]) { ok = false; break; }
-        if (!ok) continue;
-        reported.add(entry);
-        hits.push({ path: s.path, text: s.text, kind, protectedName: entry.name, category: entry.category, source: entry.source, reason: entry.reason as HitReason });
+        if (ok) report(entry);
       }
     }
+    // entire-name comparisons (names only): exact-name tier, plus any entry spelled with different breaks
+    if (kind === 'name' && toks.length) for (const entry of deny.whole.get(wholeForm(toks)) ?? []) report(entry);
   }
   return hits;
 }
 
 export function formatHit(h: NameHit): string {
-  const why = h.reason === 'multi_word' ? 'multi-word protected name' : h.reason === 'non_dictionary' ? 'protected non-dictionary word' : 'strict-category name';
+  const why = { multi_word: 'multi-word protected name', non_dictionary: 'protected non-dictionary word', strict: 'strict-category word in a name', exact_name: 'entire name equals a protected name' }[h.reason];
   return `"${h.text.length > 80 ? h.text.slice(0, 77) + '…' : h.text}" matches deny-listed "${h.protectedName}" (${h.category}, ${h.source}; ${why})`;
 }
 
@@ -273,10 +307,10 @@ function main(argv: string[]): number {
     const byCat = new Map<string, DenyEntry[]>();
     for (const e of list.entries) byCat.set(e.category, [...(byCat.get(e.category) ?? []), e]);
     for (const [cat, es] of [...byCat].sort(([a], [b]) => a.localeCompare(b))) {
-      const flagged = es.filter((e) => e.reason);
-      const inert = es.filter((e) => !e.reason);
-      console.log(`${cat}${list.strictCategories.includes(cat) ? ' (strict)' : ''}: ${flagged.length} flagged, ${inert.length} inert`);
-      if (inert.length) console.log(`  inert: ${inert.map((e) => `${e.name}${e.inertWhy === 'allowlisted' ? ' [allow]' : ''}`).join(', ')}`);
+      const n = (t: Tier): number => es.filter((e) => e.tier === t).length;
+      console.log(`${cat}${list.strictCategories.includes(cat) ? ' (strict)' : ''}: ${n('anywhere')} anywhere, ${n('in_names')} in names, ${n('exact_name')} exact-name, ${n('ignored')} allowlisted`);
+      const ign = es.filter((e) => e.tier === 'ignored');
+      if (ign.length) console.log(`  allowlisted: ${ign.map((e) => e.name).join(', ')}`);
     }
     return 0;
   }

@@ -13,5 +13,11 @@
   },
   "strict": [
     "fx_strict"
-  ]
+  ],
+  "exact_only": {
+    "fx_exact": [
+      "Beacon",
+      "Glass Crown"
+    ]
+  }
 }

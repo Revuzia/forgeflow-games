@@ -699,8 +699,9 @@ function collectNames(data: Record<string, unknown>): { inputs: NameInput[]; pat
     if (fam === 'vfx' || fam === 'audio') continue;            // engine data, never shown as text
     if (fam === 'botNames') { if (Array.isArray(v)) v.forEach((s, i) => typeof s === 'string' && add([fam, i], s, 'name')); continue; }
     if (fam === 'strings') {
-      // short strings are labels/titles (name rules); longer ones are sentences (prose rules)
-      if (isObj(v)) for (const [k, s] of Object.entries(v)) if (typeof s === 'string') add([fam, k], s, s.trim().split(/\s+/).length <= 4 ? 'name' : 'prose');
+      // UI copy, not the name of a game entity: prose rules (exact-name/strict tiers would flag
+      // ordinary labels such as a shop tab that happens to equal a protected single word)
+      if (isObj(v)) for (const [k, s] of Object.entries(v)) if (typeof s === 'string') add([fam, k], s, 'prose');
       continue;
     }
     walkObjects(v, [fam], (node, path) => {

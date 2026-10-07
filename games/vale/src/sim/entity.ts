@@ -138,6 +138,8 @@ export class AbilitySlot implements AbilityView {
   rechargeTimer = 0;
   /** recast record while the window is open */
   recastDef: AbilityCoreT | null = null;
+  /** the record whose cast opened the recast window */
+  recastFrom: AbilityCoreT | null = null;
   /** lockout before the recast may be used (the recast record's own cooldown) */
   recastLock = 0;
   /** cooldown owed by the first cast; starts when the recast window closes */

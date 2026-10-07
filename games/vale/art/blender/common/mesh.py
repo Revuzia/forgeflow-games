@@ -119,7 +119,7 @@ def shade(obj, smooth: bool = True, sharp_angle: float | None = None) -> None:
     if smooth:
         me.shade_smooth()
         if sharp_angle is not None:
-            me.set_sharpness_by_angle(angle=math.radians(sharp_angle), keep_sharp_edges=True)
+            me.set_sharp_from_angle(angle=math.radians(sharp_angle))
     else:
         me.shade_flat()
 
@@ -621,7 +621,12 @@ def bvh_of(objs) -> BVHTree:
 
 
 def _surface_r(bvh: BVHTree, origin: Vector, d: Vector, far: float) -> float | None:
-    """Distance from origin along d to the OUTERMOST surface hit (ray cast inward from far away)."""
+    """Distance from `origin` along `d` to the first surface crossed going outward (the target's
+    surface around the projection axis/centre). Falls back to the outermost hit when the origin
+    lies outside the target and the ray points away from it."""
+    hit = bvh.ray_cast(origin + d * 1e-4, d, far)
+    if hit[0] is not None:
+        return (hit[0] - origin).dot(d)
     start = origin + d * far
     hit = bvh.ray_cast(start, -d, far * 1.2)
     if hit[0] is None:
@@ -631,7 +636,8 @@ def _surface_r(bvh: BVHTree, origin: Vector, d: Vector, far: float) -> float | N
 
 def plate(proj: Projection, rows, target=None, offset: float = 0.015, thickness: float = 0.012,
           cols: int = 12, smooth_iters: int = 6, min_r: float = 0.0, r_fn=None, shape_fn=None,
-          rim: float = 0.0, rim_height: float = 0.004, bevel_w: float = 0.004, bevel_segments: int = 2,
+          rim: float = 0.0, rim_height: float = 0.004, bevel_w: float = 0.004, bevel_segments: int = 1,
+          row_step: float = 0.03,
           wrap: bool = False, far: float = 1.0, name: str = "plate", col=None,
           weighted: bool = True, mat=None, rim_mat=None) -> bpy.types.Object:
     """Armour plate conformed to `target` (a BVHTree or object list) along `proj` rays.
@@ -648,7 +654,7 @@ def plate(proj: Projection, rows, target=None, offset: float = 0.015, thickness:
     n_rows = max(len(rows), 2)
     vs = [r[0] for r in rows]
     # resample the outline to a regular number of rows
-    nv = max(4, int(abs(vs[-1] - vs[0]) / 0.02) + 1) if isinstance(proj, Cylindrical) else max(4, n_rows * 2)
+    nv = max(4, int(abs(vs[-1] - vs[0]) / row_step) + 1) if isinstance(proj, Cylindrical) else max(4, int(n_rows * 1.5))
     tv = [i / (nv - 1) for i in range(nv)]
     keys_v = [(i / (n_rows - 1), r[0]) for i, r in enumerate(rows)]
     keys_u0 = [(i / (n_rows - 1), r[1]) for i, r in enumerate(rows)]
@@ -726,7 +732,7 @@ def plate(proj: Projection, rows, target=None, offset: float = 0.015, thickness:
         obj.data.materials.append(mat)
         if rim_mat is not None:
             obj.data.materials.append(rim_mat)
-    solidify(obj, thickness, offset=-1.0)
+    solidify(obj, thickness, offset=-1.0, even=False)
     if bevel_w > 0:
         bevel(obj, bevel_w, bevel_segments, angle=40)
     shade(obj, True)
@@ -741,7 +747,7 @@ def _raise_rim_sheet(bm: bmesh.types.BMesh, width: float, height: float) -> list
     Returns the border faces."""
     faces = list(bm.faces)
     bm.normal_update()
-    res = bmesh.ops.inset_region(bm, faces=faces, thickness=width, depth=-height, use_even_offset=True,
+    res = bmesh.ops.inset_region(bm, faces=faces, thickness=width, depth=-height, use_even_offset=False,
                                  use_boundary=True, use_relative_offset=False)
     return list(res.get("faces", []))
 

@@ -141,8 +141,9 @@ def new_object(name: str, data, col: bpy.types.Collection | None = None) -> bpy.
 
 
 def select_only(objs, active=None) -> None:
-    for o in bpy.context.view_layer.objects:
-        o.select_set(False)
+    for o in list(bpy.context.selected_objects):
+        if o is not None:
+            o.select_set(False)
     for o in objs:
         o.select_set(True)
     if active is not None:

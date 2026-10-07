@@ -217,9 +217,12 @@ def model(ctx) -> list:
                         shape_fn=lambda u, v, r: 0.008 * math.exp(-(u / 18.0) ** 2),
                         rim=0.010, name=f"greave.{s}", col=col, mat=M["metal"], rim_mat=M["trim"])
         P.append(fighter.Part(f"greave.{s}", low=gr, bind=f"bone:shin.{s}"))
-        kc = mesh.plate(Spherical(kn + V((0, 0.025, 0.012)), up=(0, -1, 0.2), front=(0, 0, 1)),
-                        [(0, -180, 180), (35, -180, 180), (62, -180, 180)], target=ctx.targets,
-                        offset=0.020, thickness=0.009, cols=18, smooth_iters=10, wrap=True, rim=0.009,
+        kproj = Spherical(kn + V((0, 0.035, 0.010)), up=(0, -1, 0.25), front=(0, 0, 1))
+        o, d = kproj.ray(0, 0)
+        R = (mesh._surface_r(mesh.bvh_of(ctx.targets), o, d, 0.3) or 0.1) + 0.016
+        kc = mesh.plate(kproj, [(0, -180, 180), (30, -180, 180), (58, -180, 180)], target=None,
+                        r_fn=lambda u, v, r, R=R: R * (1.0 - 0.06 * mesh.smoothstep(20, 58, v)),
+                        offset=0.0, thickness=0.009, cols=18, smooth_iters=0, wrap=True, rim=0.009,
                         name=f"kneecop.{s}", col=col, mat=M["metal"], rim_mat=M["trim"])
         P.append(fighter.Part(f"kneecop.{s}", low=kc, bind=f"bone:shin.{s}"))
 

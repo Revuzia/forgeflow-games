@@ -72,10 +72,12 @@ async function main(argv: string[]): Promise<number> {
 
   const results: Result[] = [];
   for (const p of probes) {
-    if (!o.verbose) process.stdout.write(`… ${p}\r`);
-    else console.log(`\n──── ${p}`);
+    const live = !o.verbose && process.stdout.isTTY;   // transient "running" line only on a terminal
+    if (live) process.stdout.write(`…     ${p}`);
+    else if (o.verbose) console.log(`\n──── ${p}`);
     const r = await runOne(join(HARNESS, p), o.verbose, o.timeout);
     results.push(r);
+    if (live) process.stdout.write('\x1b[2K\r');
     console.log(`${r.status === 'PASS' ? 'PASS' : r.status === 'SKIP' ? 'SKIP' : 'FAIL'}  ${p.padEnd(44)} ${(r.ms / 1000).toFixed(1).padStart(6)}s`);
     if (r.status === 'SKIP' && r.tail.length) console.log(`      ${r.tail[r.tail.length - 1]}`);
     if (r.status === 'FAIL' && !o.verbose) for (const l of r.tail) console.log(`      │ ${l}`);

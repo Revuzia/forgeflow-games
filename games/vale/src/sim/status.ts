@@ -28,9 +28,9 @@ import {
   ST_INVISIBLE, ST_UNSTOPPABLE, ST_UNTARGETABLE, SLOT_A1, SLOT_ULT,
   type Buff, type EffOf, type EffectCtx, type Entity, type Status,
 } from './entity.ts';
-import { swapSlotDef } from './abilities.ts';
+import { interruptCast, swapSlotDef } from './abilities.ts';
 import { noteAssist } from './combat.ts';
-import { interruptCast, interruptDash } from './movement.ts';
+import { interruptDash } from './movement.ts';
 import { markStatsDirty } from './stats.ts';
 import { fireTrigger } from './triggers.ts';
 import { ranked, resolveScaling, runEffects } from './effects.ts';
@@ -136,8 +136,9 @@ export function applyStatus(w: World, src: Entity | null, dst: Entity, kind: Sta
   w.emit({ e: 'status', t: w.time, dst: dst.id, status: kind, duration });
 
   if (INTERRUPTS.has(kind)) {
-    if (kind !== 'silence' || !dst.cast || dst.cast.slot === null || dst.cast.slot.kind === 'ability') interruptCast(w, dst, true);
-    if (kind !== 'silence') { dst.atkWindup = -1; }
+    // silence only cancels fighter abilities; the rest cancel any windup/channel and attack windup
+    if (kind !== 'silence') { interruptCast(w, dst, true); dst.atkWindup = -1; }
+    else if (dst.cast && (dst.cast.slot === null || dst.cast.slot.kind === 'ability')) interruptCast(w, dst, true);
   }
   if (kind === 'disarm') dst.atkWindup = -1;
   if ((kind === 'stun' || kind === 'root' || kind === 'airborne' || kind === 'sleep') && dst.dash && !dst.dash.displace && !dst.dash.unstoppable) interruptDash(w, dst);

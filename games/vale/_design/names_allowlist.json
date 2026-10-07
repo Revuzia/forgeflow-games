@@ -1,0 +1,10 @@
+{
+  "allow": ["Rift", "Vale"],
+  "why": {
+    "Rift": "Owner-specified mode name in the brief (RIFT / BRIDGE / FRAY). Allowed ONLY as the player-facing name of the 5v5 mode and its queues. Never used for a map, objective, structure, fighter, item or currency. The registry denies it as a whole word because Riot uses it in its own product names; the risk is recorded in DESIGN_NOTE §Names, with a recommended alternative should the owner want one.",
+    "Vale": "Product working title chosen by the owner."
+  },
+  "scope": {
+    "Rift": ["modes[].name", "queues[].name", "client.modeSlots[].label", "strings"]
+  }
+}

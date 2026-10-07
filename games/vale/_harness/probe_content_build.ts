@@ -195,8 +195,11 @@ try {
   check(hit("Gloomspire's Herald").length === 1 && hit('GloomspireHerald').length === 1, 'multi-word entry flagged through possessive and squashed spelling');
   check(hit('Zzýzxblade').length === 1 && hit('a zzyzxblade appears', 'prose').length === 1, 'non-dictionary single word flagged everywhere (diacritics folded)');
   check(hit('Zzyzxblades').length === 0 && hit('Gloomspire').length === 0, 'whole-word only (no partial or plural match)');
-  check(hit('Lantern').length === 0, 'non-strict dictionary word is inert');
-  check(hit('Ember').length === 1 && hit('an ember glows', 'prose').length === 0, 'strict dictionary word flagged in names only');
+  check(hit('Lantern').length === 1 && hit('Iron Lantern').length === 0 && hit('a lantern', 'prose').length === 0, 'non-strict dictionary word is protected only as an entire name');
+  check(hit('The Beacon').length === 1 && hit('Beacon Tower').length === 0 && hit('Glass Crown').length === 1 && hit('the glass crown shatters', 'prose').length === 0,
+    'exact_only entries match an entire name only (leading "the" ignored), never inside text');
+  check(hit('Zzyzx Blade').length === 1 && hit('zzyzx blade', 'prose').length === 0, 'a name spelled with different breaks is compared squashed');
+  check(hit('Ember').length === 1 && hit('Ember Knight').length === 1 && hit('an ember glows', 'prose').length === 0, 'strict dictionary word flagged inside names only');
   check(hit('Marrow').length === 1, 'NAMES_NOT_USED "(strict)" heading makes its section strict');
   check(hit('Vale').length === 0, 'allowlisted entry is ignored');
   check(hit('Fen Hollow').length === 1 && hit('Hollowfen').length === 1, 'NAMES_NOT_USED "A / B" bullets yield both names');
