@@ -1040,7 +1040,7 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     au.toss = () => { tosses.push(1); };
     return { w, app, lifts, tosses };
   };
-  interface RealPull { carried: boolean; grabs: number[]; snaps: Array<{ finger: number; I: number; held: number }>; sp: number; voices: number; releases: number; pops: number; hapticRelease: number; lifts: number; tosses: number; stats: { pulls: number; releases: number }; minYR: number; finite: boolean; sidesOut: [number, number] }
+  interface RealPull { carried: boolean; grabs: number[]; snaps: Array<{ finger: number; I: number; held: number }>; sp: number; voices: number; releases: number; pops: number; hapticRelease: number; hapticPoke: number; lifts: number; tosses: number; stats: { pulls: number; releases: number }; minYR: number; finite: boolean; sidesOut: [number, number] }
   const realPull = (type: 'mouse' | 'touch', shift: boolean, reach = 1.8): RealPull => {
     const { w, app, lifts, tosses } = makeReal();
     const go = (ms: number, each?: () => void): void => { let left = ms; while (left > 1e-9) { const d = Math.min(1000 / 60, left); w.clock.t += d; app.frame(w.clock.t); each?.(); left -= d; } };
@@ -1066,7 +1066,7 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const m = app.hoard.meter();
     return {
       carried, grabs: ev.filter((e) => e.kind === 'grab').map((e) => e.finger), snaps: ev.filter((e) => e.kind === 'snap').map((e) => ({ finger: e.finger, I: e.intensity, held: e.heldFor })),
-      sp: m.sp + m.credits * 1e3, voices: w.audio.rec.count('squishStart'), releases: w.audio.rec.count('release'), pops: w.audio.rec.count('pop'), hapticRelease: w.haptics.rec.count('release'),
+      sp: m.sp + m.credits * 1e3, voices: w.audio.rec.count('squishStart'), releases: w.audio.rec.count('release'), pops: w.audio.rec.count('pop'), hapticRelease: w.haptics.rec.count('release'), hapticPoke: w.haptics.rec.count('poke'),
       lifts: lifts.length, tosses: tosses.length, stats: { pulls: app.profile.profile.stats.pulls, releases: app.profile.profile.stats.releases }, minYR: minY / R, finite,
       sidesOut: [(x0 - mnX - R) / maxD, (mxX - x0 - R) / maxD],
     };
@@ -1077,6 +1077,9 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     `carried ${shiftPull.carried}, grabs ${shiftPull.grabs}, snaps ${shiftPull.snaps.map((s) => s.I.toFixed(2))}, sides ${shiftPull.sidesOut.map((x) => x.toFixed(2))} maxPull, lifts ${shiftPull.lifts}, tosses ${shiftPull.tosses}`);
   check('plain pull (real SoftBody, through the game): the same drag without Shift still picks the body up (metrics.carried, the lift voice once, a toss on the let-go)',
     plainPull.carried && plainPull.grabs.join() === '0' && plainPull.snaps.length === 1 && plainPull.lifts === 1 && plainPull.tosses >= 1, `carried ${plainPull.carried}, lifts ${plainPull.lifts}, tosses ${plainPull.tosses}`);
+  // (the press itself ticks once: the real body reports a 'poke' event when a pull starts, so the Shift pull, which never lifts, has 1 tick and the lone pull has 1 + the lift's)
+  check('SHELL-4 haptics: the lift plays ONE light tick (haptics.poke) more than the same pull that never lifts (the Shift pull) and the snap that throws it the thump (haptics.release, once)',
+    plainPull.hapticPoke - shiftPull.hapticPoke === 1 && plainPull.hapticRelease === 1 && shiftPull.hapticRelease === 1, `lone pull: ticks ${plainPull.hapticPoke}, thumps ${plainPull.hapticRelease}; Shift pull (no lift): ticks ${shiftPull.hapticPoke}, thumps ${shiftPull.hapticRelease}`);
   check('touch with Shift (real SoftBody, through the game): never mirrors: one grab, one snap, and it lifts like any lone finger',
     touchPull.carried && touchPull.grabs.join() === '0' && touchPull.snaps.length === 1);
   check('Shift pull feedback: ONE stretch voice, ONE release sound, ONE thump, 1 to 3 pops, one pull and one release in the stats (as the plain pull)',
@@ -1103,6 +1106,133 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   check('Shift pull meter: the pair pays ONCE: exactly the squish points of the same pull without Shift (the second hand is no touch of its own)',
     shiftPull.sp > 0.5 && Math.abs(shiftPull.sp - plainPull.sp) < 1e-6,
     `${shiftPull.sp.toFixed(4)} SP vs ${plainPull.sp.toFixed(4)} SP. Why: fed as a second pull the mirror would pay +${(exFresh * 100).toFixed(1)} % on a fresh pull, +${(ex2 * 100).toFixed(1)} % at a 2 s cadence, +${(ex1 * 100).toFixed(1)} % at 1 s (freshness floor 0.03 of the second pull; it would also double the pull count of a Tasks goal)`);
+}
+
+/* ───────────────────────── 7f. SHELL-4: CALIBRATION.bendWithPress, measured through the whole game on the REAL SoftBody (a dome-top press, held 1.3 s) ───────────────────────── */
+{
+  const { SoftBody } = await import('../../src/physics/softbody.ts');
+  const { CALIBRATION } = await import('../../src/shell/feel.ts');
+  const mut = CALIBRATION as unknown as { bendWithPress: boolean };
+  const T0 = 1_700_000_000_000;
+  const domeGame = (bend: boolean): { comp: number; press: number; releases: number; relI: number; held: number; sp: number; direct: number; statReleases: number; squelchVoices: number; audioReleases: number } => {
+    const was = mut.bendWithPress;
+    mut.bendWithPress = bend;
+    try {
+      const w = createMockWorld({ storage: null });
+      w.deps.createBody = (gg) => new SoftBody(gg) as unknown as SoftBodyLike;
+      const now = (): number => T0 + w.clock.t;
+      const collection = createCollection({ storage: null, profile: null, now, random: () => 0.4 });
+      const app = createApp({ ...w.deps, collection, epochNow: now });
+      app.resize(1280, 800, 1);
+      app.setPhase('play');
+      const go = (ms: number, each?: () => void): void => { let left = ms; while (left > 1e-9) { const d = Math.min(1000 / 60, left); w.clock.t += d; app.frame(w.clock.t); each?.(); left -= d; } };
+      go(1500);
+      const body = app.body as unknown as InstanceType<typeof SoftBody>;
+      const disc = app.host.bodyScreen()!;
+      let comp = 0, press = 0;
+      app.input.pointerDown({ id: 7, x: disc.x, y: disc.y - 0.8 * disc.r, t: w.clock.t, button: 0, type: 'touch' });
+      go(1300, () => { comp = Math.max(comp, body.metrics.compression); press = Math.max(press, body.metrics.press ?? 0); });
+      app.input.pointerUp({ id: 7, x: disc.x, y: disc.y - 0.8 * disc.r, t: w.clock.t, button: 0, type: 'touch' });
+      go(1500);
+      const rel = app.recentEvents().filter((e) => e.kind === 'release');
+      const sp = app.hoard.meter().sp;
+      // what ONE feed of that very release pays on a fresh collection (the reference: a second payment would show as 2 x)
+      const ref = createCollection({ storage: null, profile: null, now: () => T0 + 5000, random: () => 0.4 });
+      if (rel[0]) ref.feed(rel[0], T0 + 5000);
+      const direct = ref.meter().sp; ref.dispose();
+      const out = { comp, press, releases: rel.length, relI: rel[0]?.intensity ?? 0, held: rel[0]?.heldFor ?? 0, sp, direct, statReleases: app.profile.profile.stats.releases, squelchVoices: w.audio.rec.count('squishStart'), audioReleases: w.audio.rec.count('release') };
+      app.dispose();
+      return out;
+    } finally { mut.bendWithPress = was; }
+  };
+  const withB = domeGame(true), without = domeGame(false);
+  const f2 = (x: number): string => x.toFixed(2);
+  check(`CALIBRATION.bendWithPress (decision: KEEP while the flat press reads compression ~0): a dome-top press held 1.3 s peaks at compression ${f2(withB.comp)} / press ${f2(withB.press)} with the bend and compression ${f2(without.comp)} / press ${f2(without.press)} without it (the bend is what squashes the toy into the table); the flag is true exactly while the flat press reads under 0.1`,
+    without.comp < 0.1 && withB.comp > without.comp && withB.press >= 0.9 && without.press >= 0.9 && CALIBRATION.bendWithPress === true);
+  check(`the meter is never paid twice for one press, with the bend or without it: one release event (intensity ${f2(withB.relI)} / ${f2(without.relI)}), one release sound, one release in the stats, one squelch voice, and the meter holds exactly ONE feed of that release (${withB.sp.toFixed(4)} / ${without.sp.toFixed(4)} SP against ${withB.direct.toFixed(4)} / ${without.direct.toFixed(4)} SP fed once to a fresh collection)`,
+    withB.releases === 1 && without.releases === 1 && withB.audioReleases === 1 && without.audioReleases === 1 && withB.statReleases === 1 && without.statReleases === 1 && withB.squelchVoices === 1 && without.squelchVoices === 1
+    && withB.sp > 0.5 && Math.abs(withB.sp - withB.direct) < 1e-9 && Math.abs(without.sp - without.direct) < 1e-9 && Math.abs(withB.sp - without.sp) < 0.05 * withB.sp);
+}
+
+/* ───────────────────────── 7g. SHELL-4: the Cut tool on the REAL SoftBody (the mock bodies of 5d prove the logic; this proves it against the real physics' measureCut / setNeck / pieces / setFrac) ───────────────────────── */
+{
+  const { SoftBody } = await import('../../src/physics/softbody.ts');
+  const { createCutter, SETTLE_GAP, SETTLE_S, supportAlong, JOIN_ALL_S, BRIDGE_HOLD_S } = await import('../../src/shell/cut.ts');
+  void createCutter;
+  const g = makeStarterGenome();
+  const w = createMockWorld({ storage: null });
+  const fake = upgrade(w);
+  void fake;
+  const st = w.stage as unknown as Record<string, unknown>;
+  const bridges: Array<[number, number, number]> = [], seams: number[] = [], chunkFlags: boolean[] = [];
+  st.setCutSeam = (_id: number, pl: unknown, t: number) => { seams.push(pl ? t : 0); };
+  st.setBridge = (a: number, b: number, t: number) => { bridges.push([a, b, t]); };
+  st.partPieces = () => {};
+  const baseAdd = st.addBody as (b: SoftBodyLike, gg: Genome, o?: { chunk?: boolean }) => number;
+  st.addBody = (b: SoftBodyLike, gg: Genome, o?: { chunk?: boolean }) => { chunkFlags.push(!!o?.chunk); return baseAdd(b, gg, o); };
+  const au = w.audio as unknown as Record<string, unknown>;
+  const calls: Array<[string, Record<string, unknown>]> = [];
+  au.cut = (p: Record<string, unknown>) => calls.push(['cut', p]);
+  au.rejoin = (p: Record<string, unknown>) => calls.push(['rejoin', p]);
+  w.deps.createBody = ((gg: Genome, o?: { at?: { x: number; y: number; z: number }; piece?: unknown }) => (o?.piece ? new (SoftBody as unknown as new (g: Genome, o: unknown) => SoftBodyLike)(gg, { piece: o.piece })
+    : o?.at ? new (SoftBody as unknown as new (g: Genome, o: unknown) => SoftBodyLike)(gg, { piece: { frac: 1, chunk: false, at: o.at } }) : new SoftBody(gg) as unknown as SoftBodyLike)) as typeof w.deps.createBody;
+  const now = (): number => 1_700_000_000_000 + w.clock.t;
+  const collection = createCollection({ storage: null, profile: null, now, random: () => 0.4 });
+  const app = createApp({ ...w.deps, collection, epochNow: now, genome: g });
+  app.resize(800, 600, 1);
+  app.setPhase('play');
+  const go = (ms: number, each?: () => void): void => { let left = ms; while (left > 1e-9) { const d = Math.min(1000 / 60, left); w.clock.t += d; app.frame(w.clock.t); each?.(); left -= d; } };
+  const notices: string[] = [];
+  app.on('notice', (t) => notices.push(t));
+  go(1500);
+  const whole0 = app.body as unknown as InstanceType<typeof SoftBody>;
+  const id0 = app.identity, items0 = app.hoard.items().length, fill0 = app.hoard.meter().sp;
+  const settleIdle = (max = 3000): void => { for (let t = 0; t < max && app.cut.busy; t += 1000 / 60) go(1000 / 60); };
+  const r1 = app.cut.splitInTwo();
+  go(120);
+  const necking = app.cut.busy && seams.length > 0 && Math.max(...seams) > 0;
+  settleIdle();
+  const f2 = app.cut.fracs();
+  const face = app.body as unknown as InstanceType<typeof SoftBody>;
+  const xs = app.bodies.extras.filter((x) => x.piece);
+  const frameFace = (face as unknown as { frac?: number }).frac;
+  check('X01 real physics (node, through the whole game): Split in two necks (the real setNeck), then two real pieces whose shares sum to 1 (0.5 %); the face piece is the PLAY body (a new SoftBody built as a piece, same identity), the other an eyeless chunk on the mat (AddBodyOpts.chunk)',
+    r1 === 'cut' && necking && f2.length === 2 && Math.abs(f2[0] + f2[1] - 1) < 0.005 && face !== whole0 && Math.abs((frameFace ?? 0) - f2[0]) < 1e-6 && xs.length === 1 && chunkFlags.at(-1) === true && app.identity.itemId === id0.itemId && app.identity.genome === id0.genome,
+    `${r1}; fracs ${f2.map((f) => f.toFixed(3)).join(' + ')}; neck ${necking}; extras ${xs.length}`);
+  // the parting gap: a chunk is steered to SETTLE_GAP of room from its twin (the strands need it) and let go after SETTLE_S
+  const gapOf = (): number => { const a = app.body, b = xs[0].body; const dx = a.center.x - b.center.x, dy = a.center.y - b.center.y, dz = a.center.z - b.center.z, d = Math.hypot(dx, dy, dz), u = { x: dx / d, y: dy / d, z: dz / d }; return d - supportAlong(b, u) - supportAlong(a, { x: -u.x, y: -u.y, z: -u.z }); };
+  go(0.5 * 1000);
+  const gapHeld = gapOf();
+  go(SETTLE_S * 1000);
+  check(`parting gap: the new chunk is steered to a surface gap of ${SETTLE_GAP} m from its twin (strands need room: it was 0 .. 0.03 m with a fixed 0.06 m offset from the lobes); measured ${gapHeld.toFixed(3)} m 0.5 s after the cut, then it is let go after SETTLE_S`,
+    Math.abs(gapHeld - SETTLE_GAP) < 0.04 && !(xs[0].body as unknown as { moveOn?: boolean }).moveOn, `gap ${gapHeld.toFixed(3)} m, still steered after SETTLE_S: ${(xs[0].body as unknown as { moveOn?: boolean }).moveOn}`);
+  check('X06 real physics: cutting paid the meter nothing and the Hoard saw no piece', app.hoard.meter().sp === fill0 && app.hoard.items().length === items0 && app.mat.count === 1, `sp ${fill0} -> ${app.hoard.meter().sp}`);
+  // more cuts, then the refusal numbers on the real physics (a cut that would leave a piece under 1/8 is refused: the whole's edge)
+  const r2 = app.cut.splitInTwo(); settleIdle(); go(500);
+  const f3 = app.cut.fracs();
+  check('X01 real physics: a second Split in two (the biggest piece) makes 3 pieces, shares sum to 1, none under 1/8', r2 === 'cut' && f3.length === 3 && Math.abs(f3.reduce((s, f) => s + f, 0) - 1) < 0.005 && f3.every((f) => f >= 0.125 - 1e-6), `${r2}; ${f3.map((f) => f.toFixed(3)).join(' + ')}`);
+  // Reconnect all: the bridge is held in view (the chunks' skins stay apart BRIDGE_HOLD_S), every chunk flows into the face piece, a FRESH whole body of the same genome replaces it
+  const bridgeCalls0 = bridges.length;
+  const started = app.cut.reconnectAll(true);
+  const gaps: number[] = [];
+  for (let t = 0; t < JOIN_ALL_S * 1000 + 200; t += 1000 / 60) {
+    go(1000 / 60);
+    const ex = app.bodies.extras.filter((x) => x.piece);
+    if (ex.length) gaps.push(Math.max(...ex.map((x) => { const a = app.body, b = x.body; const dx = a.center.x - b.center.x, dy = a.center.y - b.center.y, dz = a.center.z - b.center.z, d = Math.hypot(dx, dy, dz) || 1, u = { x: dx / d, y: dy / d, z: dz / d }; return d - supportAlong(b, u) - supportAlong(a, { x: -u.x, y: -u.y, z: -u.z }); })));
+  }
+  settleIdle(); go(300);
+  const apart = gaps.filter((x) => x > 0.02 * whole0.restRadius).length / 60;
+  const fw = app.body as unknown as InstanceType<typeof SoftBody>;
+  check(`X04 real physics: Reconnect all ends whole: one body, a FRESH whole SoftBody (frac 1, not a piece) of the same genome, no piece on the mat; "Whole again."; rejoin({ all }) once; the bridge was drawn every step (${bridges.length - bridgeCalls0} setBridge calls)`,
+    started && app.cut.pieces === 1 && app.bodies.extras.length === 0 && fw !== face && (fw as unknown as { frac?: number }).frac === 1 && app.identity.genome === id0.genome && notices.includes('Whole again.') && calls.filter((c) => c[0] === 'rejoin' && c[1].all === true).length === 1 && bridges.length - bridgeCalls0 >= 20,
+    `pieces ${app.cut.pieces}, extras ${app.bodies.extras.length}, notices ${notices.join(' | ')}`);
+  check(`Reconnect all keeps the glowing bridge in view: the skins of some chunk stay more than 2 % of the radius apart for ${apart.toFixed(2)} s (>= BRIDGE_HOLD_S ${BRIDGE_HOLD_S} s; it was 0.02 s when the pieces were already overlapping at the start of the join)`, apart >= BRIDGE_HOLD_S - 0.02, `${apart.toFixed(2)} s of ${gaps.length / 60} s`);
+  // leaving reconnects, on the real physics: a switch to another genome while cut
+  app.cut.splitInTwo(); settleIdle(); go(300);
+  const cutAgain = app.cut.pieces;
+  app.setGenome(speciesBaseGenome('twangle', 1));
+  check('X05 real physics: a switch of squishy while cut reconnects first (the new squishy is whole, nothing left on the mat, the Hoard unchanged)', cutAgain === 2 && app.cut.pieces === 1 && app.bodies.extras.length === 0 && app.hoard.items().length === items0, `pieces ${cutAgain} -> ${app.cut.pieces}`);
+  app.dispose();
 }
 
 /* ───────────────────────── 8. the collection module through the port: meter feed, events, table cap ───────────────────────── */

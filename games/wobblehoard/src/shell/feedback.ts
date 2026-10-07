@@ -7,9 +7,11 @@
 // The squelch is driven every frame from max(compression, press) when the body reports press (contracts.ts), else from compression.
 //
 // Round 3 play-mat voices (SOUND.md "When the shell should call what"), each feature-detected on the audio engine:
-//   lift    the rising edge of SoftMetrics.carried (physics B3: a grab pulled past 1.15 x maxPull carries the body); a body without the
-//           metric: the rising edge of "grabbed and lifted off the mat" (table mode only: a floating body is never grounded) held 0.1 s
-//   toss    on the snap that ends a carried (lifted) pull, the throw, speed = |centre velocity| / 4 m/s, only above 0.1
+//   lift    the rising edge of SoftMetrics.carried (physics B3: a grab pulled past 1.15 x maxPull carries the body): audio.lift and a light 8 ms
+//           tick (haptics.poke); a body without the metric: the rising edge of "grabbed and lifted off the mat" (table mode only: a floating
+//           body is never grounded) held 0.1 s. It follows the body the fingers are on: the play body, a squishy on the mat, a piece of a cut one
+//   toss    on the snap that ends a carried (lifted) pull, the throw, speed = |centre velocity| / 4 m/s, only above 0.1: audio.toss; the snap's own
+//           release thump (haptics.release, 18 ms) is its haptic
 //   strand  a body that reports SoftMetrics.strands (contracts.ts: the physics' own sticky strings, a pull or a press lifting off a tacky
 //           body): every frame while strands >= 0.02, tension = strands; when they let go from >= 0.3 that was a break: snap: true.
 //           A body without the metric: every frame while a TACKY family (Sticky Stretch, Slime Goo) is pulled, tension = pull level;
@@ -191,6 +193,12 @@ export function createFeedback(d: FeedbackDeps): Feedback {
     }
   }
 
+  /** the body was picked up (the rising edge of "carried"): the lift voice and a light 8 ms tick (the throw's thump is the snap's release haptic) */
+  function liftNow(c: V3): void {
+    if (d.audio.lift) { try { d.audio.lift({ pitch: pitch(), pan: d.panOfPoint(c) }); } catch (e) { d.report(e); } }
+    try { d.haptics.poke(); } catch (e) { d.report(e); }
+  }
+
   function update(dt: number): void {
     const body = d.body();
     const m = body.metrics;
@@ -228,11 +236,11 @@ export function createFeedback(d: FeedbackDeps): Feedback {
     if (typeof carried === 'boolean') {
       // the physics says when it is carried: lift on the rising edge; the throw's snap (handled before this update) plays the toss; put
       // down without a throw (the carry ended some other way) clears it so a later plain pull never tosses
-      if (carried && !lifted) { lifted = true; if (d.audio.lift) { try { d.audio.lift({ pitch: pitch(), pan: d.panOfPoint(c) }); } catch (e) { d.report(e); } } }
+      if (carried && !lifted) { lifted = true; liftNow(c); }
       else if (!carried && lifted && !grabbed) { lifted = false; liftSince = -1; }
     } else if (grabbed && d.audio.lift && !lifted && d.gravity() && wasGroundedAtGrab) {
       const off = !m.grounded || m.stretch >= 1;
-      if (off) { if (liftSince < 0) liftSince = d.simTime(); else if (d.simTime() - liftSince >= 0.1) { lifted = true; try { d.audio.lift({ pitch: pitch(), pan: d.panOfPoint(c) }); } catch (e) { d.report(e); } } }
+      if (off) { if (liftSince < 0) liftSince = d.simTime(); else if (d.simTime() - liftSince >= 0.1) { lifted = true; liftNow(c); } }
       else liftSince = -1;
     }
     if (d.audio.strand) {

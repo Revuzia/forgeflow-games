@@ -10,9 +10,10 @@
 //     cut({ phase: 'start' }) at its start; held NECK_HOLD_S at t = 1 (physics: a longer hold creases); then the body is REPLACED by two
 //     pieces built with createBody(genome, { piece }) at their lobes' centres, the face side by the eyes' anchor; stage.partPieces(a, b);
 //     audio cut({ phase: 'separate', frac: the smaller piece's share of the WHOLE }) (NOTES_FOR_SHELL_CUT: no audio.strand for the parting);
-//     a haptic tick.
-//   * Reconnect (CUT.md 1): a piece touched by a finger (a press or a pull) that touches another piece for JOIN_HOLD_S, or is let go while
-//     they touch, flows into it over JOIN_S: setBridge, the receiver setFrac up, the giver setFrac down and moveTo the receiver; then the
+//     a haptic tick. A new chunk is steered to a SURFACE gap of SETTLE_GAP from its twin for SETTLE_S (the strands need the room).
+//   * Reconnect (CUT.md 1): a piece touched by a finger (a press or a pull) whose SKIN touches another piece's (TOUCH_GAP) for JOIN_HOLD_S, or
+//     is let go while they touch, flows into it over JOIN_S: setBridge, the receiver setFrac up, the giver setFrac down and moveTo along a
+//     path that holds a small surface gap for BRIDGE_HOLD_S (the glowing neck is drawn only while the skins are apart) and then goes in; then the
 //     giver is removed, rejoin({ frac: merged share }), a haptic thump. The receiver is the face piece when it is one of the two, else the
 //     larger. A piece flowing into another is a ghost (BodyManager.setGhost: no contact push, which would shove the receiver off across the
 //     table). Reconnect all: every chunk into the face piece over JOIN_ALL_S, rejoin({ frac: 1, all: true }). When the last chunk is gone
@@ -44,22 +45,42 @@ export const NECK_DEFAULT_S = 0.25;
 export const NECK_HOLD_S = 0.08;
 /** Two pieces held together this long (a finger on one of them) reconnect. */
 export const JOIN_HOLD_S = 0.4;
-export const JOIN_S = 0.5;
+/** A join (drag one piece into another) and Reconnect all (about 1.2 s, CUT.md 1). Each runs in two parts (flowOf): the giver is first held at a
+ *  small SURFACE gap from the receiver for BRIDGE_HOLD_S while the glowing neck of stage.setBridge is on show between them, then it flows in. Without
+ *  the hold the pieces were already overlapping where they stood, closed within 0.1 s and the bridge was on screen for about that long (render lane:
+ *  "swallowed"). The neck is drawn only while the facing skins are apart, so the hold is what makes it visible. */
+export const JOIN_S = 0.8;
 export const JOIN_ALL_S = 1.2;
+export const BRIDGE_HOLD_S = 0.3;
+/** the held gap, as a share of the smaller piece's radius */
+export const BRIDGE_GAP_K = 0.3;
+/** the glowing neck is drawn while the skins are within this share of the smaller piece's radius (stage.setBridge is told 0 beyond it) */
+export const BRIDGE_REACH_K = 1.5;
 /** After the last join, a face piece further than HOME_NEAR from the middle glides there first, for at most HOME_MAX_S. */
 export const HOME_NEAR = 0.06;
 export const HOME_MAX_S = 1.6;
-/** A new CHUNK is held at its spot (moveTo, stiffness 4) this long after the parting, a little apart from its twin along the cut normal:
- *  physics checkpoint 47 builds chunk pieces that push themselves away from their cut face at 1.5..14 m/s in their first ~0.3 s (measured
- *  in node on 12 families: dimpla 12, chunkle 8.6, Dollop 1.6 m/s; a face piece does not). Held for 0.8 s they part by ~0.1 m. A STOPGAP
- *  until the physics fixes the chunk build: moveTo is horizontal on the table, so a chunk whose cut face is DOWN (a level cut's top piece)
- *  still launches upward. A finger on the piece, a join or the glide home lets go of it at once. */
+/** A new CHUNK is steered this long after the parting to a fixed SURFACE gap from its twin (its skin to its twin's skin along the line between
+ *  their centres; every step a moveTo, stiffness 3). Why: (1) physics checkpoint 47 builds chunk pieces that push themselves away from their cut
+ *  face at 1.5..14 m/s in their first ~0.3 s (measured in node on 12 families: dimpla 12, chunkle 8.6, Dollop 1.6 m/s; a face piece does not);
+ *  (2) the two pieces are BUILT overlapping by 0.2 .. 0.5 m (each is a whole rounded half placed at its lobe's centre), so a fixed offset from the
+ *  lobes (the first version, 0.06 m) left them touching: the parting strand of the slime family read as a short thick band and had about 3 cm to
+ *  stretch (render lane, VERIFY_RENDER_B_R1 B-m2). A closed loop on the measured gap gives the strands SETTLE_GAP of room whatever the species
+ *  (node, wrigglo / dollop / twangle: the gap settles at the target within 0.6 s). A STOPGAP for (1) until the physics fixes the chunk build:
+ *  moveTo is horizontal on the table, so a chunk whose cut face is DOWN (a level cut's top piece) still launches upward. A finger on the piece or
+ *  its twin, a join or the glide home lets go of it at once. */
 export const SETTLE_S = 0.8;
-export const SETTLE_GAP = 0.06;
+export const SETTLE_GAP = 0.16;
+/** the steering never asks for more than this much movement in one step (m) */
+const SETTLE_REACH = 0.3;
 /** A swipe shorter than this (CSS px) is not a cut. */
 export const MIN_SWIPE_PX = 24;
-/** Pieces touch when their centres are closer than this times the sum of their current radii. */
-export const TOUCH_K = 1.08;
+/** Two pieces TOUCH when the gap between their skins (along the line between their centres) is under this (m). The first version compared the
+ *  centres' distance with the sum of the bounding radii: half-balls resting a hand's width apart passed that test, so holding a finger on a piece
+ *  next to its twin for 0.4 s joined them (found with the wider parting gap, SHELL-4). */
+export const TOUCH_GAP = 0.03;
+/** ... and a contact that already runs is kept while the skins stay within this (m): soft bodies pressed together rebound and part by a few centimetres every
+ *  few frames, which restarted the 0.4 s hold each time (measured in the browser: first touch 0.2 s after the press, the join only after 2.8 s more) */
+export const TOUCH_KEEP_GAP = 0.09;
 
 export type CutResult = 'cut' | 'short' | 'miss' | 'small' | 'limit' | 'busy' | 'unsupported';
 
@@ -87,10 +108,12 @@ export interface CutDeps {
 }
 
 interface Piece { body: SoftBodyLike; chunk: boolean; frac: number; built: number }
+/** how a giver flows into its receiver: along the unit line u from the receiver's centre, at distance D(t): d0 at the start, dh while the bridge is held, then 0 */
+interface Flow { u: V3; d0: number; dh: number; ta: number }
 type Anim =
   | { kind: 'neck'; p: Piece; plane: CutPlane; fa: number; faceA: boolean; t0: number; neckS: number; view: number | null }
-  | { kind: 'join'; recv: Piece; giver: Piece; t0: number; dur: number }
-  | { kind: 'all'; t0: number; dur: number }
+  | { kind: 'join'; recv: Piece; giver: Piece; t0: number; dur: number; flow: Flow }
+  | { kind: 'all'; t0: number; dur: number; flows: Map<Piece, Flow> }
   | { kind: 'home'; face: Piece; t0: number };
 
 export interface Cutter {
@@ -133,6 +156,14 @@ export function faceAnchor(b: SoftBodyLike): V3 {
   return { x: b.center.x + local.x, y: b.center.y + local.y, z: b.center.z + local.z };
 }
 
+/** How far the body's skin reaches from its centre along the unit direction u (world space). */
+export function supportAlong(b: SoftBodyLike, u: V3): number {
+  const P = b.positions, n = b.vertexCount, c = b.center;
+  let m = -Infinity;
+  for (let i = 0; i < n; i++) { const s = (P[i * 3] - c.x) * u.x + (P[i * 3 + 1] - c.y) * u.y + (P[i * 3 + 2] - c.z) * u.z; if (s > m) m = s; }
+  return Number.isFinite(m) ? m : b.restRadius;
+}
+
 /** Centre of the particles on each side of the plane (the lobes; positions are world space, shared with the plane). */
 export function lobeCentres(b: SoftBodyLike, plane: CutPlane): { a: V3; b: V3 } | null {
   const P = b.positions, n = b.vertexCount;
@@ -151,10 +182,30 @@ export function createCutter(d: CutDeps): Cutter {
   let anim: Anim | null = null;
   let contact: { a: Piece; b: Piece; since: number } | null = null;
   let wobbleUntil = -1, wobbling: SoftBodyLike | null = null;
-  let settling: Array<{ body: SoftBodyLike; until: number }> = [];
-  const hold = (b: SoftBodyLike, p: V3): void => {
+  let settling: Array<{ body: SoftBodyLike; twin: SoftBodyLike; until: number }> = [];
+  /** the signed SURFACE gap between two bodies along the line between their centres (negative = overlapping), and that line's unit vector from b to a */
+  const gapBetween = (a: SoftBodyLike, b: SoftBodyLike): { u: V3; g: number } | null => {
+    const ca = a.center, cb = b.center;
+    const x = ca.x - cb.x, y = ca.y - cb.y, z = ca.z - cb.z, dd = Math.hypot(x, y, z);
+    if (!(dd > 1e-6)) return null;
+    const u: V3 = { x: x / dd, y: y / dd, z: z / dd };
+    return { u, g: dd - supportAlong(b, u) - supportAlong(a, { x: -u.x, y: -u.y, z: -u.z }) };
+  };
+  /** one step of the steering: move the chunk along the line to its twin by what is missing of the gap (half each when both are being steered) */
+  const steer = (x: { body: SoftBodyLike; twin: SoftBodyLike }): void => {
+    try {
+      const m = gapBetween(x.body, x.twin);
+      if (!m) return;
+      const k = settling.some((q) => q.body === x.twin) ? 0.5 : 1;
+      const e = Math.max(-SETTLE_REACH, Math.min(SETTLE_REACH, (SETTLE_GAP - m.g) * k)), c = x.body.center;
+      x.body.moveTo?.({ x: c.x + m.u.x * e, y: c.y + m.u.y * e, z: c.z + m.u.z * e }, 3);
+    } catch (e) { d.report(e); }
+  };
+  const hold = (b: SoftBodyLike, twin: SoftBodyLike): void => {
     if (typeof b.moveTo !== 'function') return;
-    try { b.moveTo(p, 4); settling.push({ body: b, until: d.simTime() + SETTLE_S }); } catch (e) { d.report(e); }
+    const x = { body: b, twin, until: d.simTime() + SETTLE_S };
+    settling.push(x);
+    steer(x);
   };
   const unhold = (b: SoftBodyLike): void => {
     const i = settling.findIndex((x) => x.body === b);
@@ -247,8 +298,8 @@ export function createCutter(d: CutDeps): Cutter {
       d.bodies.addExtra(pb, g, { tier: tier(), shared: true, piece: true, itemId: null });
       pieces = pieces.flatMap((q) => (q === p ? [A, Bp] : [q]));
     }
-    if (A.chunk) hold(pa, { x: lc.a.x + n.x * SETTLE_GAP, y: lc.a.y, z: lc.a.z + n.z * SETTLE_GAP });
-    if (Bp.chunk) hold(pb, { x: lc.b.x - n.x * SETTLE_GAP, y: lc.b.y, z: lc.b.z - n.z * SETTLE_GAP });
+    if (A.chunk) hold(pa, pb);
+    if (Bp.chunk) hold(pb, pa);
     try { const ia = d.bodies.viewIdOf(pa), ib = d.bodies.viewIdOf(pb); if (ia !== null && ib !== null) d.stage.partPieces?.(ia, ib); } catch (e) { d.report(e); }
     try { d.audio.cut?.({ phase: 'separate', frac: Math.min(fA, fB), family: family(), pan: d.panOf(B.center), calm: d.calm(), pitch: pitch() }); } catch (e) { d.report(e); }
     try { d.haptics.poke(); } catch { /* optional */ }
@@ -304,6 +355,39 @@ export function createCutter(d: CutDeps): Cutter {
     d.bodies.swapTo(g, { body: b, itemId: id.itemId, nickname: id.nickname, silent: true });
   }
 
+  /** the giver's path into the receiver, planned from where they stand NOW: along the line between their centres; first to a held gap of
+   *  BRIDGE_GAP_K of the smaller piece's radius between the two skins (out to it when they are closer than that, in to it when they are further:
+   *  a chunk across the table first comes up to the others), held for BRIDGE_HOLD_S, then in to the receiver's centre */
+  function flowOf(recv: Piece, giver: Piece): Flow {
+    const rc = recv.body.center, gc = giver.body.center;
+    let x = gc.x - rc.x, y = gc.y - rc.y, z = gc.z - rc.z;
+    let d0 = Math.hypot(x, y, z);
+    if (d0 < 1e-6) { x = 1; y = 0; z = 0; d0 = 0; } else { x /= d0; y /= d0; z /= d0; }
+    const u: V3 = { x, y, z };
+    let dh = d0;
+    try {
+      const held = BRIDGE_GAP_K * Math.min(radius(recv), radius(giver));
+      dh = supportAlong(recv.body, u) + supportAlong(giver.body, { x: -x, y: -y, z: -z }) + held;
+    } catch { /* a body without positions: no hold */ }
+    return { u, d0, dh, ta: Math.max(0.12, Math.min(0.45, 0.12 + 0.5 * Math.abs(d0 - dh))) };
+  }
+  /** where along its path the giver should be `el` seconds into a join of `dur` seconds: to the held gap (f.ta), held for BRIDGE_HOLD_S, then in */
+  const flowD = (f: Flow, el: number, dur: number): number => {
+    const ta = Math.min(f.ta, dur * 0.4), hold = Math.min(BRIDGE_HOLD_S, Math.max(0, dur - ta) * 0.5);
+    if (el < ta) return f.d0 + (f.dh - f.d0) * smooth(el / Math.max(1e-6, ta));
+    if (el < ta + hold) return f.dh;
+    return f.dh * (1 - smooth((el - ta - hold) / Math.max(1e-6, dur - ta - hold)));
+  };
+  /** the bridge is drawn only while the two are within reach of each other (a long thin rod across other pieces reads as a beam, not a neck) */
+  const bridgeK = (recv: Piece, giver: Piece, k: number): number => {
+    try { const m = gapBetween(giver.body, recv.body); return m && m.g <= BRIDGE_REACH_K * Math.min(radius(recv), radius(giver)) ? k : 0; } catch { return k; }
+  };
+  /** steer the giver along its path (a kinematic spring; stiffness 3 follows it within ~0.1 s) */
+  function follow(recv: Piece, giver: Piece, f: Flow, el: number, dur: number): void {
+    const rc = recv.body.center, D = flowD(f, el, dur);
+    try { giver.body.moveTo?.({ x: rc.x + f.u.x * D, y: rc.y + f.u.y * D, z: rc.z + f.u.z * D }, 3); } catch { /* optional */ }
+  }
+
   function startJoin(a: Piece, b: Piece): void {
     const aFace = a === pieces[0], bFace = b === pieces[0];
     const recv = aFace ? a : bFace ? b : a.frac >= b.frac ? a : b;
@@ -311,9 +395,10 @@ export function createCutter(d: CutDeps): Cutter {
     contact = null;
     unhold(recv.body); unhold(giver.body);
     if (typeof recv.body.setFrac !== 'function') { joined(recv, giver, false); return; }
+    const flow = flowOf(recv, giver);
     try { recv.body.setFrac(Math.min(1, recv.frac + giver.frac), JOIN_S); giver.body.setFrac?.(PIECE_MIN, JOIN_S); } catch (e) { d.report(e); }
     d.bodies.setGhost(giver.body, true);   // it flows INTO the receiver: no contact push between them (it would shove the receiver away)
-    anim = { kind: 'join', recv, giver, t0: d.simTime(), dur: JOIN_S };
+    anim = { kind: 'join', recv, giver, t0: d.simTime(), dur: JOIN_S, flow };
   }
 
   function finishAll(glide: boolean): void {
@@ -407,9 +492,11 @@ export function createCutter(d: CutDeps): Cutter {
       const face = pieces[0];
       const canAnimate = animated && typeof face.body.setFrac === 'function';
       if (!canAnimate) { finishAll(false); return true; }
+      const flows = new Map<Piece, Flow>();
+      for (const c of pieces.slice(1)) flows.set(c, flowOf(face, c));   // planned from where everything stands now (before anything grows or shrinks)
       try { face.body.setFrac!(1, JOIN_ALL_S); } catch (e) { d.report(e); }
       for (const c of pieces.slice(1)) { try { c.body.setFrac?.(PIECE_MIN, JOIN_ALL_S); } catch (e) { d.report(e); } d.bodies.setGhost(c.body, true); }
-      anim = { kind: 'all', t0: d.simTime(), dur: JOIN_ALL_S };
+      anim = { kind: 'all', t0: d.simTime(), dur: JOIN_ALL_S, flows };
       return true;
     },
     update() {
@@ -417,7 +504,10 @@ export function createCutter(d: CutDeps): Cutter {
       if (wobbling && t >= wobbleUntil) { try { wobbling.tremble?.(0); } catch { /* optional */ } wobbling = null; }
       if (settling.length) {
         const act = d.touching() ? d.activeBody() : null;
-        for (const x of settling.slice()) if (t >= x.until || x.body === act || !pieces.some((p) => p.body === x.body)) unhold(x.body);
+        for (const x of settling.slice()) {
+          if (t >= x.until || x.body === act || x.twin === act || !pieces.some((p) => p.body === x.body) || !pieces.some((p) => p.body === x.twin)) unhold(x.body);
+          else steer(x);
+        }
       }
       const a = anim;
       if (a && a.kind === 'neck') {
@@ -430,8 +520,8 @@ export function createCutter(d: CutDeps): Cutter {
       if (a && a.kind === 'join') {
         const k = smooth((t - a.t0) / a.dur);
         const v = d.bodies.viewIdOf(a.recv.body), w = d.bodies.viewIdOf(a.giver.body);
-        try { if (v !== null && w !== null) d.stage.setBridge?.(v, w, k); } catch (e) { d.report(e); }
-        try { a.giver.body.moveTo?.(a.recv.body.center, 1.4); } catch { /* optional */ }
+        try { if (v !== null && w !== null) d.stage.setBridge?.(v, w, bridgeK(a.recv, a.giver, k)); } catch (e) { d.report(e); }
+        follow(a.recv, a.giver, a.flow, t - a.t0, a.dur);
         if (t - a.t0 >= a.dur) { anim = null; joined(a.recv, a.giver, false); }
         return;
       }
@@ -440,8 +530,9 @@ export function createCutter(d: CutDeps): Cutter {
         const face = pieces[0];
         for (const c of pieces.slice(1)) {
           const v = d.bodies.viewIdOf(face.body), w = d.bodies.viewIdOf(c.body);
-          try { if (v !== null && w !== null) d.stage.setBridge?.(v, w, k); } catch (e) { d.report(e); }
-          try { c.body.moveTo?.(face.body.center, 1.6); } catch { /* optional */ }
+          try { if (v !== null && w !== null) d.stage.setBridge?.(v, w, bridgeK(face, c, k)); } catch (e) { d.report(e); }
+          const fl = a.flows.get(c);
+          if (fl) follow(face, c, fl, t - a.t0, a.dur);
         }
         if (t - a.t0 >= a.dur) {
           anim = null;
@@ -466,8 +557,9 @@ export function createCutter(d: CutDeps): Cutter {
         let Q: Piece | null = null, bestD = Infinity;
         for (const q of pieces) {
           if (q === P) continue;
-          const dd = Math.hypot(P.body.center.x - q.body.center.x, P.body.center.y - q.body.center.y, P.body.center.z - q.body.center.z);
-          if (dd < TOUCH_K * (radius(P) + radius(q)) && dd < bestD) { bestD = dd; Q = q; }
+          const m = gapBetween(P.body, q.body);
+          const lim = contact && contact.a === P && contact.b === q ? TOUCH_KEEP_GAP : TOUCH_GAP;
+          if (m && m.g < lim && m.g < bestD) { bestD = m.g; Q = q; }
         }
         if (Q) {
           if (!contact || contact.a !== P || contact.b !== Q) contact = { a: P, b: Q, since: t };
@@ -478,9 +570,9 @@ export function createCutter(d: CutDeps): Cutter {
       // let go while touching
       if (!touching && contact) {
         const c = contact;
-        const dd = Math.hypot(c.a.body.center.x - c.b.body.center.x, c.a.body.center.y - c.b.body.center.y, c.a.body.center.z - c.b.body.center.z);
         contact = null;
-        if (pieces.includes(c.a) && pieces.includes(c.b) && dd < TOUCH_K * (radius(c.a) + radius(c.b))) startJoin(c.a, c.b);
+        const m = pieces.includes(c.a) && pieces.includes(c.b) ? gapBetween(c.a.body, c.b.body) : null;
+        if (m && m.g < TOUCH_KEEP_GAP) startJoin(c.a, c.b);
       }
     },
     isPiece: (b) => pieces.some((p) => p.body === b),

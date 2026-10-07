@@ -371,7 +371,7 @@ body[data-ceremony] .qswitch, body[data-hoard="open"] .qswitch, body[data-hoard=
 
 /* ---------- the Cut tool: its bar, the blade line, a crosshair over the stage ---------- */
 body[data-tool="cut"] #stage, body[data-tool="cut"] #stage:active { cursor: crosshair; }
-body[data-tool="cut"] .qswitch, body[data-tool="cut"] .hint, body[data-tool="snap"] .hint { visibility: hidden; }
+body[data-tool="cut"] .qswitch, body[data-tool="cut"] .hint, body[data-tool="snap"] .hint, body[data-toys="open"] .hint { visibility: hidden; }   /* (the open tray covers the middle of the hint pill: only its two ends peeked out) */
 .cutbar {
   position: fixed; z-index: 5; left: 50%; bottom: calc(var(--safe-b) + 84px); transform: translateX(-50%);
   width: min(560px, calc(100vw - 2 * var(--gutter))); padding: 10px 12px; border-radius: 16px;
@@ -383,6 +383,7 @@ body[data-tool="cut"] .qswitch, body[data-tool="cut"] .hint, body[data-tool="sna
 .cutbar-count { font-size: 13px; font-weight: 800; color: var(--wh-amber); white-space: nowrap; }
 .cutbar-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .cutbar-acts .act-btn { min-height: var(--tap); }
+.cutbar-acts .act-btn[aria-disabled="true"] { opacity: .5; cursor: default; }
 .blade { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 4; pointer-events: none !important; overflow: visible; }
 .blade-glow { stroke: var(--wh-amber); stroke-width: 9; stroke-linecap: round; opacity: .3; }
 .blade-line { stroke: var(--wh-cream); stroke-width: 2; stroke-linecap: round; }

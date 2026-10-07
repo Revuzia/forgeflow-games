@@ -314,6 +314,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
       toys.setTool(t);
       document.body.dataset.tool = t;
       cutBar.show(t === 'cut');
+      if (t === 'cut') { piecesKey = `${g.cut.pieces},${g.cut.maxPieces},${g.cut.busy}`; cutBar.setPieces(g.cut.pieces, g.cut.maxPieces, g.cut.busy); }   // right now, not on the next sim step (a paused sim showed both buttons on)
       if (t === 'snap') { placeTint(); snap.show(true); } else snap.show(false);
       if (t === 'hand' && (document.activeElement === document.body || !document.activeElement || root.contains(document.activeElement) && (document.activeElement as HTMLElement).closest('.cutbar, .snapbar'))) toys.button.focus({ preventScroll: true });
       announcer.say(TOOL_LINES[t]);
@@ -341,7 +342,31 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   const placeLoop = (): void => { placeRaf = 0; place(); if (play.focused) placeRaf = requestAnimationFrame(placeLoop); };
   const onFocus = (): void => { if (!placeRaf) placeRaf = requestAnimationFrame(placeLoop); };
   play.el.addEventListener('focus', onFocus);
-  const placeTimer = window.setInterval(() => { place(); if (g.tool === 'snap') placeTint(); }, 250);
+  // The transient hint pill keeps clear of the waiting capsule's tap circle: on a landscape phone it stood across the capsule's foot (found by the
+  // render lane, VERIFY_RENDER_B_R1 B-m4). It slides sideways (--hint-dx) to the nearer side that fits, and only when neither side does (a tiny
+  // screen) does it wait, hidden, until the capsule is gone. Measured from the pill's LAYOUT box (offsetLeft less half its width: transforms and the
+  // transition of its own shift do not count), so it never chases itself.
+  const HINT_CLEAR = 10, HINT_GUTTER = 12;
+  let hintDx = 0, hintYield = false;
+  const avoidCapsule = (): void => {
+    const el = hud.hintEl;
+    let dx = 0, wait = false;
+    const cap = g.capsules.screenPoint();
+    if (cap && el.offsetWidth > 0) {
+      const cv = canvas.getBoundingClientRect(), hr = hud.el.getBoundingClientRect();
+      const cx = cv.left + cap.x, cy = cv.top + cap.y, rad = cap.r + HINT_CLEAR;
+      const left = hr.left + el.offsetLeft - el.offsetWidth / 2, right = left + el.offsetWidth, top = hr.top + el.offsetTop, bottom = top + el.offsetHeight;
+      const nx = Math.max(left, Math.min(cx, right)), ny = Math.max(top, Math.min(cy, bottom));
+      if (Math.hypot(cx - nx, cy - ny) < rad) {
+        const toLeft = (cx - rad) - right, toRight = (cx + rad) - left;
+        const okL = left + toLeft >= HINT_GUTTER, okR = right + toRight <= window.innerWidth - HINT_GUTTER;
+        if (okL && (!okR || -toLeft <= toRight)) dx = toLeft; else if (okR) dx = toRight; else wait = true;
+      }
+    }
+    if (Math.abs(dx - hintDx) > 0.5) { hintDx = dx; el.style.setProperty('--hint-dx', `${dx.toFixed(1)}px`); }
+    if (wait !== hintYield) { hintYield = wait; el.dataset.yield = String(wait); }
+  };
+  const placeTimer = window.setInterval(() => { place(); avoidCapsule(); if (g.tool === 'snap') placeTint(); }, 250);
   const onTab = (e: KeyboardEvent): void => { if (e.key === 'Tab') document.body.dataset.kbd = '1'; };
   window.addEventListener('keydown', onTab, { capture: true, passive: true });
 

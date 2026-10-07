@@ -9,6 +9,7 @@ import { TIERS, tierIndex } from '../core/rarity.ts';
 import { SPECIES_BY_TIER, getSpecies, speciesBaseGenome, tierOf } from '../data/catalog.ts';
 import type { SpeciesId } from '../data/catalog.ts';
 import type { Game } from './game.ts';
+import { faceAnchor } from './cut.ts';
 import { TUNING } from './feel.ts';
 
 export interface LabApi {
@@ -51,7 +52,7 @@ export interface ShellDevApi {
   /** SHELL-2b: the practice shelf as the harness checks it */
   hoardState(): { owned: number; items: Array<{ id: string; species: string; name: string; tier: string; seen: boolean; fav: boolean; locked: boolean; origin: string }>; restockClaimed: boolean; tasks: Array<{ id: string; text: string; progress: number; target: number; done: boolean; claimed: boolean }>; mergesToday: number; credits: number; tidyPairs: number; tidyPairsAll: number };
   /** the toy tray and the Cut tool: the tool in hand, whether the physics can cut, the pieces and their shares of the whole */
-  tools(): { tool: string; cutSupported: boolean; pieces: number; fracs: number[]; busy: boolean; maxPieces: number; extras: number; pieceViews: number; body: { x: number; y: number; z: number; r: number; frac: number }; cam: { x: number; y: number; z: number } | null };
+  tools(): { tool: string; cutSupported: boolean; pieces: number; fracs: number[]; busy: boolean; maxPieces: number; extras: number; pieceViews: number; body: { x: number; y: number; z: number; r: number; frac: number; top: number }; cam: { x: number; y: number; z: number } | null };
   /** a Cut-tool swipe from (x0, y0) to (x1, y1), 0..1 over the canvas like pointerDown (the result: 'cut', 'miss', 'small', ...) */
   cutSwipe(x0: number, y0: number, x1: number, y1: number): string;
   /** the play mat's frame-time guard in ms (mat.ts FRAME_BUSY_MS by default); the harness lifts it on SwiftShader */
@@ -74,6 +75,18 @@ export interface ShellDevApi {
   /** lifecycle hooks the harness exercises (context loss without a real GPU) */
   suspend(reason: 'hidden' | 'context' | 'covered'): void;
   unsuspend(reason: 'hidden' | 'context' | 'covered'): void;
+  /** SHELL-4: call-through spies on the REAL audio engine's methods (lift, toss, bump, cut, rejoin, ...) and the REAL haptics wrapper: every call
+   *  still reaches the engine. `spyReset()` zeroes the counts; `spyCalls()` reads them (a count and the last argument of each). */
+  spyStart(): void;
+  spyReset(): void;
+  spyCalls(): { audio: Record<string, { n: number; last: unknown }>; haptics: Record<string, number> };
+  /** SHELL-4: the cut pieces as the physics sees them: per piece its share, centre, radius and the SURFACE gap to the face piece along the line
+   *  between the centres (negative = overlapping); the face piece first. Zeroes when there is nothing cut. */
+  /** the stage's dev views: how many bodies are drawn, how many of them with a face (a chunk has none) */
+  stageViews(): { total: number; faces: number; chunks: number } | null;
+  pieceGaps(at?: { x: number; y: number; z: number } | null): Array<{ frac: number; chunk: boolean; x: number; y: number; z: number; r: number; gap: number | null; top: number; near: number }>;
+  /** where the eyes sit on the play body (cut.ts faceAnchor, world space): the Cut tool keeps the face on the side that holds it */
+  faceAnchor(): { x: number; y: number; z: number };
 }
 
 export type ShellDebugHook = DebugHook & { shell: ShellDevApi };
@@ -83,6 +96,9 @@ export interface DebugOptions {
   /** the dev clock skew the collection's epoch clock adds (boot.ts / app.ts pass `now: () => Date.now() + skew.ms`): the meter accelerator */
   skew?: { ms: number };
 }
+
+/** The highest particle of a body (world y). */
+const topOf = (b: { positions: ArrayLike<number>; vertexCount: number }): number => { let m = -Infinity; for (let i = 0; i < b.vertexCount; i++) m = Math.max(m, b.positions[i * 3 + 1]); return m; };
 
 /** A squeeze held 1.2 s and released: what the dev meter accelerator feeds. (It fed a poke until the owner decision of 2026-10-06: a tap pays nothing now, so a poke cannot fill the meter.) */
 const SQUEEZE: SoftEvent = { kind: 'release', at: { x: 0, y: 0.5, z: 0.5 }, normal: { x: 0, y: 0, z: 1 }, intensity: 0.5, heldFor: 1.2, finger: 0 };
@@ -137,6 +153,8 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
   });
 
   let mergeSeq = 0, revealSeq = 0;
+  let spyOn = false;
+  const spied: { audio: Record<string, { n: number; last: unknown }>; haptics: Record<string, number> } = { audio: {}, haptics: {} };
   const shell: ShellDevApi = {
     meter() {
       const m = game.capsules.reading;
@@ -227,7 +245,7 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       return {
         tool: game.tool, cutSupported: game.cut.supported, pieces: game.cut.pieces, fracs: game.cut.fracs(), busy: game.cut.busy, maxPieces: game.cut.maxPieces,
         extras: game.bodies.extras.length, pieceViews: game.bodies.extras.filter((x) => x.piece).length,
-        body: { x: c.x, y: c.y, z: c.z, r: b.restRadius, frac: b.frac ?? 1 }, cam: cam ? { x: cam.x, y: cam.y, z: cam.z } : null,
+        body: { x: c.x, y: c.y, z: c.z, r: b.restRadius, frac: b.frac ?? 1, top: topOf(b) }, cam: cam ? { x: cam.x, y: cam.y, z: cam.z } : null,
       };
     },
     cutSwipe: (x0, y0, x1, y1) => { const v = vp(); return game.cut.swipe(x0 * v.w, y0 * v.h, x1 * v.w, y1 * v.h); },
@@ -310,6 +328,48 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
     },
     suspend: (r) => game.suspend(r),
     unsuspend: (r) => game.unsuspend(r),
+    spyStart() {
+      if (spyOn) return;
+      spyOn = true;
+      const wrap = (obj: unknown, names: readonly string[], into: (name: string, args: unknown[]) => void): void => {
+        const o = obj as Record<string, unknown>;
+        for (const name of names) {
+          const orig = o[name];
+          if (typeof orig !== 'function') continue;
+          o[name] = (...args: unknown[]): unknown => { into(name, args); return (orig as (...a: unknown[]) => unknown).apply(obj, args); };
+        }
+      };
+      wrap(game.audio, ['lift', 'toss', 'bump', 'cut', 'rejoin', 'strand', 'land', 'pop', 'poke', 'release'], (n, a) => { const r = spied.audio[n] ?? (spied.audio[n] = { n: 0, last: null }); r.n++; r.last = a[0] ?? null; });
+      wrap(game.haptics, ['poke', 'release', 'pop', 'squeeze', 'cancel', 'pattern'], (n) => { spied.haptics[n] = (spied.haptics[n] ?? 0) + 1; });
+    },
+    spyReset() { spied.audio = {}; spied.haptics = {}; },
+    spyCalls: () => JSON.parse(JSON.stringify(spied)) as { audio: Record<string, { n: number; last: unknown }>; haptics: Record<string, number> },
+    stageViews() {
+      const vs = (game.stage as unknown as { views?: Array<{ chunk?: boolean }> }).views;
+      return vs ? { total: vs.length, faces: vs.filter((v) => !v.chunk).length, chunks: vs.filter((v) => !!v.chunk).length } : null;
+    },
+    faceAnchor: () => faceAnchor(game.bodies.body),
+    pieceGaps(at) {
+      const face = game.bodies.body;
+      const all = [face, ...game.bodies.extras.filter((x) => x.piece).map((x) => x.body)];
+      if (all.length < 2) return [];
+      const support = (b: typeof face, ux: number, uy: number, uz: number): number => {
+        const P = b.positions, c = b.center;
+        let m = -Infinity;
+        for (let i = 0; i < b.vertexCount; i++) m = Math.max(m, (P[i * 3] - c.x) * ux + (P[i * 3 + 1] - c.y) * uy + (P[i * 3 + 2] - c.z) * uz);
+        return m;
+      };
+      const nearest = (b: typeof face, p: { x: number; y: number; z: number }): number => { let m = Infinity; for (let i = 0; i < b.vertexCount; i++) m = Math.min(m, Math.hypot(b.positions[i * 3] - p.x, b.positions[i * 3 + 1] - p.y, b.positions[i * 3 + 2] - p.z)); return m; };
+      return all.map((b, i) => {
+        const c = b.center, f = face.center;
+        let gap: number | null = null;
+        if (i > 0) {
+          const dx = c.x - f.x, dy = c.y - f.y, dz = c.z - f.z, d = Math.hypot(dx, dy, dz);
+          if (d > 1e-9) { const ux = dx / d, uy = dy / d, uz = dz / d; gap = d - support(face, ux, uy, uz) - support(b, -ux, -uy, -uz); }
+        }
+        return { frac: b.frac ?? 1, chunk: i > 0, x: c.x, y: c.y, z: c.z, r: b.restRadius * Math.cbrt(b.frac ?? 1), gap, top: topOf(b), near: at ? nearest(b, at) : 0 };
+      });
+    },
   };
 
   const debug: ShellDebugHook = {

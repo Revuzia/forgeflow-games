@@ -21,8 +21,10 @@ export function createCutBar(root: HTMLElement, o: { onSplit(): void; onReconnec
   const split = h('button', { class: 'act-btn', text: 'Split in two', attrs: { type: 'button', 'data-key': 'split' } });
   const join = h('button', { class: 'act-btn', text: 'Reconnect all', attrs: { type: 'button', 'data-key': 'join' } });
   const done = h('button', { class: 'act-btn primary', text: 'Done', attrs: { type: 'button', 'data-key': 'done' } });
-  split.addEventListener('click', () => o.onSplit());
-  join.addEventListener('click', () => o.onReconnect());
+  // while a cut or a reconnect plays the buttons are aria-disabled (not `disabled`): a disabled button drops the keyboard focus to the page, and the
+  // keyboard path (Tab, Enter, Tab, Enter) would start again from the top; a press during that moment does nothing
+  split.addEventListener('click', () => { if (split.getAttribute('aria-disabled') !== 'true') o.onSplit(); });
+  join.addEventListener('click', () => { if (join.getAttribute('aria-disabled') !== 'true') o.onReconnect(); });
   done.addEventListener('click', () => o.onDone());
   const el = h('div', { class: 'cutbar', attrs: { role: 'group', 'aria-label': 'Cut tool', hidden: '' } },
     h('div', { class: 'cutbar-row' }, text, count), h('div', { class: 'cutbar-acts' }, split, join, done));
@@ -41,9 +43,13 @@ export function createCutBar(root: HTMLElement, o: { onSplit(): void; onReconnec
     show(on) { el.hidden = !on; if (!on) svg.style.display = 'none'; },
     setPieces(n, max, busy) {
       count.textContent = n > 1 ? `${n} pieces` : '';
-      text.textContent = n >= max ? "That's as many pieces as it can make." : n > 1 ? 'Swipe to cut again. With the Hand, push pieces together to join them.' : 'Swipe across a squishy to cut it.';
-      split.disabled = busy || n >= max;
-      join.disabled = busy || n <= 1;
+      text.textContent = n >= max ? "That's as many pieces as it can make." : n > 1 ? 'Swipe to cut again. With the Hand, drag a piece into another and hold to join them.' : 'Swipe across a squishy to cut it.';
+      const hadSplit = document.activeElement === split, hadJoin = document.activeElement === join;
+      const noSplit = n >= max, noJoin = n <= 1;
+      split.disabled = noSplit; join.disabled = noJoin;   // really off: nothing more to cut, nothing to join
+      split.setAttribute('aria-disabled', String(busy || noSplit)); join.setAttribute('aria-disabled', String(busy || noJoin));
+      // a button that goes off under the keyboard focus hands the focus on (Reconnect all when there is something to join, else Done)
+      if ((hadSplit && noSplit) || (hadJoin && noJoin)) (join.disabled ? done : join).focus({ preventScroll: true });
     },
     setBlade(b) {
       if (!b) { svg.style.display = 'none'; return; }

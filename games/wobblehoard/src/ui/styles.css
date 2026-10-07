@@ -213,7 +213,7 @@ body {
   position: absolute;
   left: 50%;
   bottom: calc(var(--safe-b) + 92px);
-  transform: translateX(-50%);
+  transform: translateX(calc(-50% + var(--hint-dx, 0px)));   /* --hint-dx: hudBinding.ts slides the pill clear of a waiting capsule */
   margin: 0;
   width: max-content;
   max-width: calc(100vw - 2 * var(--gutter) - var(--safe-l) - var(--safe-r));
@@ -230,7 +230,8 @@ body {
   pointer-events: none;
   transition: opacity .6s ease, transform .6s var(--ease);
 }
-.hint[data-show="false"] { opacity: 0; transform: translate(-50%, 8px); }
+.hint[data-show="false"] { opacity: 0; transform: translate(calc(-50% + var(--hint-dx, 0px)), 8px); }
+.hint[data-yield="true"] { opacity: 0; }   /* no room beside the capsule on a tiny screen: the pill waits */
 body[data-ceremony] .hint { opacity: 0; }
 
 /* the squishy's keyboard target (src/ui/playTarget.ts): invisible until it has keyboard focus, then a ring around the squishy */
@@ -532,7 +533,7 @@ body[data-calm="true"] .plate { transform: translate(-50%, 0); transition: opaci
   .panel { transform: none !important; transition: opacity .12s linear, visibility 0s linear .12s; }
   .panel[data-open="true"] { transition-delay: 0s; }
   #stage { transition: none !important; }
-  .hint, .hint[data-show="false"] { transform: translateX(-50%) !important; transition: opacity .2s linear; }
+  .hint, .hint[data-show="false"] { transform: translateX(calc(-50% + var(--hint-dx, 0px))) !important; transition: opacity .2s linear; }
   .hud, .title { transition-duration: .15s; }
   .cta, .icon-btn, .switch-ui, .switch-ui::after, .seg-face { transition: none; }
 }
