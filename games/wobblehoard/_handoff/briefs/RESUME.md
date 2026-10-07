@@ -1,5 +1,7 @@
 # RESUME (session 2, 2026-10-06): read this right after COMMON.md
 
+**FIRST read `_handoff/STATUS.md`: the ledger of what is DONE (do not redo), IN PROGRESS and QUEUED.**
+
 This file updates the lane briefs after the owner stopped work. **Where it differs from COMMON.md or a lane brief on paths, the
 machine, or "where the previous engineer stopped", this file wins.** Rules about files, git, contract, assets, product, honesty and
 player text in COMMON.md still apply unchanged.
