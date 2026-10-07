@@ -99,6 +99,9 @@ export interface QueueRequest {
   roles?: [string, string?];            // primary/secondary role preference (Rift)
   custom?: CustomLobbyConfig;
   practice?: MatchSetup['practice'];
+  /** CHANGED(SESSION), additive: the fighter (and optional role/skin) chosen at queue time — required by
+   *  'role_preset' queues, optional for practice (skips the solo pick). Ignored by other protocols. */
+  preset?: { fighter: string; role?: string; skin?: string };
 }
 export interface CustomLobbyConfig {
   mode: string; map: string;
@@ -124,6 +127,8 @@ export interface DraftState {
   bench: Record<number, string[]>;
   available: string[];                  // fighter ids still pickable
   log: string[];
+  /** CHANGED(SESSION), additive: pending finalize-phase trade requests involving the viewing seat */
+  trades?: { from: PlayerId; to: PlayerId }[];
 }
 export type DraftAction =
   | { a: 'hover'; fighter: string } | { a: 'lock' } | { a: 'ban'; fighter: string } | { a: 'skin'; skin: string }
@@ -148,7 +153,11 @@ export interface MatchClient {
 }
 
 export type SessionEvent =
-  | { type: 'queue'; state: 'idle' | 'searching' | 'found' | 'accepted' | 'declined'; queue?: string; elapsed?: number; estimate?: number }
+  | { type: 'queue'; state: 'idle' | 'searching' | 'found' | 'accepted' | 'declined'; queue?: string; elapsed?: number; estimate?: number;
+      /** CHANGED(SESSION), additive: ready-check seconds left / window, seats accepted / total ('found' | 'accepted') */
+      readyTimer?: number; readyMax?: number; accepted?: number; total?: number;
+      /** CHANGED(SESSION), additive: why the queue ended, and the re-queue lockout in seconds ('declined' | 'idle') */
+      reason?: 'declined' | 'timeout' | 'cancelled' | 'dodged'; lockout?: number }
   | { type: 'draft'; state: DraftState }
   | { type: 'loading'; setup: MatchSetup; progress: number }
   | { type: 'match'; client: MatchClient }
@@ -179,4 +188,10 @@ export interface Session {
   updateSettings(patch: Partial<Settings>): void;
   rename(name: string): void;
   resetProfile(): void;
+  // CHANGED(SESSION), additive optional methods (LocalSession implements all three; callers must
+  // feature-check): decline the ready check (cancelQueue() during a ready check does the same),
+  // set the number of bot party members (returns the party), queue again with the last request.
+  declineMatch?(): void;
+  setPartyBots?(count: number): PartyMember[];
+  playAgain?(): void;
 }

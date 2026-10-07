@@ -3,6 +3,7 @@
   "id": "fx_fighter_a",
   "name": "Fixture Alpha",
   "title": "The Placeholder",
+  "class": "fx_class_a",
   "role": "fx_role_a",
   "resource": "fx_res_a",
   "job": "Stands in for real content in probes.",

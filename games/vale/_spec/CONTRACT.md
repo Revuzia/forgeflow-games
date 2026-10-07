@@ -174,7 +174,7 @@ inside name fields; other dictionary words and every `exact_only` entry match on
 
 ## §4 Content schema
 `src/contracts/catalog.ts` is the whole schema (zod; strict). Summary of the records:
-roles · resources · fighters (stats, attack, kit = passive + a1 a2 a3 ult, art, ai, palette) ·
+roles (Rift positions) · classes (fighter mass/shape class) · resources · fighters (class, roles, stats, attack, kit = passive + a1 a2 a3 ult, art, ai, palette) ·
 skins (cosmetic only) · items (tiered recipes, stats, passives, active, pools) · setup (battle
 spells + boons + paths; the pre-match layer) · units (minions, monsters, structures, summons,
 wards, pickups) · teamBuffs · maps · modes (rules + pick format) · queues (rules overrides, draft,
@@ -468,8 +468,9 @@ fixture bot (`_harness/fixtures/fixture_bot.ts`).
 ## §9 Presentation (`src/render/`, lane RENDER)
 - `createRenderer(canvas, catalog, settings)` → `{ setScene('menu' | MatchClient), resize, render(dt), setQuality(settings.video), pickGround(x, y), pickEntity(x, y), worldToScreen(...) }`.
 - WebGL2 `WebGLRenderer`, linear workflow, sRGB output, `postprocessing` EffectComposer:
-  N8AO (contact AO) → bloom (mipmap) → LUT3D (the map's locked grade) → tone mapping (per bible)
-  → SMAA. Quality ladder §9.4.
+  N8AO (contact AO) → bloom (mipmap, threshold 1.0) → tone mapping (Khronos PBR Neutral, exposure 1.0)
+  → LUT3D (`vale_grade_01`, one locked grade everywhere) → vignette → overlay pass (bars, rings,
+  telegraphs: drawn AFTER the grade so their hex is the screen pixel) → SMAA. CHANGED(LEAD) per STYLE_BIBLE. Quality ladder §9.4.
 - Sky: map `art.sky` equirect HDR → PMREM environment + background. Height/distance fog per map.
 - Shadows: one directional sun with a shadow frustum fitted to the camera view, texel-snapped.
 - Fog of war: `view.visionGrid(localTeam)` → R8 `DataTexture` (smoothed over time) sampled by a

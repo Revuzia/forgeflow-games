@@ -318,6 +318,12 @@ export const RoleDef = z.object({
   }).strict().optional(),
 }).strict();
 
+/** Fighter class (the bible's mass/shape language: what the fighter IS). Separate from RoleDef, which is
+ *  the POSITION a player takes in a mode with roles (the Rift role contract). ADDED(LEAD) 2026-10-07. */
+export const ClassDef = z.object({
+  id: Id, name: z.string(), desc: z.string(), icon: AssetRef, shape: z.string(),
+}).strict();
+
 // ── fighters ────────────────────────────────────────────────────────────────────────────────────
 export const ClipRole = z.enum(['idle', 'run', 'attack1', 'attack2', 'crit', 'cast_a1', 'cast_a2', 'cast_a3', 'cast_ult',
   'channel', 'death', 'recall', 'spawn', 'victory', 'stunned', 'dash', 'idle_lobby', 'taunt']);
@@ -351,6 +357,9 @@ export const FighterDef = z.object({
   id: Id,
   name: z.string().min(1),
   title: z.string().min(1),
+  /** fighter class (ClassDef id) */
+  class: Id,
+  /** Rift positions this fighter is drafted for (RoleDef ids) */
   role: Id, secondaryRole: Id.optional(),
   resource: Id,
   /** the one-line job in a fight (shown in draft and collection) */
@@ -609,6 +618,7 @@ export const Catalog = z.object({
   version: z.string().regex(/^\d{4}\.\d{1,2}\.\d+$/, 'catalog version is YYYY.M.patch'),
   builtAt: z.string(),
   roles: z.array(RoleDef),
+  classes: z.array(ClassDef),
   resources: z.array(ResourceDef),
   fighters: z.array(FighterDef),
   skins: z.array(SkinDef),
@@ -649,6 +659,8 @@ export type ClientDefT = z.infer<typeof ClientDef>;
 export type AudioDefT = z.infer<typeof AudioDef>;
 export type VfxDefT = z.infer<typeof VfxDef>;
 export type RankTierT = z.infer<typeof RankTier>;
+export type ClassDefT = z.infer<typeof ClassDef>;
+export type RoleDefT = z.infer<typeof RoleDef>;
 export type StatKeyT = z.infer<typeof StatKey>;
 export type SlotT = z.infer<typeof Slot>;
 export type StatusKindT = z.infer<typeof StatusKind>;

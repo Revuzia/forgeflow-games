@@ -1,0 +1,9 @@
+[
+  {
+    "id": "fx_class_a",
+    "name": "Fx Class A",
+    "desc": "synthetic",
+    "icon": "assets/ui/fx_icon.png",
+    "shape": "block"
+  }
+]

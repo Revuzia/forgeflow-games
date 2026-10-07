@@ -107,6 +107,7 @@ type FamilyShape = 'array' | 'object' | 'recordPerFile' | 'arrayPerFile';
 interface Family { key: keyof CatalogT & string; path: string; shape: FamilyShape }
 const FAMILIES: Family[] = [
   { key: 'roles', path: 'roles.json', shape: 'array' },
+  { key: 'classes', path: 'classes.json', shape: 'array' },
   { key: 'resources', path: 'resources.json', shape: 'array' },
   { key: 'fighters', path: 'fighters', shape: 'recordPerFile' },
   { key: 'skins', path: 'skins', shape: 'arrayPerFile' },
@@ -363,6 +364,10 @@ function checkUnique<T>(arr: readonly T[], key: (t: T) => string, path: Seg[], w
 
 function semanticChecks(c: CatalogT, opts: BuildOptions, dg: Diagnostics): void {
   const roles = checkUnique(c.roles, (r) => r.id, ['roles'], 'role id', dg);
+  const classes = checkUnique(c.classes, (r) => r.id, ['classes'], 'class id', dg);
+  c.fighters.forEach((f, fi) => {
+    if (!classes.has(f.class)) dg.err(['fighters', fi, 'class'], `unknown class "${f.class}"`);
+  });
   const resources = checkUnique(c.resources, (r) => r.id, ['resources'], 'resource id', dg);
   const fighters = checkUnique(c.fighters, (f) => f.id, ['fighters'], 'fighter id', dg);
   const skins = checkUnique(c.skins, (s) => s.id, ['skins'], 'skin id', dg);

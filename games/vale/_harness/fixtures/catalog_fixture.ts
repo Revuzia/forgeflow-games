@@ -28,7 +28,7 @@ export interface FighterOpts {
 }
 export function fighter(id: string, o: FighterOpts = {}): Raw {
   return {
-    id, name: `Fx ${id}`, title: 'synthetic', role: 'fx_role', resource: o.resource ?? 'fx_mana', job: 'synthetic',
+    id, name: `Fx ${id}`, title: 'synthetic', class: 'fx_class', role: 'fx_role', resource: o.resource ?? 'fx_mana', job: 'synthetic',
     difficulty: 1, lore: 'synthetic', tags: [],
     base: { hp: 1000, hpRegen: 0, res: 0, resRegen: 0, ad: 60, ap: 0, armor: 0, resist: 0, attackSpeed: 1, moveSpeed: 3.5, ...(o.base ?? {}) },
     growth: o.growth ?? {},
@@ -141,6 +141,7 @@ export function rawCatalog(p: CatalogPatch = {}): Raw {
   return {
     schema: 1, version: '2026.10.0', builtAt: '2026-10-07T00:00:00Z',
     roles: [{ id: 'fx_role', name: 'Fx Role', contract: 'synthetic', icon: ICON, color: '#112233' }],
+    classes: [{ id: 'fx_class', name: 'Fx Class', desc: 'synthetic', icon: ICON, shape: 'block' }],
     resources: p.resources ?? [
       { id: 'fx_mana', name: 'Fx Mana', desc: 'pool', color: '#2244ff', model: 'pool', max: 300, regen: 2 },
       { id: 'fx_fury', name: 'Fx Fury', desc: 'build', color: '#ff2222', model: 'build', max: 100, startFull: false, decayPerSec: 10, decayDelay: 2, gainOnAttack: 10, gainOnHitTaken: 5, gainOnAbilityHit: 7 },
