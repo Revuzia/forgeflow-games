@@ -239,22 +239,24 @@ disc (off: the renderer's directional light is the sun), seed.
 
 See `art/renders/_proof/build_report__proof_mannequin.json` for the latest numbers.
 
-| step (proof mannequin, `build.py proof`, 2026-10-07) | time |
+| step (proof mannequin, `build.py proof --clip-sheet`, 2026-10-07, after the art review) | time |
 |---|---|
 | rig + materials | 0.2 s |
-| model (fused body + 30 hand-placed parts) | 11 s |
-| decimate + bind (bone heat, no fallback needed) | 3.4 s |
-| UV smart project + concave pack | 12.5 s |
-| bake 1024² (base 2.8 s, rough/metal 1.4 s, normal 2.1 s, AO 48 spp 10.7 s) | 17.4 s |
+| model (fused body + 42 hand-placed parts) | 13.6 s |
+| decimate + bind + armour conform (1,679 body verts re-weighted, 1,303 hidden tris culled) | 3.6 s |
+| UV smart project + concave pack | 10.2 s |
+| bake 1024² (base 2.9 s, rough/metal 1.4 s, normal 1.8 s, AO 48 spp 11.4 s) | 18.1 s |
 | clips (15 clips sampled with IK + secondary motion) | 0.2 s |
-| GLB export + gltf-transform | 2.3 s |
-| renders: portrait 29 s, icon 4 s, splash 56 s, turntable 17 s | 107 s |
-| **base build** | **154 s** |
-| skin rebuild (`_proof_mannequin_ember`: model, bake, GLB, portrait, splash) | 114 s |
-| sky 2048×1024, 16 spp (render / whole script) | 24 s / 26 s |
-| **`python3 art/build.py proof` end to end (base + skin + sky + check)** | **4 min 55 s** |
+| GLB export + gltf-transform | 2.4 s |
+| renders: portrait 42 s, icon 3 s, splash 38 s, turntable 16 s | 104 s |
+| three.js QA: sheet 12 s (+ clip sheet 22 s with `--clip-sheet`) | 34 s |
+| **base build** | **187 s** |
+| skin rebuild (`_proof_mannequin_ember`: model, bake, GLB, portrait, splash, three QA) | 105 s |
+| sky 2048×1024, 16 spp (whole script) | 32 s |
+| **`python3 art/build.py proof --clip-sheet` end to end (sky + base + skin + check)** | **5 min 25 s** |
 
-Outputs: `art/out/_proof/_proof_mannequin.glb` (23,550 tris, 3.3 MB of which ~1.9 MB textures,
-28 joints, 15 clips),
+Outputs: `art/out/_proof/_proof_mannequin.glb` (24,585 tris, 3.40 MB of which ~1.9 MB textures,
+28 joints, 15 clips; 106 px tall at 1080p default zoom; accent 3.7 % of the silhouette),
 `_proof_mannequin_ember.glb` (skin), `portrait.png`, `splash.png`, `icon.png`, skin portrait and
-splash, `sky.hdr`, `art.json`; QA in `art/renders/_proof/`.
+splash, `sky.hdr`, `art.json` (strict FighterArt), `skins.json`; QA in `art/renders/_proof/`
+(`turntable.png`, `three__proof_mannequin.png`, `three_clips__proof_mannequin.png`, build reports).

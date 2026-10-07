@@ -307,6 +307,15 @@ export const ResourceDef = z.object({
 
 export const RoleDef = z.object({
   id: Id, name: z.string(), contract: z.string(), icon: AssetRef, color: Color,
+  /** where the role plays in a mode with roles (Rift). Bots and the draft host read this; the sim does not.
+   *  ADDED(LEAD) 2026-10-07, optional, no schema bump. */
+  assign: z.object({
+    lane: Id.nullable(),                  // MapDef.lanes[].id, or null for the jungle role
+    jungle: z.boolean().default(false),
+    /** shares its lane with another role (the duo lane) and plays support for it */
+    support: z.boolean().default(false),
+    order: z.number().int().default(0),   // display/draft order
+  }).strict().optional(),
 }).strict();
 
 // ── fighters ────────────────────────────────────────────────────────────────────────────────────

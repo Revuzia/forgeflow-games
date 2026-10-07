@@ -1,0 +1,139 @@
+{
+  "id": "_proof_mannequin_ember",
+  "fighter": "_proof_mannequin",
+  "skin": true,
+  "parts": {
+    "bind_body": {
+      "heat_ok": true,
+      "unweighted": 0,
+      "fixed_vertices": 0,
+      "empty_groups": []
+    },
+    "tris_body": 7000,
+    "tris_helmet": 866,
+    "tris_visor_up": 388,
+    "tris_bevor": 494,
+    "tris_eye_slit": 272,
+    "tris_crest": 320,
+    "tris_crest_saddle": 240,
+    "tris_breastplate": 1238,
+    "tris_backplate": 1134,
+    "tris_gorget": 632,
+    "tris_chest_gem": 160,
+    "tris_gem_setting": 176,
+    "tris_belt": 540,
+    "tris_buckle": 392,
+    "tris_tasset.L": 292,
+    "tris_tasset.R": 308,
+    "tris_pauldron.L": 781,
+    "tris_pauldron_glow.L": 216,
+    "tris_lame0.L": 388,
+    "tris_lame1.L": 383,
+    "tris_pauldron.R": 792,
+    "tris_pauldron_glow.R": 216,
+    "tris_lame0.R": 383,
+    "tris_lame1.R": 411,
+    "tris_bracer.L": 480,
+    "tris_greave.L": 634,
+    "tris_kneecop.L": 502,
+    "tris_kneefan.L": 336,
+    "tris_cuisse.L": 556,
+    "tris_bracer.R": 480,
+    "tris_greave.R": 634,
+    "tris_kneecop.R": 502,
+    "tris_kneefan.R": 336,
+    "tris_cuisse.R": 556,
+    "tris_tabard_f": 776,
+    "tris_tabard_b": 776,
+    "tris_sword_blade": 360,
+    "tris_sword_rune": 176,
+    "tris_sword_guard": 300,
+    "tris_sword_grip": 340,
+    "tris_sword_pommel": 128,
+    "armour_conform": {
+      "covered": 1679,
+      "culled_faces": 1303,
+      "body_tris_before": 7000,
+      "body_tris_after": 5697
+    },
+    "validate__proof_mannequin": "14524->14518"
+  },
+  "uv_coverage": 0.551,
+  "bake": {
+    "base": 2.67,
+    "rough_metal": 1.38,
+    "normal": 1.71,
+    "ao": 11.07,
+    "normal_fixed_px": 5622,
+    "pack_save": 0.17,
+    "total": 17.15
+  },
+  "tris": 24585,
+  "mesh_top_m": 1.947,
+  "glb_bytes_raw": 3243092,
+  "optimize": {
+    "ok": true,
+    "before": 3243092,
+    "after": 3241636
+  },
+  "glb_bytes": 3241636,
+  "renders": {
+    "files": {
+      "portrait": "art/out/_proof/_proof_mannequin_ember_portrait.png",
+      "splash": "art/out/_proof/_proof_mannequin_ember_splash.png"
+    },
+    "seconds": {
+      "portrait": 20.27,
+      "splash": 25.3
+    }
+  },
+  "three_qa": {
+    "ok": true,
+    "mode": "sheet",
+    "facing": [
+      0,
+      1
+    ],
+    "bindBox": [
+      [
+        -0.746,
+        0,
+        -0.209
+      ],
+      [
+        0.746,
+        1.947,
+        0.933
+      ]
+    ],
+    "headY": 1.639,
+    "accentPct": 3.63,
+    "accentTopHalfPct": 97.4,
+    "heightPx1080": 106,
+    "size": [
+      2400,
+      900
+    ],
+    "clips": 0,
+    "out": "art/renders/_proof/three__proof_mannequin_ember.png",
+    "seconds": 9.6,
+    "exit": 0
+  },
+  "timings": {
+    "steps_s": {
+      "rig": 0.0,
+      "materials": 0.18,
+      "model": 13.6,
+      "lows_bind": 3.61,
+      "uv": 9.45,
+      "bake": 17.16,
+      "export": 0.16,
+      "optimize": 0.26,
+      "render": 50.98,
+      "three_qa": 9.73
+    },
+    "total_s": 105.2
+  },
+  "run_ref_speed": 3.6,
+  "height_m": 1.85
+}
