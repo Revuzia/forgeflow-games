@@ -1,0 +1,55 @@
+{
+  "nav": [
+    {
+      "screen": "home",
+      "label": "Home",
+      "icon": "assets/ui/fx_icon.png",
+      "hotkey": "H"
+    }
+  ],
+  "modeSlots": [
+    {
+      "mode": "fx_mode_a",
+      "status": "live"
+    },
+    {
+      "mode": null,
+      "status": "reserved",
+      "label": "Reserved",
+      "note": "Placeholder future slot."
+    }
+  ],
+  "home": {
+    "headline": "Fixture Headline",
+    "sub": "Placeholder subline.",
+    "feature": {
+      "art": "assets/ui/fx_card.webp",
+      "title": "Fixture Feature",
+      "body": "Placeholder feature body.",
+      "cta": {
+        "label": "Go",
+        "screen": "play",
+        "params": {
+          "mode": "fx_mode_a"
+        }
+      }
+    },
+    "tiles": [
+      {
+        "id": "fx_tile_a",
+        "title": "Fixture Tile",
+        "body": "Placeholder tile body.",
+        "art": "assets/ui/fx_card.webp",
+        "screen": "play"
+      }
+    ]
+  },
+  "menuScene": {
+    "model": "assets/maps/fx_map_a/scene.glb",
+    "sky": "assets/maps/fx_map_a/sky.hdr",
+    "lut": "assets/maps/fx_map_a/grade.cube"
+  },
+  "tips": [
+    "Placeholder tip text."
+  ]
+}

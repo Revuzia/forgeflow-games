@@ -1,0 +1,19 @@
+{
+  "cues": {
+    "fx_cue_hit": {
+      "files": [
+        "assets/audio/fx_hit.ogg"
+      ],
+      "bus": "sfx",
+      "pitchVar": 0.05,
+      "spatial": true
+    }
+  },
+  "music": {
+    "fx_music_a": {
+      "file": "assets/audio/fx_music.ogg",
+      "bpm": 96,
+      "loopStart": 0
+    }
+  }
+}

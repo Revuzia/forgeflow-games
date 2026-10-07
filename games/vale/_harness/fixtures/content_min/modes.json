@@ -1,0 +1,77 @@
+[
+  {
+    "id": "fx_mode_a",
+    "name": "Fixture Mode",
+    "tagline": "Placeholder tagline.",
+    "desc": "A placeholder mode.",
+    "map": "fx_map_a",
+    "teams": 2,
+    "perTeam": 1,
+    "pick": "blind",
+    "rules": {
+      "startLevel": 1,
+      "maxLevel": 18,
+      "startGold": 500,
+      "passiveGoldPerSec": 2,
+      "passiveGoldStart": 60,
+      "goldMult": 1,
+      "xpMult": 1,
+      "xpTable": [
+        280,
+        380,
+        480
+      ],
+      "respawn": {
+        "base": 6,
+        "perLevel": 1.5,
+        "max": 40
+      },
+      "shopAccess": "base",
+      "recall": true,
+      "recallTime": 8,
+      "fountainHeals": true,
+      "itemPool": "fx_pool",
+      "minionWaves": {
+        "first": 30,
+        "interval": 30,
+        "composition": [
+          {
+            "unit": "fx_unit_minion",
+            "count": 3
+          }
+        ]
+      },
+      "structures": true,
+      "jungle": true,
+      "surrender": {
+        "earliest": 900,
+        "votesNeeded": 4
+      },
+      "end": {
+        "kind": "core",
+        "coreStructure": "fx_unit_core"
+      },
+      "bounty": {
+        "kill": 300,
+        "assistShare": 0.5,
+        "streakStep": 50,
+        "streakMax": 500,
+        "shutdownMax": 700
+      },
+      "abilityRanks": {
+        "basicMax": 5,
+        "ultLevels": [
+          6,
+          11,
+          16
+        ]
+      }
+    },
+    "roles": false,
+    "card": {
+      "art": "assets/ui/fx_card.webp",
+      "accent": "#cc8844",
+      "glyph": "assets/ui/fx_icon.png"
+    }
+  }
+]

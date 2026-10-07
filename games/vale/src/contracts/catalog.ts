@@ -64,8 +64,9 @@ export const Scaling = z.union([
     /** fractions of the TARGET's hp (0.06 = 6 % of target max hp) */
     targetMaxHp: z.number().optional(), targetMissingHp: z.number().optional(), targetCurrentHp: z.number().optional(),
     /** multiply by the stacks of a counter on the caster, or of a mark on the target */
-    perCounter: z.object({ counter: Id, per: z.number() }).optional(),
-    perMark: z.object({ mark: Id, per: z.number() }).optional(),
+    // CHANGED(TOOLS): .strict() added — these were the only non-strict objects (typos were silently stripped)
+    perCounter: z.object({ counter: Id, per: z.number() }).strict().optional(),
+    perMark: z.object({ mark: Id, per: z.number() }).strict().optional(),
   }).strict(),
 ]);
 
@@ -177,7 +178,8 @@ export const Effect: z.ZodType<EffectT, unknown> = z.lazy(() => z.discriminatedU
     to: ApplyTo.default('hit'), decay: z.boolean().optional() }).strict(),
   /** timed stat buff (or debuff with negative values); `id` makes re-application refresh instead of stack */
   z.object({ op: z.literal('buff'), id: Id, duration: Ranked, stats: StatBlock.optional(),
-    statScaling: z.record(StatKey, Scaling).optional(), to: ApplyTo.default('self'),
+    // CHANGED(TOOLS): partialRecord — zod 4 makes z.record(<enum>, …) EXHAUSTIVE (all 23 stats required)
+    statScaling: z.partialRecord(StatKey, Scaling).optional(), to: ApplyTo.default('self'),
     maxStacks: z.number().int().positive().optional(),
     /** next N basic attacks are empowered with these effects (consumed per attack) */
     empowerAttacks: z.object({ count: z.number().int().positive(), effects: Effects, rangeBonus: z.number().optional(),
@@ -319,8 +321,17 @@ export const FighterArt = z.object({
   scale: z.number().positive().default(1),
   /** the speed (m/s) the run clip was authored for; the renderer scales playback by speed / runRefSpeed */
   runRefSpeed: z.number().positive().default(3.6),
-  /** clip role → clip name inside the GLB */
-  clips: z.record(ClipRole, z.string()),
+  /** clip role → clip name inside the GLB.
+   *  CHANGED(TOOLS): was z.record(ClipRole, z.string()), which zod 4 makes EXHAUSTIVE (all 18 roles
+   *  required, contradicting §12's optional clips). Now: the §12 required roles are required, the
+   *  optional ones optional, unknown roles still rejected. Keep the keys in sync with ClipRole. */
+  clips: z.object({
+    idle: z.string(), run: z.string(), attack1: z.string(), attack2: z.string(),
+    cast_a1: z.string(), cast_a2: z.string(), cast_a3: z.string(), cast_ult: z.string(),
+    death: z.string(), recall: z.string(), idle_lobby: z.string(), victory: z.string(),
+    crit: z.string().optional(), channel: z.string().optional(), spawn: z.string().optional(),
+    stunned: z.string().optional(), dash: z.string().optional(), taunt: z.string().optional(),
+  }).strict(),
   /** bone/empty names for VFX sockets */
   sockets: z.record(z.string(), z.string()).default({}),
   /** the material whose emissive is tinted with the readability color (team in Rift/Bridge, player in Fray) */
@@ -386,10 +397,12 @@ export const ItemDef = z.object({
 
 export const SetupDef = z.object({
   /** activated battle spells (same DSL as abilities; slots spell1/spell2) */
-  spells: z.array(AbilityDef.and(z.object({ pools: z.array(Id).default([]) }))).min(2),
+  // CHANGED(TOOLS): .extend() instead of .and() — a zod 4 intersection only rejects a key that BOTH
+  // sides reject, and the plain right-hand object accepts anything, so unknown keys passed silently.
+  spells: z.array(AbilityDef.extend({ pools: z.array(Id).default([]) })).min(2),
   spellSlots: z.number().int().positive(),
   /** pre-match passive choices */
-  boons: z.array(PassiveDef.and(z.object({ path: Id, pools: z.array(Id).default([]) }))).min(1),
+  boons: z.array(PassiveDef.extend({ path: Id, pools: z.array(Id).default([]) })).min(1),   // CHANGED(TOOLS): see spells
   boonSlots: z.number().int().positive(),
   paths: z.array(z.object({ id: Id, name: z.string(), desc: z.string(), color: Color, icon: AssetRef }).strict()),
   defaults: z.object({ spells: z.array(Id), boons: z.array(Id) }).strict(),

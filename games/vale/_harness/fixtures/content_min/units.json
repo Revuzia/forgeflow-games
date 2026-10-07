@@ -1,0 +1,81 @@
+[
+  {
+    "id": "fx_unit_minion",
+    "name": "Fixture Minion",
+    "kind": "minion",
+    "base": {
+      "hp": 300,
+      "ad": 12,
+      "moveSpeed": 3.2,
+      "attackSpeed": 0.8
+    },
+    "attack": {
+      "range": 1.2,
+      "windup": 0.3
+    },
+    "collisionRadius": 0.4,
+    "bounty": {
+      "gold": 20,
+      "xp": 30
+    },
+    "art": {
+      "model": "assets/units/fx_unit.glb",
+      "height": 1.2,
+      "instanced": true
+    }
+  },
+  {
+    "id": "fx_unit_core",
+    "name": "Fixture Core",
+    "kind": "structure",
+    "base": {
+      "hp": 4000,
+      "armor": 50
+    },
+    "collisionRadius": 2.5,
+    "bounty": {
+      "gold": 0,
+      "xp": 0,
+      "goldGlobal": 50
+    },
+    "behavior": {
+      "targetRules": "none"
+    },
+    "art": {
+      "model": "assets/units/fx_unit.glb",
+      "height": 4
+    }
+  },
+  {
+    "id": "fx_unit_beast",
+    "name": "Fixture Beast",
+    "kind": "monster",
+    "base": {
+      "hp": 1500,
+      "ad": 40,
+      "attackSpeed": 0.7,
+      "moveSpeed": 3
+    },
+    "attack": {
+      "range": 2,
+      "windup": 0.4
+    },
+    "collisionRadius": 1,
+    "bounty": {
+      "gold": 100,
+      "xp": 150
+    },
+    "behavior": {
+      "leash": 8
+    },
+    "onTakedownTeamBuff": "fx_teambuff_a",
+    "art": {
+      "model": "assets/units/fx_unit.glb",
+      "height": 1.2,
+      "clips": {
+        "idle": "idle_clip"
+      }
+    },
+    "abilities": []
+  }
+]

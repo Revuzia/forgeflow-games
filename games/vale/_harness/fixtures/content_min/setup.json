@@ -1,0 +1,87 @@
+{
+  "spells": [
+    {
+      "id": "fx_spell_a",
+      "name": "Fixture Spell A",
+      "desc": "Placeholder battle spell.",
+      "icon": "assets/ui/fx_icon.png",
+      "cooldown": 180,
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "self"
+      },
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 100
+        }
+      ],
+      "ai": {
+        "use": [
+          "heal"
+        ],
+        "castWhenSelfHpBelow": 0.3
+      }
+    },
+    {
+      "id": "fx_spell_b",
+      "name": "Fixture Spell B",
+      "desc": "Placeholder battle spell.",
+      "icon": "assets/ui/fx_icon.png",
+      "cooldown": 180,
+      "cost": 0,
+      "costKind": "none",
+      "targeting": {
+        "kind": "self"
+      },
+      "effects": [
+        {
+          "op": "heal",
+          "amount": 100
+        }
+      ],
+      "ai": {
+        "use": [
+          "heal"
+        ],
+        "castWhenSelfHpBelow": 0.3
+      },
+      "pools": [
+        "fx_pool"
+      ]
+    }
+  ],
+  "spellSlots": 2,
+  "boons": [
+    {
+      "id": "fx_boon_a",
+      "name": "Fixture Boon",
+      "desc": "Placeholder boon.",
+      "icon": "assets/ui/fx_icon.png",
+      "path": "fx_path_a",
+      "stats": {
+        "hp": 50
+      }
+    }
+  ],
+  "boonSlots": 1,
+  "paths": [
+    {
+      "id": "fx_path_a",
+      "name": "Fixture Path",
+      "desc": "Placeholder path.",
+      "color": "#887766",
+      "icon": "assets/ui/fx_icon.png"
+    }
+  ],
+  "defaults": {
+    "spells": [
+      "fx_spell_a",
+      "fx_spell_b"
+    ],
+    "boons": [
+      "fx_boon_a"
+    ]
+  }
+}

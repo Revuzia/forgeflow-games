@@ -1,0 +1,24 @@
+[
+  {
+    "id": "fx_skin_a_base",
+    "fighter": "fx_fighter_a",
+    "name": "Fixture Alpha",
+    "tier": "base",
+    "model": "assets/fighters/fx_fighter_a/fx_fighter_a.glb",
+    "portrait": "assets/fighters/fx_fighter_a/portrait.png",
+    "splash": "assets/fighters/fx_fighter_a/splash.png",
+    "releasedIn": "2026.10.0"
+  },
+  {
+    "id": "fx_skin_a_alt",
+    "fighter": "fx_fighter_a",
+    "name": "Fixture Alpha Variant",
+    "tier": "standard",
+    "model": "assets/fighters/fx_fighter_a/fx_skin_a_alt.glb",
+    "portrait": "assets/fighters/fx_fighter_a/portrait.png",
+    "splash": "assets/fighters/fx_fighter_a/splash.png",
+    "vfxTint": "#55aaff",
+    "desc": "A placeholder recolour.",
+    "releasedIn": "2026.10.0"
+  }
+]

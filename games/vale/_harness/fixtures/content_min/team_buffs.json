@@ -1,0 +1,12 @@
+[
+  {
+    "id": "fx_teambuff_a",
+    "name": "Fixture Blessing",
+    "desc": "Placeholder team buff.",
+    "icon": "assets/ui/fx_icon.png",
+    "duration": 90,
+    "stats": {
+      "ad": 8
+    }
+  }
+]

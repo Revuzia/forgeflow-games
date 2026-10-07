@@ -1,0 +1,26 @@
+[
+  {
+    "id": "fx_queue_a",
+    "mode": "fx_mode_a",
+    "name": "Fixture Queue",
+    "desc": "A placeholder queue.",
+    "kind": "standard",
+    "rules": {
+      "startGold": 600
+    },
+    "bots": {
+      "fill": "all_open",
+      "difficulty": "adept"
+    },
+    "partyMax": 1,
+    "grants": {
+      "win": 50,
+      "loss": 20,
+      "perMinute": 1,
+      "cap": 120,
+      "xpWin": 100,
+      "xpLoss": 60
+    },
+    "order": 1
+  }
+]

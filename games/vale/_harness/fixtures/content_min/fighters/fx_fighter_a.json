@@ -1,0 +1,314 @@
+{
+  "$comment": "synthetic fixture fighter for _harness probes; not real content",
+  "id": "fx_fighter_a",
+  "name": "Fixture Alpha",
+  "title": "The Placeholder",
+  "role": "fx_role_a",
+  "resource": "fx_res_a",
+  "job": "Stands in for real content in probes.",
+  "difficulty": 1,
+  "lore": "Exists only in the test harness.",
+  "tags": [
+    "fixture"
+  ],
+  "base": {
+    "hp": 600,
+    "hpRegen": 1.5,
+    "res": 300,
+    "resRegen": 2,
+    "ad": 60,
+    "armor": 30,
+    "resist": 30,
+    "attackSpeed": 0.65,
+    "range": 1.8,
+    "moveSpeed": 3.5
+  },
+  "growth": {
+    "hp": 95,
+    "ad": 3,
+    "armor": 4,
+    "resist": 1.5,
+    "attackSpeed": 0.02
+  },
+  "attack": {
+    "range": 1.8,
+    "windup": 0.3,
+    "present": {
+      "anim": "attack1",
+      "hitSfx": "fx_cue_hit"
+    }
+  },
+  "kit": {
+    "passive": {
+      "id": "fx_fighter_a_passive",
+      "name": "Fixture Passive",
+      "desc": "Placeholder passive text.",
+      "icon": "assets/fighters/fx_fighter_a/icon.png",
+      "triggers": [
+        {
+          "on": "attackHit",
+          "cooldown": 4,
+          "effects": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": 10,
+                "level": 2
+              },
+              "type": "magic"
+            }
+          ]
+        }
+      ],
+      "forms": {
+        "fx_form_a": {
+          "name": "Fixture Form",
+          "stats": {
+            "moveSpeedPct": 0.1
+          }
+        }
+      }
+    },
+    "a1": {
+      "id": "fx_fighter_a_a1",
+      "name": "Fixture a1",
+      "desc": "Placeholder a1 text.",
+      "icon": "assets/ui/fx_icon.png",
+      "cooldown": [
+        10,
+        9,
+        8,
+        7,
+        6
+      ],
+      "cost": 40,
+      "targeting": {
+        "kind": "direction",
+        "range": 9,
+        "indicator": {
+          "kind": "rect",
+          "length": 9,
+          "width": 1
+        }
+      },
+      "ai": {
+        "use": [
+          "damage"
+        ]
+      },
+      "effects": [
+        {
+          "op": "projectile",
+          "speed": 18,
+          "range": 9,
+          "width": 0.6,
+          "onHit": [
+            {
+              "op": "damage",
+              "amount": {
+                "base": [
+                  60,
+                  90,
+                  120,
+                  150,
+                  180
+                ],
+                "bonusAd": 0.8
+              },
+              "type": "phys"
+            }
+          ],
+          "present": {
+            "vfx": "fx_vfx_hit",
+            "sfx": "fx_cue_hit"
+          }
+        }
+      ],
+      "present": {
+        "anim": "cast_a1"
+      }
+    },
+    "a2": {
+      "id": "fx_fighter_a_a2",
+      "name": "Fixture a2",
+      "desc": "Placeholder a2 text.",
+      "icon": "assets/ui/fx_icon.png",
+      "cooldown": [
+        10,
+        9,
+        8,
+        7,
+        6
+      ],
+      "cost": 40,
+      "targeting": {
+        "kind": "point",
+        "range": 5
+      },
+      "ai": {
+        "use": [
+          "escape",
+          "gapclose"
+        ]
+      },
+      "effects": [
+        {
+          "op": "dash",
+          "mode": "toPoint",
+          "distance": 5,
+          "speed": 15
+        }
+      ],
+      "present": {
+        "anim": "cast_a2"
+      }
+    },
+    "a3": {
+      "id": "fx_fighter_a_a3",
+      "name": "Fixture a3",
+      "desc": "Placeholder a3 text.",
+      "icon": "assets/ui/fx_icon.png",
+      "cooldown": [
+        10,
+        9,
+        8,
+        7,
+        6
+      ],
+      "cost": 40,
+      "targeting": {
+        "kind": "self"
+      },
+      "ai": {
+        "use": [
+          "shield"
+        ]
+      },
+      "effects": [
+        {
+          "op": "shield",
+          "amount": {
+            "base": [
+              80,
+              120,
+              160,
+              200,
+              240
+            ],
+            "ap": 0.5
+          },
+          "duration": 3
+        }
+      ],
+      "present": {
+        "anim": "cast_a3"
+      }
+    },
+    "ult": {
+      "id": "fx_fighter_a_ult",
+      "name": "Fixture ult",
+      "desc": "Placeholder ult text.",
+      "icon": "assets/ui/fx_icon.png",
+      "cooldown": [
+        100,
+        85,
+        70
+      ],
+      "cost": 100,
+      "targeting": {
+        "kind": "point",
+        "range": 8,
+        "indicator": {
+          "kind": "circle",
+          "radius": 3
+        }
+      },
+      "ai": {
+        "use": [
+          "cc",
+          "engage"
+        ],
+        "minTargets": 2
+      },
+      "maxRank": 3,
+      "effects": [
+        {
+          "op": "area",
+          "shape": {
+            "kind": "circle",
+            "radius": 3
+          },
+          "delay": 0.5,
+          "onHit": [
+            {
+              "op": "status",
+              "status": "stun",
+              "duration": 1
+            }
+          ],
+          "present": {
+            "vfx": "fx_vfx_hit",
+            "telegraph": "everyone"
+          }
+        },
+        {
+          "op": "if",
+          "cond": {
+            "kind": "not",
+            "cond": {
+              "kind": "inForm",
+              "form": "fx_form_a"
+            }
+          },
+          "then": [
+            {
+              "op": "form",
+              "form": "fx_form_a",
+              "duration": 6
+            }
+          ]
+        }
+      ],
+      "present": {
+        "anim": "cast_ult"
+      }
+    }
+  },
+  "art": {
+    "model": "assets/fighters/fx_fighter_a/fx_fighter_a.glb",
+    "portrait": "assets/fighters/fx_fighter_a/portrait.png",
+    "splash": "assets/fighters/fx_fighter_a/splash.png",
+    "icon": "assets/fighters/fx_fighter_a/icon.png",
+    "height": 1.8,
+    "clips": {
+      "idle": "idle_clip",
+      "run": "run_clip",
+      "attack1": "attack1_clip",
+      "attack2": "attack2_clip",
+      "cast_a1": "cast_a1_clip",
+      "cast_a2": "cast_a2_clip",
+      "cast_a3": "cast_a3_clip",
+      "cast_ult": "cast_ult_clip",
+      "death": "death_clip",
+      "recall": "recall_clip",
+      "idle_lobby": "idle_lobby_clip",
+      "victory": "victory_clip"
+    },
+    "sockets": {
+      "weapon": "prop.R"
+    }
+  },
+  "ai": {
+    "style": "skirmisher",
+    "preferredRange": 2,
+    "comboOrder": [
+      "a2",
+      "a1",
+      "ult"
+    ]
+  },
+  "palette": {
+    "primary": "#aa6633",
+    "secondary": "#335577"
+  }
+}

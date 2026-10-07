@@ -1,0 +1,56 @@
+[
+  {
+    "id": "fx_item_basic",
+    "name": "Fixture Shard",
+    "desc": "Placeholder component.",
+    "icon": "assets/ui/fx_icon.png",
+    "tier": "basic",
+    "cost": 300,
+    "stats": {
+      "ad": 10
+    },
+    "tags": [
+      "attack"
+    ]
+  },
+  {
+    "id": "fx_item_core",
+    "name": "Fixture Relic",
+    "desc": "Placeholder finished item.",
+    "icon": "assets/ui/fx_icon.png",
+    "tier": "core",
+    "cost": 900,
+    "components": [
+      "fx_item_basic",
+      "fx_item_basic"
+    ],
+    "stats": {
+      "ad": 30,
+      "haste": 10
+    },
+    "tags": [
+      "attack",
+      "haste"
+    ],
+    "passives": [
+      {
+        "id": "fx_item_core_passive",
+        "name": "Fixture Echo",
+        "desc": "Placeholder item passive.",
+        "icon": "assets/ui/fx_icon.png",
+        "triggers": [
+          {
+            "on": "attackHit",
+            "effects": [
+              {
+                "op": "damage",
+                "amount": 10,
+                "type": "magic"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]

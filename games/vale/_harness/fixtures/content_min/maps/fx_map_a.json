@@ -1,0 +1,192 @@
+{
+  "id": "fx_map_a",
+  "name": "Fixture Field",
+  "desc": "A placeholder map for probes.",
+  "size": [
+    100,
+    100
+  ],
+  "navCell": 0.5,
+  "walls": [
+    [
+      [
+        0,
+        0
+      ],
+      [
+        100,
+        0
+      ],
+      [
+        100,
+        2
+      ],
+      [
+        0,
+        2
+      ]
+    ],
+    [
+      [
+        45,
+        45
+      ],
+      [
+        55,
+        45
+      ],
+      [
+        55,
+        55
+      ],
+      [
+        45,
+        55
+      ]
+    ]
+  ],
+  "thickets": [
+    [
+      [
+        20,
+        70
+      ],
+      [
+        30,
+        70
+      ],
+      [
+        30,
+        80
+      ]
+    ]
+  ],
+  "lanes": [
+    {
+      "id": "fx_lane_mid",
+      "name": "Fixture Lane",
+      "path": [
+        [
+          12,
+          12
+        ],
+        [
+          50,
+          30
+        ],
+        [
+          88,
+          88
+        ]
+      ]
+    }
+  ],
+  "bases": [
+    {
+      "team": 0,
+      "spawn": [
+        8,
+        8
+      ],
+      "fountain": {
+        "at": [
+          6,
+          6
+        ],
+        "radius": 5
+      },
+      "shop": {
+        "at": [
+          5,
+          9
+        ],
+        "radius": 3
+      }
+    },
+    {
+      "team": 1,
+      "spawn": [
+        92,
+        92
+      ],
+      "fountain": {
+        "at": [
+          94,
+          94
+        ],
+        "radius": 5
+      },
+      "shop": {
+        "at": [
+          95,
+          91
+        ],
+        "radius": 3
+      }
+    }
+  ],
+  "structures": [
+    {
+      "id": "fx_core_0",
+      "unit": "fx_unit_core",
+      "team": 0,
+      "at": [
+        12,
+        12
+      ]
+    },
+    {
+      "id": "fx_core_1",
+      "unit": "fx_unit_core",
+      "team": 1,
+      "at": [
+        88,
+        88
+      ]
+    }
+  ],
+  "camps": [
+    {
+      "id": "fx_camp_a",
+      "units": [
+        {
+          "unit": "fx_unit_beast",
+          "at": [
+            70,
+            25
+          ]
+        }
+      ],
+      "firstSpawn": 60,
+      "respawn": 180,
+      "objective": true
+    }
+  ],
+  "art": {
+    "scene": "assets/maps/fx_map_a/scene.glb",
+    "sky": "assets/maps/fx_map_a/sky.hdr",
+    "lut": "assets/maps/fx_map_a/grade.cube",
+    "minimap": "assets/maps/fx_map_a/minimap.png",
+    "lighting": {
+      "sunDir": [
+        0.4,
+        0.8,
+        0.3
+      ],
+      "sunColor": "#fff2dd",
+      "sunIntensity": 3,
+      "ambient": 0.4,
+      "fogColor": "#8899aa",
+      "fogDensity": 0.01,
+      "exposure": 1
+    },
+    "music": "fx_music_a"
+  },
+  "camera": {
+    "pitchDeg": 56,
+    "fovDeg": 40,
+    "distance": 26,
+    "minDistance": 18,
+    "maxDistance": 32
+  }
+}

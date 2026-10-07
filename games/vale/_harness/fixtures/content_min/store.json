@@ -1,0 +1,39 @@
+{
+  "currencies": [
+    {
+      "id": "fx_coin",
+      "name": "Fixture Coin",
+      "desc": "Placeholder currency earned by play.",
+      "icon": "assets/ui/fx_icon.png",
+      "earnedOnly": true
+    }
+  ],
+  "offers": [
+    {
+      "sku": "fx_offer_alt",
+      "kind": "skin",
+      "ref": "fx_skin_a_alt",
+      "price": {
+        "currency": "fx_coin",
+        "amount": 500
+      },
+      "from": "2026-10-01T00:00:00Z"
+    }
+  ],
+  "shelves": [
+    {
+      "id": "fx_shelf_a",
+      "name": "Fixture Shelf",
+      "skus": [
+        "fx_offer_alt"
+      ],
+      "layout": "grid"
+    }
+  ],
+  "starterOwnership": [
+    "fx_skin_a_base"
+  ],
+  "starterWallet": {
+    "fx_coin": 100
+  }
+}

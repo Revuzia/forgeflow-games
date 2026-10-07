@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>VALE</title>
+    <!-- runtime config (catalog URL); public/config.js, editable after deploy -->
+    <script src="/config.js"></script>
+    <style>
+      html, body { margin: 0; height: 100%; background: #0b0d10; color: #d8dde3; overflow: hidden; }
+      #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+      #ui { position: fixed; inset: 0; font: 14px/1.4 system-ui, sans-serif; padding: 16px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="view"></canvas>
+    <div id="ui"></div>
+    <script type="module" src="/src/boot/main.ts"></script>
+  </body>
+</html>

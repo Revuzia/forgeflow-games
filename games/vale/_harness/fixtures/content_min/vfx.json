@@ -1,0 +1,13 @@
+[
+  {
+    "id": "fx_vfx_hit",
+    "layers": [
+      {
+        "type": "burst",
+        "count": 8,
+        "color": "#ffcc88"
+      }
+    ],
+    "duration": 0.4
+  }
+]

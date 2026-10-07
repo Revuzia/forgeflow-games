@@ -1,0 +1,16 @@
+[
+  {
+    "id": "fx_rank_a",
+    "name": "Fixture Rank A",
+    "minRating": 0,
+    "color": "#776655",
+    "emblem": "assets/ui/fx_icon.png"
+  },
+  {
+    "id": "fx_rank_b",
+    "name": "Fixture Rank B",
+    "minRating": 1500,
+    "color": "#aabbcc",
+    "emblem": "assets/ui/fx_icon.png"
+  }
+]

@@ -261,12 +261,35 @@ shopping follows per-style build paths derived from item tags.
 - Readability: team/player ground ring, overhead bars (hp with tick marks, shield, resource,
   level), enemy outline on hover, telegraph decals (shader) per `Present.telegraph`, colorblind
   palettes from settings.
-- §9.5 VFX: `VfxDef.layers` are emitter records `{ type: 'burst'|'trail'|'ring'|'beam'|'flash'|'mesh'|'decal', ... }`
-  interpreted by `render/vfx/` (GPU-instanced quads, procedural textures). Team tint when `teamTint`.
+- §9.5 VFX: see §9.5 below.
 - §9.4 Quality ladder (settings.video): Low (scale 0.75, no AO, shadows 1024 hard, no bloom, FXAA-off,
   particles 0, scatter 0) · Medium (0.9, AO half-res, 2048, bloom, SMAA, 1, 1) · High (1.0, AO, 2048
   PCF, bloom, SMAA, 2, 2) · Ultra (1.0 + DPR up to 2, AO full, 4096, bloom, SMAA, 2, 2). Target:
   stable 1080p60 on High on a mid-range gaming GPU; dynamic resolution may drop scale to 0.8.
+
+### §9.5 VFX vocabulary (content/vfx.json → render/vfx/)
+A `VfxDef` is `{ id, duration, teamTint, layers: Layer[] }`. Every layer has `type`, optional
+`delay` (s), optional `at` (`origin` caster/emitter · `target` hit unit · `path` along a projectile
+or dash · `ground` the area/zone centre), and colors as `#rrggbb` or `"team"` (the readability color
+of the source: ally/enemy/self in team modes, the player color in Fray) or `"element"` (the
+fighter palette primary). Ranges are `[min, max]`; `size`/`alpha`/`radius` pairs are `[start, end]`
+over a particle's life. Layer types and their keys:
+- `burst`: `count, life[], speed[], spreadDeg, size[], color[2], alpha[2], gravity, drag, blend ('add'|'alpha'), texture`
+- `trail`: `width, life, color, alpha, texture, blend` (follows a projectile/dash)
+- `ring`: `radius[2], width, life, color, alpha[2], blend` (flat ground ring)
+- `beam`: `width, life, color, texture, blend` (source → target)
+- `flash`: `radius, life, color, intensity` (short point light + glow sprite)
+- `mesh`: `shape ('orb'|'blade'|'shard'|'cone'|'pillar'|'disc'|'spiral'|'crescent'|'spike'), scale[2], life, color, alpha[2], spinDeg, blend`
+- `decal`: `shape ('circle'|'ring'|'cone'|'rect'|'line'), radius, life, color, alpha[2], texture` (ground mark)
+Textures (procedural, render/vfx/textures.ts): `spark, glow, smoke, shard, ring, streak, petal, ember, drop, rune, crack, dust, mote`.
+Shared library presets are named `lib_*`; bespoke ones `<fighter>_<slot>_*`. Unknown keys are ignored
+by the renderer but flagged by the content build.
+
+### §9.6 Fixed internal ids (code vocabulary, not player-facing)
+Mode ids `rift`, `bridge`, `fray` · queue ids `rift_standard`, `rift_quick`, `rift_ranked`,
+`rift_coop`, `bridge_standard`, `fray_standard`, `custom`, `practice` · map ids `map_rift`,
+`map_bridge`, `map_fray` · item/setup pool ids `rift`, `bridge`, `fray`. Player-facing names live in
+the records. Code still never branches on these ids (it branches on `kind`, `pick`, `end.kind`).
 
 ## §10 Client UI (`src/ui/`, lane UI)
 - Preact 11 + `@preact/signals`. `ui/app.tsx` mounts over the canvas. Screens are modules in

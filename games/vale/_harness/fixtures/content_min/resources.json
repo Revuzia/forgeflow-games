@@ -1,0 +1,12 @@
+[
+  {
+    "id": "fx_res_a",
+    "name": "Fixture Resource",
+    "desc": "A placeholder pool.",
+    "color": "#3366aa",
+    "model": "pool",
+    "max": 300,
+    "maxPerLevel": 20,
+    "regen": 2
+  }
+]

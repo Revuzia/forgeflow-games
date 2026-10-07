@@ -1,0 +1,9 @@
+[
+  {
+    "id": "fx_role_a",
+    "name": "Fixture Role",
+    "contract": "Holds the placeholder lane.",
+    "icon": "assets/ui/fx_icon.png",
+    "color": "#aa6633"
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "$note": "synthetic deny-list for probes; invented words only",
+  "categories": {
+    "fx_protected": [
+      "Gloomspire Herald",
+      "Zzyzxblade",
+      "Lantern",
+      "Vale"
+    ],
+    "fx_strict": [
+      "Ember"
+    ]
+  },
+  "strict": [
+    "fx_strict"
+  ]
+}
