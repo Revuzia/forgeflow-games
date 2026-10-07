@@ -300,7 +300,7 @@ export class RarityFx {
    * @param ext   horizontal extents of the body (rx, rz) and its top, for placing aura, dome and pillar
    * @param floatT 0 on the table .. 1 floating
    */
-  update(dt: number, time: number, body: SoftBodyLike, rx: number, rz: number, floatT: number): void {
+  update(dt: number, time: number, body: SoftBodyLike, rx: number, rz: number, floatT: number, room = Infinity): void {
     const st = this.style, sc = this.ctx.scale, c = body.center;
     const k = this.strength;
     const calm = this.calm;
@@ -310,12 +310,13 @@ export class RarityFx {
       const tint = st.prism ? spectrum(time * 0.05, this.col) : st.tell;
       const g = this.ctx.palette.glow, w = st.prism ? 0.4 : 0;   // the prism aura is a pastel (a pure spectrum sample read as a plain green or blue halo)
       this.aura.setColor((tint[0] * 0.8 + g[0] * 0.2) * (1 - w) + w * 0.9, (tint[1] * 0.8 + g[1] * 0.2) * (1 - w) + w * 0.9, (tint[2] * 0.8 + g[2] * 0.2) * (1 - w) + w);   // the TIER colour dominates (it is the tell)
-      this.aura.set(c.x, c.y, c.z, R * 1.85 * this.frameFit, 0.38 * st.rimHalo * k);
+      this.aura.set(c.x, c.y, c.z, Math.min(R * 1.85 * this.frameFit, Math.max(R * 1.1, room * 0.9)), 0.38 * st.rimHalo * k);   // (never past the frame's sides, never tighter than the body)
     }
     // dome (Mythic): a soft light dome standing on the table
     if (this.dome && st.dome > 0) {
       const breathe = calm ? 1 : 0.82 + 0.18 * Math.sin(time * Math.PI * 2 * 0.2);
-      this.dome.set(c.x, c.z, R * Math.max(1.2, 1.5 * this.frameFit), R * 1.7 + (c.y - 0.4 * sc) * 0.2, 0.9 * st.dome * breathe * k, time);
+      // (the dome's radius is held inside the frame's sides: a wide species on a portrait phone had it cut by both, VERIFY_RENDER_B B-m6; never tighter than the body)
+      this.dome.set(c.x, c.z, Math.min(R * Math.max(1.2, 1.5 * this.frameFit), Math.max(R * 1.05, room * 0.9)), R * 1.7 + (c.y - 0.4 * sc) * 0.2, 0.9 * st.dome * breathe * k, time);
     }
     // pillar (Legendary): a faint light pillar on idle
     if (this.pillar && st.pillar > 0) {

@@ -51,7 +51,7 @@
 //     jelly), then partPieces(aId, bId): the parting strand, render-owned, and the seam carried over onto both cut faces, fading.
 //   * A reconnect: setBridge(receiverId, giverId, t) every frame (t 0..1, eased here), body.setFrac on both (PHYS), then removeBody(giver)
 //     (the bridge eases out by itself; setBridge(a, b, 0) also lets it go).
-//   * Every CUT light is a glow (eased in and out, capped), halved in calm mode and held low for 1 s after a granted ceremony flash.
+//   * Every CUT light is a glow (eased in and out, capped), halved in calm mode (the seam to ~22%) and held low for 1 s after a granted ceremony flash.
 //   * After a WebGL context restore the stale three 'dispose' listeners of every pre-loss object are dropped (no INVALID_OPERATION
 //     warnings when those objects are disposed later).
 import * as THREE from 'three';
@@ -75,6 +75,17 @@ const SPOT_SIZES = [1, 0.8, 0.66, 0.55, 0.46];
 const REFRAME_MAX = 1.2;
 /** ... and the most it may pull back for a very wide species (a long bean that fills a narrow frame) before the capsule has to stand in front or behind it. */
 const REFRAME_WIDE = 1.32;
+/**
+ * The play mat's slots, [x, z] in body-scale units, the play body first; stage.matLayout(n) is the first n of them. The list is NESTED on purpose: the shell builds the
+ * mat one squishy at a time, and with body-to-body contact (the real soft body) an extra stays in shared space where it was built (bodies.placeExtras moves only the apart
+ * ones), so a body's spot is the one matLayout(k + 1) gave it when it came out, never one of a later, bigger layout. (The old per-n layouts were not nested: 4 bodies
+ * came out as a 2 x 2 grid whose back row stood straight behind the front row, hiding one squishy behind another: VERIFY_RENDER_B B-M1.)
+ * A wide frame: a plain ROW, 1.3 apart (a body is ~1 wide; the camera frames the group). Outlines of two bodies never overlap in a row; depth, at the camera's low pitch, only
+ * shifts a body up the picture by ~0.27 per unit, far less than its height, so a body BEHIND another is mostly hidden. A tall frame has no width to spare for a row (the
+ * bodies would be ~50 px): a chevron instead, the play body in front and the others behind it to either side, each further out, so every face stays clear of the bodies in front.
+ */
+const MAT_SLOTS_WIDE: readonly (readonly [number, number])[] = [[0, 0], [1.3, 0], [-1.3, 0], [2.6, 0], [-2.6, 0]];
+const MAT_SLOTS_TALL: readonly (readonly [number, number])[] = [[0, 0], [0.9, -1.3], [-0.9, -1.3], [1.8, -2.6], [-1.8, -2.6]];
 const SIDES = [1, -1];
 const SPOT_DEPTHS = [0.15, 0, -0.25, -0.5];
 const SPOT_GAPS = [0.14, 0.06, 0.26];
@@ -122,6 +133,8 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo | keyof StageEx
 }
 
 const TARGET_Y = 0.42;
+/** The smallest frame the stage will size its drawing buffer for (CSS px per side; a 0 / 1 px canvas makes three's offscreen targets zero sized). */
+const MIN_FRAME_PX = 4;
 const NO_LEAK: [number, number, number] = [1, 1, 1];
 
 /** What a disposed stage hands out instead of throwing: a ceremony that is already over (done resolved, no result) / a capsule that is gone. */
@@ -153,6 +166,12 @@ function dropStaleDisposeListeners(root: THREE.Object3D): void {
       if (un) for (const k of Object.keys(un)) tex(un[k]?.value);
     }
   });
+}
+
+/** How far past a body's jelly (x its half extent) its tier's table light reaches: the Mythic dome (R x 1.2 .. 1.5), the Epic+ caustic ring. The waiting capsule stands outside it. */
+function fxReach(v: BodyView): number {
+  if (v.style.dome > 0) return Math.max(1.2, 1.5 * v.rarity.frameFit) - 1;
+  return v.style.ring > 0 ? 0.12 : 0;
 }
 
 function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
@@ -285,7 +304,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       want = Math.max(want, hTop / (TARGET_Y + 0.85 * hwPer / Math.max(0.2, camera.aspect))); }
     // one body: a wide species (a half-moon dumpling, a long bean) must fit a narrow portrait frame whole (its rest reach + a margin)
     const p1 = n === 1 ? primary() : null;
-    if (p1) want = Math.max(want, ((p1.restHalfW * 1.06 + 0.05 * p1.scale) * p1.growth) / hwPer);
+    // (a Mythic body also keeps room for its prism dome, which the rarity pass holds inside the frame's sides: a wide species on a portrait phone had it cut by both, VERIFY_RENDER_B B-m6)
+    if (p1) want = Math.max(want, ((p1.restHalfW * (p1.style.dome > 0 ? 1.34 : 1.06) + 0.05 * p1.scale) * p1.growth) / hwPer);
     let multi = false, mx = 0, mz = 0;
     const solo = n === 1 && withCap;
     if (n + (withCap ? 1 : 0) >= 2) {
@@ -323,7 +343,9 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       for (const v of views) {
         if (!v.visible) continue;
         const j = v.jelly;
-        x0 = Math.min(x0, j.minX); x1 = Math.max(x1, j.maxX); z0 = Math.min(z0, j.minZ); z1 = Math.max(z1, j.maxZ);
+        // (the tier's own light on the table reaches past the jelly: the Mythic dome, the Epic+ caustic ring; a capsule stands beyond it, not half inside it, VERIFY_RENDER_B B-m1)
+        const reach = fxReach(v) * Math.max(j.maxX - j.minX, j.maxZ - j.minZ) * 0.5;
+        x0 = Math.min(x0, j.minX - reach); x1 = Math.max(x1, j.maxX + reach); z0 = Math.min(z0, j.minZ - reach); z1 = Math.max(z1, j.maxZ + reach);
         // the body's silhouette box on screen (its skin vertices, not its world box: that one's corners overhang the silhouette a lot)
         const P = v.proxy.positions, b = [Infinity, Infinity, -Infinity, -Infinity];
         for (let i = 0; i < P.length; i += 3) {
@@ -425,7 +447,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   }
 
   function applySize(): void {
-    renderer.setPixelRatio(Math.min(dpr, TIERS[tier].dprCap));
+    // (a fractional ratio on a tiny frame must not round the drawing buffer down to 1 px either)
+    renderer.setPixelRatio(Math.max(Math.min(dpr, TIERS[tier].dprCap), MIN_FRAME_PX / Math.min(cssW, cssH)));
     renderer.setSize(cssW, cssH, false);
     camera.aspect = cssW / cssH;
     camera.updateProjectionMatrix();
@@ -437,7 +460,9 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     markCapSpot();
     const v = new BodyView(nextId++, body, genome, t, TIERS[tier], hub, quad, owned, chunk);
     v.setCalm(calm);
-    if (pos) v.proxy.setOffset(pos.x, pos.y, pos.z);
+    // (the proxy's centre carries the offset only after a sync: without one the camera, which runs before the views update, framed a body added at an offset as if it stood at the
+    // origin for one frame: a mat re-added after a swap dipped the framing by 2 .. 3% and eased back; VERIFY_RENDER_B measured 0.0314 / frame on the phone)
+    if (pos) { v.proxy.setOffset(pos.x, pos.y, pos.z); v.proxy.sync(0, 0); }
     scene.add(v.group);
     views.push(v);
     if (primaryId === null) { primaryId = v.id; bodyScale = v.scale; if (!director.active && !keepFraming) camScale = bodyScale; }
@@ -617,12 +642,9 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
 
     matLayout(n) {
       const k = Math.max(1, Math.min(5, Math.floor(Number.isFinite(n) ? n : 1))), s = bodyScale, out: V3[] = [];
-      const portrait = camera.aspect < 0.9;
-      // [x, z] in body-scale units: neighbours ~1.2 apart (a body is ~1 wide), back rows behind front ones on a narrow frame
-      const L: number[] = portrait
-        ? [[0, 0], [-0.4, 0.55, 0.45, -0.75], [-0.55, -1.0, 0.55, -1.0, 0, 0.7], [-0.55, -1.15, 0.55, -1.15, -0.55, 0.8, 0.55, 0.8], [-0.58, -1.7, 0.58, -1.7, 0, -0.35, -0.58, 1.05, 0.58, 1.05]][k - 1]
-        : [[0, 0], [-0.64, 0, 0.64, 0], [-1.25, 0, 0, 0, 1.25, 0], [-0.66, -0.7, 0.66, -0.7, -0.66, 0.5, 0.66, 0.5], [-1.3, -0.85, 0, -0.85, 1.3, -0.85, -0.68, 0.55, 0.68, 0.55]][k - 1];
-      for (let i = 0; i < L.length; i += 2) out.push({ x: L[i] * s, y: 0, z: L[i + 1] * s });
+      // the first k slots of the frame's slot list (MAT_SLOTS_*): NESTED, so growing the mat never moves a body that is already out
+      const slots = camera.aspect < 0.9 ? MAT_SLOTS_TALL : MAT_SLOTS_WIDE;
+      for (let i = 0; i < k; i++) out.push({ x: slots[i][0] * s, y: 0, z: slots[i][1] * s });
       return out;
     },
 
@@ -781,7 +803,11 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     },
 
     resize(width, height, devicePixelRatio) {
-      const w = Math.max(1, Math.floor(width)), h = Math.max(1, Math.floor(height));
+      // a size that is not a number (NaN / Infinity) says nothing about the frame: ignored (it used to leave camScale NaN for good, VERIFY_RENDER_A R-A3);
+      // 0 and 1 px (a hidden iframe reports 0; a 1 px canvas) are held at MIN_FRAME_PX: three's offscreen targets (transmission, crossfade) are the drawing buffer x a
+      // scale, and a zero-sized one logs GL_INVALID_FRAMEBUFFER_OPERATION on every draw
+      if (!Number.isFinite(width) || !Number.isFinite(height)) return;
+      const w = Math.max(MIN_FRAME_PX, Math.floor(width)), h = Math.max(MIN_FRAME_PX, Math.floor(height));
       if (sized && (w !== cssW || h !== cssH)) markCapSpot();   // (turned or resized: a waiting capsule is re-placed for the new frame)
       cssW = w; cssH = h; sized = true;
       dpr = Number.isFinite(devicePixelRatio) && devicePixelRatio > 0 ? devicePixelRatio : 1;

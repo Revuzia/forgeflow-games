@@ -19,6 +19,8 @@ import { RarityFx, TIER_STYLES, type TierStyle } from './rarity.ts';
 import { TackStrands } from './strands.ts';
 
 type TipSphere = { x: number; y: number; z: number; r: number; depth: number };
+/** Calm effects: the cut seam's strength on top of the stage's calm halving (see update). */
+const CALM_SEAM = 0.45;
 
 export class BodyView {
   readonly id: number;
@@ -43,6 +45,11 @@ export class BodyView {
   decals: Decals;
   rarity: RarityFx;
   readonly fp: Footprint = { cx: 0, cz: 0, rx: 0.5, rz: 0.5, lowY: 0, compression: 0, stretch: 0 };
+  /**
+   * World half-width the frame shows at this body's depth (along the camera's right axis) minus where the body stands in it: how far its table light (pool, shock ring)
+   * and its tier's aura and dome may reach before they leave the frame's sides. Infinity until the first frame with a camera.
+   */
+  frameRoom = Infinity;
   /** Extra pool light (capsule tell, merge charge) 0..1 added by the ceremonies. */
   extraPool = 0;
   /** 0..1: how far that extra pool light leans toward the TIER colour (a ceremony burst lights the table in the tell, not the body's own pool hue). */
@@ -189,14 +196,23 @@ export class BodyView {
     fp.cx = (j.minX + j.maxX) * 0.5; fp.cz = (j.minZ + j.maxZ) * 0.5;
     fp.rx = (j.maxX - j.minX) * 0.5; fp.rz = (j.maxZ - j.minZ) * 0.5;
     fp.lowY = j.minY; fp.compression = this.smComp; fp.stretch = this.smStretch;
+    if (camera) {
+      const e = camera.matrixWorld.elements, cc = body.center, ox = cc.x - camera.position.x, oy = cc.y - camera.position.y, oz = cc.z - camera.position.z;
+      const depth = Math.max(0.5, -(ox * e[8] + oy * e[9] + oz * e[10]));   // along the view axis (the camera looks down its -z)
+      this.frameRoom = Math.max(0.2, depth * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect - Math.abs(ox * e[0] + oy * e[1] + oz * e[2]));
+    }
+    fp.room = this.frameRoom;
     this.fx.setFootprint(Math.max(fp.rx, fp.rz));
+    this.fx.setFrameRoom(this.frameRoom);
     this.face.group.visible = this.proxy.foldAmount < 0.4 && !this.faceHidden;   // eyes disappear into the ball while it folds
     // the happy squint is the RELEASE expression: while a finger or a grab still holds the body, a wobble of the squeeze (negative rate)
     // must not trigger it, the eyes stay wide (CONTRACT 7: widen when squeezed, squint into happy arcs on release)
     const rate = Math.min(this.sqRate, m.compressionRate);
     if (!this.chunk) this.face.update(dt, time, pointer, camera, this.smComp, m.fingers > 0 || m.grabbed ? Math.max(0, rate) : rate);
     // CUT seam: eased in (~0.1 s) and out (~0.2 s): a glow, never a step
-    const sk = this.seamTarget * this.glowK;
+    // (calm: the stage's glowK halves every cut light, and the seam takes a further x0.45: the jelly shader's seam term saturates (tone mapped), so a plain half of a
+    // glow that was already clipped to white read exactly as bright as the full one, VERIFY_RENDER_B B-m3)
+    const sk = this.seamTarget * this.glowK * (this.calm ? CALM_SEAM : 1);
     this.seamAmt += (sk - this.seamAmt) * (1 - Math.exp(-dt * (sk > this.seamAmt ? 10 : 5)));
     if (this.seamAmt < 1e-3 && sk <= 0) this.seamAmt = 0;
     const off = this.proxy.offset, su = u.uSeam.value;
@@ -223,7 +239,7 @@ export class BodyView {
       this.fx.spawn('bubbles', this.snapAt, 0);
     }
     if (camera) this.rarity.frameFit = Math.min(1, Math.max(0.72, camera.aspect / 0.75));
-    this.rarity.update(dt, time, body, fp.rx, fp.rz, floatT);
+    this.rarity.update(dt, time, body, fp.rx, fp.rz, floatT, this.frameRoom);
   }
 
   private readonly snapAt = { x: 0, y: 0, z: 0 };
@@ -231,7 +247,7 @@ export class BodyView {
   /** CUT seam (stage.setCutSeam): the plane in the body's world space, t 0..1 (0 or a null plane: the glow eases out). */
   setSeam(plane: { point: V3; normal: V3 } | null, t: number): void {
     const n = plane?.normal, p = plane?.point;
-    const l = n ? Math.hypot(n.x, n.y, n.z) : 0;
+    const l = n ? Math.sqrt(n.x * n.x + n.y * n.y + n.z * n.z) : 0;
     if (!n || !p || !(l > 1e-6) || !Number.isFinite(l) || !Number.isFinite(p.x + p.y + p.z) || !(t > 0)) { this.seamTarget = 0; return; }
     this.seamN.set(n.x / l, n.y / l, n.z / l);
     this.seamD = this.seamN.x * p.x + this.seamN.y * p.y + this.seamN.z * p.z;

@@ -175,6 +175,56 @@ function resetCer(kind: string, tier: TierName, duration: number): void {
 
 /** What the capsule-spot checks measure on stage `s` (a W x H frame): the standing capsule's box and the bodies' union box in CSS px, their overlap area, its size and table z. */
 interface CapReport { landed: boolean; hit: boolean; cap: number[] | null; body: number[]; ov: number; size: number; z: number; x: number; W: number; H: number }
+/**
+ * Screen silhouettes of the stage's visible body views (their skin triangles, projected; no tier FX, no decals) and how much each pair overlaps:
+ * |A and B| / min(|A|, |B|), i.e. the share of the smaller body's own pixels that the other body's outline covers. (B-M1: a 4-body mat hid one squishy
+ * behind another; nothing measured it.) `half` = mask resolution (1 = css px, 2 = half).
+ */
+function silhouetteOverlaps(views: readonly { proxy: { positions: Float32Array; indices: Uint32Array; center: V3 } }[], half = 2): { areas: number[]; pairs: [number, number, number][]; max: number; boxes: number[][]; faceCovered: number[]; maxFaceCovered: number } {
+  const W = Math.max(1, Math.round((canvas.clientWidth || canvas.width) / half)), H = Math.max(1, Math.round((canvas.clientHeight || canvas.height) / half));
+  const c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d', { willReadFrequently: true });
+  const cam = stage.camera; cam.updateMatrixWorld();
+  const pv = new THREE.Vector3(), masks: Uint8Array[] = [], areas: number[] = [], boxes: number[][] = [];
+  if (!g) return { areas, pairs: [], max: 0, boxes, faceCovered: [], maxFaceCovered: 0 };
+  for (const v of views) {
+    const P = v.proxy.positions, I = v.proxy.indices, sx = new Float32Array(P.length / 3), sy = new Float32Array(P.length / 3);
+    let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+    for (let i = 0, k = 0; i < P.length; i += 3, k++) {
+      pv.set(P[i], P[i + 1], P[i + 2]).project(cam);
+      sx[k] = (pv.x * 0.5 + 0.5) * W; sy[k] = (1 - (pv.y * 0.5 + 0.5)) * H;
+      x0 = Math.min(x0, sx[k]); x1 = Math.max(x1, sx[k]); y0 = Math.min(y0, sy[k]); y1 = Math.max(y1, sy[k]);
+    }
+    boxes.push([x0 * half, y0 * half, x1 * half, y1 * half]);
+    g.clearRect(0, 0, W, H); g.fillStyle = '#000';
+    for (let t = 0; t < I.length; t += 3) { g.beginPath(); g.moveTo(sx[I[t]], sy[I[t]]); g.lineTo(sx[I[t + 1]], sy[I[t + 1]]); g.lineTo(sx[I[t + 2]], sy[I[t + 2]]); g.closePath(); g.fill(); }
+    const d = g.getImageData(0, 0, W, H).data, m = new Uint8Array(W * H); let a = 0;
+    for (let p = 0; p < W * H; p++) if (d[p * 4 + 3] > 127) { m[p] = 1; a++; }
+    masks.push(m); areas.push(a);
+  }
+  const pairs: [number, number, number][] = []; let max = 0;
+  for (let a = 0; a < masks.length; a++) for (let b = a + 1; b < masks.length; b++) {
+    let n = 0; const A = masks[a], B = masks[b];
+    for (let p = 0; p < A.length; p++) if (A[p] && B[p]) n++;
+    const f = n / Math.max(1, Math.min(areas[a], areas[b]));
+    pairs.push([a, b, +f.toFixed(3)]); if (f > max) max = f;
+  }
+  // the FACE band of each body (the upper 55% of its outline: where the eyes sit) and how much of it a NEARER body covers: a back body that stands higher on the screen than the
+  // one in front keeps its face even where the outlines overlap a lot; one standing right behind another loses it
+  const cp = cam.position, dist = views.map((v) => (v.proxy.center.x - cp.x) ** 2 + (v.proxy.center.y - cp.y) ** 2 + (v.proxy.center.z - cp.z) ** 2);
+  const faceCovered: number[] = []; let maxFaceCovered = 0;
+  for (let a = 0; a < masks.length; a++) {
+    const y0 = boxes[a][1] / half, y1 = boxes[a][3] / half, yCut = y0 + 0.55 * (y1 - y0), A = masks[a];
+    let band = 0, hit = 0;
+    for (let p = 0; p < A.length; p++) {
+      if (!A[p] || Math.floor(p / W) > yCut) continue;
+      band++;
+      for (let b = 0; b < masks.length; b++) if (b !== a && dist[b] < dist[a] && masks[b][p]) { hit++; break; }
+    }
+    const f = band ? hit / band : 0; faceCovered.push(+f.toFixed(3)); if (f > maxFaceCovered) maxFaceCovered = f;
+  }
+  return { areas, pairs, max, boxes, faceCovered, maxFaceCovered };
+}
 function capReport(s: StageDev, hd: CapsuleHandle, W: number, H: number): CapReport {
   const cam = s.camera, P = new THREE.Vector3();
   let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
@@ -459,6 +509,22 @@ const RV = {
   setQuality(q: QualityTier | 'auto'): void { stage.setQuality(q); },
   setPointer(x: number | null, y = 0): void { pointer = x === null ? null : { x, y }; },
   resize(w: number, h: number, dpr: number): void { stage.resize(w, h, dpr); },
+  /**
+   * VERIFY_RENDER_A R-A3: sizes a real shell can hand the stage (0 from a hidden iframe, 1 px, a negative, NaN / Infinity from a broken layout read), each followed by two frames and by
+   * a return to the real size: nothing throws, the camera framing stays a finite number, the stage draws a normal frame again. The caller counts the console's GL errors around it.
+   */
+  degenerateResize(w0: number, h0: number): { threw: string[]; finite: boolean; camScale: number; lumAfter: number; tried: number } {
+    const threw: string[] = []; let finite = true, tried = 0;
+    for (const [w, h, d] of [[0, 0, 1], [1, 1, 1], [w0, 0, 1], [0, h0, 1], [-5, h0, 1], [Number.NaN, 100, 1], [100, Number.NaN, 1], [Number.POSITIVE_INFINITY, h0, 1], [w0, h0, 0], [w0, h0, Number.NaN], [3, 3, 0.5]] as [number, number, number][]) {
+      tried++;
+      try { stage.resize(w, h, d); frame(1 / 30); frame(1 / 30); } catch (e) { threw.push(`${w}x${h}@${d}: ${String(e)}`); }
+      if (!Number.isFinite(stage.info.camScale)) finite = false;
+    }
+    stage.resize(w0, h0, 1);
+    for (let i = 0; i < 30; i++) frame(1 / 30);
+    if (!Number.isFinite(stage.info.camScale)) finite = false;
+    return { threw, finite, camScale: stage.info.camScale, lumAfter: meanLuma(), tried };
+  },
 
   /** Finger down at an NDC point on the body, then ramp the pressure over `ramp` seconds (advance with frames()). */
   press(nx: number, ny: number, target = 0.8, ramp = 0.9): boolean {
@@ -496,6 +562,8 @@ const RV = {
   orbit(dYaw: number, dPitch: number): void { stage.orbit(dYaw, dPitch); },
   zoom(d: number): void { stage.zoom(d); },
 
+  /** The real soft body class when it loaded (null: the dev stub is in use). */
+  get RealBody(): SoftBodyCtor | null { return RealBody; },
   /** Canvas sanity numbers from the CURRENT frame (render() then read in the same task). */
   canvasStats(): ReturnType<typeof frameStats> { stage.render(); return frameStats(); },
 
@@ -797,7 +865,7 @@ const RV = {
     return { family: fam, maxStrands, strandFrames, tensionEvents, snapEvents, maxLen: 0, png };
   },
   /** Stage B1: n bodies out on the mat at stage.matLayout(n); their silhouettes on screen once the camera has framed them. */
-  matProbe(n: number, seeds: string[]): { boxes: number[][]; inFrame: boolean; minGapPx: number; png: string; bodies: number } {
+  matProbe(n: number, seeds: string[]): { boxes: number[][]; inFrame: boolean; minGapPx: number; png: string; bodies: number; /** worst share of the smaller body's pixels another body's outline covers */ maxPairOverlap: number; pairs: [number, number, number][]; /** worst share of a body's FACE band (upper 55% of its outline) that a nearer body covers */ maxFaceCovered: number } {
     stage.clearBodies();
     const pos = stage.matLayout(n);
     const all: SoftBodyLike[] = [];
@@ -830,7 +898,56 @@ const RV = {
       const A = boxes[a], B = boxes[b];
       minGap = Math.min(minGap, Math.hypot((A[0] + A[2]) / 2 - (B[0] + B[2]) / 2, (A[1] + A[3]) / 2 - (B[1] + B[3]) / 2));
     }
-    return { boxes, inFrame, minGapPx: minGap, png: RV.snapshot(), bodies: stage.views.length };
+    const ov = silhouetteOverlaps(stage.views);
+    return { boxes, inFrame, minGapPx: minGap, png: RV.snapshot(), bodies: stage.views.length, maxPairOverlap: ov.max, pairs: ov.pairs, maxFaceCovered: ov.maxFaceCovered };
+  },
+  /**
+   * B-M1: the mat built the way src/shell/mat.ts + bodies.ts build it WITH body-to-body contact (the real soft body offers collide): the play body at the origin,
+   * then each squishy brought out one at a time, built in the play body's world space at layout(k+1)[k] - layout(k+1)[0] (an extra that stands in shared space
+   * KEEPS the spot it was given: bodies.placeExtras moves only the apart ones), collide() once per frame before any step. So a body's final spot is the one the
+   * layout gave it when it came out, not a row of the final layout: stage.matLayout(n) has to be NESTED (growing the mat never moves a body that is out) and clean at
+   * every n. `layout` overrides stage.matLayout(n) with absolute offsets (flat [x, z, x, z ...]) per n, for layout experiments. Returns the pair overlaps of the
+   * silhouettes (the share of the smaller body's pixels the other body's outline covers), the boxes, the frame fit and a screenshot.
+   */
+  matSharedProbe(o: { species: string[]; layout?: Record<number, number[]>; settle?: number; shot?: boolean; /** false: every extra at the FINAL layout's spot (the first verifier's build; the shell cannot produce it) */ incremental?: boolean }): {
+    skipped: boolean; n: number; pairs: [number, number, number][]; maxPairOverlap: number; faceCovered: number[]; maxFaceCovered: number; areas: number[]; boxes: number[][]; inFrame: boolean; centres: number[][]; slots: number[][]; camScale: number; png: string | null;
+  } {
+    const out = { skipped: false, n: o.species.length, pairs: [] as [number, number, number][], maxPairOverlap: 0, faceCovered: [] as number[], maxFaceCovered: 0, areas: [] as number[], boxes: [] as number[][], inFrame: true, centres: [] as number[][], slots: [] as number[][], camScale: 1, png: null as string | null };
+    const SB = RealBody;
+    if (!SB) { out.skipped = true; return out; }
+    const layoutFor = (n: number): V3[] => {
+      const f = o.layout?.[n];
+      return f ? Array.from({ length: f.length / 2 }, (_, i) => ({ x: f[i * 2], y: 0, z: f[i * 2 + 1] })) : stage.matLayout(n);
+    };
+    stage.clearBodies();
+    const sp = (id: string): Genome => speciesBaseGenome(id as Parameters<typeof speciesBaseGenome>[0], 1), g0 = sp(o.species[0]), play = new SB(g0);
+    stage.setBody(play, g0); stage.setBodyTier(stage.primaryBodyId() ?? -1, getSpecies(o.species[0])?.tier ?? 'common');
+    body = play; genome = g0;
+    const bodies: SoftBodyLike[] = [play];
+    out.slots.push([0, 0]);
+    for (let k = 1; k < o.species.length; k++) {
+      const L = layoutFor(o.incremental === false ? o.species.length : k + 1), at = { x: L[k].x - L[0].x, y: 0, z: L[k].z - L[0].z }, g = sp(o.species[k]);
+      const b = new SB(g, { piece: { frac: 1, chunk: false, at } });
+      stage.addBody(b, g, { tier: getSpecies(o.species[k])?.tier ?? 'common', position: { x: 0, y: 0, z: 0 } });
+      bodies.push(b); out.slots.push([at.x, at.z]);
+    }
+    const step = (): void => {
+      for (const b of bodies) b.collide?.(bodies.filter((x) => x !== b));
+      for (const b of bodies) { b.step(1 / 60); events.length = 0; b.drainEvents(events); }
+      time += 1 / 60; frameNo++;
+      stage.update(1 / 60, { time, pointerNdc: null });
+    };
+    for (let i = 0; i < (o.settle ?? 300); i++) step();
+    stage.render();
+    const ov = silhouetteOverlaps(stage.views);
+    out.pairs = ov.pairs; out.maxPairOverlap = ov.max; out.faceCovered = ov.faceCovered; out.maxFaceCovered = ov.maxFaceCovered; out.areas = ov.areas; out.boxes = ov.boxes;
+    const W = canvas.clientWidth || canvas.width, H = canvas.clientHeight || canvas.height;
+    out.inFrame = ov.boxes.every((q) => q[0] >= 0 && q[1] >= 0 && q[2] <= W && q[3] <= H);
+    out.centres = bodies.map((b) => [+b.center.x.toFixed(2), +b.center.z.toFixed(2)]);
+    out.camScale = stage.info.camScale;
+    if (o.shot) out.png = RV.snapshot();
+    stage.clearBodies(); setupBody(genomeFromParam(''));
+    return out;
   },
 
   /**
@@ -1419,6 +1536,145 @@ const RV = {
     }
     if (h.resultBody) body = h.resultBody;
     return { minMarginPx: Number.isFinite(minM) ? minM : 1e9, atFrame: at, rx };
+  },
+
+  /**
+   * VERIFY_RENDER_B B-m8: the colour of a species at the med tier and at the low tier, the same frozen pose (the tier FX, the decals and the strands hidden): the mean RGB (0..255) over the
+   * body's pixels (where the med frame differs from the empty scene) in each. The phone runs 'low', the desktop 'med': the same toy must read as the same colour.
+   */
+  lowMedColour(g: Genome, tier: TierName): { med: number[]; low: number[]; n: number } {
+    stage.setCalmEffects(false); stage.setQuality('med');
+    RV.showTier(tier, g); RV.frames(120);
+    const parts: [THREE.Object3D, boolean][] = [];
+    for (const v of stage.views) for (const o of [v.fx.group, v.decals.shadow, v.decals.pool, v.rarity.group, v.strands.group] as THREE.Object3D[]) { parts.push([o, o.visible]); o.visible = false; }
+    const W = canvas.width, H = canvas.height, c2 = document.createElement('canvas'); c2.width = W; c2.height = H;
+    const x2 = c2.getContext('2d', { willReadFrequently: true });
+    const grab = (q: QualityTier): Uint8ClampedArray => {
+      stage.setQuality(q); stage.update(0, { time: 50, pointerNdc: null }); stage.render();
+      if (!x2) return new Uint8ClampedArray(0);
+      x2.fillStyle = '#14102a'; x2.fillRect(0, 0, W, H); x2.drawImage(canvas, 0, 0); return x2.getImageData(0, 0, W, H).data;
+    };
+    const M = grab('med'), Lw = grab('low');
+    const vv: [{ group: THREE.Object3D }, boolean][] = stage.views.map((v) => [v, v.group.visible]);
+    for (const [v] of vv) v.group.visible = false;
+    const E = grab('med');
+    for (const [v, was] of vv) v.group.visible = was;
+    for (const [o, was] of parts) o.visible = was;
+    stage.setQuality('med');
+    let n = 0; const mr = [0, 0, 0], lr = [0, 0, 0];
+    for (let i = 0; i < M.length; i += 4) {
+      if (Math.abs(M[i] - E[i]) + Math.abs(M[i + 1] - E[i + 1]) + Math.abs(M[i + 2] - E[i + 2]) < 60) continue;
+      n++; for (let k = 0; k < 3; k++) { mr[k] += M[i + k]; lr[k] += Lw[i + k]; }
+    }
+    return { med: mr.map((x) => x / Math.max(1, n)), low: lr.map((x) => x / Math.max(1, n)), n };
+  },
+
+  /**
+   * VERIFY_RENDER_B B-m3: how much light the cut SEAM adds to the picture, normal against calm. The real body, the neck held at t = 0.7 across the body's middle (a plane through the
+   * camera and the body's vertical axis), the seam glow on, then released with the neck still held; the mean luminance (0..255) of the seam's band (29 px wide, 80 px tall) with the glow
+   * minus without it. The jelly shader's seam term saturates, so the calm version used to read as bright as the normal one (+57.0 against +63.2 on the dollop).
+   */
+  seamGlow(g: Genome, tier: TierName, calm: boolean): { adds: number; skipped: boolean } {
+    const SB = RealBody;
+    if (!SB) return { adds: 0, skipped: true };
+    stage.clearBodies(); stage.setCalmEffects(calm);
+    const b = new SB(g); stage.setBody(b, g); stage.setBodyTier(stage.primaryBodyId() ?? -1, tier); body = b; genome = g;
+    const id = stage.primaryBodyId() ?? -1;
+    const step = (): void => { b.step(1 / 60); time += 1 / 60; frameNo++; stage.update(1 / 60, { time, pointerNdc: null }); };
+    for (let i = 0; i < 150; i++) step();
+    const cam = stage.camera; cam.updateMatrixWorld();
+    const P = new THREE.Vector3(b.center.x, b.center.y, b.center.z).project(cam);
+    const ray = (nx: number, ny: number): THREE.Vector3 => new THREE.Vector3(nx, ny, 0.5).unproject(cam).sub(cam.position).normalize();
+    const n = new THREE.Vector3().crossVectors(ray(P.x, P.y + 0.5), ray(P.x, P.y - 0.5)).normalize();
+    const plane: CutPlane = { point: { x: cam.position.x, y: cam.position.y, z: cam.position.z }, normal: { x: n.x, y: n.y, z: n.z } };
+    const c2 = document.createElement('canvas'); c2.width = canvas.width; c2.height = canvas.height;
+    const x2 = c2.getContext('2d', { willReadFrequently: true });
+    const grab = (): Uint8ClampedArray => { stage.render(); if (!x2) return new Uint8ClampedArray(0); x2.drawImage(canvas, 0, 0); return x2.getImageData(0, 0, c2.width, c2.height).data; };
+    for (let i = 0; i < 40; i++) { const t = Math.min(0.7, (i / 20) * 0.7); b.setNeck?.(plane, t); stage.setCutSeam?.(id, plane, t); step(); }
+    for (let i = 0; i < 30; i++) { b.setNeck?.(plane, 0.7); stage.setCutSeam?.(id, plane, 0.7); step(); }
+    const on = grab();
+    for (let i = 0; i < 40; i++) { b.setNeck?.(plane, 0.7); stage.setCutSeam?.(id, null, 0); step(); }
+    const off = grab();
+    P.set(b.center.x, b.center.y, b.center.z).project(cam);
+    const w = c2.width, cx = Math.round((P.x * 0.5 + 0.5) * w), cy = Math.round((1 - (P.y * 0.5 + 0.5)) * c2.height);
+    const L = (d: Uint8ClampedArray, i: number): number => 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+    let s = 0, nn = 0;
+    for (let y = cy - 40; y < cy + 40; y++) for (let x = cx - 14; x <= cx + 14; x++) { const i = (y * w + x) * 4; s += L(on, i) - L(off, i); nn++; }
+    stage.setCalmEffects(false); stage.clearBodies(); setupBody(genomeFromParam(''));
+    return { adds: s / Math.max(1, nn), skipped: false };
+  },
+
+  /**
+   * VERIFY_RENDER_B B-m1: where the WAITING capsule stands against the Mythic prism dome of the play body, on the table (world units): the distance between the capsule's centre
+   * and the dome's axis minus the dome's radius minus the capsule's radius (>= 0: the capsule stands outside the dome; < 0: inside it by that much).
+   */
+  capDomeGap(seedOrGenome: string | number | Genome): { gap: number; domeR: number; capSize: number; landed: boolean } {
+    stage.setCalmEffects(false); stage.clearBodies(); RV.showTier('mythic', seedOrGenome); RV.frames(100, 1 / 60);
+    RV.dropCapsule(); RV.camTrace(150, 1 / 60); RV.frames(1, 1 / 60);
+    const cap = stage.info.cap, info = RV.capsuleInfo(), v = stage.views[0], wp = new THREE.Vector3(), ws = new THREE.Vector3();
+    let domeR = 0, gap = Infinity;
+    if (cap) v.group.traverse((o) => {
+      if (o.renderOrder !== 26 || !(o as THREE.Mesh).isMesh) return;
+      o.updateWorldMatrix(true, false); wp.setFromMatrixPosition(o.matrixWorld); o.getWorldScale(ws);
+      domeR = ws.x; gap = Math.hypot(cap.x - wp.x, cap.z - wp.z) - ws.x - 0.24 * cap.size;
+    });
+    return { gap, domeR, capSize: cap?.size ?? 0, landed: info.landed };
+  },
+
+  /**
+   * VERIFY_RENDER_B B-m7: does the WAITING capsule keep its frosted fill beside a Rare-or-better body? Mean luminance (0..255) of the capsule's own box (its centre 90% x 200%
+   * of the tap radius) with the whole scene, and with the play body's tier FX group (the aura quad, motes, dome ...) hidden. At quality med / high the fill is the capsule's own
+   * back faces seen through its front glass; the halo quads in the opaque list used to leave alpha 2 in the transmission target and the fill read as clear (61.7 against 100.1).
+   */
+  capsuleFill(tier: TierName, seedOrGenome: string | number | Genome = '16'): { all: number; noGroup: number; hit: boolean } {
+    stage.setCalmEffects(false); stage.clearBodies(); RV.showTier(tier, seedOrGenome); RV.frames(100, 1 / 60);
+    RV.dropCapsule(); RV.frames(150, 1 / 60);
+    const info = RV.capsuleInfo(), p = info.point;
+    if (!p) return { all: 0, noGroup: 0, hit: false };
+    const W = canvas.width, H = canvas.height, k = W / (canvas.clientWidth || W);
+    const c2 = document.createElement('canvas'); c2.width = W; c2.height = H;
+    const x2 = c2.getContext('2d', { willReadFrequently: true });
+    const luma = (): number => {
+      stage.render(); if (!x2) return 0;
+      x2.fillStyle = '#14102a'; x2.fillRect(0, 0, W, H); x2.drawImage(canvas, 0, 0);
+      const x0 = Math.max(0, Math.round((p.x - 0.45 * p.r) * k)), y0 = Math.max(0, Math.round((p.y - p.r) * k)), w = Math.max(1, Math.round(0.9 * p.r * k)), h = Math.max(1, Math.round(2 * p.r * k));
+      const d = x2.getImageData(x0, y0, Math.min(w, W - x0), Math.min(h, H - y0)).data;
+      let s = 0, n = 0; for (let i = 0; i < d.length; i += 4) { s += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; n++; }
+      return n ? s / n : 0;
+    };
+    const all = luma();
+    const v = stage.views[0], was = v.rarity.group.visible; v.rarity.group.visible = false;
+    const noGroup = luma(); v.rarity.group.visible = was;
+    return { all, noGroup, hit: info.hit };
+  },
+
+  /**
+   * VERIFY_RENDER_A R-A7: how much of a ceremony's TABLE LIGHT reaches the frame's sides. Every 2nd frame of the whole ceremony: render, hide the pool decal and the Fx group (the shock
+   * rings, puffs) of every view and the Mythic dome / Legendary pillar of the run, render again, and take the mean over the 3 outermost columns of each side (every row) of the largest
+   * channel difference, 0..255. Returns the worst frame. (The idle halos are haloEdge's; the screen-light ramp is uniform over the frame and not part of this.)
+   */
+  burstEdge(kind: 'merge' | 'capsule', tier: TierName): { worst: number; atFrame: number; frames: number } {
+    stage.clearBodies(); setupBody(genomeFromParam('')); stage.setCalmEffects(false); RV.frames(40, 1 / 30);
+    if (kind === 'merge') RV.merge(tier, 2, false); else RV.capsuleReveal(tier);
+    const h = cer.handle as CeremonyHandle, cw = canvas.width, ch = canvas.height;
+    const c2 = document.createElement('canvas'); c2.width = cw; c2.height = ch;
+    const x2 = c2.getContext('2d', { willReadFrequently: true });
+    const strips = (): Uint8ClampedArray[] => { stage.render(); if (!x2) return [new Uint8ClampedArray(0), new Uint8ClampedArray(0)]; x2.drawImage(canvas, 0, 0); return [x2.getImageData(0, 0, 3, ch).data, x2.getImageData(cw - 3, 0, 3, ch).data]; };
+    let worst = 0, at = -1, frames = 0;
+    for (let f = 0; f < 800 && h.active; f++) {
+      frame(1 / 30, false);
+      if (f % 2) continue;
+      const A = strips(), hid: [THREE.Object3D, boolean][] = [];
+      for (const v of stage.views) for (const o of [v.decals.pool, v.fx.group] as THREE.Object3D[]) { hid.push([o, o.visible]); o.visible = false; }
+      for (const o of stage.scene.children) if ((o as THREE.Mesh).isMesh && o.visible && ['SphereGeometry', 'CylinderGeometry'].includes((o as THREE.Mesh).geometry.type)) { hid.push([o, o.visible]); o.visible = false; }
+      const B = strips();
+      for (const [o, vis] of hid) o.visible = vis;
+      let m = 0;
+      for (let s = 0; s < 2; s++) { let sum = 0, n = 0; for (let i = 0; i < A[s].length; i += 4) { sum += Math.max(Math.abs(A[s][i] - B[s][i]), Math.abs(A[s][i + 1] - B[s][i + 1]), Math.abs(A[s][i + 2] - B[s][i + 2])); n++; } m = Math.max(m, n ? sum / n : 0); }
+      frames++; if (m > worst) { worst = m; at = f; }
+    }
+    if (h.resultBody) body = h.resultBody;
+    return { worst, atFrame: at, frames };
   },
 
   /**

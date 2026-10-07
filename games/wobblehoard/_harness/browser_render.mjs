@@ -40,6 +40,7 @@ const flag = (name, dflt) => { const a = args.find((x) => x.startsWith(`--${name
 const BODY = flag('body', 'auto');
 const QUICK = !!flag('quick', false);
 const NO_PERF = QUICK || !!flag('no-perf', false);
+// --only=fix1 runs just the checks added in render fix round 1 (VERIFY_RENDER_A / B): garbage per frame, degenerate resize, phone halos of every species and the burst's side light, the 4-mat, the capsule's fill and its place against the Mythic dome, the calm seam.
 // --only=a,b,...: run only these sections (iteration; the default runs everything). Sections: main, phone, sky, lifecycle, r2 (governor,
 // multi-body API, 3-body leak, capsule drop / ownership), cer (every ceremony: budget, beats, flash, escalation; skip; calm; tier-up,
 // 3 parents, drivers, done), chains, rarity, film, gallery, glow, strands, mat, capspot, cut, bundle (vite build + grep: no dev stage member in
@@ -357,6 +358,49 @@ try {
     check(gov.hi === 'high' && gov.lo === 'low' && gov.md === 'med' && gov.std > 8, 'explicit tiers are honoured, and switching mid-session keeps rendering', `${gov.hi}/${gov.lo}/${gov.md}`);
     report.problems.push(...abad);
     await actx.close();
+  }
+
+  /* ───────────────────────── render fix round 1 (VERIFY_RENDER_A / B): short-lived garbage, degenerate frame sizes ───────────────────────── */
+  if (ON('lifecycle') || ON('fix1') || ON('fix1a')) {
+    const gctx = await browser.newContext({ viewport: { width: 320, height: 240 }, deviceScaleFactor: 1 });
+    const { page: gp, bad: gbad } = await openView(gctx, `quality=low&body=${BODY === 'auto' ? '' : BODY}`, 'garbage');
+    // SHORT-LIVED garbage (VERIFY_RENDER_A R-A5): the check above forces a GC before and after, so it cannot see what is allocated and collected in between (relaxNormals'
+    // Math.hypot boxed its arguments: ~266 KB per body per frame, 99% of all render garbage, and that check passed with it). V8's sampling heap profiler (collected objects
+    // included) attributes every allocated byte to the function that allocated it: the bytes allocated by src/render/ code per frame of an idle whole body (update + render)
+    // must stay small. (SwiftShader / three's own allocations are not src/render/ and are not counted.)
+    {
+      const cdp = await gctx.newCDPSession(gp);
+      await cdp.send('HeapProfiler.enable');
+      await gp.evaluate(() => window.__RV__.churn(120, true, false));   // warm the measured path (JIT)
+      await cdp.send('HeapProfiler.startSampling', { samplingInterval: 128, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true });
+      const NF = 150;
+      await gp.evaluate((n) => window.__RV__.churn(n, true, false), NF);
+      const { profile } = await cdp.send('HeapProfiler.stopSampling');
+      let renderB = 0; const by = {};
+      const walk = (n) => { const u = n.callFrame.url || ''; if (u.includes('/src/render/')) { renderB += n.selfSize; const k = `${n.callFrame.functionName || '(anon)'}@${u.split('/').pop()}`; by[k] = (by[k] ?? 0) + n.selfSize; } for (const c of n.children) walk(c); };
+      walk(profile.head);
+      const top = Object.entries(by).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, v]) => `${k} ${(v / NF).toFixed(0)} B`).join(', ');
+      report.perf.renderGarbageBPerFrame = renderB / NF;
+      check(renderB / NF < 16 * 1024, 'src/render/ allocates little GARBAGE per frame (V8 sampling heap profiler incl. collected objects, 150 frames of one idle body with render; the GC-forced check above cannot see short-lived garbage)', `${(renderB / NF / 1024).toFixed(2)} KB/frame from src/render/ (bar 16 KB; HEAD before the Math.hypot / evalSurface fixes: ~222 KB, 99% in jelly.ts); top: ${top}`);
+      await cdp.send('HeapProfiler.disable');
+    }
+    report.problems.push(...gbad);
+    await gctx.close();
+    // degenerate frame sizes (VERIFY_RENDER_A R-A3): a hidden iframe reports 0 (boot.ts: canvas.clientWidth || window.innerWidth), a broken layout read can be NaN: no GL framebuffer errors,
+    // no NaN camera, a normal frame after (it logged 18 GL_INVALID_FRAMEBUFFER_OPERATION for 0 / 1 px and left camScale NaN for good after resize(NaN, 100))
+    {
+      const dctx = await browser.newContext({ viewport: { width: 320, height: 240 }, deviceScaleFactor: 1 });
+      const { page: dp, bad: dbad } = await openView(dctx, `quality=med&body=${BODY === 'auto' ? '' : BODY}`, 'resize-degenerate');
+      const n0 = dbad.length;
+      const dr = await dp.evaluate(() => window.__RV__.degenerateResize(320, 240));
+      await dp.waitForTimeout(300);
+      const gl = dbad.slice(n0);
+      check(dr.threw.length === 0 && dr.finite && dr.lumAfter > 0.01 && gl.length === 0, 'stage.resize with 0 / 1 px, negative, NaN, Infinity or a zero pixel ratio: nothing throws, no GL framebuffer error, the camera framing stays finite and the stage draws normally again at the real size',
+        `${dr.tried} sizes tried, threw ${dr.threw.length}, camScale ${dr.camScale.toFixed(3)} (finite ${dr.finite}), mean luminance after ${dr.lumAfter.toFixed(4)}, GL / console messages ${gl.length}${gl[0] ? ': ' + gl[0].slice(0, 120) : ''}`);
+      report.problems.push(...dbad.slice(0, n0));
+      await dctx.close();
+    }
+
   }
 
   /* ───────────────────────── round 2: multi-body, rarity, ceremonies, flash safety (DESIGN 5.3, 6.x) ───────────────────────── */
@@ -905,11 +949,34 @@ try {
     report.problems.push(...bbad);
     await bctx.close();
     }
+    // ---- render fix round 1: on the 390x844 phone no Rare-or-better species' tier halo (R-A7 / B-m6) and no ceremony's table light reaches the frame's sides ----
+    if (ON('rarity') || ON('fix1')) {
+      const hctx = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+      const { page: hp, bad: hbad } = await openView(hctx, `quality=low&body=${bodyQ}`, 'phone-halo', [/GPU stall due to ReadPixels/i]);
+      const R2 = report.r2 ?? (report.r2 = {});
+      // ... for EVERY Rare-and-better species, not only the starter DOLLOP's size (VERIFY_RENDER_B B-m6: the Mythic dome of skeinara / prismelo, wide bodies, filled the whole frame width: edge 10 .. 24 /255)
+      {
+        const hs = {};
+        for (const d of CATALOG) if (['rare', 'epic', 'legendary', 'mythic'].includes(d.tier)) hs[d.id] = (await hp.evaluate(([tier, g]) => window.__RV__.haloEdge(tier, g), [d.tier, speciesBaseGenome(d.id, 1)])).edge;
+        R2.haloEdgeAll = hs;
+        const worst = Object.entries(hs).sort((a, b) => b[1] - a[1])[0];
+        check(Object.values(hs).every((v) => v <= 0.75), `phone 390x844: no Rare / Epic / Legendary / Mythic species (${Object.keys(hs).length} of them) has its tier halo reach the sides of the frame (edge difference <= 0.75/255; the Mythic dome of skeinara / prismelo was 10 .. 24)`, `worst ${worst[0]} ${worst[1].toFixed(2)}, ${Object.values(hs).filter((v) => v > 0.1).length} species above 0.1`);
+      }
+      // ... nor does a ceremony's table light (the burst's light pool, its shock rings, the Mythic dome, the Legendary pillar) reach them (R-A7: 11 .. 17/255 at the burst peak; the harness only looked at the halos)
+      {
+        const be = {};
+        for (const kind of ['capsule', 'merge']) for (const tier of ['rare', 'epic', 'legendary', 'mythic']) be[`${kind}:${tier}`] = (await hp.evaluate(([k, t]) => window.__RV__.burstEdge(k, t), [kind, tier])).worst;
+        R2.burstEdge = be;
+        check(Object.values(be).every((v) => v <= 1.5), 'phone 390x844: the table light of every Rare..Mythic capsule reveal and merge burst (light pool, shock rings, dome, pillar) stays off the sides of the frame (worst frame, mean over the 3 outer columns of each side, <= 1.5/255; it was 11 .. 17)', Object.entries(be).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(', '));
+      }
+      report.problems.push(...hbad);
+      await hctx.close();
+    }
     // ---- B1 several bodies on the mat, framed: desktop and phone ----
     if (ON('mat')) for (const [label, vp] of [['desktop', { width: 1280, height: 800 }], ['phone', { width: 390, height: 844 }]]) {
       const mctx = await browser.newContext({ viewport: vp, deviceScaleFactor: 1 });
       const { page: mp, bad: mbad } = await openView(mctx, `quality=low&body=${bodyQ}`, `mat-${label}`, [/GPU stall due to ReadPixels/i]);
-      for (const n of [2, 3, 5]) {
+      for (const n of [2, 3, 4, 5]) {
         const r = await mp.evaluate((n) => window.__RV__.matProbe(n, ['', '2', '3', '16', '19']), n);
         writeFileSync(resolve(OUT, `mat_${n}_${label}.png`), b64(r.png));
         const widths = r.boxes.map((q) => q[2] - q[0]).sort((a, b) => a - b), medW = widths[Math.floor(widths.length / 2)];
@@ -920,6 +987,40 @@ try {
       }
       report.problems.push(...mbad);
       await mctx.close();
+    }
+    // ---- B-M1 (VERIFY_RENDER_B): the mat as the SHELL builds it. A 4-body mat (the default quality's limit) put the back row straight behind the front one: up to 94% of one squishy
+    // hidden, the play body itself in the default case; n = 4 was never looked at (this section tested 2 / 3 / 5 and only that the bodies were framed). The shell brings the squishies out
+    // ONE AT A TIME and, with the real soft body's body-to-body contact, a body keeps the spot it was built at (bodies.placeExtras moves only the apart ones): so matLayout must be
+    // NESTED and every step clean. Real physics, shared space, 300 settle frames, 3 species sets (A mixed commons, B Epic..Mythic, C small commons), silhouettes of the real skin:
+    // the worst pair overlap (share of the smaller body's pixels another outline covers) and the worst FACE band (upper 55% of a body) covered by a nearer body. ----
+    if (ON('mat') || ON('fix1')) {
+      const SETS = { A: ['dollop', 'twangle', 'chunkle', 'wisplet', 'kneadle'], B: ['skeinara', 'ambrosel', 'selenuff', 'prismelo', 'glimglop'], C: ['plumpet', 'glugbean', 'crimpo', 'tadpolo', 'boingle'] };
+      const PLAN = [['A', [2, 3, 4, 5]], ['B', [3, 4, 5]], ['C', [4]]];
+      for (const [label, vw, vh, wide] of [['desktop 1280x800', 1280, 800, true], ['phone 390x844', 390, 844, false], ['landscape phone 844x390', 844, 390, true]]) {
+        const sctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
+        const { page: sp3, bad: sbad3 } = await openView(sctx, `quality=low&body=${bodyQ}`, `matshared-${vw}x${vh}`, [/GPU stall due to ReadPixels/i]);
+        const nest = await sp3.evaluate(() => {
+          const st = window.__RV__.stage, L = [1, 2, 3, 4, 5].map((n) => st.matLayout(n)), bad = [];
+          for (let n = 2; n <= 5; n++) for (let k = 1; k < n; k++) { const a = L[n - 1], b = L[k]; if (Math.hypot((a[k].x - a[0].x) - (b[k].x - b[0].x), (a[k].z - a[0].z) - (b[k].z - b[0].z)) > 1e-6) bad.push(`${n}:${k}`); }
+          return { bad, slots: L[4].map((p) => [+p.x.toFixed(2), +p.z.toFixed(2)]) };
+        });
+        check(nest.bad.length === 0, `mat layout (${label}) is NESTED: matLayout(n) is the first n slots of matLayout(n + 1), relative to the first (a mat built one squishy at a time never moves a body that is out)`, `slots ${JSON.stringify(nest.slots)}${nest.bad.length ? ' BROKEN at n:k ' + nest.bad.join(',') : ''}`);
+        const real = await sp3.evaluate(() => !!window.__RV__.RealBody);
+        if (!real) { check(true, `mat as the shell builds it (${label}): skipped (no real soft body)`, ''); await sctx.close(); continue; }
+        const rows = [];
+        for (const [set, ns] of PLAN) for (const n of ns) {
+          const r = await sp3.evaluate((sp) => window.__RV__.matSharedProbe({ species: sp, settle: 300, shot: false }), SETS[set].slice(0, n));
+          rows.push({ set, n, pair: r.maxPairOverlap, face: r.maxFaceCovered, inFrame: r.inFrame, camScale: r.camScale, widths: r.boxes.map((q) => Math.round(q[2] - q[0])) });
+        }
+        const pairBar = wide ? 0.10 : 0.35, faceBar = wide ? 0.10 : 0.25;
+        const worstP = Math.max(...rows.map((x) => x.pair)), worstF = Math.max(...rows.map((x) => x.face));
+        RB.mat[`shared:${vw}x${vh}`] = rows;
+        check(rows.every((x) => x.pair <= pairBar && x.face <= faceBar && x.inFrame),
+          `mat as the SHELL builds it (${label}, real physics, shared space, one body at a time, species sets A/B/C, n = 2..5): no squishy is hidden behind another (worst pair overlap <= ${pairBar}, worst face band covered by a nearer body <= ${faceBar}), all inside the frame`,
+          `worst pair ${worstP.toFixed(2)}, worst face ${worstF.toFixed(2)}; ` + rows.map((x) => `${x.set}${x.n} ${x.pair.toFixed(2)}/${x.face.toFixed(2)} @${x.camScale.toFixed(2)}${x.inFrame ? '' : ' OUT OF FRAME'}`).join(', '));
+        report.problems.push(...sbad3);
+        await sctx.close();
+      }
     }
     // ---- the meter-full capsule lands clear of the HUD's bottom 72 CSS px (default safe inset) and, wherever the frame allows, of the body ----
     // (the last two: a tall phone with the shell's real HUD rows, ~96 px on top and ~200 px at the bottom; a round and a wide species)
@@ -940,7 +1041,7 @@ try {
     // 74 px (portrait) / 77 px (landscape) above the bottom edge. The capsule stands BESIDE the squishy at every size, clear of those rows and of the body: on a narrow
     // portrait frame the camera pulls back a little (<= 1.2x, 1.32x for a very wide species) and the capsule stands a little smaller, never in front of the body (the owner's phone report).
     const HUD_P = { top: 56, bottom: 74 }, HUD_L = { top: 56, bottom: 77 };
-    if (ON('capspot')) for (const [vw, vh, ins, sp] of [[568, 320, HUD_L, ''], [320, 256, HUD_L, ''], [844, 390, HUD_L, ''], [1280, 800, HUD_L, ''], [390, 844, null, ''],
+    if (ON('capspot')) for (const [vw, vh, ins, sp] of [[568, 320, HUD_L, ''], [320, 256, HUD_L, ''], [320, 256, { top: 23, bottom: 51 }, ''], [844, 390, HUD_L, ''], [1280, 800, HUD_L, ''], [390, 844, null, ''],
       [390, 844, HUD_P, ''], [360, 640, HUD_P, ''], [412, 915, HUD_P, ''], [320, 568, HUD_P, ''],
       [390, 844, HUD_P, 'crimpo'], [390, 844, HUD_P, 'twangle'], [390, 844, HUD_P, 'wrigglo'], [320, 568, HUD_P, 'cushlet'], [844, 390, HUD_L, 'crimpo']]) {
       const cctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
@@ -966,16 +1067,18 @@ try {
         const p = ci.point, rr = p ? p.r / 1.35 : 0;
         const cap = p ? [p.x - rr * 0.75, p.y - rr * 1.4, p.x + rr * 0.75, p.y + rr * 1.4] : null;
         const ov = cap ? Math.max(0, Math.min(cap[2], b[2]) - Math.max(cap[0], b[0])) * Math.max(0, Math.min(cap[3], b[3]) - Math.max(cap[1], b[1])) : -1;
-        return { W, H, landed: ci.landed, hit: ci.hit, cap: cap && cap.map(Math.round), body: b.map(Math.round), bodyBefore: b0.map(Math.round), overlapPx2: Math.round(ov), maxStep, size: R.stage.info.cap?.size ?? -1, camScale: tr[tr.length - 1], camScale0: tr[0], png: R.snapshot() };
+        return { W, H, landed: ci.landed, hit: ci.hit, tap: p ? [p.x, p.y, p.r] : null, cap: cap && cap.map(Math.round), body: b.map(Math.round), bodyBefore: b0.map(Math.round), overlapPx2: Math.round(ov), maxStep, size: R.stage.info.cap?.size ?? -1, camScale: tr[tr.length - 1], camScale0: tr[0], png: R.snapshot() };
       }, [ins ?? null, sp ? speciesBaseGenome(sp, 1) : null]);
-      const tag = `${vw}x${vh}${ins ? '_hud' : ''}${sp ? '_' + sp : ''}`;
+      const tag = `${vw}x${vh}${ins ? '_hud' + (ins.bottom === 77 || ins.bottom === 74 ? '' : '_b' + ins.bottom) : ''}${sp ? '_' + sp : ''}`;
       writeFileSync(resolve(OUT, `capspot_${tag}.png`), b64(r.png));
       const bot = ins ? ins.bottom : 72, top = ins ? ins.top : 0;
       const okBottom = !!r.cap && r.cap[3] <= r.H - bot && r.cap[0] >= 0 && r.cap[2] <= r.W && r.cap[1] >= top;
       const bw = r.body[2] - r.body[0], bw0 = r.bodyBefore[2] - r.bodyBefore[0], inFrame = r.body[0] >= 0 && r.body[2] <= r.W;
+      // (the tap circle too: at 320x256 with proportional insets it was 8 px past the right edge, VERIFY_RENDER_A R-A4)
+      const tapIn = !!r.tap && r.tap[0] - r.tap[2] >= -0.5 && r.tap[0] + r.tap[2] <= r.W + 0.5 && r.tap[1] - r.tap[2] >= -0.5 && r.tap[1] + r.tap[2] <= r.H + 0.5;
       RB.mat[`capspot:${tag}`] = { cap: r.cap, body: r.body, bodyBefore: r.bodyBefore, size: r.size, maxStep: r.maxStep };
       // body keeps >= 74% of its width (the pull-back is <= 1.2x: 83%, up to 1.32x = 76% for a very wide species; a little less when the aim shifts), the whole body stays in the frame, the camera eases (< 2% per frame), and the capsule is tappable
-      check(r.landed && r.hit && okBottom && r.overlapPx2 === 0 && inFrame && bw >= 0.74 * bw0 && r.maxStep < 0.02,
+      check(r.landed && r.hit && okBottom && tapIn && r.overlapPx2 === 0 && inFrame && bw >= 0.74 * bw0 && r.maxStep < 0.02,
         `capsule spot ${vw}x${vh}${ins ? ` with the shell's HUD rows (top ${top}, bottom ${bot})` : ''}${sp ? ', ' + sp : ''}: BESIDE the squishy, clear of the HUD rows and of the body, the body keeps its size (>= 74%) and the camera eases`,
         `capsule ${JSON.stringify(r.cap)} (size ${r.size.toFixed(2)}), body ${JSON.stringify(r.body)} (was ${bw0.toFixed(0)} px wide, now ${bw.toFixed(0)}), overlap ${r.overlapPx2} px2, largest camera step ${(r.maxStep * 100).toFixed(2)}%/frame, frame ${r.W}x${r.H}`);
       report.problems.push(...cbad);
@@ -1043,6 +1146,80 @@ try {
         `ok ${stepsOk.join('/')}; caps ${[L.r0, L.r1, L.r2, L.r3].map((r) => JSON.stringify(r.cap)).join(' ')}; bodies ${[L.r0, L.r1, L.r2, L.r3].map((r) => JSON.stringify(r.body)).join(' ')}; moved ${L.moved.map((m) => m.toFixed(2)).join(', ')} m`);
       report.problems.push(...lbad2);
       await lctx.close();
+    }
+    // B-m7 (VERIFY_RENDER_B): the waiting capsule keeps its frosted fill beside a Rare-or-better body at med and high (it was an empty glass hoop: the additive halo quads of the opaque list
+    // left alpha 2 in the half-float transmission target). The capsule's box luminance with the play body's whole tier FX group on must stay within 12% of the same box with it hidden.
+    if (ON('capspot') || ON('fix1')) {
+      const fctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+      const { page: fp3, bad: fbad } = await openView(fctx, `quality=med&body=${bodyQ}`, 'capsule-fill', [/GPU stall due to ReadPixels/i]);
+      const rows = [];
+      for (const q of ['med', 'high']) for (const tier of ['common', 'rare', 'epic', 'legendary', 'mythic']) {
+        await fp3.evaluate((q) => window.__RV__.stage.setQuality(q), q);
+        const r = await fp3.evaluate((tier) => window.__RV__.capsuleFill(tier, '16'), tier);
+        rows.push({ q, tier, ...r, rel: r.noGroup > 0 ? Math.abs(r.all - r.noGroup) / r.noGroup : 1 });
+      }
+      RB.mat['capfill'] = rows;
+      check(rows.every((x) => x.hit && x.rel <= 0.12), 'the WAITING capsule keeps its frosted fill beside a Common / Rare / Epic / Legendary / Mythic play body at med and high (box luminance with the tier FX of the body on within 12% of the same box with them hidden)',
+        rows.map((x) => `${x.q} ${x.tier} ${x.all.toFixed(1)} vs ${x.noGroup.toFixed(1)} (${(x.rel * 100).toFixed(0)}%)`).join(', '));
+      report.problems.push(...fbad);
+      await fctx.close();
+    }
+    // B-m8 (VERIFY_RENDER_B): the colour identity of a species across the quality tiers. The same frozen pose of each of the 50 species at 390x844, med against low, body pixels only: the CIE Lab
+    // distance of the two mean colours. HEAD (the verifier's measure, 50 species): median 10.2, p90 21.0, max 26.7, 12 of 50 above 14. The bars below are a RATCHET set just above what this round
+    // reached, not a design target: a change that lets the low tier drift further fails.
+    if (ON('gallery') || ON('fix1')) {
+      const lctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+      const { page: lp3, bad: lbad3 } = await openView(lctx2, `quality=med&body=${bodyQ}`, 'low-med-colour', [/GPU stall due to ReadPixels/i]);
+      const lab = (c) => { const f = (u) => { u /= 255; return u <= 0.04045 ? u / 12.92 : Math.pow((u + 0.055) / 1.055, 2.4); }; const R = f(c[0]), G = f(c[1]), B = f(c[2]); const X = (0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047, Y = 0.2126 * R + 0.7152 * G + 0.0722 * B, Z = (0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883; const h = (t) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116); return [116 * h(Y) - 16, 500 * (h(X) - h(Y)), 200 * (h(Y) - h(Z))]; };
+      const dEs = [];
+      for (const d of CATALOG) {
+        const r = await lp3.evaluate(([g, tier]) => window.__RV__.lowMedColour(g, tier), [speciesBaseGenome(d.id, 1), d.tier]);
+        const a = lab(r.med), b = lab(r.low);
+        dEs.push({ id: d.id, dE: Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]) });
+      }
+      const sorted = dEs.map((x) => x.dE).sort((x, y) => x - y), med = sorted[Math.floor(sorted.length / 2)], p90 = sorted[Math.floor(sorted.length * 0.9)], mx = sorted[sorted.length - 1];
+      const above = dEs.filter((x) => x.dE > 14).length, top = dEs.slice().sort((x, y) => y.dE - x.dE).slice(0, 5).map((x) => `${x.id} ${x.dE.toFixed(1)}`).join(', ');
+      RB.mat['lowmed'] = { median: med, p90, max: mx, above14: above };
+      check(med <= 10 && p90 <= 17 && mx <= 22, 'colour identity across the quality tiers: all 50 species, med against low at the same frozen pose (390x844): median Lab dE <= 10, p90 <= 17, max <= 22 (HEAD 10.2 / 21.0 / 26.7)',
+        `median ${med.toFixed(1)}, p90 ${p90.toFixed(1)}, max ${mx.toFixed(1)}, ${above} of ${dEs.length} above 14; worst: ${top}`);
+      report.problems.push(...lbad3);
+      await lctx2.close();
+    }
+    // B-m3 (VERIFY_RENDER_B): Calm is visibly softer at the cut seam (the seam band's added light, calm / normal <= 0.8; it was 0.90 / 0.82 / 1.01 on the dollop / wrigglo / twangle: the shader saturates)
+    if (ON('cut') || ON('fix1')) {
+      const sctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+      const { page: sg, bad: sgbad } = await openView(sctx, `quality=med&body=${bodyQ}`, 'seam-calm', [/GPU stall due to ReadPixels/i]);
+      const rows = [];
+      for (const id of ['dollop', 'wrigglo', 'twangle']) {
+        const g = speciesBaseGenome(id, 1), tier = CATALOG.find((d) => d.id === id).tier;
+        const n = await sg.evaluate(([g, tier]) => window.__RV__.seamGlow(g, tier, false), [g, tier]);
+        const c = await sg.evaluate(([g, tier]) => window.__RV__.seamGlow(g, tier, true), [g, tier]);
+        rows.push({ id, normal: n.adds, calm: c.adds, ratio: n.adds > 1 ? c.adds / n.adds : 1, skipped: n.skipped });
+      }
+      RB.mat['seamcalm'] = rows;
+      check(rows.every((x) => x.skipped || (x.normal > 8 && x.ratio <= 0.8)), 'CUT seam: Calm is visibly softer (the light the seam band adds, calm / normal <= 0.8 on the dollop, wrigglo and twangle; the seam must still show: normal adds > 8/255)',
+        rows.map((x) => `${x.id} ${x.normal.toFixed(1)} -> ${x.calm.toFixed(1)} (${(x.ratio * 100).toFixed(0)}%)`).join(', '));
+      report.problems.push(...sgbad);
+      await sctx.close();
+    }
+    // B-m1 (VERIFY_RENDER_B): the waiting capsule stands outside the Mythic prism dome of the play body (15 .. 19% of its pixels were inside the dome / halo / ring on the desktop, 17 .. 52% on
+    // phones: against a Mythic dome it read as a hollow glass hoop). On the desktop it must stand clear of the dome's rim for every Mythic species; the phone numbers are recorded (a body that fills
+    // the frame's width leaves no room: the dome is held inside the frame there and the capsule stands as far out as the frame lets it).
+    if (ON('capspot') || ON('fix1')) {
+      const mythics = CATALOG.filter((d) => d.tier === 'mythic').map((d) => d.id);
+      const out = {};
+      for (const [vw, vh, ins] of [[1280, 800, HUD_L], [390, 844, HUD_P]]) {
+        const dctx2 = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
+        const { page: dp2, bad: dbad2 } = await openView(dctx2, `quality=low&body=${bodyQ}`, `capdome-${vw}x${vh}`, [/GPU stall due to ReadPixels/i]);
+        await dp2.evaluate((ins) => window.__RV__.stage.setSafeInsets(ins), ins);
+        for (const id of mythics) out[`${vw}x${vh}:${id}`] = await dp2.evaluate((g) => window.__RV__.capDomeGap(g), speciesBaseGenome(id, 1));
+        report.problems.push(...dbad2);
+        await dctx2.close();
+      }
+      RB.mat['capdome'] = out;
+      const wideRows = Object.entries(out).filter(([k]) => k.startsWith('1280x800'));
+      check(wideRows.every(([, r]) => r.landed && r.gap >= -0.02), 'the WAITING capsule stands outside the Mythic prism dome of the play body on the desktop (every Mythic species, 1280x800 with the HUD rows: gap from the rim of the dome >= 0 m)',
+        Object.entries(out).map(([k, r]) => `${k} gap ${r.gap.toFixed(2)} m (dome ${r.domeR.toFixed(2)}, capsule ${r.capSize.toFixed(2)})`).join(', '));
     }
     if (ON('capspot') || ON('capturn')) {
       const tctx = await browser.newContext({ viewport: { width: 640, height: 480 }, deviceScaleFactor: 1 });

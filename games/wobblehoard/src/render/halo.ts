@@ -3,6 +3,18 @@
 // sprite along a hard straight line (the "seam" seen on the low tier, where nothing blurs it).
 import * as THREE from 'three';
 
+/**
+ * ADDITIVE light for an object in the OPAQUE list (the jelly refracts it through the transmission pass): the colour is added as usual, the destination ALPHA is left alone.
+ * three's AdditiveBlending adds the source alpha (1.0 here) to the destination alpha too, and the transmission render target is HALF FLOAT: it does not clamp, so inside the rect of
+ * a halo / pool quad it held alpha 2 instead of 1, and a transmissive object standing there (the waiting capsule beside a Rare-or-better body, inside its aura quad) read that alpha
+ * as "clear": an empty glass hoop instead of the frosted capsule (VERIFY_RENDER_B B-m7: capsule box luma 61.7 -> 105.6 once this was held at 1; the canvas is alpha-opaque anyway).
+ * Every fragment shader using this writes alpha 1.0, so the colour term is src.rgb x 1, i.e. identical to AdditiveBlending.
+ */
+export const ADD_KEEP_ALPHA = {
+  blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
+  blendEquationAlpha: THREE.AddEquation, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
+} as const;
+
 const VERT = /* glsl */`
 varying vec2 vP;
 varying float vWY;
@@ -48,7 +60,7 @@ export class HaloQuad {
         uCenter: { value: this.center }, uSize: { value: 1 }, uColor: { value: new THREE.Color(1, 0.6, 0.3) },
         uStrength: { value: 0 }, uRing: { value: opts.ring ?? 0 }, uFadeH: { value: opts.fadeH ?? 0.2 },
       },
-      transparent: false, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending,
+      transparent: false, depthWrite: false, depthTest: true, ...ADD_KEEP_ALPHA,
     });
     this.mesh = new THREE.Mesh(this.geo, this.mat);
     this.mesh.frustumCulled = false;

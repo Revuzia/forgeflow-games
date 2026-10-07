@@ -259,7 +259,7 @@ export class Face {
       if (pointer && camera) {
         this.ndc.copy(this.vA).project(camera);
         const dx = (pointer.x - this.ndc.x) * camera.aspect, dy = pointer.y - this.ndc.y;
-        const len = Math.hypot(dx, dy);
+        const len = Math.sqrt(dx * dx + dy * dy);
         if (len > 1e-4) { const mag = Math.min(1, len * 1.8); lx = (dx / len) * mag; ly = (dy / len) * mag; }
         // express the screen-space look in the eye frame: eye axes projected into camera space (view matrix 3x3)
         const ve = camera.matrixWorldInverse.elements;
@@ -275,7 +275,7 @@ export class Face {
       }
       eye.look.x += (lx - eye.look.x) * (1 - Math.exp(-dt * 16));
       eye.look.y += (ly - eye.look.y) * (1 - Math.exp(-dt * 16));
-      const lm = Math.hypot(eye.look.x, eye.look.y);
+      const lm = Math.sqrt(eye.look.x * eye.look.x + eye.look.y * eye.look.y);
       const lk = lm > 1 ? 1 / lm : 1;
       eye.uLook.value.set(eye.look.x * lk, eye.look.y * lk);
       this.lookOut[e * 2] = eye.look.x * lk; this.lookOut[e * 2 + 1] = eye.look.y * lk;

@@ -11,7 +11,7 @@ import { tintShare, type JellyPalette, type Rgb } from './oklch.ts';
 
 const WARM: Rgb = [1.0, 0.45, 0.12];
 import type { TierStyle } from './rarity.ts';
-import { HaloQuad } from './halo.ts';
+import { ADD_KEEP_ALPHA, HaloQuad } from './halo.ts';
 import { NOISE_GLSL } from './shaderlib.ts';
 
 const BLOB_VERT = /* glsl */`
@@ -88,7 +88,7 @@ export class Core {
       vertexShader: BLOB_VERT, fragmentShader: BLOB_FRAG, fog: false,
       // opaque list (so the transmission pass sees it and the jelly refracts it), but ADDITIVE: it lights what is behind it instead of
       // covering it, so a big Rare+ core reads as an inner light and never as a flat coin with an edge
-      blending: THREE.AdditiveBlending, depthWrite: false, transparent: false,
+      ...ADD_KEEP_ALPHA, depthWrite: false, transparent: false,
       uniforms: { uColor: { value: col }, uHot: { value: hot }, uIntensity: { value: 2 }, uTime: { value: 0 }, uPrism: { value: style.corePrism } },
     });
     this.halo = new HaloQuad({ renderOrder: -19, fadeH: 0.2 * scale });

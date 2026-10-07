@@ -138,6 +138,37 @@ export function evalSurface(
   nrm[no] = nx * il; nrm[no + 1] = ny * il; nrm[no + 2] = nz * il;
 }
 
+/**
+ * evalSurface for the fine mesh's hot loop: the barycentric weights are read from `bw` (u, v, w at bo..bo + 2) and alpha is PHONG_ALPHA, so the call passes only integers and typed arrays.
+ * A call that passes u, v, w as arguments boxes each of them in a heap number whenever it is not inlined (~2.5k calls per body per frame: ~90 KB of garbage per body per frame
+ * in the browser's allocation profile, VERIFY_RENDER_A R-A5). Same maths as evalSurface, same result.
+ */
+export function evalSurfaceBw(
+  P: Float32Array, N: Float32Array, a3: number, b3: number, c3: number, bw: Float32Array, bo: number,
+  pos: Float32Array, po: number, nrm: Float32Array, no: number,
+): void {
+  const u = bw[bo], v = bw[bo + 1], w = bw[bo + 2];
+  const pax = P[a3], pay = P[a3 + 1], paz = P[a3 + 2];
+  const pbx = P[b3], pby = P[b3 + 1], pbz = P[b3 + 2];
+  const pcx = P[c3], pcy = P[c3 + 1], pcz = P[c3 + 2];
+  const nax = N[a3], nay = N[a3 + 1], naz = N[a3 + 2];
+  const nbx = N[b3], nby = N[b3 + 1], nbz = N[b3 + 2];
+  const ncx = N[c3], ncy = N[c3 + 1], ncz = N[c3 + 2];
+  const px = u * pax + v * pbx + w * pcx;
+  const py = u * pay + v * pby + w * pcy;
+  const pz = u * paz + v * pbz + w * pcz;
+  const da = (px - pax) * nax + (py - pay) * nay + (pz - paz) * naz;
+  const db = (px - pbx) * nbx + (py - pby) * nby + (pz - pbz) * nbz;
+  const dc = (px - pcx) * ncx + (py - pcy) * ncy + (pz - pcz) * ncz;
+  const ua = u * da, vb = v * db, wc = w * dc;
+  pos[po] = px - PHONG_ALPHA * (ua * nax + vb * nbx + wc * ncx);
+  pos[po + 1] = py - PHONG_ALPHA * (ua * nay + vb * nby + wc * ncy);
+  pos[po + 2] = pz - PHONG_ALPHA * (ua * naz + vb * nbz + wc * ncz);
+  const nx = u * nax + v * nbx + w * ncx, ny = u * nay + v * nby + w * ncy, nz = u * naz + v * nbz + w * ncz;
+  const il = 1 / (Math.sqrt(nx * nx + ny * ny + nz * nz) || 1);
+  nrm[no] = nx * il; nrm[no + 1] = ny * il; nrm[no + 2] = nz * il;
+}
+
 /** Area-weighted vertex normals of the sim mesh. Allocation free. */
 export function simNormals(P: Float32Array, idx: Uint32Array, out: Float32Array): void {
   out.fill(0);
@@ -159,6 +190,7 @@ export function simNormals(P: Float32Array, idx: Uint32Array, out: Float32Array)
 /**
  * One relaxation pass of the sim vertex normals over their triangle neighbours: the physics mesh has creases where a finger
  * sphere pushes particles out (coarse straight edges), which the glossy low tier shows as a hard seam. `acc` is scratch.
+ * Allocation free: no Math.hypot here (it boxes its arguments: ~266 KB per body per frame for two passes, VERIFY_RENDER_A R-A5).
  */
 export function relaxNormals(N: Float32Array, idx: Uint32Array, acc: Float32Array, w: number): void {
   acc.fill(0);
@@ -169,9 +201,9 @@ export function relaxNormals(N: Float32Array, idx: Uint32Array, acc: Float32Arra
     acc[c] += N[a] + N[b]; acc[c + 1] += N[a + 1] + N[b + 1]; acc[c + 2] += N[a + 2] + N[b + 2];
   }
   for (let i = 0; i < N.length; i += 3) {
-    const al = Math.hypot(acc[i], acc[i + 1], acc[i + 2]) || 1;
+    const al = Math.sqrt(acc[i] * acc[i] + acc[i + 1] * acc[i + 1] + acc[i + 2] * acc[i + 2]) || 1;   // (Math.hypot boxes its arguments: ~133 KB of garbage per body per pass per frame)
     const x = N[i] * (1 - w) + (acc[i] / al) * w, y = N[i + 1] * (1 - w) + (acc[i + 1] / al) * w, z = N[i + 2] * (1 - w) + (acc[i + 2] / al) * w;
-    const l = Math.hypot(x, y, z) || 1;
+    const l = Math.sqrt(x * x + y * y + z * z) || 1;
     N[i] = x / l; N[i + 1] = y / l; N[i + 2] = z / l;
   }
 }
@@ -284,11 +316,10 @@ export class JellyView {
       this.press = pm; this.pull = um;
     }
     const pos = this.pos, nrm = this.nrm, str = this.strain, dsp = this.disp, sDsp = this.simD, vA = this.vA, vB = this.vB, vC = this.vC, bw = this.bw;
-    const alpha = PHONG_ALPHA;
     for (let k = 0, n = this.fineCount; k < n; k++) {
       const a = vA[k], b = vB[k], c = vC[k];
       const u = bw[k * 3], v = bw[k * 3 + 1], w = bw[k * 3 + 2];
-      evalSurface(P, sn, a, b, c, u, v, w, alpha, pos, k * 3, nrm, k * 3);
+      evalSurfaceBw(P, sn, a, b, c, bw, k * 3, pos, k * 3, nrm, k * 3);
       const ia = (a / 3) | 0, ib = (b / 3) | 0, ic = (c / 3) | 0;
       str[k] = u * S[ia] + v * S[ib] + w * S[ic];
       dsp[k * 2] = u * sDsp[ia * 2] + v * sDsp[ib * 2] + w * sDsp[ic * 2];

@@ -265,9 +265,12 @@ const EMISSIVE_STAGE = /* glsl */`
     // low tier: no transmission target, so the body carries its own colour (a base glow) and is only lightly see-through
     totalDiffuse *= 0.16;   // the transmissive tiers keep only ~10% of the direct diffuse; the glow below stands in for the rest
     // fake depth for the transmission-less tier: a thick centre is deeper and more saturated, and the core glows through it
-    totalEmissiveRadiance += (diffuseColor.rgb * (0.2 + 0.16 * jWrap) + uBlushCol * (0.34 * pow(jNdv, 1.4)) * (1.0 - 0.35 * jWrap)) * 0.68;
+    // (the fake depth deepens the body's OWN hue: it leaned fully on the blush colour, whose hue differs from the body's for many species, so the whole body took the blush hue on
+    // the phone: pink dough coral, crimson jelly violet, cream beads ochre. A third of blush is kept: it is the pressed-skin warmth.)
+    vec3 jDeepCol = mix(diffuseColor.rgb, uBlushCol, 0.35);
+    totalEmissiveRadiance += (diffuseColor.rgb * (0.2 + 0.16 * jWrap) + jDeepCol * (0.34 * pow(jNdv, 1.4)) * (1.0 - 0.35 * jWrap)) * 0.68;
     float jLow = smoothstep(0.45, -0.7, vRest.y) * (1.0 - 0.5 * jFres);   // the lower body is where the core glow sits behind thick jelly
-    vec3 jDeep = uBlushCol / max(max(uBlushCol.r, uBlushCol.g), max(uBlushCol.b, 1e-3));
+    vec3 jDeep = jDeepCol / max(max(jDeepCol.r, jDeepCol.g), max(jDeepCol.b, 1e-3));
     totalEmissiveRadiance = mix(totalEmissiveRadiance, totalEmissiveRadiance * jDeep * 1.15, 0.85 * jLow);
     // without the transmission pass's absorption the glow reads paler than med/high at the same pose (measured +8..12% in G and B):
     // a saturation lift on the jelly's own light closes most of that gap for free (specular highlights stay white)
@@ -457,7 +460,10 @@ export class JellyMaterials {
     });
     this.hub.apply(m, 1.25);
     if (low) {
-      m.color = lin(p.attenuation).lerp(lin(p.body), 0.35);   // no absorption pass: bake the deep, saturated look into the base colour
+      // no absorption pass: bake the deep, saturated look into the base colour. But only as far as the family has one: the transmissive tiers' colour for a frosted / opaque family
+      // (foam, marshmallow, mochi, putty, beads, pop dome, silicone) is mostly its own lit skin, not the absorbed colour, so the low tier leans on the body colour as the family's
+      // opacity keep falls (1 = a glassy jelly: unchanged). It was the same deep colour for all: cream beads read ochre, a pink dough coral on the phone (VERIFY_RENDER_B B-m8)
+      m.color = lin(p.body).lerp(lin(p.attenuation), 0.65 * this.opacityKeep);
       m.transparent = true;
       m.depthWrite = false;
       m.transmission = 0;

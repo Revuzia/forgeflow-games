@@ -248,6 +248,10 @@ export class Capsule {
     const top = SP_B.set(this.pos.x, (REST_Y + R) * this.sz, this.pos.z).project(camera);
     out.x = (v.x * 0.5 + 0.5) * w; out.y = (1 - (v.y * 0.5 + 0.5)) * h;
     out.r = Math.max(20, Math.abs((top.y - v.y) * 0.5 * h) * 1.35);
+    // the tap circle stays inside the frame: on a tiny frame (320 x 256 with 1 body) it was 8 px past the right edge although the capsule itself is whole (VERIFY_RENDER_A R-A4); the
+    // capsule's own height is covered by hitTest's slop either way
+    const room = Math.min(out.x, w - out.x, out.y, h - out.y);
+    if (room > 0 && out.r > room) out.r = Math.max(12, room);
     return out;
   }
 

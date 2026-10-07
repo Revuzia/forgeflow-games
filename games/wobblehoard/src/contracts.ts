@@ -398,8 +398,10 @@ export interface StageLike {
   playMergeCeremony?(spec: MergeCeremonySpec, hooks?: CeremonyHooks): CeremonyHandle;
 
   /* ── stage B and CUT, render lane (RENDER-3, 2026-10-06; optional and additive; src/render/stage.ts implements every one) ── */
-  /** Stage B1: render offsets (`AddBodyOpts.position`) for n (1..5) squishies out on the mat at once, spaced for the current frame (rows
-   *  on a wide frame, staggered rows on a portrait phone). With 2 or more bodies visible the camera frames them all by itself. */
+  /** Stage B1: render offsets (`AddBodyOpts.position`) for n (1..5) squishies out on the mat at once, spaced for the current frame (a row
+   *  on a wide frame, a chevron with the first body in front on a portrait phone). With 2 or more bodies visible the camera frames them all by itself.
+   *  NESTED (render fix round 1): the first n offsets of matLayout(n + 1), relative to its first one, equal matLayout(n)'s, so a mat built one squishy at a time
+   *  (a body in shared physics space keeps the spot it was built at) is the same as one laid out at once, and no squishy stands in front of another's face. */
   matLayout?(n: number): V3[];
   /** CSS px at each canvas edge that the shell's HUD covers (default { top: 0, right: 0, bottom: 72, left: 0 }); missing or non-finite
    *  fields keep their value. The meter-full capsule lands clear of them, and of every body, at any aspect. */

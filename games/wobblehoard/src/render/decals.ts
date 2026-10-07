@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { NOISE_GLSL } from './shaderlib.ts';
 import type { Rgb } from './oklch.ts';
 import type { TierStyle } from './rarity.ts';
+import { ADD_KEEP_ALPHA } from './halo.ts';
 
 const DECAL_VERT = /* glsl */`
 varying vec2 vUv;
@@ -44,9 +45,14 @@ void main() {
   // caustic ring (Epic and up): a broken, beaded band of focused light, two thin crossing filaments that slowly crawl, not a neon hoop
   float ring2 = 0.0;
   if (uRing2 > 0.001) {
-    float ang = atan(p.y, p.x);
-    float n1 = whNoise2(vec2(ang * 5.0 + uTime * 0.11, r * 4.0));
-    float n2 = whNoise2(vec2(ang * 9.0 - uTime * 0.07, r * 6.0 + 3.7));
+    // the beads' noise runs around the ring on a CIRCLE in noise space (the unit direction, turned a little by the time), not on the polar angle: atan() jumps by 2 pi
+    // where it wraps (the -x axis), and noise of a non-multiple of that jump is a hard straight line across the ring there (VERIFY_RENDER_A R-A6)
+    vec2 dir = p / max(r, 1e-3);
+    float a1 = uTime * 0.022, a2 = -uTime * 0.0078;
+    vec2 d1 = vec2(cos(a1) * dir.x - sin(a1) * dir.y, sin(a1) * dir.x + cos(a1) * dir.y);
+    vec2 d2 = vec2(cos(a2) * dir.x - sin(a2) * dir.y, sin(a2) * dir.x + cos(a2) * dir.y);
+    float n1 = whNoise2(d1 * 5.0 + vec2(r * 4.0, 0.0));
+    float n2 = whNoise2(d2 * 9.0 + vec2(r * 6.0 + 3.7, 11.0));
     float beads = pow(clamp(n1 * 0.6 + n2 * 0.6 - 0.15, 0.0, 1.0), 2.0) * 2.2;
     float f1 = exp(-pow((r - 0.79 - 0.025 * (n2 - 0.5)) * 30.0, 2.0));
     float f2 = exp(-pow((r - 0.83 + 0.03 * (n1 - 0.5)) * 38.0, 2.0));
@@ -66,6 +72,8 @@ export interface Footprint {
   lowY: number;                // height of the lowest vertex above the table (0 when resting)
   compression: number;         // the renderer's squeeze 0..1
   stretch: number;             // 0..1
+  /** World half-width the frame shows at the body (minus where it stands in it): the pool never reaches past it (the light stays inside the frame's sides). Absent = no limit. */
+  room?: number;
 }
 
 /** The unit quad shared by every decal (owned and disposed by the stage). */
@@ -81,6 +89,7 @@ export class Decals {
   private readonly shadowMat: THREE.ShaderMaterial;
   private readonly poolMat: THREE.ShaderMaterial;
   private poolK = 1;
+  private poolFresh = true;
   /** 0..1 multiplier on both decals (a fading-in object). */
   alphaMul = 1;
 
@@ -101,7 +110,7 @@ export class Decals {
     this.poolMat = new THREE.ShaderMaterial({
       vertexShader: DECAL_VERT, fragmentShader: POOL_FRAG,
       uniforms: { uColor: { value: new THREE.Color(1, 0.6, 0.3) }, uRingCol: { value: new THREE.Color(1, 0.6, 0.3) }, uStrength: { value: 1 }, uTime: { value: 0 }, uRing: { value: 1 }, uRing2: { value: 0 } },
-      transparent: false, depthWrite: false, depthTest: true, blending: THREE.AdditiveBlending, fog: false,
+      transparent: false, depthWrite: false, depthTest: true, ...ADD_KEEP_ALPHA, fog: false,
       polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
     });
     this.pool = new THREE.Mesh(quad, this.poolMat);
@@ -129,9 +138,13 @@ export class Decals {
     // light pool: widens and brightens with the squash; softer and smaller while floating
     const squash = Math.min(1, f.compression * 1.2 + f.stretch * 0.15);
     const pS = (1.2 + 0.4 * squash + 0.2 * h) * (1 - 0.1 * fl) * (1 + 0.12 * (style?.ring ?? 0));
-    this.poolK += ((0.3 + 0.55 * squash) - this.poolK) * (1 - Math.exp(-dt * 10));
+    // (a NEW view's pool starts at its resting strength: it used to start at 1 and relax to ~0.3 over ~8 frames, a bright bloom of light on the table every time the
+    // stage swapped a body in: the reconnect's whole, the pieces of a cut. VERIFY_RENDER_B B-m5 / A R-A1)
+    const poolRest = 0.3 + 0.55 * squash;
+    if (this.poolFresh) { this.poolK = poolRest; this.poolFresh = false; } else this.poolK += (poolRest - this.poolK) * (1 - Math.exp(-dt * 10));
     this.pool.position.set(f.cx, 0.003, f.cz);
-    this.pool.scale.set(f.rx * pS + 0.1, 1, f.rz * pS + 0.1);
+    const lim = f.room !== undefined ? Math.max(0.2, f.room * 0.85) : Infinity;   // (the pool's fringe is still lit at 0.9 of its radius: it ends well inside the frame)
+    this.pool.scale.set(Math.min(f.rx * pS + 0.1, lim), 1, Math.min(f.rz * pS + 0.1, lim));
     const mul = style ? style.poolMul : 1;
     this.poolMat.uniforms.uStrength.value = (this.poolK * mul + extraPool) * (1 - 0.5 * fl) * (0.85 / (1 + h * 0.9)) * this.alphaMul;
     this.poolMat.uniforms.uRing.value = (1 - 0.55 * fl) * (style ? 0.5 + 0.5 * Math.min(1, style.index / 2) : 1);
