@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --test --test-reporter=spec tests/",
+    "test": "node --test \"tests/*.test.ts\"",
     "detban": "node _harness/detban.ts",
     "check": "npm run detban && npm run typecheck && npm test"
   },

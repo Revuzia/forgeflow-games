@@ -717,7 +717,7 @@ errors, fps). Shots run at 1280×720 by default.
 
 ---
 
-## 19. Tests (`npm test` = `node --test tests/`; all must pass)
+## 19. Tests (`npm test` = `node --test "tests/*.test.ts"`; all must pass)
 Required (each its own file): `grid.test.ts` (done), `determinism.test.ts` (same seed → same `hash()` after 1 000
 ticks; chunked stepping (1×1000 vs 10×100 vs 1000×1) identical; save/load round trip preserves hash and continues
 identically), `water.test.ts` (water flows downhill and pools; sea-level slider; volume conserved without
