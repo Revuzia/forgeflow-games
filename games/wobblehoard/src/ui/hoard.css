@@ -39,6 +39,23 @@ body:not([data-calm="true"]) .hoard-btn[data-dot="true"] .hoard-btn-dot { animat
   .capsule-btn-label { display: none; }
   .hoard-btn-count { display: none; }
 }
+/* a phone's bottom row with a capsule waiting is the tightest it gets (name tag, Hoard, Toys, ring, capsule button): the Hoard button gives up its "3/50" count (its accessible name keeps it)
+   so even the longest species name (Rattlebead) keeps its room at 12 px or more instead of being cut off (SHELL-4) */
+@media (max-width: 480px) {
+  .hud-bottom:has(.capsule-btn:not([hidden])) .hoard-btn-count { display: none; }
+  /* the second line of the name tag (gem, tier word, nickname) never spills out of the narrow tag: what does not fit wraps and is clipped, so the gem always shows */
+  .hud-bottom:has(.capsule-btn:not([hidden])) .nametag-line { flex-wrap: wrap; max-height: 16px; overflow: hidden; }
+  .hud-bottom:has(.capsule-btn:not([hidden])) .nametag-tier { letter-spacing: .04em; }
+}
+/* ... and on the narrowest phones (320 px) the same row also tightens its gaps, the ring (52 px, the size it already has on a short screen) and the capsule button's padding, so that the longest
+   names still get 12 px or more (measured with the bottomrow probe: the name's box 41 px -> 70 px; Rattlebead needs 67) */
+@media (max-width: 380px) {
+  .hud-bottom:has(.capsule-btn:not([hidden])) { gap: 5px; }
+  .hud-bottom:has(.capsule-btn:not([hidden])) .hud-slot, .hud-bottom:has(.capsule-btn:not([hidden])) .meter-cluster { gap: 4px; }
+  .hud-bottom:has(.capsule-btn:not([hidden])) .nametag { padding: 6px 8px 7px; }
+  .hud-bottom:has(.capsule-btn:not([hidden])) .meter { width: 52px; height: 52px; }
+  .hud-bottom:has(.capsule-btn:not([hidden])) .capsule-btn { padding: 0 6px; }
+}
 
 /* ---------- the panel ---------- */
 .hoard {
@@ -85,7 +102,7 @@ body[data-hoard="open"] .hud, body[data-hoard="open"] .plate, body[data-hoard="c
 .tool-btn, .seg-btn, .act-btn, .fchip { border: 1px solid var(--wh-edge); background: var(--wh-track); color: var(--wh-cream); }
 .tool-btn:hover, .seg-btn:hover, .act-btn:hover, .fchip:hover { border-color: var(--wh-amber); }
 .tool-btn[aria-expanded="true"], .seg-btn[aria-pressed="true"], .fchip[aria-pressed="true"] { background: var(--wh-amber); color: var(--wh-ink); border-color: var(--wh-amber); }
-.tool-btn:disabled, .act-btn:disabled, .cta-btn:disabled { opacity: .5; cursor: default; border-color: var(--wh-panel-edge); }
+.tool-btn:disabled, .act-btn:disabled, .cta-btn:disabled, .cta-btn[aria-disabled="true"] { opacity: .5; cursor: default; border-color: var(--wh-panel-edge); }
 .tool-n { margin-left: 6px; padding: 0 7px; border-radius: 99px; background: var(--wh-ink); color: var(--wh-amber); font-size: 12px; }
 .tool-btn.tidy { margin-left: auto; }
 .tool-sort { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 800; color: var(--wh-cream-dim); }
@@ -416,6 +433,67 @@ body[data-tool="snap"] .net-banner, body[data-tool="snap"] .play-target, body[da
 @media (prefers-reduced-motion: reduce) { .snap-shade { display: none; } }
 body[data-calm="true"] .snap-shade { display: none; }
 
+/* ---------- a phone on its side (short landscape screens): the Cut bar and the Snap bar are a STRIP along the top edge, over the empty sky ----------
+   VERIFY B-U1: on 844x390 and 568x320 the bars covered 39 % .. 78 % of the squishy's (or each piece's) on-screen disc. SHELL-4 fix 1 docked them to the left edge, beside the squishy: that cleared
+   844x390, but at 568x320 the squishy and, after a cut, its two pieces fill the whole width, so the dock still covered 20 .. 26 % of the left piece (one eye behind it, in Cut and in Snap), and a cut made
+   the dock taller so that it ran into the name tag (VERIFY_SHELL4 A_R1 B-U1-residual and N2, B_R1 R1 and U1-residual). Nothing of the picture lives in the top 64 px of a landscape frame (the squishy
+   is framed lower), and Snap hides the whole HUD, so both bars are one row of buttons there: 56 px tall, left aligned. The Cut strip stops short of the sound and settings buttons, and the wordmark
+   steps aside while the Cut tool (or the tray) is in hand; the instruction lines go (the live region says what the tool does when it is picked, and the buttons name themselves). */
+@media (orientation: landscape) and (max-height: 520px) {
+  .cutbar, .snapbar {
+    left: calc(var(--safe-l) + var(--gutter)); right: auto; top: calc(var(--safe-t) + 8px); bottom: auto; transform: none;
+    width: auto; max-width: calc(100vw - var(--safe-l) - var(--safe-r) - 2 * var(--gutter));
+    display: flex; align-items: center; flex-wrap: nowrap; gap: 12px; padding: 5px 10px; border-radius: 16px;
+  }
+  .cutbar { max-width: calc(100vw - var(--safe-l) - var(--safe-r) - 2 * var(--gutter) - 104px); }   /* the sound and settings buttons keep the top right corner (2 x 44 px + a gap + the gutter) */
+  .cutbar-row { flex: none; align-items: baseline; gap: 10px; }
+  .cutbar-text, .snapbar-text, .snapbar-label { display: none; }
+  .cutbar-acts { flex-wrap: nowrap; gap: 8px; }
+  .cutbar-acts .act-btn { padding: 0 12px; white-space: nowrap; }
+  .snapbar-row { flex-wrap: nowrap; margin: 0; gap: 10px; }
+  .snapbar-acts { flex: none; gap: 8px; }
+  .snapbar-acts .cta-btn { flex: none; padding: 0 16px; white-space: nowrap; }
+  .snapbar-acts .act-btn { padding: 0 14px; }
+  .snap-tint-btn { padding: 4px; min-width: var(--tap); justify-content: center; }
+  /* the tint's name stays in the accessible name (visually hidden, not display:none) */
+  .snap-tint-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  body[data-tool="cut"] .wordmark, body[data-toys="open"] .wordmark { visibility: hidden; }
+  /* the open toy tray (a transient menu) is the same strip: opened from the Toys button, it stood over the whole squishy at 568x320 (VERIFY_SHELL4_B_R1 U1-residual: 99 %) and over the wordmark.
+     One row of three tools; each tool's hint stays in its accessible name (visually hidden, not display:none) */
+  .toys {
+    left: calc(var(--safe-l) + var(--gutter)); right: auto; top: calc(var(--safe-t) + 8px); bottom: auto; transform: none;
+    width: auto; max-width: calc(100vw - var(--safe-l) - var(--safe-r) - 2 * var(--gutter) - 104px); padding: 5px 10px; border-radius: 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .toys[hidden] { display: none; }
+  .toys-title { margin: 0; }
+  .toys-list { display: flex; gap: 8px; }
+  .toy { width: auto; min-height: var(--tap); padding: 4px 14px 4px 10px; gap: 8px; }
+  .toy-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+/* the narrowest portrait phones (320 wide): the open tray was three stacked rows over the lower 61 % of the squishy: one row of three tools, icon over label, the hints visually hidden */
+@media (orientation: portrait) and (max-width: 380px) {
+  .toys { padding: 8px; }
+  .toys-title { margin: 0 4px 6px; }
+  .toys-list { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .toy { flex-direction: column; justify-content: center; gap: 2px; min-height: 64px; padding: 6px 4px; text-align: center; }
+  .toy-text { justify-items: center; }
+  .toy-label { font-size: 15px; }
+  .toy-hint { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+/* the narrowest portrait phones (320 wide): the bars were full width and 145 .. 240 px tall, over the lower half of the squishy (VERIFY B-U1: 36 % .. 64 %). They keep to one row of buttons, a
+   row of backdrop swatches and no instruction paragraph (the live region says what the tool does when it is picked) */
+@media (orientation: portrait) and (max-width: 380px) {
+  .cutbar-text, .snapbar-text { display: none; }
+  .cutbar { padding: 8px 10px 10px; }
+  .cutbar-acts { flex-wrap: nowrap; gap: 6px; }
+  .cutbar-acts .act-btn { flex: 1 1 auto; padding: 0 6px; font-size: 13px; white-space: nowrap; }
+  .snapbar { padding: 8px 10px 10px; }
+  .snap-tints { flex-wrap: nowrap; }
+  .snap-tint-btn { padding: 4px; min-width: var(--tap); justify-content: center; }
+  .snap-tint-word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
+
 /* ---------- phones: the bottom row gains the Toys button (icon only) and the Hoard button shows its glyph and count ---------- */
 @media (max-width: 480px) {
   .toys-btn { padding: 6px 9px; }
@@ -425,5 +503,8 @@ body[data-calm="true"] .snap-shade { display: none; }
   .hoard-btn .hoard-glyph { width: 22px; height: 22px; }
 }
 
+/* the ring's state line sits above the ring, where the open tray and the Cut bar (both centred above the bottom row) end on a phone: it peeked out from behind
+   their edges (VERIFY B-U2: "sting, filling slowly" beside the tray). The tray and the Cut bar are transient; the live region keeps saying the state. */
+body[data-toys="open"] .meter-state, body[data-tool="cut"] .meter-state { visibility: hidden; }
 /* the ring's state line would peek out under the desktop card's bottom edge: the card says what matters there */
 @media (min-width: 640px) { body[data-hoard="card"] .meter-state { visibility: hidden; } }

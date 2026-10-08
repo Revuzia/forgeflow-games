@@ -1,4 +1,5 @@
-// The Cut tool's bar (CUT.md 1, 2.6): while the blade is in hand, a small bar above the HUD's bottom row says what to do and offers the two
+// The Cut tool's bar (CUT.md 1, 2.6): while the blade is in hand, a small bar above the HUD's bottom row (a strip along the top edge on a short landscape
+// screen, hoard.css) says what to do and offers the two
 // buttons that make the tool work without a drag: Split in two (a vertical cut through the middle as the camera sees it) and Reconnect all;
 // Done puts the Hand back. The swipe itself is drawn as a thin blade line over the canvas (an SVG line, no pointer events).
 import { h } from './dom.ts';
@@ -6,8 +7,8 @@ import { h } from './dom.ts';
 export interface CutBar {
   readonly el: HTMLElement;
   show(on: boolean): void;
-  /** pieces of the squishy now (1 = whole) and the most it can make */
-  setPieces(n: number, max: number, busy: boolean): void;
+  /** pieces of the squishy now (1 = whole), the most it can make, whether a cut or a reconnect plays, and whether any piece is still big enough to split in two */
+  setPieces(n: number, max: number, busy: boolean, canSplit?: boolean): void;
   /** the swipe in progress in page px, or null */
   setBlade(b: { x0: number; y0: number; x1: number; y1: number } | null): void;
   destroy(): void;
@@ -41,11 +42,11 @@ export function createCutBar(root: HTMLElement, o: { onSplit(): void; onReconnec
   return {
     el,
     show(on) { el.hidden = !on; if (!on) svg.style.display = 'none'; },
-    setPieces(n, max, busy) {
+    setPieces(n, max, busy, canSplit = true) {
       count.textContent = n > 1 ? `${n} pieces` : '';
-      text.textContent = n >= max ? "That's as many pieces as it can make." : n > 1 ? 'Swipe to cut again. With the Hand, drag a piece into another and hold to join them.' : 'Swipe across a squishy to cut it.';
+      text.textContent = n >= max ? "That's as many pieces as it can make." : !canSplit ? 'Every piece is too small to split in two. Swipe near an edge to peel a small one off.' : n > 1 ? 'Swipe to cut again. With the Hand, drag a piece into another and hold to join them.' : 'Swipe across a squishy to cut it.';
       const hadSplit = document.activeElement === split, hadJoin = document.activeElement === join;
-      const noSplit = n >= max, noJoin = n <= 1;
+      const noSplit = n >= max || !canSplit, noJoin = n <= 1;
       split.disabled = noSplit; join.disabled = noJoin;   // really off: nothing more to cut, nothing to join
       split.setAttribute('aria-disabled', String(busy || noSplit)); join.setAttribute('aria-disabled', String(busy || noJoin));
       // a button that goes off under the keyboard focus hands the focus on (Reconnect all when there is something to join, else Done)

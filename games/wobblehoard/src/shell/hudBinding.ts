@@ -92,11 +92,14 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   }));
   hoardUi = hoard;
   // ---- the toy tray (FUN.md 1): the Toys button sits beside the Hoard button; the Cut tool shows only when the physics can cut
-  const toys = createToyTray(root, { onPick: (t) => g.setTool(t) });
+  // The tray does not open during a capsule reveal (a Cut picked there put its bar over the reveal and a Split in two then cut the NEW squishy: VERIFY
+  // B-U3), under an open panel (Settings, the Hoard: B-U4) or in Snap, where it is hidden (an invisible open tray took the first Escape: B-M2).
+  const toys = createToyTray(root, { onPick: (t) => g.setTool(t), canOpen: () => g.phase === 'play' && !g.ceremonies.active && !g.ceremonies.pending && g.tool !== 'snap' && !p.isOpen() && !hoard.isOpen });
   hud.slot.append(hoard.button, toys.button, hoard.matChip);
   const toolsNow = (): ToolId[] => (g.cut.supported ? ['hand', 'cut', 'snap'] : ['hand', 'snap']);
   toys.setAvailable(toolsNow());
   hoard.button.addEventListener('click', () => { if (p.isOpen()) p.close('escape'); }, { capture: true });
+  toys.button.addEventListener('click', () => { if (p.isOpen()) p.close('escape'); }, { capture: true });   // Settings gives way to the tray, as it does to the Hoard
   off.push(warmSpeciesIcons());
 
   // ---- the quick switcher (SHELL-2b): the squishies played lately, then the hearted ones, one tap to play with
@@ -188,7 +191,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     g.on('message', (t) => { toast(t); announcer.say(t); }),
     g.on('notice', (t) => { announcer.say(t); }),
     g.on('ceremony', (e) => {
-      if (e.type === 'start') { hud.meter.setBusy(true); plate.hide(); document.body.dataset.ceremony = e.kind; return; }
+      if (e.type === 'start') { toys.close(false); hud.meter.setBusy(true); plate.hide(); document.body.dataset.ceremony = e.kind; return; }
       const i = e.info;
       const info = { species: i.speciesName, tier: i.item.tier as TierName, isNew: i.item.isNew, copies: i.item.copies, tierUp: i.tierUp, nickname: i.item.nickname };
       if (e.type === 'reveal') { plate.show(info); plateAt = g.clock.now(); announcer.say(plateText(info)); return; }
@@ -240,7 +243,8 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   // ---- tools: the Cut bar and its blade line, Snap's bar and backdrop tint, and the Save
   const cutBar = createCutBar(root, {
     onSplit: () => { const r = g.cut.splitInTwo(); if (r === 'miss') announcer.say('Nothing to cut there.'); },
-    onReconnect: () => { if (!g.cut.reconnectAll(!g.settings.skipAnimations)) announcer.say('It is in one piece.'); },
+    // (the animated path says "Whole again." itself when the last piece is in; with Skip animations everything is at once and silent, so the button says it: VERIFY B-M4)
+    onReconnect: () => { const animated = !g.settings.skipAnimations; if (!g.cut.reconnectAll(animated)) announcer.say('It is in one piece.'); else if (!animated) announcer.say('Whole again.'); },
     onDone: () => g.setTool('hand'),
   });
   let tintX = 0, tintY = 0;
@@ -314,7 +318,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
       toys.setTool(t);
       document.body.dataset.tool = t;
       cutBar.show(t === 'cut');
-      if (t === 'cut') { piecesKey = `${g.cut.pieces},${g.cut.maxPieces},${g.cut.busy}`; cutBar.setPieces(g.cut.pieces, g.cut.maxPieces, g.cut.busy); }   // right now, not on the next sim step (a paused sim showed both buttons on)
+      if (t === 'cut') { piecesKey = `${g.cut.pieces},${g.cut.maxPieces},${g.cut.busy},${g.cut.canSplit}`; cutBar.setPieces(g.cut.pieces, g.cut.maxPieces, g.cut.busy, g.cut.canSplit); }   // right now, not on the next sim step (a paused sim showed both buttons on)
       if (t === 'snap') { placeTint(); snap.show(true); } else snap.show(false);
       if (t === 'hand' && (document.activeElement === document.body || !document.activeElement || root.contains(document.activeElement) && (document.activeElement as HTMLElement).closest('.cutbar, .snapbar'))) toys.button.focus({ preventScroll: true });
       announcer.say(TOOL_LINES[t]);
@@ -328,8 +332,8 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     g.on('identity', () => toys.setAvailable(toolsNow())),
     g.onStep(() => {
       if (g.tool !== 'cut') return;
-      const k = `${g.cut.pieces},${g.cut.maxPieces},${g.cut.busy}`;
-      if (k !== piecesKey) { piecesKey = k; cutBar.setPieces(g.cut.pieces, g.cut.maxPieces, g.cut.busy); }
+      const k = `${g.cut.pieces},${g.cut.maxPieces},${g.cut.busy},${g.cut.canSplit}`;
+      if (k !== piecesKey) { piecesKey = k; cutBar.setPieces(g.cut.pieces, g.cut.maxPieces, g.cut.busy, g.cut.canSplit); }
     }),
     () => { cutBar.destroy(); snap.destroy(); toys.destroy(); },
   );

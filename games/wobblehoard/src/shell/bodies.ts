@@ -67,7 +67,8 @@ export interface BodyManagerDeps {
   createBody(genome: Genome): SoftBodyLike;
   stage: StageLike;
   initial: { body: SoftBodyLike; identity: PlayIdentity };
-  beforeSwap(): void;
+  /** silent: see afterSwap (the swipe in hand is not about any body, so a silent swap leaves it alone) */
+  beforeSwap(silent: boolean): void;
   /** silent: the same squishy in another body (a cut piece, whole again): no identity announcement, no history note */
   afterSwap(identity: PlayIdentity, body: SoftBodyLike, silent: boolean): void;
   report(e: unknown): void;
@@ -108,7 +109,7 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
     try { x.id = d.stage.addBody(x.body, x.genome, x.piece ? { tier: x.tier, position: x.position, chunk: true } : { tier: x.tier, position: x.position }); return x.id >= 0; } catch (e) { d.report(e); return false; }
   };
   const commit = (b: SoftBodyLike, id: PlayIdentity, viaStage: boolean, silent = false): void => {
-    try { d.beforeSwap(); } catch (e) { d.report(e); }
+    try { d.beforeSwap(silent); } catch (e) { d.report(e); }
     if (viaStage) d.stage.setBody(b, id.genome);   // setBody = clearBodies + addBody: the mat's views go with it ...
     body = b;
     identity = id;

@@ -11,8 +11,9 @@
 //     pieces built with createBody(genome, { piece }) at their lobes' centres, the face side by the eyes' anchor; stage.partPieces(a, b);
 //     audio cut({ phase: 'separate', frac: the smaller piece's share of the WHOLE }) (NOTES_FOR_SHELL_CUT: no audio.strand for the parting);
 //     a haptic tick. A new chunk is steered to a SURFACE gap of SETTLE_GAP from its twin for SETTLE_S (the strands need the room).
-//   * Reconnect (CUT.md 1): a piece touched by a finger (a press or a pull) whose SKIN touches another piece's (TOUCH_GAP) for JOIN_HOLD_S, or
-//     is let go while they touch, flows into it over JOIN_S: setBridge, the receiver setFrac up, the giver setFrac down and moveTo along a
+//   * Reconnect (CUT.md 1): a piece a finger DRAGS into another (a pull whose hand moved DRAG_TOWARD_K of its radius toward the other: a press, a
+//     squeeze, a rub or a pull away is no drag) whose SKIN touches the other's (TOUCH_GAP) for JOIN_HOLD_S, or is let go while they touch,
+//     flows into it over JOIN_S: setBridge, the receiver setFrac up, the giver setFrac down and moveTo along a
 //     path that holds a small surface gap for BRIDGE_HOLD_S (the glowing neck is drawn only while the skins are apart) and then goes in; then the
 //     giver is removed, rejoin({ frac: merged share }), a haptic thump. The receiver is the face piece when it is one of the two, else the
 //     larger. A piece flowing into another is a ghost (BodyManager.setGhost: no contact push, which would shove the receiver off across the
@@ -81,6 +82,11 @@ export const TOUCH_GAP = 0.03;
 /** ... and a contact that already runs is kept while the skins stay within this (m): soft bodies pressed together rebound and part by a few centimetres every
  *  few frames, which restarted the 0.4 s hold each time (measured in the browser: first touch 0.2 s after the press, the join only after 2.8 s more) */
 export const TOUCH_KEEP_GAP = 0.09;
+/** ... and the finger must be DRAGGING the piece into the other (CUT.md 1: "drag a piece into another"): its pull must have moved the hand at least this
+ *  share of the piece's radius toward the other piece. Why: pieces that are merely resting side by side close up to under TOUCH_GAP within about 3 s of a
+ *  cut (27 of 50 species, Dollop 0.028 m at 3 s), and a level-triggered "a finger is on a piece that touches another" joined them on ANY touch: a 60 ms tap,
+ *  a squeeze, a rub, a pull away (SHELL-4 verification A-F2). A press, a squeeze, a rub or a pull in another direction is not a drag toward the other. */
+export const DRAG_TOWARD_K = 0.25;
 
 export type CutResult = 'cut' | 'short' | 'miss' | 'small' | 'limit' | 'busy' | 'unsupported';
 
@@ -98,6 +104,8 @@ export interface CutDeps {
   /** the body the fingers act on now, and whether a finger or a pull is on it */
   activeBody(): SoftBodyLike;
   touching(): boolean;
+  /** the drag of the finger that holds a grab on the active body (hand now less hand at the start, world space), written into `out`; false = no finger pulls */
+  drag(out: V3): boolean;
   /** fingers off every body (a piece is about to be replaced or removed) */
   beforeChange(): void;
   /** put the squishies brought out of the Hoard back (a cut makes room for its pieces) */
@@ -125,6 +133,8 @@ export interface Cutter {
   fracs(): number[];
   /** a neck or a reconnect is playing */
   readonly busy: boolean;
+  /** Split in two can still do something: the limit is not reached and some piece is big enough to halve (a piece under twice the minimum, 1/4 of the whole, cannot be cut at all) */
+  readonly canSplit: boolean;
   readonly maxPieces: number;
   /** a swipe over the canvas, CSS px from (x0, y0) to (x1, y1) */
   swipe(x0: number, y0: number, x1: number, y1: number): CutResult;
@@ -226,6 +236,12 @@ export function createCutter(d: CutDeps): Cutter {
   const list = (): Piece[] => (pieces.length ? pieces : [{ body: d.bodies.body, chunk: false, frac: 1, built: 1 }]);
   const extraOf = (b: SoftBodyLike): ExtraBody | undefined => d.bodies.extras.find((x) => x.body === b && x.piece);
   const radius = (p: Piece): number => p.body.restRadius * Math.cbrt(Math.max(PIECE_MIN, (p.body.frac ?? p.frac)) / Math.max(PIECE_MIN, p.built));
+  const dragVec: V3 = { x: 0, y: 0, z: 0 };
+  /** the finger is dragging P toward the piece at the other end of `u` (the unit vector from that piece to P): its hand has moved DRAG_TOWARD_K of P's radius that way */
+  const dragsInto = (P: Piece, u: V3): boolean => {
+    try { if (!d.drag(dragVec)) return false; } catch (e) { d.report(e); return false; }
+    return -(dragVec.x * u.x + dragVec.y * u.y + dragVec.z * u.z) >= DRAG_TOWARD_K * radius(P);
+  };
 
   function wobble(b: SoftBodyLike): void {
     try {
@@ -234,12 +250,48 @@ export function createCutter(d: CutDeps): Cutter {
     } catch (e) { d.report(e); }
   }
 
-  function startCut(p: Piece, plane: CutPlane): CutResult {
+  /** the smaller part's share of the whole if the piece were cut by this plane, or null when the plane misses it */
+  function shareOf(p: Piece, plane: CutPlane): number | null {
+    try {
+      const fa = p.body.measureCut!(plane);
+      return fa === null || !(fa > 0) || !(fa < 1) ? null : Math.min(fa, 1 - fa) * p.frac;
+    } catch (e) { d.report(e); return null; }
+  }
+  /** Split in two cuts "through the middle", but a plane through a lopsided piece's centre of mass does not halve it (a chunk with a flat face, or any piece
+   *  after a few cuts): from an even split Split in two stalled at 4 pieces with "Try nearer the middle", advice a button that always cuts the middle cannot
+   *  follow (VERIFY A-F1). When the middle plane would leave a part under 1/8, this looks for the parallel plane that halves the piece best (a bisection on
+   *  the share, within 1.3 radii of the centre); the middle plane is kept when it is legal. */
+  function halving(p: Piece, plane: CutPlane): CutPlane {
+    const s0 = shareOf(p, plane);
+    if (s0 !== null && s0 >= PIECE_MIN - 1e-6) return plane;
+    const n = plane.normal, R = 1.3 * radius(p);
+    const at = (t: number): CutPlane => ({ point: { x: plane.point.x + n.x * t, y: plane.point.y + n.y * t, z: plane.point.z + n.z * t }, normal: n });
+    const side = (t: number): number | null => {   // the share on the +normal side as the plane moves t along the normal
+      try { const fa = p.body.measureCut!(at(t)); return fa === null || !(fa > 0) || !(fa < 1) ? null : fa; } catch (e) { d.report(e); return null; }
+    };
+    let lo = -R, hi = R, best = plane, bestShare = s0 ?? 0;
+    for (let i = 0; i < 18; i++) {
+      const mid = 0.5 * (lo + hi), fa = side(mid);
+      if (fa === null) { if (mid > 0) hi = mid; else lo = mid; continue; }   // the plane left the piece on that side: come back toward the middle
+      const sh = Math.min(fa, 1 - fa) * p.frac;
+      if (sh > bestShare) { bestShare = sh; best = at(mid); }
+      if (bestShare >= PIECE_MIN - 1e-6 && Math.abs(fa - 0.5) < 0.01) break;
+      if (fa > 0.5) lo = mid; else hi = mid;   // more than half on the +normal side: move the plane further along +normal
+    }
+    return best;
+  }
+
+  function startCut(p: Piece, plane: CutPlane, button = false): CutResult {
     let fa: number | null = null;
     try { fa = p.body.measureCut!(plane); } catch (e) { d.report(e); fa = null; }
     if (fa === null || !(fa > 0) || !(fa < 1)) return 'miss';
     const small = Math.min(fa, 1 - fa) * p.frac;
-    if (small < PIECE_MIN - 1e-6) { wobble(p.body); d.say(p.frac < 2 * PIECE_MIN + 1e-6 ? "That piece is as small as it gets." : 'Too small to cut there. Try nearer the middle.'); return 'small'; }
+    if (small < PIECE_MIN - 1e-6) {
+      wobble(p.body);
+      // (the button always cuts the middle, so "try nearer the middle" is advice it cannot follow: it says what is true instead)
+      d.say(button ? 'No piece is big enough to split in two. Swipe near an edge to peel off a small one.' : p.frac < 2 * PIECE_MIN + 1e-6 ? "That piece is as small as it gets." : 'Too small to cut there. Try nearer the middle.');
+      return 'small';
+    }
     if (list().length + 1 > max()) { wobble(p.body); d.say("That's as many pieces as it can make."); return 'limit'; }
     if (!pieces.length) {
       const n = d.clearMat();
@@ -436,6 +488,7 @@ export function createCutter(d: CutDeps): Cutter {
     get pieces() { return list().length; },
     fracs: () => list().map((p) => p.frac),
     get busy() { return anim !== null; },
+    get canSplit() { return list().length < max() && list().some((p) => p.frac >= 2 * PIECE_MIN - 1e-6); },
     get maxPieces() { return max(); },
     swipe(x0, y0, x1, y1) {
       if (!supported()) return 'unsupported';
@@ -481,7 +534,7 @@ export function createCutter(d: CutDeps): Cutter {
       const up = unit({ x: w[4], y: w[5], z: w[6] }) ?? { x: 0, y: 1, z: 0 };
       const normal = view ? unit(cross(view, up)) : null;
       if (!normal) return 'miss';
-      return startCut(p, { point: { x: c.x, y: c.y, z: c.z }, normal });
+      return startCut(p, halving(p, { point: { x: c.x, y: c.y, z: c.z }, normal }), true);
     },
     reconnectAll(animated) {
       if (!pieces.length && !anim) return false;
@@ -548,7 +601,8 @@ export function createCutter(d: CutDeps): Cutter {
         if (Math.hypot(c.x, c.z) <= HOME_NEAR * 0.5 || t - a.t0 >= HOME_MAX_S) { anim = null; swapWhole(a.face); }
         return;
       }
-      // touch-to-join: a piece under a finger that touches another piece for JOIN_HOLD_S, or is let go while touching
+      // touch-to-join: a piece the finger DRAGS into another so that they touch for JOIN_HOLD_S, or is let go while they touch. The contact is only
+      // STARTED by a drag toward the other piece (dragsInto); once it runs it is kept while the skins stay close (TOUCH_KEEP_GAP), whatever the finger does
       if (pieces.length < 2) { contact = null; return; }
       const touching = d.touching();
       const act = d.activeBody();
@@ -558,8 +612,9 @@ export function createCutter(d: CutDeps): Cutter {
         for (const q of pieces) {
           if (q === P) continue;
           const m = gapBetween(P.body, q.body);
-          const lim = contact && contact.a === P && contact.b === q ? TOUCH_KEEP_GAP : TOUCH_GAP;
-          if (m && m.g < lim && m.g < bestD) { bestD = m.g; Q = q; }
+          const kept = !!contact && contact.a === P && contact.b === q;
+          const lim = kept ? TOUCH_KEEP_GAP : TOUCH_GAP;
+          if (m && m.g < lim && m.g < bestD && (kept || dragsInto(P, m.u))) { bestD = m.g; Q = q; }
         }
         if (Q) {
           if (!contact || contact.a !== P || contact.b !== Q) contact = { a: P, b: Q, since: t };

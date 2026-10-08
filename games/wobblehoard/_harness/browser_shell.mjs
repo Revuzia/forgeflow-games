@@ -44,7 +44,8 @@ async function section(name, fn) {
   currentSection = name;
   console.log(`\n== ${name}`);
   const t0 = Date.now();
-  try { await fn(); } catch (e) { check(`${name}: section ran to the end`, false, String(e && e.message ? e.message : e).split('\n')[0]); }
+  // (SHELL-4 fix 1: the start of Playwright's call log, not only its first line: "Timeout 30000ms exceeded" alone hid what the click was waiting for)
+  try { await fn(); } catch (e) { check(`${name}: section ran to the end`, false, String(e && e.message ? e.message : e).split('\n').filter((l) => l.trim()).slice(0, 8).join(' | ').slice(0, 900)); }
   console.log(`   (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -207,7 +208,12 @@ async function layoutOf(page) {
       sw: d.scrollWidth, sh: d.scrollHeight, iw: innerWidth, ih: innerHeight, bsw: document.body.scrollWidth, bsh: document.body.scrollHeight,
       gear: r(q('.hud-actions button[aria-label="Settings"]')), mute: r(q('.hud-actions button[aria-pressed]')), hint: r(hint), hintShow: hint?.dataset.show, name: r(q('.nametag')), wordmark: r(q('.wordmark')), panel: r(panel),
       meter: r(q('.meter')), capsuleBtn: r(q('.capsule-btn:not([hidden])')),
-      hintFont: hint ? parseFloat(getComputedStyle(hint).fontSize) : 0, hintClipped: hint ? hint.scrollWidth > hint.clientWidth + 1 : false,
+      hintFont: hint ? parseFloat(getComputedStyle(hint).fontSize) : 0, hintClipped: hint ? (hint.scrollWidth > hint.clientWidth + 1 || (() => {
+        // (SHELL-4: also text that runs into the right padding and touches the pill's border, which scrollWidth does not report for a nowrap box: measured with a Range against the padding box)
+        const rg = document.createRange(); rg.selectNodeContents(hint); const hr = hint.getBoundingClientRect(), cs = getComputedStyle(hint), rects = [...rg.getClientRects()];
+        if (!rects.length) return false;
+        return Math.max(...rects.map((q) => q.right)) > hr.right - parseFloat(cs.borderRightWidth) - parseFloat(cs.paddingRight) + 0.5 || Math.min(...rects.map((q) => q.left)) < hr.left + parseFloat(cs.borderLeftWidth) + parseFloat(cs.paddingLeft) - 0.5;
+      })()) : false,
       hintLines: hint ? (() => { const rg = document.createRange(); rg.selectNodeContents(hint); return new Set([...rg.getClientRects()].map((q) => Math.round(q.top))).size; })() : 0,
       panelScroll: panel ? { sh: panel.scrollHeight, ch: panel.clientHeight } : null,
       labels: panel && panel.dataset.open === 'true' ? [...panel.querySelectorAll('.row-label, .panel-title, .panel-group')].filter((e) => e.offsetParent !== null).map((e) => { const b = e.getBoundingClientRect(); return { t: e.textContent, x: b.x, r: b.right, w: b.width, sw: e.scrollWidth, cw: e.clientWidth }; }) : [],
@@ -439,15 +445,22 @@ async function main() {
       // the body, so neither an image difference nor the camera position is ever still; a turn changes yaw or pitch, following does not)
       const camOf = () => page.evaluate(() => { const k = window.__WH__.shell.tools(); if (!k.cam) return null; const dx = k.cam.x - k.body.x, dz = k.cam.z - k.body.z; return { yaw: Math.atan2(dx, dz), pitch: Math.atan2(k.cam.y - k.body.y, Math.hypot(dx, dz)) }; });
       const camMoved = (p, q) => !p || !q ? true : Math.abs(p.yaw - q.yaw) > 0.02 || Math.abs(p.pitch - q.pitch) > 0.02;
-      const cL0 = await camOf();
+      // SHELL-4 fix round 1: this row used to read the camera's ANGLE in the LIVE loop right after the pull and its snap, while the squishy was still wobbling and the camera eased after it; on a loaded
+      // machine that read 0.025 rad against the 0.02 bar (it failed on the unmodified tree in VERIFY_SHELL4_A too, whose own paused measurement read 1e-14). The sim is paused and stepped now, so the
+      // only thing that can move the camera between the two reads is the drag, and the bar is a camera POSITION change of 0.05 (a real right or middle drag moves it by 2 .. 4): not looser, steadier.
+      const camPosNow = () => page.evaluate(() => window.__WH__.shell.tools().cam);
+      await page.evaluate(() => window.__WH__.pause()); await stepSim(page, 2);
+      const cL0 = await camOf(), pL0 = await camPosNow();
       await page.mouse.move(90, 140);
       await page.mouse.down();
-      for (let i = 1; i <= 12; i++) { await page.mouse.move(90 + i * 22, 140 + i * 3); await sleep(35); }
+      for (let i = 1; i <= 12; i++) { await page.mouse.move(90 + i * 22, 140 + i * 3); await stepSim(page, 1 / 30); }
       await page.mouse.up();
-      await sleep(1500);
-      const cL1 = await camOf();
+      await stepSim(page, 1.5);
+      const cL1 = await camOf(), pL1 = await camPosNow();
+      await page.evaluate(() => window.__WH__.resume());
       const aL = await started(page);
-      check('orbit: a LEFT-button drag on empty space does NOT turn the view (the camera does not move) and does not poke the body (owner decision 2026-10-06)', !camMoved(cL0, cL1) && aL.poke === a0.poke, `camera ${JSON.stringify(cL0)} -> ${JSON.stringify(cL1)}`);
+      const leftMoved = Math.hypot(pL1.x - pL0.x, pL1.y - pL0.y, pL1.z - pL0.z);
+      check('orbit: a LEFT-button drag on empty space does NOT turn the view (the camera does not move) and does not poke the body (owner decision 2026-10-06)', leftMoved < 0.05 && aL.poke === a0.poke, `camera position moved ${leftMoved.toExponential(2)}; angles ${JSON.stringify(cL0)} -> ${JSON.stringify(cL1)}`);
       // ... and the RIGHT-button drag on empty space turns the view; the body does not get poked
       const s0 = await canvasSig(page);
       const cR0 = await camOf();
@@ -501,6 +514,16 @@ async function main() {
     await section('shift-pull', async () => {
       const { page } = D;
       const vp = page.viewportSize();
+      // mouse-gestures ends with the camera wheel-zoomed IN (the squishy 300 px in radius instead of 210): a pull of 1.15 x maxPull (the lift limit) is 1.15 x 1.79 x r = 618 px there, more
+      // than the 1280 px window leaves to the right of a squishy at its middle (SHELL-4: the two Shift rows that need a pull past the limit failed at 0.98 x maxPull). The section brings
+      // the view back out first (a wheel down on empty space) and reads the body after that.
+      if ((await body(page)).rPx > 245) {
+        const rIn = (await body(page)).rPx;
+        await page.mouse.move(90, 140);
+        await page.mouse.wheel(0, 1400);
+        await waitUntil(page, (v) => window.__WH__.bodyScreen().rPx < v * 0.9, rIn, 60000);
+        await sleep(2000);
+      }
       const B = await body(page);
       const cx = B.x * vp.width, cy = B.y * vp.height, r = B.rPx;
       // the hint: the pointer wording names the Shift pull, on ONE line at full size, and a held Shift key is not "a key used" (no keyboard wording)
@@ -1040,7 +1063,7 @@ async function main() {
       });
       // a squeeze held for `frames` sim frames at the middle of the squishy, deterministic (sim paused and stepped through the hook, like the stretch below); the
       // pending-arc length is sampled 4 times while it is held; the finger is let go after, and the sim stays paused (the caller resumes it)
-      const squeezeHold = (b, frames) => page.evaluate(async (b, frames) => {
+      const squeezeHold = (b0, frames0) => page.evaluate(async ([b, frames]) => {   // (Playwright passes ONE argument to the page function: an array)
         const wh = window.__WH__; wh.pause();
         const read = () => { const p = document.querySelector('.meter-pending'); return parseFloat((p.getAttribute('stroke-dasharray') || '0').split(/[ ,]+/)[0]); };
         const yieldTask = () => new Promise((r) => setTimeout(r, 0));
@@ -1052,7 +1075,7 @@ async function main() {
         wh.pointerUp();
         for (let i = 0; i < 4; i++) { wh.step(1 / 60, 3); await yieldTask(); }
         return held;
-      }, b, frames);
+      }, [b0, frames0]);
       // 1. a quick TAP, real mouse: it pays nothing (the poke lands, audio.poke plays), so there are no sparks, no glow, no pending arc and the ring stays put
       const r0 = await ring();
       const B = await body(page); const vp = page.viewportSize();
@@ -1817,7 +1840,9 @@ async function main() {
         wh.pointerDown(sx / vw, sy / vh, 0); wh.step(1 / 60, 8);
         let carried = false;
         for (let i = 1; i <= 24; i++) { wh.pointerMove((sx + dir * i * 9) / vw, (sy - i * 9) / vh, 0); wh.step(1 / 60, 2); if (wh.shell.matInfo().bodies.some((x) => x.carried)) carried = true; }
-        for (let i = 1; i <= 6; i++) { wh.pointerMove((sx + dir * (216 + i * 30)) / vw, (sy - 216 + i * 10) / vh, 0); wh.step(1 / 60, 1); }
+        // (the carry may begin only in the flick below: sampled there too, and once more with the finger still down; the first version sampled the first 24 steps only)
+        for (let i = 1; i <= 6; i++) { wh.pointerMove((sx + dir * (216 + i * 30)) / vw, (sy - 216 + i * 10) / vh, 0); wh.step(1 / 60, 1); if (wh.shell.matInfo().bodies.some((x) => x.carried)) carried = true; }
+        wh.step(1 / 60, 2); if (wh.shell.matInfo().bodies.some((x) => x.carried)) carried = true;
         const grabbed = wh.shell.matInfo().bodies.findIndex((x) => x.fingers > 0 || x.carried);
         wh.pointerUp(0);
         const kinds = [];
@@ -1912,6 +1937,61 @@ async function main() {
         check(`phone ${vp.width}: the Snap bar fits`, inside(p3.snapbar) && p3.sw <= vp.width, JSON.stringify(p3.snapbar));
         await context.close();
       }
+    });
+
+    // ------------------------------------------------------------------------------------------------
+    // The Cut tool with a real FINGER on a phone (every other cut check uses the hook or a mouse): a CDP touch swipe across the squishy draws the blade, cuts it into two pieces on the REAL
+    // physics, pays nothing, says so in the live region; a touch that never moves (a tap) cuts nothing.
+    // ------------------------------------------------------------------------------------------------
+    await section('cut-touch', async () => {
+      const { page, context, w } = await open({ query: '?dev=1&quality=low', ctx: PHONE });
+      mainWatches.push(['cut-touch', w]);
+      const cdp = await cdpFor(page);
+      await wake(page, { touch: true });
+      await page.evaluate(() => { window.__WH__.setSetting('skipAnimations', false); window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
+      await pclick(page, '.toys-btn'); await sleep(150); await pclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await page.evaluate(() => window.__WH__.pause());
+      const vp = page.viewportSize();
+      const B = await body(page);
+      const cx = B.x * vp.width, cy = B.y * vp.height, r = B.rPx;
+      const m0 = await meter(page);
+      const t0 = await tools(page);
+      // a tap on the squishy with the Cut tool: no swipe, no cut, no pay
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: tp([{ x: cx, y: cy, id: 0 }]) });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await sleep(300);
+      const tTap = await tools(page);
+      check('Cut tool, a finger TAP on the squishy: not a cut (still one piece, nothing busy)', tTap.pieces === 1 && !tTap.busy && t0.tool === 'cut', JSON.stringify({ tool: t0.tool, pieces: tTap.pieces, busy: tTap.busy }));
+      // the swipe: top to bottom a little right of the middle
+      const x = cx + 0.1 * r, y0 = cy - 1.6 * r, y1 = cy + 1.5 * r;
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: tp([{ x: x - 10, y: y0, id: 0 }]) });
+      let blade = false;
+      for (let i = 1; i <= 10; i++) {
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: tp([{ x: x - 10 + i * 2, y: y0 + ((y1 - y0) * i) / 10, id: 0 }]) });
+        if (i === 5) blade = await page.evaluate(() => getComputedStyle(document.querySelector('.blade')).display !== 'none');
+      }
+      await page.evaluate(() => window.__WH__.pause());
+      const a0 = (await state(page)).audio.started;
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await stepSim(page, 0.16);
+      const neck = await tools(page);
+      await cutIdle(page, 2);
+      await stepSim(page, 1);
+      await sleep(400);
+      const t2 = await tools(page);
+      const a1 = (await state(page)).audio.started;
+      const m1 = await meter(page);
+      await shot(page, 'cut_touch_phone');
+      check('Cut tool, a real finger swipe on a phone: the blade is drawn, the squishy necks (busy), then two pieces whose shares sum to 1; cut start + separate sounds; the live region says "Cut into 2 pieces."',
+        blade && neck.busy && t2.pieces === 2 && Math.abs(t2.fracs[0] + t2.fracs[1] - 1) < 0.01 && a1.cut - a0.cut >= 1 && /Cut into 2 pieces\./.test(await live(page)),
+        JSON.stringify({ blade, neckBusy: neck.busy, pieces: t2.pieces, fracs: t2.fracs.map((f) => +f.toFixed(3)), cut: a1.cut - a0.cut, live: await live(page) }));
+      check('Cut tool on a phone: the swipe and the cut paid the meter nothing', m1.fill === m0.fill && m1.credits === m0.credits, JSON.stringify([m0.fill, m1.fill]));
+      // reconnect with the button (a finger tap on it), whole again
+      await pclick(page, '.cutbar [data-key="join"]');
+      await cutIdle(page, 4); await stepSim(page, 1);
+      const tw = await tools(page);
+      check('Cut tool on a phone: Reconnect all puts it back whole (one body, no piece on the mat)', tw.pieces === 1 && tw.extras === 0 && tw.body.frac === 1, JSON.stringify({ pieces: tw.pieces, extras: tw.extras, frac: tw.body.frac }));
+      await context.close();
     });
 
     // ------------------------------------------------------------------------------------------------
@@ -2045,21 +2125,27 @@ async function main() {
       }, [{ x: chunkA.x - dirA * 0.62 * chunkA.r, y: chunkA.y - 0.1 * chunkA.r }, vp.width, vp.height]);
       check(`a finger held 1.3 s on a piece that rests ${nearGap.toFixed(2)} m from its twin (skins apart) does NOT join them (the join needs the skins to touch)`, nearGap > 0.05 && !stay.busy && stay.pieces === 2, JSON.stringify({ nearGap: +nearGap.toFixed(3), ...stay }));
       await stepSim(page, 1);
-      // the natural gesture: press the chunk's OUTER shoulder and drag it ALONG the table to the face piece (a pull past 1.15 x maxPull carries the piece, at the hand's height)
+      // The natural gesture: press the chunk's INNER shoulder (the side facing the face piece) and pull it INTO the face piece. RE-SPECIFIED in SHELL-4 fix round 1 (VERIFY_SHELL4_A F2): this row used to press the
+      // OUTER shoulder and drag inward, which the gesture machine classifies as a RUB (a pull must go outward from the piece's centre): the piece never moved, the pieces had simply closed up to touching on their own,
+      // and the old level-triggered rule joined them because a finger was on one. That is the bug (any touch joined resting pieces), so the row now drags for real; it also cannot be satisfied by the resting state any more.
+      // Timing: the 0.4 s hold starts when the pull has moved the hand toward the other piece (cut.ts DRAG_TOWARD_K), not when the skins first touch (they may already touch at rest), so the join may not start
+      // before 0.4 s of the press and has to start by itself (before the finger lifts) within 1.6 s.
       const held = await page.evaluate(([f, t, vw, vh]) => {
         const wh = window.__WH__; wh.pause();
         wh.pointerDown(f.x / vw, f.y / vh, 0); wh.step(1 / 60, 8);
         let time = 0, touch0 = -1, join0 = -1;
-        const look = () => { const g = wh.shell.pieceGaps(); if (touch0 < 0 && g.length > 1 && g[1].gap < 0.03) touch0 = +time.toFixed(2); if (join0 < 0 && wh.shell.tools().busy) join0 = +time.toFixed(2); };
-        for (let i = 1; i <= 36; i++) { const k = i / 36; wh.pointerMove((f.x + (t.x - f.x) * k) / vw, (f.y + (t.y - f.y) * k) / vh, 0); wh.step(1 / 60, 2); time += 2 / 60; look(); }
-        for (let i = 0; i < 90 && join0 < 0; i++) { wh.step(1 / 60, 2); time += 2 / 60; look(); }
+        // one sim step per sample, so "the skins first touch" (TOUCH_GAP 0.03 m, the moment cut.ts starts its 0.4 s clock) and "the join begins" are read to 1/60 s; the contact is KEPT
+        // while the skins stay within TOUCH_KEEP_GAP (soft bodies rebound a few cm), so the first touch can precede a longer stretch of gaps between 0.03 and 0.09 m
+        const look = () => { const g = wh.shell.pieceGaps(); if (touch0 < 0 && g.length > 1 && g[1].gap < 0.03) touch0 = +time.toFixed(3); if (join0 < 0 && wh.shell.tools().busy) join0 = +time.toFixed(3); };
+        for (let i = 1; i <= 36; i++) { const k = i / 36; wh.pointerMove((f.x + (t.x - f.x) * k) / vw, (f.y + (t.y - f.y) * k) / vh, 0); for (let s = 0; s < 2; s++) { wh.step(1 / 60, 1); time += 1 / 60; look(); } }
+        for (let i = 0; i < 180 && join0 < 0; i++) { wh.step(1 / 60, 1); time += 1 / 60; look(); }
         return { touch0, join0, drag: +(36 * 2 / 60).toFixed(2) };
-      }, [{ x: chunkA.x - dirA * 0.62 * chunkA.r, y: chunkA.y - 0.1 * chunkA.r }, { x: faceA.x + dirA * -0.15 * faceA.r, y: chunkA.y - 0.1 * chunkA.r }, vp.width, vp.height]);
+      }, [{ x: chunkA.x + dirA * 0.55 * chunkA.r, y: chunkA.y - 0.1 * chunkA.r }, { x: faceA.x + dirA * -0.15 * faceA.r, y: chunkA.y - 0.1 * chunkA.r }, vp.width, vp.height]);
       const startedAt = held.join0 >= 0 ? held : null;   // { touch0: first time the skins touched, join0: when the join began, both from the press; drag: the drag lasted this long }
       await page.evaluate(() => window.__WH__.pointerUp(0));
       await cutIdle(page, 3); await stepSim(page, 1.5);
       const tA = await tools(page);
-      check('reconnect by DRAGGING a piece into another and holding it there: once the SKINS touch the join starts BY ITSELF after the 0.4 s hold (CUT.md 1) while the finger is still down, flows together and the squishy is whole again', rA === 'cut' && !!startedAt && held.touch0 >= 0 && held.join0 - held.touch0 >= 0.35 && held.join0 - held.touch0 <= 0.6 && tA.pieces === 1 && tA.extras === 0, JSON.stringify({ cut: rA, ...held, holdBeforeJoin: held.touch0 >= 0 && held.join0 >= 0 ? +(held.join0 - held.touch0).toFixed(2) : null, pieces: tA.pieces }));
+      check('reconnect by DRAGGING a piece into another (the inner shoulder pulled into the twin) and holding it there: the join starts BY ITSELF after the 0.4 s hold (CUT.md 1) while the finger is still down, flows together and the squishy is whole again', rA === 'cut' && !!startedAt && held.join0 >= 0.4 && held.join0 <= 1.6 && tA.pieces === 1 && tA.extras === 0, JSON.stringify({ cut: rA, ...held, pieces: tA.pieces }));
       await toolOn('cut');
       const rB = await cutHalf();
       await toolOn('hand');
@@ -2069,18 +2155,19 @@ async function main() {
       const quick = await page.evaluate(([f, t, vw, vh]) => {
         const wh = window.__WH__; wh.pause();
         wh.pointerDown(f.x / vw, f.y / vh, 0); wh.step(1 / 60, 8);
-        // a gentle placement: drag the piece in (moves of 2 frames) and let go the moment the skins touch, well under the 0.4 s hold; a throw would carry it off before the let-go is read
+        // a gentle placement: pull the piece in (moves of 2 frames) for a third of a second and let go while the skins touch, well under the 0.4 s hold (SHELL-4 fix round 1: the pieces already touch at rest, so
+        // the drag no longer stops at the first touch; the hold clock starts when the pull has moved the hand toward the twin); a throw would carry it off before the let-go is read
         let tTouch = -1, early = false, time = 0;
         const trace = [];
         const touching = () => { const g = wh.shell.pieceGaps(); if (trace.length < 40) trace.push([+time.toFixed(2), g.length > 1 ? +g[1].gap.toFixed(3) : null, wh.shell.matInfo().bodies.map((b) => (b.carried ? 'C' : '') + b.fingers).join('/')]); return g.length > 1 && g[1].gap < 0.03; };
-        for (let i = 1; i <= 36 && tTouch < 0; i++) { const k = i / 36; wh.pointerMove((f.x + (t.x - f.x) * k) / vw, (f.y + (t.y - f.y) * k) / vh, 0); wh.step(1 / 60, 2); time += 2 / 60; if (wh.shell.tools().busy) early = true; if (touching()) tTouch = +time.toFixed(2); }
-        for (let i = 0; i < 60 && tTouch < 0; i++) { wh.step(1 / 60, 2); time += 2 / 60; if (wh.shell.tools().busy) early = true; if (touching()) tTouch = +time.toFixed(2); }
+        // (the pull runs at least 12 moves, a third of the way to the twin, so the hand has moved toward it by more than DRAG_TOWARD_K of the piece's radius, and on until the skins touch; it lets go as soon as both hold)
+        for (let i = 1; i <= 36 && !(tTouch >= 0 && i >= 12); i++) { const k = i / 36; wh.pointerMove((f.x + (t.x - f.x) * k) / vw, (f.y + (t.y - f.y) * k) / vh, 0); wh.step(1 / 60, 2); time += 2 / 60; if (wh.shell.tools().busy) early = true; if (touching() && tTouch < 0) tTouch = +time.toFixed(2); }
         wh.step(1 / 60, 2);
         const stillBefore = wh.shell.tools().busy;
         wh.pointerUp(0);
         wh.step(1 / 60, 3);
         return { tTouch, busyBefore: early, stillBefore, busyAfter: wh.shell.tools().busy, trace: trace.filter((_, i) => i % 3 === 0) };
-      }, [{ x: chunkB.x - dirB * 0.62 * chunkB.r, y: chunkB.y - 0.1 * chunkB.r }, { x: faceB.x + dirB * -0.15 * faceB.r, y: chunkB.y - 0.1 * chunkB.r }, vp.width, vp.height]);
+      }, [{ x: chunkB.x + dirB * 0.55 * chunkB.r, y: chunkB.y - 0.1 * chunkB.r }, { x: faceB.x + dirB * -0.15 * faceB.r, y: chunkB.y - 0.1 * chunkB.r }, vp.width, vp.height]);
       await cutIdle(page, 3); await stepSim(page, 1.5);
       const tB = await tools(page);
       check('reconnect by LETTING GO while touching: no join while the finger is down for under 0.4 s; the let-go starts it, and the squishy is whole again', rB === 'cut' && !quick.busyBefore && !quick.stillBefore && quick.busyAfter && tB.pieces === 1 && tB.extras === 0, JSON.stringify({ cut: rB, quick, pieces: tB.pieces }));
@@ -2112,7 +2199,7 @@ async function main() {
       const sqChunk = await squeezeOn(1);
       await stepSim(page, 5);
       const sqFace = await squeezeOn(0);
-      check('X06 real: a tap on a piece pays nothing; a squeeze held 1.2 s on a chunk pays through the meter like the same squeeze on the face piece (within 25 %)', rC === 'cut' && tapPay === 0 && sqChunk > 0 && sqFace > 0 && Math.abs(sqChunk - sqFace) <= 0.25 * Math.max(sqChunk, sqFace), `tap ${tapPay}, squeeze on the chunk ${sqChunk.toFixed(4)}, on the face ${sqFace.toFixed(4)} of the ring`);
+      check('X06 real: a tap on a piece pays nothing; a squeeze held 1.2 s on a chunk pays through the meter like the same squeeze on the face piece (within 25 %)', rC === 'cut' && tapPay === 0 && sqChunk > 0 && sqFace > 0 && Math.abs(sqChunk - sqFace) <= 0.25 * Math.max(sqChunk, sqFace), `tap ${tapPay}, squeeze on the chunk ${sqChunk.toFixed(4)}, on the face ${sqFace.toFixed(4)} of the ring, cut ${rC}, pieces ${(await tools(page)).pieces}`);
       await toolOn('cut');
       await pclick(page, '.cutbar [data-key="join"]'); await cutIdle(page, 4); await stepSim(page, 1);
       // ---- X10: the keyboard only (no pointer): focus the squishy, C opens the Cut tool, Tab to Split in two, Enter, Tab to Reconnect all, Enter; live-region lines
@@ -2141,6 +2228,538 @@ async function main() {
       check('X10: keyboard only: C opens the Cut tool, Tab reaches Split in two (Enter: "Cut into 2 pieces."), Reconnect all (Enter: "Whole again."), Done (the Hand back, focus on the Toys button); no keyboard trap',
         kTool === 'cut' && nSplit >= 0 && kPieces === 2 && /Cut into 2 pieces\./.test(kSay) && nJoin >= 0 && kWhole === 1 && /Whole again\./.test(kSay2) && nDone >= 0 && kEnd.tool === 'hand' && kEnd.focus === 'toys-btn',
         JSON.stringify({ kTool, tabs: [nSplit, nJoin, nDone], kPieces, kSay, kWhole, kSay2, kEnd }));
+      await context.close();
+    });
+
+    // ------------------------------------------------------------------------------------------------
+    // SHELL-4 FIX ROUND 1 (VERIFY_SHELL4_A F5 / F6 / F4 / F2, VERIFY_SHELL4_B F1 / F2). The checks above drive the game through the debug hook (game.input directly) or through
+    // hook-made pointers, which BYPASS src/input/pointer.ts; pointer.ts forwards a pointermove only while input.isDown(id), and isDown used to answer for the Hand's presses only,
+    // so with REAL pointer events Snap's drag-to-turn and pinch did nothing and the Cut tool's blade line stood still at its start point (124/124, 183/183 and 473/473 could not see it).
+    // These sections use Playwright's real mouse and CDP touch (pointer events through pointer.ts) and a real SoftBody pair that has been resting.
+    // ------------------------------------------------------------------------------------------------
+    await section('fix1-pointer', async () => {
+      const camMove = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+      const bladeNow = (page) => page.evaluate(() => { const l = document.querySelector('.blade-line'), s = document.querySelector('.blade'); return { shown: getComputedStyle(s).display !== 'none', x1: +l.getAttribute('x1'), y1: +l.getAttribute('y1'), x2: +l.getAttribute('x2'), y2: +l.getAttribute('y2') }; });
+      const pick = async (page, id, touch) => {
+        await page.evaluate(() => window.__WH__.resume());
+        if (touch) { await pclick(page, '.toys-btn'); await sleep(250); await pclick(page, `.toy[data-tool="${id}"]`); } else { await hclick(page, '.toys-btn'); await sleep(200); await hclick(page, `.toy[data-tool="${id}"]`); }
+        await settle(page);
+        await page.evaluate(() => window.__WH__.pause());
+      };
+      // ---- desktop: a real mouse
+      {
+        const { page, context, w } = await open({ query: '?dev=1' });
+        mainWatches.push(['fix1-pointer-desktop', w]);
+        await wake(page);
+        await page.evaluate(() => window.__WH__.pause());
+        await stepSim(page, 1);
+        const drag = async (button, x0, y0, dx, dy) => {
+          const c0 = (await tools(page)).cam;
+          await page.mouse.move(x0, y0); await page.mouse.down({ button });
+          for (let i = 1; i <= 10; i++) { await page.mouse.move(x0 + (dx * i) / 10, y0 + (dy * i) / 10); await stepSim(page, 1 / 60); }
+          await page.mouse.up({ button });
+          await stepSim(page, 0.5);
+          return camMove(c0, (await tools(page)).cam);
+        };
+        const hand = await drag('right', 120, 300, 240, 50);
+        check('(control) Hand tool, a real RIGHT-button drag on empty space turns the view', hand > 0.5, `camera moved ${hand.toFixed(3)}`);
+        await pick(page, 'cut', false);
+        await page.mouse.move(120, 200); await page.mouse.down();
+        const seen = [];
+        for (let i = 1; i <= 5; i++) { await page.mouse.move(120 + 40 * i, 200 + 20 * i); await sleep(40); seen.push(await bladeNow(page)); }
+        await page.mouse.up();
+        await sleep(60);
+        const gone = await bladeNow(page);
+        check('Cut tool, a REAL mouse drag: the blade line follows the pointer (its far end reaches (320, 300) before the button is released; it was a dot at the start point) and it hides on release',
+          seen.length === 5 && seen.every((b, i) => b.shown && Math.abs(b.x2 - (160 + 40 * i)) < 6 && Math.abs(b.y2 - (220 + 20 * i)) < 6 && Math.abs(b.x1 - 120) < 2) && !gone.shown, JSON.stringify({ last: seen[4], afterUp: gone.shown }));
+        await pick(page, 'snap', false);
+        const dR = await drag('right', 120, 300, 240, 50);
+        const dM = await drag('middle', 120, 300, 240, 50);
+        const dL = await drag('left', 120, 300, 240, 50);
+        check('Snap, REAL mouse: a RIGHT-button drag and a MIDDLE-button drag on empty space turn the view (the hook-driven checks bypass the DOM glue and did not see it do nothing); a LEFT drag does not (owner decision 2026-10-06)',
+          dR > 0.5 && dM > 0.5 && dL < 0.05, `right ${dR.toFixed(3)}, middle ${dM.toFixed(3)}, left ${dL.toFixed(3)} (camera position moved; the Hand control moved ${hand.toFixed(3)})`);
+        const r0 = (await body(page)).rPx;
+        await page.mouse.move(640, 400); await page.mouse.wheel(0, -300); await stepSim(page, 0.5);
+        const r1 = (await body(page)).rPx;
+        check('Snap, REAL mouse: the wheel zooms (unchanged)', r1 > r0 * 1.05, `rPx ${r0.toFixed(0)} -> ${r1.toFixed(0)}`);
+        await page.keyboard.press('Escape'); await settle(page);
+        check('fix1-pointer desktop: Snap Escape leaves with the Hand back', (await tools(page)).tool === 'hand');
+        await context.close();
+      }
+      // ---- phone: a real finger and a real pinch
+      {
+        const { page, context, w } = await open({ query: '?dev=1', ctx: PHONE });
+        mainWatches.push(['fix1-pointer-phone', w]);
+        const cdp = await cdpFor(page);
+        await wake(page, { touch: true });
+        await page.evaluate(() => window.__WH__.pause());
+        await stepSim(page, 1);
+        const finger = async (x0, y0, dx, dy, n = 10, cb) => {
+          const c0 = (await tools(page)).cam;
+          await touchStart(cdp, [{ x: x0, y: y0, id: 0 }]);
+          for (let i = 1; i <= n; i++) { await touchMove(cdp, [{ x: x0 + (dx * i) / n, y: y0 + (dy * i) / n, id: 0 }]); await stepSim(page, 1 / 60); if (cb) await cb(i); }
+          await touchEnd(cdp);
+          await stepSim(page, 0.5);
+          return camMove(c0, (await tools(page)).cam);
+        };
+        const hand = await finger(40, 150, 200, 60);
+        check('(control) phone, Hand tool: a real finger drag on empty space turns the view', hand > 0.3, `camera moved ${hand.toFixed(3)}`);
+        await pick(page, 'cut', true);
+        const seen = [];
+        await finger(40, 150, 240, 80, 6, async () => { seen.push(await bladeNow(page)); });
+        check('Cut tool, a REAL finger drag on a phone: the blade line follows the finger (far end near (280, 230) before it lifts)', seen.length === 6 && Math.abs(seen[5].x2 - 280) < 8 && Math.abs(seen[5].y2 - 230) < 8 && seen.every((b) => b.shown), JSON.stringify(seen[5]));
+        await pick(page, 'snap', true);
+        const dF = await finger(40, 150, 200, 60);
+        const rr0 = (await body(page)).rPx;
+        const q0 = { x: 110, y: 150, id: 0 }, q1 = { x: 190, y: 150, id: 1 };
+        await touchStart(cdp, [q0]); await touchStart(cdp, [q0, q1]);
+        for (let i = 1; i <= 10; i++) { await touchMove(cdp, [{ ...q0, x: q0.x - i * 8 }, { ...q1, x: q1.x + i * 8 }]); await stepSim(page, 1 / 60); }
+        await touchEnd(cdp, [q1]); await touchEnd(cdp);
+        await stepSim(page, 0.6);
+        const rr1 = (await body(page)).rPx;
+        check('Snap, REAL fingers on a phone: one finger drag turns the view; a two-finger pinch (spread) zooms in', dF > 0.3 && rr1 > rr0 * 1.05, `drag moved the camera ${dF.toFixed(3)} (Hand control ${hand.toFixed(3)}); pinch rPx ${rr0.toFixed(0)} -> ${rr1.toFixed(0)}`);
+        await context.close();
+      }
+    });
+
+    await section('fix1-join', async () => {
+      // VERIFY_SHELL4_A F2: after a cut the pieces close up to touching (Dollop 0.028 m at 3 s, 27 of 50 species), and ANY touch on one of them then reconnected it with its twin.
+      // Here, on the real stack with a real mouse: Dollop, Split in two, 4 s of rest (the premise: the skins touch), then ONE kind of touch per trial; none may join.
+      // Then the deliberate gesture of CUT.md 1: the inner shoulder pulled INTO the twin, held (and the let-go variant), which must still reconnect.
+      const { page, context, w } = await open({ query: '?dev=1&rseed=4242&quality=high', ctx: SMALL });
+      mainWatches.push(['fix1-join', w]);
+      await wake(page);
+      await page.evaluate(() => { window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); window.__WH__.shell.spyStart(); });
+      const rejoins = () => page.evaluate(() => window.__WH__.shell.spyCalls().audio.rejoin?.n ?? 0);
+      const toolPick = async (id) => { await page.evaluate(() => window.__WH__.resume()); await hclick(page, '.toys-btn'); await sleep(200); await hclick(page, `.toy[data-tool="${id}"]`); await settle(page); await page.evaluate(() => window.__WH__.pause()); };
+      const gapNow = async () => { const g = await page.evaluate(() => window.__WH__.shell.pieceGaps()); return g.length > 1 ? g[1].gap : null; };
+      /** a fresh pair: whole again, Split in two (the Cut tool's button), the Hand, 4 s of rest */
+      const freshPair = async () => {
+        if ((await tools(page)).tool !== 'cut') await toolPick('cut');
+        if ((await tools(page)).pieces > 1) { await pclick(page, '.cutbar [data-key="join"]'); await cutIdle(page, 5); await stepSim(page, 1.5); }
+        await pclick(page, '.cutbar [data-key="split"]'); await cutIdle(page, 4);
+        await pclick(page, '.cutbar [data-key="done"]'); await settle(page);
+        await page.evaluate(() => window.__WH__.pause());
+        await stepSim(page, 4);
+        const m = await page.evaluate(() => window.__WH__.shell.matInfo().bodies);
+        const face = m[0], chunk = m[1];
+        return { face, chunk, dir: Math.sign(chunk.x - face.x) || 1, gap: await gapNow() };
+      };
+      /** a REAL mouse touch at `p`: hold `holdS`, optionally dragging along `path` ([dx, dy] px by the end); the sim is stepped between the events */
+      const touch = async (p, holdS, path = null) => {
+        const r0 = await rejoins();
+        await page.mouse.move(p.x, p.y); await page.mouse.down();
+        let busyAt = null, t = 0;
+        const n = Math.max(1, Math.round(holdS * 60 / 3));
+        for (let i = 0; i < n; i++) {
+          if (path) await page.mouse.move(p.x + (path[0] * (i + 1)) / n, p.y + (path[1] * (i + 1)) / n);
+          await stepSim(page, 3 / 60); t += 3 / 60;
+          if (busyAt === null && (await tools(page)).busy) busyAt = +t.toFixed(2);
+        }
+        await page.mouse.up();
+        await stepSim(page, 0.6);
+        const busyUp = (await tools(page)).busy;
+        await cutIdle(page, 3); await stepSim(page, 0.5);
+        return { busyAt, busyAfterUp: busyUp && busyAt === null, pieces: (await tools(page)).pieces, rejoins: (await rejoins()) - r0 };
+      };
+      const trials = [];
+      for (const [label, hold, path] of [['tap 60 ms', 0.06, null], ['press 300 ms', 0.3, null], ['squeeze 1.2 s', 1.2, null], ['rub inward 1.0 s', 1.0, 'rub'], ['pull away and up 1.0 s', 1.0, 'away']]) {
+        const f = await freshPair();
+        const p = { x: f.chunk.x + f.dir * 0.3 * f.chunk.r, y: f.chunk.y - 0.1 * f.chunk.r };
+        const pa = path === 'rub' ? [-f.dir * 0.5 * f.chunk.r, 0] : path === 'away' ? [f.dir * 0.4 * f.chunk.r, -0.6 * f.chunk.r] : null;
+        const r = await touch(path === 'away' ? { x: f.chunk.x + f.dir * 0.55 * f.chunk.r, y: f.chunk.y - 0.1 * f.chunk.r } : p, hold, pa);
+        trials.push({ label, gap: f.gap === null ? null : +f.gap.toFixed(3), ...r });
+      }
+      const allKept = trials.every((t) => t.pieces === 2 && t.busyAt === null && !t.busyAfterUp && t.rejoins === 0);
+      check('A-F2 real: a tap, a 300 ms press, a 1.2 s squeeze, a rub and a pull AWAY on a piece resting against its twin never reconnect them (each trial ends with 2 pieces, no join started, no rejoin voice; the skins were within 6 cm)',
+        allKept && trials.every((t) => t.gap !== null && t.gap < 0.06), JSON.stringify(trials));
+      // the deliberate gesture: press the INNER shoulder (the side facing the twin) and pull it into the twin, hold there; the join starts by itself 0.4 s after the skins touch, finger still down
+      const f2 = await freshPair();
+      const press2 = { x: f2.chunk.x - f2.dir * 0.55 * f2.chunk.r, y: f2.chunk.y - 0.1 * f2.chunk.r };
+      const target2 = { x: f2.face.x + f2.dir * 0.1 * f2.face.r, y: f2.chunk.y - 0.1 * f2.chunk.r };
+      await page.mouse.move(press2.x, press2.y); await page.mouse.down();
+      let join0 = -1, time = 0, minGap = 9, carried = false;
+      const look = async () => { const t = await tools(page); const g = await gapNow(); if (g !== null) minGap = Math.min(minGap, g); if (join0 < 0 && t.busy) join0 = +time.toFixed(2); const mi = await page.evaluate(() => window.__WH__.shell.matInfo().bodies); if (mi.some((b) => b.carried)) carried = true; };
+      for (let i = 1; i <= 40 && join0 < 0; i++) {
+        const k = i / 40;
+        await page.mouse.move(press2.x + (target2.x - press2.x) * k, press2.y + (target2.y - press2.y) * k);
+        await stepSim(page, 2 / 60); time += 2 / 60; await look();
+      }
+      for (let i = 0; i < 60 && join0 < 0; i++) { await stepSim(page, 3 / 60); time += 3 / 60; await look(); }
+      const heldDown = join0 >= 0;
+      await page.mouse.up();
+      await cutIdle(page, 4); await stepSim(page, 1.5);
+      const end = await tools(page);
+      check('A-F2 real: the deliberate gesture still reconnects: the inner shoulder of a piece pulled INTO its twin and held starts the join by itself while the finger is still down, and the squishy ends whole',
+        heldDown && end.pieces === 1 && end.extras === 0, JSON.stringify({ joinStartedAt: join0, fingerStillDown: heldDown, minGap: +minGap.toFixed(3), carried, pieces: end.pieces, gapBeforeDrag: f2.gap === null ? null : +f2.gap.toFixed(3) }));
+      // let go while they touch: drag the piece in and let go straight away (under the 0.4 s hold)
+      const f3 = await freshPair();
+      const press3 = { x: f3.chunk.x - f3.dir * 0.55 * f3.chunk.r, y: f3.chunk.y - 0.1 * f3.chunk.r };
+      const target3 = { x: f3.face.x + f3.dir * 0.1 * f3.face.r, y: f3.chunk.y - 0.1 * f3.chunk.r };
+      await page.mouse.move(press3.x, press3.y); await page.mouse.down();
+      // (the pieces rest 0.029 m apart, i.e. they already touch before the finger moves: the drag runs a third of a second, well under the 0.4 s hold, and the finger lets go while they touch)
+      let early = false, tm = 0, minGap3 = 9;
+      for (let i = 1; i <= 10; i++) {
+        const k = i / 40;
+        await page.mouse.move(press3.x + (target3.x - press3.x) * k, press3.y + (target3.y - press3.y) * k);
+        await stepSim(page, 2 / 60); tm += 2 / 60;
+        if ((await tools(page)).busy) early = true;
+        const g = await gapNow(); if (g !== null) minGap3 = Math.min(minGap3, g);
+      }
+      const tTouch = +minGap3.toFixed(3);
+      await page.mouse.up();
+      await stepSim(page, 3 / 60);
+      const busyAfter = (await tools(page)).busy;
+      await cutIdle(page, 4); await stepSim(page, 1.5);
+      const end3 = await tools(page);
+      check('A-F2 real: letting go of a piece that was dragged into its twin, while they touch, reconnects them at once (no 0.4 s wait)', tTouch < 0.03 && !early && busyAfter && end3.pieces === 1, JSON.stringify({ minSkinGapDuringDrag: tTouch, joinedBeforeLetGo: early, busyAfterLetGo: busyAfter, pieces: end3.pieces }));
+      await context.close();
+    });
+
+    await section('fix1-split', async () => {
+      // VERIFY_SHELL4_A F1: "Split in two" stalled at 4 pieces from an even split and answered "Try nearer the middle" (advice a button that always cuts the middle cannot follow) while it stayed enabled.
+      // Now: the button looks for the plane that halves the piece best; whenever it is enabled a press cuts, and when no piece can be halved any more it is disabled with an honest line.
+      const { page, context, w } = await open({ query: '?dev=1&rseed=4242&quality=high', ctx: SMALL });
+      mainWatches.push(['fix1-split', w]);
+      await wake(page);
+      await page.evaluate(() => { window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
+      await hclick(page, '.toys-btn'); await sleep(200); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await page.evaluate(() => window.__WH__.pause());
+      const rows = [];
+      for (let i = 0; i < 7; i++) {
+        const before = await page.evaluate(() => ({ n: window.__WH__.shell.tools().pieces, enabled: !document.querySelector('.cutbar [data-key="split"]').disabled, text: document.querySelector('.cutbar-text').textContent }));
+        if (!before.enabled) { rows.push({ press: i + 1, n: before.n, enabled: false, text: before.text }); break; }
+        await pclick(page, '.cutbar [data-key="split"]');
+        await cutIdle(page, 4); await stepSim(page, 0.8); await sleep(450);
+        const after = await tools(page);
+        rows.push({ press: i + 1, from: before.n, to: after.pieces, said: await live(page), fracs: after.fracs.map((f) => +f.toFixed(3)) });
+      }
+      const last = rows[rows.length - 1];
+      const everyEnabledPressCut = rows.filter((r) => r.from !== undefined).every((r) => r.to === r.from + 1);
+      const noMiddleAdvice = rows.every((r) => !/nearer the middle/i.test(r.said ?? ''));
+      check('A-F1 real: Split in two from whole: every press of the ENABLED button cuts (pieces +1), none answers "Try nearer the middle", and it goes beyond the old stall at 4 pieces',
+        everyEnabledPressCut && noMiddleAdvice && rows.filter((r) => r.to !== undefined).length >= 4 && rows.some((r) => r.to >= 5), JSON.stringify(rows));
+      check('A-F1 real: at the end the button is either gone (the limit of pieces: "That\'s as many pieces as it can make.") or disabled with an honest line (no piece big enough to halve); the shares always sum to 1 and none is under 1/8',
+        (last.enabled === false ? /as many pieces|too small to split/i.test(last.text) : last.to === 6) && (await tools(page)).fracs.every((f) => f >= 0.125 - 1e-6) && Math.abs((await tools(page)).fracs.reduce((s, f) => s + f, 0) - 1) < 0.005, JSON.stringify(last));
+      await context.close();
+    });
+
+    await section('fix1-leave', async () => {
+      // VERIFY_SHELL4_A F4: a swipe cut short by the shell's own release (tab hidden / a panel / a ceremony) left the blade stuck, and the next swipe by another finger was ignored
+      const { page, context, w } = await open({ query: '?dev=1&quality=high', ctx: SMALL });
+      mainWatches.push(['fix1-leave', w]);
+      await wake(page);
+      await page.evaluate(() => { window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
+      await hclick(page, '.toys-btn'); await sleep(200); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await page.evaluate(() => window.__WH__.pause());
+      const bladeShown = () => page.evaluate(() => getComputedStyle(document.querySelector('.blade')).display !== 'none');
+      const B = await body(page);
+      await page.evaluate((b) => { const wh = window.__WH__; wh.pointerDown(b.x - 0.3, b.y - 0.35, 7); wh.pointerMove(b.x - 0.28, b.y - 0.2, 7); }, B);
+      const shownMid = await bladeShown();
+      await page.evaluate(() => { window.__WH__.shell.suspend('hidden'); window.__WH__.shell.unsuspend('hidden'); });
+      const shownAfter = await bladeShown();
+      // the next swipe (another finger id, a clean down / move / up through the input port) cuts
+      const r = await page.evaluate((b) => { const wh = window.__WH__; wh.pointerDown(b.x + 0.02, b.y - 0.35, 9); wh.pointerMove(b.x + 0.025, b.y, 9); wh.pointerMove(b.x + 0.03, b.y + 0.3, 9); wh.pointerUp(9); return wh.shell.tools().busy; }, B);
+      await cutIdle(page, 4); await stepSim(page, 1);
+      const t = await tools(page);
+      check('A-F4 real: a swipe interrupted by the shell\'s own release (hidden / unhidden) clears the blade at once, and the next swipe by another finger cuts the squishy',
+        shownMid && !shownAfter && r && t.pieces === 2, JSON.stringify({ bladeMidSwipe: shownMid, bladeAfterRelease: shownAfter, nextSwipeBusy: r, pieces: t.pieces }));
+      await context.close();
+    });
+
+    await section('fix1-tray', async () => {
+      // VERIFY_SHELL4_B U2 / U3 / U4 / M1 / M2 / M3 / M4
+      const { page, context, w } = await open({ query: '?dev=1&rseed=4242&quality=high', ctx: SMALL });
+      mainWatches.push(['fix1-tray', w]);
+      await wake(page);
+      await page.evaluate(() => {
+        window.__said = [];
+        const el = document.getElementById('wh-live');
+        new MutationObserver(() => { const t = el.textContent; if (t) window.__said.push(t); }).observe(el, { subtree: true, childList: true, characterData: true });
+      });
+      const trayOpen = () => page.evaluate(() => ({ open: !document.querySelector('.toys').hidden, body: document.body.dataset.toys ?? null }));
+      const blurPlay = () => page.evaluate(() => { (document.activeElement)?.blur?.(); document.body.focus?.(); });
+      // M1: Settings names every key
+      await page.click('button[aria-label="Settings"]'); await settle(page);
+      const keys = await page.evaluate(() => ({ line: document.querySelector('.panel .keys')?.textContent ?? '', hint: [...document.querySelectorAll('.panel .row-hint')].map((e) => e.textContent).find((t) => /gravity/.test(t) && /Hoard/.test(t)) ?? '' }));
+      check('B-M1: the Settings "Keys:" line and the Keyboard shortcuts hint name T (toys) and C (cut)', /T toys/.test(keys.line) && /C cut/.test(keys.line) && /T toys/.test(keys.hint) && /C cut/.test(keys.hint), JSON.stringify(keys));
+      // U4: with Settings open, T does not stack the tray on top of the sheet; a click on Toys closes Settings first and opens the tray
+      await blurPlay();
+      await page.keyboard.press('t'); await sleep(150);
+      const withSettings = { tray: await trayOpen(), settings: await page.evaluate(() => document.querySelector('.panel').dataset.open) };
+      check('B-U4: with Settings open, T does not open the tray over it', !withSettings.tray.open && withSettings.settings === 'true', JSON.stringify(withSettings));
+      await page.click('.toys-btn'); await sleep(250);
+      const swap = { tray: await trayOpen(), settings: await page.evaluate(() => document.querySelector('.panel').dataset.open) };
+      check('B-U4: a click on the Toys button with Settings open closes Settings and opens the tray (as the Hoard button does), never both', swap.tray.open && swap.settings === 'false', JSON.stringify(swap));
+      await page.keyboard.press('Escape'); await settle(page);
+      // M2: T in Snap opens nothing (the tray is hidden there); the first Escape leaves Snap
+      await hclick(page, '.toys-btn'); await sleep(150); await hclick(page, '.toy[data-tool="snap"]'); await settle(page);
+      await blurPlay();
+      await page.keyboard.press('t'); await sleep(150);
+      const inSnap = await trayOpen();
+      await page.keyboard.press('Escape'); await settle(page);
+      check('B-M2: T during Snap opens no (invisible) tray, and the first Escape leaves Snap', !inSnap.open && (await tools(page)).tool === 'hand', JSON.stringify({ inSnap, tool: (await tools(page)).tool }));
+      // M3: Save by keyboard keeps the focus on the button
+      await hclick(page, '.toys-btn'); await sleep(150); await hclick(page, '.toy[data-tool="snap"]'); await settle(page);
+      const focus0 = await page.evaluate(() => document.activeElement?.className ?? '');
+      const dl = page.waitForEvent('download', { timeout: 240000 });
+      await page.keyboard.press('Enter');
+      await dl; await sleep(700);
+      const after = await page.evaluate(() => ({ cls: document.activeElement?.className ?? '', text: document.querySelector('.snap-save')?.textContent, aria: document.querySelector('.snap-save')?.getAttribute('aria-disabled') }));
+      check('B-M3: Save photo by keyboard (Enter) keeps the keyboard focus on the Save button while and after it saves (aria-disabled, not disabled)', /snap-save/.test(focus0) && /snap-save/.test(after.cls) && after.text === 'Save photo' && after.aria === 'false', JSON.stringify({ focus0, after }));
+      await page.keyboard.press('Escape'); await settle(page);
+      // M4: Reconnect all says "Whole again." with Skip animations on, too
+      await page.evaluate(() => { window.__WH__.setSetting('skipAnimations', true); window.__said.length = 0; });
+      await hclick(page, '.toys-btn'); await sleep(150); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await page.evaluate(() => window.__WH__.pause());
+      await pclick(page, '.cutbar [data-key="split"]'); await cutIdle(page, 4); await stepSim(page, 1.2);
+      await page.evaluate(() => { window.__said.length = 0; });
+      await pclick(page, '.cutbar [data-key="join"]'); await cutIdle(page, 4); await stepSim(page, 0.5); await sleep(500);
+      const said = await page.evaluate(() => window.__said.slice());
+      check('B-M4: Reconnect all with Skip animations on says "Whole again." in the live region, and the squishy is whole', said.includes('Whole again.') && (await tools(page)).pieces === 1, JSON.stringify(said));
+      await pclick(page, '.cutbar [data-key="done"]'); await settle(page);
+      // U3: the tray does not open during a capsule reveal, and a running reveal closes an open tray
+      await page.evaluate(() => { window.__WH__.setSetting('skipAnimations', false); window.__WH__.resume(); });
+      await hclick(page, '.toys-btn'); await sleep(200);
+      const pre = await trayOpen();
+      await page.evaluate(() => { window.__WH__.shell.grant(1); });
+      await waitUntil(page, () => window.__WH__.shell.meter().onTable, null, 20000);
+      await page.evaluate(() => { void window.__WH__.shell.openCapsule(); });
+      await waitUntil(page, () => window.__WH__.shell.ceremony().kind === 'capsule', null, 20000);
+      await sleep(200);
+      const during = await trayOpen();
+      await blurPlay();
+      await page.keyboard.press('t'); await sleep(150);
+      const viaKey = await trayOpen();
+      await pclick(page, '.toys-btn'); await sleep(150);
+      const viaClick = await trayOpen();
+      const cer = await page.evaluate(() => window.__WH__.shell.ceremony().kind);
+      check('B-U3: an open tray closes when a capsule reveal starts, and neither T nor a click on Toys opens it while the reveal runs', pre.open && !during.open && !viaKey.open && !viaClick.open && cer === 'capsule', JSON.stringify({ pre, during, viaKey, viaClick, cer }));
+      await waitUntil(page, () => window.__WH__.shell.ceremony().kind === null && !window.__WH__.shell.ceremony().pending, null, 60000);
+      await sleep(400);
+      await blurPlay();
+      await page.keyboard.press('t'); await sleep(200);
+      check('B-U3: after the reveal T opens the tray again', (await trayOpen()).open);
+      await page.keyboard.press('Escape'); await settle(page);
+      await context.close();
+      // U2 (phone): the meter's status line does not peek out from behind the open tray or the Cut bar
+      {
+        const { page: pp, context: cc, w: ww } = await open({ query: '?dev=1', ctx: PHONE });
+        mainWatches.push(['fix1-tray-phone', ww]);
+        await wake(pp, { touch: true });
+        await pp.evaluate(() => { const e = document.querySelector('.meter-state'); e.hidden = false; e.textContent = 'Squishies are resting, filling slowly'; });
+        const vis = () => pp.evaluate(() => getComputedStyle(document.querySelector('.meter-state')).visibility);
+        const v0 = await vis();
+        await pclick(pp, '.toys-btn'); await sleep(250);
+        const vTray = await vis();
+        await pclick(pp, '.toy[data-tool="cut"]'); await sleep(350);
+        const vCut = await vis();
+        await pclick(pp, '.cutbar [data-key="done"]'); await sleep(350);
+        const vBack = await vis();
+        check('B-U2 (phone 390x844): the meter status line is hidden while the tray or the Cut bar is up (it peeked out from behind their edges) and comes back after', v0 === 'visible' && vTray === 'hidden' && vCut === 'hidden' && vBack === 'visible', JSON.stringify({ v0, vTray, vCut, vBack }));
+        await cc.close();
+      }
+    });
+
+    await section('fix1-cover', async () => {
+      // VERIFY_SHELL4_B U1: on landscape and narrow phones the Cut bar and the Snap bar stood over the squishy (39 % .. 78 % of each body's on-screen disc at 844x390 and 568x320).
+      // The bars dock to the side on a short landscape screen now. The share of each body's disc (the squishy, then each of the two pieces) that the bar covers is measured here;
+      // 25 % is the verifier's own bar (not an owner number): the middle of each body must stay in view to aim a swipe.
+      const sizes = [['desktop 1280x800', { viewport: { width: 1280, height: 800 } }, false], ['phone 390x844', PHONE, true], ['phone landscape 844x390', { viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }, true],
+        ['small landscape 568x320', { viewport: { width: 568, height: 320 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }, true], ['narrow 320x568', { viewport: { width: 320, height: 568 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }, true]];
+      const cover = (page, sel) => page.evaluate((s) => {
+        const el = document.querySelector(s); if (!el || el.hidden) return null;
+        const R = el.getBoundingClientRect();
+        const m = window.__WH__.shell.matInfo();
+        const res = [];
+        for (const b of m.bodies) {
+          let tot = 0, cov = 0;
+          const N = 36;
+          for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+            const x = b.x + ((i + 0.5) / N * 2 - 1) * b.r, y = b.y + ((j + 0.5) / N * 2 - 1) * b.r;
+            if (Math.hypot(x - b.x, y - b.y) > b.r || x < 0 || y < 0 || x > innerWidth || y > innerHeight) continue;
+            tot++;
+            if (x >= R.left && x <= R.right && y >= R.top && y <= R.bottom) cov++;
+          }
+          res.push(+(cov / Math.max(1, tot)).toFixed(2));
+        }
+        return { bar: [R.left, R.top, R.right, R.bottom].map(Math.round), worst: Math.max(...res), per: res, textShown: (() => { const t = el.querySelector('.cutbar-text, .snapbar-text'); return t ? getComputedStyle(t).display !== 'none' : null; })() };
+      }, sel);
+      for (const [label, ctx, touch] of sizes) {
+        const { page, context, w } = await open({ query: '?dev=1&quality=high', ctx });
+        mainWatches.push([`fix1-cover ${label}`, w]);
+        await wake(page, { touch });
+        await page.evaluate(() => { window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
+        await pclick(page, '.toys-btn'); await sleep(250); await pclick(page, '.toy[data-tool="cut"]'); await settle(page);
+        await page.evaluate(() => window.__WH__.pause());
+        await stepSim(page, 0.6);
+        const whole = await cover(page, '.cutbar');
+        await pclick(page, '.cutbar [data-key="split"]'); await cutIdle(page, 4); await stepSim(page, 2.5);
+        const two = await cover(page, '.cutbar');
+        const rect = await rectOf(page, '.cutbar'), vp = page.viewportSize();
+        const fits = !!rect && rect.x >= 0 && rect.y >= 0 && rect.r <= vp.width && rect.b <= vp.height;
+        if (label.startsWith('small landscape') || label.startsWith('narrow')) await shot(page, `cutbar_${label.split(' ')[0]}_${vp.width}x${vp.height}`);
+        await pclick(page, '.cutbar [data-key="join"]'); await cutIdle(page, 5); await stepSim(page, 1.5);
+        await pclick(page, '.cutbar [data-key="done"]'); await settle(page);
+        await page.evaluate(() => window.__WH__.pause());
+        await pclick(page, '.toys-btn'); await sleep(250); await pclick(page, '.toy[data-tool="snap"]'); await settle(page);
+        await stepSim(page, 0.5);
+        const snap = await cover(page, '.snapbar');
+        const sr = await rectOf(page, '.snapbar');
+        const sfits = !!sr && sr.x >= 0 && sr.y >= 0 && sr.r <= vp.width && sr.b <= vp.height;
+        if (label.startsWith('small landscape') || label.startsWith('narrow')) await shot(page, `snapbar_${label.split(' ')[0]}_${vp.width}x${vp.height}`);
+        const tintNames = await page.evaluate(() => [...document.querySelectorAll('.snap-tint-btn')].map((b) => (b.textContent || '').trim()));
+        const btnSizes = await page.evaluate(() => [...document.querySelectorAll('.snapbar button, .cutbar button')].filter((b) => b.offsetParent !== null).map((b) => { const r = b.getBoundingClientRect(); return Math.min(r.width, r.height); }));
+        check(`${label}: the Cut bar covers under 25 % of the squishy and of each piece, the Snap bar under 25 % of it, both fit the screen, the tint names stay readable to assistive tech`,
+          !!whole && !!two && !!snap && whole.worst < 0.25 && two.worst < 0.25 && snap.worst < 0.25 && fits && sfits && tintNames.join() === 'Night,Lagoon,Dusk,Ember',
+          JSON.stringify({ cutWhole: whole && { worst: whole.worst, bar: whole.bar, text: whole.textShown }, cut2: two && { worst: two.worst, per: two.per }, snap: snap && { worst: snap.worst, bar: snap.bar, text: snap.textShown }, fits, sfits, tintNames, minTarget: Math.round(Math.min(...btnSizes)) }));
+        await context.close();
+      }
+    });
+
+    /** a bar / strip / tray as the player sees it: the share of each body's disc under it, the visible HUD chrome it overlaps, buttons covered, fit, the smallest button (SHELL-4 fix 2) */
+    const barProbe = (page, sel) => page.evaluate((s) => {
+      const el = document.querySelector(s);
+      const vis = (e) => { if (!e || e.hidden) return false; for (let a = e; a; a = a.parentElement) { const c = getComputedStyle(a); if (c.display === 'none' || c.visibility === 'hidden' || parseFloat(c.opacity) < 0.05) return false; } const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+      if (!vis(el)) return null;
+      const R = el.getBoundingClientRect();
+      const m = window.__WH__.shell.matInfo();
+      const per = [];
+      for (const b of m.bodies) {
+        let tot = 0, cov = 0;
+        const N = 40;
+        for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+          const x = b.x + ((i + 0.5) / N * 2 - 1) * b.r, y = b.y + ((j + 0.5) / N * 2 - 1) * b.r;
+          if (Math.hypot(x - b.x, y - b.y) > b.r || x < 0 || y < 0 || x > innerWidth || y > innerHeight) continue;
+          tot++;
+          if (x >= R.left && x <= R.right && y >= R.top && y <= R.bottom) cov++;
+        }
+        per.push(+(cov / Math.max(1, tot)).toFixed(3));
+      }
+      const chrome = { wordmark: '.wordmark', mute: '.hud-actions button[aria-pressed]', settings: '.hud-actions button[aria-label="Settings"]', nametag: '.nametag', hoard: '.hoard-btn', toys: '.toys-btn', ring: '.meter', capsule: '.capsule-btn', hint: '.hint', qswitch: '.qswitch', matchip: '.mat-chip', tray: '#wh-toys' };
+      const hit = [];
+      for (const [k, q] of Object.entries(chrome)) {
+        const e = document.querySelector(q);
+        if (!vis(e) || e === el || e.contains(el)) continue;   // (the probed element is not its own neighbour)
+        const r = e.getBoundingClientRect();
+        if (!(r.right <= R.left + 0.5 || R.right <= r.left + 0.5 || r.bottom <= R.top + 0.5 || R.bottom <= r.top + 0.5)) hit.push(`${k} by ${Math.round(Math.min(r.right, R.right) - Math.max(r.left, R.left))}x${Math.round(Math.min(r.bottom, R.bottom) - Math.max(r.top, R.top))}px`);
+      }
+      const covered = [...el.querySelectorAll('button')].filter((b) => vis(b)).filter((b) => { const r = b.getBoundingClientRect(); const t = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, r.x + r.width / 2)), Math.min(innerHeight - 1, Math.max(0, r.y + r.height / 2))); return t && t !== b && !b.contains(t); }).length;
+      return { bar: [R.left, R.top, R.right, R.bottom].map(Math.round), worst: Math.max(0, ...per), per, hit, covered, fits: R.left >= 0 && R.top >= 0 && R.right <= innerWidth && R.bottom <= innerHeight, minBtn: Math.round(Math.min(...[...el.querySelectorAll('button')].filter((b) => vis(b)).map((b) => { const r = b.getBoundingClientRect(); return Math.min(r.width, r.height); }))) };
+    }, sel);
+
+    await section('fix2-blade', async () => {
+      // VERIFY_SHELL4_A_R1 N1: a swipe that is in progress when a Reconnect all (or join, or parting) animation ends was dropped: the swap that ends the animation lets go of the fingers on the bodies, and since
+      // fix round 1 that also cleared the blade; the line vanished at that moment and the finished swipe cut nothing. The blade is not about any body: only the shell's own releases clear it.
+      const { page, context, w } = await open({ query: '?dev=1&quality=high', ctx: SMALL });
+      mainWatches.push(['fix2-blade', w]);
+      await wake(page);
+      await page.evaluate(() => { window.__WH__.setSetting('skipAnimations', false); window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
+      const B0 = await body(page);   // where the whole squishy stands: Reconnect all ends there
+      await hclick(page, '.toys-btn'); await sleep(200); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await page.evaluate(() => window.__WH__.pause());
+      const bladeShown = () => page.evaluate(() => getComputedStyle(document.querySelector('.blade')).display !== 'none');
+      await pclick(page, '.cutbar [data-key="split"]'); await cutIdle(page, 4); await stepSim(page, 2.5);
+      const two = (await tools(page)).pieces;
+      await pclick(page, '.cutbar [data-key="join"]'); await stepSim(page, 0.3);
+      const busyAtStart = (await tools(page)).busy;
+      await page.evaluate((b) => window.__WH__.pointerDown(b.x + 0.02, b.y - 0.35, 9), B0);
+      const shownMid = await bladeShown(), busyMid = (await tools(page)).busy;
+      const took = await cutIdle(page, 5);   // the animation ends (the join, the glide home, the swap to a fresh whole body)
+      const shownEnd = await bladeShown(), tEnd = await tools(page);
+      await page.evaluate((b) => { const wh = window.__WH__; wh.pointerMove(b.x + 0.025, b.y, 9); wh.pointerMove(b.x + 0.03, b.y + 0.3, 9); wh.pointerUp(9); }, B0);
+      await cutIdle(page, 4); await stepSim(page, 1);
+      const t = await tools(page);
+      check('N1 real: a swipe in progress when the Reconnect all animation ends is not dropped: the blade line is still shown after the swap to the whole body, and the finished swipe cuts it (2 pieces)',
+        two === 2 && busyAtStart && busyMid && shownMid && took >= 0 && tEnd.pieces === 1 && shownEnd && t.pieces === 2, JSON.stringify({ piecesBefore: two, busyAtStart, busyMid, bladeMidAnimation: shownMid, animationSimSeconds: took, piecesAtEnd: tEnd.pieces, bladeAfterSwap: shownEnd, piecesAfterSwipe: t.pieces }));
+      await context.close();
+    });
+
+    await section('fix2-dock', async () => {
+      // VERIFY_SHELL4_A_R1 B-U1-residual + N2 and B_R1 R1 + U1-residual: on a short landscape screen the bars are a strip along the TOP edge (hoard.css). At 568x320 the side dock of fix round 1 still covered 20 .. 26 % of the left piece
+      // (Cut after a cut, and Snap with the pieces still out), and after a cut it ran into the name tag by 5 .. 8 px. Measured here at the three short landscape sizes, in the three states the bars have
+      // (Cut over the whole squishy, Cut over two pieces, Snap with the two pieces still out): the share of each body's disc under the bar (the verifier's bar was 25 %; this one is stricter, see COVER_MAX), and
+      // every visible piece of HUD chrome (wordmark, sound / settings, name tag, Hoard, Toys, ring, capsule button, hint, quick switcher) clear of the bar.
+      const COVER_MAX = 0.05;
+      const sizes = [['phone landscape 844x390', { viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }, true], ['small landscape 568x320', { viewport: { width: 568, height: 320 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }, true],
+        ['short desktop window 1000x480', { viewport: { width: 1000, height: 480 } }, false]];
+      for (const [label, ctx, touch] of sizes) {
+        const { page, context, w } = await open({ query: '?dev=1&quality=high', ctx });
+        mainWatches.push([`fix2-dock ${label}`, w]);
+        await wake(page, { touch });
+        await page.evaluate(() => { window.__WH__.setSetting('skipAnimations', false); window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
+        await pclick(page, '.toys-btn'); await sleep(250); await pclick(page, '.toy[data-tool="cut"]'); await settle(page);
+        await page.evaluate(() => window.__WH__.pause());
+        await stepSim(page, 0.6);
+        const whole = await barProbe(page, '.cutbar');
+        await pclick(page, '.cutbar [data-key="split"]'); await cutIdle(page, 4); await stepSim(page, 2.5);
+        const two = await barProbe(page, '.cutbar');
+        await shot(page, `cutstrip_${label.split(' ')[0]}_${page.viewportSize().width}x${page.viewportSize().height}`);
+        // Snap with the two pieces still out (fix round 1 measured Snap over a whole squishy only)
+        await pclick(page, '.cutbar [data-key="done"]'); await settle(page);
+        await page.evaluate(() => window.__WH__.pause());
+        const piecesOut = (await tools(page)).pieces;
+        await pclick(page, '.toys-btn'); await sleep(250); await pclick(page, '.toy[data-tool="snap"]'); await settle(page);
+        await stepSim(page, 0.5);
+        const snap = await barProbe(page, '.snapbar');
+        await shot(page, `snapstrip_${label.split(' ')[0]}_${page.viewportSize().width}x${page.viewportSize().height}`);
+        const none = (c) => !!c && c.hit.length === 0 && c.covered === 0 && c.fits;
+        check(`${label}: the Cut strip over the whole squishy and over its two pieces covers under ${COVER_MAX * 100} % of each, and the Snap strip (the two pieces still out) under ${COVER_MAX * 100} % of each`,
+          !!whole && !!two && !!snap && piecesOut === 2 && whole.worst < COVER_MAX && two.worst < COVER_MAX && snap.worst < COVER_MAX, JSON.stringify({ cutWhole: whole && { worst: whole.worst, bar: whole.bar }, cut2: two && { worst: two.worst, per: two.per, bar: two.bar }, snapPiecesOut: snap && { worst: snap.worst, per: snap.per, bar: snap.bar }, piecesOut }));
+        check(`${label}: no overlapping HUD chrome: the strip stands clear of the wordmark, sound / settings, name tag, Hoard, Toys, ring, capsule button, hint and quick switcher in all three states; no button of it is covered; it fits the screen; every button is 44 px or more`,
+          none(whole) && none(two) && none(snap) && Math.min(whole?.minBtn ?? 0, two?.minBtn ?? 0, snap?.minBtn ?? 0) >= 44, JSON.stringify({ cutWhole: whole && { hit: whole.hit, covered: whole.covered, fits: whole.fits, minBtn: whole.minBtn }, cut2: two && { hit: two.hit, covered: two.covered, fits: two.fits, minBtn: two.minBtn }, snap: snap && { hit: snap.hit, covered: snap.covered, fits: snap.fits, minBtn: snap.minBtn } }));
+        await context.close();
+      }
+    });
+
+    await section('fix2-tray', async () => {
+      // VERIFY_SHELL4_B_R1 U1-residual (also A_R1): the OPEN toy tray stood over 99 % of the squishy at 568x320 and 61 % at 320x568 (a transient menu, but it hid what the player was about to cut or photograph),
+      // and over the wordmark. On a short landscape screen it is the same top strip as the bars; on the narrowest portrait phones its three tools are one row with the hints visually hidden. Measured at
+      // five sizes with the same probe as fix2-dock: the share of the squishy's disc under the open tray, HUD chrome overlapped, fit, and every tool 44 px or more.
+      const sizes = [['phone landscape 844x390', { viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }, true, 0.05], ['small landscape 568x320', { viewport: { width: 568, height: 320 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }, true, 0.05],
+        ['narrow 320x568', { viewport: { width: 320, height: 568 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }, true, 0.25], ['phone 390x844', PHONE, true, 0.25], ['desktop 1280x800', { viewport: { width: 1280, height: 800 } }, false, 0.25]];
+      for (const [label, ctx, touch, max] of sizes) {
+        const { page, context, w } = await open({ query: '?dev=1&quality=high', ctx });
+        mainWatches.push([`fix2-tray ${label}`, w]);
+        await wake(page, { touch });
+        await page.evaluate(() => { window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
+        await pclick(page, '.toys-btn'); await sleep(300); await settle(page);
+        await page.evaluate(() => window.__WH__.pause());
+        const tr = await barProbe(page, '#wh-toys');
+        const items = await page.evaluate(() => [...document.querySelectorAll('.toy')].map((b) => ({ tool: b.dataset.tool, name: b.textContent.trim().replace(/\s+/g, ' '), h: Math.round(b.getBoundingClientRect().height), w: Math.round(b.getBoundingClientRect().width) })));
+        await shot(page, `tray_${label.split(' ')[0]}_${page.viewportSize().width}x${page.viewportSize().height}`);
+        check(`${label}: the open toy tray covers under ${max * 100} % of the squishy, stands clear of the visible HUD chrome, fits the screen, and its three tools (Hand, Cut, Snap, hints still in their names) are 44 px or more`,
+          !!tr && tr.worst < max && tr.hit.length === 0 && tr.covered === 0 && tr.fits && tr.minBtn >= 44 && items.length === 3 && items.every((i) => /Poke|slice|photo/.test(i.name)),
+          JSON.stringify({ worst: tr && tr.worst, bar: tr && tr.bar, hit: tr && tr.hit, covered: tr && tr.covered, fits: tr && tr.fits, minBtn: tr && tr.minBtn, items }));
+        await context.close();
+      }
+    });
+
+    await section('fix1-capsule', async () => {
+      // SHELL-4 fix 1: input.isDown now answers for a held capsule too, so the DOM glue forwards a real mouse's moves to it: a quick DRAG that starts on the waiting capsule moves the pointer past the tap slop
+      // (14 px) and must not open it (it did: the capsule never saw the moves, so any quick press-drag-release inside the tap window counted as a tap). A plain tap still opens it.
+      const { page, context, w } = await open({ query: '?dev=1&rseed=4242', ctx: SMALL });
+      mainWatches.push(['fix1-capsule', w]);
+      await wake(page);
+      await page.evaluate(() => { window.__WH__.shell.grant(1); });
+      const landed = await waitUntil(page, () => window.__WH__.shell.meter().onTable, null, 30000);
+      await sleep(800);
+      const cs = await page.evaluate(() => window.__WH__.shell.capsuleScreen());
+      const vp = page.viewportSize();
+      const x = cs ? cs.x * vp.width : 0, y = cs ? cs.y * vp.height : 0;
+      // (the sim is paused, so the gesture clock is virtual: the capsule's own 0.5 s hold-to-open cannot fire while Playwright's calls take real time on a loaded machine; the first version of this row
+      // ran live and the capsule opened by being HELD for 0.5 s of real time, which is a different gesture)
+      await page.evaluate(() => window.__WH__.pause());
+      await page.mouse.move(x, y); await page.mouse.down();
+      await page.mouse.move(x + 30, y); await page.mouse.move(x + 60, y); await page.mouse.move(x + 80, y);
+      await page.mouse.up();
+      await stepSim(page, 0.3); await sleep(300);
+      const afterDrag = await page.evaluate(() => ({ cer: window.__WH__.shell.ceremony().kind, onTable: window.__WH__.shell.meter().onTable, holding: window.__WH__.shell.meter().holding }));
+      check('a quick press-drag-release that starts on the waiting capsule does NOT open it (the held capsule gets the real moves: moved 80 px > the 14 px tap slop); the capsule stays on the table', landed && !!cs && afterDrag.cer === null && afterDrag.onTable && !afterDrag.holding, JSON.stringify({ landed, cs, afterDrag }));
+      await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.up();
+      await stepSim(page, 0.3);
+      const opened = await waitUntil(page, () => window.__WH__.shell.ceremony().kind === 'capsule', null, 20000);
+      check('a plain tap on the capsule still opens it', opened);
       await context.close();
     });
 
@@ -2259,9 +2878,14 @@ async function main() {
         wh.pointerDown(f.x / vw, f.y / vh, 0); wh.step(1 / 60, 8);
         let carried = false;
         const samp = () => { if (wh.shell.matInfo().bodies.some((x) => x.carried)) carried = true; };
-        const ux = f.x + Math.sign(t.x - f.x) * 60, uy = f.y - 2.4 * rr;   // up by 2.4 radii (1.34 x maxPull): the lift, whatever size the body is on screen
-        for (let i = 1; i <= 24; i++) { const k = i / 24; wh.pointerMove((f.x + (ux - f.x) * k) / vw, (f.y + (uy - f.y) * k) / vh, 0); wh.step(1 / 60, 2); samp(); }
-        for (let i = 1; i <= 24; i++) { const k = i / 24; wh.pointerMove((ux + (t.x - ux) * k) / vw, (uy + (t.y - uy) * k) / vh, 0); wh.step(1 / 60, 2); samp(); }
+        // The press is on the OUTER shoulder, and gestures.ts commits a press to a PULL only when the first 14 px of movement go OUTWARD (cos > 0.2 against the direction from the
+        // body's centre to the press): going straight up from the shoulder is a RUB, which never lifts (this section's first version did that: carried false, bodies not even touching).
+        // So the first leg leaves outward and 30 degrees up (1.2 radii, never off the canvas), the second goes across to the neighbour: the whole path from the grab is 3 radii or more
+        // = 1.7 x maxPull, past the 1.15 lift limit, and ends over the neighbour.
+        const away = Math.sign(f.x - t.x) || 1, L1 = 1.2 * rr;
+        const ux = Math.max(8, Math.min(vw - 8, f.x + away * L1 * Math.cos(Math.PI / 6))), uy = Math.max(0.04 * vh, f.y - L1 * Math.sin(Math.PI / 6));
+        for (let i = 1; i <= 12; i++) { const k = i / 12; wh.pointerMove((f.x + (ux - f.x) * k) / vw, (f.y + (uy - f.y) * k) / vh, 0); wh.step(1 / 60, 2); samp(); }
+        for (let i = 1; i <= 36; i++) { const k = i / 36; wh.pointerMove((ux + (t.x - ux) * k) / vw, (uy + (t.y - uy) * k) / vh, 0); wh.step(1 / 60, 2); samp(); }
         for (let i = 0; i < 6; i++) { wh.step(1 / 60, 6); samp(); }
         wh.pointerUp(0);
         for (let i = 0; i < 6; i++) wh.step(1 / 60, 15);
@@ -2346,29 +2970,49 @@ async function main() {
       }
     });
 
+    // every species name fits the phone name tag (all 50, at 390 x 844 and 320 x 568), in TWO states: the plain row, and the CROWDED row (a capsule waiting, so the ring's column holds the capsule
+    // button too, and the quick switcher showing): the crowded row is the tight one. The first version of this section only tried the plain row; the hoard-phone section then found "Boingle"
+    // cut off in the crowded one (the name was fitted before the capsule button arrived and never re-fitted), and the longest names did not fit at all at 320.
+    // Also: the tag's second line (gem, tier word) stays inside the tag.
     await section('phone-names', async () => {
       const { CATALOG, speciesBaseGenome } = await import('../src/data/catalog.ts');
       const { encodeGenome } = await import('../src/core/genome.ts');
       const all = CATALOG.map((s) => ({ id: s.id, name: s.name, code: encodeGenome(speciesBaseGenome(s.id, 1)) }));
-      for (const vp of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
-        const { page, context, w } = await open({ query: '?dev=1&quality=low', ctx: { ...PHONE, viewport: vp } });
-        mainWatches.push([`phone-names-${vp.width}`, w]);
+      for (const crowded of [false, true]) for (const vp of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
+        const { page, context, w } = await open({ query: crowded ? '?dev=1&rseed=20261006&quality=low' : '?dev=1&quality=low', ctx: { ...PHONE, viewport: vp } });
+        mainWatches.push([`phone-names-${crowded ? 'crowded-' : ''}${vp.width}`, w]);
         await wake(page, { touch: true });
+        if (crowded) {
+          await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
+          await openCapsules(page, 4);   // four squishies played, so the quick switcher shows
+          await page.evaluate(() => { window.__WH__.pause(); window.__WH__.shell.grant(2); });
+          await stepUntil(page, `(wh) => wh.shell.meter().onTable`, 3, 0.1);
+          await page.evaluate(() => window.__WH__.resume());
+          await sleep(1200);
+        }
         await page.evaluate(() => window.__WH__.pause());
+        const state0 = await page.evaluate(() => ({ cap: !!document.querySelector('.capsule-btn:not([hidden])'), qs: document.body.dataset.switch ?? null }));
         const rows = [];
         for (const sp of all) {
           const row = await page.evaluate(async (s) => {
             window.__WH__.setGenome(s.code);
             await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-            const nm = document.querySelector('.nametag-name'), tag = document.querySelector('.nametag'), q = (sel) => { const e = document.querySelector(sel); if (!e || e.hidden) return null; const b = e.getBoundingClientRect(); return b.width ? { x: b.left, y: b.top, r: b.right, b: b.bottom } : null; };
-            const t = tag.getBoundingClientRect();
-            return { text: nm.textContent, font: parseFloat(getComputedStyle(nm).fontSize), clipped: nm.scrollWidth > nm.clientWidth + 1, tag: { x: t.left, y: t.top, r: t.right, b: t.bottom }, hoard: q('.hoard-btn'), toys: q('.toys-btn'), sw: document.documentElement.scrollWidth };
+            await new Promise((r) => setTimeout(r, 120));   // the observers that re-fit the name run after the frame
+            const nm = document.querySelector('.nametag-name'), tag = document.querySelector('.nametag'), line = document.querySelector('.nametag-line');
+            const q = (sel) => { const e = document.querySelector(sel); if (!e || e.hidden) return null; const b = e.getBoundingClientRect(); return b.width ? { x: b.left, y: b.top, r: b.right, b: b.bottom } : null; };
+            const t = tag.getBoundingClientRect(), lr = line.getBoundingClientRect();
+            // a child of the second line that is VISIBLE (inside the line's clipped box) must end inside the tag
+            const spill = [...line.children].filter((e) => { const b = e.getBoundingClientRect(); return b.width && b.top >= lr.top - 1 && b.bottom <= lr.bottom + 1 && b.right > t.right + 0.5; }).map((e) => e.className || e.tagName);
+            return { text: nm.textContent, font: parseFloat(getComputedStyle(nm).fontSize), clipped: nm.scrollWidth > nm.clientWidth + 1, tag: { x: t.left, y: t.top, r: t.right, b: t.bottom }, hoard: q('.hoard-btn'), toys: q('.toys-btn'), cap: q('.capsule-btn:not([hidden])'), meter: q('.meter'), spill, sw: document.documentElement.scrollWidth };
           }, sp);
           rows.push({ ...row, want: sp.name });
         }
-        const bad = rows.filter((r) => r.text !== r.want || r.clipped || r.font < 12 || r.sw > vp.width || r.tag.x < 0 || r.tag.r > vp.width || overlap(r.tag, r.hoard) || overlap(r.tag, r.toys));
+        const bad = rows.filter((r) => r.text !== r.want || r.clipped || r.font < 12 || r.sw > vp.width || r.tag.x < 0 || r.tag.r > vp.width || overlap(r.tag, r.hoard) || overlap(r.tag, r.toys) || overlap(r.tag, r.cap) || overlap(r.tag, r.meter) || r.spill.length > 0);
         const narrow = [...rows].sort((a, b) => a.font - b.font).slice(0, 3).map((r) => `${r.text} ${r.font}px`);
-        check(`phone ${vp.width}: all ${rows.length} species names fit the name tag without being cut off (none clipped, none under 12 px, tag clear of the Hoard and Toys buttons, no sideways scroll); smallest sizes: ${narrow.join(', ')}`, rows.length === 50 && bad.length === 0, bad.slice(0, 3).map((r) => JSON.stringify(r)).join(' | ') || `${rows.length} names`);
+        const proof = crowded ? state0.cap && state0.qs === 'true' : true;
+        check(`phone ${vp.width}${crowded ? ' CROWDED (capsule waiting + quick switcher)' : ''}: all ${rows.length} species names fit the name tag without being cut off (none clipped, none under 12 px, the tag clear of the Hoard and Toys buttons and the ring / capsule button, the tier line inside the tag, no sideways scroll); smallest sizes: ${narrow.join(', ')}`,
+          rows.length === 50 && bad.length === 0 && proof, (proof ? '' : `NOT the crowded state: ${JSON.stringify(state0)} `) + (bad.slice(0, 3).map((r) => JSON.stringify(r)).join(' | ') || `${rows.length} names`));
+        if (crowded) await shot(page, `hud_phone_crowded_${vp.width}`);
         await context.close();
       }
     });
@@ -2461,7 +3105,11 @@ async function main() {
       await sleep(3000);
       // ---- a lone mouse button: lifts it too
       await reset();
-      // (the lone touch before it threw the body: read where it is now and pull away from the nearer screen edge)
+      // (the lone touch before it THREW the body, which can leave it against a screen edge with too little room to pull 1.15 x maxPull: a fresh body of the same genome stands at the
+      // middle of the table again; the pull then goes away from the nearer screen edge, as far as the room allows)
+      await page.evaluate(() => window.__WH__.setGenome(window.__WH__.state().genomeCode));
+      await waitUntil(page, () => { const m = window.__WH__.state().metrics; return !m.grabbed && m.stretch < 0.05; }, null, 60000);
+      await sleep(2500);
       const B3 = await body(page);
       const cx3 = B3.x * vp.width, cy3 = B3.y * vp.height, r3 = B3.rPx, dir3 = cx3 > vp.width / 2 ? -1 : 1;
       const reach3 = Math.min(reach, dir3 > 0 ? vp.width - 14 - (cx3 + 0.55 * r3) : cx3 - 0.55 * r3 - 14);
@@ -2469,9 +3117,10 @@ async function main() {
       await page.mouse.down(); await sleep(150);
       for (let i = 1; i <= 14; i++) { await page.mouse.move(cx3 + dir3 * (0.55 * r3 + (reach3 * i) / 14), cy3 - 0.05 * r3); await sleep(50); }
       const liftedM = await waitUntil(page, () => window.__tt.carried, null, 60000);
+      const diagM = await page.evaluate(() => { const m = window.__WH__.state().metrics; return { stretch: +m.stretch.toFixed(2), grabbed: m.grabbed, fingers: m.fingers, carried: m.carried, tt: window.__tt.maxStretch.toFixed(2) }; });
       await page.mouse.up();
       await sleep(800);
-      check('a lone mouse pull past the limit still lifts the body (metrics.carried true)', liftedM, `carried ${liftedM}`);
+      check('a lone mouse pull past the limit (>= 1.2 x maxPull of room) still lifts the body (metrics.carried true)', liftedM && reach3 >= 1.2 * 1.79 * r3, `carried ${liftedM}; body r ${r3.toFixed(0)} px at ${cx3.toFixed(0)},${cy3.toFixed(0)}, pull ${reach3.toFixed(0)} px = ${(reach3 / (1.79 * r3)).toFixed(2)} x maxPull; ${JSON.stringify(diagM)}`);
       await page.evaluate(() => cancelAnimationFrame(window.__ttRaf));
       await context.close();
     });
@@ -2655,11 +3304,18 @@ async function main() {
       await sleep(500);
       const s1 = await page.evaluate(() => ({ banner: !document.querySelector('.net-banner').hidden, text: document.querySelector('.net-banner').textContent, state: document.querySelector('.meter-state')?.textContent, live: document.getElementById('wh-live')?.textContent, fill: window.__WH__.shell.meter().fill }));
       const B = await body(page); const vp = page.viewportSize();
-      for (let i = 0; i < 4; i++) { await page.mouse.click(B.x * vp.width + (i - 2) * 8, B.y * vp.height - 0.3 * B.rPx); await sleep(1100); }
+      // RE-SPECIFIED (SHELL-4): the row used four real clicks (taps) and expected the ring to move. Taps pay NOTHING since the owner decision of 2026-10-06 (commit 2f9cc8fc), so the ring stayed at 0 and
+      // the row failed with fill 0 -> 0: a leftover tap-pays assumption, the same one as the capsule-loop row. What the row proves (the offline ring keeps taking what the touches PAY) now uses a touch that
+      // pays: a real mouse press held 1.2 s of SIM time (the hook steps the sim while the real button is down), let go by the real mouse.
+      await page.mouse.move(B.x * vp.width, B.y * vp.height - 20);
+      await page.mouse.down();
+      await page.evaluate(() => { window.__WH__.pause(); window.__WH__.step(1 / 60, 72); });
+      await page.mouse.up();
+      await page.evaluate(() => { window.__WH__.step(1 / 60, 12); window.__WH__.resume(); });
       await waitUntil(page, (f) => window.__WH__.shell.meter().fill > f, s1.fill, 30000);   // SwiftShader frames are slow on a loaded machine
       const s2 = await page.evaluate(() => ({ fill: window.__WH__.shell.meter().fill, toasts: window.__toasts, banner: !document.querySelector('.net-banner').hidden }));
       await shot(page, 'offline_desktop');
-      check('U07 offline: the banner says "Offline. Your Hoard is read-only until we reconnect.", the ring says "Waiting for connection" and keeps previewing touches, no error toast storm',
+      check('U07 offline: the banner says "Offline. Your Hoard is read-only until we reconnect.", the ring says "Waiting for connection" and keeps taking what a held squeeze pays, no error toast storm',
         s1.banner && s1.text === 'Offline. Your Hoard is read-only until we reconnect.' && s1.state === 'Waiting for connection' && /Offline/.test(s1.live ?? '') && s2.banner && s2.fill > s1.fill && s2.toasts === 0,
         JSON.stringify({ ...s1, fillAfter: s2.fill, toasts: s2.toasts }));
       await page.evaluate(() => window.__WH__.shell.forceOffline(false));
@@ -2954,7 +3610,9 @@ async function main() {
       await page.keyboard.press('Enter');
       await page.waitForFunction(() => window.__WH__.state().phase === 'play', null, { timeout: 30000 });
       await waitUntil(page, () => getComputedStyle(document.querySelector('.hud')).opacity === '1', null, 8000);
-      await sleep(400);
+      // (wait for the focus hand-off itself, not a fixed 400 ms: on a loaded machine the title card's fade-out took longer and the row read the focus before it moved: SHELL-4, seen once in 108 rows)
+      await waitUntil(page, () => document.activeElement?.id === 'wh-play', null, 15000);
+      await sleep(150);
       const f = await page.evaluate(() => { const a = document.activeElement; return { id: a?.id, role: a?.getAttribute('role'), label: a?.getAttribute('aria-label'), vis: a?.matches(':focus-visible'), ring: getComputedStyle(a).boxShadow, rect: a.getBoundingClientRect().toJSON() }; });
       const B = await body(page); const vp = page.viewportSize();
       check('Enter starts the game, audio unlocks, and focus lands on the squishy (role=application, named) with a visible ring around it',
@@ -2979,17 +3637,18 @@ async function main() {
       await page.keyboard.press('g'); await page.keyboard.press('m'); await sleep(500);
       check('M on the squishy: muted, the mute button shows it, announced ("Sound off")', (await page.evaluate(() => document.querySelector('.hud-actions button[aria-pressed]').getAttribute('aria-pressed'))) === 'true' && /Sound off/.test(await live(page)), await live(page));
       await page.keyboard.press('m'); await sleep(300);
-      // Tab order: Mute, Settings, the squishy. (blur() keeps Chromium's sequential-navigation start point on the squishy, so the first Tab
-      // leaves the document (BODY) and the cycle starts there: judge the cycle of real stops, which must be exactly these three, in order.)
+      // Tab order: Mute, Settings, the Hoard, Toys, the squishy. RE-SPECIFIED (SHELL-4): the Toys button (FUN.md 1, the toy tray beside the Hoard button) is a deliberate new Tab stop; the row still
+      // expected the old four stops and failed with '... > Hoard > Toys > Squishy'. (blur() keeps Chromium's sequential-navigation start point on the squishy, so the first Tab
+      // leaves the document (BODY) and the cycle starts there: judge the cycle of real stops, which must be exactly these five, in order.)
       await page.evaluate(() => document.activeElement.blur());
       const order = [];
       // a stop's name up to its first ':' or ',' (the Hoard button's name goes on with the count: "Hoard, 3 of 50 species, ...")
-      for (let i = 0; i < 7; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')?.split(/[:,]/)[0] ?? document.activeElement?.tagName)); }
+      for (let i = 0; i < 9; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')?.split(/[:,]/)[0] ?? document.activeElement?.tagName)); }
       const stops = order.filter((o) => o !== 'BODY');
-      const want = ['Mute sound', 'Settings', 'Hoard', 'Squishy'];
+      const want = ['Mute sound', 'Settings', 'Hoard', 'Toys', 'Squishy'];
       const k0 = stops.indexOf('Mute sound');
       const cycleOk = k0 >= 0 && stops.length >= k0 + want.length && stops.every((o, i) => o === want[(((i - k0) % want.length) + want.length) % want.length]);
-      check('Tab order in play: Mute, Settings, the Hoard, the squishy (and no other stop)', cycleOk, order.join(' > '));
+      check('Tab order in play: Mute, Settings, the Hoard, Toys, the squishy (and no other stop)', cycleOk, order.join(' > '));
       // shortcuts stay out of form controls
       await page.focus('button[aria-label="Settings"]'); await page.keyboard.press('Enter'); await sleep(500);
       const g0 = (await state(page)).settings.gravity;

@@ -358,7 +358,7 @@ export function createGame(deps: GameDeps): Game {
   bodies = createBodyManager({
     createBody: deps.createBody, stage, report,
     initial: { body: body0, identity: { genome: genome0, tier: tierOfGenome(genome0), itemId: playItem0 ? playItem0.id : genomeEquals(genome0, instance.genome) ? instance.id : null, nickname: playItem0 ? null : nicknameOf(genome0) } },
-    beforeSwap() { releaseEverything(); },
+    beforeSwap(silent) { releaseEverything(silent); },   // (a silent swap is the same squishy in another body: a cut piece, whole again: the swipe in hand goes on)
     afterSwap(id, b, silent) {
       if (!focusing && !silent) history.note(id.itemId);   // a card preview is not a switch
       b.gravity = S().gravity;
@@ -414,8 +414,8 @@ export function createGame(deps: GameDeps): Game {
     bodies, stage, audio, haptics, createBody: deps.createBody,
     quality: () => { try { return stage.stats().tier; } catch { return 'low'; } },
     calm: () => S().calm, gravity: () => S().gravity, simTime: () => simTime, viewport: () => viewport,
-    activeBody, touching: () => driver.touch.contact(),
-    beforeChange: () => { releaseEverything(); active = null; },
+    activeBody, touching: () => driver.touch.contact(), drag: (out) => driver.touch.dragOf(out),
+    beforeChange: () => { releaseEverything(true); active = null; },   // (a piece is replaced or removed: the fingers on the bodies let go, the swipe in hand does not)
     clearMat: () => { const n = mat.count - 1; try { mat.clear(); } catch (e) { report(e); } return n; },
     panOf: (p) => panOfPoint(p),
     say: (t) => emit('notice', t),
@@ -486,8 +486,17 @@ export function createGame(deps: GameDeps): Game {
   }
 
   // ---------------------------------------------------------------- release / lifecycle
-  function releaseEverything(): void {
+  /** Fingers off every body, voices ended, timers and holds cleared. `keepSwipe`: the release is only about the BODIES (a cut piece is replaced, a join
+   *  ends): the swipe in hand (the Cut blade) and Snap's drags are not about any body and go on (SHELL-4 fix 2, VERIFY N1: a swipe in progress when a
+   *  Reconnect all or join animation ended lost its blade and cut nothing). The shell's own releases (tab hidden, a panel, a ceremony, a switch) clear them. */
+  function releaseEverything(keepSwipe = false): void {
     try { gestures.cancelAll(clock.now()); } catch (e) { report(e); }
+    // a swipe or a Snap drag cut short by this release (tab hidden, a panel, a ceremony) must not stay half-made: its pointerup may never come,
+    // and a stale blade ignored the next swipe by another finger (SHELL-4 fix 1, VERIFY A-F4)
+    if (!keepSwipe) {
+      if (blade) { blade = null; try { emit('blade', null); } catch (e) { report(e); } }
+      snapDrag.clear();
+    }
     driver.releaseBody();
     try { feedback.endAll(0.05); } catch (e) { report(e); }
     timers.clear();
@@ -666,7 +675,10 @@ export function createGame(deps: GameDeps): Game {
     orbitBy(dx, dy) { if (inputLive()) { emit('interaction'); driver.onAction({ type: 'orbit', dx, dy }); } },
     zoomBy(n) { if (inputLive()) { emit('interaction'); driver.onAction({ type: 'zoom', delta: n, source: 'wheel' }); } },
     screenCentre: () => host.screenCentre(),
-    isDown: (id) => gestures.isActive(id),
+    // every owner of a pressed pointer must answer here: src/input/pointer.ts forwards a pointermove only while isDown(id), else it is a hover.
+    // The gesture machine owns the Hand's presses; the Cut tool's blade, Snap's drags and a held capsule take theirs before it (SHELL-4 fix 1: Snap's
+    // drag-to-turn and pinch and the blade line did nothing with real events because only the gesture machine answered)
+    isDown: (id) => gestures.isActive(id) || snapDrag.has(id) || (blade !== null && blade.id === id) || capsules.holds(id),
     skip: () => ceremonies.tapSkip(),
     get live() { return inputLive(); },
   };

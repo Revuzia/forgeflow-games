@@ -567,13 +567,14 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
 
 /* ───────────────────────── 5d. CUT & RECONNECT, the shell side (CUT.md 1, 2, 4; cut.ts) against cut-capable mock bodies ───────────────────────── */
 {
-  const { createCutter, PIECE_MIN, JOIN_ALL_S, JOIN_HOLD_S, JOIN_S, NECK_DEFAULT_S, NECK_HOLD_S, HOME_MAX_S, SETTLE_S } = await import('../../src/shell/cut.ts');
+  const { createCutter, PIECE_MIN, JOIN_ALL_S, JOIN_HOLD_S, JOIN_S, NECK_DEFAULT_S, NECK_HOLD_S, HOME_MAX_S, SETTLE_S, supportAlong } = await import('../../src/shell/cut.ts');
   const { createBodyManager } = await import('../../src/shell/bodies.ts');
   const { createMockBody } = await import('../mocks.ts');
   type V = { x: number; y: number; z: number };
-  type CutMock = ReturnType<typeof createMockBody> & { frac: number; piece: { frac: number; chunk: boolean; cutNormal?: V; at?: V } | null; necks: number; lastNeck: number; trembles: number[]; fracCalls: Array<[number, number]>; moved: number; whole: boolean; held: boolean };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the mock keeps the PieceOpts it was built with in `piece`; CUT2 gave SoftBodyLike its own `piece?: PieceInfo`, so this field is untyped here (the whole cut mock is replaced by S4)
+  type CutMock = ReturnType<typeof createMockBody> & { frac: number; piece: any; necks: number; lastNeck: number; trembles: number[]; fracCalls: Array<[number, number]>; moved: number; whole: boolean; held: boolean };
   /** a mock body that can be cut: a sphere of radius 0.5 cbrt(frac) at its centre; measureCut is the exact sphere-cap share */
-  const cutBody = (g: Genome, o: { at?: V; piece?: { frac: number; chunk: boolean; cutNormal?: V; at?: V } } = {}): CutMock => {
+  const cutBody = (g: Genome, o: { at?: V; piece?: { frac: number; chunk?: boolean; cutNormal?: V; at?: V } } = {}): CutMock => {
     const b = createMockBody(g) as CutMock;
     const frac = o.piece?.frac ?? 1, at = o.piece?.at ?? o.at ?? null;
     const k = Math.cbrt(frac);
@@ -703,12 +704,13 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const W = world({ tier: 'low' });
     const st = W.w.stage;
     let active: SoftBodyLike | null = null, touching = false, t = 0, matOut = 0;
+    let dragV: V | null = null;   // the drag of the finger's grab on the active body (null = no grab: a tap, a press, a squeeze or a rub)
     const notices: string[] = [];
     const body0 = W.w.deps.createBody(g0);
     const bm = createBodyManager({ createBody: W.w.deps.createBody, stage: st, initial: { body: body0, identity: { genome: g0, tier: 'common', itemId: 'it-1', nickname: null } }, beforeSwap() {}, afterSwap() {}, report: (e) => { throw e; } });
     const ct = createCutter({
       bodies: bm, stage: st, audio: W.w.audio, haptics: W.w.haptics, createBody: W.w.deps.createBody, quality: () => 'low', calm: () => false, gravity: () => true,
-      simTime: () => t, viewport: () => ({ w: 800, h: 600 }), activeBody: () => active ?? bm.body, touching: () => touching, beforeChange() {}, clearMat: () => { const n = matOut; matOut = 0; return n; },
+      simTime: () => t, viewport: () => ({ w: 800, h: 600 }), activeBody: () => active ?? bm.body, touching: () => touching, drag: (out) => { if (!dragV || !touching) return false; out.x = dragV.x; out.y = dragV.y; out.z = dragV.z; return true; }, beforeChange() {}, clearMat: () => { const n = matOut; matOut = 0; return n; },
       panOf: () => 0, say: (s2) => notices.push(s2), report: (e) => { throw e; },
     });
     const step = (sec: number): void => { for (let i = 0; i < Math.round(sec * 60); i++) { t += 1 / 60; ct.update(1 / 60); } };
@@ -741,29 +743,60 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     // X03: the face goes with the side holding the eyes' anchor (the body's front, +z): a cut across z puts the face on the front piece
     // the touch-to-join: a finger on a chunk held against the face piece for JOIN_HOLD_S starts the join; the bridge rises; rejoin at the end
     const face = bm.body as CutMock, chunk = bm.extras.find((x) => x.piece)!.body as CutMock;
-    (chunk.center as V).x = (face.center as V).x + 0.55; (chunk.center as V).y = (face.center as V).y; (chunk.center as V).z = (face.center as V).z;
+    /** stand a mock piece with its centre at `at`, its skin (the vertices) carried along; the SURFACE gap to `to` along +x is then `gap` (the first version of this check moved only the centre, so the support read -1 m) */
+    const standBeside = (b: CutMock, to: CutMock, sign: 1 | -1, gap: number): void => {
+      const rb = supportAlong(b, { x: -sign, y: 0, z: 0 }), rt = supportAlong(to, { x: sign, y: 0, z: 0 });
+      const nx = (to.center as V).x + sign * (rt + rb + gap), ny = (to.center as V).y, nz = (to.center as V).z;
+      const c = b.center as V, dx = nx - c.x, dy = ny - c.y, dz = nz - c.z;
+      for (let i = 0; i < b.vertexCount; i++) { b.positions[i * 3] += dx; b.positions[i * 3 + 1] += dy; b.positions[i * 3 + 2] += dz; }
+      c.x = nx; c.y = ny; c.z = nz;
+    };
+    standBeside(chunk, face, 1, 0.02);
     active = chunk; touching = true;
     const contactsBefore = bm.contactBodies;
+    // A-F2 (SHELL-4 fix 1, VERIFY_SHELL4_A): a finger that merely RESTS on a piece lying against its twin must never join them, however long it stays
+    // (the pieces close up to touching within ~3 s of a cut on most species): no grab at all (a tap, a press, a squeeze, a rub), a pull AWAY from the other
+    // piece, and a pull across or upward; only a drag TOWARD the other piece (below) starts the 0.4 s hold
+    const gap0 = (() => { const a = chunk.center as V, b = face.center as V; return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) - supportAlong(face, { x: 1, y: 0, z: 0 }) - supportAlong(chunk, { x: -1, y: 0, z: 0 }); })();
+    const radiusChunk = supportAlong(chunk, { x: -1, y: 0, z: 0 });
+    dragV = null;
+    step(JOIN_HOLD_S * 3);
+    const restJoin = ct.busy;
+    dragV = { x: 0.3, y: 0, z: 0 };
+    step(JOIN_HOLD_S * 3);
+    const awayJoin = ct.busy;
+    dragV = { x: 0, y: 0.3, z: 0.25 };
+    step(JOIN_HOLD_S * 3);
+    const acrossJoin = ct.busy;
+    dragV = { x: -0.1 * radiusChunk, y: 0, z: 0 };
+    step(JOIN_HOLD_S * 3);
+    const nudgeJoin = ct.busy;
+    touching = false; dragV = null; step(0.2);
+    const letGoRest = ct.busy;
+    check(`A-F2 shell: a finger resting on a piece that TOUCHES its twin (skin gap ${gap0.toFixed(3)} m, under TOUCH_GAP) for 1.2 s never joins them: no grab (tap, press, squeeze, rub), a pull away, a pull across and up, and a nudge of a tenth of its radius toward it all leave 4 pieces; neither does letting go`,
+      gap0 > 0.005 && gap0 < 0.03 && !restJoin && !awayJoin && !acrossJoin && !nudgeJoin && !letGoRest && ct.pieces === 4, JSON.stringify({ gap0: +gap0.toFixed(3), restJoin, awayJoin, acrossJoin, nudgeJoin, letGoRest, pieces: ct.pieces }));
+    touching = true;
+    dragV = { x: -0.8 * radiusChunk, y: 0.1, z: 0 };   // a drag INTO the face piece: the hand moved 0.8 of the chunk's radius toward it
     step(JOIN_HOLD_S * 0.5);
     const early = ct.busy;
     step(JOIN_HOLD_S * 0.6);
     const joining = ct.busy;
     const contactsJoining = bm.contactBodies;
-    touching = false;
+    touching = false; dragV = null;
     step(JOIN_S + 0.05);
     const rj = W.audioCalls.filter((c) => c[0] === 'rejoin');
     check('CUT reconnect: the piece flowing in is a ghost (out of body-to-body contact, so it cannot shove the receiver away); the rest still collide',
       contactsBefore === 4 && contactsJoining === 3 && bm.contactBodies === 3, `contacts ${contactsBefore} -> ${contactsJoining} -> ${bm.contactBodies}`);
-    check('CUT reconnect: a chunk held against the face piece for 0.4 s flows in (bridge, setFrac up on the face piece and down on the chunk, moveTo); then 3 pieces, rejoin({ frac: the merged share })',
+    check('CUT reconnect: a chunk DRAGGED into the face piece and held against it for 0.4 s flows in (bridge, setFrac up on the face piece and down on the chunk, moveTo); then 3 pieces, rejoin({ frac: the merged share })',
       !early && joining && ct.pieces === 3 && W.bridges.some((b2) => b2[2] > 0.5) && face.fracCalls.length >= 1 && chunk.fracCalls.length >= 1 && chunk.moved > 0 && rj.length === 1 && Math.abs((rj[0][1].frac as number) - ct.fracs()[0]) < 1e-9,
       `pieces ${ct.pieces}, rejoin ${JSON.stringify(rj.map((c) => c[1].frac))}, fracs ${ct.fracs().map((f) => f.toFixed(3)).join('+')}`);
     // let go while touching: joins at once (no 0.4 s wait)
     const c2 = bm.extras.find((x) => x.piece)!.body as CutMock;
-    (c2.center as V).x = (bm.body.center as V).x - 0.5; (c2.center as V).y = (bm.body.center as V).y; (c2.center as V).z = (bm.body.center as V).z;
-    active = c2; touching = true; step(0.1); touching = false; step(1 / 60);
+    standBeside(c2, bm.body as CutMock, -1, 0.02);
+    active = c2; touching = true; dragV = { x: 0.8 * supportAlong(c2, { x: 1, y: 0, z: 0 }), y: 0, z: 0 }; step(0.1); touching = false; dragV = null; step(1 / 60);
     const letGo = ct.busy;
     step(JOIN_S + 0.05);
-    check('CUT reconnect: letting go of a piece while it touches another joins them at once', letGo && ct.pieces === 2, `pieces ${ct.pieces}`);
+    check('CUT reconnect: letting go of a piece that was DRAGGED into another, while they touch, joins them at once', letGo && ct.pieces === 2, `pieces ${ct.pieces}`);
     // X04: Reconnect all flows every piece into the face piece over 1.2 s; the result is a fresh WHOLE body of the same genome
     const before = bm.body;
     const okAll = ct.reconnectAll(true);
@@ -851,6 +884,67 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     check('tools: with Cut a swipe over the squishy cuts it (no finger reaches a body); with Snap a drag orbits the camera (no finger either)',
       r.app.tool === 'snap' && swiped === 2 && (r.app.body as CutMock).rec.count('fingerDown') === 0 && fd0 === 0 && orbits >= 1, `pieces after the swipe ${swiped}, orbits ${orbits}`);
     r.app.setTool('hand');
+    // SHELL-4 fix round 1 (VERIFY_SHELL4_A F5 / F6 / F4, B F1 / F2): src/input/pointer.ts forwards a pointermove to the game only while input.isDown(id); isDown used to answer for the Hand's gesture
+    // machine alone, so with REAL pointer events Snap's drag-to-turn and pinch did nothing and the Cut blade stayed a dot (the hook and these rows call game.input directly and never saw it). Every owner of a
+    // pressed pointer must answer: the Cut blade, a Snap drag (not a left mouse button), and a release (hidden tab, panel) must clear the stale ones.
+    {
+      r.app.setTool('cut');
+      const blades: Array<{ x1: number; y1: number } | null> = [];
+      r.app.on('blade', (b) => blades.push(b ? { x1: b.x1, y1: b.y1 } : null));
+      r.app.input.pointerDown({ id: 91, x: c.x - 60, y: c.y - 50, t: r.w.clock.t, type: 'mouse', button: 0 });
+      const bladeDown = r.app.input.isDown(91);
+      r.app.input.pointerMove({ id: 91, x: c.x + 40, y: c.y + 30, t: r.w.clock.t, type: 'mouse' });
+      const followed = blades.at(-1)?.x1 === c.x + 40;
+      r.app.suspend('hidden'); r.app.unsuspend('hidden');   // the shell's own release, no pointerup
+      const bladeAfterRelease = r.app.input.isDown(91), bladeCleared = blades.at(-1) === null;
+      r.app.input.pointerDown({ id: 92, x: c.x - 60, y: c.y - 50, t: r.w.clock.t, type: 'mouse', button: 2 });
+      const rightMouseInCut = r.app.input.isDown(92);   // a right drag in the Cut tool is nothing: not a blade
+      r.app.setTool('snap');
+      r.app.input.pointerDown({ id: 93, x: c.x, y: c.y, t: r.w.clock.t, type: 'mouse', button: 0 });
+      const leftMouse = r.app.input.isDown(93);
+      r.app.input.pointerDown({ id: 94, x: c.x, y: c.y, t: r.w.clock.t, type: 'mouse', button: 2 });
+      const rightMouse = r.app.input.isDown(94);
+      r.app.input.pointerUp({ id: 94, x: c.x, y: c.y, t: r.w.clock.t, type: 'mouse' });
+      const afterUp = r.app.input.isDown(94);
+      r.app.input.pointerDown({ id: 95, x: c.x, y: c.y, t: r.w.clock.t, type: 'touch' });
+      const finger = r.app.input.isDown(95);
+      const o0 = r.w.stage.rec.count('orbit');
+      r.app.input.pointerMove({ id: 95, x: c.x + 30, y: c.y, t: r.w.clock.t, type: 'touch' });
+      const orbited = r.w.stage.rec.count('orbit') > o0;
+      r.app.suspend('hidden'); r.app.unsuspend('hidden');
+      const afterRelease = r.app.input.isDown(95);
+      r.app.setTool('hand');
+      check('input.isDown answers for every owner of a pressed pointer (pointer.ts forwards moves only while it does): the Cut blade (and its line follows the move), a Snap right-mouse drag and a finger but not a left mouse button; up, cancel and a release (hidden tab) clear them',
+        bladeDown && followed && !bladeAfterRelease && bladeCleared && !rightMouseInCut && !leftMouse && rightMouse && finger && orbited && !afterUp && !afterRelease,
+        JSON.stringify({ bladeDown, followed, bladeAfterRelease, bladeCleared, rightMouseInCut, leftMouse, rightMouse, finger, orbited, afterUp, afterRelease }));
+    }
+    // SHELL-4 fix round 2 (VERIFY_SHELL4_A_R1 N1): a swipe in progress when a Reconnect all (or a join, or a parting) animation ends must not be dropped. The swap that ends the animation calls beforeChange /
+    // beforeSwap (fingers off the bodies), and since fix round 1 that also cleared the blade: the line vanished at that moment and the finished swipe cut nothing. The shell's own releases (hidden tab, a
+    // panel, a ceremony, a switch) still clear it (the row above).
+    {
+      r.app.setTool('cut');
+      r.app.cut.reconnectAll(false);   // (the rows above left it cut: start from a whole squishy)
+      cutTwo();
+      const two = r.app.cut.pieces === 2;
+      r.app.cut.reconnectAll(true);
+      run2(r.w, r.app, 300);
+      const blades2: Array<{ x1: number; y1: number } | null> = [];
+      const cuts: string[] = [];
+      r.app.on('blade', (b) => blades2.push(b ? { x1: b.x1, y1: b.y1 } : null));
+      r.app.on('cut', (res) => cuts.push(String(res)));
+      r.app.input.pointerDown({ id: 96, x: c.x - 60, y: c.y - 120, t: r.w.clock.t, type: 'mouse', button: 0 });
+      const downWhileBusy = r.app.cut.busy && r.app.input.isDown(96) && blades2.at(-1) !== null;
+      let waited = 0;
+      while (r.app.cut.busy && waited < 6000) { run2(r.w, r.app, 100); waited += 100; }   // the join, the glide home and the swap to a whole body
+      const survived = !r.app.cut.busy && r.app.cut.pieces === 1 && r.app.input.isDown(96) && blades2.at(-1) !== null && !blades2.includes(null);
+      r.app.input.pointerMove({ id: 96, x: c.x - 40, y: c.y + 120, t: r.w.clock.t, type: 'mouse' });
+      r.app.input.pointerUp({ id: 96, x: c.x - 40, y: c.y + 120, t: r.w.clock.t, type: 'mouse' });
+      run2(r.w, r.app, neckMs);
+      check('N1 shell: a swipe that is in progress when a Reconnect all animation ends is NOT dropped: the blade line stays through the swap to the whole body, and the finished swipe cuts it (2 pieces)',
+        two && downWhileBusy && survived && cuts.at(-1) === 'cut' && r.app.cut.pieces === 2,
+        JSON.stringify({ two, downWhileBusy, survived, waitedMs: waited, cuts, bladeEvents: blades2.map((b) => (b ? 'line' : 'null')), pieces: r.app.cut.pieces }));
+      r.app.setTool('hand');
+    }
     r.app.dispose();
   }
 }
@@ -1233,6 +1327,89 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   app.setGenome(speciesBaseGenome('twangle', 1));
   check('X05 real physics: a switch of squishy while cut reconnects first (the new squishy is whole, nothing left on the mat, the Hoard unchanged)', cutAgain === 2 && app.cut.pieces === 1 && app.bodies.extras.length === 0 && app.hoard.items().length === items0, `pieces ${cutAgain} -> ${app.cut.pieces}`);
   app.dispose();
+}
+
+/* ───────────────────────── 7h. SHELL-4 fix round 2 (VERIFY_SHELL4 A-F3 / A-F7): where do the pieces of a cut GO, and how big are they, on the REAL physics ───────────────────────── */
+// Both verifiers measured the same failures with the shell untouched by them: a level swipe threw the top piece up to 55 m on putty, gummy, firm silicone, pop dome, slow-rise and bead families, the first
+// Split in two left some pieces 6 .. 13 % off their share, and the neck of a firm / putty body threw the whole body up 3x its height. One defect: a shape-matching goal whose centroid is off the rest
+// centre pulls the whole body with no reaction (a thrust): the chunk's flat cut face (shape.ts flatPoints) and the neck's waist and swell (softbody.ts neckGoal) both moved it. These rows run the real
+// SoftBody through the game core; they gate, so they FAIL until the physics lane applies _handoff/reports/SHELL_4_FIX2_physics_goal_centroid.patch (about 20 lines in src/physics; measured in a sandbox
+// copy: 45 of 100 isolated chunks launched before, 0 after).
+{
+  const { SoftBody } = await import('../../src/physics/softbody.ts');
+  const Ctor = SoftBody as unknown as new (g: Genome, o?: unknown) => SoftBodyLike & { center: { x: number; y: number; z: number } };
+  const volOf = (b: SoftBodyLike): number => {
+    const P = b.positions as Float32Array, I = b.indices as Uint32Array; let v = 0;
+    for (let t = 0; t < I.length; t += 3) { const a = I[t] * 3, c = I[t + 1] * 3, d = I[t + 2] * 3; v += P[a] * (P[c + 1] * P[d + 2] - P[c + 2] * P[d + 1]) - P[a + 1] * (P[c] * P[d + 2] - P[c + 2] * P[d]) + P[a + 2] * (P[c] * P[d + 1] - P[c + 1] * P[d]); }
+    return v / 6;
+  };
+  // (1) the chunk alone, as cut.ts part() builds it: its flat face DOWN (a level swipe's top piece), UP (the bottom one) and to the SIDE (Split in two); frac 0.5 and 0.25 (the smallest 1/8 is the worst of the rest)
+  const LAUNCHERS = ['kneadle', 'thudge', 'prismelo', 'chunkle', 'boingle', 'caromel', 'dimpla', 'diademo', 'capnap', 'burrbin', 'crumbit', 'dollop'];
+  let worst = { id: '', dir: '', frac: 0, y: 0 }, bodiesRun = 0;
+  for (const id of LAUNCHERS) for (const [dir, ny, nx] of [['down', -1, 0], ['up', 1, 0], ['side', 0, -1]] as const) for (const frac of [0.5, 0.25]) {
+    const b = new Ctor(speciesBaseGenome(id as never, 1), { piece: { frac, chunk: true, cutNormal: { x: nx, y: ny, z: 0 }, at: { x: 0, y: 0, z: 0 }, vel: { x: 0, y: 0, z: 0 } } });
+    let hi = 0;
+    for (let i = 0; i < 4 * 60; i++) { b.step(1 / 60); if (b.center.y > hi) hi = b.center.y; }
+    bodiesRun++;
+    if (hi > worst.y) worst = { id, dir, frac, y: hi };
+  }
+  check(`A-F3 real physics: a chunk alone with its flat cut face down, up or sideways stays on the table (highest centre in 4 s under 1.5 m) on ${LAUNCHERS.length} species of the families that launched (${bodiesRun} bodies)`,
+    worst.y < 1.5, `highest ${worst.y.toFixed(2)} m (${worst.id}, face ${worst.dir}, frac ${worst.frac}); as found 55.13 m (thudge, face down, frac 0.25)`);
+  // (2) through the whole game: a level swipe through the middle (the top piece is the one that flew) and Split in two; the highest centre of any piece in 8 s, and (Split in two) the pieces' volumes against their shares 1.8 s after
+  const through = (id: string, mode: 'level' | 'split'): { hi: number; pieces: number; volErr: number } => {
+    const w = createMockWorld({ storage: null });
+    const st = w.stage as unknown as Record<string, unknown>;
+    let vid = 100;
+    st.primaryBodyId = () => 1; st.setBodyTier = () => {}; st.setCalmEffects = () => {}; st.addBody = () => ++vid; st.removeBody = () => {}; st.setCutSeam = () => {}; st.setBridge = () => {}; st.partPieces = () => {};
+    st.stats = () => ({ drawCalls: 0, triangles: 0, tier: 'high', frameMsEma: 0 });
+    const au = w.audio as unknown as Record<string, unknown>; au.cut = () => {}; au.rejoin = () => {};
+    w.deps.createBody = ((gg: Genome, o?: { at?: { x: number; y: number; z: number }; piece?: unknown }) => (o?.piece ? new Ctor(gg, { piece: o.piece }) : o?.at ? new Ctor(gg, { piece: { frac: 1, chunk: false, at: o.at } }) : new Ctor(gg))) as typeof w.deps.createBody;
+    const now = (): number => 1_700_000_000_000 + w.clock.t;
+    const app = createApp({ ...w.deps, collection: createCollection({ storage: null, profile: null, now, random: () => 0.4 }), epochNow: now, genome: speciesBaseGenome(id as never, 1) });
+    app.resize(800, 600, 1); app.setPhase('play');
+    const go = (ms: number): void => { let left = ms; while (left > 1e-9) { const d = Math.min(1000 / 60, left); w.clock.t += d; app.frame(w.clock.t); left -= d; } };
+    go(1500);
+    const V0 = volOf(app.body);
+    const b = app.host.bodyScreen()!;
+    const r = mode === 'level' ? app.cut.swipe(b.x - 1.6 * b.r, b.y, b.x + 1.6 * b.r, b.y + 6) : app.cut.splitInTwo();
+    if (r !== 'cut') { app.dispose(); return { hi: -1, pieces: 0, volErr: -1 }; }
+    let hi = 0, volErr = 0;
+    for (let t = 0; t < 8000; t += 1000 / 60) {
+      go(1000 / 60);
+      for (const bb of [app.body, ...app.bodies.extras.map((x) => x.body)]) hi = Math.max(hi, bb.center.y);
+      if (mode === 'split' && Math.abs(t - 2200) < 9) {   // about 1.8 s after the parting (the neck takes 0.3 s)
+        const bodies = [app.body, ...app.bodies.extras.filter((x) => x.piece).map((x) => x.body)], fr = app.cut.fracs();
+        volErr = Math.max(...bodies.map((bb, i) => Math.abs(volOf(bb) / (fr[i] * V0) - 1)));
+      }
+    }
+    const pieces = app.cut.pieces;
+    app.dispose();
+    return { hi, pieces, volErr };
+  };
+  const rowsL: string[] = [];
+  let hiLevel = 0, badL = '';
+  for (const id of ['kneadle', 'thudge', 'prismelo', 'boingle', 'diademo']) {
+    const o = through(id, 'level');
+    rowsL.push(`${id} ${o.hi.toFixed(2)}`);
+    if (o.hi < 0 || o.pieces !== 2) badL += ` ${id}: no cut`;
+    if (o.hi > hiLevel) hiLevel = o.hi;
+  }
+  check('A-F3 real physics (node, through the whole game): after a LEVEL swipe through the middle no piece of kneadle / thudge (putty), prismelo (gummy), boingle (firm silicone) or diademo (pop dome) rises above 2.5 m in 8 s (the highest centre of any piece)',
+    hiLevel < 2.5 && badL === '', `${rowsL.join(', ')} m${badL}; as found kneadle 12.74, prismelo 24.5, boingle 14.66, diademo 45.98`);
+  const rowsS: string[] = [], vrows: string[] = [];
+  let hiSplit = 0, vWorst = 0, badS = '';
+  for (const id of ['dollop', 'boingle', 'caromel', 'chunkle', 'thudge', 'capnap', 'burrbin', 'crumbit', 'slumbrel', 'rattlebead']) {
+    const o = through(id, 'split');
+    rowsS.push(`${id} ${o.hi.toFixed(2)}`); vrows.push(`${id} ${(o.volErr * 100).toFixed(1)} %`);
+    if (o.hi < 0 || o.pieces !== 2) badS += ` ${id}: no cut`;
+    if (o.hi > hiSplit) hiSplit = o.hi;
+    if (o.volErr > vWorst) vWorst = o.volErr;
+  }
+  // (the neck: the whole body, still one body, was thrown up 3 x its height by the goal's centroid drift; the highest centre of any body in the 8 s after Split in two)
+  check('A-F3 real physics (node, through the whole game): after Split in two nothing rises above 1.0 m in 8 s on boingle / caromel (firm silicone), chunkle (gummy), thudge (putty), capnap, slumbrel (slow-rise), burrbin, crumbit, rattlebead (beads) and dollop: the neck no longer throws the body up',
+    hiSplit < 1.0 && badS === '', `${rowsS.join(', ')} m${badS}; as found boingle 1.65, capnap 1.59, caromel 1.29, chunkle 1.16`);
+  check('A-F7 real physics (node, through the whole game): 1.8 s after Split in two the mesh volume of each piece is within 6 % of its share (X01) on the bead-squeeze and slow-rise species that were 6.6 .. 11.4 % off (capnap, burrbin, crumbit, slumbrel, rattlebead) and on dollop and the firm / putty / gummy ones',
+    vWorst <= 0.06, `${vrows.join(', ')}; as found capnap 6.7, burrbin 11.4, crumbit 9.4, slumbrel 9.1, rattlebead 10.5`);
 }
 
 /* ───────────────────────── 8. the collection module through the port: meter feed, events, table cap ───────────────────────── */

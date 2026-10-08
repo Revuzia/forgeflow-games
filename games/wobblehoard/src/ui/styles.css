@@ -413,6 +413,9 @@ select option { background: var(--wh-panel); color: var(--wh-cream); }
   .nametag { padding: 7px 10px 8px; }
   .nametag-name { font-size: 17px; }
   .meter-state { max-width: 40vw; font-size: 12px; }
+  /* the tag's second line (gem, tier word, nickname) never spills out of the tag: a short name with a long tier word ("UNCOMMON") was 3 px wider than the 120 px tag at 320 px (SHELL-4); what does not fit wraps and is clipped, so the gem always shows */
+  .nametag-tier { letter-spacing: .05em; }
+  .nametag-line { flex-wrap: wrap; max-height: 16px; overflow: hidden; }
 }
 .keys { display: none; }
 body[data-kbd="1"] .keys { display: block; }

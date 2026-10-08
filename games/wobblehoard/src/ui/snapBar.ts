@@ -54,7 +54,9 @@ export function createSnapBar(root: HTMLElement, o: { onSave(): void; onDone(): 
   const tints = h('div', { class: 'snap-tints', attrs: { role: 'radiogroup', 'aria-label': 'Backdrop' } });
   const save = h('button', { class: 'cta-btn snap-save', text: 'Save photo', attrs: { type: 'button', 'data-key': 'save' } });
   const done = h('button', { class: 'act-btn', text: 'Done', attrs: { type: 'button', 'data-key': 'done' } });
-  save.addEventListener('click', () => o.onSave());
+  // while saving the button is aria-disabled (not `disabled`): a disabled button drops the keyboard focus to the page, and a keyboard player would have to Tab
+  // back from the top (VERIFY B-M3; cutBar.ts does the same for its buttons); a press during that moment does nothing (the shell's `saving` guard)
+  save.addEventListener('click', () => { if (save.getAttribute('aria-disabled') !== 'true') o.onSave(); });
   done.addEventListener('click', () => o.onDone());
   const el = h('div', { class: 'snapbar', attrs: { role: 'group', 'aria-label': 'Photo', hidden: '' } },
     h('p', { class: 'snapbar-text', text: 'Drag to turn (right-drag with a mouse), pinch or scroll to zoom.' }),
@@ -107,7 +109,7 @@ export function createSnapBar(root: HTMLElement, o: { onSave(): void; onDone(): 
       clearTimeout(shadeTimer);
       shadeTimer = window.setTimeout(() => { delete shade.dataset.on; }, 160);
     },
-    setSaving(on) { save.disabled = on; save.textContent = on ? 'Saving…' : 'Save photo'; },
+    setSaving(on) { save.setAttribute('aria-disabled', String(on)); save.textContent = on ? 'Saving…' : 'Save photo'; },
     destroy() { clearTimeout(shadeTimer); el.remove(); overlay.remove(); shade.remove(); },
   };
 }

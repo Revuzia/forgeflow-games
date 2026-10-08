@@ -45,7 +45,7 @@ export function toolIcon(id: ToolId | 'toys', cls = 'icon tool-icon'): SVGSVGEle
   return svg;
 }
 
-export function createToyTray(root: HTMLElement, o: { onPick(t: ToolId): void }): ToyTray {
+export function createToyTray(root: HTMLElement, o: { onPick(t: ToolId): void; /** the tray may open now (not during a capsule reveal, under a panel, or in Snap, where it is hidden); closing is always allowed */ canOpen?(): boolean }): ToyTray {
   let tool: ToolId = 'hand';
   let available: ToolId[] = ['hand', 'snap'];
   let open = false;
@@ -99,7 +99,7 @@ export function createToyTray(root: HTMLElement, o: { onPick(t: ToolId): void })
     button, el,
     get isOpen() { return open; },
     open(focusFirst = true) {
-      if (open) return;
+      if (open || (o.canOpen && !o.canOpen())) return;
       open = true;
       render();
       el.hidden = false;

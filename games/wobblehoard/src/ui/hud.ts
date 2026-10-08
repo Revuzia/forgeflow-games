@@ -104,15 +104,25 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
     let size = parseFloat(cs.fontSize) || 14;
     const max = parseFloat(cs.maxWidth);
     const border = hintEl.offsetWidth - hintEl.clientWidth; // box-sizing: border-box, scrollWidth excludes the border
-    const avail = (Number.isFinite(max) ? max : document.documentElement.clientWidth - 32) - border;
-    while (hintEl.scrollWidth > avail + 0.5 && size > MIN_FONT) { size -= 0.5; hintEl.style.fontSize = `${size}px`; }
-    if (hintEl.scrollWidth > avail + 0.5) hintEl.style.whiteSpace = ''; // still too long at the minimum: let it wrap
+    // the text must fit INSIDE the padding too. scrollWidth of an overflowing nowrap box counts the left padding but not the right one, so the text was allowed to run 16 px into the right
+    // padding and touch the pill's border (seen at 390 px, SHELL-4): the text's own width is measured with a Range instead
+    const pad = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    const avail = (Number.isFinite(max) ? max : document.documentElement.clientWidth - 32) - border - pad;
+    const rg = document.createRange();
+    const textW = (): number => { rg.selectNodeContents(hintEl); return rg.getBoundingClientRect().width; };
+    while (textW() > avail + 0.5 && size > MIN_FONT) { size -= 0.5; hintEl.style.fontSize = `${size}px`; }
+    if (textW() > avail + 0.5) hintEl.style.whiteSpace = ''; // still too long at the minimum: let it wrap
   };
   fitHint();
   // The HUD root is fixed full-screen, so a ResizeObserver on it fires after every viewport / orientation change, once layout
   // and the media queries are up to date (a window 'resize' listener can run too early). It never resizes itself, so no loop.
   const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { fitHint(); fitName(); }) : null;
   if (ro) ro.observe(el); else window.addEventListener('resize', fitHint);
+  // The name tag's own box changes when its neighbours do (a capsule button and its pips arrive in the ring's column, the Hoard / Toys buttons change their words) with no change in the HUD's
+  // size, so the observer above never fired and the name stayed fitted to the OLD room, cut off with an ellipsis (SHELL-4: "Boingle" in the crowded phone row, found by the hoard-phone
+  // check). Observing the tag re-fits the name whenever its room changes; the fit ends where it began, so it does not loop.
+  const roName = typeof ResizeObserver === 'function' ? new ResizeObserver(() => fitName()) : null;
+  roName?.observe(nameTag);
   void document.fonts?.ready.then(fitHint);
 
   let active = false;
@@ -129,6 +139,6 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
     interact() { hint.interact(now()); refreshHint(); },
     setHintMode(m) { if (m === mode) return; mode = m; hintEl.textContent = HINT_TEXT[m]; fitHint(); },
     hintVisible: () => hintEl.dataset.show === 'true',
-    destroy() { clearInterval(timer); ro?.disconnect(); window.removeEventListener('resize', fitHint); meter.destroy(); el.remove(); },
+    destroy() { clearInterval(timer); ro?.disconnect(); roName?.disconnect(); window.removeEventListener('resize', fitHint); meter.destroy(); el.remove(); },
   };
 }
