@@ -71,10 +71,16 @@ homepage. Two mitigations now exist:
 1. `deploy_game.py` auto-runs `deploy_portal.py` after every successful
    publish (skip with `--no-portal` for batch runs — then run
    `deploy_portal.py` once at the end).
-2. The homepage has an SPA-fallback redirect (`pages/index/+Page.tsx`)
-   that client-routes /games/* and /category/* hard loads to the right
-   page even when the prerender is stale — so direct links WORK either
-   way; the portal rebuild is what gives the URL real static HTML (SEO).
+2. SPA fallback (reworked 2026-10-08): a `/games/<slug>` or
+   `/category/<name>` URL with no static HTML gets the top-level
+   `404.html` (HTTP 404), whose inline script hands it to the app as
+   `/?spa=<path>`; the homepage (`pages/index/+Page.tsx`,
+   `src/lib/spaFallback.ts`) then client-routes to the real page, and a
+   bogus slug ends on "Game Not Found". So direct links WORK either way;
+   the portal rebuild is what gives the URL real static HTML and a 200
+   (SEO). It used to be `/games/* / 200` rewrites in `public/_redirects`,
+   which served the homepage for EVERY game page — see the 2026-10-08
+   note under "SEO, sitemap, 404s and ads".
 
 ## Common confusions
 
@@ -85,10 +91,11 @@ auto-deploy. Run `deploy_portal.py`.
 row is in `games` with `status='published'`, it should appear. If not,
 phase_deploy didn't reach the Supabase step (probably a previous failure).
 
-**"Hard-loading /games/&lt;slug&gt; shows the homepage"** — the portal
-prerender is stale (game published after the last portal build) AND the
-deployed bundle predates the 2026-07-07 homepage SPA-fallback redirect.
-Run `pipeline/deploy_portal.py`.
+**"Hard-loading /games/&lt;slug&gt; shows the homepage"** — check
+`public/_redirects` first: any rule matching `/games/*` or `/category/*`
+(including a `200` rewrite) beats the prerendered file on Cloudflare
+Pages. That was the cause until 2026-10-08. Otherwise the portal prerender
+is stale; run `pipeline/deploy_portal.py`.
 
 **"The thumbnail isn't updating"** — CDN cache. Append `?v=<timestamp>`
 query param to the thumbnail_url in Supabase to bust browser/CDN caches.
@@ -107,10 +114,12 @@ Generated on every `npm run build` (so every `deploy_portal.py` / game publish r
 | `public/sitemap.xml` | `scripts/build-seo.mjs` (prebuild) | every indexable page + each published game with real `<lastmod>`. If the registry is unreachable it KEEPS the previous file and warns loudly — it never writes an empty sitemap. |
 | `public/ads.txt` | `scripts/build-seo.mjs` | generated from `publisherId` in `public/ads-config.json`, so it cannot drift from the ad config. |
 | `public/robots.txt` | `scripts/build-seo.mjs` | disallows `/auth/ /profile/ /friends/ /search/`. |
-| `dist/client/404.html` | `scripts/postbuild-404.mjs` (postbuild) | **a top-level 404.html is what turns off Cloudflare Pages' single-page-app mode**, which otherwise answers EVERY unknown URL with 200 (soft 404s — what sank Revuzia's AdSense application). |
+| `dist/client/404.html` | `scripts/postbuild-404.mjs` (postbuild) | **a top-level 404.html is what turns off Cloudflare Pages' single-page-app mode**, which otherwise answers EVERY unknown URL with 200 (soft 404s — what sank Revuzia's AdSense application). Plain static HTML, noindex, no React bundle; its only script is the `/games/<slug>` + `/category/<name>` SPA hand-off (loop-guarded, never fires for other URLs). |
 | `public/images/og-default.png` | `python scripts/make-og-image.py` | 1200x630 share card. It did not exist before 2026-10-06: every shared link had a broken preview. |
 
-**Cloudflare Pages `_redirects` gotcha (verified 2026-10-06):** a 200-rewrite whose target is `/index.html` is silently IGNORED; a rewrite to `/` works. The old `/* /index.html 200` never did anything — the old "every URL is 200" was just SPA mode. The `/games/*` and `/category/*` rules in `public/_redirects` (target `/`) are the safety net for a game published after the last build; everything else 404s.
+**Cloudflare Pages `_redirects` gotcha (verified 2026-10-06):** a 200-rewrite whose target is `/index.html` is silently IGNORED; a rewrite to `/` works. The old `/* /index.html 200` never did anything — the old "every URL is 200" was just SPA mode.
+
+**`_redirects` rules beat static files (2026-10-08).** Unlike Netlify, Cloudflare Pages follows a matching `_redirects` rule even when a static file exists at that path ("Redirects are always followed, regardless of whether or not an asset matches the incoming request" — developers.cloudflare.com/pages/configuration/redirects/). The `/games/* / 200` and `/category/* / 200` rewrites that were the safety net for unbuilt games therefore served the HOMEPAGE html for every prerendered game and category page, `/games/` itself, and their `index.pageContext.json` files: crawlers and link previews only ever saw the homepage title and `og:image`. They are gone; the safety net is now the 404.html hand-off (see "When to run what"). Never add a splat rule over a prerendered path. Pages serves every page at its trailing-slash URL (`/games/rimfall` → 308 → `/games/rimfall/`, `/games/rimfall/index.html` → 308 → `/games/rimfall/`), which is what `canonicalFor()` emits.
 
 **Page heads.** Titles/descriptions come from vike-react (`+title.ts` / `+description.ts` for static pages, `useConfig()` for game and category pages), canonical + noindex from `pages/+Head.tsx`, JSON-LD (VideoGame + BreadcrumbList) in the game page. Prerender seeds (`+onBeforePrerenderStart.ts` -> `pageContext`, listed in `passToClient`) put the real game data into the static HTML; see `src/lib/seed.ts` for why this is deliberately NOT a Vike `+data` hook (reload loop for games published after the last build).
 

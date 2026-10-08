@@ -1,18 +1,25 @@
 /games/wobblesworth   /games/wanderwild   301
 /games/wobblesworth/  /games/wanderwild/  301
 
-# Safety net ONLY for pages that exist in the registry but were published after
-# the last portal build (no static HTML yet): serve the app shell and let the
-# client router resolve it (see the SPA-fallback effect in pages/index/+Page.tsx).
-# Static prerendered files always win over these rewrites.
+# NO REWRITES HERE. On Cloudflare Pages a matching _redirects rule is followed
+# EVEN WHEN A STATIC FILE EXISTS AT THAT PATH ("Redirects are always followed,
+# regardless of whether or not an asset matches the incoming request",
+# developers.cloudflare.com/pages/configuration/redirects/). Static files do NOT
+# win, as they do on Netlify. Until 2026-10-08 this file had
+#   /games/*     /  200
+#   /category/*  /  200
+# as a safety net for games published after the last portal build, and those two
+# lines served the HOMEPAGE html for every prerendered game and category page
+# (and for their index.pageContext.json files): crawlers and link previews only
+# ever saw the homepage title and og:image.
 #
-# THE TARGET MUST BE "/" NOT "/index.html". Verified on Cloudflare Pages
-# (2026-10-06): a 200-rewrite to /index.html is silently ignored (404), while a
-# rewrite to / works. That means the old catch-all "/* /index.html 200" never did
-# anything — the old "every URL is 200" behaviour was just Pages' default
-# single-page-app mode, which only applies when there is NO top-level 404.html.
+# The safety net now lives in the top-level 404.html (scripts/postbuild-404.mjs):
+# a /games/<slug> or /category/<name> URL with no static html gets that 404 page,
+# whose inline script hands the URL to the app (/?spa=<path>) and the homepage's
+# SPA-fallback effect (pages/index/+Page.tsx) client-routes to the real page.
+# Every other unknown URL is a plain HTTP 404.
 #
-# There is deliberately no global catch-all. With a real 404.html (written by
-# scripts/postbuild-404.mjs) and no catch-all, /zzz now returns a true 404.
-/games/*     /  200
-/category/*  /  200
+# A 200-rewrite whose target is "/index.html" is silently ignored by Pages (a
+# rewrite to "/" works; verified 2026-10-06). Pages' single-page-app mode (every
+# unknown URL -> 200 + homepage) only applies when there is NO top-level 404.html.
+# Only add 301/302 redirects for URLs that have no static file of their own.

@@ -6,23 +6,36 @@ import GameGrid from "../../src/components/game/GameGrid";
 import { CATEGORIES } from "../../src/lib/supabase";
 import { usePageContext } from "vike-react/usePageContext";
 import AdSlot from "../../src/components/ads/AdSlot";
+import { readSpaFallback, clearSpaFallbackMarker } from "../../src/lib/spaFallback";
 
 export default function HomePage() {
   // Prerender-time registry rows (src/lib/seed.ts): the static HTML lists real games.
   const { gamesSeed } = usePageContext() as { gamesSeed?: import("../../src/lib/supabase").Game[] };
-  // 2026-07-07 — SPA-fallback recovery. Cloudflare Pages's catch-all
-  // (`/* /index.html 200`) serves this prerendered HOMEPAGE for any URL that
-  // has no static HTML of its own — e.g. a game published after the last
-  // portal build. Vike hydrates the pageContext embedded in the served HTML
-  // (the homepage) regardless of the address bar, so a hard load of
-  // /games/<new-slug> rendered the homepage. When this component finds itself
-  // mounted at a foreign dynamic-route URL, client-route to the real page.
-  // Restricted to /games/<slug> and /category/<name> so a genuinely bogus URL
-  // can't trigger a navigation loop.
+  // SPA-fallback recovery for a game or category page with no static HTML yet
+  // (published after the last portal build). Cloudflare Pages answers such a URL
+  // with the top-level 404.html (HTTP 404), whose inline script sends the visitor
+  // here as /?spa=<path> (scripts/postbuild-404.mjs). Vike hydrates the
+  // pageContext embedded in the served HTML (this homepage), so client-route to
+  // the real page, replacing the /?spa= history entry. Only /games/<slug> and
+  // /category/<name> are ever handed off; a bogus slug ends on the game page's
+  // "Game Not Found" state, and the sessionStorage marker (src/lib/spaFallback.ts)
+  // stops a hand-off loop if client routing ever falls back to a hard reload.
+  // (2026-10-08: this used to be reached through `/games/* / 200` rewrites in
+  // public/_redirects; Pages follows a matching rule even when a static file
+  // exists, so those rewrites served the homepage for every prerendered page.)
   useEffect(() => {
-    const { pathname, search, hash } = window.location;
-    if (/^\/(games|category)\/[^/]+\/?$/.test(pathname)) {
-      navigate(pathname.replace(/\/+$/, "") + search + hash).catch(() => {});
+    const fb = readSpaFallback(window.location);
+    if (fb.kind === "strip") {
+      window.history.replaceState(window.history.state, "", fb.cleanUrl);
+    } else if (fb.kind === "navigate") {
+      const targetPath = new URL(fb.target, window.location.origin).pathname;
+      navigate(fb.target, { overwriteLastHistoryEntry: true })
+        .then(() => {
+          // Landed (a hard-reload fallback would still be on "/" here): the next
+          // reload of this URL may hand off again.
+          if (window.location.pathname === targetPath) clearSpaFallbackMarker();
+        })
+        .catch(() => {});
     }
   }, []);
 

@@ -13,7 +13,9 @@
 // navigation depend on a per-page pageContext.json that only exists for pages
 // present at build time. A game published after the last build has none, and
 // the resulting failed navigation falls back to a full reload — which the
-// homepage SPA-fallback would then re-navigate: a reload loop.
+// homepage SPA-fallback would then re-navigate: a reload loop. (Since
+// 2026-10-08 the 404.html hand-off's loop guard stops that after one bounce, see
+// src/lib/spaFallback.ts, but the unbuilt game would still never open.)
 
 import type { Game } from "./supabase";
 
