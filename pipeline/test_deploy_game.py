@@ -7,7 +7,8 @@ Locks in two behaviours:
       clears screenshots set by hand.
   (b) deploy_one, when the metadata has no screenshot_urls, publishes <game_dir>/screenshots/
       (.png .jpg .jpeg .webp, sorted by filename, at most 8) as CDN URLs with ?v=<md5[:8]>.
-      No screenshots/ folder => no screenshot_urls key is sent at all.
+      No screenshots/ folder => no screenshot_urls key is sent at all. Names that need
+      percent-encoding are skipped (the CDN worker never decodes the path, so they would 404).
 
 HERMETIC: never touches R2, Supabase, Cloudflare, xAI or the live R2 manifest. _r2_put (the
 single upload seam), purge_cf_cache, refresh_portal_prerender and urllib's urlopen are
@@ -221,6 +222,40 @@ def test_deploy_caps_at_eight_sorted_by_filename():
     _ok(len(urls) == 8, f"expected 8 screenshot URLs, got {len(urls)}")
     names = [u.split("/screenshots/", 1)[1].split("?", 1)[0] for u in urls]
     _ok(names == [f"shot-{i:02d}.png" for i in range(1, 9)], f"not the first 8 by filename: {names!r}")
+
+
+def test_deploy_skips_names_the_cdn_cannot_serve():
+    # The CDN worker looks R2 up with the raw request path and never percent-decodes it
+    # (workers/games-cdn/src/index.js), so a name that needs %-encoding would publish a URL
+    # that 404s. Those are skipped with a warning, and they do not use up the 8 slots.
+    bad = ["Screenshot 2026-10-08 142233.png", "shot (2).png", "arène.png", "a#b.png", "50%.png"]
+    good = [f"ok-{i:02d}.png" for i in range(1, 10)] + ["ok_v1~final.JPEG"]
+    shots = {n: n.encode("utf-8") for n in bad + good}
+    with tempfile.TemporaryDirectory() as tmp:
+        gd = _make_game(tmp, shots)
+        out = io.StringIO()
+        with redirect_stdout(out):
+            direct = dg.screenshot_urls_from_dir(gd, SLUG)
+        man = Path(tmp) / "manifest"
+        man.mkdir()
+        _, meta, put = _deploy(gd, man)
+    urls = meta.get("screenshot_urls") or []
+    _ok(urls == direct, "deploy_one did not publish what screenshot_urls_from_dir returned")
+    names = [u.split("/screenshots/", 1)[1].split("?", 1)[0] for u in urls]
+    _ok(names == [f"ok-{i:02d}.png" for i in range(1, 9)], f"expected the first 8 URL-safe names, got {names!r}")
+    _ok(all("%" not in u and " " not in u for u in urls), f"a URL needs decoding the CDN never does: {urls!r}")
+    warning = out.getvalue()
+    _ok("WARN" in warning and all(n in warning for n in bad), f"skipped names not reported: {warning!r}")
+    _ok(not any(n in warning for n in good), f"a URL-safe name was reported as skipped: {warning!r}")
+    # every image still uploads with the game (the filter only decides what gets a URL)
+    _ok(all(f"{SLUG}/screenshots/{n}" in put for n in bad + good), "an image in screenshots/ was not uploaded")
+    # a folder holding ONLY unservable names publishes nothing (and so never clears hand-set screenshots)
+    with tempfile.TemporaryDirectory() as tmp:
+        gd = _make_game(tmp, {n: b"x" for n in bad})
+        man = Path(tmp) / "manifest"
+        man.mkdir()
+        _, meta, _ = _deploy(gd, man)
+    _ok("screenshot_urls" not in meta, f"screenshot_urls sent for unservable names only: {meta.get('screenshot_urls')!r}")
 
 
 def test_deploy_without_screenshots_dir_sends_no_key():

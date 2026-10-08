@@ -256,8 +256,11 @@ export default function GamePage() {
 
           {/* Screenshots — 2026-10-08: up to 5, clickable, with a lightbox
               (src/components/game/ScreenshotGallery.tsx). Renders nothing
-              when the game has no screenshots. */}
-          <ScreenshotGallery title={game.title} urls={game.screenshot_urls} />
+              when the game has no screenshots. Keyed by slug: this page
+              component survives /games/a -> /games/b client navigations, and
+              without the key Back with the viewer open left the next game's
+              page scroll-locked, and the viewer reopened on its own later. */}
+          <ScreenshotGallery key={game.slug} title={game.title} urls={game.screenshot_urls} />
         </aside>
       </div>
 

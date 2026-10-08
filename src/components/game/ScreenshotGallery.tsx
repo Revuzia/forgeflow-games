@@ -19,6 +19,10 @@ import { createPortal } from "react-dom";
  * SSR/prerender-safe: render never touches window/document. The portal target
  * is captured in an effect, and the dialog can only open after a click.
  * No screenshots -> renders nothing (no heading, no empty box).
+ *
+ * Key it per game at the call site (key={game.slug}): vike-react reuses the
+ * game page component across /games/a -> /games/b client navigations, so an
+ * unkeyed gallery would carry the open viewer's index to the next game.
  */
 
 /** Steam asks for at least 5 store screenshots; itch.io recommends 3-5. */
@@ -48,7 +52,10 @@ export default function ScreenshotGallery({ title, urls }: Props) {
   const openerRef = useRef(0);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
-  const isOpen = active !== null && count > 0;
+  // In range, not just non-null: a shorter list arriving while the viewer is
+  // open (a refetch) must close it, never leave the scroll lock and key
+  // handlers running with no dialog on screen.
+  const isOpen = active !== null && active < count;
 
   useEffect(() => {
     setPortalTarget(document.body);
@@ -149,7 +156,7 @@ export default function ScreenshotGallery({ title, urls }: Props) {
     </button>
   );
 
-  const current = isOpen ? (shots[active] ?? null) : null;
+  const current = isOpen ? shots[active] : null;
   const many = count > 1;
   const navButton =
     `pointer-events-auto absolute top-1/2 -translate-y-1/2 flex h-11 w-11 items-center justify-center rounded-full ` +

@@ -689,19 +689,30 @@ CDN_BASE = "https://forgeflow-games-cdn.isimcha85.workers.dev"
 # folder; not a dev-only dir). The portal shows the first 5 (Steam wants at least 5).
 SCREENSHOT_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
 MAX_SCREENSHOTS = 8
+# The CDN worker looks up R2 with the RAW request path (workers/games-cdn/src/index.js:
+# key = url.pathname.slice(1), never decoded), so any name that needs percent-encoding
+# (a space, brackets, non-ASCII — e.g. Windows' "Screenshot 2026-10-08 142233.png") gets a
+# URL that 404s even though the file uploaded. Only names that are already URL-safe publish.
+SCREENSHOT_NAME_OK = re.compile(r"^[A-Za-z0-9._~-]+$")
 
 
 def screenshot_urls_from_dir(game_dir, slug):
     """CDN URLs for the images in <game_dir>/screenshots/, sorted by filename, at most
     MAX_SCREENSHOTS. Each carries ?v=<md5[:8]> of its bytes — the same cache-bust as the
-    thumbnail, so a URL changes only when its image does. [] if there is no such folder."""
+    thumbnail, so a URL changes only when its image does. [] if there is no such folder.
+    Images whose names are not URL-safe (SCREENSHOT_NAME_OK) are skipped with a warning."""
     import hashlib as _hl
     shots_dir = Path(game_dir) / "screenshots"
     if not shots_dir.is_dir():
         return []
-    files = sorted((p for p in shots_dir.iterdir() if p.is_file() and p.suffix.lower() in SCREENSHOT_SUFFIXES),
-                   key=lambda p: p.name)[:MAX_SCREENSHOTS]
-    return [f"{CDN_BASE}/{slug}/screenshots/{urllib.parse.quote(p.name)}?v={_hl.md5(p.read_bytes()).hexdigest()[:8]}"
+    images = sorted((p for p in shots_dir.iterdir() if p.is_file() and p.suffix.lower() in SCREENSHOT_SUFFIXES),
+                    key=lambda p: p.name)
+    bad = [p.name for p in images if not SCREENSHOT_NAME_OK.fullmatch(p.name)]
+    if bad:
+        _safe_print(f"  [screenshots] WARN: skipped {len(bad)} image(s) whose names the CDN cannot serve "
+                    f"(use only letters, digits, . _ - ~): {', '.join(bad)}")
+    files = [p for p in images if SCREENSHOT_NAME_OK.fullmatch(p.name)][:MAX_SCREENSHOTS]
+    return [f"{CDN_BASE}/{slug}/screenshots/{p.name}?v={_hl.md5(p.read_bytes()).hexdigest()[:8]}"
             for p in files]
 
 

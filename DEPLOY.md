@@ -49,7 +49,11 @@ game and writes `games.screenshot_urls` as
 `<CDN>/<slug>/screenshots/<name>?v=<md5[:8]>` (same cache-bust as the
 thumbnail). An explicit `screenshot_urls` list in game_meta.json wins over
 the folder. No folder and no list => the column is NOT sent, so screenshots
-set by hand in Supabase are never cleared by a deploy.
+set by hand in Supabase are never cleared by a deploy. Name files with
+letters, digits, `.`, `_`, `-`, `~` only (e.g. `01-arena.png`): the CDN
+worker never percent-decodes paths, so a name with a space, brackets or
+accents (Windows' `Screenshot 2026-10-08 142233.png`) would 404 — the deploy
+skips such files with a `[screenshots] WARN` line.
 
 ### Daily 1am pipeline run
 `scripts/run_game_pipeline.py` runs end-to-end: research → design →
