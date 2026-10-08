@@ -6,13 +6,15 @@
 //       POST /__report/<name>  body = JSON                              → _harness/_reports/<name>.json
 //     They write into the repo, so they answer SAME-ORIGIN LOCALHOST requests only (harnessRefusal below): a web page open in
 //     another tab must not be able to fill the disk or overwrite gate evidence with a cross-site "simple" POST.
-//   * G0 size budget: every `vite build` prints the size of its output folder and FAILS when it is over 1.2 MB (CONTRACT section 6,
-//     gate G0, measured exactly like _harness/browser_shell.mjs: every file in the output folder, public/ files included).
+//   * G0 size budget: every `vite build` prints the size of its output folder and FAILS when it is over 3 MB (G0), or when the first-play
+//     files (html, js, css, not `later-*` chunks) are over 600 KB gzip (G0b) (CONTRACT section 6; G0 counts every file in the output
+//     folder, public/ files included, like _harness/browser_shell.mjs does).
 //   * css.postcss is inline + empty on purpose: isolates the game from the portal's Tailwind PostCSS config.
 import { defineConfig, type Plugin } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, relative } from 'node:path';
-import { mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
@@ -21,7 +23,12 @@ const REPORTS_DIR = resolve(ROOT, '_harness', '_reports');
 // A PNG data URL of a DPR-2 desktop canvas is a few MB; the largest shot on disk today is 2.2 MB. Reports are small JSON.
 const MAX_SHOT_BYTES = 24 * 1024 * 1024;
 const MAX_REPORT_BYTES = 8 * 1024 * 1024;
-const G0_BUDGET_BYTES = 1.2 * 1024 * 1024; // the same constant as browser_shell.mjs ('dist stays under the 1.2 MB budget (G0)')
+// G0 was 1.2 MB raw. Raised by the owner's decision (2026-10-08; "fine if it is industry standard and does not hurt us on the web"): portals ask for
+// far more (Poki: first load under 8 MB; CrazyGames: 50 MB, 20 MB for its mobile home page), and what players feel is the first-play download, so the
+// gate is now TWO numbers: G0 = the whole output folder under 3 MB raw, G0b = the first-play files (html, js, css, not `later-*` chunks) under
+// 600 KB gzip (about 345 KB today). Features that are not needed for the first play (pets, voices, secondary screens) are dynamic imports named `later-*`.
+const G0_BUDGET_BYTES = 3 * 1024 * 1024;
+const G0B_FIRST_PLAY_GZIP_BYTES = 600 * 1024;
 
 type Next = (err?: unknown) => void;
 
@@ -168,7 +175,19 @@ function dirBytes(dir: string): number {
   return n;
 }
 
-export function sizeBudget(limit: number): Plugin {
+/** Gzip level 9 size of every html / js / css file in the output folder that is NOT a `later-` chunk (G0b: what a first play must download).
+ *  Gzip, not brotli, on purpose: it is the more conservative of the two that a CDN serves. */
+function firstPlayGzipBytes(dir: string): number {
+  let n = 0;
+  for (const e of readdirSync(dir, { withFileTypes: true })) {
+    const p = resolve(dir, e.name);
+    if (e.isDirectory()) n += firstPlayGzipBytes(p);
+    else if (/\.(html|js|css)$/.test(e.name) && !e.name.startsWith('later-')) n += gzipSync(readFileSync(p), { level: 9 }).length;
+  }
+  return n;
+}
+
+export function sizeBudget(limit: number, firstPlayLimit: number): Plugin {
   let outDir = '';
   return {
     name: 'wobblehoard-g0-size-budget',
@@ -176,11 +195,15 @@ export function sizeBudget(limit: number): Plugin {
     configResolved(config) { outDir = resolve(config.root, config.build.outDir); },
     closeBundle() {
       const total = dirBytes(outDir);
+      const first = firstPlayGzipBytes(outDir);
       const kb = (b: number): string => `${(b / 1024).toFixed(0)} KB`;
       const rel = relative(ROOT, outDir);
       const line = `[G0] build output ${kb(total)} of the ${kb(limit)} budget (${rel && !rel.startsWith('..') ? rel : outDir})`;
+      const line2 = `[G0b] first-play download ${kb(first)} gzip of the ${kb(firstPlayLimit)} budget (html, js and css except later-* chunks)`;
       if (total >= limit) throw new Error(`${line}: OVER BUDGET (CONTRACT section 6, gate G0)`);
+      if (first >= firstPlayLimit) throw new Error(`${line2}: OVER BUDGET (CONTRACT section 6, gate G0b)`);
       console.log(line);
+      console.log(line2);
     },
   };
 }
@@ -189,7 +212,7 @@ export default defineConfig({
   root: ROOT,
   base: './',
   clearScreen: false,
-  plugins: [harnessEndpoints(), sizeBudget(G0_BUDGET_BYTES)],
+  plugins: [harnessEndpoints(), sizeBudget(G0_BUDGET_BYTES, G0B_FIRST_PLAY_GZIP_BYTES)],
   css: { postcss: { plugins: [] } },
   server: {
     port: 5360,
