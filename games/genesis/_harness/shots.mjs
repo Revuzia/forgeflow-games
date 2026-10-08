@@ -15,7 +15,7 @@
 
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
-import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -185,9 +185,8 @@ async function main() {
       report.shots.push({ name: s.name, url, error: String(e && e.message || e) });
     }
   }
-  for (const { page, errors } of pages.values()) {
+  for (const { errors } of pages.values()) {
     // errors raised during boot belong to no shot
-    void page;
     for (const e of errors) if (!report.consoleErrors.some((x) => x.error === e)) report.consoleErrors.push({ shot: '(boot)', error: e });
   }
   await browser.close();
@@ -201,4 +200,3 @@ async function main() {
 
 main().catch((e) => { console.error(e); process.exit(2); });
 
-void existsSync;

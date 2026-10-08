@@ -169,7 +169,6 @@ export class App {
     try {
       const view = this.sim.view;
       view.update(now);
-      this.keyActions();
       const pose = this.rig.update(dt, view, this.input);
       if (this.rig.cut) { this.renderer.cut(); this.rig.cut = false; }
       if (this.pointerDirty && this.frames % 2 === 0) this.updateHover();
@@ -265,8 +264,6 @@ export class App {
     }
   }
 
-  private keyActions(): void { /* continuous keys are read by the camera controllers */ }
-
   private updateHover(): void {
     this.pointerDirty = false;
     if (this.pointer.x < 0) { this.hover = null; return; }
@@ -281,7 +278,18 @@ export class App {
     const ndcY = 1 - (y / window.innerHeight) * 2;
     const dir = rayDirection(this.renderer.camera, ndcX, ndcY, [0, 0, 0]);
     const hit = pick(this.sim.view, this.rig.pose, dir);
-    if (!hit) return;
+    if (!hit) {
+      // far away a world is a few pixels: take the nearest projected planet within 28 px
+      let best = -1, bestD = 28;
+      for (const pv of this.sim.view.planets) {
+        const p = this.renderer.projectToScreen(pv.center, this.rig.pose, this.v2);
+        if (!p) continue;
+        const d = Math.hypot(p.x - x, p.y - y);
+        if (d < bestD) { bestD = d; best = pv.id; }
+      }
+      if (best >= 0 && (this.rig.mode === 'system' || best !== this.renderer.primaryId)) this.flyTo(best);
+      return;
+    }
     if (this.rig.mode === 'system' || hit.planet !== this.renderer.primaryId) { this.flyTo(hit.planet); return; }
     // phase 1: clicking the ground recentres the orbit on it (powers arrive with the god layer)
     if (this.rig.mode === 'orbit') {

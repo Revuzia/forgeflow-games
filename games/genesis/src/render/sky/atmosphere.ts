@@ -259,7 +259,7 @@ export class AtmosphereModel {
     u.uRg.value = radius;
     u.uRt.value = radius + thick;
     u.uHR.value = thick * 0.2;
-    u.uHM.value = thick * 0.06;
+    u.uHM.value = thick * 0.1;
     u.uOzone.value.set(thick * 0.32, thick * 0.2);
     // pressure thickens the column sub-linearly in look (very dense air saturates to a milky sky)
     const col = Math.pow(p, 0.85);
@@ -275,7 +275,7 @@ export class AtmosphereModel {
     if (a.methane > 0.05) tr = [tr[0] * 0.6, tr[1] * 1.15, tr[2] * 1.05];
     u.uBetaR.value.set(tr[0] / u.uHR.value, tr[1] / u.uHR.value, tr[2] / u.uHR.value);
     const dust = Math.max(0, a.dust);
-    const tauM = (0.018 + dust * 0.6) * SKY_DEPTH_SCALE * Math.min(1.5, Math.max(p, dust > 0.05 ? 0.4 : 0));
+    const tauM = (0.008 + dust * 0.6) * SKY_DEPTH_SCALE * Math.min(1.5, Math.max(p, dust > 0.05 ? 0.4 : 0));
     const ms = tauM / u.uHM.value;
     u.uBetaMs.value.set(ms, ms, ms);
     // dust absorbs blue: a warm, rusty extinction; clean haze barely absorbs

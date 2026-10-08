@@ -163,15 +163,15 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // ledges: a sawtooth in height (steep riser, gentle tread), only where the face is steep
     float ledge = (hG + warpV.y * 2.5 + big * 3.0) / 2.4;
     float lf = fract(ledge);
-    float cliff = smoothstep(0.3, 0.55, slope);
+    float cliff = smoothstep(0.42, 0.62, slope);
     float ledgeB = smoothstep(0.0, 0.12, lf) * (1.0 - lf) * cliff * aaF(fw, 2.0);
     // fractures: thin ridged-noise seams
     float fr = 1.0 - abs(snoise((P + warpV * 2.0) * 0.16));
     float seam = pow(fr, 10.0) * aaF(fw, 1.2);
     float mid = snoise(P * 0.21 + warpV) * aaF(fw, 4.0);
     float grain = snoise(P * 3.1) * aaF(fw, 0.32);
-    rock *= (1.0 - 0.18 * seam) * (0.94 + 0.08 * mid + 0.05 * grain) * (1.0 + 0.08 * ledgeB);
-    rockBump += ledgeB * 0.45 - seam * 0.12 + mid * 0.22 + grain * 0.02;
+    rock *= (1.0 - 0.12 * seam * steep) * (0.94 + 0.08 * mid + 0.05 * grain) * (1.0 + 0.08 * ledgeB);
+    rockBump += ledgeB * 0.45 + mid * 0.22 + grain * 0.02;
     // lichen / moss on damp, gentler rock (terran only)
     if (uKind < 0.5) {
       float lich = smoothstep(0.35, 0.8, moist) * smoothstep(0.2, 0.7, snoise(P * 0.33) * 0.5 + 0.5) * (1.0 - steep * 0.6);
@@ -253,7 +253,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     }
     // forest canopy: crowns as Voronoi domes, gaps dark (where trees are not instanced)
     if (tree > 0.01) {
-      float tw = smoothstep(0.08, 0.55, tree + m1 * 0.15);
+      float tw = smoothstep(0.08, 0.55, tree + m1 * 0.3 + m2 * 0.12);
       float conifer = cold;
       float scale = mix(0.15, 0.24, conifer);
       vec3 tv = fine ? voronoi3((P + warpV * 4.0) * scale) : vec3(0.45, 0.8, 0.5);
@@ -308,7 +308,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       vb = mix(vb, rows * 0.06 + hedge * 1.2, cw);
       vao *= mix(1.0, 1.0 - hedge * 0.35, cw);
     }
-    float vegW = clamp(vegTotal * 1.6, 0.0, 1.0) * (1.0 - steep * 0.8);
+    // per-cell cover is linear across 50 m triangles: noise in the threshold turns those edges into organic margins
+    float vegW = smoothstep(0.05, 0.6, vegTotal + m1 * 0.32 + m2 * 0.18) * (1.0 - steep * 0.8);
     col = mix(col, vcol, vegW);
     bump = mix(bump, vb, vegW);
     rough = mix(rough, 0.88, vegW);

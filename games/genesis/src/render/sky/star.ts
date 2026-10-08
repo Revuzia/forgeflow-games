@@ -4,7 +4,7 @@
 // bloom, god rays and lens flare in the post chain read it as a real light source.
 
 import {
-  AdditiveBlending, Color, Group, Mesh, PlaneGeometry, ShaderMaterial, SphereGeometry, Vector3, type Camera,
+  AdditiveBlending, Color, Group, Mesh, PlaneGeometry, ShaderMaterial, SphereGeometry, Vector3,
 } from 'three';
 import type { StarView } from '../../sim/types.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
@@ -121,7 +121,7 @@ export class StarVisual {
   }
 
   /** place the star at `rel` (star − camera, world) and refresh colour / radiance */
-  update(star: StarView, rel: Vector3, time: number, camera: Camera): void {
+  update(star: StarView, rel: Vector3, time: number): void {
     this.radius = Math.max(100, star.radius);
     this.group.position.copy(rel);
     this.sphere.scale.setScalar(this.radius);
@@ -137,6 +137,5 @@ export class StarVisual {
     this.mat.uniforms.uActivity.value = star.activity ?? 0;
     this.coronaMat.uniforms.uTime.value = time % 10000;
     this.coronaMat.uniforms.uIntensity.value = 40 * Math.sqrt(lum) * (1 + (star.activity ?? 0));
-    void camera;
   }
 }

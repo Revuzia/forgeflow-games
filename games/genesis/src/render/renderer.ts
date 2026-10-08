@@ -44,6 +44,14 @@ const _star = new Vector3();
 const _proj = new Matrix4();
 const _invProj = new Matrix4();
 const _camRot = new Matrix3();
+// per-frame scratch (no allocation in the frame loop)
+const _sunE = new Vector3();
+const _planetPos = new Vector3();
+const _sunDir = new Vector3();
+const _w2b = new Matrix3();
+const _m4 = new Matrix4();
+const _up = new Vector3();
+const _atmoList: PlanetVisual[] = [];
 
 export class Renderer {
   readonly three: WebGLRenderer;
@@ -196,7 +204,7 @@ export class Renderer {
       if (isPrimary) primaryVis = vis;
       vis.frameUpdate({
         camWorldInverse, frustum: this.frustum, camRel: _rel, sunDirWorld: _sun,
-        sunE: new Vector3(starCol[0] * E, starCol[1] * E, starCol[2] * E), time, K, frame: this.frameNo,
+        sunE: _sunE.set(starCol[0] * E, starCol[1] * E, starCol[2] * E), time, K, frame: this.frameNo,
         budget: q.patchBudget, primary: isPrimary, shadows: q.shadowCascades > 0, yearFrac: view.calendar(pv).yearFrac,
         vegRange: 380 * q.vegetationRange, vegDensity: q.vegetationDensity,
       });
@@ -212,7 +220,7 @@ export class Renderer {
     }
     // ── star, sky, orbit lines ──
     _star.set(-pose.pos[0], -pose.pos[1], -pose.pos[2]);
-    this.star.update(view.star, _star, time, cam);
+    this.star.update(view.star, _star, time);
     const minAlt = primaryVis ? primaryVis.altitude / Math.max(1, primaryVis.pv.params.radius) : 100;
     const orbitVis = this.showOrbits ? Math.min(1, Math.max(0, (minAlt - 8) / 30)) : 0;
     this.orbits.update(view, pose, orbitVis);
@@ -266,20 +274,22 @@ export class Renderer {
     _camRot.setFromMatrix4(cam.matrixWorld);
     let input = post.hdr.texture;
     let outIdx = 0;
-    const atmoVis = [...this.planets.values()].filter((v) => v.atmo.has && this.shellVisible(v, pose));
+    const atmoVis = _atmoList;
+    atmoVis.length = 0;
+    for (const v of this.planets.values()) if (v.atmo.has && this.shellVisible(v, pose)) atmoVis.push(v);
     atmoVis.sort((a, b) => this.distOf(b, pose) - this.distOf(a, pose));
     for (const vis of atmoVis) {
       const pv = vis.pv;
       const withClouds = vis === primaryVis && vis.hasClouds && !!vis.cloudCube;
-      const planetPos = new Vector3(pv.center[0] - pose.pos[0], pv.center[1] - pose.pos[1], pv.center[2] - pose.pos[2]);
+      const planetPos = _planetPos.set(pv.center[0] - pose.pos[0], pv.center[1] - pose.pos[1], pv.center[2] - pose.pos[2]);
       const d = Math.hypot(pv.center[0], pv.center[1], pv.center[2]) || 1;
-      const sunDir = new Vector3(-pv.center[0] / d, -pv.center[1] / d, -pv.center[2] / d);
+      const sunDir = _sunDir.set(-pv.center[0] / d, -pv.center[1] / d, -pv.center[2] / d);
       if (withClouds) {
         this.clouds.bind(vis.atmo, vis.cloudCube!.texture);
-        const w2b = new Matrix3().setFromMatrix4(new Matrix4().makeRotationFromQuaternion(vis.group.quaternion).invert());
+        const w2b = _w2b.setFromMatrix4(_m4.makeRotationFromQuaternion(vis.group.quaternion).invert());
         this.clouds.render(r, this.fsq, {
           depth: post.depthTexture, invProj: _invProj, camRot: _camRot, worldToBody: w2b, far: cam.far, planetPos, sunDir,
-          innerR: vis.cloudInner, outerR: vis.cloudOuter, frame: this.frameNo,
+          innerR: vis.cloudInner, outerR: vis.cloudOuter, frame: this.frameNo, altitude: vis.camBody.length() - pv.params.radius, radius: pv.params.radius,
         }, q.cloudSteps, q.cloudLightSteps);
       }
       const m = this.atmoPass.material;
@@ -319,6 +329,7 @@ export class Renderer {
   }
 
   private wb = new Vector3(1, 1, 1);
+  private sun: SunScreen = { uv: new Vector2(-10, -10), onScreen: false, color: new Vector3(1, 1, 1), strength: 0 };
   private wbSnap = true;
   private whiteBalance(primary: PlanetVisual | null, starCol: [number, number, number]): void {
     let r = starCol[0], g = starCol[1], b = starCol[2];
@@ -358,7 +369,8 @@ export class Renderer {
   }
 
   private sunScreen(pose: CameraPose, primary: PlanetVisual | null): SunScreen {
-    const s: SunScreen = { uv: new Vector2(-10, -10), onScreen: false, color: new Vector3(1, 1, 1), strength: 0 };
+    const s = this.sun;
+    s.uv.set(-10, -10); s.onScreen = false; s.color.set(1, 1, 1); s.strength = 0;
     _rel.set(-pose.pos[0], -pose.pos[1], -pose.pos[2]).applyMatrix4(this.camera.matrixWorldInverse);
     if (_rel.z < 0) {
       _rel.applyMatrix4(this.camera.projectionMatrix);
@@ -368,17 +380,15 @@ export class Renderer {
     const bb = blackbody(5800);
     s.color.set(bb[0], bb[1], bb[2]);
     if (primary && primary.atmo.has) {
-      const pv = primary.pv;
       const thick = primary.atmo.thickness;
       const inside = 1 - Math.min(1, Math.max(0, (primary.altitude - thick) / (thick * 2)));
       // sun elevation at the camera: low suns give warm, strong shafts
-      const up = primary.camBody.clone().normalize();
+      const up = _up.copy(primary.camBody).normalize();
       const sb = primary.uniforms.uSunDirBody.value as Vector3;
       const el = up.dot(sb);
       const warm = 1 - Math.min(1, Math.max(0, (el - 0.02) / 0.35));
       s.color.set(1, 1 - 0.35 * warm, 1 - 0.65 * warm);
       s.strength = inside * Math.min(1, Math.max(0, (el + 0.03) / 0.08)) * (0.6 + 0.4 * warm);
-      void pv;
     }
     return s;
   }

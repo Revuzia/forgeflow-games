@@ -10,6 +10,7 @@ import type { WorldView, PlanetView } from '../client/worldview.ts';
 import type { RenderStats } from '../render/renderer.ts';
 import type { CameraPose } from '../render/frame.ts';
 import { SPEED_PRESETS } from '../sim/types.ts';
+import { qRotateInv } from '../client/orbits.ts';
 
 export interface HudActions {
   setSpeed(x: number): void;
@@ -225,17 +226,9 @@ export class Hud {
   }
 
   private cameraLonHours(f: HudFrame, pv: PlanetView): number {
-    // camera position in the body frame → longitude (0 at +Z, east positive)
-    const rx = f.pose.pos[0] - pv.center[0], ry = f.pose.pos[1] - pv.center[1], rz = f.pose.pos[2] - pv.center[2];
-    const q = pv.quat;
-    // inverse rotate
-    const x = rx, y = ry, z = rz;
-    const qx = -q[0], qy = -q[1], qz = -q[2], qw = q[3];
-    const ix = qw * x + qy * z - qz * y, iy = qw * y + qz * x - qx * z, iz = qw * z + qx * y - qy * x, iw = -qx * x - qy * y - qz * z;
-    const bx = ix * qw + iw * -qx + iy * -qz - iz * -qy;
-    const bz = iz * qw + iw * -qz + ix * -qy - iy * -qx;
-    const lon = Math.atan2(bx, bz);
-    return (lon / (2 * Math.PI)) * pv.params.dayHours;
+    // camera position in the body frame → longitude (0 at +Z, east positive) → hours east of the meridian
+    const b = qRotateInv(pv.quat, [f.pose.pos[0] - pv.center[0], f.pose.pos[1] - pv.center[1], f.pose.pos[2] - pv.center[2]]);
+    return (Math.atan2(b[0], b[2]) / (2 * Math.PI)) * pv.params.dayHours;
   }
 }
 

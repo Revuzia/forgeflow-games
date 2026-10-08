@@ -16,7 +16,7 @@ import { TICKS_PER_SECOND_1X } from '../sim/types.ts';
 import { getGrid, type IcoGrid } from '../sim/grid/icogrid.ts';
 import { Noise3 } from '../sim/grid/noise.ts';
 import { Rng, hashFloat } from '../sim/core/rng.ts';
-import { blackbody, bodyQuat, orbitOffset, orbitPlaneQuat, qAxis, qMul, qRotateInv, type D3, type DQ } from './orbits.ts';
+import { blackbody, orbitOffset, orbitPlaneQuat, qAxis, qMul, qRotateInv, type D3, type DQ } from './orbits.ts';
 import type { SimBackend, SnapshotSink } from './simclient.ts';
 
 type Fields = Partial<Record<FieldName, Float32Array>>;
@@ -782,4 +782,3 @@ export function lookdevHomeWorld(seed = 1): { snap: PlanetSnap; fields: Fields }
   return { snap: lp.snap, fields: lp.fields };
 }
 
-void bodyQuat;

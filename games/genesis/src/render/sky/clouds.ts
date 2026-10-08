@@ -187,6 +187,7 @@ uniform int uSteps;
 uniform int uLightSteps;
 uniform float uFrame;
 uniform float uCloudBright;
+uniform vec2 uNearFade;   // clouds dissolve within this distance of the camera (gameplay views inside the layer)
 
 float hg(float nu, float g) { float g2 = g * g; return (1.0 - g2) / (4.0 * PI * pow(max(1.0 + g2 - 2.0 * g * nu, 1e-4), 1.5)); }
 
@@ -237,7 +238,7 @@ void main() {
     float hf = (r - uShell.x) / thick;
     vec2 cs = covAt(p);
     vec3 pb = uWorldToBody * p;
-    float dens = cloudDensityAt(pb, hf, cs.x, cs.y, true) * smoothstep(20.0, 140.0, t);
+    float dens = cloudDensityAt(pb, hf, cs.x, cs.y, true) * smoothstep(uNearFade.x, uNearFade.y, t);
     if (dens <= 1e-5) continue;
     vec3 up = p / r;
     // light march toward the sun (cone of growing steps)
@@ -285,6 +286,9 @@ export interface CloudInputs {
   innerR: number;
   outerR: number;
   frame: number;
+  /** camera altitude above the datum (m) and the planet's datum radius */
+  altitude: number;
+  radius: number;
 }
 
 export class CloudPass {
@@ -309,7 +313,7 @@ export class CloudPass {
       tDepth: { value: null }, uCoverage: { value: null }, uInvProj: { value: new Matrix4() }, uCamRot: { value: new Matrix3() },
       uWorldToBody: { value: new Matrix3() }, uFar: { value: 2e7 }, uPlanetPos: { value: new Vector3() },
       uSunDir: { value: new Vector3(1, 0, 0) }, uShell: { value: new Vector2(3180, 3420) }, uSteps: { value: 48 },
-      uLightSteps: { value: 5 }, uFrame: { value: 0 }, uCloudBright: { value: 1.6 },
+      uLightSteps: { value: 5 }, uFrame: { value: 0 }, uCloudBright: { value: 1.6 }, uNearFade: { value: new Vector2(20, 140) },
       uRg: { value: 0 }, uRt: { value: 0 }, uBetaR: { value: new Vector3() }, uHR: { value: 1 }, uBetaMs: { value: new Vector3() },
       uBetaMe: { value: new Vector3() }, uHM: { value: 1 }, uMieG: { value: 0.8 }, uBetaO: { value: new Vector3() },
       uOzone: { value: new Vector2(1, 1) }, uSunE: { value: new Vector3() }, uHasAtmo: { value: 1 },
@@ -342,6 +346,11 @@ export class CloudPass {
     u.uSteps.value = steps;
     u.uLightSteps.value = lightSteps;
     u.uFrame.value = i.frame % 64;
+    // inside or just above the cloud layer the camera would see only fog: open a clear bubble around it that grows
+    // with how deep in the layer it is (from below or far above the clouds look as they are)
+    const lo = i.innerR - i.radius, hi = i.outerR - i.radius;
+    const inside = Math.min(1, Math.max(0, (i.altitude - lo * 0.7) / (lo * 0.3 + 1))) * Math.min(1, Math.max(0, (hi * 1.6 - i.altitude) / (hi * 0.6)));
+    u.uNearFade.value.set(20 + inside * 60, 140 + inside * 520);
     fsq.render(renderer, this.material, this.target);
   }
 }

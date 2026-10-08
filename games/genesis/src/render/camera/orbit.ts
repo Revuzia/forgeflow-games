@@ -30,7 +30,6 @@ export class OrbitCamera implements CameraController {
   minClear = 2;
   maxDist = 6e6;
   fov = 50;
-  private vel: D3 = [0, 0, 0];
 
   /** automatic tilt (deg) for a distance: straight down from orbit, toward the horizon near the ground */
   autoTilt(dist: number): number {
@@ -99,7 +98,6 @@ export class OrbitCamera implements CameraController {
     if (input.keys.has('Equal') || input.keys.has('NumpadAdd')) zoom -= dt * 600;
     if (input.keys.has('Minus') || input.keys.has('NumpadSubtract')) zoom += dt * 600;
     if (zoom) this.dist = Math.min(this.maxDist, Math.max(this.minClear, this.dist * Math.exp(zoom * 0.0013)));
-    void this.vel;
 
     // ── pose in the body frame ──
     tangentBasis(east, north, this.focus);

@@ -242,7 +242,6 @@ export class WorldView {
   calendar(pv: PlanetView, tick = this.renderTick): { year: number; day: number; hour: number; season: string; yearFrac: number } {
     const p = pv.params;
     const dt = tick - pv.paramsTick;
-    const dayTicks = Math.max(1, p.dayHours) * 60;
     let hour = p.hourAtLon0 + (p.sunFrozen ? 0 : dt / 60);
     let dayOfYear = p.dayOfYear;
     let year = p.year;
@@ -254,7 +253,6 @@ export class WorldView {
     const yearFrac = (dayOfYear + hour / Math.max(1, p.dayHours)) / yearDays;
     const seasonIdx = p.seasonPinned != null ? p.seasonPinned : Math.floor(yearFrac * 4) % 4;
     const seasons = ['Spring', 'Summer', 'Autumn', 'Winter'];
-    void dayTicks;
     return { year, day: dayOfYear + 1, hour, season: seasons[((seasonIdx % 4) + 4) % 4], yearFrac };
   }
 }
