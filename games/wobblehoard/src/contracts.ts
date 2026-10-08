@@ -265,6 +265,8 @@ export interface AudioSettings {
   /** Round 3 (optional): music bed volume 0..1, relative to master (it sits under the master gain). 0.45 = the designed level
    *  (about -29 dBFS long-term at master 1), 1 = +6 dB over that, 0 = off (nothing is scheduled). Default 0.45. */
   music?: number;
+  /** UI v3 (optional): interface sounds (SquishAudio.ui) on or off. Default on. The shell passes Settings.uiSounds. */
+  uiSounds?: boolean;
 }
 
 export interface SquishVoiceHandle {

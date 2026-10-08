@@ -54,8 +54,8 @@ export function createSettingsController(d: SettingsDeps): SettingsController {
   function apply(force = false): void {
     const a = applied, s = settings, { audio, stage } = d;
     const mutedNow = d.muted() || (d.audioPaused() && !audio.setPaused);   // setPaused (suspend) is better; mute is the fallback
-    if (force || a.volume !== s.volume || a.squishBoost !== s.squishBoost || a.muted !== mutedNow) {
-      audio.setSettings({ master: s.volume, squishBoost: s.squishBoost, muted: mutedNow });
+    if (force || a.volume !== s.volume || a.squishBoost !== s.squishBoost || a.muted !== mutedNow || a.uiSounds !== s.uiSounds) {
+      audio.setSettings({ master: s.volume, squishBoost: s.squishBoost, muted: mutedNow, uiSounds: s.uiSounds });
     }
     if (force || a.music !== s.music) {
       try {
