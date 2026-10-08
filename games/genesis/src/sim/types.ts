@@ -96,8 +96,12 @@ export interface ChronicleEntry {
 /**
  * Per-cell planet fields shipped to the client (CONTRACT.md §7). Units:
  *   heights / depths in metres; temperature °C; moisture, fertility, vegetation, fire, road, wetness, clouds 0..1.
- * `surface` = rock + soil + sand + ash + snow + ice + lavaCrust... i.e. the top of solid ground above the datum
- * sphere (planet.radius). Water surface = surface + water.
+ * `surface` = rock + soil + sand + ash + snow + ground ice, i.e. the top of solid ground above the datum
+ * sphere (planet.radius). Water surface = surface + water. Lava lies ON the surface like water: lava top = surface + lava.
+ * `ice`: on dry cells it is ground / glacier ice (part of surface); where water > ~0.05 m it is the thickness of
+ * FLOATING ice on that water (sea / lake ice, not part of surface): draw the water surface frozen.
+ * `precipType`: 0 none, 1 rain, 2 snow, 3 hail, 4 ash, 5 acid, 6 blood, 7 sand. `biome`: index into biomes.json.
+ * `oreType`: 0 none, else 1 + index into ores.json. Species fields: index into plants.json, -1 none.
  */
 export type FieldName =
   | 'surface' | 'rock' | 'soil' | 'sand' | 'ash' | 'snow' | 'ice' | 'lava' | 'water'
@@ -106,7 +110,11 @@ export type FieldName =
   | 'grass' | 'shrub' | 'tree' | 'crop'   // vegetation cover 0..1
   | 'treeSpecies' | 'shrubSpecies' | 'cropSpecies' // dominant plant species index (content order), -1 none
   | 'fire' | 'burnt' | 'road' | 'biome' | 'cloud' | 'precip' | 'precipType'
-  | 'ore' | 'oreType' | 'territory' | 'pollution' | 'blight' | 'radiation';
+  | 'ore' | 'oreType' | 'territory' | 'pollution' | 'blight' | 'radiation'
+  // additive (SIM phase 1):
+  | 'grassSpecies'                        // dominant grass-type species index (meadow, wild grain, reeds, moss...), -1 none
+  | 'windX' | 'windY' | 'windZ'           // surface wind, m/s, body-frame tangent vector (prevailing + weather systems)
+  | 'aquifer';                            // groundwater, metres of water
 
 // ─────────────────────────────── snapshot ───────────────────────────────
 

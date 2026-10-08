@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>GENESIS</title>
+<meta name="description" content="GENESIS — light a star, breathe air onto a dead world, pour seas, seed life, and watch a people find their own way from stone toward the stars. A multi-planet living-world god game.">
+<meta name="theme-color" content="#07090f">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CradialGradient id='g' cx='38%25' cy='35%25' r='70%25'%3E%3Cstop offset='0' stop-color='%23a8d8ff'/%3E%3Cstop offset='.45' stop-color='%232a6fb0'/%3E%3Cstop offset='1' stop-color='%23061020'/%3E%3C/radialGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='%2307090f'/%3E%3Ccircle cx='32' cy='32' r='20' fill='url(%23g)'/%3E%3Cpath d='M18 30c6-5 12 2 18-3s10 0 10 0' stroke='%235c8a3a' stroke-width='5' fill='none' stroke-linecap='round' opacity='.85'/%3E%3Ccircle cx='32' cy='32' r='23' fill='none' stroke='%23e8c98a' stroke-width='1.6' opacity='.85'/%3E%3C/svg%3E">
+<style>
+  /* Page shell only: boot / fatal / no-WebGL2 cards. The in-game UI is src/ui/styles.css. */
+  :root { color-scheme: dark; --ink: #07090f; --ink2: #0d1220; --ivory: #efe7d6; --gold: #d9b878; --gold2: #f3dfae; --dim: #8c8a86; --red: #e0715c; }
+  html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: var(--ink); }
+  body { overscroll-behavior: none; touch-action: none; -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none; }
+  #game { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; outline: none; background: var(--ink); }
+  #ui { position: fixed; inset: 0; z-index: 10; pointer-events: none; overflow: hidden; }
+
+  /* ── boot / loading card ── */
+  #boot {
+    position: fixed; inset: 0; z-index: 900; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2.4vh;
+    background:
+      radial-gradient(60% 45% at 50% 46%, rgba(64, 104, 168, .18) 0%, rgba(7, 9, 15, 0) 70%),
+      radial-gradient(120% 90% at 50% 120%, #101a30 0%, var(--ink) 60%);
+    color: var(--ivory); font-family: 'Cormorant Garamond', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+    transition: opacity .9s ease, visibility 0s linear .9s; opacity: 1; visibility: visible; pointer-events: auto;
+  }
+  #boot.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+  #boot::before { /* a faint field of stars */
+    content: ''; position: absolute; inset: 0; pointer-events: none; opacity: .55;
+    background-image:
+      radial-gradient(1px 1px at 12% 18%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 76% 12%, #cfe0ff 50%, transparent 51%),
+      radial-gradient(1.4px 1.4px at 64% 72%, #ffe9c4 50%, transparent 51%), radial-gradient(1px 1px at 28% 82%, #fff 50%, transparent 51%),
+      radial-gradient(1px 1px at 88% 58%, #fff 50%, transparent 51%), radial-gradient(1.2px 1.2px at 42% 32%, #dfe8ff 50%, transparent 51%),
+      radial-gradient(1px 1px at 8% 62%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 92% 88%, #ffd9b0 50%, transparent 51%),
+      radial-gradient(1px 1px at 54% 8%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 22% 46%, #fff 50%, transparent 51%);
+  }
+  .gn-orb { position: relative; width: clamp(64px, 8vw, 120px); aspect-ratio: 1; border-radius: 50%; margin-bottom: 1vh;
+    background: radial-gradient(circle at 36% 32%, #cfe8ff 0%, #4a8fd0 22%, #1b4f86 46%, #071830 72%, #02060d 100%);
+    box-shadow: 0 0 0 1px rgba(217, 184, 120, .55), 0 0 40px rgba(120, 170, 255, .25), inset -18px -14px 30px rgba(0, 0, 0, .65);
+    animation: gnTurn 18s linear infinite; }
+  .gn-orb::after { content: ''; position: absolute; inset: -9px; border-radius: 50%; border: 1px solid rgba(217, 184, 120, .3); }
+  .gn-mark { font-weight: 500; font-size: clamp(44px, 7.6vw, 128px); letter-spacing: .42em; padding-left: .42em; line-height: 1;
+    background: linear-gradient(180deg, var(--gold2) 0%, var(--gold) 55%, #9b7b45 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: 0 0 40px rgba(217, 184, 120, .12); }
+  .gn-sub { font-style: italic; font-size: clamp(14px, 1.45vw, 22px); color: var(--ivory); opacity: .78; letter-spacing: .04em; max-width: 80vw; text-align: center; }
+  .gn-bar { position: relative; width: min(38vw, 520px); height: 1px; background: rgba(239, 231, 214, .14); margin-top: 3vh; overflow: visible; }
+  .gn-bar b { position: absolute; inset: 0 auto 0 0; width: 4%; background: linear-gradient(90deg, transparent, var(--gold2)); transition: width .35s ease;
+    box-shadow: 0 0 10px rgba(243, 223, 174, .7); }
+  .gn-status { font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif; font-size: clamp(10px, .8vw, 13px); letter-spacing: .32em; text-transform: uppercase;
+    color: var(--dim); min-height: 1.3em; }
+  @keyframes gnTurn { to { background-position: 0 0; filter: hue-rotate(0deg); } }
+  @media (prefers-reduced-motion: reduce) { .gn-orb { animation: none; } }
+
+  /* ── no-WebGL2 card and the fatal card (scoped: the game UI never inherits it) ── */
+  .gn-card-shell { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 4vh 4vw;
+    background: radial-gradient(90% 70% at 50% 40%, rgba(20, 30, 52, .96), rgba(4, 6, 10, .98)); font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+    color: var(--ivory); pointer-events: auto; -webkit-user-select: text; user-select: text; }
+  .gn-card-shell[hidden] { display: none; }
+  .gn-card-shell .gn-card { max-width: min(760px, 92vw); max-height: 88vh; overflow: auto; background: rgba(13, 18, 32, .82); border: 1px solid rgba(217, 184, 120, .45);
+    border-radius: 14px; box-shadow: 0 30px 80px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .06); padding: 2.2em 2.4em; backdrop-filter: blur(12px); }
+  .gn-card-shell h1 { margin: 0 0 .2em; font-family: 'Cormorant Garamond', 'Iowan Old Style', Palatino, Georgia, serif; font-weight: 500; font-size: clamp(30px, 3.6vw, 52px);
+    letter-spacing: .14em; color: var(--gold2); }
+  .gn-card-shell h2 { margin: 0 0 1.1em; font-size: clamp(12px, 1vw, 15px); letter-spacing: .26em; text-transform: uppercase; color: var(--dim); font-weight: 600; }
+  .gn-card-shell p { font-size: clamp(14px, 1.1vw, 17px); line-height: 1.5; margin: 0 0 .9em; color: #d9d2c4; }
+  .gn-card-shell pre { white-space: pre-wrap; word-break: break-word; font-family: 'JetBrains Mono', Consolas, monospace; font-size: 12.5px; line-height: 1.45;
+    background: rgba(0, 0, 0, .45); color: #f2c9bf; padding: 1em 1.1em; border-left: 2px solid var(--red); border-radius: 6px; max-height: 38vh; overflow: auto; margin: 0 0 1.2em; }
+  .gn-card-shell button { font: inherit; font-size: 13px; letter-spacing: .24em; text-transform: uppercase; cursor: pointer; color: var(--ink); background: linear-gradient(180deg, var(--gold2), var(--gold));
+    border: 0; border-radius: 999px; padding: .8em 1.8em; box-shadow: 0 6px 20px rgba(217, 184, 120, .25); }
+  .gn-card-shell button:hover, .gn-card-shell button:focus-visible { filter: brightness(1.08); outline: none; }
+</style>
+</head>
+<body>
+<canvas id="game" tabindex="-1" aria-label="GENESIS — world view"></canvas>
+<div id="ui"></div>
+
+<div id="boot" role="status" aria-live="polite" aria-label="Loading GENESIS">
+  <div class="gn-orb" aria-hidden="true"></div>
+  <div class="gn-mark">GENESIS</div>
+  <div class="gn-sub">You poured water on a dead rock. Now they have a word for you.</div>
+  <div class="gn-bar"><b id="boot-fill"></b></div>
+  <div class="gn-status" id="boot-status">Lighting the star…</div>
+</div>
+
+<div id="nogpu" class="gn-card-shell" hidden role="alertdialog" aria-labelledby="nogpu-title">
+  <div class="gn-card">
+    <h1 id="nogpu-title">The sky stays dark</h1>
+    <h2>GENESIS needs WebGL 2</h2>
+    <p>This world is drawn with <b>WebGL 2</b>: a real sky, volumetric clouds, water and light. This browser, or its current settings, does not offer it.</p>
+    <p>Try an up-to-date Chrome, Edge, Firefox or Safari, switch on <b>hardware acceleration</b> in the browser settings, and reload.</p>
+    <button type="button" onclick="location.reload()">Reload</button>
+  </div>
+</div>
+
+<div id="fatal" class="gn-card-shell" hidden role="alertdialog" aria-labelledby="fatal-title">
+  <div class="gn-card">
+    <h1 id="fatal-title">The world went still</h1>
+    <h2 id="fatal-sub">something broke while it turned</h2>
+    <pre id="fatal-msg"></pre>
+    <button type="button" onclick="location.reload()">Begin again</button>
+  </div>
+</div>
+
+<!-- ForgeFlow shared controls bar (bottom-right: Fullscreen, Mute, Pause, Report Bug). GAME_CONFIG must exist BEFORE the
+     script loads. touch:false = desktop god game (touch is out of scope, CONTRACT §16); fs_hotkey:false = F tilts the
+     camera here (the bar's Fullscreen button still works). Page-level script, runs before any game code. -->
+<script>window.GAME_CONFIG = { touch: false, fs_hotkey: false, mute_hotkey: false };</script>
+<script src="./game_controls.js?v=3.1"></script>
+<script>
+  // Boot guard (classic script, runs before the module graph): if the module graph fails to load or throws before
+  // src/main.ts takes over, show the fatal card instead of a dead page.
+  (function () {
+    var done = false;
+    function show(title, detail) {
+      if (done) return;
+      done = true;
+      var f = document.getElementById('fatal'), m = document.getElementById('fatal-msg'), s = document.getElementById('fatal-sub');
+      if (s && title) s.textContent = title;
+      if (m) m.textContent = String(detail || 'unknown error');
+      if (f) f.hidden = false;
+      var b = document.getElementById('boot'); if (b) b.classList.add('gone');
+    }
+    function onErr(e) { show('the world failed to begin', (e && e.error && e.error.stack) || (e && e.message) || e); }
+    function onRej(e) { var r = e && e.reason; show('the world failed to begin', (r && r.stack) || r); }
+    window.addEventListener('error', onErr);
+    window.addEventListener('unhandledrejection', onRej);
+    window.__GN_BOOT__ = {
+      /** main.ts calls this once it owns error reporting */
+      handoff: function () { window.removeEventListener('error', onErr); window.removeEventListener('unhandledrejection', onRej); clearTimeout(timer); },
+      fail: show,
+    };
+    var timer = setTimeout(function () {
+      if (!window.__GN_MAIN__) show('the world did not begin', 'src/main.ts never ran (60 s). Is the dev server up? Run: npm install && npm run dev');
+    }, 60000);
+  })();
+</script>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

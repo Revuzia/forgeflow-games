@@ -1,0 +1,23 @@
+{
+  "$comment": "Example GENESIS mod pack: adds a plant species and a weather kind, and rebalances an existing plant by id (an entry with an existing id replaces it in place, so indices stay stable). Load it through the worker's {type:'mod'} message or Sim({ content: [pack] }).",
+  "id": "highland-flora",
+  "name": "Highland flora",
+  "version": "1.0.0",
+  "plants": [
+    { "id": "edelweiss", "name": "Edelweiss", "type": "grass", "form": "moss", "habitat": "land",
+      "temp": [-18, -6, 8, 16], "moisture": [0.15, 0.3, 0.7, 0.9], "soil": 0.02, "salinity": 0.2, "water": [0, 0.02],
+      "growth": 0.05, "spread": 0.25, "light": 0.3, "height": [0.05, 0.2], "fuel": 0.05, "flammability": 0.2,
+      "deciduous": true, "colors": { "leaf": "#9aa88a", "dry": "#b8b49a", "flower": "#f4f2ea" } },
+    { "id": "pine", "name": "Mountain pine", "type": "tree", "form": "conifer", "habitat": "land",
+      "temp": [-16, -4, 14, 28], "moisture": [0.15, 0.3, 0.7, 0.95], "soil": 0.08, "salinity": 0.15, "water": [0, 0.05],
+      "growth": 0.03, "spread": 0.18, "light": 0.4, "height": [10, 24], "fuel": 1.0, "flammability": 0.8,
+      "deciduous": false, "colors": { "leaf": "#2c5030", "bark": "#7a5236" } }
+  ],
+  "weather": [
+    { "id": "foehn", "name": "Foehn wind", "precipType": "none", "precip": 0, "cloud": -0.5, "fog": 0, "wind": 14, "spin": 0,
+      "lightning": 0, "tempDelta": 9, "humidityDelta": -0.2, "radius": [500, 1100], "life": [240, 900], "speed": 1.2,
+      "spawn": { "rate": 0.05, "needsAir": true, "humidity": [0, 0.5], "temp": [-10, 25] },
+      "effects": { "dry": 0.02 },
+      "render": { "particles": "dust", "cloud": 0.0, "fog": 0.0, "wind": 0.8, "lightning": 0, "skyTint": [1.0, 0.95, 0.85] } }
+  ]
+}

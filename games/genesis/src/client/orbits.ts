@@ -36,7 +36,7 @@ export function orbitOffset(o: OrbitParams, tick: number, out: D3 = [0, 0, 0]): 
   if (!(o.a > 0) || !(o.period > 0)) { out[0] = 0; out[1] = 0; out[2] = 0; return out; }
   const e = Math.min(0.97, Math.max(0, o.e || 0));
   const M = (o.phase0 || 0) + (2 * Math.PI * tick) / o.period;
-  const E = eccentricAnomaly(M % (2 * Math.PI), e);
+  const E = eccentricAnomaly(((M % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI), e);
   const x = o.a * (Math.cos(E) - e);
   const zp = -o.a * Math.sqrt(1 - e * e) * Math.sin(E);
   // tilt about +X by inc: (x, y, z) -> (x, y cos i − z sin i, y sin i + z cos i) with y = 0

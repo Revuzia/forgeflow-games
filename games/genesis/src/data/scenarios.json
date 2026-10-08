@@ -1,0 +1,58 @@
+{
+  "$comment": "Scenarios (CONTRACT §6.5). star = a stars.json id. planets: kind = planetkinds.json id; overrides replace kind defaults (atmosphere members merge). orbit: a in AU (1 AU = 1.5e6 m, the home orbit), e, inc / node / phase0 in degrees, yearDays = orbital period in that planet's days (moons: periodDays). moons orbit the planet they are listed under (a in metres). startHour = local solar hour at longitude 0 on the focus world at tick 0. peoples are added in phase 2 (kept here so scenarios are pure data).",
+  "scenarios": [
+    { "id": "barren", "name": "Barren world", "description": "One airless, cratered world under a young star. Breathe on it.",
+      "star": "G", "starName": "Aster", "focus": 0, "startHour": 9.5,
+      "planets": [
+        { "name": "Cinder", "kind": "barren", "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 9.6 } }
+      ],
+      "peoples": [] },
+    { "id": "sandbox", "name": "Sandbox", "description": "A temperate world with seas, mountains and rivers — and nothing alive yet.",
+      "star": "G", "starName": "Aster", "focus": 0, "startHour": 9.5,
+      "planets": [
+        { "name": "Gaia", "kind": "terran", "overrides": { "vegetation": 0 },
+          "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 12 },
+          "moons": [ { "name": "Selene", "kind": "moon", "orbit": { "a": 21000, "e": 0.03, "inc": 5, "node": 23, "phase0": 126, "periodDays": 2 } } ] }
+      ],
+      "peoples": [] },
+    { "id": "twoworlds", "name": "Two worlds", "description": "A terran world of plains folk and a warm desert world of a hive, under one star.",
+      "star": "G", "starName": "Aster", "focus": 0, "startHour": 9.5,
+      "planets": [
+        { "name": "Gaia", "kind": "terran", "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 12 },
+          "moons": [ { "name": "Selene", "kind": "moon", "orbit": { "a": 21000, "e": 0.03, "inc": 5, "node": 23, "phase0": 126, "periodDays": 2 } } ] },
+        { "name": "Rust", "kind": "desert", "overrides": { "n": 48, "climateOffset": 28 }, "orbit": { "a": 1.3, "e": 0.05, "inc": 1.7, "node": 63, "phase0": 150, "yearDays": 17 } }
+      ],
+      "peoples": [
+        { "phase": 2, "species": "plains-folk", "planet": 0, "count": 40, "era": "stone" },
+        { "phase": 2, "species": "hive", "planet": 1, "count": 60, "era": "stone" }
+      ] },
+    { "id": "system", "name": "Living system", "description": "Six worlds and a moon; several inhabited, at different eras.",
+      "star": "G", "starName": "Aster", "focus": 2, "startHour": 10,
+      "planets": [
+        { "name": "Cinder", "kind": "volcanic", "overrides": { "n": 40 }, "orbit": { "a": 0.55, "e": 0.08, "inc": 3.4, "node": 115, "phase0": 250, "yearDays": 5 } },
+        { "name": "Verdance", "kind": "jungle", "overrides": { "n": 44, "climateOffset": -12 }, "orbit": { "a": 0.9, "e": 0.02, "inc": 1.2, "node": 40, "phase0": 300, "yearDays": 10.3 } },
+        { "name": "Gaia", "kind": "terran", "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 12 },
+          "moons": [ { "name": "Selene", "kind": "moon", "orbit": { "a": 21000, "e": 0.03, "inc": 5, "node": 23, "phase0": 126, "periodDays": 2 } } ] },
+        { "name": "Rust", "kind": "desert", "overrides": { "n": 40, "climateOffset": 28 }, "orbit": { "a": 1.3, "e": 0.05, "inc": 1.7, "node": 63, "phase0": 150, "yearDays": 17 } },
+        { "name": "Rime", "kind": "ice", "overrides": { "n": 40, "climateOffset": 52 }, "orbit": { "a": 2.1, "e": 0.04, "inc": 2.2, "node": 200, "phase0": 20, "yearDays": 33 } },
+        { "name": "Murk", "kind": "methane", "overrides": { "n": 40, "climateOffset": -80 }, "orbit": { "a": 3.0, "e": 0.06, "inc": 2.6, "node": 280, "phase0": 75, "yearDays": 48 } }
+      ],
+      "peoples": [
+        { "phase": 2, "species": "plains-folk", "planet": 2, "count": 120, "era": "bronze" },
+        { "phase": 2, "species": "coastal-folk", "planet": 1, "count": 60, "era": "stone" },
+        { "phase": 2, "species": "hive", "planet": 3, "count": 80, "era": "iron" },
+        { "phase": 2, "species": "cold-folk", "planet": 4, "count": 40, "era": "stone" },
+        { "phase": 2, "species": "methane-drifters", "planet": 5, "count": 50, "era": "classical" }
+      ] },
+    { "id": "lookdev", "name": "Lookdev", "description": "A lush terran world for screenshots: forests, rivers, coasts and snowcaps.",
+      "star": "G", "starName": "Aster", "focus": 0, "startHour": 9.5,
+      "planets": [
+        { "name": "Gaia", "kind": "terran", "overrides": { "vegetation": 1.25 }, "orbit": { "a": 1.0, "e": 0.012, "inc": 0, "node": 0, "phase0": 50, "yearDays": 12 },
+          "moons": [ { "name": "Selene", "kind": "moon", "orbit": { "a": 21000, "e": 0.03, "inc": 5, "node": 23, "phase0": 126, "periodDays": 2 } } ] },
+        { "name": "Rust", "kind": "desert", "overrides": { "n": 40, "climateOffset": 28 }, "orbit": { "a": 1.3, "e": 0.05, "inc": 1.7, "node": 63, "phase0": 150, "yearDays": 17 } }
+      ],
+      "peoples": [
+        { "phase": 2, "species": "plains-folk", "planet": 0, "count": 80, "era": "bronze", "settlements": ["town", "city"] }
+      ] }
+  ]
+}

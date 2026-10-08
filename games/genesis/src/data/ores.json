@@ -1,0 +1,21 @@
+{
+  "$comment": "Ore / deposit kinds (oreType field = index + 1; 0 = none). geology = affinity weights for where deposits form: mountain (high, steep, ridged rock), volcanic (lava provinces, ash), sedimentary (low plains, old sea floor), basin (closed depressions, dry lakes), coast (shores), crater (impact sites), river (valley floors with flow). rarity scales how often the richest deposit of a cell is this kind.",
+  "ores": [
+    { "id": "flint", "name": "Flint", "color": "#4a4a52", "rarity": 1.0, "geology": { "sedimentary": 1.0, "river": 0.6, "coast": 0.4 } },
+    { "id": "clay", "name": "Clay", "color": "#b86f4a", "rarity": 1.0, "geology": { "river": 1.0, "basin": 0.8, "sedimentary": 0.5 } },
+    { "id": "copper", "name": "Copper ore", "color": "#3f9a7a", "rarity": 0.7, "geology": { "mountain": 1.0, "volcanic": 0.6 } },
+    { "id": "tin", "name": "Tin ore", "color": "#9a9aa8", "rarity": 0.35, "geology": { "mountain": 0.8, "river": 0.3 } },
+    { "id": "iron", "name": "Iron ore", "color": "#8a3a2a", "rarity": 0.8, "geology": { "sedimentary": 0.6, "mountain": 0.6, "crater": 1.2 } },
+    { "id": "coal", "name": "Coal", "color": "#1e1e22", "rarity": 0.7, "geology": { "sedimentary": 1.0, "basin": 0.5 } },
+    { "id": "gold", "name": "Gold", "color": "#e0b43a", "rarity": 0.15, "geology": { "mountain": 0.6, "river": 0.8 } },
+    { "id": "silver", "name": "Silver", "color": "#c8ccd4", "rarity": 0.15, "geology": { "mountain": 0.8, "volcanic": 0.3 } },
+    { "id": "sulfur", "name": "Sulfur", "color": "#e8d84a", "rarity": 0.4, "geology": { "volcanic": 1.0, "crater": 0.2 } },
+    { "id": "obsidian", "name": "Obsidian", "color": "#1a1420", "rarity": 0.4, "geology": { "volcanic": 1.0 } },
+    { "id": "saltpeter", "name": "Saltpeter", "color": "#e8e4dc", "rarity": 0.3, "geology": { "basin": 0.8, "sedimentary": 0.3 } },
+    { "id": "salt", "name": "Rock salt", "color": "#f2ece2", "rarity": 0.6, "geology": { "basin": 1.0, "coast": 0.6 } },
+    { "id": "glass-sand", "name": "Glass sand", "color": "#efe2c0", "rarity": 0.6, "geology": { "coast": 1.0, "basin": 0.3 } },
+    { "id": "oil", "name": "Oil", "color": "#16120e", "rarity": 0.3, "geology": { "sedimentary": 0.8, "basin": 0.6, "coast": 0.3 } },
+    { "id": "uranium", "name": "Uranium", "color": "#7aa83a", "rarity": 0.08, "geology": { "mountain": 0.4, "crater": 0.5 } },
+    { "id": "gems", "name": "Gemstones", "color": "#7a3ad8", "rarity": 0.08, "geology": { "volcanic": 0.4, "mountain": 0.4 } }
+  ]
+}

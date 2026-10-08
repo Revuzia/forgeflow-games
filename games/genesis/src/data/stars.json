@@ -1,0 +1,17 @@
+{
+  "$comment": "Star kinds. luminosity relative to the sun (1 = the home orbit receives Earth-like light at 1 AU = 1.5e6 m game scale); temperature in kelvin (drives colour by blackbody); radius in game metres (the render scale of the system: the home orbit is 1.5e6 m); activity 0..1 = flare / aurora drive; color is optional (derived from temperature when absent).",
+  "stars": [
+    { "id": "O", "name": "Blue giant", "kind": "O", "luminosity": 4000, "temperature": 34000, "radius": 66000, "activity": 0.6 },
+    { "id": "B", "name": "Blue-white star", "kind": "B", "luminosity": 180, "temperature": 18000, "radius": 40000, "activity": 0.4 },
+    { "id": "A", "name": "White star", "kind": "A", "luminosity": 18, "temperature": 8800, "radius": 19000, "activity": 0.2 },
+    { "id": "F", "name": "Yellow-white star", "kind": "F", "luminosity": 2.6, "temperature": 6700, "radius": 14000, "activity": 0.2 },
+    { "id": "G", "name": "Yellow star", "kind": "G", "luminosity": 1.0, "temperature": 5750, "radius": 11000, "activity": 0.15 },
+    { "id": "K", "name": "Orange dwarf", "kind": "K", "luminosity": 0.32, "temperature": 4600, "radius": 8500, "activity": 0.25 },
+    { "id": "M", "name": "Red dwarf", "kind": "M", "luminosity": 0.04, "temperature": 3300, "radius": 5000, "activity": 0.55 },
+    { "id": "red-giant", "name": "Red giant", "kind": "K", "luminosity": 250, "temperature": 3900, "radius": 260000, "activity": 0.3 },
+    { "id": "white-dwarf", "name": "White dwarf", "kind": "white-dwarf", "luminosity": 0.003, "temperature": 16000, "radius": 900, "activity": 0.05 },
+    { "id": "neutron", "name": "Neutron star", "kind": "neutron", "luminosity": 0.0008, "temperature": 600000, "radius": 300, "activity": 0.9 },
+    { "id": "black-hole", "name": "Black hole", "kind": "black-hole", "luminosity": 0.02, "temperature": 9000, "radius": 2500, "activity": 0.7, "color": [1.0, 0.72, 0.42] },
+    { "id": "binary", "name": "Binary pair", "kind": "binary", "luminosity": 1.35, "temperature": 5400, "radius": 12000, "activity": 0.3 }
+  ]
+}

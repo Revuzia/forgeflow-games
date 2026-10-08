@@ -1,0 +1,95 @@
+/* GENESIS — in-game UI styles (CONTRACT.md §16): dark glass panels, fine ivory / gold accents, a serif display face
+   for titles and a clean sans for UI. Phase 1 covers the time HUD, world markers, toasts and the dev overlay; the full
+   UI (palette, radial, inspector, chronicle, settings) extends these tokens. No network fonts: system stacks only. */
+
+:root {
+  --gn-glass: rgba(10, 13, 22, 0.58);
+  --gn-glass-strong: rgba(10, 13, 22, 0.78);
+  --gn-line: rgba(239, 231, 214, 0.12);
+  --gn-line-gold: rgba(217, 184, 120, 0.42);
+  --gn-ivory: #efe7d6;
+  --gn-ivory-dim: rgba(239, 231, 214, 0.62);
+  --gn-gold: #d9b878;
+  --gn-gold-hi: #f3dfae;
+  --gn-blue: #9cc4ff;
+  --gn-serif: 'Cormorant Garamond', 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --gn-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+  --gn-mono: 'JetBrains Mono', 'SF Mono', Consolas, 'Liberation Mono', monospace;
+  --gn-radius: 12px;
+  --gn-blur: blur(14px) saturate(130%);
+}
+
+.gn-ui { position: fixed; inset: 0; pointer-events: none; font-family: var(--gn-sans); color: var(--gn-ivory); font-size: 13px; }
+.gn-ui.gn-hidden > * { opacity: 0 !important; pointer-events: none !important; transition: opacity .25s ease; }
+
+.gn-panel {
+  pointer-events: auto;
+  background: linear-gradient(180deg, rgba(18, 23, 38, 0.62), var(--gn-glass));
+  border: 1px solid var(--gn-line);
+  border-radius: var(--gn-radius);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: var(--gn-blur);
+  -webkit-backdrop-filter: var(--gn-blur);
+}
+
+/* ── top-left: world + calendar + time controls ── */
+.gn-time { position: absolute; left: 18px; top: 16px; padding: 12px 14px 10px; min-width: 268px; }
+.gn-world { display: flex; align-items: baseline; gap: 10px; }
+.gn-world-name { font-family: var(--gn-serif); font-size: 24px; font-weight: 500; letter-spacing: 0.12em; color: var(--gn-gold-hi); text-transform: uppercase; }
+.gn-world-kind { font-size: 10px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--gn-ivory-dim); }
+.gn-cal { margin-top: 4px; display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; color: var(--gn-ivory); letter-spacing: 0.04em; }
+.gn-cal .gn-sep { color: var(--gn-gold); opacity: 0.7; }
+.gn-cal .gn-clock { font-family: var(--gn-mono); font-size: 12.5px; color: var(--gn-gold-hi); margin-left: auto; }
+.gn-sky { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 2px; transform: translateY(1px); box-shadow: 0 0 8px currentColor; }
+.gn-speeds { margin-top: 10px; display: flex; gap: 4px; align-items: center; }
+.gn-btn {
+  pointer-events: auto; cursor: pointer; font: 600 11px/1 var(--gn-sans); letter-spacing: 0.08em; color: var(--gn-ivory-dim);
+  background: rgba(255, 255, 255, 0.035); border: 1px solid var(--gn-line); border-radius: 7px; padding: 7px 9px; min-width: 30px;
+  transition: color .15s, border-color .15s, background .15s;
+}
+.gn-btn:hover { color: var(--gn-ivory); border-color: rgba(239, 231, 214, 0.3); }
+.gn-btn:focus-visible { outline: 1px solid var(--gn-gold); outline-offset: 1px; }
+.gn-btn.gn-on { color: #15110a; background: linear-gradient(180deg, var(--gn-gold-hi), var(--gn-gold)); border-color: transparent; }
+.gn-btn svg { width: 11px; height: 11px; display: block; fill: currentColor; }
+.gn-achieved { margin-left: auto; font: 500 11px var(--gn-mono); color: var(--gn-ivory-dim); white-space: nowrap; }
+.gn-achieved b { color: var(--gn-ivory); font-weight: 600; }
+.gn-achieved.gn-behind b { color: #f0a46b; }
+
+/* ── top-right: worlds strip ── */
+.gn-worlds { position: absolute; right: 18px; top: 16px; padding: 8px; display: flex; gap: 6px; }
+.gn-worldbtn { display: flex; align-items: center; gap: 7px; padding: 6px 10px 6px 6px; }
+.gn-worldbtn i { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset -3px -2px 4px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .12); }
+.gn-worldbtn span { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
+.gn-worldbtn.gn-here { border-color: var(--gn-line-gold); color: var(--gn-gold-hi); }
+
+/* ── system view markers ── */
+.gn-markers { position: absolute; inset: 0; pointer-events: none; }
+.gn-marker { position: absolute; transform: translate(-50%, -50%); pointer-events: auto; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; transition: opacity .3s; }
+.gn-marker .gn-ring { width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--gn-line-gold); box-shadow: 0 0 14px rgba(217, 184, 120, .25); }
+.gn-marker:hover .gn-ring { border-color: var(--gn-gold-hi); box-shadow: 0 0 18px rgba(243, 223, 174, .5); }
+.gn-marker .gn-label { font: 500 10px var(--gn-sans); letter-spacing: .26em; text-transform: uppercase; color: var(--gn-ivory); text-shadow: 0 1px 6px #000; white-space: nowrap; }
+.gn-marker .gn-label small { display: block; text-align: center; letter-spacing: .12em; color: var(--gn-ivory-dim); font-size: 9px; margin-top: 2px; }
+.gn-marker.gn-moon .gn-ring { width: 12px; height: 12px; border-color: rgba(156, 196, 255, .4); }
+
+/* ── bottom-left: hint + toasts ── */
+.gn-toasts { position: absolute; left: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 6px; max-width: min(460px, 60vw); }
+.gn-toast { padding: 9px 13px; font-size: 12.5px; line-height: 1.35; animation: gnToastIn .35s ease both; }
+.gn-toast.gn-out { animation: gnToastOut .5s ease both; }
+@keyframes gnToastIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes gnToastOut { to { opacity: 0; transform: translateY(-4px); } }
+.gn-hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); padding: 7px 14px; font-size: 11px; letter-spacing: .08em; color: var(--gn-ivory-dim); white-space: nowrap; }
+.gn-hint kbd { font: 600 10px var(--gn-mono); color: var(--gn-gold-hi); border: 1px solid var(--gn-line); border-radius: 4px; padding: 1px 5px; margin: 0 2px; }
+
+/* ── dev overlay (?dev=1) ── */
+.gn-dev { position: absolute; right: 18px; bottom: 70px; padding: 10px 12px; font: 11px/1.55 var(--gn-mono); color: #cfe0ff; min-width: 210px; pointer-events: none; }
+.gn-dev b { color: var(--gn-gold-hi); font-weight: 600; }
+.gn-dev .gn-row { display: flex; justify-content: space-between; gap: 14px; }
+
+@media (max-width: 720px) {
+  .gn-time { left: 10px; top: 10px; min-width: 0; }
+  .gn-worlds { display: none; }
+  .gn-hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gn-toast, .gn-toast.gn-out { animation: none; }
+}

@@ -201,10 +201,12 @@ function genTerran(id: number, name: string, seed: number, n: number, radius: nu
     if (cont > 0) {
       const land = cont;
       const belt = smooth(0.05, 0.45, nz.fbm(x * 1.6 + 9.3, y * 1.6 - 2.2, z * 1.6 + 4.4, 3) + 0.15);
-      const ridge = nz.ridged(x * 2.7 + 1.1, y * 2.7, z * 2.7 - 5.3, 4);
+      // ranges: broad massifs (smooth fbm) carved by ridged crests — mountains with shoulders, not needles
+      const ridge = nz.ridged(x * 2.4 + 1.1, y * 2.4, z * 2.4 - 5.3, 4);
+      const massif = 0.5 + 0.5 * nz.fbm(x * 3.1 - 2.0, y * 3.1 + 5.0, z * 3.1, 3);
       const hills = nz.fbm(x * 6.5, y * 6.5 + 7.7, z * 6.5, 3);
-      e = 4 + 230 * Math.pow(land, 1.25) + 26 * hills * smooth(0.0, 0.2, land)
-        + 400 * belt * Math.pow(ridge, 2.2) * smooth(0.02, 0.22, land);
+      e = 4 + 190 * Math.pow(land, 1.3) + 24 * hills * smooth(0.0, 0.2, land)
+        + 340 * belt * (0.5 * Math.pow(ridge, 1.7) + 0.5 * massif * ridge) * smooth(0.02, 0.22, land);
     } else {
       const s = -cont;
       e = -(3 + 22 * smooth(0.0, 0.06, s) + 95 * smooth(0.05, 0.35, s) + 40 * nz.fbm(x * 4, y * 4, z * 4, 2) * smooth(0.1, 0.4, s));
@@ -213,7 +215,7 @@ function genTerran(id: number, name: string, seed: number, n: number, radius: nu
   }
 
   // 2. fluvial carving: a few passes of drainage-area-driven incision give dendritic valleys and river beds
-  for (let pass = 0; pass < 3; pass++) {
+  for (let pass = 0; pass < 4; pass++) {
     const filled = priorityFlood(g, h, 0);
     const rcv = receivers(g, filled, 0);
     const acc = accumulate(g, filled, rcv, null);
@@ -429,7 +431,10 @@ function genTerran(id: number, name: string, seed: number, n: number, radius: nu
       const zonal = 0.42 + 0.22 * Math.cos(la * 6) + 0.12 * Math.cos(la * 2);
       const ca = Math.cos(drift), sa = Math.sin(drift);
       const rx = x * ca + z * sa, rz = -x * sa + z * ca;
-      let cov = zonal + 0.55 * nz.fbm(rx * 3.4 + 40, y * 3.4, rz * 3.4, 4) + 0.18 * nz.fbm(rx * 9, y * 9 + 40, rz * 9, 2);
+      // large systems + frontal bands (ridged) + popcorn cumulus breakup
+      const front = Math.pow(nz.ridged(rx * 2.2 + 13, y * 2.2, rz * 2.2 - 7, 3), 3);
+      const cells = nz.fbm(rx * 16 + 3, y * 16, rz * 16 - 5, 2);
+      let cov = zonal + 0.5 * nz.fbm(rx * 3.4 + 40, y * 3.4, rz * 3.4, 4) + 0.35 * front + 0.2 * cells;
       for (const st of storms) {
         const d = x * st.p[0] + y * st.p[1] + z * st.p[2];
         const ang = Math.acos(Math.min(1, d));
@@ -445,7 +450,7 @@ function genTerran(id: number, name: string, seed: number, n: number, radius: nu
         const eye = smooth(0.04, 0.12, rr);
         cov += st.w * Math.exp(-rr * rr * 1.1) * (0.35 + 0.75 * arms) * eye - 0.25 * (1 - eye) * Math.exp(-rr * 4);
       }
-      const cv = clamp01((cov - 0.52) * 1.9);
+      const cv = clamp01((cov - 0.6) * 2.1);
       CL[c] = cv;
       PR[c] = cv > 0.72 ? (cv - 0.72) * 12 : 0;
       PT[c] = PR[c] > 0 ? (T[c] < 0 ? 2 : 1) : 0;
