@@ -3,6 +3,20 @@
 Last updated 2026-10-07 23:30 CDT, branch `claude/exciting-faraday-2dakqx`. **PUSHED to GitHub (only that branch, no PR, no tags) at 1e5a1159 with the owner's yes; the repo's pre-push CI hook was bypassed ONCE with the owner's explicit yes because 2 of 12 monorepo suites (test_engine_authoring, test_no_primitives) fail only on the missing 3d-models library on this PC (unrelated to this game). Every later push hits the same hook: ask again.** A local tag `cdn-2026-10-07-2683d349` marks the deployed commit (not pushed).
 **CDN: DEPLOYED 2026-10-07 ~17:10 CDT with the owner's yes (files only, `--no-portal`, publish status untouched): commit 2683d349 built clean (vite, 1139 of 1229 KB), boot-checked (desktop + phone, strict CSP, 0 errors), thumbnail = a 1280x720 title-card capture (no paid cover), 9 of 9 files uploaded and verified byte-identical live; https://forgeflow-games-cdn.isimcha85.workers.dev/squish-keeper/index.html . It does NOT contain: SHELL-4 fixes, the UI overhaul, lock / multi-pull, the ground fix, anything after 2683d349. The portal pages (prerender) were not rebuilt. The next deploy needs the owner's yes again.**
 
+## TOKEN AND TIME AUDIT 2026-10-08 11:50 CDT (owner: "a reference should not cost 500k tokens, and some jobs take 6 hours")
+Measured from the workflow transcripts with `_handoff/tools/agentstats.mjs` (edit its ROOT path for a new session). 48 agents so far: 10.3M output tokens, 224M new input tokens, 5.4B cache-read tokens (every turn re-reads the agent's whole context; I cannot see how the plan weighs cache reads).
+| Work | Agent-hours | Output tokens | Worst single agent |
+|---|---|---|---|
+| Render stage (build, 3 verification rounds) | 18.8 | 2.1M | fix-1 612 turns 370k |
+| Shell stage (killed attempt, build, 3 verification rounds, 2 fix rounds) | 29.7 | 1.9M | reverify-A-1 5.5 h 477 turns |
+| Economy + Input + early | 5.2 | 1.1M | |
+| TRUE CUT DESIGN (3 designers, spec, 2 red teams, fold) | 14.0 | 2.5M | design-phys 7.8 h, 1,260 turns, 1.05M output, memo 145 KB |
+| UI DESIGN, reference audits (4) | 9.2 so far | 0.92M | 195k to 295k each, 2.4 h, memos 70 KB |
+| PETS DESIGN (6 designers) | 13.4 so far | 1.77M | 216k to 336k each, 2.3 h, ideas memo 100 KB |
+**Verdict: roughly half of all output tokens went to DESIGN DOCUMENTS in the last day, and that was my orchestration, not the work's need:** prompts said "exhaustive / every screen / at least 40 ideas / all 50 species", no caps on turns, time or memo size; memos of 70 to 145 KB that the spec authors then read again; the machine at 100% CPU with 26 node/chrome processes (software-rendered browsers), so waits became polling turns; verification agents re-running a 68 minute harness and polling it for hundreds of turns; 7 usage-limit cutoffs that killed agents mid-run.
+**Actions taken 11:50:** the 8 open-ended agents (3 UI references, 5 pets designers) were told to wrap up and write a memo of at most 10 to 12 KB; the not-yet-run spec / review / fold prompts of the UI and pets workflows got a BUDGET block (80 tool calls, 45 minutes, spec at most 30 KB, reports at most 12 KB); when each workflow's first phase returns, the old run is stopped and resumed from the edited script (cached results kept).
+**Policy from now (verification of what SHIPS stays at full strength, as the owner chose; the saving is in documents, polling and duplication):** (1) every agent prompt carries a hard budget (tool calls, minutes, output size) and no "exhaustive" wording; (2) agents never babysit long test runs: the browser harness and probes run as a plain background script, results read once; (3) design = one author + one reviewer, not three lenses + two red teams, unless the decision is risky; (4) re-verification runs only the changed areas, the full harness once at the end of a stage by script; (5) a design phase is capped at about one hour; (6) I run `agentstats.mjs` at every phase boundary and report.
+
 ## DONE: do not redo (evidence in the named report or commit)
 | Item | Commit | Verification | Where the evidence is |
 |---|---|---|---|
