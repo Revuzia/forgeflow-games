@@ -8,8 +8,10 @@ import * as C from '/src/audio/ceremony.ts';
 import * as M from '/src/audio/music.ts';
 import * as I3 from '/src/audio/interact.ts';
 import * as CT from '/src/audio/cut.ts';
+import * as UI from '/src/audio/ui.ts';
 import { runEngineTests } from './engine_tests.js';
 import { runEngineTests3 } from './engine_tests3.js';
+import { runEngineTestsUi } from './engine_tests_ui.js';
 import { runEngineOffline } from './engine_offline.js';
 
 export const SR = 48000;
@@ -160,6 +162,8 @@ async function renderVoice(spec) {
       break;
     }
     // CUT (cut.ts): the slice, the separation pop, the rejoin (params: frac, family, neckS, calm, all, level)
+    // UI v3 (ui.ts): the interface sounds (params: kind, calm, level)
+    case 'ui': voice = UI.uiVoice(ctx, out, t0, base); break;
     case 'cutSlice': voice = CT.cutSlice(ctx, out, t0, base); break;
     case 'cutPop': voice = CT.cutPop(ctx, out, t0, base); break;
     case 'rejoin': voice = CT.rejoin(ctx, out, t0, base); break;
@@ -493,7 +497,13 @@ function bumpLimiterRun(calls) {
   return { out: calls.map((c) => ({ t: c.t, in: c.intensity, out: L.admit(c.intensity, c.t) })), throttled: L.throttled };
 }
 
-window.AV = { ready: true, SR, renderVoice, renderCeremony, renderDuck, runEngineTests, runEngineTests3, runEngineOffline, renderMusic, renderMix, renderMusicBubbles, simulateMusic, composeOnly, bumpLimiterRun, cutLimiterRun, strandAmRange, consts: {
+/** The pure UI limiter (ui.ts UiLimiter), driven with synthetic times: [{ t, kind }] -> [{ t, kind, ok }]. */
+function uiLimiterRun(calls) {
+  const L = new UI.UiLimiter();
+  return { out: calls.map((c) => ({ t: c.t, kind: c.kind, ok: L.admit(c.kind, c.t) })), throttled: L.throttled };
+}
+
+window.AV = { ready: true, SR, renderVoice, renderCeremony, renderDuck, runEngineTests, runEngineTests3, runEngineTestsUi, uiLimiterRun, runEngineOffline, renderMusic, renderMix, renderMusicBubbles, simulateMusic, composeOnly, bumpLimiterRun, cutLimiterRun, strandAmRange, consts: {
   TIERS: C.TIERS, CAPSULE_BUDGET_S: C.CAPSULE_BUDGET_S, MERGE_BUDGET_S: C.MERGE_BUDGET_S, PRE_ROLL_S: C.PRE_ROLL_S, REVEAL_DEFAULT_S: C.REVEAL_DEFAULT_S,
   MERGE_CHARGE_S: C.MERGE_CHARGE_S, MERGE_BURST_S: C.MERGE_BURST_S, BURST_GAP_S: C.BURST_GAP_S, CALM_SCALE: C.CALM_SCALE, MYTHIC_MOTIFS: C.MYTHIC_MOTIFS,
 }, musicConsts: {
@@ -507,6 +517,11 @@ window.AV = { ready: true, SR, renderVoice, renderCeremony, renderDuck, runEngin
 }, limiterConsts: { MIN_INTENSITY: I3.BumpLimiter.MIN_INTENSITY, MIN_GAP_S: I3.BumpLimiter.MIN_GAP_S, CAPACITY: I3.BumpLimiter.CAPACITY, REFILL_PER_S: I3.BumpLimiter.REFILL_PER_S, RECENT_S: I3.BumpLimiter.RECENT_S },
   strandConsts: { SILENCE_S: I3.STRAND_SILENCE_S, STOP_S: I3.STRAND_STOP_S },
   cutConsts: { FLAVOURS: CT.CUT_FLAVOURS, FAMILY_FLAVOUR: CT.FAMILY_FLAVOUR, REJOIN_RUN: CT.REJOIN_RUN, CALM_DB: CT.CUT_CALM_DB, SLICE: CT.CutLimiter.SLICE, POP: CT.CutLimiter.POP, REJOIN: CT.CutLimiter.REJOIN, ALL_GAP_S: CT.CutLimiter.ALL_GAP_S } };
+window.AV.uiConsts = {
+  KINDS: UI.UI_KINDS, SCALE_PCS: UI.UI_SCALE_PCS, SPEC: UI.UI_SPEC, GAP: UI.UI_GAP_S, PRIORITY: UI.UI_PRIORITY, PROTECT: UI.UI_PROTECT_S,
+  CEREMONY_GRACE_S: UI.UI_CEREMONY_GRACE_S, ATT_S: UI.UI_ATT_S, CALM_ATT_S: UI.UI_CALM_ATT_S, STEAL_FADE_S: UI.UI_STEAL_FADE_S, CALM_DB: UI.UI_CALM_DB,
+};
+window.AV.hoverSoundAllowed = UI.hoverSoundAllowed;
 window.AV.noteOnsets = (tier, durationS, calm, burst) => { const ti = C.tierIdx(tier); const lay = C.layout(ti, durationS, !!calm, !!burst); return { lay, onsets: C.noteOnsets(ti, lay) }; };
 
 /* ───────────── human-facing sound lab (live engine) ───────────── */
@@ -544,6 +559,13 @@ for (const b of document.querySelectorAll('button[data-r]')) {
   const up = () => { if (!held) return; held = false; audio.strand({ tension: Math.min(1, (performance.now() - t0) / 1200), snap: true, pitch: state.pitch }); };
   el.addEventListener('pointerup', up);
   el.addEventListener('pointercancel', up);
+}
+{
+  // interface sounds (UI v3): one button per kind; "UI sounds on" is the Settings uiSounds switch
+  $('uiOn').addEventListener('input', () => audio.setSettings({ uiSounds: $('uiOn').checked }));
+  for (const b of document.querySelectorAll('button[data-u]')) {
+    b.addEventListener('pointerdown', async () => { await unlock(); audio.ui({ kind: b.dataset.u, calm: $('uiCalm').checked }); });
+  }
 }
 {
   // cut and reconnect: a cut is the slice ('start') and, when the neck parts, the separation pop ('separate')

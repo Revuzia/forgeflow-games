@@ -1,0 +1,24 @@
+/* The jelly display type (UI.md 5). Widths are glyph units (the svg viewBox scales them); colours are theme tokens or the per-element
+   custom properties jelly() sets (--jl-bd the tone gradient, --jl-flat / --jl-sd the solid body and shade colours). */
+.jl-defs { position: absolute; width: 0; height: 0; overflow: hidden; pointer-events: none; }
+.jl { --jl-cap: var(--wh-cap-md); display: inline-block; position: relative; margin: 0; padding: 0; line-height: 0; vertical-align: calc(var(--jl-cap) * (var(--jl-h, 1.24) - 1.24) / -2 - var(--jl-cap) * .16); font-weight: inherit; }
+.jl-sm { --jl-cap: var(--wh-cap-sm); }
+.jl-md { --jl-cap: var(--wh-cap-md); }
+.jl-lg { --jl-cap: var(--wh-cap-lg); }
+.jl-xl { --jl-cap: var(--wh-cap-xl); }
+.jl-svg { display: var(--k-jelly-svg, block); height: calc(var(--jl-cap) * var(--jl-h, 1.24)); width: calc(var(--jl-cap) * var(--jl-w)); overflow: visible; }
+.jl-svg g { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.jl-sh { stroke: var(--wh-ink); stroke-opacity: .35; stroke-width: 26px; }
+.jl-ol { stroke: var(--wh-ink); stroke-width: 26px; }
+.jl-sd { stroke: var(--jl-sd); stroke-width: 20px; }
+.jl-bd { stroke: var(--jl-bd); stroke-width: 20px; }
+.jl-hi { stroke: url(#jg-hi); stroke-width: 5px; }
+/* small optical size (cap 24): a lighter outline, a flat body, no shadow or shade pass */
+.jl-sm .jl-ol { stroke-width: 25px; }
+.jl-sm .jl-bd { stroke: var(--jl-flat); stroke-width: 18px; }
+.jl-sm .jl-hi { stroke-width: 4px; }
+/* the system-800 fallback (W8): where the drawing is switched off (forced-colors, prefers-contrast: more; a11y.css sets --k-jelly-svg: none) the real text shows */
+@media (forced-colors: active), (prefers-contrast: more) {
+  .jl > .jl-text { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip: auto; white-space: normal; font: var(--wh-w-bold) calc(var(--jl-cap) * .9) / 1.1 var(--wh-font-ui); color: CanvasText; text-transform: uppercase; letter-spacing: .02em; }
+  .jl { line-height: normal; vertical-align: baseline; }
+}

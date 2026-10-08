@@ -1,0 +1,48 @@
+/* The kit page's own chrome (dev only; literals are fine here, src/ui is where K13 counts). Component styling is NEVER done here:
+   everything inside a .kp-stage is plain kit.css, so what the page shows is what a screen gets. */
+html, body { margin: 0; min-height: 100%; background: var(--wh-ink); color: var(--wh-cream); font: 600 16px/1.4 var(--wh-font-ui); }
+body { padding: 0 max(var(--k-gutter), env(safe-area-inset-left)) 64px; overflow-x: hidden; }
+.kp-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 14px 0 10px; border-bottom: 1px solid var(--wh-panel-edge); }
+.kp-head h1 { margin: 0; font-size: 20px; font-weight: 800; }
+.kp-head p { margin: 0; font-size: 13px; color: var(--wh-cream-dim); overflow-wrap: anywhere; }
+.kp-sec { padding: 20px 0 8px; }
+.kp-sec > h2 { margin: 0 0 4px; font-size: 22px; font-weight: 800; }
+.kp-sec > .kp-note { margin: 0 0 12px; font-size: 13px; color: var(--wh-cream-dim); max-width: 70ch; }
+.kp-sub { margin: 18px 0 8px; font: 800 12px/1.2 var(--wh-font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--wh-amber); }
+.kp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 14px 12px; align-items: start; }
+.kp-grid--wide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); }
+.kp-grid--panel { grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); }
+.kp-cell { margin: 0; min-width: 0; }
+.kp-cell > figcaption { margin-top: 6px; font-size: 11px; line-height: 1.25; color: var(--wh-cream-dim); overflow-wrap: anywhere; }
+.kp-stage { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 56px; padding: 10px; border-radius: 20px; background: var(--wh-panel); border: 1px solid var(--wh-panel-edge); }
+.kp-stage--col { flex-direction: column; align-items: stretch; }
+.kp-stage--white { background: #fff; border-color: #fff; }
+.kp-stage--amber { background: #ffb347; border-color: #ffb347; }
+.kp-stage--felt { background: var(--wh-felt); }
+.kp-stage--ink { background: var(--wh-ink); }
+.kp-stage--frame { position: relative; min-height: 300px; padding: 0; overflow: hidden; align-items: stretch; }
+.kp-stage--frame .k-scrim { position: absolute; z-index: 1; }
+.kp-stage .k-switch, .kp-stage .k-slider-row, .kp-stage .k-seg { flex: 1 1 100%; }
+.kp-stack { display: grid; gap: 4px; justify-items: start; min-width: 0; }
+.kp-sw { height: 44px; border-radius: 10px; background: var(--sw); border: 1px solid var(--wh-panel-edge); display: flex; align-items: flex-end; justify-content: space-between; padding: 3px 6px; font-size: 10px; font-weight: 800; }
+.kp-sw b { font-weight: 800; }
+.kp-ico { display: grid; justify-items: center; gap: 6px; padding: 10px 4px; border-radius: 14px; background: var(--wh-panel); border: 1px solid var(--wh-panel-edge); font-size: 11px; color: var(--wh-cream-dim); text-align: center; overflow-wrap: anywhere; }
+.kp-ico svg { color: var(--wh-cream); }
+.kp-spec { margin: 0; overflow-wrap: anywhere; }
+.kp-box { width: 56px; height: 56px; background: var(--wh-surface3); border: 1px solid var(--wh-edge); display: grid; place-items: center; font-size: 11px; font-weight: 800; }
+.kp-move { width: 28px; height: 28px; border-radius: 50%; background: var(--wh-amber); transition: transform var(--k-mv-3) var(--wh-ease-spring); }
+.kp-move[data-on="true"] { transform: translateX(96px); }
+.kp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.kp-table th, .kp-table td { padding: 4px 8px; text-align: left; border-bottom: 1px solid var(--wh-panel-edge); }
+.kp-table tr[data-now="true"] td { color: var(--wh-ink); background: var(--wh-amber); }
+.kp-slot { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 6px 10px; border: 1px dashed var(--wh-edge); border-radius: 14px; font-size: 12px; color: var(--wh-cream-dim); }
+@media (forced-colors: active) { .kp-sw, .kp-stage, .kp-ico { border-color: CanvasText; } }
+
+/* B2: the jelly glyph sheet */
+.kp-type { gap: 14px 22px; padding: 16px 14px; }
+.kp-line { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; min-width: 0; }
+.kp-dim { font-size: 11px; color: var(--wh-cream-dim); }
+.kp-stage--white .kp-cell > figcaption, .kp-stage--white .kp-dim { color: #14102a; }
+.kp-big { gap: 18px 16px; }
+.kp-big .kp-cell { min-width: 0; }
+.kp-fig { display: grid; justify-items: start; gap: 4px; }
