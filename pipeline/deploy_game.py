@@ -625,6 +625,14 @@ def insert_game_metadata(slug: str, metadata: dict):
     _ms = metadata.get("mobile_support")
     if _ms in ("full", "partial", "none"):
         row["mobile_support"] = _ms
+    # 2026-10-08 SCREENSHOTS: games.screenshot_urls (text[]) feeds the game page's gallery
+    # (src/components/game/ScreenshotGallery.tsx), but no deploy ever wrote it. Same rule as
+    # mobile_support: sent ONLY when the metadata declares a non-empty list of non-empty strings
+    # (game_meta.json, or derived from <game_dir>/screenshots/ by deploy_one), so a deploy never
+    # clears screenshots set by hand for games that declare none.
+    _shots = metadata.get("screenshot_urls")
+    if isinstance(_shots, list) and _shots and all(isinstance(u, str) and u.strip() for u in _shots):
+        row["screenshot_urls"] = _shots
 
     import datetime as _dt
     _now = _dt.datetime.now(_dt.timezone.utc)
@@ -676,6 +684,25 @@ def insert_game_metadata(slug: str, metadata: dict):
 
 
 CDN_BASE = "https://forgeflow-games-cdn.isimcha85.workers.dev"
+
+# Store screenshots a game ships in <game_dir>/screenshots/ (uploaded with the rest of the
+# folder; not a dev-only dir). The portal shows the first 5 (Steam wants at least 5).
+SCREENSHOT_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
+MAX_SCREENSHOTS = 8
+
+
+def screenshot_urls_from_dir(game_dir, slug):
+    """CDN URLs for the images in <game_dir>/screenshots/, sorted by filename, at most
+    MAX_SCREENSHOTS. Each carries ?v=<md5[:8]> of its bytes — the same cache-bust as the
+    thumbnail, so a URL changes only when its image does. [] if there is no such folder."""
+    import hashlib as _hl
+    shots_dir = Path(game_dir) / "screenshots"
+    if not shots_dir.is_dir():
+        return []
+    files = sorted((p for p in shots_dir.iterdir() if p.is_file() and p.suffix.lower() in SCREENSHOT_SUFFIXES),
+                   key=lambda p: p.name)[:MAX_SCREENSHOTS]
+    return [f"{CDN_BASE}/{slug}/screenshots/{urllib.parse.quote(p.name)}?v={_hl.md5(p.read_bytes()).hexdigest()[:8]}"
+            for p in files]
 
 
 def verify_live(slug, files=("index.html", "thumbnail.png", "content.json")):
@@ -879,6 +906,11 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, r
         metadata["thumbnail_url"] = f"{CDN_BASE}/{slug}/thumbnail.png{_tv}"
     if thumb_path.exists() and not metadata.get("hero_image_url"):
         metadata["hero_image_url"] = f"{CDN_BASE}/{slug}/thumbnail.png{_tv}"
+    # Screenshots: an explicit game_meta.json list wins; otherwise publish the screenshots/ folder.
+    if not metadata.get("screenshot_urls"):
+        _shot_urls = screenshot_urls_from_dir(game_dir, slug)
+        if _shot_urls:
+            metadata["screenshot_urls"] = _shot_urls
     insert_game_metadata(slug, metadata)
     print(f"Done! Game available at: {CDN_BASE}/{slug}/index.html")
     if refresh_portal:

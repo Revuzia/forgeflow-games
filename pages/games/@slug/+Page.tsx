@@ -11,6 +11,7 @@ import { useGame, useRelatedGames } from "../../../src/hooks/useGames";
 import GamePlayer from "../../../src/components/game/GamePlayer";
 import GameCarousel from "../../../src/components/game/GameCarousel";
 import GameDescription from "../../../src/components/game/GameDescription";
+import ScreenshotGallery from "../../../src/components/game/ScreenshotGallery";
 import { getMobileSupport, MOBILE_BADGE } from "../../../src/lib/mobile";
 import useIsTouchDevice from "../../../src/hooks/useIsTouchDevice";
 import { GAME_STATS_PANELS } from "../../../src/components/game/StatsPanel";
@@ -253,17 +254,10 @@ export default function GamePage() {
           {/* 2026-05-11 — Removed fake sidebar Advertisement placeholder; same
               reason as above. Screenshots remain — those are real content. */}
 
-          {/* Screenshots */}
-          {game.screenshot_urls && game.screenshot_urls.length > 0 && (
-            <div>
-              <h3 className="font-display font-semibold text-sm text-gray-200 mb-3">Screenshots</h3>
-              <div className="grid grid-cols-2 gap-2">
-                {game.screenshot_urls.slice(0, 4).map((url, i) => (
-                  <img key={i} src={url} alt={`${game.title} screenshot ${i + 1}`} className="rounded-lg w-full aspect-video object-cover" loading="lazy" />
-                ))}
-              </div>
-            </div>
-          )}
+          {/* Screenshots — 2026-10-08: up to 5, clickable, with a lightbox
+              (src/components/game/ScreenshotGallery.tsx). Renders nothing
+              when the game has no screenshots. */}
+          <ScreenshotGallery title={game.title} urls={game.screenshot_urls} />
         </aside>
       </div>
 

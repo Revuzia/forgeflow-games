@@ -42,6 +42,15 @@ python "C:/Users/TestRun/Claude Claw/forgeflow-games/pipeline/deploy_game.py" \
 Auto-runs `generate_cover.py` (if no thumbnail.png), uploads all files
 to R2, upserts Supabase metadata. ~1-3 min depending on file count.
 
+**Screenshots (2026-10-08).** Put store screenshots in `<game-dir>/screenshots/`
+(.png .jpg .jpeg .webp; sorted by filename, first 8 used; aim for 5 at 16:9 —
+the game page gallery shows the first 5). The deploy uploads them with the
+game and writes `games.screenshot_urls` as
+`<CDN>/<slug>/screenshots/<name>?v=<md5[:8]>` (same cache-bust as the
+thumbnail). An explicit `screenshot_urls` list in game_meta.json wins over
+the folder. No folder and no list => the column is NOT sent, so screenshots
+set by hand in Supabase are never cleared by a deploy.
+
 ### Daily 1am pipeline run
 `scripts/run_game_pipeline.py` runs end-to-end: research → design →
 build → QA → deploy. Its `phase_deploy` function uploads to R2 and
