@@ -309,7 +309,7 @@ void main() {
 
   // ── sea ice ──
   // floe edges: noise breaks the per-cell field so the pack ice never follows the grid's triangles
-  float iceW = smoothstep(0.08, 0.5, vIce + snoise(P * 0.012) * 0.3 + snoise(P * 0.06) * 0.12);
+  float iceW = vIce > 0.01 ? smoothstep(0.08, 0.5, vIce + (snoise(P * 0.012) * 0.3 + snoise(P * 0.06) * 0.12) * min(1.0, vIce * 6.0)) : 0.0;
   if (iceW > 0.0) {
     vec3 iv = voronoi3(P * 0.09);
     float cr = 1.0 - smoothstep(0.0, 0.04, iv.y - iv.x);
