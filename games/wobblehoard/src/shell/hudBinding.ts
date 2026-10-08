@@ -10,7 +10,6 @@ import { h, isCoarsePointer, prefersReducedMotion } from '../ui/dom.ts';
 import { createSparks } from '../ui/sparks.ts';
 import { createToyTray } from '../ui/toyTray.ts';
 import type { ToolId, ToyTray } from '../ui/toyTray.ts';
-import { createCutBar } from '../ui/cutBar.ts';
 import { createSnapBar, paintTint } from '../ui/snapBar.ts';
 import type { Sparks } from '../ui/sparks.ts';
 import { tierLabel } from '../ui/gem.ts';
@@ -27,6 +26,7 @@ import type { HoardUi } from '../ui/hoard/panel.ts';
 import { QUICK_MAX, createQuickSwitch } from '../ui/quickSwitch.ts';
 import type { SwitchChoice } from '../ui/quickSwitch.ts';
 import { warmSpeciesIcons } from '../ui/speciesIcon.ts';
+import { bindCut } from './cutBinding.ts';
 import type { Game, PlayLabel } from './game.ts';
 import { createHoardEnv } from './hoardEnv.ts';
 import '../ui/hoard.css';
@@ -240,13 +240,8 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   );
   { const n = g.collection.loadNotice(); if (n) { toast(n, 6000); announcer.say(n); } }
 
-  // ---- tools: the Cut bar and its blade line, Snap's bar and backdrop tint, and the Save
-  const cutBar = createCutBar(root, {
-    onSplit: () => { const r = g.cut.splitInTwo(); if (r === 'miss') announcer.say('Nothing to cut there.'); },
-    // (the animated path says "Whole again." itself when the last piece is in; with Skip animations everything is at once and silent, so the button says it: VERIFY B-M4)
-    onReconnect: () => { const animated = !g.settings.skipAnimations; if (!g.cut.reconnectAll(animated)) announcer.say('It is in one piece.'); else if (!animated) announcer.say('Whole again.'); },
-    onDone: () => g.setTool('hand'),
-  });
+  // ---- tools: the Cut bar and its blade line (cutBinding.ts), Snap's bar and backdrop tint, and the Save
+  const cutB = bindCut(root, canvas, g, { announcer, toast });
   let tintX = 0, tintY = 0;
   const placeTint = (): void => {
     const c = canvas.getBoundingClientRect();
@@ -307,35 +302,21 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     } catch (e) { console.error(e); done(); toast('The photo could not be made. Try again.'); }
   };
   const snap = createSnapBar(root, { onSave: savePhoto, onDone: () => g.setTool('hand'), onTint: (t) => { announcer.say(`Backdrop: ${t.label}`); } });
-  const TOOL_LINES: Record<ToolId, string> = {
+  const TOOL_LINES: Record<Exclude<ToolId, 'cut'>, string> = {   // (the Cut tool's line is cutText.ts's, through cutB.toolLine())
     hand: 'Hand: poke, squish, stretch.',
-    cut: 'Cut: swipe across a squishy to cut it. Split in two and Reconnect all are buttons.',
     snap: 'Snap: drag to turn the camera (right-drag with a mouse), then Save photo. Escape goes back.',
   };
-  let piecesKey = '';
   off.push(
     g.on('tool', (t) => {
       toys.setTool(t);
       document.body.dataset.tool = t;
-      cutBar.show(t === 'cut');
-      if (t === 'cut') { piecesKey = `${g.cut.pieces},${g.cut.maxPieces},${g.cut.busy},${g.cut.canSplit}`; cutBar.setPieces(g.cut.pieces, g.cut.maxPieces, g.cut.busy, g.cut.canSplit); }   // right now, not on the next sim step (a paused sim showed both buttons on)
       if (t === 'snap') { placeTint(); snap.show(true); } else snap.show(false);
       if (t === 'hand' && (document.activeElement === document.body || !document.activeElement || root.contains(document.activeElement) && (document.activeElement as HTMLElement).closest('.cutbar, .snapbar'))) toys.button.focus({ preventScroll: true });
-      announcer.say(TOOL_LINES[t]);
+      announcer.say(t === 'cut' ? cutB.toolLine() : TOOL_LINES[t]);
+      cutB.onTool(t);   // the Cut bar follows the tool; back in the Hand with pieces, the hint comes after the tool's line
     }),
-    g.on('blade', (b) => {
-      if (!b) { cutBar.setBlade(null); return; }
-      const c = canvas.getBoundingClientRect();
-      cutBar.setBlade({ x0: c.left + b.x0, y0: c.top + b.y0, x1: c.left + b.x1, y1: c.top + b.y1 });
-    }),
-    g.on('cut', (r) => { if (r === 'miss') announcer.say('Swipe across the squishy to cut it.'); }),
     g.on('identity', () => toys.setAvailable(toolsNow())),
-    g.onStep(() => {
-      if (g.tool !== 'cut') return;
-      const k = `${g.cut.pieces},${g.cut.maxPieces},${g.cut.busy},${g.cut.canSplit}`;
-      if (k !== piecesKey) { piecesKey = k; cutBar.setPieces(g.cut.pieces, g.cut.maxPieces, g.cut.busy, g.cut.canSplit); }
-    }),
-    () => { cutBar.destroy(); snap.destroy(); toys.destroy(); },
+    () => { cutB.destroy(); snap.destroy(); toys.destroy(); },
   );
   document.body.dataset.tool = g.tool;
   void lastPhoto;

@@ -1,0 +1,59 @@
+// EVERY cut string the player reads or hears (CUT2.md 9.3, CUT_MINIS.md): the live-region lines, the toast, the Cut bar's hint. `src/ui` holds no copy
+// of these: cutBinding.ts passes the bar its text. Rule: say pieces, halves, parts; never "chunk", "ball", "face piece", "role", "region" or "cell".
+//
+// Two lines mention Undo cut (the tool line and "no piece is big enough"). The Undo button does not exist before the Cutter offers `undoCut`, so
+// both take `undo` and leave the word out while there is no such button: the game never names a control the player cannot find.
+// The count text ("N pieces"), the tray hint, the Settings keys line ("C cut") and the aria-labels are unchanged and live where they were.
+
+/** The two cut styles (CUT_MINIS.md): Clean cut = every piece is the real part of the squishy on its side of the plane; Minis = every piece is a complete smaller copy. */
+export type CutStyle = 'clean' | 'minis';
+
+/** the label of a cut style (the control in the Cut options bar) */
+export const styleLabel = (s: CutStyle): string => (s === 'minis' ? 'Minis' : 'Clean cut');
+/** "Reconnect first to change the cut style" (CUT_A.md SR1) */
+export const styleLocked = 'Reconnect first to change the cut style';
+
+/** picking the Cut tool (live region) */
+export const toolPicked = (undo: boolean): string => (undo
+  ? 'Cut: swipe across a squishy to cut it. Split in two, Undo cut and Reconnect all are buttons.'
+  : 'Cut: swipe across a squishy to cut it. Split in two and Reconnect all are buttons.');
+
+/** the Cut bar's hint line: whole, 2+ pieces, the limit, nothing big enough to cut again */
+export const barWhole = 'Swipe across a squishy to cut it.';
+export const barCut = 'Swipe to cut again. With the Hand, drag a piece onto another and hold to join them.';
+export const limit = "That's as many pieces as it can make.";
+export const noneBigEnough = (undo: boolean): string => (undo
+  ? 'No piece is big enough to cut again. Undo the last cut or use Reconnect all.'
+  : 'No piece is big enough to cut again. Use Reconnect all.');
+export function barText(n: number, max: number, canSplit: boolean, undo: boolean): string {
+  return n >= max ? limit : !canSplit ? noneBigEnough(undo) : n > 1 ? barCut : barWhole;
+}
+
+/** back to the Hand with two or more pieces (a toast and a polite line, once each time the squishy goes from whole to cut) */
+export const handHint = 'Drag a piece onto another and hold to join them.';
+
+/** a join is armed (once per arm): K = the group's size ("Joining 2 pieces." for twins) */
+export const joining = (k: number): string => `Joining ${k} pieces.`;
+
+/** a cut or Split in two is done; Minis says minis */
+export const cutDone = (n: number, style: CutStyle): string => (style === 'minis' ? `Cut into ${n} minis.` : `Cut into ${n} pieces.`);
+/** a join is done: twins (N = pieces left), or the group swallowed others (K = pieces that came together) */
+export const joinedTwins = (n: number): string => `Joined. Now ${n} pieces.`;
+export const joinedGroup = (k: number): string => `Joined ${k} pieces into one.`;
+export const undone = (n: number): string => `Cut undone. Now ${n} pieces.`;
+export const whole = 'Whole again.';
+/** nothing to join, nothing to undo */
+export const inOnePiece = 'It is in one piece.';
+
+/** a swipe that missed (a swipe under 24 px, a tap, says nothing); Split in two that found nothing */
+export const swipeMiss = 'Swipe across the squishy to cut it.';
+export const nothingToCut = 'Nothing to cut there.';
+
+/** the refusals (each with a tremble): `small` has two wordings, `thin` and `loose` come with the true cut */
+export const tooSmallNearMiddle = 'Too small to cut there. Try nearer the middle.';
+export const smallestPiece = 'That piece is as small as it gets.';
+export const thin = 'That would make a piece too thin. Try another angle.';
+export const loose = 'That cut would split off two separate parts. Try another angle.';
+
+/** the first cut put the squishies from the Hoard back on the shelf */
+export const matCleared = (n: number): string => (n === 1 ? 'The other squishy went back on the shelf.' : `The other ${n} went back on the shelf.`);

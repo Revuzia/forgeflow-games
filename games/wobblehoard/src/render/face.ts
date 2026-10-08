@@ -67,6 +67,12 @@ export class Face {
   private readonly mats: THREE.Material[] = [];
   /** Iris/glint look vectors in each eye's own frame (x0, y0, x1, y1), -1..1. For the harness. */
   readonly lookOut = new Float32Array(4);
+  /** World centre of each eye bead (x0, y0, z0, x1, y1, z1), refreshed by update(): what the dev `eyeCentres` and (part 2) the clip planes read. */
+  readonly centreOut = new Float32Array(6);
+  /** DEV ONLY (defined below behind import.meta.env.DEV): the number of eye beads drawn this frame (0 when the face is hidden). */
+  declare readonly visibleEyes: number;
+  /** DEV ONLY: bit e set = eye e is drawn this frame. */
+  declare readonly visibleMask: number;
   private readonly body: SoftBodyLike;
   private readonly view: JellyView;
   private readonly style: StyleDef;
@@ -253,6 +259,7 @@ export class Face {
       this.vA.set(this.sp[0] + this.vZ.x * lift, this.sp[1] + this.vZ.y * lift, this.sp[2] + this.vZ.z * lift);
       // droop: sleepy eyes sit a little lower in their socket
       if (st.droop) this.vA.addScaledVector(this.vY, -rr * st.droop);
+      this.centreOut[e * 3] = this.vA.x; this.centreOut[e * 3 + 1] = this.vA.y; this.centreOut[e * 3 + 2] = this.vA.z;
 
       // --- look: pointer relative to this eye on screen, expressed in the eye's own axes ---
       let lx = 0, ly = 0;
@@ -309,4 +316,17 @@ export class Face {
     for (const g of this.geos) g.dispose();
     for (const m of this.mats) { this.hub.release(m); m.dispose(); }
   }
+}
+
+// DEV ONLY (CUT2 8.7; the probes' RP1 reads it): `vite build` replaces import.meta.env.DEV with false and drops this block.
+if (import.meta.env.DEV) {
+  const mask = (f: Face): number => {
+    const eyes = (f as unknown as { eyes: { dome: THREE.Mesh; arc: THREE.Mesh }[] }).eyes;
+    if (!f.group.visible) return 0;
+    let m = 0;
+    for (let i = 0; i < eyes.length; i++) if (eyes[i].dome.visible || eyes[i].arc.visible) m |= 1 << i;
+    return m;
+  };
+  Object.defineProperty(Face.prototype, 'visibleMask', { get(this: Face): number { return mask(this); } });
+  Object.defineProperty(Face.prototype, 'visibleEyes', { get(this: Face): number { const m = mask(this); return (m & 1) + ((m >> 1) & 1); } });
 }

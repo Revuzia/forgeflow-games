@@ -437,6 +437,7 @@ export function createGame(deps: GameDeps): Game {
     else { try { capsules.sync(); } catch (e) { report(e); } }
     needsRender = true;
     emit('tool', tool);
+    if (tool === 'cut') { try { cut.prewarm(); } catch (e) { report(e); } }   // get the first cut ready (a no-op until the true cut; CUT2.md 6.1)
   }
   // the Cut tool's swipe, and Snap's drag-to-orbit (every other gesture is paused while those tools are in hand)
   let blade: { id: number; x0: number; y0: number; x1: number; y1: number } | null = null;

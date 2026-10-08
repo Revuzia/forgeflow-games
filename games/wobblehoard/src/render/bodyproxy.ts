@@ -7,7 +7,7 @@
 //     glitter all follow, because they read the proxy),
 //   * render-only extras the ceremonies need: contact squash between two bodies, a "charge" compression, scale for pop-in.
 // The interactive body (the shell's) is never touched: its raycast / finger / grab calls pass straight through.
-import type { FingerDownArgs, RayHit, SoftBodyLike, SoftEvent, SoftMetrics, V3 } from '../contracts.ts';
+import type { FingerDownArgs, PieceInfo, RayHit, SoftBodyLike, SoftEvent, SoftMetrics, V3 } from '../contracts.ts';
 
 export class BodyProxy implements SoftBodyLike {
   readonly inner: SoftBodyLike;
@@ -66,6 +66,13 @@ export class BodyProxy implements SoftBodyLike {
     this.foldRadius = inner.restRadius * 0.8;
     this.sync(0, 0);
   }
+
+  /** CUT2 pass-through: a real part of a squishy publishes its PieceInfo (a merge swaps in a NEW object: the view compares it by reference every frame) and the progress of a
+   *  running rest-shape morph (0 otherwise). Getters, so a body that publishes them later is seen at once. */
+  get piece(): PieceInfo | undefined { return this.inner.piece; }
+  get morphT(): number { return this.inner.morphT ?? 0; }
+  get meanEdge(): number | undefined { return this.inner.meanEdge; }
+  get frac(): number | undefined { return this.inner.frac; }
 
   get gravity(): boolean { return this.inner.gravity; }
   set gravity(v: boolean) { this.inner.gravity = v; }

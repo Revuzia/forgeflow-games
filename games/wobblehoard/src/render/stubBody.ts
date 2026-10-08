@@ -6,10 +6,21 @@
 //   * a gaussian pull toward a world target (grab), a table plane, gravity with a bounce, and a float-mode hover.
 // strain[] is computed from the real edge lengths, so the pressure blush gets honest numbers. Not shipped: nothing in the
 // game imports this file.
-import type { CutPlane, FingerDownArgs, PieceOpts, RayHit, SoftBodyLike, SoftEvent, SoftMetrics, V3 } from '../contracts.ts';
+import type { CutPlane, CutPlaneRest, FingerDownArgs, PieceInfo, PieceOpts, PieceRegion, RayHit, SoftBodyLike, SoftEvent, SoftMetrics, V3 } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { clamp, lerp } from '../core/rng.ts';
 import { buildGeodesic } from './geodesic.ts';
+
+/* ── CUT2 (dev): REAL rest geometry for the stub. src/render never imports src/physics, so the render harness INJECTS PHYS's pure builder through this interface (the stub then
+ *  has the species' real whole and real cut pieces, with the stub's own fake dynamics). Absent: the analytic dome below (no piece geometry). ── */
+export interface RestWhole { restLocal: Float32Array; indices: Uint32Array; radius: number }
+export interface RestPiece { restLocal: Float32Array; indices: Uint32Array; radius: number; frac: number; offset: V3; rayOrigin: V3; cells: CutPlaneRest[][] }
+export interface RestProvider {
+  /** The uncut squishy's detail-3 rest mesh (the SAME object for the same genome: pieces are grouped by its identity). */
+  whole(genome: Genome): RestWhole;
+  /** The rest mesh of the piece inside region.cells[0] (frac = its built fraction; absent = the builder's own), or null when it cannot be built. */
+  piece(genome: Genome, region: PieceRegion, detail: 2 | 3, frac?: number): RestPiece | null;
+}
 
 interface StubFinger { down: boolean; px: number; py: number; pz: number; dx: number; dy: number; dz: number; target: number; depth: number; holdT: number; pressed: boolean }
 
@@ -56,24 +67,37 @@ export class StubBody implements SoftBodyLike {
   private fracNow = 1; private fracGoal = 1; private fracRate = 0;
   private neckOn = false; private neckT = 0;
   private readonly neckP = { x: 0, y: 0, z: 0 }; private readonly neckN = { x: 1, y: 0, z: 0 };
-  private homeX = 0; private homeZ = 0;
+  private homeX = 0; private homeZ = 0; private homeY: number | null = null;
+  /** CUT2: set for a body built from a region (the dev stand-in for the real piece's published fields). */
+  readonly piece?: PieceInfo;
+  readonly meanEdge: number;
+  readonly morphT = 0;
 
-  constructor(genome: Genome, opts?: { detail?: number; seed?: number; piece?: PieceOpts }) {
+  constructor(genome: Genome, opts?: { detail?: number; seed?: number; piece?: PieceOpts; /** DEV: real rest geometry (see RestProvider) */ rest?: RestProvider }) {
     const piece = opts?.piece;
-    const pf = piece && Number.isFinite(piece.frac) ? clamp(piece.frac, 0.125, 1) : 1;
+    // CUT2: with a provider the rest mesh is the species' real one (the whole, or the cell of piece.region); the dynamics below are unchanged
+    let provided: RestPiece | null = null;
+    const provWhole = opts?.rest ? opts.rest.whole(genome) : null;
+    if (opts?.rest && piece?.region && piece.region.cells[0] && piece.region.cells[0].length > 0) {
+      const f0 = Number.isFinite(piece.frac) ? piece.frac : undefined;
+      provided = opts.rest.piece(genome, piece.region, f0 !== undefined && f0 < 0.35 ? 2 : 3, f0);
+      if (!provided) throw new Error('StubBody: the rest provider cannot build this region');
+    }
+    const rp: RestWhole | RestPiece | null = provided ?? provWhole;
+    const pf = provided ? provided.frac : piece && Number.isFinite(piece.frac) ? clamp(piece.frac, 0.125, 1) : 1;
     const detail = opts?.detail ?? (pf < 0.35 ? 2 : 3);
-    const geo = buildGeodesic(Math.pow(2, detail));
-    this.vertexCount = geo.vertexCount;
-    this.R = 0.5 * lerp(0.8, 1.25, genome.size) * Math.cbrt(pf);
+    const geo = rp ? null : buildGeodesic(Math.pow(2, detail));
+    this.vertexCount = rp ? rp.restLocal.length / 3 : geo!.vertexCount;
+    this.R = rp ? rp.radius : 0.5 * lerp(0.8, 1.25, genome.size) * Math.cbrt(pf);
     this.fracNow = this.fracGoal = pf; this.fracBuilt = pf;
     this.restRadius = this.R;
     const n = this.vertexCount, R = this.R;
-    this.indices = Uint32Array.from(geo.indices);
+    this.indices = Uint32Array.from(rp ? rp.indices : geo!.indices);
     // DOLLOP-ish rest shape: squat dome (0.8 flatten) + narrow raised peak
-    const rest = new Float32Array(n * 3);
+    const rest = rp ? Float32Array.from(rp.restLocal) : new Float32Array(n * 3);
     this.restDir = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      const dx = geo.dirs[i * 3], dy = geo.dirs[i * 3 + 1], dz = geo.dirs[i * 3 + 2];
+    for (let i = 0; i < (rp ? 0 : n); i++) {
+      const dx = geo!.dirs[i * 3], dy = geo!.dirs[i * 3 + 1], dz = geo!.dirs[i * 3 + 2];
       const theta = Math.acos(clamp(dy, -1, 1));
       const w = Math.exp(-(theta / 0.4) * (theta / 0.4));
       let y = dy * R * 0.8 + R * 0.46 * w;
@@ -95,7 +119,7 @@ export class StubBody implements SoftBodyLike {
     }
     let mx = 0, my = 0, mz = 0;
     for (let i = 0; i < n; i++) { mx += rest[i * 3]; my += rest[i * 3 + 1]; mz += rest[i * 3 + 2]; }
-    mx /= n; my /= n; mz /= n;
+    if (rp) { mx = my = mz = 0; } else { mx /= n; my /= n; mz /= n; }   // (provided rest meshes are already centred on their mass centroid)
     let minY = 1e9;
     for (let i = 0; i < n; i++) {
       rest[i * 3] -= mx; rest[i * 3 + 1] -= my; rest[i * 3 + 2] -= mz;
@@ -125,8 +149,11 @@ export class StubBody implements SoftBodyLike {
         o++;
       }
     }
+    { let es = 0; for (let k = 0; k < this.nbRest.length; k++) es += this.nbRest[k]; this.meanEdge = es / Math.max(1, this.nbRest.length); }
     this.restVolume = this.volumeOf(rest);
+    if (provided && provWhole) this.piece = Object.freeze({ whole: provWhole, offset: provided.offset, rayOrigin: provided.rayOrigin, cells: provided.cells });
     if (piece?.at && Number.isFinite(piece.at.x) && Number.isFinite(piece.at.z)) { this.homeX = piece.at.x; this.homeZ = piece.at.z; }
+    if (provided && piece?.at && Number.isFinite(piece.at.y)) this.homeY = piece.at.y;   // a region piece is placed EXACTLY (no lift onto the table)
     this.reset();
     if (piece?.vel) { this.vx = piece.vel.x || 0; this.vy = piece.vel.y || 0; this.vz = piece.vel.z || 0; }
   }
@@ -169,7 +196,7 @@ export class StubBody implements SoftBodyLike {
   }
 
   reset(): void {
-    this.cx = this.homeX; this.cz = this.homeZ; this.cy = this.gravity ? this.restFloorY : this.R + 0.35;
+    this.cx = this.homeX; this.cz = this.homeZ; this.cy = this.homeY ?? (this.gravity ? this.restFloorY : this.R + 0.35);
     this.vx = this.vy = this.vz = 0;
     this.sq = this.sqv = 0; this.peakX = this.peakZ = this.peakVX = this.peakVZ = 0;
     this.tiltX = this.tiltZ = this.tiltVX = this.tiltVZ = 0;

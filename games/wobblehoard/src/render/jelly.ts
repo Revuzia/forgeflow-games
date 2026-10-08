@@ -9,8 +9,9 @@
 //  * Per-vertex attributes: strain (barycentric blend of body.strain, drives the pressure blush) and the REST direction
 //    (drives patterns, so they ride the body instead of swimming over it).
 import * as THREE from 'three';
-import type { SoftBodyLike } from '../contracts.ts';
+import type { PieceInfo, SoftBodyLike } from '../contracts.ts';
 import { buildGeodesic } from './geodesic.ts';
+import { buildPieceMesh, isCutPiece, pieceFineN, type PieceBuild } from './pieceBuild.ts';
 
 export interface SurfaceHit { tri: number; u: number; v: number; w: number }
 
@@ -208,11 +209,65 @@ export function relaxNormals(N: Float32Array, idx: Uint32Array, acc: Float32Arra
   }
 }
 
+/** simNormals over a LIST of sim triangles only (a piece's skin triangles, or one cut face's): a rim vertex's skin normal then knows nothing of the face and the face normal nothing of the skin (CUT2 8.2). */
+export function simNormalsList(P: Float32Array, idx: Uint32Array, tris: Uint32Array, out: Float32Array): void {
+  out.fill(0);
+  for (let q = 0; q < tris.length; q++) {
+    const t = tris[q] * 3, a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
+    const e1x = P[b] - P[a], e1y = P[b + 1] - P[a + 1], e1z = P[b + 2] - P[a + 2];
+    const e2x = P[c] - P[a], e2y = P[c + 1] - P[a + 1], e2z = P[c + 2] - P[a + 2];
+    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
+    out[a] += nx; out[a + 1] += ny; out[a + 2] += nz;
+    out[b] += nx; out[b + 1] += ny; out[b + 2] += nz;
+    out[c] += nx; out[c + 1] += ny; out[c + 2] += nz;
+  }
+  for (let i = 0; i < out.length; i += 3) {
+    const l = Math.sqrt(out[i] * out[i] + out[i + 1] * out[i + 1] + out[i + 2] * out[i + 2]);
+    if (l > 1e-20) { const il = 1 / l; out[i] *= il; out[i + 1] *= il; out[i + 2] *= il; } else { out[i] = 0; out[i + 1] = 1; out[i + 2] = 0; }
+  }
+}
+/** relaxNormals over a list of sim triangles only (vertices outside the list keep their normal). */
+export function relaxNormalsList(N: Float32Array, idx: Uint32Array, tris: Uint32Array, acc: Float32Array, w: number): void {
+  acc.fill(0);
+  for (let q = 0; q < tris.length; q++) {
+    const t = tris[q] * 3, a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
+    acc[a] += N[b] + N[c]; acc[a + 1] += N[b + 1] + N[c + 1]; acc[a + 2] += N[b + 2] + N[c + 2];
+    acc[b] += N[a] + N[c]; acc[b + 1] += N[a + 1] + N[c + 1]; acc[b + 2] += N[a + 2] + N[c + 2];
+    acc[c] += N[a] + N[b]; acc[c + 1] += N[a + 1] + N[b + 1]; acc[c + 2] += N[a + 2] + N[b + 2];
+  }
+  for (let i = 0; i < N.length; i += 3) {
+    const al = Math.sqrt(acc[i] * acc[i] + acc[i + 1] * acc[i + 1] + acc[i + 2] * acc[i + 2]);
+    if (al < 1e-20) continue;
+    const x = N[i] * (1 - w) + (acc[i] / al) * w, y = N[i + 1] * (1 - w) + (acc[i + 1] / al) * w, z = N[i + 2] * (1 - w) + (acc[i + 2] / al) * w;
+    const l = Math.sqrt(x * x + y * y + z * z) || 1;
+    N[i] = x / l; N[i + 1] = y / l; N[i + 2] = z / l;
+  }
+}
+
 export const PHONG_ALPHA = 0.7;
+
+/** One live cut face of a piece (world/render space, refreshed every frame from its cap triangles): the eye / core clip planes and the strand anchors read these (CUT2 8.2). */
+export interface CapInfo { id: number; live: boolean; cx: number; cy: number; cz: number; nx: number; ny: number; nz: number; d: number; area: number }
+
+/** Zero-filled attribute data for the three cut-face attributes of a WHOLE body (always bound, so a whole and a piece share one program and the first cut compiles nothing, RP10).
+ *  The typed array is shared; every geometry gets its own BufferAttribute over it (a shared attribute OBJECT would lose its GPU buffer when one geometry is disposed). */
+let zeroBuf = new Float32Array(0);
+function zeros(len: number): Float32Array { if (zeroBuf.length < len) zeroBuf = new Float32Array(len); return zeroBuf; }
 
 export class JellyView {
   readonly mesh: THREE.Mesh;
   readonly mapper: RestMapper;
+  /** CUT2: the fine-mesh plan of a piece (null for a whole: today's code path, unchanged). */
+  pb: PieceBuild | null = null;
+  /** The PieceInfo the current mesh was built from; update() compares it with body.piece BY REFERENCE and rebuilds once when a merge publishes a new one. */
+  private pieceRef: PieceInfo | undefined;
+  /** CUT2: one entry per cut plane of the piece, in plane (slot) order; empty for a whole. */
+  readonly caps: CapInfo[] = [];
+  /** I2 holds for this piece's sim mesh (dev/probe: reported, never silent); false = the majority-class fallback chamfers the face by one sim triangle. */
+  rimClean = true;
+  degraded = false;
+  private capN: Float32Array[] = [];
+  private pieceRadius = 0.5;
   /** Sim vertex normals, refreshed by update(). Shared with the face / glitter code. */
   readonly simN: Float32Array;
   private readonly nAcc: Float32Array;
@@ -226,8 +281,8 @@ export class JellyView {
   freq = 0;
   private readonly body: SoftBodyLike;
   private geo: THREE.BufferGeometry;
-  private vA = new Uint32Array(0); private vB = new Uint32Array(0); private vC = new Uint32Array(0);
-  private bw = new Float32Array(0);
+  private vA: Uint32Array = new Uint32Array(0); private vB: Uint32Array = new Uint32Array(0); private vC: Uint32Array = new Uint32Array(0);
+  private bw: Float32Array = new Float32Array(0);
   private pos = new Float32Array(0); private nrm = new Float32Array(0); private strain = new Float32Array(0); private disp = new Float32Array(0);
   private posAttr!: THREE.BufferAttribute; private nrmAttr!: THREE.BufferAttribute; private strAttr!: THREE.BufferAttribute; private dispAttr!: THREE.BufferAttribute;
 
@@ -245,6 +300,9 @@ export class JellyView {
 
   /** (Re)build the fine mesh at a geodesic frequency. Used at construction and on a tier change. */
   rebuild(freq: number): void {
+    const pc = this.body.piece;
+    if (isCutPiece(pc)) { this.rebuildPiece(freq, pc); return; }
+    this.pb = null; this.pieceRef = pc; this.caps.length = 0; this.rimClean = true; this.degraded = false;
     const g = buildGeodesic(freq);
     const N = g.vertexCount;
     const hit: SurfaceHit = { tri: 0, u: 0, v: 0, w: 0 };
@@ -268,6 +326,10 @@ export class JellyView {
     geo.setAttribute('aStrain', this.strAttr);
     geo.setAttribute('aDisp', this.dispAttr);
     geo.setAttribute('aRest', new THREE.BufferAttribute(g.dirs, 3));
+    // the cut-face attributes of a whole are all zero (vCap.x = 0: the cap code is compiled in and inert)
+    geo.setAttribute('aCap', new THREE.BufferAttribute(zeros(N * 2), 2));
+    geo.setAttribute('aCapP', new THREE.BufferAttribute(zeros(N * 3), 3));
+    geo.setAttribute('aCapD', new THREE.BufferAttribute(zeros(N), 1));
     geo.setIndex(new THREE.BufferAttribute(g.indices, 1));
     geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e4); // never culled, never recomputed
     this.geo = geo;
@@ -278,8 +340,133 @@ export class JellyView {
     this.update();
   }
 
+  /** CUT2 (8.2): the fine mesh of a piece, built by subdividing its sim triangles (no ray casting) with the cap / skin classes welded apart. */
+  private rebuildPiece(freq: number, pc: PieceInfo): void {
+    const body = this.body, T = (body.indices.length / 3) | 0;
+    const fr = typeof body.frac === 'number' && Number.isFinite(body.frac) && body.frac > 0 ? body.frac : 0.5;
+    const pb = buildPieceMesh(body.restLocal, body.indices, pc, pieceFineN(freq, fr, T));
+    this.pb = pb; this.pieceRef = pc; this.rimClean = pb.rimClean; this.degraded = pb.degraded;
+    this.pieceRadius = pc.whole.radius > 0 ? pc.whole.radius : 0.5;
+    const N = pb.count, K = pb.planes.length, V = body.vertexCount;
+    this.vA = pb.vA; this.vB = pb.vB; this.vC = pb.vC; this.bw = pb.bw;
+    this.pos = new Float32Array(N * 3); this.nrm = new Float32Array(N * 3); this.strain = new Float32Array(N); this.disp = new Float32Array(N * 2);
+    this.capN = []; for (let k = 0; k < K; k++) this.capN.push(new Float32Array(V * 3));
+    this.caps.length = 0;
+    for (let k = 0; k < K; k++) this.caps.push({ id: pb.planes[k].id, live: false, cx: 0, cy: 0, cz: 0, nx: 0, ny: 1, nz: 0, d: 0, area: 0 });
+    const old = this.geo;
+    const geo = new THREE.BufferGeometry();
+    this.posAttr = new THREE.BufferAttribute(this.pos, 3).setUsage(THREE.DynamicDrawUsage);
+    this.nrmAttr = new THREE.BufferAttribute(this.nrm, 3).setUsage(THREE.DynamicDrawUsage);
+    this.strAttr = new THREE.BufferAttribute(this.strain, 1).setUsage(THREE.DynamicDrawUsage);
+    this.dispAttr = new THREE.BufferAttribute(this.disp, 2).setUsage(THREE.DynamicDrawUsage);
+    geo.setAttribute('position', this.posAttr);
+    geo.setAttribute('normal', this.nrmAttr);
+    geo.setAttribute('aStrain', this.strAttr);
+    geo.setAttribute('aDisp', this.dispAttr);
+    geo.setAttribute('aRest', new THREE.BufferAttribute(pb.aRest, 3));
+    geo.setAttribute('aCap', new THREE.BufferAttribute(pb.aCap, 2));
+    geo.setAttribute('aCapP', new THREE.BufferAttribute(pb.aCapP, 3));
+    geo.setAttribute('aCapD', new THREE.BufferAttribute(pb.aCapD, 1));
+    geo.setIndex(new THREE.BufferAttribute(pb.indices, 1));
+    geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e4);
+    this.geo = geo;
+    this.mesh.geometry = geo;
+    old.dispose();
+    this.fineCount = N;
+    this.freq = Math.floor(freq);
+    this.update();
+  }
+
+  /** CUT2: one frame of a piece. Skin normals from the skin triangles only, face normals from each cap's triangles only (the same two relax passes restricted to each list). */
+  private updatePiece(): void {
+    const body = this.body, pb = this.pb as PieceBuild, P = body.positions, S = body.strain, idx = body.indices, sn = this.simN, K = pb.planes.length;
+    simNormalsList(P, idx, pb.skinTris, sn);
+    relaxNormalsList(sn, idx, pb.skinTris, this.nAcc, 0.7);
+    relaxNormalsList(sn, idx, pb.skinTris, this.nAcc, 0.5);
+    for (let k = 0; k < K; k++) {
+      const cn = this.capN[k], tris = pb.capTris[k];
+      simNormalsList(P, idx, tris, cn);
+      relaxNormalsList(cn, idx, tris, this.nAcc, 0.7);
+      relaxNormalsList(cn, idx, tris, this.nAcc, 0.5);
+    }
+    let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9, z0 = 1e9, z1 = -1e9;
+    for (let i = 0, n = body.vertexCount * 3; i < n; i += 3) {
+      const x = P[i], y = P[i + 1], z = P[i + 2];
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+      if (z < z0) z0 = z; if (z > z1) z1 = z;
+    }
+    this.minX = x0; this.maxX = x1; this.minY = y0; this.maxY = y1; this.minZ = z0; this.maxZ = z1;
+    // displacement from the rigid goal, in units of 0.45 x the WHOLE's radius (a thin slab has a tiny restRadius and would over-report dents)
+    {
+      const q = body.frame, c = body.center, R = body.restLocal, vSrc = pb.vSrc;
+      const qx = q.x, qy = q.y, qz = q.z, qw = q.w;
+      const r00 = 1 - 2 * (qy * qy + qz * qz), r01 = 2 * (qx * qy - qz * qw), r02 = 2 * (qx * qz + qy * qw);
+      const r10 = 2 * (qx * qy + qz * qw), r11 = 1 - 2 * (qx * qx + qz * qz), r12 = 2 * (qy * qz - qx * qw);
+      const r20 = 2 * (qx * qz - qy * qw), r21 = 2 * (qy * qz + qx * qw), r22 = 1 - 2 * (qx * qx + qy * qy);
+      const k = 1 / (0.45 * this.pieceRadius), sD = this.simD;
+      let pm = 0, um = 0;
+      for (let i = 0, n = body.vertexCount; i < n; i++) {
+        const i3 = i * 3, sc = vSrc[i], nn = sc === 0 ? sn : this.capN[sc - 1];
+        const rx = R[i3], ry = R[i3 + 1], rz = R[i3 + 2];
+        const dx = P[i3] - (c.x + r00 * rx + r01 * ry + r02 * rz);
+        const dy = P[i3 + 1] - (c.y + r10 * rx + r11 * ry + r12 * rz);
+        const dz = P[i3 + 2] - (c.z + r20 * rx + r21 * ry + r22 * rz);
+        const along = (dx * nn[i3] + dy * nn[i3 + 1] + dz * nn[i3 + 2]) * k;
+        const inw = along < 0 ? Math.min(1, -along) : 0, out = along > 0 ? Math.min(1, along) : 0;
+        sD[i * 2] = inw; sD[i * 2 + 1] = out;
+        if (inw > pm) pm = inw;
+        if (out > um) um = out;
+      }
+      this.press = pm; this.pull = um;
+    }
+    const pos = this.pos, nrm = this.nrm, str = this.strain, dsp = this.disp, sDsp = this.simD, vA = this.vA, vB = this.vB, vC = this.vC, bw = this.bw, cs = pb.classStart, twin = pb.twin;
+    for (let c = 0; c <= K; c++) {
+      const Nn = c < K ? this.capN[c] : sn, skin = c === K;
+      for (let k = cs[c], e = cs[c + 1]; k < e; k++) {
+        const a = vA[k], b = vB[k], cc = vC[k];
+        evalSurfaceBw(P, Nn, a, b, cc, bw, k * 3, pos, k * 3, nrm, k * 3);
+        if (skin) {   // a rim vertex takes its cap twin's POSITION (the edge lies in the face's plane: no hairline crack) and keeps the skin normal
+          const tw = twin[k];
+          if (tw >= 0) { pos[k * 3] = pos[tw * 3]; pos[k * 3 + 1] = pos[tw * 3 + 1]; pos[k * 3 + 2] = pos[tw * 3 + 2]; }
+        }
+        const u = bw[k * 3], v = bw[k * 3 + 1], w = bw[k * 3 + 2];
+        const ia = (a / 3) | 0, ib = (b / 3) | 0, ic = (cc / 3) | 0;
+        str[k] = u * S[ia] + v * S[ib] + w * S[ic];
+        dsp[k * 2] = u * sDsp[ia * 2] + v * sDsp[ib * 2] + w * sDsp[ic * 2];
+        dsp[k * 2 + 1] = u * sDsp[ia * 2 + 1] + v * sDsp[ib * 2 + 1] + w * sDsp[ic * 2 + 1];
+      }
+    }
+    // the live cut faces: area-weighted centroid, mean unit normal and plane offset of each cap (eye / core clip planes, strand anchors)
+    for (let k = 0; k < K; k++) {
+      const tris = pb.capTris[k], cap = this.caps[k];
+      let nx = 0, ny = 0, nz = 0, cx = 0, cy = 0, cz = 0, ar = 0;
+      for (let q = 0; q < tris.length; q++) {
+        const t = tris[q] * 3, a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
+        const e1x = P[b] - P[a], e1y = P[b + 1] - P[a + 1], e1z = P[b + 2] - P[a + 2];
+        const e2x = P[c] - P[a], e2y = P[c + 1] - P[a + 1], e2z = P[c + 2] - P[a + 2];
+        const tx = e1y * e2z - e1z * e2y, ty = e1z * e2x - e1x * e2z, tz = e1x * e2y - e1y * e2x, tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
+        nx += tx; ny += ty; nz += tz;
+        cx += (P[a] + P[b] + P[c]) * tl; cy += (P[a + 1] + P[b + 1] + P[c + 1]) * tl; cz += (P[a + 2] + P[b + 2] + P[c + 2]) * tl; ar += tl;
+      }
+      if (ar > 1e-20) {
+        const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+        cap.live = true; cap.area = ar * 0.5;
+        cap.cx = cx / (3 * ar); cap.cy = cy / (3 * ar); cap.cz = cz / (3 * ar);
+        cap.nx = nx / nl; cap.ny = ny / nl; cap.nz = nz / nl;
+        cap.d = cap.nx * cap.cx + cap.ny * cap.cy + cap.nz * cap.cz;
+      } else cap.live = false;
+    }
+    this.posAttr.needsUpdate = true;
+    this.nrmAttr.needsUpdate = true;
+    this.strAttr.needsUpdate = true;
+    this.dispAttr.needsUpdate = true;
+  }
+
   /** Recompute normals and place every fine vertex. Call once per frame after body.step(). */
   update(): void {
+    if (this.body.piece !== this.pieceRef) { this.rebuild(this.freq); return; }   // a merge published a NEW PieceInfo: rebuild once (rebuild ends in update)
+    if (this.pb) { this.updatePiece(); return; }
     const body = this.body, P = body.positions, S = body.strain, sn = this.simN;
     simNormals(P, body.indices, sn);
     relaxNormals(sn, body.indices, this.nAcc, 0.7);

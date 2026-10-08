@@ -130,6 +130,8 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo | keyof StageEx
   };
   readonly views: readonly BodyView[];
   readonly flash: FlashGovernor;
+  /** DEV (CUT2 8.7; RP1, RP7): the world centres of the eye beads a view draws now, each with the share of the bead that is not clipped away (1 until the clip planes land). [] for a view without eyes. */
+  eyeCentres(viewId: number): { x: number; y: number; z: number; share: number }[];
 }
 
 const TARGET_Y = 0.42;
@@ -867,6 +869,15 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       scene: { value: scene },
       views: { get: () => views },
       flash: { value: flash },
+      eyeCentres: {
+        value: (id: number) => {
+          const v = views.find((x) => x.id === id), out: { x: number; y: number; z: number; share: number }[] = [];
+          if (!v) return out;
+          const m = v.face.visibleMask, c = v.face.centreOut;
+          for (let e = 0; e < 2; e++) if ((m >> e) & 1) out.push({ x: c[e * 3], y: c[e * 3 + 1], z: c[e * 3 + 2], share: 1 });
+          return out;
+        },
+      },
       memory: { value: () => { const i = renderer.info; return { geometries: i.memory.geometries, textures: i.memory.textures, programs: i.programs ? i.programs.length : 0, calls: i.render.calls, triangles: i.render.triangles }; } },
       loseContext: {
         value: () => {

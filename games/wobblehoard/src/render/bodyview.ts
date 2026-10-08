@@ -12,6 +12,7 @@ import type { EnvHub } from './env.ts';
 import { Face } from './face.ts';
 import { Fx } from './fx.ts';
 import { JellyView } from './jelly.ts';
+import { isCutPiece } from './pieceBuild.ts';
 import { JellyMaterials } from './material.ts';
 import { renderPalette, type JellyPalette } from './oklch.ts';
 import type { TierSpec } from './quality.ts';
@@ -70,6 +71,12 @@ export class BodyView {
    * no face, and the squishy's world-space tier FX (aura, dome, pillar, motes, stars) stay with the face piece.
    */
   readonly chunk: boolean;
+  /**
+   * CUT2 (_spec/CUT2.md 8): this body is a REAL part of a squishy (body.piece with at least one cut plane): its fine mesh is a subdivision of its sim triangles with the cut face as its own
+   * class, its size follows the WHOLE (scale, no setFrac growth), and it carries no eyes yet (part 2 of task R1 gives each eye to the piece that holds it). A body without `piece`
+   * takes today's code path unchanged; `chunk` is honoured only then.
+   */
+  readonly isPiece: boolean;
   /** 0..1, set by the stage every frame: every CUT glow on this body is held down by it (calm effects, a recent ceremony flash). */
   glowK = 1;
   // CUT seam (setCutSeam): the plane in the BODY's world space (the render offset is added per frame), eased strength
@@ -94,11 +101,13 @@ export class BodyView {
   get isDisposed(): boolean { return this.disposed; }
 
   constructor(id: number, inner: SoftBodyLike, genome: Genome, tier: TierName, spec: TierSpec, hub: EnvHub, quad: THREE.BufferGeometry, owned: boolean, chunk = false) {
-    this.id = id; this.genome = genome; this.tier = tier; this.style = TIER_STYLES[tier]; this.spec = spec; this.owned = owned; this.chunk = chunk;
+    this.id = id; this.genome = genome; this.tier = tier; this.style = TIER_STYLES[tier]; this.spec = spec; this.owned = owned;
+    this.isPiece = isCutPiece(inner.piece);
+    this.chunk = chunk && !this.isPiece;
     this.frac0 = typeof inner.frac === 'number' && Number.isFinite(inner.frac) && inner.frac > 0 ? inner.frac : 1;
     this.proxy = new BodyProxy(inner);
     this.palette = renderPalette(genome);
-    this.scale = inner.restRadius / 0.5;
+    this.scale = (this.isPiece ? (inner.piece as { whole: { radius: number } }).whole.radius : inner.restRadius) / 0.5;   // (a piece keeps the WHOLE's scale: eye, core, bubble and seam sizes do not shrink with it)
     // the rest silhouette's horizontal reach from the centre (a wide dumpling or a long bean reaches well past restRadius): framing
     let hw = inner.restRadius;
     { const P = inner.positions, c = inner.center; for (let i = 0; i < P.length; i += 3) { const d = Math.hypot(P[i] - c.x, P[i + 2] - c.z); if (d > hw) hw = d; } }
@@ -117,7 +126,9 @@ export class BodyView {
     this.strands = new TackStrands(hub, this.palette.body, this.palette.pale);
     this.group.add(this.jelly.mesh, this.core.group, this.face.group, this.fx.group, this.decals.shadow, this.decals.pool, this.rarity.group, this.strands.group);
     this.group.frustumCulled = false;
-    if (chunk) { this.faceHidden = true; this.face.group.visible = false; this.rarity.group.visible = false; }
+    if (this.chunk) { this.faceHidden = true; this.face.group.visible = false; this.rarity.group.visible = false; }
+    // RENDER R1 part 1: a piece shows no eyes and no ember blob yet (membership, pose, clip and the core's offset and clip are part 2); its analytic core halo, glitter and tier fx stay
+    if (this.isPiece) { this.faceHidden = true; this.face.group.visible = false; this.core.group.visible = false; }
     this.update(0, 0, null, null, 0, 0);
   }
 
@@ -182,7 +193,7 @@ export class BodyView {
     this.smComp += (rawSq - this.smComp) * (1 - Math.exp(-dt * 14));
     this.smStretch += (Math.max(m.stretch, j.pull * 0.6 * this.grabGate) - this.smStretch) * (1 - Math.exp(-dt * 10));
     // CUT: a piece growing or shrinking (setFrac: a reconnect) keeps its core, glows and contact light in proportion
-    const fr = this.proxy.inner.frac, fs = typeof fr === 'number' && Number.isFinite(fr) && fr > 0 ? Math.min(3, Math.max(0.3, Math.cbrt(fr / this.frac0))) : 1;
+    const fr = this.proxy.inner.frac, fs = !this.isPiece && typeof fr === 'number' && Number.isFinite(fr) && fr > 0 ? Math.min(3, Math.max(0.3, Math.cbrt(fr / this.frac0))) : 1;   // (a true piece never scales with frac: a merge is a rest-shape morph)
     this.core.sizeMul = this.proxy.scale * fs;
     this.sizeK = fs * this.proxy.scale; this.fracK = fs;
     this.core.update(body, dt, time, this.smComp);
@@ -208,7 +219,7 @@ export class BodyView {
     // the happy squint is the RELEASE expression: while a finger or a grab still holds the body, a wobble of the squeeze (negative rate)
     // must not trigger it, the eyes stay wide (CONTRACT 7: widen when squeezed, squint into happy arcs on release)
     const rate = Math.min(this.sqRate, m.compressionRate);
-    if (!this.chunk) this.face.update(dt, time, pointer, camera, this.smComp, m.fingers > 0 || m.grabbed ? Math.max(0, rate) : rate);
+    if (!this.chunk && !this.isPiece) this.face.update(dt, time, pointer, camera, this.smComp, m.fingers > 0 || m.grabbed ? Math.max(0, rate) : rate);
     // CUT seam: eased in (~0.1 s) and out (~0.2 s): a glow, never a step
     // (calm: the stage's glowK halves every cut light, and the seam takes a further x0.45: the jelly shader's seam term saturates (tone mapped), so a plain half of a
     // glow that was already clipped to white read exactly as bright as the full one, VERIFY_RENDER_B B-m3)

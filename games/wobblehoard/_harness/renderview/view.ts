@@ -9,6 +9,7 @@ import { genomeFromParam, type Genome } from '../../src/core/genome.ts';
 import type { CapsuleHandle, CeremonyHandle, CutPlane, FxKind, QualityTier, SoftBodyCtor, SoftBodyLike, SoftEvent, TierName, V3 } from '../../src/contracts.ts';
 import { capsuleDuration, mergeDuration } from '../../src/render/ceremony.ts';
 import { getSpecies, speciesBaseGenome } from '../../src/data/catalog.ts';
+import { makeCut2 } from './cut2.ts';
 
 type BodyKind = 'real' | 'stub';
 const params = new URLSearchParams(location.search);
@@ -1697,6 +1698,8 @@ const RV = {
   stats() { return stage.stats(); },
   memory() { return stage.memory(); },
   info() { return stage.info; },
+  /** CUT2 probes (RP1, RP3, RP4, pictures): _harness/renderview/cut2.ts */
+  cut2: makeCut2(stage, canvas, () => RealBody),
 
   /** N full setBody cycles (fresh body each time); returns renderer.info.memory after each. */
   memoryCycles(n = 20, variants = false): { geometries: number; textures: number; programs: number }[] {

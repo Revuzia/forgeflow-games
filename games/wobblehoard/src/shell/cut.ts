@@ -34,6 +34,10 @@ import type { CameraLike } from '../input/camera.ts';
 import { cameraPosition, cameraRay, pxToNdc, raycastAt } from '../input/camera.ts';
 import type { Haptics } from '../input/haptics.ts';
 import type { BodyManager, ExtraBody } from './bodies.ts';
+import * as T from './cutText.ts';
+import type { CutStyle } from './cutText.ts';
+
+export type { CutStyle } from './cutText.ts';
 
 /** Pieces at once by quality tier (CUT.md 2.4). */
 export const MAX_PIECES: Readonly<Record<QualityTier, number>> = { low: 4, med: 6, high: 6 };
@@ -136,6 +140,18 @@ export interface Cutter {
   /** Split in two can still do something: the limit is not reached and some piece is big enough to halve (a piece under twice the minimum, 1/4 of the whole, cannot be cut at all) */
   readonly canSplit: boolean;
   readonly maxPieces: number;
+  /** the cut style (CUT_A.md SR1, CUT_MINIS.md): 'clean' (default; every piece is the real part on its side of the plane) or 'minis' (every piece is a complete smaller copy).
+   *  A session setting, not saved. In this build the style is only RECORDED (the piece manager still builds the old way); the true-cut rewrite (S2) acts on it. */
+  readonly style: CutStyle;
+  /** the style can be changed now: the squishy is whole and nothing plays (the Cut options control is off otherwise) */
+  readonly canChangeStyle: boolean;
+  /** change the style: false, no change and the line "Reconnect first to change the cut style" while the squishy is cut or a cut / join plays */
+  setStyle(style: CutStyle): boolean;
+  /** Picking the Cut tool: get the first cut ready (the true cut plans and builds a likely first Split in two over idle frames, 6.1). A no-op until then; never throws. */
+  prewarm(): void;
+  /** Undo cut (a twin join of the newest cut, 6): absent until the true cut offers it, so the Undo cut button stays out of the bar and the texts do not name it */
+  readonly canUndo?: boolean;
+  undoCut?(): boolean;
   /** a swipe over the canvas, CSS px from (x0, y0) to (x1, y1) */
   swipe(x0: number, y0: number, x1: number, y1: number): CutResult;
   /** the accessible cut: a vertical cut through the middle of the largest piece as the camera sees it (CUT.md 2.6) */
@@ -192,6 +208,7 @@ export function createCutter(d: CutDeps): Cutter {
   let anim: Anim | null = null;
   let contact: { a: Piece; b: Piece; since: number } | null = null;
   let wobbleUntil = -1, wobbling: SoftBodyLike | null = null;
+  let style: CutStyle = 'clean';
   let settling: Array<{ body: SoftBodyLike; twin: SoftBodyLike; until: number }> = [];
   /** the signed SURFACE gap between two bodies along the line between their centres (negative = overlapping), and that line's unit vector from b to a */
   const gapBetween = (a: SoftBodyLike, b: SoftBodyLike): { u: V3; g: number } | null => {
@@ -289,13 +306,13 @@ export function createCutter(d: CutDeps): Cutter {
     if (small < PIECE_MIN - 1e-6) {
       wobble(p.body);
       // (the button always cuts the middle, so "try nearer the middle" is advice it cannot follow: it says what is true instead)
-      d.say(button ? 'No piece is big enough to split in two. Swipe near an edge to peel off a small one.' : p.frac < 2 * PIECE_MIN + 1e-6 ? "That piece is as small as it gets." : 'Too small to cut there. Try nearer the middle.');
+      d.say(button ? T.noneBigEnough(false) : p.frac < 2 * PIECE_MIN + 1e-6 ? T.smallestPiece : T.tooSmallNearMiddle);
       return 'small';
     }
-    if (list().length + 1 > max()) { wobble(p.body); d.say("That's as many pieces as it can make."); return 'limit'; }
+    if (list().length + 1 > max()) { wobble(p.body); d.say(T.limit); return 'limit'; }
     if (!pieces.length) {
       const n = d.clearMat();
-      if (n > 0) d.say(n === 1 ? 'The other squishy went back on the shelf.' : `The other ${n} went back on the shelf.`);
+      if (n > 0) d.say(T.matCleared(n));
       pieces = [p];   // the whole squishy is piece 0 from now on (p is list()'s record of the play body)
     }
     const neckS = NECK_S[family()] ?? NECK_DEFAULT_S;
@@ -355,7 +372,7 @@ export function createCutter(d: CutDeps): Cutter {
     try { const ia = d.bodies.viewIdOf(pa), ib = d.bodies.viewIdOf(pb); if (ia !== null && ib !== null) d.stage.partPieces?.(ia, ib); } catch (e) { d.report(e); }
     try { d.audio.cut?.({ phase: 'separate', frac: Math.min(fA, fB), family: family(), pan: d.panOf(B.center), calm: d.calm(), pitch: pitch() }); } catch (e) { d.report(e); }
     try { d.haptics.poke(); } catch { /* optional */ }
-    d.say(`Cut into ${pieces.length} pieces.`);
+    d.say(T.cutDone(pieces.length, style));
   }
 
   /** the giver is gone into the receiver */
@@ -373,7 +390,7 @@ export function createCutter(d: CutDeps): Cutter {
       try { d.haptics.release(); } catch { /* optional */ }
     }
     if (pieces.length <= 1) whole(!all, true);
-    else if (!all) d.say(`Joined. ${pieces.length} pieces.`);
+    else if (!all) d.say(T.joinedTwins(pieces.length));
   }
 
   /** the last chunk is gone: the face piece becomes the exact original squishy again, at the middle of the table (gliding there first when
@@ -381,7 +398,7 @@ export function createCutter(d: CutDeps): Cutter {
   function whole(say: boolean, glide: boolean): void {
     const face = pieces[0];
     contact = null;
-    if (say) d.say('Whole again.');
+    if (say) d.say(T.whole);
     if (!face || (face.body === d.bodies.body && face.frac >= 1 && face.built >= 1)) { pieces = []; return; }
     const c = face.body.center;
     if (glide && typeof face.body.moveTo === 'function' && Math.hypot(c.x, c.z) > HOME_NEAR) {
@@ -490,6 +507,16 @@ export function createCutter(d: CutDeps): Cutter {
     get busy() { return anim !== null; },
     get canSplit() { return list().length < max() && list().some((p) => p.frac >= 2 * PIECE_MIN - 1e-6); },
     get maxPieces() { return max(); },
+    get style() { return style; },
+    get canChangeStyle() { return pieces.length === 0 && anim === null; },
+    setStyle(next) {
+      if (next !== 'clean' && next !== 'minis') return false;
+      if (next === style) return true;
+      if (!cutter.canChangeStyle) { d.say(T.styleLocked); return false; }   // pieces made in one style cannot be mixed with the other (CUT_MINIS.md 2)
+      style = next;
+      return true;
+    },
+    prewarm() { /* S0: the seam only; the true cut warms its first Split in two here (CUT2.md 6.1) */ },
     swipe(x0, y0, x1, y1) {
       if (!supported()) return 'unsupported';
       if (anim) return 'busy';
@@ -592,7 +619,7 @@ export function createCutter(d: CutDeps): Cutter {
           finishAll(true);
           try { d.audio.rejoin?.({ frac: 1, all: true, pan: d.panOf(d.bodies.body.center), calm: d.calm(), pitch: pitch() }); } catch (e) { d.report(e); }
           try { d.haptics.release(); } catch { /* optional */ }
-          d.say('Whole again.');
+          d.say(T.whole);
         }
         return;
       }
