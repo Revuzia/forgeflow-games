@@ -274,6 +274,9 @@ export interface SquishVoiceHandle {
   end(fadeS?: number, atTime?: number): void;
 }
 
+/** UI v3 (_spec/UI.md 7): the interface sound kinds; soft sine / triangle sounds on one pentatonic scale, quieter than the toy. */
+export type UiKind = 'tick' | 'press' | 'select' | 'on' | 'off' | 'open' | 'close' | 'back' | 'error' | 'toast' | 'trophy' | 'sticker';
+
 export interface SquishAudio {
   readonly ready: boolean;
   /** Resume/create the AudioContext. MUST be called from a user gesture. Safe to call repeatedly. */
@@ -332,6 +335,8 @@ export interface SquishAudio {
   /** CUT (optional): two pieces flowed back together (a gloopy "blorp" sized by the merged fraction); all = the Reconnect-all
    *  flourish as the squishy becomes whole again. */
   rejoin?(p: { frac: number; all?: boolean; pan?: number; calm?: boolean; /** the squishy's own pitch ratio (genome size); default 1 */ pitch?: number }): void;
+  /** UI v3 (optional): an interface sound. Procedural, rate-limited per kind, mute-aware, dropped before the first unlock (UI.md 7). */
+  ui?(p: { kind: UiKind; calm?: boolean }): void;
   /** Harness readout for the round-3 parts: music scheduler state and cost, and how many calls the rate limiters swallowed. */
   detailStats?(): {
     music: { on: boolean; playing: boolean; sessions: number; field: number; liveNotes: number; maxLiveNotes: number; notes: number; dropped: number; ticks: number; tickMsMean: number; tickMsMax: number; tickMsRecentP99: number; tickMsRecentMax: number; ducked: boolean; volume: number };
@@ -505,6 +510,8 @@ export interface Settings {
   fastOpen?: boolean;
   /** Single-key shortcuts (G gravity, M mute) on or off (WCAG 2.1.4). Default on. */
   shortcuts?: boolean;
+  /** UI v3: interface sounds (tick, press, select ...) on or off. Default on (UI.md 7). */
+  uiSounds?: boolean;
 }
 
 /** `window.__WH__`, exposed only when the URL has ?dev=1. Deterministic stepping makes screenshots and probes reproducible. */
