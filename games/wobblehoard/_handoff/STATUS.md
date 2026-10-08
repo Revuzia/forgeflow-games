@@ -1,6 +1,7 @@
 # STATUS LEDGER: read this first, then COMMON.md and RESUME.md. Do not redo anything marked DONE.
 
-Last updated 2026-10-07 11:35 CDT, branch `claude/exciting-faraday-2dakqx`, local commits only (NOTHING is pushed; nothing is deployed; the CDN still serves an OLD build).
+Last updated 2026-10-07 17:20 CDT, branch `claude/exciting-faraday-2dakqx`, local commits only (NOTHING is pushed to GitHub).
+**CDN: DEPLOYED 2026-10-07 ~17:10 CDT with the owner's yes (files only, `--no-portal`, publish status untouched): commit 2683d349 built clean (vite, 1139 of 1229 KB), boot-checked (desktop + phone, strict CSP, 0 errors), thumbnail = a 1280x720 title-card capture (no paid cover), 9 of 9 files uploaded and verified byte-identical live; https://forgeflow-games-cdn.isimcha85.workers.dev/squish-keeper/index.html . It does NOT contain: SHELL-4 fixes, the UI overhaul, lock / multi-pull, the ground fix, anything after 2683d349. The portal pages (prerender) were not rebuilt. The next deploy needs the owner's yes again.**
 
 ## DONE: do not redo (evidence in the named report or commit)
 | Item | Commit | Verification | Where the evidence is |
