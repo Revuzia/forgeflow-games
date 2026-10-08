@@ -14,7 +14,8 @@ import { SunShadows } from './planet/lights.ts';
 import { makeWaterSceneUniforms } from './planet/ocean.ts';
 import { PATCH_RES } from './planet/chunks.ts';
 import { AtmospherePass } from './sky/atmosphere.ts';
-import { CloudPass } from './sky/clouds.ts';
+import { CloudPass, type CloudStorm } from './sky/clouds.ts';
+import { BASE_PACK } from '../data/index.ts';
 import { StarVisual } from './sky/star.ts';
 import { Starfield } from './sky/starfield.ts';
 import { OrbitLines } from './orbitlines.ts';
@@ -48,6 +49,13 @@ const _camRot = new Matrix3();
 const _sunE = new Vector3();
 const _planetPos = new Vector3();
 const _sunDir = new Vector3();
+const _storms: CloudStorm[] = [];
+const smoothstepN = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const _bodyToClip = new Matrix4();
+/** weather kinds → how much cloud they make and whether they have an eye (weather.json, the sim's own data) */
+const WEATHER_LOOK = new Map<string, { cloud: number; eye: boolean }>(
+  (BASE_PACK.weather ?? []).map((w) => [w.id, { cloud: Math.max(0, Number(w.render?.cloud ?? 0)), eye: !!w.render?.eye }]),
+);
 const _w2b = new Matrix3();
 const _m4 = new Matrix4();
 const _up = new Vector3();
@@ -136,8 +144,14 @@ export class Renderer {
 
   setBrush(b: BrushPreview | null): void { this.brush = b; }
 
-  /** snap exposure next frame (camera cuts) */
-  cut(): void { this.post.cutExposure(); this.wbSnap = true; }
+  /**
+   * A camera cut (teleport, preset, test camera): snap exposure and white balance, and let the terrain LOD build many
+   * more patches for a few frames, so the new view converges at once instead of showing 50–100 m coarse facets for
+   * the dozens of frames the steady per-frame budget would take (a hitch at a cut is fine; streaming in view is not).
+   */
+  // a cut also invalidates last frame's image: the water's reflections must not read a view from another place
+  cut(): void { this.post.cutExposure(); this.post.prevValid = false; this.clouds.resetHistory(); this.wbSnap = true; this.cutFrames = 4; }
+  private cutFrames = 0;
 
   private syncPlanets(view: WorldView): void {
     const seen = new Set<number>();
@@ -198,15 +212,15 @@ export class Renderer {
       const pv = vis.pv;
       _rel.set(pose.pos[0] - pv.center[0], pose.pos[1] - pv.center[1], pose.pos[2] - pv.center[2]);
       const d = Math.hypot(pv.center[0], pv.center[1], pv.center[2]) || 1;
-      _sun.set(-pv.center[0] / d, -pv.center[1] / d, -pv.center[2] / d);
+      _sun.set(pv.sunDir[0], pv.sunDir[1], pv.sunDir[2]);
       const E = sunIlluminance(view.star.luminosity, d);
       const isPrimary = pv.id === this.primaryId;
       if (isPrimary) primaryVis = vis;
       vis.frameUpdate({
         camWorldInverse, frustum: this.frustum, camRel: _rel, sunDirWorld: _sun,
         sunE: _sunE.set(starCol[0] * E, starCol[1] * E, starCol[2] * E), time, K, frame: this.frameNo,
-        budget: q.patchBudget, primary: isPrimary, shadows: q.shadowCascades > 0, yearFrac: view.calendar(pv).yearFrac,
-        vegRange: 380 * q.vegetationRange, vegDensity: q.vegetationDensity,
+        budget: this.cutFrames > 0 ? Math.max(q.patchBudget, 320) : q.patchBudget, primary: isPrimary, shadows: q.shadowCascades > 0, yearFrac: view.calendar(pv).yearFrac,
+        vegRange: 380 * q.vegetationRange, vegDensity: q.vegetationDensity, proj: cam.projectionMatrix, grass: q.grass,
       });
       // brush preview
       const u = vis.uniforms;
@@ -220,9 +234,23 @@ export class Renderer {
     }
     // ── star, sky, orbit lines ──
     _star.set(-pose.pos[0], -pose.pos[1], -pose.pos[2]);
-    this.star.update(view.star, _star, time);
+    // how much of the view the star's disc fills: past ~1 % the exposure comes from the disc itself (AgX keeps its
+    // limb darkening and granulation in range), bloom drops away and the corona shrinks
+    const starDist = Math.max(1, Math.hypot(pose.pos[0], pose.pos[1], pose.pos[2]));
+    const starR = Math.max(100, view.star.radius);
+    const angR = Math.asin(Math.min(1, starR / starDist));
+    const tanH = Math.tan((cam.fov * Math.PI) / 360);
+    const screenFrac = (Math.PI * Math.tan(Math.min(angR, 1.4)) ** 2) / (4 * tanH * tanH * Math.max(0.2, cam.aspect));
+    const close = smoothstepN(0.01, 0.05, screenFrac);
+    this.star.update(view.star, _star, time, close);
+    this.post.starMix = close;
+    // the disc centre lands around 1.3 before the AgX curve: near-white gold at the centre, while the limb (a quarter
+    // of the centre's radiance) falls to deep orange and granulation keeps its gradation (0.18 / radiance made it a
+    // mid-grey moon)
+    this.post.starExposure = 1.2 / this.star.radiance;
     const minAlt = primaryVis ? primaryVis.altitude / Math.max(1, primaryVis.pv.params.radius) : 100;
-    const orbitVis = this.showOrbits ? Math.min(1, Math.max(0, (minAlt - 8) / 30)) : 0;
+    // (orbit lines vanish near the star: they would cross its disc as stray lines)
+    const orbitVis = (this.showOrbits ? Math.min(1, Math.max(0, (minAlt - 8) / 30)) : 0) * smoothstepN(20 * starR, 30 * starR, starDist);
     this.orbits.update(view, pose, orbitVis);
 
     // ── shadows near the surface of the primary planet ──
@@ -233,8 +261,7 @@ export class Renderer {
     if (primaryVis) primaryVis.uniforms.uShadowOn.value = wantShadows ? 1 : 0;
     if (wantShadows && primaryVis) {
       const pv = primaryVis.pv;
-      const d = Math.hypot(pv.center[0], pv.center[1], pv.center[2]) || 1;
-      _sun.set(-pv.center[0] / d, -pv.center[1] / d, -pv.center[2] / d);
+      _sun.set(pv.sunDir[0], pv.sunDir[1], pv.sunDir[2]);
       const far = Math.min(q.shadowDistance, Math.max(300, alt * 14 + 600));
       const near = Math.max(0.5, Math.min(alt * 0.2, 50));
       this.shadows.fit(cam, _sun, q.shadowCascades, near, far, Math.min(4000, pv.params.radius));
@@ -258,6 +285,7 @@ export class Renderer {
     this.waterScene.tPrevColor.value = post.prevColor.texture;
     this.waterScene.uPrevValid.value = post.prevValid ? 1 : 0;
     (this.waterScene.uProj.value as Matrix4).copy(cam.projectionMatrix);
+    this.waterScene.uFrame.value = this.frameNo % 64;
     let anyWater = false;
     for (const vis of this.planets.values()) if (vis.lod.stats.waterPatches > 0) anyWater = true;
     if (anyWater) {
@@ -282,14 +310,25 @@ export class Renderer {
       const pv = vis.pv;
       const withClouds = vis === primaryVis && vis.hasClouds && !!vis.cloudCube;
       const planetPos = _planetPos.set(pv.center[0] - pose.pos[0], pv.center[1] - pose.pos[1], pv.center[2] - pose.pos[2]);
-      const d = Math.hypot(pv.center[0], pv.center[1], pv.center[2]) || 1;
-      const sunDir = _sunDir.set(-pv.center[0] / d, -pv.center[1] / d, -pv.center[2] / d);
+      const sunDir = _sunDir.set(pv.sunDir[0], pv.sunDir[1], pv.sunDir[2]);
       if (withClouds) {
         this.clouds.bind(vis.atmo, vis.cloudCube!.texture);
         const w2b = _w2b.setFromMatrix4(_m4.makeRotationFromQuaternion(vis.group.quaternion).invert());
+        // the sim's weather systems organise the cloud cover (spiral arms, cores, eyes); a planet-wide override
+        // organises into storm tracks
+        _storms.length = 0;
+        for (const w of pv.weather) {
+          const def = WEATHER_LOOK.get(w.kind);
+          if (!def || def.cloud <= 0.3) continue;
+          _storms.push({ pos: w.pos, radius: w.radius, intensity: w.intensity * Math.min(1, def.cloud), eye: def.eye });
+        }
+        const g = pv.params.globalWeather ? WEATHER_LOOK.get(pv.params.globalWeather) : undefined;
+        this.clouds.setWeather(_storms, pv.params.radius, g && g.cloud > 0.5 ? 1 : 0);
+        _bodyToClip.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).multiply(vis.group.matrixWorld);
         this.clouds.render(r, this.fsq, {
           depth: post.depthTexture, invProj: _invProj, camRot: _camRot, worldToBody: w2b, far: cam.far, planetPos, sunDir,
           innerR: vis.cloudInner, outerR: vis.cloudOuter, frame: this.frameNo, altitude: vis.camBody.length() - pv.params.radius, radius: pv.params.radius,
+          bodyToClip: _bodyToClip, planetId: pv.id,
         }, q.cloudSteps, q.cloudLightSteps);
       }
       const m = this.atmoPass.material;
@@ -310,7 +349,11 @@ export class Renderer {
       // aerial perspective on geometry: thin inside the air, physical from space
       const thick = vis.atmo.thickness;
       const altP = vis.altitude;
-      u.uApScale.value = 0.09 + 0.26 * Math.min(1, Math.max(0, (altP - thick) / (thick * 4)));
+      // (denser-than-Earth air for real sunsets would wash the ground out from orbit at full strength). Inside the air
+      // the haze ramps with distance: ground 50–300 m away stays crisp (0.03), the far hills fade in by ~2 km (0.12)
+      const orbitK = Math.min(1, Math.max(0, (altP - thick) / (thick * 4)));
+      u.uApScale.value = 0.12 + 0.14 * orbitK;
+      u.uApRamp.value.set(0.03 + (0.12 + 0.14 * orbitK - 0.03) * orbitK, 300, 2000);
       const target = outIdx === 0 ? post.atmoA : post.atmoB;
       this.fsq.render(r, m, target);
       input = target.texture;
@@ -319,12 +362,22 @@ export class Renderer {
 
     // ── white balance: like a camera set to "daylight here", neutralise the sun's colour at ~50° elevation on the
     // world we are at, so noon light reads white while sunsets (much redder than that) stay warm
+    const cutNow = this.wbSnap;
     this.whiteBalance(primaryVis, starCol);
     // ── post ──
     post.keepPrevious(r, this.fsq, input);
     const sun = this.sunScreen(pose, primaryVis);
     post.setKey(this.sunElevation > -2 ? 0.075 + 0.085 * Math.min(1, Math.max(0, this.sunElevation / 0.3)) : 0.16);
+    // golden-hour grade: strongest with the sun a few degrees up, gone by mid-morning and in full night
+    {
+      const el = this.sunElevation;
+      const ss = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+      const want = (1 - ss(0.04, 0.36, el)) * ss(-0.14, -0.02, el);
+      const g = this.post.tonemapMat.uniforms.uGolden;
+      g.value += (want - g.value) * (cutNow ? 1 : Math.min(1, dt * 3));
+    }
     post.finish(r, this.fsq, input, this.settings, sun, dt, time, null);
+    if (this.cutFrames > 0) this.cutFrames--;
     this.updateStats();
     this.stats.frameMs = performance.now() - t0;
   }

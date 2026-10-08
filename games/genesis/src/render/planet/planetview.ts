@@ -12,6 +12,7 @@ import { DirFieldCube } from './dirtex.ts';
 import { kindCode, makePlanetUniforms, makeTerrainDepthMaterial, makeTerrainMaterial, paletteFor, type PlanetShaderUniforms } from './terrainmat.ts';
 import { makeOceanMaterial } from './ocean.ts';
 import { Vegetation } from '../life/vegetation.ts';
+import { GroundCover } from '../life/groundcover.ts';
 
 export interface PlanetVisualDeps {
   clouds: CloudPass;
@@ -36,9 +37,14 @@ export interface PlanetFrameContext {
   vegDensity: number;
   shadows: boolean;
   yearFrac: number;
+  /** the camera's projection matrix (water SSR reprojection) */
+  proj: Matrix4;
+  /** near-camera grass and stones (quality) */
+  grass: boolean;
 }
 
 const _m4 = new Matrix4();
+const _m4b = new Matrix4();
 const _q = new Quaternion();
 const _v = new Vector3();
 
@@ -53,6 +59,8 @@ export class PlanetVisual {
   readonly depthMats: ShaderMaterial[] = [];
   readonly waterMats: ShaderMaterial[] = [];
   cloudCube: DirFieldCube | null = null;
+  /** last frame's body → clip transform (water SSR reprojection) */
+  private readonly prevBodyToClip = new Matrix4();
   hasClouds = false;
   cloudInner = 0;
   cloudOuter = 0;
@@ -60,6 +68,7 @@ export class PlanetVisual {
   private cloudStamp = '';
   private kind = '';
   readonly vegetation: Vegetation;
+  readonly groundCover: GroundCover;
   /** camera position in the body frame (m) — updated per frame */
   readonly camBody = new Vector3();
   altitude = 1e9;
@@ -74,7 +83,8 @@ export class PlanetVisual {
     const u = this.uniforms;
     u.uFieldA.value = this.fields.tex.A; u.uFieldN.value = this.fields.tex.N; u.uFieldM0.value = this.fields.tex.M0;
     u.uFieldM1.value = this.fields.tex.M1; u.uFieldV.value = this.fields.tex.V; u.uFieldC.value = this.fields.tex.C;
-    u.uFieldS.value = this.fields.tex.S; u.uFieldF.value = this.fields.tex.F;
+    u.uFieldS.value = this.fields.tex.S; u.uFieldF.value = this.fields.tex.F; u.uFieldG.value = this.fields.tex.G;
+    u.uFieldD.value = this.fields.tex.D;
     // atmosphere, cloud and shadow uniforms are shared by reference
     const atmoU = this.atmo.uniforms as unknown as Record<string, IUniform>;
     for (const k of Object.keys(atmoU)) u[k] = atmoU[k];
@@ -90,12 +100,15 @@ export class PlanetVisual {
     const self = this;
     this.lod = new ChunkLOD(pv.grid, pv.noise, pv.params.radius, this.group, mats, {
       get surface() { return self.pv.fields.get('surface') ?? null; },
+      get grad() { return self.pv.ground.grad ?? null; },
       waterLevel: this.fields.waterLevel,
       waterDepth: this.fields.waterDepth,
       get geomVersion() { return self.fields.geomVersion; },
     });
     this.vegetation = new Vegetation(sharedRec);
     this.group.add(this.vegetation.group);
+    this.groundCover = new GroundCover(sharedRec);
+    this.group.add(this.groundCover.group);
     this.sync(pv);
   }
 
@@ -119,6 +132,9 @@ export class PlanetVisual {
     const u = this.uniforms;
     u.uRadius.value = p.radius;
     u.uSeaLevel.value = p.seaLevel;
+    // airless worlds get no sky fill at all (hard black shadows, CONTRACT §16.1); with air, a faint night airglow
+    if (this.atmo.has) u.uNightAmbient.value.set(0.004, 0.006, 0.012);
+    else u.uNightAmbient.value.set(0.0004, 0.0005, 0.0007);
     if (p.kind !== this.kind) {
       this.kind = p.kind;
       u.uKind.value = kindCode(p.kind);
@@ -166,6 +182,10 @@ export class PlanetVisual {
     // view-space sun and body → view rotation
     _m4.multiplyMatrices(ctx.camWorldInverse, g.matrixWorld);
     (u.uBodyToView.value as Matrix3).setFromMatrix4(_m4);
+    // SSR reprojection: view → body (inverse of this frame's body → view) → last frame's clip; then remember this
+    // frame's body → clip for the next one
+    (u.uViewToPrevClip.value as Matrix4).copy(this.prevBodyToClip).multiply(_m4b.copy(_m4).invert());
+    this.prevBodyToClip.multiplyMatrices(ctx.proj, _m4);
     u.uSunDirView.value.copy(ctx.sunDirWorld).transformDirection(ctx.camWorldInverse);
     this.atmo.setSun(ctx.sunE.x, ctx.sunE.y, ctx.sunE.z);
     u.uTime.value = ctx.time % 3600;
@@ -182,13 +202,16 @@ export class PlanetVisual {
     veg.density = ctx.vegDensity;
     veg.enabled = ctx.primary && ctx.vegRange > 0;
     veg.setShadowCasting(ctx.primary && ctx.shadows);
+    veg.yearFrac = ctx.yearFrac;
     veg.update(pv, this.camBody, ctx.frame);
+    this.groundCover.enabled = ctx.primary && ctx.grass;
+    this.groundCover.update(pv, this.camBody, ctx.frame);
     (u.uVegFade.value as { x: number; y: number }).x = veg.group.visible ? veg.fade.value.x : 1e9;
     (u.uVegFade.value as { x: number; y: number }).y = veg.group.visible ? veg.fade.value.y : 1e9 + 1;
     for (let L = 0; L < this.terrainMats.length; L++) {
       const [full, start] = this.lod.morphRange(L, ctx.K);
       const m = this.terrainMats[L].userData.uMorph as IUniform<{ set(x: number, y: number, z: number, w: number): void }>;
-      m.value.set(full, start, this.lod.skirtDepth(L), this.lod.spacing(L));
+      m.value.set(full, start, this.lod.skirtDepth(L), this.lod.silK);
     }
   }
 
@@ -204,6 +227,7 @@ export class PlanetVisual {
   dispose(): void {
     this.lod.dispose();
     this.vegetation.dispose();
+    this.groundCover.dispose();
     this.fields.dispose();
     this.atmo.dispose();
     this.cloudCube?.dispose();

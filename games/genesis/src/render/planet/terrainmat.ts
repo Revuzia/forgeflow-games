@@ -9,7 +9,8 @@
 //   dry grass · shrubs · forest canopy (Voronoi crowns with height bump and crown-gap occlusion, conifer vs broadleaf
 //   by climate, autumn colour) · farm fields where crop > 0 (per-field crop, rows, hedgerows) · sand with ripples ·
 //   snow with sparkle · ice · ash · mud / wetness (darker, glossier) · lava crust with emissive cracks · burnt ground ·
-//   roads (dirt → cobble by wear) · sea floor with animated caustics · night city lights (reserved `light` channel).
+//   worn paths (trodden dirt; paved roads are ribbon meshes) · beaches · rock on ridges and peaks · sea floor with
+//   filament caustics · close-up micro relief from analytic noise gradients · night city lights (`light` channel).
 // Every high-frequency term fades by the pixel footprint (no shimmer from orbit).
 //
 // Lighting: three's physical BRDF, but the star is injected per planet (IncidentLight with this planet's sun
@@ -18,7 +19,7 @@
 // and every planet in a system view is lit from its own side.
 
 import {
-  Matrix3, MeshStandardMaterial, ShaderMaterial, Vector2, Vector3, Vector4, Color, type IUniform, type Texture,
+  Matrix3, Matrix4, MeshStandardMaterial, ShaderMaterial, Vector2, Vector3, Vector4, Color, type IUniform, type Texture,
 } from 'three';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
@@ -65,8 +66,9 @@ varying vec4 vF0;  // snow sand soil ash
 varying vec4 vF1;  // lava wetness ice burnt
 varying vec4 vF2;  // grass shrub tree crop
 varying vec4 vF3;  // temperature moisture road fire
-varying vec4 vF4;  // surface waterLevel waterDepth groundHeight
+varying vec4 vF4;  // surface (curved) waterLevel waterDepth groundHeight
 varying vec4 vF5;  // treeSpecies cropSpecies light biome
+varying float vCurv; // concavity (m), field N.w
 uniform mat3 uBodyToView;
 uniform vec3 uSunDirBody;
 uniform vec3 uSunDirView;
@@ -89,7 +91,7 @@ uniform float uBrushOn;
 uniform vec2 uVegFade;  // instanced-tree hand-over band (m from the camera): canopy shading only beyond it
 uniform float uDebug;   // 0 off, 1 body normal, 2 albedo, 3 no bump, 4 macro normal only
 
-struct TSurf { vec3 albedo; float rough; float bump; float ao; vec3 emis; float glint; };
+struct TSurf { vec3 albedo; float rough; float bump; float ao; vec3 emis; float glint; vec3 microG; };
 
 // fade a pattern out before it is resolved by fewer than ~6 pixels per feature (no speckle at distance)
 float aaF(float fw, float feature) { return 1.0 - smoothstep(0.12, 0.45, fw / feature); }
@@ -103,7 +105,8 @@ float cloudShadowAt(vec3 P, vec3 sunB) {
   vec2 cs = texture(uCloudCov, normalize(q)).rg;
   float dens = cloudDensityAt(q, 0.35, cs.x, cs.y, false);
   float thick = (uCloudShell.y - uCloudShell.x) * 0.55;
-  return max(exp(-dens * thick), 0.12);
+  // (skylight still reaches a cloud's shadow, and the crisp cell edges of the clouds blur in their shadows)
+  return max(exp(-dens * thick * 0.7), 0.3);
 }
 
 // perturb a view-space normal by the screen-space gradient of a height field (metres)
@@ -115,7 +118,10 @@ vec3 bumpNormal(vec3 surfPos, vec3 n, float h) {
   vec3 r2 = cross(n, sx);
   float det = dot(sx, r1);
   vec3 g = sign(det) * (dh.x * r1 + dh.y * r2);
-  return normalize(abs(det) * n - g);
+  // edge-on pixels (the horizon) can have degenerate screen derivatives: never normalise a zero vector into NaN
+  vec3 b = abs(det) * n - g;
+  float bl = length(b);
+  return (bl > 1e-20 && !isnan(bl)) ? b / bl : n;
 }
 
 TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
@@ -130,7 +136,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   float temp = vF3.x, moist = vF3.y, road = vF3.z, fire = vF3.w;
   float hG = vF4.w;
   float uw = vF4.y - hG;   // water above this ground point (m), negative on land
-  bool airless = uKind > 0.5 && uKind < 2.5;
+  // airless follows the actual air (a barren world the player breathed on grows soil and lichen), the palette the kind
+  bool airless = uHasAtmo < 0.5;
   bool fine = fw < 6.0;
   bool veryFine = fw < 0.6;
 
@@ -143,6 +150,11 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // macro variation (tens of metres) — keeps every layer from looking tiled
   float m1 = fbm3(P * 0.013);
   float m2 = snoise(P * 0.061);
+  // concavity of the ground at the cell scale (field N.w, metres: > 0 hollows and valleys, < 0 ridges and peaks):
+  // where snow drifts in, where rock breaks through
+  // (land is broadly convex: on the lookdev world the median cell sits ~3 m above its neighbours' mean, the sharpest
+  // 5 % of ridges 12 m and more — the scale keeps rock to those)
+  float concave = clamp(vCurv / 15.0, -1.0, 1.0);
 
   // ── rock: tonal masses and weathering streaks in the albedo; structure (ledges, fractures) in the bump ──
   vec3 warpV = vec3(snoise(P * 0.045), snoise(P * 0.045 + 7.3), snoise(P * 0.045 + 13.1));
@@ -173,7 +185,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     rock *= (1.0 - 0.12 * seam * steep) * (0.94 + 0.08 * mid + 0.05 * grain) * (1.0 + 0.08 * ledgeB);
     rockBump += ledgeB * 0.45 + mid * 0.22 + grain * 0.02;
     // lichen / moss on damp, gentler rock (terran only)
-    if (uKind < 0.5) {
+    if (!airless) {
       float lich = smoothstep(0.35, 0.8, moist) * smoothstep(0.2, 0.7, snoise(P * 0.33) * 0.5 + 0.5) * (1.0 - steep * 0.6);
       rock = mix(rock, vec3(0.08, 0.095, 0.05), lich * 0.4);
     }
@@ -181,6 +193,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   vec3 col = rock;
   float rough = 0.84;
   float bump = rockBump;
+  // strength of the close-up micro relief (0.2–2 m: grain, clods, tufts), blended through the layers like the bump
+  float mk = 0.22;
   float ao = 1.0;
   float spec = 0.5;
   vec3 emis = vec3(0.0);
@@ -207,6 +221,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     col = mix(col, sc, soilW);
     bump = mix(bump, sb, soilW);
     rough = mix(rough, 0.92, soilW);
+    mk = mix(mk, 0.3, soilW);
   }
 
   // ── maria (dark basalt on moons, mapped from 'ash' on airless worlds) / volcanic ash ──
@@ -223,17 +238,20 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float cold = smoothstep(9.0, -3.0, temp);
     // grass
     vec3 lush = vec3(0.06, 0.115, 0.03);
-    vec3 dry = vec3(0.27, 0.22, 0.09);
+    vec3 dry = vec3(0.23, 0.205, 0.12);
     vec3 gcol = mix(dry, lush, smoothstep(0.22, 0.62, moist + m1 * 0.12));
     gcol = mix(gcol, vec3(0.12, 0.125, 0.065), cold * 0.7);
     gcol = mix(gcol, vec3(0.2, 0.17, 0.08), autumn * 0.35);
     gcol = mix(gcol, vec3(0.16, 0.14, 0.09), winter * 0.35 * (1.0 - cold));
     float clump = fine ? snoise(P * 0.27 + warpV) * aaF(fw, 3.5) : 0.0;
     float blades = veryFine ? snoise(P * 4.3) * aaF(fw, 0.23) : 0.0;
-    // patches of greener / yellower sward at tens of metres, tufts at metres
-    float patchy = fbm3(P * 0.035 + 11.0);
-    gcol = mix(gcol, gcol * vec3(1.25, 1.12, 0.62), smoothstep(0.0, 0.5, patchy) * 0.45);
-    gcol = mix(gcol, gcol * vec3(0.7, 0.92, 0.8), smoothstep(0.0, -0.5, patchy) * 0.35);
+    // broad, gentle drifts of greener / yellower sward at ~100 m (narrow, strong bands at 30 m read as camouflage);
+    // sun-facing slopes dry out first
+    float patchy = fbm3(P * 0.008 + 11.0);
+    float sunny = clamp(dot(Nb - up * dot(Nb, up), normalize(uSunDirBody - up * dot(uSunDirBody, up) + 1e-5)) * 3.0, -1.0, 1.0);
+    gcol = mix(gcol, dry, clamp(0.12 * sunny, 0.0, 0.12) * smoothstep(0.7, 0.3, moist));
+    gcol = mix(gcol, gcol * vec3(1.12, 1.06, 0.82), smoothstep(-0.6, 0.8, patchy) * 0.12);
+    gcol = mix(gcol, gcol * vec3(0.86, 0.96, 0.9), smoothstep(0.6, -0.8, patchy) * 0.10);
     gcol *= 0.88 + 0.16 * clump + 0.12 * blades + 0.1 * m2;
     float gBump = clump * 0.05 + blades * 0.02;
 
@@ -253,7 +271,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     }
     // forest canopy: crowns as Voronoi domes, gaps dark (where trees are not instanced)
     if (tree > 0.01) {
-      float tw = smoothstep(0.08, 0.55, tree + m1 * 0.3 + m2 * 0.12);
+      // woods break up at the scale of groves (m1, ~80 m), not in 16 m blotches against the sward (camouflage)
+      float tw = smoothstep(0.08, 0.55, tree + m1 * 0.3 + m2 * 0.03);
       float conifer = cold;
       float scale = mix(0.15, 0.24, conifer);
       vec3 tv = fine ? voronoi3((P + warpV * 4.0) * scale) : vec3(0.45, 0.8, 0.5);
@@ -262,8 +281,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       float rad = 0.75 + 0.35 * tv.z;
       float clearing = smoothstep(0.62, 0.3, tree + snoise(P * 0.03) * 0.25);
       float crown = mix(0.55, (1.0 - smoothstep(0.0, rad, tv.x)) * (1.0 - clearing * 0.8), crownAA);
-      vec3 broad = mix(vec3(0.028, 0.06, 0.018), vec3(0.055, 0.085, 0.025), tv.z);
-      vec3 conif = mix(vec3(0.018, 0.04, 0.025), vec3(0.028, 0.055, 0.03), tv.z);
+      // crown to crown the canopy varies in value by about ±8 %, not in hue (wider swings read as camouflage)
+      vec3 broad = vec3(0.038, 0.071, 0.021) * (0.92 + 0.16 * tv.z);
+      vec3 conif = vec3(0.022, 0.047, 0.027) * (0.92 + 0.16 * tv.z);
       vec3 tc = mix(broad, conif, conifer);
       // autumn: broadleaf crowns turn individually
       float turn = autumn * (1.0 - conifer) * smoothstep(0.25, 0.75, gn_hash13(vec3(tv.z * 97.0, 1.0, 2.0)));
@@ -309,9 +329,10 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       vao *= mix(1.0, 1.0 - hedge * 0.35, cw);
     }
     // per-cell cover is linear across 50 m triangles: noise in the threshold turns those edges into organic margins
-    float vegW = smoothstep(0.05, 0.6, vegTotal + m1 * 0.32 + m2 * 0.18) * (1.0 - steep * 0.8);
+    float vegW = smoothstep(0.05, 0.6, vegTotal + m1 * 0.32 + m2 * 0.06) * (1.0 - steep * 0.8);
     col = mix(col, vcol, vegW);
     bump = mix(bump, vb, vegW);
+    mk = mix(mk, 0.45, vegW);
     rough = mix(rough, 0.88, vegW);
     ao = mix(ao, vao, vegW);
     spec = mix(spec, 0.35, vegW);
@@ -319,7 +340,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
 
   // ── sand: beaches and dune seas, wind ripples ──
   if (sand > 0.01) {
-    float sw = smoothstep(0.05, 0.5, sand + m2 * 0.18) * (1.0 - steep * 0.6);
+    // plants root in sand too: cover hides the sand beneath it (dune grass, a meadow on regolith)
+    float sw = smoothstep(0.05, 0.5, sand + m2 * 0.18) * (1.0 - steep * 0.6) * (1.0 - clamp(vegTotal * 1.4 + m1 * 0.2, 0.0, 0.9));
     vec3 scl = uSandCol * (0.9 + 0.16 * m1 + 0.06 * m2);
     float rip = 0.0;
     if (fine) {
@@ -330,23 +352,51 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     col = mix(col, scl, sw);
     bump = mix(bump, rip * 0.035 + m2 * 0.25, sw);
     rough = mix(rough, 0.9, sw);
+    mk = mix(mk, 0.07, sw);
+  }
+
+  // ── beaches and bare rock (worlds with air): a noise-broken band of sand at the waterline of seas and lakes on
+  // gentle ground; rock breaking through the turf on sharp ridges and on the high peaks (no green domes at 400 m)
+  if (!airless) {
+    float above = -uw; // height above the nearby water (m); inland cells read several metres
+    float beach = (1.0 - smoothstep(0.8 + m2 * 0.45, 1.7 + m2 * 0.45, above)) * smoothstep(-0.2, 0.05, above)
+      * (1.0 - smoothstep(0.08, 0.18, slope)) * (1.0 - smoothstep(0.25, 0.6, tree));
+    if (beach > 0.001) {
+      vec3 bs = mix(uSandCol, uSandCol * vec3(0.92, 0.9, 0.86), smoothstep(-0.3, 0.6, m1)) * (0.94 + 0.06 * m2);
+      col = mix(col, bs, beach);
+      bump = mix(bump, m2 * 0.15, beach);
+      rough = mix(rough, 0.9, beach);
+      mk = mix(mk, 0.07, beach);
+    }
+    float ridge = smoothstep(0.75, 1.1, -concave + m2 * 0.15);
+    float alpine = smoothstep(210.0, 290.0, hG - uSeaLevel + m1 * 35.0);
+    float bare = clamp(max(ridge * 0.65, alpine * 0.8) * (0.75 + 0.25 * smoothstep(-0.2, 0.5, m2)), 0.0, 0.88);
+    if (bare > 0.001) {
+      col = mix(col, rock, bare);
+      bump = mix(bump, rockBump, bare);
+      rough = mix(rough, 0.84, bare);
+      mk = mix(mk, 0.22, bare);
+      ao = mix(ao, 1.0, bare);
+    }
   }
 
   // ── road / path wear ──
   if (road > 0.05) {
-    // the worn track itself is the narrow crest of the interpolated wear field (a few metres wide along the line of
-    // most-worn cells); the wider shoulder is only faintly trodden
-    float rw = smoothstep(0.7, 0.8, road + m2 * 0.03) + 0.25 * smoothstep(0.25, 0.7, road);
+    // trodden ground only: the worn track is the narrow crest of the interpolated wear field, the shoulder faintly
+    // trodden. Paved surfaces (cobble, stone) belong to the ribbon meshes along the most-worn edges (render/life/
+    // roads, with the peoples): an area fill of cobbles over the field's blobs read as stains, not paths
+    float rw = smoothstep(0.82, 0.92, road + m2 * 0.03) * 0.9 + 0.2 * smoothstep(0.3, 0.8, road);
     vec3 dirt = vec3(0.17, 0.125, 0.085) * (0.9 + 0.15 * m1);
     float rb = 0.0;
-    if (road > 0.7 && fine) {
-      vec3 cv = voronoi3(P * 1.9);
-      float stone = 1.0 - smoothstep(0.0, 0.08, cv.y - cv.x);
-      dirt = mix(vec3(0.2, 0.19, 0.17) * (0.8 + 0.4 * cv.z), vec3(0.06, 0.05, 0.04), stone * aaF(fw, 0.5));
-      rb = (1.0 - stone) * 0.04;
+    if (fine) {
+      // ruts and compacted grit along the track, not paving
+      float grit = snoise(P * 2.3) * aaF(fw, 0.4);
+      dirt *= 0.92 + 0.12 * grit;
+      rb = grit * 0.015;
     }
     col = mix(col, dirt, rw * 0.9);
     bump = mix(bump, rb, rw);
+    mk = mix(mk, 0.12, rw);
     rough = mix(rough, 0.8, rw);
     ao = mix(ao, 1.0, rw);
   }
@@ -360,7 +410,14 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
 
   // ── snow ──
   if (snow > 0.005) {
-    float sw = smoothstep(0.02, 0.22, snow + m2 * 0.12 + m1 * 0.25) * (1.0 - smoothstep(0.35, 0.6, slope) * 0.85);
+    // snow does not hold on cliffs: faces past ~45° show their rock (white walls read as spikes on the limb). Partial
+    // cover follows the land, not noise: shaded (pole-facing / away from the sun) slopes and hollows keep it, sunny
+    // convex ground melts out first — a gentle, wide transition with little noise (no dalmatian spots)
+    vec3 tanN = Nb - up * dot(Nb, up);
+    vec3 sunT = uSunDirBody - up * dot(uSunDirBody, up);
+    float aspectSun = dot(tanN, normalize(sunT + 1e-5)) * 2.5;
+    float hollow = clamp(concave * 2.5, -1.0, 1.0) * 0.3;
+    float sw = smoothstep(0.0, 0.4, snow * 1.6 - 0.04 + m2 * 0.04 + m1 * 0.04 - aspectSun * 0.12 + hollow * 0.2) * (1.0 - smoothstep(0.3, 0.55, slope));
     vec3 sc = vec3(0.78, 0.81, 0.86) * (0.93 + 0.08 * m1);
     // wind-packed crust is greyer, fresh drifts whiter; sastrugi and drifts give the shading its grain
     sc *= mix(0.9, 1.04, smoothstep(-0.4, 0.5, m2));
@@ -368,6 +425,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     col = mix(col, sc, sw);
     bump = mix(bump, drift, sw);
     rough = mix(rough, 0.55, sw);
+    mk = mix(mk, 0.05, sw);
     ao = mix(ao, 1.0, sw);
     spec = mix(spec, 0.6, sw);
     // sparkle: rare facets that mirror the sun (lit in the sun term)
@@ -376,7 +434,10 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
 
   // ── ice ──
   if (ice > 0.02) {
-    float iw = smoothstep(0.05, 0.4, ice);
+    // glacier ice drapes slopes but breaks off cliffs, where the rock beneath shows (on dry ground only: floating ice
+    // is drawn by the water surface)
+    // noise in the threshold breaks the iso-contours of a field that varies linearly over 50 m triangles (no diamonds)
+    float iw = smoothstep(0.05, 0.4, ice + m1 * 0.3 + m2 * 0.15) * (1.0 - smoothstep(0.35, 0.6, slope) * 0.9);
     vec3 icc = vec3(0.5, 0.66, 0.8) * (0.9 + 0.1 * m1);
     float cr = 0.0;
     if (fine) {
@@ -389,15 +450,26 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     }
     col = mix(col, icc, iw);
     rough = mix(rough, 0.12, iw);
+    mk = mix(mk, 0.02, iw);
     bump = mix(bump, cr * 0.1, iw);
     spec = mix(spec, 0.8, iw);
   }
 
   // ── wetness: rain, flood, mud, the wet band above the waterline ──
-  float shoreWet = uw > -1.5 && uw < 0.0 ? smoothstep(-1.5, 0.0, uw) : 0.0;
+  // the wet band above the waterline is narrow (a few tens of cm) and noise-broken; on flat shores a vertical band of
+  // 1.5 m covered whole low islands in mud
+  // On a steep rim that band is thinner than a pixel and aliases into a dotted outline: it fades out as the height
+  // above water changes by more than ~0.15 m per pixel.
+  float uwPx = fwidth(uw);
+  float shoreWet = uw > -0.45 && uw < 0.0 ? smoothstep(-0.3 + m2 * 0.1, 0.0, uw) : 0.0;
+  shoreWet *= (1.0 - smoothstep(0.2, 0.45, vegTotal)) * (1.0 - smoothstep(0.06, 0.15, uwPx));
   float wet = clamp(max(wetF * 0.85, shoreWet), 0.0, 1.0) * (1.0 - smoothstep(0.1, 0.4, snow));
+  // forest floors and meadows are not wet mirrors: the canopy and the sward take the water
+  wet *= 1.0 - 0.75 * clamp(tree + 0.5 * grass, 0.0, 1.0);
   col *= mix(1.0, 0.55, wet * (1.0 - clamp(vegTotal, 0.0, 1.0) * 0.6));
-  rough = mix(rough, 0.18, wet * 0.85);
+  // wet soil and litter stay rough (0.35); only bare rock and sand film over glossy
+  float wetFloor = mix(0.18, 0.35, clamp(soil * 2.0 + vegTotal, 0.0, 1.0));
+  rough = mix(rough, wetFloor, wet * 0.85);
 
   // ── under water: silt and sand floor ──
   if (uw > 0.0) {
@@ -405,6 +477,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     vec3 floorC = mix(uSandCol * 0.5, vec3(0.09, 0.085, 0.065), smoothstep(1.0, 12.0, uw)) * (0.85 + 0.25 * m1);
     col = mix(col, floorC, max(d, 0.6) * (1.0 - steep * 0.5));
     rough = mix(rough, 0.35, 0.7);
+    mk = mix(mk, 0.05, max(d, 0.6));
   }
 
   // ── lava: dark crust, glowing cracks (emissive, animated) ──
@@ -429,6 +502,18 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // macro relief in the shading only (gullies and swells at 10–60 m): reads at a distance, leaves the ground
   // height — the contract's groundHeight — untouched
   float macro = (fbm3(P * 0.017) * 1.4 + fbm3(P * 0.047 + 5.0) * 0.45) * (1.0 - smoothstep(0.5, 6.0, ash + snow * 4.0));
+  // close-up micro relief (0.3 m and 1.1 m octaves) from ANALYTIC noise gradients: smooth per pixel at any mesh
+  // density (screen-space derivatives of the bump facet per triangle), with a matching albedo grain
+  s.microG = vec3(0.0);
+  if (veryFine && mk > 0.01) {
+    float aa1 = aaF(fw, 0.35), aa2 = aaF(fw, 1.1);
+    vec3 g1 = vec3(0.0), g2 = vec3(0.0);
+    float n1 = aa1 > 0.0 ? snoiseGrad(P * 2.9, g1) : 0.0;
+    float n2 = snoiseGrad(P * 0.9 + 13.7, g2);
+    vec3 g = g1 * (2.9 * 0.05 * aa1) + g2 * (0.9 * 0.12 * aa2);
+    s.microG = (g - up * dot(g, up)) * mk;
+    col *= 1.0 + (0.12 * n1 * aa1 + 0.08 * n2 * aa2) * mk * 2.0;
+  }
   s.albedo = col;
   s.rough = clamp(rough, 0.04, 1.0);
   s.bump = bump + macro * (uw > 0.0 ? 0.3 : 1.0);
@@ -453,6 +538,7 @@ varying vec4 vF2;
 varying vec4 vF3;
 varying vec4 vF4;
 varying vec4 vF5;
+varying float vCurv;
 `;
 
 const VERT_MAIN = /* glsl */ `
@@ -463,8 +549,9 @@ ${TERRAIN_VERT_CORE}
   vF1 = tfInterp(uFieldM1, aCells, aMisc.x);
   vF2 = tfInterp(uFieldV, aCells, aMisc.x);
   vF3 = tfInterp(uFieldC, aCells, aMisc.x);
-  vF4 = vec4(tA.x, tA.z, tA.w, tH);
+  vF4 = vec4(tS, tA.z, tA.w, tH);
   vF5 = tfInterp(uFieldS, aCells, aMisc.x);
+  vCurv = tfInterp(uFieldN, aCells, aMisc.x).w;
   vec3 objectNormal = tNrm;
 #ifdef USE_TANGENT
   vec3 objectTangent = vec3(1.0, 0.0, 0.0);
@@ -490,10 +577,19 @@ const FRAG_LIGHT = /* glsl */ `
     // underwater: animated caustics focus the light on the floor
     float uwD = vF4.y - vF4.w;
     if (uwD > 0.0) {
-      vec3 c1 = voronoi3(Pb * 0.35 + vec3(uTime * 0.21, uTime * 0.13, 0.0));
-      vec3 c2 = voronoi3(Pb * 0.47 - vec3(0.0, uTime * 0.17, uTime * 0.11));
-      float caus = pow(clamp(1.0 - c1.x * 1.25, 0.0, 1.0), 3.0) + pow(clamp(1.0 - c2.x * 1.25, 0.0, 1.0), 3.0);
-      sunCol *= 0.65 + caus * 1.6 * exp(-uwD * 0.12);
+      // caustics are a network of bright FILAMENTS (light focused along the wave troughs): Voronoi cell edges, two
+      // drifting layers, red and blue shifted a little along the sun (dispersion), faded by the pixel footprint
+      float cfw = length(fwidth(Pb));
+      float caa = 1.0 - smoothstep(0.12, 0.6, cfw * 0.35 / 0.6);
+      vec3 sOff = uSunDirBody * 0.03;
+      vec3 q1 = Pb * 0.35 + vec3(uTime * 0.21, uTime * 0.13, 0.0);
+      vec3 q2 = Pb * 0.47 - vec3(0.0, uTime * 0.17, uTime * 0.11);
+      vec3 a1 = voronoi3(q1), a2 = voronoi3(q2);
+      vec3 b1 = voronoi3(q1 + sOff * 0.35), b2 = voronoi3(q2 + sOff * 0.47);
+      float cg = pow(1.0 - smoothstep(0.0, 0.12, a1.y - a1.x), 2.0) + pow(1.0 - smoothstep(0.0, 0.12, a2.y - a2.x), 2.0);
+      float cb = pow(1.0 - smoothstep(0.0, 0.12, b1.y - b1.x), 2.0) + pow(1.0 - smoothstep(0.0, 0.12, b2.y - b2.x), 2.0);
+      vec3 caus = vec3(cg, mix(cg, cb, 0.5), cb) * caa;
+      sunCol *= 0.7 + caus * 1.4 * exp(-uwD * 0.12);
     }
     IncidentLight sunL;
     sunL.direction = uSunDirView;
@@ -515,11 +611,19 @@ const FRAG_AMBIENT = /* glsl */ `
     vec3 nB = normalize(viewToBody * normal);
     vec3 vB = normalize(viewToBody * geometryViewDir);
     vec3 skyE = skyIrradiance(upB, nB, uSunDirBody) + uNightAmbient * (0.6 + 0.4 * max(dot(nB, upB), 0.0));
-    irradiance += skyE * ts.ao;
+    // the sky enters ONCE: three r186's RE_IndirectSpecular adds a full Lambert term from iblIrradiance itself, so
+    // adding skyE to 'irradiance' as well (RE_IndirectDiffuse) doubled the ambient — milky, shadowless ground
     iblIrradiance += skyE * ts.ao;
-    vec3 rB = reflect(-vB, nB);
-    rB = normalize(rB + upB * max(0.0, -dot(rB, upB)) * 1.05);
-    radiance += skyRadiance(upB, rB, uSunDirBody) * ts.ao * (1.0 - material.roughness * 0.6);
+    vec3 rBraw = reflect(-vB, nB);
+    // reflections of the sky need an open sky: a ray that dives below the horizon sees ground, not sky (horizon
+    // occlusion, measured BEFORE the ray is lifted above it), and creases / AO hide it too (Lagarde specular occlusion)
+    float horizonK = smoothstep(-0.05, 0.3, dot(rBraw, upB));
+    float NdVs = clamp(dot(nB, vB), 0.0, 1.0);
+    float rgh = material.roughness;
+    float specOcc = clamp(pow(NdVs + ts.ao, exp2(-16.0 * rgh - 1.0)) - 1.0 + ts.ao, 0.0, 1.0);
+    vec3 rB = normalize(rBraw + upB * max(0.0, -dot(rBraw, upB)) * 1.05);
+    // (three applies the environment BRDF — Fresnel and roughness — to this radiance itself)
+    radiance += skyRadiance(upB, rB, uSunDirBody) * specOcc * horizonK;
   }
 `;
 
@@ -552,7 +656,8 @@ export interface PlanetShaderUniforms {
 export function makePlanetUniforms(): PlanetShaderUniforms {
   return {
     uFieldA: { value: null }, uFieldN: { value: null }, uFieldM0: { value: null }, uFieldM1: { value: null },
-    uFieldV: { value: null }, uFieldC: { value: null }, uFieldS: { value: null }, uFieldF: { value: null },
+    uFieldV: { value: null }, uFieldC: { value: null }, uFieldS: { value: null }, uFieldF: { value: null }, uFieldG: { value: null },
+    uFieldD: { value: null },
     uRadius: { value: 3000 }, uCamBody: { value: new Vector3() },
     uBodyToView: { value: new Matrix3() }, uSunDirBody: { value: new Vector3(1, 0, 0) }, uSunDirView: { value: new Vector3(1, 0, 0) },
     uKind: { value: 0 }, uSeaLevel: { value: 0 }, uYearFrac: { value: 0 }, uTime: { value: 0 },
@@ -561,6 +666,8 @@ export function makePlanetUniforms(): PlanetShaderUniforms {
     uCloudCov: { value: null }, uCloudShell: { value: new Vector2(3180, 3420) }, uCloudOn: { value: 0 },
     uBrush: { value: new Vector4(0, 1, 0, 0.02) }, uBrushColor: { value: new Vector3(1.2, 0.95, 0.55) }, uBrushOn: { value: 0 },
     uDebug: { value: 0 }, uVegFade: { value: new Vector2(1e9, 1e9 + 1) }, uWindDir: { value: new Vector3(1, 0, 0.3).normalize() },
+    // this frame's view space → last frame's clip space through the planet body frame (water SSR reprojection)
+    uViewToPrevClip: { value: new Matrix4() },
   };
 }
 
@@ -582,12 +689,12 @@ export function makeTerrainMaterial(shared: Record<string, IUniform>, level: num
       .replace('#include <map_fragment>', FRAG_SURFACE)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = ts.rough;')
       .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = 0.0;')
-      .replace('#include <normal_fragment_maps>', 'if (uDebug < 2.5 || uDebug > 3.5) normal = bumpNormal(-vViewPosition, normal, ts.bump);')
+      .replace('#include <normal_fragment_maps>', 'if (uDebug < 2.5 || uDebug > 3.5) { normal = bumpNormal(-vViewPosition, normal, ts.bump); normal = normalize(normal - uBodyToView * ts.microG); }')
       .replace('#include <emissivemap_fragment>', FRAG_EMISSIVE)
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${FRAG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${FRAG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => 'genesis-terrain-v1';
+  mat.customProgramCacheKey = () => 'genesis-terrain-v3';
   return mat;
 }
 
@@ -615,7 +722,7 @@ export function makeTerrainDepthMaterial(shared: Record<string, IUniform>, terra
     vertexShader: DEPTH_VERT,
     fragmentShader: DEPTH_FRAG,
     uniforms: {
-      uFieldA: shared.uFieldA, uFieldN: shared.uFieldN, uRadius: shared.uRadius, uCamBody: shared.uCamBody,
+      uFieldA: shared.uFieldA, uFieldN: shared.uFieldN, uFieldG: shared.uFieldG, uFieldD: shared.uFieldD, uRadius: shared.uRadius, uCamBody: shared.uCamBody,
       uMorph: terrain.userData.uMorph as IUniform<Vector4>,
     },
     colorWrite: false,

@@ -226,10 +226,17 @@ function airPhrase(p: Planet): string {
 export function buildRegistry(): CommandRegistry {
   const r = new CommandRegistry();
 
-  // terrain brushes
-  const brushKinds: [BrushKind, string, number][] = [
-    ['raise', 'Raise the land', 15], ['lower', 'Lower the land', 15], ['flatten', 'Flatten the land', 0.8],
-    ['smooth', 'Smooth the land', 0.8], ['noise', 'Roughen the land', 20], ['crater', 'Blast a crater', 1],
+  // terrain brushes. Each has its own strength schema because the palette / radial UI builds its sliders from it and
+  // the numbers mean different things: metres for raise / lower / noise, a 0..1 blend for flatten / smooth, a depth
+  // multiplier for craters (1 = a natural crater of that size). brush() additionally caps any single height change at
+  // 0.3 × the planet radius and keeps the ground within ±0.5 × radius of the datum.
+  const brushKinds: [BrushKind, string, ParamSchema][] = [
+    ['raise', 'Raise the land', { type: 'number', min: 0, max: 1000, default: 15, desc: 'metres at the centre' }],
+    ['lower', 'Lower the land', { type: 'number', min: 0, max: 1000, default: 15, desc: 'metres at the centre' }],
+    ['flatten', 'Flatten the land', { type: 'number', min: 0, max: 1, default: 0.8, desc: 'blend toward the level, 0..1' }],
+    ['smooth', 'Smooth the land', { type: 'number', min: 0, max: 1, default: 0.8, desc: 'blend toward the neighbours, 0..1' }],
+    ['noise', 'Roughen the land', { type: 'number', min: 0, max: 500, default: 20, desc: 'relief amplitude in metres' }],
+    ['crater', 'Blast a crater', { type: 'number', min: 0.05, max: 5, default: 1, desc: 'depth multiplier (1 = natural)' }],
   ];
   for (const [kind, desc, strength] of brushKinds) {
     r.register(`terrain.${kind}`, ({ u, p }, a) => {
@@ -238,8 +245,9 @@ export function buildRegistry(): CommandRegistry {
     }, {
       desc, category: 'Shape',
       params: {
-        pos: pos(), radius: radius(), strength: { type: 'number', min: -500, max: 2000, default: strength },
-        height: { type: 'number', min: -5000, max: 5000 }, frequency: { type: 'number', min: 0.1, max: 50 },
+        pos: pos(), radius: radius(), strength,
+        ...(kind === 'flatten' ? { height: { type: 'number', min: -2000, max: 2000, desc: 'target height (m); default: the ground at the centre' } as ParamSchema } : {}),
+        ...(kind === 'noise' ? { frequency: { type: 'number', min: 0.1, max: 50, desc: 'bumps per radius' } as ParamSchema } : {}),
       },
     });
   }
@@ -249,12 +257,13 @@ export function buildRegistry(): CommandRegistry {
     return ok(`A mountain range rises ${where(p, a.pos)} (${n} cells).`);
   }, {
     desc: 'Raise a mountain range along a line', category: 'Shape',
-    params: { pos: pos(), to: { type: 'pos', desc: 'end of the range' }, radius: radius(220), height: { type: 'number', min: 1, max: 3000, default: 260 } },
+    params: { pos: pos(), to: { type: 'pos', desc: 'end of the range' }, radius: radius(220), height: { type: 'number', min: 1, max: 1000, default: 260 } },
   });
   r.register('terrain.dig-sea', ({ u, p }, a) => {
     const n = brush(u, p, 'dig-sea', a.pos!, a.radius as number, a.depth as number, { depth: a.depth as number });
-    return ok(`A sea is dug ${where(p, a.pos)}, ${fmt(a.depth as number)} m deep (${n} cells).`);
-  }, { desc: 'Dig a sea basin', category: 'Shape', params: { pos: pos(), radius: radius(500), depth: { type: 'number', min: 1, max: 2000, default: 40 } } });
+    const depth = Math.min(a.depth as number, 0.3 * p.st.radius);
+    return ok(`A sea is dug ${where(p, a.pos)}, ${fmt(depth)} m deep (${n} cells).`);
+  }, { desc: 'Dig a sea basin', category: 'Shape', params: { pos: pos(), radius: radius(500), depth: { type: 'number', min: 1, max: 1000, default: 40 } } });
   r.register('terrain.river', ({ u, p }, a) => {
     if (!a.to && p.s.ocean[p.cellAt(a.pos!)]) return fail('That place already lies in the sea: start a river on higher ground.');
     const n = brush(u, p, 'river', a.pos!, a.radius as number, a.depth as number, { to: (a.to as UnitVec | null) ?? undefined });
@@ -349,10 +358,23 @@ export function buildRegistry(): CommandRegistry {
     return ok(kind ? `${u.content.weather.get(kind).name} over all of ${p.name}.` : `${p.name}'s weather is its own again.`);
   }, { desc: 'One weather over the whole world', category: 'Sky', params: { kind: { type: 'enum', values: (u) => ['none', ...kinds(u)], default: null } } });
   r.register('weather.clear', ({ u, p }, a) => {
-    const n = clearWeather(u, p, a.pos ?? null, a.radius as number);
-    if (!a.pos) p.st.globalWeather = null;
-    return ok(n ? `The skies clear (${n} system${n === 1 ? '' : 's'} dispersed).` : 'The skies are already clear there.');
-  }, { desc: 'Clear the weather', category: 'Sky', params: { pos: pos(false), radius: radius(1500) } });
+    // `pos` falls back to the camera focus like every place, so "everywhere" must be asked for explicitly (or no place
+    // can be resolved at all, e.g. from a script with no focus)
+    const all = a.everywhere === true || !a.pos;
+    const n = clearWeather(u, p, all ? null : a.pos!, a.radius as number);
+    const sys = `${n} weather system${n === 1 ? '' : 's'} dispersed`;
+    if (all) {
+      const g = p.st.globalWeather;
+      if (g) setGlobalWeather(u, p, null);
+      const gName = g ? u.content.weather.find(g)?.name.toLowerCase() ?? g : null;
+      if (!n && !gName) return ok(`The skies over ${p.name} are already clear.`);
+      return ok(`The skies clear over all of ${p.name}${gName ? `: the planet-wide ${gName} lifts` : ''}${n ? `${gName ? ' and' : ':'} ${sys}` : ''}.`);
+    }
+    return ok(n ? `The skies clear ${where(p, a.pos)} (${sys}).` : `No weather system is centred within ${fmt(a.radius as number)} m ${where(p, a.pos)}.${p.st.globalWeather ? ' (The planet-wide weather stays: clear everywhere to lift it.)' : ''}`);
+  }, {
+    desc: 'Clear the weather', category: 'Sky',
+    params: { pos: pos(false), radius: radius(1500), everywhere: { type: 'boolean', default: false, desc: 'clear every system and the planet-wide weather' } },
+  });
   r.register('weather.pin-season', ({ p }, a) => {
     const s = a.season as string | null;
     const i = s ? SEASONS.indexOf(s) : -1;

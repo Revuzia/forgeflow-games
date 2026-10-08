@@ -2,6 +2,7 @@
 // camera({ poi })) and the opening. Works on whatever the sim sends (or lookdev), deterministic for given fields:
 //   coast   — low land beside open sea, looking out to sea
 //   valley  — a river among high ground, looking up the valley toward the highest peak in view
+//   river   — flowing water (the sim's flow field) inland among trees, looking downstream
 //   peak    — the highest ground
 //   town    — the most worn ground (roads, settlements)
 //   forest  — dense canopy on gentle ground
@@ -121,6 +122,30 @@ export function findPoi(pv: PlanetView, kind: string): Poi | null {
       }
       break;
     }
+    case 'river': {
+      const fx = pv.fields.get('flowX'), fy = pv.fields.get('flowY'), fz = pv.fields.get('flowZ');
+      const tree = pv.fields.get('tree');
+      if (!w || !fx || !fy || !fz) return null;
+      let bestFlow: [number, number, number] = [0, 0, 0];
+      for (let c = 0; c < N; c++) {
+        if (w[c] < 0.1 || w[c] > 8 || s[c] < 2) continue;
+        if (temp && temp[c] < 1) continue;
+        const f = Math.hypot(fx[c], fy[c], fz[c]); // m per tick
+        if (f < 4) continue;
+        // a river with trees on its banks and hills around, not out on the open shore
+        let trees = 0, hi = -Infinity, wetN = 0;
+        for (const o of near(c, 500 / R)) { if (tree) trees += tree[o]; if (s[o] > hi) hi = s[o]; if (w[o] > 0.1) wetN++; }
+        const score = Math.min(f, 30) * 1.5 + Math.min(trees, 40) + Math.min(hi - s[c], 80) * 0.3 - wetN * 0.8 + tropicPref(c) * 15;
+        if (score > bestScore) { bestScore = score; best = c; bestFlow = [fx[c], fy[c], fz[c]]; }
+      }
+      if (best < 0) return findPoi(pv, 'valley');
+      // heading downstream: the flow vector in the cell's east/north frame
+      const e: [number, number, number] = [0, 0, 0], n: [number, number, number] = [0, 0, 0];
+      tangentBasis(e, n, [P[best * 3], P[best * 3 + 1], P[best * 3 + 2]]);
+      const hd = Math.atan2(bestFlow[0] * e[0] + bestFlow[1] * e[1] + bestFlow[2] * e[2], bestFlow[0] * n[0] + bestFlow[1] * n[1] + bestFlow[2] * n[2]) * DEG;
+      const ll = latlon(pv, best);
+      return { lat: ll.lat, lon: ll.lon, heading: hd, cell: best };
+    }
     case 'town': {
       const road = pv.fields.get('road');
       if (!road) return null;
@@ -145,9 +170,30 @@ export function findPoi(pv: PlanetView, kind: string): Poi | null {
       break;
     }
     case 'desert': {
+      // a real desert: deep sand, dry, and (almost) nothing growing — the sandiest cell alone can be a forested beach
       const sand = pv.fields.get('sand');
       if (!sand) return null;
-      for (let c = 0; c < N; c += 2) if (sand[c] > bestScore && (!w || w[c] < 0.05)) { bestScore = sand[c]; best = c; }
+      const tree = pv.fields.get('tree'), shrub = pv.fields.get('shrub'), grass = pv.fields.get('grass'), moist = pv.fields.get('moisture');
+      const snow = pv.fields.get('snow');
+      const at = (f: Float32Array | undefined, c: number) => (f ? f[c] : 0);
+      for (let pass = 0; pass < 2 && best < 0; pass++) {
+        for (let c = 0; c < N; c += 2) {
+          if (w && w[c] >= 0.05) continue;
+          // first look for a strict desert (real sand, dry, bare, not a polar snowfield: bare and dry alone also match
+          // the ice caps); failing that, the driest, barest sand there is
+          const veg = at(tree, c) + at(shrub, c) + at(grass, c);
+          if (pass === 0 && (veg >= 0.15 || at(moist, c) >= 0.3 || sand[c] < 0.5 || at(snow, c) >= 0.05)) continue;
+          // the widest sand, not a sandy clearing in a wood: the neighbours' bare sand counts as much as the cell's
+          let around = 0;
+          const e0 = g.nbrStart[c], e1 = g.nbrStart[c + 1];
+          for (let e = e0; e < e1; e++) {
+            const o = g.nbr[e];
+            around += sand[o] - 2 * (at(tree, o) + at(shrub, o) + at(grass, o)) - 2 * at(snow, o) - (w && w[o] >= 0.05 ? 1 : 0);
+          }
+          const score = sand[c] + around / (e1 - e0) - (pass === 1 ? veg * 2 + at(moist, c) : 0);
+          if (score > bestScore) { bestScore = score; best = c; }
+        }
+      }
       if (best < 0) return null;
       look = g.nbr[g.nbrStart[best]];
       break;

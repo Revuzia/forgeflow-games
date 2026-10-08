@@ -6,7 +6,8 @@
 //   node _harness/shots.mjs --name=orbit --cam='{"mode":"orbit","lat":20,"lon":-30,"dist":8000}' --params=source=lookdev
 //   options: --size=1280x720  --only=name1,name2  --quality=high  --keep (leave the dev server running)
 //
-// Shot spec: { name, params?: "a=b&c=d" | {a:"b"}, camera?: CameraSpec, commands?: Command[], wait?: ticks to step,
+// Shot spec: { name, params?: "a=b&c=d" | {a:"b"}, commands?: Command[], wait?: ticks to step, camera?: CameraSpec
+//              (applied in that order: the world changes, time passes, then the camera frames it),
 //              frames?: frames to render before the capture (default 6), ui?: bool (default false), quality?, size?: [w,h],
 //              exposure?: EV, canvasOnly?: bool }
 // Starts `vite` on port 5190 (GENESIS_FROZEN=1: no HMR, so edits elsewhere never reload a page mid-shot) unless one
@@ -159,16 +160,19 @@ async function main() {
         G.ui(!!spec.ui);
         if (spec.exposure != null) G.exposure(spec.exposure);
         else G.exposure(0);
-        if (spec.camera) await G.camera(spec.camera);
-        for (const c of spec.commands ?? []) await G.cmd(c);
+        // the world first (commands, then time), then the camera: a camera `hour` must land after the stepping, or a
+        // world whose day is not 24 h would be photographed at whatever hour the steps left it
+        const results = [];
+        for (const c of spec.commands ?? []) { const r = await G.cmd(c); results.push({ k: c.k, ok: r.ok, msg: r.msg }); }
         if (spec.wait) await G.step(spec.wait);
+        if (spec.camera) await G.camera(spec.camera);
         const t = performance.now();
         await G.frames(spec.frames ?? 6);
         const ms = (performance.now() - t) / Math.max(1, spec.frames ?? 6);
         let path = null;
         if (spec.canvasOnly) path = await G.shot(spec.name);
         const st = G.state();
-        return { path, msPerFrame: ms, state: { tick: st.tick, camera: st.camera, render: st.render, source: st.source } };
+        return { path, msPerFrame: ms, results, state: { tick: st.tick, camera: st.camera, render: st.render, source: st.source } };
       }, s);
       let file = result.path;
       if (!s.canvasOnly) {
@@ -176,7 +180,9 @@ async function main() {
         await page.screenshot({ path: file });
       }
       const newErrors = errors.slice(before);
-      report.shots.push({ name: s.name, file, url, ms: Date.now() - t0, msPerFrame: Math.round(result.msPerFrame), render: result.state.render, camera: result.state.camera, errors: newErrors });
+      report.shots.push({ name: s.name, file, url, ms: Date.now() - t0, msPerFrame: Math.round(result.msPerFrame), tick: result.state.tick, commands: result.results, render: result.state.render, camera: result.state.camera, errors: newErrors });
+      for (const r of result.results) console.log(`  cmd ${r.k}: ${r.ok ? 'ok' : 'REFUSED'} — ${r.msg ?? ''}`);
+      for (const r of result.results) if (!r.ok) report.consoleErrors.push({ shot: s.name, error: `command ${r.k} refused: ${r.msg}` });
       for (const e of newErrors) report.consoleErrors.push({ shot: s.name, error: e });
       console.log(`  → ${file} (${((Date.now() - t0) / 1000).toFixed(1)} s, ${Math.round(result.msPerFrame)} ms/frame, ${result.state.render.triangles} tris, ${result.state.render.drawCalls} draws)`);
     } catch (e) {

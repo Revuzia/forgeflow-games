@@ -116,3 +116,61 @@ test('rewind restores the keyframe and replays the command log to the same state
   assert.ok(sim.u.log.every((e) => e.tick < 950));
   assert.equal(sim.rewind(5000), false);
 });
+
+test('save at every tick of a sea-level ramp in the rain: every loaded copy continues identically', () => {
+  // Regression (phase-1 review): a cache of raining land cells filtered by the ocean mask went stale while the mask
+  // moved under a sea-level ramp; the live sim and a loaded copy (fresh cache) then diverged.
+  const sim = new Sim({ ...OPTS, overrides: { n: 16 } });
+  sim.applyNow({ k: 'weather.global', kind: 'rain' });
+  sim.step(130);
+  sim.applyNow({ k: 'water.sea-level', delta: -9 });
+  const saves: Uint8Array[] = [];
+  const END = 260;
+  while (sim.tick < 200) {
+    saves.push(sim.save());
+    sim.step(1);
+  }
+  sim.step(END - sim.tick);
+  const want = sim.hash();
+  let bad = 0;
+  for (const bytes of saves) {
+    const b = Sim.load(bytes);
+    b.step(END - b.tick);
+    if (b.hash() !== want) bad++;
+  }
+  assert.equal(bad, 0, `${bad} of ${saves.length} loaded copies diverged`);
+});
+
+test('a command queued by apply() travels with the save', () => {
+  const a = new Sim({ ...OPTS, overrides: { n: 12 } });
+  a.step(10);
+  assert.ok(a.apply({ k: 'water.sea-level', delta: 30 }).ok);
+  const b = Sim.load(a.save());
+  assert.equal(b.hash(), a.hash());
+  a.step(300);
+  b.step(300);
+  assert.equal(b.hash(), a.hash());
+  assert.equal(b.u.planets[0].st.seaLevel, a.u.planets[0].st.seaLevel);
+  assert.equal(b.u.log.length, a.u.log.length);
+});
+
+test('rewind through the compressed keyframe chain reproduces every lived keyframe', () => {
+  const sim = new Sim({ ...OPTS, overrides: { n: 16 } });
+  sim.keyframeEvery = 120;
+  const lived = new Map<number, string>([[0, sim.hash()]]);
+  let si = 0;
+  while (sim.tick < 900) {
+    while (si < SCRIPT.length && SCRIPT[si][0] === sim.tick) sim.applyNow(SCRIPT[si++][1]);
+    sim.step(1);
+    if (sim.tick % 120 === 0 || sim.tick === 655) lived.set(sim.tick, sim.hash());
+  }
+  const kb = sim.keyframeBytes();
+  assert.ok(kb.keyframes >= 7, `${kb.keyframes} keyframes held`);
+  // the ring is compressed: well under one raw copy per keyframe
+  assert.ok(kb.encoded < kb.raw * (kb.keyframes - 1) * 0.6, `encoded ${kb.encoded} vs raw ${kb.raw} x ${kb.keyframes - 1}`);
+  // newest first (short chain), then the oldest (the whole chain), then between keyframes (replay)
+  for (const t of [840, 655, sim.rewindRange()[0]]) {
+    assert.ok(sim.rewind(t), `rewind to ${t}`);
+    assert.equal(sim.hash(), lived.get(t), `state at ${t}`);
+  }
+});

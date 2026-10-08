@@ -203,7 +203,7 @@ export class SimClient {
 
   setSpeed(x: number): void {
     this.backend?.setSpeed(x);
-    this.view.speed = x; // optimistic: the clock reacts this frame, the snapshot confirms
+    this.view.speedChanged(x); // optimistic: the clock reacts this frame, the snapshot confirms
   }
   async step(ticks: number): Promise<number> {
     if (!this.backend) return this.view.snapTick;

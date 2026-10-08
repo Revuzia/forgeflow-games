@@ -64,10 +64,33 @@ export function paintWeather(
   return w;
 }
 
-/** planet-wide weather override (null clears). */
+/**
+ * Planet-wide weather override (null clears). The hourly climate pass bakes the override into the climate sky
+ * (cPrecip floor, cCloud lift); swapping it here re-bakes those two at once, so "clear the skies everywhere" stops the
+ * rain now rather than up to an hour later. Humidity and temperature deltas follow at the next climate pass.
+ */
 export function setGlobalWeather(u: Universe, p: Planet, kind: string | null): boolean {
   if (kind !== null && !u.content.weather.has(kind)) return false;
+  const before = p.st.globalWeather;
   p.st.globalWeather = kind;
+  if (before === kind || !p.airy) return true;
+  const s = p.s;
+  const oldDef = before != null ? u.content.weather.find(before) : undefined;
+  const newDef = kind != null ? u.content.weather.find(kind) : undefined;
+  const oldFloor = oldDef && oldDef.precip > 0 ? Math.fround(oldDef.precip * 0.7) : -1;
+  const dCloud = (newDef ? newDef.cloud * 0.8 : 0) - (oldDef ? oldDef.cloud * 0.8 : 0);
+  const newFloor = newDef && newDef.precip > 0 ? newDef.precip * 0.7 : 0;
+  for (let c = 0; c < p.count; c++) {
+    let pr = s.cPrecip[c];
+    if (pr === oldFloor) pr = 0; // the rain was the old override's floor, not the climate's own
+    if (pr < newFloor) pr = newFloor;
+    s.cPrecip[c] = pr;
+    const cl = s.cCloud[c] + dCloud;
+    s.cCloud[c] = cl < 0 ? 0 : cl > 1 ? 1 : cl;
+    composeSky(p, c);
+  }
+  markRainDirty(p);
+  p.bump('precip'); p.bump('precipType'); p.bump('cloud');
   return true;
 }
 

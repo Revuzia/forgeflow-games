@@ -13,8 +13,8 @@ import type {
 import { TICKS_PER_SECOND_1X } from '../sim/types.ts';
 import { getGrid, type IcoGrid } from '../sim/grid/icogrid.ts';
 import { Noise3 } from '../sim/grid/noise.ts';
-import { groundHeight, type GroundSource } from '../sim/grid/surface.ts';
-import { bodyQuat, orbitOffset, spinAt, type D3, type DQ } from './orbits.ts';
+import { groundHeight, surfaceGradients, type GroundSource } from '../sim/grid/surface.ts';
+import { bodyQuat, orbitOffset, qRotate, qRotateInv, spinAt, type D3, type DQ } from './orbits.ts';
 
 export interface PlanetView {
   id: number;
@@ -36,6 +36,8 @@ export interface PlanetView {
   /** min / max of `surface` (metres above datum) — bounds for culling, picking and the camera */
   minSurface: number;
   maxSurface: number;
+  /** largest per-cell surface gradient (m/m): bounds how far the curved ground leaves its cells' heights */
+  maxGrad: number;
   agents?: MoverBlock;
   animals?: MoverBlock;
   buildings?: BuildingBlock;
@@ -47,6 +49,31 @@ export interface PlanetView {
   center: D3;
   quat: DQ;
   spin: number;
+  /**
+   * system-frame unit vector toward the sun AS THE SIM HEATS IT (derived each frame): the geometric star direction,
+   * except while a season is pinned — then the same hour angle with the pinned declination (PlanetParams.sunDir), so
+   * the renderer lights exactly the hemisphere and hour the sim warms. Every light / sky / shadow consumer reads this.
+   */
+  sunDir: D3;
+}
+
+const _sb: D3 = [0, 0, 0];
+
+/** pv.sunDir from the centre and orientation (see PlanetView.sunDir; same rule as the sim's pinDeclination) */
+export function litSunDir(pv: PlanetView): D3 {
+  const c = pv.center, out = pv.sunDir;
+  const d = Math.hypot(c[0], c[1], c[2]) || 1;
+  out[0] = -c[0] / d; out[1] = -c[1] / d; out[2] = -c[2] / d;
+  const sd = pv.params.sunDir;
+  if (pv.params.seasonPinned == null || !sd) return out;
+  qRotateInv(pv.quat, out, _sb);
+  let hx = _sb[0], hz = _sb[2];
+  let hl = Math.hypot(hx, hz);
+  if (hl < 1e-9) { hx = sd[0]; hz = sd[2]; hl = Math.hypot(hx, hz); if (hl < 1e-9) { hx = 1; hz = 0; hl = 1; } }
+  const sin = Math.max(-1, Math.min(1, sd[1]));
+  const cos = Math.sqrt(1 - sin * sin);
+  _sb[0] = (hx / hl) * cos; _sb[1] = sin; _sb[2] = (hz / hl) * cos;
+  return qRotate(pv.quat, _sb, out);
 }
 
 const ZERO_FIELDS = new Map<number, Float32Array>();
@@ -80,7 +107,15 @@ export class WorldView {
   snapshots = 0;
   /** the smoothed, interpolated render clock (fractional ticks) */
   renderTick = 0;
+  /**
+   * ticks per real second the render clock advances at: the sim's MEASURED rate over the last second of snapshots
+   * (capped at the requested speed), so a sim that cannot hold 1000x still moves the planet smoothly instead of the
+   * clock racing ahead at the nominal rate and stalling at every snapshot
+   */
+  tickRate = 10;
   private lastFrameAt = -1;
+  private rateT: number[] = [];
+  private rateTick: number[] = [];
 
   planet(id: number): PlanetView | undefined {
     for (const p of this.planets) if (p.id === id) return p;
@@ -89,6 +124,7 @@ export class WorldView {
 
   /** Merge a snapshot into the mirror. Field arrays are adopted (they were transferred to us), not copied. */
   apply(snap: Snapshot, now: number): void {
+    this.measureRate(snap, now);
     this.snapTick = snap.tick;
     this.snapAt = now;
     this.speed = snap.speed;
@@ -137,9 +173,9 @@ export class WorldView {
     return {
       id: ps.id, name: ps.name, gridN: ps.gridN, seed: ps.seed, grid, noise, params: ps.params, paramsTick: 0,
       alive: ps.alive, fields: new Map(), fieldVersion: new Map(), anyFieldVersion: 0,
-      ground: { grid, radius: ps.params.radius, noise, surface: z, soil: z, sand: z, snow: z },
-      minSurface: 0, maxSurface: 0, settlements: [], weather: [], disasters: [], population: [],
-      center: [0, 0, 0], quat: [0, 0, 0, 1], spin: ps.params.spin,
+      ground: { grid, radius: ps.params.radius, noise, surface: z, soil: z, sand: z, snow: z, grad: null },
+      minSurface: 0, maxSurface: 0, maxGrad: 0, settlements: [], weather: [], disasters: [], population: [],
+      center: [0, 0, 0], quat: [0, 0, 0, 1], spin: ps.params.spin, sunDir: [0, 1, 0],
     };
   }
 
@@ -171,6 +207,13 @@ export class WorldView {
           for (let i = 0; i < s.length; i++) { const v = s[i]; if (v < lo) lo = v; if (v > hi) hi = v; }
           pv.minSurface = lo;
           pv.maxSurface = hi;
+          // curvature of the ground (surface.ts): the same gradients the sim derives from the same array, so CPU
+          // placement, picking and the terrain shader all evaluate one curved surface
+          const g = surfaceGradients(pv.grid, ps.params.radius, s, (pv.ground.grad as Float32Array | null) ?? undefined);
+          pv.ground.grad = g;
+          let gm = 0;
+          for (let i = 0; i < g.length; i += 4) { const m = g[i] * g[i] + g[i + 1] * g[i + 1] + g[i + 2] * g[i + 2]; if (m > gm) gm = m; }
+          pv.maxGrad = Math.sqrt(gm);
         }
       }
     }
@@ -187,13 +230,43 @@ export class WorldView {
     return pv.fieldVersion.get(f) ?? 0;
   }
 
+  /** the UI changed the speed: restart the rate estimate at the nominal rate (the sim confirms within a snapshot) */
+  speedChanged(x: number): void {
+    this.speed = x;
+    this.tickRate = x * TICKS_PER_SECOND_1X;
+    this.rateT.length = 0;
+    this.rateTick.length = 0;
+  }
+
   /**
-   * Advance the render clock and every body's frame. The clock runs at the sim's speed from the last snapshot tick and
-   * is gently pulled toward (snapTick + elapsed · ticks/s) so irregular snapshot arrival never makes motion jitter or
-   * run backwards (CONTRACT.md §14).
+   * Measured ticks per real second over a sliding ~1.2 s window of snapshot arrivals. Snapshot ticks are integers and
+   * arrive at ~30 Hz, so a per-snapshot rate would be noise (0 or 30 ticks/s at 1x); a window of a second is smooth.
+   */
+  private measureRate(snap: Snapshot, now: number): void {
+    const nominal = snap.speed * TICKS_PER_SECOND_1X;
+    if (this.snapshots === 0 || snap.speed !== this.speed || snap.tick < this.snapTick) {
+      this.rateT.length = 0;
+      this.rateTick.length = 0;
+      this.tickRate = nominal;
+    }
+    this.rateT.push(now);
+    this.rateTick.push(snap.tick);
+    while (this.rateT.length > 2 && now - this.rateT[0] > 1200) { this.rateT.shift(); this.rateTick.shift(); }
+    const span = (now - this.rateT[0]) / 1000;
+    if (span >= 0.4) {
+      const est = (snap.tick - this.rateTick[0]) / span;
+      // a stepped jump inside the window would inflate the estimate: never exceed the requested speed
+      this.tickRate = Math.max(0, Math.min(nominal, est * 1.01));
+    }
+  }
+
+  /**
+   * Advance the render clock and every body's frame. The clock runs at the measured sim rate from the last snapshot
+   * tick and is gently pulled toward (snapTick + elapsed · rate) so irregular snapshot arrival never makes motion
+   * jitter or run backwards (CONTRACT.md §14).
    */
   update(now: number): void {
-    const tps = this.speed * TICKS_PER_SECOND_1X;
+    const tps = this.speed > 0 ? this.tickRate : 0;
     if (this.lastFrameAt < 0) this.lastFrameAt = now;
     const dt = Math.min(0.25, Math.max(0, (now - this.lastFrameAt) / 1000));
     this.lastFrameAt = now;
@@ -202,9 +275,12 @@ export class WorldView {
     const target = this.snapTick + Math.min(elapsed, 0.6) * tps;
     let t = this.renderTick + dt * tps;
     const err = target - t;
-    if (Math.abs(err) > Math.max(30, tps * 1.5)) t = target; // big jumps (step, load, rewind): snap
-    else t += err * Math.min(1, dt * 4);
-    if (t < this.renderTick && Math.abs(err) <= Math.max(30, tps * 1.5)) t = this.renderTick; // monotonic
+    const jump = Math.max(30, tps * 1.5);
+    if (Math.abs(err) > jump) t = target; // big jumps (step, load, rewind, a stalled frame): snap
+    // snapshot ticks are integers: within ~a tick the error is mostly that quantisation (a ±0.5 tick sawtooth at 1x),
+    // so it is corrected gently; larger errors are pulled in within a quarter second
+    else t += err * Math.min(1, dt * (Math.abs(err) > 1.5 ? 4 : 1));
+    if (t < this.renderTick && Math.abs(err) <= jump) t = this.renderTick; // monotonic
     this.renderTick = t;
     this.updateBodies(t);
   }
@@ -228,6 +304,7 @@ export class WorldView {
       pv.center[0] = cx; pv.center[1] = cy; pv.center[2] = cz;
       pv.spin = spinAt(pv.params, pv.paramsTick, t);
       bodyQuat(pv.params, pv.spin, pv.quat);
+      litSunDir(pv);
       done.add(pv.id);
     };
     for (const pv of this.planets) place(pv, 0);

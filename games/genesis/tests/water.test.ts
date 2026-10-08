@@ -148,3 +148,93 @@ test('a tsunami crosses a quarter of the world at the stylised speed, and the se
   }
   assert.ok(maxDev < 0.25, `the sea calmed (max level spread ${maxDev.toFixed(3)} m)`);
 });
+
+/** a high inland cell (far from the sea) and the current ocean mask */
+function inland(p: Planet): number {
+  let best = -1;
+  for (let c = 0; c < p.count; c++) {
+    if (p.s.ocean[c] || p.f.water[c] > 0.1) continue;
+    if (best < 0 || p.f.surface[c] > p.f.surface[best]) best = c;
+  }
+  return best;
+}
+
+test('an inland pit deeper than the sea floor does not steal the ocean', () => {
+  // Regression (phase-1 review): the mask grew from the single deepest cell, so one deep pit became "the ocean" and
+  // the real sea stopped being sea (no level hold, no slider).
+  const sim = new Sim({ seed: 5, scenario: 'sandbox', overrides: { n: 24 } });
+  const p = sim.u.planets[0];
+  const ocean0 = Uint8Array.from(p.s.ocean);
+  const count0 = p.hydro.oceanCells;
+  let floor = Infinity;
+  for (let c = 0; c < p.count; c++) if (ocean0[c]) floor = Math.min(floor, p.f.surface[c]);
+  const c = inland(p);
+  const P = p.grid.pos;
+  const pos = [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]];
+  let r = sim.applyNow({ k: 'terrain.lower', pos, radius: 150, strength: 700 });
+  assert.ok(r.ok, r.msg);
+  let pit = Infinity;
+  for (let i = 0; i < p.count; i++) pit = Math.min(pit, p.f.surface[i]);
+  assert.ok(pit < floor - 100, `the pit (${pit.toFixed(0)} m) lies below the sea floor (${floor.toFixed(0)} m)`);
+  sim.step(10);
+  let kept = 0;
+  for (let i = 0; i < p.count; i++) if (ocean0[i] && p.s.ocean[i]) kept++;
+  assert.equal(kept, count0, 'every sea cell is still sea');
+  assert.equal(p.s.ocean[p.cellAt(pos)], 0, 'the pit is a basin, not the ocean');
+  // the slider still reaches the real sea
+  r = sim.applyNow({ k: 'water.sea-level', delta: 10 });
+  assert.ok(r.ok, r.msg);
+  sim.step(300);
+  let num = 0, den = 0;
+  for (let i = 0; i < p.count; i++) if (ocean0[i]) { num += (p.f.surface[i] + p.f.water[i]) * p.cellArea[i]; den += p.cellArea[i]; }
+  assert.ok(Math.abs(num / den - 10) < 0.3, `the old sea rose to the new level (${(num / den).toFixed(2)} m)`);
+  // a dug sea, on the other hand, IS sea — and the old sea stays sea too
+  const c2 = inland(p);
+  r = sim.applyNow({ k: 'terrain.dig-sea', pos: [P[c2 * 3], P[c2 * 3 + 1], P[c2 * 3 + 2]], radius: 120, depth: 400 });
+  assert.ok(r.ok, r.msg);
+  sim.step(10);
+  assert.equal(p.s.ocean[c2], 1, 'the dug basin joined the sea');
+  kept = 0;
+  for (let i = 0; i < p.count; i++) if (ocean0[i] && p.s.ocean[i]) kept++;
+  assert.equal(kept, count0, 'the old sea is untouched by the dig');
+});
+
+test('seepage is accounted: conserved volume holds on a terran world with springs of groundwater', () => {
+  const sim = new Sim({ seed: 5, scenario: 'sandbox', overrides: { n: 24 } });
+  const p = sim.u.planets[0];
+  p.cfg.rainScale = 0; p.cfg.evaporation = 0; p.cfg.infiltration = 0; p.cfg.freeze = false;
+  // force seepage: saturate a few land cells' aquifers far beyond their capacity
+  let n = 0;
+  for (let c = 0; c < p.count && n < 12; c += 97) if (!p.s.ocean[c]) { p.f.aquifer[c] = 30; p.s.seep[c] = 0.01; n++; }
+  // the slow pass would recompute seep; keep this window inside one slow period
+  const c0 = conservedVolume(p);
+  const aq0 = p.f.aquifer.reduce((a, b, i) => a + b * p.cellArea[i], 0);
+  sim.step(200);
+  const aq1 = p.f.aquifer.reduce((a, b, i) => a + b * p.cellArea[i], 0);
+  assert.ok(aq0 - aq1 > 1000, `groundwater seeped out (${(aq0 - aq1).toFixed(0)} m³)`);
+  const drift = conservedVolume(p) - c0;
+  assert.ok(Math.abs(drift) < 1e-6 * p.waterVolume(), `conserved volume drift ${drift.toExponential(2)} m³`);
+});
+
+test('a tsunami launched while the sea level is ramping keeps its wave', () => {
+  const run = (ramp: boolean): number => {
+    const sim = new Sim({ seed: 5, scenario: 'sandbox', overrides: { n: 24 } });
+    const p = sim.u.planets[0];
+    let deep = -1;
+    for (let c = 0; c < p.count; c++) if (p.s.ocean[c] && (deep < 0 || p.f.surface[c] < p.f.surface[deep])) deep = c;
+    if (ramp) sim.applyNow({ k: 'water.sea-level', delta: 60 });
+    const P = p.grid.pos;
+    sim.applyNow({ k: 'water.tsunami', pos: [P[deep * 3], P[deep * 3 + 1], P[deep * 3 + 2]], radius: 300, height: 20 });
+    sim.step(60);
+    // deviation of the sea surface from its mean
+    let num = 0, den = 0;
+    for (let c = 0; c < p.count; c++) if (p.s.ocean[c]) { num += (p.f.surface[c] + p.f.water[c]) * p.cellArea[c]; den += p.cellArea[c]; }
+    const mean = num / den;
+    let dev = 0;
+    for (let c = 0; c < p.count; c++) if (p.s.ocean[c] && p.f.water[c] > 1) dev = Math.max(dev, Math.abs(p.f.surface[c] + p.f.water[c] - mean));
+    return dev;
+  };
+  const still = run(false), ramping = run(true);
+  assert.ok(still > 3, `the wave runs on a still sea (${still.toFixed(2)} m)`);
+  assert.ok(ramping > still * 0.7, `and on a rising one (${ramping.toFixed(2)} m vs ${still.toFixed(2)} m)`);
+});

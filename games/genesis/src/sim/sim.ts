@@ -23,7 +23,8 @@ import { makeStar, starView, type StarState } from './world/star.ts';
 import { buildRegistry, type CommandRegistry } from './god/commands.ts';
 import { parseFreeform } from './god/freeform.ts';
 import { listParams } from './god/params.ts';
-import { Hasher, sameBytes, type TypedArray } from './core/hash.ts';
+import { Hasher, type TypedArray } from './core/hash.ts';
+import { packArray, unpackArray, type PackedArray } from './core/kfcodec.ts';
 import { SaveWriter, readSave } from './core/serialize.ts';
 import { IdAllocator } from './core/ids.ts';
 import type { RngState } from './core/rng.ts';
@@ -57,14 +58,30 @@ export interface SnapshotOptions {
   drain?: boolean;
 }
 
+/**
+ * A rewind keyframe. The ring is a REVERSE delta chain: the newest keyframe's arrays are kept raw (`Sim.kfRaw`, needed
+ * anyway to encode the next one), and each older keyframe stores its arrays XOR-encoded against the next newer one
+ * (core/kfcodec.ts). Rewinding to a recent moment — the common case — decodes few links; dropping the oldest keyframe
+ * needs nothing re-encoded because nothing depends on it.
+ */
 interface Keyframe {
   tick: number;
   header: string;
-  blobs: Map<string, TypedArray>;
+  /** encoded arrays (empty for the newest keyframe, whose arrays are Sim.kfRaw) */
+  packed: Map<string, PackedArray>;
+  /** raw arrays not encoded yet (the previous newest, re-encoded a few arrays per tick against `ref`) */
+  pending?: Map<string, TypedArray>;
+  ref?: Map<string, TypedArray>;
+  /** encoded bytes held by this keyframe (header included; pending raw arrays are transient and not counted) */
+  bytes: number;
 }
 
 const KEYFRAME_EVERY = 2880;
 const KEYFRAME_RING = 16;
+/** encoded bytes the ring may hold (plus one raw copy of the newest keyframe): older keyframes are dropped first */
+const KEYFRAME_BUDGET = 64e6;
+/** raw bytes of keyframe arrays re-encoded per tick (~6 ms of work): a whole 7-world system finishes within ~20 ticks */
+const KEYFRAME_ENCODE_PER_TICK = 2e6;
 
 export class Sim {
   readonly content: Content;
@@ -75,9 +92,14 @@ export class Sim {
   achievedSpeed = 0;
   msPerTick = 0;
   keyframeEvery = KEYFRAME_EVERY;
+  /** at most this many keyframes ... */
   keyframeRing = KEYFRAME_RING;
+  /** ... and at most this many encoded bytes (the newest keyframe's raw arrays come on top) */
+  keyframeBudget = KEYFRAME_BUDGET;
   private queue: Command[] = [];
   private keyframes: Keyframe[] = [];
+  /** raw arrays of the newest keyframe (copies; never aliased with live state) */
+  private kfRaw = new Map<string, TypedArray>();
   private chronicleSent = 0;
 
   constructor(opts: SimOptions, restored?: { universe: Universe; content: Content }) {
@@ -131,6 +153,7 @@ export class Sim {
     for (const p of u.planets) if (p.alive) runPlanet(u, p, t);
     u.tick = t + 1;
     if (u.tick % this.keyframeEvery === 0) this.keyframe();
+    else if (this.keyframes.length > 1) this.encodeKeyframes(KEYFRAME_ENCODE_PER_TICK);
   }
 
   private exec(cmd: Command): CommandResult {
@@ -171,7 +194,7 @@ export class Sim {
     for (const p of u.planets) {
       const sun = u.sun(p, u.tick);
       const snap: PlanetSnap = {
-        id: p.id, name: p.name, gridN: p.n, seed: p.seed, params: p.paramsAt(u.tick, sun.lon), alive: p.alive,
+        id: p.id, name: p.name, gridN: p.n, seed: p.seed, params: p.paramsAt(u.tick, sun), alive: p.alive,
         fieldVersion: u.stamp,
         weather: weatherViews(u, p), disasters: [], settlements: [], population: [],
       };
@@ -216,6 +239,8 @@ export class Sim {
       chronicle: u.chronicle,
       stamp: u.stamp,
       planets: u.planets.map(planetToJson),
+      // commands accepted by apply() but not yet run: they are part of the future (save, hash), not of the past (log)
+      queue: this.queue,
     };
     if (withLog) h.log = u.log;
     return h;
@@ -234,7 +259,10 @@ export class Sim {
     const missing = need.filter((x) => !c.packs.includes(x));
     if (missing.length) throw new Error(`This save needs the content pack${missing.length > 1 ? 's' : ''} ${missing.map((m) => `'${m}'`).join(', ')}.`);
     const u = universeFromHeader(c, file.header, file.blobs, true);
-    return new Sim({ seed: u.seed, scenario: u.scenario }, { universe: u, content: c });
+    const sim = new Sim({ seed: u.seed, scenario: u.scenario }, { universe: u, content: c });
+    const q = file.header.queue;
+    if (Array.isArray(q)) sim.queue = (q as Command[]).map((cmd) => JSON.parse(JSON.stringify(cmd)) as Command);
+    return sim;
   }
 
   /** stable hash of the whole simulation state (not the command log, events or field versions) */
@@ -256,20 +284,85 @@ export class Sim {
   // ───────────────────────────── keyframes / rewind ─────────────────────────────
 
   private keyframe(): void {
+    // a previous re-encode still pending (only with very short test spacings): finish it first
+    this.encodeKeyframes(Infinity);
     const prev = this.keyframes[this.keyframes.length - 1];
-    const blobs = new Map<string, TypedArray>();
-    for (const p of this.u.planets) {
-      for (const [name, arr] of planetArrays(p)) {
-        const key = `p${p.id}.${name}`;
-        const old = prev?.blobs.get(key);
-        // unchanged arrays are shared with the previous keyframe (rock, ores, pins rarely change)
-        blobs.set(key, old && sameBytes(old, arr) ? old : (arr.slice() as TypedArray));
+    const raw = new Map<string, TypedArray>();
+    for (const p of this.u.planets) for (const [name, arr] of planetArrays(p)) raw.set(`p${p.id}.${name}`, arr.slice() as TypedArray);
+    const kf: Keyframe = { tick: this.u.tick, header: JSON.stringify(this.header(false)), packed: new Map(), bytes: 0 };
+    kf.bytes = kf.header.length * 2;
+    if (prev && prev.tick === kf.tick) {
+      // same tick again (constructor right after a rewind / load): replace the newest
+      this.keyframes[this.keyframes.length - 1] = kf;
+    } else {
+      if (prev) {
+        // the previous newest becomes a delta against the new one — encoded a few arrays per tick over the next ticks
+        // (a 38 MB system took ~0.3 s in one go: a visible stall of the worker), its raw arrays held until then
+        prev.pending = this.kfRaw;
+        prev.ref = raw;
+      }
+      this.keyframes.push(kf);
+    }
+    this.kfRaw = raw;
+    this.trimKeyframes();
+  }
+
+  /** drop the oldest keyframes beyond the count / byte budget (the newest two always stay) */
+  private trimKeyframes(): void {
+    let total = 0;
+    for (const k of this.keyframes) total += k.bytes;
+    while (this.keyframes.length > 2 && (this.keyframes.length > this.keyframeRing || total > this.keyframeBudget)) {
+      total -= this.keyframes[0].bytes;
+      this.keyframes.shift();
+    }
+  }
+
+  /** encode pending keyframe arrays, about `budget` raw bytes' worth (Infinity = all) */
+  private encodeKeyframes(budget: number): void {
+    let done = 0;
+    for (const k of this.keyframes) {
+      if (!k.pending || !k.ref) continue;
+      for (const [key, a] of k.pending) {
+        if (done >= budget) return;
+        const pk = packArray(a, k.ref.get(key) ?? null);
+        k.packed.set(key, pk);
+        k.bytes += pk.bytes.byteLength;
+        k.pending.delete(key);
+        done += a.byteLength;
+      }
+      k.pending = undefined;
+      k.ref = undefined;
+      this.trimKeyframes();
+    }
+  }
+
+  /** bytes held by the rewind ring: encoded deltas + the newest keyframe's raw arrays (perf HUD, STATUS numbers) */
+  keyframeBytes(): { keyframes: number; encoded: number; raw: number; pending: number } {
+    let encoded = 0, raw = 0, pending = 0;
+    for (const k of this.keyframes) {
+      encoded += k.bytes;
+      if (k.pending) for (const a of k.pending.values()) pending += a.byteLength;
+    }
+    for (const a of this.kfRaw.values()) raw += a.byteLength;
+    return { keyframes: this.keyframes.length, encoded, raw, pending };
+  }
+
+  /** decode the arrays of keyframe `idx` (walking the delta chain back from the newest) */
+  private keyframeArrays(idx: number): Map<string, TypedArray> {
+    this.encodeKeyframes(Infinity);
+    let cur = new Map<string, TypedArray>();
+    for (const [k, a] of this.kfRaw) cur.set(k, a.slice() as TypedArray);
+    for (let i = this.keyframes.length - 2; i >= idx; i--) {
+      const next = cur;
+      cur = new Map();
+      for (const [key, pk] of this.keyframes[i].packed) {
+        const ref = next.get(key) ?? null;
+        const out = typedLike(ref, pk.byteLength, key, this.keyframes[i].header);
+        unpackArray(pk, out, pk.xor ? ref : null);
+        cur.set(key, out);
       }
     }
-    const kf: Keyframe = { tick: this.u.tick, header: JSON.stringify(this.header(false)), blobs };
-    if (prev && prev.tick === kf.tick) this.keyframes[this.keyframes.length - 1] = kf;
-    else this.keyframes.push(kf);
-    while (this.keyframes.length > this.keyframeRing) this.keyframes.shift();
+    return cur;
   }
 
   /** ticks that can be rewound to (oldest keyframe .. now) */
@@ -280,16 +373,22 @@ export class Sim {
   rewind(tick: number): boolean {
     const target = Math.floor(tick);
     if (target > this.u.tick || target < 0) return false;
-    let kf: Keyframe | undefined;
-    for (const k of this.keyframes) if (k.tick <= target) kf = k;
-    if (!kf) return false;
+    let idx = -1;
+    for (let i = 0; i < this.keyframes.length; i++) if (this.keyframes[i].tick <= target) idx = i;
+    if (idx < 0) return false;
+    const kf = this.keyframes[idx];
+    const arrays = this.keyframeArrays(idx);
     const log = this.u.log;
-    const keep = log.filter((e) => e.tick < kf!.tick);
-    const replay = log.filter((e) => e.tick >= kf!.tick && e.tick < target);
+    const keep = log.filter((e) => e.tick < kf.tick);
+    const replay = log.filter((e) => e.tick >= kf.tick && e.tick < target);
     const header = JSON.parse(kf.header) as Record<string, unknown>;
-    this.u = universeFromHeader(this.content, header, kf.blobs, false);
+    this.u = universeFromHeader(this.content, header, arrays, false);
     this.u.log = keep;
-    this.keyframes = this.keyframes.filter((k) => k.tick <= kf!.tick);
+    // the chosen keyframe becomes the newest: its arrays are the raw reference again (planetFromJson copied them)
+    this.keyframes = this.keyframes.slice(0, idx + 1);
+    kf.packed = new Map();
+    kf.bytes = kf.header.length * 2;
+    this.kfRaw = arrays;
     this.queue = [];
     let ri = 0;
     while (this.u.tick < target) {
@@ -352,6 +451,22 @@ export class Sim {
 }
 
 // ───────────────────────────── helpers ─────────────────────────────
+
+/** a fresh typed array of the same type as `like` (or, for an array the newer keyframe lacks, the type its name and
+ * byte length imply from the planet's array list) */
+function typedLike(like: TypedArray | null, byteLength: number, key: string, header: string): TypedArray {
+  if (like) return new (like.constructor as new (n: number) => TypedArray)(byteLength / like.BYTES_PER_ELEMENT);
+  // a planet that existed then but not later (erased world): rebuild its array list to learn the type
+  const h = JSON.parse(header) as { planets: PlanetJson[] };
+  for (const pj of h.planets) {
+    if (!key.startsWith(`p${pj.id}.`)) continue;
+    const probe = planetFromJson(pj, new Map());
+    for (const [name, arr] of planetArrays(probe)) {
+      if (`p${pj.id}.${name}` === key) return new (arr.constructor as new (n: number) => TypedArray)(byteLength / arr.BYTES_PER_ELEMENT);
+    }
+  }
+  throw new Error(`keyframe: unknown array '${key}'`);
+}
 
 /** the systems of one planet at tick t, on their cadences */
 export function runPlanet(u: Universe, p: Planet, t: number): void {
@@ -467,7 +582,7 @@ function planetInfo(sim: Sim, p: Planet): Record<string, unknown> {
   const sun = u.sun(p, u.tick);
   return {
     id: p.id, name: p.name, kind: p.st.kind, gridN: p.n, cells: p.count, radius: p.st.radius,
-    params: p.paramsAt(u.tick, sun.lon),
+    params: p.paramsAt(u.tick, sun),
     stats: {
       meanTemperature: tSum / area, minTemperature: tMin, maxTemperature: tMax,
       waterVolume: p.waterVolume(), oceanCells: p.hydro.oceanCells, wetCells: wet, snowCells: snow,

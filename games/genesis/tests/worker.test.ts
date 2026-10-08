@@ -107,3 +107,41 @@ test('worker protocol round trip', async () => {
     await c.w.terminate();
   }
 });
+
+test('worker pacing: sleeps when it keeps up (no busy spin at 10x / 100x), answers promptly when it cannot keep up', async () => {
+  const c = new Client();
+  await c.next((m) => (m as { type: string }).type === '__booted');
+  const ready = c.next((m) => m.type === 'ready');
+  c.send({ type: 'init', scenario: 'barren', seed: 3, options: { overrides: { n: 16 }, speed: 0 } });
+  await ready;
+  try {
+    for (const speed of [10, 100]) {
+      c.send({ type: 'speed', speed });
+      await new Promise((ok) => setTimeout(ok, 600));
+      const s0 = await c.snapshot(false);
+      const u0 = c.w.performance.eventLoopUtilization();
+      await new Promise((ok) => setTimeout(ok, 1500));
+      const u1 = c.w.performance.eventLoopUtilization(u0);
+      const s1 = await c.snapshot(false);
+      const tps = (s1.tick - s0.tick) / 1.5;
+      assert.ok(tps > 10 * speed * 0.7, `${speed}x runs ${tps.toFixed(0)} ticks/s`);
+      // the barren n=16 sim needs ~1 % of a core here; a self-reposting loop showed 100 %
+      assert.ok(u1.utilization < 0.5, `${speed}x: worker busy ${(u1.utilization * 100).toFixed(0)} % of the time`);
+    }
+    // flat out (a pace no sim can hold, so every slice runs its full budget): messages still get through between slices
+    // (a MessagePort self-post loop held them back ~13 s in Node)
+    c.send({ type: 'speed', speed: 100000 });
+    await new Promise((ok) => setTimeout(ok, 300));
+    const t0 = performance.now();
+    const ans = await c.call<{ type: 'answer'; id: number; data: unknown }>({ type: 'query', id: 1, q: 'scenario' });
+    const ms = performance.now() - t0;
+    assert.ok(ans.data, 'answered');
+    assert.ok(ms < 1000, `a query waited ${ms.toFixed(0)} ms while the sim ran flat out`);
+    c.send({ type: 'speed', speed: 1 });
+    await new Promise((ok) => setTimeout(ok, 3500));
+    const s = await c.snapshot(false);
+    assert.equal(s.achievedSpeed, 1, `a steady 1x reads ${s.achievedSpeed}`);
+  } finally {
+    await c.w.terminate();
+  }
+});

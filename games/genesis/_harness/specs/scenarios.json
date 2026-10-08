@@ -1,0 +1,17 @@
+{
+  "$comment": "GENESIS scenarios on the real sim (worker). Run: node _harness/shots.mjs _harness/specs/scenarios.json",
+  "shots": [
+    { "name": "sc-sandbox-orbit", "params": "scenario=sandbox", "wait": 120, "camera": { "mode": "orbit", "lat": 18, "lon": -35, "dist": 7600, "hour": 12 }, "frames": 8 },
+    { "name": "sc-sandbox-river", "params": "scenario=sandbox", "camera": { "mode": "surface", "poi": "river", "alt": 22, "pitch": -7, "hour": 10 }, "frames": 10 },
+    { "name": "sc-lookdev-orbit", "params": "scenario=lookdev", "wait": 120, "camera": { "mode": "orbit", "lat": 12, "lon": -30, "dist": 7600, "hour": 13 }, "frames": 8 },
+    { "name": "sc-lookdev-coast", "params": "scenario=lookdev", "camera": { "mode": "orbit", "poi": "coast", "dist": 330, "tilt": 68, "hour": 10.5 }, "frames": 10 },
+    { "name": "sc-lookdev-river", "params": "scenario=lookdev", "camera": { "mode": "surface", "poi": "river", "alt": 22, "pitch": -7, "hour": 9.5 }, "frames": 10 },
+    { "name": "sc-lookdev-valley", "params": "scenario=lookdev", "camera": { "mode": "surface", "poi": "valley", "alt": 30, "pitch": -2, "hour": 9 }, "frames": 10 },
+    { "name": "sc-lookdev-forest", "params": "scenario=lookdev", "camera": { "mode": "surface", "poi": "forest", "alt": 45, "pitch": -8, "hour": 10 }, "frames": 10 },
+    { "name": "sc-lookdev-peak", "params": "scenario=lookdev", "camera": { "mode": "orbit", "poi": "peak", "dist": 900, "tilt": 58, "hour": 11 }, "frames": 10 },
+    { "name": "sc-twoworlds-system", "params": "scenario=twoworlds", "camera": { "mode": "system" }, "frames": 8 },
+    { "name": "sc-twoworlds-rust", "params": "scenario=twoworlds", "camera": { "mode": "orbit", "planet": 2, "lat": 15, "lon": 20, "dist": 6600, "hour": 13 }, "frames": 8 },
+    { "name": "sc-system-system", "params": "scenario=system", "camera": { "mode": "system" }, "frames": 8 },
+    { "name": "sc-system-cinder", "params": "scenario=system", "camera": { "mode": "orbit", "planet": 0, "lat": 15, "lon": 20, "dist": 6200, "hour": 13 }, "frames": 8 }
+  ]
+}

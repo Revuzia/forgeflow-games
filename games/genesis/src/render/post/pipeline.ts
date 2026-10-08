@@ -30,6 +30,8 @@ function rt(w: number, h: number, type: TextureDataType = HalfFloatType, format:
 // ───────────────────────────── shaders ─────────────────────────────
 
 const COPY_FRAG = /* glsl */ `
+// one NaN / Inf pixel (a degenerate normal on the horizon) must never bloom into a screen-wide glare: drop it
+vec3 sane(vec3 c) { return (any(isnan(c)) || any(isinf(c)) || !(dot(c, c) < 1e18)) ? vec3(0.0) : c; }
 ${LOGDEPTH_DECODE}
 varying vec2 vUv;
 uniform sampler2D tColor;
@@ -37,13 +39,15 @@ uniform sampler2D tDepth;
 uniform float uFar;
 uniform float uMode;
 void main() {
-  if (uMode < 0.5) { gl_FragColor = vec4(texture(tColor, vUv).rgb, 1.0); return; }
+  if (uMode < 0.5) { gl_FragColor = vec4(sane(texture(tColor, vUv).rgb), 1.0); return; }
   float d = texture(tDepth, vUv).r;
   gl_FragColor = vec4(d >= 0.999999 ? 1e9 : viewZFromLogDepth(d, uFar), 0.0, 0.0, 1.0);
 }
 `;
 
 const GOD_MASK_FRAG = /* glsl */ `
+// one NaN / Inf pixel (a degenerate normal on the horizon) must never bloom into a screen-wide glare: drop it
+vec3 sane(vec3 c) { return (any(isnan(c)) || any(isinf(c)) || !(dot(c, c) < 1e18)) ? vec3(0.0) : c; }
 varying vec2 vUv;
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
@@ -55,7 +59,7 @@ void main() {
   for (int j = 0; j < 2; j++) for (int i = 0; i < 2; i++) {
     vec2 o = (vec2(float(i), float(j)) - 0.5) * 0.5 / vec2(textureSize(tColor, 0)) * 4.0;
     float d = texture(tDepth, vUv + o).r;
-    vec3 c = texture(tColor, vUv + o).rgb;
+    vec3 c = sane(texture(tColor, vUv + o).rgb);
     acc += d >= 0.999999 ? c : vec3(0.0);
   }
   acc *= 0.25;
@@ -89,6 +93,8 @@ void main() {
 `;
 
 const BLOOM_DOWN_FRAG = /* glsl */ `
+// one NaN / Inf pixel (a degenerate normal on the horizon) must never bloom into a screen-wide glare: drop it
+vec3 sane(vec3 c) { return (any(isnan(c)) || any(isinf(c)) || !(dot(c, c) < 1e18)) ? vec3(0.0) : c; }
 varying vec2 vUv;
 uniform sampler2D tIn;
 uniform vec2 uTexel;
@@ -125,7 +131,7 @@ void main() {
   } else {
     res = e * 0.125 + (a + c + g + i) * 0.03125 + (b + d + f + h) * 0.0625 + (j + kk + l + m) * 0.125;
   }
-  gl_FragColor = vec4(min(res, vec3(30000.0)), 1.0);
+  gl_FragColor = vec4(min(sane(res), vec3(30000.0)), 1.0);
 }
 `;
 
@@ -144,6 +150,8 @@ void main() {
 `;
 
 const LUM_FRAG = /* glsl */ `
+// one NaN / Inf pixel (a degenerate normal on the horizon) must never bloom into a screen-wide glare: drop it
+vec3 sane(vec3 c) { return (any(isnan(c)) || any(isinf(c)) || !(dot(c, c) < 1e18)) ? vec3(0.0) : c; }
 varying vec2 vUv;
 uniform sampler2D tIn;
 uniform vec2 uSrcTexel;
@@ -153,7 +161,7 @@ void main() {
   for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {
     vec2 uv = vUv + (vec2(float(i), float(j)) - 1.5) * uSrcTexel;
     if (uFirst > 0.5) {
-      vec3 c = texture(tIn, uv).rgb;
+      vec3 c = sane(texture(tIn, uv).rgb);
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
       // centre-weighted, lit pixels only (empty space does not count)
       vec2 cw = uv - 0.5;
@@ -188,6 +196,8 @@ void main() {
 `;
 
 const TONEMAP_FRAG = /* glsl */ `
+// one NaN / Inf pixel (a degenerate normal on the horizon) must never bloom into a screen-wide glare: drop it
+vec3 sane(vec3 c) { return (any(isnan(c)) || any(isinf(c)) || !(dot(c, c) < 1e18)) ? vec3(0.0) : c; }
 ${NOISE_GLSL}
 varying vec2 vUv;
 uniform sampler2D tHDR;
@@ -205,6 +215,8 @@ uniform float uFlare;
 uniform float uAspect;
 uniform float uExposureBias;
 uniform float uManualExposure;
+uniform float uStarExposure;  // exposure that puts a close star's disc in range (limb darkening, granulation visible)
+uniform float uStarMix;       // 0..1: how much of the frame the star's disc fills
 uniform float uVignette;
 uniform vec3 uWhite;
 uniform vec3 uLift;
@@ -212,6 +224,7 @@ uniform vec3 uGamma;
 uniform vec3 uGain;
 uniform float uSat;
 uniform float uPower;
+uniform float uGolden;   // 0..1: how low the sun is at the camera (golden hour / sunset grade)
 
 // AgX (Sobotka), as in Blender / three.js r16x: Rec.2020 working space, sigmoid in log2 space
 const mat3 LINEAR_SRGB_TO_LINEAR_REC2020 = mat3(vec3(0.6274, 0.0691, 0.0164), vec3(0.3293, 0.9195, 0.0880), vec3(0.0433, 0.0113, 0.8956));
@@ -287,17 +300,27 @@ vec3 lensFlare(vec2 uv, float vis) {
 }
 
 void main() {
-  vec3 c = texture(tHDR, vUv).rgb;
-  vec3 b = texture(tBloom, vUv).rgb;
+  vec3 c = sane(texture(tHDR, vUv).rgb);
+  vec3 b = sane(texture(tBloom, vUv).rgb);
   c = mix(c, b, uBloom);
   c += texture(tGod, vUv).rgb * uGod * uGodColor;
-  float ex = uManualExposure > 0.0 ? uManualExposure : texture(tExposure, vec2(0.5)).r;
+  float ex = uManualExposure > 0.0 ? uManualExposure : mix(texture(tExposure, vec2(0.5)).r, uStarExposure, uStarMix);
   c *= ex * exp2(uExposureBias);
   if (uSunOn > 0.5) c += lensFlare(vUv, sunVisibility()) * uFlare;
   c *= uWhite;
+  // golden hour: warm the light before the tone curve (so highlights roll off to gold, not white)
+  c *= mix(vec3(1.0), vec3(1.22, 0.96, 0.74), uGolden);
   c = agx(c);
   // lift / gamma / gain grade in display-linear
   c = pow(max(c * uGain + uLift * (1.0 - c), 0.0), 1.0 / uGamma);
+  // ... then split-tone: shade a little cooler and violet, light amber, and richer colour overall
+  {
+    float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    vec3 tone = mix(vec3(0.9, 0.93, 1.1), vec3(1.1, 0.98, 0.84), smoothstep(0.04, 0.55, lum));
+    c = mix(c, c * tone, uGolden);
+    lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    c = max(mix(vec3(lum), c, 1.0 + 0.28 * uGolden), 0.0);
+  }
   vec2 vc = vUv - 0.5;
   float vig = 1.0 - uVignette * smoothstep(0.25, 0.95, dot(vc * vec2(uAspect, 1.0), vc * vec2(uAspect, 1.0)) * 1.4);
   c *= vig;
@@ -414,6 +437,9 @@ export class PostPipeline {
   /** last frame's composited HDR (sky, clouds, haze) — water reflections sample it */
   prevColor!: WebGLRenderTarget;
   prevValid = false;
+  /** set by the renderer when a star's disc fills the view: exposure from the disc, bloom almost off */
+  starExposure = 1;
+  starMix = 0;
   private godMask!: WebGLRenderTarget;
   private godA!: WebGLRenderTarget;
   private godB!: WebGLRenderTarget;
@@ -435,9 +461,10 @@ export class PostPipeline {
     tHDR: { value: null }, tBloom: { value: null }, tGod: { value: null }, tExposure: { value: null }, tMask: { value: null },
     uBloom: { value: 0.04 }, uGod: { value: 0 }, uGodColor: { value: new Vector3(1, 1, 1) }, uSunUV: { value: new Vector2() },
     uSunOn: { value: 0 }, uSunColor: { value: new Vector3(1, 1, 1) }, uFlare: { value: 1 }, uAspect: { value: 1 },
-    uExposureBias: { value: 0 }, uManualExposure: { value: 0 }, uVignette: { value: 0.22 }, uWhite: { value: new Vector3(1, 1, 1) },
-    uLift: { value: new Vector3(0.004, 0.006, 0.012) }, uGamma: { value: new Vector3(1.0, 1.0, 1.0) }, uGain: { value: new Vector3(1.02, 1.0, 0.97) },
-    uSat: { value: 1.12 }, uPower: { value: 1.12 },
+    uExposureBias: { value: 0 }, uManualExposure: { value: 0 }, uStarExposure: { value: 1 }, uStarMix: { value: 0 }, uVignette: { value: 0.22 }, uWhite: { value: new Vector3(1, 1, 1) },
+    // no lift: a lifted black turned space navy and every shadow milky; contrast and colour come from the curve
+    uLift: { value: new Vector3(0, 0, 0) }, uGamma: { value: new Vector3(1.0, 1.0, 1.0) }, uGain: { value: new Vector3(1.02, 1.0, 0.97) },
+    uSat: { value: 1.18 }, uPower: { value: 1.3 }, uGolden: { value: 0 },
   });
   private fxaaMat = passMaterial(FXAA_FRAG, { tIn: { value: null }, uTexel: { value: new Vector2() }, uFxaa: { value: 1 }, uGrain: { value: 0.022 }, uTime: { value: 0 } });
   private cut = true;
@@ -580,7 +607,9 @@ export class PostPipeline {
     const t = this.tonemapMat.uniforms;
     t.tHDR.value = input;
     t.tBloom.value = this.bloomMips.length ? this.bloomMips[0].texture : input;
-    t.uBloom.value = this.bloomMips.length ? s.bloom : 0;
+    t.uBloom.value = this.bloomMips.length ? s.bloom + (Math.min(s.bloom, 0.01) - s.bloom) * this.starMix : 0;
+    t.uStarExposure.value = this.starExposure;
+    t.uStarMix.value = this.starMix;
     t.uGod.value = godOn ? 0.32 * sun.strength : 0;
     if (!godOn) t.tGod.value = this.godMask.texture;
     t.uGodColor.value.copy(sun.color);

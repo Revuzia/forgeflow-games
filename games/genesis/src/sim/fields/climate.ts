@@ -22,6 +22,7 @@
 import type { Universe, SunInfo } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
 import { activateCell } from './hydrology.ts';
+import { refreshOverlay } from './weather.ts';
 
 export const CLIMATE_CADENCE = 60;
 const SIGMA = 5.670e-8;
@@ -115,7 +116,7 @@ function albedo(p: Planet, c: number): number {
   return a + (0.6 - a) * cl * 0.75;
 }
 
-const _sun: SunInfo = { dir: [0, 1, 0], flux: 0, dist: 1, lon: 0, decl: 0 };
+const _sun: SunInfo = { dir: [0, 1, 0], flux: 0, dist: 1, lon: 0, decl: 0, spin: 0 };
 
 /** band + global transport means of tPot (area weighted) */
 function bandMeans(p: Planet, sc: ClimateScratch): number {
@@ -265,16 +266,18 @@ export function climateStep(u: Universe, p: Planet, tick = u.tick): void {
   const glob = bandMeans(p, sc);
   const cfg = p.cfg;
   const globalKind = st.globalWeather != null ? u.content.weather.find(st.globalWeather) : undefined;
-  // altitude datum: the sea, or the world's mean ground where no sea lies above it (a dry world is not all highland)
-  const seaNow = Math.max(p.hydro.seaNow, st.refLevel ?? -1e9);
+  const datum = altitudeDatum(p);
 
-  // 1. prevailing wind (the weather step adds storm winds on top right after)
+  // 1. prevailing wind, then the weather systems' swirl and gusts on top again: the reset to the base wind would
+  // otherwise leave storms windless until the next overlay refresh (up to two weather steps on staggered planets),
+  // and sand, fire and the humidity advection below would run on calm air under a sandstorm
   prevailingWind(p, sun.decl, tick, sc.wn);
   for (let c = 0; c < N; c++) {
     f.windX[c] = s.baseWindX[c];
     f.windY[c] = s.baseWindY[c];
     f.windZ[c] = s.baseWindZ[c];
   }
+  refreshOverlay(u, p);
 
   // 2. energy balance -> temperature, light
   let surfaceChanged = false;
@@ -292,7 +295,7 @@ export function climateStep(u: Universe, p: Planet, tick = u.tick): void {
     let Tn = T + (DT * net) / (C + DT * dEdT);
     if (Tn < -270) Tn = -270;
     s.tPot[c] = Tn;
-    const alt = f.water[c] > 0.5 && s.ocean[c] ? 0 : Math.max(0, f.surface[c] - seaNow);
+    const alt = f.water[c] > 0.5 && s.ocean[c] ? 0 : Math.max(0, f.surface[c] - datum);
     let temp = Tn - lapse * alt + offset + (s.wMask[c] ? s.wTemp[c] : 0);
     if (globalKind) temp += globalKind.tempDelta * 0.8;
     if (f.lava[c] > 0.05) temp = Math.max(temp, 400 + 600 * Math.min(1, f.lava[c]));
@@ -468,6 +471,15 @@ export function climateStep(u: Universe, p: Planet, tick = u.tick): void {
 
 const SOLAR = 1361;
 
+/**
+ * The altitude datum of the lapse rate (m): fixed at generation — the sea level of a world with seas, the mean ground
+ * of a dry one (a dry world is not all highland). It does NOT follow the live sea: the air column does not move with
+ * the sea-level slider, so raising the sea 120 m must not warm every mountain by 7 °C (nor draining it chill the land).
+ */
+export function altitudeDatum(p: Planet): number {
+  return p.st.refLevel ?? 0;
+}
+
 /** infiltration capacity of a cell (m of water per hour): sand drinks fast, bare rock barely */
 export function permeability(p: Planet, c: number): number {
   const f = p.f;
@@ -488,6 +500,13 @@ export function soak(p: Planet, c: number, amount: number): void {
 
 // ───────────────────────────── raining cells (for the hydrology step) ─────────────────────────────
 
+// A cache, not state: it must be a pure function of SAVED arrays that are always marked dirty when they change, or a
+// loaded game / rewind keyframe (which rebuilds it) would diverge from the live sim. It therefore depends ONLY on
+// `precip` and `precipType` (written by composeSky, whose callers — the climate pass and refreshOverlay — mark it
+// dirty). The ocean mask is deliberately NOT filtered here: the mask changes under a sea-level ramp, a dig-sea or any
+// shore brush, and a list filtered by a stale mask starved newly exposed land of rain (and broke save/load identity).
+// applySources skips ocean cells itself, against the live mask.
+
 interface RainCache { list: Int32Array; count: number; dirty: boolean }
 const rainCache = new WeakMap<Planet, RainCache>();
 
@@ -496,16 +515,15 @@ export function markRainDirty(p: Planet): void {
   if (r) r.dirty = true;
 }
 
-/** cells currently receiving liquid precipitation (rebuilt from the saved precip field when dirty) */
+/** cells currently receiving liquid precipitation, sea included (rebuilt from the saved precip fields when dirty) */
 export function rainingCells(p: Planet): { list: Int32Array; count: number } {
   let r = rainCache.get(p);
   if (!r) { r = { list: new Int32Array(p.count), count: 0, dirty: true }; rainCache.set(p, r); }
   if (r.dirty) {
     let k = 0;
     const f = p.f;
-    const ocean = p.s.ocean;
     for (let c = 0; c < p.count; c++) {
-      if (f.precip[c] <= 0 || ocean[c]) continue; // the sea absorbs its rain (reservoir)
+      if (f.precip[c] <= 0) continue;
       const ty = f.precipType[c];
       if (ty === 1 || ty === 3 || ty === 5 || ty === 6) r.list[k++] = c;
     }
@@ -582,7 +600,7 @@ export function initClimate(u: Universe, p: Planet): void {
       if (dist[o] > dist[c] + 1) { dist[o] = dist[c] + 1; qd.push(o); }
     }
   }
-  const datum = Math.max(st.seaLevel, st.refLevel ?? -1e9);
+  const datum = altitudeDatum(p);
   for (let c = 0; c < N; c++) {
     const alt = s.ocean[c] ? 0 : Math.max(0, f.surface[c] - datum);
     const t = s.tPot[c] - lapse * alt + st.climateOffset;

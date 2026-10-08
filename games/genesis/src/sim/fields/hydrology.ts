@@ -25,7 +25,7 @@
 
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
-import { permeability, rainingCells, soak } from './climate.ts';
+import { markRainDirty, permeability, rainingCells, soak } from './climate.ts';
 import { priorityFlood } from '../world/gen.ts';
 import { collectFlags } from '../core/activeset.ts';
 
@@ -89,20 +89,36 @@ export function gain(p: Planet): number {
 
 // ───────────────────────────── ocean mask ─────────────────────────────
 
-/** Recompute the ocean mask: cells below `level` connected (through cells below `level`) to the deepest cell. */
+/**
+ * Recompute the ocean mask: the cells below `level` connected (through cells below `level`) to the sea that is already
+ * there. Seeds are every cell of the previous mask still below the level (so a sea that splits as it drains stays
+ * sea, and cells dig-sea marked as sea join it). Only when no sea remains below the level does the mask restart from
+ * the cell the last sea grew from (hydro.seedCell), and only when that is dry too from the deepest cell — the first sea
+ * of a barren world fills the lowest basin. An inland pit, however deep, is never "the ocean" just for being deepest:
+ * it is a basin that rain fills (it joins the sea only if the sea rises over its rim).
+ */
 export function computeOcean(p: Planet, level: number): number {
   const f = p.f, s = p.s, g = p.grid;
   const N = p.count;
+  const q = p.scratch.list;
+  let qt = 0;
+  // seeds from the previous mask (index order: deterministic)
+  for (let c = 0; c < N; c++) if (s.ocean[c] && f.surface[c] < level) q[qt++] = c;
+  if (qt === 0) {
+    const sc = p.hydro.seedCell;
+    if (sc !== undefined && sc >= 0 && sc < N && f.surface[sc] < level) q[qt++] = sc;
+    else {
+      let deep = 0;
+      for (let c = 1; c < N; c++) if (f.surface[c] < f.surface[deep]) deep = c;
+      if (f.surface[deep] < level) q[qt++] = deep;
+    }
+  }
   s.ocean.fill(0);
   s.coast.fill(0);
-  let deep = 0;
-  for (let c = 1; c < N; c++) if (f.surface[c] < f.surface[deep]) deep = c;
+  for (let i = 0; i < qt; i++) s.ocean[q[i]] = 1;
   let count = 0;
-  if (f.surface[deep] < level) {
-    const q = p.scratch.list;
-    let qh = 0, qt = 0;
-    q[qt++] = deep;
-    s.ocean[deep] = 1;
+  if (qt > 0) {
+    let qh = 0;
     while (qh < qt) {
       const c = q[qh++];
       for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
@@ -113,17 +129,23 @@ export function computeOcean(p: Planet, level: number): number {
       }
     }
     count = qt;
+    let deepest = -1;
     for (let c = 0; c < N; c++) {
       if (!s.ocean[c]) continue;
+      if (deepest < 0 || f.surface[c] < f.surface[deepest]) deepest = c;
       for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
         const o = g.nbr[e];
         if (!s.ocean[o]) { s.coast[c] = 1; s.coast[o] = 1; }
       }
     }
+    // remember where this sea lies, so a sea drained away and poured again comes back in the same basin
+    p.hydro.seedCell = deepest;
   }
   p.hydro.oceanCells = count;
   p.hydro.maskLevel = level;
   p.hydro.maskDirty = false;
+  // belt and braces: nothing cached may depend on the old mask (climate.ts rainingCells no longer filters by it)
+  markRainDirty(p);
   return count;
 }
 
@@ -172,8 +194,21 @@ export function hydroStep(u: Universe, p: Planet): void {
   hy.sourced += sourced;
   p.bump('water');
   p.bump('flowX'); p.bump('flowY'); p.bump('flowZ');
-  if (eroded) { p.bump('surface'); p.bump('sand'); p.bump('soil'); }
+  // River erosion moves millimetres on most steps. Field versions cover whole arrays, so bumping surface / sand / soil
+  // on every step re-sent ~160 KB arrays (and re-ran the client's curvature fit) several times a second in an idle
+  // world. Publish the change once it can matter: when some cell may have moved by EROSION_PUBLISH metres (erodeAcc is
+  // an upper bound: the sum of each step's largest single-cell change), or hourly. The sim itself always reads the
+  // live arrays (and Planet.ground() keys on its own surface revision), so this only paces the snapshots.
+  if (eroded > 0) hy.erodeAcc = (hy.erodeAcc ?? 0) + eroded;
+  if ((hy.erodeAcc ?? 0) > 0 && ((hy.erodeAcc ?? 0) >= EROSION_PUBLISH || hy.steps % EROSION_PUBLISH_STEPS === 0)) {
+    hy.erodeAcc = 0;
+    p.bump('surface'); p.bump('sand'); p.bump('soil');
+  }
 }
+
+/** erosion is published to snapshots once any cell may have moved this far (m), or every this many steps (hourly) */
+const EROSION_PUBLISH = 0.02;
+const EROSION_PUBLISH_STEPS = 30;
 
 /** rain, springs and aquifer seepage; returns the volume added */
 function applySources(p: Planet): number {
@@ -226,6 +261,8 @@ function applySources(p: Planet): number {
     if (d <= 0) continue;
     f.aquifer[c] -= d;
     water[c] += d;
+    // groundwater is outside the surface-water budget: seepage is a source like a spring (conservedVolume)
+    sourced += d * A[c];
     act[c] = 1;
     s.hQuiet[c] = 0;
   }
@@ -241,8 +278,17 @@ function seaUpkeep(p: Planet): number {
   if (Math.abs(target - hy.seaNow) > 1e-9 && cfg.oceanRelax) {
     const step = Math.max(-SEA_RAMP, Math.min(SEA_RAMP, target - hy.seaNow));
     hy.seaNow += step;
-    if (Math.abs(hy.seaNow - hy.maskLevel) >= 0.5 || Math.abs(target - hy.seaNow) < 1e-9) computeOcean(p, hy.seaNow);
-    sourced += fillOceanTo(p, hy.seaNow);
+    // The ramp LIFTS (or lowers) the sea by the step: every cell keeps its anomaly, so a tsunami or a flood launched
+    // while the sea is moving still runs (overwriting the sea with a flat level erased it). Only cells that join the
+    // mask at this recompute are filled to the new level. `mark` tags the old mask.
+    let stamp = 0;
+    if (Math.abs(hy.seaNow - hy.maskLevel) >= 0.5 || Math.abs(target - hy.seaNow) < 1e-9) {
+      stamp = p.nextMark();
+      const mark = p.scratch.mark, ocean = p.s.ocean;
+      for (let c = 0; c < p.count; c++) if (ocean[c]) mark[c] = stamp;
+      computeOcean(p, hy.seaNow);
+    }
+    sourced += rampOcean(p, step, hy.seaNow, stamp);
     activateCoast(p);
   } else if (cfg.oceanRelax && hy.oceanCells > 0 && hy.steps % 30 === 0) {
     const d0 = hy.seaNow - oceanMeanLevel(p.s.ocean, p.f.surface, p.f.water, p.cellArea, p.count);
@@ -253,6 +299,27 @@ function seaUpkeep(p: Planet): number {
     }
   }
   return sourced;
+}
+
+/**
+ * One ramp step of the sea: cells already in the sea move by `step` (anomalies kept); with a fresh mask (`stamp` ≠ 0
+ * tags the previous one in scratch.mark) cells that just joined are filled to `level`. Returns the volume added.
+ */
+function rampOcean(p: Planet, step: number, level: number, stamp: number): number {
+  const f = p.f, s = p.s, A = p.cellArea, mark = p.scratch.mark;
+  let added = 0;
+  for (let c = 0; c < p.count; c++) {
+    if (!s.ocean[c]) continue;
+    const w = f.water[c];
+    let nw: number;
+    if (stamp !== 0 && mark[c] !== stamp) nw = Math.max(w, level - f.surface[c]); // newly flooded
+    else nw = w + step > 0 ? w + step : 0;
+    if (nw !== w) {
+      added += (nw - w) * A[c];
+      f.water[c] = nw;
+    }
+  }
+  return added;
 }
 
 function oceanMeanLevel(ocean: Uint8Array, surf: Float32Array, water: Float64Array, A: Float64Array, N: number): number {
@@ -416,15 +483,16 @@ function applyActive(list: Int32Array, n: number, water: Float64Array, A: Float6
   }
 }
 
-/** velocity field, erosion, waking level-mismatched sleepers, and putting quiet cells to sleep */
-function finishActive(p: Planet, list: Int32Array, n: number): boolean {
+/** velocity field, erosion, waking level-mismatched sleepers, and putting quiet cells to sleep; returns the largest
+ * single-cell ground change of this step's erosion (m, 0 = none) */
+function finishActive(p: Planet, list: Int32Array, n: number): number {
   const f = p.f, s = p.s, g = p.grid, geo = p.geo, cfg = p.cfg;
   const surf = f.surface, water = f.water, flux = s.flux, act = s.hAct, A = p.cellArea, rev = g.rev;
   const nbrStart = g.nbrStart, nbr = g.nbr, tx = geo.tx, ty = geo.ty, tz = geo.tz;
   const lastDv = p.scratch.lastDv;
   const vmul = 1 / (3 * (p.edgeM / Math.sqrt(3)));
   const ocean = s.ocean;
-  let eroded = false;
+  let eroded = 0;
   for (let i = 0; i < n; i++) {
     const c = list[i];
     if (act[c] !== 1) continue;
@@ -463,7 +531,7 @@ function finishActive(p: Planet, list: Int32Array, n: number): boolean {
     // erosion: fast water lifts loose ground and drops it one cell downstream (rivers cut, deltas grow)
     if (cfg.erosion > 0 && w > 0.02 && !s.ocean[c]) {
       const sp = Math.sqrt(vx * vx + vy * vy + vz * vz);
-      if (sp > 1.5 && erode(p, c, sp, cfg.erosion)) eroded = true;
+      if (sp > 1.5) { const m = erode(p, c, sp, cfg.erosion); if (m > eroded) eroded = m; }
     }
     // quiet: no real outflow (relative to the column: deep water moves much volume for a hair of slope), no real
     // change, and level with every wet neighbour
@@ -480,29 +548,29 @@ function finishActive(p: Planet, list: Int32Array, n: number): boolean {
   return eroded;
 }
 
-/** move loose material from c to its main downstream neighbour; returns true if the ground changed */
-function erode(p: Planet, c: number, speed: number, k: number): boolean {
+/** move loose material from c to its main downstream neighbour; returns the depth moved (m, 0 = nothing) */
+function erode(p: Planet, c: number, speed: number, k: number): number {
   const f = p.f, g = p.grid, flux = p.s.flux;
   let best = -1, bf = 0;
   for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (flux[e] > bf) { bf = flux[e]; best = g.nbr[e]; }
-  if (best < 0) return false;
+  if (best < 0) return 0;
   const cap = 0.00004 * (speed - 1.5) * k;
-  let moved = false;
+  let m = 0;
   if (f.sand[c] > 0) {
-    const m = Math.min(f.sand[c], cap);
-    f.sand[c] -= m; f.sand[best] += m; moved = true;
+    m = Math.min(f.sand[c], cap);
+    f.sand[c] -= m; f.sand[best] += m;
   } else if (f.soil[c] > 0) {
-    const m = Math.min(f.soil[c], cap * 0.6);
-    f.soil[c] -= m; f.soil[best] += m * 0.5; f.sand[best] += m * 0.5; moved = true;
+    m = Math.min(f.soil[c], cap * 0.6);
+    f.soil[c] -= m; f.soil[best] += m * 0.5; f.sand[best] += m * 0.5;
   } else if (f.ash[c] > 0) {
-    const m = Math.min(f.ash[c], cap);
-    f.ash[c] -= m; f.ash[best] += m; moved = true;
+    m = Math.min(f.ash[c], cap);
+    f.ash[c] -= m; f.ash[best] += m;
   } else if (speed > 6) {
-    const m = cap * 0.05; // bedrock cuts slowly: canyons over many days
-    f.rock[c] -= m; f.sand[best] += m; moved = true;
+    m = cap * 0.05; // bedrock cuts slowly: canyons over many days
+    f.rock[c] -= m; f.sand[best] += m;
   }
-  if (moved) { p.updSurface(c); p.updSurface(best); }
-  return moved;
+  if (m > 0) { p.updSurface(c); p.updSurface(best); }
+  return m;
 }
 
 // ───────────────────────────── slow pass: aquifer, seepage, salinity ─────────────────────────────

@@ -35,9 +35,30 @@ export interface SunInfo {
   lon: number;
   /** solar declination (rad) */
   decl: number;
+  /** the planet's rotation angle at that tick (Universe.spinOf) */
+  spin: number;
 }
 
 export const SOLAR_CONSTANT = 1361;
+
+/**
+ * Replace the declination of a body-frame sun direction (in place) by the one with sine `sinDecl`, keeping its hour
+ * angle (azimuth about the spin axis). `fallback` supplies the azimuth when the real sun stands exactly over a pole.
+ * The client (src/client/worldview.ts) applies the same formula to light what the sim heats.
+ */
+export function pinDeclination(dir: D3, sinDecl: number, fallback: ArrayLike<number>): D3 {
+  let hx = dir[0], hz = dir[2];
+  let hl = Math.hypot(hx, hz);
+  if (hl < 1e-9) {
+    hx = fallback[0]; hz = fallback[2]; hl = Math.hypot(hx, hz);
+    if (hl < 1e-9) { hx = 1; hz = 0; hl = 1; }
+  }
+  const cd = Math.sqrt(Math.max(0, 1 - sinDecl * sinDecl));
+  dir[0] = (hx / hl) * cd;
+  dir[1] = sinDecl;
+  dir[2] = (hz / hl) * cd;
+  return dir;
+}
 
 export class Universe {
   readonly content: Content;
@@ -104,11 +125,14 @@ export class Universe {
   }
 
   /**
-   * Sun geometry for a planet at a (fractional) tick. A pinned season puts the star where it would be at that point of
-   * the year (the planet itself keeps orbiting for the renderer).
+   * Sun geometry for a planet at a (fractional) tick. A pinned season keeps the REAL geometry for the hour angle (the
+   * time of day, the calendar, the meridian the renderer lights) and replaces only the solar declination with the one
+   * at the middle of the pinned season. (Moving the star to that point of its orbit instead also moved the solar
+   * longitude: the sim then heated a different hour — up to half a day off — than the one drawn lit.) The renderer
+   * applies the same replacement to its star direction from PlanetParams.sunDir.
    */
   sun(p: Planet, tick: number, out?: SunInfo): SunInfo {
-    const o = out ?? { dir: [0, 1, 0], flux: 0, dist: AU, lon: 0, decl: 0 };
+    const o = out ?? { dir: [0, 1, 0], flux: 0, dist: AU, lon: 0, decl: 0, spin: 0 };
     const c: D3 = [0, 0, 0];
     this.centerOf(p, tick, c);
     let dist = Math.hypot(c[0], c[1], c[2]);
@@ -117,21 +141,35 @@ export class Universe {
       const parent = this.planet(p.st.orbit.parent);
       if (parent) dist = Math.hypot(...this.centerOf(parent, tick, [0, 0, 0]));
     }
-    let geomCenter: D3 = c;
+    o.lon = sunLongitude(c, p.st.orbit, p.st.axialTilt);
+    const spin = this.spinOf(p, tick, o.lon);
+    o.spin = spin;
+    sunDirBody(c, p.st.orbit, p.st.axialTilt, spin, o.dir);
     if (p.st.seasonPinned != null) {
       const yf = seasonYearFraction(p.st.seasonPinned);
       const root = p.st.orbit.parent >= 0 ? this.planet(p.st.orbit.parent) ?? p : p;
-      geomCenter = orbitOffsetAtYearFraction(root.st.orbit, yf, [0, 0, 0]);
-      const l = Math.hypot(geomCenter[0], geomCenter[1], geomCenter[2]) || 1;
-      geomCenter = [geomCenter[0] / l * dist, geomCenter[1] / l * dist, geomCenter[2] / l * dist];
+      const fake = orbitOffsetAtYearFraction(root.st.orbit, yf, [0, 0, 0]);
+      const fd = sunDirBody(fake, p.st.orbit, p.st.axialTilt, spin, [0, 0, 0]);
+      pinDeclination(o.dir, Math.max(-1, Math.min(1, fd[1])), fd);
     }
-    const spin = spinAt(p.st.spin0, p.st.spinTick0, p.st.dayHours, p.st.sunFrozen, tick);
-    sunDirBody(geomCenter, p.st.orbit, p.st.axialTilt, spin, o.dir);
-    o.lon = sunLongitude(geomCenter, p.st.orbit, p.st.axialTilt);
     o.dist = Math.max(dist, 1);
     o.flux = SOLAR_CONSTANT * this.star.luminosity * (AU / o.dist) ** 2 * p.st.lightScale;
     o.decl = Math.asin(Math.max(-1, Math.min(1, o.dir[1])));
     return o;
+  }
+
+  /**
+   * The planet's rotation angle at a tick. A frozen sun STANDS STILL in the sky: the planet then turns once per orbit
+   * (spin follows the star's longitude), so the hour holds instead of drifting by a day per year. `lonNow` = the
+   * star's equatorial longitude at `tick` when the caller already has it.
+   */
+  spinOf(p: Planet, tick: number, lonNow?: number): number {
+    const st = p.st;
+    if (!st.sunFrozen) return spinAt(st.spin0, st.spinTick0, st.dayHours, false, tick);
+    const lonAt = (t: number) => sunLongitude(this.centerOf(p, t, [0, 0, 0]), st.orbit, st.axialTilt);
+    let d = (lonNow ?? lonAt(tick)) - lonAt(st.spinTick0);
+    d -= Math.round(d / (2 * Math.PI)) * 2 * Math.PI;
+    return st.spin0 + d;
   }
 
   /** queue a presentation event (FX, sound, toast) */

@@ -63,7 +63,9 @@ export default defineConfig({
     port: 5190,
     strictPort: true,
     headers: { 'Cache-Control': 'no-store' },
-    ...(process.env.GENESIS_FROZEN === '1' ? { hmr: false, watch: null } : {}),
+    // GENESIS_FROZEN=1: no HMR and no file watching (a shot run never sees a half-written edit);
+    // GENESIS_NOHMR=1: files are still watched (a fresh page load gets the latest code) but open pages never reload
+    ...(process.env.GENESIS_FROZEN === '1' ? { hmr: false, watch: null } : process.env.GENESIS_NOHMR === '1' ? { hmr: false } : {}),
   },
   preview: { port: 5191, strictPort: true, headers: { 'Cache-Control': 'no-store' } },
   worker: { format: 'es' },

@@ -127,7 +127,11 @@ function parseInner(u: Universe, reg: CommandRegistry, text: string): ParseOut {
   if (/\briver\b/.test(s)) return out([at({ k: 'terrain.river', depth: n ?? 2.5 })], '→ carve a river from here, downhill');
   // weather kinds (longest names first: "acid rain" before "rain")
   const wk = [...u.content.weather.list].sort((a, b) => b.id.length - a.id.length);
-  if (/\bclear\b.*\b(sky|skies|weather|clouds)\b|\bstop the (rain|storm|weather)\b/.test(s)) return out([everywhere ? { k: 'weather.clear' } : at({ k: 'weather.clear', radius: 1500 * big })], '→ clear the skies');
+  if (/\bclear\b.*\b(sky|skies|weather|clouds)\b|\bstop the (rain|storm|weather)\b/.test(s)) {
+    return everywhere
+      ? out([{ k: 'weather.clear', everywhere: true }], '→ clear the skies over the whole world')
+      : out([at({ k: 'weather.clear', radius: 1500 * big })], '→ clear the skies here');
+  }
   for (const w of wk) {
     const name = w.id.replace(/-/g, ' ');
     if (s.includes(name) || s.includes(w.name.toLowerCase())) {
@@ -148,8 +152,8 @@ function parseInner(u: Universe, reg: CommandRegistry, text: string): ParseOut {
     return out([at({ k: 'terrain.mountain-range', to, height: n ?? 260 * Math.min(2, big) })], '→ raise a mountain range from here eastward');
   }
   if (/\bcrater\b/.test(s)) return out([at({ k: 'terrain.crater', radius: 200 * big })], '→ blast a crater here');
-  if (/\b(raise|lift|uplift)\b/.test(s)) return out([at({ k: 'terrain.raise', radius: 250 * big, strength: n ?? 20 })], '→ raise the land here');
-  if (/\b(lower|sink)\b/.test(s)) return out([at({ k: 'terrain.lower', radius: 250 * big, strength: n ?? 20 })], '→ lower the land here');
+  if (/\b(raise|lift|uplift)\b/.test(s)) return out([at({ k: 'terrain.raise', radius: 250 * big, strength: Math.abs(n ?? 20) })], '→ raise the land here');
+  if (/\b(lower|sink)\b/.test(s)) return out([at({ k: 'terrain.lower', radius: 250 * big, strength: Math.abs(n ?? 20) })], '→ lower the land here');
   if (/\bflatten\b/.test(s)) return out([at({ k: 'terrain.flatten', radius: 250 * big })], '→ flatten the land here');
   if (/\bsmooth\b/.test(s)) return out([at({ k: 'terrain.smooth', radius: 250 * big })], '→ smooth the land here');
   if (/\blava\b/.test(s)) return out([at({ k: 'terrain.paint-material', material: 'lava', radius: 120 * big, depth: n ?? 3 })], '→ pour lava here');

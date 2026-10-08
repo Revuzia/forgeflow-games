@@ -4,11 +4,15 @@
 // three cells of each render vertex and interpolate. Packing (one texture each):
 //   A  surface, rough (= roughOf(soil, sand, snow) from src/sim/grid/surface.ts — the SAME function the CPU ground
 //      uses), waterLevel (see below), waterDepth
-//   N  per-cell normal (body frame, from neighbour heights, recomputed only when `surface` changes), flow speed m/s
+//   N  per-cell normal (body frame, from neighbour heights) and concavity (neighbours' mean height − own height, m:
+//      > 0 in hollows and valleys, < 0 on ridges and peaks); both recomputed only when `surface` changes
 //   M0 snow, sand, soil, ash          M1 lava, wetness, ice, burnt
 //   V  grass, shrub, tree, crop       C  temperature, moisture, road, fire
 //   F  flow velocity (m/s, body frame), salinity
 //   S  treeSpecies, cropSpecies, light (night lights, reserved), biome
+//   G  curvature gradient of `surface` (gx, gy, gz, gw) from surface.ts surfaceGradients — computed once per surface
+//      change by the WorldView (pv.ground.grad, the array the CPU ground function reads) and uploaded as is
+//   D  dune amplitude (surface.ts duneAmpOf of the raw sand depth), the ground function's dune term
 // Each texture is rebuilt only when one of its source fields' versions changed (WorldView bumps them per arrival).
 //
 // waterLevel: wet cells carry their true water surface; dry cells next to water carry the wet neighbours' mean level
@@ -18,21 +22,23 @@
 import { DataTexture, FloatType, NearestFilter, RGBAFormat, ClampToEdgeWrapping } from 'three';
 import type { FieldName } from '../../sim/types.ts';
 import type { PlanetView } from '../../client/worldview.ts';
-import { roughOf } from '../../sim/grid/surface.ts';
+import { duneAmpOf, roughOf, surfaceGradients } from '../../sim/grid/surface.ts';
 
 export const FIELD_ROW = 256;
 const WET = 0.02;
 
-type TexName = 'A' | 'N' | 'M0' | 'M1' | 'V' | 'C' | 'F' | 'S';
+type TexName = 'A' | 'N' | 'M0' | 'M1' | 'V' | 'C' | 'F' | 'S' | 'G' | 'D';
 const SOURCES: Record<TexName, FieldName[]> = {
   A: ['surface', 'soil', 'sand', 'snow', 'water'],
-  N: ['surface', 'flowX', 'flowY', 'flowZ'],
+  N: ['surface'],
   M0: ['snow', 'sand', 'soil', 'ash'],
   M1: ['lava', 'wetness', 'ice', 'burnt'],
   V: ['grass', 'shrub', 'tree', 'crop'],
   C: ['temperature', 'moisture', 'road', 'fire'],
   F: ['flowX', 'flowY', 'flowZ', 'salinity'],
   S: ['treeSpecies', 'cropSpecies', 'biome'],
+  G: ['surface'],
+  D: ['sand'],
 };
 
 export class FieldTextures {
@@ -41,7 +47,7 @@ export class FieldTextures {
   /** CPU copies used by the chunk system for bounds / water presence (same arrays as the textures) */
   readonly waterLevel: Float32Array;
   readonly waterDepth: Float32Array;
-  private stamps: Record<TexName, string> = { A: '', N: '', M0: '', M1: '', V: '', C: '', F: '', S: '' };
+  private stamps: Record<TexName, string> = { A: '', N: '', M0: '', M1: '', V: '', C: '', F: '', S: '', G: '', D: '' };
   /** bumped whenever A (heights / water) changes: the chunk system re-derives bounds */
   geomVersion = 0;
   private normalsStamp = -1;
@@ -61,7 +67,7 @@ export class FieldTextures {
       t.needsUpdate = true;
       return t;
     };
-    this.tex = { A: mk(), N: mk(), M0: mk(), M1: mk(), V: mk(), C: mk(), F: mk(), S: mk() };
+    this.tex = { A: mk(), N: mk(), M0: mk(), M1: mk(), V: mk(), C: mk(), F: mk(), S: mk(), G: mk(), D: mk() };
     this.waterLevel = new Float32Array(count);
     this.waterDepth = new Float32Array(count);
   }
@@ -90,13 +96,43 @@ export class FieldTextures {
     return geom;
   }
 
-  private pack4(name: TexName, f: (FieldName | null)[]): void {
+  private smoothBuf: Float32Array | null = null;
+
+  /**
+   * One relaxation step over the cell graph (half own value, half the neighbours' mean). Cover fields interpolated
+   * linearly across 50 m sim triangles crease along the triangle edges — long straight tonal seams on a hillside;
+   * softening the cell-to-cell jumps first leaves the shader's noisy thresholds nothing straight to follow. Only
+   * for COLOUR fields: heights, water and roads stay exact.
+   */
+  private smoothed(src: Float32Array, passes = 1): Float32Array {
+    const g = this.pv.grid;
+    const n = g.count;
+    if (!this.smoothBuf || this.smoothBuf.length !== n) this.smoothBuf = new Float32Array(n);
+    if (passes > 1 && (!this.smoothBuf2 || this.smoothBuf2.length !== n)) this.smoothBuf2 = new Float32Array(n);
+    let from = src;
+    let out = this.smoothBuf;
+    for (let k = 0; k < passes; k++) {
+      out = k % 2 === 0 ? this.smoothBuf : this.smoothBuf2!;
+      for (let c = 0; c < n; c++) {
+        const e0 = g.nbrStart[c], e1 = g.nbrStart[c + 1];
+        let sum = 0;
+        for (let e = e0; e < e1; e++) sum += from[g.nbr[e]];
+        out[c] = 0.5 * from[c] + (0.5 * sum) / (e1 - e0);
+      }
+      from = out;
+    }
+    return out;
+  }
+  private smoothBuf2: Float32Array | null = null;
+
+  private pack4(name: TexName, f: (FieldName | null)[], smooth: (boolean | number)[] = [false, false, false, false]): void {
     const d = this.tex[name].image.data as Float32Array;
     const n = this.pv.grid.count;
     for (let ch = 0; ch < 4; ch++) {
       const k = f[ch];
-      const src = k ? this.field(k) : null;
+      let src = k ? this.field(k) : null;
       if (!src) { for (let c = 0; c < n; c++) d[c * 4 + ch] = ch === 0 && k === 'treeSpecies' ? -1 : 0; continue; }
+      if (smooth[ch]) src = this.smoothed(src, typeof smooth[ch] === 'number' ? smooth[ch] as number : 1);
       for (let c = 0; c < n; c++) d[c * 4 + ch] = src[c];
     }
   }
@@ -141,6 +177,10 @@ export class FieldTextures {
         if (sv !== this.normalsStamp) {
           this.normalsStamp = sv;
           for (let c = 0; c < n; c++) {
+            // concavity: snow drifts into hollows, rock breaks through on ridges (the shader reads it)
+            let ms = 0;
+            for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) ms += s ? s[g.nbr[e]] : 0;
+            d[c * 4 + 3] = ms / (g.nbrStart[c + 1] - g.nbrStart[c]) - (s ? s[c] : 0);
             const rc = R + (s ? s[c] : 0);
             const cx = P[c * 3] * rc, cy = P[c * 3 + 1] * rc, cz = P[c * 3 + 2] * rc;
             let nx = 0, ny = 0, nz = 0;
@@ -163,17 +203,14 @@ export class FieldTextures {
             d[c * 4 + 2] = (sign * nz) / l;
           }
         }
-        const fx = this.field('flowX'), fy = this.field('flowY'), fz = this.field('flowZ');
-        for (let c = 0; c < n; c++) {
-          // flow arrives in m/tick (1 tick = 1 game minute); shaders want m/s of the river surface
-          d[c * 4 + 3] = fx && fy && fz ? Math.hypot(fx[c], fy[c], fz[c]) / 60 : 0;
-        }
         break;
       }
-      case 'M0': this.pack4('M0', ['snow', 'sand', 'soil', 'ash']); break;
+      case 'M0': this.pack4('M0', ['snow', 'sand', 'soil', 'ash'], [true, true, true, true]); break;
       case 'M1': this.pack4('M1', ['lava', 'wetness', 'ice', 'burnt']); break;
-      case 'V': this.pack4('V', ['grass', 'shrub', 'tree', 'crop']); break;
-      case 'C': this.pack4('C', ['temperature', 'moisture', 'road', 'fire']); break;
+      // vegetation and moisture vary cell to cell (a wood here, dry sward there): two passes, or the canopy / meadow
+      // contrast reads as a 50 m camouflage pattern on every hill
+      case 'V': this.pack4('V', ['grass', 'shrub', 'tree', 'crop'], [2, 2, 2, false]); break;
+      case 'C': this.pack4('C', ['temperature', 'moisture', 'road', 'fire'], [true, 2, false, false]); break;
       case 'F': {
         this.pack4('F', ['flowX', 'flowY', 'flowZ', 'salinity']);
         const d = this.tex.F.image.data as Float32Array;
@@ -181,6 +218,22 @@ export class FieldTextures {
         break;
       }
       case 'S': this.pack4('S', ['treeSpecies', 'cropSpecies', null, 'biome']); break;
+      case 'D': {
+        // dune amplitude (m) from the RAW sand depth — part of the ground function, so never smoothed
+        const d = this.tex.D.image.data as Float32Array;
+        const sand = this.field('sand');
+        for (let c = 0; c < n; c++) d[c * 4] = sand ? duneAmpOf(sand[c]) : 0;
+        break;
+      }
+      case 'G': {
+        const d = this.tex.G.image.data as Float32Array;
+        const s = this.field('surface');
+        // the WorldView keeps pv.ground.grad in step with `surface`; derive it here only if a source never set it
+        let g = this.pv.ground.grad as Float32Array | null | undefined;
+        if (!g || g.length !== n * 4) g = s ? surfaceGradients(this.pv.grid, this.pv.params.radius, s) : null;
+        if (g) d.set(g.subarray(0, n * 4)); else d.fill(0);
+        break;
+      }
     }
   }
 

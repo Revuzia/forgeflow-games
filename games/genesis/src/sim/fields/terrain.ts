@@ -44,12 +44,24 @@ function falloff(d: number): number {
   return t * t;
 }
 
+/** largest height change of one brush stroke, as a fraction of the planet radius */
+const HEIGHT_PER_STROKE = 0.3;
+/** the ground never leaves this band around the datum sphere (fraction of the planet radius), whatever a brush asks:
+ * a schema-valid stack of brushes must not dig below the planet's centre or raise a spire into orbit */
+const GROUND_LIMIT = 0.5;
+
 function touched(p: Planet, cells: Iterable<number>): void {
-  const s = p.s;
+  const s = p.s, f = p.f;
   let shore = false;
   const sea = p.hydro.seaNow;
+  const lim = GROUND_LIMIT * p.st.radius;
   for (const c of cells) {
     p.updSurface(c);
+    const h = f.surface[c];
+    if (h < -lim || h > lim) {
+      f.rock[c] += (h < -lim ? -lim : lim) - h;
+      p.updSurface(c);
+    }
     activateCell(p, c);
     s.tAct[c] = 1;
     if (s.ocean[c] || p.f.surface[c] < sea + 1) shore = true;
@@ -68,13 +80,18 @@ export function brush(u: Universe, p: Planet, kind: BrushKind, pos: ArrayLike<nu
   const R = p.st.radius;
   const ang = Math.max(radiusM / R, g.meanEdgeAngle * 0.6);
   const dist = (c: number) => Math.acos(Math.min(1, P[c * 3] * pos[0] + P[c * 3 + 1] * pos[1] + P[c * 3 + 2] * pos[2])) / ang;
+  // one stroke never moves the ground more than this (m): the command schemas bound the inputs, this bounds them on
+  // smaller worlds too (a 400 m cut on a 600 m moon is not a brush stroke, it is a hole through the world)
+  const hMax = HEIGHT_PER_STROKE * R;
+  const clampH = (v: number) => (v > hMax ? hMax : v < -hMax ? -hMax : v);
   switch (kind) {
     case 'raise':
     case 'lower': {
       const cells = p.cellsNear(pos, radiusM).slice();
       const sgn = kind === 'raise' ? 1 : -1;
+      const amt = clampH(strength);
       for (const c of cells) {
-        let dh = sgn * strength * falloff(dist(c));
+        let dh = sgn * amt * falloff(dist(c));
         if (dh < 0) {
           // lowering strips the loose cover first
           for (const layer of ['snow', 'sand', 'ash', 'soil'] as const) {
@@ -118,9 +135,10 @@ export function brush(u: Universe, p: Planet, kind: BrushKind, pos: ArrayLike<nu
     case 'noise': {
       const cells = p.cellsNear(pos, radiusM).slice();
       const fr = (o.frequency ?? 3) / ang;
+      const amp = clampH(strength);
       for (const c of cells) {
         const n = p.noise.fbm(P[c * 3] * fr + 11, P[c * 3 + 1] * fr, P[c * 3 + 2] * fr - 7, 3);
-        f.rock[c] += strength * n * falloff(dist(c));
+        f.rock[c] += amp * n * falloff(dist(c));
       }
       touched(p, cells);
       return cells.length;
@@ -128,7 +146,7 @@ export function brush(u: Universe, p: Planet, kind: BrushKind, pos: ArrayLike<nu
     case 'crater': {
       const h = new Float32Array(p.count);
       const cells: number[] = [];
-      stampCrater(g, h, pos[0], pos[1], pos[2], ang, R, null, 0.2 * Math.max(0.05, strength), cells);
+      stampCrater(g, h, pos[0], pos[1], pos[2], ang, R, null, 0.2 * Math.min(5, Math.max(0.05, strength)), cells);
       const list = cells.slice();
       for (const c of list) {
         let dh = h[c];
@@ -140,7 +158,7 @@ export function brush(u: Universe, p: Planet, kind: BrushKind, pos: ArrayLike<nu
             if (dh >= 0) break;
           }
         }
-        f.rock[c] += dh;
+        f.rock[c] += clampH(dh);
         // the blast strips plants from the bowl and scorches the rim
         const d = dist(c);
         if (d < 1.4) { f.grass[c] = 0; f.shrub[c] = 0; f.tree[c] *= d < 1 ? 0 : 0.3; f.crop[c] = 0; f.burnt[c] = Math.max(f.burnt[c], 1 - d * 0.5); }
@@ -151,7 +169,7 @@ export function brush(u: Universe, p: Planet, kind: BrushKind, pos: ArrayLike<nu
     }
     case 'mountain-range': {
       const to = o.to ?? pos;
-      const height = strength;
+      const height = clampH(strength);
       const prof = new Map<number, number>();
       const ax = pos[0], ay = pos[1], az = pos[2];
       const bx = to[0], by = to[1], bz = to[2];
@@ -181,7 +199,7 @@ export function brush(u: Universe, p: Planet, kind: BrushKind, pos: ArrayLike<nu
       return cells.length;
     }
     case 'dig-sea': {
-      const depth = o.depth ?? Math.max(5, strength);
+      const depth = clampH(Math.abs(o.depth ?? Math.max(5, strength)));
       const sea = p.hydro.seaNow;
       const cells = p.cellsNear(pos, radiusM).slice();
       for (const c of cells) {
@@ -205,6 +223,9 @@ export function brush(u: Universe, p: Planet, kind: BrushKind, pos: ArrayLike<nu
         f.grass[c] = 0; f.shrub[c] = 0; f.tree[c] = 0; f.crop[c] = 0;
       }
       touched(p, cells);
+      // "dig a sea": the new basin IS sea (computeOcean keeps marked cells below the level as ocean seeds), however far
+      // it lies from the old coast — and the old ocean stays ocean (it is seeded from the previous mask too)
+      for (const c of cells) if (f.surface[c] < sea - 0.05) p.s.ocean[c] = 1;
       p.hydro.maskDirty = true;
       return cells.length;
     }
@@ -362,6 +383,10 @@ export function terrainStep(u: Universe, p: Planet): void {
   for (let i = 0; i < n; i++) {
     const c = list[i];
     let moved = false;
+    // A slope within a few float32 ulps of its angle of repose is at rest: the excess there is rounding, and moving
+    // sub-ulp amounts changes nothing while keeping the cell (and its neighbours' hydrology) awake forever and
+    // re-versioning every ground field each step. Count only moves that really change the ground.
+    const eps = 2e-6 * Math.max(16, Math.abs(f.surface[c]));
     for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
       const o = g.nbr[e];
       const drop = f.surface[c] - f.surface[o];
@@ -369,11 +394,14 @@ export function terrainStep(u: Universe, p: Planet): void {
       const lim = repose(p, c) * geo.len[e] * R;
       if (drop <= lim) continue;
       const m = Math.min((drop - lim) * 0.25, 4);
+      if (m <= eps) continue;
+      const sc = f.surface[c], so = f.surface[o];
       const t = takeTop(p, c, m);
       if (t < 0) f.snow[o] += -t; // snow slides as snow
       else f.sand[o] += t; // everything else lands as loose debris
       p.updSurface(c);
       p.updSurface(o);
+      if (f.surface[c] === sc && f.surface[o] === so) continue;
       s.tAct[o] = 1;
       activateCell(p, o);
       moved = true;

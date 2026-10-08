@@ -21,8 +21,14 @@ import { ATMO_PARS, LOGDEPTH_DECODE, SKY_LOOKUP } from '../shaders/atmosphere.gl
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { FullscreenQuad, passMaterial } from '../post/fsquad.ts';
 
-/** "drama" factor on Earth's vertical optical depths: a 3 km world needs denser air for real sunsets */
-const SKY_DEPTH_SCALE = 1.45;
+/**
+ * "drama" factor on Earth's vertical optical depths. A 3 km world has a horizon airmass of only ~7 (Earth: ~38), so
+ * at Earth's optical depth a low sun barely reddens: denser air (and a thinner scattering layer, below) restores deep
+ * orange sunsets while the noon sky stays blue.
+ */
+const SKY_DEPTH_SCALE = 1.75;
+/** Rayleigh scale height as a fraction of the visible shell: thinner = longer grazing paths = redder low suns */
+const RAYLEIGH_H = 0.16;
 const EARTH_TAU_R = [0.0464, 0.108, 0.265];
 const EARTH_TAU_O3 = [0.0098, 0.028, 0.0013];
 
@@ -258,7 +264,7 @@ export class AtmosphereModel {
     this.thickness = thick;
     u.uRg.value = radius;
     u.uRt.value = radius + thick;
-    u.uHR.value = thick * 0.2;
+    u.uHR.value = thick * RAYLEIGH_H;
     u.uHM.value = thick * 0.1;
     u.uOzone.value.set(thick * 0.32, thick * 0.2);
     // pressure thickens the column sub-linearly in look (very dense air saturates to a milky sky)
@@ -275,11 +281,11 @@ export class AtmosphereModel {
     if (a.methane > 0.05) tr = [tr[0] * 0.6, tr[1] * 1.15, tr[2] * 1.05];
     u.uBetaR.value.set(tr[0] / u.uHR.value, tr[1] / u.uHR.value, tr[2] / u.uHR.value);
     const dust = Math.max(0, a.dust);
-    const tauM = (0.006 + dust * 0.6) * SKY_DEPTH_SCALE * Math.min(1.5, Math.max(p, dust > 0.05 ? 0.4 : 0));
+    const tauM = (0.01 + dust * 0.6) * SKY_DEPTH_SCALE * Math.min(1.5, Math.max(p, dust > 0.05 ? 0.4 : 0));
     const ms = tauM / u.uHM.value;
     u.uBetaMs.value.set(ms, ms, ms);
-    // dust absorbs blue: a warm, rusty extinction; clean haze barely absorbs
-    const absorb = [0.1 + dust * 0.25, 0.12 + dust * 0.55, 0.14 + dust * 1.1];
+    // aerosols absorb toward the blue (sea salt, soot, dust): low suns shine through warm haze; dust far more so
+    const absorb = [0.06 + dust * 0.25, 0.16 + dust * 0.55, 0.34 + dust * 1.1];
     u.uBetaMe.value.set(ms * (1 + absorb[0]), ms * (1 + absorb[1]), ms * (1 + absorb[2]));
     u.uMieG.value = 0.78 - dust * 0.12;
     const oz = a.o2 > 0.05 ? 0.7 : 0.1;
@@ -335,6 +341,7 @@ uniform vec3 uPlanetPos;
 uniform vec3 uSunDir;
 uniform int uSteps;
 uniform float uApScale;
+uniform vec3 uApRamp;   // aerial perspective near scale, and the distances (m) over which it ramps up to uApScale
 
 vec3 viewDir(vec2 uv) {
   vec4 v = uInvProj * vec4(uv * 2.0 - 1.0, -1.0, 1.0);
@@ -347,23 +354,27 @@ float sceneDistance(vec2 uv, vec3 vdir) {
   return viewZFromLogDepth(dz, uFar) / max(-vdir.z, 1e-4);
 }
 
-// joint-bilateral upsample of the low-resolution cloud buffer (weights favour low-res texels at the same depth)
+// joint-bilateral upsample of the low-resolution cloud buffer: a 3×3 Gaussian around the low-res texel under the
+// pixel, each tap weighted by its distance and by how close its scene depth is to this pixel's (so cloud never bleeds
+// across a mountain's silhouette), with no hard 2×2 cell boundaries: cloud bases against the sky lose their 2 px steps
 vec4 cloudSample(vec2 uv, float tScene) {
   vec2 p = uv * uCloudRes - 0.5;
-  vec2 b = floor(p);
+  vec2 b = floor(p + 0.5);
   vec2 f = p - b;
+  float lz = log2(min(tScene, 1e7) + 1.0);
   vec4 acc = vec4(0.0);
   float wsum = 0.0;
-  float lz = log2(min(tScene, 1e7) + 1.0);
-  for (int j = 0; j < 2; j++)
-  for (int i = 0; i < 2; i++) {
+  for (int j = -1; j <= 1; j++)
+  for (int i = -1; i <= 1; i++) {
     vec2 o = vec2(float(i), float(j));
     vec2 tuv = (b + o + 0.5) / uCloudRes;
+    vec4 c = texture(tCloud, tuv);
     vec3 vd = viewDir(tuv);
     float tz = log2(min(sceneDistance(tuv, vd), 1e7) + 1.0);
-    float wb = (i == 0 ? 1.0 - f.x : f.x) * (j == 0 ? 1.0 - f.y : f.y);
-    float w = wb * exp(-abs(tz - lz) * 4.0) + 1e-5;
-    acc += texture(tCloud, tuv) * w;
+    vec2 dd = o - f;
+    float wg = exp(-dot(dd, dd) * 1.1);
+    float w = wg * exp(-abs(tz - lz) * 4.0) + 1e-5;
+    acc += c * w;
     wsum += w;
   }
   return acc / wsum;
@@ -371,6 +382,8 @@ vec4 cloudSample(vec2 uv, float tScene) {
 
 void main() {
   vec3 scene = texture(tScene, vUv).rgb;
+  // a NaN / Inf from upstream (degenerate shading on the horizon) is dropped here rather than smeared by every pass after
+  if (any(isnan(scene)) || any(isinf(scene)) || !(dot(scene, scene) < 1e18)) scene = vec3(0.0);
   vec3 vdir = viewDir(vUv);
   vec3 d = normalize(uCamRot * vdir);
   float tScene = sceneDistance(vUv, vdir);
@@ -398,7 +411,8 @@ void main() {
   }
   float jitter = ign(gl_FragCoord.xy);
   vec3 L, T, Lm, Tm;
-  atmoIntegrate(o, d, uSunDir, t0, t1, uSteps, jitter, geo ? uApScale : 1.0, tc, L, T, Lm, Tm);
+  float apS = mix(uApRamp.x, uApScale, smoothstep(uApRamp.y, uApRamp.z, t1 - t0));
+  atmoIntegrate(o, d, uSunDir, t0, t1, uSteps, jitter, geo ? apS : 1.0, tc, L, T, Lm, Tm);
   // stars drown in a bright sky (contrast): sky pixels fainter than the in-scattered light fade out (the sun stays)
   if (!geo) {
     float ls = dot(scene, vec3(0.2126, 0.7152, 0.0722));
@@ -420,7 +434,7 @@ export class AtmospherePass {
       uCloudRes: { value: new Vector2(1, 1) }, uCloudShell: { value: new Vector2(3180, 3420) },
       uInvProj: { value: new Matrix4() }, uCamRot: { value: new Matrix3() }, uFar: { value: 2e7 },
       uPlanetPos: { value: new Vector3() }, uSunDir: { value: new Vector3(1, 0, 0) }, uSteps: { value: 16 },
-      uApScale: { value: 0.15 },
+      uApScale: { value: 0.15 }, uApRamp: { value: new Vector3(0.15, 300, 2000) },
       // per-planet atmosphere uniforms are swapped in by bind()
       uRg: { value: 0 }, uRt: { value: 0 }, uBetaR: { value: new Vector3() }, uHR: { value: 1 }, uBetaMs: { value: new Vector3() },
       uBetaMe: { value: new Vector3() }, uHM: { value: 1 }, uMieG: { value: 0.8 }, uBetaO: { value: new Vector3() },

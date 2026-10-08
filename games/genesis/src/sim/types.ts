@@ -174,8 +174,14 @@ export interface PlanetParams {
   year: number;
   dayOfYear: number;
   yearDays: number;
-  /** local solar hour at longitude 0, 0..24 */
+  /** local solar hour at longitude 0 in the planet's OWN hours, 0..dayHours (noon = dayHours / 2: 15 on a 30 h world) */
   hourAtLon0: number;
+  /**
+   * additive (SIM phase-1 review): unit vector toward the star in the planet BODY frame at the snapshot tick — the sun
+   * the sim heats, melts and grows plants by. It equals the geometric star direction except while a season is pinned:
+   * then it keeps the real hour angle and takes the pinned season's declination (clients light with the same rule).
+   */
+  sunDir?: [number, number, number];
 }
 
 /** Structure-of-arrays block of moving things (agents, animals). Positions are unit vectors on the planet. */

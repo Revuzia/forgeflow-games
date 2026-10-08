@@ -142,3 +142,42 @@ export function detailNoise(noise: Noise3, px: number, py: number, pz: number, r
   const f2 = radius / 3.2;
   return noise.noise(px * f1, py * f1, pz * f1) * 1.6 + noise.noise(px * f2 + 31.7, py * f2, pz * f2) * 0.35;
 }
+
+/** dune wavelength (m) and the share of it taken by the gentle windward slope (the rest is the steep slip face) */
+export const DUNE_WAVELENGTH = 26;
+const DUNE_STOSS = 0.75;
+
+function duneProfile(u: number): number {
+  const d = u - Math.floor(u);
+  // gentle windward rise to a sharp crest, then the steep lee slip face; the trough is rounded a little
+  const h = d < DUNE_STOSS ? d / DUNE_STOSS : (1 - d) / (1 - DUNE_STOSS);
+  return h * h * (1.5 - 0.5 * h) - 0.5;
+}
+
+/**
+ * Wind-aligned dunes, shared by CPU placement and the render-mesh bake exactly like detailNoise (CONTRACT.md §4.3):
+ * transverse ridges across the east–west winds of the trade and westerly belts (crests run north–south), with an
+ * asymmetric profile (gentle stoss slope, steep slip face), sinuous crests and a barchan-like swell of the amplitude.
+ * Returns about −0.5..0.5; the ground scales it by the cells' dune amplitude (surface.ts duneAmpOf: deep sand only).
+ * The along-wind coordinate is the east distance R·cosφ·λ; near the antimeridian a second phase (λ in 0..2π) is
+ * cross-faded in, so the field is continuous everywhere.
+ */
+export function duneNoise(noise: Noise3, px: number, py: number, pz: number, radius: number): number {
+  const cl = Math.sqrt(px * px + pz * pz);
+  const lon = Math.atan2(px, pz);
+  const f = radius / 70;
+  const warp = noise.noise(px * f + 5.1, py * f, pz * f - 2.3) * 0.55;
+  const k = (radius * cl) / DUNE_WAVELENGTH;
+  const a = Math.abs(lon);
+  let h: number;
+  if (a < 2.6) h = duneProfile(k * lon + warp);
+  else {
+    const lon2 = lon < 0 ? lon + 2 * Math.PI : lon;
+    const t = Math.min(1, (a - 2.6) / 0.4);
+    const w = t * t * (3 - 2 * t);
+    h = duneProfile(k * lon + warp) * (1 - w) + duneProfile(k * lon2 + warp) * w;
+  }
+  const f2 = radius / 160;
+  const swell = 0.65 + 0.35 * noise.noise(px * f2 - 7.7, py * f2 + 1.9, pz * f2);
+  return h * swell;
+}

@@ -20,7 +20,10 @@ export class TimeWheel {
   private readonly mask: number;
   private buckets: number[][];
   private due = new Map<number, number>();
+  /** ids waiting beyond the ring, at most once each (`inOverflow` guards the list: an entity that keeps re-planning
+   * far ahead must not grow it by one stale copy per re-plan); an id's live due tick is always `due.get(id)` */
   private overflow: number[] = [];
+  private inOverflow = new Set<number>();
   private overflowMin = Infinity;
   /** the next tick that has not been drained yet */
   now: number;
@@ -53,9 +56,17 @@ export class TimeWheel {
     this.due.set(id, tick);
     if (tick - this.now < this.size) this.buckets[tick & this.mask].push(id);
     else {
-      this.overflow.push(id);
+      if (!this.inOverflow.has(id)) {
+        this.inOverflow.add(id);
+        this.overflow.push(id);
+      }
       if (tick < this.overflowMin) this.overflowMin = tick;
     }
+  }
+
+  /** ids currently parked beyond the ring (diagnostics / tests) */
+  get overflowSize(): number {
+    return this.overflow.length;
   }
 
   cancel(id: number): void {
@@ -97,9 +108,10 @@ export class TimeWheel {
     let min = Infinity;
     for (const id of this.overflow) {
       const due = this.due.get(id);
-      if (due === undefined) continue; // cancelled
-      if (due - t < this.size) {
-        if (due >= t) this.buckets[due & this.mask].push(id);
+      if (due === undefined || due - t < this.size) {
+        // cancelled or fired (dropped), or now within the ring: leaves the overflow list
+        this.inOverflow.delete(id);
+        if (due !== undefined && due >= t) this.buckets[due & this.mask].push(id);
       } else {
         keep.push(id);
         if (due < min) min = due;

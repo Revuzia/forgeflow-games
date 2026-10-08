@@ -5,7 +5,8 @@
 // sim grid), so a render vertex belongs to sim triangle grid.locateFaceCoords(face, fi, fj) — the same rule as the CPU.
 //
 // Geometry is static per patch (fields are textures): per vertex
-//   position = dir (unit), aCells = (cellA, cellB, cellC, wB), aMisc = (wC, detail, skirt, 0), aGrad = ∇detail,
+//   position = dir (unit), aCells = (cellA, cellB, cellC, wB), aMisc = (wC, detail, skirt, dune), aGrad = ∇detail,
+//   aGradD = ∇dune (the dune shape of noise.ts duneNoise, scaled in the shader by the cells' dune amplitude),
 // plus a GEOMORPH TARGET: odd lattice vertices collapse onto the midpoint of the two even neighbours along the coarse
 // edge they split ((i±1, j), (i, j±1) or (i−1, j+1)/(i+1, j−1)), whose own cells / weights / dirs / coarse-filtered
 // detail are stored too (aN1*, aN2*). The midpoint rule is symmetric, so two patches sharing an edge morph it
@@ -25,7 +26,8 @@ import {
 } from 'three';
 import type { IcoGrid } from '../../sim/grid/icogrid.ts';
 import { newHit } from '../../sim/grid/icogrid.ts';
-import { detailNoise, type Noise3 } from '../../sim/grid/noise.ts';
+import { detailNoise, duneNoise, DUNE_WAVELENGTH, type Noise3 } from '../../sim/grid/noise.ts';
+import { curveMargin } from '../../sim/grid/surface.ts';
 
 export const PATCH_RES = 32;
 /** angle subtended by an icosahedron edge */
@@ -79,6 +81,11 @@ function morphNeighbours(i: number, j: number): [number, number, number, number]
 function detailWeights(spacing: number): [number, number] {
   const w = (feature: number) => Math.min(1, Math.max(0, (feature / spacing - 1.5) / 1.5));
   return [w(12), w(3.2)];
+}
+
+/** band-limit weight of the dunes at a vertex spacing (gone where the lattice cannot carry a 26 m ridge) */
+function duneWeight(spacing: number): number {
+  return Math.min(1, Math.max(0, (DUNE_WAVELENGTH / spacing - 2) / 1.5));
 }
 
 function filteredDetail(noise: Noise3, x: number, y: number, z: number, radius: number, w1: number, w2: number): number {
@@ -156,11 +163,21 @@ export interface ChunkSelectContext {
 }
 
 const _v = new Vector3();
+const _pc = new Vector3();
 const _hit = newHit();
+/**
+ * extra split reach for patches seen edge-on (factor 1 + k·(1 − |cos|)³, k up to this). It is for the LIMB seen from
+ * altitude: from near the ground nearly every distant patch is edge-on, and the full boost there tripled the patch and
+ * draw counts of surface views for detail nobody sees, so k fades out below ~a third of a radius of altitude
+ * (ChunkLOD.silK; the vertex shader reads the same k from uMorph.w).
+ */
+export const SILHOUETTE_SPLIT = 2.5;
 
 /** Water and ground arrays the chunk system reads for bounds (kept by FieldTextures). */
 export interface ChunkFieldSource {
   surface: ArrayLike<number> | null;
+  /** per-cell curvature gradients (4 floats per cell, surface.ts): the curved ground can bulge past its cells */
+  grad: ArrayLike<number> | null;
   waterLevel: Float32Array;
   waterDepth: Float32Array;
   geomVersion: number;
@@ -187,6 +204,8 @@ export class ChunkLOD {
   castShadows = false;
   waterEnabled = true;
   stats = { patches: 0, waterPatches: 0, builtTotal: 0 };
+  /** this frame's silhouette split boost (see SILHOUETTE_SPLIT), set by select() */
+  silK = SILHOUETTE_SPLIT;
 
   constructor(grid: IcoGrid, noise: Noise3, radius: number, group: Group, mats: ChunkMaterials, fields: ChunkFieldSource) {
     this.grid = grid; this.noise = noise; this.radius = radius; this.group = group; this.mats = mats; this.fields = fields;
@@ -261,10 +280,12 @@ export class ChunkLOD {
     const cells = this.patchCells(p);
     const s = this.fields.surface;
     const wl = this.fields.waterLevel, wd = this.fields.waterDepth;
-    let lo = Infinity, hi = -Infinity, water = false;
+    const G = this.fields.grad;
+    let lo = Infinity, hi = -Infinity, water = false, g2 = 0;
     for (let k = 0; k < cells.length; k++) {
       const c = cells[k];
       const h = s ? s[c] : 0;
+      if (G) { const m = G[c * 4] * G[c * 4] + G[c * 4 + 1] * G[c * 4 + 1] + G[c * 4 + 2] * G[c * 4 + 2]; if (m > g2) g2 = m; }
       if (h < lo) lo = h;
       if (h > hi) hi = h;
       if (wd[c] > 0.02 || wl[c] > h - 0.5) {
@@ -272,9 +293,10 @@ export class ChunkLOD {
         if (wl[c] > hi) hi = wl[c];
       }
     }
-    // detail relief (±~2 m) and the coarse lattice cutting inside a sim triangle's plane
-    p.hMin = lo - 2.5;
-    p.hMax = hi + 2.5;
+    // detail relief (±~2 m), the coarse lattice cutting inside a sim triangle's plane, and the curved ground's bulge
+    const bulge = curveMargin(this.grid, this.radius, Math.sqrt(g2));
+    p.hMin = lo - 2.5 - bulge;
+    p.hMax = hi + 2.5 + bulge;
     p.hasWater = water;
     const rMid = this.radius + 0.5 * (p.hMin + p.hMax);
     const chord = 2 * Math.sin(p.angRadius / 2) * (this.radius + p.hMax);
@@ -327,6 +349,10 @@ export class ChunkLOD {
     const dirs = new Float64Array(W * W * 3);
     const dOwn = new Float64Array(W * W);
     const dPar = new Float64Array(W * W);
+    // dunes (surface.ts: × the cells' dune amplitude), band-limited per level like the detail
+    const uOwn = new Float64Array(W * W);
+    const uPar = new Float64Array(W * W);
+    const wd = duneWeight(sp), pwd = p.level > 0 ? duneWeight(sp * 2) : wd;
     const has = new Uint8Array(W * W);
     const fiOf = (i: number, j: number) => p.a[0] + ((p.b[0] - p.a[0]) * i) / R + ((p.c[0] - p.a[0]) * j) / R;
     const fjOf = (i: number, j: number) => p.a[1] + ((p.b[1] - p.a[1]) * i) / R + ((p.c[1] - p.a[1]) * j) / R;
@@ -338,6 +364,9 @@ export class ChunkLOD {
         dirs[k * 3] = _v.x; dirs[k * 3 + 1] = _v.y; dirs[k * 3 + 2] = _v.z;
         dOwn[k] = filteredDetail(noise, _v.x, _v.y, _v.z, radius, w1, w2);
         dPar[k] = (pw1 === w1 && pw2 === w2) ? dOwn[k] : filteredDetail(noise, _v.x, _v.y, _v.z, radius, pw1, pw2);
+        const du = wd > 0 || pwd > 0 ? duneNoise(noise, _v.x, _v.y, _v.z, radius) : 0;
+        uOwn[k] = du * wd;
+        uPar[k] = du * pwd;
         has[k] = 1;
       }
     }
@@ -366,11 +395,14 @@ export class ChunkLOD {
     const aN2m = new Float32Array(NVERT * 4);
     const aN2d = new Float32Array(NVERT * 3);
     const aGradM = new Float32Array(NVERT * 3);
+    const aGradD = new Float32Array(NVERT * 3);
+    const aGradDM = new Float32Array(NVERT * 3);
 
     // per lattice point: cells / weights (own) — computed once, referenced by neighbours' morph targets
     const cellA = new Float32Array(NPTS), cellB = new Float32Array(NPTS), cellC = new Float32Array(NPTS);
     const wB = new Float32Array(NPTS), wC = new Float32Array(NPTS);
     const gPar = new Float32Array(NPTS * 3);
+    const gParD = new Float32Array(NPTS * 3);
     const tmp = [0, 0, 0];
     for (let j = 0; j <= R; j++) {
       for (let i = 0; i + j <= R; i++) {
@@ -382,6 +414,8 @@ export class ChunkLOD {
         if (((i | j) & 1) === 0) {
           grad(i, j, 2, dPar, tmp);
           gPar[v * 3] = tmp[0]; gPar[v * 3 + 1] = tmp[1]; gPar[v * 3 + 2] = tmp[2];
+          grad(i, j, 2, uPar, tmp);
+          gParD[v * 3] = tmp[0]; gParD[v * 3 + 1] = tmp[1]; gParD[v * 3 + 2] = tmp[2];
         }
       }
     }
@@ -390,27 +424,39 @@ export class ChunkLOD {
       const k = ext(i, j);
       pos[dst * 3] = dirs[k * 3]; pos[dst * 3 + 1] = dirs[k * 3 + 1]; pos[dst * 3 + 2] = dirs[k * 3 + 2];
       aCells[dst * 4] = cellA[v]; aCells[dst * 4 + 1] = cellB[v]; aCells[dst * 4 + 2] = cellC[v]; aCells[dst * 4 + 3] = wB[v];
-      aMisc[dst * 4] = wC[v]; aMisc[dst * 4 + 1] = dOwn[k]; aMisc[dst * 4 + 2] = skirt; aMisc[dst * 4 + 3] = 0;
+      aMisc[dst * 4] = wC[v]; aMisc[dst * 4 + 1] = dOwn[k]; aMisc[dst * 4 + 2] = skirt; aMisc[dst * 4 + 3] = uOwn[k];
       grad(i, j, 1, dOwn, tmp);
       aGrad[dst * 3] = tmp[0]; aGrad[dst * 3 + 1] = tmp[1]; aGrad[dst * 3 + 2] = tmp[2];
+      grad(i, j, 1, uOwn, tmp);
+      aGradD[dst * 3] = tmp[0]; aGradD[dst * 3 + 1] = tmp[1]; aGradD[dst * 3 + 2] = tmp[2];
       const [i1, j1, i2, j2] = morphNeighbours(i, j);
       const v1 = ptIndex(i1, j1), v2 = ptIndex(i2, j2);
       const k1 = ext(i1, j1), k2 = ext(i2, j2);
       aN1[dst * 4] = cellA[v1]; aN1[dst * 4 + 1] = cellB[v1]; aN1[dst * 4 + 2] = cellC[v1]; aN1[dst * 4 + 3] = wB[v1];
-      aN1m[dst * 4] = wC[v1]; aN1m[dst * 4 + 1] = dPar[k1];
+      aN1m[dst * 4] = wC[v1]; aN1m[dst * 4 + 1] = dPar[k1]; aN1m[dst * 4 + 2] = uPar[k1];
       aN1d[dst * 3] = dirs[k1 * 3]; aN1d[dst * 3 + 1] = dirs[k1 * 3 + 1]; aN1d[dst * 3 + 2] = dirs[k1 * 3 + 2];
       aN2[dst * 4] = cellA[v2]; aN2[dst * 4 + 1] = cellB[v2]; aN2[dst * 4 + 2] = cellC[v2]; aN2[dst * 4 + 3] = wB[v2];
-      aN2m[dst * 4] = wC[v2]; aN2m[dst * 4 + 1] = dPar[k2];
+      aN2m[dst * 4] = wC[v2]; aN2m[dst * 4 + 1] = dPar[k2]; aN2m[dst * 4 + 2] = uPar[k2];
       aN2d[dst * 3] = dirs[k2 * 3]; aN2d[dst * 3 + 1] = dirs[k2 * 3 + 1]; aN2d[dst * 3 + 2] = dirs[k2 * 3 + 2];
       aGradM[dst * 3] = 0.5 * (gPar[v1 * 3] + gPar[v2 * 3]);
       aGradM[dst * 3 + 1] = 0.5 * (gPar[v1 * 3 + 1] + gPar[v2 * 3 + 1]);
       aGradM[dst * 3 + 2] = 0.5 * (gPar[v1 * 3 + 2] + gPar[v2 * 3 + 2]);
+      aGradDM[dst * 3] = 0.5 * (gParD[v1 * 3] + gParD[v2 * 3]);
+      aGradDM[dst * 3 + 1] = 0.5 * (gParD[v1 * 3 + 1] + gParD[v2 * 3 + 1]);
+      aGradDM[dst * 3 + 2] = 0.5 * (gParD[v1 * 3 + 2] + gParD[v2 * 3 + 2]);
     };
     for (let j = 0; j <= R; j++) for (let i = 0; i + j <= R; i++) writeVertex(ptIndex(i, j), i, j, 0);
     for (let k = 0; k < NSKIRT; k++) writeVertex(NPTS + k, BOUNDARY[k][0], BOUNDARY[k][1], 1);
 
     const geo = new BufferGeometry();
-    geo.setAttribute('position', new Float32BufferAttribute(pos, 3));
+    const posAttr = new Float32BufferAttribute(pos, 3);
+    geo.setAttribute('position', posAttr);
+    // three r186 compiles a MeshStandardMaterial as FLAT_SHADED when the geometry has no `normal` attribute (one
+    // face normal per render triangle from screen derivatives): the per-cell normals, the detail gradient and the
+    // curved ground then never reach the lighting and the terrain shades as a triangle mosaic. The vertex shader
+    // overrides objectNormal anyway (VERT_MAIN), so the unit `position` directions serve as the attribute — the
+    // same buffer, no extra memory.
+    geo.setAttribute('normal', posAttr);
     geo.setAttribute('aCells', new Float32BufferAttribute(aCells, 4));
     geo.setAttribute('aMisc', new Float32BufferAttribute(aMisc, 4));
     geo.setAttribute('aGrad', new Float32BufferAttribute(aGrad, 3));
@@ -421,6 +467,8 @@ export class ChunkLOD {
     geo.setAttribute('aN2m', new Float32BufferAttribute(aN2m, 4));
     geo.setAttribute('aN2d', new Float32BufferAttribute(aN2d, 3));
     geo.setAttribute('aGradM', new Float32BufferAttribute(aGradM, 3));
+    geo.setAttribute('aGradD', new Float32BufferAttribute(aGradD, 3));
+    geo.setAttribute('aGradDM', new Float32BufferAttribute(aGradDM, 3));
     geo.setIndex(indexBuffer());
     geo.boundingSphere = p.sphere.clone();
     return geo;
@@ -475,6 +523,10 @@ export class ChunkLOD {
     const out: Patch[] = [];
     const cam = ctx.camBody;
     const rc = cam.length();
+    {
+      const a = Math.min(1, Math.max(0, ((rc - this.radius) / this.radius - 0.08) / (0.35 - 0.08)));
+      this.silK = SILHOUETTE_SPLIT * a * a * (3 - 2 * a);
+    }
     // occluder: the lowest ground anywhere (conservative)
     let rOcc = this.radius;
     for (const r of this.roots) { this.updateBounds(r); rOcc = Math.min(rOcc, this.radius + r.hMin); }
@@ -485,7 +537,17 @@ export class ChunkLOD {
       _sphere.copy(p.sphere).applyMatrix4(ctx.bodyToWorld);
       if (!ctx.frustum.intersectsSphere(_sphere)) { p.split = false; return; }
       const d = this.boundDistance(p, cam, rc);
-      const rSplit = ctx.K * this.size(p.level) * (p.split ? 1.12 : 1.0);
+      // silhouette-aware: a patch seen edge-on (the limb from orbit, the horizon from the ground) shows its geometric
+      // error as a straight-segmented outline, so it splits up to 3.5× earlier (cubic in the grazing: only patches
+      // near the silhouette pay for it, not the whole disc). The vertex shader scales the morph
+      // distance by the same factor per vertex (TERRAIN_VERT_CORE), so the geomorph still lands where the coarser
+      // neighbour begins
+      _pc.copy(p.centerDir).multiplyScalar(this.radius + 0.5 * (p.hMin + p.hMax)).sub(cam);
+      const pcl = _pc.length();
+      const facing = pcl > 1e-3 ? Math.abs(p.centerDir.dot(_pc) / pcl) : 1;
+      const graze = 1 - facing;
+      const sil = 1 + this.silK * graze * graze * graze;
+      const rSplit = ctx.K * this.size(p.level) * (p.split ? 1.12 : 1.0) * sil;
       let split = p.level < this.maxLevel && d < rSplit;
       if (split) {
         const kids = p.makeChildren();

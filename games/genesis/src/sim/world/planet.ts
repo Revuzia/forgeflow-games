@@ -20,12 +20,13 @@ import type { Content, PlanetKindDef } from '../content.ts';
 import { getGrid, type IcoGrid } from '../grid/icogrid.ts';
 import { getGeo, type GridGeo } from '../grid/geo.ts';
 import { Noise3 } from '../grid/noise.ts';
+import { surfaceGradients, type GroundSource } from '../grid/surface.ts';
 import { Rng, hashFloat, type RngState } from '../core/rng.ts';
 import type { TypedArray } from '../core/hash.ts';
 import {
   accumulate, distanceFrom, priorityFlood, quantile, randomDir, receivers, smoothstep, sortDescending, stampCrater, stampVolcano,
 } from './gen.ts';
-import { orbitCount, spinAt, yearFraction } from './orbits.ts';
+import { orbitCount, yearFraction } from './orbits.ts';
 
 // ───────────────────────────── fields ─────────────────────────────
 
@@ -199,6 +200,10 @@ export interface HydroState {
   sourced: number;
   /** request a mask recompute at the next hydrology step */
   maskDirty: boolean;
+  /** the deepest cell of the last non-empty sea: where a sea drained away and poured again comes back (computeOcean) */
+  seedCell?: number;
+  /** erosion not yet published to snapshots: upper bound on any cell's ground change since the last bump (m) */
+  erodeAcc?: number;
 }
 
 export type PlanetRngs = { hydro: Rng; fire: Rng; weather: Rng; climate: Rng; veg: Rng; terrain: Rng };
@@ -238,6 +243,12 @@ export class Planet {
   vegDirty = false;
   /** transient generation output (drainage accumulation) consumed by hydrology init; never saved */
   genAcc: Float32Array | null = null;
+  /** derived ground-function source (CONTRACT §4.3), rebuilt lazily when `surface` changes; never saved or hashed */
+  private groundCache: { rev: number; surface: Float32Array; src: GroundSource } | null = null;
+  /** counts every real change of `surface` (updSurface): the ground cache keys on it rather than on the snapshot field
+   * version, because some systems publish small changes late (erosion) — the sim must always see the live ground.
+   * Transient: a loaded sim starts at 0 with an empty cache, which recomputes from the same arrays. */
+  private surfRev = 0;
   /** transient per-tick scratch (never saved) */
   readonly scratch: {
     dV: Float64Array; edge: Float64Array; lastDv: Float64Array; list: Int32Array; list2: Int32Array; cells: number[];
@@ -304,7 +315,11 @@ export class Planet {
     let s = f.rock[c] + f.soil[c] + f.sand[c] + f.ash[c] + f.snow[c];
     // ground ice counts; ice on a wet cell is floating (seaIce) and stored separately
     s += f.ice[c];
-    f.surface[c] = s;
+    const v = Math.fround(s);
+    if (f.surface[c] !== v) {
+      f.surface[c] = v;
+      this.surfRev++;
+    }
   }
 
   updAllSurface(): void {
@@ -315,6 +330,27 @@ export class Planet {
   /** elevation above the current sea level (m) */
   alt(c: number): number {
     return this.f.surface[c] - this.st.seaLevel;
+  }
+
+  /**
+   * The ground function's source for this world (src/sim/grid/surface.ts groundHeight / groundOffset): the live field
+   * arrays plus the per-cell curvature gradients, recomputed only when `surface` has changed since the last call. The
+   * renderer computes the same gradients from the same snapshot arrays, so the sim's ground and the drawn ground agree.
+   */
+  ground(): GroundSource {
+    const rev = this.surfRev;
+    const gc = this.groundCache;
+    if (gc && gc.rev === rev && gc.surface === this.f.surface) {
+      gc.src.soil = this.f.soil; gc.src.sand = this.f.sand; gc.src.snow = this.f.snow;
+      return gc.src;
+    }
+    const grad = surfaceGradients(this.grid, this.st.radius, this.f.surface, gc?.src.grad as Float32Array | undefined);
+    const src: GroundSource = {
+      grid: this.grid, radius: this.st.radius, noise: this.noise,
+      surface: this.f.surface, soil: this.f.soil, sand: this.f.sand, snow: this.f.snow, grad,
+    };
+    this.groundCache = { rev, surface: this.f.surface, src };
+    return src;
   }
 
   /** the cell nearest a unit vector */
@@ -344,10 +380,13 @@ export class Planet {
     return v;
   }
 
-  /** planet params as the renderer sees them at `tick` (derived calendar filled in) */
-  paramsAt(tick: number, sunLon: number): PlanetParams {
+  /** planet params as the renderer sees them at `tick` (derived calendar filled in), from Universe.sun at that tick:
+   * the star's longitude (hour), the rotation and the body-frame sun the sim heats by */
+  paramsAt(tick: number, sun: { lon: number; spin: number; dir: ArrayLike<number> }): PlanetParams {
     const st = this.st;
-    const spin = spinAt(st.spin0, st.spinTick0, st.dayHours, st.sunFrozen, tick);
+    const spin = sun.spin;
+    const sunLon = sun.lon;
+    const sunDir = sun.dir;
     const yearDays = Math.max(1e-3, st.orbit.period / (st.dayHours * 60));
     const yf = yearFraction(st.orbit, tick);
     let hour = 12 + ((spin - sunLon) / (Math.PI * 2)) * 24;
@@ -371,6 +410,7 @@ export class Planet {
       dayOfYear: Math.min(Math.floor(yearDays) , Math.floor(yf * yearDays)),
       yearDays: Math.round(yearDays * 100) / 100,
       hourAtLon0: (hour / 24) * st.dayHours,
+      sunDir: [sunDir[0], sunDir[1], sunDir[2]],
     };
   }
 

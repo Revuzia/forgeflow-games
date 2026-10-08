@@ -1,0 +1,233 @@
+{
+ "$comment": "GENESIS live loop on the real sim (worker): barren world -> air -> rain & seas -> life -> a mountain -> sunset -> night. Shots share one page, so each step builds on the last. Run: node _harness/shots.mjs _harness/specs/liveloop.json Hours are the planet's own (Cinder's day is 30 h: noon 15, midnight 0).",
+ "shots": [
+  {
+   "name": "loop-01-barren",
+   "params": "scenario=barren",
+   "camera": {
+    "mode": "orbit",
+    "lat": 12,
+    "lon": -30,
+    "dist": 7600,
+    "hour": 16.25
+   },
+   "frames": 8
+  },
+  {
+   "name": "loop-02-barren-surface",
+   "params": "scenario=barren",
+   "camera": {
+    "mode": "surface",
+    "lat": 10,
+    "lon": -30,
+    "alt": 35,
+    "pitch": 4,
+    "hour": 18
+   },
+   "frames": 8
+  },
+  {
+   "name": "loop-03-air",
+   "params": "scenario=barren",
+   "commands": [
+    {
+     "k": "planet.add-air",
+     "amount": 1
+    }
+   ],
+   "wait": 14400,
+   "camera": {
+    "mode": "orbit",
+    "lat": 12,
+    "lon": -30,
+    "dist": 7600,
+    "hour": 16.25
+   },
+   "frames": 10
+  },
+  {
+   "name": "loop-04-air-surface",
+   "params": "scenario=barren",
+   "camera": {
+    "mode": "surface",
+    "lat": 10,
+    "lon": -30,
+    "alt": 35,
+    "pitch": 4,
+    "hour": 18
+   },
+   "frames": 10
+  },
+  {
+   "name": "loop-05-rain",
+   "params": "scenario=barren",
+   "commands": [
+    {
+     "k": "weather.global",
+     "kind": "storm"
+    },
+    {
+     "k": "water.sea-level",
+     "value": -40
+    }
+   ],
+   "wait": 1440,
+   "camera": {
+    "mode": "orbit",
+    "lat": 12,
+    "lon": -30,
+    "dist": 7600,
+    "hour": 16.25
+   },
+   "frames": 10
+  },
+  {
+   "name": "loop-06-seas",
+   "params": "scenario=barren",
+   "commands": [
+    {
+     "k": "weather.global",
+     "kind": "none"
+    }
+   ],
+   "wait": 1440,
+   "camera": {
+    "mode": "orbit",
+    "lat": 12,
+    "lon": -30,
+    "dist": 7600,
+    "hour": 16.25
+   },
+   "frames": 10
+  },
+  {
+   "name": "loop-07-life",
+   "params": "scenario=barren",
+   "commands": [
+    {
+     "k": "life.plant",
+     "species": "meadow-grass",
+     "lat": 0,
+     "lon": 0,
+     "radius": 12000,
+     "density": 0.8
+    },
+    {
+     "k": "life.plant",
+     "species": "berry-bush",
+     "lat": 10,
+     "lon": -30,
+     "radius": 1800,
+     "density": 0.5
+    },
+    {
+     "k": "life.forest",
+     "lat": 10,
+     "lon": -30,
+     "radius": 1400
+    },
+    {
+     "k": "life.forest",
+     "lat": -20,
+     "lon": 20,
+     "radius": 1400
+    },
+    {
+     "k": "life.forest",
+     "lat": 35,
+     "lon": -70,
+     "radius": 1400
+    }
+   ],
+   "wait": 2880,
+   "camera": {
+    "mode": "orbit",
+    "lat": 12,
+    "lon": -30,
+    "dist": 6200,
+    "hour": 16.25
+   },
+   "frames": 10
+  },
+  {
+   "name": "loop-08-life-surface",
+   "params": "scenario=barren",
+   "camera": {
+    "mode": "surface",
+    "lat": 10,
+    "lon": -30,
+    "alt": 30,
+    "pitch": -3,
+    "hour": 13
+   },
+   "frames": 10
+  },
+  {
+   "name": "loop-09-mountain",
+   "params": "scenario=barren",
+   "commands": [
+    {
+     "k": "terrain.mountain-range",
+     "lat": 14,
+     "lon": -22,
+     "to": [
+      -0.129,
+      0.375,
+      0.918
+     ],
+     "height": 280,
+     "radius": 200
+    }
+   ],
+   "camera": {
+    "mode": "orbit",
+    "lat": 12,
+    "lon": -27,
+    "dist": 1300,
+    "tilt": 66,
+    "yaw": 55,
+    "hour": 11
+   },
+   "frames": 10
+  },
+  {
+   "name": "loop-10-sunset",
+   "params": "scenario=barren",
+   "camera": {
+    "mode": "surface",
+    "lat": 10,
+    "lon": -30,
+    "alt": 40,
+    "pitch": 3,
+    "sunElevation": 3,
+    "faceSun": true
+   },
+   "frames": 10
+  },
+  {
+   "name": "loop-11-dusk-orbit",
+   "params": "scenario=barren",
+   "camera": {
+    "mode": "orbit",
+    "lat": 8,
+    "lon": -30,
+    "dist": 7400,
+    "hour": 22.6
+   },
+   "frames": 10
+  },
+  {
+   "name": "loop-12-night",
+   "params": "scenario=barren",
+   "camera": {
+    "mode": "surface",
+    "lat": 10,
+    "lon": -30,
+    "alt": 40,
+    "pitch": 10,
+    "hour": 0.5
+   },
+   "frames": 10
+  }
+ ]
+}

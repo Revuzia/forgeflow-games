@@ -93,3 +93,6 @@
 @media (prefers-reduced-motion: reduce) {
   .gn-toast, .gn-toast.gn-out { animation: none; }
 }
+
+/* clean frames: __GENESIS__.ui(false), H, photo mode — the ForgeFlow portal bar (public/game_controls.js) hides too */
+.genesis-clean #__ff_controls__ { display: none !important; }

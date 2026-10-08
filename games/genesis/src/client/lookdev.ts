@@ -342,8 +342,10 @@ function genTerran(id: number, name: string, seed: number, n: number, radius: nu
     GR[c] = clamp01(lush * smooth(0.12, 0.45, m) * (0.85 + 0.3 * forestN));
     TR[c] = clamp01(lush * smooth(0.46, 0.7, m + 0.22 * forestN) * (1 - smooth(260, 330, h[c])));
     SH[c] = clamp01(lush * smooth(0.25, 0.5, m) * (1 - TR[c]) * (0.4 + 0.6 * nz.fbm(x * 14, y * 14, z * 14, 2) + 0.4));
-    TS[c] = t < 6 ? 1 : t > 24 && m > 0.75 ? 3 : 0; // 0 broadleaf, 1 conifer, 3 tropical
-    SS[c] = m < 0.35 ? 1 : 0;
+    // species are plants.json indices, like the sim's: 14 oak, 15 beech, 18 spruce, 17 pine, 24 kapok; shrubs 10 sagebrush,
+    // 8 berry bush (the renderer reads the form, height and colour of the species)
+    TS[c] = t < 6 ? (hashFloat(c, 41) < 0.6 ? 18 : 17) : t > 24 && m > 0.75 ? 24 : (hashFloat(c, 43) < 0.7 ? 14 : 15);
+    SS[c] = m < 0.35 ? 10 : 8;
     FERT[c] = clamp01(m * 0.7 + soil * 0.2);
     BIO[c] = snow > 0.5 ? (h[c] > 200 ? B.mountain : B.tundra)
       : sand > 1.2 ? (m < 0.2 ? B.dune : B.desert)
@@ -378,7 +380,7 @@ function genTerran(id: number, name: string, seed: number, n: number, radius: nu
       const patch = hashFloat(Math.floor(P[c * 3] * 60), Math.floor(P[c * 3 + 1] * 60), Math.floor(P[c * 3 + 2] * 60), 77);
       if (patch < 0.72) {
         CR[c] = 0.55 + 0.45 * hashFloat(c, 5);
-        CS[c] = Math.floor(hashFloat(c, 9) * 4);
+        CS[c] = 26 + Math.floor(hashFloat(c, 9) * 4); // wheat, rice, maize, flax
         TR[c] *= 0.1; SH[c] *= 0.3; GR[c] = Math.max(GR[c] * 0.6, 0.3);
       }
     }

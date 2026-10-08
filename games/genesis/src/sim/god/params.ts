@@ -7,7 +7,7 @@
 
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
-import { meanAnomaly, spinAt, AU, spinForHour } from '../world/orbits.ts';
+import { meanAnomaly, AU, spinForHour } from '../world/orbits.ts';
 import { setStarKind, setStarLuminosity } from '../world/star.ts';
 import { setGlobalWeather } from '../fields/weather.ts';
 
@@ -36,7 +36,7 @@ const SEASONS = ['spring', 'summer', 'autumn', 'winter'];
 /** re-anchor the spin at the current tick (call before changing dayHours / freezing) */
 export function anchorSpin(u: Universe, p: Planet): void {
   const st = p.st;
-  st.spin0 = spinAt(st.spin0, st.spinTick0, st.dayHours, st.sunFrozen, u.tick);
+  st.spin0 = u.spinOf(p, u.tick);
   st.spinTick0 = u.tick;
 }
 
@@ -130,7 +130,7 @@ export const PARAMS: ParamDef[] = [
       return i >= 0 ? `It will be ${SEASONS[i]} until you say otherwise.` : 'The seasons turn again.';
     } },
   { path: 'planet.hour', label: 'Hour at longitude 0', unit: 'h', kind: 'number', min: 0, max: 2000, aliases: ['hour', 'time of day'], desc: 'Moves the sun.',
-    get: (u, p) => { const pp = p.paramsAt(u.tick, u.sun(p, u.tick).lon); return pp.hourAtLon0; },
+    get: (u, p) => p.paramsAt(u.tick, u.sun(p, u.tick)).hourAtLon0,
     set: (u, p, v) => { setHour(u, p, Number(v)); return `The sun stands at hour ${fmt(Number(v))}.`; } },
   { path: 'star.luminosity', label: 'Star brightness', unit: '× sun', kind: 'number', min: 0, max: 10000, aliases: ['luminosity', 'brightness', 'star brightness'], desc: 'Light output of the star.',
     get: (u) => u.star.luminosity,

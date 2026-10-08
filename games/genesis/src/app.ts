@@ -36,7 +36,9 @@ export function parseParams(search: string): AppOptions {
   return {
     scenario: p.get('scenario') ?? 'lookdev',
     seed: Math.floor(num('seed', 20260)),
-    source: src === 'lookdev' || src === 'worker' ? src : 'auto',
+    // the real sim in its worker is the default; ?source=lookdev is the render-dev generator, ?source=auto tries the
+    // worker and falls back to lookdev (never silently: the HUD says so)
+    source: src === 'lookdev' || src === 'auto' ? src : 'worker',
     quality: isQualityName(q) ? q : 'auto',
     speed: num('speed', 1),
     dev: p.get('dev') === '1',
@@ -99,6 +101,10 @@ export class App {
   private pointerDirty = false;
   brushRadius = 60;
   private uiVisible = true;
+  /** last `focus` command sent (CONTRACT §8.7: the camera's dwelling point, the sim's default "here") */
+  private focusSentAt = -1e9;
+  private focusSent: [number, number, number] | null = null;
+  private focusPlanet = -1;
   private v2 = new Vector2();
 
   constructor(canvas: HTMLCanvasElement, opts: AppOptions) {
@@ -179,6 +185,7 @@ export class App {
         for (const w of this.captureWaiters.splice(0)) w(url);
       }
       this.sim.pump(now);
+      this.sendFocus(now);
       this.fps = this.fps * 0.92 + (dt > 0 ? 1 / dt : 60) * 0.08;
       this.hud.update({
         view, pose, stats: this.renderer.stats, fps: this.fps, primary: this.renderer.primaryId,
@@ -298,6 +305,35 @@ export class App {
     }
   }
 
+  /**
+   * Tell the sim where the camera dwells (a logged `focus` command, so determinism holds): it is the default place for
+   * commands given without one ("rain here") and, later, where cohorts are promoted to individuals. At most every
+   * 2.5 s, and only when the point moved more than ~1° or the world changed.
+   */
+  private sendFocus(now: number): void {
+    if (now - this.focusSentAt < 2500 || !this.sim.backend) return;
+    const mode = this.rig.mode;
+    if (mode === 'system') return;
+    const pv = this.sim.view.planet(this.rig.pose.planet >= 0 ? this.rig.pose.planet : this.renderer.primaryId);
+    if (!pv) return;
+    let d: [number, number, number];
+    if (mode === 'orbit' && this.rig.orbit.planet === pv.id) {
+      const f = this.rig.orbit.focus;
+      d = [f[0], f[1], f[2]];
+    } else {
+      const p = this.rig.pose.pos;
+      d = rotate([-pv.quat[0], -pv.quat[1], -pv.quat[2], pv.quat[3]], [p[0] - pv.center[0], p[1] - pv.center[1], p[2] - pv.center[2]]);
+      const l = Math.hypot(d[0], d[1], d[2]) || 1;
+      d = [d[0] / l, d[1] / l, d[2] / l];
+    }
+    const last = this.focusSent;
+    if (last && this.focusPlanet === pv.id && last[0] * d[0] + last[1] * d[1] + last[2] * d[2] > Math.cos(0.0175)) return;
+    this.focusSentAt = now;
+    this.focusSent = d;
+    this.focusPlanet = pv.id;
+    void this.sim.cmd({ k: 'focus', planet: pv.id, pos: d });
+  }
+
   // ── actions (HUD, keys, test surface) ──
 
   setSpeed(x: number): void { this.sim.setSpeed(Math.max(0, x)); }
@@ -348,6 +384,8 @@ export class App {
   setUi(v: boolean): void {
     this.uiVisible = v;
     this.hud.setVisible(v);
+    // clean frames (trailer stills, photo mode, __GENESIS__.ui(false)) hide the ForgeFlow portal bar too (styles.css)
+    document.body.classList.toggle('genesis-clean', !v);
   }
 
   setQuality(name: QualityName): void {
@@ -415,13 +453,14 @@ export class App {
     let hour = spec.hour;
     if (spec.sunElevation != null && pv) {
       // solve the hour angle for the wanted elevation with the sun's current declination (evening branch)
-      const d = Math.hypot(pv.center[0], pv.center[1], pv.center[2]) || 1;
-      const sunB = rotate([-pv.quat[0], -pv.quat[1], -pv.quat[2], pv.quat[3]], [-pv.center[0] / d, -pv.center[1] / d, -pv.center[2] / d]);
+      const sunB = rotate([-pv.quat[0], -pv.quat[1], -pv.quat[2], pv.quat[3]], pv.sunDir);
       const dec = Math.asin(Math.max(-1, Math.min(1, sunB[1])));
       const phi = (lat * Math.PI) / 180, el = (spec.sunElevation * Math.PI) / 180;
       const cosH = (Math.sin(el) - Math.sin(phi) * Math.sin(dec)) / Math.max(1e-6, Math.cos(phi) * Math.cos(dec));
       const H = Math.acos(Math.max(-1, Math.min(1, cosH)));
-      hour = 12 + (H / Math.PI) * 12 * (pv.params.dayHours / 24);
+      // planet hours: local noon is half a day, whatever the day length (Cinder's day is 30 h)
+      const half = pv.params.dayHours / 2;
+      hour = half + (H / Math.PI) * half;
     }
     if (hour != null) {
       // compute the pose once so "local" means the new camera position
@@ -433,8 +472,7 @@ export class App {
       await this.waitFrames(3);
       const pvs = this.sim.view.planet(planet);
       if (pvs) {
-        const d = Math.hypot(pvs.center[0], pvs.center[1], pvs.center[2]) || 1;
-        const sun = rotate([-pvs.quat[0], -pvs.quat[1], -pvs.quat[2], pvs.quat[3]], [-pvs.center[0] / d, -pvs.center[1] / d, -pvs.center[2] / d]);
+        const sun = rotate([-pvs.quat[0], -pvs.quat[1], -pvs.quat[2], pvs.quat[3]], pvs.sunDir);
         const la = (lat * Math.PI) / 180, lo = (lon * Math.PI) / 180;
         const up = [Math.cos(la) * Math.sin(lo), Math.sin(la), Math.cos(la) * Math.cos(lo)];
         const e = [up[2], 0, -up[0]];
@@ -452,7 +490,9 @@ export class App {
   /** URL ?cam= presets */
   async applyCameraPreset(name: string): Promise<void> {
     const presets: Record<string, CameraSpec> = {
-      orbit: { mode: 'orbit', lat: 18, lon: -35, dist: 7800 },
+      // the sun 60–75° off the view axis (mid-afternoon at the camera's meridian): the terminator in frame, relief in
+      // raking light — a sun behind the camera reads every world as a flat, evenly lit disc
+      orbit: { mode: 'orbit', lat: 18, lon: -35, dist: 7800, hour: 16.25 },
       system: { mode: 'system' },
       coast: { mode: 'orbit', poi: 'coast', dist: 520, tilt: 62 },
       valley: { mode: 'surface', poi: 'valley', alt: 30, pitch: -2 },
