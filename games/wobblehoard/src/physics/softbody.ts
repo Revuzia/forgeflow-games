@@ -347,7 +347,7 @@ export class SoftBody implements SoftBodyLike {
   private vnStamp = -1;
   private readonly hashHead: Int32Array; private readonly hashNext: Int32Array;
   private hashStamp = -1; private readonly hashCell: number;   // hash cell edge: 1.5 x the mean rest edge
-  private readonly meanEdge: number;        // mean rest edge length (collide's contact skin)
+  readonly meanEdge: number;                // mean rest edge length (collide's contact skin); public since CUT2 (SoftBodyLike.meanEdge)
   private bR = 0;                           // boundRadius()'s result
   private readonly contactWith: Int32Array; // per other-body slot: the substep index of the last contact (bump on a new contact)
   private bodyId = 0;                       // a per-process id (collide's contact memory); not part of the state hash

@@ -91,13 +91,37 @@ export interface FingerDownArgs {
 /* CUT (_spec/CUT.md, owner request 2026-10-06): slice a squishy into pieces and reconnect them. Every member below is optional. */
 /** A cut plane in the body's world space. The 'a' side is where dot(p - point, normal) >= 0. */
 export interface CutPlane { point: V3; normal: V3 }
+/* ── CUT2 (TRUE CUT, _spec/CUT2.md): a piece is the real part of the squishy on its side of the cut planes ── */
+export interface Quat { x: number; y: number; z: number; w: number }
+
+/** A plane in the WHOLE squishy's rest frame W (origin = the whole's rest centre of mass, axes = its rest axes, metres). Side A: n . p >= d. Shell -> PHYS. */
+export interface RestPlane { id: number; n: V3; d: number }
+/** Which part of the whole a body is, as the shell says it: a union of convex cells; a cell is a list of signed plane ids (+id side A, -id side B) whose
+ *  intersection, with the species silhouette, is that cell. cells [[]] (or no region) = the whole. `planes` holds every plane the cells name.
+ *  THIS BUILD asks for exactly ONE cell (a node of the cut tree); the list is kept so a union builder (tuning item T9) needs no contract change. */
+export interface PieceRegion { planes: RestPlane[]; cells: number[][] }
+/** PHYS -> RENDER: one bounding plane of a cell, in W; the piece lies where dot(n, p) <= d; n is a UNIT vector pointing OUT of the piece. The two faces of one cut carry
+ *  the same id with opposite n and d. A literal +id (side A of RestPlane k) is { n: -n_k, d: -d_k, id }; -id is { n: n_k, d: d_k, id }. */
+export interface CutPlaneRest { n: V3; d: number; id: number }
+export interface PieceInfo {
+  /** The uncut squishy's DETAIL-3 rest mesh (the same values as `new SoftBody(genome).restLocal`), the SAME array objects for every piece of one squishy
+   *  (pieces are grouped by this identity). `radius` = its restRadius. NOT the physics' internal detail-4 source solid. */
+  readonly whole: { readonly restLocal: Float32Array; readonly indices: Uint32Array; readonly radius: number };
+  /** restLocal_piece[i] = (the same material point in W) - offset. Composes for nested cuts. */
+  readonly offset: V3;
+  /** Piece coordinates: the centre the piece was re-meshed from; the mesh is star-shaped about it. */
+  readonly rayOrigin: V3;
+  /** The piece is the union of these convex cells (ONE cell in this build); each cell is the intersection of its planes. A fresh whole has [[]]. A merge publishes a NEW immutable PieceInfo. */
+  readonly cells: ReadonlyArray<ReadonlyArray<CutPlaneRest>>;
+}
+
 /** Construction options for one piece of a cut squishy (passed as SoftBodyCtor opts.piece). */
 export interface PieceOpts {
   /** Volume as a fraction of the whole squishy, 0.125..1; the rest shape is scaled by cbrt(frac). */
   frac: number;
   /** true: an eyeless rounded chunk with a flat cut face toward cutNormal that rounds over by the family's memory (CUT.md 1);
    *  false: the face piece, i.e. the species silhouette scaled to frac. */
-  chunk: boolean;
+  chunk?: boolean;   // CUT2: now optional; ignored when `region` is given (the shell passes `chunk: false` or nothing)
   /** World-space outward normal of the fresh cut face. */
   cutNormal?: V3;
   /** Initial centre of mass (m) and velocity (m/s). SoftBody: the piece is placed with its centre at `at` (never below its own resting
@@ -107,6 +131,22 @@ export interface PieceOpts {
    *  ({ frac: 1, chunk: false, at }, the shell's play mat) stays at its spot instead of being glided into the play body (physics round 3). */
   at?: V3;
   vel?: V3;
+  /** CUT2: absent = the old build (a whole at `at`, a scaled whole, or a legacy chunk). With `region`, `chunk` and `cutNormal` are ignored and `at` is EXACT (the constructor does not lift the piece). */
+  region?: PieceRegion;
+  /** CUT2: the parent's best-fit rotation: the child is born in the parent's pose (particles rotated about the parent's centre). */
+  frame?: Quat;
+}
+
+/** CUT2: the cut's plan, filled by SoftBody.planCut (pure, no allocation). */
+export interface CutPlan {
+  rest: { n: V3; d: number };            // the plane in W (normal toward side A); the physics latches it. prepareCut's retry ladder may shift d by at most 0.012 R0 and then updates every field below in the same step
+  fa: number;                            // share of THIS body's volume on side A, from the REST clip (= what is built, to 1e-12)
+  offA: V3; offB: V3;                    // each child's rest origin in THIS body's rest-local frame: world = center + R(frame) . off
+  velA: V3; velB: V3;                    // mean world velocity of each half of the current mesh (the shell subtracts the velocity the neck added)
+  aspectA: number; aspectB: number;      // sqrt(smallest / largest covariance eigenvalue) of each child, 0..1 (1 = ball, 0.1 = pancake)
+  sound: boolean;                        // false: a child is not one body (the cut would split off two separate parts)
+  soundPending?: boolean;                // true: only the cheap centroid test has run (sound is provisional)
+  built: boolean;                        // true: both children are cached and offA/offB are exact (otherwise estimated from the clipped centroids, <= 0.04 R0)
 }
 
 export interface SoftBodyLike {
@@ -166,7 +206,25 @@ export interface SoftBodyLike {
    *  volume within 3 % (6 % for the air-bleed families). On the table the waist sits at the bottom of the cross-section (the foot stays down);
    *  the neck band is in the contact fold limit while it forms. Swap in the pieces at t = 1: HELD at t = 1 for a second, 12 of 100 bodies
    *  crease past 120 degrees. */
-  setNeck?(plane: CutPlane | null, t: number): void;
+  setNeck?(plane: CutPlane | null, t: number, depth?: number): void;   // CUT2: optional depth 0..1 (1 = today's waist 0.3; 0.35 = a groove); the first call with t > 0 latches the rest plane
+  /** CUT2: a body that is a real part of a squishy publishes it; absent on a whole squishy. */
+  readonly piece?: PieceInfo;
+  /** CUT2: mean edge length (m): a pair's contact skin is 0.25 (meanEdgeA + meanEdgeB). */
+  readonly meanEdge?: number;
+  /** CUT2: 0..1 progress of a running setRegion morph, 0 otherwise; the render cross-fades the old cut faces to skin by it. */
+  readonly morphT?: number;
+  /** CUT2: pure; fills `out`, no allocation, <= 4 ms. 'at': the plane as given. 'median': ignore plane.point, find the offset along plane.normal that halves the volume.
+   *  'latched': reuse the rest plane latched by setNeck and recompute only velA, velB. false when the plane misses the body. */
+  planCut?(plane: CutPlane, out: CutPlan, mode?: 'at' | 'median' | 'latched'): boolean;
+  /** CUT2: after a successful planCut, build the two children in time slices (once per neck step, 3 ms); true when both are cached, false while stages remain,
+   *  'thin' | 'loose' when the cut is refused. `maxStages` caps the work per call (tests pass it with budgetMs = Infinity). */
+  prepareCut?(budgetMs: number, maxStages?: number): boolean | 'thin' | 'loose';
+  /** CUT2: put a freshly built piece (before its first step) at world `at` with velocity `vel` and rotation `frame`, exactly (no lift), and re-home it. */
+  placeAt?(at: V3, vel: V3, frame?: Quat): void;
+  /** CUT2: morph the rest shape AND volume to `region` (the one cell of a join's node) over `seconds`; at the end the body commits in place and publishes a new `piece`. [[]] = the original. */
+  setRegion?(region: PieceRegion, seconds: number): void;
+  /** CUT2: build the target of a join in time slices, once per step while a join is armed; true when cached. */
+  prepareRegion?(region: PieceRegion, budgetMs: number, maxStages?: number): boolean;
   /** Grow or shrink the rest volume smoothly to a new fraction of the whole over `seconds` (reconnect growth, the giver's shrink). */
   setFrac?(frac: number, seconds: number): void;
   /** Soft body-to-body contact (stage B item B2) against `others` this frame: pushes particles apart on both sides and emits 'bump'.
@@ -298,7 +356,9 @@ export interface AddBodyOpts {
   tier?: TierName;
   /** Render-space offset of the body (the simulated body itself keeps its own origin; the stage draws it here). */
   position?: V3;
-  /** CUT (optional): a piece without a face (an eyeless chunk of the same jelly). Default false. */
+  /** CUT2 (optional): hint only: the stage infers it from body.piece. */
+  piece?: boolean;
+  /** CUT (optional, @deprecated by CUT2): a piece without a face (an eyeless chunk of the same jelly), honoured only for a body without `piece`. Default false. */
   chunk?: boolean;
 }
 
@@ -375,7 +435,13 @@ export interface StageLike {
   spawnFx(kind: FxKind, at: V3, intensity: number): void;
   /** CUT (optional): a thin warm seam glow along `plane` on body `bodyId` while it necks; t 0..1 (0 or a null plane clears it).
    *  A glow, never a flash: the flash governor applies. */
-  setCutSeam?(bodyId: number, plane: CutPlane | null, t: number): void;
+  setCutSeam?(bodyId: number, plane: CutPlane | null, t: number, opts?: { from?: V3; to?: V3 }): void;   // CUT2: optional 4th parameter: the swipe's two ends on the plane (world space)
+  /** CUT2 (optional): make an existing view the one the camera follows (tier-styled); removeBody(primary) is then allowed. Lets a cut change the play body WITHOUT setBody. */
+  setPrimaryBody?(id: number): void;
+  /** CUT2 (optional): build and dispose one hidden piece view so the first real cut does not pay it. */
+  warmPieces?(): void;
+  /** CUT2 (optional): the two eye centres of a WHOLE body's face, in the rest-local frame of the whole; null for a body without a face. */
+  eyeAnchors?(id: number): { left: V3; right: V3 } | null;
   /** CUT (optional): the reconnect bridge, a glowing neck between two bodies; t 0..1 (0 clears). */
   setBridge?(aId: number, bId: number, t: number): void;
   dispose(): void;
