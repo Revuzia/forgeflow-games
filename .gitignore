@@ -107,3 +107,11 @@ games/hit-parade/_research/audio/_*.log
 games/hit-parade/_research/environment/unitypackage_listings/
 games/hit-parade/_research/environment/texlists/
 games/hit-parade/runtime/lab/assets/
+
+# 2026-10-08 — GENESIS (games/genesis): Vite/TS god game. node_modules + dist covered above; keep screenshots,
+# harness reports and scratch out of git.
+games/genesis/node_modules/
+games/genesis/dist/
+games/genesis/_shots/
+games/genesis/_harness/_reports/
+games/genesis/_harness/scratch/

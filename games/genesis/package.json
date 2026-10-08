@@ -1,0 +1,25 @@
+{
+  "name": "genesis",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "GENESIS — a multi-planet living-world god game. Three.js (WebGL2) + TypeScript + Vite, renderer-free deterministic sim core in a Web Worker. `npm install && npm run dev`.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test --test-reporter=spec tests/",
+    "detban": "node _harness/detban.ts",
+    "check": "npm run detban && npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "three": "0.186.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/three": "0.186.0",
+    "typescript": "7.0.2",
+    "vite": "8.3.0"
+  }
+}
