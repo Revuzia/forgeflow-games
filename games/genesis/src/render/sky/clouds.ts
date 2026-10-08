@@ -143,8 +143,8 @@ float cloudDensityAt(vec3 pb, float hf, float cov, float storm, bool detail) {
   if (cov < 0.03 || hf <= 0.0 || hf >= 1.0) return 0.0;
   // vertical profile: flat-ish bases, rounded tops; storms tower through the whole shell
   // thin decks at low cover, towers where it is high or stormy
-  float top = mix(0.38, 1.0, max(smoothstep(0.55, 0.95, cov), storm));
-  float prof = smoothstep(0.0, 0.07, hf) * (1.0 - smoothstep(top * 0.55, top, hf));
+  float top = mix(0.3, 1.0, max(smoothstep(0.65, 0.98, cov), storm));
+  float prof = smoothstep(0.0, 0.1, hf) * (1.0 - smoothstep(top * 0.45, top, hf));
   if (prof <= 0.0) return 0.0;
   vec3 q = (pb + uCloudWind) * uCloudScale.x;
   vec4 n = texture(uCloudBase, q);

@@ -1,0 +1,13 @@
+{
+  "title": "GENESIS",
+  "short_description": "GENESIS — a multi-planet living-world god game. Light a star, breathe air onto a dead world, pour seas, seed life, and watch a people find their own way from stone toward the stars.",
+  "description": "You poured water on a dead rock. Now they have a word for you.\n\nGENESIS is a god game on worlds small enough to hold: planets a few kilometres across, true to scale for the people who live on them, orbiting a real star. Breathe air onto an airless world and watch the limb turn blue; pour seas and they find the low places; seed life and it spreads only where water and warmth allow. Drop a people onto the land and they notice, experiment, learn, forget, build, quarrel and leave — while a real simulation runs underneath, whether you act or not.\n\nThe sky is physical: sunsets redden because the light crosses more air, clouds are volumetric and drift where the weather says, the sea reflects the land and the clouds and turns turquoise over sand. Zoom continuously from the whole system down to two metres above the grass.",
+  "genre": "simulation",
+  "sub_genre": "god-game",
+  "difficulty": "easy",
+  "controls_keyboard": "Left-drag turn the world · wheel descend / rise · right-drag turn and tilt · WASD / arrows pan · Q / E turn · R / F tilt · G system view · V free-fly (WASD, Space / C up and down) · P pause · , / . slower / faster · [ / ] brush size · H hide the interface",
+  "controls_gamepad": "Not yet supported",
+  "tags": ["god-game", "simulation", "sandbox", "planets", "space", "procedural", "3d", "living-world"],
+  "art_direction": "Studio-grade real-time look on tiny planets: a physically based sky with Rayleigh and Mie scattering and orange sunsets, volumetric clouds, layered procedural terrain (rock strata, grass by moisture and season, sand ripples, snow), leafy instanced forests, a refractive sea with foam and screen-space reflections, AgX tone mapping with bloom and god rays. Interface: dark glass panels with fine ivory and gold accents, a serif display face for titles.",
+  "mobile_support": "none"
+}

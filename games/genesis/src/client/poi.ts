@@ -86,9 +86,11 @@ export function findPoi(pv: PlanetView, kind: string): Poi | null {
         const hd = headingTo(pv, c, lookC);
         const west = Math.abs(((hd + 90 + 540) % 360) - 180);
         if (west > 40) continue;
-        let water = 0;
+        let water = 0, clouds = 0;
         for (const o of near(c, 800 / R)) if (w[o] > 3) water++;
-        const score = water - west * 0.5 + tropicPref(c) * 30;
+        // clouds out over the sea catch the sunset
+        if (cloud) for (const o of near(lookC, 900 / R)) if (cloud[o] > 0.3) clouds++;
+        const score = water - west * 0.5 + tropicPref(c) * 30 + Math.min(clouds, 50) * 1.2 - (cloud ? cloud[c] * 60 : 0);
         if (score > bestScore) { bestScore = score; best = c; look = lookC; }
       }
       if (best < 0) return findPoi(pv, 'coast');

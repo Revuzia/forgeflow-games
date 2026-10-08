@@ -39,7 +39,7 @@ const DEFAULT_SHOTS = [
   { name: 'terminator', params: 'source=lookdev', camera: { mode: 'orbit', lat: 8, lon: 20, dist: 7400, hour: 18.6 }, frames: 8 },
   { name: 'coast', params: 'source=lookdev', camera: { mode: 'orbit', poi: 'coast', dist: 330, tilt: 68, hour: 10.5 }, frames: 10 },
   { name: 'valley', params: 'source=lookdev', camera: { mode: 'surface', poi: 'valley', alt: 30, pitch: -2, hour: 9 }, frames: 10 },
-  { name: 'sunset', params: 'source=lookdev', camera: { mode: 'surface', poi: 'westcoast', alt: 9, pitch: 4, sunElevation: 3, faceSun: true }, frames: 10 },
+  { name: 'sunset', params: 'source=lookdev', camera: { mode: 'surface', poi: 'coast', alt: 30, pitch: 2, sunElevation: 4, faceSun: true }, frames: 10 },
   { name: 'hud', params: 'source=lookdev&dev=1', camera: { mode: 'orbit', lat: 25, lon: -60, dist: 2600, hour: 11 }, frames: 8, ui: true },
   { name: 'airless', params: 'source=lookdev&scenario=barren', camera: { mode: 'surface', lat: 10, lon: 30, alt: 25, pitch: 6, hour: 15 }, frames: 8 },
 ];

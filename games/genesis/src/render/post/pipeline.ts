@@ -60,7 +60,7 @@ void main() {
   }
   acc *= 0.25;
   vec2 dv = (vUv - uSunUV) * vec2(uAspect, 1.0);
-  float w = exp(-dot(dv, dv) * 14.0);
+  float w = exp(-dot(dv, dv) * 26.0);
   float l = dot(acc, vec3(0.2126, 0.7152, 0.0722));
   vec3 c = acc * smoothstep(0.0, 1.0, l) / max(l, 1e-4);
   gl_FragColor = vec4(min(c * w, vec3(60.0)), 1.0);
@@ -501,6 +501,9 @@ export class PostPipeline {
     this.prevValid = true;
   }
 
+  /** exposure key (mid-grey target): lower at dusk so sunsets and twilight stay dusky instead of being lifted */
+  setKey(key: number): void { this.adaptMat.uniforms.uKey.value = key; }
+
   /** steps 5–9: from the composited HDR image to the screen */
   finish(r: WebGLRenderer, fsq: FullscreenQuad, input: Texture, s: PostSettings, sun: SunScreen, dt: number, time: number, target: WebGLRenderTarget | null = null): void {
     const aspect = this.w / this.h;
@@ -578,7 +581,7 @@ export class PostPipeline {
     t.tHDR.value = input;
     t.tBloom.value = this.bloomMips.length ? this.bloomMips[0].texture : input;
     t.uBloom.value = this.bloomMips.length ? s.bloom : 0;
-    t.uGod.value = godOn ? 0.55 * sun.strength : 0;
+    t.uGod.value = godOn ? 0.32 * sun.strength : 0;
     if (!godOn) t.tGod.value = this.godMask.texture;
     t.uGodColor.value.copy(sun.color);
     t.tExposure.value = this.adapt[this.adaptIdx].texture;

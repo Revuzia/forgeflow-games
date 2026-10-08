@@ -275,7 +275,7 @@ export class AtmosphereModel {
     if (a.methane > 0.05) tr = [tr[0] * 0.6, tr[1] * 1.15, tr[2] * 1.05];
     u.uBetaR.value.set(tr[0] / u.uHR.value, tr[1] / u.uHR.value, tr[2] / u.uHR.value);
     const dust = Math.max(0, a.dust);
-    const tauM = (0.008 + dust * 0.6) * SKY_DEPTH_SCALE * Math.min(1.5, Math.max(p, dust > 0.05 ? 0.4 : 0));
+    const tauM = (0.006 + dust * 0.6) * SKY_DEPTH_SCALE * Math.min(1.5, Math.max(p, dust > 0.05 ? 0.4 : 0));
     const ms = tauM / u.uHM.value;
     u.uBetaMs.value.set(ms, ms, ms);
     // dust absorbs blue: a warm, rusty extinction; clean haze barely absorbs

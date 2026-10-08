@@ -180,7 +180,7 @@ export class Renderer {
     cam.position.set(0, 0, 0);
     cam.quaternion.set(pose.quat[0], pose.quat[1], pose.quat[2], pose.quat[3]);
     if (Math.abs(cam.fov - pose.fov) > 1e-6) { cam.fov = pose.fov; cam.updateProjectionMatrix(); }
-    // near plane: tight near the ground, relaxed in space (log depth keeps precision either way)
+    // near 0.05 m / far 2·10⁷ m for every view: the logarithmic depth buffer keeps precision across the whole range
     cam.updateMatrixWorld(true);
     _proj.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(_proj);
@@ -323,11 +323,14 @@ export class Renderer {
     // ── post ──
     post.keepPrevious(r, this.fsq, input);
     const sun = this.sunScreen(pose, primaryVis);
+    post.setKey(this.sunElevation > -2 ? 0.075 + 0.085 * Math.min(1, Math.max(0, this.sunElevation / 0.3)) : 0.16);
     post.finish(r, this.fsq, input, this.settings, sun, dt, time, null);
     this.updateStats();
     this.stats.frameMs = performance.now() - t0;
   }
 
+  /** sine of the sun's elevation at the camera (1 when not near a planet with air) */
+  sunElevation = 1;
   private wb = new Vector3(1, 1, 1);
   private sun: SunScreen = { uv: new Vector2(-10, -10), onScreen: false, color: new Vector3(1, 1, 1), strength: 0 };
   private wbSnap = true;
@@ -340,7 +343,7 @@ export class Renderer {
       r *= Math.exp(-tau('x')); g *= Math.exp(-tau('y')); b *= Math.exp(-tau('z'));
     }
     const l = 0.2126 * r + 0.7152 * g + 0.0722 * b || 1;
-    const k = 0.7; // partial: keep a little of the world's own warmth
+    const k = 0.5; // partial: keep part of the world's own warmth (sunsets stay golden)
     const tr = (l / Math.max(r, 1e-3)) * k + (1 - k), tg = (l / Math.max(g, 1e-3)) * k + (1 - k), tb = (l / Math.max(b, 1e-3)) * k + (1 - k);
     // ease so flying between worlds does not snap the grade
     const a = this.wbSnap ? 1 : 0.1;
@@ -371,6 +374,7 @@ export class Renderer {
   private sunScreen(pose: CameraPose, primary: PlanetVisual | null): SunScreen {
     const s = this.sun;
     s.uv.set(-10, -10); s.onScreen = false; s.color.set(1, 1, 1); s.strength = 0;
+    this.sunElevation = 1;
     _rel.set(-pose.pos[0], -pose.pos[1], -pose.pos[2]).applyMatrix4(this.camera.matrixWorldInverse);
     if (_rel.z < 0) {
       _rel.applyMatrix4(this.camera.projectionMatrix);
@@ -386,6 +390,7 @@ export class Renderer {
       const up = _up.copy(primary.camBody).normalize();
       const sb = primary.uniforms.uSunDirBody.value as Vector3;
       const el = up.dot(sb);
+      this.sunElevation = primary.altitude < thick * 2 ? el : 1;
       const warm = 1 - Math.min(1, Math.max(0, (el - 0.02) / 0.35));
       s.color.set(1, 1 - 0.35 * warm, 1 - 0.65 * warm);
       s.strength = inside * Math.min(1, Math.max(0, (el + 0.03) / 0.08)) * (0.6 + 0.4 * warm);
