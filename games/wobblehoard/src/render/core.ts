@@ -5,8 +5,10 @@
 // Rarity (DESIGN 5.3) scales it per tier: Common dim, Uncommon warm, Rare a visible slowly pulsing seed, Epic a bloom,
 // Legendary bright, Mythic a prism core whose colour slides through the spectrum with the view angle.
 import * as THREE from 'three';
-import type { SoftBodyLike } from '../contracts.ts';
+import type { PieceInfo, SoftBodyLike } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
+import type { CapInfo } from './jelly.ts';
+import { isCutPiece } from './pieceBuild.ts';
 import { tintShare, type JellyPalette, type Rgb } from './oklch.ts';
 
 const WARM: Rgb = [1.0, 0.45, 0.12];
@@ -14,16 +16,19 @@ import type { TierStyle } from './rarity.ts';
 import { ADD_KEEP_ALPHA, HaloQuad } from './halo.ts';
 import { NOISE_GLSL } from './shaderlib.ts';
 
+// (CUT2: the blob carries two clip planes, inert for a whole, so a piece's ember never pokes out of the cut face and wholes and pieces share one program)
 const BLOB_VERT = /* glsl */`
 varying vec3 vN;
 varying vec3 vV;
 varying vec3 vL;
+#include <clipping_planes_pars_vertex>
 void main() {
   vL = position;
-  vec4 mv = modelViewMatrix * vec4(position, 1.0);
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
   vN = normalize(normalMatrix * normal);
-  vV = -mv.xyz;
-  gl_Position = projectionMatrix * mv;
+  vV = -mvPosition.xyz;
+  gl_Position = projectionMatrix * mvPosition;
+  #include <clipping_planes_vertex>
 }
 `;
 const BLOB_FRAG = /* glsl */`
@@ -35,8 +40,10 @@ uniform vec3 uHot;
 uniform float uIntensity;
 uniform float uTime;
 uniform float uPrism;
+#include <clipping_planes_pars_fragment>
 ${NOISE_GLSL}
 void main() {
+  #include <clipping_planes_fragment>
   float ndv = clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0);
   float hot = pow(ndv, 2.4);
   float mott = 0.84 + 0.3 * whNoise3(vL * 2.6 + vec3(0.0, uTime * 0.35, uTime * 0.2));
@@ -53,6 +60,12 @@ void main() {
 }
 `;
 
+/** Probe knob (the harness sets it; the game never does): the floor of a piece's analytic halo, CUT2 8.3: coreAmt = max(share, 0.35) (a piece without ember is lit by its neighbour's). */
+export const CORE_TUNING = { pieceFloor: 0.35 };
+
+/** A clip plane that clips nothing (three.js keeps the side where normal . p + constant >= 0). */
+const inertPlane = (): THREE.Plane => new THREE.Plane(new THREE.Vector3(0, 0, 0), 1e6);
+
 export class Core {
   readonly group = new THREE.Group();
   /** World centre and a 0..~2 glow amount for the jelly shader's analytic halo. */
@@ -60,6 +73,21 @@ export class Core {
   amount = 1;
   /** Extra glow 0..1.5 from outside (merge: where the bodies touch; charge). Eased by the owner. */
   boost = 0;
+  /**
+   * CUT2 (8.3): a PIECE of a cut squishy keeps the ember where the WHOLE has it: a sphere at W (0, 0, 0), that is at -offset in the piece's rest frame (zero offset and kept = 1 for a whole).
+   * `kept` = the share of the sphere on this piece's side of its cut faces (spherical caps, the product over the planes that cross it); the blob hides under 0.2 %, the camera-facing halo is
+   * scaled by it, the jelly's analytic halo keeps a floor of 0.35 (a piece without ember is lit by its neighbour's). The blob is clipped against the piece's LIVE cut faces.
+   */
+  readonly offset = new THREE.Vector3();
+  kept = 1;
+  private cut = false;
+  private cells: readonly { n: { x: number; y: number; z: number }; d: number }[] = [];
+  private clipCaps: number[] = [];
+  private readonly clipPlanes: THREE.Plane[] = [inertPlane(), inertPlane()];
+  private readonly vOff = new THREE.Vector3();
+  private readonly qOff = new THREE.Quaternion();
+  /** The multiplier of the jelly's analytic halo: 1 at birth (a piece born at the swap lights its jelly exactly as the whole did: no step), eased to max(kept, 0.35) (CUT2 8.3) with a 0.25 s time constant. */
+  private amtK = 1;
   private readonly blob: THREE.Mesh;
   private readonly halo: HaloQuad;
   private readonly blobMat: THREE.ShaderMaterial;
@@ -88,16 +116,40 @@ export class Core {
       vertexShader: BLOB_VERT, fragmentShader: BLOB_FRAG, fog: false,
       // opaque list (so the transmission pass sees it and the jelly refracts it), but ADDITIVE: it lights what is behind it instead of
       // covering it, so a big Rare+ core reads as an inner light and never as a flat coin with an edge
-      ...ADD_KEEP_ALPHA, depthWrite: false, transparent: false,
+      ...ADD_KEEP_ALPHA, depthWrite: false, transparent: false, clipping: true,
       uniforms: { uColor: { value: col }, uHot: { value: hot }, uIntensity: { value: 2 }, uTime: { value: 0 }, uPrism: { value: style.corePrism } },
     });
     this.halo = new HaloQuad({ renderOrder: -19, fadeH: 0.2 * scale });
     this.halo.setColor(palette.core[0], palette.core[1], palette.core[2]);
+    this.blobMat.clippingPlanes = this.clipPlanes;
     this.blob = new THREE.Mesh(this.blobGeo, this.blobMat);
     this.blob.renderOrder = -20;
     this.blob.frustumCulled = false;
     this.group.add(this.blob, this.halo.mesh);
     this.setStyle(style);
+  }
+
+  /** The piece this ember belongs to (undefined / not cut = a whole: nothing changes). Call again when a merge publishes a NEW PieceInfo. */
+  setPiece(piece: PieceInfo | undefined): void {
+    this.cut = isCutPiece(piece);
+    this.cells = this.cut ? (piece as PieceInfo).cells[0].slice(0, 8) : [];
+    if (this.cut) this.offset.set((piece as PieceInfo).offset.x, (piece as PieceInfo).offset.y, (piece as PieceInfo).offset.z); else this.offset.set(0, 0, 0);
+    this.recomputeKept();
+  }
+
+  /** The kept share of the sphere (rc = 0.17 x scale x coreSize; the sphere's centre is at distance d_k inside plane k) and which cut faces cross it. */
+  private recomputeKept(): void {
+    this.clipCaps = []; this.kept = 1;
+    if (!this.cut) return;
+    const rc = this.radius * this.style.coreSize, near: { k: number; s: number }[] = [];
+    for (let k = 0; k < this.cells.length; k++) {
+      const s = this.cells[k].d;   // (the origin of W is inside plane k by d_k: n . 0 - d_k = -d_k < 0 inside)
+      if (s >= rc) continue;
+      this.kept *= s <= -rc ? 0 : 1 - ((rc - s) * (rc - s) * (2 * rc + s)) / (4 * rc * rc * rc);
+      near.push({ k, s });
+    }
+    near.sort((a, b) => a.s - b.s);
+    this.clipCaps = near.slice(0, 2).map((x) => x.k);
   }
 
   /** Rarity tier changed: recolour (Uncommon warm core, Mythic prism core) and re-scale on the next update. */
@@ -121,6 +173,7 @@ export class Core {
     this.baseHalo.setRGB(hr * (1 - w) + w * 0.9, hg * (1 - w) + w * 0.9, hb * (1 - w) + w, THREE.LinearSRGBColorSpace);
     this.baseCol.copy(col); this.baseHot.copy(hot);
     this.blobMat.uniforms.uPrism.value = style.corePrism;
+    this.recomputeKept();
   }
 
   /** Lean the core (blob, hot centre, halo) toward a colour (linear rgb) by k 0..1: the merge charge's tell. k 0 = the tier colours. */
@@ -137,8 +190,19 @@ export class Core {
   setLite(on: boolean): void { this.lite = on; this.blob.visible = !on; }
 
   /** `squeeze` is the renderer's 0..1 compression (global metric or deepest local dent). */
-  update(body: SoftBodyLike, dt: number, time: number, squeeze: number): void {
-    const c = body.center, q = body.frame, st = this.style;
+  update(body: SoftBodyLike, dt: number, time: number, squeeze: number, caps?: readonly CapInfo[]): void {
+    const c0 = body.center, q = body.frame, st = this.style;
+    let c = c0;
+    if (this.cut) {   // a piece: the ember sits at W's origin, which is -offset in the piece's rest frame, turned by the body's frame
+      this.vOff.set(-this.offset.x, -this.offset.y, -this.offset.z).applyQuaternion(this.qOff.set(q.x, q.y, q.z, q.w));
+      c = { x: c0.x + this.vOff.x, y: c0.y + this.vOff.y, z: c0.z + this.vOff.z };
+      for (let j = 0; j < 2; j++) {
+        const pl = this.clipPlanes[j], k = j < this.clipCaps.length ? this.clipCaps[j] : -1, cap = k >= 0 && caps ? caps[k] : undefined;
+        if (cap && cap.live) { pl.normal.set(-cap.nx, -cap.ny, -cap.nz); pl.constant = cap.d; } else { pl.normal.set(0, 0, 0); pl.constant = 1e6; }
+      }
+      this.blob.visible = !this.lite && this.kept > 0.002;
+      this.amtK += (Math.max(this.kept, CORE_TUNING.pieceFloor) - this.amtK) * (1 - Math.exp(-dt / 0.25));
+    }
     this.center.set(c.x, c.y, c.z);
     this.comp += (squeeze - this.comp) * (1 - Math.exp(-dt * 12));
     const k = this.comp;
@@ -150,10 +214,10 @@ export class Core {
     // idle motion: a slow pulse (Rare, under 0.5 Hz) or a slow breathing glow (Mythic); calm mode shows neither
     const pulse = this.calm ? 1 : 1 + st.corePulseAmp * Math.sin(time * Math.PI * 2 * st.corePulseHz);
     const b = 1 + this.boost;
-    this.amount = (1.2 + 0.9 * this.glow) * st.coreMul * (1 + 1.5 * k) * pulse * b;
+    this.amount = (1.2 + 0.9 * this.glow) * st.coreMul * (1 + 1.5 * k) * pulse * b * (this.cut ? this.amtK : 1);
     this.blobMat.uniforms.uIntensity.value = (1.0 + 1.2 * this.glow) * st.coreMul * (1 + 1.4 * k) * pulse * b;
     this.blobMat.uniforms.uTime.value = time;
-    const hs = (0.28 + 0.4 * this.glow) * st.haloMul * (1 + 0.7 * k) * (this.lite ? 0.85 : 1) * pulse * b;
+    const hs = (0.28 + 0.4 * this.glow) * st.haloMul * (1 + 0.7 * k) * (this.lite ? 0.85 : 1) * pulse * b * (this.cut ? this.kept : 1);
     // same soft knee as the jelly's inner glow: past 0.5 the halo keeps growing, slowly, so stacked glows saturate in hue instead of whiting out
     this.halo.set(c.x, c.y, c.z, r * (3.4 + 0.3 * k) * st.haloSize, hs < 0.5 ? hs : 0.5 + (hs - 0.5) / (1 + (hs - 0.5) / 0.4));
   }

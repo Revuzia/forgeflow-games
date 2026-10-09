@@ -12,8 +12,12 @@ import * as THREE from 'three';
 import type { PieceInfo, SoftBodyLike } from '../contracts.ts';
 import { buildGeodesic } from './geodesic.ts';
 import { buildPieceMesh, isCutPiece, pieceFineN, type PieceBuild } from './pieceBuild.ts';
+import { relaxNormals, relaxNormalsList, simNormals, simNormalsList } from './normals.ts';
 
 export interface SurfaceHit { tri: number; u: number; v: number; w: number }
+
+/** What a RestMapper reads of a body: its rest mesh (a SoftBodyLike satisfies it; so does the whole of a piece, wholeRef.ts). */
+export interface RestMeshLike { readonly vertexCount: number; readonly indices: Uint32Array; readonly restLocal: Float32Array }
 
 /** Casts rest directions against the rest mesh to find the sim triangle + barycentric weights that own them. */
 export class RestMapper {
@@ -28,7 +32,7 @@ export class RestMapper {
   private stamp = 0;
   private readonly cand: Int32Array;
 
-  constructor(body: SoftBodyLike) {
+  constructor(body: RestMeshLike) {
     this.n = body.vertexCount;
     this.idx = body.indices;
     this.rest = body.restLocal;
@@ -170,79 +174,8 @@ export function evalSurfaceBw(
   nrm[no] = nx * il; nrm[no + 1] = ny * il; nrm[no + 2] = nz * il;
 }
 
-/** Area-weighted vertex normals of the sim mesh. Allocation free. */
-export function simNormals(P: Float32Array, idx: Uint32Array, out: Float32Array): void {
-  out.fill(0);
-  for (let t = 0; t < idx.length; t += 3) {
-    const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
-    const e1x = P[b] - P[a], e1y = P[b + 1] - P[a + 1], e1z = P[b + 2] - P[a + 2];
-    const e2x = P[c] - P[a], e2y = P[c + 1] - P[a + 1], e2z = P[c + 2] - P[a + 2];
-    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x; // |n| = 2 * area
-    out[a] += nx; out[a + 1] += ny; out[a + 2] += nz;
-    out[b] += nx; out[b + 1] += ny; out[b + 2] += nz;
-    out[c] += nx; out[c + 1] += ny; out[c + 2] += nz;
-  }
-  for (let i = 0; i < out.length; i += 3) {
-    const l = Math.sqrt(out[i] * out[i] + out[i + 1] * out[i + 1] + out[i + 2] * out[i + 2]);
-    if (l > 1e-20) { const il = 1 / l; out[i] *= il; out[i + 1] *= il; out[i + 2] *= il; } else { out[i] = 0; out[i + 1] = 1; out[i + 2] = 0; }
-  }
-}
-
-/**
- * One relaxation pass of the sim vertex normals over their triangle neighbours: the physics mesh has creases where a finger
- * sphere pushes particles out (coarse straight edges), which the glossy low tier shows as a hard seam. `acc` is scratch.
- * Allocation free: no Math.hypot here (it boxes its arguments: ~266 KB per body per frame for two passes, VERIFY_RENDER_A R-A5).
- */
-export function relaxNormals(N: Float32Array, idx: Uint32Array, acc: Float32Array, w: number): void {
-  acc.fill(0);
-  for (let t = 0; t < idx.length; t += 3) {
-    const a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
-    acc[a] += N[b] + N[c]; acc[a + 1] += N[b + 1] + N[c + 1]; acc[a + 2] += N[b + 2] + N[c + 2];
-    acc[b] += N[a] + N[c]; acc[b + 1] += N[a + 1] + N[c + 1]; acc[b + 2] += N[a + 2] + N[c + 2];
-    acc[c] += N[a] + N[b]; acc[c + 1] += N[a + 1] + N[b + 1]; acc[c + 2] += N[a + 2] + N[b + 2];
-  }
-  for (let i = 0; i < N.length; i += 3) {
-    const al = Math.sqrt(acc[i] * acc[i] + acc[i + 1] * acc[i + 1] + acc[i + 2] * acc[i + 2]) || 1;   // (Math.hypot boxes its arguments: ~133 KB of garbage per body per pass per frame)
-    const x = N[i] * (1 - w) + (acc[i] / al) * w, y = N[i + 1] * (1 - w) + (acc[i + 1] / al) * w, z = N[i + 2] * (1 - w) + (acc[i + 2] / al) * w;
-    const l = Math.sqrt(x * x + y * y + z * z) || 1;
-    N[i] = x / l; N[i + 1] = y / l; N[i + 2] = z / l;
-  }
-}
-
-/** simNormals over a LIST of sim triangles only (a piece's skin triangles, or one cut face's): a rim vertex's skin normal then knows nothing of the face and the face normal nothing of the skin (CUT2 8.2). */
-export function simNormalsList(P: Float32Array, idx: Uint32Array, tris: Uint32Array, out: Float32Array): void {
-  out.fill(0);
-  for (let q = 0; q < tris.length; q++) {
-    const t = tris[q] * 3, a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
-    const e1x = P[b] - P[a], e1y = P[b + 1] - P[a + 1], e1z = P[b + 2] - P[a + 2];
-    const e2x = P[c] - P[a], e2y = P[c + 1] - P[a + 1], e2z = P[c + 2] - P[a + 2];
-    const nx = e1y * e2z - e1z * e2y, ny = e1z * e2x - e1x * e2z, nz = e1x * e2y - e1y * e2x;
-    out[a] += nx; out[a + 1] += ny; out[a + 2] += nz;
-    out[b] += nx; out[b + 1] += ny; out[b + 2] += nz;
-    out[c] += nx; out[c + 1] += ny; out[c + 2] += nz;
-  }
-  for (let i = 0; i < out.length; i += 3) {
-    const l = Math.sqrt(out[i] * out[i] + out[i + 1] * out[i + 1] + out[i + 2] * out[i + 2]);
-    if (l > 1e-20) { const il = 1 / l; out[i] *= il; out[i + 1] *= il; out[i + 2] *= il; } else { out[i] = 0; out[i + 1] = 1; out[i + 2] = 0; }
-  }
-}
-/** relaxNormals over a list of sim triangles only (vertices outside the list keep their normal). */
-export function relaxNormalsList(N: Float32Array, idx: Uint32Array, tris: Uint32Array, acc: Float32Array, w: number): void {
-  acc.fill(0);
-  for (let q = 0; q < tris.length; q++) {
-    const t = tris[q] * 3, a = idx[t] * 3, b = idx[t + 1] * 3, c = idx[t + 2] * 3;
-    acc[a] += N[b] + N[c]; acc[a + 1] += N[b + 1] + N[c + 1]; acc[a + 2] += N[b + 2] + N[c + 2];
-    acc[b] += N[a] + N[c]; acc[b + 1] += N[a + 1] + N[c + 1]; acc[b + 2] += N[a + 2] + N[c + 2];
-    acc[c] += N[a] + N[b]; acc[c + 1] += N[a + 1] + N[b + 1]; acc[c + 2] += N[a + 2] + N[b + 2];
-  }
-  for (let i = 0; i < N.length; i += 3) {
-    const al = Math.sqrt(acc[i] * acc[i] + acc[i + 1] * acc[i + 1] + acc[i + 2] * acc[i + 2]);
-    if (al < 1e-20) continue;
-    const x = N[i] * (1 - w) + (acc[i] / al) * w, y = N[i + 1] * (1 - w) + (acc[i + 1] / al) * w, z = N[i + 2] * (1 - w) + (acc[i + 2] / al) * w;
-    const l = Math.sqrt(x * x + y * y + z * z) || 1;
-    N[i] = x / l; N[i + 1] = y / l; N[i + 2] = z / l;
-  }
-}
+// (the sim-normal functions live in normals.ts, shared with pieceBuild.ts; re-exported here for the callers that import them from this module)
+export { simNormals, relaxNormals, simNormalsList, relaxNormalsList };
 
 export const PHONG_ALPHA = 0.7;
 
@@ -383,6 +316,19 @@ export class JellyView {
     simNormalsList(P, idx, pb.skinTris, sn);
     relaxNormalsList(sn, idx, pb.skinTris, this.nAcc, 0.7);
     relaxNormalsList(sn, idx, pb.skinTris, this.nAcc, 0.5);
+    {   // the rim-normal correction (pieceBuild.normDelta): the skin normal plus what makes it the whole's smooth normal at rest, turned by the body's frame
+      const q = body.frame, nd = pb.normDelta, vs = pb.vSrc, qx = q.x, qy = q.y, qz = q.z, qw = q.w;
+      const r00 = 1 - 2 * (qy * qy + qz * qz), r01 = 2 * (qx * qy - qz * qw), r02 = 2 * (qx * qz + qy * qw);
+      const r10 = 2 * (qx * qy + qz * qw), r11 = 1 - 2 * (qx * qx + qz * qz), r12 = 2 * (qy * qz - qx * qw);
+      const r20 = 2 * (qx * qz - qy * qw), r21 = 2 * (qy * qz + qx * qw), r22 = 1 - 2 * (qx * qx + qy * qy);
+      for (let i = 0, n = body.vertexCount; i < n; i++) {
+        const i3 = i * 3, dx = nd[i3], dy = nd[i3 + 1], dz = nd[i3 + 2];
+        if (vs[i] !== 0 || (dx === 0 && dy === 0 && dz === 0)) continue;
+        const x = sn[i3] + r00 * dx + r01 * dy + r02 * dz, y = sn[i3 + 1] + r10 * dx + r11 * dy + r12 * dz, z = sn[i3 + 2] + r20 * dx + r21 * dy + r22 * dz;
+        const l = Math.sqrt(x * x + y * y + z * z) || 1;
+        sn[i3] = x / l; sn[i3 + 1] = y / l; sn[i3 + 2] = z / l;
+      }
+    }
     for (let k = 0; k < K; k++) {
       const cn = this.capN[k], tris = pb.capTris[k];
       simNormalsList(P, idx, tris, cn);

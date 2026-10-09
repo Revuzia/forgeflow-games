@@ -5,7 +5,7 @@
 import type { Announcer } from '../ui/announcer.ts';
 import { createCutBar } from '../ui/cutBar.ts';
 import type { CutBar } from '../ui/cutBar.ts';
-import type { ToolId } from '../ui/toyTray.ts';
+import type { ToolId } from '../ui/toolbar.ts';
 import * as T from './cutText.ts';
 import type { Game } from './game.ts';
 

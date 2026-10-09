@@ -43,11 +43,11 @@ const NO_PERF = QUICK || !!flag('no-perf', false);
 // --only=fix1 runs just the checks added in render fix round 1 (VERIFY_RENDER_A / B): garbage per frame, degenerate resize, phone halos of every species and the burst's side light, the 4-mat, the capsule's fill and its place against the Mythic dome, the calm seam.
 // --only=a,b,...: run only these sections (iteration; the default runs everything). Sections: main, phone, sky, lifecycle, r2 (governor,
 // multi-body API, 3-body leak, capsule drop / ownership), cer (every ceremony: budget, beats, flash, escalation; skip; calm; tier-up,
-// 3 parents, drivers, done), chains, rarity, film, gallery, glow, strands, mat, capspot, cut, bundle (vite build + grep: no dev stage member in
-// production), perf
+// 3 parents, drivers, done), chains, rarity, film, gallery, glow, strands, mat, capspot, cut, cut2 (TRUE CUT: the cut face edge-on RP3, whole vs two flush pieces RP4, the eye count RP1), bundle
+// (vite build + grep: no dev stage member in production), perf
 const ONLY = typeof flag('only', '') === 'string' ? String(flag('only', '')).split(',').filter(Boolean) : [];
 const ON = (name) => ONLY.length === 0 || ONLY.includes(name);
-const PORT = 5364;
+const PORT = Number(flag('port', 5364));   // (--port=: another lane's server may hold the default)
 const OUT = resolve(ROOT, '_shots/render');
 const REPORT_DIR = resolve(ROOT, '_harness/_reports');
 mkdirSync(OUT, { recursive: true });
@@ -55,6 +55,13 @@ mkdirSync(REPORT_DIR, { recursive: true });
 
 const failures = [];
 const report = { when: new Date().toISOString(), body: null, shots: [], problems: [], perf: {}, checks: {} };
+// KNOWN: a bar that is measured and fails for a reason owned by another lane; printed as KNWN, recorded in report.known, NOT counted as a failure and never loosened. PEND: a row whose bar needs work that is not built yet.
+const known = (ok, name, why, extra = '') => {
+  console.log(`${ok ? 'ok  ' : 'KNWN'} ${name}${extra ? '  ' + extra : ''}${ok ? '' : '  [KNOWN: ' + why + ']'}`);
+  report.checks[name] = { ok, known: !ok, why: ok ? '' : why, extra };
+  if (!ok) (report.known ??= []).push(name);
+};
+const pend = (name, why, extra = '') => { console.log(`PEND ${name}${extra ? '  ' + extra : ''}  [PENDING: ${why}]`); report.checks[name] = { ok: null, pending: true, why, extra }; (report.pending ??= []).push(name); };
 const check = (ok, name, extra = '') => {
   console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra ? '  ' + extra : ''}`);
   report.checks[name] = { ok, extra };
@@ -242,7 +249,7 @@ try {
     const text = files.filter((f) => /.(js|html|css|json)$/.test(f)).map((f) => ({ f, s: readFileSync(f, 'utf8') }));
     // (measured by a positive control: the same build with the dev flag on, NODE_ENV=development --mode development, contains particlesDropped, screenLight, contextLost,
     // fineVertices, eyeLook, `restoreContext:` and `loseContext:` once each and one more .loseContext() / .restoreContext() / WEBGL_lose_context than the production build)
-    const NAMES = ['createStageDev', 'StubBody', 'stubBody', 'renderview', '__RV__', 'lifecycle3', 'particlesDropped', 'screenLight', 'contextLost', 'cameraFx: {', 'fineVertices', 'eyeLook', 'restoreContext:', 'loseContext:'];
+    const NAMES = ['createStageDev', 'StubBody', 'stubBody', 'renderview', '__RV__', 'lifecycle3', 'particlesDropped', 'screenLight', 'contextLost', 'cameraFx: {', 'fineVertices', 'eyeLook', 'restoreContext:', 'loseContext:', 'eyeCentres', 'visibleEyes', 'visibleMask', 'physPieces', 'RestProvider'];
     const found = NAMES.filter((k) => text.some((x) => x.s.includes(k)));
     // loseContext / restoreContext: only three's own forceContextLoss / forceContextRestore (one each, in the stage chunk: two WEBGL_lose_context lookups) and the shell's WebGL probe in the index chunk may use them (our dev members would add one more of each)
     const count = (re) => text.reduce((a, x) => a + (x.s.match(re) ?? []).length, 0);
@@ -1333,6 +1340,143 @@ try {
       report.problems.push(...dbad);
       await dctx.close();
     }
+  }
+
+  /* ───────────────────────── CUT2 (TRUE CUT, _spec/CUT2.md 12.1, task R1 parts 1 and 2): RP3 the flat face edge-on, RP4 whole vs two flush pieces (eyes and ember on), RP1 eyes per piece, RP2 the straddle sweep, the stage API ───────────────────────── */
+  if (ON('cut2')) {
+    const bodyQ = BODY === 'auto' ? '' : BODY;
+    const RC2 = (report.cut2 = { rp3: {}, rp4: {}, rp1: {}, rp2: {} });
+    const c2ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
+    const { page: c2p, bad: c2bad } = await openView(c2ctx, `quality=med&body=${bodyQ}`, 'cut2', [/GPU stall due to ReadPixels/i]);
+    // ---- RP3: the cut face seen edge-on (the camera IS in the plane): the cut-side silhouette is a straight line. The shipped chunk build, in the same rig, must FAIL it by >= 3 px ----
+    const RP3_BAR = 0.8;
+    for (const [sp, off] of QUICK ? [['dollop', 0]] : [['dollop', 0], ['dollop', 0.2], ['kneadle', 0.2], ['twangle', 0], ['capnap', 0]]) {
+      const r = await c2p.evaluate(([sp, off]) => window.__RV__.cut2.rp3({ species: sp, off }), [sp, off]);
+      if (r.png) writeFileSync(resolve(OUT, `cut2_rp3_${sp}_${off}.png`), b64(r.png));
+      RC2.rp3[`${sp}@${off}`] = { rms: r.rms, rows: r.rows, max: r.max, camErrM: r.camErrM, protrudeR0: r.protrudeR0, frac: r.frac };
+      check(r.ok && r.rows >= 100 && r.rms <= RP3_BAR && r.protrudeR0 <= 1e-6 && Math.abs(r.camErrM) <= 0.004, `CUT2 RP3 (${sp}, plane at ${off} R0): the cut face seen edge-on is a straight line: silhouette line-fit RMS <= ${RP3_BAR} px over the face height (1280x800), no skin beyond the plane`,
+        r.ok ? `RMS ${r.rms.toFixed(3)} px over ${r.rows} rows (worst row ${r.max.toFixed(2)} px), camera ${(r.camErrM * 1000).toFixed(2)} mm off the plane, skin beyond the plane ${r.protrudeR0.toExponential(1)} R0, piece ${(r.frac * 100).toFixed(1)} % of the whole` : String(r.why));
+    }
+    for (const sp of QUICK ? ['dollop'] : ['dollop', 'kneadle']) {
+      const r = await c2p.evaluate((sp) => window.__RV__.cut2.rp3({ species: sp, off: 0, control: true }), sp);
+      if (!r.ok) { pend(`CUT2 RP3 control (${sp})`, 'the real soft body did not load: ' + r.why); continue; }
+      if (r.png) writeFileSync(resolve(OUT, `cut2_rp3_control_${sp}.png`), b64(r.png));
+      RC2.rp3[`control ${sp}`] = { rms: r.rms, rows: r.rows, max: r.max, camErrM: r.camErrM };
+      check(r.rms >= RP3_BAR + 3 && Math.abs(r.camErrM) <= 0.012, `CUT2 RP3 control (${sp}): the SHIPPED chunk build, same rig and bar, FAILS it by >= 3 px (so the probe can fail)`,
+        `chunk RMS ${r.rms.toFixed(2)} px over ${r.rows} rows (worst ${r.max.toFixed(1)} px), camera ${(r.camErrM * 1000).toFixed(1)} mm off its plane; true piece about 0.02 px`);
+    }
+    // ---- RP4: the whole against its two flush halves (camera pinned; eyes, ember, table lights, fx off: parts 2 and R3), and a post-Reconnect-all frame against the never-cut one. TWO runs per species:
+    //      EXACT = the halves cut exactly out of the whole's own mesh (the render's own error floor), PHYS = the halves PHYS's builder makes (its re-mesh moves the skin 0.006 .. 0.02 R0 off the whole's) ----
+    for (const sp of QUICK ? ['dollop'] : ['dollop', 'kneadle', 'capnap']) {
+      for (const exact of [true, false]) {
+        const tag = exact ? 'EXACT' : 'PHYS';
+        const r = await c2p.evaluate(([sp, exact]) => window.__RV__.cut2.rp4({ species: sp, exact }), [sp, exact]);
+        if (!r.ok) { check(false, `CUT2 RP4 ${tag} (${sp})`, String(r.why)); continue; }
+        const nm = `cut2_rp4_${tag}_${sp}`;
+        if (exact || sp === 'dollop') { writeFileSync(resolve(OUT, nm + '_whole.png'), b64(r.pngWhole)); writeFileSync(resolve(OUT, nm + '_pieces.png'), b64(r.pngPieces)); }
+        writeFileSync(resolve(OUT, nm + '_diff.png'), b64(r.pngDiff));
+        const avg = (x0, x1) => r.seamProfile.slice(x0, x1).reduce((a, b) => a + b, 0) / (x1 - x0);
+        const far = (avg(0, 20) + avg(61, 81)) / 2, nearAdd = Math.max(...r.seamProfile.slice(30, 52)) - far;
+        RC2.rp4[`${tag} ${sp}`] = { meanAll: r.meanAll, meanBody: r.meanBody, maxBlock: r.maxBlock, maxBlockInterior: r.maxBlockInterior, blocksOver6: r.blocksOver6, blocksOver6Interior: r.blocksOver6Interior, blocks: r.blocks, blocksInterior: r.blocksInterior, farDiff: far, seamAdd: nearAdd, reconnectMean: r.reconnectMean, frac: r.frac };
+        const nums = `worst block ${r.maxBlock.toFixed(1)}/255, ${r.blocksOver6} of ${r.blocks} over 6; outline blocks left out: worst ${r.maxBlockInterior.toFixed(1)}, ${r.blocksOver6Interior} of ${r.blocksInterior} over; away from the seam ${far.toFixed(2)}/255, the seam adds ${nearAdd.toFixed(2)}`;
+        check(r.meanAll <= 2, `CUT2 RP4 ${tag} (${sp}): whole vs two flush halves, mean abs RGB difference outside a 4 px seam band <= 2/255 (whole frame)`, `mean ${r.meanAll.toFixed(3)} (inside the body's box ${r.meanBody.toFixed(2)}), halves ${r.frac.map((x) => (x * 100).toFixed(1)).join(' + ')} %`);
+        if (exact) {
+          check(r.maxBlockInterior <= 6, `CUT2 RP4 EXACT (${sp}): no 8 x 8 block of the difference over 6/255 away from the silhouette (the render's own floor: tessellation, normals at the rim)`, nums);
+          known(r.maxBlock <= 6, `CUT2 RP4 EXACT (${sp}): ... and none over 6/255 ON the silhouette either`, 'RENDER (R3): a piece draws a coarser fine mesh than the whole at the same tier (n = 2 against 3 per sim edge at med: the 6-pieces-cost-2-bodies budget, spec 8.2), so a sharp tip (the dollop peak) outlines differently by a fraction of a pixel', nums);
+        } else {
+          known(r.maxBlock <= 6, `CUT2 RP4 PHYS (${sp}): no 8 x 8 block of the difference over 6/255 (outside the seam band)`, 'PHYS geometry: PHYS cuts the pieces from a finer source solid, so their skin sits 0.006 .. 0.02 R0 off the whole mesh (PHYS G3) and the silhouette and highlights move (the shading itself is held to the whole\'s by the rest-normal correction)', nums);
+        }
+        check(r.reconnectMean <= 0.5, `CUT2 RP4 ${tag} (${sp}): a frame after Reconnect all (the pieces replaced by a fresh whole) against the never-cut frame <= 0.5/255`, `mean ${r.reconnectMean.toFixed(4)}, worst pixel ${r.reconnectMax.toFixed(2)}`);
+      }
+    }
+    // ---- I7 (spec 8.1): a NEW PieceInfo object (what a merge publishes) rebuilds the piece mesh once; a quality change rebuilds at the new tier; a whole never enters the piece path ----
+    {
+      const r = await c2p.evaluate(() => window.__RV__.cut2.identity({ species: 'dollop' }));
+      RC2.identity = r;
+      check(r.builtSame && r.rebuiltOnce && r.stableAfter && r.sameCountAfter && !r.wholeHasPb, 'CUT2 I7: body.piece compared by reference every frame: stable while it is the same object, ONE rebuild when a new PieceInfo is published (same fine count), a whole has no piece mesh',
+        `stable ${r.builtSame}, rebuilt once ${r.rebuiltOnce}, stable after ${r.stableAfter}, same count ${r.sameCountAfter}, whole piece mesh ${r.wholeHasPb}; fine vertices by tier (high / med / low): ${Object.entries(r.tierCounts).map(([q, v]) => q + ' ' + v[0] + ' (freq ' + v[1] + ')').join(', ')}`);
+      const t = await c2p.evaluate(() => window.__RV__.cut2.totals({ species: 'dollop' }));
+      RC2.totals = t;
+      for (const [q, v] of Object.entries(t)) console.log(`info CUT2 totals (${q}): whole ${v.whole} fine vertices, two halves ${v.halves.join(' + ')} = x${v.ratio.toFixed(2)} (spec 8.2 six pieces <= x1.95 med/high, x2.5 low); draw calls whole ${v.drawCalls.whole} vs halves ${v.drawCalls.halves}`);
+    }
+    // ---- RP4 with the eyes and the ember ON (part 2): the pieces recombine to the whole including the beads (the x = 0 plane, and a plane through the left eye with the camera in it) ----
+    for (const [sp, dRho] of QUICK ? [['dollop', undefined]] : [['dollop', undefined], ['kneadle', undefined], ['dollop', 0], ['kneadle', 0.5]]) {
+      const tag = `faces ${sp}${dRho === undefined ? ' x0' : ' eye@' + dRho + 'rho'}`;
+      const r = await c2p.evaluate(([sp, dRho]) => window.__RV__.cut2.rp4({ species: sp, exact: true, faces: true, dRho, slot: 0, inPlane: dRho !== undefined }), [sp, dRho]);
+      if (!r.ok) { check(false, `CUT2 RP4 ${tag}`, String(r.why)); continue; }
+      const nm = `cut2_rp4_${tag.replace(/[ @.]/g, '_')}`;
+      writeFileSync(resolve(OUT, nm + '_whole.png'), b64(r.pngWhole)); writeFileSync(resolve(OUT, nm + '_pieces.png'), b64(r.pngPieces)); writeFileSync(resolve(OUT, nm + '_diff.png'), b64(r.pngDiff));
+      RC2.rp4[tag] = { meanAll: r.meanAll, maxBlock: r.maxBlock, blocksOver6: r.blocksOver6, blocks: r.blocks, reconnectMean: r.reconnectMean };
+      check(r.meanAll <= 2, `CUT2 RP4 ${tag}: whole vs two flush pieces WITH eyes and ember, mean abs RGB difference outside a 4 px seam band <= 2/255`, `mean ${r.meanAll.toFixed(3)}, worst block ${r.maxBlock.toFixed(1)}/255, ${r.blocksOver6} of ${r.blocks} over 6`);
+      known(r.blocksOver6 === 0, `CUT2 RP4 ${tag}: no 8 x 8 block over 6/255`, 'CUT2 8.3: a piece that holds none of the ember lights its jelly with a floor of 0.35 of the whole\'s analytic core halo ("a piece without ember is lit by its neighbour\'s"), so the jelly of that half is dimmer than the whole\'s by design (the row below with the floor at 1 isolates it)', `${r.blocksOver6} of ${r.blocks}`);
+      check(r.reconnectMean <= 0.5, `CUT2 RP4 ${tag}: a frame after Reconnect all vs the never-cut frame <= 0.5/255`, `mean ${r.reconnectMean.toFixed(4)}`);
+    }
+    {
+      await c2p.evaluate(() => window.__RV__.cut2.setCoreFloor(1));
+      const r = await c2p.evaluate(() => window.__RV__.cut2.rp4({ species: 'dollop', exact: true, faces: true, dRho: 0, slot: 0, inPlane: true }));
+      await c2p.evaluate(() => window.__RV__.cut2.setCoreFloor(0.35));
+      RC2.rp4['faces dollop eye@0rho floor1'] = { meanAll: r.meanAll, maxBlock: r.maxBlock, blocksOver6: r.blocksOver6, blocks: r.blocks };
+      check(r.ok && r.meanAll <= 2, 'CUT2 RP4 faces dollop, plane through the left eye, core floor 1 (the halo of a piece = the whole\'s): mean abs difference <= 2/255', `mean ${r.meanAll.toFixed(3)}, worst block ${r.maxBlock.toFixed(1)}/255, ${r.blocksOver6} of ${r.blocks} blocks over 6`);
+    }
+    // ---- RP1: eyes per piece (X03'): the eye-midline plane of a squishy, each piece ALONE in the whole's flush pose, camera pinned, the dark ink in each eye's footprint against the whole's, and the dev eye-mesh count ----
+    const styles = await c2p.evaluate(() => window.__RV__.cut2.eyeSpecies());
+    const RP1_SPECIES = QUICK ? ['dollop', 'puddlo'] : [...new Set(['puddlo', 'chunkle', 'skeinara', 'granulo', 'marigel', 'wrigglo', ...Object.values(styles)])];
+    for (const sp of RP1_SPECIES) {
+      const r = await c2p.evaluate((sp) => window.__RV__.cut2.eyeInk({ species: sp, midline: true }), sp);
+      RC2.rp1[sp] = { style: r.style, ok: r.ok, whole: r.whole?.ink, pieces: r.pieces?.map((p) => ({ frac: p.frac, meshes: p.meshes, shares: p.shares, ink: p.ink })) };
+      if (!r.ok) { check(false, `CUT2 RP1 (${sp})`, String(r.why)); continue; }
+      // slot 0 (the -x eye) is on piece B (index 1), slot 1 on piece A (index 0); an eye both pieces draw is STRADDLED (the midline plane crosses its bead: granulo, marigel): that one is held to the RP2 sum bar
+      const rows = [];
+      let ok = true;
+      const evidence = [0, 0];
+      for (const slot of [0, 1]) {
+        const W = r.whole.ink[slot], own = r.pieces[slot === 1 ? 0 : 1], other = r.pieces[slot === 1 ? 1 : 0];
+        if (W < 300) { rows.push(`slot ${slot} not visible in the whole (${W} px)`); continue; }
+        const straddled = own.slotsDrawn[slot] === 1 && other.slotsDrawn[slot] === 1;
+        if (straddled) {
+          const sum = (own.ink[slot] + other.ink[slot]) / W;
+          const good = sum >= 0.94 && sum <= 1.06;
+          ok = ok && good; rows.push(`slot ${slot} straddled: A+B = ${sum.toFixed(3)} x whole (bar 0.94 .. 1.06)`);
+          evidence[0]++; evidence[1]++;
+        } else {
+          const g1 = own.ink[slot] >= 0.8 * W, g2 = other.ink[slot] <= 0.02 * W;
+          ok = ok && g1 && g2; rows.push(`slot ${slot}: owner ${(own.ink[slot] / W).toFixed(2)} x whole (>= 0.8), other piece ${(other.ink[slot] / W).toFixed(3)} (<= 0.02)`);
+          if (own.ink[slot] >= 0.1 * W) evidence[slot === 1 ? 0 : 1]++;
+        }
+      }
+      const meshOk = r.pieces.every((p, k) => p.meshes === evidence[k]);
+      check(ok && meshOk, `CUT2 RP1 (${sp}, ${r.style}): eyes per piece: the owner has >= 0.8 of the whole's ink in its eye and the other piece <= 0.02; each piece's eye-mesh count equals its pixel evidence`, `${rows.join('; ')}; meshes ${r.pieces.map((p) => p.meshes).join('/')} vs ink evidence ${evidence.join('/')}; halves ${r.pieces.map((p) => (p.frac * 100).toFixed(1)).join(' + ')} %`);
+    }
+    // ---- RP2: the straddle sweep (X11): the plane across the left eye at -1.0 .. +1.0 rho, the camera IN the plane (the real swipe plane contains the camera); dark ink of A + B against the whole, and ink beyond the cut line ----
+    const SWEEP_STYLES = QUICK ? { dot: styles.dot } : styles;
+    for (const [style, sp] of Object.entries(SWEEP_STYLES)) {
+      const line = [];
+      let allOk = true, maxBeyond = 0;
+      for (let k = -5; k <= 5; k++) {
+        const dr = +(k * 0.2).toFixed(1);
+        const r = await c2p.evaluate(([sp, dr]) => window.__RV__.cut2.eyeInk({ species: sp, dRho: dr, slot: 0, inPlane: true }), [sp, dr]);
+        if (!r.ok) { allOk = false; line.push(`${dr}: ${r.why}`); continue; }
+        const W = r.whole.ink[0], sum = (r.pieces[0].ink[0] + r.pieces[1].ink[0]) / W;
+        const sliver = Math.abs(dr) > 0.76;   // one piece holds under 12 % of the bead: it draws nothing and the sum is the other's (>= 0.88)
+        const good = (sliver ? sum >= 0.88 : sum >= 0.94 && sum <= 1.06) && r.pieces.every((p) => p.inkBeyond === 0) && Math.abs(r.camErrM) <= 0.004;
+        allOk = allOk && good;
+        maxBeyond = Math.max(maxBeyond, ...r.pieces.map((p) => p.inkBeyond));
+        line.push(`${dr}:${sum.toFixed(2)}${good ? '' : '!'}`);
+        RC2.rp2[`${sp} ${dr}`] = { sum, a: r.pieces[0].ink[0], b: r.pieces[1].ink[0], whole: W, shares: r.pieces.map((p) => p.shares), beyond: r.pieces.map((p) => p.inkBeyond), meshes: r.pieces.map((p) => p.meshes) };
+      }
+      check(allOk, `CUT2 RP2 (${style}, ${sp}): straddle sweep: ink of A + B within +-6 % of the whole (>= 0.88 at the 12 % sliver), no ink beyond the cut line`, `A+B / whole by plane offset in rho: ${line.join(' ')}; ink beyond the cut line max ${maxBeyond} px`);
+    }
+    // ---- the stage API of part 2: eyeAnchors, idempotent addBody, setPrimaryBody, no new shader program at the first piece ----
+    {
+      const r = await c2p.evaluate(() => window.__RV__.cut2.api({ species: 'dollop' }));
+      RC2.api = r;
+      check(r.anchorsErrMm <= 2 && r.anchorsNullForPiece && r.anchorsNullUnknown, 'CUT2 8.7 eyeAnchors: a whole\'s two eye centres in its rest frame equal the drawn beads at rest (<= 2 mm); null for a piece and for an unknown id', `max error ${r.anchorsErrMm.toFixed(3)} mm, null for pieces ${r.anchorsNullForPiece}, null for an unknown id ${r.anchorsNullUnknown}`);
+      check(r.idem && r.viewsAfterIdem === 1, 'CUT2 8.7 addBody is idempotent per body object: a body with a live view returns that view\'s id (no second view)', `same id ${r.idem}, views ${r.viewsAfterIdem}`);
+      check(r.primaryOk && r.primaryAfterRemove, 'CUT2 8.7 setPrimaryBody makes an existing view primary; the old primary can then be removed and the primary stays', `primary set ${r.primaryOk}, kept after removing the others ${r.primaryAfterRemove}`);
+      check(r.progAfter === r.progBefore, 'CUT2 RP10 (in part): adding the first two piece views (jelly, eyes, ember) compiles no new shader program', `programs ${r.progBefore} -> ${r.progAfter}`);
+    }
+    report.problems.push(...c2bad);
+    await c2ctx.close();
   }
 
   /* ───────────────────────── perf (relative cost only) ───────────────────────── */

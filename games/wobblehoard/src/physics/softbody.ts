@@ -74,6 +74,12 @@
 //         (FINGER.friction 0.9 while the tip only presses, FINGER.frictionKinetic 0.3 for skin slipping under a tip that slides
 //         sideways), a tip stays FINGER.tableGap rest radii above the table so it never pinches the foot rim against it, and of two
 //         tips that would overlap the one that moved gives way (a rubbing finger no longer shoves a holding one aside).
+//   * CUT2 (TRUE CUT, _spec/CUT2.md; tasks P2 and P3): a body built with `piece.region` is the REAL part of the squishy inside one convex cell: its rest mesh comes from
+//     piece.ts (the cache prepareCut fills), it publishes `piece` (PieceInfo), `frac` is its measured share (rest volume / V3), `capFlat` is true, it is born at `at`
+//     EXACTLY in the parent's `frame` (no lift), and the fold limit knows each hinge's own rest dihedral (HC / HCH / HSH). `planCut` (rest-frame plane, latched; 'at',
+//     'median', 'latched'), `prepareCut` (resumable build of the two children, the retry ladder, the 'thin' / 'loose' refusals) and `placeAt` (exact placement and
+//     re-homing) are the cut's API. Everything that depends on the rest shape is in `initRest` (task P6 runs it again on a merge). The legacy build (a whole at `at`,
+//     the Minis' scaled whole, the old chunk) is unchanged until task P9; a WHOLE body is bit-identical to the one before CUT2 (probe_truecut L6b).
 // Units: metres-ish; mass per particle ~1 (tributary area, mean 1).
 import type { Genome } from '../core/genome.ts';
 import { clamp, mulberry32 } from '../core/rng.ts';
@@ -88,7 +94,7 @@ import { deriveParams, EVENT_MIN_GAP_S, FINGER, GRAVITY, H, MAX_DT, MAX_SUBSTEPS
 import type { SoftParams } from './params.ts';
 import { extractRotation, rayMesh } from './mathx.ts';
 import { buildStruts } from './struts.ts';
-import { CutJob, PIECE_TUNING, buildPiece, cellPlanes, newCutPlanParts, planChildren, wholeOf } from './piece.ts';
+import { CutJob, PIECE_TUNING, buildPiece, cellPlanes, newCutPlanParts, planSplit, wholeOf } from './piece.ts';
 import { CLIP_VOL, WHOLE_CELL, clipMesh, compileCell, getSource, starVolume } from './region.ts';
 import type { RegionCell, Source } from './region.ts';
 import { getSpecies } from '../data/catalog.ts';
@@ -276,6 +282,8 @@ function regionOf(r: PieceRegion | undefined): PieceRegion | null {
 }
 /** planCut's scratch (module level: JS runs one call at a time; nothing is allocated per call). */
 const PC_PLANE = new Float64Array(4);                          // clipMesh's plane [nx, ny, nz, d]
+const PC_PL5 = new Float64Array(5);                            // planSplit's [nx, ny, nz, d, parentFrac]
+const PC_SCAL = new Float64Array(2);                           // [dW, the median offset]: doubles that must not cross a call
 const PC_CELL_A: RegionCell = { np: 0, pl: new Float64Array(4 * 9) };   // the two children's cells (the parent's half-spaces + the cut)
 const PC_CELL_B: RegionCell = { np: 0, pl: new Float64Array(4 * 9) };
 const PC_SV = new Float64Array(2);                             // starVolume's [volume, phi]
@@ -383,6 +391,7 @@ export class SoftBody implements SoftBodyLike {
   private lSound = true; private lPending = false;                                              // planCut's provisional soundness of the two children
   private cutJob: CutJob | null = null; private cutOut: CutPlan | null = null; private cutState = 0;   // prepareCut: 0 none, 1 running, 2 built, 3 thin, 4 loose
   private lastJobD = 0;                       // the plane offset (W) the plan was last refreshed for (the retry ladder moves it)
+  private planD = 0;                          // the rest-local plane offset the plan in `cutOut` describes
   // ---- B2 body-to-body contact (collide): this frame's vertex normals and particle hash (built once per frame on demand)
   private readonly VN: Float64Array;
   private vnStamp = -1;
@@ -829,9 +838,11 @@ export class SoftBody implements SoftBodyLike {
       }
       this.HD[h] = Math.sqrt((Q[c * 3] - Q[d * 3]) ** 2 + (Q[c * 3 + 1] - Q[d * 3 + 1]) ** 2 + (Q[c * 3 + 2] - Q[d * 3 + 2]) ** 2);
       this.HW[h] = this.invM[c] + this.invM[d];
-      // the fold limit knows the hinge's own rest dihedral (5.3): foldLimit measures the interior angle between the two half-planes (pi - the normal dihedral)
+      // the fold limit knows the hinge's own rest dihedral (5.3): foldLimit measures the interior angle between the two half-planes (pi - the normal dihedral).
+      // Only for a body with a cut face (capFlat): a WHOLE body keeps the single limit of today on every hinge, bit for bit (X21), although some of its hinges
+      // are sharper at rest than the spec assumed (probe L6b measures up to 97 degrees on a thin tip at detail 4)
       let lim = FINGER.foldMaxDeg;
-      {
+      if (this.capFlat) {
         const ux = ex / el, uy = ey / el, uz = ez / el;
         let cx = Q[c * 3] - Q[a * 3], cy = Q[c * 3 + 1] - Q[a * 3 + 1], cz = Q[c * 3 + 2] - Q[a * 3 + 2];
         const tc = cx * ux + cy * uy + cz * uz;
@@ -1462,17 +1473,17 @@ export class SoftBody implements SoftBodyLike {
     nx /= nl; ny /= nl; nz /= nl;
     const c = this.center;
     let d = wx * (plane.point.x - c.x) + wy * (plane.point.y - c.y) + wz * (plane.point.z - c.z);
-    if (mode === 'median') d = this.medianOffset(nx, ny, nz);
+    if (mode === 'median') { this.medianOffset(nx, ny, nz); d = PC_SCAL[1]; }
     this.lnx = nx; this.lny = ny; this.lnz = nz; this.lnd = d;
     this.latchOn = true;
     this.cutJob = null; this.cutState = 0; this.cutOut = out;
-    this.lastJobD = d + nx * this.offX + ny * this.offY + nz * this.offZ;
+    this.lastJobD = d + nx * this.offX + ny * this.offY + nz * this.offZ; this.planD = d;
     if (!this.fillPlan(out, true)) { this.latchOn = false; this.cutOut = null; return false; }
     return true;
   }
 
   /** The offset d along the rest-local unit normal (nx, ny, nz) that halves the REST volume: 40 bisection steps between the extremes of Q along it. */
-  private medianOffset(nx: number, ny: number, nz: number): number {
+  private medianOffset(nx: number, ny: number, nz: number): void {
     const Q = this.Q, n = this.n, P = PC_PLANE, tris = this.tris, V = this.restVolume;
     let lo = Infinity, hi = -Infinity;
     for (let i = 0; i < n; i++) { const s = nx * Q[i * 3] + ny * Q[i * 3 + 1] + nz * Q[i * 3 + 2]; if (s < lo) lo = s; if (s > hi) hi = s; }
@@ -1483,16 +1494,18 @@ export class SoftBody implements SoftBodyLike {
       clipMesh(Q, tris, P, PC_CLIP);
       if (PC_CLIP[CLIP_VOL] / V > 0.5) lo = mid; else hi = mid;
     }
-    return 0.5 * (lo + hi);
+    PC_SCAL[1] = 0.5 * (lo + hi);
   }
 
   /** Fill `out` from the latched plane, the build state and the live velocities. `fresh`: also the 360-ray soundness of the two children (planCut, not a re-read). */
   private fillPlan(out: CutPlan, fresh: boolean): boolean {
-    const P = PC_PARTS, N = PC_N;
+    const P = PC_PARTS, N = PC_N, L = PC_PL5;
+    L[0] = this.lnx; L[1] = this.lny; L[2] = this.lnz; L[3] = this.lnd; L[4] = this.fracBuilt;
+    if (!planSplit(this.Q, this.tris, L, P)) return false;
     N.x = this.lnx; N.y = this.lny; N.z = this.lnz;
-    if (!planChildren(this.Q, this.tris, this.fracBuilt, N, this.lnd, P)) return false;
     const ox = this.offX, oy = this.offY, oz = this.offZ, job = this.cutJob, st = this.cutState;
     const dW = this.lnd + N.x * ox + N.y * oy + N.z * oz;
+    PC_SCAL[0] = dW;
     out.rest.n.x = N.x; out.rest.n.y = N.y; out.rest.n.z = N.z;
     out.rest.d = job !== null ? job.d : dW;
     out.fa = job !== null ? job.plan.fa : P.fa;
@@ -1504,7 +1517,7 @@ export class SoftBody implements SoftBodyLike {
       out.offA.x = P.cA.x; out.offA.y = P.cA.y; out.offA.z = P.cA.z;
       out.offB.x = P.cB.x; out.offB.y = P.cB.y; out.offB.z = P.cB.z;
     }
-    if (fresh) this.soundCheck(P.cA, P.cB, dW);
+    if (fresh) this.soundCheck(P.cA, P.cB);
     out.sound = st === 4 ? false : st === 2 ? true : this.lSound;
     out.soundPending = st === 4 || st === 2 ? false : this.lPending;
     out.built = st === 2;
@@ -1513,8 +1526,8 @@ export class SoftBody implements SoftBodyLike {
   }
 
   /** planCut's cheap soundness (4.5): phi at each child's clipped centroid. Provisional answer: sound, pending when either phi is under PC_PHI_OK. */
-  private soundCheck(cA: V3, cB: V3, dW: number): void {
-    const S = this.source(), cd = this.cellData, np = cd.np, ox = this.offX, oy = this.offY, oz = this.offZ;
+  private soundCheck(cA: V3, cB: V3): void {
+    const S = this.source(), cd = this.cellData, np = cd.np, ox = this.offX, oy = this.offY, oz = this.offZ, dW = PC_SCAL[0];
     const ok = np + 1 <= 8;
     let pending = false;
     for (let s = 0; s < 2 && ok; s++) {
@@ -1571,9 +1584,10 @@ export class SoftBody implements SoftBodyLike {
       this.lastJobD = job.d;
       this.lnd = job.d - (this.lnx * this.offX + this.lny * this.offY + this.lnz * this.offZ);
     }
-    const st = job.status;
+    const st = job.status, was = this.cutState;
     this.cutState = st === 'ok' ? 2 : st === 'thin' ? 3 : st === 'loose' ? 4 : 1;
-    this.fillPlan(out, false);
+    if (this.cutState !== was || this.lnd !== this.planD) this.fillPlan(out, false);   // (a call that moved nothing costs only its build stages)
+    this.planD = this.lnd;
     if (this.cutState === 2) return true;
     return this.cutState === 3 ? 'thin' : this.cutState === 4 ? 'loose' : false;
   }

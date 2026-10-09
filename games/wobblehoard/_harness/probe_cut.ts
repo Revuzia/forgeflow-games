@@ -6,7 +6,7 @@
 //   * X01: a centre cut, both sides measured: fractions sum to 1 (0.5%), and the two pieces built with those fractions hold those volumes
 //     (their mesh volume / the whole's, 3%) after settling;
 //   * X02: an edge cut: the piece built with measureCut's fraction holds it (3%); a cut under 1/8 is visible to the shell (measureCut < 1/8)
-//     and the constructor never builds a piece under 1/8 (clamped);
+//     and the constructor never builds a piece under 1/8 (clamped to FRAC_MIN = 0.124 since CUT2 P3);
 //   * setNeck: eased, volume held (3%), at t = 1 a waist of about NECK_WAIST of the body's width (0.1..0.5), no fold over 120 degrees; and on
 //     every catalog species (template and soft-corner genomes) at the shell's timing (a 0.25 s pinch, 0.1 s at t = 1): no fold over 120;
 //   * setFrac: a smooth growth (no frame jumps more than 1/15 of the change) to the new volume (3%);
@@ -149,7 +149,7 @@ function pieceFracErr(id: SpeciesId, frac: number, chunk: boolean): { err: numbe
   const fe = b.measureCut(pe)!, ce = pieceFracErr('dollop', Math.max(0.125, fe), true);
   const tiny = b.measureCut({ point: v3(b.center.x + 0.85 * b.restRadius, b.center.y, b.center.z), normal: v3(1, 0, 0) }) ?? 0;
   const clamped = (new SoftBody(speciesTemplateGenome('dollop'), { piece: { frac: 0.02, chunk: true } } as never) as unknown as { frac: number }).frac;
-  add(`X02 edge cut: the chunk built with measureCut's fraction (${f(fe)}) holds it; a cut nearer the edge reads under 1/8 (the shell refuses it); the constructor never builds a piece under 1/8`, `volume error ${f(ce.err * 100, 2)} %; near-edge cut ${f(tiny)}; frac 0.02 built as ${f(clamped)}`, 'within 3 %, < 0.125, 0.125', ce.err <= 0.03 && tiny < 0.125 && clamped === 0.125);
+  add(`X02 edge cut: the chunk built with measureCut's fraction (${f(fe)}) holds it; a cut nearer the edge reads under 1/8 (the shell refuses it); the constructor never builds a piece under 1/8`, `volume error ${f(ce.err * 100, 2)} %; near-edge cut ${f(tiny)}; frac 0.02 built as ${f(clamped)}`, 'within 3 %, < 0.125, 0.124', ce.err <= 0.03 && tiny < 0.125 && clamped === 0.124);   // FRAC_MIN 0.124 since CUT2 P3 (5.6): the exact halves of a 1/4 piece (0.125 +- 2.5e-6) are built as measured. The owner changed the design on 2026-10-08.
 }
 
 // ---- setNeck

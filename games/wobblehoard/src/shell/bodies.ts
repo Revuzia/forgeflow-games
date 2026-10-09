@@ -31,7 +31,7 @@ export interface PlayIdentity {
  *  `id` is the stage's view id (it changes on a re-add). */
 export interface ExtraBody {
   id: number; body: SoftBodyLike; genome: Genome; tier: TierName; itemId: string | null; position: V3; shared: boolean;
-  /** CUT (cut.ts): a piece of the play squishy (an eyeless chunk), not a squishy brought out of the Hoard; the mat ignores it */
+  /** CUT (cut.ts): a piece of the play squishy (a real part of it, or a Minis copy), not a squishy brought out of the Hoard; the mat ignores it */
   piece?: boolean;
 }
 
@@ -52,6 +52,10 @@ export interface BodyManager {
   /** Move the extras that stand APART to new render offsets (in order; shared ones keep their place): their views are re-added there;
    *  the physics bodies are kept. */
   placeExtras(positions: readonly V3[]): void;
+  /** CUT2 3.5: make a piece that is an extra the PLAY body (the anchor) without rebuilding any view: the stage re-points its primary view (setPrimaryBody) and the previous play body leaves the mat
+   *  (its view is removed). Identity (genome, item, nickname, tier) is unchanged and nothing is announced. false, and nothing changes, when `body` is not an extra or the stage cannot re-point
+   *  its primary (an old stage: the caller falls back to swapTo, which shows every view again). */
+  promote(body: SoftBodyLike): boolean;
   /** the stage's view id of a body (the play body: the stage's primary; an extra: its id), or null */
   viewIdOf(body: SoftBodyLike): number | null;
   /** bodies that push against each other every step (body.collide; 0 when fewer than two can) */
@@ -106,7 +110,8 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
   /** (re)show one extra's view at its position; false when the stage cannot */
   const showExtra = (x: ExtraBody): boolean => {
     if (!d.stage.addBody) return false;
-    try { x.id = d.stage.addBody(x.body, x.genome, x.piece ? { tier: x.tier, position: x.position, chunk: true } : { tier: x.tier, position: x.position }); return x.id >= 0; } catch (e) { d.report(e); return false; }
+    // (a piece of a cut squishy is a peer: the stage infers what it is from body.piece, and a scaled copy (Minis) has its own face; `piece` is only a hint)
+    try { x.id = d.stage.addBody(x.body, x.genome, x.piece ? { tier: x.tier, position: x.position, piece: true } : { tier: x.tier, position: x.position }); return x.id >= 0; } catch (e) { d.report(e); return false; }
   };
   const commit = (b: SoftBodyLike, id: PlayIdentity, viaStage: boolean, silent = false): void => {
     try { d.beforeSwap(silent); } catch (e) { d.report(e); }
@@ -157,6 +162,22 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
         x.position = { x: p.x, y: p.y, z: p.z };
         showExtra(x);
       }
+    },
+    promote(b) {
+      const i = extras.findIndex((x) => x.body === b);
+      if (i < 0 || b === body || typeof d.stage.setPrimaryBody !== 'function') return false;
+      const x = extras[i];
+      let oldView: number | null = null;
+      try { oldView = d.stage.primaryBodyId?.() ?? null; } catch { /* an old stage */ }
+      try { d.beforeSwap(true); } catch (e) { d.report(e); }
+      try { d.stage.setPrimaryBody(x.id); } catch (e) { d.report(e); return false; }
+      extras.splice(i, 1);
+      if (oldView !== null && oldView !== x.id) { try { d.stage.removeBody?.(oldView); } catch (e) { d.report(e); } }
+      body = b;
+      styleTier(d.stage, identity.tier);
+      rebuildContacts();
+      try { d.afterSwap(identity, body, true); } catch (e) { d.report(e); }
+      return true;
     },
     viewIdOf(b) {
       if (b === body) { try { return d.stage.primaryBodyId?.() ?? null; } catch { return null; } }

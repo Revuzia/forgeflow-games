@@ -87,6 +87,9 @@ export interface ShellDevApi {
   pieceGaps(at?: { x: number; y: number; z: number } | null): Array<{ frac: number; chunk: boolean; x: number; y: number; z: number; r: number; gap: number | null; top: number; near: number }>;
   /** where the eyes sit on the play body (cut.ts faceAnchor, world space): the Cut tool keeps the face on the side that holds it */
   faceAnchor(): { x: number; y: number; z: number };
+  /** CUT-A gate (S5a): every drawn view, the play body first: whether it is a true cut piece and the eyes it draws (world centre, the share of the eye
+   *  this view holds, the screen position in CSS px). Dev only (the stage's dev `eyeCentres`); null when the stage offers none. */
+  eyeViews(): Array<{ id: number; piece: boolean; eyes: Array<{ x: number; y: number; z: number; share: number; sx: number; sy: number }> }> | null;
 }
 
 export type ShellDebugHook = DebugHook & { shell: ShellDevApi };
@@ -349,6 +352,19 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       return vs ? { total: vs.length, faces: vs.filter((v) => !v.chunk).length, chunks: vs.filter((v) => !!v.chunk).length } : null;
     },
     faceAnchor: () => faceAnchor(game.bodies.body),
+    eyeViews() {
+      const st = game.stage as unknown as { views?: Array<{ id: number; isPiece?: boolean }>; eyeCentres?: (id: number) => Array<{ x: number; y: number; z: number; share: number }> };
+      if (!st.views || !st.eyeCentres) return null;
+      const cam = game.stage.camera, v = vp();
+      try { cam.updateMatrixWorld(); } catch { /* ignore */ }
+      const e = cam.matrixWorldInverse.elements, m = cam.projectionMatrix.elements;
+      const proj = (p: { x: number; y: number; z: number }): { x: number; y: number } => {
+        const vx = e[0] * p.x + e[4] * p.y + e[8] * p.z + e[12], vy = e[1] * p.x + e[5] * p.y + e[9] * p.z + e[13], vz = e[2] * p.x + e[6] * p.y + e[10] * p.z + e[14];
+        const cx = m[0] * vx + m[4] * vy + m[8] * vz + m[12], cy = m[1] * vx + m[5] * vy + m[9] * vz + m[13], cw = m[3] * vx + m[7] * vy + m[11] * vz + m[15];
+        return cw > 1e-6 ? { x: (cx / cw * 0.5 + 0.5) * v.w, y: (0.5 - cy / cw * 0.5) * v.h } : { x: -1, y: -1 };
+      };
+      return st.views.map((x) => ({ id: x.id, piece: !!x.isPiece, eyes: st.eyeCentres!(x.id).map((c) => ({ ...c, ...(() => { const s = proj(c); return { sx: s.x, sy: s.y }; })() })) }));
+    },
     pieceGaps(at) {
       const face = game.bodies.body;
       const all = [face, ...game.bodies.extras.filter((x) => x.piece).map((x) => x.body)];

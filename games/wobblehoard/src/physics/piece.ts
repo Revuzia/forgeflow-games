@@ -200,10 +200,15 @@ export class PieceJob {
    *  Returns true when the job is finished (status !== 'run'). budgetMs = Infinity and a fixed maxStages make the stage at which it finishes deterministic. */
   run(budgetMs: number, maxStages = Infinity): boolean {
     const t0 = budgetMs === Infinity ? 0 : performance.now();
-    let k = 0;
+    let k = 0, s0 = t0;
     while (this.status === 'run' && k < maxStages) {
       this.stage(); k++;
-      if (budgetMs !== Infinity && performance.now() - t0 >= budgetMs) break;
+      if (budgetMs !== Infinity) {
+        // stop when the budget is spent OR the next stage, at the cost of the one just run, would spend it (a slice stays inside its budget; at least one stage runs)
+        const now = performance.now();
+        if (now - t0 + (now - s0) > budgetMs) break;
+        s0 = now;
+      }
     }
     return this.status !== 'run';
   }
@@ -814,8 +819,16 @@ export interface CutPlanParts {
 const CP = new Float64Array(16), CQ = new Float64Array(16), PL4 = new Float64Array(4), PL4B = new Float64Array(4);
 /** Pure plan of a cut of a parent whose rest mesh in W is (pos, tris): the exact clip by the plane n . x = d (side A: n . x >= d). */
 export function planChildren(pos: ArrayLike<number>, tris: Uint32Array, parentFrac: number, n: { x: number; y: number; z: number }, d: number, out: CutPlanParts): boolean {
-  PL4[0] = n.x; PL4[1] = n.y; PL4[2] = n.z; PL4[3] = d;
-  PL4B[0] = -n.x; PL4B[1] = -n.y; PL4B[2] = -n.z; PL4B[3] = -d;
+  PL5[0] = n.x; PL5[1] = n.y; PL5[2] = n.z; PL5[3] = d; PL5[4] = parentFrac;
+  return planSplit(pos, tris, PL5, out);
+}
+const PL5 = new Float64Array(5);
+/** planChildren with the plane and the parent's share passed in a typed array [nx, ny, nz, d, parentFrac]: a caller that must not allocate (SoftBody.planCut) passes
+ *  no double across the call (a double passed to a call that is not inlined is boxed: one heap number each). */
+export function planSplit(pos: ArrayLike<number>, tris: Uint32Array, pl: Float64Array, out: CutPlanParts): boolean {
+  const parentFrac = pl[4];
+  PL4[0] = pl[0]; PL4[1] = pl[1]; PL4[2] = pl[2]; PL4[3] = pl[3];
+  PL4B[0] = -pl[0]; PL4B[1] = -pl[1]; PL4B[2] = -pl[2]; PL4B[3] = -pl[3];
   clipMesh(pos, tris, PL4, CP); clipMesh(pos, tris, PL4B, CQ);
   const va = CP[CLIP_VOL], vb = CQ[CLIP_VOL], v = va + vb;
   if (!(v > 0) || !(va > 1e-9 * v) || !(vb > 1e-9 * v)) return false;
@@ -878,7 +891,7 @@ export class CutJob {
   }
   run(budgetMs: number, maxStages = Infinity): boolean {
     const t0 = budgetMs === Infinity ? 0 : performance.now();
-    let k = 0;
+    let k = 0, s0 = t0;
     while (this.status === 'run' && k < maxStages) {
       if (!this.job) {
         if (!this.startSide()) { if (this.status !== 'run') break; continue; }
@@ -888,7 +901,11 @@ export class CutJob {
       j.run(Infinity, 1);
       k += j.stagesRun - before;
       if (j.status !== 'run') this.finishSide(j);
-      if (budgetMs !== Infinity && performance.now() - t0 >= budgetMs) break;
+      if (budgetMs !== Infinity) {
+        const now = performance.now();
+        if (now - t0 + (now - s0) > budgetMs) break;   // (as PieceJob.run: the next stage is predicted by the one just run)
+        s0 = now;
+      }
     }
     return this.status !== 'run';
   }

@@ -180,6 +180,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', stencil: false });
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
+  renderer.localClippingEnabled = true;   // CUT2 8.3: the eye beads and the ember blob carry clip planes (two each, inert unless a cut face crosses them); a straddled eye is clipped flush at the live cut face
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.setClearColor(PALETTE.ink, 1);
 
@@ -263,7 +264,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   /** Half the world width the frame shows at the table centre at the rest framing (a body of scale 1 is 1 wide). */
   const hwPerNow = (): number => Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect)) * Math.tan((camera.fov * Math.PI) / 360) * camera.aspect;
   /** What framingFor returns (one reused object: no allocation). */
-  const frameOut = { want: 1, multi: false, mx: 0, mz: 0 };
+  const frameOut = { want: 1, multi: false, mx: 0, mz: 0, grp: false, gx: 0, gy: 0, gz: 0 };
   /**
    * The framing (a scale over the rest framing of a unit body) the visible bodies need, and the middle of the group they stand in; with
    * `withCap` also a capsule of size `cs` standing at (cx, cz): it counts as one more body, so with a single squishy on a narrow portrait
@@ -273,6 +274,21 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   function framingFor(withCap: boolean, cx: number, cz: number, cs: number): typeof frameOut {
     const pv = primary();
     let want = framing ?? bodyScale * (pv ? pv.growth : 1), n = 0, bcx = 0;   // (a piece that grew since it was built: setFrac)
+    // CUT2 8.6: the visible bodies are all PIECES of one squishy (no capsule beside them): the group is framed and aimed at as that one squishy, by its extents about its own centre of mass,
+    // so flush halves frame exactly like the whole did and the camera does not move at the swap (the old mat framing zoomed out and aimed between two bodies)
+    let grp = false, gcx = 0, gcy = 0, gcz = 0;
+    if (!withCap) {
+      let whole: Float32Array | null = null, cnt = 0, same = true, wsum = 0;
+      for (const v of views) {
+        if (!v.visible) continue;
+        const pc = v.proxy.piece;
+        if (!v.isPiece || !pc || (whole !== null && pc.whole.restLocal !== whole)) { same = false; break; }
+        whole = pc.whole.restLocal; cnt++;
+        const w = typeof v.proxy.frac === 'number' && v.proxy.frac > 0 ? v.proxy.frac : 1, c = v.proxy.center;
+        gcx += c.x * w; gcy += c.y * w; gcz += c.z * w; wsum += w;
+      }
+      if (same && cnt >= 2 && wsum > 0) { grp = true; gcx /= wsum; gcy /= wsum; gcz /= wsum; }
+    }
     let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;          // a mat of bodies: generous reach
     let tx0 = Infinity, tx1 = -Infinity, tz0 = Infinity, tz1 = -Infinity;      // one body and a capsule: its silhouette's reach
     for (const v of views) {
@@ -304,13 +320,22 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
         if (sk > 0.02) hTop = Math.max(hTop, Math.min(v.jelly.maxY * 1.05, v.restH * v.growth * 2.0));
       }
       want = Math.max(want, hTop / (TARGET_Y + 0.85 * hwPer / Math.max(0.2, camera.aspect))); }
+    if (grp) {   // (the group's reach about its centre of mass, each piece by its own rest reach: the same margins a single body gets)
+      let reach = 0;
+      for (const v of views) {
+        if (!v.visible) continue;
+        const c = v.proxy.center;
+        reach = Math.max(reach, Math.hypot(c.x - gcx, c.z - gcz) + (v.restHalfW * (v.style.dome > 0 ? 1.34 : 1.06) + 0.05 * v.scale) * v.growth);
+      }
+      want = Math.max(want, reach / hwPerNow());
+    }
     // one body: a wide species (a half-moon dumpling, a long bean) must fit a narrow portrait frame whole (its rest reach + a margin)
     const p1 = n === 1 ? primary() : null;
     // (a Mythic body also keeps room for its prism dome, which the rarity pass holds inside the frame's sides: a wide species on a portrait phone had it cut by both, VERIFY_RENDER_B B-m6)
     if (p1) want = Math.max(want, ((p1.restHalfW * (p1.style.dome > 0 ? 1.34 : 1.06) + 0.05 * p1.scale) * p1.growth) / hwPer);
     let multi = false, mx = 0, mz = 0;
     const solo = n === 1 && withCap;
-    if (n + (withCap ? 1 : 0) >= 2) {
+    if (!grp && n + (withCap ? 1 : 0) >= 2) {
       const ax0 = solo ? tx0 : x0, ax1 = solo ? tx1 : x1, az0 = solo ? tz0 : z0, az1 = solo ? tz1 : z1;
       // a lone squishy whose capsule already fits the frame at the single-body framing (a wide frame) keeps the camera where it is: no pull-back,
       // no sideways shift (only a narrow portrait frame needs both)
@@ -323,6 +348,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       }
     }
     frameOut.want = want; frameOut.multi = multi; frameOut.mx = mx; frameOut.mz = mz;
+    frameOut.grp = grp; frameOut.gx = gcx; frameOut.gy = gcy; frameOut.gz = gcz;
     return frameOut;
   }
 
@@ -515,12 +541,12 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     pitch += (tPitch - pitch) * k;
     zoomF += (tZoom - zoomF) * k;
     // stage B1: with 2..5 bodies out on the mat, frame them all (their table extents, plus a margin) and aim at their middle
-    let want = framing ?? bodyScale, multi = false, mx = 0, mz = 0;
+    let want = framing ?? bodyScale, multi = false, mx = 0, mz = 0, grp = false, gx = 0, gy = 0, gz = 0;
     if (!director.active) {
       // a capsule standing on the mat beside the squishy (or the group) is framed with it
       const c = capsule && !capsuleParked && capsule.group.visible ? capsule : null;
       const f = c ? framingFor(true, c.pos.x, c.pos.z, c.size) : framingFor(false, 0, 0, 1);
-      want = f.want; multi = f.multi; mx = f.mx; mz = f.mz;
+      want = f.want; multi = f.multi; mx = f.mx; mz = f.mz; grp = f.grp; gx = f.gx; gy = f.gy; gz = f.gz;
     }
     // (quicker while a neck forms: the lobes of a cut body swell within a third of a second)
     let necking = false;
@@ -530,7 +556,10 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     let wx = 0, wy = TARGET_Y * camScale, wz = 0;
     const p = primary();
     if (multi) { wx = mx; wz = mz * 0.8; wy = TARGET_Y * bodyScale; }   // the bodies stand on the table whatever the zoom: aim at their middle
-    else if (p && !director.active) {
+    else if (grp && !director.active) {   // the pieces of one squishy: aim as at the whole (its centre of mass), not at whichever piece is primary
+      wx = gx * 0.6; wz = gz * 0.6;
+      wy = TARGET_Y * camScale + Math.max(0, gy - TARGET_Y * camScale) * 0.7;
+    } else if (p && !director.active) {
       const c = p.proxy.center;
       wx = c.x * 0.6; wz = c.z * 0.6;
       wy = TARGET_Y * camScale + Math.max(0, c.y - TARGET_Y * camScale) * 0.7;
@@ -669,6 +698,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
 
     addBody(body, genome, opts?: AddBodyOpts) {
       if (disposed) return -1;
+      // idempotent per body object (CUT2 8.7): a body that already has a live view returns that view's id (the shell's cut re-adds pieces it may already have handed over)
+      for (const x of views) if (x.proxy.inner === body && !x.isDisposed) return x.id;
       const v = addView(body, genome, safeTier(opts?.tier), false, opts?.position, !!opts?.chunk);
       governor.resetWindow(24);
       return v.id;
@@ -678,6 +709,21 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     removeBody(id) { const v = views.find((x) => x.id === id); if (!v) return; if (director.active) director.abort(); if (views.includes(v)) removeView(v); },
     clearBodies() { director.abort(); removeAllViews(); cut.clear(); },
     primaryBodyId() { return primaryId; },
+    // CUT2 8.7: make an EXISTING view the one the camera follows (a cut hands the play body to its larger piece without setBody); the old primary can then be removed without the
+    // re-point to views[0]. Same as host.makePrimary: the body scale and framing follow it. Tier styling is the view's own (setBodyTier).
+    setPrimaryBody(id) {
+      if (disposed) return;
+      const v = views.find((x) => x.id === id && !x.isDisposed);
+      if (!v) return;
+      primaryId = v.id; v.owned = false; bodyScale = v.scale; framing = null;
+    },
+    // the two eye centres of a WHOLE body's face in its rest-local frame (the formulas of face.ts via wholeRef.ts): null for a piece, a chunk or an unknown id
+    eyeAnchors(id) {
+      const v = views.find((x) => x.id === id && !x.isDisposed);
+      if (!v || v.isPiece || v.chunk) return null;
+      const a = v.face.anchors;
+      return a ? { left: { ...a.left }, right: { ...a.right } } : null;
+    },
     setBodyTier(id, t) { views.find((x) => x.id === id)?.setTier(safeTier(t)); },
     setCalmEffects(on) {
       calm = !!on; flash.calm = calm;
@@ -689,8 +735,10 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       if (calm) { cameraFx.dist = 1; cameraFx.yaw = 0; cameraFx.pitch = 0; screen.stopRamp(); }
     },
 
-    setCutSeam(bodyId, plane, t) {
+    setCutSeam(bodyId, plane, t, opts) {
       if (disposed) return;
+      // (opts.from / opts.to, the swipe's two ends on the plane that make the band DRAW across the body like a blade, are task R2; they are accepted and not read yet)
+      void opts;
       for (const v of views) if (v.id === bodyId) { v.setSeam(plane, Number.isFinite(t) ? t : 0); return; }
     },
     partPieces(aId, bId) {
@@ -873,8 +921,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
         value: (id: number) => {
           const v = views.find((x) => x.id === id), out: { x: number; y: number; z: number; share: number }[] = [];
           if (!v) return out;
-          const m = v.face.visibleMask, c = v.face.centreOut;
-          for (let e = 0; e < 2; e++) if ((m >> e) & 1) out.push({ x: c[e * 3], y: c[e * 3 + 1], z: c[e * 3 + 2], share: 1 });
+          const m = v.face.visibleMask, c = v.face.centreOut, sh = v.face.shareOut;
+          for (let e = 0; e < 2; e++) if ((m >> e) & 1) out.push({ x: c[e * 3], y: c[e * 3 + 1], z: c[e * 3 + 2], share: sh[e] });
           return out;
         },
       },
