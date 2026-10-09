@@ -31,7 +31,7 @@ const LEG_SCHEMA = {
   },
   required: ['status', 'stepsDone', 'stepsNotDone', 'measured', 'filesChanged', 'pictures', 'reportPath', 'blockers', 'requestsToOrchestrator'],
 }
-const leg = (lane, label, text) => agent(`${PRE}\n\nYOUR BATCH: ${lane}. LEG: ${label}.\n${text}`, { label, phase: label.split(':')[0], schema: LEG_SCHEMA })
+const leg = (lane, label, text) => agent(`${PRE}\n\nYOUR BATCH: ${lane}. LEG: ${label}.\n${text}`, label === 'Leg 3: ui-b7' ? { label, phase: label.split(':')[0], schema: LEG_SCHEMA, model: 'sonnet' } : { label, phase: label.split(':')[0], schema: LEG_SCHEMA })
 
 phase('Leg 1')
 const leg1 = await parallel([
