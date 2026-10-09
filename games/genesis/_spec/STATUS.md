@@ -12,7 +12,7 @@ audio, the opening, ships between worlds, saves and settings UI, README / CONTRO
 ```
 npm install
 npm run dev                      # http://localhost:5190/  (the real sim in its worker; default scenario 'lookdev')
-npm run check                    # detban + tsc + all node tests (111 tests in 22 files)
+npm run check                    # detban + tsc + all node tests (126 tests in 25 files)
 npm run build                    # dist/ (app + the sim worker bundle; base './', hostable from any sub-path)
 node _harness/shots.mjs _harness/specs/integration.json  # phase 2 live: two peoples on the sandbox over years at 100x
 node _harness/shots.mjs _harness/specs/acceptance.json   # CONTRACT §21.1: barren → air → seas → plants → people → fire → 100x
@@ -133,6 +133,135 @@ the test asks for 0.15 — the solar day, not the placement, had moved the fair 
 `emergence.test.ts` asserts the band *laid in* food (≥ 3 days in store at some point) and nobody starved, rather than
 food in store at the end of day 8 (the store is eaten down before the first harvest; it passed by 0.5 days before).
 
+## Phase-2 review fixes (fix engineer)
+
+The phase-2 review (53 findings: 9 critical, 25 major, 19 minor) — what was fixed, how it was checked, what was not.
+New tests: `tests/fixpass.test.ts` (11), `tests/climate-drift.test.ts` (2), `tests/survival.test.ts` (1), and a temple
+test in `tests/render.test.ts`. Survey probes (`_harness/scratch/advrev/survey.ts <scenario> <seed0> <seed1> <days>
+[n]`, `_harness/scratch/fix2/peoplediag.ts`, `thirstdiag.ts`, `trace1.ts`, `worlds.mjs`) are kept for the people lane.
+
+**Sim — critical**
+- **Shelters never sheltered** (`finishTask` stepped out before the night was integrated): needs are integrated while
+  still inside; occupancy is kept against the building entered (`AgentStore.inside`, saved), so a death or a change of
+  home no longer leaks a bed. Test: a hut night with the fires out keeps its sleepers warm (fails without the fix:
+  warmth 0.45 → 0).
+- **Scenario peoples died within weeks.** Causes found and fixed one by one (survey of `twoworlds` seeds 1–5 and
+  `system` 1–3, 30 days, n = 64, before → after): a stricter site choice through the year (`siteScore`: the year's
+  mean, its seasons and its hottest / coldest hours against the species' limits; no closed hollows that flood; food in
+  reach); thirst (a drink must have water; water at hand — this cell or the next, snow for the cold folk, a well — is
+  drunk there instead of a half-day walk to the village's spot; a parched body drinks before it eats; a meal or a bath
+  by fresh water quenches); walks lived leg by leg (`MAX_LEG` 120 ticks: needs integrate on the road, a need turned
+  critical re-plans); heat (water and shade cool; heat-struck people seek water or shade, never the hearth); a
+  thermal-harm curve that does not kill at the edge of comfort. Rust's hive, Gaia's plains folk, Murk, Rime and
+  Verdance now live through 30 days on every surveyed seed (`system` seed 2 Verdance 60 → 10 before, 62 → 48 after;
+  Rime thirst 16 → 0–3; `twoworlds` seed 4 Rust 22 thirst deaths → 7). `tests/survival.test.ts` guards it.
+- **Terran worlds cooled for years** (no equilibrium): the energy-balance climate is spun up at build against the
+  runtime sky (measured cloud fraction and humidity, snow and sea-ice albedo, cloud long-wave), neighbour heat
+  transport and riparian moisture were added, plants and biomes judge by year means (`tempYear` / `lightYear`) and
+  peoples by the year's extremes (`tHi` / `tLo`). Drift over five years, n = 24: Gaia −1.74 → −0.1 °C/yr (sandbox),
+  −1.63 → −0.1 (twoworlds); Rust +0.33, settling. `tests/climate-drift.test.ts` (fails on the old climate). A world
+  given air, moved, spun or tilted forgets its old climate (`resetClimateMemory`, a growing-window mean) — the barren
+  acceptance run needs it.
+- **No couples, no long-run society:** pairs form daily among the unpartnered grown-ups (`pairUp`), courting grows
+  more pressing with time alone. Test: couples within days.
+
+**Sim — major**: `cohort.sick` was missing from new cohorts (hash differed after save/load: fixed, test);
+outbreaks rolled only for settlement ids that were multiples of 15 (`outbreakDue`, test); construction deadlock (a
+site whose material can no longer be had is switched or given up: `reviseSite`, test); bands that never arrived (goal
+progress, give-up, arrival rules); flooding was treated as drought (abandon causes: flood / drought / cold / heat /
+famine, chronicled as such); knowledge spreads by watching the next cells, at-risk ideas are taught first, keepers of
+lore pass ideas on; agents were frozen mid-task (needs integrate while moving, urgent needs re-plan).
+
+**Sim — minor**: place-fed animals (fish, birds) have a per-cell carrying capacity; a daughter species counts against
+its root's herd cap; one ocean is one population and sea / air species take habitat names (no more "Woolly whale" and
+three-yearly whale renames); dark ages need a real decline and last at least half a span; chronicle kinds ('hardship')
+and texts fixed; eras are climbed, not skipped (most of the previous era first), experiments need their inputs seen and
+each own discovery makes the next harder (test); raids teach (`accident 'raid'`). Not done: `maxAgents` stays a soft
+cap (a band always keeps a core of four), the people step's fixed overhead (§6.1 budget) — sim perf is the polish lane's.
+
+**Render — critical**
+- **Ruins**: a collapse, not a cut-away — each wall breaks at its own ragged height, a gable sometimes stands, nothing
+  above the knee but walls, rubble heaps ~1.3× the footprint with fallen timbers, char that weathers to grey-brown over
+  days, patchy moss and grass creeping over old ruins; a ruin under a rebuilt house is not drawn and the sim clears a
+  ruin when its site is built on.
+- **Fire**: roofs burn as a front climbing from the eaves (char behind, an ember band at the front, holes late in the
+  burn), 3–6 blazes along each burning ridge and a smoke column, camera-facing flame tongues of varied height with
+  capped cores; burning ground is a thin front line along the fire field's contour (constant width from the field's
+  gradient), sparse embers and coal patches behind it — not a glowing field.
+- **Boats** float on the water surface. **Temples** (below). **Night**: moonlight now lights buildings, roads, trees,
+  people, animals and boats (`shaders/moon.glsl.ts`, the brightest moon as a second directional light); the night key
+  is 0.013 and the exposure ceiling does not rise at night (was 14), so hearths, windows and lamps lead; street lamps
+  light only their pools (the constant +0.12 glow is gone). **Water**: caustics only 0.15–3.2 m deep within ~24 m,
+  ridged filaments, stronger absorption and in-scatter (the floor fades within a few metres).
+
+**Temples** are built in their people's tradition (the family of their dwellings — earthen, timber or masonry —
+`BuildingSpec.family`, `catalog.dwellingFamily`) and era: a stone circle; then a terraced mudbrick ziggurat (battered
+tiers, buttress rhythm, a walled stair, a shrine with a portico on the summit), a great timber hall on a stone platform
+(peristyle, steep roof, crossed gable horns) or a colonnaded temple; later a domed hall, a tiered pagoda (swept eaves
+with upturned corners, bracket sets, lattice walls, a ringed finial) or a cathedral. Mood dresses it: fearful — dark
+basalt behind a walled precinct with a spiked parapet, braziers on the gate pylons, black and red banners, horned skull
+totems, a stained altar; benevolent — open, warm stone or whitewash, hedges and flower beds, a paved walk lined with
+lanterns, an altar heaped with offerings, bells on the eaves. Test: no pagoda among masons, no ziggurat among timber
+folk; fearful has its precinct and braziers, benevolent its lanterns; LOD 1 keeps the silhouette.
+
+**Render — major**: people: matte, less saturated skin with blood in cheeks, ears, knuckles and knees; arms swing
+±28° with the elbow bending; rounder neck and shoulders; the tunic reaches over the pelvis (no bare band at the
+waist); the belt is an elliptical band on the hips. Far crowds (LOD 2) wear their clothes' colours. Animation blends
+mix joint angles per bone and pose once (no collapsing mid-blend). Animals: barrel chest, tucked waist, rounded rump,
+haunch and shoulder masses, angled legs with a hock, thicker necks, heads 17 % larger, darker duller coats with a
+countershaded belly and per-animal variation. Baobab: grey-brown bark, broad forking crowns with twigs; bark albedo is
+clamped. Construction: scaffolds by kind (a ring of saplings for huts, the frame for timber, putlogs only for masonry of
+two storeys and more, a ladder and stacked blocks for low masonry), courses rise raggedly, openings stay raw holes
+until the walls are up. Thatch: uneven wavy courses, weathering and mended patches, a lumpy cone outline and a straw
+fringe at the eave. Houses: yard props by era around each dwelling (woodpiles, barrels, fence runs, kitchen gardens,
+carts, washing, drying racks). Plinths: the floor sits at the footprint's mean on gentle slopes, foundations are dark
+field stone. Roads: lifted over the relief between samples, dead ends narrow and crumble instead of stopping square,
+darker grimy paving, no ribbons through standing water, hysteresis so a scorched way stays continuous. Terrain paths:
+only a soft warped trodden tint (the curved ribbons are the paths). Crops: rows of wider clumps out to 150 m. Harbour:
+quays of dark stone banded by the water (wet line, weed, depths) with ladders and steps; quays and decks no longer
+take the facade lamp glow. Ocean: the glint's roughness comes from the wave slopes the pixel cannot draw (glitter,
+not a blur), scattered whitecaps on the open sea (the sea state `uWind` is still a constant 1, not the weather).
+Night from orbit: two relaxation passes and a compressed level so a village shows, the glow follows the streets.
+Forest: under a closed canopy the trunks and lower crowns get ~0.4× green-tinted sky. Perf: LOD 1 buildings and yard
+props cast no shadows.
+
+**Render — minor**: far tree LOD keeps the crown's mass (more sprays and a dense core); ambient bird flocks (songbirds
+over woods and fields, gulls on the shores) circle and come down to feed near the camera, and Follow frames fliers at
+their altitude; ground stones are darker, warmer, rounder and half-buried; the market is paved at ground level with a
+kerb, crates, baskets and sacks under faded awnings; building LOD has a ±10 m hysteresis band; the herd POI frames a
+real cluster on dry land; standers vary (hands behind the back, arms folded, a hand on the hip, weight shifts).
+
+**Checked by eye** (`_harness/scratch/fix2/cap.mjs` on the AD's lookdev specs, before = `_harness/scratch/ad2/shots`,
+after = `_harness/scratch/fix2/shots*`): L18 / L19 / L20 temples, L22 night city, L24 burning, L26 ruins, L02 village,
+L07 street, L08 people, L09 herd (was framed at sea), L10 birds, and the third batch listed below.
+
+Third batch (`_harness/scratch/fix2/batch3.json`): L07 street (paving back and darker, quays banded), L24 burning
+(a front line and coals, not a peach field), L23 night orbit, L21 construction, L17 harbour, L11 forest, L14 crops,
+L01 camp, L03 town, L22 night city, B10 coast birds (probe: flocks and birds drawn).
+
+**Tests touched for world changes** (the climate fix moves the worlds' water): `society.test.ts` "complementary
+settlements trade" now picks the first of a few seeds whose two towns have a road between them (seed 11 put a lake
+between them — the boat-trade test covers that case); `plague.test.ts` "medicine" keeps the control town from
+stumbling on herbalism in the middle of its plague (it then became a second medicine town), and a grave case is the
+person's own frailty to the disease (one draw per person and disease), so the two towns compare like with like.
+
+**Not done (left for their lanes or later):**
+- People: hair as strands / cards, ears as embedded shells, clothing shells taking the body's exact weights, skin
+  triangles under clothes dropped; idle variety is in, spacing jitter for standers is not.
+- Grade, sun / sky balance and aerial haze (`pipeline.ts`, `atmosphere.ts`: the polish lane's, as the review says);
+  saturation is still 1.22 (skin was desaturated in the body material instead). Terrain detail relief (`noise.ts`,
+  `groundfloor.ts`) and the forest floor are the polish lane's; night-side clouds (`clouds.ts`) too.
+- Perf: terrain patches are not instanced per LOD, no multi-draw; crowds keep their LODs (LOD 2 is 240 triangles).
+- Houses: no new variant axes (annexes, chimney placement, per-household palettes) beyond the yard props; grass does
+  not return between houses.
+- Ocean: no cloud reflection beyond the screen-space one; night from orbit still reads as a lit polygon with blocks
+  (smoother, villages visible) rather than lights strung along every street.
+- Sim: `maxAgents` stays a soft cap (a band keeps a core of four); the people step's fixed overhead is the perf lane's.
+  Hot worlds are still hard: Verdance (system seed 2) loses ~20 % in its first month to hunger and heat, cold folk on
+  Rime still lose 0–3 to thirst when they work far from melt water.
+- Review coverage: no live boat or live bird shot (birds checked on lookdev with the flock probe); one burst frame of
+  walking people (L08 b1) shows a faint pale shape at a moving shin that was not explained.
+
 ## Acceptance §21.1 — from the barren start
 
 **Node, sim only: `tests/acceptance-barren.test.ts`** (part of `npm test`, 30–40 s). The real `barren` scenario (Cinder,
@@ -230,28 +359,25 @@ Client CPU per frame on live data (client lane, 1 508 agents / 510 buildings): L
   hourly settlement step ~35 %, no single hot spot); closing it needs structural work (fewer decisions per agent, a
   slower settlement cadence, multi-cell movement steps). In the browser the worker shares the cores with SwiftShader,
   so live rates there are far lower (×23–58 while a 2–5 M-triangle view renders on this machine).
-- **Desert peoples in summer:** on `twoworlds` the hive on Rust runs out of stored food by day 7 and, when its lake
-  dries in the 52 °C midsummer, abandons its home (drought) on day 15 and dies on the road — with either day
-  definition (checked against the old sidereal spin). Twoworlds therefore keeps only the plains folk after ~2 weeks
-  (Gaia's band lives on: 47 people after 70 days). Wells, cisterns or seasonal migration would fix it (people lane).
+- ~~**Desert peoples in summer**~~ (Rust's hive dying on the road by day 15): fixed by the review pass (site choice
+  through the year, water at hand, the climate's equilibrium) — on `twoworlds` seeds 1–5 the hive grows or holds
+  through 30 days (60 → 61–85).
 - **Lean hand-to-mouth bands:** settlements often eat their store down to nothing between harvests (no deaths); births
   stay slow (1–3 per band per game year), so "camp → village → town" is mostly more and better buildings and a rising
   era rather than many more people within a few game years. Coastal folk on a coast without stone or wood build little
   (their chosen material is out of reach and construction stalls) — set them down where trees grow (`homestead-coast`).
 - **Sandbox is bare by design** ("nothing alive yet"): a people set down there before the god sows plants has nothing
   to eat; the integration spec sows the world first, `perf_worker.ts` uses `vegetation: 1`.
-- **Render (SwiftShader only; real-GPU frame rate unmeasured):** pools show a polygon-net caustic and dashed dark
-  waterlines up close; the world-storm cloud deck has a stair-stepped limb and the clouds read as blocky cells from
-  orbit; night scenes read bright (exposure / moonlight) with occasional dark blobs in a dusk sky — all in files the
-  polish lane is changing now. Trees and ground cover still flip their season per instance at the equator (the
-  terrain no longer does). Buildings and people switch LOD with a hard cut; no far tree billboards.
-- **Look of the live runs:** a burning settlement seen from above reads like a lava field (the glowing crack pattern
-  covers every burning cell and building; the flame tongues are vertical and only read from a low angle,
-  `int-16b`); night from orbit over two small villages is one faint glow; a lake on flat ground draws as a hard
-  polygon at night; the year-2 "village" of the live run was still two hut frames (its huts rose later and burned in
-  year 6 — the history differs from run to run).
-- **Ecology pace:** isolated herds speciate after 3 years, so a few game years fill the chronicle with
-  speciation / extinction pairs (whales → deep → frost → little blue whales in 8 years) — ecology lane.
+- **Render (SwiftShader only; real-GPU frame rate unmeasured):** the world-storm cloud deck has a stair-stepped limb
+  and the clouds read as blocky cells from orbit, bright on the night side (the polish lane's files). Trees and ground
+  cover still flip their season per instance at the equator (the terrain no longer does). People switch LOD with a
+  hard cut (buildings now have a ±10 m band); no far tree billboards. (Pool caustics and the bright night: fixed in the
+  review pass.)
+- **Look of the live runs:** night from orbit over small villages is a soft, faint glow; a lake on flat ground draws
+  as a hard polygon at night; the year-2 "village" of the live run was still two hut frames (its huts rose later and
+  burned in year 6 — the history differs from run to run). (The lava-field fires: fixed in the review pass.)
+- **Ecology pace:** isolated land herds speciate after 3 years, so a few game years still bring speciation /
+  extinction pairs (sea species no longer isolate within one ocean, fliers range five times as far — review pass).
 - **Toast wording:** a "discoveries" toast groups what the god taught (fire making) with what the band worked out.
 - **Live boats** are drawn from the sim's boat item now, but no live shot has caught a boat yet (lookdev only).
 - Not verified in screenshots: the Follow camera over time, toasts at 1000×, settlement labels from high altitude.

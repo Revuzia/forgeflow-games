@@ -562,7 +562,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // embers behind the front: a few hot specks, faded where they would be smaller than a pixel
     vec3 cellE = floor(P * 2.2);
     float eh = fract(sin(dot(cellE, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-    float ember = step(0.95, eh) * (0.6 + 0.4 * sin(uTime * 3.0 + eh * 60.0)) * (1.0 - smoothstep(0.15, 0.5, fw));
+    // (round specks set off-centre in their cell, not square tiles)
+    vec3 eo = fract(P * 2.2) - 0.5 - (vec3(fract(eh * 13.7), fract(eh * 7.3), fract(eh * 3.1)) - 0.5) * 0.5;
+    float ember = step(0.95, eh) * smoothstep(0.22, 0.08, length(eo)) * (0.6 + 0.4 * sin(uTime * 3.0 + eh * 60.0)) * (1.0 - smoothstep(0.15, 0.5, fw));
     // and patches of glowing coals, not a uniform glow: an even 5 % emission over every burning cell lit whole
     // hillsides peach at night and the auto-exposure blacked out the rest of the view
     float coals = smoothstep(0.64, 0.9, snoise(P * 0.3 + 4.0) * 0.5 + 0.5);

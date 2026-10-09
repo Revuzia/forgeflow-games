@@ -343,28 +343,37 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
     b.tube(top.pts, top.rad, seg(12), torsoBone, BPART.cloth, { req: STYLE.tier1 | STYLE.tier2 | STYLE.dress }, false, false);
     const coatTop = shell(1.13, 0.86, 1.39);
     b.tube(coatTop.pts, coatTop.rad, seg(12), torsoBone, BPART.coat, { req: STYLE.tier3 }, false, false);
-    // skirts: the hem follows the thighs a little so the legs do not cut through when walking
-    const skirt = (y0: number, y1: number, r0: number, r1: number, part: number, req: number, forbid: number, follow: number) => {
-      b.surface(seg(14), lod === 0 ? 4 : 2, (u, v) => {
-        const a = u * Math.PI * 2;
-        const y = y0 + (y1 - y0) * v, r = r0 + (r1 - r0) * Math.pow(v, 0.8);
-        const x = Math.sin(a) * r, z = Math.cos(a) * r * 0.88;
+    // skirts: the hem follows the thighs a little so the legs do not cut through when walking. v runs waist → hem;
+    // the surface is built hem → waist (w = 1 − v) so its quads wind outward — built waist-down every skirt, kilt,
+    // coat tail and dress was inside out (culled from outside: legs and the bare seat showed through, only the far
+    // side's lining was drawn). The section is the torso's flat oval at the waist, rounder toward the hem, so the top
+    // tucks under the tunic or the belt instead of standing off the belly and the back.
+    const skirt = (y0: number, y1: number, r0: number, r1: number, part: number, req: number, forbid: number, follow: number, v0 = 0, v1 = 1, dr = 0, rows = lod === 0 ? 4 : 2) => {
+      const vOf = (w: number) => v1 - (v1 - v0) * w;
+      b.surface(seg(14), rows, (u, w) => {
+        const v = vOf(w), a = u * Math.PI * 2;
+        const y = y0 + (y1 - y0) * v, r = r0 + (r1 - r0) * Math.pow(v, 0.8) + dr;
+        const x = Math.sin(a) * r, z = Math.cos(a) * r * (0.7 + 0.18 * v);
         return [[x, y, z], [Math.sin(a), 0.15, Math.cos(a)]];
-      }, (p, v) => { const th = p[0] >= 0 ? 7 : 9; return [0, th, 1 - follow * v * v * Math.min(1, Math.abs(p[0]) / 0.12)]; }, part, { req, forbid }, undefined, (_p, v) => 1 - 0.25 * v);
+      }, (p, w) => { const v = vOf(w); const th = p[0] >= 0 ? 7 : 9; return [0, th, 1 - follow * v * v * Math.min(1, Math.abs(p[0]) / 0.12)]; }, part, { req, forbid }, undefined, (_p, w) => 1 - 0.25 * vOf(w));
     };
-    skirt(0.98, 0.55, 0.178, 0.245, BPART.cloth, STYLE.tier1, STYLE.dress, 0.45);
-    skirt(0.98, 0.66, 0.18, 0.225, BPART.cloth, STYLE.tier2, STYLE.dress, 0.35);
-    skirt(0.98, 0.5, 0.19, 0.26, BPART.coat, STYLE.tier3, STYLE.dress, 0.5);
-    skirt(1.0, 0.12, 0.17, 0.33, BPART.cloth, STYLE.dress, 0, 0.6);
-    // hide wrap and a fur cape (the first clothes)
+    // (they start at the hips, under the belt of the dyed tiers; the tunic or coat shell runs on beneath them)
+    skirt(0.915, 0.55, 0.184, 0.245, BPART.cloth, STYLE.tier1, STYLE.dress, 0.45);
+    skirt(0.915, 0.66, 0.184, 0.225, BPART.cloth, STYLE.tier2, STYLE.dress, 0.35);
+    skirt(0.915, 0.5, 0.188, 0.26, BPART.coat, STYLE.tier3, STYLE.dress, 0.5);
+    skirt(0.915, 0.12, 0.184, 0.33, BPART.cloth, STYLE.dress, 0, 0.6);
+    // hide wrap and a fur cape (the first clothes: no tunic under the wrap, so it starts at the waist)
     skirt(0.99, 0.66, 0.172, 0.215, BPART.fur, STYLE.tier0, STYLE.dress, 0.4);
     b.lathe(0, 0, [[0.27, 1.22], [0.25, 1.31], [0.2, 1.4], [0.13, 1.46], [0.09, 1.49]], seg(14), 1, BPART.fur, { req: STYLE.tier0 });
     // trim, belt, neckline for the dyed tiers
     // the belt sits low on the hips, where the body is the pelvis alone (at the waist the torso bends between pelvis
     // and chest, and a ring rigid to the pelvis floated free of it)
     // (elliptical, following the hips over the clothes: a round hoop stood off the belly and the back)
-    b.tube([[0, 0.9, 0], [0, 0.935, 0], [0, 0.97, 0]], [[0.19, 0.131], [0.197, 0.135], [0.199, 0.137]], seg(12), rigid(0), BPART.leather, { req: STYLE.tier2 | STYLE.tier3 }, false, false);
-    b.lathe(0, -0.004, [[0.231, 0.66], [0.233, 0.705]], seg(14), 0, BPART.cloth2, { req: STYLE.tier2, forbid: STYLE.dress });
+    // (it covers the skirts' top edge: their waist ring is 0.184 × 0.129 at 0.915 m, tucked 1.5 cm under it)
+    b.tube([[0, 0.9, 0], [0, 0.935, 0], [0, 0.97, 0]], [[0.196, 0.137], [0.201, 0.14], [0.202, 0.141]], seg(12), rigid(0), BPART.leather, { req: STYLE.tier2 | STYLE.tier3 }, false, false);
+    // the dyed hem: a band of the skirt itself, weighted like it (a ring rigid to the pelvis floated off the hem as soon
+    // as the skirt followed a stride, and its round section stood off the oval skirt front and back)
+    skirt(0.915, 0.66, 0.184, 0.225, BPART.cloth2, STYLE.tier2, STYLE.dress, 0.35, 0.82, 1, 0.005, 1);
     if (lod === 0) {
       b.lathe(0, 0.0, [[0.13, 1.4], [0.105, 1.445]], 12, 1, BPART.cloth2, { req: STYLE.tier2 | STYLE.tier3 });
       // a satchel strap and buttons on coats

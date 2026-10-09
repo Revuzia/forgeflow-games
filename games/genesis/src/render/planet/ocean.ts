@@ -315,9 +315,12 @@ void main() {
   float Vis = 0.25 / ((NdL * (1.0 - k) + k) * (NdV * (1.0 - k) + k));
   float Fs = 0.02 + 0.98 * pow(1.0 - max(dot(hB, vB), 0.0), 5.0);
   vec3 glint = sunCol * D * Vis * Fs * NdL;
-  // glitter: sub-pixel facets flash in and out where the glint is broad (a soft blob read as a gel)
-  float spark = gn_hash13(floor(P * 1.7) + floor(uTime * 6.0));
-  glint *= mix(1.0, 0.35 + 3.5 * step(0.82, spark), smoothstep(0.06, 0.2, a));
+  // glitter: sub-pixel facets flash in and out where the glint is broad (a soft blob read as a gel). The flashing cells
+  // are about two pixels across (a power-of-two size from the footprint): fixed 0.6 m cells drew a field of lit squares
+  // over the near water, where the waves are drawn anyway and there is nothing sub-pixel to stand in for
+  float cellM = exp2(floor(log2(max(fw * 2.0, 0.05))));
+  float spark = gn_hash13(floor(P / cellM) + floor(uTime * 6.0));
+  glint *= mix(1.0, 0.35 + 3.5 * step(0.82, spark), smoothstep(0.06, 0.2, a) * smoothstep(0.12, 0.5, fw));
 
   vec3 col = mix(under, skyR, F) + glint;
 
@@ -352,9 +355,10 @@ void main() {
   float rapids = max(smoothstep(1.3, 3.0, flowSpd), smoothstep(0.06, 0.25, lean) * smoothstep(0.5, 2.0, vDepth) * smoothstep(0.3, 1.0, flowSpd));
   // rivers are shallow everywhere: their banks get a thin lip of foam, not a foamy bed
   shore *= mix(1.0, 0.25, riverK);
-  // whitecaps: the open sea under a fresh wind breaks into white patches that drift and die away
+  // whitecaps: the open sea breaks into scattered white patches that drift and die away — a few, not a speckle
+  // (uWind is the sea state the waves are built for: 1 is a moderate breeze, more under a gale)
   float wcN = snoise(vec3(P.x * 0.07, P.y * 0.07 - uTime * 0.12, P.z * 0.07)) * 0.6 + snoise(P * 0.23 + vec3(uTime * 0.3)) * 0.4;
-  float whitecap = smoothstep(0.62, 0.95, wcN * 0.5 + 0.5) * smoothstep(0.45, 1.1, uWind) * smoothstep(0.3, 0.8, vSalt) * calm * smoothstep(2.0, 8.0, vDepth);
+  float whitecap = smoothstep(0.7, 0.97, wcN * 0.5 + 0.5) * smoothstep(0.5, 1.4, uWind) * smoothstep(0.3, 0.8, vSalt) * calm * smoothstep(2.0, 8.0, vDepth);
   float foamAmt = clamp(max(max(max(shore, crest * 0.8), rapids * 0.85), whitecap * 0.7), 0.0, 1.0);
   if (foamAmt > 0.01) {
     vec3 fp = P * 1.4 - vFlow * uTime * 0.8;
