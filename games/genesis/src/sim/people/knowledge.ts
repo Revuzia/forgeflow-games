@@ -8,6 +8,7 @@
 import type { PCtx } from './ctx.ts';
 import type { Settlement } from './state.ts';
 import { hashFloat } from '../core/rng.ts';
+import { AgentFlag } from '../types.ts';
 import { ERAS } from '../content.ts';
 import { hasPrereqs } from '../recipes/recipes.ts';
 import { accidentChance, experimentCandidates, experimentChance, reverseChance } from '../recipes/discovery.ts';
@@ -490,6 +491,70 @@ export function godTeach(x: PCtx, slots: number[], k: number): { taught: number;
     }
   }
   return out;
+}
+
+/**
+ * Daily apprenticeship: the informal passing-on that the task-level teaching, watching and talk do not cover (a child
+ * at the potter's elbow, a hunter taking a youth along). Per settlement and day, ideas known by the FEWEST living adults
+ * go first, so a lone knower's craft gets a second keeper before it can die with them; each idea passes to at most one
+ * new adult a day, and the settlement learns at most ~1 idea per 6 adults a day, so spreading still takes seasons.
+ * Secrets stay inside the knowers' households; taboos and missing prerequisites still block. Deterministic (hashFloat).
+ */
+export function apprenticeDaily(x: PCtx, st: Settlement): void {
+  const A = x.A, kw = A.kw;
+  if (x.info[st.species].def.hive?.sharedMemory || st.band) return;
+  const all = x.ps.members.get(st.id) ?? [];
+  const adults: number[] = [];
+  for (const m of all) if (!(A.flags[m] & AgentFlag.child) && !A.mission[m]) adults.push(m);
+  const n = adults.length;
+  if (n < 2) return;
+  const day = Math.floor(x.tick / x.day);
+  // knower counts per idea held by any adult
+  const counts = new Map<number, number>();
+  for (const m of adults) {
+    for (let w = 0; w < kw; w++) {
+      let bits = A.know[m * kw + w];
+      while (bits) {
+        const b = 31 - Math.clz32(bits);
+        bits &= ~(1 << b);
+        const k = w * 32 + b;
+        counts.set(k, (counts.get(k) ?? 0) + 1);
+      }
+    }
+  }
+  const ideas: number[] = [];
+  for (const [k, c] of counts) if (c < n) ideas.push(k);
+  // fewest knowers first; ties by id (deterministic)
+  ideas.sort((a, b) => counts.get(a)! - counts.get(b)! || a - b);
+  const boost = learnBoost(x, st);
+  let budget = Math.max(1, Math.ceil(n / 6));
+  for (const k of ideas) {
+    if (budget <= 0) break;
+    const r = x.rt.list[k];
+    if (!r) continue;
+    const c = counts.get(k)!;
+    const frac = c / n;
+    const urgency = c === 1 ? 2.2 : c === 2 ? 1.5 : 1;
+    const secret = st.secrets.includes(k);
+    for (const m of adults) {
+      if (A.knows(m, k)) continue;
+      if (r.species && !r.species.includes(A.species[m])) continue;
+      if (!hasPrereqs(r, A.know, m * kw, kw)) continue;
+      if (isTaboo(x, st, A.species[m], k)) continue;
+      if (secret && !keptInHousehold(x, adults, k, A.household[m])) continue;
+      const p = 0.09 * (0.35 + Math.sqrt(frac)) * (1 - r.teach * 0.8) * urgency * boost * (0.55 + A.traits[m * NT + TRAIT.curiosity]);
+      if (hashFloat(A.id[m], k, day, 0xa991) >= p) continue;
+      learn(x, m, k, 'teach');
+      budget--;
+      break; // one new keeper per idea per day
+    }
+  }
+}
+
+/** does any adult of household `hh` know k (a hoarded secret passes only within the house) */
+function keptInHousehold(x: PCtx, adults: number[], k: number, hh: number): boolean {
+  for (const o of adults) if (x.A.household[o] === hh && x.A.knows(o, k)) return true;
+  return false;
 }
 
 /** hive minds share what any member knows (hourly) */

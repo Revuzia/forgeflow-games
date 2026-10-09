@@ -23,6 +23,7 @@ import { tell } from './story.ts';
 import { agentRef, settlementRef, vars } from './util.ts';
 import { cohortTotal } from './cohorts.ts';
 import { insertSorted } from './lifecycle.ts';
+import { apprenticeDaily } from './knowledge.ts';
 
 // ───────────────────────────── leaders ─────────────────────────────
 
@@ -187,6 +188,7 @@ export function householdsDaily(x: PCtx, st: Settlement): void {
   }
   st.households = st.households.filter((h) => h.members.length > 0);
   pairUp(x, st);
+  apprenticeDaily(x, st);
 }
 
 /**
