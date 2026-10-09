@@ -20,6 +20,7 @@ import { buildPieceEyes } from '../../src/render/pieceEyes.ts';
 import { buildPieceMesh } from '../../src/render/pieceBuild.ts';
 import { CORE_TUNING } from '../../src/render/core.ts';
 import { FRAME_TUNING } from '../../src/render/framing.ts';
+import { LOD_TUNING } from '../../src/render/lod.ts';
 
 /** One piece of an `eyeInk` run: its fraction, eye meshes drawn, remaining width of each, dark ink in each eye's footprint, ink beyond the cut line, which slots are drawn. */
 export interface InkPiece { frac: number; meshes: number; shares: number[]; ink: number[]; inkBeyond: number; slotsDrawn: number[]; centres: number[][] }
@@ -122,7 +123,61 @@ export function makeCut2(stage: StageDev, canvas: HTMLCanvasElement, real: () =>
     const o = b as unknown as { homeX: number; homeY?: number; homeZ: number; reset(): void };
     o.homeX = x; o.homeY = y; o.homeZ = z; o.reset();
   }
+  const lowOf0 = (rest: Float32Array): number => { let m = Infinity; for (let i = 1; i < rest.length; i += 3) if (rest[i] < m) m = rest[i]; return -m; };
   const maxYOf = (a: ArrayLike<number>): number => { let m = -Infinity; for (let i = 1; i < a.length; i += 3) if (a[i] > m) m = a[i]; return m; };
+
+  /* ── CUT3 (many pieces): a seeded cut tree of REAL pieces (PHYS's builder, nested cuts), snapshots at every count. The next cut takes a random piece (weight frac^1.5), a random plane through
+   *  its middle (offset +- 0.3 of its radius); a refused plane is retried. ── */
+  const TREES = new Map<string, Map<number, CutSide[]>>();
+  const mulberry = (seed: number): (() => number) => { let s = seed >>> 0; return () => { s = (s + 0x6D2B79F5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; };
+  function cutTree(g: ReturnType<typeof genomeOf>, species: string, seed: number, maxN: number): Map<number, CutSide[]> {
+    const key = species + ':' + seed;
+    const have = TREES.get(key);
+    if (have && have.has(maxN)) return have;
+    const rnd = mulberry(seed), snaps = have ?? new Map<number, CutSide[]>();
+    let leaves: CutSide[] = [], id = 1;
+    // (restart from the cached state when it is shorter: simplest is to rebuild the whole tree once up to the biggest count asked)
+    snaps.clear();
+    while (leaves.length < maxN) {
+      let ok = false;
+      for (let tries = 0; tries < 40 && !ok; tries++) {
+        const u = rnd() * 2 - 1, ph = rnd() * Math.PI * 2, rr = Math.sqrt(1 - u * u), n = { x: rr * Math.cos(ph), y: u, z: rr * Math.sin(ph) };
+        if (leaves.length === 0) {
+          const res = PP.cut(g, n, (rnd() - 0.5) * 0.2 * PP.whole(g).radius, id);
+          if (sideOf(res)) { leaves = [res.a, res.b]; id++; ok = true; }
+          continue;
+        }
+        let tot = 0; for (const l of leaves) tot += Math.pow(l.frac, 1.5);
+        let pick = rnd() * tot, k = 0; for (; k < leaves.length - 1; k++) { pick -= Math.pow(leaves[k].frac, 1.5); if (pick <= 0) break; }
+        const L = leaves[k], o = L.rest.offset, d = n.x * o.x + n.y * o.y + n.z * o.z + (rnd() - 0.5) * 0.6 * L.rest.radius;
+        const res = PP.cut(g, n, d, id, L);
+        if (!sideOf(res) || res.a.frac < 0.0004 || res.b.frac < 0.0004) continue;
+        leaves = [...leaves.slice(0, k), res.a, res.b, ...leaves.slice(k + 1)]; id++; ok = true;
+      }
+      if (!ok) break;
+      snaps.set(leaves.length, leaves.slice());
+    }
+    TREES.set(key, snaps);
+    return snaps;
+  }
+  /** CUT3 2.2: the sim mesh detail of a piece by its share: >= 0.35 detail 3, 0.08 to 0.35 detail 2, 0.02 to 0.08 detail 1, below that the coarsest (0). */
+  const detailOfShare = (f: number): number => (f >= 0.35 ? 3 : f >= 0.08 ? 2 : f >= 0.02 ? 1 : 0);
+  /** Greedy spiral packing of discs (radii in m) around the origin with a gap; returns x, z per disc, in the order given. */
+  function packDiscs(radii: number[], gap: number): [number, number][] {
+    const order = radii.map((r, i) => i).sort((a, b) => radii[b] - radii[a]), out: [number, number][] = new Array(radii.length), placed: [number, number, number][] = [];
+    for (const i of order) {
+      const r = radii[i];
+      let best: [number, number] | null = null;
+      for (let t = 0; t < 4000 && !best; t++) {
+        const a = t * 2.399963, rad = 0.0 + 0.012 * Math.sqrt(t) * 8 * Math.max(r, 0.08) * 3;
+        const x = Math.cos(a) * rad, z = Math.sin(a) * rad * 0.8;
+        if (placed.every((p) => Math.hypot(p[0] - x, p[1] - z) >= p[2] + r + gap)) best = [x, z];
+      }
+      best = best ?? [0, 0];
+      placed.push([best[0], best[1], r]); out[i] = best;
+    }
+    return out;
+  }
 
   return {
     /** Probe knob: extra fine subdivisions per piece (src/render/pieceBuild.ts PB_TUNING). */
@@ -560,6 +615,195 @@ export function makeCut2(stage: StageDev, canvas: HTMLCanvasElement, real: () =>
       stage.setQuality('med');
       stage.clearBodies();
       return out;
+    },
+
+    /**
+     * CUT3: does the smallest piece of an n-piece cut tree still read as JELLY (not as a flat grey speck)? Each of the `k` smallest pieces is drawn ALONE as one of the many small pieces (lod 1: no shadow, no FX), the frame is
+     * differenced against the empty table, and over the pixels that changed: the area, the mean saturation (max - min over max of the colour: jelly is a colour, a grey speck is not) and the mean luma. `zoom` = the camera's log zoom step.
+     */
+    crumbs(o: { species: string; n: number; k: number; zoom?: number }): { ok: boolean; why?: string; pieces: { frac: number; area: number; sat: number; luma: number; satFace: number; areaFace: number }[]; png: string } {
+      const g = genomeOf(o.species), snaps = cutTree(g, o.species, 7, 64), leaves0 = snaps.get(o.n);
+      if (!leaves0) return { ok: false, why: 'no tree', pieces: [], png: '' };
+      const small = [...leaves0].sort((a, b) => a.frac - b.frac).slice(0, o.k);
+      const W = canvas.width, H = canvas.height, out: { frac: number; area: number; sat: number; luma: number; satFace: number; areaFace: number }[] = [];
+      const keep = LOD_TUNING.fullViews; LOD_TUNING.fullViews = 0; LOD_TUNING.enabled = true; FREEZE = false; PTR = null;
+      stage.clearBodies(); stage.setSafeInsets({ top: 56, bottom: 78 });
+      if (o.zoom) { stage.zoom(1e5); stage.zoom(Math.log(1 / 1.9) / 0.0016); stage.zoom(o.zoom); }
+      let png0 = '';
+      for (const l of small) {
+        stage.clearBodies();
+        const region = { planes: l.region.planes, cells: l.region.cells } as typeof l.region;
+        let b: StubBody;
+        try { b = new StubBody(g, { rest: PP, detail: detailOfShare(l.frac), piece: { frac: l.frac, region, at: { x: 0, y: lowOf0(l.rest.restLocal) + 0.002, z: 0 } } }); } catch { b = pieceBody(g, l, { x: 0, y: lowOf0(l.rest.restLocal) + 0.002, z: 0 }); }
+        const id = stage.addBody(b, g, { tier: 'common' }); noBlink(id);
+        run([b], 150);
+        const img = grab().slice();
+        const v = stage.views.find((w) => w.id === id)!;   // the same picture with the piece hidden (same camera): the difference is the piece
+        const shown = [v.jelly.mesh, v.face.group, v.core.group, v.fx.group, v.rarity.group, v.strands.group];
+        shown.forEach((x) => { x.visible = false; });
+        const empty = grab().slice();
+        shown.forEach((x) => { x.visible = true; });
+        let n = 0, sat = 0, lum = 0, nF = 0, satF = 0;
+        for (let i = 0; i < img.length; i += 4) {
+          const d = Math.max(Math.abs(img[i] - empty[i]), Math.abs(img[i + 1] - empty[i + 1]), Math.abs(img[i + 2] - empty[i + 2]));
+          if (d < 40) continue;
+          const mx = Math.max(img[i], img[i + 1], img[i + 2]), mn = Math.min(img[i], img[i + 1], img[i + 2]);
+          n++; sat += mx > 0 ? (mx - mn) / mx : 0; lum += (0.2126 * img[i] + 0.7152 * img[i + 1] + 0.0722 * img[i + 2]) / 255;
+          if (d > 120 && mx > 90) { nF++; satF += (mx - mn) / mx; }   // the bright body pixels (not the dim rim / shade)
+        }
+        out.push({ frac: +l.frac.toFixed(4), area: n, sat: n ? +(sat / n).toFixed(3) : 0, luma: n ? +(lum / n).toFixed(3) : 0, areaFace: nF, satFace: nF ? +(satF / nF).toFixed(3) : 0 });
+        if (!png0) png0 = png();
+      }
+      LOD_TUNING.fullViews = keep;
+      if (o.zoom) { stage.zoom(-1e5); stage.zoom(1e5); stage.zoom(Math.log(1 / 1.9) / 0.0016); }
+      stage.clearBodies();
+      return { ok: true, pieces: out, png: png0 };
+    },
+
+    /**
+     * CUT3 section 4 RENDER: N pieces (2, 6, 12, 24, 64) on the table and what they cost.
+     *   style 'clean': the real pieces of a seeded cut tree (PHYS's builder, nested cuts), each built at the detail of its SHARE (>= 0.35: 3, 0.08: 2, 0.02: 1, else 0), spread `spread` x about the middle
+     *   style 'minis': n complete copies with the same shares (the scaled-whole path), packed on the table
+     *   style 'whole': `n` whole bodies (the 2-whole baseline of the budget)
+     * Returns draw calls, triangles, fine vertices, the shares, the details, the stage's update ms and the render ms (software GL: only the ratios mean anything), the draw calls each part adds (`parts`:
+     * the calls with that part hidden, subtracted), and a picture.
+     */
+    many(o: { species: string; n: number; style: 'clean' | 'minis' | 'whole'; spread?: number; seed?: number; shot?: boolean; parts?: boolean; frames?: number; settle?: number; fixedDetail?: number; insets?: { top: number; bottom: number }; lod?: boolean; toss?: number; tossSeconds?: number; smallest?: number; after?: number; zoom?: number }): {
+      ok: boolean; why?: string; n: number; shares: number[]; details: number[]; fine: number[]; fineTotal: number; simTotal: number; calls: number; triangles: number; msUpdate: number; msRender: number; parts: Record<string, number>;
+      png: string; camScale: number; fallbacks: number; visible: number; lodSmall: number; discs: { id: number; frac: number; px: number; eyePx: number }[]; eyeMin: number; eyeMax: number; eyesDrawn: number; eyesExpected: number; faceTris: number;
+      addMs: number; firstFrameMs: number; nonFinite: number; cover: { worstUnder: number; worstOff: number; clearTop: number; clearBottom: number; silLeft: number; silRight: number; maxUnder: number; maxOff: number; framerMs: number; uncalm: number; speeds: number[]; lens: string } | null;
+    } {
+      LOD_TUNING.enabled = o.lod !== false;
+      const g = genomeOf(o.species), W = canvas.clientWidth, H = canvas.clientHeight;
+      const empty = { ok: false, n: o.n, shares: [] as number[], details: [] as number[], fine: [] as number[], fineTotal: 0, simTotal: 0, calls: 0, triangles: 0, msUpdate: 0, msRender: 0, parts: {} as Record<string, number>, png: '', camScale: NaN, fallbacks: 0, visible: 0, lodSmall: 0, discs: [] as { id: number; frac: number; px: number; eyePx: number }[], eyeMin: 0, eyeMax: 0, eyesDrawn: 0, eyesExpected: 0, faceTris: 0, addMs: 0, firstFrameMs: 0, nonFinite: 0, cover: null };
+      FREEZE = false; PTR = null; FRAME_TUNING.enabled = true;
+      stage.clearBodies();
+      stage.setSafeInsets(o.insets ?? { top: 56, bottom: 78 });
+      let fallbacks = 0;
+      const bodies: StubBody[] = [];
+      let shares: number[] = [];
+      const R0 = PP.whole(g).radius;
+      const lowOf = (rest: Float32Array): number => -minY(rest);
+      if (o.style === 'whole') {
+        for (let k = 0; k < o.n; k++) bodies.push(new StubBody(g, { piece: { frac: 1, chunk: false, at: { x: (k - (o.n - 1) / 2) * 1.2, y: 0, z: 0 } } }));
+        shares = bodies.map(() => 1);
+      } else {
+        const snaps = cutTree(g, o.species, o.seed ?? 7, 64), leaves0 = o.n === 1 ? null : snaps.get(o.n);
+        if (!leaves0) return { ...empty, why: `the cut tree has no ${o.n}-piece state (refused too often)` };
+        const leaves = o.smallest ? [...leaves0].sort((a, b) => a.frac - b.frac).slice(0, o.smallest) : leaves0;   // (smallest: only the k smallest pieces of the n: the crumbs)
+        shares = leaves.map((l) => l.frac);
+        const spread = o.spread ?? 0;   // 0 = packed on the table (no two pieces overlap: the real physics pushes pieces apart); > 0 = the flush positions x spread
+        if (o.style === 'clean') {
+          const ext = leaves.map((l) => { let m = 0; const r = l.rest.restLocal; for (let i = 0; i < r.length; i += 3) m = Math.max(m, Math.hypot(r[i], r[i + 2])); return m; });
+          const pk = spread > 0 ? null : packDiscs(ext.map((e) => e * 0.95), 0.03);
+          for (const [li, l] of leaves.entries()) {
+            const px = pk ? pk[li][0] : l.rest.offset.x * spread, pz = pk ? pk[li][1] : l.rest.offset.z * spread;
+            const det = o.fixedDetail ?? detailOfShare(l.frac);
+            const region = { planes: l.region.planes, cells: l.region.cells } as typeof l.region;   // (a NEW object: the builder's cache is keyed by it, so the piece is rebuilt at the share's detail)
+            let b: StubBody;
+            try { b = new StubBody(g, { rest: PP, detail: det, piece: { frac: l.frac, region, at: { x: px, y: lowOf(l.rest.restLocal) + 0.002, z: pz } } }); }
+            catch { fallbacks++; b = pieceBody(g, l, { x: px, y: lowOf(l.rest.restLocal) + 0.002, z: pz }); }
+            bodies.push(b);
+          }
+        } else {
+          const radii = leaves.map((l) => R0 * Math.cbrt(l.frac) * 1.05), pos = packDiscs(radii, 0.06);
+          leaves.forEach((l, i) => bodies.push(new StubBody(g, { detail: o.fixedDetail ?? detailOfShare(l.frac), piece: { frac: l.frac, chunk: false, at: { x: pos[i][0], y: 0, z: pos[i][1] } } })));
+        }
+      }
+      if (o.zoom) { stage.zoom(1e5); stage.zoom(Math.log(1 / 1.9) / 0.0016); stage.zoom(o.zoom); }   // (zoom: the camera's own log step, e.g. -1e5 = as near as it goes)
+      const tAdd = performance.now();
+      const ids = bodies.map((b) => stage.addBody(b, g, { tier: 'common' }));
+      stage.setPrimaryBody?.(ids[0]);
+      const addMs = performance.now() - tAdd;
+      const tFirst = performance.now();
+      T += 1 / 60; stage.update(1 / 60, { time: T, pointerNdc: null });
+      const firstFrameMs = performance.now() - tFirst;
+      run(bodies, o.settle ?? 150);
+      const views = ids.map((i) => stage.views.find((v) => v.id === i)!);
+      stage.render();
+      const st = stage.stats();
+      const parts: Record<string, number> = {};
+      if (o.parts) {   // the EXACT draw calls of each part (every pass counted): renderBufferDirect is wrapped for one frame and each call is filed under the part its object belongs to
+        const cat = new Map<THREE.Object3D, string>();
+        const file = (name: string, root: THREE.Object3D): void => { root.traverse((x) => { cat.set(x, name); }); };
+        for (const v of views) { file('jelly', v.jelly.mesh); file('decals', v.decals.shadow); file('decals', v.decals.pool); file('face', v.face.group); file('core', v.core.group); file('fx', v.fx.group); file('rarity', v.rarity.group); file('strands', v.strands.group); }
+        const r = stage.renderer as unknown as { renderBufferDirect: (...a: unknown[]) => unknown };
+        const orig = r.renderBufferDirect;
+        r.renderBufferDirect = function (this: unknown, ...a: unknown[]): unknown { const k = cat.get(a[4] as THREE.Object3D) ?? 'other'; parts[k] = (parts[k] ?? 0) + 1; return orig.apply(this, a); };
+        stage.render();
+        r.renderBufferDirect = orig;
+      }
+      // SR2 for many pieces: the share of each body's screen disc (centre of mass, restRadius: the shell's own measure) under the HUD rows / off the frame, and the silhouette against the band; optionally K pieces thrown far (the stub's own dynamics) and the worst moment of the run
+      const ins = o.insets ?? { top: 56, bottom: 78 };
+      const cam0 = stage.camera, w3 = new THREE.Vector3();
+      const sxy = (x: number, y: number, z: number): [number, number] => { w3.set(x, y, z).project(cam0); return [(w3.x * 0.5 + 0.5) * W, (0.5 - w3.y * 0.5) * H]; };
+      const coverNow = (): { under: number; off: number; sT: number; sB: number; sL: number; sR: number } => {
+        let wu = 0, wo = 0, st = Infinity, sb = -Infinity, sl = Infinity, sr = -Infinity;
+        for (const v of stage.views) {
+          if (!v.visible) continue;
+          const c = v.proxy.center, [cx, cy] = sxy(c.x, c.y, c.z), [ex] = sxy(c.x + v.proxy.restRadius, c.y, c.z), r = Math.abs(ex - cx);
+          let tot = 0, cov = 0, all = 0, out = 0; const N = 16;
+          for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+            const x = cx + ((i + 0.5) / N * 2 - 1) * r, y = cy + ((j + 0.5) / N * 2 - 1) * r;
+            if (Math.hypot(x - cx, y - cy) > r) continue;
+            all++;
+            if (x < 0 || y < 0 || x > W || y > H) { out++; continue; }
+            tot++; if (y < ins.top || y > H - ins.bottom) cov++;
+          }
+          wu = Math.max(wu, cov / Math.max(1, tot)); wo = Math.max(wo, out / Math.max(1, all));
+          const P = v.proxy.positions;
+          for (let i = 0; i < P.length; i += 3) { const [px2, py2] = sxy(P[i], P[i + 1], P[i + 2]); if (py2 < st) st = py2; if (py2 > sb) sb = py2; if (px2 < sl) sl = px2; if (px2 > sr) sr = px2; }
+        }
+        return { under: wu, off: wo, sT: st, sB: sb, sL: sl, sR: sr };
+      };
+      let maxUnder = 0, maxOff = 0;
+      if (o.toss && o.toss > 0) {
+        const rn = mulberry(99);
+        for (let k = 0; k < Math.min(o.toss, bodies.length); k++) { const b = bodies[Math.floor(rn() * bodies.length)], a = rn() * Math.PI * 2; b.nudge({ x: Math.cos(a) * 2.2, y: 1.6 + rn(), z: Math.sin(a) * 2.2 }); }
+        for (let f = 0; f < Math.round((o.tossSeconds ?? 4) * 60); f++) { run(bodies, 1); if (f % 5 === 0) { const m = coverNow(); maxUnder = Math.max(maxUnder, m.under); maxOff = Math.max(maxOff, m.off); } }
+      }
+      run(bodies, Math.round((o.after ?? 1.5) * 60));
+      const cv = coverNow();
+      // what the framer itself costs a frame with this many bodies (measure() runs inside stage.update: the stage's update with the framer on against off)
+      // (the stage's own dev counter: the moving average of the time framer.measure took, over the last ~60 frames of this scene; no subtraction of two noisy frame times)
+      run(bodies, 90);
+      const framerMs = stage.info.framerMs;
+      const gl = stage.renderer.getContext(), px = new Uint8Array(4), sync = (): void => { gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px); };
+      const NF = o.frames ?? 12;
+      let tU = 0;
+      for (let i = 0; i < NF; i++) { const t0 = performance.now(); T += 1 / 60; stage.update(1 / 60, { time: T, pointerNdc: null }); tU += performance.now() - t0; }
+      stage.render(); sync();
+      let tR = Infinity;
+      for (let r = 0; r < 3; r++) { const t0 = performance.now(); stage.render(); sync(); tR = Math.min(tR, performance.now() - t0); }
+      const st2 = stage.stats();
+      const cam = stage.camera, v3 = new THREE.Vector3();
+      const discs = views.map((v) => {
+        const c = v.proxy.center;
+        v3.set(c.x, c.y, c.z).project(cam); const cx = (v3.x * 0.5 + 0.5) * W;
+        v3.set(c.x + v.proxy.restRadius, c.y, c.z).project(cam); const ex = (v3.x * 0.5 + 0.5) * W;
+        let eyePx = 0;
+        const eyes = (v.face as unknown as { eyes: { dome: THREE.Mesh }[] }).eyes;
+        for (const e of eyes) {   // the pixel DIAMETER of each drawn bead: the dome's x axis is its radius (world), projected next to its centre
+          if (!e.dome.visible || !v.face.group.visible) continue;
+          const m = e.dome.matrix.elements, rx = Math.hypot(m[0], m[1], m[2]);
+          v3.set(m[12], m[13], m[14]).project(cam); const ex0 = (v3.x * 0.5 + 0.5) * W;
+          v3.set(m[12] + (cam.matrixWorld.elements[0]) * rx, m[13] + cam.matrixWorld.elements[1] * rx, m[14] + cam.matrixWorld.elements[2] * rx).project(cam);
+          eyePx = Math.max(eyePx, 2 * Math.abs((v3.x * 0.5 + 0.5) * W - ex0));
+        }
+        return { id: v.id, frac: v.proxy.frac ?? 1, px: +(Math.abs(ex - cx) * 2).toFixed(1), eyePx: +eyePx.toFixed(1) };
+      });
+      const res = {
+        ok: true, n: bodies.length, shares, details: bodies.map((b) => (b.vertexCount === 12 ? 0 : b.vertexCount === 42 ? 1 : b.vertexCount === 162 ? 2 : b.vertexCount === 642 ? 3 : -1)), fine: views.map((v) => v.jelly.fineCount),
+        fineTotal: views.reduce((s, v) => s + v.jelly.fineCount, 0), simTotal: bodies.reduce((s, b) => s + b.vertexCount, 0), calls: st2.drawCalls, triangles: st2.triangles, msUpdate: tU / NF, msRender: tR, parts,
+        eyeMin: 0, eyeMax: 0, eyesDrawn: 0, eyesExpected: 0, faceTris: 0,
+        png: o.shot ? png() : '', camScale: stage.info.camScale, fallbacks, addMs, firstFrameMs, nonFinite: views.reduce((a, v) => { let k = 0; const P = v.proxy.positions; for (let i = 0; i < P.length; i++) if (!Number.isFinite(P[i])) k++; return a + k; }, 0), cover: { worstUnder: +cv.under.toFixed(3), worstOff: +cv.off.toFixed(3), clearTop: +(cv.sT - ins.top).toFixed(1), clearBottom: +(H - ins.bottom - cv.sB).toFixed(1), silLeft: +cv.sL.toFixed(1), silRight: +(W - cv.sR).toFixed(1), maxUnder: +maxUnder.toFixed(3), maxOff: +maxOff.toFixed(3), framerMs: +framerMs.toFixed(3), uncalm: views.filter((v) => !v.hold.calm).length, speeds: views.map((v) => +v.hold.s[0].toFixed(3)).sort((a, b) => b - a).slice(0, 3), lens: JSON.stringify(stage.info.lens) }, visible: views.filter((v) => v.visible).length, lodSmall: views.filter((v) => v.lod === 1).length, discs,
+      };
+      { const px2 = discs.map((d) => d.eyePx).filter((x) => x > 0); res.eyeMin = px2.length ? Math.min(...px2) : 0; res.eyeMax = px2.length ? Math.max(...px2) : 0; res.eyesDrawn = px2.length; res.eyesExpected = views.filter((v) => (v.face as unknown as { eyes: unknown[] }).eyes.length > 0).length;
+        res.faceTris = views.reduce((a, v) => a + (v.face as unknown as { eyes: { dome: THREE.Mesh }[] }).eyes.reduce((b, e) => b + (e.dome.geometry.index ? e.dome.geometry.index.count / 3 : 0), 0), 0); }
+      LOD_TUNING.enabled = true;
+      if (o.zoom) { stage.zoom(-1e5); stage.zoom(1e5); stage.zoom(Math.log(1 / 1.9) / 0.0016); }
+      stage.clearBodies();
+      return res;
     },
 
     /** RP1 (wiring half): the dev eye count of a whole and of its two halves. Until part 2 gives each eye to the piece that holds it the pieces draw none. */

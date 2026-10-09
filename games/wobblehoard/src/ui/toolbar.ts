@@ -328,6 +328,8 @@ export function createToolbar(o: ToolbarOptions): Toolbar {
     if (moreOpen) renderMenu();
     paint();
     paintDisabled();
+    // the neighbours' API (hud.css .nametag): the tray's REAL half width, so a long name or nickname ends 12 px before the tray at any width (the fixed 276 / 150 px of hud.css are the first-paint values)
+    if (el.isConnected && bar.offsetWidth > 0) el.parentElement?.style.setProperty('--dk-half', `${Math.ceil(bar.offsetWidth / 2)}px`);
     positionAttach();
   }
 

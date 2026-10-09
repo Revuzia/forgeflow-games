@@ -1,6 +1,6 @@
 // CUT2 (TRUE CUT, _spec/CUT2.md section 4): how a piece's rest mesh is built. PHYS, task P1b. Pure: no three, no DOM, no Math.random, no Date, fixed
 // iteration counts. A piece is the real part of the whole squishy inside a convex CELL (S cut by the half-spaces on its path in the cut tree); its rest mesh
-// is the radial re-mesh of that part from its own centre on the UNCHANGED icosphere topology (642 particles, 162 under 0.35), so the solver needs nothing new:
+// is the radial re-mesh of that part from its own centre on the UNCHANGED icosphere topology (CUT3: 642 particles from a share of 0.35, 162 from 0.08, 42 from 0.02, 12 below: pieceDetail), so the solver needs nothing new:
 //   centre -> soundness (phi, centre search) -> seed -> 4 relaxations -> rim snap -> cap and skin relaxation -> validity gate -> adaptive foot (room clamp and
 //   lift cap) -> exact volume by a normal offset of the skin -> normalise -> weights -> post-conditions.
 // `PieceJob` runs those as resumable STAGES (`run(budgetMs, maxStages)`: as many as fit in the budget but never more than maxStages, so the frame at which a
@@ -13,7 +13,7 @@ import { buildRest, floppyFeature, floppyOf, floppySecond, meshVolume, physicsGe
 import type { RestShape } from './shape.ts';
 import type { IcoMesh } from './mesh.ts';
 import {
-  CLIP_ASPECT, CLIP_CX, CLIP_CY, CLIP_CZ, CLIP_VOL, CentreSearch, OUT, RAY, clipMesh, compileCell, exitDist, getSource, icoOf, measureRegion, regionCentroid, starShare, starVolume,
+  CLIP_ASPECT, CLIP_CX, CLIP_CY, CLIP_CZ, CLIP_VOL, CentreSearch, MAX_PLANES, OUT, RAY, clipMesh, compileCell, exitDist, getSource, icoOf, measureRegion, regionCentroid, starShare, starVolume,
 } from './region.ts';
 import type { RegionCell, Source } from './region.ts';
 
@@ -21,9 +21,10 @@ import type { RegionCell, Source } from './region.ts';
 export const PIECE_TUNING = {
   FOOT_LIFT_MAX: 0.08,        // R0: a foot that needs more lift than this is not added (4.1 step 8 b)
   DELTA_MAX: 0.05,            // R0: post-condition (v) of 4.1 step 12
+  DELTA_REL0: 0.5, DELTA_REL1: 0.3,   // CUT3: at detail 0 / 1 the skin offset may also be this fraction of the piece's own radius (an inscribed 12 or 42 vertex mesh is that far inside the true region: 0.22 / 0.06 median)
+  RIM_MODE: 1,                // CUT3: 1 = a build whose exact-volume solve fails (or needs an offset past the gate) is retried with the rim vertices of the cut faces sliding outward IN their plane too (thin lenses and tips cannot reach their volume with the skin alone); 0 = off (probes)
   MASS_LO: 0.01, MASS_HI: 8,  // post-condition (ii)
   PHI_OK: 0.97, PHI_SOUND: 0.95,
-  FRAC_MIN: 0.124,            // FRAC_MIN of the solver (5.6)
   SNAP_PASSES: 3,             // rim snap passes (fixed count)
   STAR_GUARD: 0.002,           // the rim snap keeps every triangle about a moved vertex above this fraction of the mean (c, tri) tetrahedron and mean area
   RELAX_REPEAT: 1,            // radial relaxation passes per relaxation stage (4 stages; the spec says K = 4 passes in all)
@@ -32,8 +33,12 @@ export const PIECE_TUNING = {
   RIM_SMOOTH: 0,              // passes of tangential rim re-spacing after the snap (tuning item T1, first cut). TRIED: 3 passes made the cap triangles worse (4 species: CAP triangle under 15 deg 14.8 -> 17.1 % of regions, median smallest angle 14.2 -> 12.5 deg), so it is off; P8 may try a proper arc-length re-spacing
 };
 
-/** The detail of a piece: under 0.35 of the whole it is built at icosphere detail 2 (162 particles), else 3 (642) (CUT.md 4.3, CUT2 3.2). */
-export const pieceDetail = (frac: number): 2 | 3 => (frac < 0.35 ? 2 : 3);
+/** CUT3 4 (PHYS): the mesh detail of a piece follows its SHARE: >= 0.35 detail 3 (642 particles), 0.08 to 0.35 detail 2 (162), 0.02 to 0.08 detail 1 (42), below that detail 0 (12, the
+ *  coarsest mesh the solver supports: an icosahedron). The owner removed the 1/8 floor on 2026-10-09 (CUT3.md 2 item 1). */
+export const DETAIL_SHARE = { d3: 0.35, d2: 0.08, d1: 0.02 };
+export const pieceDetail = (frac: number): 0 | 1 | 2 | 3 => (frac >= DETAIL_SHARE.d3 ? 3 : frac >= DETAIL_SHARE.d2 ? 2 : frac >= DETAIL_SHARE.d1 ? 1 : 0);
+/** The smallest share a body is built at (the solver clamps to it; a piece of 1e-6 of the whole is a grain 1 % of the whole's radius across). */
+export const FRAC_FLOOR = 1e-6;
 
 export interface PieceBuilt {
   rest: RestShape;
@@ -166,8 +171,8 @@ export class PieceJob {
   private phi = 0;
   private search: CentreSearch | null = null;
   private X: Float64Array; private XT: Float64Array; private X5: Float64Array;
-  private readonly mask: Uint8Array;
-  private readonly bnd: Uint8Array;
+  private readonly mask: Uint16Array;
+  private readonly bnd: Uint16Array;
   private readonly e: Float64Array;       // mean edge length per vertex
   private readonly lim: Float64Array;     // 2n: max positive / negative normal offset per skin vertex
   private readonly nrm: Float64Array;     // area-weighted vertex normals
@@ -175,6 +180,9 @@ export class PieceJob {
   private snapped = false;
   private footAdded = false;
   private delta = 0;
+  private rimMode = false;                 // CUT3: the volume solve also moves the rim vertices of the cut faces (in their plane); set by a failed skin-only solve
+  private readonly rimMv: Uint8Array;      // 1 = a rim vertex that moves in rimMode
+  private readonly capG = new Float64Array(MAX_PLANES * 3);   // per plane: centroid of its boundary vertices (rimMode)
   private pass = 0;
   private readonly lows = new Float64Array(8);
 
@@ -191,9 +199,9 @@ export class PieceJob {
     this.hint = centre ? new Float64Array([centre.x, centre.y, centre.z]) : null;
     const n = this.n;
     this.X = new Float64Array(n * 3); this.XT = new Float64Array(n * 3); this.X5 = new Float64Array(n * 3);
-    this.mask = new Uint8Array(n); this.bnd = new Uint8Array(n);
+    this.mask = new Uint16Array(n); this.bnd = new Uint16Array(n); this.rimMv = new Uint8Array(n);
     this.e = new Float64Array(n); this.lim = new Float64Array(n * 2); this.nrm = new Float64Array(n * 3);
-    if (this.cell.np > 8) { this.status = 'fail'; this.why = 'planes'; }
+    if (this.cell.np > MAX_PLANES) { this.status = 'fail'; this.why = 'planes'; }
   }
 
   /** Run stages until finished, until `maxStages` have run in THIS call, or until `budgetMs` has elapsed (checked after each stage; at least one stage runs).
@@ -509,8 +517,14 @@ export class PieceJob {
 
   /* step 7a: cap interior, 12 in-plane Laplacian passes on on-plane vertices that are neither boundary nor corner */
   private sCap(): void {
-    const n = this.n, np = this.cell.np;
+    const np = this.cell.np;
     if (np === 0) { this.pass = 0; this.st = ST_SKIN; return; }
+    this.capPasses();
+    this.pass = 0; this.st = ST_SKIN;
+  }
+  /** The in-plane Laplacian passes on the interior vertices of the cap planes (sCap; rimMode runs them again after the rim slid). */
+  private capPasses(): void {
+    const n = this.n;
     const st = this.topo.nbrStart, nb = this.topo.nbrIdx, mask = this.mask, bnd = this.bnd;
     let X = this.X, XT = this.XT;
     for (let it = 0; it < PIECE_TUNING.CAP_PASSES; it++) {
@@ -526,7 +540,6 @@ export class PieceJob {
       const t = X; X = XT; XT = t;
     }
     this.X = X; this.XT = XT;
-    this.pass = 0; this.st = ST_SKIN;
   }
 
   /* step 7b: 4 radial passes on vertices on no plane */
@@ -638,8 +651,9 @@ export class PieceJob {
   }
   private volumeAtV(): void {
     const delta = this.vd[0], n = this.n, X = this.X, Y = this.XT, mask = this.mask, nrm = this.nrm, lim = this.lim;
+    const rimMv = this.rimMv;
     for (let i = 0; i < n; i++) {
-      if (mask[i] !== 0) { Y[i * 3] = X[i * 3]; Y[i * 3 + 1] = X[i * 3 + 1]; Y[i * 3 + 2] = X[i * 3 + 2]; continue; }
+      if (mask[i] !== 0 && rimMv[i] === 0) { Y[i * 3] = X[i * 3]; Y[i * 3 + 1] = X[i * 3 + 1]; Y[i * 3 + 2] = X[i * 3 + 2]; continue; }
       let d = delta;
       if (d > lim[i * 2]) d = lim[i * 2]; else if (-d > lim[i * 2 + 1]) d = -lim[i * 2 + 1];
       Y[i * 3] = X[i * 3] + d * nrm[i * 3]; Y[i * 3 + 1] = X[i * 3 + 1] + d * nrm[i * 3 + 1]; Y[i * 3 + 2] = X[i * 3 + 2] + d * nrm[i * 3 + 2];
@@ -657,6 +671,16 @@ export class PieceJob {
       const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
       for (let k = 0; k < 3; k++) { const v = tris[t + k] * 3; nrm[v] += nx; nrm[v + 1] += ny; nrm[v + 2] += nz; }
     }
+    // CUT3 rimMode: the centroid of each cap plane's boundary vertices (the rim vertices slide away from it, in their plane)
+    const rimMv = this.rimMv, bnd = this.bnd, capG = this.capG;
+    rimMv.fill(0);
+    if (this.rimMode) {
+      for (let p = 0; p < np; p++) {
+        let gx = 0, gy = 0, gz = 0, cnt = 0;
+        for (let i = 0; i < n; i++) if ((bnd[i] >> p) & 1) { gx += X[i * 3]; gy += X[i * 3 + 1]; gz += X[i * 3 + 2]; cnt++; }
+        if (cnt > 0) { capG[p * 3] = gx / cnt; capG[p * 3 + 1] = gy / cnt; capG[p * 3 + 2] = gz / cnt; }
+      }
+    }
     for (let i = 0; i < n; i++) {
       const l = Math.sqrt(nrm[i * 3] ** 2 + nrm[i * 3 + 1] ** 2 + nrm[i * 3 + 2] ** 2);
       if (l > 1e-300) { nrm[i * 3] /= l; nrm[i * 3 + 1] /= l; nrm[i * 3 + 2] /= l; } else { nrm[i * 3] = 0; nrm[i * 3 + 1] = 0; nrm[i * 3 + 2] = 0; }
@@ -666,6 +690,23 @@ export class PieceJob {
           const q = p * 4, s = pl[q] * X[i * 3] + pl[q + 1] * X[i * 3 + 1] + pl[q + 2] * X[i * 3 + 2] - pl[q + 3];
           const room = Math.max(0, s - Math.min(s, 0.005 * R0)), a = pl[q] * nrm[i * 3] + pl[q + 1] * nrm[i * 3 + 1] + pl[q + 2] * nrm[i * 3 + 2];
           if (a < -1e-12) lp = Math.min(lp, room / -a); else if (a > 1e-12) ln = Math.min(ln, room / a);
+        }
+      } else if (this.rimMode && (bnd[i] & mask[i]) !== 0 && (mask[i] & (mask[i] - 1)) === 0) {
+        // a rim vertex of ONE cap plane p (not a corner): it slides outward in its plane (away from the centroid of the rim), kept on the right side of every other plane
+        const p = 31 - Math.clz32(mask[i]), q0 = p * 4;
+        let wx = X[i * 3] - capG[p * 3], wy = X[i * 3 + 1] - capG[p * 3 + 1], wz = X[i * 3 + 2] - capG[p * 3 + 2];
+        const dn = wx * pl[q0] + wy * pl[q0 + 1] + wz * pl[q0 + 2];
+        wx -= dn * pl[q0]; wy -= dn * pl[q0 + 1]; wz -= dn * pl[q0 + 2];
+        const wl = Math.sqrt(wx * wx + wy * wy + wz * wz);
+        if (wl > 1e-12) {
+          nrm[i * 3] = wx / wl; nrm[i * 3 + 1] = wy / wl; nrm[i * 3 + 2] = wz / wl;
+          rimMv[i] = 1;
+          for (let p2 = 0; p2 < np; p2++) {
+            if (p2 === p) continue;
+            const q = p2 * 4, s = pl[q] * X[i * 3] + pl[q + 1] * X[i * 3 + 1] + pl[q + 2] * X[i * 3 + 2] - pl[q + 3];
+            const room = Math.max(0, s - Math.min(s, 0.005 * R0)), a = pl[q] * nrm[i * 3] + pl[q + 1] * nrm[i * 3 + 1] + pl[q + 2] * nrm[i * 3 + 2];
+            if (a < -1e-12) lp = Math.min(lp, room / -a); else if (a > 1e-12) ln = Math.min(ln, room / a);
+          }
         }
       }
       lim[i * 2] = lp; lim[i * 2 + 1] = ln;
@@ -701,12 +742,24 @@ export class PieceJob {
     void fhi;
     this.volumeAt(bestD);
     this.delta = bestD;
-    if (bestF > 1e-12 * target) { this.fail('volume'); return; }
+    if (bestF > 1e-12 * target || Math.abs(bestD) > this.maxDelta()) {
+      // the skin alone cannot make the volume (or only with an offset past the gate): the rim of the cut faces slides outward too, and the solve runs again from this stage (CUT3)
+      if (!this.rimMode && PIECE_TUNING.RIM_MODE && np > 0) { this.rimMode = true; return; }
+      if (bestF > 1e-12 * target) { this.fail('volume'); return; }
+    }
     this.afterVolume();
+  }
+  /** The largest skin offset a build may need (post-condition (v)): 0.05 R0, and at detail 0 / 1 also a fraction of the piece's own radius (CUT3: an inscribed 12 / 42 vertex mesh lies that far inside the region). */
+  private maxDelta(): number {
+    const R0 = this.S.R0, Rp = R0 * Math.cbrt(this.frac);
+    let m = PIECE_TUNING.DELTA_MAX * R0;
+    if (this.detail === 0) m = Math.max(m, PIECE_TUNING.DELTA_REL0 * Rp); else if (this.detail === 1) m = Math.max(m, PIECE_TUNING.DELTA_REL1 * Rp);
+    return m;
   }
   private afterVolume(): void {
     // the moved skin is in XT: swap it in
     const t = this.X; this.X = this.XT; this.XT = t;
+    if (this.rimMode) this.capPasses();   // (the rim moved: the cap's interior follows, in its plane; the volume does not change)
     this.st = ST_FINISH;
   }
 
@@ -739,7 +792,7 @@ export class PieceJob {
     const vol = meshVolume(X, tris), target = this.frac * S.v3;
     if (Math.abs(vol - target) > 1e-12 * target * 1.01) { this.fail('volume'); return; }
     // (v) the skin offset
-    if (Math.abs(this.delta) > PIECE_TUNING.DELTA_MAX * R0) { this.fail('offset'); return; }
+    if (Math.abs(this.delta) > this.maxDelta()) { this.fail('offset'); return; }
     // normalise: offset = mass centroid, restLocal = x - offset, re-centred once more so sum m restLocal = 0
     let cx = 0, cy = 0, cz = 0;
     for (let i = 0; i < n; i++) { cx += mass[i] * X[i * 3]; cy += mass[i] * X[i * 3 + 1]; cz += mass[i] * X[i * 3 + 2]; }
@@ -808,6 +861,24 @@ export function buildPiece(genome: Genome, region: PieceRegion | undefined, deta
   return job.built ?? { fail: job.why };
 }
 
+/** The build failures a finer mesh may repair (geometry of the gates); 'unsound', 'empty', 'planes', 'ray' and 'across' are not. */
+const GEOMETRY_FAILS: ReadonlySet<string> = new Set(['volume', 'offset', 'mesh', 'mass']);
+
+/** CUT3: build a piece at the detail of its share, and when that fails a geometry gate at the next finer details up to 3 (the cache holds the successes: a piece built finer
+ *  than its share's detail is found at that detail). The detail the piece ended up at is `built.detail`. */
+export function buildPieceLadder(genome: Genome, region: PieceRegion | undefined, detail: number, frac?: number, centre?: { x: number; y: number; z: number }): PieceBuilt | { fail: string } {
+  const S = getSource(genome);
+  for (let d = detail; d <= 3; d++) { const hit = cacheGet(pieceKey(S, region, d, frac)); if (hit) return hit; }
+  let last: { fail: string } = { fail: 'none' };
+  for (let d = detail; d <= 3; d++) {
+    const b = buildPiece(genome, region, d, frac, centre);
+    if (!('fail' in b)) return b;
+    last = b;
+    if (!GEOMETRY_FAILS.has(b.fail)) return b;
+  }
+  return last;
+}
+
 /* ───────────────────────────── a cut: the plan of the two children and the retry ladder ───────────────────────────── */
 
 export interface CutPlanParts {
@@ -840,6 +911,38 @@ export function planSplit(pos: ArrayLike<number>, tris: Uint32Array, pl: Float64
 }
 export const newCutPlanParts = (): CutPlanParts => ({ fa: 0, fracA: 0, fracB: 0, cA: { x: 0, y: 0, z: 0 }, cB: { x: 0, y: 0, z: 0 }, aspectA: 0, aspectB: 0 });
 
+const TS_CELL: RegionCell = { np: 0, pl: new Float64Array(4 * (MAX_PLANES + 1)) };
+const TS_M = new Float64Array(4);
+const TS_R = new Float64Array(8);
+/** Rays of the true-share quadrature (region.ts measureRegion). */
+export const TRUE_SHARE_DIRS = 200;
+/**
+ * CUT3: the shares of a cut of a COARSE parent (a piece of detail 0 or 1: 12 or 42 particles) measured on the TRUE region (the source solid cut by the parent's cell and the
+ * plane, a ray quadrature from each side's own centroid) instead of on the parent's mesh. The mesh of a coarse piece is an inflated inscribed polyhedron and splits very
+ * differently from the region it stands for (the volume of the children asked of the builder was 0.43 to 1.79 of the true region's, so about half of the builds failed);
+ * the children are built from the region, so their targets must be the region's. `cell` is the PARENT's cell and `pl` = [nx, ny, nz, d, parentFrac] the plane in W (side A: n . x >= d).
+ * `out` must hold planSplit's result for the same plane (the aspects stay the mesh's); fa, fracA, fracB, cA and cB are replaced (centroids in W). false: the region misses the plane.
+ */
+export function planSplitTrue(S: Source, cell: RegionCell, pl: Float64Array, out: CutPlanParts): boolean {
+  const np = cell.np;
+  if (np + 1 > MAX_PLANES) return false;
+  for (let side = 0; side < 2; side++) {
+    const sg = side === 0 ? 1 : -1, c = side === 0 ? out.cA : out.cB;
+    for (let k = 0; k < np * 4; k++) TS_CELL.pl[k] = cell.pl[k];
+    TS_CELL.pl[np * 4] = sg * pl[0]; TS_CELL.pl[np * 4 + 1] = sg * pl[1]; TS_CELL.pl[np * 4 + 2] = sg * pl[2]; TS_CELL.pl[np * 4 + 3] = sg * pl[3];
+    TS_CELL.np = np + 1;
+    measureRegion(S, TS_CELL, c.x, c.y, c.z, TRUE_SHARE_DIRS, TS_M);
+    measureRegion(S, TS_CELL, TS_M[1], TS_M[2], TS_M[3], TRUE_SHARE_DIRS, TS_M);   // (from its own centroid the rays cross fewer intervals: the second pass is the accurate one; 2 x 2 x 200 rays, about 3 ms)
+    TS_R[side * 4] = TS_M[0]; TS_R[side * 4 + 1] = TS_M[1]; TS_R[side * 4 + 2] = TS_M[2]; TS_R[side * 4 + 3] = TS_M[3];
+  }
+  const va = TS_R[0], vb = TS_R[4], v = va + vb;
+  if (!(v > 0) || !(va > 1e-9 * v) || !(vb > 1e-9 * v)) return false;
+  out.fa = va / v; out.fracA = pl[4] * out.fa; out.fracB = pl[4] - out.fracA;
+  out.cA.x = TS_R[1]; out.cA.y = TS_R[2]; out.cA.z = TS_R[3];
+  out.cB.x = TS_R[5]; out.cB.y = TS_R[6]; out.cB.z = TS_R[7];
+  return true;
+}
+
 /** The ladder's shifts of the latched plane's d, in R0 (4.1 step 12). */
 export const LADDER = [0, 0.004, -0.004, 0.008, -0.008, 0.012, -0.012];
 
@@ -865,20 +968,33 @@ export class CutJob {
   private job: PieceJob | null = null;
   private side = 0;
   private fa0 = 0;
+  private ladderScale = 1;
   private readonly genome: Genome;
-  private readonly parent: { region: PieceRegion | undefined; frac: number; pos: ArrayLike<number>; tris: Uint32Array };
+  private readonly parent: { region: PieceRegion | undefined; frac: number; pos: ArrayLike<number>; tris: Uint32Array; coarse?: boolean };
+  private readonly pcell: RegionCell;
+  private detailUp = 0;                        // CUT3: how many mesh details finer than its share's the current side is being tried at (a build that fails at the nominal detail is tried finer)
   private readonly nrm: { x: number; y: number; z: number };
   private readonly d0: number;
   private readonly id: number;
   private readonly R0: number;
   private readonly cache: boolean;
-  constructor(genome: Genome, parent: { region: PieceRegion | undefined; frac: number; pos: ArrayLike<number>; tris: Uint32Array }, plane: { id: number; n: { x: number; y: number; z: number }; d: number }) {
+  constructor(genome: Genome, parent: { region: PieceRegion | undefined; frac: number; pos: ArrayLike<number>; tris: Uint32Array; coarse?: boolean }, plane: { id: number; n: { x: number; y: number; z: number }; d: number }) {
     this.genome = genome; this.parent = parent; this.nrm = plane.n; this.d0 = plane.d; this.d = plane.d; this.id = plane.id;
     this.R0 = getSource(genome).R0; this.cache = true;
+    this.pcell = compileCell(parent.region, 0);
     this.regionA = { planes: [], cells: [[]] }; this.regionB = { planes: [], cells: [[]] };
     this.setPlane(plane.d);
-    if (!planChildren(parent.pos, parent.tris, parent.frac, plane.n, plane.d, this.plan)) { this.status = 'thin'; this.why = 'misses'; return; }
+    if (!this.planAt(plane.d, this.plan)) { this.status = 'thin'; this.why = 'misses'; return; }
     this.fa0 = this.plan.fa;
+    // the retry ladder's shifts follow the smaller part's size (radius ratio to a part of 1/8, which keeps the shifts of every cut whose smaller part is >= 1/8 as they were)
+    this.ladderScale = Math.min(1, Math.cbrt(Math.min(this.plan.fracA, this.plan.fracB) / 0.125));
+  }
+  /** The plan of the plane at offset d: the clip of the parent's rest mesh, and for a coarse parent (detail 0 / 1) the shares and centroids of the TRUE region (planSplitTrue). */
+  private planAt(d: number, out: CutPlanParts): boolean {
+    if (!planChildren(this.parent.pos, this.parent.tris, this.parent.frac, this.nrm, d, out)) return false;
+    if (!this.parent.coarse) return true;
+    PL5[0] = this.nrm.x; PL5[1] = this.nrm.y; PL5[2] = this.nrm.z; PL5[3] = d; PL5[4] = this.parent.frac;
+    return planSplitTrue(getSource(this.genome), this.pcell, PL5, out);
   }
   /** (Re)write the two child regions for the plane at offset d. */
   private setPlane(d: number): void {
@@ -911,11 +1027,12 @@ export class CutJob {
   }
   /** Start the build of the current side at the current rung; false when it was a cache hit or the rung was skipped (the caller loops). */
   private startSide(): boolean {
-    if (this.side === 0 && this.shiftIdx > 0) {
-      // new rung: the plane shifted; skip it when a part would fall under 1/8 or a share moves by more than 0.01
-      const d = this.d0 + LADDER[this.shiftIdx] * this.R0;
+    if (this.side === 0 && this.shiftIdx > 0 && this.detailUp === 0) {
+      // new rung: the plane shifted; skip it when a part would vanish or a share moves by more than 0.01 of the parent (CUT3: and by more than a tenth of the smaller part, and the shifts scale with the
+      // smaller part's radius: 0.012 R0 is a tenth of a piece of 1/1000; the old 1/8 floor is gone, the owner removed the limit on 2026-10-09)
+      const d = this.d0 + LADDER[this.shiftIdx] * this.R0 * this.ladderScale;
       const p = newCutPlanParts();
-      if (!planChildren(this.parent.pos, this.parent.tris, this.parent.frac, this.nrm, d, p) || p.fracA < 0.125 - 1e-4 || p.fracB < 0.125 - 1e-4 || Math.abs(p.fa - this.fa0) > 0.01) {
+      if (!this.planAt(d, p) || p.fracA < FRAC_FLOOR || p.fracB < FRAC_FLOOR || Math.abs(p.fa - this.fa0) > Math.min(0.01, 0.1 * Math.min(this.fa0, 1 - this.fa0))) {
         this.shiftIdx++;
         if (this.shiftIdx >= LADDER.length) { this.status = 'thin'; this.why = this.why || 'ladder'; }
         return false;
@@ -925,20 +1042,27 @@ export class CutJob {
       this.plan.cA = p.cA; this.plan.cB = p.cB;
     }
     const region = this.side === 0 ? this.regionA : this.regionB, frac = this.side === 0 ? this.plan.fracA : this.plan.fracB, c = this.side === 0 ? this.plan.cA : this.plan.cB;
-    const detail = pieceDetail(frac), S = getSource(this.genome), key = pieceKey(S, region, detail, frac), hit = this.cache ? cacheGet(key) : undefined;
-    if (hit) { if (this.side === 0) { this.a = hit; this.side = 1; } else { this.b = hit; this.status = 'ok'; } return false; }
-    this.job = new PieceJob(this.genome, region, detail, frac, c);
+    const d0 = pieceDetail(frac), S = getSource(this.genome);
+    // a build of this piece that exists already (the cache holds successes only) at its share's detail or a finer one (CUT3: see finishSide) is used as it is
+    let hit: PieceBuilt | undefined;
+    if (this.cache) for (let d = d0; d <= 3 && !hit; d++) hit = cacheGet(pieceKey(S, region, d, frac));
+    if (hit) { this.detailUp = 0; if (this.side === 0) { this.a = hit; this.side = 1; } else { this.b = hit; this.status = 'ok'; } return false; }
+    this.job = new PieceJob(this.genome, region, Math.min(3, d0 + this.detailUp), frac, c);
     return true;
   }
   private finishSide(j: PieceJob): void {
     this.job = null;
     if (j.status === 'unsound') { this.status = 'loose'; this.why = 'unsound'; this.badSide = this.side; return; }
     if (j.status === 'fail') {
-      // this rung failed: next rung (side A again)
+      // CUT3: a build that fails its gates at the mesh detail of its share is tried at the next finer detail first (a finer mesh follows a thin or sharp piece better; the plane stays),
+      // and only when detail 3 failed too does the retry ladder move the plane to the next rung (side A again)
+      if (GEOMETRY_FAILS.has(j.why) && j.detail < 3) { this.detailUp++; this.why = j.why; return; }
+      this.detailUp = 0;
       this.why = j.why; this.a = null; this.b = null; this.side = 0; this.shiftIdx++;
       if (this.shiftIdx >= LADDER.length) this.status = 'thin';
       return;
     }
+    this.detailUp = 0;
     if (this.side === 0) { this.a = j.built; this.side = 1; } else { this.b = j.built; this.status = 'ok'; }
   }
 }

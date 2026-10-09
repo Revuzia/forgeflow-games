@@ -79,11 +79,13 @@ export interface ShellDevApi {
   spyStart(): void;
   spyReset(): void;
   spyCalls(): { audio: Record<string, { n: number; last: unknown }>; haptics: Record<string, number> };
-  /** SHELL-4: the cut pieces as the physics sees them: per piece its share, centre, radius and the SURFACE gap to the face piece along the line
-   *  between the centres (negative = overlapping); the face piece first. Zeroes when there is nothing cut. */
-  /** the stage's dev views: how many bodies are drawn, how many with a face and how many are the legacy eyeless chunk (none in the true cut: pieces are peers) */
+  /** SHELL-4: the cut pieces as the physics sees them: per piece its share, centre, radius and the SURFACE gap to the play body (piece 0, the anchor) along the line
+   *  between the centres (negative = overlapping); the play body first, `anchor` marks it (every piece is a peer: there is no chunk). Empty when nothing is cut. */
+  /** the stage's dev views: how many bodies are drawn, how many carry a face and how many the stage flags as the legacy eyeless chunk (none in the true cut: pieces are peers; the count stays so a regression shows) */
   stageViews(): { total: number; faces: number; chunks: number } | null;
-  pieceGaps(at?: { x: number; y: number; z: number } | null): Array<{ frac: number; chunk: boolean; x: number; y: number; z: number; r: number; gap: number | null; top: number; near: number }>;
+  pieceGaps(at?: { x: number; y: number; z: number } | null): Array<{ frac: number; anchor: boolean; x: number; y: number; z: number; r: number; gap: number | null; top: number; near: number }>;
+  /** CUT3 (join rows): the cut tree as the Cutter keeps it: per piece its share, the literals of its cell (the path from the root), whether it is the anchor, and its world centre. Empty when whole. */
+  cutRegions(): Array<{ frac: number; cells: number[]; anchor: boolean; x: number; y: number; z: number }>;
   /** CUT-B S4: the cut style of the Cutter ('clean' | 'minis'); false and no change while the squishy is cut (the harness switches to Minis for the low-quality limit rows) */
   setCutStyle(style: 'clean' | 'minis'): boolean;
   /** CUT-A gate (S5a): every drawn view, the play body first: whether it is a true cut piece and the eyes it draws (world centre, the share of the eye
@@ -364,6 +366,7 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       };
       return st.views.map((x) => ({ id: x.id, piece: !!x.isPiece, eyes: st.eyeCentres!(x.id).map((c) => ({ ...c, ...(() => { const s = proj(c); return { sx: s.x, sy: s.y }; })() })) }));
     },
+    cutRegions: () => (typeof game.cut.regions === 'function' ? game.cut.regions() : []),
     pieceGaps(at) {
       const face = game.bodies.body;
       const all = [face, ...game.bodies.extras.filter((x) => x.piece).map((x) => x.body)];
@@ -382,7 +385,7 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
           const dx = c.x - f.x, dy = c.y - f.y, dz = c.z - f.z, d = Math.hypot(dx, dy, dz);
           if (d > 1e-9) { const ux = dx / d, uy = dy / d, uz = dz / d; gap = d - support(face, ux, uy, uz) - support(b, -ux, -uy, -uz); }
         }
-        return { frac: b.frac ?? 1, chunk: i > 0, x: c.x, y: c.y, z: c.z, r: b.restRadius * Math.cbrt(b.frac ?? 1), gap, top: topOf(b), near: at ? nearest(b, at) : 0 };
+        return { frac: b.frac ?? 1, anchor: i === 0, x: c.x, y: c.y, z: c.z, r: b.restRadius * Math.cbrt(b.frac ?? 1), gap, top: topOf(b), near: at ? nearest(b, at) : 0 };
       });
     },
   };

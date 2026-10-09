@@ -152,16 +152,21 @@ const stripComments = (s: string): string => s.replace(/\/\*[\s\S]*?\*\//g, '');
   check('css: z-index is a --wh-z-* token (or 0 / 1 for stacking inside a component)', zLit.length === 0, zLit.join(','));
   check('css: every kit component class is k- prefixed (no collision with .panel .toast .seg .icon .cta .row)', [...css.kit.matchAll(/(?:^|[\s,>+~(])\.([a-z][a-z0-9_-]*)/gm)].map((m) => m[1]).filter((c) => !c.startsWith('k-') && c !== 'sr-only').length === 0,
     [...new Set([...css.kit.matchAll(/(?:^|[\s,>+~(])\.([a-z][a-z0-9_-]*)/gm)].map((m) => m[1]).filter((c) => !c.startsWith('k-')))].join(','));
-  // "do NOT restyle existing screens yet": base.css may only add custom properties on <body> plus the three rules styles.css already has verbatim
+  // RE-SPECIFIED at B7 (UI.md 8: "delete every legacy rule the new kit replaces"). B0 pinned "base.css repeats three rules styles.css already has verbatim" while the legacy sheet still existed;
+  // B7 moved them: the global reset, [hidden] and .sr-only live ONLY in base.css now (one source), together with the one visually-hidden rule for the labels that leave a compact bar / dock.
+  // base.css therefore holds: the three globals, that one rule (its selectors are listed here, so a new one is a decision), `body` custom properties only; styles.css must NOT repeat any of them.
   const baseRules = scan(css.base).filter((b) => b.stack.length === 0).map((b) => b.prelude);
   const bodyBlock = /(?:^|\n)body\s*\{([^}]*)\}/.exec(css.base)?.[1] ?? '';
   const stylesCss = stripComments(read('src/ui/styles.css'));
-  check('css: base.css restyles nothing that exists (non-k rules: *, [hidden], .sr-only, body custom properties only, all identical to styles.css); kit.css and a11y.css are k- classes and body[data-*] hooks only',
-    baseRules.filter((r) => !r.startsWith('.k-') && !r.startsWith('@media')).sort().join('|') === '*, *::before, *::after|.sr-only|[hidden]|body'
+  const hiddenRule = baseRules.find((r) => r.startsWith('.sr-only')) ?? '';
+  const hiddenSel = hiddenRule.replace(/\s+/g, ' ').trim();   // (a comma inside :is() makes a split by comma wrong: compare the whole prelude)
+  check('css: base.css = the three globals (*, [hidden], .sr-only), the compact-bar label hiding (a listed set of selectors) and body custom properties only; styles.css does not repeat them; a11y.css is k- classes and body[data-*] hooks only',
+    baseRules.filter((r) => !r.startsWith('.k-') && !r.startsWith('@media') && !r.startsWith('.sr-only')).sort().join('|') === '*, *::before, *::after|[hidden]|body'
+    && hiddenSel === '.sr-only, .opts:is([data-labels="icon"], [data-labels="tight"]) .opts-btn--ic > .opts-label, .opts[data-labels="tight"] .opts-seg .k-seg-face > span, .opts:not([data-labels="long"]) .snap-tint-word, .dock:not([data-form="full"]) .dock-tool-label, .dock:not([data-form="full"]) .dock-hoard .hoard-btn-word'
     && bodyBlock.split(';').map((d) => d.trim()).filter(Boolean).every((d) => d.startsWith('--'))
-    && stylesCss.includes('*, *::before, *::after { box-sizing: border-box; }') && stylesCss.includes('[hidden] { display: none !important; }') && stylesCss.includes('.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }')
+    && !/box-sizing\s*:\s*border-box/.test(stylesCss) && !/\[hidden\]\s*\{/.test(stylesCss) && !/\.sr-only\b/.test(stylesCss)
     && scan(css.a11y).filter((b) => b.stack.length <= 1 && b.prelude && !b.prelude.startsWith('@')).every((b) => /^(body|\.k-|\[)/.test(b.prelude.split(',')[0].trim()) || /^body/.test(b.prelude)),
-    baseRules.filter((r) => !r.startsWith('.k-')).join(' | '));
+    baseRules.filter((r) => !r.startsWith('.k-')).join(' | ').slice(0, 300));
   check('css: the focus ring is an outline plus the ink halo (box-shadow) and is composed with the component shadow, never `none`', /outline:\s*var\(--k-ring-w\)\s+solid\s+var\(--k-ring\)/.test(css.kit) && /0 0 0 var\(--k-halo-spread\) var\(--k-halo\)/.test(css.kit) && !/box-shadow:\s*var\(--k-sh,\s*none\)/.test(css.kit));
 
   // a11y.css: every mode exists and the Calm selector is the one the shell writes (data-calm="true", never the bare attribute)
@@ -197,6 +202,11 @@ const stripComments = (s: string): string => s.replace(/\/\*[\s\S]*?\*\//g, '');
     d(1280, 800) === 'full/above/dock/labels' && d(888, 500) === 'compact/above/dock/icons' && d(390, 844) === 'compact/above/dock/icons' && d(320, 568) === 'compact/above/dock/icons'
     && d(844, 390) === 'compact/inline/row/icons' && d(568, 320) === 'compact/inline/row/icons' && d(632, 355) === 'compact/inline/row/icons' && d(358, 201) === 'bare/inline/dock/icons',
     KIT_SIZES.map((k) => `${k.w}x${k.h}=${d(k.w, k.h)}`).join(' '));
+  // B7: the Table | Float pair made the full dock 772 px wide; under WIDE_FULL_MIN_W (1120) it would slide under the name plate and the ring, so a narrow wide window (a tablet landscape) takes the compact form
+  check('dock: wide and under 1120 px takes the compact form (1024x768, 1119x700, 820x600), from 1120 px the full one; the layout class stays wide (R06)',
+    d(1024, 768) === 'compact/above/dock/icons' && d(1119, 700) === 'compact/above/dock/icons' && d(820, 600) === 'compact/above/dock/icons' && d(1120, 700) === 'full/above/dock/labels' && d(1366, 768) === 'full/above/dock/labels'
+    && layoutFor(1024, 768).layout === 'wide' && layoutFor(1024, 768).narrow && !layoutFor(1120, 700).narrow && !layoutFor(1024, 768).short && sameLayout(layoutFor(1000, 700), layoutFor(1001, 701)) && !sameLayout(layoutFor(1119, 700), layoutFor(1120, 700)),
+    [d(1024, 768), d(1119, 700), d(1120, 700)].join(' '));
   const fakeBody = { dataset: {} as Record<string, string | undefined> } as unknown as HTMLElement;
   applyLayout(layoutFor(358, 201), fakeBody);
   check('dock: applyLayout writes body[data-dock] (the form)', fakeBody.dataset.dock === 'bare');

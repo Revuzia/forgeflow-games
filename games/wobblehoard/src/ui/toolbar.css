@@ -22,7 +22,7 @@ body {
   --dk-top: calc(var(--dk-t) + var(--dk-inset-t));      /* strip: the dock's top edge */
   --dk-reserve-r: 0px;                                  /* strip, tiny: width the HUD keeps on the right (Snd, Menu, FS | ring, Open) */
 }
-body[data-layout="wide"][data-density="short"] { --dk-h: 52px; --dk-b: 12px; --dk-opt-h: 48px; }
+body[data-layout="wide"][data-dock="compact"] { --dk-h: 52px; --dk-b: 12px; --dk-opt-h: 48px; }
 body[data-layout="stack"] { --dk-h: 52px; --dk-b: 14px; --dk-opt-h: 56px; }
 body[data-layout="strip"] { --dk-h: 52px; --dk-opt-h: 44px; --dk-reserve-r: 104px; }
 body[data-layout="tiny"] { --dk-h: 44px; --dk-b: 6px; --dk-opt-h: 44px; --dk-reserve-r: 128px; }

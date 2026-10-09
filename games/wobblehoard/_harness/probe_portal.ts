@@ -35,7 +35,7 @@ import type { TrophyToast } from '../src/shell/trophyToast.ts';
 import { ACH_GAP_MS, WHOAMI_TRIES, WHOAMI_WAIT_MS, createPortalBridge, portalOriginAllowed } from '../src/portal/bridge.ts';
 import type { OutMsg, PortalEnv } from '../src/portal/bridge.ts';
 import { PRIVACY_LINE, accountLine, trophyLine } from '../src/portal/copy.ts';
-import { MAX_PIECES } from '../src/shell/cut.ts';
+import { PIECE_CEILING } from '../src/shell/cut.ts';   // (re-specified: the owner removed the piece limits on 2026-10-09; the safety ceiling replaces the old MAX_PIECES record)
 
 let bad = 0, total = 0;
 const check = (id: string, name: string, ok: boolean, extra = ''): void => { total++; if (!ok) bad++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${id} ${name}${extra ? '  ' + extra : ''}`); };
@@ -85,7 +85,7 @@ check('P10', 'tier finds are the catalog\'s tier indices: rare 2, epic 3, legend
   && trig('all_fifty').min === CATALOG.length && trig('species_10').min === 10 && trig('species_25').min === 25 && trig('species_40').min === 40, `catalog ${CATALOG.length}`);
 const numWord = MERGE_COST === 2 ? 'two' : MERGE_COST === 3 ? 'three' : '?';
 check('P11', 'first_merge says the merge cost in words (MERGE_COST), so the text cannot go stale when the cost flips', new RegExp(`\\b${numWord}\\b`, 'i').test(ACH_BY_SLUG.get('first_merge')!.description), `MERGE_COST ${MERGE_COST}`);
-check('P12', 'four_pieces is reachable: the Minis limit is at least 4 pieces even at the low quality tier (cut.ts MAX_PIECES)', trig('four_pieces').min! <= MAX_PIECES.low, `Minis low ${MAX_PIECES.low}, med ${MAX_PIECES.med}`);
+check('P12', 'four_pieces is reachable: the safety ceiling (cut.ts PIECE_CEILING, the same at every quality tier; re-specified, the owner removed the old limits on 2026-10-09) is at least 4 pieces', trig('four_pieces').min! <= PIECE_CEILING, `ceiling ${PIECE_CEILING}`);
 const LOSS = /\b(lose|lost|losing|miss|missed|fail|failed|failure|streak|expire|expires|expired|penalty|punish|hurry|rush|only \d+ left|last chance|never)\b/i;
 check('P13', 'kind wording: no loss, miss, streak, expiry or pressure words in any name or description', ACHIEVEMENTS.every((d) => !LOSS.test(d.name) && !LOSS.test(d.description)), ACHIEVEMENTS.filter((d) => LOSS.test(d.name + ' ' + d.description)).map((d) => d.slug).join(','));
 const bad1 = parseAchievements({ achievements: [{ slug: 'Bad Slug', name: 'x', description: 'y', tier: 'bronze', points: 5, hidden: false, trigger: { on: 'task' } }, { slug: 'ok_one', name: 'x', description: 'y', tier: 'platinum', points: 5, hidden: false, trigger: { on: 'task' } },

@@ -80,6 +80,12 @@ export class Core {
    */
   readonly offset = new THREE.Vector3();
   kept = 1;
+  /** CUT3: the least kept share that draws the blob (0.002 = the old rule; BodyView.setLod raises it for a small piece among many). */
+  minKept = 0.002;
+  /** CUT3: a small mini among many draws neither the blob nor the halo (the jelly's own analytic glow still carries the ember); BodyView.setLod sets it. */
+  private hidden = false;
+  private manyFaces = false;
+  setHidden(h: boolean): void { if (h === this.hidden) return; this.hidden = h; if (!h) this.blob.visible = !this.lite; }
   private cut = false;
   private cells: readonly { n: { x: number; y: number; z: number }; d: number }[] = [];
   private clipCaps: number[] = [];
@@ -139,7 +145,7 @@ export class Core {
 
   /** The kept share of the sphere (rc = 0.17 x scale x coreSize; the sphere's centre is at distance d_k inside plane k) and which cut faces cross it. */
   private recomputeKept(): void {
-    this.clipCaps = []; this.kept = 1;
+    this.clipCaps = []; this.kept = 1; this.manyFaces = false;
     if (!this.cut) return;
     const rc = this.radius * this.style.coreSize, near: { k: number; s: number }[] = [];
     for (let k = 0; k < this.cells.length; k++) {
@@ -150,6 +156,9 @@ export class Core {
     }
     near.sort((a, b) => a.s - b.s);
     this.clipCaps = near.slice(0, 2).map((x) => x.k);
+    // CUT3: the blob is clipped by at most two cut faces (two clip planes): a piece whose cell has THREE or more faces crossing the ember (a shard of a squishy cut many times) would show the sphere poking out of
+    // its other faces as a loose pink ball; it draws no blob there (the camera-facing halo, scaled by the share it holds, and the jelly's own analytic glow still carry its light)
+    this.manyFaces = near.length > 2;
   }
 
   /** Rarity tier changed: recolour (Uncommon warm core, Mythic prism core) and re-scale on the next update. */
@@ -200,7 +209,7 @@ export class Core {
         const pl = this.clipPlanes[j], k = j < this.clipCaps.length ? this.clipCaps[j] : -1, cap = k >= 0 && caps ? caps[k] : undefined;
         if (cap && cap.live) { pl.normal.set(-cap.nx, -cap.ny, -cap.nz); pl.constant = cap.d; } else { pl.normal.set(0, 0, 0); pl.constant = 1e6; }
       }
-      this.blob.visible = !this.lite && this.kept > 0.002;
+      this.blob.visible = !this.lite && this.kept > this.minKept && !this.manyFaces;
       this.amtK += (Math.max(this.kept, CORE_TUNING.pieceFloor) - this.amtK) * (1 - Math.exp(-dt / 0.25));
     }
     this.center.set(c.x, c.y, c.z);
@@ -220,6 +229,7 @@ export class Core {
     const hs = (0.28 + 0.4 * this.glow) * st.haloMul * (1 + 0.7 * k) * (this.lite ? 0.85 : 1) * pulse * b * (this.cut ? this.kept : 1);
     // same soft knee as the jelly's inner glow: past 0.5 the halo keeps growing, slowly, so stacked glows saturate in hue instead of whiting out
     this.halo.set(c.x, c.y, c.z, r * (3.4 + 0.3 * k) * st.haloSize, hs < 0.5 ? hs : 0.5 + (hs - 0.5) / (1 + (hs - 0.5) / 0.4));
+    if (this.hidden) { this.blob.visible = false; this.halo.mesh.visible = false; }
   }
 
   dispose(): void {

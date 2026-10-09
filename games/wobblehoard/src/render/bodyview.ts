@@ -13,6 +13,7 @@ import { Face } from './face.ts';
 import { Fx } from './fx.ts';
 import { FrameHold } from './framing.ts';
 import { JellyView } from './jelly.ts';
+import { LOD_TUNING } from './lod.ts';
 import { isCutPiece } from './pieceBuild.ts';
 import { buildPieceEyes } from './pieceEyes.ts';
 import { wholeRefFor } from './wholeRef.ts';
@@ -25,6 +26,8 @@ import { TackStrands } from './strands.ts';
 type TipSphere = { x: number; y: number; z: number; r: number; depth: number };
 /** Calm effects: the cut seam's strength on top of the stage's calm halving (see update). */
 const CALM_SEAM = 0.45;
+/** CUT3 small-piece look (lod 1): the share of the ember a piece must hold to draw the ember's blob (a sliver draws none; the jelly's own glow still carries it). */
+const LOD_MIN_KEPT = 0.06;
 
 export class BodyView {
   readonly id: number;
@@ -82,6 +85,22 @@ export class BodyView {
   readonly isPiece: boolean;
   /** SR2: this body's held extent for the band framing (framing.ts). */
   readonly hold = new FrameHold();
+  /**
+   * CUT3 (lod.ts, _spec/CUT3.md 3): 0 = everything; 1 = one of the MANY small pieces (the stage keeps the LOD_TUNING.fullViews largest views at 0, set every frame): its table shadow and
+   * light pool fade out (and stop drawing), it has no tier FX / glitter / bubbles / aura, and a mini among many draws no ember (a piece's ember: the stage lets the two that hold the most draw it). Its jelly and its
+   * eyes are drawn as always; a finger on it still strings.
+   */
+  private lodNow = 0;
+  get lod(): number { return this.lodNow; }
+  setLod(l: 0 | 1): void {
+    if (l === this.lodNow) return;
+    this.lodNow = l;
+    this.decals.wanted = l === 0;
+    this.fx.group.visible = l === 0;
+    this.rarity.group.visible = l === 0 && !this.chunk;
+    this.core.minKept = l === 0 ? 0.002 : LOD_MIN_KEPT;
+    this.core.setHidden(l === 1 && !this.isPiece);   // (a small mini among many: no ember blob / halo; a true piece draws the ember it really holds)
+  }
   /** 0..1, set by the stage every frame: every CUT glow on this body is held down by it (calm effects, a recent ceremony flash). */
   glowK = 1;
   // CUT seam (setCutSeam): the plane in the BODY's world space (the render offset is added per frame), eased strength
@@ -237,7 +256,7 @@ export class BodyView {
     u.uSeamAmt.value = this.seamAmt;
     u.uSeamW.value = 0.03 * this.scale * fs;
     u.uSpotR.value = 0.16 * this.scale * fs;
-    this.fx.update(dt, time, body);
+    if (this.lodNow === 0) this.fx.update(dt, time, body);   // (CUT3: a small piece among many draws no FX: no glitter, no bubbles, no dust)
     const tell = Math.min(1, Math.max(0, this.extraPoolTell)) * Math.min(1, this.extraPool * 2);
     if (tell !== this.poolTellNow) {   // the ceremony light on the table, in the tier colour (no allocation: the setter copies)
       this.poolTellNow = tell;
@@ -256,7 +275,7 @@ export class BodyView {
       this.fx.spawn('bubbles', this.snapAt, 0);
     }
     if (camera) this.rarity.frameFit = Math.min(1, Math.max(0.72, camera.aspect / 0.75));
-    this.rarity.update(dt, time, body, fp.rx, fp.rz, floatT, this.frameRoom);
+    if (this.lodNow === 0) this.rarity.update(dt, time, body, fp.rx, fp.rz, floatT, this.frameRoom);
   }
 
   private readonly snapAt = { x: 0, y: 0, z: 0 };
@@ -273,7 +292,12 @@ export class BodyView {
       const ref = wholeRefFor({ vertexCount: (w.restLocal.length / 3) | 0, indices: w.indices, restLocal: w.restLocal }, w.radius, this.genome);
       return new Face(this.proxy, this.genome, this.jelly, hub, buildPieceEyes(this.proxy.restLocal, this.proxy.indices, pc, pb, ref));
     }
-    return new Face(this.proxy, this.genome, this.jelly, hub);
+    return new Face(this.proxy, this.genome, this.jelly, hub, undefined, this.faceLod);
+  }
+  /** CUT3: a small mini (a complete copy, not a true piece; body scale under 0.7) draws its eyes from a coarser dome in one pass: sqrt of its size, 0.4 .. 1 (a whole stays 1 and two passes, exactly as before). */
+  private get faceLod(): { domeQ: number; singlePass: boolean } | undefined {
+    const s = this.scale;
+    return this.isPiece || !(s < 0.7) || !LOD_TUNING.enabled ? undefined : { domeQ: Math.max(0.4, Math.min(1, Math.sqrt(s))), singlePass: true };
   }
   private rebuildFace(): void {
     const old = this.face;

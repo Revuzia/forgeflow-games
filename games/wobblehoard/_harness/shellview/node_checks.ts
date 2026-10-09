@@ -567,7 +567,7 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
 
 /* ───────────────────────── 5d. CUT & RECONNECT, the shell side (CUT.md 1, 2, 4; cut.ts) against cut-capable mock bodies ───────────────────────── */
 {
-  const { createCutter, PIECE_MIN, JOIN_ALL_S, JOIN_HOLD_S, JOIN_S, NECK_DEFAULT_S, NECK_HOLD_S, HOME_MAX_S, supportAlong } = await import('../../src/shell/cut.ts');
+  const { createCutter, SHARE_EPS, JOIN_ALL_S, JOIN_HOLD_S, JOIN_S, NECK_DEFAULT_S, NECK_HOLD_S, HOME_MAX_S, supportAlong } = await import('../../src/shell/cut.ts');
   const { createBodyManager } = await import('../../src/shell/bodies.ts');
   const { createMockBody } = await import('../mocks.ts');
   type V = { x: number; y: number; z: number };
@@ -595,7 +595,7 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
       return (Math.PI * hgt * hgt * (3 * R - hgt) / 3) / (4 / 3 * Math.PI * R * R * R);
     };
     m.setNeck = (pl: unknown, t: number) => { if (pl) { b.necks++; b.lastNeck = t; } else b.lastNeck = 0; };
-    m.setFrac = (f: number, sec: number) => { b.fracCalls.push([f, sec]); b.frac = Math.min(1, Math.max(PIECE_MIN, f)); };
+    m.setFrac = (f: number, sec: number) => { b.fracCalls.push([f, sec]); b.frac = Math.min(1, Math.max(SHARE_EPS, f)); };
     m.tremble = (a: number) => { b.trembles.push(a); };
     // moveTo: a spring toward the point on the table (the mock slides 1.5 m/s while stepped, horizontally, like the physics on the table)
     let goal: V | null = null;
@@ -713,10 +713,10 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const ct = createCutter({
       bodies: bm, stage: st, audio: W.w.audio, haptics: W.w.haptics, createBody: W.w.deps.createBody, quality: () => 'low', calm: () => false, gravity: () => true,
       simTime: () => t, viewport: () => ({ w: 800, h: 600 }), activeBody: () => active ?? bm.body, touching: () => touching, drag: (out) => { if (!dragV || !touching) return false; out.x = dragV.x; out.y = dragV.y; out.z = dragV.z; return true; }, beforeChange() {}, clearMat: () => { const n = matOut; matOut = 0; return n; },
-      panOf: () => 0, say: (s2) => notices.push(s2), report: (e) => { throw e; },
+      panOf: () => 0, say: (s2) => notices.push(s2), report: (e) => { throw e; }, ceiling: 4,
     });
     const step = (sec: number): void => { for (let i = 0; i < Math.round(sec * 60); i++) { t += 1 / 60; ct.update(1 / 60); } };
-    // X02: an edge cut that would leave under 1/8 is refused (a wobble, a line), nothing changes
+    // X02, RE-SPECIFIED because the owner removed the limit on 2026-10-09 (CUT3.md 2.1): an edge cut that leaves under 1/8 is no longer refused ("Too small to cut there"): it CUTS, the smaller part is a crumb
     const b0 = bm.body as CutMock;
     const edge = { point: { x: 0.5 * 0.9, y: 0.4, z: 0 }, normal: { x: 1, y: 0, z: 0 } };
     const fEdge = (b0 as unknown as { measureCut(p: unknown): number }).measureCut(edge);
@@ -728,20 +728,23 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const top = proj({ x: 0.47, y: 0.85, z: 0 }), bot = proj({ x: 0.47, y: -0.05, z: 0 });
     matOut = 2;
     const rEdge = ct.swipe(top.x, top.y, bot.x, bot.y);
-    check('X02 shell: a cut that would leave a piece under 1/8 of the whole is refused ("Too small to cut there..."), with a wobble; nothing is replaced and the mat is not touched',
-      fEdge < PIECE_MIN && rEdge === 'small' && ct.pieces === 1 && b0.trembles.length === 1 && notices.some((n) => /Too small/.test(n)) && matOut === 2, `${rEdge}; share ${fEdge.toFixed(3)}; ${notices.join(' | ')}`);
-    step(0.4);
-    check('CUT: the refusal wobble ends by itself (tremble back to 0)', b0.trembles.at(-1) === 0, b0.trembles.join());
+    step(NECK_DEFAULT_S + NECK_HOLD_S + 0.05);
+    const fEdgeKept = ct.fracs().slice().sort((p, q) => p - q);
+    check('X02 shell (RE-SPECIFIED, the owner removed the limit on 2026-10-09): a swipe along the very edge that leaves under 1/8 of the whole is NO LONGER refused: it cuts a small piece off (no "Too small" line, no wobble), the shares sum to 1',
+      fEdge < 0.125 && rEdge === 'cut' && ct.pieces === 2 && b0.trembles.length === 0 && !notices.some((n) => /Too small|as small as it gets|as many pieces/.test(n)) && Math.abs(fEdgeKept[0] - fEdge) < 0.02 && Math.abs(fEdgeKept[0] + fEdgeKept[1] - 1) < 1e-9, `${rEdge}; share ${fEdge.toFixed(3)}; fracs ${fEdgeKept.map((f) => f.toFixed(4)).join('+')}; ${notices.join(' | ')}`);
     // a short swipe and a miss
     check('CUT: a swipe shorter than 24 px is not a cut; a swipe beside the squishy misses', ct.swipe(400, 300, 410, 300) === 'short' && ct.swipe(20, 20, 20, 120) === 'miss');
-    // (this mock world cuts MINIS: the mock bodies have no planCut, so the limits here are the Minis record, 4 at low) cut down to the low-quality limit of 4 pieces: each Split in two cuts the largest piece; the 5th is refused
+    // (this mock world cuts MINIS: the mock bodies have no planCut.) The safety ceiling is lowered to 4 by the test dep `ceiling` (the real one is 64, checked in cutter_checks): each Split in two cuts the largest
+    // piece after the edge crumb above; the one past the ceiling is refused with the kind line. RE-SPECIFIED, the owner removed the limits (6 pieces, 4 on low, no piece under 1/8) on 2026-10-09.
     const res: string[] = [];
-    for (let i = 0; i < 4; i++) { res.push(ct.splitInTwo()); step(NECK_DEFAULT_S + NECK_HOLD_S + 0.05); }
-    check('X02 shell (limits): at low quality the squishy makes at most 4 pieces; the next cut is refused ("That\'s as many pieces as it can make."); the first cut put the mat squishies back',
-      res.slice(0, 3).join() === 'cut,cut,cut' && res[3] === 'limit' && ct.pieces === 4 && notices.some((n) => /as many pieces/.test(n)) && matOut === 0 && notices.some((n) => /went back on the shelf/.test(n)), `${res.join()} pieces ${ct.pieces} ${ct.fracs().map((f) => f.toFixed(3)).join('+')}`);
+    for (let i = 0; i < 3; i++) { res.push(ct.splitInTwo()); step(NECK_DEFAULT_S + NECK_HOLD_S + 0.05); }
+    check('X02 shell (the ceiling, test dep ceiling 4; RE-SPECIFIED 2026-10-09): the pieces stop at the ceiling; the next cut is refused with the KIND line ("That is a lot of pieces" kind line, cutText.lotOfPieces), with a wobble; the first cut put the mat squishies back',
+      res.slice(0, 2).join() === 'cut,cut' && res[2] === 'limit' && ct.pieces === 4 && ct.maxPieces === 4 && !ct.canSplit && notices.at(-1) === "That's a lot of pieces! Reconnect some to keep cutting." && matOut === 0 && notices.some((n) => /went back on the shelf/.test(n)), `${res.join()} pieces ${ct.pieces} ${ct.fracs().map((f) => f.toFixed(3)).join('+')}`);
+    step(0.4);
+    check('CUT: the refusal wobble ends by itself (tremble back to 0)', ct.fracs().length === 4 && [bm.body, ...bm.extras.map((x) => x.body)].some((b3) => (b3 as CutMock).trembles.length > 0) && [bm.body, ...bm.extras.map((x) => x.body)].every((b3) => (b3 as CutMock).trembles.length === 0 || (b3 as CutMock).trembles.at(-1) === 0));
     const sum = ct.fracs().reduce((a2, b2) => a2 + b2, 0);
-    check('X01 shell: after three cuts the shares still sum to exactly 1, every piece at least 1/8; RE-SPECIFIED 2026-10-08: four peers (the play body is the one anchor, three extra pieces), none built with a chunk flag (the regions as leaves of one tree: cutter_checks.ts, section nested, on the real clean engine)',
-      Math.abs(sum - 1) < 1e-9 && ct.fracs().every((f) => f >= PIECE_MIN - 1e-9) && bm.extras.filter((x) => x.piece).length === 3 && (bm.body as CutMock).piece?.chunk === false && bm.extras.every((x) => (x.body as CutMock).piece?.chunk === false), `sum ${sum}`);
+    check('X01 shell: after three cuts the shares still sum to exactly 1 and every piece is positive (the edge crumb included; no 1/8 minimum since 2026-10-09); RE-SPECIFIED 2026-10-08: four peers (the play body is the one anchor, three extra pieces), none built with a chunk flag (the regions as leaves of one tree: cutter_checks.ts, section nested, on the real clean engine)',
+      Math.abs(sum - 1) < 1e-9 && ct.fracs().every((f) => f > 0) && bm.extras.filter((x) => x.piece).length === 3 && (bm.body as CutMock).piece?.chunk === false && bm.extras.every((x) => (x.body as CutMock).piece?.chunk === false), `sum ${sum}`);
     // the touch-to-join: a finger on a twin held against the anchor for JOIN_HOLD_S starts the join; the bridge rises; rejoin at the end
     const anchor = bm.body as CutMock, twin = bm.extras.find((x) => x.piece)!.body as CutMock;
     /** stand a mock piece with its centre at `at`, its skin (the vertices) carried along; the SURFACE gap to `to` along +x is then `gap` (the first version of this check moved only the centre, so the support read -1 m) */
@@ -856,6 +859,22 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
     const stored = Object.keys(mem.dump?.() ?? {}).map((k) => `${k}=${mem.getItem(k)}`).join('\n');
     check('X05 shell: the Hoard never sees a piece (items unchanged through every cut and reconnect), and nothing about pieces or fractions is stored',
       r.app.hoard.items().length === items.length && stored.length > 0 && !/piece|chunk|frac|region|cells|planes/i.test(stored), `items ${items.length} -> ${r.app.hoard.items().length}; ${stored.length} chars stored`);
+    // U07 / CUT3.md 5 (2026-10-09, no piece limit): the leave paths reconnect first at 24 pieces too, the meter pays nothing for 23 cuts and the Hoard never sees a piece
+    {
+      const sp0 = r.app.hoard.meter().sp, n0 = r.app.hoard.items().length;
+      for (let i = 0; i < 23; i++) { r.app.cut.splitInTwo(); run2(r.w, r.app, neckMs); }
+      const had = r.app.cut.pieces, paid = r.app.hoard.meter().sp, itemsDuring = r.app.hoard.items().length;
+      const res24: Record<string, boolean> = {};
+      r.app.setHidden(true); r.w.clock.t += 61_000; r.app.setHidden(false);
+      res24.hidden = r.app.cut.pieces === 1 && r.app.bodies.extras.length === 0;
+      for (let i = 0; i < 23; i++) { r.app.cut.splitInTwo(); run2(r.w, r.app, neckMs); }
+      res24.again = r.app.cut.pieces === 24;
+      const other2 = items.find((it) => it.id !== r.app.identity.itemId)!;
+      r.app.switchTo(other2.id);
+      res24.switch = r.app.cut.pieces === 1 && r.app.bodies.extras.length === 0 && r.app.identity.itemId === other2.id;
+      check('U07 shell (CUT3): 23 cuts make 24 pieces, the meter paid nothing and the Hoard saw none; the tab hidden over 60 s and a switch of squishy each reconnect all 24 first (one body, nothing on the mat)',
+        had === 24 && paid === sp0 && itemsDuring === n0 && Object.values(res24).every(Boolean), JSON.stringify({ had, sp: [sp0, paid], items: [n0, itemsDuring], res24 }));
+    }
     // tool state: Cut and Snap route the pointer away from the gestures; Escape-level setTool('hand') restores them
     r.app.setTool('cut');
     const fd0 = (r.app.body as CutMock).rec.count('fingerDown');
@@ -1236,7 +1255,7 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
 /* ───────────────────────── 7g. SHELL-4: the Cut tool on the REAL SoftBody (the mock bodies of 5d prove the logic; this proves it against the real physics' measureCut / setNeck / pieces / setFrac) ───────────────────────── */
 {
   const { SoftBody } = await import('../../src/physics/softbody.ts');
-  const { createCutter, MAX_PIECES_CLEAN, PART_GAP_DEFAULT, PART_S_DEFAULT, supportAlong, JOIN_ALL_S, BRIDGE_HOLD_S } = await import('../../src/shell/cut.ts');
+  const { createCutter, PART_GAP_DEFAULT, PART_S_DEFAULT, supportAlong, JOIN_ALL_S, BRIDGE_HOLD_S } = await import('../../src/shell/cut.ts');
   void createCutter;
   const g = makeStarterGenome();
   const w = createMockWorld({ storage: null });
@@ -1290,12 +1309,12 @@ async function settle(r: Rig, ms = 0): Promise<void> { for (let i = 0; i < 4; i+
   check(`X19 parting: the scripted parting opens the pair to G ${Gw.toFixed(3)} m +-20 % by PART_S ${PART_S_DEFAULT} s (measured ${openAtPS.toFixed(3)} m) and holds to 4 s (drift under 1 cm; measured ${(open4 - openAtPS).toFixed(3)} m)`,
     Math.abs(openAtPS - Gw) <= 0.2 * Gw && Math.abs(open4 - openAtPS) < 0.01, `G ${Gw.toFixed(3)}, at PART_S ${openAtPS.toFixed(3)}, at 4 s ${open4.toFixed(3)}`);
   check('X06 real physics: cutting paid the meter nothing and the Hoard saw no piece', app.hoard.meter().sp === fill0 && app.hoard.items().length === items0 && app.mat.count === 1, `sp ${fill0} -> ${app.hoard.meter().sp}`);
-  // more cuts, then the refusal numbers on the real physics (a cut that would leave a piece under 1/8 is refused: the whole's edge)
-  // RE-SPECIFIED because the owner changed the design on 2026-10-08: the clean style's limit is MAX_PIECES_CLEAN (2 in the first build), so the second Split in two is the LIMIT, refused in words (nested cuts: cutter_checks.ts, section nested, with the test dep maxClean)
+  // a second Split in two on the real physics. RE-SPECIFIED because the owner removed the piece limit on 2026-10-09 (it was the limit of 2 pieces, refused in words, from 2026-10-08): the second press now just makes 3 pieces
+  // (the largest piece halved: 0.5 + 0.25 + 0.25); deeper nesting: cutter_checks.ts, section nested and u01
   const r2 = app.cut.splitInTwo(); settleIdle(); go(500);
-  const f3 = app.cut.fracs(), sum3 = f3.reduce((s, f) => s + f, 0), room3 = MAX_PIECES_CLEAN >= 3;
-  check(`X01 real physics: a second Split in two (the biggest piece) ${room3 ? 'makes 3 pieces' : `is the LIMIT (MAX_PIECES_CLEAN ${MAX_PIECES_CLEAN}): refused with "That's as many pieces as it can make.", 2 pieces stay`}; shares sum to 1, none under 1/8`,
-    Math.abs(sum3 - 1) < 0.005 && f3.every((f) => f >= 0.125 - 1e-6) && (room3 ? r2 === 'cut' && f3.length === 3 : r2 === 'limit' && f3.length === 2 && notices.at(-1) === "That's as many pieces as it can make."), `${r2}; ${f3.map((f) => f.toFixed(3)).join(' + ')}`);
+  const f3 = app.cut.fracs(), sum3 = f3.reduce((s, f) => s + f, 0);
+  check('X01 real physics (RE-SPECIFIED 2026-10-09, no limit): a second Split in two (the biggest piece) makes 3 pieces, shares sum to 1, all positive, the biggest piece was the one halved (0.5 + 0.25 + 0.25 within a few percent)',
+    Math.abs(sum3 - 1) < 0.005 && f3.every((f) => f > 0)&& r2 === 'cut' && f3.length === 3 && Math.max(...f3) < 0.56 && Math.min(...f3) > 0.2, `${r2}; ${f3.map((f) => f.toFixed(3)).join(' + ')}`);
   // Reconnect all: the bridge is held in view (the pieces' skins stay apart BRIDGE_HOLD_S), every piece flows into the anchor, a FRESH whole body of the same genome replaces it
   const bridgeCalls0 = bridges.length;
   const started = app.cut.reconnectAll(true);

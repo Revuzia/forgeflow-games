@@ -98,8 +98,8 @@ body[data-layout="strip"] .tro { height: 100%; }
 body[data-layout="strip"] .tro-head { min-height: 56px; padding-block: var(--wh-sp-1); }
 body[data-layout="strip"] .tro-scroll { padding-block: var(--wh-sp-1) var(--wh-sp-4); }
 body[data-layout="strip"] .tro-hero { padding: var(--wh-sp-3) var(--wh-sp-4); }
-body[data-layout="strip"] .tro-chip .k-icon, body[data-layout="tiny"] .tro-chip .k-icon { display: none; }   /* the word and the count carry it; one row of chips on a short screen */
-body[data-layout="strip"] .tro-chip, body[data-layout="tiny"] .tro-chip { padding-inline: var(--wh-sp-2); gap: 4px; }
+body:is([data-layout="strip"], [data-layout="tiny"]) .tro-chip .k-icon { display: none; }   /* the word and the count carry it; one row of chips on a short screen */
+body:is([data-layout="strip"], [data-layout="tiny"]) .tro-chip { padding-inline: var(--wh-sp-2); gap: 4px; }
 body[data-layout="strip"] :is(.tro-note, .tro-hero-cap), body[data-layout="tiny"] :is(.tro-note, .tro-hero-cap) { display: none; }
 body[data-layout="tiny"] .tro-scrim { padding: 0; }   /* tiny (the portal phone): the whole screen; the switch is icons only (its words stay for a screen reader) */
 body[data-layout="tiny"] .tro-head { min-height: calc(var(--wh-hit) + var(--safe-t)); gap: var(--wh-sp-2); padding: var(--safe-t) calc(var(--safe-r) + var(--wh-sp-2)) 0 calc(var(--safe-l) + var(--wh-sp-3)); }

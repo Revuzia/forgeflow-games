@@ -18,10 +18,9 @@ body[data-calm="true"] {
   }
 }
 /* Calm keeps the state change visible without movement: a pressed or hovered control changes tone, it does not travel or squash */
-body[data-calm="true"] .k-btn:active, body[data-calm="true"] .k-chip:active, body[data-calm="true"] .k-gel:active { transform: none; }
+body[data-calm="true"] :is(.k-btn, .k-chip, .k-gel):active, body[data-calm="true"] .k-btn:focus-visible { transform: none; }
 body[data-calm="true"] .k-btn:active { background-color: var(--k-surface-hi); }
 body[data-calm="true"] .k-gel:active { filter: brightness(.92); }
-body[data-calm="true"] .k-btn:focus-visible { transform: none; }
 @media (hover: hover) { body[data-calm="true"] .k-btn:hover { transform: none; } }
 
 /* ---- Quality low: solid containers, no blur (UI.md 3.3: backdrop-filter is solid in Quality low) ---- */
@@ -54,7 +53,7 @@ body[data-quality="low"] { --k-container: var(--wh-panel); --k-backdrop: none; }
     --k-fill-on: Highlight; --k-fill-off: Canvas; --k-slider-thumb: ButtonText;
     --k-ring: Highlight; --k-halo: Canvas; --k-ring-w: 3px;
   }
-  .k-btn:focus-visible, .k-chip:focus-visible, .k-card[tabindex]:focus-visible, .k-tip-target:focus-visible, .k-link:focus-visible { box-shadow: none; }
+  .k-btn:focus-visible, .k-chip:focus-visible, .k-card[tabindex]:focus-visible, .k-link:focus-visible { box-shadow: none; }
   .k-switch-input:checked ~ .k-switch-ui, .k-seg-input:checked ~ .k-seg-face { forced-color-adjust: none; }
   .k-seg-input:checked ~ .k-seg-face { background-color: Highlight; color: HighlightText; border-color: Highlight; }
   .k-switch-input:checked ~ .k-switch-ui { background-color: Highlight; border-color: Highlight; }

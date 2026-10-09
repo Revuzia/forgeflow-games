@@ -7,20 +7,23 @@
 //     placeAt (an old one, or a test mock) cuts Minis-style whatever the style says (the Cut tool never disappears). The style is locked while the squishy is cut.
 //   * Pieces are peers: no piece has a face "role". Piece 0 is the ANCHOR (the larger child of the last cut of the anchor; ties: side A): it is the PLAY body (bodies.ts: same
 //     identity, genome and item, so the HUD, the history and the Hoard never see a piece); every other piece is an extra body in the play body's world space
-//     (ExtraBody.piece). Pieces are never stored anywhere: a reload is whole again. MAX_PIECES_CLEAN is 2 in this build (milestone A); Minis keeps the old limits (6 at
-//     med / high, 4 at low) and no piece under 1/8.
-//   * The cut tree (cutRegion.ts) is the shell's truth for the clean style: each piece is one leaf (one convex cell); a join of twins takes the cut away again.
+//     (ExtraBody.piece). Pieces are never stored anywhere: a reload is whole again. NO piece-count limit and NO minimum piece size (CUT3.md 2, the owner removed them on
+//     2026-10-09), in both styles; the only ceiling is PIECE_CEILING live pieces (a safety net for phones, answered kindly).
+//   * The cut tree (cutRegion.ts) is the shell's truth for the clean style: each piece is one leaf (one convex cell); a join of pieces takes every cut under their lowest
+//     common ancestor away again (twins: just the one cut), CUT2.md 7.2.
 //   * A cut: a swipe (two CSS-px points) becomes the plane through the camera that contains it, in the bodies' world space; the piece the swipe passes over most is cut.
-//     Split in two cuts along the squishy's OWN line between the eyes (first press) or the camera-relative median plane (later presses). Refusals (small, limit, thin,
+//     Split in two cuts along the squishy's OWN line between the eyes (first press) or the camera-relative median plane (later presses). Refusals (the safety ceiling, thin,
 //     loose) wobble the piece, say why and change nothing else.
 //   * The neck (CUT.md 3, CUT2.md 6.3): NECK_S by family, every step body.setNeck(plane, t, depth) + stage.setCutSeam(view, plane, t, ends) (the plane is recomputed from the
 //     LATCHED rest plane), audio cut({ phase: 'start' }) at its start, prepareCut(3) until the pieces are built; held NECK_HOLD_S at t = 1; then the body is REPLACED by two
 //     pieces: placed flush by placeAt in the parent's pose with the parent's mean side velocities (less what the neck added), one common lift, partPieces, audio
 //     cut({ phase: 'separate' }), a haptic tick, and the scripted parting (a growing gap, open loop; a near-level cut parts by a small plop instead).
 //   * Reconnect (CUT.md 1): a piece a finger DRAGS into another (a pull whose hand moved DRAG_TOWARD_K of its radius toward the other) whose SKIN touches the other's
-//     (TOUCH_GAP) for JOIN_HOLD_S, or is let go while they touch, flows into it over JOIN_S (setBridge). Twins of the clean style meet MATED (the giver stops at the place where
-//     its cut face lies on the other's) and the pair glides home and is replaced by a FRESH whole body (createBody(genome)): whole again means exactly the original. Minis
-//     joins flow into the receiver (the larger piece; setFrac up and down, a ghost) and become one bigger mini. Reconnect all joins every piece.
+//     (TOUCH_GAP) for JOIN_HOLD_S, or is let go while they touch, flows into it over JOIN_S (setBridge). In the clean style the GROUP is every piece under the lowest common
+//     ancestor of the two (twins: just the two); they all meet MATED at the largest member (each stops where its cut face lies on the others'), and the group is replaced by ONE
+//     body built from that node's region (the merged piece, built when the join starts so the swap only places it); when the group is every piece the squishy glides home and
+//     is replaced by a FRESH whole body (createBody(genome)): whole again means exactly the original. Minis joins (two at a time) flow into the receiver (the larger piece;
+//     setFrac up and down, a ghost) and become one bigger mini. Reconnect all joins every piece, for any count.
 //   * Leaving reconnects (CUT.md 2.2): game.ts calls reconnectAll(false) (instant) before a switch, a card preview, a ceremony, after the tab was hidden over 60 s.
 //     Cutting and reconnecting feed nothing to the meter (rule 3): no SoftEvent is made here.
 //   * Feature-detected (CUT.md 5): the tool exists only when the play body offers measureCut / setNeck / setFrac.
@@ -39,13 +42,15 @@ import type { CutNode } from './cutRegion.ts';
 
 export type { CutStyle } from './cutText.ts';
 
-/** Pieces at once by quality tier for MINIS (CUT.md 2.4). The clean style has MAX_PIECES_CLEAN. */
-export const MAX_PIECES: Readonly<Record<QualityTier, number>> = { low: 4, med: 6, high: 6 };
-/** Pieces at once in the clean style: 2 in this build (milestone A, CUT_A.md); the true cut's full limit is the MAX_PIECES record above (CUT2.md 3.2). */
-export const MAX_PIECES_CLEAN = 2;
-/** No piece smaller than this share of the whole (CUT.md 2.4), within PIECE_TOL (the physics clamps at FRAC_MIN 0.124, so an exact half of a quarter is legal). */
-export const PIECE_MIN = 1 / 8;
-export const PIECE_TOL = 1e-4;
+/** THE SAFETY CEILING (CUT3.md 2.2): the most live pieces at once, the same in both styles and at every quality tier. It exists only to protect phones; reaching it is answered
+ *  kindly (cutText.lotOfPieces), the Cut tool still works after a join, and real play (dozens of pieces) does not reach it. The owner removed the old limits (6 pieces, 4 on low,
+ *  2 in the first clean build, and no piece under 1/8 of the whole) on 2026-10-09. This is the ONE piece-count constant. */
+export const PIECE_CEILING = 64;
+/** A numerical guard, not a rule: a cut that would make a piece of under this share of the whole (a graze of the very edge) is no cut ('miss'); also the floor under the
+ *  share a giver shrinks to while it flows into a Minis receiver (the physics clamps that to its own floor) */
+export const SHARE_EPS = 1e-6;
+/** a built piece's share may differ from the asked one by this much (rounding); more means the physics built something else */
+export const BUILT_FRAC_TOL = 1e-6;
 /** A cut whose smaller part has an aspect (sqrt of the covariance eigenvalue ratio) under this is refused as too thin (CUT2.md 6.2; the single-plane minimum measured is 0.172). */
 export const ASPECT_MIN = 0.08;
 /** The neck (pinch) by material family (CUT.md 3): firm ones resist, plastic ones cut slow and sharp, the rest about 0.25 s. */
@@ -86,8 +91,13 @@ export const HOME_NEAR = 0.06;
 export const HOME_MAX_S = 1.6;
 /** A swipe shorter than this (CSS px) is not a cut. */
 export const MIN_SWIPE_PX = 24;
-/** Two pieces TOUCH when the gap between their skins (along the line between their centres) is under this (m). */
+/** Two pieces TOUCH when the gap between their skins (along the line between their centres) is under this (m) ... */
 export const TOUCH_GAP = 0.03;
+/** ... or under TOUCH_SKIN_K x their contact skin when that is more (CUT2.md 7.3: TOUCH_GAP = max(0.03, 1.1 pairSkin), pairSkin = 0.25 (meanEdgeA + meanEdgeB), the skin the physics' collide keeps between two bodies).
+ *  A flush pair of true halves rests at 0.037 m (dollop, measured 2026-10-09), above the fixed 0.03: a drag could never reach it without pressing in. */
+export const TOUCH_SKIN_K = 1.1;
+/** ... and the contact that already runs is kept this much further out than it started */
+export const TOUCH_KEEP_EXTRA = 0.06;
 /** ... and a contact that already runs is kept while the skins stay within this (m): soft bodies pressed together rebound and part by a few centimetres every few frames */
 export const TOUCH_KEEP_GAP = 0.09;
 /** ... and the finger must be DRAGGING the piece into the other (CUT.md 1): its pull must have moved the hand at least this share of the piece's radius toward the other piece. */
@@ -97,8 +107,14 @@ export const EYE_SHARE_MIN = 0.40;
 export const EYE_SHARE_MAX = 0.60;
 /** later presses: the vertical candidate with the best aspect, preferring the smaller turn unless the best beats it by more than this */
 export const CANDIDATE_MARGIN = 0.03;
+/** ... and when no vertical turn gives halves with a min aspect of at least this, the planes across the piece's principal axes join the candidates (CUT3.md U01) */
+export const AXIS_FALLBACK_ASPECT = 0.25;
+/** Minis' Split in two keeps the straight plane through the piece's centre when its smaller side is at least this share of the piece (else it searches for the halving plane) */
+export const HALVES_OK = 0.4;
 
-export type CutResult = 'cut' | 'short' | 'miss' | 'small' | 'limit' | 'thin' | 'loose' | 'busy' | 'unsupported';
+/** 'limit' is the safety ceiling (PIECE_CEILING); 'thin' is the physics refusing a cut it cannot make into a valid piece; 'loose' (a side of two separate parts) goes away
+ *  when multi-part cuts become several pieces (CUT3.md 2.3). There is no 'small': a piece may be as small as the mesh can hold. */
+export type CutResult = 'cut' | 'short' | 'miss' | 'limit' | 'thin' | 'loose' | 'busy' | 'unsupported';
 
 export interface CutDeps {
   bodies: BodyManager;
@@ -126,14 +142,16 @@ export interface CutDeps {
   /** node and test mode: the neck builds a fixed number of stages per step with no time budget, so the swap frame is the same on every machine (CUT2.md 6.3).
    *  Default: true when there is no `window` (plain node). */
   deterministic?: boolean;
-  /** tests: the piece limit of the clean style (default MAX_PIECES_CLEAN, 2 in this build) */
-  maxClean?: number;
+  /** tests: the safety ceiling (default PIECE_CEILING, 64) */
+  ceiling?: number;
 }
 
 /** One piece: its body, its leaf of the cut tree (the clean style; null in Minis), its share of the whole and the share it was built at */
 interface Piece { body: SoftBodyLike; leaf: CutNode | null; frac: number; built: number }
 /** how a giver flows into its receiver: along the unit line u from the base point (the receiver's centre, plus `m` when the pair meets mated) at distance D(t): d0 at the start, dh while the bridge is held, then 0 */
 interface Flow { u: V3; d0: number; dh: number; ta: number; m: V3 | null }
+/** the merged piece of a group join of the clean style (built when the join starts): its body, its tree node and the share it is built at */
+interface Merged { body: SoftBodyLike; node: CutNode; frac: number }
 interface NeckAnim {
   kind: 'neck'; p: Piece; plane: CutPlane; fa: number; t0: number; neckS: number; depth: number; view: number | null; button: boolean;
   /** the clean style: the plan, the tree node being cut and its kids, the plane id, the mean velocity of the body at the neck start, whether the pieces are built */
@@ -144,7 +162,7 @@ interface NeckAnim {
 }
 type Anim =
   | NeckAnim
-  | { kind: 'join'; recv: Piece; giver: Piece; t0: number; dur: number; flow: Flow }
+  | { kind: 'join'; recv: Piece; givers: Piece[]; t0: number; dur: number; flows: Map<Piece, Flow>; merged: Merged | null }
   | { kind: 'all'; t0: number; dur: number; recv: Piece; flows: Map<Piece, Flow> }
   | { kind: 'home'; face: Piece; others: Piece[]; t0: number };
 /** the scripted parting of a fresh pair (CUT2.md 6.5) */
@@ -159,8 +177,9 @@ export interface Cutter {
   fracs(): number[];
   /** a neck or a reconnect is playing */
   readonly busy: boolean;
-  /** Split in two can still do something: the limit is not reached and some piece is big enough to halve (a piece under twice the minimum, 1/4 of the whole, cannot be cut at all) */
+  /** Split in two can still do something: the safety ceiling is not reached (any piece can be cut again; there is no minimum size, CUT3.md 2) */
   readonly canSplit: boolean;
+  /** the safety ceiling (PIECE_CEILING): the Cut bar disables Split in two only when the pieces reach it */
   readonly maxPieces: number;
   /** the cut style (CUT_A.md SR1, CUT_MINIS.md): 'clean' (default; every piece is the real part on its side of the plane) or 'minis' (every piece is a complete smaller copy).
    *  A session setting, not saved. */
@@ -213,6 +232,46 @@ export function supportAlong(b: SoftBodyLike, u: V3): number {
   return Number.isFinite(m) ? m : b.restRadius;
 }
 
+/** The principal axes of a body's vertices (world space, the longest first, unit vectors; the covariance diagonalised by Jacobi sweeps). null for a body without a mesh. */
+export function principalAxes(b: SoftBodyLike): V3[] | null {
+  const P = b.positions, n = b.vertexCount;
+  if (!P || !(n >= 4)) return null;
+  let mx = 0, my = 0, mz = 0;
+  for (let i = 0; i < n; i++) { mx += P[i * 3]; my += P[i * 3 + 1]; mz += P[i * 3 + 2]; }
+  mx /= n; my /= n; mz /= n;
+  const a = [0, 0, 0, 0, 0, 0, 0, 0, 0];   // row-major symmetric 3 x 3
+  for (let i = 0; i < n; i++) {
+    const x = P[i * 3] - mx, y = P[i * 3 + 1] - my, z = P[i * 3 + 2] - mz;
+    a[0] += x * x; a[1] += x * y; a[2] += x * z; a[4] += y * y; a[5] += y * z; a[8] += z * z;
+  }
+  a[3] = a[1]; a[6] = a[2]; a[7] = a[5];
+  const v = [1, 0, 0, 0, 1, 0, 0, 0, 1];   // columns are the eigenvectors
+  for (let sweep = 0; sweep < 24; sweep++) {
+    const o01 = Math.abs(a[1]), o02 = Math.abs(a[2]), o12 = Math.abs(a[5]);
+    const big = Math.max(o01, o02, o12);
+    if (!(big > 1e-18)) break;
+    const p = big === o01 ? 0 : big === o02 ? 0 : 1, q = big === o01 ? 1 : big === o02 ? 2 : 2;
+    const apq = a[p * 3 + q], theta = (a[q * 3 + q] - a[p * 3 + p]) / (2 * apq);
+    const t = Math.sign(theta || 1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1)), c = 1 / Math.sqrt(t * t + 1), s = t * c;
+    for (let k = 0; k < 3; k++) {   // columns p and q of A, then rows p and q
+      const akp = a[k * 3 + p], akq = a[k * 3 + q];
+      a[k * 3 + p] = c * akp - s * akq; a[k * 3 + q] = s * akp + c * akq;
+    }
+    for (let k = 0; k < 3; k++) {
+      const apk = a[p * 3 + k], aqk = a[q * 3 + k];
+      a[p * 3 + k] = c * apk - s * aqk; a[q * 3 + k] = s * apk + c * aqk;
+    }
+    for (let k = 0; k < 3; k++) {
+      const vkp = v[k * 3 + p], vkq = v[k * 3 + q];
+      v[k * 3 + p] = c * vkp - s * vkq; v[k * 3 + q] = s * vkp + c * vkq;
+    }
+  }
+  const ev = [0, 1, 2].map((i) => ({ l: a[i * 3 + i], u: unit({ x: v[i], y: v[3 + i], z: v[6 + i] }) })).filter((e) => e.u !== null) as Array<{ l: number; u: V3 }>;
+  if (ev.length < 3) return null;
+  ev.sort((e1, e2) => e2.l - e1.l);
+  return ev.map((e) => e.u);
+}
+
 /** Centre of the particles on each side of the plane (the lobes; positions are world space, shared with the plane). Minis place their pieces at these. */
 export function lobeCentres(b: SoftBodyLike, plane: CutPlane): { a: V3; b: V3 } | null {
   const P = b.positions, n = b.vertexCount;
@@ -262,7 +321,7 @@ export function createCutter(d: CutDeps): Cutter {
   const trueCutOffered = (b: SoftBodyLike): boolean => typeof b.planCut === 'function' && typeof b.prepareCut === 'function' && typeof b.placeAt === 'function';
   /** is the squishy (cut now, or about to be) on the true cut engine? */
   const isTrue = (): boolean => (locked !== null ? locked === 'true' : style === 'clean' && trueCutOffered(d.bodies.body));
-  const maxN = (): number => (isTrue() ? d.maxClean ?? MAX_PIECES_CLEAN : MAX_PIECES[d.quality()] ?? 4);
+  const maxN = (): number => d.ceiling ?? PIECE_CEILING;
   const list = (): Piece[] => {
     if (pieces.length) return pieces;
     whole0.body = d.bodies.body; whole0.leaf = tree.root; whole0.frac = 1; whole0.built = 1;
@@ -271,7 +330,9 @@ export function createCutter(d: CutDeps): Cutter {
   };
   const fracOf = (p: Piece): number => { const f = p.body.frac; return typeof f === 'number' && Number.isFinite(f) ? f : p.frac; };
   const extraOf = (b: SoftBodyLike): ExtraBody | undefined => d.bodies.extras.find((x) => x.body === b && x.piece);
-  const radius = (p: Piece): number => p.body.restRadius * Math.cbrt(Math.max(PIECE_MIN, fracOf(p)) / Math.max(PIECE_MIN, p.built));
+  const radius = (p: Piece): number => p.body.restRadius * Math.cbrt(Math.max(SHARE_EPS, fracOf(p)) / Math.max(SHARE_EPS, p.built));
+  /** the share each cut node was built at while it was a piece (the merged piece of a group join is built at exactly that share, so the physics' cache and the volume agree) */
+  const nodeFrac = new Map<CutNode, number>();
   const dragVec: V3 = { x: 0, y: 0, z: 0 };
   /** the finger is dragging P toward the piece at the other end of `u` (the unit vector from that piece to P): its hand has moved DRAG_TOWARD_K of P's radius that way */
   const dragsInto = (P: Piece, u: V3): boolean => {
@@ -279,6 +340,9 @@ export function createCutter(d: CutDeps): Cutter {
     return -(dragVec.x * u.x + dragVec.y * u.y + dragVec.z * u.z) >= DRAG_TOWARD_K * radius(P);
   };
   /** the signed SURFACE gap between two bodies along the line between their centres (negative = overlapping), and that line's unit vector from b to a */
+  /** the gap under which two pieces touch (CUT2.md 7.3): the fixed TOUCH_GAP, or TOUCH_SKIN_K x the contact skin of this pair when that is larger */
+  const touchGapOf = (a: SoftBodyLike, b: SoftBodyLike): number => Math.max(TOUCH_GAP, TOUCH_SKIN_K * 0.25 * ((a.meanEdge ?? 0) + (b.meanEdge ?? 0)));
+  const keepGapOf = (a: SoftBodyLike, b: SoftBodyLike): number => Math.max(TOUCH_KEEP_GAP, touchGapOf(a, b) + TOUCH_KEEP_EXTRA);
   const gapBetween = (a: SoftBodyLike, b: SoftBodyLike): { u: V3; g: number } | null => {
     const ca = a.center, cb = b.center;
     const x = ca.x - cb.x, y = ca.y - cb.y, z = ca.z - cb.z, dd = Math.hypot(x, y, z);
@@ -324,19 +388,7 @@ export function createCutter(d: CutDeps): Cutter {
 
   /* ───────────────────────────── plan and refusals ───────────────────────────── */
 
-  /** CUT2.md 3.2, the particle rule: a cut that would make the sixth piece while any of the six is, or would be built as, detail 3 (642 particles; a child is detail 3 from a share of 0.35) is refused */
-  function particleRule(p: Piece, fA: number, fB: number): boolean {
-    const ps = list();
-    if (ps.length + 1 < 6) return false;
-    if (fA >= 0.35 || fB >= 0.35) return true;
-    return ps.some((q) => q !== p && q.body.vertexCount > 300);
-  }
-  /** the refusal lines of the `small` case: the button always cuts the middle, so "try nearer the middle" is advice it cannot follow */
-  function refuseSmall(p: Piece, button: boolean): CutResult {
-    wobble(p.body);
-    d.say(button ? T.noneBigEnough(false) : fracOf(p) < 2 * PIECE_MIN + 1e-6 ? T.smallestPiece : T.tooSmallNearMiddle);
-    return 'small';
-  }
+  /** the refusals left (each with a tremble and one live-region line, nothing replaced): the safety ceiling, and the physics' own 'thin' / 'loose'. There is no 'small' any more (CUT3.md 2.1). */
   function refuse(p: Piece, line: string, r: CutResult): CutResult { wobble(p.body); d.say(line); return r; }
 
   /** Split in two, first press (CUT2.md 6.6): the squishy's OWN line between the eyes. The normal is its rest +x axis in the world; the plane passes through the midpoint of the two eye
@@ -380,9 +432,23 @@ export function createCutter(d: CutDeps): Cutter {
       scores.push(s);
       if (s > best) best = s;
     }
+    // a piece that was halved again and again is thin in every vertical direction (CUT3.md U01: twenty presses in a row): add the planes ACROSS its principal axes (longest first,
+    // any tilt), which give the best-shaped halves there are. They come after the vertical turns, so a vertical cut still wins unless a principal plane is clearly better.
+    if (best < AXIS_FALLBACK_ASPECT) {
+      const ax = principalAxes(p.body);
+      if (ax) for (const nk of ax) {
+        cand.push(nk);
+        const tmp = newPlan();
+        let ok = false;
+        try { ok = p.body.planCut!({ point: copy3(c), normal: nk }, tmp, 'median'); } catch (e) { d.report(e); }
+        const s = ok ? Math.min(tmp.aspectA, tmp.aspectB) : -1;
+        scores.push(s);
+        if (s > best) best = s;
+      }
+    }
     if (best < 0) return null;
     let pick = 0;
-    for (let k = 0; k < 4; k++) if (scores[k] >= best - CANDIDATE_MARGIN) { pick = k; break; }
+    for (let k = 0; k < cand.length; k++) if (scores[k] >= best - CANDIDATE_MARGIN) { pick = k; break; }
     return { point: copy3(c), normal: cand[pick] };
   }
 
@@ -420,13 +486,14 @@ export function createCutter(d: CutDeps): Cutter {
     try { ok = !!b.planCut!(plane, plan, how.mode ?? 'at'); } catch (e) { d.report(e); }
     if (!ok || !(plan.fa > 0) || !(plan.fa < 1) || !p.leaf) return 'miss';
     const pf = fracOf(p), fA = pf * plan.fa, fB = pf - fA, small = Math.min(fA, fB);
-    if (small < PIECE_MIN - PIECE_TOL) return refuseSmall(p, how.button);
-    if (list().length + 1 > maxN() || particleRule(p, fA, fB)) return refuse(p, T.limit, 'limit');
+    if (small < SHARE_EPS) return 'miss';   // a graze of the very edge: no cut (a numerical guard, not a size rule)
+    if (list().length + 1 > maxN()) return refuse(p, T.lotOfPieces, 'limit');
     if (Math.min(plan.aspectA, plan.aspectB) < ASPECT_MIN) return refuse(p, T.thin, 'thin');
     if (!plan.sound) return refuse(p, T.loose, 'loose');
     const first = pieces.length === 0;
     const kids = cutPiece(tree, p.leaf, plan.rest.n, plan.rest.d);
     if (!kids) return 'miss';
+    nodeFrac.set(p.leaf, p.built);   // the share this node was built at: the merged piece of a later join is built at exactly it
     if (first) { pieces = [p]; locked = 'true'; }
     const fam = familyId();
     const pw: CutPlane = { point: copy3(plane.point), normal: copy3(plane.normal) };
@@ -450,8 +517,8 @@ export function createCutter(d: CutDeps): Cutter {
     try { fa = p.body.measureCut!(plane); } catch (e) { d.report(e); fa = null; }
     if (fa === null || !(fa > 0) || !(fa < 1)) return 'miss';
     const small = Math.min(fa, 1 - fa) * fracOf(p);
-    if (small < PIECE_MIN - PIECE_TOL) return refuseSmall(p, button);
-    if (list().length + 1 > maxN()) return refuse(p, T.limit, 'limit');
+    if (small < SHARE_EPS) return 'miss';
+    if (list().length + 1 > maxN()) return refuse(p, T.lotOfPieces, 'limit');
     const first = pieces.length === 0;
     if (first) { pieces = [p]; locked = 'mini'; }
     const fam = familyId();
@@ -471,7 +538,7 @@ export function createCutter(d: CutDeps): Cutter {
   /** the cut never happened (the builder refused it during the neck, or a throw): the neck is released, the tree rolled back, the squishy stays as it was */
   function abandon(a: NeckAnim, line: string | null): void {
     releaseNeck(a);
-    if (a.kids && a.node) rollbackCut(tree, a.node);
+    if (a.kids && a.node) { rollbackCut(tree, a.node); nodeFrac.delete(a.node); }
     if (a.first) { pieces = []; locked = null; }
     if (line !== null) { wobble(a.p.body); d.say(line); }
   }
@@ -481,6 +548,13 @@ export function createCutter(d: CutDeps): Cutter {
     if (a.plan) partTrue(a); else partMini(a);
   }
 
+  /** A piece must be built at EXACTLY the share it was asked for (nothing is created or stored: volume is exact). A physics that cannot hold a share (a sliver under the smallest mesh it supports, or
+   *  an older build that clamps at 1/8) builds it at another share: that is the "cannot make a valid piece" refusal of CUT3.md 2.3, never a quietly wrong piece. Throws, so every caller refuses with the plain 'thin' line. */
+  function builtAt(b: SoftBodyLike, want: number): SoftBodyLike {
+    const got = b.frac;
+    if (typeof got === 'number' && Math.abs(got - want) > BUILT_FRAC_TOL) throw new Error(`cut: the physics built a piece of share ${got}, not the ${want} it was asked for`);
+    return b;
+  }
   /** Construct one child of the cut as a body (its mesh is in the physics' cache once prepareCut said true). Idempotent per side; throws what createBody throws.
    *  The plane in the tree becomes the plane that was built (the retry ladder may have moved it by a few millimetres). */
   function buildKid(a: NeckAnim, side: 0 | 1): SoftBodyLike {
@@ -490,7 +564,7 @@ export function createCutter(d: CutDeps): Cutter {
     const reg = regionOf(tree, kids[side]);
     if (!reg) throw new Error('cut: no region for a kid');
     const fA = pf * plan.fa;
-    return d.createBody(genome(), { piece: { frac: side === 0 ? fA : pf - fA, region: reg } });
+    return builtAt(d.createBody(genome(), { piece: { frac: side === 0 ? fA : pf - fA, region: reg } }), side === 0 ? fA : pf - fA);
   }
 
   function partTrue(a: NeckAnim): void {
@@ -565,12 +639,13 @@ export function createCutter(d: CutDeps): Cutter {
     const push = 0.22;   // m/s apart: enough to read as parting; more spreads the pieces so far that a portrait phone frames them tiny
     let pa: SoftBodyLike, pb: SoftBodyLike;
     try {
-      pa = d.createBody(g, { piece: { frac: fA, chunk: false, at: lc.a, vel: { x: n.x * push, y: 0, z: n.z * push } } });
-      pb = d.createBody(g, { piece: { frac: fB, chunk: false, at: lc.b, vel: { x: -n.x * push, y: 0, z: -n.z * push } } });
+      pa = builtAt(d.createBody(g, { piece: { frac: fA, chunk: false, at: lc.a, vel: { x: n.x * push, y: 0, z: n.z * push } } }), fA);
+      pb = builtAt(d.createBody(g, { piece: { frac: fB, chunk: false, at: lc.b, vel: { x: -n.x * push, y: 0, z: -n.z * push } } }), fB);
     } catch (e) {
-      // the physics could not build a piece: nothing was replaced, the squishy stays as it was
+      // the physics could not build a piece at its share: nothing was replaced, the squishy stays as it was, and the plain line says so
       d.report(e);
       if (a.first) { pieces = []; locked = null; }
+      wobble(B); d.say(T.thin);
       return;
     }
     for (const b of [pa, pb]) { try { b.gravity = d.gravity(); } catch { /* optional */ } }
@@ -673,54 +748,123 @@ export function createCutter(d: CutDeps): Cutter {
     return { recv, giver: recv === a ? b : a };
   }
 
+  /** the GROUP of a join (clean style, CUT2.md 7.2): N = the lowest common ancestor of the two pieces' leaves and every piece under it (twins: just the two). null when there is nothing to join. */
+  function groupOf(a: Piece, b: Piece): { node: CutNode; members: Piece[] } | null {
+    if (!a.leaf || !b.leaf) return null;
+    const grp = group(tree, a.leaf, b.leaf);
+    if (!grp) return null;
+    const under = new Set<CutNode>(grp.members);
+    const members = pieces.filter((q) => q.leaf !== null && under.has(q.leaf));
+    return members.length === under.size && members.length >= 2 ? { node: grp.node, members } : null;
+  }
+  /** the receiver of a group (CUT2.md 7.2): its LARGEST member (ties: the anchor, then the lower index; `members` are in piece order) */
+  function largestOf(members: Piece[]): Piece {
+    let r = members[0];
+    for (const q of members) if (fracOf(q) > fracOf(r) + 1e-9) r = q;
+    return r;
+  }
+  /** the merged piece of a group join: ONE body built from the region of the node N at the share N was built at (the physics' piece cache usually has it; the build is paid when the join STARTS, not at the swap) */
+  function buildMerged(node: CutNode): Merged | null {
+    const reg = regionOf(tree, node), frac = nodeFrac.get(node);
+    if (!reg || frac === undefined) return null;
+    try {
+      const body = builtAt(d.createBody(genome(), { piece: { frac, region: reg } }), frac);
+      try { body.gravity = d.gravity(); } catch { /* optional */ }
+      return { body, node, frac };
+    } catch (e) { d.report(e); return null; }
+  }
+  /** a gesture join (touch-to-join) of the clean style: every piece under the lowest common ancestor meets the largest MATED, then they are replaced by one piece (or by the whole) */
+  function startGroupJoin(a: Piece, b: Piece): void {
+    const g = groupOf(a, b);
+    if (!g) return;
+    const recv = largestOf(g.members), givers = g.members.filter((q) => q !== recv);
+    let merged: Merged | null = null;
+    if (g.node !== tree.root) {
+      merged = buildMerged(g.node);
+      if (!merged) { d.say(T.cantJoin); return; }   // (the physics could not build the merged piece: nothing changes)
+    }
+    const flows = new Map<Piece, Flow>();
+    for (const q of givers) flows.set(q, flowOf(recv, q));   // planned from where everything stands now
+    // they meet the receiver MATED, flush: no contact push on the way. Gate S5a (2026-10-08): a giver that was NOT a ghost was shoved by the shipped collide and climbed 0.6 m onto the receiver.
+    // Every exit of a join (joined, swapWhole, abortAnim) clears the ghost.
+    for (const q of givers) d.bodies.setGhost(q.body, true);
+    if (givers.length >= 2) d.say(T.joining(g.members.length));
+    anim = { kind: 'join', recv, givers, t0: d.simTime(), dur: JOIN_S, flows, merged };
+  }
+  /** the giver of a Minis join shrinks into its receiver: to a quarter of its share (the physics clamps it to its own floor) */
+  const shrinkTo = (giver: Piece): number => Math.max(SHARE_EPS, 0.25 * giver.frac);
+
   function startJoin(a: Piece, b: Piece): void {
     endParting();
-    const { recv, giver } = receiverOf(a, b);
     contact = null;
-    if (recv.leaf && giver.leaf && locked === 'true') {
-      const grp = group(tree, recv.leaf, giver.leaf);
-      if (!grp || !grp.twins) return;   // (joins of non-twins come with the full tree, later in CUT2)
-    }
-    if (typeof recv.body.setFrac !== 'function' && locked !== 'true') { joined(recv, giver, false); return; }
-    const flow = flowOf(recv, giver);
+    if (locked === 'true') { startGroupJoin(a, b); return; }
+    const { recv, giver } = receiverOf(a, b);
+    if (typeof recv.body.setFrac !== 'function') { joinedMini(recv, giver); return; }
+    const flows = new Map<Piece, Flow>([[giver, flowOf(recv, giver)]]);
     recv.frac = fracOf(recv); giver.frac = fracOf(giver);   // the shares as they are NOW: the bodies' own fracs move during the flow
-    if (locked !== 'true') {
-      // Minis: the receiver grows by the giver's share, the giver shrinks into it (both complete scaled copies)
-      try { recv.body.setFrac!(Math.min(1, recv.frac + giver.frac), JOIN_S); giver.body.setFrac?.(PIECE_MIN, JOIN_S); } catch (e) { d.report(e); }
-    }
-    // it flows INTO the receiver (Minis) or meets it MATED, flush (clean): no contact push between them either way. Gate S5a (2026-10-08): in the clean style the giver was NOT a ghost,
-    // so the shipped collide shoved the flush faces apart and the giver climbed 0.6 m onto / over the receiver on its way home. Every exit of a join (joined, swapWhole, abortAnim) clears the ghost.
+    // Minis: the receiver grows by the giver's share, the giver shrinks into it (both complete scaled copies) and flows INTO it as a ghost (no contact push between them)
+    try { recv.body.setFrac(Math.min(1, recv.frac + giver.frac), JOIN_S); giver.body.setFrac?.(shrinkTo(giver), JOIN_S); } catch (e) { d.report(e); }
     d.bodies.setGhost(giver.body, true);
-    anim = { kind: 'join', recv, giver, t0: d.simTime(), dur: JOIN_S, flow };
+    anim = { kind: 'join', recv, givers: [giver], t0: d.simTime(), dur: JOIN_S, flows, merged: null };
   }
 
-  /** a join ended (not Reconnect all): the giver is gone into the receiver (Minis), or the twins met mated and the squishy is whole again (clean) */
-  function joined(recv: Piece, giver: Piece, all: boolean): void {
-    setBridge(recv, giver, 0);
-    try { giver.body.moveTo?.(null); } catch { /* optional */ }
-    if (locked === 'true') {
-      if (recv.leaf && giver.leaf) { const grp = group(tree, recv.leaf, giver.leaf); if (grp) joinGroup(tree, grp.node); }
-      d.beforeChange();
-      if (!all) {
-        try { d.audio.rejoin?.({ frac: 1, pan: d.panOf(recv.body.center), calm: d.calm(), pitch: pitch() }); } catch (e) { d.report(e); }
-        try { d.haptics.release(); } catch { /* optional */ }
-      }
-      whole(!all, true);
-      return;
-    }
+  /** a join ended (not Reconnect all) */
+  function joined(a: Extract<Anim, { kind: 'join' }>): void {
+    const { recv, givers } = a;
+    for (const g of givers) { setBridge(recv, g, 0); try { g.body.moveTo?.(null); } catch { /* optional */ } }
+    if (locked === 'true') joinedClean(a); else joinedMini(recv, givers[0]);
+  }
+  /** Minis: the giver is gone into the receiver, which is one bigger mini */
+  function joinedMini(recv: Piece, giver: Piece): void {
     const x = extraOf(giver.body);
     d.beforeChange();
     if (x) d.bodies.removeExtra(x.id);
     d.bodies.setGhost(giver.body, false);
-    recv.frac = Math.min(1, recv.frac + giver.frac);   // (the recorded shares of startJoin: the giver's body has shrunk to PIECE_MIN by now)
+    recv.frac = Math.min(1, recv.frac + giver.frac);   // (the recorded shares of startJoin: the giver's body has shrunk by now)
     pieces = pieces.filter((q) => q !== giver);
     if (pieces[0] !== recv) promoteTo(recv);   // the anchor was the giver: the receiver becomes the play body
-    if (!all) {
-      try { d.audio.rejoin?.({ frac: recv.frac, pan: d.panOf(recv.body.center), calm: d.calm(), pitch: pitch() }); } catch (e) { d.report(e); }
+    try { d.audio.rejoin?.({ frac: recv.frac, pan: d.panOf(recv.body.center), calm: d.calm(), pitch: pitch() }); } catch (e) { d.report(e); }
+    try { d.haptics.release(); } catch { /* optional */ }
+    if (pieces.length <= 1) whole(true, true);
+    else d.say(T.joinedTwins(pieces.length));
+  }
+  /** the clean style: the group met mated. The root group is the whole squishy again; any other node is replaced by its one merged piece, placed in the receiver's pose. */
+  function joinedClean(a: Extract<Anim, { kind: 'join' }>): void {
+    const { recv, givers, merged } = a;
+    if (!merged) {
+      joinGroup(tree, tree.root);
+      nodeFrac.clear();
+      d.beforeChange();
+      try { d.audio.rejoin?.({ frac: 1, pan: d.panOf(recv.body.center), calm: d.calm(), pitch: pitch() }); } catch (e) { d.report(e); }
       try { d.haptics.release(); } catch { /* optional */ }
+      whole(true, true);
+      return;
     }
-    if (pieces.length <= 1) whole(!all, true);
-    else if (!all) d.say(T.joinedTwins(pieces.length));
+    const members = [recv, ...givers], B = merged.body;
+    // the merged piece stands where its cell stood: world = receiver.center + R(receiver.frame) . (merged offset - receiver offset), both offsets in W (the same law as the swap of a cut)
+    const q: Quat = { ...(recv.body.frame ?? { x: 0, y: 0, z: 0, w: 1 }) }, c = copy3(recv.body.center);
+    const ro = recv.body.piece?.offset ?? { x: 0, y: 0, z: 0 }, mo = B.piece?.offset ?? ro;
+    const r = rotate(q, { x: mo.x - ro.x, y: mo.y - ro.y, z: mo.z - ro.z });
+    const at: V3 = { x: c.x + r.x, y: c.y + r.y, z: c.z + r.z }, still: V3 = { x: 0, y: 0, z: 0 };
+    try { B.placeAt?.(at, still, q); } catch (e) { d.report(e); }
+    const low = lowestY(B);
+    if (low < 0) { at.y += -low + 1e-4; try { B.placeAt?.(at, still, q); } catch (e) { d.report(e); } }
+    joinGroup(tree, merged.node);
+    for (const k of [...nodeFrac.keys()]) if (!k.kids) nodeFrac.delete(k);   // the cuts under the node are gone (the node itself is a leaf again)
+    d.beforeChange();
+    const anchorIn = members.includes(pieces[0]);
+    const idx = Math.max(0, pieces.findIndex((p) => members.includes(p)));
+    const P: Piece = { body: B, leaf: merged.node, frac: B.frac ?? merged.frac, built: merged.frac };
+    const x = { tier: tier(), shared: true, piece: true, itemId: null as string | null };
+    d.bodies.addExtra(B, genome(), x);
+    if (anchorIn) promoteTo(P);   // the anchor was one of them: the merged piece becomes the play body (identity unchanged)
+    for (const p of members) { const xb = extraOf(p.body); if (xb) d.bodies.removeExtra(xb.id); d.bodies.setGhost(p.body, false); }
+    const rest = pieces.filter((p) => !members.includes(p) && p !== P);
+    rest.splice(anchorIn ? 0 : Math.min(idx, rest.length), 0, P);
+    pieces = rest;
+    try { d.audio.rejoin?.({ frac: P.frac, pan: d.panOf(B.center), calm: d.calm(), pitch: pitch() }); } catch (e) { d.report(e); }
+    try { d.haptics.release(); } catch { /* optional */ }
+    d.say(members.length === 2 ? T.joinedTwins(pieces.length) : T.joinedGroup(members.length));
   }
   /** the receiver becomes the play body (the anchor flowed in as a giver and is gone); the identity is unchanged */
   function promoteTo(recv: Piece): void {
@@ -741,7 +885,7 @@ export function createCutter(d: CutDeps): Cutter {
     if (say) d.say(T.whole);
     if (!face) { pieces = []; locked = null; return; }
     const others = pieces.slice(1);
-    if (!others.length && face.body === d.bodies.body && fracOf(face) >= 1 && face.built >= 1) { pieces = []; locked = null; tree = createCutTree(); return; }
+    if (!others.length && face.body === d.bodies.body && fracOf(face) >= 1 && face.built >= 1) { pieces = []; locked = null; tree = createCutTree(); nodeFrac.clear(); return; }
     const c = face.body.center;
     if (glide && typeof face.body.moveTo === 'function' && Math.hypot(c.x, c.z) > HOME_NEAR) {
       face.frac = 1;
@@ -764,23 +908,23 @@ export function createCutter(d: CutDeps): Cutter {
     for (const q of pieces) { if (q === face) continue; const x = extraOf(q.body); if (x) d.bodies.removeExtra(x.id); }
     pieces = [];
     locked = null;
-    tree = createCutTree();
+    tree = createCutTree(); nodeFrac.clear();
     parting = null;
     d.bodies.swapTo(g, { body: b, itemId: id.itemId, nickname: id.nickname, silent: true });
     clearPieceCache();
   }
 
   function finishAll(glide: boolean): void {
-    const face = pieces[0];
-    if (!face) { pieces = []; return; }
-    for (const c of pieces.slice(1)) setBridge(face, c, 0);
+    const anchor = pieces[0];
+    if (!anchor) { pieces = []; return; }
+    for (const c of pieces.slice(1)) setBridge(anchor, c, 0);
     if (locked === 'true') { whole(false, glide); return; }
-    const chunks = pieces.slice(1);
-    for (const c of chunks) { try { c.body.moveTo?.(null); } catch { /* optional */ } }
+    const others = pieces.slice(1);
+    for (const c of others) { try { c.body.moveTo?.(null); } catch { /* optional */ } }
     d.beforeChange();
-    for (const c of chunks) { const x = extraOf(c.body); if (x) d.bodies.removeExtra(x.id); d.bodies.setGhost(c.body, false); }
-    pieces = [face];
-    face.frac = 1;
+    for (const c of others) { const x = extraOf(c.body); if (x) d.bodies.removeExtra(x.id); d.bodies.setGhost(c.body, false); }
+    pieces = [anchor];
+    anchor.frac = 1;
     whole(false, glide);
   }
 
@@ -792,7 +936,7 @@ export function createCutter(d: CutDeps): Cutter {
     warm = null;
     if (!a) return;
     if (a.kind === 'neck') abandon(a, null);
-    if (a.kind === 'join') { d.bodies.setGhost(a.giver.body, false); setBridge(a.recv, a.giver, 0); try { a.giver.body.moveTo?.(null); } catch { /* optional */ } }
+    if (a.kind === 'join') for (const g of a.givers) { d.bodies.setGhost(g.body, false); setBridge(a.recv, g, 0); try { g.body.moveTo?.(null); } catch { /* optional */ } }
     if (a.kind === 'all') for (const c of pieces.slice(1)) { d.bodies.setGhost(c.body, false); setBridge(pieces[0], c, 0); }
     if (a.kind === 'home') swapWhole(a.face);   // whole at once, at the middle
   }
@@ -832,13 +976,14 @@ export function createCutter(d: CutDeps): Cutter {
     hits.forEach((h, i) => { if (h > 0 && (target < 0 || h > hits[target])) target = i; });
     return target < 0 ? null : ps[target];
   }
-  /** the legacy halving search for Minis (a plane through a lopsided copy's centre does not halve it): the parallel plane that halves the piece best, within 1.3 radii (measureCut on the deformed mesh) */
+  /** the halving search for Minis (a plane through a lopsided copy's centre does not halve it): the parallel plane that halves the piece best, within 1.3 radii (measureCut on the deformed mesh).
+   *  The straight plane is kept when it already gives halves within HALVES_OK of equal; there is no minimum size to protect any more, only the balance of the halves. */
   function halving(p: Piece, plane: CutPlane): CutPlane {
     const share = (pl: CutPlane): number | null => {
-      try { const fa = p.body.measureCut!(pl); return fa === null || !(fa > 0) || !(fa < 1) ? null : Math.min(fa, 1 - fa) * fracOf(p); } catch (e) { d.report(e); return null; }
+      try { const fa = p.body.measureCut!(pl); return fa === null || !(fa > 0) || !(fa < 1) ? null : Math.min(fa, 1 - fa); } catch (e) { d.report(e); return null; }
     };
     const s0 = share(plane);
-    if (s0 !== null && s0 >= PIECE_MIN - 1e-6) return plane;
+    if (s0 !== null && s0 >= HALVES_OK) return plane;
     const n = plane.normal, R = 1.3 * radius(p);
     const at = (t: number): CutPlane => ({ point: { x: plane.point.x + n.x * t, y: plane.point.y + n.y * t, z: plane.point.z + n.z * t }, normal: n });
     const side = (t: number): number | null => {
@@ -848,9 +993,9 @@ export function createCutter(d: CutDeps): Cutter {
     for (let i = 0; i < 18; i++) {
       const mid = 0.5 * (lo + hi), fa = side(mid);
       if (fa === null) { if (mid > 0) hi = mid; else lo = mid; continue; }
-      const sh = Math.min(fa, 1 - fa) * fracOf(p);
+      const sh = Math.min(fa, 1 - fa);
       if (sh > bestShare) { bestShare = sh; best = at(mid); }
-      if (bestShare >= PIECE_MIN - 1e-6 && Math.abs(fa - 0.5) < 0.01) break;
+      if (Math.abs(fa - 0.5) < 0.01) break;
       if (fa > 0.5) lo = mid; else hi = mid;
     }
     return best;
@@ -861,7 +1006,7 @@ export function createCutter(d: CutDeps): Cutter {
     get pieces() { return list().length; },
     fracs: () => list().map((p) => fracOf(p)),
     get busy() { return anim !== null; },
-    get canSplit() { return list().length < maxN() && list().some((p) => fracOf(p) >= 2 * PIECE_MIN - 2 * PIECE_TOL); },
+    get canSplit() { return list().length < maxN(); },
     get maxPieces() { return maxN(); },
     get style() { return style; },
     get canChangeStyle() { return pieces.length === 0 && anim === null; },
@@ -906,9 +1051,8 @@ export function createCutter(d: CutDeps): Cutter {
       const ps = list();
       let p = ps[0];
       for (const q of ps) if (fracOf(q) > fracOf(p) + 1e-9) p = q;
-      // at the limit the limit line comes first (the Cut bar's hint does the same, cutText.barText): it is true whatever the sizes are (CUT2.md 12 X10: the sixth press says the limit line)
-      if (ps.length >= maxN()) return refuse(p, T.limit, 'limit');
-      if (fracOf(p) < 2 * PIECE_MIN - 2 * PIECE_TOL) { wobble(p.body); d.say(T.noneBigEnough(false)); return 'small'; }
+      // at the safety ceiling the kind line comes first (the Cut bar's hint does the same, cutText.barText); below it any piece can be halved, however small (CUT3.md 2.1)
+      if (ps.length >= maxN()) return refuse(p, T.lotOfPieces, 'limit');
       if (isTrue()) {
         if (ps.length === 1) { const ep = eyePlane(p); return startCut(p, ep.plane, { button: true, mode: ep.mode, ends: endsAcross(p, ep.plane) }); }
         const plane = candidatePlane(p);
@@ -929,7 +1073,7 @@ export function createCutter(d: CutDeps): Cutter {
     reconnectAll(animated) {
       if (!pieces.length && !anim) return false;
       abortAnim();
-      if (pieces.length <= 1) { pieces = []; locked = null; tree = createCutTree(); return false; }
+      if (pieces.length <= 1) { pieces = []; locked = null; tree = createCutTree(); nodeFrac.clear(); return false; }
       contact = null;
       const face = pieces[0];
       const canAnimate = animated && typeof face.body.setFrac === 'function';
@@ -941,7 +1085,7 @@ export function createCutter(d: CutDeps): Cutter {
       for (const c of pieces) if (c !== recv) flows.set(c, flowOf(recv, c));   // planned from where everything stands now (before anything grows or shrinks)
       if (locked !== 'true') {
         try { recv.body.setFrac!(1, JOIN_ALL_S); } catch (e) { d.report(e); }
-        for (const c of pieces) if (c !== recv) { try { c.body.setFrac?.(PIECE_MIN, JOIN_ALL_S); } catch (e) { d.report(e); } d.bodies.setGhost(c.body, true); }
+        for (const c of pieces) if (c !== recv) { try { c.body.setFrac?.(shrinkTo(c), JOIN_ALL_S); } catch (e) { d.report(e); } d.bodies.setGhost(c.body, true); }
       } else {
         // the clean style: the pieces meet the receiver mated and flush; as for a single join (startJoin) they take no part in contact on the way (gate S5a)
         for (const c of pieces) if (c !== recv) d.bodies.setGhost(c.body, true);
@@ -981,9 +1125,12 @@ export function createCutter(d: CutDeps): Cutter {
       }
       if (a && a.kind === 'join') {
         const k = smooth((t - a.t0) / a.dur);
-        setBridge(a.recv, a.giver, bridgeK(a.recv, a.giver, k));
-        follow(a.recv, a.giver, a.flow, t - a.t0, a.dur);
-        if (t - a.t0 >= a.dur) { anim = null; joined(a.recv, a.giver, false); }
+        for (const g of a.givers) {
+          setBridge(a.recv, g, bridgeK(a.recv, g, k));
+          const fl = a.flows.get(g);
+          if (fl) follow(a.recv, g, fl, t - a.t0, a.dur);
+        }
+        if (t - a.t0 >= a.dur) { anim = null; joined(a); }
         return;
       }
       if (a && a.kind === 'all') {
@@ -1025,7 +1172,7 @@ export function createCutter(d: CutDeps): Cutter {
           if (q === P) continue;
           const m = gapBetween(P.body, q.body);
           const kept = !!contact && contact.a === P && contact.b === q;
-          const lim = kept ? TOUCH_KEEP_GAP : TOUCH_GAP;
+          const lim = kept ? keepGapOf(P.body, q.body) : touchGapOf(P.body, q.body);
           if (m && m.g < lim && m.g < bestD && (kept || dragsInto(P, m.u))) { bestD = m.g; Q = q; }
         }
         if (Q) {
@@ -1039,7 +1186,7 @@ export function createCutter(d: CutDeps): Cutter {
         const c = contact;
         contact = null;
         const m = pieces.includes(c.a) && pieces.includes(c.b) ? gapBetween(c.a.body, c.b.body) : null;
-        if (m && m.g < TOUCH_KEEP_GAP) startJoin(c.a, c.b);
+        if (m && m.g < keepGapOf(c.a.body, c.b.body)) startJoin(c.a, c.b);
       }
     },
     isPiece: (b) => pieces.some((p) => p.body === b),

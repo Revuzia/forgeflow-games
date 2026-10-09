@@ -18,6 +18,8 @@ import { meshVolume, physicsGenome, restPoint, restRadiusOf } from './shape.ts';
 
 /* ───────────────────────────── cells ───────────────────────────── */
 
+/** CUT3: the most planes a piece's cell can hold (it was 8; a piece cut 9 times in one line of descent, the middle of a star after its tips, was refused). A cut tree is as deep as the player makes it, this bounds one LINE of it. */
+export const MAX_PLANES = 16;
 /** One convex cell: `np` half-spaces, 4 numbers each [nx, ny, nz, d], kept side n . x >= d. np = 0 is the whole. */
 export interface RegionCell { np: number; pl: Float64Array }
 export const WHOLE_CELL: RegionCell = { np: 0, pl: new Float64Array(0) };

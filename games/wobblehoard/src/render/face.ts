@@ -80,6 +80,9 @@ class Eye {
   constructor(dome: THREE.Mesh, arc: THREE.Mesh, uLook: { value: THREE.Vector2 }) { this.dome = dome; this.arc = arc; this.uLook = uLook; }
 }
 
+/** CUT3: how a Face is drawn for a body that is not a true piece and is small (a mini): the dome's detail 0.4 .. 1 and one pass for the bead. */
+export interface FaceLod { domeQ: number; singlePass: boolean }
+
 export class Face {
   readonly group = new THREE.Group();
   private readonly eyes: Eye[] = [];
@@ -139,7 +142,7 @@ export class Face {
    * `pieces`: given for a PIECE of a cut squishy (BodyView builds it from the piece's PieceInfo): this Face then draws just the eyes that piece holds, sized by the WHOLE, and
    * with none (a piece with no eye) it makes no material or mesh at all. Without it the Face is a whole squishy's, exactly as it has always been.
    */
-  constructor(body: SoftBodyLike, genome: Genome, view: JellyView, hub: EnvHub, pieces?: PieceEyes) {
+  constructor(body: SoftBodyLike, genome: Genome, view: JellyView, hub: EnvHub, pieces?: PieceEyes, lod?: FaceLod) {
     this.hub = hub;
     this.body = body; this.view = view;
     this.style = STYLES[genome.eyeStyle] ?? STYLES.dot;
@@ -157,7 +160,9 @@ export class Face {
     if (wanted.length === 0) return;   // a piece with no eye: no geometry, no material, nothing to blink
 
     // dome: unit hemisphere with its pole on +Z, optional flat lid cut
-    const dome = new THREE.SphereGeometry(1, 28, 18, 0, Math.PI * 2, 0, Math.PI / 2);
+    // (CUT3: the bead of a small mini is drawn from a coarser dome: 1008 triangles at the whole's size, about 150 at a 1/200 mini)
+    const dq = lod?.domeQ ?? 1;
+    const dome = new THREE.SphereGeometry(1, Math.max(10, Math.round(28 * dq)), Math.max(6, Math.round(18 * dq)), 0, Math.PI * 2, 0, Math.PI / 2);
     dome.rotateX(Math.PI / 2);
     if (this.style.lid < 5) {
       const p = dome.getAttribute('position');
@@ -176,6 +181,7 @@ export class Face {
         transparent: true, opacity: 1,
         side: THREE.DoubleSide,   // (a clipped bead is seen from inside where its front faces are cut away: INK_BACK; unclipped, the back faces sit behind the front ones)
       });
+      if (lod?.singlePass) mat.forceSinglePass = true;   // CUT3: a small mini's bead (never clipped) is drawn in ONE pass, not back faces then front: half the draw calls of its face
       hub.apply(mat, 2.2);
       mat.clippingPlanes = clipPlanes;
       const uLook = { value: new THREE.Vector2() };

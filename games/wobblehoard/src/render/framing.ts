@@ -25,6 +25,10 @@ export const FRAME_TUNING = {
   tauOut: 0.25, tauIn: 1.2,
   /** The band is never thinner than this share of the frame (insets that would leave less are scaled down together). */
   minBand: 0.35,
+  /** CUT3: from this many visible bodies on, the extent is fitted and centred in the frame's width too (see measure). The mat holds at most 5 squishies (stage B1, they keep the old framing); 6 and more are pieces / minis of cuts. */
+  sideFitFrom: 6,
+  /** CUT3: from this many visible bodies on, a calm body's skin is scanned every `scanEvery` frames (staggered by its place in the list) instead of every frame: 64 pieces cost a sixth. Fewer bodies: every frame, as before. */
+  scanFrom: 8, scanEvery: 6,
 };
 
 /** The held extent of one body: world points (top, bottom, left, right = the skin vertices that were extreme on screen, then the disc centre). */
@@ -33,6 +37,8 @@ export class FrameHold {
   /** the filtered centre speed (0) and the centre of the last frame (1..3): typed, so a frame allocates no boxed number */
   readonly s = new Float64Array(4);
   ready = false; calm = true; private hasPrev = false;
+  /** CUT3: frames until this calm body's skin is scanned for its screen extremes again (many bodies: a rest scan every few frames, staggered; 0 = every frame, as for up to a handful of bodies). */
+  skip = 0;
   /** One more frame: the filtered centre speed and the calm flag (hysteresis; a finger on the body or a carry = not calm). `dt` is in `cfg[4]` (see Framer). */
   gate(c: { x: number; y: number; z: number }, cfg: Float64Array, held: boolean): void {
     const s = this.s, dt = cfg[4];
@@ -175,7 +181,9 @@ export class Framer {
       n++;
       if (snap) h.ready = false;
       h.gate(c, cfg, (m.fingers ?? 0) > 0 || m.carried === true);
-      if (!h.ready || h.calm) {
+      if (h.ready && h.calm && h.skip > 0 && views.length >= FRAME_TUNING.scanFrom) h.skip--;
+      else if (!h.ready || h.calm) {
+        h.skip = views.length >= FRAME_TUNING.scanFrom ? FRAME_TUNING.scanEvery - 1 - (h.ready ? 0 : n % FRAME_TUNING.scanEvery) : 0;
         // the live extremes of the skin on screen
         const e = this.cam, k0 = cfg[0], k5 = cfg[1];
         let iT = -1, iB = -1, iL = -1, iR = -1, mT = -Infinity, mB = Infinity, mL = Infinity, mR = -Infinity;
@@ -216,7 +224,9 @@ export class Framer {
     this.top = top; this.bottom = bot; this.left = lef; this.right = rig;
     const B = this.band(W, H);
     const my = 2 * Math.max(T.marginMin, T.marginFrac * H) / H, mx = 2 * Math.max(T.marginMin, T.marginFrac * W) / W;
-    const horiz = this.ins.left + this.ins.right > 0;
+    // (CUT3: with SIX or more bodies on the stage (the many pieces / minis of a squishy cut again and again) the extent is also fitted and centred in the frame's WIDTH even when the shell reports no rail:
+    // a piece that rolled to the far side, nearer the camera than the group's middle (perspective makes it wider on screen), must not stand half out of the frame. Up to five bodies (the mat's most) nothing changes.)
+    const horiz = this.ins.left + this.ins.right > 0 || n >= FRAME_TUNING.sideFitFrom;
     this.fitY = (top - bot) / Math.max(0.05, B[0] - B[1] - 2 * my);
     this.fitX = horiz ? (rig - lef) / Math.max(0.05, B[3] - B[2] - 2 * mx) : 0;
     const f = Math.max(this.fitY, this.fitX);

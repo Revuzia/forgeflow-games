@@ -57,9 +57,9 @@ body[data-calm="true"] { --k-an-title-in: title-fade; --k-an-title-pop: title-fa
 .title[data-layout="wide"][data-density="short"] .title-mark { --jl-cap: clamp(56px, 15vh, 100px); }
 .title[data-layout="wide"][data-density="short"] .title-actions { grid-auto-flow: column; justify-content: center; align-items: center; gap: var(--wh-sp-4); }
 .title[data-layout="wide"][data-density="short"] .cta { min-width: 240px; }
-/* stack (phones in portrait, tablets in portrait): the lockup is one word per line; labels give way to icons on a narrow screen */
+/* stack (phones in portrait, tablets in portrait): the lockup is one word per line; labels give way to icons on a narrow and short screen */
 .title[data-layout="stack"] { --t-pt: clamp(16px, 5vh, 56px); --t-pb: 5vh; }
-@media (max-width: 700px) {
+@media (max-width: 700px) and (max-height: 699px) {   /* (a tall phone has the room: its chips keep their words and wrap into two rows) */
   .title-chip { width: var(--wh-hit); justify-content: center; padding: 0; }
   .title-chip-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }

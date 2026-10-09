@@ -29,7 +29,8 @@ body[data-layout="tiny"] .toasts { top: calc(var(--safe-t) + 54px); }    /* y 6.
 .toast-more[hidden] { display: none; }
 body[data-layout="tiny"] .toasts > .k-toast { min-height: 32px; padding: 2px var(--wh-sp-3) 2px var(--wh-sp-2); gap: var(--wh-sp-2); }
 body[data-layout="tiny"] .toasts > .k-toast > .k-icon { width: 18px; height: 18px; }
-body[data-layout="tiny"] .toasts > .k-toast .k-toast-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body[data-layout="tiny"] .k-toast-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+body[data-layout="tiny"] .k-toast-sub { display: none; }   /* a 32 px pill: the second line would cover the squishy (the live region still says the whole text) */
 /* the hint pill hangs at y 64 on a 320 px stack: it steps aside while a toast shows */
 @media (max-width: 380px) { body[data-layout="stack"][data-toasts] .hint { opacity: 0; } }
 
@@ -61,28 +62,28 @@ body[data-layout="wide"][data-density="short"] .menu-rows { grid-template-column
 body[data-layout="wide"][data-density="short"] .menu-row { min-height: 52px; }
 /* stack (a phone held upright, a tablet upright): a bottom sheet */
 body[data-layout="stack"] .menu-scrim { align-items: end; padding: 0; }
-body[data-layout="stack"] .menu, body[data-layout="stack"] .scr { width: min(520px, 100%); max-height: 88dvh; padding-bottom: var(--safe-b); border-radius: var(--wh-r-panel) var(--wh-r-panel) 0 0; border-bottom: 0; animation: ov-sheet var(--k-mv-4) var(--wh-ease) backwards; }
+body[data-layout="stack"] :is(.menu, .scr) { width: min(520px, 100%); max-height: 88dvh; padding-bottom: var(--safe-b); border-radius: var(--wh-r-panel) var(--wh-r-panel) 0 0; border-bottom: 0; animation: ov-sheet var(--k-mv-4) var(--wh-ease) backwards; }
 body[data-layout="stack"] .menu .k-panel-grip { display: block; }
 body[data-layout="stack"] .menu-body, body[data-layout="stack"] .panel .k-panel-body, body[data-layout="stack"] .scr-body { padding-left: calc(var(--safe-l) + var(--wh-sp-4)); padding-right: calc(var(--safe-r) + var(--wh-sp-4)); }
 /* strip (a phone held sideways): a card of two columns that fits a 320 px height, scrolling when taller */
-body[data-layout="strip"] .menu-scrim, body[data-layout="strip"] .scr-scrim, body[data-layout="strip"] .tro-scrim { padding: calc(var(--safe-t) + 6px) calc(var(--safe-r) + var(--k-gutter)) calc(var(--safe-b) + 6px) calc(var(--safe-l) + var(--k-gutter)); }
+body[data-layout="strip"] :is(.menu-scrim, .scr-scrim, .tro-scrim) { padding: calc(var(--safe-t) + 6px) calc(var(--safe-r) + var(--k-gutter)) calc(var(--safe-b) + 6px) calc(var(--safe-l) + var(--k-gutter)); }
 body[data-layout="strip"] .menu { width: min(640px, 100%); }
-body[data-layout="strip"] .menu .k-panel-head, body[data-layout="strip"] .panel .k-panel-head, body[data-layout="strip"] .scr .k-panel-head { min-height: 56px; padding-top: var(--wh-sp-2); padding-bottom: var(--wh-sp-1); }
+body[data-layout="strip"] :is(.menu, .panel, .scr) .k-panel-head { min-height: 56px; padding-top: var(--wh-sp-2); padding-bottom: var(--wh-sp-1); }
 body[data-layout="strip"] .menu-body { gap: var(--wh-sp-2); padding-top: var(--wh-sp-1); padding-bottom: var(--wh-sp-4); }
 body[data-layout="strip"] .menu-rows { grid-template-columns: 1fr 1fr; }
-body[data-layout="strip"] .menu-row, body[data-layout="strip"] .menu-resume { min-height: 48px; }
+body[data-layout="strip"] :is(.menu-row, .menu-resume) { min-height: 48px; }
 /* tiny (the portal phone, 358x201): the whole screen, labels only, the rows in two columns, scrolling when taller */
 body[data-layout="tiny"] .menu-scrim { padding: 0; }
-body[data-layout="tiny"] .menu, body[data-layout="tiny"] .scr, body[data-layout="tiny"] .tro { width: 100%; height: 100%; border-radius: 0; border: 0; box-shadow: none; }
+body[data-layout="tiny"] :is(.menu, .scr, .tro) { width: 100%; height: 100%; border-radius: 0; border: 0; box-shadow: none; }
 body[data-layout="tiny"] .menu .k-panel-head {
   min-height: calc(var(--wh-hit) + var(--safe-t)); padding: var(--safe-t) calc(var(--safe-r) + var(--wh-sp-3)) 0 calc(var(--safe-l) + var(--wh-sp-4));
 }
 body[data-layout="tiny"] .menu-title.jl { --jl-cap: 26px; }
-body[data-layout="tiny"] .menu-body, body[data-layout="tiny"] .scr-body { gap: var(--wh-sp-2); padding: 2px calc(var(--safe-r) + var(--wh-sp-3)) calc(var(--safe-b) + var(--wh-sp-3)) calc(var(--safe-l) + var(--wh-sp-3)); }
+body[data-layout="tiny"] :is(.menu-body, .scr-body) { gap: var(--wh-sp-2); padding: 2px calc(var(--safe-r) + var(--wh-sp-3)) calc(var(--safe-b) + var(--wh-sp-3)) calc(var(--safe-l) + var(--wh-sp-3)); }
 body[data-layout="tiny"] .menu-rows { grid-template-columns: 1fr 1fr; }
 body[data-layout="tiny"] .menu-row { min-height: var(--wh-hit); padding: 0 var(--wh-sp-3); gap: var(--wh-sp-2); }
 body[data-layout="tiny"] .menu-row-label { font-size: var(--wh-fs-small); }
-body[data-layout="tiny"] .menu-row .k-icon, body[data-layout="tiny"] .menu-resume .k-icon { display: none; }
+body[data-layout="tiny"] :is(.menu-row, .menu-resume) .k-icon { display: none; }
 body[data-layout="tiny"] .menu-row .k-switch-thumb .k-icon { display: block; }
 body[data-layout="tiny"] .menu-resume { min-height: var(--wh-hit); }
 /* a row's words break between words, never inside one (the kit's switch label says "anywhere") */
@@ -95,8 +96,8 @@ body[data-phase="title"] .panel { z-index: var(--wh-z-modal); }
 .wh-modal { animation: ov-fade var(--k-fd-3) linear backwards; }
 .wh-modal .k-modal { animation: ov-move-up var(--k-mv-3) var(--wh-ease-spring) backwards; }
 /* a short screen (a phone held sideways, the portal phone): the dialog tightens so its buttons stay on screen (a 358x201 dialog scrolled its safe answer out of view) */
-body[data-layout="strip"] .wh-modal .k-modal, body[data-layout="tiny"] .wh-modal .k-modal { padding: var(--wh-sp-4); }
-body[data-layout="strip"] .wh-modal .k-modal-text, body[data-layout="tiny"] .wh-modal .k-modal-text { margin-bottom: var(--wh-sp-3); }
+body:is([data-layout="strip"], [data-layout="tiny"]) .wh-modal .k-modal { padding: var(--wh-sp-4); }
+body:is([data-layout="strip"], [data-layout="tiny"]) .wh-modal .k-modal-text { margin-bottom: var(--wh-sp-3); }
 body[data-layout="tiny"] .wh-modal { padding: var(--wh-sp-2); }
 body[data-layout="tiny"] .wh-modal .k-modal { padding: var(--wh-sp-3); }
 body[data-layout="tiny"] .wh-modal .k-modal-title { margin-bottom: var(--wh-sp-1); font-size: var(--wh-fs-lead); }

@@ -30,6 +30,7 @@ import { familyOf, getSpecies } from '../data/catalog.ts';
 import type { Haptics } from '../input/haptics.ts';
 import type { SimTimers } from './clock.ts';
 import type { TouchState } from './driver.ts';
+import { SLOT_COUNT } from './driver.ts';
 import { clamp01, hasPress, releaseFxLevel, snapPullLevel, squeezeDepth, stretchPullLevel } from './feel.ts';
 
 export type StatKey = 'pokes' | 'squishes' | 'pulls' | 'releases';
@@ -130,12 +131,12 @@ export function createFeedback(d: FeedbackDeps): Feedback {
         break;
       case 'release': {
         endVoice(f);
-        if ((f === 0 || f === 1) && touch.skipRelease[f] === d.stepCount()) break; // the contact became a pull (or was cancelled): no bloop
+        if (f >= 0 && f < SLOT_COUNT && touch.skipRelease[f] === d.stepCount()) break; // the contact became a pull (or was cancelled): no bloop (LOCK: five slots; the voices stay the first two fingers')
         d.bump('releases');
         d.audio.release({ compression: I, pitch: pitch(), pan: d.panOfPoint(ev.at) });
         d.haptics.release();
         d.stage.shake(0.15 + 0.5 * I);
-        const peak = f === 0 || f === 1 ? touch.peakPress[f] : 0;
+        const peak = f >= 0 && f < SLOT_COUNT ? touch.peakPress[f] : 0;
         const fx = releaseFxLevel(I, peak, hasPress(body.metrics));
         if (fx > 0) {
           d.stage.spawnFx('bubbles', ev.at, Math.max(I, fx));
@@ -169,7 +170,7 @@ export function createFeedback(d: FeedbackDeps): Feedback {
         d.bump('releases');
         const bodyHasPress = hasPress(body.metrics);
         const S = snapPullLevel(I, bodyHasPress);   // the contract's pull level (feel.ts "THE PULL SIGNAL")
-        if (bodyHasPress && (f === 0 || f === 1)) touch.learnPull(f, I);
+        if (bodyHasPress && f >= 0 && f < SLOT_COUNT) touch.learnPull(f, I);
         d.audio.release({ compression: S, pitch: pitch(), pan: d.panOfPoint(ev.at) });
         d.haptics.release();
         d.stage.shake(0.1 + 0.4 * S);

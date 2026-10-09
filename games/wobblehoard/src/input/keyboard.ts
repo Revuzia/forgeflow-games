@@ -1,6 +1,9 @@
 // Keyboard glue. Space = poke the centre (hold it to squish: it is a synthetic pointer at the body's centre, so it runs the SAME gesture
 // code as a finger), G = gravity <-> float, M = mute, H = the Hoard, 1 2 3 = the tools (Hand, Cut, Snap), C = Cut, S = Snap, F = full screen, P = the Menu, ? = How to play,
 // [ ] = switch, Escape = close what is open (hudBinding.ts escape(): the order of UI.md 4.5). Extras for people who cannot drag: arrow keys orbit, + / - zoom. During a ceremony Space, Enter and Escape skip it (after the 350 ms gate).
+// LOCK (_spec/LOCK.md): a Shift keydown (not on key repeat, not in a form control; a focused button of the dock does not count as one) calls app.input.lock(): the pulls held right now
+// that are fully stretched stay where they are. Shift alone is NOT "a key used" (the hint keeps its wording). Escape lets every lock go FIRST, but only when a lock exists and no panel
+// is open (`panelOpen`: the More popover, a modal or photo card, the Menu, Settings, the Hoard); with a panel open Escape closes it as ever (UI.md 4.5), the locks stay.
 //
 // Focus rules (WCAG 2.1.1 / 2.1.4; audit findings 12 and 13):
 //   * A focused control (button, input, select, a role=button/switch/slider/radio element, contentEditable) owns its keys: Space activates
@@ -20,6 +23,8 @@ export interface KeyTarget {
 export interface KeyboardOptions {
   /** Escape pressed: return true if something was closed (then the event is consumed). */
   onEscape(): boolean;
+  /** LOCK: a panel that Escape would close first is open (UI.md 4.5 items 2 to 5 and the More popover): then Escape does not let the locks go. Default: none open. */
+  panelOpen?(): boolean;
   /** G / M allowed (Settings.shortcuts). Default: always. */
   shortcutsEnabled?(): boolean;
   /** a key reached the toy (the hint switches to keyboard wording) */
@@ -76,9 +81,16 @@ export function attachKeyboard(target: KeyTarget, app: Pick<App, 'input' | 'phas
     const space = key === ' ' || e.code === 'Space';
     // a ceremony: Space / Enter / Escape skip it (the 350 ms gate is the ceremony controller's), nothing else reaches the toy
     if (app.phase === 'play' && (space || key === 'Enter' || key === 'Escape') && !interactiveTarget(e.target) && app.input.skip()) { e.preventDefault(); return; }
-    if (key === 'Escape') { if (opts.onEscape()) e.preventDefault(); return; }
+    if (key === 'Escape') {
+      // LOCK: with locks held and nothing open, the first Escape lets them go (and nothing else happens); the next one is the usual Escape (UI.md 4.5)
+      if (app.phase === 'play' && app.input.locks > 0 && !(opts.panelOpen?.() ?? false) && app.input.releaseLocks()) { e.preventDefault(); return; }
+      if (opts.onEscape()) e.preventDefault();
+      return;
+    }
     if (app.phase !== 'play') return;
     const inControl = interactiveTarget(e.target);
+    // LOCK: a Shift tap locks the stretched pulls. Not a key used for the hint; a dock button keeps it (the mouse player just clicked a tool and pulls with the same hand), a real form control does not
+    if (key === 'Shift') { if (!e.repeat && (!inControl || onDockButton(e.target))) app.input.lock(); return; }
     if (space) {
       if (inControl) return;
       e.preventDefault();

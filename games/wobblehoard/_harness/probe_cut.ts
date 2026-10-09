@@ -149,7 +149,7 @@ function pieceFracErr(id: SpeciesId, frac: number, chunk: boolean): { err: numbe
   const fe = b.measureCut(pe)!, ce = pieceFracErr('dollop', Math.max(0.125, fe), true);
   const tiny = b.measureCut({ point: v3(b.center.x + 0.85 * b.restRadius, b.center.y, b.center.z), normal: v3(1, 0, 0) }) ?? 0;
   const clamped = (new SoftBody(speciesTemplateGenome('dollop'), { piece: { frac: 0.02, chunk: true } } as never) as unknown as { frac: number }).frac;
-  add(`X02 edge cut: the chunk built with measureCut's fraction (${f(fe)}) holds it; a cut nearer the edge reads under 1/8 (the shell refuses it); the constructor never builds a piece under 1/8`, `volume error ${f(ce.err * 100, 2)} %; near-edge cut ${f(tiny)}; frac 0.02 built as ${f(clamped)}`, 'within 3 %, < 0.125, 0.124', ce.err <= 0.03 && tiny < 0.125 && clamped === 0.124);   // FRAC_MIN 0.124 since CUT2 P3 (5.6): the exact halves of a 1/4 piece (0.125 +- 2.5e-6) are built as measured. The owner changed the design on 2026-10-08.
+  add(`X02 edge cut: the chunk built with measureCut's fraction (${f(fe)}) holds it; a cut nearer the edge reads under 1/8; the constructor builds the share it is asked for (no floor)`, `volume error ${f(ce.err * 100, 2)} %; near-edge cut ${f(tiny)}; frac 0.02 built as ${f(clamped)}`, 'within 3 %, < 0.125, 0.02', ce.err <= 0.03 && tiny < 0.125 && Math.abs(clamped - 0.02) < 1e-6);   // RE-SPECIFIED (was: FRAC_MIN 0.124, a piece asked for 0.02 is built as 0.124): the owner removed the limit on 2026-10-09 (CUT3.md 2 item 1); the constructor builds the share asked, down to 1e-6.
 }
 
 // ---- setNeck

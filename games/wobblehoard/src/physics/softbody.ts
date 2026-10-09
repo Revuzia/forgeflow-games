@@ -84,7 +84,7 @@
 import type { Genome } from '../core/genome.ts';
 import { clamp, mulberry32 } from '../core/rng.ts';
 import type {
-  CutPlan, CutPlane, FingerDownArgs, PieceInfo, PieceOpts, PieceRegion, Quat, RayHit, SoftBodyLike, SoftEvent, SoftEventKind, SoftMetrics, V3,
+  CutPlan, CutPlane, FingerDownArgs, PieceInfo, PieceOpts, PieceRegion, Quat, RayHit, Slot, SoftBodyLike, SoftEvent, SoftEventKind, SoftMetrics, V3,
 } from '../contracts.ts';
 import { buildIcosphere } from './mesh.ts';
 import { buildChunkRest, buildRest, flatPoints, meshVolume, physicsGenome, restRadiusOf } from './shape.ts';
@@ -94,8 +94,9 @@ import { deriveParams, EVENT_MIN_GAP_S, FINGER, GRAVITY, H, MAX_DT, MAX_SUBSTEPS
 import type { SoftParams } from './params.ts';
 import { extractRotation, rayMesh } from './mathx.ts';
 import { buildStruts } from './struts.ts';
-import { CutJob, PIECE_TUNING, buildPiece, cellPlanes, newCutPlanParts, planSplit, wholeOf } from './piece.ts';
-import { CLIP_VOL, WHOLE_CELL, clipMesh, compileCell, getSource, starVolume } from './region.ts';
+import { CutJob, FRAC_FLOOR, PIECE_TUNING, buildPieceLadder, cellPlanes, newCutPlanParts, pieceDetail, planSplit, planSplitTrue, wholeOf } from './piece.ts';
+import type { CutPlanParts, PieceBuilt } from './piece.ts';
+import { CLIP_VOL, MAX_PLANES, WHOLE_CELL, clipMesh, compileCell, getSource, starVolume } from './region.ts';
 import type { RegionCell, Source } from './region.ts';
 import { getSpecies } from '../data/catalog.ts';
 import { applyMaterial, DEFAULT_FAMILY_ID, MATERIAL_FAMILIES, resolveMaterial } from '../data/materials.ts';
@@ -148,15 +149,20 @@ class Grab {
   ex = 0; ey = 0; ez = 0;      // eased target
   ramp = 0;
   holdT = 0;
+  slot = 0;                    // LOCK: the slot a lock was grabbed with (the 'finger' of its 'snap')
+  nx = 0; ny = 1; nz = 0;      // GROUND FIX: the outward surface normal at the anchor when it was grabbed (unit) ...
+  cap = -1;                    // ... and the deepest the target may be pushed INTO the body along it (m; < 0 = no limit)
   constructor(n: number) { this.verts = new Int32Array(n); this.weights = new Float64Array(n); this.p0 = new Float64Array(n * 3); }
   /** Back to the state of a new Grab. */
   clear(): void {
     this.active = false; this.count = 0; this.anchor = 0;
     this.verts.fill(0); this.weights.fill(0); this.p0.fill(0);
     this.t0x = 0; this.t0y = 0; this.t0z = 0; this.c0x = 0; this.c0y = 0; this.c0z = 0; this.rx = 0; this.ry = 0; this.rz = 0; this.ex = 0; this.ey = 0; this.ez = 0;
-    this.ramp = 0; this.holdT = 0;
+    this.ramp = 0; this.holdT = 0; this.slot = 0; this.nx = 0; this.ny = 1; this.nz = 0; this.cap = -1;
   }
 }
+/** LOCK: the placeholder of a grab slot (2 to 4) or a lock that has not been needed yet; never written (a real Grab replaces it first), so a computer that never locks or uses a touch finger allocates nothing for them. */
+const IDLE_GRAB = new Grab(0);
 
 const KIND_INDEX: Record<SoftEventKind, number> = { poke: 0, press: 1, release: 2, land: 3, grab: 4, snap: 5, bump: 6 };
 
@@ -208,8 +214,7 @@ const BURST_OVER = 0.25;           // burstOpen: goal overshoot at strength 1 (1
 const BURST_TAU = 0.3;             // ...that settles with this time constant (s)
 const BURST_SPEED = 2.2;           // ...plus a radial velocity kick of this many m/s at strength 1
 // ---- CUT (_spec/CUT.md section 4) and stage B (B2 contact, B3 toss)
-const FRAC_MIN = 0.124;            // no piece smaller than 1/8 of the whole (CUT.md 2.4), less 1e-3 so the exact halves of a 1/4 piece (0.125 +- 2.5e-6) are built as measured (CUT2 5.6)
-const PIECE_D2 = 0.35;             // pieces under this fraction of the whole use mesh detail 2 (CUT.md 4.3)
+// (CUT3: the 1/8 floor FRAC_MIN is gone, the owner removed the limit on 2026-10-09; a body is built down to piece.ts FRAC_FLOOR and its mesh detail follows its share: piece.ts pieceDetail)
 const NECK_WAIST = 0.3;           // setNeck(t = 1): the goal's waist is this fraction of the cross-section's width (CUT.md's 0.15 crumpled the gathered skin)
 const NECK_SIGMA = 0.42;          // ... and the pinch falls off over this many rest radii either side of the plane (0.3 made the goal itself
                                    // crease: its waist ring was sharper than the mesh, 120-175 degrees between goal triangles; 2 of 100 bodies
@@ -237,9 +242,21 @@ export const NECK_FIT = { goal: true, depth: true };   // (.depth false: setNeck
 /** CUT2 5.4 (P4): the tilted-plane neck gives the body net momentum (|v1 - v0| of the swap, measured by probe_neck.ts: it peaks for a plane whose normal is 35 to 65 degrees above the horizontal, |n_y| 0.57 to 0.9, and grows with the depth).
  *  The depth of a pinch along such a plane is CAPPED at `cap` (smoothly: full cap for |n_y| from 0.5 to 0.92, none below 0.3 and at 1; a family that pinches less than the cap is untouched). `cap` 1 = off. PROBES may set it. */
 export const NECK_OBL = { cap: 0.6 };
+/** CUT3 SLEEP / WAKE (restCheck; PROBES may set them). A piece sleeps after being calm for `after` s: on the table (its lowest particle within 1 cm + 5 % of its radius of it), no particle faster than `speed` m/s (a sanity bar), none moved by more than `move` rest radii (at least `moveMin` m) from where it was when the countdown started, none farther than `err` rest radii from its goal, nothing driving it
+ *  (finger, grab, lock, carry, neck, ceremony driver, float mode), a memory-arm body with its memory shape still (`mem`: rest radii per frame). `hit`: a body touching a sleeper wakes it when the body itself has been calm (nothing drives it, its centre moves under `hitSpeed` m/s) for less than `hit` x `after` s
+ *  (a body that is itself at rest leans on the sleeper as on a fixed support: two resting pieces never wake each other in turn). enabled false = nothing ever sleeps (the A/B control). */
+export const SLEEP = { enabled: true, after: 0.5, speed: 1, move: 0.004, moveMin: 1.5e-3, err: 0.3, mem: 1e-4, hit: 0.5, hitSpeed: 0.15 };
+/** GROUND FIX (LOCK.md section 4): a hand may push the grabbed patch INTO the body at most `inFrac` x the finger's safe press depth (SoftParams.squashDepth) x the body's thickness behind the patch (Infinity = no limit; PROBES may set it). */
+export const GRAB_TUNE = { inFrac: 0.5, zone: 0.8, band: 0.3, volK: 0.1, allFrom: 3, iters: 8, allEvery: 2, still: 1.5, calm: 0.012, cap: 8 };   // (.zone: the skin within this many rest radii of a pulled or locked patch is in the contact fold limit, 0 = off; .band: while a lobe is pulled or locked, and for TABLE_FOLD_AFTER after, the skin this many rest radii above the table is in it too; .allFrom: with this many lobes held, the whole skin is in it; .still: seconds after the last lock, release or grab after which a hold of locks alone looks every other substep only (metrics.kinetic cannot tell: it reads 1.0 for a locked body, the patches fight the shape all the time); .iters: fold passes per substep while .allFrom or more lobes are held; .allEvery: the whole skin joins the limit on every n-th substep; .calm / .cap: after several lobes were held the whole skin stays in the limit until the body is calm (metrics.kinetic under .calm), at most .cap seconds (a release of several lobes rippled into 140 to 175 degree folds when the tip wake ended); .volK: the volume constraint compliance x this while two or more lobes are held (grabs + locks): several lobes pulled out at once swelled the body to 1.2 .. 1.4 of its volume)
 const LIFT_OVER = 1.15;            // a pull asked past this x maxPull lifts the body off the mat (B3)
 const CARRY_OMEGA = 18;            // rad/s: how tightly a carried body follows the hand (critically damped, kinematic)
 const TOSS_MAX = 6;                // m/s: the fastest throw
+// ---- LOCK (_spec/LOCK.md): up to 5 concurrent finger / grab slots (touch fingers) and up to 6 locked lobes
+const NSLOT = 5;                   // finger and grab slots
+const MAX_LOCKS = 6;               // locked lobes (the shell passes 4 on low quality: SoftBody.maxLocks)
+const LOCK_MIN_PULL = 0.95;        // a pull locks only when it is this fully stretched (STRETCH_FULL_INTENSITY)
+const GRAB_FLOOR_Y = 0.02;         // GROUND FIX: on the table no grab target (the pointer's hand) goes lower than this (the Shift pair's SHIFT_FLOOR_Y of the shell, now for every hand)
+const LOCK_REACH = 0.4;            // lockAt: a point this many rest radii from a locked patch's nearest vertex is on the lock
 const TOSS_NORM = 4;               // m/s of throw speed that maps to 'toss' intensity 1
 const RIM_BOUNCE = 0.35;           // past the mat's rim the outward speed is reflected with this restitution (the soft rim bounces it back)
 const smooth01 = (t: number): number => { const x = t < 0 ? 0 : t > 1 ? 1 : t; return x * x * (3 - 2 * x); };
@@ -260,7 +277,7 @@ function settleDoubles(o: object, ints: ReadonlySet<string>): void {
 const INT_FIELDS: ReadonlySet<string> = new Set([
   'n', 'ne', 'nt', 'nh', 'vertexCount', 'subIdx', 'airSub', 'contactCount', 'nearCount', 'keSubs', 'pinCount',   // SoftBody
   'vnStamp', 'hashStamp', 'bodyId', 'lastTipSub', 'tipFoldSubs',
-  'count', 'anchor',                                                                                              // Grab
+  'count', 'anchor', 'slot', 'lockN', 'maxLocks',                                                                 // Grab, locks
   'fingers', 'substeps', 'safetyResets', 'contacts',                                                              // metrics, debug
 ]);
 
@@ -297,10 +314,12 @@ function regionOf(r: PieceRegion | undefined): PieceRegion | null {
 const PC_PLANE = new Float64Array(4);                          // clipMesh's plane [nx, ny, nz, d]
 const PC_PL5 = new Float64Array(5);                            // planSplit's [nx, ny, nz, d, parentFrac]
 const PC_SCAL = new Float64Array(2);                           // [dW, the median offset]: doubles that must not cross a call
-const PC_CELL_A: RegionCell = { np: 0, pl: new Float64Array(4 * 9) };   // the two children's cells (the parent's half-spaces + the cut)
-const PC_CELL_B: RegionCell = { np: 0, pl: new Float64Array(4 * 9) };
+const PC_CELL_A: RegionCell = { np: 0, pl: new Float64Array(4 * (MAX_PLANES + 1)) };   // the two children's cells (the parent's half-spaces + the cut)
+const PC_CELL_B: RegionCell = { np: 0, pl: new Float64Array(4 * (MAX_PLANES + 1)) };
 const PC_SV = new Float64Array(2);                             // starVolume's [volume, phi]
 const PC_PARTS = newCutPlanParts();
+const PC_TRUE = newCutPlanParts();                              // trueShares' scratch
+const PC_PLW = new Float64Array(5);                            // ... and the plane in W [nx, ny, nz, d, parentFrac]
 const PC_N: V3 = { x: 0, y: 0, z: 1 };
 const PC_CLIP = new Float64Array(16);
 /** A planCut with phi (the share of the child that straight rays from its clipped centroid reach) at or above this is sound outright; below it the centre search of
@@ -396,11 +415,11 @@ export class SoftBody implements SoftBodyLike {
   readonly frame = { x: 0, y: 0, z: 0, w: 1 };
   readonly metrics: SoftMetrics = {
     compression: 0, compressionRate: 0, stretch: 0, volume: 1, kinetic: 0, grounded: true, fingers: 0, grabbed: false, press: 0, reaction: 0, strands: 0, slosh: 0,
-    pull: 0, carried: false,
+    pull: 0, carried: false, locked: 0,
   };
   restRadius!: number;
   /** Harness-only counters (not part of SoftBodyLike). `safetyResets` must stay 0: it counts emergency non-finite recoveries. */
-  readonly debug = { substeps: 0, safetyResets: 0, contacts: 0, maxSpeed: 0, minVolume: 1, force: 0, goalDrift: 0 };
+  readonly debug = { substeps: 0, safetyResets: 0, contacts: 0, maxSpeed: 0, minVolume: 1, force: 0, goalDrift: 0, foldWork: 0 };
   /** Resolved solver parameters (genome-derived plus any `opts.params` override). */
   readonly params: SoftParams;
   /** Frames per phase of warmUp()'s workout (a harness knob for timing it; the default is what the probe measures). */
@@ -440,6 +459,19 @@ export class SoftBody implements SoftBodyLike {
   private cutJob: CutJob | null = null; private cutOut: CutPlan | null = null; private cutState = 0;   // prepareCut: 0 none, 1 running, 2 built, 3 thin, 4 loose
   private lastJobD = 0;                       // the plane offset (W) the plan was last refreshed for (the retry ladder moves it)
   private planD = 0;                          // the rest-local plane offset the plan in `cutOut` describes
+  private readonly tsK = new Float64Array(5); private readonly tsR = new Float64Array(9); private tsOk = false;   // CUT3 trueShares' cache: the latched plane (W) and its result
+  // ---- CUT3 SLEEP / WAKE (a resting PIECE stops stepping; it is still drawn at its pose): see restCheck
+  private asleep = false;
+  private restT = 0;                          // seconds the body has been at rest (restCheck's test passed on every step since)
+  private calmT = 0;                          // seconds it has been calm: restT's test without the 'stands on the table' bar (a calm body that leans on a sleeper does not wake it)
+  private readonly canSleep: boolean;         // a piece (built with `piece`); a whole squishy never sleeps
+  private bRvalid = false;                    // bR is current (a sleeper's does not change)
+  private readonly restRef: Float64Array;    // the pose the rest countdown started from (a piece's positions; empty for a whole)
+  private restRefOn = false;
+  private ow = 1;                             // collide's pair in hand: 1 = the other body takes its share of every push, 0 = it sleeps and is a fixed support
+  private cpContacts = 0;                     // the contact count of the last contactPiece
+  private restMem = 0;                        // memoryStep: the largest move of the memory shape in the last frame (rest frame, rest radii)
+  private readonly sleepStats = { sleeps: 0, wakes: 0, asleepSteps: 0 };   // harness readout (not part of the state)
   // ---- B2 body-to-body contact (collide): this frame's vertex normals and particle hash (built once per frame on demand)
   private readonly VN: Float64Array;
   private vnStamp = -1;
@@ -575,6 +607,9 @@ export class SoftBody implements SoftBodyLike {
   private pinCount = 0;
   private pinHold = 0;
   private kinSoft = 1;                      // kinetic fingertip friction multiplier of a family softer than the gel (constructor)
+  private gripChangeT = -10;             // simTime of the last grab, lock or release
+  private gripWake = 0; private gripCap = 0; private gripAll = false;   // the tail of a hold of several lobes (gripTail)
+  private gripT = 0;                     // seconds the wide table band (GRAB_TUNE.band) stays after the last grab or lock
   private tableFoldT = 0;                   // seconds the table edges stay in the contact fold limit (TABLE_FOLD_AFTER after the last touch)
   private goalBottom = 0;                   // lowest point of the shape-matching goal in the last substep (supported gravity, see substep)
   private peelK = 0;                        // share of the upward centre-of-mass speed the peeling tack removes per substep (the tack pass)
@@ -601,10 +636,16 @@ export class SoftBody implements SoftBodyLike {
   private prevCompression = 0;
   private lastAxisX = 0; private lastAxisY = 1; private lastAxisZ = 0;
   private lastAxisT = -10;
-  private readonly fingers: Finger[] = [new Finger(), new Finger()];
+  private readonly fingers: Finger[] = [new Finger(), new Finger(), new Finger(), new Finger(), new Finger()];
   private readonly grabs: Grab[];
+  private readonly locks: Grab[] = [IDLE_GRAB, IDLE_GRAB, IDLE_GRAB, IDLE_GRAB, IDLE_GRAB, IDLE_GRAB];   // LOCK: a lock is a grab whose pointer left; its slot stays in place (lockAt's index)
+  private lockN = 0;                    // active locks
+  /** LOCK: the most locks at once (6; the shell sets 4 on low quality). */
+  maxLocks = MAX_LOCKS;
+  private readonly rch = new Float64Array(3);   // updateGrabs: the reachable hand target (reach)
+  private readonly shv = new Float64Array(3);   // the carry's step, for shiftGrab (a call takes no doubles: they would be boxed)
   private events: SoftEvent[] = [];
-  private readonly lastEvent = new Float64Array(7 * 3).fill(-10);   // per event kind (KIND_INDEX) x finger (-1, 0, 1)
+  private readonly lastEvent = new Float64Array(7 * 6).fill(-10);   // per event kind (KIND_INDEX) x finger (-1, 0 .. 4)
   private readonly rayOut = new Float64Array(4);
   private readonly rayOut2 = new Float64Array(4);
   private readonly ray6 = new Float64Array(6);              // rayMesh input scratch (origin, direction)
@@ -627,22 +668,31 @@ export class SoftBody implements SoftBodyLike {
     this.genomeRef = genome;
     // CUT: a piece of a cut squishy (CUT.md 4.3). Its fraction is sanitised like every input; a small piece gets the coarser mesh
     const pc = opts.piece && typeof opts.piece === 'object' ? opts.piece : null;
-    let pf = pc && typeof pc.frac === 'number' && Number.isFinite(pc.frac) ? clamp(pc.frac, FRAC_MIN, 1) : 1;
+    let pf = pc && typeof pc.frac === 'number' && Number.isFinite(pc.frac) ? clamp(pc.frac, FRAC_FLOOR, 1) : 1;
     // CUT2 (5.1, 5.2): with a `region` (one convex cell with at least one plane) the body is the REAL part of the squishy: its rest mesh comes from piece.ts (the
     // cache prepareCut filled during the neck, else built here), `chunk` / `cutNormal` are ignored and `at` is EXACT (no lift). Without a region the legacy build
     // applies: a whole at `at`, the Minis' scaled whole, the old chunk (deleted by task P9).
     const reg = pc ? regionOf(pc.region) : null;
     const chunk = !reg && !!(pc && pc.chunk);
     this.capFlat = reg !== null;
+    this.canSleep = pc !== null;
     this.pieceArg = pc ? { ...pc, frac: pf, chunk } : undefined;
-    this.detailArg = opts.detail ?? (pc && pf < PIECE_D2 ? 2 : undefined);
+    // CUT3: the mesh detail follows the share (0..3: piece.ts pieceDetail); a region piece that fails its build gates at that detail is built at the next finer one (buildPieceLadder:
+    // the cut's own build, in the cache, is found at whatever detail it ended at)
+    let detail0 = opts.detail ?? (pc ? pieceDetail(pf) : undefined);
+    let built: PieceBuilt | null = null;
+    if (reg) {
+      if (!(pc && typeof pc.frac === 'number' && Number.isFinite(pc.frac))) throw new Error('SoftBody: a piece with a region needs a finite frac');
+      const bl = buildPieceLadder(genome, reg, detail0 ?? 3, pf);
+      if ('fail' in bl) throw new Error('SoftBody: the piece cannot be built (' + bl.fail + ')');
+      built = bl; detail0 = bl.detail;
+    }
+    this.detailArg = detail0;
     // genome fields are sanitised where they are read (physicsGenome: non-finite -> documented default, finite -> clamped)
     const mesh = buildIcosphere(this.detailArg ?? 3);
     let rest: RestShape;
-    if (reg) {
-      if (!(pc && typeof pc.frac === 'number' && Number.isFinite(pc.frac))) throw new Error('SoftBody: a piece with a region needs a finite frac');
-      const b = buildPiece(genome, reg, this.detailArg ?? 3, pf);
-      if ('fail' in b) throw new Error('SoftBody: the piece cannot be built (' + b.fail + ')');
+    if (reg && built) {
+      const b = built;
       rest = b.rest;
       const S = getSource(genome);
       pf = rest.restVolume / S.v3;   // frac truth (3.2, 5.6): the body's own measured share; the asked one to 1e-12
@@ -709,11 +759,12 @@ export class SoftBody implements SoftBodyLike {
     this.GOAL = new Float64Array(n * 3);
     this.GRAD = new Float64Array(n * 3);
     this.pinned = new Uint8Array(n);
+    this.restRef = new Float64Array(this.canSleep ? n * 3 : 0);
     this.touchStamp = new Int32Array(n).fill(-1);
     this.tipStamp = new Int32Array(n).fill(-1000000);
     this.nearList = new Int32Array(n);
     this.WV = new Float64Array(n);
-    this.grabs = [new Grab(n), new Grab(n)];
+    this.grabs = [new Grab(n), new Grab(n), IDLE_GRAB, IDLE_GRAB, IDLE_GRAB];
 
     // topology: edge and hinge endpoints, adjacency (the rest-dependent data of the same edges and hinges is filled by initRest)
     const ne = this.ne;
@@ -982,6 +1033,7 @@ export class SoftBody implements SoftBodyLike {
     if (on === this.gravityOn) return;
     this.gravityOn = on;
     this.airSub = 0;
+    this.wake();   // CUT3: a change of the gravity mode wakes a sleeping piece
     if (!on) { this.pinned.fill(0); this.pinCount = 0; this.carried = false; }   // a floating body has no table to be glued to (nor a carry)
   }
 
@@ -1011,13 +1063,15 @@ export class SoftBody implements SoftBodyLike {
     this.simTime = 0; this.subIdx = 0; this.touchStamp.fill(-1); this.tipStamp.fill(-1000000); this.lastTipSub = -1000000; this.hingeStamp.fill(-1); this.tipNearN = 0; this.hingeCount = 0;
     for (const f of this.fingers) f.clear();
     for (const g of this.grabs) g.clear();
-    this.pinned.fill(0); this.pinCount = 0; this.pinHold = 0; this.tableFoldT = 0; this.peelK = 0; this.goalBottom = 0;
+    for (const g of this.locks) g.clear();
+    this.lockN = 0;
+    this.pinned.fill(0); this.pinCount = 0; this.pinHold = 0; this.tableFoldT = 0; this.gripT = 0; this.gripWake = 0; this.gripCap = 0; this.gripAll = false; this.gripChangeT = -10; this.peelK = 0; this.goalBottom = 0;
     this.events.length = 0;
     this.lastEvent.fill(-10);
     this.pendingLand = -1;
     const m = this.metrics;
     m.compression = 0; m.compressionRate = 0; m.stretch = 0; m.volume = 1; m.kinetic = 0; m.grounded = this.gravityOn; m.fingers = 0; m.grabbed = false;
-    m.press = 0; m.reaction = 0; m.strands = 0; m.slosh = 0; m.pull = 0; m.carried = false;
+    m.press = 0; m.reaction = 0; m.strands = 0; m.slosh = 0; m.pull = 0; m.carried = false; m.locked = 0;
     // material and ceremony state back to a fresh body
     this.vt = 1; this.MEM.set(this.Q); this.QG.set(this.Q); this.LQG.set(this.LQ);
     this.EL.set(this.EL0); this.HD.set(this.HD0);
@@ -1035,10 +1089,16 @@ export class SoftBody implements SoftBodyLike {
     this.vnStamp = -1; this.hashStamp = -1; this.contactWith.fill(-1000000);
     this.carried = false; this.twoHanded = false; this.carrier = 0; this.carryOx = 0; this.carryOy = 0; this.carryOz = 0; this.hvx = 0; this.hvy = 0; this.hvz = 0; this.phx = 0; this.phy = 0; this.phz = 0;
     this.strain.fill(1);
+    this.asleep = false; this.restT = 0; this.calmT = 0; this.restRefOn = false; this.bRvalid = false; this.restMem = 1;
     this.syncOutputs();
   }
 
   step(dt: number): void {
+    if (this.asleep) {
+      // CUT3 SLEEP: a sleeping piece takes no solver step (it is drawn at its pose, positions / center / frame / metrics stay as they were); a touch or any driver wakes it
+      if (!this.mustWake()) { this.sleepStats.asleepSteps++; return; }
+      this.wake();
+    }
     let d = Number.isFinite(dt) ? dt : (dt > 0 ? MAX_DT : 0);
     if (d < 0) d = 0;
     if (d > MAX_DT) d = MAX_DT;
@@ -1059,6 +1119,66 @@ export class SoftBody implements SoftBodyLike {
       this.postSubstep();
     }
     this.finalize(nsub);   // an integer: a double argument to a function this size is boxed (a HeapNumber per step)
+    if (this.canSleep) this.restCheck(nsub);   // (a whole squishy runs not one instruction more than before CUT3: its calm timer stays 0, so it counts as restless for a sleeper it touches)
+  }
+
+  // ---- CUT3 SLEEP / WAKE (acceptance U06). A PIECE that has been at rest for SLEEP.after seconds stops stepping until it is touched, hit, joined or the gravity mode changes; its positions,
+  // center, frame and metrics stay as they were, so it is still drawn at its pose, and step() costs a few comparisons. A whole squishy never sleeps (bit-identical solver).
+
+  /** true while the body takes no solver step (a sleeping piece). */
+  get sleeping(): boolean { return this.asleep; }
+  /** The particles this body costs the solver this frame: 0 asleep, else its vertex count (the budget accountant of CUT3 sums these: broad.ts awakeParticles). */
+  get awakeParticles(): number { return this.asleep ? 0 : this.n; }
+  /** Harness readout: how often it fell asleep / was woken, and the steps it skipped asleep. */
+  get sleepInfo(): { sleeps: number; wakes: number; asleepSteps: number; restT: number } { const s = this.sleepStats; return { sleeps: s.sleeps, wakes: s.wakes, asleepSteps: s.asleepSteps, restT: this.restT }; }
+  /** Wake a sleeping piece (any driver call that moves or reshapes the body does): it steps again from the next step() and its rest timer starts over. Harmless on an awake body. */
+  wake(): void {
+    this.restT = 0; this.calmT = 0;
+    if (!this.asleep) return;
+    this.asleep = false; this.acc = 0; this.bRvalid = false; this.vnStamp = -1; this.hashStamp = -1; this.sleepStats.wakes++;
+  }
+  /** Something other than a call to wake() asks a sleeping piece to run: a finger or a grab on it, a lock, a carry, a ceremony driver, the neck, a change of size, float mode. */
+  private mustWake(): boolean {
+    if (this.lockN > 0 || this.carried || this.moveOn || this.neckOn || this.trembleAmp > 0 || this.burstO > 0 || this.fold !== this.foldTarget || this.fracDur > 0 || this.fracNow !== this.fracBuilt || this.flatK > 0 || !this.gravityOn) return true;
+    for (let k = 0; k < NSLOT; k++) { const f = this.fingers[k]; if (f.down || f.retracting || this.grabs[k].active) return true; }
+    return false;
+  }
+  /** Once per step (after finalize): is the body at rest? It is when nothing drives it, it stands on the table, no particle moves faster than SLEEP.speed and none is farther than SLEEP.err rest radii from
+   *  its goal; a body with a memory arm also needs the memory shape to have stopped flowing. restT counts the seconds this has held on every step; a piece asleep after SLEEP.after. */
+  private restCheck(nsub: number): void {
+    let calm = !this.mustWake() && this.pinCount === 0 && this.pinHold <= 0 && this.tableFoldT <= 0 && this.gripT <= 0 && !this.gripAll && this.strandsT === 0
+      && this.pendingLand < 0 && !(this.edgesBent && !this.memOn) && (!this.memOn || this.restMem < SLEEP.mem);
+    if (calm && this.sloshOn) calm = this.slx * this.slx + this.sly * this.sly + this.slz * this.slz < 4e-4 * this.restRadius * this.restRadius && this.slvx * this.slvx + this.slvy * this.slvy + this.slvz * this.slvz < SLEEP.speed * SLEEP.speed;
+    if (!calm) { this.calmT = 0; this.restT = 0; this.restRefOn = false; return; }
+    // calmT: nothing drives the body and its centre is (nearly) still. A calm body that touches a sleeper leans on it; only a restless one wakes it (collide)
+    if (this.vcx * this.vcx + this.vcy * this.vcy + this.vcz * this.vcz < SLEEP.hitSpeed * SLEEP.hitSpeed) this.calmT += nsub * H; else this.calmT = 0;
+    if (!this.canSleep) return;
+    const ref = this.restRef, n3 = this.n * 3, X = this.X, V = this.V, G = this.GOAL, v2 = SLEEP.speed * SLEEP.speed, e2 = SLEEP.err * SLEEP.err * this.restRadius * this.restRadius;
+    let ymin = 1e9, still = true;
+    for (let i = 0; i < n3; i += 3) {
+      if (X[i + 1] < ymin) ymin = X[i + 1];
+      if (V[i] * V[i] + V[i + 1] * V[i + 1] + V[i + 2] * V[i + 2] > v2) { still = false; break; }
+      const dx = X[i] - G[i], dy = X[i + 1] - G[i + 1], dz = X[i + 2] - G[i + 2];
+      if (dx * dx + dy * dy + dz * dz > e2) { still = false; break; }
+    }
+    // on the table: its lowest particle is at it. A piece held up by another piece does not sleep (it would be left hanging when that one is joined away): it is calm, and leans
+    if (!still || ymin > 0.01 + 0.05 * this.restRadius) { this.restT = 0; this.restRefOn = false; return; }
+    // REST = NO VISIBLE MOTION: no particle has left the pose it had when the countdown started by more than SLEEP.move rest radii (at least SLEEP.moveMin m). A jelly piece buzzes for ever (a piece
+    // resting on another is shoved back and forth by the contact, up to a millimetre a frame: speeds of 0.2 to 0.4 m/s that go nowhere), which a speed bar cannot tell from a slow roll; the
+    // displacement over the half second can.
+    if (!this.restRefOn) { ref.set(X); this.restRefOn = true; this.restT = 0; return; }
+    const tol = Math.max(SLEEP.moveMin, SLEEP.move * this.restRadius), t2 = tol * tol;
+    for (let i = 0; i < n3; i += 3) {
+      const dx = X[i] - ref[i], dy = X[i + 1] - ref[i + 1], dz = X[i + 2] - ref[i + 2];
+      if (dx * dx + dy * dy + dz * dz > t2) { ref.set(X); this.restT = 0; return; }   // moved: the countdown starts again from here
+    }
+    this.restT += nsub * H;
+    if (SLEEP.enabled && this.restT >= SLEEP.after) {
+      this.asleep = true; this.restRefOn = false; this.sleepStats.sleeps++;
+      this.V.fill(0); this.vcx = 0; this.vcy = 0; this.vcz = 0; this.pvcx = 0; this.pvcy = 0; this.pvcz = 0; this.acc = 0;
+      this.metrics.kinetic = 0; this.metrics.compressionRate = 0;
+      this.bRvalid = false;   // (the bound radius is measured once more for the sleeper)
+    }
   }
 
   /** Ray vs the current surface, front faces only. `t` is in units of `dir` (point = origin + dir * t). */
@@ -1087,7 +1207,7 @@ export class SoftBody implements SoftBodyLike {
     };
   }
 
-  fingerDown(id: 0 | 1, a: FingerDownArgs): void {
+  fingerDown(id: Slot, a: FingerDownArgs): void {
     const f = this.fingers[id];
     if (!f || !a || !a.point || !a.normal || !a.dir) return;
     const px = a.point.x, py = a.point.y, pz = a.point.z;
@@ -1152,7 +1272,7 @@ export class SoftBody implements SoftBodyLike {
     f.px = hx; f.py = hy; f.pz = hz; f.tx = hx; f.ty = hy; f.tz = hz;
     f.dx = dx; f.dy = dy; f.dz = dz; f.nx = nx; f.ny = ny; f.nz = nz;
     f.depth = 0; f.depthV = 0; f.target = 0; f.holdT = 0; f.lift = lift;
-    f.share = this.fingers[id ^ 1].down ? FINGER.pinchShare : 1;
+    f.share = this.othersDown(id) ? FINGER.pinchShare : 1;
     f.tipR = R * FINGER.rMin;
     // a thin free part (the swirl-peak) can be shoved aside by far more than its own thickness, so a flank press may
     // always go FINGER.minFlankDepth rest radii deep
@@ -1165,13 +1285,13 @@ export class SoftBody implements SoftBodyLike {
     f.ocx = f.cx; f.ocy = f.cy; f.ocz = f.cz;
   }
 
-  fingerPressure(id: 0 | 1, target: number): void {
+  fingerPressure(id: Slot, target: number): void {
     const f = this.fingers[id];
     if (!f || !f.down || !Number.isFinite(target)) return;
     f.target = clamp(target, 0, 1);
   }
 
-  fingerMove(id: 0 | 1, point: V3): void {
+  fingerMove(id: Slot, point: V3): void {
     const f = this.fingers[id];
     if (!f || !f.down || !point) return;
     const qx = point.x, qy = point.y, qz = point.z;
@@ -1195,7 +1315,7 @@ export class SoftBody implements SoftBodyLike {
     f.tx = ox; f.ty = oy; f.tz = oz;
   }
 
-  fingerUp(id: 0 | 1): void {
+  fingerUp(id: Slot): void {
     const f = this.fingers[id];
     if (!f || !f.down) return;
     // 'release' on max(compression, press) (physics round-2 fix round, the shell's contract request): a single-finger dent the global
@@ -1213,13 +1333,14 @@ export class SoftBody implements SoftBodyLike {
     f.target = 0; f.depthV = 0;
   }
 
-  grab(id: 0 | 1, vertex: number, target: V3): void {
-    const g = this.grabs[id];
+  grab(id: Slot, vertex: number, target: V3): void {
+    let g = this.grabs[id];
     if (!g || !target) return;
     const tx = target.x, ty = target.y, tz = target.z;
     if (!inWorld(tx, ty, tz) || !Number.isFinite(vertex)) return;
     const v = Math.floor(vertex);
     if (v < 0 || v >= this.n) return;
+    if (g === IDLE_GRAB) { g = this.grabs[id] = new Grab(this.n); settleDoubles(g, INT_FIELDS); }   // LOCK: a touch finger's slot (2 to 4) is made on first use
     if (g.active) this.grabRelease(id);
     const f = this.fingers[id];
     if (f.down || f.retracting) { f.down = false; f.retracting = false; f.depth = 0; f.depthV = 0; }
@@ -1242,8 +1363,12 @@ export class SoftBody implements SoftBodyLike {
       for (let i = 0; i < this.n; i++) if (X[i * 3 + 1] < NEAR) { this.pinned[i] = 1; this.pinCount++; }
     }
     this.pinHold = this.p.pinHold;
-    g.t0x = tx; g.t0y = ty; g.t0z = tz; g.rx = tx; g.ry = ty; g.rz = tz; g.ex = tx; g.ey = ty; g.ez = tz;
+    // (GROUND FIX: the reference is on the reachable side of the floor too, or the first substep would pull the patch UP by the whole distance to the floor: the hostile fuzz grabs below the table)
+    const tyr = this.gravityOn && ty < GRAB_FLOOR_Y ? GRAB_FLOOR_Y : ty;
+    g.t0x = tx; g.t0y = tyr; g.t0z = tz; g.rx = tx; g.ry = tyr; g.rz = tz; g.ex = tx; g.ey = tyr; g.ez = tz;
     g.c0x = this.center.x; g.c0y = this.center.y; g.c0z = this.center.z;
+    this.limitDepth(g, v);
+    this.gripChangeT = this.simTime;
     const nrm = this.vertexNormal(v);
     this.emit('grab', X[v * 3], X[v * 3 + 1], X[v * 3 + 2], nrm[0], nrm[1], nrm[2], 0.5, 0, id);
   }
@@ -1265,18 +1390,20 @@ export class SoftBody implements SoftBodyLike {
     return l < 0 ? 0 : l > 1 - 1e-9 ? 1 : l;   // (the clamp leaves it a rounding error short of 1 at the limit)
   }
 
-  grabMove(id: 0 | 1, target: V3): void {
+  grabMove(id: Slot, target: V3): void {
     const g = this.grabs[id];
     if (!g || !g.active || !target) return;
     if (!inWorld(target.x, target.y, target.z)) return;
     g.rx = target.x; g.ry = target.y; g.rz = target.z;
   }
 
-  grabRelease(id: 0 | 1): void {
+  grabRelease(id: Slot): void {
     const g = this.grabs[id];
     if (!g || !g.active) return;
     g.active = false;
-    if (this.carried && !this.grabs[0].active && !this.grabs[1].active) {
+    this.gripChangeT = this.simTime;
+    const other = this.otherGrab(id);
+    if (this.carried && other < 0) {
       // B3 TOSS: let go of a carried body: it flies with the hand's velocity (at most TOSS_MAX), lands ('land') and squashes. The 'snap' of a
       // pull that got past the body's maximum is a full one (intensity 1): the shell plays its toss on it and the meter pays it as a pull.
       this.carried = false;
@@ -1291,11 +1418,11 @@ export class SoftBody implements SoftBodyLike {
       return;
     }
     // the carrying hand let go while the other still holds a lobe: the other hand carries it from here
-    if (this.carried && id === this.carrier) { this.startCarry(1 - id); return; }
+    if (this.carried && id === this.carrier) { this.startCarry(other); return; }
     // a snap when the pull got anywhere (>= 5% of the body's own maxPull; it was metrics.stretch > 0.05 until the round-2 fix round,
     // which a firm family pulled to its limit never reaches: slow-rise foam reads stretch 0.04 at its maxPull, so it never snapped)
     const pl = this.pullLevel(g);
-    if (!this.grabs[0].active && !this.grabs[1].active) this.pinHold = this.p.pinHold;
+    if (other < 0 && this.lockN === 0) this.pinHold = this.p.pinHold;
     if (pl > 0.05) {
       const v = g.anchor, X = this.X;
       const nrm = this.vertexNormal(v);
@@ -1304,7 +1431,7 @@ export class SoftBody implements SoftBodyLike {
   }
 
   /** Visual aid (finger ghost, debug viewer): the current fingertip sphere of finger `id`, or null when it has no tip. Allocates; not for the hot path. */
-  tip(id: 0 | 1): { x: number; y: number; z: number; r: number; depth: number } | null {
+  tip(id: Slot): { x: number; y: number; z: number; r: number; depth: number } | null {
     const f = this.fingers[id];
     if (!f || (!f.down && !f.retracting)) return null;
     return { x: f.cx, y: f.cy, z: f.cz, r: f.tipR, depth: f.depth };
@@ -1350,6 +1477,19 @@ export class SoftBody implements SoftBodyLike {
     if (hg) w.grab(0, hg.vertex, hg.point);                                                          // grab (pinned feet) while finger 1 is down
     pull(0.5); frame(); w.fingerUp(1); pull(1); frame();
     w.grabRelease(0); frame(); w.pinHold = 1e-9; frame();                                           // snap, pinned-feet hold and expiry
+    {   // LOCK: a touch finger on slot 2, a grab on slot 3 pulled to a full stretch and locked, lockAt, two locks released one by one and together (the paths are first run here, not on the player's first lock)
+      const hf = ray(0.5 * R, 6 * R, 0, 0, -1, 0);
+      if (hf) { w.fingerDown(2, { point: hf.point, normal: hf.normal, dir: { x: 0, y: -1, z: 0 } }); w.fingerPressure(2, 1); frame(); frame(); w.fingerUp(2); frame(); }
+      const maxD = w.p.maxPull * R;
+      for (let k = 0; k < 3; k++) {
+        const hl = ray((k & 1 ? 6 : -6) * R, 0.8 * R, 0, k & 1 ? -1 : 1, 0, 0);
+        if (!hl) continue;
+        w.grab(3, hl.vertex, hl.point);
+        for (let i = 0; i < 14; i++) { const d = 1.1 * maxD * Math.min(1, (i + 1) / 8); w.grabMove(3, { x: hl.point.x + (k & 1 ? 1 : -1) * 0.8 * d, y: hl.point.y + 0.6 * d, z: hl.point.z }); frame(); }
+        w.lockGrab(3); w.lockAt(hl.point); frame(); frame();
+      }
+      w.releaseLock(0); frame(); w.releaseLock('all'); frame(); w.pinHold = 1e-9; frame();
+    }
     w.gravity = false; w.nudge({ x: 0.5, y: 0.3, z: -0.2 }); frame();                                // float, shove
     w.gravity = true; w.airSub = 8; w.vcy = -2; frame();                                             // land
     w.nudge({ x: 9, y: 0, z: 3 }); for (let i = 0; i < 8; i++) frame();                              // mat corral (outside the dead zone)
@@ -1376,6 +1516,7 @@ export class SoftBody implements SoftBodyLike {
     // at most MAX_NUDGE m/s, along the impulse's own direction (a 1e200 shove is a hard shove, not none: no overflow on the way)
     const l = Math.min(u[3], MAX_NUDGE), ix = u[0] * l, iy = u[1] * l, iz = u[2] * l;
     const V = this.V;
+    this.wake();
     for (let i = 0; i < this.n; i++) { V[i * 3] += ix; V[i * 3 + 1] += iy; V[i * 3 + 2] += iz; }
   }
 
@@ -1385,6 +1526,7 @@ export class SoftBody implements SoftBodyLike {
   setFold(t: number): void {
     if (typeof t !== 'number' || Number.isNaN(t)) return;
     this.foldTarget = t <= 0 ? 0 : t >= 1 ? 1 : t;
+    this.wake();
   }
 
   /** Kinematic spring of the centre of mass toward a world point (horizontal only on the table); null releases it. stiffness ~1 = default. */
@@ -1395,12 +1537,14 @@ export class SoftBody implements SoftBodyLike {
     const k = typeof stiffness === 'number' && Number.isFinite(stiffness) ? stiffness : 1;
     this.moveK = k < 0.1 ? 0.1 : k > 4 ? 4 : k;
     this.moveOn = true;
+    this.wake();
   }
 
   /** 0..1: high-frequency goal jitter along the surface normal (the charge-up tremble). 0 = off. */
   tremble(amp: number): void {
     if (typeof amp !== 'number' || Number.isNaN(amp)) return;
     this.trembleAmp = amp <= 0 ? 0 : amp >= 1 ? 1 : amp;
+    this.wake();
   }
 
   /** Spring open: a radial velocity kick (momentum-free) and a goal overshoot of 1 + 0.25 x strength that settles by itself (BURST_TAU). */
@@ -1408,6 +1552,7 @@ export class SoftBody implements SoftBodyLike {
     if (typeof strength !== 'number' || !(strength > 0)) return;   // NaN, <= 0: nothing
     const s = strength >= 1 ? 1 : strength;
     if (BURST_OVER * s > this.burstO) this.burstO = BURST_OVER * s;
+    this.wake();
     const n = this.n, X = this.X, V = this.V, M = this.M, kick = BURST_SPEED * s;
     let cx = 0, cy = 0, cz = 0;
     for (let i = 0; i < n; i++) { const m = M[i]; cx += m * X[i * 3]; cy += m * X[i * 3 + 1]; cz += m * X[i * 3 + 2]; }
@@ -1481,6 +1626,7 @@ export class SoftBody implements SoftBodyLike {
     if (plane === null || plane === undefined) { this.neckTarget = 0; this.nkLatched = false; return; }
     if (typeof plane !== 'object' || !plane.point || !plane.normal || !finite3(plane.point) || !finite3(plane.normal)) return;
     if (!inWorld(plane.point.x, plane.point.y, plane.point.z) || typeof t !== 'number' || Number.isNaN(t)) return;
+    this.wake();   // CUT3: a piece that is being cut is awake
     // (called every frame of a neck: no doubles passed to a helper, no ternary between integer bounds and t)
     const nx = plane.normal.x, ny = plane.normal.y, nz = plane.normal.z, nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
     if (!(nl > 1e-12) || nl === Infinity) return;
@@ -1592,6 +1738,7 @@ export class SoftBody implements SoftBodyLike {
     const P = PC_PARTS, N = PC_N, L = PC_PL5;
     L[0] = this.lnx; L[1] = this.lny; L[2] = this.lnz; L[3] = this.lnd; L[4] = this.fracBuilt;
     if (!planSplit(this.Q, this.tris, L, P)) return false;
+    if (this.n <= 42 && this.regionArg !== undefined && !this.trueShares(P)) return false;   // CUT3: a coarse piece (12 / 42 particles) is cut by the shares of its TRUE region (piece.ts planSplitTrue)
     N.x = this.lnx; N.y = this.lny; N.z = this.lnz;
     const ox = this.offX, oy = this.offY, oz = this.offZ, job = this.cutJob, st = this.cutState;
     const dW = this.lnd + N.x * ox + N.y * oy + N.z * oz;
@@ -1615,10 +1762,28 @@ export class SoftBody implements SoftBodyLike {
     return true;
   }
 
+  /** CUT3: replace the shares and centroids of `P` (planSplit's result for the latched plane, rest-local) by those of the TRUE region (the source solid cut by this piece's cell and the plane), cached for the
+   *  latched plane (the quadrature is a few ms and fillPlan runs again whenever the build state changes). false: the region does not reach both sides. */
+  private trueShares(P: CutPlanParts): boolean {
+    const ox = this.offX, oy = this.offY, oz = this.offZ, dW = this.lnd + this.lnx * ox + this.lny * oy + this.lnz * oz, k = this.tsK, r = this.tsR;
+    if (!(this.tsOk && k[0] === this.lnx && k[1] === this.lny && k[2] === this.lnz && k[3] === dW && k[4] === this.fracBuilt)) {
+      const L = PC_PLW, T = PC_TRUE;
+      L[0] = this.lnx; L[1] = this.lny; L[2] = this.lnz; L[3] = dW; L[4] = this.fracBuilt;
+      T.aspectA = P.aspectA; T.aspectB = P.aspectB;
+      T.cA.x = P.cA.x + ox; T.cA.y = P.cA.y + oy; T.cA.z = P.cA.z + oz; T.cB.x = P.cB.x + ox; T.cB.y = P.cB.y + oy; T.cB.z = P.cB.z + oz;   // (the mesh clip's centroids start the quadrature)
+      if (!planSplitTrue(this.source(), this.cellData, L, T)) { this.tsOk = false; return false; }
+      r[0] = T.fa; r[1] = T.fracA; r[2] = T.fracB; r[3] = T.cA.x; r[4] = T.cA.y; r[5] = T.cA.z; r[6] = T.cB.x; r[7] = T.cB.y; r[8] = T.cB.z;
+      k[0] = this.lnx; k[1] = this.lny; k[2] = this.lnz; k[3] = dW; k[4] = this.fracBuilt; this.tsOk = true;
+    }
+    P.fa = r[0]; P.fracA = r[1]; P.fracB = r[2];
+    P.cA.x = r[3] - ox; P.cA.y = r[4] - oy; P.cA.z = r[5] - oz; P.cB.x = r[6] - ox; P.cB.y = r[7] - oy; P.cB.z = r[8] - oz;
+    return true;
+  }
+
   /** planCut's cheap soundness (4.5): phi at each child's clipped centroid. Provisional answer: sound, pending when either phi is under PC_PHI_OK. */
   private soundCheck(cA: V3, cB: V3): void {
     const S = this.source(), cd = this.cellData, np = cd.np, ox = this.offX, oy = this.offY, oz = this.offZ, dW = PC_SCAL[0];
-    const ok = np + 1 <= 8;
+    const ok = np + 1 <= MAX_PLANES;
     let pending = false;
     for (let s = 0; s < 2 && ok; s++) {
       const cell = s === 0 ? PC_CELL_A : PC_CELL_B, sg = s === 0 ? 1 : -1, c = s === 0 ? cA : cB, pl = cell.pl;
@@ -1664,7 +1829,7 @@ export class SoftBody implements SoftBodyLike {
       const rg = this.regionArg;
       if (rg) for (const pl of rg.planes) if (pl.id > id) id = pl.id;
       const dW = this.lnd + this.lnx * this.offX + this.lny * this.offY + this.lnz * this.offZ;
-      job = new CutJob(this.genomeRef, { region: rg, frac: this.fracBuilt, pos: this.restW(), tris: this.tris }, { id: id + 1, n: { x: this.lnx, y: this.lny, z: this.lnz }, d: dW });
+      job = new CutJob(this.genomeRef, { region: rg, frac: this.fracBuilt, pos: this.restW(), tris: this.tris, coarse: this.n <= 42 }, { id: id + 1, n: { x: this.lnx, y: this.lny, z: this.lnz }, d: dW });
       this.cutJob = job; this.cutState = 1; this.lastJobD = dW;
     }
     const ms = typeof budgetMs === 'number' && !Number.isNaN(budgetMs) ? budgetMs : 3;
@@ -1702,6 +1867,7 @@ export class SoftBody implements SoftBodyLike {
    */
   placeAt(at: V3, vel: V3, frame?: Quat): void {
     if (!at || !finite3(at) || !inWorld(at.x, at.y, at.z)) return;
+    this.wake();
     let qx = 0, qy = 0, qz = 0, qw = 1;
     if (frame && Number.isFinite(frame.x) && Number.isFinite(frame.y) && Number.isFinite(frame.z) && Number.isFinite(frame.w)) {
       const l = Math.sqrt(frame.x * frame.x + frame.y * frame.y + frame.z * frame.z + frame.w * frame.w);
@@ -1729,11 +1895,12 @@ export class SoftBody implements SoftBodyLike {
   }
 
   /** Grow or shrink the rest volume smoothly (smoothstep in time) to `frac` of the whole over `seconds` (0: at once). The rest shape is the
-   *  built one scaled by cbrt(frac / built); the volume constraint follows it. frac is clamped to 1/8 .. 1. */
+   *  built one scaled by cbrt(frac / built); the volume constraint follows it. frac is clamped to FRAC_FLOOR .. 1 (CUT3: no 1/8 floor). */
   setFrac(frac: number, seconds: number): void {
     if (typeof frac !== 'number' || !Number.isFinite(frac)) return;
-    const f = frac < FRAC_MIN ? FRAC_MIN : frac > 1 ? 1 : frac;
+    const f = frac < FRAC_FLOOR ? FRAC_FLOOR : frac > 1 ? 1 : frac;
     const sec = typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 60) : 0;
+    this.wake();
     this.fracFrom = this.fracNow; this.fracTo = f; this.fracT0 = this.simTime; this.fracDur = sec;
     if (sec === 0) { this.fracNow = f; this.fracDur = 0; }
   }
@@ -1750,13 +1917,14 @@ export class SoftBody implements SoftBodyLike {
    */
   collide(others: readonly SoftBodyLike[]): void {
     if (!others || typeof others.length !== 'number') return;
+    if (this.asleep) return;   // CUT3: a sleeping piece pushes nothing; the awake bodies that reach it do the work (they lean on it, or wake it)
     const X = this.X, V = this.V, n = this.n, now = this.subIdx;
     this.boundRadius();
     const ra = this.bR;
     for (let k = 0; k < others.length; k++) {
       const o = others[k];
       if (!(o instanceof SoftBody) || o === this) continue;
-      o.boundRadius();
+      if (!(o.asleep && o.bRvalid)) { o.boundRadius(); o.bRvalid = o.asleep; }   // (a sleeper's bound radius is measured once)
       const rb = o.bR;
       const cdx = o.center.x - this.center.x, cdy = o.center.y - this.center.y, cdz = o.center.z - this.center.z;
       let skin = 0.25 * (this.meanEdge + o.meanEdge);
@@ -1769,7 +1937,14 @@ export class SoftBody implements SoftBodyLike {
       const reach = rb + skin;
       if (cdx * cdx + cdy * cdy + cdz * cdz > (ra + reach) * (ra + reach)) continue;   // broad phase: the spheres do not meet
       o.ensureContactData();
-      if (piecePair) { this.contactPiece(o, skin, now); continue; }
+      // CUT3 SLEEP: a sleeping body is a fixed support (ow 0: it takes none of the push; this body takes all of it) unless this body is itself restless, which wakes it on contact
+      const ow = o.asleep ? 0 : 1, mT = 2 - ow;
+      this.ow = ow;
+      if (piecePair) {
+        this.contactPiece(o, skin, now);
+        if (ow === 0 && this.cpContacts > 0 && this.calmT < SLEEP.hit * SLEEP.after) o.wake();
+        continue;
+      }
       const OX = o.X, OV = o.V, VN = o.VN, head = o.hashHead, next = o.hashNext, cell = o.hashCell, deep = 0.6 * o.restRadius;
       const ocx = o.center.x, ocy = o.center.y, ocz = o.center.z, reach2 = reach * reach, search2 = 4 * cell * cell;
       let contacts = 0, appr = 0, sx = 0, sy = 0, sz = 0, snx = 0, sny = 0, snz = 0, spen = 0;
@@ -1792,17 +1967,17 @@ export class SoftBody implements SoftBodyLike {
         const b3 = best * 3, nx = VN[b3], ny = VN[b3 + 1], nz = VN[b3 + 2];
         const d = (px - OX[b3]) * nx + (py - OX[b3 + 1]) * ny + (pz - OX[b3 + 2]) * nz;
         if (d >= skin || d < -deep) continue;   // clear of it, or deeper than a frame can carry a particle (no direction to trust)
-        const push = 0.5 * (skin - d);
-        X[i3] += nx * push; X[i3 + 1] += ny * push; X[i3 + 2] += nz * push;
+        const push = 0.5 * (skin - d), pT = push * mT, pO = push * ow;
+        X[i3] += nx * pT; X[i3 + 1] += ny * pT; X[i3 + 2] += nz * pT;
         if (X[i3 + 1] < 0) X[i3 + 1] = 0;
-        OX[b3] -= nx * push; OX[b3 + 1] -= ny * push; OX[b3 + 2] -= nz * push;
+        OX[b3] -= nx * pO; OX[b3 + 1] -= ny * pO; OX[b3 + 2] -= nz * pO;
         if (OX[b3 + 1] < 0) OX[b3 + 1] = 0;
         // inelastic along the normal, friction across it (half to each side)
         const rvx = V[i3] - OV[b3], rvy = V[i3 + 1] - OV[b3 + 1], rvz = V[i3 + 2] - OV[b3 + 2], vn = rvx * nx + rvy * ny + rvz * nz;
         const vnn = vn < 0 ? vn : CONTACT_TACK * vn, tx = rvx - vn * nx, ty = rvy - vn * ny, tz = rvz - vn * nz;
         const ix = 0.5 * (vnn * nx + CONTACT_MU * tx), iy = 0.5 * (vnn * ny + CONTACT_MU * ty), iz = 0.5 * (vnn * nz + CONTACT_MU * tz);
-        V[i3] -= ix; V[i3 + 1] -= iy; V[i3 + 2] -= iz;
-        OV[b3] += ix; OV[b3 + 1] += iy; OV[b3 + 2] += iz;
+        V[i3] -= ix * mT; V[i3 + 1] -= iy * mT; V[i3 + 2] -= iz * mT;
+        OV[b3] += ix * ow; OV[b3 + 1] += iy * ow; OV[b3 + 2] += iz * ow;
         contacts++;
         if (-vn > appr) appr = -vn;
         sx += px; sy += py; sz += pz; snx += nx; sny += ny; snz += nz; spen += push;
@@ -1822,11 +1997,13 @@ export class SoftBody implements SoftBodyLike {
           // ... and a rigid share of the separation (CONTACT_RIGID of the mean push, each body as a whole): the push of a few contact
           // particles alone is spread over the whole body by the next solve, so a resting stack settled 0.18 R deep into the body below
           const rs = CONTACT_RIGID * spen / contacts, rx = mx * rs, ry = my * rs, rz = mz * rs;
-          for (let i = 0; i < n * 3; i += 3) { V[i] -= tx; V[i + 1] -= ty; V[i + 2] -= tz; X[i] += rx; X[i + 1] += ry; X[i + 2] += rz; if (X[i + 1] < 0) X[i + 1] = 0; }
-          for (let i = 0; i < o.n * 3; i += 3) { OV[i] += tx; OV[i + 1] += ty; OV[i + 2] += tz; OX[i] -= rx; OX[i + 1] -= ry; OX[i + 2] -= rz; if (OX[i + 1] < 0) OX[i + 1] = 0; }
-          this.vcx -= tx; this.vcy -= ty; this.vcz -= tz; o.vcx += tx; o.vcy += ty; o.vcz += tz;
+          const txT = tx * mT, tyT = ty * mT, tzT = tz * mT, rxT = rx * mT, ryT = ry * mT, rzT = rz * mT;
+          for (let i = 0; i < n * 3; i += 3) { V[i] -= txT; V[i + 1] -= tyT; V[i + 2] -= tzT; X[i] += rxT; X[i + 1] += ryT; X[i + 2] += rzT; if (X[i + 1] < 0) X[i + 1] = 0; }
+          if (ow === 1) for (let i = 0; i < o.n * 3; i += 3) { OV[i] += tx; OV[i + 1] += ty; OV[i + 2] += tz; OX[i] -= rx; OX[i + 1] -= ry; OX[i + 2] -= rz; if (OX[i + 1] < 0) OX[i + 1] = 0; }
+          this.vcx -= txT; this.vcy -= tyT; this.vcz -= tzT;
+          if (ow === 1) { o.vcx += tx; o.vcy += ty; o.vcz += tz; }
         }
-        o.syncOutputs();
+        if (ow === 1) o.syncOutputs();
         // a 'bump' is the START of a contact (none with that body in the last BUMP_GAP substeps) that closes faster than BUMP_MIN: bodies
         // resting against each other do not keep bumping
         const slot = o.bodyId & (MAX_OTHERS - 1), fresh = now - this.contactWith[slot] > BUMP_GAP;
@@ -1835,6 +2012,7 @@ export class SoftBody implements SoftBodyLike {
           const ic = 1 / contacts;
           this.emit('bump', sx * ic, sy * ic, sz * ic, snx, sny, snz, appr / BUMP_NORM, 0, -1);   // normal: out of the other body
         }
+        if (ow === 0 && this.calmT < SLEEP.hit * SLEEP.after) o.wake();
       }
     }
     this.syncOutputs();
@@ -1854,6 +2032,8 @@ export class SoftBody implements SoftBodyLike {
     const vs = o.vtStart!, vl = o.vtList!, otris = o.tris;
     const head = o.hashHead, next = o.hashNext, cell = o.hashCell, deep = 0.6 * o.restRadius;
     const ocx = o.center.x, ocy = o.center.y, ocz = o.center.z, reach = o.bR + skin, reach2 = reach * reach, search2 = 4 * cell * cell;
+    const ow = this.ow;   // CUT3: ow 0 = o sleeps and is a fixed support (this body takes all of every push and impulse, o none)
+    this.cpContacts = 0;
     let contacts = 0, appr = 0, sx = 0, sy = 0, sz = 0, snx = 0, sny = 0, snz = 0, spen = 0;
     // the boxes of the two bodies: two halves of one cut are half-domes, their bounding spheres overlap while the bodies are a hand's width apart, their boxes do not (a parted pair costs
     // nothing; a flush or stacked pair only searches the particles inside the other's box grown by the skin)
@@ -1916,29 +2096,34 @@ export class SoftBody implements SoftBodyLike {
       let nx = tnx, ny = tny, nz = tnz;
       if (dd > 1e-9) { const s = sgn / dd; nx = rx0 * s; ny = ry0 * s; nz = rz0 * s; }
       const w0 = cp[9], w1 = cp[10], w2 = cp[11], sw2 = w0 * w0 + w1 * w1 + w2 * w2;
-      let lam = (skin - d) / (1 + sw2);
+      let lam = (skin - d) / (1 + sw2 * ow);
       if (lam > PC_PUSH_MAX) lam = PC_PUSH_MAX;
       X[i3] += nx * lam; X[i3 + 1] += ny * lam; X[i3 + 2] += nz * lam;
       if (X[i3 + 1] < 0) X[i3 + 1] = 0;
-      let pl = lam * w0;
-      OX[ia] -= nx * pl; OX[ia + 1] -= ny * pl; OX[ia + 2] -= nz * pl; if (OX[ia + 1] < 0) OX[ia + 1] = 0;
-      pl = lam * w1;
-      OX[ib] -= nx * pl; OX[ib + 1] -= ny * pl; OX[ib + 2] -= nz * pl; if (OX[ib + 1] < 0) OX[ib + 1] = 0;
-      pl = lam * w2;
-      OX[ic] -= nx * pl; OX[ic + 1] -= ny * pl; OX[ic + 2] -= nz * pl; if (OX[ic + 1] < 0) OX[ic + 1] = 0;
+      if (ow === 1) {
+        let pl = lam * w0;
+        OX[ia] -= nx * pl; OX[ia + 1] -= ny * pl; OX[ia + 2] -= nz * pl; if (OX[ia + 1] < 0) OX[ia + 1] = 0;
+        pl = lam * w1;
+        OX[ib] -= nx * pl; OX[ib + 1] -= ny * pl; OX[ib + 2] -= nz * pl; if (OX[ib + 1] < 0) OX[ib + 1] = 0;
+        pl = lam * w2;
+        OX[ic] -= nx * pl; OX[ic + 1] -= ny * pl; OX[ic + 2] -= nz * pl; if (OX[ic + 1] < 0) OX[ic + 1] = 0;
+      }
       // inelastic along the normal, friction across it: the relative velocity at the contact point, shared like the push
       const ovx = w0 * OV[ia] + w1 * OV[ib] + w2 * OV[ic], ovy = w0 * OV[ia + 1] + w1 * OV[ib + 1] + w2 * OV[ic + 1], ovz = w0 * OV[ia + 2] + w1 * OV[ib + 2] + w2 * OV[ic + 2];
       const rvx = V[i3] - ovx, rvy = V[i3 + 1] - ovy, rvz = V[i3 + 2] - ovz, vn = rvx * nx + rvy * ny + rvz * nz;
-      const vnn = vn < 0 ? vn : CONTACT_TACK * vn, tx = rvx - vn * nx, ty = rvy - vn * ny, tz = rvz - vn * nz, ik = 1 / (1 + sw2);
+      const vnn = vn < 0 ? vn : CONTACT_TACK * vn, tx = rvx - vn * nx, ty = rvy - vn * ny, tz = rvz - vn * nz, ik = 1 / (1 + sw2 * ow);
       const ix = ik * (vnn * nx + CONTACT_MU * tx), iy = ik * (vnn * ny + CONTACT_MU * ty), iz = ik * (vnn * nz + CONTACT_MU * tz);
       V[i3] -= ix; V[i3 + 1] -= iy; V[i3 + 2] -= iz;
-      OV[ia] += w0 * ix; OV[ia + 1] += w0 * iy; OV[ia + 2] += w0 * iz;
-      OV[ib] += w1 * ix; OV[ib + 1] += w1 * iy; OV[ib + 2] += w1 * iz;
-      OV[ic] += w2 * ix; OV[ic + 1] += w2 * iy; OV[ic + 2] += w2 * iz;
+      if (ow === 1) {
+        OV[ia] += w0 * ix; OV[ia + 1] += w0 * iy; OV[ia + 2] += w0 * iz;
+        OV[ib] += w1 * ix; OV[ib + 1] += w1 * iy; OV[ib + 2] += w1 * iz;
+        OV[ic] += w2 * ix; OV[ic + 1] += w2 * iy; OV[ic + 2] += w2 * iz;
+      }
       contacts++;
       if (-vn > appr) appr = -vn;
       sx += px; sy += py; sz += pz; snx += nx; sny += ny; snz += nz; spen += lam;
     }
+    this.cpContacts = contacts;
     if (contacts > 0) {
       // the bodies' relative velocity across the mean contact normal is damped (as for whole bodies) ...
       const nl = Math.sqrt(snx * snx + sny * sny + snz * snz);
@@ -1961,11 +2146,18 @@ export class SoftBody implements SoftBodyLike {
         // not (a 50 degree cut pushed the lower piece 0.2 m sideways, 17 mm/s for as long as the upper piece lay on it); the total relative separation is kept (hT + hO = 2)
         const dh = PIECE_CONTACT.asym ? this.supp - o.supp : 0, hT = 1 - dh, hO = 1 + dh;
         const rxT = rx * hT, rzT = rz * hT, rxO = rx * hO, rzO = rz * hO;
-        for (let i = 0; i < n * 3; i += 3) { V[i] -= tx; V[i + 1] -= ty; V[i + 2] -= tz; X[i] += rxT; X[i + 1] += ry; X[i + 2] += rzT; if (X[i + 1] < 0) X[i + 1] = 0; }
-        for (let i = 0; i < o.n * 3; i += 3) { OV[i] += tx; OV[i + 1] += ty; OV[i + 2] += tz; OX[i] -= rxO; OX[i + 1] -= ry; OX[i + 2] -= rzO; if (OX[i + 1] < 0) OX[i + 1] = 0; }
-        this.vcx -= tx; this.vcy -= ty; this.vcz -= tz; o.vcx += tx; o.vcy += ty; o.vcz += tz;
+        if (ow === 1) {
+          for (let i = 0; i < n * 3; i += 3) { V[i] -= tx; V[i + 1] -= ty; V[i + 2] -= tz; X[i] += rxT; X[i + 1] += ry; X[i + 2] += rzT; if (X[i + 1] < 0) X[i + 1] = 0; }
+          for (let i = 0; i < o.n * 3; i += 3) { OV[i] += tx; OV[i + 1] += ty; OV[i + 2] += tz; OX[i] -= rxO; OX[i + 1] -= ry; OX[i + 2] -= rzO; if (OX[i + 1] < 0) OX[i + 1] = 0; }
+          this.vcx -= tx; this.vcy -= ty; this.vcz -= tz; o.vcx += tx; o.vcy += ty; o.vcz += tz;
+        } else {
+          // o sleeps: it is a fixed support, this body takes the whole separation and the whole relative velocity
+          const tx2 = tx * 2, ty2 = ty * 2, tz2 = tz * 2, rx2 = rx * 2, ry2 = ry * 2, rz2 = rz * 2;
+          for (let i = 0; i < n * 3; i += 3) { V[i] -= tx2; V[i + 1] -= ty2; V[i + 2] -= tz2; X[i] += rx2; X[i + 1] += ry2; X[i + 2] += rz2; if (X[i + 1] < 0) X[i + 1] = 0; }
+          this.vcx -= tx2; this.vcy -= ty2; this.vcz -= tz2;
+        }
       }
-      o.syncOutputs();
+      if (ow === 1) o.syncOutputs();
       const slot = o.bodyId & (MAX_OTHERS - 1), fresh = now - this.contactWith[slot] > BUMP_GAP;
       this.contactWith[slot] = now;
       if (fresh && appr > BUMP_MIN) {
@@ -1985,6 +2177,13 @@ export class SoftBody implements SoftBodyLike {
     const fill = new Int32Array(n);
     for (let k = 0; k < nt3; k++) { const v = tris[k]; list[st[v] + fill[v]++] = (k / 3) | 0; }
     this.vtList = list; this.vtStart = st;
+  }
+
+  /** CUT3 broad phase (broad.ts ContactPlanner): this body's bounding sphere into out[o .. o + 3] = centre x, y, z and the radius (the bound radius plus a quarter of its mean edge, the half of
+   *  collide's contact skin that belongs to this body). A sleeping body's radius is measured once. */
+  boundSphere(out: Float64Array, o: number): void {
+    if (!(this.asleep && this.bRvalid)) { this.boundRadius(); this.bRvalid = this.asleep; }
+    out[o] = this.center.x; out[o + 1] = this.center.y; out[o + 2] = this.center.z; out[o + 3] = this.bR + 0.25 * this.meanEdge;
   }
 
   /** Largest particle distance from the centre into this.bR (collide's broad phase; a field, not a return value: a double returned from a
@@ -2113,12 +2312,11 @@ export class SoftBody implements SoftBodyLike {
   private updateFingers(): void {
     const w = FINGER.omega;
     const slide = 1 - Math.exp(-FINGER.slideRate * H);
-    const a = this.fingers[0], b = this.fingers[1];
-    for (let k = 0; k < 2; k++) {
+    for (let k = 0; k < NSLOT; k++) {
       const f = this.fingers[k];
       f.ocx = f.cx; f.ocy = f.cy; f.ocz = f.cz;
       if (f.down) {
-        const want = this.fingers[k ^ 1].down ? FINGER.pinchShare : 1;
+        const want = this.othersDown(k) ? FINGER.pinchShare : 1;
         f.share += (want - f.share) * (1 - Math.exp(-(want < f.share ? FINGER.shareIn : FINGER.shareOut) * H));
         const acc = w * w * (f.target - f.depth) - 2 * w * f.depthV;
         f.depthV += acc * H;
@@ -2143,6 +2341,11 @@ export class SoftBody implements SoftBodyLike {
     // it evenly always let a finger rubbing up to a HOLDING one shove that tip aside by up to ~0.4 R in one frame (over 15 m/s, far past
     // the speed cap), dragging its dent through the skin: in 120 000 frames of the sane-gesture fuzz (5 genomes x 4 seeds), episodes over
     // 120 deg with a finger down went from 8 to 1 with this.
+    for (let i = 0; i < NSLOT - 1; i++) for (let j = i + 1; j < NSLOT; j++) this.pinchPair(this.fingers[i], this.fingers[j]);
+  }
+
+  /** The pinch rule for one pair of tips (see updateFingers): neither overlaps the other nor is pushed into the table gap. */
+  private pinchPair(a: Finger, b: Finger): void {
     if ((a.down || a.retracting) && (b.down || b.retracting)) {
       let dx = b.cx - a.cx, dy = b.cy - a.cy, dz = b.cz - a.cz;
       let d = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -2262,7 +2465,9 @@ export class SoftBody implements SoftBodyLike {
     // face is 100 to 140 degrees AT REST. Half the smallest allowed interior angle, its cosine and sine, and the cosine of the whole angle come from the per-hinge
     // arrays filled by initRest; for every hinge of a whole body the values are the ones this function always computed.)
     const HCa = this.HC, HCHa = this.HCH, HSHa = this.HSH;
-    for (let it = 0; it < FINGER.foldIters; it++) {
+    const maxIt = this.lockN + this.grabCount() >= GRAB_TUNE.allFrom ? GRAB_TUNE.iters : FINGER.foldIters;   // (LOCK: with the whole skin in the limit, fewer passes: it is held at the limit and chased every substep)
+    for (let it = 0; it < maxIt; it++) {
+      this.debug.foldWork += hc;
       let opened = false, deep = false;
       for (let q = 0; q < hc; q++) {
         const h = hl[q], c = H3[h * 2], d = H3[h * 2 + 1], a = HE[h * 2], b = HE[h * 2 + 1];
@@ -2341,7 +2546,7 @@ export class SoftBody implements SoftBodyLike {
         }
       }
       // back onto the fingertip surfaces (radially), never under the table
-      for (let k = 0; k < 2; k++) {
+      for (let k = 0; k < NSLOT; k++) {
         const f = this.fingers[k];
         if (!f.down && !f.retracting) continue;
         const r = f.tipR, r2 = r * r, fx = f.cx, fy = f.cy, fz = f.cz;
@@ -2368,23 +2573,36 @@ export class SoftBody implements SoftBodyLike {
     // past the limit stretches the body to its maximum and holds it to the mat, as it did before pick up existed (the owner: "squish two
     // sides and pull ... now it LIFTS the squishy"). The latch stays until every finger is up, so lifting one finger of a two-handed
     // stretch does not hoist the body by the other.
-    const on0 = this.grabs[0].active || this.fingers[0].down, on1 = this.grabs[1].active || this.fingers[1].down;
-    if (on0 && on1) this.twoHanded = true; else if (!on0 && !on1) this.twoHanded = false;
-    for (let k = 0; k < 2; k++) {
+    // LOCK (LOCK.md rule 2): a locked lobe is a hand too. Two or more hands (a finger, a grab or a lock: a slot with both counts once) and the body is never picked up.
+    let hands = this.lockN;
+    for (let k = 0; k < NSLOT; k++) if (this.grabs[k].active || this.fingers[k].down) hands++;
+    if (hands >= 2) this.twoHanded = true; else if (hands === 0) this.twoHanded = false;
+    for (let k = 0; k < MAX_LOCKS; k++) { const L = this.locks[k]; if (L.active) L.holdT += H; }   // a lock keeps counting the hold since its grab (its target is frozen)
+    for (let k = 0; k < NSLOT; k++) {
       const g = this.grabs[k];
       if (!g.active) continue;
       g.ramp = Math.min(1, g.ramp + H / 0.06);
       g.holdT += H;
-      g.ex += (g.rx - g.ex) * ease; g.ey += (g.ry - g.ey) * ease; g.ez += (g.rz - g.ez) * ease;
+      // GROUND FIX (LOCK.md section 4): on the table the hand is never asked for a point under it. A pull INTO the table folded 5 of 12 species to 180 degrees and turned twangle inside
+      // out (the pointer's target went metres under the table; only a Shift pair had a floor, the shell's SHIFT_FLOOR_Y). The floor is on the raw target, so what the pick-up line and
+      // the easing see is the reachable hand.
+      this.reach(g);
+      const grx = this.rch[0], gry = this.rch[1], grz = this.rch[2];
+      g.ex += (grx - g.ex) * ease; g.ey += (gry - g.ey) * ease; g.ez += (grz - g.ez) * ease;
       // B3 PICK UP: a hand that asks for more than LIFT_OVER x the body's maxPull (the raw target, not the clamped one) unsticks the body from
       // the mat and carries it (on the table only; a floating body is already in the hand's reach)
-      if (!this.carried && this.gravityOn && !this.twoHanded) {
-        const rx = g.rx - g.t0x, ry = g.ry - g.t0y, rz = g.rz - g.t0z, lim = LIFT_OVER * maxD;
+      if (!this.carried && this.gravityOn && !this.twoHanded && this.lockN === 0) {
+        const rx = grx - g.t0x, ry = gry - g.t0y, rz = grz - g.t0z, lim = LIFT_OVER * maxD;
         if (rx * rx + ry * ry + rz * rz > lim * lim) this.startCarry(k);
       }
       if (this.carried && k === this.carrier) {
         // the hand leads the carried body by at most maxPull (the body follows at a limited speed and never under the table: a far or a
         // fast target, or one under the table, stretched the grabbed patch metres out of the body and inverted it; the hostile fuzz)
+        // GROUND FIX: ... and the hand never goes lower than where the carried body's centre sits at its rest height (a hand under that drags the grabbed patch through the body: it
+        // squashed against the table, creased to 180 degrees and inverted twangle)
+        const hfloor = this.restCenterY - this.carryOy;
+        if (g.ey < hfloor) g.ey = hfloor;
+        if (g.ey < GRAB_FLOOR_Y) g.ey = GRAB_FLOOR_Y;
         const hx = this.cx - this.carryOx, hy = this.cy - this.carryOy, hz = this.cz - this.carryOz;
         const lx = g.ex - hx, ly = g.ey - hy, lz = g.ez - hz, ll = Math.sqrt(lx * lx + ly * ly + lz * lz);
         if (ll > maxD) { const s = maxD / ll; g.ex = hx + lx * s; g.ey = hy + ly * s; g.ez = hz + lz * s; }
@@ -2399,6 +2617,199 @@ export class SoftBody implements SoftBodyLike {
       const dl = Math.sqrt(dx * dx + dy * dy + dz * dz);
       if (dl > maxD) { const s = maxD / dl; g.ex = g.t0x + dx * s; g.ey = g.t0y + dy * s; g.ez = g.t0z + dz * s; }
     }
+  }
+
+  /**
+   * GROUND FIX: how deep may a hand push the patch INTO the body? Area-weighted outward normal of the anchor from the triangles around it, and the thickness of the body
+   * behind it along that normal (a ray from the far side), like a fingertip's safe depth: cap = GRAB_TUNE.inFrac x squashDepth x thickness. A pull sideways or outward is not
+   * limited by it. (Pulling the top of a body DOWN, into the table, folded 5 of 12 species to 180 degrees: the patch was dragged a metre through the body.)
+   */
+  private limitDepth(g: Grab, v: number): void {
+    g.cap = -1;
+    const X = this.X, tris = this.tris;
+    let sx = 0, sy = 0, sz = 0;
+    for (let t = 0; t < tris.length; t += 3) {
+      const a = tris[t], b = tris[t + 1], c = tris[t + 2];
+      if (a !== v && b !== v && c !== v) continue;
+      const a3 = a * 3, b3 = b * 3, c3 = c * 3;
+      const ux = X[b3] - X[a3], uy = X[b3 + 1] - X[a3 + 1], uz = X[b3 + 2] - X[a3 + 2], wx = X[c3] - X[a3], wy = X[c3 + 1] - X[a3 + 1], wz = X[c3 + 2] - X[a3 + 2];
+      sx += uy * wz - uz * wy; sy += uz * wx - ux * wz; sz += ux * wy - uy * wx;
+    }
+    const sl = Math.sqrt(sx * sx + sy * sy + sz * sz);
+    if (!(sl > 1e-12)) return;
+    const nx = sx / sl, ny = sy / sl, nz = sz / sl, R = this.restRadius, L = 8 * R;
+    g.nx = nx; g.ny = ny; g.nz = nz;
+    const ax = X[v * 3], ay = X[v * 3 + 1], az = X[v * 3 + 2];
+    let T = 2 * R;
+    if (rayMesh(X, tris, this.setRay(ax - nx * L, ay - ny * L, az - nz * L, nx, ny, nz), this.rayOut)) T = Math.max(0.3 * R, L - this.rayOut[0]);
+    const cap = GRAB_TUNE.inFrac * this.p.squashDepth * T;
+    g.cap = cap >= 0 && cap < 1e6 ? cap : -1;
+  }
+  /** GROUND FIX: the target the hand can actually reach, into rch: the raw target with its inward part (against the grab's normal) limited to g.cap, then lifted to GRAB_FLOOR_Y on the table. */
+  private reach(g: Grab): void {
+    const r = this.rch;
+    let x = g.rx, y = g.ry, z = g.rz;
+    if (g.cap >= 0) {
+      const dn = (x - g.t0x) * g.nx + (y - g.t0y) * g.ny + (z - g.t0z) * g.nz;
+      if (dn < -g.cap) { const s = -g.cap - dn; x += g.nx * s; y += g.ny * s; z += g.nz * s; }
+    }
+    if (this.gravityOn && y < GRAB_FLOOR_Y) y = GRAB_FLOOR_Y;
+    r[0] = x; r[1] = y; r[2] = z;
+  }
+  /** Put the particles near every pulled or locked patch (rest distance from its anchor under GRAB_TUNE.zone x R) in the fold limit's list, and in the tip wake. */
+  private grabZone(): void {
+    const n = this.n, Q = this.Q, stamp = this.touchStamp, now = this.subIdx, near = this.nearList, tst = this.tipStamp;
+    const held = this.lockN + this.grabCount();
+    this.lastTipSub = now;
+    // (only locks held, no pointer grab, nothing changed for GRAB_TUNE.still seconds: the shape is quasi-static, so the limit looks every other substep: it is the most expensive part of holding six lobes)
+    if ((now & 1) !== 0 && held === this.lockN && this.simTime - this.gripChangeT > GRAB_TUNE.still) return;
+    // (the whole skin stays in the limit for a new single pull that starts before the body has calmed down after a multi-lobe hold)
+    if (held >= GRAB_TUNE.allFrom) this.gripAll = true; else if (this.gripAll && this.metrics.kinetic < GRAB_TUNE.calm) this.gripAll = false;
+    this.gripWake = 0.75; this.gripCap = GRAB_TUNE.cap;
+    if (this.gripAll) {
+      // three or more lobes held at once: the skin BETWEEN the stretched lobes creased too, far from every patch: the whole skin is in the limit (every substep, or every other one: GRAB_TUNE.allEvery)
+      if ((now % GRAB_TUNE.allEvery) === 0) for (let i = 0; i < n; i++) { tst[i] = now; if (stamp[i] !== now) { stamp[i] = now; near[this.tipNearN++] = i; } }
+      else for (let i = 0; i < n; i++) tst[i] = now;
+      return;
+    }
+    const r2 = GRAB_TUNE.zone * GRAB_TUNE.zone * this.restRadius * this.restRadius;
+    for (let k = 0; k < NSLOT + MAX_LOCKS; k++) {
+      const g = k < NSLOT ? this.grabs[k] : this.locks[k - NSLOT];
+      if (!g.active) continue;
+      const a3 = g.anchor * 3, ax = Q[a3], ay = Q[a3 + 1], az = Q[a3 + 2];
+      for (let i = 0; i < n; i++) {
+        const i3 = i * 3, dx = Q[i3] - ax, dy = Q[i3 + 1] - ay, dz = Q[i3 + 2] - az;
+        if (dx * dx + dy * dy + dz * dz >= r2) continue;
+        tst[i] = now;
+        if (stamp[i] !== now) { stamp[i] = now; near[this.tipNearN++] = i; }
+      }
+    }
+  }
+  /** The tail of a hold of several lobes: the whole skin stays in the contact fold limit until the body is calm (see GRAB_TUNE.calm), at most GRAB_TUNE.cap seconds. */
+  private gripTail(): void {
+    this.gripCap -= H;
+    if (this.gripCap <= 0) { this.gripWake = 0; return; }
+    this.gripWake -= H;
+    if (this.gripWake < 0.3 && this.metrics.kinetic > GRAB_TUNE.calm) this.gripWake = 0.3;
+    if (!this.gripAll) return;
+    const n = this.n, stamp = this.touchStamp, now = this.subIdx, near = this.nearList, tst = this.tipStamp;
+    this.lastTipSub = now;
+    for (let i = 0; i < n; i++) { tst[i] = now; if (stamp[i] !== now) { stamp[i] = now; near[this.tipNearN++] = i; } }
+  }
+  /** Is a finger other than `id` down (the pinch share of a tip)? */
+  private othersDown(id: number): boolean {
+    for (let k = 0; k < NSLOT; k++) if (k !== id && this.fingers[k].down) return true;
+    return false;
+  }
+  /** The lowest grab slot other than `id` that holds a lobe, or -1. */
+  private otherGrab(id: number): number {
+    for (let k = 0; k < NSLOT; k++) if (k !== id && this.grabs[k].active) return k;
+    return -1;
+  }
+  private grabCount(): number {
+    let c = 0;
+    for (let k = 0; k < NSLOT; k++) if (this.grabs[k].active) c++;
+    return c;
+  }
+  private anyGrab(): boolean {
+    for (let k = 0; k < NSLOT; k++) if (this.grabs[k].active) return true;
+    return false;
+  }
+  /** Is a touch finger (slot 2 to 4) whose tip works the body touching it? */
+  private extraTouch(): boolean {
+    for (let k = 2; k < NSLOT; k++) { const f = this.fingers[k]; if ((f.down || f.retracting) && f.touching) return true; }
+    return false;
+  }
+  /** The carry moved the body by shv: a lobe held by another hand (or a lock) keeps its pull relative to it (rest patch, reference and target move with the body). */
+  private shiftGrab(o: Grab): void {
+    if (!o.active) return;
+    const mx = this.shv[0], my = this.shv[1], mz = this.shv[2];
+    o.t0x += mx; o.t0y += my; o.t0z += mz; o.c0x += mx; o.c0y += my; o.c0z += mz;
+    const p0 = o.p0;
+    for (let j = 0; j < o.count * 3; j += 3) { p0[j] += mx; p0[j + 1] += my; p0[j + 2] += mz; }
+  }
+  /** Pull the Gaussian patch of a grab (or a lock) toward its hand: p0 + (eased target - target at the grab), applied after the internal constraints. */
+  private pullPatch(g: Grab, XP: Float64Array): void {
+    const px = g.ex - g.t0x, py = g.ey - g.t0y, pz = g.ez - g.t0z;
+    const kg = 0.45 * g.ramp;
+    for (let j = 0; j < g.count; j++) {
+      const i3 = g.verts[j] * 3, w = g.weights[j] * kg;
+      XP[i3] += (g.p0[j * 3] + px - XP[i3]) * w;
+      XP[i3 + 1] += (g.p0[j * 3 + 1] + py - XP[i3 + 1]) * w;
+      XP[i3 + 2] += (g.p0[j * 3 + 2] + pz - XP[i3 + 2]) * w;
+    }
+  }
+
+  /**
+   * LOCK (SoftBodyLike.lockGrab; _spec/LOCK.md): freeze the pull held on grab `slot` where it is. Only a FULLY stretched pull locks (pull level >= LOCK_MIN_PULL, the
+   * level 'snap' would report), never a carried body, never beyond `maxLocks`. The grab's patch moves to a free lock, with its eased target frozen, its pull reference and
+   * the hold time since the grab (which keeps counting); the grab slot is freed WITHOUT a 'snap' (nothing is let go: the lobe stays stretched) and the pinned feet stay
+   * pinned. The lock is a hand for the twoHanded latch (updateGrabs).
+   */
+  lockGrab(slot: number): boolean {
+    const g = this.grabs[slot];
+    if (!g || !g.active || this.carried) return false;
+    if (this.pullLevel(g) < LOCK_MIN_PULL) return false;
+    if (this.lockN >= this.maxLocks) return false;
+    let i = 0;
+    while (i < MAX_LOCKS && this.locks[i].active) i++;
+    if (i >= MAX_LOCKS) return false;
+    let L = this.locks[i];
+    if (L === IDLE_GRAB) { L = this.locks[i] = new Grab(this.n); settleDoubles(L, INT_FIELDS); }   // made on the first lock in this place; none for a body that never locks
+    const c = g.count;
+    L.verts.set(g.verts.subarray(0, c)); L.weights.set(g.weights.subarray(0, c)); L.p0.set(g.p0.subarray(0, c * 3));
+    L.count = c; L.anchor = g.anchor;
+    L.t0x = g.t0x; L.t0y = g.t0y; L.t0z = g.t0z; L.c0x = g.c0x; L.c0y = g.c0y; L.c0z = g.c0z;
+    L.ex = g.ex; L.ey = g.ey; L.ez = g.ez; L.rx = g.ex; L.ry = g.ey; L.rz = g.ez;   // frozen: the eased target is the locked target
+    L.ramp = 1; L.holdT = g.holdT; L.slot = slot;
+    L.active = true; this.lockN++;
+    g.active = false;
+    this.gripChangeT = this.simTime;
+    this.metrics.locked = this.lockN; this.metrics.grabbed = this.anyGrab();   // (at once: the shell reads them before the next step)
+    return true;
+  }
+
+  /** LOCK (SoftBodyLike.releaseLock): let a lock (or all) go. Each fires a 'snap' (heldFor = the whole hold since its grab, intensity = the pull level, finger = its slot). */
+  releaseLock(index: number | 'all'): void {
+    if (index === 'all') { for (let i = 0; i < MAX_LOCKS; i++) this.freeLock(i); return; }
+    if (typeof index === 'number' && Number.isInteger(index) && index >= 0 && index < MAX_LOCKS) this.freeLock(index);
+  }
+  private freeLock(i: number): void {
+    const L = this.locks[i];
+    if (!L.active) return;
+    L.active = false; this.lockN--;
+    this.gripChangeT = this.simTime;
+    this.metrics.locked = this.lockN;
+    const pl = this.pullLevel(L), v = L.anchor, X = this.X;
+    if (this.lockN === 0 && !this.anyGrab()) this.pinHold = this.p.pinHold;   // the feet stay glued for the snap-back transient, as after a grab
+    if (pl > 0.05) {
+      const nrm = this.vertexNormal(v);
+      this.emitLockSnap(X[v * 3], X[v * 3 + 1], X[v * 3 + 2], nrm[0], nrm[1], nrm[2], pl, L.holdT, L.slot);
+    }
+  }
+  /** A lock's 'snap' is never rate limited (releasing 5 locks at once must pay 5 pulls); the event buffer's own cap applies. */
+  private emitLockSnap(x: number, y: number, z: number, nx: number, ny: number, nz: number, intensity: number, heldFor: number, finger: number): void {
+    if (this.events.length >= 128) return;
+    const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+    this.events.push({ kind: 'snap', at: { x, y, z }, normal: { x: nx / nl, y: ny / nl, z: nz / nl }, intensity: clamp(Number.isFinite(intensity) ? intensity : 0, 0, 1), heldFor, finger });
+  }
+
+  /** LOCK (SoftBodyLike.lockAt): which lock's patch is the world point on, or -1: the nearest locked vertex within LOCK_REACH rest radii. No allocation. */
+  lockAt(point: V3): number {
+    if (!point || this.lockN === 0) return -1;
+    const px = point.x, py = point.y, pz = point.z;
+    if (!inWorld(px, py, pz)) return -1;
+    const X = this.X, lim = LOCK_REACH * this.restRadius;
+    let best = -1, bd = lim * lim;
+    for (let k = 0; k < MAX_LOCKS; k++) {
+      const L = this.locks[k];
+      if (!L.active) continue;
+      for (let j = 0; j < L.count; j++) {
+        const i3 = L.verts[j] * 3, dx = X[i3] - px, dy = X[i3 + 1] - py, dz = X[i3 + 2] - pz, d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 < bd) { bd = d2; best = k; }
+      }
+    }
+    return best;
   }
 
   /**
@@ -2426,15 +2837,17 @@ export class SoftBody implements SoftBodyLike {
     this.updateFingers();
     this.updateGrabs();
     const f0 = this.fingers[0], f1 = this.fingers[1];
-    const nFingers = (f0.down ? 1 : 0) + (f1.down ? 1 : 0);
-    const grabbing = this.grabs[0].active || this.grabs[1].active;
+    let nFingers = (f0.down ? 1 : 0) + (f1.down ? 1 : 0);
+    let extra = false;   // LOCK: a touch finger (slot 2 to 4) is down or retracting; false on a computer, where everything below is the two-finger code of before
+    for (let k = 2; k < NSLOT; k++) { const fx = this.fingers[k]; if (fx.down) nFingers++; if (fx.down || fx.retracting) extra = true; }
+    const grabbing = this.anyGrab() || this.lockN > 0;   // (a locked lobe holds the body too)
     // MAT CORRAL (the cheap dead-zone test on the last substep's centre is done here, inline, so the call only happens outside it): off while
     // something HOLDS the body (a grab, the pinned feet, a fingertip touching it); while a finger is down but its tip touches nothing (the
     // body was shoved out from under it) only the rim acts, so a nudge cannot carry the body off the mat past a finger that is merely down
     const hdx = this.cx - this.homeX, hdz = this.cz - this.homeZ;   // (about the body's home: see matCorral)
     if (this.gravityOn && !grabbing && !this.moveOn && this.pinCount === 0 && hdx * hdx + hdz * hdz > this.p.matR0 * this.p.matR0 * 0.81) {
       const a0 = f0.down || f0.retracting, a1 = f1.down || f1.retracting;
-      if (!(a0 && f0.touching) && !(a1 && f1.touching)) this.matCorral(a0 || a1);
+      if (!(a0 && f0.touching) && !(a1 && f1.touching) && !(extra && this.extraTouch())) this.matCorral(a0 || a1 || extra);
     }
 
     // ---- moveTo (ceremony): a kinematic spring of the centre of mass. A rigid translation of X before the prediction (like the corral):
@@ -2464,12 +2877,9 @@ export class SoftBody implements SoftBodyLike {
         this.cx += mx; this.cy += my; this.cz += mz;
         // the OTHER hand (if it holds a lobe too) keeps its pull relative to the carried body: its rest patch and reference move with it, so
         // its maxPull clamp still applies (unclamped, it stretched the body 3 R across the room and inverted it: the hostile fuzz's two grabs)
-        const o = this.grabs[1 - this.carrier];
-        if (o.active) {
-          o.t0x += mx; o.t0y += my; o.t0z += mz; o.c0x += mx; o.c0y += my; o.c0z += mz;
-          const p0 = o.p0;
-          for (let j = 0; j < o.count * 3; j += 3) { p0[j] += mx; p0[j + 1] += my; p0[j + 2] += mz; }
-        }
+        this.shv[0] = mx; this.shv[1] = my; this.shv[2] = mz;
+        for (let j = 0; j < NSLOT; j++) if (j !== this.carrier) this.shiftGrab(this.grabs[j]);
+        for (let j = 0; j < MAX_LOCKS; j++) this.shiftGrab(this.locks[j]);
       }
     }
 
@@ -2634,6 +3044,12 @@ export class SoftBody implements SoftBodyLike {
         else {
           if (a0) { const dx = XP[i3] - f0.cx, dy = XP[i3 + 1] - f0.cy, dz = XP[i3 + 2] - f0.cz; if (dx * dx + dy * dy + dz * dz < r0 * r0) w = 0; }
           if (a1) { const dx = XP[i3] - f1.cx, dy = XP[i3 + 1] - f1.cy, dz = XP[i3 + 2] - f1.cz; if (dx * dx + dy * dy + dz * dz < r1 * r1) w = 0; }
+          if (extra) for (let k = 2; k < NSLOT; k++) {
+            const fx = this.fingers[k];
+            if (!fx.down && !fx.retracting) continue;
+            const rx = fx.tipR + BLOCK_MARGIN, dx = XP[i3] - fx.cx, dy = XP[i3 + 1] - fx.cy, dz = XP[i3 + 2] - fx.cz;
+            if (dx * dx + dy * dy + dz * dz < rx * rx) w = 0;
+          }
         }
         WV[i] = w;
         S += w * (GRAD[i3] * GRAD[i3] + GRAD[i3 + 1] * GRAD[i3 + 1] + GRAD[i3 + 2] * GRAD[i3 + 2]);
@@ -2645,12 +3061,12 @@ export class SoftBody implements SoftBodyLike {
       const xb = Math.min(1, Math.max(0, (vf + 0.12 - vNow) / 0.14)), db = xb * xb * (3 - 2 * xb) * this.bleedF;
       // (and while a neck forms, CUT: the pinch moves the goal fast, and a compressible family's soft constraint let 7-20% of the volume go
       // in a 0.25 s pinch; the neck stiffens it toward the bottom-out value with t, never softens it)
-      const dd = Math.max(db, this.volNeck), aEff = Math.min(this.volAlphaT, this.volAlphaT * (1 - dd) + 0.5 * this.volS0 * dd);
+      const dd = Math.max(db, this.volNeck), aEff = Math.min(this.volAlphaT, this.volAlphaT * (1 - dd) + 0.5 * this.volS0 * dd) * (1 + (GRAB_TUNE.volK - 1) * (this.lockN + this.grabCount() >= 2 ? 1 : 0));   // (LOCK: several lobes held at once: a stiffer volume; no int / double ternary: it would box)
       if (this.bleedOn) {
         // AIR BLEED (SQUISHY_SCIENCE 3.2): while something loads the body its volume target falls toward the squeezed volume (air leaves,
         // with volOutTau), and always returns toward 1 (air comes back through the skin, volInTau): the constraint holds the body at V*, so it
         // cannot re-inflate faster than air returns (the slow rise). Near the floor the spring stiffens back to incompressible (bottom-out).
-        const vo = (a0 || a1 || grabbing) && vNow < this.vt - 0.003 ? this.volOutK : 0;   // air leaves only while loaded
+        const vo = (a0 || a1 || extra || grabbing) && vNow < this.vt - 0.003 ? this.volOutK : 0;   // air leaves only while loaded
         const v1 = this.vt + (Math.max(vNow, vf) - this.vt) * vo;
         this.vt = Math.min(1, Math.max(vf, v1 + (1 - v1) * this.volInK));
       }
@@ -2686,24 +3102,14 @@ export class SoftBody implements SoftBodyLike {
     if (this.ns > 0 && this.p.strutMin > 0 && this.fold < 0.01 && this.burstO < 0.01 && !(this.neckOn && this.neckT > 0.02)) this.strutPass();
 
     // ---- grab attachments (applied after the internal constraints so the user's hand wins within the substep)
-    for (let k = 0; k < 2; k++) {
-      const g = this.grabs[k];
-      if (!g.active) continue;
-      const px = g.ex - g.t0x, py = g.ey - g.t0y, pz = g.ez - g.t0z;
-      const kg = 0.45 * g.ramp;
-      for (let j = 0; j < g.count; j++) {
-        const i3 = g.verts[j] * 3, w = g.weights[j] * kg;
-        XP[i3] += (g.p0[j * 3] + px - XP[i3]) * w;
-        XP[i3 + 1] += (g.p0[j * 3 + 1] + py - XP[i3 + 1]) * w;
-        XP[i3 + 2] += (g.p0[j * 3 + 2] + pz - XP[i3 + 2]) * w;
-      }
-    }
+    for (let k = 0; k < NSLOT; k++) { const g = this.grabs[k]; if (g.active) this.pullPatch(g, XP); }
+    for (let k = 0; k < MAX_LOCKS; k++) { const g = this.locks[k]; if (g.active) this.pullPatch(g, XP); }   // LOCK: the pointer left, the target stays
 
     // ---- collisions: finger spheres, then the table (the table always wins)
     this.tipNearN = 0;
     let fingerDown = 0;   // mass-weighted downward push of the fingertips this substep: extra normal load on the table
     let react = 0;        // mass-weighted penetration the fingertips corrected this substep (metrics.reaction)
-    for (let k = 0; k < 2; k++) {
+    for (let k = 0; k < NSLOT; k++) {
       const f = this.fingers[k];
       if (!f.down && !f.retracting) continue;
       const r = f.tipR, r2 = r * r, cx = f.cx, cy = f.cy, cz = f.cz;
@@ -2787,12 +3193,15 @@ export class SoftBody implements SoftBodyLike {
         if (sd < band && sd > -band && stamp[i] !== now) { stamp[i] = now; near[this.tipNearN++] = i; }
       }
     }
+    // THE SKIN AROUND A PULLED OR LOCKED PATCH is in the contact fold limit like the skin around a fingertip: a patch dragged hard (a full pull, a pull into the table, the pick-up) folded its
+    // rim 130 to 180 degrees (twangle, crimpo, wrigglo: 0.2 R from the anchor). It stays in the limit for the tip wake after the lobe is let go (the snap-back).
+    if (grabbing && GRAB_TUNE.zone > 0) this.grabZone(); else if (this.gripWake > 0) this.gripTail();
     // RELEASE TRANSIENT OF A FINGERTIP (physics round-2 fix round, MAJOR-1): skin a rub crumpled under the tip is held at the fold limit
     // while the tip is near it (7-18 edges at 110 degrees); once the tip slid on, or lifted and retracted out of reach, the crumple sprang
     // back unconstrained and flipped past 150 degrees for 1-5 frames (the verifier's rub set: putty, slime, beads, mochi, water fill). So the
     // skin a tip had near it stays in the fold limit for tipFoldSubs substeps after the tip left it: the tip's wake while it slides (above),
     // all of it after the lift (here).
-    if (!(f0.down || f0.retracting || f1.down || f1.retracting) && this.subIdx - this.lastTipSub <= this.tipFoldSubs) {
+    if (!(f0.down || f0.retracting || f1.down || f1.retracting || extra) && this.subIdx - this.lastTipSub <= this.tipFoldSubs && !(this.lockN > 0 && (this.subIdx & 1) !== 0 && !this.anyGrab() && this.simTime - this.gripChangeT > GRAB_TUNE.still)) {   // (not on every other substep while only locks are held and nothing changed for a while: grabZone)
       const stamp = this.touchStamp, now = this.subIdx, near = this.nearList, tst = this.tipStamp, hold = this.tipFoldSubs;
       for (let i = 0; i < n; i++) if (now - tst[i] <= hold && stamp[i] !== now) { stamp[i] = now; near[this.tipNearN++] = i; }
     }
@@ -2806,13 +3215,14 @@ export class SoftBody implements SoftBodyLike {
       const tstamp = this.touchStamp, tnow = this.subIdx, tnear = this.nearList;
       // the table edges join the contact fold limit while a finger, a grab or the pinned feet work the body and for TABLE_FOLD_AFTER after
       // (the release transient: a full pull let go snaps back onto its glued foot; see foldLimit)
-      const worked = this.fingers[0].down || this.fingers[0].retracting || this.fingers[1].down || this.fingers[1].retracting || this.grabs[0].active || this.grabs[1].active || this.pinCount > 0;
+      const worked = this.fingers[0].down || this.fingers[0].retracting || this.fingers[1].down || this.fingers[1].retracting || extra || grabbing || this.pinCount > 0;
       this.tableFoldT = worked ? TABLE_FOLD_AFTER : Math.max(0, this.tableFoldT - H);
       const tfold = this.tableFoldT > 0;
       // ... and with them the foot rim just above the table (TABLE_FOLD_BAND; physics round-2 fix round 2, MAJOR-2): a full pull drags the
       // body over its pinned feet, and the rim particle one row up (2-4 cm, above the NEAR band) buckled at 151-179 degrees for up to 60
       // frames (capnap, pastrel, petalop, taffelin on the soft corner genome)
-      const band = tfold ? TABLE_FOLD_BAND * this.restRadius : 0;
+      this.gripT = grabbing ? TABLE_FOLD_AFTER : Math.max(0, this.gripT - H);
+      const band = tfold ? (this.gripT > 0 ? GRAB_TUNE.band : TABLE_FOLD_BAND) * this.restRadius : 0;
       for (let i = 0; i < n * 3; i += 3) {
         const y = XP[i + 1];
         if (y >= NEAR) { if (y < band && tstamp[i / 3] !== tnow) { tstamp[i / 3] = tnow; tnear[this.tipNearN++] = i / 3; } continue; }
@@ -3157,12 +3567,13 @@ export class SoftBody implements SoftBodyLike {
     const r00 = 1 - 2 * (qy * qy + qz * qz), r01 = 2 * (qx * qy - qw * qz), r02 = 2 * (qx * qz + qw * qy);
     const r10 = 2 * (qx * qy + qw * qz), r11 = 1 - 2 * (qx * qx + qz * qz), r12 = 2 * (qy * qz - qw * qx);
     const r20 = 2 * (qx * qz - qw * qy), r21 = 2 * (qy * qz + qw * qx), r22 = 1 - 2 * (qx * qx + qy * qy);
-    let ox = 0, oy = 0, oz = 0;
+    let ox = 0, oy = 0, oz = 0, mvMax = 0;
     for (let i = 0; i < n; i++) {
       const i3 = i * 3, dx = X[i3] - cx, dy = X[i3 + 1] - cy, dz = X[i3 + 2] - cz;
       const gx = GB[i3] - Q[i3], gy = GB[i3 + 1] - Q[i3 + 1], gz = GB[i3 + 2] - Q[i3 + 2];
       const px = r00 * dx + r10 * dy + r20 * dz - gx, py = r01 * dx + r11 * dy + r21 * dz - gy, pz = r02 * dx + r12 * dy + r22 * dz - gz;
       let mx = MEM[i3], my = MEM[i3 + 1], mz = MEM[i3 + 2];
+      const mx0 = mx, my0 = my, mz0 = mz;
       const ex = px - mx, ey = py - my, ez = pz - mz, len = Math.sqrt(ex * ex + ey * ey + ez * ez), excess = len - yl;
       if (excess > 0 && len > 1e-12) { const k = kFlow * excess / len; mx += ex * k; my += ey * k; mz += ez * k; }
       if (kHeal > 0) { mx += (Q[i3] - mx) * kHeal; my += (Q[i3 + 1] - my) * kHeal; mz += (Q[i3 + 2] - mz) * kHeal; }
@@ -3170,8 +3581,11 @@ export class SoftBody implements SoftBodyLike {
       const fl = Math.sqrt(fx * fx + fy * fy + fz * fz);
       if (fl > maxD) { const r = maxD / fl; fx *= r; fy *= r; fz *= r; }
       MEM[i3] = Q[i3] + fx; MEM[i3 + 1] = Q[i3 + 1] + fy; MEM[i3 + 2] = Q[i3 + 2] + fz;
+      const md = (MEM[i3] - mx0) * (MEM[i3] - mx0) + (MEM[i3 + 1] - my0) * (MEM[i3 + 1] - my0) + (MEM[i3 + 2] - mz0) * (MEM[i3 + 2] - mz0);
+      if (md > mvMax) mvMax = md;
       ox += M[i] * fx; oy += M[i] * fy; oz += M[i] * fz;
     }
+    this.restMem = Math.sqrt(mvMax) / R0;   // (CUT3 sleep: has the memory shape stopped flowing?)
     ox /= this.Mtot; oy /= this.Mtot; oz /= this.Mtot;
     for (let i = 0; i < n; i++) { MEM[i * 3] -= ox; MEM[i * 3 + 1] -= oy; MEM[i * 3 + 2] -= oz; }
   }
@@ -3262,7 +3676,7 @@ export class SoftBody implements SoftBodyLike {
 
   /** Per-substep bookkeeping that emits events (cheap). */
   private postSubstep(): void {
-    for (let k = 0; k < 2; k++) {
+    for (let k = 0; k < NSLOT; k++) {
       const f = this.fingers[k];
       if (f.down && f.contacted && !f.pressed && f.holdT >= FINGER.pressAfterS && f.depth > 0.03) {
         f.pressed = true;
@@ -3282,7 +3696,7 @@ export class SoftBody implements SoftBodyLike {
   }
 
   private emit(kind: SoftEventKind, x: number, y: number, z: number, nx: number, ny: number, nz: number, intensity: number, heldFor: number, finger: number): void {
-    const li = KIND_INDEX[kind] * 3 + (finger + 1);
+    const li = KIND_INDEX[kind] * 6 + (finger + 1);
     if (this.simTime - this.lastEvent[li] < EVENT_MIN_GAP_S) return;
     if (this.events.length >= 128) return;
     this.lastEvent[li] = this.simTime;
@@ -3334,15 +3748,15 @@ export class SoftBody implements SoftBodyLike {
 
     // press axis: a finger's travel direction, the pinch line, the last axis for 0.6 s after a lift, else world up
     let ax = 0, ay = 1, az = 0;
-    const f0 = this.fingers[0], f1 = this.fingers[1];
-    const nf = (f0.down ? 1 : 0) + (f1.down ? 1 : 0);
-    if (nf === 2) {
-      ax = f1.cx - f0.cx; ay = f1.cy - f0.cy; az = f1.cz - f0.cz;
+    let nf = 0, fa = this.fingers[0], fb = this.fingers[1];   // (the first two fingers down: the pinch line; with 2 fingers down exactly the old f0 and f1)
+    for (let k = 0; k < NSLOT; k++) { const fk = this.fingers[k]; if (!fk.down) continue; nf++; if (nf === 1) fa = fk; else if (nf === 2) fb = fk; }
+    if (nf >= 2) {
+      ax = fb.cx - fa.cx; ay = fb.cy - fa.cy; az = fb.cz - fa.cz;
       const l = Math.sqrt(ax * ax + ay * ay + az * az);
       if (l > 1e-6) { ax /= l; ay /= l; az /= l; } else { ax = 0; ay = 1; az = 0; }
       this.lastAxisX = ax; this.lastAxisY = ay; this.lastAxisZ = az; this.lastAxisT = this.simTime;
     } else if (nf === 1) {
-      const f = f0.down ? f0 : f1;
+      const f = fa;
       ax = f.dx; ay = f.dy; az = f.dz;
       this.lastAxisX = ax; this.lastAxisY = ay; this.lastAxisZ = az; this.lastAxisT = this.simTime;
     } else if (this.simTime - this.lastAxisT < 0.6) {
@@ -3386,14 +3800,15 @@ export class SoftBody implements SoftBodyLike {
     m.kinetic = clamp((this.keAcc / Math.max(1, this.keSubs)) / 0.08, 0, 1);
     m.grounded = this.nearCount >= 3;
     m.fingers = nf;
-    m.grabbed = this.grabs[0].active || this.grabs[1].active;
+    m.grabbed = this.anyGrab();
+    m.locked = this.lockN;
     m.carried = this.carried;
     // pull: the live PULL LEVEL (pullLevel: translation-free, 1 = the family's maxPull) of the deeper of the active grabs, 0 without one
     // (written out, not pullLevel(): a double returned from a call this large function does not inline is boxed, one HeapNumber per frame)
     {
       let pl = 0;
       const maxD = Math.max(1e-9, this.p.maxPull * this.restRadius), tk = this.pinCount > 0 ? 0 : 1;   // (see pullLevel: the base's travel)
-      for (let k = 0; k < 2; k++) {
+      for (let k = 0; k < NSLOT; k++) {
         const g = this.grabs[k];
         if (!g.active) continue;
         const dx = g.ex - g.t0x - (this.cx - g.c0x) * tk, dy = g.ey - g.t0y - (this.cy - g.c0y) * tk, dz = g.ez - g.t0z - (this.cz - g.c0z) * tk;
@@ -3406,7 +3821,7 @@ export class SoftBody implements SoftBodyLike {
     // only while the tip is actually in the skin. reaction: the push-back the fingertips met, a force (mass x penetration / H^2 per
     // substep, averaged over the step) mapped to 0..1 by REACT_REF, so a firm body pushes back harder than a soft one at the same depth.
     let press = 0;
-    for (let k = 0; k < 2; k++) {
+    for (let k = 0; k < NSLOT; k++) {
       const f = this.fingers[k];
       if (!f.touching || (!f.down && !f.retracting)) continue;
       const span = f.depthMax - f.lift;
@@ -3421,8 +3836,9 @@ export class SoftBody implements SoftBodyLike {
     // ~0.3-0.6 s, like the staggered bonds of the prototype, SQUISHY_SCIENCE 3.7)
     {
       if (this.tackS > 0) {
-        const ff0 = this.fingers[0], ff1 = this.fingers[1];
-        if ((ff0.retracting && ff0.contacted && ff0.holdT >= 0.1) || (ff1.retracting && ff1.contacted && ff1.holdT >= 0.1)) this.strandsT = 1;
+        let tug = false;
+        for (let k = 0; k < NSLOT; k++) { const ff = this.fingers[k]; if (ff.retracting && ff.contacted && ff.holdT >= 0.1) tug = true; }
+        if (tug) this.strandsT = 1;
         else if (this.strandsT > 0) { this.strandsT *= Math.exp(-dt / this.strandsTau); if (this.strandsT < 1e-3) this.strandsT = 0; }
         m.strands = Math.min(1, this.strandsGain * this.strandsT);
       } else m.strands = 0;

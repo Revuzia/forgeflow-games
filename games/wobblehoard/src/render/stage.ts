@@ -96,6 +96,7 @@ import { CutFx } from './cutfx.ts';
 import { createDecalGeometry } from './decals.ts';
 import { EnvHub, KEY_DIR, RIM_DIR } from './env.ts';
 import { FlashGovernor } from './flash.ts';
+import { LOD_TUNING } from './lod.ts';
 import { Particles } from './particles.ts';
 import { QualityGovernor, TIERS } from './quality.ts';
 import { safeTier } from './rarity.ts';
@@ -130,6 +131,8 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo | keyof StageEx
     insets: { top: number; right: number; bottom: number; left: number }; lens: { x: number; y: number; goalY: number; fitY: number; fitX: number; want: number; bodies: number };
     /** The standing capsule's table spot and size (null when none): the harness checks where it landed. */
     cap: { x: number; z: number; size: number } | null;
+    /** DEV: the band framing's own cost, ms per frame (a moving average of the time framer.measure took; 0 until it ran). */
+    framerMs: number;
   };
   readonly views: readonly BodyView[];
   readonly flash: FlashGovernor;
@@ -267,6 +270,33 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   /** setBody of a swap: the new primary does not snap the camera framing (it eases from where it is). */
   let keepFraming = false;
 
+  /**
+   * CUT3 (lod.ts, CUT3.md 3 "shadows only for the 8 largest pieces"): the LOD_TUNING.fullViews largest visible views (by share of the whole, a body without a share counts 1; the older view wins a tie)
+   * keep everything (BodyView.lod 0); the others are the many small pieces (lod 1: no table shadow / pool, no tier FX). With that many views or fewer nothing changes. No allocation (the key
+   * buffer only grows); O(n^2) for n <= 64.
+   */
+  let lodKeys = new Float64Array(64);
+  let devFramerMs = 0;   // (DEV only: the moving average of the band framing's own cost, stage.info.framerMs)
+  function assignLod(): void {
+    const n = depthOrder.length, K = LOD_TUNING.fullViews;
+    if (n <= K || !LOD_TUNING.enabled) { for (let i = 0; i < n; i++) { depthOrder[i].setLod(0); depthOrder[i].core.setHidden(false); } return; }
+    if (lodKeys.length < n) lodKeys = new Float64Array(n * 2);
+    for (let i = 0; i < n; i++) { const v = depthOrder[i], f = v.proxy.frac; lodKeys[i] = (typeof f === 'number' && Number.isFinite(f) ? f : 1) - v.id * 1e-9; }
+    for (let i = 0; i < n; i++) {
+      let above = 0; const k = lodKeys[i];
+      for (let j = 0; j < n; j++) if (lodKeys[j] > k) above++;
+      depthOrder[i].setLod(above < K ? 0 : 1);
+    }
+    // the ember (blob + halo: 4 draw calls a body): of the PIECES only the two that hold the most of it draw it (a mini among many draws none: BodyView.setLod); the rest are lit by the jelly's own glow
+    let b1 = -1, b2 = -1, k1 = 0.06, k2 = 0.06;
+    for (let i = 0; i < n; i++) {
+      const v = depthOrder[i];
+      if (!v.isPiece) continue;
+      const k = v.core.kept;
+      if (k > k1) { b2 = b1; k2 = k1; b1 = i; k1 = k; } else if (k > k2) { b2 = i; k2 = k; }
+    }
+    for (let i = 0; i < n; i++) { const v = depthOrder[i]; if (v.isPiece) v.core.setHidden(i !== b1 && i !== b2); }
+  }
   const primary = (): BodyView | null => { for (const v of views) if (v.id === primaryId) return v; return null; };
   const viewById = (id: number): BodyView | null => { for (const v of views) if (v.id === id) return v; return null; };
   const fitDistance = (): number => camScale * Math.max(3.0, 2.4 / Math.max(0.2, camera.aspect));
@@ -553,7 +583,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     pitch += (tPitch - pitch) * k;
     zoomF += (tZoom - zoomF) * k;
     // SR2: the squishy and its pieces stand between the HUD rows the shell reported (framing.ts); measured first, framingFor reads its demand
-    if (framer.on && sized && !director.active && framerS > 0) { fcam.p0 = camera.projectionMatrix.elements[0]; fcam.p5 = camera.projectionMatrix.elements[5]; framer.measure(views, fcam, cssW, cssH, framerS, dt); }
+    if (framer.on && sized && !director.active && framerS > 0) { fcam.p0 = camera.projectionMatrix.elements[0]; fcam.p5 = camera.projectionMatrix.elements[5]; const t0 = import.meta.env.DEV ? performance.now() : 0; framer.measure(views, fcam, cssW, cssH, framerS, dt); if (import.meta.env.DEV) devFramerMs += (performance.now() - t0 - devFramerMs) * 0.1; }
     else framer.clear();
     // stage B1: with 2..5 bodies out on the mat, frame them all (their table extents, plus a margin) and aim at their middle
     let want = framing ?? bodyScale, multi = false, mx = 0, mz = 0, grp = false, gx = 0, gy = 0, gz = 0;
@@ -852,6 +882,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       for (const v of depthOrder) { const c = v.proxy.center; v.sortDepth = (camera.position.x - c.x) ** 2 + (camera.position.y - c.y) ** 2 + (camera.position.z - c.z) ** 2; }
       depthOrder.sort(farFirst);
       for (let i = 0; i < depthOrder.length; i++) depthOrder[i].jelly.mesh.renderOrder = 10 + Math.min(0.99, i * 0.01);
+      assignLod();
       // CUT glows (seam, bridge): calm halves them, and for a second after a granted ceremony flash they stay low (the flash governor)
       const govK = (calm ? 0.5 : 1) * (flash.sinceFlash(time) < 1 ? 0.35 : 1);
       for (const v of views) v.glowK = govK;
@@ -972,7 +1003,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
             pixelRatio: renderer.getPixelRatio(), drawingBuffer: [canvas.width, canvas.height] as [number, number],
             eyeLook: p ? Array.from(p.face.lookOut) : null,
             bodies: views.length, primary: primaryId, ceremony: director.active, particles: particles.count, calm, screenLight: screen.lightAlpha, capsule: !!capsule || !!revealCap, cameraFx,
-            particlesDropped: particles.dropped, camScale, insets: { ...framer.ins }, lens: { x: framer.lensX, y: framer.lensY, goalY: framer.goalY, fitY: framer.fitY, fitX: framer.fitX, want: framer.wantScale, bodies: framer.bodies }, cut: { ...cut.live }, cap: capsule ? { x: capsule.pos.x, z: capsule.pos.z, size: capsule.size } : null,
+            particlesDropped: particles.dropped, camScale, insets: { ...framer.ins }, lens: { x: framer.lensX, y: framer.lensY, goalY: framer.goalY, fitY: framer.fitY, fitX: framer.fitX, want: framer.wantScale, bodies: framer.bodies }, cut: { ...cut.live }, cap: capsule ? { x: capsule.pos.x, z: capsule.pos.z, size: capsule.size } : null, framerMs: devFramerMs,
           };
         },
       },

@@ -76,7 +76,7 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .tool-n { min-width: 22px; padding: 0 6px; color: var(--k-accent); line-height: 22px; text-align: center; background: var(--k-cavity); border-radius: var(--wh-r-pill); }
 .tool-sort { display: inline-flex; align-items: center; gap: 8px; line-height: 1; }
 .tool-select-wrap { position: relative; display: inline-grid; }
-.tool-select { -webkit-appearance: none; appearance: none; font-family: inherit; font-size: var(--wh-fs-small); min-width: 0; min-height: 44px; margin: 0; padding: 0 36px 0 12px; color: var(--k-fg); background: var(--k-surface); border: 1px solid var(--k-edge); border-radius: var(--wh-r-btn); box-shadow: var(--hd-lift); cursor: pointer; }
+.tool-select { -webkit-appearance: none; appearance: none; font-family: inherit; font-size: var(--wh-fs-small); min-height: 44px; margin: 0; padding: 0 36px 0 12px; color: var(--k-fg); background: var(--k-surface); border: 1px solid var(--k-edge); border-radius: var(--wh-r-btn); box-shadow: var(--hd-lift); cursor: pointer; }
 .tool-select-chev { position: absolute; top: 50%; right: 10px; margin-top: -10px; pointer-events: none; }
 .tool-seg { display: inline-grid; grid-auto-flow: column; gap: 2px; padding: 3px; background: var(--k-surface); border: 1px solid var(--k-edge); border-radius: var(--wh-r-btn); }
 .tool-seg .seg-btn { padding: 0 12px; border-radius: var(--wh-r-chip); }

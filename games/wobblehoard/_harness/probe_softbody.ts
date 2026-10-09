@@ -1475,7 +1475,7 @@ function apiChecks(starter: Genome): { bad: string[]; tried: number } {
     const top = b.raycast(v3(0, 3, 0), v3(0, -1, 0))!;
     const args = { point: top.point, normal: top.normal, dir: v3(0, -1, 0) };
     let threw = false;
-    try { b.fingerUp(0); b.fingerUp(1); b.fingerDown(2 as 0, args); b.fingerUp(2 as 0); b.fingerUp(-1 as 0); b.fingerDown('0' as unknown as 0, args); } catch { threw = true; }
+    try { b.fingerUp(0); b.fingerUp(1); b.fingerDown(5 as 0, args); b.fingerUp(5 as 0); b.fingerUp(-1 as 0);   /* (5, not 2: slots 0 to 4 exist since LOCK, 2026-10-06) */  b.fingerDown('0' as unknown as 0, args); } catch { threw = true; }
     check('bad finger ids are ignored without throwing', !threw && b.metrics.fingers === 0);
     b.fingerDown(0, args); b.fingerDown(0, args); run(b, 0.2);
     check('a second fingerDown on the same id keeps one finger', b.metrics.fingers === 1);
@@ -1493,7 +1493,8 @@ function apiChecks(starter: Genome): { bad: string[]; tried: number } {
     const b = new SoftBody(starter);
     for (const v of [-1, b.vertexCount, Number.NaN, Infinity]) { b.grab(0, v, v3(0, 1, 0)); check(`grab(vertex ${v}) is ignored`, !b.metrics.grabbed); }
     b.grab(0, 5, v3(Number.NaN, 1, 0)); check('grab with a NaN target is ignored', !b.metrics.grabbed);
-    b.grab(2 as 0, 5, v3(0, 1, 0)); check('grab with a bad id is ignored', !b.metrics.grabbed);
+    // RE-SPECIFIED, reason: the owner changed the design on 2026-10-06 (_spec/LOCK.md): slots 0 to 4 exist (touch fingers on phones), so id 2 is no longer a bad id; the bad ids are now 5, -1, 1.5 and NaN
+    for (const bad of [5, -1, 1.5, Number.NaN]) { b.grab(bad as 0, 5, v3(0, 1, 0)); check(`grab with a bad id (${bad}) is ignored`, !b.metrics.grabbed); }
     b.grabMove(0, v3(0, 1, 0)); b.grabRelease(0); b.grabRelease(1);
     ev.length = 0; b.drainEvents(ev); check('no events from ignored grab calls', ev.length === 0);
     b.grab(0, 320.7, v3(0, 1, 0)); run(b, 0.1); check('grab with a fractional vertex index works', b.metrics.grabbed);

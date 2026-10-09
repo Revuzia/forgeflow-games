@@ -49,13 +49,13 @@ body[data-layout="wide"][data-density="short"] { --dk-half: 150px; }
 body[data-layout="wide"] .nametag { max-width: calc(50% - var(--dk-half) - var(--wh-sp-3)); }
 /* stack: the info row is a 56 high row 8 above the dock; an options bar REPLACES it (Cut, Snap) */
 body[data-layout="stack"] .hud-bottom { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-sp-2)); height: 56px; align-items: center; }
-body[data-layout="stack"][data-tool="cut"] .hud-bottom, body[data-layout="stack"][data-tool="snap"] .hud-bottom { display: none; }
+body[data-layout="stack"]:is([data-tool="cut"], [data-tool="snap"]) .hud-bottom { display: none; }
 /* strip: [Name | Hoard | ring Open] along the bottom, the tools along the top */
 body[data-layout="strip"] .hud-bottom { bottom: calc(var(--safe-b) + 8px); height: 52px; align-items: center; }
 /* tiny: only [ring][Open], bottom right; an options bar takes its place (the tray steps aside, toolbar.css) */
 body[data-layout="tiny"] .hud-bottom { left: auto; right: calc(var(--safe-r) + 12px); height: var(--dk-h); align-items: center; }
 body[data-layout="tiny"] .nametag { display: none; }
-body[data-layout="tiny"][data-tool="cut"] .meter-cluster, body[data-layout="tiny"][data-tool="snap"] .meter-cluster { display: none; }
+body[data-layout="tiny"]:is([data-tool="cut"], [data-tool="snap"]) .meter-cluster { display: none; }
 
 .nametag {
   display: grid;
@@ -164,7 +164,7 @@ body[data-calm="true"] .meter[data-full="true"] :is(.meter-glyph, .meter-seam) {
 }
 .hint[data-show="false"] { opacity: 0; transform: translate(calc(-50% + var(--hint-dx, 0px)), 8px); }
 .hint[data-yield="true"] { opacity: 0; }   /* no room beside the capsule on a tiny screen: the pill waits */
-body[data-ceremony] .hint { opacity: 0; }
+body[data-ceremony] .hint, body[data-settings="open"] .hint, body[data-layout="stack"][data-offline="true"] .hint { opacity: 0; }   /* (stack, offline: the "Waiting for connection" chip stands where the pill ends) */
 body[data-layout="stack"] .hint { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-sp-2) + 56px + var(--wh-sp-2)); }
 body[data-layout="stack"][data-tall="true"][data-switch="true"] .hint { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-sp-2) + 56px + var(--wh-sp-2) + var(--wh-hit) + var(--wh-sp-2)); }
 @media (max-width: 380px) { body[data-layout="stack"] .hint { top: calc(var(--safe-t) + 64px); bottom: auto; } }   /* 320x568: y 64..100, under the top row */

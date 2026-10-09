@@ -52,7 +52,7 @@ export function cutOnce(sc: Scene, parent: SoftBody, plane: CutPlane, how: { mod
   const fam = familyOf(sc.sp as never), plan = mkPlan();
   if (!parent.planCut!(plane, plan, how.mode ?? 'at') || !(plan.fa > 0) || !(plan.fa < 1)) return { ok: false, why: 'miss' };
   const pf = parent.frac!, fA = pf * plan.fa, fB = pf - fA;
-  if (Math.min(fA, fB) < 0.125 - 1e-4) return { ok: false, why: 'small' };
+  if (Math.min(fA, fB) < 1e-6) return { ok: false, why: 'small' };   // (RE-SPECIFIED: was < 0.125 - 1e-4, the shell's 1/8 rule; the owner removed the limit on 2026-10-09: the shell now refuses only a graze, cut.ts SHARE_EPS)
   if (!plan.sound) return { ok: false, why: 'loose' };
   const base = sc.regions.get(parent), id = sc.nextId++;
   const meanV = (pl: CutPlan): V3 => ({ x: pl.fa * pl.velA.x + (1 - pl.fa) * pl.velB.x, y: pl.fa * pl.velA.y + (1 - pl.fa) * pl.velB.y, z: pl.fa * pl.velA.z + (1 - pl.fa) * pl.velB.z });

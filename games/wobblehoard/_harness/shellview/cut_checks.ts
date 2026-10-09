@@ -4,10 +4,10 @@
 //                                       node _harness/shellview/cut_checks.ts --seqs=2000  (a quick run, a few seconds)
 //
 // X18, "cut-tree algebra" (node, cutRegion.ts alone): random operation sequences of cut(piece), join(a, b), undoCut (and the rollback of a cut
-// that never took effect), up to 6 pieces (4 on low). After EVERY operation the tree is checked against an INDEPENDENT model: the live pieces as a
+// that never took effect), up to 4, 6, 24 and 64 pieces (CUT3: the safety ceiling is 64; the owner removed the limit of 6 on 2026-10-09: RE-SPECIFIED, the sequences with 64 leaves are 1 in 10). After EVERY operation the tree is checked against an INDEPENDENT model: the live pieces as a
 // set of path strings ("" = the whole, "AB" = side B of the cut of side A of the first cut; a join of P and Q is "their longest common prefix" and
 // takes every piece under it), plus twelve fixed sample points that carry the model's own path and that the real planes route through the tree:
-//   * every piece is exactly one leaf, the leaves are exactly the model's pieces, at most 6 live leaves and 11 live nodes (7 on low);
+//   * every piece is exactly one leaf, the leaves are exactly the model's pieces, never more than the sequence's bound of live leaves (4, 6, 24 or 64) and 2 L - 1 live nodes for L leaves;
 //   * the literals of every node are the path from the root; the plane table is exactly the live cuts; ids are unique;
 //   * the cut stack is exactly the internal nodes in cut order, newest last, and its top always has two LEAF kids;
 //   * group(P, Q) is the node at the common prefix and its members are exactly the pieces under it; twins iff the group is the two;
@@ -19,8 +19,21 @@
 //   * a node that was joined away is dead: every function answers null for it and nothing changes.
 // A second row replays EVERY tree shape up to 6 pieces (64 shapes) x EVERY pair of pieces against the same model.
 //
-// The rows that need the REAL SoftBody (CUT-B task S4: X03' node leg, X04, X05, X06 leg 1, X10, X11, X12, X19) share the real-body rig of cutter_checks.ts and live there as sections
-// (parting, x03, x05, x06, x11, nested; --full = 50 species); the browser rows are _harness/cut_browser.mjs. This file stays the pure tree (no physics, no DOM).
+// THE ROW MAP of the shell's cut rows (CUT2.md 12 + CUT3.md 5; this file stays the pure tree: no physics, no DOM). Run each with node <file> [--only=section]:
+//   X18 / the tree, any count to 64 leaves ........ this file
+//   U01 20 presses, both styles, any count ......... shellview/cut_mock_checks.ts (mock bodies); shellview/cutter_checks.ts --only=u01 (real bodies; 20 presses on 12 species, green since the physics lifted its 1/8 clamp)
+//   U05 Minis to 24 ................................ cut_mock_checks.ts; cutter_checks.ts --only=u05 (real bodies); cut_browser.mjs --only=u05 (every mini draws both eyes)
+//   U07 the meter, the Hoard, the leave paths ...... node_checks.ts (24 pieces); cut_mock_checks.ts; cut_browser.mjs --only=u07 (real stack)
+//   X03' eyes on both halves ....................... cutter_checks.ts --only=x03 (--full = 50 species); cut_browser.mjs --only=x03
+//   X04 Reconnect all is the original .............. cutter_checks.ts --only=nested; cut_browser.mjs --only=x04
+//   X05 leave paths reconnect first ................ cutter_checks.ts --only=x05; browser_shell.mjs --only=cut-real; cut_browser.mjs --only=u07
+//   X06 the meter .................................. cutter_checks.ts --only=x06; cut_browser.mjs --only=x04 (leg 1), browser_shell.mjs --only=cut-real (the squeeze)
+//   X10 keyboard only .............................. cutter_checks.ts --only=nested / x06 (the lines); browser_shell.mjs --only=cut-x
+//   X11 a cut through a feature .................... cutter_checks.ts --only=x11; cut_browser.mjs --only=x11
+//   X12 nested cuts ................................ cutter_checks.ts --only=nested; cut_browser.mjs --only=x12
+//   X15 the join gesture / the resting gap ......... cutter_checks.ts --only=joins,x15gap; cut_browser.mjs --only=join (REAL drags: a group of 3, the root, 4 pieces); browser_shell.mjs --only=cut-x
+//   X19 the scripted parting ....................... cutter_checks.ts --only=parting,slope; cut_browser.mjs --only=level,part
+// --full runs the cutter_checks sections on all 50 species (default: the 12 family representatives).
 import { createCutTree, cutPiece, cutStack, group, isLeaf, isLive, isWhole, joinGroup, lca, leaves, planeById, regionOf, rollbackCut, undoCut } from '../../src/shell/cutRegion.ts';
 import type { CutNode, CutTree } from '../../src/shell/cutRegion.ts';
 import type { PieceRegion } from '../../src/contracts.ts';
@@ -291,7 +304,8 @@ function doInvalid(t: CutTree, graveyard: CutNode[], r: () => number): string | 
 
 /* ───────────────────────── one random sequence ───────────────────────── */
 function runSequence(seed: number, log?: string[]): string | null {
-  const r = rng(seed), max = seed % 3 === 0 ? 4 : 6;      // low quality: 4 pieces, otherwise 6
+  const r = rng(seed), k10 = seed % 10, max = k10 === 7 ? 64 : k10 === 3 ? 24 : seed % 3 === 0 ? 4 : 6;      // RE-SPECIFIED 2026-10-09: the bound is 4, 6, 24 or 64 leaves (the safety ceiling), 1 sequence in 10 grows to 64
+  const big = max >= 24;
   const t = createCutTree(), m = newModel(r), graveyard: CutNode[] = [];
   sink = graveyard;
   const say = (s: string): void => { log?.push(s); };
@@ -310,9 +324,10 @@ function runSequence(seed: number, log?: string[]): string | null {
   };
   const e0 = verify(t, m, max);
   if (e0) return fail('start', e0);
-  const nOps = 4 + Math.floor(r() * 36);
+  const nOps = big ? 2 * max + Math.floor(r() * 3 * max) : 4 + Math.floor(r() * 36);
   for (let i = 0; i < nOps; i++) {
-    const pick = r(), L = m.pieces.length;
+    const grow = big && i < nOps * 0.5;   // the big trees first grow (cuts, with undo / rollback / refused calls but no join, which would swallow the tree at the root), then churn
+    const rawPick = r(), pick = grow ? (rawPick < 0.94 ? rawPick * 0.38 : 0.76 + (rawPick - 0.94) * 3.3) : rawPick, L = m.pieces.length;
     let e: string | null;
     if (pick < 0.36 && L < max) { const P = m.pieces[Math.floor(r() * L)]; e = step(`cut ${P || 'root'}`, () => doCut(t, m, r, P)); }
     else if (pick < 0.74 && L >= 2) {
@@ -426,10 +441,10 @@ async function main(): Promise<void> {
     console.log(`  seed ${f.seed}: ${f.msg}\n    ops: ${log.join(' ; ')}`);
   }
   Object.assign(stats, seen);
-  check(`X18: ${stats.seqs} random sequences of cut / join / undoCut / rollback / refused calls (up to 6 pieces, 4 on low), the whole tree checked against the independent model after every one of ${stats.ops} operations: no failure`,
+  check(`X18: ${stats.seqs} random sequences of cut / join / undoCut / rollback / refused calls (up to 4, 6, 24 and 64 pieces), the whole tree checked against the independent model after every one of ${stats.ops} operations: no failure`,
     failures.length === 0 && stats.seqs === SEQS,
     `${secs.toFixed(1)} s on ${W} thread${W > 1 ? 's' : ''}; cuts ${stats.cuts}, twin joins ${stats.twinJoins}, group joins ${stats.groupJoins} (of which to the root ${stats.rootJoins}), undos ${stats.undos}, rollbacks ${stats.rollbacks}, refused calls ${stats.invalid}, whole again mid-sequence ${stats.wholes}, drained to the root ${stats.drained}, most leaves ${stats.maxLeaves}, most nodes ${stats.maxNodes}`);
-  check('X18 bounds: never more than 6 live leaves and 11 live nodes (checked on every operation above; the counters show the maxima were reached)', stats.maxLeaves === 6 && stats.maxNodes === 11, `max leaves ${stats.maxLeaves}, max nodes ${stats.maxNodes}`);
+  check('X18 bounds (RE-SPECIFIED 2026-10-09, no limit of 6): never more than the sequence bound of live leaves (4, 6, 24, 64) and 2 L - 1 nodes (checked on every operation above); the counters show the 64-leaf ceiling was reached: 64 leaves, 127 nodes', stats.maxLeaves === 64 && stats.maxNodes === 127, `max leaves ${stats.maxLeaves}, max nodes ${stats.maxNodes}`);
   check('X18 coverage: every kind of join happened (twin, group of 3 or more, to the root, mid-sequence whole again), undo, rollback and refusals each many times',
     stats.twinJoins > SEQS && stats.groupJoins > SEQS && stats.rootJoins >= SEQS && stats.wholes >= SEQS / 2 && stats.undos > SEQS / 4 && stats.rollbacks > SEQS / 8 && stats.invalid > SEQS / 4,
     `twin ${stats.twinJoins}, group ${stats.groupJoins}, root ${stats.rootJoins}, wholes ${stats.wholes}, undos ${stats.undos}, rollbacks ${stats.rollbacks}, refused ${stats.invalid}`);

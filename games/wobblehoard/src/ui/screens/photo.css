@@ -16,11 +16,11 @@
 .photo-tab .k-icon { width: 20px; height: 20px; }
 /* a card of two columns where the screen is short: the picture left, the words and the buttons right */
 body[data-layout="wide"][data-density="short"] .photo-img { max-height: min(46dvh, 300px); }
-body[data-layout="strip"] .photo-card, body[data-layout="tiny"] .photo-card { width: min(760px, 100%); grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: center; column-gap: var(--wh-sp-4); row-gap: var(--wh-sp-2); padding: var(--wh-sp-4); }
+body:is([data-layout="strip"], [data-layout="tiny"]) .photo-card { width: min(760px, 100%); grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: center; column-gap: var(--wh-sp-4); row-gap: var(--wh-sp-2); padding: var(--wh-sp-4); }
 body[data-layout="strip"] .photo-title { grid-column: 1 / -1; }
 body[data-layout="strip"] .photo-img { max-height: calc(100dvh - 150px); }
-body[data-layout="strip"] .photo-actions, body[data-layout="tiny"] .photo-actions { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: var(--wh-sp-2); }
-body[data-layout="strip"] .photo-actions .k-btn, body[data-layout="tiny"] .photo-actions .k-btn { width: 100%; }
+body:is([data-layout="strip"], [data-layout="tiny"]) .photo-actions { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: var(--wh-sp-2); }
+body:is([data-layout="strip"], [data-layout="tiny"]) .photo-actions .k-btn { width: 100%; }
 body[data-layout="strip"] .photo-hint { font-size: var(--wh-fs-small); }
 /* tiny (358x201): no visible heading (the dialog keeps its name from the hidden text), the hint small, the buttons stacked */
 body[data-layout="tiny"] .photo-title { display: none; }

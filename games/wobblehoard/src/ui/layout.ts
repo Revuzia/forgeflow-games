@@ -7,6 +7,7 @@
 //   stack   max-width 819                                        (390x844, 320x568, tablet portrait)
 //   wide    otherwise                                            (1280x800, 888x500, tablet landscape)
 //   data-density="short"  = wide and max-height 560              (888x500: the portal desktop box)
+//   `narrow` (state only)  = wide and width < 1120                (a tablet landscape: the Table | Float pair made the full dock 772 px wide, which would slide under the name plate and the ring)
 //   data-tall="true"      = stack and height >= 700             (the quick switcher shows only on tall)
 //
 // The order above is the order of the tests: a size takes the first layout it fits. Pure first; the DOM binding guards every access.
@@ -17,19 +18,21 @@
 //
 //   layout          form     attachment   Hoard button        dock
 //   wide            full     above        in the dock         64 high, bottom 14, icon + label + key chip
-//   wide, short     compact  above        in the dock         52 high, bottom 12, icon only
+//   wide, short     compact  above        in the dock         52 high, bottom 12, icon only (also wide and narrow: under 1120 px the full dock does not fit between the name plate and the ring)
 //   stack           compact  above        in the dock         52 high, bottom 14 + inset, icon only
 //   strip           compact  inline       in the bottom row   52 high at the top (y 8..60), tools only
 //   tiny            bare     inline       in the dock         44 high at the bottom (y 151..195), no tray
 
 export type LayoutId = 'tiny' | 'strip' | 'stack' | 'wide';
-export interface LayoutState { layout: LayoutId; short: boolean; tall: boolean; width: number; height: number }
+export interface LayoutState { layout: LayoutId; short: boolean; /** wide and under WIDE_FULL_MIN_W px: the dock takes its compact form (the 52 px dock rules of toolbar.css key off body[data-dock]) */ narrow: boolean; tall: boolean; width: number; height: number }
 
 export const TINY_MAX_W = 420, TINY_MAX_H = 260;
 export const STRIP_MAX_H = 440;
 export const STACK_MAX_W = 819;
 export const SHORT_MAX_H = 560;
 export const TALL_MIN_H = 700;
+/** the full dock (772 px with the Table | Float pair) needs 772 + the name plate and the ring on both sides */
+export const WIDE_FULL_MIN_W = 1120;
 
 /** The 8 kit sizes of UI.md 4.1 (every screen is checked at these). */
 export const KIT_SIZES: ReadonlyArray<{ w: number; h: number; layout: LayoutId; note: string }> = [
@@ -51,10 +54,10 @@ export function layoutFor(width: number, height: number): LayoutState {
   else if (w > h && h <= STRIP_MAX_H) layout = 'strip';
   else if (w <= STACK_MAX_W) layout = 'stack';
   else layout = 'wide';
-  return { layout, short: layout === 'wide' && h <= SHORT_MAX_H, tall: layout === 'stack' && h >= TALL_MIN_H, width: w, height: h };
+  return { layout, short: layout === 'wide' && h <= SHORT_MAX_H, narrow: layout === 'wide' && w < WIDE_FULL_MIN_W, tall: layout === 'stack' && h >= TALL_MIN_H, width: w, height: h };
 }
 
-export const sameLayout = (a: LayoutState, b: LayoutState): boolean => a.layout === b.layout && a.short === b.short && a.tall === b.tall;
+export const sameLayout = (a: LayoutState, b: LayoutState): boolean => a.layout === b.layout && a.short === b.short && a.narrow === b.narrow && a.tall === b.tall;
 
 export type DockForm = 'full' | 'compact' | 'bare';
 export interface DockSpec {
@@ -70,7 +73,7 @@ export interface DockSpec {
 /** The dock's form for a layout (UI.md 4.2). Pure. */
 export function dockFor(s: LayoutState): DockSpec {
   switch (s.layout) {
-    case 'wide': return s.short ? { form: 'compact', attach: 'above', hoard: 'dock', labels: false } : { form: 'full', attach: 'above', hoard: 'dock', labels: true };
+    case 'wide': return s.short || s.narrow ? { form: 'compact', attach: 'above', hoard: 'dock', labels: false } : { form: 'full', attach: 'above', hoard: 'dock', labels: true };
     case 'stack': return { form: 'compact', attach: 'above', hoard: 'dock', labels: false };
     case 'strip': return { form: 'compact', attach: 'inline', hoard: 'row', labels: false };
     case 'tiny': return { form: 'bare', attach: 'inline', hoard: 'dock', labels: false };

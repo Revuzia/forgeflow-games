@@ -50,8 +50,7 @@
 }
 
 /* focus: the ring plus the lift, over the component's own shadow */
-.k-btn:focus-visible, .k-chip:focus-visible, .k-card[tabindex]:focus-visible, .k-seg-input:focus-visible ~ .k-seg-face, .k-switch-input:focus-visible ~ .k-switch-ui,
-.k-tip-target:focus-visible, .k-link:focus-visible {
+.k-btn:focus-visible, .k-chip:focus-visible, .k-card[tabindex]:focus-visible, .k-seg-input:focus-visible ~ .k-seg-face, .k-switch-input:focus-visible ~ .k-switch-ui, .k-link:focus-visible {
   outline: var(--k-ring-w) solid var(--k-ring); outline-offset: var(--k-ring-off);
   box-shadow: var(--k-sh, 0 0 0 0 transparent), 0 0 0 var(--k-halo-spread) var(--k-halo);
 }
@@ -66,7 +65,7 @@
 .k-dot:nth-child(2) { animation-delay: 120ms; }
 .k-dot:nth-child(3) { animation-delay: 240ms; }
 .k-btn[aria-busy="true"] { cursor: progress; }
-.k-btn[aria-busy="true"] > :not(.k-dots) { opacity: 0; }
+.k-btn[aria-busy="true"]:has(> .k-dots) > :not(.k-dots) { opacity: 0; }   /* only a button that HAS dots hides its face: an opener that waits for a chunk keeps its icon */
 .k-btn[aria-busy="true"] > .k-dots { display: flex; }
 
 /* disabled: track fill, dim text, dashed edge, a reason in aria-describedby; NEVER opacity .5. Placed after hover / pressed on purpose. */

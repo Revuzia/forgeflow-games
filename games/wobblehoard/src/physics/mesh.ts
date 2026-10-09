@@ -1,5 +1,5 @@
 // Icosphere topology for the soft body: welded vertices, outward (counter-clockwise seen from outside) winding.
-// Pure TypeScript. Detail d gives 10 * 4^d + 2 vertices: 3 -> 642, 4 -> 2562 (and 2 -> 162, used only by cheap tests).
+// Pure TypeScript. Detail d gives 10 * 4^d + 2 vertices: 3 -> 642, 4 -> 2562, and (CUT3) 2 -> 162, 1 -> 42, 0 -> 12 for the pieces of a cut, by their share (piece.ts pieceDetail).
 // The vertex order is the creation order (12 icosahedron corners first, then edge midpoints level by level) and is
 // deterministic, so the Gauss-Seidel edge order and every hash derived from it are reproducible.
 

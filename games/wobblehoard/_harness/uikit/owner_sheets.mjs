@@ -4,6 +4,7 @@
 // Raw pictures (one per scene and size) go to --raw (default: the scratch folder of the run, NOT the repo); the contact sheets (<= 14 files in all) go to --out
 // (default _handoff/reports/ui_screens). --stress=1 runs every scene with the worst text the UI must hold (a 50-character nickname is a dev hook-free proxy: a long
 // species name via the save, dir=rtl on <html>, Arial-only font stack) and records horizontal overflow per scene.
+// --sweep runs every scene at every size inside ONE game (setViewportSize), without pictures: the fast way to the CSS coverage and the sound table. --rings keeps focus rings (default: a mouse player's view).
 // --coverage writes, for every style rule of every sheet the page loaded, whether ANY selector of it matched an element at the end of ANY scene (dynamic pseudo-classes
 // and pseudo-elements are stripped before matching; media conditions are ignored): the rules that never matched are the deletion candidates (prove each one by hand).
 // Ports 5440-5449 only. One browser; everything started is stopped.
@@ -28,6 +29,10 @@ const SET = opt('set', 'main');             // which contact sheets to build: ma
 const NO_SEED = opt('seed') === 'none';
 const SOUND = args.includes('--sounds');   // the sound wiring table of every interactive control seen (K09)
 const soundMap = new Map();
+const COMPOSE = args.includes('--compose');   // no game: build the contact sheets from the pictures already in --raw (a few scenes re-shot into the same folder, then composed again)
+const SWEEP = args.includes('--sweep');       // ONE game for all sizes, the viewport resized between them (the coverage run: layout-conditioned rules need every layout, not a new game each time)
+const NO_SHOTS = args.includes('--no-shots') || SWEEP;   // no pictures (the coverage and sound runs)
+const RINGS = args.includes('--rings');      // keep the keyboard focus ring and tooltips in the pictures (default: the view of a mouse or touch player: no ring, the pointer parked in a corner)
 const ALL = args.includes('--all-sizes');   // run every scene at every size (the coverage run); otherwise a scene runs at the sizes it names
 mkdirSync(RAW, { recursive: true });
 
@@ -124,11 +129,11 @@ const modeRows = [];
 
 async function openGame(size) {
   const context = await browser.newContext({ viewport: { width: size.w, height: size.h }, deviceScaleFactor: 1, hasTouch: size.w < 500 && size.h > size.w, ...CTX });
-  await context.addInitScript(({ hoard, stress, long }) => {
+  await context.addInitScript(({ hoard, stress, long, rings }) => {
     try { if (hoard) localStorage.setItem('wobblehoard:v2:hoard', hoard); } catch { /* none */ }
     addEventListener('securitypolicyviolation', (e) => { (window.__csp = window.__csp || []).push(`${e.violatedDirective} ${e.blockedURI}`); });
     // the dev overlay (fps, draw calls) is not what a player sees
-    document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = '.dev { display: none !important; }'; document.head.append(st); });
+    document.addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = '.dev { display: none !important; }' + (rings ? '' : ' :focus-visible { outline: none !important; box-shadow: none !important; }'); document.head.append(st); });
     if (stress) {
       document.addEventListener('DOMContentLoaded', () => {
         document.documentElement.setAttribute('dir', 'rtl');
@@ -138,7 +143,7 @@ async function openGame(size) {
       });
       void long;
     }
-  }, { hoard: NO_SEED ? '' : SAVE.json, stress: STRESS, long: LONG });
+  }, { hoard: NO_SEED ? '' : SAVE.json, stress: STRESS, long: LONG, rings: RINGS });
   const page = await context.newPage();
   const errs = [];
   page.on('pageerror', (e) => errs.push(`pageerror ${e.message}`));
@@ -219,13 +224,23 @@ const SCENES = [
   { id: 'hoard-today', sizes: ['1280x800', '390x844'], run: async (page) => { await page.evaluate(() => document.querySelector('#wh-tab-today')?.click()); await sleep(800); } },
   { id: 'reveal', sizes: ['1280x800', '390x844'], run: async (page) => {
     await closeAll(page);
-    await page.evaluate(() => { window.__WH__.shell.grant(1); }); await sleep(600);
-    await page.evaluate(() => window.__WH__.shell.openCapsule());
+    await page.evaluate(() => { if (!window.__WH__.shell.meter().onTable) window.__WH__.shell.grant(1); });
+    await page.waitForFunction(() => window.__WH__.shell.meter().onTable, null, { timeout: 30000 }).catch(() => {});
+    await page.evaluate(() => { void window.__WH__.shell.openCapsule(); });   // not awaited: the ceremony runs on the game's own clock
     // the ceremony ends in a plate: wait for it, then a beat for its entrance
-    await page.waitForFunction(() => !!document.querySelector('.plate:not([hidden])'), null, { timeout: 40000 }).catch(() => {});
+    const got = await page.waitForFunction(() => document.querySelector('.plate')?.dataset.show === 'true', null, { timeout: 60000, polling: 50 }).then(() => true, () => false);
+    note(got, 'reveal: the plate showed (data-show=true)');
+    await sleep(900);   // its entrance; it stays 3.6 s of game time
+  }, noSettle: true },
+  { id: 'photo', sizes: ['1280x800', '390x844'], run: async (page) => {
+    // a real picture: the stage as the player sees it, the HUD hidden for the grab (the card shows what Snap would have saved)
+    await page.evaluate(() => { document.getElementById('ui').style.visibility = 'hidden'; });
+    await sleep(250);
+    const png = await page.screenshot({ type: 'png' });
+    await page.evaluate(() => { document.getElementById('ui').style.visibility = ''; });
+    await page.evaluate(async (b64) => { const bin = atob(b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); await window.__WH_UI__.openPhoto(new Blob([u], { type: 'image/png' })); }, png.toString('base64'));
     await sleep(900);
   } },
-  { id: 'photo', sizes: ['1280x800', '390x844'], run: async (page) => { await page.evaluate(() => window.__WH_UI__.openPhoto()); await sleep(900); } },
   { id: 'error', sizes: ['1280x800', '390x844'], run: async (page) => {
     await page.evaluate(async () => { const m = await import('/src/ui/errorCard.ts'); m.showErrorCard(document.getElementById('ui'), { title: 'The jelly got stuck', message: 'Something went wrong while waking the squishy. Reloading usually fixes it.', detail: 'Error: WebGL context lost (simulated for the picture)' }); });
     await sleep(900);
@@ -234,29 +249,37 @@ const SCENES = [
 
 const shots = {};   // size -> scene -> path
 const failuresByScene = [];
-for (const size of SIZES) {
+let shared = null;
+if (COMPOSE) for (const f of readdirSync(RAW)) { const m = /^(.+)_(\d+x\d+)\.png$/.exec(f); if (m) (shots[m[2]] ||= {})[m[1]] = resolve(RAW, f); }
+for (const size of COMPOSE ? [] : SIZES) {
   const tag = `${size.w}x${size.h}`;
   log(`\n=== ${tag} (${MODE}${STRESS ? ', stress' : ''}) ===`);
-  const { context, page, errs } = await openGame(size);
+  let game;
+  if (SWEEP && shared) { game = shared; await game.page.setViewportSize({ width: size.w, height: size.h }); await sleep(900); }
+  else { game = await openGame(size); if (SWEEP) shared = game; }
+  const { context, page, errs } = game;
   shots[tag] = {};
-  let woke = false;
   const wake = async () => {
-    if (woke) return;
+    if (game.woke) return;
     await page.locator('.cta').click({ force: true });
     await page.waitForFunction(() => window.__WH__.state().phase === 'play', null, { timeout: 30000 });
     await page.waitForFunction(() => !document.querySelector('.title'), null, { timeout: 30000 });
-    woke = true; await sleep(600);
+    game.woke = true; await sleep(600);
   };
   for (const sc of SCENES) {
     if (WANT.length && !WANT.includes(sc.id)) continue;
     if (sc.sizes && !sc.sizes.includes(tag) && !ALL) continue;
+    if (sc.id === 'title' && SWEEP && game.woke) continue;   // (the title is only there before the first wake)
     if (sc.id !== 'title') await wake();
     try {
       await sc.run(page);
-      await settled(page);
-      const file = resolve(RAW, `${sc.id}_${tag}${MODE === 'normal' ? '' : '_' + MODE}${STRESS ? '_stress' : ''}.png`);
-      await page.screenshot({ path: file });
-      shots[tag][sc.id] = file;
+      if (!sc.noSettle) await settled(page);
+      if (!NO_SHOTS) {
+        if (!RINGS) { await page.evaluate(() => { const a = document.activeElement; if (a && a !== document.body && !a.closest('[role="dialog"]')) a.blur(); }); await page.mouse.move(1, 1); await sleep(120); }
+        const file = resolve(RAW, `${sc.id}_${tag}${MODE === 'normal' ? '' : '_' + MODE}${STRESS ? '_stress' : ''}.png`);
+        await page.screenshot({ path: file });
+        shots[tag][sc.id] = file;
+      }
       const ov = await page.evaluate(() => ({ sx: document.documentElement.scrollWidth - innerWidth, bx: document.body.scrollWidth - innerWidth }));
       if (STRESS || ov.sx > 1 || ov.bx > 1) note(ov.sx <= 1 && ov.bx <= 1, `${tag} ${sc.id}: no horizontal overflow`, `${ov.sx} / ${ov.bx} px`);
       if (COVERAGE) await page.evaluate(COLLECT);
@@ -278,7 +301,7 @@ for (const size of SIZES) {
     const cov = await page.evaluate(() => [...(window.__cov || new Map()).entries()]);
     for (const [k, v] of cov) matchedAll.set(k, (matchedAll.get(k) || false) || v);
   }
-  await context.close();
+  if (!SWEEP || size === SIZES[SIZES.length - 1]) await context.close();
 }
 
 if (COVERAGE) {

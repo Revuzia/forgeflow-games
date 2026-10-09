@@ -17,6 +17,7 @@ import { attachPointerInput } from '../input/pointer.ts';
 import { BOOT_TOTAL, createBootCard } from '../ui/bootCard.ts';
 import { h } from '../ui/dom.ts';
 import { showErrorCard, webgl2Available } from '../ui/errorCard.ts';
+import { layerCount } from '../ui/modal.ts';
 import { setCalm } from '../ui/motion.ts';
 import { createTitleCard } from '../ui/titleCard.ts';
 import type { TitleChip, TitleChipId } from '../ui/titleCard.ts';
@@ -201,6 +202,8 @@ export async function boot(): Promise<(() => void) | null> {
   // the keys (UI.md 4.5): 1 2 3 and C S pick tools, H the Hoard, [ ] switch, F full screen and P the Menu (B4's entry points: shell/entryStubs.ts, no-ops until B4)
   const detachKeys = attachKeyboard(window, g, {
     onEscape: () => ui.escape(),
+    // LOCK: Escape lets the locked lobes go first, unless one of the things UI.md 4.5 would close is open (the More popover, a modal or photo card, the Menu, Settings, the Hoard)
+    panelOpen: () => ui.hoard.isOpen || ui.panel.isOpen() || ui.menu.isOpen || layerCount() > 0 || !!document.querySelector('#wh-dock .dock-more[aria-expanded="true"]'),
     shortcutsEnabled: () => g.settings.shortcuts,
     onKeyUsed: () => ui.keyUsed(),
     onHoard: () => { if (g.phase === 'play') ui.hoard.toggle(); },

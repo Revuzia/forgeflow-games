@@ -1187,7 +1187,7 @@ if (!SKIP.includes('info')) {
     if (!ok || r !== true) { okEighth = false; break; }
     const [A, , ra] = mkChildren(g0, cur, reg, k + 1, pl); cur = A; reg = ra; eighth = A.frac!;
   }
-  add('FRAC_MIN 0.124: a legacy piece asked for 0.02 is built as 0.124; an exact 1/8 (three median cuts) is built as measured (0.125 within 1e-8), not clamped and not refused', `legacy clamp ${clampedChunk}; 1/8 piece frac ${eighth}`, '0.124; 0.125 +- 1e-8', clampedChunk === 0.124 && okEighth && Math.abs(eighth - 0.125) <= 1e-8);
+  add('no floor on the share: a legacy piece asked for 0.02 is built as 0.02; an exact 1/8 (three median cuts) is built as measured (0.125 within 1e-8)', `legacy piece ${clampedChunk}; 1/8 piece frac ${eighth}`, '0.02; 0.125 +- 1e-8', Math.abs(clampedChunk - 0.02) < 1e-9 && okEighth && Math.abs(eighth - 0.125) <= 1e-8);   // RE-SPECIFIED (was FRAC_MIN 0.124: asked for 0.02, built as 0.124): the owner removed the limit on 2026-10-09 (CUT3.md 2 item 1)
   // placeAt: exact positions in the parent's pose, no lift, re-home, velocity, and the constructor's `at` / `frame` / `vel` give the same body
   {
     const g = speciesTemplateGenome('kneadle' as never), b = new SoftBody(g), c = cutBody(b, worldPlane(b, unit(1, 0, 0), 0));

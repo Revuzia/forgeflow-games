@@ -774,5 +774,149 @@ const pullTypes = (r: Rig): string => r.types().join();
   check('end-to-end over the real camera + mock body: shoulder press + outward drag = pull with a world target', acts.some((a) => a.type === 'grab'), acts.map((a) => a.type).join());
 }
 
+// ============================================================ 12. LOCK: up to five fingers on the body (_spec/LOCK.md decision 3; touch only)
+// A touch finger (id >= 0, type 'touch') takes the first free slot of the first host.slots() (default 5); a mouse, a pen, an untyped scripted pointer and Space's synthetic finger (id -1000)
+// keep to slots 0 and 1; a host that offers 2 (a body that cannot lock) keeps the old two for fingers too.
+const T = (id: number, x: number, y: number, t: number): PointerSample => ({ id, x, y, t, button: 0, type: 'touch' });
+{
+  const around = (k: number, n: number, rad = 0.6): { x: number; y: number } => ({ x: C.x + Math.cos((2 * Math.PI * k) / n - Math.PI / 2) * C.r * rad, y: C.y + Math.sin((2 * Math.PI * k) / n - Math.PI / 2) * C.r * rad });
+  const slotsOf = (r: Rig): number[] => (r.of('fingerDown') as Array<{ slot: number }>).map((d) => d.slot);
+  const r = rig();
+  for (let k = 0; k < 5; k++) { const p = around(k, 5); r.g.pointerDown(T(20 + k, p.x, p.y, k * 10)); }
+  check('5 fingers: slots 0, 1, 2, 3, 4 in order, each with its own fingerDown and its own tap pressure', slotsOf(r).join() === '0,1,2,3,4' && (r.of('fingerPressure') as Array<{ slot: number }>).map((d) => d.slot).join() === '0,1,2,3,4', slotsOf(r).join());
+  r.g.pointerDown(T(30, C.x, C.y, 60)); r.g.pointerMove(T(30, C.x + 3, C.y, 70));
+  check('5 fingers: a sixth finger on the body is ignored (no slot, no action)', slotsOf(r).length === 5 && r.g.activeCount() === 6 && !r.log.some((a) => a.type === 'grab' || a.type === 'fingerMove'));
+  r.clear();
+  r.g.update(1500);
+  const press = r.of('fingerPressure') as Array<{ slot: number; target: number }>;
+  check('5 fingers: each ramps its own pressure on its own hold time (slot 0 the oldest: never below a younger slot)', [0, 1, 2, 3, 4].every((s) => press.some((x) => x.slot === s)) && [1, 2, 3, 4].every((s) => press.filter((x) => x.slot === s).at(-1)!.target <= press.filter((x) => x.slot === s - 1).at(-1)!.target + 1e-9));
+  r.clear();
+  r.g.pointerUp(T(22, 0, 0, 1600));
+  r.g.pointerDown(T(31, C.x - 20, C.y + 20, 1610));
+  check('5 fingers: a freed slot (2) is reused by the next finger on the body', (r.of('fingerUp') as Array<{ slot: number }>)[0].slot === 2 && slotsOf(r).join() === '2');
+  r.clear();
+  r.g.cancelAll(1700);
+  const ups = (r.of('fingerUp') as Array<{ slot: number; why: string }>);
+  check('5 fingers: cancelAll lets go of all five exactly once each (why cancel)', ups.length === 5 && ups.map((u) => u.slot).sort().join() === '0,1,2,3,4' && ups.every((u) => u.why === 'cancel') && r.g.activeCount() === 0);
+}
+{
+  // three, four and five fingers PULLING at once: each its own grab, grabMove stream and release, no mirror, no cross-talk
+  for (const n of [3, 4, 5]) {
+    const r = rig();
+    const pts = Array.from({ length: n }, (_, k) => { const a = (2 * Math.PI * k) / n - Math.PI / 2; return { x: C.x + Math.cos(a) * C.r * 0.7, y: C.y + Math.sin(a) * C.r * 0.7, a }; });
+    pts.forEach((p, k) => r.g.pointerDown(T(40 + k, p.x, p.y, k)));
+    pts.forEach((p, k) => r.g.pointerMove(T(40 + k, p.x + Math.cos(p.a) * 40, p.y + Math.sin(p.a) * 40, 50 + k)));
+    pts.forEach((p, k) => r.g.pointerMove(T(40 + k, p.x + Math.cos(p.a) * 70, p.y + Math.sin(p.a) * 70, 100 + k)));
+    const grabs = r.of('grab') as Array<{ slot: number; mirrorOf?: number }>, moves = r.of('grabMove') as Array<{ slot: number }>;
+    const want = Array.from({ length: n }, (_, k) => k).join();
+    check(`${n} fingers pulling: ${n} grabs on slots 0..${n - 1}, none mirrored, one 'pull' announcement each`, grabs.map((g) => g.slot).join() === want && grabs.every((g) => !('mirrorOf' in g)) && r.log.filter((a) => a.type === 'gesture' && a.kind === 'pull').length === n);
+    check(`${n} fingers pulling: every slot has its own grabMove stream`, Array.from({ length: n }, (_, k) => moves.filter((m) => m.slot === k).length).every((c) => c >= 1) && moves.every((m) => m.slot < n));
+    r.clear();
+    pts.forEach((p, k) => r.g.pointerUp(T(40 + k, p.x + Math.cos(p.a) * 70, p.y + Math.sin(p.a) * 70, 200 + k)));
+    const rel = r.of('grabRelease') as Array<{ slot: number; why: string }>;
+    check(`${n} fingers pulling: the ups release each grab once, why up, on its own slot`, rel.map((x) => x.slot).join() === want && rel.every((x) => x.why === 'up') && r.g.activeCount() === 0);
+  }
+  // mixed work on three fingers: one pulls, one squeezes, one taps
+  const r = rig();
+  r.g.pointerDown(T(50, C.x + 70, C.y, 0)); r.g.pointerDown(T(51, C.x - 30, C.y + 10, 5)); r.g.pointerDown(T(52, C.x, C.y - 30, 10));
+  r.g.pointerMove(T(50, C.x + 110, C.y, 40));
+  r.g.pointerUp(T(52, C.x, C.y - 30, 100)); r.g.update(400);
+  const pulls = (r.of('grab') as Array<{ slot: number }>).map((g) => g.slot), taps = r.log.filter((a) => a.type === 'gesture' && a.kind === 'tap'), sqz = r.log.filter((a) => a.type === 'gesture' && a.kind === 'squish') as Array<{ slot?: number }>;
+  check('3 fingers, three jobs: slot 0 pulls, slot 1 squishes (held past the tap time), slot 2 taps', pulls.join() === '0' && sqz.length === 1 && sqz[0].slot === 1 && taps.length === 1 && (taps[0] as { slot?: number }).slot === 2, r.types().join());
+  // who may use the extra slots
+  const slotsOf = (x: Rig): string => (x.of('fingerDown') as Array<{ slot: number }>).map((d) => d.slot).join();
+  const q = rig();
+  q.g.pointerDown(T(60, C.x - 40, C.y, 0)); q.g.pointerDown(T(61, C.x + 40, C.y, 1));
+  q.g.pointerDown({ id: 62, x: C.x, y: C.y - 40, t: 2, button: 0, type: 'mouse' });
+  q.g.pointerDown({ id: 63, x: C.x, y: C.y + 40, t: 3, button: 0, type: 'pen' });
+  q.g.pointerDown({ id: 64, x: C.x - 10, y: C.y + 10, t: 4, button: 0 });
+  q.g.pointerDown({ id: -1000, x: C.x, y: C.y, t: 5, button: 0, type: 'touch' });
+  check("slots 2 to 4 are for touch fingers only: a mouse, a pen, an untyped pointer and Space's synthetic finger (id -1000) are ignored when 0 and 1 are busy", slotsOf(q) === '0,1' && q.g.activeCount() === 6, slotsOf(q));
+  const q2 = rig();
+  q2.g.pointerDown(S(70, C.x - 40, C.y, 0)); q2.g.pointerDown(S(71, C.x + 40, C.y, 1)); q2.g.pointerDown(T(72, C.x, C.y + 30, 2));
+  check('slots 2 to 4: a touch finger takes slot 2 even when the first two belong to other kinds of pointer', slotsOf(q2) === '0,1,2');
+  const q3 = rig();
+  q3.g.pointerDown({ id: -1000, x: C.x, y: C.y, t: 0, button: 0, type: 'touch' }); q3.g.pointerDown(T(80, C.x + 50, C.y, 1)); q3.g.pointerDown(T(81, C.x - 50, C.y, 2));
+  check("Space's synthetic finger takes slot 0 (one of the two it may use); real fingers take 1 and 2", slotsOf(q3) === '0,1,2');
+}
+{
+  // a body that cannot lock offers the old two slots (host.slots() = 2); a host may offer any count from 2 to 5; absent = 5
+  for (const [n, want] of [[2, '0,1'], [3, '0,1,2'], [4, '0,1,2,3'], [5, '0,1,2,3,4'], [9, '0,1,2,3,4'], [1, '0,1']] as const) {
+    const log: GestureAction[] = [];
+    const g = createGestures({ ...host, slots: () => n }, (a) => log.push(a));
+    for (let k = 0; k < 6; k++) g.pointerDown(T(90 + k, C.x - 50 + k * 15, C.y, k));
+    check(`host.slots() = ${n}: touch fingers take slots ${want} and no more`, (log.filter((a) => a.type === 'fingerDown') as Array<{ slot: number }>).map((a) => a.slot).join() === want);
+  }
+  const log2: GestureAction[] = [];
+  const dyn = { n: 2 };
+  const g2 = createGestures({ ...host, slots: () => dyn.n }, (a) => log2.push(a));
+  g2.pointerDown(T(100, C.x - 40, C.y, 0)); g2.pointerDown(T(101, C.x + 40, C.y, 1)); g2.pointerDown(T(102, C.x, C.y + 40, 2));
+  dyn.n = 5; g2.pointerDown(T(103, C.x, C.y - 40, 3));
+  check('host.slots() is read at every press (the body under the fingers may change between presses)', (log2.filter((a) => a.type === 'fingerDown') as Array<{ slot: number }>).map((a) => a.slot).join() === '0,1,2' && g2.activeCount() === 4);
+}
+{
+  // consume(): a press that already did its work (it let a locked lobe go) is known and ignored: no slot, no action, its moves and up are swallowed, a duplicate id is cleaned up
+  const r = rig();
+  r.g.consume({ id: 5, x: C.x + 70, y: C.y, t: 0, button: 0, type: 'mouse' });
+  r.g.pointerMove({ id: 5, x: C.x + 120, y: C.y, t: 50, type: 'mouse' });
+  r.g.update(500);
+  r.g.pointerUp({ id: 5, x: C.x + 120, y: C.y, t: 600, type: 'mouse' });
+  check('consume: a consumed press emits nothing (no finger, no grab, no pull) for its whole life', r.log.length === 0 && r.g.activeCount() === 0 && !r.g.isActive(5));
+  r.g.consume({ id: 6, x: C.x + 70, y: C.y, t: 700, button: 0, type: 'mouse' });
+  check('consume: the pointer is known while it is down (the glue forwards its moves: isActive / activeCount) and holds no slot', r.g.isActive(6) && r.g.activeCount() === 1 && r.g.snapshot()[0].slot === -1);
+  r.g.pointerDown(T(7, C.x - 30, C.y, 710)); r.g.pointerDown(T(8, C.x + 30, C.y, 711));
+  check('consume: it takes no finger slot (two fingers still get 0 and 1)', (r.of('fingerDown') as Array<{ slot: number }>).map((d) => d.slot).join() === '0,1');
+  r.clear();
+  r.g.pointerCancel(6, 800);
+  check('consume: a cancel clears it without an action', r.log.length === 0 && !r.g.isActive(6));
+  const d = rig();
+  d.g.pointerDown({ id: 9, x: C.x + 60, y: C.y, t: 0, button: 0, type: 'mouse' });
+  d.clear();
+  d.g.consume({ id: 9, x: C.x + 60, y: C.y, t: 10, button: 0, type: 'mouse' });
+  check('consume: on a live pointer id the old press is cleaned up first (one fingerUp cancel), then the id is ignored', d.types().join() === 'fingerUp' && (d.of('fingerUp') as Array<{ why: string }>)[0].why === 'cancel' && d.g.snapshot()[0].slot === -1);
+  d.g.consume({ id: 10, x: NaN, y: 0, t: 0 });
+  check('consume: a non-finite sample is dropped', d.g.activeCount() === 1);
+}
+{
+  // fuzz over five slots: random touch fingers (ids 1..6) and a mouse (ids 7, 8); every slot stays 0..4, is never double-used, grabs / pressure / moves only on live slots, cancelAll leaves nothing
+  let violations = 0, actions = 0, maxSlot = -1;
+  for (let seed = 1; seed <= 150; seed++) {
+    const log: GestureAction[] = [];
+    const g = createGestures(host, (a) => log.push(a));
+    const rnd = mulberry32(9000 + seed);
+    const down = new Array<boolean>(5).fill(false), grabbed = new Array<boolean>(5).fill(false);
+    let t = 0;
+    const inspect = (): void => {
+      for (const a of log.splice(0)) {
+        actions++;
+        if ('slot' in a && typeof a.slot === 'number') { if (a.slot < 0 || a.slot > 4) violations++; maxSlot = Math.max(maxSlot, a.slot); }
+        if (a.type === 'fingerDown') { if (down[a.slot] || grabbed[a.slot]) violations++; down[a.slot] = true; }
+        else if (a.type === 'fingerUp') { if (!down[a.slot]) violations++; down[a.slot] = false; }
+        else if (a.type === 'fingerPressure' || a.type === 'fingerMove') { if (!down[a.slot]) violations++; }
+        else if (a.type === 'grab') { if (down[a.slot] || grabbed[a.slot]) violations++; grabbed[a.slot] = true; }
+        else if (a.type === 'grabMove') { if (!grabbed[a.slot]) violations++; }
+        else if (a.type === 'grabRelease') { if (!grabbed[a.slot]) violations++; grabbed[a.slot] = false; }
+      }
+    };
+    for (let i = 0; i < 300; i++) {
+      t += Math.floor(rnd() * 80);
+      const id = 1 + Math.floor(rnd() * 8), kind: 'touch' | 'mouse' = id > 6 ? 'mouse' : 'touch';
+      const x = rnd() < 0.7 ? C.x + (rnd() - 0.5) * 240 : rnd() * 800, y = rnd() < 0.7 ? C.y + (rnd() - 0.5) * 240 : rnd() * 600;
+      const k = rnd();
+      if (k < 0.25) g.pointerDown({ id, x, y, t, button: 0, type: kind });
+      else if (k < 0.6) g.pointerMove({ id, x, y, t, type: kind, ...(kind === 'mouse' && rnd() < 0.5 ? { shift: true } : {}) });
+      else if (k < 0.82) g.pointerUp({ id, x, y, t, type: kind });
+      else if (k < 0.88) g.pointerCancel(id, t);
+      else if (k < 0.96) g.update(t);
+      else if (k < 0.98) g.consume({ id, x, y, t, button: 0, type: kind });
+      else g.cancelAll(t);
+      inspect();
+    }
+    g.cancelAll(t + 1); inspect();
+    if (down.some(Boolean) || grabbed.some(Boolean) || g.activeCount() !== 0) violations++;
+  }
+  check('fuzz (five slots): 150 random scripts x 300 events of touch fingers and a mouse keep every slot invariant', violations === 0 && maxSlot === 4, `${actions} actions, ${violations} violations, highest slot ${maxSlot}`);
+}
+
 console.log(`\n${total - bad}/${total} gesture checks passed`);
 process.exit(bad ? 1 : 0);

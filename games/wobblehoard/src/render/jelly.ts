@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import type { PieceInfo, SoftBodyLike } from '../contracts.ts';
 import { buildGeodesic } from './geodesic.ts';
+import { fineFreqFor, LOD_TUNING } from './lod.ts';
 import { buildPieceMesh, isCutPiece, pieceFineN, type PieceBuild } from './pieceBuild.ts';
 import { relaxNormals, relaxNormalsList, simNormals, simNormalsList } from './normals.ts';
 
@@ -211,7 +212,11 @@ export class JellyView {
   // body extents refreshed by update()
   minX = 0; maxX = 0; minY = 0; maxY = 0; minZ = 0; maxZ = 0;
   fineCount = 0;
+  /** The TIER's frequency this mesh was asked for (BodyView.applyQuality compares it with the tier's); effFreq is the one built for this body (lod.ts fineFreqFor; = freq for a whole). */
   freq = 0;
+  effFreq = 0;
+  /** The share of the whole the fine mesh was built for (a mini that grows in a Reconnect is built again once it needs a finer one, see update()). */
+  private builtFrac = 1;
   private readonly body: SoftBodyLike;
   private geo: THREE.BufferGeometry;
   private vA: Uint32Array = new Uint32Array(0); private vB: Uint32Array = new Uint32Array(0); private vC: Uint32Array = new Uint32Array(0);
@@ -236,7 +241,11 @@ export class JellyView {
     const pc = this.body.piece;
     if (isCutPiece(pc)) { this.rebuildPiece(freq, pc); return; }
     this.pb = null; this.pieceRef = pc; this.caps.length = 0; this.rimClean = true; this.degraded = false;
-    const g = buildGeodesic(freq);
+    // CUT3 (lod.ts): the frequency follows what the body is made of (its share of the whole, its sim mesh); a whole on a detail-3 mesh gets the tier's frequency exactly
+    const fr0 = this.body.frac;
+    this.builtFrac = typeof fr0 === 'number' && Number.isFinite(fr0) && fr0 > 0 ? fr0 : 1;
+    this.effFreq = fineFreqFor(freq, this.body.vertexCount, this.builtFrac);
+    const g = buildGeodesic(this.effFreq);
     const N = g.vertexCount;
     const hit: SurfaceHit = { tri: 0, u: 0, v: 0, w: 0 };
     const idx = this.body.indices;
@@ -413,6 +422,10 @@ export class JellyView {
   update(): void {
     if (this.body.piece !== this.pieceRef) { this.rebuild(this.freq); return; }   // a merge published a NEW PieceInfo: rebuild once (rebuild ends in update)
     if (this.pb) { this.updatePiece(); return; }
+    {   // CUT3: a body that has grown since its mesh was built (a mini flowing into the others in a Reconnect all) gets the finer mesh its share now needs, once per step of 25 % in frequency
+      const fr = this.body.frac;
+      if (typeof fr === 'number' && fr > this.builtFrac * 1.15 && fineFreqFor(this.freq, this.body.vertexCount, fr) >= this.effFreq * LOD_TUNING.regrow) { this.rebuild(this.freq); return; }
+    }
     const body = this.body, P = body.positions, S = body.strain, sn = this.simN;
     simNormals(P, body.indices, sn);
     relaxNormals(sn, body.indices, this.nAcc, 0.7);

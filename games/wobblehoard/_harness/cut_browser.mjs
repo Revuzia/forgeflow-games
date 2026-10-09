@@ -4,13 +4,16 @@
 //   node _harness/cut_browser.mjs [--port=5400] [--only=level,part,...] [--v]
 // Sections: level (a horizontal swipe on gel, putty, sticky, foam: the upper piece stays), part (X19: the scripted parting reaches G +-20 % by PART_S and holds to 4 s),
 //           x03 (X03' the first Split in two leaves an eye on each half, from three camera yaws), x11 (X11 a swipe through an eye), x12 (X12 nested cuts up to the limit),
-//           x04 (X04 Reconnect all is the exact original), x05 (X05 leave paths), x06 (X06 the meter), x10 (X10 keyboard only), x25 (X25 a drag in the Cut tool never joins)
-// MAX_PIECES_CLEAN is read from src/shell/cut.ts: every row about the limit follows that constant (2 in the first build, 6 at full).
+//           x04 (X04 Reconnect all is the exact original + X06 leg 1), x25 (X25 a drag in the Cut tool never joins), join (a REAL drag joins the group under the lowest common ancestor at any count),
+//           u05 (CUT3 U05 Minis to N minis, every one with its full face, --minis=N), u07 (CUT3 U07 nothing pays the meter, the Hoard leave reconnects first, --pieces=N); X05 / X06 gesture / X10 keyboard are in browser_shell.mjs cut-real / cut-x
+// CUT3 (2026-10-09): there is no piece limit any more; the safety ceiling PIECE_CEILING (64) is read from src/shell/cut.ts. The physics lifted its 1/8 clamp the same day, so the nested rows press NEST_PRESSES times (5: six pieces, as the
+// original X12); 20 presses on the real bodies are cutter_checks --only=u01, 24 minis u05 here; the ceiling itself is reached on mock bodies (shellview/cut_mock_checks.ts).
 // Ports 5400 to 5409 only (5360 to 5381 belong to others). One browser at a time; the shots go to _shots/cut_browser/.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { ROOT, launch, startVite } from './pw.mjs';
-import { MAX_PIECES_CLEAN, PART_GAP, PART_GAP_DEFAULT, PART_S, PART_S_DEFAULT } from '../src/shell/cut.ts';
+import { PIECE_CEILING, PART_GAP, PART_GAP_DEFAULT, PART_S, PART_S_DEFAULT } from '../src/shell/cut.ts';
+const NEST_PRESSES = 5;
 import { encodeGenome } from '../src/core/genome.ts';
 import { familyOf, speciesBaseGenome } from '../src/data/catalog.ts';
 
@@ -21,7 +24,7 @@ const ONLY = (args.find((a) => a.startsWith('--only=')) ?? '').split('=')[1]?.sp
 const VERBOSE = args.includes('--v');
 const SPF = (args.find((a) => a.startsWith('--sp=')) ?? '').slice(5).split(',').filter(Boolean);   // optional species filter for x03 / x11
 const only = (list) => (SPF.length ? list.filter((q) => SPF.includes(q)) : list);
-if (PORT < 5400 || PORT > 5409) { console.error('ports 5400 to 5409 only'); process.exit(2); }
+if (!((PORT >= 5400 && PORT <= 5409) || (PORT >= 5500 && PORT <= 5519))) { console.error('ports 5400 to 5409 or 5500 to 5519 only'); process.exit(2); }
 const SHOTS = resolve(ROOT, '_shots', 'cut_browser');
 const REPORTS = resolve(ROOT, '_harness', '_reports');
 mkdirSync(SHOTS, { recursive: true }); mkdirSync(REPORTS, { recursive: true });
@@ -61,6 +64,8 @@ async function open({ query = '?dev=1&rseed=4242&quality=high', ctx = SMALL } = 
   const context = await browser.newContext(ctx);
   const page = await context.newPage();
   const w = watch(page);
+  // the live-region LOG: a trophy toast (the four-pieces trophy fires at 4 pieces) replaces the live line within a second, so rows that read "Whole again." read the log
+  await page.addInitScript(() => { const real = performance.now.bind(performance); let skew = 0; performance.now = () => real() + skew; window.__skewClock = (ms) => { skew += ms; }; window.__liveLog = []; const rec = () => { const el = document.getElementById('wh-live'); if (!el) { setTimeout(rec, 30); return; } new MutationObserver(() => { if (el.textContent) window.__liveLog.push(el.textContent); }).observe(el, { childList: true, characterData: true, subtree: true }); }; rec(); });
   await page.goto(srv.url + query, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 120000 });
   await page.waitForSelector('.cta:not([disabled])', { timeout: 60000 });
@@ -297,7 +302,7 @@ async function main() {
         const flat = clipped.flat();
         const refusedSmall = ts < 0 && t1.pieces === 1;
         rows.push({ sp, ts, pieces: t1.pieces, clipped, whole, total: +total.toFixed(2) });
-        check(`${sp}: a real swipe through the projected centre of the left eye cuts that bead in two: one clipped bead on each half with a share of 0.5 +-0.2 (${JSON.stringify(clipped)}), the other bead whole on its side (${JSON.stringify(whole)}), the shares of all eyes over both views sum to 2 (${total.toFixed(2)})${refusedSmall ? ' [refused as too small: the eye is within 1/8 of the edge]' : ''}`,
+        check(`${sp}: a real swipe through the projected centre of the left eye cuts that bead in two: one clipped bead on each half with a share of 0.5 +-0.2 (${JSON.stringify(clipped)}), the other bead whole on its side (${JSON.stringify(whole)}), the shares of all eyes over both views sum to 2 (${total.toFixed(2)})${refusedSmall ? ' [not cut: the physics refused a sliver under its 1/8 floor as thin (CUT3: PHYS lifts the floor)]' : ''}`,
           refusedSmall || (t1.pieces === 2 && pv.length === 2 && flat.length === 2 && flat.every((s) => Math.abs(s - 0.5) <= 0.2) && whole.reduce((a, n) => a + n, 0) === 1 && Math.abs(total - 2) < 0.1), JSON.stringify(rows.at(-1)));
         await shot(page, `x11_${sp}`);
       }
@@ -305,14 +310,14 @@ async function main() {
       await context.close();
     });
 
-    // ---------------------------------------------------------------- x12: the limit is the constant, in words (nested cuts up to MAX_PIECES_CLEAN)
+    // ---------------------------------------------------------------- x12: RE-SPECIFIED 2026-10-09 (the owner removed the limit): nested cuts keep going, the counter says the number, Split in two stays enabled
     await section('x12', async () => {
       const { page, context, w } = await open();
       watches.push(['x12', w]);
       await arrive(page, 'dollop');
       const t0 = await tools(page);
       const presses = [];
-      for (let i = 0; i < MAX_PIECES_CLEAN - 1; i++) {
+      for (let i = 0; i < NEST_PRESSES; i++) {
         await page.evaluate(() => window.__WH__.resume());
         await page.evaluate(() => document.querySelector('.cutbar [data-key="split"]')?.click());
         await page.evaluate(() => window.__WH__.pause());
@@ -320,15 +325,14 @@ async function main() {
         presses.push((await tools(page)).pieces);
       }
       const tN = await tools(page);
-      check(`X12: ${MAX_PIECES_CLEAN - 1} press(es) of Split in two reach MAX_PIECES_CLEAN (${MAX_PIECES_CLEAN}) pieces: shares sum to 1, none under 1/8`, t0.maxPieces === MAX_PIECES_CLEAN && tN.pieces === MAX_PIECES_CLEAN && Math.abs(tN.fracs.reduce((a, f) => a + f, 0) - 1) < 1e-6 && tN.fracs.every((f) => f >= 0.125 - 1e-4), JSON.stringify({ presses, fracs: tN.fracs.map((f) => +f.toFixed(3)) }));
       await page.evaluate(() => window.__WH__.resume());
       const disabled = await page.evaluate(() => { const b = document.querySelector('.cutbar [data-key="split"]'); return b ? b.disabled || b.getAttribute('aria-disabled') === 'true' : null; });
-      const bar = await page.evaluate(() => document.querySelector('.cutbar-text')?.textContent ?? '');
+      const bar = await page.evaluate(() => document.querySelector('.cutbar-count')?.textContent ?? document.querySelector('.cutbar')?.textContent ?? '');
+      const hint = await page.evaluate(() => document.querySelector('.cutbar-text')?.textContent ?? '');
       await page.evaluate(() => window.__WH__.pause());
-      const b = await bodyPx(page);
-      const r = await page.evaluate(([x, y, vw, vh]) => window.__WH__.shell.cutSwipe((x - 4) / vw, (y - 60) / vh, (x + 4) / vw, (y + 60) / vh), [b.x, b.y, b.vw, b.vh]);
-      await sleep(400);
-      check(`X12: one more cut is refused by the limit in words ("That's as many pieces as it can make."), Split in two is disabled, the bar says the same`, r === 'limit' && /as many pieces as it can make/.test(await live(page)) && disabled === true && /as many pieces as it can make/.test(bar), JSON.stringify({ r, disabled, bar, live: await live(page) }));
+      check(`X12 (RE-SPECIFIED 2026-10-09, no limit): ${NEST_PRESSES} presses of Split in two reach ${NEST_PRESSES + 1} pieces (each press cut the largest), maxPieces is the safety ceiling ${PIECE_CEILING}, shares sum to 1, all positive; Split in two is ENABLED; the bar counts "${NEST_PRESSES + 1} pieces" with no "of N"; no limit line`,
+        t0.maxPieces === PIECE_CEILING && tN.pieces === NEST_PRESSES + 1 && Math.abs(tN.fracs.reduce((a, f) => a + f, 0) - 1) < 1e-6 && tN.fracs.every((f) => f > 0) && disabled === false && bar.includes(`${NEST_PRESSES + 1} pieces`) && !/ of \d/.test(bar) && !/as many pieces|lot of pieces/.test(hint + (await live(page))),
+        JSON.stringify({ presses, fracs: tN.fracs.map((f) => +f.toFixed(3)), disabled, bar, hint }));
       await context.close();
     });
 
@@ -341,7 +345,7 @@ async function main() {
       const m0 = await page.evaluate(() => window.__WH__.shell.meter());
       const ev0 = await page.evaluate(() => window.__WH__.state().events.length);
       const before = (await tools(page)).body;
-      for (let i = 0; i < MAX_PIECES_CLEAN - 1; i++) {
+      for (let i = 0; i < NEST_PRESSES; i++) {
         await page.evaluate(() => window.__WH__.resume());
         await page.evaluate(() => document.querySelector('.cutbar [data-key="split"]')?.click());
         await page.evaluate(() => window.__WH__.pause());
@@ -358,7 +362,7 @@ async function main() {
       const m1 = await page.evaluate(() => window.__WH__.shell.meter());
       const kinds = await page.evaluate((n) => window.__WH__.state().events.slice(n).map((e) => e.kind), ev0);
       check(`X04 real: Reconnect all from ${nCut} pieces ends as the original: one body at the full share (frac ${t1.body.frac}), the same rest radius (${f3(t1.body.r)} vs ${f3(before.r)}), at the middle (x, z ${f3(t1.body.x)}, ${f3(t1.body.z)}), the same genome and item, "Whole again."; it took ${f3(t)} s`,
-        nCut === MAX_PIECES_CLEAN && t >= 0 && t1.pieces === 1 && t1.extras === 0 && t1.body.frac === 1 && Math.abs(t1.body.r - before.r) < 1e-9 && Math.hypot(t1.body.x, t1.body.z) < 1e-6 && id1.genomeCode === id0.genomeCode && id1.itemId === id0.itemId && /Whole again\./.test(await live(page)), JSON.stringify({ t1, id: [id0.genomeCode, id1.genomeCode] }));
+        nCut === NEST_PRESSES + 1 && t >= 0 && t1.pieces === 1 && t1.extras === 0 && t1.body.frac === 1 && Math.abs(t1.body.r - before.r) < 1e-9 && Math.hypot(t1.body.x, t1.body.z) < 1e-6 && id1.genomeCode === id0.genomeCode && id1.itemId === id0.itemId && (await page.evaluate(() => window.__liveLog)).some((t) => /^Whole again\./.test(t)), JSON.stringify({ t1, id: [id0.genomeCode, id1.genomeCode] }));
       check('X06 real (leg 1, programmatic): the cut and Reconnect all paid the meter nothing and made no poke, release or snap event', m1.fill === m0.fill && m1.credits === m0.credits && !kinds.some((k) => k === 'poke' || k === 'release' || k === 'snap'), JSON.stringify({ fill: [m0.fill, m1.fill], kinds: [...new Set(kinds)] }));
       await context.close();
     });
@@ -388,7 +392,223 @@ async function main() {
       await stepSim(page, 0.8);
       const t1 = await tools(page);
       const spy = await page.evaluate(() => window.__WH__.shell.spyCalls());
-      check('X25 real: with the Cut tool in hand a drag from one piece toward its neighbour, held 1 s and released, starts no join: still two pieces, never busy, no rejoin sound', tool === 'cut' && t1.pieces === 2 && !busyEver && !(spy.audio.rejoin?.n), JSON.stringify({ tool, pieces: t1.pieces, busyEver, rejoin: spy.audio.rejoin?.n ?? 0 }));
+      check('X25 real (RE-SPECIFIED 2026-10-09, the owner removed the piece limit: the released drag is a swipe and may now cut a third piece, which the limit of two used to refuse): with the Cut tool in hand a drag from one piece toward its neighbour, held 1 s and released, starts no join: never busy while it was held, no piece lost (2 or more, shares sum to 1), no rejoin sound', tool === 'cut' && t1.pieces >= 2 && Math.abs(t1.fracs.reduce((a, f) => a + f, 0) - 1) < 1e-6 && !busyEver && !(spy.audio.rejoin?.n), JSON.stringify({ tool, pieces: t1.pieces, busyEver, rejoin: spy.audio.rejoin?.n ?? 0 }));
+      await context.close();
+    });
+
+    // ---------------------------------------------------------------- join: CUT3 / CUT2 7.2 by a REAL drag, at any count: 4 presses (5 pieces), a piece pulled into a non-twin joins the GROUP under their lowest common ancestor (3 pieces become one,
+    // "Joined 3 pieces into one."), then the next drag joins the root group (everything: "Whole again."). The press point is the first of 0.1 .. 0.5 radii toward the other piece that grabs THIS piece
+    // (the neighbour covers the inner shoulder of a flush piece: the owner changed the design on 2026-10-08, pieces rest flush).
+    await section('join', async () => {
+      const { page, context, w } = await open();
+      watches.push(['join', w]);
+      /** pull piece ri into piece rj with the real pointer (a region index = the cutter's piece order); the first of 0.1 .. 0.5 radii toward the other piece that grabs THIS piece is the press point */
+      const dragInto = async (ri, rj) => page.evaluate(async ([ri, rj]) => {
+        const wh = window.__WH__, vw = innerWidth, vh = innerHeight;
+        wh.pause();
+        // the cutter's piece order is not the stage's body order: match each region to its body by the exact world centre
+        const reg = wh.shell.cutRegions(), pg = wh.shell.pieceGaps();
+        const at = (q) => pg.findIndex((p) => Math.abs(p.x - q.x) < 1e-9 && Math.abs(p.y - q.y) < 1e-9 && Math.abs(p.z - q.z) < 1e-9);
+        const i = at(reg[ri]), j = at(reg[rj]);
+        if (i < 0 || j < 0) return { off: null, tried: [], map: [i, j] };
+        const mi = () => wh.shell.matInfo().bodies;
+        const P0 = mi()[i], Q0 = mi()[j];
+        const dx = Q0.x - P0.x, dy = Q0.y - P0.y, dl = Math.hypot(dx, dy) || 1, ux = dx / dl, uy = dy / dl;
+        const tried = [];
+        let off = null;
+        for (const k of [0.1, 0.2, 0.3, 0.4, 0.5]) {
+          const px = P0.x + ux * k * P0.r, py = P0.y - 0.1 * P0.r + uy * k * P0.r;
+          wh.pointerDown(px / vw, py / vh, 0); wh.step(1 / 60, 8);
+          const f = mi().map((b) => b.fingers); wh.pointerUp(0); wh.step(1 / 60, 24);
+          tried.push([k, f.indexOf(Math.max(...f)), Math.max(...f)]);
+          if (f[i] > 0 && f.every((x, m) => m === i || x === 0)) { off = k; break; }
+        }
+        if (off === null) return { off, tried, map: [i, j] };
+        const P = mi()[i], Q = mi()[j];
+        const fx = P.x + ux * off * P.r, fy = P.y - 0.1 * P.r + uy * off * P.r, tx = Q.x - ux * 0.1 * Q.r, ty = Q.y - 0.1 * Q.r - uy * 0.1 * Q.r;
+        wh.pointerDown(fx / vw, fy / vh, 0); wh.step(1 / 60, 8);
+        let busyAt = -1, time = 0, steps = 0;
+        const trace = [];
+        const snap = () => { const g = wh.shell.pieceGaps(), m = mi()[i], me = g[i]; let best = [Infinity, -1]; g.forEach((o, k) => { if (k === i) return; const d = Math.hypot(o.x - me.x, o.y - me.y, o.z - me.z) - o.r - me.r; if (d < best[0]) best = [d, k]; }); if (steps++ % 24 === 0) trace.push([+time.toFixed(2), m.fingers, m.carried ? 1 : 0, +best[0].toFixed(3), best[1], Math.round(m.x), Math.round(m.y)]); };
+        for (let s = 1; s <= 36; s++) { const q = s / 36; wh.pointerMove((fx + (tx - fx) * q) / vw, (fy + (ty - fy) * q) / vh, 0); for (let n = 0; n < 2; n++) { wh.step(1 / 60, 1); time += 1 / 60; snap(); if (busyAt < 0 && wh.shell.tools().busy) busyAt = +time.toFixed(2); } }
+        for (let n = 0; n < 240 && busyAt < 0; n++) { wh.step(1 / 60, 1); time += 1 / 60; snap(); if (wh.shell.tools().busy) busyAt = +time.toFixed(2); }
+        wh.pointerUp(0);
+        return { off, tried, busyAt, drag: +time.toFixed(2), map: [i, j], trace, from: [Math.round(fx), Math.round(fy)], target: [Math.round(tx), Math.round(ty)] };
+      }, [ri, rj]);
+      /** the group of a pair by the lowest common ancestor of their cells (literals = the path from the root) */
+      const groupOf = (reg, i, j) => { let k = 0; while (k < reg[i].cells.length && k < reg[j].cells.length && reg[i].cells[k] === reg[j].cells[k]) k++; return { k, members: reg.map((_, m) => m).filter((m) => reg[m].cells.length >= k && reg[m].cells.slice(0, k).every((v, q) => v === reg[i].cells[q])) }; };
+      /** n vertical swipes, each through the centre of the RIGHTMOST piece: a row of n + 1 slices, left to right A B C D ... (the tree: A | (B | (C | D))) */
+      const sliceRow = async (n) => {
+        for (let c = 0; c < n; c++) {
+          const mi = await page.evaluate(() => window.__WH__.shell.matInfo().bodies);
+          const right = mi.reduce((a, b) => (b.x > a.x ? b : a));
+          await mouseSwipe(page, right.x, right.y - 1.7 * right.r, right.x + 1, right.y + 1.7 * right.r);
+          await untilSwap(page, 3); await cutIdle(page, 4); await stepSim(page, 1.5);
+        }
+      };
+      /** the row left to right: region indices in order of world x */
+      const rowOrder = async () => { const reg = await page.evaluate(() => window.__WH__.shell.cutRegions()); return { reg, order: reg.map((_, i) => i).sort((a, b) => reg[a].x - reg[b].x) }; };
+      const fracSum = (t) => t.fracs.reduce((a, f) => a + f, 0);
+      const liveJoin = async () => (await page.evaluate(() => window.__liveLog)).filter((t) => /Join|Whole/.test(t)).join(' | ');
+
+      // ---- scenario 1: 3 cuts = 4 slices A B C D; C is pulled onto B: the lowest common ancestor of B and C holds B, C, D (not the root) => 3 pieces become one
+      await arrive(page, 'dollop');
+      await sliceRow(3);
+      const t4 = await tools(page);
+      await pickTool(page, 'hand');
+      await stepSim(page, 1);
+      const { reg, order } = await rowOrder();
+      const [, B, C] = order;
+      const gBC = reg.length === 4 ? groupOf(reg, B, C) : null;
+      const j1 = reg.length === 4 ? await dragInto(C, B) : null;
+      let tAfter1 = null, say1 = '';
+      if (j1 && j1.off !== null) { await cutIdle(page, 4); await stepSim(page, 1.5); await sleep(450); tAfter1 = await tools(page); say1 = await liveJoin(); }
+      check(`join (group of 3, any count): 3 vertical swipes make a row of ${t4.pieces} slices; a REAL drag of the third slice onto the second joins the group under their lowest common ancestor (${gBC ? gBC.members.length : '?'} pieces, not the root): 4 -> 2 pieces, shares sum to 1, the live region says "Joining 3 pieces." and "Joined 3 pieces into one."`,
+        t4.pieces === 4 && !!gBC && gBC.members.length === 3 && gBC.k > 0 && !!j1 && j1.busyAt >= 0 && !!tAfter1 && tAfter1.pieces === 2 && Math.abs(fracSum(tAfter1) - 1) < 1e-6 && /Joining 3 pieces\./.test(say1) && /Joined 3 pieces into one\./.test(say1),
+        JSON.stringify({ order, group: gBC && gBC.members, drag: j1, after: tAfter1 && tAfter1.fracs.map((f) => +f.toFixed(3)), say: say1, reg: reg.map((q) => ({ f: +q.frac.toFixed(3), c: q.cells, x: +q.x.toFixed(2) })) }));
+      // the merged piece and slice A are the two kids of the root: the next drag joins everything, and the squishy is the original again
+      let j2 = null, tAfter2 = null, whole = false;
+      if (tAfter1 && tAfter1.pieces === 2) {
+        const r2 = await rowOrder();
+        j2 = await dragInto(r2.order[1], r2.order[0]);
+        if (j2.off !== null) { await cutIdle(page, 6); await stepSim(page, 2.5); await sleep(450); tAfter2 = await tools(page); whole = (await page.evaluate(() => window.__liveLog)).some((t) => /^Whole again\./.test(t)); }
+      }
+      check('join (the root group): the next real drag joins the group whose lowest common ancestor is the root: the squishy is whole again (one body, frac 1, no piece, "Whole again.")',
+        !!j2 && j2.busyAt >= 0 && !!tAfter2 && tAfter2.pieces === 1 && tAfter2.extras === 0 && tAfter2.body.frac === 1 && whole, JSON.stringify({ drag: j2, after: tAfter2 && { pieces: tAfter2.pieces, frac: tAfter2.body.frac }, whole }));
+
+      // ---- scenario 2: 3 cuts again; slice B is pulled onto A: their lowest common ancestor is the ROOT, so all 4 pieces become the whole squishy at once
+      await arrive(page, 'dollop');
+      await sliceRow(3);
+      await pickTool(page, 'hand');
+      await stepSim(page, 1);
+      const r3 = await rowOrder();
+      const g3 = r3.reg.length === 4 ? groupOf(r3.reg, r3.order[1], r3.order[0]) : null;
+      const j3 = r3.reg.length === 4 ? await dragInto(r3.order[1], r3.order[0]) : null;
+      let tAfter3 = null, say3 = '';
+      if (j3 && j3.off !== null) { await cutIdle(page, 6); await stepSim(page, 2.5); await sleep(450); tAfter3 = await tools(page); say3 = await liveJoin(); }
+      check('join (the root group, 4 pieces): a REAL drag of the second slice onto the first joins all four (their lowest common ancestor is the root): "Joining 4 pieces." then "Whole again.", one body at the full share',
+        r3.reg.length === 4 && !!g3 && g3.k === 0 && g3.members.length === 4 && !!j3 && j3.busyAt >= 0 && !!tAfter3 && tAfter3.pieces === 1 && tAfter3.extras === 0 && tAfter3.body.frac === 1 && /Joining 4 pieces\./.test(say3) && /Whole again\./.test(say3),
+        JSON.stringify({ group: g3 && g3.members, drag: j3, after: tAfter3 && { pieces: tAfter3.pieces, frac: tAfter3.body.frac }, say: say3 }));
+      writeFileSync(resolve(REPORTS, 'cut_browser_join.json'), JSON.stringify({ j1, j2, j3 }, null, 1));
+      await context.close();
+    });
+
+    // ---------------------------------------------------------------- x05: X05 leave paths with MANY pieces on the real stack: a quick switch, hidden over 60 s (and 30 s keeps the pieces), a reload: each comes back whole; nothing about pieces is stored
+    await section('x05', async () => {
+      const { page, context, w } = await open();
+      watches.push(['x05', w]);
+      const N = Number((args.find((a) => a.startsWith('--pieces=')) ?? '--pieces=5').split('=')[1]);
+      const cutTo = async () => {
+        await page.evaluate(() => window.__WH__.resume());
+        if ((await tools(page)).tool !== 'cut') { await page.evaluate(() => document.querySelector('#wh-play')?.focus()); await page.keyboard.press('c'); }
+        for (let i = 0; i < N - 1; i++) {
+          await page.evaluate(() => document.querySelector('.cutbar [data-key="split"]')?.click());
+          await page.evaluate(() => window.__WH__.pause());
+          await cutIdle(page, 5); await stepSim(page, 0.4);
+          await page.evaluate(() => window.__WH__.resume());
+        }
+        await page.evaluate(() => window.__WH__.pause());
+        return (await tools(page)).pieces;
+      };
+      await arrive(page, 'dollop');
+      const k1 = await cutTo();
+      const id0 = await page.evaluate(() => window.__WH__.shell.identity().itemId);
+      await page.evaluate(() => window.__WH__.resume());
+      await page.evaluate(() => document.querySelector('#wh-play')?.focus());
+      await page.keyboard.press(']'); await settle(page); await sleep(300);
+      const tsw = await tools(page), id1 = await page.evaluate(() => window.__WH__.shell.identity().itemId);
+      check(`X05 (${N} pieces): a quick switch reconnects at once: the new squishy is whole, no piece left on the mat`, k1 === N && id1 !== id0 && tsw.pieces === 1 && tsw.extras === 0, JSON.stringify({ k1, id0, id1, pieces: tsw.pieces, extras: tsw.extras }));
+      const hide = async (ms) => {
+        await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+        await page.evaluate((m) => window.__skewClock(m), ms);
+        await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { get: () => 'visible', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+        await sleep(300);
+      };
+      const k2 = await cutTo();
+      await hide(30_000);
+      const short = (await tools(page)).pieces;
+      await hide(61_000);
+      const long = await tools(page);
+      check(`X05 (${N} pieces): hidden 30 s keeps the pieces, hidden over 60 s comes back whole`, k2 === N && short === N && long.pieces === 1 && long.extras === 0, JSON.stringify({ k2, short, long: long.pieces }));
+      const k3 = await cutTo();
+      await page.reload({ waitUntil: 'load', timeout: 180000 });
+      await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 180000 });
+      await page.waitForSelector('.cta:not([disabled])', { timeout: 60000 });
+      const b = await page.locator('.cta').boundingBox();
+      await page.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+      await page.waitForFunction(() => window.__WH__.state().phase === 'play', null, { timeout: 30000 });
+      const tr = await tools(page);
+      const stored = await page.evaluate(() => Object.keys(localStorage).filter((k) => /"(piece|pieces|chunk|cutNormal|region|cells|planes)"/.test(localStorage.getItem(k) ?? '')));
+      check(`X05 (${N} pieces): a reload is whole again; nothing about pieces is stored`, k3 === N && tr.pieces === 1 && tr.extras === 0 && stored.length === 0, JSON.stringify({ k3, pieces: tr.pieces, stored }));
+      await context.close();
+    });
+
+    // ---------------------------------------------------------------- u05: CUT3 U05 Minis to N minis on the real stage: every mini draws its OWN full face (two eyes at share 1), nothing non-finite, shares sum to 1, Reconnect all is the original
+    // --minis=N presses (default 23 = 24 minis); the real physics decides how far it can go, and the row says exactly how far it got when it stops short.
+    await section('u05', async () => {
+      const { page, context, w } = await open();
+      watches.push(['u05', w]);
+      const PRESS = Number((args.find((a) => a.startsWith('--minis=')) ?? '--minis=23').split('=')[1]);
+      await arrive(page, 'dollop');
+      await page.evaluate(() => window.__WH__.shell.setCutStyle('minis'));
+      const id0 = await page.evaluate(() => window.__WH__.shell.identity());
+      const before = (await tools(page)).body;
+      const lines = [];
+      let made = 1;
+      for (let i = 0; i < PRESS; i++) {
+        await page.evaluate(() => window.__WH__.resume());
+        await page.evaluate(() => document.querySelector('.cutbar [data-key="split"]')?.click());
+        await page.evaluate(() => window.__WH__.pause());
+        await cutIdle(page, 5); await stepSim(page, 0.4);
+        const n = (await tools(page)).pieces;
+        if (n === made) lines.push(`press ${i + 1} made nothing`);
+        made = n;
+      }
+      await stepSim(page, 1.5);
+      const t = await tools(page);
+      const ev = await page.evaluate(() => window.__WH__.shell.eyeViews()) ?? [];
+      const faces = ev.map((v) => v.eyes.filter((e) => e.share >= 0.95).length);
+      const finite = await page.evaluate(() => window.__WH__.shell.pieceGaps().every((p) => [p.x, p.y, p.z, p.r].every(Number.isFinite)));
+      await shot(page, `u05_minis_${t.pieces}`);
+      await page.evaluate(() => window.__WH__.resume());
+      await page.evaluate(() => document.querySelector('.cutbar [data-key="join"]')?.click());
+      await page.evaluate(() => window.__WH__.pause());
+      const tj = await stepUntil(page, `(wh) => wh.shell.tools().pieces === 1 && !wh.shell.tools().busy`, 8, 1 / 30);
+      await stepSim(page, 2.5); await sleep(450);
+      const t1 = await tools(page), id1 = await page.evaluate(() => window.__WH__.shell.identity());
+      check(`U05 (real stage): Minis, ${PRESS} presses of Split in two make ${PRESS + 1} minis (made ${t.pieces}${lines.length ? '; ' + lines.slice(0, 3).join(', ') : ''}); the stage draws ${ev.length} views and every one has both eyes at full share (${faces.filter((n) => n === 2).length} of ${ev.length}); shares sum to 1; nothing non-finite; Reconnect all ends as the original (frac 1, same genome and item) in ${f3(tj)} s`,
+        t.pieces === PRESS + 1 && ev.length === t.pieces && faces.every((n) => n === 2) && Math.abs(t.fracs.reduce((a, f) => a + f, 0) - 1) < 1e-6 && t.fracs.every((f) => f > 0) && finite && tj >= 0 && t1.pieces === 1 && t1.extras === 0 && t1.body.frac === 1 && Math.abs(t1.body.r - before.r) < 1e-9 && id1.genomeCode === id0.genomeCode && id1.itemId === id0.itemId,
+        JSON.stringify({ pieces: t.pieces, views: ev.length, faces, minFrac: +Math.min(...t.fracs).toFixed(4), finite, t1: { pieces: t1.pieces, frac: t1.body.frac } }));
+      await context.close();
+    });
+
+    // ---------------------------------------------------------------- u07: CUT3 U07 on the real stack with many pieces: nothing pays the meter for cutting or for a join gesture, the Hoard never sees a piece, every leave path reconnects first
+    await section('u07', async () => {
+      const { page, context, w } = await open();
+      watches.push(['u07', w]);
+      const N = Number((args.find((a) => a.startsWith('--pieces=')) ?? '--pieces=8').split('=')[1]);
+      await arrive(page, 'dollop');
+      const m0 = await page.evaluate(() => window.__WH__.shell.meter());
+      const ev0 = await page.evaluate(() => window.__WH__.state().events.length);
+      const items0 = await page.evaluate(() => window.__WH__.shell.hoardState().items.length);
+      for (let i = 0; i < N - 1; i++) {
+        await page.evaluate(() => window.__WH__.resume());
+        await page.evaluate(() => document.querySelector('.cutbar [data-key="split"]')?.click());
+        await page.evaluate(() => window.__WH__.pause());
+        await cutIdle(page, 5); await stepSim(page, 0.5);
+      }
+      await stepSim(page, 1);
+      const tN = await tools(page);
+      const m1 = await page.evaluate(() => window.__WH__.shell.meter());
+      const kinds = await page.evaluate((n) => window.__WH__.state().events.slice(n).map((e) => e.kind), ev0);
+      check(`U07 (real stack): ${tN.pieces} pieces made by ${N - 1} presses paid the meter nothing (fill and credits unchanged) and made no poke, release or snap event`, tN.pieces === N && m1.fill === m0.fill && m1.credits === m0.credits && !kinds.some((k) => k === 'poke' || k === 'release' || k === 'snap'), JSON.stringify({ pieces: tN.pieces, fill: [m0.fill, m1.fill], kinds: [...new Set(kinds)] }));
+      // leaving: the Hoard opens (a leave path) => the squishy is reconnected first, whole, nothing on the mat, the tool back to the Hand; stored text names no piece
+      await page.evaluate(() => window.__WH__.resume());
+      await page.click('.hoard-btn', { timeout: 60000 }); await settle(page); await stepUntil(page, '(wh) => wh.shell.tools().pieces === 1 && !wh.shell.tools().busy', 4, 0.1);
+      const th = await tools(page);
+      const stored = await page.evaluate(() => Object.keys(localStorage).filter((k) => /"(piece|pieces|chunk|cutNormal|region|cells|planes)"/.test(localStorage.getItem(k) ?? '')));
+      const items1 = await page.evaluate(() => window.__WH__.shell.hoardState().items.length);
+      check(`U07 (real stack): opening the Hoard with ${tN.pieces} pieces reconnects first (one piece, nothing on the mat), the Hoard lists no piece (${items0} -> ${items1} squishies), nothing about pieces is stored`, th.pieces === 1 && th.extras === 0 && items0 === items1 && stored.length === 0, JSON.stringify({ pieces: th.pieces, extras: th.extras, items: [items0, items1], stored }));
       await context.close();
     });
 
@@ -427,8 +647,8 @@ async function main() {
     await browser.close().catch(() => {});
     srv.stop();
   }
-  console.log(`\n${results.filter((r) => r.ok).length}/${results.length} cut browser checks passed (sections: ${ran.join(', ') || 'none'}); MAX_PIECES_CLEAN ${MAX_PIECES_CLEAN}`);
-  writeFileSync(resolve(REPORTS, 'cut_browser.json'), JSON.stringify({ results, maxPiecesClean: MAX_PIECES_CLEAN }, null, 1));
+  console.log(`\n${results.filter((r) => r.ok).length}/${results.length} cut browser checks passed (sections: ${ran.join(", ") || "none"}); PIECE_CEILING ${PIECE_CEILING}`);
+  writeFileSync(resolve(REPORTS, 'cut_browser.json'), JSON.stringify({ results, pieceCeiling: PIECE_CEILING }, null, 1));
   process.exit(failures ? 1 : 0);
 }
 main().catch((e) => { console.error(e); process.exit(1); });

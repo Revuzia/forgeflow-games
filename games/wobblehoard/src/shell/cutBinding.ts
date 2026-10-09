@@ -33,7 +33,8 @@ export function bindCut(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, u
     const k = `${n},${c.maxPieces},${c.busy},${can},${c.style},${c.canChangeStyle},${canUndo}`;
     if (!force && k === key) return;
     key = k;
-    bar.setPieces(n, c.maxPieces, c.busy, can, T.barText(n, c.maxPieces, can, undo), c.style, c.canChangeStyle, canUndo);
+    // (maxPieces is the safety ceiling: the bar disables Split in two only there. The counter is the plain number, labels.pieces; the hint is T.barText.)
+    bar.setPieces(n, c.maxPieces, c.busy, can, T.barText(n, c.maxPieces), c.style, c.canChangeStyle, canUndo);
   };
 
   const bar = createCutBar(root, {

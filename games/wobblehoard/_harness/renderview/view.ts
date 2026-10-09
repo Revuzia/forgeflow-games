@@ -996,7 +996,7 @@ const RV = {
    * reconnect first (stage.setBridge over 0.4 s, the giver shrinks into the receiver). Then Reconnect all: every chunk bridges into the
    * face piece over 1.2 s. Per-frame mean luminance and screen light, the most pieces, shots at the telling moments.
    */
-  cutProbe(o: { genome: Genome; cuts?: number; gapS?: number; calm?: boolean; dt?: number; shots?: boolean }): {
+  cutProbe(o: { genome: Genome; cuts?: number; gapS?: number; calm?: boolean; dt?: number; shots?: boolean; /** the old piece limit (the two smallest flow back at this many pieces; 0 = none, CUT3) */ limit?: number }): {
     lumas: number[]; light: number[]; maxPieces: number; cutsDone: number; reconnects: number; strandEvents: number; snapEvents: number;
     maxGlow: number; maxStrands: number; maxBridges: number; piecesAtEnd: number; wholeAtEnd: boolean; facesAtEnd: number; marks: string[];
     shots: Record<string, string>; framed: { pieces: number; inFrame: boolean; minPx: number; boxes: number[][] };
@@ -1037,13 +1037,15 @@ const RV = {
       marks.push(`reconnect x${pairs.length}@${(f * dt).toFixed(2)}`);
     };
     for (let c = 0; c < cuts; c++) {
-      if (pieces.length >= 6) {   // the piece limit: the two smallest flow back together first
+      // (CUT3, re-specified 2026-10-09: the owner removed the piece limit and the 1/8 rule. This probe used to flow the two smallest pieces back together at 6 pieces and to refuse a cut of a piece under 1/4:
+      // it cuts every time now, so 10 cuts make 11 pieces, and the Reconnect all at the end joins all of them. `limit: 6` brings the old behaviour back for the A / B.)
+      if (o.limit && pieces.length >= o.limit) {
         const sorted = [...pieces].sort((a, b) => a.frac - b.frac);
         const gv = sorted[0].face ? sorted[1] : sorted[0], r = sorted.find((p) => p !== gv) as Piece;
         reconnect([[r, gv]], 0.4, c === 6 ? 'bridge_mid' : '');
       }
       const src = [...pieces].sort((a, b) => b.frac - a.frac)[0];
-      if (src.frac < 0.25) { marks.push(`refused@${(f * dt).toFixed(2)}`); for (let i = 0; i < Math.round(0.4 / dt); i++) step(); continue; }
+      if (src.frac < (o.limit ? 0.25 : 0.004)) { marks.push(`refused@${(f * dt).toFixed(2)}`); for (let i = 0; i < Math.round(0.4 / dt); i++) step(); continue; }
       const ang = c * 1.9 + 0.4, n = { x: Math.cos(ang), y: 0, z: Math.sin(ang) };
       const plane = { point: centreOf(src), normal: n };
       const nS = Math.round(0.25 / dt);

@@ -92,6 +92,9 @@ export class Decals {
   private poolFresh = true;
   /** 0..1 multiplier on both decals (a fading-in object). */
   alphaMul = 1;
+  /** CUT3 (lod.ts): false = this body is one of the many small pieces: its table shadow and light pool fade out (and stop drawing: 4 draw calls a body) and back. */
+  wanted = true;
+  private lodK = 1;
 
   constructor(quad: THREE.BufferGeometry) {
     this.shadowMat = new THREE.ShaderMaterial({
@@ -125,6 +128,9 @@ export class Decals {
   setVisible(v: boolean): void { this.shadow.visible = v; this.pool.visible = v; }
 
   update(dt: number, time: number, f: Footprint, floatT: number, style: TierStyle | null, calm: boolean, extraPool = 0): void {
+    // (a body of the many: eased out in ~0.2 s, never drawn once it is out; a view that is built as one starts out: no shadow flashes in for a frame)
+    if (this.wanted) this.lodK += (1 - this.lodK) * (1 - Math.exp(-dt * 8)); else this.lodK -= this.lodK * (1 - Math.exp(-dt * 8));
+    if (this.lodK < 0.01 && !this.wanted) { this.lodK = 0; this.setVisible(false); return; }
     this.setVisible(true);
     this.poolMat.uniforms.uTime.value = time;
     const h = Math.max(0, f.lowY);
@@ -132,8 +138,11 @@ export class Decals {
     const fl = floatT;
     const sS = 1.3 + 0.5 * fl + 0.45 * h;
     this.shadow.position.set(f.cx, 0.002, f.cz);
-    this.shadow.scale.set(f.rx * sS + 0.05, 1, f.rz * sS + 0.05);
-    this.shadowMat.uniforms.uStrength.value = (0.95 - 0.38 * fl) * lift * this.alphaMul;
+    // (CUT3: the margins of the footprint are a fraction of a whole's; a body whose footprint is under 0.2 (a piece or mini under about 1/30 of the whole) takes them in proportion, so a crumb does not sit in a pool wider than itself)
+    const mk = Math.max(f.rx, f.rz) >= 0.2 ? 1 : Math.max(0.2, Math.max(f.rx, f.rz) / 0.2);
+    this.shadow.scale.set(f.rx * sS + 0.05 * mk, 1, f.rz * sS + 0.05 * mk);
+    const am = this.alphaMul * this.lodK;
+    this.shadowMat.uniforms.uStrength.value = (0.95 - 0.38 * fl) * lift * am;
     this.shadowMat.uniforms.uSoft.value = Math.max(0, 1 - 0.75 * fl - 0.5 * Math.min(1, h * 1.5));
     // light pool: widens and brightens with the squash; softer and smaller while floating
     const squash = Math.min(1, f.compression * 1.2 + f.stretch * 0.15);
@@ -144,9 +153,9 @@ export class Decals {
     if (this.poolFresh) { this.poolK = poolRest; this.poolFresh = false; } else this.poolK += (poolRest - this.poolK) * (1 - Math.exp(-dt * 10));
     this.pool.position.set(f.cx, 0.003, f.cz);
     const lim = f.room !== undefined ? Math.max(0.2, f.room * 0.85) : Infinity;   // (the pool's fringe is still lit at 0.9 of its radius: it ends well inside the frame)
-    this.pool.scale.set(Math.min(f.rx * pS + 0.1, lim), 1, Math.min(f.rz * pS + 0.1, lim));
+    this.pool.scale.set(Math.min(f.rx * pS + 0.1 * mk, lim), 1, Math.min(f.rz * pS + 0.1 * mk, lim));
     const mul = style ? style.poolMul : 1;
-    this.poolMat.uniforms.uStrength.value = (this.poolK * mul + extraPool) * (1 - 0.5 * fl) * (0.85 / (1 + h * 0.9)) * this.alphaMul;
+    this.poolMat.uniforms.uStrength.value = (this.poolK * mul + extraPool) * (1 - 0.5 * fl) * (0.85 / (1 + h * 0.9)) * am;
     this.poolMat.uniforms.uRing.value = (1 - 0.55 * fl) * (style ? 0.5 + 0.5 * Math.min(1, style.index / 2) : 1);
     // caustic ring on the table: Epic and up; Legendary breathes at 0.25 Hz (never in calm mode)
     let ring2 = style ? style.ring : 0;

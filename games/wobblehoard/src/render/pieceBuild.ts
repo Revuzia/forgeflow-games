@@ -10,6 +10,7 @@
 // a cap twin (a rim vertex) takes the twin's POSITION (the rim lies in the plane exactly; Phong tessellation with the skin normals would lift it out by ~1e-3 R0 and open a
 // hairline crack) and keeps its own skin NORMAL.
 import type { CutPlaneRest, PieceInfo } from '../contracts.ts';
+import { LOD_TUNING } from './lod.ts';
 import { relaxNormals, relaxNormalsList, simNormals, simNormalsList } from './normals.ts';
 
 export interface PieceBuild {
@@ -55,11 +56,17 @@ export interface PieceBuild {
 /** Tuning knobs (probes and the R3 per-piece resolution work): nExtra adds to every piece's n. */
 export const PB_TUNING = { nExtra: 0 };
 
-/** n of the n x n subdivision (8.2): about N_tier * frac^(2/3) fine vertices for a piece, never fewer than 2 per sim edge. `simTris` = 1280 (detail 3) or 320 (detail 2). */
+/**
+ * n of the n x n subdivision (8.2): about N_tier * frac^(2/3) fine vertices for a piece (the same density per area as the whole's), never fewer than 2 per sim edge (3 on a sim mesh of under 200 triangles: detail 1 and 0
+ * of CUT3, 80 and 20 triangles; a 20-triangle mesh needs 3 x 3 to read round; 1 on a finer sim mesh under a share of 0.04). `simTris` = 1280 (detail 3), 320 (2), 80 (1) or 20 (0). CUT3: no floor at 1/50 any more (it was 0.02): a 1/200 crumb draws a
+ * proportionally smaller mesh (down to the n floor), so 64 pieces cost about what one whole did.
+ */
 export function pieceFineN(fineFreq: number, frac: number, simTris: number): number {
   const nTier = 10 * fineFreq * fineFreq + 2;
-  const f = Math.max(0.02, Math.min(1, Number.isFinite(frac) ? frac : 0.5));
-  return Math.max(2, Math.min(8, Math.floor(Math.sqrt((2 * nTier * Math.pow(f, 2 / 3)) / Math.max(1, simTris)) + 0.35) + PB_TUNING.nExtra));
+  const f = Math.max(LOD_TUNING.enabled ? 0.002 : 0.02, Math.min(1, Number.isFinite(frac) ? frac : 0.5));
+  // (a sim mesh of 200 triangles or more under a share of 0.04 is already finer than the piece needs (a safety net: PHYS builds those at detail 1 or 0, but a build that fails falls back to detail 2): no subdivision)
+  const nMin = !LOD_TUNING.enabled ? 2 : simTris < 200 ? 3 : f < 0.04 ? 1 : 2;
+  return Math.max(nMin, Math.min(8, Math.floor(Math.sqrt((2 * nTier * Math.pow(f, 2 / 3)) / Math.max(1, simTris)) + 0.35) + PB_TUNING.nExtra));
 }
 
 /** A piece draws through this path only when its cell has at least one plane; `cells = [[]]` or no piece is a whole (today's code path). */

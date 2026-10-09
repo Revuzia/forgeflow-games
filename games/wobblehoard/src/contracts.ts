@@ -43,13 +43,16 @@ export type SoftEventKind =
   | 'snap'     // a pull was let go (intensity = the pull level released, 0..1: 1 = the family's maxPull; see above)
   | 'bump';    // CUT / B2 (optional): this body hit another body (intensity = relative impact speed 0..1; at = contact point)
 
+/** LOCK (_spec/LOCK.md): a finger / grab slot. 0 and 1 are the mouse and the first two fingers as ever; 2 to 4 are only used by touch fingers on phones. */
+export type Slot = 0 | 1 | 2 | 3 | 4;
+
 export interface SoftEvent {
   kind: SoftEventKind;
   at: V3;            // world-space point of the event
   normal: V3;        // outward surface normal there (unit)
   intensity: number; // 0..1, see kinds above
   heldFor: number;   // seconds (release / snap), else 0
-  finger: number;    // 0 or 1 (-1 for 'land')
+  finger: number;    // the slot 0..4 (-1 for 'land'); LOCK: a 'snap' of releaseLock carries the slot the lock was grabbed with
 }
 
 /** Continuous readouts, valid after step(). Audio drives its squelch from these, the renderer drives the blush and the eyes. */
@@ -60,7 +63,7 @@ export interface SoftMetrics {
   volume: number;           // current enclosed volume / rest volume (should stay ~1)
   kinetic: number;          // 0..1 normalised internal jiggle energy (0 = settled)
   grounded: boolean;        // resting on the table (always false in float mode unless it touches it)
-  fingers: number;          // number of fingers currently down (0..2)
+  fingers: number;          // number of fingers currently down (0..5; LOCK widened it from 0..2)
   grabbed: boolean;
   /** Round 2 (PHYS fills these in; consumers must treat undefined as 0). */
   press?: number;           // 0..1 deepest current finger indentation (fraction of restRadius * max safe depth). Unlike `compression` this is non-zero for a single-finger dent, so audio/haptics/FX should drive from max(compression, press)
@@ -78,6 +81,8 @@ export interface SoftMetrics {
    *  throws it with the hand's velocity and fires a full 'snap' (intensity 1); it then flies, lands ('land') and squashes.
    *  metrics.grounded is false while carried. */
   carried?: boolean;
+  /** LOCK (optional; _spec/LOCK.md): how many lobes are locked in place (lockGrab); 0 when none. A locked lobe counts as a hand (the twoHanded rule). */
+  locked?: number;
 }
 
 export interface RayHit { point: V3; normal: V3; vertex: number; t: number }
@@ -168,18 +173,29 @@ export interface SoftBodyLike {
   /** Ray vs the current surface. Origin/dir in world space; dir need not be normalised. */
   raycast(origin: V3, dir: V3): RayHit | null;
 
-  // fingers: ids 0 and 1 (two fingers = pinch). The body owns the depth ramp so squeezing feels the same on every device.
-  fingerDown(id: 0 | 1, a: FingerDownArgs): void;
+  // fingers: slots 0 to 4 (two fingers = pinch; 2 to 4 only for touch fingers, LOCK). The body owns the depth ramp so squeezing feels the same on every device.
+  fingerDown(id: Slot, a: FingerDownArgs): void;
   /** Target press depth 0..1 (fraction of the max safe depth). The body eases toward it; the input layer ramps it with hold time. */
-  fingerPressure(id: 0 | 1, target: number): void;
+  fingerPressure(id: Slot, target: number): void;
   /** Slide the contact: world-space point on the surface under the pointer (from a fresh raycast). */
-  fingerMove(id: 0 | 1, point: V3): void;
+  fingerMove(id: Slot, point: V3): void;
   fingerUp(id: 0 | 1): void;
 
   /** Pull: attach the vertices around `vertex` to a world target; move it; let go (-> springs back, emits 'snap'). */
-  grab(id: 0 | 1, vertex: number, target: V3): void;
-  grabMove(id: 0 | 1, target: V3): void;
+  grab(id: Slot, vertex: number, target: V3): void;
+  grabMove(id: Slot, target: V3): void;
   grabRelease(id: 0 | 1): void;
+
+  /* LOCK (optional, additive; _spec/LOCK.md). A pull that is FULLY stretched (pull level >= 0.95) can be locked where it is. */
+  /** Lock the pull held on grab `slot`: true when it locked (that grab has a pull level >= 0.95, the body is not carried, and there is room: at most 6 locks, 4 on low quality).
+   *  The patch keeps its goal at the locked target, the grab slot is freed (the pointer is free to pull another lobe), and the time since the grab keeps counting.
+   *  False (nothing changes) when the grab is not fully stretched, there is none, the body is carried, or the limit is reached. */
+  lockGrab?(slot: number): boolean;
+  /** Let a lock go (index from lockAt / the lock list, or 'all'): the lobe snaps back and fires the normal 'snap' event per lock, heldFor = the WHOLE hold since the grab,
+   *  intensity = the pull level, finger = the slot it was grabbed with, so the meter pays it as a pull. An index that is not a lock does nothing. */
+  releaseLock?(index: number | 'all'): void;
+  /** Which lock's patch is the world point on (nearest locked vertex within the patch radius), or -1. The shell calls it for a press to see whether it lands on a locked lobe. */
+  lockAt?(point: V3): number;
 
   /**
    * Ceremony drivers (round 2, OPTIONAL: PHYS implements them; the renderer feature-detects and falls back to a procedural
@@ -247,7 +263,7 @@ export interface SoftBodyLike {
    * Optional (PHYS addition): the fingertip sphere of finger `id` in world space (centre, radius, eased depth 0..1), or null
    * when that finger has no tip. For a finger ghost / contact FX. Allocates, so call it once per frame at most.
    */
-  tip?(id: 0 | 1): { x: number; y: number; z: number; r: number; depth: number } | null;
+  tip?(id: Slot): { x: number; y: number; z: number; r: number; depth: number } | null;
   /** Optional (PHYS addition): pay the JIT warm-up now (once, at load) so the first touches do not hitch; leaves the body's state bit-identical. */
   warmUp?(): void;
 }

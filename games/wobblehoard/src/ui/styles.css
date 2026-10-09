@@ -10,7 +10,6 @@
   --safe-l: env(safe-area-inset-left, 0px);
   --gutter: 16px;
   --tap: 44px;
-  --radius: 16px;
   --ease: cubic-bezier(.2, .8, .2, 1);
 }
 
@@ -61,7 +60,6 @@ body {
 .icon { width: 24px; height: 24px; display: block; }
 
 .gem { width: 16px; height: 16px; flex: none; display: block; }
-.gem-lg { width: 22px; height: 22px; }
 
 
 /* the reveal name plate lives in hoard.css (UI.md 6, B5); the toasts, the Menu, the modal and the error card live in overlay.css (B4a) */

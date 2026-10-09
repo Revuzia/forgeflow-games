@@ -19,7 +19,7 @@ export interface RestProvider {
   /** The uncut squishy's detail-3 rest mesh (the SAME object for the same genome: pieces are grouped by its identity). */
   whole(genome: Genome): RestWhole;
   /** The rest mesh of the piece inside region.cells[0] (frac = its built fraction; absent = the builder's own), or null when it cannot be built. */
-  piece(genome: Genome, region: PieceRegion, detail: 2 | 3, frac?: number): RestPiece | null;
+  piece(genome: Genome, region: PieceRegion, detail: number, frac?: number): RestPiece | null;
 }
 
 interface StubFinger { down: boolean; px: number; py: number; pz: number; dx: number; dy: number; dz: number; target: number; depth: number; holdT: number; pressed: boolean }
@@ -80,11 +80,11 @@ export class StubBody implements SoftBodyLike {
     const provWhole = opts?.rest ? opts.rest.whole(genome) : null;
     if (opts?.rest && piece?.region && piece.region.cells[0] && piece.region.cells[0].length > 0) {
       const f0 = Number.isFinite(piece.frac) ? piece.frac : undefined;
-      provided = opts.rest.piece(genome, piece.region, f0 !== undefined && f0 < 0.35 ? 2 : 3, f0);
+      provided = opts.rest.piece(genome, piece.region, opts.detail ?? (f0 !== undefined && f0 < 0.35 ? 2 : 3), f0);   // (opts.detail: CUT3, the share-based detail 0..3 of a small piece)
       if (!provided) throw new Error('StubBody: the rest provider cannot build this region');
     }
     const rp: RestWhole | RestPiece | null = provided ?? provWhole;
-    const pf = provided ? provided.frac : piece && Number.isFinite(piece.frac) ? clamp(piece.frac, 0.125, 1) : 1;
+    const pf = provided ? provided.frac : piece && Number.isFinite(piece.frac) ? clamp(piece.frac, 0.001, 1) : 1;   // (CUT3: the 1/8 floor is gone)
     const detail = opts?.detail ?? (pf < 0.35 ? 2 : 3);
     const geo = rp ? null : buildGeodesic(Math.pow(2, detail));
     this.vertexCount = rp ? rp.restLocal.length / 3 : geo!.vertexCount;
@@ -177,7 +177,7 @@ export class StubBody implements SoftBodyLike {
   }
   /** CUT: grow / shrink to a new fraction of the whole over `seconds` (the rest shape scales by the cube root). */
   setFrac(frac: number, seconds: number): void {
-    this.fracGoal = clamp(Number.isFinite(frac) ? frac : this.fracNow, 0.02, 1.2);
+    this.fracGoal = clamp(Number.isFinite(frac) ? frac : this.fracNow, 0.001, 1.2);
     this.fracRate = Math.abs(this.fracGoal - this.fracNow) / Math.max(1e-3, Number.isFinite(seconds) ? seconds : 0.4);
   }
 
