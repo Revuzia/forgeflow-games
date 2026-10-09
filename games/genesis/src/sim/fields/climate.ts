@@ -18,10 +18,25 @@
 //   * Prevailing winds by latitude band (trades, westerlies, polar easterlies, shifted with the season).
 // Water that boils away at low pressure is the "airless" rule: pour a sea on a dead rock and it boils (day side) or
 // freezes and sublimates (night side) until there is air.
+//
+// Time-lapse (SIM perf push 2, perf/lapse.ts): at 100x / 1000x one pass stands for 2 / 6 hours (a dormant dead world's
+// for 6 at any speed). On ground and shallow water the energy balance steps through those hours one by one, each under
+// its own hour's sun and re-linearised at the current temperature, and feeds every temperature-driven accumulator
+// (72-hour and year means, the year's envelopes, light, the degree-hours of melt) hour by hour (round 2: one step of H
+// hours linearised at the start overshot radiative equilibrium on low-capacity ground — a dormant moon ~30 °C warm, the
+// barren world at 1000x +40 °C — and flattened every day / night cycle); deep water, whose heat capacity makes that
+// error negligible, takes one step under the hours' mean sun. Evaporation and infiltration of the land stay hourly:
+// soilHour runs them on the hours a coarse schedule skips (round 2: against the water standing at the instant of the
+// pass they missed the rain that runs off in between — soils dried, wetlands shrank by a quarter at 1000x). The other
+// hourly amounts (transpiration, freezing, snowfall) are scaled and hourly relaxations compounded. The humidity block
+// stays the hourly update (see columnKernel): it gives the right rain rate and cloud. Measured over 4 seeds × 3 days on
+// the home world: mean temperature within 0.06 °C, humidity +1.5 %, cloud ±1.5 %, precipitation within the storms' own
+// seed-to-seed scatter (tests/perf-lapse.test.ts); dead moon, barren world, envelopes, soils and wetlands within the
+// tolerances of tests/perf-fidelity.test.ts.
 
 import type { Universe, SunInfo } from '../world/universe.ts';
 import { CLIM_MEM_FULL, type Planet } from '../world/planet.ts';
-import { activateCell } from './hydrology.ts';
+import { wakeIfUnlevel } from './hydrology.ts';
 import { refreshOverlay } from './weather.ts';
 
 export const CLIMATE_CADENCE = 60;
@@ -224,7 +239,7 @@ function fillKey(p: Planet, key: NoiseKey, k: number, from: number, to: number):
   }
 }
 
-function driftNoise(p: Planet, tick: number): DriftNoise {
+function driftNoise(p: Planet, tick: number, hours = 1): DriftNoise {
   const N = p.count;
   const k = Math.floor(tick / NOISE_KEY);
   let d = driftCache.get(p);
@@ -248,9 +263,9 @@ function driftNoise(p: Planet, tick: number): DriftNoise {
     d.k = k;
     d.nextDone = 0;
   }
-  // a twelfth of the keyframe after next per hourly pass
+  // a twelfth of the keyframe after next per hourly pass (a time-lapse pass of several hours does their share)
   if (d.nextDone < N) {
-    const to = Math.min(N, d.nextDone + Math.ceil(N / (NOISE_KEY / CLIMATE_CADENCE)));
+    const to = Math.min(N, d.nextDone + Math.ceil(N / (NOISE_KEY / CLIMATE_CADENCE)) * hours);
     fillKey(p, d.next, k + 2, d.nextDone, to);
     d.nextDone = to;
   }
@@ -284,7 +299,7 @@ function lat6(p: Planet): { s6: Float64Array; c6: Float64Array } {
 
 /** prevailing wind (m/s, body-frame vector) for every cell; season shifts the cells' bands with the sun. Also fills
  * the drifting weather-noise field `wn`. */
-function prevailingWind(p: Planet, decl: number, tick: number, wn: Float32Array): void {
+function prevailingWind(p: Planet, decl: number, tick: number, wn: Float32Array, hours = 1): void {
   const af = airFactor(p);
   const s = p.s;
   const geo = p.geo;
@@ -294,7 +309,7 @@ function prevailingWind(p: Planet, decl: number, tick: number, wn: Float32Array)
     s.baseWindX.fill(0); s.baseWindY.fill(0); s.baseWindZ.fill(0); wn.fill(0);
     return;
   }
-  const dn = driftNoise(p, tick);
+  const dn = driftNoise(p, tick, hours);
   windKernel(p.count, p.grid.lat, lat6(p), decl, U, V, af, dn.mu, dn.mv, geo.east, geo.north, s.baseWindX, s.baseWindY, s.baseWindZ);
   wn.set(dn.wn);
 }
@@ -357,11 +372,15 @@ export function composeSky(p: Planet, c: number): void {
  * re-streamed the same arrays four times). Per cell the arithmetic and its order are those of the original passes; the
  * only cross-cell reads (upwind humidity, upwind ground) come from data no sweep changes until the end.
  */
-export function climateStep(u: Universe, p: Planet, tick = u.tick): void {
+export function climateStep(u: Universe, p: Planet, tick = u.tick, hours = 1): void {
   const f = p.f, s = p.s, st = p.st, g = p.grid;
   const N = p.count;
   const sc = scratch(p);
   const sun = u.sun(p, tick, _sun);
+  // time-lapse (perf/lapse.ts): a pass of several hours lights each cell with the mean of the hourly suns it stands for
+  // (the instants the hourly passes would have used), so day and night still balance
+  const H = hours > 1 ? Math.min(HOURS_MAX, Math.round(hours)) : 1;
+  if (H > 1) sunSamples(u, p, tick, H);
   const af = airFactor(p);
   const airy = af > 0;
   // mean humidity for the vapour greenhouse (cheap: previous hour)
@@ -374,17 +393,17 @@ export function climateStep(u: Universe, p: Planet, tick = u.tick): void {
   // 1. prevailing wind, then the weather systems' swirl and gusts on top again: the reset to the base wind would
   // otherwise leave storms windless until the next overlay refresh (up to two weather steps on staggered planets),
   // and sand, fire and the humidity advection below would run on calm air under a sandstorm
-  prevailingWind(p, sun.decl, tick, sc.wn);
+  prevailingWind(p, sun.decl, tick, sc.wn, H);
   f.windX.set(s.baseWindX);
   f.windY.set(s.baseWindY);
   f.windZ.set(s.baseWindZ);
   refreshOverlay(u, p);
 
   // 2. upwind neighbours and neighbourhood humidity (semi-Lagrangian advection, from the previous hour's air)
-  if (airy) advectPrep(N, g.nbrStart, g.nbr, p.geo.tx, p.geo.ty, p.geo.tz, f.windX, f.windY, f.windZ, f.humidity, sc.qn, sc.up1, s.tPot, sc.tn, f.water, f.salinity, sc.rip);
+  if (airy) advectPrep(N, g.nbrStart, g.nbr, p.geo.tx, p.geo.ty, p.geo.tz, f.windX, f.windY, f.windZ, f.humidity, sc.qn, sc.up1, s.tPot, sc.tn, f.water, f.salinity, sc.rip, s.ocean);
 
   // 3. per cell: energy balance -> temperature, light; humidity, precipitation, clouds; sky; surface water exchanges
-  const nChanged = columnKernel(u, p, sc, sun, airy, greenhouse(p, qm), glob);
+  const nChanged = columnKernel(u, p, sc, sun, airy, greenhouse(p, qm), glob, H);
   if (nChanged >= 0) {
     // snow / ice changed: recompute the ground of the cells that changed (every other cell's surface already is the
     // sum of its layers) and publish. INVARIANT: this is no longer a full re-sum, so every writer of a ground layer
@@ -401,31 +420,70 @@ export function climateStep(u: Universe, p: Planet, tick = u.tick): void {
   p.bump('windX'); p.bump('windY'); p.bump('windZ'); p.bump('water'); p.bump('moisture'); p.bump('wetness'); p.bump('aquifer');
 }
 
+/** time-lapse sun: direction (x, y, z) and flux of each hourly instant a multi-hour pass stands for (the instants the
+ * hourly passes would have used, the pass's own last), and the sample each hour of the pass uses (`sunOfHour`: one per
+ * hour up to SUN_MAX hours — every schedule of perf/lapse.ts stays below — spread evenly beyond) */
+const SUN_MAX = 24;
+const HOURS_MAX = 256;
+/** per hour of the pass (k = 0 .. H-1): the sun of the sample it uses */
+const sunS = new Float64Array(HOURS_MAX * 4);
+/** the mean over the samples (deep water's single step) */
+let sunN = 0;
+const _sunJ: SunInfo = { dir: [0, 1, 0], flux: 0, dist: 1, lon: 0, decl: 0, spin: 0 };
+function sunSamples(u: Universe, p: Planet, tick: number, hours: number): void {
+  const n = Math.min(SUN_MAX, hours);
+  sunN = hours;
+  let k = 0;
+  for (let j = 0; j < n; j++) {
+    const sj = u.sun(p, tick - Math.round(((n - 1 - j) * hours) / n) * CLIMATE_CADENCE, _sunJ);
+    // the hours this sample stands for (all of them, one each, up to SUN_MAX hours)
+    const kEnd = j === n - 1 ? hours : Math.floor(((j + 1) * hours) / n);
+    for (; k < kEnd; k++) { sunS[k * 4] = sj.dir[0]; sunS[k * 4 + 1] = sj.dir[1]; sunS[k * 4 + 2] = sj.dir[2]; sunS[k * 4 + 3] = sj.flux; }
+  }
+}
+
+/** 1 − (1 − r)^h: an hourly relaxation rate `r` compounded over h hours (h ≥ 1, small integer) */
+function relaxH(r: number, h: number): number {
+  const k = 1 - r;
+  let q = k;
+  for (let i = 1; i < h; i++) q *= k;
+  return 1 - q;
+}
+
 /** semi-Lagrangian humidity advection, preparation: the best upwind neighbour of every cell this hour (`up1`, -1 =
  * calm) and every cell's blend with its neighbourhood (`qn` = 0.7 q + 0.3 mean of the neighbours) */
 function advectPrep(
   N: number, nbrStart: Int32Array, nbr: Int32Array, tx: Float32Array, ty: Float32Array, tz: Float32Array,
   windX: Float32Array, windY: Float32Array, windZ: Float32Array, q: Float32Array, qn: Float32Array, up1: Int32Array,
   tPot: Float32Array, tn: Float32Array, water: Float64Array | Float32Array, salinity: Float32Array, rip: Uint8Array,
+  ocean: Uint8Array,
 ): void {
   for (let c = 0; c < N; c++) {
     const wx = -windX[c], wy = -windY[c], wz = -windZ[c];
     let best = -1, bestD = 1e-6;
-    let nsum = 0, tsum = 0, nk = 0, r = 0;
-    const e1 = nbrStart[c + 1];
-    for (let e = nbrStart[c]; e < e1; e++) {
+    let nsum = 0, tsum = 0, nk = 0;
+    const e0 = nbrStart[c], e1 = nbrStart[c + 1];
+    for (let e = e0; e < e1; e++) {
       const d = tx[e] * wx + ty[e] * wy + tz[e] * wz;
       if (d > bestD) { bestD = d; best = e; }
       const o = nbr[e];
       nsum += q[o];
       tsum += tPot[o];
-      if (water[o] > 0.05 && salinity[o] < 0.5) r = 1;
       nk++;
     }
     up1[c] = best < 0 ? -1 : nbr[best];
     qn[c] = 0.7 * q[c] + 0.3 * (nsum / nk);
     tn[c] = tsum / nk;
-    rip[c] = r;
+    // the riparian flag is read on land only (the column kernel's soil branch): the sea — most of a terran world —
+    // skips the neighbours' water and salt (SIM perf push 2)
+    if (ocean[c] === 0) {
+      let r = 0;
+      for (let e = e0; e < e1; e++) {
+        const o = nbr[e];
+        if (water[o] > 0.05 && salinity[o] < 0.5) { r = 1; break; }
+      }
+      rip[c] = r;
+    }
   }
 }
 
@@ -436,8 +494,10 @@ function advectPrep(
 const INV_SNOW_FULL = 1 / SNOW_FULL, INV_ICE_FULL = 1 / ICE_FULL, INV_72 = 1 / 72, INV_24 = 1 / 24, INV_96 = 1 / 96, INV_38 = 1 / 38, INV_150 = 1 / 150;
 const INV_024 = 1 / 0.24, INV_12 = 1 / 12, INV_30 = 1 / 30, INV_003 = 1 / 0.03;
 const LIGHT_K = 1 / (1361 * 0.318);
+/** time-lapse: water deeper than this (m) takes one multi-hour energy-balance step, shallower ground steps hour by hour */
+const DEEP_SINGLE = 2;
 
-function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, airy: boolean, gh: number, glob: number): number {
+function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, airy: boolean, gh: number, glob: number, H = 1): number {
   const f = p.f, s = p.s, st = p.st, cfg = p.cfg;
   const N = p.count;
   const P = Math.min(3, st.atmosphere.pressure);
@@ -476,13 +536,32 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
   const ash = f.ash, lava = f.lava, surface = f.surface, salinity = f.salinity;
   const wMask = s.wMask, wTemp = s.wTemp, wPrecip = s.wPrecip, wType = s.wType, wCloud = s.wCloud;
   const cPrecip = s.cPrecip, cCloud = s.cCloud;
+  // time-lapse (perf/lapse.ts): one pass integrates H hours. On ground and shallow water the energy balance and
+  // everything temperature drives step through the hours one by one (the H > 1 branches below; deep water takes one
+  // step); evaporation and infiltration are this hour's (soilHour did the others); the remaining hourly amounts are
+  // scaled by H and hourly relaxations compounded (1 − (1 − r)^H). At H = 1 each expression is the hourly one bit for
+  // bit (the H1 branches)
+  const H1 = H === 1;
+  const kPM = H1 ? INV_96 : relaxH(INV_96, H);
+  // (deep water's single multi-hour step: the hourly relaxations compounded)
+  const DTH = DT * H, kTM = relaxH(INV_72, H), kLM = relaxH(INV_24, H), invYearH = relaxH(invYear, H), seasH = relaxH(invYear * 0.3, H);
+  const airlessP = H1 ? 0.98 : Math.pow(0.98, H), wetKeep = H1 ? 0.8 : Math.pow(0.8, H);
+  const kRip = H1 ? 0.04 : relaxH(0.04, H);
+  // The humidity block (advection, sources, rain-out, clouds) is the HOURLY update even in a multi-hour pass: the air
+  // over a cell is near the steady state of its hour-upwind neighbour's air, so one hourly update gives the right rain
+  // RATE and cloud (the rain batches multiply the rate by the ticks). Compounding H hours of sources onto a parcel
+  // walked H hours upwind rained what the cells in between should have rained (+77 % on land at 1000x, measured);
+  // the hourly update keeps the means (only fronts drift through the field H times slower in game time).
   let sourced = 0;
   let nChanged = 0;
   let anyChanged = false;
   for (let c = 0; c < N; c++) {
     // ── energy balance (semi-implicit) ──
-    const mu = pos[c * 3] * sx + pos[c * 3 + 1] * sy + pos[c * 3 + 2] * sz;
-    const ins = mu > 0 ? flux * mu * trans : 0;
+    let ins = 0;
+    if (H1) {
+      const mu = pos[c * 3] * sx + pos[c * 3 + 1] * sy + pos[c * 3 + 2] * sz;
+      ins = mu > 0 ? flux * mu * trans : 0;
+    }
     // surface + cloud albedo (albedo(p, c))
     const w0 = water[c];
     let a: number;
@@ -501,45 +580,137 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
     const cl0 = cloud[c];
     a = a + (0.6 - a) * cl0 * CLOUD_SW;
     const Tp = tPot[c];
-    const TK = Math.max(3, Tp + 273.15);
     // clouds hold back part of the outgoing longwave (cloudy nights stay mild)
     const em = emis * (1 - CLOUD_LW * cl0);
-    const E = em * TK * TK * TK * TK;
     const bm = bandMean[band[c]];
-    const net = ins * (1 - a) - E + Dband * (bm - Tp) + Dglob * (glob - bm) + Dnbr * (tn[c] - Tp);
-    const dEdT = 4 * em * TK * TK * TK + Dband + Dnbr;
     // heat capacity: ground skin + air column + standing water
     const C = capBase + (w0 > 0.2 ? 4.2e6 * Math.min(w0, 3) : 0);
-    let Tn = Tp + (DT * net) / (C + DT * dEdT);
-    if (Tn < -270) Tn = -270;
-    tPot[c] = Tn;
     const sea = ocean[c];
     const alt = w0 > 0.5 && sea ? 0 : Math.max(0, surface[c] - datum);
-    let temp = Tn - lapse * alt + offset + (wMask[c] ? wTemp[c] : 0);
-    if (hasGlobal) temp += gD;
     const lv = lava[c];
-    if (lv > 0.05) temp = Math.max(temp, 400 + 600 * Math.min(1, lv));
-    temperature[c] = temp;
-    const tm = tempMean[c] + (temp - tempMean[c]) * INV_72;
-    tempMean[c] = tm;
-    // the year-scale memory: an exponential mean over about a year — or, since a reset (resetClimateMemory: a world
-    // given air, moved, re-tilted), a growing-window mean that learns the new climate in days, not years
-    const nMem = climMem[c];
-    // (the window is the most recent quarter of the time since the reset: a world warming for two weeks after its air
-    // came is judged by its last few days, then by ever longer stretches until a full year carries the mean)
-    const rYear = nMem < CLIM_MEM_FULL ? Math.max(invYear, 4 / (nMem + 8)) : invYear;
-    if (nMem < CLIM_MEM_FULL) climMem[c] = rYear > invYear ? nMem + 1 : CLIM_MEM_FULL;
-    const tyr = tempYear[c] + (temp - tempYear[c]) * rYear;
-    tempYear[c] = tyr;
-    // the year's extremes: envelopes of the hourly temperature, relaxing slowly toward the year's mean
-    const relaxSeas = rYear * 0.3;
-    const hi = tHi[c] + (tyr - tHi[c]) * relaxSeas, lo = tLo[c] + (tyr - tLo[c]) * relaxSeas;
-    tHi[c] = hi > temp ? hi : temp;
-    tLo[c] = lo < temp ? lo : temp;
-    const light = ins * (1 - 0.45 * cl0) * LIGHT_K;
-    lightMean[c] += (light - lightMean[c]) * INV_24;
-    lightYear[c] += (light - lightYear[c]) * rYear;
+    // degree-hours above freezing (and above freezing + 2 °C) and hours at or below it, for the melt / compaction below
+    let degH = 0, iceH = 0, coldH = 0;
+    if (H1) {
+      const TK = Math.max(3, Tp + 273.15);
+      const E = em * TK * TK * TK * TK;
+      const net = ins * (1 - a) - E + Dband * (bm - Tp) + Dglob * (glob - bm) + Dnbr * (tn[c] - Tp);
+      const dEdT = 4 * em * TK * TK * TK + Dband + Dnbr;
+      let Tn = Tp + (DT * net) / (C + DT * dEdT);
+      if (Tn < -270) Tn = -270;
+      tPot[c] = Tn;
+      let temp = Tn - lapse * alt + offset + (wMask[c] ? wTemp[c] : 0);
+      if (hasGlobal) temp += gD;
+      if (lv > 0.05) temp = Math.max(temp, 400 + 600 * Math.min(1, lv));
+      temperature[c] = temp;
+      const tm = tempMean[c] + (temp - tempMean[c]) * INV_72;
+      tempMean[c] = tm;
+      // the year-scale memory: an exponential mean over about a year — or, since a reset (resetClimateMemory: a world
+      // given air, moved, re-tilted), a growing-window mean that learns the new climate in days, not years
+      const nMem = climMem[c];
+      // (the window is the most recent quarter of the time since the reset: a world warming for two weeks after its air
+      // came is judged by its last few days, then by ever longer stretches until a full year carries the mean)
+      const rYear1 = nMem < CLIM_MEM_FULL ? Math.max(invYear, 4 / (nMem + 8)) : invYear;
+      if (nMem < CLIM_MEM_FULL) climMem[c] = rYear1 > invYear ? nMem + 1 : CLIM_MEM_FULL;
+      const rYear = rYear1, relaxSeas = rYear1 * 0.3;
+      const tyr = tempYear[c] + (temp - tempYear[c]) * rYear;
+      tempYear[c] = tyr;
+      // the year's extremes: envelopes of the hourly temperature, relaxing slowly toward the year's mean
+      const hi = tHi[c] + (tyr - tHi[c]) * relaxSeas, lo = tLo[c] + (tyr - tLo[c]) * relaxSeas;
+      tHi[c] = hi > temp ? hi : temp;
+      tLo[c] = lo < temp ? lo : temp;
+      const light = ins * (1 - 0.45 * cl0) * LIGHT_K;
+      lightMean[c] += (light - lightMean[c]) * INV_24;
+      lightYear[c] += (light - lightYear[c]) * rYear;
+    } else if (w0 > DEEP_SINGLE) {
+      // deep standing water (the sea, lakes): its heat capacity (≥ ~10 MJ/m²K) keeps one semi-implicit step of H hours
+      // under the mean of the hours' suns within a few tenths of a degree of the hourly passes — and the sea is most of
+      // a terran world: half the cost of the time-lapse pass. Hourly relaxations compounded.
+      const px = pos[c * 3], py = pos[c * 3 + 1], pz = pos[c * 3 + 2];
+      let sum = 0;
+      for (let k = 0; k < H; k++) {
+        const mu = px * sunS[k * 4] + py * sunS[k * 4 + 1] + pz * sunS[k * 4 + 2];
+        if (mu > 0) sum += sunS[k * 4 + 3] * mu;
+      }
+      const insm = (sum / sunN) * trans;
+      const TK = Math.max(3, Tp + 273.15);
+      const net = insm * (1 - a) - em * TK * TK * TK * TK + Dband * (bm - Tp) + Dglob * (glob - bm) + Dnbr * (tn[c] - Tp);
+      let Tn = Tp + (DTH * net) / (C + DTH * (4 * em * TK * TK * TK + Dband + Dnbr));
+      if (Tn < -270) Tn = -270;
+      tPot[c] = Tn;
+      let temp = Tn - lapse * alt + offset + (wMask[c] ? wTemp[c] : 0);
+      if (hasGlobal) temp += gD;
+      if (lv > 0.05) temp = Math.max(temp, 400 + 600 * Math.min(1, lv));
+      temperature[c] = temp;
+      tempMean[c] += (temp - tempMean[c]) * kTM;
+      const nMem = climMem[c];
+      let rYear = invYearH, relaxSeas = seasH;
+      if (nMem < CLIM_MEM_FULL) {
+        const rYear1 = Math.max(invYear, 4 / (nMem + 8));
+        climMem[c] = rYear1 > invYear ? Math.min(CLIM_MEM_FULL, nMem + H) : CLIM_MEM_FULL;
+        if (rYear1 > invYear) {
+          const k1 = 1 - rYear1, k2 = 1 - rYear1 * 0.3;
+          let q1 = k1, q2 = k2;
+          for (let i = 1; i < H; i++) { q1 *= k1; q2 *= k2; }
+          rYear = 1 - q1; relaxSeas = 1 - q2;
+        }
+      }
+      const tyr = tempYear[c] + (temp - tempYear[c]) * rYear;
+      tempYear[c] = tyr;
+      const hi = tHi[c] + (tyr - tHi[c]) * relaxSeas, lo = tLo[c] + (tyr - tLo[c]) * relaxSeas;
+      tHi[c] = hi > temp ? hi : temp;
+      tLo[c] = lo < temp ? lo : temp;
+      const light = insm * (1 - 0.45 * cl0) * LIGHT_K;
+      lightMean[c] += (light - lightMean[c]) * kLM;
+      lightYear[c] += (light - lightYear[c]) * rYear;
+      if (temp > freeze) { degH = (temp - freeze) * H; if (temp > freeze + 2) iceH = degH; } else coldH = H;
+    } else {
+      // time-lapse / dormant pass (push 2 round 2): the H hours it stands for, one by one — the energy balance
+      // re-linearised every hour under that hour's own sun (one H-hour step linearised at the starting temperature
+      // overshot radiative equilibrium on low-capacity ground: a dead moon ran ~30 °C warm, airless worlds warmer at
+      // 1000x, every day/night cycle flattened), and every temperature-driven accumulator — the means, the year's
+      // envelopes, light, the degree-hours of melt — fed each hour as the hourly passes would. Band, global and
+      // neighbour temperatures (transport) and the albedo hold for the pass.
+      const px = pos[c * 3], py = pos[c * 3 + 1], pz = pos[c * 3 + 2];
+      const wT = wMask[c] ? wTemp[c] : 0;
+      const lavaT = lv > 0.05 ? 400 + 600 * Math.min(1, lv) : -1e9;
+      const a1 = 1 - a, shade = (1 - 0.45 * cl0) * LIGHT_K, nbrT = tn[c], gTerm = Dglob * (glob - bm);
+      let Tn = Tp, temp = 0;
+      let tm = tempMean[c], tyr = tempYear[c], hi = tHi[c], lo = tLo[c], lm = lightMean[c], ly = lightYear[c];
+      let nMem = climMem[c];
+      for (let k = 0; k < H; k++) {
+        const j = k * 4;
+        const mu = px * sunS[j] + py * sunS[j + 1] + pz * sunS[j + 2];
+        const insk = mu > 0 ? sunS[j + 3] * mu * trans : 0;
+        const TK = Tn + 273.15 > 3 ? Tn + 273.15 : 3;
+        const TK3 = TK * TK * TK;
+        const net = insk * a1 - em * TK3 * TK + Dband * (bm - Tn) + gTerm + Dnbr * (nbrT - Tn);
+        Tn = Tn + (DT * net) / (C + DT * (4 * em * TK3 + Dband + Dnbr));
+        if (Tn < -270) Tn = -270;
+        temp = Tn - lapse * alt + offset + wT;
+        if (hasGlobal) temp += gD;
+        if (temp < lavaT) temp = lavaT;
+        tm += (temp - tm) * INV_72;
+        let rY = invYear;
+        if (nMem < CLIM_MEM_FULL) {
+          const r1 = 4 / (nMem + 8);
+          if (r1 > invYear) { rY = r1; nMem++; } else nMem = CLIM_MEM_FULL;
+        }
+        tyr += (temp - tyr) * rY;
+        const rs = rY * 0.3;
+        hi += (tyr - hi) * rs; lo += (tyr - lo) * rs;
+        if (temp > hi) hi = temp;
+        if (temp < lo) lo = temp;
+        const light = insk * shade;
+        lm += (light - lm) * INV_24;
+        ly += (light - ly) * rY;
+        if (temp > freeze) { degH += temp - freeze; if (temp > freeze + 2) iceH += temp - freeze; } else coldH++;
+      }
+      tPot[c] = Tn; temperature[c] = temp; tempMean[c] = tm; tempYear[c] = tyr; tHi[c] = hi; tLo[c] = lo;
+      lightMean[c] = lm; lightYear[c] = ly; climMem[c] = nMem;
+    }
     const T = temperature[c];
+    // (an hourly pass: its own hour, from the stored temperature exactly as before)
+    if (H1) { if (T > freeze) { degH = T - freeze; if (T > freeze + 2) iceH = degH; } else coldH = 1; }
 
     // ── humidity: advection, sources, precipitation, climate clouds ──
     if (airy) {
@@ -586,12 +757,12 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
       cl = 0.15 * cloudiness + 0.85 * cl + (pr > 0 ? 0.15 : 0);
       if (hasGlobal) cl += gC;
       cCloud[c] = cl < 0 ? 0 : cl > 1 ? 1 : cl;
-      precipMean[c] += (pr - precipMean[c]) * INV_96;
+      precipMean[c] += (pr - precipMean[c]) * kPM;
     } else {
       q[c] = 0;
       cPrecip[c] = 0;
       cCloud[c] = 0;
-      precipMean[c] *= 0.98;
+      precipMean[c] *= airlessP;
     }
 
     // ── sky: climate precip / cloud + the weather-system overlay (composeSky) ──
@@ -618,44 +789,50 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
     let changedHere = false;
     // snowfall (1 mm water ≈ 1 cm snow)
     if (prF > 0 && tyF === 2 && !(sea && water[c] > 0.5)) {
-      snow[c] += prF * 0.01 * rs3;
+      snow[c] += prF * 0.01 * rs3 * H;
       changedHere = true;
     }
     if (doFreeze) {
       // snow melt (degree-hour) feeds surface water; deep old snow compacts into glacier ice
+      // (by the degree-hours of the hours this pass stands for: an hourly pass's own hour exactly as before)
       if (snow[c] > 0) {
-        if (T > freeze) {
-          const m = Math.min(snow[c], 0.004 * (T - freeze));
+        if (degH > 0) {
+          const m = Math.min(snow[c], 0.004 * degH);
           snow[c] -= m;
           if (airy && T < boil) {
             water[c] += m * 0.25;
             sourced += m * 0.25 * area[c];
-            if (m > 0.008) activateCell(p, c);
+            if (m > 0.008) wakeIfUnlevel(p, c);
           }
           changedHere = true;
-        } else if (snow[c] > 2.5) {
-          snow[c] -= 0.002;
-          ice[c] += 0.0018;
+        }
+        if (coldH > 0 && snow[c] > 2.5) {
+          snow[c] -= 0.002 * coldH;
+          ice[c] += 0.0018 * coldH;
           changedHere = true;
         }
-        if (!airy && snow[c] > 0) { snow[c] = Math.max(0, snow[c] - 0.002); changedHere = true; }
+        if (!airy && snow[c] > 0) { snow[c] = Math.max(0, snow[c] - 0.002 * H); changedHere = true; }
       }
-      if (ice[c] > 0 && T > freeze + 2) {
-        const m = Math.min(ice[c], 0.0012 * (T - freeze));
+      if (ice[c] > 0 && iceH > 0) {
+        const m = Math.min(ice[c], 0.0012 * iceH);
         ice[c] -= m;
-        if (airy && T < boil) { water[c] += m * 0.9; sourced += m * 0.9 * area[c]; if (m > 0.004) activateCell(p, c); }
+        if (airy && T < boil) { water[c] += m * 0.9; sourced += m * 0.9 * area[c]; if (m > 0.004) wakeIfUnlevel(p, c); }
         changedHere = true;
       }
       // standing water freezes over / thaws
       if (water[c] > 0.02) {
         // salt water freezes ~2 °C lower than fresh
         const fz = salinity[c] > 0.5 ? freeze - SALT_FREEZE : freeze;
-        if (T < fz - 0.5) seaIce[c] = Math.min(Math.min(water[c], 3), seaIce[c] + 0.01 * (fz - T));
-        else if (seaIce[c] > 0) seaIce[c] = Math.max(0, seaIce[c] - 0.02 * (T - fz + 0.5));
+        if (T < fz - 0.5) seaIce[c] = Math.min(Math.min(water[c], 3), seaIce[c] + 0.01 * (fz - T) * H);
+        else if (seaIce[c] > 0) seaIce[c] = Math.max(0, seaIce[c] - 0.02 * (T - fz + 0.5) * H);
       } else if (seaIce[c] > 0) seaIce[c] = 0;
     }
     if (changedHere) { changed[nChanged++] = c; anyChanged = true; }
-    // evaporation and boiling (the open ocean is a reservoir: its level is held by the sea-level relaxation)
+    // evaporation and boiling (the open ocean is a reservoir: its level is held by the sea-level relaxation). Evaporation
+    // and infiltration are this hour's only, at every level: a time-lapse or dormant schedule runs the hours the pass
+    // skips in soilHour (push 2 round 2 — one H-hour exchange against the water standing at the instant of the pass
+    // missed most of the rain that ran off in between: soils dried, wetlands shrank by a quarter at 1000x).
+    // Transpiration (below) needs no standing water: it stays H hours here (hourly in soilHour measured the same)
     const w = water[c];
     if (w > 0 && !sea && evaporation > 0) {
       let rate: number;
@@ -666,7 +843,7 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
       if (d > 0) {
         water[c] = w - d;
         sourced -= d * area[c];
-        if (d > 0.002) activateCell(p, c);
+        if (d > 0.002) wakeIfUnlevel(p, c);
       }
     }
     // infiltration into soil moisture, overflow recharges the aquifer
@@ -686,23 +863,24 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
           m = 1;
         }
         moisture[c] = m;
-        if (inf > 0.002) activateCell(p, c);
+        if (inf > 0.002) wakeIfUnlevel(p, c);
       }
       // evapotranspiration dries the soil
       if (airy) {
         const veg = tree[c] + 0.6 * grass[c] + 0.5 * shrub[c] + 0.6 * crop[c];
         const et = 0.0009 * Math.min(1.3, Math.max(0.03, (T + 5) * INV_30)) * (0.4 + veg) * (1 - 0.7 * q[c]);
-        moisture[c] = Math.max(0, moisture[c] - et / cap * 0.25);
+        moisture[c] = Math.max(0, moisture[c] - et / cap * 0.25 * H);
         // the banks of fresh water stay moist (seepage): green strips along desert rivers, oases round desert lakes
-        if (rip[c] && moisture[c] < RIPARIAN) moisture[c] += (RIPARIAN - moisture[c]) * 0.04;
+        // (the riparian flags are this pass's: compounded over the hours it stands for, soilHour leaves them out)
+        if (rip[c] && moisture[c] < RIPARIAN) moisture[c] += (RIPARIAN - moisture[c]) * kRip;
       }
     } else if (sea) {
       moisture[c] = 1;
     }
-    if (!airy && water[c] <= 0) moisture[c] = Math.max(0, moisture[c] - 0.01);
+    if (!airy && water[c] <= 0) moisture[c] = Math.max(0, moisture[c] - 0.01 * H);
     // wetness for shading
     const ww = water[c];
-    let wet = wetness[c] * 0.8;
+    let wet = wetness[c] * wetKeep;
     if (ww > 0.002) wet = Math.max(wet, Math.min(1, 0.35 + ww * INV_003));
     if (prF > 0 && (tyF === 1 || tyF === 5 || tyF === 6)) wet = Math.max(wet, Math.min(1, 0.5 + prF * 0.08));
     wet = Math.max(wet, moisture[c] * 0.35);
@@ -710,6 +888,69 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
   }
   p.hydro.sourced += sourced;
   return anyChanged ? nChanged : -1;
+}
+
+/**
+ * The soil hour (SIM perf push 2, round 2): the land's hourly exchanges with standing water — evaporation / boiling and
+ * infiltration into soil moisture (overflow to the aquifer) — for an hour on which a time-lapse or dormant schedule
+ * skips the climate pass (sim.ts runPlanet; the pass then does its own hour). Rain arrives in batches and thin sheets
+ * carry it off within the hour, so one multi-hour exchange against the water standing at the instant of the pass missed
+ * most of it: soils dried and wetlands shrank by a quarter at 1000x. The same expressions as columnKernel's soil block
+ * at H = 1, under the sky of the last pass (temperature, humidity, wind hold between passes). Mass: every m³ taken is
+ * accounted in hydro.sourced, as in the pass. Cost: one read of the water per cell, work on wet land only.
+ */
+export function soilHour(u: Universe, p: Planet): void {
+  const cfg = p.cfg, f = p.f;
+  if (cfg.evaporation <= 0 && cfg.infiltration <= 0) return;
+  const sourced = soilKernel(
+    p, p.count, p.airy, cfg.evaporation, cfg.infiltration, p.st.liquid.freeze, boilingPoint(p), f.water, p.cellArea,
+    p.s.ocean, f.temperature, f.humidity, f.windX, f.windY, f.windZ, f.soil, f.sand, f.moisture, f.aquifer,
+  );
+  if (sourced !== 0) { p.hydro.sourced += sourced; p.bump('water'); p.bump('moisture'); p.bump('aquifer'); }
+}
+
+function soilKernel(
+  p: Planet, N: number, airy: boolean, evaporation: number, infiltration: number, freeze: number, boil: number,
+  water: Float64Array, area: Float64Array, ocean: Uint8Array, temperature: Float32Array, q: Float32Array,
+  windX: Float32Array, windY: Float32Array, windZ: Float32Array, soil: Float32Array, sand: Float32Array,
+  moisture: Float32Array, aquifer: Float32Array,
+): number {
+  let sourced = 0;
+  for (let c = 0; c < N; c++) {
+    const w = water[c];
+    if (w <= 0 || ocean[c] !== 0) continue;
+    const T = temperature[c];
+    if (evaporation > 0) {
+      let rate: number;
+      if (T < freeze) rate = airy ? 0.00005 : 0.002;
+      else if (T >= boil) rate = Math.min(1.5, 0.05 + 0.02 * (T - boil));
+      else rate = 0.0006 * Math.min(1.3, Math.max(0.05, (T + 12) * INV_38)) * (1 - q[c] * 0.8) * (1 + Math.sqrt(windX[c] * windX[c] + windY[c] * windY[c] + windZ[c] * windZ[c]) * INV_12);
+      const d = Math.min(w, rate * evaporation);
+      if (d > 0) {
+        water[c] = w - d;
+        sourced -= d * area[c];
+        if (d > 0.002) wakeIfUnlevel(p, c);
+      }
+    }
+    if (infiltration > 0 && T > freeze) {
+      const so = soil[c], sa = sand[c];
+      const cap = 0.4 * (so + sa + 0.08);
+      const w2 = water[c];
+      if (w2 > 0) {
+        const inf = Math.min(w2, 0.004 * (0.25 + Math.min(1, so) + 2.5 * Math.min(1, sa)) * infiltration);
+        water[c] = w2 - inf;
+        sourced -= inf * area[c];
+        let m = moisture[c] + inf / cap;
+        if (m > 1) {
+          aquifer[c] += (m - 1) * cap;
+          m = 1;
+        }
+        moisture[c] = m;
+        if (inf > 0.002) wakeIfUnlevel(p, c);
+      }
+    }
+  }
+  return sourced;
 }
 
 const SOLAR = 1361;

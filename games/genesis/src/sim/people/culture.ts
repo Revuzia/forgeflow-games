@@ -172,7 +172,11 @@ export type WitnessKind = 'help' | 'harm' | 'wonder';
  * player): help adds love, harm adds fear, wonder some of both — by distance, the species' bias and the agent's piety
  * and nerve. Settlements that saw it read it (chronicled at the next step). Returns the number of witnesses.
  */
+/** how many acts were witnessed so far (the god layer tells whether a command already let people see it) */
+export const witnessCounter = { n: 0 };
+
 export function witness(p: Planet, pos: ArrayLike<number>, radius: number, kind: WitnessKind, magnitude: number, god = 0): number {
+  witnessCounter.n++;
   const ps = p.people;
   const c = ps?.contentRef;
   if (!ps || !c || ps.agents.count === 0 && !ps.settlements.length) return 0;
@@ -261,8 +265,10 @@ export function cultureDaily(x: PCtx, st: Settlement): void {
   let none = 0;
   for (const s of members) {
     const piety = A.traits[s * NT + TRAIT.piety];
-    const lk = 1 - (seen ? 0.004 : 0.025) * (1.2 - piety);
-    const fk = 1 - (seen ? 0.01 : 0.045);
+    // the god layer's law 'belief.decay' scales how fast neglected faith fades (god/params)
+    const dk = x.u.god.law('belief.decay');
+    const lk = 1 - (seen ? 0.004 : 0.025) * (1.2 - piety) * dk;
+    const fk = 1 - (seen ? 0.01 : 0.045) * dk;
     let any = 0;
     for (let g = 0; g < GODS; g++) {
       const i = s * GODS + g;

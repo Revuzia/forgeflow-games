@@ -40,6 +40,10 @@ import { bestBoat, boatSeats, boatSwim, routeBetween } from './missions.ts';
 import { findPath } from '../grid/pathfind.ts';
 import { pathOptsFor } from './resources.ts';
 import { recountShelters } from './tasks.ts';
+import { lapseLevel } from '../perf/lapse.ts';
+
+/** re-planning interval multiplier per time-lapse level (SIM perf push 2: settlementStep) */
+const REPLAN = [1, 2, 3] as const;
 
 export const SETTLEMENT_CADENCE = 60;
 
@@ -249,7 +253,10 @@ export function found(x: PCtx, st: Settlement, c: number, ruinOf: Settlement | n
   st.cell = c;
   st.pos = cellPos(x.p, c) as [number, number, number];
   st.feature = siteFeature(x, c);
-  st.name = settlementName(x.c, st.species, st.langSeed, st.id, st.feature);
+  // a people the god sent to a new place keeps its name there (god/civic.ts settlement.move)
+  if (st.recent.keepName === undefined || !st.name) st.name = settlementName(x.c, st.species, st.langSeed, st.id, st.feature);
+  delete st.recent.keepName;
+  delete st.recent.godSite;
   st.target = null;
   // ruins on the site are taken over
   for (const b of x.ps.buildings) {
@@ -363,18 +370,21 @@ export function settlementStep(x: PCtx, st: Settlement): void {
   st.stats.peak = Math.max(st.stats.peak, Math.round(pop));
   const hour = Math.floor(x.tick / 60);
   if (st.band) { bandStep(x, st, hour); return; }
+  // SIM perf push 2 — time-lapse (perf/lapse.ts): at 100x / 1000x the re-planning below (caches, roles, work lists) runs
+  // 2 / 3 times less often; everything that integrates time (hearths, births, age, sickness, cohorts) stays hourly
+  const rp = REPLAN[lapseLevel(x.u)];
   // refresh caches at fixed hours (saved: decisions read them)
-  if ((hour + st.id) % 8 === 0 || !st.res) updateResources(x, st);
-  if ((hour + st.id) % 24 === 0 || !st.flow) updateFlow(x, st);
+  if ((hour + st.id) % (8 * rp) === 0 || !st.res) updateResources(x, st);
+  if ((hour + st.id) % (24 * rp) === 0 || !st.flow) updateFlow(x, st);
   burnHearths(x, st, 60);
   refreshLibrary(x, st);
   hiveShare(x, st);
   if (!st.leader || x.A.slotOf(st.leader) < 0) electLeader(x, st);
-  assignRoles(x, st);
+  if ((hour + st.id) % rp === 0) assignRoles(x, st);
   // the work lists (saved) are revised every few hours, staggered between settlements
-  if ((hour + st.id) % 3 === 0) planJobs(x, st);
-  if ((hour + st.id) % 2 === 1) planWants(x, st);
-  if ((hour + st.id) % 2 === 0) planConstruction(x, st);
+  if ((hour + st.id) % (3 * rp) === 0) planJobs(x, st);
+  if ((hour + st.id) % (2 * rp) === 1) planWants(x, st);
+  if ((hour + st.id) % (2 * rp) === 0) planConstruction(x, st);
   births(x, st);
   oldAge(x, st);
   sicknessAndAccidents(x, st);
@@ -458,11 +468,14 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   // the band makes no headway toward for three days (half of a coastal band kept going back to the sea to bathe; a
   // band walked for weeks toward a cell under 11 m of new lake)
   const roaming = st.recent.roam !== undefined;
-  const spoilt = x.p.f.water[tc] > 0.15 || (!roaming && siteScore(x, st.species, tc, st.id) < 3.2);
+  // (a place the god chose is kept unless it floods: the god's word outweighs the band's judgement of the site)
+  const godSite = st.recent.godSite !== undefined;
+  const spoilt = x.p.f.water[tc] > 0.15 || (!roaming && !godSite && siteScore(x, st.species, tc, st.id) < 3.2);
   if (leadD < (st.recent.tgtBest ?? Infinity) - 30) { st.recent.tgtBest = Math.round(leadD); st.recent.tgtAt = x.tick; }
   const stuck = x.tick - (st.recent.tgtAt ?? x.tick) > 3 * x.day;
   if (spoilt || stuck) {
     if (!roaming) st.recent[`u${tc}`] = x.tick;
+    delete st.recent.godSite;
     st.target = null;
     delete st.recent.tgtAt; delete st.recent.tgtBest; delete st.recent.roam;
     return;
@@ -473,7 +486,7 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
   for (const m of members) { A.posAt(m, x.tick, pt); if (distM(x.p, pt, st.target) < 60) near++; }
   if (near >= members.length * 0.5 || (leadD < 60 && near * 3 >= members.length)) {
     const v = siteScore(x, st.species, tc, st.id);
-    if (v >= 3.2 || (v > 1 && x.tick - (st.recent.wander ?? x.tick) > 3 * x.day)) {
+    if (v >= 3.2 || godSite || (v > 1 && x.tick - (st.recent.wander ?? x.tick) > 3 * x.day)) {
       // ruins of a fallen settlement here?
       const ruin = x.ps.settlements.find((o) => o.fallen >= 0 && distM(x.p, o.pos, st.target!) < 120);
       delete st.recent.tgtAt; delete st.recent.tgtBest; delete st.recent.roam;
@@ -565,6 +578,9 @@ export function assignRoles(x: PCtx, st: Settlement): void {
   const pending: number[] = [];
   for (const m of adults) {
     if (A.id[m] === st.leader) { A.role[m] = ROLE.leader; continue; }
+    // a role the god gave holds (god/civic.ts agent.role)
+    const given = st.recent[`r${A.id[m]}`];
+    if (given !== undefined) { A.role[m] = given; count[given]++; continue; }
     const r = A.role[m];
     if (r > 0 && r !== ROLE.child && r !== ROLE.leader && count[r] < quota[r]) { count[r]++; continue; }
     pending.push(m);
@@ -1218,7 +1234,7 @@ export function fall(x: PCtx, st: Settlement, cause: string): void {
   for (const h of x.ps.herds) if (h.owner === st.id) h.owner = -1;
   if (!st.band) {
     // an abandonment was told already; an emptied settlement gets its fall
-    if (cause !== 'drought' && cause !== 'famine') tell(x.u, x.p, cause === 'starvation' ? 'fall.starvation' : 'fall', vars(x, st, -1, { cause }), st, [settlementRef(x, st)], 3);
+    if (cause !== 'drought' && cause !== 'famine' && cause !== 'god') tell(x.u, x.p, cause === 'starvation' ? 'fall.starvation' : 'fall', vars(x, st, -1, { cause }), st, [settlementRef(x, st)], 3);
     emitSt(x, st, { t: 'settlement.fallen', text: st.name, data: { cause } });
   }
   x.ps.version++;

@@ -8,8 +8,11 @@
 //
 // Phase-1 kinds: terrain.* brushes, water.*, weather.*, time.*, planet.atmosphere / add-air / remove-air, star.set,
 // planet.set, life.plant / forest / paint-biome / pin-biome, fire.ignite / extinguish, set (any parameter), focus,
-// freeform (minimal parser until phase 3). Phase 2 (people/commands.ts): life.spawn-people / spawn-animal, agent.*,
-// idea.teach, settlement.gift / introduce / withdraw / rename / found / raze.
+// freeform. Phase 2 (people/commands.ts): life.spawn-people / spawn-animal, agent.*, idea.teach, settlement.gift /
+// introduce / withdraw / rename / found / raze. Phase 3 (god/index.ts registerGodCommands): hand.*, miracle.*,
+// disaster.*, creature.*, world.*, rival.*, possess.*, disciple.*, life.kill / heal / bless / curse, agent.inspire,
+// settlement.law / teach, meta.restraint, content.* (runtime inventions); Sim adds time.speed / step / rewind /
+// edit-past (they act on the Sim, not the world).
 
 import type { Command, CommandResult, EntityRef, UnitVec } from '../types.ts';
 import type { Universe } from '../world/universe.ts';
@@ -19,7 +22,7 @@ import { brush, MATERIALS, type BrushKind } from '../fields/terrain.ts';
 import { addWater, drainWater, waterImpulse } from '../fields/hydrology.ts';
 import { clearWeather, paintWeather, setGlobalWeather } from '../fields/weather.ts';
 import { extinguishArea, igniteArea } from '../fields/fire.ts';
-import { forestArea, plantArea } from '../fields/vegetation.ts';
+import { forestArea, plantArea, bestSpecies } from '../fields/vegetation.ts';
 import { resetClimateMemory } from '../fields/climate.ts';
 import { paintBiome, pinBiome } from '../fields/biomes.ts';
 import { anchorSpin, coerceParam, findParam, fmt, noteAir, setHour } from './params.ts';
@@ -27,6 +30,8 @@ import { setStarKind, setStarLuminosity } from '../world/star.ts';
 import { AU } from '../world/orbits.ts';
 import { suggest } from '../content.ts';
 import { registerPeopleCommands, focusHook } from '../people/commands.ts';
+import { pave } from './shaping.ts';
+import { registerGodCommands } from './index.ts';
 
 export type ParamType = 'number' | 'int' | 'string' | 'boolean' | 'pos' | 'vec3' | 'enum' | 'any';
 
@@ -46,7 +51,13 @@ export interface CommandSchema {
   /** UI grouping for palettes (Shape, Water, Sky, Life, Fire, Time, Worlds, Meta) */
   category: string;
   params: Record<string, ParamSchema>;
+  /** at least one of these parameters must be given (planet.set, star.set ...): checked by validate, so a preview of
+   * an empty act is not reported as fine */
+  anyOf?: string[];
 }
+
+/** parameters every command accepts without declaring them: the kind, the world, the acting god, a place */
+const UNIVERSAL_KEYS = new Set(['k', 'planet', 'god', 'pos', 'lat', 'lon', 'cell']);
 
 export interface CmdCtx {
   u: Universe;
@@ -84,6 +95,18 @@ export class CommandRegistry {
     return this.entries.get(kind)?.schema;
   }
 
+  /** the handler registered for a kind (a later module may wrap it: register again with a handler that calls it) */
+  handlerOf(kind: string): Handler | undefined {
+    return this.entries.get(kind)?.handler;
+  }
+
+  /**
+   * Hooks around every dispatch (the god layer: restraint costs before, automatic witnessing after). A before-hook
+   * returning a result refuses the command with it.
+   */
+  readonly before: ((u: Universe, cmd: Command, p: Planet) => CommandResult | null)[] = [];
+  readonly after: ((u: Universe, cmd: Command, p: Planet, res: CommandResult, args: Args) => void)[] = [];
+
   /** check a command without running it */
   validate(u: Universe, cmd: Command): { ok: true; args: Args; p: Planet } | { ok: false; msg: string } {
     if (!cmd || typeof cmd !== 'object' || typeof cmd.k !== 'string') return { ok: false, msg: 'A command needs a kind ("k").' };
@@ -95,11 +118,22 @@ export class CommandRegistry {
     const p = u.planetFor(cmd.planet);
     if (!p) return { ok: false, msg: typeof cmd.planet === 'number' ? `There is no world #${cmd.planet}.` : 'There is no world to act on.' };
     if (!p.alive) return { ok: false, msg: `${p.name} is gone.` };
+    // a parameter the command does not take is refused (it would otherwise be dropped silently, and the act land at
+    // the camera focus instead of where it was meant: life.kill { settlement } used to kill at the focus)
+    const unknown = Object.keys(cmd).filter((k) => !UNIVERSAL_KEYS.has(k) && !(k in e.schema.params) && cmd[k] !== undefined);
+    if (unknown.length) {
+      const takes = Object.keys(e.schema.params);
+      const hint = unknown.map((k) => suggest(k, takes)).find((h) => h);
+      return { ok: false, msg: `${cmd.k} does not take ${unknown.map((k) => `'${k}'`).join(', ')}${hint ? ` — did you mean '${hint}'?` : ''} (it takes: ${takes.join(', ') || 'nothing'}).` };
+    }
     const args: Args = {};
     for (const [name, sc] of Object.entries(e.schema.params)) {
       const r = coerce(u, p, cmd, name, sc);
       if (!r.ok) return { ok: false, msg: `${cmd.k}: ${r.msg}` };
       if (r.v !== undefined) args[name] = r.v;
+    }
+    if (e.schema.anyOf && !e.schema.anyOf.some((k) => cmd[k] !== undefined && cmd[k] !== null)) {
+      return { ok: false, msg: `${cmd.k} needs at least one of ${e.schema.anyOf.join(', ')}.` };
     }
     return { ok: true, args, p };
   }
@@ -109,12 +143,17 @@ export class CommandRegistry {
     const v = this.validate(u, cmd);
     if (!v.ok) return { ok: false, msg: v.msg, tick: u.tick };
     const e = this.entries.get(cmd.k)!;
+    for (const h of this.before) {
+      const refused = h(u, cmd, v.p);
+      if (refused) { refused.tick = u.tick; return refused; }
+    }
     let res: CommandResult;
     try {
       res = e.handler({ u, p: v.p, cmd }, v.args);
     } catch (err) {
       res = { ok: false, msg: `${cmd.k} failed: ${err instanceof Error ? err.message : String(err)}` };
     }
+    for (const h of this.after) h(u, cmd, v.p, res, v.args);
     res.tick = u.tick;
     if (res.ok) u.emit({ t: 'command', planet: v.p.id, text: res.msg, data: { k: cmd.k } });
     return res;
@@ -273,11 +312,16 @@ export function buildRegistry(): CommandRegistry {
     return ok(`A river bed is carved ${where(p, a.pos)} (${n} cells) and a spring wells up at its head.`);
   }, { desc: 'Carve a river path', category: 'Water', params: { pos: pos(), to: { type: 'pos' }, radius: radius(60), depth: { type: 'number', min: 0.2, max: 50, default: 2.5 } } });
   r.register('terrain.paint-material', ({ u, p }, a) => {
+    // 'road': the ground paved (god/shaping.ts terrain.pave does the same, and lays roads between places)
+    if (a.material === 'road') {
+      const n = pave(p, p.cellsNear(a.pos!, Math.max(a.radius as number, p.edgeM * 0.6)).slice().sort((q, w) => q - w));
+      return n ? ok(`The ground is paved ${where(p, a.pos)} (${n} cells).`) : fail(`There is no dry land ${where(p, a.pos)} to pave.`);
+    }
     const n = brush(u, p, 'paint-material', a.pos!, a.radius as number, a.depth as number, { material: a.material as (typeof MATERIALS)[number] });
     return ok(`${a.material} ${(a.depth as number) >= 0 ? 'laid' : 'stripped'} ${where(p, a.pos)} (${n} cells).`);
   }, {
     desc: 'Paint a material layer', category: 'Shape',
-    params: { pos: pos(), radius: radius(), material: { type: 'enum', values: MATERIALS, default: 'soil' }, depth: { type: 'number', min: -100, max: 500, default: 0.5 } },
+    params: { pos: pos(), radius: radius(), material: { type: 'enum', values: [...MATERIALS, 'road'], default: 'soil' }, depth: { type: 'number', min: -100, max: 500, default: 0.5 } },
   });
 
   // water
@@ -329,7 +373,7 @@ export function buildRegistry(): CommandRegistry {
     const up = p.st.seaLevel > before;
     if (p.st.seaLevel === before) return ok(`The sea stays at ${fmt(before)} m.`);
     return ok(`The seas ${up ? 'rise' : 'fall'} toward ${fmt(p.st.seaLevel)} m.`);
-  }, { desc: 'Set the sea level', category: 'Water', params: { value: { type: 'number', min: -5000, max: 5000 }, delta: { type: 'number', min: -5000, max: 5000 } } });
+  }, { desc: 'Set the sea level', category: 'Water', anyOf: ['value', 'delta'], params: { value: { type: 'number', min: -5000, max: 5000 }, delta: { type: 'number', min: -5000, max: 5000 } } });
   r.register('water.spring', ({ u, p }, a) => {
     const c = p.cellAt(a.pos!);
     const id = u.ids.alloc('spring');
@@ -373,7 +417,13 @@ export function buildRegistry(): CommandRegistry {
       if (!n && !gName) return ok(`The skies over ${p.name} are already clear.`);
       return ok(`The skies clear over all of ${p.name}${gName ? `: the planet-wide ${gName} lifts` : ''}${n ? `${gName ? ' and' : ':'} ${sys}` : ''}.`);
     }
-    return ok(n ? `The skies clear ${where(p, a.pos)} (${sys}).` : `No weather system is centred within ${fmt(a.radius as number)} m ${where(p, a.pos)}.${p.st.globalWeather ? ' (The planet-wide weather stays: clear everywhere to lift it.)' : ''}`);
+    if (!n && p.st.globalWeather) {
+      // the sky here IS the planet-wide weather: clearing it here lifts it
+      const g = p.st.globalWeather;
+      setGlobalWeather(u, p, null);
+      return ok(`The planet-wide ${u.content.weather.find(g)?.name.toLowerCase() ?? g} lifts: the skies clear ${where(p, a.pos)} and all over ${p.name}.`);
+    }
+    return ok(n ? `The skies clear ${where(p, a.pos)} (${sys}).` : `The skies ${where(p, a.pos)} are already clear (no weather system within ${fmt(a.radius as number)} m).`);
   }, {
     desc: 'Clear the weather', category: 'Sky',
     params: { pos: pos(false), radius: radius(1500), everywhere: { type: 'boolean', default: false, desc: 'clear every system and the planet-wide weather' } },
@@ -388,10 +438,17 @@ export function buildRegistry(): CommandRegistry {
   // time
   r.register('time.set-hour', ({ u, p }, a) => {
     const h = a.hour as number;
-    if (h > p.st.dayHours) return fail(`A day on ${p.name} has only ${fmt(p.st.dayHours)} hours.`);
-    setHour(u, p, h);
-    return ok(`The sun stands at ${fmt(h)}:00 over the meridian of ${p.name}.`);
-  }, { desc: 'Move the sun to an hour', category: 'Time', params: { hour: { type: 'number', min: 0, max: 2000, required: true } } });
+    const D = p.st.dayHours;
+    if (h > D) return fail(`A day on ${p.name} has only ${fmt(D)} hours.`);
+    // `at`: the local solar hour at that place (the freeform parser passes the camera focus); none = longitude 0
+    const at = a.at as UnitVec | null;
+    const lon = at ? Math.atan2(at[0], at[2]) : 0;
+    const h0 = (((h - (lon / (2 * Math.PI)) * D) % D) + D) % D;
+    setHour(u, p, h0);
+    const hh = Math.floor(h), mm = Math.round((h - hh) * 60);
+    const clock = `${hh}:${String(mm === 60 ? 0 : mm).padStart(2, '0')}`;
+    return ok(at ? `The sun stands at ${clock} ${where(p, at)} (local time).` : `The sun stands at ${clock} over the meridian of ${p.name}.`);
+  }, { desc: 'Move the sun to an hour (local at a place, or at longitude 0)', category: 'Time', params: { hour: { type: 'number', min: 0, max: 2000, required: true }, at: { type: 'pos', desc: 'the hour is local here' } } });
   r.register('time.day-length', ({ u, p }, a) => {
     anchorSpin(u, p);
     p.st.dayHours = a.hours as number;
@@ -434,19 +491,34 @@ export function buildRegistry(): CommandRegistry {
       const v = a[k];
       if (typeof v === 'number') at[k] = v;
     }
+    // one gas to a share of the air, the others scaled to make room (the shares keep summing to 1)
+    let mixed = '';
+    if (typeof a.gas === 'string' && typeof a.share === 'number') {
+      const gases = ['n2', 'o2', 'co2', 'methane'] as const;
+      const g = a.gas as (typeof gases)[number];
+      const want = Math.max(0, Math.min(1, a.share));
+      const rest = gases.filter((q) => q !== g).reduce((t, q) => t + at[q], 0);
+      const room = 1 - want;
+      for (const q of gases) if (q !== g) at[q] = rest > 1e-9 ? Math.round((at[q] / rest) * room * 10000) / 10000 : q === 'n2' ? room : 0;
+      at[g] = want;
+      mixed = ` ${({ n2: 'Nitrogen', o2: 'Oxygen', co2: 'Carbon dioxide', methane: 'Methane' } as Record<string, string>)[g]} is now ${Math.round(want * 1000) / 10}% of it.`;
+    }
     if (a.tint !== undefined) at.tint = a.tint === null ? null : (a.tint as [number, number, number]);
     // a world given (or stripped of) air has a new climate: the memory of the old one is no guide
     if (Math.abs(at.pressure - before) > Math.max(0.05, before * 0.25)) resetClimateMemory(p);
     noteAir(u, p, before);
     const verb = at.pressure > before ? 'thickens' : at.pressure < before ? 'thins' : 'changes';
-    return ok(`The air of ${p.name} ${verb}: ${fmt(at.pressure)} atm, ${airPhrase(p)}.`);
+    const tinted = a.tint !== undefined ? (a.tint === null ? ' The sky has its own colour again.' : ' The sky takes on a new colour.') : '';
+    const tox = typeof a.toxicity === 'number' ? (a.toxicity > 0.3 ? ' The air turns poisonous.' : a.toxicity === 0 ? ' The air is clean.' : '') : '';
+    return ok(`The air of ${p.name} ${verb}: ${fmt(at.pressure)} atm, ${airPhrase(p)}.${mixed}${tox}${tinted}`);
   };
   const airParams: Record<string, ParamSchema> = {
     action: { type: 'enum', values: ['set', 'add-air', 'remove-air'], default: 'set' },
     amount: { type: 'number', min: 0, max: 100 },
     pressure: { type: 'number', min: 0, max: 100 }, o2: { type: 'number', min: 0, max: 1 }, co2: { type: 'number', min: 0, max: 1 },
     n2: { type: 'number', min: 0, max: 1 }, methane: { type: 'number', min: 0, max: 1 }, dust: { type: 'number', min: 0, max: 10 },
-    toxicity: { type: 'number', min: 0, max: 1 }, tint: { type: 'any' },
+    toxicity: { type: 'number', min: 0, max: 1 }, tint: { type: 'any', desc: 'the sky colour [r, g, b] 0..1, or null for its own' },
+    gas: { type: 'enum', values: ['n2', 'o2', 'co2', 'methane'], desc: 'set this gas to `share` of the air' }, share: { type: 'number', min: 0, max: 1 },
   };
   r.register('planet.atmosphere', ({ u, p }, a) => atmosphere(u, p, a), { desc: 'Change the air', category: 'Worlds', params: airParams });
   r.register('planet.add-air', ({ u, p }, a) => atmosphere(u, p, { ...a, action: 'add-air' }), { desc: 'Breathe air onto the world', category: 'Worlds', params: { amount: { type: 'number', min: 0, max: 100, default: 1 } } });
@@ -468,7 +540,7 @@ export function buildRegistry(): CommandRegistry {
     if (typeof a.activity === 'number') { u.star.activity = a.activity; msgs.push('The star stirs.'); }
     return msgs.length ? ok(msgs.join(' ')) : fail('star.set needs a kind, luminosity or activity.');
   }, {
-    desc: 'Change the star', category: 'Worlds',
+    desc: 'Change the star', category: 'Worlds', anyOf: ['kind', 'luminosity', 'activity'],
     params: { kind: { type: 'enum', values: (u) => u.content.stars.ids() }, luminosity: { type: 'number', min: 0, max: 10000 }, activity: { type: 'number', min: 0, max: 1 } },
   });
   r.register('planet.set', ({ u, p }, a) => {
@@ -489,6 +561,7 @@ export function buildRegistry(): CommandRegistry {
     return msgs.length ? ok(`${p.name}: ${msgs.join(', ')}.`) : fail('planet.set needs at least one of gravity, magnetism, distance, spin, cloudiness, temperatureOffset, seaLevel.');
   }, {
     desc: 'Change the world itself', category: 'Worlds',
+    anyOf: ['gravity', 'magnetism', 'distance', 'spin', 'cloudiness', 'temperatureOffset', 'seaLevel', 'eccentricity'],
     params: {
       gravity: { type: 'number', min: 0, max: 50 }, magnetism: { type: 'number', min: 0, max: 5 }, distance: { type: 'number', min: 0.05, max: 40 },
       spin: { type: 'number', min: 1, max: 2000 }, cloudiness: { type: 'number', min: 0, max: 1 }, temperatureOffset: { type: 'number', min: -150, max: 150 },
@@ -498,24 +571,37 @@ export function buildRegistry(): CommandRegistry {
 
   // life
   r.register('life.plant', ({ u, p }, a) => {
-    const sp = u.content.plants.idx(a.species as string);
-    const n = plantArea(u, p, sp, a.pos!, a.radius as number, a.density as number);
+    // no species named: the kind of plant asked for (grass by default) that best suits the ground there
+    let sp = a.species ? u.content.plants.idx(a.species as string) : -1;
+    if (sp < 0) {
+      const ti = ['grass', 'shrub', 'tree', 'crop'].indexOf(String(a.type ?? 'grass'));
+      const t = u.content.plantTable;
+      sp = bestSpecies(p, t, Math.max(0, ti), p.cellAt(a.pos!), ti === 3).sp;
+      if (sp < 0) sp = t.byType[Math.max(0, ti)][0] ?? 0;
+    }
+    const R = a.everywhere === true ? Math.PI * p.st.radius : a.radius as number;
+    const n = plantArea(u, p, sp, a.pos!, R, a.density as number);
     const name = u.content.plants.list[sp].name.toLowerCase();
     if (!n) return fail(`Nowhere ${where(p, a.pos)} can hold ${name}.`);
     const doomed = p.st.atmosphere.pressure < 0.05 ? ' Without air it will not last.' : '';
-    return ok(`${u.content.plants.list[sp].name} planted ${where(p, a.pos)} (${n} cells).${doomed}`);
+    return ok(`${u.content.plants.list[sp].name} planted ${a.everywhere === true ? `all over ${p.name}` : where(p, a.pos)} (${n} cells).${doomed}`);
   }, {
-    desc: 'Plant a species', category: 'Life',
-    params: { species: { type: 'enum', values: (u) => u.content.plants.ids(), required: true }, pos: pos(), radius: radius(150), density: { type: 'number', min: 0.01, max: 1, default: 0.6 } },
+    desc: 'Plant a species (or the best of a kind for the place)', category: 'Life',
+    params: {
+      species: { type: 'enum', values: (u) => u.content.plants.ids() }, type: { type: 'enum', values: ['grass', 'shrub', 'tree', 'crop'], default: 'grass', desc: 'with no species: the best of this kind' },
+      pos: pos(), radius: radius(150), density: { type: 'number', min: 0.01, max: 1, default: 0.6 }, everywhere: { type: 'boolean', default: false },
+    },
   });
   r.register('life.forest', ({ u, p }, a) => {
     const sp = a.species ? u.content.plants.idx(a.species as string) : -1;
     if (sp >= 0 && u.content.plants.list[sp].type !== 'tree') return fail(`${a.species} is not a tree.`);
-    const n = forestArea(u, p, a.pos!, a.radius as number, a.density as number, sp);
-    return n ? ok(`A forest springs up ${where(p, a.pos)} (${n} cells).`) : fail('There is no dry land there for a forest.');
+    // everywhere: every dry land cell of the world (a radius of half the circumference reaches the far side)
+    const R = a.everywhere === true ? Math.PI * p.st.radius : a.radius as number;
+    const n = forestArea(u, p, a.pos!, R, a.density as number, sp);
+    return n ? ok(`A forest springs up ${a.everywhere === true ? `over all the dry land of ${p.name}` : where(p, a.pos)} (${n} cells).`) : fail('There is no dry land there for a forest.');
   }, {
-    desc: 'Grow a forest', category: 'Life',
-    params: { pos: pos(), radius: radius(300), density: { type: 'number', min: 0.05, max: 1, default: 0.85 }, species: { type: 'enum', values: (u) => u.content.plants.ids() } },
+    desc: 'Grow a forest (here, or over the whole world)', category: 'Life',
+    params: { pos: pos(), radius: radius(300), density: { type: 'number', min: 0.05, max: 1, default: 0.85 }, species: { type: 'enum', values: (u) => u.content.plants.ids() }, everywhere: { type: 'boolean', default: false } },
   });
   const paintBiomeHandler: Handler = ({ u, p }, a) => {
     const b = u.content.biomes.idx(a.biome as string);
@@ -564,5 +650,6 @@ export function buildRegistry(): CommandRegistry {
   }, { desc: 'The camera dwells here', category: 'Meta', params: { pos: { type: 'pos' } } });
 
   registerPeopleCommands(r);
+  registerGodCommands(r);
   return r;
 }

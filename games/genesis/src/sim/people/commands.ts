@@ -14,14 +14,16 @@ import { ERAS } from '../content.ts';
 import { makeCtx, type PCtx } from './ctx.ts';
 import { DEATH, MEMK, NN } from './defs.ts';
 import { spawnPeople, landingCell } from './spawn.ts';
+import { searchSite } from './settlement.ts';
 import { spawnHerd, habitatFit } from '../life/herds.ts';
 import { die } from './lifecycle.ts';
-import { godTeach, silence, accident, refusalOf } from './knowledge.ts';
+import { godTeach, silence, accident, refusalOf, refusalWords, forceTeach } from './knowledge.ts';
 import { interrupt, witness, dropItem } from './people.ts';
 import { storeAdd, storeTake, storeHas } from './store.ts';
 import { agentName, vars, settlementRef, agentRef, kName } from './util.ts';
 import { tell } from './story.ts';
 import { found, siteScore, updateTerritory, fall } from './settlement.ts';
+import { cellPos3 } from '../god/util.ts';
 import { ruin } from './buildings.ts';
 import { distM, spotInCell } from './world.ts';
 import { focusPeople } from './cohorts.ts';
@@ -82,12 +84,63 @@ const herdPosOf = (h: { from: number[]; to: number[]; t0: number; t1: number }, 
 const itemsEnum = (u: Universe) => u.content.items.ids();
 const recipesEnum = (u: Universe) => u.content.recipes.ids();
 
+/** the people most likely to thrive at a place: the kind of the nearest settlement, else the best site of any kind */
+function plausibleSpecies(x: PCtx, at: ArrayLike<number>): string | null {
+  let best: Settlement | null = null, bd = Infinity;
+  for (const st of x.ps.settlements) {
+    if (st.fallen >= 0) continue;
+    const d = distM(x.p, st.pos, at);
+    if (d < bd) { bd = d; best = st; }
+  }
+  if (best) return x.c.species.list[best.species].id;
+  const c = x.p.cellAt(at);
+  let pick: string | null = null, ps = -Infinity;
+  x.c.species.list.forEach((sp, i) => {
+    const site = searchSite(x, i, c, 3);
+    if (site.cell >= 0 && site.score > ps) { ps = site.score; pick = sp.id; }
+  });
+  return ps > 0 ? pick : x.c.species.list[0]?.id ?? null;
+}
+
+/** newcomers born or set down INTO a settlement: they become its members (households, its people, its era) */
+function joinSettlement(u: Universe, p: Planet, home: Settlement, o: { species?: string; count: number; era?: string; children?: boolean }): CommandResult {
+  const x = makeCtx(u, p);
+  const sp = o.species ?? x.c.species.list[home.species].id;
+  const era = o.era ?? ERAS[Math.max(0, Math.min(ERAS.length - 1, home.era))];
+  const band = spawnPeople(u, p, { species: sp, count: Math.max(1, Math.round(o.count)), pos: home.pos, era, settled: false, band: true });
+  if (!band) return fail(`${x.c.species.get(sp).name} could not be set down at ${home.name}.`);
+  const A = x.A;
+  let n = 0;
+  for (const m of (x.ps.members.get(band.id) ?? []).slice()) {
+    x.ps.removeMember(band.id, m);
+    A.settlement[m] = home.id;
+    A.home[m] = -1;
+    if (o.children) { A.birth[m] = u.tick; A.flags[m] |= AgentFlag.child; }
+    x.ps.addMember(home.id, m);
+    interrupt(x, m);
+    n++;
+  }
+  for (const h of band.households) home.households.push({ id: h.id, members: h.members.slice(), home: -1 });
+  band.households = [];
+  for (let k = 0; k < 3; k++) { home.cohort.n[k] += band.cohort.n[k]; band.cohort.n[k] = 0; }
+  fall(x, band, 'merged');
+  const kind = x.c.species.get(sp).plural.replace(/^the /, '');
+  const same = sp === x.c.species.list[home.species].id;
+  if (o.children) tell(u, p, 'birth.god', vars(x, home, -1, { text: `${n === 1 ? 'A child was' : `${n} children were`} born at ${home.name} by the god's will.` }), home, [settlementRef(x, home)], 1);
+  witness(p, home.pos, home.territory + 150, 'wonder', 0.3);
+  return ok(o.children ? `${n === 1 ? 'A child is' : `${n} children are`} born at ${home.name}.` : `${n} ${same ? 'newcomers of their own kind' : kind} come to live at ${home.name}.`, [settlementRef(x, home)]);
+}
+
 export function registerPeopleCommands(r: CommandRegistry): void {
   r.register('life.spawn-people', ({ u, p }, a) => {
     const x = makeCtx(u, p);
-    const sid = typeof a.settlement === 'number' ? a.settlement : null;
     let at: ArrayLike<number> | undefined = (a.pos as UnitVec | null) ?? undefined;
-    if (sid !== null) { const st = x.ps.settlement(sid); if (!st) return fail(`There is no settlement #${sid}.`); at = st.pos; }
+    if (a.settlement !== undefined && a.settlement !== null) {
+      // people set down INTO a settlement join it: its members, its households, its people and its era by default
+      const home = findSettlement(x, { settlement: a.settlement });
+      if (!home || home.fallen >= 0) return fail(`There is no settlement called '${a.settlement}'.`);
+      return joinSettlement(u, p, home, { species: typeof a.speciesGiven === 'string' ? a.speciesGiven : undefined, count: a.count as number, era: a.eraGiven as string | undefined, children: a.children === true });
+    }
     const sp = x.c.species.get(a.species as string);
     const st = spawnPeople(u, p, { species: sp.id, count: a.count as number, pos: at, era: (a.era as string) ?? 'stone', settled: a.settled as boolean });
     if (!st) return fail(`${sp.name} could not be placed on ${p.name}.`);
@@ -100,9 +153,14 @@ export function registerPeopleCommands(r: CommandRegistry): void {
     desc: 'Set a people down on the world', category: 'Peoples',
     params: {
       species: { type: 'enum', values: speciesEnum, default: 'plains-folk' }, count: { type: 'int', min: 1, max: 2000, default: 20 },
-      pos: pos(), settlement: { type: 'any' }, era: { type: 'enum', values: [...ERAS], default: 'stone' }, settled: { type: 'boolean', default: false },
+      pos: pos(), settlement: { type: 'any', desc: 'join this settlement (its people and era unless given)' }, era: { type: 'enum', values: [...ERAS], default: 'stone' },
+      settled: { type: 'boolean', default: false }, children: { type: 'boolean', default: false, desc: 'into a settlement: born as children' },
     },
   });
+  // (which of species / era the caller actually gave: a settlement's own are the defaults when joining it)
+  const spawnPeopleH = r.handlerOf('life.spawn-people')!;
+  const spawnPeopleS = r.schema('life.spawn-people')!;
+  r.register('life.spawn-people', (ctx, a) => spawnPeopleH(ctx, { ...a, speciesGiven: ctx.cmd.species, eraGiven: ctx.cmd.era }), spawnPeopleS);
 
   r.register('life.spawn-animal', ({ u, p }, a) => {
     const x = makeCtx(u, p);
@@ -121,10 +179,14 @@ export function registerPeopleCommands(r: CommandRegistry): void {
   r.register('life.cull', ({ u, p }, a) => {
     const x = makeCtx(u, p);
     const sp = a.species ? animalIdx(x, String(a.species)) : -1;
-    // a species named without a radius: everywhere on the world; otherwise around the place (the focus by default)
-    const everywhere = sp >= 0 && a.radius === undefined;
-    const at = everywhere ? null : a.pos as UnitVec | null;
-    const radius = (a.radius as number) ?? 400;
+    if (a.species && sp < 0) return fail(`No ${a.species} live on ${p.name}.`);
+    const st = a.settlement !== undefined ? findSettlement(x, { settlement: a.settlement }) : null;
+    if (a.settlement !== undefined && !st) return fail(`There is no settlement called '${a.settlement}'.`);
+    // a species named without a radius or a settlement: everywhere on the world; otherwise around the place (the focus
+    // by default) or the settlement's land
+    const everywhere = a.everywhere === true || (sp >= 0 && a.radius === undefined && !st);
+    const at = everywhere ? null : st ? st.pos : a.pos as UnitVec | null;
+    const radius = st ? Math.max((a.radius as number) ?? 0, st.territory + 600) : (a.radius as number) ?? 400;
     const share = (a.share as number) ?? 1;
     let n = 0;
     for (const h of x.ps.herds) {
@@ -140,10 +202,40 @@ export function registerPeopleCommands(r: CommandRegistry): void {
     x.ps.version++;
     if (at) witness(p, at, radius + 100, 'harm', 0.3);
     return ok(n ? `${Math.round(n)} animals are struck down.` : 'No animals there.');
-  }, { desc: 'Cull animals (a species everywhere, or everything around a place)', category: 'Life', params: { species: { type: 'enum', values: animalIds }, pos: pos(), radius: { type: 'number', min: 1, max: 20000, desc: 'metres around the place (default 400; none with a species = everywhere)' }, share: { type: 'number', min: 0, max: 1, default: 1 } } });
+  }, {
+    desc: 'Cull animals (a species everywhere, or everything around a place or a settlement)', category: 'Life',
+    params: {
+      species: { type: 'enum', values: animalIds }, pos: pos(), radius: { type: 'number', min: 1, max: 20000, desc: 'metres around the place (default 400; none with a species = everywhere)' },
+      share: { type: 'number', min: 0, max: 1, default: 1 }, settlement: { type: 'any', desc: 'around this settlement' }, everywhere: { type: 'boolean', default: false },
+    },
+  });
 
   r.register('life.extinct', ({ u, p }, a) => {
     const x = makeCtx(u, p);
+    // a people: every one of them taken from the world (or from one settlement)
+    const people = x.c.species.idx(String(a.species));
+    if (people >= 0) {
+      const st = a.settlement !== undefined ? findSettlement(x, { settlement: a.settlement }) : null;
+      if (a.settlement !== undefined && !st) return fail(`There is no settlement called '${a.settlement}'.`);
+      const def = x.c.species.list[people];
+      const pl = def.plural.replace(/^the /, '');
+      let n = 0;
+      const A = x.A;
+      for (let s = 0; s < A.hi; s++) {
+        if (!A.alive[s] || A.species[s] !== people || (st && A.settlement[s] !== st.id) || u.god.isHeld('agent', A.id[s])) continue;
+        die(x, s, DEATH.god);
+        n++;
+      }
+      for (const o of x.ps.settlements) {
+        if (o.species !== people || (st && o.id !== st.id)) continue;
+        const k = o.cohort.n[0] + o.cohort.n[1] + o.cohort.n[2];
+        if (k > 0) { n += Math.round(k); o.cohort.n[0] = 0; o.cohort.n[1] = 0; o.cohort.n[2] = 0; }
+      }
+      if (!n) return ok(`There were no ${pl} ${st ? `in ${st.name}` : `on ${p.name}`}.`);
+      u.chronicleAdd(p, 'god', st ? `The god took the ${pl} of ${st.name} from the world: ${n} souls.` : `The god took the ${pl} from ${p.name}: ${n} souls, and none of them remain.`, 3);
+      witness(p, st ? st.pos : x.ps.settlements[0]?.pos ?? [0, 0, 1], st ? st.territory + 2000 : 4000, 'harm', 0.9);
+      return ok(st ? `The ${pl} of ${st.name} are taken from the world (${n}).` : `The ${pl} are taken from ${p.name}: ${n} souls, and none remain.`);
+    }
     const sp = animalIdx(x, String(a.species));
     if (sp < 0) return fail(`No ${a.species} live on ${p.name}.`);
     let n = 0;
@@ -152,7 +244,10 @@ export function registerPeopleCommands(r: CommandRegistry): void {
     reindexHerds(x);
     x.ps.version++;
     return ok(n ? `The last ${plural(animalDef(x, sp).name)} of ${p.name} are gone.` : `There were no ${plural(animalDef(x, sp).name)} on ${p.name}.`);
-  }, { desc: 'Wipe a species from the world', category: 'Life', params: { species: { type: 'enum', values: animalIds, required: true } } });
+  }, {
+    desc: 'Wipe a species from the world: an animal, or a people (optionally only those of one settlement)', category: 'Life',
+    params: { species: { type: 'enum', values: (u) => [...animalIds(u), ...speciesEnum(u)], required: true }, settlement: { type: 'any' } },
+  });
 
   r.register('life.breed', ({ u, p }, a) => {
     const x = makeCtx(u, p);
@@ -224,11 +319,17 @@ export function registerPeopleCommands(r: CommandRegistry): void {
     const s = agentSlot(x, a.id as number);
     if (s < 0) return fail('That person is not alive.');
     const k = x.rt.byId.get(a.knowledge as string)!;
+    if (a.force === true) {
+      const f = forceTeach(x, [s], k);
+      if (f.already) return ok(`${agentName(x, s)} already knows ${kName(x, k)}.`);
+      return ok(`${agentName(x, s)} is made to understand ${kName(x, k)}${f.groundwork ? ` (and the ${f.groundwork} thing${f.groundwork === 1 ? '' : 's'} it rests on)` : ''}${f.compelled ? ' — against their will: they fear you more for it' : ''}.`);
+    }
     const res = godTeach(x, [s], k);
     if (res.taught) return ok(`${agentName(x, s)} now knows ${kName(x, k)}.`);
     if (res.already) return ok(`${agentName(x, s)} already knows ${kName(x, k)}.`);
-    return fail(`${agentName(x, s)} refuses ${kName(x, k)} (${Object.keys(res.reasons)[0] ?? 'unwilling'}).`);
-  }, { desc: 'Teach a person an idea', category: 'Ideas', params: { id: agentId, knowledge: { type: 'enum', values: recipesEnum, required: true } } });
+    const why = Object.keys(res.reasons)[0] ?? 'unwilling';
+    return fail(`${refusalWords(x, agentName(x, s), s, k, why)}. (To insist: "make ${agentName(x, s)} learn ${kName(x, k)}".)`);
+  }, { desc: 'Teach a person an idea (force: insist, teaching the groundwork too)', category: 'Ideas', params: { id: agentId, knowledge: { type: 'enum', values: recipesEnum, required: true }, force: { type: 'boolean', default: false } } });
 
   r.register('agent.silence', ({ u, p }, a) => {
     const x = makeCtx(u, p);
@@ -314,20 +415,25 @@ export function registerPeopleCommands(r: CommandRegistry): void {
       label = st.name;
     }
     if (!slots.length) return fail('There is nobody there to teach.');
-    const res = godTeach(x, slots, k);
     const name = kName(x, k);
+    if (a.force === true) {
+      const f = forceTeach(x, slots, k);
+      if (!f.taught && f.already) return ok(`${label} already knows ${name}.`);
+      return ok(`${f.taught} of ${label} are made to understand ${name}${f.groundwork ? ` (with ${f.groundwork} lesson${f.groundwork === 1 ? '' : 's'} of groundwork)` : ''}${f.compelled ? `; ${f.compelled} against their will, and they fear you more for it` : ''}.`);
+    }
+    const res = godTeach(x, slots, k);
     if (!res.taught && !res.refused) return ok(`${label} already knows ${name}.`);
     if (!res.taught) {
       const why = Object.entries(res.reasons).sort((q, w) => w[1] - q[1])[0]?.[0] ?? 'unwilling';
-      const words: Record<string, string> = { taboo: 'it is forbidden to them', fear: 'they are afraid of you', faith: 'they do not believe in you', conservative: 'the old ways are enough for them', grasp: 'they cannot grasp it yet' };
-      return { ok: false, msg: `${label} refused ${name}: ${words[why] ?? why}.` };
+      return { ok: false, msg: `${label} refused ${name}: ${refusalWords(x, slots.length === 1 ? label : `the people of ${label}`, slots[0], k, why, slots.length > 1)}. (To insist: "make ${label} learn ${name}".)` };
     }
-    return ok(`${res.taught} of ${label} now know${res.taught === 1 ? 's' : ''} ${name}${res.refused ? `; ${res.refused} refused` : ''}.`);
+    return ok(`${res.taught} of ${label} now know${res.taught === 1 ? 's' : ''} ${name}${res.refused ? `; ${res.refused} refused (${refusalWords(x, 'they', -1, k, Object.entries(res.reasons).sort((q, w) => w[1] - q[1])[0]?.[0] ?? '', true)})` : ''}.`);
   }, {
     desc: 'Teach an idea (it may be refused)', category: 'Ideas',
     params: {
       knowledge: { type: 'enum', values: recipesEnum, required: true }, agent: { type: 'int', min: 1, desc: 'a person (id)' },
       settlement: { type: 'any', desc: 'a settlement (id or name)' }, target: { type: 'any' }, pos: pos(),
+      force: { type: 'boolean', default: false, desc: 'insist: they learn it (and its groundwork), willing or not' },
     },
   });
 
@@ -390,8 +496,17 @@ export function registerPeopleCommands(r: CommandRegistry): void {
       // an idea enters through the most curious few
       const members = (x.ps.members.get(st.id) ?? []).filter((m) => !(x.A.flags[m] & AgentFlag.child));
       members.sort((q, w) => x.A.traits[w * 6] - x.A.traits[q * 6] || x.A.id[q] - x.A.id[w]);
-      const res = godTeach(x, members.slice(0, Math.max(1, Math.ceil(members.length / 8))), k);
-      if (!res.taught) return { ok: false, msg: `${st.name} turned the idea of ${kName(x, k)} away (${Object.keys(res.reasons)[0] ?? 'unwilling'}).` };
+      const few = members.slice(0, Math.max(1, Math.ceil(members.length / 8)));
+      if (a.force === true) {
+        const f = forceTeach(x, few, k);
+        return ok(`The idea of ${kName(x, k)} is set in ${f.taught} mind${f.taught === 1 ? '' : 's'} at ${st.name}${f.groundwork ? ` (with its groundwork)` : ''}${f.compelled ? ', whether they wanted it or not' : ''}.`);
+      }
+      const res = godTeach(x, few, k);
+      if (!res.taught) {
+        if (res.already && !res.refused) return ok(`${st.name} knows ${kName(x, k)} already.`);
+        const why = Object.entries(res.reasons).sort((q, w) => w[1] - q[1])[0]?.[0] ?? 'unwilling';
+        return { ok: false, msg: `${st.name} turned the idea of ${kName(x, k)} away: ${refusalWords(x, `the people of ${st.name}`, few[0] ?? -1, k, why, true)}. (To insist: "make ${st.name} learn ${kName(x, k)}".)` };
+      }
       return ok(`The idea of ${kName(x, k)} takes root in ${res.taught} mind${res.taught === 1 ? '' : 's'} at ${st.name}.`);
     }
     if (a.animal) {
@@ -417,17 +532,32 @@ export function registerPeopleCommands(r: CommandRegistry): void {
       if (sp < 0 || x.c.plants.list[sp].type !== 'crop') return fail(`'${a.crop}' is not a crop.`);
       const f = p.f;
       let n = 0;
-      for (const c of p.cellsNear(at, 90).slice()) {
-        if (f.water[c] > 0.1 || x.ps.bByCell.get(c).length) continue;
+      // sown over at least the first ring of cells around the place (or the town's own fields and land), never on
+      // water or under a building; the town takes it as its crop (its farmers sow it from now on)
+      const ring = Math.max(90, p.edgeM * 1.6, st ? st.territory * 0.6 : 0);
+      const cells = new Set<number>(p.cellsNear(at, ring));
+      if (st) for (const c of st.fields) cells.add(c);
+      for (const c of [...cells].sort((q, w) => q - w)) {
+        if (f.water[c] > 0.1 || p.s.ocean[c] || x.ps.bByCell.get(c).length || f.lava[c] > 0) continue;
         f.cropSpecies[c] = sp;
         f.crop[c] = Math.max(f.crop[c], 0.2);
         if (st && !st.fields.includes(c)) st.fields.push(c);
         n++;
       }
-      if (st) { st.fields.sort((q, w) => q - w); if (st.crop < 0) st.crop = sp; }
+      if (!n) {
+        // a town hemmed in by its own houses: the nearest open ground takes the seed
+        for (const c of p.cellsNear(at, ring * 3).slice().sort((q, w) => distM(p, at, cellPos3(p, q)) - distM(p, at, cellPos3(p, w)) || q - w)) {
+          if (f.water[c] > 0.1 || p.s.ocean[c] || x.ps.bByCell.get(c).length || f.lava[c] > 0) continue;
+          f.cropSpecies[c] = sp; f.crop[c] = Math.max(f.crop[c], 0.2);
+          if (st && !st.fields.includes(c)) st.fields.push(c);
+          if (++n >= 3) break;
+        }
+      }
+      const before = st && st.crop >= 0 ? x.c.plants.list[st.crop].name.toLowerCase() : '';
+      if (st) { st.fields.sort((q, w) => q - w); st.crop = sp; }
       p.bump('crop'); p.bump('cropSpecies'); p.vegDirty = true;
       if (st) accident(x, st, 'spilled-seed', cell);
-      return ok(`${x.c.plants.list[sp].name} grows ${st ? `by ${st.name}` : 'there'} (${n} fields).`);
+      return ok(`${x.c.plants.list[sp].name} is sown ${st ? `by ${st.name}` : 'there'} (${n} cell${n === 1 ? '' : 's'})${st ? `; their farmers grow it now${before && before !== x.c.plants.list[sp].name.toLowerCase() ? ` instead of ${before}` : ''}` : ''}.`);
     }
     return fail('Introduce what? Give item, idea, artifact, animal, crop or disease.');
   }, {
@@ -436,14 +566,68 @@ export function registerPeopleCommands(r: CommandRegistry): void {
       settlement: { type: 'any' }, pos: pos(), item: { type: 'enum', values: itemsEnum }, artifact: { type: 'enum', values: itemsEnum },
       idea: { type: 'enum', values: recipesEnum }, animal: { type: 'enum', values: animalIds },
       crop: { type: 'enum', values: (u) => u.content.plants.ids() }, disease: { type: 'enum', values: (u) => u.content.diseases.ids() },
-      qty: { type: 'number', min: 1, max: 1e6 },
+      qty: { type: 'number', min: 1, max: 1e6 }, force: { type: 'boolean', default: false, desc: 'an idea: insist (they learn it willing or not)' },
     },
   });
 
-  r.register('settlement.withdraw', ({ u, p }, a) => {
+  r.register('settlement.withdraw', ({ u, p, cmd }, a) => {
     const x = makeCtx(u, p);
+    // from the whole world: every settlement, and the land itself
+    if (a.everywhere === true) {
+      const msgs: string[] = [];
+      let okAny = false;
+      for (const st of x.ps.settlements.filter((q) => q.fallen < 0)) {
+        const res = withdrawFrom(u, p, x, st, a, cmd.god);
+        if (res.ok) okAny = true;
+        if (res.msg && msgs.length < 4) msgs.push(res.msg);
+      }
+      if (a.crop) {
+        const sp = x.c.plants.idx(String(a.crop));
+        let n = 0;
+        for (let c = 0; c < p.count; c++) if (p.f.cropSpecies[c] === sp) { p.f.cropSpecies[c] = -1; p.f.crop[c] = 0; n++; }
+        if (n) { okAny = true; p.bump('crop'); p.bump('cropSpecies'); p.vegDirty = true; msgs.push(`${n} fields of ${x.c.plants.list[sp].name.toLowerCase()} wither away.`); }
+      }
+      if (a.item) {
+        const it = x.c.items.idx(String(a.item));
+        const before = x.ps.items.length;
+        x.ps.items = x.ps.items.filter((g) => { if (g.item !== it) return true; x.ps.iByCell.remove(g.cell, g.id); return false; });
+        if (x.ps.items.length !== before) { okAny = true; x.ps.version++; }
+      }
+      return okAny ? ok(msgs.join(' ') || 'It is taken from the world.') : fail(msgs[0] ?? 'There was nothing of it to take.');
+    }
     const st = findSettlement(x, a);
     if (!st) return fail('Withdraw from whom? Name a settlement or point at one.');
+    return withdrawFrom(u, p, x, st, a, cmd.god);
+  }, {
+    desc: 'Take something back: an item, an idea, a crop, a law, or a sickness (from a settlement, or from the whole world)', category: 'Ideas',
+    params: {
+      settlement: { type: 'any' }, pos: pos(), item: { type: 'enum', values: itemsEnum }, idea: { type: 'enum', values: recipesEnum },
+      crop: { type: 'enum', values: (u) => u.content.plants.ids() }, law: { type: 'any', desc: 'a law the god gave (or "all")' },
+      disease: { type: 'enum', values: (u) => u.content.diseases.ids() }, everywhere: { type: 'boolean', default: false },
+    },
+  });
+  /** (the single-settlement withdraw, kept for the everywhere form above) */
+  const withdrawFrom = (u: Universe, p: Planet, x: PCtx, st: Settlement, a: Record<string, unknown>, god: unknown): CommandResult => {
+    if (a.law !== undefined) return r.dispatch(u, { k: 'settlement.law', settlement: st.id, law: String(a.law), on: false, planet: p.id, god });
+    if (a.disease !== undefined) return r.dispatch(u, { k: 'life.cure', settlement: st.id, disease: String(a.disease), planet: p.id, god });
+    if (a.crop) {
+      const sp = x.c.plants.idx(String(a.crop));
+      if (sp < 0) return fail(`'${a.crop}' is not a crop.`);
+      let n = 0;
+      for (const c of p.cellsNear(st.pos, st.territory + 300)) if (p.f.cropSpecies[c] === sp) { p.f.cropSpecies[c] = -1; p.f.crop[c] = 0; n++; }
+      st.fields = st.fields.filter((c) => p.f.cropSpecies[c] !== -1 || p.f.crop[c] > 0);
+      const had = st.crop === sp;
+      if (had) st.crop = -1;
+      // the seed itself is taken from their stores too
+      const seed = x.c.items.idx(String(a.crop));
+      if (seed >= 0) storeTake(st, seed, storeHas(st, seed));
+      p.bump('crop'); p.bump('cropSpecies'); p.vegDirty = true;
+      witness(p, st.pos, st.territory + 100, 'harm', 0.2);
+      return n || had ? ok(`${x.c.plants.list[sp].name} is taken from ${st.name}: ${n} field${n === 1 ? '' : 's'} wither${n === 1 ? 's' : ''}${had ? ', and they will have to choose another crop' : ''}.`) : fail(`${st.name} grows no ${x.c.plants.list[sp].name.toLowerCase()}.`);
+    }
+    return withdrawOld(u, p, x, st, a);
+  };
+  const withdrawOld = (u: Universe, p: Planet, x: PCtx, st: Settlement, a: Record<string, unknown>): CommandResult => {
     if (a.idea) {
       const k = x.rt.byId.get(String(a.idea))!;
       const members = x.ps.members.get(st.id) ?? [];
@@ -455,6 +639,7 @@ export function registerPeopleCommands(r: CommandRegistry): void {
       if (it < 0) return fail(`There is no such thing as '${a.item}'.`);
       const had = storeHas(st, it);
       storeTake(st, it, had);
+      const before = x.ps.items.length;
       const keep: typeof x.ps.items = [];
       for (const g of x.ps.items) {
         if (g.item === it && distM(p, g.pos, st.pos) < st.territory + 100) x.ps.iByCell.remove(g.cell, g.id);
@@ -462,10 +647,10 @@ export function registerPeopleCommands(r: CommandRegistry): void {
       }
       x.ps.items = keep;
       x.ps.version++;
-      return ok(`${x.c.items.list[it].name} vanishes from ${st.name}${had ? ` (${had.toFixed(0)} taken)` : ''}.`);
+      return had || keep.length !== before ? ok(`${x.c.items.list[it].name} vanishes from ${st.name}${had ? ` (${had.toFixed(0)} taken)` : ''}.`) : fail(`${st.name} has no ${x.c.items.list[it].name.toLowerCase()}.`);
     }
-    return fail('Withdraw what? Give an item or an idea.');
-  }, { desc: 'Take something back', category: 'Ideas', params: { settlement: { type: 'any' }, pos: pos(), item: { type: 'enum', values: itemsEnum }, idea: { type: 'enum', values: recipesEnum } } });
+    return fail('Withdraw what? Give an item, an idea, a crop, a law or a sickness.');
+  };
 
   r.register('settlement.rename', ({ u, p }, a) => {
     const x = makeCtx(u, p);
@@ -480,13 +665,25 @@ export function registerPeopleCommands(r: CommandRegistry): void {
   r.register('settlement.found', ({ u, p }, a) => {
     const x = makeCtx(u, p);
     const at = a.pos as UnitVec;
-    const band = x.ps.settlements.filter((st) => st.band && st.fallen < 0).sort((q, w) => distM(p, q.pos, at) - distM(p, w.pos, at) || q.id - w.id)[0];
-    if (!band) return fail('There is no wandering band to settle.');
-    let cell = p.cellAt(at);
-    if (siteScore(x, band.species, cell, band.id) < 0) cell = landingCell(x, band.species, cell, 3);
-    found(x, band, cell, null);
-    return ok(`The band settles: ${band.name}.`, [settlementRef(x, band)]);
-  }, { desc: 'Settle the nearest band here', category: 'Peoples', params: { pos: pos(true) } });
+    // a wandering band nearby (within a few kilometres) settles here; with none, the god sets a founding people down
+    const band = a.species === undefined ? x.ps.settlements.filter((st) => st.band && st.fallen < 0 && distM(p, st.pos, at) < 4000).sort((q, w) => distM(p, q.pos, at) - distM(p, w.pos, at) || q.id - w.id)[0] : undefined;
+    if (band) {
+      let cell = p.cellAt(at);
+      if (siteScore(x, band.species, cell, band.id) < 0) cell = landingCell(x, band.species, cell, 3);
+      found(x, band, cell, null);
+      return ok(`The band settles: ${band.name}.`, [settlementRef(x, band)]);
+    }
+    const sp = typeof a.species === 'string' ? a.species : plausibleSpecies(x, at);
+    if (!sp) return fail(`No people could live ${p.st.atmosphere.pressure < 0.05 ? 'without air' : 'there'}: give ${p.name} air, water and plants first.`);
+    const st = spawnPeople(u, p, { species: sp, count: a.count as number, pos: at, era: (a.era as string) ?? 'stone', settled: true });
+    if (!st) return fail(`${x.c.species.get(sp).name} could not be set down there.`);
+    tell(u, p, 'found.god', vars(x, st, -1, { text: `The god set ${a.count} ${x.c.species.get(sp).plural.replace(/^the /, '')} down and bade them build: ${st.name} was founded.` }), st, [settlementRef(x, st)], 2);
+    witness(p, st.pos, 600, 'wonder', 0.5);
+    return ok(`${st.name} is founded: ${a.count} ${x.c.species.get(sp).plural.replace(/^the /, '')} set down to build it.`, [settlementRef(x, st)]);
+  }, {
+    desc: 'Found a settlement here (a nearby band settles; else a founding people is set down)', category: 'Peoples',
+    params: { pos: pos(true), species: { type: 'enum', values: speciesEnum }, count: { type: 'int', min: 2, max: 2000, default: 12 }, era: { type: 'enum', values: [...ERAS] } },
+  });
 
   r.register('settlement.raze', ({ u, p }, a) => {
     const x = makeCtx(u, p);

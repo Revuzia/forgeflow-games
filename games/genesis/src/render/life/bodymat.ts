@@ -540,6 +540,8 @@ ${BODY_ANIM_GLSL}
 attribute vec3 iColA;
 attribute vec3 iColB;
 attribute vec3 iColC;
+attribute float iFade;
+varying float vFade;
 varying vec3 vBodyPos;
 varying vec3 vColA;
 varying vec3 vColB;
@@ -572,6 +574,7 @@ varying float vPart;
 varying float vAO;
 varying vec3 vLocal;
 varying float vStyle;
+varying float vFade;
 float bodyCloudShadow(vec3 P, vec3 sunB) {
   if (uCloudOn < 0.5) return 1.0;
   float mid = 0.5 * (uCloudShell.x + uCloudShell.y);
@@ -584,6 +587,11 @@ float bodyCloudShadow(vec3 P, vec3 sunB) {
 `;
 
 const FRAG_SURFACE = /* glsl */ `
+  // LOD cross-fade (crowds.ts / animals.ts): the two LODs share the pixels of a screen-space dither across the band
+  if (vFade < 0.999) {
+    float hd = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    if (vFade >= 0.0 ? hd >= vFade : hd < 1.0 + vFade) discard;
+  }
   int part = int(vPart + 0.5);
   int st = int(vStyle + 0.5);
   float fwL = length(fwidth(vLocal));
@@ -721,12 +729,15 @@ export function makeBodyMaterial(shared: Record<string, IUniform>, animTime: IUn
       .replace('#include <project_vertex>', `#include <project_vertex>
   vBodyPos = (instanceMatrix * vec4(transformed, 1.0)).xyz;
   vColA = iColA; vColB = iColB; vColC = iColC;
-  vPart = aRig.w; vAO = aSel.w; vLocal = position; vStyle = iStyle.x;`);
+  vPart = aRig.w; vAO = aSel.w; vLocal = position; vStyle = iStyle.x; vFade = 1.0 - iFade;`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\n${FRAG_PARS}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_SURFACE}`)
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = bRough;')
       .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = bMetal;')
+      // a skinned normal can turn away from the eye where a joint bends hard (blended between two bones): reflected
+      // back toward the viewer it shades as the surface it is, instead of a pale Fresnel glow on a bent shin or hem
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n  { vec3 vv = normalize(vViewPosition); float nv = dot(normal, vv); if (nv < 0.0) normal = normalize(normal - 1.05 * nv * vv); }')
       .replace('#include <emissivemap_fragment>', 'totalEmissiveRadiance = bEmit;')
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${FRAG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${FRAG_AMBIENT}`);

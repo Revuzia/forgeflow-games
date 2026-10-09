@@ -312,6 +312,8 @@
     { "id": "quarantine", "name": "Quarantine", "kind": "idea", "inputs": [], "tools": [], "place": {}, "knowledge": ["medicine", "law"], "outputs": [], "time": 0, "skill": "heal",
       "discover": { "base": 0.006, "triggers": ["plague", "death"], "curiosity": 0.5 }, "teach": 0.35, "era": "medieval", "effect": { "contagion": 0.5 } },
     { "id": "vaccination", "name": "Vaccination", "kind": "idea", "inputs": [], "tools": [], "place": {}, "knowledge": ["medicine", "chemistry", "lenses"], "outputs": [], "time": 0, "skill": "heal",
-      "discover": { "base": 0.003, "triggers": ["plague", "lab"], "curiosity": 0.7 }, "teach": 0.55, "era": "steam", "effect": { "mortality": 0.3, "contagion": 0.6 } }
+      "discover": { "base": 0.003, "triggers": ["plague", "lab"], "curiosity": 0.7 }, "teach": 0.55, "era": "steam", "effect": { "mortality": 0.3, "contagion": 0.6 } },
+    { "id": "forestry", "name": "Forestry", "kind": "idea", "desc": "Tending and replanting the woods: cut, and plant again (the god layer regrows a forestry settlement's woods).", "inputs": [], "tools": [], "place": {}, "knowledge": ["woodcutting"], "outputs": [], "time": 0, "skill": "gather",
+      "discover": { "base": 0.002, "triggers": ["miracle-forest", "forest"], "curiosity": 0.4 }, "teach": 0.3, "era": "clay", "effect": { "yield.forage": 1.05 } }
   ]
 }

@@ -9,7 +9,7 @@
 // It reads the WorldView and a CameraPose; it never writes the world.
 
 import {
-  Frustum, Matrix3, Matrix4, NoToneMapping, PerspectiveCamera, Quaternion, Scene, Vector2, Vector3, WebGLRenderer, type IUniform,
+  Frustum, Matrix3, Matrix4, NoToneMapping, PerspectiveCamera, Quaternion, Scene, Vector2, Vector3, Vector4, WebGLRenderer, type IUniform,
 } from 'three';
 import type { WorldView, PlanetView } from '../client/worldview.ts';
 import { PlanetVisual } from './planet/planetview.ts';
@@ -25,6 +25,7 @@ import { OrbitLines } from './orbitlines.ts';
 import { FullscreenQuad } from './post/fsquad.ts';
 import { PostPipeline, type PostSettings, type SunScreen } from './post/pipeline.ts';
 import { GtaoPass, aoFor } from './post/gtao.ts';
+import { FX_EXPOSURE } from './fx/particles.ts';
 import { QUALITY, type Quality, type QualityName } from './quality.ts';
 import { nearestPlanet, sunIlluminance, type CameraPose } from './frame.ts';
 import { blackbody } from '../client/orbits.ts';
@@ -35,6 +36,13 @@ export interface RenderStats {
   frameMs: number;
   gpuPatches: number;
   waterPatches: number;
+  /** draw calls / triangles per pass this frame (shadow cascades, opaque scene, water) and patches the local horizon culled */
+  shadowCalls: number;
+  shadowTris: number;
+  sceneCalls: number;
+  sceneTris: number;
+  waterCalls: number;
+  horizonCulled: number;
   primary: string;
   altitude: number;
   renderW: number;
@@ -73,17 +81,24 @@ const _moonDir = new Vector3();
 const _moonE = new Vector3();
 const _moonB = new Vector3();
 const _moonK = new Vector3();
+const _moonEc = new Vector3();
 const _v3 = new Vector3();
 const _sunView = new Vector3();
 /** weather / shadow cube face size per preset (cloud steps → resolution) */
 const WX_RES = (steps: number): number => (steps <= 24 ? 96 : steps <= 32 ? 128 : steps <= 48 ? 192 : 256);
 /**
  * Moonlight, art-directed: the brightest other body in the sky (albedo × Lambert-sphere phase × apparent size²) at a
- * fixed boost (a full moon of the Moon's apparent size gives 0.6 % of the sun), capped at 1.2 % of the sun. Real
+ * fixed boost (a full moon of the Moon's apparent size gives ~1.4 % of the sun), capped at 2.8 % of the sun. Real
  * moonlight is ~10⁻⁶ of the sun; a game night must stay readable.
  */
-const MOON_BOOST = 2500;
-const MOON_CAP = 0.012;
+const MOON_BOOST = 6000;
+const MOON_CAP = 0.028;
+/** the moonlit SKY and the clouds keep the earlier, dimmer level (0.012 of the sun): a night sky as bright as the
+ * ground's moonlight read as twilight, and moonlit cloud decks crowded the night side seen from orbit. The ground,
+ * buildings, trees and people take the full moonlight: with the orange town spill gone, at 0.012 a moonlit village
+ * sank to black under the night exposure ceiling and only its windows showed. */
+const MOON_SKY_SHARE = 0.43;
+const MOON_CLOUD_SHARE = 0.19;
 
 export class Renderer {
   readonly three: WebGLRenderer;
@@ -103,7 +118,10 @@ export class Renderer {
   readonly planets = new Map<number, PlanetVisual>();
   readonly waterScene: Record<string, IUniform> = makeWaterSceneUniforms();
   readonly settings: PostSettings = { bloom: 0.045, godRays: true, fxaa: true, grain: 0.02, vignette: 0.22, flare: 1, exposureBias: 0, manualExposure: 0 };
-  readonly stats: RenderStats = { drawCalls: 0, triangles: 0, frameMs: 0, gpuPatches: 0, waterPatches: 0, primary: '', altitude: 0, renderW: 0, renderH: 0 };
+  readonly stats: RenderStats = {
+    drawCalls: 0, triangles: 0, frameMs: 0, gpuPatches: 0, waterPatches: 0, shadowCalls: 0, shadowTris: 0, sceneCalls: 0, sceneTris: 0, waterCalls: 0,
+    horizonCulled: 0, primary: '', altitude: 0, renderW: 0, renderH: 0,
+  };
   /** cloud / atmosphere / UI switches for photo mode and tests */
   showOrbits = true;
   /** terrain debug view: 0 off, 1 normals, 2 albedo, 3 no bump, 4 macro normals */
@@ -266,6 +284,7 @@ export class Renderer {
     }
     // ── the sun's elevation at the camera (exposure, grade, AO) and the moon over the primary planet ──
     const camSunEl = this.camSunElevation(primaryVis);
+    this.forestAtCamera(view, primaryVis);
     const moonOn = primaryVis ? this.moonLight(view, primaryVis, starCol) : false;
     // ── cloud weather of the primary planet: organised and baked (weather + shadow cubes) BEFORE the scene, whose
     // materials read the cloud-shadow cube ──
@@ -311,6 +330,7 @@ export class Renderer {
     this.stats.altitude = alt;
     this.stats.primary = primaryPv?.name ?? '';
     const wantShadows = !!primaryVis && q.shadowCascades > 0 && alt < 3500;
+    const callsPre = r.info.render.calls, trisPre = r.info.render.triangles;
     if (primaryVis) primaryVis.uniforms.uShadowOn.value = wantShadows ? 1 : 0;
     if (wantShadows && primaryVis) {
       const pv = primaryVis.pv;
@@ -319,10 +339,12 @@ export class Renderer {
       const near = Math.max(0.5, Math.min(alt * 0.2, 50));
       this.shadows.fit(cam, _sun, q.shadowCascades, near, far, Math.min(4000, pv.params.radius));
       const vis = primaryVis;
-      this.shadows.render(r, this.scene, (depth) => vis.swapDepth(depth));
+      this.shadowCull(vis, camSunEl);
+      this.shadows.render(r, this.scene, (depth) => vis.swapDepth(depth), this.perCascade);
     } else {
       this.shadows.uniforms.uShadowOn.value = 0;
     }
+    const callsShadow = r.info.render.calls, trisShadow = r.info.render.triangles;
 
     // ── opaque scene → HDR ──
     const post = this.post;
@@ -330,6 +352,20 @@ export class Renderer {
     r.setRenderTarget(post.hdr);
     r.setClearColor(0x000000, 1);
     r.render(this.scene, cam);
+    const callsScene = r.info.render.calls, trisScene = r.info.render.triangles;
+    // contact shadows (GTAO, Medium+) from the OPAQUE depth, before the water is drawn: computed after the water, the
+    // sheet's edge against the beach was a crease it darkened — a dashed black line along every waterline — and the
+    // water surface itself took AO. (aoFactor weighs each AO sample by depth, so water pixels, whose depth is the
+    // sheet's, keep their light.)
+    const aoS = q.ssao ? aoFor(q.name) : null;
+    if (aoS) {
+      if (primaryVis) _sunView.copy(primaryVis.uniforms.uSunDirView.value as Vector3); else _sunView.set(0, 0, -1);
+      const ss = (a: number, b: number, x: number) => smoothstepN(a, b, x);
+      // sky / direct-sun irradiance: ~0.13 under a high sun (the sky fill is art-directed down, atmosphere.ts
+      // SKY_FILL), the sky wins as the sun sets
+      const skyRatio = 0.13 + 0.87 * (1 - ss(0.0, 0.45, camSunEl));
+      this.gtao.compute(r, this.fsq, aoS, post.depthTexture, cam.projectionMatrixInverse, cam.projectionMatrix, cam.far, post.w, post.h, this.frameNo, _sunView, skyRatio, ss(-0.02, 0.06, camSunEl));
+    }
     // ── water (reads copies of colour and linear depth) ──
     post.copyForWater(r, this.fsq, cam.far);
     this.waterScene.tSceneColor.value = post.sceneCopy.texture;
@@ -349,6 +385,12 @@ export class Renderer {
       r.autoClear = true;
       cam.layers.set(0);
     }
+    this.stats.shadowCalls = callsShadow - callsPre;
+    this.stats.shadowTris = trisShadow - trisPre;
+    this.stats.sceneCalls = callsScene - callsShadow;
+    this.stats.sceneTris = trisScene - trisShadow;
+    // (the scene copies between are two full-screen draws)
+    this.stats.waterCalls = Math.max(0, r.info.render.calls - callsScene - 2);
 
     // ── clouds + atmosphere composites ──
     _invProj.copy(cam.projectionMatrixInverse);
@@ -357,19 +399,11 @@ export class Renderer {
     // contact shadows (GTAO, Medium+) on the ambient share of the lit scene, before aerial perspective and clouds:
     // folded into the first atmosphere composite; without air applied here and written back into post.hdr (via atmoB),
     // so passes that draw into post.hdr when no atmosphere runs still start from it
-    const aoS = q.ssao ? aoFor(q.name) : null;
     const atmoVis = _atmoList;
     atmoVis.length = 0;
     for (const v of this.planets.values()) if (v.atmo.has && this.shellVisible(v, pose)) atmoVis.push(v);
     atmoVis.sort((a, b) => this.distOf(b, pose) - this.distOf(a, pose));
-    if (aoS) {
-      if (primaryVis) _sunView.copy(primaryVis.uniforms.uSunDirView.value as Vector3); else _sunView.set(0, 0, -1);
-      const ss = (a: number, b: number, x: number) => smoothstepN(a, b, x);
-      // sky / direct-sun irradiance: ~0.2 under a high sun, the sky wins as the sun sets
-      const skyRatio = 0.2 + 0.8 * (1 - ss(0.0, 0.45, camSunEl));
-      this.gtao.compute(r, this.fsq, aoS, post.depthTexture, cam.projectionMatrixInverse, cam.projectionMatrix, cam.far, post.w, post.h, this.frameNo, _sunView, skyRatio, ss(-0.02, 0.06, camSunEl));
-      if (atmoVis.length === 0) this.gtao.apply(r, this.fsq, aoS, post.depthTexture, cam.projectionMatrixInverse, cam.far, post.w, post.h, post.hdr.texture, post.atmoB, post.hdr);
-    }
+    if (aoS && atmoVis.length === 0) this.gtao.apply(r, this.fsq, aoS, post.depthTexture, cam.projectionMatrixInverse, cam.far, post.w, post.h, post.hdr.texture, post.atmoB, post.hdr);
     let outIdx = 0;
     let firstComposite = true;
     for (const vis of atmoVis) {
@@ -383,7 +417,9 @@ export class Renderer {
         this.clouds.render(r, this.fsq, {
           depth: post.depthTexture, invProj: _invProj, camRot: _camRot, worldToBody: w2b, far: cam.far, planetPos, sunDir,
           innerR: vis.cloudInner, outerR: vis.cloudOuter, frame: this.frameNo, altitude: vis.camBody.length() - pv.params.radius, radius: pv.params.radius,
-          bodyToClip: _bodyToClip, planetId: pv.id, moonDir: moonOn ? _moonDir : undefined, moonE: moonOn ? _moonE : undefined,
+          // (clouds take a fifth of the art-directed moonlight: at full strength the night side from orbit was a field
+          // of bright grey cloud blocks around the cities, which should be what the night shows)
+          bodyToClip: _bodyToClip, planetId: pv.id, moonDir: moonOn ? _moonDir : undefined, moonE: moonOn ? _moonEc.copy(_moonE).multiplyScalar(MOON_CLOUD_SHARE) : undefined,
         }, q.cloudSteps, q.cloudLightSteps);
       }
       const m = this.atmoPass.material;
@@ -407,7 +443,7 @@ export class Renderer {
       (u.uMoonDir.value as Vector3).copy(_moonDir);
       if (moonOn && vis === primaryVis) {
         const se = vis.atmo.uniforms.uSunE.value;
-        (u.uMoonK.value as Vector3).set(_moonE.x / Math.max(se.x, 1e-6), _moonE.y / Math.max(se.y, 1e-6), _moonE.z / Math.max(se.z, 1e-6));
+        (u.uMoonK.value as Vector3).set(_moonE.x / Math.max(se.x, 1e-6), _moonE.y / Math.max(se.y, 1e-6), _moonE.z / Math.max(se.z, 1e-6)).multiplyScalar(MOON_SKY_SHARE);
       } else (u.uMoonK.value as Vector3).set(0, 0, 0);
       u.uCloudRes.value.set(this.clouds.target.width, this.clouds.target.height);
       u.uCloudShell.value.set(vis.cloudInner, vis.cloudOuter);
@@ -424,8 +460,12 @@ export class Renderer {
       // the haze ramps with distance: ground 50–300 m away stays crisp (0.03), the far hills fade in by ~2 km (0.12)
       const orbitK = Math.min(1, Math.max(0, (altP - thick) / (thick * 4)));
       u.uApScale.value = 0.1 + 0.08 * orbitK;
-      u.uApRamp.value.set(0.025 + (0.1 + 0.08 * orbitK - 0.025) * orbitK, 300, 2400);
+      // (a camera near the ground: the first ~450 m stay nearly clear — at 0.025 from 0 m a veil of blue lay over
+      // every settlement view at 60–150 m and flattened it)
+      u.uApRamp.value.set(0.012 + (0.1 + 0.08 * orbitK - 0.012) * orbitK, 450 - 150 * orbitK, 2400);
       u.uCloudHaze.value = 0.3 + 0.7 * orbitK;
+      // inside a wood (the primary planet, the camera under its canopy height): the haze between the trunks
+      (u.uForest.value as Vector4).set(vis === primaryVis ? this.forestK : 0, this.forestCamH, 18, 0);
       const target = outIdx === 0 ? post.atmoA : post.atmoB;
       this.fsq.render(r, m, target);
       input = target.texture;
@@ -433,6 +473,7 @@ export class Renderer {
     }
     // ── fire, smoke and embers over the composited image (render/fx/particles.ts via the life layer): after the
     // atmosphere, so smoke against the sky is never taken for stars, with soft depth from the linear depth copy ──
+    FX_EXPOSURE.value = post.exposureTexture();
     if (primaryVis) primaryVis.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
 
     // ── white balance: like a camera set to "daylight here", neutralise the sun's colour at ~50° elevation on the
@@ -451,10 +492,19 @@ export class Renderer {
     {
       const el = this.sunElevation;
       const night = 1 - smoothstepN(-0.15, -0.02, el);
-      const key = el >= 0 ? 0.095 + 0.038 * smoothstepN(0.0, 0.25, el) : 0.095 + (0.013 - 0.095) * night;
+      let key = el >= 0 ? 0.095 + 0.038 * smoothstepN(0.0, 0.25, el) : 0.095 + (0.013 - 0.095) * night;
+      // from orbit over the night side (the sun's elevation at the camera reads 1 there): a darker key, or the auto
+      // exposure meters the few lit pixels — the cities — up to mid-grey and their cores clip to a white blob
+      if (primaryVis && primaryVis.atmo.has && primaryVis.altitude >= primaryVis.atmo.thickness * 1.5) {
+        const sub = _up.copy(primaryVis.camBody).normalize().dot(primaryVis.uniforms.uSunDirBody.value as Vector3);
+        const orbitNight = (1 - smoothstepN(-0.35, 0.05, sub)) * smoothstepN(primaryVis.atmo.thickness * 1.5, primaryVis.atmo.thickness * 3, primaryVis.altitude);
+        key += (0.05 - key) * orbitNight;
+      }
       post.setKey(key);
       post.setMetering(0.02, Math.exp(Math.log(6) + (Math.log(5) - Math.log(6)) * night), Math.exp(Math.log(0.004) + (Math.log(0.0002) - Math.log(0.004)) * night));
     }
+    // bloom: half by day (a veil), full at dusk and night where lamps, windows and fire should glow
+    post.bloomScale = 0.5 + 0.5 * (1 - smoothstepN(-0.02, 0.15, this.sunElevation));
     // golden-hour grade: strongest with the sun a few degrees up, gone by mid-morning and in full night
     {
       const el = this.sunElevation;
@@ -479,6 +529,59 @@ export class Renderer {
   sunElevation = 1;
   /** moonlight on the primary planet as a fraction of its sunlight (dev HUD / probes) */
   moonRatio = 0;
+
+  // ── shadow cascades: what each cascade draws ──
+  private cullVis: PlanetVisual | null = null;
+  private cullMargin = 50;
+  private readonly cullView = new Vector3();
+  private readonly hiddenSmall: { visible: boolean }[] = [];
+  private shadowCull(vis: PlanetVisual, sunEl: number): void {
+    this.cullVis = vis;
+    // terrain throws its shadows over about (relief ÷ tan elevation) — for ~40 m of relief, ~50 m at mid-morning, a few
+    // hundred at sunset
+    const el = Math.max(0.05, Math.min(1, sunEl));
+    this.cullMargin = Math.min(450, Math.max(40, (40 * Math.sqrt(1 - el * el)) / el));
+    // the view direction in the body frame
+    this.cullView.set(0, 0, -1).applyQuaternion(this.camera.quaternion).applyQuaternion(_q4.copy(vis.group.quaternion).invert());
+  }
+  /** before cascade k: the ground nearer than the previous split (less the shadow reach) stays out; people and animals
+   * only in the first two cascades (a texel of the last is metres wide); k < 0 restores everything */
+  private readonly perCascade = (k: number): void => {
+    const vis = this.cullVis;
+    if (!vis) return;
+    const sh = this.shadows;
+    const near = k >= 1 ? sh.splits[k - 1] - this.cullMargin : 0;
+    vis.lod.shadowCascade(k, vis.camBody, this.cullView, near);
+    if (k === 2 || (k < 0 && this.hiddenSmall.length)) {
+      if (k === 2) {
+        for (const name of ['crowds', 'animals']) {
+          const o = vis.group.getObjectByName(name);
+          if (o && o.visible) { o.visible = false; this.hiddenSmall.push(o); }
+        }
+      } else {
+        for (const o of this.hiddenSmall) o.visible = true;
+        this.hiddenSmall.length = 0;
+      }
+    }
+  };
+
+  /** canopy density around the camera (0 above the treetops or out of the woods) and the camera's height above ground */
+  private forestK = 0;
+  private forestCamH = 0;
+  private forestAtCamera(view: WorldView, vis: PlanetVisual | null): void {
+    this.forestK = 0;
+    if (!vis || !vis.atmo.has || vis.altitude > 400) return;
+    const pv = vis.pv;
+    const tree = pv.fields.get('tree');
+    if (!tree) return;
+    const c = vis.camBody;
+    const rc = c.length() || 1;
+    const ux = c.x / rc, uy = c.y / rc, uz = c.z / rc;
+    const h = rc - view.groundRadius(pv, ux, uy, uz);
+    this.forestCamH = Math.max(0, h);
+    const t = pv.grid.sample(tree, ux, uy, uz);
+    this.forestK = smoothstepN(0.35, 0.8, t) * (1 - smoothstepN(14, 30, h));
+  }
 
   /** the same sine, available before the post section (the AO's sun share needs it) */
   private camSunElevation(primary: PlanetVisual | null): number {
@@ -513,7 +616,10 @@ export class Renderer {
       const I = albedo * phase * (R / d) * (R / d) * (sunIlluminance(view.star.luminosity, dm) / Math.max(1e-6, sunIlluminance(view.star.luminosity, Math.hypot(pv.center[0], pv.center[1], pv.center[2]) || 1)));
       if (I > best) { best = I; _moonDir.set(dx / d, dy / d, dz / d); }
     }
-    const ratio = Math.min(MOON_CAP, best * MOON_BOOST);
+    // (art-directed for the ground: from orbit the night side is the cities' — at full strength moonlit snow and ice
+    // glowed blue-white beside them once the exposure metered on the few lit pixels)
+    const orbitDim = 1 - 0.7 * smoothstepN(vis.atmo.thickness * 2, vis.atmo.thickness * 6, vis.altitude);
+    const ratio = Math.min(MOON_CAP, best * MOON_BOOST) * orbitDim;
     this.moonRatio = ratio;
     const dist = Math.hypot(pv.center[0], pv.center[1], pv.center[2]) || 1;
     const E = sunIlluminance(view.star.luminosity, dist);
@@ -530,6 +636,9 @@ export class Renderer {
     // every material also gets a moonlit sky's share of its night ambient while the moon is up at the camera (the
     // direct moonlight itself is the uMoonE term in terrain, buildings, roads, trees, bodies — shaders/moon.glsl.ts)
     if (on) (u.uNightAmbient.value as Vector3).addScaledVector(_moonE, 0.22 * smoothstepN(-0.05, 0.25, elev));
+    // starlight and airglow (with air): a moonless night keeps buildings, trees, people and roads faintly readable in a
+    // cool grey-blue instead of black against the lit windows (planetview's base airglow is ~5× weaker)
+    if (vis.atmo.has) (u.uNightAmbient.value as Vector3).add(_v3.set(0.014, 0.019, 0.04).multiplyScalar(orbitDim));
     return on;
   }
   private wb = new Vector3(1, 1, 1);
@@ -603,10 +712,11 @@ export class Renderer {
     const info = this.three.info;
     this.stats.drawCalls = info.render.calls;
     this.stats.triangles = info.render.triangles;
-    let p = 0, w = 0;
-    for (const v of this.planets.values()) { p += v.lod.stats.patches; w += v.lod.stats.waterPatches; }
+    let p = 0, w = 0, hc = 0;
+    for (const v of this.planets.values()) { p += v.lod.stats.patches; w += v.lod.stats.waterPatches; hc += v.lod.stats.horizonCulled; }
     this.stats.gpuPatches = p;
     this.stats.waterPatches = w;
+    this.stats.horizonCulled = hc;
   }
 
   /** read the canvas as a PNG data URL right after a render (no preserveDrawingBuffer needed in the same task) */

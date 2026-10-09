@@ -384,7 +384,8 @@ function baobab(lod: number, variant: number): BufferGeometry {
   for (let i = 0; i <= rings; i++) {
     const t = i / rings;
     pts.push(new Vector3((rng.float() - 0.5) * 0.01, -0.05 + t * 0.6, (rng.float() - 0.5) * 0.01));
-    radii.push(0.1 + 0.05 * Math.sin(Math.PI * Math.min(1, t * 1.25)) - 0.05 * t * t);
+    // a massive, nearly cylindrical bole flaring at the foot, barely swelling (a swollen bottle read as a bowling pin)
+    radii.push(0.115 + 0.045 * Math.pow(1 - t, 4) + 0.012 * Math.sin(Math.PI * t) - 0.03 * t * t);
   }
   tube(m, pts, radii, [12, 8, 5][lod], bark, 0, 0.1, 0.55);
   const top = pts[pts.length - 1];
@@ -400,7 +401,7 @@ function baobab(lod: number, variant: number): BufferGeometry {
     const end = lp[lp.length - 1];
     const ed = end.clone().sub(lp[lp.length - 2]).normalize();
     // each limb forks into two or three, and those into twigs
-    const forks = lod === 2 ? 1 : 2 + (rng.float() < 0.4 ? 1 : 0);
+    const forks = lod === 2 ? 2 : 2 + (rng.float() < 0.4 ? 1 : 0);
     for (let f = 0; f < forks; f++) {
       const fd = deviate(ed, 0.5 + rng.float() * 0.3, (f / forks) * 6.28 + rng.float());
       fd.y = Math.max(fd.y, 0.15);
@@ -419,7 +420,8 @@ function baobab(lod: number, variant: number): BufferGeometry {
     }
   }
   const crown = top.clone().add(new Vector3(0, 0.16, 0));
-  for (const t of tips) cluster(m, rng, LEAF_TILE.smallSpray, t.p, t.d, [3, 2, 2][lod], [0.11, 0.15, 0.22][lod], crown, 0.4, 0.6, 0.5, 0.4);
+  // (the far LOD keeps the crown's mass: fewer, larger sprays on every fork)
+  for (const t of tips) cluster(m, rng, LEAF_TILE.smallSpray, t.p, t.d, [3, 2, 3][lod], [0.11, 0.15, 0.24][lod], crown, 0.4, 0.6, 0.5, 0.4);
   m.normalize();
   return m.build();
 }

@@ -81,11 +81,16 @@ test('clearing the skies everywhere clears every system and the planet-wide weat
   assert.equal(p.st.globalWeather, null);
   assert.equal(p.weather.length, 0);
   assert.ok(wet() < p.count * 0.5, `the rain stops now (${wet()} cells still wet-skied by the climate)`);
-  // a local clear with nothing there says so (and that the planet-wide weather would stay)
+  // a local clear with no system there, under a planet-wide weather: the sky the god looks at IS that weather, and it
+  // lifts (a clear that changed nothing would read as a broken word)
   sim.applyNow({ k: 'weather.global', kind: 'rain' });
   const local = sim.applyNow({ k: 'weather.clear', lat: -60, lon: 90, radius: 100 });
   assert.ok(local.ok);
-  assert.match(local.msg ?? '', /planet-wide weather stays/);
+  assert.match(local.msg ?? '', /planet-wide rain lifts/);
+  assert.equal(p.st.globalWeather, null);
+  // with no weather at all, it says there was none
+  const none = sim.applyNow({ k: 'weather.clear', lat: -60, lon: 90, radius: 100 });
+  assert.match(none.msg ?? '', /No weather|nothing|clear already|already clear/i);
 });
 
 test('storm winds survive the hourly climate pass on every planet (staggered clocks)', () => {

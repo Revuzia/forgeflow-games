@@ -1,0 +1,10237 @@
+{
+ "$comment": "Every user-facing god power (CONTRACT §11.1, §16): category (radial ring group), icon key, radial ring (0 inner .. 2 outer), gesture (unistroke: spiral water, zigzag lightning, double-zigzag storm, circle shield, triangle fire, v heal, wave forest, square food, star meteor, heart fertility, caret teach, line wood, tilde calm, arrow fireball), command + default params, the UI schema of what can be tuned (types, ranges, units, what it targets), synonyms for the freeform parser, restraint cost (worship) and cooldown (ticks), and what witnesses make of it when the handler does not say. Generated palettes, radial menus and the parser read this file; every power must map to a registered command (tests/content.test.ts).",
+ "powers": [
+  {
+   "id": "raise",
+   "name": "Raise land",
+   "category": "Shape",
+   "icon": "mountain",
+   "ring": 0,
+   "gesture": null,
+   "command": "terrain.raise",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "strength": {
+     "type": "number",
+     "min": 0,
+     "max": 1000,
+     "default": 15,
+     "desc": "metres at the centre",
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "raise",
+    "lift",
+    "uplift",
+    "heave",
+    "build up",
+    "raise the land",
+    "hill"
+   ],
+   "desc": "Lift the ground under the brush.",
+   "cost": 4,
+   "witness": {
+    "wonder": 0.25,
+    "radius": 400
+   }
+  },
+  {
+   "id": "lower",
+   "name": "Lower land",
+   "category": "Shape",
+   "icon": "valley",
+   "ring": 0,
+   "gesture": null,
+   "command": "terrain.lower",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "strength": {
+     "type": "number",
+     "min": 0,
+     "max": 1000,
+     "default": 15,
+     "desc": "metres at the centre",
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "lower",
+    "sink",
+    "dig",
+    "depress",
+    "lower the land",
+    "hollow"
+   ],
+   "desc": "Press the ground down.",
+   "cost": 4,
+   "witness": {
+    "wonder": 0.25,
+    "radius": 400
+   }
+  },
+  {
+   "id": "flatten",
+   "name": "Flatten",
+   "category": "Shape",
+   "icon": "flatten",
+   "ring": 0,
+   "gesture": null,
+   "command": "terrain.flatten",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "strength": {
+     "type": "number",
+     "min": 0,
+     "max": 1,
+     "default": 0.8,
+     "desc": "blend toward the level, 0..1",
+     "unit": "m"
+    },
+    "height": {
+     "type": "number",
+     "min": -2000,
+     "max": 2000,
+     "desc": "target height (m); default: the ground at the centre",
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "flatten",
+    "level",
+    "plane",
+    "even out"
+   ],
+   "desc": "Level the land to one height.",
+   "cost": 3,
+   "witness": {
+    "wonder": 0.15,
+    "radius": 300
+   }
+  },
+  {
+   "id": "smooth",
+   "name": "Smooth",
+   "category": "Shape",
+   "icon": "smooth",
+   "ring": 1,
+   "gesture": null,
+   "command": "terrain.smooth",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "strength": {
+     "type": "number",
+     "min": 0,
+     "max": 1,
+     "default": 0.8,
+     "desc": "blend toward the neighbours, 0..1",
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "smooth",
+    "soften",
+    "erode",
+    "round off"
+   ],
+   "desc": "Wear the land smooth.",
+   "cost": 3,
+   "witness": {
+    "wonder": 0.1,
+    "radius": 300
+   }
+  },
+  {
+   "id": "roughen",
+   "name": "Roughen",
+   "category": "Shape",
+   "icon": "rough",
+   "ring": 1,
+   "gesture": null,
+   "command": "terrain.noise",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "strength": {
+     "type": "number",
+     "min": 0,
+     "max": 500,
+     "default": 20,
+     "desc": "relief amplitude in metres",
+     "unit": "m"
+    },
+    "frequency": {
+     "type": "number",
+     "min": 0.1,
+     "max": 50,
+     "desc": "bumps per radius"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "roughen",
+    "crag",
+    "break up",
+    "rugged",
+    "bumpy"
+   ],
+   "desc": "Break the land into crags and knolls.",
+   "cost": 4,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 300
+   }
+  },
+  {
+   "id": "crater",
+   "name": "Crater",
+   "category": "Shape",
+   "icon": "crater",
+   "ring": 1,
+   "gesture": null,
+   "command": "terrain.crater",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "strength": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "desc": "depth multiplier (1 = natural)",
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "crater",
+    "blast",
+    "pit",
+    "hole"
+   ],
+   "desc": "Blast a crater (people nearby are hurt).",
+   "cost": 10,
+   "witness": {
+    "harm": 0.5,
+    "wonder": 0.3,
+    "radius": 600
+   }
+  },
+  {
+   "id": "mountains",
+   "name": "Mountain range",
+   "category": "Shape",
+   "icon": "peaks",
+   "ring": 1,
+   "gesture": null,
+   "command": "terrain.mountain-range",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "to": {
+     "type": "pos",
+     "target": "line",
+     "desc": "end of the range"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 220,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "height": {
+     "type": "number",
+     "min": 1,
+     "max": 1000,
+     "default": 260,
+     "unit": "m"
+    }
+   },
+   "target": "line",
+   "synonyms": [
+    "mountain",
+    "mountains",
+    "range",
+    "ridge",
+    "peaks",
+    "sierra",
+    "cordillera"
+   ],
+   "desc": "Raise a range of mountains along a line.",
+   "cost": 20,
+   "witness": {
+    "wonder": 0.6,
+    "radius": 1500
+   }
+  },
+  {
+   "id": "dig-sea",
+   "name": "Dig a sea",
+   "category": "Shape",
+   "icon": "sea",
+   "ring": 1,
+   "gesture": null,
+   "command": "terrain.dig-sea",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 500,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "depth": {
+     "type": "number",
+     "min": 1,
+     "max": 1000,
+     "default": 40,
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "dig a sea",
+    "basin",
+    "new sea",
+    "ocean",
+    "bay",
+    "gulf"
+   ],
+   "desc": "Dig a basin for a sea.",
+   "cost": 20,
+   "witness": {
+    "wonder": 0.5,
+    "radius": 1200
+   }
+  },
+  {
+   "id": "paint-sand",
+   "name": "Lay sand",
+   "category": "Shape",
+   "icon": "sand",
+   "ring": 2,
+   "gesture": null,
+   "command": "terrain.paint-material",
+   "params": {
+    "material": "sand",
+    "depth": 0.5
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "depth": {
+     "type": "number",
+     "min": -100,
+     "max": 500,
+     "default": 0.5,
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "sand",
+    "dune",
+    "desert sand",
+    "beach"
+   ],
+   "desc": "Lay a layer of sand over the land.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "harm": 0,
+    "radius": 400
+   }
+  },
+  {
+   "id": "paint-snow",
+   "name": "Lay snow",
+   "category": "Shape",
+   "icon": "snow",
+   "ring": 2,
+   "gesture": null,
+   "command": "terrain.paint-material",
+   "params": {
+    "material": "snow",
+    "depth": 0.5
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "depth": {
+     "type": "number",
+     "min": -100,
+     "max": 500,
+     "default": 0.5,
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "lay snow",
+    "snowfield",
+    "snowpack",
+    "snow cover",
+    "powder",
+    "cover in snow"
+   ],
+   "desc": "Lay a layer of snow over the land.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "harm": 0,
+    "radius": 400
+   }
+  },
+  {
+   "id": "paint-soil",
+   "name": "Lay soil",
+   "category": "Shape",
+   "icon": "soil",
+   "ring": 2,
+   "gesture": null,
+   "command": "terrain.paint-material",
+   "params": {
+    "material": "soil",
+    "depth": 0.5
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "depth": {
+     "type": "number",
+     "min": -100,
+     "max": 500,
+     "default": 0.5,
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "soil",
+    "earth",
+    "dirt",
+    "loam",
+    "topsoil"
+   ],
+   "desc": "Lay a layer of soil over the land.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "harm": 0,
+    "radius": 400
+   }
+  },
+  {
+   "id": "paint-ash",
+   "name": "Lay ash",
+   "category": "Shape",
+   "icon": "ash",
+   "ring": 2,
+   "gesture": null,
+   "command": "terrain.paint-material",
+   "params": {
+    "material": "ash",
+    "depth": 0.3
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "depth": {
+     "type": "number",
+     "min": -100,
+     "max": 500,
+     "default": 0.5,
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "ash",
+    "cinders",
+    "soot"
+   ],
+   "desc": "Lay a layer of ash over the land.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "harm": 0,
+    "radius": 400
+   }
+  },
+  {
+   "id": "paint-ice",
+   "name": "Lay ice",
+   "category": "Shape",
+   "icon": "ice",
+   "ring": 2,
+   "gesture": null,
+   "command": "terrain.paint-material",
+   "params": {
+    "material": "ice",
+    "depth": 2
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "depth": {
+     "type": "number",
+     "min": -100,
+     "max": 500,
+     "default": 0.5,
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "ice",
+    "glacier",
+    "ice sheet",
+    "frost"
+   ],
+   "desc": "Lay a layer of ice over the land.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "harm": 0,
+    "radius": 400
+   }
+  },
+  {
+   "id": "paint-rock",
+   "name": "Lay rock",
+   "category": "Shape",
+   "icon": "rock",
+   "ring": 2,
+   "gesture": null,
+   "command": "terrain.paint-material",
+   "params": {
+    "material": "rock",
+    "depth": 3
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "depth": {
+     "type": "number",
+     "min": -100,
+     "max": 500,
+     "default": 0.5,
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "rock",
+    "stone",
+    "bedrock"
+   ],
+   "desc": "Lay a layer of rock over the land.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "harm": 0,
+    "radius": 400
+   }
+  },
+  {
+   "id": "paint-lava",
+   "name": "Pour lava",
+   "category": "Shape",
+   "icon": "lava",
+   "ring": 2,
+   "gesture": null,
+   "command": "terrain.paint-material",
+   "params": {
+    "material": "lava",
+    "depth": 3
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "depth": {
+     "type": "number",
+     "min": -100,
+     "max": 500,
+     "default": 0.5,
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "lava",
+    "magma",
+    "molten rock"
+   ],
+   "desc": "Lay a layer of lava over the land.",
+   "cost": 15,
+   "witness": {
+    "wonder": 0.2,
+    "harm": 0.3,
+    "radius": 400
+   }
+  },
+  {
+   "id": "pin-biome",
+   "name": "Keep its nature",
+   "category": "Shape",
+   "icon": "pin",
+   "ring": 2,
+   "gesture": null,
+   "command": "life.pin-biome",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 400,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "on": {
+     "type": "boolean",
+     "default": true
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "pin",
+    "keep",
+    "hold the land",
+    "preserve",
+    "sanctuary"
+   ],
+   "desc": "Pin a region's biome so it never drifts back.",
+   "cost": 3
+  },
+  {
+   "id": "pour-water",
+   "name": "Pour water",
+   "category": "Water",
+   "icon": "water",
+   "ring": 0,
+   "gesture": null,
+   "command": "water.add",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "depth": {
+     "type": "number",
+     "min": 0,
+     "max": 1000,
+     "default": 2,
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "water",
+    "pour",
+    "pour water",
+    "add water",
+    "lake",
+    "pond",
+    "fill"
+   ],
+   "desc": "Pour water onto the land.",
+   "cost": 5,
+   "witness": {
+    "help": 0.2,
+    "wonder": 0.2,
+    "radius": 400
+   }
+  },
+  {
+   "id": "take-water",
+   "name": "Take water",
+   "category": "Water",
+   "icon": "dry",
+   "ring": 1,
+   "gesture": null,
+   "command": "water.remove",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "volume": {
+     "type": "number",
+     "min": 0,
+     "max": 1000000000000000,
+     "unit": "m³"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "take water",
+    "remove water",
+    "dry",
+    "empty"
+   ],
+   "desc": "Take water away.",
+   "cost": 5,
+   "witness": {
+    "harm": 0.1,
+    "wonder": 0.2,
+    "radius": 400
+   }
+  },
+  {
+   "id": "drain",
+   "name": "Drain",
+   "category": "Water",
+   "icon": "drain",
+   "ring": 1,
+   "gesture": null,
+   "command": "water.drain",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 250,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "drain",
+    "dry up",
+    "sink the water",
+    "empty the lake"
+   ],
+   "desc": "Drain every drop in a region.",
+   "cost": 8,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 500
+   }
+  },
+  {
+   "id": "rain",
+   "name": "Rain",
+   "category": "Water",
+   "icon": "rain",
+   "ring": 0,
+   "gesture": null,
+   "command": "water.rain",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 600,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": 10,
+     "max": 1000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.1,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "rain",
+    "shower",
+    "downpour",
+    "drizzle",
+    "make it rain",
+    "precipitation"
+   ],
+   "desc": "Make it rain.",
+   "cost": 6,
+   "witness": {
+    "help": 0.25,
+    "wonder": 0.15,
+    "radius": 800
+   }
+  },
+  {
+   "id": "flood",
+   "name": "Flood",
+   "category": "Water",
+   "icon": "flood",
+   "ring": 1,
+   "gesture": null,
+   "command": "water.flood",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 300,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "height": {
+     "type": "number",
+     "min": 0.1,
+     "max": 200,
+     "default": 4,
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "flood",
+    "deluge",
+    "inundate",
+    "overflow"
+   ],
+   "desc": "Burst water out over a region.",
+   "cost": 30,
+   "cooldown": 240,
+   "witness": {
+    "harm": 0.6,
+    "radius": 800
+   }
+  },
+  {
+   "id": "tsunami-wave",
+   "name": "Tidal wave",
+   "category": "Water",
+   "icon": "wave",
+   "ring": 2,
+   "gesture": null,
+   "command": "water.tsunami",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 350,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "height": {
+     "type": "number",
+     "min": 0.5,
+     "max": 300,
+     "default": 12,
+     "unit": "m"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "wave",
+    "tidal wave",
+    "wall of water",
+    "surge"
+   ],
+   "desc": "Raise a wall of water and send it at the shore.",
+   "cost": 40,
+   "cooldown": 480,
+   "witness": {
+    "harm": 0.8,
+    "radius": 1200
+   }
+  },
+  {
+   "id": "raise-seas",
+   "name": "Raise the seas",
+   "category": "Water",
+   "icon": "sea-up",
+   "ring": 1,
+   "gesture": null,
+   "command": "water.sea-level",
+   "params": {
+    "delta": 10
+   },
+   "schema": {
+    "delta": {
+     "type": "number",
+     "min": -5000,
+     "max": 5000,
+     "unit": "m"
+    },
+    "value": {
+     "type": "number",
+     "min": -5000,
+     "max": 5000,
+     "unit": "m"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "raise the sea",
+    "rising seas",
+    "sea rise",
+    "higher seas"
+   ],
+   "desc": "Raise the sea level.",
+   "cost": 40,
+   "witness": {
+    "wonder": 0.4
+   }
+  },
+  {
+   "id": "lower-seas",
+   "name": "Lower the seas",
+   "category": "Water",
+   "icon": "sea-down",
+   "ring": 1,
+   "gesture": null,
+   "command": "water.sea-level",
+   "params": {
+    "delta": -10
+   },
+   "schema": {
+    "delta": {
+     "type": "number",
+     "min": -5000,
+     "max": 5000,
+     "unit": "m"
+    },
+    "value": {
+     "type": "number",
+     "min": -5000,
+     "max": 5000,
+     "unit": "m"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "lower the sea",
+    "falling seas",
+    "sea fall",
+    "lower seas"
+   ],
+   "desc": "Lower the sea level.",
+   "cost": 40,
+   "witness": {
+    "wonder": 0.4
+   }
+  },
+  {
+   "id": "spring",
+   "name": "Spring",
+   "category": "Water",
+   "icon": "spring",
+   "ring": 1,
+   "gesture": null,
+   "command": "water.spring",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "rate": {
+     "type": "number",
+     "min": 0.1,
+     "max": 1000000,
+     "default": 40,
+     "desc": "m³ per tick",
+     "unit": "m³/tick"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": -1,
+     "unit": "ticks"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "spring",
+    "fountain",
+    "well up",
+    "source"
+   ],
+   "desc": "Open a spring.",
+   "cost": 6,
+   "witness": {
+    "help": 0.3,
+    "wonder": 0.3,
+    "radius": 400
+   }
+  },
+  {
+   "id": "river",
+   "name": "River",
+   "category": "Water",
+   "icon": "river",
+   "ring": 1,
+   "gesture": null,
+   "command": "terrain.river",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "to": {
+     "type": "pos",
+     "target": "line"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 60,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "depth": {
+     "type": "number",
+     "min": 0.2,
+     "max": 50,
+     "default": 2.5,
+     "unit": "m"
+    }
+   },
+   "target": "line",
+   "synonyms": [
+    "river",
+    "stream",
+    "creek",
+    "brook",
+    "channel"
+   ],
+   "desc": "Carve a river bed from here, downhill.",
+   "cost": 15,
+   "witness": {
+    "help": 0.2,
+    "wonder": 0.4,
+    "radius": 800
+   }
+  },
+  {
+   "id": "water-miracle",
+   "name": "Water miracle",
+   "category": "Water",
+   "icon": "water-miracle",
+   "ring": 0,
+   "gesture": "spiral",
+   "command": "miracle.water",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "water miracle",
+    "bless with water",
+    "quench"
+   ],
+   "desc": "Water for the thirsty: rain, a pool, damp fields, fires put out.",
+   "cost": 10,
+   "cooldown": 60
+  },
+  {
+   "id": "weather-thunderstorm",
+   "name": "Thunderstorm",
+   "category": "Sky",
+   "icon": "storm",
+   "ring": 0,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "thunderstorm"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "thunderstorm",
+    "thunder",
+    "storm clouds"
+   ],
+   "desc": "Thunderstorm over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-snow",
+   "name": "Snowfall",
+   "category": "Sky",
+   "icon": "snowflake",
+   "ring": 1,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "snow"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "snowfall",
+    "snowing",
+    "let it snow",
+    "snow",
+    "snowy",
+    "make it snow"
+   ],
+   "desc": "Snowfall over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-blizzard",
+   "name": "Blizzard",
+   "category": "Sky",
+   "icon": "blizzard",
+   "ring": 1,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "blizzard"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "blizzard",
+    "whiteout",
+    "snowstorm"
+   ],
+   "desc": "Blizzard over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-hail",
+   "name": "Hail",
+   "category": "Sky",
+   "icon": "hail",
+   "ring": 2,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "hail"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "hail",
+    "hailstorm"
+   ],
+   "desc": "Hail over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-fog",
+   "name": "Fog",
+   "category": "Sky",
+   "icon": "fog",
+   "ring": 1,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "fog"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "fog",
+    "mist",
+    "haze"
+   ],
+   "desc": "Fog over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-sandstorm",
+   "name": "Sandstorm",
+   "category": "Sky",
+   "icon": "sandstorm",
+   "ring": 2,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "sandstorm"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "sandstorm",
+    "dust storm",
+    "haboob"
+   ],
+   "desc": "Sandstorm over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-ashfall",
+   "name": "Ashfall",
+   "category": "Sky",
+   "icon": "ashfall",
+   "ring": 2,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "ashfall"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "ashfall",
+    "ash rain",
+    "falling ash"
+   ],
+   "desc": "Ashfall over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-acid-rain",
+   "name": "Acid rain",
+   "category": "Sky",
+   "icon": "acid",
+   "ring": 2,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "acid-rain"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "acid rain",
+    "acid"
+   ],
+   "desc": "Acid rain over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-blood-rain",
+   "name": "Blood rain",
+   "category": "Sky",
+   "icon": "blood",
+   "ring": 2,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "blood-rain"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "blood rain",
+    "rain of blood",
+    "raining blood",
+    "blood"
+   ],
+   "desc": "Blood rain over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-heatwave",
+   "name": "Heat",
+   "category": "Sky",
+   "icon": "sun",
+   "ring": 2,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "heatwave"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "heat",
+    "scorching",
+    "hot weather"
+   ],
+   "desc": "Heat over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-cold-snap",
+   "name": "Cold snap",
+   "category": "Sky",
+   "icon": "cold",
+   "ring": 2,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "cold-snap"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "cold snap",
+    "frost",
+    "freeze",
+    "cold"
+   ],
+   "desc": "Cold snap over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-aurora-storm",
+   "name": "Aurora",
+   "category": "Sky",
+   "icon": "aurora",
+   "ring": 2,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "aurora-storm"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "aurora",
+    "northern lights",
+    "lights in the sky"
+   ],
+   "desc": "Aurora over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-monsoon",
+   "name": "Monsoon",
+   "category": "Sky",
+   "icon": "monsoon",
+   "ring": 1,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "monsoon"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "monsoon",
+    "wet season",
+    "torrential rain"
+   ],
+   "desc": "Monsoon over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-overcast",
+   "name": "Overcast",
+   "category": "Sky",
+   "icon": "cloud",
+   "ring": 1,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "overcast"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "clouds",
+    "overcast",
+    "grey sky",
+    "cloudy"
+   ],
+   "desc": "Overcast over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "weather-clear",
+   "name": "Fair weather",
+   "category": "Sky",
+   "icon": "clear",
+   "ring": 1,
+   "gesture": null,
+   "command": "weather.paint",
+   "params": {
+    "kind": "clear"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 700,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 1000000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "fair weather",
+    "sunshine",
+    "clear weather"
+   ],
+   "desc": "Fair weather over a region.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "clear-skies",
+   "name": "Clear the skies",
+   "category": "Sky",
+   "icon": "sun-clear",
+   "ring": 0,
+   "gesture": null,
+   "command": "weather.clear",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 1500,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "everywhere": {
+     "type": "boolean",
+     "default": false,
+     "desc": "clear every system and the planet-wide weather"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "clear the sky",
+    "clear skies",
+    "stop the rain",
+    "end the storm",
+    "sunny"
+   ],
+   "desc": "Clear the weather away.",
+   "cost": 5,
+   "witness": {
+    "help": 0.1,
+    "wonder": 0.2,
+    "radius": 900
+   }
+  },
+  {
+   "id": "world-weather",
+   "name": "Weather of the world",
+   "category": "Sky",
+   "icon": "globe-weather",
+   "ring": 2,
+   "gesture": null,
+   "command": "weather.global",
+   "params": {},
+   "schema": {
+    "kind": {
+     "type": "enum",
+     "values": "weather"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "everywhere",
+    "planet-wide weather",
+    "whole world weather",
+    "global weather"
+   ],
+   "desc": "One weather over the whole world.",
+   "cost": 60,
+   "witness": {
+    "wonder": 0.5
+   }
+  },
+  {
+   "id": "hold-season",
+   "name": "Hold a season",
+   "category": "Sky",
+   "icon": "season",
+   "ring": 2,
+   "gesture": null,
+   "command": "weather.pin-season",
+   "params": {},
+   "schema": {
+    "season": {
+     "type": "enum",
+     "values": [
+      "none",
+      "spring",
+      "summer",
+      "autumn",
+      "winter"
+     ]
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "eternal",
+    "always",
+    "hold the season",
+    "forever summer",
+    "forever winter",
+    "eternal winter"
+   ],
+   "desc": "Hold the world in one season.",
+   "cost": 60,
+   "witness": {
+    "wonder": 0.5
+   }
+  },
+  {
+   "id": "storm-miracle",
+   "name": "Storm miracle",
+   "category": "Sky",
+   "icon": "storm-miracle",
+   "ring": 0,
+   "gesture": "double-zigzag",
+   "command": "miracle.storm",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "storm miracle",
+    "call the storm",
+    "summon a storm",
+    "tempest"
+   ],
+   "desc": "Call a thunderstorm down.",
+   "cost": 15,
+   "cooldown": 90
+  },
+  {
+   "id": "lightning",
+   "name": "Lightning",
+   "category": "Sky",
+   "icon": "lightning",
+   "ring": 0,
+   "gesture": "zigzag",
+   "command": "miracle.lightning",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "lightning",
+    "bolt",
+    "thunderbolt",
+    "strike"
+   ],
+   "desc": "Strike with lightning (fire, fear, glass in the dunes).",
+   "cost": 10,
+   "cooldown": 60
+  },
+  {
+   "id": "calm",
+   "name": "Calm",
+   "category": "Sky",
+   "icon": "calm",
+   "ring": 1,
+   "gesture": "tilde",
+   "command": "miracle.calm",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "calm",
+    "peace",
+    "quiet",
+    "soothe",
+    "still the storm"
+   ],
+   "desc": "Calm: storms disperse, fires die, fear eases, anger cools.",
+   "cost": 15,
+   "cooldown": 90
+  },
+  {
+   "id": "invent-weather",
+   "name": "Invent a weather",
+   "category": "Sky",
+   "icon": "new-weather",
+   "ring": 2,
+   "gesture": null,
+   "command": "content.weather",
+   "params": {},
+   "schema": {
+    "name": {
+     "type": "string"
+    },
+    "base": {
+     "type": "enum",
+     "values": "weather",
+     "default": "rain"
+    },
+    "precip": {
+     "type": "enum",
+     "values": [
+      "none",
+      "rain",
+      "snow",
+      "hail",
+      "ash",
+      "acid",
+      "blood",
+      "sand"
+     ],
+     "default": "rain"
+    },
+    "animal": {
+     "type": "string"
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 50,
+     "max": 20000,
+     "default": 600,
+     "unit": "m",
+     "target": "region"
+    },
+    "duration": {
+     "type": "number",
+     "min": 10,
+     "max": 1000000,
+     "default": 720,
+     "unit": "ticks"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.1,
+     "max": 3,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "rain frogs",
+    "rain of",
+    "new weather",
+    "weird rain"
+   ],
+   "desc": "A weather the world never had: it can rain anything.",
+   "cost": 25,
+   "witness": {
+    "wonder": 0.7,
+    "radius": 1000
+   }
+  },
+  {
+   "id": "set-hour",
+   "name": "Move the sun",
+   "category": "Time",
+   "icon": "clock",
+   "ring": 0,
+   "gesture": null,
+   "command": "time.set-hour",
+   "params": {},
+   "schema": {
+    "hour": {
+     "type": "number",
+     "min": 0,
+     "max": 2000,
+     "unit": "h"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "hour",
+    "noon",
+    "dawn",
+    "dusk",
+    "midnight",
+    "sunrise",
+    "sunset",
+    "time of day"
+   ],
+   "desc": "Move the sun to an hour.",
+   "cost": 10,
+   "witness": {
+    "wonder": 0.5
+   }
+  },
+  {
+   "id": "day-length",
+   "name": "Length of the day",
+   "category": "Time",
+   "icon": "day",
+   "ring": 1,
+   "gesture": null,
+   "command": "time.day-length",
+   "params": {},
+   "schema": {
+    "hours": {
+     "type": "number",
+     "min": 1,
+     "max": 2000,
+     "unit": "h"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "day length",
+    "longer days",
+    "shorter days",
+    "days last"
+   ],
+   "desc": "Change the length of the day.",
+   "cost": 40,
+   "witness": {
+    "wonder": 0.4
+   }
+  },
+  {
+   "id": "freeze-sun",
+   "name": "Stop the sun",
+   "category": "Time",
+   "icon": "sun-stop",
+   "ring": 1,
+   "gesture": null,
+   "command": "time.freeze-sun",
+   "params": {
+    "on": true
+   },
+   "schema": {
+    "on": {
+     "type": "boolean",
+     "default": true
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "freeze the sun",
+    "stop the sun",
+    "the sun stands still"
+   ],
+   "desc": "The sun stands still in the sky.",
+   "cost": 80,
+   "witness": {
+    "wonder": 0.9
+   }
+  },
+  {
+   "id": "year-length",
+   "name": "Length of the year",
+   "category": "Time",
+   "icon": "year",
+   "ring": 2,
+   "gesture": null,
+   "command": "time.year-length",
+   "params": {},
+   "schema": {
+    "days": {
+     "type": "number",
+     "min": 0.5,
+     "max": 2000,
+     "unit": "days"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "year length",
+    "longer years",
+    "shorter years"
+   ],
+   "desc": "Change the length of the year.",
+   "cost": 40,
+   "witness": {
+    "wonder": 0.3
+   }
+  },
+  {
+   "id": "axial-tilt",
+   "name": "Tilt the axis",
+   "category": "Time",
+   "icon": "tilt",
+   "ring": 2,
+   "gesture": null,
+   "command": "time.axial-tilt",
+   "params": {},
+   "schema": {
+    "degrees": {
+     "type": "number",
+     "min": 0,
+     "max": 180,
+     "unit": "°"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "tilt",
+    "axial tilt",
+    "obliquity",
+    "seasons stronger"
+   ],
+   "desc": "Tilt the axis: the strength of the seasons.",
+   "cost": 60,
+   "witness": {
+    "wonder": 0.4
+   }
+  },
+  {
+   "id": "speed",
+   "name": "Speed of time",
+   "category": "Time",
+   "icon": "speed",
+   "ring": 0,
+   "gesture": null,
+   "command": "time.speed",
+   "params": {},
+   "schema": {
+    "speed": {
+     "type": "number",
+     "min": 0,
+     "max": 100000,
+     "unit": "m/s"
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "faster",
+    "slower",
+    "speed up",
+    "slow down",
+    "pause",
+    "time speed"
+   ],
+   "desc": "How fast time runs."
+  },
+  {
+   "id": "step",
+   "name": "Step time",
+   "category": "Time",
+   "icon": "step",
+   "ring": 0,
+   "gesture": null,
+   "command": "time.step",
+   "params": {},
+   "schema": {
+    "ticks": {
+     "type": "int",
+     "min": 0,
+     "max": 1000000,
+     "unit": "ticks"
+    },
+    "hours": {
+     "type": "number",
+     "min": 0,
+     "max": 100000,
+     "unit": "h"
+    },
+    "days": {
+     "type": "number",
+     "min": 0,
+     "max": 10000,
+     "unit": "days"
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "step",
+    "skip ahead",
+    "wait",
+    "fast forward",
+    "let time pass"
+   ],
+   "desc": "Let time pass."
+  },
+  {
+   "id": "rewind",
+   "name": "Rewind",
+   "category": "Time",
+   "icon": "rewind",
+   "ring": 1,
+   "gesture": null,
+   "command": "time.rewind",
+   "params": {},
+   "schema": {
+    "tick": {
+     "type": "int",
+     "min": 0,
+     "unit": "tick"
+    },
+    "hoursAgo": {
+     "type": "number",
+     "min": 0,
+     "unit": "h"
+    },
+    "daysAgo": {
+     "type": "number",
+     "min": 0,
+     "unit": "days"
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "rewind",
+    "go back",
+    "undo time",
+    "turn back time"
+   ],
+   "desc": "Turn time back to an earlier moment."
+  },
+  {
+   "id": "edit-past",
+   "name": "Change the past",
+   "category": "Time",
+   "icon": "history",
+   "ring": 2,
+   "gesture": null,
+   "command": "time.edit-past",
+   "params": {},
+   "schema": {
+    "tick": {
+     "type": "int",
+     "min": 0,
+     "unit": "tick"
+    },
+    "hoursAgo": {
+     "type": "number",
+     "min": 0,
+     "unit": "h"
+    },
+    "daysAgo": {
+     "type": "number",
+     "min": 0,
+     "unit": "days"
+    },
+    "cmd": {
+     "type": "any"
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "change the past",
+    "edit the past",
+    "rewrite history",
+    "what if"
+   ],
+   "desc": "Insert an act at an earlier moment and live the world forward again."
+  },
+  {
+   "id": "add-air",
+   "name": "Breathe air",
+   "category": "Worlds",
+   "icon": "air",
+   "ring": 0,
+   "gesture": null,
+   "command": "planet.add-air",
+   "params": {},
+   "schema": {
+    "amount": {
+     "type": "number",
+     "min": 0,
+     "max": 100,
+     "default": 1,
+     "unit": "atm"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "air",
+    "breathe",
+    "atmosphere",
+    "give it air",
+    "oxygen"
+   ],
+   "desc": "Breathe an Earth-like air onto the world.",
+   "cost": 100,
+   "witness": {
+    "wonder": 0.8
+   }
+  },
+  {
+   "id": "remove-air",
+   "name": "Strip the air",
+   "category": "Worlds",
+   "icon": "vacuum",
+   "ring": 1,
+   "gesture": null,
+   "command": "planet.remove-air",
+   "params": {},
+   "schema": {
+    "amount": {
+     "type": "number",
+     "min": 0,
+     "max": 100,
+     "unit": "atm"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "remove the air",
+    "strip the air",
+    "vacuum",
+    "suffocate"
+   ],
+   "desc": "Take the air away.",
+   "cost": 200,
+   "witness": {
+    "harm": 0.8,
+    "wonder": 0.5
+   }
+  },
+  {
+   "id": "atmosphere",
+   "name": "Change the air",
+   "category": "Worlds",
+   "icon": "gases",
+   "ring": 2,
+   "gesture": null,
+   "command": "planet.atmosphere",
+   "params": {},
+   "schema": {
+    "pressure": {
+     "type": "number",
+     "min": 0,
+     "max": 100
+    },
+    "o2": {
+     "type": "number",
+     "min": 0,
+     "max": 1
+    },
+    "co2": {
+     "type": "number",
+     "min": 0,
+     "max": 1
+    },
+    "n2": {
+     "type": "number",
+     "min": 0,
+     "max": 1
+    },
+    "methane": {
+     "type": "number",
+     "min": 0,
+     "max": 1
+    },
+    "dust": {
+     "type": "number",
+     "min": 0,
+     "max": 10
+    },
+    "toxicity": {
+     "type": "number",
+     "min": 0,
+     "max": 1
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "atmosphere",
+    "composition",
+    "gases",
+    "carbon dioxide",
+    "methane air"
+   ],
+   "desc": "Set the air's pressure and mix.",
+   "cost": 100,
+   "witness": {
+    "wonder": 0.5
+   }
+  },
+  {
+   "id": "star-kind",
+   "name": "Remake the star",
+   "category": "Worlds",
+   "icon": "star",
+   "ring": 1,
+   "gesture": null,
+   "command": "star.set",
+   "params": {},
+   "schema": {
+    "kind": {
+     "type": "enum",
+     "values": "stars"
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "star",
+    "red dwarf",
+    "blue giant",
+    "white dwarf",
+    "yellow sun",
+    "black hole"
+   ],
+   "desc": "Remake the star as another kind.",
+   "cost": 500,
+   "cooldown": 2880,
+   "witness": {
+    "wonder": 1,
+    "harm": 0.3
+   }
+  },
+  {
+   "id": "star-brightness",
+   "name": "Brighten or dim the star",
+   "category": "Worlds",
+   "icon": "sun-bright",
+   "ring": 1,
+   "gesture": null,
+   "command": "star.set",
+   "params": {},
+   "schema": {
+    "luminosity": {
+     "type": "number",
+     "min": 0,
+     "max": 10000,
+     "unit": "× sun"
+    },
+    "activity": {
+     "type": "number",
+     "min": 0,
+     "max": 1,
+     "unit": "0..1"
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "brighter",
+    "dimmer",
+    "brighten the sun",
+    "dim the sun",
+    "star brightness"
+   ],
+   "desc": "Turn the star up or down.",
+   "cost": 200,
+   "witness": {
+    "wonder": 0.8
+   }
+  },
+  {
+   "id": "gravity",
+   "name": "Gravity",
+   "category": "Worlds",
+   "icon": "gravity",
+   "ring": 1,
+   "gesture": null,
+   "command": "planet.set",
+   "params": {},
+   "schema": {
+    "gravity": {
+     "type": "number",
+     "min": 0,
+     "max": 50,
+     "unit": "m/s²"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "gravity",
+    "heavier",
+    "lighter",
+    "weight"
+   ],
+   "desc": "Change the pull of the world.",
+   "cost": 100,
+   "witness": {
+    "wonder": 0.6
+   }
+  },
+  {
+   "id": "magnetism",
+   "name": "Magnetic field",
+   "category": "Worlds",
+   "icon": "magnet",
+   "ring": 2,
+   "gesture": null,
+   "command": "planet.set",
+   "params": {},
+   "schema": {
+    "magnetism": {
+     "type": "number",
+     "min": 0,
+     "max": 5,
+     "unit": "×"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "magnetism",
+    "magnetic field",
+    "shield of the world"
+   ],
+   "desc": "Strengthen or weaken the world's magnetic shield.",
+   "cost": 60,
+   "witness": {
+    "wonder": 0.4
+   }
+  },
+  {
+   "id": "spin",
+   "name": "Spin",
+   "category": "Worlds",
+   "icon": "spin",
+   "ring": 2,
+   "gesture": null,
+   "command": "planet.set",
+   "params": {},
+   "schema": {
+    "spin": {
+     "type": "number",
+     "min": 1,
+     "max": 2000,
+     "unit": "h"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "spin",
+    "rotation",
+    "spin faster",
+    "spin slower"
+   ],
+   "desc": "Change how fast the world turns (hours per day).",
+   "cost": 60,
+   "witness": {
+    "wonder": 0.5
+   }
+  },
+  {
+   "id": "warmth",
+   "name": "Warm or cool the world",
+   "category": "Worlds",
+   "icon": "thermometer",
+   "ring": 1,
+   "gesture": null,
+   "command": "planet.set",
+   "params": {},
+   "schema": {
+    "temperatureOffset": {
+     "type": "number",
+     "min": -150,
+     "max": 150,
+     "unit": "°C"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "warmer",
+    "colder",
+    "heat the world",
+    "cool the world",
+    "climate"
+   ],
+   "desc": "Warm or cool the whole world.",
+   "cost": 80,
+   "witness": {
+    "wonder": 0.4
+   }
+  },
+  {
+   "id": "move-world",
+   "name": "Move the world",
+   "category": "Worlds",
+   "icon": "orbit",
+   "ring": 1,
+   "gesture": null,
+   "command": "world.move",
+   "params": {},
+   "schema": {
+    "world": {
+     "type": "entity",
+     "desc": "a world (id or name); default: this one",
+     "entity": [
+      "planet"
+     ]
+    },
+    "distance": {
+     "type": "number",
+     "min": 0.05,
+     "max": 40,
+     "unit": "AU"
+    },
+    "eccentricity": {
+     "type": "number",
+     "min": 0,
+     "max": 0.9
+    },
+    "inclination": {
+     "type": "number",
+     "min": 0,
+     "max": 90
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "move the world",
+    "closer to the sun",
+    "further from the sun",
+    "orbit"
+   ],
+   "desc": "Move a world to a new orbit.",
+   "cost": 300,
+   "cooldown": 1440,
+   "witness": {
+    "wonder": 0.9
+   }
+  },
+  {
+   "id": "birth-world",
+   "name": "Birth a world",
+   "category": "Worlds",
+   "icon": "new-world",
+   "ring": 1,
+   "gesture": null,
+   "command": "world.birth",
+   "params": {},
+   "schema": {
+    "kind": {
+     "type": "enum",
+     "values": "planetkinds",
+     "default": "terran"
+    },
+    "name": {
+     "type": "string"
+    },
+    "distance": {
+     "type": "number",
+     "min": 0.1,
+     "max": 40,
+     "default": 1.5,
+     "unit": "AU"
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "new world",
+    "create a planet",
+    "birth a world",
+    "make a planet"
+   ],
+   "desc": "A new world of any kind at any orbit.",
+   "cost": 1000,
+   "cooldown": 2880
+  },
+  {
+   "id": "crack-world",
+   "name": "Crack a world",
+   "category": "Worlds",
+   "icon": "crack",
+   "ring": 2,
+   "gesture": null,
+   "command": "world.crack",
+   "params": {},
+   "schema": {
+    "world": {
+     "type": "entity",
+     "desc": "a world (id or name); default: this one",
+     "entity": [
+      "planet"
+     ]
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "crack",
+    "shatter",
+    "split the world",
+    "break the world"
+   ],
+   "desc": "Crack a world: quake storms, rifts, shards in orbit.",
+   "cost": 1500,
+   "cooldown": 4320,
+   "witness": {
+    "harm": 1,
+    "wonder": 0.8
+   }
+  },
+  {
+   "id": "erase-world",
+   "name": "Erase a world",
+   "category": "Worlds",
+   "icon": "erase",
+   "ring": 2,
+   "gesture": null,
+   "command": "world.erase",
+   "params": {},
+   "schema": {
+    "world": {
+     "type": "entity",
+     "desc": "a world (id or name); default: this one",
+     "entity": [
+      "planet"
+     ]
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "unmake",
+    "destroy the world",
+    "annihilate"
+   ],
+   "desc": "Unmake a world and all on it.",
+   "cost": 3000,
+   "cooldown": 4320
+  },
+  {
+   "id": "add-moon",
+   "name": "Add a moon",
+   "category": "Worlds",
+   "icon": "moon",
+   "ring": 1,
+   "gesture": null,
+   "command": "world.moon-add",
+   "params": {},
+   "schema": {
+    "world": {
+     "type": "entity",
+     "desc": "a world (id or name); default: this one",
+     "entity": [
+      "planet"
+     ]
+    },
+    "kind": {
+     "type": "enum",
+     "values": "planetkinds",
+     "default": "moon"
+    },
+    "name": {
+     "type": "string"
+    },
+    "distance": {
+     "type": "number",
+     "min": 4000,
+     "max": 200000,
+     "unit": "AU"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "moon",
+    "new moon",
+    "add a moon",
+    "satellite"
+   ],
+   "desc": "Give a world a new moon.",
+   "cost": 300,
+   "witness": {
+    "wonder": 0.7
+   }
+  },
+  {
+   "id": "moon-fall",
+   "name": "Drop the moon",
+   "category": "Worlds",
+   "icon": "moon-fall",
+   "ring": 2,
+   "gesture": null,
+   "command": "world.moon-fall",
+   "params": {},
+   "schema": {
+    "world": {
+     "type": "entity",
+     "desc": "a world (id or name); default: this one",
+     "entity": [
+      "planet"
+     ]
+    },
+    "moon": {
+     "type": "int",
+     "min": 0
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "drop the moon",
+    "moon falls",
+    "the moon falls",
+    "crash the moon"
+   ],
+   "desc": "A moon breaks its orbit and falls.",
+   "cost": 1500,
+   "cooldown": 4320
+  },
+  {
+   "id": "seed-species",
+   "name": "Seed a species",
+   "category": "Worlds",
+   "icon": "seed",
+   "ring": 1,
+   "gesture": null,
+   "command": "world.seed-species",
+   "params": {},
+   "schema": {
+    "world": {
+     "type": "entity",
+     "desc": "a world (id or name); default: this one",
+     "entity": [
+      "planet"
+     ]
+    },
+    "species": {
+     "type": "string"
+    },
+    "count": {
+     "type": "int",
+     "min": 1,
+     "max": 50,
+     "default": 3
+    },
+    "size": {
+     "type": "int",
+     "min": 1,
+     "max": 500
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "seed",
+    "populate",
+    "colonise",
+    "spread across the world"
+   ],
+   "desc": "Seed a people, an animal or a plant across a world.",
+   "cost": 100,
+   "witness": {
+    "wonder": 0.4
+   }
+  },
+  {
+   "id": "plant",
+   "name": "Plant",
+   "category": "Life",
+   "icon": "sprout",
+   "ring": 0,
+   "gesture": null,
+   "command": "life.plant",
+   "params": {},
+   "schema": {
+    "species": {
+     "type": "enum",
+     "values": "plants"
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 150,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "density": {
+     "type": "number",
+     "min": 0.01,
+     "max": 1,
+     "default": 0.6,
+     "unit": "0..1"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "plant",
+    "sow",
+    "seed",
+    "grow",
+    "grass",
+    "flowers"
+   ],
+   "desc": "Plant a species.",
+   "cost": 4,
+   "witness": {
+    "help": 0.1,
+    "wonder": 0.15,
+    "radius": 400
+   }
+  },
+  {
+   "id": "forest",
+   "name": "Forest",
+   "category": "Life",
+   "icon": "tree",
+   "ring": 0,
+   "gesture": null,
+   "command": "life.forest",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 300,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "density": {
+     "type": "number",
+     "min": 0.05,
+     "max": 1,
+     "default": 0.85,
+     "unit": "0..1"
+    },
+    "species": {
+     "type": "enum",
+     "values": "plants"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "forest",
+    "woods",
+    "trees",
+    "grove",
+    "jungle"
+   ],
+   "desc": "Grow a forest.",
+   "cost": 8,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 600
+   }
+  },
+  {
+   "id": "forest-miracle",
+   "name": "Forest miracle",
+   "category": "Life",
+   "icon": "forest-miracle",
+   "ring": 0,
+   "gesture": "wave",
+   "command": "miracle.forest",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "forest miracle",
+    "green the land"
+   ],
+   "desc": "A forest springs up; those who see it may learn forestry.",
+   "cost": 15,
+   "cooldown": 90
+  },
+  {
+   "id": "paint-biome",
+   "name": "Paint a biome",
+   "category": "Life",
+   "icon": "biome",
+   "ring": 1,
+   "gesture": null,
+   "command": "life.paint-biome",
+   "params": {},
+   "schema": {
+    "biome": {
+     "type": "enum",
+     "values": "biomes"
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 400,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "pinned": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "biome",
+    "make it desert",
+    "make it tundra",
+    "turn to grassland",
+    "rainforest"
+   ],
+   "desc": "Paint a biome (plants and soil follow).",
+   "cost": 8,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 600
+   }
+  },
+  {
+   "id": "animals",
+   "name": "Make animals",
+   "category": "Life",
+   "icon": "paw",
+   "ring": 0,
+   "gesture": null,
+   "command": "life.spawn-animal",
+   "params": {},
+   "schema": {
+    "species": {
+     "type": "enum",
+     "values": "animals"
+    },
+    "count": {
+     "type": "int",
+     "min": 1,
+     "max": 100000,
+     "default": 8
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "animals",
+    "herd",
+    "beasts",
+    "send",
+    "release"
+   ],
+   "desc": "Make a herd of any animal.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.25,
+    "radius": 400
+   }
+  },
+  {
+   "id": "invent-animal",
+   "name": "Invent an animal",
+   "category": "Life",
+   "icon": "new-beast",
+   "ring": 2,
+   "gesture": null,
+   "command": "content.animal",
+   "params": {},
+   "schema": {
+    "name": {
+     "type": "string"
+    },
+    "like": {
+     "type": "enum",
+     "values": "animals"
+    },
+    "count": {
+     "type": "int",
+     "min": 1,
+     "max": 10000,
+     "default": 8
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "new animal",
+    "invent an animal",
+    "unicorn",
+    "dragon",
+    "griffin"
+   ],
+   "desc": "An animal the world never had.",
+   "cost": 30,
+   "witness": {
+    "wonder": 0.7,
+    "radius": 600
+   }
+  },
+  {
+   "id": "cull",
+   "name": "Cull",
+   "category": "Life",
+   "icon": "cull",
+   "ring": 1,
+   "gesture": null,
+   "command": "life.cull",
+   "params": {},
+   "schema": {
+    "species": {
+     "type": "enum",
+     "values": "animals"
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "desc": "metres around the place (default 400; none with a species = everywhere)",
+     "unit": "m",
+     "target": "region"
+    },
+    "share": {
+     "type": "number",
+     "min": 0,
+     "max": 1,
+     "default": 1,
+     "unit": "0..1"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "cull",
+    "thin the herds",
+    "kill the animals"
+   ],
+   "desc": "Strike animals down.",
+   "cost": 8,
+   "witness": {
+    "harm": 0.2,
+    "radius": 400
+   }
+  },
+  {
+   "id": "breed",
+   "name": "Breed",
+   "category": "Life",
+   "icon": "breed",
+   "ring": 1,
+   "gesture": null,
+   "command": "life.breed",
+   "params": {},
+   "schema": {
+    "species": {
+     "type": "enum",
+     "values": "animals"
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "desc": "metres around the place (default 400; none with a species = everywhere)",
+     "unit": "m",
+     "target": "region"
+    },
+    "factor": {
+     "type": "number",
+     "min": 1,
+     "max": 20,
+     "default": 1.5,
+     "unit": "×"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "breed",
+    "multiply",
+    "more animals",
+    "fertile herds"
+   ],
+   "desc": "Make animals multiply.",
+   "cost": 8,
+   "witness": {
+    "help": 0.1,
+    "radius": 400
+   }
+  },
+  {
+   "id": "extinct",
+   "name": "Extinction",
+   "category": "Life",
+   "icon": "skull-paw",
+   "ring": 2,
+   "gesture": null,
+   "command": "life.extinct",
+   "params": {},
+   "schema": {
+    "species": {
+     "type": "enum",
+     "values": "animals"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "extinct",
+    "wipe out",
+    "extinction",
+    "eradicate"
+   ],
+   "desc": "Wipe a species from the world.",
+   "cost": 60,
+   "witness": {
+    "harm": 0.3
+   }
+  },
+  {
+   "id": "kill-area",
+   "name": "Death",
+   "category": "Life",
+   "icon": "death",
+   "ring": 2,
+   "gesture": null,
+   "command": "life.kill",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 60,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "what": {
+     "type": "enum",
+     "values": [
+      "all",
+      "people",
+      "animals",
+      "plants"
+     ],
+     "default": "all"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "kill",
+    "death",
+    "slay",
+    "strike dead",
+    "annihilate"
+   ],
+   "desc": "Everything in the area dies.",
+   "cost": 50,
+   "cooldown": 240
+  },
+  {
+   "id": "heal-area",
+   "name": "Healing",
+   "category": "Life",
+   "icon": "heal",
+   "ring": 0,
+   "gesture": null,
+   "command": "life.heal",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 200,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "heal everything",
+    "cure",
+    "mend"
+   ],
+   "desc": "Heal everyone and everything in an area.",
+   "cost": 20
+  },
+  {
+   "id": "heal-miracle",
+   "name": "Heal miracle",
+   "category": "Life",
+   "icon": "heal-miracle",
+   "ring": 0,
+   "gesture": "v",
+   "command": "miracle.heal",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "heal",
+    "healing",
+    "miracle of healing",
+    "cure the sick"
+   ],
+   "desc": "Heal the sick and hurt; it can start medicine.",
+   "cost": 20,
+   "cooldown": 120
+  },
+  {
+   "id": "food-miracle",
+   "name": "Food miracle",
+   "category": "Life",
+   "icon": "bread",
+   "ring": 0,
+   "gesture": "square",
+   "command": "miracle.food",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "food",
+    "feed",
+    "bread",
+    "manna",
+    "harvest"
+   ],
+   "desc": "Food falls into the store (they may refuse it).",
+   "cost": 15,
+   "cooldown": 90
+  },
+  {
+   "id": "fertility",
+   "name": "Fertility",
+   "category": "Life",
+   "icon": "fertility",
+   "ring": 1,
+   "gesture": "heart",
+   "command": "miracle.fertility",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "fertility",
+    "fertile",
+    "babies",
+    "abundance"
+   ],
+   "desc": "Fields swell, herds breed, couples have children.",
+   "cost": 25,
+   "cooldown": 150
+  },
+  {
+   "id": "bless",
+   "name": "Bless",
+   "category": "Life",
+   "icon": "bless",
+   "ring": 1,
+   "gesture": null,
+   "command": "life.bless",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 300,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "bless",
+    "blessing",
+    "luck",
+    "favour"
+   ],
+   "desc": "Health, harvests and joy.",
+   "cost": 20
+  },
+  {
+   "id": "curse",
+   "name": "Curse",
+   "category": "Life",
+   "icon": "curse",
+   "ring": 1,
+   "gesture": null,
+   "command": "life.curse",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 300,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "disease": {
+     "type": "enum",
+     "values": "diseases"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "curse",
+    "hex",
+    "doom",
+    "blight them"
+   ],
+   "desc": "Blight, sickness and gloom.",
+   "cost": 30
+  },
+  {
+   "id": "people",
+   "name": "Set down a people",
+   "category": "Peoples",
+   "icon": "people",
+   "ring": 0,
+   "gesture": null,
+   "command": "life.spawn-people",
+   "params": {},
+   "schema": {
+    "species": {
+     "type": "enum",
+     "values": "species",
+     "default": "plains-folk"
+    },
+    "count": {
+     "type": "int",
+     "min": 1,
+     "max": 2000,
+     "default": 20
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "era": {
+     "type": "enum",
+     "values": [
+      "stone",
+      "fire",
+      "clay",
+      "bronze",
+      "iron",
+      "classical",
+      "medieval",
+      "gunpowder",
+      "steam",
+      "electric",
+      "space"
+     ],
+     "default": "stone"
+    },
+    "settled": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "people",
+    "tribe",
+    "folk",
+    "humans",
+    "settlers",
+    "villagers",
+    "band"
+   ],
+   "desc": "Set a people down on the world.",
+   "cost": 50,
+   "witness": {
+    "wonder": 0.4,
+    "radius": 300
+   }
+  },
+  {
+   "id": "move-person",
+   "name": "Move a person",
+   "category": "Peoples",
+   "icon": "move",
+   "ring": 1,
+   "gesture": null,
+   "command": "agent.move",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "agent id",
+     "entity": [
+      "agent"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "move him",
+    "move her",
+    "carry",
+    "set down elsewhere"
+   ],
+   "desc": "Set a person down elsewhere.",
+   "cost": 2
+  },
+  {
+   "id": "possess",
+   "name": "Possess",
+   "category": "Peoples",
+   "icon": "possess",
+   "ring": 1,
+   "gesture": null,
+   "command": "agent.possess",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "agent id",
+     "entity": [
+      "agent"
+     ]
+    },
+    "on": {
+     "type": "boolean",
+     "default": true
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "possess",
+    "become",
+    "control",
+    "take over",
+    "ride"
+   ],
+   "desc": "Look out through a person's eyes: they do what you order.",
+   "cost": 10
+  },
+  {
+   "id": "possess-move",
+   "name": "Walk (possessed)",
+   "category": "Peoples",
+   "icon": "walk",
+   "ring": 2,
+   "gesture": null,
+   "command": "possess.move",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "entity": [
+      "agent"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "queue": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "walk",
+    "go to",
+    "walk there"
+   ],
+   "desc": "Walk the person you possess somewhere."
+  },
+  {
+   "id": "possess-act",
+   "name": "Act (possessed)",
+   "category": "Peoples",
+   "icon": "act",
+   "ring": 2,
+   "gesture": null,
+   "command": "possess.act",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "entity": [
+      "agent"
+     ]
+    },
+    "act": {
+     "type": "enum",
+     "values": [
+      "gather",
+      "wood",
+      "fish",
+      "hunt",
+      "build",
+      "pray",
+      "preach",
+      "teach",
+      "eat",
+      "drink",
+      "sleep",
+      "dance",
+      "fight",
+      "rest",
+      "explore"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "target": {
+     "type": "entity",
+     "entity": [
+      "agent",
+      "animal",
+      "building"
+     ]
+    },
+    "queue": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "work",
+    "gather",
+    "chop",
+    "pray",
+    "preach",
+    "fish",
+    "hunt"
+   ],
+   "desc": "Make the person you possess do something."
+  },
+  {
+   "id": "kill-person",
+   "name": "Strike down",
+   "category": "Peoples",
+   "icon": "strike",
+   "ring": 2,
+   "gesture": null,
+   "command": "agent.kill",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "agent id",
+     "entity": [
+      "agent"
+     ]
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "kill",
+    "strike down",
+    "smite him",
+    "smite her"
+   ],
+   "desc": "Kill a person.",
+   "cost": 5
+  },
+  {
+   "id": "heal-person",
+   "name": "Heal a person",
+   "category": "Peoples",
+   "icon": "heal-one",
+   "ring": 1,
+   "gesture": null,
+   "command": "agent.heal",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "agent id",
+     "entity": [
+      "agent"
+     ]
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "heal him",
+    "heal her",
+    "make whole"
+   ],
+   "desc": "Heal a person.",
+   "cost": 3
+  },
+  {
+   "id": "disciple",
+   "name": "Make a disciple",
+   "category": "Peoples",
+   "icon": "disciple",
+   "ring": 1,
+   "gesture": null,
+   "command": "agent.make-disciple",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "entity": [
+      "agent"
+     ]
+    },
+    "mode": {
+     "type": "enum",
+     "values": [
+      "worship",
+      "farm",
+      "build",
+      "teach",
+      "preach",
+      "missionary"
+     ],
+     "default": "preach"
+    },
+    "target": {
+     "type": "entity",
+     "min": 0,
+     "desc": "missionary: a settlement id",
+     "entity": [
+      "settlement"
+     ]
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "disciple",
+    "prophet",
+    "apostle",
+    "chosen one",
+    "missionary"
+   ],
+   "desc": "Make a person your disciple with a standing order.",
+   "cost": 20
+  },
+  {
+   "id": "disciple-order",
+   "name": "Order disciples",
+   "category": "Peoples",
+   "icon": "orders",
+   "ring": 2,
+   "gesture": null,
+   "command": "disciple.order",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "entity": [
+      "agent"
+     ]
+    },
+    "mode": {
+     "type": "enum",
+     "values": [
+      "worship",
+      "farm",
+      "build",
+      "teach",
+      "preach",
+      "missionary"
+     ]
+    },
+    "target": {
+     "type": "entity",
+     "min": 0,
+     "entity": [
+      "settlement"
+     ]
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "order the disciples",
+    "disciples preach",
+    "disciples farm"
+   ],
+   "desc": "Give disciples a standing order."
+  },
+  {
+   "id": "inspire",
+   "name": "Inspire",
+   "category": "Peoples",
+   "icon": "spark",
+   "ring": 1,
+   "gesture": null,
+   "command": "agent.inspire",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "entity": [
+      "agent"
+     ]
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "inspire",
+    "genius",
+    "insight",
+    "eureka",
+    "enlighten"
+   ],
+   "desc": "A flash of insight, zeal and skill.",
+   "cost": 15
+  },
+  {
+   "id": "age-person",
+   "name": "Age",
+   "category": "Peoples",
+   "icon": "hourglass",
+   "ring": 2,
+   "gesture": null,
+   "command": "agent.age",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "agent id",
+     "entity": [
+      "agent"
+     ]
+    },
+    "years": {
+     "type": "number",
+     "min": -500,
+     "max": 500,
+     "default": 10,
+     "unit": "years"
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "age",
+    "older",
+    "younger",
+    "rejuvenate"
+   ],
+   "desc": "Age (or rejuvenate) a person.",
+   "cost": 5
+  },
+  {
+   "id": "rename-person",
+   "name": "Rename a person",
+   "category": "Peoples",
+   "icon": "name",
+   "ring": 2,
+   "gesture": null,
+   "command": "agent.rename",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "agent id",
+     "entity": [
+      "agent"
+     ]
+    },
+    "name": {
+     "type": "string"
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "rename him",
+    "rename her",
+    "call him",
+    "call her"
+   ],
+   "desc": "Give a person a new name."
+  },
+  {
+   "id": "found",
+   "name": "Found a settlement",
+   "category": "Peoples",
+   "icon": "found",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.found",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "found",
+    "settle",
+    "build a village",
+    "found a town"
+   ],
+   "desc": "Settle the nearest band here.",
+   "cost": 10,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 300
+   }
+  },
+  {
+   "id": "raze",
+   "name": "Raze",
+   "category": "Peoples",
+   "icon": "raze",
+   "ring": 2,
+   "gesture": null,
+   "command": "settlement.raze",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "raze",
+    "destroy the town",
+    "burn it down",
+    "level the city"
+   ],
+   "desc": "Throw a settlement down.",
+   "cost": 80,
+   "cooldown": 480
+  },
+  {
+   "id": "gift",
+   "name": "Gift",
+   "category": "Peoples",
+   "icon": "gift",
+   "ring": 0,
+   "gesture": null,
+   "command": "settlement.gift",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "items": {
+     "type": "any"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "give",
+    "gift",
+    "offer",
+    "donate",
+    "send them"
+   ],
+   "desc": "Give a settlement things (they may refuse).",
+   "cost": 5
+  },
+  {
+   "id": "wood-miracle",
+   "name": "Wood miracle",
+   "category": "Peoples",
+   "icon": "logs",
+   "ring": 1,
+   "gesture": "line",
+   "command": "miracle.wood",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "wood",
+    "timber",
+    "logs",
+    "lumber"
+   ],
+   "desc": "Wood piles up in the store.",
+   "cost": 8,
+   "cooldown": 48
+  },
+  {
+   "id": "split",
+   "name": "Split",
+   "category": "Peoples",
+   "icon": "split",
+   "ring": 2,
+   "gesture": null,
+   "command": "settlement.split",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "split",
+    "divide",
+    "schism",
+    "exodus"
+   ],
+   "desc": "Split a settlement in two.",
+   "cost": 30
+  },
+  {
+   "id": "merge",
+   "name": "Merge",
+   "category": "Peoples",
+   "icon": "merge",
+   "ring": 2,
+   "gesture": null,
+   "command": "settlement.merge",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "other": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "merge",
+    "unite",
+    "join together"
+   ],
+   "desc": "Merge one settlement into another.",
+   "cost": 30
+  },
+  {
+   "id": "peace",
+   "name": "Make peace",
+   "category": "Peoples",
+   "icon": "dove",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.make-peace",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "other": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "make peace",
+    "peace",
+    "truce",
+    "end the war",
+    "reconcile"
+   ],
+   "desc": "Make two warring peoples lay down their arms.",
+   "cost": 30
+  },
+  {
+   "id": "war",
+   "name": "Start a war",
+   "category": "Peoples",
+   "icon": "swords",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.start-war",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "other": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "war",
+    "start a war",
+    "attack",
+    "declare war",
+    "fight"
+   ],
+   "desc": "Set two peoples at war.",
+   "cost": 30
+  },
+  {
+   "id": "rename-settlement",
+   "name": "Rename a settlement",
+   "category": "Peoples",
+   "icon": "sign",
+   "ring": 2,
+   "gesture": null,
+   "command": "settlement.rename",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "name": {
+     "type": "string"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "rename the town",
+    "rename the village",
+    "call the town"
+   ],
+   "desc": "Give a settlement a new name."
+  },
+  {
+   "id": "teach",
+   "name": "Teach",
+   "category": "Ideas",
+   "icon": "book",
+   "ring": 0,
+   "gesture": null,
+   "command": "idea.teach",
+   "params": {},
+   "schema": {
+    "knowledge": {
+     "type": "enum",
+     "values": "recipes"
+    },
+    "agent": {
+     "type": "entity",
+     "min": 1,
+     "desc": "a person (id)",
+     "entity": [
+      "agent"
+     ]
+    },
+    "settlement": {
+     "type": "entity",
+     "desc": "a settlement (id or name)",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "teach",
+    "show",
+    "reveal",
+    "instruct",
+    "explain"
+   ],
+   "desc": "Teach an idea (it may be refused).",
+   "cost": 20,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 300
+   }
+  },
+  {
+   "id": "teach-miracle",
+   "name": "Teaching miracle",
+   "category": "Ideas",
+   "icon": "scroll",
+   "ring": 0,
+   "gesture": "caret",
+   "command": "miracle.teach",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    },
+    "knowledge": {
+     "type": "enum",
+     "values": "recipes"
+    },
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "teach them",
+    "what comes next",
+    "the next idea"
+   ],
+   "desc": "Teach a settlement the next thing it could grasp.",
+   "cost": 30,
+   "cooldown": 180
+  },
+  {
+   "id": "forget",
+   "name": "Make forget",
+   "category": "Ideas",
+   "icon": "forget",
+   "ring": 2,
+   "gesture": null,
+   "command": "agent.silence",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "agent id",
+     "entity": [
+      "agent"
+     ]
+    },
+    "knowledge": {
+     "type": "enum",
+     "values": "recipes"
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "forget",
+    "silence",
+    "unlearn",
+    "mute"
+   ],
+   "desc": "Make a person forget (or fall silent).",
+   "cost": 10
+  },
+  {
+   "id": "introduce-item",
+   "name": "Introduce a thing",
+   "category": "Ideas",
+   "icon": "gift-box",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.introduce",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "item": {
+     "type": "enum",
+     "values": "items"
+    },
+    "qty": {
+     "type": "number",
+     "min": 1,
+     "max": 1000000,
+     "unit": "units"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "introduce",
+    "bring",
+    "give them something",
+    "drop something on them"
+   ],
+   "desc": "Introduce an item to a people: they notice, try it, adopt it, or refuse it.",
+   "cost": 15,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 300
+   }
+  },
+  {
+   "id": "introduce-idea",
+   "name": "Introduce an idea",
+   "category": "Ideas",
+   "icon": "idea",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.introduce",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "idea": {
+     "type": "enum",
+     "values": "recipes"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "introduce the idea",
+    "the idea of"
+   ],
+   "desc": "Introduce an idea to a people: they notice, try it, adopt it, or refuse it.",
+   "cost": 15,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 300
+   }
+  },
+  {
+   "id": "introduce-artifact",
+   "name": "Drop an artifact",
+   "category": "Ideas",
+   "icon": "artifact",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.introduce",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "artifact": {
+     "type": "enum",
+     "values": "items"
+    },
+    "qty": {
+     "type": "number",
+     "min": 1,
+     "max": 1000000,
+     "unit": "units"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "artifact",
+    "relic",
+    "strange object",
+    "mystery"
+   ],
+   "desc": "Introduce an artifact to a people: they notice, try it, adopt it, or refuse it.",
+   "cost": 15,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 300
+   }
+  },
+  {
+   "id": "introduce-animal",
+   "name": "Introduce an animal",
+   "category": "Ideas",
+   "icon": "paw-new",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.introduce",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "animal": {
+     "type": "enum",
+     "values": "animals"
+    },
+    "qty": {
+     "type": "number",
+     "min": 1,
+     "max": 1000000,
+     "unit": "units"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "introduce animals",
+    "bring animals"
+   ],
+   "desc": "Introduce an animal to a people: they notice, try it, adopt it, or refuse it.",
+   "cost": 15,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 300
+   }
+  },
+  {
+   "id": "introduce-crop",
+   "name": "Introduce a crop",
+   "category": "Ideas",
+   "icon": "crop",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.introduce",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "crop": {
+     "type": "enum",
+     "values": "plants"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "crop",
+    "introduce a crop",
+    "seed corn",
+    "grain"
+   ],
+   "desc": "Introduce a crop to a people: they notice, try it, adopt it, or refuse it.",
+   "cost": 15,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 300
+   }
+  },
+  {
+   "id": "introduce-disease",
+   "name": "Introduce a disease",
+   "category": "Ideas",
+   "icon": "germ",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.introduce",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "disease": {
+     "type": "enum",
+     "values": "diseases"
+    },
+    "qty": {
+     "type": "number",
+     "min": 1,
+     "max": 1000000,
+     "unit": "units"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "disease",
+    "sickness",
+    "infect",
+    "plague them",
+    "pox"
+   ],
+   "desc": "Introduce a disease to a people: they notice, try it, adopt it, or refuse it.",
+   "cost": 15,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 300
+   }
+  },
+  {
+   "id": "introduce-people",
+   "name": "Introduce a people",
+   "category": "Ideas",
+   "icon": "strangers",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.introduce",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "people": {
+     "type": "enum",
+     "values": "species"
+    },
+    "qty": {
+     "type": "number",
+     "min": 1,
+     "max": 1000000,
+     "unit": "units"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "strangers",
+    "immigrants",
+    "newcomers",
+    "visitors"
+   ],
+   "desc": "Introduce a people to a people: they notice, try it, adopt it, or refuse it.",
+   "cost": 15,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 300
+   }
+  },
+  {
+   "id": "introduce-substance",
+   "name": "Introduce a substance",
+   "category": "Ideas",
+   "icon": "flask",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.introduce",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "substance": {
+     "type": "string",
+     "desc": "anything: unknown words become new content"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "substance",
+    "material",
+    "introduce something new"
+   ],
+   "desc": "Introduce a substance to a people: they notice, try it, adopt it, or refuse it.",
+   "cost": 15,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 300
+   }
+  },
+  {
+   "id": "withdraw",
+   "name": "Take back",
+   "category": "Ideas",
+   "icon": "withdraw",
+   "ring": 2,
+   "gesture": null,
+   "command": "settlement.withdraw",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "item": {
+     "type": "enum",
+     "values": "items"
+    },
+    "idea": {
+     "type": "enum",
+     "values": "recipes"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "withdraw",
+    "take back",
+    "take away",
+    "remove"
+   ],
+   "desc": "Take back a thing or an idea.",
+   "cost": 10
+  },
+  {
+   "id": "invent-thing",
+   "name": "Invent a thing",
+   "category": "Ideas",
+   "icon": "invent",
+   "ring": 1,
+   "gesture": null,
+   "command": "content.item",
+   "params": {},
+   "schema": {
+    "name": {
+     "type": "string"
+    },
+    "tags": {
+     "type": "any",
+     "desc": "food, drink, material, tool, weapon, drug, cloth, luxury, fuel ..."
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "invent",
+    "create",
+    "make up",
+    "new thing"
+   ],
+   "desc": "A thing the world never had (and the craft to make it).",
+   "cost": 20
+  },
+  {
+   "id": "invent-idea",
+   "name": "Invent an idea",
+   "category": "Ideas",
+   "icon": "lightbulb",
+   "ring": 1,
+   "gesture": null,
+   "command": "content.idea",
+   "params": {},
+   "schema": {
+    "name": {
+     "type": "string"
+    },
+    "effect": {
+     "type": "enum",
+     "values": [
+      "teach",
+      "faith",
+      "trade",
+      "yield.farm",
+      "yield.forage",
+      "yield.hunt",
+      "yield.fish",
+      "mortality",
+      "contagion",
+      "speed",
+      "war",
+      "diplomacy",
+      "safety",
+      "order",
+      "light",
+      "haul",
+      "road",
+      "blight"
+     ],
+     "default": "teach"
+    },
+    "mult": {
+     "type": "number",
+     "min": 0.1,
+     "max": 5,
+     "default": 1.4,
+     "unit": "×"
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "invent the idea",
+    "new idea",
+    "discover"
+   ],
+   "desc": "An idea the world never had, with an effect.",
+   "cost": 30
+  },
+  {
+   "id": "ignite",
+   "name": "Set fire",
+   "category": "Fire",
+   "icon": "fire",
+   "ring": 0,
+   "gesture": null,
+   "command": "fire.ignite",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 60,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "strength": {
+     "type": "number",
+     "min": 0.05,
+     "max": 1,
+     "default": 0.8,
+     "unit": "m"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "fire",
+    "burn",
+    "ignite",
+    "set fire",
+    "set alight",
+    "torch"
+   ],
+   "desc": "Set fire to whatever will burn.",
+   "cost": 6,
+   "witness": {
+    "harm": 0.5,
+    "wonder": 0.2,
+    "radius": 500
+   }
+  },
+  {
+   "id": "extinguish",
+   "name": "Put out fire",
+   "category": "Fire",
+   "icon": "no-fire",
+   "ring": 0,
+   "gesture": null,
+   "command": "fire.extinguish",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 300,
+     "desc": "radius in metres",
+     "unit": "m",
+     "target": "region"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "extinguish",
+    "put out",
+    "douse",
+    "quench the fire"
+   ],
+   "desc": "Put the fires out.",
+   "cost": 4,
+   "witness": {
+    "help": 0.3,
+    "radius": 500
+   }
+  },
+  {
+   "id": "fire-miracle",
+   "name": "Gift of fire",
+   "category": "Fire",
+   "icon": "flame",
+   "ring": 0,
+   "gesture": "triangle",
+   "command": "miracle.fire",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "gift of fire",
+    "light the hearth",
+    "give them fire",
+    "flame"
+   ],
+   "desc": "Light their hearths: they may learn to keep fire.",
+   "cost": 8,
+   "cooldown": 48
+  },
+  {
+   "id": "fireball",
+   "name": "Fireball",
+   "category": "Fire",
+   "icon": "fireball",
+   "ring": 1,
+   "gesture": "arrow",
+   "command": "miracle.fireball",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "fireball",
+    "ball of fire",
+    "firebomb",
+    "hellfire"
+   ],
+   "desc": "Hurl a ball of fire: it burns, kills — and teaches fire.",
+   "cost": 20,
+   "cooldown": 120
+  },
+  {
+   "id": "firestorm-call",
+   "name": "Firestorm",
+   "category": "Fire",
+   "icon": "firestorm",
+   "ring": 2,
+   "gesture": null,
+   "command": "fire.firestorm",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 20,
+     "max": 5000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.1,
+     "max": 5,
+     "unit": "×"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "firestorm",
+    "storm of fire",
+    "inferno"
+   ],
+   "desc": "Raise a firestorm.",
+   "cost": 60,
+   "cooldown": 480
+  },
+  {
+   "id": "disaster-meteor",
+   "name": "Meteor",
+   "category": "Disasters",
+   "icon": "d-meteor",
+   "ring": 0,
+   "gesture": "star",
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "meteor"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "meteor",
+    "meteorite",
+    "shooting star",
+    "falling star",
+    "bolide",
+    "asteroid",
+    "space rock"
+   ],
+   "desc": "A stone from the sky: a blinding fall, a crater, a ring of fire, iron in the ashes.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-meteor-shower",
+   "name": "Meteor shower",
+   "category": "Disasters",
+   "icon": "d-meteor-shower",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "meteor-shower"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "meteor shower",
+    "shooting stars",
+    "star shower",
+    "falling stars",
+    "rain of fire"
+   ],
+   "desc": "A night of falling stars: many small stones burn down across a wide land.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-comet",
+   "name": "Comet",
+   "category": "Disasters",
+   "icon": "d-comet",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "comet"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "comet",
+    "great comet",
+    "dirty snowball",
+    "tailed star"
+   ],
+   "desc": "A great comet hangs in the sky for days — then strikes: a crater wider than a town, fire, dust that dims the sun.",
+   "cost": 400,
+   "cooldown": 720
+  },
+  {
+   "id": "disaster-swarm",
+   "name": "Swarm",
+   "category": "Disasters",
+   "icon": "d-swarm",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "swarm"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "swarm",
+    "locusts",
+    "locust swarm",
+    "plague of locusts",
+    "insects"
+   ],
+   "desc": "A locust cloud darkens the sky and strips every field it crosses.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-volcano",
+   "name": "Volcano",
+   "category": "Disasters",
+   "icon": "d-volcano",
+   "ring": 0,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "volcano"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "volcano",
+    "eruption",
+    "erupt",
+    "fire mountain",
+    "lava mountain"
+   ],
+   "desc": "The ground splits and a mountain of fire pours lava and ash over the land.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-supervolcano",
+   "name": "Supervolcano",
+   "category": "Disasters",
+   "icon": "d-supervolcano",
+   "ring": 2,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "supervolcano"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "supervolcano",
+    "super volcano",
+    "caldera",
+    "yellowstone",
+    "the big eruption"
+   ],
+   "desc": "A caldera tens of kilometres wide opens: ash buries the land, the sky goes dark for a year.",
+   "cost": 400,
+   "cooldown": 720
+  },
+  {
+   "id": "disaster-quake",
+   "name": "Earthquake",
+   "category": "Disasters",
+   "icon": "d-quake",
+   "ring": 0,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "quake"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "earthquake",
+    "earthquake",
+    "tremor",
+    "shake",
+    "shaking",
+    "seism"
+   ],
+   "desc": "The ground shakes: weak walls fall first, slopes slide, the coast may send back a wave.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-sinkhole",
+   "name": "Sinkhole",
+   "category": "Disasters",
+   "icon": "d-sinkhole",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "sinkhole"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "sinkhole",
+    "sink hole",
+    "the ground opens",
+    "pit"
+   ],
+   "desc": "The ground opens and swallows what stood on it.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-rift",
+   "name": "Rift",
+   "category": "Disasters",
+   "icon": "d-rift",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "rift"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "rift",
+    "crack",
+    "chasm",
+    "fissure",
+    "the earth splits"
+   ],
+   "desc": "A crack runs across the land, lava welling in its floor.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-flood",
+   "name": "Flood",
+   "category": "Disasters",
+   "icon": "d-flood",
+   "ring": 0,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "flood"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "flood",
+    "deluge",
+    "inundation",
+    "floods",
+    "rising waters",
+    "high water"
+   ],
+   "desc": "Rivers burst their banks and the low places drown.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-tsunami",
+   "name": "Tsunami",
+   "category": "Disasters",
+   "icon": "d-tsunami",
+   "ring": 0,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "tsunami"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "tsunami",
+    "tidal wave",
+    "giant wave",
+    "wall of water"
+   ],
+   "desc": "A wall of water rises from the sea and runs inland.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-drought",
+   "name": "Drought",
+   "category": "Disasters",
+   "icon": "d-drought",
+   "ring": 0,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "drought"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "drought",
+    "dry spell",
+    "no rain",
+    "dryness",
+    "the rains fail"
+   ],
+   "desc": "No rain for weeks: wells sink, crops wither, the herds wander off.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-hurricane",
+   "name": "Hurricane",
+   "category": "Disasters",
+   "icon": "d-hurricane",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "hurricane"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "hurricane",
+    "cyclone",
+    "typhoon",
+    "hurricanes",
+    "great storm"
+   ],
+   "desc": "A great spiral storm comes off the sea: wind, rain, and a surge of water at the coast.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-tornado",
+   "name": "Tornado",
+   "category": "Disasters",
+   "icon": "d-tornado",
+   "ring": 0,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "tornado"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "tornado",
+    "twister",
+    "whirlwind",
+    "cyclone funnel",
+    "funnel cloud"
+   ],
+   "desc": "A twisting funnel walks across the land, flinging roofs, trees and people.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-wildfire",
+   "name": "Wildfire",
+   "category": "Disasters",
+   "icon": "d-wildfire",
+   "ring": 0,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "wildfire"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "wildfire",
+    "forest fire",
+    "bushfire",
+    "brush fire",
+    "fire storm in the woods",
+    "blaze"
+   ],
+   "desc": "Fire runs through dry country faster than people can flee.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-firestorm",
+   "name": "Firestorm",
+   "category": "Disasters",
+   "icon": "d-firestorm",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "firestorm"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "firestorm",
+    "fire storm",
+    "storm of fire",
+    "inferno",
+    "holocaust of flame"
+   ],
+   "desc": "Fire makes its own wind: a storm of flame that nothing in its path survives.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-plague",
+   "name": "Plague",
+   "category": "Disasters",
+   "icon": "d-plague",
+   "ring": 0,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "plague"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "plague",
+    "pestilence",
+    "epidemic",
+    "black death",
+    "pox",
+    "the sickness"
+   ],
+   "desc": "A sickness passes from hand to hand through the towns.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-blight",
+   "name": "Blight",
+   "category": "Disasters",
+   "icon": "d-blight",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "blight"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "blight",
+    "crop rot",
+    "rot",
+    "mildew",
+    "withering"
+   ],
+   "desc": "A rot spreads through fields and woods.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-infestation",
+   "name": "Infestation",
+   "category": "Disasters",
+   "icon": "d-infestation",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "infestation"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "infestation",
+    "vermin",
+    "rats",
+    "pests",
+    "weevils",
+    "mice"
+   ],
+   "desc": "Rats and weevils swarm the granaries and the fields.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-solar-flare",
+   "name": "Solar flare",
+   "category": "Disasters",
+   "icon": "d-solar-flare",
+   "ring": 2,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "solar-flare"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "solar flare",
+    "flare",
+    "sun storm",
+    "solar storm",
+    "coronal mass ejection"
+   ],
+   "desc": "The star throws off a storm of light: skies burn with auroras, the day side is scorched.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-impact-winter",
+   "name": "Impact winter",
+   "category": "Disasters",
+   "icon": "d-impact-winter",
+   "ring": 2,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "impact-winter"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "impact winter",
+    "nuclear winter",
+    "dark sky",
+    "year without a summer",
+    "volcanic winter"
+   ],
+   "desc": "Dust hides the sun: a year of cold and failed harvests.",
+   "cost": 400,
+   "cooldown": 720
+  },
+  {
+   "id": "disaster-gravity-slip",
+   "name": "Gravity slip",
+   "category": "Disasters",
+   "icon": "d-gravity-slip",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "gravity-slip"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "gravity slip",
+    "gravity fails",
+    "weightlessness",
+    "float",
+    "antigravity",
+    "levitation"
+   ],
+   "desc": "For a while the world lets go: people, beasts and loose things drift up — and fall.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-magnetic-storm",
+   "name": "Magnetic storm",
+   "category": "Disasters",
+   "icon": "d-magnetic-storm",
+   "ring": 2,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "magnetic-storm"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "magnetic storm",
+    "geomagnetic storm",
+    "aurora storm",
+    "pole flip",
+    "magnetic reversal"
+   ],
+   "desc": "The world's shield flickers: auroras at noon, birds lost, a rain of hard light.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-eclipse",
+   "name": "Year-long eclipse",
+   "category": "Disasters",
+   "icon": "d-eclipse",
+   "ring": 2,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "eclipse"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "year-long eclipse",
+    "year-long eclipse",
+    "long night",
+    "darkness",
+    "eclipse of the sun",
+    "black sun"
+   ],
+   "desc": "Something stands before the sun for a whole year. Cold, dark, and the end of the world foretold.",
+   "cost": 400,
+   "cooldown": 720
+  },
+  {
+   "id": "disaster-moon-fall",
+   "name": "Second moon falling",
+   "category": "Disasters",
+   "icon": "d-moon-fall",
+   "ring": 2,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "moon-fall"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "second moon falling",
+    "falling moon",
+    "moon fall",
+    "moonfall",
+    "the moon falls",
+    "second moon"
+   ],
+   "desc": "A moon breaks its orbit and falls: tides tear the coasts for days, then it strikes.",
+   "cost": 400,
+   "cooldown": 720
+  },
+  {
+   "id": "disaster-rogue-flyby",
+   "name": "Rogue planet flyby",
+   "category": "Disasters",
+   "icon": "d-rogue-flyby",
+   "ring": 2,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "rogue-flyby"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "rogue planet flyby",
+    "rogue planet",
+    "wandering world",
+    "flyby",
+    "close encounter",
+    "passing planet"
+   ],
+   "desc": "A wandering world passes close: tides, quakes, a long night of strange light, a bent orbit.",
+   "cost": 400,
+   "cooldown": 720
+  },
+  {
+   "id": "disaster-acid-rain",
+   "name": "Acid rain",
+   "category": "Disasters",
+   "icon": "d-acid-rain",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "acid-rain"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "acid rain",
+    "acid storm",
+    "burning rain",
+    "poison rain"
+   ],
+   "desc": "Rain that burns leaves, pocks stone and stings the skin.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-ice-age",
+   "name": "Ice age",
+   "category": "Disasters",
+   "icon": "d-ice-age",
+   "ring": 2,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "ice-age"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "ice age",
+    "glaciation",
+    "great cold",
+    "the long winter",
+    "snowball"
+   ],
+   "desc": "The cold comes down from the poles and does not leave: glaciers, frozen seas, short summers.",
+   "cost": 400,
+   "cooldown": 720
+  },
+  {
+   "id": "disaster-heat-wave",
+   "name": "Heat wave",
+   "category": "Disasters",
+   "icon": "d-heat-wave",
+   "ring": 2,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "heat-wave"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "heat wave",
+    "heatwave",
+    "scorching heat",
+    "hot spell",
+    "burning summer"
+   ],
+   "desc": "Weeks of killing heat: the old and the weak fall, fields burn brown.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-dust-bowl",
+   "name": "Dust bowl",
+   "category": "Disasters",
+   "icon": "d-dust-bowl",
+   "ring": 2,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "dust-bowl"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "dust bowl",
+    "dustbowl",
+    "black blizzard",
+    "dust storms",
+    "the soil blows away"
+   ],
+   "desc": "Overworked land dries and blows away; black blizzards bury the farms.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-glass-storm",
+   "name": "Glass storm",
+   "category": "Disasters",
+   "icon": "d-glass-storm",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "glass-storm"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "glass storm",
+    "glass rain",
+    "lightning storm on the dunes",
+    "fulgurite storm"
+   ],
+   "desc": "Lightning walks the dunes all night; morning finds the sand fused into rivers of glass.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-overgrowth",
+   "name": "Overgrowth",
+   "category": "Disasters",
+   "icon": "d-overgrowth",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "overgrowth"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "overgrowth",
+    "the green madness",
+    "jungle rises",
+    "verdant surge",
+    "plant explosion"
+   ],
+   "desc": "The green goes mad: vines split walls, forest swallows fields and roads in days.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-leviathan",
+   "name": "Leviathan",
+   "category": "Disasters",
+   "icon": "d-leviathan",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "leviathan"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "leviathan",
+    "sea monster",
+    "kraken",
+    "sea serpent",
+    "monster from the deep"
+   ],
+   "desc": "Something vast rises from the deep and walks the shallows, wrecking boats and harbours.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-forgetting-fog",
+   "name": "Forgetting fog",
+   "category": "Disasters",
+   "icon": "d-forgetting-fog",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "forgetting-fog"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "forgetting fog",
+    "mind fog",
+    "the great forgetting",
+    "fog of forgetting",
+    "amnesia"
+   ],
+   "desc": "A grey mist settles and people walk out of it not knowing what they knew. Only what is written survives.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "disaster-stampede",
+   "name": "Stampede",
+   "category": "Disasters",
+   "icon": "d-stampede",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "stampede"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "unit": "×"
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 1,
+     "max": 10000000,
+     "desc": "ticks",
+     "unit": "ticks"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "a front heads here"
+    },
+    "heading": {
+     "type": "number",
+     "min": -360,
+     "max": 360,
+     "desc": "degrees from north",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "stampede",
+    "the herds run",
+    "rampage",
+    "stampeding herd"
+   ],
+   "desc": "The herds panic: a thundering river of beasts tramples fields, fences and anyone in the way.",
+   "cost": 80,
+   "cooldown": 120
+  },
+  {
+   "id": "cancel-disaster",
+   "name": "Stop a disaster",
+   "category": "Disasters",
+   "icon": "stop",
+   "ring": 0,
+   "gesture": null,
+   "command": "disaster.cancel",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "entity": [
+      "disaster"
+     ]
+    },
+    "kind": {
+     "type": "enum",
+     "values": "disasters"
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "all": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "stop",
+    "cancel",
+    "end it",
+    "enough",
+    "halt"
+   ],
+   "desc": "Stop a live disaster."
+  },
+  {
+   "id": "scale-disaster",
+   "name": "Grow or shrink a disaster",
+   "category": "Disasters",
+   "icon": "scale",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.scale",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "entity": [
+      "disaster"
+     ]
+    },
+    "kind": {
+     "type": "enum",
+     "values": "disasters"
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "factor": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20,
+     "default": 2,
+     "unit": "×"
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "bigger",
+    "smaller",
+    "grow",
+    "shrink",
+    "worse",
+    "weaker"
+   ],
+   "desc": "Make a live disaster bigger or smaller.",
+   "cost": 20
+  },
+  {
+   "id": "move-disaster",
+   "name": "Move a disaster",
+   "category": "Disasters",
+   "icon": "move-d",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.move",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "entity": [
+      "disaster"
+     ]
+    },
+    "kind": {
+     "type": "enum",
+     "values": "disasters"
+    },
+    "to": {
+     "type": "pos",
+     "target": "line",
+     "desc": "put it here"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "head this way"
+    },
+    "speed": {
+     "type": "number",
+     "min": 0,
+     "max": 5000,
+     "desc": "m per tick",
+     "unit": "m/s"
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "move the storm",
+    "steer",
+    "turn the storm aside",
+    "send the storm away"
+   ],
+   "desc": "Move a live disaster or set it heading.",
+   "cost": 20
+  },
+  {
+   "id": "freeze-disaster",
+   "name": "Freeze a disaster",
+   "category": "Disasters",
+   "icon": "freeze",
+   "ring": 1,
+   "gesture": null,
+   "command": "disaster.freeze",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "entity": [
+      "disaster"
+     ]
+    },
+    "kind": {
+     "type": "enum",
+     "values": "disasters"
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "on": {
+     "type": "boolean",
+     "default": true
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "freeze",
+    "hold it",
+    "stop in the air",
+    "suspend"
+   ],
+   "desc": "Freeze a live disaster mid-flight.",
+   "cost": 20
+  },
+  {
+   "id": "meteor-miracle",
+   "name": "Falling star",
+   "category": "Disasters",
+   "icon": "star-fall",
+   "ring": 0,
+   "gesture": null,
+   "command": "miracle.meteor",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "falling star",
+    "call a star down"
+   ],
+   "desc": "Call a star down (gesture: a star).",
+   "cost": 40,
+   "cooldown": 240
+  },
+  {
+   "id": "grab",
+   "name": "Grab",
+   "category": "Hand",
+   "icon": "grab",
+   "ring": 0,
+   "gesture": null,
+   "command": "hand.grab",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "target": {
+     "type": "entity",
+     "desc": "an entity { kind, id } or \"kind:id\"",
+     "entity": [
+      "agent",
+      "animal",
+      "tree",
+      "rock",
+      "item",
+      "building",
+      "creature"
+     ]
+    },
+    "kind": {
+     "type": "enum",
+     "values": [
+      "agent",
+      "animal",
+      "tree",
+      "rock",
+      "item",
+      "building",
+      "creature"
+     ]
+    },
+    "id": {
+     "type": "entity",
+     "min": 0,
+     "entity": [
+      "agent"
+     ]
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 2000,
+     "default": 60,
+     "unit": "m",
+     "target": "region"
+    },
+    "item": {
+     "type": "enum",
+     "values": "items",
+     "desc": "conjure an item into the hand"
+    },
+    "qty": {
+     "type": "number",
+     "min": 1,
+     "max": 100000,
+     "unit": "units"
+    },
+    "mass": {
+     "type": "number",
+     "min": 10,
+     "max": 2000000,
+     "desc": "kg (a boulder)",
+     "unit": "kg"
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "grab",
+    "pick up",
+    "take",
+    "lift",
+    "seize",
+    "hold"
+   ],
+   "desc": "Grab anything: a person, an animal, a tree, a rock, an item, a hut, the creature."
+  },
+  {
+   "id": "throw",
+   "name": "Throw",
+   "category": "Hand",
+   "icon": "throw",
+   "ring": 0,
+   "gesture": null,
+   "command": "hand.throw",
+   "params": {},
+   "schema": {
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "throw at this point"
+    },
+    "speed": {
+     "type": "number",
+     "min": 0,
+     "max": 3000,
+     "desc": "m/s",
+     "unit": "m/s"
+    },
+    "angle": {
+     "type": "number",
+     "min": 0,
+     "max": 89,
+     "default": 35,
+     "desc": "degrees above the ground",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "throw",
+    "hurl",
+    "fling",
+    "toss",
+    "chuck",
+    "pitch"
+   ],
+   "desc": "Throw what the hand holds.",
+   "witness": {
+    "wonder": 0.2,
+    "radius": 300
+   }
+  },
+  {
+   "id": "release",
+   "name": "Let go",
+   "category": "Hand",
+   "icon": "open-hand",
+   "ring": 1,
+   "gesture": null,
+   "command": "hand.release",
+   "params": {},
+   "schema": {
+    "vel": {
+     "type": "vec3",
+     "desc": "m/s, body frame"
+    },
+    "toward": {
+     "type": "pos",
+     "target": "point",
+     "desc": "throw at this point"
+    },
+    "speed": {
+     "type": "number",
+     "min": 0,
+     "max": 3000,
+     "desc": "m/s",
+     "unit": "m/s"
+    },
+    "angle": {
+     "type": "number",
+     "min": 0,
+     "max": 89,
+     "default": 35,
+     "desc": "degrees above the ground",
+     "unit": "°"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "let go",
+    "release",
+    "drop it"
+   ],
+   "desc": "Let go of what the hand holds."
+  },
+  {
+   "id": "place",
+   "name": "Set down",
+   "category": "Hand",
+   "icon": "place",
+   "ring": 0,
+   "gesture": null,
+   "command": "hand.place",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "place",
+    "set down",
+    "put down",
+    "put"
+   ],
+   "desc": "Set something down gently."
+  },
+  {
+   "id": "drop",
+   "name": "Drop",
+   "category": "Hand",
+   "icon": "drop",
+   "ring": 1,
+   "gesture": null,
+   "command": "hand.drop",
+   "params": {},
+   "schema": {},
+   "target": "none",
+   "synonyms": [
+    "drop"
+   ],
+   "desc": "Drop what the hand holds."
+  },
+  {
+   "id": "slap",
+   "name": "Slap",
+   "category": "Hand",
+   "icon": "slap",
+   "ring": 0,
+   "gesture": null,
+   "command": "hand.slap",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "target": {
+     "type": "entity",
+     "desc": "an entity { kind, id } or \"kind:id\"",
+     "entity": [
+      "agent",
+      "animal",
+      "tree",
+      "rock",
+      "item",
+      "building",
+      "creature"
+     ]
+    },
+    "kind": {
+     "type": "enum",
+     "values": [
+      "agent",
+      "animal",
+      "tree",
+      "rock",
+      "item",
+      "building",
+      "creature"
+     ]
+    },
+    "id": {
+     "type": "entity",
+     "min": 0,
+     "entity": [
+      "agent"
+     ]
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 1000,
+     "default": 40,
+     "unit": "m",
+     "target": "region"
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "slap",
+    "hit",
+    "punish",
+    "smack",
+    "spank"
+   ],
+   "desc": "Slap: hurts a person, punishes the creature."
+  },
+  {
+   "id": "stroke",
+   "name": "Stroke",
+   "category": "Hand",
+   "icon": "stroke",
+   "ring": 0,
+   "gesture": null,
+   "command": "hand.stroke",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "target": {
+     "type": "entity",
+     "desc": "an entity { kind, id } or \"kind:id\"",
+     "entity": [
+      "agent",
+      "animal",
+      "tree",
+      "rock",
+      "item",
+      "building",
+      "creature"
+     ]
+    },
+    "kind": {
+     "type": "enum",
+     "values": [
+      "agent",
+      "animal",
+      "tree",
+      "rock",
+      "item",
+      "building",
+      "creature"
+     ]
+    },
+    "id": {
+     "type": "entity",
+     "min": 0,
+     "entity": [
+      "agent"
+     ]
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 1000,
+     "default": 40,
+     "unit": "m",
+     "target": "region"
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "stroke",
+    "pet",
+    "comfort",
+    "reward",
+    "caress",
+    "pat"
+   ],
+   "desc": "Stroke: comforts and heals a little, rewards the creature."
+  },
+  {
+   "id": "shield",
+   "name": "Shield",
+   "category": "Hand",
+   "icon": "shield",
+   "ring": 1,
+   "gesture": "circle",
+   "command": "miracle.shield",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "desc": "metres",
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    },
+    "duration": {
+     "type": "number",
+     "min": 10,
+     "max": 1000000,
+     "default": 1440,
+     "desc": "ticks",
+     "unit": "ticks"
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "shield",
+    "protect",
+    "ward",
+    "barrier",
+    "dome"
+   ],
+   "desc": "A shield nothing can pass: disasters, fire, thrown things.",
+   "cost": 30,
+   "cooldown": 180
+  },
+  {
+   "id": "cast",
+   "name": "Cast",
+   "category": "Hand",
+   "icon": "cast",
+   "ring": 2,
+   "gesture": null,
+   "command": "miracle.cast",
+   "params": {},
+   "schema": {
+    "kind": {
+     "type": "enum",
+     "values": [
+      "water",
+      "food",
+      "heal",
+      "forest",
+      "storm",
+      "fire",
+      "fireball",
+      "shield",
+      "lightning",
+      "wood",
+      "fertility",
+      "calm",
+      "teach",
+      "meteor"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 20000,
+     "unit": "m",
+     "target": "region"
+    },
+    "power": {
+     "type": "number",
+     "min": 0.05,
+     "max": 5,
+     "default": 1,
+     "unit": "×"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "cast",
+    "miracle",
+    "work a miracle"
+   ],
+   "desc": "Cast any miracle by name.",
+   "cost": 10,
+   "cooldown": 60
+  },
+  {
+   "id": "adopt",
+   "name": "Adopt a creature",
+   "category": "Creature",
+   "icon": "creature",
+   "ring": 0,
+   "gesture": null,
+   "command": "creature.adopt",
+   "params": {},
+   "schema": {
+    "template": {
+     "type": "enum",
+     "values": "creatures",
+     "default": "ape"
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "name": {
+     "type": "string"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "creature",
+    "adopt",
+    "pet",
+    "titan",
+    "beast of my own"
+   ],
+   "desc": "Adopt a creature: it learns from your hand.",
+   "cost": 100
+  },
+  {
+   "id": "leash",
+   "name": "Leash",
+   "category": "Creature",
+   "icon": "leash",
+   "ring": 0,
+   "gesture": null,
+   "command": "creature.leash",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "creature id (default: your first)",
+     "entity": [
+      "creature"
+     ]
+    },
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "mode": {
+     "type": "enum",
+     "values": [
+      "tend",
+      "defend",
+      "impress",
+      "terrify",
+      "explore"
+     ]
+    },
+    "length": {
+     "type": "number",
+     "min": 50,
+     "max": 20000,
+     "default": 900,
+     "unit": "m"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "leash",
+    "tie",
+    "tether",
+    "guard the village"
+   ],
+   "desc": "Leash the creature to a village or a place, with a mode."
+  },
+  {
+   "id": "unleash",
+   "name": "Unleash",
+   "category": "Creature",
+   "icon": "unleash",
+   "ring": 1,
+   "gesture": null,
+   "command": "creature.unleash",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "creature id (default: your first)",
+     "entity": [
+      "creature"
+     ]
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "unleash",
+    "let it roam",
+    "set loose"
+   ],
+   "desc": "Let the creature roam."
+  },
+  {
+   "id": "creature-mode",
+   "name": "Creature mode",
+   "category": "Creature",
+   "icon": "mode",
+   "ring": 1,
+   "gesture": null,
+   "command": "creature.set-mode",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "creature id (default: your first)",
+     "entity": [
+      "creature"
+     ]
+    },
+    "mode": {
+     "type": "enum",
+     "values": [
+      "tend",
+      "defend",
+      "impress",
+      "terrify",
+      "explore"
+     ]
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "tend",
+    "defend",
+    "impress",
+    "terrify",
+    "explore"
+   ],
+   "desc": "What the leashed creature should do."
+  },
+  {
+   "id": "reward",
+   "name": "Reward",
+   "category": "Creature",
+   "icon": "treat",
+   "ring": 0,
+   "gesture": null,
+   "command": "creature.reward",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "creature id (default: your first)",
+     "entity": [
+      "creature"
+     ]
+    },
+    "amount": {
+     "type": "number",
+     "min": 0.1,
+     "max": 5,
+     "default": 1,
+     "unit": "atm"
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "good boy",
+    "good girl",
+    "well done",
+    "reward it",
+    "praise"
+   ],
+   "desc": "Reward the creature for what it just did."
+  },
+  {
+   "id": "punish",
+   "name": "Punish",
+   "category": "Creature",
+   "icon": "stick",
+   "ring": 0,
+   "gesture": null,
+   "command": "creature.punish",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "creature id (default: your first)",
+     "entity": [
+      "creature"
+     ]
+    },
+    "amount": {
+     "type": "number",
+     "min": 0.1,
+     "max": 5,
+     "default": 1,
+     "unit": "atm"
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "bad",
+    "no",
+    "punish it",
+    "scold"
+   ],
+   "desc": "Punish the creature for what it just did."
+  },
+  {
+   "id": "teach-creature",
+   "name": "Teach by example",
+   "category": "Creature",
+   "icon": "show",
+   "ring": 1,
+   "gesture": null,
+   "command": "creature.teach-by-example",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "creature id (default: your first)",
+     "entity": [
+      "creature"
+     ]
+    },
+    "miracle": {
+     "type": "enum",
+     "values": [
+      "water",
+      "food",
+      "heal",
+      "forest",
+      "storm",
+      "fire",
+      "fireball",
+      "shield",
+      "lightning",
+      "wood",
+      "fertility",
+      "calm",
+      "teach",
+      "meteor"
+     ]
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "show it",
+    "teach the creature",
+    "watch me"
+   ],
+   "desc": "Cast a miracle for the creature to learn."
+  },
+  {
+   "id": "creature-go",
+   "name": "Send the creature",
+   "category": "Creature",
+   "icon": "go",
+   "ring": 1,
+   "gesture": null,
+   "command": "creature.move",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "creature id (default: your first)",
+     "entity": [
+      "creature"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "go",
+    "come",
+    "fetch",
+    "go there",
+    "call the creature"
+   ],
+   "desc": "Send the creature somewhere."
+  },
+  {
+   "id": "creature-rename",
+   "name": "Name the creature",
+   "category": "Creature",
+   "icon": "name-c",
+   "ring": 2,
+   "gesture": null,
+   "command": "creature.rename",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "creature id (default: your first)",
+     "entity": [
+      "creature"
+     ]
+    },
+    "to": {
+     "type": "string"
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "name the creature"
+   ],
+   "desc": "Rename the creature."
+  },
+  {
+   "id": "grow-creature",
+   "name": "Grow the creature",
+   "category": "Creature",
+   "icon": "grow",
+   "ring": 2,
+   "gesture": null,
+   "command": "creature.grow",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "creature id (default: your first)",
+     "entity": [
+      "creature"
+     ]
+    },
+    "amount": {
+     "type": "number",
+     "min": -1,
+     "max": 1,
+     "default": 0.25,
+     "desc": "growth added (its kind spans 0..1)"
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "grow the creature",
+    "make the creature bigger",
+    "feed it up",
+    "shrink the creature"
+   ],
+   "desc": "Grow (or shrink) the creature at once: years of feeding in a moment."
+  },
+  {
+   "id": "creature-release",
+   "name": "Set the creature free",
+   "category": "Creature",
+   "icon": "free",
+   "ring": 2,
+   "gesture": null,
+   "command": "creature.release",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "creature id (default: your first)",
+     "entity": [
+      "creature"
+     ]
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "set it free",
+    "release the creature",
+    "let it go"
+   ],
+   "desc": "Set the creature free."
+  },
+  {
+   "id": "set-law",
+   "name": "Set a law of nature",
+   "category": "Laws",
+   "icon": "law",
+   "ring": 0,
+   "gesture": null,
+   "command": "set",
+   "params": {},
+   "schema": {
+    "path": {
+     "type": "string"
+    },
+    "value": {
+     "type": "any",
+     "unit": "m"
+    }
+   },
+   "target": "planet",
+   "synonyms": [
+    "set",
+    "law",
+    "change a law",
+    "set a law"
+   ],
+   "desc": "Set any law of the world by its path.",
+   "cost": 50,
+   "witness": {
+    "wonder": 0.4
+   }
+  },
+  {
+   "id": "restraint",
+   "name": "Restraint",
+   "category": "Laws",
+   "icon": "restraint",
+   "ring": 1,
+   "gesture": null,
+   "command": "meta.restraint",
+   "params": {},
+   "schema": {
+    "on": {
+     "type": "boolean",
+     "default": true
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "restraint",
+    "limit my powers",
+    "hard mode",
+    "cost"
+   ],
+   "desc": "Restraint mode: worship costs and cooldowns."
+  },
+  {
+   "id": "rival",
+   "name": "Rival god",
+   "category": "Laws",
+   "icon": "rival",
+   "ring": 1,
+   "gesture": null,
+   "command": "rival.add",
+   "params": {},
+   "schema": {
+    "name": {
+     "type": "string"
+    },
+    "temperament": {
+     "type": "enum",
+     "values": [
+      "benevolent",
+      "wrathful",
+      "trickster",
+      "jealous"
+     ]
+    },
+    "alignment": {
+     "type": "number",
+     "min": -1,
+     "max": 1
+    },
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "rival",
+    "another god",
+    "a new god",
+    "false god",
+    "enemy god"
+   ],
+   "desc": "Add an AI god that acts through the same powers."
+  },
+  {
+   "id": "rival-remove",
+   "name": "Banish a god",
+   "category": "Laws",
+   "icon": "banish",
+   "ring": 2,
+   "gesture": null,
+   "command": "rival.remove",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "max": 3,
+     "entity": [
+      "god"
+     ]
+    },
+    "name": {
+     "type": "string"
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "banish",
+    "remove the god",
+    "kill the god"
+   ],
+   "desc": "Remove a rival god."
+  },
+  {
+   "id": "give-law",
+   "name": "Give a law",
+   "category": "Laws",
+   "icon": "tablet",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.law",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "law": {
+     "type": "enum",
+     "values": [
+      "peace",
+      "worship",
+      "learning",
+      "labour",
+      "hospitality",
+      "tradition",
+      "war",
+      "no-fire",
+      "no-hunting",
+      "sharing"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "commandment",
+    "give them a law",
+    "decree",
+    "rule"
+   ],
+   "desc": "Give a settlement a law: peace, worship, learning, labour ...",
+   "cost": 30
+  },
+  {
+   "id": "natural-disasters",
+   "name": "Nature's violence",
+   "category": "Laws",
+   "icon": "volcano-law",
+   "ring": 2,
+   "gesture": null,
+   "command": "set",
+   "params": {
+    "path": "disasters.natural"
+   },
+   "schema": {
+    "value": {
+     "type": "any",
+     "unit": "m"
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "natural disasters",
+    "calm nature",
+    "violent nature"
+   ],
+   "desc": "How often nature sends disasters on its own."
+  },
+  {
+   "id": "species-law",
+   "name": "Laws of a species",
+   "category": "Laws",
+   "icon": "dna",
+   "ring": 2,
+   "gesture": null,
+   "command": "set",
+   "params": {
+    "path": "species.plains-folk.fertility"
+   },
+   "schema": {
+    "path": {
+     "type": "string"
+    },
+    "value": {
+     "type": "any",
+     "unit": "m"
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "species",
+    "lifespan",
+    "fertility of",
+    "live longer",
+    "more children"
+   ],
+   "desc": "Set a species' fertility, lifespan, speed, size ...",
+   "cost": 50
+  },
+  {
+   "id": "pave",
+   "name": "Pave",
+   "category": "Shape",
+   "icon": "rock",
+   "ring": 1,
+   "gesture": null,
+   "command": "terrain.pave",
+   "params": {},
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "to": {
+     "type": "pos",
+     "target": "point",
+     "desc": "lay a road from pos to here"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 120,
+     "unit": "m",
+     "target": "region"
+    },
+    "width": {
+     "type": "int",
+     "min": 1,
+     "max": 3,
+     "default": 1
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "pave",
+    "pave the ground",
+    "paved",
+    "cobble",
+    "cobble the streets",
+    "lay a road",
+    "build a road",
+    "a road between",
+    "road",
+    "roads",
+    "highway",
+    "causeway"
+   ],
+   "desc": "Pave the ground of a region, or lay a road along the easiest way between two places (the god's roads never fade).",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 300
+   }
+  },
+  {
+   "id": "move-settlement",
+   "name": "Move a settlement",
+   "category": "Peoples",
+   "icon": "move",
+   "ring": 2,
+   "gesture": null,
+   "command": "settlement.move",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "to": {
+     "type": "pos",
+     "target": "point",
+     "desc": "the new place (or pos)"
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "mode": {
+     "type": "enum",
+     "default": "lift",
+     "values": [
+      "lift",
+      "migrate"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "move a settlement",
+    "move the town",
+    "move the village",
+    "relocate",
+    "relocate the town",
+    "lift the town",
+    "uproot the town",
+    "resettle",
+    "migrate"
+   ],
+   "desc": "Lift a whole town — houses, people, herds — and set it down elsewhere, or send its people walking to found it anew.",
+   "cost": 40,
+   "cooldown": 60,
+   "witness": {
+    "wonder": 0.8,
+    "radius": 600
+   }
+  },
+  {
+   "id": "build",
+   "name": "Raise a building",
+   "category": "Peoples",
+   "icon": "found",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.build",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "type": {
+     "type": "enum",
+     "values": "buildings"
+    },
+    "count": {
+     "type": "int",
+     "min": 1,
+     "max": 20,
+     "default": 1
+    },
+    "site": {
+     "type": "boolean",
+     "default": false,
+     "desc": "lay out a site for the people to build (else the god raises it finished)"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "raise a building",
+    "build a temple",
+    "build a granary",
+    "build walls",
+    "erect",
+    "build for them",
+    "raise a temple"
+   ],
+   "desc": "Raise a finished building for a settlement (a temple, walls, a granary...), or lay out a site for its people to build.",
+   "cost": 15,
+   "witness": {
+    "wonder": 0.5,
+    "help": 0.3,
+    "radius": 400
+   }
+  },
+  {
+   "id": "role",
+   "name": "Give a role",
+   "category": "Peoples",
+   "icon": "name",
+   "ring": 2,
+   "gesture": null,
+   "command": "agent.role",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "agent id",
+     "entity": [
+      "agent"
+     ]
+    },
+    "role": {
+     "type": "enum",
+     "values": [
+      "gatherer",
+      "hunter",
+      "fisher",
+      "farmer",
+      "herder",
+      "crafter",
+      "builder",
+      "teacher",
+      "priest",
+      "leader",
+      "trader",
+      "soldier",
+      "sailor",
+      "scholar",
+      "healer"
+     ]
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "give a role",
+    "make chief",
+    "make leader",
+    "crown",
+    "appoint",
+    "make priest",
+    "make healer",
+    "anoint a leader"
+   ],
+   "desc": "Make a person the leader of their town, a priest, a healer, a smith — the role holds.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 200
+   }
+  },
+  {
+   "id": "treaty",
+   "name": "Treaty",
+   "category": "Peoples",
+   "icon": "dove",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.treaty",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "other": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "kind": {
+     "type": "enum",
+     "default": "alliance",
+     "values": [
+      "alliance",
+      "trade"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "treaty",
+    "alliance",
+    "ally",
+    "make allies",
+    "trade pact",
+    "open trade",
+    "make them trade",
+    "bind them together",
+    "ally with",
+    "make an alliance",
+    "sign a treaty"
+   ],
+   "desc": "Bind two peoples by an alliance or a trade pact (a war between them ends).",
+   "cost": 10,
+   "witness": {
+    "wonder": 0.3,
+    "help": 0.2,
+    "radius": 400
+   }
+  },
+  {
+   "id": "sway-belief",
+   "name": "Sway hearts",
+   "category": "Laws",
+   "icon": "sign",
+   "ring": 1,
+   "gesture": null,
+   "command": "belief.sway",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "everywhere": {
+     "type": "boolean",
+     "default": false
+    },
+    "feeling": {
+     "type": "enum",
+     "default": "love",
+     "values": [
+      "love",
+      "fear",
+      "worship",
+      "convert"
+     ]
+    },
+    "amount": {
+     "type": "number",
+     "min": 0.05,
+     "max": 3,
+     "default": 0.5
+    },
+    "toGod": {
+     "type": "int",
+     "min": 0,
+     "max": 3,
+     "desc": "convert to this god (0 you)"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "sway hearts",
+    "love me",
+    "fear me",
+    "worship me",
+    "believe in me",
+    "make them love me",
+    "make them fear me",
+    "convert",
+    "convert them",
+    "turn them to me"
+   ],
+   "desc": "Move hearts directly: love, fear, worship, or conversion to a god.",
+   "cost": 12,
+   "cooldown": 30,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 400
+   }
+  },
+  {
+   "id": "silence-town",
+   "name": "Silence a town",
+   "category": "Ideas",
+   "icon": "forget",
+   "ring": 2,
+   "gesture": null,
+   "command": "settlement.silence",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "knowledge": {
+     "type": "enum",
+     "values": "recipes"
+    },
+    "everything": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "silence a town",
+    "silence the town",
+    "silence the settlement",
+    "mute the keepers",
+    "make the town forget",
+    "make them forget everything"
+   ],
+   "desc": "Silence a settlement: its keepers of lore fall silent and forget — or the whole town forgets one idea, or everything.",
+   "cost": 10,
+   "witness": {
+    "harm": 0.4,
+    "wonder": 0.3,
+    "radius": 400
+   }
+  },
+  {
+   "id": "cure",
+   "name": "Cure",
+   "category": "Life",
+   "icon": "heal",
+   "ring": 1,
+   "gesture": null,
+   "command": "life.cure",
+   "params": {},
+   "schema": {
+    "disease": {
+     "type": "enum",
+     "values": "diseases"
+    },
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 600,
+     "unit": "m",
+     "target": "region"
+    },
+    "everywhere": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "cure",
+    "cure the sick",
+    "cure the plague",
+    "end the plague",
+    "lift the sickness",
+    "end the sickness",
+    "cure them"
+   ],
+   "desc": "Cure a sickness — one disease, or every one — in a place, a settlement, or the whole world.",
+   "cost": 8,
+   "witness": {
+    "help": 0.6,
+    "radius": 500
+   }
+  },
+  {
+   "id": "tame",
+   "name": "Tame",
+   "category": "Life",
+   "icon": "paw",
+   "ring": 1,
+   "gesture": null,
+   "command": "life.tame",
+   "params": {},
+   "schema": {
+    "species": {
+     "type": "enum",
+     "values": "animals"
+    },
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 1,
+     "max": 20000,
+     "default": 1500,
+     "unit": "m",
+     "target": "region"
+    },
+    "everywhere": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "tame",
+    "tame the beasts",
+    "tame the animals",
+    "make them friendly",
+    "domesticate",
+    "befriend the beasts"
+   ],
+   "desc": "Wild herds grow gentle and come to the nearest people (wolves become their dogs).",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.3,
+    "help": 0.2,
+    "radius": 500
+   }
+  },
+  {
+   "id": "transform",
+   "name": "Transform a person",
+   "category": "Peoples",
+   "icon": "spark",
+   "ring": 3,
+   "gesture": null,
+   "command": "agent.transform",
+   "params": {},
+   "schema": {
+    "id": {
+     "type": "entity",
+     "min": 1,
+     "desc": "agent id",
+     "entity": [
+      "agent"
+     ]
+    },
+    "into": {
+     "type": "enum",
+     "values": "animals"
+    }
+   },
+   "target": "agent",
+   "synonyms": [
+    "transform",
+    "turn into an animal",
+    "turn him into a frog",
+    "turn her into a frog",
+    "change into a beast",
+    "metamorphose"
+   ],
+   "desc": "Turn a person into an animal.",
+   "cost": 10,
+   "witness": {
+    "wonder": 0.8,
+    "harm": 0.4,
+    "radius": 400
+   }
+  },
+  {
+   "id": "wind",
+   "name": "Wind",
+   "category": "Sky",
+   "icon": "cloud",
+   "ring": 1,
+   "gesture": null,
+   "command": "weather.wind",
+   "params": {},
+   "schema": {
+    "from": {
+     "type": "string",
+     "desc": "where it blows from: north, east, ... or degrees from north"
+    },
+    "strength": {
+     "type": "number",
+     "min": 0,
+     "max": 80,
+     "default": 12,
+     "desc": "m/s",
+     "unit": "m/s"
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 10000000,
+     "default": 4320,
+     "desc": "ticks (-1 = until changed)",
+     "unit": "ticks"
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 50,
+     "max": 20000,
+     "unit": "m",
+     "target": "region"
+    },
+    "everywhere": {
+     "type": "boolean",
+     "default": true
+    }
+   },
+   "target": "region",
+   "synonyms": [
+    "wind",
+    "set the wind",
+    "make the wind blow",
+    "a wind from the east",
+    "gale",
+    "still the wind",
+    "change the wind"
+   ],
+   "desc": "Set the wind blowing from a quarter, over a region or the whole world: storms, clouds, sand and fire go with it.",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.15,
+    "radius": 2000
+   }
+  },
+  {
+   "id": "repeal",
+   "name": "Repeal a law",
+   "category": "Laws",
+   "icon": "scroll",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.law",
+   "params": {
+    "on": false
+   },
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "law": {
+     "type": "enum",
+     "values": [
+      "peace",
+      "worship",
+      "learning",
+      "labour",
+      "hospitality",
+      "tradition",
+      "war",
+      "no-fire",
+      "no-hunting",
+      "sharing",
+      "taboo",
+      "all"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "repeal",
+    "repeal a law",
+    "abolish the law",
+    "revoke the law",
+    "lift the law",
+    "annul the law",
+    "abolish their laws"
+   ],
+   "desc": "Take back a law the god gave (its effect undone where it can be); \"all\" takes back every one.",
+   "cost": 3,
+   "witness": {
+    "wonder": 0.2,
+    "radius": 300
+   }
+  },
+  {
+   "id": "forbid",
+   "name": "Forbid",
+   "category": "Laws",
+   "icon": "no-fire",
+   "ring": 1,
+   "gesture": null,
+   "command": "settlement.law",
+   "params": {
+    "law": "taboo"
+   },
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    },
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "knowledge": {
+     "type": "enum",
+     "desc": "law 'taboo': the idea forbidden",
+     "values": "recipes"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "forbid",
+    "ban",
+    "outlaw",
+    "prohibit",
+    "make it taboo",
+    "forbid an idea"
+   ],
+   "desc": "Forbid a settlement an idea: they will not take it up, and those who know it keep it hidden. (Forbidding war, fire or hunting gives the matching law.)",
+   "cost": 6,
+   "witness": {
+    "wonder": 0.4,
+    "radius": 300
+   }
+  },
+  {
+   "id": "disaster-random",
+   "name": "Random disaster",
+   "category": "Disasters",
+   "icon": "d-meteor",
+   "ring": 2,
+   "gesture": null,
+   "command": "disaster.spawn",
+   "params": {
+    "kind": "random"
+   },
+   "schema": {
+    "pos": {
+     "type": "pos",
+     "target": "point",
+     "desc": "where (unit vector or lat/lon)"
+    },
+    "radius": {
+     "type": "number",
+     "min": 5,
+     "max": 50000,
+     "unit": "m",
+     "target": "region"
+    },
+    "intensity": {
+     "type": "number",
+     "min": 0.05,
+     "max": 20
+    },
+    "scale": {
+     "type": "number",
+     "min": 0.05,
+     "max": 50
+    },
+    "duration": {
+     "type": "number",
+     "min": -1,
+     "max": 10000000,
+     "desc": "ticks (-1 = until cancelled)",
+     "unit": "ticks"
+    }
+   },
+   "target": "point",
+   "synonyms": [
+    "random disaster",
+    "a random disaster",
+    "surprise me",
+    "a random catastrophe",
+    "any disaster",
+    "some calamity",
+    "let fate choose"
+   ],
+   "desc": "Fate chooses: a disaster drawn at random, weighted toward what the place could suffer on its own.",
+   "cost": 40,
+   "cooldown": 120
+  },
+  {
+   "id": "save",
+   "name": "Save",
+   "category": "Time",
+   "icon": "hourglass",
+   "ring": 3,
+   "gesture": null,
+   "command": "meta.save",
+   "params": {},
+   "schema": {
+    "quick": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "save",
+    "save the game",
+    "save my game",
+    "quicksave",
+    "quick save",
+    "save progress"
+   ],
+   "desc": "Keep the world as it is now (the host saves it)."
+  },
+  {
+   "id": "load",
+   "name": "Load",
+   "category": "Time",
+   "icon": "history",
+   "ring": 3,
+   "gesture": null,
+   "command": "meta.load",
+   "params": {},
+   "schema": {
+    "quick": {
+     "type": "boolean",
+     "default": false
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "load",
+    "load the game",
+    "load my last save",
+    "quickload",
+    "quick load",
+    "restore the save"
+   ],
+   "desc": "Go back to the last save (the host loads it)."
+  },
+  {
+   "id": "resume",
+   "name": "Resume",
+   "category": "Time",
+   "icon": "speed",
+   "ring": 0,
+   "gesture": null,
+   "command": "time.speed",
+   "params": {
+    "speed": 1
+   },
+   "schema": {},
+   "target": "none",
+   "synonyms": [
+    "resume",
+    "unpause",
+    "play",
+    "normal speed",
+    "let time run",
+    "go to normal speed"
+   ],
+   "desc": "Let time run again at its own pace."
+  },
+  {
+   "id": "birth",
+   "name": "A child is born",
+   "category": "Peoples",
+   "icon": "people",
+   "ring": 2,
+   "gesture": null,
+   "command": "life.spawn-people",
+   "params": {
+    "children": true,
+    "count": 1
+   },
+   "schema": {
+    "count": {
+     "type": "int",
+     "min": 1,
+     "max": 2000,
+     "default": 20
+    },
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ]
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "a child is born",
+    "give them a child",
+    "a birth",
+    "newborn",
+    "add a villager",
+    "add a person"
+   ],
+   "desc": "People born into (or set down in) a settlement: they become its own.",
+   "cost": 4,
+   "witness": {
+    "wonder": 0.3,
+    "radius": 300
+   }
+  }
+ ]
+}

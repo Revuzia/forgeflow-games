@@ -21,6 +21,8 @@ export interface BodyBucket {
   colB: InstancedBufferAttribute;
   colC: InstancedBufferAttribute;
   style: InstancedBufferAttribute;
+  /** LOD cross-fade (bodymat.ts iFade), stored as 1 − f (0 = whole); f ≥ 0 keeps the dither below f, f < 0 the dither at or above 1 + f */
+  fade: InstancedBufferAttribute;
   count: number;
   cap: number;
   /** cast shadows from this bucket (near LODs) */
@@ -62,7 +64,7 @@ export class BodyBuckets {
       g.setAttribute(name, a);
       return a;
     };
-    const anim = mk(4, 'iAnim'), colA = mk(3, 'iColA'), colB = mk(3, 'iColB'), colC = mk(3, 'iColC'), style = mk(4, 'iStyle');
+    const anim = mk(4, 'iAnim'), colA = mk(3, 'iColA'), colB = mk(3, 'iColB'), colC = mk(3, 'iColC'), style = mk(4, 'iStyle'), fade = mk(1, 'iFade');
     const mesh = new InstancedMesh(g, material, cap);
     mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     mesh.count = 0;
@@ -71,7 +73,7 @@ export class BodyBuckets {
     mesh.visible = false;
     if (shadows && this.castShadows) mesh.layers.enable(1);
     this.group.add(mesh);
-    return { key, mesh, material, depth, anim, colA, colB, colC, style, count: 0, cap, shadows };
+    return { key, mesh, material, depth, anim, colA, colB, colC, style, fade, count: 0, cap, shadows };
   }
 
   /** make room for one more instance; returns its index */
@@ -88,14 +90,16 @@ export class BodyBuckets {
       (nb.colB.array as Float32Array).set(old.colB.array as Float32Array);
       (nb.colC.array as Float32Array).set(old.colC.array as Float32Array);
       (nb.style.array as Float32Array).set(old.style.array as Float32Array);
+      (nb.fade.array as Float32Array).set(old.fade.array as Float32Array);
       old.mesh.dispose();
-      b.mesh = nb.mesh; b.anim = nb.anim; b.colA = nb.colA; b.colB = nb.colB; b.colC = nb.colC; b.style = nb.style; b.cap = cap;
+      b.mesh = nb.mesh; b.anim = nb.anim; b.colA = nb.colA; b.colB = nb.colB; b.colC = nb.colC; b.style = nb.style; b.fade = nb.fade; b.cap = cap;
     }
     return b.count++;
   }
 
   /** write one instance */
-  set(b: BodyBucket, i: number, m: ArrayLike<number>, anim: [number, number, number, number], a: ArrayLike<number>, bb: ArrayLike<number>, c: ArrayLike<number>, style: [number, number, number, number]): void {
+  set(b: BodyBucket, i: number, m: ArrayLike<number>, anim: [number, number, number, number], a: ArrayLike<number>, bb: ArrayLike<number>, c: ArrayLike<number>, style: [number, number, number, number], fade = 1): void {
+    b.fade.setX(i, 1 - fade);
     _m.fromArray(m as number[]);
     b.mesh.setMatrixAt(i, _m);
     b.anim.setXYZW(i, anim[0], anim[1], anim[2], anim[3]);
@@ -115,7 +119,7 @@ export class BodyBuckets {
       n += b.count;
       if (!b.count) continue;
       b.mesh.instanceMatrix.needsUpdate = true;
-      b.anim.needsUpdate = true; b.colA.needsUpdate = true; b.colB.needsUpdate = true; b.colC.needsUpdate = true; b.style.needsUpdate = true;
+      b.anim.needsUpdate = true; b.colA.needsUpdate = true; b.colB.needsUpdate = true; b.colC.needsUpdate = true; b.style.needsUpdate = true; b.fade.needsUpdate = true;
     }
     return n;
   }

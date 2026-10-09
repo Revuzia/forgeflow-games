@@ -93,11 +93,15 @@ test('worker protocol round trip', async () => {
     assert.ok(live.achievedSpeed > 10, `achieved ${live.achievedSpeed.toFixed(0)}x`);
     assert.ok(live.msPerTick > 0);
     c.send({ type: 'speed', speed: 0 });
-    // rewind: the loaded world's oldest keyframe is the load point (tick 120); earlier is out of reach
+    // rewind: the save carried its rewind history, so the loaded world reaches back past the load point (tick 120)
     const rw = await c.call<{ type: 'result'; id: number; result: { ok: boolean; tick?: number } }>({ type: 'rewind', id: 10, tick: 200 });
     assert.ok(rw.result.ok);
     assert.equal(rw.result.tick, 200);
-    const tooFar = await c.call<{ type: 'result'; id: number; result: { ok: boolean; msg?: string } }>({ type: 'rewind', id: 12, tick: 60 });
+    const before = await c.call<{ type: 'result'; id: number; result: { ok: boolean; tick?: number } }>({ type: 'rewind', id: 13, tick: 60 });
+    assert.ok(before.result.ok, 'a moment before the load is still in reach');
+    assert.equal(before.result.tick, 60);
+    // the future is not
+    const tooFar = await c.call<{ type: 'result'; id: number; result: { ok: boolean; msg?: string } }>({ type: 'rewind', id: 12, tick: 1e9 });
     assert.equal(tooFar.result.ok, false);
     // a broken mod pack is refused with the reason
     const mod = await c.call<{ type: 'result'; id: number; result: { ok: boolean; msg?: string } }>({ type: 'mod', id: 11, pack: { id: 'bad', plants: [{ id: 'x', name: 'X', type: 'tre' }] } });

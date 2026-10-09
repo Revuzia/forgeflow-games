@@ -31,6 +31,7 @@
     {"id": "fall.starvation", "kind": "fall", "weight": 3, "text": ["{settlement} starved and fell. Its huts stand empty.", "Hunger emptied {settlement}."]},
     {"id": "fall", "kind": "fall", "weight": 3, "text": ["{settlement} fell. Only ruins remain.", "The last of {settlement} are gone ({cause})."]},
     {"id": "abandon", "kind": "diaspora", "weight": 2, "text": ["The {people} of {settlement} abandoned their homes and walked away ({cause})."]},
+    {"id": "abandon.god", "kind": "diaspora", "weight": 2, "text": ["At the god's word the {people} of {settlement} left their homes and set out to build them anew elsewhere.", "The god sent the {people} of {settlement} away from their homes, to found them again in another place."]},
     {"id": "abandon.drought", "kind": "diaspora", "weight": 2, "text": ["The water failed at {settlement}: its {people} abandoned their homes and walked away.", "{settlement} dried out, and its {people} left to find water."]},
     {"id": "abandon.famine", "kind": "diaspora", "weight": 2, "text": ["Hunger drove the {people} of {settlement} from their homes.", "With nothing left to eat, the {people} of {settlement} walked away."]},
     {"id": "abandon.flood", "kind": "diaspora", "weight": 2, "text": ["The water rose over {settlement}, and its {people} left their drowned homes for higher ground.", "{settlement} went under the water; its {people} waded out and walked away."]},
@@ -111,6 +112,20 @@
     {"id": "taboo.forgotten", "kind": "culture", "weight": 1, "text": ["Generations on, {settlement} forgot why {knowledge} was forbidden."]},
     {"id": "sacred.animal", "kind": "culture", "weight": 2, "text": ["{settlement} owes its life to the {animal}: no one there will hunt them again."]},
     {"id": "sacred.star-iron", "kind": "culture", "weight": 1, "text": ["The iron that fell from the sky is sacred in {settlement}: no smith may work it."]},
-    {"id": "sacrifice", "kind": "god", "weight": 1, "text": ["The fearful folk of {settlement} burned {item} to the god."]}
+    {"id": "sacrifice", "kind": "god", "weight": 1, "text": ["The fearful folk of {settlement} burned {item} to the god."]},
+    {"id": "disaster.toll", "kind": "disaster", "weight": 2, "text": ["{text}", "{text} The survivors buried their dead and began again."]},
+    {"id": "creature.eat", "kind": "god", "weight": 2, "text": ["{text}", "{text} The village will not forget it."]},
+    {"id": "creature.raised", "kind": "culture", "weight": 2, "text": ["{text}"]},
+    {"id": "disciple.converted", "kind": "god", "weight": 2, "text": ["{text}"]},
+    {"id": "conversion", "kind": "god", "weight": 2, "text": ["{text}", "{text} The old shrine stands empty."]},
+    {"id": "rival.arrives", "kind": "god", "weight": 3, "text": ["{text}"]},
+    {"id": "law.given", "kind": "god", "weight": 2, "text": ["{text}", "{text} They carved it where all could see."]},
+    {"id": "discovery.accident.miracle-forest", "kind": "discovery", "weight": 2, "text": ["When the god raised a forest by {settlement}, {agent} watched it grow and learned {knowledge}.", "The {people} of {settlement} saw trees rise in a night. {agent} understood: {knowledge}."]},
+    {"id": "discovery.accident.miracle-heal", "kind": "discovery", "weight": 2, "text": ["{agent} of {settlement} saw the sick made whole and went looking for the herbs that might do the same: {knowledge}."]},
+    {"id": "discovery.accident.fireball", "kind": "discovery", "weight": 3, "text": ["Fire fell from the god's hand near {settlement}. {agent} carried a burning branch home: {knowledge}.", "The {people} of {settlement} took fire from the god's own fireball, and learned {knowledge}."]},
+    {"id": "discovery.accident.quake", "kind": "discovery", "weight": 2, "text": ["After the ground shook {settlement} down, {agent} learned {knowledge}."]},
+    {"id": "discovery.accident.rebuild", "kind": "discovery", "weight": 2, "text": ["Rebuilding {settlement} after the disaster, {agent} found a better way: {knowledge}."]},
+    {"id": "discovery.accident.impact", "kind": "discovery", "weight": 2, "text": ["From the crater by {settlement}, {agent} learned {knowledge}."]},
+    {"id": "discovery.accident.eruption", "kind": "discovery", "weight": 2, "text": ["The mountain of fire taught {settlement} something: {agent} learned {knowledge}."]}
   ]
 }

@@ -166,6 +166,22 @@ ground(p) = radius + grid.sample(surface, p) + detailNoise(p) * rough(p)
 * Agent life: lifespan ~60 years (default species); a generation ≈ 25 years ≈ 7 minutes at 100x.
 * `sunFrozen` stops the planet's rotation (the sun stands still). `hourAtLon0` scrubbing is a command
   (`time.set`), not a renderer trick: sleep, light, fear, crops and photosynthesis read the same sun.
+* *(Note, SIM perf push 2 — time-lapse LOD, `src/sim/perf/lapse.ts`.)* The speed preset is a **logged sim input**:
+  the worker issues `time.scale` when the preset changes level (1x/10x → level 0, 100x → 1, 1000x → 2); it is in the
+  command log, saved (`settings.lapse`) and replayed by rewind. Level 0 is the plain sim. Levels 1 / 2
+  run slow systems on coarser fixed cadences with proportionally larger steps: climate 2 h / 6 h, vegetation 2 h / 8 h,
+  weather + rain batches 20 / 30 ticks, overland sheet flow 4 / 12 ticks, hydrology 2 / 4 ticks (half per-step
+  friction at 4: same steady discharge, waves at half speed in game time), sand 20 / 30, biomes 12 h / 24 h,
+  settlement re-planning ×2 / ×3, keyframes 2 / 4 days. A step after a level change integrates exactly the elapsed
+  time. Same seed + same command log (speed changes included) ⇒ same hash. A dead world (no air, water, life,
+  weather, lava, fire; not the camera's `focus`) runs its climate and vegetation every 6 h at any level, and wakes at
+  the next hour it is not.
+  *(Round 2 additions.)* The 4-tick hydrology step applies only while the sea is calm (fewer than 1/256 of its cells
+  awake — a pure function of state, decided per 4-tick block); with waves on the sea the pipes run at 2 ticks as at
+  1x. A multi-hour climate pass steps the energy balance and the temperature-driven accumulators (means, year
+  envelopes, light, melt degree-hours) hour by hour under each hour's sun on ground and shallow water (deep water
+  takes one step); evaporation and infiltration of the land stay hourly at every level (`soilHour` runs on the hours
+  a coarse or dormant schedule skips). Sediment carried into the sea displaces sea water (an accounted sink).
 
 ---
 

@@ -26,7 +26,7 @@ import { groundHeight } from '../../sim/grid/surface.ts';
 import { hashFloat } from '../../sim/core/rng.ts';
 import { buildingAt, dwellingFamily, eraIndex, materialAt, shelterKind, type BuildFamily, type BuildingKind } from './catalog.ts';
 import { extractRoads } from './roadnet.ts';
-import { EMIT, buildingMesh, rubbleMesh, scaffoldKindFor, scaffoldMesh, yardPropMesh, type BuildingMesh, type Emitter, type YardProp } from '../gen/buildinggen.ts';
+import { EMIT, HOUSEHOLD_VARIANTS, buildingMesh, rubbleMesh, scaffoldKindFor, scaffoldMesh, yardPropMesh, type BuildingMesh, type Emitter, type YardProp } from '../gen/buildinggen.ts';
 import { makeBuildingDepthMaterial, makeBuildingMaterial } from './buildingmat.ts';
 
 /** a body-frame emitter of a building (particles / lights) */
@@ -52,13 +52,16 @@ interface Variant {
   pending: boolean;
   /** distance (m) from the camera to the nearest building of this variant (pending variants build nearest first) */
   near: number;
-  spec: { kind: BuildingKind; matIdx: number; style: number; era: number; mood: number; w: number; d: number; family?: BuildFamily };
+  spec: { kind: BuildingKind; matIdx: number; style: number; era: number; mood: number; w: number; d: number; family?: BuildFamily; hv?: number };
 }
 
 interface Bucket {
   mesh: InstancedMesh;
   state: InstancedBufferAttribute;
   info: InstancedBufferAttribute;
+  /** per instance (buildingmat.ts iFade): LOD cross-fade (1 = whole), and the ground's slope (dy/dx, dy/dz) for the
+   *  kinds that follow it (a square, a pen, a wall run) */
+  fade: InstancedBufferAttribute;
   count: number;
   cap: number;
   geo: BufferGeometry;
@@ -90,6 +93,11 @@ interface Rec {
   /** where its instance went in the last full rewrite (a state-only change rewrites just that slot) */
   slot: Bucket | null;
   slotI: number;
+  /** the ground's slope under it (local x, z) for the kinds that follow the ground instead of standing level */
+  shx?: number; shz?: number;
+  /** its far-LOD instance while it cross-fades between LODs */
+  slot2?: Bucket | null;
+  slotI2?: number;
   /** sim tick it was first seen ruined (NaN: not ruined; -1e9: already a ruin when first seen) */
   ruinAt: number;
 }
@@ -120,6 +128,8 @@ const _m4 = new Matrix4();
 const _yl = new Matrix4();
 const _c = new Color();
 const LOD0 = 110;
+/** half-width (m) of the band over which a building cross-fades from its near mesh to its far one */
+const LOD_BAND = 14;
 const MAX_DIST = 3600;
 /** yard props are drawn this close (m) */
 const YARD_DIST = 320;
@@ -180,6 +190,8 @@ export class Buildings {
   /** bumps when buildings are placed, moved, removed or ruined (footprints change) */
   layoutVersion = 0;
   private lastGenT = 0;
+  /** some building is cross-fading between its LODs (instances are rewritten on smaller camera moves) */
+  private fading = false;
   /** lit windows: one light source per lit, intact building (at night the nearest become point lights) */
   windowLights: { x: number; y: number; z: number; kind: number; power: number; seed: number }[] = [];
   /** per-cell night light (0..~2), for the terrain's light channel */
@@ -204,10 +216,14 @@ export class Buildings {
   private makeBucket(geo: BufferGeometry, cap: number, cut = false, noShadow = false): Bucket {
     const state = new InstancedBufferAttribute(new Float32Array(cap * 4), 4);
     const info = new InstancedBufferAttribute(new Float32Array(cap * 4), 4);
+    // (stored as 1 − fade so that zero — also what a mesh without the attribute reads — is whole)
+    const fade = new InstancedBufferAttribute(new Float32Array(cap * 3), 3);
     state.setUsage(DynamicDrawUsage);
     info.setUsage(DynamicDrawUsage);
+    fade.setUsage(DynamicDrawUsage);
     geo.setAttribute('iState', state);
     geo.setAttribute('iInfo', info);
+    geo.setAttribute('iFade', fade);
     const mesh = new InstancedMesh(geo, cut ? this.materialCut : this.material, cap);
     mesh.userData.cut = cut;
     // far (LOD 1) buildings and yard props cast no shadow: the cascades do not resolve them, and the depth passes
@@ -220,7 +236,7 @@ export class Buildings {
     mesh.visible = false;
     if (this.castShadows && !noShadow) mesh.layers.enable(1);
     this.group.add(mesh);
-    return { mesh, state, info, count: 0, cap, geo, cut, noShadow };
+    return { mesh, state, info, fade, count: 0, cap, geo, cut, noShadow };
   }
 
   private grow(b: Bucket, need: number): Bucket {
@@ -234,6 +250,7 @@ export class Buildings {
       (nb.mesh.instanceMatrix.array as Float32Array).set((b.mesh.instanceMatrix.array as Float32Array).subarray(0, n * 16));
       (nb.state.array as Float32Array).set((b.state.array as Float32Array).subarray(0, n * 4));
       (nb.info.array as Float32Array).set((b.info.array as Float32Array).subarray(0, n * 4));
+      (nb.fade.array as Float32Array).set((b.fade.array as Float32Array).subarray(0, n * 3));
       if (b.mesh.instanceColor) {
         nb.mesh.setColorAt(0, _c.setRGB(1, 1, 1));
         (nb.mesh.instanceColor!.array as Float32Array).set((b.mesh.instanceColor.array as Float32Array).subarray(0, n * 3));
@@ -241,7 +258,7 @@ export class Buildings {
     }
     this.group.remove(b.mesh);
     b.mesh.dispose();
-    b.mesh = nb.mesh; b.state = nb.state; b.info = nb.info; b.cap = cap;
+    b.mesh = nb.mesh; b.state = nb.state; b.info = nb.info; b.fade = nb.fade; b.cap = cap;
     return b;
   }
 
@@ -258,11 +275,11 @@ export class Buildings {
     });
   }
 
-  private variantFor(kind: BuildingKind, matIdx: number, style: number, era: number, mood: number, w: number, d: number, family?: BuildFamily): Variant {
-    const key = `${kind}|${matIdx}|${style}|${era}|${mood}|${w}|${d}${family ? `|${family}` : ''}`;
+  private variantFor(kind: BuildingKind, matIdx: number, style: number, era: number, mood: number, w: number, d: number, family?: BuildFamily, hv?: number): Variant {
+    const key = `${kind}|${matIdx}|${style}|${era}|${mood}|${w}|${d}${family ? `|${family}` : ''}${hv !== undefined ? `|h${hv}` : ''}`;
     let v = this.variants.get(key);
     if (!v) {
-      v = { key, meshes: [null, null], buckets: [null, null], cutBuckets: [null, null], pending: true, near: 1e9, spec: { kind, matIdx, style, era, mood, w, d, family } };
+      v = { key, meshes: [null, null], buckets: [null, null], cutBuckets: [null, null], pending: true, near: 1e9, spec: { kind, matIdx, style, era, mood, w, d, family, hv } };
       this.variants.set(key, v);
     }
     return v;
@@ -307,9 +324,11 @@ export class Buildings {
       while (used.has(slot) && used.size < 3) slot = (slot + 1) % 3;
       used.add(slot);
       const along = (hashFloat(r.id, i, 0x7a4) - 0.5) * 0.5;
-      const gap = prop === 'garden' || prop === 'fence' ? 2.0 : prop === 'cart' || prop === 'laundry' ? 2.4 : 1.0;
-      const x = slot === 0 ? -(r.w / 2 + gap) : slot === 1 ? r.w / 2 + gap : along * r.w;
-      const z = slot === 2 ? -(r.d / 2 + gap) : along * r.d;
+      const gap = prop === 'garden' || prop === 'fence' ? 1.7 : prop === 'cart' || prop === 'laundry' ? 2.1 : 0.7;
+      // clear of the house's own extent (eaves, an annex on one side)
+      const ext = r.variant.meshes[0]?.ext ?? [-r.w / 2, r.w / 2, -r.d / 2, r.d / 2];
+      const x = slot === 0 ? ext[0] - gap : slot === 1 ? ext[1] + gap : along * r.w;
+      const z = slot === 2 ? ext[2] - gap : along * r.d;
       const yaw = slot === 0 ? -Math.PI / 2 : slot === 1 ? Math.PI / 2 : Math.PI;
       const vi = hashFloat(r.id, i, 0x7a5) < 0.5 ? 0 : 1;
       const key = `${prop}|${vi}`;
@@ -463,7 +482,9 @@ export class Buildings {
       } else {
         changed = true;
         const old = rec;
-        const variant = this.variantFor(kind, b.material[i], style, st.era, st.mood, w, d, family);
+        // each household builds its own way (colours, pitch, door, chimney, annex...): a street is not one model repeated
+        const hv = DWELLINGS.has(kind) ? Math.floor(hashFloat(id, 0x4856) * HOUSEHOLD_VARIANTS) : undefined;
+        const variant = this.variantFor(kind, b.material[i], style, st.era, st.mood, w, d, family, hv);
         rec = this.place(pv, id, variant, px, py, pz, rot, w, d, kind, water ?? null, surface ?? null);
         rec.settlement = b.settlement[i];
         rec.skey = skey;
@@ -586,12 +607,14 @@ export class Buildings {
     const xx = uy * zz - uz * zy, xy = uz * zx - ux * zz, xz = ux * zy - uy * zx;
     const R = pv.params.radius;
     // ground under the footprint: centre + corners
-    let hi = -Infinity, lo = Infinity, wet = false, wl = -Infinity, sum = 0, n = 0;
+    let hi = -Infinity, lo = Infinity, wet = false, wl = -Infinity, sum = 0, n = 0, gx = 0, gz = 0;
     for (const [a, bb] of [[0, 0], [-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5], [0, 0.5], [0, -0.5]] as [number, number][]) {
       const qx = ux + (xx * a * w + zx * bb * d) / R, qy = uy + (xy * a * w + zy * bb * d) / R, qz = uz + (xz * a * w + zz * bb * d) / R;
       const ql = Math.hypot(qx, qy, qz);
       const g = groundHeight(pv.ground, qx / ql, qy / ql, qz / ql);
       hi = Math.max(hi, g); lo = Math.min(lo, g); sum += g; n++;
+      // the ground's plane over the footprint (least squares through the samples)
+      gx += a * g; gz += bb * g;
       if (water && surface) {
         const wd = pv.grid.sample(water, qx / ql, qy / ql, qz / ql);
         if (wd > 0.3) { wet = true; wl = Math.max(wl, R + pv.grid.sample(surface, qx / ql, qy / ql, qz / ql) + wd); }
@@ -601,14 +624,27 @@ export class Buildings {
     // on steep ground at the highest corner (its plinth then a foundation wall downhill). Always at the highest corner,
     // every house on a hillside stood on a tall pale pedestal.
     const grade = (hi - lo) / Math.max(1, Math.max(w, d));
-    let base = (grade < 0.12 ? Math.max(sum / n, hi - 0.45) : hi) + 0.04;
+    // (on steep ground the house is also cut a little into the slope uphill — a terrace — so the footing downhill is
+    // not a storey-high pedestal)
+    let base = (grade < 0.12 ? Math.max(sum / n, hi - 0.45) : Math.max(hi - 0.6, lo + (hi - lo) * 0.5)) + 0.04;
     if ((kind === 'dock' || kind === 'shipyard') && wet) base = Math.max(lo, wl + 0.35);
+    // open ground works follow the slope (a sheared mesh: posts stay plumb) instead of standing on a level slab whose
+    // downhill side stood up like a table: a market square, a pen, a run of wall, a hearth ring, a store pit
+    let shx = 0, shz = 0;
+    if (kind === 'market' || kind === 'pen' || kind === 'wall' || kind === 'hearth' || kind === 'store-pit') {
+      // Σa² = Σb² = 4 × 0.25 + 1 × 0.25 (the corners and the two edge mid-points), over w and d metres
+      shx = Math.max(-0.35, Math.min(0.35, gx / (1.0 * w)));
+      shz = Math.max(-0.35, Math.min(0.35, gz / (1.5 * d)));
+      // (a square sits a hand's breadth into the ground: the ground's own bumps break through its paving, rather than
+      // its kerb standing proud where the ground dips under the fitted plane)
+      base = sum / n + (kind === 'market' ? -0.12 : 0.03);
+    }
     const m = new Float32Array(16);
     m[0] = xx; m[1] = xy; m[2] = xz; m[3] = 0;
     m[4] = ux; m[5] = uy; m[6] = uz; m[7] = 0;
     m[8] = zx; m[9] = zy; m[10] = zz; m[11] = 0;
     m[12] = ux * base; m[13] = uy * base; m[14] = uz * base; m[15] = 1;
-    return { id, settlement: -1, kind, variant, m, px: ux * base, py: uy * base, pz: uz * base, ux, uy, uz, state: [1, 0, 0, 0], seed: hashFloat(id, 911), skey: '', w, d, slot: null, slotI: -1, ruinAt: NaN };
+    return { id, settlement: -1, kind, variant, m, px: ux * base, py: uy * base, pz: uz * base, ux, uy, uz, state: [1, 0, 0, 0], seed: hashFloat(id, 911), skey: '', w, d, slot: null, slotI: -1, ruinAt: NaN, shx, shz };
   }
 
   /** emitters and the light field follow the building set and states */
@@ -729,7 +765,7 @@ export class Buildings {
       const sp = v.spec;
       const mat = materialAt(sp.matIdx);
       for (let lod = 0; lod < 2; lod++) {
-        const bm = buildingMesh({ kind: sp.kind, mat, style: sp.style, era: sp.era, mood: sp.mood, w: sp.w, d: sp.d, lod, family: sp.family });
+        const bm = buildingMesh({ kind: sp.kind, mat, style: sp.style, era: sp.era, mood: sp.mood, w: sp.w, d: sp.d, lod, family: sp.family, hv: sp.hv });
         v.meshes[lod] = bm;
         v.buckets[lod] = this.makeBucket(bm.geo, 8, false, lod === 1);
       }
@@ -754,14 +790,16 @@ export class Buildings {
     }
     const pend = this.buildPending(pv, camX, camY, camZ);
     const moved = Math.hypot(camX - this.lastCam[0], camY - this.lastCam[1], camZ - this.lastCam[2]);
-    if (!this.dirty && moved < 8 && !pend) {
+    // (while buildings are cross-fading between LODs the instances are rewritten every couple of metres)
+    if (!this.dirty && moved < (this.fading ? 2 : 8) && !pend) {
       // state-only changes (a wall rising, a fire lit): rewrite those instances' state in place
       if (this.stateChanged.length) {
         for (const r of this.stateChanged) {
-          const b = r.slot;
-          if (!b || r.slotI < 0 || r.slotI >= b.count) continue;
-          b.state.setXYZW(r.slotI, r.state[0], r.state[1], r.state[2], this.stateW(r, tick, dayTicks));
-          b.state.needsUpdate = true;
+          for (const [b, i] of [[r.slot, r.slotI], [r.slot2 ?? null, r.slotI2 ?? -1]] as [Bucket | null, number][]) {
+            if (!b || i < 0 || i >= b.count) continue;
+            b.state.setXYZW(i, r.state[0], r.state[1], r.state[2], this.stateW(r, tick, dayTicks));
+            b.state.needsUpdate = true;
+          }
         }
         this.stateChanged.length = 0;
       }
@@ -769,7 +807,8 @@ export class Buildings {
     }
     this.stateChanged.length = 0;
     this.dirty = false;
-    for (const r of this.recs) { r.slot = null; r.slotI = -1; }
+    this.fading = false;
+    for (const r of this.recs) { r.slot = null; r.slotI = -1; r.slot2 = null; r.slotI2 = -1; }
     this.lastCam = [camX, camY, camZ];
     for (const v of this.variants.values()) { for (const b of v.buckets) if (b) b.count = 0; for (const b of v.cutBuckets) if (b) b.count = 0; }
     for (const b of this.scaffolds.values()) b.count = 0;
@@ -782,36 +821,49 @@ export class Buildings {
       const dist = Math.hypot(r.px - camX, r.py - camY, r.pz - camZ);
       if (dist > MAX_DIST) continue;
       const big = Math.max(r.w, r.d);
-      // a ±10 m band around the switch: a building keeps the LOD it has until it is clearly past it (no flicker
-      // back and forth while the camera hovers at the threshold)
+      // near / far mesh: across a band around the switch distance both are drawn, sharing the pixels of a dither
+      // (the near one fading out as the far one fades in) — no pop, no flicker at the threshold
       const edge = LOD0 + big * 3;
-      const lod = r.lod === 0 ? (dist < edge + 10 ? 0 : 1) : r.lod === 1 ? (dist < edge - 10 ? 0 : 1) : dist < edge ? 0 : 1;
+      const f = Math.max(0, Math.min(1, (edge + LOD_BAND - dist) / (2 * LOD_BAND)));
+      const near = f * f * (3 - 2 * f);
+      const lod = near >= 0.5 ? 0 : 1;
       r.lod = lod;
       const bm = v.meshes[lod]!;
       const [progress, damage, flags, light] = r.state;
       const cut = progress < 0.999 || damage > 0.3 || (flags & (BuildingFlag.ruined | BuildingFlag.burning)) !== 0;
-      let b: Bucket;
-      if (cut) {
+      const bucketOf = (l: number): Bucket => {
+        if (!cut) return v.buckets[l]!;
         // its own geometry object (sharing the mesh buffers) so its per-instance attributes stay its own
-        let cb = v.cutBuckets[lod];
+        let cb = v.cutBuckets[l];
         if (!cb) {
           const g2 = new BufferGeometry();
-          for (const [name, a] of Object.entries(bm.geo.attributes)) if (name !== 'iState' && name !== 'iInfo') g2.setAttribute(name, a);
-          g2.setIndex(bm.geo.index);
-          cb = v.cutBuckets[lod] = this.makeBucket(g2, 4, true, lod === 1);
+          const lm = v.meshes[l]!;
+          for (const [name, a] of Object.entries(lm.geo.attributes)) if (name !== 'iState' && name !== 'iInfo' && name !== 'iFade') g2.setAttribute(name, a);
+          g2.setIndex(lm.geo.index);
+          cb = v.cutBuckets[l] = this.makeBucket(g2, 4, true, l === 1);
         }
-        b = cb;
-      } else b = v.buckets[lod]!;
-      b = this.grow(b, b.count + 1);
-      const i = b.count++;
-      r.slot = b; r.slotI = i;
-      _m4.fromArray(r.m);
-      b.mesh.setMatrixAt(i, _m4);
-      b.state.setXYZW(i, progress, damage, flags, this.stateW(r, tick, dayTicks));
-      b.info.setXYZW(i, bm.height, bm.hx, bm.hz, r.seed);
+        return cb;
+      };
       const tone = 0.9 + 0.2 * r.seed;
       _c.setRGB(tone, tone * (0.98 + 0.04 * hashFloat(r.id, 3)), tone * (0.96 + 0.06 * hashFloat(r.id, 5)));
-      b.mesh.setColorAt(i, _c);
+      _m4.fromArray(r.m);
+      const put = (l: number, fade: number): void => {
+        const lm = v.meshes[l]!;
+        let b = bucketOf(l);
+        b = this.grow(b, b.count + 1);
+        const i = b.count++;
+        if (l === lod) { r.slot = b; r.slotI = i; } else { r.slot2 = b; r.slotI2 = i; }
+        b.mesh.setMatrixAt(i, _m4);
+        b.state.setXYZW(i, progress, damage, flags, this.stateW(r, tick, dayTicks));
+        b.info.setXYZW(i, lm.height, lm.hx, lm.hz, r.seed);
+        b.fade.setXYZ(i, 1 - fade, r.shx ?? 0, r.shz ?? 0);
+        b.mesh.setColorAt(i, _c);
+      };
+      if (near > 0.002 && near < 0.998) {
+        put(0, near);
+        put(1, -(1 - near));
+        this.fading = true;
+      } else put(lod, 1);
       inst++;
       // scaffold while it rises
       if (progress < 0.999 && dist < 900) {
@@ -837,7 +889,7 @@ export class Buildings {
         let rb = this.rubble[stone ? 0 : 1];
         rb = this.grow(rb, rb.count + 1);
         const j = rb.count++;
-        const sx = r.w * 0.66, sz = r.d * 0.66, sy = Math.min(1.6, 0.35 + bm.height * 0.12) / 0.32;
+        const sx = r.w * 0.66, sz = r.d * 0.66, sy = Math.min(1.0, 0.3 + bm.height * 0.08) / 0.27;
         const m = r.m;
         _m4.set(
           m[0] * sx, m[4] * sy, m[8] * sz, m[12],
@@ -859,6 +911,7 @@ export class Buildings {
         if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
         b.state.needsUpdate = true;
         b.info.needsUpdate = true;
+        b.fade.needsUpdate = true;
       }
     };
     let nv = 0;

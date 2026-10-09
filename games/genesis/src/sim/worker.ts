@@ -16,6 +16,12 @@
 // With the init option `grad: true` every snapshot that carries `surface` also carries the ground's curvature data
 // (PlanetSnap.grad, the sim's own Planet.ground() gradients), so the main thread need not refit them.
 //
+// Time-lapse (SIM perf push 2, perf/lapse.ts): the speed preset decides the sim's time-lapse level (1x / 10x real time,
+// 100x and 1000x coarser fixed cadences). The level is a LOGGED sim input: whenever the preset (or a god-layer
+// `time.speed` act, or a load / rewind that restored another level) leaves the sim on a level that differs from the
+// preset's, the worker issues `time.scale` at the current tick boundary — recorded in the command log, saved, replayed.
+// Pausing keeps the level (stepping a paused 1000x world steps it in time-lapse).
+//
 // This is the one sim file allowed to touch timers and performance.now (_harness/detban.ts): it only paces the sim; it
 // never feeds time into it.
 
@@ -24,6 +30,7 @@ import { TICKS_PER_SECOND_1X } from './types.ts';
 import { Sim } from './sim.ts';
 import { FAST_FIELDS } from './world/planet.ts';
 import { loadContent, type ContentPack } from './content.ts';
+import { lapseLevel, levelOfScale } from './perf/lapse.ts';
 import { BASE_PACK } from '../data/index.ts';
 
 const FAST_MS = 100;
@@ -177,6 +184,26 @@ function measure(t: number, ticks: number): void {
   if (Math.abs(achieved - speed) <= oneTick) achieved = speed;
 }
 
+// ───────────────────────────── time-lapse level ─────────────────────────────
+
+/** put the sim on the time-lapse level of the current speed preset (a logged `time.scale` command when it differs) */
+function syncLapse(): void {
+  if (!sim || speed <= 0) return; // paused: the level stays (a step at 1000x is a time-lapse step)
+  if (lapseLevel(sim.u) === levelOfScale(speed)) return;
+  const r = sim.applyNow({ k: 'time.scale', scale: speed });
+  if (!r.ok) post({ type: 'error', msg: `time.scale: ${r.msg ?? 'refused'}` });
+}
+
+/** a new speed preset: re-pace at once and match the time-lapse level */
+function setSpeed(x: number): void {
+  speed = Math.max(0, Number(x) || 0);
+  debt = 0;
+  lastPace = now();
+  resetMeasure(lastPace);
+  syncLapse();
+  wake(0);
+}
+
 // ───────────────────────────── snapshots ─────────────────────────────
 
 function snapshot(full: boolean): void {
@@ -227,6 +254,7 @@ function handle(m: ToWorker): void {
       resetSent();
       lastPace = now();
       resetMeasure(lastPace);
+      syncLapse();
       post({ type: 'ready', content: sim.content.packs });
       wake(0);
       return;
@@ -235,11 +263,7 @@ function handle(m: ToWorker): void {
       snapshot(!!m.full);
       return;
     case 'speed':
-      speed = Math.max(0, Number(m.speed) || 0);
-      debt = 0;
-      lastPace = now();
-      resetMeasure(lastPace);
-      wake(0);
+      setSpeed(m.speed);
       return;
   }
   if (!sim) {
@@ -250,6 +274,11 @@ function handle(m: ToWorker): void {
     case 'cmd': {
       const result = sim.applyNow(m.cmd as Command);
       post({ type: 'result', id: m.id, result });
+      // a time act the host honours (CommandResult.control): the pace of `time.speed`; after a rewind / edit of the past
+      // the restored world may stand on another time-lapse level than the preset
+      const ctl = result.control;
+      if (ctl && typeof ctl.speed === 'number') setSpeed(ctl.speed);
+      else if (ctl && (ctl.rewind !== undefined || ctl.edit !== undefined)) { resetSent(); syncLapse(); }
       return;
     }
     case 'parse':
@@ -271,6 +300,7 @@ function handle(m: ToWorker): void {
       try {
         sim = Sim.load(new Uint8Array(m.data), mods);
         resetSent();
+        syncLapse();
         post({ type: 'loaded', id: m.id, ok: true });
       } catch (e) {
         post({ type: 'loaded', id: m.id, ok: false, msg: e instanceof Error ? e.message : String(e) });
@@ -279,7 +309,7 @@ function handle(m: ToWorker): void {
     }
     case 'rewind': {
       const ok = sim.rewind(m.tick);
-      if (ok) resetSent();
+      if (ok) { resetSent(); syncLapse(); }
       post({ type: 'result', id: m.id, result: { ok, msg: ok ? `Time runs back to tick ${sim.tick}.` : 'That moment is too far back to return to.', tick: sim.tick } });
       return;
     }

@@ -12,6 +12,19 @@
 //   hydrology 2 · fire 5 · weather 10 · terrain (lava, talus, sand, ash) 10 · climate 60 · vegetation 60 (+30)
 //   chronicle firsts 60 (+45) · groundwater/seepage/salt 720 · biomes 720 (+360) · keyframe 2880
 // Snow melt and freezing run inside the hourly climate pass (temperature only changes hourly).
+//
+// Time-lapse (SIM perf push 2, perf/lapse.ts): the speed preset is a LOGGED input (`time.scale`, issued by the worker
+// when the preset changes level; saved in settings.lapse, replayed by rewind). Level 0 (1x, 10x) is exactly the above.
+// Level 1 (100x) / 2 (1000x): climate every 120 / 360 ticks and vegetation every 120 / 480 (each pass integrates the
+// hours it stands for; the climate steps its energy balance hour by hour under each hour's sun), weather systems and
+// rain batches every 20 / 30, hydrology every 2 / 4 — 4 only while the sea is calm (same per-step gain, half the
+// per-step friction: same steady discharge; with waves on the sea, 2 as at 1x), thin overland sheet flow every 4 / 12,
+// sand 20 / 30, biomes 720 / 1440, settlement re-planning ×2 / ×3, keyframes every 2880 / 5760; evaporation and
+// infiltration of the land stay hourly (the soil hour below runs on the hours the climate pass skips). A step after a
+// level change integrates exactly the time since that system last ran. Same seed + same log (speed changes included)
+// => same hash. A dead world the camera is not on (no air, water, life, weather, lava, fire: perf/lapse.ts dormant)
+// runs its climate and vegetation every 6 hours at any level. Measured against 1x (round 2, tests/perf-fidelity):
+// temperatures, envelopes, soils, wetlands and the sea's recovery match; a downpour carves ~15 % more at 100x / 1000x.
 
 import type { Command, CommandResult, FieldName, PlanetSnap, SimEvent, Snapshot } from './types.ts';
 import { BASE_PACK } from '../data/index.ts';
@@ -24,11 +37,13 @@ import { buildRegistry, type CommandRegistry } from './god/commands.ts';
 import { parseFreeform } from './god/freeform.ts';
 import { listParams } from './god/params.ts';
 import { Hasher, type TypedArray } from './core/hash.ts';
-import { packArray, unpackArray, type PackedArray } from './core/kfcodec.ts';
+import { unpackArray, type PackedArray } from './core/kfcodec.ts';
+import { packKeyframe } from './perf/kfpack.ts';
 import { SaveWriter, readSave } from './core/serialize.ts';
+import { readHistory, trimHistory, writeHistory, type SavedFrame } from './history.ts';
 import { IdAllocator } from './core/ids.ts';
 import type { RngState } from './core/rng.ts';
-import { climateStep, CLIMATE_CADENCE } from './fields/climate.ts';
+import { climateStep, soilHour, CLIMATE_CADENCE } from './fields/climate.ts';
 import { hydroStep, hydroSlowStep, HYDRO_CADENCE, HYDRO_SLOW_CADENCE } from './fields/hydrology.ts';
 import { weatherStep, weatherViews, WEATHER_CADENCE } from './fields/weather.ts';
 import { fireStep, FIRE_CADENCE, heatAt } from './fields/fire.ts';
@@ -40,6 +55,11 @@ import { meanAnomaly } from './world/orbits.ts';
 import { peopleStep } from './people/people.ts';
 import { agentBlock, animalBlock, buildingBlock, populationBySpecies, settlementViews } from './people/snapshot.ts';
 import { peopleQuery, PEOPLE_QUERIES } from './people/query.ts';
+import { KEYFRAME_MULT, LAPSE_BIOME, LAPSE_CLIMATE, LAPSE_HYDRO, LAPSE_VEG, LAPSE_WEATHER, lapseDue, lapseLevel, registerTimeScale } from './perf/lapse.ts';
+// the god layer (phase 3): its step, its snapshot parts, its save state, the time controls (god/index.ts)
+import { godTick, godSnapPlanet, godSnapGlobal, godRestore, godQuery, GOD_QUERIES, installSimControls, runControl, controlRequested } from './god/index.ts';
+import { validatePowers } from './god/powers.ts';
+import { ContentError } from './content.ts';
 
 export interface SimOptions {
   seed: number;
@@ -116,18 +136,29 @@ export class Sim {
       this.u = buildScenario(this.content, opts.scenario, opts.seed >>> 0, { overrides: opts.overrides });
     }
     this.registry = buildRegistry();
+    registerTimeScale(this.registry); // SIM perf push 2: the logged speed level (perf/lapse.ts)
     this.registry.register('freeform', ({ u }, a) => {
       const r = parseFreeform(u, this.registry, String(a.text ?? ''));
-      if (!r.ok || !r.resolved?.length) return { ok: false, msg: r.msg ?? 'Nothing to do.', resolved: r.resolved };
+      // (ok with nothing to do: a question answered from the world — the reply is the answer)
+      if (!r.ok || !r.resolved?.length) return { ok: r.ok && !!r.msg, msg: r.msg ?? 'Nothing to do.', resolved: r.resolved };
       const msgs: string[] = [];
       let okAll = true;
+      // what the acts made and the time / save controls they ask the host for travel with the result (god/freeform.ts)
+      const created: NonNullable<CommandResult['created']> = [];
+      let control: Record<string, number> | undefined;
       for (const c of r.resolved) {
         const res = this.registry.dispatch(u, c);
         okAll = okAll && res.ok;
         if (res.msg) msgs.push(res.msg);
+        if (res.created) created.push(...res.created);
+        if (res.control) control = { ...(control ?? {}), ...res.control };
       }
-      return { ok: okAll, msg: msgs.join(' '), resolved: r.resolved };
+      return { ok: okAll, msg: msgs.join(' '), resolved: r.resolved, ...(created.length ? { created } : {}), ...(control ? { control } : {}) };
     }, { desc: 'Do what the words say', category: 'Meta', params: { text: { type: 'string', required: true } } });
+    // the god layer: time controls act on this Sim; every power in the content must have a handler
+    installSimControls(this);
+    const badPowers = validatePowers(this.registry, this.content);
+    if (badPowers.length) throw new ContentError(badPowers);
     this.chronicleSent = this.u.chronicle.length;
     this.keyframe();
   }
@@ -144,7 +175,11 @@ export class Sim {
 
   step(ticks: number): void {
     const n = Math.max(0, Math.floor(ticks));
-    for (let i = 0; i < n; i++) this.tickOnce();
+    for (let i = 0; i < n; i++) {
+      this.tickOnce();
+      // a queued time command (rewind, edit-past) runs between ticks, never inside one (god/index.ts)
+      if (controlRequested(this)) runControl(this);
+    }
   }
 
   private tickOnce(): void {
@@ -156,15 +191,21 @@ export class Sim {
       for (const c of q) this.exec(c);
     }
     for (const p of u.planets) if (p.alive) runPlanet(u, p, t);
+    godTick(u, this.registry, t); // disasters, things in flight, creatures, rivals, natural disasters (god/index.ts)
     u.tick = t + 1;
-    if (u.tick % this.keyframeEvery === 0) this.keyframe();
+    // (time-lapse spaces keyframes further apart at 1000x: perf/lapse.ts)
+    if (u.tick % (this.keyframeEvery * KEYFRAME_MULT[lapseLevel(u)]) === 0) this.keyframe();
     else if (this.keyframes.length > 1) this.encodeKeyframes(KEYFRAME_ENCODE_PER_TICK);
   }
 
   private exec(cmd: Command): CommandResult {
     const clean = JSON.parse(JSON.stringify(cmd)) as Command;
-    this.u.log.push({ tick: this.u.tick, cmd: clean });
-    return this.registry.dispatch(this.u, clean);
+    const entry = { tick: this.u.tick, cmd: clean };
+    this.u.log.push(entry);
+    const r = this.registry.dispatch(this.u, clean);
+    // a time act (speed, step, rewind, edit-past) is not a world act: it is not part of the log (god/index.ts)
+    if (controlRequested(this)) this.u.log = this.u.log.filter((e) => e !== entry);
+    return r;
   }
 
   apply(cmd: Command): CommandResult {
@@ -177,7 +218,10 @@ export class Sim {
   applyNow(cmd: Command): CommandResult {
     const v = this.registry.validate(this.u, cmd);
     if (!v.ok) return { ok: false, msg: v.msg, tick: this.u.tick };
-    return this.exec(cmd);
+    const r = this.exec(cmd);
+    const note = runControl(this);
+    if (note) r.msg = `${r.msg ?? ''}${note}`;
+    return r;
   }
 
   parse(text: string): CommandResult {
@@ -216,6 +260,7 @@ export class Sim {
       }
       if (any) snap.fields = fields;
       if (opts.grad && fields.surface) snap.grad = new Float32Array(p.ground().grad as Float32Array); // SIM perf pass
+      godSnapPlanet(u, p, snap); // live disasters; people in the hand or in the air (god/index.ts)
       planets.push(snap);
     }
     const drain = opts.drain !== false;
@@ -224,7 +269,7 @@ export class Sim {
     if (drain) this.chronicleSent = u.chronicle.length;
     return {
       tick: u.tick, speed: this.speed, achievedSpeed: this.achievedSpeed, star: starView(u.star), planets,
-      ships: [], creatures: [], hand: null, events, chronicle, content: this.content.packs, msPerTick: this.msPerTick,
+      ships: [], ...godSnapGlobal(u), events, chronicle, content: this.content.packs, msPerTick: this.msPerTick,
       restraint: u.settings.restraint, worship: worshipPool(u),
     };
   }
@@ -242,6 +287,7 @@ export class Sim {
       star: u.star,
       settings: u.settings,
       focus: u.focus,
+      god: u.god.toJson(), // the god layer: disasters, hand, creatures, gods, laws, inventions (god/state.ts)
       ids: u.ids.save(),
       rng: u.rng.save().map((x) => x >>> 0),
       chronicle: u.chronicle,
@@ -257,7 +303,52 @@ export class Sim {
   save(): Uint8Array {
     const w = new SaveWriter();
     for (const p of this.u.planets) for (const [name, arr] of planetArrays(p)) w.blob(`p${p.id}.${name}`, arr);
-    return w.finish(this.header(true));
+    // the rewind ring goes with it (history.ts): a loaded world can still be rewound and its past edited
+    const history = writeHistory(w, trimHistory(this.historyForSave()));
+    return w.finish({ ...this.header(true), ...(history.length ? { history } : {}) });
+  }
+
+  /** the rewind ring as a save keeps it: older keyframes as they are, the newest encoded against the live arrays */
+  private historyForSave(): SavedFrame[] {
+    this.encodeKeyframes(Infinity);
+    if (!this.keyframes.length) return [];
+    const live = new Map<string, TypedArray>();
+    for (const p of this.u.planets) for (const [name, arr] of planetArrays(p)) live.set(`p${p.id}.${name}`, arr);
+    const newest = this.keyframes[this.keyframes.length - 1];
+    const top: SavedFrame = { tick: newest.tick, header: newest.header, packed: new Map() };
+    for (const [key, raw] of this.kfRaw) {
+      const ref = live.get(key);
+      const same = ref && ref.byteLength === raw.byteLength && ref.constructor === raw.constructor;
+      top.packed.set(key, packKeyframe(raw, same ? ref : null));
+    }
+    return [...this.keyframes.slice(0, -1).map((k) => ({ tick: k.tick, header: k.header, packed: k.packed })), top];
+  }
+
+  /** after a load: the saved ring becomes the rewind ring again (behind the keyframe the constructor took) */
+  private restoreHistory(frames: SavedFrame[]): void {
+    const live = new Map<string, TypedArray>();
+    for (const p of this.u.planets) for (const [name, arr] of planetArrays(p)) live.set(`p${p.id}.${name}`, arr);
+    const top = frames[frames.length - 1];
+    const topRaw = new Map<string, TypedArray>();
+    for (const [key, pk] of top.packed) {
+      const ref = pk.xor ? live.get(key) ?? null : null;
+      const out = typedLike(ref ?? live.get(key) ?? null, pk.byteLength, key, top.header);
+      unpackArray(pk, out, ref);
+      topRaw.set(key, out);
+    }
+    const bytesOf = (f: SavedFrame) => { let b = f.header.length * 2; for (const pk of f.packed.values()) b += pk.bytes.byteLength; return b; };
+    const older: Keyframe[] = frames.slice(0, -1).map((f) => ({ tick: f.tick, header: f.header, packed: f.packed, bytes: bytesOf(f) }));
+    const cur = this.keyframes[this.keyframes.length - 1];
+    const mid: Keyframe = { tick: top.tick, header: top.header, packed: new Map(), bytes: top.header.length * 2 };
+    if (!cur || cur.tick === top.tick) {
+      this.keyframes = [...older, mid];
+      this.kfRaw = topRaw;
+    } else {
+      mid.pending = topRaw;
+      mid.ref = this.kfRaw;
+      this.keyframes = [...older, mid, cur];
+    }
+    this.trimKeyframes();
   }
 
   static load(bytes: Uint8Array, content?: ContentPack[]): Sim {
@@ -270,6 +361,8 @@ export class Sim {
     const sim = new Sim({ seed: u.seed, scenario: u.scenario }, { universe: u, content: c });
     const q = file.header.queue;
     if (Array.isArray(q)) sim.queue = (q as Command[]).map((cmd) => JSON.parse(JSON.stringify(cmd)) as Command);
+    const hist = readHistory(file.header.history, file.blobs);
+    if (hist) sim.restoreHistory(hist);
     return sim;
   }
 
@@ -332,7 +425,7 @@ export class Sim {
       if (!k.pending || !k.ref) continue;
       for (const [key, a] of k.pending) {
         if (done >= budget) return;
-        const pk = packArray(a, k.ref.get(key) ?? null);
+        const pk = packKeyframe(a, k.ref.get(key) ?? null); // (unchanged arrays skip the codec: perf/kfpack.ts)
         k.packed.set(key, pk);
         k.bytes += pk.bytes.byteLength;
         k.pending.delete(key);
@@ -453,6 +546,7 @@ export class Sim {
       case 'hash':
         return this.hash();
       default:
+        if (GOD_QUERIES.includes(q)) return godQuery(u, q, args); // powers, gestures, gods, creatures, disasters (god/index.ts)
         if (PEOPLE_QUERIES.includes(q)) return p ? peopleQuery(u, p, q, args) : null;
         return { error: `unknown query '${q}'`, known: ['cell', 'planet', 'planets', 'params', 'commands', 'chronicle', 'scenario', 'weather', 'plants', 'biomes', 'stars', 'hash', ...PEOPLE_QUERIES] };
     }
@@ -491,22 +585,31 @@ function worshipPool(u: Universe): number[] {
 export function runPlanet(u: Universe, p: Planet, t: number): void {
   const off = p.id * 13; // stagger slow passes between worlds
   const ts = t + off;
-  if (ts % CLIMATE_CADENCE === 0) climateStep(u, p);
-  if (ts % WEATHER_CADENCE === 0) weatherStep(u, p);
-  if (t % HYDRO_CADENCE === 0) {
-    hydroStep(u, p);
+  // SIM perf push 2 — time-lapse (perf/lapse.ts): climate, weather and vegetation run on the cadences of the logged
+  // speed level, each handed the ticks it integrates (level 0: exactly the base cadences above)
+  const dtC = lapseDue(u, p, LAPSE_CLIMATE, ts, 0);
+  if (dtC) climateStep(u, p, t, dtC / CLIMATE_CADENCE);
+  // (perf push 2 round 2: an hour the coarse schedule skips still soaks and dries the land hourly — climate.ts soilHour)
+  else if (ts % CLIMATE_CADENCE === 0) soilHour(u, p);
+  const dtW = lapseDue(u, p, LAPSE_WEATHER, ts, 0);
+  if (dtW) weatherStep(u, p, dtW);
+  const dtH = lapseDue(u, p, LAPSE_HYDRO, t, 0); // every HYDRO_CADENCE ticks (every 4 at 1000x)
+  if (dtH) {
+    hydroStep(u, p, dtH);
     if (p.springs.length) {
       let expired = false;
-      for (const s of p.springs) if (s.life > 0) { s.life = Math.max(0, s.life - HYDRO_CADENCE); if (s.life === 0) expired = true; }
+      for (const s of p.springs) if (s.life > 0) { s.life = Math.max(0, s.life - dtH); if (s.life === 0) expired = true; }
       if (expired) p.springs = p.springs.filter((s) => s.life !== 0);
     }
   }
   if (t % FIRE_CADENCE === 0) fireStep(u, p);
   if ((ts + 5) % TERRAIN_CADENCE === 0) terrainStep(u, p);
-  if (ts % VEG_CADENCE === VEG_OFFSET) vegetationStep(u, p);
+  const dtV = lapseDue(u, p, LAPSE_VEG, ts, VEG_OFFSET);
+  if (dtV) vegetationStep(u, p, dtV / VEG_CADENCE);
   if (ts % CHRONICLE_CADENCE === CHRONICLE_OFFSET) chronicleCheck(u, p);
   if (ts % HYDRO_SLOW_CADENCE === 120) hydroSlowStep(u, p);
-  if (ts % BIOME_CADENCE === 360) biomeStep(u, p);
+  const dtB = lapseDue(u, p, LAPSE_BIOME, ts, 360); // (daily at 1000x)
+  if (dtB) biomeStep(u, p, dtB / BIOME_CADENCE);
   peopleStep(u, p, t);
 }
 
@@ -530,6 +633,7 @@ function universeFromHeader(content: Content, h: Record<string, unknown>, blobs:
   u.tick = h.tick as number;
   u.settings = { ...(h.settings as Universe['settings']) };
   u.focus = (h.focus as Universe['focus']) ?? null;
+  godRestore(u, h); // the god state, and the content its inventions made (before the planets: their people need it)
   u.ids = IdAllocator.load(h.ids as Record<string, number>);
   u.rng.load(h.rng as RngState);
   u.chronicle = ((h.chronicle as Universe['chronicle']) ?? []).map((e) => ({ ...e }));
@@ -542,7 +646,7 @@ function universeFromHeader(content: Content, h: Record<string, unknown>, blobs:
     u.addPlanet(p);
   }
   // transient people indices (time wheel, buckets, members) rebuilt at the restored tick
-  for (const p of u.planets) { p.people.contentRef = content; p.people.reindex(u.tick); }
+  for (const p of u.planets) { p.people.contentRef = u.content; p.people.reindex(u.tick); }
   // the restored stamp must stay above every field version
   let maxVer = u.stamp;
   for (const p of u.planets) for (const v of Object.values(p.fieldVer)) if (v > maxVer) maxVer = v;

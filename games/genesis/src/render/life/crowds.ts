@@ -26,6 +26,29 @@ import type { Buildings } from './buildings.ts';
 import { Boats, vesselOf } from './boats.ts';
 
 const LOD_D = [30, 95, 650];
+/** half-widths (m) of the cross-fade bands at the LOD switches (and the fade-out at the far edge) */
+const LOD_BAND = [2.5, 6, 40];
+const _lf: [number, number][] = [[0, 1], [0, 1]];
+
+/**
+ * The LODs a body at distance d is drawn with and their cross-fades: one LOD away from the switches, the two
+ * neighbours sharing a dither across a band at each switch (no hard cut), fading out at the far edge. Returns how many
+ * of `_lf` it filled ([lod, fade]).
+ */
+function lodFades(d: number): number {
+  for (let l = 0; l < 3; l++) {
+    const e = LOD_D[l], h = LOD_BAND[l];
+    if (d < e - h) { _lf[0][0] = l; _lf[0][1] = 1; return 1; }
+    if (d < e + h) {
+      const f = (e + h - d) / (2 * h), near = f * f * (3 - 2 * f);
+      _lf[0][0] = l; _lf[0][1] = near;
+      if (l === 2) return 1;
+      _lf[1][0] = l + 1; _lf[1][1] = -(1 - near);
+      return 2;
+    }
+  }
+  return 0;
+}
 const BLEND_S = 0.35;
 /** correction decay time constant (s) and the jump beyond which a person is placed, not slid (m) */
 const SMOOTH_S = 0.15;
@@ -78,15 +101,17 @@ export class Crowds {
 
   get group() { return this.bodies.group; }
 
-  private bucketFor(species: number, lod: number) {
+  /** the body bucket of a species at a LOD; bipeds near the camera come per clothing tier (only that tier's clothes) */
+  private bucketFor(species: number, lod: number, era = 2) {
     const sp = speciesAt(species);
     const plan = sp.plan === 'hexapod' ? PLAN.hex : sp.plan === 'flyer' ? PLAN.jelly : PLAN.biped;
-    const key = `p${plan}|${sp.furred ? 1 : 0}${sp.webbed ? 1 : 0}|${lod}`;
+    const tier = plan === PLAN.biped && lod <= 1 ? clothTier(era) : -1;
+    const key = `p${plan}|${sp.furred ? 1 : 0}${sp.webbed ? 1 : 0}|${lod}|t${tier}`;
     return this.bodies.get(key, () => {
       let body: BodyMesh;
       if (plan === PLAN.hex) body = hexMesh(lod);
       else if (plan === PLAN.jelly) body = jellyMesh(lod);
-      else body = bipedMesh(lod, { furred: sp.furred, webbed: sp.webbed });
+      else body = bipedMesh(lod, { furred: sp.furred, webbed: sp.webbed, tier: tier >= 0 ? tier : undefined });
       const rig = plan === PLAN.hex ? HEX_RIG : plan === PLAN.jelly ? JELLY_RIG : BIPED_RIG;
       return { body, opts: { plan, rig }, shadows: lod <= 1 };
     });
@@ -138,14 +163,24 @@ export class Crowds {
       if (!fronts.length) continue;
       const n = Math.min(Math.round(s.cohort * 0.12 * this.density), 420);
       const sp = speciesAt(s.species);
+      // standers keep a little room round each other (bodies stood through bodies)
+      const spots: number[] = [];
+      const clear = (x: number, y: number, z: number) => { for (let q = 0; q < spots.length; q += 3) { const dx = spots[q] - x, dy = spots[q + 1] - y, dz = spots[q + 2] - z; if (dx * dx + dy * dy + dz * dz < 0.8 * 0.8) return false; } return true; };
       for (let k = 0; k < n; k++) {
         const f = fronts[Math.floor(hashFloat(s.id, k, 1) * fronts.length)];
         const id = 900000 + s.id * 5000 + k;
-        const off = 1.2 + hashFloat(id, 2) * 3.5, side = (hashFloat(id, 3) - 0.5) * f.w;
-        const px = f.x + f.fx * off + f.sx * side, py = f.y + f.fy * off + f.sy * side, pz = f.z + f.fz * off + f.sz * side;
-        const l = Math.hypot(px, py, pz);
         const r = hashFloat(id, 4);
         const walking = r < 0.45;
+        const off = 1.2 + hashFloat(id, 2) * 3.5;
+        let side = (hashFloat(id, 3) - 0.5) * f.w;
+        let px = f.x + f.fx * off + f.sx * side, py = f.y + f.fy * off + f.sy * side, pz = f.z + f.fz * off + f.sz * side;
+        if (!walking) {
+          let tries = 0;
+          while (!clear(px, py, pz) && tries++ < 3) { side += 0.95; px = f.x + f.fx * off + f.sx * side; py = f.y + f.fy * off + f.sy * side; pz = f.z + f.fz * off + f.sz * side; }
+          if (tries > 3) continue;
+          spots.push(px, py, pz);
+        }
+        const l = Math.hypot(px, py, pz);
         const anim = walking ? AnimState.walk : r < 0.62 ? AnimState.idle : r < 0.76 ? AnimState.teach : r < 0.88 ? AnimState.sit : r < 0.94 ? AnimState.work : AnimState.carry;
         // walkers pace a short beat along the frontage
         const len = walking || anim === AnimState.carry ? 4 + hashFloat(id, 5) * 10 : 0;
@@ -221,12 +256,10 @@ export class Crowds {
         // metres above the sea off steep quays and coasts, where the curved ground bulges above the linear one.
         if (afloat) r = water && surfaceF ? pv.params.radius + pv.grid.sample(surfaceF, ux, uy, uz) + Math.max(0, pv.grid.sample(water, ux, uy, uz)) : tr.ground;
         const d = Math.hypot(ux * r - cx, uy * r - cy, uz * r - cz);
-        const lod = d < LOD_D[0] ? 0 : d < LOD_D[1] ? 1 : d < LOD_D[2] ? 2 : -1;
-        if (lod < 0) continue;
+        const nl = lodFades(d);
+        if (!nl) continue;
         const sp = speciesAt(A.species[i]);
         const era = eraOf.get(A.group[i]) ?? 2;
-        const b = this.bucketFor(A.species[i], lod);
-        const k = this.bodies.push(b);
         const scale = (sp.height / (sp.plan === 'hexapod' ? 1.3 : sp.plan === 'flyer' ? 2.2 : 1.72)) * (A.scale[i] || 1);
         let dh = A.heading[i] - tr.hd;
         dh -= Math.round(dh / (Math.PI * 2)) * Math.PI * 2;
@@ -236,6 +269,8 @@ export class Crowds {
           // the boat under them, bow ahead, pitching gently on the swell; they sit in it (stand at a sail boat's helm)
           const kind = vesselOf(A.carry[i]);
           const pitch = Math.sin(realTime * 1.3 + hashFloat(id, 61) * 6.28) * 0.04;
+          // riding the swell: a slow heave with the pitch (rider and boat together)
+          r += 0.035 * Math.sin(realTime * 1.05 + hashFloat(id, 67) * 6.28);
           bodyMatrix(_mat, ux, uy, uz, r - 0.02, tr.hd, 1, pitch);
           this.boats.add(kind, _mat, hashFloat(id, 63));
           anim = prevAnim = kind === 'sail' ? AnimState.idle : AnimState.sit;
@@ -246,7 +281,12 @@ export class Crowds {
         this.colours(id, sp, A.tint[i], flags, era, A.species[i]);
         const tool = this.toolFor(tr.anim, A.carry[i], era, flags, id);
         const cadence = 0.9 + 0.2 * hashFloat(id, 41);
-        this.bodies.set(b, k, _mat, [anim, prevAnim, blend, A.phase[i] + hashFloat(id, 43)], _a, _b, _c, [this.styleFor(id, flags, era), afloat ? HELD.none : tool, cadence, flags]);
+        const style = this.styleFor(id, flags, era);
+        for (let q = 0; q < nl; q++) {
+          const b = this.bucketFor(A.species[i], _lf[q][0], era);
+          const k = this.bodies.push(b);
+          this.bodies.set(b, k, _mat, [anim, prevAnim, blend, A.phase[i] + hashFloat(id, 43)], _a, _b, _c, [style, afloat ? HELD.none : tool, cadence, flags], _lf[q][1]);
+        }
         this.addPick(id, ux * r, uy * r, uz * r, scale * (sp.plan === 'hexapod' ? 1.3 : 1.72));
         agents++;
       }
@@ -274,18 +314,22 @@ export class Crowds {
         if (!fwd) heading += Math.PI;
       }
       const dq = Math.hypot(ux * R - cx, uy * R - cy, uz * R - cz);
-      if (dq > LOD_D[2]) continue;
+      if (dq > LOD_D[2] + LOD_BAND[2]) continue;
       const g = groundHeight(pv.ground, ux, uy, uz);
       const d = Math.hypot(ux * g - cx, uy * g - cy, uz * g - cz);
-      const lod = d < LOD_D[0] ? 0 : d < LOD_D[1] ? 1 : 2;
+      const nl = lodFades(d);
+      if (!nl) continue;
       const sp = speciesAt(a.species);
       const era = eraOf.get(a.settlement) ?? 2;
-      const b = this.bucketFor(a.species, lod);
-      const k = this.bodies.push(b);
       const child = (a.flags & AgentFlag.child) !== 0;
       bodyMatrix(_mat, ux, uy, uz, g, heading, (sp.height / 1.72) * (child ? 0.62 : 0.92 + 0.16 * hashFloat(a.id, 15)));
       this.colours(a.id, sp, a.tint, a.flags, era, a.species);
-      this.bodies.set(b, k, _mat, [a.anim, a.anim, 1, hashFloat(a.id, 16)], _a, _b, _c, [this.styleFor(a.id, a.flags, era), a.tool, 0.9 + 0.2 * hashFloat(a.id, 17), a.flags]);
+      const style = this.styleFor(a.id, a.flags, era);
+      for (let q = 0; q < nl; q++) {
+        const b = this.bucketFor(a.species, _lf[q][0], era);
+        const k = this.bodies.push(b);
+        this.bodies.set(b, k, _mat, [a.anim, a.anim, 1, hashFloat(a.id, 16)], _a, _b, _c, [style, a.tool, 0.9 + 0.2 * hashFloat(a.id, 17), a.flags], _lf[q][1]);
+      }
       amb++;
     }
     this.boats.end();

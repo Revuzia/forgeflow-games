@@ -77,6 +77,8 @@ export class SunShadows {
   size: number;
   cascades = 0;
   splits = [0, 0, 0, 0];
+  /** world size of one shadow texel per cascade (m) */
+  readonly texel = [0, 0, 0, 0];
   private radii = [0, 0, 0, 0];
 
   constructor(size = 2048) {
@@ -145,6 +147,7 @@ export class SunShadows {
     }
     const sp = u.uShadowSplits.value;
     sp.set(bounds[1], bounds[2] ?? 1e9, bounds[3] ?? 1e9, bounds[4] ?? 1e9);
+    for (let i = 0; i < 4; i++) this.splits[i] = bounds[i + 1] ?? 1e9;
     const tanY = Math.tan((camera.fov * Math.PI) / 360);
     const tanX = tanY * camera.aspect;
     const half = this.size / 2;
@@ -176,6 +179,7 @@ export class SunShadows {
       cam.updateMatrixWorld(true);
       // snap the centre to whole texels in light space (no shimmering while the camera moves)
       const texel = (2 * r) / half;
+      this.texel[k] = texel;
       const inv = _m.copy(cam.matrixWorld).invert();
       const lc = _ls.copy(_c).applyMatrix4(inv);
       lc.x = Math.round(lc.x / texel) * texel;
@@ -191,8 +195,13 @@ export class SunShadows {
     }
   }
 
-  /** render the casters (layer 1) into the atlas; `swap(true)` must switch casters to depth materials */
-  render(renderer: WebGLRenderer, scene: Object3D, swap: (depth: boolean) => void): void {
+  /**
+   * render the casters (layer 1) into the atlas; `swap(true)` must switch casters to depth materials. `perCascade(k)`
+   * runs before cascade k is drawn (and with −1 after the last) so the caller can leave out casters that cascade
+   * cannot use — ground near the camera in the far cascades (those pixels read cascade 0), casters smaller than a
+   * texel — instead of drawing the whole view's geometry once per cascade.
+   */
+  render(renderer: WebGLRenderer, scene: Object3D, swap: (depth: boolean) => void, perCascade?: (k: number) => void): void {
     if (!this.cascades) return;
     const prevTarget = renderer.getRenderTarget();
     const prevAuto = renderer.autoClear;
@@ -210,8 +219,10 @@ export class SunShadows {
       this.rt.scissor.copy(this.rt.viewport);
       this.rt.scissorTest = true;
       renderer.setRenderTarget(this.rt);
+      perCascade?.(k);
       renderer.render(scene, this.cams[k]);
     }
+    perCascade?.(-1);
     this.rt.scissorTest = false;
     renderer.autoClear = prevAuto;
     renderer.setClearColor(0x000000, 1);

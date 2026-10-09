@@ -25,6 +25,7 @@ import { fireSourceNear } from './fire.ts';
 import { boatSwim, missionOf, planMission } from './missions.ts';
 import { sacredAnimal } from './culture.ts';
 import { offsetPoint } from './world.ts';
+import { godHooks } from './hooks.ts';
 
 const _p = [0, 0, 0];
 const _q = [0, 0, 0];
@@ -36,6 +37,8 @@ const NEED_STEP = 60;
 export function onDue(x: PCtx, s: number): void {
   const A = x.A;
   if (!A.alive[s]) return;
+  // held in the god's hand or flying: no decisions until set down (the landing wakes them)
+  if (godHooks.held && godHooks.held(x, s)) return;
   if (A.phase[s] === PHASE.moving) {
     // a long walk is lived leg by leg: thirst, hunger and cold are felt (and can kill) on the road, not all at once at
     // its end — agents on day-long errands carried days of deprivation into one decision and died 20 ticks after
@@ -116,7 +119,12 @@ export function decide(x: PCtx, s: number): void {
   const h = updateNeeds(x, s);
   if (h <= 0) { die(x, s, A.cause[s] || DEATH.injury); return; }
   const home = x.ps.settlement(A.settlement[s]);
-  if (A.flags[s] & AgentFlag.possessed) { idle(x, s, 60); return; }
+  if (A.flags[s] & AgentFlag.possessed) {
+    // the player drives this one (god/possess.ts): its next order, else it stands and waits
+    const t = godHooks.possessed ? godHooks.possessed(x, s) : null;
+    if (t) startTask(x, s, t); else idle(x, s, 60);
+    return;
+  }
   // on the road with a caravan or a war band: eat what they carry, drink and sleep where they are, keep going
   const mission = A.mission[s] ? missionOf(x, s) : undefined;
   const away = !!mission && mission.phase >= 1 && mission.phase <= 3;
@@ -184,6 +192,11 @@ export function decide(x: PCtx, s: number): void {
     U[C.curious] = 0;
   }
   U[C.wander] = mission ? 0 : 0.15;
+  // a disciple carries its god's will (god/disciples.ts) unless a body's need is pressing
+  if (A.flags[s] & AgentFlag.disciple && godHooks.disciple && !mission) {
+    const pressing = Math.max(U[C.flee], U[C.drink], U[C.eat], U[C.warm], U[C.sleep], U[C.exhausted]);
+    if (pressing < 1.3) { const t = godHooks.disciple(x, s, st, night); if (t) { startTask(x, s, t); return; } }
+  }
   // best first; a candidate that finds no target falls through to the next
   _order.length = 0;
   for (let i = 0; i < NC; i++) if (U[i] > 0.02) { U[i] += jitter(x, s, i); _order.push(i); }

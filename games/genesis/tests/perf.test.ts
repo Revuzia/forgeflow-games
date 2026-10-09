@@ -12,7 +12,8 @@
 // 4-vCPU 2.1 GHz Xeon build VM, idle or busy, as long as this process gets a core, so it is only a sanity bound, not a
 // measure of load. Each measurement is a median of 3 runs after a game day of warm-up (V8 tiers up the hourly kernels
 // slowly). The floors are fixed: on the build VM with the renderer's SwiftShader screenshots running the perf pass does
-// ~1 450–1 900 ticks/s idle and ~420–540 in the monsoon; phase 1 ran ~850–1 100 and ~220–290.
+// ~1 450–1 900 ticks/s idle and ~420–540 in the monsoon; phase 1 ran ~850–1 100 and ~220–290. SIM perf push 2 adds the
+// same floor at the 1000x preset (the logged time-lapse level, src/sim/perf/lapse.ts) and raises the real-time ones.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -99,21 +100,41 @@ const DESCHED_OVERLOADED = 1.3;
 /** calibration (CPU ns / element) beyond which a core is too contended to judge: ~1.6x the build VM's ~2.2 (a faster
  * machine never gets near it) */
 const CALIB_OVERLOADED = 3.5;
-/** floors: idle above phase 1's best (~1 160), downpour above phase 1's best (~290) */
-const IDLE_FLOOR = 1300;
-const MONSOON_FLOOR = 330;
+/**
+ * Floors (SIM perf push 2, re-taken in round 2 with natural disasters off). Real time (1x / 10x): idle ~1 850–2 100
+ * measured (1 600 at load ~18, wall/CPU 5), downpour ~560–630 (580 at load ~18) — sheets that keep their edge flux cost
+ * ~10 % of the downpour rate of round 1 but carve and run as the pure pipes did. The 1000x time-lapse level
+ * (perf/lapse.ts): ~4 400–4 700 idle (3 800 at load ~18) and ~1 400–1 600 in the monsoon (1 290), the 4-tick pipes
+ * now only while the sea is calm. Floors ~20–30 % below the loaded measurements.
+ */
+const IDLE_FLOOR = 1450;
+const MONSOON_FLOOR = 450;
+const IDLE_FLOOR_1000X = 3000;
+const MONSOON_FLOOR_1000X = 900;
 
 test('sim throughput floor: terran home world idle and in a planet-wide monsoon', { timeout: 600_000 }, (t) => {
+  floorTest(t, 1, IDLE_FLOOR, MONSOON_FLOOR);
+});
+
+test('sim throughput floor at the 1000x preset (time-lapse level 2): idle and monsoon', { timeout: 600_000 }, (t) => {
+  floorTest(t, 1000, IDLE_FLOOR_1000X, MONSOON_FLOOR_1000X);
+});
+
+function floorTest(t: { diagnostic(s: string): void; skip(s: string): void }, scale: number, IDLE_FLOOR: number, MONSOON_FLOOR: number): void {
   const calib = calibrate();
   const cal = `calibration ${calib.ns.toFixed(2)} ns/element, wall/CPU ${calib.desched.toFixed(2)}`;
   const sim = new Sim({ seed: 1234, scenario: 'sandbox' });
+  // natural disasters off (the god layer's law, on by default): a natural quake wakes the whole sea for ~1.5 game days
+  // at a third of the idle rate, so a floor measured across one would be luck (perf push 2 round 2)
+  assert.ok(sim.applyNow({ k: 'set', path: 'disasters.natural', value: 0 }).ok);
+  if (scale > 1) assert.ok(sim.applyNow({ k: 'time.scale', scale }).ok);
   sim.step(1440); // warm-up: a game day
   const idle = judge(sim, sim.save(), 1440, IDLE_FLOOR, 3);
   const home = sim.u.planets[0];
   assert.ok(sim.applyNow({ k: 'weather.global', planet: home.id, kind: 'monsoon' }).ok);
   sim.step(600);
   const monsoon = judge(sim, sim.save(), 720, MONSOON_FLOOR, 3);
-  const got = `idle ${idle.rate.toFixed(0)} ticks/s (${idle.tries} tries, wall/CPU ${idle.desched.toFixed(2)}), ` +
+  const got = `${scale}x: idle ${idle.rate.toFixed(0)} ticks/s (${idle.tries} tries, wall/CPU ${idle.desched.toFixed(2)}), ` +
     `monsoon ${monsoon.rate.toFixed(0)} ticks/s (${monsoon.tries} tries, wall/CPU ${monsoon.desched.toFixed(2)}); ${cal}`;
   t.diagnostic(got);
   // a miss is excused only when every try of that measurement ran descheduled, or the calibration kernel ran far
@@ -127,7 +148,7 @@ test('sim throughput floor: terran home world idle and in a planet-wide monsoon'
   }
   assert.ok(!idleMiss, `idle below the floor ${IDLE_FLOOR}: ${got}`);
   assert.ok(!monsoonMiss, `monsoon below the floor ${MONSOON_FLOOR}: ${got}`);
-});
+}
 
 // ── the perf pass's semantics (fast checks on small worlds) ──
 

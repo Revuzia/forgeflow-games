@@ -19,6 +19,10 @@ import animals from './animals.json' with { type: 'json' };
 import diseases from './diseases.json' with { type: 'json' };
 import names from './names.json' with { type: 'json' };
 import events from './events.json' with { type: 'json' };
+import powers from './powers.json' with { type: 'json' };
+import disasters from './disasters.json' with { type: 'json' };
+import creatures from './creatures.json' with { type: 'json' };
+import lexicon from './lexicon.json' with { type: 'json' };
 import plainsFolk from './species/plains-folk.json' with { type: 'json' };
 import coastalFolk from './species/coastal-folk.json' with { type: 'json' };
 import hive from './species/hive.json' with { type: 'json' };
@@ -47,6 +51,11 @@ export const BASE_PACK: ContentPack = {
   diseases: diseases.diseases as unknown as ContentPack['diseases'],
   phonologies: names.phonologies as unknown as ContentPack['phonologies'],
   events: events.templates as unknown as ContentPack['events'],
+  // the god layer (phase 3)
+  powers: powers.powers as unknown as ContentPack['powers'],
+  disasters: disasters.disasters as unknown as ContentPack['disasters'],
+  creatures: creatures.creatures as unknown as ContentPack['creatures'],
+  lexicon: lexicon as unknown as ContentPack['lexicon'],
 };
 
 /** name titles (leader / priest / master), shared by the sim's naming and the inspector */

@@ -49,7 +49,9 @@ const BASE: Omit<Quality, 'name'> = {
 export const QUALITY: Record<QualityName, Quality> = {
   low: { ...BASE, name: 'low', renderScale: 0.75, maxDpr: 1, terrainPixelError: 14, patchBudget: 8, shadowCascades: 0, shadowMapSize: 1024, atmoSteps: 10, cloudSteps: 24, cloudLightSteps: 3, cloudScale: 0.25, bloom: 0.035, godRays: false, flare: 0.6, grain: 0.015, vegetationDensity: 0.35, vegetationRange: 0.5, grass: false, particleBudget: 4000, lightBudget: 2, ssao: false },
   medium: { ...BASE, name: 'medium', renderScale: 0.9, maxDpr: 1.25, terrainPixelError: 9, patchBudget: 12, shadowCascades: 2, shadowMapSize: 2048, atmoSteps: 12, cloudSteps: 32, cloudLightSteps: 4, cloudScale: 0.35, vegetationDensity: 0.65, vegetationRange: 0.75, particleBudget: 10000, lightBudget: 4 },
-  high: { ...BASE, name: 'high' },
+  // (terrain pixel error 7, not BASE's 6: ~25 % fewer terrain patches and draws at settlement views for detail the
+  // shading — analytic micro normals, bump — carries anyway)
+  high: { ...BASE, name: 'high', terrainPixelError: 7 },
   ultra: { ...BASE, name: 'ultra', maxDpr: 2, msaa: 4, terrainPixelError: 4, patchBudget: 24, shadowCascades: 4, shadowMapSize: 4096, shadowDistance: 4500, atmoSteps: 24, cloudSteps: 72, cloudLightSteps: 6, cloudScale: 0.5, vegetationDensity: 1.3, vegetationRange: 1.4, particleBudget: 40000, lightBudget: 12, ssao: true },
   // (cinematic clouds: k = 2 with 96 steps — every pixel marched each frame cost ~4× High; vegetation capped near Ultra:
   // 1.6 × 2.0² drew ~6× High's triangles)

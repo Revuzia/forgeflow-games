@@ -18,8 +18,11 @@ import { composeSky, markRainDirty } from './climate.ts';
 import { igniteCell } from './fire.ts';
 import { hashFloat } from '../core/rng.ts';
 import { capCells } from '../perf/cap.ts';
+import { lapseLevel } from '../perf/lapse.ts';
 
 export const WEATHER_CADENCE = 10;
+/** the overlay is redrawn every this many weather steps, per time-lapse level */
+const OVERLAY_EVERY = [2, 2, 4] as const;
 /** stylised drift: metres per tick per (m/s) of wind (a storm crosses a 3 km world in about two days) */
 const DRIFT = 0.6;
 const MAX_NATURAL = 9;
@@ -108,8 +111,9 @@ export function clearWeather(u: Universe, p: Planet, pos: ArrayLike<number> | nu
   return n;
 }
 
-/** One weather step: drift, age, spawn, overlay, deposits, lightning. */
-export function weatherStep(u: Universe, p: Planet): void {
+/** One weather step: drift, age, spawn, overlay, deposits, lightning. `dt` = ticks since the last step (the cadence;
+ * longer in time-lapse, perf/lapse.ts: everything below scales with it). */
+export function weatherStep(u: Universe, p: Planet, dt = WEATHER_CADENCE): void {
   const content = u.content;
   const R = p.st.radius;
   const s = p.s;
@@ -122,17 +126,17 @@ export function weatherStep(u: Universe, p: Planet): void {
       w.vel[0] = s.baseWindX[c] * sp;
       w.vel[1] = s.baseWindY[c] * sp;
       w.vel[2] = s.baseWindZ[c] * sp;
-      let x = w.pos[0] + w.vel[0] * WEATHER_CADENCE;
-      let y = w.pos[1] + w.vel[1] * WEATHER_CADENCE;
-      let z = w.pos[2] + w.vel[2] * WEATHER_CADENCE;
+      let x = w.pos[0] + w.vel[0] * dt;
+      let y = w.pos[1] + w.vel[1] * dt;
+      let z = w.pos[2] + w.vel[2] * dt;
       const l = Math.sqrt(x * x + y * y + z * z) || 1;
       x /= l; y /= l; z /= l;
       w.pos[0] = x; w.pos[1] = y; w.pos[2] = z;
     } else {
       w.vel[0] = 0; w.vel[1] = 0; w.vel[2] = 0;
     }
-    w.age += WEATHER_CADENCE;
-    if (w.life > 0 && !w.pinned) w.life = Math.max(0, w.life - WEATHER_CADENCE);
+    w.age += dt;
+    if (w.life > 0 && !w.pinned) w.life = Math.max(0, w.life - dt);
   }
   const ended = p.weather.filter((w) => w.life === 0);
   if (ended.length) {
@@ -143,16 +147,17 @@ export function weatherStep(u: Universe, p: Planet): void {
   const before = p.weather.length;
   if (!p.airy) {
     if (p.weather.length) p.weather.length = 0;
-  } else spawn(u, p);
-  // systems drift about one cell per step: the overlay is rebuilt every other step, or at once when systems appear or end
-  const even = (Math.floor(u.tick / WEATHER_CADENCE) & 1) === 0;
-  if (even || ended.length || p.weather.length !== before || p.weather.some((w) => w.age <= WEATHER_CADENCE)) refreshOverlay(u, p);
-  applyEffects(u, p);
-  lightning(u, p);
+  } else spawn(u, p, dt);
+  // systems drift about one cell per step: the overlay is rebuilt every other step (every 4th at 1000x, where a step is
+  // 30 ticks: perf/lapse.ts), or at once when systems appear or end
+  const even = Math.floor(u.tick / dt) % OVERLAY_EVERY[lapseLevel(u)] === 0;
+  if (even || ended.length || p.weather.length !== before || p.weather.some((w) => w.age <= dt)) refreshOverlay(u, p);
+  applyEffects(u, p, dt);
+  lightning(u, p, dt);
 }
 
 /** natural spawning from local conditions */
-function spawn(u: Universe, p: Planet): void {
+function spawn(u: Universe, p: Planet, dt: number): void {
   const rate = p.cfg.weatherSpawn;
   if (rate <= 0) return;
   let natural = 0;
@@ -182,7 +187,7 @@ function spawn(u: Universe, p: Planet): void {
     if (sp.toxicity !== undefined && st.atmosphere.toxicity < sp.toxicity) continue;
     if (sp.magnetism !== undefined && st.magnetism < sp.magnetism) continue;
     if (sp.calm && Math.sqrt(f.windX[c] * f.windX[c] + f.windY[c] * f.windY[c] + f.windZ[c] * f.windZ[c]) > 3) continue;
-    if (!rng.chance(sp.rate * 0.35 * rate)) continue;
+    if (!rng.chance(sp.rate * 0.35 * rate * (dt / WEATHER_CADENCE))) continue;
     // ashfall rises from the vents, not from a random cell
     let cell = c;
     if (sp.lava !== undefined && p.vents.length) cell = p.vents[rng.int(0, p.vents.length - 1)].cell;
@@ -335,9 +340,9 @@ function maskList(p: Planet): MaskList {
 }
 
 /** deposits (snow / ash / sand) and effects (acid, smother, dry, crush) under the systems */
-function applyEffects(u: Universe, p: Planet): void {
+function applyEffects(u: Universe, p: Planet, dt: number): void {
   const f = p.f, s = p.s;
-  const dtH = WEATHER_CADENCE / 60;
+  const dtH = dt / 60;
   const content = u.content;
   let surf = false, veg = false;
   if (!p.weather.length) return;
@@ -377,7 +382,7 @@ function applyEffects(u: Universe, p: Planet): void {
 export const strikeHooks: ((u: Universe, p: Planet, cell: number, ignited: boolean) => void)[] = [];
 
 /** lightning strikes from stormy systems (and a planet-wide stormy override): events + fires in dry fuel */
-function lightning(u: Universe, p: Planet): void {
+function lightning(u: Universe, p: Planet, dt: number): void {
   const rng = p.rng.weather;
   const content = u.content;
   const P = p.grid.pos;
@@ -396,7 +401,7 @@ function lightning(u: Universe, p: Planet): void {
     const def = content.weather.list[w.kind];
     if (def.lightning <= 0) continue;
     const I = systemIntensity(w);
-    const expected = def.lightning * I * (WEATHER_CADENCE / 60);
+    const expected = def.lightning * I * (dt / 60);
     let n = Math.floor(expected);
     if (rng.chance(expected - n)) n++;
     for (let i = 0; i < n; i++) {
@@ -415,7 +420,7 @@ function lightning(u: Universe, p: Planet): void {
   }
   const gk = p.st.globalWeather ? content.weather.find(p.st.globalWeather) : undefined;
   if (gk && gk.lightning > 0 && p.airy) {
-    const expected = gk.lightning * 0.6 * (WEATHER_CADENCE / 60);
+    const expected = gk.lightning * 0.6 * (dt / 60);
     let n = Math.floor(expected);
     if (rng.chance(expected - n)) n++;
     for (let i = 0; i < n; i++) {

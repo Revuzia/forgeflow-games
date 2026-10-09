@@ -417,9 +417,16 @@ vec3 meadowTint(vec3 g, vec3 P, float fw, float moist, float autumn, float winte
   float pA = fbm3(P * 0.045 + warpV * 0.6 + 3.1);
   float pB = snoise(P * 0.11 + warpV * 0.4 + 7.7);
   float dryness = clamp(0.5 + 0.6 * pA + 0.22 * pB - (moist - 0.45) * 0.9, 0.0, 1.0);
-  vec3 dryC = g * vec3(1.5, 1.28, 0.72) + vec3(0.018, 0.012, 0.0);
-  vec3 lushC = g * vec3(0.82, 1.08, 0.8);
-  g = mix(g, mix(lushC, dryC, smoothstep(0.32, 0.82, dryness)), 0.6);
+  vec3 dryC = g * vec3(1.42, 1.24, 0.76) + vec3(0.014, 0.01, 0.0);
+  vec3 lushC = g * vec3(0.84, 1.06, 0.82);
+  // (softer than before: strong 10–50 m swings between straw and deep green read as blurry blotches from 60 m up)
+  g = mix(g, mix(lushC, dryC, smoothstep(0.32, 0.82, dryness)), 0.45);
+  // what gives the sward its focus at 3–100 m: tussocks and their shaded gaps (~0.7 m and ~2.2 m), trampled and
+  // thin patches (~6 m) — value, not hue, so it never turns into camouflage; each fades to its mean by footprint
+  float tus = snoise(P * 1.45 + warpV * 0.6 + 33.0) * ff_aa(fw, 0.7) * 0.6 + snoise(P * 0.45 + 51.0) * ff_aa(fw, 2.2) * 0.4;
+  float thin = smoothstep(0.35, 0.85, snoise(P * 0.16 + warpV * 0.5 + 71.0) * 0.5 + 0.5) * ff_aa(fw, 6.0);
+  g *= 0.84 + 0.32 * smoothstep(-0.8, 0.8, tus);
+  g = mix(g, g * vec3(1.2, 1.12, 0.86) + vec3(0.012, 0.008, 0.002), thin * 0.45);
   float season = (1.0 - autumn) * (1.0 - winter) * (1.0 - cold);
   float patchF = smoothstep(0.55, 0.8, snoise(P * 0.19 + warpV + 21.0) * 0.5 + 0.5) * season * smoothstep(0.3, 0.55, moist) * (1.0 - dryness * 0.5);
   if (patchF > 0.01) {
@@ -429,7 +436,8 @@ vec3 meadowTint(vec3 g, vec3 P, float fw, float moist, float autumn, float winte
     ff_cells(P * 6.0, fp, f1, id);
     float fleck = (1.0 - smoothstep(0.1, 0.17, f1)) * step(0.4, id);
     float aa = ff_aa(fw, 0.06);
-    float cover = mix(0.11, fleck, aa) * patchF;
+    // (unresolved, the flecks average to a faint tint only: their full mean laid pale washes over whole meadows)
+    float cover = mix(0.035, fleck, aa) * patchF;
     g = mix(g, fl, cover);
   }
   return g;

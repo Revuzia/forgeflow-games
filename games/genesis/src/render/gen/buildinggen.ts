@@ -32,7 +32,16 @@ export interface BuildingSpec {
   lod: number;
   /** the people's building tradition (their dwellings), for temples: earthen, timber or masonry */
   family?: BuildFamily;
+  /**
+   * household variant 0..HOUSEHOLD_VARIANTS-1 (dwellings): each household builds its own way within its culture's
+   * style — its own colours, roof pitch, door and chimney placement, an annex, a porch or a door hood, window boxes
+   * (a street of one culture is never one model repeated)
+   */
+  hv?: number;
 }
+
+/** household variants per dwelling archetype (buildings.ts picks one per building by a hash of its id) */
+export const HOUSEHOLD_VARIANTS = 6;
 
 /** emitter kinds shared with render/fx/particles.ts and render/life/nightlights.ts */
 export const EMIT = { smoke: 0, hearth: 1, mouth: 2, stack: 3, beacon: 4, brazier: 5, blink: 6, blaze: 7 } as const;
@@ -45,6 +54,8 @@ export interface BuildingMesh {
   /** half extents of the footprint incl. overhangs (m) */
   hx: number;
   hz: number;
+  /** the footprint's extent incl. overhangs and annexes: min x, max x, min z, max z (m) */
+  ext: [number, number, number, number];
   emitters: Emitter[];
 }
 
@@ -52,7 +63,8 @@ export interface BuildingMesh {
 
 const PLASTER: RGB[] = [[0.6, 0.57, 0.5], [0.56, 0.42, 0.24], [0.58, 0.41, 0.34], [0.42, 0.46, 0.48], [0.64, 0.6, 0.47], [0.5, 0.48, 0.44], [0.62, 0.5, 0.33], [0.55, 0.36, 0.25]];
 const TRIM: RGB[] = [[0.05, 0.16, 0.08], [0.04, 0.09, 0.2], [0.26, 0.04, 0.03], [0.07, 0.045, 0.03], [0.3, 0.2, 0.04], [0.025, 0.025, 0.028], [0.12, 0.2, 0.22], [0.2, 0.08, 0.12]];
-const TILE: RGB[] = [[0.4, 0.12, 0.045], [0.33, 0.1, 0.05], [0.45, 0.17, 0.06], [0.28, 0.12, 0.07]];
+// fired clay roof tiles: earthy, weathered reds and browns (bright orange read as a toy town under the grade)
+const TILE: RGB[] = [[0.34, 0.13, 0.065], [0.28, 0.11, 0.065], [0.38, 0.17, 0.08], [0.25, 0.12, 0.08]];
 const WOOD_DARK: RGB = [0.11, 0.07, 0.04];
 const WOOD: RGB = [0.2, 0.13, 0.075];
 const WOOD_GREY: RGB = [0.22, 0.2, 0.17];
@@ -72,7 +84,12 @@ const GOLD: RGB = [0.62, 0.42, 0.1];
 
 // ───────────────────────────── kit pieces ─────────────────────────────
 
-interface Opening { x0: number; x1: number; y0: number; y1: number; kind: 'window' | 'door' | 'arch' | 'gap' }
+/**
+ * An opening in a wall from (x0, y0) to (x1, y1). `head` turns its top into an arch whose crown is y1: 'round' (a
+ * semicircle) or 'pointed' (a lancet of two arcs, `rise` high; default 0.9 × the width) — the wall fills the corners
+ * above the springing and the arch's soffit runs through the wall's thickness.
+ */
+interface Opening { x0: number; x1: number; y0: number; y1: number; kind: 'window' | 'door' | 'arch' | 'gap'; head?: 'round' | 'pointed'; rise?: number }
 
 interface WallLook {
   surf: number;
@@ -116,6 +133,7 @@ function wallPanel(k: KitBuilder, L: number, H: number, T: number, ops: Opening[
     }
     if (o.y1 < H) solid(o.x0, o.x1, o.y1, H, false, false, true);
     fillOpening(k, o, T, look, rng);
+    if (o.head) archHead(k, o, T, look);
     x = o.x1;
   }
   solid(x, L, 0, H, x > 0, false, false);
@@ -129,11 +147,13 @@ function fillOpening(k: KitBuilder, o: Opening, T: number, look: WallLook, rng: 
     const sd = rng.float();
     k.quad([o.x0, o.y0, z], [o.x1, o.y0, z], [o.x1, o.y1, z], [o.x0, o.y1, z], SURF.planks, PART.door, look.doorCol, 0.55, sd);
     if (look.lod === 0) {
-      // frame and a step
+      // frame (square-headed doors) and a step
       const f = 0.07;
-      k.box(o.x0 - f, o.y0, -T * 0.6, o.x0, o.y1 + f, 0.02, SURF.beam, PART.frame, look.frameCol, { skip: ['bottom', 'nz'] });
-      k.box(o.x1, o.y0, -T * 0.6, o.x1 + f, o.y1 + f, 0.02, SURF.beam, PART.frame, look.frameCol, { skip: ['bottom', 'nz'] });
-      k.box(o.x0 - f, o.y1, -T * 0.6, o.x1 + f, o.y1 + f, 0.02, SURF.beam, PART.frame, look.frameCol, { skip: ['nz'] });
+      if (!o.head) {
+        k.box(o.x0 - f, o.y0, -T * 0.6, o.x0, o.y1 + f, 0.02, SURF.beam, PART.frame, look.frameCol, { skip: ['bottom', 'nz'] });
+        k.box(o.x1, o.y0, -T * 0.6, o.x1 + f, o.y1 + f, 0.02, SURF.beam, PART.frame, look.frameCol, { skip: ['bottom', 'nz'] });
+        k.box(o.x0 - f, o.y1, -T * 0.6, o.x1 + f, o.y1 + f, 0.02, SURF.beam, PART.frame, look.frameCol, { skip: ['nz'] });
+      }
       if (o.y0 < 0.05) k.box(o.x0 - 0.15, -0.3, 0, o.x1 + 0.15, 0.04, 0.38, look.sillSurf, PART.trim, look.sillCol, { skip: ['bottom'], aoLow: 0.6 });
     }
     return;
@@ -156,11 +176,74 @@ function fillOpening(k: KitBuilder, o: Opening, T: number, look: WallLook, rng: 
   }
   // sill
   k.box(o.x0 - 0.06, o.y0 - 0.07, -0.02, o.x1 + 0.06, o.y0, 0.09, look.sillSurf, PART.trim, look.sillCol, { skip: ['nz'], aoLow: 0.7 });
-  if (look.shutters) {
+  if (look.shutters && !o.head) {
     const sw = w / 2;
     // open shutters folded back against the wall, a little ajar
     k.box(o.x0 - sw - 0.01, o.y0, 0.01, o.x0 - 0.01, o.y1, 0.05, SURF.planks, PART.trim, look.shutters, { skip: ['nz'], aoLow: 0.85 });
     k.box(o.x1 + 0.01, o.y0, 0.01, o.x1 + sw + 0.01, o.y1, 0.05, SURF.planks, PART.trim, look.shutters, { skip: ['nz'], aoLow: 0.85 });
+  }
+}
+
+/**
+ * The half arch from the left springing (x0, ys) to the crown (mid, ys + h): a circle centred on the springing line
+ * (round: radius w/2; pointed: the radius that makes the two arcs meet at height h).
+ */
+function archHalf(x0: number, x1: number, ys: number, h: number, n: number): [number, number][] {
+  const w = x1 - x0, mid = (x0 + x1) / 2;
+  const R = Math.max(w / 2, (h * h + (w * w) / 4) / w);
+  const cx = x0 + R;
+  const th0 = Math.PI, th1 = Math.acos(Math.max(-1, Math.min(1, (mid - cx) / R)));
+  const out: [number, number][] = [];
+  for (let i = 0; i <= n; i++) {
+    const th = th0 + ((th1 - th0) * i) / n;
+    out.push([cx + R * Math.cos(th), ys + R * Math.sin(th)]);
+  }
+  out[n] = [mid, ys + h];
+  return out;
+}
+
+/** a triangle facing +nz (or −nz): ordered so its normal points that way */
+function triFacing(k: KitBuilder, a: V3, b: V3, c: V3, nz: number, surf: number, part: number, col: RGB, ao = 1): void {
+  const cz = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  if (cz * nz >= 0) k.triangle(a, b, c, surf, part, col, ao); else k.triangle(a, c, b, surf, part, col, ao);
+}
+
+/**
+ * The arched head of an opening (wall frame: along +X, outer face z = 0, inner face z = −T): the wall's corners above
+ * the springing filled on both faces, and the arch's soffit through the wall (with a dressed-stone voussoir ring on
+ * masonry walls).
+ */
+function archHead(k: KitBuilder, o: Opening, T: number, look: WallLook): void {
+  const w = o.x1 - o.x0;
+  const h = o.head === 'round' ? w / 2 : Math.min(o.y1 - o.y0 - 0.05, o.rise ?? w * 0.9);
+  const ys = o.y1 - h;
+  const n = look.lod === 0 ? 7 : 3;
+  const left = archHalf(o.x0, o.x1, ys, h, n);
+  const right = left.map(([x, y]) => [o.x0 + o.x1 - x, y] as [number, number]);
+  const ring = look.surf === SURF.ashlar || look.surf === SURF.rubble || look.surf === SURF.brick;
+  const ringCol = look.surf === SURF.brick ? mulc(look.col, 0.85) : mulc(look.col, 1.08);
+  for (const [half, cx] of [[left, o.x0], [right, o.x1]] as [[number, number][], number][]) {
+    const corner: V3 = [cx, o.y1, 0], cornerI: V3 = [cx, o.y1, -T];
+    for (let i = 0; i < half.length - 1; i++) {
+      const [ax, ay] = half[i], [bx, by] = half[i + 1];
+      triFacing(k, corner, [ax, ay, 0], [bx, by, 0], 1, look.surf, PART.wall, look.col, 0.9);
+      triFacing(k, cornerI, [ax, ay, -T], [bx, by, -T], -1, SURF.plaster, PART.wall, look.inner, 0.5);
+      // the soffit: its normal points into the opening (toward the arch's axis, below the curve)
+      const sa: V3 = [ax, ay, 0], sb: V3 = [bx, by, 0], sc: V3 = [bx, by, -T], sd: V3 = [ax, ay, -T];
+      const nx = -(by - ay), ny = bx - ax; // the quad's normal direction as wound below
+      const inward = nx * ((o.x0 + o.x1) / 2 - (ax + bx) / 2) + ny * (ys - (ay + by) / 2) > 0 ? 1 : -1;
+      if (inward > 0) k.quad(sa, sb, sc, sd, look.surf, PART.wall, look.col, 0.6); else k.quad(sb, sa, sd, sc, look.surf, PART.wall, look.col, 0.6);
+      if (ring && look.lod === 0) {
+        // voussoirs: a slightly proud band of dressed stone round the arch on the outer face
+        const r = 0.2;
+        const pa: V3 = [ax, ay, 0.015], pb: V3 = [bx, by, 0.015];
+        const la = Math.hypot(ax - (o.x0 + o.x1) / 2, ay - ys) || 1, lb = Math.hypot(bx - (o.x0 + o.x1) / 2, by - ys) || 1;
+        const qa: V3 = [ax + ((ax - (o.x0 + o.x1) / 2) / la) * r, ay + ((ay - ys) / la) * r, 0.015];
+        const qb: V3 = [bx + ((bx - (o.x0 + o.x1) / 2) / lb) * r, by + ((by - ys) / lb) * r, 0.015];
+        triFacing(k, pa, pb, qb, 1, SURF.ashlar, PART.trim, ringCol, 0.95);
+        triFacing(k, pa, qb, qa, 1, SURF.ashlar, PART.trim, ringCol, 0.95);
+      }
+    }
   }
 }
 
@@ -256,16 +339,32 @@ function coneRoof(k: KitBuilder, r: number, yE: number, apexH: number, over: num
   const R = r + over;
   const yEave = yE - over * (apexH / r) + rf.thick * 0.5;
   const yTop = yE + apexH + rf.thick;
-  // outer cone with a slight belly (thatch sags between the rafters) and a thick eave lip
+  // outer cone with a slight belly (thatch sags between the rafters) and a thick eave lip; thatch is laid in
+  // courses, each tier's butt ends standing a few centimetres proud of the one above (a stepped, layered outline, not a
+  // turned cone), and a capping of darker, older straw bound round the top
   const prof: [number, number][] = [];
-  for (let i = 0; i <= 6; i++) {
-    const t = i / 6;
+  const thatchy = rf.surf === SURF.thatch;
+  const tiers = thatchy ? 3 : 1;
+  for (let i = 0; i <= 6 * tiers; i++) {
+    const t = i / (6 * tiers);
     const rr = R * (1 - t) + 0.04 * t;
     const y = yEave + (yTop - yEave) * Math.pow(t, 0.92);
     prof.push([rr, y]);
+    // a course's butt: step out at the bottom of every tier above the first
+    if (thatchy && i > 0 && i < 6 * tiers && i % 6 === 0) prof.push([rr + 0.1, y - 0.07]);
   }
   const v0 = k.vertexCount;
   k.lathe(0, 0, [[R - 0.02, yEave - rf.thick], ...prof], sides, rf.surf, PART.roof, rf.col, 0.75, 1);
+  if (thatchy) {
+    // the capping and its bindings
+    const capY = yEave + (yTop - yEave) * 0.8;
+    const capR = R * (1 - Math.pow(0.8, 1 / 0.92)) + 0.05;
+    k.lathe(0, 0, [[capR + 0.07, capY - 0.06], [capR * 0.55 + 0.05, capY + (yTop - capY) * 0.55], [0.06, yTop + 0.02]], sides, rf.surf, PART.roof, mulc(mixc(rf.col, [0.24, 0.23, 0.2], 0.4), 0.8), 0.8, 1);
+    for (const f of [0.15, 0.5]) {
+      const yy = capY + (yTop - capY) * f, rr = (capR + 0.07) * (1 - f) + 0.06 * f + 0.012;
+      k.lathe(0, 0, [[rr, yy - 0.03], [rr + 0.012, yy], [rr, yy + 0.03]], sides, SURF.rope, PART.roof, [0.09, 0.07, 0.045], 0.85, 0.85);
+    }
+  }
   // underside
   const under: [number, number][] = [[0.05, yTop - rf.thick * 2.2], [R - 0.02, yEave - rf.thick]];
   k.lathe(0, 0, under, sides, rf.underSurf, PART.roof, rf.under, 0.5, 0.4);
@@ -277,11 +376,13 @@ function coneRoof(k: KitBuilder, r: number, yE: number, apexH: number, over: num
   };
   if (rf.surf === SURF.thatch) {
     k.jitterRadial(v0, 0, 0, lump);
-    // a ragged fringe of straw ends hanging below the eave
+    // a ragged fringe of straw ends hanging below the eave (irregular: a regular sawtooth read as a crown of teeth)
     const n = sides * 3;
     for (let i = 0; i < n; i++) {
-      const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2, am = (a0 + a1) / 2;
-      const len = 0.1 + 0.12 * (0.5 + 0.5 * Math.sin(i * 2.399 + ph));
+      const h1 = Math.abs(Math.sin(i * 12.9898 + ph * 78.233) * 43758.5453) % 1;
+      if (h1 < 0.3) continue;
+      const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1 + (h1 > 0.8 ? 1 : 0)) / n) * Math.PI * 2, am = (a0 + a1) / 2 + (h1 - 0.5) * 0.04;
+      const len = 0.04 + 0.16 * Math.pow(h1, 2);
       const ry = yEave - rf.thick;
       const p0: V3 = [Math.cos(a0) * (R - 0.01 + lump(a0, ry)), ry + 0.02, Math.sin(a0) * (R - 0.01 + lump(a0, ry))];
       const p1: V3 = [Math.cos(a1) * (R - 0.01 + lump(a1, ry)), ry + 0.02, Math.sin(a1) * (R - 0.01 + lump(a1, ry))];
@@ -388,17 +489,26 @@ function lookFor(spec: BuildingSpec, rng: Rng): Look {
   // plastered materials take the culture's colours (whitewash, ochre, rose...); fearful cultures build dark
   if (surf === SURF.daub || surf === SURF.plaster) wallCol = mixc(wallCol, PLASTER[st], m.id === 'wattle' ? 0.55 : 0.75);
   if (surf === SURF.mudbrick && st % 3 === 1) { surf = SURF.plaster; wallCol = mixc(m.wallCol, PLASTER[(st + 1) & 7], 0.6); }
+  // each household's own colours: another wash on plaster and daub, a different stone / brick / timber tone
+  const hv = spec.hv;
+  if (hv !== undefined) {
+    if (surf === SURF.daub || surf === SURF.plaster || surf === SURF.mudbrick) wallCol = mixc(wallCol, PLASTER[(st + hv * 3 + 2) & 7], hv % 3 === 0 ? 0.0 : 0.38);
+    else if (surf === SURF.brick) wallCol = mixc(wallCol, ([[0.3, 0.1, 0.055], [0.42, 0.2, 0.11], [0.34, 0.15, 0.1], [0.46, 0.27, 0.17], [0.28, 0.12, 0.08], [0.38, 0.16, 0.08]] as RGB[])[hv % 6], 0.5);
+    else wallCol = mulc(mixc(wallCol, hv % 2 ? [0.5, 0.44, 0.36] : [0.4, 0.41, 0.42], 0.18), [0.88, 1.0, 1.1, 0.94, 1.05, 0.97][hv % 6]);
+  }
   if (fear) wallCol = mulc(mixc(wallCol, STONE_DARK, 0.55), 0.8);
   if (kind) wallCol = mixc(wallCol, [0.7, 0.6, 0.45], 0.12);
   // a little variation per building of the same variant comes from the instance tint; per variant here
   wallCol = mulc(wallCol, 0.92 + rng.float() * 0.14);
-  const trim = fear ? [0.03, 0.025, 0.025] as RGB : TRIM[(st * 3 + 1) & 7];
+  const trim = fear ? [0.03, 0.025, 0.025] as RGB : TRIM[(st * 3 + 1 + (hv ?? 0) * 3) & 7];
   let roofKind = m.roof;
   if (roofKind === 'thatch' && spec.era >= 6 && m.tier >= 1) roofKind = 'tile';
   if (roofKind === 'slate' && spec.era <= 3) roofKind = 'thatch';
   if (roofKind === 'tile' && st % 4 === 3 && spec.era >= 6) roofKind = 'slate';
   if (roofKind === 'shingle' && spec.era <= 2) roofKind = 'thatch';
-  const roofCol: RGB = roofKind === 'thatch' ? mulc(THATCH, 0.85 + rng.float() * 0.3) : roofKind === 'tile' ? TILE[st & 3] : roofKind === 'slate' ? SLATE
+  const hk = hv === undefined ? 1 : [1, 0.86, 1.1, 0.93, 1.04, 0.8][hv % 6];
+  const roofCol: RGB = roofKind === 'thatch' ? mulc(mixc(THATCH, [0.3, 0.29, 0.26], hv === undefined ? 0 : (hv % 3) * 0.22), (0.85 + rng.float() * 0.3) * hk)
+    : roofKind === 'tile' ? mulc(TILE[(st + (hv ?? 0)) & 3], hk) : roofKind === 'slate' ? mulc(SLATE, hk)
     : roofKind === 'shingle' ? SHINGLE : roofKind === 'hide' ? HIDE : roofKind === 'metal' ? [0.18, 0.17, 0.16] : CONCRETE;
   const roofSurf = roofKind === 'thatch' ? SURF.thatch : roofKind === 'tile' ? SURF.tiles : roofKind === 'slate' ? SURF.slate
     : roofKind === 'shingle' ? SURF.shingle : roofKind === 'hide' ? SURF.hide : roofKind === 'metal' ? SURF.metal : SURF.concrete;
@@ -406,8 +516,8 @@ function lookFor(spec: BuildingSpec, rng: Rng): Look {
   const wall: WallLook = {
     surf, col: wallCol, inner: INTERIOR, frameCol: spec.era >= 6 && !fear ? mixc(trim, [0.6, 0.58, 0.52], st % 2 ? 0.0 : 0.85) : WOOD_DARK,
     sillSurf: m.tier >= 2 ? SURF.ashlar : SURF.planks, sillCol: m.tier >= 2 ? mulc(STONE, 1.3) : WOOD,
-    shutters: spec.era >= 5 && spec.era <= 8 && !fear && st % 3 !== 2 ? trim : null,
-    doorCol: fear ? [0.035, 0.03, 0.028] : st % 2 ? trim : WOOD, mullions: spec.era >= 6, lod: spec.lod,
+    shutters: spec.era >= 5 && spec.era <= 8 && !fear && (st + (hv ?? 0)) % 3 !== 2 ? trim : null,
+    doorCol: fear ? [0.035, 0.03, 0.028] : (st + (hv ?? 0)) % 2 ? trim : mulc(WOOD, 0.8 + 0.1 * ((hv ?? 0) % 3)), mullions: spec.era >= 6, lod: spec.lod,
   };
   const roof: RoofLook = {
     surf: roofSurf, col: roofCol, under: roofKind === 'thatch' ? mulc(THATCH, 0.45) : WOOD_DARK, underSurf: roofKind === 'thatch' ? SURF.thatch : SURF.planks,
@@ -415,8 +525,10 @@ function lookFor(spec: BuildingSpec, rng: Rng): Look {
     capSurf: roofKind === 'thatch' ? SURF.thatch : roofKind === 'tile' ? SURF.tiles : roofSurf,
   };
   // foundations are dark field stone (or dressed stone in later eras), never pale: they show downhill on slopes
-  const plinthSurf = m.tier >= 3 ? SURF.ashlar : SURF.rubble;
-  const plinthCol: RGB = fear ? STONE_DARK : m.tier >= 3 ? mulc(STONE, 0.85) : mixc(STONE_DARK, mulc(STONE, 0.85), 0.5);
+  // (dark rubble field stone up to the industrial eras' dressed footings: a pale grey footing on a slope stood out as a
+  // pedestal under the house)
+  const plinthSurf = m.tier >= 4 ? SURF.ashlar : SURF.rubble;
+  const plinthCol: RGB = fear ? STONE_DARK : m.tier >= 4 ? mulc(STONE, 0.66) : mixc(STONE_DARK, mulc(STONE, 0.8), 0.45);
   return { wall, roof, roofKind, plinthSurf, plinthCol, trim, cornerSurf: m.tier >= 2 ? SURF.ashlar : SURF.beam, cornerCol: m.tier >= 2 ? mulc(STONE, 1.25) : WOOD_DARK };
 }
 
@@ -431,6 +543,165 @@ interface HouseOpts {
   floors: number; floorH: number; T: number; pitch: number; over: number; roof: 'gable' | 'hip' | 'flat' | 'gambrel';
   winW: number; winH: number; spacing: number; chimneys: number; corners: boolean; frame: boolean; porch: boolean;
   jetty: number; parapet: boolean; vigas: boolean; plinthH: number; doorW: number; doorH: number; cornice: boolean; dormers: boolean;
+  /** household variation (see householdOpts): door offset (× width), chimney placement, an annex, a door hood, window boxes */
+  doorPos?: number; chim?: 'end' | 'other' | 'ridge' | 'stack'; annex?: 'none' | 'leanto' | 'wing' | 'rear'; hood?: boolean; boxes?: boolean;
+}
+
+/** a household's own way of building within its culture: pitch, proportions, door, chimney, annex, porch or hood */
+function householdOpts(o: HouseOpts, kind: BuildingKind, spec: BuildingSpec): HouseOpts {
+  if (spec.hv === undefined) return o;
+  const hv = spec.hv % HOUSEHOLD_VARIANTS;
+  const r = new Rng(6007 + hv * 7919 + spec.style * 131 + spec.era * 17 + kind.length * 3);
+  const out: HouseOpts = { ...o };
+  if (o.roof !== 'flat') out.pitch = o.pitch * [1, 0.86, 1.14, 0.94, 1.08, 0.8][hv];
+  out.over = o.over * (0.85 + 0.3 * r.float());
+  out.floorH = o.floorH + (r.float() - 0.5) * 0.3;
+  out.spacing = o.spacing * (0.9 + 0.25 * r.float());
+  out.winW = o.winW * (0.9 + 0.2 * r.float());
+  out.doorPos = spec.w > 5.2 ? [0, -0.22, 0.22, 0.04, 0.2, -0.18][hv] : 0;
+  out.chim = (['end', 'ridge', 'other', 'stack', 'end', 'other'] as const)[hv];
+  if (o.chimneys >= 2) out.chimneys = hv % 3 === 1 ? 1 : 2;
+  else if (o.chimneys === 0 && spec.era >= 4 && hv % 4 === 2 && kind !== 'mudbrick') out.chimneys = 1;
+  out.annex = (['none', 'leanto', 'wing', 'rear', 'leanto', 'wing'] as const)[hv];
+  if (kind === 'timber' || kind === 'wattle' || kind === 'stone-house') out.porch = spec.era >= 3 && (hv === 0 || hv === 3);
+  out.hood = !out.porch && spec.era >= 5 && kind !== 'mudbrick' && hv % 2 === 1;
+  out.boxes = spec.era >= 6 && spec.mood >= -0.33 && hv % 3 !== 1 && kind !== 'mudbrick';
+  if ((kind === 'brick-house' || kind === 'stone-house') && spec.era >= 6 && hv === 3) out.roof = 'hip';
+  if (kind === 'mudbrick' && spec.w > 6 && hv === 4) out.floors = 2;
+  return out;
+}
+
+/** window boxes with flowers under a window (front face at z = 0 in the current frame) */
+function windowBox(k: KitBuilder, x0: number, x1: number, y: number, rng: Rng): void {
+  k.box(x0 - 0.06, y - 0.3, 0.04, x1 + 0.06, y - 0.08, 0.3, SURF.planks, PART.trim, mulc(WOOD, 0.9), { skip: ['nz'], aoLow: 0.8 });
+  const n = Math.max(2, Math.round((x1 - x0) / 0.18));
+  for (let i = 0; i < n; i++) {
+    const x = x0 + ((i + 0.5) * (x1 - x0)) / n, z = 0.17 + (rng.float() - 0.5) * 0.08;
+    const c = rng.float() < 0.45 ? mulc(LEAF_G, 1.2) : FLOWER_C[Math.floor(rng.float() * FLOWER_C.length)];
+    k.lathe(x, z, [[0.05, y - 0.1], [0.1, y + 0.02], [0.07, y + 0.12], [0.01, y + 0.15]], 5, SURF.thatch, PART.prop, c, 0.7, 1);
+  }
+}
+const LEAF_G: RGB = [0.04, 0.075, 0.028];
+const FLOWER_C: RGB[] = [[0.6, 0.08, 0.06], [0.7, 0.55, 0.08], [0.75, 0.72, 0.66], [0.32, 0.12, 0.45], [0.75, 0.3, 0.05]];
+
+/**
+ * Earthen houses (flat roofs): softened corners, wooden rain spouts through the parapet, and what each household keeps
+ * up there — a ladder or an outside stair of mud steps to the roof, a little rooftop room, pots, a drying mat.
+ * (yR: the roof deck; top: the parapet top; dx: the door's x)
+ */
+function mudbrickDressing(k: KitBuilder, spec: BuildingSpec, L: Look, W: number, D: number, yR: number, top: number, dx: number, rng: Rng): void {
+  const hv = (spec.hv ?? spec.style) % 6, lod = spec.lod;
+  const col = L.wall.col, surf = L.wall.surf;
+  // rounded, buttressed corners (hand-plastered earth never keeps a sharp arris)
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.cylinder(sx * (W / 2 - 0.12), sz * (D / 2 - 0.12), -0.3, top - 0.04, 0.3, 0.24, lod === 0 ? 8 : 5, surf, PART.wall, mulc(col, 0.97), { top: true });
+  if (lod > 0) return;
+  // canales: wooden spouts out through the parapet
+  for (const sz of [-1, 1]) for (const fx of [-0.3, 0.3]) {
+    const x = fx * W + (hv % 2 ? 0.25 : -0.25);
+    k.beam([x, yR + 0.12, sz * (D / 2 - 0.2)], [x, yR + 0.04, sz * (D / 2 + 0.6)], 0.15, 0.12, SURF.planks, PART.trim, WOOD, 0.85);
+  }
+  if (hv === 0 || hv === 3) {
+    // a ladder leaning on the front wall up to the roof
+    const lx = dx + (dx > 0 ? -1.4 : 1.4);
+    for (const sx of [-0.22, 0.22]) k.beam([lx + sx, -0.05, D / 2 + 1.0], [lx + sx, top + 0.6, D / 2 + 0.06], 0.06, 0.06, SURF.bark, PART.prop, WOOD_GREY, 0.9);
+    for (let yy = 0.35; yy < top + 0.3; yy += 0.38) { const t = yy / (top + 0.65); k.beam([lx - 0.22, yy, D / 2 + 1.0 - 0.94 * t], [lx + 0.22, yy, D / 2 + 1.0 - 0.94 * t], 0.04, 0.04, SURF.bark, PART.prop, WOOD_GREY, 0.9); }
+  }
+  if (hv === 2 || hv === 5) {
+    // an outside stair of mud steps up the side wall to the roof
+    const sx = hv === 2 ? -1 : 1, n = Math.max(4, Math.ceil(yR / 0.28)), run = Math.min(D - 0.6, yR * 1.05);
+    for (let i = 0; i < n; i++) {
+      const z1 = D / 2 - 0.4 - (i * run) / n, z0 = z1 - run / n, yt = ((i + 1) * yR) / n;
+      k.box(sx * (W / 2), -0.4, z0, sx * (W / 2 + 0.95), yt, z1, surf, PART.wall, mulc(col, 0.95), { skip: ['bottom'], aoLow: 0.7 });
+    }
+  }
+  if (hv === 1 || hv === 4) {
+    // a rooftop room in the back corner
+    const rw = Math.min(2.8, W * 0.42), rd = Math.min(2.4, D * 0.45), cx = (hv === 1 ? 1 : -1) * (W / 2 - rw / 2 - 0.3), cz = -D / 2 + rd / 2 + 0.3;
+    k.push(cx, 0, cz);
+    boxWalls(k, { W: rw, D: rd, H: 2.1, T: 0.35, y0: yR, front: [{ x0: rw / 2 - 0.42, x1: rw / 2 + 0.42, y0: 0, y1: 1.75, kind: 'door' }], back: [], left: [], right: [] }, L.wall, rng);
+    k.quad([-rw / 2, yR + 2.12, rd / 2], [rw / 2, yR + 2.12, rd / 2], [rw / 2, yR + 2.12, -rd / 2], [-rw / 2, yR + 2.12, -rd / 2], SURF.earth, PART.roof, mulc(col, 0.85), 0.9);
+    k.box(-rw / 2, yR + 2.1, rd / 2 - 0.2, rw / 2, yR + 2.45, rd / 2, surf, PART.roof, col, { skip: ['bottom'] });
+    for (let i = 0; i < 3; i++) k.tube([[-rw / 2 + 0.45 + i * (rw - 0.9) / 2, yR + 1.9, rd / 2 - 0.2], [-rw / 2 + 0.45 + i * (rw - 0.9) / 2, yR + 1.92, rd / 2 + 0.35]], [0.07, 0.065], 5, SURF.bark, PART.trim, WOOD, { cap: true });
+    k.pop();
+  }
+  // pots and a drying mat on the roof
+  for (let i = 0; i < 2 + (hv % 3); i++) {
+    const x = (rng.float() - 0.5) * (W - 2), z = (rng.float() - 0.2) * (D - 2) * 0.5;
+    k.lathe(x, z, [[0.12, yR], [0.22, yR + 0.18], [0.2, yR + 0.36], [0.11, yR + 0.44], [0.13, yR + 0.48]], 7, SURF.plaster, PART.prop, mulc([0.42, 0.2, 0.1], 0.8 + rng.float() * 0.4), 0.75, 1);
+  }
+  const mx = (hv % 2 ? -1 : 1) * W * 0.18;
+  k.quad([mx - 0.9, yR + 0.04, 0.9], [mx + 0.9, yR + 0.04, 0.9], [mx + 0.9, yR + 0.04, -0.6], [mx - 0.9, yR + 0.04, -0.6], SURF.thatch, PART.prop, [0.36, 0.27, 0.13], 0.85);
+}
+
+/**
+ * A household's annex against the house (local frame of the house, its walls W × D from the plinth top ph):
+ *   leanto — an outshot along part of the back wall under a shallow skillion roof;
+ *   wing   — a lower gabled bay against one gable end, set back a little;
+ *   rear   — a gabled back wing at right angles (an L-shaped house).
+ */
+function houseAnnex(k: KitBuilder, spec: BuildingSpec, L: Look, o: HouseOpts, ph: number, rng: Rng): void {
+  const W = spec.w, D = spec.d, kind = o.annex;
+  if (!kind || kind === 'none') return;
+  const sgn = ((spec.hv ?? 0) + spec.style) % 2 ? 1 : -1;
+  const T = Math.max(0.22, o.T * 0.8);
+  const look = L.wall;
+  const flat = o.roof === 'flat';
+  const win = (len: number, y0: number): Opening[] => windowRow(len, y0, [Math.min(0.7, o.winW), Math.min(0.8, o.winH)], 2.4, 0.8, null);
+  if (kind === 'leanto') {
+    const Wa = W * 0.62, da = 2.1, ha = Math.min(2.05, o.floorH - 0.5);
+    const xc = sgn * (W - Wa) / 2 * 0.85;
+    k.push(xc, 0, -D / 2 - da / 2 + 0.05);
+    boxWalls(k, { W: Wa, D: da + 0.1, H: ha, T, y0: ph, front: [], back: win(Wa, 0.9), left: sgn < 0 ? [{ x0: 0.5, x1: 1.35, y0: 0, y1: Math.min(1.85, ha - 0.1), kind: 'door' }] : [], right: sgn > 0 ? [{ x0: da - 1.4, x1: da - 0.55, y0: 0, y1: Math.min(1.85, ha - 0.1), kind: 'door' }] : [] }, look, rng);
+    k.pop();
+    k.box(xc - Wa / 2 - 0.08, -4, -D / 2 - da - 0.08, xc + Wa / 2 + 0.08, ph, -D / 2 + 0.05, L.plinthSurf, PART.plinth, L.plinthCol, { skip: ['bottom'], aoLow: 0.45, aoHigh: 0.85 });
+    if (flat) {
+      k.quad([xc - Wa / 2, ph + ha + 0.02, -D / 2], [xc + Wa / 2, ph + ha + 0.02, -D / 2], [xc + Wa / 2, ph + ha + 0.02, -D / 2 - da], [xc - Wa / 2, ph + ha + 0.02, -D / 2 - da], SURF.earth, PART.roof, mulc(look.col, 0.85), 0.9);
+      return;
+    }
+    const yTop = ph + Math.min(o.floorH - 0.12, ha + 0.85), yLow = ph + ha - 0.12;
+    const zT = -D / 2 + 0.05, zL = -D / 2 - da - 0.35;
+    const xa = xc - Wa / 2 - 0.2, xb = xc + Wa / 2 + 0.2;
+    k.slab([xb, yLow, zL], [xa, yLow, zL], [xa, yTop, zT], [xb, yTop, zT], L.roof.thick * 0.7, L.roof.surf, PART.roof, mulc(L.roof.col, 0.94), L.roof.underSurf, L.roof.under, 0.92);
+    // the wall fills under the sloping roof at both ends
+    for (const sx of [-1, 1]) {
+      const x = xc + sx * Wa / 2;
+      triFacingX(k, [x, ph + ha, -D / 2 - da], [x, ph + ha, -D / 2 + 0.05], [x, yTop - 0.1, -D / 2 + 0.05], sx, look.surf, PART.wall, look.col, 0.85);
+    }
+    return;
+  }
+  if (kind === 'wing') {
+    const Wa = Math.min(3.4, Math.max(2.4, W * 0.42)), Dw = D * 0.74, ha = Math.max(2.2, o.floorH - 0.25);
+    const xc = sgn * (W / 2 + Wa / 2 - 0.15), zc = -(D - Dw) / 2 * 0.6;
+    k.push(xc, 0, zc);
+    boxWalls(k, { W: Wa + 0.3, D: Dw, H: ha, T, y0: ph, front: win(Wa + 0.3, 0.9), back: [], left: sgn < 0 ? win(Dw - 2 * T, 0.9) : [], right: sgn > 0 ? win(Dw - 2 * T, 0.9) : [] }, look, rng);
+    k.box(-(Wa + 0.3) / 2 - 0.08, -4, -Dw / 2 - 0.08, (Wa + 0.3) / 2 + 0.08, ph, Dw / 2 + 0.08, L.plinthSurf, PART.plinth, L.plinthCol, { skip: ['bottom'], aoLow: 0.45, aoHigh: 0.85 });
+    if (flat) {
+      k.quad([-(Wa + 0.3) / 2, ph + ha + 0.02, Dw / 2], [(Wa + 0.3) / 2, ph + ha + 0.02, Dw / 2], [(Wa + 0.3) / 2, ph + ha + 0.02, -Dw / 2], [-(Wa + 0.3) / 2, ph + ha + 0.02, -Dw / 2], SURF.earth, PART.roof, mulc(look.col, 0.85), 0.9);
+      k.box(-(Wa + 0.3) / 2, ph + ha, Dw / 2 - 0.22, (Wa + 0.3) / 2, ph + ha + 0.45, Dw / 2, look.surf, PART.roof, look.col, { skip: ['bottom'] });
+    } else gableRoof(k, Wa + 0.3, Dw, T, ph + ha, o.pitch, o.over * 0.8, L.roof, { surf: look.surf, col: look.col }, spec.lod);
+    k.pop();
+    return;
+  }
+  // rear wing at right angles
+  const Wr = Math.min(W * 0.5, 4.2), Dr = Math.min(4.2, Math.max(3.0, D * 0.7)), ha = o.floorH - 0.1;
+  const xc = sgn * (W / 2 - Wr / 2 - 0.25), zc = -D / 2 - Dr / 2 + 0.25;
+  k.push(xc, 0, zc);
+  boxWalls(k, { W: Wr, D: Dr + 0.5, H: ha, T, y0: ph, front: [], back: win(Wr, 0.9).slice(0, 1), left: win(Dr, 0.9), right: win(Dr, 0.9) }, look, rng);
+  k.box(-Wr / 2 - 0.08, -4, -(Dr + 0.5) / 2 - 0.08, Wr / 2 + 0.08, ph, (Dr + 0.5) / 2, L.plinthSurf, PART.plinth, L.plinthCol, { skip: ['bottom'], aoLow: 0.45, aoHigh: 0.85 });
+  if (flat) {
+    k.quad([-Wr / 2, ph + ha + 0.02, (Dr + 0.5) / 2], [Wr / 2, ph + ha + 0.02, (Dr + 0.5) / 2], [Wr / 2, ph + ha + 0.02, -(Dr + 0.5) / 2], [-Wr / 2, ph + ha + 0.02, -(Dr + 0.5) / 2], SURF.earth, PART.roof, mulc(look.col, 0.85), 0.9);
+  } else {
+    k.push(0, 0, 0, Math.PI / 2);
+    gableRoof(k, Dr + 0.5, Wr, T, ph + ha, o.pitch, o.over * 0.8, L.roof, { surf: look.surf, col: look.col }, spec.lod);
+    k.pop();
+  }
+  k.pop();
+}
+
+/** a triangle facing +X (sx = 1) or −X (sx = −1) */
+function triFacingX(k: KitBuilder, a: V3, b: V3, c: V3, sx: number, surf: number, part: number, col: RGB, ao = 1): void {
+  const nx = (b[1] - a[1]) * (c[2] - a[2]) - (b[2] - a[2]) * (c[1] - a[1]);
+  if (nx * sx >= 0) k.triangle(a, b, c, surf, part, col, ao); else k.triangle(a, c, b, surf, part, col, ao);
 }
 
 /** the general rectangular house: storeys of walls with openings, plinth, roof, chimneys, porch, framing */
@@ -438,7 +709,7 @@ function house(k: KitBuilder, spec: BuildingSpec, L: Look, o: HouseOpts, rng: Rn
   const W = spec.w, D = spec.d;
   const ph = o.plinthH;
   plinth(k, W, D, ph, L.plinthSurf, L.plinthCol);
-  const doorX = W / 2 + (spec.style % 3 === 1 && W > 7 ? -W * 0.18 : 0);
+  const doorX = W / 2 + (o.doorPos !== undefined ? o.doorPos * W : spec.style % 3 === 1 && W > 7 ? -W * 0.18 : 0);
   let y = ph;
   for (let f = 0; f < o.floors; f++) {
     const jet = f > 0 ? o.jetty : 0;
@@ -453,6 +724,11 @@ function house(k: KitBuilder, spec: BuildingSpec, L: Look, o: HouseOpts, rng: Rn
     const side = D > 5.5 ? windowRow(Df - 2 * o.T, sill, [o.winW, winH], o.spacing * 1.3, 1.1, null) : [];
     const wl = spec.lod > 0 ? { ...L.wall } : L.wall;
     boxWalls(k, { W: Wf, D: Df, H: fh, T: o.T, y0: y, front, back, left: side, right: f === 0 && spec.style % 2 ? [] : side }, wl, rng);
+    if (o.boxes && spec.lod === 0) {
+      k.push(-Wf / 2, 0, Df / 2);
+      for (const q of front) if (q.kind === 'window') windowBox(k, q.x0, q.x1, y + q.y0 - 0.02, rng);
+      k.pop();
+    }
     // timber framing over the plaster (half-timbered upper floors, wattle corner posts)
     if (o.frame && spec.lod === 0) frameBeams(k, Wf, Df, y, fh, front, back, side.map((q) => ({ ...q, x0: q.x0 + o.T, x1: q.x1 + o.T })));
     if (o.corners && spec.lod === 0) {
@@ -498,15 +774,24 @@ function house(k: KitBuilder, spec: BuildingSpec, L: Look, o: HouseOpts, rng: Rn
         k.tube([[x, y - 0.25, D / 2 - 0.3], [x, y - 0.22, D / 2 + 0.45]], [0.09, 0.085], 6, SURF.bark, PART.trim, WOOD, { cap: true });
       }
     }
+    if (spec.kind === 'mudbrick') mudbrickDressing(k, spec, L, Wt, Dt, y, top, doorX - W / 2, rng);
   }
   // chimneys at the gable ends (inside the wall line, rising above the ridge)
   for (let c = 0; c < o.chimneys; c++) {
-    const sx = c === 0 ? 1 : -1;
-    const cx = sx * (Wt / 2 - 0.6);
+    const where = c === 0 ? o.chim ?? 'end' : o.chim === 'other' ? 'end' : 'other';
+    const sx = where === 'other' ? -1 : 1;
     const cw = 0.62;
     const yTop = top + 0.9;
     const surf = L.wall.surf === SURF.brick || spec.era >= 7 ? SURF.brick : SURF.rubble;
-    chimney(k, cx, -Dt * 0.12, y - 0.6, yTop, cw, surf, surf === SURF.brick ? [0.36, 0.13, 0.07] : mulc(STONE, 0.9), em);
+    const ccol: RGB = surf === SURF.brick ? [0.3, 0.12, 0.07] : mixc(STONE_DARK, mulc(STONE, 0.9), 0.55);
+    if (where === 'ridge') chimney(k, Wt * 0.12 * (spec.style % 2 ? 1 : -1), 0, y - 0.6, yTop, cw, surf, ccol, em);
+    else if (where === 'stack' && o.roof !== 'flat') {
+      // an outside stack against the gable wall: a broad base, a weathered shoulder, the flue up past the ridge
+      const x0 = Wt / 2 - 0.04, x1 = Wt / 2 + 0.62, ys = ph + o.floorH * 0.72;
+      k.box(x0, -0.4, -0.68, x1, ys, 0.68, surf, PART.trim, ccol, { skip: ['bottom'], aoLow: 0.65 });
+      k.slab([x1, ys, 0.68], [x1, ys, -0.68], [x1 - 0.1, ys + 0.5, -0.36], [x1 - 0.1, ys + 0.5, 0.36], 0.1, surf, PART.trim, mulc(ccol, 0.95), surf, ccol);
+      chimney(k, (x0 + x1) / 2 - 0.05, 0, ys, yTop, 0.6, surf, ccol, em);
+    } else chimney(k, sx * (Wt / 2 - 0.6), -Dt * 0.12, y - 0.6, yTop, cw, surf, ccol, em);
   }
   // a porch on posts over the door
   if (o.porch && spec.lod === 0) {
@@ -515,6 +800,29 @@ function house(k: KitBuilder, spec: BuildingSpec, L: Look, o: HouseOpts, rng: Rn
     for (const sx of [-1, 1]) k.cylinder(doorX - W / 2 + sx * pw / 2, D / 2 + pd - 0.15, ph, py, 0.08, 0.07, 6, SURF.beam, PART.frame, WOOD, { top: true });
     k.slab([doorX - W / 2 - pw / 2 - 0.2, py, D / 2 + pd + 0.15], [doorX - W / 2 + pw / 2 + 0.2, py, D / 2 + pd + 0.15], [doorX - W / 2 + pw / 2 + 0.2, py + 0.55, D / 2], [doorX - W / 2 - pw / 2 - 0.2, py + 0.55, D / 2], 0.1, L.roof.surf, PART.roof, L.roof.col, SURF.planks, WOOD_DARK);
     k.box(doorX - W / 2 - pw / 2, -0.4, D / 2, doorX - W / 2 + pw / 2, ph, D / 2 + pd, SURF.planks, PART.trim, WOOD_GREY, { skip: ['bottom'] });
+  }
+  if (o.hood && spec.lod === 0) {
+    // a door hood on two brackets
+    const hx = doorX - W / 2, yh = ph + Math.min(o.doorH + 0.25, o.floorH - 0.3);
+    k.slab([hx - 0.75, yh, D / 2 + 0.75], [hx + 0.75, yh, D / 2 + 0.75], [hx + 0.75, yh + 0.38, D / 2], [hx - 0.75, yh + 0.38, D / 2], 0.07, L.roof.surf, PART.roof, L.roof.col, SURF.planks, WOOD_DARK);
+    for (const sx of [-1, 1]) k.beam([hx + sx * 0.6, yh - 0.45, D / 2], [hx + sx * 0.6, yh, D / 2 + 0.6], 0.07, 0.07, SURF.beam, PART.frame, WOOD_DARK, 0.85);
+  }
+  if (spec.lod === 0 && spec.era >= 2 && spec.kind !== 'tenement' && spec.kind !== 'block' && spec.kind !== 'barn') {
+    // a bench by the door
+    const bx = doorX - W / 2 + ((spec.hv ?? spec.style) % 2 ? 1.25 : -1.25);
+    if (Math.abs(bx) < W / 2 - 0.6) {
+      k.box(bx - 0.6, ph + 0.4, D / 2 + 0.15, bx + 0.6, ph + 0.46, D / 2 + 0.5, SURF.planks, PART.prop, WOOD_GREY, {});
+      for (const lx of [-0.5, 0.5]) k.box(bx + lx - 0.04, ph - 0.2, D / 2 + 0.2, bx + lx + 0.04, ph + 0.4, D / 2 + 0.45, SURF.planks, PART.prop, WOOD_GREY, {});
+    }
+  }
+  houseAnnex(k, spec, L, o, ph, rng);
+  if (spec.lod === 0 && spec.era >= 3 && !o.porch) {
+    // a path of worn flags from the door out to the street
+    const px = doorX - W / 2;
+    for (let i = 0; i < 3; i++) {
+      const z = D / 2 + 0.75 + i * 0.62, jx = (rng.float() - 0.5) * 0.25, sw = 0.28 + rng.float() * 0.1;
+      k.lathe(px + jx, z, [[sw, -0.12], [sw, 0.0], [sw * 0.85, 0.035]], 7, SURF.rubble, PART.trim, mulc(STONE, 0.62 + rng.float() * 0.18), 0.8, 1);
+    }
   }
   if (o.dormers && spec.lod === 0 && o.roof !== 'flat') {
     const n = Math.max(1, Math.floor(W / 4));
@@ -634,8 +942,9 @@ function tent(k: KitBuilder, spec: BuildingSpec, rng: Rng, em: Emitter[]): numbe
 
 /** round hut: daub / wattle wall with a door, a conical thatch roof with a deep eave, a top knot */
 function hut(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng, em: Emitter[]): number {
-  const R = Math.min(spec.w, spec.d) / 2 * 0.85;
-  const wallH = 1.7;
+  const hv = spec.hv ?? 0;
+  const R = Math.min(spec.w, spec.d) / 2 * (0.85 + [0, -0.06, 0.05, -0.03, 0.03, -0.08][hv % 6]);
+  const wallH = 1.7 + [0, 0.15, -0.12, 0.25, 0.05, -0.05][hv % 6];
   const sides = spec.lod === 0 ? 18 : 10;
   const T = 0.25;
   // wall: two arcs leaving a door gap at +Z (angle π/2)
@@ -660,7 +969,7 @@ function hut(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng, em: Emitter[]
     k.beam([ca * (R - T / 2), -0.2, sa * (R - T / 2)], [ca * (R - T / 2), wallH, sa * (R - T / 2)], T + 0.04, 0.14, SURF.bark, PART.frame, WOOD_DARK, 0.8);
   }
   k.quad([-0.45, 0, R - 0.5], [0.45, 0, R - 0.5], [0.45, wallH - 0.1, R - 0.5], [-0.45, wallH - 0.1, R - 0.5], SURF.hide, PART.door, mulc(HIDE, 0.4), 0.4);
-  const top = coneRoof(k, R, wallH, R * 1.15, 0.85, L.roof, sides);
+  const top = coneRoof(k, R, wallH, R * [1.15, 1.32, 1.02, 1.22, 1.4, 1.08][hv % 6], [0.85, 0.7, 0.95, 0.8, 0.75, 1.0][hv % 6], L.roof, sides);
   // the top knot of bound straw
   if (spec.lod === 0) k.lathe(0, 0, [[0.28, top - 0.3], [0.2, top], [0.05, top + 0.35]], 8, SURF.thatch, PART.roof, mulc(L.roof.col, 0.75), 0.8, 1);
   // a smoke hole: hearth smoke seeps through the thatch
@@ -891,11 +1200,12 @@ interface TempleLook {
 
 function templeLook(spec: BuildingSpec, L: Look): TempleLook {
   const fear = spec.mood < -0.33, kind = spec.mood > 0.33;
-  const plain = mixc(mulc(STONE, 1.25), [0.62, 0.55, 0.42], 0.3);
+  // (weathered limestone / sandstone, not a white: in the sun under the grade a 0.55 albedo read as plaster)
+  const plain = mixc(mulc(STONE, 1.08), [0.52, 0.46, 0.36], 0.3);
   const earth0 = mixc(spec.mat.id === 'mudbrick' ? spec.mat.wallCol : L.wall.col, [0.52, 0.38, 0.24], 0.35);
   return {
     fear, kind,
-    stone: fear ? BASALT : kind ? mixc(plain, [0.72, 0.64, 0.5], 0.35) : plain,
+    stone: fear ? BASALT : kind ? mixc(plain, [0.6, 0.52, 0.4], 0.3) : plain,
     earth: fear ? mixc(earth0, BASALT, 0.72) : kind ? mixc(earth0, WHITEWASH, 0.6) : earth0,
     metal: fear ? IRON : GOLD,
     cloth: fear ? (spec.style & 1 ? [0.02, 0.018, 0.018] : [0.3, 0.02, 0.015]) : CLOTH[(spec.style + (kind ? 2 : 0)) % CLOTH.length],
@@ -1350,8 +1660,8 @@ function templeHall(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, r
   const W = spec.w * 0.85, D = spec.d * 0.85;
   const ph = 1.1;
   // a platform of field stone (darker than dressed masonry: it is the hall's footing, not a monument)
-  k.box(-W / 2 - 1.1, -3, -D / 2 - 1.1, W / 2 + 1.1, ph, D / 2 + 1.1, SURF.rubble, PART.plinth, mulc(T.stone, 0.68), { skip: ['bottom'], aoLow: 0.6 });
-  for (let i = 0; i < 3; i++) k.box(-1.8, -1, D / 2 + 1.0, 1.8, (ph / 3) * (i + 1), D / 2 + 1.1 + 0.45 * (3 - i), SURF.rubble, PART.plinth, mulc(T.stone, 0.72), { skip: ['bottom'], aoLow: 0.7 });
+  k.box(-W / 2 - 1.1, -3, -D / 2 - 1.1, W / 2 + 1.1, ph, D / 2 + 1.1, SURF.rubble, PART.plinth, mulc(T.stone, 0.5), { skip: ['bottom'], aoLow: 0.6 });
+  for (let i = 0; i < 3; i++) k.box(-1.8, -1, D / 2 + 1.0, 1.8, (ph / 3) * (i + 1), D / 2 + 1.1 + 0.45 * (3 - i), SURF.rubble, PART.plinth, mulc(T.stone, 0.54), { skip: ['bottom'], aoLow: 0.7 });
   const cw = W - 3.0, cd = D - 3.4, H = 4.2;
   const wood: RGB = T.fear ? [0.04, 0.032, 0.028] : T.kind ? mixc(WOOD, [0.5, 0.34, 0.18], 0.35) : WOOD;
   const look: WallLook = { ...L.wall, surf: SURF.logs, col: wood, shutters: null, mullions: false, frameCol: T.timber, doorCol: T.fear ? [0.02, 0.016, 0.014] : T.timber, lod };
@@ -1435,84 +1745,386 @@ function colonnade(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rn
   return { top, hw: W / 2 + 0.9, back: -D / 2 - 0.9, front: D / 2 + 2.6 };
 }
 
-/** domed hall: arcaded walls, a drum and dome, corner towers */
+/**
+ * Domed hall: walls arcaded with round-headed windows behind a crenellated parapet, a tall portal (a pointed arch
+ * recessed in a framing block) on the front, a windowed drum under a ribbed dome (onion-swelled for some styles)
+ * crowned by a lantern, small domes at the roof's corners and minarets with balconies at the corners of the court.
+ * Fearful: dark basalt, iron-spiked parapet and minaret tips; benevolent: whitewash, gilded finials.
+ */
 function domed(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: Rng, em: Emitter[]): TempleFrame {
+  const lod = spec.lod;
   const S = Math.min(spec.w, spec.d) * 1.05;
   const sc = T.stone;
-  plinth(k, S, S, 0.6, SURF.ashlar, mulc(sc, 0.9));
+  plinth(k, S + 0.4, S + 0.4, 0.6, SURF.ashlar, mulc(sc, 0.85));
   const H = 7;
-  const look: WallLook = { ...L.wall, surf: T.fear ? SURF.ashlar : SURF.plaster, col: T.fear ? mulc(BASALT, 1.3) : T.kind ? WHITEWASH : [0.66, 0.62, 0.55], shutters: null, mullions: true, doorCol: T.fear ? [0.02, 0.016, 0.014] : L.wall.doorCol };
-  const arches = (len: number) => windowRow(len, 2.2, [1.2, 3.0], 2.8, 1.2, null, 'window');
-  boxWalls(k, { W: S, D: S, H, T: 0.8, y0: 0.6, front: [{ x0: S / 2 - 1.4, x1: S / 2 + 1.4, y0: 0, y1: 4.6, kind: 'door' }], back: arches(S), left: arches(S - 1.6), right: arches(S - 1.6) }, look, rng);
+  const wallCol: RGB = T.fear ? mulc(BASALT, 1.3) : T.kind ? WHITEWASH : [0.66, 0.62, 0.55];
+  const look: WallLook = { ...L.wall, surf: T.fear ? SURF.ashlar : SURF.plaster, col: wallCol, shutters: null, mullions: false, frameCol: mulc(sc, 0.7), sillSurf: SURF.ashlar, sillCol: mulc(sc, 1.05), doorCol: T.fear ? [0.02, 0.016, 0.014] : [0.16, 0.08, 0.035], lod };
+  const arches = (len: number, avoid: [number, number] | null): Opening[] => windowRow(len, 1.6, [1.1, 3.4], 2.6, 1.1, avoid).map((o) => ({ ...o, head: 'round' as const }));
+  const pw = Math.min(3.4, S * 0.26);
+  boxWalls(k, {
+    W: S, D: S, H, T: 0.8, y0: 0.6,
+    front: [{ x0: S / 2 - pw / 2, x1: S / 2 + pw / 2, y0: 0, y1: 5.6, kind: 'door', head: 'pointed', rise: pw * 0.8 }, ...arches(S, [S / 2 - pw / 2 - 1.4, S / 2 + pw / 2 + 1.4])],
+    back: arches(S, null), left: arches(S - 1.6, null), right: arches(S - 1.6, null),
+  }, look, rng);
   const y0 = 0.6 + H;
-  k.box(-S / 2 - 0.2, y0, -S / 2 - 0.2, S / 2 + 0.2, y0 + 0.5, S / 2 + 0.2, SURF.ashlar, PART.trim, mulc(sc, 1.1), { skip: ['bottom'] });
-  if (T.fear && spec.lod === 0) for (let q = 0; q < 4; q++) {
+  // cornice and a crenellated parapet (merlons)
+  k.box(-S / 2 - 0.2, y0, -S / 2 - 0.2, S / 2 + 0.2, y0 + 0.4, S / 2 + 0.2, SURF.ashlar, PART.trim, mulc(sc, 1.08), { skip: ['bottom'] });
+  for (let q = 0; q < 4; q++) {
     k.push(0, 0, 0, (q * Math.PI) / 2);
-    for (let x = -S / 2; x <= S / 2; x += 1.2) k.cylinder(x, S / 2 + 0.05, y0 + 0.5, y0 + 1.15, 0.06, 0.0, 4, SURF.iron, PART.trim, IRON);
+    const n = Math.max(4, Math.round(S / 1.1));
+    for (let i = 0; i < n; i++) {
+      const x = -S / 2 + (i + 0.5) * (S / n);
+      if (lod === 0 || i % 2 === 0) k.box(x - 0.28, y0 + 0.4, S / 2 - 0.15, x + 0.28, y0 + 1.15, S / 2 + 0.15, look.surf, PART.trim, wallCol, { skip: ['bottom'] });
+      if (T.fear && lod === 0) k.cylinder(x, S / 2, y0 + 1.15, y0 + 1.75, 0.05, 0.0, 4, SURF.iron, PART.trim, IRON);
+    }
     k.pop();
   }
-  // drum and dome
-  const R = S * 0.36;
-  k.cylinder(0, 0, y0 + 0.5, y0 + 2.6, R, R, 20, look.surf, PART.wall, look.col, {});
-  const domeCol: RGB = T.fear ? [0.05, 0.05, 0.06] : spec.style & 1 ? [0.12, 0.3, 0.32] : T.kind ? WHITEWASH : GOLD;
-  const prof: [number, number][] = [];
-  for (let i = 0; i <= 9; i++) { const t = (i / 9) * Math.PI / 2; prof.push([R * 1.03 * Math.cos(t) + 0.01, y0 + 2.6 + R * 1.05 * Math.sin(t)]); }
-  k.lathe(0, 0, prof, spec.lod === 0 ? 24 : 12, domeCol === WHITEWASH ? SURF.plaster : SURF.metal, PART.roof, domeCol, 0.85, 1);
-  const topY = y0 + 2.6 + R * 1.05;
-  k.lathe(0, 0, [[0.35, topY - 0.05], [0.25, topY + 0.8], [0.03, topY + 1.8]], 8, SURF.metal, PART.trim, T.metal, 1, 1);
-  if (spec.lod === 0) for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    const x = sx * (S / 2 + 1.2), z = sz * (S / 2 + 1.2);
-    k.cylinder(x, z, -1, y0 + 6, 0.7, 0.55, 10, look.surf, PART.wall, look.col, {});
-    if (T.fear) k.cylinder(x, z, y0 + 6, y0 + 8.4, 0.75, 0.0, 4, SURF.iron, PART.roof, IRON);
-    else k.lathe(x, z, [[0.75, y0 + 6], [0.6, y0 + 6.8], [0.04, y0 + 8.4]], 10, SURF.metal, PART.roof, domeCol === WHITEWASH ? GOLD : domeCol, 0.9, 1);
-  }
-  em.push({ p: [-2, 0.9, S / 2 + 1.0], kind: EMIT.brazier, size: 0.35 });
-  em.push({ p: [2, 0.9, S / 2 + 1.0], kind: EMIT.brazier, size: 0.35 });
-  return { top: topY + 1.8, hw: S / 2 + 1.9, back: -S / 2 - 1.9, front: S / 2 + 1.9 };
-}
-
-/** cathedral: nave, aisles, buttresses, a west tower with spire, rose window */
-function cathedral(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: Rng, em: Emitter[]): TempleFrame {
-  const W = Math.min(spec.w, spec.d), D = Math.max(spec.w, spec.d) * 1.2;
-  const naveW = W * 0.55, naveH = 11, aisleH = 6;
-  const sc = T.stone;
-  const look: WallLook = { ...L.wall, surf: SURF.ashlar, col: sc, shutters: null, mullions: true, frameCol: STONE_DARK, doorCol: T.fear ? [0.02, 0.016, 0.014] : L.wall.doorCol };
-  plinth(k, W, D, 0.6, SURF.ashlar, mulc(sc, 0.9));
-  const aw = (W - naveW) / 2;
-  const slate: RGB = T.fear ? [0.03, 0.03, 0.035] : SLATE;
-  for (const sx of [-1, 1]) {
-    k.push(sx * (naveW / 2 + aw / 2), 0, 0);
-    boxWalls(k, { W: aw, D, H: aisleH, T: 0.7, y0: 0.6, front: [], back: [], left: sx < 0 ? windowRow(D - 1.4, 2.0, [1.1, 3.2], 3.4, 1.5, null) : [], right: sx > 0 ? windowRow(D - 1.4, 2.0, [1.1, 3.2], 3.4, 1.5, null) : [] }, look, rng);
-    k.pop();
-    const xo = sx * (W / 2 + 0.4), xi = sx * naveW / 2;
-    const a: V3 = [xo, aisleH + 0.6, D / 2 + 0.3], b: V3 = [xo, aisleH + 0.6, -D / 2 - 0.3], c: V3 = [xi, aisleH + 2.4, -D / 2 - 0.3], d: V3 = [xi, aisleH + 2.4, D / 2 + 0.3];
-    if (sx > 0) k.slab(b, c, d, a, 0.2, SURF.slate, PART.roof, slate, SURF.planks, WOOD_DARK); else k.slab(a, d, c, b, 0.2, SURF.slate, PART.roof, slate, SURF.planks, WOOD_DARK);
-    if (spec.lod === 0) for (let i = 0; i < 5; i++) {
-      const z = -D / 2 + 2 + (i * (D - 4)) / 4;
-      k.box(xo - sx * 0.1 - 0.4, -0.5, z - 0.4, xo - sx * 0.1 + 0.4, aisleH + 1.4, z + 0.4, SURF.ashlar, PART.wall, sc, { skip: ['bottom'] });
-      k.cylinder(xo - sx * 0.1, z, aisleH + 1.4, aisleH + 3.2, 0.3, 0.02, 4, T.fear ? SURF.iron : SURF.ashlar, PART.roof, T.fear ? IRON : sc, {});
+  // the portal block (pishtaq): a frame standing proud of the front wall and above the parapet, round the portal
+  {
+    const fw = pw + 2.2, fh = H + 2.6, z = S / 2;
+    k.box(-fw / 2, 0.6, z, -pw / 2, 0.6 + fh, z + 0.7, look.surf, PART.wall, mulc(wallCol, 1.02), { skip: ['bottom'] });
+    k.box(pw / 2, 0.6, z, fw / 2, 0.6 + fh, z + 0.7, look.surf, PART.wall, mulc(wallCol, 1.02), { skip: ['bottom'] });
+    k.box(-pw / 2, 0.6 + 6.2, z, pw / 2, 0.6 + fh, z + 0.7, look.surf, PART.wall, mulc(wallCol, 1.02), { skip: ['bottom'] });
+    if (lod === 0) {
+      archBand(k, -pw / 2 - 0.05, pw / 2 + 0.05, 0.6 + 5.6 - pw * 0.8, pw * 0.8 + 0.6, z + 0.72, 0.22, T.fear ? IRON : T.kind ? GOLD : mulc(sc, 1.1), 6);
+      k.box(-fw / 2 - 0.1, 0.6 + fh, z - 0.1, fw / 2 + 0.1, 0.6 + fh + 0.3, z + 0.8, SURF.ashlar, PART.trim, mulc(sc, 1.1), {});
+      // a band of tile work across its top
+      k.quad([-fw / 2 + 0.3, 0.6 + fh - 1.4, z + 0.71], [fw / 2 - 0.3, 0.6 + fh - 1.4, z + 0.71], [fw / 2 - 0.3, 0.6 + fh - 0.5, z + 0.71], [-fw / 2 + 0.3, 0.6 + fh - 0.5, z + 0.71], SURF.tiles, PART.trim, T.fear ? [0.12, 0.02, 0.015] : [0.05, 0.2, 0.3], 0.95);
     }
   }
-  boxWalls(k, { W: naveW, D, H: naveH, T: 0.8, y0: 0.6, front: [{ x0: naveW / 2 - 1.3, x1: naveW / 2 + 1.3, y0: 0, y1: 5.2, kind: 'door' }, { x0: naveW / 2 - 1.5, x1: naveW / 2 + 1.5, y0: 6.6, y1: 9.6, kind: 'window' }], back: [{ x0: naveW / 2 - 1.4, x1: naveW / 2 + 1.4, y0: 3, y1: 9.5, kind: 'window' }], left: windowRow(D - 1.6, aisleH + 2.6, [1.0, 2.2], 3.4, 1.5, null), right: windowRow(D - 1.6, aisleH + 2.6, [1.0, 2.2], 3.4, 1.5, null) }, look, rng);
-  const rf: RoofLook = { ...L.roof, surf: SURF.slate, col: slate, cap: slate, capSurf: SURF.slate };
-  k.push(0, 0, 0, Math.PI / 2);
-  gableRoof(k, D, naveW, 0.8, naveH + 0.6, 0.95, 0.4, rf, { surf: SURF.ashlar, col: sc }, spec.lod, T.fear);
-  k.pop();
-  const tw = naveW * 0.75, tz = D / 2 + tw / 2 - 0.5;
-  k.box(-tw / 2, -1, tz - tw / 2, tw / 2, naveH + 9, tz + tw / 2, SURF.ashlar, PART.wall, sc, { skip: ['bottom'], aoLow: 0.7 });
-  if (spec.lod === 0) for (const y of [naveH + 2, naveH + 6]) for (let q = 0; q < 4; q++) {
-    k.push(0, 0, tz, (q * Math.PI) / 2);
-    k.quad([-0.5, y, tw / 2 + 0.01], [0.5, y, tw / 2 + 0.01], [0.5, y + 2.4, tw / 2 + 0.01], [-0.5, y + 2.4, tw / 2 + 0.01], SURF.glass, PART.glass, GLASS, 1, rng.float());
+  // drum with arched windows, a ribbed dome, a lantern
+  const R = S * 0.34;
+  const drumH = 2.8;
+  const ds = lod === 0 ? 20 : 12;
+  k.cylinder(0, 0, y0 + 0.4, y0 + 0.4 + drumH, R, R, ds, look.surf, PART.wall, wallCol, {});
+  if (lod === 0) for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    k.push(Math.sin(a) * (R + 0.01), 0, Math.cos(a) * (R + 0.01), a);
+    k.quad([-0.3, y0 + 1.0, 0], [0.3, y0 + 1.0, 0], [0.3, y0 + 2.4, 0], [-0.3, y0 + 2.4, 0], SURF.glass, PART.glass, GLASS, 1, rng.float());
+    k.lathe(0, 0, [[0.3, y0 + 2.4], [0.2, y0 + 2.62], [0.001, y0 + 2.7]], 6, SURF.glass, PART.glass, GLASS);
     k.pop();
   }
-  k.cylinder(0, tz, naveH + 9, naveH + 22, tw * 0.62, 0.05, 8, SURF.slate, PART.roof, T.fear ? [0.02, 0.02, 0.025] : SLATE, {});
-  if (!T.fear && spec.lod === 0) k.beam([0, naveH + 22, tz], [0, naveH + 23.6, tz], 0.12, 0.12, SURF.metal, PART.roof, T.metal, 1);
-  const zf = tz + tw / 2 + 0.02;
-  k.box(-1.5, 0.6, zf - 0.02, 1.5, 5.6, zf + 0.25, SURF.ashlar, PART.trim, mulc(sc, 1.1), { skip: ['nz'] });
-  k.quad([-1.1, 0.6, zf + 0.26], [1.1, 0.6, zf + 0.26], [1.1, 5.0, zf + 0.26], [-1.1, 5.0, zf + 0.26], SURF.planks, PART.door, T.fear ? [0.02, 0.016, 0.014] : WOOD_DARK, 0.6);
-  k.quad([-1.6, 7.0, zf], [1.6, 7.0, zf], [1.6, 11.0, zf], [-1.6, 11.0, zf], SURF.glass, PART.glass, [0.05, 0.02, 0.05], 1, rng.float());
-  em.push({ p: [-1.6, 0.9, zf + 0.6], kind: EMIT.brazier, size: 0.3 });
-  return { top: naveH + 23.6, hw: W / 2 + 0.6, back: -D / 2 - 0.5, front: zf + 0.6 };
+  k.box(-R - 0.15, y0 + 0.4 + drumH - 0.05, -R - 0.15, R + 0.15, y0 + 0.4 + drumH + 0.2, R + 0.15, SURF.ashlar, PART.trim, mulc(sc, 1.08), {});
+  const onion = (spec.style & 2) !== 0;
+  const domeCol: RGB = T.fear ? [0.05, 0.05, 0.06] : spec.style & 1 ? [0.1, 0.27, 0.3] : T.kind ? WHITEWASH : GOLD;
+  const db = y0 + 0.6 + drumH;
+  const prof: [number, number][] = [];
+  for (let i = 0; i <= 12; i++) {
+    const t = i / 12;
+    // a hemisphere, or an onion: swelling past the drum and drawn up to a point
+    const r = onion ? R * (1.0 + 0.22 * Math.sin(t * Math.PI * 1.15)) * Math.pow(Math.cos(t * Math.PI / 2), 0.75) : R * 1.02 * Math.cos((t * Math.PI) / 2);
+    const y = db + (onion ? R * 1.45 : R * 1.02) * (onion ? Math.sin(t * Math.PI / 2) * (0.85 + 0.15 * t) : Math.sin((t * Math.PI) / 2));
+    prof.push([Math.max(0.02, r), y]);
+  }
+  const domeSurf = domeCol === WHITEWASH ? SURF.plaster : spec.style & 1 ? SURF.tiles : SURF.metal;
+  k.lathe(0, 0, prof, lod === 0 ? 28 : 14, domeSurf, PART.roof, domeCol, 0.85, 1);
+  if (lod === 0) {
+    // ribs down the dome
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2;
+      const pts: V3[] = prof.filter((_, j) => j % 2 === 0).map(([r, y]) => [Math.sin(a) * (r + 0.04), y, Math.cos(a) * (r + 0.04)]);
+      k.tube(pts, pts.map(() => 0.06), 4, domeSurf, PART.roof, mulc(domeCol, domeCol === GOLD ? 1.15 : 0.85));
+    }
+  }
+  const topY = prof[prof.length - 1][1];
+  // the lantern: a little arcaded drum and cupola, a finial
+  k.cylinder(0, 0, topY - 0.3, topY + 0.9, 0.55, 0.5, 8, look.surf, PART.wall, wallCol, {});
+  k.lathe(0, 0, [[0.62, topY + 0.9], [0.5, topY + 1.3], [0.2, topY + 1.6], [0.02, topY + 1.7]], 8, domeSurf, PART.roof, domeCol, 0.9, 1);
+  if (T.fear) k.cylinder(0, 0, topY + 1.6, topY + 3.0, 0.08, 0.0, 4, SURF.iron, PART.trim, IRON);
+  else k.lathe(0, 0, [[0.08, topY + 1.65], [0.18, topY + 1.95], [0.06, topY + 2.25], [0.12, topY + 2.5], [0.01, topY + 3.0]], 8, SURF.metal, PART.trim, T.metal, 1, 1);
+  // small corner domes on the roof
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const x = sx * (S / 2 - 1.6), z = sz * (S / 2 - 1.6);
+    k.cylinder(x, z, y0 + 0.4, y0 + 1.5, 0.95, 0.95, lod === 0 ? 10 : 6, look.surf, PART.wall, wallCol, {});
+    const sp: [number, number][] = [];
+    for (let i = 0; i <= 5; i++) { const t = (i / 5) * Math.PI / 2; sp.push([0.02 + 1.0 * Math.cos(t), y0 + 1.5 + 0.95 * Math.sin(t)]); }
+    k.lathe(x, z, sp, lod === 0 ? 10 : 6, domeSurf, PART.roof, domeCol, 0.85, 1);
+  }
+  // minarets at the corners of the court: a shaft, a balcony on brackets, a slimmer upper stage, a cap
+  const mH = y0 + R * 1.5 + 6;
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    if (lod > 0 && sz < 0) continue;
+    const x = sx * (S / 2 + 1.6), z = sz * (S / 2 + 1.6);
+    k.cylinder(x, z, -1, mH * 0.68, 0.75, 0.62, lod === 0 ? 10 : 6, look.surf, PART.wall, wallCol, {});
+    k.cylinder(x, z, mH * 0.68, mH * 0.68 + 0.35, 0.62, 1.05, lod === 0 ? 10 : 6, SURF.ashlar, PART.trim, mulc(sc, 1.05), { bottom: true });
+    k.cylinder(x, z, mH * 0.68 + 0.35, mH * 0.68 + 0.95, 1.05, 1.05, lod === 0 ? 10 : 6, SURF.ashlar, PART.trim, mulc(sc, 1.05), { top: true });
+    k.cylinder(x, z, mH * 0.68 + 0.95, mH, 0.5, 0.45, lod === 0 ? 10 : 6, look.surf, PART.wall, wallCol, {});
+    if (T.fear) k.cylinder(x, z, mH, mH + 2.6, 0.55, 0.0, 6, SURF.iron, PART.roof, IRON);
+    else k.lathe(x, z, [[0.56, mH], [0.62, mH + 0.4], [0.38, mH + 1.2], [0.02, mH + 2.4]], 10, domeSurf, PART.roof, domeCol === WHITEWASH ? GOLD : domeCol, 0.9, 1);
+  }
+  em.push({ p: [-pw / 2 - 1.6, 0.9, S / 2 + 1.4], kind: EMIT.brazier, size: 0.35 });
+  em.push({ p: [pw / 2 + 1.6, 0.9, S / 2 + 1.4], kind: EMIT.brazier, size: 0.35 });
+  return { top: Math.max(topY + 3.0, mH + 2.6), hw: S / 2 + 2.4, back: -S / 2 - 2.4, front: S / 2 + 2.4 };
+}
+
+/** a lancet window or door (pointed head) of width w centred at cx, from y0 to the crown y1 */
+function lancet(cx: number, w: number, y0: number, y1: number, kind: Opening['kind'] = 'window'): Opening {
+  return { x0: cx - w / 2, x1: cx + w / 2, y0, y1, kind, head: 'pointed', rise: w * 0.95 };
+}
+
+/** lancets spaced along a wall of length L, skipping `skip` (wall-x ranges) */
+function lancetRow(L: number, y0: number, w: number, h: number, spacing: number, margin: number, skip: [number, number][] = []): Opening[] {
+  return windowRow(L, y0, [w, h], spacing, margin, null).filter((o) => !skip.some(([a, b]) => o.x1 > a && o.x0 < b)).map((o) => ({ ...o, head: 'pointed' as const, rise: w * 0.95 }));
+}
+
+/** a Gothic pinnacle: a square shaft, gablets, a pyramid spirelet and a finial (an iron spike where the people fear) */
+function pinnacle(k: KitBuilder, x: number, z: number, y0: number, h: number, s: number, col: RGB, T: TempleLook, lod: number): void {
+  const ys = y0 + h * 0.42;
+  k.box(x - s / 2, y0, z - s / 2, x + s / 2, ys, z + s / 2, SURF.ashlar, PART.trim, col, { skip: ['bottom'], aoLow: 0.85 });
+  if (lod === 0) k.box(x - s / 2 - 0.05, ys, z - s / 2 - 0.05, x + s / 2 + 0.05, ys + 0.12, z + s / 2 + 0.05, SURF.ashlar, PART.trim, mulc(col, 1.08), {});
+  k.push(x, 0, z, Math.PI / 4);
+  k.cylinder(0, 0, ys + 0.12, y0 + h, s * 0.72, 0.02, 4, SURF.ashlar, PART.roof, mulc(col, 0.95), {});
+  k.pop();
+  if (lod === 0) {
+    // crockets: little knobs up the edges
+    for (let i = 1; i <= 3; i++) {
+      const t = i / 4, y = ys + 0.12 + (y0 + h - ys - 0.12) * t, r = s * 0.5 * (1 - t);
+      for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) k.box(x + dx * r - 0.05, y - 0.05, z + dz * r - 0.05, x + dx * r + 0.05, y + 0.06, z + dz * r + 0.05, SURF.ashlar, PART.trim, col, {});
+    }
+    if (T.fear) k.cylinder(x, z, y0 + h - 0.05, y0 + h + 0.6, 0.04, 0.0, 4, SURF.iron, PART.roof, IRON, {});
+    else k.lathe(x, z, [[0.02, y0 + h - 0.05], [0.1, y0 + h + 0.08], [0.02, y0 + h + 0.22]], 6, T.kind ? SURF.metal : SURF.ashlar, PART.roof, T.kind ? T.metal : col, 1, 1);
+  }
+}
+
+/**
+ * A flying buttress in the plane z: a straight sloping top from the pier (xP, ytP) to the wall (xW, ytW) over a
+ * quarter arch springing from the pier, `t` thick.
+ */
+function flyer(k: KitBuilder, xP: number, ytP: number, xW: number, ytW: number, z: number, t: number, col: RGB, n: number): void {
+  const ybP = ytP - 2.3, ybW = ytW - 0.75;
+  const top = (s: number): [number, number] => [xP + (xW - xP) * s, ytP + (ytW - ytP) * s];
+  const bot = (s: number): [number, number] => { const ph = (s * Math.PI) / 2; return [xW + (xP - xW) * Math.cos(ph), ybP + (ybW - ybP) * Math.sin(ph)]; };
+  const sgn = Math.sign(xW - xP) || 1;
+  for (let i = 0; i < n; i++) {
+    const s0 = i / n, s1 = (i + 1) / n;
+    const [tx0, ty0] = top(s0), [tx1, ty1] = top(s1), [bx0, by0] = bot(s0), [bx1, by1] = bot(s1);
+    // the two faces
+    for (const [zz, f] of [[z + t / 2, 1], [z - t / 2, -1]] as const) {
+      const a: V3 = [bx0, by0, zz], b: V3 = [bx1, by1, zz], c: V3 = [tx1, ty1, zz], d: V3 = [tx0, ty0, zz];
+      if (f * sgn > 0) k.quad(a, b, c, d, SURF.ashlar, PART.wall, col, 0.85); else k.quad(b, a, d, c, SURF.ashlar, PART.wall, col, 0.85);
+    }
+    // top coping and the arch's soffit
+    const tq: [V3, V3, V3, V3] = [[tx0, ty0, z + t / 2], [tx1, ty1, z + t / 2], [tx1, ty1, z - t / 2], [tx0, ty0, z - t / 2]];
+    const bq: [V3, V3, V3, V3] = [[bx0, by0, z - t / 2], [bx1, by1, z - t / 2], [bx1, by1, z + t / 2], [bx0, by0, z + t / 2]];
+    if (sgn > 0) { k.quad(tq[0], tq[1], tq[2], tq[3], SURF.ashlar, PART.wall, mulc(col, 1.05), 0.95); k.quad(bq[0], bq[1], bq[2], bq[3], SURF.ashlar, PART.wall, col, 0.55); }
+    else { k.quad(tq[1], tq[0], tq[3], tq[2], SURF.ashlar, PART.wall, mulc(col, 1.05), 0.95); k.quad(bq[1], bq[0], bq[3], bq[2], SURF.ashlar, PART.wall, col, 0.55); }
+  }
+}
+
+/** a rose window facing +Z on the plane z: a disc of glass, a moulded stone ring, spokes of tracery and a hub */
+function roseWindow(k: KitBuilder, cx: number, cy: number, z: number, r: number, col: RGB, lod: number, seed: number): void {
+  const n = lod === 0 ? 16 : 8;
+  const c = k.vert(cx, cy, z, 0, 0, 1, SURF.glass, PART.glass, GLASS, 1, seed);
+  const rim: number[] = [];
+  for (let i = 0; i <= n; i++) { const a = (i / n) * Math.PI * 2; rim.push(k.vert(cx + Math.cos(a) * r, cy + Math.sin(a) * r, z, 0, 0, 1, SURF.glass, PART.glass, GLASS, 1, seed)); }
+  for (let i = 0; i < n; i++) k.tri(c, rim[i], rim[i + 1]);
+  const ring = lod === 0 ? 0.28 : 0.35;
+  for (let i = 0; i < n; i++) {
+    const a0 = (i / n) * Math.PI * 2, a1 = ((i + 1) / n) * Math.PI * 2;
+    k.beam([cx + Math.cos(a0) * r, cy + Math.sin(a0) * r, z + 0.08], [cx + Math.cos(a1) * r, cy + Math.sin(a1) * r, z + 0.08], ring, 0.22, SURF.ashlar, PART.trim, mulc(col, 1.06), 0.9);
+  }
+  if (lod > 0) return;
+  for (let i = 0; i < 12; i++) {
+    const a = (i / 12) * Math.PI * 2;
+    k.beam([cx + Math.cos(a) * r * 0.22, cy + Math.sin(a) * r * 0.22, z + 0.05], [cx + Math.cos(a) * r * 0.95, cy + Math.sin(a) * r * 0.95, z + 0.05], 0.08, 0.1, SURF.ashlar, PART.trim, col, 0.9);
+    // the cusped inner ring
+    const b = a + Math.PI / 12;
+    k.beam([cx + Math.cos(a) * r * 0.6, cy + Math.sin(a) * r * 0.6, z + 0.05], [cx + Math.cos(b + Math.PI / 12) * r * 0.6, cy + Math.sin(b + Math.PI / 12) * r * 0.6, z + 0.05], 0.07, 0.08, SURF.ashlar, PART.trim, col, 0.9);
+  }
+  k.box(cx - r * 0.17, cy - r * 0.17, z, cx + r * 0.17, cy + r * 0.17, z + 0.14, SURF.ashlar, PART.trim, col, { skip: ['nz'] });
+}
+
+/** an arch drawn as a band of beams along a pointed curve (archivolts, the outline of a gablet), in the plane z */
+function archBand(k: KitBuilder, x0: number, x1: number, ys: number, h: number, z: number, w: number, col: RGB, n: number): void {
+  const left = archHalf(x0, x1, ys, h, n);
+  const right = left.map(([x, y]) => [x0 + x1 - x, y] as [number, number]).reverse();
+  const pts = [[x0, ys - 0.01] as [number, number], ...left, ...right.slice(1)];
+  for (let i = 0; i < pts.length - 1; i++) k.beam([pts[i][0], pts[i][1], z], [pts[i + 1][0], pts[i + 1][1], z], w, w * 0.9, SURF.ashlar, PART.trim, col, 0.88);
+}
+
+/**
+ * Cathedral (Gothic): a cross plan — a tall nave with clerestory lancets over lean-to aisles, a transept with rose
+ * windows in its gables, a polygonal apse of tall lancets — buttress piers along the aisles carrying flying buttresses to
+ * the nave wall and crowned with pinnacles, and a west front of twin towers (belfries, spires on some) round a deep
+ * portal of stepped arches under a rose window. Fearful peoples raise it in dark basalt with iron spikes; benevolent
+ * ones in warm limestone with gilded finials.
+ */
+function cathedral(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: Rng, em: Emitter[]): TempleFrame {
+  const lod = spec.lod;
+  const W = Math.min(spec.w, spec.d), D = Math.max(spec.w, spec.d) * 1.15;
+  const naveW = W * 0.5, aw = (W - naveW) / 2;
+  const naveH = 12.5, aisleH = 6.4, ph = 0.6;
+  const sc = T.fear ? mulc(BASALT, 1.6) : T.stone;
+  const look: WallLook = {
+    ...L.wall, surf: SURF.ashlar, col: sc, inner: INTERIOR, shutters: null, mullions: true, frameCol: mulc(sc, 0.75),
+    sillSurf: SURF.ashlar, sillCol: mulc(sc, 1.05), doorCol: T.fear ? [0.02, 0.016, 0.014] : WOOD_DARK, lod,
+  };
+  const roofCol: RGB = T.fear ? [0.022, 0.022, 0.026] : spec.style & 1 ? [0.16, 0.24, 0.2] : SLATE;
+  const roofSurf = spec.style & 1 && !T.fear ? SURF.metal : SURF.slate;
+  const rf: RoofLook = { ...L.roof, surf: roofSurf, col: roofCol, cap: mulc(roofCol, 0.85), capSurf: roofSurf, thick: 0.25, under: WOOD_DARK, underSurf: SURF.planks };
+  const zW = D / 2, zE = -D / 2;
+  const transD = naveW * 1.05, zc = zE + transD / 2 + 1.2;
+  const tw = aw + 1.4;
+  const zA0 = zc + transD / 2, zA1 = zW - tw + 0.6;
+  const aisleLen = zA1 - zA0;
+  // footing under nave and aisles
+  k.box(-W / 2 - 0.3, -4, zE - 0.3, W / 2 + 0.3, ph, zW + 0.3, SURF.ashlar, PART.plinth, mulc(sc, 0.82), { skip: ['bottom'], aoLow: 0.5 });
+  // aisles: outer walls with lancets, lean-to roofs against the nave
+  const bay = aisleLen / Math.max(2, Math.round(aisleLen / 3.6));
+  const nb = Math.round(aisleLen / bay);
+  const aisleOps = (): Opening[] => {
+    const out: Opening[] = [];
+    for (let i = 0; i < nb; i++) out.push(lancet((i + 0.5) * bay, 1.05, 1.6, aisleH - 0.7));
+    return out;
+  };
+  k.push(W / 2, ph, zA1, Math.PI / 2); wallPanel(k, aisleLen, aisleH, 0.7, aisleOps(), look, rng); k.pop();
+  k.push(-W / 2, ph, zA0, -Math.PI / 2); wallPanel(k, aisleLen, aisleH, 0.7, aisleOps(), look, rng); k.pop();
+  for (const sx of [-1, 1]) {
+    const xo = sx * (W / 2 + 0.35), xi = sx * naveW / 2;
+    const a: V3 = [xo, ph + aisleH, zA1], b: V3 = [xo, ph + aisleH, zA0], c: V3 = [xi, ph + aisleH + 2.0, zA0], d: V3 = [xi, ph + aisleH + 2.0, zA1];
+    if (sx > 0) k.slab(a, b, c, d, 0.2, rf.surf, PART.roof, roofCol, SURF.planks, WOOD_DARK); else k.slab(b, a, d, c, 0.2, rf.surf, PART.roof, roofCol, SURF.planks, WOOD_DARK);
+    // a parapet along the aisle eave
+    k.box(Math.min(xo, sx * (W / 2 - 0.1)), ph + aisleH - 0.1, zA0, Math.max(xo, sx * (W / 2 - 0.1)), ph + aisleH + 0.55, zA1, SURF.ashlar, PART.trim, mulc(sc, 1.04), { skip: ['bottom'] });
+  }
+  // nave: tall walls with clerestory lancets above the aisle roofs, the west wall with the portal
+  const clere = (): Opening[] => {
+    const out: Opening[] = [];
+    for (let i = 0; i < nb; i++) out.push(lancet((i + 0.5) * bay, 1.0, aisleH + 2.6, naveH - 0.9));
+    return out;
+  };
+  const naveLen = zW - zE;
+  k.push(naveW / 2, ph, zW, Math.PI / 2); wallPanel(k, naveLen, naveH, 0.8, clere().map((o) => ({ ...o, x0: o.x0 + (zW - zA1), x1: o.x1 + (zW - zA1) })), look, rng); k.pop();
+  k.push(-naveW / 2, ph, zE, -Math.PI / 2); wallPanel(k, naveLen, naveH, 0.8, clere().map((o) => ({ ...o, x0: o.x0 + (zA0 - zE), x1: o.x1 + (zA0 - zE) })), look, rng); k.pop();
+  const portalW = Math.min(3.0, naveW * 0.42), portalH = 6.4;
+  k.push(-naveW / 2, ph, zW, 0); wallPanel(k, naveW, naveH, 0.8, [lancet(naveW / 2, portalW, 0, portalH, 'door')], look, rng); k.pop();
+  // the nave roof (ridge along Z), gables at both ends
+  k.push(0, 0, 0, Math.PI / 2);
+  const yR = gableRoof(k, naveLen, naveW, 0.8, naveH + ph, 0.98, 0.35, rf, { surf: SURF.ashlar, col: sc }, lod, T.fear);
+  k.pop();
+  // transept: arms out past the aisles, gable ends with rose windows, lancets in the long walls
+  const tW = W + 5.2, trH = naveH - 0.6;
+  k.push(0, 0, zc);
+  boxWalls(k, {
+    W: tW, D: transD, H: trH, T: 0.8, y0: ph,
+    front: [lancet(tW / 2 - (W / 2 + 1.3), 1.1, 2.0, 8.0), lancet(tW / 2 + (W / 2 + 1.3), 1.1, 2.0, 8.0)],
+    back: [lancet(tW / 2 - (W / 2 + 1.3), 1.1, 2.0, 8.0), lancet(tW / 2 + (W / 2 + 1.3), 1.1, 2.0, 8.0)],
+    left: [lancet((transD - 1.6) / 2, 1.0, 1.8, 6.6)],
+    right: [lancet((transD - 1.6) / 2, 1.6, 1.2, 6.0, 'door')],
+  }, look, rng);
+  const yTR = gableRoof(k, tW, transD, 0.8, trH + ph, 0.98, 0.35, rf, { surf: SURF.ashlar, col: sc }, lod, T.fear);
+  for (const sx of [-1, 1]) {
+    k.push(sx * (tW / 2 + 0.01), 0, 0, sx * Math.PI / 2);
+    roseWindow(k, 0, ph + trH - 0.6, 0, Math.min(1.9, transD * 0.27), sc, lod, rng.float());
+    k.pop();
+  }
+  k.pop();
+  // the crossing: a slender lead flèche, or a square lantern tower
+  if (spec.style & 2) {
+    const cs = naveW * 0.8;
+    k.box(-cs / 2, yR - 1.2, zc - cs / 2, cs / 2, yR + 4.2, zc + cs / 2, SURF.ashlar, PART.wall, sc, { skip: ['bottom'] });
+    if (lod === 0) for (let q = 0; q < 4; q++) {
+      k.push(0, 0, zc, (q * Math.PI) / 2);
+      for (const dx of [-0.8, 0.8]) k.quad([dx - 0.35, yR + 1.4, cs / 2 + 0.01], [dx + 0.35, yR + 1.4, cs / 2 + 0.01], [dx + 0.35, yR + 3.5, cs / 2 + 0.01], [dx - 0.35, yR + 3.5, cs / 2 + 0.01], SURF.glass, PART.glass, GLASS, 1, rng.float());
+      k.pop();
+    }
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) pinnacle(k, sx * (cs / 2 - 0.3), zc + sz * (cs / 2 - 0.3), yR + 4.2, 2.6, 0.5, sc, T, lod);
+  } else {
+    k.push(0, 0, zc, Math.PI / 8);
+    k.cylinder(0, 0, yR - 0.4, yR + 2.2, 0.95, 0.85, 8, SURF.metal, PART.roof, roofCol, {});
+    k.cylinder(0, 0, yR + 2.2, yR + 10.5, 0.95, 0.03, 8, SURF.metal, PART.roof, roofCol, {});
+    k.pop();
+  }
+  // the apse: a half polygon of tall lancets under a half cone
+  const ar = naveW / 2, aH = naveH - 1.6, na = 5;
+  const apt: [number, number][] = [];
+  for (let i = 0; i <= na; i++) { const a = (i / na) * Math.PI; apt.push([Math.cos(a) * ar, zE - Math.sin(a) * ar]); }
+  for (let i = 0; i < na; i++) {
+    const [x0, z0] = apt[i], [x1, z1] = apt[i + 1];
+    const Ls = Math.hypot(x1 - x0, z1 - z0);
+    k.push(x0, ph, z0, Math.atan2(-(z1 - z0), x1 - x0));
+    wallPanel(k, Ls, aH, 0.7, Ls > 1.6 ? [lancet(Ls / 2, Math.min(1.0, Ls * 0.45), 1.6, aH - 1.0)] : [], look, rng);
+    k.pop();
+    // a buttress at each angle
+    const a = (i / na) * Math.PI;
+    if (i > 0) {
+      const bx = Math.cos(a) * (ar + 0.55), bz = zE - Math.sin(a) * (ar + 0.55);
+      k.push(bx, 0, bz, a + Math.PI / 2);
+      k.box(-0.24, -1, -0.45, 0.24, ph + aH - 2.6, 0.45, SURF.ashlar, PART.wall, mulc(sc, 0.97), { skip: ['bottom'], aoLow: 0.6 });
+      k.pop();
+      pinnacle(k, bx, bz, ph + aH - 2.6, 2.4, 0.42, sc, T, lod);
+    }
+  }
+  const apexY = ph + naveH + 1.6;
+  for (let i = 0; i < na; i++) {
+    const [x0, z0] = apt[i], [x1, z1] = apt[i + 1];
+    const o = 0.5 / ar + 1;
+    k.triangle([x0 * o, ph + aH, zE + (z0 - zE) * o], [x1 * o, ph + aH, zE + (z1 - zE) * o], [0, apexY, zE], rf.surf, PART.roof, roofCol, 0.9);
+    k.triangle([x1 * o, ph + aH - 0.2, zE + (z1 - zE) * o], [x0 * o, ph + aH - 0.2, zE + (z0 - zE) * o], [0, apexY - 0.2, zE], SURF.planks, PART.roof, WOOD_DARK, 0.4);
+  }
+  // buttress piers along the aisles, flying buttresses to the nave wall, pinnacles on the piers
+  for (let i = 0; i <= nb; i++) {
+    const z = zA0 + i * bay;
+    if (i === nb && z > zA1 - 0.5) continue;
+    for (const sx of [-1, 1]) {
+      const x0 = sx * (W / 2 + 0.05), x1 = sx * (W / 2 + 1.05);
+      k.box(Math.min(x0, x1), -1, z - 0.42, Math.max(x0, x1), ph + aisleH + 2.6, z + 0.42, SURF.ashlar, PART.wall, mulc(sc, 0.97), { skip: ['bottom'], aoLow: 0.6 });
+      // a weathered offset halfway up
+      if (lod === 0) k.box(Math.min(x0, sx * (W / 2 + 1.3)), -1, z - 0.5, Math.max(x0, sx * (W / 2 + 1.3)), ph + aisleH * 0.45, z + 0.5, SURF.ashlar, PART.wall, mulc(sc, 0.93), { skip: ['bottom'], aoLow: 0.55 });
+      pinnacle(k, sx * (W / 2 + 0.55), z, ph + aisleH + 2.6, 3.2, 0.62, sc, T, lod);
+      if (lod === 0) flyer(k, sx * (W / 2 + 0.1), ph + aisleH + 2.4, sx * (naveW / 2 + 0.02), ph + naveH - 1.0, z, 0.42, mulc(sc, 1.02), 5);
+      else k.beam([sx * (W / 2 + 0.1), ph + aisleH + 1.8, z], [sx * naveW / 2, ph + naveH - 1.4, z], 0.4, 0.6, SURF.ashlar, PART.wall, sc, 0.9);
+    }
+  }
+  // the west front: twin towers round the portal, belfries, spires on some, the rose window between them
+  const tH = naveH + 8.5, belfry = 5.2;
+  const tz = zW - tw / 2 + 0.6;
+  const spires = (spec.style & 1) === 0 || T.fear;
+  for (const sx of [-1, 1]) {
+    const tx = sx * (naveW / 2 + tw / 2 - 0.3);
+    k.push(tx, 0, tz);
+    // the lower stages (a tall lancet in the west face), then the belfry with paired openings on every face
+    boxWalls(k, { W: tw, D: tw, H: tH - belfry, T: 0.8, y0: ph, front: [lancet(tw / 2, 0.9, 7.0, 10.6)], back: [], left: [], right: [] }, look, rng);
+    k.box(-tw / 2, -1, -tw / 2, tw / 2, ph, tw / 2, SURF.ashlar, PART.plinth, mulc(sc, 0.85), { skip: ['bottom', 'top'], aoLow: 0.5 });
+    boxWalls(k, { W: tw, D: tw, H: belfry, T: 0.6, y0: ph + tH - belfry, front: [lancet(tw / 2 - 0.65, 0.8, 1.0, 4.2), lancet(tw / 2 + 0.65, 0.8, 1.0, 4.2)], back: [lancet(tw / 2 - 0.65, 0.8, 1.0, 4.2), lancet(tw / 2 + 0.65, 0.8, 1.0, 4.2)], left: [lancet((tw - 1.2) / 2, 0.8, 1.0, 4.2)], right: [lancet((tw - 1.2) / 2, 0.8, 1.0, 4.2)] }, look, rng);
+    // clasping buttresses at the tower's corners, a parapet, corner pinnacles
+    for (const cx of [-1, 1]) for (const cz of [-1, 1]) {
+      if (lod === 0) k.box(cx * tw / 2 - 0.35, -1, cz * tw / 2 - 0.35, cx * tw / 2 + 0.35, ph + tH - 3, cz * tw / 2 + 0.35, SURF.ashlar, PART.wall, mulc(sc, 0.96), { skip: ['bottom'], aoLow: 0.6 });
+      pinnacle(k, cx * (tw / 2 - 0.2), cz * (tw / 2 - 0.2), ph + tH, 3.0, 0.55, sc, T, lod);
+    }
+    k.box(-tw / 2 - 0.1, ph + tH, -tw / 2 - 0.1, tw / 2 + 0.1, ph + tH + 0.25, tw / 2 + 0.1, SURF.ashlar, PART.trim, mulc(sc, 1.06), {});
+    if (spires) {
+      k.push(0, 0, 0, Math.PI / 8);
+      k.cylinder(0, 0, ph + tH + 0.25, ph + tH + 14, tw * 0.46, 0.04, 8, rf.surf, PART.roof, T.fear ? [0.02, 0.02, 0.024] : mulc(sc, 0.9), {});
+      k.pop();
+      if (lod === 0) {
+        if (T.fear) k.cylinder(0, 0, ph + tH + 13.8, ph + tH + 15.6, 0.07, 0.0, 4, SURF.iron, PART.roof, IRON, {});
+        else { k.beam([0, ph + tH + 13.8, 0], [0, ph + tH + 15.4, 0], 0.1, 0.1, SURF.metal, PART.roof, T.metal, 1); k.beam([-0.45, ph + tH + 14.9, 0], [0.45, ph + tH + 14.9, 0], 0.09, 0.09, SURF.metal, PART.roof, T.metal, 1); }
+      }
+    } else {
+      k.quad([-tw / 2, ph + tH + 0.25, tw / 2], [tw / 2, ph + tH + 0.25, tw / 2], [tw / 2, ph + tH + 0.25, -tw / 2], [-tw / 2, ph + tH + 0.25, -tw / 2], rf.surf, PART.roof, roofCol, 0.8);
+    }
+    k.pop();
+  }
+  // the portal: stepped archivolts round the door, a gablet over it; the rose window above
+  const zf = zW + 0.02;
+  if (lod === 0) {
+    for (let i = 1; i <= 3; i++) {
+      const e = i * 0.22;
+      archBand(k, -portalW / 2 - e, portalW / 2 + e, portalH - portalW * 0.95, portalW * 0.95 + e * 0.9, zf + 0.06 * i, 0.2, mulc(sc, 1.04 + 0.02 * i), 6);
+    }
+    // jamb shafts under the archivolts
+    for (let i = 1; i <= 3; i++) for (const sx of [-1, 1]) k.cylinder(sx * (portalW / 2 + i * 0.22), zf + 0.06 * i, 0, portalH - portalW * 0.95, 0.1, 0.1, 6, SURF.ashlar, PART.trim, mulc(sc, 1.04 + 0.02 * i), {});
+    const gy = portalH - 0.2, gw = portalW / 2 + 1.0;
+    k.beam([-gw, gy, zf + 0.3], [0, gy + 1.9, zf + 0.3], 0.28, 0.3, SURF.ashlar, PART.trim, mulc(sc, 1.08), 0.9);
+    k.beam([gw, gy, zf + 0.3], [0, gy + 1.9, zf + 0.3], 0.28, 0.3, SURF.ashlar, PART.trim, mulc(sc, 1.08), 0.9);
+    pinnacle(k, -gw - 0.15, zf + 0.3, gy - 0.6, 2.2, 0.36, sc, T, lod);
+    pinnacle(k, gw + 0.15, zf + 0.3, gy - 0.6, 2.2, 0.36, sc, T, lod);
+  }
+  roseWindow(k, 0, ph + portalH + 3.6, zf, Math.min(2.2, naveW * 0.3), sc, lod, rng.float());
+  // steps before the portal
+  for (let i = 0; i < 3; i++) k.box(-portalW / 2 - 0.8 - 0.3 * (2 - i), -1, zW + 0.3, portalW / 2 + 0.8 + 0.3 * (2 - i), ph * (i + 1) / 3, zW + 0.3 + 0.4 * (3 - i), SURF.ashlar, PART.plinth, mulc(sc, 0.95), { skip: ['bottom'], aoLow: 0.7 });
+  em.push({ p: [-portalW / 2 - 1.2, 0.9, zW + 1.2], kind: EMIT.brazier, size: 0.3 });
+  return { top: ph + tH + (spires ? 15.6 : 3.2), hw: W / 2 + 2.6, back: zE - ar - 0.6, front: zW + 1.6 };
 }
 
 /** library: a columned portico, steps, a pediment, tall windows (domed in later eras) */
@@ -1608,7 +2220,8 @@ function market(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng): number {
     if (spec.era < 7) {
       // awning on four poles: dyed cloth faded by the sun
       for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.cylinder(sx * 1.1, sz * 0.75, 0, sz > 0 ? 2.2 : 2.5, 0.04, 0.035, 5, SURF.beam, PART.frame, WOOD, {});
-      const cc = mulc(mixc(CLOTH[(i + spec.style) % CLOTH.length], [0.46, 0.42, 0.34], 0.45), 0.85);
+      // (weathered, sun-faded dyes: undyed linen and canvas mostly, the dyed ones dull)
+      const cc = (i + spec.style) % 3 === 0 ? mulc([0.42, 0.38, 0.3], 0.8 + 0.2 * rng.float()) : mulc(mixc(CLOTH[(i + spec.style) % CLOTH.length], [0.4, 0.36, 0.28], 0.5), 0.62);
       k.slab([-1.25, 2.2, 0.9], [1.25, 2.2, 0.9], [1.25, 2.55, -0.9], [-1.25, 2.55, -0.9], 0.03, SURF.cloth, PART.roof, cc, SURF.cloth, mulc(cc, 0.5), 1, rng.float());
     }
     crate(k, 1.4, -0.6, 0.5, 0.4, WOOD_GREY);
@@ -1814,8 +2427,13 @@ function tower(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng, em: Emitter
 
 /** dock: a plank pier on piles reaching out along +Z, bollards, crates, a moored boat */
 function dock(k: KitBuilder, spec: BuildingSpec, rng: Rng): number {
-  const W = Math.min(spec.w, 7), Lz = Math.max(spec.d, 12);
+  const W = Math.min(spec.w, 7), Lz0 = Math.max(spec.d, 12);
   const deck = 0.6;
+  // the pier runs back to the land: its landward end is carried on into the shore (the rising beach buries what is
+  // behind the waterline) — a quay standing alone out in the sea read as a floating slab
+  const back = 10;
+  k.push(0, 0, -back / 2);
+  const Lz = Lz0 + back;
   const stone = spec.mat.tier >= 2 && spec.era >= 6;
   if (stone) {
     // a quay of dark dressed stone, banded by the water: dry above the splash line, a dark wet band at the waterline,
@@ -1847,6 +2465,17 @@ function dock(k: KitBuilder, spec: BuildingSpec, rng: Rng): number {
       const z = -Lz / 2 + (i * Lz) / nz;
       k.cylinder(sx * (W / 2 - 0.2), z, -9, deck + (spec.lod === 0 ? 0.6 : 0), 0.16, 0.15, spec.lod === 0 ? 6 : 4, SURF.bark, PART.plinth, mulc(WOOD, 0.75), { top: true, aoLow: 0.3 });
     }
+    if (spec.lod === 0) {
+      // stringers under the deck, cross-braces between the pile bents down to the water, a rubbing strake
+      for (const sx of [-1, 1]) k.beam([sx * (W / 2 - 0.2), deck - 0.2, -Lz / 2], [sx * (W / 2 - 0.2), deck - 0.2, Lz / 2], 0.18, 0.22, SURF.beam, PART.plinth, mulc(WOOD, 0.65), 0.7);
+      for (let i = 0; i <= nz; i++) {
+        const z = -Lz / 2 + (i * Lz) / nz;
+        k.beam([-(W / 2 - 0.2), deck - 0.25, z], [W / 2 - 0.2, deck - 0.25, z], 0.16, 0.2, SURF.beam, PART.plinth, mulc(WOOD, 0.6), 0.7);
+        k.beam([-(W / 2 - 0.2), deck - 0.35, z], [W / 2 - 0.2, -0.6, z], 0.1, 0.1, SURF.beam, PART.plinth, mulc(WOOD, 0.55), 0.6);
+        k.beam([W / 2 - 0.2, deck - 0.35, z], [-(W / 2 - 0.2), -0.6, z], 0.1, 0.1, SURF.beam, PART.plinth, mulc(WOOD, 0.55), 0.6);
+      }
+      for (const sx of [-1, 1]) k.beam([sx * (W / 2 + 0.05), deck - 0.15, -Lz / 2], [sx * (W / 2 + 0.05), deck - 0.15, Lz / 2], 0.1, 0.18, SURF.beam, PART.plinth, mulc(WOOD_GREY, 0.7), 0.8);
+    }
     // deck planks across
     const planks = spec.lod === 0 ? Math.round(Lz / 0.3) : 1;
     for (let i = 0; i < planks; i++) {
@@ -1864,6 +2493,7 @@ function dock(k: KitBuilder, spec: BuildingSpec, rng: Rng): number {
     boat(k, 2.0, 7.0, spec.era >= 4, rng);
     k.pop();
   }
+  k.pop();
   return deck + 0.6;
 }
 
@@ -2442,7 +3072,7 @@ function houseOpts(kind: BuildingKind, spec: BuildingSpec): HouseOpts {
 
 /** build a building mesh for a spec (deterministic per spec) */
 export function buildingMesh(spec: BuildingSpec): BuildingMesh {
-  const rng = new Rng(9001 + spec.style * 131 + spec.era * 17 + Math.round(spec.mood * 3 + 3) * 7 + spec.kind.length * 1009 + Math.round(spec.w * 10) * 3 + Math.round(spec.d * 10));
+  const rng = new Rng(9001 + spec.style * 131 + spec.era * 17 + Math.round(spec.mood * 3 + 3) * 7 + spec.kind.length * 1009 + Math.round(spec.w * 10) * 3 + Math.round(spec.d * 10) + (spec.hv ?? 0) * 7717);
   const k = new KitBuilder();
   const L = lookFor(spec, rng);
   const em: Emitter[] = [];
@@ -2484,12 +3114,13 @@ export function buildingMesh(spec: BuildingSpec): BuildingMesh {
     case 'powerplant': h = powerplant(k, spec, L, rng, em); break;
     case 'refinery': h = refinery(k, spec, rng, em); break;
     case 'lab': h = lab(k, spec, L, rng, em); break;
-    default: h = house(k, spec, L, houseOpts(spec.kind, spec), rng, em); break;
+    default: h = house(k, spec, L, householdOpts(houseOpts(spec.kind, spec), spec.kind, spec), rng, em); break;
   }
   const b = k.bounds();
   return {
     geo: k.build(), height: Math.max(h, b.max[1]),
     hx: Math.max(Math.abs(b.min[0]), Math.abs(b.max[0])), hz: Math.max(Math.abs(b.min[2]), Math.abs(b.max[2])), emitters: em,
+    ext: [b.min[0], b.max[0], b.min[2], b.max[2]],
   };
 }
 
@@ -2511,7 +3142,7 @@ export function yardPropMesh(kind: YardProp, seed: number): BufferGeometry {
       woodPile(k, 1.6, 4, WOOD, rng);
       k.pop();
       // a little lean-to roof of boards over it
-      k.slab([-0.95, 1.05, 0.55], [0.95, 1.05, 0.55], [0.95, 1.35, -0.45], [-0.95, 1.35, -0.45], 0.04, SURF.planks, PART.prop, WOOD_GREY, SURF.planks, mulc(WOOD_GREY, 0.6));
+      k.slab([-0.95, 1.05, 0.55], [0.95, 1.05, 0.55], [0.95, 1.35, -0.45], [-0.95, 1.35, -0.45], 0.04, SURF.shingle, PART.prop, mulc(WOOD_GREY, 0.55), SURF.planks, mulc(WOOD_GREY, 0.4));
       for (const sx of [-0.9, 0.9]) { k.cylinder(sx, 0.5, -0.1, 1.05, 0.04, 0.04, 5, SURF.bark, PART.prop, WOOD_DARK, {}); k.cylinder(sx, -0.42, -0.1, 1.35, 0.04, 0.04, 5, SURF.bark, PART.prop, WOOD_DARK, {}); }
       break;
     }
@@ -2598,8 +3229,9 @@ export function scaffoldKindFor(kind: BuildingKind, mat: MaterialLook, H: number
  */
 export function scaffoldMesh(W: number, D: number, H: number, kind: ScaffoldKind = 'putlog'): BufferGeometry {
   const k = new KitBuilder();
-  const col: RGB = [0.24, 0.19, 0.12];
-  const fresh: RGB = [0.36, 0.28, 0.17];
+  // weathered poles and boards (pale timber read as white sticks in the sun)
+  const col: RGB = [0.17, 0.135, 0.09];
+  const fresh: RGB = [0.26, 0.2, 0.125];
   if (kind === 'ring') {
     // bent saplings: arcs over the footprint from side to side, lashed where they cross
     const R = Math.max(W, D) * 0.5 + 0.05;
@@ -2683,8 +3315,8 @@ export function scaffoldMesh(W: number, D: number, H: number, kind: ScaffoldKind
     k.beam([a, y, f], [b, y, f], 0.07, 0.07, SURF.bark, PART.frame, col, 0.9);
     k.beam([a, y, e], [a, y, f], 0.07, 0.07, SURF.bark, PART.frame, col, 0.9);
     k.beam([b, y, e], [b, y, f], 0.07, 0.07, SURF.bark, PART.frame, col, 0.9);
-    k.box(a, y + 0.035, e - 0.35, b, y + 0.08, e + 0.35, SURF.planks, PART.frame, [0.3, 0.24, 0.15], {});
-    k.box(a, y + 0.035, f - 0.35, b, y + 0.08, f + 0.35, SURF.planks, PART.frame, [0.3, 0.24, 0.15], {});
+    k.box(a, y + 0.035, e - 0.35, b, y + 0.08, e + 0.35, SURF.planks, PART.frame, [0.19, 0.15, 0.1], {});
+    k.box(a, y + 0.035, f - 0.35, b, y + 0.08, f + 0.35, SURF.planks, PART.frame, [0.19, 0.15, 0.1], {});
   }
   for (let i = 0; i < xs.length - 1; i += 2) {
     k.beam([xs[i], 0, -D / 2 - off], [xs[i + 1], Math.min(H, 4), -D / 2 - off], 0.05, 0.05, SURF.bark, PART.frame, col, 0.85);
@@ -2693,29 +3325,88 @@ export function scaffoldMesh(W: number, D: number, H: number, kind: ScaffoldKind
   return k.build();
 }
 
-/** a rubble heap (ruins, collapse, rebuilding sites): scattered blocks and a low mound, unit footprint radius */
+/**
+ * A rubble heap (ruins, collapse, rebuilding sites), unit footprint radius: an irregular low mound of earth and broken
+ * fill (no turned dome), tumbled blocks and wall chunks half sunk in it and spilled round its foot, and the fallen roof —
+ * charred timbers lying slantwise across it. Stone rubble is blocks and slabs; earthen rubble is lumps of clay brick,
+ * broken wattle and more timber.
+ */
 export function rubbleMesh(seed: number, stone: boolean): BufferGeometry {
   const k = new KitBuilder();
   const rng = new Rng(seed);
   const col: RGB = stone ? [0.3, 0.29, 0.27] : [0.22, 0.16, 0.1];
-  // the mound
-  const prof: [number, number][] = [[1.0, -0.3], [0.92, 0.05], [0.6, 0.22], [0.25, 0.3], [0.02, 0.32]];
-  k.lathe(0, 0, prof, 12, SURF.rubble, PART.prop, mulc(col, 0.7), 0.6, 0.9);
-  for (let i = 0; i < 26; i++) {
-    const a = rng.float() * Math.PI * 2, d = Math.sqrt(rng.float()) * 0.95;
-    const s = 0.05 + rng.float() * 0.09;
-    k.push(Math.cos(a) * d, 0.2 * (1 - d) - 0.02, Math.sin(a) * d, rng.float() * 6);
-    if (stone || rng.float() < 0.4) k.box(-s * 1.4, -s * 0.3, -s, s * 1.4, s, s, stone ? SURF.ashlar : SURF.mudbrick, PART.prop, mulc(col, 0.8 + rng.float() * 0.5), {});
-    else k.beam([-s * 4, 0, 0], [s * 4, s * 2, 0], s * 0.6, s * 0.6, SURF.beam, PART.prop, [0.05, 0.035, 0.025], 0.8);
-    k.pop();
+  const earth: RGB = stone ? [0.17, 0.155, 0.135] : [0.15, 0.11, 0.075];
+  // the mound: a polar height field with a ragged edge and lumps
+  const NR = 5, NA = 20;
+  const ph = [rng.float() * 6.28, rng.float() * 6.28, rng.float() * 6.28];
+  const edge = (a: number) => 0.86 + 0.1 * Math.sin(3 * a + ph[0]) + 0.06 * Math.sin(7 * a + ph[1]);
+  const height = (r: number, a: number) => {
+    const t = Math.max(0, 1 - r * r);
+    const lump = 0.6 + 0.25 * Math.sin(2 * a + ph[2] + r * 3) + 0.2 * Math.sin(5 * a + ph[1] - r * 4) + 0.15 * Math.cos(9 * a + ph[0] + r * 7);
+    return 0.27 * Math.pow(t, 0.75) * lump - 0.02;
+  };
+  const P = (i: number, j: number): V3 => {
+    const a = (j / NA) * Math.PI * 2, r = (i / NR) * edge(a);
+    return [Math.cos(a) * r, i === NR ? -0.06 : height(i / NR, a), Math.sin(a) * r];
+  };
+  const ids: number[][] = [];
+  for (let i = 0; i <= NR; i++) {
+    const row: number[] = [];
+    for (let j = 0; j <= NA; j++) {
+      const p = P(i, j % NA);
+      // normal from the neighbouring points
+      const pa = P(Math.min(NR, i + 1), j % NA), pb = P(Math.max(0, i - 1), j % NA), pc = P(i, (j + 1) % NA), pd = P(i, (j + NA - 1) % NA);
+      const u: V3 = [pa[0] - pb[0], pa[1] - pb[1], pa[2] - pb[2]], v: V3 = [pc[0] - pd[0], pc[1] - pd[1], pc[2] - pd[2]];
+      let n: V3 = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      if (i === 0) n = [0, 1, 0];
+      if (n[1] < 0) n = [-n[0], -n[1], -n[2]];
+      const shade = 0.75 + 0.3 * rng.float();
+      row.push(k.vert(p[0], p[1], p[2], n[0], n[1], n[2], stone ? SURF.rubble : SURF.earth, PART.prop, mulc(i >= NR - 1 ? earth : mixc(earth, col, 0.35), shade), i >= NR - 1 ? 0.7 : 0.85));
+    }
+    ids.push(row);
+  }
+  for (let i = 0; i < NR; i++) for (let j = 0; j < NA; j++) {
+    const a = ids[i][j], b = ids[i][j + 1], c = ids[i + 1][j], d = ids[i + 1][j + 1];
+    k.tri(a, b, d); k.tri(a, d, c);
+  }
+  // blocks and broken wall chunks, tumbled at all angles, sunk into the heap and spilled round its foot
+  const nb = stone ? 34 : 22;
+  for (let i = 0; i < nb; i++) {
+    const a = rng.float() * Math.PI * 2, d = Math.pow(rng.float(), 0.7) * 1.08;
+    const s = (stone ? 0.035 : 0.035) + Math.pow(rng.float(), 1.6) * (stone ? 0.07 : 0.05);
+    const cx = Math.cos(a) * d, cz = Math.sin(a) * d;
+    const y = Math.max(-0.02, height(Math.min(1, d), a)) - s * 0.35;
+    const dir: V3 = [Math.cos(rng.float() * 6.28), (rng.float() - 0.5) * 1.2, Math.sin(rng.float() * 6.28)];
+    const dl = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+    const L = s * (1.2 + rng.float() * 0.8);
+    const p0: V3 = [cx - (dir[0] / dl) * L, y - (dir[1] / dl) * L, cz - (dir[2] / dl) * L], p1: V3 = [cx + (dir[0] / dl) * L, y + (dir[1] / dl) * L, cz + (dir[2] / dl) * L];
+    const tone = 0.75 + rng.float() * 0.5;
+    if (stone || rng.float() < 0.55) k.beam(p0, p1, s * 1.5, s * (0.9 + rng.float() * 0.5), stone ? SURF.ashlar : SURF.mudbrick, PART.prop, mulc(col, tone), 0.85);
+    else k.beam(p0, p1, s * 0.5, s * 0.5, SURF.beam, PART.prop, [0.05, 0.035, 0.025], 0.8);
+  }
+  if (stone) {
+    // a few big slabs of fallen wall, leaning on the heap
+    for (let i = 0; i < 4; i++) {
+      const a = rng.float() * Math.PI * 2, d = 0.25 + rng.float() * 0.5;
+      const cx = Math.cos(a) * d, cz = Math.sin(a) * d, y = height(d, a);
+      const t = a + Math.PI / 2 + (rng.float() - 0.5) * 0.8, L = 0.18 + rng.float() * 0.12;
+      k.beam([cx - Math.cos(t) * L, y - 0.04, cz - Math.sin(t) * L], [cx + Math.cos(t) * L, y + 0.06 + rng.float() * 0.1, cz + Math.sin(t) * L], 0.2 + rng.float() * 0.12, 0.06, SURF.ashlar, PART.prop, mulc(col, 0.9 + rng.float() * 0.3), 0.85);
+    }
+  } else {
+    // broken wattle: thin withies sticking out of the clay
+    for (let i = 0; i < 10; i++) {
+      const a = rng.float() * Math.PI * 2, d = 0.2 + rng.float() * 0.7, y = height(d, a);
+      const t = rng.float() * 6.28;
+      k.beam([Math.cos(a) * d, y - 0.03, Math.sin(a) * d], [Math.cos(a) * d + Math.cos(t) * 0.18, y + 0.08 + rng.float() * 0.08, Math.sin(a) * d + Math.sin(t) * 0.18], 0.012, 0.012, SURF.bark, PART.prop, [0.12, 0.08, 0.05], 0.8);
+    }
   }
   // the fallen roof: long timbers lying slantwise across the heap, one end on the mound, one on the ground
-  const timbers = stone ? 3 : 6;
+  const timbers = stone ? 4 : 7;
   for (let i = 0; i < timbers; i++) {
     const a = rng.float() * Math.PI * 2, b = a + Math.PI * (0.55 + rng.float() * 0.9);
-    const r0 = 0.05 + rng.float() * 0.3, r1 = 0.75 + rng.float() * 0.35;
-    const t = 0.022 + rng.float() * 0.016;
-    k.beam([Math.cos(a) * r0, 0.26 + rng.float() * 0.06, Math.sin(a) * r0], [Math.cos(b) * r1, -0.01, Math.sin(b) * r1], t, t * 0.8, SURF.beam, PART.prop, [0.045, 0.032, 0.022], 0.75);
+    const r0 = 0.05 + rng.float() * 0.3, r1 = 0.8 + rng.float() * 0.4;
+    const t = 0.026 + rng.float() * 0.018;
+    k.beam([Math.cos(a) * r0, height(r0, a) + t * 0.6, Math.sin(a) * r0], [Math.cos(b) * r1, -0.01, Math.sin(b) * r1], t, t * 0.85, SURF.beam, PART.prop, [0.045, 0.032, 0.022], 0.75);
   }
   return k.build();
 }

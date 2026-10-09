@@ -23,7 +23,7 @@ import { AgentFlag, AnimState, BuildingFlag } from '../sim/types.ts';
 import type { IcoGrid } from '../sim/grid/icogrid.ts';
 import { Rng, hashFloat } from '../sim/core/rng.ts';
 import {
-  animalIndex, buildingAt, buildingIndex, itemIndex, lightKindForEra, materialIndex, speciesAt, speciesIndex,
+  animalAt, animalIndex, buildingAt, buildingIndex, itemIndex, lightKindForEra, materialIndex, speciesAt, speciesIndex,
 } from '../render/life/catalog.ts';
 import { extractRoads, roadWidth, type RoadChain } from '../render/life/roadnet.ts';
 
@@ -530,9 +530,12 @@ export class LookdevLife {
           const w = look.w * scale, d = look.d * scale;
           // side normal (left of travel = (−tz, tx))
           const nx = -tz * side, nz = tx * side;
-          const off = roadWidth(wear) * 0.5 + 1.6 + d / 2;
+          // households set their houses back and turn them a little each their own way (an even frontage along a
+          // street read as a toy town); the planned streets of later eras keep a straighter line
+          const loose = eraIdx(s.era) <= 6 ? 1 : 0.3;
+          const off = roadWidth(wear) * 0.5 + 1.6 + d / 2 + this.rng.float() * 2.4 * loose;
           const bx = px + nx * off, bz = pz + nz * off;
-          const rot = LookdevLife.heading(-nx, -nz);
+          const rot = LookdevLife.heading(-nx, -nz) + (this.rng.float() - 0.5) * 0.26 * loose;
           if (this.canPlace(s, bx, bz, w, d, rot)) {
             this.add(s, id, fb, mat, bx, bz, rot, scale);
             t += w + gap + this.rng.float() * gap;
@@ -851,12 +854,33 @@ export class LookdevLife {
   }
 
   private ring(s: Site, cx: number, cz: number, n: number, r0: number, r1: number, anims: number[], faceIn = true, carry = -1): void {
-    for (let i = 0; i < n; i++) {
+    // standers keep a little room round each other (a crowd packed at random stood in walls, bodies through bodies);
+    // in a loose crowd some talk in pairs and threes, turned to each other
+    const placed: [number, number][] = [];
+    const free = (x: number, z: number, d: number) => placed.every(([px, pz]) => (px - x) * (px - x) + (pz - z) * (pz - z) >= d * d);
+    let made = 0;
+    for (let tries = 0; made < n && tries < n * 6; tries++) {
       const a = this.rng.float() * Math.PI * 2, r = r0 + this.rng.float() * (r1 - r0);
       const x = cx + Math.sin(a) * r, z = cz + Math.cos(a) * r;
-      if (this.sample('water', this.toDir(s.frame, x, z)) > 0.05) continue;
-      const face = faceIn ? LookdevLife.heading(cx - x, cz - z) : this.rng.float() * Math.PI * 2;
-      this.stander(s, x, z, anims[Math.floor(this.rng.float() * anims.length)], face, carry);
+      if (!free(x, z, 0.85) || this.sample('water', this.toDir(s.frame, x, z)) > 0.05) continue;
+      const anim = anims[Math.floor(this.rng.float() * anims.length)];
+      let face = faceIn ? LookdevLife.heading(cx - x, cz - z) + (this.rng.float() - 0.5) * 0.7 : this.rng.float() * Math.PI * 2;
+      placed.push([x, z]);
+      made++;
+      if (!faceIn && (anim === AnimState.idle || anim === AnimState.teach) && this.rng.float() < 0.45 && made < n) {
+        // a partner (or two) facing this one, a pace away
+        const k = this.rng.float() < 0.3 ? 2 : 1;
+        for (let j = 0; j < k && made < n; j++) {
+          const pa = face + (j === 0 ? 0 : (this.rng.float() < 0.5 ? 1 : -1) * 1.1) + (this.rng.float() - 0.5) * 0.4, pd = 0.8 + this.rng.float() * 0.35;
+          const qx = x + Math.sin(pa) * pd, qz = z + Math.cos(pa) * pd;
+          if (!free(qx, qz, 0.7)) continue;
+          placed.push([qx, qz]);
+          made++;
+          this.stander(s, qx, qz, this.rng.float() < 0.6 ? AnimState.idle : AnimState.teach, LookdevLife.heading(x - qx, z - qz), carry);
+        }
+        face = LookdevLife.heading(Math.sin(face), Math.cos(face));
+      }
+      this.stander(s, x, z, anim, face, carry);
     }
   }
 
@@ -1040,7 +1064,11 @@ export class LookdevLife {
       const sea = (d: V3) => this.sample('water', d) > 3;
       const add = (sp: string, at: [number, number] | null, kind: Herd['kind'], n: number, radius: number, alt = 0, speed = 0.02) => {
         if (!at) return;
-        this.herd({ species: animalIndex(sp), cx: at[0], cz: at[1], site: s, radius, members: n, drift: rng.float() * 6.28, kind, alt, speed, seed: rng.float(), tint: tint(0), group: group++ });
+        // a species the content does not have (songbirds, gulls: the renderer's ambient flocks draw those) is left out —
+        // the lookup's fallback (the first animal, a deer) flew deer in circles over the fields
+        const idx = animalIndex(sp), look = animalAt(idx);
+        if (!look || (look.id !== sp && look.form !== sp)) return;
+        this.herd({ species: idx, cx: at[0], cz: at[1], site: s, radius, members: n, drift: rng.float() * 6.28, kind, alt, speed, seed: rng.float(), tint: tint(0), group: group++ });
       };
       if (s.kind === 'camp' || s.kind === 'village' || s.kind === 'town' || s.kind === 'hamlet') {
         add('deer', find(edge, 120, 320), 'graze', 6 + Math.floor(rng.float() * 6), 18);

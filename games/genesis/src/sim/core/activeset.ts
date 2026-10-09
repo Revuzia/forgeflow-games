@@ -51,6 +51,28 @@ export function collectFlags(flags: Uint8Array, out: Int32Array, n: number): num
   return k;
 }
 
+/** how many cells' two flag bytes share a set bit (a[c] & b[c] !== 0), counted up to `limit` (an early exit): 4 cells
+ * per word AND (SIM perf push 2 round 2: "how many sea cells are awake" — hAct is 1 for an awake pipe-mode cell between
+ * steps and the sea is never a sheet (8), ocean is 0 / 1 — asked every 4th tick at 1000x: a few µs on the home world) */
+export function countCommonBits(a: Uint8Array, b: Uint8Array, n: number, limit: number): number {
+  let k = 0;
+  const words = (a.byteOffset & 3) === 0 && (b.byteOffset & 3) === 0 ? n >> 2 : 0;
+  if (words) {
+    const wa = wordView(a, words), wb = wordView(b, words);
+    for (let i = 0; i < words; i++) {
+      const x = wa[i] & wb[i];
+      if (x === 0) continue;
+      if ((x & 0xff) !== 0) k++;
+      if ((x & 0xff00) !== 0) k++;
+      if ((x & 0xff0000) !== 0) k++;
+      if ((x >>> 24) !== 0) k++;
+      if (k >= limit) return k;
+    }
+  }
+  for (let c = words << 2; c < n && k < limit; c++) if ((a[c] & b[c]) !== 0) k++;
+  return k;
+}
+
 /** true when any flag is set */
 export function anyFlag(flags: Uint8Array, n: number): boolean {
   const words = (flags.byteOffset & 3) === 0 ? n >> 2 : 0;

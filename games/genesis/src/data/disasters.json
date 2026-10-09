@@ -1,0 +1,1846 @@
+{
+ "$comment": "Disasters (CONTRACT \u00a711.3): each is a live entity composed of effectors \u2014 impact (crater, shock, fire ring, dust, ejecta, meteor iron, tsunami at sea), area (field modifiers over time: drought, heat, cold, acid, radiation, deposits, lava, weather), front (a moving region: funnel, swarm, firestorm, monster), spread (contagion over cells / people: fire, plague, blight, infestation), quake (shaking by material, landslides, rifts, sinkholes, a wave off the coast), water (flood / tsunami / surge / tides impulses), global (planet parameters ramped over life: dust, light, gravity, magnetism, star activity, temperature) and spawn (herds, falling meteors, a falling moon, a rogue world). life in ticks (lifeYears overrides with planet years), radius metres, speed metres per tick, render = the renderer's initial parameters (the sim keeps them live), natural = expected events per planet-year where every listed condition holds.",
+ "disasters": [
+  {
+   "id": "meteor",
+   "name": "Meteor",
+   "desc": "A stone from the sky: a blinding fall, a crater, a ring of fire, iron in the ashes.",
+   "category": "sky",
+   "life": [
+    24,
+    24
+   ],
+   "radius": 120,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "impact",
+     "at": "end",
+     "crater": 1.4,
+     "craterK": 1,
+     "shock": 1.2,
+     "shockK": 2.6,
+     "fire": 0.9,
+     "fireK": 1.6,
+     "dust": 0.15,
+     "ejecta": 4,
+     "iron": true,
+     "sea": 10,
+     "kill": 0.9
+    }
+   ],
+   "render": {
+    "alt": 24000,
+    "speed": 1000,
+    "size": 12,
+    "dirX": 0,
+    "dirY": 0,
+    "dirZ": 0,
+    "glow": 1
+   },
+   "witness": {
+    "harm": 0.9,
+    "wonder": 0.6
+   },
+   "triggers": [
+    "meteor-iron",
+    "impact"
+   ],
+   "natural": {
+    "rate": 0.04,
+    "needs": []
+   },
+   "synonyms": [
+    "meteorite",
+    "shooting star",
+    "falling star",
+    "bolide",
+    "asteroid",
+    "space rock"
+   ]
+  },
+  {
+   "id": "meteor-shower",
+   "name": "Meteor shower",
+   "desc": "A night of falling stars: many small stones burn down across a wide land.",
+   "category": "sky",
+   "life": [
+    360,
+    480
+   ],
+   "radius": 900,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "spawn",
+     "what": "meteors",
+     "every": 12,
+     "size": 30,
+     "count": 1
+    },
+    {
+     "type": "global",
+     "activity": 0.1,
+     "ramp": 0.2
+    }
+   ],
+   "render": {
+    "density": 1,
+    "alt": 30000,
+    "dirX": 0,
+    "dirY": 0,
+    "dirZ": 0
+   },
+   "witness": {
+    "wonder": 0.6,
+    "harm": 0.2
+   },
+   "triggers": [
+    "meteor-iron",
+    "comet"
+   ],
+   "natural": {
+    "rate": 0.08,
+    "needs": []
+   },
+   "synonyms": [
+    "shooting stars",
+    "star shower",
+    "falling stars",
+    "rain of fire"
+   ]
+  },
+  {
+   "id": "comet",
+   "name": "Comet",
+   "desc": "A great comet hangs in the sky for days \u2014 then strikes: a crater wider than a town, fire, dust that dims the sun.",
+   "category": "sky",
+   "life": [
+    2880,
+    2880
+   ],
+   "radius": 420,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "impact",
+     "at": "end",
+     "crater": 2.2,
+     "craterK": 1,
+     "shock": 1.6,
+     "shockK": 3.5,
+     "fire": 1,
+     "fireK": 2.4,
+     "dust": 1.1,
+     "ejecta": 10,
+     "iron": true,
+     "sea": 40,
+     "kill": 1
+    },
+    {
+     "type": "global",
+     "activity": 0.15,
+     "ramp": 0.5
+    }
+   ],
+   "render": {
+    "alt": 400000,
+    "tail": 1,
+    "speed": 120,
+    "size": 60,
+    "dirX": 0,
+    "dirY": 0,
+    "dirZ": 0
+   },
+   "witness": {
+    "wonder": 0.4,
+    "harm": 0.3
+   },
+   "triggers": [
+    "comet",
+    "meteor-iron",
+    "impact"
+   ],
+   "synonyms": [
+    "great comet",
+    "dirty snowball",
+    "tailed star"
+   ]
+  },
+  {
+   "id": "swarm",
+   "name": "Swarm",
+   "desc": "A locust cloud darkens the sky and strips every field it crosses.",
+   "category": "life",
+   "life": [
+    2160,
+    3600
+   ],
+   "radius": 350,
+   "intensity": 1,
+   "speed": 6,
+   "effectors": [
+    {
+     "type": "spawn",
+     "what": "herd",
+     "animal": "locust-swarm",
+     "count": 40,
+     "at": "start"
+    },
+    {
+     "type": "front",
+     "every": 10,
+     "crops": 0.18,
+     "stores": 0.02,
+     "uproot": 0.0,
+     "grass": 0.08,
+     "wander": 0.3
+    }
+   ],
+   "render": {
+    "density": 1,
+    "height": 20
+   },
+   "witness": {
+    "harm": 0.5
+   },
+   "triggers": [
+    "famine",
+    "swarm"
+   ],
+   "natural": {
+    "rate": 0.25,
+    "needs": [
+     "crops",
+     "hot",
+     "grass"
+    ]
+   },
+   "synonyms": [
+    "locusts",
+    "locust swarm",
+    "plague of locusts",
+    "insects"
+   ]
+  },
+  {
+   "id": "volcano",
+   "name": "Volcano",
+   "desc": "The ground splits and a mountain of fire pours lava and ash over the land.",
+   "category": "earth",
+   "life": [
+    1440,
+    4320
+   ],
+   "radius": 260,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "quake",
+     "at": "start",
+     "magnitude": 5.5,
+     "damage": 0.5,
+     "harm": 0.3,
+     "landslide": 3
+    },
+    {
+     "type": "area",
+     "every": 10,
+     "lava": 1.2,
+     "lavaK": 0.35,
+     "fire": 0.5,
+     "deposit": {
+      "material": "ash",
+      "m": 0.004
+     },
+     "harm": 0.04,
+     "damage": 0.03,
+     "weather": "ashfall",
+     "herds": 0.03,
+     "veg": {
+      "grass": 0.05,
+      "shrub": 0.05,
+      "tree": 0.05,
+      "crop": 0.08
+     }
+    },
+    {
+     "type": "global",
+     "dust": 0.35,
+     "ramp": 0.3
+    },
+    {
+     "type": "impact",
+     "at": "start",
+     "crater": 0,
+     "shock": 0.4,
+     "shockK": 1.5,
+     "fire": 0.6,
+     "fireK": 1.0,
+     "kill": 0.3
+    }
+   ],
+   "render": {
+    "plume": 1800,
+    "lava": 1,
+    "glow": 1,
+    "height": 300
+   },
+   "witness": {
+    "harm": 0.6,
+    "wonder": 0.6
+   },
+   "triggers": [
+    "eruption",
+    "volcanic",
+    "fire"
+   ],
+   "natural": {
+    "rate": 0.8,
+    "needs": [
+     "volcanic"
+    ]
+   },
+   "synonyms": [
+    "eruption",
+    "erupt",
+    "fire mountain",
+    "lava mountain"
+   ]
+  },
+  {
+   "id": "supervolcano",
+   "name": "Supervolcano",
+   "desc": "A caldera tens of kilometres wide opens: ash buries the land, the sky goes dark for a year.",
+   "category": "earth",
+   "life": [
+    4320,
+    8640
+   ],
+   "radius": 900,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "quake",
+     "at": "start",
+     "magnitude": 7.5,
+     "damage": 1,
+     "harm": 0.6,
+     "landslide": 8
+    },
+    {
+     "type": "area",
+     "every": 10,
+     "lava": 2.4,
+     "lavaK": 0.4,
+     "fire": 0.8,
+     "deposit": {
+      "material": "ash",
+      "m": 0.03
+     },
+     "harm": 0.12,
+     "damage": 0.08,
+     "weather": "ashfall",
+     "herds": 0.08,
+     "veg": {
+      "grass": 0.15,
+      "shrub": 0.15,
+      "tree": 0.12,
+      "crop": 0.2
+     }
+    },
+    {
+     "type": "global",
+     "dust": 2.4,
+     "temp": -6,
+     "ramp": 0.25
+    },
+    {
+     "type": "impact",
+     "at": "start",
+     "crater": 1.2,
+     "craterK": 0.6,
+     "shock": 1,
+     "shockK": 2.5,
+     "fire": 1,
+     "fireK": 1.4,
+     "kill": 0.8
+    }
+   ],
+   "render": {
+    "plume": 6000,
+    "lava": 2,
+    "glow": 1.5,
+    "height": 800
+   },
+   "witness": {
+    "harm": 1,
+    "wonder": 0.5
+   },
+   "triggers": [
+    "eruption",
+    "volcanic"
+   ],
+   "natural": {
+    "rate": 0.02,
+    "needs": [
+     "volcanic"
+    ]
+   },
+   "synonyms": [
+    "super volcano",
+    "caldera",
+    "yellowstone",
+    "the big eruption"
+   ]
+  },
+  {
+   "id": "quake",
+   "name": "Earthquake",
+   "desc": "The ground shakes: weak walls fall first, slopes slide, the coast may send back a wave.",
+   "category": "earth",
+   "life": [
+    60,
+    120
+   ],
+   "radius": 600,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "quake",
+     "at": "start",
+     "magnitude": 6.5,
+     "damage": 1,
+     "harm": 0.45,
+     "landslide": 4,
+     "tsunami": 10,
+     "aftershocks": 3,
+     "every": 20
+    }
+   ],
+   "render": {
+    "magnitude": 6.5,
+    "shake": 1
+   },
+   "witness": {
+    "harm": 0.8
+   },
+   "triggers": [
+    "quake"
+   ],
+   "natural": {
+    "rate": 1.0,
+    "needs": [
+     "rift"
+    ]
+   },
+   "synonyms": [
+    "earthquake",
+    "tremor",
+    "shake",
+    "shaking",
+    "seism"
+   ]
+  },
+  {
+   "id": "sinkhole",
+   "name": "Sinkhole",
+   "desc": "The ground opens and swallows what stood on it.",
+   "category": "earth",
+   "life": [
+    30,
+    30
+   ],
+   "radius": 70,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "quake",
+     "at": "start",
+     "magnitude": 3.5,
+     "damage": 0.3,
+     "harm": 0.1,
+     "rift": 0,
+     "sink": 30
+    }
+   ],
+   "render": {
+    "depth": 30
+   },
+   "witness": {
+    "harm": 0.6,
+    "wonder": 0.4
+   },
+   "natural": {
+    "rate": 0.1,
+    "needs": [
+     "wet",
+     "settled"
+    ]
+   },
+   "synonyms": [
+    "sink hole",
+    "the ground opens",
+    "pit"
+   ]
+  },
+  {
+   "id": "rift",
+   "name": "Rift",
+   "desc": "A crack runs across the land, lava welling in its floor.",
+   "category": "earth",
+   "life": [
+    360,
+    720
+   ],
+   "radius": 700,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "quake",
+     "at": "start",
+     "magnitude": 6.8,
+     "damage": 0.8,
+     "harm": 0.4,
+     "rift": 25,
+     "riftLava": 0.6,
+     "landslide": 3
+    },
+    {
+     "type": "area",
+     "every": 30,
+     "lava": 0.25,
+     "lavaK": 0.15,
+     "fire": 0.3,
+     "harm": 0.01
+    }
+   ],
+   "render": {
+    "length": 1400,
+    "glow": 1,
+    "depth": 25
+   },
+   "witness": {
+    "harm": 0.7,
+    "wonder": 0.6
+   },
+   "triggers": [
+    "quake",
+    "volcanic"
+   ],
+   "natural": {
+    "rate": 0.05,
+    "needs": [
+     "rift"
+    ]
+   },
+   "synonyms": [
+    "crack",
+    "chasm",
+    "fissure",
+    "the earth splits"
+   ]
+  },
+  {
+   "id": "flood",
+   "name": "Flood",
+   "desc": "Rivers burst their banks and the low places drown.",
+   "category": "water",
+   "life": [
+    600,
+    1200
+   ],
+   "radius": 380,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "water",
+     "at": "start",
+     "mode": "flood",
+     "height": 5
+    },
+    {
+     "type": "water",
+     "at": "each",
+     "every": 120,
+     "mode": "flood",
+     "height": 1.2
+    },
+    {
+     "type": "area",
+     "every": 60,
+     "weather": "rain",
+     "harm": 0.01,
+     "damage": 0.03,
+     "veg": {
+      "crop": 0.06
+     },
+     "herds": 0.02
+    }
+   ],
+   "render": {
+    "height": 5
+   },
+   "witness": {
+    "harm": 0.5
+   },
+   "triggers": [
+    "flood"
+   ],
+   "natural": {
+    "rate": 0.4,
+    "needs": [
+     "wet",
+     "settled"
+    ]
+   },
+   "synonyms": [
+    "deluge",
+    "inundation",
+    "floods",
+    "rising waters",
+    "high water"
+   ]
+  },
+  {
+   "id": "tsunami",
+   "name": "Tsunami",
+   "desc": "A wall of water rises from the sea and runs inland.",
+   "category": "water",
+   "life": [
+    120,
+    180
+   ],
+   "radius": 420,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "water",
+     "at": "start",
+     "mode": "tsunami",
+     "height": 16
+    },
+    {
+     "type": "area",
+     "every": 20,
+     "damage": 0.12,
+     "harm": 0.08,
+     "herds": 0.05,
+     "veg": {
+      "crop": 0.2,
+      "shrub": 0.1
+     }
+    }
+   ],
+   "render": {
+    "height": 16,
+    "front": 1
+   },
+   "witness": {
+    "harm": 0.9,
+    "wonder": 0.3
+   },
+   "triggers": [
+    "flood",
+    "tsunami"
+   ],
+   "synonyms": [
+    "tidal wave",
+    "giant wave",
+    "wall of water"
+   ]
+  },
+  {
+   "id": "drought",
+   "name": "Drought",
+   "desc": "No rain for weeks: wells sink, crops wither, the herds wander off.",
+   "category": "weather",
+   "life": [
+    5760,
+    10080
+   ],
+   "radius": 1200,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "area",
+     "every": 60,
+     "moisture": 0.93,
+     "aquifer": 0.02,
+     "veg": {
+      "crop": 0.02,
+      "grass": 0.015,
+      "shrub": 0.006
+     },
+     "weather": "clear",
+     "drain": 0.15,
+     "temp": 0.08,
+     "herds": 0.004
+    }
+   ],
+   "render": {
+    "dryness": 1
+   },
+   "witness": {
+    "harm": 0.3
+   },
+   "triggers": [
+    "drought",
+    "famine"
+   ],
+   "natural": {
+    "rate": 0.5,
+    "needs": [
+     "dry",
+     "crops"
+    ]
+   },
+   "synonyms": [
+    "dry spell",
+    "no rain",
+    "dryness",
+    "the rains fail"
+   ]
+  },
+  {
+   "id": "hurricane",
+   "name": "Hurricane",
+   "desc": "A great spiral storm comes off the sea: wind, rain, and a surge of water at the coast.",
+   "category": "weather",
+   "life": [
+    1440,
+    2880
+   ],
+   "radius": 900,
+   "intensity": 1,
+   "speed": 1.4,
+   "effectors": [
+    {
+     "type": "front",
+     "every": 10,
+     "damage": 0.06,
+     "harm": 0.02,
+     "uproot": 0.04,
+     "crops": 0.04,
+     "weather": "hurricane",
+     "wander": 0.05,
+     "lift": 0.0
+    },
+    {
+     "type": "water",
+     "at": "each",
+     "every": 180,
+     "mode": "surge",
+     "height": 3
+    }
+   ],
+   "render": {
+    "eye": 80,
+    "spin": 1,
+    "height": 1200
+   },
+   "witness": {
+    "harm": 0.6,
+    "wonder": 0.3
+   },
+   "triggers": [
+    "storm",
+    "flood"
+   ],
+   "natural": {
+    "rate": 0.25,
+    "needs": [
+     "sea",
+     "hot",
+     "storms"
+    ]
+   },
+   "synonyms": [
+    "cyclone",
+    "typhoon",
+    "hurricanes",
+    "great storm"
+   ]
+  },
+  {
+   "id": "tornado",
+   "name": "Tornado",
+   "desc": "A twisting funnel walks across the land, flinging roofs, trees and people.",
+   "category": "weather",
+   "life": [
+    180,
+    360
+   ],
+   "radius": 60,
+   "intensity": 1,
+   "speed": 12,
+   "effectors": [
+    {
+     "type": "front",
+     "every": 2,
+     "damage": 0.35,
+     "harm": 0.25,
+     "uproot": 0.4,
+     "crops": 0.3,
+     "weather": "thunderstorm",
+     "wander": 0.4,
+     "lift": 0.25,
+     "herds": 0.2
+    }
+   ],
+   "render": {
+    "height": 900,
+    "width": 60,
+    "spin": 1
+   },
+   "witness": {
+    "harm": 0.7,
+    "wonder": 0.4
+   },
+   "triggers": [
+    "storm"
+   ],
+   "natural": {
+    "rate": 0.3,
+    "needs": [
+     "storms",
+     "grass"
+    ]
+   },
+   "synonyms": [
+    "twister",
+    "whirlwind",
+    "cyclone funnel",
+    "funnel cloud"
+   ]
+  },
+  {
+   "id": "wildfire",
+   "name": "Wildfire",
+   "desc": "Fire runs through dry country faster than people can flee.",
+   "category": "fire",
+   "life": [
+    1440,
+    2880
+   ],
+   "radius": 300,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "spread",
+     "what": "fire",
+     "every": 15,
+     "rate": 0.5,
+     "strength": 0.85
+    },
+    {
+     "type": "area",
+     "every": 30,
+     "harm": 0.01,
+     "herds": 0.02
+    }
+   ],
+   "render": {
+    "height": 14,
+    "smoke": 1
+   },
+   "witness": {
+    "harm": 0.5
+   },
+   "triggers": [
+    "wildfire",
+    "fire"
+   ],
+   "natural": {
+    "rate": 0.8,
+    "needs": [
+     "forest",
+     "dry"
+    ]
+   },
+   "synonyms": [
+    "forest fire",
+    "bushfire",
+    "brush fire",
+    "fire storm in the woods",
+    "blaze"
+   ]
+  },
+  {
+   "id": "firestorm",
+   "name": "Firestorm",
+   "desc": "Fire makes its own wind: a storm of flame that nothing in its path survives.",
+   "category": "fire",
+   "life": [
+    480,
+    900
+   ],
+   "radius": 350,
+   "intensity": 1.2,
+   "speed": 4,
+   "effectors": [
+    {
+     "type": "spread",
+     "what": "fire",
+     "every": 5,
+     "rate": 0.85,
+     "strength": 1
+    },
+    {
+     "type": "front",
+     "every": 5,
+     "damage": 0.15,
+     "harm": 0.12,
+     "uproot": 0.1,
+     "burn": 0.9,
+     "wander": 0.2
+    }
+   ],
+   "render": {
+    "height": 40,
+    "smoke": 2
+   },
+   "witness": {
+    "harm": 0.9
+   },
+   "triggers": [
+    "wildfire",
+    "fire"
+   ],
+   "synonyms": [
+    "fire storm",
+    "storm of fire",
+    "inferno",
+    "holocaust of flame"
+   ]
+  },
+  {
+   "id": "plague",
+   "name": "Plague",
+   "desc": "A sickness passes from hand to hand through the towns.",
+   "category": "life",
+   "life": [
+    4320,
+    8640
+   ],
+   "radius": 1200,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "spread",
+     "what": "plague",
+     "every": 360,
+     "disease": "plague",
+     "strength": 4,
+     "rate": 0.5
+    }
+   ],
+   "render": {
+    "miasma": 1
+   },
+   "witness": {
+    "harm": 0.6
+   },
+   "triggers": [
+    "plague"
+   ],
+   "synonyms": [
+    "pestilence",
+    "epidemic",
+    "black death",
+    "pox",
+    "the sickness"
+   ]
+  },
+  {
+   "id": "blight",
+   "name": "Blight",
+   "desc": "A rot spreads through fields and woods.",
+   "category": "life",
+   "life": [
+    4320,
+    8640
+   ],
+   "radius": 900,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "spread",
+     "what": "blight",
+     "every": 60,
+     "rate": 0.4,
+     "strength": 0.25
+    }
+   ],
+   "render": {
+    "tint": 1
+   },
+   "witness": {
+    "harm": 0.3
+   },
+   "triggers": [
+    "blight",
+    "famine"
+   ],
+   "natural": {
+    "rate": 0.3,
+    "needs": [
+     "crops",
+     "wet"
+    ]
+   },
+   "synonyms": [
+    "crop rot",
+    "rot",
+    "mildew",
+    "withering"
+   ]
+  },
+  {
+   "id": "infestation",
+   "name": "Infestation",
+   "desc": "Rats and weevils swarm the granaries and the fields.",
+   "category": "life",
+   "life": [
+    2880,
+    5760
+   ],
+   "radius": 600,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "spread",
+     "what": "infestation",
+     "every": 60,
+     "rate": 0.35,
+     "strength": 0.06
+    },
+    {
+     "type": "spawn",
+     "what": "herd",
+     "animal": "rabbit",
+     "count": 30,
+     "at": "start"
+    }
+   ],
+   "render": {
+    "density": 1
+   },
+   "witness": {
+    "harm": 0.3
+   },
+   "triggers": [
+    "famine"
+   ],
+   "natural": {
+    "rate": 0.2,
+    "needs": [
+     "crops",
+     "settled"
+    ]
+   },
+   "synonyms": [
+    "vermin",
+    "rats",
+    "pests",
+    "weevils",
+    "mice"
+   ]
+  },
+  {
+   "id": "solar-flare",
+   "name": "Solar flare",
+   "desc": "The star throws off a storm of light: skies burn with auroras, the day side is scorched.",
+   "category": "space",
+   "life": [
+    240,
+    480
+   ],
+   "radius": 3000,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "global",
+     "activity": 0.9,
+     "magnetism": -0.2,
+     "ramp": 0.15
+    },
+    {
+     "type": "area",
+     "every": 30,
+     "radiation": 0.35,
+     "sunlit": true,
+     "fire": 0.1,
+     "veg": {
+      "crop": 0.02
+     },
+     "harm": 0.01
+    }
+   ],
+   "render": {
+    "activity": 0.9,
+    "aurora": 1
+   },
+   "witness": {
+    "wonder": 0.7,
+    "harm": 0.2
+   },
+   "triggers": [
+    "flare"
+   ],
+   "natural": {
+    "rate": 0.15,
+    "needs": []
+   },
+   "synonyms": [
+    "flare",
+    "sun storm",
+    "solar storm",
+    "coronal mass ejection"
+   ]
+  },
+  {
+   "id": "impact-winter",
+   "name": "Impact winter",
+   "desc": "Dust hides the sun: a year of cold and failed harvests.",
+   "category": "sky",
+   "life": [
+    8640,
+    8640
+   ],
+   "radius": 3000,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "global",
+     "dust": 2.8,
+     "temp": -4,
+     "ramp": 0.15
+    },
+    {
+     "type": "area",
+     "every": 120,
+     "veg": {
+      "crop": 0.03,
+      "grass": 0.01
+     },
+     "herds": 0.01
+    }
+   ],
+   "render": {
+    "dust": 2.8
+   },
+   "witness": {
+    "harm": 0.4,
+    "wonder": 0.2
+   },
+   "triggers": [
+    "famine"
+   ],
+   "synonyms": [
+    "nuclear winter",
+    "dark sky",
+    "year without a summer",
+    "volcanic winter"
+   ],
+   "lifeYears": 0.75
+  },
+  {
+   "id": "gravity-slip",
+   "name": "Gravity slip",
+   "desc": "For a while the world lets go: people, beasts and loose things drift up \u2014 and fall.",
+   "category": "world",
+   "life": [
+    120,
+    180
+   ],
+   "radius": 500,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "global",
+     "gravity": -0.8,
+     "ramp": 0.2
+    },
+    {
+     "type": "front",
+     "every": 10,
+     "lift": 0.6,
+     "harm": 0.0,
+     "damage": 0.02
+    }
+   ],
+   "render": {
+    "lift": 1
+   },
+   "witness": {
+    "harm": 0.4,
+    "wonder": 0.9
+   },
+   "triggers": [
+    "miracle"
+   ],
+   "synonyms": [
+    "gravity fails",
+    "weightlessness",
+    "float",
+    "antigravity",
+    "levitation"
+   ]
+  },
+  {
+   "id": "magnetic-storm",
+   "name": "Magnetic storm",
+   "desc": "The world's shield flickers: auroras at noon, birds lost, a rain of hard light.",
+   "category": "space",
+   "life": [
+    1440,
+    2880
+   ],
+   "radius": 3000,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "global",
+     "magnetism": -0.7,
+     "activity": 0.4,
+     "ramp": 0.2
+    },
+    {
+     "type": "area",
+     "every": 60,
+     "radiation": 0.2,
+     "weather": "aurora-storm",
+     "harm": 0.003
+    }
+   ],
+   "render": {
+    "aurora": 1
+   },
+   "witness": {
+    "wonder": 0.8
+   },
+   "synonyms": [
+    "geomagnetic storm",
+    "aurora storm",
+    "pole flip",
+    "magnetic reversal"
+   ]
+  },
+  {
+   "id": "eclipse",
+   "name": "Year-long eclipse",
+   "desc": "Something stands before the sun for a whole year. Cold, dark, and the end of the world foretold.",
+   "category": "sky",
+   "life": [
+    17280,
+    17280
+   ],
+   "radius": 3000,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "global",
+     "light": -0.82,
+     "temp": -3,
+     "ramp": 0.04
+    },
+    {
+     "type": "area",
+     "every": 240,
+     "veg": {
+      "crop": 0.01,
+      "grass": 0.005
+     }
+    }
+   ],
+   "render": {
+    "coverage": 0.82
+   },
+   "witness": {
+    "wonder": 0.6,
+    "harm": 0.3
+   },
+   "triggers": [
+    "eclipse",
+    "eclipse-long"
+   ],
+   "synonyms": [
+    "year-long eclipse",
+    "long night",
+    "darkness",
+    "eclipse of the sun",
+    "black sun"
+   ],
+   "lifeYears": 1
+  },
+  {
+   "id": "moon-fall",
+   "name": "Second moon falling",
+   "desc": "A moon breaks its orbit and falls: tides tear the coasts for days, then it strikes.",
+   "category": "world",
+   "life": [
+    4320,
+    4320
+   ],
+   "radius": 900,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "spawn",
+     "what": "moon",
+     "at": "start"
+    },
+    {
+     "type": "water",
+     "at": "each",
+     "every": 240,
+     "mode": "tides",
+     "height": 4
+    },
+    {
+     "type": "quake",
+     "at": "each",
+     "every": 360,
+     "magnitude": 5.5,
+     "damage": 0.3,
+     "harm": 0.1
+    },
+    {
+     "type": "impact",
+     "at": "end",
+     "crater": 3,
+     "craterK": 1,
+     "shock": 2,
+     "shockK": 4,
+     "fire": 1,
+     "fireK": 3,
+     "dust": 3.5,
+     "ejecta": 16,
+     "iron": true,
+     "sea": 60,
+     "kill": 1
+    }
+   ],
+   "render": {
+    "alt": 60000,
+    "size": 400,
+    "dirX": 0,
+    "dirY": 0,
+    "dirZ": 0,
+    "tide": 1
+   },
+   "witness": {
+    "wonder": 0.6,
+    "harm": 0.6
+   },
+   "triggers": [
+    "impact",
+    "meteor-iron",
+    "comet"
+   ],
+   "synonyms": [
+    "falling moon",
+    "moon fall",
+    "moonfall",
+    "the moon falls",
+    "second moon"
+   ]
+  },
+  {
+   "id": "rogue-flyby",
+   "name": "Rogue planet flyby",
+   "desc": "A wandering world passes close: tides, quakes, a long night of strange light, a bent orbit.",
+   "category": "world",
+   "life": [
+    2880,
+    4320
+   ],
+   "radius": 3000,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "spawn",
+     "what": "rogue",
+     "at": "start"
+    },
+    {
+     "type": "water",
+     "at": "each",
+     "every": 360,
+     "mode": "tides",
+     "height": 3
+    },
+    {
+     "type": "quake",
+     "at": "each",
+     "every": 480,
+     "magnitude": 5,
+     "damage": 0.25,
+     "harm": 0.08
+    },
+    {
+     "type": "global",
+     "magnetism": -0.3,
+     "eccentricity": 0.04,
+     "ramp": 0.3
+    }
+   ],
+   "render": {
+    "dist": 80000,
+    "size": 2500,
+    "bearing": 0
+   },
+   "witness": {
+    "wonder": 0.9,
+    "harm": 0.2
+   },
+   "triggers": [
+    "comet",
+    "eclipse"
+   ],
+   "synonyms": [
+    "rogue planet",
+    "wandering world",
+    "flyby",
+    "close encounter",
+    "passing planet"
+   ]
+  },
+  {
+   "id": "acid-rain",
+   "name": "Acid rain",
+   "desc": "Rain that burns leaves, pocks stone and stings the skin.",
+   "category": "weather",
+   "life": [
+    1440,
+    2880
+   ],
+   "radius": 700,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "area",
+     "every": 30,
+     "weather": "acid-rain",
+     "toxic": 0.004,
+     "veg": {
+      "tree": 0.01,
+      "shrub": 0.012,
+      "crop": 0.02,
+      "grass": 0.008
+     },
+     "damage": 0.01,
+     "harm": 0.004
+    }
+   ],
+   "render": {
+    "acid": 1
+   },
+   "witness": {
+    "harm": 0.4
+   },
+   "synonyms": [
+    "acid storm",
+    "burning rain",
+    "poison rain"
+   ]
+  },
+  {
+   "id": "ice-age",
+   "name": "Ice age",
+   "desc": "The cold comes down from the poles and does not leave: glaciers, frozen seas, short summers.",
+   "category": "weather",
+   "life": [
+    34560,
+    34560
+   ],
+   "radius": 3000,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "global",
+     "temp": -14,
+     "ramp": 0.2
+    },
+    {
+     "type": "area",
+     "every": 240,
+     "deposit": {
+      "material": "snow",
+      "m": 0.05
+     },
+     "poleward": true
+    }
+   ],
+   "render": {
+    "cold": 1
+   },
+   "witness": {
+    "harm": 0.3,
+    "wonder": 0.2
+   },
+   "triggers": [
+    "cold"
+   ],
+   "synonyms": [
+    "glaciation",
+    "great cold",
+    "eternal winter",
+    "the long winter",
+    "snowball"
+   ],
+   "lifeYears": 2
+  },
+  {
+   "id": "heat-wave",
+   "name": "Heat wave",
+   "desc": "Weeks of killing heat: the old and the weak fall, fields burn brown.",
+   "category": "weather",
+   "life": [
+    2880,
+    4320
+   ],
+   "radius": 1100,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "area",
+     "every": 60,
+     "weather": "heatwave",
+     "moisture": 0.96,
+     "temp": 0.12,
+     "veg": {
+      "crop": 0.015,
+      "grass": 0.01
+     },
+     "harm": 0.006,
+     "fire": 0.04
+    }
+   ],
+   "render": {
+    "heat": 1
+   },
+   "witness": {
+    "harm": 0.4
+   },
+   "triggers": [
+    "drought"
+   ],
+   "natural": {
+    "rate": 0.4,
+    "needs": [
+     "hot",
+     "settled"
+    ]
+   },
+   "synonyms": [
+    "heatwave",
+    "scorching heat",
+    "hot spell",
+    "burning summer"
+   ]
+  },
+  {
+   "id": "dust-bowl",
+   "name": "Dust bowl",
+   "desc": "Overworked land dries and blows away; black blizzards bury the farms.",
+   "category": "weather",
+   "life": [
+    5760,
+    8640
+   ],
+   "radius": 1100,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "area",
+     "every": 60,
+     "weather": "sandstorm",
+     "moisture": 0.94,
+     "deposit": {
+      "material": "sand",
+      "m": 0.006
+     },
+     "veg": {
+      "crop": 0.025,
+      "grass": 0.02
+     },
+     "strip": {
+      "soil": 0.002
+     },
+     "harm": 0.002
+    }
+   ],
+   "render": {
+    "dust": 1
+   },
+   "witness": {
+    "harm": 0.4
+   },
+   "triggers": [
+    "drought",
+    "famine"
+   ],
+   "natural": {
+    "rate": 0.15,
+    "needs": [
+     "dry",
+     "crops",
+     "grass"
+    ]
+   },
+   "synonyms": [
+    "dustbowl",
+    "black blizzard",
+    "dust storms",
+    "the soil blows away"
+   ]
+  },
+  {
+   "id": "glass-storm",
+   "name": "Glass storm",
+   "desc": "Lightning walks the dunes all night; morning finds the sand fused into rivers of glass.",
+   "category": "weather",
+   "life": [
+    360,
+    720
+   ],
+   "radius": 600,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "area",
+     "every": 10,
+     "weather": "thunderstorm",
+     "lightning": 2,
+     "glass": 0.08,
+     "fire": 0.15,
+     "harm": 0.01
+    }
+   ],
+   "render": {
+    "bolts": 1
+   },
+   "witness": {
+    "wonder": 0.7,
+    "harm": 0.2
+   },
+   "triggers": [
+    "lightning-dune",
+    "lightning"
+   ],
+   "natural": {
+    "rate": 0.1,
+    "needs": [
+     "sand",
+     "storms"
+    ]
+   },
+   "synonyms": [
+    "glass rain",
+    "lightning storm on the dunes",
+    "fulgurite storm"
+   ]
+  },
+  {
+   "id": "overgrowth",
+   "name": "Overgrowth",
+   "desc": "The green goes mad: vines split walls, forest swallows fields and roads in days.",
+   "category": "life",
+   "life": [
+    2880,
+    4320
+   ],
+   "radius": 500,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "area",
+     "every": 30,
+     "grow": {
+      "tree": 0.04,
+      "shrub": 0.05,
+      "grass": 0.05
+     },
+     "damage": 0.012,
+     "roads": 0.05,
+     "veg": {
+      "crop": 0.03
+     },
+     "fertility": 0.01
+    }
+   ],
+   "render": {
+    "bloom": 1
+   },
+   "witness": {
+    "wonder": 0.6,
+    "harm": 0.2
+   },
+   "triggers": [
+    "miracle-forest",
+    "forest"
+   ],
+   "synonyms": [
+    "the green madness",
+    "jungle rises",
+    "verdant surge",
+    "plant explosion"
+   ]
+  },
+  {
+   "id": "leviathan",
+   "name": "Leviathan",
+   "desc": "Something vast rises from the deep and walks the shallows, wrecking boats and harbours.",
+   "category": "water",
+   "life": [
+    1440,
+    2880
+   ],
+   "radius": 140,
+   "intensity": 1,
+   "speed": 10,
+   "effectors": [
+    {
+     "type": "front",
+     "every": 5,
+     "damage": 0.4,
+     "harm": 0.3,
+     "coastal": true,
+     "wander": 0.3,
+     "herds": 0.4
+    },
+    {
+     "type": "water",
+     "at": "each",
+     "every": 60,
+     "mode": "surge",
+     "height": 2
+    }
+   ],
+   "render": {
+    "height": 40,
+    "length": 120
+   },
+   "witness": {
+    "harm": 0.8,
+    "wonder": 0.8
+   },
+   "triggers": [
+    "storm-at-sea"
+   ],
+   "synonyms": [
+    "sea monster",
+    "kraken",
+    "sea serpent",
+    "monster from the deep"
+   ]
+  },
+  {
+   "id": "forgetting-fog",
+   "name": "Forgetting fog",
+   "desc": "A grey mist settles and people walk out of it not knowing what they knew. Only what is written survives.",
+   "category": "life",
+   "life": [
+    1440,
+    2880
+   ],
+   "radius": 500,
+   "intensity": 1,
+   "speed": 0,
+   "effectors": [
+    {
+     "type": "area",
+     "every": 60,
+     "weather": "fog",
+     "forget": 0.08,
+     "harm": 0
+    }
+   ],
+   "render": {
+    "density": 1
+   },
+   "witness": {
+    "wonder": 0.5,
+    "harm": 0.4
+   },
+   "synonyms": [
+    "mind fog",
+    "the great forgetting",
+    "fog of forgetting",
+    "amnesia"
+   ]
+  },
+  {
+   "id": "stampede",
+   "name": "Stampede",
+   "desc": "The herds panic: a thundering river of beasts tramples fields, fences and anyone in the way.",
+   "category": "life",
+   "life": [
+    120,
+    240
+   ],
+   "radius": 120,
+   "intensity": 1,
+   "speed": 9,
+   "effectors": [
+    {
+     "type": "front",
+     "every": 2,
+     "damage": 0.08,
+     "harm": 0.3,
+     "crops": 0.4,
+     "grass": 0.2,
+     "wander": 0.15
+    }
+   ],
+   "render": {
+    "dust": 1
+   },
+   "witness": {
+    "harm": 0.5
+   },
+   "natural": {
+    "rate": 0.1,
+    "needs": [
+     "herds",
+     "grass"
+    ]
+   },
+   "synonyms": [
+    "the herds run",
+    "rampage",
+    "stampeding herd"
+   ]
+  }
+ ]
+}

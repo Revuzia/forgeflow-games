@@ -16,6 +16,7 @@ import { activateCell, DRY } from './hydrology.ts';
 import { igniteCell } from './fire.ts';
 import { stampCrater, smoothstep } from '../world/gen.ts';
 import { collectFlags } from '../core/activeset.ts';
+import { lapseCadence, lapseDue, stagger, LAPSE_SAND } from '../perf/lapse.ts';
 
 /** called when something strikes the ground (crater brush, meteors later): peoples are hurt, star iron falls */
 export const impactHooks: ((u: Universe, p: Planet, pos: ArrayLike<number>, radiusM: number, meteor: boolean) => void)[] = [];
@@ -423,10 +424,13 @@ export function terrainStep(u: Universe, p: Planet): void {
   // 3. wind on sand and ash; ash weathering — a third of the grid per step (contiguous thirds in turn) at three times
   // the per-step rates, so every cell is visited every 3 steps (30 ticks): dunes grow over days, and the full-grid
   // scan was a fixed cost of every terrain step on every world with sand (SIM perf pass)
-  if (p.airy) {
-    const part = Math.floor((u.tick + p.id * 13 + 5) / TERRAIN_CADENCE) % SAND_SPLIT;
+  // (time-lapse, perf/lapse.ts: every 20 / 30 ticks at 100x / 1000x, each pass moving the elapsed time's worth)
+  // (asked every terrain step, airless or not: a time-lapse record is consumed on schedule)
+  const dtS = lapseDue(u, p, LAPSE_SAND, u.tick + stagger(p), 5);
+  if (dtS && p.airy) {
+    const part = Math.floor((u.tick + p.id * 13 + 5) / lapseCadence(u, LAPSE_SAND)) % SAND_SPLIT;
     const from = Math.floor((N * part) / SAND_SPLIT), to = Math.floor((N * (part + 1)) / SAND_SPLIT);
-    if (sandKernel(p, from, to, SAND_SPLIT)) changed = true;
+    if (sandKernel(p, from, to, (SAND_SPLIT * dtS) / TERRAIN_CADENCE)) changed = true;
   }
   if (changed) {
     for (const k of ['surface', 'rock', 'sand', 'soil', 'ash', 'snow', 'lava', 'road'] as const) p.bump(k);

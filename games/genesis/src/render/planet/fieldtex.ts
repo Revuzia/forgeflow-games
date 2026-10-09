@@ -12,7 +12,9 @@
 //   S  treeSpecies, cropSpecies, light (night lights, reserved), biome
 //   G  curvature gradient of `surface` (gx, gy, gz, gw) from surface.ts surfaceGradients — computed once per surface
 //      change by the WorldView (pv.ground.grad, the array the CPU ground function reads) and uploaded as is
-//   D  dune amplitude (surface.ts duneAmpOf of the raw sand depth), the ground function's dune term
+//   D  dune amplitude (surface.ts duneAmpOf of the raw sand depth), the ground function's dune term; surface wind
+//      (m/s, body-frame tangent vector: the sea state of the water, ocean.ts) in yzw — a synthetic trade-wind / westerly
+//      pattern with gusty variation where the source has no wind field (lookdev)
 // Each texture is rebuilt only when one of its source fields' versions changed (WorldView bumps them per arrival).
 //
 // waterLevel: wet cells carry their true water surface; dry cells next to water carry the wet neighbours' mean level
@@ -38,7 +40,7 @@ const SOURCES: Record<TexName, FieldName[]> = {
   F: ['flowX', 'flowY', 'flowZ', 'salinity'],
   S: ['treeSpecies', 'cropSpecies', 'biome'],
   G: ['surface'],
-  D: ['sand'],
+  D: ['sand', 'windX', 'windY', 'windZ'],
 };
 
 export class FieldTextures {
@@ -246,6 +248,33 @@ export class FieldTextures {
         const d = this.tex.D.image.data as Float32Array;
         const sand = this.field('sand');
         for (let c = 0; c < n; c++) d[c * 4] = sand ? duneAmpOf(sand[c]) : 0;
+        // surface wind (sea state): the sim's, relaxed once (gust fronts stay, cell facets go)
+        const wx = this.field('windX'), wy = this.field('windY'), wz = this.field('windZ');
+        const P = g.pos;
+        if (wx && wy && wz) {
+          for (const [ch, f] of [[1, wx], [2, wy], [3, wz]] as const) {
+            const sm = this.smoothed(f, 1);
+            for (let c = 0; c < n; c++) d[c * 4 + ch] = sm[c];
+          }
+        } else {
+          // no wind field: easterly trades in the tropics, westerlies at mid latitudes, 3–11 m/s with broad gusty
+          // swells (a few hundred metres) so the sea is not one uniform state
+          for (let c = 0; c < n; c++) {
+            const x = P[c * 3], y = P[c * 3 + 1], z = P[c * 3 + 2];
+            const lat = Math.asin(Math.max(-1, Math.min(1, y)));
+            const band = Math.cos(lat * 3);   // +1 trades (equator), −1 westerlies (~60°), +1 polar easterlies
+            const gust = 0.5 + 0.5 * Math.sin(x * 9.1 + Math.sin(z * 7.3) * 2) * Math.sin(z * 8.3 + Math.sin(y * 6.1) * 2);
+            const speed = 3 + 8 * gust * (0.6 + 0.4 * Math.abs(band));
+            // east unit vector (−z, 0, x)/|..| in this frame's longitude convention (lon = atan2(x, z))
+            let ex = z, ez = -x;
+            const el = Math.hypot(ex, ez) || 1;
+            ex /= el; ez /= el;
+            const k = band >= 0 ? -1 : 1; // trades blow toward the west
+            d[c * 4 + 1] = ex * speed * k;
+            d[c * 4 + 2] = 0;
+            d[c * 4 + 3] = ez * speed * k;
+          }
+        }
         break;
       }
       case 'G': {

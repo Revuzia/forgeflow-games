@@ -37,6 +37,14 @@ const RANGE = 650;
 const TRAIL = 0.2;
 /** how far below TRAIL a drawn way's wear may fall before it stops being drawn */
 const TRAIL_HOLD = 0.08;
+/** within this distance (m) of the camera at a rebuild the ribbon is resampled every DENSE_STEP m and draped on the
+ * ground itself (the camera moves < 120 m between rebuilds, so the ~40 m about it is always dense); farther out the
+ * 2 m chain samples are lifted over the highest ground about them, where the terrain patches are coarser anyway */
+const NEAR_DENSE = 160;
+const DENSE_STEP = 0.75;
+/** across-road columns (−1..1): a footpath or lane, and a wide street near the camera */
+const ACROSS_NARROW = [-1, -0.45, 0, 0.45, 1];
+const ACROSS_WIDE = [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1];
 /** a footpath's width (m) for a wear value — must match the trail branch of halfW in FRAG_SURFACE / FRAG_LAMPS */
 function trailWidth(wear: number): number {
   return 0.55 + 0.75 * Math.max(0, Math.min(1, (wear - TRAIL) / 0.5));
@@ -49,6 +57,7 @@ const VERT_PARS = /* glsl */ `
 attribute vec4 aRoad;   // along (m), across (−1..1), tier, wear
 attribute float aLamp;  // street-lamp kind along this stretch (0 none, 2 oil, 3 gas, 4 electric)
 attribute float aEnd;   // metres to a dead end of the chain (capped; junction ends do not count)
+attribute float aLift;  // extra lift (m) far from the camera, where the terrain patches drop the ~3 m detail relief
 varying vec4 vRoad;
 varying float vLamp;
 varying float vEnd;
@@ -218,6 +227,10 @@ function makeRoadMaterial(shared: Record<string, IUniform>, transparent: boolean
     for (const k of Object.keys(shared)) shader.uniforms[k] = shared[k];
     shader.vertexShader = shader.vertexShader
       .replace('#include <clipping_planes_pars_vertex>', `#include <clipping_planes_pars_vertex>\n${VERT_PARS}`)
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+  // a ribbon draped on the full-detail ground near the camera rides over the smoother terrain of the coarser patches
+  // farther out (full detail reaches ≥ ~110 m at every quality)
+  transformed += normalize(position) * aLift * smoothstep(90.0, 150.0, length((modelViewMatrix * vec4(position, 1.0)).xyz));`)
       .replace('#include <project_vertex>', `#include <project_vertex>
   // pull toward the camera by a sliver of the distance: drawn over the terrain at any range, never floating
   mvPosition.xyz *= 0.9985;
@@ -243,7 +256,7 @@ function makeRoadMaterial(shared: Record<string, IUniform>, transparent: boolean
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${FRAG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${FRAG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => `genesis-road-v3-${transparent ? 't' : 'o'}`;
+  mat.customProgramCacheKey = () => `genesis-road-v4-${transparent ? 't' : 'o'}`;
   return mat;
 }
 
@@ -373,10 +386,9 @@ export class Roads {
       return false;
     };
     const geo = {
-      dirt: { p: [] as number[], n: [] as number[], a: [] as number[], l: [] as number[], e: [] as number[], i: [] as number[] },
-      paved: { p: [] as number[], n: [] as number[], a: [] as number[], l: [] as number[], e: [] as number[], i: [] as number[] },
+      dirt: { p: [] as number[], n: [] as number[], a: [] as number[], l: [] as number[], e: [] as number[], f: [] as number[], i: [] as number[] },
+      paved: { p: [] as number[], n: [] as number[], a: [] as number[], l: [] as number[], e: [] as number[], f: [] as number[], i: [] as number[] },
     };
-    const ACROSS = [-1, -0.45, 0, 0.45, 1];
     const waterF = pv.fields.get('water') ?? null;
     // dead ends: a chain end no other chain meets (junction ends run on into the next chain)
     const ends = new Map<number, number>();
@@ -393,33 +405,82 @@ export class Roads {
       }
       return g;
     };
+    // near the camera the ribbon is resampled every DENSE_STEP m (along, and across a wide street) and draped on the
+    // ground itself: the 2 m samples lifted over the highest ground about them floated it ~0.2–0.3 m over the hollows
+    // of the 3 m detail relief, and a see-through footpath hung over the feet of everyone walking it veiled their
+    // shins and hems in a pale haze
+    const gCam = groundHeight(pv.ground, dx, dy, dz);
+    const vCam = rc - gCam;
+    const nearCam = (x: number, y: number, z: number): boolean => {
+      const l = Math.hypot(x, y, z) || 1;
+      const h = Math.acos(Math.min(1, (x * dx + y * dy + z * dz) / l)) * gCam;
+      return h * h + vCam * vCam < NEAR_DENSE * NEAR_DENSE;
+    };
+    type Row = { skip: boolean; dense: boolean; u: number[]; g: number[]; along: number; tier: number; wear: number; lamp: number; end: number };
     for (const ch of chains) {
-      const np = ch.pts.length / 3;
-      if (np < 2) continue;
+      const ns = ch.pts.length / 3;
+      if (ns < 2) continue;
+      // the chain's samples, with the stretches near the camera subdivided
+      const pts: number[] = [], wr: number[] = [], dense: boolean[] = [];
+      for (let i = 0; i < ns; i++) {
+        const x1 = ch.pts[i * 3], y1 = ch.pts[i * 3 + 1], z1 = ch.pts[i * 3 + 2];
+        if (i > 0) {
+          const x0 = ch.pts[(i - 1) * 3], y0 = ch.pts[(i - 1) * 3 + 1], z0 = ch.pts[(i - 1) * 3 + 2];
+          if (nearCam((x0 + x1) * 0.5, (y0 + y1) * 0.5, (z0 + z1) * 0.5)) {
+            dense[dense.length - 1] = true;
+            const k = Math.ceil((Math.hypot(x1 - x0, y1 - y0, z1 - z0) * R) / DENSE_STEP);
+            for (let s = 1; s < k; s++) {
+              const t = s / k;
+              const x = x0 + (x1 - x0) * t, y = y0 + (y1 - y0) * t, z = z0 + (z1 - z0) * t;
+              const l = Math.hypot(x, y, z) || 1;
+              pts.push(x / l, y / l, z / l);
+              wr.push(ch.wear[i - 1] + (ch.wear[i] - ch.wear[i - 1]) * t);
+              dense.push(true);
+            }
+            pts.push(x1, y1, z1);
+            wr.push(ch.wear[i]);
+            dense.push(true);
+            continue;
+          }
+        }
+        pts.push(x1, y1, z1);
+        wr.push(ch.wear[i]);
+        dense.push(false);
+      }
+      const np = pts.length / 3;
       let total = 0;
-      for (let i = 1; i < np; i++) total += Math.hypot(ch.pts[i * 3] - ch.pts[(i - 1) * 3], ch.pts[i * 3 + 1] - ch.pts[(i - 1) * 3 + 1], ch.pts[i * 3 + 2] - ch.pts[(i - 1) * 3 + 2]) * R;
+      for (let i = 1; i < np; i++) total += Math.hypot(pts[i * 3] - pts[(i - 1) * 3], pts[i * 3 + 1] - pts[(i - 1) * 3 + 1], pts[i * 3 + 2] - pts[(i - 1) * 3 + 2]) * R;
       const dead0 = !ch.loop && ends.get(ch.cells[0]) === 1, dead1 = !ch.loop && ends.get(ch.cells[ch.cells.length - 1]) === 1;
       const mid = Math.floor(np / 2);
-      const tier = tierAt(ch.pts[mid * 3], ch.pts[mid * 3 + 1], ch.pts[mid * 3 + 2]);
+      const tier = tierAt(pts[mid * 3], pts[mid * 3 + 1], pts[mid * 3 + 2]);
       const out = tier >= 2 ? geo.paved : geo.dirt;
       // street lamps from the medieval era (oil lanterns), gas with steam, electric after
       const lampKind = chainEra >= 6 ? lightKindForEra(chainEra) : 0;
       const spacing = LAMP[lampKind]?.spacing ?? 1e9;
-      let along = 0;
-      let prevRow = -1;
-      let nextLamp = 0.5 * spacing, lampN = 0;
+      // a wide street resampled near the camera gets more columns (~0.75 m apart instead of up to 1.5 m)
+      let wMax = 0, anyDense = false;
       for (let i = 0; i < np; i++) {
-        const ux = ch.pts[i * 3], uy = ch.pts[i * 3 + 1], uz = ch.pts[i * 3 + 2];
+        const th = tier === 1 && wr[i] < 0.5 ? 0 : tier;
+        wMax = Math.max(wMax, th === 0 ? trailWidth(wr[i]) : roadWidth(wr[i]));
+        if (dense[i]) anyDense = true;
+      }
+      const ACROSS = anyDense && wMax > 2.4 ? ACROSS_WIDE : ACROSS_NARROW;
+      const nc = ACROSS.length;
+      let along = 0;
+      let nextLamp = 0.5 * spacing, lampN = 0;
+      const rows: Row[] = [];
+      for (let i = 0; i < np; i++) {
+        const ux = pts[i * 3], uy = pts[i * 3 + 1], uz = pts[i * 3 + 2];
         const j = Math.min(np - 1, i + 1), k = Math.max(0, i - 1);
-        let tx = ch.pts[j * 3] - ch.pts[k * 3], ty = ch.pts[j * 3 + 1] - ch.pts[k * 3 + 1], tz = ch.pts[j * 3 + 2] - ch.pts[k * 3 + 2];
+        let tx = pts[j * 3] - pts[k * 3], ty = pts[j * 3 + 1] - pts[k * 3 + 1], tz = pts[j * 3 + 2] - pts[k * 3 + 2];
         const td = tx * ux + ty * uy + tz * uz;
         tx -= ux * td; ty -= uy * td; tz -= uz * td;
         const tl = Math.hypot(tx, ty, tz) || 1;
         tx /= tl; ty /= tl; tz /= tl;
         // side = up × tangent
         const sx = uy * tz - uz * ty, sy = uz * tx - ux * tz, sz = ux * ty - uy * tx;
-        if (i > 0) along += Math.hypot(ux - ch.pts[(i - 1) * 3], uy - ch.pts[(i - 1) * 3 + 1], uz - ch.pts[(i - 1) * 3 + 2]) * R;
-        const wear = ch.wear[i];
+        if (i > 0) along += Math.hypot(ux - pts[(i - 1) * 3], uy - pts[(i - 1) * 3 + 1], uz - pts[(i - 1) * 3 + 2]) * R;
+        const wear = wr[i];
         // below a road's threshold, a road-era settlement's way is still only a path
         const tierHere = tier === 1 && wear < 0.5 ? 0 : tier;
         // a dead end narrows to a rounded tip over its last metres
@@ -447,25 +508,69 @@ export class Roads {
         }
         // no ribbon under a building, nor through standing water (a road ran on under a pool, its caustics over it)
         // (judged on the nearest cell: an interpolated sample picks up the sea next to every coastal street)
-        if (inside(ux * g0, uy * g0, uz * g0) || (waterF && waterF[pv.grid.nearestCell(ux, uy, uz)] > 0.25)) { prevRow = -1; continue; }
-        const base = out.p.length / 3;
-        // the along-neighbours (half a step either way bounds the relief between ribbon rows)
+        const row: Row = { skip: false, dense: dense[i], u: [], g: [], along, tier: tierHere, wear, lamp: lampHere, end: Math.min(endDist, 50) };
+        rows.push(row);
+        if (inside(ux * g0, uy * g0, uz * g0) || (waterF && waterF[pv.grid.nearestCell(ux, uy, uz)] > 0.25)) { row.skip = true; continue; }
+        // the along-neighbours (half a step either way bounds the relief between coarse ribbon rows)
         const ip = Math.max(0, i - 1), inx = Math.min(np - 1, i + 1);
         for (const a of ACROSS) {
           const off = (a * half) / R;
           let px = ux + sx * off, py = uy + sy * off, pz = uz + sz * off;
           const pl = Math.hypot(px, py, pz);
           px /= pl; py /= pl; pz /= pl;
-          // a cambered road: the crown a few cm higher than the shoulders, over the highest ground about the vertex
-          const g = groundMax(px, py, pz, ch.pts[ip * 3] + sx * off, ch.pts[ip * 3 + 1] + sy * off, ch.pts[ip * 3 + 2] + sz * off,
-            ch.pts[inx * 3] + sx * off, ch.pts[inx * 3 + 1] + sy * off, ch.pts[inx * 3 + 2] + sz * off) + 0.04 + (1 - a * a) * (tier >= 2 ? 0.06 : 0.02);
-          out.p.push(px * g, py * g, pz * g);
-          out.a.push(along, a, tierHere, wear);
-          out.l.push(lampHere);
-          out.e.push(Math.min(endDist, 50));
+          row.u.push(px, py, pz);
+          // dense: the ground right here (the chord errors are added below); coarse: the highest ground about the vertex
+          row.g.push(dense[i] ? groundHeight(pv.ground, px, py, pz) : groundMax(px, py, pz, pts[ip * 3] + sx * off, pts[ip * 3 + 1] + sy * off, pts[ip * 3 + 2] + sz * off,
+            pts[inx * 3] + sx * off, pts[inx * 3 + 1] + sy * off, pts[inx * 3 + 2] + sz * off));
+        }
+      }
+      // dense rows: where the ground between two rows rises above the straight ribbon between them (a crest of the
+      // detail relief), both rows are raised by that much; and the far lift (aLift, applied by the vertex shader beyond
+      // ~90 m, where the terrain patches drop the 3 m relief) is the rise of the ground about the vertex
+      const chord: number[][] = [];
+      for (let i = 0; i + 1 < rows.length; i++) {
+        const r0 = rows[i], r1 = rows[i + 1];
+        const e: number[] = [];
+        if (r0.dense && r1.dense && !r0.skip && !r1.skip) {
+          for (let c = 0; c < nc; c++) {
+            let mx = r0.u[c * 3] + r1.u[c * 3], my = r0.u[c * 3 + 1] + r1.u[c * 3 + 1], mz = r0.u[c * 3 + 2] + r1.u[c * 3 + 2];
+            const ml = Math.hypot(mx, my, mz) || 1;
+            mx /= ml; my /= ml; mz /= ml;
+            e.push(Math.max(0, groundHeight(pv.ground, mx, my, mz) - 0.5 * (r0.g[c] + r1.g[c])));
+          }
+        }
+        chord.push(e);
+      }
+      let prevRow = -1;
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        if (row.skip) { prevRow = -1; continue; }
+        const base = out.p.length / 3;
+        const pr = i > 0 && !rows[i - 1].skip ? rows[i - 1] : null, nx = i + 1 < rows.length && !rows[i + 1].skip ? rows[i + 1] : null;
+        for (let c = 0; c < nc; c++) {
+          const a = ACROSS[c];
+          let lift = 0, far = 0;
+          if (row.dense) {
+            lift = Math.max(chord[i - 1]?.[c] ?? 0, chord[i]?.[c] ?? 0);
+            let gm = row.g[c];
+            const c0 = Math.max(0, c - 1), c1 = Math.min(nc - 1, c + 1);
+            for (let cc = c0; cc <= c1; cc++) {
+              gm = Math.max(gm, row.g[cc]);
+              if (pr) gm = Math.max(gm, pr.g[cc]);
+              if (nx) gm = Math.max(gm, nx.g[cc]);
+            }
+            far = Math.max(0, gm - row.g[c] - lift);
+          }
+          // a cambered road: the crown a few cm higher than the shoulders
+          const g = row.g[c] + lift + 0.04 + (1 - a * a) * (row.tier >= 2 ? 0.06 : 0.02);
+          out.p.push(row.u[c * 3] * g, row.u[c * 3 + 1] * g, row.u[c * 3 + 2] * g);
+          out.a.push(row.along, a, row.tier, row.wear);
+          out.l.push(row.lamp);
+          out.e.push(row.end);
+          out.f.push(far);
         }
         if (prevRow >= 0) {
-          for (let c = 0; c < ACROSS.length - 1; c++) {
+          for (let c = 0; c < nc - 1; c++) {
             const a0 = prevRow + c, a1 = prevRow + c + 1, b0 = base + c, b1 = base + c + 1;
             out.i.push(a0, b0, b1, a0, b1, a1);
           }
@@ -473,7 +578,7 @@ export class Roads {
         prevRow = base;
       }
     }
-    const put = (m: Mesh, g: { p: number[]; n: number[]; a: number[]; l: number[]; e: number[]; i: number[] }) => {
+    const put = (m: Mesh, g: { p: number[]; n: number[]; a: number[]; l: number[]; e: number[]; f: number[]; i: number[] }) => {
       m.geometry.dispose();
       const bg = new BufferGeometry();
       if (g.i.length) {
@@ -481,6 +586,7 @@ export class Roads {
         bg.setAttribute('aRoad', new Float32BufferAttribute(g.a, 4));
         bg.setAttribute('aLamp', new Float32BufferAttribute(g.l, 1));
         bg.setAttribute('aEnd', new Float32BufferAttribute(g.e, 1));
+        bg.setAttribute('aLift', new Float32BufferAttribute(g.f, 1));
         bg.setIndex(new Uint32BufferAttribute(g.i, 1));
         // the ribbon's own normals (it follows the slopes), wound upward
         bg.computeVertexNormals();

@@ -487,6 +487,8 @@ export class PostPipeline {
   prevValid = false;
   /** set by the renderer when a star's disc fills the view: exposure from the disc, bloom almost off */
   starExposure = 1;
+  /** bloom scale for the light: by day a wide glow is only a veil over the view (halved), at night lights bloom fully */
+  bloomScale = 1;
   starMix = 0;
   private godMask!: WebGLRenderTarget;
   private godA!: WebGLRenderTarget;
@@ -512,11 +514,11 @@ export class PostPipeline {
     uExposureBias: { value: 0 }, uManualExposure: { value: 0 }, uStarExposure: { value: 1 }, uStarMix: { value: 0 }, uVignette: { value: 0.22 }, uWhite: { value: new Vector3(1, 1, 1) },
     // no lift: a lifted black turned space navy and every shadow milky; contrast and colour come from the curve
     uLift: { value: new Vector3(0, 0, 0) }, uGamma: { value: new Vector3(1.0, 1.0, 1.0) }, uGain: { value: new Vector3(1.02, 1.0, 0.97) },
-    // AgX with a contrasty look on the narrower range: power 1.3 (the exposure key puts the scene's log-average at
+    // AgX with a contrasty look on the narrower range: power 1.34 (the exposure key puts the scene's log-average at
     // ~122/255; diffuse white → ~224, scene 2.0 → ~241; the old 1.36 / 4.03 pair pulled mid-tones to 94 and capped white
-    // at 184), a toe that takes the deepest shadows to black, saturation 1.22 after the curve, gamut- and hue-limited
-    // (vibrance: greens and sky blues get half of it)
-    uSat: { value: 1.22 }, uPower: { value: 1.3 }, uGolden: { value: 0 }, uGrade: { value: 0.3 }, uNight: { value: 0 }, uToe: { value: 0.012 },
+    // at 184), a toe that takes the deepest shadows to black, saturation 1.1 after the curve, gamut- and hue-limited
+    // (vibrance: greens and sky blues get half of it; 1.22 pushed skin, brick and awnings to orange pastel plastic)
+    uSat: { value: 1.1 }, uPower: { value: 1.34 }, uGolden: { value: 0 }, uGrade: { value: 0.3 }, uNight: { value: 0 }, uToe: { value: 0.012 },
   });
   private fxaaMat = passMaterial(FXAA_FRAG, { tIn: { value: null }, uTexel: { value: new Vector2() }, uFxaa: { value: 1 }, uGrain: { value: 0.022 }, uTime: { value: 0 } });
   private cut = true;
@@ -665,7 +667,7 @@ export class PostPipeline {
     t.tHDR.value = input;
     t.tBloom.value = this.bloomMips.length ? this.bloomMips[0].texture : input;
     // bloom weight on the level-normalised chain: twice the preset's mix (≈ 9 % of a wide glow at High)
-    t.uBloom.value = this.bloomMips.length ? 2 * (s.bloom + (Math.min(s.bloom, 0.01) - s.bloom) * this.starMix) : 0;
+    t.uBloom.value = this.bloomMips.length ? 2 * this.bloomScale * (s.bloom + (Math.min(s.bloom, 0.01) - s.bloom) * this.starMix) : 0;
     t.uBloomNorm.value = this.bloomMips.length ? 1 / this.bloomMips.length : 1;
     t.uStarExposure.value = this.starExposure;
     t.uStarMix.value = this.starMix;

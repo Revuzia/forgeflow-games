@@ -29,7 +29,10 @@ const VERT_PARS = /* glsl */ `
 attribute vec4 aKit;
 attribute vec4 iState;   // progress, damage, flags, light (kind*256 + level*255)
 attribute vec4 iInfo;    // height, half x, half z, seed
+attribute vec3 iFade;    // x: 1 − the LOD cross-fade f (f ≥ 0 keeps the pixels whose dither < f, f < 0 those whose dither ≥ 1 + f;
+                         //    a mesh without the attribute reads 0: whole); yz: ground slope
 uniform float uTime;
+varying float vFade;
 varying vec3 vBodyPos;
 varying vec3 vLocal;
 varying vec2 vKUv;
@@ -41,6 +44,8 @@ varying vec4 vInfo;
 /** windmill sails turn about the local Z axis through (0, uv.x); everything else is static */
 const VERT_BEGIN = /* glsl */ `
   vec3 transformed = vec3(position);
+  // open works follow the ground's slope: a shear (verticals stay plumb)
+  transformed.y += iFade.y * transformed.x + iFade.z * transformed.z;
   if (abs(aKit.y - 9.0) < 0.5) {
     float a = uTime * 0.7 + iInfo.w * 6.28;
     float ca = cos(a), sa = sin(a);
@@ -49,8 +54,50 @@ const VERT_BEGIN = /* glsl */ `
   }
 `;
 
+/**
+ * Where a building under construction or in ruins has no fabric (true = discard). Shared by the colour material and the
+ * shadow caster: the caster drew the whole intact building, so a ruin lay in the shadow of its fallen roof and its
+ * broken walls were speckled with self-shadowing, and a rising house cast the shadow of the finished one.
+ */
+const CUT_GLSL = /* glsl */ `
+bool bldCut(vec3 cp, float cprt, float cprog, float cdmg, bool cruin, float cH, vec2 cinf, float cseed, float croof) {
+  // construction: the walls rise course by course; the roof comes last
+  if (cprog < 0.999) {
+    // a ragged top: courses laid unevenly along each wall, not a cut by a plane
+    float course = cH * 1.02 * clamp(cprog / 0.9, 0.0, 1.0) - 0.25 + 0.14 * gn_hash12(floor(cp.xz * 1.6) + 3.0)
+      + 0.16 * vnoise(vec3(cp.x * 2.7, cp.z * 2.7, cseed * 3.0));
+    if (cp.y > course || (croof > 0.5 && cprog < 0.92)) return true;
+    // the openings stay raw holes until the walls are up: glass, frames, doors, shutters and sills go in last
+    if (cprog < 0.9 && (abs(cprt - 2.0) < 0.5 || abs(cprt - 7.0) < 0.5 || abs(cprt - 3.0) < 0.5 || (abs(cprt - 6.0) < 0.5 && cp.y > 0.6))) return true;
+  }
+  // ruins: a collapse, not a cut-away. Each wall breaks off at its own height (0.3-1.5 m; a hut's ring of posts and
+  // daub to knee height) with a ragged top, one wall in five keeps its gable; the roof is down (on the rubble heap) and
+  // no beam, rafter or frame stands above the knee
+  float broken = cruin ? 1.0 : smoothstep(0.62, 0.9, cdmg);
+  if (broken > 0.0) {
+    vec2 hxz = max(cinf, vec2(0.5));
+    vec2 q = cp.xz / hxz;
+    bool xSide = abs(q.x) > abs(q.y);
+    float wallId = xSide ? (q.x > 0.0 ? 0.0 : 1.0) : (q.y > 0.0 ? 2.0 : 3.0);
+    float along = xSide ? cp.z : cp.x;
+    float wh = gn_hash12(vec2(wallId + 1.0, cseed * 7.0));
+    float small = cH < 4.2 ? 0.45 : 1.0;
+    float jag = abs(fract(along * 0.9 + wh * 3.7) - 0.5) * 0.7 + 0.45 * vnoise(vec3(along * 2.3, wallId * 3.1, cseed * 5.0)) - 0.25;
+    float ruinH = (mix(0.3, 1.5, wh) + jag) * small;
+    // a gable left standing: a ragged triangle on its wall
+    if (wh > 0.8 && !xSide && small > 0.5) ruinH = max(ruinH, cH * 0.78 - abs(along) * 0.95 + jag);
+    ruinH = mix(cH * 1.2, ruinH, broken);
+    bool structural = cprt < 0.5 || abs(cprt - 4.0) < 0.5 || abs(cprt - 3.0) < 0.5;
+    float outside = max(abs(q.x), abs(q.y));
+    if (cp.y > ruinH || (croof > 0.5 && broken > 0.5) || (broken > 0.5 && !structural && cp.y > 0.45) || (broken > 0.5 && outside > 1.08 && cp.y > 0.3)) return true;
+  }
+  return false;
+}
+`;
+
 const FRAG_PARS = /* glsl */ `
 ${NOISE_GLSL}
+${CUT_GLSL}
 ${ATMO_PARS}
 ${SKY_LOOKUP}
 ${CLOUD_DENSITY_GLSL}
@@ -64,6 +111,7 @@ uniform float uCloudOn;
 uniform vec3 uNightAmbient;
 uniform float uTime;
 uniform float uBldDebug;  // dev: 1 no bump, 2 flat albedo + no bump, 3 back faces red
+varying float vFade;
 varying vec3 vBodyPos;
 varying vec3 vLocal;
 varying vec2 vKUv;
@@ -205,7 +253,9 @@ BSurf surfaceOf(int s, vec2 uv, vec3 base, float seed, float fw, float isRoof) {
     tc = mix(tc, vec3(dot(tc, vec3(0.33))) * vec3(0.95, 0.95, 0.92), aged * 0.55);
     tc = mix(tc, base * vec3(1.3, 1.18, 0.85), mended * 0.45);
     o.col = mix(tc, vec3(0.07, 0.09, 0.035), moss * k2);
-    o.h = (lip * 0.7 + strands * 0.15 * k1) * k2;
+    // (the lip's bump eases back to zero before the course wraps: a step there in one pixel row made the bump's screen
+    // derivatives spike per 2×2 quad — a dashed line of white seams along every course)
+    o.h = (lip * 0.3 * (1.0 - smoothstep(0.86, 1.0, cr)) + strands * 0.2 * k1) * k2;
     o.rough = 0.95;
   } else if (s == 9) {
     // clay pantiles: courses with rounded waves, a dark overlap line, tone per tile
@@ -241,7 +291,8 @@ BSurf surfaceOf(int s, vec2 uv, vec3 base, float seed, float fw, float isRoof) {
     float weave = (sin(uv.x * 220.0) * sin(uv.y * 220.0)) * aaK(fw, 0.01);
     // awnings in two colours: the dye and undyed cream, in stripes
     float stripe = fract(seed * 3.7) > 0.45 ? mix(1.0, step(0.5, fract(uv.x / 0.5)), aaK(fw, 0.12)) : 1.0;
-    o.col = mix(vec3(0.6, 0.57, 0.5), base, stripe) * (0.92 + 0.08 * weave) * (0.92 + 0.1 * fbm3(vec3(uv * 0.8, seed)));
+    // (the undyed stripes are weathered linen, not a white: and stains and sun-fade over the whole cloth)
+    o.col = mix(vec3(0.42, 0.39, 0.33), base, stripe) * (0.92 + 0.08 * weave) * (0.82 + 0.2 * fbm3(vec3(uv * 0.8, seed)));
     o.h = weave * 0.02;
     o.rough = 0.9;
   } else if (s == 13) {
@@ -318,6 +369,11 @@ vec3 lightTint(float kind) {
 `;
 
 const FRAG_SURFACE = /* glsl */ `
+  // LOD cross-fade (buildings.ts): the near and far meshes share the pixels of a screen-space dither in the band
+  if (vFade < 0.999) {
+    float hd = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    if (vFade >= 0.0 ? hd >= vFade : hd < 1.0 + vFade) discard;
+  }
   float part = vKit.y;
   float surfId = vKit.x;
   float seed = vKit.z + vInfo.w * 7.13;
@@ -335,39 +391,20 @@ const FRAG_SURFACE = /* glsl */ `
   bool lit = mod(floor(flags / 128.0), 2.0) > 0.5 || lightLevel > 0.01;
   float isRoof = abs(part - 1.0) < 0.5 ? 1.0 : 0.0;
   float H = max(vInfo.x, 0.5);
-  // construction: the walls rise course by course; the roof comes last
-  if (progress < 0.999) {
-    // a ragged top: courses laid unevenly along each wall, not a cut by a plane
-    float course = H * 1.02 * clamp(progress / 0.9, 0.0, 1.0) - 0.25 + 0.14 * gn_hash12(floor(vLocal.xz * 1.6) + 3.0)
-      + 0.16 * vnoise(vec3(vLocal.x * 2.7, vLocal.z * 2.7, seed * 3.0));
-    if (vLocal.y > course || (isRoof > 0.5 && progress < 0.92)) discard;
-    // the openings stay raw holes until the walls are up: glass, frames, doors, shutters and sills go in last
-    if (progress < 0.9 && (abs(part - 2.0) < 0.5 || abs(part - 7.0) < 0.5 || abs(part - 3.0) < 0.5 || (abs(part - 6.0) < 0.5 && vLocal.y > 0.6))) discard;
-  }
-  // ruins: a collapse, not a cut-away. Each wall breaks off at its own height (0.3-1.5 m; a hut's ring of posts and
-  // daub to knee height) with a ragged top, one wall in five keeps its gable; the roof is down (on the rubble heap) and
-  // no beam, rafter or frame stands above the knee
-  float broken = ruined ? 1.0 : smoothstep(0.62, 0.9, damage);
-  if (broken > 0.0) {
-    vec2 hxz = max(vInfo.yz, vec2(0.5));
-    vec2 q = vLocal.xz / hxz;
-    bool xSide = abs(q.x) > abs(q.y);
-    float wallId = xSide ? (q.x > 0.0 ? 0.0 : 1.0) : (q.y > 0.0 ? 2.0 : 3.0);
-    float along = xSide ? vLocal.z : vLocal.x;
-    float wh = gn_hash12(vec2(wallId + 1.0, seed * 7.0));
-    float small = H < 4.2 ? 0.45 : 1.0;
-    float jag = abs(fract(along * 0.9 + wh * 3.7) - 0.5) * 0.7 + 0.45 * vnoise(vec3(along * 2.3, wallId * 3.1, seed * 5.0)) - 0.25;
-    float ruinH = (mix(0.3, 1.5, wh) + jag) * small;
-    // a gable left standing: a ragged triangle on its wall
-    if (wh > 0.8 && !xSide && small > 0.5) ruinH = max(ruinH, H * 0.78 - abs(along) * 0.95 + jag);
-    ruinH = mix(H * 1.2, ruinH, broken);
-    bool structural = part < 0.5 || abs(part - 4.0) < 0.5 || abs(part - 3.0) < 0.5;
-    float outside = max(abs(q.x), abs(q.y));
-    if (vLocal.y > ruinH || (isRoof > 0.5 && broken > 0.5) || (broken > 0.5 && !structural && vLocal.y > 0.45) || (broken > 0.5 && outside > 1.08 && vLocal.y > 0.3)) discard;
-  }
+  // construction and ruin cut-aways (CUT_GLSL: the shadow pass cuts the same, so a ruin casts no shadow of its roof)
+  if (bldCut(vLocal, part, progress, damage, ruined, H, vInfo.yz, seed, isRoof)) discard;
   float fwUv = length(fwidth(vKUv));
   BSurf bs = surfaceOf(int(surfId + 0.5), vKUv, vColor.rgb, seed, fwUv, isRoof);
   vec3 alb = bs.col;
+  // weathered roofs (tiles, slate, shingles): lichen and grime in broad patches and streaks down the slope, darker and
+  // greyer toward the eaves — no roof is a fresh, even colour
+  if (isRoof > 0.5 && (surfId > 8.5 && surfId < 10.5 || abs(surfId - 22.0) < 0.5)) {
+    float wz = fbm3(vec3(vKUv.x * 0.22, vKUv.y * 0.08, seed * 3.0)) * 0.5 + 0.5;
+    float lich = smoothstep(0.55, 0.85, fbm3(vec3(vKUv * 0.6, seed * 7.0)) * 0.5 + 0.5);
+    alb = mix(alb, vec3(dot(alb, vec3(0.33))) * vec3(0.95, 0.93, 0.85), 0.1 + 0.3 * wz);
+    alb *= 0.82 + 0.25 * wz;
+    alb = mix(alb, alb * 0.62 + vec3(0.025, 0.032, 0.012), lich * 0.45);
+  }
   // weathering: ground splash on walls, rain streaks, fresh courses during construction
   if (part < 0.5 || abs(part - 4.0) < 0.5) {
     alb *= mix(0.72, 1.0, smoothstep(-0.2, 0.9, vLocal.y));
@@ -375,6 +412,11 @@ const FRAG_SURFACE = /* glsl */ `
     alb *= 1.0 - 0.08 * smoothstep(0.2, 0.8, streak) * aaK(fwUv, 0.4);
   }
   if (progress < 0.999) alb = mix(alb, alb * 1.25 + 0.03, smoothstep(0.6, 0.0, abs(vLocal.y - H * progress / 0.9)) * 0.5);
+  // a wall still rising has no roof: its inner faces are daylit raw wall (rough core, unplastered), not the dark of a
+  // closed room (the open top read as a black hole); the kit's inner faces are dark plaster
+  if (progress < 0.999 && part < 0.5 && (int(surfId + 0.5) == 0 || int(surfId + 0.5) == 5) && dot(vColor.rgb, vec3(1.0)) < 0.16) {
+    alb = (int(surfId + 0.5) == 5 ? vec3(0.2, 0.15, 0.1) : vec3(0.3, 0.28, 0.25)) * (0.78 + 0.3 * vnoise(vec3(vLocal * 3.0 + seed)));
+  }
   // broken wall cores (seen through the cut) read as rubble: the wall's own stuff, darker and broken up
   // (a wall still rising shows its fresh core in its own material; only a ruin's broken core is dark)
   if (!gl_FrontFacing) alb = bs.col * (progress < 0.999 && !ruined ? 0.78 : 0.45) * (0.75 + 0.5 * snoise(vLocal * 3.0)) + 0.02;
@@ -517,7 +559,8 @@ export function makeBuildingMaterial(shared: Record<string, IUniform>, doubleSid
   vKUv = uv;
   vKit = aKit;
   vState = iState;
-  vInfo = iInfo;`);
+  vInfo = iInfo;
+  vFade = 1.0 - iFade.x;`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\n${FRAG_PARS}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_SURFACE}`)
@@ -547,10 +590,18 @@ const DEPTH_VERT = /* glsl */ `
 #include <common>
 attribute vec4 aKit;
 attribute vec4 iInfo;
+attribute vec4 iState;
+attribute vec3 iFade;
 uniform float uTime;
+varying vec3 vLocal;
+varying vec4 vKit;
+varying vec4 vState;
+varying vec4 vInfo;
 #include <logdepthbuf_pars_vertex>
 void main() {
   vec3 transformed = position;
+  transformed.y += iFade.y * transformed.x + iFade.z * transformed.z;
+  vLocal = transformed; vKit = aKit; vState = iState; vInfo = iInfo;
   if (abs(aKit.y - 9.0) < 0.5) {
     float a = uTime * 0.7 + iInfo.w * 6.28;
     vec2 r = vec2(transformed.x, transformed.y - uv.x);
@@ -562,9 +613,19 @@ void main() {
 }
 `;
 const DEPTH_FRAG = /* glsl */ `
+${NOISE_GLSL}
+${CUT_GLSL}
+varying vec3 vLocal;
+varying vec4 vKit;
+varying vec4 vState;
+varying vec4 vInfo;
 #include <logdepthbuf_pars_fragment>
 void main() {
 #include <logdepthbuf_fragment>
+  float flags = floor(vState.z + 0.5);
+  bool ruined = mod(floor(flags / 2.0), 2.0) > 0.5;
+  float part = vKit.y;
+  if (bldCut(vLocal, part, vState.x, vState.y, ruined, max(vInfo.x, 0.5), vInfo.yz, vKit.z + vInfo.w * 7.13, abs(part - 1.0) < 0.5 ? 1.0 : 0.0)) discard;
   gl_FragColor = vec4(1.0);
 }
 `;

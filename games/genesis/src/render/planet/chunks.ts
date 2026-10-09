@@ -118,6 +118,8 @@ export class Patch {
   hasWater = false;
   boundsVersion = -1;
   cells: Int32Array | null = null;
+  /** the cells the patch's vertices actually interpolate (set when its geometry is built): exact water presence */
+  vcells: Int32Array | null = null;
   geometry: BufferGeometry | null = null;
   mesh: Mesh | null = null;
   waterMesh: Mesh | null = null;
@@ -172,6 +174,9 @@ const _hit = newHit();
  * (ChunkLOD.silK; the vertex shader reads the same k from uMorph.w).
  */
 export const SILHOUETTE_SPLIT = 2.5;
+/** reach of the local horizon occluder profile (rad from the camera) and its number of radial bins */
+const LOCAL_OCC = 1.2;
+const OCC_BINS = 96;
 
 /** Water and ground arrays the chunk system reads for bounds (kept by FieldTextures). */
 export interface ChunkFieldSource {
@@ -203,7 +208,7 @@ export class ChunkLOD {
   terrainLayerMask = 0;
   castShadows = false;
   waterEnabled = true;
-  stats = { patches: 0, waterPatches: 0, builtTotal: 0 };
+  stats = { patches: 0, waterPatches: 0, builtTotal: 0, horizonCulled: 0 };
   /** this frame's silhouette split boost (see SILHOUETTE_SPLIT), set by select() */
   silK = SILHOUETTE_SPLIT;
 
@@ -293,6 +298,10 @@ export class ChunkLOD {
         if (wl[c] > hi) hi = wl[c];
       }
     }
+    // the bounds keep the 1.6-cell margin (shore cells across the border), but whether the patch draws a water sheet
+    // at all is decided by the cells its vertices interpolate: the margin flagged every patch within ~80 m of a pond
+    // (501 water patches over the mostly dry lookdev city, each a full 2 000-triangle draw of discarded fragments)
+    if (water && p.vcells) water = this.vertexWater(p.vcells, s, wl, wd);
     // detail relief (±~2 m), the coarse lattice cutting inside a sim triangle's plane, and the curved ground's bulge
     const bulge = curveMargin(this.grid, this.radius, Math.sqrt(g2));
     p.hMin = lo - 2.5 - bulge;
@@ -306,6 +315,15 @@ export class ChunkLOD {
       if (!p.geometry.boundingSphere) p.geometry.boundingSphere = new Sphere();
       p.geometry.boundingSphere.copy(p.sphere);
     }
+  }
+
+  /** any of these cells wet, or a shore cell whose extrapolated level is within reach of its ground (same rule as bounds) */
+  private vertexWater(cells: Int32Array, s: ArrayLike<number> | null, wl: Float32Array, wd: Float32Array): boolean {
+    for (let k = 0; k < cells.length; k++) {
+      const c = cells[k];
+      if (wd[c] > 0.02 || wl[c] > (s ? s[c] : 0) - 0.5) return true;
+    }
+    return false;
   }
 
   skirtDepth(level: number): number {
@@ -447,6 +465,12 @@ export class ChunkLOD {
     };
     for (let j = 0; j <= R; j++) for (let i = 0; i + j <= R; i++) writeVertex(ptIndex(i, j), i, j, 0);
     for (let k = 0; k < NSKIRT; k++) writeVertex(NPTS + k, BOUNDARY[k][0], BOUNDARY[k][1], 1);
+    // the distinct cells the vertices interpolate (morph targets are lattice points of this patch too)
+    {
+      const seen = new Set<number>();
+      for (let v = 0; v < NPTS; v++) { seen.add(cellA[v]); seen.add(cellB[v]); seen.add(cellC[v]); }
+      p.vcells = Int32Array.from(seen);
+    }
 
     const geo = new BufferGeometry();
     const posAttr = new Float32BufferAttribute(pos, 3);
@@ -479,6 +503,8 @@ export class ChunkLOD {
     if (budget && this.builtThisFrame >= this.buildBudgetNow) return false;
     this.updateBounds(p);
     p.geometry = this.buildGeometry(p);
+    // now that the vertex cells are known, the exact water test (bounds were derived before the build)
+    if (p.hasWater && p.vcells) p.hasWater = this.vertexWater(p.vcells, this.fields.surface, this.fields.waterLevel, this.fields.waterDepth);
     this.builtThisFrame++;
     this.built++;
     this.stats.builtTotal++;
@@ -517,9 +543,56 @@ export class ChunkLOD {
 
   // ── selection ──
 
+  /** radial occluder profile around the camera: prof[i] = the radius of the lowest VISIBLE surface within angle
+   * (i + 1)·LOCAL_OCC/OCC_BINS of the camera — the ground, or the water over it (the water sheet is opaque and
+   * depth-tested: whatever lies under the sea's horizon is hidden by the sea) — minus what the detail relief, dunes and
+   * the curved ground can dig below the cells. A sight line from the camera to a point θ away never leaves the disc of
+   * radius θ, so a sphere of radius prof(θ) is a valid occluder for everything within θ: each patch is tested against
+   * the tightest sphere its own sight lines allow (recomputed as the camera moves ~25 m or the ground changes) */
+  private occ = { prof: new Float64Array(OCC_BINS), x: 0, y: 0, z: 0, version: -1, valid: false };
+
+  private updateLocalOccluder(cam: Vector3, rc: number): void {
+    const L = this.occ;
+    const s = this.fields.surface;
+    if (!s || rc <= 0) { L.valid = false; return; }
+    const ux = cam.x / rc, uy = cam.y / rc, uz = cam.z / rc;
+    const moved = Math.hypot(ux - L.x, uy - L.y, uz - L.z) * this.radius;
+    if (L.valid && L.version === this.fields.geomVersion && moved < 25) return;
+    L.x = ux; L.y = uy; L.z = uz; L.version = this.fields.geomVersion;
+    const G = this.fields.grad;
+    const wl = this.fields.waterLevel, wd = this.fields.waterDepth;
+    const P = this.grid.pos;
+    const lo = L.prof;
+    lo.fill(Infinity);
+    let g2 = 0;
+    // the cell's own extent: a cell a bin away may still reach into the nearer bin
+    const half = this.grid.meanEdgeAngle * 0.6;
+    for (const c of this.grid.cellsWithin(ux, uy, uz, LOCAL_OCC + 0.03)) {
+      // (a wet cell's surface is its water level; the shore sheet thins out within a metre or so of its edge)
+      const top = wd[c] > 0.5 ? Math.max(s[c], wl[c] - 1) : s[c];
+      const th = Math.acos(Math.min(1, Math.max(-1, P[c * 3] * ux + P[c * 3 + 1] * uy + P[c * 3 + 2] * uz)));
+      const b = Math.max(0, Math.min(OCC_BINS - 1, Math.floor(((th - half) / LOCAL_OCC) * OCC_BINS)));
+      if (top < lo[b]) lo[b] = top;
+      if (G) { const m = G[c * 4] * G[c * 4] + G[c * 4 + 1] * G[c * 4 + 1] + G[c * 4 + 2] * G[c * 4 + 2]; if (m > g2) g2 = m; }
+    }
+    const margin = 3 + curveMargin(this.grid, this.radius, Math.sqrt(g2));
+    let run = Infinity;
+    for (let i = 0; i < OCC_BINS; i++) { run = Math.min(run, lo[i]); lo[i] = run; }
+    for (let i = 0; i < OCC_BINS; i++) lo[i] = Number.isFinite(lo[i]) ? this.radius + lo[i] - margin : 0;
+    L.valid = true;
+  }
+
+  /** the occluder radius valid for sight lines that stay within angle th of the camera (0: none) */
+  private occluderWithin(th: number): number {
+    const L = this.occ;
+    if (!L.valid || th > LOCAL_OCC) return 0;
+    return L.prof[Math.min(OCC_BINS - 1, Math.max(0, Math.ceil((th / LOCAL_OCC) * OCC_BINS) - 1))];
+  }
+
   select(ctx: ChunkSelectContext): Patch[] {
     this.builtThisFrame = 0;
     this.buildBudgetNow = ctx.buildBudget;
+    this.stats.horizonCulled = 0;
     const out: Patch[] = [];
     const cam = ctx.camBody;
     const rc = cam.length();
@@ -531,9 +604,18 @@ export class ChunkLOD {
     let rOcc = this.radius;
     for (const r of this.roots) { this.updateBounds(r); rOcc = Math.min(rOcc, this.radius + r.hMin); }
     rOcc -= 5;
+    // near the ground the planet's lowest point (the sea floor) makes a useless occluder: from 60 m up it leaves
+    // ~1.5 km of ground beyond the true horizon "visible". The local occluder profile (updateLocalOccluder) gives each
+    // patch the tightest valid sphere for its own sight lines and culls the far side of the horizon
+    this.updateLocalOccluder(cam, rc);
     const visit = (p: Patch): void => {
       this.updateBounds(p);
       if (!this.aboveHorizon(p, cam, rc, rOcc)) { p.split = false; return; }
+      {
+        const cosT = Math.min(1, Math.max(-1, cam.dot(p.centerDir) / rc));
+        const rLoc = this.occluderWithin(Math.acos(cosT) + p.angRadius);
+        if (rLoc > rOcc && rc > rLoc && !this.aboveHorizon(p, cam, rc, rLoc)) { p.split = false; this.stats.horizonCulled++; return; }
+      }
       _sphere.copy(p.sphere).applyMatrix4(ctx.bodyToWorld);
       if (!ctx.frustum.intersectsSphere(_sphere)) { p.split = false; return; }
       const d = this.boundDistance(p, cam, rc);
@@ -580,6 +662,24 @@ export class ChunkLOD {
     this.stats.waterPatches = water;
     this.evict(ctx.frame);
     return out;
+  }
+
+  /**
+   * Shadow cascade k (lights.ts perCascade): leave out the selected patches lying wholly nearer than `nearDepth` along
+   * the view direction (body frame) — the pixels there read a finer cascade, and the margin the caller folds into
+   * nearDepth covers the shadows those patches throw further out. k < 0 restores every selected patch.
+   */
+  shadowCascade(k: number, camBody: Vector3, viewDirBody: Vector3, nearDepth: number): number {
+    let drawn = 0;
+    for (const p of this.selected) {
+      if (!p.mesh) continue;
+      if (k < 0 || nearDepth <= 0) { p.mesh.visible = true; drawn++; continue; }
+      const depthMax = (p.sphere.center.x - camBody.x) * viewDirBody.x + (p.sphere.center.y - camBody.y) * viewDirBody.y
+        + (p.sphere.center.z - camBody.z) * viewDirBody.z + p.sphere.radius;
+      p.mesh.visible = depthMax >= nearDepth;
+      if (p.mesh.visible) drawn++;
+    }
+    return drawn;
   }
 
   /** drop geometry of long-unused patches when over the cache budget */

@@ -183,7 +183,7 @@ export function findPoi(pv: PlanetView, kind0: string): Poi | null {
     const M = pv.animals;
     if (!M || !M.count) return null;
     // members by group; a group can span several herds far apart (its mean then lands between them, at sea), so the
-    // herd framed is a real cluster: the members within 60 m of the group's most central member
+    // herd framed is a real cluster: the members within 30 m of the herd's densest knot
     const groups = new Map<number, number[]>();
     for (let i = 0; i < M.count; i++) {
       if (M.flags[i] & (4 | 8 | 16)) continue;
@@ -194,12 +194,18 @@ export function findPoi(pv: PlanetView, kind0: string): Poi | null {
     const water = pv.fields.get('water');
     const dryAt = (x: number, y: number, z: number) => !water || pv.grid.sample(water, x, y, z) < 0.05;
     let best: { n: number; x: number; y: number; z: number; members: number[] } | null = null;
+    const dist = (i: number, j: number) => Math.hypot(M.pos[i * 3] - M.pos[j * 3], M.pos[i * 3 + 1] - M.pos[j * 3 + 1], M.pos[i * 3 + 2] - M.pos[j * 3 + 2]) * R;
     for (const l of groups.values()) {
-      let mx = 0, my = 0, mz = 0;
-      for (const i of l) { mx += M.pos[i * 3]; my += M.pos[i * 3 + 1]; mz += M.pos[i * 3 + 2]; }
-      let seed = l[0], sd = Infinity;
-      for (const i of l) { const d = Math.hypot(M.pos[i * 3] - mx / l.length, M.pos[i * 3 + 1] - my / l.length, M.pos[i * 3 + 2] - mz / l.length); if (d < sd) { sd = d; seed = i; } }
-      const near = l.filter((i) => Math.hypot(M.pos[i * 3] - M.pos[seed * 3], M.pos[i * 3 + 1] - M.pos[seed * 3 + 1], M.pos[i * 3 + 2] - M.pos[seed * 3 + 2]) * R < 60);
+      // the densest knot of the herd (the member with the most others within 25 m), not its spread-out mean: a frame
+      // centred on the mean of a loose herd showed a few animals scattered over an empty hillside
+      let seed = l[0], sn = -1;
+      const step = Math.max(1, Math.floor(l.length / 64));
+      for (let a = 0; a < l.length; a += step) {
+        let n = 0;
+        for (const j of l) if (dist(l[a], j) < 25) n++;
+        if (n > sn) { sn = n; seed = l[a]; }
+      }
+      const near = l.filter((i) => dist(i, seed) < 30);
       let x = 0, y = 0, z = 0;
       for (const i of near) { x += M.pos[i * 3]; y += M.pos[i * 3 + 1]; z += M.pos[i * 3 + 2]; }
       if (!best || near.length > best.n) best = { n: near.length, x: x / near.length, y: y / near.length, z: z / near.length, members: near };
@@ -217,8 +223,9 @@ export function findPoi(pv: PlanetView, kind0: string): Poi | null {
       }
     }
     const c = pv.grid.nearestCell(px, py, pz);
-    const ll = latlon(pv, c);
-    return { lat: ll.lat, lon: ll.lon, heading: 0, cell: c };
+    // the herd's own position, not its cell's centre (cells are ~50 m apart: the snap could leave a close frame empty)
+    const pl = Math.hypot(px, py, pz) || 1;
+    return { lat: Math.asin(Math.max(-1, Math.min(1, py / pl))) * DEG, lon: Math.atan2(px, pz) * DEG, heading: 0, cell: c };
   }
   if (kind === 'harbour') {
     // the dock of the most populous settlement that has one, seen from the water side looking back at the shore

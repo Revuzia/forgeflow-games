@@ -38,6 +38,15 @@ export function anchorSpin(u: Universe, p: Planet): void {
   const st = p.st;
   st.spin0 = u.spinOf(p, u.tick);
   st.spinTick0 = u.tick;
+  forgetSun(p);
+}
+
+/** the peoples' hourly sun cache (people/world.ts sunAt) is stale once the god moves the sun or changes the day */
+export function forgetSun(p: Planet): void {
+  const ps = p.people as unknown as { sunTick?: number; sunRateHour?: number } | undefined;
+  if (!ps) return;
+  ps.sunTick = -1;
+  ps.sunRateHour = -1;
 }
 
 /** set the local hour at longitude 0 (the sun moves; everything that reads the sun follows) */
@@ -46,6 +55,7 @@ export function setHour(u: Universe, p: Planet, hour: number): void {
   const h24 = (hour / p.st.dayHours) * 24;
   p.st.spin0 = spinForHour(h24, sun.lon);
   p.st.spinTick0 = u.tick;
+  forgetSun(p);
 }
 
 function atmo(key: 'pressure' | 'o2' | 'co2' | 'n2' | 'methane' | 'dust' | 'toxicity', label: string, unit: string, max: number, desc: string): ParamDef {
@@ -184,11 +194,12 @@ export function registerParam(d: ParamDef): void {
   byPath.set(d.path, d);
 }
 
-/** exact path, a path suffix ('gravity' -> planet.gravity) or an alias */
+/** exact path, a path suffix ('gravity' -> planet.gravity), an alias, or a dynamic family (species.<id>.<key>) */
 export function findParam(path: string): ParamDef | undefined {
   const k = path.trim().toLowerCase();
   const exact = byPath.get(path.trim());
   if (exact) return exact;
+  for (const f of FAMILIES) { const d = f(k); if (d) return d; }
   for (const d of PARAMS) if (d.path.toLowerCase() === k) return d;
   for (const d of PARAMS) if (d.path.toLowerCase().endsWith('.' + k)) return d;
   for (const d of PARAMS) if (d.aliases?.some((a) => a.toLowerCase() === k)) return d;
@@ -223,9 +234,21 @@ export function coerceParam(u: Universe, d: ParamDef, raw: unknown): { ok: true;
   return { ok: true, v: raw === null ? null : String(raw) };
 }
 
+/** parameter families resolved by path pattern (species.<id>.<key> ...): the god layer adds them */
+export const FAMILIES: ((path: string) => ParamDef | undefined)[] = [];
+/** every concrete member of the families for a universe (the inspector lists them) */
+export const FAMILY_LISTS: ((u: Universe) => ParamDef[])[] = [];
+
+/** every parameter path known for this universe (fixed + families) */
+export function allParams(u: Universe): ParamDef[] {
+  const out = PARAMS.slice();
+  for (const f of FAMILY_LISTS) out.push(...f(u));
+  return out;
+}
+
 /** the registry with current values for a planet (inspector "Laws of this world") */
 export function listParams(u: Universe, p: Planet): { path: string; label: string; unit: string; kind: ParamKind; min?: number; max?: number; values?: string[]; value: unknown; desc: string }[] {
-  return PARAMS.map((d) => ({
+  return allParams(u).map((d) => ({
     path: d.path, label: d.label, unit: d.unit, kind: d.kind, min: d.min, max: d.max,
     values: d.values ? d.values(u) : undefined, value: d.get(u, p), desc: d.desc,
   }));

@@ -213,6 +213,9 @@ export const EVENT_TRIGGERS = [
   'trade', 'raid', 'war', 'famine', 'feast', 'tar-seep', 'firework', 'flint-sparks', 'storm-at-sea', 'birth',
   // societies & ecology (phase 2b)
   'blight', 'battle', 'conquest', 'contact', 'siege', 'schism',
+  // the god layer (phase 3): miracles and disasters are introductions too (CONTRACT §11.2)
+  'miracle-forest', 'miracle-heal', 'fireball', 'quake', 'eruption', 'tsunami', 'impact', 'storm', 'swarm', 'eclipse-long',
+  'flare', 'refugees', 'rebuild', 'god-hand',
 ] as const;
 
 export interface SpeciesDef {
@@ -406,10 +409,128 @@ export interface EventTemplateDef {
   text: string[];
 }
 
+// ───────────────────────────── the god layer (phase 3) ─────────────────────────────
+
+/** radial / palette categories of powers (CONTRACT §16.3) */
+export const POWER_CATEGORIES = ['Shape', 'Water', 'Sky', 'Life', 'Peoples', 'Ideas', 'Fire', 'Disasters', 'Hand', 'Creature', 'Worlds', 'Time', 'Laws'] as const;
+/** how a power picks where / what it acts on */
+export const POWER_TARGETS = ['point', 'region', 'line', 'entity', 'settlement', 'agent', 'planet', 'none'] as const;
+export const PARAM_TYPES = ['number', 'int', 'string', 'boolean', 'enum', 'pos', 'entity', 'vec3', 'items', 'any'] as const;
+
+/** one parameter of a power as the palette / radial UI shows it (types, ranges, units, what it targets) */
+export interface PowerParamDef {
+  type: (typeof PARAM_TYPES)[number];
+  min?: number;
+  max?: number;
+  default?: unknown;
+  unit?: string;
+  /** enum choices: a static list, or the name of a content registry ('weather', 'plants', 'animals', 'items', ...) */
+  values?: string[] | string;
+  /** a point, a region (pos + radius), a line (pos + to) or an entity (agent, settlement, disaster ...) */
+  target?: 'point' | 'region' | 'line' | 'entity';
+  /** entity kinds a target accepts */
+  entity?: string[];
+  desc?: string;
+}
+
+export interface PowerDef {
+  id: string;
+  name: string;
+  category: (typeof POWER_CATEGORIES)[number];
+  /** icon key (the UI draws it from its own icon set) */
+  icon: string;
+  /** radial ring: 0 inner (the everyday powers) .. 2 outer */
+  ring: number;
+  /** unistroke gesture that casts it ('spiral', 'zigzag', 'circle', 'triangle', 'v', 'wave', 'square', 'star', ...) */
+  gesture?: string | null;
+  /** the command kind it issues (must be a registered handler) */
+  command: string;
+  /** default parameters merged into the command */
+  params: Record<string, unknown>;
+  /** parameter schema for the UI (what the player can tune) */
+  schema: Record<string, PowerParamDef>;
+  target: (typeof POWER_TARGETS)[number];
+  synonyms: string[];
+  desc: string;
+  /** worship cost and cooldown (ticks) in restraint mode; never charged by default (CONTRACT §1 pillar 1) */
+  cost?: number;
+  cooldown?: number;
+  /** what witnesses make of it when the handler does not say (help / harm / wonder magnitudes, radius m) */
+  witness?: { help?: number; harm?: number; wonder?: number; radius?: number };
+}
+
+/** an effector of a disaster (CONTRACT §11.3) */
+export interface EffectorDef {
+  type: 'impact' | 'area' | 'front' | 'spread' | 'quake' | 'water' | 'global' | 'spawn';
+  /** when it acts: 'start' | 'end' (impact of a falling body) | 'each' (on its cadence for the whole life) | 0..1 (once, at that share of life) */
+  at?: 'start' | 'end' | 'each' | number;
+  /** cadence in ticks for 'each' (default 10) */
+  every?: number;
+  [k: string]: unknown;
+}
+
+export interface DisasterDef {
+  id: string;
+  name: string;
+  desc: string;
+  /** 'sky' | 'earth' | 'water' | 'fire' | 'life' | 'weather' | 'space' | 'world' */
+  category: string;
+  /** life in ticks [min, max] (-1 = until cancelled) */
+  life: [number, number];
+  /** life in planet years instead (a year-long eclipse lasts one year of the world it darkens) */
+  lifeYears?: number;
+  /** radius (m) and intensity defaults */
+  radius: number;
+  intensity: number;
+  /** metres per tick a front / storm moves (0 = stays) */
+  speed?: number;
+  effectors: EffectorDef[];
+  /** kind-specific render parameters (initial values; the sim updates them: altitude, height, plume ...) */
+  render: Record<string, number>;
+  /** what witnesses make of it (per hour of life near it) */
+  witness?: { help?: number; harm?: number; wonder?: number };
+  /** accident triggers it fires at settlements in reach (knowledge from disaster: meteor iron ...) */
+  triggers?: string[];
+  /** how it comes about on its own: expected events per planet-year where the conditions hold (0 = only by the god) */
+  natural?: { rate: number; needs: string[] };
+  synonyms?: string[];
+}
+
+export interface CreatureDef {
+  id: string;
+  name: string;
+  /** body plan for the renderer's creaturegen ('ape', 'ox', 'cat', 'tortoise', 'wolf', ...) */
+  body: string;
+  /** height (m) when adopted and when fully grown */
+  size: [number, number];
+  /** walking speed m/s */
+  speed: number;
+  strength: number;
+  intelligence: number;
+  /** hunger per hour 0..1 */
+  appetite: number;
+  /** what it eats by preference ('animal', 'crop', 'tree', 'store', 'people', 'fish') */
+  diet: string[];
+  /** starting behaviour desires (weights 0..1) */
+  desires: Record<string, number>;
+  /** miracles it knows from the start (skill 0..1) */
+  miracles?: Record<string, number>;
+  /** content animal(s) a settlement's sacred beast must be for its people to raise one of this kind */
+  animals?: string[];
+  colors: string[];
+}
+
+/** the freeform parser's vocabulary (merged by mods: objects deep-merged, arrays concatenated) */
+export type Lexicon = Record<string, unknown>;
+
 export interface ContentPack {
   id: string;
   name?: string;
   version?: string;
+  powers?: PowerDef[];
+  disasters?: DisasterDef[];
+  creatures?: CreatureDef[];
+  lexicon?: Lexicon;
   plants?: PlantDef[];
   weather?: WeatherDef[];
   biomes?: BiomeDef[];
@@ -544,12 +665,22 @@ export interface Content {
   contexts: Set<string>;
   /** sections this build does not understand yet (kept for later phases / round-tripping) */
   extra: Record<string, unknown[]>;
+  // ── the god layer (phase 3) ──
+  powers: Registry<PowerDef>;
+  disasters: Registry<DisasterDef>;
+  creatures: Registry<CreatureDef>;
+  lexicon: Lexicon;
+  /** the packs this content was built from, in order (the god layer rebuilds content with a runtime pack on top) */
+  sources: ContentPack[];
 }
+
+/** the id of the pack the god layer builds at runtime (freeform inventions, species laws); never required by saves */
+export const RUNTIME_PACK = 'runtime';
 
 // ───────────────────────────── loading ─────────────────────────────
 
 const KNOWN = ['plants', 'weather', 'biomes', 'biomeRules', 'stars', 'planetkinds', 'ores', 'scenarios', 'species', 'items', 'recipes',
-  'buildings', 'materials', 'animals', 'diseases', 'phonologies', 'events'];
+  'buildings', 'materials', 'animals', 'diseases', 'phonologies', 'events', 'powers', 'disasters', 'creatures', 'lexicon'];
 
 /**
  * Merge and validate packs (base first, then mods in order). Throws ContentError listing every problem.
@@ -579,6 +710,11 @@ export function loadContent(packs: ContentPack[]): Content {
     itemsByTag: new Map(),
     contexts: new Set(),
     extra: {},
+    powers: new Registry('power'),
+    disasters: new Registry('disaster'),
+    creatures: new Registry('creature'),
+    lexicon: {},
+    sources: packs.slice(),
   };
   for (const pack of packs) {
     if (!pack || typeof pack !== 'object') { problems.push('a content pack is not an object'); continue; }
@@ -617,6 +753,13 @@ export function loadContent(packs: ContentPack[]): Content {
     section('diseases', c.diseases, checkDisease);
     section('phonologies', c.phonologies, checkPhonology);
     section('events', c.events, checkEventTemplate);
+    section('powers', c.powers, checkPower);
+    section('disasters', c.disasters, checkDisaster);
+    section('creatures', c.creatures, checkCreature);
+    if (pack.lexicon !== undefined) {
+      if (!pack.lexicon || typeof pack.lexicon !== 'object' || Array.isArray(pack.lexicon)) problems.push(`${pid} › 'lexicon' must be an object`);
+      else mergeLexicon(c.lexicon, pack.lexicon);
+    }
     if (pack.biomeRules !== undefined) {
       if (!Array.isArray(pack.biomeRules)) problems.push(`${pid} › 'biomeRules' must be an array`);
       else c.biomeRules = pack.biomeRules.slice();
@@ -669,6 +812,7 @@ export function loadContent(packs: ContentPack[]): Content {
     if (s.focus !== undefined && (s.focus < 0 || s.focus >= s.planets.length)) problems.push(`scenario '${s.id}': focus ${s.focus} is not a planet index`);
   }
   crossCheckPeoples(c, problems);
+  crossCheckGod(c, problems);
   if (problems.length) throw new ContentError(problems);
   c.plantTable = compilePlants(c.plants);
   return c;
@@ -1147,5 +1291,112 @@ function crossCheckPeoples(c: Content, problems: string[]): void {
       if (e && typeof e === 'object' && e.species !== undefined && !c.species.has(e.species)) problems.push(ref('scenario', s.id, `peoples[${i}].species`, e.species, c.species));
       if (e && typeof e === 'object' && e.era !== undefined && !ERAS.includes(e.era as Era)) problems.push(`scenario '${s.id}': peoples[${i}].era '${e.era}' is not one of ${ERAS.join(', ')}`);
     });
+  }
+}
+
+// ───────────────────────────── the god layer: checks (phase 3) ─────────────────────────────
+
+const EFFECTOR_TYPES = ['impact', 'area', 'front', 'spread', 'quake', 'water', 'global', 'spawn'];
+/** natural-disaster conditions a planet can be tested for (god/disasters.ts naturalRolls) */
+export const DISASTER_NEEDS = [
+  'air', 'volcanic', 'rift', 'mountain', 'coast', 'sea', 'dry', 'wet', 'hot', 'cold', 'forest', 'grass', 'crops', 'people', 'herds',
+  'sand', 'moon', 'magnetism', 'storms', 'pole', 'settled',
+];
+const CREATURE_DIET = ['animal', 'crop', 'tree', 'store', 'people', 'fish', 'grass', 'rock'];
+export const CREATURE_BEHAVIOURS = [
+  'eat', 'sleep', 'play', 'throw', 'help', 'attack', 'cast', 'impress', 'terrify', 'poop', 'explore', 'follow', 'eat-people', 'throw-people',
+];
+
+function checkPower(x: PowerDef, w: string, p: string[]): void {
+  const o = x as unknown as Record<string, unknown>;
+  str(o, 'name', w, p);
+  str(o, 'icon', w, p);
+  str(o, 'command', w, p);
+  str(o, 'desc', w, p);
+  oneOf(o, 'category', POWER_CATEGORIES, w, p);
+  oneOf(o, 'target', POWER_TARGETS, w, p);
+  num(o, 'ring', w, p, 0, 3);
+  strArr(o, 'synonyms', w, p, false);
+  if (!x.params || typeof x.params !== 'object' || Array.isArray(x.params)) p.push(`${w}: "params" must be an object of default parameters`);
+  if (!x.schema || typeof x.schema !== 'object' || Array.isArray(x.schema)) { p.push(`${w}: "schema" must be an object of parameter schemas`); return; }
+  for (const [k, s] of Object.entries(x.schema)) {
+    if (!s || typeof s !== 'object') { p.push(`${w}: schema.${k} must be an object`); continue; }
+    if (!PARAM_TYPES.includes(s.type)) p.push(`${w}: schema.${k}.type '${String(s.type)}' is not one of ${PARAM_TYPES.join(', ')}`);
+    if (s.min !== undefined && s.max !== undefined && s.min > s.max) p.push(`${w}: schema.${k} has min > max`);
+  }
+  if (x.gesture !== undefined && x.gesture !== null && typeof x.gesture !== 'string') p.push(`${w}: "gesture" must be a string or null`);
+  for (const k of ['cost', 'cooldown'] as const) if (x[k] !== undefined) num(o, k, w, p, 0, 1e7);
+}
+
+function checkDisaster(x: DisasterDef, w: string, p: string[]): void {
+  const o = x as unknown as Record<string, unknown>;
+  str(o, 'name', w, p);
+  str(o, 'desc', w, p);
+  str(o, 'category', w, p);
+  num(o, 'radius', w, p, 1, 1e6);
+  num(o, 'intensity', w, p, 0, 100);
+  if (!Array.isArray(x.life) || x.life.length !== 2 || x.life.some((v) => typeof v !== 'number')) p.push(`${w}: "life" must be [min, max] ticks (-1 = until cancelled)`);
+  if (!Array.isArray(x.effectors) || !x.effectors.length) p.push(`${w}: "effectors" must be a non-empty array`);
+  else x.effectors.forEach((e, i) => {
+    if (!e || typeof e !== 'object' || !EFFECTOR_TYPES.includes(String(e.type))) p.push(`${w}: effectors[${i}].type must be one of ${EFFECTOR_TYPES.join(', ')}`);
+  });
+  if (!x.render || typeof x.render !== 'object') p.push(`${w}: "render" parameters object is required`);
+  if (x.natural !== undefined) {
+    if (!x.natural || typeof x.natural.rate !== 'number' || !Array.isArray(x.natural.needs)) p.push(`${w}: "natural" needs a numeric rate and a needs array`);
+    else for (const k of x.natural.needs) if (!DISASTER_NEEDS.includes(k)) p.push(`${w}: natural need '${k}' is unknown${suggest(k, DISASTER_NEEDS) ? ` — did you mean '${suggest(k, DISASTER_NEEDS)}'?` : ''}`);
+  }
+}
+
+function checkCreature(x: CreatureDef, w: string, p: string[]): void {
+  const o = x as unknown as Record<string, unknown>;
+  str(o, 'name', w, p);
+  str(o, 'body', w, p);
+  tuple(o, 'size', 2, w, p);
+  num(o, 'speed', w, p, 0.05, 50);
+  num(o, 'strength', w, p, 0, 10);
+  num(o, 'intelligence', w, p, 0, 10);
+  num(o, 'appetite', w, p, 0, 1);
+  strArr(o, 'diet', w, p, false);
+  for (const d of x.diet ?? []) if (!CREATURE_DIET.includes(d)) p.push(`${w}: diet '${d}' is not one of ${CREATURE_DIET.join(', ')}`);
+  if (!x.desires || typeof x.desires !== 'object') p.push(`${w}: "desires" must map behaviours to weights`);
+  else for (const k of Object.keys(x.desires)) if (!CREATURE_BEHAVIOURS.includes(k)) p.push(`${w}: unknown behaviour '${k}'${suggest(k, CREATURE_BEHAVIOURS) ? ` — did you mean '${suggest(k, CREATURE_BEHAVIOURS)}'?` : ''}`);
+  if (!Array.isArray(x.colors) || x.colors.some((col) => !COLOR.test(col))) p.push(`${w}: "colors" must be #rrggbb strings`);
+}
+
+/** deep merge: objects merge key by key, arrays concatenate (deduplicated), scalars replace */
+function mergeLexicon(into: Record<string, unknown>, add: Record<string, unknown>): void {
+  for (const [k, v] of Object.entries(add)) {
+    if (k.startsWith('$')) continue;
+    const cur = into[k];
+    if (Array.isArray(v)) {
+      const base = Array.isArray(cur) ? cur.slice() : [];
+      for (const e of v) if (!base.some((b) => JSON.stringify(b) === JSON.stringify(e))) base.push(e);
+      into[k] = base;
+    } else if (v && typeof v === 'object') {
+      const base = cur && typeof cur === 'object' && !Array.isArray(cur) ? cur as Record<string, unknown> : {};
+      into[k] = base;
+      mergeLexicon(base, v as Record<string, unknown>);
+    } else into[k] = v;
+  }
+}
+
+/** references from the god sections into the rest of the content */
+function crossCheckGod(c: Content, problems: string[]): void {
+  for (const d of c.disasters.list) {
+    for (const t of d.triggers ?? []) if (!c.contexts.has(t)) problems.push(`disaster '${d.id}': trigger '${t}' is unknown`);
+    for (const e of d.effectors ?? []) {
+      if (typeof e.animal === 'string' && !c.animals.has(e.animal)) problems.push(ref('disaster', d.id, 'effectors.animal', e.animal, c.animals));
+      if (typeof e.weather === 'string' && !c.weather.has(e.weather)) problems.push(ref('disaster', d.id, 'effectors.weather', e.weather, c.weather));
+      if (typeof e.disease === 'string' && !c.diseases.has(e.disease)) problems.push(ref('disaster', d.id, 'effectors.disease', e.disease, c.diseases));
+      if (typeof e.material === 'string' && !['soil', 'sand', 'snow', 'ash', 'ice', 'rock', 'lava'].includes(e.material)) problems.push(`disaster '${d.id}': material '${e.material}' is not a terrain material`);
+    }
+  }
+  for (const cr of c.creatures.list) for (const a of cr.animals ?? []) if (!c.animals.has(a)) problems.push(ref('creature', cr.id, 'animals', a, c.animals));
+  for (const pw of c.powers.list) {
+    // a disaster power must name a known disaster; a weather power a known weather kind
+    const kind = pw.params?.kind;
+    if (pw.command === 'disaster.spawn' && typeof kind === 'string' && kind !== 'random' && !c.disasters.has(kind)) problems.push(ref('power', pw.id, 'params.kind', kind, c.disasters));
+    if ((pw.command === 'weather.paint' || pw.command === 'weather.global') && typeof kind === 'string' && kind !== 'none' && !c.weather.has(kind)) problems.push(ref('power', pw.id, 'params.kind', kind, c.weather));
+    if (pw.command === 'creature.adopt' && typeof pw.params?.template === 'string' && !c.creatures.has(pw.params.template)) problems.push(ref('power', pw.id, 'params.template', pw.params.template as string, c.creatures));
   }
 }

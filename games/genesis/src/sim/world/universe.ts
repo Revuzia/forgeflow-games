@@ -11,6 +11,8 @@ import { Rng, type RngState } from '../core/rng.ts';
 import { IdAllocator } from '../core/ids.ts';
 import type { Planet } from './planet.ts';
 import type { StarState } from './star.ts';
+import type { LapseState } from '../perf/lapse.ts';
+import { GodState } from '../god/state.ts';
 import { AU, bodyCenter, orbitOffsetAtYearFraction, seasonYearFraction, sunDirBody, sunLongitude, spinAt, type D3 } from './orbits.ts';
 
 export interface LoggedCommand {
@@ -21,6 +23,8 @@ export interface LoggedCommand {
 export interface Settings {
   maxAgents: number;
   restraint: boolean;
+  /** SIM perf push 2: the time-lapse level from the logged speed preset (perf/lapse.ts; absent = level 0) */
+  lapse?: LapseState;
 }
 
 /** Solar geometry of a planet at a tick (the climate, plants and the calendar read it). */
@@ -61,7 +65,8 @@ export function pinDeclination(dir: D3, sinDecl: number, fallback: ArrayLike<num
 }
 
 export class Universe {
-  readonly content: Content;
+  /** replaced (never mutated) when the god layer adds runtime content (god/runtime.ts) */
+  content: Content;
   readonly seed: number;
   scenario: string;
   tick = 0;
@@ -77,6 +82,8 @@ export class Universe {
   /** camera focus (the 'focus' command): "here" for the parser, cohort promotion later */
   focus: { planet: number; pos: UnitVec } | null = null;
   settings: Settings = { maxAgents: 4000, restraint: false };
+  /** the god layer: disasters, the hand, creatures, gods, laws, runtime content (god/state.ts; saved in the header) */
+  god: GodState = new GodState();
   /** global change stamp: field versions are stamps so 'since' queries are one comparison */
   private stampCounter = 0;
 
@@ -87,6 +94,7 @@ export class Universe {
     this.star = star;
     this.rng = new Rng(this.seed);
     this.ids = new IdAllocator();
+    this.god.rng = this.rng.fork('god');
   }
 
   get stamp(): number {

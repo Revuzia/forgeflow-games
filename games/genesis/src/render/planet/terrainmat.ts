@@ -364,8 +364,11 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       vb = mix(vb, rows * 0.06 + hedge * 1.2, cw);
       vao *= mix(1.0, 1.0 - hedge * 0.35, cw);
     }
-    // per-cell cover is linear across 50 m triangles: noise in the threshold turns those edges into organic margins
-    float vegW = max(smoothstep(0.05, 0.6, vegTotal + m1 * 0.32 + m2 * 0.06) * (1.0 - steep * 0.8), fieldW);
+    // per-cell cover is linear across 50 m triangles: noise in the threshold turns those edges into organic margins.
+    // Partial cover is turf broken by small outcrops and bare scars (~5–16 m, crisp-edged), not half the hillside in
+    // soft 80 m blotches of rock grey against green — that read as camouflage from 30–60 m up
+    float vegN = m1 * 0.16 + m2 * 0.12 + snoise(P * 0.21 + warpV) * 0.14;
+    float vegW = max(smoothstep(0.1, 0.42, vegTotal + vegN) * (1.0 - steep * 0.8), fieldW);
     col = mix(col, vcol, vegW);
     bump = mix(bump, vb, vegW);
     mk = mix(mk, 0.45, vegW);
@@ -507,13 +510,15 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // ── wetness: rain, flood, mud, the wet band above the waterline ──
   // the wet band above the waterline is narrow (a few tens of cm) and noise-broken; on flat shores a vertical band of
   // 1.5 m covered whole low islands in mud
-  // On a steep rim that band is thinner than a pixel and aliases into a dotted outline: it fades out as the height
-  // above water changes by more than ~0.15 m per pixel.
+  // On a steep rim, or seen from 50 m up, that band is thinner than a pixel and would alias into a dotted outline: it
+  // widens to at least ~1.5 pixels (in height above the water) and softens instead — a continuous wet line along every
+  // shore, never dashes (fading it out instead left only the water's own specks of film: a dotted shoreline)
   float uwPx = fwidth(uw);
   // (no hard edges: the band rises smoothly from dry ground and runs on under the water's edge, so where the water
   // mesh ends along a sim triangle there is no seam of dry-then-wet pixels to trace it in dashes)
-  float shoreWet = smoothstep(-0.36 + m2 * 0.1, -0.04, uw) * (1.0 - smoothstep(0.1, 0.5, uw));
-  shoreWet *= (1.0 - smoothstep(0.2, 0.45, vegTotal)) * (1.0 - smoothstep(0.04, 0.3, uwPx));
+  float wLo = min(-0.36 + m2 * 0.1, -0.04 - uwPx * 1.5);
+  float shoreWet = smoothstep(wLo, -0.04, uw) * (1.0 - smoothstep(0.1 + uwPx, 0.5 + uwPx * 2.0, uw));
+  shoreWet *= (1.0 - smoothstep(0.2, 0.45, vegTotal)) * mix(1.0, 0.6, smoothstep(0.04, 0.4, uwPx));
   float wet = clamp(max(wetF * 0.85, shoreWet), 0.0, 1.0) * (1.0 - smoothstep(0.1, 0.4, snow));
   // forest floors and meadows are not wet mirrors: the canopy and the sward take the water
   wet *= 1.0 - 0.75 * clamp(tree + 0.5 * grass, 0.0, 1.0);
@@ -523,12 +528,16 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   rough = mix(rough, wetFloor, wet * 0.85);
 
   // ── under water: silt and sand floor ──
+  // (every change at the waterline ramps in over ~25 cm of depth: a step at uw = 0 in the colour, and above all in the
+  // bump height — whose screen derivative spikes along the contour, quad by quad — drew a dotted black line along
+  // every shore, with or without the water sheet)
   if (uw > 0.0) {
     float d = smoothstep(0.0, 6.0, uw);
+    float inW = smoothstep(0.0, 0.25, uw);
     vec3 floorC = mix(uSandCol * 0.5, vec3(0.09, 0.085, 0.065), smoothstep(1.0, 12.0, uw)) * (0.85 + 0.25 * m1);
-    col = mix(col, floorC, max(d, 0.6) * (1.0 - steep * 0.5));
-    rough = mix(rough, 0.35, 0.7);
-    mk = mix(mk, 0.05, max(d, 0.6));
+    col = mix(col, floorC, max(d, 0.6) * (1.0 - steep * 0.5) * inW);
+    rough = mix(rough, 0.35, 0.7 * inW);
+    mk = mix(mk, 0.05, max(d, 0.6) * inW);
   }
 
   // ── lava: dark crust, glowing cracks (emissive, animated) ──
@@ -550,28 +559,51 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // (the fire field's gradient per metre, taken outside the branch: derivatives in divergent flow are undefined)
   float fireDW = fwidth(fire) / max(fw, 1e-4);
   if (fire > 0.01) {
-    float warp = snoise(P * 0.045 + vec3(0.0, uTime * 0.01, 0.0)) * 0.6 + snoise(P * 0.17) * 0.3 + snoise(P * 0.6) * 0.1;
-    float level = fire + warp * 0.2;
-    // the front is a LINE of constant width on the ground (~1.5 m) along the level-0.25 contour, found from the field's
-    // own gradient — a band of field values covered whole hillsides where the fire field is smooth, glowing peach
-    float perM = min(fireDW + 0.025, 1.0);
-    float band = 1.0 - smoothstep(0.0, max(perM * 1.5, 0.004), abs(level - 0.25));
-    float behind = smoothstep(0.22, 0.4, level);
+    // the level is warped by noise so the front wanders instead of following the sim triangles; its gradient per metre
+    // comes from the field's screen derivative and the noise's ANALYTIC gradient, so the front has the same width in
+    // metres everywhere (with a floor-only gradient it ballooned into peach blobs wherever the noise was flat)
+    // (the warp is small against the field: at ±0.2 a smooth fire field crossed 0.25 in curly loops all over the
+    // burning ground — orange swirls by day, scattered petals at night — instead of along ONE wandering front)
+    // (one broad octave only: a finer one made little closed islands of the contour beside the front — orange rings
+    // and flecks scattered over the grass)
+    vec3 gw1;
+    float warp = snoiseGrad(P * 0.045 + vec3(0.0, uTime * 0.01, 0.0), gw1);
+    vec3 gW = gw1 * 0.045 * 0.06;
+    gW -= up * dot(gW, up);
+    float level = fire + warp * 0.06;
+    float gradF = fireDW * 0.7;
+    float gradL = max(sqrt(gradF * gradF + dot(gW, gW)), 0.004);
+    // signed distance (m) behind the front (> 0: inside the burning ground)
+    float dB = (level - 0.25) / gradL;
+    // the front: a line of burning litter ~2 m wide, at least ~1.5 pixels (dimmed by the excess, so it never thickens
+    // into a glowing area from far away); only where the fire field itself carries the contour — where the noise
+    // dominates (a flat field near 0.25) the contour would only draw islands, not a front
+    float halfW = max(1.0, fw * 0.75);
+    float frontK = smoothstep(0.35, 0.75, gradF / (gradF + length(gW) + 1e-5));
+    float band = (1.0 - smoothstep(0.0, halfW, abs(dB + 0.3))) * min(1.0, 1.0 / halfW) * frontK;
     float fl = 0.55 + 0.45 * snoise(P * 0.7 + vec3(0.0, uTime * 1.3, 0.0));
     float lick = smoothstep(0.1, 0.7, snoise(P * vec3(1.6, 0.4, 1.6) + vec3(uTime * 0.6)) * 0.5 + 0.5);
-    // embers behind the front: a few hot specks, faded where they would be smaller than a pixel
+    // behind it: a smouldering margin a few metres deep (glowing coals in sparse patches, dying back), then char and
+    // ash (with the small warp, dB is a fair distance near the front; a margin defined in field values covered most of
+    // a smooth burning field with coals — orange flecks everywhere, even by day)
+    float smoulder = smoothstep(0.3, 1.5, dB) * (1.0 - smoothstep(3.0, 7.0 + 3.0 * fl, dB));
+    float coals = smoothstep(0.72, 0.92, snoise(P * 0.42 + 4.0) * 0.5 + 0.5 + 0.15 * snoise(P * 1.7)) * 0.35;
+    // sparse embers in the smoulder, round specks off-centre in their cells, faded before they shrink under a pixel
     vec3 cellE = floor(P * 2.2);
     float eh = fract(sin(dot(cellE, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
-    // (round specks set off-centre in their cell, not square tiles)
     vec3 eo = fract(P * 2.2) - 0.5 - (vec3(fract(eh * 13.7), fract(eh * 7.3), fract(eh * 3.1)) - 0.5) * 0.5;
-    float ember = step(0.95, eh) * smoothstep(0.22, 0.08, length(eo)) * (0.6 + 0.4 * sin(uTime * 3.0 + eh * 60.0)) * (1.0 - smoothstep(0.15, 0.5, fw));
-    // and patches of glowing coals, not a uniform glow: an even 5 % emission over every burning cell lit whole
-    // hillsides peach at night and the auto-exposure blacked out the rest of the view
-    float coals = smoothstep(0.64, 0.9, snoise(P * 0.3 + 4.0) * 0.5 + 0.5);
-    emis += vec3(2.4, 0.62, 0.09) * (band * (0.6 + 0.9 * lick) * fl * 2.6 + ember * behind * 1.6 + behind * coals * 0.12 * fl);
-    // the ground: charred where the fire has passed, dark ash with grey bloom
-    float ashK = min(1.0, max(behind, band * 0.7) * 1.1);
-    col = mix(col, mix(vec3(0.03, 0.028, 0.026), vec3(0.11, 0.105, 0.1), smoothstep(0.3, 0.8, snoise(P * 0.9) * 0.5 + 0.5) * 0.7), ashK * 0.9);
+    float ember = step(0.975, eh) * smoothstep(0.22, 0.08, length(eo)) * (0.6 + 0.4 * sin(uTime * 3.0 + eh * 60.0)) * (1.0 - smoothstep(0.06, 0.2, fw));
+    // (by day the front and the coals are a smouldering line under the flames, not a lava worm: about half the glow
+    // the night shows — the exposure, not the fire, changes, but the eye reads the sunlit ground first)
+    float dayFire = mix(1.0, 0.45, smoothstep(-0.05, 0.25, dot(up, uSunDirBody)));
+    emis += vec3(2.4, 0.62, 0.09) * (band * (0.5 + 0.9 * lick) * fl * 2.2 + smoulder * (coals + 0.004) * fl + ember * smoulder * 1.2) * dayFire;
+    // the ground: scorched brown just ahead of the front (heat), charred black right behind it, grey ash further back
+    float ahead = smoothstep(0.1, 0.24, level) * (1.0 - step(0.0, dB));
+    col = mix(col, col * vec3(0.55, 0.45, 0.35), ahead * 0.6);
+    float charK = smoothstep(-0.8, 0.6, dB);
+    float ashBloom = smoothstep(0.5, 0.9, level) * smoothstep(0.3, 0.8, snoise(P * 0.9) * 0.5 + 0.5);
+    col = mix(col, mix(vec3(0.022, 0.02, 0.018), vec3(0.12, 0.115, 0.11), ashBloom * 0.75), charK * 0.95);
+    rough = mix(rough, 0.97, charK);
   }
 
   // macro relief in the shading only (gullies and swells at 10–60 m): reads at a distance, leaves the ground
@@ -591,7 +623,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   }
   s.albedo = col;
   s.rough = clamp(rough, 0.04, 1.0);
-  s.bump = bump + macro * (uw > 0.0 ? 0.3 : 1.0);
+  s.bump = bump + macro * mix(1.0, 0.3, smoothstep(0.0, 0.25, uw));
   s.ao = ao;
   s.emis = emis;
   return s;
@@ -619,12 +651,21 @@ ${GROUND_VERT_PARS}
 
 const VERT_MAIN = /* glsl */ `
 ${TERRAIN_VERT_CORE}
-  vBodyPos = tPos;
-  vBodyN = tNrm;
   vF0 = tfInterp(uFieldM0, aCells, aMisc.x);
   vF1 = tfInterp(uFieldM1, aCells, aMisc.x);
   vF2 = tfInterp(uFieldV, aCells, aMisc.x);
   vF3 = tfInterp(uFieldC, aCells, aMisc.x);
+  // material-aware relief in the SHADING (the heights are the contract's ground and stay as they are): the 12 m and
+  // 3 m detail octaves shade at full strength on bare rock, at half on soil and meadow, and barely on sown fields,
+  // roads and streets — the same ±0.6 m humps lit everywhere read as a quilted mattress
+  {
+    float rockK = smoothstep(0.55, 0.9, tA.y);
+    float flatK = max(smoothstep(0.04, 0.3, vF2.w), smoothstep(0.1, 0.45, vF3.z)) * (1.0 - rockK);
+    float reliefK = mix(mix(0.45, 1.0, rockK), 0.12, flatK);
+    tNrm = normalize(tNrm + aGrad * tA.y * (1.0 - reliefK) * (1.0 - tMorph));
+  }
+  vBodyPos = tPos;
+  vBodyN = tNrm;
   vF4 = vec4(tS, tA.z, tA.w, tH);
   vF5 = tfInterp(uFieldS, aCells, aMisc.x);
   vCurv = tfInterp(uFieldN, aCells, aMisc.x).w;
@@ -667,8 +708,10 @@ const FRAG_LIGHT = /* glsl */ `
         vec3 wq = vec3(snoise(q1 * 0.5), snoise(q1 * 0.5 + 4.1), snoise(q1 * 0.5 + 8.3)) * 0.6;
         float r1 = 1.0 - abs(snoise(q1 + wq));
         float r2 = 1.0 - abs(snoise(q2 - wq * 0.7));
-        float caus = pow(r1, 9.0) + pow(r2, 9.0) * 0.8;
-        sunCol *= 1.0 + (caus * 1.6 - 0.3) * 0.3 * k;
+        // (the zero-crossings of one noise form a connected net — it still read as pool tiles; where two warped ridge
+        // sets overlap only broken, wandering filaments and knots stay bright, like light focused by real swell)
+        float caus = pow(r1 * r2, 7.0) * 2.2 + pow(r1, 14.0) * 0.25;
+        sunCol *= 1.0 + (caus * 1.5 - 0.15) * 0.3 * k;
       }
     }
     IncidentLight sunL;
@@ -730,27 +773,53 @@ const FRAG_EMISSIVE = /* glsl */ `
     float cityL = vF5.z;
     if (cityL > 0.002 && night > 0.0) {
       float cd = length(vViewPosition);
-      vec3 lv = voronoi3(vBodyPos * 0.11);
-      float lamp = exp(-lv.x * lv.x * 22.0) * step(0.3, lv.z);
-      float lampAA = aaF(tFw, 9.0);
-      // seen from high up the lamps merge: lit blocks (~35 m cells, some dark) strung along the worn streets, with
-      // dark gaps between — a city reads as a speckled web of light, not a smooth blob; their own mean beyond that
-      vec3 bv = voronoi3(vBodyPos * 0.016);
-      float block = smoothstep(0.62, 0.1, bv.x) * step(0.3, bv.z) * (0.4 + 0.6 * bv.z);
-      float street = smoothstep(0.1, 0.55, vF3.z);
-      float blockAA = aaF(tFw, 60.0);
-      // (beyond the blocks' scale the glow still follows the worn streets: a web along the roads, not a flat disc)
-      float far = mix(0.05 + 0.3 * street, block * (0.2 + 1.0 * street) * 0.6, blockAA);
-      float pattern = mix(far, lamp * 1.4 + 0.05, lampAA);
+      vec3 Pc = vBodyPos;
+      // An organic glow, not a lit polygon: the per-cell light is linear over 50 m sim triangles (its contours are
+      // straight lines), so a noise-warped threshold bites the outline into ragged edges, and a hamlet's few hearths
+      // fade in rather than being cut off (any lit village keeps a visible glow)
+      float wn = fbm3(Pc * 0.022 + 3.7) + 0.35 * snoise(Pc * 0.09 + 1.3);
+      float street = smoothstep(0.08, 0.5, vF3.z + wn * 0.12);
+      float presence = smoothstep(0.0, 0.35, cityL * 1.6 + wn * 0.22 - 0.06 + street * 0.25);
+      // lit quarters strung along the worn streets, dark gaps (yards, gardens, fields) between them — shaped by noise,
+      // so no Voronoi cells
+      // (driven by the noise more than by the street wear, which is high all over a city: led by the streets the
+      // clumps merged into one uniform blown-out blob)
+      // (the exposure meters a night side on its few lit pixels, so a city's brightness is normalised away: what reads
+      // is its contrast — lit quarters against dark gaps — hence a low floor and about half of it in gaps)
+      // A city is its lights: a faint aura, and points whose density follows the quarters (soft noise, so no
+      // hard-edged leopard spots — thresholded clumps read as dark holes punched in a cream blob)
+      float clump = smoothstep(-0.3, 0.6, wn * 1.2 + street * 0.25 + min(cityL, 2.0) * 0.08);
+      float glow = (0.003 + 0.07 * clump * (0.3 + 0.7 * street)) * presence;
+      // the lights themselves: points (one per ~8 m and per ~25 m cell, each its own brightness, many dark). Where a
+      // point is smaller than a pixel it stays a pixel-sized spark (dimmed linearly, not by area) — the bloom carries
+      // it — and where even the cells are unresolved their mean is already in the glow
+      float pts = 0.0;
+      {
+        vec3 fp; float f1; float id;
+        ff_cells(Pc * 0.125, fp, f1, id);
+        float rad = 0.07, rr = max(rad, tFw * 0.125 * 0.6);
+        float on8 = step(1.0 - (0.2 + 0.6 * clump), id);
+        pts += on8 * (0.6 + 0.8 * fract(id * 7.3)) * exp(-(f1 * f1) / (rr * rr)) * (rad / rr) * aaF(tFw, 2.5);
+        ff_cells(Pc * 0.04 + 7.7, fp, f1, id);
+        rad = 0.05; rr = max(rad, tFw * 0.04 * 0.6);
+        float on25 = step(1.0 - (0.3 + 0.65 * clump) * (0.55 + 0.45 * street), id);
+        pts += on25 * (0.8 + 0.8 * fract(id * 3.1)) * exp(-(f1 * f1) / (rr * rr)) * (rad / rr) * 3.0;
+      }
+      float pattern = glow + pts * presence;
       // within a couple of km the settlement's own lit windows and street lamps are drawn (render/life): the ground
       // keeps only a faint warm spill there instead of a field of spots — light FALLING on the ground (its own colour,
       // saturating with the cell's sum of houses), not light glowing out of it: a self-lit spill read as a glaring disc
       // round every town once the night exposure adapted to it, brighter than the windows that cast it
       float nearK = smoothstep(900.0, 2500.0, cd);
-      vec3 lc = mix(vec3(1.0, 0.5, 0.18), vec3(1.0, 0.72, 0.42), smoothstep(1.5, 3.5, cityL));
-      totalEmissiveRadiance += lc * cityL * pattern * night * uCityLights * 1.4 * nearK;
+      // (warm, saturated lamp and hearth light: the paler city tint went cream-white under AgX)
+      vec3 lc = mix(vec3(1.0, 0.46, 0.14), vec3(1.0, 0.6, 0.26), smoothstep(1.5, 3.5, cityL));
+      // (a city's core compressed against its outskirts: linear in the light it saturated to a white disc)
+      totalEmissiveRadiance += lc * pow(cityL, 0.65) * pattern * night * uCityLights * 1.4 * nearK;
       float spillL = cityL / (1.0 + 0.6 * cityL);
-      totalEmissiveRadiance += lc * spillL * diffuseColor.rgb * 0.035 * night * uCityLights * (1.0 - nearK);
+      // the spill is a whisper (about the moonlight's level at a town's heart): at 0.035 it was ~6× the moonlight and
+      // floodlit the whole village ground orange-brown at night (the road ribbons, which do not take it, then read as
+      // black bars); the pools under windows and lamps are the point lights'
+      totalEmissiveRadiance += lc * spillL * diffuseColor.rgb * 0.006 * night * uCityLights * (1.0 - nearK);
     }
     // brush preview ring (projected on the ground, so it hugs every slope)
     if (uBrushOn > 0.5) {

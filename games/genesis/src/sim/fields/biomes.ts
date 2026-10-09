@@ -146,9 +146,11 @@ function classifyFlat(fr: FlatRules, v: Float64Array): number {
 }
 
 /** Re-classify every cell; pinned cells keep their biome and are nudged back toward its painted state. (readVars and
- * classifyCell, with the planet's arrays read once and the rules flattened — same variables, same rule order.) */
-export function biomeStep(u: Universe, p: Planet): void {
+ * classifyCell, with the planet's arrays read once and the rules flattened — same variables, same rule order.)
+ * `passes` > 1: a time-lapse pass standing for that many (perf/lapse.ts): the pinned nudge is compounded. */
+export function biomeStep(u: Universe, p: Planet, passes = 1): void {
   const f = p.f, s = p.s, g = p.grid;
+  const pinK = passes > 1 ? 1 - Math.pow(0.75, passes) : 0.25;
   const N = p.count;
   const fr = flatRules(u.content);
   const v = vars;
@@ -162,7 +164,7 @@ export function biomeStep(u: Universe, p: Planet): void {
     const pin = pinnedBiome[c];
     if (pin >= 0) {
       biome[c] = pin;
-      applyPaint(u, p, c, u.content.biomes.list[pin], 0.25, false);
+      applyPaint(u, p, c, u.content.biomes.list[pin], pinK, false);
       continue;
     }
     let mx = 0, coast = 0;

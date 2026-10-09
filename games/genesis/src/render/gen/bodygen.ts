@@ -40,6 +40,14 @@ export interface BodyMesh { geo: BufferGeometry; rig: Rig; height: number; verts
 interface VOpt { req?: number; forbid?: number; tool?: number; ao?: number }
 
 class RigBuilder {
+  /**
+   * Style bits an instance of this mesh may carry / always carries: a part that needs none of the possible bits, or is
+   * forbidden by an ever-present one, is never shown on this mesh and is not built at all (the crowds build one biped
+   * per clothing tier, so a mesh does not carry every other tier's clothes collapsed)
+   */
+  possible = 0x7fffffff;
+  always = 0;
+  private skip(o: VOpt): boolean { return (!!o.req && (o.req & this.possible) === 0) || (!!o.forbid && (o.forbid & this.always) !== 0); }
   pos: number[] = [];
   nrm: number[] = [];
   rig: number[] = [];
@@ -60,6 +68,7 @@ class RigBuilder {
    * in u. `keep(p)` drops triangles whose centroid fails (hair caps, open necklines).
    */
   surface(nu: number, nv: number, f: (u: number, v: number) => [V3, V3], bone: (p: V3, v: number) => [number, number, number], part: number, o: VOpt = {}, keep?: (p: V3) => boolean, aoFn?: (p: V3, v: number) => number): void {
+    if (this.skip(o)) return;
     const ids: number[][] = [];
     const P: V3[][] = [];
     for (let j = 0; j <= nv; j++) {
@@ -101,6 +110,7 @@ class RigBuilder {
    * builder's side axis). Bone weights per ring come from `bone(t)`. Caps both ends (cap0 / cap1).
    */
   tube(pts: V3[], rad: [number, number][], sides: number, bone: (t: number) => [number, number, number], part: number, o: VOpt = {}, cap0 = true, cap1 = true, side: V3 = [1, 0, 0]): void {
+    if (this.skip(o)) return;
     const n = pts.length;
     const rings: number[][] = [];
     for (let i = 0; i < n; i++) {
@@ -150,6 +160,7 @@ class RigBuilder {
 
   /** a flat two-sided quad strip (wings, fins, cards): corners a b c d */
   card(a: V3, b: V3, c: V3, d: V3, bone: (p: V3) => [number, number, number], part: number, o: VOpt = {}): void {
+    if (this.skip(o)) return;
     const ux = b[0] - a[0], uy = b[1] - a[1], uz = b[2] - a[2];
     const vx = d[0] - a[0], vy = d[1] - a[1], vz = d[2] - a[2];
     const n: V3 = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
@@ -163,6 +174,7 @@ class RigBuilder {
 
   /** axis-aligned box rigid to one bone */
   box(c: V3, h: V3, bone: number, part: number, o: VOpt = {}): void {
+    if (this.skip(o)) return;
     const [x0, y0, z0] = [c[0] - h[0], c[1] - h[1], c[2] - h[2]], [x1, y1, z1] = [c[0] + h[0], c[1] + h[1], c[2] + h[2]];
     const faces: [V3, V3, V3, V3, V3][] = [
       [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1], [0, 0, 1]],
@@ -221,10 +233,18 @@ export const BIPED_RIG: Rig = {
   parents: [-1, 0, 1, 1, 3, 1, 5, 0, 7, 0, 9],
 };
 
-export interface BipedOpts { furred: boolean; webbed: boolean }
+/** `tier` (0..3): build only that clothing tier's parts (with every hair style, dress, hat, beard and tool) */
+export interface BipedOpts { furred: boolean; webbed: boolean; tier?: number }
+
+const TIER_BITS = [STYLE.tier0, STYLE.tier1, STYLE.tier2, STYLE.tier3];
 
 export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
   const b = new RigBuilder();
+  if (o.tier !== undefined) {
+    const tb = TIER_BITS[Math.max(0, Math.min(3, o.tier))];
+    b.always = tb;
+    b.possible = tb | STYLE.hairShort | STYLE.hairLong | STYLE.dress | STYLE.hat | STYLE.beard | STYLE.child | STYLE.bald;
+  }
   const S = lod === 0 ? 1 : lod === 1 ? 0.42 : 0.3;
   const seg = (n: number) => Math.max(3, Math.round(n * S));
   const P = BIPED_RIG.pivots;
@@ -238,7 +258,14 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
   // (far LOD: no clothing shells, so the body itself wears the clothes — torso and upper arms in the cloth colour, legs
   // in the second — or every crowd seen from the god camera was a swarm of naked skin-coloured dots)
   const far = lod === 2;
-  b.tube(tPts, tRad, seg(12), torsoBone, far ? BPART.cloth : BPART.skin, {}, true, true);
+  if (far) b.tube(tPts, tRad, seg(12), torsoBone, BPART.cloth, {}, true, true);
+  else {
+    // the skin of the belly and back is left out under a tunic, coat or dress (it poked through the clothes as the
+    // body twisted); the chest above it stays, under the neckline
+    const cut = torso.findIndex((q) => q[0] >= 1.17);
+    b.tube(tPts.slice(0, cut + 1), tRad.slice(0, cut + 1), seg(12), (t) => torsoBone(t * (tPts[cut][1] - 0.86) / 0.59), BPART.skin, { forbid: STYLE.tier1 | STYLE.tier2 | STYLE.tier3 | STYLE.dress }, true, false);
+    b.tube(tPts.slice(cut), tRad.slice(cut), seg(12), (t) => torsoBone((tPts[cut][1] - 0.86 + t * (tPts[tPts.length - 1][1] - tPts[cut][1])) / 0.59), BPART.skin, {}, false, true);
+  }
   // ── neck and head
   // (rounder neck and shoulders up close: at 8 sides they read faceted)
   b.tube([[0, 1.43, 0.0], [0, 1.53, 0.012]], [[0.05, 0.05], [0.046, 0.046]], seg(lod === 0 ? 14 : 8), (t) => [2, 1, 0.4 + 0.6 * t], BPART.skin, {}, false, false);
@@ -259,7 +286,9 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
         b.ellipsoid([sx * 0.034, 1.637, 0.088], [0.016, 0.011, 0.008], 8, 5, rigid(2), BPART.white);
         b.ellipsoid([sx * 0.034, 1.637, 0.095], [0.008, 0.008, 0.004], 6, 4, rigid(2), BPART.dark);
         b.box([sx * 0.036, 1.657, 0.092], [0.02, 0.004, 0.006], 2, BPART.hair, { forbid: STYLE.bald });
-        b.ellipsoid([sx * 0.088, 1.625, 0.0], [0.012, 0.026, 0.02], 6, 5, rigid(2), BPART.skin);
+        // the ear: a thin shell set against the skull, its bowl darker inside
+        b.ellipsoid([sx * 0.09, 1.627, -0.006], [0.009, 0.029, 0.019], 8, 6, rigid(2), BPART.skin, {}, undefined, (p) => [p[0], p[1], p[2] - (p[1] - 1.627) * 0.18]);
+        b.ellipsoid([sx * 0.0955, 1.622, -0.003], [0.005, 0.015, 0.01], 6, 4, rigid(2), BPART.skin, { ao: 0.5 });
       } else {
         b.box([sx * 0.034, 1.638, 0.09], [0.014, 0.008, 0.006], 2, BPART.dark);
       }
@@ -279,7 +308,17 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
   if (lod <= 1) {
     const capKeep = (p: V3) => { const ly = p[1] - hc[1], lz = p[2] - hc[2]; return ly > 0.035 || (lz < -0.01 && ly > -0.07) || (Math.abs(p[0]) > 0.075 && ly > -0.02 && lz < 0.05); };
     b.ellipsoid([hc[0], hc[1] + 0.008, hc[2] - 0.004], [0.094, 0.12, 0.107], seg(14), seg(10), rigid(2), BPART.hair, { req: STYLE.hairShort | STYLE.hairLong }, capKeep);
-    b.tube([[0, 1.66, -0.07], [0, 1.52, -0.105], [0, 1.36, -0.12], [0, 1.27, -0.115]], [[0.08, 0.035], [0.085, 0.03], [0.08, 0.025], [0.06, 0.018]], seg(8), (t) => (t < 0.35 ? [2, 2, 1] : [1, 2, Math.min(1, (t - 0.35) * 3)]), BPART.hair, { req: STYLE.hairLong }, true, true);
+    // long hair: clumped locks falling from the crown over the nape and down the back (a single slab read as a plank)
+    const locks = lod === 0 ? 9 : 5;
+    for (let i = 0; i < locks; i++) {
+      const u = (i / (locks - 1)) * 2 - 1;
+      const a = u * 1.15, ca = Math.cos(a), sa = Math.sin(a);
+      const len = 0.24 + 0.1 * (1 - Math.abs(u)) + 0.035 * Math.sin(i * 2.3);
+      const w = 0.026 + 0.008 * Math.cos(i * 1.7);
+      const x0 = sa * 0.083, z0 = -ca * 0.088 + 0.004;
+      const pts: V3[] = [[x0 * 0.85, 1.69, z0 * 0.8], [x0 * 1.08, 1.6, z0 * 1.08 - 0.01], [x0 * 1.2, 1.5, -0.1 - 0.03 * ca], [x0 * 1.35 + u * 0.01, 1.62 - len * 0.82, -0.115 - 0.025 * ca], [x0 * 1.4 + u * 0.02, 1.62 - len, -0.11 - 0.02 * ca]];
+      b.tube(pts, [[w, w * 0.55], [w * 1.15, w * 0.6], [w * 1.1, w * 0.55], [w * 0.8, w * 0.45], [w * 0.25, w * 0.2]], seg(6), (t) => (t < 0.4 ? [2, 2, 1] : [1, 2, Math.min(1, (t - 0.4) * 3)]), BPART.hair, { req: STYLE.hairLong }, false, true, [ca, 0, sa]);
+    }
     if (lod === 0) {
       b.ellipsoid([hc[0], hc[1] - 0.006, hc[2] + 0.004], [0.091, 0.117, 0.104], 12, 8, rigid(2), BPART.hair, { req: STYLE.beard }, (p) => p[1] - hc[1] < -0.035 && p[2] - hc[2] > 0.0);
     }
@@ -290,8 +329,10 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
   for (const [sx, up, fo] of [[1, 3, 4], [-1, 5, 6]] as [number, number, number][]) {
     const sh = P[up], el = P[fo];
     const wr: V3 = [sx * 0.228, 0.855, 0.012];
-    b.tube([[sh[0] - sx * 0.02, sh[1] + 0.02, sh[2]], [sh[0], sh[1] - 0.06, 0], [el[0], el[1] + 0.02, el[2]]], [[0.055, 0.055], [0.05, 0.048], [0.04, 0.038]], seg(lod === 0 ? 14 : 8), limbW(up, 1), far ? BPART.cloth : BPART.skin, {}, true, false);
-    b.tube([[el[0], el[1] + 0.03, el[2]], [lerp3(el, wr, 0.5)[0], lerp3(el, wr, 0.5)[1], 0.0], wr], [[0.039, 0.037], [0.034, 0.03], [0.026, 0.021]], seg(8), limbW(fo, up), BPART.skin, {}, false, true);
+    // (the arm's skin is left out inside a coat's sleeves)
+    const armSel = far ? {} : { forbid: STYLE.tier3 };
+    b.tube([[sh[0] - sx * 0.02, sh[1] + 0.02, sh[2]], [sh[0], sh[1] - 0.06, 0], [el[0], el[1] + 0.02, el[2]]], [[0.055, 0.055], [0.05, 0.048], [0.04, 0.038]], seg(lod === 0 ? 14 : 8), limbW(up, 1), far ? BPART.cloth : BPART.skin, armSel, true, false);
+    b.tube([[el[0], el[1] + 0.03, el[2]], [lerp3(el, wr, 0.5)[0], lerp3(el, wr, 0.5)[1], 0.0], wr], [[0.039, 0.037], [0.034, 0.03], [0.026, 0.021]], seg(8), limbW(fo, up), BPART.skin, armSel, false, true);
     // hand
     const hp: V3 = [sx * 0.233, 0.79, 0.022];
     if (lod <= 1) {
@@ -312,14 +353,23 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
   for (const [sx, th, sh] of [[1, 7, 8], [-1, 9, 10]] as [number, number, number][]) {
     const hip = P[th], kn = P[sh];
     const an: V3 = [sx * 0.1, 0.085, -0.005];
-    b.tube([[hip[0], hip[1] + 0.03, hip[2]], lerp3(hip, kn, 0.5), [kn[0], kn[1] + 0.02, kn[2]]], [[0.085, 0.085], [0.07, 0.068], [0.054, 0.052]], seg(8), limbW(th, 0), far ? BPART.cloth2 : BPART.skin, {}, true, false);
-    b.tube([[kn[0], kn[1] + 0.03, kn[2]], [sx * 0.1, 0.3, -0.012], an], [[0.053, 0.052], [0.046, 0.044], [0.032, 0.031]], seg(8), limbW(sh, th), far ? BPART.cloth2 : BPART.skin, {}, false, false);
+    // bare legs only where they show: hides (tier 0) and the short tunic (tier 1) without a dress — inside trousers or
+    // a long dress the skin was left out (knees and shins poked through the cloth in stride)
+    const legSels: VOpt[] = far ? [{}] : [{ req: STYLE.tier0 }, { req: STYLE.tier1, forbid: STYLE.dress }];
+    for (const sel of legSels) {
+      b.tube([[hip[0], hip[1] + 0.03, hip[2]], lerp3(hip, kn, 0.5), [kn[0], kn[1] + 0.02, kn[2]]], [[0.085, 0.085], [0.07, 0.068], [0.054, 0.052]], seg(8), limbW(th, 0), far ? BPART.cloth2 : BPART.skin, sel, true, false);
+      b.tube([[kn[0], kn[1] + 0.03, kn[2]], [sx * 0.1, 0.3, -0.012], an], [[0.053, 0.052], [0.046, 0.044], [0.032, 0.031]], seg(8), limbW(sh, th), far ? BPART.cloth2 : BPART.skin, sel, false, false);
+    }
+    // under a long dress only the ankles show above the feet
+    if (!far) b.tube([[sx * 0.1, 0.2, -0.01], an], [[0.04, 0.039], [0.032, 0.031]], seg(8), rigid(sh), BPART.skin, { req: STYLE.dress, forbid: STYLE.tier2 | STYLE.tier3 }, false, false);
     // foot (bare skin; boots over it for the later tiers)
     const fc: V3 = [sx * 0.1, 0.038, 0.05];
     if (lod <= 1) {
       b.ellipsoid(fc, [0.042, 0.04, 0.115], seg(8), seg(5), rigid(sh), BPART.skin, { forbid: STYLE.tier2 | STYLE.tier3 });
       b.ellipsoid([fc[0], fc[1] + 0.006, fc[2]], [0.048, 0.048, 0.122], seg(8), seg(5), rigid(sh), BPART.leather, { req: STYLE.tier2 | STYLE.tier3 });
-      b.tube([[sx * 0.1, 0.32, -0.012], an], [[0.052, 0.05], [0.046, 0.045]], seg(8), limbW(sh, th), BPART.leather, { req: STYLE.tier2 | STYLE.tier3 }, false, false);
+      // (the boot leg starts mid-shin: it is the shin's alone — weighted like a tube starting at the knee, its top
+      // swung half with the thigh, stretched and lit pale whenever the knee bent)
+      b.tube([[sx * 0.1, 0.32, -0.012], an], [[0.052, 0.05], [0.046, 0.045]], seg(8), rigid(sh), BPART.leather, { req: STYLE.tier2 | STYLE.tier3 }, false, false);
       if (o.webbed && lod === 0) b.card([sx * 0.11, 0.4, -0.05], [sx * 0.11, 0.2, -0.06], [sx * 0.14, 0.26, -0.11], [sx * 0.14, 0.38, -0.1], rigid(sh), BPART.horn);
     } else {
       b.box(fc, [0.04, 0.035, 0.1], sh, BPART.leather);
@@ -339,10 +389,12 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
     };
     // (the tunic and coat shells reach down over the pelvis: started at the waist they left a band of bare skin
     // between them and the skirt or trousers whenever the body twisted)
-    const top = shell(1.08, 0.86, 1.39);
-    b.tube(top.pts, top.rad, seg(12), torsoBone, BPART.cloth, { req: STYLE.tier1 | STYLE.tier2 | STYLE.dress }, false, false);
-    const coatTop = shell(1.13, 0.86, 1.39);
-    b.tube(coatTop.pts, coatTop.rad, seg(12), torsoBone, BPART.coat, { req: STYLE.tier3 }, false, false);
+    // (closed at the neckline and the crotch: with the skin of the belly left out, an open shell let the ground show
+    // through at the shoulders and between the legs)
+    const top = shell(1.08, 0.86, 1.45);
+    b.tube(top.pts, top.rad, seg(12), torsoBone, BPART.cloth, { req: STYLE.tier1 | STYLE.tier2 | STYLE.dress }, true, true);
+    const coatTop = shell(1.13, 0.86, 1.45);
+    b.tube(coatTop.pts, coatTop.rad, seg(12), torsoBone, BPART.coat, { req: STYLE.tier3 }, true, true);
     // skirts: the hem follows the thighs a little so the legs do not cut through when walking. v runs waist → hem;
     // the surface is built hem → waist (w = 1 − v) so its quads wind outward — built waist-down every skirt, kilt,
     // coat tail and dress was inside out (culled from outside: legs and the bare seat showed through, only the far
@@ -401,35 +453,37 @@ function tools(b: RigBuilder, lod: number): void {
     b.tube([a, e], [[r, r], [r * 0.9, r * 0.9]], sides, rigid(6), BPART.wood, { tool });
     return e;
   };
+  // (the mid LOD keeps only what reads at 30-95 m: long hafts, loads, the torch's flame)
+  const near = lod === 0;
   // axe: a handle down along the arm, the head at its end
-  { const e = handle(HELD.axe, 0.62, false); b.box([e[0], e[1] + 0.07, e[2] + 0.05], [0.012, 0.06, 0.07], 6, BPART.metal, { tool: HELD.axe }); }
+  if (near) { const e = handle(HELD.axe, 0.62, false); b.box([e[0], e[1] + 0.07, e[2] + 0.05], [0.012, 0.06, 0.07], 6, BPART.metal, { tool: HELD.axe }); }
   // hoe: a long handle held near its middle, the blade turned forward just off the ground
   { const a: V3 = [G[0], G[1] + 0.5, G[2]], e: V3 = [G[0], G[1] - 0.6, G[2]]; b.tube([a, e], [[0.015, 0.015], [0.014, 0.014]], sides, rigid(6), BPART.wood, { tool: HELD.hoe }); b.box([e[0], e[1] + 0.02, e[2] + 0.1], [0.06, 0.012, 0.1], 6, BPART.metal, { tool: HELD.hoe }); }
   // spear and staff: upright
   { const e = handle(HELD.spear, 1.95, true, 0.014); b.tube([e, [e[0], e[1] + 0.22, e[2]]], [[0.025, 0.012], [0.001, 0.001]], sides, rigid(6), BPART.stone, { tool: HELD.spear }); }
   handle(HELD.staff, 1.75, true, 0.02);
   // hammer
-  { const e = handle(HELD.hammer, 0.4, false); b.box([e[0], e[1] + 0.03, e[2]], [0.03, 0.035, 0.07], 6, BPART.metal, { tool: HELD.hammer }); }
+  if (near) { const e = handle(HELD.hammer, 0.4, false); b.box([e[0], e[1] + 0.03, e[2]], [0.03, 0.035, 0.07], 6, BPART.metal, { tool: HELD.hammer }); }
   // torch with a flame
   { const e = handle(HELD.torch, 0.65, true, 0.02); b.lathe(e[0], e[2], [[0.04, e[1] - 0.02], [0.06, e[1] + 0.08], [0.02, e[1] + 0.22], [0.001, e[1] + 0.3]], 6, 6, BPART.flame, { tool: HELD.torch }); }
   // fishing rod: up and forward
   b.tube([[G[0], G[1] - 0.1, G[2] - 0.05], [G[0], G[1] + 0.6, G[2] + 0.5], [G[0], G[1] + 1.4, G[2] + 1.3]], [[0.014, 0.014], [0.009, 0.009], [0.004, 0.004]], 4, rigid(6), BPART.wood, { tool: HELD.rod });
   // sword
-  { b.box([G[0], G[1] + 0.05, G[2]], [0.014, 0.05, 0.014], 6, BPART.leather, { tool: HELD.sword }); b.box([G[0], G[1] - 0.38, G[2]], [0.006, 0.38, 0.024], 6, BPART.metal, { tool: HELD.sword }); b.box([G[0], G[1] - 0.005, G[2]], [0.012, 0.012, 0.07], 6, BPART.metal, { tool: HELD.sword }); }
+  if (near) { b.box([G[0], G[1] + 0.05, G[2]], [0.014, 0.05, 0.014], 6, BPART.leather, { tool: HELD.sword }); b.box([G[0], G[1] - 0.38, G[2]], [0.006, 0.38, 0.024], 6, BPART.metal, { tool: HELD.sword }); b.box([G[0], G[1] - 0.005, G[2]], [0.012, 0.012, 0.07], 6, BPART.metal, { tool: HELD.sword }); }
   // sickle: a short handle and a curved blade
-  { const e = handle(HELD.sickle, 0.16, false, 0.018); b.tube([e, [e[0], e[1] - 0.12, e[2] + 0.1], [e[0], e[1] - 0.06, e[2] + 0.24], [e[0], e[1] + 0.06, e[2] + 0.25]], [[0.008, 0.004], [0.008, 0.004], [0.007, 0.003], [0.003, 0.002]], 4, rigid(6), BPART.metal, { tool: HELD.sickle }); }
+  if (near) { const e = handle(HELD.sickle, 0.16, false, 0.018); b.tube([e, [e[0], e[1] - 0.12, e[2] + 0.1], [e[0], e[1] - 0.06, e[2] + 0.24], [e[0], e[1] + 0.06, e[2] + 0.25]], [[0.008, 0.004], [0.008, 0.004], [0.007, 0.003], [0.003, 0.002]], 4, rigid(6), BPART.metal, { tool: HELD.sickle }); }
   // pick
-  { const e = handle(HELD.pick, 0.7, false); b.tube([[e[0], e[1], e[2] - 0.25], [e[0], e[1] + 0.04, e[2]], [e[0], e[1], e[2] + 0.25]], [[0.006, 0.006], [0.02, 0.02], [0.006, 0.006]], 5, rigid(6), BPART.metal, { tool: HELD.pick }); }
+  if (near) { const e = handle(HELD.pick, 0.7, false); b.tube([[e[0], e[1], e[2] - 0.25], [e[0], e[1] + 0.04, e[2]], [e[0], e[1], e[2] + 0.25]], [[0.006, 0.006], [0.02, 0.02], [0.006, 0.006]], 5, rigid(6), BPART.metal, { tool: HELD.pick }); }
   // rifle / musket: upright at the side
   { b.box([G[0], G[1] + 0.25, G[2] + 0.01], [0.02, 0.42, 0.03], 6, BPART.wood, { tool: HELD.rifle }); b.box([G[0], G[1] + 0.82, G[2] + 0.01], [0.009, 0.25, 0.009], 6, BPART.metal, { tool: HELD.rifle }); }
   // a scroll / book in the hand
-  b.box([G[0] + 0.01, G[1] - 0.02, G[2] + 0.05], [0.02, 0.08, 0.06], 6, BPART.cloth2, { tool: HELD.scroll });
+  if (near) b.box([G[0] + 0.01, G[1] - 0.02, G[2] + 0.05], [0.02, 0.08, 0.06], 6, BPART.cloth2, { tool: HELD.scroll });
   // loads: a basket held in front, logs on the right shoulder, a pot on the head, a bundle on the back, a stone
   b.lathe(0, 0.27, [[0.12, 0.92], [0.17, 0.96], [0.2, 1.08], [0.205, 1.12], [0.19, 1.13], [0.17, 1.02]], lod === 0 ? 10 : 6, 1, BPART.straw, { tool: HELD.basket });
   for (const [x, y] of [[-0.12, 1.5], [-0.2, 1.52], [-0.16, 1.58]] as [number, number][]) b.tube([[x, y, -0.55], [x, y, 0.6]], [[0.052, 0.052], [0.048, 0.048]], sides, rigid(1), BPART.wood, { tool: HELD.logs });
   b.lathe(0, 0.005, [[0.06, 1.745], [0.12, 1.79], [0.135, 1.86], [0.09, 1.935], [0.07, 1.97], [0.08, 1.99]], lod === 0 ? 10 : 6, 2, BPART.clay, { tool: HELD.pot });
   b.ellipsoid([0, 1.2, -0.22], [0.17, 0.2, 0.12], lod === 0 ? 8 : 5, lod === 0 ? 6 : 4, rigid(1), BPART.cloth2, { tool: HELD.bundle });
-  b.ellipsoid([0, 1.13, 0.23], [0.13, 0.11, 0.1], 7, 5, rigid(1), BPART.stone, { tool: HELD.stone });
+  if (near) b.ellipsoid([0, 1.13, 0.23], [0.13, 0.11, 0.1], 7, 5, rigid(1), BPART.stone, { tool: HELD.stone });
 }
 
 // ───────────────────────────── hive hexapod ─────────────────────────────
@@ -509,7 +563,7 @@ interface QuadSpec {
 const QUADS: Record<string, QuadSpec> = {
   deer: { len: 1.15, depth: 0.42, width: 0.3, legR: 0.04, neckLen: 0.5, neckAng: 0.95, headLen: 0.3, headR: 0.09, tail: 0.12, tailR: 0.03, ears: 0.12, earUp: 0.6, horns: 'antlers', mane: false, wool: false, hump: 0, snout: 0.6, legLen: 1, sprawl: 0, hairyTail: false },
   horse: { len: 1.4, depth: 0.52, width: 0.38, legR: 0.055, neckLen: 0.7, neckAng: 0.8, headLen: 0.52, headR: 0.11, tail: 0.75, tailR: 0.05, ears: 0.1, earUp: 0.9, horns: 'none', mane: true, wool: false, hump: 0, snout: 0.7, legLen: 1, sprawl: 0, hairyTail: true },
-  cattle: { len: 1.45, depth: 0.66, width: 0.5, legR: 0.065, neckLen: 0.35, neckAng: 0.35, headLen: 0.44, headR: 0.13, tail: 0.75, tailR: 0.025, ears: 0.1, earUp: 0.1, horns: 'short', mane: false, wool: false, hump: 0, snout: 0.5, legLen: 0.88, sprawl: 0, hairyTail: false },
+  cattle: { len: 1.45, depth: 0.66, width: 0.5, legR: 0.065, neckLen: 0.32, neckAng: 0.3, headLen: 0.36, headR: 0.13, tail: 0.75, tailR: 0.025, ears: 0.1, earUp: 0.1, horns: 'short', mane: false, wool: false, hump: 0.06, snout: 0.15, legLen: 0.88, sprawl: 0, hairyTail: false },
   bison: { len: 1.5, depth: 0.78, width: 0.58, legR: 0.07, neckLen: 0.3, neckAng: -0.1, headLen: 0.42, headR: 0.17, tail: 0.4, tailR: 0.03, ears: 0.07, earUp: 0.1, horns: 'short', mane: true, wool: false, hump: 0.28, snout: 0.35, legLen: 0.75, sprawl: 0, hairyTail: false },
   bear: { len: 1.35, depth: 0.7, width: 0.58, legR: 0.1, neckLen: 0.25, neckAng: 0.2, headLen: 0.36, headR: 0.16, tail: 0.08, tailR: 0.05, ears: 0.06, earUp: 0.8, horns: 'none', mane: false, wool: false, hump: 0.1, snout: 0.5, legLen: 0.8, sprawl: 0, hairyTail: false },
   wolf: { len: 1.05, depth: 0.38, width: 0.26, legR: 0.04, neckLen: 0.32, neckAng: 0.55, headLen: 0.34, headR: 0.09, tail: 0.5, tailR: 0.06, ears: 0.1, earUp: 1, horns: 'none', mane: false, wool: false, hump: 0, snout: 0.8, legLen: 1, sprawl: 0, hairyTail: true },
@@ -571,19 +625,24 @@ export function quadMesh(form: AnimalForm, lod: number): BodyMesh {
     bodyRad.push([q.width * 0.5 * kx, (q.depth * 0.5 + hump * 0.4) * ky]);
   }
   const bodyPart = q.wool ? BPART.fur : BPART.coat;
-  b.tube(bodyPts, bodyRad, seg(12), rigid(0), bodyPart, {}, true, true, [1, 0, 0]);
+  b.tube(bodyPts, bodyRad, seg(16), rigid(0), bodyPart, {}, true, true, [1, 0, 0]);
   if (!q.wool && lod <= 1) {
     // belly: a slightly smaller shell showing below the flank line (two-tone coats)
-    b.tube(bodyPts.map((p) => [p[0], p[1] - q.depth * 0.06, p[2]] as V3), bodyRad.map(([x, y]) => [x * 0.97, y * 0.97] as [number, number]), seg(12), rigid(0), BPART.belly, {}, false, false);
+    // (only under the barrel: at the rump and the chest, where the body narrows fast, a full-length shell poked out)
+    b.tube(bodyPts.slice(1, -1).map((p) => [p[0], p[1] - q.depth * 0.05, p[2]] as V3), bodyRad.slice(1, -1).map(([x, y]) => [x * 0.955, y * 0.96] as [number, number]), seg(12), rigid(0), BPART.belly, {}, false, false);
   }
   // neck (thick at its base, into the shoulders) and head (a little larger than the old toy heads)
   const nb = P[1], hd = P[2];
   const hR = q.headR * 1.17;
-  b.tube([[nb[0], nb[1] - q.depth * 0.2, nb[2] - 0.1], nb, hd], [[q.width * 0.4, q.depth * 0.44], [q.width * 0.25, q.depth * 0.26], [hR * 0.9, hR * 1.0]], seg(8), (t) => (t < 0.5 ? [1, 0, 0.5 + t] : [1, 1, 1]), bodyPart === BPART.fur ? BPART.coat : bodyPart, {}, false, false, [1, 0, 0]);
+  // (deep through the throat and broad where it meets the shoulders: a thin neck read as a stick)
+  b.tube([[nb[0], nb[1] - q.depth * 0.22, nb[2] - 0.12], nb, lerp3(nb, hd, 0.55), hd], [[q.width * 0.44, q.depth * 0.56], [q.width * 0.34, q.depth * 0.42], [q.width * 0.27, q.depth * 0.3], [hR * 0.95, hR * 1.1]], seg(8), (t) => (t < 0.5 ? [1, 0, 0.5 + t] : [1, 1, 1]), bodyPart === BPART.fur ? BPART.coat : bodyPart, {}, false, false, [1, 0, 0]);
   const headDir: V3 = [0, -Math.sin(0.5 - q.neckAng * 0.3), Math.cos(0.5 - q.neckAng * 0.3)];
   const snoutEnd: V3 = [0, hd[1] + headDir[1] * q.headLen, hd[2] + headDir[2] * q.headLen];
   b.tube([[hd[0], hd[1] + hR * 0.1, hd[2] - hR * 0.4], hd, lerp3(hd, snoutEnd, 0.6), snoutEnd], [[hR * 0.9, hR], [hR, hR * 1.05], [hR * (0.5 + 0.3 * (1 - q.snout)), hR * 0.7], [hR * (0.35 + 0.2 * (1 - q.snout)), hR * 0.45]], seg(8), rigid(2), BPART.coat, {}, true, true, [1, 0, 0]);
   b.ellipsoid(snoutEnd, [hR * 0.32, hR * 0.3, hR * 0.2], seg(6), seg(4), rigid(2), BPART.dark);
+  // the jaw: a broad cheek and jowl behind the mouth (a straight taper read as a cone), and a fuller muzzle
+  b.ellipsoid([0, hd[1] - hR * 0.35, hd[2] + q.headLen * 0.12], [hR * 0.95, hR * 0.75, hR * 1.05], seg(8), seg(6), rigid(2), BPART.coat);
+  b.ellipsoid(lerp3(hd, snoutEnd, 0.86), [hR * (0.42 + 0.25 * (1 - q.snout)), hR * 0.5, hR * 0.42], seg(7), seg(5), rigid(2), BPART.coat);
   if (lod <= 1) {
     for (const sx of [1, -1]) {
       b.ellipsoid([sx * hR * 0.7, hd[1] + hR * 0.35, hd[2] + q.headLen * 0.12], [hR * 0.14, hR * 0.14, hR * 0.14], 6, 4, rigid(2), BPART.dark);
@@ -616,7 +675,8 @@ export function quadMesh(form: AnimalForm, lod: number): BodyMesh {
     const foot: V3 = [k[0] * (1 + q.sprawl * 0.3), 0.03, k[2] + (front ? 0.02 : -0.02)];
     const thick = q.legR * (front ? 1 : 1.15);
     // the upper leg carries the muscle (shoulder / haunch) and angles back (front) or forward (hind) to the joint
-    b.tube([[a[0], a[1] + q.depth * 0.2, a[2] + (front ? 0.02 : -0.03) * L], a, k], [[thick * 2.2, thick * 2.8], [thick * 1.5, thick * 1.8], [thick, thick * 1.05]], seg(6), limbW(up, 0), q.wool ? BPART.dark : BPART.coat, {}, false, false);
+    // (flattened against the flank: the muscle is deep front to back and thin side to side, not a post)
+    b.tube([[a[0] * 0.85, a[1] + q.depth * 0.22, a[2] + (front ? 0.02 : -0.03) * L], a, k], [[thick * 1.5, thick * 3.1], [thick * 1.3, thick * 2.0], [thick, thick * 1.1]], seg(8), limbW(up, 0), q.wool ? BPART.dark : BPART.coat, {}, false, false);
     // below it a slender cannon: the hind leg bends back at the hock, the foreleg runs straight down from the knee
     const mid: V3 = front ? [k[0], k[1] * 0.42, k[2] + 0.01 * L] : [k[0], k[1] * 0.45, k[2] - 0.08 * L];
     b.tube([k, mid, lerp3(mid, foot, 0.6), foot], [[thick * 0.95, thick], [thick * 0.72, thick * 0.78], [thick * 0.62, thick * 0.66], [thick * 0.8, thick * 0.85]], seg(6), limbW(lo, up), q.wool ? BPART.dark : BPART.coat, {}, false, true);

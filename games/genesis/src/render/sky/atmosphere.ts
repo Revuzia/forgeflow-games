@@ -16,7 +16,7 @@
 
 import {
   FloatType, HalfFloatType, LinearFilter, Matrix3, Matrix4, NearestFilter, RGBAFormat, ShaderMaterial, Vector2, Vector3,
-  WebGLRenderTarget, ClampToEdgeWrapping, type IUniform, type Texture, type WebGLRenderer,
+  Vector4, WebGLRenderTarget, ClampToEdgeWrapping, type IUniform, type Texture, type WebGLRenderer,
 } from 'three';
 import type { AtmosphereParams } from '../../sim/types.ts';
 import { ATMO_PARS, LOGDEPTH_DECODE, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
@@ -32,6 +32,8 @@ import { AO_APPLY_GLSL } from '../post/gtao.ts';
 const SKY_DEPTH_SCALE = 1.75;
 /** Rayleigh scale height as a fraction of the visible shell: thinner = longer grazing paths = redder low suns */
 const RAYLEIGH_H = 0.16;
+/** sky irradiance (ambient) scale against the sun, see IRR_FRAG */
+const SKY_FILL = 0.66;
 const EARTH_TAU_R = [0.0464, 0.108, 0.265];
 const EARTH_TAU_O3 = [0.0098, 0.028, 0.0013];
 
@@ -206,7 +208,10 @@ void main() {
     float y = k == 0 ? 0.282095 : k == 1 ? 0.488603 * d.y : k == 2 ? 0.488603 * d.z : 0.488603 * d.x;
     acc += L * y;
   }
-  gl_FragColor = vec4(acc * 4.0 * ATMO_PI / float(NT * NP), 1.0);
+  // × SKY_FILL: the sky's share of the light on every surface (terrain, buildings, trees, people, cloud ambient) is
+  // art-directed down by a third against the sun — at the physical value midday read flat and hazy: faint shadows,
+  // a weak sun-to-sky ratio (the sky LUT itself, what the eye sees of the sky, is unchanged)
+  gl_FragColor = vec4(acc * 4.0 * ATMO_PI / float(NT * NP) * ${SKY_FILL.toFixed(3)}, 1.0);
 }
 `;
 
@@ -353,6 +358,8 @@ uniform int uSteps;
 uniform float uApScale;
 uniform vec3 uApRamp;   // aerial perspective near scale, and the distances (m) over which it ramps up to uApScale
 uniform float uCloudHaze; // share of the air's in-scatter in front of a cloud that is kept (art direction, see below)
+uniform vec4 uForest;     // inside a wood: x = canopy density at the camera, y = camera height above the ground (m),
+                          // z = canopy height (m); 0 density elsewhere (renderer.ts)
 
 vec3 viewDir(vec2 uv) {
   vec4 v = uInvProj * vec4(uv * 2.0 - 1.0, -1.0, 1.0);
@@ -448,6 +455,20 @@ void main() {
   // clouds came out milky blue-grey. Only uCloudHaze of that haze is kept in front of cloud (clear sky keeps all of it).
   if (cl.a < 0.999) col = mix(Lm * uCloudHaze, Lm, cl.a) + pow(Tm, vec3(uCloudHaze)) * cl.rgb + cl.a * ((L - Lm) + T * scene);
   else col = L + T * scene;
+  // inside a wood: the air between the trunks is hazy with the canopy's own light — dust, pollen and moisture lit by
+  // green-filtered skylight and the odd sunbeam. Along the part of the ray that stays under the canopy layer, so far
+  // trunks fade into a soft green-grey and the open sky above stays clear.
+  if (uForest.x > 0.001) {
+    vec3 upC = normalize(o);
+    float muV = dot(d, upC);
+    float tLayer = muV > 0.02 ? max(0.0, uForest.z - uForest.y) / muV : 1e9;
+    float path = min(min(geo ? t1 - t0 : 1e9, tLayer), 260.0);
+    float haze = (1.0 - exp(-path * 0.0095 * uForest.x)) * 0.85;
+    vec3 Ein = skyIrradiance(upC, upC, uSunDir);
+    vec3 Esun = uSunE * sunTransmittance(length(o), dot(upC, uSunDir)) * max(dot(upC, uSunDir), 0.0);
+    vec3 inscat = (Ein * 0.11 * vec3(0.78, 1.0, 0.72) + Esun * 0.012 * (1.0 + 2.0 * phaseMie(dot(d, uSunDir), 0.6))) / ATMO_PI;
+    col = mix(col, inscat, haze);
+  }
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -463,6 +484,7 @@ export class AtmospherePass {
       uInvProj: { value: new Matrix4() }, uCamRot: { value: new Matrix3() }, uFar: { value: 2e7 },
       uPlanetPos: { value: new Vector3() }, uSunDir: { value: new Vector3(1, 0, 0) }, uSteps: { value: 16 },
       uApScale: { value: 0.15 }, uApRamp: { value: new Vector3(0.15, 300, 2000) }, uCloudHaze: { value: 1 },
+      uForest: { value: new Vector4(0, 0, 18, 0) },
       // per-planet atmosphere uniforms are swapped in by bind()
       uRg: { value: 0 }, uRt: { value: 0 }, uBetaR: { value: new Vector3() }, uHR: { value: 1 }, uBetaMs: { value: new Vector3() },
       uBetaMe: { value: new Vector3() }, uHM: { value: 1 }, uMieG: { value: 0.8 }, uBetaO: { value: new Vector3() },

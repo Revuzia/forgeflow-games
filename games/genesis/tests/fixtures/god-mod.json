@@ -1,0 +1,50 @@
+{
+  "$comment": "A god-layer mod pack for tests/content.test.ts: a new disaster (composed of the built-in effectors), a new creature template, a power for each (so the palette, radial menu, gestures and the parser pick them up), and lexicon words. Loads as Sim({ content: [pack] }).",
+  "id": "ember-gods",
+  "name": "Ember gods",
+  "version": "1.0.0",
+  "disasters": [
+    {
+      "id": "ember-rain", "name": "Ember rain", "desc": "Glowing cinders fall from a clear sky and set the dry country alight.", "category": "fire",
+      "life": [240, 480], "radius": 400, "intensity": 1, "speed": 0,
+      "effectors": [
+        { "type": "spread", "what": "fire", "every": 20, "rate": 0.4, "strength": 0.6 },
+        { "type": "area", "every": 30, "harm": 0.004, "herds": 0.01 }
+      ],
+      "render": { "embers": 1, "glow": 0.8 },
+      "witness": { "harm": 0.4, "wonder": 0.4 },
+      "triggers": ["fire"],
+      "natural": { "rate": 0.05, "needs": ["forest", "dry"] },
+      "synonyms": ["rain of embers", "cinder fall", "cinders from the sky"]
+    }
+  ],
+  "creatures": [
+    {
+      "id": "salamander", "name": "Salamander", "body": "lizard", "size": [2, 10], "speed": 1.8, "strength": 4, "intelligence": 5, "appetite": 0.04,
+      "diet": ["animal", "rock"], "colors": ["#c8461e", "#5a1a0a", "#f2b33d"],
+      "desires": { "eat": 0.6, "sleep": 0.6, "play": 0.3, "help": 0.3, "cast": 0.4, "impress": 0.5, "explore": 0.3, "follow": 0.3 },
+      "miracles": { "fire": 0.3 },
+      "animals": ["desert-lizard"]
+    }
+  ],
+  "powers": [
+    {
+      "id": "disaster-ember-rain", "name": "Ember rain", "category": "Fire", "icon": "d-embers", "ring": 1, "gesture": "zigzag",
+      "command": "disaster.spawn", "params": { "kind": "ember-rain" },
+      "schema": { "pos": { "type": "pos", "target": "point" }, "radius": { "type": "number", "min": 50, "max": 5000, "unit": "m", "target": "region" } },
+      "target": "point", "synonyms": ["ember rain", "embers", "cinder rain"],
+      "desc": "Let burning cinders fall where you point.", "cost": 40, "cooldown": 60, "witness": { "harm": 0.3, "wonder": 0.3, "radius": 600 }
+    },
+    {
+      "id": "creature-salamander", "name": "Adopt a salamander", "category": "Creature", "icon": "c-salamander", "ring": 2, "gesture": null,
+      "command": "creature.adopt", "params": { "template": "salamander" },
+      "schema": { "pos": { "type": "pos", "target": "point" }, "name": { "type": "string" } },
+      "target": "point", "synonyms": ["fire lizard", "salamander"],
+      "desc": "A young salamander, warm to the touch, yours to raise."
+    }
+  ],
+  "lexicon": {
+    "verbs": { "create": ["kindle"] },
+    "diseases": { "ember lung": "wasting-cough" }
+  }
+}

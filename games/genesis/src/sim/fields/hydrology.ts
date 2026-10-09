@@ -22,12 +22,30 @@
 // MEAN level relaxes toward the live sea level (uniform corrections keep waves intact); moving the sea-level slider
 // ramps the level and floods / drains the mask as it goes. Rivers carve (erosion moves sand / soil downstream and
 // deposits it where flow slows — deltas), floods leave wet ground, snow and ice melt into the system (climate.ts).
+//
+// SIM perf push 2:
+//   * SHEETS (below, "sheets: thin overland flow"): land water shallower than SHEET_IN (2 cm, until it is deeper than
+//     SHEET_OUT = 5 cm) runs as zero-inertia sheet flow — each step it sends its lower neighbours the pipes' steady-state
+//     flux for the drop, with no momentum to carry and no quiet counter (about half the work of a pipe cell). On an
+//     ordinary day ~2/3 of the awake cells are such films, ~85 % in a downpour. Lakes, rivers, floods, tsunamis and the
+//     sea keep the momentum of the pipes. Mass is exchanged through the same dV / sink accounting, so it is conserved
+//     exactly. Round 2: a sheet keeps its per-step edge outflow in the pipes' flux array, so velocities count inflow
+//     and outflow alike (sheets and the rivers they feed: a monsoon carves as the pure pipes did) and a sheet that
+//     deepens into the pipes starts with its flow as momentum.
+//   * TIME-LAPSE (perf/lapse.ts, the logged speed level): at 100x the sheets step every 2nd step and rain batches come
+//     every 20 ticks; at 1000x the sheets every 12 ticks, the rain every 30, and the hydrology every 4 ticks while the
+//     sea is calm (same per-step gain — the CFL bound — and half the per-step friction, so a steady flow carries the
+//     same discharge per tick) — with waves on the sea every 2, as at 1x (round 2: the 4-tick friction kept a quake's
+//     seiche alive for days). Level 0 (1x, 10x) is the plain model above.
+//   * SEDIMENT INTO THE SEA displaces sea water (an accounted sink; the mean-level relaxation spreads it back): a delta
+//     raising the sea surface over itself kept the open sea awake at every river mouth in a downpour (round 2).
 
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
 import { markRainDirty, rainingCells } from './climate.ts';
 import { priorityFlood } from '../world/gen.ts';
 import { collectFlags } from '../core/activeset.ts';
+import { lapseDue, stagger, LAPSE_RAIN, LAPSE_SHEETS } from '../perf/lapse.ts';
 
 export const HYDRO_CADENCE = 2;
 /** depth (m) at which wave speed saturates (deeper water moves no faster: CFL safety) */
@@ -68,14 +86,37 @@ const SEA_RAMP = 0.3;
 export function activateCell(p: Planet, c: number): void {
   const s = p.s, g = p.grid;
   const act = s.hAct, quiet = s.hQuiet, water = p.f.water, nbr = g.nbr;
-  act[c] = 1;
+  // (an awake sheet stays a sheet: the mode split of the next step decides by depth)
+  if (act[c] === 0) act[c] = 1;
   quiet[c] = 0;
   const e1 = g.nbrStart[c + 1];
   for (let e = g.nbrStart[c]; e < e1; e++) {
     const o = nbr[e];
     if (water[o] <= DRY) continue;
-    act[o] = 1;
+    if (act[o] === 0) act[o] = 1;
     quiet[o] = 0;
+  }
+}
+
+/**
+ * Wake what a change of a cell's water needs awake, and nothing else (SIM perf push 2): the cell itself if it now
+ * stands above a neighbour beyond the level tolerance (it has to send), and every sleeping wet neighbour that now stands
+ * above it (they have to send). For the climate's slow exchanges (melt, evaporation, infiltration): activateCell woke
+ * every wet neighbour of every coastal cell the hourly pass touched — in a downpour ~450 sea cells stepping for nothing
+ * (water running off the land into the sea joins the reservoir directly, and land beside the sea stands above it).
+ */
+export function wakeIfUnlevel(p: Planet, c: number): void {
+  const s = p.s, g = p.grid, f = p.f;
+  const act = s.hAct, quiet = s.hQuiet, water = f.water, surf = f.surface, nbr = g.nbr;
+  const w = water[c], sc = surf[c], Hc = sc + w;
+  const e1 = g.nbrStart[c + 1];
+  for (let e = g.nbrStart[c]; e < e1; e++) {
+    const o = nbr[e];
+    const wo = water[o], so = surf[o], Ho = so + wo;
+    const bed = sc > so ? sc : so;
+    if (Hc > Ho) {
+      if (act[c] === 0 && w > DRY && Hc - Ho > levelEps(Hc - bed)) { act[c] = 1; quiet[c] = 0; }
+    } else if (act[o] === 0 && wo > DRY && Ho - Hc > levelEps(Ho - bed)) { act[o] = 1; quiet[o] = 0; }
   }
 }
 
@@ -184,6 +225,10 @@ interface HydroCache {
   K: Float64Array;
   /** largest outflow of each active cell this step (fluxPass -> finishActive) */
   maxOut: Float64Array;
+  /** this step's awake sheet cells (ascending) */
+  sheets: Int32Array;
+  /** each sheet cell's main receiver this step (erosion drops its load there), -1 none */
+  mainRcv: Int32Array;
 }
 const hydroCache = new WeakMap<Planet, HydroCache>();
 function cacheOf(p: Planet): HydroCache {
@@ -192,7 +237,7 @@ function cacheOf(p: Planet): HydroCache {
     const G = gain(p), wid = p.geo.width, len = p.geo.len;
     const K = new Float64Array(wid.length);
     for (let e = 0; e < K.length; e++) K[e] = (G * wid[e]) / len[e];
-    h = { K, maxOut: new Float64Array(p.count) };
+    h = { K, maxOut: new Float64Array(p.count), sheets: new Int32Array(p.count), mainRcv: new Int32Array(p.count) };
     hydroCache.set(p, h);
   }
   return h;
@@ -203,23 +248,50 @@ function cacheOf(p: Planet): HydroCache {
 // The step is split into small kernels taking plain typed arrays: V8 optimises small monomorphic loops far better than
 // one giant function (the active-list scan alone ran 13x slower inside the monolith).
 
-/** One hydrology step (every HYDRO_CADENCE ticks). */
-export function hydroStep(u: Universe, p: Planet): void {
+/**
+ * One hydrology step (every HYDRO_CADENCE ticks; `dt` = the ticks it covers). In 1000x time-lapse with a calm sea
+ * (perf/lapse.ts) a step covers two: the pipes keep their per-step gain (the CFL bound) and take half the per-step
+ * friction, so a steady flow carries the same discharge per tick while waves cross the world at half the speed in game
+ * time; sources, thresholds and erosion are per step and scale with it. At dt = HYDRO_CADENCE every expression is the
+ * plain one.
+ */
+export function hydroStep(u: Universe, p: Planet, dt = HYDRO_CADENCE): void {
   const hy = p.hydro, s = p.s, f = p.f, g = p.grid;
   hy.steps++;
-  let sourced = applySources(p, rainBatchDue(u.tick, p.id));
-  sourced += seaUpkeep(p);
+  const kf = dt / HYDRO_CADENCE;
+  // rain batches ride on the sky period, sheets run every step — both coarser in time-lapse (perf/lapse.ts)
+  let sourced = applySources(p, lapseDue(u, p, LAPSE_RAIN, u.tick + stagger(p), 0), kf);
+  sourced += seaUpkeep(p, kf);
+  // the sheets' schedule is asked every step, work or not (a time-lapse record is consumed on schedule)
+  const sheetDue = lapseDue(u, p, LAPSE_SHEETS, u.tick, 0);
   const list = p.scratch.list;
   const n = collectFlags(s.hAct, list, p.count);
   if (n === 0) { hy.sourced += sourced; return; }
   const hc = cacheOf(p);
+  // the mode split: thin land water flows as sheets (zero inertia), everything else through the pipes (momentum)
+  const np = splitModes(list, n, hc.sheets, f.water, s.ocean, s.hAct, s.hQuiet, s.flux, g.nbrStart);
+  const ns = sheetCount;
+  // ticks the sheets' flow covers this step (0 = not their step in time-lapse: they only take in what reaches them)
+  const sheetDt = ns > 0 ? sheetDue : 0;
   sourced += fluxPass(
-    list, n, g.nbrStart, g.nbr, g.rev, hc.K, f.surface, f.water, p.cellArea, s.flux, p.scratch.edge,
-    s.ocean, s.hAct, s.hQuiet, p.scratch.dV, hc.maxOut, p.scratch.list2,
+    list, np, g.nbrStart, g.nbr, g.rev, hc.K, f.surface, f.water, p.cellArea, s.flux, p.scratch.edge,
+    s.ocean, s.hAct, s.hQuiet, p.scratch.dV, hc.maxOut, p.scratch.list2, kf,
   );
+  if (sheetDt > 0) {
+    sourced += sheetPass(
+      hc.sheets, ns, g.nbrStart, g.nbr, g.rev, hc.K, f.surface, f.water, p.cellArea, s.flux, s.ocean, s.hAct, s.hQuiet, p.scratch.dV,
+      p.scratch.list2, p.geo.tx, p.geo.ty, p.geo.tz, f.flowX, f.flowY, f.flowZ, hc.mainRcv, 1 / (3 * (p.edgeM / Math.sqrt(3))),
+      sheetDt,
+    );
+  }
   applyFed(p.scratch.list2, fedCount, g.nbrStart, g.nbr, f.surface, f.water, p.cellArea, s.hAct, s.hQuiet, p.scratch.dV);
-  applyActive(list, n, f.water, p.cellArea, p.scratch.dV, p.scratch.lastDv);
-  const eroded = finishActive(p, list, n, hc.maxOut);
+  applyActive(list, np, f.water, p.cellArea, p.scratch.dV, p.scratch.lastDv);
+  if (ns > 0) applySheets(hc.sheets, ns, f.water, p.cellArea, p.scratch.dV, s.hAct, f.flowX, f.flowY, f.flowZ, g.nbrStart, s.flux);
+  let eroded = finishActive(p, list, np, hc.maxOut, kf);
+  if (sheetDt > 0 && p.cfg.erosion > 0) {
+    const m = sheetErosion(p, hc.sheets, ns, hc.mainRcv, sheetDt / HYDRO_CADENCE);
+    if (m > eroded) eroded = m;
+  }
   hy.sourced += sourced;
   p.bump('water');
   p.bump('flowX'); p.bump('flowY'); p.bump('flowZ');
@@ -249,23 +321,23 @@ const EROSION_PUBLISH_STEPS = 30;
  * Sky changes made by a command mid-period (a planet-wide override) reach the ground at the next period.
  */
 const RAIN_PERIOD = 10;
-const RAIN_STEPS = RAIN_PERIOD / HYDRO_CADENCE;
 
 export function rainBatchDue(tick: number, planetId: number): boolean {
   const ph = (tick + planetId * 13) % RAIN_PERIOD;
   return ph < HYDRO_CADENCE;
 }
 
-/** rain (on batch steps), springs and aquifer seepage; returns the volume added */
-function applySources(p: Planet, rainNow: boolean): number {
+/** rain (on batch steps: `rainTicks` = the ticks of rain the batch carries, 0 = none), springs and aquifer seepage;
+ * returns the volume added */
+function applySources(p: Planet, rainTicks: number, kf: number): number {
   const f = p.f, s = p.s, g = p.grid, cfg = p.cfg;
   const water = f.water, surf = f.surface, A = p.cellArea, act = s.hAct, quiet = s.hQuiet;
   const nbrStart = g.nbrStart, nbr = g.nbr;
   let sourced = 0;
-  if (rainNow && p.airy && cfg.rainScale > 0) {
+  if (rainTicks > 0 && p.airy && cfg.rainScale > 0) {
     const rc = rainingCells(p);
-    const k = (cfg.rainScale * HYDRO_CADENCE * RAIN_STEPS) / 60 / 1000; // mm/h -> m per batch
-    const kInf = (HYDRO_CADENCE * RAIN_STEPS) / 60; // per hour -> per batch
+    const k = (cfg.rainScale * rainTicks) / 60 / 1000; // mm/h -> m per batch
+    const kInf = rainTicks / 60; // per hour -> per batch
     const freeze = p.st.liquid.freeze;
     const infiltration = cfg.infiltration;
     const list = rc.list, ocean = s.ocean, precip = f.precip, temperature = f.temperature;
@@ -302,15 +374,16 @@ function applySources(p: Planet, rainNow: boolean): number {
     }
   }
   for (const sp of p.springs) {
-    water[sp.cell] += sp.rate / A[sp.cell];
-    sourced += sp.rate;
+    const r = kf === 1 ? sp.rate : sp.rate * kf; // (per step)
+    water[sp.cell] += r / A[sp.cell];
+    sourced += r;
     act[sp.cell] = 1;
     quiet[sp.cell] = 0;
   }
   const seep = seepCells(p);
   for (let i = 0; i < seep.count; i++) {
     const c = seep.list[i];
-    const d = Math.min(s.seep[c], f.aquifer[c]);
+    const d = Math.min(s.seep[c] * kf, f.aquifer[c]);
     if (d <= 0) continue;
     f.aquifer[c] -= d;
     water[c] += d;
@@ -338,13 +411,14 @@ function wakeIfRunning(c: number, water: Float64Array, surf: Float32Array, nbrSt
 }
 
 /** the sea: slider ramp, mask upkeep, mean-level relaxation; returns the volume added */
-function seaUpkeep(p: Planet): number {
+function seaUpkeep(p: Planet, kf: number): number {
   const hy = p.hydro, cfg = p.cfg;
   let sourced = 0;
   if (hy.maskDirty) computeOcean(p, hy.seaNow);
   const target = p.st.seaLevel;
   if (Math.abs(target - hy.seaNow) > 1e-9 && cfg.oceanRelax) {
-    const step = Math.max(-SEA_RAMP, Math.min(SEA_RAMP, target - hy.seaNow));
+    const ramp = SEA_RAMP * kf;
+    const step = Math.max(-ramp, Math.min(ramp, target - hy.seaNow));
     hy.seaNow += step;
     // The ramp LIFTS (or lowers) the sea by the step: every cell keeps its anomaly, so a tsunami or a flood launched
     // while the sea is moving still runs (overwriting the sea with a flat level erased it). Only cells that join the
@@ -358,7 +432,7 @@ function seaUpkeep(p: Planet): number {
     }
     sourced += rampOcean(p, step, hy.seaNow, stamp);
     activateCoast(p);
-  } else if (cfg.oceanRelax && hy.oceanCells > 0 && hy.steps % 30 === 0) {
+  } else if (cfg.oceanRelax && hy.oceanCells > 0 && hy.steps % (30 / kf) === 0) {
     const d0 = hy.seaNow - oceanMeanLevel(p.s.ocean, p.f.surface, p.f.water, p.cellArea, p.count);
     if (Math.abs(d0) > 0.004) {
       const d = Math.max(-0.03, Math.min(0.03, d0));
@@ -437,9 +511,12 @@ function fluxPass(
   list: Int32Array, n: number, nbrStart: Int32Array, nbr: Int32Array, rev: Int32Array, K: Float64Array,
   surf: Float32Array, water: Float64Array, A: Float64Array, flux: Float64Array, tmp: Float64Array,
   ocean: Uint8Array, act: Uint8Array, quiet: Uint8Array, dV: Float64Array, maxOutA: Float64Array, fed: Int32Array,
+  kf: number,
 ): number {
   let sunk = 0;
   let nf = 0;
+  // time-lapse step of kf plain steps: the per-step friction / kf (see hydroStep); the wake threshold is per step
+  const invKf = 1 / kf, quietRel = QUIET_REL * kf;
   for (let i = 0; i < n; i++) {
     const c = list[i];
     const bc = surf[c];
@@ -460,7 +537,7 @@ function fluxPass(
         const bed = bc > bo ? bc : bo;
         let d = top - bed;
         if (d > DRY && (Hc >= Ho ? wc : wo) > DRY) {
-          const damp = 1 - (FR0 + FR1 / (1 + d / H0));
+          const damp = 1 - (FR0 + FR1 / (1 + d / H0)) * invKf;
           const dh = Hc - Ho;
           if (d > DCAP) d = DCAP;
           t = (flux[e] - flux[rev[e]]) * damp + K[e] * d * dh;
@@ -493,7 +570,7 @@ function fluxPass(
       if (a === 0 || a === 4) {
         if (a === 0) fed[nf++] = o; // first inflow this step: collect the receiver
         const wo = water[o] > 0.075 ? water[o] : 0.075;
-        if (fl / (A[o] * wo) > QUIET_REL) { act[o] = 2; quiet[o] = 0; } else if (a === 0) act[o] = 4;
+        if (fl / (A[o] * wo) > quietRel) { act[o] = 2; quiet[o] = 0; } else if (a === 0) act[o] = 4;
       }
     }
     dV[c] -= out;
@@ -545,6 +622,245 @@ function applyActive(list: Int32Array, n: number, water: Float64Array, A: Float6
   }
 }
 
+// ───────────────────────────── sheets: thin overland flow (SIM perf push 2) ─────────────────────────────
+//
+// Most awake water is a film a few millimetres to centimetres thick running over the land after rain or snowmelt (on
+// the home world ~65 % of the active set on an ordinary day, ~85 % in a planet-wide downpour). Such films have no
+// momentum worth keeping: the pipes' friction takes ~10 % of a film's flux every step, so its flow is always within a
+// few steps of the steady state of its slope. Sheets therefore skip the pipes: each step a sheet sends each LOWER
+// neighbour (by water level) the pipes' steady-state flux for that drop,
+//     F_e = K_e · d_e · (H_c − H_o) / (FR0 + FR1 / (1 + d_e / H0))      (the fixed point of fluxPass's update)
+// limited, like the pipes, to what the cell holds. No momentum update, no pair bookkeeping, no quiet counter: about a
+// third of the work of a pipe cell. A sheet is a land cell shallower than SHEET_IN; it goes back to the pipes once
+// deeper than SHEET_OUT (it pools, a river or a flood reaches it): lakes, rivers, floods, tsunamis and the sea keep full
+// momentum dynamics. A sheet writes what it sends along each edge, per plain step, into the pipes' flux array (zero on
+// the rest of its edges, all zero once asleep): its velocity — and that of every cell it feeds — is net flux, outflow
+// less inflow, as in the pipes (round 2: counting the outflow alone halved a channel's speed, and a monsoon carved
+// ~35 % less), and the flow is its momentum when it deepens into the pipes. Every m³ a sheet sends arrives in its
+// receiver's dV (or joins the sea, accounted), so mass is conserved exactly as in the pipes. Wake rules are the pipes' own: a sheet that is level with its wet neighbours, or
+// within the retention film, sleeps at once (nothing to carry); sleepers are woken by any source (rain, melt, springs,
+// seepage, commands, terrain edits: activateCell / wakeIfRunning), by a real inflow, or by a level mismatch.
+//
+// The stability bound of the explicit zero-inertia step (a sheet must not overshoot its receiver's level) holds by a
+// wide margin at these depths: per edge K·d / ((FR0 + FR1)·A) ≈ 0.12 per metre of depth on the home world, so a 5 cm
+// sheet exchanges well under 1 % of a level difference per step.
+
+/** hAct value of an awake cell in SHEET mode (pipes are 1; 2 and 4 are transient marks inside a step) */
+export const SHEET = 8;
+/** a land cell shallower than this (m) flows as a sheet ... */
+export const SHEET_IN = 0.02;
+/** ... until it is deeper than this (m): then the pipes carry it (hysteresis keeps cells from flapping) */
+export const SHEET_OUT = 0.05;
+
+/** sheets found by the last splitModes */
+let sheetCount = 0;
+
+/**
+ * Split this step's awake list (ascending) into pipe cells (compacted in place at the front of `list`, still ascending;
+ * returned count) and sheet cells (`sheets`, ascending; count in sheetCount). A pipe cell turning into a sheet drops its
+ * outflow fluxes (a film's momentum is negligible); a sheet turning into a pipe cell starts from rest.
+ */
+function splitModes(
+  list: Int32Array, n: number, sheets: Int32Array, water: Float64Array, ocean: Uint8Array, act: Uint8Array, quiet: Uint8Array,
+  flux: Float64Array, nbrStart: Int32Array,
+): number {
+  let np = 0, ns = 0;
+  for (let i = 0; i < n; i++) {
+    const c = list[i];
+    const a = act[c];
+    if (ocean[c] === 0 && water[c] < (a === SHEET ? SHEET_OUT : SHEET_IN)) {
+      if (a !== SHEET) {
+        act[c] = SHEET;
+        quiet[c] = 0;
+        const e1 = nbrStart[c + 1];
+        for (let e = nbrStart[c]; e < e1; e++) flux[e] = 0;
+      }
+      sheets[ns++] = c;
+    } else {
+      if (a === SHEET) { act[c] = 1; quiet[c] = 0; }
+      list[np++] = c;
+    }
+  }
+  sheetCount = ns;
+  return np;
+}
+
+/** per-sheet receiver scratch (a cell has at most 6 neighbours) */
+const rcvO = new Int32Array(8);
+const rcvE = new Int32Array(8);
+const rcvF = new Float64Array(8);
+
+/**
+ * The sheet pass (after fluxPass, before any water moves: it reads the step's starting levels like the pipes do).
+ * Sends each sheet's flow into its receivers' dV, collects sleeping receivers into the fed list (as fluxPass does),
+ * writes the sheet's velocity, wakes higher sleeping wet neighbours out of level, and puts level / dry sheets to sleep.
+ * Returns the volume sunk into the sea (negative: a sink).
+ */
+function sheetPass(
+  sheets: Int32Array, ns: number, nbrStart: Int32Array, nbr: Int32Array, rev: Int32Array, K: Float64Array, surf: Float32Array,
+  water: Float64Array, A: Float64Array, flux: Float64Array, ocean: Uint8Array, act: Uint8Array, quiet: Uint8Array, dV: Float64Array,
+  fed: Int32Array, tx: Float32Array, ty: Float32Array, tz: Float32Array, flowX: Float32Array, flowY: Float32Array,
+  flowZ: Float32Array, mainRcv: Int32Array, vmul: number, dtTicks: number,
+): number {
+  let sunk = 0;
+  let nf = fedCount;
+  const invH0 = 1 / H0;
+  // time-lapse: one sheet step stands for dtTicks / HYDRO_CADENCE steps (the films' zero-inertia flux is a rate: it
+  // scales with the step; ~1 % of a level difference per step at these depths leaves a wide stability margin)
+  const m = dtTicks / HYDRO_CADENCE, invM = 1 / m;
+  for (let i = 0; i < ns; i++) {
+    const c = sheets[i];
+    const w = water[c];
+    const bc = surf[c];
+    const Hc = bc + w;
+    const e0 = nbrStart[c], e1 = nbrStart[c + 1];
+    let nr = 0, total = 0, level = true;
+    // what flows in along each edge (the neighbours' per-step outflow toward this cell: pipes this step, sheets their
+    // latest) — the velocity counts it, as the pipes' does (round 2: a sheet's velocity counted its outflow only, half
+    // the pipes' through a channel, and the rivers they feed lost their inflow term: a monsoon carved ~38 % less)
+    let ix = 0, iy = 0, iz = 0;
+    if (w > DRY) {
+      // the common receiver lies on lower ground (its bed below this one): the depth across the edge is the film itself,
+      // so the friction term and the level tolerance are the cell's own (one division per cell, not per edge)
+      const kw = (w / (FR0 + FR1 / (1 + w * invH0))) * m;
+      const epsW = LEVEL_EPS + LEVEL_EPS_DEPTH * w;
+      for (let e = e0; e < e1; e++) {
+        const o = nbr[e];
+        flux[e] = 0;
+        const bo = surf[o];
+        const Ho = bo + water[o];
+        const dh = Hc - Ho;
+        if (dh > 0) {
+          let F: number;
+          if (bo <= bc) {
+            if (dh > epsW) level = false;
+            F = K[e] * kw * dh;
+          } else {
+            // a step up to the receiver's bed: only the water above it crosses
+            const d = Hc - bo;
+            if (d <= DRY) continue;
+            if (dh > LEVEL_EPS + LEVEL_EPS_DEPTH * d) level = false;
+            F = ((K[e] * d * dh) / (FR0 + FR1 / (1 + d * invH0))) * m;
+          }
+          rcvO[nr] = o; rcvE[nr] = e; rcvF[nr] = F; nr++;
+          total += F;
+        } else if (dh < 0) {
+          // a higher neighbour: asleep, it may need waking; awake, what it sends here is this cell's inflow (only a higher
+          // cell sends downhill — the inflow read skips the rest: scattered reads were the cost of this pass)
+          if (act[o] === 0) wakeHigher(o, -dh, bc, bo, Ho, water[o], act, quiet);
+          else {
+            const fin = flux[rev[e]];
+            if (fin > 0) { ix += fin * tx[e]; iy += fin * ty[e]; iz += fin * tz[e]; }
+          }
+        }
+      }
+    } else {
+      // within the retention film: sends nothing; still wakes a higher sleeping wet neighbour out of level
+      for (let e = e0; e < e1; e++) {
+        flux[e] = 0;
+        const o = nbr[e];
+        if (act[o] !== 0) continue;
+        const bo = surf[o];
+        const Ho = bo + water[o];
+        if (Ho > Hc) wakeHigher(o, Ho - Hc, bc, bo, Ho, water[o], act, quiet);
+      }
+    }
+    if (nr === 0) {
+      // nothing lower: dry, or a hollow / level ground holding its film — asleep. An inflow already sent to it this
+      // step makes it a fed cell (applyFed wakes it if the gift leaves it out of level); later senders feed it as usual
+      if (dV[c] > 0) { act[c] = 4; fed[nf++] = c; } else act[c] = 0;
+      flowX[c] = 0; flowY[c] = 0; flowZ[c] = 0;
+      mainRcv[c] = -1;
+      continue;
+    }
+    const inflow = dV[c];
+    const V = w * A[c];
+    const k = total > V ? V / total : 1;
+    let qx = 0, qy = 0, qz = 0, out = 0, best = -1, bf = 0;
+    const fromLand = ocean[c] === 0;
+    for (let j = 0; j < nr; j++) {
+      const fl = rcvF[j] * k;
+      const o = rcvO[j], e = rcvE[j];
+      // the edge's outflow per plain step, as the pipes keep it: their neighbours' momentum and velocity read it, and
+      // it is this cell's momentum if it deepens into the pipes
+      flux[e] = fl * invM;
+      out += fl;
+      qx += fl * tx[e]; qy += fl * ty[e]; qz += fl * tz[e];
+      if (fl > bf) { bf = fl; best = o; }
+      if (fromLand && ocean[o] !== 0) { sunk += fl; continue; }
+      dV[o] += fl;
+      const a = act[o];
+      if (a === 0 || a === 4) {
+        if (a === 0) fed[nf++] = o;
+        const wr = water[o] > 0.075 ? water[o] : 0.075;
+        if (fl > QUIET_REL * A[o] * wr * m) { act[o] = 2; quiet[o] = 0; } else if (a === 0) act[o] = 4;
+      }
+    }
+    dV[c] -= out;
+    mainRcv[c] = best;
+    if (level) {
+      // level with every wet neighbour (only drops within the level tolerance): the film rests — it sends this step's
+      // trickle and sleeps (as a fed cell when something flowed in this step, see above); a sleeper holds no flux
+      if (inflow > 0) { act[c] = 4; fed[nf++] = c; } else act[c] = 0;
+      for (let j = 0; j < nr; j++) flux[rcvE[j]] = 0;
+      flowX[c] = 0; flowY[c] = 0; flowZ[c] = 0;
+      continue;
+    }
+    // net flux along the edge tangents per column depth, per tick (finishActive's velocity: outflow − inflow)
+    const kv = vmul / (w > 0.05 ? w : 0.05) / HYDRO_CADENCE;
+    flowX[c] = (qx * invM - ix) * kv; flowY[c] = (qy * invM - iy) * kv; flowZ[c] = (qz * invM - iz) * kv;
+  }
+  fedCount = nf;
+  return -sunk;
+}
+
+/** wake sleeping neighbour o, higher than a sheet by `rise`, if it is wet and out of level across the edge (the pipes'
+ * finishActive rule: only an awake cell sends, and o has to send water this way) */
+function wakeHigher(o: number, rise: number, bc: number, bo: number, Ho: number, wo: number, act: Uint8Array, quiet: Uint8Array): void {
+  if (wo <= DRY) return;
+  const d = Ho - (bc > bo ? bc : bo);
+  if (d > DRY && rise > LEVEL_EPS + LEVEL_EPS_DEPTH * (d < LEVEL_EPS_MAXD ? d : LEVEL_EPS_MAXD)) { act[o] = 1; quiet[o] = 0; }
+}
+
+/** apply the sheets' dV (a sheet put to sleep this step is applied here too; a fed one already was, dV is 0 then); a
+ * sheet that ran dry this step sleeps (as the pipes' finishActive does: nothing left to send) */
+function applySheets(
+  sheets: Int32Array, ns: number, water: Float64Array, A: Float64Array, dV: Float64Array, act: Uint8Array,
+  flowX: Float32Array, flowY: Float32Array, flowZ: Float32Array, nbrStart: Int32Array, flux: Float64Array,
+): void {
+  for (let i = 0; i < ns; i++) {
+    const c = sheets[i];
+    const dv = dV[c];
+    if (dv !== 0) {
+      dV[c] = 0;
+      const w = water[c] + dv / A[c];
+      water[c] = w < 0 ? 0 : w;
+    }
+    if (act[c] === SHEET && water[c] <= DRY) {
+      act[c] = 0; flowX[c] = 0; flowY[c] = 0; flowZ[c] = 0;
+      const e1 = nbrStart[c + 1];
+      for (let e = nbrStart[c]; e < e1; e++) flux[e] = 0;
+    }
+  }
+}
+
+/** sheet wash: a fast sheet (> 2 cm, > 1.5 m/s) carries loose ground to its main receiver, like the pipes' erosion */
+function sheetErosion(p: Planet, sheets: Int32Array, ns: number, mainRcv: Int32Array, steps: number): number {
+  const f = p.f;
+  const water = f.water, fx = f.flowX, fy = f.flowY, fz = f.flowZ;
+  const k = p.cfg.erosion * steps;
+  let eroded = 0;
+  for (let i = 0; i < ns; i++) {
+    const c = sheets[i];
+    if (water[c] <= 0.02) continue;
+    const r = mainRcv[c];
+    if (r < 0) continue;
+    const sp = Math.sqrt(fx[c] * fx[c] + fy[c] * fy[c] + fz[c] * fz[c]);
+    if (sp > 1.5) { const m = erodeTo(p, c, r, sp, k); if (m > eroded) eroded = m; }
+  }
+  return eroded;
+}
+
 /** velocity field, erosion, waking level-mismatched sleepers, and putting quiet cells to sleep; returns the largest
  * single-cell ground change of this step's erosion (m, 0 = none).
  *
@@ -552,7 +868,7 @@ function applyActive(list: Int32Array, n: number, water: Float64Array, A: Float6
  * wakes a SLEEPING neighbour that is out of level. A flowing cell therefore tests only its sleeping neighbours — inside
  * a river or a rain sheet every neighbour is awake and the test is skipped — while a quiet candidate tests every edge
  * until one is out of level. Same decisions as testing every edge, in the same order. */
-function finishActive(p: Planet, list: Int32Array, n: number, maxOutA: Float64Array): number {
+function finishActive(p: Planet, list: Int32Array, n: number, maxOutA: Float64Array, kf: number): number {
   const f = p.f, s = p.s, g = p.grid, geo = p.geo, cfg = p.cfg;
   const surf = f.surface, water = f.water, flux = s.flux, act = s.hAct, quiet = s.hQuiet, A = p.cellArea, rev = g.rev;
   const nbrStart = g.nbrStart, nbr = g.nbr, tx = geo.tx, ty = geo.ty, tz = geo.tz;
@@ -560,7 +876,8 @@ function finishActive(p: Planet, list: Int32Array, n: number, maxOutA: Float64Ar
   const lastDv = p.scratch.lastDv;
   const vmul = 1 / (3 * (p.edgeM / Math.sqrt(3)));
   const ocean = s.ocean;
-  const erosion = cfg.erosion;
+  // a time-lapse step of kf plain steps (hydroStep): per-step thresholds, the step's duration and erosion scale with it
+  const erosion = cfg.erosion * kf, quietDv = QUIET * kf, quietRel = QUIET_REL * kf, stepTicks = HYDRO_CADENCE * kf;
   let eroded = 0;
   for (let i = 0; i < n; i++) {
     const c = list[i];
@@ -575,7 +892,7 @@ function finishActive(p: Planet, list: Int32Array, n: number, maxOutA: Float64Ar
     // no real change; it sleeps if it is also level with every wet neighbour
     const ldv = lastDv[c];
     const dv = ldv < 0 ? -ldv : ldv;
-    const cand = dv < QUIET && maxOut < QUIET_REL * A[c] * (w > 0.075 ? w : 0.075);
+    const cand = dv < quietDv && maxOut < quietRel * A[c] * (w > 0.075 ? w : 0.075);
     let level = true;
     for (let e = e0; e < e1; e++) {
       const o = nbr[e];
@@ -583,8 +900,10 @@ function finishActive(p: Planet, list: Int32Array, n: number, maxOutA: Float64Ar
       const so = surf[o];
       const wo = water[o];
       const Ho = so + wo;
-      // the sea does not wait for land running off into it (that water joins the reservoir)
-      if (sea && Ho > Hc && !ocean[o]) continue;
+      // the sea does not wait for land running off into it (that water joins the reservoir), and no cell waits for an
+      // awake higher neighbour: that one sends its water by itself (a sleeper receives, and wakes when the gift leaves
+      // it out of level)
+      if (Ho > Hc && (act[o] !== 0 || (sea && !ocean[o]))) continue;
       const bed = bc > so ? bc : so;
       const top = Hc > Ho ? Hc : Ho;
       const dep = top - bed;
@@ -609,7 +928,7 @@ function finishActive(p: Planet, list: Int32Array, n: number, maxOutA: Float64Ar
       qx += net * tx[e]; qy += net * ty[e]; qz += net * tz[e];
     }
     const dd = w > 0.05 ? w : 0.05;
-    const k = vmul / dd / HYDRO_CADENCE;
+    const k = vmul / dd / stepTicks;
     const vx = qx * k, vy = qy * k, vz = qz * k;
     flowX[c] = vx; flowY[c] = vy; flowZ[c] = vz;
     // erosion: fast water lifts loose ground and drops it one cell downstream (rivers cut, deltas grow)
@@ -631,10 +950,16 @@ function finishActive(p: Planet, list: Int32Array, n: number, maxOutA: Float64Ar
 
 /** move loose material from c to its main downstream neighbour; returns the depth moved (m, 0 = nothing) */
 function erode(p: Planet, c: number, speed: number, k: number): number {
-  const f = p.f, g = p.grid, flux = p.s.flux;
+  const g = p.grid, flux = p.s.flux;
   let best = -1, bf = 0;
   for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) if (flux[e] > bf) { bf = flux[e]; best = g.nbr[e]; }
   if (best < 0) return 0;
+  return erodeTo(p, c, best, speed, k);
+}
+
+/** move loose material from c to `best` (its main receiver) at flow speed `speed`; returns the depth moved */
+function erodeTo(p: Planet, c: number, best: number, speed: number, k: number): number {
+  const f = p.f;
   const cap = 0.00004 * (speed - 1.5) * k;
   let m = 0;
   if (f.sand[c] > 0) {
@@ -650,7 +975,17 @@ function erode(p: Planet, c: number, speed: number, k: number): number {
     m = cap * 0.05; // bedrock cuts slowly: canyons over many days
     f.rock[c] -= m; f.sand[best] += m;
   }
-  if (m > 0) { p.updSurface(c); p.updSurface(best); }
+  if (m > 0) {
+    p.updSurface(c); p.updSurface(best);
+    // sediment carried into the sea displaces sea water (push 2 round 2): the sea is a reservoir, so the displaced water
+    // leaves it as an accounted sink and the mean-level relaxation spreads it back. A delta that raised the sea surface
+    // over itself instead kept the open sea awake at every river mouth in a downpour (hundreds of cells, all monsoon)
+    if (p.s.ocean[best] !== 0) {
+      const w = f.water[best], d = w < m ? w : m;
+      f.water[best] = w - d;
+      p.hydro.sourced -= d * p.cellArea[best];
+    }
+  }
   return m;
 }
 
@@ -860,6 +1195,7 @@ export function waterImpulse(p: Planet, pos: ArrayLike<number>, radiusM: number,
       flux[e] = Math.max(flux[e], al * v * k * geo.width[e] * p.st.radius * Math.min(d, DCAP) * 0.5);
     }
     activateCell(p, c);
+    p.s.hAct[c] = 1; // momentum lives in the pipes (a thin fringe drops back to a sheet at the next split)
   }
   p.hydro.sourced += added;
   p.bump('water');

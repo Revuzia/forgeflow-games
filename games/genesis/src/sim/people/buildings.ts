@@ -100,6 +100,15 @@ export function chooseMaterial(x: PCtx, st: Settlement, t: number): number {
   return best;
 }
 
+/** the material a god-raised building is made of: what the builders would choose, else the first the building allows
+ * (the god may build in a stone they cannot yet work) */
+export function godMaterial(x: PCtx, st: Settlement, t: number): number {
+  const m = chooseMaterial(x, st, t);
+  if (m >= 0) return m;
+  const order = materialOrder(x, st, t);
+  return order.length ? order[0] : 0;
+}
+
 /**
  * Can the settlement still get what site b lacks? Every item of its material must be in store for the rest of the
  * work, or growing / lying within reach, or made by a recipe it knows.
@@ -268,8 +277,8 @@ export function styleOf(st: Settlement): number {
 }
 
 /** place a construction site; returns the building (progress 0) or null */
-export function planBuilding(x: PCtx, st: Settlement, t: number, complete = false): Building | null {
-  const mat = chooseMaterial(x, st, t);
+export function planBuilding(x: PCtx, st: Settlement, t: number, complete = false, matOverride = -1): Building | null {
+  const mat = matOverride >= 0 ? matOverride : chooseMaterial(x, st, t);
   if (mat < 0) return null;
   const site = findSite(x, st, t);
   if (!site) return null;

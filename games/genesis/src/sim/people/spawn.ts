@@ -30,6 +30,8 @@ export interface SpawnSpec {
   settled?: boolean;
   /** size hint for established settlements: 'village' | 'town' | 'city' */
   size?: string;
+  /** stay a band whatever the era (newcomers who will join a settlement: god/civic, people/commands joinSettlement) */
+  band?: boolean;
 }
 
 /** a good land cell for a species near `from` (or anywhere on the planet) */
@@ -71,7 +73,7 @@ export function spawnPeople(u: Universe, p: Planet, spec: SpawnSpec): Settlement
   const at = spec.cell ?? (spec.pos ? p.cellAt(spec.pos) : bestSiteOnPlanet(x, sp, p.people.settlements.length + 1));
   if (at < 0) return null;
   const era = Math.max(0, ERAS.indexOf((spec.era ?? 'stone') as (typeof ERAS)[number]));
-  const settle = era > 0 || !!spec.settled;
+  const settle = !spec.band && (era > 0 || !!spec.settled);
   // where they will live: the best site near the drop
   const site = landingCell(x, sp, at);
   // an established people stands on its site at once; a band set down by the hand stands where it was put (on the

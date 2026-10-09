@@ -20,7 +20,7 @@
 //     instances shrink into the ground across a hand-over band at the edge of the range (no popping, no speckle).
 //     Ground cover casts no shadows (too small to matter at the cascade resolutions).
 
-import { Color, Group, InstancedMesh, Matrix4, DynamicDrawUsage, type IUniform } from 'three';
+import { Color, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, DynamicDrawUsage, type IUniform } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
 import { hashFloat } from '../../sim/core/rng.ts';
@@ -138,8 +138,18 @@ export class GroundCover {
     this.group.add(this.near, this.far);
     // far crop rows: the crop clumps with their own fade band
     const farMat = makeVegMaterial(shared, this.farFade, leafTex);
+    // the vegetation shader reads a per-instance iExtra (snow, char, leaf loss, LOD role): ground cover carries its own,
+    // plain (0, 0, 0, 1). Without it the shader read whatever generic value another program had left at that attribute
+    // location (often a ShaderMaterial's default colour, 1, 1, 1): "snow" on every upward face and "char" on the rest —
+    // the pale coins with dark rims that the stones read as on the grass, frosted crops and tufts
+    const plain = (g: BufferGeometry, cap: number): BufferGeometry => {
+      const a = new Float32Array(cap * 4);
+      for (let i = 3; i < a.length; i += 4) a[i] = 1;
+      g.setAttribute('iExtra', new InstancedBufferAttribute(a, 4));
+      return g;
+    };
     for (let v = 0; v < KVARS[GK.crop]; v++) {
-      const m = new InstancedMesh(cropClump(CROP_TYPES[v >> 1], v & 1), farMat, 6000);
+      const m = new InstancedMesh(plain(cropClump(CROP_TYPES[v >> 1], v & 1), 6000), farMat, 6000);
       m.instanceMatrix.setUsage(DynamicDrawUsage);
       m.count = 0;
       m.frustumCulled = false;
@@ -152,9 +162,10 @@ export class GroundCover {
         case GK.grass: return [grassTuft(v), 6000];
         case GK.stone: return [stone(v), 1200];
         case GK.flower: return [flowerClump(v), 1500];
-        case GK.fern: return [treeGeometry('fern', 1, v), 800];
+        // (the tree generator's cached geometry, which the trees' own meshes give their iExtra: a copy of it)
+        case GK.fern: return [treeGeometry('fern', 1, v).clone(), 800];
         case GK.log: return [fallenLog(v), 200];
-        case GK.reed: return [treeGeometry('reed', 1, v), 1200];
+        case GK.reed: return [treeGeometry('reed', 1, v).clone(), 1200];
         case GK.crop: return [cropClump(CROP_TYPES[v >> 1], v & 1), 4000];
         default: return [mushrooms(v), 300];
       }
@@ -163,7 +174,7 @@ export class GroundCover {
       const row: InstancedMesh[] = [];
       for (let v = 0; v < KVARS[k]; v++) {
         const [g, cap] = geo(k, v);
-        const m = new InstancedMesh(g, mat, cap);
+        const m = new InstancedMesh(plain(g, cap), mat, cap);
         m.instanceMatrix.setUsage(DynamicDrawUsage);
         m.count = 0;
         m.frustumCulled = false;
@@ -302,7 +313,7 @@ export class GroundCover {
           // weathered field stone: warm grey-brown, some with lichen (pale coins of grey read as litter on the grass)
           const tone = 0.75 + 0.5 * hashFloat(c, k, 12);
           const lichen = hashFloat(c, k, 13) < 0.35 ? 0.5 : 0;
-          out.push(dx, dy, dz, gh, yaw, s, 1, variant, (0.2 + (0.19 - 0.2) * lichen) * tone, (0.18 + (0.19 - 0.18) * lichen) * tone, (0.15 + (0.11 - 0.15) * lichen) * tone);
+          out.push(dx, dy, dz, gh, yaw, s, 1, variant, (0.15 + (0.14 - 0.15) * lichen) * tone, (0.135 + (0.145 - 0.135) * lichen) * tone, (0.115 + (0.085 - 0.115) * lichen) * tone);
         }
       }
     }

@@ -44,6 +44,9 @@ const ready = next((m) => m.type === 'ready');
 // the sandbox with its vegetation grown (as _harness/perf_people.ts and the tests use it): people need food
 send({ type: 'init', scenario: 'sandbox', seed: 20260, options: { speed: 0, grad: true, overrides: { vegetation: 1 } } });
 await ready;
+// natural disasters off unless NATURAL=1 (perf push 2 round 2): a natural quake wakes the whole sea for ~1.5 game days at a
+// third of the usual rate, so a 20 s window across one measures luck, not the sim
+if (process.env.NATURAL !== '1') await call({ type: 'cmd', id: id++, cmd: { k: 'set', path: 'disasters.natural', value: 0 } });
 let made = 0, villages = 0;
 for (let lat = -36; lat <= 36 && made < want; lat += 18) {
   for (let lon = -170; lon < 180 && made < want; lon += 30) {

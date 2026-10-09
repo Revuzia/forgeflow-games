@@ -54,6 +54,11 @@ export interface CommandResult {
   created?: EntityRef[];
   /** tick at which it was applied */
   tick?: number;
+  /**
+   * additive (SIM phase 3): a time act the host should honour — `speed` (the worker's pace), `step` (ticks stepped),
+   * `rewind` / `edit` (the tick history was rewound / rewritten to). The sim has already done its part.
+   */
+  control?: Record<string, number>;
 }
 
 // ─────────────────────────────── events ─────────────────────────────────
@@ -392,6 +397,26 @@ export interface ShipView {
   progress: number;
 }
 
+/**
+ * something in flight (CONTRACT §11.4): a thrown rock, tree, item, animal, building or the creature. (A thrown PERSON
+ * is drawn from the agent block, which carries their flight position and the `thrown` animation.)
+ */
+export interface ProjectileView {
+  id: number;
+  planet: number;
+  /** 'rock' | 'tree' | 'item' | 'animal' | 'building' | 'creature' | 'agent' */
+  kind: string;
+  /** what it is: item / plant / animal species content index, building type, creature or agent id; rock: kg */
+  what: number;
+  /** content id of the item / plant / animal / building type ('' for rock, creature, agent) */
+  content: string;
+  pos: UnitVec;
+  /** metres above the ground under it */
+  alt: number;
+  /** m/s, body frame */
+  vel: [number, number, number];
+}
+
 export interface HandView {
   planet: number;
   pos: UnitVec;
@@ -419,6 +444,8 @@ export interface PlanetSnap {
   settlements?: SettlementView[];
   weather?: WeatherView[];
   disasters?: DisasterView[];
+  /** additive (god layer): things the hand threw (or a storm lifted) that are in the air now */
+  projectiles?: ProjectileView[];
   /** population totals by species index */
   population?: number[];
   /**

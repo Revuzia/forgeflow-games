@@ -194,11 +194,24 @@ export class Animals {
           }
           continue;
         }
-        const b = this.bucket(look, lod);
-        const j = this.bodies.push(b);
         const flying = M.anim[i] === AnimState.fly;
         bodyMatrix(_mat, ux, uy, uz, r, M.heading[i], size, flying ? 0.05 : 0);
-        this.bodies.set(b, j, _mat, [tr.anim, tr.prev, blend, M.phase[i] + hashFloat(id, 13)], _a, _b, _c, [male, 0, cadence, 0]);
+        // across a band at each LOD switch both meshes are drawn, sharing a dither (no hard cut)
+        const pair: [number, number][] = [];
+        {
+          const E = [45, 170], Bw = [3, 8];
+          let l = 0;
+          while (l < 2 && d >= E[l] + Bw[l]) l++;
+          if (l < 2 && d >= E[l] - Bw[l]) {
+            const f = (E[l] + Bw[l] - d) / (2 * Bw[l]), near = f * f * (3 - 2 * f);
+            pair.push([l, near], [l + 1, -(1 - near)]);
+          } else pair.push([l, 1]);
+        }
+        for (const [l, fade] of pair) {
+          const b = this.bucket(look, l);
+          const j = this.bodies.push(b);
+          this.bodies.set(b, j, _mat, [tr.anim, tr.prev, blend, M.phase[i] + hashFloat(id, 13)], _a, _b, _c, [male, 0, cadence, 0], fade);
+        }
         this.addPick(M.group[i], ux * r, uy * r, uz * r, Math.max(0.4, look.size * (M.scale[i] || 1)));
       }
       if (this.tracks.size > M.count * 2 + 256) {

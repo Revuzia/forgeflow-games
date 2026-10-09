@@ -11,7 +11,6 @@
 import type { Universe } from '../world/universe.ts';
 import type { Planet } from '../world/planet.ts';
 import type { PlantTable } from '../content.ts';
-import { hashFloat } from '../core/rng.ts';
 
 export const VEG_CADENCE = 60;
 /** vegetation runs half an hour after the climate so the two full-grid passes never share a tick */
@@ -76,10 +75,41 @@ export function bestSpecies(p: Planet, t: PlantTable, type: number, c: number, i
 }
 
 /**
- * suitability() for one species with the cell's values already read (vegetationStep reads them once per cell: the
- * pass asks up to a dozen times per cell). Same arithmetic, same order.
+ * The cell's conditions for suitFast (written once per cell by vegetationStep) and its result. SIM perf push 2: a call
+ * V8 does not inline passes and returns doubles as fresh heap numbers — the pass allocated ~4 MB of them per hour on
+ * the home world (a tenth of all garbage with 1 500 agents); typed-array slots carry the same values without boxing.
  */
-function suitFast(
+const ENV = new Float64Array(9);
+const E_TM = 0, E_W = 1, E_MO = 2, E_DEPTH = 3, E_SAL = 4, E_LM = 5, E_SNOW = 6, E_OUT = 7;
+/** the pass's running cover total: a function-level double carried through the cell loop was a fresh heap number at
+ * every update (~4 MB per pass on the home world); a typed-array slot is not */
+const E_TOTAL = 8;
+
+/** stateless hash of four small integers as an int32 (core/rng.ts hash32 bit for bit; `>>> 0` gives hash32): a Smi
+ * return, where hashFloat's double is a fresh heap number whenever the call is not inlined */
+function hashI(a: number, b: number, c: number, d: number): number {
+  let h = (a | 0) ^ 0x9e3779b9;
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  h ^= Math.imul(b | 0, 0x85ebca6b);
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  h ^= Math.imul(c | 0, 0xc2b2ae35);
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  h ^= Math.imul(d | 0, 0x27d4eb2f);
+  h ^= h >>> 16; h = Math.imul(h, 0x85ebca6b); h ^= h >>> 13; h = Math.imul(h, 0xc2b2ae35); h ^= h >>> 16;
+  return h | 0;
+}
+/** 2^32: hashFloat(a, b, c, d) < p ⇔ (hashI(a, b, c, d) >>> 0) < p · 2^32, exactly */
+const TWO32 = 4294967296;
+
+/**
+ * suitability() for one species with the cell's values already read into ENV (vegetationStep reads them once per cell:
+ * the pass asks up to a dozen times per cell); the result goes to ENV[E_OUT]. Same arithmetic, same order.
+ */
+function suitFast(t: PlantTable, sp: number): void {
+  ENV[E_OUT] = suitCalc(t, sp, ENV[E_TM], ENV[E_W], ENV[E_MO], ENV[E_DEPTH], ENV[E_SAL], ENV[E_LM], ENV[E_SNOW]);
+}
+
+function suitCalc(
   t: PlantTable, sp: number, tm: number, w: number, mo: number, depth: number, sal: number, lm: number, snowF: number,
 ): number {
   const i4 = sp * 4;
@@ -126,13 +156,24 @@ function drownDepth(t: PlantTable): number {
   return d;
 }
 
-/** One hourly vegetation pass. */
-export function vegetationStep(u: Universe, p: Planet): void {
+/** 1 − (1 − r)^h: an hourly chance or relaxation compounded over h hours */
+function perHours(r: number, h: number): number {
+  const k = 1 - r;
+  let q = k;
+  for (let i = 1; i < h; i++) q *= k;
+  return 1 - q;
+}
+
+/** One hourly vegetation pass (`hours` > 1: a time-lapse pass standing for that many hours, perf/lapse.ts — growth,
+ * decline and decay scale with it, hourly chances are compounded; at 1 every expression is the hourly one). */
+export function vegetationStep(u: Universe, p: Planet, hours = 1): void {
   const f = p.f, s = p.s, g = p.grid;
   const N = p.count;
   const t = u.content.plantTable;
   const life = airSupportsLife(p);
-  const growK = p.cfg.vegGrowth / 24;
+  const H = hours > 1 ? Math.round(hours) : 1, H1 = H === 1;
+  const growK = H1 ? p.cfg.vegGrowth / 24 : (p.cfg.vegGrowth / 24) * H;
+  const pBank = H1 ? 0.04 : perHours(0.04, H), pSucc = H1 ? 0.03 : perHours(0.03, H), keepLifeless = H1 ? 0.9 : Math.pow(0.9, H);
   const vegGrowth = p.cfg.vegGrowth;
   const hour = Math.floor(u.tick / 60);
   const covers = [f.grass, f.shrub, f.tree, f.crop];
@@ -146,7 +187,7 @@ export function vegetationStep(u: Universe, p: Planet): void {
   const growth = t.growth, deciduous = t.deciduous, spread = t.spread;
   const cropA = f.crop, grassSp = f.grassSpecies, shrubSp = f.shrubSpecies, treeSp = f.treeSpecies;
   const wDead = drownDepth(t);
-  let total = 0;
+  ENV[E_TOTAL] = 0;
   // a lifeless world has nothing to grow or seed: only the derived fields need refreshing
   const lifeless = p.vegTotal <= 0 && !p.vegDirty;
   p.vegDirty = false;
@@ -157,6 +198,7 @@ export function vegetationStep(u: Universe, p: Planet): void {
     const sal = salinity[c], lm = lightYear[c];
     const season = lm > 0.02 ? Math.min(1.25, lightMean[c] / lm) : 1;
     const snowF = snow[c] > 0.6 ? 0.3 : 1;
+    ENV[E_TM] = tm; ENV[E_W] = w; ENV[E_MO] = mo; ENV[E_DEPTH] = depth; ENV[E_SAL] = sal; ENV[E_LM] = lm; ENV[E_SNOW] = snowF;
     // water deeper than any plant can live in, nothing growing: no species suits the cell (suitability is 0 for all),
     // so nothing grows, seeds or succeeds — the type loop below would only clear the wild species marks (the open sea)
     let skip = lifeless;
@@ -171,11 +213,12 @@ export function vegetationStep(u: Universe, p: Planet): void {
       let x = cov[c];
       const sp = spf[c];
       if (!life) {
-        if (x > 0) { x *= 0.9; if (x < 0.005) { x = 0; } cov[c] = x; }
+        if (x > 0) { x *= keepLifeless; if (x < 0.005) { x = 0; } cov[c] = x; }
         continue;
       }
       if (x > 0 && sp >= 0) {
-        const suit = suitFast(t, sp, tm, w, mo, depth, sal, lm, snowF);
+        suitFast(t, sp | 0);
+        const suit = ENV[E_OUT];
         const dormant = deciduous[sp] && temperature[c] < 3;
         let cap = 1;
         if (ti === 0) cap = 1 - 0.55 * treeA[c] - 0.2 * shrubA[c];
@@ -184,21 +227,22 @@ export function vegetationStep(u: Universe, p: Planet): void {
         let dx = 0;
         if (!dormant) dx += growth[sp] * growK * suit * season * x * (1 - x / cap);
         if (suit < 0.25) {
-          dx -= (0.25 - suit) * 0.12 / 24 * 4 * x;
+          dx -= (0.25 - suit) * 0.12 / 24 * 4 * x * H;
           // the seed bank: where the climate has moved away from this species, one that suits it better comes up in
           // its place (succession only from neighbours left whole regions dying with nothing to replace them)
-          if (ti !== 3 && hashFloat(c, hour, ti, 0x5eeb) < 0.04) {
+          if (ti !== 3 && (hashI(c, hour, ti, 0x5eeb) >>> 0) < pBank * TWO32) {
             let bs = -1, bv = suit + 0.15;
             for (const o of t.byType[ti]) {
               if (o === sp || t.domestic[o]) continue;
-              const v = suitFast(t, o, tm, w, mo, depth, sal, lm, snowF);
+              suitFast(t, o);
+              const v = ENV[E_OUT];
               if (v > bv) { bv = v; bs = o; }
             }
             if (bs >= 0) spf[c] = bs;
           }
         }
-        if (x > cap) dx -= (x - cap) * 0.05;
-        if (ash[c] > 0.08 && ti !== 2) dx -= 0.04 * x;
+        if (x > cap) dx -= (x - cap) * 0.05 * H;
+        if (ash[c] > 0.08 && ti !== 2) dx -= 0.04 * x * H;
         x += dx;
         if (x < 0.003) { x = 0; }
         if (x > 1) x = 1;
@@ -214,8 +258,10 @@ export function vegetationStep(u: Universe, p: Planet): void {
         }
         if (bo >= 0) {
           const so = spf[bo];
-          const suit = suitFast(t, so, tm, w, mo, depth, sal, lm, snowF);
-          if (suit > 0.08 && hashFloat(c, hour, ti, 0x5eed) < spread[so] * bc * suit * 0.35 * vegGrowth) {
+          suitFast(t, so | 0);
+          const suit = ENV[E_OUT];
+          const chance = spread[so] * bc * suit * 0.35 * vegGrowth;
+          if (suit > 0.08 && (hashI(c, hour, ti, 0x5eed) >>> 0) < (H1 ? chance : perHours(Math.min(1, chance), H)) * TWO32) {
             cov[c] = 0.03;
             spf[c] = so;
             x = 0.03;
@@ -224,19 +270,21 @@ export function vegetationStep(u: Universe, p: Planet): void {
         if (x === 0) spf[c] = -1;
       }
       // succession: a better-suited neighbouring species slowly takes the cell
-      if (x > 0.05 && ti !== 3 && hashFloat(c, hour, ti, 0x5acc) < 0.03) {
+      if (x > 0.05 && ti !== 3 && (hashI(c, hour, ti, 0x5acc) >>> 0) < pSucc * TWO32) {
         const deg = nbrStart[c + 1] - nbrStart[c];
         const o = nbr[nbrStart[c] + ((hour + c) % deg)];
         const so = spf[o];
         if (so >= 0 && so !== spf[c] && cov[o] > 0.3) {
-          const cur = suitFast(t, spf[c], tm, w, mo, depth, sal, lm, snowF);
-          if (suitFast(t, so, tm, w, mo, depth, sal, lm, snowF) > cur + 0.12) spf[c] = so;
+          suitFast(t, spf[c] | 0);
+          const cur = ENV[E_OUT];
+          suitFast(t, so | 0);
+          if (ENV[E_OUT] > cur + 0.12) spf[c] = so;
         }
       }
-      total += cov[c];
+      ENV[E_TOTAL] += cov[c];
     }
     // scars fade as life returns
-    if (burnt[c] > 0 && fire[c] <= 0) burnt[c] = Math.max(0, burnt[c] - 0.004 - 0.02 * grassA[c]);
+    if (burnt[c] > 0 && fire[c] <= 0) burnt[c] = Math.max(0, H1 ? burnt[c] - 0.004 - 0.02 * grassA[c] : burnt[c] - (0.004 + 0.02 * grassA[c]) * H);
     // fertility
     if (ocean[c] || w > 0.5) fertility[c] = 0;
     else {
@@ -246,9 +294,10 @@ export function vegetationStep(u: Universe, p: Planet): void {
       fert -= 0.5 * pollution[c];
       fertility[c] = fert < 0 ? 0 : fert > 1 ? 1 : fert;
     }
-    if (pollution[c] > 0) pollution[c] = Math.max(0, pollution[c] - 0.002);
-    if (blight[c] > 0) blight[c] = Math.max(0, blight[c] - 0.01);
+    if (pollution[c] > 0) pollution[c] = Math.max(0, pollution[c] - 0.002 * H);
+    if (blight[c] > 0) blight[c] = Math.max(0, blight[c] - 0.01 * H);
   }
+  const total = ENV[E_TOTAL];
   p.vegTotal = total;
   if (total > 0 || life) {
     p.bump('grass'); p.bump('shrub'); p.bump('tree'); p.bump('crop'); p.bump('fertility'); p.bump('burnt');

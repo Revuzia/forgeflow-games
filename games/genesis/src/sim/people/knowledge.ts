@@ -493,6 +493,75 @@ export function godTeach(x: PCtx, slots: number[], k: number): { taught: number;
   return out;
 }
 
+/** the prerequisites of k that agent s lacks, deepest first (teaching them in this order gives the groundwork) */
+export function missingGroundwork(x: PCtx, s: number, k: number): number[] {
+  const A = x.A;
+  const out: number[] = [];
+  const seen = new Set<number>();
+  const visit = (q: number): void => {
+    const pre = x.rt.list[q].pre;
+    for (let w = 0; w < pre.length; w++) {
+      let bits = pre[w];
+      while (bits) {
+        const b = 31 - Math.clz32(bits);
+        bits &= ~(1 << b);
+        const pk = w * 32 + b;
+        if (seen.has(pk) || A.knows(s, pk)) continue;
+        seen.add(pk);
+        visit(pk);
+        out.push(pk);
+      }
+    }
+  };
+  visit(k);
+  return out;
+}
+
+/** a refusal in plain words ("Hesh lacks the groundwork: iron smelting needs copper smelting and charcoal first") */
+export function refusalWords(x: PCtx, who: string, s: number, k: number, why: string, many = false): string {
+  const name = kName(x, k);
+  const they = many ? 'they' : who;
+  switch (why) {
+    case 'grasp': {
+      const miss = s >= 0 ? missingGroundwork(x, s, k).map((q) => kName(x, q)) : [];
+      const list = miss.length > 3 ? `${miss.slice(-3).join(', ')} and more` : miss.length > 1 ? `${miss.slice(0, -1).join(', ')} and ${miss[miss.length - 1]}` : miss[0] ?? 'what comes before it';
+      return `${who} ${many ? 'lack' : 'lacks'} the groundwork: ${name} needs ${list} first`;
+    }
+    case 'taboo': return `${name} is taboo to ${many ? who : `${who}'s people`}: ${they} will not touch it`;
+    case 'fear': return `${who} ${many ? 'are' : 'is'} too afraid of you to listen`;
+    case 'faith': return `${who} ${many ? 'do' : 'does'} not believe in you, so ${they} will not take your word for ${name}`;
+    case 'conservative': return `the old ways are enough for ${many ? who : `${who}`}: ${they} turn ${name} away`;
+    default: return `${who} ${many ? 'turn' : 'turns'} ${name} away`;
+  }
+}
+
+/**
+ * The god insists (force): each listener is taught the groundwork they lack and then k itself, whatever they would have
+ * refused — at a price: those who would have refused are compelled, and fear the god a little more and love it a
+ * little less. Returns how many learned k, how many were compelled, and how many ideas of groundwork were given.
+ */
+export function forceTeach(x: PCtx, slots: number[], k: number): { taught: number; compelled: number; groundwork: number; already: number } {
+  const A = x.A;
+  const out = { taught: 0, compelled: 0, groundwork: 0, already: 0 };
+  for (const s of slots) {
+    if (!A.alive[s]) continue;
+    if (A.knows(s, k)) { out.already++; continue; }
+    const why = refusalOf(x, s, k);
+    for (const q of missingGroundwork(x, s, k)) if (learn(x, s, q, 'god')) out.groundwork++;
+    if (learn(x, s, k, 'god') || A.knows(s, k)) out.taught++;
+    if (why && why !== 'grasp') {
+      out.compelled++;
+      A.fear[s * 4] = Math.min(1, A.fear[s * 4] + 0.08);
+      A.love[s * 4] = Math.max(0, A.love[s * 4] - 0.03);
+      A.remember(s, MEMK.fear, x.tick, k);
+    } else {
+      A.love[s * 4] = Math.min(1, A.love[s * 4] + 0.03);
+      A.remember(s, MEMK.miracle, x.tick, k);
+    }
+  }
+  return out;
+}
+
 /**
  * Daily apprenticeship: the informal passing-on that the task-level teaching, watching and talk do not cover (a child
  * at the potter's elbow, a hunter taking a youth along). Per settlement and day, ideas known by the FEWEST living adults

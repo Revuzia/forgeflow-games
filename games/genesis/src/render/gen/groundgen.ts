@@ -121,7 +121,8 @@ export function stone(variant: number): BufferGeometry {
     tris.push([a, ab, ca], [c, bc, ab], [d, ca, bc], [ab, bc, ca]);
   }
   // rounded, a little taller than wide-flat (half of it sits in the ground: groundcover sinks it by a third)
-  const flat = 0.6 + rng.float() * 0.3;
+  // (boulders and cobbles, not coins: seen from above a flat stone read as a pale disc on the grass)
+  const flat = 0.78 + rng.float() * 0.35;
   const stretch = 0.85 + rng.float() * 0.4;
   const jit = verts.map(() => 0.88 + rng.float() * 0.24);
   const b = new Builder();
@@ -167,9 +168,8 @@ export function cropClump(type: CropType, variant: number): BufferGeometry {
     }
     return [x + ox * Math.sin(lean) * h, Math.cos(lean * 0.7) * h, z + oz * Math.sin(lean) * h] as [number, number, number];
   };
-  const head = (p: [number, number, number], len: number, r: number, droop: number, shade: number) => {
+  const head = (p: [number, number, number], len: number, r: number, droop: number, shade: number, n = 5) => {
     // an ear / panicle: a small spindle hanging from the stem tip
-    const n = 5;
     const ring: number[][] = [];
     for (let i = 0; i <= 3; i++) {
       const t = i / 3;
@@ -213,9 +213,16 @@ export function cropClump(type: CropType, variant: number): BufferGeometry {
     }
   } else {
     const flax = type === 'flax';
-    for (let k = 0; k < 13; k++) {
-      const x = (rng.float() - 0.5) * 0.5, z = (rng.float() - 0.5) * 0.5;
-      const tip = blade(x, z, 0.85 + rng.float() * 0.15, 0.1 + rng.float() * 0.2, rng.float() * 6.28, flax ? 0.01 : 0.016, 0.85, 3);
+    // a dense stand (a dozen stems with fat pale ears read as sparse sticks over bare ground): two dozen stems spread
+    // across the row so the rows close up, thin awned ears in the straw's own tone, and leaves low on the stems
+    const nStem = flax ? 16 : 24;
+    for (let k = 0; k < 5; k++) {
+      const x = (rng.float() - 0.5) * 0.6, z = (rng.float() - 0.5) * 0.6;
+      blade(x, z, 0.35 + rng.float() * 0.2, 0.9 + rng.float() * 0.5, rng.float() * 6.28, 0.03, 0.7, 2);
+    }
+    for (let k = 0; k < nStem; k++) {
+      const x = (rng.float() - 0.5) * 0.9, z = (rng.float() - 0.5) * 0.9;
+      const tip = blade(x, z, 0.8 + rng.float() * 0.2, 0.08 + rng.float() * 0.22, rng.float() * 6.28, flax ? 0.01 : 0.014, 0.85, 2);
       if (flax) {
         // small blue flowers (vertex colour; they keep their hue against the green tint)
         const fl = b.vert(tip[0], tip[1] + 0.02, tip[2], 0, 1, 0, 1, 1, 0.5);
@@ -223,7 +230,7 @@ export function cropClump(type: CropType, variant: number): BufferGeometry {
         for (let i = 0; i < 5; i++) b.idx.push(fl, pts[(i + 1) % 5], pts[i]);
         const n0 = b.col.length / 3 - 6;
         for (let v = n0; v < n0 + 6; v++) { b.col[v * 3] = 0.25; b.col[v * 3 + 1] = 0.4; b.col[v * 3 + 2] = 1.6; }
-      } else head(tip, 0.1, 0.014, 0.5 + rng.float() * 0.6, 1.3);
+      } else head(tip, 0.085, 0.011, 0.5 + rng.float() * 0.6, 1.05, 3);
     }
   }
   return b.build();
