@@ -21,8 +21,12 @@ import { BufferGeometry, Float32BufferAttribute, Vector3 } from 'three';
 import { Rng } from '../../sim/core/rng.ts';
 import { atlasUV, LEAF_TILE } from './leaftex.ts';
 
-export type TreeKind = 'conifer' | 'broadleaf' | 'birch' | 'tropical' | 'palm' | 'dead' | 'shrub';
-export const TREE_KINDS: TreeKind[] = ['conifer', 'broadleaf', 'birch', 'tropical', 'palm', 'dead', 'shrub'];
+export type TreeKind = 'conifer' | 'broadleaf' | 'birch' | 'tropical' | 'palm' | 'dead' | 'shrub'
+  | 'baobab' | 'mangrove' | 'willow' | 'cactus' | 'burnt' | 'kelp' | 'berrybush' | 'fern' | 'heather' | 'sage' | 'reed';
+export const TREE_KINDS: TreeKind[] = ['conifer', 'broadleaf', 'birch', 'tropical', 'palm', 'dead', 'shrub',
+  'baobab', 'mangrove', 'willow', 'cactus', 'burnt', 'kelp', 'berrybush', 'fern', 'heather', 'sage', 'reed'];
+/** the kinds drawn by the shrub layer (shorter view range, understorey rules) */
+export const SHRUB_KINDS: TreeKind[] = ['shrub', 'berrybush', 'fern', 'heather', 'sage', 'reed'];
 
 class MeshBuilder {
   pos: number[] = [];
@@ -334,6 +338,21 @@ function broadSpec(kind: TreeKind): BroadSpec {
         grow: { forkH: 0.58, trunkR: 0.022, limbs: [3, 5], limbAngle: [48, 66], limbLen: 0.34, childCount: [2, 3], childAngle: [25, 45], lenRatio: 0.7, radiusRatio: 0.62, tropism: 0.18, maxDepth: 3, lateral: 0.5, lean: 0.06, leader: 0.1 },
         bark: [0.13, 0.11, 0.085], tile: LEAF_TILE.smallSpray, size: [0.12, 0.28, 0.4], per: [7, 4, 4], flat: 0.65,
       };
+    case 'burnt':
+      return {
+        grow: { forkH: 0.42, trunkR: 0.03, limbs: [2, 4], limbAngle: [22, 42], limbLen: 0.3, childCount: [1, 2], childAngle: [20, 40], lenRatio: 0.6, radiusRatio: 0.6, tropism: 0.2, maxDepth: 2, lateral: 0.3, lean: 0.1, leader: 0.6 },
+        bark: [0.022, 0.02, 0.019], tile: LEAF_TILE.spray, size: [0, 0, 0], per: [0, 0, 0], flat: 0, leafless: true,
+      };
+    case 'mangrove':
+      return {
+        grow: { forkH: 0.42, trunkR: 0.022, limbs: [4, 5], limbAngle: [40, 62], limbLen: 0.34, childCount: [2, 3], childAngle: [25, 45], lenRatio: 0.66, radiusRatio: 0.6, tropism: 0.25, maxDepth: 3, lateral: 0.5, lean: 0.05, leader: 0.3 },
+        bark: [0.11, 0.1, 0.085], tile: LEAF_TILE.spray, size: [0.12, 0.27, 0.38], per: [7, 4, 4], flat: 0.2,
+      };
+    case 'willow':
+      return {
+        grow: { forkH: 0.3, trunkR: 0.032, limbs: [4, 5], limbAngle: [30, 52], limbLen: 0.42, childCount: [2, 3], childAngle: [20, 40], lenRatio: 0.7, radiusRatio: 0.58, tropism: 0.35, maxDepth: 2, lateral: 0.4, lean: 0.1, leader: 0.3 },
+        bark: [0.1, 0.085, 0.065], tile: LEAF_TILE.smallSpray, size: [0.1, 0.2, 0.3], per: [3, 2, 2], flat: 0,
+      };
     case 'dead':
       return {
         grow: { forkH: 0.38, trunkR: 0.026, limbs: [3, 4], limbAngle: [25, 45], limbLen: 0.38, childCount: [2, 3], childAngle: [25, 45], lenRatio: 0.66, radiusRatio: 0.6, tropism: 0.15, maxDepth: 3, lateral: 0.5, lean: 0.12, leader: 0.4 },
@@ -348,6 +367,293 @@ function broadSpec(kind: TreeKind): BroadSpec {
 }
 
 const skeletons = new Map<string, Skeleton>();
+
+// ───────────────────────────── special forms ─────────────────────────────
+
+/**
+ * baobab: a stout, gently swollen trunk carrying a broad crown of long, forking limbs (spread ≥ 0.6 × the trunk's
+ * height) that end in dense twigs: leafless in the dry season it reads as a twiggy mass, not a pale bowling pin
+ */
+function baobab(lod: number, variant: number): BufferGeometry {
+  const rng = new Rng(3300 + variant * 11);
+  const m = new MeshBuilder();
+  // grey-brown bark (a pale #9a8270 read near-white in the savanna sun)
+  const bark: RGB = [0.13, 0.105, 0.085];
+  const pts: Vector3[] = [], radii: number[] = [];
+  const rings = [10, 7, 4][lod];
+  for (let i = 0; i <= rings; i++) {
+    const t = i / rings;
+    pts.push(new Vector3((rng.float() - 0.5) * 0.01, -0.05 + t * 0.6, (rng.float() - 0.5) * 0.01));
+    radii.push(0.1 + 0.05 * Math.sin(Math.PI * Math.min(1, t * 1.25)) - 0.05 * t * t);
+  }
+  tube(m, pts, radii, [12, 8, 5][lod], bark, 0, 0.1, 0.55);
+  const top = pts[pts.length - 1];
+  const n = 6 + Math.floor(rng.float() * 3);
+  const tips: { p: Vector3; d: Vector3 }[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rng.float() * 0.5;
+    const dir = new Vector3(Math.cos(a) * 0.9, 0.45 + rng.float() * 0.35, Math.sin(a) * 0.9).normalize();
+    const L = 0.3 + rng.float() * 0.14;
+    const start = top.clone().add(new Vector3(Math.cos(a) * 0.04, -0.04, Math.sin(a) * 0.04));
+    const lp = bentPath(rng, start, dir, L, 0.3, lod === 0 ? 4 : lod === 1 ? 3 : 2);
+    tube(m, lp, lp.map((_, k) => 0.05 * (1 - 0.55 * k / (lp.length - 1))), [6, 4, 3][lod], bark, 0.1, 0.4, 0.75);
+    const end = lp[lp.length - 1];
+    const ed = end.clone().sub(lp[lp.length - 2]).normalize();
+    // each limb forks into two or three, and those into twigs
+    const forks = lod === 2 ? 1 : 2 + (rng.float() < 0.4 ? 1 : 0);
+    for (let f = 0; f < forks; f++) {
+      const fd = deviate(ed, 0.5 + rng.float() * 0.3, (f / forks) * 6.28 + rng.float());
+      fd.y = Math.max(fd.y, 0.15);
+      fd.normalize();
+      const fp = bentPath(rng, end, fd, 0.14 + rng.float() * 0.08, 0.35, lod === 0 ? 3 : 2);
+      tube(m, fp, fp.map((_, k) => 0.022 * (1 - 0.6 * k / (fp.length - 1))), [4, 3, 3][lod], bark, 0.4, 0.6, 0.8);
+      const fe = fp[fp.length - 1];
+      const fed = fe.clone().sub(fp[fp.length - 2]).normalize();
+      tips.push({ p: fe, d: fed });
+      if (lod <= 1) for (let t = 0; t < (lod === 0 ? 3 : 2); t++) {
+        const td = deviate(fed, 0.7, rng.float() * 6.28);
+        const tp = bentPath(rng, fe, td, 0.06 + rng.float() * 0.04, 0.4, 2);
+        tube(m, tp, [0.008, 0.005, 0.003], 3, bark, 0.6, 0.75, 0.85);
+        tips.push({ p: tp[2], d: td });
+      }
+    }
+  }
+  const crown = top.clone().add(new Vector3(0, 0.16, 0));
+  for (const t of tips) cluster(m, rng, LEAF_TILE.smallSpray, t.p, t.d, [3, 2, 2][lod], [0.11, 0.15, 0.22][lod], crown, 0.4, 0.6, 0.5, 0.4);
+  m.normalize();
+  return m.build();
+}
+
+/** prop roots arching out of a mangrove's trunk into the mud / water */
+function propRoots(m: MeshBuilder, rng: Rng, lod: number, bark: RGB): void {
+  const n = [10, 6, 4][lod];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + rng.float() * 0.4;
+    const h0 = 0.12 + rng.float() * 0.18;
+    const reach = 0.18 + rng.float() * 0.16;
+    const pts: Vector3[] = [];
+    for (let k = 0; k <= 4; k++) {
+      const t = k / 4;
+      const r = 0.02 + reach * t;
+      const y = h0 * (1 - t * t) + 0.04 * Math.sin(Math.PI * t) - 0.05 * t;
+      pts.push(new Vector3(Math.cos(a) * r, y, Math.sin(a) * r));
+    }
+    tube(m, pts, pts.map((_, k) => 0.012 * (1 - 0.4 * k / 4)), [5, 4, 3][lod], bark, 0, 0.05, 0.7);
+  }
+}
+
+/** willow curtains: long strips of small-leaf sprays hanging from the limb tips */
+function willowCurtains(m: MeshBuilder, rng: Rng, sk: Skeleton, lod: number): void {
+  const strips = [3, 2, 1][lod];
+  for (const t of sk.tips) {
+    for (let k = 0; k < strips; k++) {
+      const a = rng.float() * Math.PI * 2;
+      const out = new Vector3(Math.cos(a), 0, Math.sin(a));
+      const top = t.pos.clone().addScaledVector(out, 0.02 + rng.float() * 0.05);
+      const len = Math.min(top.y - 0.08, 0.35 + rng.float() * 0.25);
+      if (len < 0.05) continue;
+      const segs = [3, 2, 1][lod];
+      const w = [0.07, 0.11, 0.16][lod];
+      // a hanging, slightly outward-bowed strip of cards (tile v runs down the strip)
+      let prev = top;
+      for (let sgi = 0; sgi < segs; sgi++) {
+        const next = top.clone().add(new Vector3(out.x * 0.04 * (sgi + 1), -len * (sgi + 1) / segs, out.z * 0.04 * (sgi + 1)));
+        const along = next.clone().sub(prev);
+        card(m, LEAF_TILE.smallSpray, prev, along.clone().normalize(), Math.atan2(out.z, out.x) + Math.PI / 2, w, along.length() * 1.15, sk.crown, sk.crownR, 0.9 + rng.float() * 0.2, 0.55 + 0.3 * (sgi / segs));
+        prev = next;
+      }
+    }
+  }
+}
+
+/** saguaro: a ribbed green column with upturned arms (solid foliage, aCard 0.5) */
+function cactus(lod: number, variant: number): BufferGeometry {
+  const rng = new Rng(5100 + variant * 19);
+  const m = new MeshBuilder();
+  const green: RGB = [0.11, 0.17, 0.08];
+  const ribs = [14, 10, 6][lod];
+  const column = (base: Vector3, path: Vector3[], r: number) => {
+    const rows: number[][] = [];
+    for (let i = 0; i < path.length; i++) {
+      const p = path[i];
+      const t = i / (path.length - 1);
+      const rr = r * (t > 0.85 ? Math.sqrt(Math.max(0.05, 1 - (t - 0.85) / 0.15)) : 1);
+      const row: number[] = [];
+      for (let s = 0; s <= ribs * 2; s++) {
+        const a = (s / (ribs * 2)) * Math.PI * 2;
+        const rib = s % 2 === 0 ? 1 : 0.86;
+        const nx = Math.cos(a), nz = Math.sin(a);
+        row.push(m.vert(p.x + nx * rr * rib, p.y, p.z + nz * rr * rib, nx, 0.15, nz, green[0] * (0.85 + 0.15 * rib), green[1] * (0.85 + 0.15 * rib), green[2], 0.05 + 0.1 * p.y, 0, 0, 0.5));
+      }
+      rows.push(row);
+    }
+    for (let i = 0; i < rows.length - 1; i++) for (let s = 0; s < ribs * 2; s++) {
+      const a = rows[i][s], b = rows[i][s + 1], c = rows[i + 1][s], d = rows[i + 1][s + 1];
+      m.tri(a, d, b); m.tri(a, c, d);
+    }
+    void base;
+  };
+  const trunk: Vector3[] = [];
+  const segs = [10, 6, 4][lod];
+  for (let i = 0; i <= segs; i++) trunk.push(new Vector3(0, -0.04 + (i / segs) * 1.04, 0));
+  column(trunk[0], trunk, 0.075);
+  const arms = 1 + Math.floor(rng.float() * 3);
+  for (let k = 0; k < arms; k++) {
+    const a = (k / arms) * Math.PI * 2 + rng.float();
+    const h = 0.35 + rng.float() * 0.25;
+    const out = 0.1 + rng.float() * 0.06;
+    const up = 0.25 + rng.float() * 0.2;
+    const pts: Vector3[] = [];
+    const n = [7, 5, 3][lod];
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      // out, around the elbow, then up
+      const e = Math.min(1, t * 2.2);
+      const x = out * Math.sin(e * Math.PI / 2), y = h + out * (1 - Math.cos(e * Math.PI / 2)) * 0.6 + Math.max(0, t - 0.45) / 0.55 * up;
+      pts.push(new Vector3(Math.cos(a) * x, y, Math.sin(a) * x));
+    }
+    column(pts[0], pts, 0.05);
+  }
+  m.normalize();
+  return m.build();
+}
+
+/** kelp: tall wavy fronds rising from a holdfast (solid, swaying in the current) */
+function kelp(lod: number, variant: number): BufferGeometry {
+  const rng = new Rng(6100 + variant * 7);
+  const m = new MeshBuilder();
+  const col: RGB = [0.09, 0.075, 0.025];
+  const n = [7, 5, 3][lod];
+  for (let k = 0; k < n; k++) {
+    const a = rng.float() * Math.PI * 2;
+    const segs = [10, 6, 4][lod];
+    const w = 0.035 + rng.float() * 0.025;
+    const h = 0.75 + rng.float() * 0.25;
+    let prevL = -1, prevR = -1;
+    for (let i = 0; i <= segs; i++) {
+      const t = i / segs;
+      const x = Math.cos(a) * 0.03 + Math.sin(t * 6 + k) * 0.04 * t, z = Math.sin(a) * 0.03 + Math.cos(t * 5 + k * 2) * 0.04 * t, y = t * h;
+      const ww = w * (0.6 + 0.8 * Math.sin(Math.PI * Math.min(1, t * 1.1)));
+      const sx = -Math.sin(a), sz = Math.cos(a);
+      const L = m.vert(x - sx * ww, y, z - sz * ww, Math.cos(a), 0.2, Math.sin(a), col[0], col[1], col[2], t, 0, 0, 0.5);
+      const R = m.vert(x + sx * ww, y, z + sz * ww, Math.cos(a), 0.2, Math.sin(a), col[0], col[1], col[2], t, 0, 0, 0.5);
+      if (prevL >= 0) { m.tri(prevL, prevR, R); m.tri(prevL, R, L); m.tri(prevL, R, prevR); m.tri(prevL, L, R); }
+      prevL = L; prevR = R;
+    }
+  }
+  m.normalize();
+  return m.build();
+}
+
+/** low shrubs: berry bushes (with berries), heather mounds (flowering), sagebrush (grey, woody), ferns, reeds */
+function lowShrub(kind: TreeKind, lod: number, variant: number): BufferGeometry {
+  const rng = new Rng(4400 + variant * 13 + kind.length * 101);
+  const m = new MeshBuilder();
+  const bark: RGB = kind === 'sage' ? [0.12, 0.11, 0.09] : [0.07, 0.055, 0.04];
+  if (kind === 'fern') {
+    const n = [12, 8, 5][lod];
+    const crown = new Vector3(0, 0.35, 0);
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + rng.float() * 0.4;
+      const out = new Vector3(Math.cos(a), 0, Math.sin(a));
+      const rise = 0.75 + rng.float() * 0.35;
+      const len = 0.75 + rng.float() * 0.3;
+      const rows = [4, 3, 2][lod];
+      const spine: Vector3[] = [];
+      for (let r = 0; r <= rows; r++) { const t = r / rows; spine.push(out.clone().multiplyScalar(t * len * 0.75).add(new Vector3(0, rise * t - t * t * 0.55, 0))); }
+      const side = new Vector3(-Math.sin(a), 0, Math.cos(a));
+      const ids: number[] = [];
+      for (let r = 0; r <= rows; r++) {
+        const t = r / rows, p = spine[r];
+        const wdt = 0.16 * Math.sin(Math.PI * (0.1 + 0.9 * t));
+        for (const su of [-1, 0, 1]) {
+          const [u, v] = atlasUV(LEAF_TILE.frond, (su + 1) / 2, t);
+          ids.push(m.vert(p.x + side.x * su * wdt, p.y - Math.abs(su) * wdt * 0.3, p.z + side.z * su * wdt, out.x * 0.3, 0.9, out.z * 0.3, 0.9, 0.95, 0.85, 0.3 + 0.6 * t, u, v, 1));
+        }
+      }
+      for (let r = 0; r < rows; r++) for (let c = 0; c < 2; c++) {
+        const i0 = r * 3 + c, i1 = (r + 1) * 3 + c;
+        m.tri(ids[i0], ids[i0 + 1], ids[i1 + 1]); m.tri(ids[i0], ids[i1 + 1], ids[i1]);
+      }
+    }
+    void crown;
+    m.normalize();
+    return m.build();
+  }
+  if (kind === 'reed') {
+    // a clump of tall thin blades, some carrying brown cattail heads
+    const n = [26, 14, 8][lod];
+    for (let i = 0; i < n; i++) {
+      const a = rng.float() * Math.PI * 2, r0 = rng.float() * 0.12;
+      const bx = Math.cos(a) * r0, bz = Math.sin(a) * r0;
+      const lean = (rng.float() - 0.5) * 0.25, h = 0.7 + rng.float() * 0.3, w = 0.012 + rng.float() * 0.008;
+      const sx = Math.cos(a + 1.57), sz = Math.sin(a + 1.57);
+      let pl = -1, pr = -1;
+      const rows = [4, 3, 2][lod];
+      for (let k = 0; k <= rows; k++) {
+        const t = k / rows;
+        const x = bx + Math.cos(a) * lean * t * t, z = bz + Math.sin(a) * lean * t * t, y = h * t;
+        const ww = w * (1 - 0.85 * t);
+        // solid blades (no leaf texture): the colour is the albedo — green, yellowing toward the tips
+        const L = m.vert(x - sx * ww, y, z - sz * ww, Math.cos(a), 0.4, Math.sin(a), 0.075 + 0.07 * t, 0.12 + 0.05 * t, 0.035 + 0.01 * t, t * t, 0, 0, 0.5);
+        const R = m.vert(x + sx * ww, y, z + sz * ww, Math.cos(a), 0.4, Math.sin(a), 0.075 + 0.07 * t, 0.12 + 0.05 * t, 0.035 + 0.01 * t, t * t, 0, 0, 0.5);
+        if (pl >= 0) { m.tri(pl, pr, R); m.tri(pl, R, L); }
+        pl = L; pr = R;
+      }
+      if (i % 4 === 0 && lod < 2) {
+        const tx = bx + Math.cos(a) * lean, tz = bz + Math.sin(a) * lean;
+        tube(m, [new Vector3(tx, h * 0.82, tz), new Vector3(tx, h * 0.98, tz)], [0.016, 0.014], 5, [0.12, 0.07, 0.035], 0.85, 1, 1);
+      }
+    }
+    m.normalize();
+    return m.build();
+  }
+  // bushes: stems from the ground, a mound of sprays; heather lies low and wide; berries / flowers on top
+  const low = kind === 'heather';
+  const crown = new Vector3(0, low ? 0.25 : 0.45, 0);
+  const crownR = low ? 0.7 : 0.55;
+  const stems = [low ? 9 : 7, low ? 6 : 4, 3][lod];
+  const tile = kind === 'berrybush' ? LEAF_TILE.spray : LEAF_TILE.smallSpray;
+  for (let i = 0; i < stems; i++) {
+    const a = (i / stems) * Math.PI * 2 + rng.float() * 0.8;
+    const spread = low ? 1.4 : kind === 'sage' ? 0.7 : 0.55;
+    const dir = new Vector3(Math.cos(a) * spread, 1, Math.sin(a) * spread).normalize();
+    const start = new Vector3(Math.cos(a) * 0.04, -0.04, Math.sin(a) * 0.04);
+    const pts = bentPath(rng, start, dir, (low ? 0.4 : 0.6) + rng.float() * 0.3, kind === 'sage' ? 0.0 : 0.1, 2);
+    if (lod < 2) tube(m, pts, kind === 'sage' ? [0.02, 0.013, 0.006] : [0.012, 0.008, 0.003], 3, bark, 0, 0.5, 0.6);
+    const tip = pts[pts.length - 1];
+    const tdir = tip.clone().sub(pts[pts.length - 2]).normalize();
+    const nC = [3, 3, 2][lod];
+    cluster(m, rng, tile, tip, tdir, nC, [0.4, 0.5, 0.62][lod] * (low ? 0.8 : 1), crown, crownR, 0.3, 0.6, low ? 0.5 : 0);
+    if (lod === 0) cluster(m, rng, tile, pts[1], deviate(tdir, 0.8, rng.float() * 6.28), 2, 0.32, crown, crownR, 0.2, 0.7);
+    // berries (bark-shaded so the foliage tint leaves them red) / heather flowers (purple sprays)
+    if (lod < 2 && kind === 'berrybush') {
+      for (let b = 0; b < 6; b++) {
+        const bp = tip.clone().add(new Vector3((rng.float() - 0.5) * 0.25, (rng.float() - 0.3) * 0.15, (rng.float() - 0.5) * 0.25));
+        const r = 0.022;
+        const ids = [
+          m.vert(bp.x, bp.y + r, bp.z, 0, 1, 0, 0.32, 0.02, 0.05, 0.5, 0, 0, 0.2), m.vert(bp.x + r, bp.y, bp.z, 1, 0, 0, 0.32, 0.02, 0.05, 0.5, 0, 0, 0.2),
+          m.vert(bp.x, bp.y, bp.z + r, 0, 0, 1, 0.32, 0.02, 0.05, 0.5, 0, 0, 0.2), m.vert(bp.x - r, bp.y, bp.z, -1, 0, 0, 0.32, 0.02, 0.05, 0.5, 0, 0, 0.2),
+          m.vert(bp.x, bp.y, bp.z - r, 0, 0, -1, 0.32, 0.02, 0.05, 0.5, 0, 0, 0.2), m.vert(bp.x, bp.y - r, bp.z, 0, -1, 0, 0.32, 0.02, 0.05, 0.5, 0, 0, 0.2),
+        ];
+        for (const [x, y, z] of [[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 1], [5, 2, 1], [5, 3, 2], [5, 4, 3], [5, 1, 4]]) m.tri(ids[x], ids[y], ids[z]);
+      }
+    }
+    if (lod < 2 && kind === 'heather') {
+      const ids0 = m.pos.length / 3;
+      cluster(m, rng, LEAF_TILE.smallSpray, tip.clone().add(new Vector3(0, 0.05, 0)), tdir, 2, 0.3, crown, crownR, 0.3, 0.5, 0.6);
+      // tint the flower sprays purple (the shader multiplies by the species tint, which is near-neutral for heather)
+      for (let v = ids0; v < m.pos.length / 3; v++) { m.col[v * 3] *= 1.7; m.col[v * 3 + 1] *= 0.55; m.col[v * 3 + 2] *= 1.9; }
+    }
+  }
+  m.normalize();
+  if (low) {
+    // heather and tundra creepers are wider than tall: squash to half height (unit-height convention is restored by
+    // the instance scale, which uses the species height)
+    for (let i = 0; i < m.pos.length; i += 3) { m.pos[i] *= 1.7; m.pos[i + 2] *= 1.7; }
+  }
+  return m.build();
+}
 function skeletonFor(kind: TreeKind, variant: number): Skeleton {
   const key = `${kind}|${variant}`;
   let s = skeletons.get(key);
@@ -379,6 +685,8 @@ function broadleafTree(kind: TreeKind, lod: number, variant: number): BufferGeom
     for (const c of l.children) walk(c);
   };
   walk(sk.root);
+  if (kind === 'mangrove') propRoots(m, rng, lod, spec.bark);
+  if (kind === 'willow') willowCurtains(m, rng, sk, lod);
   if (!spec.leafless) {
     const tile = spec.tile;
     const size = spec.size[lod];
@@ -402,11 +710,20 @@ function broadleafTree(kind: TreeKind, lod: number, variant: number): BufferGeom
         let spread = 0;
         for (const t of list) spread = Math.max(spread, t.pos.distanceTo(c));
         // the cluster covers the region its twigs spanned: a few sprays spread over it
-        const n = lod === 1 ? Math.min(6, 2 + Math.ceil(list.length / 2)) : Math.min(7, 3 + Math.ceil(list.length / 5));
+        // (the far LOD keeps the crown's mass: more, bigger sprays — a few sparse sprays read as sprigs in the sky)
+        const n = lod === 1 ? Math.min(6, 2 + Math.ceil(list.length / 2)) : Math.min(10, 5 + Math.ceil(list.length / 3));
         for (let k = 0; k < n; k++) {
           const t = list[Math.floor(rng.float() * list.length)];
           const at = c.clone().lerp(t.pos, 0.55 + rng.float() * 0.4);
           cluster(m, rng, tile, at, t.dir.clone().lerp(d, 0.5).normalize(), Math.max(1, per - 1), size * (0.8 + spread * 1.2), sk.crown, sk.crownR, 0.55, 0.6, spec.flat);
+        }
+      }
+      if (lod === 2) {
+        // a dense core of large sprays filling the crown's middle (the silhouette's mass, not a ring of tufts)
+        for (let k = 0; k < 4; k++) {
+          const a = (k / 4) * Math.PI * 2 + rng.float();
+          const at = sk.crown.clone().add(new Vector3(Math.cos(a) * sk.crownR * 0.3, (rng.float() - 0.3) * sk.crownR * 0.4, Math.sin(a) * sk.crownR * 0.3));
+          cluster(m, rng, tile, at, new Vector3(Math.cos(a), 0.4, Math.sin(a)).normalize(), 2, sk.crownR * 0.75, sk.crown, sk.crownR, 0.5, 0.5, spec.flat);
         }
       }
     }
@@ -579,6 +896,10 @@ export function treeGeometry(kind: TreeKind, lod: number, variant = 0): BufferGe
     case 'conifer': g = conifer(lod, variant); break;
     case 'palm': g = palm(lod, variant); break;
     case 'shrub': g = shrub(lod, variant); break;
+    case 'baobab': g = baobab(lod, variant); break;
+    case 'cactus': g = cactus(lod, variant); break;
+    case 'kelp': g = kelp(lod, variant); break;
+    case 'berrybush': case 'fern': case 'heather': case 'sage': case 'reed': g = lowShrub(kind, lod, variant); break;
     default: g = broadleafTree(kind, lod, variant); break;
   }
   cache.set(key, g);

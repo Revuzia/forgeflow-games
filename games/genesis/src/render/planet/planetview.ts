@@ -1,7 +1,10 @@
 // GENESIS — one planet's render objects: the body-frame Group, field textures, chunk LOD with terrain / water / depth
 // materials per level, the atmosphere model + LUTs, and the cloud-coverage cube. The Renderer owns one per PlanetView.
 
-import { Group, Matrix3, Matrix4, Quaternion, Vector3, type Frustum, type IUniform, type MeshStandardMaterial, type ShaderMaterial } from 'three';
+import {
+  Group, Matrix3, Matrix4, Quaternion, Vector3, type Camera, type Frustum, type IUniform, type MeshStandardMaterial, type Scene, type ShaderMaterial,
+  type Texture, type WebGLRenderer, type WebGLRenderTarget,
+} from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
 import { AtmosphereModel } from '../sky/atmosphere.ts';
 import type { CloudPass } from '../sky/clouds.ts';
@@ -13,6 +16,7 @@ import { kindCode, makePlanetUniforms, makeTerrainDepthMaterial, makeTerrainMate
 import { makeOceanMaterial } from './ocean.ts';
 import { Vegetation } from '../life/vegetation.ts';
 import { GroundCover } from '../life/groundcover.ts';
+import { LifeLayer } from '../life/life.ts';
 
 export interface PlanetVisualDeps {
   clouds: CloudPass;
@@ -41,6 +45,10 @@ export interface PlanetFrameContext {
   proj: Matrix4;
   /** near-camera grass and stones (quality) */
   grass: boolean;
+  /** life layer: sim-paced animation clock (s), point-light and particle budgets (quality) */
+  animTime?: number;
+  lightBudget?: number;
+  particleBudget?: number;
 }
 
 const _m4 = new Matrix4();
@@ -69,6 +77,8 @@ export class PlanetVisual {
   private kind = '';
   readonly vegetation: Vegetation;
   readonly groundCover: GroundCover;
+  /** buildings, people, animals, roads, night lights, fire and smoke */
+  readonly life: LifeLayer;
   /** camera position in the body frame (m) — updated per frame */
   readonly camBody = new Vector3();
   altitude = 1e9;
@@ -109,6 +119,8 @@ export class PlanetVisual {
     this.group.add(this.vegetation.group);
     this.groundCover = new GroundCover(sharedRec);
     this.group.add(this.groundCover.group);
+    this.life = new LifeLayer(sharedRec);
+    this.group.add(this.life.group);
     this.sync(pv);
   }
 
@@ -126,6 +138,7 @@ export class PlanetVisual {
   /** pull new snapshot data: field textures, air, palette, cloud cover */
   sync(pv: PlanetView): void {
     this.pv = pv;
+    if (this.life) { const lf = this.life.lightField(); this.fields.setLight(lf.data, lf.version); }
     this.fields.update();
     const p = pv.params;
     this.atmo.configure(p.radius, p.atmosphere, p.kind);
@@ -190,6 +203,8 @@ export class PlanetVisual {
     this.atmo.setSun(ctx.sunE.x, ctx.sunE.y, ctx.sunE.z);
     u.uTime.value = ctx.time % 3600;
     u.uYearFrac.value = ctx.yearFrac;
+    // seasons swing with the axial tilt (full at ~17° and more; none on an upright world)
+    u.uSeasonAmp.value = Math.min(1, Math.abs(pv.params.axialTilt ?? 0.41) / 0.3);
     u.uShadowOn.value = ctx.primary && ctx.shadows ? 1 : 0;
     // LOD
     this.lod.setShadowCasting(ctx.primary && ctx.shadows);
@@ -205,7 +220,12 @@ export class PlanetVisual {
     veg.yearFrac = ctx.yearFrac;
     veg.update(pv, this.camBody, ctx.frame);
     this.groundCover.enabled = ctx.primary && ctx.grass;
+    this.groundCover.yearFrac = ctx.yearFrac;
     this.groundCover.update(pv, this.camBody, ctx.frame);
+    this.life.update({
+      pv, camBody: this.camBody, frame: ctx.frame, time: ctx.time, animTime: ctx.animTime ?? ctx.time, primary: ctx.primary,
+      shadows: ctx.primary && ctx.shadows, lightBudget: ctx.lightBudget ?? 8, particleBudget: ctx.particleBudget ?? 20000, crowdDensity: ctx.vegDensity,
+    });
     (u.uVegFade.value as { x: number; y: number }).x = veg.group.visible ? veg.fade.value.x : 1e9;
     (u.uVegFade.value as { x: number; y: number }).y = veg.group.visible ? veg.fade.value.y : 1e9 + 1;
     for (let L = 0; L < this.terrainMats.length; L++) {
@@ -215,9 +235,15 @@ export class PlanetVisual {
     }
   }
 
+  /** fire, smoke and embers over the composited image (Renderer, after the atmosphere): see render/fx/particles.ts */
+  renderFx(renderer: WebGLRenderer, scene: Scene, camera: Camera, target: WebGLRenderTarget | null, depth: Texture, w: number, h: number): void {
+    this.life.renderFx(renderer, scene, camera, target, depth, w, h);
+  }
+
   /** swap the visible casters to / from their depth materials (shadow pass) */
   swapDepth(depth: boolean): void {
     this.vegetation.swapDepth(depth);
+    this.life.swapDepth(depth);
     for (const p of this.lod.selected) {
       if (!p.mesh) continue;
       p.mesh.material = depth ? this.depthMats[p.level] : this.terrainMats[p.level];
@@ -228,6 +254,7 @@ export class PlanetVisual {
     this.lod.dispose();
     this.vegetation.dispose();
     this.groundCover.dispose();
+    this.life.dispose();
     this.fields.dispose();
     this.atmo.dispose();
     this.cloudCube?.dispose();

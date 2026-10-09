@@ -102,12 +102,22 @@ const DEFAULT_MATERIALS: MaterialLook[] = [
   { id: 'chitin', wall: SURF.chitin, wallCol: [0.3, 0.22, 0.12], roof: 'dome', tier: 1 },
   { id: 'resin', wall: SURF.chitin, wallCol: [0.42, 0.28, 0.08], roof: 'dome', tier: 1 },
   { id: 'ashlar', wall: SURF.ashlar, wallCol: [0.5, 0.46, 0.39], roof: 'tile', tier: 3 },
+  { id: 'fieldstone', wall: SURF.rubble, wallCol: [0.3, 0.28, 0.25], roof: 'thatch', tier: 2 },
+  { id: 'cloth', wall: SURF.cloth, wallCol: [0.62, 0.57, 0.45], roof: 'hide', tier: 0 },
 ];
+/** materials.json `pattern` hints → the surface the shader draws */
+const PATTERN_SURF: Record<string, number> = {
+  stitched: SURF.hide, straw: SURF.daub, logs: SURF.logs, drystone: SURF.rubble, daub: SURF.daub, coursed: SURF.mudbrick,
+  planks: SURF.planks, ashlar: SURF.ashlar, bond: SURF.brick, canvas: SURF.cloth, cast: SURF.concrete, girder: SURF.metal,
+  glazed: SURF.glass, blocks: SURF.ice, plated: SURF.chitin, combed: SURF.chitin,
+};
 const DEFAULT_MAT_BY_ID = new Map(DEFAULT_MATERIALS.map((m) => [m.id, m]));
 
 function materialFromDef(d: Def): MaterialLook {
   const id = str(d.id);
-  const base = DEFAULT_MAT_BY_ID.get(id)
+  // the content's "stone" is DRESSED stone (ashlar); rough walls are "fieldstone"
+  const base = (id === 'stone' && str(d.pattern) === 'ashlar' ? DEFAULT_MAT_BY_ID.get('ashlar') : undefined)
+    ?? DEFAULT_MAT_BY_ID.get(id)
     ?? (/stone|rock|granite|marble/.test(id) ? DEFAULT_MAT_BY_ID.get('stone')!
       : /brick|terracotta/.test(id) ? DEFAULT_MAT_BY_ID.get('brick')!
         : /mud|adobe|clay|earth/.test(id) ? DEFAULT_MAT_BY_ID.get('mudbrick')!
@@ -118,8 +128,11 @@ function materialFromDef(d: Def): MaterialLook {
                   : /skin|hide|leather|fur/.test(id) ? DEFAULT_MAT_BY_ID.get('hide')!
                     : DEFAULT_MAT_BY_ID.get('wood')!);
   const colors = (d.colors ?? d.color) as unknown;
-  const c = typeof colors === 'string' ? colors : (colors && typeof colors === 'object' ? (colors as Def).wall ?? (colors as Def).base : undefined);
-  return { ...base, id: id || base.id, wallCol: hexLinear(c, base.wallCol) };
+  const c = typeof colors === 'string' ? colors : Array.isArray(colors) ? colors[0] : (colors && typeof colors === 'object' ? (colors as Def).wall ?? (colors as Def).base : undefined);
+  const wall = PATTERN_SURF[str(d.pattern)] ?? base.wall;
+  // the content colour is an sRGB swatch of the bare material; walls read a little darker than the swatch (weathering)
+  const col = hexLinear(c, base.wallCol);
+  return { ...base, id: id || base.id, wall, wallCol: [col[0] * 0.82, col[1] * 0.82, col[2] * 0.82] };
 }
 
 let matCacheKey: unknown = null;
@@ -147,7 +160,7 @@ export const BUILDING_KINDS = [
   'lean-to', 'tent', 'hut', 'wattle', 'mudbrick', 'stone-house', 'timber', 'brick-house', 'half-timber', 'block',
   'hearth', 'kiln', 'furnace', 'forge', 'granary', 'workshop', 'temple', 'library', 'market', 'mill', 'aqueduct', 'wall',
   'gate', 'tower', 'dock', 'shipyard', 'lighthouse', 'observatory', 'factory', 'radio', 'launchpad', 'pen', 'well',
-  'hive-mound', 'longhouse', 'barn', 'tenement',
+  'hive-mound', 'longhouse', 'barn', 'tenement', 'igloo', 'store-pit', 'oven', 'shrine', 'mine', 'powerplant', 'refinery', 'lab',
 ] as const;
 export type BuildingKind = (typeof BUILDING_KINDS)[number];
 
@@ -201,6 +214,14 @@ const DEFAULT_BUILDINGS: BuildingLook[] = [
   B('hive-mound', 'hive-mound', 9, 9, ['chitin', 'resin', 'mudbrick']),
   B('barn', 'barn', 9, 12, ['timber', 'wood', 'stone']),
   B('tenement', 'tenement', 10, 9, ['brick', 'concrete']),
+  B('igloo', 'igloo', 4.4, 4.4, ['ice']),
+  B('store-pit', 'store-pit', 3.4, 3.4, ['hide', 'wood']),
+  B('oven', 'oven', 3.2, 3.2, ['mudbrick', 'brick'], false, 1),
+  B('shrine', 'shrine', 3.4, 3.4, ['wood', 'fieldstone', 'stone']),
+  B('mine', 'mine', 7, 7, ['wood', 'timber']),
+  B('powerplant', 'powerplant', 22, 18, ['brick', 'concrete'], false, 1),
+  B('refinery', 'refinery', 24, 24, ['steel', 'concrete'], false, 1),
+  B('lab', 'lab', 13, 10, ['brick', 'concrete', 'glass']),
 ];
 
 function kindFromDef(d: Def): BuildingKind {
@@ -209,6 +230,17 @@ function kindFromDef(d: Def): BuildingKind {
   const direct = (BUILDING_KINDS as readonly string[]).find((k) => id === k);
   if (direct) return direct as BuildingKind;
   if (/lean/.test(all)) return 'lean-to';
+  if (/igloo|snow.?house/.test(all)) return 'igloo';
+  if (/pit/.test(all)) return 'store-pit';
+  if (/oven|bakery/.test(all)) return 'oven';
+  if (/shrine|altar/.test(all)) return 'shrine';
+  if (/blast/.test(all)) return 'furnace';
+  if (/school|academy|university/.test(all)) return 'library';
+  if (/power|generator|plant/.test(all) && /power/.test(all)) return 'powerplant';
+  if (/refiner|oil/.test(all)) return 'refinery';
+  if (/lab/.test(all)) return 'lab';
+  if (/mine|quarry/.test(all)) return 'mine';
+  if (/palisade|stockade/.test(all)) return 'wall';
   if (/tent|yurt|tipi|teepee/.test(all)) return 'tent';
   if (/longhouse|hall/.test(all)) return 'longhouse';
   if (/hive|mound|nest/.test(all)) return 'hive-mound';
@@ -243,6 +275,11 @@ function kindFromDef(d: Def): BuildingKind {
     case 'farm': return 'barn';
     case 'lighthouse': return 'lighthouse';
     case 'gate': return 'gate';
+    case 'oven': return 'oven';
+    case 'mine': return 'mine';
+    case 'refinery': return 'refinery';
+    case 'lab': return 'lab';
+    case 'well': return 'well';
   }
   return 'wattle';
 }
@@ -253,10 +290,11 @@ function buildingFromDef(d: Def): BuildingLook {
   const fp = d.footprint;
   let w = dflt.w, dd = dflt.d;
   if (Array.isArray(fp) && fp.length >= 2) { w = num(fp[0], w); dd = num(fp[1], dd); }
-  else if (typeof fp === 'number') {
-    // a footprint given in cells / tiles / metres: anything under 4 is a cell count (≈ 4 m per unit), else metres
-    const m = fp < 4 ? fp * 4.5 : fp;
-    const k = m / Math.max(dflt.w, dflt.d);
+  else if (typeof fp === 'number' && fp > 0) {
+    // buildings.json: footprint = a RADIUS in metres (also the spacing between buildings): the drawn building fills
+    // most of that circle, keeping the archetype's own proportions
+    const span = fp * 1.7;
+    const k = span / Math.max(dflt.w, dflt.d);
     w = dflt.w * k; dd = dflt.d * k;
   }
   const fn = str(d.function);
@@ -296,18 +334,32 @@ export function buildingIndex(idOrKind: string): number {
 export function shelterKind(look: BuildingLook, mat: MaterialLook, era: number, style: number): BuildingKind {
   if (!look.byMaterial) return look.kind;
   switch (mat.id) {
-    case 'hide': return 'tent';
+    case 'hide': case 'cloth': return 'tent';
     case 'thatch': case 'reed': case 'grass': return 'hut';
+    case 'fieldstone': return era <= 3 ? 'hut' : 'stone-house';
     case 'wood': return era <= 1 ? 'lean-to' : 'hut';
     case 'wattle': return era <= 2 ? 'hut' : 'wattle';
     case 'mudbrick': return 'mudbrick';
     case 'stone': case 'ashlar': return 'stone-house';
     case 'timber': return style % 3 === 2 ? 'longhouse' : 'timber';
-    case 'brick': return era >= 8 && style % 2 === 0 ? 'tenement' : era >= 5 && era <= 7 && style % 2 === 1 ? 'half-timber' : 'brick-house';
+    case 'brick': return era >= 8 && style % 4 === 0 ? 'tenement' : era >= 5 && era <= 7 && style % 2 === 1 ? 'half-timber' : 'brick-house';
     case 'concrete': case 'steel': return 'block';
-    case 'ice': case 'chitin': case 'resin': return 'hive-mound';
+    case 'ice': return 'igloo';
+    case 'chitin': case 'resin': return 'hive-mound';
   }
   return mat.tier <= 0 ? 'hut' : mat.tier === 1 ? 'mudbrick' : mat.tier === 2 ? 'stone-house' : mat.tier === 3 ? 'brick-house' : 'block';
+}
+
+/** a culture's building tradition, read off its dwellings: earthen (mudbrick, hive mounds, snow), timber (huts, halls,
+ *  log houses) or masonry (stone, brick, blocks). Temples are built in it (buildinggen.ts templeForm). */
+export type BuildFamily = 'earth' | 'timber' | 'stone';
+export function dwellingFamily(kind: BuildingKind): BuildFamily | null {
+  switch (kind) {
+    case 'mudbrick': case 'hive-mound': case 'igloo': return 'earth';
+    case 'hut': case 'tent': case 'lean-to': case 'longhouse': case 'timber': case 'wattle': return 'timber';
+    case 'stone-house': case 'half-timber': case 'brick-house': case 'tenement': case 'block': return 'stone';
+  }
+  return null;
 }
 
 // ───────────────────────────── species (peoples) ─────────────────────────────
@@ -321,6 +373,10 @@ export interface SpeciesLook {
   height: number;
   skin: [number, number, number];
   hair: [number, number, number];
+  /** palettes (linear): each person picks one of each by a hash of their id */
+  skins: [number, number, number][];
+  hairs: [number, number, number][];
+  cloths: [number, number, number][];
   /** fur coat (cold folk): the body is drawn furred, clothing over it */
   furred: boolean;
   /** amphibious (coastal folk): webbed, sleek, fins */
@@ -329,12 +385,13 @@ export interface SpeciesLook {
   floats: boolean;
 }
 
+const P = (h: string[]): [number, number, number][] => h.map((x) => hexLinear(x, [0.3, 0.2, 0.15]));
 const DEFAULT_SPECIES: SpeciesLook[] = [
-  { id: 'plains-folk', plan: 'biped', height: 1.72, skin: [0.36, 0.2, 0.12], hair: [0.05, 0.035, 0.025], furred: false, webbed: false, floats: false },
-  { id: 'coastal-folk', plan: 'biped', height: 1.66, skin: [0.17, 0.26, 0.24], hair: [0.03, 0.06, 0.07], furred: false, webbed: true, floats: false },
-  { id: 'hive', plan: 'hexapod', height: 1.25, skin: [0.22, 0.13, 0.05], hair: [0.05, 0.03, 0.02], furred: false, webbed: false, floats: false },
-  { id: 'cold-folk', plan: 'biped', height: 1.85, skin: [0.55, 0.5, 0.46], hair: [0.62, 0.6, 0.57], furred: true, webbed: false, floats: false },
-  { id: 'methane-drifters', plan: 'flyer', height: 2.2, skin: [0.45, 0.3, 0.55], hair: [0.7, 0.5, 0.8], furred: false, webbed: false, floats: true },
+  { id: 'plains-folk', plan: 'biped', height: 1.72, skin: [0.36, 0.2, 0.12], hair: [0.05, 0.035, 0.025], skins: P(['#8d5a3b', '#a8714a', '#c68b5e', '#6b4128', '#d9a27a']), hairs: P(['#1f1610', '#3a2416', '#5a3a20', '#2a1a10']), cloths: P(['#8a6a4a', '#a0784e', '#6e5236', '#b08a5a', '#7a5c3c']), furred: false, webbed: false, floats: false },
+  { id: 'coastal-folk', plan: 'biped', height: 1.66, skin: [0.17, 0.26, 0.24], hair: [0.03, 0.06, 0.07], skins: P(['#5e8a86', '#4f7a7e', '#6f9a8e']), hairs: P(['#1a2a30', '#2a3a3a']), cloths: P(['#d8ccb0', '#6a8a9a', '#a0b8b0']), furred: false, webbed: true, floats: false },
+  { id: 'hive', plan: 'hexapod', height: 1.25, skin: [0.22, 0.13, 0.05], hair: [0.05, 0.03, 0.02], skins: P(['#4a3a2a', '#5a4430', '#3a2e22']), hairs: P(['#2a2018']), cloths: P(['#c08a3a', '#a87a3a']), furred: false, webbed: false, floats: false },
+  { id: 'cold-folk', plan: 'biped', height: 1.85, skin: [0.55, 0.5, 0.46], hair: [0.62, 0.6, 0.57], skins: P(['#e8e4dc', '#d8d0c4', '#c8bca8']), hairs: P(['#f4f0e8', '#d8d0c0']), cloths: P(['#6a5a4a', '#8a7a62', '#4a4038']), furred: true, webbed: false, floats: false },
+  { id: 'methane-drifters', plan: 'flyer', height: 2.2, skin: [0.45, 0.3, 0.55], hair: [0.7, 0.5, 0.8], skins: P(['#d8a8c8', '#b8a0e0', '#a0c0e8']), hairs: P(['#f0e0ff']), cloths: P(['#f0d8a8', '#c8b0f0']), furred: false, webbed: false, floats: true },
 ];
 
 function planOf(v: unknown, id: string): BodyPlan {
@@ -357,11 +414,18 @@ function speciesFromDef(d: Def): SpeciesLook {
   const size = d.size;
   const height = typeof size === 'number' ? (size < 3 ? size * (size < 1.2 ? 1.72 : 1) : 1.72) : dflt.height;
   const colors = (d.colors ?? {}) as Def;
+  const pal = (v: unknown, fb: [number, number, number][]): [number, number, number][] => {
+    const a = Array.isArray(v) ? v : typeof v === 'string' ? [v] : [];
+    const out = a.map((x) => hexLinear(x, [-1, -1, -1])).filter((c) => c[0] >= 0);
+    return out.length ? out : fb;
+  };
+  const skins = pal(colors.skin ?? colors.body ?? colors.carapace, dflt.skins);
+  const hairs = pal(colors.hair ?? colors.fur ?? colors.accent, dflt.hairs);
+  const cloths = pal(colors.cloth ?? colors.clothing, dflt.cloths);
   return {
     id: id || dflt.id, plan, height: Math.max(0.4, Math.min(4, height)),
-    skin: hexLinear(colors.skin ?? colors.body ?? colors.carapace, dflt.skin),
-    hair: hexLinear(colors.hair ?? colors.fur ?? colors.accent, dflt.hair),
-    furred: !!(d.furred ?? (/fur/.test(JSON.stringify(d.traits ?? '')) || dflt.furred)),
+    skin: skins[0], hair: hairs[0], skins, hairs, cloths,
+    furred: !!(d.furred ?? (/fur/.test(JSON.stringify(d.traits ?? '')) || /cold/.test(id) || dflt.furred)),
     webbed: dflt.webbed || /coast|amphib/.test(str(d.habitat)),
     floats: dflt.floats || str(d.breathes) === 'methane' && plan === 'flyer',
   };
@@ -386,7 +450,7 @@ export function speciesIndex(id: string): number {
 // ───────────────────────────── animals ─────────────────────────────
 
 /** quadruped / bird / fish / insect body variants the generator knows (render/gen/bodygen.ts) */
-export const ANIMAL_FORMS = ['deer', 'boar', 'wolf', 'bear', 'bison', 'goat', 'sheep', 'horse', 'cattle', 'bird', 'gull', 'fish', 'locust', 'hare'] as const;
+export const ANIMAL_FORMS = ['deer', 'boar', 'wolf', 'bear', 'bison', 'goat', 'sheep', 'horse', 'cattle', 'bird', 'gull', 'fish', 'locust', 'hare', 'lizard', 'crawler', 'ray', 'whale', 'chicken', 'vulture'] as const;
 export type AnimalForm = (typeof ANIMAL_FORMS)[number];
 
 export interface AnimalLook {
@@ -396,29 +460,49 @@ export interface AnimalLook {
   size: number;
   coat: [number, number, number];
   belly: [number, number, number];
+  /** coat colour variants (each animal picks one by a hash of its id) */
+  coats: [number, number, number][];
 }
 
 const DEFAULT_ANIMALS: AnimalLook[] = [
-  { id: 'deer', form: 'deer', size: 1.15, coat: [0.24, 0.12, 0.05], belly: [0.55, 0.45, 0.35] },
-  { id: 'boar', form: 'boar', size: 0.85, coat: [0.08, 0.06, 0.05], belly: [0.12, 0.09, 0.07] },
-  { id: 'wolf', form: 'wolf', size: 0.8, coat: [0.2, 0.19, 0.17], belly: [0.5, 0.48, 0.44] },
-  { id: 'bear', form: 'bear', size: 1.2, coat: [0.1, 0.06, 0.035], belly: [0.12, 0.075, 0.045] },
-  { id: 'bison', form: 'bison', size: 1.75, coat: [0.09, 0.055, 0.03], belly: [0.16, 0.1, 0.06] },
-  { id: 'goat', form: 'goat', size: 0.75, coat: [0.5, 0.45, 0.38], belly: [0.65, 0.62, 0.56] },
-  { id: 'sheep', form: 'sheep', size: 0.8, coat: [0.62, 0.58, 0.5], belly: [0.55, 0.5, 0.42] },
-  { id: 'horse', form: 'horse', size: 1.55, coat: [0.2, 0.09, 0.035], belly: [0.22, 0.1, 0.04] },
-  { id: 'cattle', form: 'cattle', size: 1.4, coat: [0.32, 0.18, 0.08], belly: [0.6, 0.55, 0.48] },
-  { id: 'songbird', form: 'bird', size: 0.25, coat: [0.12, 0.09, 0.06], belly: [0.45, 0.35, 0.25] },
-  { id: 'gull', form: 'gull', size: 0.45, coat: [0.7, 0.72, 0.74], belly: [0.8, 0.82, 0.84] },
-  { id: 'fish', form: 'fish', size: 0.45, coat: [0.12, 0.16, 0.18], belly: [0.6, 0.62, 0.6] },
-  { id: 'locust', form: 'locust', size: 0.07, coat: [0.3, 0.25, 0.08], belly: [0.4, 0.33, 0.12] },
-  { id: 'hare', form: 'hare', size: 0.3, coat: [0.3, 0.22, 0.14], belly: [0.6, 0.55, 0.48] },
+  { id: 'deer', form: 'deer', size: 1.15, coat: [0.24, 0.12, 0.05], belly: [0.55, 0.45, 0.35], coats: [] },
+  { id: 'boar', form: 'boar', size: 0.85, coat: [0.08, 0.06, 0.05], belly: [0.12, 0.09, 0.07], coats: [] },
+  { id: 'wolf', form: 'wolf', size: 0.8, coat: [0.2, 0.19, 0.17], belly: [0.5, 0.48, 0.44], coats: [] },
+  { id: 'bear', form: 'bear', size: 1.2, coat: [0.1, 0.06, 0.035], belly: [0.12, 0.075, 0.045], coats: [] },
+  { id: 'bison', form: 'bison', size: 1.75, coat: [0.09, 0.055, 0.03], belly: [0.16, 0.1, 0.06], coats: [] },
+  { id: 'goat', form: 'goat', size: 0.75, coat: [0.5, 0.45, 0.38], belly: [0.65, 0.62, 0.56], coats: [] },
+  { id: 'sheep', form: 'sheep', size: 0.8, coat: [0.62, 0.58, 0.5], belly: [0.55, 0.5, 0.42], coats: [] },
+  { id: 'horse', form: 'horse', size: 1.55, coat: [0.2, 0.09, 0.035], belly: [0.22, 0.1, 0.04], coats: [] },
+  { id: 'cattle', form: 'cattle', size: 1.4, coat: [0.32, 0.18, 0.08], belly: [0.6, 0.55, 0.48], coats: [] },
+  { id: 'songbird', form: 'bird', size: 0.25, coat: [0.12, 0.09, 0.06], belly: [0.45, 0.35, 0.25], coats: [] },
+  { id: 'gull', form: 'gull', size: 0.45, coat: [0.7, 0.72, 0.74], belly: [0.8, 0.82, 0.84], coats: [] },
+  { id: 'fish', form: 'fish', size: 0.45, coat: [0.12, 0.16, 0.18], belly: [0.6, 0.62, 0.6], coats: [] },
+  { id: 'locust', form: 'locust', size: 0.07, coat: [0.3, 0.25, 0.08], belly: [0.4, 0.33, 0.12], coats: [] },
+  { id: 'hare', form: 'hare', size: 0.3, coat: [0.3, 0.22, 0.14], belly: [0.6, 0.55, 0.48], coats: [] },
 ];
+
+for (const a of DEFAULT_ANIMALS) a.coats = [a.coat];
 
 function animalFromDef(d: Def): AnimalLook {
   const id = str(d.id);
   const all = `${id} ${str(d.name)} ${str(d.kind)} ${str(d.body)} ${str(d.form)} ${strs(d.tags).join(' ')}`;
+  const body = str(d.body);
   const form: AnimalForm = (ANIMAL_FORMS as readonly string[]).includes(id) ? id as AnimalForm
+    : /chicken|hen|bird-small/.test(all) ? 'chicken'
+    : /vulture|bird-large|eagle|condor/.test(all) ? 'vulture'
+    : /ray/.test(body) ? 'ray'
+    : /whale/.test(all) ? 'whale'
+    : /lizard|reptile/.test(all) ? 'lizard'
+    : /hexapod|crawler|beetle/.test(all) ? 'crawler'
+    : /hopper|rabbit|hare/.test(all) ? 'hare'
+    : /bear/.test(all) ? 'bear'
+    : /bison|aurochs|buffalo|yak|ice-beast|mammoth/.test(all) ? 'bison'
+    : /cattle|cow|\box\b/.test(all) ? 'cattle'
+    : /woolly|sheep/.test(all) ? 'sheep'
+    : /equine|horse/.test(all) ? 'horse'
+    : /canine|wolf|dog|fox/.test(all) ? 'wolf'
+    : /stocky|boar|pig/.test(all) ? 'boar'
+    : /goat|ibex/.test(all) ? 'goat'
     : /locust|insect|swarm|bee/.test(all) ? 'locust'
       : /fish|salmon|cod|tuna|shoal/.test(all) ? 'fish'
         : /gull|albatross|sea.?bird/.test(all) ? 'gull'
@@ -434,11 +518,16 @@ function animalFromDef(d: Def): AnimalLook {
                             : /hare|rabbit/.test(all) ? 'hare'
                               : 'deer';
   const dflt = DEFAULT_ANIMALS.find((a) => a.form === form) ?? DEFAULT_ANIMALS[0];
-  const colors = (d.colors ?? {}) as Def;
+  const colors = d.colors as unknown;
+  let coatH: unknown, bellyH: unknown;
+  if (Array.isArray(colors)) { coatH = colors[0]; bellyH = colors[1] ?? colors[0]; }
+  else if (colors && typeof colors === 'object') { const c = colors as Def; coatH = c.coat ?? c.fur ?? c.body; bellyH = c.belly ?? c.under; }
+  else coatH = d.color;
+  const coat = hexLinear(coatH, dflt.coat);
+  const belly = hexLinear(bellyH, dflt.belly);
   return {
-    id: id || dflt.id, form, size: Math.max(0.03, Math.min(6, num(d.size, dflt.size))),
-    coat: hexLinear(colors.coat ?? colors.fur ?? colors.body ?? d.color, dflt.coat),
-    belly: hexLinear(colors.belly ?? colors.under, dflt.belly),
+    id: id || dflt.id, form, size: Math.max(0.03, Math.min(20, num(d.size, dflt.size))),
+    coat, belly, coats: Array.isArray(colors) ? colors.map((x) => hexLinear(x, coat)) : [coat],
   };
 }
 

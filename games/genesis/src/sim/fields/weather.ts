@@ -17,6 +17,7 @@ import { PRECIP_TYPES } from '../content.ts';
 import { composeSky, markRainDirty } from './climate.ts';
 import { igniteCell } from './fire.ts';
 import { hashFloat } from '../core/rng.ts';
+import { capCells } from '../perf/cap.ts';
 
 export const WEATHER_CADENCE = 10;
 /** stylised drift: metres per tick per (m/s) of wind (a storm crosses a 3 km world in about two days) */
@@ -194,87 +195,131 @@ function spawn(u: Universe, p: Planet): void {
   }
 }
 
+/** per-planet cap buffer (a cache; never saved) */
+const capBuf = new WeakMap<Planet, Int32Array>();
+function capOut(p: Planet): Int32Array {
+  let b = capBuf.get(p);
+  if (!b) { b = new Int32Array(p.count); capBuf.set(p, b); }
+  return b;
+}
+
 /** rebuild the per-cell overlay from the live systems and re-compose sky + wind on every touched cell */
 export function refreshOverlay(u: Universe, p: Planet): void {
   const f = p.f, s = p.s, g = p.grid;
-  const N = p.count;
   const R = p.st.radius;
   const P = g.pos;
   const content = u.content;
+  const wMask = s.wMask, wPrecip = s.wPrecip, wType = s.wType, wCloud = s.wCloud, wTemp = s.wTemp;
+  const windX = f.windX, windY = f.windY, windZ = f.windZ, bx = s.baseWindX, by = s.baseWindY, bz = s.baseWindZ;
   // reset cells covered last time (precip / cloud / wind return to the climate values). The covered cells are kept
   // as a list (a cache: rebuilt by one scan after a load; per-cell resets do not depend on order).
   const touched = p.scratch.list2;
   let nt = 0;
   const prev = maskList(p);
+  const prevList = prev.list;
   for (let i = 0; i < prev.n; i++) {
-    const c = prev.list[i];
-    if (!s.wMask[c]) continue;
-    s.wMask[c] = 0;
-    s.wPrecip[c] = 0;
-    s.wType[c] = 0;
-    s.wCloud[c] = 0;
-    s.wTemp[c] = 0;
-    f.windX[c] = s.baseWindX[c];
-    f.windY[c] = s.baseWindY[c];
-    f.windZ[c] = s.baseWindZ[c];
+    const c = prevList[i];
+    if (!wMask[c]) continue;
+    wMask[c] = 0;
+    wPrecip[c] = 0;
+    wType[c] = 0;
+    wCloud[c] = 0;
+    wTemp[c] = 0;
+    windX[c] = bx[c];
+    windY[c] = by[c];
+    windZ[c] = bz[c];
     touched[nt++] = c;
   }
+  const cells = capOut(p);
   for (const w of p.weather) {
     const def = content.weather.list[w.kind];
     const I = systemIntensity(w);
     if (I <= 0) continue;
     const ang = w.radius / R;
-    const cells = g.cellsWithin(w.pos[0], w.pos[1], w.pos[2], ang * 1.15, p.scratch.cells);
+    const nc = capCells(g, w.pos[0], w.pos[1], w.pos[2], ang * 1.15, cells);
     const code = precipCode(def);
-    const sgn = w.pos[1] >= 0 ? 1 : -1;
-    const gustDirLen = Math.sqrt(w.vel[0] * w.vel[0] + w.vel[1] * w.vel[1] + w.vel[2] * w.vel[2]);
+    const wx0 = w.pos[0], wy0 = w.pos[1], wz0 = w.pos[2];
+    const vx = w.vel[0], vy = w.vel[1], vz = w.vel[2];
+    const sgn = wy0 >= 0 ? 1 : -1;
+    const gustDirLen = Math.sqrt(vx * vx + vy * vy + vz * vz);
+    const hasEye = !!def.render.eye;
+    const dPrecip = def.precip, dCloud = def.cloud, dTemp = def.tempDelta, dWind = def.wind, dSpin = def.spin;
     // chord length ≈ angle at these sizes (and monotonic): no acos per cell
     const chordScale = 1 / (2 * Math.sin(ang / 2));
-    for (const c of cells) {
+    for (let i = 0; i < nc; i++) {
+      const c = cells[i];
       const px = P[c * 3], py = P[c * 3 + 1], pz = P[c * 3 + 2];
-      const dx = px - w.pos[0], dy = py - w.pos[1], dz = pz - w.pos[2];
+      const dx = px - wx0, dy = py - wy0, dz = pz - wz0;
       const d = Math.sqrt(dx * dx + dy * dy + dz * dz) * chordScale;
       if (d > 1.15) continue;
       let k = d < 0.6 ? 1 : Math.max(0, 1 - (d - 0.6) / 0.55);
       k *= k * (3 - 2 * k);
       // hurricane eye: calm, clear centre
-      const eye = def.render.eye ? Math.min(1, d / 0.12) : 1;
+      const eye = hasEye ? Math.min(1, d / 0.12) : 1;
       const kI = k * I;
-      if (!s.wMask[c]) { s.wMask[c] = 1; touched[nt++] = c; }
-      const pr = def.precip * kI * eye;
-      if (pr > s.wPrecip[c]) { s.wPrecip[c] = pr; s.wType[c] = code; }
-      s.wCloud[c] += def.cloud * kI * (def.cloud > 0 ? eye : 1);
-      s.wTemp[c] += def.tempDelta * kI;
+      if (!wMask[c]) { wMask[c] = 1; touched[nt++] = c; }
+      const pr = dPrecip * kI * eye;
+      if (pr > wPrecip[c]) { wPrecip[c] = pr; wType[c] = code; }
+      wCloud[c] += dCloud * kI * (dCloud > 0 ? eye : 1);
+      wTemp[c] += dTemp * kI;
       // wind: cyclonic swirl (counter-clockwise in the north) + gust along the drift, or calming (negative wind)
-      if (def.wind >= 0) {
-        let tx = w.pos[1] * pz - w.pos[2] * py;
-        let ty = w.pos[2] * px - w.pos[0] * pz;
-        let tz = w.pos[0] * py - w.pos[1] * px;
+      if (dWind >= 0) {
+        let tx = wy0 * pz - wz0 * py;
+        let ty = wz0 * px - wx0 * pz;
+        let tz = wx0 * py - wy0 * px;
         const tl = Math.sqrt(tx * tx + ty * ty + tz * tz);
-        const swirl = def.wind * def.spin * kI * Math.min(1, d * 3) * eye * sgn;
-        if (tl > 1e-9) { tx /= tl; ty /= tl; tz /= tl; f.windX[c] += tx * swirl; f.windY[c] += ty * swirl; f.windZ[c] += tz * swirl; }
+        const swirl = dWind * dSpin * kI * Math.min(1, d * 3) * eye * sgn;
+        if (tl > 1e-9) { tx /= tl; ty /= tl; tz /= tl; windX[c] += tx * swirl; windY[c] += ty * swirl; windZ[c] += tz * swirl; }
         if (gustDirLen > 1e-12) {
-          const gust = def.wind * (1 - def.spin) * kI / gustDirLen;
-          f.windX[c] += w.vel[0] * gust; f.windY[c] += w.vel[1] * gust; f.windZ[c] += w.vel[2] * gust;
+          const gust = dWind * (1 - dSpin) * kI / gustDirLen;
+          windX[c] += vx * gust; windY[c] += vy * gust; windZ[c] += vz * gust;
         }
       } else {
-        const damp = Math.max(0, 1 + (def.wind / 10) * kI);
-        f.windX[c] *= damp; f.windY[c] *= damp; f.windZ[c] *= damp;
+        const damp = Math.max(0, 1 + (dWind / 10) * kI);
+        windX[c] *= damp; windY[c] *= damp; windZ[c] *= damp;
       }
     }
   }
   // temperature deltas are folded in by the hourly climate pass
-  let nm = 0;
-  for (let i = 0; i < nt; i++) {
-    const c = touched[i];
-    composeSky(p, c);
-    if (s.wMask[c]) prev.list[nm++] = c;
-  }
+  const nm = composeTouched(touched, nt, p.st.liquid.freeze, s.cPrecip, s.cCloud, f.temperature, wMask, wPrecip, wType, wCloud, f.precip, f.precipType, f.cloud, prevList);
   prev.n = nm;
   if (nt) {
     markRainDirty(p);
     p.bump('precip'); p.bump('precipType'); p.bump('cloud'); p.bump('windX'); p.bump('windY'); p.bump('windZ');
   }
+}
+
+/** composeSky (climate.ts) over the touched cells; the still-covered ones become the next reset list. Returns their
+ * count. */
+function composeTouched(
+  touched: Int32Array, nt: number, freeze: number, cPrecip: Float32Array, cCloud: Float32Array, temperature: Float32Array,
+  wMask: Uint8Array, wPrecip: Float32Array, wType: Uint8Array, wCloud: Float32Array, precip: Float32Array,
+  precipType: Float32Array, cloud: Float32Array, next: Int32Array,
+): number {
+  const snowBelow = freeze + 0.5;
+  let nm = 0;
+  for (let i = 0; i < nt; i++) {
+    const c = touched[i];
+    let pr = cPrecip[c];
+    const t = temperature[c];
+    let ty = pr > 0 ? (t < snowBelow ? 2 : 1) : 0;
+    let cl = cCloud[c];
+    if (wMask[c]) {
+      const wp = wPrecip[c];
+      if (wp > pr || (wType[c] > 0 && wp > 0)) {
+        pr = Math.max(pr, wp);
+        ty = wType[c];
+        // a rain system in freezing air falls as snow
+        if (ty === 1 && t < freeze) ty = 2;
+      }
+      cl = Math.min(1, Math.max(0, cl + wCloud[c]));
+      next[nm++] = c;
+    }
+    precip[c] = pr;
+    precipType[c] = pr > 0 ? ty : 0;
+    cloud[c] = cl;
+  }
+  return nm;
 }
 
 interface MaskList { list: Int32Array; n: number }
@@ -301,9 +346,11 @@ function applyEffects(u: Universe, p: Planet): void {
     if (!def.deposit && !def.effects) continue;
     const I = systemIntensity(w);
     const ang = w.radius / p.st.radius;
-    const cells = p.grid.cellsWithin(w.pos[0], w.pos[1], w.pos[2], ang, p.scratch.cells);
+    const cells = capOut(p);
+    const nc = capCells(p.grid, w.pos[0], w.pos[1], w.pos[2], ang, cells);
     const P = p.grid.pos;
-    for (const c of cells) {
+    for (let i = 0; i < nc; i++) {
+      const c = cells[i];
       const d = Math.acos(Math.min(1, P[c * 3] * w.pos[0] + P[c * 3 + 1] * w.pos[1] + P[c * 3 + 2] * w.pos[2])) / ang;
       const k = Math.max(0, 1 - d * d) * I * dtH;
       if (k <= 0) continue;
@@ -326,6 +373,9 @@ function applyEffects(u: Universe, p: Planet): void {
   if (veg) { p.bump('grass'); p.bump('shrub'); p.bump('tree'); p.bump('crop'); }
 }
 
+/** called for every strike (peoples: accidents of lightning in a dune, fire taken from a lightning fire) */
+export const strikeHooks: ((u: Universe, p: Planet, cell: number, ignited: boolean) => void)[] = [];
+
 /** lightning strikes from stormy systems (and a planet-wide stormy override): events + fires in dry fuel */
 function lightning(u: Universe, p: Planet): void {
   const rng = p.rng.weather;
@@ -338,7 +388,9 @@ function lightning(u: Universe, p: Planet): void {
     const f = p.f;
     const fuel = f.grass[c] * 0.3 + f.shrub[c] * 0.6 + f.tree[c] + f.crop[c] * 0.4;
     const dry = 1 - Math.min(1, f.moisture[c] * 1.3 + f.wetness[c] * 0.6 + (f.precip[c] > 0 ? 0.5 : 0));
-    if (fuel > 0.1 && dry > 0.15 && hashFloat(c, u.tick, 0x11e7) < 0.35 * dry * Math.min(1, fuel)) igniteCell(u, p, c, 0.5 + 0.4 * intensity, 'lightning');
+    let ignited = false;
+    if (fuel > 0.1 && dry > 0.15 && hashFloat(c, u.tick, 0x11e7) < 0.35 * dry * Math.min(1, fuel)) ignited = igniteCell(u, p, c, 0.5 + 0.4 * intensity, 'lightning');
+    for (const h of strikeHooks) h(u, p, c, ignited);
   };
   for (const w of p.weather) {
     const def = content.weather.list[w.kind];

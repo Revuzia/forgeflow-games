@@ -18,6 +18,7 @@ import { Noise3 } from '../sim/grid/noise.ts';
 import { Rng, hashFloat } from '../sim/core/rng.ts';
 import { blackbody, orbitOffset, orbitPlaneQuat, qAxis, qMul, qRotateInv, type D3, type DQ } from './orbits.ts';
 import type { SimBackend, SnapshotSink } from './simclient.ts';
+import { LookdevLife } from './lookdevlife.ts';
 
 type Fields = Partial<Record<FieldName, Float32Array>>;
 
@@ -29,6 +30,9 @@ interface LookPlanet {
   cloudGen: ((t: number) => void) | null;
   spin0: number;
   cloudTick: number;
+  /** settlements, buildings, people and herds (the home world only) */
+  life?: LookdevLife;
+  lifeSent?: boolean;
 }
 
 // ───────────────────────────────── helpers ─────────────────────────────────
@@ -355,66 +359,10 @@ function genTerran(id: number, name: string, seed: number, n: number, radius: nu
       : distOcean[c] <= 1 ? B.coast : B.grassland;
   }
 
-  // 5. towns: flat, temperate, watered land; farms in patches around them; roads between them (A* on slope)
-  const towns: number[] = [];
-  const cand: number[] = [];
-  for (let c = 0; c < N; c++) {
-    if (h[c] < 3 || h[c] > 120 || slope[c] > 0.12 || T[c] < 6 || T[c] > 27 || M[c] < 0.38 || W[c] > 0.2) continue;
-    if (distWater[c] > 3) continue;
-    cand.push(c);
-  }
-  rng.shuffle(cand);
-  for (const c of cand) {
-    if (towns.length >= 3) break;
-    let ok = true;
-    for (const t of towns) {
-      const d = P[c * 3] * P[t * 3] + P[c * 3 + 1] * P[t * 3 + 1] + P[c * 3 + 2] * P[t * 3 + 2];
-      if (d > Math.cos(0.32)) ok = false;
-    }
-    if (ok) towns.push(c);
-  }
-  for (const t of towns) {
-    const ring = g.cellsWithin(P[t * 3], P[t * 3 + 1], P[t * 3 + 2], 0.06);
-    for (const c of ring) {
-      if (h[c] < 1 || W[c] > 0.2 || slope[c] > 0.2) continue;
-      const patch = hashFloat(Math.floor(P[c * 3] * 60), Math.floor(P[c * 3 + 1] * 60), Math.floor(P[c * 3 + 2] * 60), 77);
-      if (patch < 0.72) {
-        CR[c] = 0.55 + 0.45 * hashFloat(c, 5);
-        CS[c] = 26 + Math.floor(hashFloat(c, 9) * 4); // wheat, rice, maize, flax
-        TR[c] *= 0.1; SH[c] *= 0.3; GR[c] = Math.max(GR[c] * 0.6, 0.3);
-      }
-    }
-    // the town core: worn ground
-    const core = g.cellsWithin(P[t * 3], P[t * 3 + 1], P[t * 3 + 2], 0.012);
-    for (const c of core) { ROAD[c] = Math.max(ROAD[c], 0.55); TR[c] = 0; CR[c] = 0; }
-  }
-  const roadPath = (a: number, b: number) => {
-    const cost = new Float32Array(N).fill(Infinity);
-    const from = new Int32Array(N).fill(-1);
-    const heap = new CellHeap(1024);
-    cost[a] = 0; heap.push(a, 0);
-    const bx = P[b * 3], by = P[b * 3 + 1], bz = P[b * 3 + 2];
-    while (heap.size) {
-      const c = heap.pop();
-      if (c === b) break;
-      for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
-        const o = g.nbr[e];
-        const wet = W[o] > 0.3 ? (riverCell[o] === 1 ? 8 : 400) : 0;
-        const st = cost[c] + 1 + slope[o] * 30 + wet + (h[o] > 200 ? 4 : 0);
-        if (st < cost[o]) {
-          cost[o] = st; from[o] = c;
-          const dd = Math.acos(Math.min(1, P[o * 3] * bx + P[o * 3 + 1] * by + P[o * 3 + 2] * bz)) / g.meanEdgeAngle;
-          heap.push(o, st + dd);
-        }
-      }
-    }
-    for (let c = b; c >= 0 && c !== a; c = from[c]) {
-      ROAD[c] = Math.max(ROAD[c], 0.85);
-      for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) ROAD[g.nbr[e]] = Math.max(ROAD[g.nbr[e]], 0.25);
-      TR[c] *= 0.2;
-    }
-  };
-  for (let i = 1; i < towns.length; i++) roadPath(towns[i - 1], towns[i]);
+  // 5. peoples: settlements of four eras and a scatter of hamlets with streets, farmland, buildings, people and
+  // herds (src/client/lookdevlife.ts); it writes road wear, farmland and the wildfire into the fields
+  const life = new LookdevLife({ g, R: radius, f, h, slope, distOcean, distWater, riverCell, seed });
+  void rng;
 
   // 6. clouds: zonal bands + noise + spiral storms, regenerated as time passes (drift with the trade winds)
   const storms: { p: D3; r: number; s: number; w: number }[] = [];
@@ -464,7 +412,7 @@ function genTerran(id: number, name: string, seed: number, n: number, radius: nu
     id, name, gridN: n, seed, alive: true, fieldVersion: 1,
     params: params({ radius, orbit, kind: 'terran', axialTilt: 0.41, cloudiness: 0.55, magnetism: 1 }),
   };
-  return { snap, fields: f, dirty: new Set(ALL_FIELDS), cloudGen, spin0: 0, cloudTick: 0 };
+  return { snap, fields: f, dirty: new Set(ALL_FIELDS), cloudGen, spin0: 0, cloudTick: 0, life };
 }
 
 /** craters into a height array (bowl + rim + ejecta), returns nothing */
@@ -694,6 +642,15 @@ export class LookdevBackend implements SimBackend {
         lp.dirty.add('cloud'); lp.dirty.add('precip'); lp.dirty.add('precipType');
       }
       const snap: PlanetSnap = { ...lp.snap, params: { ...p, atmosphere: { ...p.atmosphere } } };
+      if (lp.life) {
+        const ls = lp.life.snapshot(tick);
+        snap.agents = ls.agents;
+        snap.animals = ls.animals;
+        snap.settlements = lp.life.settlements;
+        if (ls.buildings || !lp.lifeSent) snap.buildings = ls.buildings ?? lp.life.buildings;
+        snap.population = [lp.life.settlements.reduce((a, s) => a + s.population, 0)];
+        lp.lifeSent = true;
+      }
       if (lp.dirty.size) {
         snap.fields = {};
         // copies: the client adopts the arrays (as it would transferred buffers) and we keep evolving ours

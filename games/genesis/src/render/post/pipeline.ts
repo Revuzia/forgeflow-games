@@ -8,8 +8,10 @@
 //   6. bloom: 13-tap Karis-weighted downsample mip chain + tent upsample (Jimenez 2014), mixed at a few percent
 //   7. auto exposure: luminance reduction to 1×1 (lit pixels only, so black space never blows out a planet) + temporal
 //      adaptation in a 1×1 ping-pong
-//   8. tone map: exposure → lens flare ghosts/halo/starburst gated by sun visibility → AgX (Blender's) with a look
-//      (power / saturation in AgX log space) → white balance / lift-gamma-gain → vignette → sRGB → `ldr`
+//   8. tone map: exposure → lens flare ghosts/halo/starburst gated by sun visibility (squared; no rings over an
+//      occluder) → AgX (Blender's, log range −12.5..+2.8 EV) with a power look → gamut- and hue-limited saturation →
+//      toe → lift-gamma-gain → split-tone grade (warm highlights / cool shadows; golden hour; moonlit night) →
+//      vignette → sRGB → `ldr`
 //   9. FXAA 3.11 + subtle animated film grain → screen
 
 import {
@@ -156,6 +158,7 @@ varying vec2 vUv;
 uniform sampler2D tIn;
 uniform vec2 uSrcTexel;
 uniform float uFirst;
+uniform float uLumFloor;   // luminance below which a pixel does not count (stars, faint sky glow; lower at night)
 void main() {
   vec2 acc = vec2(0.0);
   for (int j = 0; j < 4; j++) for (int i = 0; i < 4; i++) {
@@ -165,8 +168,9 @@ void main() {
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
       // centre-weighted, lit pixels only (empty space does not count)
       vec2 cw = uv - 0.5;
-      // lit surfaces only: stars and faint sky glow (below ~0.004) never drag the exposure up
-      float w = smoothstep(0.004, 0.04, l) * (1.0 - dot(cw, cw) * 1.2);
+      // lit surfaces only: stars and faint sky glow (below the floor: ~0.004 by day, moonlit ground at night) never
+      // drag the exposure up
+      float w = smoothstep(uLumFloor, uLumFloor * 10.0, l) * (1.0 - dot(cw, cw) * 1.2);
       acc += vec2(log2(max(l, 1e-6)) * w, w);
     } else {
       acc += texture(tIn, uv).rg;
@@ -206,6 +210,7 @@ uniform sampler2D tGod;
 uniform sampler2D tExposure;
 uniform sampler2D tMask;
 uniform float uBloom;
+uniform float uBloomNorm;  // 1 / number of bloom levels: the additive upsample chain SUMS every level
 uniform float uGod;
 uniform vec3 uGodColor;
 uniform vec2 uSunUV;
@@ -225,6 +230,9 @@ uniform vec3 uGain;
 uniform float uSat;
 uniform float uPower;
 uniform float uGolden;   // 0..1: how low the sun is at the camera (golden hour / sunset grade)
+uniform float uGrade;    // 0..1: everyday split-tone strength (warm highlights, cool shadows)
+uniform float uNight;    // 0..1: night grade (moonlit blue shadows)
+uniform float uToe;      // display-linear toe: the darkest shadows fall to true black
 
 // AgX (Sobotka), as in Blender / three.js r16x: Rec.2020 working space, sigmoid in log2 space
 const mat3 LINEAR_SRGB_TO_LINEAR_REC2020 = mat3(vec3(0.6274, 0.0691, 0.0164), vec3(0.3293, 0.9195, 0.0880), vec3(0.0433, 0.0113, 0.8956));
@@ -232,7 +240,9 @@ const mat3 LINEAR_REC2020_TO_LINEAR_SRGB = mat3(vec3(1.6605, -0.1246, -0.0182), 
 const mat3 AgXInset = mat3(vec3(0.856627153315983, 0.137318972929847, 0.11189821299995), vec3(0.0951212405381588, 0.761241990602591, 0.0767994186031903), vec3(0.0482516061458583, 0.101439036467562, 0.811302368396859));
 const mat3 AgXOutset = mat3(vec3(1.1271005818144368, -0.1413297634984383, -0.14132976349843826), vec3(-0.11060664309660323, 1.157823702216272, -0.11060664309660294), vec3(-0.016493938717834573, -0.016493938717834257, 1.2519364065950405));
 const float AgxMinEv = -12.47393;
-const float AgxMaxEv = 4.026069;
+// (Blender's 4.03 left diffuse white at 184/255 once the look's power was applied: 2.4 puts it at ~224 and scene 2.0
+// at ~241 — sunlit cloud tops and snow reach the 230s, highlights still roll off, mid-tones are not pulled down)
+const float AgxMaxEv = 2.4;
 vec3 agxContrast(vec3 x) {
   vec3 x2 = x * x;
   vec3 x4 = x2 * x2;
@@ -245,14 +255,39 @@ vec3 agx(vec3 c) {
   c = clamp(log2(c), AgxMinEv, AgxMaxEv);
   c = (c - AgxMinEv) / (AgxMaxEv - AgxMinEv);
   c = agxContrast(c);
-  // look: power + saturation (a little "punchy", cinematic)
+  // look: power (contrast) in AgX log space; saturation is applied after the curve, gamut-aware (see vibrance)
   c = pow(max(c, 0.0), vec3(uPower));
-  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
-  c = l + uSat * (c - l);
   c = AgXOutset * c;
   c = pow(max(vec3(0.0), c), vec3(2.2));
   c = LINEAR_REC2020_TO_LINEAR_SRGB * c;
   return clamp(c, 0.0, 1.0);
+}
+// saturation in display-linear sRGB, limited per pixel so no channel is pushed below a floor of its luminance or
+// above 1 (no hue clipping: a sky's red channel or foliage's blue never hit 0), and half as strong on greens
+// (70–160°) and sky blues (190–245°), which the curve already renders rich
+vec3 vibrance(vec3 c, float s) {
+  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  float mx = max(c.r, max(c.g, c.b)), mn = min(c.r, min(c.g, c.b));
+  if (mx - mn < 1e-5 || l <= 1e-6) return c;
+  float h;
+  if (mx == c.r) h = mod((c.g - c.b) / (mx - mn), 6.0);
+  else if (mx == c.g) h = (c.b - c.r) / (mx - mn) + 2.0;
+  else h = (c.r - c.g) / (mx - mn) + 4.0;
+  h *= 60.0;
+  float prot = max(smoothstep(55.0, 80.0, h) * (1.0 - smoothstep(150.0, 175.0, h)), smoothstep(180.0, 200.0, h) * (1.0 - smoothstep(240.0, 260.0, h)));
+  s = mix(s, 1.0 + (s - 1.0) * 0.5, prot);
+  // the largest saturation that keeps every channel inside [0.06 l, 1]
+  vec3 lo3 = l * 0.94 / max(vec3(l) - c, vec3(1e-5));
+  vec3 hi3 = (1.0 - l) / max(c - vec3(l), vec3(1e-5));
+  vec3 lim = mix(hi3, lo3, step(c, vec3(l)));
+  s = min(s, max(min(lim.r, min(lim.g, lim.b)), 1.0));
+  c = l + s * (c - l);
+  // gamut ceiling: no channel below 2.5 % of the brightest (≈ 0.85 saturation once encoded to sRGB) — backlit leaves
+  // and deep sky keep their hue instead of clipping a channel to 0
+  float cmx = max(c.r, max(c.g, c.b)), cmn = min(c.r, min(c.g, c.b));
+  float den = cmx - cmn - 0.975 * (cmx - l);
+  if (den > 1e-6) c = l + min(1.0, 0.975 * l / den) * (c - l);
+  return max(c, 0.0);
 }
 vec3 toSRGB(vec3 c) {
   c = clamp(c, 0.0, 1.0);
@@ -272,10 +307,14 @@ float sunVisibility() {
 
 vec3 lensFlare(vec2 uv, float vis) {
   if (vis <= 0.0) return vec3(0.0);
+  // a sun half hidden by foliage or a ridge must not paint ghosts and rings over the occluder
+  float ringK = smoothstep(0.75, 0.95, vis);
+  vis *= vis;
   vec3 f = vec3(0.0);
   vec2 axis = vec2(0.5) - uSunUV;
   // ghosts along the axis through the centre, chromatic tints, soft discs and rings
   for (int i = 0; i < 6; i++) {
+    if (ringK <= 0.0) break;
     float fi = float(i);
     float k = 0.35 + fi * 0.33 - (i > 3 ? 1.25 : 0.0);
     vec2 c = uSunUV + axis * 2.0 * k;
@@ -284,13 +323,13 @@ vec3 lensFlare(vec2 uv, float vis) {
     float disc = smoothstep(r, r * 0.6, length(d));
     float ring = smoothstep(r * 0.15, 0.0, abs(length(d) - r)) * 0.5;
     vec3 tint = 0.5 + 0.5 * cos(6.2831 * (fi * 0.17 + vec3(0.0, 0.33, 0.67)));
-    f += (disc * 0.5 + ring) * tint * (0.008 + 0.004 * fi);
+    f += (disc * 0.5 + ring) * tint * (0.008 + 0.004 * fi) * ringK;
   }
   // faint chromatic halo ring around the sun
   vec2 ds = (uv - uSunUV) * vec2(uAspect, 1.0);
   float dl = length(ds);
   float ring = smoothstep(0.022, 0.0, abs(dl - 0.36));
-  f += vec3(0.55, 0.75, 1.0) * ring * 0.012 + vec3(1.0, 0.7, 0.5) * smoothstep(0.02, 0.0, abs(dl - 0.38)) * 0.006;
+  f += (vec3(0.55, 0.75, 1.0) * ring * 0.012 + vec3(1.0, 0.7, 0.5) * smoothstep(0.02, 0.0, abs(dl - 0.38)) * 0.006) * ringK;
   // starburst: fine diffraction streaks close to the disc only
   float ang = atan(ds.y, ds.x);
   float burst = pow(abs(snoise(vec3(ang * 5.0, 0.0, 1.7))), 4.0) + 0.6 * pow(max(cos(ang * 3.0), 0.0), 120.0);
@@ -302,24 +341,33 @@ vec3 lensFlare(vec2 uv, float vis) {
 void main() {
   vec3 c = sane(texture(tHDR, vUv).rgb);
   vec3 b = sane(texture(tBloom, vUv).rgb);
-  c = mix(c, b, uBloom);
+  // (the upsample chain sums ~7 levels: unnormalised, a 4.5 % mix laid a 30 % veil of blur over every frame)
+  c = mix(c, b * uBloomNorm, uBloom);
   c += texture(tGod, vUv).rgb * uGod * uGodColor;
   float ex = uManualExposure > 0.0 ? uManualExposure : mix(texture(tExposure, vec2(0.5)).r, uStarExposure, uStarMix);
   c *= ex * exp2(uExposureBias);
   if (uSunOn > 0.5) c += lensFlare(vUv, sunVisibility()) * uFlare;
   c *= uWhite;
   // golden hour: warm the light before the tone curve (so highlights roll off to gold, not white)
-  c *= mix(vec3(1.0), vec3(1.22, 0.96, 0.74), uGolden);
+  c *= mix(vec3(1.0), vec3(1.28, 0.95, 0.68), uGolden);
   c = agx(c);
+  c = vibrance(c, uSat);
+  // toe: c²(1+t)/(c+t) takes the very deepest shadows to true black (space) and leaves the rest alone; lifted at golden
+  // hour (backlit foliage and the shadow side of a sunset keep their colour instead of crushing) and at night (moonlit
+  // ground lives in the bottom of the curve)
+  float toe = uToe * (1.0 - 0.75 * uGolden) * (1.0 - 0.8 * uNight);
+  c = c * c * (1.0 + toe) / (c + toe);
   // lift / gamma / gain grade in display-linear
   c = pow(max(c * uGain + uLift * (1.0 - c), 0.0), 1.0 / uGamma);
-  // ... then split-tone: shade a little cooler and violet, light amber, and richer colour overall
+  // ... then split-tone: shadows a little cooler, highlights warmer — subtle by day, strong at golden hour; at night
+  // the shadows go moonlit blue
   {
     float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
     vec3 tone = mix(vec3(0.9, 0.93, 1.1), vec3(1.1, 0.98, 0.84), smoothstep(0.04, 0.55, lum));
-    c = mix(c, c * tone, uGolden);
+    c = mix(c, c * tone, max(uGolden, uGrade));
+    c = mix(c, c * vec3(0.84, 0.95, 1.18), uNight * (1.0 - smoothstep(0.08, 0.45, lum)));
     lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
-    c = max(mix(vec3(lum), c, 1.0 + 0.28 * uGolden), 0.0);
+    c = max(mix(vec3(lum), c, 1.0 + 0.28 * uGolden - 0.2 * uNight), 0.0);
   }
   vec2 vc = vUv - 0.5;
   float vig = 1.0 - uVignette * smoothstep(0.25, 0.95, dot(vc * vec2(uAspect, 1.0), vc * vec2(uAspect, 1.0)) * 1.4);
@@ -453,18 +501,22 @@ export class PostPipeline {
   private godBlurMat = passMaterial(GOD_BLUR_FRAG, { tIn: { value: null }, uSunUV: { value: new Vector2() }, uSpread: { value: 1 }, uJitter: { value: 0 } });
   private downMat = passMaterial(BLOOM_DOWN_FRAG, { tIn: { value: null }, uTexel: { value: new Vector2() }, uKaris: { value: 0 } });
   private upMat = passMaterial(BLOOM_UP_FRAG, { tIn: { value: null }, uTexel: { value: new Vector2() }, uRadius: { value: 1 } }, { blending: AdditiveBlending });
-  private lumMat = passMaterial(LUM_FRAG, { tIn: { value: null }, uSrcTexel: { value: new Vector2() }, uFirst: { value: 1 } });
+  private lumMat = passMaterial(LUM_FRAG, { tIn: { value: null }, uSrcTexel: { value: new Vector2() }, uFirst: { value: 1 }, uLumFloor: { value: 0.004 } });
   private adaptMat = passMaterial(ADAPT_FRAG, {
     tLum: { value: null }, tPrev: { value: null }, uDt: { value: 0.016 }, uCut: { value: 1 }, uKey: { value: 0.16 }, uRange: { value: new Vector2(0.02, 6) },
   });
   readonly tonemapMat = passMaterial(TONEMAP_FRAG, {
     tHDR: { value: null }, tBloom: { value: null }, tGod: { value: null }, tExposure: { value: null }, tMask: { value: null },
-    uBloom: { value: 0.04 }, uGod: { value: 0 }, uGodColor: { value: new Vector3(1, 1, 1) }, uSunUV: { value: new Vector2() },
+    uBloom: { value: 0.04 }, uBloomNorm: { value: 1 }, uGod: { value: 0 }, uGodColor: { value: new Vector3(1, 1, 1) }, uSunUV: { value: new Vector2() },
     uSunOn: { value: 0 }, uSunColor: { value: new Vector3(1, 1, 1) }, uFlare: { value: 1 }, uAspect: { value: 1 },
     uExposureBias: { value: 0 }, uManualExposure: { value: 0 }, uStarExposure: { value: 1 }, uStarMix: { value: 0 }, uVignette: { value: 0.22 }, uWhite: { value: new Vector3(1, 1, 1) },
     // no lift: a lifted black turned space navy and every shadow milky; contrast and colour come from the curve
     uLift: { value: new Vector3(0, 0, 0) }, uGamma: { value: new Vector3(1.0, 1.0, 1.0) }, uGain: { value: new Vector3(1.02, 1.0, 0.97) },
-    uSat: { value: 1.18 }, uPower: { value: 1.3 }, uGolden: { value: 0 },
+    // AgX with a contrasty look on the narrower range: power 1.3 (the exposure key puts the scene's log-average at
+    // ~122/255; diffuse white → ~224, scene 2.0 → ~241; the old 1.36 / 4.03 pair pulled mid-tones to 94 and capped white
+    // at 184), a toe that takes the deepest shadows to black, saturation 1.22 after the curve, gamut- and hue-limited
+    // (vibrance: greens and sky blues get half of it)
+    uSat: { value: 1.22 }, uPower: { value: 1.3 }, uGolden: { value: 0 }, uGrade: { value: 0.3 }, uNight: { value: 0 }, uToe: { value: 0.012 },
   });
   private fxaaMat = passMaterial(FXAA_FRAG, { tIn: { value: null }, uTexel: { value: new Vector2() }, uFxaa: { value: 1 }, uGrain: { value: 0.022 }, uTime: { value: 0 } });
   private cut = true;
@@ -530,6 +582,11 @@ export class PostPipeline {
 
   /** exposure key (mid-grey target): lower at dusk so sunsets and twilight stay dusky instead of being lifted */
   setKey(key: number): void { this.adaptMat.uniforms.uKey.value = key; }
+  /** auto-exposure limits and the metering floor (luminance below which pixels do not count): night lowers both */
+  setMetering(minExposure: number, maxExposure: number, lumFloor: number): void {
+    (this.adaptMat.uniforms.uRange.value as Vector2).set(minExposure, maxExposure);
+    this.lumMat.uniforms.uLumFloor.value = lumFloor;
+  }
 
   /** steps 5–9: from the composited HDR image to the screen */
   finish(r: WebGLRenderer, fsq: FullscreenQuad, input: Texture, s: PostSettings, sun: SunScreen, dt: number, time: number, target: WebGLRenderTarget | null = null): void {
@@ -607,7 +664,9 @@ export class PostPipeline {
     const t = this.tonemapMat.uniforms;
     t.tHDR.value = input;
     t.tBloom.value = this.bloomMips.length ? this.bloomMips[0].texture : input;
-    t.uBloom.value = this.bloomMips.length ? s.bloom + (Math.min(s.bloom, 0.01) - s.bloom) * this.starMix : 0;
+    // bloom weight on the level-normalised chain: twice the preset's mix (≈ 9 % of a wide glow at High)
+    t.uBloom.value = this.bloomMips.length ? 2 * (s.bloom + (Math.min(s.bloom, 0.01) - s.bloom) * this.starMix) : 0;
+    t.uBloomNorm.value = this.bloomMips.length ? 1 / this.bloomMips.length : 1;
     t.uStarExposure.value = this.starExposure;
     t.uStarMix.value = this.starMix;
     t.uGod.value = godOn ? 0.32 * sun.strength : 0;

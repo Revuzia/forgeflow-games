@@ -31,7 +31,7 @@ function ramp(x: number, a: number, b: number, c: number, d: number): number {
 export function suitability(p: Planet, t: PlantTable, sp: number, c: number): number {
   const f = p.f, s = p.s;
   const i4 = sp * 4;
-  const tf = ramp(s.tempMean[c], t.temp[i4], t.temp[i4 + 1], t.temp[i4 + 2], t.temp[i4 + 3]);
+  const tf = ramp(s.tempYear[c], t.temp[i4], t.temp[i4 + 1], t.temp[i4 + 2], t.temp[i4 + 3]);
   if (tf <= 0) return 0;
   const w = f.water[c];
   let wf: number;
@@ -40,7 +40,7 @@ export function suitability(p: Planet, t: PlantTable, sp: number, c: number): nu
     const lo = t.waterMin[sp], hi = t.waterMax[sp];
     wf = w < lo ? Math.max(0, w / lo) * (w > 0.5 ? 1 : 0) : w > hi ? Math.max(0, 1 - (w - hi) / (hi * 0.5)) : 1;
     if (wf <= 0) return 0;
-    const lf = Math.min(1, s.lightMean[c] / Math.max(0.02, t.light[sp]));
+    const lf = Math.min(1, s.lightYear[c] / Math.max(0.02, t.light[sp]));
     return tf * wf * lf * (f.salinity[c] <= t.salinity[sp] + 0.01 ? 1 : 0.4);
   }
   const wmax = t.waterMax[sp];
@@ -53,7 +53,7 @@ export function suitability(p: Planet, t: PlantTable, sp: number, c: number): nu
   const sf = need <= 0 ? 1 : Math.min(1, Math.sqrt(depth / need));
   const sal = f.salinity[c];
   const saf = sal <= t.salinity[sp] ? 1 : Math.max(0, 1 - (sal - t.salinity[sp]) * 4);
-  const lf = Math.min(1, s.lightMean[c] / Math.max(0.02, t.light[sp]));
+  const lf = Math.min(1, s.lightYear[c] / Math.max(0.02, t.light[sp]));
   const snow = f.snow[c] > 0.6 ? 0.3 : 1;
   return tf * wf * mf * sf * saf * lf * snow;
 }
@@ -75,6 +75,57 @@ export function bestSpecies(p: Planet, t: PlantTable, type: number, c: number, i
   return { sp: best, suit: bs };
 }
 
+/**
+ * suitability() for one species with the cell's values already read (vegetationStep reads them once per cell: the
+ * pass asks up to a dozen times per cell). Same arithmetic, same order.
+ */
+function suitFast(
+  t: PlantTable, sp: number, tm: number, w: number, mo: number, depth: number, sal: number, lm: number, snowF: number,
+): number {
+  const i4 = sp * 4;
+  const tt = t.temp;
+  const tf = ramp(tm, tt[i4], tt[i4 + 1], tt[i4 + 2], tt[i4 + 3]);
+  if (tf <= 0) return 0;
+  let wf: number;
+  if (t.habitat[sp] === 2) {
+    // aquatic: needs standing water within its depth band
+    const lo = t.waterMin[sp], hi = t.waterMax[sp];
+    wf = w < lo ? Math.max(0, w / lo) * (w > 0.5 ? 1 : 0) : w > hi ? Math.max(0, 1 - (w - hi) / (hi * 0.5)) : 1;
+    if (wf <= 0) return 0;
+    const lf = Math.min(1, lm / Math.max(0.02, t.light[sp]));
+    return tf * wf * lf * (sal <= t.salinity[sp] + 0.01 ? 1 : 0.4);
+  }
+  const wmax = t.waterMax[sp];
+  wf = w <= wmax ? 1 : Math.max(0, 1 - (w - wmax) / 0.3);
+  if (wf <= 0) return 0;
+  const tmo = t.moist;
+  const mf = ramp(mo, tmo[i4], tmo[i4 + 1], tmo[i4 + 2], tmo[i4 + 3] + 1e-6);
+  if (mf <= 0) return 0;
+  const need = t.soil[sp];
+  const sf = need <= 0 ? 1 : Math.min(1, Math.sqrt(depth / need));
+  const ssal = t.salinity[sp];
+  const saf = sal <= ssal ? 1 : Math.max(0, 1 - (sal - ssal) * 4);
+  const lf = Math.min(1, lm / Math.max(0.02, t.light[sp]));
+  return tf * wf * mf * sf * saf * lf * snowF;
+}
+
+/** water depth (m) beyond which suitability() is 0 for every species of the table (a cache per table) */
+const drownCache = new WeakMap<PlantTable, number>();
+function drownDepth(t: PlantTable): number {
+  let d = drownCache.get(t);
+  if (d === undefined) {
+    d = 0;
+    for (let sp = 0; sp < t.count; sp++) {
+      // land: wf = 0 from waterMax + 0.3; aquatic: wf = 0 above 1.5 × waterMax
+      const lim = t.habitat[sp] === 2 ? t.waterMax[sp] * 1.5 : t.waterMax[sp] + 0.3;
+      if (lim > d) d = lim;
+    }
+    d += 1e-6;
+    drownCache.set(t, d);
+  }
+  return d;
+}
+
 /** One hourly vegetation pass. */
 export function vegetationStep(u: Universe, p: Planet): void {
   const f = p.f, s = p.s, g = p.grid;
@@ -82,36 +133,72 @@ export function vegetationStep(u: Universe, p: Planet): void {
   const t = u.content.plantTable;
   const life = airSupportsLife(p);
   const growK = p.cfg.vegGrowth / 24;
+  const vegGrowth = p.cfg.vegGrowth;
   const hour = Math.floor(u.tick / 60);
   const covers = [f.grass, f.shrub, f.tree, f.crop];
   const species = [f.grassSpecies, f.shrubSpecies, f.treeSpecies, f.cropSpecies];
+  const nbrStart = g.nbrStart, nbr = g.nbr;
+  // plants live by the climate (the year's means); the season only sets how fast they grow (light, dormancy)
+  const tempYear = s.tempYear, lightYear = s.lightYear, lightMean = s.lightMean, water = f.water, moisture = f.moisture, soil = f.soil;
+  const sand = f.sand, ash = f.ash, salinity = f.salinity, snow = f.snow, temperature = f.temperature;
+  const grassA = f.grass, shrubA = f.shrub, treeA = f.tree, burnt = f.burnt, fire = f.fire, ocean = s.ocean;
+  const fertility = f.fertility, pollution = f.pollution, blight = f.blight;
+  const growth = t.growth, deciduous = t.deciduous, spread = t.spread;
+  const cropA = f.crop, grassSp = f.grassSpecies, shrubSp = f.shrubSpecies, treeSp = f.treeSpecies;
+  const wDead = drownDepth(t);
   let total = 0;
   // a lifeless world has nothing to grow or seed: only the derived fields need refreshing
   const lifeless = p.vegTotal <= 0 && !p.vegDirty;
   p.vegDirty = false;
   for (let c = 0; c < N; c++) {
+    // this cell's conditions (suitFast)
+    const tm = tempYear[c], w = water[c], mo = moisture[c];
+    const depth = soil[c] + 0.3 * sand[c] + 0.5 * ash[c];
+    const sal = salinity[c], lm = lightYear[c];
+    const season = lm > 0.02 ? Math.min(1.25, lightMean[c] / lm) : 1;
+    const snowF = snow[c] > 0.6 ? 0.3 : 1;
+    // water deeper than any plant can live in, nothing growing: no species suits the cell (suitability is 0 for all),
+    // so nothing grows, seeds or succeeds — the type loop below would only clear the wild species marks (the open sea)
+    let skip = lifeless;
+    if (!skip && life && w > wDead && grassA[c] === 0 && shrubA[c] === 0 && treeA[c] === 0 && cropA[c] === 0) {
+      grassSp[c] = -1; shrubSp[c] = -1; treeSp[c] = -1;
+      skip = true;
+    }
     // pinned biomes hold their painted vegetation (biomes.ts nudges them); others follow the climate
-    for (let ti = 0; ti < 4 && !lifeless; ti++) {
+    for (let ti = 0; ti < 4 && !skip; ti++) {
       const cov = covers[ti];
       const spf = species[ti];
       let x = cov[c];
-      let sp = spf[c];
+      const sp = spf[c];
       if (!life) {
         if (x > 0) { x *= 0.9; if (x < 0.005) { x = 0; } cov[c] = x; }
         continue;
       }
       if (x > 0 && sp >= 0) {
-        const suit = suitability(p, t, sp, c);
-        const dormant = t.deciduous[sp] && f.temperature[c] < 3;
+        const suit = suitFast(t, sp, tm, w, mo, depth, sal, lm, snowF);
+        const dormant = deciduous[sp] && temperature[c] < 3;
         let cap = 1;
-        if (ti === 0) cap = 1 - 0.55 * f.tree[c] - 0.2 * f.shrub[c];
-        else if (ti === 1) cap = 1 - 0.45 * f.tree[c];
+        if (ti === 0) cap = 1 - 0.55 * treeA[c] - 0.2 * shrubA[c];
+        else if (ti === 1) cap = 1 - 0.45 * treeA[c];
         if (cap < 0.05) cap = 0.05;
         let dx = 0;
-        if (!dormant) dx += t.growth[sp] * growK * suit * x * (1 - x / cap);
-        if (suit < 0.25) dx -= (0.25 - suit) * 0.12 / 24 * 4 * x;
+        if (!dormant) dx += growth[sp] * growK * suit * season * x * (1 - x / cap);
+        if (suit < 0.25) {
+          dx -= (0.25 - suit) * 0.12 / 24 * 4 * x;
+          // the seed bank: where the climate has moved away from this species, one that suits it better comes up in
+          // its place (succession only from neighbours left whole regions dying with nothing to replace them)
+          if (ti !== 3 && hashFloat(c, hour, ti, 0x5eeb) < 0.04) {
+            let bs = -1, bv = suit + 0.15;
+            for (const o of t.byType[ti]) {
+              if (o === sp || t.domestic[o]) continue;
+              const v = suitFast(t, o, tm, w, mo, depth, sal, lm, snowF);
+              if (v > bv) { bv = v; bs = o; }
+            }
+            if (bs >= 0) spf[c] = bs;
+          }
+        }
         if (x > cap) dx -= (x - cap) * 0.05;
-        if (f.ash[c] > 0.08 && ti !== 2) dx -= 0.04 * x;
+        if (ash[c] > 0.08 && ti !== 2) dx -= 0.04 * x;
         x += dx;
         if (x < 0.003) { x = 0; }
         if (x > 1) x = 1;
@@ -120,14 +207,15 @@ export function vegetationStep(u: Universe, p: Planet): void {
       } else if (ti !== 3) {
         // seeding from the richest neighbour of this type
         let bo = -1, bc = 0.2;
-        for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
-          const o = g.nbr[e];
+        const e1 = nbrStart[c + 1];
+        for (let e = nbrStart[c]; e < e1; e++) {
+          const o = nbr[e];
           if (cov[o] > bc && spf[o] >= 0) { bc = cov[o]; bo = o; }
         }
         if (bo >= 0) {
           const so = spf[bo];
-          const suit = suitability(p, t, so, c);
-          if (suit > 0.08 && hashFloat(c, hour, ti, 0x5eed) < t.spread[so] * bc * suit * 0.35 * p.cfg.vegGrowth) {
+          const suit = suitFast(t, so, tm, w, mo, depth, sal, lm, snowF);
+          if (suit > 0.08 && hashFloat(c, hour, ti, 0x5eed) < spread[so] * bc * suit * 0.35 * vegGrowth) {
             cov[c] = 0.03;
             spf[c] = so;
             x = 0.03;
@@ -137,29 +225,29 @@ export function vegetationStep(u: Universe, p: Planet): void {
       }
       // succession: a better-suited neighbouring species slowly takes the cell
       if (x > 0.05 && ti !== 3 && hashFloat(c, hour, ti, 0x5acc) < 0.03) {
-        const deg = g.nbrStart[c + 1] - g.nbrStart[c];
-        const o = g.nbr[g.nbrStart[c] + ((hour + c) % deg)];
+        const deg = nbrStart[c + 1] - nbrStart[c];
+        const o = nbr[nbrStart[c] + ((hour + c) % deg)];
         const so = spf[o];
         if (so >= 0 && so !== spf[c] && cov[o] > 0.3) {
-          const cur = suitability(p, t, spf[c], c);
-          if (suitability(p, t, so, c) > cur + 0.12) spf[c] = so;
+          const cur = suitFast(t, spf[c], tm, w, mo, depth, sal, lm, snowF);
+          if (suitFast(t, so, tm, w, mo, depth, sal, lm, snowF) > cur + 0.12) spf[c] = so;
         }
       }
       total += cov[c];
     }
     // scars fade as life returns
-    if (f.burnt[c] > 0 && f.fire[c] <= 0) f.burnt[c] = Math.max(0, f.burnt[c] - 0.004 - 0.02 * f.grass[c]);
+    if (burnt[c] > 0 && fire[c] <= 0) burnt[c] = Math.max(0, burnt[c] - 0.004 - 0.02 * grassA[c]);
     // fertility
-    if (s.ocean[c] || f.water[c] > 0.5) f.fertility[c] = 0;
+    if (ocean[c] || w > 0.5) fertility[c] = 0;
     else {
-      const soilF = Math.min(1, (f.soil[c] + 0.2 * f.ash[c]) / 0.5);
-      let fert = soilF * (0.3 + 0.7 * f.moisture[c]) * (1 - 0.8 * f.salinity[c]);
-      if (f.ash[c] > 0.01 && f.moisture[c] > 0.2) fert += 0.25 * Math.min(1, f.ash[c] / 0.15);
-      fert -= 0.5 * f.pollution[c];
-      f.fertility[c] = fert < 0 ? 0 : fert > 1 ? 1 : fert;
+      const soilF = Math.min(1, (soil[c] + 0.2 * ash[c]) / 0.5);
+      let fert = soilF * (0.3 + 0.7 * mo) * (1 - 0.8 * sal);
+      if (ash[c] > 0.01 && mo > 0.2) fert += 0.25 * Math.min(1, ash[c] / 0.15);
+      fert -= 0.5 * pollution[c];
+      fertility[c] = fert < 0 ? 0 : fert > 1 ? 1 : fert;
     }
-    if (f.pollution[c] > 0) f.pollution[c] = Math.max(0, f.pollution[c] - 0.002);
-    if (f.blight[c] > 0) f.blight[c] = Math.max(0, f.blight[c] - 0.01);
+    if (pollution[c] > 0) pollution[c] = Math.max(0, pollution[c] - 0.002);
+    if (blight[c] > 0) blight[c] = Math.max(0, blight[c] - 0.01);
   }
   p.vegTotal = total;
   if (total > 0 || life) {
@@ -169,7 +257,7 @@ export function vegetationStep(u: Universe, p: Planet): void {
   // chronicle: the first forest
   if (p.firsts.forest === undefined && life) {
     let forest = 0;
-    for (let c = 0; c < N; c += 3) if (f.tree[c] > 0.5) forest++;
+    for (let c = 0; c < N; c += 3) if (treeA[c] > 0.5) forest++;
     if (forest * 3 > 40) {
       p.firsts.forest = u.tick;
       u.chronicleAdd(p, 'nature', 'The first forest closed its canopy.', 2);

@@ -1,0 +1,20 @@
+{
+  "$comment": "Species (CONTRACT §8.1). size m (adult height); speed = × the base walk of 0.25 m/tick; swim = × speed in water (0 = cannot); lifespan / maturity / elder in years of the planet; fertility = births per couple per year at plenty; diet = food tag weights (what they eat and how much they like it); forage = food sources (vegetation, sea, air); temp = [min, comfortLo, comfortHi, max] °C (outside comfort warmth drains; beyond min/max it kills without shelter, fire or clothes); breathes o2 | methane | none; habitat land, coast, water, cold; needs = weights of the shared needs (+ species needs wetness / methane / hive); decay = per-day rate multipliers; traits = means 0..1; colours for bodygen; phonology = names.json id; style = building materials in preference order + form hints; taboos / sacred seed the culture; god = awe / fear sensitivity to the player's acts; start = innate knowledge (recipe ids) of a stone-age band.",
+  "id": "plains-folk", "name": "Plains folk", "plural": "the plains folk", "adjective": "plains",
+  "desc": "Upright, curious generalists of grass and river country. They walk far, eat almost anything, and talk to everything.",
+  "body": "biped", "size": 1.7, "mass": 65, "speed": 1.0, "swim": 0.35, "fly": false,
+  "lifespan": 62, "maturity": 14, "elder": 50, "fertility": 0.9,
+  "diet": { "plant": 1.0, "meat": 1.0, "fish": 0.8, "cooked": 1.2 },
+  "forage": ["vegetation", "sea"],
+  "temp": [-12, 6, 34, 46], "breathes": "o2", "habitat": ["land"], "nocturnal": false,
+  "hive": null,
+  "needs": { "food": 1.0, "water": 1.0, "warmth": 1.0, "rest": 1.0, "safety": 0.9, "belonging": 0.8, "status": 0.5, "curiosity": 0.7, "faith": 0.6 },
+  "decay": {},
+  "traits": { "curiosity": 0.55, "boldness": 0.5, "sociability": 0.6, "piety": 0.5, "aggression": 0.3, "diligence": 0.55 },
+  "colors": { "skin": ["#8d5a3b", "#a8714a", "#c68b5e", "#6b4128", "#d9a27a"], "hair": ["#1f1610", "#3a2416", "#5a3a20", "#2a1a10"], "cloth": ["#8a6a4a", "#a0784e", "#6e5236", "#b08a5a", "#7a5c3c"] },
+  "phonology": "plains",
+  "style": { "materials": ["thatch", "wattle", "mudbrick", "timber", "fieldstone", "stone", "brick"], "form": "round", "roof": "pitched", "palette": ["#c8a060", "#a0522d", "#e0c890"] },
+  "taboos": [], "sacred": ["river", "sun"],
+  "god": { "awe": 1.0, "fear": 1.0 },
+  "start": ["foraging", "woodcutting", "stone-tools", "shelter-building", "burial-rites"]
+}

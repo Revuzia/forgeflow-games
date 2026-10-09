@@ -1,0 +1,19 @@
+{
+  "id": "coastal-folk", "name": "Coastal folk", "plural": "the coastal folk", "adjective": "coastal",
+  "desc": "Amphibious, sleek-skinned people of the tide line. They swim before they walk, fish before they farm, and dry out and sicken far from the sea.",
+  "body": "biped", "size": 1.6, "mass": 60, "speed": 0.9, "swim": 1.6, "fly": false,
+  "lifespan": 55, "maturity": 12, "elder": 44, "fertility": 1.0,
+  "diet": { "fish": 1.5, "plant": 0.7, "meat": 0.5, "cooked": 1.0 },
+  "forage": ["sea", "vegetation"],
+  "temp": [-2, 14, 32, 42], "breathes": "o2", "habitat": ["coast", "water"], "nocturnal": false,
+  "hive": null,
+  "needs": { "food": 1.0, "water": 0.8, "warmth": 0.9, "rest": 1.0, "safety": 0.8, "belonging": 0.9, "status": 0.4, "curiosity": 0.6, "faith": 0.7, "wetness": 1.0 },
+  "decay": { "water": 0.6 },
+  "traits": { "curiosity": 0.5, "boldness": 0.55, "sociability": 0.7, "piety": 0.6, "aggression": 0.2, "diligence": 0.5 },
+  "colors": { "skin": ["#5e8a86", "#4f7a7e", "#6f9a8e", "#3e6a70", "#7aa69a"], "hair": ["#1a2a30", "#2a3a3a", "#0f1f24"], "cloth": ["#d8ccb0", "#6a8a9a", "#a0b8b0", "#4a6a7a"] },
+  "phonology": "coastal",
+  "style": { "materials": ["thatch", "wood", "timber", "fieldstone", "stone", "brick"], "form": "stilt", "roof": "steep", "palette": ["#e8e0c8", "#4a7a8a", "#d0a060"] },
+  "taboos": [], "sacred": ["sea", "moon"],
+  "god": { "awe": 1.1, "fear": 0.9 },
+  "start": ["foraging", "woodcutting", "fishing", "cordage", "stone-tools", "shelter-building", "burial-rites"]
+}

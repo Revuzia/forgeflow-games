@@ -17,11 +17,13 @@ class Builder {
   wind: number[] = [];
   card: number[] = [];
   idx: number[] = [];
-  vert(x: number, y: number, z: number, nx: number, ny: number, nz: number, c: number, w: number, card: number): number {
+  /** c: grey level, or an RGB colour (bark / stems keep their hue: the instance tint only scales their brightness) */
+  vert(x: number, y: number, z: number, nx: number, ny: number, nz: number, c: number | readonly [number, number, number], w: number, card: number): number {
     this.pos.push(x, y, z);
     const l = Math.hypot(nx, ny, nz) || 1;
     this.nrm.push(nx / l, ny / l, nz / l);
-    this.col.push(c, c, c);
+    if (typeof c === 'number') this.col.push(c, c, c);
+    else this.col.push(c[0], c[1], c[2]);
     this.wind.push(w);
     this.card.push(card);
     return this.pos.length / 3 - 1;
@@ -118,9 +120,10 @@ export function stone(variant: number): BufferGeometry {
     const ab = midpoint(a, c), bc = midpoint(c, d), ca = midpoint(d, a);
     tris.push([a, ab, ca], [c, bc, ab], [d, ca, bc], [ab, bc, ca]);
   }
-  const flat = 0.45 + rng.float() * 0.25;
-  const stretch = 0.8 + rng.float() * 0.5;
-  const jit = verts.map(() => 0.78 + rng.float() * 0.4);
+  // rounded, a little taller than wide-flat (half of it sits in the ground: groundcover sinks it by a third)
+  const flat = 0.6 + rng.float() * 0.3;
+  const stretch = 0.85 + rng.float() * 0.4;
+  const jit = verts.map(() => 0.88 + rng.float() * 0.24);
   const b = new Builder();
   for (let i = 0; i < verts.length; i++) {
     const v = verts[i];
@@ -131,5 +134,209 @@ export function stone(variant: number): BufferGeometry {
   }
   // (the icosahedron's faces wind counter-clockwise seen from outside, and the subdivision keeps that)
   for (const tri of tris) b.idx.push(tri[0], tri[1], tri[2]);
+  return b.build();
+}
+
+// ───────────────────────────── crops, flowers, forest-floor pieces ─────────────────────────────
+
+/** crop types, matching plants.json crops by form: grain (wheat / flax), paddy (rice), stalk (maize) */
+export const CROP_TYPES = ['wheat', 'rice', 'maize', 'flax'] as const;
+export type CropType = (typeof CROP_TYPES)[number];
+
+/**
+ * A crop clump covering ~0.6 × 0.6 m of a field row, unit height (the instance scales it by the growth stage):
+ *   wheat — a dozen stems with drooping ears; rice — a dense tuft of arching blades with panicles;
+ *   maize — one tall stalk with long strap leaves, a tassel and a cob; flax — thin stems with small blue flowers.
+ * Foliage is solid (aCard 0.5) so the instance tint (green → gold through the season) colours it.
+ */
+export function cropClump(type: CropType, variant: number): BufferGeometry {
+  const rng = new Rng(9100 + variant * 29 + type.length * 7);
+  const b = new Builder();
+  const blade = (x: number, z: number, h: number, lean: number, az: number, w: number, shade: number, rows = 3) => {
+    const ox = Math.cos(az), oz = Math.sin(az), sx = -oz, sz = ox;
+    let pl = -1, pr = -1;
+    for (let i = 0; i <= rows; i++) {
+      const t = i / rows;
+      const bend = lean * t * t;
+      const cx = x + ox * Math.sin(bend) * h * t, cz = z + oz * Math.sin(bend) * h * t, y = Math.cos(bend * 0.7) * h * t;
+      const half = w * (1 - 0.9 * t) * 0.5;
+      const L = b.vert(cx - sx * half, y, cz - sz * half, ox * 0.3, 1, oz * 0.3, shade * (0.55 + 0.45 * t), t * t, 0.5);
+      const R = b.vert(cx + sx * half, y, cz + sz * half, ox * 0.3, 1, oz * 0.3, shade * (0.55 + 0.45 * t), t * t, 0.5);
+      if (pl >= 0) b.idx.push(pl, pr, R, pl, R, L);
+      pl = L; pr = R;
+    }
+    return [x + ox * Math.sin(lean) * h, Math.cos(lean * 0.7) * h, z + oz * Math.sin(lean) * h] as [number, number, number];
+  };
+  const head = (p: [number, number, number], len: number, r: number, droop: number, shade: number) => {
+    // an ear / panicle: a small spindle hanging from the stem tip
+    const n = 5;
+    const ring: number[][] = [];
+    for (let i = 0; i <= 3; i++) {
+      const t = i / 3;
+      const cy = p[1] - Math.sin(droop) * len * t, cx = p[0] + Math.cos(droop) * len * t * 0.4;
+      const rr = r * Math.sin(Math.PI * (0.15 + 0.7 * t));
+      const row: number[] = [];
+      for (let s = 0; s <= n; s++) {
+        const a = (s / n) * Math.PI * 2;
+        row.push(b.vert(cx + Math.cos(a) * rr, cy, p[2] + Math.sin(a) * rr, Math.cos(a), 0.3, Math.sin(a), shade, 1, 0.5));
+      }
+      ring.push(row);
+    }
+    for (let i = 0; i < 3; i++) for (let s = 0; s < n; s++) b.idx.push(ring[i][s], ring[i + 1][s], ring[i + 1][s + 1], ring[i][s], ring[i + 1][s + 1], ring[i][s + 1]);
+  };
+  if (type === 'maize') {
+    const x = (rng.float() - 0.5) * 0.15, z = (rng.float() - 0.5) * 0.15;
+    blade(x, z, 1.0, 0.04, rng.float() * 6.28, 0.04, 0.9, 4);
+    for (let k = 0; k < 7; k++) {
+      const y0 = 0.15 + k * 0.11;
+      const az = k * 2.4 + rng.float();
+      const ox = Math.cos(az), oz = Math.sin(az);
+      // a strap leaf arching out and down
+      let pl = -1, pr = -1;
+      for (let i = 0; i <= 4; i++) {
+        const t = i / 4;
+        const cx = x + ox * t * 0.45, cz = z + oz * t * 0.45, y = y0 + 0.18 * t - 0.3 * t * t;
+        const half = 0.035 * Math.sin(Math.PI * (0.1 + 0.8 * t));
+        const L = b.vert(cx - oz * half, y, cz + ox * half, 0, 1, 0, 0.8, 0.3 + 0.7 * t, 0.5);
+        const R = b.vert(cx + oz * half, y, cz - ox * half, 0, 1, 0, 0.8, 0.3 + 0.7 * t, 0.5);
+        if (pl >= 0) b.idx.push(pl, pr, R, pl, R, L, pl, R, pr, pl, L, R);
+        pl = L; pr = R;
+      }
+    }
+    head([x, 1.0, z], 0.16, 0.02, 1.4, 1.3);
+    head([x + 0.04, 0.55, z], 0.14, 0.035, 0.3, 1.25);
+  } else if (type === 'rice') {
+    for (let k = 0; k < 16; k++) {
+      const a = rng.float() * 6.28, r = rng.float() * 0.08;
+      const tip = blade(Math.cos(a) * r, Math.sin(a) * r, 0.75 + rng.float() * 0.25, 0.4 + rng.float() * 0.5, a, 0.018, 0.85);
+      if (k % 3 === 0) head(tip, 0.12, 0.012, 1.0, 1.25);
+    }
+  } else {
+    const flax = type === 'flax';
+    for (let k = 0; k < 13; k++) {
+      const x = (rng.float() - 0.5) * 0.5, z = (rng.float() - 0.5) * 0.5;
+      const tip = blade(x, z, 0.85 + rng.float() * 0.15, 0.1 + rng.float() * 0.2, rng.float() * 6.28, flax ? 0.01 : 0.016, 0.85, 3);
+      if (flax) {
+        // small blue flowers (vertex colour; they keep their hue against the green tint)
+        const fl = b.vert(tip[0], tip[1] + 0.02, tip[2], 0, 1, 0, 1, 1, 0.5);
+        const pts = [0, 1, 2, 3, 4].map((i) => { const a = (i / 5) * Math.PI * 2; return b.vert(tip[0] + Math.cos(a) * 0.025, tip[1] + 0.01, tip[2] + Math.sin(a) * 0.025, 0, 1, 0, 1, 1, 0.5); });
+        for (let i = 0; i < 5; i++) b.idx.push(fl, pts[(i + 1) % 5], pts[i]);
+        const n0 = b.col.length / 3 - 6;
+        for (let v = n0; v < n0 + 6; v++) { b.col[v * 3] = 0.25; b.col[v * 3 + 1] = 0.4; b.col[v * 3 + 2] = 1.6; }
+      } else head(tip, 0.1, 0.014, 0.5 + rng.float() * 0.6, 1.3);
+    }
+  }
+  return b.build();
+}
+
+/** a clump of wildflowers: thin stems with coloured heads (variant = colour) */
+export function flowerClump(variant: number): BufferGeometry {
+  const rng = new Rng(9500 + variant * 41);
+  const b = new Builder();
+  const cols: [number, number, number][] = [[1.4, 1.3, 0.2], [1.5, 1.5, 1.45], [0.5, 0.45, 1.6], [1.6, 0.25, 0.2], [1.4, 0.55, 1.2]];
+  const c = cols[variant % cols.length];
+  const n = 7 + Math.floor(rng.float() * 5);
+  for (let k = 0; k < n; k++) {
+    const a = rng.float() * 6.28, r = rng.float() * 0.18;
+    const x = Math.cos(a) * r, z = Math.sin(a) * r, h = 0.45 + rng.float() * 0.55;
+    const s0 = b.vert(x - 0.006, 0, z, 0, 1, 0, 0.5, 0, 0.5), s1 = b.vert(x + 0.006, 0, z, 0, 1, 0, 0.5, 0, 0.5);
+    const s2 = b.vert(x + 0.004, h, z, 0, 1, 0, 0.9, 1, 0.5), s3 = b.vert(x - 0.004, h, z, 0, 1, 0, 0.9, 1, 0.5);
+    b.idx.push(s0, s1, s2, s0, s2, s3, s0, s2, s1, s0, s3, s2);
+    // the head: a little star of petals (not foliage: aCard 0.2 keeps its colour against the green tint)
+    const pc = b.vert(x, h + 0.01, z, 0, 1, 0, c[0] * 0.6, 1, 0.2);
+    const petals = 6, rr = 0.03 + rng.float() * 0.02;
+    const ring: number[] = [];
+    for (let i = 0; i < petals; i++) {
+      const pa = (i / petals) * Math.PI * 2 + k;
+      ring.push(b.vert(x + Math.cos(pa) * rr, h, z + Math.sin(pa) * rr, Math.cos(pa) * 0.3, 1, Math.sin(pa) * 0.3, 1, 1, 0.2));
+    }
+    for (let i = 0; i < petals; i++) b.idx.push(pc, ring[(i + 1) % petals], ring[i], pc, ring[i], ring[(i + 1) % petals]);
+    const base = b.col.length / 3 - petals - 1;
+    for (let v = base; v < base + petals + 1; v++) { b.col[v * 3] = c[0] * 0.5; b.col[v * 3 + 1] = c[1] * 0.5; b.col[v * 3 + 2] = c[2] * 0.5; }
+  }
+  return b.build();
+}
+
+/**
+ * A fallen branch or rotting log with a couple of broken stubs, half sunk in the litter (unit length): a round,
+ * slightly irregular trunk (12 sides, bark ridges as a radius wobble), moss in patches on the upper side, a pale
+ * splintered break at the thick end with a darker heart, and a tapering broken tip.
+ */
+export function fallenLog(variant: number): BufferGeometry {
+  const rng = new Rng(9700 + variant * 23);
+  const b = new Builder();
+  const r0 = 0.05 + rng.float() * 0.05;
+  const sides = 12;
+  const phase = rng.float() * 6.28;
+  const BARK: [number, number, number] = [0.19, 0.14, 0.1], MOSS: [number, number, number] = [0.07, 0.1, 0.03];
+  const tubeAt = (pts: [number, number, number][], radii: number[], shade: number, mossy: boolean): number[][] => {
+    const rings: number[][] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      const ring: number[] = [];
+      for (let s = 0; s <= sides; s++) {
+        const a = (s / sides) * Math.PI * 2;
+        const ny = Math.cos(a), nz = Math.sin(a);
+        // bark ridges: a small wobble of the radius around and along the log
+        const rr = radii[i] * (1 + 0.07 * Math.sin(a * 5 + phase + i * 0.7) + 0.04 * Math.sin(a * 11 + i * 2.1));
+        // weathered grey-brown bark; moss in patches on the upper side (not a uniform green lid)
+        const k = (shade / 0.55) * (0.78 + 0.22 * ny) * (0.92 + 0.16 * Math.sin(a * 7 + i * 1.3 + phase));
+        const patch = 0.5 + 0.5 * Math.sin(i * 1.9 + a * 2.3 + phase * 2);
+        const mossK = mossy ? Math.max(0, Math.min(1, (ny - 0.35) * 2.2)) * (0.35 + 0.65 * patch) : 0;
+        const col: [number, number, number] = [(BARK[0] * (1 - mossK) + MOSS[0] * mossK) * k, (BARK[1] * (1 - mossK) + MOSS[1] * mossK) * k, (BARK[2] * (1 - mossK) + MOSS[2] * mossK) * k];
+        ring.push(b.vert(p[0], p[1] + ny * rr, p[2] + nz * rr, 0, ny, nz, col, 0, 0));
+      }
+      rings.push(ring);
+    }
+    for (let i = 0; i < rings.length - 1; i++) for (let s = 0; s < sides; s++) b.idx.push(rings[i][s], rings[i + 1][s], rings[i + 1][s + 1], rings[i][s], rings[i + 1][s + 1], rings[i][s + 1]);
+    return rings;
+  };
+  const pts: [number, number, number][] = [];
+  for (let i = 0; i <= 8; i++) pts.push([-0.5 + i * 0.125, r0 * 0.4 + Math.sin(i * 0.8) * 0.008, Math.sin(i * 0.55 + variant) * 0.035]);
+  const radii = pts.map((_, i) => r0 * (1 - 0.4 * (i / 8) ** 1.5));
+  tubeAt(pts, radii, 0.55, true);
+  // the broken butt: a pale splintered face, darker heartwood, a jagged rim
+  const c0 = pts[0];
+  const centre = b.vert(c0[0] - r0 * 0.15, c0[1], c0[2], -1, 0, 0, [0.12, 0.08, 0.05], 0, 0);
+  const rim: number[] = [];
+  for (let s = 0; s <= sides; s++) {
+    const a = (s / sides) * Math.PI * 2;
+    const jag = (s % 2 ? 0.06 : -0.03) * r0;
+    rim.push(b.vert(c0[0] + jag, c0[1] + Math.cos(a) * radii[0] * 0.97, c0[2] + Math.sin(a) * radii[0] * 0.97, -1, 0, 0, [0.36, 0.29, 0.2], 0, 0));
+  }
+  for (let s = 0; s < sides; s++) b.idx.push(centre, rim[s + 1], rim[s]);
+  // the thin end: a short splintered cone
+  const ce = pts[pts.length - 1];
+  const tip = b.vert(ce[0] + r0 * 0.9, ce[1] + 0.005, ce[2], 1, 0, 0, [0.3, 0.23, 0.16], 0, 0);
+  const er: number[] = [];
+  for (let s = 0; s <= sides; s++) {
+    const a = (s / sides) * Math.PI * 2;
+    er.push(b.vert(ce[0], ce[1] + Math.cos(a) * radii[8], ce[2] + Math.sin(a) * radii[8], 0.4, Math.cos(a), Math.sin(a), [0.17, 0.13, 0.09], 0, 0));
+  }
+  for (let s = 0; s < sides; s++) b.idx.push(er[s], er[s + 1], tip);
+  // broken branch stubs
+  for (let k = 0; k < 2; k++) {
+    const x = -0.2 + k * 0.35;
+    tubeAt([[x, r0 * 0.8, 0], [x + 0.08, r0 + 0.12, 0.05 * (k ? 1 : -1)]], [r0 * 0.35, r0 * 0.18], 0.5, false);
+  }
+  return b.build();
+}
+
+/** a few mushrooms (autumn forest floor) */
+export function mushrooms(variant: number): BufferGeometry {
+  const rng = new Rng(9900 + variant * 31);
+  const b = new Builder();
+  // brown boletes, pale field mushrooms, red fly agarics
+  const capCol: [number, number, number] = variant === 0 ? [0.3, 0.17, 0.08] : variant === 1 ? [0.62, 0.56, 0.46] : [0.5, 0.05, 0.02];
+  const stemCol: [number, number, number] = [0.62, 0.58, 0.5];
+  for (let k = 0; k < 4; k++) {
+    const x = (rng.float() - 0.5) * 0.3, z = (rng.float() - 0.5) * 0.3, h = 0.05 + rng.float() * 0.07, r = 0.03 + rng.float() * 0.03;
+    const stem = [b.vert(x - 0.008, 0, z, 0, 1, 0, stemCol, 0, 0), b.vert(x + 0.008, 0, z, 0, 1, 0, stemCol, 0, 0), b.vert(x + 0.008, h, z, 0, 1, 0, stemCol, 0, 0), b.vert(x - 0.008, h, z, 0, 1, 0, stemCol, 0, 0)];
+    b.idx.push(stem[0], stem[1], stem[2], stem[0], stem[2], stem[3], stem[0], stem[2], stem[1], stem[0], stem[3], stem[2]);
+    const top = b.vert(x, h + r * 0.6, z, 0, 1, 0, capCol, 0, 0);
+    const ring: number[] = [];
+    for (let i = 0; i < 7; i++) { const a = (i / 7) * Math.PI * 2; ring.push(b.vert(x + Math.cos(a) * r, h, z + Math.sin(a) * r, Math.cos(a), 0.4, Math.sin(a), [capCol[0] * 0.8, capCol[1] * 0.8, capCol[2] * 0.8], 0, 0)); }
+    for (let i = 0; i < 7; i++) b.idx.push(top, ring[(i + 1) % 7], ring[i]);
+  }
   return b.build();
 }

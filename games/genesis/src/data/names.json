@@ -1,0 +1,26 @@
+{
+  "$comment": "Name phonologies (CONTRACT §8.5, §9). A name is 1..N syllables of onset + vowel + coda, joined with sep; weights favour the first entries. Each settlement speaks a language derived from its species' phonology and a language seed: the seed reweights and occasionally drops or swaps sounds, so a split-off settlement's names drift audibly from its parent's. features = how a settlement's name is completed by the most striking thing about its site ('Aru by the Falls'); feature order is the priority when several apply.",
+  "phonologies": [
+    { "id": "plains", "onsets": ["", "b", "d", "g", "h", "k", "m", "n", "r", "s", "t", "v", "sh", "th", "kh", "y"],
+      "vowels": ["a", "e", "i", "o", "u", "a", "aa", "ei", "u"], "codas": ["", "", "n", "r", "l", "s", "sh", "m", "k", "th"],
+      "syllables": [1, 3], "personal": [1, 2], "sep": "",
+      "features": { "falls": "by the Falls", "spring": "at the Spring", "river": "on the River", "lake": "by the Lake", "coast": "by the Sea", "volcano": "under the Smoke", "crater": "in the Crater", "mountain": "under the Mountain", "hills": "in the Hills", "marsh": "in the Reeds", "forest": "in the Wood", "dunes": "among the Dunes", "ice": "on the Ice", "plain": "on the Plain" } },
+    { "id": "coastal", "onsets": ["", "l", "m", "n", "w", "y", "s", "h", "f", "k", "t", "ph", "l"],
+      "vowels": ["a", "e", "i", "o", "u", "ea", "oa", "ai", "ae"], "codas": ["", "", "", "l", "n", "s", "sh"],
+      "syllables": [2, 3], "personal": [2, 3], "sep": "",
+      "features": { "falls": "of the Singing Water", "spring": "of the Sweet Spring", "river": "where the River Meets", "lake": "of the Still Water", "coast": "of the Tide", "volcano": "below the Fire Hill", "crater": "of the Round Bay", "mountain": "under the Grey Peak", "hills": "of the Dunes", "marsh": "of the Mangroves", "forest": "of the Green Shore", "dunes": "of the White Sands", "ice": "of the Cold Tide", "plain": "of the Long Beach" } },
+    { "id": "hive", "onsets": ["k", "t", "q", "x", "z", "tz", "kk", "r", "ch", "k"],
+      "vowels": ["a", "i", "u", "ii", "aa", "i"], "codas": ["k", "x", "t", "z", "", "r", "tt"],
+      "syllables": [2, 3], "personal": [2, 2], "sep": "'",
+      "features": { "falls": "Wet-Chamber", "spring": "Water-Root", "river": "Flow-Trench", "lake": "Deep-Water", "coast": "Salt-Edge", "volcano": "Hot-Vent", "crater": "Sky-Wound", "mountain": "High-Spire", "hills": "Many-Mounds", "marsh": "Soft-Ground", "forest": "Shade-Tunnels", "dunes": "Sand-Comb", "ice": "Cold-Shell", "plain": "Open-Comb" } },
+    { "id": "cold", "onsets": ["", "g", "k", "n", "r", "s", "sk", "t", "v", "h", "j", "br", "th"],
+      "vowels": ["a", "e", "i", "o", "u", "y", "oe", "aa", "ei"], "codas": ["", "n", "rk", "ld", "g", "k", "r", "t", "nd"],
+      "syllables": [1, 3], "personal": [1, 2], "sep": "",
+      "features": { "falls": "under the Frozen Falls", "spring": "at the Warm Spring", "river": "on the Ice River", "lake": "on the Frozen Lake", "coast": "by the Grey Sea", "volcano": "by the Burning Hill", "crater": "in the Star-Bowl", "mountain": "under the White Peak", "hills": "among the Drifts", "marsh": "on the Frozen Bog", "forest": "in the Pines", "dunes": "on the Wind Plain", "ice": "on the Glacier", "plain": "on the Snowfield" } },
+    { "id": "drifter", "onsets": ["", "w", "wh", "l", "hl", "m", "ny", "s", "oo", "v"],
+      "vowels": ["oo", "ee", "au", "ai", "u", "o", "ae", "ia"], "codas": ["", "", "l", "m", "n", "h"],
+      "syllables": [2, 4], "personal": [2, 3], "sep": "-",
+      "features": { "falls": "Where-Rain-Falls-Upward", "spring": "Of-The-Rising-Gas", "river": "Above-The-Slow-River", "lake": "Over-The-Mirror-Sea", "coast": "Where-Sea-Meets-Ice", "volcano": "Over-The-Warm-Vent", "crater": "In-The-Star-Hollow", "mountain": "Around-The-Pillar", "hills": "Over-The-Folds", "marsh": "Above-The-Slush", "forest": "Among-The-Spires", "dunes": "Over-The-Grains", "ice": "Above-The-Long-Ice", "plain": "In-The-Wide-Haze" } }
+  ],
+  "titles": { "leader": ["Elder", "Chief", "First", "Speaker"], "priest": ["Seer", "Keeper", "Voice"], "master": ["Master", "Maker"] }
+}

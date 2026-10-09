@@ -27,10 +27,15 @@ import {
   accumulate, distanceFrom, priorityFlood, quantile, randomDir, receivers, smoothstep, sortDescending, stampCrater, stampVolcano,
 } from './gen.ts';
 import { orbitCount, yearFraction } from './orbits.ts';
+import { PeopleState, type PeopleJson } from '../people/state.ts';
+import { recipeTable } from '../recipes/recipes.ts';
 
 // ───────────────────────────── fields ─────────────────────────────
 
 /** Fields shipped to the client (types.ts FieldName). Order is the save / hash order. */
+/** a climate memory this many steps old has its full (about a year) span (PlanetSolverState.climMem) */
+export const CLIM_MEM_FULL = 1e6;
+
 export const PUBLISHED_FIELDS: FieldName[] = [
   'surface', 'rock', 'soil', 'sand', 'ash', 'snow', 'ice', 'lava', 'water', 'flowX', 'flowY', 'flowZ',
   'temperature', 'moisture', 'humidity', 'wetness', 'fertility', 'salinity',
@@ -91,6 +96,18 @@ export interface PlanetSolverState {
   tempMean: Float32Array;
   lightMean: Float32Array;
   precipMean: Float32Array;
+  /** the climate plants and biomes live by: temperature (°C) and light (0..1) averaged over about a year (fix pass:
+   * plants judged by a 3-day mean died back every winter of a 12-day year and never recovered their cover) */
+  tempYear: Float32Array;
+  lightYear: Float32Array;
+  /** the year's extremes (°C): the hottest and the coldest hour of about the last year — envelopes of the hourly
+   * temperature that relax toward tempYear (~3 years) — what a people choosing a home must live through
+   * (settlement.ts seasonTemps) */
+  tHi: Float32Array;
+  tLo: Float32Array;
+  /** climate steps the year-scale memory has run since it was last reset (a world given air or moved: the memory of
+   * its old climate is dropped and re-learned as a growing-window mean, not over years) */
+  climMem: Float32Array;
   /** painted biome pins (-1 none) */
   pinnedBiome: Int8Array;
   /** climate-only precipitation (mm/h) and cloud cover, before weather systems are layered on */
@@ -206,7 +223,7 @@ export interface HydroState {
   erodeAcc?: number;
 }
 
-export type PlanetRngs = { hydro: Rng; fire: Rng; weather: Rng; climate: Rng; veg: Rng; terrain: Rng };
+export type PlanetRngs = { hydro: Rng; fire: Rng; weather: Rng; climate: Rng; veg: Rng; terrain: Rng; people: Rng };
 
 export class Planet {
   readonly id: number;
@@ -231,6 +248,8 @@ export class Planet {
   vents: Vent[] = [];
   /** first-time chronicle triggers: key -> tick */
   firsts: Record<string, number> = {};
+  /** peoples: agents, buildings, settlements, herds, ground items (CONTRACT §6.4, §8) */
+  people: PeopleState;
   rng: PlanetRngs;
   alive = true;
   /** monotonically bumped per field when it changes (global stamp from the universe) */
@@ -285,15 +304,16 @@ export class Planet {
       flux: new Float64Array(E), hAct: new Uint8Array(N), hQuiet: new Uint8Array(N), ocean: new Uint8Array(N),
       coast: new Uint8Array(N), seaIce: F(), fAct: new Uint8Array(N), tAct: new Uint8Array(N), lAct: new Uint8Array(N),
       wMask: new Uint8Array(N), wPrecip: F(), wType: new Uint8Array(N), wCloud: F(), wTemp: F(),
-      baseWindX: F(), baseWindY: F(), baseWindZ: F(), tPot: F(), tempMean: F(), lightMean: F(), precipMean: F(),
+      baseWindX: F(), baseWindY: F(), baseWindZ: F(), tPot: F(), tempMean: F(), lightMean: F(), precipMean: F(), tempYear: F(), lightYear: F(), tHi: F(), tLo: F(), climMem: F().fill(CLIM_MEM_FULL),
       pinnedBiome: new Int8Array(N).fill(-1), cPrecip: F(), cCloud: F(), seep: F(),
     };
     this.hydro = { seaNow: st.seaLevel, maskLevel: st.seaLevel, steps: 0, oceanCells: 0, sourced: 0, maskDirty: true };
     const root = new Rng(this.seed ^ 0x6e7e5);
     this.rng = {
       hydro: root.fork('hydro'), fire: root.fork('fire'), weather: root.fork('weather'), climate: root.fork('climate'),
-      veg: root.fork('veg'), terrain: root.fork('terrain'),
+      veg: root.fork('veg'), terrain: root.fork('terrain'), people: root.fork('people'),
     };
+    this.people = new PeopleState(N, 8, 8);
     this.scratch = {
       dV: new Float64Array(N), edge: new Float64Array(E), lastDv: new Float64Array(N), list: new Int32Array(N), list2: new Int32Array(N),
       cells: [], mark: new Uint32Array(N), markStamp: 0,
@@ -431,6 +451,7 @@ export function planetArrays(p: Planet): [string, TypedArray][] {
   const out: [string, TypedArray][] = [];
   for (const k of Object.keys(p.f).sort()) out.push([`f.${k}`, (p.f as unknown as Record<string, TypedArray>)[k]]);
   for (const k of Object.keys(p.s).sort()) out.push([`s.${k}`, (p.s as unknown as Record<string, TypedArray>)[k]]);
+  for (const [k, a] of p.people.agents.arrays()) out.push([`a.${k}`, a]);
   return out;
 }
 
@@ -451,6 +472,7 @@ export interface PlanetJson {
   fieldVer: Record<string, number>;
   vegTotal?: number;
   vegDirty?: boolean;
+  people?: PeopleJson;
 }
 
 export function planetToJson(p: Planet): PlanetJson {
@@ -465,6 +487,7 @@ export function planetToJson(p: Planet): PlanetJson {
     weather: p.weather.map((w) => ({ ...w, pos: [...w.pos] as [number, number, number], vel: [...w.vel] as [number, number, number] })),
     springs: p.springs.map((s) => ({ ...s })), vents: p.vents.map((v) => ({ ...v })),
     firsts: { ...p.firsts }, rng, alive: p.alive, fieldVer: { ...p.fieldVer }, vegTotal: p.vegTotal, vegDirty: p.vegDirty,
+    people: p.people.toJson(),
   };
 }
 
@@ -481,12 +504,19 @@ export function planetFromJson(j: PlanetJson, arrays: Map<string, TypedArray>): 
   p.fieldVer = { ...j.fieldVer };
   p.vegTotal = j.vegTotal ?? 0;
   p.vegDirty = j.vegDirty ?? true;
+  // the agent store must exist at its saved capacity before its arrays are filled
+  p.people = PeopleState.fromJson(j.people, p.count, null);
   for (const [name, arr] of planetArrays(p)) {
     const src = arrays.get(`p${p.id}.${name}`);
     if (!src) continue; // a field added in a later minor version keeps its fresh default
     if (src.length !== arr.length) throw new Error(`save: planet ${p.id} array '${name}' has ${src.length} entries, expected ${arr.length}`);
     (arr as unknown as { set(a: ArrayLike<number>): void }).set(src as unknown as ArrayLike<number>);
   }
+  // saves from before the yearly climate means: start them from the short means
+  if (!arrays.has(`p${p.id}.s.tempYear`)) { p.s.tempYear.set(p.s.tempMean); p.s.lightYear.set(p.s.lightMean); }
+  if (!arrays.has(`p${p.id}.s.tHi`)) for (let c = 0; c < p.count; c++) { p.s.tHi[c] = p.s.tempMean[c] + 12; p.s.tLo[c] = p.s.tempMean[c] - 12; }
+  if (!arrays.has(`p${p.id}.s.climMem`)) p.s.climMem.fill(CLIM_MEM_FULL);
+  // transient people indices are rebuilt by the universe once it knows the tick (sim.ts universeFromHeader)
   return p;
 }
 
@@ -547,6 +577,8 @@ export function generatePlanet(content: Content, spec: PlanetSpec): { planet: Pl
     moistureBias: def.moisture ?? 1,
   };
   const p = new Planet(spec.id, spec.name, spec.seed, Math.round(def.n), st);
+  p.people = new PeopleState(p.count, recipeTable(content).kw, 64);
+  p.people.contentRef = content;
   generateRelief(p, def, content);
   return { planet: p, def };
 }

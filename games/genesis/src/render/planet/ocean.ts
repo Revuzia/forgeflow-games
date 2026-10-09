@@ -143,6 +143,9 @@ float cloudShadowW(vec3 P, vec3 sunB) {
 }
 
 // twelve analytic ripples: returns the surface gradient (tangent, body frame) for a given phase offset along the flow
+// the slope variance of the wave octaves too small for this pixel to draw (they are not lost: the sun glitter
+// widens by them, see the GGX roughness below)
+float gUnresolved = 0.0;
 vec3 ripples(vec3 P, vec3 up, float fw, vec3 offset, float t) {
   vec3 g = vec3(0.0);
   for (int i = 0; i < 12; i++) {
@@ -153,6 +156,7 @@ vec3 ripples(vec3 P, vec3 up, float fw, vec3 offset, float t) {
     float k = 6.2831853 / L;
     float amp = L * 0.012 * uWind;
     float aa = 1.0 - smoothstep(0.15, 0.6, fw / L);
+    gUnresolved += (amp * k) * (amp * k) * 0.5 * (1.0 - aa);
     if (aa <= 0.0) continue;
     float w = sqrt(9.8 * k);
     float ph = k * dot(P - offset, d) - w * t + fi * 1.7;
@@ -223,9 +227,12 @@ void main() {
   // ── surface normal: Gerstner (analytic) + ripples (flow-mapped on rivers) ──
   vec3 grad = vec3(0.0);
   float calm = smoothstep(0.3, 4.0, vDepth) * (1.0 - smoothstep(0.05, 0.4, vIce));
+  gUnresolved = 0.0;
   for (int i = 0; i < 4; i++) {
     float L = GW_D[i].w;
-    float amp = GW_A[i] * uWind * calm * (1.0 - smoothstep(0.2, 0.7, fw / L)) * (1.0 - smoothstep(L * 5.0, L * 11.0, length(vViewPos)));
+    float fade = (1.0 - smoothstep(0.2, 0.7, fw / L)) * (1.0 - smoothstep(L * 5.0, L * 11.0, length(vViewPos)));
+    float amp = GW_A[i] * uWind * calm * fade;
+    gUnresolved += pow(GW_A[i] * uWind * calm * 6.2831853 / L, 2.0) * 0.5 * (1.0 - fade);
     vec3 d = gwDir(i, up);
     float k = 6.2831853 / L;
     float ph = k * dot(P, d) - sqrt(9.8 * k) * uTime;
@@ -274,11 +281,13 @@ void main() {
   pathLen = min(pathLen, 400.0);
   vec3 refr = texture(tSceneColor, ruv).rgb;
   // cold seas a little greener, warm shallows turquoise
-  vec3 sigmaA = vec3(0.42, 0.075, 0.042) + vec3(0.0, 0.01, 0.0) * smoothstep(15.0, 0.0, vTemp);
+  // (coastal and lake water carries plankton and silt: the floor fades within a few metres — a quay's foot 9 m down
+  // stayed in plain view and every pool read as a swimming pool)
+  vec3 sigmaA = vec3(0.45, 0.15, 0.11) + vec3(0.0, 0.02, 0.0) * smoothstep(15.0, 0.0, vTemp);
   // rivers carry silt: browner, murkier water
   float riverK = smoothstep(0.15, 0.6, length(vFlow));
   sigmaA += vec3(0.08, 0.16, 0.3) * riverK;
-  vec3 sigmaS = vec3(0.004, 0.018, 0.022);
+  vec3 sigmaS = vec3(0.018, 0.045, 0.05);
   vec3 Tw = exp(-(sigmaA + sigmaS) * pathLen * 1.25);
   vec3 inscat = sigmaS / (sigmaA + sigmaS) * (1.0 - Tw) * (sunCol * max(muS, 0.0) * 0.22 + skyE * 0.3) / 3.14159;
   vec3 under = refr * Tw + inscat;
@@ -293,8 +302,9 @@ void main() {
     skyR = mix(skyR, sr.rgb, clamp(sr.a, 0.0, 1.0));
   }
   float F = 0.02 + 0.98 * pow(1.0 - NdV, 5.0);
-  // sun glint (GGX), roughness from the unresolved wave slopes at this pixel size
-  float a = clamp(0.035 + fw * 0.012 + (1.0 - calm) * 0.02, 0.035, 0.45);
+  // sun glint (GGX), roughness from the slope variance of the waves this pixel cannot draw (not a fixed blur): near,
+  // a sharp sun in every facet; far, a broad road of glitter — sparkling where single facets catch the sun
+  float a = clamp(sqrt(0.035 * 0.035 + 2.0 * gUnresolved) + (1.0 - calm) * 0.02, 0.035, 0.45);
   vec3 hB = normalize(uSunDirBody + vB);
   float NdH = max(dot(nB, hB), 0.0);
   float NdL = max(dot(nB, uSunDirBody), 0.0);
@@ -305,6 +315,9 @@ void main() {
   float Vis = 0.25 / ((NdL * (1.0 - k) + k) * (NdV * (1.0 - k) + k));
   float Fs = 0.02 + 0.98 * pow(1.0 - max(dot(hB, vB), 0.0), 5.0);
   vec3 glint = sunCol * D * Vis * Fs * NdL;
+  // glitter: sub-pixel facets flash in and out where the glint is broad (a soft blob read as a gel)
+  float spark = gn_hash13(floor(P * 1.7) + floor(uTime * 6.0));
+  glint *= mix(1.0, 0.35 + 3.5 * step(0.82, spark), smoothstep(0.06, 0.2, a));
 
   vec3 col = mix(under, skyR, F) + glint;
 
@@ -339,7 +352,10 @@ void main() {
   float rapids = max(smoothstep(1.3, 3.0, flowSpd), smoothstep(0.06, 0.25, lean) * smoothstep(0.5, 2.0, vDepth) * smoothstep(0.3, 1.0, flowSpd));
   // rivers are shallow everywhere: their banks get a thin lip of foam, not a foamy bed
   shore *= mix(1.0, 0.25, riverK);
-  float foamAmt = clamp(max(max(shore, crest * 0.8), rapids * 0.85), 0.0, 1.0);
+  // whitecaps: the open sea under a fresh wind breaks into white patches that drift and die away
+  float wcN = snoise(vec3(P.x * 0.07, P.y * 0.07 - uTime * 0.12, P.z * 0.07)) * 0.6 + snoise(P * 0.23 + vec3(uTime * 0.3)) * 0.4;
+  float whitecap = smoothstep(0.62, 0.95, wcN * 0.5 + 0.5) * smoothstep(0.45, 1.1, uWind) * smoothstep(0.3, 0.8, vSalt) * calm * smoothstep(2.0, 8.0, vDepth);
+  float foamAmt = clamp(max(max(max(shore, crest * 0.8), rapids * 0.85), whitecap * 0.7), 0.0, 1.0);
   if (foamAmt > 0.01) {
     vec3 fp = P * 1.4 - vFlow * uTime * 0.8;
     vec3 fv = voronoi3(fp);

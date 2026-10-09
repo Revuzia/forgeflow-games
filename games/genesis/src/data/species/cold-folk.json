@@ -1,0 +1,19 @@
+{
+  "id": "cold-folk", "name": "Cold-world people", "plural": "the cold folk", "adjective": "cold-world",
+  "desc": "Thick-furred, heat-intolerant hunters of snowfields and glaciers. They build in ice, and a warm wind can kill them.",
+  "body": "biped", "size": 1.9, "mass": 95, "speed": 0.9, "swim": 0.25, "fly": false,
+  "lifespan": 70, "maturity": 16, "elder": 56, "fertility": 0.6,
+  "diet": { "meat": 1.4, "fish": 1.2, "plant": 0.5, "cooked": 1.0 },
+  "forage": ["vegetation", "sea"],
+  "temp": [-55, -30, 4, 22], "breathes": "o2", "habitat": ["land", "cold"], "nocturnal": false,
+  "hive": null,
+  "needs": { "food": 1.0, "water": 0.8, "warmth": 1.0, "rest": 0.9, "safety": 0.8, "belonging": 0.7, "status": 0.6, "curiosity": 0.5, "faith": 0.7 },
+  "decay": { "food": 1.2 },
+  "traits": { "curiosity": 0.45, "boldness": 0.6, "sociability": 0.45, "piety": 0.6, "aggression": 0.35, "diligence": 0.6 },
+  "colors": { "skin": ["#e8e4dc", "#d8d0c4", "#c8bca8", "#f0ece4"], "hair": ["#f4f0e8", "#d8d0c0", "#b8ac98"], "cloth": ["#6a5a4a", "#8a7a62", "#4a4038"] },
+  "phonology": "cold",
+  "style": { "materials": ["ice", "hide", "fieldstone", "wood", "stone", "timber"], "form": "dome", "roof": "dome", "palette": ["#dbeaf2", "#6a5a4a", "#a0b8c8"] },
+  "taboos": [], "sacred": ["aurora", "ice"],
+  "god": { "awe": 0.9, "fear": 1.1 },
+  "start": ["foraging", "woodcutting", "stone-tools", "spear-making", "hunting", "fishing", "ice-cutting", "ice-building", "hide-working", "shelter-building", "burial-rites"]
+}

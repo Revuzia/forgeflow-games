@@ -8,7 +8,8 @@
 //
 // Phase-1 kinds: terrain.* brushes, water.*, weather.*, time.*, planet.atmosphere / add-air / remove-air, star.set,
 // planet.set, life.plant / forest / paint-biome / pin-biome, fire.ignite / extinguish, set (any parameter), focus,
-// freeform (minimal parser until phase 3).
+// freeform (minimal parser until phase 3). Phase 2 (people/commands.ts): life.spawn-people / spawn-animal, agent.*,
+// idea.teach, settlement.gift / introduce / withdraw / rename / found / raze.
 
 import type { Command, CommandResult, EntityRef, UnitVec } from '../types.ts';
 import type { Universe } from '../world/universe.ts';
@@ -19,11 +20,13 @@ import { addWater, drainWater, waterImpulse } from '../fields/hydrology.ts';
 import { clearWeather, paintWeather, setGlobalWeather } from '../fields/weather.ts';
 import { extinguishArea, igniteArea } from '../fields/fire.ts';
 import { forestArea, plantArea } from '../fields/vegetation.ts';
+import { resetClimateMemory } from '../fields/climate.ts';
 import { paintBiome, pinBiome } from '../fields/biomes.ts';
 import { anchorSpin, coerceParam, findParam, fmt, noteAir, setHour } from './params.ts';
 import { setStarKind, setStarLuminosity } from '../world/star.ts';
 import { AU } from '../world/orbits.ts';
 import { suggest } from '../content.ts';
+import { registerPeopleCommands, focusHook } from '../people/commands.ts';
 
 export type ParamType = 'number' | 'int' | 'string' | 'boolean' | 'pos' | 'vec3' | 'enum' | 'any';
 
@@ -406,6 +409,7 @@ export function buildRegistry(): CommandRegistry {
   }, { desc: 'Change the length of the year', category: 'Time', params: { days: { type: 'number', min: 0.5, max: 2000, required: true } } });
   r.register('time.axial-tilt', ({ p }, a) => {
     p.st.axialTilt = ((a.degrees as number) * Math.PI) / 180;
+    resetClimateMemory(p);
     return ok(`${p.name}'s axis now leans ${fmt(a.degrees as number)}°${(a.degrees as number) < 1 ? ': no more seasons' : ''}.`);
   }, { desc: 'Tilt the axis (seasons)', category: 'Time', params: { degrees: { type: 'number', min: 0, max: 180, required: true } } });
 
@@ -431,6 +435,8 @@ export function buildRegistry(): CommandRegistry {
       if (typeof v === 'number') at[k] = v;
     }
     if (a.tint !== undefined) at.tint = a.tint === null ? null : (a.tint as [number, number, number]);
+    // a world given (or stripped of) air has a new climate: the memory of the old one is no guide
+    if (Math.abs(at.pressure - before) > Math.max(0.05, before * 0.25)) resetClimateMemory(p);
     noteAir(u, p, before);
     const verb = at.pressure > before ? 'thickens' : at.pressure < before ? 'thins' : 'changes';
     return ok(`The air of ${p.name} ${verb}: ${fmt(at.pressure)} atm, ${airPhrase(p)}.`);
@@ -478,6 +484,8 @@ export function buildRegistry(): CommandRegistry {
     if (typeof a.temperatureOffset === 'number') { p.st.climateOffset = a.temperatureOffset; msgs.push(`temperature ${a.temperatureOffset >= 0 ? '+' : ''}${fmt(a.temperatureOffset)} °C`); }
     if (typeof a.seaLevel === 'number') { p.st.seaLevel = a.seaLevel; msgs.push(`sea level ${fmt(a.seaLevel)} m`); }
     if (typeof a.eccentricity === 'number') { p.st.orbit.e = a.eccentricity; msgs.push(`eccentricity ${fmt(a.eccentricity)}`); }
+    // moved, spun or warmed: the climate memory starts again
+    if (typeof a.distance === 'number' || typeof a.spin === 'number' || typeof a.temperatureOffset === 'number' || typeof a.eccentricity === 'number') resetClimateMemory(p);
     return msgs.length ? ok(`${p.name}: ${msgs.join(', ')}.`) : fail('planet.set needs at least one of gravity, magnetism, distance, spin, cloudiness, temperatureOffset, seaLevel.');
   }, {
     desc: 'Change the world itself', category: 'Worlds',
@@ -550,8 +558,11 @@ export function buildRegistry(): CommandRegistry {
   r.register('focus', ({ u, p }, a) => {
     if (a.pos) u.focus = { planet: p.id, pos: a.pos };
     else u.focus = { planet: p.id, pos: u.focus && u.focus.planet === p.id ? u.focus.pos : [0, 0, 1] };
+    // cohort members near the camera become individuals (CONTRACT §8.7); deterministic: focus is a logged command
+    focusHook(u, p, u.focus.pos);
     return { ok: true };
   }, { desc: 'The camera dwells here', category: 'Meta', params: { pos: { type: 'pos' } } });
 
+  registerPeopleCommands(r);
   return r;
 }

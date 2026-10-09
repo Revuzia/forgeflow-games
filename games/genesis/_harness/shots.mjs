@@ -9,7 +9,21 @@
 // Shot spec: { name, params?: "a=b&c=d" | {a:"b"}, commands?: Command[], wait?: ticks to step, camera?: CameraSpec
 //              (applied in that order: the world changes, time passes, then the camera frames it),
 //              frames?: frames to render before the capture (default 6), ui?: bool (default false), quality?, size?: [w,h],
-//              exposure?: EV, canvasOnly?: bool }
+//              exposure?: EV, canvasOnly?: bool,
+//              run?: { speed, seconds } — let the sim run in real time at that speed after `wait` (then pause unless
+//                     keep: true), e.g. a settlement living at 100× while the page renders,
+//              select?: { kind, id } | "agent:nearest" | "building:nearest" | "settlement:<id>" — open the inspector on it,
+//              follow?: same forms as select — keep the camera on it,
+//              click?: "agent:nearest" | "building:nearest" | [x, y] — a real click there (picking, then the inspector) }
+// Values in commands / camera / select may use: "$poi:<name>" → that POI's unit vector on the primary world
+// (e.g. "pos": "$poi:homestead"), "$created" → the id of the last settlement (else entity) a command created on this
+// page (also inside strings: "poi": "settlement:$created"). A command with "as": "<name>" also keeps what it created
+// as "$<name>" (e.g. "as": "plains" → "settlement:$plains"); "as" is not sent to the sim. Shots of the same URL share
+// one page, so a sequence of shots follows one world through time.
+// chronicle?: true | N — after the shot, print the world's chronicle (all, or the last N entries) and save it as
+// _shots/<name>.chronicle.txt.
+// pick?: "agent:settlement:<id>" — before the camera, keep a living member of that settlement (the first the sim lists)
+// as "$agent", e.g. camera { target: { kind: "agent", id: "$agent" } } and select { kind: "agent", id: "$agent" }.
 // Starts `vite` on port 5190 (GENESIS_FROZEN=1: no HMR, so edits elsewhere never reload a page mid-shot) unless one
 // is already serving there; saves PNGs to _shots/ and a JSON report (console errors, fps, timings) to
 // _shots/report.json. Exit code 1 if any shot failed or any console error was seen.
@@ -157,22 +171,92 @@ async function main() {
       const before = errors.length;
       const result = await page.evaluate(async (spec) => {
         const G = window.__GENESIS__;
+        const vars = (window.__shotVars ??= { created: null });
+        // "$poi:<name>" and "$created" substitution (see the header)
+        const subst = (v) => {
+          if (typeof v === 'string') {
+            // named values ($created, and whatever a command kept with "as"), longest names first; then POIs, so
+            // "$poi:settlement:$plains" works
+            const names = Object.keys(vars).sort((a, b) => b.length - a.length);
+            for (const k of names) if (v === `$${k}`) return vars[k];
+            let out = v;
+            for (const k of names) if (out.includes(`$${k}`)) out = out.split(`$${k}`).join(String(vars[k]));
+            if (out.startsWith('$poi:')) { const p = G.poi(out.slice(5)); if (!p) throw new Error(`no POI '${out.slice(5)}'`); return p.pos; }
+            return out;
+          }
+          if (Array.isArray(v)) return v.map(subst);
+          if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, subst(x)]));
+          return v;
+        };
+        const refOf = (sel) => {
+          if (!sel) return null;
+          if (typeof sel === 'object') return subst(sel);
+          const [kind, what] = String(subst(sel)).split(':');
+          if (kind === 'agent' && what === 'nearest') { const a = G.agents(1)[0]; return a ? { kind: 'agent', id: a.id } : null; }
+          if (kind === 'building' && what === 'nearest') { const a = G.buildings(1)[0]; return a ? { kind: 'building', id: a.id } : null; }
+          return { kind, id: Number(what) };
+        };
         G.ui(!!spec.ui);
+        // toasts outlive the seconds a software-rendered frame takes
+        G.toastLife(spec.toastLife ?? 120000);
         if (spec.exposure != null) G.exposure(spec.exposure);
         else G.exposure(0);
         // the world first (commands, then time), then the camera: a camera `hour` must land after the stepping, or a
         // world whose day is not 24 h would be photographed at whatever hour the steps left it
         const results = [];
-        for (const c of spec.commands ?? []) { const r = await G.cmd(c); results.push({ k: c.k, ok: r.ok, msg: r.msg }); }
+        for (const c0 of spec.commands ?? []) {
+          const { as, ...c1 } = c0;
+          const c = subst(c1);
+          const r = await G.cmd(c);
+          results.push({ k: c.k, ok: r.ok, msg: r.msg });
+          const made = (r.created ?? []).find((e) => e.kind === 'settlement') ?? (r.created ?? [])[0];
+          if (made) { vars.created = made.id; if (as) vars[as] = made.id; }
+        }
         if (spec.wait) await G.step(spec.wait);
-        if (spec.camera) await G.camera(spec.camera);
+        let ran = null;
+        if (spec.run) {
+          const t0 = G.state().tick;
+          G.setSpeed(spec.run.speed ?? 100);
+          await new Promise((ok) => setTimeout(ok, (spec.run.seconds ?? 10) * 1000));
+          const st = G.state();
+          ran = { speed: spec.run.speed ?? 100, seconds: spec.run.seconds ?? 10, ticks: Math.round(st.tick - t0), achievedSpeed: st.achievedSpeed };
+          if (!spec.run.keep) G.setSpeed(0);
+        }
+        if (spec.pick) {
+          const [kind, scope, sid] = String(subst(spec.pick)).split(':');
+          if (kind === 'agent' && scope === 'settlement') {
+            const list = (await G.query('agents', { settlement: Number(sid) })) ?? [];
+            vars.agent = list.length ? list[0].id : null;
+            if (vars.agent == null) throw new Error(`nobody lives in settlement ${sid}`);
+          }
+        }
+        if (spec.camera) await G.camera(subst(spec.camera));
+        if (spec.follow) G.follow(refOf(spec.follow));
+        if (spec.select !== undefined) {
+          // people are pickable once drawn: let a frame or two place them first
+          await G.frames(2);
+          G.select(refOf(spec.select));
+        }
+        let clicked = null;
+        if (spec.click) {
+          // a real click on what is drawn there (picking end to end): "agent:nearest" / "building:nearest" or [x, y]
+          await G.frames(2);
+          let xy = Array.isArray(spec.click) ? spec.click : null;
+          if (!xy) { const l = String(spec.click).startsWith('building') ? G.buildings(1) : G.agents(1); xy = l[0]?.screen ?? null; }
+          if (xy) { G.click(xy[0], xy[1]); clicked = { at: xy, selected: G.state().selected }; }
+        }
         const t = performance.now();
         await G.frames(spec.frames ?? 6);
         const ms = (performance.now() - t) / Math.max(1, spec.frames ?? 6);
         let path = null;
         if (spec.canvasOnly) path = await G.shot(spec.name);
         const st = G.state();
-        return { path, msPerFrame: ms, results, state: { tick: st.tick, camera: st.camera, render: st.render, source: st.source } };
+        let chronicle = null;
+        if (spec.chronicle) {
+          const all = (await G.query('chronicle', {})) ?? [];
+          chronicle = (typeof spec.chronicle === 'number' ? all.slice(-spec.chronicle) : all).map((e) => `[${e.kind}] Year ${e.year}, day ${e.day}: ${e.text}`);
+        }
+        return { path, msPerFrame: ms, results, ran, clicked, chronicle, state: { tick: st.tick, camera: st.camera, render: st.render, source: st.source, life: st.life, selected: st.selected, planets: st.planets } };
       }, s);
       let file = result.path;
       if (!s.canvasOnly) {
@@ -180,8 +264,18 @@ async function main() {
         await page.screenshot({ path: file });
       }
       const newErrors = errors.slice(before);
-      report.shots.push({ name: s.name, file, url, ms: Date.now() - t0, msPerFrame: Math.round(result.msPerFrame), tick: result.state.tick, commands: result.results, render: result.state.render, camera: result.state.camera, errors: newErrors });
+      report.shots.push({ name: s.name, file, url, ms: Date.now() - t0, msPerFrame: Math.round(result.msPerFrame), tick: result.state.tick, commands: result.results, render: result.state.render, camera: result.state.camera, life: result.state.life, selected: result.state.selected, planets: result.state.planets, errors: newErrors });
+      if (result.state.life) console.log(`  life: ${JSON.stringify(result.state.life)}${result.state.selected ? ` · selected ${JSON.stringify(result.state.selected)}` : ''}`);
+      if (result.clicked) console.log(`  clicked ${JSON.stringify(result.clicked.at.map((v) => Math.round(v)))} → selected ${JSON.stringify(result.clicked.selected)}`);
+      if (result.ran) console.log(`  ran ${result.ran.seconds} s at ${result.ran.speed}×: ${result.ran.ticks} ticks, achieved ×${Number(result.ran.achievedSpeed).toFixed(1)}`);
+      report.shots[report.shots.length - 1].ran = result.ran;
       for (const r of result.results) console.log(`  cmd ${r.k}: ${r.ok ? 'ok' : 'REFUSED'} — ${r.msg ?? ''}`);
+      if (result.chronicle) {
+        writeFileSync(resolve(SHOTS, `${s.name}.chronicle.txt`), result.chronicle.join('\n') + '\n');
+        console.log(`  chronicle (${result.chronicle.length} entries):`);
+        for (const line of result.chronicle) console.log(`    ${line}`);
+        report.shots[report.shots.length - 1].chronicle = result.chronicle;
+      }
       for (const r of result.results) if (!r.ok) report.consoleErrors.push({ shot: s.name, error: `command ${r.k} refused: ${r.msg}` });
       for (const e of newErrors) report.consoleErrors.push({ shot: s.name, error: e });
       console.log(`  → ${file} (${((Date.now() - t0) / 1000).toFixed(1)} s, ${Math.round(result.msPerFrame)} ms/frame, ${result.state.render.triangles} tris, ${result.state.render.drawCalls} draws)`);

@@ -6,7 +6,9 @@
 // speed measured here is a conservative floor.
 //
 //   node _harness/perf.mjs                                  # sandbox, speeds 1,10,100,1000, 12 s each
-//   node _harness/perf.mjs --scenario=lookdev --speeds=100,1000 --secs=15 --quality=low --view=orbit|surface|system --size=640x360
+//   node _harness/perf.mjs --scenario=lookdev --speeds=100,1000 --secs=15 --quality=low --view=orbit|surface|system|settlement --size=640x360
+//   node _harness/perf.mjs --people=1500 --speeds=100,1000 --view=settlement   # ~1 500 agents: clay-age villages of 60
+//     set down over the world through life.spawn-people (as _harness/perf_people.ts does in Node), then measured
 // Uses (or starts) the vite dev server on :5190; prints a table and writes _shots/perf.json.
 
 import { createRequire } from 'node:module';
@@ -29,6 +31,7 @@ const speeds = (opts.speeds ?? '1,10,100,1000').split(',').map(Number);
 const secs = Number(opts.secs ?? 12);
 const quality = opts.quality ?? 'high';
 const view = opts.view ?? 'orbit';
+const people = Number(opts.people ?? 0);
 const [vw, vh] = String(opts.size ?? '1280x720').split('x').map(Number);
 
 async function serverUp() {
@@ -58,9 +61,40 @@ await page.goto(url, { waitUntil: 'load' });
 await page.waitForFunction(() => !!window.__GENESIS__);
 await page.evaluate(() => window.__GENESIS__.ready);
 const bootS = (Date.now() - t0) / 1000;
-await page.evaluate((v) => window.__GENESIS__.camera(v === 'surface'
+// a populated world: villages of 60 over a lat/lon lattice (each lands at the best site near its point) until `people`
+let peopleInfo = null;
+if (people > 0) {
+  peopleInfo = await page.evaluate(async ({ want, sandbox }) => {
+    const G = window.__GENESIS__;
+    // the sandbox starts with nothing alive: the god sows grasses, wild grain and berries over the world and scatters
+    // forests first (as _harness/specs/integration.json does), so the villages have food and wood
+    if (sandbox) {
+      for (const lon of [0, 180]) {
+        for (const [species, density] of [['meadow-grass', 0.7], ['wild-grain', 0.35], ['berry-bush', 0.35]]) await G.cmd({ k: 'life.plant', species, lat: 0, lon, radius: 12000, density });
+      }
+      await G.cmd({ k: 'life.plant', species: 'savanna-grass', lat: 0, lon: 90, radius: 12000, density: 0.5 });
+      await G.cmd({ k: 'life.plant', species: 'steppe-grass', lat: 0, lon: -90, radius: 12000, density: 0.5 });
+      for (const [lat, lon] of [[10, -30], [-20, 20], [35, -70], [-35, 100], [20, 140], [0, 60], [45, 30], [-10, -120], [25, -150], [-40, -60]]) await G.cmd({ k: 'life.forest', lat, lon, radius: 1100 });
+      await G.step(1440);
+    }
+    let made = 0, villages = 0, first = null;
+    for (let lat = -36; lat <= 36 && made < want; lat += 18) {
+      for (let lon = -170; lon < 180 && made < want; lon += 30) {
+        const n = Math.min(60, want - made);
+        const r = await G.cmd({ k: 'life.spawn-people', species: 'plains-folk', count: n, lat, lon, era: 'clay', settled: true });
+        if (r.ok) { made += n; villages++; if (first == null) first = r.created?.[0]?.id ?? null; }
+      }
+    }
+    await G.step(600);
+    const st = G.state();
+    return { made, villages, first, agents: st.planets?.[0]?.agents, buildings: st.planets?.[0]?.buildings };
+  }, { want: people, sandbox: scenario === 'sandbox' });
+  console.log(`people: ${peopleInfo.made} set down in ${peopleInfo.villages} villages; ${peopleInfo.agents} agents, ${peopleInfo.buildings} buildings`);
+}
+await page.evaluate(({ v, first }) => window.__GENESIS__.camera(v === 'surface'
   ? { mode: 'surface', poi: 'coast', alt: 40, pitch: -3, hour: 10 }
-  : v === 'system' ? { mode: 'system' } : { mode: 'orbit', lat: 12, lon: -30, dist: 7600, hour: 10 }), view);
+  : v === 'settlement' ? { mode: 'orbit', poi: first != null ? `settlement:${first}` : 'city', dist: 150, tilt: 52, hour: 10 }
+  : v === 'system' ? { mode: 'system' } : { mode: 'orbit', lat: 12, lon: -30, dist: 7600, hour: 10 }), { v: view, first: peopleInfo?.first ?? null });
 await page.evaluate(() => window.__GENESIS__.frames(3));
 
 const rows = [];
@@ -120,7 +154,7 @@ for (const sp of speeds) {
 }
 await browser.close();
 if (server) server.kill();
-const report = { scenario, quality, view, size: [vw, vh], bootSeconds: bootS, rows, errors, at: new Date().toISOString() };
+const report = { scenario, quality, view, size: [vw, vh], bootSeconds: bootS, people: peopleInfo, rows, errors, at: new Date().toISOString() };
 mkdirSync(resolve(ROOT, '_shots'), { recursive: true });
 writeFileSync(resolve(ROOT, '_shots/perf.json'), JSON.stringify(report, null, 2));
 if (errors.length) { console.log('console errors:', errors); process.exit(1); }

@@ -182,6 +182,12 @@ export interface PlanetParams {
    * then it keeps the real hour angle and takes the pinned season's declination (clients light with the same rule).
    */
   sunDir?: [number, number, number];
+  /**
+   * additive (phase-2 integration): rotation rate in rad per tick at the snapshot tick. `dayHours` is the SOLAR day, so
+   * the planet turns a little faster than 2π / (dayHours · 60) — by the star's drift in longitude along the orbit.
+   * Clients extrapolate `spin` with this rate (absent: one turn per dayHours, as older sims did).
+   */
+  spinRate?: number;
 }
 
 /** Structure-of-arrays block of moving things (agents, animals). Positions are unit vectors on the planet. */
@@ -225,7 +231,12 @@ export type AnimStateId = (typeof AnimState)[keyof typeof AnimState];
 export const AgentFlag = {
   child: 1, elder: 2, female: 4, leader: 8, disciple: 16, possessed: 32, sick: 64, armed: 128,
   sleepingIndoors: 256, onFire: 512, priest: 1024, master: 2048, trader: 4096, soldier: 8192, sees_god: 16384,
+  // additive (SIM phase 2b): afloat in a boat — `carry` holds the boat item (raft / boat / sailship), anim is `sail`
+  boat: 32768,
 } as const;
+
+/** additive (SIM phase 2): flags of animal movers (PlanetSnap.animals.flags) */
+export const AnimalFlag = { domestic: 1, predator: 2, swarm: 4, fish: 8, flying: 16, fleeing: 32, penned: 64, young: 128 } as const;
 
 export interface BuildingBlock {
   count: number;
@@ -280,7 +291,35 @@ export interface SettlementView {
   nightLight: number;
   knowledgeCount: number;
   flags: number;
+  // ── additive (SIM phase 2b: societies) ──
+  /**
+   * culture style variant 0..7 for new buildings (buildinggen): bit 2 (4) = fearful (walls, dark stone, spikes),
+   * bits 0-1 = the language's own variant. Benevolent cultures (alignment > 0.25) build warm, open, colourful.
+   */
+  style?: number;
+  /**
+   * emergent culture music hint (CONTRACT §17): mode 0 ionian 1 dorian 2 phrygian 3 lydian 4 mixolydian 5 aeolian
+   * 6 locrian (benevolent -> lydian / ionian, fearful -> phrygian / locrian), tempo in bpm, instrument set by era
+   * (0 drums + flutes, 1 lyres + strings, 2 brass + organ, 3 synth)
+   */
+  music?: { mode: number; tempo: number; instruments: number };
+  /** polity name ("the realm of Aru") */
+  polityName?: string;
+  /** settlement ids this one is at war with / trades with (overlay lines) */
+  war?: number[];
+  trade?: number[];
+  /** under siege by a war band */
+  besieged?: boolean;
+  /** 'golden' | 'dark' | '' */
+  age?: string;
+  /** the god most of them believe in (-1 none) and the share who believe in none */
+  disbelief?: number;
+  /** names of its parties ("hawks", "devout", ...) with shares */
+  factions?: { kind: string; share: number }[];
 }
+
+/** SettlementView.flags bits */
+export const SettlementFlag = { band: 1, fallen: 2, atWar: 4, besieged: 8, port: 16, market: 32, golden: 64, dark: 128, tributary: 256 } as const;
 
 export interface CreatureView {
   id: number;
@@ -382,6 +421,12 @@ export interface PlanetSnap {
   disasters?: DisasterView[];
   /** population totals by species index */
   population?: number[];
+  /**
+   * additive (SIM perf pass): the ground's per-cell curvature data (src/sim/grid/surface.ts surfaceGradients: 4 floats
+   * per cell, gx gy gz gw), sent alongside `fields.surface` when the client asked for it (worker init option
+   * `grad: true`), so the main thread need not refit it on every surface update.
+   */
+  grad?: Float32Array;
 }
 
 export interface StarView {

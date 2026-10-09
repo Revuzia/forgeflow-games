@@ -9,25 +9,33 @@
 //     acacia…) → mesh kind; height from the species' height range; foliage colour from its leaf colour, turning in
 //     autumn for deciduous species; burnt → dead; climate is the fallback when a cell has no species. Every tree also
 //     gets its own lean, girth and brightness. Cached per cell; the cache drops when the fields change.
-//   * LOD: three meshes per kind by distance; past the range the terrain's canopy shading takes over (the terrain
-//     material receives the same range), and whole instances shrink into the ground across the hand-over band (and
-//     their shadows with them): nothing pops, no loose leaf pixels.
-//   * Shading: three's physical BRDF with this planet's sun (transmittance, cascaded + cloud shadows), sky ambient,
-//     leaf translucency when the sun is behind the crown, wind sway (gusting, per-tree phase). Trees cast shadows.
+//   * LOD: three meshes per kind by distance, CROSS-FADED: across a band at each LOD boundary a tree is drawn by both
+//     LODs, the outgoing one losing metre-sized chunks of its crown (hashed in the tree's own space) while the incoming
+//     one gains exactly the complementary chunks, trunks swapping at the middle — no pop, and no pixel dither (which
+//     never resolves without TAA). Past the range the terrain's canopy shading takes over (the terrain material
+//     receives the same range), and whole instances shrink into the ground across the hand-over band (and their
+//     shadows with them).
+//   * Shading: three's physical BRDF with this planet's sun (transmittance, cascaded + cloud shadows — the cloud
+//     shadow per vertex, crowns overdraw too much for it per pixel), sky ambient, leaf translucency when the sun is
+//     behind the crown, bark furrows in the normal, wind sway (gusting, per-tree phase, strength from the weather).
+//     Per tree: snow on the branches, fire char (a past fire's scar or the fire burning there now), leaf fall of
+//     deciduous species from late autumn to spring. Trees cast shadows.
 
 import {
-  Color, DoubleSide, DynamicDrawUsage, Group, InstancedMesh, Matrix4, MeshStandardMaterial, ShaderMaterial, Vector3, type IUniform,
+  Color, DoubleSide, DynamicDrawUsage, Group, InstancedBufferAttribute, InstancedMesh, Matrix4, MeshStandardMaterial, ShaderMaterial, Vector3, Vector4,
+  type IUniform,
 } from 'three';
 import type { PlanetView } from '../../client/worldview.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
 import { hash32, hashFloat } from '../../sim/core/rng.ts';
-import { TREE_KINDS, treeGeometry, type TreeKind } from '../gen/treegen.ts';
+import { SHRUB_KINDS, TREE_KINDS, treeGeometry, type TreeKind } from '../gen/treegen.ts';
 import { BASE_PACK } from '../../data/index.ts';
 import { leafClusterTexture } from '../gen/leaftex.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { SHADOW_GLSL } from '../planet/lights.ts';
+import { MOON_PARS, moonDirect } from '../shaders/moon.glsl.ts';
 
 const KINDS: TreeKind[] = TREE_KINDS;
 const K = (k: TreeKind): number => KINDS.indexOf(k);
@@ -37,7 +45,7 @@ const LODS = 3;
 const REC = 10;
 
 /** plant species render data from the base content pack (indices match the sim's species fields) */
-interface SpeciesLook { kind: number; hMin: number; hMax: number; tint: [number, number, number]; autumn: [number, number, number] | null }
+interface SpeciesLook { kind: number; layer: 'tree' | 'shrub' | 'sea'; hMin: number; hMax: number; tint: [number, number, number]; autumn: [number, number, number] | null; deciduous: boolean }
 const srgbToLin = (c: number) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 function hexLin(h: string | undefined, fallback: [number, number, number]): [number, number, number] {
   if (!h || !/^#[0-9a-f]{6}$/i.test(h)) return fallback;
@@ -59,9 +67,16 @@ function tintFor(leaf: [number, number, number], ref: [number, number, number]):
   return [ch(0) * k, ch(1) * k, ch(2) * k];
 }
 const SPECIES: SpeciesLook[] = (BASE_PACK.plants ?? []).map((pl) => {
-  const f = pl.form;
+  const f = String(pl.form ?? '');
+  const id = String(pl.id ?? '');
+  // the plant's form (plants.json) picks its mesh: trees by crown form, shrubs by habit
   const kind = f === 'conifer' || f === 'spruce' ? K('conifer') : f === 'birch' ? K('birch') : f === 'palm' ? K('palm')
-    : f === 'acacia' || pl.id === 'kapok' ? K('tropical') : pl.type === 'tree' ? (f === 'kelp' ? -1 : K('broadleaf')) : K('shrub');
+    : f === 'acacia' || id === 'kapok' ? K('tropical') : f === 'baobab' ? K('baobab') : f === 'mangrove' ? K('mangrove')
+      : f === 'willow' ? K('willow') : f === 'kelp' ? K('kelp') : f === 'cactus' ? K('cactus')
+        : pl.type === 'tree' ? K('broadleaf')
+          : id === 'berry-bush' ? K('berrybush') : f === 'fern' ? K('fern') : f === 'creeper' ? K('heather') : id === 'sagebrush' ? K('sage')
+            : f === 'reed' ? K('reed') : K('shrub');
+  const layer: SpeciesLook['layer'] = f === 'kelp' ? 'sea' : pl.type === 'tree' ? 'tree' : 'shrub';
   const ref = kind === K('conifer') ? ATLAS_NEEDLES : ATLAS_SPRAY;
   const t = tintFor(hexLin(pl.colors?.leaf, ref), ref);
   // autumn: the turned colour itself (deciduous only), allowed to leave green far behind
@@ -72,7 +87,7 @@ const SPECIES: SpeciesLook[] = (BASE_PACK.plants ?? []).map((pl) => {
     aT = [Math.min(4, (autumn[0] / lumOf(autumn)) / (ref[0] / lumOf(ref)) * k), Math.min(4, (autumn[1] / lumOf(autumn)) / (ref[1] / lumOf(ref)) * k), Math.min(4, (autumn[2] / lumOf(autumn)) / (ref[2] / lumOf(ref)) * k)];
   }
   const [h0, h1] = pl.height ?? [8, 20];
-  return { kind, hMin: Math.max(1, Math.min(30, h0)), hMax: Math.max(1.5, Math.min(34, h1)), tint: t, autumn: aT };
+  return { kind, layer, hMin: Math.max(0.1, Math.min(30, h0)), hMax: Math.max(0.3, Math.min(34, h1)), tint: t, autumn: aT, deciduous: !!pl.deciduous };
 });
 
 const VEG_VERT_PARS = /* glsl */ `
@@ -80,6 +95,13 @@ attribute float aWind;
 attribute vec2 aLeafUv;
 attribute float aCard;
 attribute float aCrown;
+attribute vec4 iExtra;        // snow on the branches, char, leaf loss (winter), LOD role (1 plain, 2/3 fading out across
+                              // LOD boundary 0/1, 4/5 fading in; a missing attribute reads 1)
+uniform float uWindK;         // wind strength from the weather (calm 0.3 … gale 2.5)
+uniform vec4 uLodBand;        // LOD cross-fade bands (m from the camera): boundary 0 (x..y), boundary 1 (z..w)
+varying vec4 vExtra;
+varying vec2 vLod;            // visibility 0..1 in the LOD cross-fade, +1 fading out / −1 fading in
+varying vec3 vLocalP;
 uniform float uTime;
 uniform vec3 uWindDir;
 uniform vec3 uCamBody;
@@ -91,8 +113,43 @@ varying float vCard;
 varying float vLocalY;
 varying float vCrown;
 `;
-/** alpha test for leaf cards, with Golus-style alpha sharpening so edges stay crisp at any mip */
+/**
+ * Cloud shadow per VERTEX (main pass only): the clouds' shadow is metres-to-kilometres wide, and evaluating the cloud
+ * density per foliage fragment (crowns overdraw many layers) was the single largest cost of a forest view
+ */
+const VEG_VERT_CLOUD = /* glsl */ `
+${NOISE_GLSL}
+${ATMO_PARS}
+${CLOUD_DENSITY_GLSL}
+uniform samplerCube uCloudCov;
+uniform vec2 uCloudShell;
+uniform float uCloudOn;
+uniform vec3 uSunDirBody;
+varying float vCloudSh;
+float vegCloudShadowV(vec3 P, vec3 sunB) {
+  if (uCloudOn < 0.5) return 1.0;
+  float mid = 0.5 * (uCloudShell.x + uCloudShell.y);
+  vec2 hit = raySphere(P, sunB, mid);
+  if (hit.y < 0.0) return 1.0;
+  vec3 q = P + sunB * hit.y;
+  vec2 cs = textureLod(uCloudCov, normalize(q), 0.0).rg;
+  cl_fp = 0.0;
+  return max(exp(-cloudDensityAt(q, 0.35, cs.x, cs.y, false) * (uCloudShell.y - uCloudShell.x) * 0.4), 0.3);
+}
+`;
+
+/** alpha test for leaf cards, with Golus-style alpha sharpening so edges stay crisp at any mip; deciduous trees lose
+ *  their leaves patch by patch through late autumn (vExtra.z) */
 const LEAF_ALPHA = /* glsl */ `
+  if (vLod.x < 0.999) {
+    float lch = fract(sin(dot(floor(vLocalP * 5.0 + 0.37), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    if (vLod.y < 0.0) lch = 1.0 - lch;
+    if (vCard > 0.25 ? lch > vLod.x : (vLod.y > 0.0 ? vLod.x < 0.5 : vLod.x <= 0.5)) discard;
+  }
+  if (vCard > 0.25 && vExtra.z > 0.0) {
+    float lh = fract(sin(dot(floor(vLocalP * 9.0), vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    if (lh < vExtra.z) discard;
+  }
   if (vCard > 0.5) {
     vec4 lt = texture(uLeafTex, vLeafUv);
     // coarser mips average the sprays' alpha toward their coverage (< the test threshold): scale alpha up with the mip
@@ -112,13 +169,29 @@ const VEG_WIND = /* glsl */ `
     // hand-over to the terrain's canopy shading: WHOLE trees sink and shrink into the ground across the band (a
     // per-pixel dither left clouds of loose leaf pixels and, without TAA, never resolved); the shadow pass uses the
     // same vertex code, so shadows fade with their trees
-    float handover = smoothstep(uFade.x, uFade.y, distance(ip, uCamBody));
+    float camD = distance(ip, uCamBody);
+    float handover = smoothstep(uFade.x, uFade.y, camD);
     transformed *= 1.0 - handover;
+    // LOD cross-fade: inside a band both LODs draw this tree, the outgoing one losing crown chunks as the incoming one
+    // gains the complementary chunks (object-space, metres-sized: no pixel dither), trunks swap at the middle
+    vLod = vec2(1.0, 1.0);
+    if (iExtra.w > 1.5) {
+      float role = iExtra.w;
+      bool fadeIn = role > 3.5;
+      float bnd = fadeIn ? role - 4.0 : role - 2.0;
+      vec2 band = bnd < 0.5 ? uLodBand.xy : uLodBand.zw;
+      float t = smoothstep(band.x, band.y, camD);
+      vLod = vec2(fadeIn ? t : 1.0 - t, fadeIn ? -1.0 : 1.0);
+      transformed *= step(0.002, vLod.x);
+    }
     float ph = dot(ip, vec3(0.071, 0.113, 0.097));
     float gust = 0.55 + 0.45 * sin(uTime * 0.37 + ph * 0.2);
-    float sway = (sin(uTime * 1.6 + ph) * 0.6 + sin(uTime * 2.9 + ph * 1.7) * 0.25) * gust;
+    float sway = (sin(uTime * 1.6 * (0.8 + 0.2 * uWindK) + ph) * 0.6 + sin(uTime * 2.9 + ph * 1.7) * 0.25) * gust;
     vec3 wl = vec3(dot(uWindDir, vec3(1.0, 0.0, 0.0)), 0.0, dot(uWindDir, vec3(0.0, 0.0, 1.0)));
-    transformed += (wl * sway * 0.035 + vec3(sin(uTime * 4.1 + ph * 3.0 + position.y * 9.0), 0.0, cos(uTime * 3.7 + ph * 2.0)) * 0.006) * aWind * aWind;
+    // the trees lean a little with the wind and sway more the stronger it blows (leaves flutter on top)
+    transformed += (wl * (sway + 0.6 * (uWindK - 0.5)) * 0.035 * uWindK + vec3(sin(uTime * 4.1 + ph * 3.0 + position.y * 9.0), 0.0, cos(uTime * 3.7 + ph * 2.0)) * 0.006 * uWindK) * aWind * aWind;
+    vExtra = iExtra;
+    vLocalP = position;
   }
 `;
 
@@ -131,7 +204,7 @@ ${SHADOW_GLSL}
 uniform mat3 uBodyToView;
 uniform vec3 uSunDirBody;
 uniform vec3 uSunDirView;
-uniform samplerCube uCloudCov;
+${MOON_PARS}uniform samplerCube uCloudCov;
 uniform vec2 uCloudShell;
 uniform float uCloudOn;
 uniform vec3 uNightAmbient;
@@ -142,6 +215,10 @@ varying vec2 vLeafUv;
 varying float vCard;
 varying float vLocalY;
 varying float vCrown;
+varying vec4 vExtra;
+varying vec2 vLod;
+varying vec3 vLocalP;
+varying float vCloudSh;
 float vegCloudShadow(vec3 P, vec3 sunB) {
   if (uCloudOn < 0.5) return 1.0;
   float mid = 0.5 * (uCloudShell.x + uCloudShell.y);
@@ -160,12 +237,13 @@ const VEG_LIGHT = /* glsl */ `
     float sh = sunShadow(-vViewPosition, normal);
     // the crown shades itself: interior foliage (and bark inside the crown) sees less sun than the outer shell
     float crownDirect = mix(0.55, 1.0, smoothstep(0.35, 0.95, vCrown));
-    vec3 sunCol = uSunE * sunTransmittance(rP, dot(upB, uSunDirBody)) * sh * vegCloudShadow(vBodyPos, uSunDirBody) * crownDirect;
+    vec3 sunCol = uSunE * sunTransmittance(rP, dot(upB, uSunDirBody)) * sh * vCloudSh * crownDirect;
     IncidentLight sunL;
     sunL.direction = uSunDirView;
     sunL.color = sunCol;
     sunL.visible = true;
     RE_Direct(sunL, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
+    ${moonDirect('vBodyPos', 'crownDirect')}
     // leaves let light through: a forward-scattering glow when the sun is behind the crown
     float back = pow(max(dot(-geometryViewDir, uSunDirView), 0.0), 3.0);
     float wrap = max(0.0, dot(-geometryNormal, uSunDirView) * 0.5 + 0.5);
@@ -178,6 +256,11 @@ const VEG_AMBIENT = /* glsl */ `
     vec3 upB = normalize(vBodyPos);
     vec3 nB = normalize(transpose(uBodyToView) * normal);
     vec3 e = skyIrradiance(upB, nB, uSunDirBody) + uNightAmbient;
+    // under a closed canopy the trunks and the lower, inner crowns see little open sky, and what they see comes
+    // through leaves (green); in the open the sky is all around (a forest's inside was lit like a meadow)
+    float canopy = clamp(fract(vExtra.w) * 2.5, 0.0, 1.0);
+    float under = vLeaf < 0.5 ? 1.0 : 1.0 - smoothstep(0.4, 0.9, vCrown);
+    e *= mix(vec3(1.0), vec3(0.34, 0.42, 0.28), canopy * under);
     // crown AO (cheap volumetric occlusion from the baked crown depth); the sky enters once (see terrainmat FRAG_AMBIENT)
     iblIrradiance += e * mix(0.45, 1.0, smoothstep(0.3, 0.95, vCrown));
   }
@@ -190,8 +273,10 @@ export function makeVegMaterial(shared: Record<string, IUniform>, fade: IUniform
     for (const k of Object.keys(shared)) shader.uniforms[k] = shared[k];
     shader.uniforms.uFade = fade;
     shader.uniforms.uLeafTex = leafTex;
+    shader.uniforms.uWindK = WIND_K;
+    shader.uniforms.uLodBand = LOD_BAND;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <clipping_planes_pars_vertex>', `#include <clipping_planes_pars_vertex>\n${VEG_VERT_PARS}`)
+      .replace('#include <clipping_planes_pars_vertex>', `#include <clipping_planes_pars_vertex>\n${VEG_VERT_PARS}\n${VEG_VERT_CLOUD}`)
       .replace('#include <begin_vertex>', VEG_WIND)
       .replace('#include <color_vertex>', `
   // aCard: 0 bark, 0.5 solid foliage (conifer core), 1 alpha-tested spray. The instance colour is the FOLIAGE tint
@@ -202,7 +287,7 @@ export function makeVegMaterial(shared: Record<string, IUniform>, fade: IUniform
   float leafy = step(0.25, aCard);
   vColor.xyz *= mix(vec3(dot(instanceColor.xyz, vec3(0.3, 0.55, 0.15))), instanceColor.xyz, leafy);
 #endif`)
-      .replace('#include <project_vertex>', `#include <project_vertex>\n  vBodyPos = (instanceMatrix * vec4(transformed, 1.0)).xyz;\n  vLeaf = step(0.25, aCard);\n  vLeafUv = aLeafUv;\n  vCard = aCard;\n  vLocalY = position.y;\n  vCrown = aCrown;`);
+      .replace('#include <project_vertex>', `#include <project_vertex>\n  vBodyPos = (instanceMatrix * vec4(transformed, 1.0)).xyz;\n  vCloudSh = vegCloudShadowV(vBodyPos, uSunDirBody);\n  vLeaf = step(0.25, aCard);\n  vLeafUv = aLeafUv;\n  vCard = aCard;\n  vLocalY = position.y;\n  vCrown = aCrown;`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\n${VEG_FRAG_PARS}`)
       .replace('#include <color_fragment>', `#include <color_fragment>
@@ -210,18 +295,32 @@ ${LEAF_ALPHA}
   if (vCard > 0.5) diffuseColor.rgb *= texture(uLeafTex, vLeafUv).rgb * 1.7;
   // leaf clusters: cellular light / dark speckle on foliage (fading with distance), bark furrows on trunks
   float vegFw = length(fwidth(vBodyPos));
-  vec3 lv = voronoi3(vBodyPos * 2.2);
   float leafAA = 1.0 - smoothstep(0.08, 0.35, vegFw * 2.2);
+  // (the cellular speckle only where it is resolved, and not on the textured spray cards)
+  vec3 lv = vLeaf > 0.5 && vCard < 0.75 && leafAA > 0.001 ? voronoi3(vBodyPos * 2.2) : vec3(0.5, 0.7, 0.5);
   float leafTex = mix(0.92, 0.62 + 0.62 * (1.0 - lv.x) * (0.7 + 0.6 * lv.z), leafAA);
-  float barkTex = 0.8 + 0.3 * abs(snoise(vec3(vBodyPos.x * 9.0, vBodyPos.y * 0.8, vBodyPos.z * 9.0)));
+  // bark: furrows running along the stem (mesh-local: the trunk is the local Y axis), in colour and in the normal
+  float barkAA = 1.0 - smoothstep(0.02, 0.12, vegFw);
+  float barkH = abs(snoise(vec3(vLocalP.x * 55.0, vLocalP.y * 5.0, vLocalP.z * 55.0)));
+  float barkTex = mix(0.92, 0.7 + 0.42 * barkH, barkAA);
   diffuseColor.rgb *= vCard > 0.5 ? 1.0 : mix(barkTex, leafTex, vLeaf);
+  // no bark is paler than weathered grey wood (bright trunks read as white posts in the sun)
+  if (vLeaf < 0.5) diffuseColor.rgb = min(diffuseColor.rgb, vec3(0.24, 0.22, 0.2));
   // trunk bases sink into the ground: soil, moss and shade creep up the lowest metre instead of a clean cut
   if (vLeaf < 0.5) {
     float baseW = 1.0 - smoothstep(-0.01, 0.045, vLocalY);
     vec3 soilC = mix(vec3(0.055, 0.045, 0.032), vec3(0.04, 0.055, 0.025), smoothstep(0.3, 0.7, snoise(vBodyPos * 1.7) * 0.5 + 0.5));
     diffuseColor.rgb = mix(diffuseColor.rgb, soilC, baseW * 0.8);
   }
-  float vegBump = mix(0.0, (1.0 - lv.x) * 0.25 * leafAA, vLeaf);`)
+  float vegBump = mix(barkH * 0.035 * barkAA, (1.0 - lv.x) * 0.25 * leafAA, vLeaf);
+  // charred bark (fire scars), snow lying on the upward faces of branches and foliage
+  if (vLeaf < 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.02, 0.018, 0.016), vExtra.y);
+  if (vExtra.x > 0.0) {
+    vec3 upS = normalize(vBodyPos);
+    vec3 nS = normalize(transpose(uBodyToView) * normalize(vNormal));
+    float lie = smoothstep(0.05, 0.55, abs(dot(nS, upS))) * (0.7 + 0.3 * snoise(vBodyPos * 3.0));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.78, 0.8, 0.85), clamp(vExtra.x * lie, 0.0, 0.9));
+  }`)
       .replace('#include <normal_fragment_begin>', `#include <normal_fragment_begin>
   // foliage normals are bent outward from the crown on BOTH faces: never flip them for back faces (dark crowns)
   if (vLeaf > 0.5) { normal = normalize(vNormal); nonPerturbedNormal = normal; }`)
@@ -237,9 +336,14 @@ ${LEAF_ALPHA}
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${VEG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${VEG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => 'genesis-veg-v3';
+  mat.customProgramCacheKey = () => 'genesis-veg-v7';
   return mat;
 }
+
+/** wind strength shared by every vegetation material (set from the weather at the camera each frame) */
+export const WIND_K: IUniform<number> = { value: 0.8 };
+/** LOD cross-fade bands (set per frame from the vegetation range) */
+export const LOD_BAND: IUniform<Vector4> = { value: new Vector4(51, 69, 140, 179) };
 
 const VEG_DEPTH_VERT = /* glsl */ `
 #include <common>
@@ -257,6 +361,9 @@ const VEG_DEPTH_FRAG = /* glsl */ `
 uniform sampler2D uLeafTex;
 varying vec2 vLeafUv;
 varying float vCard;
+varying vec4 vExtra;
+varying vec2 vLod;
+varying vec3 vLocalP;
 #include <logdepthbuf_pars_fragment>
 void main() {
 #include <logdepthbuf_fragment>
@@ -265,9 +372,10 @@ ${LEAF_ALPHA}
 }
 `;
 
-interface Bucket { mesh: InstancedMesh; depth: ShaderMaterial; count: number; kind: number; variant: number; lod: number }
+interface Bucket { mesh: InstancedMesh; depth: ShaderMaterial; count: number; kind: number; variant: number; lod: number; extra: InstancedBufferAttribute }
 
 const SHRUB = KINDS.indexOf('shrub');
+const IS_SHRUB = KINDS.map((k) => SHRUB_KINDS.includes(k));
 const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const _m = new Matrix4();
 const _c = new Color();
@@ -299,19 +407,23 @@ export class Vegetation {
     this.group.matrixAutoUpdate = false;
     const leafTex: IUniform = { value: leafClusterTexture() };
     this.material = makeVegMaterial(shared, this.fade, leafTex);
-    const depthUniforms = { uTime: shared.uTime, uWindDir: shared.uWindDir, uLeafTex: leafTex, uCamBody: shared.uCamBody, uFade: this.fade };
+    const depthUniforms = { uTime: shared.uTime, uWindDir: shared.uWindDir, uLeafTex: leafTex, uCamBody: shared.uCamBody, uFade: this.fade, uWindK: WIND_K, uLodBand: LOD_BAND };
     for (let k = 0; k < KINDS.length; k++) {
       for (let v = 0; v < VARIANTS; v++) {
         for (let l = 0; l < LODS; l++) {
           const geo = treeGeometry(KINDS[k], l, v);
-          const cap = l === 0 ? 1200 : l === 1 ? 3000 : 6000;
+          const shrubby = SHRUB_KINDS.includes(KINDS[k]);
+          const cap = (l === 0 ? 1200 : l === 1 ? 3000 : 6000) * (shrubby ? 1 : 1);
+          const extra = new InstancedBufferAttribute(new Float32Array(cap * 4), 4);
+          extra.setUsage(DynamicDrawUsage);
+          geo.setAttribute('iExtra', extra);
           const mesh = new InstancedMesh(geo, this.material, cap);
           mesh.instanceMatrix.setUsage(DynamicDrawUsage);
           mesh.count = 0;
           mesh.frustumCulled = false;
           mesh.matrixAutoUpdate = false;
           const depth = new ShaderMaterial({ vertexShader: VEG_DEPTH_VERT, fragmentShader: VEG_DEPTH_FRAG, uniforms: depthUniforms, colorWrite: false, side: DoubleSide });
-          this.buckets.push({ mesh, depth, count: 0, kind: k, variant: v, lod: l });
+          this.buckets.push({ mesh, depth, count: 0, kind: k, variant: v, lod: l, extra });
           this.group.add(mesh);
         }
       }
@@ -340,6 +452,28 @@ export class Vegetation {
     const treeSp = pv.fields.get('treeSpecies'), shrubSp = pv.fields.get('shrubSpecies');
     const tc = tree ? tree[c] : 0, sc = shrub ? shrub[c] : 0;
     const out: number[] = [];
+    // kelp forests on the sea floor (the cell's dominant "tree" species is kelp, under a few metres of water)
+    if (water && water[c] > 2.5 && treeSp && treeSp[c] >= 0) {
+      const lk = SPECIES[Math.round(treeSp[c])];
+      if (lk && lk.layer === 'sea') {
+        const area = g.area[c] * R * R;
+        const n = Math.ceil((area / 140) * this.density * Math.min(1, tc + 0.3));
+        const P = g.pos;
+        for (let i = 0; i < n; i++) {
+          let dx = P[c * 3], dy = P[c * 3 + 1], dz = P[c * 3 + 2];
+          const a = hashFloat(c, i, 501) * Math.PI * 2, rr = Math.sqrt(hashFloat(c, i, 502)) * Math.sqrt(area) * 0.6 / R;
+          let ex = dz, ez = -dx;
+          const el = Math.hypot(ex, ez) || 1; ex /= el; ez /= el;
+          const nx = dy * ez, ny = dz * ex - dx * ez, nz = -dy * ex;
+          dx += (ex * Math.cos(a) + nx * Math.sin(a)) * rr; dy += ny * Math.sin(a) * rr; dz += (ez * Math.cos(a) + nz * Math.sin(a)) * rr;
+          const l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
+          const depth = g.sample(water, dx, dy, dz);
+          if (depth < 2) continue;
+          const h = Math.min(lk.hMax, depth * (0.6 + 0.35 * hashFloat(c, i, 503)));
+          out.push(dx, dy, dz, groundHeight(pv.ground, dx, dy, dz), hashFloat(c, i, 504) * 6.28, h, K('kelp'), hash32(c, i, 505) % VARIANTS, Math.round(treeSp[c]), hashFloat(c, i, 506));
+        }
+      }
+    }
     if ((tc > 0.02 || sc > 0.02) && !(water && water[c] > 1)) {
       const area = g.area[c] * R * R;
       const spacing = Math.sqrt(area);
@@ -382,20 +516,22 @@ export class Vegetation {
         let sp = spf ? Math.round(spf[pick]) : -1;
         if (sp < 0 && spf) sp = Math.round(spf[c]);
         let look = sp >= 0 && sp < SPECIES.length ? SPECIES[sp] : null;
-        if (look && look.kind < 0) return; // kelp and other underwater forms are not land trees
+        if (look && look.layer === 'sea') return; // kelp grows under the sea, placed above
         // a species of the wrong functional type for this layer (a mod, a stale index) is ignored, not obeyed
-        if (look && (look.kind === K('shrub')) !== isShrub) look = null;
+        if (look && (look.layer === 'shrub') !== isShrub) look = null;
         let kind: number;
-        if (isShrub) kind = K('shrub');
-        else if (b > 0.5) kind = K('dead');
-        else if (look && look.kind >= 0 && look.kind !== K('shrub')) kind = look.kind;
+        if (isShrub) kind = b > 0.6 ? K('burnt') : look ? look.kind : K('shrub');
+        else if (b > 0.5) kind = K('burnt');
+        else if (look) kind = look.kind;
         else if (t < 3 + hashFloat(c, i, 9) * 6) kind = K('conifer');
         else if (t > 23 && m > 0.7) kind = K('tropical');
         else kind = K('broadleaf');
         const hs = hashFloat(c, i, salt + 3);
         let height: number;
         if (look) height = look.hMin + (look.hMax - look.hMin) * Math.pow(hs, 1.4);
-        else height = kind === K('conifer') ? 8 + hs * hs * 16 : kind === K('tropical') ? 14 + hs * 12 : kind === K('dead') ? 6 + hs * 8 : kind === K('shrub') ? 1.1 + hs * 1.8 : 7 + hs * hs * 12;
+        else height = kind === K('conifer') ? 8 + hs * hs * 16 : kind === K('tropical') ? 14 + hs * 12 : kind === K('dead') || kind === K('burnt') ? 6 + hs * 8 : IS_SHRUB[kind] ? 1.1 + hs * 1.8 : 7 + hs * hs * 12;
+        // burnt shrubs are stumps of what they were
+        if (isShrub && kind === K('burnt')) height = Math.min(height, 2.5);
         // young trees at a forest's edge: the thinner the cover, the smaller the trees; ±20 % from tree to tree
         if (!isShrub) height *= (0.7 + 0.3 * Math.min(1, cover * 1.4)) * (0.8 + 0.4 * hashFloat(c, i, salt + 8));
         else if (under) height *= 0.6 + 0.5 * hashFloat(c, i, salt + 8);
@@ -416,6 +552,18 @@ export class Vegetation {
    * camera has not moved much (instances stay valid: they live in the body frame).
    */
   update(pv: PlanetView, camBody: Vector3, frame: number): void {
+    // wind strength at the camera from the sim's wind field (lookdev has none: a light breeze)
+    {
+      const wx = pv.fields.get('windX'), wy = pv.fields.get('windY'), wz = pv.fields.get('windZ');
+      const cl = camBody.length() || 1;
+      let speed = 3;
+      if (wx && wy && wz) {
+        const ux = camBody.x / cl, uy = camBody.y / cl, uz = camBody.z / cl;
+        speed = Math.hypot(pv.grid.sample(wx, ux, uy, uz), pv.grid.sample(wy, ux, uy, uz), pv.grid.sample(wz, ux, uy, uz));
+      }
+      const want = Math.min(2.5, Math.max(0.3, 0.35 + speed / 7));
+      WIND_K.value += (want - WIND_K.value) * 0.02;
+    }
     const stamp = `${pv.fieldVersion.get('tree') ?? 0}|${pv.fieldVersion.get('shrub') ?? 0}|${pv.fieldVersion.get('surface') ?? 0}|${pv.fieldVersion.get('burnt') ?? 0}|${pv.fieldVersion.get('treeSpecies') ?? 0}|${this.density}`;
     // a season step re-tints the instances (autumn colour) without re-scattering them
     const season = Math.floor(this.yearFrac * 48);
@@ -439,9 +587,16 @@ export class Vegetation {
     const cells = pv.grid.cellsWithin(dx, dy, dz, (range + 60) / R);
     for (const b of this.buckets) b.count = 0;
     const lod0 = range * 0.16, lod1 = range * 0.42;
+    const b0a = lod0 * 0.85, b0b = lod0 * 1.15, b1a = lod1 * 0.88, b1b = lod1 * 1.12;
+    LOD_BAND.value.set(b0a, b0b, b1a, b1b);
+    // the camera moves up to range * 0.04 before the next rebuild: trees that may enter a band by then draw in both LODs
+    const M = range * 0.04 + 2;
     // autumn at the camera's latitude (northern autumn at year fraction 0.5–0.75, southern half a year later)
     const yfH = dy >= 0 ? this.yearFrac : (this.yearFrac + 0.5) % 1;
     const autumn = smooth(0.5, 0.6, yfH) * (1 - smooth(0.74, 0.8, yfH));
+    // leaf fall: from the end of autumn through winter, leafing out again early in spring
+    const winterK = yfH >= 0.5 ? smooth(0.72, 0.8, yfH) : 1 - smooth(0.06, 0.14, yfH);
+    const snowF = pv.fields.get('snow'), burntF = pv.fields.get('burnt'), fireF = pv.fields.get('fire'), treeF = pv.fields.get('tree');
     let total = 0;
     for (const c of cells) {
       const rec = this.cellPlants(pv, c);
@@ -450,11 +605,19 @@ export class Vegetation {
         _v.set(rec[i] * gr, rec[i + 1] * gr, rec[i + 2] * gr);
         const d = _v.distanceTo(camBody);
         const kind = rec[i + 6];
-        const maxD = kind === SHRUB ? range * 0.45 : range;
+        const maxD = IS_SHRUB[kind] ? range * 0.45 : range;
         if (d > maxD) continue;
-        const lod = d < lod0 ? 0 : d < lod1 ? 1 : 2;
-        const b = this.buckets[(kind * VARIANTS + rec[i + 7]) * LODS + lod];
-        if (b.count >= b.mesh.instanceMatrix.count) continue;
+        // LOD (and role in a cross-fade band): [lod, role, lod, role] — role 1 plain, 2/3 out, 4/5 in
+        const base = (kind * VARIANTS + rec[i + 7]) * LODS;
+        let la = 0, ra = 1, lb = -1, rb = 1;
+        if (d < b0a - M) { la = 0; }
+        else if (d <= b0b + M) { la = 0; ra = 2; lb = 1; rb = 4; }
+        else if (d < b1a - M) { la = 1; }
+        else if (d <= b1b + M) { la = 1; ra = 3; lb = 2; rb = 5; }
+        else { la = 2; }
+        const bA = this.buckets[base + la];
+        const bB = lb >= 0 ? this.buckets[base + lb] : null;
+        if (bA.count >= bA.mesh.instanceMatrix.count || (bB && bB.count >= bB.mesh.instanceMatrix.count)) continue;
         const seed = rec[i + 9];
         // basis: up = the radial direction tilted by this tree's own lean (≤ ~5°), yaw about it, scale = height
         let ux = rec[i], uy = rec[i + 1], uz = rec[i + 2];
@@ -497,7 +660,7 @@ export class Vegetation {
         const look = sp >= 0 ? SPECIES[sp] : null;
         let tr = 1, tg = 1, tbl = 1;
         if (look) { tr = look.tint[0]; tg = look.tint[1]; tbl = look.tint[2]; }
-        if (look?.autumn && kind !== SHRUB) {
+        if (look?.autumn && !IS_SHRUB[kind]) {
           const turn = Math.min(1, autumn * (0.55 + 0.9 * ((seed * 3.3) % 1)));
           tr += (look.autumn[0] - tr) * turn; tg += (look.autumn[1] - tg) * turn; tbl += (look.autumn[2] - tbl) * turn;
         }
@@ -505,8 +668,21 @@ export class Vegetation {
         const th = (seed * 17.9) % 1;
         const tb = 0.8 + 0.4 * ((seed * 5.77) % 1);
         _c.setRGB(tr * tb * (0.94 + 0.12 * th), tg * tb, tbl * tb * (1.06 - 0.12 * th));
-        b.mesh.setColorAt(b.count, _c);
-        b.mesh.setMatrixAt(b.count++, _m);
+        // per tree: snow on the branches (the ground's snow cover), fire char near burnt ground, leaf fall of
+        // deciduous species through late autumn into winter (bare in winter, leafing again in spring)
+        const ux0 = rec[i], uy0 = rec[i + 1], uz0 = rec[i + 2];
+        const snowA = snowF ? Math.min(1, pv.grid.sample(snowF, ux0, uy0, uz0) / 0.25) : 0;
+        // char from the scar of a past fire, or the fire burning here now
+        const charA = Math.min(0.9, Math.max(burntF ? (pv.grid.sample(burntF, ux0, uy0, uz0) - 0.15) * 1.6 : 0, fireF ? pv.grid.sample(fireF, ux0, uy0, uz0) * 0.85 : 0, 0));
+        const leafless = look?.deciduous && !IS_SHRUB[kind] ? Math.min(1, winterK * (0.7 + 0.6 * ((seed * 9.1) % 1))) : 0;
+        // the canopy around it (0..1, carried in the role's fraction: the role is an integer 1..5): under a closed
+        // canopy the trunks and lower crown see little sky
+        const canopy = treeF ? Math.min(1, Math.max(0, (pv.grid.sample(treeF, ux0, uy0, uz0) - 0.3) / 0.5)) : 0;
+        for (const [b, role] of bB ? [[bA, ra], [bB, rb]] as const : [[bA, ra]] as const) {
+          b.extra.setXYZW(b.count, snowA, kind === K('burnt') ? 0 : charA, leafless, role + canopy * 0.4);
+          b.mesh.setColorAt(b.count, _c);
+          b.mesh.setMatrixAt(b.count++, _m);
+        }
         total++;
       }
     }
@@ -516,6 +692,7 @@ export class Vegetation {
       if (b.count) {
         b.mesh.instanceMatrix.needsUpdate = true;
         if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
+        b.extra.needsUpdate = true;
       }
     }
     this.stats.instances = total;

@@ -174,10 +174,32 @@ export class SimClient {
     });
   }
 
+  /** callers waiting for a snapshot taken after a moment (see fresh()) */
+  private freshWaiters: { after: number; ok: () => void }[] = [];
+
+  /**
+   * Resolves when a snapshot asked for now has arrived: the world as it is after every command and step already
+   * answered (the worker handles messages in order). Framing a camera on something just made or moved needs it; a
+   * slow frame (a software renderer takes seconds) must not stand between the request and the answer.
+   */
+  fresh(): Promise<void> {
+    if (!this.backend) return Promise.resolve();
+    const after = performance.now();
+    this.backend.requestSnapshot(this.wantFull);
+    this.wantFull = false;
+    this.inFlight = true;
+    this.requestedAt = after;
+    this.lastRequest = after;
+    return new Promise<void>((ok) => this.freshWaiters.push({ after, ok }));
+  }
+
   private receive(s: Snapshot): void {
     const now = performance.now();
     this.view.apply(s, now);
     this.inFlight = false;
+    if (this.freshWaiters.length) {
+      for (let i = this.freshWaiters.length - 1; i >= 0; i--) if (this.freshWaiters[i].after < now) { this.freshWaiters[i].ok(); this.freshWaiters.splice(i, 1); }
+    }
     this.snapsThisSecond++;
     if (now - this.hzWindowStart > 1000) {
       this.snapshotHz = (this.snapsThisSecond * 1000) / (now - this.hzWindowStart);

@@ -1,12 +1,15 @@
 // GENESIS — the Renderer (CONTRACT.md §15): WebGL2 + logarithmic depth, floating origin, every planet / sky / post
 // pass per frame in the order of §15.2:
-//   shadows (primary planet, near the surface) → opaque scene into HDR (starfield, star, terrain, orbit lines)
-//   → scene copies → water → clouds (reduced res) → atmosphere composite per planet (far → near)
-//   → god rays → bloom → exposure → lens flare + AgX + grade → FXAA + grain → canvas.
+//   cloud weather + cloud-shadow bake (primary planet, only when its weather changed) → shadows (primary planet, near
+//   the surface) → opaque scene into HDR (starfield, star, terrain, orbit lines) → scene copies → water → GTAO →
+//   clouds (interleaved march + full-res resolve) → atmosphere composite per planet (far → near; the first one folds
+//   in the AO) → god rays → bloom → exposure → lens flare + AgX + grade → FXAA + grain → canvas.
+// Night: the brightest moon in the sky lights the primary planet (terrain direct light, clouds, a moonlit sky, the
+// ambient of every other material) and the exposure meters down to moonlit ground.
 // It reads the WorldView and a CameraPose; it never writes the world.
 
 import {
-  Frustum, Matrix3, Matrix4, NoToneMapping, PerspectiveCamera, Scene, Vector2, Vector3, WebGLRenderer, type IUniform,
+  Frustum, Matrix3, Matrix4, NoToneMapping, PerspectiveCamera, Quaternion, Scene, Vector2, Vector3, WebGLRenderer, type IUniform,
 } from 'three';
 import type { WorldView, PlanetView } from '../client/worldview.ts';
 import { PlanetVisual } from './planet/planetview.ts';
@@ -21,6 +24,7 @@ import { Starfield } from './sky/starfield.ts';
 import { OrbitLines } from './orbitlines.ts';
 import { FullscreenQuad } from './post/fsquad.ts';
 import { PostPipeline, type PostSettings, type SunScreen } from './post/pipeline.ts';
+import { GtaoPass, aoFor } from './post/gtao.ts';
 import { QUALITY, type Quality, type QualityName } from './quality.ts';
 import { nearestPlanet, sunIlluminance, type CameraPose } from './frame.ts';
 import { blackbody } from '../client/orbits.ts';
@@ -53,13 +57,33 @@ const _storms: CloudStorm[] = [];
 const smoothstepN = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const _bodyToClip = new Matrix4();
 /** weather kinds → how much cloud they make and whether they have an eye (weather.json, the sim's own data) */
-const WEATHER_LOOK = new Map<string, { cloud: number; eye: boolean }>(
-  (BASE_PACK.weather ?? []).map((w) => [w.id, { cloud: Math.max(0, Number(w.render?.cloud ?? 0)), eye: !!w.render?.eye }]),
+const WEATHER_LOOK = new Map<string, { cloud: number; eye: boolean; style: number }>(
+  (BASE_PACK.weather ?? []).map((w) => [w.id, {
+    cloud: Math.max(0, Number(w.render?.cloud ?? 0)), eye: !!w.render?.eye,
+    // cloud organisation style: tropical cyclone (eye), convective (lightning-bearing towers), else a front
+    style: w.render?.eye ? 2 : Number(w.render?.lightning ?? 0) >= 0.2 ? 1 : 0,
+  }]),
 );
 const _w2b = new Matrix3();
+const _q4 = new Quaternion();
 const _m4 = new Matrix4();
 const _up = new Vector3();
 const _atmoList: PlanetVisual[] = [];
+const _moonDir = new Vector3();
+const _moonE = new Vector3();
+const _moonB = new Vector3();
+const _moonK = new Vector3();
+const _v3 = new Vector3();
+const _sunView = new Vector3();
+/** weather / shadow cube face size per preset (cloud steps → resolution) */
+const WX_RES = (steps: number): number => (steps <= 24 ? 96 : steps <= 32 ? 128 : steps <= 48 ? 192 : 256);
+/**
+ * Moonlight, art-directed: the brightest other body in the sky (albedo × Lambert-sphere phase × apparent size²) at a
+ * fixed boost (a full moon of the Moon's apparent size gives 0.6 % of the sun), capped at 1.2 % of the sun. Real
+ * moonlight is ~10⁻⁶ of the sun; a game night must stay readable.
+ */
+const MOON_BOOST = 2500;
+const MOON_CAP = 0.012;
 
 export class Renderer {
   readonly three: WebGLRenderer;
@@ -72,6 +96,7 @@ export class Renderer {
   readonly shadows: SunShadows;
   readonly clouds = new CloudPass();
   readonly atmoPass = new AtmospherePass();
+  readonly gtao = new GtaoPass();
   readonly star = new StarVisual();
   readonly starfield = new Starfield();
   readonly orbits = new OrbitLines();
@@ -107,6 +132,9 @@ export class Renderer {
     this.camera.matrixAutoUpdate = true;
     this.shadows = new SunShadows(this.quality.shadowMapSize);
     this.shadows.init(this.three);
+    // the AO's sun-share estimate reads the cascaded sun shadow
+    this.gtao.bindShadows(this.shadows.uniforms as unknown as Record<string, IUniform>);
+    this.clouds.setWeatherRes(WX_RES(this.quality.cloudSteps));
     this.scene.add(this.starfield.group, this.star.group, this.orbits.group);
     this.scene.matrixWorldAutoUpdate = true;
   }
@@ -120,6 +148,7 @@ export class Renderer {
     this.settings.grain = this.quality.grain;
     this.shadows.setSize(this.quality.shadowMapSize);
     this.shadows.init(this.three);
+    this.clouds.setWeatherRes(WX_RES(this.quality.cloudSteps));
     this.resize(this.cssW, this.cssH, this.dpr);
   }
 
@@ -133,7 +162,7 @@ export class Renderer {
     const w = Math.max(2, Math.round(this.cssW * pr * this.quality.renderScale));
     const h = Math.max(2, Math.round(this.cssH * pr * this.quality.renderScale));
     this.post.setSize(w, h, this.quality.msaa);
-    this.clouds.setSize(Math.max(2, Math.round(w * this.quality.cloudScale)), Math.max(2, Math.round(h * this.quality.cloudScale)));
+    this.clouds.setSize(w, h, this.quality.cloudScale);
     this.orbits.setResolution(w, h);
     this.starfield.setPixelRatio(pr * this.quality.renderScale);
     this.camera.aspect = this.cssW / this.cssH;
@@ -216,11 +245,14 @@ export class Renderer {
       const E = sunIlluminance(view.star.luminosity, d);
       const isPrimary = pv.id === this.primaryId;
       if (isPrimary) primaryVis = vis;
+      // clouds (and their shadows) are drawn for the primary planet only: the others cast none either
+      else vis.uniforms.uCloudOn.value = 0;
       vis.frameUpdate({
         camWorldInverse, frustum: this.frustum, camRel: _rel, sunDirWorld: _sun,
         sunE: _sunE.set(starCol[0] * E, starCol[1] * E, starCol[2] * E), time, K, frame: this.frameNo,
         budget: this.cutFrames > 0 ? Math.max(q.patchBudget, 320) : q.patchBudget, primary: isPrimary, shadows: q.shadowCascades > 0, yearFrac: view.calendar(pv).yearFrac,
         vegRange: 380 * q.vegetationRange, vegDensity: q.vegetationDensity, proj: cam.projectionMatrix, grass: q.grass,
+        lightBudget: q.lightBudget, particleBudget: q.particleBudget,
       });
       // brush preview
       const u = vis.uniforms;
@@ -231,6 +263,27 @@ export class Renderer {
         if (this.brush.color) u.uBrushColor.value.set(...this.brush.color);
       } else u.uBrushOn.value = 0;
       vis.atmo.update(r, this.fsq);
+    }
+    // ── the sun's elevation at the camera (exposure, grade, AO) and the moon over the primary planet ──
+    const camSunEl = this.camSunElevation(primaryVis);
+    const moonOn = primaryVis ? this.moonLight(view, primaryVis, starCol) : false;
+    // ── cloud weather of the primary planet: organised and baked (weather + shadow cubes) BEFORE the scene, whose
+    // materials read the cloud-shadow cube ──
+    const cloudVis = primaryVis && primaryVis.atmo.has && primaryVis.hasClouds && primaryVis.cloudCube ? primaryVis : null;
+    if (cloudVis) {
+      const pv = cloudVis.pv;
+      this.clouds.bind(cloudVis.atmo, cloudVis.cloudCube!.texture);
+      // the sim's weather systems organise the cloud cover (spiral arms, cores, eyes); a planet-wide override
+      // organises into storm tracks
+      _storms.length = 0;
+      for (const w of pv.weather) {
+        const def = WEATHER_LOOK.get(w.kind);
+        if (!def || def.cloud <= 0.3) continue;
+        _storms.push({ pos: w.pos, radius: w.radius, intensity: w.intensity * Math.min(1, def.cloud), eye: def.eye, style: def.style, vel: w.vel });
+      }
+      const g = pv.params.globalWeather ? WEATHER_LOOK.get(pv.params.globalWeather) : undefined;
+      this.clouds.setWeather(_storms, pv.params.radius, g && g.cloud > 0.5 ? 1 : 0, 0.15 + 0.6 * Math.min(1, Math.max(0, pv.params.cloudiness)));
+      this.clouds.bake(r, this.fsq, cloudVis.cloudCube!.texture, cloudVis.cloudInner, cloudVis.cloudOuter, this.cutFrames > 0);
     }
     // ── star, sky, orbit lines ──
     _star.set(-pose.pos[0], -pose.pos[1], -pose.pos[2]);
@@ -301,34 +354,36 @@ export class Renderer {
     _invProj.copy(cam.projectionMatrixInverse);
     _camRot.setFromMatrix4(cam.matrixWorld);
     let input = post.hdr.texture;
-    let outIdx = 0;
+    // contact shadows (GTAO, Medium+) on the ambient share of the lit scene, before aerial perspective and clouds:
+    // folded into the first atmosphere composite; without air applied here and written back into post.hdr (via atmoB),
+    // so passes that draw into post.hdr when no atmosphere runs still start from it
+    const aoS = q.ssao ? aoFor(q.name) : null;
     const atmoVis = _atmoList;
     atmoVis.length = 0;
     for (const v of this.planets.values()) if (v.atmo.has && this.shellVisible(v, pose)) atmoVis.push(v);
     atmoVis.sort((a, b) => this.distOf(b, pose) - this.distOf(a, pose));
+    if (aoS) {
+      if (primaryVis) _sunView.copy(primaryVis.uniforms.uSunDirView.value as Vector3); else _sunView.set(0, 0, -1);
+      const ss = (a: number, b: number, x: number) => smoothstepN(a, b, x);
+      // sky / direct-sun irradiance: ~0.2 under a high sun, the sky wins as the sun sets
+      const skyRatio = 0.2 + 0.8 * (1 - ss(0.0, 0.45, camSunEl));
+      this.gtao.compute(r, this.fsq, aoS, post.depthTexture, cam.projectionMatrixInverse, cam.projectionMatrix, cam.far, post.w, post.h, this.frameNo, _sunView, skyRatio, ss(-0.02, 0.06, camSunEl));
+      if (atmoVis.length === 0) this.gtao.apply(r, this.fsq, aoS, post.depthTexture, cam.projectionMatrixInverse, cam.far, post.w, post.h, post.hdr.texture, post.atmoB, post.hdr);
+    }
+    let outIdx = 0;
+    let firstComposite = true;
     for (const vis of atmoVis) {
       const pv = vis.pv;
-      const withClouds = vis === primaryVis && vis.hasClouds && !!vis.cloudCube;
+      const withClouds = vis === cloudVis;
       const planetPos = _planetPos.set(pv.center[0] - pose.pos[0], pv.center[1] - pose.pos[1], pv.center[2] - pose.pos[2]);
       const sunDir = _sunDir.set(pv.sunDir[0], pv.sunDir[1], pv.sunDir[2]);
       if (withClouds) {
-        this.clouds.bind(vis.atmo, vis.cloudCube!.texture);
         const w2b = _w2b.setFromMatrix4(_m4.makeRotationFromQuaternion(vis.group.quaternion).invert());
-        // the sim's weather systems organise the cloud cover (spiral arms, cores, eyes); a planet-wide override
-        // organises into storm tracks
-        _storms.length = 0;
-        for (const w of pv.weather) {
-          const def = WEATHER_LOOK.get(w.kind);
-          if (!def || def.cloud <= 0.3) continue;
-          _storms.push({ pos: w.pos, radius: w.radius, intensity: w.intensity * Math.min(1, def.cloud), eye: def.eye });
-        }
-        const g = pv.params.globalWeather ? WEATHER_LOOK.get(pv.params.globalWeather) : undefined;
-        this.clouds.setWeather(_storms, pv.params.radius, g && g.cloud > 0.5 ? 1 : 0);
         _bodyToClip.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse).multiply(vis.group.matrixWorld);
         this.clouds.render(r, this.fsq, {
           depth: post.depthTexture, invProj: _invProj, camRot: _camRot, worldToBody: w2b, far: cam.far, planetPos, sunDir,
           innerR: vis.cloudInner, outerR: vis.cloudOuter, frame: this.frameNo, altitude: vis.camBody.length() - pv.params.radius, radius: pv.params.radius,
-          bodyToClip: _bodyToClip, planetId: pv.id,
+          bodyToClip: _bodyToClip, planetId: pv.id, moonDir: moonOn ? _moonDir : undefined, moonE: moonOn ? _moonE : undefined,
         }, q.cloudSteps, q.cloudLightSteps);
       }
       const m = this.atmoPass.material;
@@ -337,7 +392,23 @@ export class Renderer {
       u.tScene.value = input;
       u.tDepth.value = post.depthTexture;
       u.tCloud.value = this.clouds.target.texture;
+      u.tCloudAux.value = this.clouds.aux;
       u.uHasCloud.value = withClouds ? 1 : 0;
+      // the AO multiplies the scene once: in the first composite (which reads post.hdr)
+      u.uAoOn.value = aoS && firstComposite ? 1 : 0;
+      if (aoS && firstComposite) {
+        u.tAO.value = this.gtao.result;
+        const [aw, ah] = this.gtao.resultSize;
+        (u.uAoRes.value as Vector2).set(aw, ah);
+        u.uAoStrength.value = aoS.strength;
+      }
+      firstComposite = false;
+      // the moonlit sky of the planet the camera is on
+      (u.uMoonDir.value as Vector3).copy(_moonDir);
+      if (moonOn && vis === primaryVis) {
+        const se = vis.atmo.uniforms.uSunE.value;
+        (u.uMoonK.value as Vector3).set(_moonE.x / Math.max(se.x, 1e-6), _moonE.y / Math.max(se.y, 1e-6), _moonE.z / Math.max(se.z, 1e-6));
+      } else (u.uMoonK.value as Vector3).set(0, 0, 0);
       u.uCloudRes.value.set(this.clouds.target.width, this.clouds.target.height);
       u.uCloudShell.value.set(vis.cloudInner, vis.cloudOuter);
       u.uInvProj.value.copy(_invProj);
@@ -352,13 +423,17 @@ export class Renderer {
       // (denser-than-Earth air for real sunsets would wash the ground out from orbit at full strength). Inside the air
       // the haze ramps with distance: ground 50–300 m away stays crisp (0.03), the far hills fade in by ~2 km (0.12)
       const orbitK = Math.min(1, Math.max(0, (altP - thick) / (thick * 4)));
-      u.uApScale.value = 0.12 + 0.14 * orbitK;
-      u.uApRamp.value.set(0.03 + (0.12 + 0.14 * orbitK - 0.03) * orbitK, 300, 2000);
+      u.uApScale.value = 0.1 + 0.08 * orbitK;
+      u.uApRamp.value.set(0.025 + (0.1 + 0.08 * orbitK - 0.025) * orbitK, 300, 2400);
+      u.uCloudHaze.value = 0.3 + 0.7 * orbitK;
       const target = outIdx === 0 ? post.atmoA : post.atmoB;
       this.fsq.render(r, m, target);
       input = target.texture;
       outIdx ^= 1;
     }
+    // ── fire, smoke and embers over the composited image (render/fx/particles.ts via the life layer): after the
+    // atmosphere, so smoke against the sky is never taken for stars, with soft depth from the linear depth copy ──
+    if (primaryVis) primaryVis.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
 
     // ── white balance: like a camera set to "daylight here", neutralise the sun's colour at ~50° elevation on the
     // world we are at, so noon light reads white while sunsets (much redder than that) stay warm
@@ -367,7 +442,19 @@ export class Renderer {
     // ── post ──
     post.keepPrevious(r, this.fsq, input);
     const sun = this.sunScreen(pose, primaryVis);
-    post.setKey(this.sunElevation > -2 ? 0.075 + 0.085 * Math.min(1, Math.max(0, this.sunElevation / 0.3)) : 0.16);
+    // exposure key (mid-grey target, the scene's log-average): 0.133 by day (→ ~122/255 on the curve), dusky at
+    // twilight (0.095), dark at night (0.013: moonlit ground ~12–25/255). The metering floor opens up at night so moonlit
+    // ground (radiance ~10⁻³) is what the exposure meters, not a fixed fallback; the exposure ceiling does NOT rise at
+    // night (it was 14: the auto-exposure lifted a moonless village to dusk and its hearths, windows and lamps — the
+    // brightest things a night should have — sank into a grey, lit-looking scene). Night stays night, lights read.
+    // (sunElevation is a sine.)
+    {
+      const el = this.sunElevation;
+      const night = 1 - smoothstepN(-0.15, -0.02, el);
+      const key = el >= 0 ? 0.095 + 0.038 * smoothstepN(0.0, 0.25, el) : 0.095 + (0.013 - 0.095) * night;
+      post.setKey(key);
+      post.setMetering(0.02, Math.exp(Math.log(6) + (Math.log(5) - Math.log(6)) * night), Math.exp(Math.log(0.004) + (Math.log(0.0002) - Math.log(0.004)) * night));
+    }
     // golden-hour grade: strongest with the sun a few degrees up, gone by mid-morning and in full night
     {
       const el = this.sunElevation;
@@ -375,7 +462,13 @@ export class Renderer {
       const want = (1 - ss(0.04, 0.36, el)) * ss(-0.14, -0.02, el);
       const g = this.post.tonemapMat.uniforms.uGolden;
       g.value += (want - g.value) * (cutNow ? 1 : Math.min(1, dt * 3));
+      // night grade (moonlit blue shadows) once the sun is well down at the camera
+      const n = this.post.tonemapMat.uniforms.uNight;
+      n.value += (ss(0.02, -0.16, el) - n.value) * (cutNow ? 1 : Math.min(1, dt * 3));
     }
+    // after a cut the exposure snaps to its target on every frame of the cut window (terrain patches and the clouds'
+    // history are still converging on the first frame: one snap left the view wrongly exposed for a second)
+    if (this.cutFrames > 0) post.cutExposure();
     post.finish(r, this.fsq, input, this.settings, sun, dt, time, null);
     if (this.cutFrames > 0) this.cutFrames--;
     this.updateStats();
@@ -384,6 +477,61 @@ export class Renderer {
 
   /** sine of the sun's elevation at the camera (1 when not near a planet with air) */
   sunElevation = 1;
+  /** moonlight on the primary planet as a fraction of its sunlight (dev HUD / probes) */
+  moonRatio = 0;
+
+  /** the same sine, available before the post section (the AO's sun share needs it) */
+  private camSunElevation(primary: PlanetVisual | null): number {
+    if (!primary || !primary.atmo.has) return 1;
+    if (primary.altitude >= primary.atmo.thickness * 2) return 1;
+    const up = _up.copy(primary.camBody).normalize();
+    return up.dot(primary.uniforms.uSunDirBody.value as Vector3);
+  }
+
+  /**
+   * Moonlight on the primary planet: direction (world frame, from its centre to the moon's) and illuminance (see
+   * MOON_BOOST). Sets the terrain's moon light, a moonlit share of every material's night ambient and _moonDir /
+   * _moonE for the clouds and the sky. Returns whether a moon lights the planet.
+   */
+  private moonLight(view: WorldView, vis: PlanetVisual, starCol: [number, number, number]): boolean {
+    const pv = vis.pv;
+    const u = vis.uniforms;
+    let best = 0;
+    for (const m of view.planets) {
+      if (m.id === pv.id) continue;
+      const dx = m.center[0] - pv.center[0], dy = m.center[1] - pv.center[1], dz = m.center[2] - pv.center[2];
+      const d = Math.hypot(dx, dy, dz);
+      const R = m.params.radius;
+      if (!(d > R * 2)) continue;
+      const dm = Math.hypot(m.center[0], m.center[1], m.center[2]) || 1;
+      // phase angle at the moon between the star (at the origin) and the planet; Lambert-sphere phase function
+      // (star → moon is −centre, moon → planet is −(dx, dy, dz): their angle is that between centre and (dx, dy, dz))
+      const cosA = Math.max(-1, Math.min(1, (m.center[0] * dx + m.center[1] * dy + m.center[2] * dz) / (dm * d)));
+      const a = Math.acos(cosA);
+      const phase = (Math.sin(a) + (Math.PI - a) * Math.cos(a)) / Math.PI;
+      const albedo = m.params.atmosphere && m.params.atmosphere.pressure > 0.05 ? 0.3 : 0.12;
+      const I = albedo * phase * (R / d) * (R / d) * (sunIlluminance(view.star.luminosity, dm) / Math.max(1e-6, sunIlluminance(view.star.luminosity, Math.hypot(pv.center[0], pv.center[1], pv.center[2]) || 1)));
+      if (I > best) { best = I; _moonDir.set(dx / d, dy / d, dz / d); }
+    }
+    const ratio = Math.min(MOON_CAP, best * MOON_BOOST);
+    this.moonRatio = ratio;
+    const dist = Math.hypot(pv.center[0], pv.center[1], pv.center[2]) || 1;
+    const E = sunIlluminance(view.star.luminosity, dist);
+    _moonE.set(starCol[0] * E * ratio, starCol[1] * E * ratio, starCol[2] * E * ratio);
+    const on = ratio > 1e-6;
+    // body frame and view space (the planet's uniforms were updated this frame)
+    _moonB.copy(_moonDir).applyQuaternion(_q4.copy(vis.group.quaternion).invert());
+    const elev = _v3.copy(vis.camBody).normalize().dot(_moonB);
+    if (u.uMoonE) {
+      (u.uMoonE.value as Vector3).copy(on ? _moonE : _v3.set(0, 0, 0));
+      (u.uMoonDirBody.value as Vector3).copy(_moonB);
+      (u.uMoonDirView.value as Vector3).copy(_moonB).applyMatrix3(u.uBodyToView.value as Matrix3).normalize();
+    }
+    // every material also gets a moonlit sky's share of its night ambient while the moon is up at the camera (the
+    // direct moonlight itself is the uMoonE term in terrain, buildings, roads, trees, bodies — shaders/moon.glsl.ts)
+    if (on) (u.uNightAmbient.value as Vector3).addScaledVector(_moonE, 0.22 * smoothstepN(-0.05, 0.25, elev));
+    return on;
+  }
   private wb = new Vector3(1, 1, 1);
   private sun: SunScreen = { uv: new Vector2(-10, -10), onScreen: false, color: new Vector3(1, 1, 1), strength: 0 };
   private wbSnap = true;
@@ -470,6 +618,7 @@ export class Renderer {
     for (const v of this.planets.values()) v.dispose();
     this.planets.clear();
     this.post.dispose();
+    this.gtao.dispose();
     this.shadows.dispose();
     this.three.dispose();
   }

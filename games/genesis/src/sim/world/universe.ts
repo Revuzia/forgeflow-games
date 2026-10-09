@@ -164,12 +164,32 @@ export class Universe {
    * star's equatorial longitude at `tick` when the caller already has it.
    */
   spinOf(p: Planet, tick: number, lonNow?: number): number {
+    // `dayHours` is the SOLAR day (CONTRACT §5: a 24 h day is 1 440 ticks; the calendar, sleep, crops and shots count
+    // solar days): the rotation follows the star's longitude and adds one turn per day on top, so noon comes back every
+    // dayHours exactly. (Spinning once per dayHours made that the sidereal day: on a 12-day year the sun returned
+    // ~2.2 h later each day.) A frozen sun is the same without the daily turn.
     const st = p.st;
-    if (!st.sunFrozen) return spinAt(st.spin0, st.spinTick0, st.dayHours, false, tick);
-    const lonAt = (t: number) => sunLongitude(this.centerOf(p, t, [0, 0, 0]), st.orbit, st.axialTilt);
-    let d = (lonNow ?? lonAt(tick)) - lonAt(st.spinTick0);
+    let d = (lonNow ?? this.sunLonAt(p, tick)) - this.sunLonAt(p, st.spinTick0);
     d -= Math.round(d / (2 * Math.PI)) * 2 * Math.PI;
-    return st.spin0 + d;
+    return spinAt(st.spin0 + d, st.spinTick0, st.dayHours, st.sunFrozen, tick);
+  }
+
+  /** the star's longitude in a planet's equatorial frame at a tick (no cache: orbits are edited in place) */
+  private sunLonAt(p: Planet, tick: number): number {
+    return sunLongitude(this.centerOf(p, tick, this._c), p.st.orbit, p.st.axialTilt);
+  }
+  private readonly _c: D3 = [0, 0, 0];
+
+  /**
+   * The rotation rate (rad per tick) at a tick, for clients that extrapolate the spin between snapshots
+   * (PlanetParams.spinRate): one turn per solar day plus the star's drift in longitude.
+   */
+  spinRateOf(p: Planet, tick: number): number {
+    const h = 30;
+    let d = this.sunLonAt(p, tick + h) - this.sunLonAt(p, tick - h);
+    d -= Math.round(d / (2 * Math.PI)) * 2 * Math.PI;
+    const drift = d / (2 * h);
+    return p.st.sunFrozen ? drift : drift + (2 * Math.PI) / (Math.max(1e-6, p.st.dayHours) * 60);
   }
 
   /** queue a presentation event (FX, sound, toast) */

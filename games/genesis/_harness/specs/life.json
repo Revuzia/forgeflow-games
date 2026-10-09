@@ -1,0 +1,12 @@
+{
+  "$comment": "GENESIS life visuals (CONTRACT \u00a715.6/\u00a715.7) on the lookdev world's fabricated settlements, people, herds and wildfire (src/client/lookdevlife.ts). Run: node _harness/shots.mjs _harness/specs/life.json",
+  "shots": [
+    {"name": "life-town-60m", "params": "source=lookdev", "size": [960, 540], "camera": {"mode": "orbit", "poi": "town", "dist": 60, "tilt": 70, "hour": 10}, "frames": 6},
+    {"name": "life-street-2m", "params": "source=lookdev", "size": [960, 540], "camera": {"mode": "surface", "poi": "town", "alt": 1.8, "pitch": -1, "hour": 15.5}, "frames": 6},
+    {"name": "life-forest-edge-5m", "params": "source=lookdev", "size": [960, 540], "camera": {"mode": "surface", "poi": "forest-edge", "alt": 5, "pitch": -3, "hour": 9.5}, "frames": 6},
+    {"name": "life-farm-3m", "params": "source=lookdev", "size": [960, 540], "camera": {"mode": "surface", "poi": "farm", "alt": 3, "pitch": -6, "hour": 15}, "frames": 6},
+    {"name": "life-city-night-300m", "params": "source=lookdev", "size": [960, 540], "camera": {"mode": "orbit", "poi": "city", "dist": 300, "tilt": 55, "hour": 22.5}, "frames": 6},
+    {"name": "life-orbit-night", "params": "source=lookdev", "size": [960, 540], "camera": {"mode": "orbit", "poi": "city", "dist": 5200, "tilt": 25, "hour": 23}, "frames": 6},
+    {"name": "life-burning", "params": "source=lookdev", "size": [960, 540], "camera": {"mode": "orbit", "poi": "burning", "dist": 85, "tilt": 56, "turn": 25, "hour": 19}, "frames": 6}
+  ]
+}

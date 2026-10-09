@@ -55,6 +55,8 @@ export interface PlanetView {
    * the renderer lights exactly the hemisphere and hour the sim warms. Every light / sky / shadow consumer reads this.
    */
   sunDir: D3;
+  /** the interpolated render tick of the last updateBodies() (movers extrapolate from paramsTick to here) */
+  renderTick?: number;
 }
 
 const _sb: D3 = [0, 0, 0];
@@ -303,6 +305,7 @@ export class WorldView {
       }
       pv.center[0] = cx; pv.center[1] = cy; pv.center[2] = cz;
       pv.spin = spinAt(pv.params, pv.paramsTick, t);
+      pv.renderTick = t;
       bodyQuat(pv.params, pv.spin, pv.quat);
       litSunDir(pv);
       done.add(pv.id);

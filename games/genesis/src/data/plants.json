@@ -86,7 +86,7 @@
     { "id": "baobab", "name": "Baobab", "type": "tree", "form": "baobab", "habitat": "land",
       "temp": [16, 22, 34, 44], "moisture": [0.08, 0.18, 0.45, 0.7], "soil": 0.2, "salinity": 0.2, "water": [0, 0.03],
       "growth": 0.012, "spread": 0.06, "light": 0.55, "height": [12, 24], "fuel": 0.6, "flammability": 0.2,
-      "deciduous": true, "colors": { "leaf": "#5d8a3a", "leafAutumn": "#9a8a4a", "bark": "#9a8270", "flower": "#f2efe2" } },
+      "deciduous": true, "colors": { "leaf": "#5d8a3a", "leafAutumn": "#9a8a4a", "bark": "#5e5048", "flower": "#f2efe2" } },
     { "id": "acacia", "name": "Acacia", "type": "tree", "form": "acacia", "habitat": "land",
       "temp": [14, 20, 34, 46], "moisture": [0.06, 0.15, 0.45, 0.75], "soil": 0.08, "salinity": 0.3, "water": [0, 0.03],
       "growth": 0.03, "spread": 0.14, "light": 0.55, "height": [6, 14], "fuel": 0.7, "flammability": 0.6,

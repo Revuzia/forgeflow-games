@@ -1,28 +1,266 @@
-# GENESIS — status after phase 1 (integration)
+# GENESIS — status after phase 2 (integration)
 
-Phase 1 = sim core + render foundation, integrated: the app runs the **real deterministic sim in its Web Worker** by
-default and draws it live. No peoples, buildings, god hand, UI panels or audio yet (phases 2–5).
+Phase 1 built the deterministic sim core and the render foundation (kept below as a reference). Phase 2 adds the
+peoples, recipes, societies and ecology to the sim and draws them live in the browser: people walk, settle, build,
+farm, keep fire, discover, forget, trade, fight, split and fall; herds graze, flee, breed and speciate; the client shows
+it all with procedural bodies, buildings, roads, crops, night lights, fire, toasts and an inspector.
+**Not built yet (phases 3–5):** the god hand and creature, command palette / radial / freeform field / chronicle panel,
+audio, the opening, ships between worlds, saves and settings UI, README / CONTROLS.
 
 ## How to run
 
 ```
 npm install
-npm run dev                      # http://localhost:5190/  (the real sim, scenario 'lookdev')
-npm run check                    # detban + tsc + all node tests
+npm run dev                      # http://localhost:5190/  (the real sim in its worker; default scenario 'lookdev')
+npm run check                    # detban + tsc + all node tests (111 tests in 22 files)
 npm run build                    # dist/ (app + the sim worker bundle; base './', hostable from any sub-path)
-node _harness/shots.mjs _harness/specs/liveloop.json    # barren → air → rain/seas → life → mountain → sunset → night
-node _harness/shots.mjs _harness/specs/scenarios.json   # sandbox / lookdev / twoworlds / system
-node _harness/shots.mjs                                  # the render-dev reference set (?source=lookdev)
-node _harness/perf.mjs --scenario=sandbox --speeds=1,10,100,1000
-open /_harness/treeview.html     # every procedural tree kind × LOD (dev tool)
+node _harness/shots.mjs _harness/specs/integration.json  # phase 2 live: two peoples on the sandbox over years at 100x
+node _harness/shots.mjs _harness/specs/acceptance.json   # CONTRACT §21.1: barren → air → seas → plants → people → fire → 100x
+node _harness/shots.mjs _harness/specs/peoples.json      # a band on twoworlds day by day, inspector, toasts (client lane)
+node _harness/shots.mjs _harness/specs/life.json         # lookdev town / city / farm / forest / night / fire (render lane)
+node _harness/shots.mjs _harness/specs/liveloop.json     # phase 1: barren → air → rain → life → mountain → night
+node _harness/perf_people.ts 1500 2                      # Node: the n = 64 world with and without 1 500 agents (CPU time)
+node _harness/perf_worker.ts 1500 20 100,1000            # Node: the real worker at 100x / 1000x with 1 500 agents, no renderer
+node _harness/perf.mjs --people=1500 --speeds=100,1000 --view=settlement   # browser: achieved speed + frame time
 ```
 
-URL: `?scenario=barren|sandbox|lookdev|twoworlds|system` `&seed=` `&speed=` `&quality=low|medium|high|ultra|cinematic`
-`&source=worker` (default) `|lookdev` (render-dev generator, no sim) `|auto` (worker, falls back to lookdev with a toast)
-`&hour=` `&cam=orbit|system|coast|valley|peak|town|forest` `&ui=0` `&dev=1` (dev overlay + `window.__GENESIS_APP__`).
-Test surface: `window.__GENESIS__` (CONTRACT §18). Hours are the planet's own (a 30 h world has noon at 15).
+URL: `?scenario=barren|sandbox|lookdev|twoworlds|system` `&seed=` (app default 20260) `&speed=`
+`&quality=low|medium|high|ultra|cinematic` `&source=worker` (default) `|lookdev` (render-dev generator) `|auto`
+`&hour=` `&cam=…` `&ui=0` `&dev=1`. Test surface `window.__GENESIS__` (CONTRACT §18) adds `query`, `poi`, `select`,
+`follow`, `click`, `agents`, `buildings`, `toastLife`. Camera POIs include `homestead`, `homestead-coast` (a homestead
+with the sea in reach, for coastal folk), `herd` (the biggest grazing herd), `settlement:<id>`, `farm:<id>`, `harbour`,
+`burning`, `city/town/village/camp`, `forest`, `forest-edge`, `coast`, `valley`, `river`, `peak`, `desert`.
 
-## What works
+Shot specs (`_harness/shots.mjs`): `commands` (values may use `"$poi:<name>"`, `"$created"`, and `"as": "<name>"` on a
+command keeps what it created as `"$<name>"`, also inside strings: `"$poi:settlement:$plains"`), `wait` (ticks, stepped
+as fast as the worker can), `run: {speed, seconds}` (real time at a multiplier), `camera` (an `hour` there scrubs the
+sim's sun with `time.set-hour`), `select`, `follow`, `click`, `ui`, `chronicle: true | N` (print the chronicle and save
+it as `_shots/<name>.chronicle.txt`), `pick: "agent:settlement:<id>"` (keep one of its people as `"$agent"` for a
+camera `target` and `select`).
+
+## Phase 2 — what works
+
+**Content (data, `src/data/**`, validated by `content.ts`):** 5 species (plains folk, coastal folk, the hive, cold
+folk, methane drifters), 126 items, 145 recipes from stone tools to rocketry and the generation ship (every one
+discoverable; a pack with dead ends, cycles or a hot craft whose only workplace needs the craft is refused), 38
+buildings, 16 materials, 27 animals (+ species born by speciation), 8 diseases, 30 plants, 104 chronicle templates,
+name phonologies for 5 languages.
+
+**Peoples (sim, `src/sim/people/**`, `recipes/**`):** SoA agents with needs, traits, skills, knowledge bitsets,
+memories, faith; event-driven decisions on a time wheel, analytic movement along A* / flow-field routes; day and night
+(sleep by their own sun), warmth (shelter, body heat, fire, clothes), food from foraging, hunting, fishing, farming,
+herding and cooking. Knowledge: libraries and writing, teaching, watching, talk, experiments, accidents, artifacts, god
+teaching that can be refused; loss with the last knower (and the chronicle says so); hoarded secrets. Buildings from what
+builders can get, decay, fire, ruins. Settlements: site choice through the year, names from a feature, households,
+roles, stores, territory, roads worn by feet, splits with a drifted tongue, abandonment, falls; cohorts beyond the
+individual cap and `focus` to bring them back. **Societies:** economy (prices from scarcity, gifts, theft, markets,
+caravans and trading boats as real agents), polities and relations, raids, sieges, battles, conquest, treaties,
+tribute, factions, leaders, religion and disbelief, taboos and sacred things from the town's stories, first contact by
+land and sea, golden and dark ages, boats (rafts → sailships) with docks that grow from use and colonists who cross the
+sea. **Ecology:** herds that graze, flee, migrate, breed, starve and are hunted, predator–prey balance, domestication,
+speciation and extinction, invasive species, blight, SEIR plagues with medicine. Snapshot blocks (agents, animals,
+buildings, settlements, population, worship) and inspector queries; ~40 commands (spawn, teach, gift, introduce, found,
+raze, war, peace, split, merge, cull, breed…). All deterministic (same seed + log → same hash; save/load and rewind).
+
+**Life visuals (render, `src/render/life/**`, `gen/**`):** procedural species bodies with GPU vertex animation (walk,
+work, carry, pray, sleep, fish, build, chop, dig, dance, flee, mourn…), animals in herds / flocks / shoals / swarms,
+buildings per type × material × style × era (scaffolds while rising, rubble when ruined, flames and smoke when
+burning), road ribbons by tier with street lamps by era, crops in rows by growth stage, ground cover (grass,
+wildflowers, ferns, logs, mushrooms, reeds), trees that cross-fade between three LODs and char near fire, boats under
+people afloat, night lights (hearths, windows, lamps, wildfire) and GPU fire / smoke / embers / sparks.
+
+**Client (`src/app.ts`, `src/client/**`, `src/ui/**`):** the live worker's blocks drawn every snapshot (cheap state-only
+updates, smoothing of movers), settlement labels, toasts (discoveries, births and deaths gathered per settlement,
+founding, splits, falls, refusals, war, plague… clicking one flies there), and the inspector (click a person, building,
+herd or settlement: biography, needs, skills, knowledge, family, memories; rule, factions, neighbours, stores, stories,
+language) with Look and Follow.
+
+## Phase-2 integration pass
+
+Every sim ↔ client mismatch the lanes reported, resolved:
+
+- **The day was sidereal.** `dayHours` drove one rotation per `dayHours`, so on Gaia (12-day year) the sun came back
+  every 1 571 ticks, not 1 440: noon drifted ~2.2 h a day and shots had to wait "solar days". `Universe.spinOf` now
+  anchors the rotation to the star's longitude and adds one turn per `dayHours` (the frozen-sun branch already worked
+  this way), so `dayHours` is the solar day (CONTRACT §5: a 24 h day = 1 440 ticks; a 12-day year is exactly 12 days).
+  Snapshots publish the exact rate as `PlanetParams.spinRate` (additive), which the client's `spinAt` extrapolates with
+  (old data falls back to one turn per `dayHours`). Checked on every world of `sandbox` and `system`: the same hour
+  every `dayHours × 60` ticks; extrapolation error ≤ 1e-3 rad per 100 ticks. `peoples.json` waits are whole 1 440-tick
+  days again.
+- **Boats.** `agentBlock` put the carried item in `carry` for people afloat; it is now the boat item (types.ts
+  `AgentFlag.boat`), so the client draws raft / boat / sailship from the sim, not a default rowing boat.
+- **Fireless dwellings glowed 15 %.** `lightOf` gives hearth-age dwellings no light when the settlement keeps no fire
+  (`nightLight = 0`): a people without fire huddles in the dark (§16.1). The client's gate stays as a fallback.
+- **Animals crash after speciation** (herd species past the content list): fixed in the live tree by the societies
+  lane; verified by a 70-day `twoworlds` run (8 speciations, every snapshot's animal species in range, herd and
+  ecology queries every day, no error).
+- **A band dropped at a point appeared ~165 m away** (`landingCell` teleported it to the best site within 5 rings).
+  A band now stands where the hand put it (the nearest dry land) and *walks* to the site it chose, if it can walk
+  there; established peoples (`settled` / above stone) still stand on their site at once.
+- **A band spawned with no place (`twoworlds`, no focus) never settled.** Three causes, all fixed:
+  (1) the scenario's default "here" was any land near the equator facing the morning sun — on seed 20260 waterless
+  dunes; it now prefers habitable ground (the plains folk's site score; airless worlds unchanged);
+  (2) a band that saw nothing good within 3 rings did a random walk of 4-cell legs that re-rolled its direction every
+  12 h; now its scouts range ~1.2 km (sparse search, near sites preferred), sites it cannot walk to (across a lake, up
+  a cliff) are passed over for 10 days (`st.recent`, saved), and when nothing is in reach it walks toward the
+  greenest, wettest, flattest land in view, holding a bearing for two days;
+  (3) band members followed in straight 3-cell legs that could run into deep water (one 165 m segment was a four-day
+  swim) and, at ~15 m per game hour, lasted half a day without a decision — so nobody drank or slept. Legs are now one
+  cell along an A* route (swimmers and boat crews may cross water).
+- **Fire nobody could feed.** While food was short every gatherer foraged, so a people that knew fire-keeping sat by
+  a cold hearth for years (Node probe: 30 days, wood 0, hearth fuel 0). One gatherer in four now fetches firewood
+  while a kept hearth's woodpile is low; with fire they then work out cooking, roasting and pottery.
+- **Huts that never rose.** For the same reason builders whose site lacked materials fell back to foraging food, so
+  nobody fetched stone, reeds or wood: a band's two hut frames stood bare for weeks (browser and Node). A builder now
+  fetches its site's materials (they lead the settlement's wants). Node projection of the integration world: 5 huts by
+  day 20, 8 huts + a house + a shrine by day 40, 15 buildings and 47 people by day 60 (before: 2 frames at day 17).
+- **Villages that fell to ruin while lived in.** Repairs waited behind construction (there is nearly always a site in
+  hand), and with no site open nobody held the builder role at all, so huts (thatch lasts ~40 days untended, wood ~70)
+  decayed into ruins with people still sleeping in them. A building at damage ≥ 0.6 is now mended before any new
+  site, and worn buildings count toward the builder quota.
+- **`sc.focus`** compared a scenario planet index with planet ids (moons take ids in between); it now counts the
+  scenario's own planets like `peoples[].planet` does.
+- **Equator seam (render).** The terrain shader switched autumn / winter at the sign of the latitude, which drew a
+  hard line round the equator (very visible on a terraformed Cinder). Seasons now fade toward the equator and scale
+  with the axial tilt (`uSeasonAmp`, set from `PlanetParams.axialTilt`).
+- **Settlement position of a fresh camp** (the founding cell while its people still gather 30–45 m away): kept as is
+  (the place is the place); the client frames bands and bare camps on their people's centroid.
+
+Tests: `tests/acceptance-barren.test.ts` (new, §21.1, below). Two tests were re-pointed at what they mean after the
+behaviour changes: `society.test.ts` "iron monopoly" compares the two runs' opinions *on the same day* (the monopoly
+run stops at its war on day 8, the fair run went on drifting for 18 days; day for day the fair town is 0.26 warmer,
+the test asks for 0.15 — the solar day, not the placement, had moved the fair run's drift);
+`emergence.test.ts` asserts the band *laid in* food (≥ 3 days in store at some point) and nobody starved, rather than
+food in store at the end of day 8 (the store is eaten down before the first harvest; it passed by 0.5 days before).
+
+## Acceptance §21.1 — from the barren start
+
+**Node, sim only: `tests/acceptance-barren.test.ts`** (part of `npm test`, 30–40 s). The real `barren` scenario (Cinder,
+30 h days, 9.6-day years) at grid n = 32: airless, dry, bare, empty → `planet.add-air` and ~10 days of greenhouse warming
+(−40.8 → >10 °C mean; rain on frozen rock only lays snow) → a world storm while the sea level is raised (seas and lakes
+fill the craters) → meadow grass and berry scrub, two forests → 30 plains folk at the best place to live → the
+god teaches fire keeping and fire making → three Cinder years at full speed. It asserts a settlement stands, ≥ 15 live,
+a hearth burned at night, they hold ≥ 3 ideas nobody gave them (discovery events of their own, never `god`), and the
+chronicle names them. A run of it tells (abridged): *"A band of plains folk settled at Vuman by the Lake." · "A fire
+laid on clay at Vuman by the Lake left a hard red shell. Sekan understood: pottery." · "After many failures the
+flint-clan of Vuman worked out cooking." · "In Vuman by the Lake, Ta worked out agriculture. Nobody had shown her
+how." · "The clay age began at Vuman by the Lake." · "The golden age of Vuman by the Lake began…" · "Vuman by the Lake
+raised its first bread oven." · "After many failures the mason-clan of Vuman worked out houses." · "Rafts was first
+understood in Vuman by the Lake, by Kukek."* — 30 discoveries in three Cinder years, none of them placed.
+
+**Browser, live worker, full-size Cinder (n = 64): `_harness/specs/acceptance.json`** → `_shots/acc-01-barren` …
+`acc-07-first-night`: the grey cratered rock; the blue limb after air; the world storm filling the seas; green land,
+crater lakes and polar snow; the band set down at the `homestead`; the settlement after 120 s at 100x with the inspector
+open; the first night by the hearth. The chronicle of that run is saved as `_shots/acc-06-left-at-100x.chronicle.txt`.
+
+## Screenshots (live worker sim, SwiftShader, 1280×720 medium; all looked at)
+
+**A living world on the sandbox (`_harness/specs/integration.json`, one page = one world's history, seed 20260):**
+`int-01-world` the bare sandbox after the god sows it (grasses, wild grain, berries, ten forests) ·
+`int-02-band-arrives` 40 plains folk walking from where the hand put them among palms and pools ·
+`int-03-coastal-folk` 30 coastal folk at a palm grove by the shore (`homestead-coast`) ·
+`int-04-herds` deer and wolves in a forest (deer, aurochs, wild horses and wolves set loose) ·
+`int-05-camp-day1` the camp: two hut frames, people at the water ·
+`int-06-village` after 40 s at 100x (year 2, ×51): "Isobar by the Lake · clay age", discovery toasts ·
+`int-07-coastal-village` "Lane of the Singing Water" ·
+`int-08-town` after 160 s more at 100x (**136 400 ticks ≈ 9.5 game years, ×85–94**): year 12, bronze age, timber
+houses, domed huts and the charred ruins of the year-6 fire on worn roads; toasts of the coastal town's losses ·
+`int-09-street` street level (1.7 m) among houses, ruins and a scaffold · `int-10-forest` a forest canopy ·
+`int-11-herd-card` the inspector on a herd ("Red deer", 8 animals, grazing, wild) ·
+`int-12-inspect-person` the inspector on a person (Humthu, 5, drinking; needs, faith, skills, nature, knowledge —
+`_harness/specs/inspect.json`, the same seeded world four days in) ·
+`int-13-inspect-settlement` the settlement card (bronze age, 40 souls, Chief Shuthu, factions, 18 born / 18 died,
+14 maize fields, 54 ideas) · `int-14-night-village` lit windows and the hearth at night ·
+`int-15-night-orbit` the night side from orbit: the one lit village is a small glow (two villages do not make a city) ·
+`int-16-burning` the god sets the town alight at dusk: burning buildings and ground ·
+`int-16b-burning-oblique` the same from a low angle so the flames read (`_harness/specs/fire.json`, a fresh camp).
+The world's chronicle (175 entries) is `_shots/int-16-burning.chronicle.txt`; excerpts: *"Where the plains folk of
+Isobar by the Lake threw out seed, grain came up thick. Shuthu saw the meaning: agriculture."* · *"Year 6. Isobar by the
+Lake burned."* · *"The plains folk of Isobar by the Lake swore never to make fire again, nor to take it as a gift."* ·
+*"Grain left wet in the stores … turned sour and strange. Shuthu drank it anyway, and Isobar by the Lake learned
+brewing."* · *"Neduk … raised orphaned cubs by the fire. They stayed: animal husbandry."* · *"Green stones in the kiln
+at Isobar by the Lake wept bright metal. Ten learned copper smelting."* · *"Isobar by the Lake entered the bronze age."*
+· *"When Saises died, Lane of the Singing Water forgot fishing nets. Nobody had written it down."* · speciation and
+extinction of the herds the god set loose (*"…the wolves of Gaia became something new: savanna wolves."*).
+
+**From the barren start (§21.1, `_harness/specs/acceptance.json`):** `acc-01-barren` … `acc-07-first-night` (above).
+
+Earlier lane shots kept in `_shots/`: `peoples-*`, `toasts-*`, `fields-*` (client lane, twoworlds), `life-*` (lookdev
+town / city / farm / forest / night / fire), `cint-lookdev-*`, phase-1 `loop-*` and `sc-*`.
+
+## Measurements (phase 2; 4-core Xeon @ 2.1 GHz shared with other engineers' SwiftShader captures, load average 12–21)
+
+**Sim throughput with ~1 500 agents** (CONTRACT §6.1 asks ≥ 1 000 ticks/s on the n = 64 home world):
+
+| measure | world alone | with ~1 600 agents | notes |
+|---|---|---|---|
+| `perf_people.ts 1500 2`, CPU time | 1 344 ticks/s (0.744 ms/tick) | **781 ticks/s** (1.280 ms/tick) | people 0.54 ms/tick, 0.34 µs per agent per tick; 25 clay-age villages, 521 buildings, 38 herds |
+| same, wall time (loaded machine) | 902 | 506 | |
+| `perf_worker.ts`, real worker, 30 Hz snapshots, **100x** | | **503 ticks/s** (×52) | 1 509 → 1 399 agents during the run; snapshot round trip p50 17 ms / p95 57 ms |
+| `perf_worker.ts`, **1000x** | | **645 ticks/s** (×65) | 1 268 agents; p50 15 ms / p95 71 ms; best effort, never skips work |
+| browser, live while SwiftShader renders a village (2–5 M triangles) | | ×23–58 | the worker shares the 4 cores with the software GPU |
+
+Profile of the people step (1 600 agents): decisions ~36 % (planning ~44 % of that, starting tasks ~22 %, needs
+~15 %), the hourly settlement step ~37 % (jobs, resources, wants, roles, construction), task completion ~8 %; no single
+hot spot. The world systems dominate the rest (climate column kernel, hydrology flux, vegetation).
+
+**Frame time** (SwiftShader, CPU rendering — regressions only, says nothing about a real GPU):
+
+| `perf.mjs --people=1500`, 1280×720 medium, load ≈ 12 | worker achieved | ticks/s seen by the client | wall ms per frame | `render()` CPU |
+|---|---|---|---|---|
+| settlement view, 100x | ×58 | 430 | 15 100 | 83 ms |
+| settlement view, 1000x | ×47 | (no snapshot in the window) | 15 200 | 56 ms |
+| orbit view, 100x | ×42 | 222 | 15 100 | 17 ms |
+| orbit view, 1000x | ×44 | 186 | 10 100 | 850 ms (one slow frame in a short window) |
+
+Shot runs: 7–67 s per frame (2–5 M triangles, 1 500–2 600 draws) while other engineers' captures shared the CPU; the
+same run reported 7.5 s per frame for the airless orbit (179 k triangles). At 100x the worker achieved ×23–51 while a
+village view rendered, and ×85–94 over the 160-s run of `int-08` (136 400 ticks).
+
+Client CPU per frame on live data (client lane, 1 508 agents / 510 buildings): LifeLayer.update 2.4 ms (buildings
+1.1, crowds 1.1, animals 0.2), WorldView.apply 0.02 ms per snapshot without fields.
+
+## Known gaps
+
+- **Not built yet (phases 3–5):** the god hand, creature, command palette / radial / freeform field / chronicle panel /
+  overlays / settings / saves UI, audio, the opening (`?intro` is ignored), ships between worlds (`firstOrbit` exists
+  for the launch system to call), photo / dolly / walk cameras, README and CONTROLS.
+- **Sim budget missed:** ~780 ticks/s by CPU time with ~1 600 agents on the n = 64 world (CONTRACT §6.1 asks 1 000;
+  the world alone runs ~1 340). The people's ~0.54 ms/tick is spread thinly (decisions and their planning ~50 %, the
+  hourly settlement step ~35 %, no single hot spot); closing it needs structural work (fewer decisions per agent, a
+  slower settlement cadence, multi-cell movement steps). In the browser the worker shares the cores with SwiftShader,
+  so live rates there are far lower (×23–58 while a 2–5 M-triangle view renders on this machine).
+- **Desert peoples in summer:** on `twoworlds` the hive on Rust runs out of stored food by day 7 and, when its lake
+  dries in the 52 °C midsummer, abandons its home (drought) on day 15 and dies on the road — with either day
+  definition (checked against the old sidereal spin). Twoworlds therefore keeps only the plains folk after ~2 weeks
+  (Gaia's band lives on: 47 people after 70 days). Wells, cisterns or seasonal migration would fix it (people lane).
+- **Lean hand-to-mouth bands:** settlements often eat their store down to nothing between harvests (no deaths); births
+  stay slow (1–3 per band per game year), so "camp → village → town" is mostly more and better buildings and a rising
+  era rather than many more people within a few game years. Coastal folk on a coast without stone or wood build little
+  (their chosen material is out of reach and construction stalls) — set them down where trees grow (`homestead-coast`).
+- **Sandbox is bare by design** ("nothing alive yet"): a people set down there before the god sows plants has nothing
+  to eat; the integration spec sows the world first, `perf_worker.ts` uses `vegetation: 1`.
+- **Render (SwiftShader only; real-GPU frame rate unmeasured):** pools show a polygon-net caustic and dashed dark
+  waterlines up close; the world-storm cloud deck has a stair-stepped limb and the clouds read as blocky cells from
+  orbit; night scenes read bright (exposure / moonlight) with occasional dark blobs in a dusk sky — all in files the
+  polish lane is changing now. Trees and ground cover still flip their season per instance at the equator (the
+  terrain no longer does). Buildings and people switch LOD with a hard cut; no far tree billboards.
+- **Look of the live runs:** a burning settlement seen from above reads like a lava field (the glowing crack pattern
+  covers every burning cell and building; the flame tongues are vertical and only read from a low angle,
+  `int-16b`); night from orbit over two small villages is one faint glow; a lake on flat ground draws as a hard
+  polygon at night; the year-2 "village" of the live run was still two hut frames (its huts rose later and burned in
+  year 6 — the history differs from run to run).
+- **Ecology pace:** isolated herds speciate after 3 years, so a few game years fill the chronicle with
+  speciation / extinction pairs (whales → deep → frost → little blue whales in 8 years) — ecology lane.
+- **Toast wording:** a "discoveries" toast groups what the god taught (fire making) with what the band worked out.
+- **Live boats** are drawn from the sim's boat item now, but no live shot has caught a boat yet (lookdev only).
+- Not verified in screenshots: the Follow camera over time, toasts at 1000×, settlement labels from high altitude.
+
+## Phase 1 (reference)
+
+The phase-1 report, unchanged except for the headings.
+
+### What works (phase 1)
 
 **Sim (worker / Node, deterministic):** every §7 field; hydrology (pipes with momentum, sea reservoir, rivers, springs,
 erosion, floods, tsunamis), hourly climate (energy balance, greenhouse, lapse rate, humidity advection, rain/snow,
@@ -79,7 +317,7 @@ coverage-preserving alpha at coarse mips. Crowns carry a per-vertex crown depth 
 single sky-ambient term, per-tree hue / value jitter, clumping, height variance and an understory; trees at the edge
 of the vegetation range shrink into the ground per instance (no per-pixel dither confetti).
 
-## Phase-1 review fixes (fix engineer)
+### Phase-1 review fixes (fix engineer)
 
 All 41 review findings were triaged; every critical and major one is fixed except where noted under Known gaps.
 Repro probes live in `_harness/scratch/simrev/` (sim) and `_harness/scratch/fix/` (render captures, `capture.mjs`);
@@ -171,7 +409,7 @@ regression tests in `tests/simreview.test.ts`, `tests/determinism.test.ts`, `tes
   ponds have no foam ring).
 - *Capture:* `?ui=0` and clean captures hide the ForgeFlow control bar (`.genesis-clean`).
 
-## Measurements (headless Chromium, SwiftShader — CPU rendering; frame times are for regressions only)
+### Measurements, phase 1 (headless Chromium, SwiftShader — CPU rendering; frame times are for regressions only)
 
 Machine: 4-core Xeon @ 2.1 GHz; SwiftShader renders on the same cores the worker uses, so sim rates here are a floor.
 
@@ -207,11 +445,9 @@ fixes: the orbit view draws ~725k triangles in ~300 terrain patches (the silhoue
 fades out below ~a third of a radius of altitude, which halved the patch count of low views that had paid for it);
 surface views 4.7–10M triangles incl. trees and ground cover, 3–4k draws; `render()` CPU 30–140 ms.
 
-## Known gaps
+### Known gaps (phase 1, still open unless noted above)
 
-- **Not built yet (phases 2–5):** peoples, settlements, buildings, animals, the hand, creature, god powers UI
-  (palette, radial, freeform field, inspector, chronicle panel), audio, the opening (`?intro` is ignored), saves and
-  settings UI, photo/follow/dolly/walk cameras (they fall back to orbit/fly), gamepad/touch, city lights.
+
 - **Sim speed:** ≥ 1000 ticks/s holds only for idle/normal weather on one world; planet-wide heavy rain ~260
   ticks/s; multi-planet scenarios 280–415 ticks/s. 1000x is best effort (the HUD shows the achieved speed).
 - **Sim model (SIM lane notes):** sea is a level-held reservoir (no currents/tides); snow melt runs in the hourly

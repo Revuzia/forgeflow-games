@@ -9,8 +9,10 @@
 //
 // The composite pass reconstructs view distance from the logarithmic depth buffer and applies, per pixel:
 //   final = L(0..tc) + T(0..tc)·cloud + Tcloud·[ L(tc..ts) + T(0..ts)·scene ]
-// with tc the cloud layer and ts the scene depth: sky from the surface, sunsets, the blue limb from orbit, aerial
-// perspective over terrain and haze in front of clouds — one integral. Pressure 0 skips the planet (black sky).
+// with tc the cloud layer (the cloud pass's own per-pixel cloud distance) and ts the scene depth: sky from the surface,
+// sunsets, the blue limb from orbit, aerial perspective over terrain and haze in front of clouds — one integral.
+// The first composite of a frame also applies the GTAO contact shadows to the scene's ambient share (post/gtao.ts), and
+// at night adds the moonlit sky (the sky LUT lit from the moon's direction). Pressure 0 skips the planet (black sky).
 
 import {
   FloatType, HalfFloatType, LinearFilter, Matrix3, Matrix4, NearestFilter, RGBAFormat, ShaderMaterial, Vector2, Vector3,
@@ -20,6 +22,7 @@ import type { AtmosphereParams } from '../../sim/types.ts';
 import { ATMO_PARS, LOGDEPTH_DECODE, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { FullscreenQuad, passMaterial } from '../post/fsquad.ts';
+import { AO_APPLY_GLSL } from '../post/gtao.ts';
 
 /**
  * "drama" factor on Earth's vertical optical depths. A 3 km world has a horizon airmass of only ~7 (Earth: ~38), so
@@ -281,7 +284,9 @@ export class AtmosphereModel {
     if (a.methane > 0.05) tr = [tr[0] * 0.6, tr[1] * 1.15, tr[2] * 1.05];
     u.uBetaR.value.set(tr[0] / u.uHR.value, tr[1] / u.uHR.value, tr[2] / u.uHR.value);
     const dust = Math.max(0, a.dust);
-    const tauM = (0.01 + dust * 0.6) * SKY_DEPTH_SCALE * Math.min(1.5, Math.max(p, dust > 0.05 ? 0.4 : 0));
+    // (clear-air aerosol a quarter thinner than Earth's typical 0.01: the milky white veil over every view came mostly
+    // from Mie; the sun's glow and sunsets keep plenty)
+    const tauM = (0.0075 + dust * 0.6) * SKY_DEPTH_SCALE * Math.min(1.5, Math.max(p, dust > 0.05 ? 0.4 : 0));
     const ms = tauM / u.uHM.value;
     u.uBetaMs.value.set(ms, ms, ms);
     // aerosols absorb toward the blue (sea salt, soot, dust): low suns shine through warm haze; dust far more so
@@ -325,12 +330,17 @@ export class AtmosphereModel {
 const COMPOSITE_FRAG = /* glsl */ `
 #include <common>
 ${ATMO_PARS}
+${SKY_LOOKUP}
 ${LOGDEPTH_DECODE}
 ${NOISE_GLSL}
+${AO_APPLY_GLSL}
 varying vec2 vUv;
 uniform sampler2D tScene;
 uniform sampler2D tDepth;
 uniform sampler2D tCloud;
+uniform sampler2D tCloudAux;  // per pixel: log2(cloud distance + 1) (< 0: none) — where the cloud's light sits
+uniform vec3 uMoonDir;         // moonlit sky at night (world frame); uMoonK = moon / sun illuminance per channel
+uniform vec3 uMoonK;
 uniform float uHasCloud;
 uniform vec2 uCloudRes;
 uniform vec2 uCloudShell;
@@ -342,6 +352,7 @@ uniform vec3 uSunDir;
 uniform int uSteps;
 uniform float uApScale;
 uniform vec3 uApRamp;   // aerial perspective near scale, and the distances (m) over which it ramps up to uApScale
+uniform float uCloudHaze; // share of the air's in-scatter in front of a cloud that is kept (art direction, see below)
 
 vec3 viewDir(vec2 uv) {
   vec4 v = uInvProj * vec4(uv * 2.0 - 1.0, -1.0, 1.0);
@@ -358,6 +369,8 @@ float sceneDistance(vec2 uv, vec3 vdir) {
 // pixel, each tap weighted by its distance and by how close its scene depth is to this pixel's (so cloud never bleeds
 // across a mountain's silhouette), with no hard 2×2 cell boundaries: cloud bases against the sky lose their 2 px steps
 vec4 cloudSample(vec2 uv, float tScene) {
+  // the cloud pass resolves at full resolution (its own depth-aware reconstruction): read the pixel as is
+  if (all(lessThan(abs(uCloudRes - vec2(textureSize(tDepth, 0))), vec2(0.5)))) return texelFetch(tCloud, ivec2(gl_FragCoord.xy), 0);
   vec2 p = uv * uCloudRes - 0.5;
   vec2 b = floor(p + 0.5);
   vec2 f = p - b;
@@ -387,6 +400,8 @@ void main() {
   vec3 vdir = viewDir(vUv);
   vec3 d = normalize(uCamRot * vdir);
   float tScene = sceneDistance(vUv, vdir);
+  // contact shadows (GTAO, folded in here: the ambient share of the lit scene, before haze and clouds)
+  if (uAoOn > 0.5 && tScene < 1e29) scene *= aoFactor(vUv, tScene * max(-vdir.z, 1e-4));
   vec3 o = -uPlanetPos;
   vec2 ts = raySphere(o, d, uRt);
   vec4 cl = vec4(0.0, 0.0, 0.0, 1.0);
@@ -401,18 +416,26 @@ void main() {
   // cloud layer distance (where the cloud buffer's light sits along the ray)
   float tc = 1e30;
   if (cl.a < 0.999) {
-    float r0 = length(o);
-    vec2 ci = raySphere(o, d, uCloudShell.x);
-    vec2 co = raySphere(o, d, uCloudShell.y);
-    float mid = 0.5 * (uCloudShell.x + uCloudShell.y);
-    vec2 cm = raySphere(o, d, mid);
-    if (r0 < mid) tc = cm.y; else tc = cm.x > 0.0 ? cm.x : cm.y;
+    // the cloud pass's own (transmittance-weighted) cloud distance; the mid-shell where it has none
+    float la = all(lessThan(abs(uCloudRes - vec2(textureSize(tDepth, 0))), vec2(0.5))) ? texelFetch(tCloudAux, ivec2(gl_FragCoord.xy), 0).x : -1.0;
+    if (la > 0.0) tc = exp2(la) - 1.0;
+    else {
+      float r0 = length(o);
+      float mid = 0.5 * (uCloudShell.x + uCloudShell.y);
+      vec2 cm = raySphere(o, d, mid);
+      if (r0 < mid) tc = cm.y; else tc = cm.x > 0.0 ? cm.x : cm.y;
+    }
     tc = clamp(tc, t0, t1);
   }
   float jitter = ign(gl_FragCoord.xy);
   vec3 L, T, Lm, Tm;
   float apS = mix(uApRamp.x, uApScale, smoothstep(uApRamp.y, uApRamp.z, t1 - t0));
   atmoIntegrate(o, d, uSunDir, t0, t1, uSteps, jitter, geo ? apS : 1.0, tc, L, T, Lm, Tm);
+  // the moonlit sky (night, from inside the air: the sky LUT seen from the surface, lit from the moon's direction)
+  if (!geo && dot(uMoonK, uMoonK) > 0.0) {
+    float r0 = length(o);
+    if (r0 < uRt) L += skyRadiance(o / r0, d, normalize(uMoonDir)) * uMoonK;
+  }
   // stars drown in a bright sky (contrast): sky pixels fainter than the in-scattered light fade out (the sun stays)
   if (!geo) {
     float ls = dot(scene, vec3(0.2126, 0.7152, 0.0722));
@@ -420,7 +443,10 @@ void main() {
     if (ls < 40.0) scene *= clamp(1.0 - lsky / 0.008, 0.0, 1.0);
   }
   vec3 col;
-  if (cl.a < 0.999) col = Lm + Tm * cl.rgb + cl.a * ((L - Lm) + T * scene);
+  // The cloud shell sits 2–4 Rayleigh scale heights up this small world's air, so seen from inside it nearly the
+  // whole sky's in-scatter lies in front of a cloud (on Earth a cumulus deck is a tenth of a scale height up): the
+  // clouds came out milky blue-grey. Only uCloudHaze of that haze is kept in front of cloud (clear sky keeps all of it).
+  if (cl.a < 0.999) col = mix(Lm * uCloudHaze, Lm, cl.a) + pow(Tm, vec3(uCloudHaze)) * cl.rgb + cl.a * ((L - Lm) + T * scene);
   else col = L + T * scene;
   gl_FragColor = vec4(col, 1.0);
 }
@@ -430,16 +456,18 @@ export class AtmospherePass {
   readonly material: ShaderMaterial;
   constructor() {
     this.material = passMaterial(COMPOSITE_FRAG, {
-      tScene: { value: null }, tDepth: { value: null }, tCloud: { value: null }, uHasCloud: { value: 0 },
+      tScene: { value: null }, tDepth: { value: null }, tCloud: { value: null }, tCloudAux: { value: null }, uHasCloud: { value: 0 },
+      tAO: { value: null }, uAoRes: { value: new Vector2(1, 1) }, uAoStrength: { value: 0 }, uAoOn: { value: 0 },
+      uMoonDir: { value: new Vector3(0, 1, 0) }, uMoonK: { value: new Vector3() },
       uCloudRes: { value: new Vector2(1, 1) }, uCloudShell: { value: new Vector2(3180, 3420) },
       uInvProj: { value: new Matrix4() }, uCamRot: { value: new Matrix3() }, uFar: { value: 2e7 },
       uPlanetPos: { value: new Vector3() }, uSunDir: { value: new Vector3(1, 0, 0) }, uSteps: { value: 16 },
-      uApScale: { value: 0.15 }, uApRamp: { value: new Vector3(0.15, 300, 2000) },
+      uApScale: { value: 0.15 }, uApRamp: { value: new Vector3(0.15, 300, 2000) }, uCloudHaze: { value: 1 },
       // per-planet atmosphere uniforms are swapped in by bind()
       uRg: { value: 0 }, uRt: { value: 0 }, uBetaR: { value: new Vector3() }, uHR: { value: 1 }, uBetaMs: { value: new Vector3() },
       uBetaMe: { value: new Vector3() }, uHM: { value: 1 }, uMieG: { value: 0.8 }, uBetaO: { value: new Vector3() },
       uOzone: { value: new Vector2(1, 1) }, uSunE: { value: new Vector3() }, uHasAtmo: { value: 1 },
-      uTransLUT: { value: null }, uMsLUT: { value: null },
+      uTransLUT: { value: null }, uMsLUT: { value: null }, uSkyLUT: { value: null }, uIrrSH: { value: null },
     });
   }
 
@@ -447,7 +475,7 @@ export class AtmospherePass {
   bind(model: AtmosphereModel): void {
     const u = this.material.uniforms;
     const m = model.uniforms as unknown as Record<string, IUniform>;
-    for (const k of ['uRg', 'uRt', 'uBetaR', 'uHR', 'uBetaMs', 'uBetaMe', 'uHM', 'uMieG', 'uBetaO', 'uOzone', 'uSunE', 'uHasAtmo', 'uTransLUT', 'uMsLUT']) {
+    for (const k of ['uRg', 'uRt', 'uBetaR', 'uHR', 'uBetaMs', 'uBetaMe', 'uHM', 'uMieG', 'uBetaO', 'uOzone', 'uSunE', 'uHasAtmo', 'uTransLUT', 'uMsLUT', 'uSkyLUT', 'uIrrSH']) {
       u[k] = m[k];
     }
   }

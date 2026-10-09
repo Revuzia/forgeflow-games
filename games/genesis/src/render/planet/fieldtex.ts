@@ -48,6 +48,9 @@ export class FieldTextures {
   readonly waterLevel: Float32Array;
   readonly waterDepth: Float32Array;
   private stamps: Record<TexName, string> = { A: '', N: '', M0: '', M1: '', V: '', C: '', F: '', S: '', G: '', D: '' };
+  /** night light per cell, supplied by the life layer (lit buildings), packed into S.z; and its version */
+  private light: Float32Array | null = null;
+  private lightVersion = 0;
   /** bumped whenever A (heights / water) changes: the chunk system re-derives bounds */
   geomVersion = 0;
   private normalsStamp = -1;
@@ -75,7 +78,15 @@ export class FieldTextures {
   private stamp(name: TexName): string {
     let s = '';
     for (const f of SOURCES[name]) s += (this.pv.fieldVersion.get(f) ?? 0) + ',';
+    if (name === 'S') s += `L${this.lightVersion}`;
     return s;
+  }
+
+  /** the life layer's per-cell night light (render/life/buildings.ts lightField); uploaded with S when it changes */
+  setLight(data: Float32Array | null, version: number): void {
+    if (version === this.lightVersion && data === this.light) return;
+    this.light = data;
+    this.lightVersion = version;
   }
 
   private field(f: FieldName): Float32Array | null {
@@ -217,7 +228,19 @@ export class FieldTextures {
         for (let c = 0; c < n; c++) { d[c * 4] /= 60; d[c * 4 + 1] /= 60; d[c * 4 + 2] /= 60; }
         break;
       }
-      case 'S': this.pack4('S', ['treeSpecies', 'cropSpecies', null, 'biome']); break;
+      case 'S': {
+        this.pack4('S', ['treeSpecies', 'cropSpecies', null, 'biome']);
+        // night lights: two relaxation passes so a town's glow is a soft pool, not a facet of the sim triangles; the
+        // level compressed so a lit village still shows from orbit (a hamlet's few hearths vanished entirely) while a
+        // city stays the brightest
+        const L = this.light;
+        if (L && L.length === n) {
+          const d = this.tex.S.image.data as Float32Array;
+          const sm = this.smoothed(L, 2);
+          for (let c = 0; c < n; c++) { const x = sm[c]; d[c * 4 + 2] = x > 1e-4 ? Math.min(4, (2.2 * x) / (0.35 + x) + 0.25 * x) : 0; }
+        }
+        break;
+      }
       case 'D': {
         // dune amplitude (m) from the RAW sand depth — part of the ground function, so never smoothed
         const d = this.tex.D.image.data as Float32Array;

@@ -13,6 +13,8 @@
 // Snapshots: on request (the client asks after each rendered frame, ≤ 30 Hz). Fields are sent only when their version
 // changed AND their throttle allows: fast fields (water, fire, lava, cloud, precip, snow, ...) at most every ~100 ms,
 // slow fields every ~500 ms. Arrays are fresh copies posted as transferables. A `full` request sends everything.
+// With the init option `grad: true` every snapshot that carries `surface` also carries the ground's curvature data
+// (PlanetSnap.grad, the sim's own Planet.ground() gradients), so the main thread need not refit them.
 //
 // This is the one sim file allowed to touch timers and performance.now (_harness/detban.ts): it only paces the sim; it
 // never feeds time into it.
@@ -45,6 +47,8 @@ let lastPace = 0;
 let debt = 0;
 let achieved = 0;
 let msPerTick = 0;
+/** the client asked for the ground's curvature data with every surface update (init option `grad: true`) */
+let wantGrad = false;
 // per (planet, field): last version sent and when
 const sentVer = new Map<string, number>();
 const sentAt = new Map<string, number>();
@@ -189,9 +193,10 @@ function snapshot(full: boolean): void {
   sim.speed = speed;
   sim.achievedSpeed = speed > 0 ? achieved : 0;
   sim.msPerTick = msPerTick;
-  const snap: Snapshot = sim.snapshot({ full, include });
+  const snap: Snapshot = sim.snapshot({ full, include, grad: wantGrad });
   const transfer: Transferable[] = [];
   for (const ps of snap.planets) {
+    if (ps.grad) transfer.push(ps.grad.buffer);
     if (!ps.fields) continue;
     for (const [k, arr] of Object.entries(ps.fields) as [FieldName, Float32Array][]) {
       const key = `${ps.id}:${k}`;
@@ -218,6 +223,7 @@ function handle(m: ToWorker): void {
       mods = packs;
       sim = new Sim({ seed: m.seed >>> 0, scenario: m.scenario, content: mods, overrides: (opts.overrides as Record<string, unknown>) ?? undefined });
       if (typeof opts.speed === 'number') speed = Math.max(0, opts.speed);
+      wantGrad = opts.grad === true;
       resetSent();
       lastPace = now();
       resetMeasure(lastPace);

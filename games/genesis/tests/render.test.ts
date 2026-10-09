@@ -22,6 +22,9 @@ import { WorldView } from '../src/client/worldview.ts';
 import { GroundCover } from '../src/render/life/groundcover.ts';
 import { makePlanetUniforms } from '../src/render/planet/terrainmat.ts';
 import { Vector3 } from 'three';
+import { buildingMesh, templeForm, type BuildingSpec } from '../src/render/gen/buildinggen.ts';
+import { materials } from '../src/render/life/catalog.ts';
+import { PART } from '../src/render/gen/meshkit.ts';
 
 function chunkGeometry(): BufferGeometry {
   const grid = getGrid(16);
@@ -106,7 +109,8 @@ test('ground cover rebuilds only cells whose inputs changed, and keeps drawing m
   const bump = (k: string) => pv.fieldVersion.set(k as never, (pv.fieldVersion.get(k as never) ?? 0) + 1);
   // deep water rising and grass drifting by half a percent: nothing to rebuild
   for (let i = 0; i < water.length; i++) if (water[i] > 2) water[i] += 0.3;
-  for (let i = 0; i < grass.length; i++) grass[i] *= 1.005;
+  // (a drift that stays inside its quantum: a value a hair under a step boundary would cross it, which is a real change)
+  for (let i = 0; i < grass.length; i++) grass[i] = Math.min(grass[i] * 1.005, (Math.floor(grass[i] / 0.04) + 1) * 0.04 - 1e-4);
   bump('water'); bump('grass');
   gc.update(pv, cam, ++frame);
   assert.equal(inner.stale.size, 0, 'sub-quantum changes rebuild nothing');
@@ -127,4 +131,43 @@ test('ground cover rebuilds only cells whose inputs changed, and keeps drawing m
   assert.ok(low > full * 0.3, `still drawing while rebuilding (${low} of ${full})`);
   assert.equal(inner.cache.size, cached, 'no cell dropped');
   gc.dispose();
+});
+
+test('temples are built in their people\'s tradition and dressed by their mood', () => {
+  const mat = materials().find((m) => m.id === 'stone')!;
+  const spec = (family: 'earth' | 'timber' | 'stone', era: number, mood: number, style = 2, lod = 0): BuildingSpec =>
+    ({ kind: 'temple', mat, style, era, mood, w: 14, d: 20, lod, family });
+  // the form follows the tradition, never the style index alone: no pagoda among masons, no ziggurat among timber folk
+  for (let style = 0; style < 8; style++) for (let era = 3; era <= 10; era++) {
+    assert.notEqual(templeForm(spec('stone', era, 0, style)), 'pagoda');
+    assert.notEqual(templeForm(spec('earth', era, 0, style)), 'pagoda');
+    assert.notEqual(templeForm(spec('timber', era, 0, style)), 'ziggurat');
+    assert.notEqual(templeForm(spec('stone', era, 0, style)), 'ziggurat');
+  }
+  assert.equal(templeForm(spec('earth', 4, 0)), 'ziggurat');
+  assert.equal(templeForm(spec('timber', 4, 0)), 'hall');
+  assert.equal(templeForm(spec('timber', 6, 0)), 'pagoda');
+  assert.equal(templeForm(spec('stone', 4, 0)), 'columns');
+  assert.equal(templeForm(spec('stone', 2, 0)), 'henge');
+  const parts = (g: ReturnType<typeof buildingMesh>) => {
+    const kit = g.geo.getAttribute('aKit'), pos = g.geo.getAttribute('position');
+    for (let i = 0; i < pos.array.length; i++) assert.ok(Number.isFinite(pos.array[i]), 'finite geometry');
+    const n = new Map<number, number>();
+    for (let i = 0; i < kit.count; i++) n.set(kit.getY(i), (n.get(kit.getY(i)) ?? 0) + 1);
+    return n;
+  };
+  for (const fam of ['earth', 'timber', 'stone'] as const) for (const era of [3, 6]) {
+    const plain = buildingMesh(spec(fam, era, 0)), fear = buildingMesh(spec(fam, era, -1)), kind = buildingMesh(spec(fam, era, 1));
+    parts(plain);
+    // fearful: a walled precinct (a wider footprint) with braziers on its gate
+    assert.ok(fear.hx > plain.hx + 1, `${fam} ${era}: fearful precinct (${fear.hx} vs ${plain.hx})`);
+    assert.ok(fear.emitters.length > plain.emitters.length, `${fam} ${era}: braziers at the gate`);
+    // benevolent: lanterns that glow at night
+    assert.ok((parts(kind).get(PART.lantern) ?? 0) > 0, `${fam} ${era}: lanterns`);
+    assert.ok((parts(fear).get(PART.lantern) ?? 0) === 0, `${fam} ${era}: no lanterns where the people fear`);
+    // the far LOD keeps the silhouette (same height) with less geometry
+    const far = buildingMesh(spec(fam, era, 0, 2, 1));
+    assert.ok(Math.abs(far.height - plain.height) < 0.5, `${fam} ${era}: LOD height ${far.height} vs ${plain.height}`);
+    assert.ok(far.geo.getAttribute('position').count < plain.geo.getAttribute('position').count, `${fam} ${era}: LOD 1 lighter`);
+  }
 });

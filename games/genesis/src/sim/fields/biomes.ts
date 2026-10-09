@@ -71,7 +71,7 @@ function readVars(p: Planet, c: number): void {
   vars[3] = coast;
   vars[4] = f.water[c];
   vars[5] = s.seaIce[c];
-  vars[6] = s.tempMean[c];
+  vars[6] = s.tempYear[c];
   vars[7] = f.moisture[c];
   vars[8] = f.surface[c] - p.st.seaLevel;
   vars[9] = mx / p.edgeM;
@@ -105,16 +105,97 @@ export function classifyCell(u: Universe, p: Planet, c: number): number {
   return 0;
 }
 
-/** Re-classify every cell; pinned cells keep their biome and are nudged back toward its painted state. */
+/** the compiled rules flattened into typed arrays (per content; a cache): per rule its biome and the [start, end) of its
+ * `all` and `any` triples in `conds` */
+interface FlatRules { n: number; biome: Int32Array; allS: Int32Array; allE: Int32Array; anyS: Int32Array; anyE: Int32Array; conds: Float64Array }
+const flatCache = new WeakMap<Content, FlatRules>();
+function flatRules(content: Content): FlatRules {
+  let f = flatCache.get(content);
+  if (f) return f;
+  const rules = compile(content);
+  let total = 0;
+  for (const r of rules) total += r.all.length + r.any.length;
+  const n = rules.length;
+  f = { n, biome: new Int32Array(n), allS: new Int32Array(n), allE: new Int32Array(n), anyS: new Int32Array(n), anyE: new Int32Array(n), conds: new Float64Array(total) };
+  let k = 0;
+  rules.forEach((r, i) => {
+    f!.biome[i] = r.biome;
+    f!.allS[i] = k; f!.conds.set(r.all, k); k += r.all.length; f!.allE[i] = k;
+    f!.anyS[i] = k; f!.conds.set(r.any, k); k += r.any.length; f!.anyE[i] = k;
+  });
+  flatCache.set(content, f);
+  return f;
+}
+
+/** classifyCell's rule walk over flattened rules and filled variables (first match wins; 0 when none) */
+function classifyFlat(fr: FlatRules, v: Float64Array): number {
+  const conds = fr.conds;
+  for (let r = 0; r < fr.n; r++) {
+    let ok = true;
+    for (let i = fr.allS[r], e = fr.allE[r]; i < e; i += 3) if (!test(v[conds[i]], conds[i + 1], conds[i + 2])) { ok = false; break; }
+    if (!ok) continue;
+    const a0 = fr.anyS[r], a1 = fr.anyE[r];
+    if (a1 > a0) {
+      let anyOk = false;
+      for (let i = a0; i < a1; i += 3) if (test(v[conds[i]], conds[i + 1], conds[i + 2])) { anyOk = true; break; }
+      if (!anyOk) continue;
+    }
+    return fr.biome[r];
+  }
+  return 0;
+}
+
+/** Re-classify every cell; pinned cells keep their biome and are nudged back toward its painted state. (readVars and
+ * classifyCell, with the planet's arrays read once and the rules flattened — same variables, same rule order.) */
 export function biomeStep(u: Universe, p: Planet): void {
-  const f = p.f, s = p.s;
+  const f = p.f, s = p.s, g = p.grid;
   const N = p.count;
+  const fr = flatRules(u.content);
+  const v = vars;
+  const air = p.st.atmosphere;
+  const seaLevel = p.st.seaLevel, edgeM = p.edgeM;
+  const nbrStart = g.nbrStart, nbr = g.nbr;
+  const surface = f.surface, ocean = s.ocean, water = f.water, seaIce = s.seaIce, tempMean = s.tempYear;
+  const moisture = f.moisture, sand = f.sand, snow = f.snow, ice = f.ice, lava = f.lava, ash = f.ash, soil = f.soil;
+  const salinity = f.salinity, tree = f.tree, shrub = f.shrub, grass = f.grass, pinnedBiome = s.pinnedBiome, biome = f.biome;
   for (let c = 0; c < N; c++) {
-    const pin = s.pinnedBiome[c];
+    const pin = pinnedBiome[c];
     if (pin >= 0) {
-      f.biome[c] = pin;
+      biome[c] = pin;
       applyPaint(u, p, c, u.content.biomes.list[pin], 0.25, false);
-    } else f.biome[c] = classifyCell(u, p, c);
+      continue;
+    }
+    let mx = 0, coast = 0;
+    const sc = surface[c];
+    const oc = ocean[c];
+    const e1 = nbrStart[c + 1];
+    for (let e = nbrStart[c]; e < e1; e++) {
+      const o = nbr[e];
+      const d = Math.abs(surface[o] - sc);
+      if (d > mx) mx = d;
+      if (ocean[o] && !oc) coast = 1;
+    }
+    v[0] = air.pressure;
+    v[1] = air.toxicity;
+    v[2] = oc;
+    v[3] = coast;
+    v[4] = water[c];
+    v[5] = seaIce[c];
+    v[6] = tempMean[c];
+    v[7] = moisture[c];
+    v[8] = sc - seaLevel;
+    v[9] = mx / edgeM;
+    v[10] = sand[c];
+    v[11] = snow[c];
+    v[12] = ice[c];
+    v[13] = lava[c];
+    v[14] = ash[c];
+    v[15] = soil[c];
+    v[16] = salinity[c];
+    v[17] = tree[c];
+    v[18] = shrub[c];
+    v[19] = grass[c];
+    biome[c] = classifyFlat(fr, v);
   }
   p.bump('biome');
 }

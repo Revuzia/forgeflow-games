@@ -37,6 +37,9 @@ import { vegetationStep, VEG_CADENCE, VEG_OFFSET } from './fields/vegetation.ts'
 import { biomeStep, BIOME_CADENCE } from './fields/biomes.ts';
 import { chronicleCheck, CHRONICLE_CADENCE, CHRONICLE_OFFSET } from './chronicle.ts';
 import { meanAnomaly } from './world/orbits.ts';
+import { peopleStep } from './people/people.ts';
+import { agentBlock, animalBlock, buildingBlock, populationBySpecies, settlementViews } from './people/snapshot.ts';
+import { peopleQuery, PEOPLE_QUERIES } from './people/query.ts';
 
 export interface SimOptions {
   seed: number;
@@ -56,6 +59,8 @@ export interface SnapshotOptions {
   include?: (planet: number, field: FieldName) => boolean;
   /** drain pending events and new chronicle entries into the snapshot (default true) */
   drain?: boolean;
+  /** SIM perf pass: ship the ground's curvature data (PlanetSnap.grad) whenever `surface` is shipped */
+  grad?: boolean;
 }
 
 /**
@@ -194,9 +199,11 @@ export class Sim {
     for (const p of u.planets) {
       const sun = u.sun(p, u.tick);
       const snap: PlanetSnap = {
-        id: p.id, name: p.name, gridN: p.n, seed: p.seed, params: p.paramsAt(u.tick, sun), alive: p.alive,
+        id: p.id, name: p.name, gridN: p.n, seed: p.seed, params: { ...p.paramsAt(u.tick, sun), spinRate: u.spinRateOf(p, u.tick) }, alive: p.alive,
         fieldVersion: u.stamp,
-        weather: weatherViews(u, p), disasters: [], settlements: [], population: [],
+        weather: weatherViews(u, p), disasters: [],
+        settlements: settlementViews(u, p), population: populationBySpecies(u, p),
+        agents: agentBlock(u, p), animals: animalBlock(u, p), buildings: buildingBlock(u, p),
       };
       const fields: Partial<Record<FieldName, Float32Array>> = {};
       let any = false;
@@ -208,6 +215,7 @@ export class Sim {
         any = true;
       }
       if (any) snap.fields = fields;
+      if (opts.grad && fields.surface) snap.grad = new Float32Array(p.ground().grad as Float32Array); // SIM perf pass
       planets.push(snap);
     }
     const drain = opts.drain !== false;
@@ -217,7 +225,7 @@ export class Sim {
     return {
       tick: u.tick, speed: this.speed, achievedSpeed: this.achievedSpeed, star: starView(u.star), planets,
       ships: [], creatures: [], hand: null, events, chronicle, content: this.content.packs, msPerTick: this.msPerTick,
-      restraint: u.settings.restraint, worship: [0],
+      restraint: u.settings.restraint, worship: worshipPool(u),
     };
   }
 
@@ -445,7 +453,8 @@ export class Sim {
       case 'hash':
         return this.hash();
       default:
-        return { error: `unknown query '${q}'`, known: ['cell', 'planet', 'planets', 'params', 'commands', 'chronicle', 'scenario', 'weather', 'plants', 'biomes', 'stars', 'hash'] };
+        if (PEOPLE_QUERIES.includes(q)) return p ? peopleQuery(u, p, q, args) : null;
+        return { error: `unknown query '${q}'`, known: ['cell', 'planet', 'planets', 'params', 'commands', 'chronicle', 'scenario', 'weather', 'plants', 'biomes', 'stars', 'hash', ...PEOPLE_QUERIES] };
     }
   }
 }
@@ -468,6 +477,16 @@ function typedLike(like: TypedArray | null, byteLength: number, key: string, hea
   throw new Error(`keyframe: unknown array '${key}'`);
 }
 
+/** worship generated per god across every world (0 = the player); later phases spend it */
+function worshipPool(u: Universe): number[] {
+  const out = [0, 0, 0, 0];
+  for (const p of u.planets) {
+    const w = p.people?.worship;
+    if (w) for (let g = 0; g < out.length; g++) out[g] = Math.round((out[g] + (w[g] ?? 0)) * 100) / 100;
+  }
+  return out;
+}
+
 /** the systems of one planet at tick t, on their cadences */
 export function runPlanet(u: Universe, p: Planet, t: number): void {
   const off = p.id * 13; // stagger slow passes between worlds
@@ -488,6 +507,7 @@ export function runPlanet(u: Universe, p: Planet, t: number): void {
   if (ts % CHRONICLE_CADENCE === CHRONICLE_OFFSET) chronicleCheck(u, p);
   if (ts % HYDRO_SLOW_CADENCE === 120) hydroSlowStep(u, p);
   if (ts % BIOME_CADENCE === 360) biomeStep(u, p);
+  peopleStep(u, p, t);
 }
 
 /** a Float32 copy of a published field (ice = ground ice + floating ice) */
@@ -521,6 +541,8 @@ function universeFromHeader(content: Content, h: Record<string, unknown>, blobs:
     const p = planetFromJson(pj, prefixed);
     u.addPlanet(p);
   }
+  // transient people indices (time wheel, buckets, members) rebuilt at the restored tick
+  for (const p of u.planets) { p.people.contentRef = content; p.people.reindex(u.tick); }
   // the restored stamp must stay above every field version
   let maxVer = u.stamp;
   for (const p of u.planets) for (const v of Object.values(p.fieldVer)) if (v > maxVer) maxVer = v;

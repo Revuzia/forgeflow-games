@@ -1,7 +1,8 @@
 // GENESIS — content loading (CONTRACT.md §9): base pack + mod packs -> validated, indexed registries.
 //
 // Content is data. A pack is a JSON object with optional sections (plants, weather, biomes, biomeRules, stars,
-// planetkinds, ores, scenarios, ... later: species, items, recipes, buildings, powers). Packs are merged in order: an
+// planetkinds, ores, scenarios, species, items, recipes, buildings, materials, animals, diseases, phonologies, events;
+// later: powers, lexicon, creatures, disasters). Packs are merged in order: an
 // entry whose id already exists REPLACES that entry in place (so indices stay stable and a mod can rebalance oak), a new
 // id is appended. References between sections are checked after the merge and every problem is reported at once, in
 // words a modder can act on ("plants › 'oakk' … did you mean 'oak'?").
@@ -177,6 +178,234 @@ export interface ScenarioDef {
   peoples: unknown[];
 }
 
+// ───────────────────────────── peoples (phase 2) ─────────────────────────────
+
+/** eras in order (recipes carry one; a settlement's era is the furthest it really works in) */
+export const ERAS = ['stone', 'fire', 'clay', 'bronze', 'iron', 'classical', 'medieval', 'gunpowder', 'steam', 'electric', 'space'] as const;
+export type Era = (typeof ERAS)[number];
+
+/** skill groups (per-agent skill levels 0..1; masters are >= 0.7) */
+export const SKILLS = ['gather', 'hunt', 'fish', 'farm', 'herd', 'craft', 'smith', 'build', 'cook', 'heal', 'lore', 'sail', 'fight'] as const;
+export type SkillName = (typeof SKILLS)[number];
+
+/** needs (CONTRACT §8.2): the shared nine + species-specific ones */
+export const NEEDS = ['food', 'water', 'warmth', 'rest', 'safety', 'belonging', 'status', 'curiosity', 'faith', 'wetness', 'methane', 'hive'] as const;
+export type NeedName = (typeof NEEDS)[number];
+
+export const TRAITS = ['curiosity', 'boldness', 'sociability', 'piety', 'aggression', 'diligence'] as const;
+export type TraitName = (typeof TRAITS)[number];
+
+export const BODY_PLANS = ['biped', 'quadruped', 'hexapod-hive', 'aquatic', 'flyer', 'serpent', 'blob'];
+export const FORAGE_SOURCES = ['vegetation', 'sea', 'air'];
+
+/** place contexts sensed from the world around a cell (resources, terrain, climate) — see people/context.ts */
+export const ENV_CONTEXTS = [
+  'water', 'fresh-water', 'sea', 'river', 'shore', 'forest', 'wood', 'grass', 'wild-grain', 'berries', 'reeds', 'fertile',
+  'field', 'dune', 'sand', 'snow', 'ice', 'cold', 'hot', 'mountain', 'volcanic', 'herds', 'predators', 'fish', 'methane',
+  'flint', 'clay', 'copper', 'tin', 'iron', 'coal', 'gold', 'silver', 'sulfur', 'obsidian', 'saltpeter', 'salt', 'glass-sand',
+  'oil', 'uranium', 'gems', 'fire', 'store', 'sacred',
+] as const;
+
+/** accident / event triggers: things that HAPPEN at a place (lightning in a dune, fire on clay, a death...) */
+export const EVENT_TRIGGERS = [
+  'lightning', 'lightning-dune', 'lightning-fire', 'wildfire', 'fire-on-clay', 'rotten-grain', 'meteor-iron', 'copper-in-fire',
+  'spilled-seed', 'wolf-cubs', 'tame-young', 'flood', 'drought', 'death', 'plague', 'injury', 'eclipse', 'comet', 'miracle',
+  'trade', 'raid', 'war', 'famine', 'feast', 'tar-seep', 'firework', 'flint-sparks', 'storm-at-sea', 'birth',
+  // societies & ecology (phase 2b)
+  'blight', 'battle', 'conquest', 'contact', 'siege', 'schism',
+] as const;
+
+export interface SpeciesDef {
+  id: string;
+  name: string;
+  plural: string;
+  adjective: string;
+  desc?: string;
+  body: string;
+  /** adult height, m */
+  size: number;
+  mass?: number;
+  /** × base walk (0.25 m/tick) */
+  speed: number;
+  /** × speed in water (0 = cannot swim) */
+  swim: number;
+  fly?: boolean;
+  /** hover altitude for flyers, m */
+  alt?: number;
+  lifespan: number;
+  maturity: number;
+  elder: number;
+  fertility: number;
+  /** food tag -> preference weight */
+  diet: Record<string, number>;
+  forage: string[];
+  temp: [number, number, number, number];
+  breathes: 'o2' | 'methane' | 'none';
+  habitat: string[];
+  nocturnal: boolean;
+  hive: null | { castes: string[]; shares: number[]; queen: string; sharedMemory: boolean; queenLifespan?: number };
+  needs: Partial<Record<NeedName, number>>;
+  decay?: Partial<Record<NeedName, number>>;
+  traits: Record<TraitName, number>;
+  colors: { skin: string[]; hair: string[]; cloth: string[]; caste?: Record<string, string> };
+  phonology: string;
+  style: { materials: string[]; form: string; roof: string; palette: string[] };
+  taboos: string[];
+  sacred: string[];
+  god: { awe: number; fear: number };
+  start: string[];
+}
+
+export interface ItemDef {
+  id: string;
+  name: string;
+  tags: string[];
+  weight: number;
+  /** days of food for an adult per unit */
+  food?: number;
+  fuel?: number;
+  value: number;
+  /** building material this item stands for (render hint) */
+  material?: string;
+  /** fraction lost per day in a store */
+  decay?: number;
+  /** cold protection when worn 0..1 */
+  warmth?: number;
+  /** tool / weapon quality */
+  quality?: number;
+}
+
+export interface RecipeIO {
+  item?: string;
+  tag?: string;
+  qty: number;
+}
+
+export interface RecipeOut {
+  item?: string;
+  building?: string;
+  knowledge?: string;
+  qty?: number;
+}
+
+export interface RecipeDef {
+  id: string;
+  name: string;
+  kind: 'craft' | 'gather' | 'idea' | 'build';
+  desc?: string;
+  inputs: RecipeIO[];
+  tools: string[];
+  place: { needs?: string[] | string; heat?: number; near?: string[]; biome?: string[] };
+  knowledge: string[];
+  outputs: RecipeOut[];
+  time: number;
+  skill: SkillName;
+  difficulty?: number;
+  discover: { base: number; triggers: string[]; curiosity: number };
+  teach: number;
+  era: Era;
+  writes?: boolean;
+  enables?: string[];
+  effect?: Record<string, number>;
+  gather?: { task: string; items: string[] };
+  species?: string[];
+  secret?: number;
+}
+
+export interface BuildingDef {
+  id: string;
+  name: string;
+  function: string;
+  provides: string[];
+  footprint: number;
+  capacity: number;
+  storage: number;
+  materials: string[];
+  recipe: string;
+  cost: number;
+  work: number;
+  hp: number;
+  decay: number;
+  heat: number;
+  light: number;
+  height?: number;
+  era: Era;
+  species?: string[];
+}
+
+export interface MaterialDef {
+  id: string;
+  name: string;
+  items: RecipeIO[];
+  knowledge: string | null;
+  color: string;
+  roughness: number;
+  pattern?: string;
+  flammability: number;
+  strength: number;
+  insulation: number;
+  era: Era;
+}
+
+export interface AnimalDef {
+  id: string;
+  name: string;
+  kind: 'herbivore' | 'predator' | 'scavenger' | 'fish' | 'bird' | 'insect' | 'domestic';
+  body: string;
+  size: number;
+  mass?: number;
+  speed: number;
+  herd: [number, number];
+  diet: string[];
+  temp: [number, number, number, number];
+  habitat: 'land' | 'water' | 'sea' | 'air';
+  biomes: string[];
+  products: RecipeIO[];
+  danger: number;
+  flee: number;
+  domesticable: boolean;
+  domesticatesTo?: string;
+  domestic?: boolean;
+  breed: number;
+  swarm?: boolean;
+  nocturnal?: boolean;
+  colors: string[];
+}
+
+export interface DiseaseDef {
+  id: string;
+  name: string;
+  transmission: 'contact' | 'water' | 'air' | 'food' | 'animal';
+  contagion: number;
+  mortality: number;
+  duration: number;
+  /** days exposed (infected, not yet sick or infectious); default 1 */
+  incubation?: number;
+  immunity: number;
+  medicine: string;
+  species: string[] | null;
+  origin: string[];
+  crowd: number;
+}
+
+export interface PhonologyDef {
+  id: string;
+  onsets: string[];
+  vowels: string[];
+  codas: string[];
+  syllables: [number, number];
+  personal: [number, number];
+  sep: string;
+  features: Record<string, string>;
+}
+
+export interface EventTemplateDef {
+  id: string;
+  kind: string;
+  weight: number;
+  text: string[];
+}
+
 export interface ContentPack {
   id: string;
   name?: string;
@@ -190,6 +419,15 @@ export interface ContentPack {
   planetkinds?: PlanetKindDef[];
   ores?: OreDef[];
   scenarios?: ScenarioDef[];
+  species?: SpeciesDef[];
+  items?: ItemDef[];
+  recipes?: RecipeDef[];
+  buildings?: BuildingDef[];
+  materials?: MaterialDef[];
+  animals?: AnimalDef[];
+  diseases?: DiseaseDef[];
+  phonologies?: PhonologyDef[];
+  events?: EventTemplateDef[];
   [section: string]: unknown;
 }
 
@@ -291,13 +529,27 @@ export interface Content {
   planetkinds: Registry<PlanetKindDef>;
   ores: Registry<OreDef>;
   scenarios: Registry<ScenarioDef>;
+  species: Registry<SpeciesDef>;
+  items: Registry<ItemDef>;
+  recipes: Registry<RecipeDef>;
+  buildings: Registry<BuildingDef>;
+  materials: Registry<MaterialDef>;
+  animals: Registry<AnimalDef>;
+  diseases: Registry<DiseaseDef>;
+  phonologies: Registry<PhonologyDef>;
+  events: Registry<EventTemplateDef>;
+  /** item tag -> item indices (content order) */
+  itemsByTag: Map<string, number[]>;
+  /** every place context a recipe may name: environment + building provides + accident events */
+  contexts: Set<string>;
   /** sections this build does not understand yet (kept for later phases / round-tripping) */
   extra: Record<string, unknown[]>;
 }
 
 // ───────────────────────────── loading ─────────────────────────────
 
-const KNOWN = ['plants', 'weather', 'biomes', 'biomeRules', 'stars', 'planetkinds', 'ores', 'scenarios'];
+const KNOWN = ['plants', 'weather', 'biomes', 'biomeRules', 'stars', 'planetkinds', 'ores', 'scenarios', 'species', 'items', 'recipes',
+  'buildings', 'materials', 'animals', 'diseases', 'phonologies', 'events'];
 
 /**
  * Merge and validate packs (base first, then mods in order). Throws ContentError listing every problem.
@@ -315,6 +567,17 @@ export function loadContent(packs: ContentPack[]): Content {
     planetkinds: new Registry('planet kind'),
     ores: new Registry('ore'),
     scenarios: new Registry('scenario'),
+    species: new Registry('species'),
+    items: new Registry('item'),
+    recipes: new Registry('recipe'),
+    buildings: new Registry('building'),
+    materials: new Registry('material'),
+    animals: new Registry('animal'),
+    diseases: new Registry('disease'),
+    phonologies: new Registry('phonology'),
+    events: new Registry('chronicle template'),
+    itemsByTag: new Map(),
+    contexts: new Set(),
     extra: {},
   };
   for (const pack of packs) {
@@ -345,6 +608,15 @@ export function loadContent(packs: ContentPack[]): Content {
     section('planetkinds', c.planetkinds, checkPlanetKind);
     section('ores', c.ores, checkOre);
     section('scenarios', c.scenarios, checkScenario);
+    section('species', c.species, checkSpecies);
+    section('items', c.items, checkItem);
+    section('recipes', c.recipes, checkRecipe);
+    section('buildings', c.buildings, checkBuilding);
+    section('materials', c.materials, checkMaterial);
+    section('animals', c.animals, checkAnimal);
+    section('diseases', c.diseases, checkDisease);
+    section('phonologies', c.phonologies, checkPhonology);
+    section('events', c.events, checkEventTemplate);
     if (pack.biomeRules !== undefined) {
       if (!Array.isArray(pack.biomeRules)) problems.push(`${pid} › 'biomeRules' must be an array`);
       else c.biomeRules = pack.biomeRules.slice();
@@ -396,6 +668,7 @@ export function loadContent(packs: ContentPack[]): Content {
     s.planets.forEach((pl, i) => walk(pl, `planets[${i}]`));
     if (s.focus !== undefined && (s.focus < 0 || s.focus >= s.planets.length)) problems.push(`scenario '${s.id}': focus ${s.focus} is not a planet index`);
   }
+  crossCheckPeoples(c, problems);
   if (problems.length) throw new ContentError(problems);
   c.plantTable = compilePlants(c.plants);
   return c;
@@ -594,4 +867,285 @@ function editDistance(a: string, b: string): number {
 export function hexColor(h: string): [number, number, number] {
   const v = parseInt(h.slice(1), 16);
   return [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255, (v & 255) / 255];
+}
+
+// ───────────────────────────── peoples: per-entry checks ─────────────────────────────
+
+function strArr(o: Record<string, unknown>, k: string, w: string, p: string[], allowEmpty = true): void {
+  const v = o[k];
+  if (!Array.isArray(v) || v.some((x) => typeof x !== 'string')) p.push(`${w}: "${k}" must be an array of strings`);
+  else if (!allowEmpty && v.length === 0) p.push(`${w}: "${k}" must not be empty`);
+}
+
+function ioArr(o: Record<string, unknown>, k: string, w: string, p: string[]): void {
+  const v = o[k];
+  if (!Array.isArray(v)) { p.push(`${w}: "${k}" must be an array of { item | tag, qty }`); return; }
+  v.forEach((io: unknown, i: number) => {
+    const x = io as RecipeIO;
+    if (!x || typeof x !== 'object' || (typeof x.item !== 'string' && typeof x.tag !== 'string')) p.push(`${w}: ${k}[${i}] needs "item" or "tag"`);
+    else if (typeof x.qty !== 'number' || !(x.qty > 0)) p.push(`${w}: ${k}[${i}] needs a positive "qty"`);
+  });
+}
+
+function oneOf(o: Record<string, unknown>, k: string, vals: readonly string[], w: string, p: string[]): void {
+  if (!vals.includes(String(o[k]))) {
+    const hint = suggest(String(o[k]), [...vals]);
+    p.push(`${w}: "${k}" must be one of ${vals.join(', ')} (got '${String(o[k])}')${hint ? ` — did you mean '${hint}'?` : ''}`);
+  }
+}
+
+function checkSpecies(x: SpeciesDef, w: string, p: string[]): void {
+  const o = x as unknown as Record<string, unknown>;
+  for (const k of ['name', 'plural', 'adjective', 'phonology']) str(o, k, w, p);
+  oneOf(o, 'body', BODY_PLANS, w, p);
+  num(o, 'size', w, p, 0.05, 100);
+  num(o, 'speed', w, p, 0.01, 20);
+  num(o, 'swim', w, p, 0, 20);
+  num(o, 'lifespan', w, p, 1, 10000);
+  num(o, 'maturity', w, p, 0, 1000);
+  num(o, 'elder', w, p, 0, 10000);
+  num(o, 'fertility', w, p, 0, 50);
+  tuple(o, 'temp', 4, w, p);
+  oneOf(o, 'breathes', ['o2', 'methane', 'none'], w, p);
+  strArr(o, 'habitat', w, p, false);
+  strArr(o, 'forage', w, p, false);
+  for (const f of x.forage ?? []) if (!FORAGE_SOURCES.includes(f)) p.push(`${w}: forage '${f}' is not one of ${FORAGE_SOURCES.join(', ')}`);
+  if (typeof x.nocturnal !== 'boolean') p.push(`${w}: "nocturnal" must be true or false`);
+  if (!x.diet || typeof x.diet !== 'object') p.push(`${w}: "diet" must be an object of food tag -> weight`);
+  if (!x.needs || typeof x.needs !== 'object') p.push(`${w}: "needs" must be an object of need -> weight`);
+  else for (const k of Object.keys(x.needs)) if (!NEEDS.includes(k as NeedName)) p.push(`${w}: unknown need '${k}'${suggest(k, [...NEEDS]) ? ` — did you mean '${suggest(k, [...NEEDS])}'?` : ''}`);
+  if (!x.traits || typeof x.traits !== 'object') p.push(`${w}: "traits" must be an object of trait -> mean 0..1`);
+  else for (const t of TRAITS) if (typeof x.traits[t] !== 'number') p.push(`${w}: traits.${t} must be a number 0..1`);
+  if (!x.colors || !Array.isArray(x.colors.skin) || !x.colors.skin.length) p.push(`${w}: "colors.skin" must list at least one #rrggbb`);
+  else for (const list of [x.colors.skin, x.colors.hair ?? [], x.colors.cloth ?? []]) for (const col of list) if (!COLOR.test(col)) p.push(`${w}: colour '${col}' is not #rrggbb`);
+  if (!x.style || !Array.isArray(x.style.materials)) p.push(`${w}: "style.materials" must be an array`);
+  if (!x.god || typeof x.god.awe !== 'number' || typeof x.god.fear !== 'number') p.push(`${w}: "god" needs numeric awe and fear`);
+  strArr(o, 'start', w, p);
+  strArr(o, 'taboos', w, p);
+  if (x.hive !== null && x.hive !== undefined && (!Array.isArray(x.hive.castes) || !Array.isArray(x.hive.shares) || x.hive.castes.length !== x.hive.shares.length)) {
+    p.push(`${w}: "hive" needs castes and shares of the same length`);
+  }
+}
+
+function checkItem(x: ItemDef, w: string, p: string[]): void {
+  const o = x as unknown as Record<string, unknown>;
+  str(o, 'name', w, p);
+  strArr(o, 'tags', w, p);
+  num(o, 'weight', w, p, 0, 1e7);
+  num(o, 'value', w, p, 0, 1e7);
+  for (const k of ['food', 'fuel', 'decay', 'warmth', 'quality']) if (o[k] !== undefined) num(o, k, w, p, 0, k === 'decay' || k === 'warmth' ? 1 : 1e4);
+}
+
+function checkRecipe(x: RecipeDef, w: string, p: string[]): void {
+  const o = x as unknown as Record<string, unknown>;
+  str(o, 'name', w, p);
+  oneOf(o, 'kind', ['craft', 'gather', 'idea', 'build'], w, p);
+  ioArr(o, 'inputs', w, p);
+  strArr(o, 'tools', w, p);
+  strArr(o, 'knowledge', w, p);
+  if (!x.place || typeof x.place !== 'object') p.push(`${w}: "place" must be an object (may be empty)`);
+  if (!Array.isArray(x.outputs)) p.push(`${w}: "outputs" must be an array`);
+  num(o, 'time', w, p, 0, 1e6);
+  oneOf(o, 'skill', SKILLS, w, p);
+  num(o, 'teach', w, p, 0, 1);
+  oneOf(o, 'era', ERAS, w, p);
+  if (!x.discover || typeof x.discover.base !== 'number' || !Array.isArray(x.discover.triggers) || typeof x.discover.curiosity !== 'number') {
+    p.push(`${w}: "discover" needs base (0..1), triggers (array) and curiosity`);
+  } else if (x.discover.base < 0 || x.discover.base > 1) p.push(`${w}: discover.base must be within 0..1`);
+  if (x.kind === 'craft' && (!Array.isArray(x.outputs) || !x.outputs.some((q) => q && (q.item || q.knowledge)))) p.push(`${w}: a craft recipe needs at least one item output`);
+  if (x.gather && (typeof x.gather.task !== 'string' || !Array.isArray(x.gather.items))) p.push(`${w}: "gather" needs a task and items`);
+}
+
+function checkBuilding(x: BuildingDef, w: string, p: string[]): void {
+  const o = x as unknown as Record<string, unknown>;
+  str(o, 'name', w, p);
+  str(o, 'function', w, p);
+  str(o, 'recipe', w, p);
+  strArr(o, 'provides', w, p);
+  strArr(o, 'materials', w, p, false);
+  num(o, 'footprint', w, p, 0.2, 500);
+  num(o, 'capacity', w, p, 0, 10000);
+  num(o, 'storage', w, p, 0, 1e6);
+  num(o, 'cost', w, p, 0, 1e5);
+  num(o, 'work', w, p, 1, 1e7);
+  num(o, 'hp', w, p, 1, 1e6);
+  num(o, 'decay', w, p, 0, 1);
+  num(o, 'heat', w, p, 0, 5000);
+  num(o, 'light', w, p, 0, 10);
+  oneOf(o, 'era', ERAS, w, p);
+}
+
+function checkMaterial(x: MaterialDef, w: string, p: string[]): void {
+  const o = x as unknown as Record<string, unknown>;
+  str(o, 'name', w, p);
+  ioArr(o, 'items', w, p);
+  if (x.knowledge !== null && typeof x.knowledge !== 'string') p.push(`${w}: "knowledge" must be a recipe id or null`);
+  if (!COLOR.test(String(x.color))) p.push(`${w}: "color" must be #rrggbb`);
+  for (const k of ['roughness', 'flammability', 'insulation']) num(o, k, w, p, 0, 1);
+  num(o, 'strength', w, p, 0, 100);
+  oneOf(o, 'era', ERAS, w, p);
+}
+
+function checkAnimal(x: AnimalDef, w: string, p: string[]): void {
+  const o = x as unknown as Record<string, unknown>;
+  str(o, 'name', w, p);
+  str(o, 'body', w, p);
+  oneOf(o, 'kind', ['herbivore', 'predator', 'scavenger', 'fish', 'bird', 'insect', 'domestic'], w, p);
+  oneOf(o, 'habitat', ['land', 'water', 'sea', 'air'], w, p);
+  num(o, 'size', w, p, 0.001, 1000);
+  num(o, 'speed', w, p, 0, 50);
+  tuple(o, 'herd', 2, w, p);
+  tuple(o, 'temp', 4, w, p);
+  strArr(o, 'diet', w, p);
+  strArr(o, 'biomes', w, p);
+  ioArr(o, 'products', w, p);
+  num(o, 'danger', w, p, 0, 1);
+  num(o, 'flee', w, p, 0, 1);
+  num(o, 'breed', w, p, 0, 100);
+  if (!Array.isArray(x.colors) || x.colors.some((col) => !COLOR.test(col))) p.push(`${w}: "colors" must be #rrggbb strings`);
+}
+
+function checkDisease(x: DiseaseDef, w: string, p: string[]): void {
+  const o = x as unknown as Record<string, unknown>;
+  str(o, 'name', w, p);
+  oneOf(o, 'transmission', ['contact', 'water', 'air', 'food', 'animal'], w, p);
+  for (const k of ['contagion', 'mortality', 'immunity']) num(o, k, w, p, 0, 1);
+  num(o, 'duration', w, p, 0.01, 10000);
+  num(o, 'crowd', w, p, 0, 1e6);
+  str(o, 'medicine', w, p);
+  strArr(o, 'origin', w, p);
+  if (x.species !== null && !Array.isArray(x.species)) p.push(`${w}: "species" must be an array of species ids or null`);
+}
+
+function checkPhonology(x: PhonologyDef, w: string, p: string[]): void {
+  const o = x as unknown as Record<string, unknown>;
+  strArr(o, 'onsets', w, p, false);
+  strArr(o, 'vowels', w, p, false);
+  strArr(o, 'codas', w, p, false);
+  tuple(o, 'syllables', 2, w, p);
+  tuple(o, 'personal', 2, w, p);
+  if (typeof x.sep !== 'string') p.push(`${w}: "sep" must be a string (may be empty)`);
+  if (!x.features || typeof x.features !== 'object') p.push(`${w}: "features" must map site features to phrases`);
+}
+
+function checkEventTemplate(x: EventTemplateDef, w: string, p: string[]): void {
+  const o = x as unknown as Record<string, unknown>;
+  str(o, 'kind', w, p);
+  num(o, 'weight', w, p, 0, 3);
+  strArr(o, 'text', w, p, false);
+}
+
+/** references between the peoples sections (after every pack merged); also builds the tag index and context set */
+function crossCheckPeoples(c: Content, problems: string[]): void {
+  c.itemsByTag.clear();
+  c.items.list.forEach((it, i) => {
+    for (const t of it.tags ?? []) {
+      let l = c.itemsByTag.get(t);
+      if (!l) c.itemsByTag.set(t, (l = []));
+      l.push(i);
+    }
+  });
+  c.contexts.clear();
+  for (const k of ENV_CONTEXTS) c.contexts.add(k);
+  for (const k of EVENT_TRIGGERS) c.contexts.add(k);
+  for (const b of c.buildings.list) for (const k of b.provides ?? []) c.contexts.add(k);
+  const ctxList = [...c.contexts];
+  const itemRef = (who: string, io: RecipeIO, field: string) => {
+    if (io.item !== undefined && !c.items.has(io.item)) problems.push(ref(who.split(' ')[0], who.split(' ').slice(1).join(' '), field, io.item, c.items));
+    if (io.tag !== undefined && !c.itemsByTag.has(io.tag)) problems.push(`${who}: ${field} names tag '${io.tag}', which no item carries`);
+  };
+  for (const s of c.species.list) {
+    if (!c.phonologies.has(s.phonology)) problems.push(ref('species', s.id, 'phonology', s.phonology, c.phonologies));
+    for (const k of s.start ?? []) if (!c.recipes.has(k)) problems.push(ref('species', s.id, 'start', k, c.recipes));
+    for (const k of s.taboos ?? []) if (!c.recipes.has(k)) problems.push(ref('species', s.id, 'taboos', k, c.recipes));
+    for (const m of s.style?.materials ?? []) if (!c.materials.has(m)) problems.push(ref('species', s.id, 'style.materials', m, c.materials));
+    for (const t of Object.keys(s.diet ?? {})) if (!c.itemsByTag.has(t)) problems.push(`species '${s.id}': diet names food tag '${t}', which no item carries`);
+  }
+  for (const it of c.items.list) if (it.material && !c.materials.has(it.material)) problems.push(ref('item', it.id, 'material', it.material, c.materials));
+  for (const r of c.recipes.list) {
+    const who = `recipe ${r.id}`;
+    for (const io of r.inputs ?? []) itemRef(who, io, 'inputs');
+    for (const t of r.tools ?? []) if (!c.itemsByTag.has(t)) problems.push(`recipe '${r.id}': tool tag '${t}' is carried by no item`);
+    for (const k of r.knowledge ?? []) if (!c.recipes.has(k)) problems.push(ref('recipe', r.id, 'knowledge', k, c.recipes));
+    if (r.knowledge?.includes(r.id)) problems.push(`recipe '${r.id}' lists itself as a prerequisite`);
+    for (const o of r.outputs ?? []) {
+      if (o.item !== undefined && !c.items.has(o.item)) problems.push(ref('recipe', r.id, 'outputs.item', o.item, c.items));
+      if (o.building !== undefined && !c.buildings.has(o.building)) problems.push(ref('recipe', r.id, 'outputs.building', o.building, c.buildings));
+      if (o.knowledge !== undefined && !c.recipes.has(o.knowledge)) problems.push(ref('recipe', r.id, 'outputs.knowledge', o.knowledge, c.recipes));
+    }
+    const needs = r.place?.needs === undefined ? [] : Array.isArray(r.place.needs) ? r.place.needs : [r.place.needs];
+    for (const k of [...needs, ...(r.place?.near ?? [])]) {
+      if (!c.contexts.has(k)) { const h = suggest(k, ctxList); problems.push(`recipe '${r.id}': place context '${k}' is unknown${h ? ` — did you mean '${h}'?` : ''}`); }
+    }
+    for (const b of r.place?.biome ?? []) if (!c.biomes.has(b)) problems.push(ref('recipe', r.id, 'place.biome', b, c.biomes));
+    for (const k of r.discover?.triggers ?? []) {
+      if (!c.contexts.has(k)) { const h = suggest(k, ctxList); problems.push(`recipe '${r.id}': discover trigger '${k}' is unknown${h ? ` — did you mean '${h}'?` : ''}`); }
+    }
+    for (const it of r.gather?.items ?? []) if (!c.items.has(it)) problems.push(ref('recipe', r.id, 'gather.items', it, c.items));
+    for (const sp of r.species ?? []) if (!c.species.has(sp)) problems.push(ref('recipe', r.id, 'species', sp, c.species));
+  }
+  // prerequisite cycles would make a recipe unlearnable by any path except a direct gift: refuse them
+  const state = new Map<string, number>();
+  const visit = (id: string, path: string[]): void => {
+    const st = state.get(id);
+    if (st === 2) return;
+    if (st === 1) { problems.push(`recipes: prerequisite cycle ${[...path, id].join(' -> ')}`); return; }
+    state.set(id, 1);
+    for (const k of c.recipes.find(id)?.knowledge ?? []) if (c.recipes.has(k)) visit(k, [...path, id]);
+    state.set(id, 2);
+  };
+  for (const r of c.recipes.list) visit(r.id, []);
+  // hot work needs a workplace hot enough, of the kind it names, that can be built WITHOUT the recipe itself (a smelter
+  // that only smelters can build would lock its age away for ever)
+  const needsOf = (id: string): Set<string> => {
+    const out = new Set<string>();
+    const stack = [id];
+    while (stack.length) {
+      const k = stack.pop()!;
+      for (const q of c.recipes.find(k)?.knowledge ?? []) if (!out.has(q)) { out.add(q); stack.push(q); }
+    }
+    return out;
+  };
+  const eraOf = (e: string | undefined) => Math.max(0, ERAS.indexOf((e ?? 'stone') as Era));
+  for (const r of c.recipes.list) {
+    const heat = r.place?.heat ?? 0;
+    if (heat <= 0) continue;
+    const needs = r.place?.needs === undefined ? [] : Array.isArray(r.place.needs) ? r.place.needs : [r.place.needs];
+    const places = c.buildings.list.filter((b) => (b.heat ?? 0) >= heat && needs.every((k) => (b.provides ?? []).includes(k) || (ENV_CONTEXTS as readonly string[]).includes(k)));
+    if (heat > 700 && !places.length) {
+      problems.push(`recipe '${r.id}': no building reaches ${heat} °C${needs.length ? ` and provides ${needs.join(' + ')}` : ''}`);
+      continue;
+    }
+    // self-locked (every such workplace needs the recipe itself): the first try happens at a fire of its age or before
+    if (places.length && places.every((b) => b.recipe === r.id || needsOf(b.recipe).has(r.id))) {
+      const fire = c.buildings.list.some((b) => (b.heat ?? 0) > 0 && b.recipe !== r.id && !needsOf(b.recipe).has(r.id) && eraOf(b.era) <= eraOf(r.era));
+      if (!fire) problems.push(`recipe '${r.id}' needs ${heat} °C at ${places.map((b) => b.id).join(' / ')}, which only those who already know it can build, and no older fire to first try it at`);
+    }
+  }
+  for (const b of c.buildings.list) {
+    if (!c.recipes.has(b.recipe)) problems.push(ref('building', b.id, 'recipe', b.recipe, c.recipes));
+    for (const m of b.materials ?? []) if (!c.materials.has(m)) problems.push(ref('building', b.id, 'materials', m, c.materials));
+    for (const sp of b.species ?? []) if (!c.species.has(sp)) problems.push(ref('building', b.id, 'species', sp, c.species));
+  }
+  for (const m of c.materials.list) {
+    for (const io of m.items ?? []) itemRef(`material ${m.id}`, io, 'items');
+    if (m.knowledge && !c.recipes.has(m.knowledge)) problems.push(ref('material', m.id, 'knowledge', m.knowledge, c.recipes));
+  }
+  for (const a of c.animals.list) {
+    for (const io of a.products ?? []) itemRef(`animal ${a.id}`, io, 'products');
+    if (a.domesticatesTo && !c.animals.has(a.domesticatesTo)) problems.push(ref('animal', a.id, 'domesticatesTo', a.domesticatesTo, c.animals));
+    for (const b of a.biomes ?? []) if (!c.biomes.has(b)) problems.push(ref('animal', a.id, 'biomes', b, c.biomes));
+  }
+  for (const d of c.diseases.list) {
+    if (!c.recipes.has(d.medicine)) problems.push(ref('disease', d.id, 'medicine', d.medicine, c.recipes));
+    for (const sp of d.species ?? []) if (!c.species.has(sp)) problems.push(ref('disease', d.id, 'species', sp, c.species));
+    for (const b of d.origin ?? []) if (!c.biomes.has(b)) problems.push(ref('disease', d.id, 'origin', b, c.biomes));
+  }
+  for (const s of c.scenarios.list) {
+    (s.peoples ?? []).forEach((pe, i) => {
+      const e = pe as { species?: string; era?: string };
+      if (e && typeof e === 'object' && e.species !== undefined && !c.species.has(e.species)) problems.push(ref('scenario', s.id, `peoples[${i}].species`, e.species, c.species));
+      if (e && typeof e === 'object' && e.era !== undefined && !ERAS.includes(e.era as Era)) problems.push(`scenario '${s.id}': peoples[${i}].era '${e.era}' is not one of ${ERAS.join(', ')}`);
+    });
+  }
 }

@@ -98,8 +98,13 @@ export function orbitPlaneQuat(o: OrbitParams, out: DQ = [0, 0, 0, 1]): DQ {
   return qMul(_qa, _qb, out);
 }
 
-/** Spin angle at `tick` given the snapshot's spin at `snapTick` (sunFrozen stops it). */
+/**
+ * Spin angle at `tick` given the snapshot's spin at `snapTick`. The sim publishes its rotation rate (`spinRate`: one
+ * turn per SOLAR day plus the star's drift, or only the drift while the sun is frozen); older data turns once per
+ * dayHours and stops when frozen.
+ */
 export function spinAt(p: PlanetParams, snapTick: number, tick: number): number {
+  if (typeof p.spinRate === 'number' && Number.isFinite(p.spinRate)) return p.spin + p.spinRate * (tick - snapTick);
   if (p.sunFrozen || !(p.dayHours > 0)) return p.spin;
   return p.spin + (2 * Math.PI * (tick - snapTick)) / (p.dayHours * 60);
 }

@@ -17,6 +17,9 @@ import { igniteCell } from './fire.ts';
 import { stampCrater, smoothstep } from '../world/gen.ts';
 import { collectFlags } from '../core/activeset.ts';
 
+/** called when something strikes the ground (crater brush, meteors later): peoples are hurt, star iron falls */
+export const impactHooks: ((u: Universe, p: Planet, pos: ArrayLike<number>, radiusM: number, meteor: boolean) => void)[] = [];
+
 export const TERRAIN_CADENCE = 10;
 
 export type BrushKind =
@@ -165,6 +168,7 @@ export function brush(u: Universe, p: Planet, kind: BrushKind, pos: ArrayLike<nu
       }
       touched(p, list);
       u.emit({ t: 'impact', planet: p.id, pos: [pos[0], pos[1], pos[2]], a: radiusM, b: strength });
+      for (const h of impactHooks) h(u, p, pos, radiusM, false);
       return list.length;
     }
     case 'mountain-range': {
@@ -416,54 +420,78 @@ export function terrainStep(u: Universe, p: Planet): void {
     u.emit({ t: 'landslide', planet: p.id, pos: [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]], a: slid });
   }
 
-  // 3. wind on sand and ash; ash weathering
+  // 3. wind on sand and ash; ash weathering — a third of the grid per step (contiguous thirds in turn) at three times
+  // the per-step rates, so every cell is visited every 3 steps (30 ticks): dunes grow over days, and the full-grid
+  // scan was a fixed cost of every terrain step on every world with sand (SIM perf pass)
   if (p.airy) {
-    const freeze = p.st.liquid.freeze;
-    const k = 0.0004 * cfg.sandTransport;
-    for (let c = 0; c < N; c++) {
-      const sand = f.sand[c], ash = f.ash[c];
-      if (sand < 0.02 && ash < 0.01) continue;
-      if (ash > 0 && f.moisture[c] > 0.2 && f.temperature[c] > freeze) {
-        // ash weathers into soil (the fertility bonus is read by vegetation)
-        const w = Math.min(ash, 0.00025 * f.moisture[c]);
-        f.ash[c] -= w;
-        f.soil[c] += w * 0.8;
-        changed = true;
-      }
-      if (f.water[c] > DRY || f.moisture[c] > 0.3 || f.snow[c] > 0.05 || f.temperature[c] < freeze - 5 && f.ice[c] > 0) continue;
-      const veg = f.grass[c] + f.shrub[c] + f.tree[c] + f.crop[c];
-      if (veg > 0.6) continue;
-      const wx = f.windX[c], wy = f.windY[c], wz = f.windZ[c];
-      const ws = Math.sqrt(wx * wx + wy * wy + wz * wz);
-      const thr = sand >= 0.02 ? 5 : 3;
-      if (ws <= thr) continue;
-      let best = -1, bd = 0.3 * ws;
-      for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
-        const d = geo.tx[e] * wx + geo.ty[e] * wy + geo.tz[e] * wz;
-        if (d > bd) { bd = d; best = e; }
-      }
-      if (best < 0) continue;
-      const o = g.nbr[best];
-      const q = k * (ws - thr) * (1 - Math.min(1, veg));
-      if (sand >= 0.02) {
-        const m = Math.min(sand, q * Math.min(1, sand / 0.2));
-        f.sand[c] -= m;
-        f.sand[o] += m;
-        if (m > 0.0005) { f.road[o] *= 1 - Math.min(0.5, m * 30); f.crop[o] *= 1 - Math.min(0.5, m * 8); }
-      } else {
-        const m = Math.min(ash, q * 1.5);
-        f.ash[c] -= m;
-        f.ash[o] += m;
-      }
-      p.updSurface(c);
-      p.updSurface(o);
-      s.tAct[o] = 1;
-      changed = true;
-    }
+    const part = Math.floor((u.tick + p.id * 13 + 5) / TERRAIN_CADENCE) % SAND_SPLIT;
+    const from = Math.floor((N * part) / SAND_SPLIT), to = Math.floor((N * (part + 1)) / SAND_SPLIT);
+    if (sandKernel(p, from, to, SAND_SPLIT)) changed = true;
   }
   if (changed) {
     for (const k of ['surface', 'rock', 'sand', 'soil', 'ash', 'snow', 'lava', 'road'] as const) p.bump(k);
   }
+}
+
+/** cells per sand / ash pass: each terrain step handles one contiguous part */
+const SAND_SPLIT = 3;
+
+/** wind on sand and ash, ash weathering, over cells [from, to) with `scale` steps' worth of transport; true if anything
+ * moved */
+function sandKernel(p: Planet, from: number, to: number, scale: number): boolean {
+  const f = p.f, s = p.s, g = p.grid, geo = p.geo;
+  const freeze = p.st.liquid.freeze;
+  const k = 0.0004 * p.cfg.sandTransport * scale;
+  const sandA = f.sand, ashA = f.ash, moisture = f.moisture, temperature = f.temperature, soil = f.soil;
+  const water = f.water, snow = f.snow, ice = f.ice, grass = f.grass, shrub = f.shrub, tree = f.tree, crop = f.crop;
+  const windX = f.windX, windY = f.windY, windZ = f.windZ, road = f.road, tAct = s.tAct;
+  const nbrStart = g.nbrStart, nbr = g.nbr, tx = geo.tx, ty = geo.ty, tz = geo.tz;
+  let changed = false;
+  for (let c = from; c < to; c++) {
+    const sand = sandA[c], ash = ashA[c];
+    if (sand < 0.02 && ash < 0.01) continue;
+    if (ash > 0 && moisture[c] > 0.2 && temperature[c] > freeze) {
+      // ash weathers into soil (the fertility bonus is read by vegetation)
+      const w = Math.min(ash, 0.00025 * moisture[c] * scale);
+      ashA[c] -= w;
+      soil[c] += w * 0.8;
+      // the layer sum shrank (0.2 of the weathered ash is lost): keep `surface` exact — nothing re-sums every cell
+      // any more (the hourly climate pass only re-sums cells whose own snow / ice changed)
+      p.updSurface(c);
+      changed = true;
+    }
+    if (water[c] > DRY || moisture[c] > 0.3 || snow[c] > 0.05 || temperature[c] < freeze - 5 && ice[c] > 0) continue;
+    const veg = grass[c] + shrub[c] + tree[c] + crop[c];
+    if (veg > 0.6) continue;
+    const wx = windX[c], wy = windY[c], wz = windZ[c];
+    const ws = Math.sqrt(wx * wx + wy * wy + wz * wz);
+    const thr = sand >= 0.02 ? 5 : 3;
+    if (ws <= thr) continue;
+    let best = -1, bd = 0.3 * ws;
+    const e1 = nbrStart[c + 1];
+    for (let e = nbrStart[c]; e < e1; e++) {
+      const d = tx[e] * wx + ty[e] * wy + tz[e] * wz;
+      if (d > bd) { bd = d; best = e; }
+    }
+    if (best < 0) continue;
+    const o = nbr[best];
+    const q = k * (ws - thr) * (1 - Math.min(1, veg));
+    if (sand >= 0.02) {
+      const m = Math.min(sand, q * Math.min(1, sand / 0.2));
+      sandA[c] -= m;
+      sandA[o] += m;
+      if (m > 0.0005) { road[o] *= 1 - Math.min(0.5, m * 30); crop[o] *= 1 - Math.min(0.5, m * 8); }
+    } else {
+      const m = Math.min(ashA[c], q * 1.5);
+      ashA[c] -= m;
+      ashA[o] += m;
+    }
+    p.updSurface(c);
+    p.updSurface(o);
+    tAct[o] = 1;
+    changed = true;
+  }
+  return changed;
 }
 
 /** viscous lava flow, cooling, steam and burning over the lava active set */
@@ -505,8 +533,10 @@ function lavaFlow(u: Universe, p: Planet, list: Int32Array, n: number): void {
     if (dL[c] !== 0) { f.lava[c] = Math.max(0, f.lava[c] + dL[c]); dL[c] = 0; }
   }
   // cooling, steam, burning: over the (possibly grown) set
-  for (let c = 0; c < p.count; c++) {
-    if (!s.lAct[c]) continue;
+  const cool2 = p.scratch.list2;
+  const nc = collectFlags(s.lAct, cool2, p.count);
+  for (let i = 0; i < nc; i++) {
+    const c = cool2[i];
     let L = f.lava[c];
     if (L <= 0.005) {
       f.rock[c] += L;

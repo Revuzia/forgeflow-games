@@ -1,0 +1,19 @@
+{
+  "id": "methane-drifters", "name": "Methane drifters", "plural": "the drifters", "adjective": "drifter",
+  "desc": "Buoyant, translucent beings of frozen methane worlds. They float on gas bladders, breathe methane, filter food from the haze, and cannot know fire.",
+  "body": "flyer", "size": 2.4, "mass": 20, "speed": 1.1, "swim": 0.6, "fly": true, "alt": 3.5,
+  "lifespan": 90, "maturity": 10, "elder": 70, "fertility": 0.5,
+  "diet": { "air": 1.5, "plant": 0.2 },
+  "forage": ["air"],
+  "temp": [-215, -190, -140, -100], "breathes": "methane", "habitat": ["land", "water", "cold"], "nocturnal": true,
+  "hive": null,
+  "needs": { "food": 0.8, "water": 0.0, "warmth": 0.8, "rest": 0.6, "safety": 0.7, "belonging": 0.9, "status": 0.3, "curiosity": 0.9, "faith": 0.8, "methane": 1.0 },
+  "decay": { "food": 0.7, "rest": 0.6 },
+  "traits": { "curiosity": 0.75, "boldness": 0.35, "sociability": 0.75, "piety": 0.7, "aggression": 0.1, "diligence": 0.4 },
+  "colors": { "skin": ["#d8a8c8", "#b8a0e0", "#a0c0e8", "#e0b8a0"], "hair": ["#f0e0ff"], "cloth": ["#f0d8a8", "#c8b0f0", "#a8d8f0"] },
+  "phonology": "drifter",
+  "style": { "materials": ["ice", "fieldstone", "resin", "stone"], "form": "spire", "roof": "dome", "palette": ["#e0d0f8", "#a8c8e8", "#f0c8a0"] },
+  "taboos": ["fire-keeping", "fire-making"], "sacred": ["storm", "star"],
+  "god": { "awe": 1.3, "fear": 0.7 },
+  "start": ["air-grazing", "ice-cutting", "shelter-building", "oral-tradition"]
+}

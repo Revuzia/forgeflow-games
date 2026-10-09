@@ -1,0 +1,214 @@
+{
+ "$comment": "GENESIS: a burning building on the live sim (worker): the seeded sandbox of integration.json, plains folk set down and given fire, six days to raise huts, then the god sets the camp alight at dusk; an oblique view so the flames read. Run: node _harness/shots.mjs _harness/specs/fire.json",
+ "shots": [
+  {
+   "name": "fire-00-seeded",
+   "params": "scenario=sandbox&source=worker&seed=20260",
+   "size": [
+    1280,
+    720
+   ],
+   "quality": "medium",
+   "commands": [
+    {
+     "k": "life.plant",
+     "species": "meadow-grass",
+     "lat": 0,
+     "lon": 0,
+     "radius": 12000,
+     "density": 0.7
+    },
+    {
+     "k": "life.plant",
+     "species": "meadow-grass",
+     "lat": 0,
+     "lon": 180,
+     "radius": 12000,
+     "density": 0.7
+    },
+    {
+     "k": "life.plant",
+     "species": "wild-grain",
+     "lat": 0,
+     "lon": 0,
+     "radius": 12000,
+     "density": 0.35
+    },
+    {
+     "k": "life.plant",
+     "species": "wild-grain",
+     "lat": 0,
+     "lon": 180,
+     "radius": 12000,
+     "density": 0.35
+    },
+    {
+     "k": "life.plant",
+     "species": "berry-bush",
+     "lat": 0,
+     "lon": 0,
+     "radius": 12000,
+     "density": 0.35
+    },
+    {
+     "k": "life.plant",
+     "species": "berry-bush",
+     "lat": 0,
+     "lon": 180,
+     "radius": 12000,
+     "density": 0.35
+    },
+    {
+     "k": "life.plant",
+     "species": "savanna-grass",
+     "lat": 0,
+     "lon": 90,
+     "radius": 12000,
+     "density": 0.5
+    },
+    {
+     "k": "life.plant",
+     "species": "steppe-grass",
+     "lat": 0,
+     "lon": -90,
+     "radius": 12000,
+     "density": 0.5
+    },
+    {
+     "k": "life.forest",
+     "lat": 10,
+     "lon": -30,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": -20,
+     "lon": 20,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": 35,
+     "lon": -70,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": -35,
+     "lon": 100,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": 20,
+     "lon": 140,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": 0,
+     "lon": 60,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": 45,
+     "lon": 30,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": -10,
+     "lon": -120,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": 25,
+     "lon": -150,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": -40,
+     "lon": -60,
+     "radius": 1100
+    }
+   ],
+   "wait": 1440,
+   "camera": {
+    "mode": "orbit",
+    "poi": "homestead",
+    "dist": 7600,
+    "tilt": 0,
+    "hour": 10
+   },
+   "frames": 1
+  },
+  {
+   "name": "fire-01-camp",
+   "params": "scenario=sandbox&source=worker&seed=20260",
+   "size": [
+    1280,
+    720
+   ],
+   "quality": "medium",
+   "commands": [
+    {
+     "k": "life.spawn-people",
+     "species": "plains-folk",
+     "count": 40,
+     "pos": "$poi:homestead",
+     "as": "plains"
+    },
+    {
+     "k": "idea.teach",
+     "knowledge": "fire-keeping",
+     "settlement": "$plains"
+    },
+    {
+     "k": "idea.teach",
+     "knowledge": "fire-making",
+     "settlement": "$plains"
+    }
+   ],
+   "wait": 10080,
+   "camera": {
+    "mode": "orbit",
+    "poi": "settlement:$plains",
+    "dist": 55,
+    "tilt": 60,
+    "yaw": 20,
+    "hour": 10
+   },
+   "frames": 2
+  },
+  {
+   "name": "int-16b-burning-oblique",
+   "params": "scenario=sandbox&source=worker&seed=20260",
+   "size": [
+    1280,
+    720
+   ],
+   "quality": "medium",
+   "commands": [
+    {
+     "k": "fire.ignite",
+     "pos": "$poi:settlement:$plains",
+     "radius": 70,
+     "strength": 1
+    }
+   ],
+   "wait": 20,
+   "camera": {
+    "mode": "orbit",
+    "poi": "burning",
+    "dist": 40,
+    "tilt": 76,
+    "yaw": 20,
+    "hour": 18.4
+   },
+   "frames": 3
+  }
+ ]
+}

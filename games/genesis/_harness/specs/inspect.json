@@ -1,0 +1,196 @@
+{
+ "$comment": "GENESIS: the inspector on a person of the live sim (worker), on the seeded sandbox of integration.json: plains folk set down, three days pass, one of them is framed and selected. Run: node _harness/shots.mjs _harness/specs/inspect.json",
+ "shots": [
+  {
+   "name": "inspect-00-seeded",
+   "params": "scenario=sandbox&source=worker&seed=20260",
+   "size": [
+    1280,
+    720
+   ],
+   "quality": "medium",
+   "commands": [
+    {
+     "k": "life.plant",
+     "species": "meadow-grass",
+     "lat": 0,
+     "lon": 0,
+     "radius": 12000,
+     "density": 0.7
+    },
+    {
+     "k": "life.plant",
+     "species": "meadow-grass",
+     "lat": 0,
+     "lon": 180,
+     "radius": 12000,
+     "density": 0.7
+    },
+    {
+     "k": "life.plant",
+     "species": "wild-grain",
+     "lat": 0,
+     "lon": 0,
+     "radius": 12000,
+     "density": 0.35
+    },
+    {
+     "k": "life.plant",
+     "species": "wild-grain",
+     "lat": 0,
+     "lon": 180,
+     "radius": 12000,
+     "density": 0.35
+    },
+    {
+     "k": "life.plant",
+     "species": "berry-bush",
+     "lat": 0,
+     "lon": 0,
+     "radius": 12000,
+     "density": 0.35
+    },
+    {
+     "k": "life.plant",
+     "species": "berry-bush",
+     "lat": 0,
+     "lon": 180,
+     "radius": 12000,
+     "density": 0.35
+    },
+    {
+     "k": "life.plant",
+     "species": "savanna-grass",
+     "lat": 0,
+     "lon": 90,
+     "radius": 12000,
+     "density": 0.5
+    },
+    {
+     "k": "life.plant",
+     "species": "steppe-grass",
+     "lat": 0,
+     "lon": -90,
+     "radius": 12000,
+     "density": 0.5
+    },
+    {
+     "k": "life.forest",
+     "lat": 10,
+     "lon": -30,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": -20,
+     "lon": 20,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": 35,
+     "lon": -70,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": -35,
+     "lon": 100,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": 20,
+     "lon": 140,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": 0,
+     "lon": 60,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": 45,
+     "lon": 30,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": -10,
+     "lon": -120,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": 25,
+     "lon": -150,
+     "radius": 1100
+    },
+    {
+     "k": "life.forest",
+     "lat": -40,
+     "lon": -60,
+     "radius": 1100
+    }
+   ],
+   "wait": 1440,
+   "camera": {
+    "mode": "orbit",
+    "poi": "homestead",
+    "dist": 7600,
+    "tilt": 0,
+    "hour": 10
+   },
+   "frames": 1
+  },
+  {
+   "name": "int-12-inspect-person",
+   "params": "scenario=sandbox&source=worker&seed=20260",
+   "size": [
+    1280,
+    720
+   ],
+   "quality": "medium",
+   "ui": true,
+   "commands": [
+    {
+     "k": "life.spawn-people",
+     "species": "plains-folk",
+     "count": 40,
+     "pos": "$poi:homestead",
+     "as": "plains"
+    },
+    {
+     "k": "idea.teach",
+     "knowledge": "fire-keeping",
+     "settlement": "$plains"
+    },
+    {
+     "k": "idea.teach",
+     "knowledge": "fire-making",
+     "settlement": "$plains"
+    }
+   ],
+   "wait": 5760,
+   "pick": "agent:settlement:$plains",
+   "camera": {
+    "mode": "orbit",
+    "target": {
+     "kind": "agent",
+     "id": "$agent"
+    },
+    "dist": 9,
+    "tilt": 38,
+    "yaw": 20,
+    "hour": 11
+   },
+   "select": {
+    "kind": "agent",
+    "id": "$agent"
+   },
+   "frames": 3
+  }
+ ]
+}

@@ -15,7 +15,7 @@
 import { BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, Uint32BufferAttribute } from 'three';
 
 /** what a face is, for the shaders: roofs hide during construction, glass glows at night, hot mouths emit */
-export const PART = { wall: 0, roof: 1, glass: 2, door: 3, plinth: 4, hot: 5, trim: 6, frame: 7, lamp: 8, sail: 9, beacon: 10, prop: 11 } as const;
+export const PART = { wall: 0, roof: 1, glass: 2, door: 3, plinth: 4, hot: 5, trim: 6, frame: 7, lamp: 8, sail: 9, beacon: 10, prop: 11, lantern: 12 } as const;
 
 export type V3 = [number, number, number];
 type RGB = [number, number, number];
@@ -132,6 +132,9 @@ export class KitBuilder {
    */
   box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, surf: number, part: number, col: RGB,
     opt: { skip?: string[]; aoLow?: number; aoHigh?: number; seed?: number; topSurf?: number; topCol?: RGB } = {}): void {
+    if (x0 > x1) { const t = x0; x0 = x1; x1 = t; }
+    if (y0 > y1) { const t = y0; y0 = y1; y1 = t; }
+    if (z0 > z1) { const t = z0; z0 = z1; z1 = t; }
     const sk = opt.skip ?? [];
     const lo = opt.aoLow ?? 1, hi = opt.aoHigh ?? 1;
     const sd = opt.seed ?? this.seed;
@@ -327,6 +330,29 @@ export class KitBuilder {
     this.quad(b2, c2, c, b, edgeSurf, part, edgeCol, ao * 0.8, seed);
     this.quad(c2, d2, d, c, edgeSurf, part, edgeCol, ao * 0.8, seed);
     this.quad(d2, a2, a, d, edgeSurf, part, edgeCol, ao * 0.8, seed);
+  }
+
+  /**
+   * Push every vertex emitted since `from` out from the local +Y axis through (cx, cz) by `dr(angle, y)` metres (in the
+   * current frame): hand-made irregularity on a lathe (a thatched cone's lumpy outline). dr must be periodic in angle.
+   */
+  jitterRadial(from: number, cx: number, cz: number, dr: (a: number, y: number) => number): void {
+    const f = this.xf;
+    for (let i = from; i < this.pos.length / 3; i++) {
+      const l = this.untransform([this.pos[i * 3], this.pos[i * 3 + 1], this.pos[i * 3 + 2]]);
+      const dx = l[0] - cx, dz = l[2] - cz;
+      const r = Math.hypot(dx, dz);
+      if (r < 1e-4) continue;
+      const d = dr(Math.atan2(dz, dx), l[1]);
+      const x = l[0] + (dx / r) * d, z = l[2] + (dz / r) * d;
+      this.pos[i * 3] = f.tx + f.k * (f.c * x + f.s * z);
+      this.pos[i * 3 + 2] = f.tz + f.k * (-f.s * x + f.c * z);
+    }
+  }
+
+  /** overwrite the uv of every vertex of `part` emitted since `from` (pivots for animated parts: windmill sails) */
+  setPartUv(part: number, u: number, v: number, from = 0): void {
+    for (let i = from; i < this.pos.length / 3; i++) if (this.kit[i * 4 + 1] === part) { this.uv[i * 2] = u; this.uv[i * 2 + 1] = v; }
   }
 
   /** append another builder's geometry (already in final local coordinates) */

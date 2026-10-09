@@ -26,6 +26,7 @@ import { ATMO_PARS, SKY_LOOKUP } from '../shaders/atmosphere.glsl.ts';
 import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { SHADOW_GLSL } from './lights.ts';
 import { TERRAIN_VERT_CORE, TERRAIN_VERT_PARS } from './terrainvert.glsl.ts';
+import { GROUND_FRAG_PARS, GROUND_UNIFORMS, GROUND_VERT_MAIN, GROUND_VERT_PARS } from './groundfloor.ts';
 
 /** planet kind → palette / behaviour code used by the shaders */
 export function kindCode(kind: string): number {
@@ -75,6 +76,7 @@ uniform vec3 uSunDirView;
 uniform float uKind;
 uniform float uSeaLevel;
 uniform float uYearFrac;
+uniform float uSeasonAmp;
 uniform float uTime;
 uniform vec3 uRockA;
 uniform vec3 uRockB;
@@ -90,8 +92,10 @@ uniform vec3 uBrushColor;
 uniform float uBrushOn;
 uniform vec2 uVegFade;  // instanced-tree hand-over band (m from the camera): canopy shading only beyond it
 uniform float uDebug;   // 0 off, 1 body normal, 2 albedo, 3 no bump, 4 macro normal only
+${GROUND_FRAG_PARS}
 
-struct TSurf { vec3 albedo; float rough; float bump; float ao; vec3 emis; float glint; vec3 microG; };
+// sky: ambient-only occlusion (forest canopy over its floor); ao darkens ambient and, partly, the sun
+struct TSurf { vec3 albedo; float rough; float bump; float ao; vec3 emis; float glint; vec3 microG; float sky; };
 
 // fade a pattern out before it is resolved by fewer than ~6 pixels per feature (no speckle at distance)
 float aaF(float fw, float feature) { return 1.0 - smoothstep(0.12, 0.45, fw / feature); }
@@ -127,6 +131,8 @@ vec3 bumpNormal(vec3 surfPos, vec3 n, float h) {
 TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   TSurf s;
   s.glint = 0.0;
+  s.sky = 1.0;
+  FFloor ffl; float ffW = 0.0;
   vec3 up = normalize(P);
   float slope = 1.0 - clamp(dot(Nb, up), 0.0, 1.0);
   float steep = smoothstep(0.1, 0.32, slope);
@@ -142,10 +148,19 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   bool veryFine = fw < 0.6;
 
   // season: autumn in each hemisphere (yearFrac 0.5..0.75 north, 0..0.25 south)
+  // (the tropics barely have seasons and a planet without axial tilt has none: the swing fades toward the equator and
+  // scales with the tilt, uSeasonAmp — switching hemispheres at lat 0 drew a hard line round the equator)
   float lat = up.y;
-  float yf = lat >= 0.0 ? uYearFrac : fract(uYearFrac + 0.5);
-  float autumn = smoothstep(0.48, 0.58, yf) * (1.0 - smoothstep(0.72, 0.8, yf));
-  float winter = smoothstep(0.7, 0.8, yf) + (1.0 - smoothstep(0.0, 0.08, yf));
+  float yf = lat >= 0.0 ? uYearFrac : fract(uYearFrac + 0.5); // the local year (crop calendars below)
+  float yfS = fract(uYearFrac + 0.5);
+  float autumnN = smoothstep(0.48, 0.58, uYearFrac) * (1.0 - smoothstep(0.72, 0.8, uYearFrac));
+  float autumnS = smoothstep(0.48, 0.58, yfS) * (1.0 - smoothstep(0.72, 0.8, yfS));
+  float winterN = smoothstep(0.7, 0.8, uYearFrac) + (1.0 - smoothstep(0.0, 0.08, uYearFrac));
+  float winterS = smoothstep(0.7, 0.8, yfS) + (1.0 - smoothstep(0.0, 0.08, yfS));
+  float seasonK = uSeasonAmp * smoothstep(0.06, 0.32, abs(lat));
+  float hemi = smoothstep(-0.12, 0.12, lat);
+  float autumn = mix(autumnS, autumnN, hemi) * seasonK;
+  float winter = mix(winterS, winterN, hemi) * seasonK;
 
   // macro variation (tens of metres) — keeps every layer from looking tiled
   float m1 = fbm3(P * 0.013);
@@ -234,6 +249,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
 
   // ── vegetation: grass / dry grass, shrubs, forest canopy, farm fields ──
   float vegTotal = grass + shrub + tree + crop;
+  // farmland's own weight: a sown field shows as tilled rows even where little else grows (and covers the sand)
+  float fieldW = 0.0;
   if (vegTotal > 0.01) {
     float cold = smoothstep(9.0, -3.0, temp);
     // grass
@@ -253,6 +270,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     gcol = mix(gcol, gcol * vec3(1.12, 1.06, 0.82), smoothstep(-0.6, 0.8, patchy) * 0.12);
     gcol = mix(gcol, gcol * vec3(0.86, 0.96, 0.9), smoothstep(0.6, -0.8, patchy) * 0.10);
     gcol *= 0.88 + 0.16 * clump + 0.12 * blades + 0.1 * m2;
+    gcol = meadowTint(gcol, P, fw, moist, autumn, winter, cold, warpV);
     float gBump = clump * 0.05 + blades * 0.02;
 
     vec3 vcol = gcol;
@@ -292,20 +310,29 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       float leaf = veryFine ? snoise(P * 2.1) * aaF(fw, 0.45) : 0.0;
       tc *= 0.62 + 0.55 * crown + 0.1 * leaf;
       // within the instanced-tree range the real trees stand here: show their floor (litter, shade), not canopy
-      float inst = 1.0 - smoothstep(uVegFade.x, uVegFade.y, camDist);
+      // (no trees instanced at all — the planet view parks the band at 1e9 — means canopy everywhere, not floor)
+      float inst = uVegFade.x > 1e8 ? 0.0 : 1.0 - smoothstep(uVegFade.x, uVegFade.y, camDist);
       float cover = tw * mix(0.8, 1.0, crown) * (1.0 - inst);
       vcol = mix(vcol, tc, cover);
       vb = mix(vb, crown * 1.8 * crownAA + leaf * 0.15, tw * (1.0 - inst));
       vao *= mix(1.0, mix(0.45, 1.0, crown), tw * crownAA * (1.0 - inst));
       if (inst > 0.0) {
-        vec3 litter = mix(vec3(0.07, 0.055, 0.035), vec3(0.05, 0.07, 0.03), smoothstep(-0.2, 0.4, m2)) * (0.85 + 0.25 * m1);
-        vcol = mix(vcol, litter, tw * inst * 0.85);
-        vao *= mix(1.0, 0.62, tw * inst);
+        // the forest floor (groundfloor.ts): litter / duff, twigs, roots, stones, moss, canopy sky occlusion — wherever
+        // the instanced trees really shade the ground (ff_canopy), not only where the cell's tree field is high
+        float shadeK = ff_canopy(P, up, Nb, dot(up, uSunDirBody)) * smoothstep(0.01, 0.05, tree);
+        float twc = max(tw, shadeK);
+        ffl = forestFloor(P, up, fw, twc, shrub, moist, autumn, winter, concave, m1, m2, warpV, uRockB);
+        ffW = twc * inst;
+        vcol = mix(vcol, ffl.col, ffW);
+        vb = mix(vb, ffl.bump, ffW);
+        vao *= mix(1.0, ffl.ao, ffW);
       }
     }
     // farm fields
     if (crop > 0.01) {
-      float cw = smoothstep(0.1, 0.45, crop);
+      // a field reads as a field from the day it is sown (the live sim's crops start at a few hundredths and fill in)
+      float cw = smoothstep(0.015, 0.14, crop);
+      fieldW = cw * (1.0 - steep * 0.8);
       vec3 fv = voronoi3(P * 0.019 + vec3(3.7));
       float fid = fv.z;
       vec3 rnd = normalize(gn_hash33(vec3(fid * 91.7, 7.3, 3.1)) - 0.5);
@@ -321,36 +348,50 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       float ph = fract(yf + fid * 0.15);
       vec3 cc = ph < 0.15 ? tilled : ph < 0.45 ? young : ph < 0.7 ? (k < 1.5 ? canola : ripe) : (k < 2.5 ? hay : tilled);
       cc = k > 3.5 ? mix(young, vec3(0.05, 0.1, 0.03), 0.4) : cc; // pasture
+      // the sim's own growth wins while it is young: rows of green on tilled soil, the green widening as the crop fills
+      // in (far away the rows average to that mix); the season colours a full field
+      float rowMask = smoothstep(-0.3, 0.7, rows);
+      float cover = smoothstep(0.04, 0.45, crop);
+      vec3 youngField = mix(tilled, young, clamp(mix(rowMask * 0.85, 1.0, cover * cover) * smoothstep(0.02, 0.1, crop), 0.0, 1.0));
+      cc = mix(youngField, cc, smoothstep(0.35, 0.6, crop));
       cc *= 0.9 + 0.1 * rows + 0.12 * m2;
-      float hedge = (1.0 - smoothstep(0.0, 0.035 + fw * 0.004, fv.y - fv.x)) * aaF(fw, 20.0);
+      // hedgerows grow round old farmland: a first season's plots are bare strips with grass between them
+      float mature = smoothstep(0.25, 0.5, crop);
+      float hedge = (1.0 - smoothstep(0.0, 0.035 + fw * 0.004, fv.y - fv.x)) * aaF(fw, 20.0) * mature;
+      cw *= mix(smoothstep(0.0, 0.06 + fw * 0.004, fv.y - fv.x), 1.0, mature);
       cc = mix(cc, vec3(0.025, 0.05, 0.018), hedge * 0.85);
       vcol = mix(vcol, cc, cw);
       vb = mix(vb, rows * 0.06 + hedge * 1.2, cw);
       vao *= mix(1.0, 1.0 - hedge * 0.35, cw);
     }
     // per-cell cover is linear across 50 m triangles: noise in the threshold turns those edges into organic margins
-    float vegW = smoothstep(0.05, 0.6, vegTotal + m1 * 0.32 + m2 * 0.06) * (1.0 - steep * 0.8);
+    float vegW = max(smoothstep(0.05, 0.6, vegTotal + m1 * 0.32 + m2 * 0.06) * (1.0 - steep * 0.8), fieldW);
     col = mix(col, vcol, vegW);
     bump = mix(bump, vb, vegW);
     mk = mix(mk, 0.45, vegW);
     rough = mix(rough, 0.88, vegW);
     ao = mix(ao, vao, vegW);
     spec = mix(spec, 0.35, vegW);
+    if (ffW > 0.0) {
+      rough = mix(rough, ffl.rough, ffW * vegW);
+      mk = mix(mk, ffl.mk, ffW * vegW);
+      // (the canopy hides the sky whatever the ground is: not weighted by the ground's vegetation cover, which drops on
+      // slopes and left shaded forest hillsides lit by the full blue sky — slate grey)
+      s.sky = mix(1.0, ffl.sky, ffW);
+    }
   }
 
   // ── sand: beaches and dune seas, wind ripples ──
   if (sand > 0.01) {
     // plants root in sand too: cover hides the sand beneath it (dune grass, a meadow on regolith)
-    float sw = smoothstep(0.05, 0.5, sand + m2 * 0.18) * (1.0 - steep * 0.6) * (1.0 - clamp(vegTotal * 1.4 + m1 * 0.2, 0.0, 0.9));
+    float sw = smoothstep(0.05, 0.5, sand + m2 * 0.18) * (1.0 - steep * 0.6) * (1.0 - clamp(vegTotal * 1.4 + m1 * 0.2, 0.0, 0.9)) * (1.0 - fieldW);
     vec3 scl = uSandCol * (0.9 + 0.16 * m1 + 0.06 * m2);
-    float rip = 0.0;
-    if (fine) {
-      vec3 wind = normalize(cross(up, vec3(0.0, 1.0, 0.0)) + 1e-4);
-      rip = sin(dot(P, wind) * 6.2831853 / 0.9 + snoise(P * 0.35) * 3.0) * aaF(fw, 0.45);
-      scl *= 0.96 + 0.05 * rip;
-    }
+    // ripples, finer ripples and wind streaks + sun glints (groundfloor.ts sandDetail)
+    vec3 sdt = fine ? sandDetail(P, up, fw) : vec3(1.0, 0.0, 0.0);
+    scl *= sdt.x;
+    if (veryFine && sw > 0.5) s.glint = max(s.glint, sdt.z);
     col = mix(col, scl, sw);
-    bump = mix(bump, rip * 0.035 + m2 * 0.25, sw);
+    bump = mix(bump, sdt.y + m2 * 0.25, sw);
     rough = mix(rough, 0.9, sw);
     mk = mix(mk, 0.07, sw);
   }
@@ -385,7 +426,11 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // trodden ground only: the worn track is the narrow crest of the interpolated wear field, the shoulder faintly
     // trodden. Paved surfaces (cobble, stone) belong to the ribbon meshes along the most-worn edges (render/life/
     // roads, with the peoples): an area fill of cobbles over the field's blobs read as stains, not paths
-    float rw = smoothstep(0.82, 0.92, road + m2 * 0.03) * 0.9 + 0.2 * smoothstep(0.3, 0.8, road);
+    // (only a soft, domain-warped trodden tint: the tracks themselves are the roadnet's curved ribbons, render/life/
+    // roads.ts, down to footpaths. A crest band of the interpolated field ran in straight lines between the sim cells
+    // and covered the land round a settlement with a triangulated wireframe)
+    float rwarp = 0.15 * snoise(P * 0.05) + 0.08 * snoise(P * 0.21);
+    float rw = 0.3 * smoothstep(0.35, 0.95, road + rwarp);
     vec3 dirt = vec3(0.17, 0.125, 0.085) * (0.9 + 0.15 * m1);
     float rb = 0.0;
     if (fine) {
@@ -418,6 +463,10 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float aspectSun = dot(tanN, normalize(sunT + 1e-5)) * 2.5;
     float hollow = clamp(concave * 2.5, -1.0, 1.0) * 0.3;
     float sw = smoothstep(0.0, 0.4, snow * 1.6 - 0.04 + m2 * 0.04 + m1 * 0.04 - aspectSun * 0.12 + hollow * 0.2) * (1.0 - smoothstep(0.3, 0.55, slope));
+    // under a canopy (the forest floor's weight) the crowns catch part of the snow, and litter, twigs and stones poke
+    // through a thin cover; the floor keeps its canopy occlusion (ao below)
+    // (a wide ramp: the litter's leaf-scale height on a narrow one made a dithered snow edge up close)
+    if (ffW > 0.0) sw *= (1.0 - 0.5 * ffW) * (1.0 - ffW * smoothstep(0.005, 0.085, ffl.bump) * (1.0 - smoothstep(0.4, 0.9, snow)));
     vec3 sc = vec3(0.78, 0.81, 0.86) * (0.93 + 0.08 * m1);
     // wind-packed crust is greyer, fresh drifts whiter; sastrugi and drifts give the shading its grain
     sc *= mix(0.9, 1.04, smoothstep(-0.4, 0.5, m2));
@@ -426,7 +475,7 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     bump = mix(bump, drift, sw);
     rough = mix(rough, 0.55, sw);
     mk = mix(mk, 0.05, sw);
-    ao = mix(ao, 1.0, sw);
+    ao = mix(ao, 1.0, sw * (1.0 - ffW));
     spec = mix(spec, 0.6, sw);
     // sparkle: rare facets that mirror the sun (lit in the sun term)
     if (veryFine && sw > 0.5) s.glint = gn_hash13(floor(P * 22.0));
@@ -461,8 +510,10 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // On a steep rim that band is thinner than a pixel and aliases into a dotted outline: it fades out as the height
   // above water changes by more than ~0.15 m per pixel.
   float uwPx = fwidth(uw);
-  float shoreWet = uw > -0.45 && uw < 0.0 ? smoothstep(-0.3 + m2 * 0.1, 0.0, uw) : 0.0;
-  shoreWet *= (1.0 - smoothstep(0.2, 0.45, vegTotal)) * (1.0 - smoothstep(0.06, 0.15, uwPx));
+  // (no hard edges: the band rises smoothly from dry ground and runs on under the water's edge, so where the water
+  // mesh ends along a sim triangle there is no seam of dry-then-wet pixels to trace it in dashes)
+  float shoreWet = smoothstep(-0.36 + m2 * 0.1, -0.04, uw) * (1.0 - smoothstep(0.1, 0.5, uw));
+  shoreWet *= (1.0 - smoothstep(0.2, 0.45, vegTotal)) * (1.0 - smoothstep(0.04, 0.3, uwPx));
   float wet = clamp(max(wetF * 0.85, shoreWet), 0.0, 1.0) * (1.0 - smoothstep(0.1, 0.4, snow));
   // forest floors and meadows are not wet mirrors: the canopy and the sward take the water
   wet *= 1.0 - 0.75 * clamp(tree + 0.5 * grass, 0.0, 1.0);
@@ -492,11 +543,33 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     emis += vec3(4.0, 1.1, 0.18) * glow * lw * (0.25 + hot) * pulse * 6.0;
     bump = mix(bump, (1.0 - glow) * 0.4, lw);
   }
-  // fire: embers glow on the ground
+  // fire: a FRONT — a ragged band of burning litter where the fire field crosses the edge of the burning ground (its
+  // level warped by noise, so the band wanders instead of following the 50 m sim triangles), ash and a sparse scatter
+  // of embers behind it, untouched ground ahead (the flames themselves are particles). Not a glowing net over every
+  // burning cell, which read as a lava field from above.
+  // (the fire field's gradient per metre, taken outside the branch: derivatives in divergent flow are undefined)
+  float fireDW = fwidth(fire) / max(fw, 1e-4);
   if (fire > 0.01) {
-    float fl = snoise(P * 0.8 + vec3(0.0, uTime * 0.7, 0.0)) * 0.5 + 0.5;
-    emis += vec3(3.0, 0.9, 0.15) * fire * fl * 8.0;
-    col *= 1.0 - fire * 0.7;
+    float warp = snoise(P * 0.045 + vec3(0.0, uTime * 0.01, 0.0)) * 0.6 + snoise(P * 0.17) * 0.3 + snoise(P * 0.6) * 0.1;
+    float level = fire + warp * 0.2;
+    // the front is a LINE of constant width on the ground (~1.5 m) along the level-0.25 contour, found from the field's
+    // own gradient — a band of field values covered whole hillsides where the fire field is smooth, glowing peach
+    float perM = min(fireDW + 0.025, 1.0);
+    float band = 1.0 - smoothstep(0.0, max(perM * 1.5, 0.004), abs(level - 0.25));
+    float behind = smoothstep(0.22, 0.4, level);
+    float fl = 0.55 + 0.45 * snoise(P * 0.7 + vec3(0.0, uTime * 1.3, 0.0));
+    float lick = smoothstep(0.1, 0.7, snoise(P * vec3(1.6, 0.4, 1.6) + vec3(uTime * 0.6)) * 0.5 + 0.5);
+    // embers behind the front: a few hot specks, faded where they would be smaller than a pixel
+    vec3 cellE = floor(P * 2.2);
+    float eh = fract(sin(dot(cellE, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+    float ember = step(0.95, eh) * (0.6 + 0.4 * sin(uTime * 3.0 + eh * 60.0)) * (1.0 - smoothstep(0.15, 0.5, fw));
+    // and patches of glowing coals, not a uniform glow: an even 5 % emission over every burning cell lit whole
+    // hillsides peach at night and the auto-exposure blacked out the rest of the view
+    float coals = smoothstep(0.64, 0.9, snoise(P * 0.3 + 4.0) * 0.5 + 0.5);
+    emis += vec3(2.4, 0.62, 0.09) * (band * (0.6 + 0.9 * lick) * fl * 2.6 + ember * behind * 1.6 + behind * coals * 0.12 * fl);
+    // the ground: charred where the fire has passed, dark ash with grey bloom
+    float ashK = min(1.0, max(behind, band * 0.7) * 1.1);
+    col = mix(col, mix(vec3(0.03, 0.028, 0.026), vec3(0.11, 0.105, 0.1), smoothstep(0.3, 0.8, snoise(P * 0.9) * 0.5 + 0.5) * 0.7), ashK * 0.9);
   }
 
   // macro relief in the shading only (gullies and swells at 10–60 m): reads at a distance, leaves the ground
@@ -539,6 +612,7 @@ varying vec4 vF3;
 varying vec4 vF4;
 varying vec4 vF5;
 varying float vCurv;
+${GROUND_VERT_PARS}
 `;
 
 const VERT_MAIN = /* glsl */ `
@@ -552,6 +626,7 @@ ${TERRAIN_VERT_CORE}
   vF4 = vec4(tS, tA.z, tA.w, tH);
   vF5 = tfInterp(uFieldS, aCells, aMisc.x);
   vCurv = tfInterp(uFieldN, aCells, aMisc.x).w;
+${GROUND_VERT_MAIN}
   vec3 objectNormal = tNrm;
 #ifdef USE_TANGENT
   vec3 objectTangent = vec3(1.0, 0.0, 0.0);
@@ -574,22 +649,25 @@ const FRAG_LIGHT = /* glsl */ `
     float sh = sunShadow(-vViewPosition, nView);
     float csh = cloudShadowAt(Pb, uSunDirBody);
     vec3 sunCol = uSunE * sunTransmittance(rP, muS) * sh * csh;
-    // underwater: animated caustics focus the light on the floor
+    // underwater: caustics — the light focused by the waves into thin wandering filaments on a shallow floor. Only
+    // in shallows (0.2-3 m: deeper the focus blurs out) and near the camera (they are a close-up detail: from 60 m a
+    // net of bright lines over every pool read as a swimming pool), soft (±30 %), as ridged noise — curved filaments,
+    // not the polygon cells of a Voronoi edge net.
     float uwD = vF4.y - vF4.w;
-    if (uwD > 0.0) {
-      // caustics are a network of bright FILAMENTS (light focused along the wave troughs): Voronoi cell edges, two
-      // drifting layers, red and blue shifted a little along the sun (dispersion), faded by the pixel footprint
+    if (uwD > 0.15) {
+      float camD = length(vViewPosition);
+      float k = (1.0 - smoothstep(10.0, 24.0, camD)) * smoothstep(0.15, 0.4, uwD) * (1.0 - smoothstep(1.6, 3.2, uwD));
       float cfw = length(fwidth(Pb));
-      float caa = 1.0 - smoothstep(0.12, 0.6, cfw * 0.35 / 0.6);
-      vec3 sOff = uSunDirBody * 0.03;
-      vec3 q1 = Pb * 0.35 + vec3(uTime * 0.21, uTime * 0.13, 0.0);
-      vec3 q2 = Pb * 0.47 - vec3(0.0, uTime * 0.17, uTime * 0.11);
-      vec3 a1 = voronoi3(q1), a2 = voronoi3(q2);
-      vec3 b1 = voronoi3(q1 + sOff * 0.35), b2 = voronoi3(q2 + sOff * 0.47);
-      float cg = pow(1.0 - smoothstep(0.0, 0.12, a1.y - a1.x), 2.0) + pow(1.0 - smoothstep(0.0, 0.12, a2.y - a2.x), 2.0);
-      float cb = pow(1.0 - smoothstep(0.0, 0.12, b1.y - b1.x), 2.0) + pow(1.0 - smoothstep(0.0, 0.12, b2.y - b2.x), 2.0);
-      vec3 caus = vec3(cg, mix(cg, cb, 0.5), cb) * caa;
-      sunCol *= 0.7 + caus * 1.4 * exp(-uwD * 0.12);
+      k *= 1.0 - smoothstep(0.08, 0.3, cfw);
+      if (k > 0.001) {
+        vec3 q1 = Pb * 0.55 + vec3(uTime * 0.16, uTime * 0.1, -uTime * 0.07);
+        vec3 q2 = Pb * 0.83 - vec3(uTime * 0.05, uTime * 0.14, uTime * 0.09);
+        vec3 wq = vec3(snoise(q1 * 0.5), snoise(q1 * 0.5 + 4.1), snoise(q1 * 0.5 + 8.3)) * 0.6;
+        float r1 = 1.0 - abs(snoise(q1 + wq));
+        float r2 = 1.0 - abs(snoise(q2 - wq * 0.7));
+        float caus = pow(r1, 9.0) + pow(r2, 9.0) * 0.8;
+        sunCol *= 1.0 + (caus * 1.6 - 0.3) * 0.3 * k;
+      }
     }
     IncidentLight sunL;
     sunL.direction = uSunDirView;
@@ -600,6 +678,14 @@ const FRAG_LIGHT = /* glsl */ `
     if (ts.glint > 0.997) {
       float gl = pow(max(dot(reflect(-geometryViewDir, geometryNormal), uSunDirView), 0.0), 64.0);
       reflectedLight.directSpecular += sunCol * gl * 6.0;
+    }
+    // moonlight (renderer.ts: the brightest moon in the sky, art-directed): a second directional light, no shadow maps
+    if (dot(uMoonE, uMoonE) > 0.0) {
+      IncidentLight moonL;
+      moonL.direction = uMoonDirView;
+      moonL.color = uMoonE * smoothstep(-0.03, 0.06, dot(upB, uMoonDirBody)) * cloudShadowAt(Pb, uMoonDirBody) * mix(1.0, ts.ao, 0.45);
+      moonL.visible = true;
+      RE_Direct(moonL, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
     }
   }
 `;
@@ -613,14 +699,16 @@ const FRAG_AMBIENT = /* glsl */ `
     vec3 skyE = skyIrradiance(upB, nB, uSunDirBody) + uNightAmbient * (0.6 + 0.4 * max(dot(nB, upB), 0.0));
     // the sky enters ONCE: three r186's RE_IndirectSpecular adds a full Lambert term from iblIrradiance itself, so
     // adding skyE to 'irradiance' as well (RE_IndirectDiffuse) doubled the ambient — milky, shadowless ground
-    iblIrradiance += skyE * ts.ao;
+    // under a canopy the sky light arrives through leaves: less of it, and neutral-green rather than sky blue
+    skyE = mix(skyE, vec3(dot(skyE, vec3(0.2126, 0.7152, 0.0722))) * vec3(0.86, 1.06, 0.78), clamp((1.0 - ts.sky) * 1.6, 0.0, 1.0));
+    iblIrradiance += skyE * ts.ao * ts.sky;
     vec3 rBraw = reflect(-vB, nB);
     // reflections of the sky need an open sky: a ray that dives below the horizon sees ground, not sky (horizon
     // occlusion, measured BEFORE the ray is lifted above it), and creases / AO hide it too (Lagarde specular occlusion)
     float horizonK = smoothstep(-0.05, 0.3, dot(rBraw, upB));
     float NdVs = clamp(dot(nB, vB), 0.0, 1.0);
     float rgh = material.roughness;
-    float specOcc = clamp(pow(NdVs + ts.ao, exp2(-16.0 * rgh - 1.0)) - 1.0 + ts.ao, 0.0, 1.0);
+    float specOcc = clamp(pow(NdVs + ts.ao, exp2(-16.0 * rgh - 1.0)) - 1.0 + ts.ao, 0.0, 1.0) * ts.sky;
     vec3 rB = normalize(rBraw + upB * max(0.0, -dot(rBraw, upB)) * 1.05);
     // (three applies the environment BRDF — Fresnel and roughness — to this radiance itself)
     radiance += skyRadiance(upB, rB, uSunDirBody) * specOcc * horizonK;
@@ -633,9 +721,35 @@ const FRAG_EMISSIVE = /* glsl */ `
   if (uDebug > 1.5 && uDebug < 2.5) { totalEmissiveRadiance = ts.albedo * 4.0; diffuseColor.rgb = vec3(0.0); }
   if (uDebug > 3.5) { totalEmissiveRadiance = (normalize(vBodyN) * 0.5 + 0.5) * 2.0; diffuseColor.rgb = vec3(0.0); }
   {
-    // night-side lights of settlements (reserved channel: the sim fills 'light' in a later phase)
+    // night-side lights of settlements: the life layer's per-cell light (lit buildings: hearth → lamps → electric;
+    // render/life/buildings.ts) as clusters of lamp-lit spots that average into a soft glow from orbit; close up the
+    // buildings' own windows and point lights take over, so the ground glow fades out near the camera
     float night = smoothstep(0.05, -0.12, dot(normalize(vBodyPos), uSunDirBody));
-    totalEmissiveRadiance += vec3(1.0, 0.62, 0.3) * vF5.z * night * uCityLights;
+    float cityL = vF5.z;
+    if (cityL > 0.002 && night > 0.0) {
+      float cd = length(vViewPosition);
+      vec3 lv = voronoi3(vBodyPos * 0.11);
+      float lamp = exp(-lv.x * lv.x * 22.0) * step(0.3, lv.z);
+      float lampAA = aaF(tFw, 9.0);
+      // seen from high up the lamps merge: lit blocks (~35 m cells, some dark) strung along the worn streets, with
+      // dark gaps between — a city reads as a speckled web of light, not a smooth blob; their own mean beyond that
+      vec3 bv = voronoi3(vBodyPos * 0.016);
+      float block = smoothstep(0.62, 0.1, bv.x) * step(0.3, bv.z) * (0.4 + 0.6 * bv.z);
+      float street = smoothstep(0.1, 0.55, vF3.z);
+      float blockAA = aaF(tFw, 60.0);
+      // (beyond the blocks' scale the glow still follows the worn streets: a web along the roads, not a flat disc)
+      float far = mix(0.05 + 0.3 * street, block * (0.2 + 1.0 * street) * 0.6, blockAA);
+      float pattern = mix(far, lamp * 1.4 + 0.05, lampAA);
+      // within a couple of km the settlement's own lit windows and street lamps are drawn (render/life): the ground
+      // keeps only a faint warm spill there instead of a field of spots — light FALLING on the ground (its own colour,
+      // saturating with the cell's sum of houses), not light glowing out of it: a self-lit spill read as a glaring disc
+      // round every town once the night exposure adapted to it, brighter than the windows that cast it
+      float nearK = smoothstep(900.0, 2500.0, cd);
+      vec3 lc = mix(vec3(1.0, 0.5, 0.18), vec3(1.0, 0.72, 0.42), smoothstep(1.5, 3.5, cityL));
+      totalEmissiveRadiance += lc * cityL * pattern * night * uCityLights * 1.4 * nearK;
+      float spillL = cityL / (1.0 + 0.6 * cityL);
+      totalEmissiveRadiance += lc * spillL * diffuseColor.rgb * 0.035 * night * uCityLights * (1.0 - nearK);
+    }
     // brush preview ring (projected on the ground, so it hugs every slope)
     if (uBrushOn > 0.5) {
       float ang = acos(clamp(dot(normalize(vBodyPos), uBrush.xyz), -1.0, 1.0));
@@ -660,9 +774,11 @@ export function makePlanetUniforms(): PlanetShaderUniforms {
     uFieldD: { value: null },
     uRadius: { value: 3000 }, uCamBody: { value: new Vector3() },
     uBodyToView: { value: new Matrix3() }, uSunDirBody: { value: new Vector3(1, 0, 0) }, uSunDirView: { value: new Vector3(1, 0, 0) },
-    uKind: { value: 0 }, uSeaLevel: { value: 0 }, uYearFrac: { value: 0 }, uTime: { value: 0 },
+    uKind: { value: 0 }, uSeaLevel: { value: 0 }, uYearFrac: { value: 0 }, uSeasonAmp: { value: 1 }, uTime: { value: 0 },
     uRockA: { value: new Color() }, uRockB: { value: new Color() }, uSandCol: { value: new Color() }, uRegolith: { value: new Color() },
     uNightAmbient: { value: new Vector3(0.004, 0.006, 0.012) }, uCityLights: { value: 1 },
+    // moonlight (set per frame by the renderer for the primary planet; zero elsewhere)
+    uMoonE: { value: new Vector3() }, uMoonDirBody: { value: new Vector3(0, 1, 0) }, uMoonDirView: { value: new Vector3(0, 1, 0) },
     uCloudCov: { value: null }, uCloudShell: { value: new Vector2(3180, 3420) }, uCloudOn: { value: 0 },
     uBrush: { value: new Vector4(0, 1, 0, 0.02) }, uBrushColor: { value: new Vector3(1.2, 0.95, 0.55) }, uBrushOn: { value: 0 },
     uDebug: { value: 0 }, uVegFade: { value: new Vector2(1e9, 1e9 + 1) }, uWindDir: { value: new Vector3(1, 0, 0.3).normalize() },
@@ -679,6 +795,7 @@ export function makeTerrainMaterial(shared: Record<string, IUniform>, level: num
   mat.userData.level = level;
   mat.onBeforeCompile = (shader) => {
     for (const k of Object.keys(shared)) shader.uniforms[k] = shared[k];
+    Object.assign(shader.uniforms, GROUND_UNIFORMS);
     shader.uniforms.uMorph = morph;
     shader.vertexShader = shader.vertexShader
       .replace('#include <clipping_planes_pars_vertex>', `#include <clipping_planes_pars_vertex>\n${VERT_PARS}`)
