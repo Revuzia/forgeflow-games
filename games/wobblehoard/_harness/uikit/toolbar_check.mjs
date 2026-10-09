@@ -34,7 +34,7 @@ try {
       tool: dock.dataset.tool, form: dock.dataset.form, attach: dock.dataset.attach, open: dock.dataset.open,
       pressed: tools.map((b) => `${b.dataset.tool}:${b.getAttribute('aria-pressed')}`).join(' '),
       stops: [...dock.querySelectorAll('.dock-tools button')].filter((b) => !b.hidden && b.tabIndex === 0).map((b) => b.dataset.tool),
-      focus: ae && ae.dataset ? ae.dataset.tool ?? ae.className : String(ae),
+      focus: ae && ae.dataset ? ae.dataset.tool ?? ae.dataset.grav ?? ae.className : String(ae),
       moreShown: !!more && !more.hidden,
       hoardParent: document.querySelector('.hoard-btn')?.parentElement?.className,
     };
@@ -60,7 +60,8 @@ try {
     await page.evaluate(() => document.querySelector('#wh-dock .dock-tool[data-tool=cut]').focus());
     const seq = [];
     for (const k of ['ArrowRight', 'ArrowRight', 'Home', 'ArrowLeft', 'End']) { await page.keyboard.press(k); seq.push((await state(page)).focus); }
-    check('keys: ArrowRight, ArrowRight (wraps), Home, ArrowLeft (wraps), End move focus through the tools', seq.join(' ') === 'snap hand hand snap snap', seq.join(' '));
+    // RE-SPECIFIED, reason: the owner moved Table / Float to the toolbar on 2026-10-09: the roving toolbar's arrows walk the pair after Snap (Hand, Cut, Snap, Table, Float), so the wraps and End land on Table / Float
+    check('keys: ArrowRight, ArrowRight (on to Table), Home, ArrowLeft (wraps to Float), End move focus through the tools and the Table | Float pair', seq.join(' ') === 'snap table hand float float', seq.join(' '));
     await page.keyboard.press('Home');
     s = await state(page);
     check('roving: the Tab stop follows focus (Hand now)', s.stops.length === 1 && s.stops[0] === 'hand', JSON.stringify(s.stops));
@@ -216,6 +217,63 @@ try {
     const after = await page.evaluate(() => { const hosts = [...document.querySelectorAll('.kp-dockhost')].filter((h) => h.style.width === '260px'); const dock = hosts[2].querySelector('.dock'); return { open: dock.dataset.open, focus: document.activeElement?.dataset?.tool, expanded: dock.querySelector('.dock-more').getAttribute('aria-expanded') }; });
     check('More: Escape closes the popover and returns focus to More', after.open === 'false' && after.focus === 'more' && after.expanded === 'false', JSON.stringify(after));
     check('no page errors (parts)', errs.length === 0, errs.slice(0, 2).join(' | '));
+    await ctx.close();
+  }
+
+  // ============ Table | Float (UI.md 1.8, the owner's call of 2026-10-09): the pair in every form, its fallbacks, its rest state, the roving walk ============
+  {
+    const { ctx, page, errs } = await open(1280, 800, 'toolbar-parts');   // (the full form specimen needs a wide page: on 390 px it would overflow by design)
+    const info = await page.evaluate(() => {
+      const hosts = [...document.querySelectorAll('.kp-dockhost')].filter((h) => h.querySelector('.dock-grav-opt'));
+      const one = (h) => {
+        const dock = h.querySelector('.dock');
+        const grp = dock.querySelector('.dock-grav');
+        const btns = [...dock.querySelectorAll('.dock-grav-opt')];
+        const more = dock.querySelector('.dock-more');
+        return {
+          form: dock.dataset.form, hoard: dock.dataset.hoard, width: h.style.width, grp: !!grp && grp.getAttribute('role') === 'group' && grp.getAttribute('aria-label') === 'Gravity', inToolbar: !!grp && !!grp.closest('[role=toolbar]'),
+          pairShown: !!grp && !grp.hidden, pressed: btns.map((b) => `${b.dataset.grav}:${b.getAttribute('aria-pressed')}`).join(' '), disabled: btns.map((b) => b.getAttribute('aria-disabled') === 'true' && !!b.getAttribute('aria-describedby')).join(),
+          sizes: btns.filter((b) => b.getClientRects().length).map((b) => { const r = b.getBoundingClientRect(); return `${Math.round(r.width)}x${Math.round(r.height)}`; }).join(' '),
+          moreShown: !!more && !more.hidden, kbd: !!dock.querySelector('.dock-grav-kbd'), open: dock.dataset.open, menuGroup: dock.querySelector('.dock-menu [role=group]')?.getAttribute('aria-label') ?? null,
+          menu: [...dock.querySelectorAll('.dock-menu [data-grav]')].map((b) => `${b.dataset.grav}:${b.getAttribute('aria-checked')}`).join(' '),
+          label: [...dock.querySelectorAll('.dock-grav-opt .dock-tool-label')].map((e) => e.textContent).join(','),
+        };
+      };
+      return hosts.map(one);
+    });
+    const byW = (w) => info.filter((x) => x.width === `${w}px`);
+    const [full, compact, bare] = info;
+    check('Table | Float, full form: a group "Gravity" inside the Tools toolbar with the words Table and Float and one G chip, Table pressed, both 44 or more high', full.grp && full.inToolbar && full.pairShown && full.label === 'Table,Float' && full.kbd && full.pressed === 'table:true float:false' && full.sizes.split(' ').every((s) => Number(s.split('x')[0]) >= 44 && Number(s.split('x')[1]) >= 44), JSON.stringify(full));
+    check('Table | Float, compact form: icon-only 44 x 44, Float pressed (the selected face is the one aria-pressed marks)', compact.pairShown && compact.pressed === 'table:false float:true' && compact.sizes === '44x44 44x44', JSON.stringify(compact));
+    check('Table | Float, bare form (330 px): the pair and the Hoard icon fit; no More', bare.pairShown && !bare.moreShown && bare.sizes === '44x44 44x44', JSON.stringify(bare));
+    const n338 = byW(338)[0], n296 = byW(296);
+    check('Table | Float, a 338 px tray: the Hoard gives its count away first (data-hoard icon) and the pair stays', n338.hoard === 'icon' && n338.pairShown && !n338.moreShown, JSON.stringify(n338));
+    check('Table | Float, a 296 px tray: the pair goes behind More (hidden in the tray, More shown)', !n296[0].pairShown && n296[0].moreShown, JSON.stringify(n296[0]));
+    check('Table | Float, More open: the popover has a group "Gravity" of two radios (Float checked), the popover is the open attachment', n296[1].open === 'true' && n296[1].menuGroup === 'Gravity' && n296[1].menu === 'table:false float:true', JSON.stringify(n296[1]));
+    const rest = info.find((x) => x.disabled === 'true,true');
+    check('Table | Float, resting (a capsule opens): both halves are aria-disabled with the reason as their description', !!rest, JSON.stringify(info.map((x) => x.disabled)));
+    // a click on the compact specimen's Table (Float was selected): the specimen's onSet repaints the pair, the other half is released
+    await page.evaluate(() => { const h = [...document.querySelectorAll('.kp-dockhost')].filter((x) => x.querySelector('.dock-grav-opt'))[1]; h.querySelector('.dock-grav-opt[data-grav=table]').click(); });
+    const flip = await page.evaluate(() => { const h = [...document.querySelectorAll('.kp-dockhost')].filter((x) => x.querySelector('.dock-grav-opt'))[1]; return [...h.querySelectorAll('.dock-grav-opt')].map((b) => `${b.dataset.grav}:${b.getAttribute('aria-pressed')}`).join(' ') + ' ' + h.querySelector('.dock').dataset.gravity; });
+    check('Table | Float: pressing the other half moves the selection (Table pressed, Float released, the dock says table)', flip === 'table:true float:false table', flip);
+    // a click on a resting pair does nothing (the face stays)
+    const restFlip = await page.evaluate(() => { const h = [...document.querySelectorAll('.kp-dockhost')].filter((x) => x.querySelector('.dock-grav-opt[aria-disabled=true]'))[0]; const before = [...h.querySelectorAll('.dock-grav-opt')].map((b) => b.getAttribute('aria-pressed')).join(); h.querySelector('.dock-grav-opt[data-grav=float]').click(); return before + ' > ' + [...h.querySelectorAll('.dock-grav-opt')].map((b) => b.getAttribute('aria-pressed')).join(); });
+    check('Table | Float: a press on a resting pair changes nothing', /^(true,false) > \1$/.test(restFlip), restFlip);
+    // the roving walk: Hand -> Cut -> Snap -> Table -> Float, then wraps; the pair is no extra Tab stop
+    const walk = await page.evaluate(() => {
+      const h = [...document.querySelectorAll('.kp-dockhost')].filter((x) => x.querySelector('.dock-grav-opt'))[0];
+      const dock = h.querySelector('.dock');
+      const stopsBefore = [...dock.querySelectorAll('.dock-tools button')].filter((b) => !b.hidden && b.tabIndex === 0).length;
+      const name = (e) => e?.dataset?.tool ?? e?.dataset?.grav ?? null;
+      const key = (k) => { document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true })); return name(document.activeElement); };
+      dock.querySelector('.dock-tool[data-tool=hand]').focus();
+      const seq = [key('ArrowRight'), key('ArrowRight'), key('ArrowRight'), key('ArrowRight'), key('ArrowRight')];
+      dock.querySelector('.dock-tool[data-tool=hand]').focus();
+      const end = key('End');
+      return { seq: seq.join(), end, stopsBefore };
+    });
+    check('Table | Float: the toolbar walk (arrows) goes Hand, Cut, Snap, Table, Float and wraps; End = Float; the pair is not a second Tab stop', walk.seq === 'cut,snap,table,float,hand' && walk.end === 'float' && walk.stopsBefore === 1, JSON.stringify(walk));
+    check('no page errors (Table | Float, parts)', errs.length === 0, errs.slice(0, 2).join(' | '));
     await ctx.close();
   }
 } catch (e) {

@@ -96,8 +96,9 @@ async function main() {
       check('Menu > Settings (the later-* chunk loads on the first open): the panel opens, focus is on its heading, it is a non-modal dialog named "Settings", the game keeps running under it', open1 && s1.focus === 'wh-settings-title' && s1.role === 'dialog' && s1.modal === 'false' && s1.name === 'Settings' && !s1.covered && s1.loaded, JSON.stringify(s1));
       const walk = await tabWalk(page);
       const ids = walk.map((s) => s.a.id || s.a.label || s.a.key);
-      check('Settings: the Tab walk visits close, the 4 sliders, the switches, Gravity and Quality (one stop each: a radio group is one stop), the How to play link, then wraps to close (14 stops without Haptics)',
-        walk.length === 14 && ids[0] === 'Close settings' && ids[ids.length - 1] === 'wh-howto-link' && ['wh-volume', 'wh-music', 'wh-boost', 'wh-shake', 'wh-uisounds', 'wh-extra', 'wh-calm', 'wh-skip', 'wh-fast', 'wh-keys'].every((i) => ids.includes(i)) && !ids.includes('wh-haptics'), ids.join(' > '));
+      // RE-SPECIFIED, reason: the owner moved Table / Float to the toolbar on 2026-10-09 (the Gravity stop left the panel: 14 stops became 13, and no stop is Gravity)
+      check('Settings: the Tab walk visits close, the 4 sliders, the switches and Quality (one stop each: a radio group is one stop), the How to play link, then wraps to close (13 stops without Haptics, none of them Gravity)',
+        walk.length === 13 && !ids.includes('wh-gravity') && ids[0] === 'Close settings' && ids[ids.length - 1] === 'wh-howto-link' && ['wh-volume', 'wh-music', 'wh-boost', 'wh-shake', 'wh-uisounds', 'wh-extra', 'wh-calm', 'wh-skip', 'wh-fast', 'wh-keys'].every((i) => ids.includes(i)) && !ids.includes('wh-haptics'), ids.join(' > '));
       check('Settings: every stop but the sliders shows a focus ring of 3 px or more (outline) on its visual part (switch track, segment face, button)', walk.every((s) => s.ring && s.ring.w >= 3 && s.ring.style !== 'none'), walk.filter((s) => !(s.ring && s.ring.w >= 3)).map((s) => s.key).join(' | ') || `${walk.length} stops`);
       const sliderRings = [];
       for (const id of ['wh-volume', 'wh-music', 'wh-boost', 'wh-shake']) {
@@ -121,13 +122,13 @@ async function main() {
       await page.focus('#wh-uisounds'); await page.keyboard.press('Space');
       await page.focus('#wh-extra'); await page.keyboard.press('Space');
       await page.focus('#wh-quality input:checked'); await page.keyboard.press('ArrowRight'); await page.keyboard.press('ArrowRight');
-      await page.focus('#wh-gravity input:checked'); await page.keyboard.press('ArrowRight');
       await settle(400);
       const st = await settingsNow(page);
-      check('Settings: Home on Volume, End on Music, Space on Button sounds and Extra squish, arrows on Quality and Gravity reach the app (volume 0, music 1, uiSounds off, extra on, quality low -> med, float)',
-        st.volume === 0 && st.music === 1 && st.uiSounds === false && st.extraSquish === true && st.quality === 'med' && st.gravity === false, JSON.stringify(st));
-      const vals = await page.evaluate(() => ({ out: document.querySelector('#wh-volume').closest('.row').querySelector('output').textContent, q: document.querySelector('#wh-quality input:checked').value, g: document.querySelector('#wh-gravity input:checked').value, sw: document.querySelector('#wh-uisounds').checked, extra: document.querySelector('#wh-extra').checked }));
-      check('Settings: the panel shows what the keys did (volume 0%, Medium, Float, switches)', vals.out === '0%' && vals.q === 'med' && vals.g === 'float' && vals.sw === false && vals.extra === true, JSON.stringify(vals));
+      // RE-SPECIFIED, reason: the owner moved Table / Float to the toolbar on 2026-10-09 (the Gravity arrow key left the panel; gravity stays on the table here)
+      check('Settings: Home on Volume, End on Music, Space on Button sounds and Extra squish, arrows on Quality reach the app (volume 0, music 1, uiSounds off, extra on, quality low -> med) and gravity is untouched (Table)',
+        st.volume === 0 && st.music === 1 && st.uiSounds === false && st.extraSquish === true && st.quality === 'med' && st.gravity === true, JSON.stringify(st));
+      const vals = await page.evaluate(() => ({ out: document.querySelector('#wh-volume').closest('.row').querySelector('output').textContent, q: document.querySelector('#wh-quality input:checked').value, sw: document.querySelector('#wh-uisounds').checked, extra: document.querySelector('#wh-extra').checked }));
+      check('Settings: the panel shows what the keys did (volume 0%, Medium, switches)', vals.out === '0%' && vals.q === 'med' && vals.sw === false && vals.extra === true, JSON.stringify(vals));
       // ---- How to play from the Settings link, over Settings
       await page.focus('#wh-howto-link'); await page.keyboard.press('Enter'); await settle(700);
       const h1 = await page.evaluate(() => ({ open: !!document.querySelector('.scr-howto'), focus: document.activeElement?.getAttribute('aria-label'), settingsInert: document.querySelector('.panel').hasAttribute('inert'), role: document.querySelector('.scr-howto').getAttribute('role'), modal: document.querySelector('.scr-howto').getAttribute('aria-modal'), name: document.getElementById(document.querySelector('.scr-howto').getAttribute('aria-labelledby'))?.textContent, cards: document.querySelectorAll('.guide-card').length, hud: document.querySelector('.hud').hasAttribute('inert') }));

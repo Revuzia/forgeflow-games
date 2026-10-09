@@ -12,7 +12,7 @@ import type { Announcer } from '../ui/announcer.ts';
 import { h, isCoarsePointer, prefersReducedMotion } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { createSparks } from '../ui/sparks.ts';
-import { createToolbar, TOOLS } from '../ui/toolbar.ts';
+import { createToolbar, GRAVITY_MODES, TOOLS } from '../ui/toolbar.ts';
 import type { Toolbar, ToolId } from '../ui/toolbar.ts';
 import { bindHoard, installLayout } from '../ui/layout.ts';
 import type { LayoutHandle } from '../ui/layout.ts';
@@ -46,6 +46,7 @@ import { createMenu } from '../ui/menu.ts';
 import type { Menu } from '../ui/menu.ts';
 import { closeTopLayer, layerCount, openModal } from '../ui/modal.ts';
 import { createToaster } from '../ui/toast.ts';
+import { cue } from '../ui/uiSound.ts';
 import type { Toaster } from '../ui/toast.ts';
 import { setTrophyToastSink, trophyToastSub } from './trophyToast.ts';
 import { createTrophiesLauncher } from './trophiesOpen.ts';
@@ -191,16 +192,27 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   let toolSource: ToolSource = 'game';
   const setToolFrom = (id: ToolId, src: ToolSource): void => { toolSource = src; try { g.setTool(id); } finally { toolSource = 'game'; } };
   let clickSource: ToolSource = 'mouse';
+  // Table | Float (UI.md 1.8, the owner's call of 2026-10-09): the pair sits beside the tools and is bound to the gravity setting; the G key (input/keyboard.ts) and the pair
+  // both change that one setting, and the 'settings' event below repaints the pair, says the new face and plays its sound, whichever of them did it.
   const tb: Toolbar = createToolbar({
     layout, root: hud.el,
     onTool: (id) => { const src = clickSource; clickSource = 'mouse'; setToolFrom(id, src); },
     onBlocked: (_id, why) => announcer.say(why),
+    gravity: { table: g.settings.gravity, onSet: (t) => g.setSetting('gravity', t) },
   });
   // (capture: before the toolbar's own handler) how this click came, and Settings gives way to the dock as it does to the Hoard
   tb.el.addEventListener('click', (e) => {
     if (!(e.target as Element | null)?.closest?.('.dock-tool, .dock-hoard')) return;
     clickSource = e.detail === 0 ? 'key' : toolSourceOfPointer((e as PointerEvent).pointerType ?? '');
     if (p.isOpen()) p.close('escape');
+  }, true);
+  // how a Table | Float press came (the pair or its row in More): a finger or a key gets the 1.4 s caption chip, as a tool does (R10); a mouse has the tooltip. The G key and the dev hook
+  // reach the setting without a press here, so 'key' is the default.
+  let gravSource: ToolSource = 'key';
+  tb.el.addEventListener('click', (e) => {
+    if (!(e.target as Element | null)?.closest?.('.dock-grav-opt, .dock-menuitem[data-grav]')) return;
+    gravSource = e.detail === 0 ? 'key' : toolSourceOfPointer((e as PointerEvent).pointerType ?? '');
+    window.setTimeout(() => { gravSource = 'key'; }, 0);   // (the setting changes inside this click; a press that changed nothing must not tag the next change)
   }, true);
   hud.slot.append(hoard.button, hoard.matChip);
   tb.adoptHoard(hoard.button);
@@ -212,7 +224,8 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     if (!force && k === dockKey) return;
     dockKey = k;
     tb.setAvailable(tools);
-    tb.setDisabled(busy ? Object.fromEntries(tools.map((id) => [id, TOOLS_BUSY])) : null);
+    // (the G key rests in a ceremony too: keyboard.ts `app.input.live`)
+    tb.setDisabled(busy ? Object.fromEntries([...tools, 'gravity'].map((id) => [id, TOOLS_BUSY])) : null);
   };
   syncDock(true);
   off.push(g.onStep(() => syncDock()));
@@ -359,7 +372,15 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
       p.sync(s);
       applyCalm(s.calm);
       applyQuality(s.quality);
-      if (s.gravity !== gravityWas) { gravityWas = s.gravity; announcer.say(s.gravity ? 'On the table' : 'Floating'); }
+      tb.setGravity(s.gravity);
+      if (s.gravity !== gravityWas) {
+        gravityWas = s.gravity;
+        const m = GRAVITY_MODES.find((x) => x.table === s.gravity)!;
+        announcer.say(m.line);
+        if (showsToolCaption(gravSource)) tb.showCaption(m.label, m.hint);
+        gravSource = 'key';
+        cue(m.sound);   // (one cue per change, from the setting: the pair's buttons are silent themselves, `data-sound="none"`, so the G key and a press sound alike)
+      }
     }),
     g.on('mute', (mu) => { hud.setMuted(mu); menu?.sync(); announcer.say(mu ? 'Sound off' : 'Sound on'); }),
     g.on('identity', (_id, l) => { hud.setLabel(l); setPlayLabel(l); if (!g.ceremonies.active) announcer.say(`Your squishy: ${labelText(l)}`); }),

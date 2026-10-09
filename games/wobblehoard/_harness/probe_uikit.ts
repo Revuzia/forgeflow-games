@@ -225,5 +225,23 @@ const stripComments = (s: string): string => s.replace(/\/\*[\s\S]*?\*\//g, '');
     /--dk-bar-h: 64px/.test(tcss) && /--dk-bar-h: 52px/.test(tcss) && /--dk-bar-h: 44px/.test(tcss) && /--dk-tool-h: 48px/.test(tcss) && !/:hover/.test(tcss));
 }
 
+// ============================================================ Table | Float in the toolbar (UI.md 1.8, the owner's call of 2026-10-09: "float/table should be in the toolbar, not in settings")
+{
+  const tts = stripComments(read('src/ui/toolbar.ts')), hud = stripComments(read('src/shell/hudBinding.ts')), key = stripComments(read('src/input/keyboard.ts'));
+  const tcss = stripComments(read('src/ui/toolbar.css'));
+  check('Table | Float: GRAVITY_MODES is Table (gravity on, icon table, cue on, line "Table") and Float (icon float, cue off, line "Floating"); both icons exist; the key is G',
+    /id: 'table', table: true, label: 'Table', icon: 'table'[^}]*sound: 'on', line: 'Table'/.test(tts) && /id: 'float', table: false, label: 'Float', icon: 'float'[^}]*sound: 'off', line: 'Floating'/.test(tts)
+    && iconPaths('table').length > 0 && iconPaths('float').length > 0 && /GRAVITY_KEY = 'G'/.test(tts));
+  check('Table | Float: the pair is a role=group "Gravity" of two aria-pressed buttons INSIDE the Tools toolbar (one roving Tab stop, the arrows walk it), >= 44 px in every form, with a tooltip, and its sound is the setting\'s cue (data-sound none)',
+    /role: 'group', 'aria-label': 'Gravity'/.test(tts) && /toolsEl\.append\(gravSep, gravEl\)/.test(tts) && /'aria-pressed': 'false', 'aria-keyshortcuts': GRAVITY_KEY/.test(tts) && /\.\.\.\(gravHidden \? \[\] : gravItems\(\)\)/.test(tts)
+    && /\.dock:not\(\[data-form="full"\]\) :is\(\.dock-tool, \.dock-grav-opt\) \{ width: var\(--wh-hit\)/.test(tcss) && /\.dock-tool, \.dock-grav-opt \{ flex: none; min-height: var\(--dk-tool-h\)/.test(tcss) && /attachTooltip\(b, `\$\{m\.label\} \(\$\{GRAVITY_KEY\}\)`/.test(tts) && /b\.dataset\.sound = 'none'/.test(tts));
+  check('Table | Float: when the tray is too narrow the Hoard drops its count, then the pair goes behind More as a role=group of two menuitemradio items, then the tools (SHAPES ladder); a strip bar keeps OPTS_ROOM',
+    /const SHAPES[\s\S]*?\{ icon: false, pair: true \}, \{ icon: true, pair: true \}, \{ icon: false, pair: false \}, \{ icon: true, pair: false \}/.test(tts) && /role: 'menuitemradio'[^}]*'data-grav': m\.id/.test(tts) && /OPTS_ROOM = 320/.test(tts) && /\.dock:is\(\[data-form="bare"\], \[data-hoard="icon"\]\) \.dock-hoard\.hoard-btn \{ width: var\(--wh-hit\)/.test(tcss));
+  check('Table | Float: hudBinding gives the toolbar the gravity setting (initial value and onSet -> setSetting), repaints it from the \'settings\' event, says the face ("Table" / "Floating" from GRAVITY_MODES) and plays one cue per change; the pair rests with the tools (key gravity)',
+    /gravity: \{ table: g\.settings\.gravity, onSet: \(t\) => g\.setSetting\('gravity', t\) \}/.test(hud) && /tb\.setGravity\(s\.gravity\)/.test(hud) && /announcer\.say\(m\.line\)/.test(hud) && /cue\(m\.sound\)/.test(hud) && /\[\.\.\.tools, 'gravity'\]/.test(hud) && !/On the table/.test(hud));
+  check('Table | Float: the G key still toggles gravity (keyboard.ts) and the Settings panel keeps no gravity code (probe_screens pins its rows)',
+    /app\.toggleGravity\(\)/.test(key) && !/gravity/i.test(stripComments(read('src/ui/settingsPanel.ts')).replace(/\/\/.*$/gm, '')));
+}
+
 console.log(`\n${total - bad}/${total} UI foundation checks passed`);
 process.exit(bad ? 1 : 0);

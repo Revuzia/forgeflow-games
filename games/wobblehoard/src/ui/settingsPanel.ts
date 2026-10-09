@@ -1,6 +1,6 @@
 // Settings (UI.md 6, W14), on the kit. A later-* chunk (`ui/screens/later-screens.ts`): the shell builds an empty `section.panel#wh-settings` at boot (shell/screens.ts) and this
 // file fills it the first time Settings opens. Four groups (Sound, Feel, Motion, Other) of kit rows: slider (10 px track, 28 px thumb), switch (56x32 with a tick), segmented
-// radios (Gravity, Quality 4-way), a link row (How to play). The row list is DATA (screens/screenCopy.ts SETTINGS_GROUPS): every key of core/settings.ts has one row.
+// radios (Quality 4-way; Gravity left for the toolbar on 2026-10-09), a link row (How to play). The row list is DATA (screens/screenCopy.ts SETTINGS_GROUPS): every key of core/settings.ts has one row.
 // A side panel on a wide screen and on a strip, a bottom sheet on a stack, the whole screen on the portal phone (screens.css decides from body[data-layout]); it scrolls inside
 // itself. NOT modal: the squishy keeps playing under it (a play-while-you-tweak panel), so its row ids and its `.panel[data-open]` contract stay what the harness knows.
 // Focus: opening moves focus to the panel title, Tab wraps inside while open. Closing with Escape returns focus to the squishy (the play target: Escape means "back to the
@@ -100,19 +100,14 @@ export function createSettingsPanel(root: HTMLElement, o: SettingsPanelOptions, 
     const inputs: HTMLInputElement[] = [];
     const group = h('div', { class: 'k-seg seg', attrs: { id: r.id, role: 'radiogroup', 'aria-labelledby': lid } });
     for (const opt of r.options) {
-      const input = h('input', { class: 'k-seg-input', attrs: { type: 'radio', name: r.key === 'gravity' ? 'wh-gravity' : `${r.id}-r`, value: opt.value } });
-      input.addEventListener('change', () => {
-        if (!input.checked) return;
-        if (r.key === 'gravity') o.onChange('gravity', (opt.value === 'table') as never);
-        else o.onChange('quality', opt.value as QualityTier | 'auto' as never);
-      });
+      const input = h('input', { class: 'k-seg-input', attrs: { type: 'radio', name: `${r.id}-r`, value: opt.value } });
+      input.addEventListener('change', () => { if (input.checked) o.onChange(r.key, opt.value as QualityTier | 'auto' as never); });
       inputs.push(input);
       group.append(h('label', { class: 'k-seg-opt seg-opt' }, input,
         h('span', { class: 'k-seg-face seg-face' }, opt.icon ? icon(opt.icon) : null, h('span', { text: opt.label }))));
     }
     syncers.push((s) => {
-      const want = r.key === 'gravity' ? (s.gravity ? 'table' : 'float') : s.quality;
-      for (const i of inputs) i.checked = i.value === want;
+      for (const i of inputs) i.checked = i.value === s[r.key];
     });
     return h('div', { class: 'set-item set-seg' }, h('span', { class: 'row-label', text: r.label, attrs: { id: lid } }), group);
   }

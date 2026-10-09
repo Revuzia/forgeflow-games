@@ -8,7 +8,7 @@ import { SETTING_KEYS } from '../src/core/settings.ts';
 import { FEATURES } from '../src/core/features.ts';
 import { PRIVACY_LINE } from '../src/portal/copy.ts';
 import {
-  CREDITS_BUILT_WITH, CREDITS_CRAFT, CREDITS_PRIVACY, GUIDE_CARDS, GUIDE_KEYS, KEYS_LINE, QUALITY_OPTIONS, SETTINGS_GROUPS, THREE_LICENCE, VOICES_ROW,
+  CREDITS_BUILT_WITH, CREDITS_CRAFT, CREDITS_PRIVACY, GUIDE_CARDS, GUIDE_KEYS, KEYS_LINE, QUALITY_OPTIONS, SETTINGS_GROUPS, THREE_LICENCE, TOOLBAR_SETTING_KEYS, VOICES_ROW,
 } from '../src/ui/screens/screenCopy.ts';
 import { PHOTO_HINT, PHOTO_LINE } from '../src/ui/screens/photoCopy.ts';
 import { downloadBlob, needsPhotoCard, photoEnv, routePhoto } from '../src/shell/photoRoute.ts';
@@ -29,16 +29,20 @@ const walk = (dir: string, out: string[] = []): string[] => { for (const e of re
   const rows = SETTINGS_GROUPS.flatMap((g) => g.rows);
   const keyed = rows.filter((r): r is Extract<typeof r, { key: string }> => 'key' in r).map((r) => r.key as string);
   check('Settings: the four groups are Sound, Feel, Motion, Other, in that order', SETTINGS_GROUPS.map((g) => g.title).join() === 'Sound,Feel,Motion,Other');
-  check('Settings: every key of core/settings.ts has exactly ONE control (none missing, none twice, none unknown)', SETTING_KEYS.every((k) => keyed.filter((x) => x === k).length === 1) && keyed.length === SETTING_KEYS.length, `rows ${keyed.length} keys ${SETTING_KEYS.length}`);
+  // RE-SPECIFIED because the owner moved Table / Float to the toolbar on 2026-10-09 (UI.md 1.8): the gravity key keeps its setting and its stored value but has NO row here
+  // (the toolbar's pair is its control: probe_uikit pins that half); every other key still has exactly ONE control.
+  check('Settings: every key of core/settings.ts has exactly ONE control (none missing, none twice, none unknown), except the toolbar gravity, which has none here and stays a setting',
+    SETTING_KEYS.every((k) => keyed.filter((x) => x === k).length === ((TOOLBAR_SETTING_KEYS as readonly string[]).includes(k) ? 0 : 1)) && keyed.length === SETTING_KEYS.length - TOOLBAR_SETTING_KEYS.length
+    && TOOLBAR_SETTING_KEYS.join() === 'gravity' && (SETTING_KEYS as readonly string[]).includes('gravity'), `rows ${keyed.length} keys ${SETTING_KEYS.length}`);
   const ids = rows.map((r) => r.id);
-  check('Settings: row ids are unique and keep the `wh-` ids the harness knows (volume, music, boost, shake, extra, haptics, calm, skip, fast, keys, gravity, quality)', new Set(ids).size === ids.length && ['wh-volume', 'wh-music', 'wh-boost', 'wh-shake', 'wh-extra', 'wh-haptics', 'wh-calm', 'wh-skip', 'wh-fast', 'wh-keys', 'wh-gravity', 'wh-quality'].every((i) => ids.includes(i)) && ids.every((i) => /^wh-[a-z-]+$/.test(i)));
+  check('Settings: row ids are unique and keep the `wh-` ids the harness knows (volume, music, boost, shake, extra, haptics, calm, skip, fast, keys, quality; no wh-gravity since 2026-10-09)', new Set(ids).size === ids.length && ['wh-volume', 'wh-music', 'wh-boost', 'wh-shake', 'wh-extra', 'wh-haptics', 'wh-calm', 'wh-skip', 'wh-fast', 'wh-keys', 'wh-quality'].every((i) => ids.includes(i)) && !ids.includes('wh-gravity') && ids.every((i) => /^wh-[a-z-]+$/.test(i)));
   const sound = SETTINGS_GROUPS[0].rows, feel = SETTINGS_GROUPS[1].rows;
-  check('Settings: Sound = Volume, Music, UI sounds, Louder squish; Feel = Extra squish, Haptics (only where the device vibrates), Gravity, Quality; Motion = Calm, Shake, Skip, Fast open; Other = Keyboard shortcuts + the How to play link',
-    sound.map((r) => r.id).join() === 'wh-volume,wh-music,wh-uisounds,wh-boost' && feel.map((r) => r.id).join() === 'wh-extra,wh-haptics,wh-gravity,wh-quality' && SETTINGS_GROUPS[2].rows.map((r) => r.id).join() === 'wh-calm,wh-shake,wh-skip,wh-fast' && SETTINGS_GROUPS[3].rows.map((r) => r.id).join() === 'wh-keys,wh-howto-link'
+  check('Settings: Sound = Volume, Music, UI sounds, Louder squish; Feel = Extra squish, Haptics (only where the device vibrates), Quality (no Gravity: the toolbar Table | Float, 2026-10-09); Motion = Calm, Shake, Skip, Fast open; Other = Keyboard shortcuts + the How to play link',
+    sound.map((r) => r.id).join() === 'wh-volume,wh-music,wh-uisounds,wh-boost' && feel.map((r) => r.id).join() === 'wh-extra,wh-haptics,wh-quality' && SETTINGS_GROUPS[2].rows.map((r) => r.id).join() === 'wh-calm,wh-shake,wh-skip,wh-fast' && SETTINGS_GROUPS[3].rows.map((r) => r.id).join() === 'wh-keys,wh-howto-link'
     && (feel[1] as { needs?: string }).needs === 'vibrate');
-  check('Settings: Quality is a 4-way segmented control (Auto, Low, Medium, High) whose values are the game\'s tiers', QUALITY_OPTIONS.map((o) => o.value).join() === 'auto,low,med,high' && (feel[3] as { kind: string }).kind === 'seg');
-  check('Settings: the labels the browser harness reads are unchanged (Volume, Music, Louder squish, Extra squish, Gravity, Calm effects, Screen shake, Skip animations, Fast open, Keyboard shortcuts, Quality, Haptics)',
-    ['Volume', 'Music', 'Louder squish', 'Extra squish', 'Gravity', 'Calm effects', 'Screen shake', 'Skip animations', 'Fast open', 'Keyboard shortcuts', 'Quality', 'Haptics'].every((l) => rows.some((r) => r.label === l)));
+  check('Settings: Quality is a 4-way segmented control (Auto, Low, Medium, High) whose values are the game\'s tiers', QUALITY_OPTIONS.map((o) => o.value).join() === 'auto,low,med,high' && (feel[2] as { kind: string }).kind === 'seg');
+  check('Settings: the labels the browser harness reads are unchanged (Volume, Music, Louder squish, Extra squish, Calm effects, Screen shake, Skip animations, Fast open, Keyboard shortcuts, Quality, Haptics) and there is no Gravity label (moved to the toolbar, 2026-10-09)',
+    ['Volume', 'Music', 'Louder squish', 'Extra squish', 'Calm effects', 'Screen shake', 'Skip animations', 'Fast open', 'Keyboard shortcuts', 'Quality', 'Haptics'].every((l) => rows.some((r) => r.label === l)) && !rows.some((r) => /gravity/i.test(r.label)) && !/gravity/i.test(read('src/ui/settingsPanel.ts').replace(/\/\/.*$/gm, '')));
   check('Settings: the Voices switch is a hidden component (FEATURES.voices is false, VOICES_ROW is in no group, the panel mounts it only when the flag AND a place to keep it exist)',
     FEATURES.voices === false && FEATURES.reset === false && !ids.includes(VOICES_ROW.id) && /features\.voices && o\.voices/.test(read('src/ui/settingsPanel.ts')));
   check('Settings: the "Start over" component is NOT built (UI.md 10 / 11 R19: the owner\'s call): no reset text in the panel or the copy', !/start over|reset progress/i.test(read('src/ui/settingsPanel.ts') + read('src/ui/screens/screenCopy.ts')));

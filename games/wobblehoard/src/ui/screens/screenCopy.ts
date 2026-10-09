@@ -6,7 +6,7 @@ import { PRIVACY_LINE } from '../../portal/copy.ts';
 // ---------------------------------------------------------------------------------------------------------------- Settings
 export type SliderKey = 'volume' | 'music' | 'squishBoost' | 'shake';
 export type SwitchKey = 'uiSounds' | 'extraSquish' | 'haptics' | 'calm' | 'skipAnimations' | 'fastOpen' | 'shortcuts';
-export type SegKey = 'gravity' | 'quality';
+export type SegKey = 'quality';
 
 export interface SegOption { value: string; label: string; icon?: IconName }
 export type SettingRow =
@@ -20,15 +20,16 @@ export interface SettingGroup { id: 'sound' | 'feel' | 'motion' | 'other'; title
 export const QUALITY_OPTIONS: readonly SegOption[] = [
   { value: 'auto', label: 'Auto' }, { value: 'low', label: 'Low' }, { value: 'med', label: 'Medium' }, { value: 'high', label: 'High' },
 ];
-/** Gravity: the radios' values are 'table' / 'float' (the game keeps a boolean: table = true). */
-export const GRAVITY_OPTIONS: readonly SegOption[] = [{ value: 'table', label: 'Table', icon: 'table' }, { value: 'float', label: 'Float', icon: 'float' }];
+/** Settings keys that have NO row here because their control lives somewhere else. Gravity (Table | Float) moved to the toolbar on 2026-10-09 (the owner: "float/table should be in
+ *  the toolbar, not in settings"; UI.md 1.8; `ui/toolbar.ts` GRAVITY_MODES): the setting and its stored value stay, only the row left. The probe pins both halves. */
+export const TOOLBAR_SETTING_KEYS = ['gravity'] as const;
 
 /** The keyboard line under Other. It names every key the game answers (the keys of input/keyboard.ts): the probe compares it with the How to play key table. */
-export const KEYS_LINE = 'Keys: Tab to the squishy · Space pokes · arrows look around · + / − zoom · G gravity · M sound · H Hoard · 1 2 3 tools · C cut · S snap · F full screen · P Menu · ? How to play · [ ] switch squishy · Shift + drag pulls both sides · right-drag turns the view · Esc closes';
+export const KEYS_LINE = 'Keys: Tab to the squishy · Space pokes · arrows look around · + / − zoom · G gravity · M sound · H Hoard · 1 2 3 tools · C cut · S snap · F full screen · P Menu · ? How to play · [ ] switch squishy · Shift + drag pulls both sides · Shift while stretched fully locks a pull; Esc lets go · right-drag turns the view · Esc closes';
 export const SAVED_LINE = 'Saved on this device.';
 
 /** Sound, Feel, Motion, Other (UI.md 6). The labels keep the words the game already used (Volume, Louder squish, Fast open, ...): plain, no dB. Every key of
- *  `SETTING_KEYS` (core/settings.ts) has exactly one row here: the probe checks it. */
+ *  `SETTING_KEYS` (core/settings.ts) has exactly one row here, except `TOOLBAR_SETTING_KEYS` (Gravity: the toolbar's Table | Float): the probe checks it. */
 export const SETTINGS_GROUPS: readonly SettingGroup[] = [
   { id: 'sound', title: 'Sound', rows: [
     { kind: 'slider', id: 'wh-volume', key: 'volume', label: 'Volume' },
@@ -39,7 +40,6 @@ export const SETTINGS_GROUPS: readonly SettingGroup[] = [
   { id: 'feel', title: 'Feel', rows: [
     { kind: 'switch', id: 'wh-extra', key: 'extraSquish', label: 'Extra squish', hint: 'Presses go deeper.' },
     { kind: 'switch', id: 'wh-haptics', key: 'haptics', label: 'Haptics', needs: 'vibrate' },
-    { kind: 'seg', id: 'wh-gravity', key: 'gravity', label: 'Gravity', options: GRAVITY_OPTIONS },
     { kind: 'seg', id: 'wh-quality', key: 'quality', label: 'Quality', options: QUALITY_OPTIONS },
   ] },
   { id: 'motion', title: 'Motion', rows: [
@@ -88,6 +88,7 @@ export const GUIDE_KEYS: readonly KeyRow[] = [
   { keys: ['?'], does: 'This screen' },
   { keys: ['Esc'], does: 'Close, or back to the Hand' },
   { keys: ['Shift', 'drag'], does: 'Pull both sides' },
+  { keys: ['Shift'], does: 'Lock a pull that is stretched all the way. Press the lobe, or Esc, to let go.' },
   { keys: ['Right-drag'], does: 'Turn the view' },
 ];
 

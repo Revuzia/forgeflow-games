@@ -2,6 +2,7 @@
 //  * `toolbar-parts`: the dock as a component, in its three forms (full | compact | bare), every state (rest, hover, focus, pressed, selected, disabled with
 //    a reason, ceremony), the Hoard button inside it, the attachment with its caret, the More popover (five tools in a narrow tray), the caption chip and a
 //    held tooltip. Fixed forms, so one page shows all of them whatever the viewport is.
+//    (2026-10-09: the Table | Float pair beside the tools, its forms, states, the Hoard giving its count away and the pair behind More: the owner moved the control from Settings to the toolbar.)
 //  * `scene-rest` / `scene-cut` / `scene-snap`: the real layout at THE VIEWPORT'S SIZE (the 8 kit sizes): a mock HUD as 4.2 draws it (top row, hint, name
 //    plate, ring + Open, the squishy's band) around the REAL toolbar, which follows layout.ts like the game will. The mock pieces are the kit page's own
 //    (kitpage.css); B3b / B3c replace them with the real HUD. Options bars are mocks too (B3b builds the real ones).
@@ -44,9 +45,9 @@ const EXTRA_TOOLS: ToolDef[] = [
 ];
 
 /** A fixed-form dock for the component sheet (not following the viewport). */
-export function specimen(form: 'full' | 'compact' | 'bare', o: { tool?: string; tools?: ToolDef[]; hoard?: HTMLButtonElement | false; attach?: 'above' | 'inline'; disabled?: Record<string, string>; width?: number } = {}): { host: HTMLElement; tb: Toolbar } {
+export function specimen(form: 'full' | 'compact' | 'bare', o: { tool?: string; tools?: ToolDef[]; hoard?: HTMLButtonElement | false; attach?: 'above' | 'inline'; disabled?: Record<string, string>; width?: number; gravity?: boolean; floating?: boolean } = {}): { host: HTMLElement; tb: Toolbar } {
   let tb!: Toolbar;
-  tb = createToolbar({ form, attach: o.attach ?? 'above', tools: o.tools, onTool: (id) => tb.setTool(id), onBlocked: () => {} });
+  tb = createToolbar({ form, attach: o.attach ?? 'above', tools: o.tools, onTool: (id) => tb.setTool(id), onBlocked: () => {}, ...(o.gravity ? { gravity: { table: !o.floating, onSet: (t: boolean) => tb.setGravity(t) } } : {}) });
   const host = h('div', { class: form === 'full' ? 'kp-dockhost kp-dockhost--full' : 'kp-dockhost' }, tb.el);
   if (o.width) host.style.width = `${o.width}px`;
   if (o.hoard !== false) { const hb = o.hoard ?? mockHoard(); tb.group.append(hb); tb.adoptHoard(hb); }
@@ -102,6 +103,30 @@ const parts: KitSection = {
     const m3 = specimen('compact', { tools: EXTRA_TOOLS, width: 260 });
     queueMicrotask(() => requestAnimationFrame(() => { m3.tb.fit(); m3.tb.el.querySelector<HTMLElement>('.dock-more')?.click(); }));
     host.append(cell('More open: the popover takes the slot, caret on More', m3.host));
+
+    // Table | Float (UI.md 1.8)
+    host.append(sub('Table | Float: the pair beside the tools (one key, G; the selected face has the amber ring; the game keeps the setting)'));
+    const g1 = specimen('full', { gravity: true }), g2 = specimen('compact', { gravity: true, floating: true, tool: 'cut' }), g3 = specimen('bare', { gravity: true, width: 330 });
+    host.append(
+      cell('full: Table selected (icon + word, one G chip)', g1.host),
+      cell('compact: Float selected, Cut in hand (icon only)', g2.host),
+      cell('bare 330 px (the Hoard is an icon already)', g3.host));
+    const gst = (label: string, f: (tb: Toolbar) => void, o: Parameters<typeof specimen>[1] = {}): HTMLElement => { const x = specimen('full', { gravity: true, ...o }); f(x.tb); return cell(label, x.host); };
+    host.append(
+      gst('hover (Float)', (tb) => tb.gravityButton('float')!.setAttribute('data-force', 'hover')),
+      gst('focus-visible (Table)', (tb) => tb.gravityButton('table')!.setAttribute('data-force', 'focus-visible')),
+      gst('pressed (Float)', (tb) => tb.gravityButton('float')!.setAttribute('data-force', 'hover active')),
+      gst('ceremony: the pair rests, with its reason', () => {}, { disabled: { hand: 'A capsule is opening.', cut: 'A capsule is opening.', snap: 'A capsule is opening.', gravity: 'A capsule is opening.' } }));
+    host.append(sub('When the tray is too narrow: the Hoard gives its count away first, then the pair goes behind More (a group of two radios)'));
+    const n1 = specimen('compact', { gravity: true, width: 338 }), n2 = specimen('compact', { gravity: true, width: 296 }), n3 = specimen('compact', { gravity: true, width: 296, floating: true });
+    // (opening More focuses its first item: give the focus back to whoever had it, so the More sheet above keeps its own open popover and its focus for the harness)
+    queueMicrotask(() => requestAnimationFrame(() => {
+      n3.tb.fit();
+      const prev = document.activeElement as HTMLElement | null;
+      n3.tb.el.querySelector<HTMLElement>('.dock-more')?.click();
+      if (prev && prev !== document.body) prev.focus(); else (document.activeElement as HTMLElement | null)?.blur();
+    }));
+    host.append(cell('338 px: the Hoard is an icon, the pair stays', n1.host), cell('296 px: the pair is behind More', n2.host), cell('296 px, More open (Float selected): the popover takes the slot', n3.host));
 
     // caption + tooltip
     host.append(sub('Caption chip (1.4 s in the game; held here) and the tooltip (450 ms hover, instant on focus; held here)'));
@@ -172,7 +197,7 @@ function scene(id: string, title: string, note: string, tool: ToolId, o: { capti
 
       // the real toolbar, following layout.ts
       const w2 = window as unknown as { __kitBlocked?: string[]; __kitToolbar?: Toolbar };
-      const tb = createToolbar({ layout: ctx.layout, root: stage, onTool: (next) => select(next), onBlocked: (_id, why) => { (w2.__kitBlocked ??= []).push(why); } });
+      const tb: Toolbar = createToolbar({ layout: ctx.layout, root: stage, onTool: (next) => select(next), onBlocked: (_id, why) => { (w2.__kitBlocked ??= []).push(why); }, gravity: { table: true, onSet: (t) => tb.setGravity(t) } });
       const hoard = mockHoard();
       tb.adoptHoard(hoard);
       bindHoard(ctx.layout, hoard, { dock: tb.group, row: rowHoard }, null);

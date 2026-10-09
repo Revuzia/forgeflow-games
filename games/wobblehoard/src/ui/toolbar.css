@@ -63,17 +63,19 @@ body[data-layout="tiny"] .dock[data-open="true"] { padding-right: calc(var(--dk-
 .dock-tools { display: flex; align-items: center; gap: var(--wh-sp-1); min-width: 0; }
 .dock[data-form="full"] .dock-tools { gap: var(--wh-sp-2); }
 
-/* ---- a tool ---- */
-.dock-tool { flex: none; min-height: var(--dk-tool-h); }
-.dock[data-form="full"] .dock-tool { padding: 0 var(--wh-sp-3) 0 var(--wh-sp-3); gap: var(--wh-sp-2); }
+/* ---- a tool, and the two halves of the Table | Float pair (the same button: opaque surface, the amber ring and warm tint when selected) ---- */
+.dock-tool, .dock-grav-opt { flex: none; min-height: var(--dk-tool-h); }
+.dock[data-form="full"] :is(.dock-tool, .dock-grav-opt) { padding: 0 var(--wh-sp-3); gap: var(--wh-sp-2); }
 .dock[data-form="full"] .dock-tool-label { font-size: var(--wh-fs-body); }
-.dock:not([data-form="full"]) .dock-tool { width: var(--wh-hit); padding: 0; }
+.dock:not([data-form="full"]) :is(.dock-tool, .dock-grav-opt) { width: var(--wh-hit); padding: 0; }
 /* compact and bare: the label leaves the picture, never the accessibility tree */
 .dock:not([data-form="full"]) .dock-kbd { display: none; }
-.dock-tool > .k-icon { transition: color var(--k-fd-2) var(--wh-ease); }
+.dock :is(.dock-tool, .dock-grav-opt) > .k-icon { transition: color var(--k-fd-2) var(--wh-ease); }
 @media (forced-colors: none) {
-  .dock-tool[aria-pressed="true"]:not([aria-disabled="true"]) > .k-icon { color: var(--k-accent); }
+  .dock :is(.dock-tool, .dock-grav-opt)[aria-pressed="true"]:not([aria-disabled="true"]) > .k-icon { color: var(--k-accent); }
 }
+/* the pair: Table | Float, one key (G) for both, its chip after the pair (full form only) */
+.dock-grav, .dock-menu-group { display: contents; }   /* the groups add no box of their own: the pair's buttons are flex items of the toolbar, the popover's items of the menu */
 
 /* ---- the Hoard button joins the dock (its DOM is ui/hoard/panel.ts's: .hoard-btn > svg.hoard-glyph + .hoard-btn-text > .hoard-btn-word + .hoard-btn-count, .hoard-btn-dot) ---- */
 .dock-hoard.hoard-btn {
@@ -87,8 +89,9 @@ body[data-layout="tiny"] .dock[data-open="true"] { padding-right: calc(var(--dk-
 .dock-hoard .hoard-btn-word { font-size: var(--wh-fs-body); }
 .dock-hoard .hoard-btn-count { display: block; font-size: var(--wh-fs-label); font-weight: var(--wh-w-bold); color: var(--k-fg-dim); font-variant-numeric: tabular-nums; }
 .dock[data-form="compact"] .dock-hoard.hoard-btn { padding: 0 var(--wh-sp-2); }
-.dock[data-form="bare"] .dock-hoard.hoard-btn { width: var(--wh-hit); padding: 0; justify-content: center; }
-.dock[data-form="bare"] .dock-hoard .hoard-btn-count { display: none; }
+/* tiny (bare), and the tray too wide for the pair (toolbar.ts fit: the Hoard button gives its count away first; its name never changes): the Hoard is an icon */
+.dock:is([data-form="bare"], [data-hoard="icon"]) .dock-hoard.hoard-btn { width: var(--wh-hit); padding: 0; justify-content: center; }
+.dock:is([data-form="bare"], [data-hoard="icon"]) .dock-hoard .hoard-btn-count { display: none; }
 .dock-hoard .hoard-btn-dot { top: -3px; right: -3px; }
 
 /* ================= the attachment: ONE slot above the dock (inline beside the tools in strip and tiny), a caret on its tool ================= */
@@ -118,8 +121,10 @@ body[data-layout="tiny"] .dock[data-open="true"] .dock-attach { flex: 1 1 auto; 
 
 /* the More popover's list */
 .dock-menu { display: grid; gap: var(--wh-sp-1); min-width: 168px; }
-.dock-menuitem { justify-content: flex-start; width: 100%; min-height: 48px; padding: 0 var(--wh-sp-3); gap: var(--wh-sp-3); }
+.dock-menuitem { justify-content: flex-start; min-height: 48px; padding: 0 var(--wh-sp-3); gap: var(--wh-sp-3); }
 .dock-menuitem .k-kbd { margin-left: auto; }
+/* inline attachments (tiny, strip): the More popover is ONE ROW (a list would cover the squishy on a 201 px screen; in tiny it stands in for the tray); toolbar.ts draws its tools icon-only */
+.dock[data-attach="inline"] .dock-menu { display: flex; min-width: 0; }
 .dock-menuitem[aria-checked="true"] { --k-sh: inset 0 0 0 1px var(--k-sel-edge), var(--wh-e1); background: var(--k-sel-fill); border-color: var(--k-sel-edge); color: var(--k-sel-fg); }
 
 /* ================= the tool caption chip (R10): aria-hidden, 1.4 s, above the dock (below it in strip) ================= */

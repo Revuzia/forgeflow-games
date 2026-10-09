@@ -4,12 +4,17 @@
 //   #wh-dock.dock                (DOM order = Tab order: Hoard, Tools, the options bar; CSS puts the attachment ABOVE the tray with column-reverse)
 //     div.dock-bar                the tray
 //       div[role=group "Collection"]   the Hoard button's parent in wide, stack and tiny (layout.ts bindHoard moves the node)
-//       div[role=toolbar "Tools"]      button.dock-tool[data-tool][aria-pressed][aria-keyshortcuts] x N, roving tabindex, ONE Tab stop; a trailing More
+//       div[role=toolbar "Tools"]      button.dock-tool[data-tool][aria-pressed][aria-keyshortcuts] x N, then (when the game gives `gravity`) the Table | Float pair
+//                                      div.dock-grav[role=group "Gravity"] > button.dock-grav-opt[data-grav][aria-pressed] x 2 (UI.md 1.8, the owner's call of 2026-10-09:
+//                                      Table / Float lives HERE, not in Settings), then a trailing More; roving tabindex, ONE Tab stop
 //     div.dock-attach             the ONE attachment (an options bar, later a shelf, the More popover) with a caret on its tool
 //     p.dock-caption              the 1.4 s, aria-hidden tool-change chip (R10), out of flow
 //
 // The form (full | compact | bare) and where an attachment goes (above | inline) come from layout.ts `dockFor` (or the options, for the kit's
 // fixed specimens). Names never change with the form: a compact tool hides its label visually, not from the accessibility tree.
+//
+// What gives way when the tray is too wide (fit(), in this order, each step only while the tray still overflows): the Hoard button drops its count (icon only,
+// `.dock[data-hoard="icon"]`), the Table | Float pair moves behind More (a role=group of two menuitemradio items), then the tools from the end (the tool in hand never).
 import './base.css';
 import './kit.css';
 import './a11y.css';
@@ -17,6 +22,7 @@ import './toolbar.css';
 import { h } from './dom.ts';
 import { icon } from './icons.ts';
 import type { IconName } from './icons.ts';
+import type { UiKind } from '../contracts.ts';
 import { dockFor } from './layout.ts';
 import type { DockForm, DockSpec, LayoutHandle } from './layout.ts';
 import { squash } from './motion.ts';
@@ -44,6 +50,20 @@ export const TOOLS: readonly ToolDef[] = [
   { id: 'snap', label: 'Snap', hint: 'Take a photo', icon: 'snap', chip: 'S', keys: '3 S' },
 ];
 
+/** Table | Float (UI.md 1.8): the two faces of the gravity setting. `table` = gravity on (the game keeps a boolean: table = true). Words are the live line's and the tooltip's. */
+export const GRAVITY_MODES = [
+  { id: 'table', table: true, label: 'Table', icon: 'table', hint: 'Rests on the table', sound: 'on', line: 'Table' },
+  { id: 'float', table: false, label: 'Float', icon: 'float', hint: 'Drifts in the air', sound: 'off', line: 'Floating' },
+] as const satisfies ReadonlyArray<{ id: string; table: boolean; label: string; icon: IconName; hint: string; sound: UiKind; line: string }>;
+export type GravityId = (typeof GRAVITY_MODES)[number]['id'];
+export const GRAVITY_KEY = 'G';
+export interface GravityOptions {
+  /** true = Table (gravity on) */
+  table: boolean;
+  /** a Table or Float button was chosen (click, tap, Enter, Space). Like the tools it is CONTROLLED: the pair repaints only through setGravity() (the game's 'settings' event calls it). */
+  onSet(table: boolean): void;
+}
+
 export interface ToolbarOptions {
   /** a tool was chosen by click, tap, Enter or Space; the active Cut or Snap pressed again arrives as `hand`. The toolbar is CONTROLLED: it changes
    *  its own selection only through setTool() (the game's 'tool' event calls it). */
@@ -55,6 +75,8 @@ export interface ToolbarOptions {
   form?: DockForm;
   attach?: 'above' | 'inline';
   tools?: readonly ToolDef[];
+  /** the Table | Float pair next to the tools (omit it and the toolbar has none: the kit's older specimens) */
+  gravity?: GravityOptions;
   /** the root the dock is appended to (the HUD); omit to build it detached (the kit page places it) */
   root?: HTMLElement;
 }
@@ -74,8 +96,16 @@ export interface Toolbar {
   setTool(id: string): void;
   /** which tools exist now (Cut only when the physics can cut); the rest are not drawn */
   setAvailable(ids: readonly string[]): void;
-  /** tools that are busy or unavailable right now and WHY: `aria-disabled` + the reason (aria-describedby); null / {} = all enabled */
+  /** tools that are busy or unavailable right now and WHY: `aria-disabled` + the reason (aria-describedby); null / {} = all enabled. The key `gravity` rests the Table | Float pair. */
   setDisabled(reasons: Readonly<Record<string, string>> | null): void;
+  /** Table (true) or Float (false): aria-pressed on the pair and the checked item in More. No-op without a `gravity` option. */
+  setGravity(table: boolean): void;
+  /** null when the toolbar has no pair */
+  readonly gravity: boolean | null;
+  /** one half of the pair (null without a `gravity` option) */
+  gravityButton(id: GravityId): HTMLButtonElement | null;
+  /** the pair sits behind More right now (it did not fit) */
+  readonly gravityInMore: boolean;
   /** put ONE node in the attachment slot, caret on `forTool` (default: the tool in hand); null empties it */
   attach(node: HTMLElement | null, forTool?: string): void;
   readonly attached: boolean;
@@ -96,6 +126,9 @@ export interface Toolbar {
 }
 
 export const CAPTION_MS = 1400;
+/** The room (px) an inline options bar keeps beside the tray (strip: the bar stands to the right of the tools). The widest bar in its tightest single row is Snap's, 311 px
+ *  (optionsBar.ts: "568x320: Snap needs 311 px"); when the pair in the tray would leave less, the pair goes behind More while a bar is open. */
+export const OPTS_ROOM = 320;
 const ids = (n: string): string => `wh-dock-${n}`;
 
 export function createToolbar(o: ToolbarOptions): Toolbar {
@@ -108,6 +141,8 @@ export function createToolbar(o: ToolbarOptions): Toolbar {
   let overflow: string[] = [];
   let moreOpen = false;
   let base: { node: HTMLElement; forTool: string | null } | null = null;
+  let table = o.gravity?.table ?? true;
+  let gravHidden = false;   // the pair is behind More (it did not fit)
   const form0: DockForm = o.form ?? 'full';
   let spec: DockSpec = o.layout ? dockFor(o.layout.current()) : { form: form0, attach: o.attach ?? 'above', hoard: 'dock', labels: form0 === 'full' };
   const offs: Array<() => void> = [];
@@ -123,7 +158,7 @@ export function createToolbar(o: ToolbarOptions): Toolbar {
   const toolsEl = h('div', { class: 'dock-tools', attrs: { role: 'toolbar', 'aria-label': 'Tools', 'aria-orientation': 'horizontal' } });
   const bar = h('div', { class: 'dock-bar k-glass' }, group, sep, toolsEl);
   const reasonBox = h('div', { class: 'sr-only' });
-  const el = h('div', { class: 'dock', attrs: { id: 'wh-dock', 'data-form': spec.form, 'data-attach': spec.attach, 'data-open': 'false', 'data-tool': current } }, bar, attachEl, caption, reasonBox);
+  const el = h('div', { class: 'dock', attrs: { id: 'wh-dock', 'data-form': spec.form, 'data-attach': spec.attach, 'data-open': 'false', 'data-tool': current, 'data-hoard': 'full', 'data-gravity': o.gravity ? (table ? 'table' : 'float') : 'none' } }, bar, attachEl, caption, reasonBox);
 
   /** the strip dock sits at the top of the screen: its tips open downwards */
   const tipSide = (): 'above' | 'below' => (el.dataset.attach === 'inline' && el.dataset.form === 'compact' ? 'below' : 'above');
@@ -135,6 +170,23 @@ export function createToolbar(o: ToolbarOptions): Toolbar {
     toolsEl.append(b);
     offs.push(attachTooltip(b, () => `${d.label} (${d.chip})`, { place: tipSide, when: () => el.dataset.form !== 'full' }).destroy);
   }
+  // ---- Table | Float: a group of two toggle buttons in the same toolbar (so the roving tabindex and the arrows walk it), after a separator ----
+  const gravBtns = new Map<GravityId, HTMLButtonElement>();
+  const gravSep = h('span', { class: 'dock-sep dock-grav-sep', attrs: { 'aria-hidden': 'true' } });
+  const gravEl = h('div', { class: 'dock-grav', attrs: { role: 'group', 'aria-label': 'Gravity' } });
+  if (o.gravity) {
+    for (const m of GRAVITY_MODES) {
+      const b = h('button', { class: 'k-btn k-tool dock-grav-opt', attrs: { type: 'button', 'data-grav': m.id, 'aria-pressed': 'false', 'aria-keyshortcuts': GRAVITY_KEY, tabindex: '-1' } },
+        icon(m.icon), h('span', { class: 'k-btn-label k-tool-label dock-tool-label', text: m.label }));
+      b.addEventListener('click', () => chooseGravity(m.table));
+      gravBtns.set(m.id, b);
+      gravEl.append(b);
+      offs.push(attachTooltip(b, `${m.label} (${GRAVITY_KEY})`, { place: tipSide, when: () => el.dataset.form !== 'full' }).destroy);
+    }
+    gravEl.append(h('kbd', { class: 'k-kbd dock-kbd dock-grav-kbd', text: GRAVITY_KEY, attrs: { 'aria-hidden': 'true' } }));
+    toolsEl.append(gravSep, gravEl);
+  }
+  const gravItems = (): HTMLButtonElement[] => [...gravBtns.values()];
   const moreBtn = h('button', { class: 'k-btn k-tool dock-tool dock-more', attrs: { type: 'button', 'data-tool': 'more', 'aria-haspopup': 'menu', 'aria-expanded': 'false', 'aria-controls': ids('menu'), tabindex: '-1', hidden: '' } },
     icon('more'), h('span', { class: 'k-btn-label k-tool-label dock-tool-label', text: 'More' }));
   moreBtn.addEventListener('click', () => { if (moreOpen) closeMore(false); else openMore(); });
@@ -154,17 +206,26 @@ export function createToolbar(o: ToolbarOptions): Toolbar {
   function paint(): void {
     for (const [id, b] of buttons) b.setAttribute('aria-pressed', String(id === current));
     el.dataset.tool = current;
+    for (const m of GRAVITY_MODES) gravBtns.get(m.id)?.setAttribute('aria-pressed', String(m.table === table));
+    if (o.gravity) el.dataset.gravity = table ? 'table' : 'float';
     roving();
+  }
+  /** Table or Float chosen (a button, or an item in More): a pair that rests says why; the face already showing does nothing */
+  function chooseGravity(want: boolean): void {
+    if (moreOpen) closeMore(false);
+    if (reasons.gravity !== undefined) { o.onBlocked?.('gravity', reasons.gravity); return; }
+    if (want === table) return;
+    o.gravity?.onSet(want);
   }
 
   // ---- roving tabindex: ONE Tab stop; arrows, Home, End ----
-  const items = (): HTMLButtonElement[] => [...buttons.values(), moreBtn].filter((b) => !b.hidden);
+  const items = (): HTMLButtonElement[] => [...buttons.values(), ...(gravHidden ? [] : gravItems()), moreBtn].filter((b) => !b.hidden);
   function roving(stop?: HTMLElement): void {
     const list = items();
     const cur = buttons.get(current);
     const active = (stop && list.includes(stop as HTMLButtonElement) ? stop : null) ?? (cur && !cur.hidden ? cur : list[0]);
     for (const b of list) b.tabIndex = b === active ? 0 : -1;
-    for (const b of buttons.values()) if (b.hidden) b.tabIndex = -1;
+    for (const b of [...buttons.values(), ...gravItems()]) if (!list.includes(b)) b.tabIndex = -1;
   }
   toolsEl.addEventListener('focusin', (e) => roving(e.target as HTMLElement));
   toolsEl.addEventListener('focusout', (e) => { if (!toolsEl.contains(e.relatedTarget as Node | null)) roving(); });
@@ -195,20 +256,58 @@ export function createToolbar(o: ToolbarOptions): Toolbar {
       b.setAttribute('aria-disabled', 'true');
       b.setAttribute('aria-describedby', rid);
     }
+    // the pair rests with its own key `gravity`; a press then says why (and, off the delegated sounds, makes the "not that" sound: kindOfControl reads `data-sound` first)
+    const gwhy = reasons.gravity;
+    for (const [id, b] of gravBtns) {
+      if (gwhy === undefined) { b.removeAttribute('aria-disabled'); b.removeAttribute('aria-describedby'); b.dataset.sound = 'none'; continue; }
+      const rid = ids(`why-grav-${id}`);
+      reasonBox.append(h('span', { text: gwhy, attrs: { id: rid } }));
+      b.setAttribute('aria-disabled', 'true');
+      b.setAttribute('aria-describedby', rid);
+      delete b.dataset.sound;
+    }
     const shown = [...buttons].filter(([, b]) => !b.hidden);
     if (shown.length && shown.every(([id]) => isOff(id))) toolsEl.setAttribute('aria-disabled', 'true'); else toolsEl.removeAttribute('aria-disabled');
   }
 
-  // ---- overflow: what does not fit goes behind a trailing More (the tool in hand never does) ----
+  // ---- overflow: what does not fit gives way, in this order: the Hoard button's count, the Table | Float pair (behind a trailing More), then the tools from the end (the tool in hand never) ----
+  /** one shape of the tray: the Hoard as an icon only (it drops its count), the pair in the tray or behind More */
+  const SHAPES: ReadonlyArray<{ icon: boolean; pair: boolean }> = [{ icon: false, pair: true }, { icon: true, pair: true }, { icon: false, pair: false }, { icon: true, pair: false }];
   function fit(): void {
+    // the tray is not drawn (tiny, an attachment open: the options bar or the More popover IS the row): nothing can be measured, so nothing changes; renderAttach() measures
+    // again when the tray comes back. (Without this the open popover re-measured a 0-wide tray, found "nothing overflows" and closed itself.)
+    if (el.isConnected && getComputedStyle(bar).display === 'none') { paint(); paintDisabled(); return; }
     // a control that holds focus is never hidden by a re-measure (display:none would blur it): it stays, the measure goes on without it
     const fo = document.activeElement;
     const setHidden = (b: HTMLElement, v: boolean): void => { if (b.hidden !== v && !(v && b === fo)) b.hidden = v; };
     for (const [id, b] of buttons) setHidden(b, !available.has(id));
     setHidden(moreBtn, true);
     overflow = [];
+    gravHidden = false;
+    const pairFocused = !!fo && gravEl.contains(fo);
+    const showPair = (on: boolean): void => { gravEl.hidden = !on || !o.gravity; gravSep.hidden = gravEl.hidden; };
+    showPair(!!o.gravity);
+    el.dataset.hoard = 'full';
     const tooWide = (): boolean => toolsEl.scrollWidth > toolsEl.clientWidth + 1;
-    if (el.isConnected && tooWide()) {
+    /** strip: an options bar stands beside the tray and must keep OPTS_ROOM; the pair (not the tools) gives way for it */
+    const cramped = (): boolean => {
+      if (!base || el.dataset.attach !== 'inline') return false;
+      const cs = getComputedStyle(el);
+      return el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - bar.offsetWidth - 8 < OPTS_ROOM;
+    };
+    if (el.isConnected && o.gravity && (tooWide() || cramped())) {
+      // the Hoard icon-only is for the pair's sake (without a pair nothing changes); a shape that hides the pair is skipped while focus is in it
+      for (const sh of SHAPES) {
+        if (!sh.pair && pairFocused) continue;
+        el.dataset.hoard = sh.icon ? 'icon' : 'full';
+        showPair(sh.pair);
+        setHidden(moreBtn, sh.pair);
+        if (!tooWide() && !cramped()) break;
+      }
+      gravHidden = gravEl.hidden === true;
+    }
+    if (el.isConnected && (tooWide() || gravHidden)) {
+      // still too wide, or the pair went behind More (which needs its button): the tools give way from the end, the tool in hand and the Hand never
       setHidden(moreBtn, false);
       const order = defs.map((d) => d.id).filter((id) => available.has(id));
       for (let k = order.length - 1; k >= 0 && tooWide(); k--) {
@@ -218,9 +317,14 @@ export function createToolbar(o: ToolbarOptions): Toolbar {
         b.hidden = true;
         overflow.unshift(id);
       }
-      if (!overflow.length) setHidden(moreBtn, true);
+      if (!overflow.length && !gravHidden) setHidden(moreBtn, true);
     }
-    if (!overflow.length && moreOpen) closeMore(false);
+    if (!overflow.length && !gravHidden && moreOpen) closeMore(false);
+    // More is not needed (the pair came back, the room came back) but it may still hold focus, so the re-measure could not hide it: the focus goes to the tool in hand, then More goes
+    if (!overflow.length && !gravHidden && !moreBtn.hidden) {
+      if (document.activeElement === moreBtn) { const cur = buttons.get(current); (cur && !cur.hidden ? cur : items().find((b) => b !== moreBtn))?.focus(); }
+      moreBtn.hidden = true;
+    }
     if (moreOpen) renderMenu();
     paint();
     paintDisabled();
@@ -230,20 +334,35 @@ export function createToolbar(o: ToolbarOptions): Toolbar {
   // ---- the More popover (an attachment of its own: it takes the slot while open, then gives it back) ----
   let over: { node: HTMLElement; forTool: string } | null = null;
   function renderMenu(): void {
-    const held = menu.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.tool : undefined; // a re-measure must not drop the focus
+    const ae = document.activeElement as HTMLElement | null;
+    const held = ae && menu.contains(ae) ? (ae.dataset.tool ?? ae.dataset.grav) : undefined; // a re-measure must not drop the focus
     menu.replaceChildren();
+    // an inline attachment (tiny, strip) is a ROW (toolbar.css): the tools in it are icon-only like the tray's (the name moves to aria-label, it never changes) and no key chips
+    const row = el.dataset.attach === 'inline';
     for (const id of overflow) {
       const d = byId.get(id)!;
-      const it = h('button', { class: 'k-btn dock-menuitem', attrs: { type: 'button', role: 'menuitemradio', 'aria-checked': String(id === current), 'data-tool': id, tabindex: '-1' } },
-        icon(d.icon), h('span', { class: 'k-btn-label', text: d.label }), h('kbd', { class: 'k-kbd', text: d.chip, attrs: { 'aria-hidden': 'true' } }));
+      const it = h('button', { class: 'k-btn dock-menuitem', attrs: { type: 'button', role: 'menuitemradio', 'aria-checked': String(id === current), 'data-tool': id, tabindex: '-1', ...(row ? { 'aria-label': d.label } : {}) } },
+        icon(d.icon), row ? null : h('span', { class: 'k-btn-label', text: d.label }), row ? null : h('kbd', { class: 'k-kbd', text: d.chip, attrs: { 'aria-hidden': 'true' } }));
       if (isOff(id)) { it.setAttribute('aria-disabled', 'true'); it.title = reasons[id]; }
       it.addEventListener('click', () => { closeMore(true); choose(id); });
       menu.append(it);
     }
-    if (held) [...menu.querySelectorAll<HTMLElement>('button')].find((b) => b.dataset.tool === held)?.focus();
+    // the pair that did not fit: its own role=group of two radios, set apart by a rule
+    if (gravHidden) {
+      const grp = h('div', { class: 'dock-menu-group', attrs: { role: 'group', 'aria-label': 'Gravity' } });
+      for (const m of GRAVITY_MODES) {
+        const it = h('button', { class: 'k-btn dock-menuitem', attrs: { type: 'button', role: 'menuitemradio', 'aria-checked': String(m.table === table), 'data-grav': m.id, 'aria-keyshortcuts': GRAVITY_KEY, tabindex: '-1' } },
+          icon(m.icon), h('span', { class: 'k-btn-label', text: m.label }), row ? null : h('kbd', { class: 'k-kbd', text: GRAVITY_KEY, attrs: { 'aria-hidden': 'true' } }));
+        if (reasons.gravity !== undefined) { it.setAttribute('aria-disabled', 'true'); it.title = reasons.gravity; }
+        it.addEventListener('click', () => { closeMore(true); chooseGravity(m.table); });
+        grp.append(it);
+      }
+      menu.append(grp);
+    }
+    if (held) [...menu.querySelectorAll<HTMLElement>('button')].find((b) => (b.dataset.tool ?? b.dataset.grav) === held)?.focus();
   }
   function openMore(): void {
-    if (!overflow.length) return;
+    if (!overflow.length && !gravHidden) return;
     moreOpen = true;
     renderMenu();
     over = { node: menu, forTool: 'more' };
@@ -357,9 +476,21 @@ export function createToolbar(o: ToolbarOptions): Toolbar {
       paintDisabled();
       if (moreOpen) renderMenu();
     },
+    get gravity() { return o.gravity ? table : null; },
+    get gravityInMore() { return gravHidden; },
+    gravityButton: (id) => gravBtns.get(id) ?? null,
+    setGravity(want) {
+      if (!o.gravity || want === table) return;
+      table = want;
+      paint();
+      if (moreOpen) renderMenu();
+      const b = gravBtns.get(table ? 'table' : 'float');
+      if (b && !b.hidden && !gravHidden) squash(b.querySelector('svg') ?? b, 0.9);
+    },
     attach(node, forTool) {
       base = node ? { node, forTool: forTool ?? null } : null;
       renderAttach();
+      if (o.gravity && el.dataset.attach === 'inline') fit();   // strip: a bar beside the tray wants room, the pair may have to step aside (or come back)
     },
     showCaption(label, hint, ms = CAPTION_MS) {
       caption.replaceChildren(h('b', { text: label }));
