@@ -1,0 +1,21 @@
+{
+  "$comment": "Example GENESIS mod pack — a chronicle set: 'The Book of Ash', a darker, older voice for the chronicle (CONTRACT §13). Templates are matched by id (events.json): an id the base pack has is RE-VOICED in place, a new id is added (the sim tells the most specific id it finds: 'discovery.accident.lightning-dune' before 'discovery.accident'). Because it changes existing templates, load it before the world is made (the worker's {type:'mod'} message before 'init', or Sim({ content: [pack] })); a running world only takes packs that add new things.",
+  "id": "book-of-ash",
+  "name": "The Book of Ash",
+  "version": "1.0.0",
+  "events": [
+    {"id": "founding", "kind": "founding", "weight": 2, "text": ["Here the {people} put down their stones and named the place {settlement}. Count the years from this.", "{count} of the {people} stopped walking. The place they stopped became {settlement}."]},
+    {"id": "discovery.experiment", "kind": "discovery", "weight": 2, "text": ["{agent} of {settlement} burned their fingers and spoiled their work a hundred times, and then it held: {knowledge}.", "Nobody taught {agent} of {settlement}. The failures taught {pron}: {knowledge}."]},
+    {"id": "loss", "kind": "loss", "weight": 2, "text": ["{agent} of {settlement} was buried with {knowledge} still in {pron2} hands. Nobody had asked. It is gone.", "The earth took {agent} of {settlement}, and {knowledge} with {pron}. Write things down."]},
+    {"id": "fall", "kind": "fall", "weight": 3, "text": ["{settlement} is a name on a stone now ({cause}).", "The roofs of {settlement} fell in and the {people} did not come back to mend them ({cause})."]},
+    {"id": "plague", "kind": "plague", "weight": 2, "text": ["{disease} came to {settlement} like a guest who would not leave.", "In {settlement} they began to dig graves before the dying had stopped breathing: {disease}."]},
+    {"id": "world.abandoned", "kind": "world", "weight": 3, "text": ["{planet} keeps its rivers and its weather and nobody to see them. The people are gone."]},
+    {"id": "space.launch.first", "kind": "orbit", "weight": 3, "text": ["The {ship} {name} of {settlement} climbed on a column of fire until it was a star among stars: the first of {home} to leave it.", "For the first time, the ground of {home} let one of its children go: the {ship} {name}, {count} aboard."]},
+    {"id": "space.contact.first", "kind": "contact", "weight": 3, "text": ["The {people} of {settlement} had thought they were alone under the sky. Then {others} came down from it, out of {home}.", "Two worlds that had watched each other as lights met at {settlement}: the {people}, and {others} from {home}."]},
+    {"id": "space.lost.transfer", "kind": "disaster", "weight": 3, "text": ["Somewhere between {home} and {planet} the {ship} {name} went quiet ({cause}). The dark keeps {count} of the {people} of {settlement}."]},
+    {"id": "space.worship", "kind": "god", "weight": 3, "text": ["The {people} of {settlement} knelt in the scorched ring where the visitors' ship had stood, and called them {god}."]},
+    {"id": "discovery.accident.contact", "kind": "discovery", "weight": 2, "text": ["Strangers came, and left something behind besides their footprints: {agent} of {settlement} learned {knowledge} from them."]},
+    {"id": "discovery.accident.war", "kind": "discovery", "weight": 2, "text": ["The war taught {settlement} what peace never had: {agent} learned {knowledge} among the dead."]},
+    {"id": "space.observe", "kind": "discovery", "weight": 1, "text": ["Through polished glass the {people} of {settlement} saw {planet} clearly for the first time: {desc}. They were less alone than they had thought."]}
+  ]
+}

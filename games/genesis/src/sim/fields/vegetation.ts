@@ -174,6 +174,7 @@ export function vegetationStep(u: Universe, p: Planet, hours = 1): void {
   const H = hours > 1 ? Math.round(hours) : 1, H1 = H === 1;
   const growK = H1 ? p.cfg.vegGrowth / 24 : (p.cfg.vegGrowth / 24) * H;
   const pBank = H1 ? 0.04 : perHours(0.04, H), pSucc = H1 ? 0.03 : perHours(0.03, H), keepLifeless = H1 ? 0.9 : Math.pow(0.9, H);
+  const capK = H1 ? 0.05 : perHours(0.05, H), ashK = H1 ? 0.04 : perHours(0.04, H);
   const vegGrowth = p.cfg.vegGrowth;
   const hour = Math.floor(u.tick / 60);
   const covers = [f.grass, f.shrub, f.tree, f.crop];
@@ -225,9 +226,18 @@ export function vegetationStep(u: Universe, p: Planet, hours = 1): void {
         else if (ti === 1) cap = 1 - 0.45 * treeA[c];
         if (cap < 0.05) cap = 0.05;
         let dx = 0;
-        if (!dormant) dx += growth[sp] * growK * suit * season * x * (1 - x / cap);
+        if (!dormant) {
+          if (H1) dx += growth[sp] * growK * suit * season * x * (1 - x / cap);
+          else {
+            // (time-lapse, push 3 round 2: the logistic growth over the pass's hours, solved exactly — one Euler step
+            // of 8-24 hours under-grew a spreading cover by up to a third, e^r − 1 against r; unwatched worlds' plants
+            // fell behind 1x by 2-9 % in 12 days)
+            const E = Math.exp(-growth[sp] * growK * suit * season);
+            dx += (cap * x) / (x + (cap - x) * E) - x;
+          }
+        }
         if (suit < 0.25) {
-          dx -= (0.25 - suit) * 0.12 / 24 * 4 * x * H;
+          dx -= H1 ? (0.25 - suit) * 0.12 / 24 * 4 * x * H : perHours((0.25 - suit) * 0.02, H) * x;
           // the seed bank: where the climate has moved away from this species, one that suits it better comes up in
           // its place (succession only from neighbours left whole regions dying with nothing to replace them)
           if (ti !== 3 && (hashI(c, hour, ti, 0x5eeb) >>> 0) < pBank * TWO32) {
@@ -241,8 +251,9 @@ export function vegetationStep(u: Universe, p: Planet, hours = 1): void {
             if (bs >= 0) spf[c] = bs;
           }
         }
-        if (x > cap) dx -= (x - cap) * 0.05 * H;
-        if (ash[c] > 0.08 && ti !== 2) dx -= 0.04 * x * H;
+        // (time-lapse: the hourly relaxations compounded — 0.05 × 24 hours overshot the cap)
+        if (x > cap) dx -= H1 ? (x - cap) * 0.05 * H : (x - cap) * capK;
+        if (ash[c] > 0.08 && ti !== 2) dx -= H1 ? 0.04 * x * H : ashK * x;
         x += dx;
         if (x < 0.003) { x = 0; }
         if (x > 1) x = 1;
@@ -262,9 +273,17 @@ export function vegetationStep(u: Universe, p: Planet, hours = 1): void {
           const suit = ENV[E_OUT];
           const chance = spread[so] * bc * suit * 0.35 * vegGrowth;
           if (suit > 0.08 && (hashI(c, hour, ti, 0x5eed) >>> 0) < (H1 ? chance : perHours(Math.min(1, chance), H)) * TWO32) {
-            cov[c] = 0.03;
-            spf[c] = so;
             x = 0.03;
+            // (time-lapse, push 3 round 2: a seedling of a multi-hour pass took root on average halfway through it and
+            // has grown since — at 1x it grows from the next hour; seeded at the pass's end, a spreading front lagged)
+            if (!H1 && !(deciduous[so] && temperature[c] < 3)) {
+              let cap = ti === 0 ? 1 - 0.55 * treeA[c] - 0.2 * shrubA[c] : ti === 1 ? 1 - 0.45 * treeA[c] : 1;
+              if (cap < 0.05) cap = 0.05;
+              const E = Math.exp(-0.5 * growth[so] * growK * suit * season);
+              x = (cap * x) / (x + (cap - x) * E);
+            }
+            cov[c] = x;
+            spf[c] = so;
           }
         }
         if (x === 0) spf[c] = -1;

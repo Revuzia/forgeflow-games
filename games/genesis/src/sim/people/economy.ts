@@ -145,10 +145,11 @@ export interface TradePlan {
 }
 
 /** what a trip from `a` to `b` would carry each way (barter: the smaller side sets the value) */
-export function tradePlan(x: PCtx, a: Settlement, b: Settlement, capacity: number): TradePlan {
+export function tradePlan(x: PCtx, a: Settlement, b: Settlement, capacity: number, own?: { pa: Float64Array; da: Float64Array }): TradePlan {
   const n = x.c.items.size;
-  const pa = pricesOf(x, a), pb = pricesOf(x, b);
-  const da = demandOf(x, a), db = demandOf(x, b);
+  // (`own`: a's prices and demand, computed once by planTrade for all its partners — SIM perf push 3; the same values)
+  const pa = own ? own.pa : pricesOf(x, a), pb = pricesOf(x, b);
+  const da = own ? own.da : demandOf(x, a), db = demandOf(x, b);
   const Pa = Math.max(1, popOf(x, a)), Pb = Math.max(1, popOf(x, b));
   const spareA = foodDays(x, a) - Pa * 8, spareB = foodDays(x, b) - Pb * 8;
   const lackA = Math.max(0, -spareA), lackB = Math.max(0, -spareB);
@@ -240,6 +241,7 @@ export function planTrade(x: PCtx, st: Settlement): Mission | null {
   const traders = Math.min(4, Math.max(1, Math.floor(members.length / 12)) + (hasMarket(x, st) ? 1 : 0));
   const cap = carry(x, st) * traders;
   let best: Settlement | null = null, bv = 1.2, bp: TradePlan | null = null;
+  let own: { pa: Float64Array; da: Float64Array } | undefined;
   for (const id of st.contacts) {
     const o = x.ps.settlement(id);
     if (!o || o.fallen >= 0 || o.band || o.id === st.id) continue;
@@ -249,7 +251,8 @@ export function planTrade(x: PCtx, st: Settlement): Mission | null {
     // a caravan walks ~15 m an hour: beyond a few days' walk (or sail) it is not worth the road
     const d = distM(x.p, st.pos, o.pos);
     if (d > 4500) continue;
-    const plan = tradePlan(x, st, o, cap);
+    if (!own) own = { pa: pricesOf(x, st), da: demandOf(x, st) };
+    const plan = tradePlan(x, st, o, cap, own);
     // the way there costs: far trips need more to be worth it; a market at the other end draws trade
     const v = plan.value / (1 + d / 700) * (hasMarket(x, o) ? 1.4 : 1) * (rel?.treaties.includes('trade-pact') ? 1.3 : 1);
     if (v > bv) { bv = v; best = o; bp = plan; }

@@ -197,8 +197,10 @@ void main() {
     // a broad sheet (the outline comes from the density noise in the fragment shader, not from the quad); its aspect
     // goes to the fragment shader so the turbulence keeps its proportions (stretched noise drew streaky curtains)
     float hgt = 1.25 * mix(1.0, tall, 0.8);
-    vGlow = vec3(hgt / 0.85, face, 0.0);
-    mv.xy += rt * corner.x * sz * 0.85 + ax * (corner.y + 0.6) * sz * hgt;
+    // (widths differ per tongue: sheets of one width stacked side by side squared a fire off into a lit panel)
+    float wj = 0.85 * (0.7 + 0.5 * h1(seed, 7.0));
+    vGlow = vec3(hgt / wj, face, 0.0);
+    mv.xy += rt * corner.x * sz * wj + ax * (corner.y + 0.6) * sz * hgt;
   } else if (vKind > 2.5) {
     // embers: a short streak along the flight on screen
     vec2 dir = vGlow.xy;
@@ -262,23 +264,35 @@ void main() {
     float w2 = snoise(q * 2.3 + vec3(5.2, -tt * 0.7, 1.3));
     float w3 = snoise(q * 5.1 + vec3(1.7, -tt * 1.6, 7.9));
     // domain-warped sideways (the sheet writhes), more toward the top
-    float x = vCorner.x + (w1 * 0.3 + w2 * 0.12) * (0.2 + y);
+    // the finer octaves fade once their features shrink under ~3 pixels (thresholded sub-pixel noise drew every
+    // distant tongue as fuzzy, speckled fur)
+    float dq = 1.6 * max(fwidth(vCorner.x), asp * fwidth(vCorner.y));
+    float k2 = 1.0 - smoothstep(0.2, 0.5, 2.3 * dq), k3 = 1.0 - smoothstep(0.2, 0.5, 5.1 * dq);
+    float x = vCorner.x + (w1 * 0.3 + w2 * 0.12 * k2) * (0.2 + y);
     // the flame field: a broad base narrowing upward, eaten by turbulence that grows with height — thresholded, so
     // the turbulence carves defined licking tongues and holes (a soft falloff read as a fuzzy cream column)
-    float n = w1 * 0.5 + w2 * 0.32 + w3 * 0.18;
-    float tongues = 1.0 - abs(snoise(vec3(x * 1.9 + sd, y * asp * 1.8 - tt * 0.8, sd * 0.3)));
-    float shape = (1.0 - abs(x) * mix(1.15, 1.9, y)) * (1.0 - pow(y, 1.3 + 0.8 * tongues)) * 1.3 + n * (0.18 + 0.5 * y) - 0.08;
+    float n = w1 * 0.5 + w2 * 0.32 * k2 + w3 * 0.18 * k3;
+    float tongues = 1.0 - abs(snoise(vec3(x * 2.2 + sd, y * asp * 1.5 - tt * 0.9, sd * 0.3)));
+    // a teardrop: full width only at the foot, the upper half split along the ridges of the tongue noise into two or
+    // three licks (a body solid to three quarters of its height made a fire's overlapping sheets one glowing haystack)
+    float halfW = mix(0.9, 0.3, y);
+    float body = min((1.0 - abs(x) / halfW) * 1.6, 1.0);
+    float shape = body * (1.0 - pow(y, 0.9 + 1.1 * tongues)) * 1.35 + n * (0.2 + 0.5 * y) - 0.12;
+    shape -= (1.0 - tongues) * smoothstep(0.25, 0.8, y) * 0.9;
     // a rounded, ragged foot (a flat full-width bottom edge read as a glowing box, above all in the canopy)
-    float dens = smoothstep(0.1, 0.3, shape) * smoothstep(0.0, 0.16, y + 0.1 * w2 - 0.3 * x * x);
+    // (an outline one pixel soft whatever the distance)
+    float aw = clamp(fwidth(shape), 0.02, 0.1);
+    float dens = smoothstep(0.2 - aw, 0.2 + aw, shape) * smoothstep(0.0, 0.16, y + 0.1 * w2 * k2 - 0.3 * x * x);
     // heat: the dense, low core is hottest; edges, tips and older gas cool through orange to a deep red
-    float heat = clamp(smoothstep(0.18, 0.8, shape) * (1.1 - vColor.x * 0.6), 0.0, 1.0);
+    float heat = clamp(smoothstep(0.18, 0.8, shape) * (1.1 - vColor.x * 0.6) * (1.0 - 0.45 * y), 0.0, 1.0);
     // a saturated orange body with a gold core, deep red rims — never white (sheets overlap; AgX takes bright
     // orange to cream, so the emission stays near a flame's own and lets the exposure do the rest)
-    vec3 c = heat > 0.6 ? mix(vec3(1.0, 0.3, 0.035), vec3(1.0, 0.56, 0.14), (heat - 0.6) / 0.4)
-                        : mix(vec3(0.42, 0.03, 0.0), vec3(1.0, 0.3, 0.035), heat / 0.6);
+    vec3 c = heat > 0.6 ? mix(vec3(1.0, 0.25, 0.028), vec3(1.0, 0.47, 0.1), (heat - 0.6) / 0.4)
+                        : mix(vec3(0.45, 0.025, 0.0), vec3(1.0, 0.25, 0.028), heat / 0.6);
     // display-referred: about the same on screen at night and by day (see FX_EXPOSURE)
     float ex = uHasExposure > 0.5 ? max(texture(tExposure, vec2(0.5)).r, 0.02) : 1.0;
-    float I = (0.06 + 0.55 * heat * heat) * vColor.y * pow(ex, -0.65) * 0.75;
+    // (by day, at exposure^-0.65, a fire's overlapping sheets summed past AgX's saturated range into cream haystacks)
+    float I = (0.06 + 0.55 * heat * heat) * vColor.y * pow(ex, -0.5) * 0.42;
     // seen from straight above a sheet turned to the camera is a flat stain of flame: dimmer, its light is the pool
     I *= mix(1.0, 0.3, vGlow.y);
     float a = vColor.a * dens * fade;

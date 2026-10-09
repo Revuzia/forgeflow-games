@@ -13,6 +13,7 @@ import type { Planet } from './planet.ts';
 import type { StarState } from './star.ts';
 import type { LapseState } from '../perf/lapse.ts';
 import { GodState } from '../god/state.ts';
+import { SpaceState } from '../space/state.ts';
 import { AU, bodyCenter, orbitOffsetAtYearFraction, seasonYearFraction, sunDirBody, sunLongitude, spinAt, type D3 } from './orbits.ts';
 
 export interface LoggedCommand {
@@ -84,6 +85,9 @@ export class Universe {
   settings: Settings = { maxAgents: 4000, restraint: false };
   /** the god layer: disasters, the hand, creatures, gods, laws, runtime content (god/state.ts; saved in the header) */
   god: GodState = new GodState();
+  /** worlds and space: ships, what each people has seen of the sky, firsts, relations across worlds, colonies
+   * (space/state.ts; saved in the header) */
+  space: SpaceState = new SpaceState();
   /** global change stamp: field versions are stamps so 'since' queries are one comparison */
   private stampCounter = 0;
 
@@ -210,7 +214,9 @@ export class Universe {
   /** append a chronicle entry dated with the planet's calendar (and emit a 'chronicle' event) */
   chronicleAdd(planet: Planet | null, kind: string, text: string, weight = 1, refs?: EntityRef[]): ChronicleEntry {
     const p = planet ?? this.planets[0];
-    const cal = p ? p.calendar(this.tick) : { year: 1, day: 1 };
+    // a moon keeps its world's years (its own month is no year: Selene's lines read "Year 15" among Gaia's "Year 3")
+    const host = p && p.st.orbit.parent >= 0 ? this.planet(p.st.orbit.parent) ?? p : p;
+    const cal = host ? host.calendar(this.tick) : { year: 1, day: 1 };
     // dated in the planet's own calendar: "Year 1. Air came to the world."
     const full = `Year ${cal.year}. ${text}`;
     const entry: ChronicleEntry = { tick: this.tick, planet: p ? p.id : -1, year: cal.year, day: cal.day, kind, text: full, weight };

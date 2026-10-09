@@ -73,7 +73,9 @@ function registryIds(u: Universe, name: string): string[] {
 }
 
 /** commands that are camera / client / system plumbing, not god acts (never charged, never witnessed) */
-const PLUMBING = new Set(['focus', 'hand.move', 'hand.pose', 'freeform', 'set', 'meta.restraint', 'meta.save', 'meta.load', 'time.speed', 'time.step', 'time.rewind', 'time.edit-past']);
+// ('time.scale' is the worker's logged speed level — perf/lapse.ts: a speed preset change is not a god act; SIM perf
+// push 3)
+const PLUMBING = new Set(['focus', 'hand.move', 'hand.pose', 'freeform', 'set', 'meta.restraint', 'meta.save', 'meta.load', 'time.speed', 'time.step', 'time.rewind', 'time.edit-past', 'time.scale']);
 
 /** install the registry hooks: restraint before, witnessing after (idempotent per registry) */
 export function installPowerHooks(reg: CommandRegistry): void {

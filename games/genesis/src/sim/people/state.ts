@@ -624,8 +624,19 @@ export class PeopleState {
 
   /** living slots in a cell, ascending agent id (canonical order) */
   agentsIn(cell: number, out: number[] = []): number[] {
-    const id = this.agents.id;
-    return this.buckets.list(cell, (s) => id[s], out);
+    // (SIM perf push 3: an insertion by id as the cell's list is walked — the same order as sorting it, without a
+    // comparator closure per call: talk and observe ask for crowded hearth cells many times a day)
+    const id = this.agents.id, B = this.buckets;
+    out.length = 0;
+    if (cell < 0 || cell >= B.head.length) return out;
+    for (let s = B.head[cell]; s >= 0; s = B.next[s]) {
+      const v = id[s];
+      let i = out.length;
+      out.push(s);
+      while (i > 0 && id[out[i - 1]] > v) { out[i] = out[i - 1]; i--; }
+      out[i] = s;
+    }
+    return out;
   }
 
   private bsCache = new Map<number, Building[]>();

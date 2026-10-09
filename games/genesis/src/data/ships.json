@@ -1,0 +1,25 @@
+{
+  "$comment": "Ship kinds (CONTRACT §12): how a people leaves its ground. A ship kind is a recipe chain, not an unlock: a settlement can start one only when EVERY id in `knowledge` is in its library, the `pad` building stands complete in its lands, and the `hull` item (made by its own crafters from that recipe's inputs) and the `fuel` are in its store. class: 'air' (flies over its own world), 'orbit' (goes up and stays: sees every world of the sky), 'interplanetary' (crosses to another world), 'gate' (folds space: no hull, the gate building is the ship). crew [min, max] people aboard; cargo units of goods; prep hours of fuelling and loading at the pad; orbitHours hours circling before the transfer; days [min, max] game days of a crossing (by distance; air: per 1000 km of the world's own size scale); altitude m (air cruise, orbit height above the ground); reliability: chance a flight goes well with a skilled crew in calm skies; returns: the ship can carry fuel to fly home again (trade voyages).",
+  "ships": [
+    { "id": "airship", "name": "Airship", "class": "air", "desc": "A gas bag over a steam engine: crosses seas and mountains of its own world.",
+      "hull": "airship", "pad": "airship-mast", "knowledge": ["airships", "steam-engine", "weaving", "rope-making"],
+      "fuel": [{ "item": "coal", "qty": 6 }], "crew": [3, 16], "cargo": 30, "prep": 4, "orbitHours": 0, "days": [0.2, 1.2], "altitude": 320,
+      "reliability": 0.96, "returns": true },
+    { "id": "orbiter", "name": "Orbiter", "class": "orbit", "desc": "A machine set circling the world: every world of the sky seen clearly.",
+      "hull": "orbiter", "pad": "launchpad", "knowledge": ["orbiters", "guidance-systems", "liquid-fuel-rocket", "radio", "astronomy"],
+      "fuel": [{ "item": "rocket-fuel", "qty": 8 }], "crew": [0, 3], "cargo": 0, "prep": 6, "orbitHours": 0, "days": [0, 0], "altitude": 1800,
+      "reliability": 0.93, "returns": false },
+    { "id": "rocket", "name": "Rocket", "class": "interplanetary", "desc": "A crewed rocket: up through the sky, around the world, and across to another.",
+      "hull": "orbital-rocket", "pad": "launchpad", "knowledge": ["orbital-rocket", "liquid-fuel-rocket", "guidance-systems", "precision-machining", "oil-refining", "chemistry", "astronomy", "navigation", "steel"],
+      "fuel": [{ "item": "rocket-fuel", "qty": 20 }], "crew": [3, 14], "cargo": 40, "prep": 8, "orbitHours": 2, "days": [2.5, 6], "altitude": 1500,
+      "reliability": 0.9, "returns": true },
+    { "id": "generation-ship", "name": "Generation ship", "class": "interplanetary", "desc": "A whole town in the sky: a people moves to another world, children born on the way.",
+      "hull": "generation-ship", "pad": "launchpad", "knowledge": ["generation-ship", "orbital-rocket", "medicine", "agriculture", "astronomy", "navigation"],
+      "fuel": [{ "item": "rocket-fuel", "qty": 60 }], "crew": [12, 120], "cargo": 400, "prep": 24, "orbitHours": 6, "days": [5, 12], "altitude": 2400,
+      "reliability": 0.93, "returns": false },
+    { "id": "gate", "name": "Gate crossing", "class": "gate", "desc": "Step through the ring and stand on another world.",
+      "hull": null, "pad": "star-gate", "knowledge": ["star-gates", "gate-theory", "dynamo", "orbital-rocket"],
+      "fuel": [{ "item": "battery", "qty": 6 }], "crew": [2, 40], "cargo": 60, "prep": 2, "orbitHours": 0, "days": [0.02, 0.04], "altitude": 0,
+      "reliability": 0.98, "returns": true }
+  ]
+}

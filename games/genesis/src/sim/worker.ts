@@ -240,13 +240,42 @@ function resetSent(): void {
   sentAt.clear();
 }
 
+// ───────────────────────────── mods (CONTRACT §9) ─────────────────────────────
+
+/**
+ * A mod pack: validated now (every problem listed in words). Before a world exists it joins the packs the next world
+ * is made from (send 'mod' before 'init'); while a world runs, a pack of only NEW things joins it in place (Sim.addPack:
+ * new ids appended, every index in use stays put), and a pack that changes existing things waits for the next world.
+ */
+function loadMod(id: number, pack: ContentPack): void {
+  try {
+    if (!pack || typeof pack !== 'object' || typeof pack.id !== 'string') throw new Error('A content pack needs an "id".');
+    // (a pack sent again keeps its place in the order: the order of packs is the order of every index they add)
+    const at = mods.findIndex((x) => x.id === pack.id);
+    const test = at >= 0 ? mods.map((x, i) => (i === at ? pack : x)) : [...mods, pack];
+    loadContent([BASE_PACK, ...test]); // throws a readable ContentError listing every problem
+    mods = test;
+  } catch (e) {
+    post({ type: 'result', id, result: { ok: false, msg: e instanceof Error ? e.message : String(e) } });
+    return;
+  }
+  if (!sim) {
+    post({ type: 'result', id, result: { ok: true, msg: `Mod '${pack.name ?? pack.id}' loaded: the world you create will have it.` } });
+    return;
+  }
+  const r = sim.addPack(pack);
+  // refused by the running world (it changes what the world has): not added — kept for the next world (deferred)
+  post({ type: 'result', id, result: r.ok ? r : { ok: false, deferred: true, msg: `${r.msg}`, tick: sim.tick } });
+}
+
 // ───────────────────────────── messages ─────────────────────────────
 
 function handle(m: ToWorker): void {
   switch (m.type) {
     case 'init': {
       const opts = m.options ?? {};
-      const packs = Array.isArray(opts.mods) ? (opts.mods as ContentPack[]) : [];
+      // packs named with 'init' replace the list; without them the world is made from the packs sent by 'mod' before it
+      const packs = Array.isArray(opts.mods) ? (opts.mods as ContentPack[]) : mods;
       mods = packs;
       sim = new Sim({ seed: m.seed >>> 0, scenario: m.scenario, content: mods, overrides: (opts.overrides as Record<string, unknown>) ?? undefined });
       if (typeof opts.speed === 'number') speed = Math.max(0, opts.speed);
@@ -264,6 +293,9 @@ function handle(m: ToWorker): void {
       return;
     case 'speed':
       setSpeed(m.speed);
+      return;
+    case 'mod':
+      loadMod(m.id, m.pack as ContentPack);
       return;
   }
   if (!sim) {
@@ -316,19 +348,6 @@ function handle(m: ToWorker): void {
     case 'query':
       post({ type: 'answer', id: m.id, data: sim.query(m.q, m.args ?? {}) });
       return;
-    case 'mod': {
-      // a mod pack: validate now; it takes effect for the next world (content indices must stay stable mid-game)
-      try {
-        const pack = m.pack as ContentPack;
-        const test = [...mods.filter((x) => x.id !== pack.id), pack];
-        loadContent([BASE_PACK, ...test]); // throws a readable ContentError listing every problem
-        mods = test;
-        post({ type: 'result', id: m.id, result: { ok: true, msg: `Mod '${pack.id}' loaded; it shapes the next world you create.` } });
-      } catch (e) {
-        post({ type: 'result', id: m.id, result: { ok: false, msg: e instanceof Error ? e.message : String(e) } });
-      }
-      return;
-    }
   }
 }
 

@@ -14,4 +14,9 @@ export const godHooks: {
   disciple: ((x: PCtx, s: number, st: Settlement | undefined, night: boolean) => TaskSpec | null) | null;
   /** is this agent in the god's hand or in flight (no decisions) */
   held: ((x: PCtx, s: number) => boolean) | null;
-} = { possessed: null, disciple: null, held: null };
+  /**
+   * additive (SIM phase 4, space/ships.ts): the task of an agent enlisted for a ship (mission id −ship id: building,
+   * fuelling or crewing it at the pad); null lets it live as usual this turn
+   */
+  crew: ((x: PCtx, s: number, st: Settlement | undefined) => TaskSpec | null) | null;
+} = { possessed: null, disciple: null, held: null, crew: null };

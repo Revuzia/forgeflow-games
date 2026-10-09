@@ -59,6 +59,11 @@ export interface CommandResult {
    * `rewind` / `edit` (the tick history was rewound / rewritten to). The sim has already done its part.
    */
   control?: Record<string, number>;
+  /**
+   * additive (SIM phase 4, worker 'mod'): the pack was not added to the running world (it changes what the world
+   * already has) but is kept for the next world made — `ok` is false, the UI says "queued for the next world"
+   */
+  deferred?: boolean;
 }
 
 // ─────────────────────────────── events ─────────────────────────────────
@@ -193,6 +198,11 @@ export interface PlanetParams {
    * Clients extrapolate `spin` with this rate (absent: one turn per dayHours, as older sims did).
    */
   spinRate?: number;
+  /**
+   * additive (SIM phase 4): a ring of rubble around the world (a cracked world, world.crack): inner and outer radius
+   * from the centre in metres, density 0..1 (absent: no ring)
+   */
+  ring?: { inner: number; outer: number; density: number };
 }
 
 /** Structure-of-arrays block of moving things (agents, animals). Positions are unit vectors on the planet. */
@@ -378,10 +388,15 @@ export interface WeatherView {
 
 export interface ShipView {
   id: number;
-  kind: string; // 'raft','boat','sailship','airship','rocket','orbiter','generation-ship','gate'
-  owner: number; // settlement id
+  /** ship kind id (ships.json): 'airship', 'orbiter', 'rocket', 'generation-ship', 'gate' (+ 'raft','boat','sailship') */
+  kind: string;
+  owner: number; // settlement id (on the ship's home world)
   species: number;
-  /** 'pad' | 'ascent' | 'orbit' | 'transfer' | 'descent' | 'landed' | 'sailing' | 'lost' */
+  /**
+   * 'pad' | 'ascent' | 'orbit' | 'transfer' | 'descent' | 'landed' | 'sailing' | 'lost'; additive (SIM phase 4):
+   * 'building' (its hull being made at the pad: progress = the work done), 'fuelling' (progress = loading),
+   * 'boarding' (the crew walking to the pad), 'stranded' (drifting between the worlds: its world was erased)
+   */
   phase: string;
   /** planet the ship is on / around (-1 = interplanetary) */
   planet: number;

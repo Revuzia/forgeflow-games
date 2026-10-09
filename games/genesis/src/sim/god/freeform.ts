@@ -286,7 +286,7 @@ interface Mods {
   by?: number;
 }
 
-interface Live { name: string; kind: 'settlement' | 'planet' | 'creature' | 'god' | 'agent'; id: number; planet: number; pos?: V3 }
+interface Live { name: string; kind: 'settlement' | 'planet' | 'creature' | 'god' | 'agent' | 'ship'; id: number; planet: number; pos?: V3 }
 
 /** may a name stand for a live thing in this sentence? (an ordinary word only when capitalised mid-sentence) */
 function nameUsable(name: string, raw: string, reserved: Set<string>): boolean {
@@ -314,6 +314,8 @@ function liveNames(u: Universe, raw: string): Live[] {
   }
   for (const c of u.god.creatures) if (c.alive) push({ name: c.name.toLowerCase(), kind: 'creature', id: c.id, planet: c.planet, pos: [...c.pos] as V3 });
   for (const g of u.god.gods) if (g.alive && g.kind === 'rival') push({ name: g.name.toLowerCase(), kind: 'god', id: g.id, planet: g.home.planet });
+  // ships by name (every ship not yet finished: building, flying, landed)
+  for (const sh of u.space.ships) if (sh.phase !== 'done' && sh.name) push({ name: sh.name.toLowerCase(), kind: 'ship', id: sh.id, planet: sh.home });
   // the people, by name (a cheap index: every living person's name and first name)
   for (const p of u.planets) {
     if (!p.alive || !p.people || !p.people.agents.count) continue;
@@ -589,6 +591,8 @@ interface PCtx2 {
   note?: string;
   /** the commands such an answer is about (the preview shows which power it would be: "Possess — whom?") */
   asked: Command[];
+  /** the command kind a keyword's question was about (see Clause.ask) */
+  noteAbout?: string;
   /** this clause is one of several (a clause that only names the creature is then spoken to it) */
   multi: boolean;
   /** a question was answered from the world (the reply is the answer: nothing to do, nothing refused) */
@@ -738,6 +742,7 @@ function parseText(u: Universe, reg: CommandRegistry, raw: string, depth = 0): P
   cx.multi = lifted.length > 1;
   for (const c of lifted) {
     cx.note = undefined;
+    cx.noteAbout = undefined;
     const got = resolveClause(cx, c.core, c.mods, c.text);
     if (got.length) cmds.push(...got);
     else if (cx.note) notes.push(cx.note);
@@ -881,8 +886,11 @@ interface Clause {
   full: string;
   out: Command[];
   add(cmd: Command, label?: string): void;
-  /** understood, but it needs a word more (or cannot be done): say so */
-  ask(msg: string): boolean;
+  /**
+   * understood, but it needs a word more (or cannot be done): say so. `about`: the command a keyword's question is about
+   * (a whole-phrase match of another power then wins over it: "salt wind" is a disaster, not the wind)
+   */
+  ask(msg: string, about?: string): boolean;
 }
 
 /** the camera focus on the acting world */
@@ -907,7 +915,7 @@ function resolveClause(cx: PCtx2, core: string, mods: Mods, full: string): Comma
       out.push(cmd);
       cx.why.push(`→ ${describe(cx, cmd, label ?? powerName(cx.u.content, cmd))}${placeLabel(mods)}`);
     },
-    ask: (msg) => { cx.note = msg; return true; },
+    ask: (msg, about) => { cx.note = msg; cx.noteAbout = about; return true; },
   };
   // a clause that only names the creature ("well done, creature"): spoken to it, nothing to do of its own
   if (cx.multi && isVocative(cx, core)) return out;
@@ -2503,7 +2511,120 @@ function intentLaw(c: Clause): boolean {
   return false;
 }
 
+// ───────────────────────────── ships between the worlds ─────────────────────────────
+
+const VESSEL = /\b(ships?|rockets?|airships?|orbiters?|generation ships?|spaceships?|spacecraft|space ships?|vessels?|starships?|gate crossing)\b/;
+
+/** the planets named in a clause in the order written (the raw clause: a name the place-lifting took out counts too) */
+function planetsIn(c: Clause): (Live & { at: number })[] {
+  return allLive(c.full, c.cx.live, ['planet']);
+}
+
+/**
+ * Ships by their verbs: "launch a rocket to Rust", "send a ship to Rust", "send the plains folk to the stars" (from the
+ * town named or the most advanced people, TO the world named), "call the ship back", "turn Ukugur back", "destroy the
+ * rocket", "strike Ukugur from the sky" (a ship by name, else the one flying: the command picks it).
+ */
+function intentShip(c: Clause): boolean {
+  const { cx, full, mods } = c;
+  const named = findLive(full, cx.live, ['ship']);
+  const vessel = VESSEL.test(full);
+  const stars = /\bto the stars\b|\binto space\b|\bspace program\b/.test(full);
+  if (!named && !vessel && !stars) return false;
+  // (a boat on the sea is a ship too: "send ships to Aru" with no world named and no word of space is the peoples' own)
+  const worlds = planetsIn(c);
+  const spacey = !!named || stars || worlds.length > 0 || /\b(rockets?|orbiters?|generation ships?|spaceships?|spacecraft|space ships?|starships?|airships?)\b/.test(full);
+  const flying = cx.u.space.ships.some((sh) => sh.phase !== 'done');
+  if (!spacey && !flying) return false;
+  const ref = named ? { ship: named.id } : {};
+  const who = named ? named.name.replace(/\b\w/g, (m) => m.toUpperCase()) : 'the ship';
+  if (/\b(call|turn|bring|order|summon|send)\b.*\b(back|home|around|about)\b|\b(recall|abort|cancel|forbid|ground)\b|\bstop\b.*\b(launch|ship|rocket|building)\b/.test(full)) {
+    c.add({ k: 'ship.cancel', ...ref }, `call ${who} back`);
+    return true;
+  }
+  if (/\b(destroy|strike|smash|shoot|blast|wreck|smite|explode|blow up|bring down|knock down|down the)\b/.test(full)) {
+    c.add({ k: 'ship.destroy', ...ref }, `strike ${who} from the sky`);
+    return true;
+  }
+  if (!spacey || (!/\b(launch|send|fly|build|make|go|sail|set out|leave|take)\b/.test(full) && !stars)) return false;
+  if (!vessel && !stars) return false;
+  // to the world named after to / for / toward (or the only world named that is not where they start)
+  const toM = full.match(/\b(?:to|for|toward|towards|onto|at|reach)\s+(?:the\s+)?(?:world\s+|planet\s+|moon\s+)?(.+)$/);
+  let to = toM ? worlds.find((w) => wordAt(toM[1], w.name) === 0) : undefined;
+  const fromM = full.match(/\bfrom\s+(?:the\s+)?(?:world\s+|planet\s+)?(.+?)(?:\s+(?:to|for|toward|towards)\b|$)/);
+  const from = fromM ? worlds.find((w) => wordAt(fromM[1], w.name) === 0) : undefined;
+  if (!to && worlds.length === 1 && worlds[0] !== from) to = worlds[0];
+  const kind = /\bairships?\b/.test(full) ? 'airship' : /\borbiters?\b/.test(full) ? 'orbiter' : /\bgeneration ships?\b/.test(full) ? 'generation-ship' : /\bgate\b/.test(full) ? 'gate' : /\brockets?\b/.test(full) ? 'rocket' : undefined;
+  const cmd: Command = { k: 'ship.launch', ...(kind ? { kind } : {}), ...(to ? { to: to.id } : {}), ...(from ? { planet: from.id } : {}) };
+  // the place-lifting read "to Rust" as where to act: the world the ship goes TO is not the world it leaves
+  if (mods.place && !mods.place.settlement && to && mods.place.planet === to.id) mods.place = null;
+  if (mods.place?.settlement !== undefined) { cmd.settlement = mods.place.settlement; if (mods.place.planet !== undefined) cmd.planet = mods.place.planet; }
+  for (const w of ['colony', 'colonise', 'colonize', 'settle', 'trade', 'exodus', 'refuge', 'flee', 'explore', 'look']) if (wordAt(full, w) >= 0) {
+    cmd.purpose = w === 'colonise' || w === 'colonize' || w === 'settle' ? 'colony' : w === 'flee' ? 'refuge' : w === 'explore' || w === 'look' ? 'curiosity' : w;
+    break;
+  }
+  const toName = to ? cx.u.planet(to.id)?.name : undefined;
+  mods.qty = undefined; mods.one = undefined;
+  c.add(cmd, `send them to the stars${kind ? ` · ${kind}` : ''}${toName ? ` · to ${toName}` : ''}`);
+  return true;
+}
+
 // ───────────────────────────── worlds ─────────────────────────────
+
+/**
+ * A world named in the clause and a verb for worlds: "crack Rust", "erase Rust", "unmake Verd", "destroy the world
+ * Rust", "move Rust to 2 au", "give Rust a moon", "drop the moon on Gaia", "seed deer across Rust", "populate Rust with
+ * plains folk" — and the birth of a world by name ("create a planet called Eden"). The world's name binds the
+ * command's `world`, and the preview names it.
+ */
+function intentWorldNamed(c: Clause): boolean {
+  const { cx, full, mods } = c;
+  const { u } = cx;
+  // a new world by name: "create a planet called Eden", "birth a world named Thule at 2 au"
+  const called = cx.raw.match(/\b(?:called|named)\s+([A-Za-z][\w'-]*(?:\s+[A-Z][\w'-]*)*)/);
+  if (called && /\b(world|planet)\b/.test(full) && /\b(make|create|birth|form|forge|build|add|spawn|conjure|summon|bring forth|new|another)\b/.test(full)) {
+    const k = findNoun(u.content, cx.p, full, ['planetkind']);
+    const au = full.match(/(\d+(?:\.\d+)?)\s*au\b/);
+    mods.qty = undefined; mods.one = undefined;
+    c.add({ k: 'world.birth', name: called[1].trim(), kind: k?.id ?? 'terran', ...(au ? { distance: parseFloat(au[1]) } : {}) }, `birth a world · ${called[1].trim()}`);
+    return true;
+  }
+  const ws = planetsIn(c);
+  if (!ws.length) return false;
+  const w = ws[0];
+  const name = u.planet(w.id)?.name ?? w.name;
+  const isMoon = (u.planet(w.id)?.st.orbit.parent ?? -1) >= 0;
+  const bind = (cmd: Command, label: string) => {
+    // the world named is the one acted on (not the place to act from)
+    if (mods.place && !mods.place.settlement && mods.place.planet === w.id) mods.place = null;
+    mods.qty = undefined; mods.one = undefined;
+    c.add(cmd, `${label} · ${name}`);
+    return true;
+  };
+  // the verb must take the world itself as its object ("destroy the crops on Rust" is not the end of Rust)
+  const nm = esc(w.name);
+  const of = (verbs: string) => new RegExp(`\\b(?:${verbs})\\s+(?:the\\s+)?(?:(?:whole\\s+)?(?:world|planet|moon)\\s+(?:of\\s+)?)?${nm}\\b|\\b${nm}\\s+(?:must\\s+|shall\\s+|should\\s+)?(?:be\\s+|is\\s+)?(?:${verbs})(?:ed|d|n)?\\b`).test(full);
+  if (of('erase|unmake|annihilate|obliterate|delete|destroy|uncreate|wipe out|end')) return bind({ k: 'world.erase', world: w.id }, 'erase the world');
+  if (of('crack|shatter|split|break|sunder')) return bind({ k: 'world.crack', world: w.id }, 'crack the world');
+  if (/\bmoon\b/.test(full) && /\b(drop|crash|fall|falls|falling|smash|hurl)\b/.test(full)) return bind({ k: 'world.moon-fall', world: w.id }, 'drop the moon');
+  if (/\b(moon|moons|satellite)\b/.test(full) && /\b(add|give|new|another|create|make|second)\b/.test(full) && !isMoon) return bind({ k: 'world.moon-add', world: w.id }, 'a new moon');
+  if (/\b(seed|populate|colonise|colonize)\b/.test(full)) {
+    const sp = findNoun(u.content, cx.p, full, ['species', 'animal', 'plant']);
+    if (!sp) { cx.asked.push({ k: 'world.seed-species', world: w.id }); return c.ask(`Seed ${name} with what? ("seed deer across ${name}", "populate ${name} with plains folk").`); }
+    const n = mods.qty;
+    mods.qty = undefined; mods.one = undefined;
+    if (mods.place && !mods.place.settlement && mods.place.planet === w.id) mods.place = null;
+    c.add({ k: 'world.seed-species', world: w.id, species: sp.id, ...(n !== undefined ? { count: Math.max(1, Math.min(50, Math.round(n))) } : {}) }, `seed ${sp.id} across ${name}`);
+    return true;
+  }
+  const au = full.match(/(\d+(?:\.\d+)?)\s*au\b/);
+  if (/\b(move|push|pull|shift|drag|carry)\b/.test(full) && (au || /\b(closer|nearer|farther|further|away|out|in)\b/.test(full))) {
+    const cur = (u.planet(w.id)?.st.orbit.a ?? AU) / AU;
+    const d = au ? parseFloat(au[1]) : /\b(closer|nearer|in)\b/.test(full) ? cur * 0.8 : cur * 1.25;
+    return bind({ k: 'world.move', world: w.id, distance: Math.round(d * 1000) / 1000 }, 'move the world');
+  }
+  return false;
+}
 
 function intentWorld(c: Clause): boolean {
   const { s, cx, mods, full } = c;
@@ -2513,6 +2634,8 @@ function intentWorld(c: Clause): boolean {
   if (birth && !/\b(moon|sun|star)\b/.test(s)) {
     const k = findNoun(u.content, p, s, ['planetkind']);
     const au = full.match(/(\d+(?:\.\d+)?)\s*au\b/);
+    // ("a world" is one world, not a people of one)
+    c.mods.qty = undefined; c.mods.one = undefined;
     c.add({ k: 'world.birth', kind: k?.id ?? 'terran', ...(au ? { distance: parseFloat(au[1]) } : {}) }, 'birth a world');
     return true;
   }
@@ -2570,7 +2693,7 @@ function intentSky(c: Clause): boolean {
     const dirM = s.match(/\bfrom (?:the )?(north|south|east|west|northeast|north-east|northwest|north-west|southeast|south-east|southwest|south-west)\b/) ?? s.match(/\b(north|south|east|west|northeast|northwest|southeast|southwest)(?:erly| wind)\b/);
     const toM = s.match(/\b(?:to|toward|towards) (?:the )?(north|south|east|west|northeast|northwest|southeast|southwest)\b/);
     const from = dirM ? BEARINGS[dirM[1]] : toM ? (BEARINGS[toM[1]] + 180) % 360 : null;
-    if (from === null) return c.ask('Blow from where? ("make the wind blow from the east", "a gale from the north").');
+    if (from === null) return c.ask('Blow from where? ("make the wind blow from the east", "a gale from the north").', 'weather.wind');
     const strength = /\bgale|storm|hurricane|fierce|howling|strong\b/.test(s) ? 22 : /\bbreeze|gentle|light|soft\b/.test(s) ? 5 : 12;
     const local = !!mods.place && !mods.place.everywhere && !mods.place.here;
     c.add({ k: 'weather.wind', from, strength: Math.round(strength * (mods.intensity ?? 1)), ...(local ? { everywhere: false, radius: 1500 } : { everywhere: true }), ...(mods.duration !== undefined ? { duration: mods.duration } : {}) }, `wind from the ${Object.keys(BEARINGS).find((k) => BEARINGS[k] === from && !k.includes('-')) ?? `${from}°`}`);
@@ -2980,7 +3103,7 @@ function intentFound(c: Clause): boolean {
 }
 
 const INTENTS: ((c: Clause) => boolean)[] = [
-  intentAsk, intentControl, intentSet, intentLetGo, intentForbid, intentWithdraw, intentExtinguish, intentLight, intentParadise, intentTime, intentDisaster, intentPlanetLaws, intentAir, intentSea,
+  intentAsk, intentControl, intentShip, intentWorldNamed, intentSet, intentLetGo, intentForbid, intentWithdraw, intentExtinguish, intentLight, intentParadise, intentTime, intentDisaster, intentPlanetLaws, intentAir, intentSea,
   intentLand, intentPeaceWar, intentPerson, intentSpeciesLaw, intentPlain, intentFound, intentSettlement, intentSomeone, intentPossession, intentCreature, intentHand, intentRival, intentLaw,
   intentWorld, intentSky, intentIdeas, intentMiracle, intentDeath, intentLawNumber, intentNoun, intentPowers, intentInvent,
 ];
@@ -3053,8 +3176,10 @@ function synonymOverride(c: Clause): Command[] {
   fillFromClause(c.cx, pw, cmd, byFull ? c.full : c.s, c.mods);
   fillTargets(c, cmd);
   // understood, and answered with a reason it cannot be done ("a war needs two peoples"): that answer stands, and the
-  // preview names the power it is about
-  if (!c.out.length && c.cx.note) { c.cx.asked.push(cmd); return c.out; }
+  // preview names the power it is about — unless the question was a keyword's inside a longer name that IS another
+  // power ("salt wind" is a disaster a pack brought, not the wind asking where to blow from)
+  const weak = c.cx.noteAbout !== undefined && c.cx.noteAbout !== pw.command;
+  if (!c.out.length && c.cx.note && !weak) { c.cx.asked.push(cmd); return c.out; }
   // replace what the clause made with the power's own command (its defaults, the clause's place and modifiers)
   const n = c.out.length;
   c.out.length = 0;

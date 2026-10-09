@@ -25,10 +25,21 @@
 // => same hash. A dead world the camera is not on (no air, water, life, weather, lava, fire: perf/lapse.ts dormant)
 // runs its climate and vegetation every 6 hours at any level. Measured against 1x (round 2, tests/perf-fidelity):
 // temperatures, envelopes, soils, wetlands and the sea's recovery match; a downpour carves ~15 % more at 100x / 1000x.
+//
+// SIM perf push 3: (1) the PEOPLES' time-lapse (perf/plapse.ts): at levels 1 / 2 a task of the day's work stands for up
+// to 2 / 4 sessions back to back (as many as needs and daylight leave; effects at the sessions' own ticks), walks run
+// in legs ×2 / ×4, water at hand and food in the hand are taken in passing, the settlement step runs every 2 / 4 hours
+// integrating the hours, decisions read buildings through a per-settlement cache (state read live) — ~3x fewer turns at
+// 1000x. (2) WORLDS THE CAMERA IS NOT ON (perf/lapse.ts planetLevel 3, while time-lapse is on): climate 12 h,
+// vegetation 24 h, weather / rain 60 ticks, hydrology 16 (calm sea), sheets 48, sand 60, terrain (lava, talus, ash)
+// 30 below, biomes 2 days, settlement step 6 h — a time-lapse approximation of what nobody watches, deterministic
+// (the focus is logged). Keyframes every 11 520 ticks at 1000x. Level 0 unchanged (same hashes). Fidelity at 1000x
+// vs 1x over two game years, 6 seeds (_harness/scratch/perf3/curves.ts): population, food in store, ideas,
+// discoveries, buildings, births deviate −0.6 … +3.2 % on their run means (a once-perturbed 1x twin: −1.2 … +2.5 %).
 
 import type { Command, CommandResult, FieldName, PlanetSnap, SimEvent, Snapshot } from './types.ts';
 import { BASE_PACK } from '../data/index.ts';
-import { loadContent, type Content, type ContentPack } from './content.ts';
+import { loadContent, RUNTIME_PACK, type Content, type ContentPack } from './content.ts';
 import { Universe } from './world/universe.ts';
 import { buildScenario } from './world/scenarios.ts';
 import { PUBLISHED_FIELDS, planetArrays, planetFromJson, planetToJson, type Planet, type PlanetJson } from './world/planet.ts';
@@ -55,11 +66,15 @@ import { meanAnomaly } from './world/orbits.ts';
 import { peopleStep } from './people/people.ts';
 import { agentBlock, animalBlock, buildingBlock, populationBySpecies, settlementViews } from './people/snapshot.ts';
 import { peopleQuery, PEOPLE_QUERIES } from './people/query.ts';
-import { KEYFRAME_MULT, LAPSE_BIOME, LAPSE_CLIMATE, LAPSE_HYDRO, LAPSE_VEG, LAPSE_WEATHER, lapseDue, lapseLevel, registerTimeScale } from './perf/lapse.ts';
+import { KEYFRAME_MULT, LAPSE_BIOME, LAPSE_CLIMATE, LAPSE_HYDRO, LAPSE_TERRAIN, LAPSE_VEG, LAPSE_WEATHER, lapseDue, lapseLevel, registerTimeScale } from './perf/lapse.ts';
 // the god layer (phase 3): its step, its snapshot parts, its save state, the time controls (god/index.ts)
 import { godTick, godSnapPlanet, godSnapGlobal, godRestore, godQuery, GOD_QUERIES, installSimControls, runControl, controlRequested } from './god/index.ts';
 import { validatePowers } from './god/powers.ts';
+import { rebuildContent } from './god/runtime.ts';
 import { ContentError } from './content.ts';
+// worlds and space (phase 4): ships, contact, colonies across worlds (space/index.ts)
+import { spaceTick, shipViews, spaceQuery, SPACE_QUERIES } from './space/index.ts';
+import { SpaceState, type SpaceJson } from './space/state.ts';
 
 export interface SimOptions {
   seed: number;
@@ -109,7 +124,8 @@ const KEYFRAME_BUDGET = 64e6;
 const KEYFRAME_ENCODE_PER_TICK = 2e6;
 
 export class Sim {
-  readonly content: Content;
+  /** the packs this world was made from (base + mods; a mod added while it runs is appended: addPack) */
+  content: Content;
   u: Universe;
   readonly registry: CommandRegistry;
   /** worker-side pacing info, reported in snapshots */
@@ -192,6 +208,7 @@ export class Sim {
     }
     for (const p of u.planets) if (p.alive) runPlanet(u, p, t);
     godTick(u, this.registry, t); // disasters, things in flight, creatures, rivals, natural disasters (god/index.ts)
+    spaceTick(u, t); // ships on their pads and between the worlds; peoples weighing the sky (space/index.ts)
     u.tick = t + 1;
     // (time-lapse spaces keyframes further apart at 1000x: perf/lapse.ts)
     if (u.tick % (this.keyframeEvery * KEYFRAME_MULT[lapseLevel(u)]) === 0) this.keyframe();
@@ -226,6 +243,54 @@ export class Sim {
 
   parse(text: string): CommandResult {
     return parseFreeform(this.u, this.registry, text);
+  }
+
+  /**
+   * A content pack added to a RUNNING world (the worker's 'mod' message after 'init'). Only new content is taken in
+   * place: new ids are appended, so every index already in use (items in stores, species of agents, plants in the
+   * fields, recipes in knowledge bits) stays where it is. A pack that would change what the world already has (an
+   * existing id) is refused here with the ids it touches — it can shape the next world instead. The pack becomes part
+   * of the world: saves list it, rewinds keep it.
+   */
+  addPack(pack: ContentPack): CommandResult {
+    if (!pack || typeof pack !== 'object' || typeof pack.id !== 'string' || !pack.id) return { ok: false, msg: 'A content pack needs an "id".' };
+    if (this.content.packs.includes(pack.id)) return { ok: true, msg: `Mod '${pack.id}' is already part of this world.` };
+    // (against the world's content: what the god invented counts as what the world has)
+    const clash = replacedIds(this.u.content, pack);
+    if (clash.length) {
+      return { ok: false, msg: `Mod '${pack.id}' changes what this world already has (${clash.slice(0, 6).join(', ')}${clash.length > 6 ? ', …' : ''}): a running world only takes new things. It will shape the next world you create.` };
+    }
+    let next: Content;
+    // what the god has made so far keeps its place: a frozen copy of the runtime pack goes in before the new pack, so
+    // the god's later inventions (the live runtime pack, always last) re-state those ids in place and append after it —
+    // invented items, recipes and weather kinds keep their indices
+    // (the world's content carries the live runtime pack; the sim's own list may not)
+    const live = this.u.content.sources.find((pk) => pk.id === RUNTIME_PACK);
+    const below = this.content.sources.filter((pk) => pk.id !== RUNTIME_PACK);
+    const frozen: ContentPack[] = live ? [{ ...JSON.parse(JSON.stringify(live)) as ContentPack, id: `${RUNTIME_PACK}@${this.u.tick}`, name: `Made by the god (before ${pack.name ?? pack.id})` }] : [];
+    try {
+      next = loadContent([...below, ...frozen, pack]);
+      // (the live runtime pack is laid on top again below: rebuildContent)
+      if (live) loadContent([...below, ...frozen, pack, live]);
+    } catch (e) {
+      return { ok: false, msg: e instanceof Error ? e.message : String(e) };
+    }
+    const bad = validatePowers(this.registry, next);
+    if (bad.length) return { ok: false, msg: `Mod '${pack.id}' is refused: ${bad.join('; ')}` };
+    this.content = next;
+    // the world's own content: these packs, with the god's inventions laid on top again (god/runtime.ts)
+    this.u.content = next;
+    rebuildContent(this.u);
+    for (const p of this.u.planets) {
+      if (!p.people) continue;
+      p.people.contentRef = this.u.content;
+      const kw = Math.ceil(this.u.content.recipes.size / 32);
+      if (p.people.agents.kw < kw) p.people.agents.growKnowledge(kw);
+    }
+    const added: string[] = [];
+    for (const [k, v] of Object.entries(pack)) if (Array.isArray(v) && v.length && !k.startsWith('$')) added.push(`${v.length} ${k}`);
+    this.u.chronicleAdd(null, 'god', `New things came into the world: ${pack.name ?? pack.id}.`, 1);
+    return { ok: true, msg: `Mod '${pack.name ?? pack.id}' is part of this world now (${added.join(', ') || 'words'}).`, tick: this.u.tick };
   }
 
   drainEvents(): SimEvent[] {
@@ -269,7 +334,7 @@ export class Sim {
     if (drain) this.chronicleSent = u.chronicle.length;
     return {
       tick: u.tick, speed: this.speed, achievedSpeed: this.achievedSpeed, star: starView(u.star), planets,
-      ships: [], ...godSnapGlobal(u), events, chronicle, content: this.content.packs, msPerTick: this.msPerTick,
+      ships: shipViews(u), ...godSnapGlobal(u), events, chronicle, content: this.content.packs, msPerTick: this.msPerTick,
       restraint: u.settings.restraint, worship: worshipPool(u),
     };
   }
@@ -284,10 +349,15 @@ export class Sim {
       seed: u.seed,
       tick: u.tick,
       content: this.content.packs,
+      // the packs by name and version, in order: a save that needs one this build lacks says which (Sim.load)
+      packs: this.content.sources.filter((pk) => pk.id !== RUNTIME_PACK).map((pk) => ({ id: pk.id, name: pk.name ?? pk.id, version: pk.version ?? '' })),
+      // the god's inventions frozen in place when a pack came in after them (addPack): their content travels with the save
+      frozen: this.content.sources.filter((pk) => pk.id.startsWith(`${RUNTIME_PACK}@`)),
       star: u.star,
       settings: u.settings,
       focus: u.focus,
       god: u.god.toJson(), // the god layer: disasters, hand, creatures, gods, laws, inventions (god/state.ts)
+      space: u.space.toJson(), // ships, the sky each people has seen, firsts, relations across worlds (space/state.ts)
       ids: u.ids.save(),
       rng: u.rng.save().map((x) => x >>> 0),
       chronicle: u.chronicle,
@@ -351,18 +421,46 @@ export class Sim {
     this.trimKeyframes();
   }
 
+  /**
+   * Open a save. Its packs are laid in the order the world was made with (an appended pack's items, species and
+   * recipes are indices into every store and every head: the same packs in another order would turn rubies into opals),
+   * whatever order they are given in; a pack it needs and is not given is named. A pack given that the save does not
+   * list is laid on top only if it adds nothing but new things; one that would change what the world has is refused.
+   */
   static load(bytes: Uint8Array, content?: ContentPack[]): Sim {
     const file = readSave(bytes);
-    const c = loadContent([BASE_PACK, ...(content ?? [])]);
-    const need = (file.header.content as string[] | undefined) ?? ['base'];
-    const missing = need.filter((x) => !c.packs.includes(x));
-    if (missing.length) throw new Error(`This save needs the content pack${missing.length > 1 ? 's' : ''} ${missing.map((m) => `'${m}'`).join(', ')}.`);
+    const given = (content ?? []).filter((pk) => pk && typeof pk === 'object' && pk.id !== 'base');
+    const frozen = ((file.header.frozen as ContentPack[] | undefined) ?? []).filter((pk) => pk && typeof pk.id === 'string');
+    const need = ((file.header.content as string[] | undefined) ?? ['base']).filter((id) => id !== 'base' && id !== RUNTIME_PACK);
+    const byId = (id: string) => frozen.find((pk) => pk.id === id) ?? given.find((pk) => pk.id === id);
+    const missing = need.filter((id) => !byId(id));
+    if (missing.length) {
+      const info = (file.header.packs as { id: string; name: string; version: string }[] | undefined) ?? [];
+      const words = missing.map((m) => { const i = info.find((q) => q.id === m); return i && i.name !== m ? `'${i.name}' (${m}${i.version ? ` ${i.version}` : ''})` : `'${m}'`; });
+      throw new Error(`This save needs the content pack${missing.length > 1 ? 's' : ''} ${words.join(', ')}, which ${missing.length > 1 ? 'are' : 'is'} not loaded. Load ${missing.length > 1 ? 'them' : 'it'} (mods/) before opening the save.`);
+    }
+    const ordered = need.map((id) => byId(id)!);
+    const c = loadContent([BASE_PACK, ...ordered]);
+    const extra = given.filter((pk) => !need.includes(pk.id));
+    const refused: string[] = [];
+    const added: ContentPack[] = [];
+    for (const pk of extra) {
+      const clash = replacedIds(c, pk);
+      if (clash.length) refused.push(`'${pk.name ?? pk.id}' (it changes ${clash.slice(0, 4).join(', ')}${clash.length > 4 ? ', …' : ''})`);
+      else added.push(pk);
+    }
+    if (refused.length) {
+      throw new Error(`This save was made without the pack${refused.length > 1 ? 's' : ''} ${refused.join(', ')}: opened with ${refused.length > 1 ? 'them' : 'it'}, the world would change under the save. Unload ${refused.length > 1 ? 'them' : 'it'} to open this save (or start a new world with ${refused.length > 1 ? 'them' : 'it'}).`);
+    }
     const u = universeFromHeader(c, file.header, file.blobs, true);
     const sim = new Sim({ seed: u.seed, scenario: u.scenario }, { universe: u, content: c });
     const q = file.header.queue;
     if (Array.isArray(q)) sim.queue = (q as Command[]).map((cmd) => JSON.parse(JSON.stringify(cmd)) as Command);
     const hist = readHistory(file.header.history, file.blobs);
     if (hist) sim.restoreHistory(hist);
+    // packs of new things the save did not have are laid on top the way a running world takes them (appended; the
+    // god's inventions frozen in place first)
+    for (const pk of added) sim.addPack(pk);
     return sim;
   }
 
@@ -547,8 +645,9 @@ export class Sim {
         return this.hash();
       default:
         if (GOD_QUERIES.includes(q)) return godQuery(u, q, args); // powers, gestures, gods, creatures, disasters (god/index.ts)
+        if (SPACE_QUERIES.includes(q)) return spaceQuery(u, q, args); // ships, a ship, the sky, the chain (space/index.ts)
         if (PEOPLE_QUERIES.includes(q)) return p ? peopleQuery(u, p, q, args) : null;
-        return { error: `unknown query '${q}'`, known: ['cell', 'planet', 'planets', 'params', 'commands', 'chronicle', 'scenario', 'weather', 'plants', 'biomes', 'stars', 'hash', ...PEOPLE_QUERIES] };
+        return { error: `unknown query '${q}'`, known: ['cell', 'planet', 'planets', 'params', 'commands', 'chronicle', 'scenario', 'weather', 'plants', 'biomes', 'stars', 'hash', ...PEOPLE_QUERIES, ...GOD_QUERIES, ...SPACE_QUERIES] };
     }
   }
 }
@@ -603,7 +702,10 @@ export function runPlanet(u: Universe, p: Planet, t: number): void {
     }
   }
   if (t % FIRE_CADENCE === 0) fireStep(u, p);
-  if ((ts + 5) % TERRAIN_CADENCE === 0) terrainStep(u, p);
+  // (SIM perf push 3: lava and talus every 30 ticks on a world the camera is not on at 100x / 1000x — perf/lapse.ts; the
+  // plain `(ts + 5) % TERRAIN_CADENCE === 0` otherwise)
+  const dtT = lapseDue(u, p, LAPSE_TERRAIN, ts, 5);
+  if (dtT) terrainStep(u, p, dtT);
   const dtV = lapseDue(u, p, LAPSE_VEG, ts, VEG_OFFSET);
   if (dtV) vegetationStep(u, p, dtV / VEG_CADENCE);
   if (ts % CHRONICLE_CADENCE === CHRONICLE_OFFSET) chronicleCheck(u, p);
@@ -634,6 +736,7 @@ function universeFromHeader(content: Content, h: Record<string, unknown>, blobs:
   u.settings = { ...(h.settings as Universe['settings']) };
   u.focus = (h.focus as Universe['focus']) ?? null;
   godRestore(u, h); // the god state, and the content its inventions made (before the planets: their people need it)
+  u.space = SpaceState.fromJson(h.space as SpaceJson | undefined); // (saves before phase 4 have none: an empty sky)
   u.ids = IdAllocator.load(h.ids as Record<string, number>);
   u.rng.load(h.rng as RngState);
   u.chronicle = ((h.chronicle as Universe['chronicle']) ?? []).map((e) => ({ ...e }));
@@ -723,4 +826,21 @@ function countFlags(a: Uint8Array): number {
   let n = 0;
   for (let i = 0; i < a.length; i++) if (a[i]) n++;
   return n;
+}
+
+/** ids a pack would REPLACE in this content (registry sections; a rule list counts as one) */
+export function replacedIds(c: Content, pack: ContentPack): string[] {
+  const regs: Record<string, { has(id: string): boolean }> = {
+    plants: c.plants, weather: c.weather, biomes: c.biomes, stars: c.stars, planetkinds: c.planetkinds, ores: c.ores, scenarios: c.scenarios,
+    species: c.species, items: c.items, recipes: c.recipes, buildings: c.buildings, materials: c.materials, animals: c.animals, diseases: c.diseases,
+    phonologies: c.phonologies, names: c.phonologies, events: c.events, powers: c.powers, disasters: c.disasters, creatures: c.creatures, ships: c.ships,
+  };
+  const out: string[] = [];
+  for (const [sec, reg] of Object.entries(regs)) {
+    const arr = (pack as Record<string, unknown>)[sec];
+    if (!Array.isArray(arr)) continue;
+    for (const e of arr) { const id = (e as { id?: unknown })?.id; if (typeof id === 'string' && reg.has(id)) out.push(`${sec} '${id}'`); }
+  }
+  if (Array.isArray(pack.biomeRules)) out.push('biomeRules');
+  return out;
 }

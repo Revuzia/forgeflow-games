@@ -29,7 +29,9 @@
 // soilHour runs them on the hours a coarse schedule skips (round 2: against the water standing at the instant of the
 // pass they missed the rain that runs off in between — soils dried, wetlands shrank by a quarter at 1000x). The other
 // hourly amounts (transpiration, freezing, snowfall) are scaled and hourly relaxations compounded. The humidity block
-// stays the hourly update (see columnKernel): it gives the right rain rate and cloud. Measured over 4 seeds × 3 days on
+// stays the hourly update (see columnKernel): it gives the right rain rate and cloud — and (push 3 round 2) the hours
+// before it in the pass are hourly updates of the air alone (humidityHours), so a dry world's air dries at the 1x
+// pace instead of H times slower. Measured over 4 seeds × 3 days on
 // the home world: mean temperature within 0.06 °C, humidity +1.5 %, cloud ±1.5 %, precipitation within the storms' own
 // seed-to-seed scatter (tests/perf-lapse.test.ts); dead moon, barren world, envelopes, soils and wetlands within the
 // tolerances of tests/perf-fidelity.test.ts.
@@ -401,6 +403,8 @@ export function climateStep(u: Universe, p: Planet, tick = u.tick, hours = 1): v
 
   // 2. upwind neighbours and neighbourhood humidity (semi-Lagrangian advection, from the previous hour's air)
   if (airy) advectPrep(N, g.nbrStart, g.nbr, p.geo.tx, p.geo.ty, p.geo.tz, f.windX, f.windY, f.windZ, f.humidity, sc.qn, sc.up1, s.tPot, sc.tn, f.water, f.salinity, sc.rip, s.ocean);
+  // (time-lapse, push 3 round 2: the air lives the pass's earlier hours too — humidityHours; the kernel's is the last)
+  if (airy && H > 1) humidityHours(u, p, sc, H - 1);
 
   // 3. per cell: energy balance -> temperature, light; humidity, precipitation, clouds; sky; surface water exchanges
   const nChanged = columnKernel(u, p, sc, sun, airy, greenhouse(p, qm), glob, H);
@@ -487,6 +491,118 @@ function advectPrep(
   }
 }
 
+/** per grid size: the pass-constant parts of the hourly humidity update (humidityHours) */
+interface HumScratch { upA: Int32Array; upB: Int32Array; k: Float32Array; Q: Float32Array; crit: Float32Array; conv: Uint8Array }
+const humByN = new Map<number, HumScratch>();
+/** longest step (hours) of the air's semi-Lagrangian walk in humidityHours */
+const HUM_STEP = 4;
+
+/**
+ * Time-lapse (SIM perf push 3, round 2): the `n` hours of a multi-hour climate pass before its last, for the air's
+ * humidity alone, in semi-Lagrangian steps of up to HUM_STEP hours, under the wind, the drifting disturbances and the
+ * temperatures at the start of the pass (the column kernel then runs the last hour as before: its rain rate and
+ * clouds). Each step takes the air from where it was g hours before — the kernel's hour-upwind walk followed g times,
+ * each hour under the wind where the air was; the neighbourhood blend there — and applies g hours of the kernel's
+ * humidity block: sources and subsidence compounded, the rain-out, a planet-wide override. One hourly update per pass
+ * relaxed the air H times slower in game time: a dry world's air kept its starting humidity for weeks (Murk +81 %,
+ * Cinder +64 % over 12 days at 1000x while nobody watched them; +66 / +51 % on 6-hour passes; now within ~2 / 4-7 %).
+ * The rain these hours wring out is not delivered (the rain batches carry the last hour's rate, as before) — which is
+ * why compounding hours here is safe where it was not for the kernel's hour (push 2: +77 % rain on land). (A closed
+ * form for the open sea, without walk or rain-out, left the sea's air too humid: +2-4 % on a terran world.) Never runs
+ * at H = 1 (1x is untouched).
+ */
+function humidityHours(u: Universe, p: Planet, sc: ClimateScratch, n: number): void {
+  const f = p.f, s = p.s, st = p.st, g = p.grid;
+  const N = p.count;
+  let hs = humByN.get(p.n);
+  if (!hs) {
+    hs = { upA: new Int32Array(N), upB: new Int32Array(N), k: new Float32Array(N), Q: new Float32Array(N), crit: new Float32Array(N), conv: new Uint8Array(N) };
+    humByN.set(p.n, hs);
+  }
+  const { upA, upB, k: kS, Q, crit: crit0, conv } = hs;
+  const q = f.humidity, up1 = sc.up1, wn = sc.wn;
+  const windX = f.windX, windY = f.windY, windZ = f.windZ, temperature = f.temperature, water = f.water;
+  const ocean = s.ocean, seaIce = s.seaIce, moisture = f.moisture, tree = f.tree, grass = f.grass, crop = f.crop;
+  const surface = f.surface, freeze = st.liquid.freeze, cloudiness = st.cloudiness;
+  const globalKind = st.globalWeather != null ? u.content.weather.find(st.globalWeather) : undefined;
+  const gH = (globalKind ? globalKind.humidityDelta : 0) * 0.2;
+  // the steps: m of them, the first `ext` of gA = gB + 1 hours, the rest of gB
+  const m = Math.ceil(n / HUM_STEP), gB = Math.floor(n / m), ext = n - gB * m, gA = gB + 1;
+  // per cell, what holds for the whole pass (the kernel's expressions): the cell an hour upwind (the kernel's walk),
+  // the source's hourly pull and target, the rain-out threshold (orographic lift from the hour-upwind cell) without
+  // the convective term
+  const W1 = sc.up;
+  for (let c = 0; c < N; c++) {
+    const ws = Math.sqrt(windX[c] * windX[c] + windY[c] * windY[c] + windZ[c] * windZ[c]);
+    const steps = Math.min(4, Math.round(ws * ADVECT_CELLS_PER_MS));
+    let up = c;
+    for (let j = 0; j < steps; j++) {
+      const nx = up1[up];
+      if (nx < 0) break;
+      up = nx;
+    }
+    W1[c] = up;
+    const T = temperature[c];
+    const ef = Math.min(1.3, Math.max(0.04, (T + 12) * INV_38));
+    if (ocean[c] || water[c] > 0.02) {
+      kS[c] = 0.12 * ef * (seaIce[c] > 0.1 ? 0.25 : 1) * (T < freeze ? 0.4 : 1);
+      Q[c] = 0.8;
+    } else {
+      kS[c] = (0.05 * moisture[c] + 0.035 * (tree[c] + 0.5 * grass[c] + 0.6 * crop[c])) * ef;
+      Q[c] = 0.85;
+    }
+    const rise = surface[c] - surface[up];
+    crit0[c] = 0.86 - (rise > 0 ? Math.min(0.2, rise * INV_150) : 0) - 0.06 * cloudiness - 0.09 * wn[c];
+    conv[c] = T > 24 ? 1 : 0;
+  }
+  // the gB- and gA-hour trajectories: the hour-upwind cell followed hour by hour
+  for (let c = 0; c < N; c++) {
+    let up = c;
+    for (let j = 0; j < gB; j++) up = W1[up];
+    upB[c] = up;
+    upA[c] = W1[up];
+  }
+  const nbrStart = g.nbrStart, nbr = g.nbr;
+  // each step reads the last step's air (src) and writes the next (dst); the neighbourhood blend is taken where it is
+  // read, at the cell the air came from
+  let src = q, dst = sc.q2;
+  for (let i = 0; i < m; i++) {
+    const gh = i < ext ? gA : gB, upW = i < ext ? upA : upB;
+    const sub = 0.99 ** gh, wring = 1 - 0.4 ** gh, gHh = gH * gh;
+    for (let c = 0; c < N; c++) {
+      const up = upW[c];
+      const e0 = nbrStart[up], e1 = nbrStart[up + 1];
+      let nsum = 0;
+      for (let e = e0; e < e1; e++) nsum += src[nbr[e]];
+      let qq = 0.7 * src[up] + 0.3 * (nsum / (e1 - e0));
+      // the source's pull compounded over the step's hours: 1 − (1 − k)^g
+      const k1 = 1 - kS[c];
+      let kp = k1;
+      for (let j = 1; j < gh; j++) kp *= k1;
+      qq += (Q[c] - qq) * (1 - kp);
+      qq *= sub;
+      const crit = conv[c] && qq > 0.7 ? crit0[c] - 0.04 : crit0[c];
+      if (qq > crit) qq -= (qq - crit) * wring;
+      if (globalKind) qq += gHh;
+      dst[c] = qq < 0 ? 0 : qq > 1 ? 1 : qq;
+    }
+    const t = src; src = dst; dst = t;
+  }
+  if (src !== q) q.set(src);
+  // the kernel's hour reads the blend of the air these hours left
+  blendQ(N, nbrStart, nbr, q, sc.qn);
+}
+
+/** qn = 0.7 q + 0.3 mean of the neighbours (advectPrep's blend, alone) */
+function blendQ(N: number, nbrStart: Int32Array, nbr: Int32Array, q: Float32Array, qn: Float32Array): void {
+  for (let c = 0; c < N; c++) {
+    const e0 = nbrStart[c], e1 = nbrStart[c + 1];
+    let nsum = 0;
+    for (let e = e0; e < e1; e++) nsum += q[nbr[e]];
+    qn[c] = 0.7 * q[c] + 0.3 * (nsum / (e1 - e0));
+  }
+}
+
 /** the per-cell column pass (see climateStep); returns the number of cells whose snow / ice changed (listed in
  * sc.changed), or -1 when none did */
 /** reciprocals of the column kernel's constant divisors (a multiply instead of a divide per cell; SIM perf pass —
@@ -551,7 +667,8 @@ function columnKernel(u: Universe, p: Planet, sc: ClimateScratch, sun: SunInfo, 
   // over a cell is near the steady state of its hour-upwind neighbour's air, so one hourly update gives the right rain
   // RATE and cloud (the rain batches multiply the rate by the ticks). Compounding H hours of sources onto a parcel
   // walked H hours upwind rained what the cells in between should have rained (+77 % on land at 1000x, measured);
-  // the hourly update keeps the means (only fronts drift through the field H times slower in game time).
+  // the hourly update keeps the means. (Push 3 round 2: the pass's earlier hours are hourly updates of the air too —
+  // humidityHours, before this kernel — so transients and fronts move through the field at the 1x pace.)
   let sourced = 0;
   let nChanged = 0;
   let anyChanged = false;

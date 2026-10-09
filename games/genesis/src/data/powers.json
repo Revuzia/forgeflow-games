@@ -3163,6 +3163,18 @@
      "max": 40,
      "default": 1.5,
      "unit": "AU"
+    },
+    "life": {
+     "type": "number",
+     "min": 0,
+     "max": 3,
+     "unit": "×",
+     "desc": "plants and herds on it (0 bare .. 3 lush; default: its kind’s own)"
+    },
+    "people": {
+     "type": "enum",
+     "values": "species",
+     "desc": "a people to set on it"
     }
    },
    "target": "none",
@@ -3172,7 +3184,7 @@
     "birth a world",
     "make a planet"
    ],
-   "desc": "A new world of any kind at any orbit.",
+   "desc": "A new world of any kind at any orbit, bare or green, with a people on it if you like.",
    "cost": 1000,
    "cooldown": 2880
   },
@@ -10231,6 +10243,154 @@
    "witness": {
     "wonder": 0.3,
     "radius": 300
+   }
+  },
+  {
+   "id": "launch-ship",
+   "name": "Send them to the stars",
+   "category": "Worlds",
+   "icon": "w-rocket",
+   "ring": 2,
+   "gesture": null,
+   "command": "ship.launch",
+   "params": {},
+   "schema": {
+    "settlement": {
+     "type": "entity",
+     "entity": [
+      "settlement"
+     ],
+     "desc": "the town that goes"
+    },
+    "to": {
+     "type": "entity",
+     "entity": [
+      "planet"
+     ],
+     "desc": "the world to go to"
+    },
+    "purpose": {
+     "type": "enum",
+     "values": [
+      "colony",
+      "exodus",
+      "refuge",
+      "trade",
+      "curiosity",
+      "god",
+      "survey"
+     ]
+    },
+    "kind": {
+     "type": "enum",
+     "values": "ships"
+    }
+   },
+   "target": "settlement",
+   "synonyms": [
+    "send a ship to another world",
+    "go to the stars",
+    "space program",
+    "build a rocket",
+    "launch a rocket",
+    "send them to another world"
+   ],
+   "desc": "Tell a people to build a ship and go: they must know how (the recipe chain, a pad, the hull and its fuel) — teach them or give them what they lack.",
+   "cost": 400,
+   "cooldown": 2880,
+   "witness": {
+    "wonder": 0.6,
+    "radius": 900
+   }
+  },
+  {
+   "id": "recall-ship",
+   "name": "Call a ship back",
+   "category": "Worlds",
+   "icon": "w-recall",
+   "ring": 2,
+   "gesture": null,
+   "command": "ship.cancel",
+   "params": {},
+   "schema": {
+    "ship": {
+     "type": "entity",
+     "entity": [
+      "ship"
+     ],
+     "desc": "the ship"
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "call the ship back",
+    "turn the ship back",
+    "forbid the launch"
+   ],
+   "desc": "Stop a ship being built, or turn one between the worlds back for home."
+  },
+  {
+   "id": "destroy-ship",
+   "name": "Strike a ship down",
+   "category": "Worlds",
+   "icon": "w-smite-ship",
+   "ring": 2,
+   "gesture": null,
+   "command": "ship.destroy",
+   "params": {},
+   "schema": {
+    "ship": {
+     "type": "entity",
+     "entity": [
+      "ship"
+     ],
+     "desc": "the ship"
+    }
+   },
+   "target": "entity",
+   "synonyms": [
+    "strike the ship from the sky",
+    "destroy the rocket",
+    "smash the ship"
+   ],
+   "desc": "A ship in the sky falls, and all aboard.",
+   "cost": 300,
+   "cooldown": 1440,
+   "witness": {
+    "harm": 0.6,
+    "wonder": 0.6,
+    "radius": 1500
+   }
+  },
+  {
+   "id": "star-flare",
+   "name": "Star flare",
+   "category": "Worlds",
+   "icon": "w-flare",
+   "ring": 2,
+   "gesture": null,
+   "command": "star.flare",
+   "params": {},
+   "schema": {
+    "strength": {
+     "type": "number",
+     "min": 0.1,
+     "max": 5,
+     "default": 1
+    }
+   },
+   "target": "none",
+   "synonyms": [
+    "the star flares",
+    "flare the star",
+    "a flare over every world"
+   ],
+   "desc": "The star throws off a storm of light over every world: auroras, burned crops, frightened peoples, ships in danger.",
+   "cost": 500,
+   "cooldown": 2880,
+   "witness": {
+    "harm": 0.2,
+    "wonder": 0.8
    }
   }
  ]

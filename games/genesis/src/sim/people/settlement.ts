@@ -40,10 +40,13 @@ import { bestBoat, boatSeats, boatSwim, routeBetween } from './missions.ts';
 import { findPath } from '../grid/pathfind.ts';
 import { pathOptsFor } from './resources.ts';
 import { recountShelters } from './tasks.ts';
-import { lapseLevel } from '../perf/lapse.ts';
+import { planetLevel } from '../perf/lapse.ts';
+// SIM perf push 3 — the coarse settlement step of the peoples' time-lapse (perf/plapse.ts)
+import { chanceIn, dueIn, hourly, settleHours } from '../perf/plapse.ts';
 
-/** re-planning interval multiplier per time-lapse level (SIM perf push 2: settlementStep) */
-const REPLAN = [1, 2, 3] as const;
+/** re-planning interval multiplier per time-lapse level (SIM perf push 2: settlementStep; push 3: per world —
+ * perf/lapse.ts planetLevel, 3 = a world the camera is not on) */
+const REPLAN = [1, 2, 3, 4] as const;
 
 export const SETTLEMENT_CADENCE = 60;
 
@@ -165,6 +168,12 @@ export function siteScore(x: PCtx, species: number, c: number, exclude = -1): nu
   const hollow = hollowDepth(p, c);
   const wet = f.moisture[c] > 0.3 || p.s.precipMean[c] > 0.05;
   if (hollow > 2 && wet) return -1;
+  // (SIM phase 4) ground lower than the water standing beside it floods as soon as the water moves: a scenario city was
+  // set a couple of metres under the surface of the spring-fed pond next door and drowned in five days
+  for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
+    const o = g.nbr[e];
+    if (f.water[o] > 0.3 && f.surface[o] + f.water[o] > f.surface[c] + 0.25) return -1;
+  }
   if (sp.air) food += 3;
   if (sp.sea && sea > 0) food += 2.5 * sea;
   // a place with almost nothing to eat around it is no home, however good its water (a hive settled in bare desert by
@@ -271,7 +280,9 @@ export function found(x: PCtx, st: Settlement, c: number, ruinOf: Settlement | n
   assignRoles(x, st);
   const members = x.ps.members.get(st.id) ?? [];
   const parent = st.parent >= 0 ? x.ps.settlement(st.parent) : undefined;
-  if (ruinOf) tell(x.u, x.p, 'resettle', vars(x, st, -1, { other: ruinOf.name }), st, [settlementRef(x, st)]);
+  // (a colony come down from the sky is told by space/contact.ts in its own words)
+  if (st.recent.spaceColony !== undefined) delete st.recent.spaceColony;
+  else if (ruinOf) tell(x.u, x.p, 'resettle', vars(x, st, -1, { other: ruinOf.name }), st, [settlementRef(x, st)]);
   else if (parent && parent.fallen < 0 && st.recent.colony !== undefined) tell(x.u, x.p, 'colony', vars(x, st, -1, { parent: parent.name, count: members.length }), st, [settlementRef(x, st), settlementRef(x, parent)]);
   else if (parent && parent.fallen < 0) tell(x.u, x.p, 'split', vars(x, st, -1, { parent: parent.name, count: members.length }), st, [settlementRef(x, st), settlementRef(x, parent)]);
   else tell(x.u, x.p, 'founding', vars(x, st, -1, { count: members.length }), st, [settlementRef(x, st)]);
@@ -363,7 +374,10 @@ export function createBand(x: PCtx, species: number, cell: number, n: number, op
 // ───────────────────────────── hourly step ─────────────────────────────
 
 export function settlementStep(x: PCtx, st: Settlement): void {
-  if (st.fallen >= 0) return;
+  // SIM perf push 3 — the peoples' time-lapse (perf/plapse.ts): at 100x / 1000x the step runs every 2 / 4 hours and
+  // integrates the hours since the last one (H); at level 0 H is 1 and every line below is the plain hourly step
+  const H = settleHours(x, st);
+  if (st.fallen >= 0 || H === 0) return;
   const members = x.ps.members.get(st.id) ?? [];
   const pop = members.length + cohortTotal(st);
   if (pop <= 0.5) { fall(x, st, st.stats.starved > st.stats.deaths * 0.4 ? 'starvation' : 'emptied'); return; }
@@ -371,29 +385,31 @@ export function settlementStep(x: PCtx, st: Settlement): void {
   const hour = Math.floor(x.tick / 60);
   if (st.band) { bandStep(x, st, hour); return; }
   // SIM perf push 2 — time-lapse (perf/lapse.ts): at 100x / 1000x the re-planning below (caches, roles, work lists) runs
-  // 2 / 3 times less often; everything that integrates time (hearths, births, age, sickness, cohorts) stays hourly
-  const rp = REPLAN[lapseLevel(x.u)];
+  // 2 / 3 times less often; everything that integrates time (hearths, births, age, sickness, cohorts) covers its hours.
+  // (push 3: a periodic task runs when its hour falls inside the H hours this step stands for — dueIn; at H = 1 the
+  // plain `(hour + offset) % period === 0`)
+  const rp = REPLAN[planetLevel(x.u, x.p)];
   // refresh caches at fixed hours (saved: decisions read them)
-  if ((hour + st.id) % (8 * rp) === 0 || !st.res) updateResources(x, st);
-  if ((hour + st.id) % (24 * rp) === 0 || !st.flow) updateFlow(x, st);
-  burnHearths(x, st, 60);
+  if (dueIn(hour + st.id, 8 * rp, H) || !st.res) updateResources(x, st);
+  if (dueIn(hour + st.id, 24 * rp, H) || !st.flow) updateFlow(x, st);
+  burnHearths(x, st, 60 * H);
   refreshLibrary(x, st);
   hiveShare(x, st);
   if (!st.leader || x.A.slotOf(st.leader) < 0) electLeader(x, st);
-  if ((hour + st.id) % rp === 0) assignRoles(x, st);
+  if (dueIn(hour + st.id, rp, H)) assignRoles(x, st);
   // the work lists (saved) are revised every few hours, staggered between settlements
-  if ((hour + st.id) % (3 * rp) === 0) planJobs(x, st);
-  if ((hour + st.id) % (2 * rp) === 1) planWants(x, st);
-  if ((hour + st.id) % (2 * rp) === 0) planConstruction(x, st);
-  births(x, st);
-  oldAge(x, st);
-  sicknessAndAccidents(x, st);
-  diseaseStep(x, st);
-  cohortStep(x, st);
+  if (dueIn(hour + st.id, 3 * rp, H)) planJobs(x, st);
+  if (dueIn(hour + st.id - 1, 2 * rp, H)) planWants(x, st);
+  if (dueIn(hour + st.id, 2 * rp, H)) planConstruction(x, st);
+  births(x, st, H);
+  oldAge(x, st, H);
+  sicknessAndAccidents(x, st, H);
+  hourly(x, st, H, diseaseStep); // (sickness spreads hour by hour, at each hour's own tick)
+  hourly(x, st, H, cohortStep); // (the cohort's statistics, hour by hour: nothing to do for most)
   assignHomes(x, st);
   recountShelters(x, st);
   // daily
-  if ((hour + st.id * 5) % 24 === 0) daily(x, st);
+  if (dueIn(hour + st.id * 5, 24, H)) daily(x, st);
   st.nightLight = x.ps.of(st.id).some((b) => b.fuel > 0) ? 1 : 0;
 }
 
@@ -576,10 +592,12 @@ export function assignRoles(x: PCtx, st: Settlement): void {
   // assign: keep current roles where quota allows; the best-skilled fill the rest (ascending id order)
   const count = new Array<number>(17).fill(0);
   const pending: number[] = [];
+  // (the roles the god gave, `r<agent id>` in st.recent, gathered once — SIM perf push 3: a key built per adult per call)
+  const givenRoles = godGivenRoles(st);
   for (const m of adults) {
     if (A.id[m] === st.leader) { A.role[m] = ROLE.leader; continue; }
     // a role the god gave holds (god/civic.ts agent.role)
-    const given = st.recent[`r${A.id[m]}`];
+    const given = givenRoles ? givenRoles.get(A.id[m]) : undefined;
     if (given !== undefined) { A.role[m] = given; count[given]++; continue; }
     const r = A.role[m];
     if (r > 0 && r !== ROLE.child && r !== ROLE.leader && count[r] < quota[r]) { count[r]++; continue; }
@@ -614,6 +632,18 @@ export function assignRoles(x: PCtx, st: Settlement): void {
     if (A.role[m] === ROLE.soldier) f |= AgentFlag.soldier | AgentFlag.armed;
     A.flags[m] = f;
   }
+}
+
+/** st.recent's `r<agent id>` entries (roles the god gave) as id → role, or null when there are none */
+function godGivenRoles(st: Settlement): Map<number, number> | null {
+  let out: Map<number, number> | null = null;
+  for (const key in st.recent) {
+    if (key.charCodeAt(0) !== 114 || key.length < 2) continue;
+    const id = Number(key.slice(1));
+    if (!Number.isInteger(id) || `r${id}` !== key) continue;
+    (out ??= new Map()).set(id, st.recent[key]);
+  }
+  return out;
 }
 
 // ───────────────────────────── jobs and wants ─────────────────────────────
@@ -845,12 +875,13 @@ function assignHomes(x: PCtx, st: Settlement): void {
 
 // ───────────────────────────── births and age ─────────────────────────────
 
-function births(x: PCtx, st: Settlement): void {
+/** births of the last `hours` hours (1: the plain hourly roll; more: the window's chance — perf/plapse.ts) */
+function births(x: PCtx, st: Settlement, hours = 1): void {
   const A = x.A;
   const members = x.ps.members.get(st.id) ?? [];
   if (!members.length) return;
   const def = x.info[st.species].def;
-  const perHour = 60 / x.year;
+  const perHour = (60 / x.year) * hours;
   const fd = foodDays(x, st) / Math.max(1, members.length);
   // well fed (a store, or full bellies: foragers keep little in store but eat well)
   let fed = 0;
@@ -866,7 +897,7 @@ function births(x: PCtx, st: Settlement): void {
     if (queen === undefined) {
       // the hive raises a new queen from a worker
       const w = members.find((m) => !(A.flags[m] & AgentFlag.child) && def.hive!.castes[A.caste[m]] === 'worker');
-      if (w !== undefined && hashFloat(st.id, x.tick, 0x9ee) < 0.05) A.caste[w] = def.hive.castes.indexOf(def.hive.queen);
+      if (w !== undefined && hashFloat(st.id, x.tick, 0x9ee) < chanceIn(0.05, hours)) A.caste[w] = def.hive.castes.indexOf(def.hive.queen);
       return;
     }
     const p = def.fertility * 8 * perHour * plenty * crowd;
@@ -888,10 +919,11 @@ function births(x: PCtx, st: Settlement): void {
   }
 }
 
-function oldAge(x: PCtx, st: Settlement): void {
+/** deaths of old age over the last `hours` hours (perf/plapse.ts; 1 = the plain hourly roll) */
+function oldAge(x: PCtx, st: Settlement, hours = 1): void {
   const A = x.A;
   const members = (x.ps.members.get(st.id) ?? []).slice();
-  const perHour = 60 / x.year;
+  const perHour = (60 / x.year) * hours;
   for (const m of members) {
     if (!A.alive[m]) continue;
     const h = ageHazard(x, m) * perHour;
@@ -901,10 +933,11 @@ function oldAge(x: PCtx, st: Settlement): void {
 
 // ───────────────────────────── accidents of daily life ─────────────────────────────
 
-function sicknessAndAccidents(x: PCtx, st: Settlement): void {
+/** the accidents of the last `hours` hours (perf/plapse.ts: each hourly chance becomes the window's; 1 = plain) */
+function sicknessAndAccidents(x: PCtx, st: Settlement, hours = 1): void {
   const ctx = st.res?.contexts ?? [];
   const has = (k: string) => ctx.includes(k);
-  const roll = (salt: number, p: number) => hashFloat(st.id, x.tick, salt, 0xacc) < p;
+  const roll = (salt: number, p: number) => hashFloat(st.id, x.tick, salt, 0xacc) < chanceIn(p, hours);
   const lit = x.ps.of(st.id).some((b) => b.fuel > 0);
   const f = x.p.f;
   // a fire burning in the territory: someone may carry it home (fire-keeping)

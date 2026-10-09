@@ -217,6 +217,9 @@ export function findSite(x: PCtx, st: Settlement, t: number): { pos: [number, nu
     }
   }
   const wall = fn === 'wall';
+  // (SIM phase 4) a launchpad, a star gate or an airship mast stands out past the houses: in a crowded town the inner
+  // spiral never found room for a 20 m pad
+  const outskirts = fn === 'launchpad' || fn === 'gate' || fn === 'airfield';
   let coreR = 10;
   for (const b of mine) coreR = Math.max(coreR, distM(p, st.pos, b.pos) + x.c.buildings.list[b.type].footprint);
   const out: number[] = [0, 0, 0];
@@ -228,6 +231,9 @@ export function findSite(x: PCtx, st: Settlement, t: number): { pos: [number, nu
       const seg = mine.filter((b) => b.type === t).length + k;
       a = seg * (Math.PI * 2 / 14) + st.id;
       r = coreR + 6 + def.footprint;
+    } else if (outskirts) {
+      a = k * GOLDEN + st.id * 0.53 + jitter;
+      r = coreR + def.footprint + 12 + 6 * Math.sqrt(k);
     } else if (centre !== st.pos) {
       a = k * GOLDEN + jitter;
       r = 4 + def.footprint + 3 * Math.sqrt(k);

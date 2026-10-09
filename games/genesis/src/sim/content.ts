@@ -2,7 +2,7 @@
 //
 // Content is data. A pack is a JSON object with optional sections (plants, weather, biomes, biomeRules, stars,
 // planetkinds, ores, scenarios, species, items, recipes, buildings, materials, animals, diseases, phonologies, events;
-// later: powers, lexicon, creatures, disasters). Packs are merged in order: an
+// powers, lexicon, creatures, disasters; ships; `names` is an alias of phonologies). Packs are merged in order: an
 // entry whose id already exists REPLACES that entry in place (so indices stay stable and a mod can rebalance oak), a new
 // id is appended. References between sections are checked after the merge and every problem is reported at once, in
 // words a modder can act on ("plants › 'oakk' … did you mean 'oak'?").
@@ -520,6 +520,48 @@ export interface CreatureDef {
   colors: string[];
 }
 
+// ───────────────────────────── worlds and space (phase 4) ─────────────────────────────
+
+/** how a ship kind travels: over its own world, up into orbit, across to another world, or through a gate */
+export const SHIP_CLASSES = ['air', 'orbit', 'interplanetary', 'gate'] as const;
+export type ShipClass = (typeof SHIP_CLASSES)[number];
+
+/**
+ * A kind of ship (ships.json, CONTRACT §12): a recipe chain, never an unlock. A settlement can start one only when every
+ * id in `knowledge` is in its library, the `pad` building stands in its lands, and the `hull` item (made by its own
+ * crafters) and the `fuel` are in its store.
+ */
+export interface ShipKindDef {
+  id: string;
+  name: string;
+  class: ShipClass;
+  desc?: string;
+  /** the item that IS the ship (crafted at the pad); null for a gate (the gate building is the ship) */
+  hull: string | null;
+  /** the building the ship leaves from */
+  pad: string;
+  /** recipe ids that must all be known by the settlement */
+  knowledge: string[];
+  /** burned per flight (taken from the store; twice for a return voyage) */
+  fuel: RecipeIO[];
+  /** people aboard [min, max] */
+  crew: [number, number];
+  /** units of goods carried */
+  cargo: number;
+  /** hours of fuelling and loading at the pad */
+  prep: number;
+  /** hours circling before a transfer */
+  orbitHours: number;
+  /** game days of a crossing [near, far] */
+  days: [number, number];
+  /** cruise altitude (air) / orbit height above the ground (m) */
+  altitude: number;
+  /** chance a flight goes well with a skilled crew under calm skies */
+  reliability: number;
+  /** can fly home again (carries a second load of fuel) */
+  returns: boolean;
+}
+
 /** the freeform parser's vocabulary (merged by mods: objects deep-merged, arrays concatenated) */
 export type Lexicon = Record<string, unknown>;
 
@@ -549,6 +591,10 @@ export interface ContentPack {
   diseases?: DiseaseDef[];
   phonologies?: PhonologyDef[];
   events?: EventTemplateDef[];
+  /** ship kinds (phase 4) */
+  ships?: ShipKindDef[];
+  /** an alias of `phonologies` for mod packs (name languages) */
+  names?: PhonologyDef[];
   [section: string]: unknown;
 }
 
@@ -672,6 +718,8 @@ export interface Content {
   lexicon: Lexicon;
   /** the packs this content was built from, in order (the god layer rebuilds content with a runtime pack on top) */
   sources: ContentPack[];
+  // ── worlds and space (phase 4) ──
+  ships: Registry<ShipKindDef>;
 }
 
 /** the id of the pack the god layer builds at runtime (freeform inventions, species laws); never required by saves */
@@ -680,7 +728,7 @@ export const RUNTIME_PACK = 'runtime';
 // ───────────────────────────── loading ─────────────────────────────
 
 const KNOWN = ['plants', 'weather', 'biomes', 'biomeRules', 'stars', 'planetkinds', 'ores', 'scenarios', 'species', 'items', 'recipes',
-  'buildings', 'materials', 'animals', 'diseases', 'phonologies', 'events', 'powers', 'disasters', 'creatures', 'lexicon'];
+  'buildings', 'materials', 'animals', 'diseases', 'phonologies', 'events', 'powers', 'disasters', 'creatures', 'lexicon', 'ships', 'names'];
 
 /**
  * Merge and validate packs (base first, then mods in order). Throws ContentError listing every problem.
@@ -715,6 +763,7 @@ export function loadContent(packs: ContentPack[]): Content {
     creatures: new Registry('creature'),
     lexicon: {},
     sources: packs.slice(),
+    ships: new Registry('ship kind'),
   };
   for (const pack of packs) {
     if (!pack || typeof pack !== 'object') { problems.push('a content pack is not an object'); continue; }
@@ -723,15 +772,22 @@ export function loadContent(packs: ContentPack[]): Content {
     if (c.packs.includes(pid)) problems.push(`pack '${pid}' is loaded twice`);
     c.packs.push(pid);
     const where = (sec: string, i: number, id?: unknown) => `${pid} › ${sec}[${i}]${typeof id === 'string' ? ` '${id}'` : ''}`;
+    // ids seen in this pack per registry: one pack naming an id twice is a mistake (the second would silently win)
+    const seen = new Map<Registry<{ id: string }>, Map<string, string>>();
     const section = <T extends { id: string }>(name: string, reg: Registry<T>, check: (x: T, w: string, p: string[]) => void) => {
       const arr = pack[name];
       if (arr === undefined) return;
       if (!Array.isArray(arr)) { problems.push(`${pid} › '${name}' must be an array`); return; }
+      let ids = seen.get(reg as unknown as Registry<{ id: string }>);
+      if (!ids) seen.set(reg as unknown as Registry<{ id: string }>, (ids = new Map()));
       arr.forEach((x: unknown, i: number) => {
         const o = x as T;
         const w = where(name, i, (o as { id?: unknown })?.id);
         if (!o || typeof o !== 'object') { problems.push(`${w}: not an object`); return; }
         if (typeof o.id !== 'string' || !o.id) { problems.push(`${w}: missing string "id"`); return; }
+        const first = ids!.get(o.id);
+        if (first) { problems.push(`${w}: the id '${o.id}' is already used by ${first} in this pack (give it its own id, or keep one of them)`); return; }
+        ids!.set(o.id, `${name}[${i}]`);
         const before = problems.length;
         check(o, w, problems);
         if (problems.length === before) reg.put(o);
@@ -752,10 +808,12 @@ export function loadContent(packs: ContentPack[]): Content {
     section('animals', c.animals, checkAnimal);
     section('diseases', c.diseases, checkDisease);
     section('phonologies', c.phonologies, checkPhonology);
+    section('names', c.phonologies, checkPhonology);
     section('events', c.events, checkEventTemplate);
     section('powers', c.powers, checkPower);
     section('disasters', c.disasters, checkDisaster);
     section('creatures', c.creatures, checkCreature);
+    section('ships', c.ships, checkShip);
     if (pack.lexicon !== undefined) {
       if (!pack.lexicon || typeof pack.lexicon !== 'object' || Array.isArray(pack.lexicon)) problems.push(`${pid} › 'lexicon' must be an object`);
       else mergeLexicon(c.lexicon, pack.lexicon);
@@ -813,6 +871,7 @@ export function loadContent(packs: ContentPack[]): Content {
   }
   crossCheckPeoples(c, problems);
   crossCheckGod(c, problems);
+  crossCheckShips(c, problems);
   if (problems.length) throw new ContentError(problems);
   c.plantTable = compilePlants(c.plants);
   return c;
@@ -1172,11 +1231,31 @@ function checkPhonology(x: PhonologyDef, w: string, p: string[]): void {
   if (!x.features || typeof x.features !== 'object') p.push(`${w}: "features" must map site features to phrases`);
 }
 
+/**
+ * The words the sim fills into chronicle templates ({people}, {settlement}, {agent}, …): a template asking for any
+ * other would print its braces in the chronicle.
+ */
+export const TEMPLATE_VARS = [
+  'adj', 'agent', 'ally', 'animal', 'back', 'building', 'cause', 'clan', 'count', 'crop', 'days', 'desc', 'disease', 'era', 'faction', 'god',
+  'goods', 'home', 'item', 'knowledge', 'name', 'old', 'other', 'others', 'parent', 'people', 'place', 'planet', 'polity', 'pron', 'pron2',
+  'settlement', 'ship', 'terms', 'text', 'title', 'why', 'years',
+] as const;
+
 function checkEventTemplate(x: EventTemplateDef, w: string, p: string[]): void {
   const o = x as unknown as Record<string, unknown>;
   str(o, 'kind', w, p);
   num(o, 'weight', w, p, 0, 3);
   strArr(o, 'text', w, p, false);
+  if (!Array.isArray(o.text)) return;
+  const known = TEMPLATE_VARS as readonly string[];
+  (o.text as unknown[]).forEach((t, i) => {
+    if (typeof t !== 'string') return;
+    for (const m of t.matchAll(/\{([^{}\s]*)\}/g)) {
+      if (known.includes(m[1])) continue;
+      const hint = suggest(m[1], [...known]);
+      p.push(`${w}: text[${i}] asks for {${m[1]}}, which the chronicle never fills${hint ? ` — did you mean {${hint}}?` : ''} (it can fill: ${known.map((v) => `{${v}}`).join(' ')})`);
+    }
+  });
 }
 
 /** references between the peoples sections (after every pack merged); also builds the tag index and context set */
@@ -1290,6 +1369,11 @@ function crossCheckPeoples(c: Content, problems: string[]): void {
       const e = pe as { species?: string; era?: string };
       if (e && typeof e === 'object' && e.species !== undefined && !c.species.has(e.species)) problems.push(ref('scenario', s.id, `peoples[${i}].species`, e.species, c.species));
       if (e && typeof e === 'object' && e.era !== undefined && !ERAS.includes(e.era as Era)) problems.push(`scenario '${s.id}': peoples[${i}].era '${e.era}' is not one of ${ERAS.join(', ')}`);
+      // (phase 4) a people further along than its era: its ideas, goods and buildings must exist
+      const more = pe as { knowledge?: unknown; store?: unknown; buildings?: unknown };
+      if (Array.isArray(more.knowledge)) for (const k of more.knowledge) if (typeof k !== 'string' || !c.recipes.has(k)) problems.push(ref('scenario', s.id, `peoples[${i}].knowledge`, String(k), c.recipes));
+      if (more.store && typeof more.store === 'object') for (const k of Object.keys(more.store as object)) if (!c.items.has(k)) problems.push(ref('scenario', s.id, `peoples[${i}].store`, k, c.items));
+      if (Array.isArray(more.buildings)) for (const k of more.buildings) if (typeof k !== 'string' || !c.buildings.has(k)) problems.push(ref('scenario', s.id, `peoples[${i}].buildings`, String(k), c.buildings));
     });
   }
 }
@@ -1398,5 +1482,44 @@ function crossCheckGod(c: Content, problems: string[]): void {
     if (pw.command === 'disaster.spawn' && typeof kind === 'string' && kind !== 'random' && !c.disasters.has(kind)) problems.push(ref('power', pw.id, 'params.kind', kind, c.disasters));
     if ((pw.command === 'weather.paint' || pw.command === 'weather.global') && typeof kind === 'string' && kind !== 'none' && !c.weather.has(kind)) problems.push(ref('power', pw.id, 'params.kind', kind, c.weather));
     if (pw.command === 'creature.adopt' && typeof pw.params?.template === 'string' && !c.creatures.has(pw.params.template)) problems.push(ref('power', pw.id, 'params.template', pw.params.template as string, c.creatures));
+  }
+}
+
+// ───────────────────────────── worlds and space: checks (phase 4) ─────────────────────────────
+
+function checkShip(x: ShipKindDef, w: string, p: string[]): void {
+  const o = x as unknown as Record<string, unknown>;
+  str(o, 'name', w, p);
+  oneOf(o, 'class', SHIP_CLASSES, w, p);
+  if (x.hull !== null && (typeof x.hull !== 'string' || !x.hull)) p.push(`${w}: "hull" must be an item id or null (a gate)`);
+  if (x.hull === null && x.class !== 'gate') p.push(`${w}: only a gate may have no hull`);
+  str(o, 'pad', w, p);
+  strArr(o, 'knowledge', w, p, false);
+  ioArr(o, 'fuel', w, p);
+  tuple(o, 'crew', 2, w, p);
+  tuple(o, 'days', 2, w, p);
+  num(o, 'cargo', w, p, 0, 1e6);
+  num(o, 'prep', w, p, 0, 1000);
+  num(o, 'orbitHours', w, p, 0, 1000);
+  num(o, 'altitude', w, p, 0, 1e6);
+  num(o, 'reliability', w, p, 0, 1);
+  if (typeof x.returns !== 'boolean') p.push(`${w}: "returns" must be true or false`);
+  if (Array.isArray(x.crew) && x.crew[1] < 1 && x.class !== 'orbit') p.push(`${w}: a ${x.class} ship needs room for at least one person`);
+}
+
+/** references from ship kinds into items, buildings and recipes */
+function crossCheckShips(c: Content, problems: string[]): void {
+  for (const s of c.ships.list) {
+    if (s.hull && !c.items.has(s.hull)) problems.push(ref('ship kind', s.id, 'hull', s.hull, c.items));
+    if (!c.buildings.has(s.pad)) problems.push(ref('ship kind', s.id, 'pad', s.pad, c.buildings));
+    for (const k of s.knowledge ?? []) if (!c.recipes.has(k)) problems.push(ref('ship kind', s.id, 'knowledge', k, c.recipes));
+    for (const io of s.fuel ?? []) {
+      if (io.item !== undefined && !c.items.has(io.item)) problems.push(ref('ship kind', s.id, 'fuel', io.item, c.items));
+      if (io.tag !== undefined && !c.itemsByTag.has(io.tag)) problems.push(`ship kind '${s.id}': fuel names tag '${io.tag}', which no item carries`);
+    }
+    // the hull must be something a people can make: some recipe outputs it
+    if (s.hull && c.items.has(s.hull) && !c.recipes.list.some((r) => (r.outputs ?? []).some((o) => o.item === s.hull))) {
+      problems.push(`ship kind '${s.id}': no recipe makes its hull '${s.hull}' (a ship no people can build)`);
+    }
   }
 }

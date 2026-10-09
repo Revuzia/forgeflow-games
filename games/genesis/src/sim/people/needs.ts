@@ -12,6 +12,8 @@ import { NEED, NT, TASK, TRAIT } from './defs.ts';
 import { DEATH } from './defs.ts';
 import { airTemp, sunElevation } from './world.ts';
 import { caseHarm } from '../life/disease.ts';
+// SIM phase 4: a pressure suit or a habitat dome seals a body in its own air and warmth (space/habitat.ts)
+import { sealed } from '../space/habitat.ts';
 
 const FOOD = NEED.food, WATER = NEED.water, WARMTH = NEED.warmth, REST = NEED.rest, SAFETY = NEED.safety;
 const BELONG = NEED.belonging, STATUS = NEED.status, CURIO = NEED.curiosity, FAITH = NEED.faith;
@@ -78,6 +80,11 @@ export function thermalStress(x: PCtx, s: number, out?: { teff: number; cold: nu
     else if (f.tree[cell] > 0.3) th -= (th - mid) * 0.25 * Math.min(1, f.tree[cell]);
   }
   const heat = th > hi ? Math.min(2, (th - hi) / Math.max(4, tMax - hi)) : 0;
+  // sealed in a suit or a dome, the world's cold and heat stay outside (asked only past bearing: a cheap path)
+  if ((cold > 0.3 || heat > 0.3) && sealed(x, s)) {
+    if (out) { out.teff = (lo + hi) * 0.5; out.cold = 0; out.heat = 0; }
+    return 0;
+  }
   if (out) { out.teff = cold > 0 ? tc : th; out.cold = cold; out.heat = heat; }
   return Math.max(cold, heat);
 }
@@ -159,7 +166,7 @@ export function updateNeeds(x: PCtx, s: number): number {
   }
   if (sp.needW[METHANE] > 0) {
     const a = x.p.st.atmosphere;
-    if (a.methane * a.pressure >= 0.02) N[nb + METHANE] = 1;
+    if (a.methane * a.pressure >= 0.02 || sealed(x, s)) N[nb + METHANE] = 1;
     else hurt(zeroDays(N, nb + METHANE, 3, days) * 1.6, DEATH.suffocation);
   }
   if (sp.needW[HIVE] > 0) {
@@ -168,13 +175,18 @@ export function updateNeeds(x: PCtx, s: number): number {
     if (home) N[nb + HIVE] = Math.min(1, N[nb + HIVE] + 2 * days);
     else N[nb + HIVE] = Math.max(0, N[nb + HIVE] - 0.5 * days);
   }
-  // breath: lungs need their gas
+  // breath: lungs need their gas (a suit or a dome carries its own: space/habitat.ts)
   {
     const a = x.p.st.atmosphere;
     const br = sp.def.breathes;
-    if (br === 'o2' && a.pressure * a.o2 < 0.05) hurt(days * 2.5, DEATH.suffocation);
-    if (br === 'methane' && a.pressure * a.methane < 0.005 && a.pressure * a.o2 > 0.05) hurt(days * 1.5, DEATH.suffocation);
-    if (a.toxicity > 0.5) hurt(days * (a.toxicity - 0.5) * 1.5, DEATH.suffocation);
+    const noO2 = br === 'o2' && a.pressure * a.o2 < 0.05;
+    const noCH4 = br === 'methane' && a.pressure * a.methane < 0.005 && a.pressure * a.o2 > 0.05;
+    const toxic = a.toxicity > 0.5;
+    if ((noO2 || noCH4 || toxic) && !sealed(x, s)) {
+      if (noO2) hurt(days * 2.5, DEATH.suffocation);
+      if (noCH4) hurt(days * 1.5, DEATH.suffocation);
+      if (toxic) hurt(days * (a.toxicity - 0.5) * 1.5, DEATH.suffocation);
+    }
   }
   // sickness wears the body: a grave case wastes away within the illness unless cured, a mild one barely (disease.ts)
   const sick = A.disease[s] >= 0 && now >= A.infectT[s];

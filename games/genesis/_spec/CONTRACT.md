@@ -182,6 +182,25 @@ ground(p) = radius + grid.sample(surface, p) + detailNoise(p) * rough(p)
   envelopes, light, melt degree-hours) hour by hour under each hour's sun on ground and shallow water (deep water
   takes one step); evaporation and infiltration of the land stay hourly at every level (`soilHour` runs on the hours
   a coarse or dormant schedule skips). Sediment carried into the sea displaces sea water (an accounted sink).
+* *(Note, SIM perf push 3 — the peoples' time-lapse, `src/sim/perf/plapse.ts`; unwatched worlds, `perf/lapse.ts`
+  `planetLevel`.)* At levels 1 / 2 people live in coarser chunks, deterministically (every rule is a function of the
+  saved state and the logged level): a task of the day's work (gathering, fishing, hunting, crafting, fields, herding,
+  teaching, study, preaching, courting, healing, watch; wandering) stands for up to 2 / 4 sessions back to back — as
+  many as the agent's water, food, rest and the daylight leave it — and yields those sessions' effects at their own
+  ticks (carried yields count the trips home in time); walks run in legs ×2 / ×4 longer (every cell passed is still
+  worn); water at hand and food in the hand are taken in passing (store meals are not: the walk home to eat stays);
+  the settlement step runs every 2 / 4 hours and integrates the hours (births, old age, accidents with the window's
+  probability; sickness hour by hour at each hour's tick); decisions read their settlement's buildings through a
+  per-settlement cache (each building's state read live). Level 0 (1x, 10x) is untouched: the same hashes as without
+  this note. Measured over two game years
+  at 1000x against 1x (6 seeds): population, food in store, ideas, discoveries, buildings and births deviate by
+  −0.6 … +3.2 % on their means over the run, as a 1x twin perturbed once does (−1.2 … +2.5 %); deaths are dominated
+  by wars and fires, which are chaotic. Keyframes are 8 days apart at 1000x.
+  **Worlds the camera is not on** (the logged `focus` names another planet) run coarser still while time-lapse is on
+  (level 3: climate 12 h, vegetation 24 h, weather + rain 60 ticks, hydrology 16 ticks while their sea is calm — the
+  round-2 rule —, sheets 48, sand 60, lava / talus / ash 30, biomes 2 days, settlement step 6 h, tasks and walks as
+  at 1000x). What happens on a world nobody watches at 100x / 1000x is therefore a **time-lapse approximation** —
+  same totals, coarser in time — and still deterministic (the focus is logged); water stays conserved and seas settle.
 
 ---
 

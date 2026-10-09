@@ -102,6 +102,8 @@ export function learn(x: PCtx, s: number, k: number, how: LearnHow, meta: { trig
     // satisfying curiosity
     A.needs[s * 12 + CURIO] = Math.min(1, A.needs[s * 12 + CURIO] + 0.3);
   }
+  // the world's first idea nobody taught (the opening's 'first-discovery' milestone: chronicle.ts milestonesCheck)
+  if (st && newToSettlement && discovered && x.ps.firsts.discovery === undefined) x.ps.firsts.discovery = x.tick;
   if (st && newToSettlement && (discovered || how === 'god')) {
     st.stats.discoveries++;
     const v = vars(x, st, s, { knowledge: kName(x, k), cause: meta.trigger ?? '', item: meta.item !== undefined ? x.c.items.list[meta.item]?.name.toLowerCase() : undefined, clan: clanOf(x, s) });
@@ -228,7 +230,17 @@ let _words = new Uint32Array(0);
 
 /** the product of a library effect (speed, teach, mortality, blight...) over what a settlement knows (cached per library) */
 const _effects = new WeakMap<number[], { n: number; m: Map<string, number> }>();
+/** the last answer (SIM perf push 3: a walk, a session's yield and a lesson ask the same settlement for the same effect
+ * many times in a row — a weak-map lookup each time; the same cache key: the library array and its length) */
+let _lastLib: number[] | null = null, _lastN = -1, _lastKey = '', _lastV = 1;
 export function libraryEffect(x: PCtx, st: Settlement, key: string): number {
+  const lib = st.library;
+  if (lib === _lastLib && lib.length === _lastN && key === _lastKey) return _lastV;
+  const v = libraryEffectOf(x, st, key);
+  _lastLib = lib; _lastN = lib.length; _lastKey = key; _lastV = v;
+  return v;
+}
+function libraryEffectOf(x: PCtx, st: Settlement, key: string): number {
   let c = _effects.get(st.library);
   if (!c || c.n !== st.library.length) { c = { n: st.library.length, m: new Map() }; _effects.set(st.library, c); }
   let v = c.m.get(key);

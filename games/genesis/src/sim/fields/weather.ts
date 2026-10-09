@@ -18,11 +18,12 @@ import { composeSky, markRainDirty } from './climate.ts';
 import { igniteCell } from './fire.ts';
 import { hashFloat } from '../core/rng.ts';
 import { capCells } from '../perf/cap.ts';
-import { lapseLevel } from '../perf/lapse.ts';
+import { planetLevel } from '../perf/lapse.ts';
 
 export const WEATHER_CADENCE = 10;
 /** the overlay is redrawn every this many weather steps, per time-lapse level */
-const OVERLAY_EVERY = [2, 2, 4] as const;
+// (per planetLevel: plain, 100x, 1000x, a world the camera is not on — its steps are 60 ticks: SIM perf push 3)
+const OVERLAY_EVERY = [2, 2, 4, 2] as const;
 /** stylised drift: metres per tick per (m/s) of wind (a storm crosses a 3 km world in about two days) */
 const DRIFT = 0.6;
 const MAX_NATURAL = 9;
@@ -150,7 +151,7 @@ export function weatherStep(u: Universe, p: Planet, dt = WEATHER_CADENCE): void 
   } else spawn(u, p, dt);
   // systems drift about one cell per step: the overlay is rebuilt every other step (every 4th at 1000x, where a step is
   // 30 ticks: perf/lapse.ts), or at once when systems appear or end
-  const even = Math.floor(u.tick / dt) % OVERLAY_EVERY[lapseLevel(u)] === 0;
+  const even = Math.floor(u.tick / dt) % OVERLAY_EVERY[planetLevel(u, p)] === 0;
   if (even || ended.length || p.weather.length !== before || p.weather.some((w) => w.age <= dt)) refreshOverlay(u, p);
   applyEffects(u, p, dt);
   lightning(u, p, dt);
@@ -386,13 +387,25 @@ function lightning(u: Universe, p: Planet, dt: number): void {
   const rng = p.rng.weather;
   const content = u.content;
   const P = p.grid.pos;
-  const strike = (cx: number, cy: number, cz: number, intensity: number) => {
+  // (SIM perf push 3, round 2: at 100x / 1000x lightning lit fires under storms that never start at 1x. The overlay
+  // under a storm is redrawn only every 2nd-4th step — up to 120 ticks old — while strikes land in the storm's CURRENT
+  // disc, and the ground's wetness is set by the climate pass, every 2 / 6 / 12 hours: the leading edge of a storm read
+  // as dry ground in dry air. At 1x every strike falls on a raining cell the hourly pass has wetted. A strike from a
+  // raining system now reads the cell as that system leaves it — raining, and as wet as the hourly pass makes a cell
+  // under its rain (climate.ts: 0.5 + 0.08 × the rate, rain only, not frozen). Level 0 reads the fields as before)
+  const lapsed = u.settings.lapse !== undefined && planetLevel(u, p) > 0;
+  const strike = (cx: number, cy: number, cz: number, intensity: number, rain = 0, code = 0) => {
     const c = p.grid.nearestCell(cx, cy, cz);
     u.emit({ t: 'lightning', planet: p.id, pos: [P[c * 3], P[c * 3 + 1], P[c * 3 + 2]], a: intensity, data: { cell: c } });
     // dry fuel catches
     const f = p.f;
     const fuel = f.grass[c] * 0.3 + f.shrub[c] * 0.6 + f.tree[c] + f.crop[c] * 0.4;
-    const dry = 1 - Math.min(1, f.moisture[c] * 1.3 + f.wetness[c] * 0.6 + (f.precip[c] > 0 ? 0.5 : 0));
+    let wet = f.wetness[c];
+    if (rain > 0 && (code === 5 || code === 6 || (code === 1 && f.temperature[c] >= p.st.liquid.freeze))) {
+      const ww = 0.5 + rain * 0.08;
+      if (ww > wet) wet = ww > 1 ? 1 : ww;
+    }
+    const dry = 1 - Math.min(1, f.moisture[c] * 1.3 + wet * 0.6 + (rain > 0 || f.precip[c] > 0 ? 0.5 : 0));
     let ignited = false;
     if (fuel > 0.1 && dry > 0.15 && hashFloat(c, u.tick, 0x11e7) < 0.35 * dry * Math.min(1, fuel)) ignited = igniteCell(u, p, c, 0.5 + 0.4 * intensity, 'lightning');
     for (const h of strikeHooks) h(u, p, c, ignited);
@@ -404,9 +417,20 @@ function lightning(u: Universe, p: Planet, dt: number): void {
     const expected = def.lightning * I * (dt / 60);
     let n = Math.floor(expected);
     if (rng.chance(expected - n)) n++;
+    const rains = lapsed && def.precip > 0 && I > 0;
+    const code = rains ? precipCode(def) : 0, eyed = !!def.render.eye;
     for (let i = 0; i < n; i++) {
       // a random point in the disc (uniform by area)
-      const r = Math.sqrt(rng.float()) * (w.radius / p.st.radius) * 0.9;
+      const u01 = rng.float();
+      const r = Math.sqrt(u01) * (w.radius / p.st.radius) * 0.9;
+      // (round 2: the system's own rain there, as the overlay paints it — refreshOverlay; d = distance / radius)
+      let rain = 0;
+      if (rains) {
+        const d = Math.sqrt(u01) * 0.9;
+        let k = d < 0.6 ? 1 : Math.max(0, 1 - (d - 0.6) / 0.55);
+        k *= k * (3 - 2 * k);
+        rain = def.precip * k * I * (eyed ? Math.min(1, d / 0.12) : 1);
+      }
       const th = rng.float() * Math.PI * 2;
       let ex = w.pos[2], ez = -w.pos[0];
       let el = Math.hypot(ex, ez);
@@ -415,7 +439,7 @@ function lightning(u: Universe, p: Planet, dt: number): void {
       const nx = w.pos[1] * ez, ny = w.pos[2] * ex - w.pos[0] * ez, nz = -w.pos[1] * ex;
       const cs = Math.cos(r), sn = Math.sin(r);
       const dx = Math.cos(th) * ex + Math.sin(th) * nx, dy = Math.sin(th) * ny, dz = Math.cos(th) * ez + Math.sin(th) * nz;
-      strike(w.pos[0] * cs + dx * sn, w.pos[1] * cs + dy * sn, w.pos[2] * cs + dz * sn, I);
+      strike(w.pos[0] * cs + dx * sn, w.pos[1] * cs + dy * sn, w.pos[2] * cs + dz * sn, I, rain, code);
     }
   }
   const gk = p.st.globalWeather ? content.weather.find(p.st.globalWeather) : undefined;

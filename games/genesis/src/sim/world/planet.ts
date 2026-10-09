@@ -179,6 +179,8 @@ export interface PlanetState {
   moistureBias?: number;
   /** mean ground height at generation: the altitude datum for the lapse rate on worlds whose sea lies below it */
   refLevel?: number;
+  /** (SIM phase 4) a ring of rubble around it (a cracked world): radii from the centre (m) and density 0..1 */
+  ring?: { inner: number; outer: number; density: number };
 }
 
 /** Tunable rates (exposed through the parameter registry; tests switch sinks off). */
@@ -431,6 +433,7 @@ export class Planet {
       yearDays: Math.round(yearDays * 100) / 100,
       hourAtLon0: (hour / 24) * st.dayHours,
       sunDir: [sunDir[0], sunDir[1], sunDir[2]],
+      ...(st.ring ? { ring: { ...st.ring } } : {}),
     };
   }
 

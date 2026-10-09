@@ -66,8 +66,10 @@ test('time-lapse: the levels of the speed presets; level 0 is the plain sim and 
   assert.deepEqual(homeRecords(b), []);
   assert.equal(lapseLevel(b.u), 0);
   a.step(400); b.step(400);
-  // (the whole hash is not compared: the god layer counts every accepted command in its act statistics)
-  assert.equal(worldHash(a), worldHash(b), 'a 10x preset is the plain sim');
+  // the whole state, not only the world arrays (SIM perf push 3: 'time.scale' is plumbing in god/powers.ts, so a speed
+  // change is no longer counted among the god's acts)
+  assert.equal(worldHash(a), worldHash(b), 'a 10x preset is the plain sim (world arrays)');
+  assert.equal(a.hash(), b.hash(), 'a 10x preset is the plain sim (full hash)');
   // up to 1000x and back to 1x: the records are consumed and the state is dropped again
   assert.ok(b.applyNow({ k: 'time.scale', scale: 1000 }).ok);
   assert.equal(lapseLevel(b.u), 2);

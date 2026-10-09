@@ -638,7 +638,8 @@ export class Renderer {
     if (on) (u.uNightAmbient.value as Vector3).addScaledVector(_moonE, 0.22 * smoothstepN(-0.05, 0.25, elev));
     // starlight and airglow (with air): a moonless night keeps buildings, trees, people and roads faintly readable in a
     // cool grey-blue instead of black against the lit windows (planetview's base airglow is ~5× weaker)
-    if (vis.atmo.has) (u.uNightAmbient.value as Vector3).add(_v3.set(0.014, 0.019, 0.04).multiplyScalar(orbitDim));
+    // (at 0.014 / 0.019 / 0.04 a moonless street at eye height was black past the reach of the lamps)
+    if (vis.atmo.has) (u.uNightAmbient.value as Vector3).add(_v3.set(0.021, 0.028, 0.058).multiplyScalar(orbitDim));
     return on;
   }
   private wb = new Vector3(1, 1, 1);

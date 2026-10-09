@@ -18,12 +18,19 @@ import { computeOcean, initHydrology } from '../fields/hydrology.ts';
 import { initClimate, seedRiparian } from '../fields/climate.ts';
 import { initVegetation } from '../fields/vegetation.ts';
 import { initBiomes } from '../fields/biomes.ts';
-import { markInitialFirsts } from '../chronicle.ts';
+import { markInitialFirsts, milestonesCheck } from '../chronicle.ts';
 import { makeCtx } from '../people/ctx.ts';
 import { initHerds } from '../life/herds.ts';
 import { spawnPeople } from '../people/spawn.ts';
 import { siteScore } from '../people/settlement.ts';
 import { ERAS } from '../content.ts';
+import type { Settlement } from '../people/state.ts';
+import { learn, refreshLibrary } from '../people/knowledge.ts';
+import { storeAdd } from '../people/store.ts';
+import { planBuilding, canBuild } from '../people/buildings.ts';
+import { hashFloat } from '../core/rng.ts';
+import { NS } from '../people/defs.ts';
+import { AgentFlag } from '../types.ts';
 
 /** a scenario's people entry (scenarios.json "peoples") */
 interface PeopleEntry {
@@ -34,6 +41,13 @@ interface PeopleEntry {
   era?: string;
   /** several settlements of this people: 'village' | 'town' | 'city' each (eras step up toward the last) */
   settlements?: string[];
+  /** (phase 4) ideas beyond the era its most advanced settlement holds (prerequisites come along): a people at the
+   * edge of rockets */
+  knowledge?: string[];
+  /** (phase 4) goods in the store of its most advanced settlement (item id -> quantity) */
+  store?: Record<string, number>;
+  /** (phase 4) buildings standing there besides what its era raises (building ids) */
+  buildings?: string[];
 }
 
 const DEG = Math.PI / 180;
@@ -109,15 +123,19 @@ export function buildScenario(content: Content, scenarioId: string, seed: number
     const era = Math.max(0, ERAS.indexOf((raw.era ?? 'stone') as (typeof ERAS)[number]));
     const weight = (sz: string | null) => (sz === 'city' ? 2 : sz === 'town' ? 1.2 : 1);
     const total = sizes.reduce((a, sz) => a + weight(sz), 0);
+    let last: Settlement | null = null;
     sizes.forEach((sz, i) => {
       // several settlements of one people stand at different eras: the last at the scenario's era
       const e = Math.max(0, era - (sizes.length - 1 - i));
-      spawnPeople(u, p, {
+      last = spawnPeople(u, p, {
         species: raw.species, count: Math.max(4, Math.round((raw.count * weight(sz)) / total)), era: ERAS[e],
         settled: true, size: sz ?? undefined,
-      });
+      }) ?? last;
     });
+    if (last && (raw.knowledge?.length || raw.store || raw.buildings?.length)) advance(u, p, last, raw);
   }
+  // the opening's beats a world already has (its air, seas, green, its peoples) are not news (chronicle.ts)
+  for (const { p } of made) milestonesCheck(u, p, true);
   const fp = u.planet(focus) ?? u.planets[0];
   if (fp) {
     const P = fp.grid.pos;
@@ -136,4 +154,44 @@ export function buildScenario(content: Content, scenarioId: string, seed: number
     u.focus = { planet: fp.id, pos: [P[best * 3], P[best * 3 + 1], P[best * 3 + 2]] };
   }
   return u;
+}
+
+/**
+ * A people further along than its era: extra ideas (and everything they rest on) for a share of its adults — at
+ * least three knowers, two of them masters — the goods in its store, and the buildings those ideas raise, standing.
+ */
+function advance(u: Universe, p: Planet, st: Settlement, raw: PeopleEntry): void {
+  const x = makeCtx(u, p);
+  const A = x.A;
+  const want = new Set<number>();
+  const add = (id: string) => {
+    const k = x.rt.byId.get(id);
+    if (k === undefined || want.has(k) || st.library.includes(k)) return;
+    for (const q of x.rt.list[k].preList) add(x.rt.list[q].id);
+    want.add(k);
+  };
+  for (const id of raw.knowledge ?? []) add(id);
+  const adults = (x.ps.members.get(st.id) ?? []).filter((m) => !(A.flags[m] & AgentFlag.child));
+  const ks = [...want].sort((a, b) => x.rt.list[a].era - x.rt.list[b].era || a - b);
+  for (const k of ks) {
+    const r = x.rt.list[k];
+    let knowers = 0, masters = 0;
+    for (const m of adults) {
+      if (knowers >= 3 && hashFloat(A.id[m], k, 0xadf) >= (r.teach <= 0.35 ? 0.6 : 0.3)) continue;
+      learn(x, m, k, 'spawn');
+      if (!A.knows(m, k)) continue;
+      knowers++;
+      if (masters < 2) { A.skills[m * NS + r.skill] = Math.max(A.skills[m * NS + r.skill], 0.75 + 0.15 * hashFloat(A.id[m], k, 0xae0)); masters++; }
+    }
+  }
+  refreshLibrary(x, st);
+  for (const [id, q] of Object.entries(raw.store ?? {})) { const it = x.c.items.idx(id); if (it >= 0 && q > 0) storeAdd(x, st, it, q); }
+  // what the new ideas raise, standing (a launchpad for those who know rockets)
+  const raise = new Set<number>();
+  for (const k of ks) for (const b of x.rt.list[k].outBuildings) raise.add(b);
+  for (const id of raw.buildings ?? []) { const t = x.c.buildings.idx(id); if (t >= 0) raise.add(t); }
+  for (const t of [...raise].sort((a, b) => a - b)) {
+    if (!canBuild(x, st, t) || x.ps.of(st.id).some((b) => b.type === t)) continue;
+    planBuilding(x, st, t, true);
+  }
 }

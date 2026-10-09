@@ -23,6 +23,7 @@ import powers from './powers.json' with { type: 'json' };
 import disasters from './disasters.json' with { type: 'json' };
 import creatures from './creatures.json' with { type: 'json' };
 import lexicon from './lexicon.json' with { type: 'json' };
+import ships from './ships.json' with { type: 'json' };
 import plainsFolk from './species/plains-folk.json' with { type: 'json' };
 import coastalFolk from './species/coastal-folk.json' with { type: 'json' };
 import hive from './species/hive.json' with { type: 'json' };
@@ -56,6 +57,8 @@ export const BASE_PACK: ContentPack = {
   disasters: disasters.disasters as unknown as ContentPack['disasters'],
   creatures: creatures.creatures as unknown as ContentPack['creatures'],
   lexicon: lexicon as unknown as ContentPack['lexicon'],
+  // worlds and space (phase 4)
+  ships: ships.ships as unknown as ContentPack['ships'],
 };
 
 /** name titles (leader / priest / master), shared by the sim's naming and the inspector */

@@ -131,6 +131,9 @@
     { "id": "generation-ship", "name": "Generation ship", "tags": ["vehicle", "rocket", "space", "ship"], "weight": 500000, "value": 20000.0 },
     { "id": "idol", "name": "Carved idol", "tags": ["artifact", "sacred", "luxury"], "weight": 2, "value": 3.0 },
     { "id": "jewellery", "name": "Jewellery", "tags": ["luxury", "precious"], "weight": 0.1, "value": 8.0 },
-    { "id": "gas-bladder", "name": "Gas bladder", "tags": ["part", "buoyant"], "weight": 1, "value": 1.5 }
+    { "id": "gas-bladder", "name": "Gas bladder", "tags": ["part", "buoyant"], "weight": 1, "value": 1.5 },
+    {"id": "airship", "name": "Airship", "tags": ["vehicle", "air", "ship"], "weight": 4000, "value": 400},
+    {"id": "orbiter", "name": "Orbiter", "tags": ["vehicle", "space", "instrument"], "weight": 2500, "value": 900},
+    {"id": "pressure-suit", "name": "Pressure suit", "tags": ["clothing", "suit"], "weight": 14, "value": 60, "warmth": 0.75, "decay": 0.001}
   ]
 }

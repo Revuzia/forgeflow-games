@@ -1,0 +1,32 @@
+{
+  "$comment": "Example GENESIS mod pack — a NEW disaster composed of the built-in effectors (CONTRACT §11.3), with its power for the palette, the radial menu and the freeform parser. A salt wind: a dry gale off a dying sea that walks inland, withers the crops and grass it crosses, salts the fields (the salt lies in the soil as pollution, and fertility falls until the rain washes it out), drinks the moisture out of the ground and stings the eyes of anyone caught in it. Nature sends it now and then where dry land, a sea and fields meet; the god sends it at will and can cancel, scale, move or freeze it like any other disaster. Load it before creating a world, or into a running world (it only adds new things).",
+  "id": "salt-wind",
+  "name": "Salt wind",
+  "version": "1.0.0",
+  "disasters": [
+    {
+      "id": "salt-wind", "name": "Salt wind", "category": "weather",
+      "desc": "A dry gale off a dying sea walks inland: crops wither white, the fields are salted, the wells turn brackish.",
+      "life": [600, 1200], "radius": 420, "intensity": 1, "speed": 3,
+      "effectors": [
+        { "type": "front", "every": 5, "crops": 0.08, "grass": 0.06, "harm": 0.01, "herds": 0.02, "weather": "sandstorm", "wander": 0.25 },
+        { "type": "area", "every": 30, "moisture": 0.88, "veg": { "crop": 0.03, "grass": 0.02 }, "toxic": 0.01, "harm": 0.001 }
+      ],
+      "render": { "dust": 0.6, "height": 180 },
+      "witness": { "harm": 0.35, "wonder": 0.2 },
+      "triggers": ["drought", "famine", "storm"],
+      "natural": { "rate": 0.06, "needs": ["dry", "sea", "crops"] },
+      "synonyms": ["salt wind", "salt gale", "white wind", "the brine wind", "a wind that salts the fields"]
+    }
+  ],
+  "powers": [
+    {
+      "id": "disaster-salt-wind", "name": "Salt wind", "category": "Disasters", "icon": "d-wind", "ring": 2, "gesture": null,
+      "command": "disaster.spawn", "params": { "kind": "salt-wind" },
+      "schema": { "pos": { "type": "pos", "target": "point" }, "radius": { "type": "number", "min": 50, "max": 3000, "unit": "m", "target": "region" }, "intensity": { "type": "number", "min": 0.1, "max": 5 } },
+      "target": "point", "synonyms": ["salt wind", "salt gale", "brine wind", "salt the fields"],
+      "desc": "Send a dry gale off the sea that withers and salts the fields where you point.", "cost": 40, "cooldown": 120,
+      "witness": { "harm": 0.35, "wonder": 0.2, "radius": 700 }
+    }
+  ]
+}

@@ -145,7 +145,8 @@ export interface CreatureState {
 export interface GodRecord {
   id: number;
   name: string;
-  kind: 'player' | 'rival';
+  /** 'visitor': the sky-folk of another world, worshipped by a people they came down among (space/contact.ts) */
+  kind: 'player' | 'rival' | 'visitor';
   /** -1 cruel .. +1 good: the running balance of help against harm (the hand's tint, the rival's choices) */
   alignment: number;
   /** rivals: 'benevolent' | 'wrathful' | 'trickster' | 'jealous' */

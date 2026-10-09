@@ -432,7 +432,7 @@ function seaUpkeep(p: Planet, kf: number): number {
     }
     sourced += rampOcean(p, step, hy.seaNow, stamp);
     activateCoast(p);
-  } else if (cfg.oceanRelax && hy.oceanCells > 0 && hy.steps % (30 / kf) === 0) {
+  } else if (cfg.oceanRelax && hy.oceanCells > 0 && hy.steps % relaxSteps(kf) === 0) {
     const d0 = hy.seaNow - oceanMeanLevel(p.s.ocean, p.f.surface, p.f.water, p.cellArea, p.count);
     if (Math.abs(d0) > 0.004) {
       const d = Math.max(-0.03, Math.min(0.03, d0));
@@ -462,6 +462,12 @@ function rampOcean(p: Planet, step: number, level: number, stamp: number): numbe
     }
   }
   return added;
+}
+
+/** the sea's mean level is relaxed every 30 plain steps' worth: 30 / 15 steps at kf 1 / 2 (as before), 8 when a step
+ * covers 8 ticks (a world nobody watches at 100x / 1000x: SIM perf push 3) */
+function relaxSteps(kf: number): number {
+  return kf === 1 || kf === 2 ? 30 / kf : Math.max(1, Math.round(30 / kf));
 }
 
 function oceanMeanLevel(ocean: Uint8Array, surf: Float32Array, water: Float64Array, A: Float64Array, N: number): number {

@@ -40,7 +40,9 @@ import type { Planet } from '../world/planet.ts';
 import type { CommandRegistry } from '../god/commands.ts';
 import { anyFlag, countCommonBits } from '../core/activeset.ts';
 
-export type LapseLevel = 0 | 1 | 2;
+/** 0 plain · 1 time-lapse (100x) · 2 deep time-lapse (1000x) · 3 a living world the camera is not on, at 100x or 1000x
+ * (SIM perf push 3: `planetLevel`) */
+export type LapseLevel = 0 | 1 | 2 | 3;
 
 /** saved time-lapse state (Universe.settings.lapse; absent = level 0 with nothing pending) */
 export interface LapseState {
@@ -50,14 +52,14 @@ export interface LapseState {
   run: Record<string, number>;
 }
 
-/** a system on a time-lapse schedule: base cadence (ticks) and its multiplier per level */
+/** a system on a time-lapse schedule: base cadence (ticks) and its multiplier per level (the 4th: unfocused worlds) */
 export interface LapseSys {
   key: string;
   base: number;
-  mult: readonly [number, number, number];
+  mult: readonly [number, number, number, number];
   /** due when (ts − phase) mod cadence < window[level] (rain batches: the first hydrology step at or after the sky
    * step, so the window is the hydrology cadence of the level) */
-  window: readonly [number, number, number];
+  window: readonly [number, number, number, number];
   /** it only ever runs on ticks that are multiples of this (systems called from the hydrology step: 2) */
   step: number;
   /** cadence multiplier on a dormant world (1 = none) */
@@ -72,28 +74,36 @@ export interface LapseSys {
 export const DORMANT_MULT = 6;
 
 export const LAPSE_CLIMATE: LapseSys = {
-  key: 'clim', base: 60, mult: [1, 2, 6], window: [1, 1, 1], step: 1, dormant: DORMANT_MULT,
+  key: 'clim', base: 60, mult: [1, 2, 6, 12], window: [1, 1, 1, 1], step: 1, dormant: DORMANT_MULT,
 };
+/** (push 3 round 2: 12 h on a world the camera is not on — at 24 h its plants fell 2-4 % behind 1x within 12 days,
+ * ~1 % at 12 h; vegetation.ts also solves the logistic growth of a multi-hour pass exactly now) */
 export const LAPSE_VEG: LapseSys = {
-  key: 'veg', base: 60, mult: [1, 2, 8], window: [1, 1, 1], step: 1, dormant: DORMANT_MULT,
+  key: 'veg', base: 60, mult: [1, 2, 8, 12], window: [1, 1, 1, 1], step: 1, dormant: DORMANT_MULT,
 };
-export const LAPSE_WEATHER: LapseSys = { key: 'wx', base: 10, mult: [1, 2, 3], window: [1, 1, 1], step: 1, dormant: 1 };
+export const LAPSE_WEATHER: LapseSys = { key: 'wx', base: 10, mult: [1, 2, 3, 6], window: [1, 1, 1, 1], step: 1, dormant: 1 };
 /** hydrology: every 2 ticks; at 1000x every 4 — but only while the sea is calm (push 2 round 2; calmSea below). A
  * 4-tick step keeps the per-step gain (the CFL bound) and halves the per-step friction: a steady flow carries the same
  * discharge per tick, but a free wave loses a quarter of the 1x friction per game tick, so after a quake or a tsunami
  * the whole sea stayed awake 3-5x longer than at 1x (days of 1000x at a third of its speed). With waves on the sea the
  * pipes now run exactly as at 1x; a calm sea — the usual state: no sea cell wakes in an idle day on the home world, a
  * few dozen off river mouths in a monsoon — keeps the 4-tick step (~20 % of 1000x idle, ~35 % in a monsoon). */
-export const LAPSE_HYDRO: LapseSys = { key: 'hydro', base: 2, mult: [1, 1, 2], window: [1, 1, 1], step: 2, dormant: 1, coarseIf: calmSea };
+export const LAPSE_HYDRO: LapseSys = { key: 'hydro', base: 2, mult: [1, 1, 2, 8], window: [1, 1, 1, 1], step: 2, dormant: 1, coarseIf: calmSea };
 /** the rain batch rides on the sky period (= the weather cadence); window = the longest hydrology cadence of the level
  * (with the sea awake at 1000x the steps are 2 ticks apart: a second, 2-tick batch then falls in the window — exact) */
-export const LAPSE_RAIN: LapseSys = { key: 'rain', base: 10, mult: [1, 2, 3], window: [2, 2, 4], step: 2, dormant: 1 };
+export const LAPSE_RAIN: LapseSys = { key: 'rain', base: 10, mult: [1, 2, 3, 6], window: [2, 2, 4, 16], step: 2, dormant: 1 };
 /** biome classification (biomes.ts): twice a day, daily at 1000x */
-export const LAPSE_BIOME: LapseSys = { key: 'biome', base: 720, mult: [1, 1, 2], window: [1, 1, 1], step: 1, dormant: 1 };
+export const LAPSE_BIOME: LapseSys = { key: 'biome', base: 720, mult: [1, 1, 2, 4], window: [1, 1, 1, 1], step: 1, dormant: 1 };
 /** wind on sand and ash (terrain.ts; the terrain step's phase is +5) */
-export const LAPSE_SAND: LapseSys = { key: 'sand', base: 10, mult: [1, 2, 3], window: [1, 1, 1], step: 1, dormant: 1 };
+export const LAPSE_SAND: LapseSys = { key: 'sand', base: 10, mult: [1, 2, 3, 6], window: [1, 1, 1, 1], step: 1, dormant: 1 };
+/** lava, talus (and the vents' feed): terrain.ts terrainStep, every 10 ticks — every 30 on a world the camera is not on
+ * (push 3; the step's phase is +5 and the sand / ash pass below rides on it) while it has no vent and no lava moving
+ * (round 2: `coarseIf`, decided per 30-tick block like the calm sea. A 30-tick lava step poured and boiled three steps'
+ * worth at once and the volcanic world nobody watched ran > 4 °C warm with up to 10 % more lava within days; with lava
+ * about, the step is the 1x one. What stays coarse there is talus settling, which ends in the same rest state) */
+export const LAPSE_TERRAIN: LapseSys = { key: 'terr', base: 10, mult: [1, 1, 1, 3], window: [1, 1, 1, 1], step: 1, dormant: 1, coarseIf: noLava };
 /** thin overland sheets: every hydrology step, every 2nd (100x), every 3rd 4-tick step (1000x) */
-export const LAPSE_SHEETS: LapseSys = { key: 'sheet', base: 2, mult: [1, 2, 6], window: [1, 1, 1], step: 2, dormant: 1 };
+export const LAPSE_SHEETS: LapseSys = { key: 'sheet', base: 2, mult: [1, 2, 6, 24], window: [1, 1, 1, 1], step: 2, dormant: 1 };
 /** systems whose last run is recorded when time-lapse starts (all scheduled systems; phases as sim.ts runPlanet) */
 const SYSTEMS: { sys: LapseSys; phase: number; stagger: boolean }[] = [
   { sys: LAPSE_CLIMATE, phase: 0, stagger: true },
@@ -103,25 +113,47 @@ const SYSTEMS: { sys: LapseSys; phase: number; stagger: boolean }[] = [
   { sys: LAPSE_RAIN, phase: 0, stagger: true },
   { sys: LAPSE_SHEETS, phase: 0, stagger: false },
   { sys: LAPSE_SAND, phase: 5, stagger: true },
+  { sys: LAPSE_TERRAIN, phase: 5, stagger: true },
   { sys: LAPSE_BIOME, phase: 360, stagger: true },
 ];
-/** keyframe spacing multiplier per level (Sim.keyframeEvery × this) */
+/** keyframe spacing multiplier per level (Sim.keyframeEvery × this). (Push 3 round 2: back to 4 days at 1000x — 8
+ * days doubled the worst rewind replay to ~11 500 ticks, ~8 s of CPU blocking the worker with 1 500 agents) */
 export const KEYFRAME_MULT: readonly [number, number, number] = [1, 1, 2];
 
 /** the level a speed multiplier asks for */
-export function levelOfScale(scale: number): LapseLevel {
+export function levelOfScale(scale: number): 0 | 1 | 2 {
   return scale >= 1000 ? 2 : scale >= 100 ? 1 : 0;
 }
 
-/** the current time-lapse level */
-export function lapseLevel(u: Universe): LapseLevel {
+/** the current time-lapse level (the logged one: 0..2) */
+export function lapseLevel(u: Universe): 0 | 1 | 2 {
   const la = u.settings.lapse;
   return la ? levelOfScale(la.scale) : 0;
 }
 
-/** the current cadence (ticks) of a scheduled system */
-export function lapseCadence(u: Universe, sys: LapseSys): number {
-  return sys.base * sys.mult[lapseLevel(u)];
+/** a world the camera is not on (the logged `focus` names another planet; no focus at all: every world is watched) */
+export function unfocused(u: Universe, p: Planet): boolean {
+  const f = u.focus;
+  return f != null && f.planet !== p.id;
+}
+
+/**
+ * The time-lapse level planet p's schedules follow (SIM perf push 3): the logged level on the world the camera is on;
+ * UNFOCUSED (3) on any other world while time-lapse is on — its hydrology, sheets, rain, weather, sand and ash, climate,
+ * vegetation and biomes then run coarser still (the 4th column of every LAPSE_* table). Deterministic: the focus is a
+ * logged command (CONTRACT §8.7), and lapseDue integrates exactly the time since each system last ran across a switch.
+ * What happens on worlds nobody watches at 100x / 1000x is a time-lapse approximation (CONTRACT §5 note).
+ */
+export function planetLevel(u: Universe, p: Planet): LapseLevel {
+  const la = u.settings.lapse;
+  if (!la) return 0;
+  const lv = levelOfScale(la.scale);
+  return lv > 0 && unfocused(u, p) ? 3 : lv;
+}
+
+/** the current cadence (ticks) of a scheduled system (on planet p: its own level) */
+export function lapseCadence(u: Universe, sys: LapseSys, p?: Planet): number {
+  return sys.base * sys.mult[p ? planetLevel(u, p) : lapseLevel(u)];
 }
 
 /** the planet stagger of runPlanet (slow passes of different worlds never share a tick) */
@@ -146,7 +178,7 @@ export function lapseDue(u: Universe, p: Planet, sys: LapseSys, ts: number, phas
   // a dormant world (no air, water, life, weather, lava or fire: perf/lapse.ts dormant) runs its slow passes coarser
   const dm = sys.dormant > 1 && onBase && dormant(u, p) ? sys.dormant : 1;
   if (!la && dm === 1) return onBase ? sys.base : 0;
-  const lv = la ? levelOfScale(la.scale) : 0;
+  const lv = planetLevel(u, p);
   let mult = sys.mult[lv] > dm ? sys.mult[lv] : dm;
   const key = runKey(p.id, sys);
   // a state-dependent coarse cadence (hydrology at 1000x: only while the sea is calm). The state is asked on the ticks
@@ -162,8 +194,9 @@ export function lapseDue(u: Universe, p: Planet, sys: LapseSys, ts: number, phas
   const cad = sys.base * mult;
   const t = u.tick;
   if (mod(ts - phase, cad) >= sys.window[lv]) {
-    // entering a dormant schedule between its runs: the last run was the base one just before
-    if (dm > 1 && (!la || la.run[key] === undefined)) {
+    // entering a coarser schedule between its runs (a dead world turned dormant; push 3: a world the camera left, a
+    // world born at 100x / 1000x): the last run was the base one just before
+    if (mult > 1 && (!la || la.run[key] === undefined)) {
       if (!la) { la = { scale: 1, run: {} }; u.settings.lapse = la; }
       la.run[key] = lastBaseRun(t, ts - t, sys, phase);
     }
@@ -217,6 +250,11 @@ function calmSea(p: Planet): boolean {
   return countCommonBits(p.s.hAct, p.s.ocean, p.count, k) < k;
 }
 
+/** no vent feeds lava and no lava cell is awake (LAPSE_TERRAIN.coarseIf: lava steps at the 1x cadence) */
+function noLava(p: Planet): boolean {
+  return p.vents.length === 0 && !anyFlag(p.s.lAct, p.count);
+}
+
 /** no standing water and no lava anywhere (a sleeping puddle is not awake, but it is water) */
 function noWater(p: Planet): boolean {
   const w = p.f.water, l = p.f.lava;
@@ -250,13 +288,15 @@ function lastBaseRun(t: number, offset: number, sys: LapseSys, phase: number): n
  * base cadence (a record-less system has been on it — at level 0, or at level 1 for those whose level-1 multiplier is
  * 1, such as the biomes: round 2 fixed 100x → 1000x, which used to skip this and lose up to one base period).
  */
-export function setTimeScale(u: Universe, scale: number): LapseLevel {
+export function setTimeScale(u: Universe, scale: number): 0 | 1 | 2 {
   const lv = levelOfScale(scale);
   let la = u.settings.lapse;
   if (lv > 0) {
     for (const p of u.planets) {
+      // (push 3: a world the camera is not on follows the unfocused column)
+      const plv = unfocused(u, p) ? 3 : lv;
       for (const { sys, phase, stagger: st } of SYSTEMS) {
-        if (sys.mult[lv] === 1) continue;
+        if (sys.mult[plv] === 1) continue;
         if (!la) { la = { scale, run: {} }; u.settings.lapse = la; }
         const key = runKey(p.id, sys);
         if (la.run[key] === undefined) la.run[key] = lastBaseRun(u.tick, st ? stagger(p) : 0, sys, phase);

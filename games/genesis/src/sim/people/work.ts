@@ -12,7 +12,6 @@ import { BELONG, FAITH, FOOD, NEED_N, REST, WATER, WET } from './needs.ts';
 import { availability, itemIdx } from './resources.ts';
 import { bestFood, storeAdd, storeHas, storeTake, storeTakeAny, storeAny } from './store.ts';
 import { craft } from '../recipes/crafting.ts';
-import { firstOrbit } from '../chronicle.ts';
 import { accident, learn, learnBoost, libraryEffect, resolveExperiment, reverseEngineer, talk, teachSession } from './knowledge.ts';
 import { die, practise, insertSorted } from './lifecycle.ts';
 import { leaveShelter, startTask } from './tasks.ts';
@@ -114,12 +113,9 @@ export function finishTask(x: PCtx, s: number): boolean {
     case TASK.craft: {
       if (!st) return false;
       const res = craft(x, s, st, A.tData[s], A.cell[s]);
-      if (res.ok) {
-        equipFromStore(x, s, st);
-        // a rocket built for orbit at the launchpad: the world's first orbit
-        const out = x.rt.list[A.tData[s]]?.outItems[0]?.[0];
-        if (out !== undefined && x.c.items.list[out]?.id === 'orbital-rocket') firstOrbit(x, st);
-      }
+      // (a rocket made at the launchpad is a hull in the store: the first orbit is told when a ship reaches orbit —
+      // space/flight.ts — not when it is made)
+      if (res.ok) equipFromStore(x, s, st);
       return false;
     }
     case TASK.farm: farm(x, s, st); return false;
@@ -174,7 +170,8 @@ export function finishTask(x: PCtx, s: number): boolean {
 
 // ───────────────────────────── eating ─────────────────────────────
 
-function eat(x: PCtx, s: number, st: Settlement | undefined, fromStore: boolean): void {
+/** (exported for the meal in passing of the peoples' time-lapse: perf/plapse.ts, SIM perf push 3) */
+export function eat(x: PCtx, s: number, st: Settlement | undefined, fromStore: boolean): void {
   const A = x.A;
   const sp = x.info[A.species[s]];
   const nb = s * NEED_N;

@@ -217,6 +217,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // ── regolith (airless) / soil ──
   // noise-broken thresholds: per-cell fields change linearly across 50 m triangles, the noise hides those edges
   float soilW = smoothstep(0.1, 0.9, soil + m1 * 0.45 + m2 * 0.25) * (1.0 - steep * 0.85);
+  // where plants grow there is earth under them: the gaps of a thin sward show soil, not the bedrock grey (partial
+  // cover on uplands read as blue-grey rock blotches between the grass); rock stays on steep faces and ridges
+  if (!airless) soilW = max(soilW, smoothstep(0.04, 0.3, vF2.x + vF2.y + vF2.z + vF2.w) * (1.0 - steep * 0.9) * 0.9);
   if (soilW > 0.001) {
     vec3 sc;
     float sb;
@@ -662,7 +665,10 @@ ${TERRAIN_VERT_CORE}
     float rockK = smoothstep(0.55, 0.9, tA.y);
     float flatK = max(smoothstep(0.04, 0.3, vF2.w), smoothstep(0.1, 0.45, vF3.z)) * (1.0 - rockK);
     float reliefK = mix(mix(0.45, 1.0, rockK), 0.12, flatK);
-    tNrm = normalize(tNrm + aGrad * tA.y * (1.0 - reliefK) * (1.0 - tMorph));
+    // (the detail gradient taken back out follows the geomorph — toward the coarse level's gradient, aGradM — so the
+    // two sides of an LOD border shade alike: with the own level's gradient faded by the morph, every patch border
+    // drew a straight seam across the meadow)
+    tNrm = normalize(tNrm + mix(aGrad, aGradM, tMorph) * tA.y * (1.0 - reliefK));
   }
   vBodyPos = tPos;
   vBodyN = tNrm;

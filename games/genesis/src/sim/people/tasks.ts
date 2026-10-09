@@ -22,6 +22,8 @@ import { DEATH } from './defs.ts';
 import { die } from './lifecycle.ts';
 import { tell } from './story.ts';
 import { vars, settlementRef } from './util.ts';
+// SIM perf push 3 — the peoples' time-lapse (stretched tasks, batched walks: perf/plapse.ts)
+import { batch, batchHops, ctxOf, goalCellOf, legOf, mergeArrival, storeIn, stretchFor, wearOf, workTicks } from '../perf/plapse.ts';
 
 const _path: number[] = [];
 /** the longest a walker goes without waking (ticks): longer legs are walked in parts */
@@ -56,6 +58,9 @@ export function workAnim(kind: number): number {
     case TASK.trade: return AnimState.work;
     case TASK.raid: case TASK.fight: return AnimState.fight;
     case TASK.sail: return AnimState.sail;
+    // a ship's ground crew at work on the pad; its crew waiting to board (space/ships.ts)
+    case TASK.launch: return AnimState.build;
+    case TASK.board: return AnimState.idle;
     default: return AnimState.idle;
   }
 }
@@ -79,6 +84,11 @@ export function startTask(x: PCtx, s: number, t: TaskSpec): void {
   A.tData[s] = t.data ?? -1;
   A.tData2[s] = t.data2 ?? -1;
   A.tWork[s] = Math.max(1, Math.round(t.work));
+  // SIM perf push 3 (perf/plapse.ts): at 100x / 1000x a task of the day's work stands for up to k sessions (A.dmg
+  // holds the stretch; never written at level 0)
+  const kS = stretchFor(x, s, t);
+  if (kS > 1) A.dmg[s] = kS;
+  else if (A.dmg[s] !== 0) A.dmg[s] = 0;
   // settle where we are now (end of the last segment)
   A.posAt(s, x.tick, _a);
   A.fx[s] = _a[0]; A.fy[s] = _a[1]; A.fz[s] = _a[2];
@@ -92,7 +102,7 @@ export function startTask(x: PCtx, s: number, t: TaskSpec): void {
     return;
   }
   A.gx[s] = t.goal[0]; A.gy[s] = t.goal[1]; A.gz[s] = t.goal[2];
-  A.gcell[s] = x.p.cellAt(t.goal);
+  A.gcell[s] = goalCellOf(x, t.goal, t.goalCell); // (cellAt(goal); 100x / 1000x: the plan's cell — perf/plapse.ts)
   planRoute(x, s, A.cell[s], t.goalCell);
   A.phase[s] = PHASE.moving;
   nextSegment(x, s);
@@ -129,16 +139,20 @@ export function nextSegment(x: PCtx, s: number): void {
   const from = A.cell[s];
   let to: number;
   const goal = _b;
+  // (SIM perf push 3: this segment ends at the task's goal point — at 1000x the work then follows without a wake-up)
+  let atGoal = false;
   if (A.pathPos[s] < A.pathLen[s]) {
     to = A.path[s * PATH_MAX + A.pathPos[s]];
     A.pathPos[s]++;
     if (A.pathPos[s] >= A.pathLen[s] && to === goalCell(x, s)) {
       goal[0] = A.gx[s]; goal[1] = A.gy[s]; goal[2] = A.gz[s];
+      atGoal = true;
     } else spotInCell(p, to, A.id[s], A.pathPos[s] + 7, goal);
   } else {
     // final approach to the goal point (it may lie in the current cell, or the path ran out: re-plan once more)
     goal[0] = A.gx[s]; goal[1] = A.gy[s]; goal[2] = A.gz[s];
     to = goalCell(x, s);
+    atGoal = true;
     if (to !== from && A.pathLen[s] >= PATH_MAX) {
       planRoute(x, s, from, to);
       if (A.pathLen[s] > 0) { nextSegment(x, s); return; }
@@ -162,17 +176,29 @@ export function nextSegment(x: PCtx, s: number): void {
     return;
   }
   const age = A.flags[s] & AgentFlag.child ? 0.75 : A.flags[s] & AgentFlag.elder ? 0.7 : 1;
-  const v = walkSpeed(p, to, sp.speed * speedEffect(x, A.settlement[s]), age * (0.45 + 0.55 * A.health[s])) / k;
+  const speed = sp.speed * speedEffect(x, A.settlement[s]), ageF = age * (0.45 + 0.55 * A.health[s]);
+  const v = walkSpeed(p, to, speed, ageF) / k;
   let dur = Math.max(1, Math.round(d / Math.max(0.01, v)));
+  // SIM perf push 3 (perf/plapse.ts): legs are longer at 100x / 1000x and on land one segment walks on through several
+  // waypoints; a stretched task's way is worn once per trip it stands for (at level 0: maxLeg MAX_LEG, wear 1)
+  const maxLeg = legOf(x, MAX_LEG);
+  const wear = wearOf(x, s);
+  if (maxLeg > MAX_LEG && dur < maxLeg && !afloat && !sp.fly && to !== from && p.f.water[to] <= 0.6) {
+    batchHops(x, s, to, goal, dur, speed, ageF, sp.swim, maxLeg, goalCell(x, s), wear);
+    if (batch.to !== to) atGoal = batch.atGoal;
+    to = batch.to;
+    dur = batch.dur;
+  }
   // a leg longer than MAX_LEG is walked in parts (the same cell, the same spot: the next part goes on toward it), so
   // the walker is woken on the way — needs are lived on the road and a need turned critical can end the walk (one-cell
   // legs on a coarse world took a weak child 13-23 hours without a single decision)
-  if (dur > MAX_LEG) {
-    const f = MAX_LEG / dur;
+  if (dur > maxLeg) {
+    const f = maxLeg / dur;
     const gx = _a[0] + (goal[0] - _a[0]) * f, gy = _a[1] + (goal[1] - _a[1]) * f, gz = _a[2] + (goal[2] - _a[2]) * f;
     const gl = Math.hypot(gx, gy, gz) || 1;
     goal[0] = gx / gl; goal[1] = gy / gl; goal[2] = gz / gl;
-    dur = MAX_LEG;
+    dur = maxLeg;
+    atGoal = false;
     // walk on toward the same waypoint next time
     if (A.pathPos[s] > 0 && to === A.path[s * PATH_MAX + A.pathPos[s] - 1]) A.pathPos[s]--;
   }
@@ -192,8 +218,11 @@ export function nextSegment(x: PCtx, s: number): void {
   if (to !== A.cell[s]) {
     A.cell[s] = to;
     x.ps.buckets.move(s, to);
-    if (!sp.fly) wearRoad(x, to);
+    // (a stretched task's way is its trips: each wears it — perf/plapse.ts)
+    if (!sp.fly) { wearRoad(x, to); for (let i = 1; i < wear; i++) wearRoad(x, to); }
   }
+  // (SIM perf push 3, perf/plapse.ts: at 1000x the work begins where this last leg ends, without a wake-up between)
+  if (atGoal && !afloat && mergeArrival(x)) { beginWork(x, s, A.t1[s]); return; }
   schedule(x, s, A.t1[s]);
 }
 
@@ -238,13 +267,16 @@ export function arrive(x: PCtx, s: number): void {
   beginWork(x, s);
 }
 
-function beginWork(x: PCtx, s: number): void {
+/** start the work phase (`at`: when it begins — now, or at the end of the leg walking there: perf/plapse.ts) */
+function beginWork(x: PCtx, s: number, at = x.tick): void {
   const A = x.A;
   A.phase[s] = PHASE.working;
   A.anim[s] = workAnim(A.task[s]);
-  A.posAt(s, x.tick, _a);
-  const c = x.p.cellAt(_a);
-  if (c !== A.cell[s]) { A.cell[s] = c; x.ps.buckets.move(s, c); }
+  if (at === x.tick) {
+    A.posAt(s, x.tick, _a);
+    const c = x.p.cellAt(_a);
+    if (c !== A.cell[s]) { A.cell[s] = c; x.ps.buckets.move(s, c); }
+  }
   // under a roof: sleeping at home, warming up inside
   const k = A.task[s];
   // (occupancy is kept against the building entered, A.inside — not A.home, which findShelter / assignHomes may change
@@ -257,7 +289,8 @@ function beginWork(x: PCtx, s: number): void {
       b.occupants++;
     }
   }
-  schedule(x, s, x.tick + A.tWork[s]);
+  // (a stretched task works its k sessions and the trips home they stand for: perf/plapse.ts; tWork at level 0)
+  schedule(x, s, at + workTicks(x, s));
 }
 
 /** step out of a shelter (occupancy bookkeeping) */
@@ -310,6 +343,8 @@ function speedEffect(x: PCtx, sid: number): number {
 
 /** the settlement's store point (its first standing store building, else the centre) */
 export function storePoint(x: PCtx, st: Settlement, out: number[]): number {
+  const cx = ctxOf(x, st); // (100x / 1000x: the settlement's store buildings, sorted out once — perf/plapse.ts)
+  if (cx) return storeIn(cx, st, out);
   for (const b of x.ps.of(st.id)) {
     if (b.progress < 1 || b.damage >= 0.9) continue;
     if (x.c.buildings.list[b.type].provides.includes('store')) {

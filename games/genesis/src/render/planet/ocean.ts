@@ -259,7 +259,9 @@ void main() {
   vec3 grad = vec3(0.0);
   float calm = smoothstep(0.3, 4.0, vDepth) * (1.0 - smoothstep(0.05, 0.4, vIce));
   float windSpd = length(vWind);
-  gSea = seaState(vWind);
+  // fetch: ponds, oases and small lakes (fresh, still) are sheltered — the same wind barely roughens them, so they keep
+  // the mirror of their banks and sky (at the open sea's state a sunset pond went a dark, rough grey); rivers keep theirs
+  gSea = seaState(vWind) * mix(0.4, 1.0, max(smoothstep(0.3, 0.8, vSalt), smoothstep(0.15, 0.6, length(vFlow))));
   gWindT = windTan(vWind, up);
   float sea = uWind * gSea;
   gUnresolved = 0.0;
@@ -349,6 +351,9 @@ void main() {
   // water goes forward, down and away) — a few percent of the light, not a fifth: brighter in-scatter turned every
   // sea a glowing swimming-pool turquoise
   vec3 inscat = sigmaS / (sigmaA + sigmaS) * (1.0 - Tw) * (sunCol * max(muS, 0.0) * 0.09 + skyE * 0.1) / 3.14159;
+  // (still fresh water is dark and clear, not milky — at the sea's back-scatter ponds read as turquoise milk; rivers
+  // keep their silt)
+  inscat *= mix(0.5, 1.0, max(smoothstep(0.3, 0.8, vSalt), riverK));
   vec3 under = refr * Tw + inscat;
 
   // ── reflection ──

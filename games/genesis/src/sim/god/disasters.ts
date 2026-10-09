@@ -29,6 +29,7 @@
 // once a planet-day. Randomness is stateless (hash of disaster id, tick, salt): the same log gives the same disasters.
 
 import type { Universe } from '../world/universe.ts';
+import { meanAnomaly } from '../world/orbits.ts';
 import type { Planet } from '../world/planet.ts';
 import type { DisasterDef, EffectorDef } from '../content.ts';
 import type { DisasterView } from '../types.ts';
@@ -283,6 +284,25 @@ function updateParams(u: Universe, p: Planet, d: DisasterState, def: DisasterDef
   if (def.render.width !== undefined) P.width = Math.round(def.render.width * Math.sqrt(d.scale));
   P.radius = Math.round(effR(d));
   P.intensity = r3(effI(d));
+  if (def.id === 'moon-fall' && d.target >= 0) spiralMoon(u, p, d, prog);
+}
+
+/**
+ * A falling moon spirals in: its orbit shrinks toward a grazing one (faster at the end), its month shortens by
+ * Kepler's law, and it keeps its place on its orbit (the mean anomaly is carried over), so it never jumps in the sky.
+ */
+function spiralMoon(u: Universe, p: Planet, d: DisasterState, prog: number): void {
+  const moon = u.planet(d.target);
+  if (!moon || !moon.alive || moon.st.orbit.parent !== p.id) return;
+  const o = moon.st.orbit;
+  if (d.st.a0 === undefined) { d.st.a0 = o.a; d.st.T0 = o.period; }
+  const aEnd = p.st.radius * 1.2 + moon.st.radius;
+  const a = d.st.a0 + (aEnd - d.st.a0) * prog * prog;
+  const M = meanAnomaly(o, u.tick);
+  o.a = Math.round(a * 1000) / 1000;
+  o.period = Math.max(30, d.st.T0 * Math.pow(a / Math.max(1, d.st.a0), 1.5));
+  o.phase0 = M - (2 * Math.PI * u.tick) / o.period;
+  d.params.moonAlt = Math.round(a - p.st.radius);
 }
 
 /** 0..1 ramp in over the first `ramp` share of life, out over the last */

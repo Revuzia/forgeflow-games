@@ -37,6 +37,8 @@ import { distM } from './world.ts';
 import { missionStep } from './missions.ts';
 import { politicsDaily } from './war.ts';
 import { contactsDaily, flushReadings } from './culture.ts';
+import { finishTask } from './work.ts';
+import { creditStretched } from '../perf/plapse.ts';
 
 export const FIRE_CHECK = 5;
 
@@ -139,6 +141,9 @@ function ensureList(n: number): Int32Array {
 /** stop what an agent is doing and decide again next tick (fire, a predator, the god's hand) */
 export function interrupt(x: PCtx, s: number): void {
   const A = x.A;
+  // (SIM perf push 3, round 2: a task stretched at 100x / 1000x yields the whole sessions already worked — the 1x agent
+  // finished those before the interruption; perf/plapse.ts. A.dmg is 0 at level 0)
+  if (A.dmg[s] !== 0) { creditStretched(x, s, finishTask); if (!A.alive[s]) return; }
   const pos = [0, 0, 0];
   A.posAt(s, x.tick, pos);
   A.place(s, pos[0], pos[1], pos[2], x.tick);

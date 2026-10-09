@@ -50,7 +50,8 @@ const fuelCache = new WeakMap<object, number[]>();
 export function fuelItems(x: PCtx): number[] {
   let l = fuelCache.get(x.c);
   if (!l) {
-    l = x.c.items.list.map((it, i) => (it.fuel && it.fuel >= 0.8 ? i : -1)).filter((i) => i >= 0);
+    // (propellant — rocket fuel — is kept for the ships, never thrown on a hearth or into a kiln: SIM phase 4)
+    l = x.c.items.list.map((it, i) => (it.fuel && it.fuel >= 0.8 && !it.tags.includes('propellant') ? i : -1)).filter((i) => i >= 0);
     // best fuel first
     l.sort((a, b) => (x.c.items.list[b].fuel ?? 0) - (x.c.items.list[a].fuel ?? 0) || a - b);
     fuelCache.set(x.c, l);

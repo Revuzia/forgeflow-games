@@ -15,15 +15,20 @@ import { agentName, settlementRef, vars } from './people/util.ts';
 import { cohortTotal } from './people/cohorts.ts';
 import { foodDays } from './people/store.ts';
 import { NS, SKILL } from './people/defs.ts';
+import { sunElevation } from './people/world.ts';
 
 export const CHRONICLE_CADENCE = 60;
 export const CHRONICLE_OFFSET = 45;
 
-/** mark what a freshly generated world already has (no announcements for those) */
+/**
+ * Mark what a freshly generated world already has (no announcements for those). A world made with air is a living
+ * world: the water its lakes and dry seas gather in its first hours is not "the first sea" (a desert world with almost
+ * no ocean announced one on its first morning), nor is its first shower the first rain. Only a dead world gets those.
+ */
 export function markInitialFirsts(p: Planet): void {
   const f = p.f;
   if (p.st.atmosphere.pressure >= 0.02) p.firsts.air = 0;
-  if (p.hydro.oceanCells > p.count * 0.01) p.firsts.sea = 0;
+  if (p.hydro.oceanCells > p.count * 0.01 || p.airy) p.firsts.sea = 0;
   let rain = false, snow = false, trees = 0;
   for (let c = 0; c < p.count; c++) {
     if (f.precip[c] > 0) { if (f.precipType[c] === 2) snow = true; else rain = true; }
@@ -31,7 +36,8 @@ export function markInitialFirsts(p: Planet): void {
   }
   if (p.vegTotal > 1) p.firsts.life = 0;
   if (trees > 40) p.firsts.forest = 0;
-  if (p.airy && (rain || p.hydro.oceanCells > 0)) p.firsts.rain = 0;
+  if (p.airy) p.firsts.rain = 0;
+  void rain;
   if (p.airy && snow) p.firsts.snow = 0;
 }
 
@@ -64,6 +70,64 @@ export function chronicleCheck(u: Universe, p: Planet): void {
   if (fs.life === undefined && p.vegTotal > 1) {
     fs.life = u.tick;
     u.chronicleAdd(p, 'nature', 'Green came to the world: the first plants took root.', 3);
+  }
+  milestonesCheck(u, p, false);
+}
+
+// ───────────────────────────── milestones (the opening, CONTRACT §16.1) ─────────────────────────────
+
+/** the opening's beats, in the order a dead rock usually meets them */
+export const MILESTONES = ['air', 'first-rain', 'first-sea', 'first-green', 'first-people', 'first-fire', 'first-night', 'first-settlement', 'first-discovery'] as const;
+
+const MILESTONE_WORDS: Record<string, string> = {
+  air: 'The world has air.', 'first-rain': 'The first rain.', 'first-sea': 'The first sea.', 'first-green': 'The first green.',
+  'first-people': 'Someone is there to see it.', 'first-fire': 'They have fire.', 'first-night': 'Their first night.',
+  'first-settlement': 'They have settled.', 'first-discovery': 'They worked something out that nobody taught them.',
+};
+
+/** is a milestone's condition true on this world now */
+function milestoneHolds(u: Universe, p: Planet, kind: string): boolean {
+  const ps = p.people;
+  const peopled = !!ps && (ps.agents.count > 0 || ps.settlements.some((st) => st.fallen < 0 && cohortTotal(st) >= 1));
+  switch (kind) {
+    case 'air': return p.airy;
+    case 'first-rain': return p.firsts.rain !== undefined;
+    case 'first-sea': return p.firsts.sea !== undefined;
+    case 'first-green': return p.firsts.life !== undefined || p.vegTotal > 1;
+    case 'first-people': return peopled;
+    case 'first-fire': {
+      if (!ps || !peopled) return false;
+      // fire of their own: a lit hearth, kiln or forge
+      for (const b of ps.buildings) if (b.fuel > 0 && b.progress >= 1 && (u.content.buildings.list[b.type]?.heat ?? 0) > 0) return true;
+      return false;
+    }
+    case 'first-night': {
+      if (!ps || !peopled) return false;
+      const st = ps.settlements.find((s) => s.fallen < 0);
+      if (!st) return false;
+      return sunElevation(u, p, u.tick, st.pos) < -0.03;
+    }
+    case 'first-settlement': return !!ps && ps.settlements.some((st) => !st.band && st.fallen < 0);
+    case 'first-discovery': return !!ps && ps.firsts.discovery !== undefined;
+    default: return false;
+  }
+}
+
+/**
+ * Hourly: the opening's beats (air, first rain, sea, green, people, fire, night, settlement, discovery) as 'milestone'
+ * events the opening UI listens for (data.kind). Each is told once per world; what a world already had when it was
+ * made (or a scenario set down) is marked silently (`silent`), so a living world never announces its own seas.
+ */
+export function milestonesCheck(u: Universe, p: Planet, silent: boolean): void {
+  for (const kind of MILESTONES) {
+    const key = `m:${kind}`;
+    if (p.firsts[key] !== undefined) continue;
+    // a people set down with its world has lived through nights before (at noon its first night is not news)
+    const held = milestoneHolds(u, p, kind) || (silent && kind === 'first-night' && milestoneHolds(u, p, 'first-people'));
+    if (!held) continue;
+    p.firsts[key] = u.tick;
+    if (silent) continue;
+    u.emit({ t: 'milestone', planet: p.id, text: MILESTONE_WORDS[kind], data: { kind } });
   }
 }
 

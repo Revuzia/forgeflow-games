@@ -1,0 +1,52 @@
+{
+  "$comment": "Example GENESIS mod pack — a new people with its own tongue, its own recipes and its own holy building. The stone-singers are slow, long-lived, four-legged people of the high rocks who talk to the stone. Load it through the worker's {type:'mod'} message before the world is made (or at any time: everything here is new, so a running world takes it in place), or Sim({ content: [pack] }). Set them down with life.spawn-people { species: 'stone-singers' } or the words 'set down the stone singers'.",
+  "id": "stone-singers",
+  "name": "The stone-singers",
+  "version": "1.0.0",
+  "names": [
+    { "id": "stone-tongue", "onsets": ["", "g", "gr", "d", "dr", "b", "m", "n", "r", "th", "k"], "vowels": ["o", "u", "a", "oo", "au", "uo"], "codas": ["", "m", "n", "rn", "l", "k", "rk"],
+      "syllables": [2, 3], "personal": [1, 2], "sep": "-",
+      "features": { "falls": "of the Ringing Fall", "spring": "of the Deep Well", "river": "by the Grinding River", "lake": "of the Stone Mirror", "coast": "of the Worn Shore",
+        "volcano": "under the Burning Throat", "crater": "in the Great Bowl", "mountain": "of the Singing Peak", "hills": "of the Humming Hills", "marsh": "by the Soft Ground",
+        "forest": "under the Root-Roof", "dunes": "of the Moving Stone", "ice": "of the Hard Water", "plain": "of the Open Stone" } }
+  ],
+  "species": [
+    {
+      "id": "stone-singers", "name": "Stone-singer", "plural": "the stone-singers", "adjective": "stone-singing",
+      "desc": "Broad, slow, four-legged people of the high rocks with hides like lichen. They live two lifetimes of the plains folk, eat roots and lichen-bread, and hum to the stone until it splits along the line they want.",
+      "body": "quadruped", "size": 1.4, "mass": 140, "speed": 0.7, "swim": 0.2, "fly": false,
+      "lifespan": 120, "maturity": 25, "elder": 95, "fertility": 0.7,
+      "diet": { "plant": 1.3, "meat": 0.3, "cooked": 1.1 },
+      "forage": ["vegetation"],
+      "temp": [-25, -5, 28, 42], "breathes": "o2", "habitat": ["land"], "nocturnal": true,
+      "hive": null,
+      "needs": { "food": 0.9, "water": 0.7, "warmth": 0.6, "rest": 1.0, "safety": 0.7, "belonging": 0.8, "status": 0.3, "curiosity": 0.5, "faith": 1.0 },
+      "decay": { "food": 0.7, "water": 0.7 },
+      "traits": { "curiosity": 0.4, "boldness": 0.35, "sociability": 0.6, "piety": 0.85, "aggression": 0.15, "diligence": 0.75 },
+      "colors": { "skin": ["#7d8670", "#6a7362", "#8c9478", "#5d6656"], "hair": ["#3a3f34", "#4a4f40"], "cloth": ["#a89a7a", "#6a6252", "#8a7a5a"] },
+      "phonology": "stone-tongue",
+      "style": { "materials": ["fieldstone", "stone", "mudbrick"], "form": "cairn", "roof": "domed", "palette": ["#8c8270", "#5a5446", "#b0a080"] },
+      "taboos": [], "sacred": ["mountain", "stone"],
+      "god": { "awe": 1.2, "fear": 0.8 },
+      "start": ["foraging", "quarrying", "stone-tools", "shelter-building", "oral-tradition"]
+    }
+  ],
+  "items": [
+    { "id": "singing-stone", "name": "Singing stone", "tags": ["artifact", "sacred", "luxury", "stone"], "weight": 6, "value": 6 }
+  ],
+  "recipes": [
+    { "id": "stone-song", "name": "Stone-song", "kind": "idea", "desc": "Humming to the rock until it answers: the way the stone-singers keep their lore and split their stone.", "inputs": [], "tools": [], "place": {},
+      "knowledge": ["oral-tradition", "quarrying"], "outputs": [{ "building": "song-cairn" }], "time": 0, "skill": "lore",
+      "discover": { "base": 0.05, "triggers": ["mountain", "sacred", "quake"], "curiosity": 0.5 }, "teach": 0.3, "era": "stone", "species": ["stone-singers"], "effect": { "teach": 1.25 } },
+    { "id": "resonant-masonry", "name": "Resonant masonry", "kind": "craft", "desc": "Stone split by song along its own grain: true blocks without a chisel.", "inputs": [{ "item": "stone", "qty": 3 }], "tools": [], "place": {},
+      "knowledge": ["stone-song"], "outputs": [{ "item": "stone-block", "qty": 2 }], "time": 180, "skill": "build", "difficulty": 0.3,
+      "discover": { "base": 0.03, "triggers": ["mountain", "quake"], "curiosity": 0.6 }, "teach": 0.35, "era": "clay", "species": ["stone-singers"] },
+    { "id": "singing-stones", "name": "Singing stones", "kind": "craft", "desc": "A stone tuned to hum in the wind: an offering, a treasure, a thing other peoples trade for.", "inputs": [{ "item": "stone", "qty": 2 }], "tools": [], "place": { "near": ["mountain", "sacred"] },
+      "knowledge": ["stone-song"], "outputs": [{ "item": "singing-stone", "qty": 1 }], "time": 240, "skill": "craft", "difficulty": 0.4,
+      "discover": { "base": 0.02, "triggers": ["sacred", "mountain"], "curiosity": 0.7 }, "teach": 0.4, "era": "clay", "species": ["stone-singers"] }
+  ],
+  "buildings": [
+    { "id": "song-cairn", "name": "Song cairn", "function": "temple", "provides": ["temple", "sacred"], "footprint": 5, "capacity": 0, "storage": 0,
+      "materials": ["fieldstone", "stone"], "recipe": "stone-song", "cost": 10, "work": 1400, "hp": 400, "decay": 0.0005, "heat": 0, "light": 0.2, "height": 6, "era": "stone", "species": ["stone-singers"] }
+  ]
+}

@@ -20,12 +20,14 @@ import { hasPrereqs } from '../recipes/recipes.ts';
 import { libHas, isTaboo, planExperiment } from './knowledge.ts';
 import { placeFor } from './context.ts';
 import { animalDef, herdPos } from '../life/herds.ts';
-import { finishTask } from './work.ts';
+import { eat, finishTask } from './work.ts';
 import { fireSourceNear } from './fire.ts';
 import { boatSwim, missionOf, planMission } from './missions.ts';
 import { sacredAnimal } from './culture.ts';
 import { offsetPoint } from './world.ts';
 import { godHooks } from './hooks.ts';
+// SIM perf push 3 — the peoples' time-lapse (stretched tasks, per-settlement context caches: perf/plapse.ts)
+import { ctxOf, finishStretched, inPassing, litOf, lowHearthOf, penIn, rival, templeIn } from '../perf/plapse.ts';
 
 const _p = [0, 0, 0];
 const _q = [0, 0, 0];
@@ -54,7 +56,8 @@ export function onDue(x: PCtx, s: number): void {
   // the task's interval is integrated where it was lived — inside the shelter for a night's sleep or a warm-up at home.
   // (finishTask steps out of the shelter; integrating after it judged a whole night in a hut as a night in the open.)
   if (updateNeeds(x, s) <= 0) { die(x, s, A.cause[s] || DEATH.injury); return; }
-  const chained = finishTask(x, s);
+  // (SIM perf push 3: a task stretched at 100x / 1000x yields its k sessions — perf/plapse.ts; A.dmg is 0 at level 0)
+  const chained = A.dmg[s] > 1 ? finishStretched(x, s, finishTask) : finishTask(x, s);
   if (!A.alive[s] || chained) return;
   decide(x, s);
 }
@@ -129,6 +132,9 @@ export function decide(x: PCtx, s: number): void {
   const mission = A.mission[s] ? missionOf(x, s) : undefined;
   const away = !!mission && mission.phase >= 1 && mission.phase <= 3;
   const st = away ? undefined : home;
+  // (SIM perf push 3: at 100x / 1000x water and food at hand are taken in passing — perf/plapse.ts; nothing at 1x.
+  // Round 2: a drink takes its time — the task decided below starts that many ticks later)
+  const sip = inPassing(x, s, st, waterHere, eat);
   const nb = s * NEED_N;
   const N = A.needs;
   const sp = x.info[A.species[s]];
@@ -197,15 +203,74 @@ export function decide(x: PCtx, s: number): void {
     const pressing = Math.max(U[C.flee], U[C.drink], U[C.eat], U[C.warm], U[C.sleep], U[C.exhausted]);
     if (pressing < 1.3) { const t = godHooks.disciple(x, s, st, night); if (t) { startTask(x, s, t); return; } }
   }
+  // enlisted for a ship (mission −ship id, space/ships.ts): building, fuelling or boarding it comes first, unless a
+  // body's need is pressing (they sleep in a camp by the pad: the hook decides that)
+  if (A.mission[s] < 0 && godHooks.crew) {
+    const pressing = Math.max(U[C.flee], U[C.drink], U[C.eat], U[C.exhausted]);
+    if (pressing < 1.3) { const t = godHooks.crew(x, s, st); if (t) { startTask(x, s, t); return; } }
+  }
   // best first; a candidate that finds no target falls through to the next
   _order.length = 0;
+  const lapsed = x.u.settings.lapse !== undefined; // (SIM perf push 3, round 2: the utilities before the jitter, below)
+  if (lapsed) _raw.set(U);
   for (let i = 0; i < NC; i++) if (U[i] > 0.02) { U[i] += jitter(x, s, i); _order.push(i); }
   _order.sort((a, b) => U[b] - U[a] || a - b);
-  for (const k of _order) {
+  for (let o = 0; o < _order.length; o++) {
+    const k = _order[o];
     const t = k === C.work && mission && home ? planMission(x, s, home, mission) : plan(x, s, st, k, night);
-    if (t) { startTask(x, s, t); return; }
+    if (t) {
+      if (lapsed) noteRivals(x, s, k, o, !!st && !st.band && !mission, night, child);
+      if (sip > 0) { x.tick += sip; startTask(x, s, t); x.tick -= sip; } else startTask(x, s, t);
+      return;
+    }
   }
   idle(x, s, 45);
+}
+
+/** the utilities of the last decision before the jitter (levels ≥ 1 only: noteRivals) */
+const _raw = new Float64Array(NC);
+
+/**
+ * SIM perf push 3, round 2 (perf/plapse.ts `rival`): how long a 1x agent would keep choosing activity k, for the stretch
+ * of the task it starts. A stretched task stood for up to 4 sessions whenever needs and daylight allowed, but between
+ * sessions a 1x agent decides again — and company, prayer, curiosity, courting or a bath win some of those decisions:
+ * the stretch inflated the share of whatever was chosen (work +9 %, a child's company +40 % of the day at 1000x; food in
+ * store ran 15-25 % high from the third game year). Now: no stretch while an untried rival is within the jitter's reach
+ * of k (0.12, both ±0.06), else up to the time a rival driven by a decaying need — company, faith, curiosity, a bath —
+ * would come within that reach (needs decay linearly: needs.ts updateNeeds).
+ */
+function noteRivals(x: PCtx, s: number, k: number, o: number, settled: boolean, night: boolean, child: boolean): void {
+  const U = _raw;
+  const reach = U[k] - 0.12;
+  for (let i = o + 1; i < _order.length; i++) if (U[_order[i]] >= reach) { rival.ticks = 0; return; }
+  const A = x.A, nb = s * NEED_N, N = A.needs, sp = x.info[A.species[s]], dec = sp.decay, day = x.day;
+  let ticks = Infinity;
+  if (settled) {
+    const dayF = night ? 0.25 : 1;
+    const soc = A.traits[s * NT + TRAIT.sociability], piety = A.traits[s * NT + TRAIT.piety], cur = A.traits[s * NT + TRAIT.curiosity];
+    ticks = riseTo(ticks, C.social, k, o, reach, U[C.social], (0.75 * (0.5 + soc) * (child ? 1.6 : 1) * dec[BELONG] * (0.5 + soc)) / day);
+    ticks = riseTo(ticks, C.pray, k, o, reach, U[C.pray], (0.55 * piety * dayF * dec[FAITH] * (0.3 + piety)) / day);
+    if (!child) ticks = riseTo(ticks, C.curious, k, o, reach, U[C.curious], (0.85 * cur * dayF * dec[CURIO] * (0.4 + cur)) / day);
+  }
+  // a bath: wanted below 0.6 wetness, at (1 − wet) × 1.8 (decide's utility)
+  if (sp.needW[WET] > 0 && dec[WET] > 0 && k !== C.bathe && !triedBefore(C.bathe, o)) {
+    const t = ((N[nb + WET] - Math.min(0.6, 1 - reach / 1.8)) * day) / dec[WET];
+    if (t < ticks) ticks = t < 0 ? 0 : t;
+  }
+  rival.ticks = ticks;
+}
+
+/** the ticks until rival j (utility u0 now, rising `perTick`) comes within reach of k — or `ticks`, if sooner (a rival
+ * that was tried before k found nothing to do: not a rival) */
+function riseTo(ticks: number, j: number, k: number, o: number, reach: number, u0: number, perTick: number): number {
+  if (j === k || perTick <= 0 || triedBefore(j, o)) return ticks;
+  const t = (reach - u0) / perTick;
+  return t < ticks ? (t < 0 ? 0 : t) : ticks;
+}
+
+function triedBefore(j: number, o: number): boolean {
+  for (let i = 0; i < o; i++) if (_order[i] === j) return true;
+  return false;
 }
 
 function plan(x: PCtx, s: number, st: Settlement | undefined, k: number, night: boolean): TaskSpec | null {
@@ -407,7 +472,8 @@ function planSleep(x: PCtx, s: number, st: Settlement | undefined, night: boolea
     if (!home || home.progress < 1 || home.flags & 2) home = findShelter(x, s, st);
     if (home) return { kind: TASK.sleep, goal: [home.pos[0], home.pos[1], home.pos[2]], goalCell: home.cell, work: dur, target: home.id };
     // no roof: by the fire, else by the centre
-    const fireB = x.ps.of(st.id).find((b) => b.fuel > 0 && b.progress >= 1);
+    const cx = ctxOf(x, st); // (perf/plapse.ts)
+    const fireB = cx ? litOf(cx) : x.ps.of(st.id).find((b) => b.fuel > 0 && b.progress >= 1);
     if (fireB) return { kind: TASK.sleep, goal: spotNear(x, s, fireB.pos, 3 + hashFloat(A.id[s], 3) * 4), goalCell: fireB.cell, work: dur, target: -1 };
     return { kind: TASK.sleep, goal: spot(x, s, st.cell, 5), goalCell: st.cell, work: dur, target: -1 };
   }
@@ -687,7 +753,8 @@ export function seedItems(x: PCtx): number[] {
 function planHerd(x: PCtx, s: number, st: Settlement): TaskSpec | null {
   const hu = x.rt.byId.get('animal-husbandry');
   if (hu === undefined || !libHas(st, hu)) return null;
-  const pen = x.ps.of(st.id).find((b) => b.progress >= 1 && x.c.buildings.list[b.type].function === 'pen');
+  const cx = ctxOf(x, st); // (perf/plapse.ts)
+  const pen = cx ? penIn(cx) : x.ps.of(st.id).find((b) => b.progress >= 1 && x.c.buildings.list[b.type].function === 'pen');
   if (!pen) return null;
   const owned = x.ps.herds.find((h) => h.owner === st.id && h.count >= 1);
   if (owned) return { kind: TASK.herd, goal: spotNear(x, s, pen.pos, 4), goalCell: pen.cell, work: 120, target: owned.id, data2: 0 };
@@ -814,6 +881,8 @@ function planTendFire(x: PCtx, s: number, st: Settlement, b: Building): TaskSpec
 
 /** the hearth most in need of fuel (or unlit) */
 function lowHearth(x: PCtx, st: Settlement): Building | null {
+  const cx = ctxOf(x, st); // (100x / 1000x: the settlement's hearths, sorted out once — perf/plapse.ts)
+  if (cx) return lowHearthOf(cx);
   let best: Building | null = null;
   for (const b of x.ps.of(st.id)) {
     if (b.progress < 1 || b.flags & 2) continue;
@@ -900,6 +969,8 @@ function planPreach(x: PCtx, s: number, st: Settlement): TaskSpec | null {
 }
 
 function templeOf(x: PCtx, st: Settlement): Building | undefined {
+  const cx = ctxOf(x, st); // (perf/plapse.ts)
+  if (cx) return templeIn(cx);
   return x.ps.of(st.id).find((b) => b.progress >= 1 && b.damage < 0.9 && x.c.buildings.list[b.type].function === 'temple');
 }
 
@@ -922,7 +993,8 @@ function planHeal(x: PCtx, s: number, st: Settlement): TaskSpec | null {
 function planSocial(x: PCtx, s: number, st: Settlement): TaskSpec | null {
   const A = x.A;
   // gather at a lit hearth, else near someone of the household, else the centre
-  const fire = x.ps.of(st.id).find((b) => b.fuel > 0 && b.progress >= 1);
+  const cx = ctxOf(x, st); // (perf/plapse.ts)
+  const fire = cx ? litOf(cx) : x.ps.of(st.id).find((b) => b.fuel > 0 && b.progress >= 1);
   if (fire) return { kind: TASK.socialize, goal: spotNear(x, s, fire.pos, 2 + hashFloat(A.id[s], 7) * 3.5), goalCell: fire.cell, work: 60 };
   const members = x.ps.members.get(st.id) ?? [];
   if (members.length > 1) {

@@ -10,14 +10,22 @@
 //   ..  blob section: each typed array's raw bytes at its `o` (relative to the section start), 8-byte aligned
 //
 // The header carries everything object-shaped (params, entity lists, RNG states, chronicle, command log); the blobs
-// carry the bulk per-cell / per-edge typed arrays. Readers refuse unknown MAJOR versions with a readable message and
-// run minor migrations (none yet: 1.0 is the first format).
+// carry the bulk per-cell / per-edge typed arrays. Readers refuse unknown MAJOR versions (and minor versions newer
+// than this build: it would silently drop state it does not know) with a readable message, and migrate older minors.
+//
+// Versions: 1.0 phase 1 (fields, weather, firsts) — and every save written before the version was first bumped, which
+// may also carry phase-2 peoples and phase-3 god state; 1.1 phase 2 (peoples: agents, settlements, buildings, herds);
+// 1.2 phase 3 (the god layer: hand, creatures, disasters, rivals, inventions); 1.3 phase 4 (worlds and space: ships in
+// flight with their crews, what each people has seen of the sky, colonies across worlds, debris rings; the list of
+// content packs by name and version); 1.4 phase 4, second pass (each ship's set-aside goods and the progress of its
+// program, the sicknesses its crew carry unseen, the place a ship called down from orbit glides from; the god's
+// inventions frozen in place before a pack that came in after them).
 
 import type { TypedArray } from './hash.ts';
 
 export const SAVE_MAGIC = 'GNSS';
 export const SAVE_MAJOR = 1;
-export const SAVE_MINOR = 0;
+export const SAVE_MINOR = 4;
 
 export type BlobType = 'f32' | 'f64' | 'i8' | 'u8' | 'i16' | 'u16' | 'i32' | 'u32';
 
@@ -118,6 +126,9 @@ export function readSave(bytes: Uint8Array): SaveFile {
   if (major !== SAVE_MAJOR) {
     throw new Error(`This save was written by an incompatible GENESIS version (format ${major}.${minor}; this build reads ${SAVE_MAJOR}.x).`);
   }
+  if (minor > SAVE_MINOR) {
+    throw new Error(`This save was written by a newer GENESIS (format ${major}.${minor}; this build reads up to ${SAVE_MAJOR}.${SAVE_MINOR}). Update the game to open it.`);
+  }
   const hlen = dv.getUint32(8, true);
   if (12 + hlen > bytes.length) throw new Error('The save is truncated (header).');
   let header: Record<string, unknown>;
@@ -143,5 +154,25 @@ export function readSave(bytes: Uint8Array): SaveFile {
   return { major, minor, header, blobs };
 }
 
-/** minor-version migrations run here (in order) — 1.0 is the first format, so nothing yet */
-function migrate(_major: number, _minor: number, _header: Record<string, unknown>): void {}
+/**
+ * Minor-version migrations, in order. Each step fills what that phase added with the state a world of the older format
+ * had (no peoples, no god acts, an empty sky), so the loaders (sim.ts universeFromHeader, planet.ts planetFromJson)
+ * always see a complete header. `migratedFrom` records where a save came from (the inspector / tests read it).
+ */
+function migrate(major: number, minor: number, header: Record<string, unknown>): void {
+  if (minor >= SAVE_MINOR) return;
+  header.migratedFrom = `${major}.${minor}`;
+  const planets = Array.isArray(header.planets) ? (header.planets as Record<string, unknown>[]) : [];
+  // 1.0 -> 1.1: planets without peoples get none (an empty agent store; their arrays keep their fresh defaults)
+  if (minor < 1) for (const pj of planets) if (pj.people === undefined) pj.people = null;
+  // 1.1 -> 1.2: no god acts yet (the player god alone, default laws)
+  if (minor < 2 && header.god === undefined) header.god = null;
+  // 1.2 -> 1.3: an empty sky (no ships, nothing seen), and the pack list by id only
+  if (minor < 3) {
+    if (header.space === undefined) header.space = null;
+    if (header.packs === undefined) header.packs = ((header.content as string[] | undefined) ?? ['base']).map((id) => ({ id, name: id, version: '' }));
+  }
+  // 1.3 -> 1.4: ships without set-aside goods, progress marks, latent sicknesses or a descent start (space/state.ts
+  // fills them per ship: nothing set aside, progress counted from the phase's start), and no frozen god-made packs
+  if (minor < 4 && header.frozen === undefined) header.frozen = [];
+}

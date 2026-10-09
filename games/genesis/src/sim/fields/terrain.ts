@@ -360,17 +360,24 @@ function takeTop(p: Planet, c: number, m: number): number {
   return m;
 }
 
-export function terrainStep(u: Universe, p: Planet): void {
+/**
+ * Lava, talus, wind on sand and ash. `dt` = the ticks this step covers: TERRAIN_CADENCE, or (SIM perf push 3,
+ * perf/lapse.ts LAPSE_TERRAIN) three times that on a world the camera is not on at 100x / 1000x — vents pour and lava
+ * flows and cools the elapsed time's worth (the flow's share per step stays below a half: stable), the talus relaxes
+ * at its per-step rate (it only settles slower). At TERRAIN_CADENCE every expression is the plain one.
+ */
+export function terrainStep(u: Universe, p: Planet, dt = TERRAIN_CADENCE): void {
   const f = p.f, s = p.s, g = p.grid, geo = p.geo, cfg = p.cfg;
   const N = p.count;
   const R = p.st.radius;
   let changed = false;
+  const k = dt === TERRAIN_CADENCE ? 1 : dt / TERRAIN_CADENCE;
 
   // vents feed lava
   for (const v of p.vents) {
-    f.lava[v.cell] += v.rate;
+    f.lava[v.cell] += k === 1 ? v.rate : v.rate * k;
     s.lAct[v.cell] = 1;
-    if (v.life > 0) v.life = Math.max(0, v.life - TERRAIN_CADENCE);
+    if (v.life > 0) v.life = Math.max(0, v.life - dt);
   }
   if (p.vents.some((v) => v.life === 0)) p.vents = p.vents.filter((v) => v.life !== 0);
 
@@ -378,7 +385,7 @@ export function terrainStep(u: Universe, p: Planet): void {
   const list = p.scratch.list;
   let n = collectFlags(s.lAct, list, N);
   if (n) {
-    lavaFlow(u, p, list, n);
+    lavaFlow(u, p, list, n, k);
     changed = true;
   }
 
@@ -428,7 +435,7 @@ export function terrainStep(u: Universe, p: Planet): void {
   // (asked every terrain step, airless or not: a time-lapse record is consumed on schedule)
   const dtS = lapseDue(u, p, LAPSE_SAND, u.tick + stagger(p), 5);
   if (dtS && p.airy) {
-    const part = Math.floor((u.tick + p.id * 13 + 5) / lapseCadence(u, LAPSE_SAND)) % SAND_SPLIT;
+    const part = Math.floor((u.tick + p.id * 13 + 5) / lapseCadence(u, LAPSE_SAND, p)) % SAND_SPLIT; // (the planet's own level: push 3)
     const from = Math.floor((N * part) / SAND_SPLIT), to = Math.floor((N * (part + 1)) / SAND_SPLIT);
     if (sandKernel(p, from, to, (SAND_SPLIT * dtS) / TERRAIN_CADENCE)) changed = true;
   }
@@ -499,7 +506,8 @@ function sandKernel(p: Planet, from: number, to: number, scale: number): boolean
 }
 
 /** viscous lava flow, cooling, steam and burning over the lava active set */
-function lavaFlow(u: Universe, p: Planet, list: Int32Array, n: number): void {
+/** viscous lava flow, cooling, steam and burning over the active lava (`k` plain steps' worth: 1 at the base cadence) */
+function lavaFlow(u: Universe, p: Planet, list: Int32Array, n: number, k = 1): void {
   const f = p.f, s = p.s, g = p.grid;
   const dL = p.scratch.dV; // reused as a lava delta buffer (hydrology clears its own entries after use)
   const YIELD = 0.35;
@@ -516,7 +524,7 @@ function lavaFlow(u: Universe, p: Planet, list: Int32Array, n: number): void {
       if (dh > 0) total += dh;
     }
     if (total <= 0) continue;
-    const out = Math.min(L * 0.6, total * 0.12);
+    const out = Math.min(L * 0.6, total * (k === 1 ? 0.12 : 0.12 * k));
     for (let e = e0; e < e1; e++) {
       const o = g.nbr[e];
       const dh = Hc - (f.surface[o] + f.lava[o]) - YIELD;
@@ -526,7 +534,7 @@ function lavaFlow(u: Universe, p: Planet, list: Int32Array, n: number): void {
       dL[o] += m;
     }
   }
-  const cool = 0.004 * p.cfg.lavaCooling;
+  const cool = 0.004 * p.cfg.lavaCooling * k;
   let steam = 0;
   for (let i = 0; i < n; i++) {
     const c = list[i];
@@ -549,16 +557,16 @@ function lavaFlow(u: Universe, p: Planet, list: Int32Array, n: number): void {
       p.updSurface(c);
       continue;
     }
-    let k = cool * (1 + Math.max(0, -f.temperature[c]) / 40);
+    let kc = cool * (1 + Math.max(0, -f.temperature[c]) / 40);
     if (f.water[c] > 0.01) {
-      const boil = Math.min(f.water[c], 0.25);
+      const boil = Math.min(f.water[c], k === 1 ? 0.25 : 0.25 * k);
       f.water[c] -= boil;
       p.hydro.sourced -= boil * p.cellArea[c];
       steam += boil;
-      k += 0.05;
+      kc += k === 1 ? 0.05 : 0.05 * k;
       activateCell(p, c);
     }
-    const m = Math.min(L, k);
+    const m = Math.min(L, kc);
     L -= m;
     f.lava[c] = L;
     f.rock[c] += m; // cooled lava builds land
