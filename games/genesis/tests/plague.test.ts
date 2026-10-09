@@ -68,6 +68,9 @@ test('medicine: a town that knows it loses far fewer of its sick', () => {
     const st = town(sim, 60);
     const x = ctx(sim);
     if (medicine) for (const s of membersOf(sim, st)) for (const id of ['herbalism', 'medicine']) learn(x, s, x.rt.byId.get(id)!, 'spawn');
+    // the control town must not stumble on herbalism in the middle of its plague (a plague is that discovery's trigger):
+    // it would then be a second medicine town
+    else for (const id of ['herbalism', 'medicine']) st.culture.taboos.push(x.rt.byId.get(id)!);
     must(sim, { k: 'settlement.introduce', settlement: st.id, disease: 'plague', qty: 2 });
     const ever = new Set<number>(), dead = { n: 0 };
     for (let d = 0; d < 16; d++) day(sim, x.c.diseases.idx('plague'), ever, dead);

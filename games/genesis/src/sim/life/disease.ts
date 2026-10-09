@@ -51,7 +51,9 @@ export function grave(x: PCtx, s: number): boolean {
   const d = A.disease[s];
   if (d < 0) return false;
   const st = x.ps.settlement(A.settlement[s]);
-  return hashFloat(A.id[s], d, A.infectT[s], 0x9a7e) < caseFatality(x, d) * relief(x, st);
+  // (the draw is the person's own frailty to this disease — the same each time they catch it — so what a town knows
+  // decides who of its frail it saves, case for case)
+  return hashFloat(A.id[s], d, 0x9a7e) < caseFatality(x, d) * relief(x, st);
 }
 
 /** health lost per day by a sick agent (needs.ts): grave cases waste away within the illness, mild ones barely */
