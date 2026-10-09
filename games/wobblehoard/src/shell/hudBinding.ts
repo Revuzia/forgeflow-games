@@ -1,15 +1,21 @@
 // HUD binding: the DOM side of the game core. It builds the HUD, the squishy's keyboard target, the settings panel, the live region,
 // the reveal plate and the toast, and maps the game's events onto them (and the DOM's clicks onto the game). Nothing here simulates or
-// decides: it only shows what game.ts reports. SHELL-2b adds the Hoard here: hud.slot is the bottom-centre slot for its button, and
-// game.hoard / game.focusInstance / game.restorePrimary / game.playMerge / game.holdInput are its seams.
+// decides: it only shows what game.ts reports. SHELL-2b adds the Hoard here: its button lives in the toolbar's Collection group (the strip layout keeps it in
+// the HUD's bottom row, ui/layout.ts bindHoard), and game.hoard / game.focusInstance / game.restorePrimary / game.playMerge / game.holdInput are its seams.
+// UI v3 (B3c): the tools are the TOOLBAR (ui/toolbar.ts, UI.md 4), always in the dock: no tray, no menu button for them. The options bars (Cut, Snap) ride in the dock's
+// attachment slot; the keys 1 2 3 C S pick tools (input/keyboard.ts onTool); Escape closes things in the order of UI.md 4.5.
 import type { TierName } from '../contracts.ts';
 import type { SettingsEnv } from '../core/settings.ts';
 import { createAnnouncer } from '../ui/announcer.ts';
 import type { Announcer } from '../ui/announcer.ts';
 import { h, isCoarsePointer, prefersReducedMotion } from '../ui/dom.ts';
 import { createSparks } from '../ui/sparks.ts';
-import { createToyTray } from '../ui/toyTray.ts';
-import type { ToolId, ToyTray } from '../ui/toyTray.ts';
+import { createToolbar, TOOLS } from '../ui/toolbar.ts';
+import type { Toolbar, ToolId } from '../ui/toolbar.ts';
+import { bindHoard, installLayout } from '../ui/layout.ts';
+import type { LayoutHandle } from '../ui/layout.ts';
+import { showsToolCaption, toolSourceOfPointer } from '../ui/hint.ts';
+import type { ToolSource } from '../ui/hint.ts';
 import { createSnapBar, paintTint } from '../ui/snapBar.ts';
 import type { Sparks } from '../ui/sparks.ts';
 import { tierLabel } from '../ui/gem.ts';
@@ -29,6 +35,7 @@ import { warmSpeciesIcons } from '../ui/speciesIcon.ts';
 import { bindCut } from './cutBinding.ts';
 import type { Game, PlayLabel } from './game.ts';
 import { createHoardEnv } from './hoardEnv.ts';
+import { closeOverlay, openMenu, openPhotoCard } from './entryStubs.ts';
 import '../ui/hoard.css';
 import { COPY } from '../collection/copy.ts';
 
@@ -42,10 +49,15 @@ export interface UiBinding {
   readonly hoard: HoardUi;
   /** visible XP: the gain sparks (none under Calm effects or reduced motion: the ring glows instead) */
   readonly sparks: Sparks;
-  /** the toy tray (FUN.md 1) */
-  readonly toys: ToyTray;
+  /** the toolbar (UI.md 4): the tools, the Hoard group, the attachment slot */
+  readonly toolbar: Toolbar;
+  /** the viewport layout (body[data-layout]) */
+  readonly layout: LayoutHandle;
   toast(text: string, ms?: number): void;
-  /** Escape outside a ceremony: close what is open (settings, the plate); true = something closed */
+  /** a tool key (1 2 3 C S): the active Cut or Snap pressed again returns the Hand; a busy tool says why. True = the tool changed. */
+  pickTool(id: ToolId): boolean;
+  /** Escape outside a ceremony: close what is open, in the order of UI.md 4.5 (a transient popover, a photo card or modal, the Menu, Settings, the Hoard, the tool
+   *  back to the Hand, the reveal plate, then the Menu); true = something closed or opened */
   escape(): boolean;
   /** a key reached the toy: the Keys line and the keyboard hint wording */
   keyUsed(): void;
@@ -54,6 +66,15 @@ export interface UiBinding {
   destroy(): void;
 }
 
+/** Live-region lines of the toolbar (UI.md 4.5, word for word: the tool lines stay what the tray said). The Cut tool's line is cutText.ts's. */
+export const TOOL_LINES: Record<Exclude<ToolId, 'cut'>, string> = {
+  hand: 'Hand: poke, squish, stretch.',
+  snap: 'Snap: drag to turn the camera (right-drag with a mouse), then Save photo. Escape goes back.',
+};
+/** why the tools are resting (the dock's `aria-disabled` reason and the live line a press or a key gets) */
+export const TOOLS_BUSY = 'Tools rest while a capsule opens.';
+export const CUT_UNAVAILABLE = 'Cut is not available here.';
+
 export const labelText = (l: PlayLabel): string => `${l.species}, ${tierLabel(l.tier)}${l.nickname ? `, called ${l.nickname}` : ''}`;
 
 export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, env: SettingsEnv, o: { onPlay(): void }): UiBinding {
@@ -61,11 +82,16 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   let hoardUi: HoardUi | null = null;
   const announcer = createAnnouncer(root);
   let panel: SettingsPanel | null = null;
+  // the layout classifier (UI.md 4.1): body[data-layout | data-density | data-tall | data-dock], kept right on resize / rotation / fullscreen; every HUD rule keys off it
+  const layout = installLayout();
+  off.push(() => layout.dispose());
   const hud = createHud(root, {
     label: g.label, muted: g.muted,
     onGear: () => { if (hoardUi?.isOpen) hoardUi.close(); panel?.toggle(); },
     onMute: () => g.toggleMute(),
     onOpenCapsule: () => { g.unlockAudio(); void g.capsules.openNext(); },
+    onReady: () => g.haptics.uiTap?.('ready'),
+    onPoke: () => g.audio.ui?.({ kind: 'tick', calm: g.settings.calm }),
   });
   const play = createPlayTarget(root);
   const setPlayLabel = (l: PlayLabel): void => {
@@ -91,15 +117,51 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     returnFocus: () => (g.phase === 'play' ? play.el : null),
   }));
   hoardUi = hoard;
-  // ---- the toy tray (FUN.md 1): the Toys button sits beside the Hoard button; the Cut tool shows only when the physics can cut
-  // The tray does not open during a capsule reveal (a Cut picked there put its bar over the reveal and a Split in two then cut the NEW squishy: VERIFY
-  // B-U3), under an open panel (Settings, the Hoard: B-U4) or in Snap, where it is hidden (an invisible open tray took the first Escape: B-M2).
-  const toys = createToyTray(root, { onPick: (t) => g.setTool(t), canOpen: () => g.phase === 'play' && !g.ceremonies.active && !g.ceremonies.pending && g.tool !== 'snap' && !p.isOpen() && !hoard.isOpen });
-  hud.slot.append(hoard.button, toys.button, hoard.matChip);
+  // ---- the toolbar (UI.md 4): the tools are always in the dock, the Hoard button in its Collection group; the Cut tool is drawn only when the physics can cut.
+  // A tool is not pickable during a capsule reveal (a Cut picked there put its bar over the reveal and a Split in two then cut the NEW squishy: VERIFY B-U3): the
+  // dock says so (aria-disabled + the reason) and a press or a key says it too. Under Settings a tool click closes the panel first (B-U4); a ceremony start puts
+  // the Hand back (game.ts). The caption chip names a tool picked by touch or key (R10); a mouse has the tooltip, the game's own changes have the live line.
   const toolsNow = (): ToolId[] => (g.cut.supported ? ['hand', 'cut', 'snap'] : ['hand', 'snap']);
-  toys.setAvailable(toolsNow());
+  const resting = (): boolean => g.ceremonies.active || g.ceremonies.pending;
+  let toolSource: ToolSource = 'game';
+  const setToolFrom = (id: ToolId, src: ToolSource): void => { toolSource = src; try { g.setTool(id); } finally { toolSource = 'game'; } };
+  let clickSource: ToolSource = 'mouse';
+  const tb: Toolbar = createToolbar({
+    layout, root: hud.el,
+    onTool: (id) => { const src = clickSource; clickSource = 'mouse'; setToolFrom(id, src); },
+    onBlocked: (_id, why) => announcer.say(why),
+  });
+  // (capture: before the toolbar's own handler) how this click came, and Settings gives way to the dock as it does to the Hoard
+  tb.el.addEventListener('click', (e) => {
+    if (!(e.target as Element | null)?.closest?.('.dock-tool, .dock-hoard')) return;
+    clickSource = e.detail === 0 ? 'key' : toolSourceOfPointer((e as PointerEvent).pointerType ?? '');
+    if (p.isOpen()) p.close('escape');
+  }, true);
+  hud.slot.append(hoard.button, hoard.matChip);
+  tb.adoptHoard(hoard.button);
+  off.push(bindHoard(layout, hoard.button, { dock: tb.group, row: hud.slot }, hoard.matChip));
+  let dockKey = '';
+  const syncDock = (force = false): void => {
+    const tools = toolsNow(), busy = resting();
+    const k = `${busy}|${tools.join()}`;
+    if (!force && k === dockKey) return;
+    dockKey = k;
+    tb.setAvailable(tools);
+    tb.setDisabled(busy ? Object.fromEntries(tools.map((id) => [id, TOOLS_BUSY])) : null);
+  };
+  syncDock(true);
+  off.push(g.onStep(() => syncDock()));
+  /** a tool key: the active Cut or Snap pressed again returns the Hand; a tool that is busy or missing says why */
+  const pickTool = (id: ToolId): boolean => {
+    if (hoard.isOpen || g.phase !== 'play' || p.isOpen()) return false;   // (a tool key does nothing under a panel: Settings gives way to a CLICK on a tool, not to a key)
+    if (!toolsNow().includes(id)) { announcer.say(CUT_UNAVAILABLE); return false; }
+    if (resting()) { announcer.say(TOOLS_BUSY); return false; }
+    const next: ToolId = id !== 'hand' && g.tool === id ? 'hand' : id;
+    if (next === g.tool) return false;
+    setToolFrom(next, 'key');
+    return true;
+  };
   hoard.button.addEventListener('click', () => { if (p.isOpen()) p.close('escape'); }, { capture: true });
-  toys.button.addEventListener('click', () => { if (p.isOpen()) p.close('escape'); }, { capture: true });   // Settings gives way to the tray, as it does to the Hoard
   off.push(warmSpeciesIcons());
 
   // ---- the quick switcher (SHELL-2b): the squishies played lately, then the hearted ones, one tap to play with
@@ -122,7 +184,8 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     return out;
   };
   // the HUD rows the 3D capsule must not land under (render lane's optional setSafeInsets): the top bar and the bottom row (the quick
-  // switcher above the name tag covers only the left edge; counting it would leave the capsule too little room); on change only
+  // switcher above the name tag covers only the left edge; counting it would leave the capsule too little room); the dock's TRAY counts, not its options bar
+  // (a bar comes and goes with the tool and must not move the capsule's spot); in the strip layout the tray is a top row; on change only
   let insetKey = '';
   const reportInsets = (): void => {
     const st = g.stage;
@@ -130,13 +193,17 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     const ih = window.innerHeight;
     if (!(ih > 0)) return;
     const topBar = hud.el.querySelector<HTMLElement>('.hud-top')?.getBoundingClientRect();
+    const tray = tb.bar.getBoundingClientRect();
+    const trayOnTop = layout.current().layout === 'strip';
     let bottomTop = ih;
     for (const e of [hud.el.querySelector<HTMLElement>('.hud-bottom')]) {
       if (!e || e.hidden) continue;
       const r = e.getBoundingClientRect();
       if (r.height > 0) bottomTop = Math.min(bottomTop, r.top);
     }
-    const top = topBar && topBar.height > 0 ? Math.round(topBar.bottom) : 0;
+    if (!trayOnTop && tray.height > 0) bottomTop = Math.min(bottomTop, tray.top);
+    let top = topBar && topBar.height > 0 ? Math.round(topBar.bottom) : 0;
+    if (trayOnTop && tray.height > 0) top = Math.max(top, Math.round(tray.bottom));
     const bottom = Math.round(Math.max(0, ih - bottomTop));
     const k = `${top},${bottom}`;
     if (k === insetKey) return;
@@ -146,7 +213,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   const refreshSwitch = (): void => { qs.set(choices()); reportInsets(); };
   refreshSwitch();
   window.addEventListener('resize', reportInsets);
-  off.push(() => window.removeEventListener('resize', reportInsets));
+  off.push(() => window.removeEventListener('resize', reportInsets), layout.onChange(() => requestAnimationFrame(reportInsets)));
   off.push(g.on('identity', () => refreshSwitch()), g.hoard.onChange(() => refreshSwitch()), () => qs.destroy());
 
   // ---- offline (COLLECTION 9.9, signed in): a quiet banner while the connection is gone, the ring keeps previewing; "Reconnected" once
@@ -177,10 +244,14 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   let plateAt = 0;
   const applyCalm = (calm: boolean): void => { document.body.dataset.calm = String(calm); };
   applyCalm(g.settings.calm);
+  // Quality low: the glass goes solid (a11y.css body[data-quality="low"], UI.md 3.3)
+  const applyQuality = (q: string): void => { document.body.dataset.quality = q; };
+  applyQuality(g.settings.quality);
   off.push(
     g.on('settings', (s) => {
       p.sync(s);
       applyCalm(s.calm);
+      applyQuality(s.quality);
       if (s.gravity !== gravityWas) { gravityWas = s.gravity; announcer.say(s.gravity ? 'On the table' : 'Floating'); }
     }),
     g.on('mute', (m) => { hud.setMuted(m); announcer.say(m ? 'Sound off' : 'Sound on'); }),
@@ -191,12 +262,13 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     g.on('message', (t) => { toast(t); announcer.say(t); }),
     g.on('notice', (t) => { announcer.say(t); }),
     g.on('ceremony', (e) => {
-      if (e.type === 'start') { toys.close(false); hud.meter.setBusy(true); plate.hide(); document.body.dataset.ceremony = e.kind; return; }
+      if (e.type === 'start') { tb.escape(); syncDock(); hud.meter.setBusy(true); plate.hide(); document.body.dataset.ceremony = e.kind; return; }
       const i = e.info;
       const info = { species: i.speciesName, tier: i.item.tier as TierName, isNew: i.item.isNew, copies: i.item.copies, tierUp: i.tierUp, nickname: i.item.nickname };
       if (e.type === 'reveal') { plate.show(info); plateAt = g.clock.now(); announcer.say(plateText(info)); return; }
       hud.meter.setBusy(false);
       delete document.body.dataset.ceremony;
+      syncDock();
     }),
     // the plate leaves PLATE_MS of game time after the reveal (the gesture clock: frozen while paused, stepped by DebugHook.step)
     g.onStep(() => { if (plate.shown && !g.ceremonies.active && g.clock.now() - plateAt >= PLATE_MS) plate.hide(); }),
@@ -296,27 +368,33 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
         done();
         if (!blob) { toast('The photo could not be made. Try again.'); return; }
         lastPhoto = name;
+        if (openPhotoCard(blob, name)) return;   // B4: inside a sandboxed iframe (or when a download cannot be confirmed) the Photo card shows the picture and says it
         download(blob, name);
         announcer.say('Photo saved.');
       }, 'image/png');
     } catch (e) { console.error(e); done(); toast('The photo could not be made. Try again.'); }
   };
   const snap = createSnapBar(root, { onSave: savePhoto, onDone: () => g.setTool('hand'), onTint: (t) => { announcer.say(`Backdrop: ${t.label}`); } });
-  const TOOL_LINES: Record<Exclude<ToolId, 'cut'>, string> = {   // (the Cut tool's line is cutText.ts's, through cutB.toolLine())
-    hand: 'Hand: poke, squish, stretch.',
-    snap: 'Snap: drag to turn the camera (right-drag with a mouse), then Save photo. Escape goes back.',
-  };
   off.push(
     g.on('tool', (t) => {
-      toys.setTool(t);
+      tb.setTool(t);
       document.body.dataset.tool = t;
-      if (t === 'snap') { placeTint(); snap.show(true); } else snap.show(false);
-      if (t === 'hand' && (document.activeElement === document.body || !document.activeElement || root.contains(document.activeElement) && (document.activeElement as HTMLElement).closest('.cutbar, .snapbar'))) toys.button.focus({ preventScroll: true });
+      hud.toolTried();
+      // the options bars ride in the dock's attachment slot: shown (and fitted) first, then attached; taken out of the slot first, then hidden (the dock gives the focus
+      // that was in a removed bar back to the Hand button)
+      if (t === 'snap') { placeTint(); snap.el.hidden = false; tb.attach(snap.el, 'snap'); snap.show(true); }
+      else if (t === 'cut') { cutB.bar.show(true); tb.attach(cutB.bar.el, 'cut'); }
+      else { tb.attach(null); snap.show(false); }
+      if (t === 'hand' && (document.activeElement === document.body || !document.activeElement || tb.toolsEl.contains(document.activeElement))) tb.focusTool('hand');   // focus returns to the Hand button
+      if (showsToolCaption(toolSource)) { const d = TOOLS.find((x) => x.id === t); if (d) tb.showCaption(d.label, d.hint); } else tb.hideCaption();
       announcer.say(t === 'cut' ? cutB.toolLine() : TOOL_LINES[t]);
       cutB.onTool(t);   // the Cut bar follows the tool; back in the Hand with pieces, the hint comes after the tool's line
+      // a bar the dock let go of waits, hidden, in the UI root (it keeps its place in the DOM: the harness and the probes find `.cutbar` and `.snapbar` there)
+      for (const bar of [cutB.bar.el, snap.el]) if (!bar.isConnected) root.append(bar);
+      requestAnimationFrame(reportInsets);
     }),
-    g.on('identity', () => toys.setAvailable(toolsNow())),
-    () => { cutB.destroy(); snap.destroy(); toys.destroy(); },
+    g.on('identity', () => syncDock()),
+    () => { cutB.destroy(); snap.destroy(); tb.destroy(); },
   );
   document.body.dataset.tool = g.tool;
   void lastPhoto;
@@ -355,14 +433,25 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   const onTab = (e: KeyboardEvent): void => { if (e.key === 'Tab') document.body.dataset.kbd = '1'; };
   window.addEventListener('keydown', onTab, { capture: true, passive: true });
 
+  // a full-screen change ends with its own Escape (the browser leaves full screen on it): that one must not also open the Menu (UI.md 4.5, 8)
+  let fullscreenAt = -Infinity;
+  const onFullscreen = (): void => { fullscreenAt = performance.now(); };
+  document.addEventListener('fullscreenchange', onFullscreen);
+  off.push(() => document.removeEventListener('fullscreenchange', onFullscreen));
+
   return {
-    hud, panel: p, play, plate, announcer, hoard, sparks, toys, toast,
+    hud, panel: p, play, plate, announcer, hoard, sparks, toolbar: tb, layout, toast,
+    pickTool,
+    // UI.md 4.5, first match wins (1 is keyboard.ts's: skip a running ceremony): the More popover, then 2 a photo card or modal and 3 the Menu (B4: closeOverlay), 4 Settings,
+    // 5 the Hoard, 6 the tool back to the Hand, 7 the reveal plate, 8 nothing open: the Menu (B4: openMenu), unless a full-screen change just happened
     escape() {
-      if (toys.escape()) return true;
+      if (tb.escape()) return true;
+      if (closeOverlay()) return true;
       if (p.isOpen()) { p.close('escape'); return true; }
       if (hoard.escape()) return true;
       if (g.tool !== 'hand') { g.setTool('hand'); return true; }   // Snap and Cut: Escape puts the Hand back
       if (plate.shown) { plate.hide(); return true; }
+      if (g.phase === 'play' && performance.now() - fullscreenAt > 500) return openMenu();
       return false;
     },
     keyUsed() { document.body.dataset.kbd = '1'; if (!isCoarsePointer()) hud.setHintMode('keyboard'); },

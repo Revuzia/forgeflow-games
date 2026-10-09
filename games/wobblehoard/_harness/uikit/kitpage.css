@@ -1,5 +1,7 @@
 /* The kit page's own chrome (dev only; literals are fine here, src/ui is where K13 counts). Component styling is NEVER done here:
    everything inside a .kp-stage is plain kit.css, so what the page shows is what a screen gets. */
+/* the few :root variables styles.css gives the game and hud.css reads */
+:root { --safe-t: 0px; --safe-r: 0px; --safe-b: 0px; --safe-l: 0px; --gutter: 16px; --tap: 44px; }
 html, body { margin: 0; min-height: 100%; background: var(--wh-ink); color: var(--wh-cream); font: 600 16px/1.4 var(--wh-font-ui); }
 body { padding: 0 max(var(--k-gutter), env(safe-area-inset-left)) 64px; overflow-x: hidden; }
 .kp-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; padding: 14px 0 10px; border-bottom: 1px solid var(--wh-panel-edge); }
@@ -22,7 +24,7 @@ body { padding: 0 max(var(--k-gutter), env(safe-area-inset-left)) 64px; overflow
 .kp-stage--ink { background: var(--wh-ink); }
 .kp-stage--frame { position: relative; min-height: 300px; padding: 0; overflow: hidden; align-items: stretch; }
 .kp-stage--frame .k-scrim { position: absolute; z-index: 1; }
-.kp-stage .k-switch, .kp-stage .k-slider-row, .kp-stage .k-seg { flex: 1 1 100%; }
+.kp-stage .k-switch, .kp-stage .k-slider-row, .kp-stage .k-seg:not(.opts-seg) { flex: 1 1 100%; }
 .kp-stack { display: grid; gap: 4px; justify-items: start; min-width: 0; }
 .kp-sw { height: 44px; border-radius: 10px; background: var(--sw); border: 1px solid var(--wh-panel-edge); display: flex; align-items: flex-end; justify-content: space-between; padding: 3px 6px; font-size: 10px; font-weight: 800; }
 .kp-sw b { font-weight: 800; }
@@ -46,3 +48,68 @@ body { padding: 0 max(var(--k-gutter), env(safe-area-inset-left)) 64px; overflow
 .kp-big { gap: 18px 16px; }
 .kp-big .kp-cell { min-width: 0; }
 .kp-fig { display: grid; justify-items: start; gap: 4px; }
+
+/* B3: the toolbar sheet. A "scene" is the real layout at the viewport's size: mock HUD pieces around the REAL toolbar (src/ui/toolbar.*). The mock pieces follow
+   UI.md 4.2 and are replaced by the real HUD in B3c. */
+.kp-sec--bleed { margin-inline: calc(50% - 50vw); padding-bottom: 0; }
+.kp-sec--bleed > h2, .kp-sec--bleed > .kp-note { padding-inline: 16px; }
+.kp-dockhost { position: relative; width: 100%; min-width: 0; }
+.kp-dockhost .dock { position: relative; inset: auto !important; padding: 0 !important; width: 100%; }   /* a specimen is in flow whatever layout the viewport has */
+.kp-dockhost--full { min-width: 560px; }
+.kp-stage:has(> .kp-dockhost--full) { overflow-x: auto; }
+.kp-dockhost--caption { padding-top: 46px; }
+.kp-dockhost--tip { padding-top: 54px; }
+.kp-scene { position: relative; overflow: hidden; isolation: isolate; background: radial-gradient(120% 90% at 50% 64%, var(--wh-felt) 0%, var(--wh-ink) 72%); }
+.kp-blob { position: absolute; border-radius: 50%; background: radial-gradient(circle at 36% 30%, #ffe2b0 0, #ffb347 46%, #e8862a 100%); box-shadow: inset 0 -16px 28px rgba(181, 97, 26, .45), 0 24px 40px rgba(8, 4, 20, .4); }
+.kp-top { position: absolute; z-index: 3; left: 16px; right: 16px; top: 12px; height: 44px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.kp-top { pointer-events: none; }   /* (like the real .hud-top: the row is click-through, its buttons are not) */
+.kp-top-btns { display: flex; gap: 8px; pointer-events: auto; }
+.kp-brand-slot { display: none; margin-right: auto; min-width: 0; }
+body[data-layout="wide"] .kp-brand-slot { display: block; }
+body[data-layout="strip"] .kp-top { top: 8px; }
+body[data-layout="strip"] .kp-fs { display: none; }
+@media (min-width: 700px) { body[data-layout="strip"] .kp-fs { display: contents; } }
+body[data-layout="tiny"] .kp-top { top: 6px; left: 12px; right: 12px; }
+.kp-hint { display: none; top: 64px; bottom: auto !important; z-index: 3; }   /* (!important: hud.css lifts the pill above the switcher with a body rule) */   /* the real .hint (hud.css) draws the pill; the sheet only places it */
+@media (max-width: 380px) { body[data-layout="stack"] .kp-hint { display: block; } }
+.kp-info { position: absolute; z-index: 3; left: 16px; right: 16px; display: flex; align-items: flex-end; justify-content: space-between; gap: 8px; pointer-events: none; bottom: var(--dk-bottom); }
+.kp-info > * { pointer-events: auto; }
+body[data-layout="stack"] .kp-info { height: 56px; align-items: center; bottom: calc(var(--dk-bottom) + var(--dk-h) + 8px); }
+body[data-layout="stack"] .kp-scene[data-attach="true"] .kp-info { display: none; }   /* the options bar replaces the info row */
+body[data-layout="strip"] .kp-info { height: 52px; align-items: center; bottom: 8px; }
+body[data-layout="tiny"] .kp-info { left: auto; right: 12px; }
+body[data-layout="tiny"] .kp-plate, body[data-layout="tiny"] .kp-row-hoard { display: none; }
+body[data-layout="tiny"] .kp-scene[data-attach="true"] .kp-ringbox { display: none; }
+.kp-plate { display: grid; gap: 1px; min-width: 0; max-width: 46%; padding: 6px 14px 7px; border-radius: 20px; }
+.kp-plate b { font: 800 18px/1.1 var(--wh-font-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kp-plate span { font: 800 12px/1.1 var(--wh-font-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--wh-cream-dim); }
+.kp-row-hoard { display: flex; }
+.kp-ringbox { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 8px; border-radius: 28px; }
+.kp-ringbox .meter { order: -1; width: 48px; height: 48px; }   /* the REAL ring (meterRing.ts): UI.md draws [ring][Open], the DOM order is Open then ring */
+body[data-layout="tiny"] .kp-ringbox .meter { width: 40px; height: 40px; }
+body[data-layout="tiny"] .kp-ringbox { padding: 2px 2px 2px 6px; gap: 6px; }
+body[data-layout="tiny"] .kp-ringbox .capsule-btn { min-width: 0; padding: 0 var(--wh-sp-3); }
+.kp-opts { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.kp-opts > * { flex: none; }
+.kp-opts-seg { flex: none; }
+.kp-opts-seg--icons .k-seg-face { padding: 0; width: var(--wh-hit); }
+.kp-opts-seg--icons .k-seg-face > span { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.kp-opts-sw { display: flex; gap: 4px; }
+.kp-swatch::before { content: ""; width: 26px; height: 26px; border-radius: 50%; background: var(--sw, var(--wh-felt)); border: 2px solid var(--wh-cream); }
+.kp-swatch--felt { --sw: var(--wh-felt); }
+.kp-swatch--dusk { --sw: var(--wh-dusk); }
+.kp-swatch--mint { --sw: #bfe8d0; }
+.kp-swatch--peach { --sw: #ffd6b0; }
+
+/* B3b: the HUD parts sheet (real hint pill, ring, switcher; the sheet only places them) */
+.kp-hintbox { position: relative; display: flex; justify-content: center; min-width: 0; max-width: 100%; }
+.kp-hintbox .hint { position: static; transform: none; max-width: 100%; }
+.kp-ringdemo { position: relative; display: flex; justify-content: flex-end; min-width: 300px; padding: 36px 8px 4px 4px; }
+.kp-ringdemo .meter-cluster { pointer-events: auto; }
+.kp-ringdemo .meter { order: -1; }
+.kp-qs .qswitch { position: static; display: flex !important; }
+.kp-qs--row .qs-row { display: flex !important; }
+.kp-qs--row .qs-fold { display: none !important; }
+.kp-qs--fold .qs-row { display: none !important; }
+.kp-qs--fold .qs-fold { display: flex !important; }
+.kp-scene[data-tool="cut"] .qswitch, .kp-scene[data-tool="snap"] .qswitch { visibility: hidden; }   /* the game's body[data-tool] rule: no switcher under an options bar */

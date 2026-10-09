@@ -11,7 +11,8 @@ import {
   contrastRatio, mixHex, themeVars,
 } from '../src/ui/theme.ts';
 import { ICON_NAMES, ICON_PATHS, iconPaths } from '../src/ui/icons.ts';
-import { KIT_SIZES, applyLayout, layoutFor, sameLayout } from '../src/ui/layout.ts';
+import { KIT_SIZES, applyLayout, bindHoard, dockFor, layoutFor, sameLayout } from '../src/ui/layout.ts';
+import type { LayoutHandle, LayoutState } from '../src/ui/layout.ts';
 import { CALM_FADE_MS, CALM_MOVE_MS, durationFor, play } from '../src/ui/motion.ts';
 import { TIER_STYLE } from '../src/core/rarity.ts';
 
@@ -73,17 +74,23 @@ const stripComments = (s: string): string => s.replace(/\/\*[\s\S]*?\*\//g, '');
   applyLayout(layoutFor(888, 500), fake);
   const d1 = JSON.stringify(fake.dataset);
   applyLayout(layoutFor(390, 844), fake);
-  check('layout: applyLayout writes data-layout / data-density / data-tall and clears density when it no longer applies', d1 === '{"layout":"wide","density":"short","tall":"false"}' && fake.dataset.layout === 'stack' && fake.dataset.density === undefined && fake.dataset.tall === 'true');
+  check('layout: applyLayout writes data-layout / data-density / data-tall / data-dock (the dock form, B3a) and clears density when it no longer applies', d1 === '{"layout":"wide","density":"short","tall":"false","dock":"compact"}' && fake.dataset.layout === 'stack' && fake.dataset.density === undefined && fake.dataset.tall === 'true' && fake.dataset.dock === 'compact');
   check('layout: sameLayout ignores pixel drift inside a class', sameLayout(layoutFor(1280, 800), layoutFor(1281, 801)) && !sameLayout(layoutFor(1280, 800), layoutFor(888, 500)));
 }
 
 // ============================================================ icons (UI.md 3.3)
 {
-  const toyTray = read('src/ui/toyTray.ts');
+  // RE-SPECIFIED (reason: the owner changed the design on 2026-10-08): the three tool glyphs were pinned to the old tray's file, which is deleted (UI.md 4.6); they are pinned
+  // to the same paths as literals now (the glyphs are the old ones, byte for byte; icons.ts is their only home)
+  const TOOL_PATHS: Record<'hand' | 'cut' | 'snap', string[]> = {
+    hand: ['M8 12.5V6.8a1.6 1.6 0 0 1 3.2 0V11', 'M11.2 10.6V5.4a1.6 1.6 0 0 1 3.2 0v5.2', 'M14.4 10.8V6.6a1.6 1.6 0 0 1 3.2 0v6.6c0 4-2.6 6.8-6.2 6.8-2.6 0-4.1-1.3-5.4-3.4l-2-3.4a1.5 1.5 0 0 1 2.5-1.6L8 13'],
+    cut: ['M5 19 15.5 8.5', 'M15.5 8.5l2.6-2.6a1.8 1.8 0 0 1 2.5 2.5L18 11', 'M5 19l3.6-.9', 'M9 15.4l2.2 2.2'],
+    snap: ['M4 8.5h3l1.6-2.5h6.8L17 8.5h3v10H4z', 'M12 16.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z'],
+  };
   check(`icons: ${ICON_NAMES.length} icons, unique camelCase names, none empty, unknown name draws nothing`, ICON_NAMES.length >= 55 && ICON_NAMES.length === new Set(ICON_NAMES).size && ICON_NAMES.every((n) => /^[a-z][A-Za-z0-9]*$/.test(n) && iconPaths(n).length > 0) && iconPaths('nope').length === 0);
   const need = ['hand', 'cut', 'snap', 'split', 'join', 'stamp', 'roll', 'menu', 'trophy', 'shelf', 'lock', 'minis', 'gear', 'close', 'soundOn', 'soundOff', 'fullscreen', 'fullscreenExit', 'hoard', 'capsule', 'heart', 'clock', 'check', 'plus', 'help', 'more', 'chevronLeft', 'arrowRight', 'info', 'success', 'warning', 'error'];
   check('icons: every icon the spec and the audit name exists (tools, HUD, status, and the replacements for the text glyphs heart / clock / chevron / arrow / plus / help / more)', need.every((n) => n in ICON_PATHS), need.filter((n) => !(n in ICON_PATHS)).join(','));
-  check('icons: hand / cut / snap are verbatim from toyTray.ts and split / join are the UI.md strings', (['hand', 'cut', 'snap'] as const).every((n) => ICON_PATHS[n].every((d) => toyTray.includes(`'${d}'`)))
+  check('icons: hand / cut / snap are the original tool glyphs (pinned literals, re-specified 2026-10-08) and split / join are the UI.md strings', (['hand', 'cut', 'snap'] as const).every((n) => JSON.stringify([...ICON_PATHS[n]]) === JSON.stringify(TOOL_PATHS[n]))
     && ICON_PATHS.split[0] === 'M12 3v18M8 8l-4 4 4 4M16 8l4 4-4 4' && ICON_PATHS.join[0] === 'M3 12h7M7 8.5 10.5 12 7 15.5M21 12h-7M17 8.5 13.5 12 17 15.5');
   const CMD = /^[MmLlHhVvCcSsQqTtAaZz0-9eE.,\s-]+$/;
   const all = Object.entries(ICON_PATHS).flatMap(([n, ds]) => (ds as readonly string[]).map((d) => ({ n, d })));
@@ -182,6 +189,41 @@ const stripComments = (s: string): string => s.replace(/\/\*[\s\S]*?\*\//g, '');
   // K05: ALL dist CSS <= 80 KB minified. The working tree's old sheets already minify to ~53 KB (styles 23.1 + hoard 29.1 + boot 0.7); the "42,087 B" in
   // UI.md is the 2026-10-05 dist. So B0 is a RATCHET: it may not grow, and B2-B7 must delete the old rules their kit classes replace.
   check(`size (ratchet): base + kit + a11y minified <= 26 KB and <= 6 KB gzip (${how}); later batches delete the old CSS they replace (K05: 80 KB for ALL css)`, min.length <= 26 * 1024 && gz <= 6 * 1024, `${min.length} B minified, ${gz} B gzip`);
+}
+
+// ============================================================ the toolbar (UI.md 4.1 to 4.3, B3a)
+{
+  const d = (w: number, h: number): string => { const x = dockFor(layoutFor(w, h)); return `${x.form}/${x.attach}/${x.hoard}/${x.labels ? 'labels' : 'icons'}`; };
+  check('dock: the 8 kit sizes take the forms of UI.md 4.2 (wide full with labels; wide-short and stack compact; strip compact with the Hoard button in the bottom row; tiny bare)',
+    d(1280, 800) === 'full/above/dock/labels' && d(888, 500) === 'compact/above/dock/icons' && d(390, 844) === 'compact/above/dock/icons' && d(320, 568) === 'compact/above/dock/icons'
+    && d(844, 390) === 'compact/inline/row/icons' && d(568, 320) === 'compact/inline/row/icons' && d(632, 355) === 'compact/inline/row/icons' && d(358, 201) === 'bare/inline/dock/icons',
+    KIT_SIZES.map((k) => `${k.w}x${k.h}=${d(k.w, k.h)}`).join(' '));
+  const fakeBody = { dataset: {} as Record<string, string | undefined> } as unknown as HTMLElement;
+  applyLayout(layoutFor(358, 201), fakeBody);
+  check('dock: applyLayout writes body[data-dock] (the form)', fakeBody.dataset.dock === 'bare');
+  // bindHoard moves ONE node between the dock and the bottom row as the layout changes (never clones it)
+  type Fake = { parentElement: unknown; insertBefore(n: { parentElement: unknown }, ref: unknown): void };
+  const mk = (): Fake => { const p: Fake = { parentElement: null, insertBefore(n) { n.parentElement = p; } }; return p; };
+  const dock = mk(), row = mk();
+  const node = { parentElement: null as unknown };
+  let cb: ((n: LayoutState, b: LayoutState) => void) | null = null;
+  let cur = layoutFor(1280, 800);
+  const handle: LayoutHandle = { current: () => cur, update: () => cur, onChange: (f) => { cb = f; return () => { cb = null; }; }, dispose: () => {} };
+  bindHoard(handle, node as unknown as HTMLElement, { dock: dock as unknown as HTMLElement, row: row as unknown as HTMLElement });
+  const where = (): string => (node.parentElement === dock ? 'dock' : node.parentElement === row ? 'row' : 'none');
+  const seen: string[] = [where()];
+  for (const [w, h] of [[844, 390], [358, 201], [390, 844], [632, 355]] as const) { const before = cur; cur = layoutFor(w, h); (cb as ((n: LayoutState, b: LayoutState) => void) | null)?.(cur, before); seen.push(where()); }
+  check('dock: the Hoard node is in the dock for wide, stack and tiny and in the bottom row for strip (1280 dock, 844x390 row, 358x201 dock, 390x844 dock, 632x355 row)', seen.join() === 'dock,row,dock,dock,row', seen.join());
+
+  // static audit of the toolbar's own sources
+  const tcss = stripComments(read('src/ui/toolbar.css'));
+  const tts = read('src/ui/toolbar.ts') + read('src/ui/tooltip.ts');
+  check('toolbar css: no raw hex colour, no `transition: all`, no backdrop-filter of its own (glass is `.k-glass`), no px font size (type tokens only), z-index from the token scale',
+    !/#[0-9a-fA-F]{3,8}\b/.test(tcss) && !/transition:\s*all/.test(tcss) && !/backdrop-filter/.test(tcss) && !/font-size:\s*[0-9.]+px/.test(tcss) && [...tcss.matchAll(/z-index:\s*([^;]+);/g)].every((m) => /^var\(--wh-z-/.test(m[1].trim())));
+  check('toolbar ts: text only through textContent (no innerHTML / outerHTML / insertAdjacentHTML), no inline style attribute or <style>, no storage',
+    !/innerHTML|outerHTML|insertAdjacentHTML/.test(tts) && !/setAttribute\(\s*['"]style['"]/.test(tts) && !/createElement\(\s*['"]style['"]/.test(tts) && !/localStorage|sessionStorage|indexedDB/.test(tts));
+  check('toolbar css: the dock sizes are the UI.md 4.2 numbers (64 / 52 / 44 bars, 48 / 44 tools) and there is no :hover rule (kit.css owns hover, fine pointers only)',
+    /--dk-bar-h: 64px/.test(tcss) && /--dk-bar-h: 52px/.test(tcss) && /--dk-bar-h: 44px/.test(tcss) && /--dk-tool-h: 48px/.test(tcss) && !/:hover/.test(tcss));
 }
 
 console.log(`\n${total - bad}/${total} UI foundation checks passed`);

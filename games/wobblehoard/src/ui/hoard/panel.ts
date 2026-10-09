@@ -1,11 +1,13 @@
-// The Hoard (COLLECTION 9.1-9.3, 9.5, 9.6, 9.9, 9.10): the shelf of all 50 species, the detail card with the LIVE squishy, the daily
+// The Hoard (COLLECTION 9.1-9.3, 9.5, 9.6, 9.9, 9.10; UI.md 6): the cabinet of all 50 species, the detail card with the LIVE squishy, the daily
 // gift (restock) and today's tasks, plus the HUD entry button and the "put them back" chip of the play mat.
 //
 // Layout: an overlay above the live stage. Desktop: an 880 px panel; the card is a right-hand column with the stage visible (and
 // pokeable) beside it. Phone (< 640 px): a full-screen sheet (the stage is paused under it); the card is a bottom sheet with the
 // squishy shown above it. Everything is keyboard-operable: the plinths are a roving-tabindex grid (arrows, Home / End, Enter), Tab
 // stays inside the open panel, Escape closes the innermost thing (merge pad, card, then the Hoard) and focus returns to where it was.
-// Player words come from collection/copy.ts or are plain English in the same voice. Counts are text, never only a badge.
+// Player words come from collection/copy.ts or are plain English in the same voice. Counts are text, never only a badge. Rarity is a gem
+// SHAPE + the tier word + a double-rim frame, never a colour alone. The look is the kit's (kit.css classes beside the old hook names the
+// harness and the card logic key on); icons and jelly lettering reach this file through env.kit (src/ui/hoard/** imports only dom.ts and theme.ts).
 import type { TierName } from '../../contracts.ts';
 import {
   COPY, collectionCountCopy, mergeButtonCopy, oddsCopy, originCopy, plinthLabel, restockErrorCopy, restockOwnedCopy, sparesCopy,
@@ -13,7 +15,7 @@ import {
 } from '../../collection/copy.ts';
 import { filterStacks, ownedCount, rowComplete, sortStacks } from '../../collection/stacks.ts';
 import type { HoardItem, HoardPrefs, SortKey, Stack } from '../../collection/types.ts';
-import { h, icon } from '../dom.ts';
+import { h } from '../dom.ts';
 import { createMergePad } from './merge.ts';
 import type { MergePad } from './merge.ts';
 import type { HoardEnv } from './types.ts';
@@ -42,9 +44,11 @@ export interface HoardUi {
 const SORTS: ReadonlyArray<[SortKey, string]> = [['tier', 'Tier'], ['newest', 'Newest'], ['name', 'Name'], ['spares', 'Most spares'], ['catalog', 'Collection order']];
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 const hoursLeft = (ms: number): string => `free in ${Math.max(1, Math.ceil(ms / 3_600_000))} h`;
+const NO_FILTERS: Partial<HoardPrefs> = { tiers: 0, lanes: 0, onlySpares: false, onlyMissing: false, onlyHearts: false, onlyShelf: false };
 
 export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
   const c = env.collection;
+  const kit = env.kit;
   const off: Array<() => void> = [];
   let open = false;
   let tab: HoardTab = 'shelf';
@@ -54,34 +58,40 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
   let card: { species: string; selected: string | null; opener: HTMLElement | null } | null = null;
   let giftPick: string | null = null;
   let rovingIdx = 0;
+  let titleSm = false;
+
+  const tierWord = (t: string): string => env.tiers.find((x) => x.id === t)?.label ?? t;
+  const mark = (name: 'heart' | 'clock'): HTMLElement => h('span', { class: `mark ${name}` }, kit.glyph(name, 'k-icon mark-icon', { fill: name === 'heart', size: 16 }));
 
   /* ─────────────── HUD entry + mat chip ─────────────── */
   const btnCount = h('span', { class: 'hoard-btn-count' });
   const btnDot = h('span', { class: 'hoard-btn-dot', attrs: { 'aria-hidden': 'true' } });
   const button = h('button', { class: 'hoard-btn', attrs: { type: 'button', 'aria-haspopup': 'dialog', 'aria-expanded': 'false' } },
-    cabinetGlyph(), h('span', { class: 'hoard-btn-text' }, h('span', { class: 'hoard-btn-word', text: 'Hoard' }), btnCount), btnDot);
+    kit.glyph('hoard', 'icon hoard-glyph'), h('span', { class: 'hoard-btn-text' }, h('span', { class: 'hoard-btn-word', text: 'Hoard' }), btnCount), btnDot);
   button.addEventListener('click', () => ui.toggle());
   const matChip = h('button', { class: 'mat-chip', attrs: { type: 'button', hidden: '' } });
   matChip.addEventListener('click', () => { const n = env.mat.count - 1; env.mat.clear(); env.announce(n === 1 ? 'Put back on the shelf.' : `${n} put back on the shelf.`); });
 
   /* ─────────────── the panel ─────────────── */
-  const title = h('h2', { class: 'hoard-title', text: 'Hoard', attrs: { id: 'wh-hoard-title', tabindex: '-1' } });
+  const title = kit.jelly('Hoard', { tag: 'h2', size: 'md', tone: 'amber' });
+  title.id = 'wh-hoard-title'; title.tabIndex = -1; title.classList.add('hoard-title');
   const count = h('p', { class: 'hoard-count' });
   const bar = h('div', { class: 'hoard-bar', attrs: { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '50', 'aria-labelledby': 'wh-hoard-count-label' } }, h('span', { class: 'hoard-bar-fill' }));
   const countLabel = h('span', { class: 'sr-only', attrs: { id: 'wh-hoard-count-label' }, text: 'Species collected' });
   const ledger = h('span', { class: 'hoard-ledger', text: COPY.practiceLabel });
-  const closeBtn = h('button', { class: 'icon-btn hoard-close', attrs: { type: 'button', 'aria-label': 'Close the Hoard' } }, icon('close'));
+  // ONE close button for the whole panel (the note below has its own plain "Got it": two identical X buttons stacked 8 px apart was the audit's W13)
+  const closeBtn = h('button', { class: 'k-btn k-iconbtn hoard-close', attrs: { type: 'button', 'aria-label': 'Close the Hoard' } }, kit.glyph('close'));
   closeBtn.addEventListener('click', () => ui.close());
   const head = h('header', { class: 'hoard-head' }, h('div', { class: 'hoard-head-l' }, title, ledger), h('div', { class: 'hoard-head-c' }, count, bar, countLabel), closeBtn);
   const noteText = h('p', { class: 'hoard-note-text' }, h('strong', { text: COPY.practiceShelf }), ' ', h('span', { class: 'hoard-note-chip', text: COPY.signInChip }));
-  const noteClose = h('button', { class: 'icon-btn small', attrs: { type: 'button', 'aria-label': 'Dismiss this note' } }, icon('close'));
-  noteClose.addEventListener('click', () => { noteDismissed = true; note.hidden = true; title.focus(); });
-  const note = h('div', { class: 'hoard-note' }, noteText, noteClose);
+  const noteOk = h('button', { class: 'k-btn k-btn--sm hoard-note-ok', text: 'Got it', attrs: { type: 'button' } });
+  noteOk.addEventListener('click', () => { noteDismissed = true; note.hidden = true; title.focus(); });
+  const note = h('div', { class: 'hoard-note' }, noteText, noteOk);
 
   const tabs: Record<HoardTab, HTMLButtonElement> = {
-    shelf: tabBtn('shelf', 'Shelf'),
-    gift: tabBtn('gift', COPY.dailyGift),
-    today: tabBtn('today', 'Today'),
+    shelf: tabBtn('shelf', 'Shelf', 'shelf'),
+    gift: tabBtn('gift', 'Gift', 'gift'),
+    today: tabBtn('today', 'Today', 'today'),
   };
   const tablist = h('div', { class: 'hoard-tabs', attrs: { role: 'tablist', 'aria-label': 'Hoard sections' } }, tabs.shelf, tabs.gift, tabs.today);
   tablist.addEventListener('keydown', (e) => {
@@ -103,7 +113,7 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
   root.append(el);
 
   /* ─────────────── the card ─────────────── */
-  const cardEl = h('div', { class: 'hcard', attrs: { role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'wh-card-name', 'data-open': 'false', hidden: '' } });
+  const cardEl = h('div', { class: 'hcard k-frame', attrs: { role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'wh-card-name', 'data-open': 'false', hidden: '' } });
   root.append(cardEl);
 
   /* ─────────────── merge pad and Tidy-up (merge.ts) ─────────────── */
@@ -112,9 +122,9 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
     onClosed: (focusBack) => { (focusBack ?? (card ? cardEl.querySelector<HTMLElement>('.hcard-merge') : null) ?? title)?.focus(); },
   });
 
-  function tabBtn(id: HoardTab, label: string): HTMLButtonElement {
-    const b = h('button', { class: 'hoard-tab', attrs: { type: 'button', role: 'tab', id: `wh-tab-${id}`, 'aria-controls': `wh-pane-${id}`, 'aria-selected': 'false', tabindex: '-1' } },
-      h('span', { text: label }), h('span', { class: 'hoard-tab-dot', attrs: { 'aria-hidden': 'true' } }));
+  function tabBtn(id: HoardTab, label: string, ic: string): HTMLButtonElement {
+    const b = h('button', { class: 'hoard-tab k-btn', attrs: { type: 'button', role: 'tab', 'aria-label': label, id: `wh-tab-${id}`, 'aria-controls': `wh-pane-${id}`, 'aria-selected': 'false', tabindex: '-1' } },
+      kit.glyph(ic, 'k-icon hoard-tab-icon'), h('span', { class: 'hoard-tab-text', text: label }), h('span', { class: 'hoard-tab-dot', attrs: { 'aria-hidden': 'true' } }));
     b.addEventListener('click', () => showTab(id));
     return b;
   }
@@ -124,6 +134,7 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
     for (const k of Object.keys(tabs) as HoardTab[]) {
       const on = k === t;
       tabs[k].setAttribute('aria-selected', String(on));
+      tabs[k].classList.toggle('k-gel', on);
       tabs[k].tabIndex = on ? 0 : -1;
     }
     shelfPanel.hidden = t !== 'shelf'; giftPanel.hidden = t !== 'gift'; todayPanel.hidden = t !== 'today';
@@ -144,6 +155,9 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
     button.setAttribute('aria-label', `Hoard, ${owned} of ${stacks.length} species${extra ? `, ${extra}` : ''}`);
     tabs.gift.dataset.dot = String(gift);
     tabs.today.dataset.dot = String(task);
+    // the tab's name says what the dot says (a short screen shows the icon alone)
+    tabs.gift.setAttribute('aria-label', gift ? 'Gift, a gift is waiting' : 'Gift');
+    tabs.today.setAttribute('aria-label', task ? 'Today, a task is ready' : 'Today');
     const out = env.mat.count - 1;
     matChip.hidden = out < 1;
     matChip.textContent = '';
@@ -162,9 +176,17 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
     note.hidden = noteDismissed;
   }
 
+  /** the heading wears the small optical size where height is scarce (a landscape phone, the portal phone) */
+  function sizeTitle(): void {
+    const sm = window.matchMedia('(max-height: 440px)').matches;
+    if (sm === titleSm) return;
+    titleSm = sm;
+    kit.setJelly(title, 'Hoard', { size: sm ? 'sm' : 'md' });
+  }
+
   /* ─────────────── the shelf ─────────────── */
   function chip(label: string, on: boolean, n: number | null, onClick: () => void, lead?: Element): HTMLButtonElement {
-    const b = h('button', { class: 'fchip', attrs: { type: 'button', 'aria-pressed': String(on) } }, lead ?? null, h('span', { text: label }), n === null ? null : h('span', { class: 'fchip-n', text: `(${n})` }));
+    const b = h('button', { class: 'fchip k-chip', attrs: { type: 'button', 'aria-pressed': String(on) } }, lead ?? null, h('span', { text: label }), n === null ? null : h('span', { class: 'fchip-n k-chip-n', text: String(n) }));
     b.addEventListener('click', onClick);
     return b;
   }
@@ -178,60 +200,63 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
     shelfPanel.textContent = '';
 
     // tools: filters toggle, sort, view, Tidy-up
-    const fBtn = h('button', { class: 'tool-btn', attrs: { type: 'button', 'aria-expanded': String(filtersOpen), 'aria-controls': 'wh-filters', 'data-key': 'filters' } },
-      h('span', { text: 'Filters' }), nFilters ? h('span', { class: 'tool-n', text: String(nFilters) }) : null);
+    const fBtn = h('button', { class: 'tool-btn k-btn k-btn--sm', attrs: { type: 'button', 'aria-expanded': String(filtersOpen), 'aria-controls': 'wh-filters', 'aria-label': nFilters ? `Filters, ${nFilters} on` : 'Filters', 'data-key': 'filters' } },
+      kit.glyph('filter', 'k-icon k-icon--sm'), h('span', { text: 'Filters' }), nFilters ? h('span', { class: 'tool-n', text: String(nFilters) }) : null);
     fBtn.addEventListener('click', () => { filtersOpen = !filtersOpen; renderShelf(); shelfPanel.querySelector<HTMLElement>('[data-key="filters"]')?.focus(); });
     const sortSel = h('select', { class: 'tool-select', attrs: { id: 'wh-hoard-sort', 'data-key': 'sort' } });
     for (const [k, label] of SORTS) { const o = h('option', { text: label, attrs: { value: k } }); if (k === prefs.sort) o.selected = true; sortSel.append(o); }
     sortSel.addEventListener('change', () => { c.setPrefs({ sort: sortSel.value as SortKey }); });
-    const sortWrap = h('label', { class: 'tool-sort' }, h('span', { text: 'Sort' }), sortSel);
+    const sortWrap = h('label', { class: 'tool-sort' }, h('span', { class: 'tool-sort-label', text: 'Sort' }),
+      h('span', { class: 'tool-select-wrap' }, sortSel, kit.glyph('chevronDown', 'k-icon k-icon--sm tool-select-chev')));
     const viewBtn = (v: HoardPrefs['view'], label: string): HTMLButtonElement => {
-      const b = h('button', { class: 'seg-btn', text: label, attrs: { type: 'button', 'aria-pressed': String(prefs.view === v), 'data-key': `view-${v}` } });
+      const b = h('button', { class: prefs.view === v ? 'seg-btn k-btn k-btn--sm k-gel' : 'seg-btn k-btn k-btn--sm', text: label, attrs: { type: 'button', 'aria-pressed': String(prefs.view === v), 'data-key': `view-${v}` } });
       b.addEventListener('click', () => c.setPrefs({ view: v }));
       return b;
     };
     const views = h('div', { class: 'tool-seg', attrs: { role: 'group', 'aria-label': 'View' } }, viewBtn('cabinet', 'Shelves'), viewBtn('grid', 'Grid'));
     const plan = c.tidyPlan({ includeRare: false });
     const planRare = plan.length ? plan : c.tidyPlan({ includeRare: true });
-    const tidy = h('button', { class: 'tool-btn tidy', attrs: { type: 'button', 'data-key': 'tidy' } }, h('span', { text: 'Tidy up' }));
+    const tidy = h('button', { class: 'tool-btn tidy k-btn k-btn--sm', attrs: { type: 'button', 'aria-label': 'Tidy up', 'data-key': 'tidy' } }, kit.glyph('sparkle', 'k-icon k-icon--sm'), h('span', { text: 'Tidy up' }));
     tidy.disabled = planRare.length === 0;
-    if (tidy.disabled) tidy.title = COPY.noSpares;
+    // a disabled control says why (UI.md 3.3): in text for assistive tech, and as a hover title
+    const tidyWhy = h('span', { class: 'sr-only', attrs: { id: 'wh-tidy-why' }, text: COPY.noSpares });
+    if (tidy.disabled) { tidy.title = COPY.noSpares; tidy.setAttribute('aria-describedby', 'wh-tidy-why'); }
     tidy.addEventListener('click', () => pad.openTidy(tidy));
-    shelfPanel.append(h('div', { class: 'hoard-tools' }, fBtn, sortWrap, views, tidy));
+    shelfPanel.append(h('div', { class: 'hoard-tools' }, fBtn, sortWrap, views, tidy, tidyWhy));
 
     if (filtersOpen) {
-      const tierRow = h('div', { class: 'fchips', attrs: { role: 'group', 'aria-label': 'Tier' } });
+      const tierRow = h('div', { class: 'fchips k-chips', attrs: { role: 'group', 'aria-label': 'Tier' } });
       env.tiers.forEach((t, i) => {
         const n = filterStacks(all, { ...prefs, tiers: 1 << i }).length;
         tierRow.append(chip(t.label, !!(prefs.tiers & (1 << i)), n, () => c.setPrefs({ tiers: prefs.tiers ^ (1 << i) }), env.gem(t.id, 'gem gem-sm')));
       });
-      const laneRow = h('div', { class: 'fchips', attrs: { role: 'group', 'aria-label': 'Feel' } });
+      const laneRow = h('div', { class: 'fchips k-chips', attrs: { role: 'group', 'aria-label': 'Feel' } });
       env.lanes.forEach((l, i) => {
         const n = filterStacks(all, { ...prefs, lanes: 1 << i }).length;
         laneRow.append(chip(l, !!(prefs.lanes & (1 << i)), n, () => c.setPrefs({ lanes: prefs.lanes ^ (1 << i) })));
       });
-      const togRow = h('div', { class: 'fchips', attrs: { role: 'group', 'aria-label': 'Show' } },
+      const togRow = h('div', { class: 'fchips k-chips', attrs: { role: 'group', 'aria-label': 'Show' } },
         chip('Only spares', prefs.onlySpares, filterStacks(all, { ...prefs, onlySpares: true }).length, () => c.setPrefs({ onlySpares: !prefs.onlySpares })),
         chip('Only missing', prefs.onlyMissing, filterStacks(all, { ...prefs, onlyMissing: true }).length, () => c.setPrefs({ onlyMissing: !prefs.onlyMissing })),
-        chip('Hearts', prefs.onlyHearts, filterStacks(all, { ...prefs, onlyHearts: true }).length, () => c.setPrefs({ onlyHearts: !prefs.onlyHearts })));
-      const clear = h('button', { class: 'link-btn', text: 'Clear filters', attrs: { type: 'button' } });
+        chip('Hearts', prefs.onlyHearts, filterStacks(all, { ...prefs, onlyHearts: true }).length, () => c.setPrefs({ onlyHearts: !prefs.onlyHearts }), kit.glyph('heart', 'k-icon', { size: 18 })));
+      const clear = h('button', { class: 'link-btn k-link', text: 'Clear filters', attrs: { type: 'button' } });
       clear.disabled = nFilters === 0;
-      clear.addEventListener('click', () => c.setPrefs({ tiers: 0, lanes: 0, onlySpares: false, onlyMissing: false, onlyHearts: false, onlyShelf: false }));
+      clear.addEventListener('click', () => c.setPrefs(NO_FILTERS));
       shelfPanel.append(h('div', { class: 'hoard-filters', attrs: { id: 'wh-filters' } },
-        h('p', { class: 'fgroup', text: 'Tier' }), tierRow, h('p', { class: 'fgroup', text: 'Feel' }), laneRow, h('p', { class: 'fgroup', text: 'Show' }), togRow, clear));
+        h('p', { class: 'fgroup k-group-title', text: 'Tier' }), tierRow, h('p', { class: 'fgroup k-group-title', text: 'Feel' }), laneRow, h('p', { class: 'fgroup k-group-title', text: 'Show' }), togRow, clear));
     }
 
     const items = c.items();
     if (items.length <= 1 && ownedCount(all) <= 1) shelfPanel.append(h('p', { class: 'hoard-empty-hint', text: COPY.firstRun }));
     shelfPanel.append(h('p', { class: 'hoard-showing', text: shown.length === all.length ? `All ${all.length} species` : `Showing ${shown.length} of ${all.length}` }));
     if (!shown.length) {
-      const clear = h('button', { class: 'link-btn', text: 'Clear filters', attrs: { type: 'button' } });
-      clear.addEventListener('click', () => c.setPrefs({ tiers: 0, lanes: 0, onlySpares: false, onlyMissing: false, onlyHearts: false, onlyShelf: false }));
-      shelfPanel.append(h('div', { class: 'hoard-none' }, h('p', { text: 'Nothing matches these filters.' }), clear));
+      const clear = h('button', { class: 'link-btn k-link', text: 'Clear filters', attrs: { type: 'button' } });
+      clear.addEventListener('click', () => c.setPrefs(NO_FILTERS));
+      shelfPanel.append(h('div', { class: 'hoard-none' }, kit.glyph('shelf', 'k-icon k-icon--lg'), h('p', { text: 'Nothing matches these filters.' }), clear));
       return;
     }
 
-    const grid = h('div', { class: 'cabinet', attrs: { role: 'grid', 'aria-label': 'Your squishies', 'aria-describedby': 'wh-grid-help' } });
+    const grid = h('div', { class: 'cabinet', attrs: { role: 'grid', 'aria-label': 'Your squishies', 'aria-describedby': 'wh-grid-help', 'data-view': prefs.view } });
     const help = h('p', { class: 'sr-only', attrs: { id: 'wh-grid-help' }, text: 'Arrow keys move between squishies. Enter opens one.' });
     const plinths: HTMLButtonElement[] = [];
     if (prefs.view === 'cabinet') {
@@ -242,9 +267,11 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
         const done = rowComplete(all, i);
         const shelf = h('div', { class: 'shelf', attrs: { role: 'row', 'data-tier': t.id } });
         for (const s of row) shelf.append(cell(plinth(s, plinths)));
-        grid.append(h('div', { class: 'shelf-head', attrs: { role: 'presentation' } }, env.gem(t.id, 'gem gem-sm'),
-          h('h3', { class: 'shelf-title', text: t.label }), h('span', { class: 'shelf-count', text: `${tierAll.filter((s) => s.copies > 0).length} of ${tierAll.length}` }),
-          done ? h('span', { class: 'shelf-done', text: COPY.rowComplete }) : null), shelf);
+        const name = kit.jelly(t.label, { tag: 'h3', size: 'sm', tone: t.id });
+        name.classList.add('shelf-title');
+        grid.append(h('div', { class: 'shelf-head', attrs: { role: 'presentation', 'data-tier': t.id } }, env.gem(t.id, 'gem gem-md'),
+          name, h('span', { class: 'shelf-count', text: `${tierAll.filter((s) => s.copies > 0).length} of ${tierAll.length}` }),
+          done ? h('span', { class: 'shelf-done' }, kit.glyph('check', 'k-icon', { size: 16 }), h('span', { text: COPY.rowComplete })) : null), shelf);
       });
     } else {
       const shelf = h('div', { class: 'shelf flat', attrs: { role: 'row' } });
@@ -263,16 +290,16 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
 
   function plinth(s: Stack, list: HTMLButtonElement[]): HTMLButtonElement {
     const owned = s.copies > 0;
-    const marks = h('span', { class: 'plinth-marks', attrs: { 'aria-hidden': 'true' } },
-      s.keeperHearted ? h('span', { class: 'mark heart', text: '♥' }) : null,
-      s.allLocked ? h('span', { class: 'mark clock', text: '◷' }) : null);
+    const marks = h('span', { class: 'plinth-marks', attrs: { 'aria-hidden': 'true' } }, s.keeperHearted ? mark('heart') : null, s.allLocked ? mark('clock') : null);
     const label = plinthLabel(s) + (s.keeperHearted ? ', hearted' : '') + (s.allLocked ? ', resting' : '') + (env.mat.has(s.keeper ?? '') ? ', out on the mat' : '');
-    const b = h('button', { class: 'plinth', attrs: { type: 'button', 'data-owned': String(owned), 'data-tier': s.tier, 'data-key': `p-${s.species}`, 'data-species': s.species, 'aria-label': label } },
+    // a frame is a double rim (the tier colour, then ink) + the gem + the tier word: the colour is never alone
+    const b = h('button', { class: 'plinth k-frame', attrs: { type: 'button', 'data-owned': String(owned), 'data-tier': s.tier, 'data-key': `p-${s.species}`, 'data-species': s.species, 'aria-label': label } },
       env.gem(s.tier as TierName, 'gem plinth-gem'),
-      s.unseen > 0 ? h('span', { class: 'plinth-new', attrs: { 'aria-hidden': 'true' } }) : null,
+      s.unseen > 0 ? h('span', { class: 'plinth-new', text: 'NEW', attrs: { 'aria-hidden': 'true' } }) : null,
       env.icon(s.species, { silhouette: !owned, cls: 'sp-icon plinth-icon' }),
       h('span', { class: 'plinth-name', text: s.name }),
       h('span', { class: 'plinth-sub', text: owned ? (s.copies >= 2 ? `x${s.copies}` : '') : COPY.notYet }),
+      h('span', { class: 'plinth-tier', text: tierWord(s.tier) }),
       marks);
     const idx = list.length;
     list.push(b);
@@ -323,28 +350,30 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
     const sel = copies.find((x) => x.id === card!.selected) ?? null;
     const keep = document.activeElement && cardEl.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.key ?? null : null;
     cardEl.textContent = '';
+    cardEl.dataset.tier = s.tier;
 
-    const back = h('button', { class: 'tool-btn hcard-back', attrs: { type: 'button', 'data-key': 'back' } }, h('span', { text: '‹ Shelf' }));
-    back.setAttribute('aria-label', 'Back to the shelf');
+    const back = h('button', { class: 'tool-btn k-btn k-btn--sm hcard-back', attrs: { type: 'button', 'data-key': 'back', 'aria-label': 'Back to the shelf' } }, kit.glyph('chevronLeft', 'k-icon k-icon--sm'), h('span', { text: 'Shelf' }));
     back.addEventListener('click', () => closeCard());
-    const x = h('button', { class: 'icon-btn small', attrs: { type: 'button', 'aria-label': 'Close the Hoard', 'data-key': 'x' } }, icon('close'));
+    const x = h('button', { class: 'k-btn k-iconbtn', attrs: { type: 'button', 'aria-label': 'Close the Hoard', 'data-key': 'x' } }, kit.glyph('close'));
     x.addEventListener('click', () => ui.close());
-    const nameRow = h('div', { class: 'hcard-title' }, env.gem(s.tier as TierName, 'gem gem-md'),
-      h('h2', { class: 'hcard-name', text: s.name, attrs: { id: 'wh-card-name', tabindex: '-1' } }));
-    const tierWord = env.tiers.find((t) => t.id === s.tier)?.label ?? s.tier;
-    const facts = h('p', { class: 'hcard-facts', text: s.copies ? `${tierWord} · ${plural(s.copies, 'copy', 'copies')}${s.spares ? ` · ${sparesCopy(s.spares)}` : ''}` : `${tierWord} · ${COPY.notYet}` });
+    const nameEl = kit.jelly(s.name, { tag: 'h2', size: 'md', tone: 'amber' });
+    nameEl.id = 'wh-card-name'; nameEl.tabIndex = -1; nameEl.classList.add('hcard-name');
+    const nameRow = h('div', { class: 'hcard-title' }, env.gem(s.tier as TierName, 'gem gem-md'), nameEl);
+    const facts = h('p', { class: 'hcard-facts' }, h('span', { class: 'k-tier hcard-tier', text: tierWord(s.tier), attrs: { 'data-tier': s.tier } }),
+      s.copies ? h('span', { text: plural(s.copies, 'copy', 'copies') }) : h('span', { text: COPY.notYet }),
+      s.copies && s.spares ? h('span', { text: sparesCopy(s.spares) }) : null);
     cardEl.append(h('div', { class: 'hcard-top' }, back, x), nameRow, facts);
 
     if (!s.copies) {
       cardEl.append(h('div', { class: 'hcard-pic' }, env.icon(s.species, { silhouette: true, cls: 'sp-icon hcard-icon' })),
         h('p', { class: 'hcard-blurb', text: words?.blurb ?? '' }),
-        h('p', { class: 'hcard-feel' }, h('strong', { text: words?.family ?? '' }), h('span', { text: words ? ` · ${words.familyBlurb}` : '' })),
+        feel(words),
         h('p', { class: 'hcard-odds', text: oddsCopy(s.tier) }),
         h('p', { class: 'hcard-hint', text: 'Squish to earn capsules: this one could be in any of them.' }));
     } else {
-      cardEl.append(h('p', { class: 'hcard-live', text: 'This is the real squishy: poke it, squeeze it, stretch it.' }),
+      cardEl.append(h('p', { class: 'hcard-live' }, kit.glyph('sparkle', 'k-icon k-icon--sm'), h('span', { text: 'This is the real squishy: poke it, squeeze it, stretch it.' })),
         h('p', { class: 'hcard-blurb', text: words?.blurb ?? '' }),
-        h('p', { class: 'hcard-feel' }, h('strong', { text: words?.family ?? '' }), h('span', { text: words ? ` · ${words.familyBlurb}` : '' })),
+        feel(words),
         h('p', { class: 'hcard-odds', text: oddsCopy(s.tier) }));
       // the instance strip: one swatch per copy
       const strip = h('div', { class: 'hcard-strip', attrs: { role: 'radiogroup', 'aria-label': 'Your copies' } });
@@ -353,8 +382,10 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
         const locked = it.lockedUntil !== null && it.lockedUntil > now;
         const tags = [it.id === s.keeper ? 'Keeper' : '', it.fav ? 'Hearted' : '', locked ? hoursLeft((it.lockedUntil ?? 0) - now) : '', originCopy(it.origin), !it.seen ? 'New' : '', env.mat.has(it.id) ? 'On the mat' : ''].filter(Boolean);
         const on = it.id === card!.selected;
+        const pills = h('span', { class: 'copy-tags' });
+        for (const t of tags) pills.append(h('span', { class: t === 'Keeper' ? 'copy-tag keeper' : 'copy-tag', text: t }));
         const b = h('button', { class: 'copy', attrs: { type: 'button', role: 'radio', 'aria-checked': String(on), tabindex: on ? '0' : '-1', 'data-key': `c-${it.id}`, 'aria-label': `Copy ${i + 1}: ${tags.join(', ')}` } },
-          env.swatch(it), h('span', { class: 'copy-tags', text: tags.join(' · ') }), it.fav ? h('span', { class: 'mark heart', text: '♥', attrs: { 'aria-hidden': 'true' } }) : null);
+          env.swatch(it), pills, it.fav ? mark('heart') : null);
         b.addEventListener('click', () => selectCopy(it));
         b.addEventListener('keydown', (e) => {
           const k = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
@@ -366,27 +397,27 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
         });
         strip.append(b);
       });
-      cardEl.append(h('p', { class: 'hcard-sub', text: 'Your copies' }), strip);
+      cardEl.append(h('p', { class: 'hcard-sub k-group-title', text: 'Your copies' }), strip);
 
-      // actions
+      // actions: Play with this one is the gel (the one main thing), the rest are glass
       const acts = h('div', { class: 'hcard-actions' });
       if (sel) {
-        const heart = h('button', { class: 'act-btn', attrs: { type: 'button', 'aria-pressed': String(sel.fav), 'data-key': 'heart' } }, h('span', { class: 'mark heart', text: sel.fav ? '♥' : '♡', attrs: { 'aria-hidden': 'true' } }), h('span', { text: sel.fav ? 'Hearted' : 'Heart' }));
+        const heart = h('button', { class: 'act-btn k-btn k-btn--sm', attrs: { type: 'button', 'aria-pressed': String(sel.fav), 'data-key': 'heart' } }, kit.glyph('heart', 'k-icon k-icon--sm', { fill: sel.fav, size: 20 }), h('span', { text: sel.fav ? 'Hearted' : 'Heart' }));
         heart.title = 'A hearted squishy is kept safe from merging and tidying up.';
         heart.addEventListener('click', () => { void c.setFav([sel.id], !sel.fav).then(() => env.announce(sel.fav ? 'Heart removed.' : 'Hearted: kept safe from merging.')); });
-        acts.append(heart);
         if (env.playItemId() !== sel.id) {
-          const play = h('button', { class: 'act-btn primary', attrs: { type: 'button', 'data-key': 'play' } }, h('span', { text: 'Play with this one' }));
+          const play = h('button', { class: 'act-btn primary k-btn k-gel', attrs: { type: 'button', 'data-key': 'play' } }, kit.glyph('play', 'k-icon k-icon--sm', { fill: true, size: 20 }), h('span', { text: 'Play with this one' }));
           play.addEventListener('click', () => { if (env.playWith(sel)) { env.announce(`${s.name} is your squishy now.`); ui.close(); } });
           acts.append(play);
-        } else acts.append(h('p', { class: 'act-note', text: 'This is the one you play with.' }));
+        } else acts.append(h('p', { class: 'act-note playing', text: 'This is the one you play with.' }));
+        acts.append(heart);
         if (env.mat.has(sel.id)) {
-          const back2 = h('button', { class: 'act-btn', attrs: { type: 'button', 'data-key': 'mat' } }, h('span', { text: 'Put back' }));
+          const back2 = h('button', { class: 'act-btn k-btn k-btn--sm', attrs: { type: 'button', 'data-key': 'mat' } }, h('span', { text: 'Put back' }));
           back2.addEventListener('click', () => { env.mat.putBack(sel.id); env.announce(`${s.name} is back on the shelf.`); });
           acts.append(back2);
         } else if (env.playItemId() !== sel.id) {
           const why = env.mat.refusal(sel);
-          const out = h('button', { class: 'act-btn', attrs: { type: 'button', 'data-key': 'mat' } }, h('span', { text: 'Bring out' }));
+          const out = h('button', { class: 'act-btn k-btn k-btn--sm', attrs: { type: 'button', 'data-key': 'mat' } }, h('span', { text: 'Bring out' }));
           out.disabled = !!why;
           out.addEventListener('click', () => {
             const r = env.mat.bringOut(sel);
@@ -395,25 +426,31 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
             ui.close();
           });
           acts.append(out);
-          if (why) acts.append(h('p', { class: 'act-note', text: why }));
+          if (why) { out.setAttribute('aria-describedby', 'wh-mat-why'); acts.append(h('p', { class: 'act-note', text: why, attrs: { id: 'wh-mat-why' } })); }
         }
         if (!sel.seen) {
-          const rep = h('button', { class: 'act-btn', attrs: { type: 'button', 'data-key': 'replay' } }, h('span', { text: COPY.replayReveal }));
+          const rep = h('button', { class: 'act-btn k-btn k-btn--sm', attrs: { type: 'button', 'data-key': 'replay' } }, h('span', { text: COPY.replayReveal }));
           rep.addEventListener('click', () => { ui.close(); void env.replayReveal(sel); });
           acts.append(rep);
         }
       }
       const mergeWhy = mergeButtonCopy(s, env.topTierIdx);
-      const merge = h('button', { class: 'act-btn hcard-merge', attrs: { type: 'button', 'data-key': 'merge' } }, h('span', { text: 'Merge' }));
+      const merge = h('button', { class: 'act-btn hcard-merge k-btn k-btn--sm', attrs: { type: 'button', 'data-key': 'merge' } }, kit.glyph('join', 'k-icon k-icon--sm', { size: 20 }), h('span', { text: 'Merge' }));
       merge.disabled = !!mergeWhy;
       merge.addEventListener('click', () => pad.open(s.species, merge));
       acts.append(merge);
-      if (mergeWhy) acts.append(h('p', { class: 'act-note', text: mergeWhy }));
+      if (mergeWhy) { merge.setAttribute('aria-describedby', 'wh-merge-why'); acts.append(h('p', { class: 'act-note', text: mergeWhy, attrs: { id: 'wh-merge-why' } })); }
       cardEl.append(acts);
     }
     cardEl.hidden = false;
     cardEl.dataset.open = 'true';
+    // a long name shrinks to the row (the card is a 292 px column on a 320 px phone)
+    kit.fit(nameEl, Math.max(80, nameRow.clientWidth - 22 - 10));
     if (keep) cardEl.querySelector<HTMLElement>(`[data-key="${keep}"]`)?.focus();
+  }
+
+  function feel(words: ReturnType<HoardEnv['species']>): HTMLElement {
+    return h('p', { class: 'hcard-feel' }, h('strong', { text: words?.family ?? '' }), h('span', { text: words ? ` ${words.familyBlurb}` : '' }));
   }
 
   function selectCopy(it: HoardItem): void {
@@ -445,17 +482,17 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
     giftPanel.textContent = '';
     const r = c.restock();
     if (r.claimed) {
-      giftPanel.append(h('div', { class: 'gift-done' }, h('p', { class: 'gift-big', text: COPY.comeBackTomorrow }),
+      giftPanel.append(h('div', { class: 'gift-done' }, kit.glyph('gift', 'k-icon k-icon--lg'), h('p', { class: 'gift-big', text: COPY.comeBackTomorrow }),
         h('p', { class: 'gift-sub', text: "Today's gift is on your shelf. A new choice of three is here every day." })));
       return;
     }
-    giftPanel.append(h('p', { class: 'gift-lead', text: 'Pick one of these three to keep. A new choice comes every day.' }));
+    giftPanel.append(h('h3', { class: 'k-group-title gift-title', text: COPY.dailyGift }), h('p', { class: 'gift-lead', text: 'Pick one of these three to keep. A new choice comes every day.' }));
     const row = h('div', { class: 'gift-row', attrs: { role: 'radiogroup', 'aria-label': "Today's gift" } });
     r.display.forEach((d, i) => {
       const on = giftPick === d.species;
-      const b = h('button', { class: 'gift', attrs: { type: 'button', role: 'radio', 'aria-checked': String(on), tabindex: on || (!giftPick && i === 0) ? '0' : '-1', 'data-species': d.species } },
-        env.gem(d.tier as TierName, 'gem plinth-gem'), env.icon(d.species, { cls: 'sp-icon gift-icon' }),
-        h('span', { class: 'gift-name', text: d.name }), h('span', { class: 'gift-tier', text: env.tiers.find((t) => t.id === d.tier)?.label ?? d.tier }),
+      const b = h('button', { class: 'gift k-frame', attrs: { type: 'button', role: 'radio', 'aria-checked': String(on), tabindex: on || (!giftPick && i === 0) ? '0' : '-1', 'data-species': d.species, 'data-tier': d.tier } },
+        env.gem(d.tier as TierName, 'gem plinth-gem'), h('span', { class: 'gift-check', attrs: { 'aria-hidden': 'true' } }, kit.glyph('check', 'k-icon', { size: 16 })), env.icon(d.species, { cls: 'sp-icon gift-icon' }),
+        h('span', { class: 'gift-name', text: d.name }), h('span', { class: 'gift-tier', text: tierWord(d.tier) }),
         h('span', { class: 'gift-own', text: restockOwnedCopy(d.copies) }));
       b.addEventListener('click', () => { giftPick = d.species; renderGift(); giftPanel.querySelector<HTMLElement>(`[data-species="${d.species}"]`)?.focus(); });
       b.addEventListener('keydown', (e) => {
@@ -468,8 +505,10 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
       });
       row.append(b);
     });
-    const take = h('button', { class: 'cta-btn', text: COPY.takeThisOne, attrs: { type: 'button', 'data-key': 'take' } });
+    const take = h('button', { class: 'cta-btn k-btn k-gel k-cta', text: COPY.takeThisOne, attrs: { type: 'button', 'data-key': 'take' } });
     take.disabled = !giftPick || env.busy();
+    const why = h('p', { class: 'act-note gift-why', text: giftPick ? '' : 'Pick one first.', attrs: { id: 'wh-take-why' } });
+    if (take.disabled && !giftPick) take.setAttribute('aria-describedby', 'wh-take-why');
     take.addEventListener('click', () => {
       if (!giftPick) return;
       void c.claimRestock(giftPick as never).then((res) => {
@@ -480,7 +519,7 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
         void env.revealClaim(res);
       });
     });
-    giftPanel.append(row, take);
+    giftPanel.append(row, h('div', { class: 'gift-foot' }, take, why));
   }
 
   /* ─────────────── today (9.6) ─────────────── */
@@ -489,7 +528,7 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
     const rows = c.tasks();
     if (!rows.length) { todayPanel.append(h('p', { class: 'gift-lead', text: 'No tasks today.' })); return; }
     if (rows.every((t) => t.weeklyLimitReached && !t.claimed)) {
-      todayPanel.append(h('p', { class: 'gift-big', text: COPY.weekDone }));
+      todayPanel.append(h('div', { class: 'gift-done' }, kit.glyph('today', 'k-icon k-icon--lg'), h('p', { class: 'gift-big', text: COPY.weekDone })));
       return;
     }
     todayPanel.append(h('p', { class: 'gift-lead', text: 'Two little things to try today. Each one done is a capsule.' }));
@@ -498,12 +537,14 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
       const fill = h('span', { class: 'task-fill' });
       fill.style.setProperty('--fill', String(Math.min(1, t.progress / Math.max(1, t.target))));
       const barEl = h('div', { class: 'task-bar', attrs: { role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': String(t.target), 'aria-valuenow': String(t.progress), 'aria-valuetext': taskProgressCopy(t), 'aria-labelledby': `wh-task-${i}` } }, fill);
+      // the state chip says it in a word (and a tick where it is done): colour is never alone
+      const state = t.claimed ? 'collected' : t.weeklyLimitReached ? 'resting' : t.done ? 'ready' : 'going';
+      const chip = h('span', { class: 'task-chip', attrs: { 'data-state': state } }, state === 'collected' || state === 'ready' ? kit.glyph('check', 'k-icon', { size: 16 }) : null, h('span', { text: { collected: 'Collected', resting: 'Resting', ready: 'Ready', going: 'In progress' }[state] }));
       const li = h('li', { class: 'task', attrs: { 'data-done': String(t.done), 'data-claimed': String(t.claimed) } },
-        h('p', { class: 'task-text', text: t.def.text, attrs: { id: `wh-task-${i}` } }), barEl, h('p', { class: 'task-n', text: taskProgressCopy(t) }));
-      if (t.claimed) li.append(h('p', { class: 'task-state', text: 'Collected' }));
-      else if (t.weeklyLimitReached) li.append(h('p', { class: 'task-state', text: COPY.weekDone }));
-      else if (t.done) {
-        const b = h('button', { class: 'cta-btn small', text: COPY.collectCapsule, attrs: { type: 'button', 'data-key': `task-${t.def.id}` } });
+        h('p', { class: 'task-text', text: t.def.text, attrs: { id: `wh-task-${i}` } }), chip, barEl, h('p', { class: 'task-n', text: taskProgressCopy(t) }));
+      if (t.weeklyLimitReached && !t.claimed) li.append(h('p', { class: 'task-state', text: COPY.weekDone }));
+      else if (t.done && !t.claimed) {
+        const b = h('button', { class: 'cta-btn small k-btn k-gel', text: COPY.collectCapsule, attrs: { type: 'button', 'data-key': `task-${t.def.id}` } });
         b.addEventListener('click', () => {
           void c.completeTask(t.def.id).then((r) => {
             if (!r.ok) { env.toast(r.message ?? taskErrorCopy(r.error, r.progress, r.target)); return; }
@@ -526,6 +567,7 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
     env.cover(open && !card && isPhone());
     env.holdInput(open && !card);
     document.body.dataset.hoard = open ? (card ? 'card' : 'open') : 'closed';
+    sizeTitle();
   }
 
   function render(): void {
@@ -614,11 +656,3 @@ export function createHoard(root: HTMLElement, env: HoardEnv): HoardUi {
 }
 
 function popcount(n: number): number { let k = 0; for (let x = n; x; x &= x - 1) k++; return k; }
-
-/** A small cabinet glyph (three shelves) for the HUD button. */
-function cabinetGlyph(): SVGSVGElement {
-  const svg = icon('none', 'icon hoard-glyph');
-  const ns = 'http://www.w3.org/2000/svg';
-  for (const d of ['M5 4h14v16H5z', 'M5 9.5h14M5 15h14', 'M9 7h2M13 12.3h2M9 17.6h2']) { const p = document.createElementNS(ns, 'path'); p.setAttribute('d', d); svg.append(p); }
-  return svg;
-}

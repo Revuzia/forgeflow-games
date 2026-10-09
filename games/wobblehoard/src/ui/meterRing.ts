@@ -2,7 +2,9 @@
 //   * Ring: role="meter" with aria-valuenow as a percentage and a text value; it eases to a new fill over 400 ms and never jumps
 //     backwards by more than a reconcile (the collection decides; the ring only shows). States as text under it: resting, done for today,
 //     table full, offline.
-//   * At a new capsule: ONE pulse (400 ms, ease-out, single, never repeating); none under Calm effects or reduced motion.
+//   * At a new capsule: ONE pulse (400 ms, ease-out, single, never repeating); none under Calm effects or reduced motion. UI.md 6 "capsule waiting":
+//     the ring glows (data-full), the Open button (the kit's gel) breathes twice then keeps a steady amber halo (data-ready), `onReady` is the haptic
+//     double pulse (the shell passes haptics.uiTap('ready'); it fires on every pulse(), Calm or not); under Calm the halo is steady and the ring says "Ready".
 //   * Capsule button: "Open a capsule (3 waiting)" for assistive tech, "Open" + the count on screen; the 3D capsule is never the only way.
 //   * Visible XP (FUN.md 2): the fill eases (0.4 s) a moment AFTER the touch, when its sparks land (hold(ms)); aria-valuenow follows at
 //     once. A lighter PENDING arc continues the fill while a squeeze or a stretch is held (setPending) and banks on release
@@ -53,7 +55,7 @@ export function stateLine(m: MeterView): string {
   return '';
 }
 
-export function createMeterRing(parent: HTMLElement, o: { onOpen(): void }): MeterRing {
+export function createMeterRing(parent: HTMLElement, o: { onOpen(): void; /** a capsule just became ready: the shell's haptic double pulse (UI.md 6) */ onReady?(): void }): MeterRing {
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 56 56');
   svg.setAttribute('class', 'meter-svg');
@@ -82,13 +84,15 @@ export function createMeterRing(parent: HTMLElement, o: { onOpen(): void }): Met
   svg.append(track, pend, fill, glyph, seam);
 
   const count = h('span', { class: 'meter-count', attrs: { 'aria-hidden': 'true' } });
+  // Calm: the ring says it in a word instead of moving (UI.md 6, R15); drawn only under body[data-calm=true] with a capsule waiting
+  const readyWord = h('span', { class: 'meter-ready', text: 'Ready', attrs: { 'aria-hidden': 'true' } });
   const meter = h('div', {
     class: 'meter', attrs: { role: 'meter', 'aria-label': 'Squish meter', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': '0', 'aria-valuetext': '0%, toward the next capsule' },
-  }, svg, count);
+  }, svg, count, readyWord);
   const btnCount = h('span', { class: 'capsule-btn-count' });
   // the capsule dock (SHELL-2b): one little capsule per waiting capsule, up to WH_QUEUE_MAX shown; the first is the one on the table
   const pips = h('span', { class: 'capsule-pips', attrs: { 'aria-hidden': 'true' } });
-  const openButton = h('button', { class: 'capsule-btn', attrs: { type: 'button', hidden: '' }, on: { click: () => o.onOpen() } },
+  const openButton = h('button', { class: 'k-btn k-gel capsule-btn', attrs: { type: 'button', hidden: '' }, on: { click: () => o.onOpen() } },
     pips, h('span', { class: 'capsule-btn-label', text: 'Open' }), btnCount);
   let pipCount = -1;
   const state = h('p', { class: 'meter-state', attrs: { 'aria-hidden': 'true' } });
@@ -195,11 +199,13 @@ export function createMeterRing(parent: HTMLElement, o: { onOpen(): void }): Met
         for (let i = 0; i < Math.min(5, credits); i++) pips.append(h('span', { class: i === 0 ? 'pip first' : 'pip' }));
       }
       openButton.dataset.full = String(m.tableFull);
+      openButton.dataset.ready = String(credits > 0);
       openButton.setAttribute('aria-label', `Open a capsule (${credits} waiting)`);
       openButton.hidden = credits <= 0;
       openButton.disabled = busy;
     },
     pulse(calm) {
+      o.onReady?.();
       if (calm) return;
       meter.classList.remove('pulse');
       void meter.getBoundingClientRect();   // restart the single 400 ms animation

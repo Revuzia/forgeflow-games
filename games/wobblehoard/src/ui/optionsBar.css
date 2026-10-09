@@ -1,0 +1,85 @@
+/* WOBBLEHOARD options bars (UI.md 4.2, 4.4): the Cut bar and the Snap bar. One row of kit controls (kit.css buttons, the segmented control, the gel), held by
+   the toolbar's attachment slot (toolbar.css: the glass body, the caret). Colour is --k-* roles only, sizes --wh-* tokens, no raw hex. Every control is 44 high
+   (the gel 48 on a full desktop dock); the segmented control is 44 in all (36 faces, hit areas reach out to 44).
+
+   Label mode (data-labels, written by optionsBar.ts from the room the slot really has):
+     long   words with icons ("Split in two", "Reconnect all", "Clean cut | Minis", swatch names)
+     short  shorter button words ("Split", "Reconnect"); the style words stay
+     icon   the buttons are icons only; the style words stay (their icons alone do not say what they mean); a control with no icon (Done) keeps its word
+     tight  the style faces are icons too (the tightest single row)
+     wrap   (data-wrap) tight mode that also wraps onto a second line when one row is still too wide (320 px Snap)
+   The instruction line (.opts-status) is drawn only where there is vertical room (a full desktop dock); everywhere else it is visually hidden, still in the tree
+   as the reason (aria-describedby) of a control that is off. */
+
+.opts { position: relative; display: flex; flex-direction: column; gap: var(--wh-sp-1); min-width: 0; max-width: 100%; color: var(--k-fg); font-family: var(--wh-font-ui); }
+.opts-row { display: flex; align-items: center; gap: var(--wh-sp-2); min-width: 0; }
+.opts-row > * { flex: none; }
+.opts[data-wrap="true"] .opts-row { flex-wrap: wrap; justify-content: center; row-gap: var(--wh-sp-1); }
+.opts[data-wrap="true"] .snapbar-row { flex-basis: 100%; justify-content: center; }   /* Snap, wrapped: the swatches get a line, Save and Done the next */
+
+/* ---------- the instruction line and the count: visually hidden unless the dock is a full desktop one ---------- */
+.opts-status { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+body[data-layout="wide"]:not([data-density="short"]) .opts-status {
+  position: static; display: flex; align-items: baseline; justify-content: space-between; gap: var(--wh-sp-3);
+  width: 0; min-width: 100%; height: auto; margin: 0; padding: var(--wh-sp-1) var(--wh-sp-2) var(--wh-sp-1); overflow: visible; clip: auto; white-space: normal;
+}
+.opts-text { margin: 0; min-width: 0; font: var(--wh-w-bold) var(--wh-fs-small)/1.3 var(--wh-font-ui); color: var(--k-fg-dim); overflow-wrap: anywhere; }
+.opts-count { flex: none; font: var(--wh-w-bold) var(--wh-fs-small)/1.3 var(--wh-font-ui); color: var(--k-accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.opts-count:empty { display: none; }
+
+/* ---------- buttons ---------- */
+.opts-btn { flex: none; min-height: var(--wh-hit); }
+.opts[data-shed="true"] [data-key="done"] { display: none; }   /* strip, no room: the tray's Hand button is the way back (optionsBar.ts createOptionsFit) */
+.opts .k-gel { min-height: var(--wh-hit); padding: 0 var(--wh-sp-4); }
+body[data-layout="wide"]:not([data-density="short"]) .opts .k-gel { min-height: var(--wh-btn-h); padding: 0 var(--wh-sp-5); }
+.opts-btn > .k-icon { width: 20px; height: 20px; }
+.opts:is([data-labels="icon"], [data-labels="tight"]) .opts-btn--ic { width: var(--wh-hit); padding: 0; }
+.opts:is([data-labels="icon"], [data-labels="tight"]) .opts-btn--ic > .opts-label,
+.opts[data-labels="tight"] .opts-seg .k-seg-face > span,
+.opts:not([data-labels="long"]) .snap-tint-word {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ---------- the cut style: Clean cut | Minis (native radios in the kit's segmented control) ---------- */
+.opts-seg { --seg-face-h: 36px; position: relative; flex: none; grid-auto-columns: auto; gap: 4px; border-radius: var(--wh-r-btn); }
+.opts-seg .k-seg-face { min-height: var(--seg-face-h); padding: 0 var(--wh-sp-3); border-radius: calc(var(--wh-r-btn) - 4px); white-space: nowrap; }
+.opts-seg .k-seg-input { top: -4px; bottom: -4px; height: auto; left: -2px; right: -2px; width: auto; }   /* a 36 high face keeps a 44 high hit box */
+.opts[data-labels="tight"] .opts-seg { gap: 0; }
+.opts[data-labels="tight"] .opts-seg .k-seg-face { width: var(--wh-hit); padding: 0; }   /* 44 wide faces side by side: each keeps a whole 44 wide hit box (K02: 36 + a 4 px gap overlapped the neighbour's) */
+.opts[data-labels="tight"] .opts-seg .k-seg-input { left: 0; right: 0; }
+/* tight is the narrowest a bar gets (a strip slot is 274 px at 568x320): smaller gaps, the gel's padding trimmed */
+.opts[data-labels="tight"] .opts-row { gap: calc(var(--wh-sp-2) - 2px); }
+.opts[data-labels="tight"] .opts-btn:not(.opts-btn--ic) { padding: 0 var(--wh-sp-3); }
+.opts-lock { position: absolute; z-index: 2; right: -6px; top: -8px; display: none; place-items: center; width: 20px; height: 20px; border-radius: 50%; pointer-events: none;
+  color: var(--k-fg); background: var(--k-surface-hi); border: 1px solid var(--k-edge); }
+.opts-lock .k-icon { width: 12px; height: 12px; }
+/* locked (the squishy is cut or a cut plays): the kit's disabled look, but the faces still take a press, so the Cutter can say why */
+.opts-seg[data-locked="true"] { border-style: dashed; cursor: not-allowed; }
+.opts-seg[data-locked="true"] .k-seg-opt, .opts-seg[data-locked="true"] .k-seg-input { cursor: not-allowed; }
+.opts-seg[data-locked="true"] .opts-lock { display: grid; }
+.opts-seg[data-locked="true"] .k-seg-face { color: var(--k-disabled-fg); }
+.opts-seg[data-locked="true"] .k-seg-input:checked ~ .k-seg-face { color: var(--k-fg); background: var(--k-surface-hi); background-image: none; box-shadow: none; border: 2px dashed var(--k-edge-hot); }
+@media (hover: hover) {
+  .opts-seg[data-locked="true"] .k-seg-opt:hover .k-seg-input:not(:checked) ~ .k-seg-face { background: transparent; border-color: transparent; }
+}
+
+/* ---------- Snap: backdrop swatches ---------- */
+.snapbar-row { display: flex; align-items: center; gap: var(--wh-sp-2); min-width: 0; }
+.snap-tints { display: flex; gap: var(--wh-sp-1); }
+.snap-tint-btn { gap: var(--wh-sp-2); padding: 0 var(--wh-sp-3) 0 var(--wh-sp-2); }
+.opts:not([data-labels="long"]) .snap-tint-btn { width: var(--wh-hit); padding: 0; }
+.snap-swatch {
+  flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--k-fg);
+  background: radial-gradient(circle at 34% 28%, var(--wh-gloss), transparent 46%), var(--sw);   /* a gumdrop: the gloss sits on the colour */
+  transition: transform var(--k-mv-2) var(--wh-ease-spring);
+}
+.snap-tint-btn[aria-checked="true"] { --k-sh: inset 0 0 0 1px var(--k-sel-edge), var(--wh-e1); background: var(--k-sel-fill); border-color: var(--k-sel-edge); color: var(--k-sel-fg); }
+.snap-tint-btn[aria-checked="true"] .snap-swatch { transform: scale(1.14); }
+
+/* ---------- modes ---------- */
+@media (forced-colors: active) {
+  .snap-tint-btn[aria-checked="true"] { forced-color-adjust: none; background-color: Highlight; color: HighlightText; border-color: Highlight; }
+  .snap-swatch { forced-color-adjust: none; border-color: ButtonText; }
+  .opts-lock { background: Canvas; border-color: ButtonText; }
+}
+body[data-calm="true"] .snap-swatch { transition: none; }

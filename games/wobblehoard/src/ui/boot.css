@@ -1,11 +1,64 @@
-/* Pre-boot paint (linked from index.html, so the page needs no inline <style>: a strict style-src 'self' CSP works; audit finding 21).
-   The colours match --wh-ink / --wh-cream in src/ui/theme.ts; the real stylesheet arrives with the app bundle. */
-html, body { margin: 0; height: 100%; background: #14102a; color: #fff1d6; overflow: hidden; overscroll-behavior: none;
-  touch-action: none; -webkit-user-select: none; user-select: none; font-family: system-ui, sans-serif; }
-#boot { position: fixed; inset: 0; display: grid; place-items: center; align-content: center; gap: 14px; padding: 24px; text-align: center;
-  font-weight: 900; letter-spacing: .08em; font-size: 18px; }
-/* The boot watchdog without a script: if the app has not replaced #boot after 12 s (blocked script, dead network), this line appears. */
-#boot::after { content: "This is taking a while. Check your connection, then reload."; font-weight: 700; letter-spacing: 0; font-size: 15px;
-  max-width: 30ch; opacity: 0; animation: wh-boot-slow 0.01s linear 12s forwards; }
-@keyframes wh-boot-slow { to { opacity: 1; } }
-noscript { position: fixed; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; background: #14102a; }
+/* Pre-boot paint and the loading card (UI.md 6 "Loading"). Linked from index.html, so the page needs no inline <style> (a strict style-src 'self'
+   CSP works) and the card paints before any script runs. The theme tokens are installed by script, so the few colours this card needs are
+   written here once as --b-* and checked against theme.ts by _harness/probe_boot.ts. No script: the bar sits at 12 %, the first line shows,
+   the slow line and its Reload link appear after 12 s. With script: src/ui/bootCard.ts sets data-step, --p and the line from the count of
+   finished boot events. Calm: no bobbing, no moving sheen (the OS preference here; body[data-calm] once boot.ts has read the saved setting). */
+:root {
+  --b-ink: #14102a; --b-felt: #2a2150; --b-cream: #fff1d6; --b-dim: #c9bdcf; --b-track: #3b2a5f; --b-edge: #8a67b8; --b-lagoon: #59d6e6;
+  --b-gel: #ffd592; --b-amber: #ffb347; --b-deep: #e8862a; --b-shade: #ba7617;
+  --b-font: ui-rounded, "SF Pro Rounded", "Segoe UI Variable Text", "Segoe UI", system-ui, Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+html, body { margin: 0; height: 100%; background: var(--b-ink); color: var(--b-cream); overflow: hidden; overscroll-behavior: none;
+  touch-action: none; -webkit-user-select: none; user-select: none; font-family: var(--b-font); }
+
+#boot {
+  position: fixed; inset: 0; z-index: 30; display: grid; place-content: center; justify-items: center; gap: 18px; padding: 24px; text-align: center;
+  background: radial-gradient(120% 90% at 50% 64%, var(--b-felt) 0%, var(--b-ink) 72%);
+  transition: opacity .3s ease;
+}
+#boot[data-leaving="true"] { opacity: 0; pointer-events: none; }
+
+/* the wordmark: two inline drawings (a row on wide screens, one word per line on a portrait phone), five passes like the jelly type */
+.boot-mark { --cap: clamp(44px, min(9.4vw, 17vh), 100px); display: flex; flex-direction: row; flex-wrap: nowrap; justify-content: center; align-items: flex-end;
+  column-gap: calc(var(--cap) * .32); transform-origin: 50% 100%; animation: bt-bob 3.4s ease-in-out infinite; }
+.bt-w { flex: none; height: calc(var(--cap) * 1.24); overflow: visible; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.bt-a { width: calc(var(--cap) * 4.14); }
+.bt-b { width: calc(var(--cap) * 4.67); }
+.bt-sh { stroke: var(--b-ink); stroke-opacity: .35; stroke-width: 26px; }
+.bt-ol { stroke: var(--b-ink); stroke-width: 26px; }
+.bt-sd { stroke: var(--b-shade); stroke-width: 20px; }
+.bt-bd { stroke-width: 20px; }
+.bt-hi { stroke-width: 5px; }
+@keyframes bt-bob { 0%, 100% { transform: translateY(0) scale(1, 1); } 50% { transform: translateY(-5px) scale(1.01, .99); } }
+
+/* the jelly bar */
+.boot-bar { width: min(62vw, 320px); height: 14px; overflow: hidden; background: var(--b-track); border: 1px solid var(--b-edge); border-radius: 999px; }
+.boot-fill { position: relative; display: block; width: 100%; height: 100%; border-radius: 999px; overflow: hidden;
+  background: linear-gradient(180deg, var(--b-gel) 0%, var(--b-amber) 52%, var(--b-deep) 100%);
+  clip-path: inset(0 calc((1 - var(--p, .12)) * 100%) 0 0 round 999px); transition: clip-path .45s cubic-bezier(.2, .8, .2, 1); }
+.boot-fill::before { content: ""; position: absolute; left: 3px; right: 3px; top: 1px; height: 38%; border-radius: 999px; background: linear-gradient(180deg, rgba(255, 255, 255, .55), transparent); }
+.boot-fill::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, rgba(255, 255, 255, .5) 50%, transparent 70%); transform: translateX(-100%); animation: bt-sheen 1.7s linear infinite; }
+@keyframes bt-sheen { to { transform: translateX(100%); } }
+
+.boot-line { margin: 0; min-height: 1.4em; font: 800 16px/1.4 var(--b-font); letter-spacing: .01em; color: var(--b-cream); }
+/* the boot watchdog without a script: if the app has not replaced #boot after 12 s (blocked script, dead network), this line and its Reload link appear */
+.boot-slow { margin: 0; max-width: 32ch; font: 600 14px/1.4 var(--b-font); color: var(--b-dim); visibility: hidden; animation: bt-slow .01s linear 12s forwards; }
+.boot-slow a { display: inline-block; min-height: 44px; line-height: 44px; padding: 0 4px; color: var(--b-lagoon); font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+@keyframes bt-slow { to { visibility: visible; } }
+
+/* portrait phones: one word per line, bigger; landscape and the portal phone: one row, short */
+@media (max-width: 819px) and (min-height: 441px) {
+  .boot-mark { flex-direction: column; align-items: center; row-gap: calc(var(--cap) * .03); --cap: clamp(48px, min(17.5vw, 12vh), 96px); }
+}
+@media (max-height: 260px) {
+  #boot { gap: 8px; padding: 10px 16px; }
+  .boot-mark { --cap: min(9.4vw, 17vh); }
+  .boot-slow { font-size: 12px; line-height: 1.25; }
+  .boot-slow a { min-height: 32px; line-height: 32px; }
+}
+
+@media (prefers-reduced-motion: reduce) { .boot-mark, .boot-fill::after { animation: none; } .boot-fill, #boot { transition: none; } }
+body[data-calm="true"] .boot-mark, body[data-calm="true"] .boot-fill::after { animation: none; }
+body[data-calm="true"] .boot-fill { transition: none; }
+/* with scripts off the card would sit above this message (z 30), so the message goes above the card */
+noscript { position: fixed; inset: 0; z-index: 31; display: grid; place-items: center; padding: 24px; text-align: center; background: var(--b-ink); }

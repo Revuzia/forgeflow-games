@@ -11,7 +11,7 @@
 import type { TierName } from '../../contracts.ts';
 import { COPY, lastCopyCopy, mergePreviewLines, mergeRuleCopy, tidyCapCopy, tidyNoteCopy, unpickableChip } from '../../collection/copy.ts';
 import type { HoardItem, MergeOk, MergePreviewResult, MergeResult, TidyResult } from '../../collection/types.ts';
-import { h, icon } from '../dom.ts';
+import { h } from '../dom.ts';
 import { createHoldButton } from './hold.ts';
 import type { HoardEnv } from './types.ts';
 
@@ -48,8 +48,9 @@ export function createMergePad(root: HTMLElement, env: HoardEnv, o: { onMerged()
   root.append(scrim, el);
   const status = h('p', { class: 'hmerge-status', attrs: { role: 'status', 'aria-live': 'polite' } });
 
-  const hold = createHoldButton(COPY.holdToMerge, env.holdMs, () => { void doMerge(); }, 'hold-btn');
-  const tidyHold = createHoldButton('Hold to tidy up', env.holdMs, () => { void doTidy(); }, 'hold-btn');
+  const hold = createHoldButton(COPY.holdToMerge, env.holdMs, () => { void doMerge(); }, 'hold-btn k-btn k-cta');
+  const tidyHold = createHoldButton('Hold to tidy up', env.holdMs, () => { void doTidy(); }, 'hold-btn k-btn k-cta');
+  const kit = env.kit;
 
   const now = (): number => env.now();
   const copiesOf = (sp: string): HoardItem[] => c.items().filter((it) => it.species === sp).sort((a, b) => b.bornAt - a.bornAt);
@@ -72,9 +73,17 @@ export function createMergePad(root: HTMLElement, env: HoardEnv, o: { onMerged()
   }
 
   function header(text: string): HTMLElement {
-    const x = h('button', { class: 'icon-btn small', attrs: { type: 'button', 'aria-label': 'Close' } }, icon('close'));
+    const x = h('button', { class: 'k-btn k-iconbtn', attrs: { type: 'button', 'aria-label': 'Close' } }, kit.glyph('close'));
     x.addEventListener('click', () => { if (!waiting) pad.close(); });
-    return h('div', { class: 'hmerge-head' }, h('h2', { class: 'hmerge-title', text, attrs: { id: 'wh-merge-title', tabindex: '-1' } }), x);
+    const t = kit.jelly(text, { tag: 'h2', size: 'sm', tone: 'amber' });
+    t.id = 'wh-merge-title'; t.tabIndex = -1; t.classList.add('hmerge-title');
+    return h('div', { class: 'hmerge-head' }, t, x);
+  }
+  /** a long name (Merge Rattlebead) shrinks to the heading's room; call once the pad is shown */
+  function fitHeader(): void {
+    const t = el.querySelector<HTMLElement>('#wh-merge-title');
+    const head = el.querySelector<HTMLElement>('.hmerge-head');
+    if (t && head) kit.fit(t, Math.max(80, head.clientWidth - 44 - 12));
   }
 
   function preview(): MergePreviewResult | null { return ids.length === env.mergeCost ? c.previewMerge(ids) : null; }
@@ -90,11 +99,11 @@ export function createMergePad(root: HTMLElement, env: HoardEnv, o: { onMerged()
     for (let i = 0; i < env.mergeCost; i++) {
       const it = ids[i] ? c.item(ids[i]) : null;
       const b = h('button', { class: 'slot', attrs: { type: 'button', 'aria-expanded': String(picking === i), 'data-key': `slot-${i}`, 'aria-label': it ? `Slot ${i + 1}: ${it.name}${it.id === keeperOf(species) ? ', your keeper' : ''}. Change it.` : `Slot ${i + 1}: empty. Pick a copy.` } },
-        it ? env.swatch(it) : h('span', { class: 'slot-empty', text: '?' }), h('span', { class: 'slot-word', text: it ? (it.id === keeperOf(species) ? 'Keeper' : 'Spare') : 'Pick one' }), h('span', { class: 'slot-change', text: 'Change' }));
+        it ? env.swatch(it) : h('span', { class: 'slot-empty' }, kit.glyph('plus', 'k-icon')), h('span', { class: 'slot-word', text: it ? (it.id === keeperOf(species) ? 'Keeper' : 'Spare') : 'Pick one' }), h('span', { class: 'slot-change', text: 'Change' }));
       b.disabled = waiting;
       b.addEventListener('click', () => { picking = picking === i ? -1 : i; renderMerge(); });
       slots.append(b);
-      if (i < env.mergeCost - 1) slots.append(h('span', { class: 'slot-plus', text: '+', attrs: { 'aria-hidden': 'true' } }));
+      if (i < env.mergeCost - 1) slots.append(h('span', { class: 'slot-plus', attrs: { 'aria-hidden': 'true' } }, kit.glyph('plus', 'k-icon')));
     }
     el.append(slots);
     if (picking >= 0) {
@@ -102,7 +111,7 @@ export function createMergePad(root: HTMLElement, env: HoardEnv, o: { onMerged()
       for (const it of copiesOf(species)) {
         const why = whyNot(it);
         const used = ids.includes(it.id);
-        const b = h('button', { class: 'pick', attrs: { type: 'button', role: 'option', 'aria-selected': String(ids[picking] === it.id), 'data-key': `pick-${it.id}` } },
+        const b = h('button', { class: 'pick k-btn k-btn--sm', attrs: { type: 'button', role: 'option', 'aria-selected': String(ids[picking] === it.id), 'data-key': `pick-${it.id}` } },
           env.swatch(it), h('span', { class: 'pick-word', text: it.id === keeperOf(species) ? 'Keeper' : 'Spare' }), why ? h('span', { class: 'pick-why', text: why }) : used ? h('span', { class: 'pick-why', text: 'In a slot' }) : null);
         b.disabled = !!why || (used && ids[picking] !== it.id);
         b.addEventListener('click', () => { ids[picking] = it.id; picking = -1; confirmedLast = false; message = ''; renderMerge(); el.querySelector<HTMLElement>('[data-key="slot-0"]')?.focus(); });
@@ -124,7 +133,7 @@ export function createMergePad(root: HTMLElement, env: HoardEnv, o: { onMerged()
       for (const r of pv.preview.outcomes) {
         const w = env.species(r.species);
         const tierWord = env.tiers.find((t) => t.id === r.tier)?.label ?? r.tier;
-        outs.append(h('li', { class: 'out', attrs: { 'data-up': String(r.tier !== pv.preview.stayTier) } },
+        outs.append(h('li', { class: 'out', attrs: { 'data-up': String(r.tier !== pv.preview.stayTier), 'data-tier': r.tier } },
           env.icon(r.species, { cls: 'sp-icon out-icon' }), env.gem(r.tier as TierName, 'gem gem-sm'),
           h('span', { class: 'out-name', text: w?.name ?? r.species }), h('span', { class: 'out-tier', text: tierWord }),
           r.isNew ? h('span', { class: 'out-new', text: 'NEW' }) : null, h('span', { class: 'out-p', text: pct(r.probability) })));
@@ -136,19 +145,21 @@ export function createMergePad(root: HTMLElement, env: HoardEnv, o: { onMerged()
     }
     el.append(body);
     hold.setDisabled(!canHold || waiting);
-    hold.setLabel(waiting ? 'Merging…' : COPY.holdToMerge);
+    hold.setLabel(waiting ? 'Merging' : COPY.holdToMerge);
+    hold.el.setAttribute('aria-busy', String(waiting));
     hold.el.dataset.key = 'hold';
     status.textContent = message;
     el.append(h('div', { class: 'hmerge-foot' }, hold.el, h('p', { class: 'hmerge-help', text: 'Press and hold. Let go early and nothing happens.' })), status);
     if (modal) el.append(modal);   // a re-render (the collection changed) keeps an open warning on top
+    fitHeader();
     if (keep) el.querySelector<HTMLElement>(`[data-key="${keep}"]`)?.focus();
   }
 
   let modal: HTMLElement | null = null;
   function lastCopyModal(name: string): void {
     if (modal) return;
-    const cancel = h('button', { class: 'act-btn', text: 'Cancel', attrs: { type: 'button' } });
-    const go = h('button', { class: 'act-btn primary', text: 'Merge anyway', attrs: { type: 'button' } });
+    const cancel = h('button', { class: 'act-btn k-btn', text: 'Cancel', attrs: { type: 'button' } });
+    const go = h('button', { class: 'act-btn primary k-btn k-gel', text: 'Merge anyway', attrs: { type: 'button' } });
     modal = h('div', { class: 'hmodal', attrs: { role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'wh-last-copy' } },
       h('p', { class: 'hmodal-text', text: lastCopyCopy(name), attrs: { id: 'wh-last-copy' } }), h('div', { class: 'hmodal-acts' }, cancel, go));
     const done = (yes: boolean): void => {
@@ -201,25 +212,25 @@ export function createMergePad(root: HTMLElement, env: HoardEnv, o: { onMerged()
         if (!r.ok) { ul.append(h('li', { class: 'out stop', text: r.message ?? COPY.somethingWrong })); return; }
         const from = r.parents[0]?.name ?? '';
         const tierWord = env.tiers.find((t) => t.id === r.item.tier)?.label ?? r.item.tier;
-        ul.append(h('li', { class: 'out', attrs: { 'data-best': String(i === tidyDone!.best) } },
-          h('span', { class: 'out-from', text: `${from} →` }), env.icon(r.item.species, { cls: 'sp-icon out-icon' }), env.gem(r.item.tier as TierName, 'gem gem-sm'),
+        ul.append(h('li', { class: 'out', attrs: { 'data-best': String(i === tidyDone!.best), 'data-tier': r.item.tier } },
+          h('span', { class: 'out-from' }, h('span', { text: from }), kit.glyph('arrowRight', 'k-icon k-icon--sm')), env.icon(r.item.species, { cls: 'sp-icon out-icon' }), env.gem(r.item.tier as TierName, 'gem gem-sm'),
           h('span', { class: 'out-name', text: r.item.name }), h('span', { class: 'out-tier', text: tierWord }),
           r.is_new ? h('span', { class: 'out-new', text: 'NEW' }) : null, r.tier_up ? h('span', { class: 'out-up', text: 'TIER UP' }) : null));
       });
-      const doneBtn = h('button', { class: 'cta-btn', text: 'Done', attrs: { type: 'button', 'data-key': 'done' } });
+      const doneBtn = h('button', { class: 'cta-btn k-btn k-gel', text: 'Done', attrs: { type: 'button', 'data-key': 'done' } });
       doneBtn.addEventListener('click', () => pad.close());
-      el.append(ul, doneBtn);
+      el.append(ul, h('div', { class: 'hmerge-foot' }, doneBtn));
+      fitHeader();
       return;
     }
     const left = c.practice().mergeCap - c.practice().mergesToday;
     const plan = c.tidyPlan({ includeRare });
     el.append(h('p', { class: 'hmerge-rule', text: `Merges your spare ${includeRare ? '' : 'Common and Uncommon '}squishies in pairs of the same kind. Hearted copies and your keepers are never touched.` }));
-    const tog = h('label', { class: 'hmerge-toggle' });
-    const cb = h('input', { attrs: { type: 'checkbox', 'data-key': 'rare' } }) as HTMLInputElement;
+    const cb = h('input', { class: 'k-switch-input', attrs: { type: 'checkbox', role: 'switch', 'data-key': 'rare' } }) as HTMLInputElement;
     cb.checked = includeRare;
     cb.addEventListener('change', () => { includeRare = cb.checked; renderTidy(); el.querySelector<HTMLElement>('[data-key="rare"]')?.focus(); });
-    tog.append(cb, h('span', { text: 'Include Rare and above' }));
-    el.append(tog);
+    el.append(h('label', { class: 'k-switch hmerge-toggle' }, cb, h('span', { class: 'k-switch-label', text: 'Include Rare and above' }),
+      h('span', { class: 'k-switch-ui', attrs: { 'aria-hidden': 'true' } }, h('span', { class: 'k-switch-thumb' }, kit.glyph('check', 'k-icon')))));
     if (!plan.length) {
       el.append(h('p', { class: 'hmerge-warn', text: left <= 0 ? `${c.practice().mergeCap} merges today. They're resting until tomorrow.` : COPY.noSpares }));
     } else {
@@ -230,15 +241,17 @@ export function createMergePad(root: HTMLElement, env: HoardEnv, o: { onMerged()
         const it = c.item(pairs[0][0]);
         const pv = c.previewMerge(pairs[0]);
         const odds = pv.ok ? mergePreviewLines(pv.preview, pv.mergesToday)[0] : '';
-        ul.append(h('li', { class: 'out' }, env.icon(sp, { cls: 'sp-icon out-icon' }), it ? env.gem(it.tier as TierName, 'gem gem-sm') : null,
+        ul.append(h('li', { class: 'out out-plan', attrs: { 'data-tier': it?.tier ?? '' } }, env.icon(sp, { cls: 'sp-icon out-icon' }), it ? env.gem(it.tier as TierName, 'gem gem-sm') : null,
           h('span', { class: 'out-name', text: it?.name ?? sp }), h('span', { class: 'out-tier', text: pairs.length === 1 ? '1 merge' : `${pairs.length} merges` }),
           h('span', { class: 'out-odds', text: odds })));
       }
-      el.append(ul, h('p', { class: 'hmerge-sub', text: `${tidyCapCopy(left)}. ${tidyNoteCopy}` }));
+      el.append(ul, h('p', { class: 'hmerge-sub hmerge-note', text: `${tidyCapCopy(left)}. ${tidyNoteCopy}` }));
     }
     tidyHold.setDisabled(!plan.length || waiting);
-    tidyHold.setLabel(waiting ? 'Tidying…' : 'Hold to tidy up');
+    tidyHold.setLabel(waiting ? 'Tidying up' : 'Hold to tidy up');
+    tidyHold.el.setAttribute('aria-busy', String(waiting));
     el.append(h('div', { class: 'hmerge-foot' }, tidyHold.el, h('p', { class: 'hmerge-help', text: 'Press and hold. Let go early and nothing happens.' })), status);
+    fitHeader();
   }
 
   async function doTidy(): Promise<void> {

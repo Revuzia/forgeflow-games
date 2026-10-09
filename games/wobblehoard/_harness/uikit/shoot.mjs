@@ -1,6 +1,7 @@
 // Shoots the UI kit page (_harness/uikit/index.html) at the 8 kit sizes of UI.md 4.1 in 4 modes and measures what a sheet can prove.
 //   node _harness/uikit/shoot.mjs --batch B0 [--sizes=1280x800,320x568] [--modes=normal,calm,contrast,forced] [--sections=buttons,controls]
-//                                 [--tile=1100] [--port=5430] [--no-shots] [--out=<dir>]
+//                                 [--tile=1100] [--port=5430] [--no-shots] [--out=<dir>] [--only=<section ids>: build only those sections (fast; the
+//                                 "idle hook is dead" check needs the B0 busy dots and is skipped)]
 // Modes: normal | calm (OS reduced-motion + body[data-calm=true]) | contrast (prefers-contrast: more) | forced (forced-colors: active).
 // Forced pseudo-states (data-force="hover focus-visible active") are painted through the DevTools protocol, so the sheet shows every state
 // without kit.css carrying test-only selectors. Pictures go to _shots/uikit/<batch>/<mode>/<WxH>__<section>[_n].png (gitignored), the numbers
@@ -12,7 +13,8 @@ import { ROOT, launch, startVite } from '../pw.mjs';
 import { KIT_SIZES } from '../../src/ui/layout.ts';
 
 process.env.WH_FROZEN = '1'; // no HMR / file watching while this runs
-const args = process.argv.slice(2);
+// `--batch B3` (the documented exit command) and `--batch=B3` both work
+const args = process.argv.slice(2).reduce((a, x, i, all) => { if (i > 0 && /^--[a-z]+$/.test(all[i - 1]) && !x.startsWith('--')) a[a.length - 1] += `=${x}`; else a.push(x); return a; }, []);
 const opt = (name, dflt = '') => (args.find((a) => a.startsWith(`--${name}=`)) ?? `--${name}=${dflt}`).split('=').slice(1).join('=');
 const BATCH = opt('batch', 'B0');
 const PORT = Number(opt('port', '5430'));
@@ -21,6 +23,7 @@ const NO_SHOTS = args.includes('--no-shots');
 const wantSizes = opt('sizes').split(',').filter(Boolean);
 const wantModes = opt('modes', 'normal,calm,contrast,forced').split(',').filter(Boolean);
 const wantSections = opt('sections').split(',').filter(Boolean);
+const ONLY = opt('only');
 const OUT = resolve(opt('out') || resolve(ROOT, '_shots', 'uikit', BATCH));
 const SIZES = KIT_SIZES.filter((s) => !wantSizes.length || wantSizes.includes(`${s.w}x${s.h}`));
 const HIT_FLOOR = 0.6; // below this a control has no real 44 px hit box; 0.85 is the target (rounded corners cost a 44 px button about 11 %)
@@ -119,7 +122,7 @@ try {
       page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') consoleErrors.push(`${m.type()}: ${m.text()}`); });
       page.on('pageerror', (e) => consoleErrors.push('pageerror: ' + e.message));
       await page.setViewportSize({ width: size.w, height: size.h });
-      await page.goto(`${vite.url}_harness/uikit/index.html?batch=${BATCH}${def.query}`, { waitUntil: 'load' });
+      await page.goto(`${vite.url}_harness/uikit/index.html?batch=${BATCH}${def.query}${ONLY ? '&only=' + ONLY : ''}`, { waitUntil: 'load' });
       await page.waitForFunction(() => window.__kitReady === true, null, { timeout: 30000 });
       await page.evaluate(() => document.fonts.ready);
       const { cdp, n: forced } = await forceStates(page);
@@ -138,7 +141,7 @@ try {
       if (mode === 'forced' && !facts.media.forced) fail(`${tag}: forced-colors emulation did not take`);
       if (mode === 'contrast' && !facts.media.more) fail(`${tag}: prefers-contrast emulation did not take`);
       if (mode === 'calm' && facts.runningTransformAnimations > 0) fail(`${tag}: ${facts.runningTransformAnimations} transform animation(s) still running under Calm (K08)`);
-      if (mode === 'normal' && facts.runningTransformAnimations === 0) fail(`${tag}: normal mode shows no busy-dot animation (the idle hook is dead)`);
+      if (mode === 'normal' && !ONLY && facts.runningTransformAnimations === 0) fail(`${tag}: normal mode shows no busy-dot animation (the idle hook is dead)`);
       if (mode === 'forced' && facts.swOnBg && facts.swOffBg && facts.swOnBg === facts.swOffBg) fail(`${tag}: switch on and off have the same background in forced-colors (${facts.swOnBg})`);
 
       // ---- pictures ----

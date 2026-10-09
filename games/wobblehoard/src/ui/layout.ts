@@ -10,6 +10,17 @@
 //   data-tall="true"      = stack and height >= 700             (the quick switcher shows only on tall)
 //
 // The order above is the order of the tests: a size takes the first layout it fits. Pure first; the DOM binding guards every access.
+//
+// The dock (UI.md 4.2) is a function of the same state: `dockFor` says which FORM the toolbar takes, where an attachment (the options bar)
+// goes and which parent the Hoard button lives in. `applyLayout` writes the form as `body[data-dock]`; the dock's own geometry lives in
+// toolbar.css (heights 64 / 52 / 52 / 52 / 44, bottoms 14 / 12 / 14 / top 8 / 6).
+//
+//   layout          form     attachment   Hoard button        dock
+//   wide            full     above        in the dock         64 high, bottom 14, icon + label + key chip
+//   wide, short     compact  above        in the dock         52 high, bottom 12, icon only
+//   stack           compact  above        in the dock         52 high, bottom 14 + inset, icon only
+//   strip           compact  inline       in the bottom row   52 high at the top (y 8..60), tools only
+//   tiny            bare     inline       in the dock         44 high at the bottom (y 151..195), no tray
 
 export type LayoutId = 'tiny' | 'strip' | 'stack' | 'wide';
 export interface LayoutState { layout: LayoutId; short: boolean; tall: boolean; width: number; height: number }
@@ -45,6 +56,27 @@ export function layoutFor(width: number, height: number): LayoutState {
 
 export const sameLayout = (a: LayoutState, b: LayoutState): boolean => a.layout === b.layout && a.short === b.short && a.tall === b.tall;
 
+export type DockForm = 'full' | 'compact' | 'bare';
+export interface DockSpec {
+  form: DockForm;
+  /** where the ONE attachment (options bar, More popover) goes: `above` the dock with a caret, or `inline` beside the tools */
+  attach: 'above' | 'inline';
+  /** which parent holds the Hoard button: the dock's Collection group or the HUD's bottom row */
+  hoard: 'dock' | 'row';
+  /** tool labels and key chips are drawn (icon-only otherwise; the accessible names never change) */
+  labels: boolean;
+}
+
+/** The dock's form for a layout (UI.md 4.2). Pure. */
+export function dockFor(s: LayoutState): DockSpec {
+  switch (s.layout) {
+    case 'wide': return s.short ? { form: 'compact', attach: 'above', hoard: 'dock', labels: false } : { form: 'full', attach: 'above', hoard: 'dock', labels: true };
+    case 'stack': return { form: 'compact', attach: 'above', hoard: 'dock', labels: false };
+    case 'strip': return { form: 'compact', attach: 'inline', hoard: 'row', labels: false };
+    case 'tiny': return { form: 'bare', attach: 'inline', hoard: 'dock', labels: false };
+  }
+}
+
 export interface LayoutHandle {
   /** The state last written to the body. */
   current(): LayoutState;
@@ -65,6 +97,7 @@ export function applyLayout(s: LayoutState, body: HTMLElement = document.body): 
   body.dataset.layout = s.layout;
   if (s.short) body.dataset.density = 'short'; else delete body.dataset.density;
   body.dataset.tall = String(s.tall);
+  body.dataset.dock = dockFor(s).form;
 }
 
 /**
@@ -115,4 +148,12 @@ export function bindSlots(h: LayoutHandle, node: HTMLElement, slots: Partial<Rec
   };
   place(h.current());
   return h.onChange(place);
+}
+
+/**
+ * The Hoard button's home (UI.md 4.1): the dock's Collection group in wide, stack and tiny, the HUD's bottom row in strip. The node is
+ * MOVED, never cloned, so its listeners, focus and `aria-expanded` survive a rotation. Returns the unsubscribe.
+ */
+export function bindHoard(h: LayoutHandle, node: HTMLElement, parents: { dock: HTMLElement; row: HTMLElement }, beforeInRow?: Node | null): () => void {
+  return bindSlots(h, node, { wide: parents.dock, stack: parents.dock, tiny: parents.dock, strip: parents.row }, { strip: beforeInRow ?? null });
 }

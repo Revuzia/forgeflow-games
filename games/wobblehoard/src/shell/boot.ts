@@ -6,7 +6,7 @@
 // stats overlay; ?lab=1 adds the sound lab. A production build contains no hook, no lab and no /__shot poster (audit findings 6 / 20).
 import type { QualityTier, Settings, SoftBodyCtor } from '../contracts.ts';
 import { genomeFromParam } from '../core/genome.ts';
-import { SETTINGS_KEY, detectEnv, parseSettingsText, safeLocalStorage } from '../core/settings.ts';
+import { SETTINGS_KEY, detectEnv, loadSettings, parseSettingsText, safeLocalStorage } from '../core/settings.ts';
 import type { StorageSubscribe } from '../core/save.ts';
 import { createProfileStore } from '../core/save.ts';
 import { createCollection } from '../collection/index.ts';
@@ -14,12 +14,16 @@ import { mulberry32 } from '../core/rng.ts';
 import { attachKeyboard } from '../input/keyboard.ts';
 import { attachLifecycle } from '../input/lifecycle.ts';
 import { attachPointerInput } from '../input/pointer.ts';
+import { BOOT_TOTAL, createBootCard } from '../ui/bootCard.ts';
 import { h } from '../ui/dom.ts';
 import { showErrorCard, webgl2Available } from '../ui/errorCard.ts';
+import { setCalm } from '../ui/motion.ts';
 import { createTitleCard } from '../ui/titleCard.ts';
+import type { TitleChip, TitleChipId } from '../ui/titleCard.ts';
 import type { Game } from './game.ts';
 import { createGame } from './game.ts';
 import { bindUi } from './hudBinding.ts';
+import { openMenu, toggleFullscreen } from './entryStubs.ts';
 
 declare global { interface Window { __whBooted?: boolean } }
 
@@ -27,7 +31,15 @@ const QUALITIES = ['auto', 'low', 'med', 'high'] as const;
 /** WebGL context loss: how long to wait for the context to come back before the give-up card */
 export const CONTEXT_GIVE_UP_MS = 5000;
 
-interface UrlConfig { genomeParam: string | null; overrides: Partial<Settings>; muted: boolean; dev: boolean; lab: boolean }
+/** The title's destination chips (UI.md 6): a chip shows only when the screen behind it exists. A later batch flips its flag and fills in `openDestination`
+ *  (B4: Settings through the Menu, How to play, Credits; B6: Trophies). */
+export const TITLE_DESTINATIONS: Readonly<Record<TitleChipId, boolean>> = { howto: false, trophies: false, credits: false, settings: false };
+const CHIP_LABELS: Readonly<Record<TitleChipId, string>> = { howto: 'How to play', trophies: 'Trophies', credits: 'Credits', settings: 'Settings' };
+const CHIP_ORDER: readonly TitleChipId[] = ['howto', 'trophies', 'credits', 'settings'];
+function openDestination(_id: TitleChipId): void { /* no destination exists yet: every flag above is false, so a build never calls this */ }
+const titleChips = (all: boolean): TitleChip[] => CHIP_ORDER.filter((id) => all || TITLE_DESTINATIONS[id]).map((id) => ({ id, label: CHIP_LABELS[id], onPress: () => openDestination(id) }));
+
+interface UrlConfig { genomeParam: string | null; overrides: Partial<Settings>; muted: boolean; dev: boolean; lab: boolean; titleChips: boolean }
 
 export function readUrl(search: string): UrlConfig {
   const p = new URLSearchParams(search);
@@ -35,7 +47,7 @@ export function readUrl(search: string): UrlConfig {
   if (p.get('float') === '1') overrides.gravity = false;
   const q = p.get('quality');
   if (q && (QUALITIES as readonly string[]).includes(q)) overrides.quality = q as QualityTier | 'auto';
-  return { genomeParam: p.get('genome'), overrides, muted: p.get('mute') === '1', dev: p.get('dev') === '1', lab: p.get('lab') === '1' };
+  return { genomeParam: p.get('genome'), overrides, muted: p.get('mute') === '1', dev: p.get('dev') === '1', lab: p.get('lab') === '1', titleChips: p.get('titlechips') === '1' };
 }
 
 const isLocalHost = (): boolean => /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)$/.test(location.hostname);
@@ -43,6 +55,7 @@ const isLocalHost = (): boolean => /^(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)
 function fail(root: HTMLElement, title: string, message: string, err?: unknown): void {
   const detail = err instanceof Error ? err.message : err ? String(err) : undefined;
   if (err) console.error(err);
+  document.getElementById('boot')?.remove();   // the loading card sits above an error card
   root.querySelector('.title')?.remove();
   root.querySelector('.hud')?.setAttribute('inert', '');
   root.querySelector('.panel')?.setAttribute('inert', '');
@@ -56,9 +69,17 @@ export async function boot(): Promise<(() => void) | null> {
   const root = document.getElementById('ui');
   const canvas = document.getElementById('stage');
   if (!root || !(canvas instanceof HTMLCanvasElement)) throw new Error('index.html is missing #stage / #ui');
-  document.getElementById('boot')?.remove();
+  const bootCard = createBootCard(document.getElementById('boot'));
   document.body.dataset.phase = 'boot';
   const cfg = readUrl(location.search);
+  // the loading card follows the COUNT of finished boot events (3 imports, then createGame): the card, the bar and a window event (R09)
+  const progress = (done: number): void => {
+    bootCard.setProgress(done);
+    window.dispatchEvent(new CustomEvent('wh:boot-progress', { detail: { done, total: BOOT_TOTAL } }));
+  };
+  let finished = 0;
+  const tick = <T,>(m: T): T => { progress(++finished); return m; };
+  progress(0);
 
   if (!webgl2Available()) {
     fail(root, 'This device can’t draw the squishy', 'Squish Keeper needs WebGL2 for its 3D jelly. Try a recent Chrome, Safari, Firefox or Edge, and make sure hardware acceleration is switched on.');
@@ -67,6 +88,8 @@ export async function boot(): Promise<(() => void) | null> {
   }
 
   const env = detectEnv();
+  // the saved Calm setting (else the OS preference) is known before the first frame: the loading card and the title obey it, not just the game
+  setCalm(loadSettings(safeLocalStorage(), env).calm ?? env.reducedMotion);
   // storage, the profile and the collection share ONE cross-tab subscription (window 'storage'); the profile first, so the collection's
   // starter ghost keeps the profile's starter id (src/collection/index.ts WIRING)
   const storage = safeLocalStorage();
@@ -76,25 +99,14 @@ export async function boot(): Promise<(() => void) | null> {
   const epochNow = import.meta.env.DEV ? () => Date.now() + skew.ms : () => Date.now();
   let game: Game | null = null;
   let playTargetFocus: (() => void) | null = null;
-  const card = createTitleCard(root, {
-    onStart(viaKeyboard) {
-      // This handler IS the user gesture: unlock audio synchronously, before anything else.
-      if (!game) return;
-      game.unlockAudio();
-      game.setPhase('play');
-      // keyboard: focus goes to the squishy (Space pokes at once); pointer: no focus ring over the toy
-      if (viaKeyboard) playTargetFocus?.(); else (document.activeElement as HTMLElement | null)?.blur?.();
-    },
-  });
-  document.body.dataset.phase = 'title';
 
   let profile: ReturnType<typeof createProfileStore> | null = null;
   let hoard: ReturnType<typeof createCollection> | null = null;
   try {
     const [{ SoftBody }, { createStage }, { createAudio }] = await Promise.all([
-      import('../physics/softbody.ts'),
-      import('../render/stage.ts'),
-      import('../audio/engine.ts'),
+      import('../physics/softbody.ts').then(tick),
+      import('../render/stage.ts').then(tick),
+      import('../audio/engine.ts').then(tick),
     ]);
     profile = createProfileStore(storage, { subscribe });
     // DEV ONLY: ?dev=1&rseed=N makes the practice rolls repeatable (the harness's scripted practice loop); a build never reads it
@@ -122,12 +134,29 @@ export async function boot(): Promise<(() => void) | null> {
     // createGame already disposed what it built (stage, audio); the saves and their cross-tab listeners are ours to close
     try { hoard?.dispose(); } catch { /* ignore */ }
     try { profile?.dispose(); } catch { /* ignore */ }
-    card.dismiss();
     fail(root, 'The squishy didn’t wake up', 'Something went wrong while starting the game. Reloading usually fixes it.', err);
     window.__whBooted = true;
     return null;
   }
   const g: Game = game;
+  progress(++finished);   // createGame done: the fourth and last event
+
+  // ---- the title card: built now that the game exists (its button unlocks audio and starts the play phase)
+  const card = createTitleCard(root, {
+    muted: g.muted,
+    chips: titleChips(import.meta.env.DEV && cfg.titleChips),
+    onStart(viaKeyboard) {
+      // This handler IS the user gesture: unlock audio synchronously, before anything else.
+      g.unlockAudio();
+      g.setPhase('play');
+      // keyboard: focus goes to the squishy (Space pokes at once); pointer: no focus ring over the toy
+      if (viaKeyboard) playTargetFocus?.(); else (document.activeElement as HTMLElement | null)?.blur?.();
+    },
+    onSound: (m) => g.setMuted(m),
+    onPoke: () => g.audio.ui?.({ kind: 'tick', calm: g.settings.calm }),
+  });
+  const offMute = g.on('mute', (m) => card.setMuted(m));
+  document.body.dataset.phase = 'title';
 
   // ---- canvas size
   const resize = (): void => { g.resize(canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight, Math.min(window.devicePixelRatio || 1, 3)); };
@@ -143,7 +172,17 @@ export async function boot(): Promise<(() => void) | null> {
 
   // ---- input + lifecycle
   const detachPointer = attachPointerInput(canvas, g);
-  const detachKeys = attachKeyboard(window, g, { onEscape: () => ui.escape(), shortcutsEnabled: () => g.settings.shortcuts, onKeyUsed: () => ui.keyUsed(), onHoard: () => { if (g.phase === 'play') ui.hoard.toggle(); }, onSwitch: (dir) => { if (g.phase === 'play' && !ui.hoard.isOpen) ui.switchBy(dir); }, onToys: () => { if (g.phase === 'play' && !ui.hoard.isOpen) ui.toys.toggle(); }, onCut: () => { if (g.phase === 'play' && !ui.hoard.isOpen && g.cut.supported) g.setTool(g.tool === 'cut' ? 'hand' : 'cut'); } });
+  // the keys (UI.md 4.5): 1 2 3 and C S pick tools, H the Hoard, [ ] switch, F full screen and P the Menu (B4's entry points: shell/entryStubs.ts, no-ops until B4)
+  const detachKeys = attachKeyboard(window, g, {
+    onEscape: () => ui.escape(),
+    shortcutsEnabled: () => g.settings.shortcuts,
+    onKeyUsed: () => ui.keyUsed(),
+    onHoard: () => { if (g.phase === 'play') ui.hoard.toggle(); },
+    onSwitch: (dir) => { if (g.phase === 'play' && !ui.hoard.isOpen) ui.switchBy(dir); },
+    onTool: (id) => { if (g.phase === 'play') ui.pickTool(id); },
+    onFullscreen: () => { if (g.phase === 'play') toggleFullscreen(); },
+    onMenu: () => { if (g.phase === 'play' && !ui.hoard.isOpen) openMenu(); },
+  });
   const detachLife = attachLifecycle(g);
 
   // another tab changed the settings: follow it (the 'storage' event fires in the OTHER tabs only)
@@ -195,12 +234,14 @@ export async function boot(): Promise<(() => void) | null> {
 
   g.setPhase('title');
   g.start();
+  bootCard.leave();   // the title is under it: the loading card fades away and the intro plays
   card.setReady(true);
   window.__whBooted = true;
 
   // teardown (a host that unmounts the game, a test): every listener off, the saves flushed, GL context and AudioContext released
   return () => {
     clearTimeout(lostTimer);
+    offMute();
     detachPointer(); detachKeys(); detachLife();
     window.removeEventListener('storage', onStorage);
     window.removeEventListener('resize', resize);

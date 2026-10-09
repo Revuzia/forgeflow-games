@@ -1,6 +1,6 @@
 // Keyboard glue. Space = poke the centre (hold it to squish: it is a synthetic pointer at the body's centre, so it runs the SAME gesture
-// code as a finger), G = gravity <-> float, M = mute, H = the Hoard, T = the toy tray, C = the Cut tool, [ ] = switch, Escape = close the panel. Extras for people who cannot drag: arrow keys orbit,
-// + / - zoom. During a ceremony Space, Enter and Escape skip it (after the 350 ms gate).
+// code as a finger), G = gravity <-> float, M = mute, H = the Hoard, 1 2 3 = the tools (Hand, Cut, Snap), C = Cut, S = Snap, F = full screen, P = the Menu, ? = How to play,
+// [ ] = switch, Escape = close what is open (hudBinding.ts escape(): the order of UI.md 4.5). Extras for people who cannot drag: arrow keys orbit, + / - zoom. During a ceremony Space, Enter and Escape skip it (after the 350 ms gate).
 //
 // Focus rules (WCAG 2.1.1 / 2.1.4; audit findings 12 and 13):
 //   * A focused control (button, input, select, a role=button/switch/slider/radio element, contentEditable) owns its keys: Space activates
@@ -28,10 +28,15 @@ export interface KeyboardOptions {
   onHoard?(): void;
   /** [ and ]: switch the play squishy (the HUD quick switcher); same rules as G and M */
   onSwitch?(dir: -1 | 1): void;
-  /** T: open the toy tray (FUN.md 1); same rules as G and M */
-  onToys?(): void;
-  /** C: the Cut tool on or off (CUT.md 1); same rules as G and M */
-  onCut?(): void;
+  /** 1 Hand, 2 or C Cut, 3 or S Snap (UI.md 4.5): the toolbar's keys; same rules as G and M. The caller decides what a tool key does now (the active Cut or Snap
+   *  pressed again returns the Hand; a busy or unavailable tool says why). Not gated by `input.live`: a ceremony is a reason the caller says out loud. */
+  onTool?(id: 'hand' | 'cut' | 'snap'): void;
+  /** F: full screen on / off (UI.md 6.1); same rules as G and M */
+  onFullscreen?(): void;
+  /** P: the Menu (UI.md 4.5); same rules as G and M */
+  onMenu?(): void;
+  /** ?: How to play; same rules as G and M */
+  onHelp?(): void;
 }
 
 interface KeyEventLike extends Event {
@@ -48,6 +53,9 @@ export function interactiveTarget(t: EventTarget | null): boolean {
   const role = el.getAttribute?.('role');
   return role === 'button' || role === 'switch' || role === 'slider' || role === 'radio' || role === 'menuitem' || role === 'tab' || role === 'textbox' || role === 'combobox' || role === 'option';
 }
+
+/** a <button> inside the dock (#wh-dock: the toolbar, the Hoard button, the options bar): it does not own the letter and digit shortcuts */
+const onDockButton = (t: EventTarget | null): boolean => { const el = t as Element | null; return !!el && el.tagName === 'BUTTON' && !!el.closest?.('#wh-dock'); };
 
 export function attachKeyboard(target: KeyTarget, app: Pick<App, 'input' | 'phase' | 'toggleGravity' | 'toggleMute'>, opts: KeyboardOptions): () => void {
   let spaceHeld = false;
@@ -82,24 +90,36 @@ export function attachKeyboard(target: KeyTarget, app: Pick<App, 'input' | 'phas
       app.input.pointerDown({ id: KEY_POINTER_ID, x: c.x, y: c.y, type: 'touch' });
       return;
     }
-    if (inControl) return; // letters, arrows and +/- belong to a focused control (a slider's arrows, a select's typeahead)
+    // letters, arrows and +/- belong to a focused control (a slider's arrows, a select's typeahead). A focused BUTTON of the dock (a tool, the Hoard button, a button of the options bar)
+    // owns only Enter and Space: after a click on a tool, or after Snap focuses its Save button, the focus stays on a button and the shortcuts (1 2 3 C S H G M [ ]) must keep working then
+    if (inControl && !onDockButton(e.target)) return;
     if ((key === '[' || key === ']') && opts.onSwitch) {
       if (e.repeat || !shortcuts()) return;
       opts.onKeyUsed?.();
       opts.onSwitch(key === ']' ? 1 : -1);
       return;
     }
-    if ((key === 't' || key === 'T') && opts.onToys) {
+    const toolKey: 'hand' | 'cut' | 'snap' | null = key === '1' ? 'hand' : key === '2' || key === 'c' || key === 'C' ? 'cut' : key === '3' || key === 's' || key === 'S' ? 'snap' : null;
+    if (toolKey && opts.onTool) {
       if (e.repeat || !shortcuts()) return;
-      e.preventDefault();   // the tray takes focus: the key must not type into it
+      e.preventDefault();   // a tool takes focus (the options bar): the key must not type into it
       opts.onKeyUsed?.();
-      opts.onToys();
+      opts.onTool(toolKey);
       return;
     }
-    if ((key === 'c' || key === 'C') && opts.onCut) {
-      if (e.repeat || !shortcuts() || app.input.live === false) return;
-      opts.onKeyUsed?.();
-      opts.onCut();
+    if ((key === 'f' || key === 'F') && opts.onFullscreen) {
+      if (e.repeat || !shortcuts()) return;
+      opts.onFullscreen();
+      return;
+    }
+    if ((key === 'p' || key === 'P') && opts.onMenu) {
+      if (e.repeat || !shortcuts()) return;
+      opts.onMenu();
+      return;
+    }
+    if (key === '?' && opts.onHelp) {
+      if (e.repeat || !shortcuts()) return;
+      opts.onHelp();
       return;
     }
     if ((key === 'h' || key === 'H') && opts.onHoard) {

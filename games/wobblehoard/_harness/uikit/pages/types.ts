@@ -5,7 +5,12 @@ import { h } from '../../../src/ui/dom.ts';
 import type { LayoutHandle } from '../../../src/ui/layout.ts';
 
 export interface KitCtx { layout: LayoutHandle }
-export interface KitSection { id: string; title: string; note?: string; build(host: HTMLElement, ctx: KitCtx): void }
+export interface KitSection {
+  id: string; title: string; note?: string;
+  /** a full-bleed section (the page's side padding removed): a scene drawn at exactly the viewport's size */
+  bleed?: boolean;
+  build(host: HTMLElement, ctx: KitCtx): void;
+}
 
 /** A captioned specimen on a stage. `tone` picks the backdrop (white and amber are the worst cases for the focus ring and the glass). */
 export function cell(caption: string, stage: Node[] | Node, o: { tone?: 'white' | 'amber' | 'felt' | 'ink'; col?: boolean; frame?: boolean } = {}): HTMLElement {

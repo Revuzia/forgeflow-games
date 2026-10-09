@@ -1,5 +1,6 @@
 // The UI kit page (dev only). ?batch=B0 shows the pages of B0 (cumulative), ?calm=1 / ?quality=low set the body hooks the shell sets in the game.
 // The theme tokens are installed exactly like main.ts does (installTheme on :root); the three kit sheets load in the production order.
+import '../../src/ui/hud.css';   // the HUD's rules, in the game's order (styles, hud, then the kit): the real hint, ring and switcher are on the B3b sheets
 import '../../src/ui/base.css';
 import '../../src/ui/kit.css';
 import '../../src/ui/a11y.css';
@@ -30,7 +31,7 @@ const head = h('header', { class: 'kp-head' }, h('h1', { text: `UI kit ${batch}`
 root.append(head);
 const sections = sectionsUpTo(batch).filter((s) => !only.length || only.includes(s.id));
 for (const s of sections) {
-  const sec = h('section', { class: 'kp-sec', attrs: { id: `sec-${s.id}`, 'aria-label': s.title } }, h('h2', { text: s.title }), s.note ? h('p', { class: 'kp-note', text: s.note }) : null);
+  const sec = h('section', { class: s.bleed ? 'kp-sec kp-sec--bleed' : 'kp-sec', attrs: { id: `sec-${s.id}`, 'aria-label': s.title } }, h('h2', { text: s.title }), s.note ? h('p', { class: 'kp-note', text: s.note }) : null);
   try { s.build(sec, { layout }); } catch (e) { window.__kitErrors!.push(`${s.id}: ${e instanceof Error ? e.stack : String(e)}`); sec.append(h('p', { text: `BUILD FAILED: ${String(e)}` })); }
   root.append(sec);
 }

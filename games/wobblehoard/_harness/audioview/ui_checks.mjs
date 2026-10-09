@@ -140,7 +140,7 @@ export async function uiChecks(env) {
     const uiMax = Math.max(...KINDS.map((k) => rows[k].worst)), toyMin = Math.min(...Object.values(toy).map((v) => v.peak));
     const uiRms = median(KINDS.map((k) => rows[k].rms)), toyRms = median(Object.values(toy).map((v) => v.rms));
     check(g, 'quieter than the toy: the loudest interface peak is below the quietest canonical poke / release / land / pop peak, and the median active RMS is lower too', uiMax < toyMin && uiRms < toyRms, `UI peak <= ${f4(uiMax)}, toy peaks ${Object.entries(toy).map(([k, v]) => `${k} ${f3(v.peak)}`).join(' ')}; median RMS UI ${f1(uiRms)} vs toy ${f1(toyRms)} dBFS`, 'UI below');
-    info.toy = toy; info.rows = rows; info.pitch = pitchInfo;
+    info.reference = toy; info.rows = rows; info.pitch = pitchInfo;
     // artefacts for the owner's ears
     const gap = new Float32Array(Math.round(0.35 * SR));
     const strip = (list) => { const parts = []; for (const x of list) parts.push(x, gap); const all = new Float32Array(parts.reduce((a, p) => a + p.length, 0)); let o = 0; for (const p of parts) { all.set(p, o); o += p.length; } return all; };

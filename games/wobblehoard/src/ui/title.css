@@ -1,0 +1,81 @@
+/* The title card (UI.md 4 and 6). Colour and size come from the --wh-* tokens and the --k-* roles (base.css); the buttons, chips and glass are
+   the kit's (kit.css). Layout is the card's own data-layout (layout.ts: wide | strip | stack | tiny), written by titleCard.ts. Calm and
+   reduced motion swap every movement for a fade (the same hooks a11y.css uses). No transition: all; animate transform and opacity only. */
+
+body { --k-an-title-in: title-rise; --k-an-title-pop: title-pop; }
+body[data-calm="true"] { --k-an-title-in: title-fade; --k-an-title-pop: title-fade; }
+@media (prefers-reduced-motion: reduce) { body:not([data-calm="false"]) { --k-an-title-in: title-fade; --k-an-title-pop: title-fade; } }
+
+.title {
+  --t-pt: 6vh; --t-pb: 6vh;
+  position: fixed; inset: 0; z-index: 8;
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto;
+  grid-template-areas: "mark" "." "plate" "actions";
+  justify-items: center; align-items: start; row-gap: var(--wh-sp-3);
+  padding: calc(env(safe-area-inset-top, 0px) + var(--t-pt)) calc(env(safe-area-inset-right, 0px) + var(--k-gutter, 16px)) calc(env(safe-area-inset-bottom, 0px) + var(--t-pb)) calc(env(safe-area-inset-left, 0px) + var(--k-gutter, 16px));
+  text-align: center; font-family: var(--wh-font-ui); color: var(--k-fg, var(--wh-cream));
+  /* a live scene under a scrim: ink at the top (the lockup) and at the bottom (the plate and the button), clear through the middle (the squishy) */
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--wh-ink) 86%, transparent) 0%, color-mix(in srgb, var(--wh-ink) 42%, transparent) 22%, transparent 40%,
+    transparent 56%, color-mix(in srgb, var(--wh-ink) 78%, transparent) 82%, color-mix(in srgb, var(--wh-ink) 90%, transparent) 100%);
+  transition: opacity var(--k-fd-4) var(--wh-ease);
+  animation: title-fade var(--k-fd-3) var(--wh-ease) backwards;
+}
+/* a warm light behind the lockup */
+.title::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(60% 34% at 50% 15%, color-mix(in srgb, var(--wh-amber) 20%, transparent), transparent 70%); }
+.title[data-leaving="true"] { opacity: 0; pointer-events: none; }
+
+.title-mark { grid-area: mark; margin: 0; max-width: 100%; --jl-cap: min(var(--wh-cap-xl), 14vh); }
+.title-promise { grid-area: plate; margin: 0; max-width: min(34ch, 100%); padding: 9px var(--wh-sp-5); border-radius: var(--wh-r-pill);
+  font: var(--wh-w-mid) var(--wh-fs-lead)/1.3 var(--wh-font-ui); color: var(--k-fg); text-wrap: balance; overflow-wrap: anywhere; }
+.title-actions { grid-area: actions; display: grid; justify-items: center; gap: var(--wh-sp-4); width: 100%; min-width: 0; }
+.title-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--wh-sp-3) var(--wh-sp-2); }
+.title-chip-label { min-width: 0; }
+
+/* ---- the button: the kit's gel, restated over the legacy .cta rules (styles.css, until the error card moves to the kit in B4) ---- */
+.title .cta { min-width: min(320px, 100%); opacity: 1; animation: var(--k-an-title-pop) 480ms var(--wh-ease-spring) 880ms backwards; }
+.title .cta:not(:disabled) { animation: var(--k-an-title-pop) 480ms var(--wh-ease-spring) 880ms backwards, var(--k-an-breathe) 2.6s ease-in-out 1.5s infinite; }
+.title .cta:active { transform: translateY(3px); box-shadow: var(--k-sh); animation: none; }
+.title .cta:disabled { opacity: 1; }
+
+/* ---- the intro: the plate rises, the button pops, the chips follow the letters (the lockup's letters are jelly.css's); any key or tap ends it ---- */
+.title-promise { animation: var(--k-an-title-in) 420ms var(--wh-ease) 680ms backwards; }
+.title-chips > * { animation: var(--k-an-title-in) 380ms var(--wh-ease) calc(1000ms + var(--n, 0) * 50ms) backwards; }
+.title-chips > :nth-child(2) { --n: 1; } .title-chips > :nth-child(3) { --n: 2; } .title-chips > :nth-child(4) { --n: 3; } .title-chips > :nth-child(5) { --n: 4; }
+.title[data-intro="done"] .title-promise, .title[data-intro="done"] .title-chips > *, .title[data-intro="done"] .cta { animation: none; }
+.title[data-intro="done"] .cta:not(:disabled) { animation: var(--k-an-breathe) 2.6s ease-in-out infinite; }
+.title[data-intro="done"] .cta:not(:disabled):active { animation: none; }
+@keyframes title-rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes title-pop { from { opacity: 0; transform: scale(.72); } }
+@keyframes title-fade { from { opacity: 0; } }
+
+/* ================= layouts ================= */
+/* wide short (the portal's 888x500 box): a smaller lockup, tighter margins */
+/* wide short (the portal's 888x500 box): the button and the chips share one row, so the squishy keeps its room */
+.title[data-layout="wide"][data-density="short"] { --t-pt: 3vh; --t-pb: 4vh; }
+.title[data-layout="wide"][data-density="short"] .title-mark { --jl-cap: clamp(56px, 15vh, 100px); }
+.title[data-layout="wide"][data-density="short"] .title-actions { grid-auto-flow: column; justify-content: center; align-items: center; gap: var(--wh-sp-4); }
+.title[data-layout="wide"][data-density="short"] .cta { min-width: 240px; }
+/* stack (phones in portrait, tablets in portrait): the lockup is one word per line; labels give way to icons on a narrow screen */
+.title[data-layout="stack"] { --t-pt: clamp(16px, 5vh, 56px); --t-pb: 5vh; }
+@media (max-width: 700px) {
+  .title-chip { width: var(--wh-hit); justify-content: center; padding: 0; }
+  .title-chip-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+/* strip (phones in landscape): the lockup and the plate on top, the button and the chips on ONE row at the bottom, the squishy between */
+.title[data-layout="strip"] { --t-pt: 3vh; --t-pb: 3vh; grid-template-areas: "mark" "plate" "." "actions"; grid-template-rows: auto auto minmax(0, 1fr) auto; row-gap: var(--wh-sp-2); }
+.title[data-layout="strip"] .title-mark { --jl-cap: clamp(36px, 15vh, 72px); }
+.title[data-layout="strip"] .title-promise { padding: 5px var(--wh-sp-4); font-size: var(--wh-fs-body); }
+.title[data-layout="strip"] .title-actions { grid-auto-flow: column; justify-content: center; align-items: center; width: auto; gap: var(--wh-sp-4); }
+.title[data-layout="strip"] .cta { min-height: 52px; min-width: 0; padding: 0 var(--wh-sp-6); }
+/* tiny (the portal phone, 358x201): a 28 px lockup, a one-line plate, a 44 px button with its two icons beside it */
+.title[data-layout="tiny"] { --t-pt: 6px; --t-pb: 6px; --k-gutter: var(--wh-sp-3); grid-template-areas: "mark" "plate" "." "actions"; grid-template-rows: auto auto minmax(0, 1fr) auto; row-gap: 4px; }
+.title[data-layout="tiny"] .title-mark { --jl-cap: 28px; }
+.title[data-layout="tiny"] .title-promise { padding: 3px var(--wh-sp-3); font-size: var(--wh-fs-small); }
+.title[data-layout="tiny"] .title-actions { grid-auto-flow: column; justify-content: center; align-items: center; width: 100%; gap: var(--wh-sp-2); }
+.title[data-layout="tiny"] .cta { min-height: var(--wh-hit); min-width: 0; width: 100%; padding: 0 var(--wh-sp-5); font-size: var(--wh-fs-lead); }
+.title[data-layout="tiny"] .title-chip:not(.title-keep) { display: none; }
+.title[data-layout="tiny"] .title-chips { flex-wrap: nowrap; gap: var(--wh-sp-2); }
+/* a narrow phone: the plate is one 14 px line (two lines cost 30 px a 568 px screen cannot spare) */
+@media (max-width: 380px) { .title-promise { padding: 7px var(--wh-sp-4); font-size: var(--wh-fs-small); } }

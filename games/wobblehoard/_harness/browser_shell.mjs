@@ -16,6 +16,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
+import { gzipSync } from 'node:zlib';
 import { extname, resolve } from 'node:path';
 import { ROOT, launch, startVite } from './pw.mjs';
 
@@ -270,10 +271,19 @@ async function main() {
       check('title card: wordmark, one-line promise, one big input-neutral button "Wake it up" (enabled once loaded; audit finding 17)', (t.mark ?? '').replace(/\s/g, '') === GAME_MARK.replace(/\s/g, '') && t.btn === 'Wake it up' && t.disabled === false && !!t.promise && t.role === 'dialog', JSON.stringify(t));
       check('index.html: viewport-fit=cover, theme-color is the ink token, one h1 for assistive tech', /viewport-fit=cover/.test(t.viewport) && t.theme === '#14102a' && t.h1 === GAME_MARK);
       check('title card: the HUD is not shown (or reachable) underneath it', t.hudHidden === 'hidden');
-      // the three wordmark checks (the owner's rename to Squish Keeper, 2026-10-06): exact text, not whitespace-folded
-      const marks = await page.evaluate(() => ({ titleMark: document.querySelector('.title-mark')?.textContent, h1: [...document.querySelectorAll('h1')].map((e) => e.textContent), wordmark: document.querySelector('.wordmark')?.textContent }));
-      check("wordmark: the title card's .title-mark textContent is exactly 'SQUISHKEEPER' (one letter per span, the gap is a spacer)", marks.titleMark === 'SQUISHKEEPER', JSON.stringify(marks.titleMark));
-      check("wordmark: the page's h1 reads exactly 'SQUISH KEEPER' (and there is one h1)", marks.h1.length === 1 && marks.h1[0] === 'SQUISH KEEPER', JSON.stringify(marks.h1));
+      // the three wordmark checks (the owner's rename to Squish Keeper, 2026-10-06): exact text, not whitespace-folded.
+      // RE-SPECIFIED 2026-10-08 (UI.md 5 / 6, B2b; reason: the owner changed the design on 2026-10-08 to the jelly lettering): the lockup is ONE jelly h1 whose real text
+      // is 'SQUISH KEEPER' in an sr-only span (the drawn letters are aria-hidden SVG), so the letters are no longer one span each and the gap is a real space; the HUD's
+      // .wordmark h1 (hud.ts, built in B3c) stays in the DOM under the title with visibility: hidden, so "one h1" means one RENDERED h1 (checkVisibility), as a screen reader sees it.
+      const marks = await page.evaluate(() => ({
+        titleMark: document.querySelector('.title-mark')?.textContent, titleTag: document.querySelector('.title-mark')?.tagName,
+        drawn: [...document.querySelectorAll('.title-mark .jl-svg')].length, drawnHidden: [...document.querySelectorAll('.title-mark .jl-svg')].every((e) => e.getAttribute('aria-hidden') === 'true'),
+        h1: [...document.querySelectorAll('h1')].filter((e) => e.checkVisibility({ visibilityProperty: true })).map((e) => e.textContent),
+        named: document.querySelector('.title')?.getAttribute('aria-labelledby') === document.querySelector('.title-mark')?.id,
+        wordmark: document.querySelector('.wordmark')?.textContent,
+      }));
+      check("wordmark: the title card's .title-mark is the jelly h1 whose text is exactly 'SQUISH KEEPER' (real text; the 2 drawings are aria-hidden) and it names the dialog", marks.titleMark === 'SQUISH KEEPER' && marks.titleTag === 'H1' && marks.drawn === 2 && marks.drawnHidden && marks.named, JSON.stringify(marks));
+      check("wordmark: the page's rendered h1 reads exactly 'SQUISH KEEPER' (and there is exactly one rendered h1)", marks.h1.length === 1 && marks.h1[0] === 'SQUISH KEEPER', JSON.stringify(marks.h1));
       check("wordmark: the HUD's .wordmark reads exactly 'SQUISH KEEPER'", marks.wordmark === 'SQUISH KEEPER', JSON.stringify(marks.wordmark));
       const a0 = await state(page);
       check('audio is locked before the gesture (nothing created before unlock)', a0.audio.state === 'locked' || a0.audio.state === 'suspended', a0.audio.state);
@@ -1566,14 +1576,33 @@ async function main() {
     });
 
     // ================================================================================================
-    // SHELL-4: the toy tray, Snap (photo mode), the Cut tool on the REAL physics (checkpoint 47), the mat bumping, the phone fit
+    // SHELL-4: the toolbar (was the toy tray, re-specified 2026-10-08), Snap (photo mode), the Cut tool on the REAL physics (checkpoint 47), the mat bumping, the phone fit
     // ================================================================================================
     const tools = (page) => page.evaluate(() => window.__WH__.shell.tools());
-    const focusInfo = (page) => page.evaluate(() => { const a = document.activeElement; return a ? (a.classList.contains('toy') ? a.dataset.tool : (a.className || a.tagName)) : null; });
-    const trayState = (page) => page.evaluate(() => ({ open: !document.querySelector('.toys').hidden, expanded: document.querySelector('.toys-btn').getAttribute('aria-expanded'), focus: document.activeElement?.classList.contains('toy') ? document.activeElement.dataset.tool : (document.activeElement?.className || null), role: document.activeElement?.getAttribute('role') ?? null, checked: document.activeElement?.getAttribute('aria-checked') ?? null, items: [...document.querySelectorAll('.toy')].map((b) => b.dataset.tool), label: document.querySelector('.toys-btn').getAttribute('aria-label') }));
+    const focusInfo = (page) => page.evaluate(() => { const a = document.activeElement; return a ? (a.classList.contains('dock-tool') ? a.dataset.tool : (a.className || a.tagName)) : null; });
+    /** the dock as the player meets it (UI v3: re-specified because the owner changed the design on 2026-10-08, the Toys button and tray are gone and the tools are always in the dock) */
+    const dockState = (page) => page.evaluate(() => {
+      const dock = document.getElementById('wh-dock');
+      const tb = dock?.querySelector('[role=toolbar]');
+      const btns = [...(tb?.querySelectorAll('.dock-tool:not(.dock-more)') ?? [])].filter((b) => !b.hidden);
+      const ae = document.activeElement;
+      return {
+        visible: !!dock && dock.getBoundingClientRect().width > 0 && getComputedStyle(dock).visibility === 'visible',
+        group: dock?.querySelector('[role=group]')?.getAttribute('aria-label') ?? null, toolbar: tb?.getAttribute('aria-label') ?? null, hoardIn: !!dock?.querySelector('[role=group] .hoard-btn'),
+        tools: btns.map((b) => ({ id: b.dataset.tool, pressed: b.getAttribute('aria-pressed'), tab: b.tabIndex, disabled: b.getAttribute('aria-disabled'), keys: b.getAttribute('aria-keyshortcuts') })),
+        tool: dock?.dataset.tool ?? null, attached: !!dock && !dock.querySelector('.dock-attach')?.hidden, toolbarDisabled: tb?.getAttribute('aria-disabled') ?? null,
+        focus: ae && ae.dataset && ae.dataset.tool ? ae.dataset.tool : (ae?.className || ae?.tagName || null),
+      };
+    });
     const rectOf = (page, sel) => page.evaluate((s) => { const e = document.querySelector(s); if (!e || e.hidden) return null; const b = e.getBoundingClientRect(); return b.width ? { x: b.left, y: b.top, r: b.right, b: b.bottom } : null; }, sel);
     /** in-page click (Playwright's own click waits for the page to ack the input; a photo's PNG encode right after can hold the main thread) */
     const pclick = (page, sel) => page.evaluate((s) => { const b = document.querySelector(s); if (!b || b.disabled) return false; b.click(); return true; }, sel);
+    /** UI v3, RE-SPECIFIED because the owner changed the design on 2026-10-08 (UI.md 9.1): there is no Toys button or tray, the tools are always in the dock. A tool is picked with a real click on its dock button. */
+    const pickTool = (page, id) => hclick(page, `.dock-tool[data-tool="${id}"]`);
+    /** the same as an in-page click (the sections that avoid Playwright's own click) */
+    const pickToolIn = (page, id) => pclick(page, `.dock-tool[data-tool="${id}"]`);
+    /** a text with no "Toys": the word is reserved for the pets update (UI.md 1.7, 4.6). The squishy-toy copy (the canvas label, the tagline) is the one allowed use. */
+    const toysWord = (t) => /\btoys?\b/i.test(String(t).replace(/(squishy|translucent) toy/gi, ''));
     const cutIdle = (page, max = 4) => stepUntil(page, `(wh) => !wh.shell.tools().busy`, max, 0.05);
     /** bring a squishy of `species` out of the Hoard onto the mat (its card's "Bring out") */
     async function bringOut(page, sp) {
@@ -1605,57 +1634,78 @@ async function main() {
       return { carried, lift: s1.lift - s0.lift, toss: s1.toss - s0.toss, bump: s1.bump - s0.bump, land: s1.land - s0.land, rejoin: s1.rejoin - s0.rejoin, events: [...new Set(kinds)] };
     }, [from, to, holdS, stepsPer, lift, page.viewportSize().width, page.viewportSize().height]);
 
-    await section('toys-tray', async () => {
+    await section('toolbar', async () => {
+      // UI v3 (UI.md 4, 9.1). RE-SPECIFIED from the old toy-tray section (reason: the owner changed the design on 2026-10-08): there is no Toys button and no tray, the tools are always in the dock
+      // (a roving toolbar of Hand, Cut, Snap with aria-pressed), the options bar rides in its attachment slot, the keys are 1 2 3 C S, the active tool pressed again is the Hand, and the focus returns
+      // to the Hand button.
       const { page, context, w } = await open({ query: '?dev=1' });
-      mainWatches.push(['toys-tray', w]);
+      mainWatches.push(['toolbar', w]);
       await wake(page);
+      await page.mouse.move(12, 420);   // (a mouse resting over a bar control would show its tooltip, and the first Escape only dismisses that: WCAG 1.4.13)
       const t0 = await tools(page);
-      await page.evaluate(() => document.querySelector('#wh-play')?.focus());
-      await page.keyboard.press('t'); await sleep(200);
-      const a = await trayState(page);
-      check('toy tray: T opens it (aria-expanded true) with focus on the tool in hand (Hand: a checked menuitemradio); Hand, Cut (the physics can cut), Snap; no Stamp / Roll clutter',
-        a.open && a.expanded === 'true' && a.focus === 'hand' && a.role === 'menuitemradio' && a.checked === 'true' && JSON.stringify(a.items) === JSON.stringify(t0.cutSupported ? ['hand', 'cut', 'snap'] : ['hand', 'snap']) && t0.cutSupported, JSON.stringify(a));
-      await shot(page, 'toys_tray_desktop');
+      const d0 = await dockState(page);
+      check('toolbar: always visible once the title has left (nothing to open): a Collection group with the Hoard button and a Tools toolbar of Hand, Cut (the physics can cut), Snap, each aria-pressed with its keys; the Hand is pressed; no Stamp / Roll clutter',
+        d0.visible && d0.group === 'Collection' && d0.toolbar === 'Tools' && d0.hoardIn && t0.cutSupported && JSON.stringify(d0.tools.map((t) => t.id)) === JSON.stringify(['hand', 'cut', 'snap']) && JSON.stringify(d0.tools.map((t) => t.pressed)) === JSON.stringify(['true', 'false', 'false'])
+          && JSON.stringify(d0.tools.map((t) => t.keys)) === JSON.stringify(['1 Escape', '2 C', '3 S']) && !d0.attached && d0.tool === 'hand', JSON.stringify(d0));
+      const texts = await page.evaluate(() => { const all = [document.body.innerText, document.getElementById('wh-live')?.textContent ?? '']; for (const e of document.querySelectorAll('[aria-label], [title]')) all.push(e.getAttribute('aria-label') ?? '', e.getAttribute('title') ?? ''); return all; });
+      check('the word Toys appears in no visible text, aria-label, title or live line (it is reserved for the pets update)', !texts.some(toysWord), JSON.stringify(texts.filter(toysWord)));
+      check('toolbar: ONE Tab stop in the tools (roving tabindex), on the tool in hand', JSON.stringify(d0.tools.map((t) => t.tab)) === JSON.stringify([0, -1, -1]), JSON.stringify(d0.tools.map((t) => t.tab)));
+      await page.focus('.dock-tool[data-tool="hand"]');
       const seq = [];
-      for (const k of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'End', 'Home', 'ArrowUp']) { await page.keyboard.press(k); seq.push(await focusInfo(page)); }
-      check('toy tray: the arrows move through the tools and wrap, Home / End jump', JSON.stringify(seq) === JSON.stringify(['cut', 'snap', 'hand', 'snap', 'hand', 'snap']), seq.join(' '));
-      await page.keyboard.press('Escape'); await sleep(100);
-      const b = await trayState(page);
-      check('toy tray: Escape closes it, focus goes back to the Toys button, the tool is unchanged', !b.open && b.expanded === 'false' && (await focusInfo(page)) === 'toys-btn' && (await tools(page)).tool === 'hand', JSON.stringify({ ...b, focus: await focusInfo(page) }));
-      await page.evaluate(() => document.querySelector('#wh-play')?.focus());
-      await page.keyboard.press('t'); await sleep(100); await page.keyboard.press('ArrowDown'); await page.keyboard.press('Enter');
-      await sleep(450);
-      const c = await page.evaluate(() => ({ tool: window.__WH__.shell.tools().tool, bar: !document.querySelector('.cutbar').hidden, btns: [...document.querySelectorAll('.cutbar button')].map((x) => x.textContent), live: document.getElementById('wh-live')?.textContent, label: document.querySelector('.toys-btn').getAttribute('aria-label'), open: !document.querySelector('.toys').hidden }));
-      check('toy tray: T, ArrowDown, Enter picks Cut: the Cut bar shows (Split in two, Reconnect all, Done), the live region says how it works, the Toys button names it',
-        c.tool === 'cut' && c.bar && JSON.stringify(c.btns) === JSON.stringify(['Split in two', 'Reconnect all', 'Done']) && /^Cut: swipe across/.test(c.live ?? '') && c.label === 'Toys, Cut in hand' && !c.open, JSON.stringify(c));
+      for (const k of ['ArrowRight', 'ArrowRight', 'ArrowRight', 'End', 'Home', 'ArrowLeft']) { await page.keyboard.press(k); seq.push(await focusInfo(page)); }
+      check('toolbar: the arrows move through the tools and wrap, Home / End jump, and moving only moves (the Hand stays in hand)', JSON.stringify(seq) === JSON.stringify(['cut', 'snap', 'hand', 'snap', 'hand', 'snap']) && (await tools(page)).tool === 'hand', seq.join(' '));
+      await page.keyboard.press('ArrowLeft'); await page.keyboard.press('Enter'); await sleep(450);
+      const c = await page.evaluate(() => ({ tool: window.__WH__.shell.tools().tool, inDock: !!document.querySelector('#wh-dock .dock-attach-slot .cutbar'), shown: !document.querySelector('.cutbar').hidden, btns: [...document.querySelectorAll('.cutbar button')].map((x) => x.textContent.trim()), live: document.getElementById('wh-live')?.textContent, pressed: document.querySelector('.dock-tool[aria-pressed="true"]')?.dataset.tool, caption: (() => { const e = document.querySelector('.dock-caption'); return { show: e.dataset.show, hidden: e.getAttribute('aria-hidden'), text: e.textContent }; })() }));
+      check('toolbar: Enter on Cut picks it: the Cut bar rides in the dock (Split in two, Reconnect all, Done), the live region says how it works, Cut is the pressed tool, and the 1.4 s caption chip (aria-hidden) names it',
+        c.tool === 'cut' && c.inDock && c.shown && JSON.stringify(c.btns) === JSON.stringify(['Split in two', 'Reconnect all', 'Done']) && /^Cut: swipe across/.test(c.live ?? '') && c.pressed === 'cut' && c.caption.show === 'true' && c.caption.hidden === 'true' && /^Cut/.test(c.caption.text), JSON.stringify(c));
+      await sleep(1700);
+      check('toolbar: the caption chip goes after about 1.4 s', (await page.evaluate(() => document.querySelector('.dock-caption').dataset.show)) === 'false');
       await shot(page, 'cut_bar_desktop');
-      await page.keyboard.press('Escape'); await sleep(150);
-      const d = { tool: (await tools(page)).tool, focus: await focusInfo(page) };
-      check('Escape puts the Hand back (and focus on the Toys button)', d.tool === 'hand' && d.focus === 'toys-btn', JSON.stringify(d));
-      await page.evaluate(() => document.querySelector('#wh-play')?.focus());
-      await page.keyboard.press('c'); const c1 = (await tools(page)).tool;
-      await page.keyboard.press('c'); const c2 = (await tools(page)).tool;
-      check('C takes the Cut tool and puts it back', c1 === 'cut' && c2 === 'hand', `${c1} ${c2}`);
-      // shortcuts off: T and C do nothing
+      await page.keyboard.press('Escape'); await sleep(250);
+      const d = { tool: (await tools(page)).tool, focus: await focusInfo(page), attached: (await dockState(page)).attached };
+      check('Escape puts the Hand back: the bar leaves the dock and the focus is on the Hand button', d.tool === 'hand' && d.focus === 'hand' && !d.attached, JSON.stringify(d));
+      // the keys: 1 Hand, 2 or C Cut, 3 or S Snap; a tool key on the active Cut or Snap = the Hand
+      // (a tool key reaches the game from the squishy or the page; entering Snap puts the focus on its Save button, which then owns the keys, so the play target is focused before each key)
+      const keyTool = async (k) => { await page.evaluate(() => document.querySelector('#wh-play')?.focus()); await page.keyboard.press(k); await sleep(120); return (await tools(page)).tool; };
+      const ks = [await keyTool('2'), await keyTool('2'), await keyTool('c'), await keyTool('c'), await keyTool('s'), await keyTool('s'), await keyTool('3'), await keyTool('1'), await keyTool('C')];
+      check('keys: 2 and C take the Cut tool and put it back, 3 and S the Snap tool and put it back, 1 the Hand', JSON.stringify(ks) === JSON.stringify(['cut', 'hand', 'cut', 'hand', 'snap', 'hand', 'snap', 'hand', 'cut']), ks.join(' '));
+      await page.keyboard.press('1'); await sleep(200);
+      // a click leaves the focus on the tool: the shortcuts still work from there (a toolbar button owns only Enter, Space and the arrows)
+      await pickTool(page, 'cut'); await sleep(300);
+      const kfocus = await focusInfo(page);
+      await page.keyboard.press('1'); await sleep(250);
+      const afterClick = { focus: kfocus, tool: (await tools(page)).tool, now: await focusInfo(page) };
+      check('keys: after a click on a tool its button holds the focus, and 1 still puts the Hand back (focus then on the Hand button)', afterClick.focus === 'cut' && afterClick.tool === 'hand' && afterClick.now === 'hand', JSON.stringify(afterClick));
+      // a mouse click shows no caption chip (the mouse has the tooltip); the active tool pressed again is the Hand
+      await pickTool(page, 'snap'); await sleep(300);
+      const sn = await page.evaluate(() => ({ tool: window.__WH__.shell.tools().tool, caption: document.querySelector('.dock-caption').dataset.show, bar: !document.querySelector('.snapbar').hidden }));
+      await pickTool(page, 'snap'); await sleep(300);
+      const sn2 = { tool: (await tools(page)).tool, bar: await page.evaluate(() => !document.querySelector('.snapbar').hidden) };
+      check('toolbar: a click picks Snap (its bar shows, no caption chip for a mouse), and a click on the active Snap puts the Hand back', sn.tool === 'snap' && sn.bar && sn.caption === 'false' && sn2.tool === 'hand' && !sn2.bar, JSON.stringify({ sn, sn2 }));
+      // shortcuts off: the tool keys do nothing
       await page.evaluate(() => window.__WH__.setSetting('shortcuts', false));
       await page.evaluate(() => document.querySelector('#wh-play')?.focus());
-      await page.keyboard.press('t'); await page.keyboard.press('c'); await sleep(100);
-      const off = { open: (await trayState(page)).open, tool: (await tools(page)).tool };
+      for (const k of ['1', '2', '3', 'c', 's']) await page.keyboard.press(k);
+      await sleep(150);
+      const off = (await tools(page)).tool;
       await page.evaluate(() => window.__WH__.setSetting('shortcuts', true));
-      check('with Keyboard shortcuts off, T and C do nothing', !off.open && off.tool === 'hand', JSON.stringify(off));
-      // never in a form control: T typed into the settings panel's controls does not open the tray
+      check('with Keyboard shortcuts off, 1 2 3 C S do nothing', off === 'hand', off);
+      // never in a form control: a tool key typed into the settings panel's controls picks nothing
       await page.click('button[aria-label="Settings"]'); await settle(page);
       await page.evaluate(() => document.querySelector('.panel input[type=range]')?.focus());
       const inForm = await page.evaluate(() => document.activeElement?.tagName);
-      await page.keyboard.press('t'); await sleep(100);
-      const fc = (await trayState(page)).open;
+      await page.keyboard.press('2'); await sleep(100);
+      const fc = (await tools(page)).tool;
+      check('a tool key in a form control (a settings slider) does nothing', inForm === 'INPUT' && fc === 'hand', `${inForm}, tool ${fc}`);
       await page.keyboard.press('Escape'); await settle(page);
-      check('T in a form control (a settings slider) does not open the tray', inForm === 'INPUT' && !fc, `${inForm}, tray ${fc}`);
-      // a tap outside closes it; the tray fits the window
-      await hclick(page, '.toys-btn'); await sleep(150);
-      const tr = await rectOf(page, '.toys'); const vp = page.viewportSize();
-      await page.mouse.click(40, 300); await sleep(150);
-      check('toy tray: fits the window, and a tap outside closes it', !!tr && tr.x >= 0 && tr.r <= vp.width && tr.y >= 0 && tr.b <= vp.height && !(await trayState(page)).open, JSON.stringify(tr));
+      // Escape order (UI.md 4.5): Settings closes before the tool goes back to the Hand
+      await pickTool(page, 'cut'); await sleep(250);
+      await page.click('button[aria-label="Settings"]'); await settle(page);
+      await page.keyboard.press('Escape'); await settle(page);
+      const e1 = { settings: await page.evaluate(() => document.querySelector('.panel').dataset.open), tool: (await tools(page)).tool };
+      await page.keyboard.press('Escape'); await sleep(250);
+      const e2 = (await tools(page)).tool;
+      check('Escape order: with Cut in hand and Settings open the first Escape closes Settings (the tool stays), the second puts the Hand back', e1.settings === 'false' && e1.tool === 'cut' && e2 === 'hand', JSON.stringify({ e1, e2 }));
       await context.close();
     });
 
@@ -1693,11 +1743,11 @@ async function main() {
       await shot(page, 'mat_stack_desktop');
       await page.evaluate(() => window.__WH__.resume());
       // Snap with the mat out
-      await hclick(page, '.toys-btn'); await sleep(150);
-      await hclick(page, '.toy[data-tool="snap"]'); await settle(page);
-      const s1 = await page.evaluate(() => ({ tool: window.__WH__.shell.tools().tool, hud: getComputedStyle(document.querySelector('.hud')).visibility, bar: !document.querySelector('.snapbar').hidden, tints: [...document.querySelectorAll('.snap-tint-btn')].map((b) => b.dataset.tint), checked: document.querySelector('.snap-tint-btn[aria-checked="true"]')?.dataset.tint, mat: window.__WH__.shell.matInfo().count }));
-      check('Snap: the HUD hides; the Snap bar offers the backdrop tints (Night, Lagoon, Dusk, Ember; Night first) and Save; the mat stays out',
-        s1.tool === 'snap' && s1.hud === 'hidden' && s1.bar && JSON.stringify(s1.tints) === JSON.stringify(['night', 'lagoon', 'dusk', 'ember']) && s1.checked === 'night' && s1.mat === 3, JSON.stringify(s1));
+      await pickTool(page, 'snap'); await settle(page);
+      const s1 = await page.evaluate(() => ({ tool: window.__WH__.shell.tools().tool, hud: ['.nametag', '.meter-cluster', '.hint', '.hud-top .wordmark'].map((q) => getComputedStyle(document.querySelector(q)).visibility).join(), dock: getComputedStyle(document.getElementById('wh-dock')).visibility, bar: !document.querySelector('.snapbar').hidden, tints: [...document.querySelectorAll('.snap-tint-btn')].map((b) => b.dataset.tint), checked: document.querySelector('.snap-tint-btn[aria-checked="true"]')?.dataset.tint, mat: window.__WH__.shell.matInfo().count }));
+      // RE-SPECIFIED (the owner changed the design on 2026-10-08, UI.md 4.1): Snap hides the brand, the name plate, the ring and the hint; the dock and its Snap bar stay (the old row wanted the whole HUD hidden)
+      check('Snap: the brand, name plate, ring and hint step aside (the dock stays); the Snap bar offers the backdrop tints (Night, Lagoon, Dusk, Ember; Night first) and Save; the mat stays out',
+        s1.tool === 'snap' && s1.hud === 'hidden,hidden,hidden,hidden' && s1.dock === 'visible' && s1.bar && JSON.stringify(s1.tints) === JSON.stringify(['night', 'lagoon', 'dusk', 'ember']) && s1.checked === 'night' && s1.mat === 3, JSON.stringify(s1));
       await hclick(page, '.snap-tint-btn[data-tint="lagoon"]'); await sleep(300);
       const tint = await page.evaluate(() => ({ checked: document.querySelector('.snap-tint-btn[aria-checked="true"]')?.dataset.tint, overlay: getComputedStyle(document.querySelector('.snap-tint')).backgroundImage.slice(0, 40), blend: getComputedStyle(document.querySelector('.snap-tint')).mixBlendMode }));
       check('Snap: a tint lays a soft-light backdrop over the scene', tint.checked === 'lagoon' && /gradient/.test(tint.overlay) && tint.blend === 'soft-light', JSON.stringify(tint));
@@ -1731,7 +1781,8 @@ async function main() {
       check('Snap: no flash: the shutter is a soft dim (peak opacity <= 0.3, off under Calm / reduced motion)', peak !== null && peak <= 0.3, `peak ${peak}`);
       await page.keyboard.press('Escape'); await settle(page);
       const back = await page.evaluate(() => ({ tool: window.__WH__.shell.tools().tool, hud: getComputedStyle(document.querySelector('.hud')).visibility, focus: document.activeElement?.className }));
-      check('Snap: Escape goes back to play (the Hand, the HUD back, focus on the Toys button)', back.tool === 'hand' && back.hud === 'visible' && back.focus === 'toys-btn', JSON.stringify(back));
+      // RE-SPECIFIED (the owner changed the design on 2026-10-08): the focus goes back to the Hand button of the dock (UI.md 9.1)
+      check('Snap: Escape goes back to play (the Hand, the HUD back, focus on the Hand button)', back.tool === 'hand' && back.hud === 'visible' && /dock-tool/.test(back.focus ?? '') && (await focusInfo(page)) === 'hand', JSON.stringify(back));
       await hclick(page, '.mat-chip'); await settle(page);
       await context.close();
     });
@@ -1751,7 +1802,7 @@ async function main() {
       await settle(page);
       const t0 = await tools(page);
       check('Cut on the real SoftBody (checkpoint 47): the Cut tool is offered, 6 pieces at quality high', t0.cutSupported && t0.maxPieces === 6 && t0.pieces === 1, JSON.stringify(t0));
-      await hclick(page, '.toys-btn'); await sleep(150); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await pickTool(page, 'cut'); await settle(page);
       const a0 = (await state(page)).audio.started;
       // a REAL mouse swipe, top to bottom a little right of the middle; paused before the let-go so the neck is stepped
       const B = await body(page); const vp = page.viewportSize();
@@ -1906,35 +1957,194 @@ async function main() {
       await context.close();
     });
 
-    await section('toys-phone', async () => {
+    await section('toolbar-phone', async () => {
+      // RE-SPECIFIED from the old toys-phone section (reason: the owner changed the design on 2026-10-08): the bottom of a phone is the info row (name plate, ring) over the dock (Hoard, Hand, Cut, Snap);
+      // a TAP on a tool shows the caption chip; the options bars ride in the dock and, on a stack screen, take the info row's place.
       const RATTLE = 'g1.ASQDAwcAAAAZAGEB13vScY2Bhl-GkKWKo3c';   // a Rattlebead: the longest species name
       for (const vp of [{ width: 390, height: 844 }, { width: 320, height: 568 }]) {
         const { page, context, w } = await open({ query: '?dev=1&genome=' + RATTLE, ctx: { ...PHONE, viewport: vp } });
-        mainWatches.push([`toys-phone-${vp.width}`, w]);
+        mainWatches.push([`toolbar-phone-${vp.width}`, w]);
         await wake(page, { touch: true });
         await page.evaluate(() => window.__WH__.pause());
         const R = async () => page.evaluate(() => {
           const r = (s) => { const e = document.querySelector(s); if (!e || e.hidden) return null; const b = e.getBoundingClientRect(); return b.width ? { x: b.left, y: b.top, r: b.right, b: b.bottom } : null; };
           const nm = document.querySelector('.nametag-name');
-          return { sw: document.documentElement.scrollWidth, hoard: r('.hoard-btn'), toys: r('.toys-btn'), name: r('.nametag'), tray: r('.toys'), cutbar: r('.cutbar'), snapbar: r('.snapbar'), qs: r('.qswitch'), nameText: nm?.textContent, nameClipped: nm ? nm.scrollWidth > nm.clientWidth + 1 : true, nameFont: nm ? getComputedStyle(nm).fontSize : null };
+          return { sw: document.documentElement.scrollWidth, hoard: r('.hoard-btn'), dock: r('.dock-bar'), name: r('.nametag'), ring: r('.meter-cluster'), cutbar: r('.cutbar'), snapbar: r('.snapbar'), qs: r('.qswitch'), nameText: nm?.textContent, nameClipped: nm ? nm.scrollWidth > nm.clientWidth + 1 : true, nameFont: nm ? getComputedStyle(nm).fontSize : null, layout: document.body.dataset.layout };
         });
         const inside = (a) => !!a && a.x >= 0 && a.r <= vp.width + 0.5 && a.y >= 0 && a.b <= vp.height + 0.5;
+        const within = (a, b) => !!a && !!b && a.x >= b.x - 0.5 && a.r <= b.r + 0.5 && a.y >= b.y - 0.5 && a.b <= b.b + 0.5;
+        const tap = async (sel) => { const b = await page.locator(sel).boundingBox(); await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2); };
         const p0 = await R();
-        check(`phone ${vp.width}: the bottom row fits (Hoard, Toys and the name tag apart, no sideways scroll); "Rattlebead" fits the name tag (${p0.nameFont})`,
-          p0.sw <= vp.width && inside(p0.hoard) && inside(p0.toys) && inside(p0.name) && !overlap(p0.hoard, p0.toys) && !overlap(p0.name, p0.hoard) && !overlap(p0.name, p0.toys) && p0.nameText === 'Rattlebead' && !p0.nameClipped, JSON.stringify(p0));
-        await pclick(page, '.toys-btn'); await sleep(150);
-        const p1 = await R();
-        await shot(page, `toys_tray_${vp.width}`);
-        check(`phone ${vp.width}: the tray fits above the bottom row`, inside(p1.tray) && !overlap(p1.tray, p1.toys) && !overlap(p1.tray, p1.hoard), JSON.stringify(p1.tray));
-        await pclick(page, '.toy[data-tool="cut"]'); await sleep(150);
+        check(`phone ${vp.width}: the bottom fits (the name plate, the ring and the dock with the Hoard button apart, no sideways scroll); "Rattlebead" fits the name plate (${p0.nameFont})`,
+          p0.layout === 'stack' && p0.sw <= vp.width && inside(p0.dock) && inside(p0.name) && inside(p0.ring) && within(p0.hoard, p0.dock) && !overlap(p0.name, p0.dock) && !overlap(p0.ring, p0.dock) && !overlap(p0.name, p0.ring) && p0.nameText === 'Rattlebead' && !p0.nameClipped, JSON.stringify(p0));
+        await page.evaluate(() => { window.__capSeen = null; const e = document.querySelector('.dock-caption'); new MutationObserver(() => { if (e.dataset.show === 'true') window.__capSeen = { show: 'true', text: e.textContent, hidden: e.getAttribute('aria-hidden') }; }).observe(e, { attributes: true, attributeFilter: ['data-show'] }); window.__WH__.resume(); });
+        await tap('.dock-tool[data-tool="cut"]'); await sleep(450);
+        await page.evaluate(() => window.__WH__.pause());
         const p2 = await R();
+        const cap = await page.evaluate(() => window.__capSeen ?? { show: 'never', text: '', hidden: null });
         await shot(page, `cut_bar_${vp.width}`);
-        check(`phone ${vp.width}: the Cut bar fits, clear of the bottom row`, inside(p2.cutbar) && !overlap(p2.cutbar, p2.toys) && !overlap(p2.cutbar, p2.hoard) && !overlap(p2.cutbar, p2.name) && p2.sw <= vp.width, JSON.stringify(p2.cutbar));
+        check(`phone ${vp.width}: a tap on Cut shows the caption chip, and the Cut bar fits, clear of the dock; it takes the info row's place`,
+          cap.show === 'true' && /^Cut/.test(cap.text) && cap.hidden === 'true' && inside(p2.cutbar) && !overlap(p2.cutbar, p2.dock) && p2.name === null && p2.sw <= vp.width, JSON.stringify({ cap, bar: p2.cutbar, dock: p2.dock, name: p2.name }));
         await pclick(page, '.cutbar [data-key="done"]'); await sleep(100);
-        await pclick(page, '.toys-btn'); await sleep(100); await pclick(page, '.toy[data-tool="snap"]'); await sleep(150);
+        await pickToolIn(page, 'snap'); await sleep(250);
         const p3 = await R();
         await shot(page, `snap_${vp.width}`);
-        check(`phone ${vp.width}: the Snap bar fits`, inside(p3.snapbar) && p3.sw <= vp.width, JSON.stringify(p3.snapbar));
+        check(`phone ${vp.width}: the Snap bar fits, clear of the dock`, inside(p3.snapbar) && !overlap(p3.snapbar, p3.dock) && p3.sw <= vp.width, JSON.stringify(p3.snapbar));
+        await context.close();
+      }
+    });
+
+    // ------------------------------------------------------------------------------------------------
+    // UI v3 acceptance on the LIVE game (UI.md 9: K02 hit boxes, K04 keyboard, K11 collisions). NEW rows (no old row names them). K02: at the 8 kit sizes, in the three tool states, every focusable control has a
+    // 44 x 44 px hit box (elementFromPoint along the two centre lines, 1 px steps: a control covered by a neighbour measures short). K11: at the same sizes and states no two pieces of chrome overlap (brand, Sound,
+    // Settings, hint, switcher, name plate, ring + Open, mat chip, dock tray, options bar), all are on screen, the permanent chrome covers 0 % of the squishy's disc at rest and a bar, plate or chip at most 25 %.
+    // ------------------------------------------------------------------------------------------------
+    const KIT_SIZES = [[1280, 800], [888, 500], [390, 844], [320, 568], [844, 390], [568, 320], [358, 201], [632, 355]];
+    const kitCtx = (w, h) => ((w <= 900 && (w < h || h <= 440)) ? { viewport: { width: w, height: h }, deviceScaleFactor: 1, hasTouch: true, isMobile: true } : { viewport: { width: w, height: h } });
+    /** hit boxes of every visible focusable control, and the rects of the HUD pieces (page side) */
+    const gridProbe = (page) => page.evaluate(() => {
+      const shown = (e) => { if (!e || e.hidden) return false; for (let a = e; a; a = a.parentElement) { const c = getComputedStyle(a); if (c.display === 'none' || c.visibility === 'hidden' || parseFloat(c.opacity) < 0.05) return false; } const r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+      const ext = (el) => {
+        const lab = el instanceof HTMLInputElement && el.labels && el.labels[0] ? el.labels[0] : el;   // a radio's face is its label
+        const r = lab.getBoundingClientRect(), cx = Math.round(r.left + r.width / 2), cy = Math.round(r.top + r.height / 2);
+        const hits = (x, y) => { if (x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return false; const t = document.elementFromPoint(x, y); return !!t && (t === lab || lab.contains(t)); };
+        if (!hits(cx, cy)) return { w: 0, h: 0 };
+        let x0 = cx; while (hits(x0 - 1, cy) && cx - x0 < 90) x0--;
+        let x1 = cx; while (hits(x1 + 1, cy) && x1 - cx < 90) x1++;
+        let y0 = cy; while (hits(cx, y0 - 1) && cy - y0 < 90) y0--;
+        let y1 = cy; while (hits(cx, y1 + 1) && y1 - cy < 90) y1++;
+        return { w: x1 - x0 + 1, h: y1 - y0 + 1 };
+      };
+      const focusables = [...document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea, summary, [tabindex]')].filter((e) => !e.matches('#wh-play, .play-target') && e.tabIndex >= -1 && shown(e instanceof HTMLInputElement && e.labels && e.labels[0] ? e.labels[0] : e));
+      const small = focusables.map((e) => ({ e, ...ext(e) })).filter((x) => x.w < 43 || x.h < 43).map((x) => `${x.e.getAttribute('aria-label') ?? x.e.dataset.tool ?? x.e.dataset.key ?? x.e.className} ${x.w}x${x.h}`);
+      const rect = (e) => { const b = e.getBoundingClientRect(); return { x: b.left, y: b.top, r: b.right, b: b.bottom }; };
+      const pieces = { brand: '.hud-top .wordmark', mute: '.hud-actions button[aria-pressed]', settings: '.hud-actions button[aria-label="Settings"]', hint: '.hint', switcher: '.qswitch', plate: '.nametag', ring: '.meter-cluster', chip: '.mat-chip', tray: '.dock-bar', bar: '.dock-attach-body', caption: '.dock-caption' };
+      const R = {};
+      for (const [k, q] of Object.entries(pieces)) { const e = document.querySelector(q); if (shown(e)) R[k] = rect(e); }
+      const clash = [];
+      const keys = Object.keys(R);
+      for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) { const a = R[keys[i]], b = R[keys[j]]; if (!(a.r <= b.x + 0.5 || b.r <= a.x + 0.5 || a.b <= b.y + 0.5 || b.b <= a.y + 0.5)) clash.push(`${keys[i]} x ${keys[j]}`); }
+      const off = keys.filter((k) => R[k].x < -0.5 || R[k].y < -0.5 || R[k].r > innerWidth + 0.5 || R[k].b > innerHeight + 0.5);
+      // the share of each body's disc under a piece (the disc of the squishy on screen: matInfo)
+      const cover = {};
+      const m = window.__WH__.shell.matInfo();
+      for (const [k, a] of Object.entries(R)) {
+        let worst = 0;
+        for (const b of m.bodies) {
+          let tot = 0, cov = 0; const N = 36;
+          for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+            const x = b.x + ((i + 0.5) / N * 2 - 1) * b.r, y = b.y + ((j + 0.5) / N * 2 - 1) * b.r;
+            if (Math.hypot(x - b.x, y - b.y) > b.r || x < 0 || y < 0 || x > innerWidth || y > innerHeight) continue;
+            tot++; if (x >= a.x && x <= a.r && y >= a.y && y <= a.b) cov++;
+          }
+          worst = Math.max(worst, cov / Math.max(1, tot));
+        }
+        cover[k] = +worst.toFixed(3);
+      }
+      return { n: focusables.length, small, clash, off, cover, layout: document.body.dataset.layout, sw: document.documentElement.scrollWidth, iw: innerWidth };
+    });
+    const PERMANENT = ['brand', 'mute', 'settings', 'plate', 'ring', 'tray'];
+    /** wait until no finite animation or transition is running (a slow page can hold one at its first frame for seconds: a measurement taken mid-way sees controls half moved) */
+    const quiet = (page) => page.evaluate(async () => { const t0 = performance.now(); while (performance.now() - t0 < 20000) { const run = document.getAnimations().filter((a) => a.playState !== 'finished' && (a.effect?.getComputedTiming?.().iterations ?? 1) !== Infinity); if (!run.length) { await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))); return true; } await new Promise((r) => setTimeout(r, 80)); } return false; });
+    /** put the game in a tool state through the dock (tiny: the tray steps aside under a bar, so Done comes first) */
+    async function toolState(page, id) {
+      if (await page.evaluate(() => document.body.dataset.tool !== 'hand')) {
+        if (await page.evaluate(() => !!document.querySelector('.dock-attach [data-key="done"]'))) await pclick(page, '.dock-attach [data-key="done"]'); else await pickToolIn(page, 'hand');
+        await sleep(300);
+      }
+      if (id !== 'hand') { await pickToolIn(page, id); await sleep(450); }
+      await settle(page);
+      // (the 1.4 s caption chip is its own row: toolbar, toolbar-phone. A tooltip is a transient overlay (WCAG 1.4.13: Escape dismisses it): a script click focuses Save in Snap, which shows its tip over the swatches of a wrapped bar)
+      await page.evaluate(() => { const c = document.querySelector('.dock-caption'); if (c) c.dataset.show = 'false'; for (const t of document.querySelectorAll('.k-tip')) t.hidden = true; });
+      await quiet(page);
+    }
+    await section('toolbar-grid', async () => {
+      const all = [];
+      for (const [W, H] of KIT_SIZES) {
+        const { page, context, w } = await open({ query: '?dev=1', ctx: kitCtx(W, H) });
+        mainWatches.push([`toolbar-grid ${W}x${H}`, w]);
+        await wake(page, { touch: !!kitCtx(W, H).hasTouch });
+        await page.evaluate(() => window.__WH__.pause());
+        await stepSim(page, 1.5);
+        for (const id of ['hand', 'cut', 'snap']) {
+          await toolState(page, id);
+          await page.evaluate(() => { window.__WH__.pause(); });
+          const g = await gridProbe(page);
+          all.push({ size: `${W}x${H}`, tool: id, ...g });
+          const perm = PERMANENT.filter((k) => id === 'hand' && g.cover[k] > 0);
+          const bars = ['bar', 'plate', 'chip', 'hint', 'caption'].filter((k) => g.cover[k] > 0.25);
+          check(`K02 ${W}x${H} (${g.layout}) ${id}: all ${g.n} focusable controls have a 44 x 44 px hit box${g.small.length ? ': ' + g.small.join('; ') : ''}`, g.small.length === 0 && g.n > 0 && g.sw <= g.iw, JSON.stringify({ small: g.small, sw: g.sw, iw: g.iw }));
+          check(`K11 ${W}x${H} (${g.layout}) ${id}: no overlap among brand, Sound, Settings, hint, switcher, plate, ring, chip, dock tray and options bar; all on screen; permanent chrome covers 0 % of the squishy at rest, a bar / plate / chip at most 25 %`,
+            g.clash.length === 0 && g.off.length === 0 && perm.length === 0 && bars.length === 0, JSON.stringify({ clash: g.clash, off: g.off, permanentOverDisc: perm.map((k) => `${k} ${g.cover[k]}`), barsOver25: bars.map((k) => `${k} ${g.cover[k]}`), cover: g.cover }));
+        }
+        await context.close();
+      }
+      writeFileSync(resolve(REPORTS, 'toolbar_grid.json'), JSON.stringify(all, null, 1));
+    });
+
+    await section('toolbar-sweep', async () => {
+      // K11, the height sweep of the stack layout (UI.md 4.2 "320x568 proof"): heights 460, 568, 640, 740 with and without a 34 px bottom inset (a phone's home bar), at 320 and 390 wide, Hand and Cut
+      for (const W of [320, 390]) for (const inset of [0, 34]) {
+        const { page, context, w } = await open({ query: '?dev=1', ctx: kitCtx(W, 740) });
+        mainWatches.push([`toolbar-sweep ${W} inset ${inset}`, w]);
+        let cdp = null;
+        if (inset) { try { cdp = await cdpFor(page); await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { top: 0, bottom: inset, left: 0, right: 0 } }); } catch (e) { check(`sweep ${W}: the bottom inset can be emulated`, false, String(e.message).slice(0, 160)); await context.close(); continue; } }
+        await wake(page, { touch: true });
+        await page.evaluate(() => window.__WH__.pause());
+        for (const H of [740, 640, 568, 460]) {
+          await page.setViewportSize({ width: W, height: H });
+          await sleep(400);
+          for (const id of ['hand', 'cut']) {
+            await toolState(page, id);
+            await page.evaluate(() => window.__WH__.pause());
+            const g = await gridProbe(page);
+            const bars = ['bar', 'plate', 'chip', 'hint'].filter((k) => g.cover[k] > 0.25);
+            if (g.small.length) { await page.evaluate((q) => { window.__badBox = q; }, g.small); await shot(page, `sweep_fail_${W}x${H}_${id}${inset ? '_inset' : ''}`); }
+            check(`K11 sweep ${W}x${H}${inset ? ` + ${inset} px inset` : ''} (${g.layout}) ${id}: no overlap, all on screen, every control 44 px, bars under 25 % of the squishy`, g.clash.length === 0 && g.off.length === 0 && g.small.length === 0 && bars.length === 0, JSON.stringify({ clash: g.clash, off: g.off, small: g.small, bars: bars.map((k) => `${k} ${g.cover[k]}`) }));
+          }
+        }
+        await context.close();
+      }
+    });
+
+    await section('toolbar-k04', async () => {
+      // K04: a Tab-only walk of the play view: the stops in order (Mute, Settings, Hoard, the toolbar's ONE stop, the options bar's controls, the squishy), a focus ring of 3 px or more on every stop, no trap
+      // (the cycle comes round), Escape from a control of the bar puts the Hand back with the focus on the Hand button.
+      for (const [W, H] of [[1280, 800], [390, 844]]) {
+        const { page, context, w } = await open({ query: '?dev=1', ctx: kitCtx(W, H) });
+        mainWatches.push([`toolbar-k04 ${W}x${H}`, w]);
+        await wake(page, { touch: false });
+        await page.evaluate(() => window.__WH__.resume());
+        const walk = async (n) => {
+          await page.evaluate(() => { document.querySelector('#wh-play')?.focus(); document.activeElement.blur(); });   // (the walk starts from the squishy: blur() keeps it as the navigation start point)
+          await page.mouse.move(6, 420);
+          const out = [];
+          for (let i = 0; i < n; i++) {
+            await page.keyboard.press('Tab');
+            out.push(await page.evaluate(() => { const a = document.activeElement; const cs = a ? getComputedStyle(a) : null; return { name: a?.getAttribute('aria-label')?.split(/[:,]/)[0] ?? (a?.classList.contains('dock-tool') ? a.querySelector('.dock-tool-label')?.textContent : null) ?? a?.dataset?.key ?? a?.getAttribute('value') ?? a?.tagName, ring: cs ? (cs.outlineStyle !== 'none' ? parseFloat(cs.outlineWidth) : 0) : 0, play: a?.id === 'wh-play' }; }));
+          }
+          return out;
+        };
+        const hand = await walk(8);
+        const first = hand.findIndex((s) => s.name === 'Mute sound');
+        const cyc = hand.slice(first, first + 5).map((s) => s.name);
+        check(`K04 ${W}x${H}: the Tab-only walk at rest is Mute, Settings, Hoard, Hand (one stop for the toolbar), the squishy; the cycle comes round; every control stop shows a ring of 3 px or more`,
+          first >= 0 && JSON.stringify(cyc) === JSON.stringify(['Mute sound', 'Settings', 'Hoard', 'Hand', 'Squishy']) && hand.slice(first, first + 5).filter((s) => !s.play).every((s) => s.ring >= 3), JSON.stringify(hand));
+        await pickToolIn(page, 'cut'); await sleep(500); await settle(page);
+        const cut = await walk(14);
+        const f2 = cut.findIndex((s) => s.name === 'Mute sound');
+        const names = cut.slice(f2, f2 + 12).map((s) => s.name);
+        const iCut = names.indexOf('Cut'), iDone = names.indexOf('Done'), iSquish = names.indexOf('Squishy');
+        check(`K04 ${W}x${H}: with Cut in hand the toolbar's one stop is Cut and the bar's controls (Split in two, the style group, Done; Reconnect all too once the squishy is cut) follow it before the squishy; every stop shows a ring`,
+          f2 >= 0 && iCut === 3 && iDone > iCut && iSquish > iDone && names.slice(iCut + 1, iDone + 1).includes('Split in two') && names.slice(iCut + 1, iDone + 1).includes('clean') && cut.slice(f2, f2 + iDone + 1).every((s) => s.ring >= 3), JSON.stringify(names));   // (Reconnect all is off on a whole squishy and the walk passes it: Split in two, the style group, Done)
+        // Escape from a control of the bar: the Hand back, focus on the Hand button. A tooltip showing on that control (icon-only bars show one on keyboard focus) takes the FIRST Escape (WCAG 1.4.13), so Escape is pressed until the tool moves (at most twice)
+        await page.evaluate(() => document.querySelector('.dock-attach [data-key="split"]').focus());
+        const tip0 = await page.evaluate(() => [...document.querySelectorAll('.k-tip')].some((t) => !t.hidden));
+        await page.keyboard.press('Escape'); await sleep(300);
+        const e1 = (await tools(page)).tool;
+        if (e1 !== 'hand') { await page.keyboard.press('Escape'); await sleep(300); }
+        const back = { tool: (await tools(page)).tool, focus: await focusInfo(page), tip0, firstEscape: e1 };
+        check(`K04 ${W}x${H}: Escape from a control of the options bar puts the Hand back (a visible tooltip takes the first Escape) and the focus goes to the Hand button`, back.tool === 'hand' && back.focus === 'hand' && (back.firstEscape === 'hand' || tip0), JSON.stringify(back));
         await context.close();
       }
     });
@@ -1949,7 +2159,7 @@ async function main() {
       const cdp = await cdpFor(page);
       await wake(page, { touch: true });
       await page.evaluate(() => { window.__WH__.setSetting('skipAnimations', false); window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
-      await pclick(page, '.toys-btn'); await sleep(150); await pclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await pickToolIn(page, 'cut'); await settle(page);
       await page.evaluate(() => window.__WH__.pause());
       const vp = page.viewportSize();
       const B = await body(page);
@@ -2034,7 +2244,7 @@ async function main() {
         }
         return { r: 'none', dx: null, tried };
       };
-      await hclick(page, '.toys-btn'); await sleep(150); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await pickTool(page, 'cut'); await settle(page);
       await page.evaluate(() => window.__WH__.pause());
       const m0 = await meter(page);
       const id0 = await page.evaluate(() => window.__WH__.shell.identity());
@@ -2224,9 +2434,9 @@ async function main() {
       const kWhole = (await tools(page)).pieces, kSay2 = await sayNow();
       const nDone = await tabTo('.cutbar [data-key="done"]');
       await page.keyboard.press('Enter'); await sleep(300);
-      const kEnd = await page.evaluate(() => ({ tool: window.__WH__.shell.tools().tool, focus: document.activeElement?.className ?? null }));
-      check('X10: keyboard only: C opens the Cut tool, Tab reaches Split in two (Enter: "Cut into 2 pieces."), Reconnect all (Enter: "Whole again."), Done (the Hand back, focus on the Toys button); no keyboard trap',
-        kTool === 'cut' && nSplit >= 0 && kPieces === 2 && /Cut into 2 pieces\./.test(kSay) && nJoin >= 0 && kWhole === 1 && /Whole again\./.test(kSay2) && nDone >= 0 && kEnd.tool === 'hand' && kEnd.focus === 'toys-btn',
+      const kEnd = await page.evaluate(() => ({ tool: window.__WH__.shell.tools().tool, focus: document.activeElement?.dataset?.tool ?? document.activeElement?.className ?? null }));
+      check('X10: keyboard only: C opens the Cut tool, Tab reaches Split in two (Enter: "Cut into 2 pieces."), Reconnect all (Enter: "Whole again."), Done (the Hand back, focus on the Hand button of the dock; re-specified 2026-10-08); no keyboard trap',
+        kTool === 'cut' && nSplit >= 0 && kPieces === 2 && /Cut into 2 pieces\./.test(kSay) && nJoin >= 0 && kWhole === 1 && /Whole again\./.test(kSay2) && nDone >= 0 && kEnd.tool === 'hand' && kEnd.focus === 'hand',
         JSON.stringify({ kTool, tabs: [nSplit, nJoin, nDone], kPieces, kSay, kWhole, kSay2, kEnd }));
       await context.close();
     });
@@ -2242,7 +2452,7 @@ async function main() {
       const bladeNow = (page) => page.evaluate(() => { const l = document.querySelector('.blade-line'), s = document.querySelector('.blade'); return { shown: getComputedStyle(s).display !== 'none', x1: +l.getAttribute('x1'), y1: +l.getAttribute('y1'), x2: +l.getAttribute('x2'), y2: +l.getAttribute('y2') }; });
       const pick = async (page, id, touch) => {
         await page.evaluate(() => window.__WH__.resume());
-        if (touch) { await pclick(page, '.toys-btn'); await sleep(250); await pclick(page, `.toy[data-tool="${id}"]`); } else { await hclick(page, '.toys-btn'); await sleep(200); await hclick(page, `.toy[data-tool="${id}"]`); }
+        if (touch) { await pickToolIn(page, id); } else { await pickTool(page, id); }
         await settle(page);
         await page.evaluate(() => window.__WH__.pause());
       };
@@ -2331,7 +2541,7 @@ async function main() {
       await wake(page);
       await page.evaluate(() => { window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); window.__WH__.shell.spyStart(); });
       const rejoins = () => page.evaluate(() => window.__WH__.shell.spyCalls().audio.rejoin?.n ?? 0);
-      const toolPick = async (id) => { await page.evaluate(() => window.__WH__.resume()); await hclick(page, '.toys-btn'); await sleep(200); await hclick(page, `.toy[data-tool="${id}"]`); await settle(page); await page.evaluate(() => window.__WH__.pause()); };
+      const toolPick = async (id) => { await page.evaluate(() => window.__WH__.resume()); await pickTool(page, id); await settle(page); await page.evaluate(() => window.__WH__.pause()); };
       const gapNow = async () => { const g = await page.evaluate(() => window.__WH__.shell.pieceGaps()); return g.length > 1 ? g[1].gap : null; };
       /** a fresh pair: whole again, Split in two (the Cut tool's button), the Hand, 4 s of rest */
       const freshPair = async () => {
@@ -2423,7 +2633,7 @@ async function main() {
       mainWatches.push(['fix1-split', w]);
       await wake(page);
       await page.evaluate(() => { window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
-      await hclick(page, '.toys-btn'); await sleep(200); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await pickTool(page, 'cut'); await settle(page);
       await page.evaluate(() => window.__WH__.pause());
       const rows = [];
       for (let i = 0; i < 7; i++) {
@@ -2450,7 +2660,7 @@ async function main() {
       mainWatches.push(['fix1-leave', w]);
       await wake(page);
       await page.evaluate(() => { window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
-      await hclick(page, '.toys-btn'); await sleep(200); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await pickTool(page, 'cut'); await settle(page);
       await page.evaluate(() => window.__WH__.pause());
       const bladeShown = () => page.evaluate(() => getComputedStyle(document.querySelector('.blade')).display !== 'none');
       const B = await body(page);
@@ -2468,7 +2678,8 @@ async function main() {
     });
 
     await section('fix1-tray', async () => {
-      // VERIFY_SHELL4_B U2 / U3 / U4 / M1 / M2 / M3 / M4
+      // VERIFY_SHELL4_B U2 / U3 / U4 / M1 / M2 / M3 / M4. RE-SPECIFIED where they named the Toys button or the tray (reason: the owner changed the design on 2026-10-08, UI.md 9.1): the tools are
+      // always in the dock, so "the tray opens / closes" became "a tool is picked / refused", and the key list names 1 2 3 C S.
       const { page, context, w } = await open({ query: '?dev=1&rseed=4242&quality=high', ctx: SMALL });
       mainWatches.push(['fix1-tray', w]);
       await wake(page);
@@ -2477,40 +2688,40 @@ async function main() {
         const el = document.getElementById('wh-live');
         new MutationObserver(() => { const t = el.textContent; if (t) window.__said.push(t); }).observe(el, { subtree: true, childList: true, characterData: true });
       });
-      const trayOpen = () => page.evaluate(() => ({ open: !document.querySelector('.toys').hidden, body: document.body.dataset.toys ?? null }));
       const blurPlay = () => page.evaluate(() => { (document.activeElement)?.blur?.(); document.body.focus?.(); });
       // M1: Settings names every key
       await page.click('button[aria-label="Settings"]'); await settle(page);
       const keys = await page.evaluate(() => ({ line: document.querySelector('.panel .keys')?.textContent ?? '', hint: [...document.querySelectorAll('.panel .row-hint')].map((e) => e.textContent).find((t) => /gravity/.test(t) && /Hoard/.test(t)) ?? '' }));
-      check('B-M1: the Settings "Keys:" line and the Keyboard shortcuts hint name T (toys) and C (cut)', /T toys/.test(keys.line) && /C cut/.test(keys.line) && /T toys/.test(keys.hint) && /C cut/.test(keys.hint), JSON.stringify(keys));
-      // U4: with Settings open, T does not stack the tray on top of the sheet; a click on Toys closes Settings first and opens the tray
+      check('B-M1: the Settings "Keys:" line and the Keyboard shortcuts hint name the tool keys (1 2 3, C cut, S snap) and no longer name T or Toys', /1 2 3 tools/.test(keys.line) && /C cut/.test(keys.line) && /S snap/.test(keys.line) && /1 2 3 tools/.test(keys.hint) && /C cut/.test(keys.hint) && !toysWord(keys.line) && !toysWord(keys.hint), JSON.stringify(keys));
+      // U4: with Settings open a tool KEY does nothing (nothing stacks on the sheet); a click on a tool closes Settings first and picks the tool (as the Hoard button does), never both
       await blurPlay();
-      await page.keyboard.press('t'); await sleep(150);
-      const withSettings = { tray: await trayOpen(), settings: await page.evaluate(() => document.querySelector('.panel').dataset.open) };
-      check('B-U4: with Settings open, T does not open the tray over it', !withSettings.tray.open && withSettings.settings === 'true', JSON.stringify(withSettings));
-      await page.click('.toys-btn'); await sleep(250);
-      const swap = { tray: await trayOpen(), settings: await page.evaluate(() => document.querySelector('.panel').dataset.open) };
-      check('B-U4: a click on the Toys button with Settings open closes Settings and opens the tray (as the Hoard button does), never both', swap.tray.open && swap.settings === 'false', JSON.stringify(swap));
+      await page.keyboard.press('2'); await sleep(150);
+      const withSettings = { tool: (await tools(page)).tool, settings: await page.evaluate(() => document.querySelector('.panel').dataset.open) };
+      check('B-U4: with Settings open, the 2 key does not pick Cut under it', withSettings.tool === 'hand' && withSettings.settings === 'true', JSON.stringify(withSettings));
+      await pickTool(page, 'cut'); await sleep(250);
+      const swap = { tool: (await tools(page)).tool, settings: await page.evaluate(() => document.querySelector('.panel').dataset.open) };
+      check('B-U4: a click on a tool with Settings open closes Settings and picks the tool, never both open', swap.tool === 'cut' && swap.settings === 'false', JSON.stringify(swap));
       await page.keyboard.press('Escape'); await settle(page);
-      // M2: T in Snap opens nothing (the tray is hidden there); the first Escape leaves Snap
-      await hclick(page, '.toys-btn'); await sleep(150); await hclick(page, '.toy[data-tool="snap"]'); await settle(page);
+      // M2: in Snap the first Escape leaves Snap (the Hand back), and the 3 key pressed in Snap puts the Hand back too
+      await pickTool(page, 'snap'); await settle(page);
       await blurPlay();
-      await page.keyboard.press('t'); await sleep(150);
-      const inSnap = await trayOpen();
+      await page.keyboard.press('3'); await sleep(200);
+      const viaKey = (await tools(page)).tool;
+      await pickTool(page, 'snap'); await settle(page);
       await page.keyboard.press('Escape'); await settle(page);
-      check('B-M2: T during Snap opens no (invisible) tray, and the first Escape leaves Snap', !inSnap.open && (await tools(page)).tool === 'hand', JSON.stringify({ inSnap, tool: (await tools(page)).tool }));
+      check('B-M2: in Snap the first Escape leaves it (the Hand back), and a tool key on the active Snap does the same', viaKey === 'hand' && (await tools(page)).tool === 'hand', JSON.stringify({ viaKey, tool: (await tools(page)).tool }));
       // M3: Save by keyboard keeps the focus on the button
-      await hclick(page, '.toys-btn'); await sleep(150); await hclick(page, '.toy[data-tool="snap"]'); await settle(page);
+      await pickTool(page, 'snap'); await settle(page);
       const focus0 = await page.evaluate(() => document.activeElement?.className ?? '');
       const dl = page.waitForEvent('download', { timeout: 240000 });
       await page.keyboard.press('Enter');
       await dl; await sleep(700);
       const after = await page.evaluate(() => ({ cls: document.activeElement?.className ?? '', text: document.querySelector('.snap-save')?.textContent, aria: document.querySelector('.snap-save')?.getAttribute('aria-disabled') }));
-      check('B-M3: Save photo by keyboard (Enter) keeps the keyboard focus on the Save button while and after it saves (aria-disabled, not disabled)', /snap-save/.test(focus0) && /snap-save/.test(after.cls) && after.text === 'Save photo' && after.aria === 'false', JSON.stringify({ focus0, after }));
+      check('B-M3: Save photo by keyboard (Enter) keeps the keyboard focus on the Save button while and after it saves (aria-disabled, not disabled)', /snap-save/.test(focus0) && /snap-save/.test(after.cls) && /Save photo/.test(after.text ?? '') && after.aria === 'false', JSON.stringify({ focus0, after }));
       await page.keyboard.press('Escape'); await settle(page);
       // M4: Reconnect all says "Whole again." with Skip animations on, too
       await page.evaluate(() => { window.__WH__.setSetting('skipAnimations', true); window.__said.length = 0; });
-      await hclick(page, '.toys-btn'); await sleep(150); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await pickTool(page, 'cut'); await settle(page);
       await page.evaluate(() => window.__WH__.pause());
       await pclick(page, '.cutbar [data-key="split"]'); await cutIdle(page, 4); await stepSim(page, 1.2);
       await page.evaluate(() => { window.__said.length = 0; });
@@ -2518,31 +2729,37 @@ async function main() {
       const said = await page.evaluate(() => window.__said.slice());
       check('B-M4: Reconnect all with Skip animations on says "Whole again." in the live region, and the squishy is whole', said.includes('Whole again.') && (await tools(page)).pieces === 1, JSON.stringify(said));
       await pclick(page, '.cutbar [data-key="done"]'); await settle(page);
-      // U3: the tray does not open during a capsule reveal, and a running reveal closes an open tray
+      // U3: no tool is pickable during a capsule reveal (the dock is aria-disabled with the reason, a click and a key say why and pick nothing); a Cut open when the reveal starts goes back to the Hand
       await page.evaluate(() => { window.__WH__.setSetting('skipAnimations', false); window.__WH__.resume(); });
-      await hclick(page, '.toys-btn'); await sleep(200);
-      const pre = await trayOpen();
+      await pickTool(page, 'cut'); await sleep(250);
+      const pre = await dockState(page);
       await page.evaluate(() => { window.__WH__.shell.grant(1); });
       await waitUntil(page, () => window.__WH__.shell.meter().onTable, null, 20000);
       await page.evaluate(() => { void window.__WH__.shell.openCapsule(); });
       await waitUntil(page, () => window.__WH__.shell.ceremony().kind === 'capsule', null, 20000);
       await sleep(200);
-      const during = await trayOpen();
+      const during = await dockState(page);
+      await page.evaluate(() => { window.__said.length = 0; });
       await blurPlay();
-      await page.keyboard.press('t'); await sleep(150);
-      const viaKey = await trayOpen();
-      await pclick(page, '.toys-btn'); await sleep(150);
-      const viaClick = await trayOpen();
+      await page.keyboard.press('3'); await sleep(600);   // (the announcer batches for 250 ms)
+      const keySaid = await page.evaluate(() => window.__said.slice());
+      await page.evaluate(() => { window.__said.length = 0; });
+      await pclick(page, '.dock-tool[data-tool="snap"]'); await sleep(600);
+      const viaClick = { tool: (await tools(page)).tool, said: await page.evaluate(() => window.__said.slice()) };
       const cer = await page.evaluate(() => window.__WH__.shell.ceremony().kind);
-      check('B-U3: an open tray closes when a capsule reveal starts, and neither T nor a click on Toys opens it while the reveal runs', pre.open && !during.open && !viaKey.open && !viaClick.open && cer === 'capsule', JSON.stringify({ pre, during, viaKey, viaClick, cer }));
+      const why = await page.evaluate(() => { const b = document.querySelector('.dock-tool[data-tool="snap"]'); const d = document.getElementById(b.getAttribute('aria-describedby') ?? ''); return d ? d.textContent : null; });
+      check('B-U3: a Cut open when a capsule reveal starts goes back to the Hand; during the reveal every tool is aria-disabled with the reason, a key and a click pick nothing and say why in the live region',
+        pre.tool === 'cut' && during.tool === 'hand' && !during.attached && during.tools.every((t) => t.disabled === 'true') && during.toolbarDisabled === 'true' && /capsule/i.test(why ?? '') && viaClick.tool === 'hand' && keySaid.some((t) => /capsule/i.test(t)) && viaClick.said.some((t) => /capsule/i.test(t)) && cer === 'capsule',
+        JSON.stringify({ pre: pre.tool, during, why, keySaid, viaClick, cer }));
       await waitUntil(page, () => window.__WH__.shell.ceremony().kind === null && !window.__WH__.shell.ceremony().pending, null, 60000);
-      await sleep(400);
+      await sleep(600);
       await blurPlay();
-      await page.keyboard.press('t'); await sleep(200);
-      check('B-U3: after the reveal T opens the tray again', (await trayOpen()).open);
+      await page.keyboard.press('2'); await sleep(250);
+      const post = { tool: (await tools(page)).tool, disabled: (await dockState(page)).tools.some((t) => t.disabled === 'true') };
+      check('B-U3: after the reveal the tools work again (the 2 key picks Cut)', post.tool === 'cut' && !post.disabled, JSON.stringify(post));
       await page.keyboard.press('Escape'); await settle(page);
       await context.close();
-      // U2 (phone): the meter's status line does not peek out from behind the open tray or the Cut bar
+      // U2 (phone): the meter's status line does not peek out from behind the Cut bar
       {
         const { page: pp, context: cc, w: ww } = await open({ query: '?dev=1', ctx: PHONE });
         mainWatches.push(['fix1-tray-phone', ww]);
@@ -2550,13 +2767,11 @@ async function main() {
         await pp.evaluate(() => { const e = document.querySelector('.meter-state'); e.hidden = false; e.textContent = 'Squishies are resting, filling slowly'; });
         const vis = () => pp.evaluate(() => getComputedStyle(document.querySelector('.meter-state')).visibility);
         const v0 = await vis();
-        await pclick(pp, '.toys-btn'); await sleep(250);
-        const vTray = await vis();
-        await pclick(pp, '.toy[data-tool="cut"]'); await sleep(350);
+        await pickToolIn(pp, 'cut'); await sleep(350);
         const vCut = await vis();
         await pclick(pp, '.cutbar [data-key="done"]'); await sleep(350);
         const vBack = await vis();
-        check('B-U2 (phone 390x844): the meter status line is hidden while the tray or the Cut bar is up (it peeked out from behind their edges) and comes back after', v0 === 'visible' && vTray === 'hidden' && vCut === 'hidden' && vBack === 'visible', JSON.stringify({ v0, vTray, vCut, vBack }));
+        check('B-U2 (phone 390x844): the meter status line is hidden while the Cut bar is up (it peeked out from behind its edges) and comes back after', v0 === 'visible' && vCut === 'hidden' && vBack === 'visible', JSON.stringify({ v0, vCut, vBack }));
         await cc.close();
       }
     });
@@ -2590,7 +2805,7 @@ async function main() {
         mainWatches.push([`fix1-cover ${label}`, w]);
         await wake(page, { touch });
         await page.evaluate(() => { window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
-        await pclick(page, '.toys-btn'); await sleep(250); await pclick(page, '.toy[data-tool="cut"]'); await settle(page);
+        await pickToolIn(page, 'cut'); await settle(page);
         await page.evaluate(() => window.__WH__.pause());
         await stepSim(page, 0.6);
         const whole = await cover(page, '.cutbar');
@@ -2602,7 +2817,7 @@ async function main() {
         await pclick(page, '.cutbar [data-key="join"]'); await cutIdle(page, 5); await stepSim(page, 1.5);
         await pclick(page, '.cutbar [data-key="done"]'); await settle(page);
         await page.evaluate(() => window.__WH__.pause());
-        await pclick(page, '.toys-btn'); await sleep(250); await pclick(page, '.toy[data-tool="snap"]'); await settle(page);
+        await pickToolIn(page, 'snap'); await settle(page);
         await stepSim(page, 0.5);
         const snap = await cover(page, '.snapbar');
         const sr = await rectOf(page, '.snapbar');
@@ -2636,15 +2851,15 @@ async function main() {
         }
         per.push(+(cov / Math.max(1, tot)).toFixed(3));
       }
-      const chrome = { wordmark: '.wordmark', mute: '.hud-actions button[aria-pressed]', settings: '.hud-actions button[aria-label="Settings"]', nametag: '.nametag', hoard: '.hoard-btn', toys: '.toys-btn', ring: '.meter', capsule: '.capsule-btn', hint: '.hint', qswitch: '.qswitch', matchip: '.mat-chip', tray: '#wh-toys' };
+      const chrome = { wordmark: '.wordmark', mute: '.hud-actions button[aria-pressed]', settings: '.hud-actions button[aria-label="Settings"]', nametag: '.nametag', hoard: '.hoard-btn', ring: '.meter', capsule: '.capsule-btn', hint: '.hint', qswitch: '.qswitch', matchip: '.mat-chip', dock: '.dock-bar' };   // (the dock's tray replaces the Toys button and tray: re-specified 2026-10-08)
       const hit = [];
       for (const [k, q] of Object.entries(chrome)) {
         const e = document.querySelector(q);
-        if (!vis(e) || e === el || e.contains(el)) continue;   // (the probed element is not its own neighbour)
+        if (!vis(e) || e === el || e.contains(el) || el.contains(e)) continue;   // (the probed element is not its own neighbour, nor are its children: the dock's tray holds the Hoard button)
         const r = e.getBoundingClientRect();
         if (!(r.right <= R.left + 0.5 || R.right <= r.left + 0.5 || r.bottom <= R.top + 0.5 || R.bottom <= r.top + 0.5)) hit.push(`${k} by ${Math.round(Math.min(r.right, R.right) - Math.max(r.left, R.left))}x${Math.round(Math.min(r.bottom, R.bottom) - Math.max(r.top, R.top))}px`);
       }
-      const covered = [...el.querySelectorAll('button')].filter((b) => vis(b)).filter((b) => { const r = b.getBoundingClientRect(); const t = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, r.x + r.width / 2)), Math.min(innerHeight - 1, Math.max(0, r.y + r.height / 2))); return t && t !== b && !b.contains(t); }).length;
+      const covered = [...el.querySelectorAll('button')].filter((b) => vis(b)).filter((b) => { const r = b.getBoundingClientRect(); const t = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, r.x + r.width / 2)), Math.min(innerHeight - 1, Math.max(0, r.y + r.height / 2))); return t && t !== b && !b.contains(t) && !t.closest('.k-tip'); }).length;   // (a tooltip over a control it names is not a cover)
       return { bar: [R.left, R.top, R.right, R.bottom].map(Math.round), worst: Math.max(0, ...per), per, hit, covered, fits: R.left >= 0 && R.top >= 0 && R.right <= innerWidth && R.bottom <= innerHeight, minBtn: Math.round(Math.min(...[...el.querySelectorAll('button')].filter((b) => vis(b)).map((b) => { const r = b.getBoundingClientRect(); return Math.min(r.width, r.height); }))) };
     }, sel);
 
@@ -2656,7 +2871,7 @@ async function main() {
       await wake(page);
       await page.evaluate(() => { window.__WH__.setSetting('skipAnimations', false); window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
       const B0 = await body(page);   // where the whole squishy stands: Reconnect all ends there
-      await hclick(page, '.toys-btn'); await sleep(200); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await pickTool(page, 'cut'); await settle(page);
       await page.evaluate(() => window.__WH__.pause());
       const bladeShown = () => page.evaluate(() => getComputedStyle(document.querySelector('.blade')).display !== 'none');
       await pclick(page, '.cutbar [data-key="split"]'); await cutIdle(page, 4); await stepSim(page, 2.5);
@@ -2679,7 +2894,7 @@ async function main() {
       // VERIFY_SHELL4_A_R1 B-U1-residual + N2 and B_R1 R1 + U1-residual: on a short landscape screen the bars are a strip along the TOP edge (hoard.css). At 568x320 the side dock of fix round 1 still covered 20 .. 26 % of the left piece
       // (Cut after a cut, and Snap with the pieces still out), and after a cut it ran into the name tag by 5 .. 8 px. Measured here at the three short landscape sizes, in the three states the bars have
       // (Cut over the whole squishy, Cut over two pieces, Snap with the two pieces still out): the share of each body's disc under the bar (the verifier's bar was 25 %; this one is stricter, see COVER_MAX), and
-      // every visible piece of HUD chrome (wordmark, sound / settings, name tag, Hoard, Toys, ring, capsule button, hint, quick switcher) clear of the bar.
+      // every visible piece of HUD chrome (wordmark, sound / settings, name tag, Hoard, the dock's tray, ring, capsule button, hint, quick switcher) clear of the bar.
       const COVER_MAX = 0.05;
       const sizes = [['phone landscape 844x390', { viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }, true], ['small landscape 568x320', { viewport: { width: 568, height: 320 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }, true],
         ['short desktop window 1000x480', { viewport: { width: 1000, height: 480 } }, false]];
@@ -2688,7 +2903,7 @@ async function main() {
         mainWatches.push([`fix2-dock ${label}`, w]);
         await wake(page, { touch });
         await page.evaluate(() => { window.__WH__.setSetting('skipAnimations', false); window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
-        await pclick(page, '.toys-btn'); await sleep(250); await pclick(page, '.toy[data-tool="cut"]'); await settle(page);
+        await pickToolIn(page, 'cut'); await settle(page);
         await page.evaluate(() => window.__WH__.pause());
         await stepSim(page, 0.6);
         const whole = await barProbe(page, '.cutbar');
@@ -2699,23 +2914,23 @@ async function main() {
         await pclick(page, '.cutbar [data-key="done"]'); await settle(page);
         await page.evaluate(() => window.__WH__.pause());
         const piecesOut = (await tools(page)).pieces;
-        await pclick(page, '.toys-btn'); await sleep(250); await pclick(page, '.toy[data-tool="snap"]'); await settle(page);
+        await pickToolIn(page, 'snap'); await settle(page);
         await stepSim(page, 0.5);
         const snap = await barProbe(page, '.snapbar');
         await shot(page, `snapstrip_${label.split(' ')[0]}_${page.viewportSize().width}x${page.viewportSize().height}`);
         const none = (c) => !!c && c.hit.length === 0 && c.covered === 0 && c.fits;
         check(`${label}: the Cut strip over the whole squishy and over its two pieces covers under ${COVER_MAX * 100} % of each, and the Snap strip (the two pieces still out) under ${COVER_MAX * 100} % of each`,
           !!whole && !!two && !!snap && piecesOut === 2 && whole.worst < COVER_MAX && two.worst < COVER_MAX && snap.worst < COVER_MAX, JSON.stringify({ cutWhole: whole && { worst: whole.worst, bar: whole.bar }, cut2: two && { worst: two.worst, per: two.per, bar: two.bar }, snapPiecesOut: snap && { worst: snap.worst, per: snap.per, bar: snap.bar }, piecesOut }));
-        check(`${label}: no overlapping HUD chrome: the strip stands clear of the wordmark, sound / settings, name tag, Hoard, Toys, ring, capsule button, hint and quick switcher in all three states; no button of it is covered; it fits the screen; every button is 44 px or more`,
+        check(`${label}: no overlapping HUD chrome: the strip stands clear of the wordmark, sound / settings, name tag, Hoard, the dock's tray, ring, capsule button, hint and quick switcher in all three states; no button of it is covered; it fits the screen; every button is 44 px or more`,
           none(whole) && none(two) && none(snap) && Math.min(whole?.minBtn ?? 0, two?.minBtn ?? 0, snap?.minBtn ?? 0) >= 44, JSON.stringify({ cutWhole: whole && { hit: whole.hit, covered: whole.covered, fits: whole.fits, minBtn: whole.minBtn }, cut2: two && { hit: two.hit, covered: two.covered, fits: two.fits, minBtn: two.minBtn }, snap: snap && { hit: snap.hit, covered: snap.covered, fits: snap.fits, minBtn: snap.minBtn } }));
         await context.close();
       }
     });
 
     await section('fix2-tray', async () => {
-      // VERIFY_SHELL4_B_R1 U1-residual (also A_R1): the OPEN toy tray stood over 99 % of the squishy at 568x320 and 61 % at 320x568 (a transient menu, but it hid what the player was about to cut or photograph),
-      // and over the wordmark. On a short landscape screen it is the same top strip as the bars; on the narrowest portrait phones its three tools are one row with the hints visually hidden. Measured at
-      // five sizes with the same probe as fix2-dock: the share of the squishy's disc under the open tray, HUD chrome overlapped, fit, and every tool 44 px or more.
+      // VERIFY_SHELL4_B_R1 U1-residual (also A_R1): the OPEN toy tray stood over 99 % of the squishy at 568x320 and 61 % at 320x568. RE-SPECIFIED (reason: the owner changed the design on 2026-10-08, UI.md 9.1): there is no
+      // tray, the dock is always on screen, so the same measurement is taken on the DOCK's tray (Hoard, Hand, Cut, Snap) at five sizes with the same probe as fix2-dock: the share of the squishy's disc under it, HUD chrome
+      // overlapped, fit, and every tool 44 px or more. (The strip layout puts the dock along the top edge, hence the 5 % bar at the two short landscape sizes; the wide and stack docks sit under the squishy.)
       const sizes = [['phone landscape 844x390', { viewport: { width: 844, height: 390 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }, true, 0.05], ['small landscape 568x320', { viewport: { width: 568, height: 320 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }, true, 0.05],
         ['narrow 320x568', { viewport: { width: 320, height: 568 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true }, true, 0.25], ['phone 390x844', PHONE, true, 0.25], ['desktop 1280x800', { viewport: { width: 1280, height: 800 } }, false, 0.25]];
       for (const [label, ctx, touch, max] of sizes) {
@@ -2723,13 +2938,13 @@ async function main() {
         mainWatches.push([`fix2-tray ${label}`, w]);
         await wake(page, { touch });
         await page.evaluate(() => { window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
-        await pclick(page, '.toys-btn'); await sleep(300); await settle(page);
+        await sleep(300); await settle(page);
         await page.evaluate(() => window.__WH__.pause());
-        const tr = await barProbe(page, '#wh-toys');
-        const items = await page.evaluate(() => [...document.querySelectorAll('.toy')].map((b) => ({ tool: b.dataset.tool, name: b.textContent.trim().replace(/\s+/g, ' '), h: Math.round(b.getBoundingClientRect().height), w: Math.round(b.getBoundingClientRect().width) })));
-        await shot(page, `tray_${label.split(' ')[0]}_${page.viewportSize().width}x${page.viewportSize().height}`);
-        check(`${label}: the open toy tray covers under ${max * 100} % of the squishy, stands clear of the visible HUD chrome, fits the screen, and its three tools (Hand, Cut, Snap, hints still in their names) are 44 px or more`,
-          !!tr && tr.worst < max && tr.hit.length === 0 && tr.covered === 0 && tr.fits && tr.minBtn >= 44 && items.length === 3 && items.every((i) => /Poke|slice|photo/.test(i.name)),
+        const tr = await barProbe(page, '.dock-bar');
+        const items = await page.evaluate(() => [...document.querySelectorAll('.dock-tool:not(.dock-more)')].map((b) => ({ tool: b.dataset.tool, name: b.querySelector('.dock-tool-label')?.textContent.trim(), h: Math.round(b.getBoundingClientRect().height), w: Math.round(b.getBoundingClientRect().width) })));
+        await shot(page, `dock_${label.split(' ')[0]}_${page.viewportSize().width}x${page.viewportSize().height}`);
+        check(`${label}: the dock's tray covers under ${max * 100} % of the squishy, stands clear of the visible HUD chrome, fits the screen, and its three tools (Hand, Cut, Snap) are 44 px or more`,
+          !!tr && tr.worst < max && tr.hit.length === 0 && tr.covered === 0 && tr.fits && tr.minBtn >= 44 && items.map((i) => i.name).join() === 'Hand,Cut,Snap' && items.every((i) => i.h >= 44 && i.w >= 44),
           JSON.stringify({ worst: tr && tr.worst, bar: tr && tr.bar, hit: tr && tr.hit, covered: tr && tr.covered, fits: tr && tr.fits, minBtn: tr && tr.minBtn, items }));
         await context.close();
       }
@@ -2773,7 +2988,7 @@ async function main() {
         mainWatches.push([`cut-swell-${sp}`, w]);
         await wake(page);
         await page.evaluate(() => { window.__WH__.pause(); window.__WH__.step(1 / 60, 120); });
-        await hclick(page, '.toys-btn'); await sleep(150); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+        await pickTool(page, 'cut'); await settle(page);
         await page.evaluate(() => window.__WH__.pause());
         const rest = (await tools(page)).body.top;
         const Bq = await body(page);
@@ -2796,7 +3011,7 @@ async function main() {
       mainWatches.push(['cut-low', w]);
       await wake(page);
       await page.evaluate(() => { window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
-      await hclick(page, '.toys-btn'); await sleep(150); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await pickTool(page, 'cut'); await settle(page);
       await page.evaluate(() => window.__WH__.pause());
       const t0 = await tools(page);
       const vp = page.viewportSize();
@@ -2912,7 +3127,7 @@ async function main() {
       // 3. a piece of a cut squishy: a chunk flicked (lift + toss) and carried into the face piece (bump)
       await page.evaluate(() => window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'));
       await settle(page);
-      await hclick(page, '.toys-btn'); await sleep(150); await hclick(page, '.toy[data-tool="cut"]'); await settle(page);
+      await pickTool(page, 'cut'); await settle(page);
       const Bc = await body(page);
       const rc = await page.evaluate((b) => window.__WH__.shell.cutSwipe(b.x + 0.05, b.y - 0.3, b.x + 0.06, b.y + 0.3), Bc);
       await cutIdle(page, 2); await stepSim(page, 1);
@@ -3003,14 +3218,14 @@ async function main() {
             const t = tag.getBoundingClientRect(), lr = line.getBoundingClientRect();
             // a child of the second line that is VISIBLE (inside the line's clipped box) must end inside the tag
             const spill = [...line.children].filter((e) => { const b = e.getBoundingClientRect(); return b.width && b.top >= lr.top - 1 && b.bottom <= lr.bottom + 1 && b.right > t.right + 0.5; }).map((e) => e.className || e.tagName);
-            return { text: nm.textContent, font: parseFloat(getComputedStyle(nm).fontSize), clipped: nm.scrollWidth > nm.clientWidth + 1, tag: { x: t.left, y: t.top, r: t.right, b: t.bottom }, hoard: q('.hoard-btn'), toys: q('.toys-btn'), cap: q('.capsule-btn:not([hidden])'), meter: q('.meter'), spill, sw: document.documentElement.scrollWidth };
+            return { text: nm.textContent, font: parseFloat(getComputedStyle(nm).fontSize), clipped: nm.scrollWidth > nm.clientWidth + 1, tag: { x: t.left, y: t.top, r: t.right, b: t.bottom }, hoard: q('.hoard-btn'), dock: q('.dock-bar'), cap: q('.capsule-btn:not([hidden])'), meter: q('.meter'), spill, sw: document.documentElement.scrollWidth };
           }, sp);
           rows.push({ ...row, want: sp.name });
         }
-        const bad = rows.filter((r) => r.text !== r.want || r.clipped || r.font < 12 || r.sw > vp.width || r.tag.x < 0 || r.tag.r > vp.width || overlap(r.tag, r.hoard) || overlap(r.tag, r.toys) || overlap(r.tag, r.cap) || overlap(r.tag, r.meter) || r.spill.length > 0);
+        const bad = rows.filter((r) => r.text !== r.want || r.clipped || r.font < 12 || r.sw > vp.width || r.tag.x < 0 || r.tag.r > vp.width || overlap(r.tag, r.hoard) || overlap(r.tag, r.dock) || overlap(r.tag, r.cap) || overlap(r.tag, r.meter) || r.spill.length > 0);
         const narrow = [...rows].sort((a, b) => a.font - b.font).slice(0, 3).map((r) => `${r.text} ${r.font}px`);
         const proof = crowded ? state0.cap && state0.qs === 'true' : true;
-        check(`phone ${vp.width}${crowded ? ' CROWDED (capsule waiting + quick switcher)' : ''}: all ${rows.length} species names fit the name tag without being cut off (none clipped, none under 12 px, the tag clear of the Hoard and Toys buttons and the ring / capsule button, the tier line inside the tag, no sideways scroll); smallest sizes: ${narrow.join(', ')}`,
+        check(`phone ${vp.width}${crowded ? ' CROWDED (capsule waiting + quick switcher)' : ''}: all ${rows.length} species names fit the name tag without being cut off (none clipped, none under 12 px, the tag clear of the dock (the Hoard button included) and the ring / capsule button, the tier line inside the tag, no sideways scroll); smallest sizes: ${narrow.join(', ')}`,
           rows.length === 50 && bad.length === 0 && proof, (proof ? '' : `NOT the crowded state: ${JSON.stringify(state0)} `) + (bad.slice(0, 3).map((r) => JSON.stringify(r)).join(' | ') || `${rows.length} names`));
         if (crowded) await shot(page, `hud_phone_crowded_${vp.width}`);
         await context.close();
@@ -3544,8 +3759,9 @@ async function main() {
       mainWatches.push(['reflow', w]);
       const titleAt = async (W, H) => {
         await page.setViewportSize({ width: W, height: H }); await sleep(700);
-        const t = await page.evaluate(() => { const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; }; const lines = new Set([...document.querySelectorAll('.title-mark > span')].filter((e) => e.getBoundingClientRect().width > 0).map((e) => Math.round(e.offsetTop / 4))).size; return { iw: innerWidth, ih: innerHeight, sw: document.documentElement.scrollWidth, cta: r('.cta'), mark: r('.title-mark'), promise: r('.title-promise'), markLines: lines }; });
-        check(`reflow ${W}x${H} title card: no horizontal scroll; wordmark (one line), tagline and the button all on screen`, t.sw <= t.iw && t.cta.b <= t.ih && t.cta.y >= 0 && t.mark.x >= 0 && t.mark.r <= t.iw && t.markLines === 1 && t.promise.r <= t.iw && t.promise.x >= 0 && t.promise.b <= t.cta.y, JSON.stringify(t));
+        const t = await page.evaluate(() => { const r = (s) => { const b = document.querySelector(s).getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom }; }; const lines = new Set([...document.querySelectorAll('.title-mark .jl-svg')].map((e) => Math.round(e.getBoundingClientRect().top / 8))).size; return { iw: innerWidth, ih: innerHeight, sw: document.documentElement.scrollWidth, cta: r('.cta'), mark: r('.title-mark'), promise: r('.title-promise'), markLines: lines, layout: document.querySelector('.title')?.dataset.layout }; });
+        // RE-SPECIFIED 2026-10-08 (reason: the owner changed the design on 2026-10-08): the jelly lockup is one line, and one word per line (two) on the stack layout (UI.md 6); the old test counted the old per-letter spans
+        check(`reflow ${W}x${H} title card: no horizontal scroll; wordmark (${W}x${H} is ${t.layout}: ${t.layout === 'stack' ? 'two lines' : 'one line'}), tagline and the button all on screen`, t.sw <= t.iw && t.cta.b <= t.ih && t.cta.y >= 0 && t.mark.x >= 0 && t.mark.r <= t.iw && t.markLines === (t.layout === 'stack' ? 2 : 1) && t.promise.r <= t.iw && t.promise.x >= 0 && t.promise.b <= t.cta.y, JSON.stringify(t));
         await shot(page, `title_${W}x${H}`);
       };
       await titleAt(320, 568); await titleAt(568, 320); await titleAt(320, 256);
@@ -3637,18 +3853,18 @@ async function main() {
       await page.keyboard.press('g'); await page.keyboard.press('m'); await sleep(500);
       check('M on the squishy: muted, the mute button shows it, announced ("Sound off")', (await page.evaluate(() => document.querySelector('.hud-actions button[aria-pressed]').getAttribute('aria-pressed'))) === 'true' && /Sound off/.test(await live(page)), await live(page));
       await page.keyboard.press('m'); await sleep(300);
-      // Tab order: Mute, Settings, the Hoard, Toys, the squishy. RE-SPECIFIED (SHELL-4): the Toys button (FUN.md 1, the toy tray beside the Hoard button) is a deliberate new Tab stop; the row still
-      // expected the old four stops and failed with '... > Hoard > Toys > Squishy'. (blur() keeps Chromium's sequential-navigation start point on the squishy, so the first Tab
-      // leaves the document (BODY) and the cycle starts there: judge the cycle of real stops, which must be exactly these five, in order.)
+      // Tab order: Mute, Settings, the Hoard, the Tools toolbar (ONE stop, on the tool in hand), the squishy. RE-SPECIFIED (the owner changed the design on 2026-10-08, UI.md 9.1): the Toys button is gone, the roving
+      // toolbar of the dock follows the Hoard. (blur() keeps Chromium's sequential-navigation start point on the squishy, so the first Tab leaves the document (BODY) and the cycle starts there: judge the
+      // cycle of real stops, which must be exactly these five, in order.)
       await page.evaluate(() => document.activeElement.blur());
       const order = [];
-      // a stop's name up to its first ':' or ',' (the Hoard button's name goes on with the count: "Hoard, 3 of 50 species, ...")
-      for (let i = 0; i < 9; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => document.activeElement?.getAttribute('aria-label')?.split(/[:,]/)[0] ?? document.activeElement?.tagName)); }
+      // a stop's name up to its first ':' or ',' (the Hoard button's name goes on with the count: "Hoard, 3 of 50 species, ..."); a tool's name is its label
+      for (let i = 0; i < 9; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => { const a = document.activeElement; return a?.getAttribute('aria-label')?.split(/[:,]/)[0] ?? (a?.classList.contains('dock-tool') ? a.querySelector('.dock-tool-label')?.textContent : null) ?? a?.tagName; })); }
       const stops = order.filter((o) => o !== 'BODY');
-      const want = ['Mute sound', 'Settings', 'Hoard', 'Toys', 'Squishy'];
+      const want = ['Mute sound', 'Settings', 'Hoard', 'Hand', 'Squishy'];
       const k0 = stops.indexOf('Mute sound');
       const cycleOk = k0 >= 0 && stops.length >= k0 + want.length && stops.every((o, i) => o === want[(((i - k0) % want.length) + want.length) % want.length]);
-      check('Tab order in play: Mute, Settings, the Hoard, Toys, the squishy (and no other stop)', cycleOk, order.join(' > '));
+      check('Tab order in play: Mute, Settings, the Hoard, the Tools toolbar (one stop, the Hand), the squishy (and no other stop)', cycleOk, order.join(' > '));
       // shortcuts stay out of form controls
       await page.focus('button[aria-label="Settings"]'); await page.keyboard.press('Enter'); await sleep(500);
       const g0 = (await state(page)).settings.gravity;
@@ -3757,8 +3973,9 @@ async function main() {
     await section('reduced-motion', async () => {
       const { page, context, w } = await open({ query: '?dev=1&quality=low', ctx: { ...SMALL, reducedMotion: 'reduce' } });
       mainWatches.push(['reduced-motion', w]);
-      const anim = await page.evaluate(() => ({ letter: getComputedStyle(document.querySelector('.title-letter')).animationName, cta: getComputedStyle(document.querySelector('.cta')).animationName }));
-      check('prefers-reduced-motion: no wobbling title letters, no breathing button', anim.letter === 'none' && anim.cta === 'none', JSON.stringify(anim));
+      // RE-SPECIFIED 2026-10-08 (reason: the owner changed the design on 2026-10-08): the lettering is the jelly's per-letter groups (.jl-c) with an idle wobble on the lockup, not .title-letter spans
+      const anim = await page.evaluate(() => ({ letter: getComputedStyle(document.querySelector('.title-mark .jl-c')).animationName, idle: getComputedStyle(document.querySelector('.title-mark')).animationName, cta: getComputedStyle(document.querySelector('.cta')).animationName, intro: document.querySelector('.title')?.dataset.intro }));
+      check('prefers-reduced-motion: no falling or wobbling title letters, no idle bob on the lockup, no breathing button, the intro is already over', anim.letter === 'none' && anim.idle === 'none' && anim.cta === 'none' && anim.intro === 'done', JSON.stringify(anim));
       const s = await state(page);
       const st = await page.evaluate(() => window.__WH__.shell.stageInfo());
       check('prefers-reduced-motion: Calm effects default ON (stage calm), screen shake 0', s.settings.calm === true && st?.calm === true && s.settings.shake === 0, `calm ${s.settings.calm}, stage ${st?.calm}, shake ${s.settings.shake}`);
@@ -3937,7 +4154,11 @@ async function main() {
       const walk = (dir) => { for (const e of readdirSync(dir, { withFileTypes: true })) { const p = resolve(dir, e.name); if (e.isDirectory()) walk(p); else files.push(p); } };
       walk(out);
       const total = files.reduce((n, f) => n + statSync(f).size, 0);
-      check('dist stays under the 1.2 MB budget (G0)', total < 1.2 * 1024 * 1024, `${(total / 1024).toFixed(0)} KB`);
+      // RE-SPECIFIED 2026-10-08 (reason: the owner changed the size gate on 2026-10-08, see vite.config.ts and UI.md: G0 is 3 MB raw for the whole folder and G0b is 600 KB gzip for the
+      // first-play files, html + js + css that are not later-* chunks; this row still tested the old 1.2 MB figure and failed on every UI batch). The build itself also enforces both.
+      check('dist stays under the 3 MB budget (G0, raw)', total < 3 * 1024 * 1024, `${(total / 1024).toFixed(0)} KB`);
+      const first = files.filter((f) => /\.(html|js|css)$/.test(f) && !/(^|[\\/])later-[^\\/]*$/.test(f)).reduce((n, f) => n + gzipSync(readFileSync(f), { level: 9 }).length, 0);
+      check('the first-play files stay under 600 KB gzip (G0b)', first < 600 * 1024, `${(first / 1024).toFixed(0)} KB gzip`);
       const text = files.filter((f) => /\.(js|css|html)$/.test(f)).map((f) => [f, readFileSync(f, 'utf8')]);
       const FORBIDDEN = ['__WH__', '__shot', '__report', 'Sound lab', 'squish (hold)', 'playSound', 'createDebugTools', 'capsuleScreen', 'lab-btn', 'stageInfo'];
       const hits = FORBIDDEN.flatMap((s) => text.filter(([, t]) => t.includes(s)).map(([f]) => `${s} in ${f.slice(out.length + 1)}`));

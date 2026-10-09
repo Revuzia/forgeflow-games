@@ -1,12 +1,12 @@
 // ONE original icon family (UI.md 3.3): 24 grid, stroke 2, round caps and joins, currentColor, no text glyphs, no icon font, no assets.
-// Replaces dom.ts ICONS, toyTray.ts PATHS, panel.ts cabinetGlyph and meterRing.ts's capsule glyph, and the ad-hoc text glyphs of the audit
+// Replaces dom.ts ICONS, the old tool tray's paths, panel.ts cabinetGlyph and meterRing.ts's capsule glyph, and the ad-hoc text glyphs of the audit
 // (heart, clock, back chevron, arrow, plus, help, more). Later batches migrate their callers; dom.ts keeps its own copy until then so no
 // existing screen changes in B0.
 //
 // Family rules (checked by probe_app.ts): every path uses only M L H V C S Q T A Z (absolute or relative), every number stays inside the
 // 24 grid with 2 px of padding (1..23 for geometry; the strokes bleed to the edge), names are unique, camelCase.
 //
-// hand / cut / snap are kept verbatim from toyTray.ts:36-38; split / join are given by UI.md 3.3.
+// hand / cut / snap are kept verbatim from the old tool tray (the glyphs are pinned in _harness/probe_uikit.ts); split / join are given by UI.md 3.3.
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const CIRCLE = 'M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z';

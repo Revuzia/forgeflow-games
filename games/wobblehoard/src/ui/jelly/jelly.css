@@ -22,3 +22,33 @@
   .jl > .jl-text { position: static; width: auto; height: auto; margin: 0; overflow: visible; clip: auto; white-space: normal; font: var(--wh-w-bold) calc(var(--jl-cap) * .9) / 1.1 var(--wh-font-ui); color: CanvasText; text-transform: uppercase; letter-spacing: .02em; }
   .jl { line-height: normal; vertical-align: baseline; }
 }
+
+/* ---- words: one drawing per word, a flex row that wraps between words (the lockup). jl-col = one word per line (the stack layout). ---- */
+.jl-words { display: flex; flex-wrap: nowrap; justify-content: center; align-items: flex-end; column-gap: calc(var(--jl-cap) * .32); row-gap: calc(var(--jl-cap) * .03); }
+.jl-words > .jl-svg { flex: none; }
+.jl-words.jl-col { flex-direction: column; align-items: center; }
+
+/* ---- motion: the intro drop, the idle wobble, the poke. Calm and reduced motion name every animation "none" (the same hooks a11y.css uses),
+        so a skipped or Calm intro is simply the resting pose. Only transform and opacity move. ---- */
+body { --k-an-jl-drop: jl-drop; --k-an-jl-idle: jl-idle; }
+body[data-calm="true"] { --k-an-jl-drop: none; --k-an-jl-idle: none; }
+@media (prefers-reduced-motion: reduce) { body:not([data-calm="false"]) { --k-an-jl-drop: none; --k-an-jl-idle: none; } }
+.jl-c { transform-box: fill-box; transform-origin: 50% 100%; }
+/* letters fall in one after another (the 5 passes of a letter share --i, so they land together), squash on impact, rebound once, settle */
+.jl-intro .jl-c { animation: var(--k-an-jl-drop) 600ms linear both; animation-delay: calc(var(--jl-delay, 80ms) + var(--i, 0) * 42ms); }
+@keyframes jl-drop {
+  0% { transform: translateY(-190px) scale(.86, 1.16); opacity: 0; animation-timing-function: cubic-bezier(.55, 0, .9, .55); }
+  14% { opacity: 1; }
+  50% { transform: translateY(0) scale(.96, 1.04); opacity: 1; animation-timing-function: cubic-bezier(.2, .7, .3, 1); }
+  63% { transform: translateY(0) scale(1.2, .74); animation-timing-function: cubic-bezier(.2, .8, .3, 1); }
+  80% { transform: translateY(-15px) scale(.95, 1.08); animation-timing-function: cubic-bezier(.5, 0, .7, 1); }
+  100% { transform: translateY(0) scale(1, 1); opacity: 1; }
+}
+/* the whole word breathes (one compositor transform: cheap), the letters keep their fixed bounce pose */
+.jl-idle { transform-origin: 50% 100%; animation: var(--k-an-jl-idle) 3.4s ease-in-out var(--jl-idle-delay, 0s) infinite; }
+@keyframes jl-idle {
+  0%, 100% { transform: translateY(0) rotate(0) scale(1, 1); }
+  25% { transform: translateY(-4px) rotate(-.5deg) scale(.994, 1.012); }
+  50% { transform: translateY(0) rotate(0) scale(1.012, .99); }
+  75% { transform: translateY(-3px) rotate(.5deg) scale(.994, 1.01); }
+}

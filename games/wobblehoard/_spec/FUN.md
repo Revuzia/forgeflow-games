@@ -4,11 +4,12 @@
 activities, the order they are built in, and the shared rules. Each one is built on the soft-body physics that makes Squish Keeper
 different. None of them adds a currency, a timer, a paywall or a score you can lose.
 
-## 1. The toy tray
+## 1. The toolbar
 
-The play view stays clean: one **Toys** button next to the Hoard button opens a small tray of tools. The default tool is the **Hand**:
-poke, squish, stretch, as today. Picking a tool changes what a touch does until you pick the Hand again. The keyboard path is
-`T` for the tray, the arrow keys to choose, and Enter to pick (only when keyboard shortcuts are on). Every tool works with Calm effects.
+**Changed by the owner on 2026-10-08** (`UI.md` 1.3, 4): the one-button tray is gone. The tools are always on screen as a toolbar (the dock, bottom centre; along the top in a short landscape window)
+beside the Hoard button, the tool in hand marked, with an options bar attached above it for the tool that has options. The word *Toys* is reserved for the pets update (real toys like a ball or a stick),
+and this list is **tools**. The default tool is the **Hand**: poke, squish, stretch, as today. Picking a tool changes what a touch does until you pick the Hand again (or press the active tool again, or Escape).
+The keyboard path is `1` Hand, `2` or `C` Cut, `3` or `S` Snap, the arrow keys inside the toolbar, and Enter or Space to pick (the letter and digit keys only when keyboard shortcuts are on). Every tool works with Calm effects.
 
 | Tool | What you do | What it shows off | Status |
 |---|---|---|---|

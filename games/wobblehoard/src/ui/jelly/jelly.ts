@@ -1,9 +1,10 @@
-// The jelly display type renderer (UI.md 5), glyph-sheet scope: ensureJellyDefs, jellyWidth, jelly. (setJelly, fitJelly, pokeJelly and the
-// wobble come after the owner approves the lettering.) Real text stays in the DOM; the drawing is an aria-hidden svg of <use> elements.
-// Colours come from theme.ts; widths and finish live in jelly.css; a gradient stop is set by setAttribute (strict-CSP safe).
+// The jelly display type renderer (UI.md 5): ensureJellyDefs, jellyWidth, jelly, setJelly, fitJelly, pokeJelly. Real text stays in the DOM;
+// the drawing is an aria-hidden svg of <use> elements. Colours come from theme.ts; widths and finish live in jelly.css; a gradient stop is
+// set by setAttribute and a custom property by the CSSOM (strict-CSP safe: no style attribute is ever written as text).
 import { ADV, GLYPHS, SPACE_W, glyphFor, glyphId } from './glyphs.ts';
-import { JELLY, mixHex } from '../theme.ts';
+import { EASE, JELLY, MOTION, mixHex } from '../theme.ts';
 import type { JellyTone, MedalId, TierId } from '../theme.ts';
+import { flash, isCalm, play } from '../motion.ts';
 
 export type JellySize = 'sm' | 'md' | 'lg' | 'xl';
 export type JellyToneId = JellyTone | TierId | MedalId;
@@ -13,6 +14,12 @@ export interface JellyOpts {
   tag?: 'span' | 'div' | 'p' | 'h1' | 'h2' | 'h3';
   /** 0..1: each letter sits a little off the line and off the vertical (a fixed, repeating pattern: the lockup's bounce). Default 0 = a straight line. */
   bounce?: number;
+  /** One drawing per word, laid out as a flex row that wraps between words (the lockup: one line on wide, two on stack). Default: one drawing for the whole text. */
+  words?: boolean;
+  /** Every letter in its own `<g class="jl-c">` (the intro drop and `pokeJelly` move one letter at a time). The five passes still paint back to front. */
+  letters?: boolean;
+  /** A number or word that changes while the player watches (a counter): the element is a polite, atomic live region, so setJelly announces the new text once. */
+  live?: boolean;
 }
 
 const NS = 'http://www.w3.org/2000/svg';
@@ -27,6 +34,9 @@ const PASSES_SM = [PASSES[1], PASSES[3], PASSES[4]] as const;
 const TILT = [-3, 2, -2.5, 3, -1.5, 2.5, -2, 1.5], LIFT = [0, -4, 2, -3, 3, -2, 1, -4];
 
 const svgEl = (tag: string): SVGElement => document.createElementNS(NS, tag);
+
+interface State { text: string; size: JellySize; tone: JellyToneId; bounce: number; words: boolean; letters: boolean }
+const STATE = new WeakMap<HTMLElement, State>();
 
 let defs: SVGSVGElement | null = null;
 /** The hidden svg holding every glyph path and one body gradient per tone (user-space, y 5..95: a bounding-box gradient will not paint on a straight I). Idempotent. */
@@ -83,46 +93,158 @@ export function jellyWidth(text: string): number {
   return Math.max(0, x - ADV);
 }
 
-/** A jelly word: `<tag class="jl jl-md">` = a real text span (screen readers, the no-SVG fallback) + the aria-hidden drawing. */
-export function jelly(text: string, o: JellyOpts = {}): HTMLElement {
-  ensureJellyDefs();
-  const size = o.size ?? 'md', tone = o.tone ?? 'amber';
-  const st = JELLY[tone];
-  const el = document.createElement(o.tag ?? 'span');
-  el.className = `jl jl-${size}`;
-  el.dataset.tone = tone;
-  el.style.setProperty('--jl-bd', `url(#jg-g-${tone})`);
-  el.style.setProperty('--jl-flat', st.body);
-  el.style.setProperty('--jl-sd', st.shade);
-  const label = document.createElement('span');
-  label.className = 'jl-text sr-only';
-  label.textContent = text;
-  const units = jellyWidth(text), b = o.bounce ?? 0, room = b ? 6 : 0;
+/** The drawing of one run of text: five passes (three at cap 24), each a group of <use>. `first` is the running letter index (the bounce pattern and the stagger continue across words). */
+function drawing(part: string, st: State, first: number): SVGSVGElement {
+  const units = jellyWidth(part), b = st.bounce, room = b ? 6 : 0;
   const svg = svgEl('svg') as SVGSVGElement;
   svg.setAttribute('class', 'jl-svg');
   svg.setAttribute('viewBox', `${-PAD_X} ${TOP - room} ${units + 2 * PAD_X} ${VIEW_H + 2 * room}`);
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('focusable', 'false');
-  el.style.setProperty('--jl-w', ((units + 2 * PAD_X) / 100).toFixed(3));
-  if (room) el.style.setProperty('--jl-h', ((VIEW_H + 2 * room) / 100).toFixed(3));
-  for (const [cls, dx, dy] of size === 'sm' ? PASSES_SM : PASSES) {
+  svg.style.setProperty('--jl-w', ((units + 2 * PAD_X) / 100).toFixed(3));
+  for (const [cls, dx, dy] of st.size === 'sm' ? PASSES_SM : PASSES) {
     const g = svgEl('g');
     g.setAttribute('class', `jl-${cls}`);
     if (dx || dy) g.setAttribute('transform', `translate(${dx} ${dy})`);
-    let x = 0, n = 0;
-    for (const ch of text) {
+    let x = 0, k = first;
+    for (const ch of part) {
       const gl = glyphFor(ch);
       if (!gl) { x += SPACE_W; continue; }
       const u = svgEl('use');
       u.setAttribute('href', `#${glyphId(ch)}`);
-      if (b) u.setAttribute('transform', `translate(${x} ${(LIFT[n % 8] * b).toFixed(1)}) rotate(${(TILT[n % 8] * b).toFixed(1)} ${gl[0] / 2} 50)`);
+      if (b) u.setAttribute('transform', `translate(${x} ${(LIFT[k % 8] * b).toFixed(1)}) rotate(${(TILT[k % 8] * b).toFixed(1)} ${gl[0] / 2} 50)`);
       else if (x) u.setAttribute('x', String(x));
-      g.append(u);
+      if (st.letters) {
+        const c = svgEl('g');
+        c.setAttribute('class', 'jl-c');
+        c.setAttribute('data-i', String(k));
+        c.style.setProperty('--i', String(k));
+        c.append(u);
+        g.append(c);
+      } else g.append(u);
       x += gl[0] + ADV;
-      n++;
+      k++;
     }
     svg.append(g);
   }
-  el.append(label, svg);
+  return svg;
+}
+
+const countGlyphs = (s: string): number => { let n = 0; for (const ch of s) if (glyphFor(ch)) n++; return n; };
+
+function paint(el: HTMLElement, text: string, st: State): void {
+  const label = document.createElement('span');
+  label.className = 'jl-text sr-only';
+  label.textContent = text;
+  const parts = st.words ? text.split(/\s+/).filter(Boolean) : [text];
+  const room = st.bounce ? 6 : 0;
+  el.classList.remove('jl-sm', 'jl-md', 'jl-lg', 'jl-xl', 'jl-words');   // a caller's own classes stay
+  el.classList.add('jl', `jl-${st.size}`);
+  if (st.words) el.classList.add('jl-words');
+  el.dataset.tone = st.tone;
+  el.style.setProperty('--jl-bd', `url(#jg-g-${st.tone})`);
+  el.style.setProperty('--jl-flat', JELLY[st.tone].body);
+  el.style.setProperty('--jl-sd', JELLY[st.tone].shade);
+  if (room) el.style.setProperty('--jl-h', ((VIEW_H + 2 * room) / 100).toFixed(3)); else el.style.removeProperty('--jl-h');
+  const svgs: SVGSVGElement[] = [];
+  let n = 0;
+  for (const part of parts) { svgs.push(drawing(part, st, n)); n += countGlyphs(part); }
+  el.replaceChildren(label, ...svgs);
+}
+
+/** A jelly word: `<tag class="jl jl-md">` = a real text span (screen readers, the no-SVG fallback) + the aria-hidden drawing. */
+export function jelly(text: string, o: JellyOpts = {}): HTMLElement {
+  ensureJellyDefs();
+  const st: State = { text, size: o.size ?? 'md', tone: o.tone ?? 'amber', bounce: o.bounce ?? 0, words: !!o.words, letters: !!o.letters };
+  const el = document.createElement(o.tag ?? 'span');
+  STATE.set(el, st);
+  paint(el, text, st);
+  if (o.live) { el.setAttribute('aria-live', 'polite'); el.setAttribute('aria-atomic', 'true'); }
   return el;
+}
+
+/** Change the text (and optionally the look) of an existing jelly element in place; the element, its tag, its id and its listeners stay. */
+export function setJelly(el: HTMLElement, text: string, o: Omit<JellyOpts, 'tag'> = {}): void {
+  ensureJellyDefs();
+  const prev = STATE.get(el);
+  const st: State = {
+    text,
+    size: o.size ?? prev?.size ?? 'md', tone: o.tone ?? prev?.tone ?? 'amber',
+    bounce: o.bounce ?? prev?.bounce ?? 0, words: o.words ?? prev?.words ?? false, letters: o.letters ?? prev?.letters ?? false,
+  };
+  STATE.set(el, st);
+  paint(el, text, st);
+}
+
+export interface FitOpts {
+  /** The smallest cap height in px (UI.md: 14). */
+  floor?: number;
+  /** The largest cap height in px (a height-limited layout). */
+  capMax?: number;
+}
+
+/**
+ * Shrink the element's cap height until its drawing is at most `maxW` px wide (a row of words: their sum; a column of words: the widest).
+ * Sets `--jl-cap` on the element, so call it again after the text, the size class or the layout changes. Never grows past the size class
+ * (or `capMax`). Returns the cap in px, or 0 where nothing is laid out yet (a detached element, display none).
+ */
+export function fitJelly(el: HTMLElement, maxW: number, o: FitOpts = {}): number {
+  const floor = o.floor ?? 14;
+  el.style.removeProperty('--jl-cap');
+  const svgs = [...el.querySelectorAll<SVGSVGElement>(':scope > .jl-svg')];
+  if (!svgs.length) return 0;
+  const first = svgs[0].getBoundingClientRect(), last = svgs[svgs.length - 1].getBoundingClientRect();
+  const st = STATE.get(el);
+  const ratio = (VIEW_H + (st?.bounce ? 12 : 0)) / 100;
+  if (!first.height) return 0;
+  const cap0 = first.height / ratio;
+  const column = svgs.length > 1 && getComputedStyle(el).flexDirection.startsWith('column');
+  const natural = column ? Math.max(...svgs.map((s) => s.getBoundingClientRect().width))
+    : svgs.length > 1 ? Math.max(0, last.right - first.left) : first.width;
+  let cap = natural > maxW ? cap0 * maxW / natural : cap0;
+  if (o.capMax !== undefined) cap = Math.min(cap, o.capMax);
+  cap = Math.max(floor, cap);
+  if (Math.abs(cap - cap0) > 0.25) el.style.setProperty('--jl-cap', `${cap.toFixed(2)}px`);
+  return cap;
+}
+
+/** The index of the letter whose drawing is nearest to a viewport x (letters mode only), or -1. */
+export function jellyLetterAt(el: HTMLElement, clientX: number): number {
+  let best = -1, bestD = Infinity;
+  for (const c of el.querySelectorAll<SVGGElement>('.jl-bd > .jl-c, .jl-ol > .jl-c')) {
+    const r = c.getBoundingClientRect();
+    const d = Math.abs(r.left + r.width / 2 - clientX);
+    if (d < bestD) { bestD = d; best = Number(c.dataset.i); }
+  }
+  return best;
+}
+
+const POKE_MS = MOTION.t4 + 120;
+/**
+ * Poke one letter (`at` = a letter index, or a viewport x to take the nearest letter; omitted = the middle one): it squashes and springs
+ * back, its neighbours follow a beat later with less. Letters mode only (others: nothing moves, false). Calm: one 120 ms highlight on the
+ * letter instead (no transform). Returns the index poked, or -1.
+ */
+export function pokeJelly(el: HTMLElement, at?: number | { x: number }): number {
+  const all = [...el.querySelectorAll<SVGGElement>('.jl-bd > .jl-c')];
+  if (!all.length) return -1;
+  const idx = at === undefined ? Math.floor(all.length / 2) : typeof at === 'number' ? at : jellyLetterAt(el, at.x);
+  if (idx < 0) return -1;
+  const calm = isCalm();
+  const hit = (i: number, strength: number, delay: number): void => {
+    for (const c of el.querySelectorAll<SVGGElement>(`.jl-c[data-i="${i}"]`)) {
+      if (calm) { if (delay === 0) flash(c); continue; }
+      play(c, [
+        { transform: 'scale(1, 1)' },
+        { transform: `scale(${1 + 0.2 * strength}, ${1 - 0.26 * strength})`, offset: 0.28 },
+        { transform: `scale(${1 - 0.07 * strength}, ${1 + 0.1 * strength})`, offset: 0.58 },
+        { transform: `scale(${1 + 0.025 * strength}, ${1 - 0.03 * strength})`, offset: 0.8 },
+        { transform: 'scale(1, 1)' },
+      ], { ms: POKE_MS, easing: EASE.spring, delay });
+    }
+  };
+  hit(idx, 1, 0);
+  hit(idx - 1, 0.45, 55);
+  hit(idx + 1, 0.45, 55);
+  return idx;
 }
