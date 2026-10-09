@@ -13,6 +13,7 @@ import { shapeBounds, shapeDistance, shapeVolumeRatio } from '../src/data/shapes
 import { MATERIAL_FAMILIES, MATERIAL_FAMILY_IDS, feelOf } from '../src/data/materials.ts';
 import { TIERS, TIER_NAMES, TIER_ODDS_PERCENT, TIER_SPECIES_COUNTS, TIER_STYLE, tierIndex } from '../src/core/rarity.ts';
 import { MERGE_COST, MERGE_TIER_UP } from '../src/core/merge.ts';
+import { TIERS as UI_TIERS } from '../src/ui/theme.ts';   // the tier colours live in ui/theme.ts only
 import type { Genome } from '../src/core/genome.ts';
 import { bodyLinear, coreLinear, linearToOklab, labDistance as dE, linearToHex as hex } from '../src/data/palette.ts';
 
@@ -44,7 +45,7 @@ export function renderCatalogDoc(): string {
   out.push('|---|---|---|---|---|---|---|');
   TIERS.forEach((t, i) => {
     const st = TIER_STYLE[t];
-    out.push(`| ${TIER_NAMES[t]} | ${TIER_SPECIES_COUNTS[i]} | ${TIER_ODDS_PERCENT[i]}% | ${(TIER_ODDS_PERCENT[i] / TIER_SPECIES_COUNTS[i]).toFixed(2)}% | ${i < 5 ? Math.round(MERGE_TIER_UP[i] * 100) + '%' : 'cannot merge'} | ${st.gem} (${st.gemPoints || 'round'}) | ${swatch(st.tellHex)} |`);
+    out.push(`| ${TIER_NAMES[t]} | ${TIER_SPECIES_COUNTS[i]} | ${TIER_ODDS_PERCENT[i]}% | ${(TIER_ODDS_PERCENT[i] / TIER_SPECIES_COUNTS[i]).toFixed(2)}% | ${i < 5 ? Math.round(MERGE_TIER_UP[i] * 100) + '%' : 'cannot merge'} | ${st.gem} (${st.gemPoints || 'round'}) | ${swatch(UI_TIERS[t].tell)} |`);
   });
   out.push('');
   out.push(`Merge cost is **${MERGE_COST}** of the same species (\`MERGE_COST\` in \`src/core/merge.ts\`).`);

@@ -10,6 +10,8 @@
 //   * keyboard only: Tab to the squishy, a visible focus ring, Space pokes, G / M only where they belong, Escape back to the squishy
 //   * live regions; WCAG 1.4.10 reflow at 320x568, 568x320, 320x460, 320x256; WebGL context loss (freeze, resume, give-up card)
 //   * the production build: size budget, no DebugHook / sound lab / shot poster in the bundle, no inline script or style, a strict CSP holds
+//   * UI v3 B4a overlays (run them with --only=menu-pause,fullscreen-gate,toasts,modal-layers,ui-sounds): the Menu as the pause screen (__PAUSE__, focus trap, Esc order, Sound switch, Settings row),
+//     full screen only where the page may use it and a refusal handled, the toast stack, the modal, the delegated interface sounds
 // Screenshots go to _shots/shell/ (gitignored); the JSON report to _harness/_reports/shell.json.
 // Usage: node _harness/browser_shell.mjs [--quick] [--port=5366] [--only=name,name]
 // (--quick skips the 20 s hint-comes-back wait). The machine is shared and SwiftShader is slow: one browser at a time, one page at a time.
@@ -19,6 +21,7 @@ import { createServer } from 'node:http';
 import { gzipSync } from 'node:zlib';
 import { extname, resolve } from 'node:path';
 import { ROOT, launch, startVite } from './pw.mjs';
+import { MAX_PIECES_CLEAN } from '../src/shell/cut.ts';   // CUT-B S4: every cut row that counts pieces follows this constant (2 in the first build)
 
 process.env.WH_FROZEN = '1'; // no HMR / file watching while the harness runs
 const args = process.argv.slice(2);
@@ -96,6 +99,20 @@ const body = (page) => page.evaluate(() => window.__WH__.bodyScreen());
 const shellApi = (page, fn, arg) => page.evaluate(fn, arg);
 const meter = (page) => page.evaluate(() => window.__WH__.shell.meter());
 const live = (page) => page.evaluate(() => document.getElementById('wh-live')?.textContent ?? '');
+/** UI v3 (B4a), RE-SPECIFIED because the owner changed the design on 2026-10-08 (UI.md 9.1): the HUD's gear is the MENU now (the pause screen). A flow that only needs the Settings panel opens it
+ *  through the dev hook (ui/uiHook.ts); the production build has no hook, so its section goes through the real Menu (`openSettingsViaMenu`). */
+const openSettings = (page) => page.evaluate(() => window.__WH_UI__.openSettings());   // (resolves when the panel, a later-* chunk since B4b, is built and open)
+/** UI v3 (B4b), RE-SPECIFIED because the owner changed the design on 2026-10-08 (UI.md 9.1): Quality is a 4-way segmented control (a radiogroup that keeps the id `wh-quality`), not a <select> */
+const setQuality = (page, v) => page.click(`#wh-quality input[value="${v}"]`);
+/** the touch version: a real tap on the Menu button, then on its Settings row (the Menu is a sheet on a phone held upright, a card sideways) */
+const tapSettingsViaMenu = async (page, g) => {
+  await page.touchscreen.tap(g.x + g.w / 2, g.y + g.h / 2);
+  await waitUntil(page, () => !!document.querySelector('#wh-menu'), null, 8000);
+  await sleep(800);
+  const b = await page.locator('.menu [data-key="settings"]').boundingBox();
+  await page.touchscreen.tap(b.x + b.width / 2, b.y + b.height / 2);
+};
+const openSettingsViaMenu = async (page) => { await page.click('button[aria-label="Menu"]'); await page.click('.menu [data-key="settings"]'); };
 async function ctaCentre(page) { const b = await page.locator('.cta').boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }
 async function wake(page, { touch = false } = {}) {
   await page.waitForSelector('.cta:not([disabled])', { timeout: 60000 });
@@ -207,7 +224,7 @@ async function layoutOf(page) {
     const panel = q('.panel');
     return {
       sw: d.scrollWidth, sh: d.scrollHeight, iw: innerWidth, ih: innerHeight, bsw: document.body.scrollWidth, bsh: document.body.scrollHeight,
-      gear: r(q('.hud-actions button[aria-label="Settings"]')), mute: r(q('.hud-actions button[aria-pressed]')), hint: r(hint), hintShow: hint?.dataset.show, name: r(q('.nametag')), wordmark: r(q('.wordmark')), panel: r(panel),
+      gear: r(q('.hud-actions button[aria-label="Menu"]')), mute: r(q('.hud-actions button[aria-label="Mute sound"]')), hint: r(hint), hintShow: hint?.dataset.show, name: r(q('.nametag')), wordmark: r(q('.wordmark')), panel: r(panel),
       meter: r(q('.meter')), capsuleBtn: r(q('.capsule-btn:not([hidden])')),
       hintFont: hint ? parseFloat(getComputedStyle(hint).fontSize) : 0, hintClipped: hint ? (hint.scrollWidth > hint.clientWidth + 1 || (() => {
         // (SHELL-4: also text that runs into the right padding and touches the pill's border, which scrollWidth does not report for a nowrap box: measured with a Range against the padding box)
@@ -327,11 +344,11 @@ async function main() {
       const hud = await page.evaluate(() => ({
         wordmark: document.querySelector('.wordmark')?.textContent, name: document.querySelector('.nametag-name')?.textContent, tier: document.querySelector('.nametag-tier')?.textContent,
         gem: !!document.querySelector('.nametag svg.gem'), hint: document.querySelector('.hint')?.textContent, hintShow: document.querySelector('.hint')?.dataset.show,
-        gear: !!document.querySelector('button[aria-label="Settings"]'), mute: !!document.querySelector('button[aria-label="Mute sound"]'),
+        gear: !!document.querySelector('button[aria-label="Menu"]'), mute: !!document.querySelector('button[aria-label="Mute sound"]'),
         meter: document.querySelector('[role=meter]')?.getAttribute('aria-valuenow'), focus: document.activeElement?.id || document.activeElement?.tagName,
         ring: getComputedStyle(document.querySelector('.play-target')).boxShadow,
       }));
-      check('HUD: wordmark, gear + mute, the catalog species name "Dollop" with its tier gem and label "Common" (audit finding 19), a meter ring (role=meter)',
+      check('HUD: wordmark, Menu + mute, the catalog species name "Dollop" with its tier gem and label "Common" (audit finding 19), a meter ring (role=meter)',
         hud.wordmark === GAME_MARK && hud.name === 'Dollop' && /common/i.test(hud.tier) && hud.gem && hud.gear && hud.mute && hud.meter === '0', JSON.stringify(hud));
       check('HUD hint: pointer wording with the one pull wording ("drag out to stretch")', hud.hintShow === 'true' && /^Click to poke/.test(hud.hint) && /drag out to stretch/.test(hud.hint), hud.hint);
       check('a mouse start does not park a focus ring on the squishy', hud.focus !== 'wh-play' && hud.ring === 'none', `${hud.focus} / ${hud.ring}`);
@@ -756,15 +773,15 @@ async function main() {
     await section('settings-panel-desktop', async () => {
       const { page } = D;
       await page.evaluate(() => localStorage.removeItem('wobblehoard:v1:settings'));
-      await page.click('button[aria-label="Settings"]');
+      await openSettings(page);
       await waitUntil(page, () => document.querySelector('.panel').dataset.open === 'true' && getComputedStyle(document.querySelector('.panel')).opacity === '1', null, 8000);
       const info = await page.evaluate(() => ({
-        open: document.querySelector('.panel').dataset.open, expanded: document.querySelector('button[aria-label="Settings"]').getAttribute('aria-expanded'),
+        open: document.querySelector('.panel').dataset.open,
         focus: document.activeElement?.id, role: document.querySelector('.panel').getAttribute('role'), label: document.querySelector('.panel').getAttribute('aria-labelledby'),
         labels: [...document.querySelectorAll('.panel .row-label')].filter((e) => e.offsetParent !== null).map((e) => e.textContent),
         vibrate: typeof navigator.vibrate, touch: navigator.maxTouchPoints,
       }));
-      check('settings: the gear opens the panel (aria-expanded, role=dialog, labelled) and focus moves into it', info.open === 'true' && info.expanded === 'true' && info.focus === 'wh-settings-title' && info.role === 'dialog' && info.label === 'wh-settings-title', JSON.stringify(info));
+      check('settings: the panel opens (role=dialog, labelled; reached through the Menu since 2026-10-08) and focus moves into it', info.open === 'true' && info.focus === 'wh-settings-title' && info.role === 'dialog' && info.label === 'wh-settings-title', JSON.stringify(info));
       const want = ['Volume', 'Music', 'Louder squish', 'Extra squish', 'Gravity', 'Calm effects', 'Screen shake', 'Skip animations', 'Fast open', 'Keyboard shortcuts', 'Quality'];
       check('settings: Volume, Music, Louder squish, Extra squish, Gravity, Calm effects, Screen shake, Skip animations, Fast open, Keyboard shortcuts, Quality', want.every((l) => info.labels.includes(l)), info.labels.join(' | '));
       check('settings: no Haptics switch on a desktop without touch, although navigator.vibrate exists (it is a no-op there; audit finding 18)', !info.labels.includes('Haptics') && info.vibrate === 'function' && info.touch === 0 && (await state(page)).settings.haptics === false, JSON.stringify({ vibrate: info.vibrate, touch: info.touch }));
@@ -777,7 +794,7 @@ async function main() {
       await page.focus('#wh-boost'); await page.keyboard.press('End');
       await page.focus('#wh-music'); await page.keyboard.press('Home');
       await page.click('.seg-opt:has(input[value=float])');
-      await page.selectOption('#wh-quality', 'low');
+      await setQuality(page, 'low');
       await page.focus('#wh-fast'); await page.keyboard.press('Space');
       await page.focus('#wh-extra'); await page.keyboard.press('Space');
       await sleep(500);
@@ -798,10 +815,10 @@ async function main() {
       const kp = await waitEvent(page, seen, 'poke', { timeout: 40000 });
       check('settings: after Escape, Space pokes the squishy (not the gear)', !!kp && (await started(page)).poke === a0.poke + 1 && await page.evaluate(() => document.querySelector('.panel').dataset.open === 'false'));
       await waitUntil(page, () => window.__WH__.state().metrics.fingers === 0, null, 30000);
-      // the close button returns focus to the gear
-      await page.click('button[aria-label="Settings"]'); await sleep(400);
+      // the close button returns focus to the Menu button
+      await openSettings(page); await sleep(400);
       await page.focus('.panel .icon-btn'); await page.keyboard.press('Enter'); await sleep(400);
-      check('settings: the close button returns focus to the gear', await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Settings'));
+      check('settings: the close button returns focus to the control it was opened from (the Menu button; the gear is gone)', await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Menu'));
       const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('wobblehoard:v1:settings')));
       check('settings: persisted under wobblehoard:v1:settings as v: 2 with the chosen round-2 fields', stored && stored.v === 2 && stored.volume === 0 && stored.quality === 'low' && stored.gravity === false && stored.squishBoost === 1 && stored.music === 0 && stored.fastOpen === true && stored.extraSquish === true && !('calm' in stored), JSON.stringify(stored));
       await page.reload({ waitUntil: 'load' });
@@ -809,14 +826,16 @@ async function main() {
       const afterReload = await state(page);
       check('settings: survive a reload', afterReload.settings.volume === 0 && afterReload.settings.quality === 'low' && afterReload.settings.gravity === false && afterReload.settings.shake === 0 && afterReload.settings.music === 0 && afterReload.settings.fastOpen === true, JSON.stringify(afterReload.settings));
       await wake(page);
-      await page.click('button[aria-label="Settings"]');
+      await openSettings(page);
       await sleep(500);
-      const ui = await page.evaluate(() => ({ vol: document.querySelector('#wh-volume').value, music: document.querySelector('#wh-music').value, q: document.querySelector('#wh-quality').value, floatChecked: document.querySelector('input[value=float]').checked, fast: document.querySelector('#wh-fast').checked }));
+      const ui = await page.evaluate(() => ({ vol: document.querySelector('#wh-volume').value, music: document.querySelector('#wh-music').value, q: document.querySelector('#wh-quality input:checked')?.value, floatChecked: document.querySelector('input[value=float]').checked, fast: document.querySelector('#wh-fast').checked }));
       check('settings: the reloaded panel shows the saved values', ui.vol === '0' && ui.music === '0' && ui.q === 'low' && ui.floatChecked === true && ui.fast === true, JSON.stringify(ui));
       await page.focus('.panel .icon-btn');
       for (let i = 0; i < 18; i++) await page.keyboard.press('Tab');
       check('settings: Tab keeps focus inside the open panel (wraps)', await page.evaluate(() => document.querySelector('.panel').contains(document.activeElement)));
-      const ring = await page.evaluate(() => { const a = document.activeElement; const cs = getComputedStyle(a); const sw = a.matches('input[role=switch]') ? getComputedStyle(a.nextElementSibling) : null; return { vis: a.matches(':focus-visible'), outline: cs.outlineStyle + ' ' + cs.outlineWidth, swOutline: sw ? sw.outlineStyle + ' ' + sw.outlineWidth : null, tag: a.tagName }; });
+      await page.focus('#wh-keys');   // (B4b: 18 Tabs now land on a slider, whose ring is on its thumb and is proved by pixel diff in uikit/b4b_checks.mjs; this row reads a switch)
+      const ring = await page.evaluate(() => { const a = document.activeElement; const cs = getComputedStyle(a); const sw = a.matches('input[role=switch]') ? getComputedStyle(a.parentElement.querySelector('.k-switch-ui, .switch-ui')) : null; return { vis: a.matches(':focus-visible'), outline: cs.outlineStyle + ' ' + cs.outlineWidth, swOutline: sw ? sw.outlineStyle + ' ' + sw.outlineWidth : null, tag: a.tagName }; });
+      // RE-SPECIFIED by B4b (the owner changed the design on 2026-10-08, UI.md 9.1): the kit switch draws its ring on `.k-switch-ui`, which follows the label (it was the input's next sibling)
       check('settings: keyboard focus shows a visible focus ring', ring.vis && (ring.outline !== 'none 0px' || (ring.swOutline && ring.swOutline !== 'none 0px')), JSON.stringify(ring));
       await page.keyboard.press('Escape');
       await page.evaluate(() => localStorage.removeItem('wobblehoard:v1:settings'));
@@ -1014,7 +1033,7 @@ async function main() {
     await section('calm-mode', async () => {
       const { page } = C;
       await page.evaluate(() => window.__WH__.pause());     // no live WebGL frames while clicking through the panel (the DOM still runs)
-      if (!(await clickSel(page, 'button[aria-label="Settings"]', 'the gear'))) return;
+      await openSettings(page);
       await sleep(400);
       await page.focus('#wh-calm'); await page.keyboard.press('Space'); await sleep(300);
       await page.keyboard.press('Escape'); await sleep(300);
@@ -1691,7 +1710,7 @@ async function main() {
       await page.evaluate(() => window.__WH__.setSetting('shortcuts', true));
       check('with Keyboard shortcuts off, 1 2 3 C S do nothing', off === 'hand', off);
       // never in a form control: a tool key typed into the settings panel's controls picks nothing
-      await page.click('button[aria-label="Settings"]'); await settle(page);
+      await openSettings(page); await settle(page);
       await page.evaluate(() => document.querySelector('.panel input[type=range]')?.focus());
       const inForm = await page.evaluate(() => document.activeElement?.tagName);
       await page.keyboard.press('2'); await sleep(100);
@@ -1700,7 +1719,7 @@ async function main() {
       await page.keyboard.press('Escape'); await settle(page);
       // Escape order (UI.md 4.5): Settings closes before the tool goes back to the Hand
       await pickTool(page, 'cut'); await sleep(250);
-      await page.click('button[aria-label="Settings"]'); await settle(page);
+      await openSettings(page); await settle(page);
       await page.keyboard.press('Escape'); await settle(page);
       const e1 = { settings: await page.evaluate(() => document.querySelector('.panel').dataset.open), tool: (await tools(page)).tool };
       await page.keyboard.press('Escape'); await sleep(250);
@@ -1789,19 +1808,19 @@ async function main() {
 
     await section('cut-real', async () => {
       // the hidden-tab path needs more than 60 s hidden: performance.now gets a dev skew (the game's wall clock), only in this page
-      const init = () => { const real = performance.now.bind(performance); let skew = 0; performance.now = () => real() + skew; window.__skewClock = (ms) => { skew += ms; }; };
+      const init = () => { const real = performance.now.bind(performance); let skew = 0; performance.now = () => real() + skew; window.__skewClock = (ms) => { skew += ms; }; window.__liveLog = []; const rec = () => { const el = document.getElementById('wh-live'); if (!el) { setTimeout(rec, 30); return; } new MutationObserver(() => { if (el.textContent) window.__liveLog.push(el.textContent); }).observe(el, { childList: true, characterData: true, subtree: true }); }; rec(); };
       const { page, context, w } = await open({ query: '?dev=1&rseed=4242', init });
       mainWatches.push(['cut-real', w]);
       await wake(page);
       await page.evaluate(() => window.__WH__.setSetting('skipAnimations', true));
       await openCapsules(page, 3);   // others in the Hoard (the switch path)
-      // the cut flow is checked on the starter (Dollop). Checkpoint 47's chunk pieces push themselves off their cut face (node: Dollop 1.6
-      // m/s, popdome / dimpla families 8..14 m/s; the shell holds new chunks 0.8 s as a stopgap): a known physics issue, not the shell's
+      // the cut flow is checked on the starter (Dollop) in the clean style (the TRUE cut: two real pieces, the scripted parting). RE-SPECIFIED because the owner changed the design on 2026-10-08
+      // (CUT2.md 14: no face piece, no chunk, no closed-loop hold; MAX_PIECES_CLEAN is the limit). The true-cut rows are in cut_browser.mjs.
       await page.evaluate((c) => window.__WH__.setGenome(c), 'g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA');
       await page.evaluate(() => { window.__WH__.setSetting('skipAnimations', false); window.__WH__.setSetting('quality', 'high'); window.__WH__.resume(); });
       await settle(page);
       const t0 = await tools(page);
-      check('Cut on the real SoftBody (checkpoint 47): the Cut tool is offered, 6 pieces at quality high', t0.cutSupported && t0.maxPieces === 6 && t0.pieces === 1, JSON.stringify(t0));
+      check(`Cut on the real SoftBody: the Cut tool is offered, MAX_PIECES_CLEAN (${MAX_PIECES_CLEAN}) pieces in the clean style at quality high`, t0.cutSupported && t0.maxPieces === MAX_PIECES_CLEAN && t0.pieces === 1, JSON.stringify(t0));
       await pickTool(page, 'cut'); await settle(page);
       const a0 = (await state(page)).audio.started;
       // a REAL mouse swipe, top to bottom a little right of the middle; paused before the let-go so the neck is stepped
@@ -1821,11 +1840,11 @@ async function main() {
       await shot(page, 'cut_separated_desktop');
       await sleep(400);
       const a1 = (await state(page)).audio.started;
-      check('a real mouse swipe draws the blade, necks the squishy (busy), then two pieces whose shares sum to 1, the face on the side that held the eyes; cut start + separate sounds',
+      check('a real mouse swipe draws the blade, necks the squishy (busy), then two pieces whose shares sum to 1, the play body the larger one; cut start + separate sounds',
         bladeOn && neck.busy && neck.pieces === 1 && t2.pieces === 2 && Math.abs(t2.fracs[0] + t2.fracs[1] - 1) < 0.01 && t2.fracs[0] > t2.fracs[1] && a1.cut - a0.cut >= 1 && t2.pieceViews === 1,
         JSON.stringify({ bladeOn, neckBusy: neck.busy, fracs: t2.fracs.map((f) => +f.toFixed(3)), cut: a1.cut - a0.cut, cutPop: a1.cutPop - a0.cutPop }));
       check('the cut says it in the live region ("Cut into 2 pieces.")', /Cut into 2 pieces\./.test(await live(page)), await live(page));
-      // drag to reconnect: carry the chunk onto the face piece and hold it there
+      // drag to reconnect: carry the other piece onto the play body and hold it there
       await stepSim(page, 1);
       const mm = await page.evaluate(() => window.__WH__.shell.matInfo());
       const face = mm.bodies[0], near = mm.bodies[1];
@@ -1833,35 +1852,31 @@ async function main() {
       // (CUT.md 1: pieces are played with, and joined, with the Hand: a drag in the Cut tool is a cut)
       await page.evaluate(() => document.querySelector('#wh-play')?.focus()); await page.keyboard.press('c');
       const handNow = (await tools(page)).tool;
-      const cr = await carry(page, { x: near.x + dir * 0.62 * near.r, y: near.y - 0.1 * near.r }, { x: face.x, y: face.y - 0.3 * face.r }, 0.6, 2);
+      const cr = await carry(page, { x: near.x - dir * 0.62 * near.r, y: near.y - 0.1 * near.r }, { x: face.x, y: face.y - 0.3 * face.r }, 0.6, 2);   // (RE-SPECIFIED 2026-10-08: the OUTER shoulder; a true-cut pair rests flush, so a press on the inner shoulder meets the other piece first)
       await cutIdle(page, 3);
       const tj = await tools(page);
-      check('drag to reconnect: the chunk carried onto the face piece and held there flows back in (whole again, a rejoin sound)',
+      check('drag to reconnect: the other piece carried onto the play body and held there flows back in (whole again, a rejoin sound)',
         handNow === 'hand' && tj.pieces === 1 && tj.extras === 0 && cr.rejoin >= 1, JSON.stringify({ handNow, pieces: tj.pieces, carried: cr.carried, rejoin: cr.rejoin, kinds: cr.events }));
       await stepSim(page, 1);
       await page.evaluate(() => document.querySelector('#wh-play')?.focus()); await page.keyboard.press('c');
       const Bc = await body(page);
       await page.evaluate((b2) => window.__WH__.shell.cutSwipe(b2.x + 0.04, b2.y - 0.3, b2.x + 0.05, b2.y + 0.3), Bc);
       await cutIdle(page, 1.5);
-      // Split in two up to 4, then 6; a 7th is refused
-      for (let i = 0; i < 2; i++) { await pclick(page, '.cutbar [data-key="split"]'); await cutIdle(page, 1.5); }
-      await stepSim(page, 1);
-      const t4 = await tools(page);
-      await shot(page, 'cut4_desktop');
-      check('Split in two (the accessible cut) twice: 4 pieces, shares sum to 1, none under 1/8', t4.pieces === 4 && Math.abs(t4.fracs.reduce((s, f) => s + f, 0) - 1) < 0.01 && t4.fracs.every((f) => f >= 0.125 - 1e-6), JSON.stringify(t4.fracs.map((f) => +f.toFixed(3))));
-      for (let i = 0; i < 2; i++) { await pclick(page, '.cutbar [data-key="split"]'); await cutIdle(page, 1.5); }
+      // Split in two (the accessible cut) up to MAX_PIECES_CLEAN pieces, then the limit. RE-SPECIFIED because the owner changed the design on 2026-10-08: the clean style's limit is the constant
+      // MAX_PIECES_CLEAN (2 in the first build; the swipe above made the first two), no longer 4 and 6
+      for (let i = 0; i < Math.max(0, MAX_PIECES_CLEAN - 2); i++) { await pclick(page, '.cutbar [data-key="split"]'); await cutIdle(page, 1.5); }
       await stepSim(page, 0.6);
-      const t6 = await tools(page);
-      const m6 = await page.evaluate(() => window.__WH__.shell.matInfo());
-      const in6 = m6.bodies.every((b2) => b2.x - 0.5 * b2.r >= 0 && b2.x + 0.5 * b2.r <= vp.width && b2.y > 0 && b2.y < vp.height);
-      await shot(page, 'cut6_desktop');
+      const tN = await tools(page);
+      const mN = await page.evaluate(() => window.__WH__.shell.matInfo());
+      const inN = mN.bodies.every((b2) => b2.x - 0.5 * b2.r >= 0 && b2.x + 0.5 * b2.r <= vp.width && b2.y > 0 && b2.y < vp.height);
+      await shot(page, 'cut4_desktop');
       const splitOff = await page.evaluate(() => document.querySelector('.cutbar [data-key="split"]').disabled);
-      const B6 = await body(page);
-      const r7 = await page.evaluate((b2) => window.__WH__.shell.cutSwipe(b2.x - 0.01, b2.y - 0.3, b2.x + 0.01, b2.y + 0.3), B6);
+      const BN = await body(page);
+      const r7 = await page.evaluate((b2) => window.__WH__.shell.cutSwipe(b2.x - 0.01, b2.y - 0.3, b2.x + 0.01, b2.y + 0.3), BN);
       await sleep(400);
-      check('6 pieces at quality high, all in frame; a 7th cut is refused in words and Split in two is disabled',
-        t6.pieces === 6 && in6 && Math.abs(t6.fracs.reduce((s, f) => s + f, 0) - 1) < 0.01 && splitOff && ['limit', 'miss', 'small'].includes(r7) && (r7 !== 'limit' || /That's as many pieces as it can make\./.test(await live(page))),
-        JSON.stringify({ pieces: t6.pieces, r7, splitOff, at: m6.bodies.map((b2) => [Math.round(b2.x), Math.round(b2.y), Math.round(b2.r)]) }));
+      check(`${MAX_PIECES_CLEAN} pieces (MAX_PIECES_CLEAN): shares sum to 1, none under 1/8, all in frame; one more cut is refused in words and Split in two is disabled`,
+        tN.pieces === MAX_PIECES_CLEAN && inN && Math.abs(tN.fracs.reduce((s, f) => s + f, 0) - 1) < 0.01 && tN.fracs.every((f) => f >= 0.125 - 1e-6) && splitOff && ['limit', 'miss', 'small'].includes(r7) && (r7 !== 'limit' || /That's as many pieces as it can make\./.test(await live(page))),
+        JSON.stringify({ pieces: tN.pieces, max: MAX_PIECES_CLEAN, r7, splitOff, at: mN.bodies.map((b2) => [Math.round(b2.x), Math.round(b2.y), Math.round(b2.r)]) }));
       await cutIdle(page, 1);
       // Reconnect all
       await pclick(page, '.cutbar [data-key="join"]');
@@ -1872,17 +1887,17 @@ async function main() {
       const tw = await tools(page);
       await sleep(400);
       check('Reconnect all: whole again (one body, frac 1, no pieces on the mat) at the middle of the table; "Whole again."',
-        tw.pieces === 1 && tw.extras === 0 && tw.body.frac === 1 && Math.hypot(tw.body.x, tw.body.z) < 0.05 && /Whole again\./.test(await live(page)), JSON.stringify({ pieces: tw.pieces, body: tw.body, live: await live(page) }));
+        tw.pieces === 1 && tw.extras === 0 && tw.body.frac === 1 && Math.hypot(tw.body.x, tw.body.z) < 0.05 && (await page.evaluate(() => window.__liveLog)).some((t) => /^Whole again\.$/.test(t)), JSON.stringify({ pieces: tw.pieces, body: tw.body, live: await live(page), log: (await page.evaluate(() => window.__liveLog)).slice(-4) }));   // (the live-region LOG: the Whole Again trophy toast replaces the line within a second)
       await shot(page, 'cut_whole_desktop');
-      // toss a piece: cut in two, carry the chunk up and let go while swinging
+      // toss a piece: cut in two, carry a piece up and let go while swinging
       const B2 = await body(page);
       await page.evaluate((b2) => window.__WH__.shell.cutSwipe(b2.x + 0.05, b2.y - 0.3, b2.x + 0.06, b2.y + 0.3), B2);
       await cutIdle(page, 1); await stepSim(page, 0.5);
       await page.evaluate(() => document.querySelector('#wh-play')?.focus()); await page.keyboard.press('c');   // the Hand
       const mt = await page.evaluate(() => window.__WH__.shell.matInfo());
       const ch = mt.bodies[1];
-      // grab the chunk by its OUTER shoulder (away from the face piece) and pull away from it: as found, the section pressed the shoulder facing the face piece, which hit the
-      // FACE piece (the nearer body on that ray), pulled it a little and let go touching the chunk: that is a join (pieces 1, nothing carried): a test fault, not the shell's
+      // grab the piece by its OUTER shoulder (away from the play body) and pull away from it: as found, the section pressed the shoulder facing the play body, which hit the
+      // play body (the nearer body on that ray), pulled it a little and let go touching the other piece: that is a join (pieces 1, nothing carried): a test fault, not the shell's
       const away = Math.sign(ch.x - mt.bodies[0].x) || 1;
       const ts = await page.evaluate(([c, vw, vh, dir]) => {
         const wh = window.__WH__; wh.pause();
@@ -1899,11 +1914,11 @@ async function main() {
         const kinds = [];
         for (let i = 0; i < 12; i++) { wh.step(1 / 60, 15); for (const e of wh.state().events) kinds.push(e.kind); }
         const s1 = wh.state().audio.started;
-        return { carried, grabbedBody: grabbed, lift: s1.lift - s0.lift, toss: s1.toss - s0.toss, land: s1.land - s0.land, kinds: [...new Set(kinds)] };
+        return { carried, grabbedBody: grabbed, lift: s1.lift - s0.lift, toss: s1.toss - s0.toss, land: s1.land - s0.land, rejoin: s1.rejoin - s0.rejoin, kinds: [...new Set(kinds)] };
       }, [ch, vp.width, vp.height, away]);
       const tt = await tools(page);
-      check('toss a piece: a chunk pulled past 1.15 x maxPull is carried (lift), thrown on the let-go (toss) and lands; still two pieces',
-        ts.carried && ts.lift >= 1 && ts.toss >= 1 && (ts.land >= 1 || ts.kinds.includes('land')) && tt.pieces === 2, JSON.stringify({ ...ts, pieces: tt.pieces }));
+      check('toss a piece: a piece pulled past 1.15 x maxPull is carried (lift), thrown on the let-go (toss) and lands; still two pieces and no rejoin sound (a toss is not a join)',
+        ts.carried && ts.lift >= 1 && ts.toss >= 1 && (ts.land >= 1 || ts.kinds.includes('land')) && ts.rejoin === 0 && tt.pieces === 2, JSON.stringify({ ...ts, pieces: tt.pieces }));
       // leaving reconnects (CUT.md 2.2): the Hoard (animated on a wide screen), a quick switch, a ceremony, a hide over 60 s, a reload
       await page.evaluate(() => window.__WH__.resume());
       await hclick(page, '.hoard-btn'); await settle(page);
@@ -1952,7 +1967,7 @@ async function main() {
       await page.waitForFunction(() => window.__WH__ && window.__WH__.state().phase === 'title', null, { timeout: 180000 });
       await wake(page);
       const tr = await tools(page);
-      const stored = await page.evaluate(() => Object.keys(localStorage).filter((k) => /"(piece|pieces|chunk|cutNormal)"/.test(localStorage.getItem(k) ?? '')));
+      const stored = await page.evaluate(() => Object.keys(localStorage).filter((k) => /"(piece|pieces|chunk|cutNormal|region|cells|planes)"/.test(localStorage.getItem(k) ?? '')));
       check('leaving: a reload is whole again; nothing about pieces is stored', k4.pieces === 2 && tr.pieces === 1 && tr.extras === 0 && stored.length === 0, JSON.stringify({ k4, pieces: tr.pieces, stored }));
       await context.close();
     });
@@ -2018,7 +2033,7 @@ async function main() {
       const focusables = [...document.querySelectorAll('button, a[href], input:not([type=hidden]), select, textarea, summary, [tabindex]')].filter((e) => !e.matches('#wh-play, .play-target') && e.tabIndex >= -1 && shown(e instanceof HTMLInputElement && e.labels && e.labels[0] ? e.labels[0] : e));
       const small = focusables.map((e) => ({ e, ...ext(e) })).filter((x) => x.w < 43 || x.h < 43).map((x) => `${x.e.getAttribute('aria-label') ?? x.e.dataset.tool ?? x.e.dataset.key ?? x.e.className} ${x.w}x${x.h}`);
       const rect = (e) => { const b = e.getBoundingClientRect(); return { x: b.left, y: b.top, r: b.right, b: b.bottom }; };
-      const pieces = { brand: '.hud-top .wordmark', mute: '.hud-actions button[aria-pressed]', settings: '.hud-actions button[aria-label="Settings"]', hint: '.hint', switcher: '.qswitch', plate: '.nametag', ring: '.meter-cluster', chip: '.mat-chip', tray: '.dock-bar', bar: '.dock-attach-body', caption: '.dock-caption' };
+      const pieces = { brand: '.hud-top .wordmark', mute: '.hud-actions button[aria-label="Mute sound"]', menu: '.hud-actions button[aria-label="Menu"]', fs: '.hud-actions button[aria-label="Full screen"]', hint: '.hint', switcher: '.qswitch', plate: '.nametag', ring: '.meter-cluster', chip: '.mat-chip', tray: '.dock-bar', bar: '.dock-attach-body', caption: '.dock-caption' };
       const R = {};
       for (const [k, q] of Object.entries(pieces)) { const e = document.querySelector(q); if (shown(e)) R[k] = rect(e); }
       const clash = [];
@@ -2126,10 +2141,13 @@ async function main() {
           return out;
         };
         const hand = await walk(8);
-        const first = hand.findIndex((s) => s.name === 'Mute sound');
-        const cyc = hand.slice(first, first + 5).map((s) => s.name);
-        check(`K04 ${W}x${H}: the Tab-only walk at rest is Mute, Settings, Hoard, Hand (one stop for the toolbar), the squishy; the cycle comes round; every control stop shows a ring of 3 px or more`,
-          first >= 0 && JSON.stringify(cyc) === JSON.stringify(['Mute sound', 'Settings', 'Hoard', 'Hand', 'Squishy']) && hand.slice(first, first + 5).filter((s) => !s.play).every((s) => s.ring >= 3), JSON.stringify(hand));
+        // (RE-SPECIFIED because the owner changed the design on 2026-10-08, UI.md 9.1 / B4a: the top row is [Full screen, Sound, Menu], the gear is the Menu; Full screen only where the page may use it and the layout draws it: not on a strip under 700 px wide)
+        const fsOn = await page.evaluate(() => { const b = document.querySelector('.hud-actions button[aria-label="Full screen"]'); return !!b && b.offsetParent !== null; });
+        const want5 = [...(fsOn ? ['Full screen'] : []), 'Mute sound', 'Menu', 'Hoard', 'Hand', 'Squishy'];
+        const first = hand.findIndex((s) => s.name === want5[0]);
+        const cyc = hand.slice(first, first + want5.length).map((s) => s.name);
+        check(`K04 ${W}x${H}: the Tab-only walk at rest is ${fsOn ? 'Full screen, ' : ''}Mute, Menu, Hoard, Hand (one stop for the toolbar), the squishy; the cycle comes round; every control stop shows a ring of 3 px or more`,
+          first >= 0 && JSON.stringify(cyc) === JSON.stringify(want5) && hand.slice(first, first + want5.length).filter((s) => !s.play).every((s) => s.ring >= 3), JSON.stringify(hand));
         await pickToolIn(page, 'cut'); await sleep(500); await settle(page);
         const cut = await walk(14);
         const f2 = cut.findIndex((s) => s.name === 'Mute sound');
@@ -2206,8 +2224,8 @@ async function main() {
 
     // ------------------------------------------------------------------------------------------------
     // SHELL-4 step 3: the Cut tool on the REAL physics and the real stage, CUT.md X01..X10 mapped to named checks (the physics-only parts: probe_cut.ts).
-    //   X01 sizes (shares sum to 1, 2 / 4 / 6 pieces by swipe)    X02 refusals (under 1/8, over the limit, 4 on low) with their live-region lines
-    //   X03 one face (stage views: one with a face, the rest chunks; the face on the side holding the eyes' anchor)     X04 whole again (Reconnect all)
+    //   X01 sizes (shares sum to 1, up to MAX_PIECES_CLEAN pieces by swipe)    X02 refusals (under 1/8, over the limit; Minis: 4 on low) with their live-region lines
+    //   X03 (re-specified 2026-10-08) both pieces are peers, one stage view per piece, none a chunk     X04 whole again (Reconnect all)
     //   X05 every leave path reconnects first (section cut-real: Hoard, switch, capsule, hidden 60 s, reload)    X06 the meter: cut and reconnect pay nothing,
     //   a held squeeze on a piece pays like on a whole squishy, a tap pays nothing     X07 (physics: probe_cut)    X08 (physics: probe_cut)
     //   X09 flash gate (render harness, section cut)     X10 keyboard only: Tab to the Cut tool's buttons, Split in two, Reconnect all, live-region lines
@@ -2233,7 +2251,7 @@ async function main() {
         return wh.shell.cutSwipe((x - 4) / vw, (b.y - 1.35 * b.r) / vh, (x + 4) / vw, (b.y + 1.25 * b.r) / vh);
       }, [dx, vp.width, vp.height]);
       /** swipe the biggest piece further and further in from its edge until a cut is accepted (the smaller part just over 1/8: how a player reaches 6) */
-      const peel = async () => {
+      const cutSmall = async () => {
         const tried = [];
         for (let dx = 0.94; dx > -0.05; dx -= 0.04) {
           const r = await swipeBiggest(dx);
@@ -2256,20 +2274,19 @@ async function main() {
       const t0 = await tools(page);
       check('X02 real: a swipe along the very edge (a piece under 1/8 of the whole) is refused ("Too small to cut there. Try nearer the middle."); the squishy stays whole, nothing is replaced', r0 === 'small' && /Too small to cut there\./.test(sayEdge) && t0.pieces === 1 && t0.extras === 0, JSON.stringify({ r0, say: sayEdge, pieces: t0.pieces }));
       await stepSim(page, 0.5);
-      // ---- X01 by swipe: 2, 4, 6 pieces by REAL swipes (each peels a piece just over 1/8 off the biggest piece), face views counted
-      const anchor0 = await page.evaluate(() => window.__WH__.shell.faceAnchor());
-      const p1 = await peel();
-      const g1 = await gaps(anchor0), v1 = await views(), t1 = await tools(page);
-      const nearest1 = g1.reduce((best, q, i) => (q.near < g1[best].near ? i : best), 0);
+      // ---- X01 by swipe: up to MAX_PIECES_CLEAN pieces by REAL swipes (each cuts a piece just over 1/8 off the biggest piece). RE-SPECIFIED because the owner changed the design on 2026-10-08:
+      //      there is no face piece and no chunk (the old X03 "ONE face and one eyeless chunk" is X03' in cut_browser.mjs x03), the limit is the constant MAX_PIECES_CLEAN, the views are peers
+      const p1 = await cutSmall();
+      const v1 = await views(), t1 = await tools(page);
       check('X01 real: a swipe cuts the whole squishy into 2 pieces whose shares sum to 1 (0.5 %), the smaller just over 1/8', p1.r === 'cut' && t1.pieces === 2 && Math.abs(t1.fracs[0] + t1.fracs[1] - 1) < 0.005 && Math.min(...t1.fracs) >= 0.125 - 1e-6, JSON.stringify({ r: p1.r, dx: p1.dx, fracs: t1.fracs.map((f) => +f.toFixed(3)) }));
-      check('X03 real: the stage draws ONE face and one eyeless chunk (stage views); the face piece is the play body, the one holding the eyes\' anchor (nearest to where it was); the identity is unchanged',
-        v1 && v1.faces === 1 && v1.chunks === 1 && nearest1 === 0 && (await page.evaluate(() => window.__WH__.shell.identity().itemId)) === id0.itemId, JSON.stringify({ v1, nearest: g1.map((q) => +q.near.toFixed(3)), id: id0.itemId }));
+      check('X03 real (re-specified 2026-10-08): both pieces are peers: the stage draws one view per piece and none is an eyeless chunk (stageViews chunks 0); the play body is the LARGER piece; the identity is unchanged',
+        v1 && v1.total === 2 && v1.chunks === 0 && t1.fracs[0] >= t1.fracs[1] - 1e-9 && (await page.evaluate(() => window.__WH__.shell.identity().itemId)) === id0.itemId, JSON.stringify({ v1, fracs: t1.fracs.map((f) => +f.toFixed(3)), id: id0.itemId }));
       const pk = [];
-      for (let k = 2; k < 6; k++) { const p = await peel(); pk.push(p.r); }
-      const t6 = await tools(page), v6 = await views(), g6 = await gaps(anchor0);
+      for (let k = 2; k < MAX_PIECES_CLEAN; k++) { const p = await cutSmall(); pk.push(p.r); }
+      const t6 = await tools(page), v6 = await views();
       await shot(page, 'cut6_swipes_desktop');
-      check('X01 real: five REAL swipes make 6 pieces (quality high), shares sum to 1, none under 1/8; X03: still ONE face and five chunks (the face goes with the side that holds the eyes of the piece being cut: after several cuts it is no longer the piece nearest the ORIGINAL anchor)',
-        t6.pieces === 6 && pk.every((r) => r === 'cut') && Math.abs(t6.fracs.reduce((s, f) => s + f, 0) - 1) < 0.005 && t6.fracs.every((f) => f >= 0.125 - 1e-6) && v6.faces === 1 && v6.chunks === 5,
+      check(`X01 / X12 real: REAL swipes make ${MAX_PIECES_CLEAN} pieces (MAX_PIECES_CLEAN), shares sum to 1, none under 1/8, one view per piece and none a piece`,
+        t6.pieces === MAX_PIECES_CLEAN && pk.every((r) => r === 'cut') && Math.abs(t6.fracs.reduce((s, f) => s + f, 0) - 1) < 0.005 && t6.fracs.every((f) => f >= 0.125 - 1e-6) && v6.total === MAX_PIECES_CLEAN && v6.chunks === 0,
         JSON.stringify({ pieces: t6.pieces, results: pk, fracs: t6.fracs.map((f) => +f.toFixed(3)), v6 }));
       // ---- X02: the 7th cut (the biggest piece through its middle) is refused by the limit, in words; nothing changes
       await stepSim(page, 0.6);
@@ -2277,7 +2294,7 @@ async function main() {
       await sleep(400);
       const say7 = await sayNow();
       const t7 = await tools(page);
-      check('X02 real: a 7th cut is refused ("That\'s as many pieces as it can make."), six pieces stay, Split in two is disabled', r7 === 'limit' && /as many pieces as it can make/.test(say7) && t7.pieces === 6 && (await page.evaluate(() => document.querySelector('.cutbar [data-key="split"]').disabled)), JSON.stringify({ r7, say: say7, pieces: t7.pieces }));
+      check(`X02 real: a cut beyond MAX_PIECES_CLEAN (${MAX_PIECES_CLEAN}) is refused ("That\'s as many pieces as it can make."), the pieces stay, Split in two is disabled`, r7 === 'limit' && /as many pieces as it can make/.test(say7) && t7.pieces === MAX_PIECES_CLEAN && (await page.evaluate(() => document.querySelector('.cutbar [data-key="split"]').disabled)), JSON.stringify({ r7, say: say7, pieces: t7.pieces }));
       // a piece already near the minimum: "as small as it gets"
       const small = await page.evaluate(() => { const g = window.__WH__.shell.pieceGaps(), m = window.__WH__.shell.matInfo(); let k = 1; for (let i = 1; i < g.length; i++) if (g[i].frac < g[k].frac) k = i; return { x: m.bodies[k].x, y: m.bodies[k].y, r: m.bodies[k].r, frac: g[k].frac }; });
       const rs = await page.evaluate(([b, vw, vh]) => window.__WH__.shell.cutSwipe((b.x - 4) / vw, (b.y - 1.2 * b.r) / vh, (b.x + 4) / vw, (b.y + 1.1 * b.r) / vh), [small, vp.width, vp.height]);
@@ -2286,8 +2303,8 @@ async function main() {
       check('X02 real: cutting the smallest piece (about 1/8) is refused in words', ['small', 'limit', 'miss'].includes(rs) && (rs !== 'small' || /as small as it gets|Too small/.test(saySmall)), JSON.stringify({ rs, frac: +small.frac.toFixed(3), say: saySmall }));
       // ---- X06: cutting paid nothing (and a refusal either)
       const m6 = await meter(page);
-      check('X06 real: six cuts and the refusals paid the meter nothing and the Hoard saw no piece (fill and items unchanged)', m6.fill === m0.fill && m6.credits === m0.credits && (await hstate(page)).items.length === items0, JSON.stringify({ fill: [m0.fill, m6.fill], items: [items0, (await hstate(page)).items.length] }));
-      // ---- X04 + the bridge: Reconnect all from six pieces, the chunks' SURFACE gap to the face piece every step (the bridge is drawn while the skins are apart)
+      check('X06 real: the cuts and the refusals paid the meter nothing and the Hoard saw no piece (fill and items unchanged)', m6.fill === m0.fill && m6.credits === m0.credits && (await hstate(page)).items.length === items0, JSON.stringify({ fill: [m0.fill, m6.fill], items: [items0, (await hstate(page)).items.length] }));
+      // ---- X04 + the bridge: Reconnect all from six pieces, the pieces' SURFACE gap to the play body every step (the bridge is drawn while the skins are apart)
       const R0 = t0.body.r;   // the whole squishy's radius, read before the first cut
       await pclick(page, '.cutbar [data-key="join"]');
       const series = [];
@@ -2299,17 +2316,18 @@ async function main() {
         series.push([(i + 1) * 2 / 60, Math.min(...g.slice(1).map((q) => q.gap)), Math.max(...g.slice(1).map((q) => q.gap))]);
         if (i === 2 || i === 7 || i === 15 || i === 27) await shot(page, `reconnect6_${(i + 1) * 2}_desktop`);
       }
-      // seconds with the chunk that is furthest apart still showing a gap that opens the bridge (> 2 % of the whole's radius), and the same for ANY chunk
+      // seconds with the other piece that is furthest apart still showing a gap that opens the bridge (> 2 % of the whole's radius), and the same for ANY piece
       const tAny = series.filter((s) => s[2] > 0.02 * R0).length * 2 / 60, tAll = series.filter((s) => s[1] > 0.02 * R0).length * 2 / 60;
       await cutIdle(page, 4); await stepSim(page, 1); await sleep(450);
       const tw = await tools(page), vw = await views();
-      check('X04 real: Reconnect all from 6 pieces ends whole: one body at the full share, no piece on the mat, one stage view; "Whole again."', tw.pieces === 1 && tw.extras === 0 && tw.body.frac === 1 && vw.total === 1 && vw.faces === 1 && /Whole again\./.test(await sayNow()), JSON.stringify({ pieces: tw.pieces, extras: tw.extras, frac: tw.body.frac, views: vw }));
-      check(`Reconnect all keeps the glowing bridge in view: some chunk's skin stays more than 2 % of the radius clear of the face piece for at least 0.3 s (measured ${tAny.toFixed(2)} s; every chunk ${tAll.toFixed(2)} s; the whole join ${(series.length * 2 / 60).toFixed(2)} s)`, tAny >= 0.3 && series.length * 2 / 60 <= 1.45, JSON.stringify(series.filter((_, i) => i % 3 === 0).map((s) => [+s[0].toFixed(2), +s[1].toFixed(3), +s[2].toFixed(3)])));
+      check(`X04 real: Reconnect all from ${MAX_PIECES_CLEAN} pieces ends whole: one body at the full share, no piece on the mat, one stage view; "Whole again."`, tw.pieces === 1 && tw.extras === 0 && tw.body.frac === 1 && vw.total === 1 && vw.faces === 1 && /Whole again\./.test(await sayNow()), JSON.stringify({ pieces: tw.pieces, extras: tw.extras, frac: tw.body.frac, views: vw }));
+      check(`Reconnect all keeps the glowing bridge in view: some piece's skin stays more than 2 % of the radius clear of the play body for at least 0.3 s (measured ${tAny.toFixed(2)} s; every piece ${tAll.toFixed(2)} s; the whole join ${(series.length * 2 / 60).toFixed(2)} s)`, tAny >= 0.3 && series.length * 2 / 60 <= 1.45, JSON.stringify(series.filter((_, i) => i % 3 === 0).map((s) => [+s[0].toFixed(2), +s[1].toFixed(3), +s[2].toFixed(3)])));
       const m7 = await meter(page);
       check('X06 real: Reconnect all paid nothing either', m7.fill === m0.fill, `${m0.fill} -> ${m7.fill}`);
-      // ---- the gestures: drag a chunk into the face piece and HOLD (0.4 s), then the other way: let go while touching
+      // ---- the gestures: drag a piece into the play body and HOLD (0.4 s), then the other way: let go while touching
       const cutHalf = async () => {
         await page.evaluate(() => window.__WH__.pause());
+        if ((await tools(page)).pieces > 1) { await toolOn('cut'); await pclick(page, '.cutbar [data-key="join"]'); await cutIdle(page, 4); await stepSim(page, 1); }   // (whole first: an earlier row may have left the pair cut)
         const Bq = await body(page);
         const r = await page.evaluate((b) => window.__WH__.shell.cutSwipe(b.x + 0.05, b.y - 0.3, b.x + 0.06, b.y + 0.3), Bq);
         await cutIdle(page, 2); await stepSim(page, 1.2);
@@ -2320,8 +2338,8 @@ async function main() {
       const rA = await cutHalf();
       await toolOn('hand');
       const mA = await mi();
-      const faceA = mA.bodies[0], chunkA = mA.bodies[1];
-      const dirA = Math.sign(faceA.x - chunkA.x) || 1;
+      const anchorA = mA.bodies[0], twinA = mA.bodies[1];
+      const dirA = Math.sign(anchorA.x - twinA.x) || 1;
       // a finger held on a piece that merely rests NEAR its twin (the parting gap, skins about 0.15 m apart) must not join them: the first version compared bounding spheres, and holding a
       // piece for 0.4 s next to its twin merged them; a join needs the skins to touch
       const nearGap = (await gaps(null))[1].gap;
@@ -2332,10 +2350,10 @@ async function main() {
         for (let i = 0; i < 12; i++) { wh.step(1 / 60, 6); if (wh.shell.tools().busy) busy = true; }   // 1.3 s of squeezing it in place
         wh.pointerUp(0); wh.step(1 / 60, 20);
         return { busy, pieces: wh.shell.tools().pieces };
-      }, [{ x: chunkA.x - dirA * 0.62 * chunkA.r, y: chunkA.y - 0.1 * chunkA.r }, vp.width, vp.height]);
-      check(`a finger held 1.3 s on a piece that rests ${nearGap.toFixed(2)} m from its twin (skins apart) does NOT join them (the join needs the skins to touch)`, nearGap > 0.05 && !stay.busy && stay.pieces === 2, JSON.stringify({ nearGap: +nearGap.toFixed(3), ...stay }));
+      }, [{ x: twinA.x - dirA * 0.62 * twinA.r, y: twinA.y - 0.1 * twinA.r }, vp.width, vp.height]);
+      check(`a finger held 1.3 s on a piece that rests ${nearGap.toFixed(2)} m from its twin (skins apart) does NOT join them (X15: a resting touch never joins; RE-SPECIFIED 2026-10-08: a true-cut pair rests flush, under TOUCH_GAP, not 0.15 m apart as the chunk did)`, nearGap < 0.05 && !stay.busy && stay.pieces === 2, JSON.stringify({ nearGap: +nearGap.toFixed(3), ...stay }));
       await stepSim(page, 1);
-      // The natural gesture: press the chunk's INNER shoulder (the side facing the face piece) and pull it INTO the face piece. RE-SPECIFIED in SHELL-4 fix round 1 (VERIFY_SHELL4_A F2): this row used to press the
+      // The natural gesture: press the other piece's INNER shoulder (the side facing the play body) and pull it INTO the play body. RE-SPECIFIED in SHELL-4 fix round 1 (VERIFY_SHELL4_A F2): this row used to press the
       // OUTER shoulder and drag inward, which the gesture machine classifies as a RUB (a pull must go outward from the piece's centre): the piece never moved, the pieces had simply closed up to touching on their own,
       // and the old level-triggered rule joined them because a finger was on one. That is the bug (any touch joined resting pieces), so the row now drags for real; it also cannot be satisfied by the resting state any more.
       // Timing: the 0.4 s hold starts when the pull has moved the hand toward the other piece (cut.ts DRAG_TOWARD_K), not when the skins first touch (they may already touch at rest), so the join may not start
@@ -2350,18 +2368,18 @@ async function main() {
         for (let i = 1; i <= 36; i++) { const k = i / 36; wh.pointerMove((f.x + (t.x - f.x) * k) / vw, (f.y + (t.y - f.y) * k) / vh, 0); for (let s = 0; s < 2; s++) { wh.step(1 / 60, 1); time += 1 / 60; look(); } }
         for (let i = 0; i < 180 && join0 < 0; i++) { wh.step(1 / 60, 1); time += 1 / 60; look(); }
         return { touch0, join0, drag: +(36 * 2 / 60).toFixed(2) };
-      }, [{ x: chunkA.x + dirA * 0.55 * chunkA.r, y: chunkA.y - 0.1 * chunkA.r }, { x: faceA.x + dirA * -0.15 * faceA.r, y: chunkA.y - 0.1 * chunkA.r }, vp.width, vp.height]);
+      }, [{ x: twinA.x + dirA * 0.55 * twinA.r, y: twinA.y - 0.1 * twinA.r }, { x: anchorA.x + dirA * -0.15 * anchorA.r, y: twinA.y - 0.1 * twinA.r }, vp.width, vp.height]);
       const startedAt = held.join0 >= 0 ? held : null;   // { touch0: first time the skins touched, join0: when the join began, both from the press; drag: the drag lasted this long }
       await page.evaluate(() => window.__WH__.pointerUp(0));
       await cutIdle(page, 3); await stepSim(page, 1.5);
       const tA = await tools(page);
-      check('reconnect by DRAGGING a piece into another (the inner shoulder pulled into the twin) and holding it there: the join starts BY ITSELF after the 0.4 s hold (CUT.md 1) while the finger is still down, flows together and the squishy is whole again', rA === 'cut' && !!startedAt && held.join0 >= 0.4 && held.join0 <= 1.6 && tA.pieces === 1 && tA.extras === 0, JSON.stringify({ cut: rA, ...held, pieces: tA.pieces }));
+      check('KNOWN RED until X15 (the join gesture for FLUSH halves, S2 second half; cut_browser.mjs grab: a press on the inner shoulder grabs the play body or nothing, never this piece): reconnect by DRAGGING a piece into another (the inner shoulder pulled into the twin) and holding it there: the join starts BY ITSELF after the 0.4 s hold (CUT.md 1) while the finger is still down, flows together and the squishy is whole again', rA === 'cut' && !!startedAt && held.join0 >= 0.4 && held.join0 <= 1.6 && tA.pieces === 1 && tA.extras === 0, JSON.stringify({ cut: rA, ...held, pieces: tA.pieces }));
       await toolOn('cut');
       const rB = await cutHalf();
       await toolOn('hand');
       const mB = await mi();
-      const faceB = mB.bodies[0], chunkB = mB.bodies[1];
-      const dirB = Math.sign(faceB.x - chunkB.x) || 1;
+      const anchorB = mB.bodies[0], twinB = mB.bodies[1];
+      const dirB = Math.sign(anchorB.x - twinB.x) || 1;
       const quick = await page.evaluate(([f, t, vw, vh]) => {
         const wh = window.__WH__; wh.pause();
         wh.pointerDown(f.x / vw, f.y / vh, 0); wh.step(1 / 60, 8);
@@ -2377,10 +2395,10 @@ async function main() {
         wh.pointerUp(0);
         wh.step(1 / 60, 3);
         return { tTouch, busyBefore: early, stillBefore, busyAfter: wh.shell.tools().busy, trace: trace.filter((_, i) => i % 3 === 0) };
-      }, [{ x: chunkB.x + dirB * 0.55 * chunkB.r, y: chunkB.y - 0.1 * chunkB.r }, { x: faceB.x + dirB * -0.15 * faceB.r, y: chunkB.y - 0.1 * chunkB.r }, vp.width, vp.height]);
+      }, [{ x: twinB.x + dirB * 0.55 * twinB.r, y: twinB.y - 0.1 * twinB.r }, { x: anchorB.x + dirB * -0.15 * anchorB.r, y: twinB.y - 0.1 * twinB.r }, vp.width, vp.height]);
       await cutIdle(page, 3); await stepSim(page, 1.5);
       const tB = await tools(page);
-      check('reconnect by LETTING GO while touching: no join while the finger is down for under 0.4 s; the let-go starts it, and the squishy is whole again', rB === 'cut' && !quick.busyBefore && !quick.stillBefore && quick.busyAfter && tB.pieces === 1 && tB.extras === 0, JSON.stringify({ cut: rB, quick, pieces: tB.pieces }));
+      check('KNOWN RED until X15 (the join gesture for FLUSH halves, S2 second half; see the DRAGGING row): reconnect by LETTING GO while touching: no join while the finger is down for under 0.4 s; the let-go starts it, and the squishy is whole again', rB === 'cut' && !quick.busyBefore && !quick.stillBefore && quick.busyAfter && tB.pieces === 1 && tB.extras === 0, JSON.stringify({ cut: rB, quick, pieces: tB.pieces }));
       // ---- X06: a held squeeze on a PIECE pays like one on a whole squishy; a tap on it pays nothing
       await toolOn('cut');
       const rC = await cutHalf();
@@ -2406,10 +2424,10 @@ async function main() {
       await stepSim(page, 4);
       const tapPay = await tapOn(1);
       await stepSim(page, 4);
-      const sqChunk = await squeezeOn(1);
+      const sqTwin = await squeezeOn(1);
       await stepSim(page, 5);
-      const sqFace = await squeezeOn(0);
-      check('X06 real: a tap on a piece pays nothing; a squeeze held 1.2 s on a chunk pays through the meter like the same squeeze on the face piece (within 25 %)', rC === 'cut' && tapPay === 0 && sqChunk > 0 && sqFace > 0 && Math.abs(sqChunk - sqFace) <= 0.25 * Math.max(sqChunk, sqFace), `tap ${tapPay}, squeeze on the chunk ${sqChunk.toFixed(4)}, on the face ${sqFace.toFixed(4)} of the ring, cut ${rC}, pieces ${(await tools(page)).pieces}`);
+      const sqAnchor = await squeezeOn(0);
+      check('X06 real: a tap on a piece pays nothing; a squeeze held 1.2 s on a piece pays through the meter like the same squeeze on the play body (within 25 %)', rC === 'cut' && tapPay === 0 && sqTwin > 0 && sqAnchor > 0 && Math.abs(sqTwin - sqAnchor) <= 0.25 * Math.max(sqTwin, sqAnchor), `tap ${tapPay}, squeeze on the other piece ${sqTwin.toFixed(4)}, on the face ${sqAnchor.toFixed(4)} of the ring, cut ${rC}, pieces ${(await tools(page)).pieces}`);
       await toolOn('cut');
       await pclick(page, '.cutbar [data-key="join"]'); await cutIdle(page, 4); await stepSim(page, 1);
       // ---- X10: the keyboard only (no pointer): focus the squishy, C opens the Cut tool, Tab to Split in two, Enter, Tab to Reconnect all, Enter; live-region lines
@@ -2552,8 +2570,8 @@ async function main() {
         await page.evaluate(() => window.__WH__.pause());
         await stepSim(page, 4);
         const m = await page.evaluate(() => window.__WH__.shell.matInfo().bodies);
-        const face = m[0], chunk = m[1];
-        return { face, chunk, dir: Math.sign(chunk.x - face.x) || 1, gap: await gapNow() };
+        const anchor = m[0], twin = m[1];
+        return { anchor, twin, dir: Math.sign(twin.x - anchor.x) || 1, gap: await gapNow() };
       };
       /** a REAL mouse touch at `p`: hold `holdS`, optionally dragging along `path` ([dx, dy] px by the end); the sim is stepped between the events */
       const touch = async (p, holdS, path = null) => {
@@ -2575,9 +2593,9 @@ async function main() {
       const trials = [];
       for (const [label, hold, path] of [['tap 60 ms', 0.06, null], ['press 300 ms', 0.3, null], ['squeeze 1.2 s', 1.2, null], ['rub inward 1.0 s', 1.0, 'rub'], ['pull away and up 1.0 s', 1.0, 'away']]) {
         const f = await freshPair();
-        const p = { x: f.chunk.x + f.dir * 0.3 * f.chunk.r, y: f.chunk.y - 0.1 * f.chunk.r };
-        const pa = path === 'rub' ? [-f.dir * 0.5 * f.chunk.r, 0] : path === 'away' ? [f.dir * 0.4 * f.chunk.r, -0.6 * f.chunk.r] : null;
-        const r = await touch(path === 'away' ? { x: f.chunk.x + f.dir * 0.55 * f.chunk.r, y: f.chunk.y - 0.1 * f.chunk.r } : p, hold, pa);
+        const p = { x: f.twin.x + f.dir * 0.3 * f.twin.r, y: f.twin.y - 0.1 * f.twin.r };
+        const pa = path === 'rub' ? [-f.dir * 0.5 * f.twin.r, 0] : path === 'away' ? [f.dir * 0.4 * f.twin.r, -0.6 * f.twin.r] : null;
+        const r = await touch(path === 'away' ? { x: f.twin.x + f.dir * 0.55 * f.twin.r, y: f.twin.y - 0.1 * f.twin.r } : p, hold, pa);
         trials.push({ label, gap: f.gap === null ? null : +f.gap.toFixed(3), ...r });
       }
       const allKept = trials.every((t) => t.pieces === 2 && t.busyAt === null && !t.busyAfterUp && t.rejoins === 0);
@@ -2585,8 +2603,8 @@ async function main() {
         allKept && trials.every((t) => t.gap !== null && t.gap < 0.06), JSON.stringify(trials));
       // the deliberate gesture: press the INNER shoulder (the side facing the twin) and pull it into the twin, hold there; the join starts by itself 0.4 s after the skins touch, finger still down
       const f2 = await freshPair();
-      const press2 = { x: f2.chunk.x - f2.dir * 0.55 * f2.chunk.r, y: f2.chunk.y - 0.1 * f2.chunk.r };
-      const target2 = { x: f2.face.x + f2.dir * 0.1 * f2.face.r, y: f2.chunk.y - 0.1 * f2.chunk.r };
+      const press2 = { x: f2.twin.x - f2.dir * 0.55 * f2.twin.r, y: f2.twin.y - 0.1 * f2.twin.r };
+      const target2 = { x: f2.anchor.x + f2.dir * 0.1 * f2.anchor.r, y: f2.twin.y - 0.1 * f2.twin.r };
       await page.mouse.move(press2.x, press2.y); await page.mouse.down();
       let join0 = -1, time = 0, minGap = 9, carried = false;
       const look = async () => { const t = await tools(page); const g = await gapNow(); if (g !== null) minGap = Math.min(minGap, g); if (join0 < 0 && t.busy) join0 = +time.toFixed(2); const mi = await page.evaluate(() => window.__WH__.shell.matInfo().bodies); if (mi.some((b) => b.carried)) carried = true; };
@@ -2604,8 +2622,8 @@ async function main() {
         heldDown && end.pieces === 1 && end.extras === 0, JSON.stringify({ joinStartedAt: join0, fingerStillDown: heldDown, minGap: +minGap.toFixed(3), carried, pieces: end.pieces, gapBeforeDrag: f2.gap === null ? null : +f2.gap.toFixed(3) }));
       // let go while they touch: drag the piece in and let go straight away (under the 0.4 s hold)
       const f3 = await freshPair();
-      const press3 = { x: f3.chunk.x - f3.dir * 0.55 * f3.chunk.r, y: f3.chunk.y - 0.1 * f3.chunk.r };
-      const target3 = { x: f3.face.x + f3.dir * 0.1 * f3.face.r, y: f3.chunk.y - 0.1 * f3.chunk.r };
+      const press3 = { x: f3.twin.x - f3.dir * 0.55 * f3.twin.r, y: f3.twin.y - 0.1 * f3.twin.r };
+      const target3 = { x: f3.anchor.x + f3.dir * 0.1 * f3.anchor.r, y: f3.twin.y - 0.1 * f3.twin.r };
       await page.mouse.move(press3.x, press3.y); await page.mouse.down();
       // (the pieces rest 0.029 m apart, i.e. they already touch before the finger moves: the drag runs a third of a second, well under the 0.4 s hold, and the finger lets go while they touch)
       let early = false, tm = 0, minGap3 = 9;
@@ -2647,10 +2665,10 @@ async function main() {
       const last = rows[rows.length - 1];
       const everyEnabledPressCut = rows.filter((r) => r.from !== undefined).every((r) => r.to === r.from + 1);
       const noMiddleAdvice = rows.every((r) => !/nearer the middle/i.test(r.said ?? ''));
-      check('A-F1 real: Split in two from whole: every press of the ENABLED button cuts (pieces +1), none answers "Try nearer the middle", and it goes beyond the old stall at 4 pieces',
-        everyEnabledPressCut && noMiddleAdvice && rows.filter((r) => r.to !== undefined).length >= 4 && rows.some((r) => r.to >= 5), JSON.stringify(rows));
+      check(`A-F1 real (re-specified 2026-10-08: the limit is MAX_PIECES_CLEAN, ${MAX_PIECES_CLEAN}): Split in two from whole: every press of the ENABLED button cuts (pieces +1), none answers "Try nearer the middle", and the presses reach ${MAX_PIECES_CLEAN} pieces${MAX_PIECES_CLEAN >= 5 ? ' (beyond the old stall at 4)' : ''}`,
+        everyEnabledPressCut && noMiddleAdvice && rows.filter((r) => r.to !== undefined).length >= MAX_PIECES_CLEAN - 1 && rows.some((r) => r.to === MAX_PIECES_CLEAN) && (MAX_PIECES_CLEAN < 5 || rows.some((r) => r.to >= 5)), JSON.stringify(rows));
       check('A-F1 real: at the end the button is either gone (the limit of pieces: "That\'s as many pieces as it can make.") or disabled with an honest line (no piece big enough to halve); the shares always sum to 1 and none is under 1/8',
-        (last.enabled === false ? /as many pieces|too small to split/i.test(last.text) : last.to === 6) && (await tools(page)).fracs.every((f) => f >= 0.125 - 1e-6) && Math.abs((await tools(page)).fracs.reduce((s, f) => s + f, 0) - 1) < 0.005, JSON.stringify(last));
+        (last.enabled === false ? /as many pieces|big enough to cut again/i.test(last.text) : last.to === MAX_PIECES_CLEAN) && (await tools(page)).fracs.every((f) => f >= 0.125 - 1e-6) && Math.abs((await tools(page)).fracs.reduce((s, f) => s + f, 0) - 1) < 0.005, JSON.stringify(last));
       await context.close();
     });
 
@@ -2690,7 +2708,7 @@ async function main() {
       });
       const blurPlay = () => page.evaluate(() => { (document.activeElement)?.blur?.(); document.body.focus?.(); });
       // M1: Settings names every key
-      await page.click('button[aria-label="Settings"]'); await settle(page);
+      await openSettings(page); await settle(page);
       const keys = await page.evaluate(() => ({ line: document.querySelector('.panel .keys')?.textContent ?? '', hint: [...document.querySelectorAll('.panel .row-hint')].map((e) => e.textContent).find((t) => /gravity/.test(t) && /Hoard/.test(t)) ?? '' }));
       check('B-M1: the Settings "Keys:" line and the Keyboard shortcuts hint name the tool keys (1 2 3, C cut, S snap) and no longer name T or Toys', /1 2 3 tools/.test(keys.line) && /C cut/.test(keys.line) && /S snap/.test(keys.line) && /1 2 3 tools/.test(keys.hint) && /C cut/.test(keys.hint) && !toysWord(keys.line) && !toysWord(keys.hint), JSON.stringify(keys));
       // U4: with Settings open a tool KEY does nothing (nothing stacks on the sheet); a click on a tool closes Settings first and picks the tool (as the Hoard button does), never both
@@ -2851,7 +2869,7 @@ async function main() {
         }
         per.push(+(cov / Math.max(1, tot)).toFixed(3));
       }
-      const chrome = { wordmark: '.wordmark', mute: '.hud-actions button[aria-pressed]', settings: '.hud-actions button[aria-label="Settings"]', nametag: '.nametag', hoard: '.hoard-btn', ring: '.meter', capsule: '.capsule-btn', hint: '.hint', qswitch: '.qswitch', matchip: '.mat-chip', dock: '.dock-bar' };   // (the dock's tray replaces the Toys button and tray: re-specified 2026-10-08)
+      const chrome = { wordmark: '.wordmark', mute: '.hud-actions button[aria-label="Mute sound"]', menu: '.hud-actions button[aria-label="Menu"]', fs: '.hud-actions button[aria-label="Full screen"]', nametag: '.nametag', hoard: '.hoard-btn', ring: '.meter', capsule: '.capsule-btn', hint: '.hint', qswitch: '.qswitch', matchip: '.mat-chip', dock: '.dock-bar' };   // (the dock's tray replaces the Toys button and tray: re-specified 2026-10-08)
       const hit = [];
       for (const [k, q] of Object.entries(chrome)) {
         const e = document.querySelector(q);
@@ -2978,7 +2996,7 @@ async function main() {
       await context.close();
     });
 
-    // KNOWN PHYS ISSUE, reproduced once in the real shell (RENDER_R finding): the physics' cut neck morph (softbody.ts neckGoal) swells putty / slow-rise /
+    // KNOWN PHYS ISSUE (CUT2.md 14: this row becomes gated <= x1.25 on all families once PHYS P4's `depth` lands; P4 was not done in CUT-B leg 1, so it stays a report), reproduced once in the real shell (RENDER_R finding): the physics' cut neck morph (softbody.ts neckGoal) swells putty / slow-rise /
     // firm-silicone lobes to 2.0 .. 2.9 x their height and throws the pieces up. Not gated (not the shell's): the numbers go to the report, a dome family is the control.
     await section('cut-swell', async () => {
       const { speciesBaseGenome } = await import('../src/data/catalog.ts');
@@ -3005,7 +3023,7 @@ async function main() {
       }
     });
 
-    // the cut limit at LOW quality (the phone tier): 4 pieces, the 5th refused in words (real physics)
+    // the cut limit at LOW quality (the phone tier). RE-SPECIFIED because the owner changed the design on 2026-10-08: the clean style's limit is MAX_PIECES_CLEAN at every quality; MINIS keeps the old record (4 at low, 6 at med / high): 4 pieces, the 5th refused in words (real physics)
     await section('cut-low', async () => {
       const { page, context, w } = await open({ query: '?dev=1&quality=low' });
       mainWatches.push(['cut-low', w]);
@@ -3013,9 +3031,12 @@ async function main() {
       await page.evaluate(() => { window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'); window.__WH__.pause(); window.__WH__.step(1 / 60, 90); });
       await pickTool(page, 'cut'); await settle(page);
       await page.evaluate(() => window.__WH__.pause());
+      const tClean = await tools(page);
+      check(`LOW quality, clean style: the limit is MAX_PIECES_CLEAN (${MAX_PIECES_CLEAN}), the same as at every quality`, tClean.maxPieces === MAX_PIECES_CLEAN, JSON.stringify({ max: tClean.maxPieces }));
+      const styled = await page.evaluate(() => window.__WH__.shell.setCutStyle('minis'));
       const t0 = await tools(page);
       const vp = page.viewportSize();
-      // three REAL swipes each peel a piece just over 1/8 off the biggest piece (4 pieces: 0.37 + 3 x 0.13), so the biggest piece is still big enough to cut in the middle:
+      // three REAL swipes each cutSmall a piece just over 1/8 off the biggest piece (4 pieces: 0.37 + 3 x 0.13), so the biggest piece is still big enough to cut in the middle:
       // the 5th cut must then be refused by the LIMIT, not by size (with Split in two only, all four pieces are 0.25 and a 5th cut is refused as "too small" first)
       const swipeBiggest = async (dx) => page.evaluate(([dx, vw, vh]) => {
         const wh = window.__WH__, m = wh.shell.matInfo(), g = wh.shell.pieceGaps();
@@ -3036,8 +3057,8 @@ async function main() {
       const bar = await page.evaluate(() => ({ disabled: document.querySelector('.cutbar [data-key="split"]').disabled, text: document.querySelector('.cutbar-text').textContent }));
       const r5 = await swipeBiggest(0.02);
       await sleep(450);
-      check('X02 real, LOW quality: at most 4 pieces: three swipes make 4, then Split in two is disabled and the bar says "That\'s as many pieces as it can make."; a 5th swipe through the biggest piece is refused by the LIMIT with the same line in the live region',
-        t0.maxPieces === 4 && results.every((r) => r === 'cut') && t4.pieces === 4 && Math.abs(t4.fracs.reduce((s, f) => s + f, 0) - 1) < 0.005 && bar.disabled && /as many pieces as it can make/.test(bar.text) && r5 === 'limit' && /as many pieces as it can make/.test(await live(page)),
+      check('X02 real, LOW quality, MINIS: at most 4 pieces: three swipes make 4, then Split in two is disabled and the bar says "That\'s as many pieces as it can make."; a 5th swipe through the biggest piece is refused by the LIMIT with the same line in the live region',
+        styled === true && t0.maxPieces === 4 && results.every((r) => r === 'cut') && t4.pieces === 4 && Math.abs(t4.fracs.reduce((s, f) => s + f, 0) - 1) < 0.005 && bar.disabled && /as many pieces as it can make/.test(bar.text) && r5 === 'limit' && /as many pieces as it can make/.test(await live(page)),
         JSON.stringify({ max: t0.maxPieces, results, fracs: t4.fracs.map((f) => +f.toFixed(3)), pieces: t4.pieces, bar, r5, say: await live(page) }));
       await context.close();
     });
@@ -3079,7 +3100,7 @@ async function main() {
       }, [c, vp.width, vp.height, dir]);
       const summary = (r) => JSON.stringify({ carried: r.carried, audio: Object.fromEntries(Object.entries(r.spy.audio).filter(([k]) => ['lift', 'toss', 'bump', 'land', 'rejoin'].includes(k)).map(([k, v]) => [k, v.n])), toss: r.spy.audio.toss?.last, haptics: r.spy.haptics, vibrate: [...new Set(r.vib)].slice(0, 8) });
       const routed = (r) => !!r.spy.audio.lift && r.spy.audio.lift.n === 1 && !!r.spy.audio.toss && r.spy.audio.toss.n >= 1 && r.spy.audio.toss.last.speed > 0.1 && r.spy.audio.toss.last.speed <= 1
-        && (r.spy.haptics.poke ?? 0) >= 1 && (r.spy.haptics.release ?? 0) >= 1 && r.vib.includes('8') && r.vib.includes('18');
+        && (r.spy.haptics.poke ?? 0) >= 1 && (r.spy.haptics.release ?? 0) >= 1 && r.vib.includes('8') && r.vib.includes('18') && !(r.spy.audio.rejoin?.n);   // (a toss is not a join: no rejoin sound, CUT2.md 14)
       // 1. a squishy brought out onto the mat (the play body still stands at the middle): it is carried (by its OUTER shoulder, away from the play body) over its neighbour
       const idNow = await page.evaluate(() => window.__WH__.shell.identity());
       const cand = (await hstate(page)).items.filter((it) => it.id !== idNow.itemId && it.species !== idNow.species);
@@ -3124,7 +3145,7 @@ async function main() {
       check('play body, REAL physics: a pull past 1.15 x maxPull carries it (metrics.carried) -> audio.lift ONCE and a light tick (haptics.poke, vibrate 8); the let-go throws it -> audio.toss with a throw speed in (0.1, 1] and the thump (haptics.release, vibrate 18)', routed(r1), summary(r1));
       await stepSim(page, 3);
       await page.evaluate(() => window.__WH__.resume());
-      // 3. a piece of a cut squishy: a chunk flicked (lift + toss) and carried into the face piece (bump)
+      // 3. a piece of a cut squishy: a piece flicked (lift + toss) and carried into the play body (bump)
       await page.evaluate(() => window.__WH__.setGenome('g1.AQAAAAkQAQ0gAAoA0aPMx-BhvZ6ATQCAgIA'));
       await settle(page);
       await pickTool(page, 'cut'); await settle(page);
@@ -3134,11 +3155,11 @@ async function main() {
       await page.evaluate(() => document.querySelector('#wh-play')?.focus()); await page.keyboard.press('c');
       const mp = await page.evaluate(() => window.__WH__.shell.matInfo());
       const r4 = await flick(mp.bodies[1], Math.sign(mp.bodies[1].x - mp.bodies[0].x) || 1);
-      check('cut piece, REAL physics: a chunk flicked -> audio.lift once + tick, audio.toss with a throw speed + thump (pieces are extra bodies with the same routes)', rc === 'cut' && routed(r4), summary({ ...r4 }) + ` cut ${rc}`);
+      check('cut piece, REAL physics: a piece flicked -> audio.lift once + tick, audio.toss with a throw speed + thump (pieces are extra bodies with the same routes)', rc === 'cut' && routed(r4), summary({ ...r4 }) + ` cut ${rc}`);
       await stepSim(page, 3);
       const mq = await page.evaluate(() => window.__WH__.shell.matInfo());
-      const face = mq.bodies[0], chunk = mq.bodies[1];
-      const dirq = Math.sign(face.x - chunk.x) || 1;
+      const anchor = mq.bodies[0], twin = mq.bodies[1];
+      const dirq = Math.sign(anchor.x - twin.x) || 1;
       const bumpPiece = await page.evaluate(([f, t, vw, vh]) => {
         const wh = window.__WH__; wh.pause(); wh.shell.spyReset(); window.__vib.length = 0;
         wh.pointerDown(f.x / vw, f.y / vh, 0); wh.step(1 / 60, 8);
@@ -3148,9 +3169,9 @@ async function main() {
         for (let i = 1; i <= 24; i++) { const k = i / 24; wh.pointerMove((ux + (t.x - ux) * k) / vw, (uy + (t.y - uy) * k) / vh, 0); wh.step(1 / 60, 2); if (wh.shell.matInfo().bodies.some((x) => x.carried)) carried = true; }
         for (let i = 0; i < 4; i++) wh.step(1 / 60, 4);
         return { carried, spy: wh.shell.spyCalls(), vib: window.__vib.slice() };
-      }, [{ x: chunk.x + dirq * -0.62 * chunk.r, y: chunk.y - 0.1 * chunk.r }, { x: face.x - dirq * 0.1 * face.r, y: face.y - 0.7 * face.r }, vp.width, vp.height]);
+      }, [{ x: twin.x + dirq * -0.62 * twin.r, y: twin.y - 0.1 * twin.r }, { x: anchor.x - dirq * 0.1 * anchor.r, y: anchor.y - 0.7 * anchor.r }, vp.width, vp.height]);
       await page.evaluate(() => window.__WH__.pointerUp(0));
-      check('cut piece, REAL physics: a chunk carried into the face piece -> the physics\' bump events -> audio.bump and a light tick', bumpPiece.carried && !!bumpPiece.spy.audio.bump && bumpPiece.spy.audio.bump.n >= 1 && (bumpPiece.spy.haptics.pop ?? 0) >= 1, summary({ ...bumpPiece, kinds: [] }));
+      check('cut piece, REAL physics: a piece carried into the play body -> the physics\' bump events -> audio.bump and a light tick', bumpPiece.carried && !!bumpPiece.spy.audio.bump && bumpPiece.spy.audio.bump.n >= 1 && (bumpPiece.spy.haptics.pop ?? 0) >= 1, summary({ ...bumpPiece, kinds: [] }));
       await page.evaluate(() => window.__WH__.resume());
       await context.close();
     });
@@ -3514,7 +3535,7 @@ async function main() {
       const { page, context, w } = await open({ query: '?dev=1&rseed=99' });
       mainWatches.push(['hoard-offline', w]);
       await wake(page);
-      await page.evaluate(() => { window.__toasts = 0; new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains('toast')) window.__toasts++; }).observe(document.getElementById('ui'), { childList: true }); });
+      await page.evaluate(() => { window.__toasts = 0; new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.classList?.contains('toast') && n.dataset.kind !== 'trophy') window.__toasts++; }).observe(document.getElementById('ui'), { childList: true, subtree: true }); });   // (subtree since 2026-10-08: the toasts stand in the stack at the top, UI.md 6)
       await page.evaluate(() => window.__WH__.shell.forceOffline(true));
       await sleep(500);
       const s1 = await page.evaluate(() => ({ banner: !document.querySelector('.net-banner').hidden, text: document.querySelector('.net-banner').textContent, state: document.querySelector('.meter-state')?.textContent, live: document.getElementById('wh-live')?.textContent, fill: window.__WH__.shell.meter().fill }));
@@ -3554,7 +3575,7 @@ async function main() {
         check('migration: a slice-1 blob keeps its six values; the new fields take their defaults (music 0.45, calm off, shortcuts on); nothing rewritten yet',
           s.volume === 0.3 && s.squishBoost === 0.9 && s.shake === 0.1 && s.gravity === false && s.quality === 'low' && s.music === 0.45 && s.calm === false && s.shortcuts === true && !JSON.parse(raw0).v, JSON.stringify(s));
         await wake(page);
-        await page.click('button[aria-label="Settings"]'); await sleep(400);
+        await openSettings(page); await sleep(400);
         await page.focus('#wh-music'); await page.keyboard.press('End'); await sleep(300);
         const raw1 = JSON.parse(await page.evaluate(() => localStorage.getItem('wobblehoard:v1:settings')));
         check('migration: the first change writes v: 2, keeps the old values and adds only the chosen field', raw1.v === 2 && raw1.volume === 0.3 && raw1.quality === 'low' && raw1.music === 1 && !('calm' in raw1), JSON.stringify(raw1));
@@ -3615,9 +3636,10 @@ async function main() {
       await shot(page, 'play_phone');
       const L = await layoutOf(page);
       check('G6: 390x844 has no horizontal (or vertical) scroll', L.sw <= L.iw && L.bsw <= L.iw && L.sh <= L.ih, `scrollW ${L.sw}/${L.iw}, scrollH ${L.sh}/${L.ih}`);
-      check('G6: gear + mute are reachable (inside the viewport, >= 44 px)', L.gear && L.mute && L.gear.r <= L.iw && L.gear.y >= 0 && L.gear.w >= 44 && L.gear.h >= 44 && L.mute.w >= 44, JSON.stringify([L.gear, L.mute]));
+      check('G6: Menu + mute are reachable (inside the viewport, >= 44 px)', L.gear && L.mute && L.gear.r <= L.iw && L.gear.y >= 0 && L.gear.w >= 44 && L.gear.h >= 44 && L.mute.w >= 44, JSON.stringify([L.gear, L.mute]));
       check('G6: hint text is readable (>= 12 px after fit-to-width, not clipped, ONE line, inside the screen, clear of the name tag)', L.hintFont >= 12 && !L.hintClipped && L.hintLines <= 1 && L.hint.x >= 0 && L.hint.r <= L.iw && !overlap(L.hint, L.name), `font ${L.hintFont}px, lines ${L.hintLines}, hint ${JSON.stringify(L.hint)}, name ${JSON.stringify(L.name)}`);
-      check('G6: wordmark, name tag and hint are all on screen', L.wordmark.r <= L.iw && L.name.b <= L.ih && L.hint.b <= L.ih);
+      // RE-SPECIFIED because the owner changed the design on 2026-10-08 (UI.md 4.2: the brand is drawn on wide and from 600 px on stack, so a 390 phone has none): the brand, where drawn, is on screen
+      check('G6: the brand (where drawn: not on a 390 phone), the name tag and the hint are all on screen', (L.wordmark === null || L.wordmark.r <= L.iw) && L.name.b <= L.ih && L.hint.b <= L.ih);
 
       const vp = page.viewportSize();
       const B = await body(page);
@@ -3703,8 +3725,8 @@ async function main() {
       check('touchmove on the canvas is preventDefault-ed (no browser scroll / overscroll)', prevented);
       await sleep(300);
 
-      // settings as a bottom sheet
-      await page.touchscreen.tap(L.gear.x + L.gear.w / 2, L.gear.y + L.gear.h / 2);
+      // settings as a bottom sheet (opened as a player does it now: Menu, then its Settings row)
+      await tapSettingsViaMenu(page, L.gear);
       await waitUntil(page, () => document.querySelector('.panel').dataset.open === 'true' && getComputedStyle(document.querySelector('.panel')).opacity === '1', null, 8000);
       await sleep(900); await settle(page);
       const L2 = await layoutOf(page);
@@ -3726,16 +3748,16 @@ async function main() {
       await sleep(300);
       const vol = (await state(page)).settings.volume;
       check('phone: dragging the volume slider with a finger changes it (and does not poke / orbit the body)', vol < 0.6 && vol > 0.05, `volume ${vol}`);
-      await page.touchscreen.tap(L.gear.x + L.gear.w / 2, L.gear.y + L.gear.h / 2);
+      { const cb = await page.locator('.panel .icon-btn').boundingBox(); await page.touchscreen.tap(cb.x + cb.width / 2, cb.y + cb.height / 2); }
       await sleep(600);
-      check('phone: the gear closes the sheet again', await page.evaluate(() => document.querySelector('.panel').dataset.open === 'false'));
+      check('phone: the close button of the sheet closes it again (the gear is the Menu now)', await page.evaluate(() => document.querySelector('.panel').dataset.open === 'false'));
 
       // rotate to landscape
       await page.setViewportSize({ width: 844, height: 390 });
       await sleep(1200);
       const L3 = await layoutOf(page);
       check('landscape phone 844x390: no scroll, HUD on screen', L3.sw <= L3.iw && L3.sh <= L3.ih && L3.gear.r <= L3.iw && L3.name.b <= L3.ih, `scroll ${L3.sw}x${L3.sh} of ${L3.iw}x${L3.ih}`);
-      await page.touchscreen.tap(L3.gear.x + L3.gear.w / 2, L3.gear.y + L3.gear.h / 2);
+      await tapSettingsViaMenu(page, L3.gear);
       await sleep(900); await settle(page);
       const L4 = await layoutOf(page);
       check('landscape phone: the settings panel fits (scrolls inside itself) and does not overflow the screen', L4.panel.b <= L4.ih + 1 && L4.panel.y >= 0 && L4.sw <= L4.iw, JSON.stringify(L4.panel));
@@ -3773,12 +3795,14 @@ async function main() {
         await sleep(1200); await settle(page);
         const L = await layoutOf(page);
         const inside = (r) => r && r.x >= -0.5 && r.r <= L.iw + 0.5 && r.y >= -0.5 && r.b <= L.ih + 0.5;
-        check(`reflow ${W}x${H} play: no horizontal or vertical scroll; gear, mute, name plate, meter ring and capsule button fully on screen`,
-          L.sw <= L.iw && L.sh <= L.ih && inside(L.gear) && inside(L.mute) && inside(L.name) && inside(L.meter) && inside(L.capsuleBtn), JSON.stringify({ sw: L.sw, sh: L.sh, name: L.name, meter: L.meter, btn: L.capsuleBtn }));
-        check(`reflow ${W}x${H} play: the bottom row does not overlap itself, and a shown hint clears it`, !overlap(L.name, L.meter) && !overlap(L.name, L.capsuleBtn) && (L.hintShow !== 'true' || (!overlap(L.hint, L.name) && !overlap(L.hint, L.meter) && !overlap(L.hint, L.capsuleBtn) && inside(L.hint) && !L.hintClipped)),
+        // RE-SPECIFIED because the owner changed the design on 2026-10-08 (UI.md 4.2 TINY, the portal phone: no brand, no hint, no name plate): in the tiny layout those are not drawn, and a Menu button replaces the gear
+        const tiny = await page.evaluate(() => document.body.dataset.layout === 'tiny');
+        check(`reflow ${W}x${H} play: no horizontal or vertical scroll; Menu, mute, name plate (not drawn in tiny), meter ring and capsule button fully on screen`,
+          L.sw <= L.iw && L.sh <= L.ih && inside(L.gear) && inside(L.mute) && (tiny ? L.name === null : inside(L.name)) && inside(L.meter) && inside(L.capsuleBtn), JSON.stringify({ sw: L.sw, sh: L.sh, name: L.name, meter: L.meter, btn: L.capsuleBtn }));
+        check(`reflow ${W}x${H} play: the bottom row does not overlap itself, and a shown hint (not drawn in tiny) clears it`, !overlap(L.name, L.meter) && !overlap(L.name, L.capsuleBtn) && (L.hintShow !== 'true' || (tiny ? L.hint === null : (!overlap(L.hint, L.name) && !overlap(L.hint, L.meter) && !overlap(L.hint, L.capsuleBtn) && inside(L.hint) && !L.hintClipped))),
           JSON.stringify({ hint: L.hint, hintShow: L.hintShow, lines: L.hintLines }));
         await shot(page, `play_${W}x${H}`);
-        await page.evaluate(() => document.querySelector('button[aria-label="Settings"]').click());
+        await openSettings(page);
         await sleep(900); await settle(page);
         const P = await layoutOf(page);
         const clipped = P.labels.filter((l) => l.x < P.panel.x - 0.5 || l.r > P.panel.r + 0.5 || l.x < 0 || l.r > P.iw || l.sw > l.cw + 1);
@@ -3817,6 +3841,354 @@ async function main() {
     });
 
     // ------------------------------------------------------------------------------------------------
+    // UI v3 B4a (UI.md 4.5, 6, 6.1, 9 K04): the Menu is the pause screen. __PAUSE__, the focus trap, the Esc order, the Sound switch, Settings through the Menu
+    // ------------------------------------------------------------------------------------------------
+    await section('menu-pause', async () => {
+      const { context, page, w } = await open({ query: '?dev=1' });
+      mainWatches.push(['menu-pause', w]);
+      const menuOpen = (p) => p.evaluate(() => !!document.querySelector('#wh-menu'));
+      const reasons = (p) => p.evaluate(() => window.__WH__.shell.pauseReasons());
+      const t0 = await page.evaluate(() => { const p = window.__PAUSE__; if (!p) return null; p.pause(); return { keys: Object.keys(p).sort().join(), menu: !!document.querySelector('#wh-menu'), reasons: window.__WH__.shell.pauseReasons() }; });
+      check('__PAUSE__ = { pause, resume, toggle } exists from boot; on the title pause() does nothing (no Menu, nothing suspended)', !!t0 && t0.keys === 'pause,resume,toggle' && !t0.menu && t0.reasons.length === 0, JSON.stringify(t0));
+      // the title's Settings chip (the only destination that exists yet): the panel opens ABOVE the title, the title is inert under it, Esc closes it and the focus returns to the chip
+      const tc = await page.evaluate(() => ({ chips: [...document.querySelectorAll('.title [data-chip]')].map((c) => c.dataset.chip) }));
+      await page.evaluate(() => document.querySelector('.title [data-chip="settings"]')?.click());
+      await waitUntil(page, () => document.querySelector('.panel')?.dataset.open === 'true', null, 8000); await sleep(600);
+      const tp = await page.evaluate(() => { const p = document.querySelector('.panel'); const b = p.getBoundingClientRect(); const top = document.elementFromPoint(b.x + b.width / 2, b.y + 40); return { inert: document.querySelector('.title').hasAttribute('inert'), above: !!top && p.contains(top), focus: document.activeElement?.id }; });
+      await page.keyboard.press('Escape'); await sleep(500);
+      const tq = await page.evaluate(() => ({ closed: document.querySelector('.panel').dataset.open === 'false', inert: document.querySelector('.title').hasAttribute('inert'), focus: document.activeElement?.getAttribute('data-chip') }));
+      // RE-SPECIFIED by B4b (the owner changed the design on 2026-10-08): How to play and Credits are chips now (Trophies is B6b's: left out of the order check); Settings opens a later-* chunk
+      check('title: the chips are How to play, Credits, Settings and Sound in that order (Trophies, owned by B6b, may sit between); Settings opens above the title (the title is inert under it), Esc closes it, focus returns to the chip', JSON.stringify(tc.chips.filter((c) => c !== 'trophies')) === JSON.stringify(['howto', 'credits', 'settings', 'sound']) && tp.inert && tp.above && tp.focus === 'wh-settings-title' && tq.closed && !tq.inert && tq.focus === 'settings', JSON.stringify({ tc, tp, tq }));
+      await wake(page);
+      const top = await page.evaluate(() => {
+        const m = document.querySelector('.hud-actions button[aria-label="Menu"]');
+        return { labels: [...document.querySelectorAll('.hud-actions button')].map((b) => b.getAttribute('aria-label')), haspopup: m?.getAttribute('aria-haspopup'), expanded: m?.getAttribute('aria-expanded'), fsEnabled: document.fullscreenEnabled };
+      });
+      const wantTop = [...(top.fsEnabled ? ['Full screen'] : []), 'Mute sound', 'Menu'];
+      check('the top row is [Full screen (only where the page may use it), Mute sound, Menu]; the Menu button names a dialog and starts collapsed', JSON.stringify(top.labels) === JSON.stringify(wantTop) && top.haspopup === 'dialog' && top.expanded === 'false', JSON.stringify(top));
+
+      // open with a real click: the dialog, the heading, the rows, focus on Resume, everything behind inert, the live line
+      await page.click('button[aria-label="Menu"]');
+      await waitUntil(page, () => !!document.querySelector('#wh-menu'), null, 8000);
+      await sleep(500);
+      const m1 = await page.evaluate(() => {
+        const el = document.querySelector('#wh-menu'); const a = document.activeElement;
+        return {
+          role: el.getAttribute('role'), modal: el.getAttribute('aria-modal'), name: document.getElementById(el.getAttribute('aria-labelledby'))?.textContent,
+          rows: [...el.querySelectorAll('.menu-row')].map((r) => r.textContent.trim()), focus: a?.getAttribute('data-key'), inside: el.contains(a),
+          hudInert: document.querySelector('.hud').hasAttribute('inert'), expanded: document.querySelector('.hud-actions button[aria-label="Menu"]').getAttribute('aria-expanded'),
+          live: document.getElementById('wh-live')?.textContent, covered: window.__WH__.shell.pauseReasons().includes('covered'),
+        };
+      });
+      check('the Menu: a modal dialog named "Menu", Resume has the focus, the HUD behind is inert, the live region says "Menu open.", the game is suspended as "covered"',
+        m1.role === 'dialog' && m1.modal === 'true' && m1.name === 'Menu' && m1.focus === 'resume' && m1.inside && m1.hudInert && m1.expanded === 'true' && /Menu open\./.test(m1.live ?? '') && m1.covered, JSON.stringify(m1));
+      // RE-SPECIFIED by B4b (the owner changed the design on 2026-10-08): How to play and Credits exist now (Trophies is B6b's row)
+      check('the Menu rows: Settings, How to play, Credits, Full screen (if the page may), Sound',
+        m1.rows.some((r) => /^Settings/.test(r)) && m1.rows.some((r) => /^How to play/.test(r)) && m1.rows.some((r) => /^Credits/.test(r)) && m1.rows.some((r) => /^Sound/.test(r)) && (m1.rows.some((r) => /^Full screen/.test(r)) === top.fsEnabled), m1.rows.join(' | '));
+      await shot(page, 'menu_desktop');
+      // the sim and the audio really stop (the same hash after a while; the audio context sleeps), and run again on Resume
+      const h1 = (await state(page)).stateHash; await sleep(700); const h2 = (await state(page)).stateHash;
+      const asleep = await waitUntil(page, () => window.__WH__.state().audio.state === 'suspended', null, 8000);
+      check('while the Menu is open the sim does not advance and the audio context is suspended (the pause is real)', h1 === h2 && asleep, `hash ${h1 === h2 ? 'same' : 'moved'}, audio ${(await state(page)).audio.state}`);
+      // Tab stays inside (forward and back); the toy cannot be reached
+      const trap = [];
+      for (let i = 0; i < 9; i++) { await page.keyboard.press('Tab'); trap.push(await page.evaluate(() => !!document.activeElement?.closest('#wh-menu'))); }
+      for (let i = 0; i < 3; i++) { await page.keyboard.press('Shift+Tab'); trap.push(await page.evaluate(() => !!document.activeElement?.closest('#wh-menu'))); }
+      check('K04: Tab and Shift+Tab never leave the open Menu (a focus trap, nine forward and three back)', trap.every(Boolean), trap.join(','));
+      // Escape closes it: the game runs again, focus returns to the Menu button (where it was opened from)
+      await page.keyboard.press('Escape'); await sleep(500);
+      const c1 = await page.evaluate(() => ({ gone: !document.querySelector('#wh-menu'), focus: document.activeElement?.getAttribute('aria-label'), expanded: document.querySelector('.hud-actions button[aria-label="Menu"]').getAttribute('aria-expanded'), covered: window.__WH__.shell.pauseReasons().includes('covered'), hudInert: document.querySelector('.hud').hasAttribute('inert') }));
+      // (a resting squishy has a constant hash: the proof that the sim runs again is a held Space moving it)
+      await page.evaluate(() => document.getElementById('wh-play').focus());
+      await page.keyboard.down('Space'); await sleep(250);
+      const moves = await waitUntil(page, (h) => window.__WH__.state().stateHash !== h, h2, 8000);
+      await page.keyboard.up('Space');
+      const awake = await waitUntil(page, () => window.__WH__.state().audio.state === 'running', null, 8000);
+      check('Escape closes the Menu: focus returns to the Menu button, the HUD is live again, the sim and the audio run again', c1.gone && c1.focus === 'Menu' && c1.expanded === 'false' && !c1.covered && !c1.hudInert && moves && awake, JSON.stringify({ ...c1, moves, awake }));
+      // Resume, the close button and a press on the dim area all close it
+      for (const [how, act] of [['Resume', () => page.click('.menu [data-key="resume"]')], ['the close button', () => page.click('.menu-close')], ['the dim area', () => page.mouse.click(8, 8)]]) {
+        await page.evaluate(() => window.__WH_UI__.openMenu()); await waitUntil(page, () => !!document.querySelector('#wh-menu'), null, 8000); await sleep(450);
+        await act(); await sleep(400);
+        check(`the Menu closes by ${how}`, !(await menuOpen(page)) && !(await reasons(page)).includes('covered'));
+      }
+      // Escape with nothing open opens the Menu (UI.md 4.5 layer 8); a tool in hand goes back to the Hand first and does NOT open it; Settings closes before the Menu comes
+      await page.evaluate(() => document.getElementById('wh-play').focus());
+      await page.keyboard.press('Escape'); await sleep(450);
+      const e8 = await menuOpen(page);
+      await page.keyboard.press('Escape'); await sleep(450);
+      check('Esc (layer 8) with nothing open opens the Menu, and Esc closes it again with the focus back on the squishy', e8 && !(await menuOpen(page)) && await page.evaluate(() => document.activeElement?.id === 'wh-play'), `opened ${e8}`);
+      await pickTool(page, 'snap'); await sleep(500);
+      await page.evaluate(() => document.getElementById('wh-play').focus());
+      await page.keyboard.press('Escape'); await sleep(450);
+      check('Esc (layer 6) in Snap puts the Hand back and does not open the Menu', (await tools(page)).tool === 'hand' && !(await menuOpen(page)));
+      await openSettings(page); await sleep(500);
+      await page.keyboard.press('Escape'); await sleep(450);
+      check('Esc (layer 4) closes Settings first; the Menu does not open on the same press', await page.evaluate(() => document.querySelector('.panel').dataset.open === 'false') && !(await menuOpen(page)));
+      // a modal over the Menu: Esc closes the modal (layer 2), then the Menu (layer 3)
+      await page.evaluate(() => window.__WH_UI__.openMenu()); await sleep(500);
+      await page.evaluate(() => window.__WH_UI__.modal({ title: 'Sure?', text: 'A test dialog over the Menu.', buttons: [{ label: 'Yes', kind: 'gel' }, { label: 'No' }] })); await sleep(450);
+      const stack1 = await page.evaluate(() => ({ layers: window.__WH_UI__.layers(), menuInert: document.querySelector('.menu-scrim').hasAttribute('inert') }));
+      await page.keyboard.press('Escape'); await sleep(400);
+      const stack2 = await page.evaluate(() => ({ layers: window.__WH_UI__.layers(), menu: !!document.querySelector('#wh-menu'), menuInert: document.querySelector('.menu-scrim')?.hasAttribute('inert') }));
+      await page.keyboard.press('Escape'); await sleep(400);
+      check('Esc closes a modal over the Menu first (the Menu is inert under it), then the Menu: the layers stack (UI.md 4.5 layers 2 and 3)', stack1.layers === 2 && stack1.menuInert && stack2.layers === 1 && stack2.menu && !stack2.menuInert && !(await menuOpen(page)), JSON.stringify({ stack1, stack2 }));
+      // Settings through the Menu: the Menu closes, the game runs, the panel opens with the focus in it; its close button returns the focus to the Menu button
+      await page.click('button[aria-label="Menu"]'); await waitUntil(page, () => !!document.querySelector('#wh-menu'), null, 8000); await sleep(450);
+      await page.click('.menu [data-key="settings"]'); await sleep(700);
+      const s1 = await page.evaluate(() => ({ menu: !!document.querySelector('#wh-menu'), open: document.querySelector('.panel').dataset.open, focus: document.activeElement?.id, covered: window.__WH__.shell.pauseReasons().includes('covered') }));
+      await page.focus('.panel .icon-btn'); await page.keyboard.press('Enter'); await sleep(400);
+      check('the Settings row closes the Menu, resumes the game and opens the Settings panel (focus in it); its close button returns the focus to the Menu button', !s1.menu && s1.open === 'true' && s1.focus === 'wh-settings-title' && !s1.covered && await page.evaluate(() => document.activeElement?.getAttribute('aria-label') === 'Menu'), JSON.stringify(s1));
+      // the Sound switch is the HUD's mute (one source of truth), both ways, announced
+      await page.evaluate(() => window.__WH_UI__.openMenu()); await sleep(500);
+      await page.click('.menu [data-key="sound"]'); await sleep(400);
+      const snd = await page.evaluate(() => ({ checked: document.querySelector('.menu [data-key="sound"]').checked, pressed: document.querySelector('.hud-actions button[aria-label="Mute sound"]').getAttribute('aria-pressed'), live: document.getElementById('wh-live')?.textContent }));
+      await page.click('.menu [data-key="sound"]'); await sleep(400);
+      const snd2 = await page.evaluate(() => ({ checked: document.querySelector('.menu [data-key="sound"]').checked, pressed: document.querySelector('.hud-actions button[aria-label="Mute sound"]').getAttribute('aria-pressed') }));
+      check('the Menu Sound switch mutes and unmutes the game (the HUD button follows, the live region says so)', !snd.checked && snd.pressed === 'true' && /Sound off/.test(snd.live ?? '') && snd2.checked && snd2.pressed === 'false', JSON.stringify({ snd, snd2 }));
+      await page.keyboard.press('Escape'); await sleep(400);
+      // __PAUSE__ in play: synchronous, idempotent, resume, toggle; the window losing focus is NOT a pause
+      const pz = await page.evaluate(() => {
+        const p = window.__PAUSE__; const out = {};
+        p.pause(); out.opened = !!document.querySelector('#wh-menu'); out.covered = window.__WH__.shell.pauseReasons().includes('covered');   // (the same turn: pause() is synchronous)
+        p.pause(); out.one = document.querySelectorAll('#wh-menu').length;
+        p.resume(); out.closed = !document.querySelector('#wh-menu'); out.uncovered = !window.__WH__.shell.pauseReasons().includes('covered');
+        p.resume(); out.resumeTwice = !document.querySelector('#wh-menu');
+        p.toggle(); out.toggled = !!document.querySelector('#wh-menu'); p.toggle(); out.toggledBack = !document.querySelector('#wh-menu');
+        return out;
+      });
+      check('__PAUSE__ in play: pause() opens the Menu and suspends in the same turn, twice is still one Menu, resume() closes it (also twice), toggle() flips', pz.opened && pz.covered && pz.one === 1 && pz.closed && pz.uncovered && pz.resumeTwice && pz.toggled && pz.toggledBack, JSON.stringify(pz));
+      await sleep(500);
+      await page.evaluate(() => window.dispatchEvent(new Event('blur'))); await sleep(500);
+      check('no pause on window blur (the tab-hidden pause is the lifecycle\'s own)', !(await menuOpen(page)) && !(await reasons(page)).includes('covered'));
+      // Esc that ends a full-screen change must not also open the Menu (UI.md 4.5 layer 8)
+      await page.evaluate(() => document.getElementById('wh-play').focus());
+      await page.evaluate(() => document.dispatchEvent(new Event('fullscreenchange')));
+      await page.keyboard.press('Escape'); await sleep(300);
+      const guarded = !(await menuOpen(page));
+      await sleep(700);
+      await page.keyboard.press('Escape'); await sleep(450);
+      check('an Escape within 500 ms of a fullscreenchange does not open the Menu; a later one does', guarded && (await menuOpen(page)), `guarded ${guarded}`);
+      await page.keyboard.press('Escape'); await sleep(300);
+      await context.close();
+    });
+
+    // ------------------------------------------------------------------------------------------------
+    // UI v3 B4a (UI.md 6.1): full screen is offered only where the page may use it, and a refusal is handled (the portal frame may deny it)
+    // ------------------------------------------------------------------------------------------------
+    await section('fullscreen-gate', async () => {
+      const fsMenu = (p) => p.evaluate(() => { window.__WH_UI__.openMenu(); return new Promise((ok) => setTimeout(() => { const r = !!document.querySelector('.menu [data-key="fullscreen"]'); window.__WH_UI__.closeMenu(); ok(r); }, 450)); });
+      // (a) not enabled at all (an iPhone, a frame without allow=fullscreen): no button, no row, the F key says so
+      {
+        const { context, page, w } = await open({ query: '?dev=1', init: () => { Object.defineProperty(Document.prototype, 'fullscreenEnabled', { get: () => false, configurable: true }); Object.defineProperty(Document.prototype, 'webkitFullscreenEnabled', { get: () => false, configurable: true }); } });
+        mainWatches.push(['fullscreen-off', w]);
+        await wake(page);
+        const hasBtn = await page.evaluate(() => !!document.querySelector('.hud-actions button[aria-label="Full screen"]'));
+        const hasRow = await fsMenu(page);
+        await page.evaluate(() => document.getElementById('wh-play').focus());
+        await page.keyboard.press('f'); await sleep(500);
+        const toast = await page.evaluate(() => document.querySelector('.toast')?.textContent ?? '');
+        check('full screen not enabled by the page: no [FS] button, no Menu row, and the F key says it is not available here', !hasBtn && !hasRow && /isn’t available here/.test(toast), JSON.stringify({ hasBtn, hasRow, toast }));
+        await context.close();
+      }
+      // (b) enabled but the browser refuses at the moment of the request (a portal frame): a toast, then the button and the row go away; no error
+      {
+        const { context, page, w } = await open({ query: '?dev=1', init: () => { Element.prototype.requestFullscreen = () => Promise.reject(new TypeError('Permissions check failed')); Object.defineProperty(Document.prototype, 'fullscreenEnabled', { get: () => true, configurable: true }); } });
+        mainWatches.push(['fullscreen-denied', w]);
+        await wake(page);
+        await page.click('.hud-actions button[aria-label="Full screen"]'); await sleep(700);
+        const r = await page.evaluate(() => ({ toast: document.querySelector('.toast')?.textContent ?? '', hidden: document.querySelector('.hud-actions button[aria-label="Full screen"]')?.hidden }));
+        const row = await fsMenu(page);
+        check('full screen refused by the browser: a quiet toast, the [FS] button and the Menu row go away (handled, not thrown)', /isn’t available here/.test(r.toast) && r.hidden === true && !row, JSON.stringify({ ...r, row }));
+        await context.close();
+      }
+      // (c) accepted: the button, the Menu switch and the F key follow the document's own state; the layout is re-measured on fullscreenchange
+      {
+        const { context, page, w } = await open({ query: '?dev=1', init: () => {
+          let el = null;
+          Object.defineProperty(Document.prototype, 'fullscreenEnabled', { get: () => true, configurable: true });
+          Object.defineProperty(Document.prototype, 'fullscreenElement', { get: () => el, configurable: true });
+          Element.prototype.requestFullscreen = function () { el = this; document.dispatchEvent(new Event('fullscreenchange')); return Promise.resolve(); };
+          Document.prototype.exitFullscreen = function () { el = null; document.dispatchEvent(new Event('fullscreenchange')); return Promise.resolve(); };
+        } });
+        mainWatches.push(['fullscreen-on', w]);
+        await wake(page);
+        const st = () => page.evaluate(() => ({ pressed: document.querySelector('.hud-actions button[aria-label="Full screen"]').getAttribute('aria-pressed'), on: !!document.fullscreenElement }));
+        await page.click('.hud-actions button[aria-label="Full screen"]'); await sleep(400);
+        const a = await st();
+        await page.evaluate(() => document.getElementById('wh-play').focus());
+        await page.keyboard.press('f'); await sleep(400);
+        const b = await st();
+        await page.keyboard.press('f'); await sleep(400);
+        const c = await st();
+        await page.evaluate(() => window.__WH_UI__.openMenu()); await sleep(450);
+        const sw = await page.evaluate(() => document.querySelector('.menu [data-key="fullscreen"]').checked);
+        await page.click('.menu [data-key="fullscreen"]'); await sleep(400);
+        const d = await st();
+        await page.keyboard.press('Escape'); await sleep(300);
+        check('full screen accepted: [FS] and the F key toggle it, aria-pressed follows the document, the Menu switch shows it and drives it', a.on && a.pressed === 'true' && !b.on && b.pressed === 'false' && c.on && c.pressed === 'true' && sw === true && !d.on && d.pressed === 'false', JSON.stringify({ a, b, c, sw, d }));
+        await context.close();
+      }
+    });
+
+    // ------------------------------------------------------------------------------------------------
+    // UI v3 B4a (UI.md 6): the toast stack: at the top, five kinds with an icon, said once, two at a time then "+N more", held while something matters more
+    // ------------------------------------------------------------------------------------------------
+    await section('toasts', async () => {
+      const { context, page, w } = await open({ query: '?dev=1' });
+      mainWatches.push(['toasts', w]);
+      await wake(page);
+      await page.evaluate(() => { window.__said = []; const l = document.getElementById('wh-live'); new MutationObserver(() => { if (l.textContent) window.__said.push(l.textContent); }).observe(l, { childList: true, characterData: true, subtree: true }); });
+      const geo = () => page.evaluate(async () => {
+        await Promise.all(document.getAnimations().filter((a) => a.effect?.target?.closest?.('.toasts')).map((a) => a.finished.catch(() => null)));   // (measure the settled toast, not its entrance)
+        const r = (e) => { const b = e.getBoundingClientRect(); return { x: b.x, y: b.y, r: b.right, b: b.bottom, w: b.width }; };
+        const q = (s) => document.querySelector(s);
+        return { toasts: [...document.querySelectorAll('.toast')].map((t) => ({ ...r(t), kind: t.dataset.kind, hidden: t.getAttribute('aria-hidden'), icon: !!t.querySelector('.k-icon'), text: t.textContent })), dock: r(q('.dock-bar')), actions: r(q('.hud-actions')), iw: innerWidth };
+      });
+      const kinds = ['info', 'success', 'warning', 'error', 'trophy'];
+      const seen = [];
+      for (const k of kinds) {
+        await page.evaluate(([kind]) => window.__WH_UI__.toast(kind, `A ${kind} toast`, { ms: 2400, sub: kind === 'trophy' ? 'Bronze trophy' : undefined }), [k]);
+        // (read it the moment it exists: a CSS animation can wait many frames for its start on this machine, and the toast lives 2.4 s whatever the frames do)
+        seen.push(await page.evaluate(async (kind) => {
+          for (let i = 0; i < 300; i++) {
+            const el = [...document.querySelectorAll('.toast')].find((x) => x.textContent.includes(`A ${kind} toast`));
+            if (el) return { kind: el.dataset.kind, hidden: el.getAttribute('aria-hidden'), icon: !!el.querySelector('.k-icon'), text: el.textContent };
+            await new Promise((r) => setTimeout(r, 20));
+          }
+          return null;
+        }, k));
+        await waitUntil(page, () => document.querySelectorAll('.toast').length === 0, null, 8000);   // (each one leaves before the next comes: the stack is not what this row looks at)
+      }
+      check('every toast kind (info, success, warning, error, trophy) shows with an icon and its words, aria-hidden (the live region speaks)', seen.length === 5 && seen.every((t) => t && t.icon && t.hidden === 'true' && t.text.includes(`A ${t.kind} toast`)), JSON.stringify(seen.map((t) => t && t.kind)));
+      const said = await page.evaluate(() => window.__said);
+      check('the live region said each toast ONCE (five toasts, five lines)', kinds.every((k) => said.filter((s) => s.includes(`A ${k} toast`)).length === 1), JSON.stringify(said));
+      await page.evaluate(() => { const u = window.__WH_UI__; u.toast('info', 'One'); u.toast('info', 'Two'); u.toast('info', 'Three'); u.toast('info', 'Four'); u.toast('info', 'One'); });
+      await sleep(500);
+      const g1 = await geo();
+      const more = await page.evaluate(() => ({ text: document.querySelector('.toast-more')?.textContent, hidden: document.querySelector('.toast-more')?.hidden, counts: window.__WH_UI__.toasts() }));
+      const one = g1.toasts[0];
+      check('toasts stand at the top centre under the top row: centred, below the Menu row, nowhere near the dock', g1.toasts.length === 2 && Math.abs((one.x + one.r) / 2 - g1.iw / 2) < 3 && one.y >= g1.actions.b && g1.toasts.every((t) => t.b < g1.dock.y - 100), JSON.stringify({ one, actions: g1.actions.b, dock: g1.dock.y }));
+      check('two at a time, then a "+N more" pill; the same words twice do not stack (One was sent twice)', more.counts.visible === 2 && more.counts.waiting === 2 && more.text === '+2 more' && more.hidden === false, JSON.stringify(more));
+      const came = await waitUntil(page, () => { const t = window.__WH_UI__.toasts(); return t.visible === 2 && t.waiting === 0; }, null, 8000);   // (One and Two leave together after 2.6 s; Three and Four come in)
+      const more2 = await page.evaluate(() => window.__WH_UI__.toasts());
+      check('when the first two leave (2.6 s) the two waiting ones come in and the "+N more" pill goes', came && more2.visible === 2 && more2.waiting === 0, JSON.stringify(more2));
+      await sleep(5000);
+      // the queue logic on its own, with a held() the test controls (a ceremony, a plate), and the portal phone's single slot
+      const q = await page.evaluate(async () => {
+        const m = await import('/src/ui/toast.ts');
+        const root = document.createElement('div'); document.body.append(root);
+        let held = true, tiny = false; const said = [];
+        const t = m.createToaster(root, { say: (x) => said.push(x), held: () => held, tiny: () => tiny });
+        t.show('info', 'wait for me');
+        const a = { visible: t.visibleCount(), waiting: t.waitingCount() };
+        t.show('warning', 'urgent one', { sticky: true, urgent: true });
+        const b = { visible: t.visibleCount(), waiting: t.waitingCount() };
+        held = false; await new Promise((r) => setTimeout(r, 600));
+        const c = { visible: t.visibleCount(), waiting: t.waitingCount() };
+        t.destroy();
+        const root2 = document.createElement('div'); document.body.append(root2);
+        tiny = true;
+        const t2 = m.createToaster(root2, { say: () => {}, held: () => false, tiny: () => tiny });
+        t2.show('info', 'a'); t2.show('info', 'b');
+        const d = { visible: t2.visibleCount(), waiting: t2.waitingCount() };
+        t2.destroy(); root.remove(); root2.remove();
+        return { a, b, c, d, said };
+      });
+      check('toasts wait while held (a ceremony, a plate) and show when it ends; an urgent sticky one does not wait; the portal phone shows one at a time', q.a.visible === 0 && q.a.waiting === 1 && q.b.visible === 1 && q.c.visible === 2 && q.c.waiting === 0 && q.d.visible === 1 && q.d.waiting === 1, JSON.stringify(q));
+      // the trophy renderer B6's seam waits for (shell/trophyToast.ts): a tier chip, the name, "+N XP" only when signed in, said once
+      const tr = await page.evaluate(async () => {
+        const m = await import('/src/shell/trophyToast.ts');
+        const say = []; const l = document.getElementById('wh-live'); new MutationObserver(() => { if (l.textContent) say.push(l.textContent); }).observe(l, { childList: true, characterData: true, subtree: true });
+        const t = { slug: 'first-squish', name: 'First squish', description: 'Squish the squishy.', tier: 'bronze', points: 10, hidden: false, signedIn: true, retro: false };
+        const read = () => { const el = [...document.querySelectorAll('.toast')].find((x) => x.dataset.kind === 'trophy' && !x.dataset.state); return el ? { text: el.querySelector('.k-toast-text')?.textContent, chip: el.querySelector('.k-tier')?.textContent, tier: el.querySelector('.k-tier')?.dataset.tier } : null; };
+        const a = m.showTrophyToast(t); await new Promise((r) => setTimeout(r, 600)); const ra = read();
+        await new Promise((r) => setTimeout(r, 3600));
+        const b = m.showTrophyToast({ ...t, name: 'Second squish', signedIn: false }); await new Promise((r) => setTimeout(r, 600)); const rb = read();
+        return { a, ra, b, rb, said: say.length };
+      });
+      check('trophy toast (B6 seam): a tier chip, the name and "+10 XP" when signed in, no XP line when not; the toast system took it (the live region says it once each)', tr.a && tr.b && tr.ra?.chip === 'Bronze' && tr.ra?.tier === 'bronze' && /First squish/.test(tr.ra.text) && /\+10 XP/.test(tr.ra.text) && /Second squish/.test(tr.rb?.text ?? '') && !/XP/.test(tr.rb?.text ?? '') && tr.said === 2, JSON.stringify(tr));
+      // Calm: no transform animation running once settled (the fade stays)
+      await page.evaluate(() => window.__WH__.setSetting('calm', true));
+      await page.evaluate(() => window.__WH_UI__.toast('info', 'Calm toast', { ms: 5000 })); await sleep(300); await settle(page);   // (the page's frames are driven by settle(): a CSS animation can wait for its first frame on this machine)
+      const calm = await page.evaluate(() => { const t = [...document.querySelectorAll('.toast')].find((x) => x.textContent.includes('Calm toast')); const an = t ? t.getAnimations() : []; return { n: an.length, transform: an.filter((a) => a.effect?.getKeyframes?.().some((k) => 'transform' in k)).length }; });
+      check('Calm: the toast has no transform animation left running after it has settled', calm.transform === 0, JSON.stringify(calm));
+      await context.close();
+    });
+
+    // ------------------------------------------------------------------------------------------------
+    // UI v3 B4a (UI.md 3.3): the modal: a focus trap, Esc, an input arm of 250 ms, the safe answer focused on a danger dialog
+    // ------------------------------------------------------------------------------------------------
+    await section('modal-layers', async () => {
+      const { context, page, w } = await open({ query: '?dev=1' });
+      mainWatches.push(['modal-layers', w]);
+      await wake(page);
+      await page.evaluate(() => document.getElementById('wh-play').focus());
+      await page.evaluate(() => window.__WH_UI__.modal({ title: 'Start over?', text: 'This clears your Hoard. It cannot be undone.', danger: true, buttons: [{ label: 'Start over', kind: 'coral' }, { label: 'Keep playing', kind: 'gel' }] }));
+      await sleep(500);
+      const m = await page.evaluate(() => {
+        const d = document.querySelector('.k-modal'); const a = document.activeElement;
+        return { role: d.getAttribute('role'), modal: d.getAttribute('aria-modal'), name: document.getElementById(d.getAttribute('aria-labelledby'))?.textContent, desc: !!document.getElementById(d.getAttribute('aria-describedby'))?.textContent, focus: a?.textContent, hudInert: document.querySelector('.hud').hasAttribute('inert'), live: !document.getElementById('wh-live').closest('[inert]') };
+      });
+      check('a danger modal is an alertdialog named by its heading and described by its line; the SAFE answer (the last button) has the focus; the HUD is inert but the live region still works', m.role === 'alertdialog' && m.modal === 'true' && m.name === 'Start over?' && m.desc && m.focus === 'Keep playing' && m.hudInert && m.live, JSON.stringify(m));
+      await shot(page, 'modal_desktop');
+      const trap = [];
+      for (let i = 0; i < 5; i++) { await page.keyboard.press('Tab'); trap.push(await page.evaluate(() => !!document.activeElement?.closest('.k-modal'))); }
+      await page.keyboard.press('Shift+Tab'); trap.push(await page.evaluate(() => !!document.activeElement?.closest('.k-modal')));
+      check('K04: Tab and Shift+Tab stay inside the modal', trap.every(Boolean), trap.join(','));
+      await page.keyboard.press('Escape'); await sleep(400);
+      check('Esc closes the modal and the focus returns to where it was (the squishy)', await page.evaluate(() => !document.querySelector('.k-modal') && !document.querySelector('.hud').hasAttribute('inert') && document.activeElement?.id === 'wh-play'));
+      // the 250 ms input arm: a press in the first moments is ignored, a later one answers
+      await page.evaluate(() => { window.__pressed = 0; window.__WH_UI__.modal({ title: 'Arm', text: 'Press me fast.', buttons: [{ label: 'Yes', kind: 'gel', onPress: () => { window.__pressed++; } }] }); document.querySelector('.k-modal button').click(); });
+      const early = await page.evaluate(() => ({ pressed: window.__pressed, open: !!document.querySelector('.k-modal') }));
+      await sleep(450);
+      await page.click('.k-modal button'); await sleep(300);
+      const late = await page.evaluate(() => ({ pressed: window.__pressed, open: !!document.querySelector('.k-modal') }));
+      check('a modal ignores a press in its first 250 ms (the tap that opened it) and answers a later one', early.pressed === 0 && early.open && late.pressed === 1 && !late.open, JSON.stringify({ early, late }));
+      await context.close();
+    });
+
+    // ------------------------------------------------------------------------------------------------
+    // UI v3 B4a (UI.md 7): the delegated interface sounds: a tick on a MOUSE hover only, on / off for a switch, select for a tool, nothing with the Settings switch off
+    // ------------------------------------------------------------------------------------------------
+    await section('ui-sounds', async () => {
+      const { context, page, w } = await open({ query: '?dev=1' });
+      mainWatches.push(['ui-sounds', w]);
+      await wake(page);
+      await sleep(600);
+      const n = async (k) => (await started(page))[`ui:${k}`] ?? 0;
+      const t0 = await n('tick');
+      await page.hover('.dock-tool[data-tool="snap"]'); await sleep(500);
+      const t1 = await n('tick');
+      check('a mouse hover over a control plays a tick', t1 === t0 + 1, `${t0} -> ${t1}`);
+      await page.evaluate(() => { const b = document.querySelector('.dock-tool[data-tool="hand"]'); b.dispatchEvent(new PointerEvent('pointerover', { pointerType: 'touch', bubbles: true })); });
+      await sleep(400);
+      check('a touch "hover" plays no tick (hoverSoundAllowed: a finger has no hover)', (await n('tick')) === t1, `${t1} -> ${await n('tick')}`);
+      const s0 = await n('select');
+      await pickTool(page, 'snap'); await sleep(500);
+      check('picking a tool plays select', (await n('select')) >= s0 + 1, `${s0} -> ${await n('select')}`);
+      await pickTool(page, 'hand'); await sleep(300);
+      await openSettings(page); await sleep(500);
+      const on0 = await n('on'), off0 = await n('off');
+      await page.click('.row-switch:has(#wh-extra)'); await sleep(450);
+      await page.click('.row-switch:has(#wh-extra)'); await sleep(450);
+      check('a switch plays "on" turning on and "off" turning off', (await n('on')) === on0 + 1 && (await n('off')) === off0 + 1, `on ${on0} -> ${await n('on')}, off ${off0} -> ${await n('off')}`);
+      const map = await page.evaluate(async () => {
+        const m = await import('/src/ui/uiSound.ts');
+        const mk = (cls, attrs = {}) => { const b = document.createElement('button'); b.className = cls; for (const [k, v] of Object.entries(attrs)) b.setAttribute(k, v); return b; };
+        return { gel: m.kindOfControl(mk('k-btn k-gel')), chip: m.kindOfControl(mk('k-chip')), off: m.kindOfControl(mk('k-btn', { 'aria-disabled': 'true' })), pop: m.kindOfControl(mk('k-btn', { 'aria-haspopup': 'dialog' })), close: m.kindOfControl(mk('k-btn', { 'aria-label': 'Close menu' })),
+          none: m.kindOfControl(mk('k-btn k-gel', { 'data-sound': 'none' })), back: m.kindOfControl(mk('k-btn', { 'data-sound': 'back' })) };
+      });
+      check('the class and role map: a gel presses, a chip selects, an aria-disabled press is the "not that" error, a popup opens, a Close button closes, data-sound="none" is silent and data-sound="back" overrides', map.gel === 'press' && map.chip === 'select' && map.off === 'error' && map.pop === 'open' && map.close === 'close' && map.none === null && map.back === 'back', JSON.stringify(map));
+      const peak = (await state(page)).audio.peak;
+      check('the interface sounds stay quiet (peak <= 0.126)', peak <= 0.126 + 1e-6, `peak ${peak}`);
+      await page.evaluate(() => window.__WH__.setSetting('uiSounds', false)); await sleep(300);
+      const t2 = await n('tick');
+      await page.hover('.dock-tool[data-tool="cut"], .dock-tool[data-tool="snap"]'); await page.hover('.hoard-btn'); await sleep(450);
+      check('with the Settings switch "UI sounds" off nothing is played (not even counted)', (await n('tick')) === t2, `${t2} -> ${await n('tick')}`);
+      await context.close();
+    });
+
+    // ------------------------------------------------------------------------------------------------
     // keyboard only (audit findings 12, 13, 14): the squishy is a focus target with a visible ring; G / M respect focus
     // ------------------------------------------------------------------------------------------------
     await section('keyboard-only', async () => {
@@ -3851,7 +4223,7 @@ async function main() {
       await page.keyboard.press('g'); await sleep(500);
       check('G on the squishy: float mode, announced in the live region ("Floating")', (await state(page)).settings.gravity === false && /Floating/.test(await live(page)), await live(page));
       await page.keyboard.press('g'); await page.keyboard.press('m'); await sleep(500);
-      check('M on the squishy: muted, the mute button shows it, announced ("Sound off")', (await page.evaluate(() => document.querySelector('.hud-actions button[aria-pressed]').getAttribute('aria-pressed'))) === 'true' && /Sound off/.test(await live(page)), await live(page));
+      check('M on the squishy: muted, the mute button shows it, announced ("Sound off")', (await page.evaluate(() => document.querySelector('.hud-actions button[aria-label="Mute sound"]').getAttribute('aria-pressed'))) === 'true' && /Sound off/.test(await live(page)), await live(page));
       await page.keyboard.press('m'); await sleep(300);
       // Tab order: Mute, Settings, the Hoard, the Tools toolbar (ONE stop, on the tool in hand), the squishy. RE-SPECIFIED (the owner changed the design on 2026-10-08, UI.md 9.1): the Toys button is gone, the roving
       // toolbar of the dock follows the Hoard. (blur() keeps Chromium's sequential-navigation start point on the squishy, so the first Tab leaves the document (BODY) and the cycle starts there: judge the
@@ -3861,27 +4233,29 @@ async function main() {
       // a stop's name up to its first ':' or ',' (the Hoard button's name goes on with the count: "Hoard, 3 of 50 species, ..."); a tool's name is its label
       for (let i = 0; i < 9; i++) { await page.keyboard.press('Tab'); order.push(await page.evaluate(() => { const a = document.activeElement; return a?.getAttribute('aria-label')?.split(/[:,]/)[0] ?? (a?.classList.contains('dock-tool') ? a.querySelector('.dock-tool-label')?.textContent : null) ?? a?.tagName; })); }
       const stops = order.filter((o) => o !== 'BODY');
-      const want = ['Mute sound', 'Settings', 'Hoard', 'Hand', 'Squishy'];
-      const k0 = stops.indexOf('Mute sound');
+      // (RE-SPECIFIED because the owner changed the design on 2026-10-08, UI.md 9.1 / B4a: Full screen, Mute, Menu replace Mute, Settings)
+      const fsOn = await page.evaluate(() => { const b = document.querySelector('.hud-actions button[aria-label="Full screen"]'); return !!b && b.offsetParent !== null; });
+      const want = [...(fsOn ? ['Full screen'] : []), 'Mute sound', 'Menu', 'Hoard', 'Hand', 'Squishy'];
+      const k0 = stops.indexOf(want[0]);
       const cycleOk = k0 >= 0 && stops.length >= k0 + want.length && stops.every((o, i) => o === want[(((i - k0) % want.length) + want.length) % want.length]);
-      check('Tab order in play: Mute, Settings, the Hoard, the Tools toolbar (one stop, the Hand), the squishy (and no other stop)', cycleOk, order.join(' > '));
+      check('Tab order in play: Full screen (where drawn), Mute, Menu, the Hoard, the Tools toolbar (one stop, the Hand), the squishy (and no other stop)', cycleOk, order.join(' > '));
       // shortcuts stay out of form controls
-      await page.focus('button[aria-label="Settings"]'); await page.keyboard.press('Enter'); await sleep(500);
+      await openSettings(page); await sleep(500);
       const g0 = (await state(page)).settings.gravity;
       await page.focus('#wh-volume'); await page.keyboard.press('g');
-      await page.focus('#wh-quality'); await page.keyboard.press('m');
+      await page.focus('#wh-quality input:checked'); await page.keyboard.press('m');
       await sleep(300);
-      check('G on a focused slider and M on the Quality select do nothing (WCAG 2.1.4)', (await state(page)).settings.gravity === g0 && (await page.evaluate(() => document.querySelector('.hud-actions button[aria-pressed]').getAttribute('aria-pressed'))) === 'false');
+      check('G on a focused slider and M on the Quality select do nothing (WCAG 2.1.4)', (await state(page)).settings.gravity === g0 && (await page.evaluate(() => document.querySelector('.hud-actions button[aria-label="Mute sound"]').getAttribute('aria-pressed'))) === 'false');
       await page.focus('#wh-keys'); await page.keyboard.press('Space'); await sleep(200);
       await page.keyboard.press('Escape'); await sleep(400);
       check('Escape closes the panel and focus returns to the squishy', await page.evaluate(() => document.activeElement?.id === 'wh-play' && document.querySelector('.panel').dataset.open === 'false'));
       await page.keyboard.press('g'); await page.keyboard.press('m'); await sleep(300);
-      check('with "Keyboard shortcuts" off, G and M do nothing even on the squishy', (await state(page)).settings.gravity === g0 && !(await state(page)).settings.shortcuts && (await page.evaluate(() => document.querySelector('.hud-actions button[aria-pressed]').getAttribute('aria-pressed'))) === 'false');
+      check('with "Keyboard shortcuts" off, G and M do nothing even on the squishy', (await state(page)).settings.gravity === g0 && !(await state(page)).settings.shortcuts && (await page.evaluate(() => document.querySelector('.hud-actions button[aria-label="Mute sound"]').getAttribute('aria-pressed'))) === 'false');
       seen = await evKeys(page); a0 = await started(page);
       await page.keyboard.down('Space'); await sleep(60); await page.keyboard.up('Space');
       check('…while Space still pokes (it is not a single-letter shortcut)', !!(await waitEvent(page, seen, 'poke', { timeout: 40000 })));
       await page.evaluate(() => window.__WH__.setSetting('shortcuts', true));
-      const keysLine = await page.evaluate(() => { document.querySelector('button[aria-label="Settings"]').click(); const k = document.querySelector('.keys'); return { shown: k.offsetParent !== null, text: k.textContent }; });
+      const keysLine = await page.evaluate(() => { window.__WH_UI__.openSettings(); const k = document.querySelector('.keys'); return { shown: k.offsetParent !== null, text: k.textContent }; });
       check('the Keys line is shown (a keyboard was used) and lists + / − zoom', keysLine.shown && /\+ \/ − zoom/.test(keysLine.text), JSON.stringify(keysLine));
       await context.close();
     });
@@ -3980,7 +4354,7 @@ async function main() {
       const st = await page.evaluate(() => window.__WH__.shell.stageInfo());
       check('prefers-reduced-motion: Calm effects default ON (stage calm), screen shake 0', s.settings.calm === true && st?.calm === true && s.settings.shake === 0, `calm ${s.settings.calm}, stage ${st?.calm}, shake ${s.settings.shake}`);
       await wake(page);
-      await page.click('button[aria-label="Settings"]');
+      await openSettings(page);
       await sleep(500);
       const sh = await page.evaluate(() => ({ shake: document.querySelector('#wh-shake').parentElement.querySelector('output').textContent, calm: document.querySelector('#wh-calm').checked }));
       check('prefers-reduced-motion: the panel shows Calm effects on and Screen shake Off', sh.shake === 'Off' && sh.calm === true, JSON.stringify(sh));
@@ -3998,7 +4372,7 @@ async function main() {
       mainWatches.push(['no-vibrate', w]);
       await wake(page, { touch: true });
       const s = await state(page);
-      await page.evaluate(() => document.querySelector('button[aria-label="Settings"]').click());
+      await openSettings(page);
       await sleep(600);
       const row = await page.evaluate(() => ({ vib: typeof navigator.vibrate, shown: document.querySelector('#wh-haptics').closest('.row').offsetParent !== null, labels: [...document.querySelectorAll('.panel .row-label')].filter((e) => e.offsetParent !== null).map((e) => e.textContent) }));
       check('a touch phone without navigator.vibrate (iOS Safari): the Haptics control is hidden, haptics default off', row.vib === 'undefined' && !row.shown && !row.labels.includes('Haptics') && s.settings.haptics === false, JSON.stringify(row));
@@ -4019,7 +4393,7 @@ async function main() {
         const { page, context, w } = await open({ query: '?dev=1', init });
         mainWatches.push([`storage:${label}`, w]);
         await wake(page);
-        await page.click('button[aria-label="Settings"]');
+        await openSettings(page);
         await sleep(400);
         await page.focus('#wh-volume'); await page.keyboard.press('Home');
         await page.click('.seg-opt:has(input[value=float])');
@@ -4074,7 +4448,7 @@ async function main() {
       mainWatches.push(['url', w]);
       const s = await state(page);
       check('?float=1 ?quality=low apply as session overrides', s.settings.gravity === false && s.settings.quality === 'low' && s.stage.tier === 'low', JSON.stringify([s.settings.gravity, s.settings.quality, s.stage.tier]));
-      const hud = await page.evaluate(() => ({ name: document.querySelector('.nametag-name').textContent, tier: document.querySelector('.nametag-tier').textContent, muted: document.querySelector('.hud-actions button[aria-pressed]').getAttribute('aria-pressed'), canvas: document.getElementById('stage').getAttribute('aria-label') }));
+      const hud = await page.evaluate(() => ({ name: document.querySelector('.nametag-name').textContent, tier: document.querySelector('.nametag-tier').textContent, muted: document.querySelector('.hud-actions button[aria-label="Mute sound"]').getAttribute('aria-pressed'), canvas: document.getElementById('stage').getAttribute('aria-label') }));
       check(`?genome=<a ${rare.tier} code> shows that species' catalog name "${rare.name}" and tier (not a random nickname); ?mute=1 starts muted; the canvas label names it`,
         s.genomeCode === code && hud.name === rare.name && new RegExp(rare.tier, 'i').test(hud.tier) && hud.muted === 'true' && hud.canvas.includes(rare.name), JSON.stringify(hud));
       check('URL overrides were not written to storage', await page.evaluate(() => localStorage.getItem('wobblehoard:v1:settings') === null));
@@ -4186,7 +4560,7 @@ async function main() {
         const c = await ctaCentre(page);
         await page.mouse.click(c.x, c.y);
         await page.waitForFunction(() => document.body.dataset.phase === 'play', null, { timeout: 30000 });
-        await page.click('button[aria-label="Settings"]'); await sleep(500);
+        await openSettingsViaMenu(page); await sleep(900);   // the production build has no dev hook: the real Menu, then its Settings row
         await page.focus('#wh-volume'); await page.keyboard.press('ArrowLeft');
         await page.keyboard.press('Escape'); await sleep(1500);
         const info = await page.evaluate(() => ({ hook: typeof window.__WH__, dev: !!document.querySelector('.dev'), lab: !!document.querySelector('.lab'), hud: getComputedStyle(document.querySelector('.hud')).visibility, csp: window.__csp, name: document.querySelector('.nametag-name')?.textContent }));

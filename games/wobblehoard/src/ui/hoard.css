@@ -10,29 +10,29 @@ body { --hd-t: env(safe-area-inset-top, 0px); --hd-r: env(safe-area-inset-right,
 body[data-calm="true"] { --k-an-hoard: none; --k-an-hcard: none; --k-an-hmerge: none; }
 @media (prefers-reduced-motion: reduce) { body:not([data-calm="false"]) { --k-an-hoard: none; --k-an-hcard: none; --k-an-hmerge: none; } }
 /* the panel is modal: the HUD and a reveal plate under it would only peek out around its edges */
-body[data-hoard="open"] .hud, body[data-hoard="open"] .plate, body[data-hoard="card"] .plate, body[data-hoard="open"] .dev { visibility: hidden; }
-:where(.hoard, .hcard, .hmerge, .plate) { color: var(--k-fg); font: 600 14px/1.4 var(--wh-font-ui); }
+body[data-hoard="open"] .hud, body[data-hoard="open"] .plate, body[data-hoard="card"] .plate, body[data-hoard="open"] .dev, body[data-hoard="card"] .hint { visibility: hidden; }   /* (the card leaves the HUD around it, but the hint line would run under its edge) */
+:where(.hoard, .hcard, .hmerge, .plate) { color: var(--k-fg); font: 600 var(--wh-fs-small)/1.4 var(--wh-font-ui); }
 :where(.hoard, .hcard, .hmerge, .plate) :where(p, h3, ul) { margin: 0; }
 svg.k-icon[width="16"] { width: 16px; height: 16px; }
 
 /* ---- type roles: one definition each (UI.md 3.2: 12 caps label | 14 | 16 | 18 | 22 | 28; weights 600 and 800) ---- */
-.hoard-ledger, .plinth-tier, .gift-tier, .shelf-done, .plate-banner, .out-new, .out-up, .plinth-new, .hmerge-sub, .out-tier, .out-from, .slot-change, .pick-why, .copy-tag, .tool-n { font-weight: 800; font-size: 12px; line-height: 1.3; }
+.hoard-ledger, .plinth-tier, .gift-tier, .shelf-done, .plate-banner, .out-new, .out-up, .plinth-new, .hmerge-sub, .out-tier, .out-from, .slot-change, .pick-why, .copy-tag, .tool-n { font-weight: 800; font-size: var(--wh-fs-label); line-height: 1.3; }
 .hoard-ledger, .plinth-tier, .gift-tier, .shelf-done, .plate-banner, .out-new, .out-up, .plinth-new, .hmerge-sub { letter-spacing: .08em; text-transform: uppercase; }
 .hoard-count, .shelf-count, .tool-sort, .tool-select, .hcard-facts, .hcard-live, .gift-own, .task-n, .task-state, .hoard-empty-hint, .hmerge-warn, .hmerge-status, .plate-chip, .plate-nick, .slot-word, .act-note.playing, .plinth-name, .plinth-sub, .out { font-weight: 800; }
 .hoard-count, .shelf-count, .task-n, .out-p, .tool-n { font-variant-numeric: tabular-nums; }
 .hoard-ledger, .hoard-count, .shelf-count, .tool-sort, .plinth-tier, .gift-tier, .hoard-note-chip, .hoard-showing, .hcard-facts, .hcard-feel, .hcard-odds, .hcard-hint, .act-note, .hmerge-rule, .hmerge-help, .hmerge-note, .task-n, .task-state, .out-tier, .out-from, .out-odds, .gift-sub, .pick-why, .slot-empty, .tool-select-chev, .mark { color: var(--k-fg-dim); }
-.hoard-ledger { padding: 3px 10px; border: 1px dashed var(--k-edge); border-radius: 999px; }
+.hoard-ledger { padding: 3px 10px; border: 1px dashed var(--k-edge); border-radius: var(--wh-r-pill); }
 .hoard-note-text, .hoard-showing, .hcard-blurb, .hcard-feel, .hcard-odds, .hcard-hint, .act-note, .hmerge-rule, .hmerge-lines, .hmerge-help, .hmerge-note, .gift-lead, .gift-sub { font-weight: 600; }
-.hcard-blurb, .gift-lead, .gift-sub, .task-text, .out-name, .out-p { font-size: 16px; }
+.hcard-blurb, .gift-lead, .gift-sub, .task-text, .out-name, .out-p { font-size: var(--wh-fs-body); }
 .task-text, .out-name, .out-p, .hmerge-lines li.lead, .gift-name, .gift-big, .hmodal-text, .plate-name, .hold-btn { font-weight: 800; }
-.gift-name, .hmerge-lines li.lead, .hold-btn { font-size: 18px; }
-.gift-big, .hmodal-text { font-size: 22px; line-height: 1.25; }
-.plate-name { font-size: 28px; line-height: 1.15; }
+.gift-name, .hmerge-lines li.lead, .hold-btn { font-size: var(--wh-fs-lead); }
+.gift-big, .hmodal-text { font-size: var(--wh-fs-h3); line-height: 1.25; }
+.plate-name { font-size: var(--wh-fs-h2); line-height: 1.15; }
 /* the gel face (amber gradient, ink text): every small sticker and the selected tab / view button share it */
 .shelf-done, .plinth-new, .copy-tag.keeper, .out-new, .gift-check, .plate-chip[data-kind="new"], .hoard-tab.k-gel, .tool-seg .seg-btn.k-gel { color: var(--k-gel-fg); background-color: var(--k-gel-fill); background-image: var(--k-gel-image); border: var(--k-gel-border); }
-.shelf-done, .plinth-new, .out-new, .out-up, .plate-banner, .plate-chip { border-radius: 999px; }
+.shelf-done, .plinth-new, .out-new, .out-up, .plate-banner, .plate-chip { border-radius: var(--wh-r-pill); }
 .out-up, .plate-banner { color: var(--k-gel-fg); background-color: var(--k-coral-fill); background-image: var(--k-coral-image); }
-.hoard-bar, .task-bar { height: 12px; overflow: hidden; background: var(--k-fill-off); border: 1px solid var(--k-edge); border-radius: 999px; }
+.hoard-bar, .task-bar { height: 12px; overflow: hidden; background: var(--k-fill-off); border: 1px solid var(--k-edge); border-radius: var(--wh-r-pill); }
 .hoard-bar-fill, .task-fill { display: block; height: 100%; background-color: var(--k-fill-on); background-image: var(--k-gel-image); clip-path: inset(0 calc((1 - var(--fill, 0)) * 100%) 0 0 round 999px); }
 
 /* ================= the panel ================= */
@@ -42,6 +42,8 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
   background: var(--k-panel); border: 1px solid var(--k-edge-quiet); border-radius: var(--wh-r-panel); box-shadow: var(--wh-e3);
   touch-action: pan-y; -webkit-user-select: none; user-select: none; animation: var(--k-an-hoard) var(--wh-t-3) var(--wh-ease);
 }
+/* a roomy desktop: the panel is as tall as its pane (the Gift and Today panes are short), up to the screen */
+@media (min-width: 641px) and (min-height: 441px) { .hoard { bottom: auto; max-height: calc(100dvh - var(--hd-t) - var(--hd-b) - 82px); } }
 @keyframes hoard-in { from { opacity: 0; transform: translate(-50%, 14px); } }
 @keyframes hcard-in { from { opacity: 0; transform: translateX(18px); } }
 @keyframes hmerge-in { from { opacity: 0; transform: translate(-50%, calc(-50% + 14px)); } }
@@ -58,10 +60,10 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .hoard-note-ok { flex: none; }
 /* tabs: a segmented set, the selected one is the gel */
 .hoard-tabs { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; margin: 0 24px 12px; padding: 3px; background: var(--k-surface); border: 1px solid var(--k-edge); border-radius: var(--wh-r-card); }
-.hoard-tab, .tool-seg .seg-btn { --k-sh: 0 0 0 0 transparent; min-width: 0; border-radius: calc(var(--wh-r-card) - 4px); }
+.hoard-tab, .tool-seg .seg-btn { --k-sh: 0 0 0 0 transparent; min-width: 0; border-radius: var(--wh-r-btn); }
 .hoard-tab:not(.k-gel), .tool-seg .seg-btn:not(.k-gel) { background: transparent; border-color: transparent; }
 .hoard-tab.k-gel, .tool-seg .seg-btn.k-gel { --k-sh: var(--wh-e1); min-height: 44px; padding: 0 8px; }
-.hoard-tab { gap: 8px; padding: 0 8px; font-size: 14px; }
+.hoard-tab { gap: 8px; padding: 0 8px; font-size: var(--wh-fs-small); }
 .hoard-tab-icon { width: 20px; height: 20px; }
 .hoard-tab-dot { display: none; position: absolute; top: 4px; left: calc(50% + 36px); width: 10px; height: 10px; background: var(--wh-coral); border-radius: 50%; box-shadow: 0 0 0 2px var(--k-ink); }
 .hoard-tab[data-dot="true"] .hoard-tab-dot { display: block; }
@@ -71,13 +73,13 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .hoard-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
 .tool-btn[aria-expanded="true"] { --k-sh: var(--hd-sel); color: var(--k-sel-fg); background: var(--k-sel-fill); border-color: var(--k-sel-edge); }
 .tool-btn.tidy { margin-left: auto; }
-.tool-n { min-width: 22px; padding: 0 6px; color: var(--k-accent); line-height: 22px; text-align: center; background: var(--k-cavity); border-radius: 999px; }
+.tool-n { min-width: 22px; padding: 0 6px; color: var(--k-accent); line-height: 22px; text-align: center; background: var(--k-cavity); border-radius: var(--wh-r-pill); }
 .tool-sort { display: inline-flex; align-items: center; gap: 8px; line-height: 1; }
 .tool-select-wrap { position: relative; display: inline-grid; }
-.tool-select { -webkit-appearance: none; appearance: none; font-family: inherit; font-size: 14px; min-width: 0; min-height: 44px; margin: 0; padding: 0 36px 0 12px; color: var(--k-fg); background: var(--k-surface); border: 1px solid var(--k-edge); border-radius: var(--wh-r-btn); box-shadow: var(--hd-lift); cursor: pointer; }
+.tool-select { -webkit-appearance: none; appearance: none; font-family: inherit; font-size: var(--wh-fs-small); min-width: 0; min-height: 44px; margin: 0; padding: 0 36px 0 12px; color: var(--k-fg); background: var(--k-surface); border: 1px solid var(--k-edge); border-radius: var(--wh-r-btn); box-shadow: var(--hd-lift); cursor: pointer; }
 .tool-select-chev { position: absolute; top: 50%; right: 10px; margin-top: -10px; pointer-events: none; }
 .tool-seg { display: inline-grid; grid-auto-flow: column; gap: 2px; padding: 3px; background: var(--k-surface); border: 1px solid var(--k-edge); border-radius: var(--wh-r-btn); }
-.tool-seg .seg-btn { padding: 0 12px; border-radius: calc(var(--wh-r-btn) - 3px); }
+.tool-seg .seg-btn { padding: 0 12px; border-radius: var(--wh-r-chip); }
 .hoard-filters { display: grid; gap: 8px; margin: 0 0 12px; padding: 12px 16px 8px; background: var(--k-surface); border: 1px solid var(--k-edge-quiet); border-radius: var(--wh-r-card); }
 .fgroup { margin-top: 4px; }
 .fchip { min-height: 44px; }   /* 44 visual here: a thumb, and the harness's 44 x 44 row, read the element's own box */
@@ -111,8 +113,8 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .plinth-gem { position: absolute; top: 7px; left: 7px; width: 20px; height: 20px; }
 .plinth-new { position: absolute; top: 7px; right: 7px; padding: 1px 8px; }
 .plinth-icon { width: 64px; height: 64px; margin-top: 2px; }
-.plinth-name { min-width: 0; font-size: 14px; line-height: 1.15; text-align: center; overflow-wrap: break-word; }
-.plinth-sub { min-height: 16px; color: var(--k-accent); font-size: 12px; }
+.plinth-name { min-width: 0; font-size: var(--wh-fs-small); line-height: 1.15; text-align: center; overflow-wrap: break-word; }
+.plinth-sub { min-height: 16px; color: var(--k-accent); font-size: var(--wh-fs-label); }
 .plinth[data-owned="false"] .plinth-sub { color: var(--k-fg-dim); }
 .cabinet[data-view="cabinet"] .plinth-tier { display: none; }   /* the shelf's heading carries gem + word; a flat grid needs them on every plinth */
 .plinth-marks { position: absolute; right: 8px; bottom: 8px; display: flex; gap: 2px; }
@@ -143,7 +145,7 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .copy[aria-checked="true"], .gift[aria-checked="true"], .slot[aria-expanded="true"] { --k-sh: var(--hd-sel); color: var(--k-sel-fg); background-color: var(--k-sel-fill); border-color: var(--k-sel-edge); }
 .copy .mark { position: absolute; top: 4px; right: 6px; }
 .copy-tags { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
-.copy-tag { padding: 1px 8px; color: var(--k-fg); background: var(--k-track); border: 1px solid var(--k-edge-quiet); border-radius: 999px; }
+.copy-tag { padding: 1px 8px; color: var(--k-fg); background: var(--k-track); border: 1px solid var(--k-edge-quiet); border-radius: var(--wh-r-pill); }
 .swatch { flex: none; width: 30px; height: 30px; border: 2px solid var(--k-ink); border-radius: 50%; background: radial-gradient(circle at 36% 30%, var(--sw-a, var(--wh-cream)) 0%, var(--sw-b, var(--wh-edge)) 55%, var(--sw-c, var(--wh-dusk)) 100%); }
 /* the actions stay in reach: pinned to the card's foot while the rest scrolls */
 .hcard-actions { position: sticky; bottom: -16px; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px -16px -16px; padding: 12px 16px 16px; background: var(--k-panel); border-top: 1px solid var(--k-edge-quiet); }
@@ -171,7 +173,7 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .task { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 16px; background: var(--k-surface); border: 1px solid var(--k-edge-quiet); border-radius: var(--wh-r-card); box-shadow: var(--hd-lift); }
 .task-text { line-height: 1.3; }
 .task-bar { grid-column: 1 / -1; }
-.task-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px 2px 6px; color: var(--k-fg-dim); font-weight: 800; font-size: 12px; line-height: 1.3; border: 1px solid var(--k-edge); border-radius: 999px; }
+.task-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px 2px 6px; color: var(--k-fg-dim); font-weight: 800; font-size: var(--wh-fs-label); line-height: 1.3; border: 1px solid var(--k-edge); border-radius: var(--wh-r-pill); }
 .task-chip:not(:has(.k-icon)) { padding-left: 10px; }
 .task-chip[data-state="ready"] { color: var(--k-gel-fg); background-color: var(--k-gel-fill); background-image: var(--k-gel-image); border: var(--k-gel-border); }
 .task-chip[data-state="collected"] .k-icon { color: var(--k-ok); }
@@ -195,21 +197,21 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .hmerge-pick { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px; background: var(--k-cavity); border-radius: var(--wh-r-card); }
 .pick { gap: 8px; padding: 0 12px 0 6px; }
 .pick[aria-selected="true"] { --k-sh: var(--hd-sel); background: var(--k-sel-fill); border-color: var(--k-sel-edge); }
-.pick-why { padding: 1px 8px; background: var(--k-track); border-radius: 999px; }
+.pick-why { padding: 1px 8px; background: var(--k-track); border-radius: var(--wh-r-pill); }
 .hmerge-lines { display: grid; gap: 4px; padding-left: 18px; }
 .hmerge-lines li.lead { margin-left: -18px; color: var(--k-accent); line-height: 1.3; list-style: none; }
 .hmerge-sub { margin-top: 8px; color: var(--k-accent); }
-.hmerge-sub.hmerge-note { margin: 0; font: 600 14px/1.4 var(--wh-font-ui); letter-spacing: 0; text-transform: none; }
+.hmerge-sub.hmerge-note { margin: 0; font: 600 var(--wh-fs-small)/1.4 var(--wh-font-ui); letter-spacing: 0; text-transform: none; }
 .hmerge-outs { display: grid; gap: 6px; max-height: 280px; padding: 0; overflow-y: auto; list-style: none; }
 /* a row: the name keeps at least 12 characters of its own line; tier, chances and tags wrap UNDER it when the row is full */
 .out { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-height: 44px; padding: 6px 12px 6px 8px; font-weight: 600; line-height: 1.3; background: var(--k-surface); border-radius: var(--wh-r-btn); }
-.out[data-up="true"] { box-shadow: inset 4px 0 0 var(--k-accent); }
-.out[data-best="true"] { box-shadow: inset 4px 0 0 var(--k-danger-edge); }
+.out[data-up="true"], .out[data-best="true"] { padding-inline-start: 4px; border-inline-start: 4px solid var(--k-accent); }
+.out[data-best="true"] { border-inline-start-color: var(--k-danger-edge); }
 .out.stop { display: block; padding: 8px 12px; color: var(--k-fg-dim); }
 .out-icon { flex: none; width: 36px; height: 36px; }
 .out-name { flex: 1 1 12ch; min-width: 12ch; line-height: 1.2; overflow-wrap: break-word; }
 .out-from { display: inline-flex; align-items: center; gap: 2px; }
-.out-odds { flex: 1 0 100%; font-size: 14px; font-weight: 600; }
+.out-odds { flex: 1 0 100%; font-size: var(--wh-fs-small); font-weight: 600; }
 .out-new, .out-up { padding: 1px 8px; }
 .out-p { margin-left: auto; line-height: 1; }
 .hmerge-warn { padding: 8px 12px; line-height: 1.4; background: var(--k-track); border-radius: var(--wh-r-btn); }
@@ -240,13 +242,13 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .plate-tierline { display: flex; align-items: center; gap: 8px; }
 .plate .gem-lg { width: 26px; height: 26px; }
 .plate-nick[hidden], .plate-banner[hidden] { display: none; }
-@media (max-width: 480px) { .plate-name { font-size: 22px; } }
+@media (max-width: 480px) { .plate-name { font-size: var(--wh-fs-h3); } }
 @media (max-width: 420px) and (max-height: 260px) {
   /* TINY (UI.md 4.2): the plate REPLACES the bottom row while it shows: one line, y 156..192 (gem, tier, species, New); the squishy keeps the screen */
   .plate { top: auto; bottom: calc(var(--hd-b) + 9px); display: flex; align-items: center; justify-content: center; gap: 8px; width: calc(100vw - 2 * var(--k-gutter)); min-width: 0; height: 36px; padding: 0 12px; }
   .plate-banner, .plate-nick { display: none; }
-  .plate-tierline { flex: none; order: 1; gap: 4px; } .plate-name { flex: 1 1 0; order: 2; min-width: 0; overflow: hidden; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; } .plate-row { flex: none; order: 3; }
-  .plate .gem-lg { width: 20px; height: 20px; } .plate-tier { --jl-cap: 14px; } .plate-chip { padding: 0 8px; font-size: 12px; }
+  .plate-tierline { flex: none; order: 1; gap: 4px; } .plate-name { flex: 1 1 0; order: 2; min-width: 0; overflow: hidden; font-size: var(--wh-fs-body); text-overflow: ellipsis; white-space: nowrap; } .plate-row { flex: none; order: 3; }
+  .plate .gem-lg { width: 20px; height: 20px; } .plate-tier { --jl-cap: 14px; } .plate-chip { padding: 0 8px; font-size: var(--wh-fs-label); }
 }
 
 /* ================= narrow: the tools are two rows, the practice note is short ================= */
@@ -281,7 +283,7 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
   .gift-row { gap: 8px; }
   .gift { padding: 26px 4px 12px; }
   .gift-icon { width: 64px; height: 64px; }
-  .gift-name { font-size: 16px; }
+  .gift-name { font-size: var(--wh-fs-body); }
   .hmerge { top: auto; bottom: 0; left: 0; width: 100%; max-height: 92dvh; padding: 8px calc(var(--hd-r) + 14px) calc(var(--hd-b) + 16px) calc(var(--hd-l) + 14px); border-radius: var(--wh-r-panel) var(--wh-r-panel) 0 0; transform: none; }
   .hold-btn { width: 100%; min-width: 0; }
 }
@@ -299,7 +301,7 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
   .hoard-tools .tool-btn > span:not(.tool-n) { display: none; }   /* Filters and Tidy up are icons here (their names are aria-labels) */
   .hoard-tools .tool-btn { padding: 0 12px; }
   .plate { padding: 8px 16px 12px; }
-  .plate-name { font-size: 22px; }
+  .plate-name { font-size: var(--wh-fs-h3); }
   .hmerge { max-height: calc(100dvh - var(--hd-t) - var(--hd-b) - 16px); }
 }
 @media (max-width: 640px) and (max-height: 440px) { .hoard { top: 0; bottom: 0; } }

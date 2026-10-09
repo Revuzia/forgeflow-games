@@ -14,7 +14,6 @@ import { ICON_NAMES, ICON_PATHS, iconPaths } from '../src/ui/icons.ts';
 import { KIT_SIZES, applyLayout, bindHoard, dockFor, layoutFor, sameLayout } from '../src/ui/layout.ts';
 import type { LayoutHandle, LayoutState } from '../src/ui/layout.ts';
 import { CALM_FADE_MS, CALM_MOVE_MS, durationFor, play } from '../src/ui/motion.ts';
-import { TIER_STYLE } from '../src/core/rarity.ts';
 
 let bad = 0;
 let total = 0;
@@ -36,7 +35,7 @@ const stripComments = (s: string): string => s.replace(/\/\*[\s\S]*?\*\//g, '');
   check('tokens: PALETTE.plum stays the old surface tone (probe_app asserts it); the UI.md "plum" is DERIVED.plumBright', PALETTE.plum === '#2a1744' && DERIVED.plumBright === '#b894f2');
   check('tokens: --wh-font-ui does not shadow styles.css --wh-font; every token name is unique and kebab-case', !('--wh-font' in v) && Object.keys(v).every((k) => /^--wh-[a-z0-9-]+$/.test(k)) && Object.keys(v).length === new Set(Object.keys(v)).size, `${Object.keys(v).length} tokens`);
   check('tokens: glass is plum at .86 and the scrim ink at .62; the focus-ring halo spread is ring + offset + 2 (7 px)', v['--wh-glass'] === 'rgba(42, 23, 68, 0.86)' && v['--wh-scrim'] === 'rgba(20, 16, 42, 0.62)' && v['--wh-ring-halo-spread'] === '7px');
-  check('tokens: rarity frames equal core/rarity.ts frameHex while the old copy exists (B5 moves it)', TIER_IDS.every((id) => { const old = (TIER_STYLE as Record<string, { frameHex?: string; tellHex?: string }>)[id]; return !old || old.frameHex === undefined || (old.frameHex === TIERS[id].frame && old.tellHex === TIERS[id].tell); }));
+  check('tokens: the six rarity frames and tells live in theme.ts only (core/rarity.ts carries no frameHex / tellHex / prismHex: UI.md 3.1, K13 raw hex = 0)', TIER_IDS.length === 6 && TIER_IDS.every((id) => /^#[0-9a-f]{6}$/.test(TIERS[id].frame) && /^#[0-9a-f]{6}$/.test(TIERS[id].tell)) && !/frameHex|tellHex|prismHex/.test(read('src/core/rarity.ts')));
   check('tokens: 4 medals, 6 rarity frames, and a jelly stop set (top / body / shade) for each tone, tier and medal', MEDAL_IDS.length === 4 && TIER_IDS.length === 6 && Object.keys(JELLY).length === 5 + 6 + 4 && Object.values(JELLY).every((s) => /^#[0-9a-f]{6}$/.test(s.top) && /^#[0-9a-f]{6}$/.test(s.body) && /^#[0-9a-f]{6}$/.test(s.shade)));
   check('tokens: the jelly shade is darker than the body and the top lighter, for every stop set', Object.entries(JELLY).every(([, s]) => contrastRatio(s.shade, '#000000') < contrastRatio(s.body, '#000000') && contrastRatio(s.top, '#000000') > contrastRatio(s.body, '#000000') - 1e-9));
   check('tokens: mixHex is a plain sRGB mix (0 -> a, 1 -> b, .5 -> midpoint)', mixHex('#000000', '#ffffff', 0) === '#000000' && mixHex('#000000', '#ffffff', 1) === '#ffffff' && mixHex('#000000', '#ffffff', 0.5) === '#808080');

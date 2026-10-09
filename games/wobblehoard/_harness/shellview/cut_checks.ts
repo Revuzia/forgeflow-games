@@ -18,6 +18,9 @@
 //   * joining the rest of the pieces in a random order always ends at the root, and the root is then a fresh whole (ids start over);
 //   * a node that was joined away is dead: every function answers null for it and nothing changes.
 // A second row replays EVERY tree shape up to 6 pieces (64 shapes) x EVERY pair of pieces against the same model.
+//
+// The rows that need the REAL SoftBody (CUT-B task S4: X03' node leg, X04, X05, X06 leg 1, X10, X11, X12, X19) share the real-body rig of cutter_checks.ts and live there as sections
+// (parting, x03, x05, x06, x11, nested; --full = 50 species); the browser rows are _harness/cut_browser.mjs. This file stays the pure tree (no physics, no DOM).
 import { createCutTree, cutPiece, cutStack, group, isLeaf, isLive, isWhole, joinGroup, lca, leaves, planeById, regionOf, rollbackCut, undoCut } from '../../src/shell/cutRegion.ts';
 import type { CutNode, CutTree } from '../../src/shell/cutRegion.ts';
 import type { PieceRegion } from '../../src/contracts.ts';

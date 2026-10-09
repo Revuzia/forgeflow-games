@@ -241,6 +241,15 @@ const buildPairs = (): ContrastPair[] => [
     { name: `UI: medal ${k} on ink`, fg: MEDALS[k], bg: PALETTE.ink, min: 3 },
     { name: `UI: medal ${k} on panel`, fg: MEDALS[k], bg: DERIVED.panel, min: 3 },
   ]),
+  // ---- UI v3 B6b: the Trophies screen. The trophy / lock icon (ink) sits on the medal plate (three gradient stops), and an earned card's text sits on a 12 % tint of its tier colour ----
+  ...MEDAL_IDS.flatMap((k) => [
+    { name: `UI: trophy icon (ink) on the ${k} plate`, fg: PALETTE.ink, bg: MEDALS[k], min: 3 },
+    { name: `UI: trophy icon (ink) on the ${k} plate's bright stop`, fg: PALETTE.ink, bg: mixHex(MEDALS[k], PALETTE.cream, 0.52), min: 3 },
+    { name: `UI: trophy icon (ink) on the ${k} plate's dark stop`, fg: PALETTE.ink, bg: mixHex(MEDALS[k], PALETTE.ink, 0.2), min: 3 },
+    { name: `UI: text on an earned ${k} card's tint`, fg: PALETTE.cream, bg: mixHex(DERIVED.surface2, MEDALS[k], 0.12), min: 4.5 },
+    { name: `UI: dim text on an earned ${k} card's tint`, fg: DERIVED.creamDim, bg: mixHex(DERIVED.surface2, MEDALS[k], 0.12), min: 4.5 },
+    { name: `UI: "Earned" tick (ok) on an earned ${k} card's tint`, fg: DERIVED.ok, bg: mixHex(DERIVED.surface2, MEDALS[k], 0.12), min: 4.5 },
+  ]),
 ];
 // PURE: only probes read the table, so the bundler drops it (and its computed rows) from the game
 export const CONTRAST_PAIRS: ReadonlyArray<ContrastPair> = /* @__PURE__ */ buildPairs();

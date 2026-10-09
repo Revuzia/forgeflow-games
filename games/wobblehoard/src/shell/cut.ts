@@ -63,9 +63,13 @@ export const PART_GAP: Readonly<Record<string, number>> = { stickystretch: 0.16,
 export const PART_GAP_DEFAULT = 0.06;
 export const PART_S: Readonly<Record<string, number>> = { stickystretch: 0.45, slimegoo: 0.45, putty: 0.45, mochidough: 0.45 };
 export const PART_S_DEFAULT = 0.30;
-/** a cut plane steeper than this (|n.y|) is a near-level cut: its pieces are stacked flat faces that do not slide; the upper one is dropped from a small height instead */
+/** a cut plane flatter than this (|n.y| >= LEVEL_NY, a slope under 41 degrees) is a near-level cut: its pieces are stacked faces that do not slide; the upper one is dropped from a small height instead (PLOP_MAX).
+ *  Measured on the real SoftBody (CUT-B leg 2, 12 families, horizontal swipes through, above and below the middle, both directions; the 16 degree slope of the default camera): the stack stays within 0.01 to 0.09 m in 4 s. Holding
+ *  the pair's relative offset with moveTo for 1 to 2 s (a symmetric grip released with a taper) was tried and REVERTED: it only delays the slow slide of planes steeper than 35 degrees (wisplet 0.027 -> 0.115 m between 2 s and 3 s). Moving
+ *  the threshold made steeper planes worse (0.85: capnap 0.39 m, boingle 0.27 m on a 38 degree plane). */
 export const LEVEL_NY = 0.75;
-export const PLOP_MAX = 0.05;
+/** the drop of the upper piece of a near-level cut: 0.05 m landed at 0.99 m/s (capnap rebounded to 1.29 m/s, above the X13 bar of 1.2) and sank 2 to 4 cm into the lower piece; 0.03 m lands at 0.77 m/s (capnap 1.16, boingle 0.71, dollop 0.72, twangle 0.72) and rests with the stack within 1 cm of flush */
+export const PLOP_MAX = 0.03;
 /** Two pieces held together this long (a finger on one of them) reconnect. */
 export const JOIN_HOLD_S = 0.4;
 /** A join (drag one piece into another) and Reconnect all (about 1.2 s, CUT.md 1). Each runs in two parts (flowOf): the giver is first held at a
@@ -80,10 +84,6 @@ export const BRIDGE_REACH_K = 1.5;
 /** After the last join, a pair or piece further than HOME_NEAR from the middle glides there first, for at most HOME_MAX_S. */
 export const HOME_NEAR = 0.06;
 export const HOME_MAX_S = 1.6;
-/** @deprecated the closed-loop steering of the chunk build is gone (CUT2.md 6.5: the scripted parting replaced it). Kept as constants only because
- *  _harness/shellview/node_checks.ts imports them; S4 deletes those rows and these two lines. Nothing in this file uses them. */
-export const SETTLE_S = 0.8;
-export const SETTLE_GAP = 0.16;
 /** A swipe shorter than this (CSS px) is not a cut. */
 export const MIN_SWIPE_PX = 24;
 /** Two pieces TOUCH when the gap between their skins (along the line between their centres) is under this (m). */
@@ -204,14 +204,6 @@ const newPlan = (): CutPlan => ({
   aspectA: 0, aspectB: 0, sound: false, soundPending: false, built: false,
 });
 const lowestY = (b: SoftBodyLike): number => { const P = b.positions; let m = Infinity; for (let i = 1; i < P.length; i += 3) if (P[i] < m) m = P[i]; return m; };
-
-/** Where the eyes sit (CUT.md 1 "the eyes' anchor point"): the front of the body, a little above its middle, carried by its rotation.
- *  @deprecated only the dev hook (debugHook.ts) reads this until task S3 removes it; the true cut uses stage.eyeAnchors. */
-export function faceAnchor(b: SoftBodyLike): V3 {
-  const f = b.frame ?? { x: 0, y: 0, z: 0, w: 1 };
-  const local = rotate(f, { x: 0, y: 0.08 * b.restRadius, z: 0.9 * b.restRadius });
-  return { x: b.center.x + local.x, y: b.center.y + local.y, z: b.center.z + local.z };
-}
 
 /** How far the body's skin reaches from its centre along the unit direction u (world space). */
 export function supportAlong(b: SoftBodyLike, u: V3): number {
@@ -914,6 +906,8 @@ export function createCutter(d: CutDeps): Cutter {
       const ps = list();
       let p = ps[0];
       for (const q of ps) if (fracOf(q) > fracOf(p) + 1e-9) p = q;
+      // at the limit the limit line comes first (the Cut bar's hint does the same, cutText.barText): it is true whatever the sizes are (CUT2.md 12 X10: the sixth press says the limit line)
+      if (ps.length >= maxN()) return refuse(p, T.limit, 'limit');
       if (fracOf(p) < 2 * PIECE_MIN - 2 * PIECE_TOL) { wobble(p.body); d.say(T.noneBigEnough(false)); return 'small'; }
       if (isTrue()) {
         if (ps.length === 1) { const ep = eyePlane(p); return startCut(p, ep.plane, { button: true, mode: ep.mode, ends: endsAcross(p, ep.plane) }); }

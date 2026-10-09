@@ -34,15 +34,11 @@ body[data-layout="wide"]:not([data-density="short"]) .opts-status {
 body[data-layout="wide"]:not([data-density="short"]) .opts .k-gel { min-height: var(--wh-btn-h); padding: 0 var(--wh-sp-5); }
 .opts-btn > .k-icon { width: 20px; height: 20px; }
 .opts:is([data-labels="icon"], [data-labels="tight"]) .opts-btn--ic { width: var(--wh-hit); padding: 0; }
-.opts:is([data-labels="icon"], [data-labels="tight"]) .opts-btn--ic > .opts-label,
-.opts[data-labels="tight"] .opts-seg .k-seg-face > span,
-.opts:not([data-labels="long"]) .snap-tint-word {
-  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
-}
+/* (the labels that leave the picture but not the accessibility tree share base.css .sr-only) */
 
 /* ---------- the cut style: Clean cut | Minis (native radios in the kit's segmented control) ---------- */
 .opts-seg { --seg-face-h: 36px; position: relative; flex: none; grid-auto-columns: auto; gap: 4px; border-radius: var(--wh-r-btn); }
-.opts-seg .k-seg-face { min-height: var(--seg-face-h); padding: 0 var(--wh-sp-3); border-radius: calc(var(--wh-r-btn) - 4px); white-space: nowrap; }
+.opts-seg .k-seg-face { min-height: var(--seg-face-h); padding: 0 var(--wh-sp-3); border-radius: var(--wh-r-chip); white-space: nowrap; }
 .opts-seg .k-seg-input { top: -4px; bottom: -4px; height: auto; left: -2px; right: -2px; width: auto; }   /* a 36 high face keeps a 44 high hit box */
 .opts[data-labels="tight"] .opts-seg { gap: 0; }
 .opts[data-labels="tight"] .opts-seg .k-seg-face { width: var(--wh-hit); padding: 0; }   /* 44 wide faces side by side: each keeps a whole 44 wide hit box (K02: 36 + a 4 px gap overlapped the neighbour's) */

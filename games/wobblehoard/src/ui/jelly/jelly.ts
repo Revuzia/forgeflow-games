@@ -208,6 +208,21 @@ export function fitJelly(el: HTMLElement, maxW: number, o: FitOpts = {}): number
   return cap;
 }
 
+/** Keep a jelly heading inside its room: shrink its cap (floor 20) until it fits, on open, when the entrance has settled and on every resize (a "How to play" heading on a 320 px phone,
+ *  a "Your photo" one beside a close button). `room` is read each time. Returns the undo. */
+export function keepFitted(title: HTMLElement, room: () => number, settle?: HTMLElement): () => void {
+  const fit = (): void => { const w = room(); if (w > 0) fitJelly(title, w, { floor: 20 }); };
+  fit();
+  window.addEventListener('resize', fit);
+  settle?.addEventListener('animationend', fit, { once: true });
+  return () => window.removeEventListener('resize', fit);
+}
+/** the width a header's heading may use: the header's inner width less the close button and a gap */
+export const headRoom = (head: HTMLElement, close: HTMLElement): number => {
+  const cs = getComputedStyle(head);
+  return head.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - close.offsetWidth - 12;
+};
+
 /** The index of the letter whose drawing is nearest to a viewport x (letters mode only), or -1. */
 export function jellyLetterAt(el: HTMLElement, clientX: number): number {
   let best = -1, bestD = Infinity;

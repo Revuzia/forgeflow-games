@@ -22,8 +22,12 @@ import { createTitleCard } from '../ui/titleCard.ts';
 import type { TitleChip, TitleChipId } from '../ui/titleCard.ts';
 import type { Game } from './game.ts';
 import { createGame } from './game.ts';
+import { createAchievements } from './achievementsBinding.ts';
+import type { Achievements } from './achievementsBinding.ts';
 import { bindUi } from './hudBinding.ts';
-import { openMenu, toggleFullscreen } from './entryStubs.ts';
+import { DESTINATIONS, DEST_LABELS, TITLE_ORDER } from './destinations.ts';
+import { installPauseCtl } from './pauseCtl.ts';
+import { attachUiSound } from '../ui/uiSound.ts';
 
 declare global { interface Window { __whBooted?: boolean } }
 
@@ -31,13 +35,14 @@ const QUALITIES = ['auto', 'low', 'med', 'high'] as const;
 /** WebGL context loss: how long to wait for the context to come back before the give-up card */
 export const CONTEXT_GIVE_UP_MS = 5000;
 
-/** The title's destination chips (UI.md 6): a chip shows only when the screen behind it exists. A later batch flips its flag and fills in `openDestination`
- *  (B4: Settings through the Menu, How to play, Credits; B6: Trophies). */
-export const TITLE_DESTINATIONS: Readonly<Record<TitleChipId, boolean>> = { howto: false, trophies: false, credits: false, settings: false };
-const CHIP_LABELS: Readonly<Record<TitleChipId, string>> = { howto: 'How to play', trophies: 'Trophies', credits: 'Credits', settings: 'Settings' };
-const CHIP_ORDER: readonly TitleChipId[] = ['howto', 'trophies', 'credits', 'settings'];
-function openDestination(_id: TitleChipId): void { /* no destination exists yet: every flag above is false, so a build never calls this */ }
-const titleChips = (all: boolean): TitleChip[] => CHIP_ORDER.filter((id) => all || TITLE_DESTINATIONS[id]).map((id) => ({ id, label: CHIP_LABELS[id], onPress: () => openDestination(id) }));
+/** The title's destination chips (UI.md 6): a chip shows only when the screen behind it exists (the flags are shell/destinations.ts's: Settings since B4a; How to play and
+ *  Credits come with B4b, Trophies with B6b, each in hudBinding.ts `openDestination`). */
+export const TITLE_DESTINATIONS: Readonly<Record<TitleChipId, boolean>> = DESTINATIONS;
+/** a chip press: the screen opens ABOVE the title (the title goes inert under it, focus returns to the chip) */
+let openDestination: (id: TitleChipId, from: HTMLElement | null) => void = () => { /* the game is not built yet: a chip cannot be pressed before the title exists */ };
+const titleChips = (all: boolean): TitleChip[] => TITLE_ORDER.filter((id) => all || TITLE_DESTINATIONS[id]).map((id) => ({
+  id, label: DEST_LABELS[id], onPress: () => openDestination(id, document.querySelector<HTMLElement>(`.title [data-chip="${id}"]`)),
+}));
 
 interface UrlConfig { genomeParam: string | null; overrides: Partial<Settings>; muted: boolean; dev: boolean; lab: boolean; titleChips: boolean }
 
@@ -71,6 +76,9 @@ export async function boot(): Promise<(() => void) | null> {
   if (!root || !(canvas instanceof HTMLCanvasElement)) throw new Error('index.html is missing #stage / #ui');
   const bootCard = createBootCard(document.getElementById('boot'));
   document.body.dataset.phase = 'boot';
+  // the portal's pause contract exists from the first moment (a stub: nothing to pause yet); the real one replaces it once the Menu exists
+  const noPause = { pause() { /* booting */ }, resume() { /* booting */ }, toggle() { /* booting */ } };
+  window.__PAUSE__ = noPause;
   const cfg = readUrl(location.search);
   // the loading card follows the COUNT of finished boot events (3 imports, then createGame): the card, the bar and a window event (R09)
   const progress = (done: number): void => {
@@ -102,6 +110,7 @@ export async function boot(): Promise<(() => void) | null> {
 
   let profile: ReturnType<typeof createProfileStore> | null = null;
   let hoard: ReturnType<typeof createCollection> | null = null;
+  let ach: Achievements | null = null;
   try {
     const [{ SoftBody }, { createStage }, { createAudio }] = await Promise.all([
       import('../physics/softbody.ts').then(tick),
@@ -112,11 +121,13 @@ export async function boot(): Promise<(() => void) | null> {
     // DEV ONLY: ?dev=1&rseed=N makes the practice rolls repeatable (the harness's scripted practice loop); a build never reads it
     const rseed = import.meta.env.DEV && cfg.dev ? Number(new URLSearchParams(location.search).get('rseed')) : NaN;
     hoard = createCollection({ storage, profile: profile.profile, subscribe, now: epochNow, random: Number.isFinite(rseed) && rseed > 0 ? mulberry32(rseed >>> 0) : undefined });
+    // the trophies (UI B6a): the Hoard passes through ONE observing wrapper, so every capsule, merge, task and touch the game feeds it is seen (nothing changes for the game)
+    ach = createAchievements({ storage, now: epochNow, subscribe });
     game = createGame({
       canvas,
       storage,
       profile,
-      collection: hoard,
+      collection: ach.observe(hoard),
       epochNow,
       // the play mat with contact (mat.ts): a whole squishy built at its mat spot is the face piece of frac 1 (contracts.ts PieceOpts)
       // CUT (cut.ts): one piece of a cut squishy, built with the contract's PieceOpts
@@ -132,6 +143,7 @@ export async function boot(): Promise<(() => void) | null> {
     });
   } catch (err) {
     // createGame already disposed what it built (stage, audio); the saves and their cross-tab listeners are ours to close
+    try { ach?.dispose(); } catch { /* ignore */ }
     try { hoard?.dispose(); } catch { /* ignore */ }
     try { profile?.dispose(); } catch { /* ignore */ }
     fail(root, 'The squishy didn’t wake up', 'Something went wrong while starting the game. Reloading usually fixes it.', err);
@@ -140,6 +152,11 @@ export async function boot(): Promise<(() => void) | null> {
   }
   const g: Game = game;
   progress(++finished);   // createGame done: the fourth and last event
+  // the interface sounds: ONE delegated listener (ui/uiSound.ts); the hover rule comes from the audio module that is already loaded (a mouse or a pen, never a finger)
+  const { hoverSoundAllowed } = await import('../audio/ui.ts');
+  const detachUiSound = attachUiSound(document, {
+    play: (p) => g.audio.ui?.(p), calm: () => g.settings.calm, tap: (k) => g.haptics.uiTap?.(k), hoverAllowed: hoverSoundAllowed,
+  });
 
   // ---- the title card: built now that the game exists (its button unlocks audio and starts the play phase)
   const card = createTitleCard(root, {
@@ -167,8 +184,17 @@ export async function boot(): Promise<(() => void) | null> {
   window.visualViewport?.addEventListener('resize', resize);
 
   // ---- the DOM around the game (HUD, the squishy's keyboard target, settings, live region, reveal plate): hudBinding.ts
-  const ui = bindUi(root, canvas, g, env, { onPlay: () => card.dismiss() });
+  const ui = bindUi(root, canvas, g, env, {
+    onPlay: () => card.dismiss(),
+    trophies: ach,   // B6b: the Trophies row and chip
+    // a Settings opened from a title chip stands over the title: the title is inert under it
+    onSettingsOpenChange: (open) => { if (card.isShown()) card.el.toggleAttribute('inert', open); },
+  });
   playTargetFocus = () => ui.play.focus();
+  const trophies: Achievements = ach;
+  const offTrophies = trophies.attach(g, { announce: (t) => ui.announcer.say(t) });   // B6a: the game's real events -> trophies -> the portal bridge (standalone: posts nothing)
+  openDestination = (id, from) => { if (g.phase === 'title') ui.openDestination(id, from ?? undefined); };
+  const removePause = installPauseCtl({ phase: () => g.phase, menu: ui.menu });
 
   // ---- input + lifecycle
   const detachPointer = attachPointerInput(canvas, g);
@@ -180,8 +206,9 @@ export async function boot(): Promise<(() => void) | null> {
     onHoard: () => { if (g.phase === 'play') ui.hoard.toggle(); },
     onSwitch: (dir) => { if (g.phase === 'play' && !ui.hoard.isOpen) ui.switchBy(dir); },
     onTool: (id) => { if (g.phase === 'play') ui.pickTool(id); },
-    onFullscreen: () => { if (g.phase === 'play') toggleFullscreen(); },
-    onMenu: () => { if (g.phase === 'play' && !ui.hoard.isOpen) openMenu(); },
+    onFullscreen: () => { if (g.phase === 'play') void ui.toggleFullscreen(); },
+    onMenu: () => { if (g.phase === 'play' && !ui.hoard.isOpen) ui.openMenu(); },
+    onHelp: () => { ui.openHelp(); },   // ? : How to play (B4b; in play with nothing else open)
   });
   const detachLife = attachLifecycle(g);
 
@@ -195,14 +222,13 @@ export async function boot(): Promise<(() => void) | null> {
 
   // ---- WebGL context loss (mobile browsers reclaim contexts): freeze input, stop held voices, tell the player; resume when it comes
   // back; after CONTEXT_GIVE_UP_MS a working give-up card (the loop stops, the phase is 'error', the ceremony sounds stop). Finding 1.
-  let lostToast: HTMLElement | null = null;
+  let lostToast: { remove(): void } | null = null;
   let lostTimer = 0;
   const onLost = (e: Event): void => {
     e.preventDefault();
     g.suspend('context');
     lostToast?.remove();
-    lostToast = h('div', { class: 'toast', text: 'The picture was interrupted. Hang on…', attrs: { role: 'status' } });
-    root.append(lostToast);
+    lostToast = ui.toasts.show('warning', 'The picture was interrupted. Hang on…', { sticky: true, urgent: true });   // stays until the picture comes back (or the give-up card)
     clearTimeout(lostTimer);
     lostTimer = window.setTimeout(() => {
       lostToast?.remove(); lostToast = null;
@@ -224,11 +250,11 @@ export async function boot(): Promise<(() => void) | null> {
 
   // ---- dev tools (never in a production bundle)
   if (import.meta.env.DEV && (cfg.dev || (cfg.lab && isLocalHost()))) {
-    const [{ createDebugTools }, { createDevOverlay }, { createLabPanel }] = await Promise.all([
-      import('./debugHook.ts'), import('../ui/devOverlay.ts'), import('../ui/labPanel.ts'),
+    const [{ createDebugTools }, { createDevOverlay }, { createLabPanel }, { createUiHook }] = await Promise.all([
+      import('./debugHook.ts'), import('../ui/devOverlay.ts'), import('../ui/labPanel.ts'), import('../ui/uiHook.ts'),
     ]);
     const tools = createDebugTools(g, { skew });
-    if (cfg.dev) { window.__WH__ = tools.debug; createDevOverlay(root, g); }
+    if (cfg.dev) { window.__WH__ = tools.debug; window.__WH_UI__ = createUiHook(g, ui); createDevOverlay(root, g); }
     if (cfg.lab) createLabPanel(root, { lab: tools.lab, unlockAudio: () => g.unlockAudio() });
   }
 
@@ -242,6 +268,7 @@ export async function boot(): Promise<(() => void) | null> {
   return () => {
     clearTimeout(lostTimer);
     offMute();
+    removePause(); detachUiSound();
     detachPointer(); detachKeys(); detachLife();
     window.removeEventListener('storage', onStorage);
     window.removeEventListener('resize', resize);
@@ -249,9 +276,11 @@ export async function boot(): Promise<(() => void) | null> {
     canvas.removeEventListener('webglcontextlost', onLost);
     canvas.removeEventListener('webglcontextrestored', onRestored);
     ro?.disconnect();
+    offTrophies(); trophies.dispose();
     ui.destroy();
     g.dispose();   // flushes and disposes the collection; disposes stage and audio
     try { profile?.flush(); profile?.dispose(); } catch { /* ignore */ }
     if (import.meta.env.DEV && window.__WH__) delete window.__WH__;
+    if (import.meta.env.DEV && window.__WH_UI__) delete window.__WH_UI__;
   };
 }

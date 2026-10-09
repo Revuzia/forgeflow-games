@@ -43,6 +43,10 @@ function pageHitReport() {
   for (const el of document.querySelectorAll(sel)) {
     const cs = getComputedStyle(el);
     if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+    // an inert control (the HUD behind an open Menu) and the content of a closed disclosure (the error card's Details) cannot take focus: they are not focusables (B4a)
+    if (el.closest('[inert]')) continue;
+    const closedDetails = el.closest('details:not([open])');
+    if (closedDetails && !(el.tagName === 'SUMMARY' && el.parentElement === closedDetails)) continue;
     let r = el.getBoundingClientRect();
     if (r.width === 0 || r.height === 0) continue;
     el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' });
@@ -60,6 +64,8 @@ function pageHitReport() {
     rows.push({ name: `${el.tagName.toLowerCase()}.${String(el.className).split(' ')[0]} "${name}"`, w: Math.round(r.width), h: Math.round(r.height), cov: n ? hit / n : 1 });
   }
   scrollTo(0, 0);
+  // (B6b) a screen that scrolls INSIDE itself (the Trophies pane) was scrolled by scrollIntoView above: the picture must show it at the top, as a player first sees it
+  for (const s of document.querySelectorAll('*')) if (s.scrollTop > 0) s.scrollTop = 0;
   return rows;
 }
 

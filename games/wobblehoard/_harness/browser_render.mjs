@@ -43,7 +43,7 @@ const NO_PERF = QUICK || !!flag('no-perf', false);
 // --only=fix1 runs just the checks added in render fix round 1 (VERIFY_RENDER_A / B): garbage per frame, degenerate resize, phone halos of every species and the burst's side light, the 4-mat, the capsule's fill and its place against the Mythic dome, the calm seam.
 // --only=a,b,...: run only these sections (iteration; the default runs everything). Sections: main, phone, sky, lifecycle, r2 (governor,
 // multi-body API, 3-body leak, capsule drop / ownership), cer (every ceremony: budget, beats, flash, escalation; skip; calm; tier-up,
-// 3 parents, drivers, done), chains, rarity, film, gallery, glow, strands, mat, capspot, cut, cut2 (TRUE CUT: the cut face edge-on RP3, whole vs two flush pieces RP4, the eye count RP1), bundle
+// 3 parents, drivers, done), chains, rarity, film, gallery, glow, strands, mat, capspot, cut, frame (SR2: the band framing between the shell's HUD rows at six sizes: cover of each body's screen disc, the top edge, a stack, a toss), cut2 (TRUE CUT: the cut face edge-on RP3, whole vs two flush pieces RP4, the eye count RP1), bundle
 // (vite build + grep: no dev stage member in production), perf
 const ONLY = typeof flag('only', '') === 'string' ? String(flag('only', '')).split(',').filter(Boolean) : [];
 const ON = (name) => ONLY.length === 0 || ONLY.includes(name);
@@ -1339,6 +1339,73 @@ try {
       }
       report.problems.push(...dbad);
       await dctx.close();
+    }
+  }
+
+  /* ───────────────────────── SR2 (CUT2 8.6 framing, UI.md 4.2): the band framing. The squishy and its pieces are framed BETWEEN the rows the shell reports (setSafeInsets), at the six sizes the owner
+     looks at. The insets are what the REAL shell reported at each size (read off stageInfo().insets in the live game, 2026-10-09; the Cut options bar is NOT in them: hudBinding.reportInsets counts the top row,
+     the dock tray and the info row). Rows: at rest (whole, the two flush halves, two minis, the halves with one resting on the other, one mini on the other) no body's screen disc (the shell's own measure,
+     debugHook.matInfo) has any part under a row or off the frame and the silhouette stays inside the band (nothing touches the top edge); a thrown piece (the transient) stays within 25 % of its disc.
+     `band: false` is the framing as it was before SR2: printed beside, never a bar. ───────────────────────── */
+  if (ON('frame')) {
+    const bodyQ = BODY === 'auto' ? '' : BODY;
+    const RF = (report.frame = {});
+    // [label, W, H, insets-by-state]
+    const SIZES = [['960x600', 960, 600, [['hand/cut', { top: 56, bottom: 78 }]]], ['390x844', 390, 844, [['hand', { top: 56, bottom: 130 }], ['cut', { top: 56, bottom: 66 }]]],
+      ['844x390', 844, 390, [['hand/cut', { top: 60, bottom: 60 }]]], ['568x320', 568, 320, [['hand/cut', { top: 60, bottom: 60 }]]], ['358x201', 358, 201, [['hand/cut', { top: 50, bottom: 50 }]]],
+      ['320x568', 320, 568, [['hand', { top: 56, bottom: 130 }], ['cut', { top: 56, bottom: 66 }]]],
+      // (not a shell state: rails on both sides, the generic path of setSafeInsets {left, right}: the shell reports only top and bottom today)
+      ['960x600', 960, 600, [['rails left 120 / right 60', { top: 56, bottom: 78, left: 120, right: 60 }]]], ['320x568', 320, 568, [['rails left 90 / right 20', { top: 56, bottom: 66, left: 90, right: 20 }]]]];
+    const REST = ['whole', 'halves', 'minis', 'stack', 'stackMinis'];
+    const fmt = (r) => `under ${r.worstUnder.toFixed(3)} off ${r.worstOff.toFixed(3)} sil ${r.sil.top.toFixed(0)}..${r.sil.bottom.toFixed(0)} clear ${r.clearTop.toFixed(0)}/${r.clearBottom.toFixed(0)} cam ${r.camScale.toFixed(2)} lens ${r.lens.x.toFixed(3)}/${r.lens.y.toFixed(3)}${r.sil.left !== undefined ? ` sil x ${r.sil.left.toFixed(0)}..${r.sil.right.toFixed(0)}` : ''}`;
+    for (const [label, vw, vh, states] of SIZES) {
+      const fctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 1 });
+      const { page: fp, bad: fbad } = await openView(fctx, `quality=low&body=${bodyQ}`, `frame-${label}`, [/GPU stall due to ReadPixels/i]);
+      for (const [stName, ins] of states) {
+        const rows = {};
+        for (const sc of QUICK ? ['whole', 'halves', 'stack'] : REST) {
+          const A = await fp.evaluate((a) => window.__RV__.cut2.framing(a), { species: 'dollop', scenario: sc, insets: ins, band: false });
+          const B = await fp.evaluate((a) => window.__RV__.cut2.framing(a), { species: 'dollop', scenario: sc, insets: ins, band: true, shot: sc === 'stack' || sc === 'halves' });
+          if (B.png) writeFileSync(resolve(OUT, `frame_${label}_${stName.replace('/', '-')}_${sc}.png`), b64(B.png));
+          rows[sc] = { before: { under: A.worstUnder, off: A.worstOff, clearTop: A.clearTop, clearBottom: A.clearBottom, cam: A.camScale }, after: { under: B.worstUnder, off: B.worstOff, clearTop: B.clearTop, clearBottom: B.clearBottom, cam: B.camScale, lens: B.lens.y, sil: B.sil, discs: B.discs, transient: B.transient } };
+          check(B.ok && B.worstUnder === 0 && B.worstOff === 0 && B.clearTop >= 0 && B.clearBottom >= 0 && B.sil.left >= (ins.left ?? 0) && B.sil.right <= vw - (ins.right ?? 0),
+            `SR2 ${label} (${stName}, rows ${ins.top} / ${ins.bottom}) ${sc}, at rest: no part of any body's screen disc is under a row or off the frame (0 %) and the silhouette stays inside the band (nothing touches the top edge)`,
+            B.ok ? `after: ${fmt(B)}  | before: ${fmt(A)}` : String(B.why));
+        }
+        // a piece thrown up and over (the stub's own dynamics): the transient stays within 25 % of any disc under a row, none leaves the frame by more than 25 %
+        const Tn = await fp.evaluate((a) => window.__RV__.cut2.framing(a), { species: 'dollop', scenario: 'toss', insets: ins, band: true, seconds: 5 });
+        const Tb = await fp.evaluate((a) => window.__RV__.cut2.framing(a), { species: 'dollop', scenario: 'toss', insets: ins, band: false, seconds: 5 });
+        rows.toss = { after: { transient: Tn.transient, under: Tn.worstUnder, off: Tn.worstOff }, before: { transient: Tb.transient, under: Tb.worstUnder, off: Tb.worstOff } };
+        check(Tn.ok && Tn.worstUnder === 0 && Tn.worstOff === 0 && Tn.transient.maxUnder <= 0.25 && Tn.transient.maxOff <= 0.25,
+          `SR2 ${label} (${stName}) a piece thrown up and over: at most 25 % of any disc under a row or off the frame at any moment, 0 % once it lies still`,
+          `after: transient under ${Tn.transient.maxUnder.toFixed(3)} off ${Tn.transient.maxOff.toFixed(3)} then ${fmt(Tn)} | before: transient under ${Tb.transient.maxUnder.toFixed(3)} off ${Tb.transient.maxOff.toFixed(3)} then ${fmt(Tb)}`);
+        RF[`${label} ${stName}`] = rows;
+      }
+      report.problems.push(...fbad);
+      await fctx.close();
+    }
+    // the band framing's own garbage per frame (V8 sampling heap profiler incl. collected objects): 2 bodies, rows reported, 150 frames with render; bar 2 KB / frame from framing.ts (about 1 KB measured: the boxed
+    // doubles of the few calls a frame makes that V8 has not optimised in 150 frames; the existing bar for ALL of src/render/ is 16 KB, see the lifecycle section)
+    {
+      const actx = await browser.newContext({ viewport: { width: 960, height: 600 }, deviceScaleFactor: 1 });
+      const { page: ap, bad: abad } = await openView(actx, `quality=low&body=${bodyQ}`, 'frame-alloc', [/GPU stall due to ReadPixels/i]);
+      await ap.evaluate(() => { const R = window.__RV__; R.stage.setSafeInsets({ top: 56, bottom: 78 }); R.setGenome(''); R.addBody('2', 'rare', -1.15, 0.1); R.frames(30); });
+      const cdp = await actx.newCDPSession(ap);
+      await cdp.send('HeapProfiler.enable');
+      await ap.evaluate(() => window.__RV__.churn(120, true, false));
+      await cdp.send('HeapProfiler.startSampling', { samplingInterval: 64, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true });
+      const NF = 150;
+      await ap.evaluate((n) => window.__RV__.churn(n, true, false), NF);
+      const { profile } = await cdp.send('HeapProfiler.stopSampling');
+      let fb = 0, rb = 0;
+      const walk = (n) => { const u = n.callFrame.url || ''; if (u.includes('/src/render/')) { rb += n.selfSize; if (u.includes('framing.ts')) fb += n.selfSize; } for (const c of n.children) walk(c); };
+      walk(profile.head);
+      const lens = await ap.evaluate(() => { const i = window.__RV__.stage.info; return { lens: i.lens, insets: i.insets, bodies: i.bodies }; });
+      report.perf.frameGarbageBPerFrame = fb / NF;
+      check(fb / NF <= 2048 && lens.lens.bodies === 2, 'SR2 the band framing allocates little garbage per frame: 2 bodies, rows reported, 150 frames with render (V8 sampling heap profiler, collected objects included)', `${(fb / NF).toFixed(1)} B/frame from framing.ts (bar 2048), ${(rb / NF / 1024).toFixed(2)} KB/frame from all of src/render/, the framer saw ${lens.lens.bodies} bodies, lens ${lens.lens.y.toFixed(3)}`);
+      await cdp.send('HeapProfiler.disable');
+      report.problems.push(...abad);
+      await actx.close();
     }
   }
 

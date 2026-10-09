@@ -69,9 +69,6 @@ body[data-layout="tiny"] .dock[data-open="true"] { padding-right: calc(var(--dk-
 .dock[data-form="full"] .dock-tool-label { font-size: var(--wh-fs-body); }
 .dock:not([data-form="full"]) .dock-tool { width: var(--wh-hit); padding: 0; }
 /* compact and bare: the label leaves the picture, never the accessibility tree */
-.dock:not([data-form="full"]) .dock-tool-label, .dock:not([data-form="full"]) .dock-hoard .hoard-btn-word {
-  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
-}
 .dock:not([data-form="full"]) .dock-kbd { display: none; }
 .dock-tool > .k-icon { transition: color var(--k-fd-2) var(--wh-ease); }
 @media (forced-colors: none) {

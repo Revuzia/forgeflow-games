@@ -37,6 +37,7 @@ export function bindCut(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, u
   };
 
   const bar = createCutBar(root, {
+    labels: T.barLabels,                            // every word the bar draws or says on its own comes from cutText.ts
     onSplit: () => { const r = g.cut.splitInTwo(); if (r === 'miss') say(T.nothingToCut); },
     // (the animated path says "Whole again." itself when the last piece is in; with Skip animations everything is at once and silent, so the button says it: VERIFY B-M4)
     onReconnect: () => { const animated = !g.settings.skipAnimations; if (!g.cut.reconnectAll(animated)) say(T.inOnePiece); else if (!animated) say(T.whole); },

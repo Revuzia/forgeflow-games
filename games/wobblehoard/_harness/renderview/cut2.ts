@@ -5,6 +5,7 @@
 //        and the same with the outline blocks left out; a post "Reconnect all" frame against the never-cut frame
 //   rp1  eyes per piece: dark ink pixels inside each eye's footprint on each piece rendered alone against the whole's, and the dev count of eye meshes (`eyeInk`, part 2)
 //   rp2  the straddle sweep: the plane across an eye at -1.0 .. +1.0 rho, ink of A + B against the whole, ink beyond the cut face (`eyeInk` with the camera IN the plane)
+//   framing  SR2 (CUT2 8.6, UI.md 4.2): the band framing: the share of each body's screen disc under the reported insets, the silhouette against the top edge, a stack / a toss
 //   shots  a whole and its two pieces apart, from three cameras, as PNGs (the cut-face look is READ, not only measured)
 import * as THREE from 'three';
 import type { StageDev } from '../../src/render/stageDev.ts';
@@ -18,6 +19,7 @@ import { wholeRefFor } from '../../src/render/wholeRef.ts';
 import { buildPieceEyes } from '../../src/render/pieceEyes.ts';
 import { buildPieceMesh } from '../../src/render/pieceBuild.ts';
 import { CORE_TUNING } from '../../src/render/core.ts';
+import { FRAME_TUNING } from '../../src/render/framing.ts';
 
 /** One piece of an `eyeInk` run: its fraction, eye meshes drawn, remaining width of each, dark ink in each eye's footprint, ink beyond the cut line, which slots are drawn. */
 export interface InkPiece { frac: number; meshes: number; shares: number[]; ink: number[]; inkBeyond: number; slotsDrawn: number[]; centres: number[][] }
@@ -114,6 +116,13 @@ export function makeCut2(stage: StageDev, canvas: HTMLCanvasElement, real: () =>
     for (const [y, x] of pts) { const r = x - (a * y + b); ss += r * r; if (Math.abs(r) > mx) mx = Math.abs(r); }
     return { rms: Math.sqrt(ss / n), rows: n, slope: a, x: b + a * ((yTop + yBot) / 2), yTop, yBot, max: mx };
   }
+
+  /** The stub's own placement knobs (private fields): put a body at (x, y, z) exactly, at rest. */
+  function placeBody(b: StubBody, x: number, y: number, z: number): void {
+    const o = b as unknown as { homeX: number; homeY?: number; homeZ: number; reset(): void };
+    o.homeX = x; o.homeY = y; o.homeZ = z; o.reset();
+  }
+  const maxYOf = (a: ArrayLike<number>): number => { let m = -Infinity; for (let i = 1; i < a.length; i += 3) if (a[i] > m) m = a[i]; return m; };
 
   return {
     /** Probe knob: extra fine subdivisions per piece (src/render/pieceBuild.ts PB_TUNING). */
@@ -570,6 +579,144 @@ export function makeCut2(stage: StageDev, canvas: HTMLCanvasElement, real: () =>
       out.pieces = ids.map((i) => stage.eyeCentres(i).length);
       stage.clearBodies();
       return out;
+    },
+
+    /**
+     * SR2 (CUT2 8.6, UI.md 4.2): the band framing. The scenario is built the way the shell does it (the whole settles, then the bodies that replace it are added and the whole removed), the stage is given
+     * the rows the shell reports (`insets`: top, bottom, left, right in CSS px) and run for 4 s; then, in the picture the camera made:
+     *   the SHARE OF EACH BODY'S SCREEN DISC (the shell's own measure, debugHook.matInfo: the centre of mass, the radius restRadius) under the rows: `under`, off the frame: `off`;
+     *   the silhouette (every skin vertex of every body): its top against the top row and the top edge, its bottom against the bottom row;
+     *   `transient`: the worst `under` / `off` and the closest approach of the silhouette to the rows over the whole run, from the swap.
+     * scenarios: whole | halves (the two flush halves of the vertical plane through the middle) | minis (two complete copies of 0.5 side by side) | stack (the halves, one resting on the other) |
+     * stackMinis (one mini on the other) | toss (the halves, one thrown up and over, the stub's own dynamics). `band: false` = the framing as it was before SR2 (the A of the A / B).
+     */
+    framing(o: { species: string; scenario: 'whole' | 'halves' | 'minis' | 'stack' | 'stackMinis' | 'toss'; insets: { top: number; bottom: number; left?: number; right?: number }; band?: boolean; shot?: boolean; seconds?: number }): {
+      ok: boolean; why?: string; W: number; H: number; scenario: string; band: boolean; camScale: number; lens: { x: number; y: number; fitY: number; want: number }; discs: number[][]; under: number[]; off: number[]; worstUnder: number; worstOff: number;
+      sil: { top: number; bottom: number; left: number; right: number }; clearTop: number; clearBottom: number; transient: { maxUnder: number; maxOff: number; minClearTop: number; minClearBottom: number }; frac: number[]; png: string;
+    } {
+      const g = genomeOf(o.species), W = canvas.clientWidth, H = canvas.clientHeight, R0 = PP.whole(g).radius;
+      const ins = { top: o.insets.top, bottom: o.insets.bottom, left: o.insets.left ?? 0, right: o.insets.right ?? 0 };
+      const band = o.band !== false, sc = o.scenario;
+      const empty = { ok: false, W, H, scenario: sc, band, camScale: NaN, lens: { x: 0, y: 0, fitY: 0, want: 0 }, discs: [] as number[][], under: [] as number[], off: [] as number[], worstUnder: NaN, worstOff: NaN, sil: { top: NaN, bottom: NaN, left: NaN, right: NaN }, clearTop: NaN, clearBottom: NaN, transient: { maxUnder: NaN, maxOff: NaN, minClearTop: NaN, minClearBottom: NaN }, frac: [] as number[], png: '' };
+      FRAME_TUNING.enabled = band; FREEZE = false; PTR = null;
+      stage.clearBodies();
+      stage.setSafeInsets(ins);
+      const whole = new StubBody(g, { rest: PP }), iw = stage.addBody(whole, g, { tier: 'common' });
+      run([whole], 150);
+      const c0 = { x: whole.center.x, y: whole.center.y, z: whole.center.z };
+      let bodies: SoftBodyLike[] = [];
+      let frac: number[] = [];
+      const swapTo = (bs: SoftBodyLike[]): void => {
+        const ids = bs.map((b) => stage.addBody(b, g, { tier: 'common' }));
+        stage.setPrimaryBody?.(ids[0]);
+        stage.removeBody?.(iw);
+        bodies = bs;
+      };
+      if (sc === 'whole') { bodies = [whole]; frac = [1]; }
+      else if (sc === 'halves' || sc === 'stack' || sc === 'toss') {
+        const cut = PP.cut(g, { x: 1, y: 0, z: 0 }, 0);
+        if (!sideOf(cut)) return { ...empty, why: cut.refused };
+        const mk = (s: CutSide, dx = 0, dy = 0): StubBody => pieceBody(g, s, { x: c0.x + s.rest.offset.x + dx, y: c0.y + s.rest.offset.y + dy, z: c0.z + s.rest.offset.z });
+        frac = [cut.a.frac, cut.b.frac];
+        if (sc === 'stack') {
+          // b rests on a: its lowest point on a's highest, a little off a's middle
+          const topA = c0.y + cut.a.rest.offset.y + maxYOf(cut.a.rest.restLocal), lowB = minY(cut.b.rest.restLocal);
+          const dx = cut.a.rest.offset.x + 0.1 * R0 - cut.b.rest.offset.x;
+          const pa = mk(cut.a), pb = pieceBody(g, cut.b, { x: c0.x + cut.b.rest.offset.x + dx, y: topA - lowB + 0.004, z: c0.z + cut.a.rest.offset.z });
+          swapTo([pa, pb]); FREEZE = true;
+        } else {
+          const pa = mk(cut.a), pb = mk(cut.b);
+          swapTo([pa, pb]);
+          if (sc === 'toss') pb.nudge({ x: 0.9, y: 2.4, z: 0.5 });
+        }
+      } else {
+        // two complete minis (the old scaled-whole path, no region): side by side, or one on the other
+        const mk = (x: number): StubBody => new StubBody(g, { piece: { frac: 0.5, chunk: false, at: { x: c0.x + x, y: 0, z: c0.z } } });
+        const ma = mk(sc === 'minis' ? -0.46 : 0), mb = mk(sc === 'minis' ? 0.46 : 0.08);
+        frac = [0.5, 0.5];
+        if (sc === 'stackMinis') {
+          run([ma], 90);
+          const topA = maxYOf(ma.positions), lowB = minY(mb.restLocal);
+          placeBody(mb, c0.x + 0.08, topA - lowB + 0.004, c0.z);
+          swapTo([ma, mb]); FREEZE = true;
+        } else swapTo([ma, mb]);
+      }
+      const cam = stage.camera, v3 = new THREE.Vector3();
+      const sx = (x: number, y: number, z: number): [number, number] => { v3.set(x, y, z).project(cam); return [(v3.x * 0.5 + 0.5) * W, (0.5 - v3.y * 0.5) * H]; };
+      /** the shell's measure: the disc of each body (centre of mass, restRadius along world x), the share of its in-frame samples under a row; and the share of the disc outside the frame */
+      const cover = (): { discs: number[][]; under: number[]; off: number[]; sil: { top: number; bottom: number; left: number; right: number } } => {
+        const discs: number[][] = [], under: number[] = [], off: number[] = [];
+        let st = Infinity, sb = -Infinity, sl = Infinity, sr = -Infinity;
+        for (const v of stage.views) {
+          if (!v.visible) continue;
+          const c = v.proxy.center, [cx, cy] = sx(c.x, c.y, c.z), [ex] = sx(c.x + v.proxy.restRadius, c.y, c.z), r = Math.abs(ex - cx);
+          discs.push([cx, cy, r]);
+          let tot = 0, cov = 0, all = 0, out = 0; const N = 40;
+          for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+            const x = cx + ((i + 0.5) / N * 2 - 1) * r, y = cy + ((j + 0.5) / N * 2 - 1) * r;
+            if (Math.hypot(x - cx, y - cy) > r) continue;
+            all++;
+            if (x < 0 || y < 0 || x > W || y > H) { out++; continue; }
+            tot++; if (y < ins.top || y > H - ins.bottom || x < ins.left || x > W - ins.right) cov++;
+          }
+          under.push(+(cov / Math.max(1, tot)).toFixed(4)); off.push(+(out / Math.max(1, all)).toFixed(4));
+          const P = v.proxy.positions;
+          for (let i = 0; i < P.length; i += 3) { const [px, py] = sx(P[i], P[i + 1], P[i + 2]); if (py < st) st = py; if (py > sb) sb = py; if (px < sl) sl = px; if (px > sr) sr = px; }
+        }
+        return { discs, under, off, sil: { top: st, bottom: sb, left: sl, right: sr } };
+      };
+      let maxUnder = 0, maxOff = 0, minClearTop = Infinity, minClearBottom = Infinity;
+      const N = Math.round((o.seconds ?? 4) * 60);
+      for (let f = 0; f < N; f++) {
+        run(bodies, 1);
+        if (f % 4 === 0 || f > N - 8) {
+          const m = cover();
+          maxUnder = Math.max(maxUnder, ...m.under); maxOff = Math.max(maxOff, ...m.off);
+          minClearTop = Math.min(minClearTop, m.sil.top - ins.top); minClearBottom = Math.min(minClearBottom, H - ins.bottom - m.sil.bottom);
+        }
+      }
+      const m = cover();
+      const info = stage.info;
+      const res = {
+        ok: true, W, H, scenario: sc, band, camScale: info.camScale, lens: { x: info.lens.x, y: info.lens.y, fitY: info.lens.fitY, want: info.lens.want }, discs: m.discs.map((d) => d.map((v) => +v.toFixed(1))), under: m.under, off: m.off,
+        worstUnder: Math.max(...m.under), worstOff: Math.max(...m.off), sil: m.sil, clearTop: m.sil.top - ins.top, clearBottom: H - ins.bottom - m.sil.bottom,
+        transient: { maxUnder, maxOff, minClearTop, minClearBottom }, frac, png: o.shot ? png() : '',
+      };
+      FREEZE = false; FRAME_TUNING.enabled = true;
+      stage.clearBodies();
+      return res;
+    },
+
+    /**
+     * Pictures to READ: the Reconnect bridge. The two flush halves of the vertical plane through the middle, pulled apart to `gap` m (each side moves gap / 2), `stage.setBridge(a, b, 1)` on, a
+     * second of frames for the neck to ease in, then a picture from each of `yaws` (camera orbit, radians) at the viewport's size.
+     */
+    bridge(o: { species: string; gap: number; yaws?: number[]; zoom?: number }): { ok: boolean; why?: string; pngs: string[] } {
+      const g = genomeOf(o.species);
+      const cut = PP.cut(g, { x: 1, y: 0, z: 0 }, 0);
+      if (!sideOf(cut)) return { ok: false, why: cut.refused, pngs: [] };
+      stage.clearBodies(); FREEZE = false; PTR = null;
+      const whole = new StubBody(g, { rest: PP }); stage.addBody(whole, g, { tier: 'common' });
+      run([whole], 120);
+      const c0 = { x: whole.center.x, y: whole.center.y, z: whole.center.z };
+      stage.clearBodies();
+      const mk = (s: CutSide, sgn: number): StubBody => pieceBody(g, s, { x: c0.x + s.rest.offset.x + sgn * o.gap / 2, y: c0.y + s.rest.offset.y, z: c0.z + s.rest.offset.z });
+      const pa = mk(cut.a, 1), pb = mk(cut.b, -1);
+      const ia = stage.addBody(pa, g, { tier: 'common' }), ib = stage.addBody(pb, g, { tier: 'common' });
+      FREEZE = true;
+      if (o.zoom) stage.zoom(o.zoom);
+      const pngs: string[] = [];
+      let cur = 0;
+      for (const yw of o.yaws ?? [0, 0.7]) {
+        stage.orbit(yw - cur, 0); cur = yw;
+        for (let i = 0; i < 90; i++) { stage.setBridge?.(ia, ib, 1); run([pa, pb], 1); }
+        pngs.push(png());
+      }
+      stage.orbit(-cur, 0);
+      if (o.zoom) stage.zoom(-o.zoom);
+      FREEZE = false;
+      stage.clearBodies();
+      return { ok: true, pngs };
     },
 
     /**

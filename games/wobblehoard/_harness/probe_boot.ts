@@ -58,7 +58,7 @@ const jellyCss = stripComments(read('src/ui/jelly/jelly.css'));
   check('boot card: the body gradient is the jelly amber tone (top, body, belly) and the gloss is white .9 to .25', JSON.stringify(stops) === JSON.stringify([[0, s.top], [0.42, s.body], [1, mixHex(s.body, s.shade, 0.55)]]) && /stop-color="#fff" stop-opacity="\.9"/.test(mark) && /stop-color="#fff" stop-opacity="\.25"/.test(mark));
   check('boot card: five passes per word (shadow, outline, shade, body, gloss), the shadow down 7, the shade down 3, the gloss up-left', ['wa', 'wb'].every((w) => ['sh', 'ol', 'sd', 'bd', 'hi'].every((p) => new RegExp(`<use class="bt-${p}"[^>]*href="#bt-${w}"`).test(mark))) && /class="bt-sh" transform="translate\(0 7\)"/.test(mark) && /class="bt-sd" transform="translate\(0 3\)"/.test(mark) && /class="bt-hi"[^>]*transform="translate\(-3 -4\)"/.test(mark));
   check('boot card: the stroke widths match jelly.css (shadow 26, outline 26, shade 20, body 20, gloss 5)', /\.bt-sh \{[^}]*stroke-width: 26px/.test(bootCss) && /\.bt-ol \{[^}]*stroke-width: 26px/.test(bootCss) && /\.bt-sd \{[^}]*stroke-width: 20px/.test(bootCss) && /\.bt-bd \{ stroke-width: 20px/.test(bootCss) && /\.bt-hi \{ stroke-width: 5px/.test(bootCss) && /\.jl-sh \{[^}]*stroke-width: 26px/.test(jellyCss) && /\.jl-sd \{[^}]*stroke-width: 20px/.test(jellyCss) && /\.jl-hi \{[^}]*stroke-width: 5px/.test(jellyCss));
-  check('boot.css: the <noscript> message sits above the loading card (z 31 over 30), or a visitor with scripts off would never read it', /#boot \{[^}]*z-index: 30/.test(bootCss) && /noscript \{[^}]*z-index: 31/.test(bootCss) && /<noscript>[^<]*JavaScript[^<]*<\/noscript>/.test(html));
+  check('boot.css: the <noscript> message sits above the loading card (both z 30 = the boot step of the z scale, K13; the noscript comes later in the page, so it paints over the card), or a visitor with scripts off would never read it', /#boot \{[^}]*z-index: 30/.test(bootCss) && /noscript \{[^}]*z-index: 30/.test(bootCss) && html.indexOf('id="boot"') > 0 && html.indexOf('id="boot"') < html.indexOf('<noscript>') && /<noscript>[^<]*JavaScript[^<]*<\/noscript>/.test(html));
   check('index.html: no inline script, no <style>, no style attribute; boot.css is linked (a strict CSP holds)', !/<script\b(?![^>]*\bsrc=)/i.test(html) && !/<style\b/i.test(html) && !/\sstyle=/i.test(html) && /<link rel="stylesheet" href="\.\/src\/ui\/boot\.css">/.test(html));
 }
 
@@ -90,7 +90,15 @@ const jellyCss = stripComments(read('src/ui/jelly/jelly.css'));
   check('title: the lockup is the one h1 (jelly tag h1, real text SQUISH KEEPER) and names the dialog (aria-labelledby)', /jelly\(WORD, \{[^}]*tag: 'h1'/.test(card) && /'aria-labelledby': 'wh-title-name'/.test(card));
   check('title: a keydown or a pointerdown anywhere skips the intro; the Sound chip is a switch (aria-pressed = sound on); the button keeps the .cta class', /addEventListener\('keydown', skip, true\)/.test(card) && /addEventListener\('pointerdown', skip, true\)/.test(card) && /'aria-pressed', String\(!m\)/.test(card) && /class: 'cta k-btn k-gel k-cta'/.test(card));
   const boot = read('src/shell/boot.ts');
-  check('title: every destination chip is hidden until its screen exists (flags false), and the dev-only ?titlechips=1 shows them', /TITLE_DESTINATIONS[^=]*= \{ howto: false, trophies: false, credits: false, settings: false \}/.test(boot) && /import\.meta\.env\.DEV && cfg\.titleChips/.test(boot));
+  // RE-SPECIFIED by B4a (the owner changed the design on 2026-10-08: the Menu and its Settings row exist): the flags moved to shell/destinations.ts, and Settings is true; the rule is unchanged (a chip is drawn only when its screen exists)
+  const dest = read('src/shell/destinations.ts');
+  // RE-SPECIFIED again by B6b (the owner changed the design on 2026-10-08: the screens arrive one batch at a time, so a row that pins WHICH flags are true breaks every time a batch flips its own):
+  // the rule is unchanged and is now checked as the rule: four literal flags, Settings on, and every flag that is true has its `case` in hudBinding.ts openDestination (a chip that does nothing is worse than none)
+  const flags = /DESTINATIONS[^=]*= \{ howto: (true|false), trophies: (true|false), credits: (true|false), settings: (true|false) \}/.exec(dest);
+  const hudSrc = read('src/shell/hudBinding.ts');
+  const dflags = flags ? (['howto', 'trophies', 'credits', 'settings'] as const).filter((_, i) => flags[i + 1] === 'true') : [];
+  check(`title: a destination chip is drawn only when its screen exists (shell/destinations.ts: ${flags ? flags[0].replace(/^[^{]*/, '') : '?'}; every flag that is true has its case in hudBinding.openDestination), boot.ts takes the flags from there, and the dev-only ?titlechips=1 shows them all`,
+    !!flags && flags[4] === 'true' && dflags.every((id) => new RegExp(`case '${id}'`).test(hudSrc)) && /TITLE_DESTINATIONS[^=]*= DESTINATIONS/.test(boot) && /import\.meta\.env\.DEV && cfg\.titleChips/.test(boot));
 }
 
 // ============================================================ static audit of the sheets this batch owns

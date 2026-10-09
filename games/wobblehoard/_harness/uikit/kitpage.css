@@ -113,3 +113,12 @@ body[data-layout="tiny"] .kp-ringbox .capsule-btn { min-width: 0; padding: 0 var
 .kp-qs--fold .qs-row { display: none !important; }
 .kp-qs--fold .qs-fold { display: flex !important; }
 .kp-scene[data-tool="cut"] .qswitch, .kp-scene[data-tool="snap"] .qswitch { visibility: hidden; }   /* the game's body[data-tool] rule: no switcher under an options bar */
+
+/* ---- roles the kit page shows that the game does not use (B7 moved them out of base.css / kit.css: K05) ---- */
+.k-text { font: var(--wh-w-mid) var(--wh-fs-body)/var(--wh-lh-body) var(--wh-font-ui); color: var(--k-fg); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; min-width: 0; }
+.k-field-error { display: flex; align-items: flex-start; gap: var(--wh-sp-2); margin: var(--wh-sp-2) 0 0; font: var(--wh-w-bold) var(--wh-fs-small)/1.3 var(--wh-font-ui); color: var(--k-danger); overflow-wrap: anywhere; }
+.k-field-error .k-icon { width: 20px; height: 20px; margin-top: -1px; color: var(--k-danger-edge); }
+.k-reason { margin: var(--wh-sp-1) 0 0; font: var(--wh-w-mid) var(--wh-fs-label)/1.3 var(--wh-font-ui); color: var(--k-fg-dim); }
+.k-card-head { display: flex; align-items: center; gap: var(--wh-sp-3); margin: 0 0 var(--wh-sp-2); }
+.k-panel-title { margin: 0; min-width: 0; font: var(--wh-w-bold) var(--wh-fs-h3)/1.15 var(--wh-font-ui); overflow-wrap: anywhere; }
+.k-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--wh-sp-3); }

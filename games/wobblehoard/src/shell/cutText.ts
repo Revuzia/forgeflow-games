@@ -5,6 +5,8 @@
 // both take `undo` and leave the word out while there is no such button: the game never names a control the player cannot find.
 // The count text ("N pieces"), the tray hint, the Settings keys line ("C cut") and the aria-labels are unchanged and live where they were.
 
+import type { CutBarLabels } from '../ui/cutContract.ts';
+
 /** The two cut styles (CUT_MINIS.md): Clean cut = every piece is the real part of the squishy on its side of the plane; Minis = every piece is a complete smaller copy. */
 export type CutStyle = 'clean' | 'minis';
 
@@ -12,6 +14,20 @@ export type CutStyle = 'clean' | 'minis';
 export const styleLabel = (s: CutStyle): string => (s === 'minis' ? 'Minis' : 'Clean cut');
 /** "Reconnect first to change the cut style" (CUT_A.md SR1) */
 export const styleLocked = 'Reconnect first to change the cut style';
+
+/** Every word the Cut options bar draws or says on its own, in the shape of src/ui/cutContract.ts (the UI lane's request; cutBinding.ts hands it to createCutBar as `labels`).
+ *  long = when there is room, short = when there is little; the aria name is the long one. */
+export const barLabels: CutBarLabels = {
+  group: 'Cut tool',
+  split: { long: 'Split in two', short: 'Split' },
+  join: { long: 'Reconnect all', short: 'Reconnect' },
+  undo: { long: 'Undo cut', short: 'Undo' },
+  done: { long: 'Done', short: 'Done' },
+  styleGroup: 'Cut style',
+  style: { clean: { long: styleLabel('clean'), short: styleLabel('clean') }, minis: { long: styleLabel('minis'), short: styleLabel('minis') } },
+  styleLocked,
+  pieces: (n) => `${n} pieces`,
+};
 
 /** picking the Cut tool (live region) */
 export const toolPicked = (undo: boolean): string => (undo

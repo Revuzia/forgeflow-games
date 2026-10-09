@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "game": "squish-keeper",
+  "achievements": [
+    { "slug": "first_squish", "name": "Hello, Squishy", "description": "Squeeze it for a moment.", "tier": "bronze", "points": 5, "hidden": false, "trigger": { "on": "squeeze", "min": 0.4 } },
+    { "slug": "first_stretch", "name": "Stretchy Hello", "description": "Pull it and let go.", "tier": "bronze", "points": 5, "hidden": false, "trigger": { "on": "stretch", "min": 0.35 } },
+    { "slug": "first_capsule", "name": "Something Inside", "description": "Open your first capsule.", "tier": "bronze", "points": 5, "hidden": false, "trigger": { "on": "open", "min": 0 } },
+    { "slug": "first_task", "name": "Little Job", "description": "Finish a task.", "tier": "bronze", "points": 5, "hidden": false, "trigger": { "on": "task" } },
+    { "slug": "first_cut", "name": "Clean Cut", "description": "Cut a squishy in two.", "tier": "bronze", "points": 5, "hidden": false, "trigger": { "on": "pieces", "min": 2 } },
+    { "slug": "whole_again", "name": "Whole Again", "description": "Put the pieces back together.", "tier": "bronze", "points": 5, "hidden": false, "trigger": { "on": "join" } },
+    { "slug": "species_10", "name": "Small Shelf", "description": "Own 10 different squishies.", "tier": "bronze", "points": 5, "hidden": false, "trigger": { "on": "species", "min": 10 } },
+    { "slug": "rare_find", "name": "Something Shiny", "description": "Find a Rare squishy.", "tier": "bronze", "points": 5, "hidden": false, "trigger": { "on": "open", "min": 2 } },
+    { "slug": "full_stretch", "name": "As Far As It Goes", "description": "Stretch one all the way.", "tier": "silver", "points": 15, "hidden": false, "trigger": { "on": "stretch", "min": 0.95 } },
+    { "slug": "lift_toss", "name": "Up and Away", "description": "Pick one up and toss it.", "tier": "silver", "points": 15, "hidden": true, "trigger": { "on": "toss" } },
+    { "slug": "medley", "name": "Squeeze and Stretch", "description": "Squeeze, then stretch, within twelve seconds.", "tier": "silver", "points": 15, "hidden": false, "trigger": { "on": "medley", "windowMs": 12000 } },
+    { "slug": "four_pieces", "name": "Four Little Ones", "description": "Have it in four pieces at once.", "tier": "silver", "points": 15, "hidden": false, "trigger": { "on": "pieces", "min": 4 } },
+    { "slug": "first_merge", "name": "Two Become One", "description": "Merge two squishies.", "tier": "silver", "points": 15, "hidden": false, "trigger": { "on": "merge" } },
+    { "slug": "epic_find", "name": "Rare Delight", "description": "Find an Epic squishy.", "tier": "silver", "points": 15, "hidden": false, "trigger": { "on": "open", "min": 3 } },
+    { "slug": "species_25", "name": "Growing Shelf", "description": "Own 25 different squishies.", "tier": "silver", "points": 15, "hidden": false, "trigger": { "on": "species", "min": 25 } },
+    { "slug": "tier_up", "name": "A Step Up", "description": "A merge lifts a squishy to a higher rarity.", "tier": "gold", "points": 30, "hidden": false, "trigger": { "on": "merge", "tierUp": true } },
+    { "slug": "legendary_find", "name": "Legendary Day", "description": "Find a Legendary squishy.", "tier": "gold", "points": 30, "hidden": false, "trigger": { "on": "open", "min": 4 } },
+    { "slug": "species_40", "name": "Nearly There", "description": "Own 40 different squishies.", "tier": "gold", "points": 30, "hidden": false, "trigger": { "on": "species", "min": 40 } },
+    { "slug": "mythic_find", "name": "Once in a Rainbow", "description": "Find a Mythic squishy.", "tier": "diamond", "points": 60, "hidden": true, "trigger": { "on": "tier", "min": 5 } },
+    { "slug": "all_fifty", "name": "The Whole Hoard", "description": "Own all 50 squishies.", "tier": "diamond", "points": 60, "hidden": false, "trigger": { "on": "species", "min": 50 } }
+  ]
+}

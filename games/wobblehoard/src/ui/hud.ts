@@ -1,5 +1,5 @@
 // HUD: the brand (top-left: the jelly SQUISH KEEPER at its small size, the page's h1 once the title has left; shown on wide screens and on stack from 600 px, UI.md 4.2),
-// mute + gear (top-right; B4 turns the gear into Menu and adds Full screen), the name plate of the play squishy (bottom-left: catalog species name, tier gem and
+// Full screen, Sound and the Menu (top-right, in that Tab order; Full screen only where the page may use it), the name plate of the play squishy (bottom-left: catalog species name, tier gem and
 // label, nickname if any), the meter ring + capsule button (bottom-right), a slot for the Hoard button in the strip layout (every other layout keeps it in the dock,
 // ui/toolbar.ts) and the mat chip, one-line hint. The toolbar (the tools, the options bar) is built by hudBinding.ts into this element.
 // The hint fades after the first interaction and comes back after 20 s idle (hint.ts), then names the tools until one was tried. No score, no currency, no timers.
@@ -11,6 +11,7 @@ import { HINT_TEXT, createHintController } from './hint.ts';
 import type { MeterRing } from './meterRing.ts';
 import { createMeterRing } from './meterRing.ts';
 import { jelly, pokeJelly } from './jelly/jelly.ts';
+import { attachTooltip } from './tooltip.ts';
 import './jelly/jelly.css';
 
 export interface HudLabel { species: string; tier: TierName; nickname: string | null }
@@ -18,8 +19,11 @@ export interface HudLabel { species: string; tier: TierName; nickname: string | 
 export interface HudOptions {
   label: HudLabel;
   muted: boolean;
-  onGear(): void;
+  /** the Menu button (it was the Settings gear before UI v3): the Menu is the pause screen and the way to Settings */
+  onMenu(): void;
   onMute(): void;
+  /** the [FS] button: drawn only when `available` (shell/fullscreen.ts) */
+  fullscreen?: { available: boolean; on: boolean; onToggle(): void };
   onOpenCapsule(): void;
   /** a capsule just became ready: the shell's haptic double pulse (UI.md 6) */
   onReady?(): void;
@@ -30,8 +34,10 @@ export interface HudOptions {
 
 export interface Hud {
   readonly el: HTMLElement;
-  readonly gear: HTMLButtonElement;
+  readonly menuButton: HTMLButtonElement;
   readonly muteButton: HTMLButtonElement;
+  /** null where full screen is not available */
+  readonly fsButton: HTMLButtonElement | null;
   readonly hintEl: HTMLElement;
   readonly meter: MeterRing;
   /** the bottom row's middle slot: the Hoard button in the strip layout (layout.ts bindHoard) and the mat chip */
@@ -42,7 +48,9 @@ export interface Hud {
   setMuted(m: boolean): void;
   /** false while the title card is up */
   setActive(on: boolean): void;
-  setGearOpen(open: boolean): void;
+  setMenuOpen(open: boolean): void;
+  /** the [FS] button follows the real state (aria-pressed, the icon); `available` false takes the button away (a refusal) */
+  setFullscreen(on: boolean, available?: boolean): void;
   interact(): void;
   /** switch the hint wording (a keyboard was used) */
   setHintMode(mode: 'touch' | 'pointer' | 'keyboard'): void;
@@ -63,12 +71,27 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
   const nickEl = h('span', { class: 'nametag-nick' });
   const nameTag = h('div', { class: 'nametag k-glass' }, nameEl, h('span', { class: 'nametag-line' }, gem, tierEl, nickEl));
 
-  const muteBtn = h('button', { class: 'k-btn k-iconbtn', attrs: { type: 'button', 'aria-label': 'Mute sound', 'aria-pressed': 'false', title: 'Mute (M)' }, on: { click: () => o.onMute() } });
-  const gear = h('button', {
+  const muteBtn = h('button', { class: 'k-btn k-iconbtn', attrs: { type: 'button', 'aria-label': 'Mute sound', 'aria-pressed': 'false' }, on: { click: () => o.onMute() } });
+  const menuBtn = h('button', {
     class: 'k-btn k-iconbtn',
-    attrs: { type: 'button', 'aria-label': 'Settings', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'aria-controls': 'wh-settings', title: 'Settings' },
-    on: { click: () => o.onGear() },
-  }, icon('gear'));
+    attrs: { type: 'button', 'aria-label': 'Menu', 'aria-haspopup': 'dialog', 'aria-expanded': 'false', 'aria-controls': 'wh-menu', 'aria-keyshortcuts': 'P', 'data-sound': 'none' },
+    on: { click: () => o.onMenu() },
+  }, icon('menu'));
+  const fsBtn = o.fullscreen?.available
+    ? h('button', { class: 'k-btn k-iconbtn', attrs: { type: 'button', 'aria-label': 'Full screen', 'aria-pressed': 'false', 'aria-keyshortcuts': 'F' }, on: { click: () => o.fullscreen?.onToggle() } }, icon('fullscreen'))
+    : null;
+  const setFullscreen = (on: boolean, available = true): void => {
+    if (!fsBtn) return;
+    fsBtn.hidden = !available;
+    fsBtn.setAttribute('aria-pressed', String(on));
+    fsBtn.replaceChildren(icon(on ? 'fullscreenExit' : 'fullscreen'));
+  };
+  setFullscreen(!!o.fullscreen?.on);
+  // the top row's three icon buttons name themselves with the kit tooltip (UI.md 3.3, K16): 450 ms on a fine pointer, at once on focus, never on touch, hoverable, Esc dismisses
+  // (the native `title` it replaces is a browser tip the page cannot hold, dismiss or restyle)
+  attachTooltip(muteBtn, () => (muteBtn.getAttribute('aria-pressed') === 'true' ? 'Unmute (M)' : 'Mute (M)'), { place: 'below' });
+  attachTooltip(menuBtn, 'Menu (P)', { place: 'below' });
+  if (fsBtn) attachTooltip(fsBtn, () => (fsBtn.getAttribute('aria-pressed') === 'true' ? 'Leave full screen (F)' : 'Full screen (F)'), { place: 'below' });
 
   let mode: 'touch' | 'pointer' | 'keyboard' = isCoarsePointer() ? 'touch' : 'pointer';
   const hintEl = h('p', { class: 'hint', text: HINT_TEXT[mode], attrs: { 'data-show': 'true' } });
@@ -76,7 +99,7 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
   const wordmark = jelly('SQUISH KEEPER', { size: 'sm', tone: 'amber', tag: 'h1' });
   wordmark.classList.add('wordmark', 'jl-idle');
   wordmark.addEventListener('pointerdown', (e) => { pokeJelly(wordmark, { x: e.clientX }); o.onPoke?.(); });
-  const top = h('div', { class: 'hud-top' }, wordmark, h('div', { class: 'hud-actions' }, muteBtn, gear));
+  const top = h('div', { class: 'hud-top' }, wordmark, h('div', { class: 'hud-actions' }, fsBtn, muteBtn, menuBtn));
   const slot = h('div', { class: 'hud-slot', attrs: { 'data-slot': 'hoard' } });
   const bottom = h('div', { class: 'hud-bottom' }, nameTag, slot);
   const el = h('div', { class: 'hud', attrs: { 'data-active': 'false' } }, top, hintEl, bottom);
@@ -87,7 +110,6 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
   const setMuted = (m: boolean): void => {
     muteBtn.replaceChildren(icon(m ? 'soundOff' : 'soundOn'));
     muteBtn.setAttribute('aria-pressed', String(m));
-    muteBtn.title = m ? 'Unmute (M)' : 'Mute (M)';
   };
   setMuted(o.muted);
 
@@ -155,11 +177,12 @@ export function createHud(root: HTMLElement, o: HudOptions): Hud {
   refreshHint();
 
   return {
-    el, gear, muteButton: muteBtn, hintEl, meter, slot, brand: wordmark,
+    el, menuButton: menuBtn, muteButton: muteBtn, fsButton: fsBtn, hintEl, meter, slot, brand: wordmark,
     setLabel,
     setMuted,
     setActive(on) { active = on; el.dataset.active = String(on); refreshHint(); },
-    setGearOpen(open) { gear.setAttribute('aria-expanded', String(open)); },
+    setMenuOpen(open) { menuBtn.setAttribute('aria-expanded', String(open)); },
+    setFullscreen,
     interact() { hint.interact(now()); refreshHint(); },
     setHintMode(m) { if (m === mode) return; mode = m; hintEl.textContent = hint.line(m); fitHint(); },
     toolTried() { hint.toolTried(); },

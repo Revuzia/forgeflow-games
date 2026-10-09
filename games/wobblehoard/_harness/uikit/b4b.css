@@ -1,0 +1,4 @@
+/* B4b kit page: the How to play pictures on the sheet (the screens' own sheets are src/ui/screens/screens.css and photo.css). */
+.kp-art-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.kp-art-row .guide-art { width: 72px; height: 56px; }
+.kp-art-row--big .guide-art { width: 216px; height: 168px; }

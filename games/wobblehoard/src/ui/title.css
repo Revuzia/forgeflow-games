@@ -8,7 +8,7 @@ body[data-calm="true"] { --k-an-title-in: title-fade; --k-an-title-pop: title-fa
 
 .title {
   --t-pt: 6vh; --t-pb: 6vh;
-  position: fixed; inset: 0; z-index: 8;
+  position: fixed; inset: 0; z-index: var(--wh-z-panel);
   display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto;
   grid-template-areas: "mark" "." "plate" "actions";
   justify-items: center; align-items: start; row-gap: var(--wh-sp-3);

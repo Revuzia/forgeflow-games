@@ -916,15 +916,19 @@ function runStat(bs: SoftBody[], k: number, secs: number, each?: (i: number) => 
 /* ── L6b: whole bodies are bit-identical to the committed solver (P0, before P2): 10 + 14 stateHash checkpoints x 50 species ── */
 if (!SKIP.includes('l6b')) {
   const gold = JSON.parse(readFileSync(new URL('./physview/l6_golden.json', import.meta.url), 'utf8')).data as Record<string, { whole: number[]; pair: number[]; with: string }>;
-  let okW = 0, okP = 0, nP = 0, nW = 0; const bad: string[] = [];
+  let okW = 0, okP = 0, nP = 0, nW = 0, neckDiff = 0; const bad: string[] = [];
   for (const id of SPECIES) {
     const g = gold[id]; if (!g) continue;
     const w = wholeSession(SoftBody as never, id), p = pairSession(SoftBody as never, id, g.with);
     nW++; nP++;
-    if (w.every((v, i) => v === g.whole[i])) okW++; else bad.push(id + ':whole@' + w.findIndex((v, i) => v !== g.whole[i]));
+    // checkpoints 0 to 8 (everything before the first setNeck) must be identical; checkpoint 9 IS the first setNeck, which changed by design in CUT2 task P5: while a neck forms the best-fit rotation is
+    // extracted against the necked goal (softbody.ts substep, NECK_FIT), CUT2 5.7's rule; the owner's design is unchanged, the measured tilt of the parent at the swap fell from 23-156 to <= 8 degrees
+    if (w.every((v, i) => i >= 9 || v === g.whole[i])) okW++; else bad.push(id + ':whole@' + w.findIndex((v, i) => i < 9 && v !== g.whole[i]));
+    if (w[9] !== g.whole[9]) neckDiff++;
     if (p.every((v, i) => v === g.pair[i])) okP++; else bad.push(id + ':pair@' + p.findIndex((v, i) => v !== g.pair[i]));
   }
-  add('L6b whole bodies unchanged vs the committed solver (P0, before P2): stateHash at the 10 checkpoints of the session (press, rub, release, pull, nudge, fold, burst, setFrac, first setNeck)', `${okW}/${nW} species${bad.length ? ' (differ: ' + bad.slice(0, 6).join(' ') + ')' : ''}`, `${nW}/${nW}`, okW === nW);
+  add('L6b whole bodies unchanged vs the committed solver (P0, before P2): stateHash at the 9 checkpoints before the first setNeck (press, rub, release, pull, nudge, fold, burst, setFrac)', `${okW}/${nW} species${bad.length ? ' (differ: ' + bad.slice(0, 6).join(' ') + ')' : ''}`, `${nW}/${nW}`, okW === nW);
+  info('L6b the first setNeck (checkpoint 9) differs from the committed solver BY DESIGN since CUT2 task P5 (the best-fit rotation is extracted against the necked goal while a neck forms)', `${neckDiff}/${nW} species`);
   add('L6b two whole bodies, the second dropped on the first, collide every frame, 7 s (X21): stateHash of both at 7 checkpoints', `${okP}/${nP} pairs`, `${nP}/${nP}`, okP === nP);
 }
 

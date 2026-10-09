@@ -11,6 +11,7 @@ import { Decals, type Footprint } from './decals.ts';
 import type { EnvHub } from './env.ts';
 import { Face } from './face.ts';
 import { Fx } from './fx.ts';
+import { FrameHold } from './framing.ts';
 import { JellyView } from './jelly.ts';
 import { isCutPiece } from './pieceBuild.ts';
 import { buildPieceEyes } from './pieceEyes.ts';
@@ -79,6 +80,8 @@ export class BodyView {
    * A body without `piece` takes today's code path unchanged; `chunk` is honoured only then.
    */
   readonly isPiece: boolean;
+  /** SR2: this body's held extent for the band framing (framing.ts). */
+  readonly hold = new FrameHold();
   /** 0..1, set by the stage every frame: every CUT glow on this body is held down by it (calm effects, a recent ceremony flash). */
   glowK = 1;
   // CUT seam (setCutSeam): the plane in the BODY's world space (the render offset is added per frame), eased strength

@@ -63,6 +63,7 @@ import type { Genome } from '../core/genome.ts';
 import { clamp } from '../core/rng.ts';
 import { BodyView } from './bodyview.ts';
 import { Capsule, CAPSULE_HEIGHT } from './capsule.ts';
+import { Framer } from './framing.ts';
 
 /** The capsule's radius (capsule.ts R): its footprint for the landing-spot choice. */
 const CAP_R = 0.24;
@@ -125,6 +126,8 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo | keyof StageEx
     contextLost: boolean; pixelRatio: number; drawingBuffer: [number, number]; eyeLook: number[] | null;
     bodies: number; primary: number | null; ceremony: boolean; particles: number; calm: boolean; screenLight: number; capsule: boolean; cameraFx: { dist: number; yaw: number; pitch: number };
     particlesDropped: number; camScale: number; cut: { strands: number; bridges: number; glow: number };
+    /** SR2: the rows the shell reported to the framing (setSafeInsets; 0 until it did), and the band framing's state: the lens shift (NDC), its goal, the extent / band ratios, the camera scale it demands (0 = none). */
+    insets: { top: number; right: number; bottom: number; left: number }; lens: { x: number; y: number; goalY: number; fitY: number; fitX: number; want: number; bodies: number };
     /** The standing capsule's table spot and size (null when none): the harness checks where it landed. */
     cap: { x: number; z: number; size: number } | null;
   };
@@ -244,6 +247,12 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   let capsuleId = 0;
   /** CSS px of the frame the shell's HUD covers (setSafeInsets); the meter-full capsule never lands under them. */
   const safe = { top: 0, right: 0, bottom: 72, left: 0 };
+  /** SR2 (CUT2 8.6, UI.md 4.2): the band framing. Only the rows the shell really reported count for it (the capsule's default bottom 72 is a guess for a HUD that has not reported): until then the framing is the old one. */
+  const framer = new Framer();
+  const fcam = { e: camera.matrixWorldInverse.elements, p0: 1, p5: 1 };
+  /** camScale x zoom x cameraFx.dist of the camera that produced the view matrix the framer reads (the extent is inversely proportional to it). */
+  let framerS = 0;   // (0 until the first updateCamera has placed the camera: the framer reads the view matrix of the frame before)
+  let lensKeyX = Number.NaN, lensKeyY = Number.NaN;
   const spotBoxes: number[][] = [], spotBox = [0, 0, 0, 0], spotV = new THREE.Vector3();
   let spotReframes = false;
   /** resize() has run: the frame's real size is known (before that the canvas is 1 x 1 CSS px and no capsule spot can be chosen). */
@@ -320,6 +329,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
         if (sk > 0.02) hTop = Math.max(hTop, Math.min(v.jelly.maxY * 1.05, v.restH * v.growth * 2.0));
       }
       want = Math.max(want, hTop / (TARGET_Y + 0.85 * hwPer / Math.max(0.2, camera.aspect))); }
+    // SR2: the extent of the bodies must fit the band the HUD leaves (framing.ts): the camera pulls back until it does
+    if (framer.wantScale > 0) want = Math.max(want, framer.wantScale);
     if (grp) {   // (the group's reach about its centre of mass, each piece by its own rest reach: the same margins a single body gets)
       let reach = 0;
       for (const v of views) {
@@ -480,6 +491,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     renderer.setSize(cssW, cssH, false);
     camera.aspect = cssW / cssH;
     camera.updateProjectionMatrix();
+    applyLens(true);
   }
 
   /** The frame, the HUD rows or the bodies changed: a waiting capsule's spot is checked again once things have settled (see replaceCapsule). */
@@ -540,6 +552,9 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     yaw += (tYaw - yaw) * k;
     pitch += (tPitch - pitch) * k;
     zoomF += (tZoom - zoomF) * k;
+    // SR2: the squishy and its pieces stand between the HUD rows the shell reported (framing.ts); measured first, framingFor reads its demand
+    if (framer.on && sized && !director.active && framerS > 0) { fcam.p0 = camera.projectionMatrix.elements[0]; fcam.p5 = camera.projectionMatrix.elements[5]; framer.measure(views, fcam, cssW, cssH, framerS, dt); }
+    else framer.clear();
     // stage B1: with 2..5 bodies out on the mat, frame them all (their table extents, plus a margin) and aim at their middle
     let want = framing ?? bodyScale, multi = false, mx = 0, mz = 0, grp = false, gx = 0, gy = 0, gz = 0;
     if (!director.active) {
@@ -551,7 +566,9 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     // (quicker while a neck forms: the lobes of a cut body swell within a third of a second)
     let necking = false;
     if (!calm) for (const v of views) if (v.visible && v.seamAmount > 0.02) { necking = true; break; }
-    camScale += (want - camScale) * (1 - Math.exp(-dt * (necking ? 14 : 4)));
+    // (SR2: the first frame with a body AND the shell's rows, or the first body after an empty stage, takes its framing at once: no pull-back on the first picture)
+    if (framer.fresh && framer.bodies > 0 && !director.active) camScale = want;
+    else camScale += (want - camScale) * (1 - Math.exp(-dt * (necking ? 14 : 4)));
     // follow the primary body gently (it can drift when shoved or floating); a ceremony keeps the pad centred
     let wx = 0, wy = TARGET_Y * camScale, wz = 0;
     const p = primary();
@@ -584,6 +601,17 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     }
     camera.lookAt(tgt);
     camera.updateMatrixWorld();
+    framerS = camScale * zoomF * cameraFx.dist;
+    framer.ease(dt);
+    applyLens(false);
+  }
+  /** SR2: the lens shift (the principal point moves by framer.lensX / lensY in NDC: the picture slides inside the frame, the camera does not move); also after a resize. */
+  function applyLens(force: boolean): void {
+    const lx = framer.lensX, ly = framer.lensY;
+    if (!force && lx === lensKeyX && ly === lensKeyY) return;
+    lensKeyX = lx; lensKeyY = ly;
+    if (lx === 0 && ly === 0) { if (camera.view && camera.view.enabled) camera.clearViewOffset(); return; }
+    camera.setViewOffset(cssW, cssH, -lx * cssW * 0.5, ly * cssH * 0.5, cssW, cssH);
   }
 
   // ---- ceremony host ----
@@ -668,6 +696,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       if (!insets) return;
       let changed = false;
       for (const k of ['top', 'right', 'bottom', 'left'] as const) { const v = insets[k]; if (typeof v === 'number' && Number.isFinite(v) && Math.max(0, v) !== safe[k]) { safe[k] = Math.max(0, v); changed = true; } }
+      framer.setInsets(insets);
       if (changed) markCapSpot();   // (a waiting capsule that now stands under the HUD glides out from under it)
     },
 
@@ -692,7 +721,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       const v = addView(body, genome, 'common', false);
       keepFraming = false;
       primaryId = v.id; bodyScale = v.scale; framing = null;
-      if (!swap) { camScale = bodyScale; tgt.set(body.center.x * 0.6, TARGET_Y * bodyScale, body.center.z * 0.6); }
+      if (!swap) { camScale = bodyScale; tgt.set(body.center.x * 0.6, TARGET_Y * bodyScale, body.center.z * 0.6); framer.fresh = true; }   // (SR2: the first body takes its band framing at once)
       governor.resetWindow(24);
     },
 
@@ -707,7 +736,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
     // a running ceremony owns its bodies (and adopts the result at its end): removing bodies under it first ends it at its final frame,
     // exactly as setBody does, so the result is never orphaned (a primary id pointing at a removed view)
     removeBody(id) { const v = views.find((x) => x.id === id); if (!v) return; if (director.active) director.abort(); if (views.includes(v)) removeView(v); },
-    clearBodies() { director.abort(); removeAllViews(); cut.clear(); },
+    clearBodies() { director.abort(); removeAllViews(); cut.clear(); framer.reset(); },
     primaryBodyId() { return primaryId; },
     // CUT2 8.7: make an EXISTING view the one the camera follows (a cut hands the play body to its larger piece without setBody); the old primary can then be removed without the
     // re-point to views[0]. Same as host.makePrimary: the body scale and framing follow it. Tier styling is the view's own (setBodyTier).
@@ -943,7 +972,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
             pixelRatio: renderer.getPixelRatio(), drawingBuffer: [canvas.width, canvas.height] as [number, number],
             eyeLook: p ? Array.from(p.face.lookOut) : null,
             bodies: views.length, primary: primaryId, ceremony: director.active, particles: particles.count, calm, screenLight: screen.lightAlpha, capsule: !!capsule || !!revealCap, cameraFx,
-            particlesDropped: particles.dropped, camScale, cut: { ...cut.live }, cap: capsule ? { x: capsule.pos.x, z: capsule.pos.z, size: capsule.size } : null,
+            particlesDropped: particles.dropped, camScale, insets: { ...framer.ins }, lens: { x: framer.lensX, y: framer.lensY, goalY: framer.goalY, fitY: framer.fitY, fitX: framer.fitX, want: framer.wantScale, bodies: framer.bodies }, cut: { ...cut.live }, cap: capsule ? { x: capsule.pos.x, z: capsule.pos.z, size: capsule.size } : null,
           };
         },
       },

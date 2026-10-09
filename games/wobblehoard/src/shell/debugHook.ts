@@ -9,7 +9,6 @@ import { TIERS, tierIndex } from '../core/rarity.ts';
 import { SPECIES_BY_TIER, getSpecies, speciesBaseGenome, tierOf } from '../data/catalog.ts';
 import type { SpeciesId } from '../data/catalog.ts';
 import type { Game } from './game.ts';
-import { faceAnchor } from './cut.ts';
 import { TUNING } from './feel.ts';
 
 export interface LabApi {
@@ -82,11 +81,11 @@ export interface ShellDevApi {
   spyCalls(): { audio: Record<string, { n: number; last: unknown }>; haptics: Record<string, number> };
   /** SHELL-4: the cut pieces as the physics sees them: per piece its share, centre, radius and the SURFACE gap to the face piece along the line
    *  between the centres (negative = overlapping); the face piece first. Zeroes when there is nothing cut. */
-  /** the stage's dev views: how many bodies are drawn, how many of them with a face (a chunk has none) */
+  /** the stage's dev views: how many bodies are drawn, how many with a face and how many are the legacy eyeless chunk (none in the true cut: pieces are peers) */
   stageViews(): { total: number; faces: number; chunks: number } | null;
   pieceGaps(at?: { x: number; y: number; z: number } | null): Array<{ frac: number; chunk: boolean; x: number; y: number; z: number; r: number; gap: number | null; top: number; near: number }>;
-  /** where the eyes sit on the play body (cut.ts faceAnchor, world space): the Cut tool keeps the face on the side that holds it */
-  faceAnchor(): { x: number; y: number; z: number };
+  /** CUT-B S4: the cut style of the Cutter ('clean' | 'minis'); false and no change while the squishy is cut (the harness switches to Minis for the low-quality limit rows) */
+  setCutStyle(style: 'clean' | 'minis'): boolean;
   /** CUT-A gate (S5a): every drawn view, the play body first: whether it is a true cut piece and the eyes it draws (world centre, the share of the eye
    *  this view holds, the screen position in CSS px). Dev only (the stage's dev `eyeCentres`); null when the stage offers none. */
   eyeViews(): Array<{ id: number; piece: boolean; eyes: Array<{ x: number; y: number; z: number; share: number; sx: number; sy: number }> }> | null;
@@ -351,7 +350,7 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
       const vs = (game.stage as unknown as { views?: Array<{ chunk?: boolean }> }).views;
       return vs ? { total: vs.length, faces: vs.filter((v) => !v.chunk).length, chunks: vs.filter((v) => !!v.chunk).length } : null;
     },
-    faceAnchor: () => faceAnchor(game.bodies.body),
+    setCutStyle: (style) => game.cut.setStyle(style),
     eyeViews() {
       const st = game.stage as unknown as { views?: Array<{ id: number; isPiece?: boolean }>; eyeCentres?: (id: number) => Array<{ x: number; y: number; z: number; share: number }> };
       if (!st.views || !st.eyeCentres) return null;
