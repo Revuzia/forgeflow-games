@@ -12,6 +12,8 @@
 import type { SoftBodyLike, StageLike, TierName, V3 } from '../contracts.ts';
 import type { Genome } from '../core/genome.ts';
 import { getSpecies, tierOf } from '../data/catalog.ts';
+import { ContactPlanner } from '../physics/broad.ts';
+import type { PlannerStats } from '../physics/broad.ts';
 
 /** Who the play body is: the genome and, when it is a collection item, its id and nickname. */
 export interface PlayIdentity {
@@ -60,6 +62,8 @@ export interface BodyManager {
   viewIdOf(body: SoftBodyLike): number | null;
   /** bodies that push against each other every step (body.collide; 0 when fewer than two can) */
   readonly contactBodies: number;
+  /** CUT3: the contact planner's numbers of the last step (bodies, how many were awake, the awake particles, the pairs it handed to collide against the pairs a pairwise loop would test), for the debug hook and the harness */
+  readonly contactStats: Readonly<PlannerStats>;
   /** A ghost takes no part in body-to-body contact (a cut piece flowing into another must not shove it away); off again with false.
    *  A body that leaves the manager stops being a ghost. */
   setGhost(body: SoftBodyLike, on: boolean): void;
@@ -95,15 +99,17 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
   let body = d.initial.body;
   let identity = d.initial.identity;
   const extras: ExtraBody[] = [];
-  // stage B2: who collides with whom, rebuilt when the mat or the play body changes (so a step allocates nothing)
-  let contacts: Array<{ b: SoftBodyLike; others: SoftBodyLike[] }> = [];
+  // stage B2: who collides with whom, rebuilt when the mat or the play body changes (so a step allocates nothing). CUT3: the contact pass of a frame is ONE call of the planner (physics/broad.ts): bounding spheres,
+  // sort and sweep, sleeping pairs skipped, so 64 pieces do not cost 2,016 pair tests a frame; for two bodies its calls are exactly the pairwise loop's (PHYS: bit-identical).
+  let contacts: SoftBodyLike[] = [];
+  const planner = new ContactPlanner();
   const ghosts = new Set<SoftBodyLike>();
   const rebuildContacts = (): void => {
     for (const g of ghosts) if (g !== body && !extras.some((x) => x.body === g)) ghosts.delete(g);
     const all: SoftBodyLike[] = [];
     if (typeof body.collide === 'function' && !ghosts.has(body)) all.push(body);
     for (const x of extras) if (x.shared && typeof x.body.collide === 'function' && !ghosts.has(x.body)) all.push(x.body);
-    contacts = all.length >= 2 ? all.map((b) => ({ b, others: all.filter((o) => o !== b) })) : [];
+    contacts = all.length >= 2 ? all : [];
   };
 
   /** viaStage: hand the body to the stage first (setBody may throw: then the play body is unchanged and the error propagates). */
@@ -185,13 +191,14 @@ export function createBodyManager(d: BodyManagerDeps): BodyManager {
       return x ? x.id : null;
     },
     get contactBodies() { return contacts.length; },
+    get contactStats() { return planner.stats; },
     setGhost(b, on) {
       if (on === ghosts.has(b)) return;
       if (on) ghosts.add(b); else ghosts.delete(b);
       rebuildContacts();
     },
     step(dt) {
-      for (let i = 0; i < contacts.length; i++) { const c = contacts[i]; try { c.b.collide!(c.others); } catch (e) { d.report(e); } }
+      if (contacts.length >= 2) { try { planner.run(contacts); } catch (e) { d.report(e); } }
       body.step(dt);
       for (let i = 0; i < extras.length; i++) extras[i].body.step(dt);
     },

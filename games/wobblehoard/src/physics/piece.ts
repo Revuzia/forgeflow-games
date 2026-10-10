@@ -13,8 +13,9 @@ import { buildRest, floppyFeature, floppyOf, floppySecond, meshVolume, physicsGe
 import type { RestShape } from './shape.ts';
 import type { IcoMesh } from './mesh.ts';
 import {
-  CLIP_ASPECT, CLIP_CX, CLIP_CY, CLIP_CZ, CLIP_VOL, CentreSearch, MAX_PLANES, OUT, RAY, clipMesh, compileCell, exitDist, getSource, icoOf, measureRegion, regionCentroid, starShare, starVolume,
+  CLIP_ASPECT, CLIP_CX, CLIP_CY, CLIP_CZ, CLIP_VOL, CentreSearch, MAX_PLANES, OUT, RAY, clipMesh, compileCell, exitDist, getSource, icoOf, measureRegion, regionCentroid, starReach, starShare, starVolume,
 } from './region.ts';
+import { CutParts } from './parts.ts';
 import type { RegionCell, Source } from './region.ts';
 
 /** Starting values the spec asks to be re-confirmed by the probe rows (P8 tunes them). */
@@ -62,7 +63,17 @@ export interface PieceBuilt {
 /* ───────────────────────────── cache ───────────────────────────── */
 
 const CACHE = new Map<string, PieceBuilt>();
-export function clearPieceCache(): void { CACHE.clear(); }
+export function clearPieceCache(): void { CACHE.clear(); HINTS.clear(); }
+/** CUT3 leg 3: the centre of every body of a multi-part cut, registered when the cut is planned (CutJob.makeKids), keyed by the piece (species, cell, share, token) WITHOUT its detail. A body of such a cut is the
+ *  star of ONE part of its cell, which only a centre inside that part can name; the shell may build it before the neck's background build finished (a cache miss), and then the constructor finds the centre here. */
+const HINTS = new Map<string, { x: number; y: number; z: number }>();
+const hintKey = (S: Source, region: PieceRegion, frac: number | undefined): string => pieceKey(S, region, 0, frac);
+export function registerPartHint(S: Source, region: PieceRegion, frac: number, c: { x: number; y: number; z: number }): void {
+  if (region.part === undefined) return;
+  const k = hintKey(S, region, frac);
+  HINTS.delete(k); HINTS.set(k, { x: c.x, y: c.y, z: c.z });
+  if (HINTS.size > 256) HINTS.delete(HINTS.keys().next().value as string);
+}
 const cacheGet = (k: string): PieceBuilt | undefined => { const v = CACHE.get(k); if (v) { CACHE.delete(k); CACHE.set(k, v); } return v; };
 const cachePut = (k: string, v: PieceBuilt): void => { CACHE.set(k, v); if (CACHE.size > 64) CACHE.delete(CACHE.keys().next().value as string); };
 export function pieceCacheSize(): number { return CACHE.size; }
@@ -72,7 +83,7 @@ export function pieceCacheSize(): number { return CACHE.size; }
  *  piece the shell asks for hits the entry `prepareCut` filled whatever either side called the plane (CUT2 P3). `frac` is quantised to 1e-13: the shell derives the
  *  children's shares from `plan.fa` in its own arithmetic (a difference of the last bit or two), the volume gate of the build is 1e-12 relative. */
 export function pieceKey(S: Source, region: PieceRegion | undefined, detail: number, frac: number | undefined): string {
-  const s = S.key + '#' + detail + '#' + (frac === undefined ? 'auto' : frac.toFixed(13));
+  const s = S.key + '#' + detail + '#' + (frac === undefined ? 'auto' : frac.toFixed(13)) + (region && region.part !== undefined ? '#p' + region.part : '');
   const cell = compileCell(region, 0), parts: string[] = [];
   for (let k = 0; k < cell.np; k++) parts.push(cell.pl[k * 4].toPrecision(17) + ',' + cell.pl[k * 4 + 1].toPrecision(17) + ',' + cell.pl[k * 4 + 2].toPrecision(17) + ',' + cell.pl[k * 4 + 3].toPrecision(17));
   parts.sort();
@@ -185,6 +196,7 @@ export class PieceJob {
   private readonly capG = new Float64Array(MAX_PLANES * 3);   // per plane: centroid of its boundary vertices (rimMode)
   private pass = 0;
   private readonly lows = new Float64Array(8);
+  private readonly partMode: boolean;       // CUT3 leg 3: this body is ONE connected part of a cell whose region has several (PieceRegion.part): the centre is given, the part's volume is the asked share
 
   constructor(genome: Genome, region: PieceRegion | undefined, detail: number, frac?: number, centre?: { x: number; y: number; z: number }) {
     this.S = getSource(genome);
@@ -201,6 +213,7 @@ export class PieceJob {
     this.X = new Float64Array(n * 3); this.XT = new Float64Array(n * 3); this.X5 = new Float64Array(n * 3);
     this.mask = new Uint16Array(n); this.bnd = new Uint16Array(n); this.rimMv = new Uint8Array(n);
     this.e = new Float64Array(n); this.lim = new Float64Array(n * 2); this.nrm = new Float64Array(n * 3);
+    this.partMode = !!region && region.part !== undefined;
     if (this.cell.np > MAX_PLANES) { this.status = 'fail'; this.why = 'planes'; }
   }
 
@@ -244,6 +257,7 @@ export class PieceJob {
   /* 4.1 step 2: the centre and the region's volume */
   private sCentre(): void {
     const S = this.S, tmp = this.tmp, c = this.c;
+    if (this.partMode) { this.sCentrePart(); return; }
     if (this.hint) {
       // the centre is given (planCut's exact centroid): V and phi from one pass of 360 rays
       c.set(this.hint); starVolume(S, this.cell, c[0], c[1], c[2], 360, tmp);
@@ -260,6 +274,18 @@ export class PieceJob {
     this.st = ST_PHI;
   }
 
+  /** CUT3 leg 3: a part of a region made of several parts. The rays from the given centre reach only the part that holds it (the interval that starts at the origin), so the build is the part's
+   *  star; its volume to compare with is the asked share (the plan's share of the REST mesh clip, on the source solid's scale), and the centre search stays near the given centre. */
+  private sCentrePart(): void {
+    const S = this.S, c = this.c;
+    if (!this.hint || !(this.frac > 0)) { this.fail('part'); return; }
+    c.set(this.hint);
+    const Vexp = this.frac * S.vol;
+    this.Vcell = Vexp;
+    this.phi = Math.min(1, starReach(S, this.cell, c[0], c[1], c[2], 360) / Vexp);
+    this.afterPhi();
+  }
+
   /* step 3: soundness */
   private sPhi(): void {
     const c = this.c;
@@ -268,7 +294,7 @@ export class PieceJob {
   }
   private afterPhi(): void {
     if (this.phi >= PIECE_TUNING.PHI_OK) { this.st = ST_SEED; return; }
-    this.search = new CentreSearch(this.S, this.cell, this.Vcell, this.c, this.phi);
+    this.search = new CentreSearch(this.S, this.cell, this.Vcell, this.c, this.phi, this.partMode ? 2.5 * Math.cbrt((3 * this.Vcell) / (4 * Math.PI)) : 0);
     this.st = ST_SEARCH;
   }
   private sSearch(): void {
@@ -856,6 +882,7 @@ export function buildPiece(genome: Genome, region: PieceRegion | undefined, deta
   const key = pieceKey(S, region, detail, frac);
   const hit = cacheGet(key);
   if (hit) return hit;
+  if (!centre && region && region.part !== undefined) centre = HINTS.get(hintKey(S, region, frac));
   const job = new PieceJob(genome, region, detail, frac, centre);
   job.run(Infinity);
   return job.built ?? { fail: job.why };
@@ -948,11 +975,18 @@ export const LADDER = [0, 0.004, -0.004, 0.008, -0.008, 0.012, -0.012];
 
 export type CutStatus = 'run' | 'ok' | 'thin' | 'loose';
 
+/** One body a cut makes (CUT3 leg 3): a side's connected part (or the whole side), with the region it is built from. */
+export interface CutKid { side: 0 | 1; part: number | undefined; frac: number; c: { x: number; y: number; z: number }; region: PieceRegion; built: PieceBuilt | null }
+/** The token of the k-th of m parts of a side, for a cut of a body whose own region carries the token `t` (undefined = none). One part: the body inherits its parent's token. */
+export const partToken = (t: number | undefined, m: number, k: number): number | undefined => (m <= 1 ? t : (t === undefined ? 0 : t) * 17 + k + 1);
+
 /**
- * The two children of one cut of a parent piece, built (resumably) with the retry ladder. `parent` is the parent's region (cell literals and planes), its
+ * The children of one cut of a parent piece, built (resumably) with the retry ladder. `parent` is the parent's region (cell literals and planes), its
  * frac and its rest mesh in W; `plane` is the new cut {n, d} in W (side A: n . x >= d) and gets `id`. Side A is the literal +id, side B -id. On success `a`, `b`
  * hold the built children and `d` is the plane actually built (the ladder may have shifted it by at most 0.012 R0); `plan` holds the shares and centroids of that
- * plane. Refusals: 'loose' when a child is not one body (star-shapedness), 'thin' when every rung of the ladder failed the build gates.
+ * plane. CUT3 leg 3: a side that the plane leaves in several separate parts (a star's tips) is one child per part: `kids` lists them all (side A's parts by their lowest
+ * mesh vertex, then side B's), `a` / `b` are the first child of each side. Refusals: 'loose' when a part cannot be made into one body (star-shapedness),
+ * 'thin' when every rung of the ladder failed the build gates.
  */
 export class CutJob {
   status: CutStatus = 'run';
@@ -965,20 +999,24 @@ export class CutJob {
   badSide = -1;
   readonly plan = newCutPlanParts();
   readonly regionA: PieceRegion; readonly regionB: PieceRegion;
+  /** CUT3 leg 3: the bodies of the cut at the plane being built (two for a plain cut). */
+  kids: CutKid[] = [];
   private job: PieceJob | null = null;
-  private side = 0;
+  private kidIdx = 0;
   private fa0 = 0;
+  private sig = '';
   private ladderScale = 1;
   private readonly genome: Genome;
-  private readonly parent: { region: PieceRegion | undefined; frac: number; pos: ArrayLike<number>; tris: Uint32Array; coarse?: boolean };
+  private readonly parent: { region: PieceRegion | undefined; frac: number; pos: ArrayLike<number>; tris: Uint32Array; coarse?: boolean; parts?: boolean };
   private readonly pcell: RegionCell;
+  private cparts: CutParts | null = null;
   private detailUp = 0;                        // CUT3: how many mesh details finer than its share's the current side is being tried at (a build that fails at the nominal detail is tried finer)
   private readonly nrm: { x: number; y: number; z: number };
   private readonly d0: number;
   private readonly id: number;
   private readonly R0: number;
   private readonly cache: boolean;
-  constructor(genome: Genome, parent: { region: PieceRegion | undefined; frac: number; pos: ArrayLike<number>; tris: Uint32Array; coarse?: boolean }, plane: { id: number; n: { x: number; y: number; z: number }; d: number }) {
+  constructor(genome: Genome, parent: { region: PieceRegion | undefined; frac: number; pos: ArrayLike<number>; tris: Uint32Array; coarse?: boolean; parts?: boolean }, plane: { id: number; n: { x: number; y: number; z: number }; d: number }) {
     this.genome = genome; this.parent = parent; this.nrm = plane.n; this.d0 = plane.d; this.d = plane.d; this.id = plane.id;
     this.R0 = getSource(genome).R0; this.cache = true;
     this.pcell = compileCell(parent.region, 0);
@@ -986,8 +1024,12 @@ export class CutJob {
     this.setPlane(plane.d);
     if (!this.planAt(plane.d, this.plan)) { this.status = 'thin'; this.why = 'misses'; return; }
     this.fa0 = this.plan.fa;
+    if (!this.makeKids()) { this.status = 'thin'; this.why = 'parts'; return; }
+    this.sig = this.kids.map((k) => k.side).join('');
     // the retry ladder's shifts follow the smaller part's size (radius ratio to a part of 1/8, which keeps the shifts of every cut whose smaller part is >= 1/8 as they were)
-    this.ladderScale = Math.min(1, Math.cbrt(Math.min(this.plan.fracA, this.plan.fracB) / 0.125));
+    let fmin = Math.min(this.plan.fracA, this.plan.fracB);
+    for (const k of this.kids) if (k.frac < fmin) fmin = k.frac;
+    this.ladderScale = Math.min(1, Math.cbrt(fmin / 0.125));
   }
   /** The plan of the plane at offset d: the clip of the parent's rest mesh, and for a coarse parent (detail 0 / 1) the shares and centroids of the TRUE region (planSplitTrue). */
   private planAt(d: number, out: CutPlanParts): boolean {
@@ -1004,6 +1046,38 @@ export class CutJob {
     (this.regionA as { planes: typeof planes }).planes = planes; (this.regionB as { planes: typeof planes }).planes = planes;
     (this.regionA as { cells: number[][] }).cells = [[...base, this.id]]; (this.regionB as { cells: number[][] }).cells = [[...base, -this.id]];
     this.d = d;
+  }
+  /** The bodies of the plane now set (this.d, this.plan): the plain pair, or one per connected part when a side of the parent's rest mesh falls into several (a parent of detail 2 or 3 only: a
+   *  coarse piece's mesh is too crude to tell its parts, and its true region is measured by rays). Tokens: `partToken`. false: more than MAX_PARTS parts on a side. */
+  private makeKids(): boolean {
+    const t = this.parent.region ? this.parent.region.part : undefined, plan = this.plan;
+    const withPart = (r: PieceRegion, tok: number | undefined): PieceRegion => (tok === undefined ? r : { planes: r.planes, cells: r.cells, part: tok });
+    let ps: CutParts | null = null;
+    if (!this.parent.coarse && this.parent.parts === true) {
+      const nv = this.parent.pos.length / 3;
+      if (this.cparts === null || this.cparts.A.lab.length !== nv) this.cparts = new CutParts(nv);
+      PL4C[0] = this.nrm.x; PL4C[1] = this.nrm.y; PL4C[2] = this.nrm.z; PL4C[3] = this.d;
+      const n = this.cparts.run(this.parent.pos, this.parent.tris, nv, PL4C, 3 * FRAC_FLOOR * getSource(this.genome).v3);
+      if (n < 0) return false;
+      if (this.cparts.multi) ps = this.cparts;
+    }
+    const kids: CutKid[] = [];
+    if (ps === null) {
+      kids.push({ side: 0, part: t, frac: plan.fracA, c: plan.cA, region: withPart(this.regionA, t), built: null });
+      kids.push({ side: 1, part: t, frac: plan.fracB, c: plan.cB, region: withPart(this.regionB, t), built: null });
+    } else {
+      for (let s = 0; s < 2; s++) {
+        const side = s === 0 ? ps.A : ps.B, fs = s === 0 ? plan.fracA : plan.fracB, reg = s === 0 ? this.regionA : this.regionB;
+        for (let k = 0; k < side.n; k++) {
+          const tok = partToken(t, side.n, k);
+          kids.push({ side: s as 0 | 1, part: tok, frac: fs * (side.vol[k] / side.total), c: { x: side.cx[k], y: side.cy[k], z: side.cz[k] }, region: withPart(reg, tok), built: null });
+        }
+      }
+    }
+    this.kids = kids;
+    const S = getSource(this.genome);
+    for (const k of kids) if (k.part !== undefined) registerPartHint(S, k.region, k.frac, k.c);
+    return true;
   }
   run(budgetMs: number, maxStages = Infinity): boolean {
     const t0 = budgetMs === Infinity ? 0 : performance.now();
@@ -1025,9 +1099,18 @@ export class CutJob {
     }
     return this.status !== 'run';
   }
-  /** Start the build of the current side at the current rung; false when it was a cache hit or the rung was skipped (the caller loops). */
+  /** A body is done: the next one, or the whole cut. */
+  private advance(): void {
+    this.kidIdx++;
+    if (this.kidIdx >= this.kids.length) {
+      this.a = null; this.b = null;
+      for (const kid of this.kids) { if (kid.side === 0 && this.a === null) this.a = kid.built; if (kid.side === 1 && this.b === null) this.b = kid.built; }
+      this.status = 'ok';
+    }
+  }
+  /** Start the build of the current body at the current rung; false when it was a cache hit or the rung was skipped (the caller loops). */
   private startSide(): boolean {
-    if (this.side === 0 && this.shiftIdx > 0 && this.detailUp === 0) {
+    if (this.kidIdx === 0 && this.shiftIdx > 0 && this.detailUp === 0) {
       // new rung: the plane shifted; skip it when a part would vanish or a share moves by more than 0.01 of the parent (CUT3: and by more than a tenth of the smaller part, and the shifts scale with the
       // smaller part's radius: 0.012 R0 is a tenth of a piece of 1/1000; the old 1/8 floor is gone, the owner removed the limit on 2026-10-09)
       const d = this.d0 + LADDER[this.shiftIdx] * this.R0 * this.ladderScale;
@@ -1037,32 +1120,46 @@ export class CutJob {
         if (this.shiftIdx >= LADDER.length) { this.status = 'thin'; this.why = this.why || 'ladder'; }
         return false;
       }
+      const keep = { d: this.d, fracA: this.plan.fracA, fracB: this.plan.fracB, fa: this.plan.fa, aspectA: this.plan.aspectA, aspectB: this.plan.aspectB, cA: this.plan.cA, cB: this.plan.cB };
       this.setPlane(d);
       Object.assign(this.plan, { fa: p.fa, fracA: p.fracA, fracB: p.fracB, aspectA: p.aspectA, aspectB: p.aspectB });
       this.plan.cA = p.cA; this.plan.cB = p.cB;
+      // the bodies of the shifted plane must be the same set (a shift that joins or splits a part is not the same cut)
+      if (!this.makeKids() || this.kids.map((k) => k.side).join('') !== this.sig || this.kids.some((k) => k.frac < FRAC_FLOOR)) {
+        this.setPlane(keep.d);
+        Object.assign(this.plan, { fa: keep.fa, fracA: keep.fracA, fracB: keep.fracB, aspectA: keep.aspectA, aspectB: keep.aspectB });
+        this.plan.cA = keep.cA; this.plan.cB = keep.cB;
+        this.shiftIdx++;
+        if (this.shiftIdx >= LADDER.length) { this.status = 'thin'; this.why = this.why || 'parts'; }
+        else this.makeKids();
+        return false;
+      }
     }
-    const region = this.side === 0 ? this.regionA : this.regionB, frac = this.side === 0 ? this.plan.fracA : this.plan.fracB, c = this.side === 0 ? this.plan.cA : this.plan.cB;
-    const d0 = pieceDetail(frac), S = getSource(this.genome);
+    const kid = this.kids[this.kidIdx], S = getSource(this.genome);
+    const frac = kid.frac, region = kid.region, c = kid.c, d0 = pieceDetail(frac);
     // a build of this piece that exists already (the cache holds successes only) at its share's detail or a finer one (CUT3: see finishSide) is used as it is
     let hit: PieceBuilt | undefined;
     if (this.cache) for (let d = d0; d <= 3 && !hit; d++) hit = cacheGet(pieceKey(S, region, d, frac));
-    if (hit) { this.detailUp = 0; if (this.side === 0) { this.a = hit; this.side = 1; } else { this.b = hit; this.status = 'ok'; } return false; }
+    if (hit) { this.detailUp = 0; kid.built = hit; this.advance(); return false; }
     this.job = new PieceJob(this.genome, region, Math.min(3, d0 + this.detailUp), frac, c);
     return true;
   }
   private finishSide(j: PieceJob): void {
     this.job = null;
-    if (j.status === 'unsound') { this.status = 'loose'; this.why = 'unsound'; this.badSide = this.side; return; }
+    const kid = this.kids[this.kidIdx];
+    if (j.status === 'unsound') { this.status = 'loose'; this.why = 'unsound'; this.badSide = kid.side; return; }
     if (j.status === 'fail') {
       // CUT3: a build that fails its gates at the mesh detail of its share is tried at the next finer detail first (a finer mesh follows a thin or sharp piece better; the plane stays),
-      // and only when detail 3 failed too does the retry ladder move the plane to the next rung (side A again)
+      // and only when detail 3 failed too does the retry ladder move the plane to the next rung (the first body again)
       if (GEOMETRY_FAILS.has(j.why) && j.detail < 3) { this.detailUp++; this.why = j.why; return; }
       this.detailUp = 0;
-      this.why = j.why; this.a = null; this.b = null; this.side = 0; this.shiftIdx++;
+      this.why = j.why; this.a = null; this.b = null; this.kidIdx = 0; for (const k of this.kids) k.built = null; this.shiftIdx++;
       if (this.shiftIdx >= LADDER.length) this.status = 'thin';
       return;
     }
     this.detailUp = 0;
-    if (this.side === 0) { this.a = j.built; this.side = 1; } else { this.b = j.built; this.status = 'ok'; }
+    kid.built = j.built;
+    this.advance();
   }
 }
+const PL4C = new Float64Array(4);

@@ -12,13 +12,18 @@ import { CATALOG, speciesBaseGenome } from '../../src/data/catalog.ts';
 import { familyOf } from '../../src/data/catalog.ts';
 import { wholeRefFor } from '../../src/render/wholeRef.ts';
 import { SoftBody } from '../../src/physics/softbody.ts';
+import { recipeOf } from '../../src/physics/shape.ts';
 import { createBodyManager } from '../../src/shell/bodies.ts';
 import { JOIN_HOLD_S, LEVEL_NY, NECK_DEPTH, PIECE_CEILING, TOUCH_SKIN_K, NECK_DEPTH_DEFAULT, PART_GAP, PART_GAP_DEFAULT, PART_S, PART_S_DEFAULT, createCutter, supportAlong } from '../../src/shell/cut.ts';
 import { createMockWorld } from '../mocks.ts';
+import type { CameraLike } from '../../src/input/camera.ts';
+import { bestMultiSwipe, partsOfSwipe, tipDirsOfRecipe, tipSwipe } from '../../src/shell/cutProbe.ts';
 
 const only = (process.argv.find((a) => a.startsWith('--only=')) ?? '').slice(7).split(',').filter(Boolean);
 const run = (name: string): boolean => only.length === 0 || only.includes(name);
 const VERBOSE = process.argv.includes('--v');
+const TRACE = process.argv.includes('--trace');
+const WATCH_S = Number((process.argv.find((a) => a.startsWith('--watch=')) ?? '--watch=10').slice(8));
 let bad = 0, total = 0;
 const check = (name: string, ok: boolean, extra = ''): void => { total++; if (!ok) bad++; console.log(`${ok ? 'ok  ' : 'FAIL'} ${name}${extra ? '  ' + extra : ''}`); };
 const f3 = (x: number): string => x.toFixed(3);
@@ -284,7 +289,7 @@ const rot = (q: { x: number; y: number; z: number; w: number }, v: V): V => {
 const mulberry = (seed: number) => () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
 
 /** the Cutter on its own with REAL bodies: a controllable finger, every moveTo and every setNeck plane recorded, the eyes of face.ts (wholeRef) offered as `stage.eyeAnchors` */
-function rig2(species: string, o: { ceiling?: number; eyes?: boolean; calm?: boolean } = {}) {
+function rig2(species: string, o: { ceiling?: number; eyes?: boolean; calm?: boolean; fast?: boolean } = {}) {
   const w = createMockWorld({ storage: null });
   const st = w.stage as unknown as Record<string, unknown>;
   let vid = 100;
@@ -318,7 +323,8 @@ function rig2(species: string, o: { ceiling?: number; eyes?: boolean; calm?: boo
     bodies: bm, stage: w.stage, audio: w.audio, haptics: w.haptics, createBody: mk, quality: () => 'high', calm: () => !!o.calm, gravity: () => true, simTime: () => t, viewport: () => ({ w: 800, h: 600 }),
     activeBody: () => active ?? bm.body, touching: () => touching, drag: (out) => { if (!dragV || !touching) return false; out.x = dragV.x; out.y = dragV.y; out.z = dragV.z; return true; }, beforeChange() {}, clearMat: () => 0, panOf: () => 0, say: (s) => notices.push(s), report: (e) => { if (/cannot be built|the physics built a piece of share/.test(String((e as Error)?.message))) buildFails.push(String((e as Error).message)); else throw e; }, ceiling: o.ceiling,
   });
-  const step = (sec: number): void => { for (let i = 0; i < Math.round(sec * 60); i++) { t += 1 / 60; const all = [bm.body, ...bm.extras.map((x) => x.body)]; for (const b of all) b.collide?.(all.filter((q) => q !== b)); bm.step(1 / 60); ct.update(1 / 60); } };
+  const step = (sec: number): void => { for (let i = 0; i < Math.round(sec * 60); i++) { t += 1 / 60; const all = [bm.body, ...bm.extras.map((x) => x.body)]; if (!o.fast) for (const b of all) b.collide?.(all.filter((q) => q !== b));   // (fast: only bodies.step, whose contact pass is the planner, as in the game)
+    bm.step(1 / 60); ct.update(1 / 60); } };
   const idle = (max = 6): void => { for (let i = 0; i < max * 60 && ct.busy; i++) step(1 / 60); };
   const bodies = (): SoftBodyLike[] => [bm.body, ...bm.extras.map((x) => x.body)];
   const cam = (w.stage as unknown as { camera: THREE.PerspectiveCamera }).camera;
@@ -789,6 +795,184 @@ if (run('x06')) {
   check('X06 (node leg 1, programmatic): a cut and Reconnect all pay the meter nothing, the Hoard sees no piece, and the bodies emit no poke, release or snap event at all', r.app.hoard.meter().sp === meter0 && !k.some((x) => x === 'poke' || x === 'release' || x === 'snap') && r.app.cut.pieces === 1, `sp ${meter0} -> ${r.app.hoard.meter().sp}; events ${[...new Set(k)].join(',') || 'none'}`);
   check('X10 (wording): the live region said "Cut into 2 pieces." and "Whole again." (the Undo cut line is not offered in this build: Cutter.undoCut is absent, so the bar and the texts do not name it)', r.notices.includes('Cut into 2 pieces.') && r.notices.at(-1) === 'Whole again.' && r.app.cut.undoCut === undefined, r.notices.slice(-3).join(' | '));
   r.app.dispose();
+}
+
+/* ───────── CUT3 leg 3 (2026-10-09): tips that fall (U02) and several tips at once (U03), on the REAL physics and the real Cutter ───────── */
+// The owner asked for it on 2026-10-09: "a star: cut its tips off and those fall down, and even cut the middle further". The old rows that refused such a cut as 'loose' are re-specified with that reason.
+// Species: the star-like ones (5 or more thin tips in their recipe, measured by the recipes' own `thin` test of probe_truecut.ts); --full = every species with 3 or more; --sp=a,b = those named.
+// A swipe across a tip is made the way a player makes it: on the screen, perpendicular to the tip's axis as the camera sees it, 0.4 of the way from the tip's base to its apex, with the camera at the real pitch 0.27.
+const STAR_SPECIES = ['granulo', 'burrbin', 'marigel', 'gloopsy', 'diademo', 'caromel', 'ambrosel', 'glimglop', 'constello', 'prismelo', 'skeinara'];
+const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
+const tipDirs = (sp: string): V[] => tipDirsOfRecipe(recipeOf(sp as never).features ?? []);
+const lowOf = (b: SoftBodyLike): number => { const P = b.positions; let m = Infinity; for (let i = 1; i < P.length; i += 3) if (P[i] < m) m = P[i]; return m; };
+const unitOf = (v: V): V | null => { const l = Math.hypot(v.x, v.y, v.z); return l > 1e-9 ? { x: v.x / l, y: v.y / l, z: v.z / l } : null; };
+const crossOf = (a: V, b: V): V => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
+function setRealCamera(r: ReturnType<typeof rig2>): THREE.PerspectiveCamera {
+  const cam = (r.w.stage as unknown as { camera: THREE.PerspectiveCamera }).camera;
+  cam.position.set(0, 0.35 + 3.3 * Math.sin(0.27), 3.3 * Math.cos(0.27)); cam.lookAt(0, 0.35, 0); cam.updateMatrixWorld(true);
+  return cam;
+}
+const VP800 = { w: 800, h: 600 };
+/** step `secs` and read the new pieces: when each first touches the table, how high its underside rebounds after that (the launch), and where it ends (rest on the table, speed) */
+function watchPieces(r: ReturnType<typeof rig2>, bodies: SoftBodyLike[], secs: number): Array<{ low0: number; tLand: number; rebound: number; endLow: number; endSpeed: number; maxUp: number; rise: number; tRest: number; nan: boolean }> {
+  const st = bodies.map((b) => ({ b, low0: lowOf(b), y0: b.center.y, rise: 0, tRest: -1, tCalm: 0, tLand: -1, rebound: 0, up: 0, prev: { ...b.center }, speed: 0, nan: false, hist: [] as V[] }));
+  for (let i = 0; i < Math.round(secs * 60); i++) {
+    r.step(1 / 60);
+    const t = (i + 1) / 60;
+    for (const s of st) {
+      const low = lowOf(s.b), c = s.b.center;
+      if (!Number.isFinite(low) || !Number.isFinite(c.y)) s.nan = true;
+      // the speed of a small jelly piece buzzes frame to frame (PHYS: 0.2 to 0.4 m/s for ever): it is read over a quarter of a second, the displacement of its centre
+      s.hist.push({ x: c.x, y: c.y, z: c.z });
+      if (s.hist.length > 16) s.hist.shift();
+      const h0 = s.hist[0];
+      s.speed = s.hist.length >= 16 ? Math.hypot(c.x - h0.x, c.y - h0.y, c.z - h0.z) / 0.25 : Math.hypot(c.x - s.prev.x, c.y - s.prev.y, c.z - s.prev.z) * 60;
+      s.up = Math.max(s.up, (c.y - s.prev.y) * 60);
+      s.prev = { x: c.x, y: c.y, z: c.z };
+      s.rise = Math.max(s.rise, c.y - s.y0);
+      if (s.speed < 0.12) { s.tCalm += 1 / 60; if (s.tRest < 0 && s.tCalm >= 0.5) s.tRest = t - 0.5; } else { s.tCalm = 0; s.tRest = -1; }
+      if (TRACE && i % 30 === 29) console.log(`      t ${t.toFixed(2)} piece ${bodies.indexOf(s.b)} low ${low.toFixed(3)} y ${c.y.toFixed(3)} x ${c.x.toFixed(2)} z ${c.z.toFixed(2)} v ${s.speed.toFixed(2)}`);
+      if (s.tLand < 0 && low <= 0.004) s.tLand = t;
+      else if (s.tLand >= 0 && t >= s.tLand + 0.05) s.rebound = Math.max(s.rebound, low);
+    }
+  }
+  return st.map((s) => ({ low0: s.low0, tLand: s.tLand, rebound: s.rebound, endLow: lowOf(s.b), endSpeed: s.speed, maxUp: s.up, rise: s.rise, tRest: s.tRest, nan: s.nan }));
+}
+if (run('tips')) {
+  const species = SP_ARG.length ? SP_ARG : FULL ? CATALOG.map((s) => s.id as string).filter((id) => tipDirs(id).length >= 3) : STAR_SPECIES;
+  const bad: string[] = [], rows: string[] = [];
+  let cutsDone = 0, tried = 0, worstRebound = 0, worstEndSpeed = 0, worstRise = 0, perched = 0, worstSum = 0, mostPieces = 0;
+  for (const sp of species) {
+    const r = rig2(sp); r.step(1.5);
+    const cam = setRealCamera(r);
+    const dirs = tipDirs(sp);
+    let took = 0;
+    for (const dir of dirs) {
+      if (took >= 5) break;
+      const big = r.bodies().reduce((m, b) => ((b.frac ?? 1) > (m.frac ?? 1) + 1e-9 ? b : m));
+      const sw = tipSwipe(big, cam as unknown as CameraLike, VP800, dir);
+      if (!sw) continue;
+      tried++;
+      const before = new Set(r.bodies()), n0 = r.ct.pieces;
+      const res = r.ct.swipe(sw.x0, sw.y0, sw.x1, sw.y1);
+      r.idle();
+      if (res !== 'cut') { rows.push(`${sp} tip ${took + 1}: ${res} (${r.notices.at(-1) ?? ''})`); bad.push(`${sp}: the swipe across a tip answered ${res}${r.notices.length ? ' "' + r.notices.at(-1) + '"' : ''}`); continue; }
+      const made = r.bodies().filter((b) => !before.has(b)), fr = r.ct.fracs();
+      if (r.ct.pieces < n0 + 1 || Math.abs(fr.reduce((s, x) => s + x, 0) - 1) > 1e-9) { bad.push(`${sp}: ${r.ct.pieces} pieces from ${n0}, shares sum ${fr.reduce((s, x) => s + x, 0)}`); continue; }
+      worstSum = Math.max(worstSum, Math.abs(fr.reduce((s, x) => s + x, 0) - 1));
+      const tipBodies = made.filter((b) => (b.frac ?? 1) < 0.5 * (big.frac ?? 1));
+      const w = watchPieces(r, tipBodies.length ? tipBodies : made, WATCH_S);
+      cutsDone++; took++; mostPieces = Math.max(mostPieces, r.ct.pieces);
+      const lines = w.map((x) => `rise ${x.rise.toFixed(3)} m, ${x.tLand < 0 ? 'perched (never on the table)' : 'table at ' + x.tLand.toFixed(2) + ' s, rebound ' + x.rebound.toFixed(3) + ' m'}, at rest from ${x.tRest < 0 ? 'never' : x.tRest.toFixed(1) + ' s'} (ends ${x.endLow.toFixed(3)} m up, ${x.endSpeed.toFixed(3)} m/s)`);
+      rows.push(`${sp} tip ${took}: ${n0} -> ${r.ct.pieces} pieces, tip share ${tipBodies.map((b) => (b.frac ?? 0).toFixed(4)).join('+')}, born ${w.map((x) => x.low0.toFixed(2)).join('+')} m up; ${lines.join(' | ')}`);
+      for (const x of w) {
+        worstRebound = Math.max(worstRebound, x.rebound); worstEndSpeed = Math.max(worstEndSpeed, x.endSpeed); worstRise = Math.max(worstRise, x.rise); if (x.tLand < 0) perched++;
+        if (x.nan) bad.push(`${sp}: NaN`);
+        if (x.rise > 0.06) bad.push(`${sp} tip ${took}: rises ${x.rise.toFixed(3)} m above where it was born (a launch; bar 0.06)`);
+        if (x.tLand >= 0 && x.rebound > 0.06) bad.push(`${sp} tip ${took}: rebounds ${x.rebound.toFixed(3)} m after landing on the table (bar 0.06)`);
+        if (x.tRest < 0 || x.endSpeed > 0.2) bad.push(`${sp} tip ${took}: not at rest after ${WATCH_S} s (speed ${x.endSpeed.toFixed(2)} m/s, ${x.endLow.toFixed(3)} m up)`);
+        else if (x.tLand >= 0 && (x.endLow > 0.012 || x.endLow < -0.02)) bad.push(`${sp} tip ${took}: ends ${x.endLow.toFixed(3)} m up after touching the table`);
+      }
+    }
+    // the middle can be cut further, and everything comes back exactly
+    const mid = r.ct.splitInTwo(); r.idle(); r.step(0.5);
+    const piecesNow = r.ct.pieces, fr = r.ct.fracs();
+    if (took > 0 && (mid !== 'cut' || Math.abs(fr.reduce((s, x) => s + x, 0) - 1) > 1e-9)) bad.push(`${sp}: after ${took} tips the middle could not be cut further (${mid})`);
+    r.ct.reconnectAll(false);
+    if (r.ct.pieces !== 1) bad.push(`${sp}: Reconnect all left ${r.ct.pieces} pieces`);
+    rows.push(`${sp}: ${took} of ${Math.min(5, dirs.length)} tips taken, then Split in two on the middle: ${mid}, ${piecesNow} pieces`);
+  }
+  if (VERBOSE) { for (const x of rows) console.log('   ' + x); for (const x of bad) console.log('   BAD ' + x); }
+  check(`U02 (real physics, real Cutter, camera pitch 0.27): on ${species.length} star-like species ${cutsDone} of ${tried} swipes across one tip each take it off as its own piece (shares sum to 1 within 1e-9, worst ${worstSum.toExponential(1)}); every tip falls and comes to rest within ${WATCH_S} s (${perched} of them perched on another piece, the rest on the table), never rises more than 0.06 m above where it was born (worst ${worstRise.toFixed(3)} m), rebounds at most 0.06 m after landing on the table (worst ${worstRebound.toFixed(3)} m), no NaN; then Split in two on the middle works; up to ${mostPieces} pieces`,
+    bad.length === 0 && cutsDone > 0, bad.slice(0, 6).join('; ') || `${cutsDone} tips`);
+}
+
+/* ───────── U03: ONE swipe across SEVERAL tips makes several pieces (one per connected part); volumes sum to the parent's within 0.5 percent ───────── */
+// A near-level swipe on the screen below the cut points of the top three upward tips: the plane through the camera and the swipe takes everything above it, which is the tips as separate parts. The expected number of pieces
+// is counted INDEPENDENTLY on the pre-cut mesh (connected parts of the vertices on each side of the same plane, edges between kept vertices); the physics' own count (CutPlan.parts) must agree.
+if (run('u03')) {
+  const species = SP_ARG.length ? SP_ARG : FULL ? CATALOG.map((s) => s.id as string).filter((id) => tipDirs(id).length >= 3) : STAR_SPECIES;
+  const bad: string[] = [], rows: string[] = [];
+  let tested = 0, several = 0, worstVol = 0, mostParts = 0, worstRise = 0, worstSum = 0;
+  for (const sp of species) {
+    const r = rig2(sp); r.step(1.5);
+    const cam = setRealCamera(r), big = r.bodies()[0], vol0 = volOf(big);
+    const ms = bestMultiSwipe(big, cam as unknown as CameraLike, VP800);
+    if (!ms) { rows.push(`${sp}: no plane through the camera leaves 3 separate parts (a tip and the rest is the most): skipped`); continue; }
+    tested++;
+    const expected = partsOfSwipe(big, cam as unknown as CameraLike, VP800, ms);
+    const before = new Set(r.bodies());
+    const res = r.ct.swipe(ms.x0, ms.y0, ms.x1, ms.y1);
+    r.idle();
+    if (res !== 'cut') { bad.push(`${sp}: the swipe across several tips answered ${res} ${r.notices.at(-1) ?? ''}`); rows.push(`${sp}: ${res}`); continue; }
+    const made = r.bodies(), fr = r.ct.fracs(), parts = r.ct.info.lastParts;
+    const vols = made.reduce((s, b) => s + volOf(b), 0) / vol0, sum = fr.reduce((s, x) => s + x, 0);
+    worstVol = Math.max(worstVol, Math.abs(vols - 1)); worstSum = Math.max(worstSum, Math.abs(sum - 1)); mostParts = Math.max(mostParts, parts);
+    if (parts >= 3) several++;
+    rows.push(`${sp}: the best swipe (${ms.parts} parts by the independent count): ${parts} pieces (independent count ${expected}), shares ${fr.map((x) => x.toFixed(4)).join(' + ')}, mesh volume ${(vols * 100).toFixed(2)} % of the parent`);
+    if (parts !== expected) bad.push(`${sp}: ${parts} pieces, the independent count of connected parts is ${expected}`);
+    if (r.ct.pieces !== parts || made.length !== parts) bad.push(`${sp}: ${r.ct.pieces} pieces / ${made.length} bodies, the cut said ${parts}`);
+    if (Math.abs(sum - 1) > 1e-9 || fr.some((x) => !(x > 0))) bad.push(`${sp}: shares sum ${sum}`);
+    if (Math.abs(vols - 1) > 0.005) bad.push(`${sp}: the pieces' mesh volume is ${(vols * 100).toFixed(2)} % of the parent's (bar 0.5 %)`);
+    if (r.notices.at(-1) !== `Cut into ${parts} pieces.`) bad.push(`${sp}: the line said "${r.notices.at(-1)}"`);
+    const fresh = made.filter((b) => !before.has(b) || b !== big);
+    const w = watchPieces(r, fresh, WATCH_S);
+    for (const x of w) {
+      worstRise = Math.max(worstRise, x.rise);
+      if (x.nan) bad.push(`${sp}: NaN`);
+      if (x.rise > 0.06) bad.push(`${sp}: a piece rises ${x.rise.toFixed(3)} m above where it was born`);
+      if (x.tLand >= 0 && x.rebound > 0.06) bad.push(`${sp}: a piece rebounds ${x.rebound.toFixed(3)} m after landing`);
+      if (x.tRest < 0 || x.endSpeed > 0.2) bad.push(`${sp}: a piece is not at rest after ${WATCH_S} s (${x.endSpeed.toFixed(2)} m/s)`);
+    }
+    r.ct.reconnectAll(false);
+    if (r.ct.pieces !== 1) bad.push(`${sp}: Reconnect all left ${r.ct.pieces}`);
+  }
+  if (VERBOSE) { for (const x of rows) console.log('   ' + x); for (const x of bad) console.log('   BAD ' + x); }
+  check(`U03 (real physics): on ${tested} star-like species one swipe (the line on the screen whose plane leaves the most separate parts, found by a grid search of 36 angles x 29 offsets on the pre-cut mesh) makes one piece per connected part (the physics' count equals an independent count of the parts on both sides of the plane; ${several} species made 3 or more pieces, most ${mostParts}), shares sum to 1 (worst ${worstSum.toExponential(1)}), the pieces' mesh volumes sum to the parent's within 0.5 % (worst ${(worstVol * 100).toFixed(2)} %), "Cut into N pieces.", every piece falls to rest within ${WATCH_S} s without rising more than 0.06 m above its birth (worst ${worstRise.toFixed(3)} m); Reconnect all ends whole`,
+    bad.length === 0 && tested >= 1 && several >= 1, bad.slice(0, 6).join('; ') || `${tested} species`);
+}
+
+/* ───────── U04 (CUT3 5), REAL bodies: 64 pieces: no crash, no NaN, the kind line at the safety ceiling, cutting works again after a join; the frame cost of the shell's step at 2, 24 and 64 pieces ───────── */
+// The Cutter on real SoftBodies, stepped only through bodies.step (the contact pass is the planner of physics/broad.ts, as in the game; sleeping pieces take no solver steps). 63 presses of Split in two (the largest piece each time, a quarter of a
+// second of settling after each) make 64 pieces; the 64th press says the kind line; Reconnect all (animated) brings the whole back and the next press cuts again. The frame cost is best of 3 batches of 20 frames, so a busy machine adds noise
+// to the ratios (the spec's bar is 1.5 x two whole bodies at 24 pieces, 12 of them awake).
+if (run('u04')) {
+  const r = rig2('dollop', { fast: true });
+  r.step(1.2);
+  const KIND = "That's a lot of pieces! Reconnect some to keep cutting.";
+  const frameMs = (): number => { let best = Infinity; for (let b = 0; b < 3; b++) { const t0 = performance.now(); for (let i = 0; i < 20; i++) r.step(1 / 60); best = Math.min(best, (performance.now() - t0) / 20); } return best; };
+  // the reference: the shell's step with 2 whole bodies in contact range
+  const ref = rig2('dollop', { fast: true });
+  { const g = speciesBaseGenome('dollop' as never, 1); const b2 = new Ctor(g, { piece: { frac: 1, chunk: false, at: { x: 0.9, y: 0.5, z: 0 } } }); ref.bm.addExtra(b2, g as never, { tier: 'common', shared: true, piece: false, itemId: null }); }
+  ref.step(2);
+  let two = Infinity; for (let b = 0; b < 3; b++) { const t0 = performance.now(); for (let i = 0; i < 20; i++) ref.step(1 / 60); two = Math.min(two, (performance.now() - t0) / 20); }
+  const results: string[] = [], cost: Record<number, number> = {}, awake24: number[] = [];
+  let nan = false, presses = 0, refused = 0;
+  const anyNaN = (): boolean => r.bodies().some((b) => b.positions.some((v) => !Number.isFinite(v)));
+  // press until 64 pieces: a press the builder refuses ("too thin": a crumb that cannot be halved by that plane) is retried on the next-best plane / the next piece (SPLIT_TRIES), so it costs a press, not the run
+  while (r.ct.pieces < 64 && presses < 110) {
+    const before = r.ct.pieces;
+    results.push(r.ct.splitInTwo()); presses++; r.idle(); r.step(0.25);
+    if (r.ct.pieces === before) refused++;
+    if (r.ct.pieces === 24 && cost[24] === undefined) {
+      const t0 = performance.now(); for (let k = 0; k < 20; k++) r.step(1 / 60); cost[24] = (performance.now() - t0) / 20;   // right after the cut: the newest pieces awake
+      r.step(3); cost[2024] = frameMs(); awake24.push(r.bm.contactStats.awake, r.bm.contactStats.awakeParticles);   // and 3 s later
+    }
+    if (presses % 8 === 7 && anyNaN()) nan = true;
+  }
+  const at64 = r.ct.pieces, allAwake = frameMs();
+  const last = r.ct.splitInTwo(), line = r.notices.at(-1), hits = r.ct.info.ceilingHits;
+  r.step(6);
+  const settled = frameMs(), cs = r.bm.contactStats;
+  nan = nan || anyNaN();
+  const fr = r.ct.fracs(), sum = fr.reduce((s, x) => s + x, 0), asleep = r.bodies().filter((b) => (b as unknown as { sleeping?: boolean }).sleeping === true).length;
+  check(`U04 (real bodies): ${presses} presses of Split in two (${refused} refused by the builder as too thin, the next press tried another plane) make 64 pieces, the next press answers 'limit' with the kind line, the hit is counted (${hits}), shares sum to 1 within 1e-9 (${sum.toFixed(12)}), no NaN in any position`,
+    at64 === 64 && last === 'limit' && line === KIND && hits === 1 && Math.abs(sum - 1) < 1e-9 && !nan, `pieces ${r.ct.pieces}; last ${last}; "${line}"`);
+  console.log(`   frame cost of bodies.step (best of 3 x 20 frames; this machine is shared): 2 whole bodies ${two.toFixed(2)} ms; 24 pieces ${cost[24] === undefined ? 'n/a' : cost[24].toFixed(2)} ms (${cost[24] === undefined ? 'n/a' : (cost[24] / two).toFixed(2)} x) right after the cut, ${cost[2024] === undefined ? 'n/a' : cost[2024].toFixed(2)} ms (${cost[2024] === undefined ? 'n/a' : (cost[2024] / two).toFixed(2)} x) 3 s later with ${awake24[0]} of 24 awake (${awake24[1]} particles); 64 pieces right after the last cut ${allAwake.toFixed(2)} ms (${(allAwake / two).toFixed(2)} x); 64 pieces after 6 s ${settled.toFixed(2)} ms (${(settled / two).toFixed(2)} x), ${asleep} of 64 asleep; planner ${cs.pairs} pairs of ${cs.naivePairs} (${cs.awake} awake, ${cs.awakeParticles} particles)`);
+  check(`U04: the frame cost at 24 pieces, 3 s after the last cut, is within 1.5 x two whole bodies (${cost[2024] === undefined ? 'n/a' : cost[2024].toFixed(2)} ms vs ${two.toFixed(2)} ms: ${cost[2024] === undefined ? 'n/a' : (cost[2024] / two).toFixed(2)} x; ${awake24[0]} of 24 pieces still awake: pieces lying on other pieces do not sleep, the Split in two spam piles them up)`, cost[2024] !== undefined && cost[2024] <= 1.5 * two);
+  const ok = r.ct.reconnectAll(true); r.idle(15); r.step(2.5);
+  const again = r.ct.splitInTwo(); r.idle(); r.step(0.3);
+  check('U04: Reconnect all from 64 pieces ends whole (one fresh body) and the Cut tool works again (the next press cuts)', ok && again === 'cut' && r.ct.pieces === 2, `whole? pieces now ${r.ct.pieces}; ${r.notices.at(-2)} / ${r.notices.at(-1)}`);
 }
 
 console.log(`${total - bad}/${total} cutter checks passed`);

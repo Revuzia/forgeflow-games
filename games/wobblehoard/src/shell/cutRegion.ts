@@ -13,6 +13,10 @@
 //   * `cutStack` is the cut nodes still alive, newest last. A join at N removes every entry under and at N. The top entry always has two LEAF
 //     kids (an internal kid's own cut is newer and would sit above it): undoCut is therefore always an exact twin join.
 //   * A node that has been joined away (or rolled back) is DEAD: its links are cut, and every function here answers null for it.
+//   * PARTS (CUT3.md 2.3, 2026-10-09): one side of a cut can be several separate pieces (a swipe across two tips of a star: both tips are side A and are not joined to each other). Such a side is a
+//     'parts' node (isParts: a binary chain, no plane and no cut of its own, literals equal to its parent's) over k leaves, one per connected part; each leaf keeps the physics' opaque address of
+//     its part (`part`) and hands it back in PieceRegion.part. A parts node is not a body: a join that would end on one LIFTS to the cut node above it (the cell of a cut node is connected, so it is
+//     always one body); joining two tips that one swipe took off therefore brings back everything cut from that plane. Plane ids, the stack and rollback are unchanged: the stack holds cut nodes only.
 import type { PieceRegion, RestPlane, V3 } from '../contracts.ts';
 
 export interface CutNode {
@@ -24,8 +28,18 @@ export interface CutNode {
   parent: CutNode | null;
   /** [side A, side B], or null for a leaf (a live piece, or a dead node) */
   kids: [CutNode, CutNode] | null;
-  /** the id of the plane that cut this node into its kids; 0 for a leaf */
+  /** the id of the plane that cut this node into its kids; 0 for a leaf and for a parts node */
   cutId: number;
+  /** the real depth from the root (a parts chain adds depth without adding a literal) */
+  readonly depth: number;
+  /** an internal node that only separates the connected parts of one side of a cut: no plane, not a body (a join lifts above it) */
+  readonly isParts: boolean;
+  /** a leaf made of several parts: its position (0..k-1) among them, else -1 */
+  readonly partIndex: number;
+  /** the physics' token for this leaf's connected part inside its cell (PieceRegion.part, copied from CutPlan.partList and never invented here); null = the cell is one body */
+  part: number | null;
+  /** a cut node: the first node id that was free when it was cut (what rollbackCut gives back) */
+  mark: number;
 }
 
 export interface CutTree {
@@ -48,7 +62,7 @@ export interface Group {
 }
 
 export function createCutTree(): CutTree {
-  return { root: { id: 0, lits: Object.freeze([]) as readonly number[], parent: null, kids: null, cutId: 0 }, planes: [], stack: [], nextPlane: 1, nextNode: 1 };
+  return { root: { id: 0, lits: Object.freeze([]) as readonly number[], parent: null, kids: null, cutId: 0, depth: 0, isParts: false, partIndex: -1, part: null, mark: 0 }, planes: [], stack: [], nextPlane: 1, nextNode: 1 };
 }
 
 /** nothing is cut */
@@ -86,50 +100,81 @@ export function planeById(t: CutTree, id: number): RestPlane | null {
 /** The lowest common ancestor of two nodes of one tree (a node is its own ancestor); null for nodes of different trees or a dead node. */
 export function lca(a: CutNode, b: CutNode): CutNode | null {
   let x = a, y = b;
-  while (x.lits.length > y.lits.length) { if (!x.parent) return null; x = x.parent; }
-  while (y.lits.length > x.lits.length) { if (!y.parent) return null; y = y.parent; }
+  while (x.depth > y.depth) { if (!x.parent) return null; x = x.parent; }
+  while (y.depth > x.depth) { if (!y.parent) return null; y = y.parent; }
   while (x !== y) { if (!x.parent || !y.parent) return null; x = x.parent; y = y.parent; }
   return x;
 }
 
 /** Cut the live leaf `leaf` by the plane (unit n, d) of the whole's rest frame W (side A: n . p >= d). Allocates the plane id, stores a COPY of the
- *  plane and returns the two kids [side A, side B]. null, and nothing changes, for a node that is not a live leaf or a plane that is not finite. */
-export function cutPiece(t: CutTree, leaf: CutNode, n: V3, d: number): [CutNode, CutNode] | null {
+ *  plane and returns the two kids [side A, side B]. null, and nothing changes, for a node that is not a live leaf or a plane that is not finite.
+ *  `partsA` / `partsB` (CUT3): the physics' tokens of the connected parts of a side that is several separate pieces (null = no token); a side with two or more becomes a
+ *  parts node over one leaf per token, in order (a side with 0 or 1 is one leaf, which keeps its token when it has one). The returned kids are the SIDE
+ *  nodes; the pieces are `leavesUnder(kid)`. */
+export function cutPiece(t: CutTree, leaf: CutNode, n: V3, d: number, partsA?: ReadonlyArray<number | null>, partsB?: ReadonlyArray<number | null>): [CutNode, CutNode] | null {
   if (leaf.kids !== null || !isLive(t, leaf)) return null;
   if (!Number.isFinite(n.x) || !Number.isFinite(n.y) || !Number.isFinite(n.z) || !Number.isFinite(d)) return null;
+  const mark = t.nextNode;
   const id = t.nextPlane++;
   t.planes.push({ id, n: { x: n.x, y: n.y, z: n.z }, d });
-  const a: CutNode = { id: t.nextNode++, lits: Object.freeze([...leaf.lits, id]) as readonly number[], parent: leaf, kids: null, cutId: 0 };
-  const b: CutNode = { id: t.nextNode++, lits: Object.freeze([...leaf.lits, -id]) as readonly number[], parent: leaf, kids: null, cutId: 0 };
+  const mk = (parent: CutNode, lits: readonly number[], isParts: boolean, partIndex: number, part: number | null): CutNode =>
+    ({ id: t.nextNode++, lits, parent, kids: null, cutId: 0, depth: parent.depth + 1, isParts, partIndex, part, mark: 0 });
+  const pa = partsA ?? [], pb = partsB ?? [];
+  const la = Object.freeze([...leaf.lits, id]) as readonly number[], lb = Object.freeze([...leaf.lits, -id]) as readonly number[];
+  const a = mk(leaf, la, pa.length > 1, -1, pa.length === 1 ? pa[0] : null);
+  const b = mk(leaf, lb, pb.length > 1, -1, pb.length === 1 ? pb[0] : null);
+  // a side of several parts: a binary chain of parts nodes over one leaf per part (the ids come after both sides', so a single-part cut allocates exactly two nodes as it always did)
+  const chain = (side: CutNode, parts: ReadonlyArray<number | null>): void => {
+    let cur = side;
+    for (let i = 0; i < parts.length - 1; i++) {
+      const first = mk(cur, cur.lits, false, i, parts[i]);
+      const rest = i < parts.length - 2 ? mk(cur, cur.lits, true, -1, null) : mk(cur, cur.lits, false, i + 1, parts[i + 1]);
+      cur.kids = [first, rest];
+      cur = rest;
+    }
+  };
+  if (pa.length > 1) chain(a, pa);
+  if (pb.length > 1) chain(b, pb);
   leaf.kids = [a, b];
   leaf.cutId = id;
+  leaf.mark = mark;
   t.stack.push(leaf);
   return [a, b];
 }
 
-/** Take back the cut that was JUST made at `node` and never took effect (the builder refused it during the neck, 6.3): the two kids are dropped, the
- *  plane id and the node ids are given back, the stack is as it was. false, and nothing changes, unless `node` is the newest cut and its kids are
- *  still leaves. (This is not Undo cut: the player never saw this cut.) */
+/** Take back the cut that was JUST made at `node` and never took effect (the builder refused it during the neck, 6.3): the two kids (and the parts under them) are
+ *  dropped, the plane id and the node ids are given back, the stack is as it was. false, and nothing changes, unless `node` is the newest cut and nothing under
+ *  it has been cut again. (This is not Undo cut: the player never saw this cut.) */
 export function rollbackCut(t: CutTree, node: CutNode): boolean {
   const top = t.stack[t.stack.length - 1], k = node.kids, last = t.planes[t.planes.length - 1];
-  if (!top || top !== node || !k || k[0].kids || k[1].kids || !isLive(t, node)) return false;
-  if (node.cutId !== t.nextPlane - 1 || !last || last.id !== node.cutId || k[0].id !== t.nextNode - 2 || k[1].id !== t.nextNode - 1) return false;
+  if (!top || top !== node || !k || !isLive(t, node)) return false;
+  let under = 0;
+  const plain = (x: CutNode): boolean => { under++; return x.kids === null || (x.isParts && plain(x.kids[0]) && plain(x.kids[1])); };
+  if (!plain(k[0]) || !plain(k[1])) return false;   // (something under it was cut again: it is not the newest cut)
+  if (node.cutId !== t.nextPlane - 1 || !last || last.id !== node.cutId || t.nextNode - node.mark !== under) return false;
   t.stack.pop();
   t.planes.pop();
   t.nextPlane--;
-  t.nextNode -= 2;
-  for (const x of k) { x.parent = null; x.cutId = 0; }
+  t.nextNode = node.mark;
+  killUnder(node);
+  node.mark = 0;
+  return true;
+}
+/** the links of everything under `node` are cut (dead nodes answer null everywhere) and `node` is a leaf again */
+function killUnder(node: CutNode): void {
+  const kill = (n: CutNode): void => { if (n.kids) { kill(n.kids[0]); kill(n.kids[1]); } n.parent = null; n.kids = null; n.cutId = 0; };
+  if (node.kids) { kill(node.kids[0]); kill(node.kids[1]); }
   node.kids = null;
   node.cutId = 0;
-  return true;
 }
 
 /** The group of two live pieces (7.2): N = lca(P, Q) and every piece under N. `out` receives the members (reused when given). null when P or Q is not a
  *  live leaf. A piece with itself is a group of one (twins false). */
 export function group(t: CutTree, p: CutNode, q: CutNode, out: CutNode[] = []): Group | null {
   if (p.kids !== null || q.kids !== null || !isLive(t, p) || !isLive(t, q)) return null;
-  const node = lca(p, q);
+  let node = lca(p, q);
   if (!node) return null;
+  while (node.isParts && node.parent) node = node.parent;   // two parts of one side: the cell that is one body is the cut node above (CUT3)
   out.length = 0;
   leavesUnder(node, out);
   const k = node.kids;
@@ -140,7 +185,7 @@ export function group(t: CutTree, p: CutNode, q: CutNode, out: CutNode[] = []): 
  *  it leaves the stack and the plane table; everything under it dies. When `node` is the root the squishy is whole and the ids start over.
  *  Returns `node`, or null (nothing changes) for a leaf or a dead node. */
 export function joinGroup(t: CutTree, node: CutNode): CutNode | null {
-  if (node.kids === null || !isLive(t, node)) return null;
+  if (node.kids === null || node.isParts || !isLive(t, node)) return null;
   const cuts: CutNode[] = [];
   const collect = (n: CutNode): void => { if (n.kids) { cuts.push(n); collect(n.kids[0]); collect(n.kids[1]); } };
   collect(node);
@@ -150,11 +195,8 @@ export function joinGroup(t: CutTree, node: CutNode): CutNode | null {
   w = 0;
   for (const p of t.planes) if (!cuts.some((c) => c.cutId === p.id)) t.planes[w++] = p;
   t.planes.length = w;
-  const kill = (n: CutNode): void => { if (n.kids) { kill(n.kids[0]); kill(n.kids[1]); } n.parent = null; n.kids = null; n.cutId = 0; };
-  kill(node.kids[0]);
-  kill(node.kids[1]);
-  node.kids = null;
-  node.cutId = 0;
+  killUnder(node);
+  node.mark = 0;
   if (node === t.root) { t.nextPlane = 1; t.nextNode = 1; }
   return node;
 }
@@ -168,12 +210,14 @@ export function undoCut(t: CutTree): CutNode | null {
 /** A node's cell as the contract's PieceRegion for the physics: ONE cell (the node's literals) and COPIES of the planes it names. Works for a leaf and for
  *  an internal node (the target of a join that is still armed). The root is `{ planes: [], cells: [[]] }`. null for a dead node. */
 export function regionOf(t: CutTree, node: CutNode): PieceRegion | null {
-  if (!isLive(t, node)) return null;
+  if (node.isParts || !isLive(t, node)) return null;   // (a parts node is not a body)
   const planes: RestPlane[] = [];
   for (const s of node.lits) {
     const p = planeById(t, s < 0 ? -s : s);
     if (!p) return null;
     planes.push({ id: p.id, n: { x: p.n.x, y: p.n.y, z: p.n.z }, d: p.d });
   }
-  return { planes, cells: [node.lits.slice()] };
+  const region: PieceRegion = { planes, cells: [node.lits.slice()] };
+  if (node.part !== null) region.part = node.part;   // the physics' token of a connected part (CUT3.md 2.3); absent = the cell is one body
+  return region;
 }

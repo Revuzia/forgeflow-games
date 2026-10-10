@@ -23,9 +23,10 @@ body[data-layout="strip"] .hud { padding-top: calc(var(--safe-t) + 8px); }
 body[data-layout="tiny"] .hud { padding-top: calc(var(--safe-t) + 6px); padding-left: calc(var(--safe-l) + 12px); padding-right: calc(var(--safe-r) + 12px); }
 
 /* the brand: the jelly SQUISH KEEPER at its small size (hud.ts; real text inside, the drawing is aria-hidden). The page's one h1 once the title has left. */
-.hud-top .wordmark { display: none; flex: none; min-width: 0; margin: 0; pointer-events: auto; }
-body[data-layout="wide"] .hud-top .wordmark { display: block; }
-@media (min-width: 600px) { body[data-layout="stack"] .hud-top .wordmark { display: block; } }
+/* where the brand does not show (phone stack, strip, tiny, Snap) it stays the page's h1 for a screen reader: out of the flow and clipped, never display:none (K14) */
+.hud-top .wordmark { position: absolute; clip-path: inset(50%); flex: none; min-width: 0; margin: 0; pointer-events: auto; }
+body[data-layout="wide"] .hud-top .wordmark { position: static; clip-path: none; }
+@media (min-width: 600px) { body[data-layout="stack"] .hud-top .wordmark { position: static; clip-path: none; } }
 
 /* ---------- the info row: name plate left, [ring][Open] right; the dock stands between them (wide) or above/below (stack, strip, tiny) ---------- */
 .hud-bottom {
@@ -36,19 +37,19 @@ body[data-layout="wide"] .hud-top .wordmark { display: block; }
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: var(--wh-sp-2);
+  gap: var(--wh-s2);
   pointer-events: none;
 }
 /* the middle slot holds the Hoard button in the strip layout only (layout.ts bindHoard); everywhere else it is just the mat chip's parent */
 .hud-slot { display: contents; }
-body[data-layout="strip"] .hud-slot { display: flex; flex: none; align-items: center; gap: var(--wh-sp-2); pointer-events: auto; }
+body[data-layout="strip"] .hud-slot { display: flex; flex: none; align-items: center; gap: var(--wh-s2); pointer-events: auto; }
 /* wide: half of the dock's width (full form, then the compact form of the portal box) keeps the name plate and the ring clear of the tray */
 body { --dk-half: 0px; }
 body[data-layout="wide"] { --dk-half: 276px; }
 body[data-layout="wide"][data-density="short"] { --dk-half: 150px; }
-body[data-layout="wide"] .nametag { max-width: calc(50% - var(--dk-half) - var(--wh-sp-3)); }
+body[data-layout="wide"] .nametag { max-width: calc(50% - var(--dk-half) - var(--wh-s3)); }
 /* stack: the info row is a 56 high row 8 above the dock; an options bar REPLACES it (Cut, Snap) */
-body[data-layout="stack"] .hud-bottom { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-sp-2)); height: 56px; align-items: center; }
+body[data-layout="stack"] .hud-bottom { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-s2)); height: 56px; align-items: center; }
 body[data-layout="stack"]:is([data-tool="cut"], [data-tool="snap"]) .hud-bottom { display: none; }
 /* strip: [Name | Hoard | ring Open] along the bottom, the tools along the top */
 body[data-layout="strip"] .hud-bottom { bottom: calc(var(--safe-b) + 8px); height: 52px; align-items: center; }
@@ -78,7 +79,7 @@ body[data-layout="tiny"]:is([data-tool="cut"], [data-tool="snap"]) .meter-cluste
   flex: none;
   display: flex;
   align-items: center;
-  gap: var(--wh-sp-2);
+  gap: var(--wh-s2);
   padding: 4px 4px 4px 8px;
   border-radius: var(--wh-r-panel);
   pointer-events: none;
@@ -89,8 +90,8 @@ body[data-layout="tiny"]:is([data-tool="cut"], [data-tool="snap"]) .meter-cluste
   box-shadow: inset 0 1px 0 var(--wh-rim), var(--wh-e1); transition: box-shadow var(--k-fd-3) var(--wh-ease);
 }
 body[data-layout="tiny"] .meter { width: 40px; height: 40px; }
-body[data-layout="tiny"] .meter-cluster { padding: 2px 2px 2px 6px; gap: var(--wh-sp-2); }
-body[data-layout="tiny"] .k-btn.capsule-btn { min-width: 0; padding: 0 var(--wh-sp-3); }
+body[data-layout="tiny"] .meter-cluster { padding: 2px 2px 2px 6px; gap: var(--wh-s2); }
+body[data-layout="tiny"] .k-btn.capsule-btn { min-width: 0; padding: 0 var(--wh-s3); }
 .meter-svg { width: 100%; height: 100%; display: block; }
 .meter-track { fill: none; stroke: var(--k-track); stroke-width: 5; }
 .meter-fill { fill: none; stroke: var(--k-accent); stroke-width: 5; stroke-linecap: round; transition: stroke-dashoffset .4s ease-out; }
@@ -100,15 +101,13 @@ body[data-layout="tiny"] .k-btn.capsule-btn { min-width: 0; padding: 0 var(--wh-
 .meter[data-full="true"] .meter-glyph { fill: color-mix(in srgb, var(--k-accent) 55%, transparent); stroke: var(--k-accent); }
 .meter-count {
   position: absolute; right: -6px; top: -6px; min-width: 26px; padding: 2px 6px; border-radius: var(--wh-r-pill);
-  background: var(--k-accent); color: var(--k-ink); font: var(--wh-w-bold) var(--wh-fs-small)/1.25 var(--wh-font-ui); text-align: center;
+  background: var(--k-accent); color: var(--k-ink); font: var(--wh-fb-small); text-align: center;
 }
 .meter-count:empty { display: none; }
 .meter-cluster .meter-count { right: auto; left: -8px; top: -8px; }   /* the ring is the cluster's left half: the count badge sits on its outer corner, clear of the Open button */
-.meter-ready { display: none; position: absolute; inset: 0; place-items: center; font: var(--wh-w-bold) var(--wh-fs-label)/1 var(--wh-font-ui); color: var(--k-fg); letter-spacing: .02em; }
+.meter-ready { display: none; position: absolute; inset: 0; place-items: center; font: var(--wh-fb-label); color: var(--k-fg); letter-spacing: .02em; }
 body[data-calm="true"] .meter[data-full="true"] .meter-ready { display: grid; }
 body[data-calm="true"] .meter[data-full="true"] :is(.meter-glyph, .meter-seam) { opacity: 0; }
-.meter.pulse { animation: wh-pulse .4s ease-out 1; }
-@keyframes wh-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--wh-amber) 70%, transparent); } 100% { box-shadow: 0 0 0 16px transparent; } }
 .meter-cluster[data-state="resting"] .meter-fill, .meter-cluster[data-state="done"] .meter-fill { stroke: var(--k-fg-dim); }
 /* visible XP (FUN.md 2): the pending arc of a held squeeze or stretch (lighter, under the fill), the bank, the glow, the sparks */
 .meter-fill[data-instant="true"] { transition: none; }
@@ -126,12 +125,12 @@ body[data-calm="true"] .meter[data-full="true"] :is(.meter-glyph, .meter-seam) {
 }
 .meter-state {
   position: absolute; right: 0; bottom: calc(100% + 6px); width: max-content;
-  margin: 0; max-width: min(46vw, 260px); padding: 4px var(--wh-sp-3); border-radius: var(--wh-r-chip); text-align: right;
-  background: var(--k-container); border: 1px solid var(--k-edge-quiet);
+  margin: 0; max-width: min(46vw, 260px); padding: 4px var(--wh-s3); border-radius: var(--wh-r-chip); text-align: right;
+  background: var(--k-container); border: var(--k-bd-q);
   font: var(--wh-w-bold) var(--wh-fs-label)/1.3 var(--wh-font-ui); color: var(--k-fg);
 }
 .meter-state[hidden] { display: none; }
-.k-btn.capsule-btn { pointer-events: auto; padding: 0 var(--wh-sp-4); font-size: var(--wh-fs-lead); }   /* (compound: kit.css loads after this file and would win a tie) */
+.k-btn.capsule-btn { pointer-events: auto; padding: 0 var(--wh-s4); font-size: var(--wh-fs-lead); }   /* (compound: kit.css loads after this file and would win a tie) */
 .capsule-btn[data-ready="true"] {
   --k-sh: var(--k-gel-lip), var(--wh-e2), 0 0 0 3px color-mix(in srgb, var(--k-accent) 55%, transparent), 0 0 22px 2px color-mix(in srgb, var(--k-accent) 40%, transparent);
   animation: var(--k-an-breathe) 1.3s ease-in-out 2;   /* breathes twice, then the halo stays; Calm sets the name to none */
@@ -145,15 +144,15 @@ body[data-calm="true"] .meter[data-full="true"] :is(.meter-glyph, .meter-seam) {
 .hint {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-sp-4));
+  bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-s4));
   transform: translateX(calc(-50% + var(--hint-dx, 0px)));   /* --hint-dx: hudBinding.ts slides the pill clear of a waiting capsule */
   margin: 0;
   width: max-content;
   max-width: calc(100vw - 2 * var(--gutter) - var(--safe-l) - var(--safe-r));
-  padding: var(--wh-sp-2) var(--wh-sp-4);
+  padding: var(--wh-s2) var(--wh-s4);
   border-radius: var(--wh-r-pill);
   background: var(--k-container);   /* the kit's translucent container tone, no blur (the four glass containers are the top group, dock, info row and toast) */
-  border: 1px solid var(--k-edge-quiet);
+  border: var(--k-bd-q);
   box-shadow: var(--wh-e1);
   color: var(--k-fg);
   font: var(--wh-w-mid) var(--wh-fs-small)/1.3 var(--wh-font-ui);   /* 600: body weight (the 800 pill was 11 px wider and no longer slid clear of the capsule at 568x320) */
@@ -165,10 +164,10 @@ body[data-calm="true"] .meter[data-full="true"] :is(.meter-glyph, .meter-seam) {
 .hint[data-show="false"] { opacity: 0; transform: translate(calc(-50% + var(--hint-dx, 0px)), 8px); }
 .hint[data-yield="true"] { opacity: 0; }   /* no room beside the capsule on a tiny screen: the pill waits */
 body[data-ceremony] .hint, body[data-settings="open"] .hint, body[data-layout="stack"][data-offline="true"] .hint { opacity: 0; }   /* (stack, offline: the "Waiting for connection" chip stands where the pill ends) */
-body[data-layout="stack"] .hint { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-sp-2) + 56px + var(--wh-sp-2)); }
-body[data-layout="stack"][data-tall="true"][data-switch="true"] .hint { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-sp-2) + 56px + var(--wh-sp-2) + var(--wh-hit) + var(--wh-sp-2)); }
+body[data-layout="stack"] .hint { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-s2) + 56px + var(--wh-s2)); }
+body[data-layout="stack"][data-tall="true"][data-switch="true"] .hint { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-s2) + 56px + var(--wh-s2) + var(--wh-hit) + var(--wh-s2)); }
 @media (max-width: 380px) { body[data-layout="stack"] .hint { top: calc(var(--safe-t) + 64px); bottom: auto; } }   /* 320x568: y 64..100, under the top row */
-body[data-layout="strip"] .hint { bottom: calc(var(--safe-b) + 8px + 52px + var(--wh-sp-2)); padding: 7px var(--wh-sp-3); }
+body[data-layout="strip"] .hint { bottom: calc(var(--safe-b) + 8px + 52px + var(--wh-s2)); padding: 7px var(--wh-s3); }
 body[data-layout="tiny"] .hint { display: none; }
 
 /* the squishy's keyboard target (src/ui/playTarget.ts): invisible until it has keyboard focus, then a ring around the squishy */
@@ -188,9 +187,7 @@ body[data-phase="title"] .play-target, body[data-phase="error"] .play-target { v
   .nametag-line { flex-wrap: wrap; max-height: 16px; overflow: hidden; }
 }
 /* reduced motion: the HUD's part of the block that styles.css keeps for the title, panel and plate */
-body[data-calm="true"] .meter.pulse { animation: none; }
 @media (prefers-reduced-motion: reduce) {
-  .meter.pulse { animation: none !important; }
   .meter-fill { transition: none; }
   .meter, .meter-pending { transition-duration: .2s !important; transition-delay: 0s !important; }
   .sparks { display: none; }
@@ -206,8 +203,8 @@ body:not([data-calm="true"]) .hoard-btn[data-dot="true"] .hoard-btn-dot { animat
 @keyframes wh-dot { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--wh-coral) 55%, transparent); } 50% { box-shadow: 0 0 0 6px transparent; } }
 /* "Put back n" (squishies out of the Hoard on the mat): a kit button (hudBinding adds `k-btn`). In the strip layout it stands beside the Hoard button; elsewhere it hangs
    above the info row, right-aligned (the switcher is on the left) */
-.mat-chip { pointer-events: auto; padding: 0 var(--wh-sp-3); font-size: var(--wh-fs-small); }
-body:not([data-layout="strip"]) .mat-chip { position: absolute; right: 0; bottom: calc(100% + var(--wh-sp-2)); }
+.mat-chip { pointer-events: auto; padding: 0 var(--wh-s3); font-size: var(--wh-fs-small); }
+body:not([data-layout="strip"]) .mat-chip { position: absolute; right: 0; bottom: calc(100% + var(--wh-s2)); }
 .mat-chip-n { min-width: 22px; padding: 1px 6px; border-radius: 999px; background: var(--wh-amber); color: var(--wh-ink); font-size: var(--wh-fs-label); text-align: center; }
 @media (max-width: 380px) { .mat-chip > span:first-child { display: none; } }
 @media (prefers-reduced-motion: reduce) {
@@ -216,20 +213,20 @@ body:not([data-layout="strip"]) .mat-chip { position: absolute; right: 0; bottom
 
 /* ---------- the quick switcher (UI.md 4.2, R12): a row of round tier-rimmed buttons (wide, tall stack), or [<] 1/6 [>] folded (stack under 700 high);
    not drawn in strip and tiny ([ and ] stay). The rim is the double rim of the tiers: 3 px tier colour + 2 px ink, with the tier word in the button's name. ---------- */
-.qswitch { position: absolute; left: calc(var(--safe-l) + var(--gutter)); bottom: calc(var(--dk-bottom) + 72px); display: flex; gap: var(--wh-sp-2); pointer-events: auto; }
+.qswitch { position: absolute; left: calc(var(--safe-l) + var(--gutter)); bottom: calc(var(--dk-bottom) + 72px); display: flex; gap: var(--wh-s2); pointer-events: auto; }
 .qs-row { display: flex; gap: 6px; }
 .k-btn.qs-btn {
   --k-sh: 0 0 0 2px var(--k-ink), var(--wh-e1);
   width: var(--wh-hit); height: var(--wh-hit); padding: 0; border-radius: 50%; border: 3px solid var(--k-tier, var(--k-edge));
 }
 .qs-icon { width: 30px; height: 30px; }
-.qs-fold { display: none; align-items: center; gap: var(--wh-sp-1); }
-.qs-count { min-width: 3.2ch; text-align: center; font: var(--wh-w-bold) var(--wh-fs-small)/1 var(--wh-font-ui); color: var(--k-fg); font-variant-numeric: tabular-nums; }
+.qs-fold { display: none; align-items: center; gap: var(--wh-s1); }
+.qs-count { min-width: 3.2ch; text-align: center; font: var(--wh-fb-small-1); color: var(--k-fg); font-variant-numeric: tabular-nums; }
 body[data-layout="stack"]:not([data-tall="true"]) .qs-row { display: none; }
 body[data-layout="stack"]:not([data-tall="true"]) .qs-fold { display: flex; }
 /* the fold takes the free left of the top row (stack has no brand there): the info row cannot hold plate + fold + ring + Open at 320 */
 body[data-layout="stack"]:not([data-tall="true"]) .qswitch { top: calc(var(--safe-t) + 12px); bottom: auto; }
-body[data-layout="stack"][data-tall="true"] .qswitch { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-sp-2) + 56px + var(--wh-sp-2)); }   /* above the 56 high info row, which sits 8 above the dock */
+body[data-layout="stack"][data-tall="true"] .qswitch { bottom: calc(var(--dk-bottom) + var(--dk-h) + var(--wh-s2) + 56px + var(--wh-s2)); }   /* above the 56 high info row, which sits 8 above the dock */
 body[data-layout="strip"] .qswitch, body[data-layout="tiny"] .qswitch { display: none; }
 body[data-ceremony] .qswitch, body[data-hoard="open"] .qswitch, body[data-hoard="card"] .qswitch { visibility: hidden; }
 /* a phone: the five switcher buttons (44 px targets) and the ring's state line ("Squishies are resting, ...") share one height, so the
@@ -252,7 +249,8 @@ body[data-tool="cut"] .qswitch, body[data-tool="cut"] .hint, body[data-tool="sna
 
 /* ---------- Snap (photo mode): the brand, name plate, ring, hint, switcher and chip step aside (UI.md 4.1); the dock, its backdrop bar and the top buttons stay.
    The backdrop tint lies over the live canvas (its bar is optionsBar.css) ---------- */
-body[data-tool="snap"] :is(.hud-top .wordmark, .nametag, .meter-cluster, .qswitch, .mat-chip), body[data-tool="snap"] :is(.plate, .toast, .sparks, .net-banner, .play-target) { visibility: hidden; }
+body[data-tool="snap"] .hud-top .wordmark { position: absolute; clip-path: inset(50%); }
+body[data-tool="snap"] :is(.nametag, .meter-cluster, .qswitch, .mat-chip), body[data-tool="snap"] :is(.plate, .toast, .sparks, .net-banner, .play-target) { visibility: hidden; }
 .snap-tint { position: fixed; inset: 0; pointer-events: none; mix-blend-mode: soft-light; }
 .snap-tint[hidden] { display: none; }
 .snap-shade { position: fixed; inset: 0; z-index: var(--wh-z-dock); pointer-events: none !important; background: var(--wh-ink); opacity: 0; transition: opacity .22s ease-out; }

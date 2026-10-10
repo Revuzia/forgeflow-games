@@ -96,6 +96,7 @@ import { CutFx } from './cutfx.ts';
 import { createDecalGeometry } from './decals.ts';
 import { EnvHub, KEY_DIR, RIM_DIR } from './env.ts';
 import { FlashGovernor } from './flash.ts';
+import { LockFx } from './lockfx.ts';
 import { LOD_TUNING } from './lod.ts';
 import { Particles } from './particles.ts';
 import { QualityGovernor, TIERS } from './quality.ts';
@@ -110,7 +111,7 @@ type RoundTwo = Required<Pick<StageLike, 'addBody' | 'removeBody' | 'clearBodies
  * Stage B and CUT members (StageLike, optional there; every one implemented here): onStrand (B6 strand hook), setSafeInsets (HUD insets
  * for the capsule spot), matLayout (B1 offsets for 1..5 bodies), setCutSeam / partPieces / setBridge (CUT visuals). See src/contracts.ts.
  */
-export type StageExtras = Required<Pick<StageLike, 'matLayout' | 'setSafeInsets' | 'setCutSeam' | 'setBridge' | 'partPieces'>> & {
+export type StageExtras = Required<Pick<StageLike, 'matLayout' | 'setSafeInsets' | 'setCutSeam' | 'setBridge' | 'partPieces' | 'setLockMarkers'>> & {
   onStrand: ((bodyId: number, e: StrandEvent) => void) | null;
 };
 
@@ -127,6 +128,8 @@ export interface StageDev extends Omit<StageLike, keyof RoundTwo | keyof StageEx
     contextLost: boolean; pixelRatio: number; drawingBuffer: [number, number]; eyeLook: number[] | null;
     bodies: number; primary: number | null; ceremony: boolean; particles: number; calm: boolean; screenLight: number; capsule: boolean; cameraFx: { dist: number; yaw: number; pitch: number };
     particlesDropped: number; camScale: number; cut: { strands: number; bridges: number; glow: number };
+    /** LOCK: the ring markers drawn now (visible after easing) and the number of points the shell asked for in its last call. */
+    lockMarkers: number; lockWanted: number;
     /** SR2: the rows the shell reported to the framing (setSafeInsets; 0 until it did), and the band framing's state: the lens shift (NDC), its goal, the extent / band ratios, the camera scale it demands (0 = none). */
     insets: { top: number; right: number; bottom: number; left: number }; lens: { x: number; y: number; goalY: number; fitY: number; fitX: number; want: number; bodies: number };
     /** The standing capsule's table spot and size (null when none): the harness checks where it landed. */
@@ -213,6 +216,8 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
   const flash = new FlashGovernor();
   const cut = new CutFx(hub);          // CUT: parting strands and reconnect bridges (the seam glow is in each body's jelly)
   scene.add(cut.group);
+  const lockfx = new LockFx();         // LOCK: a thin ring at each locked lobe (setLockMarkers)
+  scene.add(lockfx.group);
 
   const governor = new QualityGovernor();
   let tier = governor.tier;
@@ -800,6 +805,10 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       void opts;
       for (const v of views) if (v.id === bodyId) { v.setSeam(plane, Number.isFinite(t) ? t : 0); return; }
     },
+    setLockMarkers(points) {   // (the shell's one array, rewritten in place: read here, never kept)
+      if (disposed) return;
+      lockfx.set(points);
+    },
     partPieces(aId, bId) {
       if (disposed) return;
       const a = viewById(aId), b = viewById(bId);
@@ -887,6 +896,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       const govK = (calm ? 0.5 : 1) * (flash.sinceFlash(time) < 1 ? 0.35 : 1);
       for (const v of views) v.glowK = govK;
       cut.update(d, govK);
+      lockfx.update(d, primary()?.proxy.restRadius ?? 0.5, govK, calm);
       // tack strands (stage B6) and the CUT parting strands -> the shell's strand voice
       const hook = stage.onStrand;
       if (hook) {
@@ -960,7 +970,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
       canvas.removeEventListener('webglcontextrestored', onRestored, false);
       while (views.length) removeView(views[views.length - 1]);
       discardCapsule(); discardRevealCapsule();
-      table.dispose(); quad.dispose(); screen.dispose(); particles.dispose(); cut.dispose();
+      table.dispose(); quad.dispose(); screen.dispose(); particles.dispose(); cut.dispose(); lockfx.dispose();
       hub.dispose();
       renderer.dispose();
     },
@@ -1003,7 +1013,7 @@ function buildStage(canvas: HTMLCanvasElement): StageLike & StageExtras {
             pixelRatio: renderer.getPixelRatio(), drawingBuffer: [canvas.width, canvas.height] as [number, number],
             eyeLook: p ? Array.from(p.face.lookOut) : null,
             bodies: views.length, primary: primaryId, ceremony: director.active, particles: particles.count, calm, screenLight: screen.lightAlpha, capsule: !!capsule || !!revealCap, cameraFx,
-            particlesDropped: particles.dropped, camScale, insets: { ...framer.ins }, lens: { x: framer.lensX, y: framer.lensY, goalY: framer.goalY, fitY: framer.fitY, fitX: framer.fitX, want: framer.wantScale, bodies: framer.bodies }, cut: { ...cut.live }, cap: capsule ? { x: capsule.pos.x, z: capsule.pos.z, size: capsule.size } : null, framerMs: devFramerMs,
+            particlesDropped: particles.dropped, camScale, insets: { ...framer.ins }, lens: { x: framer.lensX, y: framer.lensY, goalY: framer.goalY, fitY: framer.fitY, fitX: framer.fitX, want: framer.wantScale, bodies: framer.bodies }, cut: { ...cut.live }, lockMarkers: lockfx.shown, lockWanted: lockfx.wanted, cap: capsule ? { x: capsule.pos.x, z: capsule.pos.z, size: capsule.size } : null, framerMs: devFramerMs,
           };
         },
       },

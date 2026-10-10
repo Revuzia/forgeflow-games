@@ -139,6 +139,11 @@ export const TYPE = { label: 12, small: 14, body: 16, lead: 18, h3: 22, h2: 28, 
 export const WEIGHT = { mid: 600, bold: 800 } as const;
 export const LEADING = { body: 1.4, tight: 1.15 } as const;
 export const TRACKING_LABEL = '.08em';
+/** token key (without --wh-) -> [weight, size, line-height ('body' = LEADING.body, else a literal)]; the 9 `font` shorthands the stylesheets repeat most (the sheets that probes pin to explicit --wh-fs-* tokens, screens.css / photo.css / the .hint rule, keep the long form) */
+export const FONT_COMBOS: Record<string, readonly ['mid' | 'bold', keyof typeof TYPE, string]> = {
+  'fb-body': ['bold', 'body', '1.2'], 'fb-label': ['bold', 'label', '1'], 'fm-body': ['mid', 'body', 'body'], 'fb-small': ['bold', 'small', '1.25'],
+  'fb-small-3': ['bold', 'small', '1.3'], 'fb-small-11': ['bold', 'small', '1.1'], 'fm-small': ['mid', 'small', '1.3'], 'fb-lead': ['bold', 'lead', '1.2'], 'fb-small-1': ['bold', 'small', '1'],
+};
 /** Cap heights of the jelly display type (px; xl is fluid). */
 export const JELLY_CAPS = { sm: 24, md: 36, lg: 56, xl: 'clamp(64px, 12vw, 120px)' } as const;
 export const SPACE = [4, 8, 12, 16, 24, 32, 48] as const;
@@ -269,6 +274,8 @@ export function themeVars(): Record<string, string> {
   // type
   out['--wh-font-ui'] = FONT_STACK;
   out['--wh-font-mono'] = MONO_STACK;
+  // the `font` shorthands the sheets repeat, as ready-made tokens (weight size/line-height family): one short name instead of ~55 characters each time (the K05 byte cap counts them)
+  for (const [k, [w, s, lh]] of Object.entries(FONT_COMBOS)) out[`--wh-${k}`] = `${WEIGHT[w]} ${px(TYPE[s])}/${lh === 'body' ? LEADING.body : lh} ${FONT_STACK}`;
   for (const [k, v] of Object.entries(TYPE)) out[`--wh-fs-${k}`] = px(v);
   out['--wh-w-mid'] = String(WEIGHT.mid);
   out['--wh-w-bold'] = String(WEIGHT.bold);
@@ -277,7 +284,8 @@ export function themeVars(): Record<string, string> {
   out['--wh-track-label'] = TRACKING_LABEL;
   for (const [k, v] of Object.entries(JELLY_CAPS)) out[`--wh-cap-${k}`] = typeof v === 'number' ? px(v) : v;
   // space, shape, size
-  SPACE.forEach((v, i) => { out[`--wh-sp-${i + 1}`] = px(v); });
+  // (the spacing tokens are --wh-s1..--wh-s6: the most repeated custom property in the sheets, so the name is kept short; the K05 byte cap counts every character)
+  SPACE.forEach((v, i) => { out[`--wh-s${i + 1}`] = px(v); });
   out['--wh-gutter'] = px(GUTTER);
   out['--wh-gutter-narrow'] = px(GUTTER_NARROW);
   for (const [k, v] of Object.entries(RADII)) out[`--wh-r-${k}`] = px(v);

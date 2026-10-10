@@ -259,12 +259,15 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   };
   const openSettings = (from?: HTMLElement): Promise<boolean> => { if (hoard.isOpen) hoard.close(); return settingsHost.openAsync(from ?? hud.menuButton); };
   let guideBusy = false;   // one reading screen at a time (loading or open)
+  // focus comes back to where it was: the control named, else whatever held it when the screen was asked for (the squishy for the ? key; after a Menu row, the control the Menu itself gave it back to). The guides and Trophies share it (K04).
+  const openerFor = (from?: HTMLElement | null): HTMLElement => {
+    const here = document.activeElement;
+    return from ?? (here instanceof HTMLElement && here !== document.body && !here.closest('[inert]') ? here : hud.menuButton);
+  };
   const openGuide = async (id: 'howto' | 'credits', from?: HTMLElement): Promise<boolean> => {
     if (guideBusy) return false;
     guideBusy = true;
-    // focus comes back to where it was: the control named, else whatever held it when the screen was asked for (the squishy for the ? key; after a Menu row, the control the Menu itself gave it back to)
-    const here = document.activeElement;
-    const opener = from ?? (here instanceof HTMLElement && here !== document.body && !here.closest('[inert]') ? here : hud.menuButton);
+    const opener = openerFor(from);
     const timer = window.setTimeout(() => { if (opener instanceof HTMLButtonElement) opener.setAttribute('aria-busy', 'true'); }, 150);
     let m: Awaited<ReturnType<typeof loadScreens>>;
     try { m = await loadScreens(); } catch (e) { console.error(e); guideBusy = false; screenFailed(); return false; } finally { window.clearTimeout(timer); opener.removeAttribute('aria-busy'); }
@@ -282,7 +285,7 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
     switch (id) {
       case 'settings': return openSettings(from);
       case 'howto': case 'credits': return openGuide(id, from);
-      case 'trophies': void trophies?.open(from ?? null); return !!trophies;   // B6b: a later-* chunk (shell/trophiesOpen.ts)
+      case 'trophies': void trophies?.open(openerFor(from)); return !!trophies;   // B6b: a later-* chunk (shell/trophiesOpen.ts)
       default: return false;
     }
   };

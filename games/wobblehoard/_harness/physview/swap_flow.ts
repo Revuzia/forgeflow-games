@@ -13,7 +13,7 @@ const rotate = (q: Quat, v: V3): V3 => {
   const tx = q.y * v.z - q.z * v.y + q.w * v.x, ty = q.z * v.x - q.x * v.z + q.w * v.y, tz = q.x * v.y - q.y * v.x + q.w * v.z;
   return { x: v.x + 2 * (q.y * tz - q.z * ty), y: v.y + 2 * (q.z * tx - q.x * tz), z: v.z + 2 * (q.x * ty - q.y * tx) };
 };
-export const mkPlan = (): CutPlan => ({ rest: { n: { x: 0, y: 0, z: 0 }, d: 0 }, fa: 0, offA: { x: 0, y: 0, z: 0 }, offB: { x: 0, y: 0, z: 0 }, velA: { x: 0, y: 0, z: 0 }, velB: { x: 0, y: 0, z: 0 }, aspectA: 0, aspectB: 0, sound: false, soundPending: false, built: false });
+export const mkPlan = (): CutPlan => ({ acceptParts: true, rest: { n: { x: 0, y: 0, z: 0 }, d: 0 }, fa: 0, offA: { x: 0, y: 0, z: 0 }, offB: { x: 0, y: 0, z: 0 }, velA: { x: 0, y: 0, z: 0 }, velB: { x: 0, y: 0, z: 0 }, aspectA: 0, aspectB: 0, sound: false, soundPending: false, built: false });
 const lowestY = (b: SoftBody): number => { const P = b.positions; let m = Infinity; for (let i = 1; i < P.length; i += 3) if (P[i] < m) m = P[i]; return m; };
 
 /** A squishy being cut: its pieces with the region each was built with, all stepped together with `collide`. */
@@ -43,7 +43,7 @@ export function frame(sc: Scene, each?: () => void): void {
   each?.();
 }
 
-export interface CutResult { ok: boolean; why?: string; a?: SoftBody; b?: SoftBody; parent?: SoftBody; plan?: CutPlan; tilt?: number; lift?: number; liftedBy?: number; bornLow?: number[]; mode?: string; dv?: V3; v0?: V3; v1?: V3; depth?: number }
+export interface CutResult { ok: boolean; why?: string; a?: SoftBody; b?: SoftBody; kids?: SoftBody[]; parent?: SoftBody; plan?: CutPlan; tilt?: number; lift?: number; liftedBy?: number; bornLow?: number[]; mode?: string; dv?: V3; v0?: V3; v1?: V3; depth?: number }
 /** what a probe may look at the moment of the swap: the necked parent (still in the scene) and the two children placed in its pose, before the common lift */
 export interface SwapView { parent: SoftBody; a: SoftBody; b: SoftBody; plan: CutPlan; dv: V3; v0: V3; v1: V3; depth: number }
 /** The shell's flow for one cut of `parent` along the WORLD plane `plane`: plan, refuse, the neck with the pre-build, the swap (placed flush in the parent's pose with the lobes' velocities less what the neck
@@ -78,10 +78,13 @@ export function cutOnce(sc: Scene, parent: SoftBody, plane: CutPlane, how: { mod
   const planes = (base ? base.planes.slice() : []).concat([{ id, n: { ...plan.rest.n }, d: plan.rest.d }]);
   const lits = base && base.cells[0] ? base.cells[0] : [];
   const ra: PieceRegion = { planes, cells: [[...lits, id]] }, rb: PieceRegion = { planes, cells: [[...lits, -id]] };
-  let pa: SoftBody, pb: SoftBody;
+  // the bodies of the cut: the plain pair, or one per entry of the plan's partList (CUT3 leg 3; the shell builds them the same way)
+  const ent = p2.partList ? p2.partList.map((e) => ({ side: e.side, part: e.part, frac: pf * e.frac, off: { ...e.off }, vel: { ...e.vel } })) : [{ side: 0 as 0 | 1, part: undefined as number | undefined, frac: fA, off: { ...p2.offA }, vel: { ...p2.velA } }, { side: 1 as 0 | 1, part: undefined as number | undefined, frac: fB, off: { ...p2.offB }, vel: { ...p2.velB } }];
+  if (ent.some((e) => e.frac < 1e-6)) return { ok: false, why: 'small' };
+  const regionFor = (e: { side: 0 | 1; part: number | undefined }): PieceRegion => (e.part === undefined ? (e.side === 0 ? ra : rb) : { planes, cells: (e.side === 0 ? ra : rb).cells, part: e.part });
+  const kidBodies: SoftBody[] = [], kidRegions: PieceRegion[] = [];
   try {
-    pa = new SoftBody(sc.genome, { piece: { frac: fA, region: ra } } as never);
-    pb = new SoftBody(sc.genome, { piece: { frac: fB, region: rb } } as never);
+    for (const e of ent) { const rg = regionFor(e); kidRegions.push(rg); kidBodies.push(new SoftBody(sc.genome, { piece: { frac: e.frac, region: rg } } as never)); }
   } catch (e) { return { ok: false, why: 'build: ' + (e as Error).message }; }
   const place = (b: SoftBody, o: V3, v: V3): { at: V3; vel: V3 } => {
     const w = b.piece?.offset, r = rotate(q, w ? { x: w.x - po.x, y: w.y - po.y, z: w.z - po.z } : o);
@@ -89,30 +92,42 @@ export function cutOnce(sc: Scene, parent: SoftBody, plane: CutPlane, how: { mod
     return { at: { x: c.x + r.x, y: c.y + r.y, z: c.z + r.z }, vel: vv };
   };
   const parentLow = lowestY(parent);
-  const pA = place(pa, p2.offA, p2.velA), pB = place(pb, p2.offB, p2.velB);
-  pa.placeAt!(pA.at, pA.vel, q); pb.placeAt!(pB.at, pB.vel, q);
+  const pls = kidBodies.map((b, i) => place(b, ent[i].off, ent[i].vel));
+  kidBodies.forEach((b, i) => b.placeAt!(pls[i].at, pls[i].vel, q));
+  const iA = ent.findIndex((e) => e.side === 0), iB = ent.findIndex((e) => e.side === 1);
+  const pa = kidBodies[iA], pb = kidBodies[iB], pA = pls[iA], pB = pls[iB];
   if (how.onSwap) how.onSwap({ parent, a: pa, b: pb, plan: p2, dv, v0, v1, depth });
-  if (how.stopAtSwap) { parent.setNeck!(null, 0); return { ok: true, a: pa, b: pb, parent, plan: p2, tilt, lift: c.y - cy0, dv, v0, v1, depth }; }
-  const low = Math.min(lowestY(pa), lowestY(pb));
+  if (how.stopAtSwap) { parent.setNeck!(null, 0); return { ok: true, a: pa, b: pb, kids: kidBodies, parent, plan: p2, tilt, lift: c.y - cy0, dv, v0, v1, depth }; }
+  const low = Math.min(...kidBodies.map(lowestY));
+  const replaceAll = (): void => { kidBodies.forEach((b, i) => b.placeAt!(pls[i].at, pls[i].vel, q)); };
   let liftedBy = 0;
-  if (low < 0) { liftedBy = -low + 1e-4; pA.at.y += liftedBy; pB.at.y += liftedBy; pa.placeAt!(pA.at, pA.vel, q); pb.placeAt!(pB.at, pB.vel, q); }
+  if (low < 0) { liftedBy = -low + 1e-4; for (const p of pls) p.at.y += liftedBy; replaceAll(); }
   // (a proposal for the shell, CUT2 P4: a parent that stood on the table but whose centre the neck raised gives children born in the air; one common DROP puts the lower child's lowest particle on the table)
-  else if (how.drop && low > 2e-3 && parentLow < 0.005) { liftedBy = -(low - 1e-4); pA.at.y += liftedBy; pB.at.y += liftedBy; pa.placeAt!(pA.at, pA.vel, q); pb.placeAt!(pB.at, pB.vel, q); }
+  else if (how.drop && low > 2e-3 && parentLow < 0.005) { liftedBy = -(low - 1e-4); for (const p of pls) p.at.y += liftedBy; replaceAll(); }
   const n = rotate(q, plan.rest.n);
   const G = (PART_GAP[fam] ?? PART_GAP_DEFAULT) * (sc.wholeR / 0.5) * (how.calm ? 0.6 : 1);
   let mode: 'slide' | 'plop' | 'none' = Math.abs(n.y) < LEVEL_NY ? 'slide' : 'plop';
   if (mode === 'plop') {
-    const up = pA.at.y >= pB.at.y ? pA : pB, upBody = up === pA ? pa : pb;
-    up.at.y += Math.min(G, PLOP_MAX); upBody.placeAt!(up.at, up.vel, q); mode = 'none';
+    if (ent.length === 2) {
+      const up = pA.at.y >= pB.at.y ? pA : pB, upBody = up === pA ? pa : pb;
+      up.at.y += Math.min(G, PLOP_MAX); upBody.placeAt!(up.at, up.vel, q);
+    } else {
+      // several bodies: the side whose bodies stand higher on average lifts by one gap
+      let ya = 0, na = 0, yb = 0, nb = 0;
+      ent.forEach((e, i) => { if (e.side === 0) { ya += pls[i].at.y; na++; } else { yb += pls[i].at.y; nb++; } });
+      const upSide = ya / na >= yb / nb ? 0 : 1;
+      ent.forEach((e, i) => { if (e.side === upSide) { pls[i].at.y += Math.min(G, PLOP_MAX); kidBodies[i].placeAt!(pls[i].at, pls[i].vel, q); } });
+    }
+    mode = 'none';
   }
   // the scene: the parent leaves, the two children join (the shell's install)
-  sc.bodies = sc.bodies.filter((b) => b !== parent).concat([pa, pb]);
-  sc.regions.delete(parent); sc.regions.set(pa, ra); sc.regions.set(pb, rb);
-  if (mode === 'slide') {
+  sc.bodies = sc.bodies.filter((b) => b !== parent).concat(kidBodies);
+  sc.regions.delete(parent); kidBodies.forEach((b, i) => sc.regions.set(b, kidRegions[i]));
+  if (mode === 'slide' && ent.length === 2) {
     const l = Math.hypot(n.x, n.z) || 1, s = { x: n.x / l, y: 0, z: n.z / l };
     sc.parting = { a: pa, b: pb, ax: pA.at.x, ay: pA.at.y, az: pA.at.z, bx: pB.at.x, by: pB.at.y, bz: pB.at.z, s, G, dur: PART_S[fam] ?? PART_S_DEFAULT, t0: sc.t, mode: 'slide' };
   } else sc.parting = null;
-  return { ok: true, a: pa, b: pb, parent, plan: p2, tilt, lift: c.y - cy0, liftedBy, bornLow: [lowestY(pa), lowestY(pb)], mode: mode === 'slide' ? 'slide' : 'plop', dv, v0, v1, depth };
+  return { ok: true, a: pa, b: pb, kids: kidBodies, parent, plan: p2, tilt, lift: c.y - cy0, liftedBy, bornLow: [lowestY(pa), lowestY(pb)], mode: mode === 'slide' ? 'slide' : 'plop', dv, v0, v1, depth };
 }
 
 /** the world plane through the centre of `b` with a normal n (unit) shifted by off x restRadius along n */

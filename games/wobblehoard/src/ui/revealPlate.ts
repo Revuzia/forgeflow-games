@@ -11,6 +11,8 @@ import { jelly, setJelly } from './jelly/jelly.ts';
 import './jelly/jelly.css';
 
 export const PLATE_MS = 3600;
+/** the tier word's jelly size on the card form: it grows with the tier (the line form keeps the small optical size) */
+const TIER_JELLY: Record<TierName, 'sm' | 'md' | 'lg'> = { common: 'sm', uncommon: 'sm', rare: 'md', epic: 'md', legendary: 'md', mythic: 'lg' };
 
 export interface RevealPlateInfo { species: string; tier: TierName; isNew: boolean; copies: number; tierUp: boolean; nickname: string | null }
 
@@ -47,7 +49,10 @@ export function createRevealPlate(root: HTMLElement): RevealPlate {
       chip.textContent = i.isNew ? 'NEW' : `x${Math.max(2, i.copies)} spare`;
       chip.dataset.kind = i.isNew ? 'new' : 'spare';
       name.textContent = i.species;
-      setJelly(tier, tierLabel(i.tier), { tone: i.tier, size: 'sm' });
+      // the LINE form (hoard.css): tiny, strip, the portal's desktop box and a short phone get ONE line over the dock row; tall and roomy screens get the tier-scaled card
+      const b = document.body.dataset, line = b.layout === 'tiny' || b.layout === 'strip' || b.density === 'short' || (b.layout === 'stack' && b.tall !== 'true');
+      el.dataset.form = line ? 'line' : 'card';
+      setJelly(tier, tierLabel(i.tier), { tone: i.tier, size: line ? 'sm' : TIER_JELLY[i.tier] });
       nick.textContent = i.nickname ?? '';
       nick.hidden = !i.nickname;
       el.dataset.tier = i.tier;

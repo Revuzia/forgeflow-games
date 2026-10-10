@@ -406,6 +406,19 @@ export function starVolume(S: Source, cell: RegionCell, cx: number, cy: number, 
   out[0] = (all * w) / 3; out[1] = all > 0 ? reached / all : 0;
 }
 
+/** CUT3 leg 3: the volume of the region that straight rays from c reach (the interval that starts at the origin of each ray), ray quadrature over nDirs directions: the part of a region made of
+ *  several separate parts that holds c, as far as it is star-shaped about c. 0 when c is outside the region. */
+export function starReach(S: Source, cell: RegionCell, cx: number, cy: number, cz: number, nDirs: number): number {
+  const dirs = fibDirs(nDirs), w = (4 * Math.PI) / nDirs;
+  let reached = 0;
+  for (let i = 0; i < nDirs; i++) {
+    RAY[0] = cx; RAY[1] = cy; RAY[2] = cz; RAY[3] = dirs[i * 3]; RAY[4] = dirs[i * 3 + 1]; RAY[5] = dirs[i * 3 + 2];
+    const m = regionIntervals(S, cell);
+    if (m > 0 && IV[0] <= 1e-12) { const b = IV[1]; reached += b * b * b; }
+  }
+  return (reached * w) / 3;
+}
+
 /** phi(c) (4.1 step 3): the share of the region's volume V that straight rays from c reach, (1/V)(1/3) int exit(c, u)^3 dOmega over nDirs directions.
  *  0 when c is outside the region. */
 export function starShare(S: Source, cell: RegionCell, cx: number, cy: number, cz: number, V: number, nDirs: number): number {
@@ -439,9 +452,11 @@ export class CentreSearch {
   private readonly S: Source;
   private readonly cell: RegionCell;
   private readonly V: number;
-  constructor(S: Source, cell: RegionCell, V: number, start: Float64Array, startPhi: number) {
-    this.S = S; this.cell = cell; this.V = V;
-    this.best.set(start); this.phi = startPhi; this.step = 0.2 * S.R0;
+  private readonly radius: number;     // CUT3 leg 3: > 0 confines the scan to the cube of this half-width about `start` (a part of a region made of several parts: the scan must not wander into a sibling)
+  private readonly start0 = new Float64Array(3);
+  constructor(S: Source, cell: RegionCell, V: number, start: Float64Array, startPhi: number, radius = 0) {
+    this.S = S; this.cell = cell; this.V = V; this.radius = radius;
+    this.best.set(start); this.start0.set(start); this.phi = startPhi; this.step = radius > 0 ? Math.min(0.2 * S.R0, 0.5 * radius) : 0.2 * S.R0;
   }
   get sound(): boolean { return this.phi >= 0.95; }
   get done(): boolean { return this.phase === 2; }
@@ -454,7 +469,8 @@ export class CentreSearch {
         const i = this.idx + 1;
         // R3 sequence: fractional parts of i * (1/g, 1/g^2, 1/g^3), g the plastic number
         const a1 = 0.8191725133961645, a2 = 0.6710436067037893, a3 = 0.5497004779019703;
-        const x = box[0] + (box[3] - box[0]) * ((0.5 + a1 * i) % 1), y = box[1] + (box[4] - box[1]) * ((0.5 + a2 * i) % 1), z = box[2] + (box[5] - box[2]) * ((0.5 + a3 * i) % 1);
+        let x = box[0] + (box[3] - box[0]) * ((0.5 + a1 * i) % 1), y = box[1] + (box[4] - box[1]) * ((0.5 + a2 * i) % 1), z = box[2] + (box[5] - box[2]) * ((0.5 + a3 * i) % 1);
+        if (this.radius > 0) { const r = this.radius, s0 = this.start0; x = s0[0] + r * (2 * ((0.5 + a1 * i) % 1) - 1); y = s0[1] + r * (2 * ((0.5 + a2 * i) % 1) - 1); z = s0[2] + r * (2 * ((0.5 + a3 * i) % 1) - 1); }
         this.idx++;
         if (insideCell(this.cell, x, y, z) && insideS(S, x, y, z)) {
           const p = this.eval(x, y, z); budget--;

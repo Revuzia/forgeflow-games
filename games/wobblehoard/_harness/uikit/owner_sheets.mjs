@@ -138,7 +138,7 @@ async function openGame(size) {
       document.addEventListener('DOMContentLoaded', () => {
         document.documentElement.setAttribute('dir', 'rtl');
         const st = document.createElement('style');   // (the page's own CSP forbids this in production; the dev server allows it. Arial-only text, as K03 asks)
-        st.textContent = ':root, body, button, input, select { --wh-font: Arial, sans-serif !important; --wh-font-ui: Arial, sans-serif !important; font-family: Arial, sans-serif !important; }';
+        st.textContent = ':root, body, button, input, select { --wh-font: Arial, sans-serif !important; --wh-font-ui: Arial, sans-serif !important; font-family: Arial, sans-serif !important; } *, *::before, *::after { font-family: Arial, sans-serif !important; }';   /* (the universal rule: the sheets' ready-made font tokens, --wh-fb-body and the like, carry their family, so the --wh-font-ui override alone no longer reaches them) */
         document.head.append(st);
       });
       void long;

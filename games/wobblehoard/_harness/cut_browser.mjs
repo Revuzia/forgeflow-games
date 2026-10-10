@@ -5,6 +5,8 @@
 // Sections: level (a horizontal swipe on gel, putty, sticky, foam: the upper piece stays), part (X19: the scripted parting reaches G +-20 % by PART_S and holds to 4 s),
 //           x03 (X03' the first Split in two leaves an eye on each half, from three camera yaws), x11 (X11 a swipe through an eye), x12 (X12 nested cuts up to the limit),
 //           x04 (X04 Reconnect all is the exact original + X06 leg 1), x25 (X25 a drag in the Cut tool never joins), join (a REAL drag joins the group under the lowest common ancestor at any count),
+//           u04 (CUT3 U04: the real Split in two button up to the safety ceiling, the kind line, the bar, Reconnect all, the tool cuts again; --pieces=N, --vp=phone),
+//           tips (CUT3 U02 / U03: REAL swipes across the tips of a star, the tips fall and rest, one swipe across several tips, 960x600 and 390x844; --sp, --tips=N, --watch=S),
 //           u05 (CUT3 U05 Minis to N minis, every one with its full face, --minis=N), u07 (CUT3 U07 nothing pays the meter, the Hoard leave reconnects first, --pieces=N); X05 / X06 gesture / X10 keyboard are in browser_shell.mjs cut-real / cut-x
 // CUT3 (2026-10-09): there is no piece limit any more; the safety ceiling PIECE_CEILING (64) is read from src/shell/cut.ts. The physics lifted its 1/8 clamp the same day, so the nested rows press NEST_PRESSES times (5: six pieces, as the
 // original X12); 20 presses on the real bodies are cutter_checks --only=u01, 24 minis u05 here; the ceiling itself is reached on mock bodies (shellview/cut_mock_checks.ts).
@@ -493,7 +495,7 @@ async function main() {
       await context.close();
     });
 
-    // ---------------------------------------------------------------- x05: X05 leave paths with MANY pieces on the real stack: a quick switch, hidden over 60 s (and 30 s keeps the pieces), a reload: each comes back whole; nothing about pieces is stored
+    // ---------------------------------------------------------------- x05: X05 leave paths with MANY pieces on the real stack: hidden over 60 s (and 30 s keeps the pieces), a reload: each comes back whole (the Hoard leave is u07; a quick switch needs a second squishy in the Hoard and is browser_shell.mjs cut-real); nothing about pieces is stored
     await section('x05', async () => {
       const { page, context, w } = await open();
       watches.push(['x05', w]);
@@ -511,13 +513,6 @@ async function main() {
         return (await tools(page)).pieces;
       };
       await arrive(page, 'dollop');
-      const k1 = await cutTo();
-      const id0 = await page.evaluate(() => window.__WH__.shell.identity().itemId);
-      await page.evaluate(() => window.__WH__.resume());
-      await page.evaluate(() => document.querySelector('#wh-play')?.focus());
-      await page.keyboard.press(']'); await settle(page); await sleep(300);
-      const tsw = await tools(page), id1 = await page.evaluate(() => window.__WH__.shell.identity().itemId);
-      check(`X05 (${N} pieces): a quick switch reconnects at once: the new squishy is whole, no piece left on the mat`, k1 === N && id1 !== id0 && tsw.pieces === 1 && tsw.extras === 0, JSON.stringify({ k1, id0, id1, pieces: tsw.pieces, extras: tsw.extras }));
       const hide = async (ms) => {
         await page.evaluate(() => { Object.defineProperty(document, 'visibilityState', { get: () => 'hidden', configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
         await page.evaluate((m) => window.__skewClock(m), ms);
@@ -609,6 +604,163 @@ async function main() {
       const stored = await page.evaluate(() => Object.keys(localStorage).filter((k) => /"(piece|pieces|chunk|cutNormal|region|cells|planes)"/.test(localStorage.getItem(k) ?? '')));
       const items1 = await page.evaluate(() => window.__WH__.shell.hoardState().items.length);
       check(`U07 (real stack): opening the Hoard with ${tN.pieces} pieces reconnects first (one piece, nothing on the mat), the Hoard lists no piece (${items0} -> ${items1} squishies), nothing about pieces is stored`, th.pieces === 1 && th.extras === 0 && items0 === items1 && stored.length === 0, JSON.stringify({ pieces: th.pieces, extras: th.extras, items: [items0, items1], stored }));
+      await context.close();
+    });
+
+    // ---------------------------------------------------------------- tips (CUT3 U02 / U03, the owner's request of 2026-10-09): REAL swipes across the tips of a star; the tips fall; 960x600 and 390x844
+    // The swipe is made the way a player makes it (the dev hook's tipSwipe / multiSwipe give the screen line, the mouse draws it); the physics is stepped (pause + step), so the numbers are those of cutter_checks --only=tips,u03 on the real stage.
+    // Species: --sp=a,b, else granulo (5 tips) and constello (8). --tips=N tips per species (2), --watch=S seconds each new piece is followed (6).
+    await section('tips', async () => {
+      const { recipeOf } = await import('../src/physics/shape.ts');
+      const { tipDirsOfRecipe } = await import('../src/shell/cutProbe.ts');
+      const SPS = SPF.length ? SPF : ['granulo', 'constello'];
+      const TIPS = Number((args.find((a) => a.startsWith('--tips=')) ?? '--tips=2').slice(7));
+      const WATCH = Number((args.find((a) => a.startsWith('--watch=')) ?? '--watch=6').slice(8));
+      /** follow the pieces `idx` for `secs` of sim time at 30 Hz: rise above the birth height, rebound after first touching the table, windowed speed (a quarter second), rest, and whether the centre stays on the screen */
+      const follow = (page, idx, secs) => page.evaluate(([ix, D]) => {
+        const wh = window.__WH__, vw = innerWidth, vh = innerHeight;
+        const ps0 = wh.shell.pieceStates();
+        const st = ix.map((i) => ({ i, low0: ps0[i].low, y0: ps0[i].y, rise: 0, tLand: -1, rebound: 0, tRest: -1, tCalm: 0, hist: [], speed: 0, nan: false, off: 0, last: ps0[i] }));
+        let t = 0;
+        for (let k = 1; k <= Math.round(D * 30); k++) {
+          wh.step(1 / 60, 2); t += 1 / 30;
+          const ps = wh.shell.pieceStates();
+          for (const s of st) {
+            const p = ps[s.i]; s.last = p;
+            if (!Number.isFinite(p.low) || !Number.isFinite(p.y)) s.nan = true;
+            s.rise = Math.max(s.rise, p.y - s.y0);
+            s.hist.push([p.x, p.y, p.z]); if (s.hist.length > 9) s.hist.shift();
+            const h0 = s.hist[0];
+            s.speed = s.hist.length >= 9 ? Math.hypot(p.x - h0[0], p.y - h0[1], p.z - h0[2]) / (8 / 30) : 99;
+            if (s.speed < 0.12) { s.tCalm += 1 / 30; if (s.tRest < 0 && s.tCalm >= 0.5) s.tRest = t - 0.5; } else { s.tCalm = 0; s.tRest = -1; }
+            if (s.tLand < 0 && p.low <= 0.004) s.tLand = t; else if (s.tLand >= 0 && t >= s.tLand + 0.05) s.rebound = Math.max(s.rebound, p.low);
+            if (p.sx < 0 || p.sx > vw || p.sy < 0 || p.sy > vh) s.off++;
+          }
+        }
+        return st.map((s) => ({ i: s.i, frac: s.last.frac, born: s.low0, rise: s.rise, tLand: s.tLand, rebound: s.rebound, tRest: s.tRest, speed: s.speed, endLow: s.last.low, nan: s.nan, offFrames: s.off, sx: s.last.sx, sy: s.last.sy }));
+      }, [idx, secs]);
+      const results2 = [];
+      const VPS = (args.find((a) => a.startsWith('--vp=')) ?? '').slice(5);   // --vp=phone | 960: one viewport only
+      for (const [label, ctx] of [['960x600', SMALL], ['390x844', PHONE]].filter(([l]) => !VPS || (VPS === 'phone' ? l === '390x844' : l === '960x600'))) {
+        const { page, context, w } = await open({ ctx });
+        watches.push(['tips ' + label, w]);
+        for (const sp of SPS) {
+          await arrive(page, sp);
+          const dirs = tipDirsOfRecipe(recipeOf(sp).features);
+          let took = 0;
+          for (const dir of dirs) {
+            if (took >= TIPS) break;
+            const sw = await page.evaluate((d) => window.__WH__.shell.tipSwipe(d), dir);
+            if (!sw) continue;
+            const n0 = (await tools(page)).pieces;
+            await mouseSwipe(page, sw.x0, sw.y0, sw.x1, sw.y1);
+            const ts = await stepUntil(page, `(wh) => wh.shell.tools().pieces > ${n0} && !wh.shell.tools().busy`, 3, 1 / 60);
+            const t1 = await tools(page), info = await page.evaluate(() => window.__WH__.shell.cutInfo());
+            if (ts < 0) { check(`tips ${label} ${sp}: the swipe across a tip cut it`, false, `no swap in 3 s; pieces ${t1.pieces}; ${await live(page)}`); continue; }
+            took++;
+            const ps = await page.evaluate(() => window.__WH__.shell.pieceStates());
+            const big = Math.max(...ps.map((p) => p.frac)), tipIdx = ps.map((p, i) => [p, i]).filter(([p]) => p.frac < 0.5 * big).map(([, i]) => i);
+            const sum = t1.fracs.reduce((a, b) => a + b, 0);
+            await sleep(450);   // (the announcer merges a burst of lines inside 250 ms and writes 30 ms later, in wall-clock time)
+            const line = (await page.evaluate(() => window.__liveLog.slice(-4))).join(' | ');
+            const views = await page.evaluate(() => window.__WH__.shell.stageViews());
+            const F = await follow(page, tipIdx.length ? tipIdx : [ps.length - 1], WATCH);
+            results2.push({ label, sp, tip: took, pieces: t1.pieces, fracs: t1.fracs.map((f) => +f.toFixed(4)), F });
+            check(`tips ${label} ${sp} tip ${took}: a REAL swipe across a tip takes it off as its own piece: ${n0} -> ${t1.pieces} pieces (${info.lastParts} made), shares sum to 1 (1e-9), the line says "Cut into ${t1.pieces} pieces.", one view per piece`,
+              t1.pieces > n0 && Math.abs(sum - 1) < 1e-9 && line.includes(`Cut into ${t1.pieces} pieces.`) && views && views.total === t1.pieces, `${t1.fracs.map((f) => f.toFixed(4)).join(' + ')}; views ${JSON.stringify(views)}; log ${line}`);
+            for (const x of F) {
+              check(`tips ${label} ${sp} tip ${took}: the tip (share ${f3(x.frac)}, born ${f3(x.born)} m up) falls and rests: never rises above its birth by more than 0.06 m (${f3(x.rise)}), rebounds at most 0.06 m after landing on the table (${x.tLand < 0 ? 'perched on another piece' : f3(x.rebound)}), at rest within ${WATCH} s (${x.tRest < 0 ? 'NOT' : 'from ' + f3(x.tRest) + ' s'}, ${f3(x.speed)} m/s), no NaN, its centre stays on the screen (${x.offFrames} frames off)`,
+                x.rise <= 0.06 && (x.tLand < 0 || x.rebound <= 0.06) && x.tRest >= 0 && !x.nan && x.offFrames === 0, `ends ${f3(x.endLow)} m up at screen (${Math.round(x.sx)}, ${Math.round(x.sy)})`);
+            }
+            if (took === 1) await shot(page, `tips_${label}_${sp}_tip1`);
+          }
+          // U03: ONE swipe across several tips
+          await page.evaluate(() => document.querySelector('.cutbar [data-key="join"]')?.click());
+          await stepUntil(page, `(wh) => wh.shell.tools().pieces === 1 && !wh.shell.tools().busy`, 6, 0.1);
+          await arrive(page, sp);
+          const ms = await page.evaluate(() => window.__WH__.shell.multiSwipe());
+          const vpLabel = label;
+          if (!ms) { console.log(`   ${label} ${sp}: no swipe leaves 3 separate parts: U03 skipped`); }
+          else {
+            await mouseSwipe(page, ms.x0, ms.y0, ms.x1, ms.y1);
+            const ts = await stepUntil(page, `(wh) => wh.shell.tools().pieces > 1 && !wh.shell.tools().busy`, 3, 1 / 60);
+            const t1 = await tools(page), info = await page.evaluate(() => window.__WH__.shell.cutInfo()), sum = t1.fracs.reduce((a, b) => a + b, 0);
+            const ps = await page.evaluate(() => window.__WH__.shell.pieceStates());
+            await sleep(450);
+            const F = await follow(page, ps.map((_, i) => i), WATCH);
+            const line = (await page.evaluate(() => window.__liveLog.slice(-4))).join(' | ');
+            check(`tips ${label} ${sp} U03: ONE real swipe across several tips makes ${ms.parts} pieces in one swap (the independent count of parts on the pre-cut mesh), "Cut into ${ms.parts} pieces.", shares sum to 1 (1e-9), every piece falls without rising more than 0.06 m above its birth, all at rest within ${WATCH} s, all on the screen`,
+              ts >= 0 && t1.pieces === ms.parts && info.lastParts === ms.parts && Math.abs(sum - 1) < 1e-9 && line.includes(`Cut into ${ms.parts} pieces.`) && F.every((x) => x.rise <= 0.06 && x.tRest >= 0 && !x.nan && x.offFrames === 0),
+              `pieces ${t1.pieces} of ${ms.parts}; the swipe answered ${info.lastResult} (${Math.round(ms.x0)},${Math.round(ms.y0)} to ${Math.round(ms.x1)},${Math.round(ms.y1)} on ${vpLabel}); ${t1.fracs.map((f) => f.toFixed(4)).join(' + ')}; rise ${F.map((x) => f3(x.rise)).join('/')}; rest ${F.map((x) => (x.tRest < 0 ? 'NO' : f3(x.tRest))).join('/')}; off ${F.map((x) => x.offFrames).join('/')}`);
+            await shot(page, `tips_${label}_${sp}_multi`);
+            // the middle can be cut further, then Reconnect all is whole
+            await page.evaluate(() => window.__WH__.resume());
+            await page.evaluate(() => document.querySelector('.cutbar [data-key="split"]')?.click());
+            await page.evaluate(() => window.__WH__.pause());
+            await cutIdle(page, 4); await stepSim(page, 1);
+            const t2 = await tools(page);
+            await page.evaluate(() => window.__WH__.resume());
+            await page.evaluate(() => document.querySelector('.cutbar [data-key="join"]')?.click());
+            await page.evaluate(() => window.__WH__.pause());
+            const back = await stepUntil(page, `(wh) => wh.shell.tools().pieces === 1 && !wh.shell.tools().busy`, 8, 0.1);
+            check(`tips ${label} ${sp}: after the tips the middle can be cut further (Split in two: ${t1.pieces} -> ${t2.pieces} pieces) and Reconnect all ends whole`, t2.pieces > t1.pieces && back >= 0 && (await tools(page)).pieces === 1, `pieces ${t2.pieces} -> ${(await tools(page)).pieces}`);
+          }
+        }
+        await context.close();
+      }
+      writeFileSync(resolve(REPORTS, 'cut_browser_tips.json'), JSON.stringify(results2, null, 1));
+    });
+
+    // ---------------------------------------------------------------- u04 (CUT3 U04 on the real stack): up to the safety ceiling by the real Split in two button; the kind line; the bar; Reconnect all; the Cut tool works again
+    // --pieces=N presses N - 1 times (64 by default = the ceiling); --vp=phone uses the 390x844 phone. Every piece must stay on the screen (SR2 framing is RENDER's, measured here), no NaN, 0 console errors.
+    await section('u04', async () => {
+      const N = Number((args.find((a) => a.startsWith('--pieces=')) ?? '--pieces=6').split('=')[1]);
+      const phone = args.includes('--vp=phone');
+      const { page, context, w } = await open({ ctx: phone ? PHONE : SMALL });
+      watches.push(['u04', w]);
+      await arrive(page, 'dollop');
+      const CEIL = N >= PIECE_CEILING ? PIECE_CEILING : N;   // fewer than 64 pieces: the ceiling is lowered to N by the dev hook (the real 64 is cutter_checks --only=u04 on real bodies and --pieces=64 here)
+      await page.evaluate((n) => window.__WH__.shell.setCutCeiling(n), CEIL === PIECE_CEILING ? null : CEIL);
+      const press = async () => {
+        await page.evaluate(() => window.__WH__.resume());
+        await page.evaluate(() => document.querySelector('.cutbar [data-key="split"]')?.click());
+        await page.evaluate(() => window.__WH__.pause());
+        await cutIdle(page, 5); await stepSim(page, 0.3);
+      };
+      const t0 = Date.now(), sizes = [];
+      for (let i = 0; i < N - 1; i++) {
+        await press();
+        if ((i + 2) % 16 === 0 && (i + 2) < N) { const ci = await page.evaluate(() => window.__WH__.shell.cutInfo()); sizes.push(`${ci.pieces}: ${ci.awakeParticles} of ${ci.particles} particles awake, ${ci.sleeping} asleep, planner ${ci.contact.pairs}/${ci.contact.naivePairs} pairs`); }
+      }
+      await stepSim(page, 2);
+      const tN = await tools(page), ciN = await page.evaluate(() => window.__WH__.shell.cutInfo());
+      const ps = await page.evaluate(() => window.__WH__.shell.pieceStates());
+      const vp = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }));
+      const off = ps.filter((p) => p.sx < 0 || p.sx > vp.w || p.sy < 0 || p.sy > vp.h).length;
+      const nan = ps.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isFinite(p.z));
+      console.log(`   ${tN.pieces} pieces in ${((Date.now() - t0) / 1000).toFixed(0)} s wall; ${sizes.join(' | ')}; ${ciN.awakeParticles} of ${ciN.particles} particles awake, ${ciN.sleeping} asleep`);
+      check(`U04 (real stack${phone ? ', phone' : ''}): ${N - 1} presses of the real Split in two button make ${N} pieces, shares sum to 1 (1e-9), no NaN, every piece's centre is on the screen (${off} off), one view per piece`,
+        tN.pieces === N && Math.abs(tN.fracs.reduce((a, b) => a + b, 0) - 1) < 1e-9 && !nan && off === 0 && (await page.evaluate(() => window.__WH__.shell.stageViews()))?.total === N, `off ${off}; ${tN.fracs.slice(0, 3).map((f) => f.toFixed(4)).join(' + ')} ...`);
+      await shot(page, `u04_${phone ? 'phone' : '960'}_${N}`);
+      {
+        // one more: the kind line in the live region and in the bar, Split in two disabled, the hit counted
+        await page.evaluate(() => window.__WH__.resume());
+        const disabled = await page.evaluate(() => { const b = document.querySelector('.cutbar [data-key="split"]'); return !!b && (b.disabled || b.getAttribute('aria-disabled') === 'true'); });
+        const hint = await page.evaluate(() => document.querySelector('.cutbar')?.textContent ?? '');
+        const kind = await page.evaluate(() => { window.__WH__.pause(); return window.__WH__.shell.cutSplit(); });
+        await page.evaluate(() => window.__WH__.resume()); await sleep(450);
+        const log = await page.evaluate(() => window.__liveLog.slice(-3).join(' | ')), ci = await page.evaluate(() => window.__WH__.shell.cutInfo());
+        check(`U04 (real stack): at the ceiling of ${CEIL} pieces the Cut bar says the kind line and disables Split in two, a press answers 'limit' with the line in the live region, the hit is counted (${ci.ceilingHits}), pieces stay ${ci.pieces}`,
+          disabled && /lot of pieces/.test(hint) && kind === 'limit' && /That's a lot of pieces! Reconnect some to keep cutting\./.test(log) && ci.ceilingHits >= 1 && ci.pieces === CEIL, `disabled ${disabled}; hint "${hint.slice(0, 90)}"; result ${kind}; log ${log.slice(-90)}`);
+      }
+      // Reconnect all by the real button: whole; the Cut tool cuts again
+      await page.evaluate(() => window.__WH__.resume());
+      await page.evaluate(() => document.querySelector('.cutbar [data-key="join"]')?.click());
+      await page.evaluate(() => window.__WH__.pause());
+      const back = await stepUntil(page, `(wh) => wh.shell.tools().pieces === 1 && !wh.shell.tools().busy`, 12, 0.1);
+      await press();
+      const t2 = await tools(page);
+      check(`U04 (real stack): Reconnect all from ${N} pieces ends whole (${back >= 0 ? back.toFixed(1) + ' s' : 'NOT'}) and the next Split in two cuts again (${t2.pieces} pieces)`, back >= 0 && t2.pieces === 2, `pieces ${t2.pieces}`);
       await context.close();
     });
 

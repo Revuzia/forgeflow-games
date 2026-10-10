@@ -11,41 +11,41 @@
    The instruction line (.opts-status) is drawn only where there is vertical room (a full desktop dock); everywhere else it is visually hidden, still in the tree
    as the reason (aria-describedby) of a control that is off. */
 
-.opts { position: relative; display: flex; flex-direction: column; gap: var(--wh-sp-1); min-width: 0; max-width: 100%; color: var(--k-fg); font-family: var(--wh-font-ui); }
-.opts-row { display: flex; align-items: center; gap: var(--wh-sp-2); min-width: 0; }
+.opts { position: relative; display: flex; flex-direction: column; gap: var(--wh-s1); min-width: 0; max-width: 100%; color: var(--k-fg); font-family: var(--wh-font-ui); }
+.opts-row { display: flex; align-items: center; gap: var(--wh-s2); min-width: 0; }
 .opts-row > * { flex: none; }
-.opts[data-wrap="true"] .opts-row { flex-wrap: wrap; justify-content: center; row-gap: var(--wh-sp-1); }
+.opts[data-wrap="true"] .opts-row { flex-wrap: wrap; justify-content: center; row-gap: var(--wh-s1); }
 .opts[data-wrap="true"] .snapbar-row { flex-basis: 100%; justify-content: center; }   /* Snap, wrapped: the swatches get a line, Save and Done the next */
 
 /* ---------- the instruction line and the count: visually hidden unless the dock is a full desktop one ---------- */
 .opts-status { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 body[data-layout="wide"]:not([data-density="short"]) .opts-status {
-  position: static; display: flex; align-items: baseline; justify-content: space-between; gap: var(--wh-sp-3);
-  width: 0; min-width: 100%; height: auto; margin: 0; padding: var(--wh-sp-1) var(--wh-sp-2) var(--wh-sp-1); overflow: visible; clip: auto; white-space: normal;
+  position: static; display: flex; align-items: baseline; justify-content: space-between; gap: var(--wh-s3);
+  width: 0; min-width: 100%; height: auto; margin: 0; padding: var(--wh-s1) var(--wh-s2) var(--wh-s1); overflow: visible; clip: auto; white-space: normal;
 }
-.opts-text { margin: 0; min-width: 0; font: var(--wh-w-bold) var(--wh-fs-small)/1.3 var(--wh-font-ui); color: var(--k-fg-dim); overflow-wrap: anywhere; }
-.opts-count { flex: none; font: var(--wh-w-bold) var(--wh-fs-small)/1.3 var(--wh-font-ui); color: var(--k-accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.opts-text { margin: 0; min-width: 0; font: var(--wh-fb-small-3); color: var(--k-fg-dim); overflow-wrap: anywhere; }
+.opts-count { flex: none; font: var(--wh-fb-small-3); color: var(--k-accent); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .opts-count:empty { display: none; }
 
 /* ---------- buttons ---------- */
 .opts-btn { flex: none; min-height: var(--wh-hit); }
 .opts[data-shed="true"] [data-key="done"] { display: none; }   /* strip, no room: the tray's Hand button is the way back (optionsBar.ts createOptionsFit) */
-.opts .k-gel { min-height: var(--wh-hit); padding: 0 var(--wh-sp-4); }
-body[data-layout="wide"]:not([data-density="short"]) .opts .k-gel { min-height: var(--wh-btn-h); padding: 0 var(--wh-sp-5); }
+.opts .k-gel { min-height: var(--wh-hit); padding: 0 var(--wh-s4); }
+body[data-layout="wide"]:not([data-density="short"]) .opts .k-gel { min-height: var(--wh-btn-h); padding: 0 var(--wh-s5); }
 .opts-btn > .k-icon { width: 20px; height: 20px; }
 .opts:is([data-labels="icon"], [data-labels="tight"]) .opts-btn--ic { width: var(--wh-hit); padding: 0; }
 /* (the labels that leave the picture but not the accessibility tree share base.css .sr-only) */
 
 /* ---------- the cut style: Clean cut | Minis (native radios in the kit's segmented control) ---------- */
 .opts-seg { --seg-face-h: 36px; position: relative; flex: none; grid-auto-columns: auto; gap: 4px; border-radius: var(--wh-r-btn); }
-.opts-seg .k-seg-face { min-height: var(--seg-face-h); padding: 0 var(--wh-sp-3); border-radius: var(--wh-r-chip); white-space: nowrap; }
+.opts-seg .k-seg-face { min-height: var(--seg-face-h); padding: 0 var(--wh-s3); border-radius: var(--wh-r-chip); white-space: nowrap; }
 .opts-seg .k-seg-input { top: -4px; bottom: -4px; height: auto; left: -2px; right: -2px; width: auto; }   /* a 36 high face keeps a 44 high hit box */
 .opts[data-labels="tight"] .opts-seg { gap: 0; }
 .opts[data-labels="tight"] .opts-seg .k-seg-face { width: var(--wh-hit); padding: 0; }   /* 44 wide faces side by side: each keeps a whole 44 wide hit box (K02: 36 + a 4 px gap overlapped the neighbour's) */
 .opts[data-labels="tight"] .opts-seg .k-seg-input { left: 0; right: 0; }
 /* tight is the narrowest a bar gets (a strip slot is 274 px at 568x320): smaller gaps, the gel's padding trimmed */
-.opts[data-labels="tight"] .opts-row { gap: calc(var(--wh-sp-2) - 2px); }
-.opts[data-labels="tight"] .opts-btn:not(.opts-btn--ic) { padding: 0 var(--wh-sp-3); }
+.opts[data-labels="tight"] .opts-row { gap: calc(var(--wh-s2) - 2px); }
+.opts[data-labels="tight"] .opts-btn:not(.opts-btn--ic) { padding: 0 var(--wh-s3); }
 .opts-lock { position: absolute; z-index: 2; right: -6px; top: -8px; display: none; place-items: center; width: 20px; height: 20px; border-radius: 50%; pointer-events: none;
   color: var(--k-fg); background: var(--k-surface-hi); border: 1px solid var(--k-edge); }
 .opts-lock .k-icon { width: 12px; height: 12px; }
@@ -60,9 +60,9 @@ body[data-layout="wide"]:not([data-density="short"]) .opts .k-gel { min-height: 
 }
 
 /* ---------- Snap: backdrop swatches ---------- */
-.snapbar-row { display: flex; align-items: center; gap: var(--wh-sp-2); min-width: 0; }
-.snap-tints { display: flex; gap: var(--wh-sp-1); }
-.snap-tint-btn { gap: var(--wh-sp-2); padding: 0 var(--wh-sp-3) 0 var(--wh-sp-2); }
+.snapbar-row { display: flex; align-items: center; gap: var(--wh-s2); min-width: 0; }
+.snap-tints { display: flex; gap: var(--wh-s1); }
+.snap-tint-btn { gap: var(--wh-s2); padding: 0 var(--wh-s3) 0 var(--wh-s2); }
 .opts:not([data-labels="long"]) .snap-tint-btn { width: var(--wh-hit); padding: 0; }
 .snap-swatch {
   flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--k-fg);

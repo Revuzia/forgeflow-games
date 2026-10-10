@@ -32,7 +32,7 @@ body[data-layout="tiny"] { --dk-h: 44px; --dk-b: 6px; --dk-opt-h: 44px; --dk-res
 .dock {
   --dk-pad: 7px; --dk-bar-h: 64px; --dk-tool-h: 48px;
   position: absolute; z-index: var(--wh-z-dock); left: 0; right: 0; bottom: var(--dk-bottom);
-  display: flex; flex-direction: column-reverse; align-items: center; gap: var(--wh-sp-2);   /* DOM: tray, attachment; the attachment sits ABOVE the tray */
+  display: flex; flex-direction: column-reverse; align-items: center; gap: var(--wh-s2);   /* DOM: tray, attachment; the attachment sits ABOVE the tray */
   padding: 0 calc(var(--dk-inset-r) + var(--k-gutter, 16px)) 0 calc(var(--dk-inset-l) + var(--k-gutter, 16px));
   pointer-events: none;
 }
@@ -51,21 +51,21 @@ body[data-layout="tiny"] .dock[data-open="true"] { padding-right: calc(var(--dk-
 
 /* ---- the tray ---- */
 .dock-bar {
-  display: flex; align-items: center; gap: var(--wh-sp-1); min-width: 0; max-width: 100%; height: var(--dk-bar-h); padding: 0 var(--dk-pad);
+  display: flex; align-items: center; gap: var(--wh-s1); min-width: 0; max-width: 100%; height: var(--dk-bar-h); padding: 0 var(--dk-pad);
   border-radius: var(--wh-r-panel); box-shadow: inset 0 1px 0 var(--wh-rim), var(--wh-e2);
 }
-.dock[data-form="full"] .dock-bar { gap: var(--wh-sp-2); }
-.dock[data-form="bare"] .dock-bar { --k-backdrop: none; gap: var(--wh-sp-1); padding: 0; background: none; border: 0; box-shadow: none; border-radius: 0; }
+.dock[data-form="full"] .dock-bar { gap: var(--wh-s2); }
+.dock[data-form="bare"] .dock-bar { --k-backdrop: none; gap: var(--wh-s1); padding: 0; background: none; border: 0; box-shadow: none; border-radius: 0; }
 .dock-group { display: flex; align-items: center; flex: none; }
 .dock-group:empty, .dock-group:empty + .dock-sep { display: none; }
-.dock-sep { flex: none; align-self: center; width: 1px; height: 24px; margin: 0 var(--wh-sp-1); background: var(--k-edge-quiet); }
+.dock-sep { flex: none; align-self: center; width: 1px; height: 24px; margin: 0 var(--wh-s1); background: var(--k-edge-quiet); }
 .dock[data-form="bare"] .dock-sep { display: none; }
-.dock-tools { display: flex; align-items: center; gap: var(--wh-sp-1); min-width: 0; }
-.dock[data-form="full"] .dock-tools { gap: var(--wh-sp-2); }
+.dock-tools { display: flex; align-items: center; gap: var(--wh-s1); min-width: 0; }
+.dock[data-form="full"] .dock-tools { gap: var(--wh-s2); }
 
 /* ---- a tool, and the two halves of the Table | Float pair (the same button: opaque surface, the amber ring and warm tint when selected) ---- */
 .dock-tool, .dock-grav-opt { flex: none; min-height: var(--dk-tool-h); }
-.dock[data-form="full"] :is(.dock-tool, .dock-grav-opt) { padding: 0 var(--wh-sp-3); gap: var(--wh-sp-2); }
+.dock[data-form="full"] :is(.dock-tool, .dock-grav-opt) { padding: 0 var(--wh-s3); gap: var(--wh-s2); }
 .dock[data-form="full"] .dock-tool-label { font-size: var(--wh-fs-body); }
 .dock:not([data-form="full"]) :is(.dock-tool, .dock-grav-opt) { width: var(--wh-hit); padding: 0; }
 /* compact and bare: the label leaves the picture, never the accessibility tree */
@@ -79,16 +79,16 @@ body[data-layout="tiny"] .dock[data-open="true"] { padding-right: calc(var(--dk-
 
 /* ---- the Hoard button joins the dock (its DOM is ui/hoard/panel.ts's: .hoard-btn > svg.hoard-glyph + .hoard-btn-text > .hoard-btn-word + .hoard-btn-count, .hoard-btn-dot) ---- */
 .dock-hoard.hoard-btn {
-  flex: none; min-height: var(--dk-tool-h, var(--wh-hit));   /* (the strip's bottom row holds this button outside any .dock: 44 px there too) */ padding: 0 var(--wh-sp-3); gap: var(--wh-sp-2); box-shadow: var(--k-sh);
+  flex: none; min-height: var(--dk-tool-h, var(--wh-hit));   /* (the strip's bottom row holds this button outside any .dock: 44 px there too) */ padding: 0 var(--wh-s3); gap: var(--wh-s2); box-shadow: var(--k-sh);
   color: var(--k-fg); background: var(--k-surface); border: 1px solid var(--k-edge); border-radius: var(--wh-r-btn);
-  font: var(--wh-w-bold) var(--wh-fs-small)/1.1 var(--wh-font-ui);
+  font: var(--wh-fb-small-11);
 }
 .dock-hoard.hoard-btn[aria-expanded="true"] { --k-sh: inset 0 0 0 1px var(--k-sel-edge), var(--wh-e1); background: var(--k-sel-fill); border-color: var(--k-sel-edge); }
 .dock-hoard .hoard-glyph { width: 24px; height: 24px; }
 .dock-hoard .hoard-btn-text { display: grid; gap: 1px; line-height: 1.1; text-align: left; }
 .dock-hoard .hoard-btn-word { font-size: var(--wh-fs-body); }
 .dock-hoard .hoard-btn-count { display: block; font-size: var(--wh-fs-label); font-weight: var(--wh-w-bold); color: var(--k-fg-dim); font-variant-numeric: tabular-nums; }
-.dock[data-form="compact"] .dock-hoard.hoard-btn { padding: 0 var(--wh-sp-2); }
+.dock[data-form="compact"] .dock-hoard.hoard-btn { padding: 0 var(--wh-s2); }
 /* tiny (bare), and the tray too wide for the pair (toolbar.ts fit: the Hoard button gives its count away first; its name never changes): the Hoard is an icon */
 .dock:is([data-form="bare"], [data-hoard="icon"]) .dock-hoard.hoard-btn { width: var(--wh-hit); padding: 0; justify-content: center; }
 .dock:is([data-form="bare"], [data-hoard="icon"]) .dock-hoard .hoard-btn-count { display: none; }
@@ -97,7 +97,7 @@ body[data-layout="tiny"] .dock[data-open="true"] { padding-right: calc(var(--dk-
 /* ================= the attachment: ONE slot above the dock (inline beside the tools in strip and tiny), a caret on its tool ================= */
 .dock-attach { display: flex; justify-content: center; width: 100%; min-width: 0; animation: dk-fade var(--k-fd-3) linear, dk-rise var(--k-mv-3) var(--wh-ease); }
 .dock-attach-body {
-  position: relative; min-width: 0; max-width: min(100%, 720px); padding: var(--wh-sp-1); border-radius: var(--wh-r-card);
+  position: relative; min-width: 0; max-width: min(100%, 720px); padding: var(--wh-s1); border-radius: var(--wh-r-card);
   box-shadow: inset 0 1px 0 var(--wh-rim), var(--wh-e2);
   transform: translateX(var(--dk-ax, 0px)); transition: transform var(--k-mv-3) var(--wh-ease);
 }
@@ -120,8 +120,8 @@ body[data-layout="tiny"] .dock[data-open="true"] .dock-bar { display: none; }
 body[data-layout="tiny"] .dock[data-open="true"] .dock-attach { flex: 1 1 auto; }
 
 /* the More popover's list */
-.dock-menu { display: grid; gap: var(--wh-sp-1); min-width: 168px; }
-.dock-menuitem { justify-content: flex-start; min-height: 48px; padding: 0 var(--wh-sp-3); gap: var(--wh-sp-3); }
+.dock-menu { display: grid; gap: var(--wh-s1); min-width: 168px; }
+.dock-menuitem { justify-content: flex-start; min-height: 48px; padding: 0 var(--wh-s3); gap: var(--wh-s3); }
 .dock-menuitem .k-kbd { margin-left: auto; }
 /* inline attachments (tiny, strip): the More popover is ONE ROW (a list would cover the squishy on a 201 px screen; in tiny it stands in for the tray); toolbar.ts draws its tools icon-only */
 .dock[data-attach="inline"] .dock-menu { display: flex; min-width: 0; }
@@ -129,15 +129,15 @@ body[data-layout="tiny"] .dock[data-open="true"] .dock-attach { flex: 1 1 auto; 
 
 /* ================= the tool caption chip (R10): aria-hidden, 1.4 s, above the dock (below it in strip) ================= */
 .dock-caption {
-  position: absolute; left: 0; right: 0; bottom: calc(100% + var(--wh-sp-2)); width: max-content; max-width: calc(100% - 2 * var(--k-gutter, 16px)); margin: 0 auto;
-  display: flex; align-items: baseline; gap: var(--wh-sp-2); padding: 6px var(--wh-sp-3); border-radius: var(--wh-r-pill); box-shadow: var(--wh-e1);
+  position: absolute; left: 0; right: 0; bottom: calc(100% + var(--wh-s2)); width: max-content; max-width: calc(100% - 2 * var(--k-gutter, 16px)); margin: 0 auto;
+  display: flex; align-items: baseline; gap: var(--wh-s2); padding: 6px var(--wh-s3); border-radius: var(--wh-r-pill); box-shadow: var(--wh-e1);
   font: var(--wh-w-bold) var(--wh-fs-small)/1.2 var(--wh-font-ui); color: var(--k-fg); overflow-wrap: anywhere;
   opacity: 0; transform: translateY(4px);
   transition: opacity var(--k-fd-2) linear, transform var(--k-mv-3) var(--wh-ease);
 }
 .dock-caption > span { color: var(--k-fg-dim); font-weight: var(--wh-w-mid); }
 .dock-caption[data-show="true"] { opacity: 1; transform: none; }
-body[data-layout="strip"] .dock-caption { left: var(--k-gutter, 16px); right: auto; bottom: auto; top: calc(100% + var(--wh-sp-2)); margin: 0; }
+body[data-layout="strip"] .dock-caption { left: var(--k-gutter, 16px); right: auto; bottom: auto; top: calc(100% + var(--wh-s2)); margin: 0; }
 body[data-layout="tiny"] .dock-caption { left: var(--k-gutter, 12px); right: auto; margin: 0; }
 
 /* ================= the tooltip tail follows the target (tooltip.ts sets --tip-ax) ================= */

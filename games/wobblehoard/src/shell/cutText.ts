@@ -65,8 +65,9 @@ export const inOnePiece = 'It is in one piece.';
 export const swipeMiss = 'Swipe across the squishy to cut it.';
 export const nothingToCut = 'Nothing to cut there.';
 
-/** the refusals the physics makes (each with a tremble): `thin` (a sliver thinner than the mesh can hold) and `loose` (a side of two separate parts; goes away when multi-part cuts
- *  become several pieces, CUT3.md 2.3). The "as many pieces as it can make" and "Too small to cut" lines are gone with the limits they described. */
+/** the refusals the physics makes (each with a tremble): `thin` (a sliver thinner than the mesh can hold, or a part it cannot build) and `loose` (a side of two separate parts: said ONLY by a physics
+ *  that reports no `parts`, an older one; the real physics makes a piece of each part, CUT3.md 2.3, 2026-10-09: "Cut into 3 pieces." is cutDone). The "as many pieces as it can make" and "Too small to cut"
+ *  lines are gone with the limits they described. */
 export const thin = 'That would make a piece too thin. Try another angle.';
 export const loose = 'That cut would split off two separate parts. Try another angle.';
 /** the merged piece of a join could not be built (nothing changes) */

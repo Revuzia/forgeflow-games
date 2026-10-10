@@ -104,7 +104,12 @@ export interface RestPlane { id: number; n: V3; d: number }
 /** Which part of the whole a body is, as the shell says it: a union of convex cells; a cell is a list of signed plane ids (+id side A, -id side B) whose
  *  intersection, with the species silhouette, is that cell. cells [[]] (or no region) = the whole. `planes` holds every plane the cells name.
  *  THIS BUILD asks for exactly ONE cell (a node of the cut tree); the list is kept so a union builder (tuning item T9) needs no contract change. */
-export interface PieceRegion { planes: RestPlane[]; cells: number[][] }
+export interface PieceRegion {
+  planes: RestPlane[]; cells: number[][];
+  /** CUT3 leg 3 (additive): which connected part of the cell this body is, when the cell's region (the species cut by the cell's half-spaces) is made of several separate parts (a star's tips taken by
+   *  one plane). An opaque token: the shell copies the `part` of the CutPlan.partList entry it builds the body for, and never invents one. Absent = the cell is one body (every plain piece). */
+  part?: number;
+}
 /** PHYS -> RENDER: one bounding plane of a cell, in W; the piece lies where dot(n, p) <= d; n is a UNIT vector pointing OUT of the piece. The two faces of one cut carry
  *  the same id with opposite n and d. A literal +id (side A of RestPlane k) is { n: -n_k, d: -d_k, id }; -id is { n: n_k, d: d_k, id }. */
 export interface CutPlaneRest { n: V3; d: number; id: number }
@@ -142,6 +147,15 @@ export interface PieceOpts {
   frame?: Quat;
 }
 
+/** CUT3 leg 3 (additive): one body a cut makes, see CutPlan.partList. */
+export interface CutPart {
+  side: 0 | 1;                           // 0 = side A (the literal +id of the new plane), 1 = side B (-id)
+  part?: number;                         // the token for PieceRegion.part of this body's region (undefined = none)
+  frac: number;                          // share of THIS body's volume; the entries sum to 1 (1e-9)
+  off: V3;                               // its rest origin in this body's rest-local frame, as offA / offB (the exact mass centroid once built)
+  vel: V3;                               // mean world velocity of its material
+  aspect: number;                        // as aspectA
+}
 /** CUT2: the cut's plan, filled by SoftBody.planCut (pure, no allocation). */
 export interface CutPlan {
   rest: { n: V3; d: number };            // the plane in W (normal toward side A); the physics latches it. prepareCut's retry ladder may shift d by at most 0.012 R0 and then updates every field below in the same step
@@ -151,6 +165,14 @@ export interface CutPlan {
   aspectA: number; aspectB: number;      // sqrt(smallest / largest covariance eigenvalue) of each child, 0..1 (1 = ball, 0.1 = pancake)
   sound: boolean;                        // false: a child is not one body (the cut would split off two separate parts)
   soundPending?: boolean;                // true: only the cheap centroid test has run (sound is provisional)
+  /** CUT3 leg 3 (additive, INPUT): the shell sets this to true when it builds one body per `partList` entry. Absent or false: a side that falls into several separate parts is refused as before (`sound` false, the 'loose' line), so a shell that does not know parts never meets one. */
+  acceptParts?: boolean;
+  /** CUT3 leg 3 (additive): the number of bodies the cut makes: 2 (the pair A, B) or more when a side is made of several separate parts (a star's tips, both ears). */
+  parts?: number;
+  /** CUT3 leg 3 (additive): present when `parts` > 2 or the cut body itself carries a `region.part`: the bodies to build, side A's parts (ordered by their lowest mesh vertex) then side B's. The shell builds one
+   *  body per entry: region = this cut's cell with the literal +id (side 0) or -id (side 1) and `part` = the entry's token, frac = parent.frac x entry.frac, placed at off, velocity vel. Absent: the plain pair.
+   *  (The entries are reused objects: read them, do not keep them across planCut calls.) `fa`, `offA`, `velA` ... keep their meaning for side A as a whole. */
+  partList?: CutPart[];
   built: boolean;                        // true: both children are cached and offA/offB are exact (otherwise estimated from the clipped centroids, <= 0.04 R0)
 }
 
@@ -503,6 +525,9 @@ export interface StageLike {
    *  stretches between them as they separate and snaps (long for sticky stretch and slime, barely there for gel; shorter in calm),
    *  render-owned from here; `onStrand` reports it with bodyId = aId. Unknown ids are ignored. */
   partPieces?(aId: number, bId: number): void;
+  /** LOCK (optional; _spec/LOCK.md): draw a thin marker ring at each locked lobe. `points` = the world points of the locked patches (at most 6), handed every sim step while there are locks and once empty when
+   *  the last goes; the array is the caller's own and is rewritten in place (read it, do not keep it). Calm: a still, softer ring; a glow, never a flash. */
+  setLockMarkers?(points: readonly V3[]): void;
 }
 
 /* ───────────────────────────── shell (src/main.ts, input, ui) ───────────────────────────── */

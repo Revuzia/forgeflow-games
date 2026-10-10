@@ -39,7 +39,7 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .hoard {
   position: fixed; z-index: var(--wh-z-panel); top: calc(var(--hd-t) + 64px); bottom: calc(var(--hd-b) + 18px); left: 50%; transform: translateX(-50%);
   width: min(880px, calc(100vw - 2 * var(--k-gutter) - var(--hd-l) - var(--hd-r))); display: flex; flex-direction: column; overflow: hidden;
-  background: var(--k-panel); border: 1px solid var(--k-edge-quiet); border-radius: var(--wh-r-panel); box-shadow: var(--wh-e3);
+  background: var(--k-panel); border: var(--k-bd-q); border-radius: var(--wh-r-panel); box-shadow: var(--wh-e3);
   touch-action: pan-y; -webkit-user-select: none; user-select: none; animation: var(--k-an-hoard) var(--wh-t-3) var(--wh-ease);
 }
 /* a roomy desktop: the panel is as tall as its pane (the Gift and Today panes are short), up to the screen */
@@ -67,7 +67,7 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .hoard-tab-icon { width: 20px; height: 20px; }
 .hoard-tab-dot { display: none; position: absolute; top: 4px; left: calc(50% + 36px); width: 10px; height: 10px; background: var(--wh-coral); border-radius: 50%; box-shadow: 0 0 0 2px var(--k-ink); }
 .hoard-tab[data-dot="true"] .hoard-tab-dot { display: block; }
-.hoard-body { flex: 1 1 auto; min-height: 0; padding: 4px 24px 24px; overflow-y: auto; overscroll-behavior: contain; }
+.hoard-body { --px: 24px; --pb: 24px; flex: 1 1 auto; min-height: 0; padding: 4px 24px 24px; overflow-y: auto; overscroll-behavior: contain; }
 
 /* ================= tools, filters ================= */
 .hoard-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
@@ -80,7 +80,7 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .tool-select-chev { position: absolute; top: 50%; right: 10px; margin-top: -10px; pointer-events: none; }
 .tool-seg { display: inline-grid; grid-auto-flow: column; gap: 2px; padding: 3px; background: var(--k-surface); border: 1px solid var(--k-edge); border-radius: var(--wh-r-btn); }
 .tool-seg .seg-btn { padding: 0 12px; border-radius: var(--wh-r-chip); }
-.hoard-filters { display: grid; gap: 8px; margin: 0 0 12px; padding: 12px 16px 8px; background: var(--k-surface); border: 1px solid var(--k-edge-quiet); border-radius: var(--wh-r-card); }
+.hoard-filters { display: grid; gap: 8px; margin: 0 0 12px; padding: 12px 16px 8px; background: var(--k-surface); border: var(--k-bd-q); border-radius: var(--wh-r-card); }
 .fgroup { margin-top: 4px; }
 .fchip { min-height: 44px; }   /* 44 visual here: a thumb, and the harness's 44 x 44 row, read the element's own box */
 .fchip::after { display: none; }
@@ -145,10 +145,11 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .copy[aria-checked="true"], .gift[aria-checked="true"], .slot[aria-expanded="true"] { --k-sh: var(--hd-sel); color: var(--k-sel-fg); background-color: var(--k-sel-fill); border-color: var(--k-sel-edge); }
 .copy .mark { position: absolute; top: 4px; right: 6px; }
 .copy-tags { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
-.copy-tag { padding: 1px 8px; color: var(--k-fg); background: var(--k-track); border: 1px solid var(--k-edge-quiet); border-radius: var(--wh-r-pill); }
+.copy-tag { padding: 1px 8px; color: var(--k-fg); background: var(--k-track); border: var(--k-bd-q); border-radius: var(--wh-r-pill); }
 .swatch { flex: none; width: 30px; height: 30px; border: 2px solid var(--k-ink); border-radius: 50%; background: radial-gradient(circle at 36% 30%, var(--sw-a, var(--wh-cream)) 0%, var(--sw-b, var(--wh-edge)) 55%, var(--sw-c, var(--wh-dusk)) 100%); }
-/* the actions stay in reach: pinned to the card's foot while the rest scrolls */
-.hcard-actions { position: sticky; bottom: -16px; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px -16px -16px; padding: 12px 16px 16px; background: var(--k-panel); border-top: 1px solid var(--k-edge-quiet); }
+/* the primary action stays in reach (F2): the card's actions, the merge pad's hold button and the gift's Take button are pinned to the foot of their scroller while the rest scrolls; the scroller sets --px / --pb to its own padding */
+.hcard-actions, .hmerge-foot, .gift-foot { position: sticky; bottom: calc(var(--pb, 16px) * -1); z-index: 1; margin: 8px calc(var(--px, 16px) * -1) calc(var(--pb, 16px) * -1); padding: 12px var(--px, 16px) var(--pb, 16px); background: var(--k-panel); border-top: var(--k-bd-q); }
+.hcard-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .act-btn .k-icon { width: 20px; height: 20px; }
 .act-note { flex-basis: 100%; margin-top: -2px; line-height: 1.3; }
 .act-note.playing { flex-basis: auto; margin: 0; padding: 8px 12px; color: var(--k-fg); background: var(--k-track); border-radius: var(--wh-r-btn); }
@@ -170,7 +171,7 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .gift-done { display: grid; justify-items: center; gap: 8px; padding: 32px 0; text-align: center; }
 .gift-done .k-icon { color: var(--k-accent); }
 .tasks { display: grid; gap: 12px; padding: 0; list-style: none; }
-.task { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 16px; background: var(--k-surface); border: 1px solid var(--k-edge-quiet); border-radius: var(--wh-r-card); box-shadow: var(--hd-lift); }
+.task { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px 12px; padding: 16px; background: var(--k-surface); border: var(--k-bd-q); border-radius: var(--wh-r-card); box-shadow: var(--hd-lift); }
 .task-text { line-height: 1.3; }
 .task-bar { grid-column: 1 / -1; }
 .task-chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 10px 2px 6px; color: var(--k-fg-dim); font-weight: 800; font-size: var(--wh-fs-label); line-height: 1.3; border: 1px solid var(--k-edge); border-radius: var(--wh-r-pill); }
@@ -184,8 +185,8 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 
 /* ================= merge pad + Tidy-up ================= */
 .hmerge-scrim { position: fixed; inset: 0; z-index: var(--wh-z-modal); background: var(--k-scrim); }
-.hmerge { position: fixed; z-index: var(--wh-z-modal); left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; width: min(560px, calc(100vw - 2 * var(--k-gutter))); max-height: calc(100dvh - var(--hd-t) - var(--hd-b) - 32px); padding: 8px 24px 24px;
-  overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; background: var(--k-panel); border: 1px solid var(--k-edge-quiet); border-radius: var(--wh-r-panel); box-shadow: var(--wh-e3); animation: var(--k-an-hmerge) var(--wh-t-3) var(--wh-ease); }
+.hmerge { position: fixed; z-index: var(--wh-z-modal); left: 50%; top: 50%; transform: translate(-50%, -50%); display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; width: min(560px, calc(100vw - 2 * var(--k-gutter))); max-height: calc(100dvh - var(--hd-t) - var(--hd-b) - 32px); padding: 8px 24px 24px; --px: 24px; --pb: 24px;
+  overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; background: var(--k-panel); border: var(--k-bd-q); border-radius: var(--wh-r-panel); box-shadow: var(--wh-e3); animation: var(--k-an-hmerge) var(--wh-t-3) var(--wh-ease); }
 .hmerge-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; }
 .hmerge-slots { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; }
 .slot { --k-sh: var(--hd-lift); display: grid; justify-items: center; gap: 4px; min-width: 120px; min-height: 104px; padding: 12px; font-weight: 800; border: 2px dashed var(--k-edge); border-radius: var(--wh-r-card); }
@@ -243,13 +244,19 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
 .plate .gem-lg { width: 26px; height: 26px; }
 .plate-nick[hidden], .plate-banner[hidden] { display: none; }
 @media (max-width: 480px) { .plate-name { font-size: var(--wh-fs-h3); } }
-@media (max-width: 420px) and (max-height: 260px) {
-  /* TINY (UI.md 4.2): the plate REPLACES the bottom row while it shows: one line, y 156..192 (gem, tier, species, New); the squishy keeps the screen */
-  .plate { top: auto; bottom: calc(var(--hd-b) + 9px); display: flex; align-items: center; justify-content: center; gap: 8px; width: calc(100vw - 2 * var(--k-gutter)); min-width: 0; height: 36px; padding: 0 12px; }
-  .plate-banner, .plate-nick { display: none; }
-  .plate-tierline { flex: none; order: 1; gap: 4px; } .plate-name { flex: 1 1 0; order: 2; min-width: 0; overflow: hidden; font-size: var(--wh-fs-body); text-overflow: ellipsis; white-space: nowrap; } .plate-row { flex: none; order: 3; }
-  .plate .gem-lg { width: 20px; height: 20px; } .plate-tier { --jl-cap: 14px; } .plate-chip { padding: 0 8px; font-size: var(--wh-fs-label); }
-}
+/* the card form is TIER-SCALED (F1): the tier word grows with the tier (revealPlate.ts picks the jelly size), the rim glows from Rare up, Legendary and Mythic are wider and roomier with a bigger gem */
+.plate[data-tier="rare"], .plate[data-tier="epic"] { min-width: min(300px, calc(100vw - 2 * var(--k-gutter))); padding: 16px 32px 18px; box-shadow: 0 0 0 2px var(--k-ink), var(--wh-e2), 0 0 20px color-mix(in srgb, var(--k-tier) 55%, transparent); }
+.plate[data-tier="legendary"], .plate[data-tier="mythic"] { min-width: min(340px, calc(100vw - 2 * var(--k-gutter))); padding: 20px 40px 22px; box-shadow: 0 0 0 2px var(--k-ink), var(--wh-e2), 0 0 40px 6px color-mix(in srgb, var(--k-tier) 80%, transparent); }
+.plate:is([data-tier="legendary"], [data-tier="mythic"]) .gem-lg { width: 40px; height: 40px; }
+/* the LINE form (revealPlate.ts data-form="line": tiny, strip, the portal's desktop box, a short phone): the plate REPLACES the dock row (UI.md 4.2): one line over the row itself, above the dock in z, same box (gem, tier, species, New). It never covers the squishy. */
+.plate[data-form="line"] { z-index: var(--wh-z-panel); top: auto; bottom: var(--dk-bottom); display: flex; align-items: center; justify-content: center; gap: 8px; width: min(calc(100vw - 2 * var(--k-gutter)), 560px); min-width: 0; height: var(--dk-h); padding: 0 12px; }
+.plate[data-form="line"] :is(.plate-banner, .plate-nick) { display: none; }
+.plate[data-form="line"] .plate-tierline { flex: none; order: 1; gap: 4px; }
+.plate[data-form="line"] .plate-name { flex: 1 1 0; order: 2; min-width: 0; overflow: hidden; font-size: var(--wh-fs-body); text-overflow: ellipsis; white-space: nowrap; }
+.plate[data-form="line"] .plate-row { flex: none; order: 3; }
+.plate[data-form="line"] .gem-lg { width: 22px; height: 22px; }
+.plate[data-form="line"] .plate-chip { padding: 0 8px; font-size: var(--wh-fs-label); }
+body[data-layout="tiny"] .plate .gem-lg { width: 20px; height: 20px; } body[data-layout="tiny"] .plate-tier { --jl-cap: 14px; }
 
 /* ================= narrow: the tools are two rows, the practice note is short ================= */
 @media (max-width: 480px) {
@@ -270,7 +277,7 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
   .hoard-close { grid-column: 2; grid-row: 1; }
   .hoard-bar { width: 100px; }
   .hoard-note, .hoard-tabs { margin: 0 12px 8px; }
-  .hoard-body { padding: 4px 12px 16px; }
+  .hoard-body { --px: 12px; --pb: 16px; padding: 4px 12px 16px; }
   .hoard-tools .tool-btn.tidy { margin-left: 0; }
   .shelf { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 10px; padding: 12px 10px; }
   .plinth { min-height: 132px; }
@@ -279,30 +286,33 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
   body[data-hoard="card"] #stage { transform: translateY(-20dvh); }
   body[data-hoard="card"] .hud { visibility: hidden; }
   .hcard-strip { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
-  .hcard-top { order: -4; } .hcard-title { order: -3; } .hcard-facts { order: -2; } .hcard-actions { position: static; order: -1; margin: 0; padding: 0; background: none; border: 0; }
+  .hcard-top { order: -4; } .hcard-title { order: -3; } .hcard-facts { order: -2; }
   .gift-row { gap: 8px; }
   .gift { padding: 26px 4px 12px; }
   .gift-icon { width: 64px; height: 64px; }
   .gift-name { font-size: var(--wh-fs-body); }
-  .hmerge { top: auto; bottom: 0; left: 0; width: 100%; max-height: 92dvh; padding: 8px calc(var(--hd-r) + 14px) calc(var(--hd-b) + 16px) calc(var(--hd-l) + 14px); border-radius: var(--wh-r-panel) var(--wh-r-panel) 0 0; transform: none; }
+  .gift-tier { letter-spacing: .03em; }   /* "UNCOMMON" fits a 87 px card at 320 wide */
+  .hmerge { --px: 14px; --pb: calc(var(--hd-b) + 16px); top: auto; bottom: 0; left: 0; width: 100%; max-height: 92dvh; padding: 8px calc(var(--hd-r) + 14px) calc(var(--hd-b) + 16px) calc(var(--hd-l) + 14px); border-radius: var(--wh-r-panel) var(--wh-r-panel) 0 0; transform: none; }
   .hold-btn { width: 100%; min-width: 0; }
 }
 @keyframes hoard-sheet-in { from { opacity: 0; transform: translateY(18px); } }
-/* short screens (a landscape phone, the portal phone): the title, the tabs and the close button share one row; the shelf keeps the room */
-@media (max-height: 440px) {
-  .hoard { top: calc(var(--hd-t) + 8px); bottom: calc(var(--hd-b) + 8px); display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
-  .hcard { top: calc(var(--hd-t) + 8px); bottom: calc(var(--hd-b) + 8px); }
+@media (max-width: 640px) and (min-height: 261px) { .hcard-actions { position: static; order: -1; margin: 0; padding: 0; background: none; border: 0; } }
+/* short screens (a landscape phone, the portal phone, and the portal's desktop box, 888 x 500): the title, the tabs and the close button share one row; the shelf keeps the room (F3) */
+@media (max-height: 440px), (min-width: 641px) and (max-height: 560px) {
+  .hoard { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); align-items: center; }
   .hoard-head { display: contents; }
   .hoard-head-l { grid-area: 1 / 1; padding: 4px 0 4px 16px; }
   .hoard-head-c, .hoard-note { display: none; }
   .hoard-tabs { grid-area: 1 / 2; margin: 4px 8px; }
   .hoard-close { grid-area: 1 / 3; margin-right: 6px; }
   .hoard-body { grid-area: 2 / 1 / 3 / 4; align-self: stretch; }
+  .hmerge { max-height: calc(100dvh - var(--hd-t) - var(--hd-b) - 16px); }
+}
+@media (max-height: 440px) {
+  .hoard { top: calc(var(--hd-t) + 8px); bottom: calc(var(--hd-b) + 8px); }
+  .hcard { top: calc(var(--hd-t) + 8px); bottom: calc(var(--hd-b) + 8px); }
   .hoard-tools .tool-btn > span:not(.tool-n) { display: none; }   /* Filters and Tidy up are icons here (their names are aria-labels) */
   .hoard-tools .tool-btn { padding: 0 12px; }
-  .plate { padding: 8px 16px 12px; }
-  .plate-name { font-size: var(--wh-fs-h3); }
-  .hmerge { max-height: calc(100dvh - var(--hd-t) - var(--hd-b) - 16px); }
 }
 @media (max-width: 640px) and (max-height: 440px) { .hoard { top: 0; bottom: 0; } }
 /* a landscape phone: the card is a right column (a bottom sheet would leave no screen); the stage steps left so the squishy stays in view beside it */
@@ -316,6 +326,14 @@ svg.k-icon[width="16"] { width: 16px; height: 16px; }
   .hoard-tools { display: flex; flex-wrap: nowrap; }
   .tool-sort { flex: 1 1 0; min-width: 0; }
   .hoard-tab-dot { left: calc(50% + 8px); }
+  .hcard { --px: 12px; --pb: 12px; width: min(320px, 72vw); }   /* wide enough for Hearted and Merge side by side: one row of actions is the foot */
+  .act-note.playing { display: none; }
+  .shelf-head { margin: 8px 0 4px; }
+  .hoard-tools { margin-bottom: 4px; }
+  .hmerge-help { display: none; }
+  .hold-btn, .gift-foot .cta-btn { min-height: 44px; }
+  .gift-why { display: none; }   /* (the button keeps the reason in aria-describedby; the cards need the room) */
+  .hcard-actions, .hmerge-foot, .gift-foot { padding-top: 8px; }
 }
 
 /* no jelly drawing (forced-colors, contrast more): the real text shows in system 800 and must fit a narrow card or pad heading */

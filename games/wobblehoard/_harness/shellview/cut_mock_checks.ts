@@ -1,6 +1,6 @@
 // CUT3 SHELL checks on MOCK bodies that speak the whole true-cut contract (CUT3.md 4 SHELL, 5 U01 / U04 / U05 / U07; task shell-c1, 2026-10-09). Plain node, exits 1 on a failed row.
 //   node _harness/shellview/cut_mock_checks.ts              all rows (a few seconds: no physics, no DOM)
-//   node _harness/shellview/cut_mock_checks.ts --only=a,b   sections: u01 (20 presses, both styles), ceiling, joins (group joins and Reconnect all, any count), minis24, swipes, leave
+//   node _harness/shellview/cut_mock_checks.ts --only=a,b   sections: u01 (20 presses, both styles), ceiling, joins (group joins and Reconnect all, any count), minis24, swipes, leave, parts (CUT3 leg 3: a cut that makes several pieces)
 //
 // WHY MOCKS: the shell's piece manager (cut.ts) is the code under test, not the physics. The real SoftBody clamped a piece at 1/8 until the PHYS lane lifted it on 2026-10-09, and the ceiling of 64 pieces is still out of reach of a browser run, so rows that need
 // 20 nested halvings of a REAL body live in cutter_checks.ts (section u01, red until PHYS lands) and everything the shell does for ANY number of pieces is proved here, with no limit in the way:
@@ -11,7 +11,7 @@ import { createMockWorld } from '../mocks.ts';
 import type { PieceInfo, SoftBodyLike } from '../../src/contracts.ts';
 import { speciesBaseGenome } from '../../src/data/catalog.ts';
 import { createBodyManager } from '../../src/shell/bodies.ts';
-import { JOIN_ALL_S, JOIN_HOLD_S, JOIN_S, PIECE_CEILING, createCutter, principalAxes, supportAlong } from '../../src/shell/cut.ts';
+import { JOIN_ALL_S, JOIN_HOLD_S, JOIN_S, PIECE_CEILING, TIP_PUSH, createCutter, principalAxes, supportAlong } from '../../src/shell/cut.ts';
 import type { CutStyle } from '../../src/shell/cut.ts';
 
 const only = (process.argv.find((a) => a.startsWith('--only=')) ?? '').slice(7).split(',').filter(Boolean);
@@ -26,13 +26,13 @@ const N = 96;
 const UNIT = (() => { const a = new Float64Array(N * 3); for (let i = 0; i < N; i++) { const y = 1 - (2 * (i + 0.5)) / N, r = Math.sqrt(1 - y * y), th = i * 2.399963; a[i * 3] = Math.cos(th) * r; a[i * 3 + 1] = y; a[i * 3 + 2] = Math.sin(th) * r; } return a; })();
 const capShare = (R: number, sd: number): number => { const h = R - sd; return (Math.PI * h * h * (3 * R - h) / 3) / (4 / 3 * Math.PI * R * R * R); };   // share of a ball on the side n.(x - c) >= sd
 
-function mockWorld(o: { ceiling?: number; style?: CutStyle; gravity?: boolean; slowBuild?: boolean } = {}) {
+function mockWorld(o: { ceiling?: number; style?: CutStyle; gravity?: boolean; slowBuild?: boolean; tips?: number; oldLoose?: boolean; failPart?: number } = {}) {
   const w = createMockWorld({ storage: null });
   const st = w.stage as unknown as Record<string, unknown>;
   let vid = 100;
   st.primaryBodyId = () => 1; st.setBodyTier = () => {}; st.addBody = () => ++vid; st.removeBody = () => {}; st.setBody = () => {}; st.setCutSeam = () => {}; st.setBridge = () => {}; st.partPieces = () => {}; st.setPrimaryBody = () => {};
   const info = new Map<string, { offset: V; frac: number }>([['', { offset: { x: 0, y: 0, z: 0 }, frac: 1 }]]);
-  const made: Array<{ body: SoftBodyLike; piece: { frac: number; region?: unknown; chunk?: boolean } | null }> = [];
+  const made: Array<{ body: SoftBodyLike; piece: { frac: number; region?: { part?: number; cells: number[][] }; chunk?: boolean } | null }> = [];
   const childOffset = (parent: { offset: V; frac: number }, n: V, d: number, sign: 1 | -1): V => {
     const Rp = 0.5 * Math.cbrt(parent.frac), sd = Math.max(-Rp * 0.98, Math.min(Rp * 0.98, d - (n.x * parent.offset.x + n.y * parent.offset.y + n.z * parent.offset.z)));
     const t = sign > 0 ? sd + (Rp - sd) * 0.375 : sd - (Rp + sd) * 0.375;
@@ -41,16 +41,20 @@ function mockWorld(o: { ceiling?: number; style?: CutStyle; gravity?: boolean; s
   const mk = (g: unknown, op?: { at?: V; piece?: { frac: number; chunk?: boolean; at?: V; vel?: V; region?: { planes: Array<{ id: number; n: V; d: number }>; cells: number[][] } } }): SoftBodyLike => {
     const pc = op?.piece ?? null;
     let frac = pc?.frac ?? 1;
-    const lits = pc?.region?.cells[0] ?? null;
+    const lits = pc?.region?.cells[0] ?? null, tok = (pc?.region as { part?: number } | undefined)?.part;
+    if (o.failPart !== undefined && tok === o.failPart) throw new Error('mock: the physics cannot be built this part');
     let offset: V = { x: 0, y: 0, z: 0 };
     if (lits) {
-      const k = lits.join(',');
+      // a part of a cell (a tip of a star) is its own body: its token makes its own origin, a little off the cell's
+      const cellKey = lits.join(','), k = tok === undefined ? cellKey : cellKey + '#' + tok;
       let inf = info.get(k);
       if (!inf) {
         const par = info.get(lits.slice(0, -1).join(',')), last = lits[lits.length - 1], pl = pc!.region!.planes.find((p) => p.id === Math.abs(last));
         if (!par || !pl) throw new Error('mock: no parent info for cell ' + k);
-        inf = { offset: childOffset(par, pl.n, pl.d, last > 0 ? 1 : -1), frac };
+        const base = childOffset(par, pl.n, pl.d, last > 0 ? 1 : -1), j = tok ?? 0;
+        inf = { offset: { x: base.x + 0.07 * j, y: base.y + 0.05 * j, z: base.z }, frac };
         info.set(k, inf);
+        if (!info.has(cellKey)) info.set(cellKey, inf);
       }
       offset = inf.offset; frac = pc!.frac;
     }
@@ -89,7 +93,7 @@ function mockWorld(o: { ceiling?: number; style?: CutStyle; gravity?: boolean; s
         const l = Math.hypot(pl.normal.x, pl.normal.y, pl.normal.z), sd = ((pl.point.x - center.x) * pl.normal.x + (pl.point.y - center.y) * pl.normal.y + (pl.point.z - center.z) * pl.normal.z) / l;
         return Math.abs(sd) >= body.restRadius ? null : capShare(body.restRadius, sd);
       },
-      planCut(pl: { point: V; normal: V }, out: { rest: { n: V; d: number }; fa: number; offA: V; offB: V; velA: V; velB: V; aspectA: number; aspectB: number; sound: boolean; soundPending?: boolean; built: boolean }, mode: string = 'at') {
+      planCut(pl: { point: V; normal: V }, out: { rest: { n: V; d: number }; fa: number; offA: V; offB: V; velA: V; velB: V; aspectA: number; aspectB: number; sound: boolean; soundPending?: boolean; built: boolean; parts?: number; partList?: unknown[] }, mode: string = 'at') {
         if (mode === 'latched') { out.built = counts.prepared >= 2; return true; }
         const l = Math.hypot(pl.normal.x, pl.normal.y, pl.normal.z), n = { x: pl.normal.x / l, y: pl.normal.y / l, z: pl.normal.z / l }, R = body.restRadius;
         let sd = mode === 'median' ? 0 : ((pl.point.x - center.x) * n.x + (pl.point.y - center.y) * n.y + (pl.point.z - center.z) * n.z);
@@ -104,6 +108,16 @@ function mockWorld(o: { ceiling?: number; style?: CutStyle; gravity?: boolean; s
         out.velA.x = out.velA.y = out.velA.z = out.velB.x = out.velB.y = out.velB.z = 0;
         const fa = out.fa; out.aspectA = out.aspectB = Math.max(0.2, Math.min(fa, 1 - fa) * 2);
         out.sound = true; out.soundPending = false; out.built = false; counts.prepared = 0;
+        out.parts = 2; out.partList = undefined;
+        if (o.oldLoose && Math.abs(sd) > 0.45 * R) { out.sound = false; out.parts = undefined; }   // an older physics: a cap of several separate parts is 'loose'
+        else if (o.tips && Math.abs(sd) > 0.45 * R) {
+          // a cap cut off a ball is `tips` separate tips (a star): each its own body with its token (1, 2, ...); the rest of the ball is the other side's one body
+          const capSide = sd > 0 ? 0 : 1, capFrac = capSide === 0 ? out.fa : 1 - out.fa, k = o.tips, capOff = capSide === 0 ? oa : ob, restOff = capSide === 0 ? ob : oa;
+          const tips = Array.from({ length: k }, (_u, j) => ({ side: capSide, part: j + 1, frac: capFrac / k, off: { x: capOff.x - offset.x + 0.02 * j, y: capOff.y - offset.y, z: capOff.z - offset.z }, vel: { x: 0, y: 0, z: 0 }, aspect: 0.5 }));
+          const rest = { side: 1 - capSide, part: undefined, frac: 1 - capFrac, off: { x: restOff.x - offset.x, y: restOff.y - offset.y, z: restOff.z - offset.z }, vel: { x: 0, y: 0, z: 0 }, aspect: 0.5 };
+          out.partList = capSide === 0 ? [...tips, rest] : [rest, ...tips];
+          out.parts = k + 1;
+        }
         void sd; sd = lastSd; void lastN;
         return true;
       },
@@ -125,7 +139,7 @@ function mockWorld(o: { ceiling?: number; style?: CutStyle; gravity?: boolean; s
   const ct = createCutter({
     bodies: bm, stage: w.stage, audio: w.audio, haptics: w.haptics, createBody: mk, quality: () => 'high', calm: () => false, gravity: () => o.gravity !== false, simTime: () => t, viewport: () => ({ w: 800, h: 600 }),
     activeBody: () => active ?? bm.body, touching: () => touching, drag: (out) => { if (!dragV || !touching) return false; out.x = dragV.x; out.y = dragV.y; out.z = dragV.z; return true; },
-    beforeChange() {}, clearMat: () => 0, panOf: () => 0, say: (s) => notices.push(s), report: (e) => { throw e; }, ceiling: o.ceiling, deterministic: true,
+    beforeChange() {}, clearMat: () => 0, panOf: () => 0, say: (s) => notices.push(s), report: (e) => { if (o.failPart !== undefined) return; throw e; }, ceiling: o.ceiling, deterministic: true,
   });
   if (o.style) ct.setStyle(o.style);
   const step = (sec: number): void => { for (let i = 0; i < Math.round(sec * 60); i++) { t += 1 / 60; bm.step(1 / 60); ct.update(1 / 60); } };
@@ -305,7 +319,7 @@ if (run('swipes')) {
       const s = projectPx(r, c), Rpx = Math.abs(projectPx(r, { x: c.x + tgt.restRadius, y: c.y, z: c.z }).x - s.x);
       const th = (tries * 0.9) % Math.PI, dx = Math.cos(th), dy = Math.sin(th);
       const res = r.ct.swipe(s.x - 1.5 * Rpx * dx, s.y - 1.5 * Rpx * dy, s.x + 1.5 * Rpx * dx, s.y + 1.5 * Rpx * dy);
-      if (res === 'cut') { cuts++; seen.add(tgt); r.idle(8); r.step(0.2); } else r.step(0.05);
+      if (res === 'cut') { cuts++; r.idle(8); r.step(0.2); const after = new Set(r.bodies()); for (const b of ps) if (!after.has(b)) seen.add(b); } else r.step(0.05);   // (the piece that was ACTUALLY cut is the one the swap removed: the swipe cuts the piece it passes over most, which need not be the one aimed at)
     }
     check(`swipes (${style}): 23 swipes through different pieces make 24 pieces (${tries} tries); a piece cut by a swipe may be cut again; shares sum to 1 (1e-9)`, cuts === 23 && r.ct.pieces === 24 && Math.abs(sum(r.ct.fracs()) - 1) < 1e-9 && seen.size >= 8, `cuts ${cuts}, distinct targets ${seen.size}, pieces ${r.ct.pieces}`);
   }
@@ -332,6 +346,117 @@ if (run('leave')) {
     const busyNow = r.ct.busy;
     r.ct.reconnectAll(false);
     check(`leave paths (${style}): leaving during a neck unwinds it (not busy, whole, one body)`, busyNow && !r.ct.busy && r.ct.pieces === 1 && r.bm.extras.length === 0);
+  }
+}
+
+/* ───────── CUT3 leg 3 (2026-10-09): a cut that makes SEVERAL pieces: a swipe across the tips of a star (the owner asked for it on 2026-10-09; the old 'loose' rows are re-specified with that reason) ───────── */
+// The mock physics reports `parts` / `partList` exactly as src/contracts.ts CutPlan defines them: a cap cut off a ball (|offset| > 0.45 R) is `tips` separate tips, each its own body with its token (CutPart.part),
+// the rest of the ball is the other side's one body. The Cutter, the cut tree, the BodyManager and the camera are the REAL ones.
+if (run('parts')) {
+  const px = (r: World, b: SoftBodyLike): { s: { x: number; y: number }; R: number } => { const s = projectPx(r, b.center); return { s, R: Math.abs(projectPx(r, { x: b.center.x + b.restRadius, y: b.center.y, z: b.center.z }).x - s.x) }; };
+  /** a horizontal swipe 0.7 radii above the piece's centre (a near-level plane: the tips drop), or a vertical one 0.7 radii to the right of it (a steep plane: the pair slides apart) */
+  const capSwipe = (r: World, b: SoftBodyLike, how: 'level' | 'steep'): string => {
+    const { s, R } = px(r, b);
+    return how === 'level' ? r.ct.swipe(s.x - 1.6 * R, s.y - 0.7 * R, s.x + 1.6 * R, s.y - 0.7 * R) : r.ct.swipe(s.x + 0.7 * R, s.y - 1.6 * R, s.x + 0.7 * R, s.y + 1.6 * R);
+  };
+  // (regions() is in the Cutter's piece order, bodies() in the BodyManager's: the two differ after a cut of a non-anchor piece, so a body finds its region by where it stands)
+  const partOfBody = (r: World, b: SoftBodyLike): number => r.ct.regions().find((x) => x.x === b.center.x && x.y === b.center.y && x.z === b.center.z)?.part ?? -2;
+  const tipsOf = (r: World): SoftBodyLike[] => r.bodies().filter((b) => partOfBody(r, b) >= 0);
+  const restOf = (r: World): SoftBodyLike => r.bodies().filter((b) => partOfBody(r, b) === -1).reduce((m, b) => ((b.frac ?? 1) > (m.frac ?? 1) ? b : m));
+  /** the mock bodies do not collide: stand the pieces in a row 1.3 m apart (x), so a swipe or a drag meets exactly one of them */
+  const spread = (r: World): void => { const bs = r.bodies(); bs.forEach((b, i) => (b as unknown as { placeAt(a: V, v: V): void }).placeAt({ x: (i - (bs.length - 1) / 2) * 1.3, y: b.center.y, z: 0 }, { x: 0, y: 0, z: 0 })); };
+
+  // (1) one swipe over the cap of a ball with 3 tips: 4 pieces in ONE swap
+  for (const how of ['level', 'steep'] as const) {
+    const r = mockWorld({ tips: 3 });
+    r.step(0.5);
+    const res = capSwipe(r, r.bm.body, how);
+    r.idle(8);
+    const flush = r.bodies().map((b) => ({ x: b.center.x, z: b.center.z }));
+    r.step(2);
+    const fr = r.ct.fracs(), reg = r.ct.regions(), tips = tipsOf(r);
+    check(`parts (${how} swipe): a swipe across the 3 tips of a ball makes FOUR pieces in one swap (3 tips + the rest), shares sum to 1 (1e-9), the tips share the cap equally, "Cut into 4 pieces."`,
+      res === 'cut' && r.ct.pieces === 4 && Math.abs(sum(fr) - 1) < 1e-9 && tips.length === 3 && Math.abs((tips[0].frac ?? 0) - (tips[1].frac ?? 1)) < 1e-9 && Math.abs((tips[1].frac ?? 0) - (tips[2].frac ?? 1)) < 1e-9 && r.notices.at(-1) === 'Cut into 4 pieces.' && r.ct.info.lastParts === 4 && r.bm.extras.length === 3,
+      `${res}; fracs ${fr.map((f) => f.toFixed(4)).join(' + ')}; ${r.notices.at(-1)}`);
+    check(`parts (${how}): the cut tree has one leaf per piece: the three tips are parts 0, 1, 2 of ONE side (cells [-1] or [1]), the rest is alone on its side (part -1); the bodies were built with the physics' tokens 1, 2, 3 and the rest with none; one anchor (the rest)`,
+      reg.length === 4 && reg.filter((x) => x.part >= 0).map((x) => x.part).sort().join() === '0,1,2' && new Set(reg.filter((x) => x.part >= 0).map((x) => x.cells.join())).size === 1 && reg.filter((x) => x.part < 0).length === 1 && reg[0].part === -1
+        && r.made.filter((m) => m.piece?.region && m.piece.region.part !== undefined).map((m) => m.piece!.region!.part).sort().join() === '1,2,3' && r.made.filter((m) => m.piece?.region && m.piece.region.part === undefined).length === 1,
+      JSON.stringify(reg.map((x) => [x.cells, x.part])));
+    // the lighter side moves more (the tips slide away, the big body barely moves); a cut whose lighter side is a tip (<= TIP_SIDE_SHARE of the body) is a TOSS even when it is near-level: the tips are pushed off the cut face
+    // along the table by TIP_PUSH more, so a tip taken off the top of a star slides off the stump and falls instead of sitting on it
+    const all = r.bodies(), restI = all.indexOf(restOf(r));
+    const dis = all.map((b, i) => Math.hypot(b.center.x - flush[i].x, b.center.z - flush[i].z));
+    const tipDis = Math.max(...dis.filter((_v, i) => i !== restI)), restDis = dis[restI];
+    check(`parts (${how}): the parting script gives the gap to the LIGHT side and tosses tips (cut off ${(1 - 0.9377).toFixed(3)} of the body): the tips slide ${tipDis.toFixed(3)} m (at least G + TIP_PUSH = ${(0.06 + TIP_PUSH).toFixed(2)} m less the spring's lag), the big body ${restDis.toFixed(3)} m (under a tenth), the level cut included`,
+      tipDis > 0.1 && restDis < 0.1 * tipDis);
+    // Reconnect all from the four: ONE fresh whole
+    const ok = r.ct.reconnectAll(true); r.idle(15); r.step(HOME_WAIT);
+    check(`parts (${how}): Reconnect all from the 3 tips and the rest ends bit-for-bit whole (one fresh body, frac 1, no extras, the original genome, "Whole again.")`, ok && r.ct.pieces === 1 && r.bm.extras.length === 0 && r.bm.body.frac === 1 && r.bm.body.piece === undefined && r.bm.identity.genome === r.g0 && r.notices.at(-1) === 'Whole again.');
+  }
+
+  // (2) joins: two tips of one swipe lift to the cut above ("Joining 4 pieces."); a tip dragged to the rest does the same; a nested cut joins at the cut node, never at a parts node
+  {
+    const r = mockWorld({ tips: 3 });
+    r.step(0.5);
+    capSwipe(r, r.bm.body, 'steep'); r.idle(8); r.step(1.5);
+    const tips = tipsOf(r);
+    joinByHand(r, tips[0], tips[1]);
+    check('parts joins: dragging one tip onto another tip of the same swipe brings back EVERYTHING cut from that plane (the cell of a cut is the one body): "Joining 4 pieces.", then "Whole again." (the root)',
+      r.notices.includes('Joining 4 pieces.') && r.ct.pieces === 1 && r.notices.at(-1) === 'Whole again.' && r.bm.body.frac === 1 && r.bm.body.piece === undefined, `pieces ${r.ct.pieces}; ${r.notices.slice(-3).join(' | ')}`);
+  }
+  {
+    const r = mockWorld({ tips: 3 });
+    r.step(0.5);
+    r.ct.splitInTwo(); r.idle(8); r.step(1.5);   // two halves
+    spread(r);
+    const big = largest(r);
+    const res = capSwipe(r, big, 'steep'); r.idle(8); r.step(1.5);
+    const before = r.ct.pieces, tips = tipsOf(r);
+    const capTotal = tips.reduce((m, b) => m + (b.frac ?? 0), 0);
+    // the cut node of the nested cut: its cell is the half that was cut (a share of 1/2); joining two of its tips rebuilds exactly that half
+    spread(r);
+    (tips[0] as unknown as { placeAt(a: V, v: V): void }).placeAt({ x: tips[0].center.x, y: tips[2].center.y, z: 0 }, { x: 0, y: 0, z: 0 });   // (side by side at one height)
+    joinByHand(r, tips[0], tips[2]);
+    const regs = r.ct.regions();
+    check(`parts joins (nested): a half cut across 3 tips (${res}; ${before} pieces), then two of its tips dragged together bring back ONLY that half: ${before} -> 2 pieces, the merged piece holds 1/2 exactly (was ${(capTotal + (before === 5 ? 0 : 0)).toFixed(4)} cap + the rest), "Joined 4 pieces into one."`,
+      res === 'cut' && before === 5 && r.ct.pieces === 2 && Math.abs(sum(r.ct.fracs()) - 1) < 1e-9 && r.ct.fracs().every((f) => Math.abs(f - 0.5) < 1e-9) && r.notices.includes('Joined 4 pieces into one.') && regs.length === 2 && regs.every((x) => x.part === -1), `${res}; fracs ${r.ct.fracs().map((f) => f.toFixed(4)).join(' + ')}; ${r.notices.at(-1)}`);
+    r.ct.reconnectAll(false);
+  }
+
+  // (3) the safety ceiling counts the pieces a cut makes: 3 pieces + a 4-piece cut would pass 5
+  for (const style of ['clean'] as const) {
+    const r = mockWorld({ tips: 3, ceiling: 5, style });
+    r.step(0.5);
+    r.ct.splitInTwo(); r.idle(8); r.step(1);   // 2 pieces
+    r.ct.splitInTwo(); r.idle(8); r.step(1);   // 3 pieces
+    spread(r);
+    const big = largest(r), before = r.ct.pieces;
+    const hits0 = r.ct.info.ceilingHits;
+    const res = capSwipe(r, big, 'steep'); r.idle(8); r.step(0.5);
+    check(`parts ceiling (test ceiling 5): ${before} pieces + a cut that would make 4 (3 -> 6) is refused with the kind line, nothing changes, canSplit still true, the hit is counted for the harness`,
+      before === 3 && res === 'limit' && r.ct.pieces === 3 && r.notices.at(-1) === KIND && r.ct.canSplit && r.ct.info.ceilingHits === hits0 + 1 && r.ct.info.lastResult === 'limit' && !r.ct.busy, `${res}; pieces ${r.ct.pieces}; ${r.notices.at(-1)}; hits ${r.ct.info.ceilingHits}`);
+    // a cut that FITS (2 -> 5 is out of reach here; one Split in two: 3 -> 4) still works
+    const again = r.ct.splitInTwo(); r.idle(8); r.step(0.3);
+    check('parts ceiling: after the refusal Split in two still works (3 -> 4 pieces)', again === 'cut' && r.ct.pieces === 4);
+  }
+
+  // (4) the physics refusing a part: the neck is released, the tree rolled back, the plain thin line, the squishy as it was
+  {
+    const r = mockWorld({ tips: 3, failPart: 2 });
+    r.step(0.5);
+    const b0 = r.bm.body, res = capSwipe(r, b0, 'steep'); r.idle(8); r.step(0.5);
+    const unchanged = r.bm.body === b0 && r.bm.extras.length === 0 && r.ct.pieces === 1 && !r.ct.busy && r.notices.at(-1) === 'That would make a piece too thin. Try another angle.';
+    const again = r.ct.splitInTwo(); r.idle(8); r.step(0.3);
+    check('parts refused: when the physics cannot build one part the cut never happens: the same body, one piece, the plain "too thin" line, nothing replaced, no half-built tree (the next cut gets plane id 1 again)',
+      res === 'cut' && unchanged && again === 'cut' && r.ct.pieces === 2 && r.ct.regions().map((x) => x.cells.join()).sort().join('|') === '-1|1', `${res}; unchanged ${unchanged}; pieces ${r.ct.pieces}; ${r.notices.slice(-2).join(' | ')}; cells ${JSON.stringify(r.ct.regions().map((x) => x.cells))}`);
+  }
+
+  // (5) an older physics (no parts): a side of separate parts is still refused with the old line
+  {
+    const r = mockWorld({ oldLoose: true });
+    r.step(0.5);
+    const res = capSwipe(r, r.bm.body, 'steep');
+    check('parts, an older physics that reports no parts: the cap that would split off separate parts is refused with the old "two separate parts" line, nothing changes', res === 'loose' && r.ct.pieces === 1 && r.notices.at(-1) === 'That cut would split off two separate parts. Try another angle.');
   }
 }
 

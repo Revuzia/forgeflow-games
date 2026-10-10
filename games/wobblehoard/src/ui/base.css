@@ -23,6 +23,7 @@ body {
   --k-scrim: var(--wh-scrim);
   --k-edge: var(--wh-edge);
   --k-edge-quiet: var(--wh-panel-edge);
+  --k-bd-q: 1px solid var(--k-edge-quiet);   /* the quiet 1 px border, written once (the sheets use it 16 times; K05 counts every character). It resolves here, on <body>, so the mode blocks of a11y.css that change --k-edge-quiet carry it along */
   --k-edge-hot: var(--wh-amber);
   --k-track: var(--wh-track);
   --k-accent: var(--wh-amber);

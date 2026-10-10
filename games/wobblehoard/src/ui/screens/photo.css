@@ -1,32 +1,33 @@
 /* The Photo card (UI.md 6.1): the picture to press-and-hold or right-click and save. It rides on the kit's scrim and dialog (kit.css) and the modal's entrance (overlay.css); this sheet
    ships in the later-* chunk with it. The picture must keep the browser's own save paths: touch callout on, selection on, no touch-action that swallows a long press. */
-.photo-card { width: min(560px, 100%); display: grid; gap: var(--wh-sp-3); max-height: 100%; }
+.photo-card { width: min(560px, 100%); display: grid; gap: var(--wh-s3); max-height: 100%; }
 .photo-title { margin: 0; min-width: 0; }
-.photo-fig { margin: 0; display: grid; place-items: center; min-width: 0; min-height: 0; background: var(--k-ink); border: 1px solid var(--k-edge-quiet); border-radius: var(--wh-r-card); overflow: hidden; }
+.photo-fig { margin: 0; display: grid; place-items: center; min-width: 0; min-height: 0; background: var(--k-ink); border: var(--k-bd-q); border-radius: var(--wh-r-card); overflow: hidden; }
 .photo-img {
   display: block; width: auto; height: auto; max-width: 100%; max-height: min(52dvh, 440px); object-fit: contain;
   -webkit-touch-callout: default; -webkit-user-select: text; user-select: text; touch-action: manipulation; cursor: context-menu;
 }
 .photo-img:focus-visible { outline: var(--k-ring-w) solid var(--k-ring); outline-offset: calc(-1 * var(--k-ring-w)); }
-.photo-side { display: grid; gap: var(--wh-sp-3); min-width: 0; }
+.photo-side { display: grid; gap: var(--wh-s3); min-width: 0; }
 .photo-hint { margin: 0; font: var(--wh-w-mid) var(--wh-fs-body)/var(--wh-lh-body) var(--wh-font-ui); color: var(--k-fg); overflow-wrap: anywhere; }
 .photo-note { margin: 0; font: var(--wh-w-bold) var(--wh-fs-small)/1.3 var(--wh-font-ui); color: var(--k-fg-dim); overflow-wrap: anywhere; }
-.photo-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--wh-sp-3); }
+.photo-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--wh-s3); }
 .photo-actions .k-btn { min-width: 0; }
 .photo-tab .k-icon { width: 20px; height: 20px; }
 /* a card of two columns where the screen is short: the picture left, the words and the buttons right */
 body[data-layout="wide"][data-density="short"] .photo-img { max-height: min(46dvh, 300px); }
-body:is([data-layout="strip"], [data-layout="tiny"]) .photo-card { width: min(760px, 100%); grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: center; column-gap: var(--wh-sp-4); row-gap: var(--wh-sp-2); padding: var(--wh-sp-4); }
+body:is([data-layout="strip"], [data-layout="tiny"]) .photo-card { width: min(760px, 100%); grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: center; column-gap: var(--wh-s4); row-gap: var(--wh-s2); padding: var(--wh-s4); }
 body[data-layout="strip"] .photo-title { grid-column: 1 / -1; }
 body[data-layout="strip"] .photo-img { max-height: calc(100dvh - 150px); }
-body:is([data-layout="strip"], [data-layout="tiny"]) .photo-actions { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: var(--wh-sp-2); }
+body:is([data-layout="strip"], [data-layout="tiny"]) .photo-actions { flex-direction: column; align-items: stretch; flex-wrap: nowrap; gap: var(--wh-s2); }
 body:is([data-layout="strip"], [data-layout="tiny"]) .photo-actions .k-btn { width: 100%; }
 body[data-layout="strip"] .photo-hint { font-size: var(--wh-fs-small); }
 /* tiny (358x201): no visible heading (the dialog keeps its name from the hidden text), the hint small, the buttons stacked */
 body[data-layout="tiny"] .photo-title { display: none; }
-body[data-layout="tiny"] .photo-card { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); padding: var(--wh-sp-3); }
+body[data-layout="tiny"] .photo-card { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); padding: var(--wh-s3); }
 body[data-layout="tiny"] .photo-img { max-height: calc(100dvh - 40px); }
 body[data-layout="tiny"] .photo-hint { font-size: var(--wh-fs-label); line-height: 1.3; }
-body[data-layout="tiny"] .photo-side { gap: var(--wh-sp-2); }
-body[data-layout="tiny"] .photo-actions .k-btn { padding: 0 var(--wh-sp-2); font-size: var(--wh-fs-small); line-height: 1.1; }
+body[data-layout="tiny"] .photo-side { gap: var(--wh-s2); }
+body[data-layout="tiny"] .photo-actions .k-btn { padding: 0 var(--wh-s2); font-size: var(--wh-fs-small); line-height: 1.1; }
 @media (max-width: 420px) { .photo-actions .k-btn { flex: 1 1 100%; } }
+body[data-layout="stack"]:not([data-tall="true"]) .photo-img { max-height: 40dvh; }   /* a short phone (320x568): the picture leaves room for Done (M8) */

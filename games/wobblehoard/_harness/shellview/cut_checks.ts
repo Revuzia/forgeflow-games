@@ -18,6 +18,7 @@
 //   * joining the rest of the pieces in a random order always ends at the root, and the root is then a fresh whole (ids start over);
 //   * a node that was joined away is dead: every function answers null for it and nothing changes.
 // A second row replays EVERY tree shape up to 6 pieces (64 shapes) x EVERY pair of pieces against the same model.
+// A third (X18 parts, CUT3 leg 3) adds the case the first two do not have: ONE side of a cut that is several separate parts (the tips of a star taken by one swipe).
 //
 // THE ROW MAP of the shell's cut rows (CUT2.md 12 + CUT3.md 5; this file stays the pure tree: no physics, no DOM). Run each with node <file> [--only=section]:
 //   X18 / the tree, any count to 64 leaves ........ this file
@@ -34,7 +35,7 @@
 //   X15 the join gesture / the resting gap ......... cutter_checks.ts --only=joins,x15gap; cut_browser.mjs --only=join (REAL drags: a group of 3, the root, 4 pieces); browser_shell.mjs --only=cut-x
 //   X19 the scripted parting ....................... cutter_checks.ts --only=parting,slope; cut_browser.mjs --only=level,part
 // --full runs the cutter_checks sections on all 50 species (default: the 12 family representatives).
-import { createCutTree, cutPiece, cutStack, group, isLeaf, isLive, isWhole, joinGroup, lca, leaves, planeById, regionOf, rollbackCut, undoCut } from '../../src/shell/cutRegion.ts';
+import { createCutTree, cutPiece, cutStack, group, isLeaf, isLive, isWhole, joinGroup, lca, leaves, leavesUnder, planeById, regionOf, rollbackCut, undoCut } from '../../src/shell/cutRegion.ts';
 import type { CutNode, CutTree } from '../../src/shell/cutRegion.ts';
 import type { PieceRegion } from '../../src/contracts.ts';
 import { availableParallelism } from 'node:os';
@@ -480,6 +481,158 @@ async function main(): Promise<void> {
   }
   check(`X18 exhaustive: all ${counts.reduce((s, c) => s + c, 0)} tree shapes up to 6 pieces (${counts.join(', ')} with 1 to 6 pieces) x every pair of pieces (${pairs}): group, join, region, stack and "drain to the root" all agree with the model`,
     fails === 0 && counts.join() === '1,1,2,5,14,42', fails ? first : '');
+}
+
+/* ───────────────────────── X18 parts (CUT3 leg 3, 2026-10-09): a side of a cut can be several separate pieces ───────────────────────── */
+// The owner asked for cuts that take tips off (2026-10-09), so ONE side of a cut may be k >= 2 separate parts: a 'parts' node (a chain, no plane of its own, not a body) over k leaves. Independent model: a piece is a LIST OF TOKENS, one per cut
+// level on its way from the root: "A" / "B" (a side of one part) or "B0" / "B1" / "B2" (part i of a side of several). A join of P and Q takes the first level where their tokens differ (side OR part): the group is every piece that shares the
+// tokens above it, and the merged piece is the cut node there (never a parts node). Checked after every operation against the tree: the leaves, their literals, their regions (with the physics' token as `part`), the group, the cut stack
+// (cut nodes only), ids, rollback of a cut with parts (ids given back), the join target's region, and "drain to the root ends whole".
+{
+  const t0 = performance.now();
+  const key = (p: readonly string[]): string => p.join('.');
+  let seqs = 0, ops = 0, cuts = 0, multi = 0, joins = 0, partJoins = 0, rollbacks = 0, maxLeaves = 0, fails = 0, first = '';
+  /** the token path of a leaf, from the tree alone (parent links) */
+  const pathOfLeaf = (leaf: CutNode): string[] => {
+    const out: string[] = [];
+    let x = leaf;
+    while (x.parent) {
+      const idx = x.partIndex >= 0 ? String(x.partIndex) : '';
+      let y = x;
+      while (y.parent && y.parent.isParts) y = y.parent;
+      const cut = y.parent;
+      if (!cut || !cut.kids) break;
+      out.unshift((cut.kids[0] === y ? 'A' : 'B') + idx);
+      x = cut;
+    }
+    return out;
+  };
+  const canonP = (t: CutTree): string => {
+    const parts: string[] = [];
+    const walk = (n: CutNode): void => { parts.push(`${n.id}:${n.lits.join(',')}:${n.cutId}:${n.kids ? (n.isParts ? 'p' : 'c') : 'l'}:${n.partIndex}:${n.part}:${n.mark}`); if (n.kids) { walk(n.kids[0]); walk(n.kids[1]); } };
+    walk(t.root);
+    parts.push('P' + t.planes.map((p) => `${p.id},${p.d}`).join(';'), 'S' + t.stack.map((n) => n.id).join(','), `N${t.nextPlane},${t.nextNode}`);
+    return parts.join('|');
+  };
+  interface Live { path: string[]; node: CutNode; token: number | null }
+  for (let s = 0; s < Math.max(200, Math.floor(SEQS / 5)); s++) {
+    const r = rng(777 + s), t = createCutTree();
+    const model = new Map<string, Live>();   // key(path) -> the piece the model says is live
+    model.set('', { path: [], node: t.root, token: null });
+    let tokenCounter = 1, err: string | null = null;
+    const bound = [6, 24, 64][Math.floor(r() * 3)];
+    seqs++;
+    const verifyAll = (): string | null => {
+      const ls = leaves(t);
+      if (ls.length !== model.size) return `${ls.length} leaves, the model has ${model.size}`;
+      maxLeaves = Math.max(maxLeaves, ls.length);
+      const ids = new Set<number>();
+      for (const leaf of ls) {
+        const p = pathOfLeaf(leaf), m = model.get(key(p));
+        if (!m) return `leaf ${key(p)} is not a piece of the model`;
+        if (m.node !== leaf) return `leaf ${key(p)} is a different node than the model's`;
+        const reg = regionOf(t, leaf);
+        if (!reg || reg.cells.length !== 1 || !sameArr(reg.cells[0], leaf.lits)) return `region of ${key(p)} is not its literals`;
+        if ((reg.part ?? null) !== m.token) return `region of ${key(p)} has part ${reg.part} but the physics' token was ${m.token}`;
+        if (ids.has(leaf.id)) return 'a node id twice';
+        ids.add(leaf.id);
+      }
+      // the cut stack holds cut nodes only, newest last; parts nodes and leaves are never on it; the plane table is exactly the live cuts
+      let cutsLive = 0, prev = 0;
+      const walk = (n: CutNode): string | null => {
+        if (ids.has(n.id) && n.kids) return 'a node id twice (internal)';
+        if (n.kids) {
+          ids.add(n.id);
+          if (n.isParts) { if (n.cutId !== 0) return 'a parts node has a plane'; if (!sameArr(n.kids[0].lits, n.lits) || !sameArr(n.kids[1].lits, n.lits)) return 'a parts node kid has other literals'; }
+          else { cutsLive++; if (!(n.cutId >= 1)) return 'a cut node without a plane'; }
+          return walk(n.kids[0]) ?? walk(n.kids[1]);
+        }
+        return null;
+      };
+      const w = walk(t.root);
+      if (w) return w;
+      if (t.stack.length !== cutsLive || t.planes.length !== cutsLive) return `stack ${t.stack.length} / planes ${t.planes.length} / live cuts ${cutsLive}`;
+      for (const e of t.stack) { if (e.isParts || !e.kids) return 'the stack holds a leaf or a parts node'; if (e.cutId <= prev) return 'stack not in cut order'; prev = e.cutId; }
+      return null;
+    };
+    const parentPrefix = (a: string[], b: string[]): string[] => { let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++; return a.slice(0, i); };
+    const livePaths = (): Live[] => [...model.values()];
+    for (let op = 0; op < 60 && !err; op++) {
+      const roll = r(), all = livePaths();
+      if ((roll < 0.55 && all.length < bound) || all.length === 1) {
+        if (all.length >= bound) break;
+        // a cut of a random live piece; each side is 1 part (most often) or 2 to 4
+        const tgt = all[Math.floor(r() * all.length)], nA = r() < 0.7 ? 1 : 2 + Math.floor(r() * 3), nB = r() < 0.7 ? 1 : 2 + Math.floor(r() * 3);
+        if (all.length - 1 + nA + nB > bound) { continue; }
+        const tokA = Array.from({ length: nA }, () => (r() < 0.2 && nA === 1 ? null : tokenCounter++)), tokB = Array.from({ length: nB }, () => (r() < 0.2 && nB === 1 ? null : tokenCounter++));
+        const before = canonP(t);
+        const doRollback = r() < 0.12;
+        const kids = cutPiece(t, tgt.node, unitV(r), r() * 1.2 - 0.6, tokA, tokB);
+        if (!kids) { err = 'cutPiece refused a live leaf'; break; }
+        const leafsA = leavesUnder(kids[0]), leafsB = leavesUnder(kids[1]);
+        if (leafsA.length !== nA || leafsB.length !== nB) { err = `a cut made ${leafsA.length}+${leafsB.length} leaves, wanted ${nA}+${nB}`; break; }
+        if (nA > 1 && !kids[0].isParts || nB > 1 && !kids[1].isParts || (nA === 1 && kids[0].isParts) || (nB === 1 && kids[1].isParts)) { err = 'a side of several parts is not a parts node (or a side of one is)'; break; }
+        if (doRollback) {
+          if (!rollbackCut(t, tgt.node)) { err = 'rollbackCut refused the newest cut (with parts)'; break; }
+          if (canonP(t) !== before) { err = 'rollbackCut did not restore the tree (with parts)'; break; }
+          if (leafsA.concat(leafsB).some((x) => isLive(t, x))) { err = 'a rolled-back part is still live'; break; }
+          rollbacks++;
+        } else {
+          model.delete(key(tgt.path));
+          const put = (side: 'A' | 'B', leafs: CutNode[], toks: Array<number | null>): void => leafs.forEach((leaf, i) => {
+            const p = [...tgt.path, side + (leafs.length > 1 ? String(i) : '')];
+            model.set(key(p), { path: p, node: leaf, token: toks[i] });
+          });
+          put('A', leafsA, tokA); put('B', leafsB, tokB);
+          cuts++; if (nA > 1 || nB > 1) multi++;
+        }
+      } else {
+        // a join of two random pieces: the group is every piece below the first level where their tokens differ
+        const a = all[Math.floor(r() * all.length)];
+        let b = all[Math.floor(r() * all.length)];
+        if (a === b) b = all[(all.indexOf(a) + 1) % all.length];
+        if (a === b) continue;
+        const pre = parentPrefix(a.path, b.path), under = all.filter((x) => pre.every((tok, i) => x.path[i] === tok));
+        const g = group(t, a.node, b.node);
+        if (!g) { err = 'group refused two live leaves'; break; }
+        if (g.members.length !== under.length || !under.every((x) => g.members.includes(x.node))) { err = `group of ${key(a.path)} and ${key(b.path)}: ${g.members.length} members, the model says ${under.length}`; break; }
+        if (g.node.isParts) { err = 'a group ended on a parts node'; break; }
+        if (pre.length === 0 ? g.node !== t.root : false) { err = 'the group of pieces of different top-level sides is not the root'; break; }
+        const sameSide = a.path.length === b.path.length && a.path.length > pre.length && a.path[pre.length][0] === b.path[pre.length][0];
+        if (sameSide) partJoins++;
+        // a parts node is never a join target: asking for it answers null and changes nothing
+        let pn: CutNode | null = null;
+        for (let x: CutNode | null = a.node.parent; x; x = x.parent) if (x.isParts) { pn = x; break; }
+        if (pn) { const c0 = canonP(t); if (joinGroup(t, pn) !== null || regionOf(t, pn) !== null || canonP(t) !== c0) { err = 'a parts node was accepted as a join target'; break; } }
+        const regBefore = regionOf(t, g.node), litsBefore = g.node.lits.slice();
+        const node = joinGroup(t, g.node);
+        if (node !== g.node || node.kids !== null || !sameArr(node.lits, litsBefore) || !regBefore || !sameArr(regionOf(t, node)!.cells[0], regBefore.cells[0])) { err = 'joinGroup did not restore the same node and region'; break; }
+        for (const x of under) model.delete(key(x.path));
+        model.set(key(pre), { path: pre, node, token: node.part });
+        // the merged node keeps the physics' token it had as a leaf (a part of its own parent), so the model keeps it too
+        joins++;
+      }
+      ops++;
+      err = verifyAll();
+    }
+    // drain to the root: join random pairs until whole
+    let guard = 0;
+    while (!err && model.size > 1 && guard++ < 200) {
+      const all = livePaths(), a = all[0], b = all[1 + Math.floor(r() * (all.length - 1))];
+      const g = group(t, a.node, b.node);
+      if (!g) { err = 'drain: group refused'; break; }
+      const pre = parentPrefix(a.path, b.path), under = all.filter((x) => pre.every((tok, i) => x.path[i] === tok));
+      joinGroup(t, g.node);
+      for (const x of under) model.delete(key(x.path));
+      model.set(key(pre), { path: pre, node: g.node, token: g.node.part });
+      err = verifyAll();
+    }
+    if (!err && !(isWhole(t) && t.nextPlane === 1 && t.nextNode === 1 && t.planes.length === 0 && t.stack.length === 0)) err = 'did not end whole with the ids started over';
+    if (err) { fails++; if (!first) first = `seed ${777 + s}: ${err}`; }
+  }
+  check(`X18 parts: ${seqs} random sequences of cuts whose sides are 1 to 4 separate parts, joins (a join that ends on a parts node lifts to the cut node above it), rollbacks of a cut with parts and "drain to the root", after every one of ${ops} operations the tree equals the token model (leaves, literals, regions with the physics' part tokens, groups, stack of cut nodes only, ids); up to ${maxLeaves} leaves`,
+    fails === 0 && multi > seqs && partJoins > seqs / 4 && rollbacks > seqs / 10 && maxLeaves >= 30,
+    `${((performance.now() - t0) / 1000).toFixed(1)} s; cuts ${cuts} (${multi} with a side of several parts), joins ${joins} (${partJoins} of two pieces on one side), rollbacks ${rollbacks}${first ? '; FIRST FAILURE ' + first : ''}`);
 }
 
 console.log(`\n${total - bad}/${total} cut checks passed`);

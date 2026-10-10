@@ -11,7 +11,7 @@ body[data-calm="true"] { --k-an-title-in: title-fade; --k-an-title-pop: title-fa
   position: fixed; inset: 0; z-index: var(--wh-z-panel);
   display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto auto;
   grid-template-areas: "mark" "." "plate" "actions";
-  justify-items: center; align-items: start; row-gap: var(--wh-sp-3);
+  justify-items: center; align-items: start; row-gap: var(--wh-s3);
   padding: calc(env(safe-area-inset-top, 0px) + var(--t-pt)) calc(env(safe-area-inset-right, 0px) + var(--k-gutter, 16px)) calc(env(safe-area-inset-bottom, 0px) + var(--t-pb)) calc(env(safe-area-inset-left, 0px) + var(--k-gutter, 16px));
   text-align: center; font-family: var(--wh-font-ui); color: var(--k-fg, var(--wh-cream));
   /* a live scene under a scrim: ink at the top (the lockup) and at the bottom (the plate and the button), clear through the middle (the squishy) */
@@ -27,11 +27,13 @@ body[data-calm="true"] { --k-an-title-in: title-fade; --k-an-title-pop: title-fa
 .title[data-leaving="true"] { opacity: 0; pointer-events: none; }
 
 .title-mark { grid-area: mark; margin: 0; max-width: 100%; --jl-cap: min(var(--wh-cap-xl), 14vh); }
-.title-promise { grid-area: plate; margin: 0; max-width: min(34ch, 100%); padding: 9px var(--wh-sp-5); border-radius: var(--wh-r-pill);
+.title-promise { grid-area: plate; margin: 0; max-width: min(34ch, 100%); padding: 9px var(--wh-s5); border-radius: var(--wh-r-pill);
   font: var(--wh-w-mid) var(--wh-fs-lead)/1.3 var(--wh-font-ui); color: var(--k-fg); text-wrap: balance; overflow-wrap: anywhere; }
-.title-actions { grid-area: actions; display: grid; justify-items: center; gap: var(--wh-sp-4); width: 100%; min-width: 0; }
-.title-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--wh-sp-3) var(--wh-sp-2); }
+.title-actions { grid-area: actions; display: grid; justify-items: center; gap: var(--wh-s4); width: 100%; min-width: 0; }
+.title-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px var(--wh-s2); }
 .title-chip-label { min-width: 0; }
+.title[data-layout="wide"]:not([data-density="short"]) { --wh-chip-h: 40px; }   /* a roomy screen: chips and plate sized to stand under the 66 px button (F1) */
+.title[data-layout="wide"]:not([data-density="short"]) :is(.title-chip, .title-promise) { font-size: var(--wh-fs-body); }
 
 /* ---- the button: the kit's gel, restated over the legacy .cta rules (styles.css, until the error card moves to the kit in B4) ---- */
 .title .cta { min-width: min(320px, 100%); opacity: 1; animation: var(--k-an-title-pop) 480ms var(--wh-ease-spring) 880ms backwards; }
@@ -55,7 +57,7 @@ body[data-calm="true"] { --k-an-title-in: title-fade; --k-an-title-pop: title-fa
 /* wide short (the portal's 888x500 box): the button and the chips share one row, so the squishy keeps its room */
 .title[data-layout="wide"][data-density="short"] { --t-pt: 3vh; --t-pb: 4vh; }
 .title[data-layout="wide"][data-density="short"] .title-mark { --jl-cap: clamp(56px, 15vh, 100px); }
-.title[data-layout="wide"][data-density="short"] .title-actions { grid-auto-flow: column; justify-content: center; align-items: center; gap: var(--wh-sp-4); }
+.title[data-layout="wide"][data-density="short"] .title-actions { grid-auto-flow: column; justify-content: center; align-items: center; gap: var(--wh-s4); }
 .title[data-layout="wide"][data-density="short"] .cta { min-width: 240px; }
 /* stack (phones in portrait, tablets in portrait): the lockup is one word per line; labels give way to icons on a narrow and short screen */
 .title[data-layout="stack"] { --t-pt: clamp(16px, 5vh, 56px); --t-pb: 5vh; }
@@ -64,18 +66,18 @@ body[data-calm="true"] { --k-an-title-in: title-fade; --k-an-title-pop: title-fa
   .title-chip-label { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 /* strip (phones in landscape): the lockup and the plate on top, the button and the chips on ONE row at the bottom, the squishy between */
-.title[data-layout="strip"] { --t-pt: 3vh; --t-pb: 3vh; grid-template-areas: "mark" "plate" "." "actions"; grid-template-rows: auto auto minmax(0, 1fr) auto; row-gap: var(--wh-sp-2); }
+.title[data-layout="strip"] { --t-pt: 3vh; --t-pb: 3vh; grid-template-areas: "mark" "plate" "." "actions"; grid-template-rows: auto auto minmax(0, 1fr) auto; row-gap: var(--wh-s2); }
 .title[data-layout="strip"] .title-mark { --jl-cap: clamp(36px, 15vh, 72px); }
-.title[data-layout="strip"] .title-promise { padding: 5px var(--wh-sp-4); font-size: var(--wh-fs-body); }
-.title[data-layout="strip"] .title-actions { grid-auto-flow: column; justify-content: center; align-items: center; width: auto; gap: var(--wh-sp-4); }
-.title[data-layout="strip"] .cta { min-height: 52px; min-width: 0; padding: 0 var(--wh-sp-6); }
+.title[data-layout="strip"] .title-promise { padding: 5px var(--wh-s4); font-size: var(--wh-fs-body); }
+.title[data-layout="strip"] .title-actions { grid-auto-flow: column; justify-content: center; align-items: center; width: auto; gap: var(--wh-s4); }
+.title[data-layout="strip"] .cta { min-height: 52px; min-width: 0; padding: 0 var(--wh-s6); }
 /* tiny (the portal phone, 358x201): a 28 px lockup, a one-line plate, a 44 px button with its two icons beside it */
-.title[data-layout="tiny"] { --t-pt: 6px; --t-pb: 6px; --k-gutter: var(--wh-sp-3); grid-template-areas: "mark" "plate" "." "actions"; grid-template-rows: auto auto minmax(0, 1fr) auto; row-gap: 4px; }
+.title[data-layout="tiny"] { --t-pt: 6px; --t-pb: 6px; --k-gutter: var(--wh-s3); grid-template-areas: "mark" "plate" "." "actions"; grid-template-rows: auto auto minmax(0, 1fr) auto; row-gap: 4px; }
 .title[data-layout="tiny"] .title-mark { --jl-cap: 28px; }
-.title[data-layout="tiny"] .title-promise { padding: 3px var(--wh-sp-3); font-size: var(--wh-fs-small); }
-.title[data-layout="tiny"] .title-actions { grid-auto-flow: column; justify-content: center; align-items: center; width: 100%; gap: var(--wh-sp-2); }
-.title[data-layout="tiny"] .cta { min-height: var(--wh-hit); min-width: 0; width: 100%; padding: 0 var(--wh-sp-5); font-size: var(--wh-fs-lead); }
+.title[data-layout="tiny"] .title-promise { padding: 3px var(--wh-s3); font-size: var(--wh-fs-small); }
+.title[data-layout="tiny"] .title-actions { grid-auto-flow: column; justify-content: center; align-items: center; width: 100%; gap: var(--wh-s2); }
+.title[data-layout="tiny"] .cta { min-height: var(--wh-hit); min-width: 0; width: 100%; padding: 0 var(--wh-s5); font-size: var(--wh-fs-lead); }
 .title[data-layout="tiny"] .title-chip:not(.title-keep) { display: none; }
-.title[data-layout="tiny"] .title-chips { flex-wrap: nowrap; gap: var(--wh-sp-2); }
+.title[data-layout="tiny"] .title-chips { flex-wrap: nowrap; gap: var(--wh-s2); }
 /* a narrow phone: the plate is one 14 px line (two lines cost 30 px a 568 px screen cannot spare) */
-@media (max-width: 380px) { .title-promise { padding: 7px var(--wh-sp-4); font-size: var(--wh-fs-small); } }
+@media (max-width: 380px) { .title-promise { padding: 7px var(--wh-s4); font-size: var(--wh-fs-small); } }

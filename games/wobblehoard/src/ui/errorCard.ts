@@ -52,7 +52,7 @@ export function showErrorCard(root: HTMLElement, o: ErrorCardOptions): HTMLEleme
   let title: HTMLElement;
   try {
     // (the drawn alphabet has the straight apostrophe only: the curly one is drawn straight, and the real text for readers keeps the original)
-    title = jelly(o.title.replace(/[‘’]/g, "'"), { size: o.title.length > 22 ? 'sm' : 'md', tone: 'amber', tag: 'h2', words: true });
+    title = jelly(o.title.replace(/[‘’]/g, "'"), { size: o.title.length > 22 || innerHeight <= 340 ? 'sm' : 'md', tone: 'amber', tag: 'h2', words: true });
     const real = title.querySelector('.jl-text');
     if (real) real.textContent = o.title;
     title.classList.add('errorcard-title');

@@ -1864,7 +1864,7 @@ async function main() {
       // (CUT.md 1: pieces are played with, and joined, with the Hand: a drag in the Cut tool is a cut)
       await page.evaluate(() => document.querySelector('#wh-play')?.focus()); await page.keyboard.press('c');
       const handNow = (await tools(page)).tool;
-      const cr = await carry(page, { x: near.x - dir * 0.62 * near.r, y: near.y - 0.1 * near.r }, { x: face.x, y: face.y - 0.3 * face.r }, 0.6, 2);   // (RE-SPECIFIED 2026-10-08: the OUTER shoulder; a true-cut pair rests flush, so a press on the inner shoulder meets the other piece first)
+      const cr = await carry(page, { x: near.x + dir * 0.1 * near.r, y: near.y - 0.1 * near.r }, { x: face.x, y: face.y - 0.3 * face.r }, 0.6, 2);   // (RE-SPECIFIED 2026-10-09: 0.1 radius toward the twin. The 2026-10-08 version pressed the OUTER shoulder and lifted: that drag is not OUTWARD from the piece's centre (cos 0.00 < 0.2, gestures.ts), so it was a rub and the piece was never picked up. 0.55 toward the twin meets the twin first (a true-cut pair rests flush); 0.1 is the piece's own, and the lift is outward (cos 0.8))
       await cutIdle(page, 3);
       const tj = await tools(page);
       check('drag to reconnect: the other piece carried onto the play body and held there flows back in (whole again, a rejoin sound)',
