@@ -12,7 +12,7 @@ import { MILESTONES } from '../src/sim/chronicle.ts';
 import { cohortTotal } from '../src/sim/people/cohorts.ts';
 import type { Command, SimEvent } from '../src/sim/types.ts';
 import { makeCtx } from '../src/sim/people/ctx.ts';
-import { siteScore } from '../src/sim/people/settlement.ts';
+import { siteScore, seasonTemps, enduresSeason } from '../src/sim/people/settlement.ts';
 import { DAY, must, shipsLine, until } from './helpers/space.ts';
 
 const people = (sim: Sim, planet: number): number => {
@@ -163,4 +163,38 @@ test('barren: the milestones come in order, each once; living worlds have theirs
   back.drainEvents();
   back.step(DAY);
   assert.equal(back.drainEvents().filter((e) => e.t === 'milestone' && seen.includes((e.data as { kind: string }).kind)).length, 0);
+});
+
+test('a scenario sets its peoples where their bodies bear the whole year, clothed; a housed town sits out a hard season', () => {
+  // (seed 1 put the electric-age city of 'system' at 53° south, where winter nights passed the plains folk's limit: it
+  // froze in its houses in its third winter, walked out into the spring, and died to the last on a bare riverbank)
+  const sim = new Sim({ seed: 1, scenario: 'system', overrides: { n: 16 } });
+  const u = sim.u;
+  for (const p of u.planets) {
+    const x = makeCtx(u, p);
+    for (const st of p.people.settlements.filter((s) => s.fallen < 0 && !s.band)) {
+      const [tMin, , , tMax] = u.content.species.list[st.species].temp;
+      const t = seasonTemps(x, st.cell);
+      assert.ok(t.cold >= tMin && t.hot <= tMax, `${p.name} ${st.name}: a year of ${t.cold.toFixed(1)} .. ${t.hot.toFixed(1)} °C within ${tMin} .. ${tMax}`);
+      if (st.era >= 3 && u.content.species.list[st.species].body === 'biped') {
+        const ms = p.people.members.get(st.id) ?? [];
+        assert.ok(ms.every((s) => p.people.agents.gear[s] >= 0), `${st.name}: everyone clothed`);
+      }
+    }
+  }
+  const gaia = u.planets.find((p) => p.name === 'Gaia')!;
+  const x = makeCtx(u, gaia);
+  const st = gaia.people.settlements.find((s) => s.fallen < 0 && !s.band)!;
+  assert.ok(enduresSeason(x, st), 'a town with roofs for its people stays through a hard season');
+  // ... but not where the year itself is past bearing (the world moved, an ice age)
+  const y0 = gaia.s.tempYear[st.cell];
+  gaia.s.tempYear[st.cell] = u.content.species.list[st.species].temp[0] - 10;
+  assert.equal(enduresSeason(x, st), false);
+  gaia.s.tempYear[st.cell] = y0;
+  // ... nor a town without roofs for most
+  const bs = gaia.people.buildings.filter((b) => b.settlement === st.id);
+  const f0 = bs.map((b) => b.flags);
+  for (const b of bs) b.flags |= 2;
+  assert.equal(enduresSeason(x, st), false);
+  bs.forEach((b, i) => { b.flags = f0[i]; });
 });

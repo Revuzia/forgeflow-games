@@ -25,6 +25,7 @@ import { emitAt, agentRef } from './util.ts';
 import { missionTaskDone } from './missions.ts';
 import { addWorship, meet } from './culture.ts';
 import { formCouple } from './social.ts';
+import { breathable } from '../space/habitat.ts';
 
 const _p = [0, 0, 0];
 const _q = [0, 0, 0];
@@ -318,8 +319,12 @@ export function equipFromStore(x: PCtx, s: number, st: Settlement): void {
   const A = x.A;
   if (A.gear[s] < 0) {
     let best = -1, bw = 0;
+    // (a pressure suit is clothing too, the warmest — but it is kept for a world whose air would kill, not worn to the
+    // fields: a town that wore its suits had none left for the settlers it sent to such a world)
+    const sealOnly = breathable(x.c.species.list[A.species[s]], x.p.st.atmosphere);
     for (const it of x.c.itemsByTag.get('clothing') ?? []) {
       const w = x.c.items.list[it].warmth ?? 0;
+      if (sealOnly && x.c.items.list[it].tags.includes('suit')) continue;
       if (storeHas(st, it) >= 1 && w > bw) { bw = w; best = it; }
     }
     if (best >= 0 && storeTake(st, best, 1) >= 1) A.gear[s] = best;

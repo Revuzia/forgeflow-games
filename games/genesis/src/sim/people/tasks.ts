@@ -181,7 +181,7 @@ export function nextSegment(x: PCtx, s: number): void {
   let dur = Math.max(1, Math.round(d / Math.max(0.01, v)));
   // SIM perf push 3 (perf/plapse.ts): legs are longer at 100x / 1000x and on land one segment walks on through several
   // waypoints; a stretched task's way is worn once per trip it stands for (at level 0: maxLeg MAX_LEG, wear 1)
-  const maxLeg = legOf(x, MAX_LEG);
+  const maxLeg = legOf(x, MAX_LEG, A.task[s]); // (push 3 round 2: a flight from fire walks as at 1x)
   const wear = wearOf(x, s);
   if (maxLeg > MAX_LEG && dur < maxLeg && !afloat && !sp.fly && to !== from && p.f.water[to] <= 0.6) {
     batchHops(x, s, to, goal, dur, speed, ageF, sp.swim, maxLeg, goalCell(x, s), wear);
@@ -222,7 +222,7 @@ export function nextSegment(x: PCtx, s: number): void {
     if (!sp.fly) { wearRoad(x, to); for (let i = 1; i < wear; i++) wearRoad(x, to); }
   }
   // (SIM perf push 3, perf/plapse.ts: at 1000x the work begins where this last leg ends, without a wake-up between)
-  if (atGoal && !afloat && mergeArrival(x)) { beginWork(x, s, A.t1[s]); return; }
+  if (atGoal && !afloat && mergeArrival(x, A.task[s])) { beginWork(x, s, A.t1[s]); return; }
   schedule(x, s, A.t1[s]);
 }
 

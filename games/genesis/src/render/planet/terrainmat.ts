@@ -97,6 +97,18 @@ ${GROUND_FRAG_PARS}
 // sky: ambient-only occlusion (forest canopy over its floor); ao darkens ambient and, partly, the sun
 struct TSurf { vec3 albedo; float rough; float bump; float ao; vec3 emis; float glint; vec3 microG; float sky; };
 
+// a lit street seen from afar (night-side city lights): the zero line of noise at frequency f (1/m) in the tangent
+// plane, half-width hw (m); a line under a pixel (px m) wide keeps about a pixel's width and dims by its coverage
+float cl_street(vec3 P, float f, float hw, float px, vec3 up) {
+  vec3 g;
+  float n = snoiseGrad(P * f, g);
+  g *= f;
+  g -= up * dot(g, up);
+  float d = abs(n) / max(length(g), 1e-5);
+  float w = max(hw, px * 0.7);
+  return (1.0 - smoothstep(w * 0.5, w, d)) * (hw / w);
+}
+
 // fade a pattern out before it is resolved by fewer than ~6 pixels per feature (no speckle at distance)
 float aaF(float fw, float feature) { return 1.0 - smoothstep(0.12, 0.45, fw / feature); }
 
@@ -590,7 +602,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // ash (with the small warp, dB is a fair distance near the front; a margin defined in field values covered most of
     // a smooth burning field with coals — orange flecks everywhere, even by day)
     float smoulder = smoothstep(0.3, 1.5, dB) * (1.0 - smoothstep(3.0, 7.0 + 3.0 * fl, dB));
-    float coals = smoothstep(0.72, 0.92, snoise(P * 0.42 + 4.0) * 0.5 + 0.5 + 0.15 * snoise(P * 1.7)) * 0.35;
+    // (fine-grained: 1–2 m blotches of coal glow read as orange petals scattered over the grass by day)
+    float coals = smoothstep(0.78, 0.95, snoise(P * 1.1 + 4.0) * 0.5 + 0.5 + 0.2 * snoise(P * 3.7)) * 0.3 * aaF(fw, 0.9);
     // sparse embers in the smoulder, round specks off-centre in their cells, faded before they shrink under a pixel
     vec3 cellE = floor(P * 2.2);
     float eh = fract(sin(dot(cellE, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
@@ -598,8 +611,12 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float ember = step(0.975, eh) * smoothstep(0.22, 0.08, length(eo)) * (0.6 + 0.4 * sin(uTime * 3.0 + eh * 60.0)) * (1.0 - smoothstep(0.06, 0.2, fw));
     // (by day the front and the coals are a smouldering line under the flames, not a lava worm: about half the glow
     // the night shows — the exposure, not the fire, changes, but the eye reads the sunlit ground first)
+    // (by day the coals all but vanish under the sun; a smooth bright front line read as a lava worm: it is broken
+    // into burning stretches with dim gaps, and kept low — the flames standing on it are the fire)
     float dayFire = mix(1.0, 0.45, smoothstep(-0.05, 0.25, dot(up, uSunDirBody)));
-    emis += vec3(2.4, 0.62, 0.09) * (band * (0.5 + 0.9 * lick) * fl * 2.2 + smoulder * (coals + 0.004) * fl + ember * smoulder * 1.2) * dayFire;
+    float dayCoal = mix(1.0, 0.15, smoothstep(-0.05, 0.25, dot(up, uSunDirBody)));
+    float broken = 0.25 + 0.75 * smoothstep(0.35, 0.75, lick * 0.6 + 0.4 * (snoise(P * 0.18 + vec3(0.0, uTime * 0.2, 0.0)) * 0.5 + 0.5));
+    emis += vec3(2.4, 0.55, 0.07) * (band * broken * (0.5 + 0.9 * lick) * fl * 1.1 * dayFire + (smoulder * (coals + 0.004) * fl + ember * smoulder * 1.2) * dayCoal);
     // the ground: scorched brown just ahead of the front (heat), charred black right behind it, grey ash further back
     float ahead = smoothstep(0.1, 0.24, level) * (1.0 - step(0.0, dB));
     col = mix(col, col * vec3(0.55, 0.45, 0.35), ahead * 0.6);
@@ -659,12 +676,13 @@ ${TERRAIN_VERT_CORE}
   vF2 = tfInterp(uFieldV, aCells, aMisc.x);
   vF3 = tfInterp(uFieldC, aCells, aMisc.x);
   // material-aware relief in the SHADING (the heights are the contract's ground and stay as they are): the 12 m and
-  // 3 m detail octaves shade at full strength on bare rock, at half on soil and meadow, and barely on sown fields,
-  // roads and streets — the same ±0.6 m humps lit everywhere read as a quilted mattress
+  // 3 m detail octaves shade at full strength on bare rock, at under a third on soil and meadow, and barely on sown
+  // fields, roads and streets — the same ±0.6 m humps lit everywhere read as a quilted mattress (and their shadows are
+  // left out of the shadow maps: DEPTH_VERT)
   {
     float rockK = smoothstep(0.55, 0.9, tA.y);
     float flatK = max(smoothstep(0.04, 0.3, vF2.w), smoothstep(0.1, 0.45, vF3.z)) * (1.0 - rockK);
-    float reliefK = mix(mix(0.45, 1.0, rockK), 0.12, flatK);
+    float reliefK = mix(mix(0.3, 1.0, rockK), 0.06, flatK);
     // (the detail gradient taken back out follows the geomorph — toward the coarse level's gradient, aGradM — so the
     // two sides of an LOD border shade alike: with the own level's gradient faded by the morph, every patch border
     // drew a straight seam across the meadow)
@@ -780,38 +798,36 @@ const FRAG_EMISSIVE = /* glsl */ `
     if (cityL > 0.002 && night > 0.0) {
       float cd = length(vViewPosition);
       vec3 Pc = vBodyPos;
-      // An organic glow, not a lit polygon: the per-cell light is linear over 50 m sim triangles (its contours are
-      // straight lines), so a noise-warped threshold bites the outline into ragged edges, and a hamlet's few hearths
-      // fade in rather than being cut off (any lit village keeps a visible glow)
-      float wn = fbm3(Pc * 0.022 + 3.7) + 0.35 * snoise(Pc * 0.09 + 1.3);
-      float street = smoothstep(0.08, 0.5, vF3.z + wn * 0.12);
-      float presence = smoothstep(0.0, 0.35, cityL * 1.6 + wn * 0.22 - 0.06 + street * 0.25);
-      // lit quarters strung along the worn streets, dark gaps (yards, gardens, fields) between them — shaped by noise,
-      // so no Voronoi cells
-      // (driven by the noise more than by the street wear, which is high all over a city: led by the streets the
-      // clumps merged into one uniform blown-out blob)
-      // (the exposure meters a night side on its few lit pixels, so a city's brightness is normalised away: what reads
-      // is its contrast — lit quarters against dark gaps — hence a low floor and about half of it in gaps)
-      // A city is its lights: a faint aura, and points whose density follows the quarters (soft noise, so no
-      // hard-edged leopard spots — thresholded clumps read as dark holes punched in a cream blob)
-      float clump = smoothstep(-0.3, 0.6, wn * 1.2 + street * 0.25 + min(cityL, 2.0) * 0.08);
-      float glow = (0.003 + 0.07 * clump * (0.3 + 0.7 * street)) * presence;
-      // the lights themselves: points (one per ~8 m and per ~25 m cell, each its own brightness, many dark). Where a
-      // point is smaller than a pixel it stays a pixel-sized spark (dimmed linearly, not by area) — the bloom carries
-      // it — and where even the cells are unresolved their mean is already in the glow
+      // An organic glow, not a lit polygon (the per-cell light is linear over 50 m sim triangles, its contours
+      // straight lines): the light is a DENSITY that thins out smoothly toward the edge of the settled land (no
+      // threshold, hence no outline), carried a little along the worn roads round it, and drawn as what a night town is
+      // from above — its lit streets: the zero lines of domain-warped noise, a winding net of avenues (~65 m apart)
+      // everywhere lit and lanes between them (~30 m) where the quarter is dense, dotted with lamps, plus a few bright
+      // points (squares, inns, workshops). A line narrower than a pixel keeps a pixel's width and dims by its coverage
+      // (no thickening into a blob from orbit); unresolved, the net averages into the aura. Thresholded clumps of points
+      // read as polka dots on a lit polygon.
+      float wn = fbm3(Pc * 0.022 + 3.7);
+      float wornWay = smoothstep(0.06, 0.45, vF3.z + wn * 0.08);
+      float dens = clamp(cityL * (0.75 + 0.5 * wn) + wornWay * 0.35 * smoothstep(0.0, 0.08, cityL), 0.0, 2.5);
+      vec3 upC = normalize(Pc);
+      vec3 wq = vec3(snoise(Pc * 0.006 + 1.0), snoise(Pc * 0.006 + 5.2), snoise(Pc * 0.006 + 9.7)) * 40.0;
+      float pxM = max(tFw, 0.25);
+      float avenue = cl_street(Pc + wq, 0.0075, 3.5, pxM, upC);
+      float lane = cl_street(Pc + wq * 0.6 + 31.0, 0.016, 2.0, pxM, upC);
+      float lamps = 0.6 + 0.8 * smoothstep(0.25, 0.85, snoise(Pc * 0.08 + 4.0) * 0.5 + 0.5);
+      float streets = (avenue * smoothstep(0.0, 0.25, dens) + lane * 0.75 * smoothstep(0.2, 0.9, dens)) * lamps;
+      float glow = 0.03 * dens * (0.6 + 0.4 * smoothstep(-0.3, 0.5, wn));
+      // bright points: one per ~25 m cell at most, more in the dense quarters, each its own brightness; sub-pixel they
+      // stay a pixel-sized spark dimmed linearly (the bloom carries it)
       float pts = 0.0;
       {
         vec3 fp; float f1; float id;
-        ff_cells(Pc * 0.125, fp, f1, id);
-        float rad = 0.07, rr = max(rad, tFw * 0.125 * 0.6);
-        float on8 = step(1.0 - (0.2 + 0.6 * clump), id);
-        pts += on8 * (0.6 + 0.8 * fract(id * 7.3)) * exp(-(f1 * f1) / (rr * rr)) * (rad / rr) * aaF(tFw, 2.5);
         ff_cells(Pc * 0.04 + 7.7, fp, f1, id);
-        rad = 0.05; rr = max(rad, tFw * 0.04 * 0.6);
-        float on25 = step(1.0 - (0.3 + 0.65 * clump) * (0.55 + 0.45 * street), id);
-        pts += on25 * (0.8 + 0.8 * fract(id * 3.1)) * exp(-(f1 * f1) / (rr * rr)) * (rad / rr) * 3.0;
+        float rad = 0.05, rr = max(rad, tFw * 0.04 * 0.6);
+        float on25 = step(1.0 - 0.4 * smoothstep(0.05, 1.0, dens), id);
+        pts = on25 * (0.8 + 0.8 * fract(id * 3.1)) * exp(-(f1 * f1) / (rr * rr)) * (rad / rr) * 1.6;
       }
-      float pattern = glow + pts * presence;
+      float pattern = glow + streets * 0.9 + pts;
       // within a couple of km the settlement's own lit windows and street lamps are drawn (render/life): the ground
       // keeps only a faint warm spill there instead of a field of spots — light FALLING on the ground (its own colour,
       // saturating with the cell's sum of houses), not light glowing out of it: a self-lit spill read as a glaring disc
@@ -898,6 +914,10 @@ ${TERRAIN_VERT_PARS}
 #include <logdepthbuf_pars_vertex>
 void main() {
 ${TERRAIN_VERT_CORE}
+  // soil, turf, sand and snow cast their shadows from just under their own detail relief (the 3–12 m humps, ±~0.8 m):
+  // every hump shadowing the next at a low sun drew an egg-crate of light and shade over every meadow and street.
+  // Hills and valleys (the cell surface) still cast theirs, ~1.5 m shorter; bare rock keeps its own relief's shadows
+  tPos -= normalize(tPos) * (3.0 * tA.y * (1.0 - smoothstep(0.55, 0.9, tA.y)));
   gl_Position = projectionMatrix * modelViewMatrix * vec4(tPos, 1.0);
 #include <logdepthbuf_vertex>
 }

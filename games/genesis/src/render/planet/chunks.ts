@@ -21,8 +21,8 @@
 // baked per vertex, band-limited per level so coarse patches do not alias, at full strength from ~1 m spacing down.
 
 import {
-  BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, Sphere, Vector3, Frustum, Mesh, type Group, type Material,
-  type Matrix4,
+  BatchedMesh, BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, Sphere, Vector3, Frustum, type Mesh, type Group,
+  type Material, type Matrix4,
 } from 'three';
 import type { IcoGrid } from '../../sim/grid/icogrid.ts';
 import { newHit } from '../../sim/grid/icogrid.ts';
@@ -39,6 +39,8 @@ const R = PATCH_RES;
 const NPTS = ((R + 1) * (R + 2)) / 2;
 const NSKIRT = 3 * R;
 const NVERT = NPTS + NSKIRT;
+/** indices per patch: R² lattice triangles + two per skirt quad */
+const NINDEX = (R * R + 6 * R) * 3;
 const ptIndex = (i: number, j: number): number => j * (R + 1) - (j * (j - 1)) / 2 + i;
 
 /** boundary lattice points in CCW order (A→B, B→C, C→A), 3R of them */
@@ -120,9 +122,14 @@ export class Patch {
   cells: Int32Array | null = null;
   /** the cells the patch's vertices actually interpolate (set when its geometry is built): exact water presence */
   vcells: Int32Array | null = null;
-  geometry: BufferGeometry | null = null;
+  /** geometry built and stored in its level's batch (slot below) */
+  built = false;
+  /** its level's terrain batch (shared by every patch of the level: planetview swaps its material for the shadow
+   * pass through this reference) */
   mesh: Mesh | null = null;
-  waterMesh: Mesh | null = null;
+  /** slot in the level's terrain batch, and in its water batch (−1: none; a dry patch never takes a water slot) */
+  tSlot = -1;
+  wSlot = -1;
   lastUsed = 0;
   readonly sphere = new Sphere();
 
@@ -148,6 +155,101 @@ export class Patch {
 export interface ChunkMaterials {
   terrain(level: number): Material;
   water(level: number): Material;
+}
+
+/**
+ * One LOD level's patches in ONE draw (three's BatchedMesh: WEBGL_multi_draw where the browser has it, else a loop
+ * of draws with no per-object cost). Every patch has the same vertex and index counts (the shared lattice), so the
+ * batch is a pool of fixed-size slots: a new patch overwrites a freed slot in place (a sub-range upload) and the pool
+ * doubles when it runs out. The patches' positions are already in the body frame, so every instance matrix stays the
+ * identity; visibility per slot is set by the LOD selection (and per shadow cascade), never by three's culling (the
+ * unit-direction `position` attribute would give it wrong bounds).
+ */
+class PatchBatch {
+  readonly mesh: BatchedMesh;
+  private cap: number;
+  private used = 0;
+  private free: number[] = [];
+  private geomId: number[] = [];
+  private instId: number[] = [];
+  private visibleN = 0;
+  private vis: Uint8Array;
+
+  constructor(material: Material, cap: number, layer: number, name: string) {
+    this.cap = cap;
+    this.vis = new Uint8Array(cap);
+    this.mesh = new BatchedMesh(cap, cap * NVERT, cap * NINDEX, material);
+    this.mesh.name = name;
+    this.mesh.perObjectFrustumCulled = false;
+    this.mesh.sortObjects = false;
+    this.mesh.frustumCulled = false;
+    this.mesh.matrixAutoUpdate = false;
+    this.mesh.visible = false;
+    this.mesh.layers.set(layer);
+  }
+
+  /** store a patch geometry, returning its slot (hidden until shown) */
+  alloc(geo: BufferGeometry): number {
+    let s = this.free.pop();
+    if (s === undefined) {
+      if (this.used >= this.cap) this.grow();
+      s = this.used++;
+      this.geomId[s] = this.mesh.addGeometry(geo, NVERT, NINDEX);
+      this.instId[s] = this.mesh.addInstance(this.geomId[s]);
+      // (a new instance starts visible: count it, then hide it)
+      this.vis[s] = 1;
+      this.visibleN++;
+      this.show(s, false);
+    } else {
+      // (a freed slot is already hidden)
+      this.mesh.setGeometryAt(this.geomId[s], geo);
+    }
+    return s;
+  }
+
+  release(s: number): void {
+    if (s < 0) return;
+    this.show(s, false);
+    this.free.push(s);
+  }
+
+  show(s: number, on: boolean): void {
+    if (s < 0 || (this.vis[s] === 1) === on) return;
+    this.vis[s] = on ? 1 : 0;
+    this.visibleN += on ? 1 : -1;
+    this.mesh.setVisibleAt(this.instId[s], on);
+    this.mesh.visible = this.visibleN > 0;
+  }
+
+  isShown(s: number): boolean { return s >= 0 && this.vis[s] === 1; }
+
+  /** a copy of a slot's vertex data as a stand-alone geometry (a patch that turns wet takes a water slot from it) */
+  extract(s: number): BufferGeometry {
+    const src = this.mesh.geometry;
+    const r = this.mesh.getGeometryRangeAt(this.geomId[s]) as { vertexStart: number };
+    const vs = r.vertexStart;
+    const geo = new BufferGeometry();
+    for (const name of Object.keys(src.attributes)) {
+      const a = src.getAttribute(name);
+      geo.setAttribute(name, new Float32BufferAttribute((a.array as Float32Array).slice(vs * a.itemSize, (vs + NVERT) * a.itemSize), a.itemSize));
+    }
+    geo.setIndex(indexBuffer());
+    return geo;
+  }
+
+  private grow(): void {
+    const cap = this.cap * 2;
+    this.mesh.setInstanceCount(cap);
+    this.mesh.setGeometrySize(cap * NVERT, cap * NINDEX);
+    const v = new Uint8Array(cap);
+    v.set(this.vis);
+    this.vis = v;
+    this.cap = cap;
+  }
+
+  dispose(): void {
+    this.mesh.dispose();
+  }
 }
 
 export interface ChunkSelectContext {
@@ -204,6 +306,9 @@ export class ChunkLOD {
   private live = new Set<Patch>();
   private built = 0;
   private builtThisFrame = 0;
+  /** per LOD level: the terrain batch and the water batch (created on first use) */
+  private tBatch: (PatchBatch | null)[] = [];
+  private wBatch: (PatchBatch | null)[] = [];
   maxCached = 1400;
   terrainLayerMask = 0;
   castShadows = false;
@@ -311,10 +416,6 @@ export class ChunkLOD {
     const chord = 2 * Math.sin(p.angRadius / 2) * (this.radius + p.hMax);
     p.sphere.center.copy(p.centerDir).multiplyScalar(rMid);
     p.sphere.radius = Math.hypot(chord, 0.5 * (p.hMax - p.hMin)) + this.skirtDepth(p.level);
-    if (p.geometry) {
-      if (!p.geometry.boundingSphere) p.geometry.boundingSphere = new Sphere();
-      p.geometry.boundingSphere.copy(p.sphere);
-    }
   }
 
   /** any of these cells wet, or a shore cell whose extrapolated level is within reach of its ground (same rule as bounds) */
@@ -498,34 +599,36 @@ export class ChunkLOD {
     return geo;
   }
 
+  /** the level's terrain (water = false) or water batch, made on first use */
+  private batch(level: number, water: boolean): PatchBatch {
+    const list = water ? this.wBatch : this.tBatch;
+    let b = list[level];
+    if (!b) {
+      // (dry patches never take a water slot: the water pools start small)
+      b = new PatchBatch(water ? this.mats.water(level) : this.mats.terrain(level), water ? 8 : 32, water ? 2 : 0, `${water ? 'water' : 'terrain'}-L${level}`);
+      if (!water && this.castShadows) b.mesh.layers.enable(1);
+      list[level] = b;
+      this.group.add(b.mesh);
+    }
+    return b;
+  }
+
   private ensureGeometry(p: Patch, budget: boolean): boolean {
-    if (p.geometry) return true;
+    if (p.built) return true;
     if (budget && this.builtThisFrame >= this.buildBudgetNow) return false;
     this.updateBounds(p);
-    p.geometry = this.buildGeometry(p);
+    const geo = this.buildGeometry(p);
     // now that the vertex cells are known, the exact water test (bounds were derived before the build)
     if (p.hasWater && p.vcells) p.hasWater = this.vertexWater(p.vcells, this.fields.surface, this.fields.waterLevel, this.fields.waterDepth);
     this.builtThisFrame++;
     this.built++;
     this.stats.builtTotal++;
-    const m = new Mesh(p.geometry, this.mats.terrain(p.level));
-    m.matrixAutoUpdate = false;
-    m.frustumCulled = true;
-    m.castShadow = false;
-    m.receiveShadow = false;
-    m.visible = false;
-    if (this.castShadows) m.layers.enable(1);
-    m.userData.patchLevel = p.level;
-    p.mesh = m;
-    this.group.add(m);
-    const w = new Mesh(p.geometry, this.mats.water(p.level));
-    w.matrixAutoUpdate = false;
-    w.frustumCulled = true;
-    w.visible = false;
-    w.layers.set(2); // drawn in the water pass only
-    w.userData.patchLevel = p.level;
-    p.waterMesh = w;
-    this.group.add(w);
+    const tb = this.batch(p.level, false);
+    p.tSlot = tb.alloc(geo);
+    p.mesh = tb.mesh;
+    // the water sheet is drawn from a copy of the same vertices in the level's water batch (water pass, layer 2)
+    if (p.hasWater) p.wSlot = this.batch(p.level, true).alloc(geo);
+    p.built = true;
     this.live.add(p);
     return true;
   }
@@ -535,9 +638,9 @@ export class ChunkLOD {
   setShadowCasting(on: boolean): void {
     if (on === this.castShadows) return;
     this.castShadows = on;
-    for (const p of this.live) {
-      if (!p.mesh) continue;
-      if (on) p.mesh.layers.enable(1); else p.mesh.layers.disable(1);
+    for (const b of this.tBatch) {
+      if (!b) continue;
+      if (on) b.mesh.layers.enable(1); else b.mesh.layers.disable(1);
     }
   }
 
@@ -646,16 +749,20 @@ export class ChunkLOD {
       }
     };
     for (const r of this.roots) visit(r);
-    // visibility flags
-    for (const p of this.selected) { if (p.mesh) p.mesh.visible = false; if (p.waterMesh) p.waterMesh.visible = false; }
+    // visibility per batch slot: last frame's patches off, this frame's on (a patch that turned wet since it was
+    // built takes a water slot now, copied from its terrain slot; one that dried keeps its slot, hidden)
+    for (const p of this.selected) this.showPatch(p, false, false);
     let water = 0;
     for (const p of out) {
       p.lastUsed = ctx.frame;
-      if (p.mesh) p.mesh.visible = true;
-      if (p.waterMesh) {
-        p.waterMesh.visible = this.waterEnabled && p.hasWater;
-        if (p.waterMesh.visible) water++;
+      if (!p.built) continue;
+      const wet = this.waterEnabled && p.hasWater;
+      if (wet && p.wSlot < 0) {
+        const geo = this.batch(p.level, false).extract(p.tSlot);
+        p.wSlot = this.batch(p.level, true).alloc(geo);
       }
+      this.showPatch(p, true, wet);
+      if (wet) water++;
     }
     this.selected = out;
     this.stats.patches = out.length;
@@ -669,17 +776,39 @@ export class ChunkLOD {
    * the view direction (body frame) — the pixels there read a finer cascade, and the margin the caller folds into
    * nearDepth covers the shadows those patches throw further out. k < 0 restores every selected patch.
    */
-  shadowCascade(k: number, camBody: Vector3, viewDirBody: Vector3, nearDepth: number): number {
+  shadowCascade(k: number, camBody: Vector3, viewDirBody: Vector3, nearDepth: number, cascade?: Frustum, bodyToWorld?: Matrix4): number {
     let drawn = 0;
     for (const p of this.selected) {
-      if (!p.mesh) continue;
-      if (k < 0 || nearDepth <= 0) { p.mesh.visible = true; drawn++; continue; }
-      const depthMax = (p.sphere.center.x - camBody.x) * viewDirBody.x + (p.sphere.center.y - camBody.y) * viewDirBody.y
-        + (p.sphere.center.z - camBody.z) * viewDirBody.z + p.sphere.radius;
-      p.mesh.visible = depthMax >= nearDepth;
-      if (p.mesh.visible) drawn++;
+      if (!p.built) continue;
+      const tb = this.tBatch[p.level]!;
+      if (k < 0) { tb.show(p.tSlot, true); drawn++; continue; }
+      let on = true;
+      if (nearDepth > 0) {
+        const depthMax = (p.sphere.center.x - camBody.x) * viewDirBody.x + (p.sphere.center.y - camBody.y) * viewDirBody.y
+          + (p.sphere.center.z - camBody.z) * viewDirBody.z + p.sphere.radius;
+        on = depthMax >= nearDepth;
+      }
+      // (the batch is drawn whole: what lies outside this cascade's light box is left out here, as three's per-object
+      // culling did for separate patch meshes)
+      if (on && cascade && bodyToWorld) on = cascade.intersectsSphere(_sphere.copy(p.sphere).applyMatrix4(bodyToWorld));
+      tb.show(p.tSlot, on);
+      if (on) drawn++;
     }
     return drawn;
+  }
+
+  private showPatch(p: Patch, on: boolean, water: boolean): void {
+    if (!p.built) return;
+    this.tBatch[p.level]?.show(p.tSlot, on);
+    if (p.wSlot >= 0) this.wBatch[p.level]?.show(p.wSlot, on && water);
+  }
+
+  /** draw counts of the batches (logical draws: one per non-empty level batch per pass) */
+  batchStats(): { terrain: number; water: number } {
+    let t = 0, w = 0;
+    for (const b of this.tBatch) if (b && b.mesh.visible) t++;
+    for (const b of this.wBatch) if (b && b.mesh.visible) w++;
+    return { terrain: t, water: w };
   }
 
   /** drop geometry of long-unused patches when over the cache budget */
@@ -689,10 +818,9 @@ export class ChunkLOD {
     const drop = this.live.size - this.maxCached + 64;
     for (let i = 0; i < Math.min(drop, cands.length); i++) {
       const p = cands[i];
-      if (p.mesh) this.group.remove(p.mesh);
-      if (p.waterMesh) this.group.remove(p.waterMesh);
-      p.geometry?.dispose();
-      p.geometry = null; p.mesh = null; p.waterMesh = null;
+      this.tBatch[p.level]?.release(p.tSlot);
+      if (p.wSlot >= 0) this.wBatch[p.level]?.release(p.wSlot);
+      p.tSlot = -1; p.wSlot = -1; p.built = false; p.mesh = null;
       this.live.delete(p);
     }
   }
@@ -705,11 +833,14 @@ export class ChunkLOD {
   }
 
   dispose(): void {
-    for (const p of this.live) {
-      if (p.mesh) this.group.remove(p.mesh);
-      if (p.waterMesh) this.group.remove(p.waterMesh);
-      p.geometry?.dispose();
+    for (const p of this.live) { p.built = false; p.mesh = null; p.tSlot = -1; p.wSlot = -1; }
+    for (const b of [...this.tBatch, ...this.wBatch]) {
+      if (!b) continue;
+      this.group.remove(b.mesh);
+      b.dispose();
     }
+    this.tBatch = [];
+    this.wBatch = [];
     this.live.clear();
   }
 }

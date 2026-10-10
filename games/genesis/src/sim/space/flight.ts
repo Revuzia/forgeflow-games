@@ -76,6 +76,8 @@ export function launch(u: Universe, sh: ShipState, def: ShipKindDef): void {
   }
   sh.reliability = reliabilityOf(u, x, st, present, def);
   present.sort((a, b) => A.id[a] - A.id[b]);
+  // (the log tells who came: those who reached the pad during the countdown go too, a family not all there stays)
+  const chosen = sh.crewIds.length;
   for (const s of present) sh.crew.push(liftAgent(x, s, sh));
   dismiss(x, sh, sh.crewIds);
   dismiss(x, sh, sh.ground);
@@ -94,7 +96,7 @@ export function launch(u: Universe, sh: ShipState, def: ShipKindDef): void {
   }
   sh.launchTick = u.tick;
   sh.lastDay = 0;
-  sh.log.push(`Launched with ${sh.crew.length} aboard.`);
+  sh.log.push(`Launched with ${sh.crew.length} aboard${chosen > sh.crew.length ? `; ${chosen - sh.crew.length} of those chosen stayed behind` : ''}.`);
   const target = sh.to >= 0 ? u.planet(sh.to) : undefined;
   const v = vars(x, st, -1, { ship: kindName(x, sh), name: sh.name, count: sh.crew.length, planet: target ? target.name : p.name, home: p.name });
   const first = u.space.firsts.launch === undefined && def.class !== 'air';

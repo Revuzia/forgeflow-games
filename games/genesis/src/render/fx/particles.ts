@@ -101,22 +101,30 @@ void main() {
   vLight = vec3(0.0);
   vGlow = vec3(0.0);
   if (sys < 0.5 || sys > 4.5 && sys < 5.5) {
-    // flames: born across the fire's base, rising and narrowing, flickering sideways
+    // flames: TONGUES. Each particle is one tongue of burning gas standing on the fuel, swaying, its edges licked by
+    // turbulence, its tip tearing away late in its short life; a fire is a crown of such tongues of very different
+    // heights over a bed of low, broad flames (every third particle). (Broad sheets, all of a size and stacked on each
+    // other, merged into cream haystacks; equal tongues side by side read as a picket fence of candles.)
     float wild = sys > 4.5 ? 1.0 : 0.0;
-    float base = size * mix(0.45, 0.75, wild) * sqrt(r2);
-    // a sheet stays on its fuel for most of its life and only its tip breaks away at the end (buoyancy, accelerating):
-    // rising the whole life stacked the sheets into tall streaky columns of light
-    float rise = size * (0.12 + 0.75 * age * age) * (0.7 + 0.6 * r3);
-    p += side * base * (1.0 - age * 0.3) + up * rise;
-    p += (e1 * sin(uTime * 4.0 + r1 * 30.0) + e2 * cos(uTime * 3.3 + r2 * 20.0)) * 0.08 * size * age;
+    float bed = step(0.6, fract(iIdx.x / 3.0 + 0.01));
+    float base = size * mix(0.45, 0.7, wild) * sqrt(r2);
+    p += side * base;
+    // (a tongue stays on its fuel — a gentle lift only; rising the whole life stacked them into streaky columns)
+    p += up * size * (0.04 + 0.22 * age * age) * (1.0 - bed);
+    p += (e1 * sin(uTime * 2.1 + r1 * 30.0) + e2 * cos(uTime * 1.7 + r2 * 20.0)) * 0.05 * size;
     // flames lean and are torn downwind
-    p += iWind * tSec * (0.2 + 0.4 * age);
-    sz = size * mix(0.7, 0.95, wild) * (0.75 + 0.45 * r3) * (1.0 - age * 0.35) * (0.75 + 0.25 * power);
-    float a = smoothstep(0.0, 0.12, age) * (1.0 - smoothstep(0.55, 1.0, age));
-    // the fragment shader shapes the tongue and colours it by heat: pass age, power and a seed
+    p += iWind * tSec * 0.22;
+    float hT = size * mix(mix(0.9, 2.4, r3 * r3) * mix(1.0, 0.8, wild), mix(0.5, 0.8, r3), bed) * (0.75 + 0.25 * power);
+    // it shoots up in the first fifth of its life
+    hT *= 0.45 + 0.55 * smoothstep(0.0, 0.2, age);
+    float wT = hT * mix(mix(0.26, 0.62, r1 * r1), 0.9, bed);
+    sz = hT;
+    float a = smoothstep(0.0, 0.08, age) * (1.0 - smoothstep(0.72, 1.0, age));
+    // the fragment shader shapes the tongue and colours it by heat: pass age, power and a seed; aspect and bed below
     col = vec4(age, power, r1, a);
-    soft = 0.4 * size;
+    soft = 0.35 * size;
     vKind = 1.0;
+    vGlow = vec3(hT / max(wT, 1e-3), 0.0, bed);
   } else if (sys < 1.5 || sys > 2.5 && sys < 3.5) {
     // embers (slow, spiralling up on the heat) and sparks (fast, falling back)
     bool spark = sys > 2.5;
@@ -159,15 +167,17 @@ void main() {
     // (a hearth's chimney: a thin blue-grey wisp, not cotton-wool puffs over every roof)
     float dens = stack ? 0.92 : wild ? 0.85 : 0.15;
     // burning thatch and timber: dark brown-grey to near black, greyer and paler as it cools and spreads
-    vec3 sc = stack ? vec3(0.045, 0.041, 0.038) : wild ? vec3(0.07, 0.064, 0.058) : vec3(0.34, 0.35, 0.38);
-    sc = mix(sc, (stack || wild) ? vec3(0.17, 0.16, 0.15) : sc * 0.6, (stack || wild) ? smoothstep(0.3, 1.0, age) * 0.65 : r2 * 0.5);
+    vec3 sc = stack ? vec3(0.045, 0.041, 0.038) : wild ? vec3(0.06, 0.055, 0.05) : vec3(0.34, 0.35, 0.38);
+    // (a grass fire's smoke greys as it spreads, but not to white: at 0.17 its old puffs read as steam by day)
+    sc = mix(sc, stack ? vec3(0.17, 0.16, 0.15) : wild ? vec3(0.13, 0.122, 0.112) : sc * 0.6, (stack || wild) ? smoothstep(0.3, 1.0, age) * 0.65 : r2 * 0.5);
     col = vec4(sc, a * dens * (0.6 + 0.4 * power));
     soft = 0.6 * sz;
     // fire glow lights the column from below: strong at its root, gone some tens of metres up
     vKind = 2.0;
     // (a hearth's chimney glows only at its mouth: lit for its whole first half the wisps floated as orange-brown
     // puffs high over a night village)
-    vGlow = vec3(1.0, 0.4, 0.09) * 5.0 * (1.0 - smoothstep(0.0, column ? 0.42 : 0.08, age)) * (column ? 1.0 : 0.15) * power;
+    // (lit for the first ~40 % of its life at 5× a column glowed tan-cream for tens of metres: glowing cotton, not smoke)
+    vGlow = vec3(1.0, 0.36, 0.07) * 3.6 * (1.0 - smoothstep(0.0, column ? 0.24 : 0.08, age)) * (column ? 1.0 : 0.15) * power;
   }
   // lighting of smoke: sun through the air at this height + sky; computed per particle (cheap, smooth)
   vSunS = vec2(0.0, 1.0);
@@ -186,21 +196,16 @@ void main() {
   if (vKind > 0.5 && vKind < 1.5) {
     // flames: an upright tongue (its axis the local up as seen on screen), the base at the particle. Seen from above
     // the local up points at the camera and its screen image shrinks to a sliver: the tongue then turns to face the
-    // camera (its axis eases to screen-up), so a fire seen from the god camera is still a fire, not a line.
+    // camera (its axis eases to screen-up) and is shortened — a fire seen from the god camera is still a fire.
     vec3 upV = normalize((modelViewMatrix * vec4(up, 0.0)).xyz);
     vec2 ax0 = length(upV.xy) > 1e-3 ? normalize(upV.xy) : vec2(0.0, 1.0);
     float face = smoothstep(0.6, 0.92, abs(upV.z));
     vec2 ax = normalize(mix(ax0, vec2(0.0, 1.0), face) + vec2(1e-4, 0.0));
     vec2 rt = vec2(ax.y, -ax.x);
-    // tongues of a fire differ in height (per emitter and per particle)
-    float tall = (0.7 + 0.8 * h1(seed, 11.0)) * (0.8 + 0.4 * r2);
-    // a broad sheet (the outline comes from the density noise in the fragment shader, not from the quad); its aspect
-    // goes to the fragment shader so the turbulence keeps its proportions (stretched noise drew streaky curtains)
-    float hgt = 1.25 * mix(1.0, tall, 0.8);
-    // (widths differ per tongue: sheets of one width stacked side by side squared a fire off into a lit panel)
-    float wj = 0.85 * (0.7 + 0.5 * h1(seed, 7.0));
-    vGlow = vec3(hgt / wj, face, 0.0);
-    mv.xy += rt * corner.x * sz * wj + ax * (corner.y + 0.6) * sz * hgt;
+    float hT = sz * mix(1.0, 0.6, face), wT = sz / vGlow.x;
+    vGlow = vec3(hT / wT, face, vGlow.z);
+    // the quad: its foot a little below the particle (in the fuel), the tongue rising from it
+    mv.xy += rt * corner.x * wT * 0.5 + ax * (corner.y * 0.5 + 0.45) * hT;
   } else if (vKind > 2.5) {
     // embers: a short streak along the flight on screen
     vec2 dir = vGlow.xy;
@@ -248,57 +253,57 @@ void main() {
   // fade near the camera so a puff never fills the screen with a flat card
   fade *= smoothstep(0.3, 2.0, vViewZ);
   if (vKind > 0.5 && vKind < 1.5) {
-    // a flame tongue: wide and hot at the base, licking up to a ragged tip; the noise scrolls upward so the
-    // outline writhes. Colour from its heat — white-gold in the core, orange, a dull red at the cooling tips.
-    // a sheet of burning gas: turbulent density scrolling up (the flow speeds up with height, so features stretch
-    // vertically as they rise), a ragged base, a body that tears into tongues near the top and thins to holes
+    // a flame tongue: a rounded foot widest at a fifth of its height, drawn up to a point; a slow sideways wave travels
+    // up it (it sways); turbulence scrolling upward licks into its outline, more toward the tip; late in its life the
+    // tip tears off as a separate lick. Colour by heat: a yellow core low in the middle, an orange body, deep red at the
+    // rim and the tip. The outline is crisp (one pixel), the inside nearly solid: flames are bright, defined shapes.
     float y = vCorner.y * 0.5 + 0.5;
+    float asp = max(vGlow.x, 0.5);
+    float bed = vGlow.z;
     float sd = vColor.z * 17.0;
-    float tt = uTime * 2.6;
-    float asp = max(vGlow.x, 1.0);
-    // isotropic noise in the sheet's own metres (the quad is 1.7·size wide and 1.7·asp·size tall: x ∈ [-1, 1] spans
-    // 0.85·size per unit, y ∈ [0, 1] 1.7·asp·size — under-scaled in y, the turbulence stretched into vertical streaks),
-    // scrolling up faster toward the top
-    vec3 q = vec3(vCorner.x * 1.6, y * asp * 3.2 - tt * (0.9 + 0.6 * y), sd);
-    float w1 = snoise(q * vec3(1.0, 0.8, 1.0));
-    float w2 = snoise(q * 2.3 + vec3(5.2, -tt * 0.7, 1.3));
-    float w3 = snoise(q * 5.1 + vec3(1.7, -tt * 1.6, 7.9));
-    // domain-warped sideways (the sheet writhes), more toward the top
-    // the finer octaves fade once their features shrink under ~3 pixels (thresholded sub-pixel noise drew every
-    // distant tongue as fuzzy, speckled fur)
-    float dq = 1.6 * max(fwidth(vCorner.x), asp * fwidth(vCorner.y));
-    float k2 = 1.0 - smoothstep(0.2, 0.5, 2.3 * dq), k3 = 1.0 - smoothstep(0.2, 0.5, 5.1 * dq);
-    float x = vCorner.x + (w1 * 0.3 + w2 * 0.12 * k2) * (0.2 + y);
-    // the flame field: a broad base narrowing upward, eaten by turbulence that grows with height — thresholded, so
-    // the turbulence carves defined licking tongues and holes (a soft falloff read as a fuzzy cream column)
-    float n = w1 * 0.5 + w2 * 0.32 * k2 + w3 * 0.18 * k3;
-    float tongues = 1.0 - abs(snoise(vec3(x * 2.2 + sd, y * asp * 1.5 - tt * 0.9, sd * 0.3)));
-    // a teardrop: full width only at the foot, the upper half split along the ridges of the tongue noise into two or
-    // three licks (a body solid to three quarters of its height made a fire's overlapping sheets one glowing haystack)
-    float halfW = mix(0.9, 0.3, y);
-    float body = min((1.0 - abs(x) / halfW) * 1.6, 1.0);
-    float shape = body * (1.0 - pow(y, 0.9 + 1.1 * tongues)) * 1.35 + n * (0.2 + 0.5 * y) - 0.12;
-    shape -= (1.0 - tongues) * smoothstep(0.25, 0.8, y) * 0.9;
-    // a rounded, ragged foot (a flat full-width bottom edge read as a glowing box, above all in the canopy)
-    // (an outline one pixel soft whatever the distance)
-    float aw = clamp(fwidth(shape), 0.02, 0.1);
-    float dens = smoothstep(0.2 - aw, 0.2 + aw, shape) * smoothstep(0.0, 0.16, y + 0.1 * w2 * k2 - 0.3 * x * x);
-    // heat: the dense, low core is hottest; edges, tips and older gas cool through orange to a deep red
-    float heat = clamp(smoothstep(0.18, 0.8, shape) * (1.1 - vColor.x * 0.6) * (1.0 - 0.45 * y), 0.0, 1.0);
-    // a saturated orange body with a gold core, deep red rims — never white (sheets overlap; AgX takes bright
-    // orange to cream, so the emission stays near a flame's own and lets the exposure do the rest)
-    vec3 c = heat > 0.6 ? mix(vec3(1.0, 0.25, 0.028), vec3(1.0, 0.47, 0.1), (heat - 0.6) / 0.4)
-                        : mix(vec3(0.45, 0.025, 0.0), vec3(1.0, 0.25, 0.028), heat / 0.6);
-    // display-referred: about the same on screen at night and by day (see FX_EXPOSURE)
+    float age = vColor.x;
+    float tt = uTime;
+    // the finer octave fades once its features shrink under a few pixels (sub-pixel noise drew fur)
+    float dq = max(fwidth(vCorner.x), fwidth(vCorner.y) * asp);
+    float k2 = 1.0 - smoothstep(0.12, 0.35, dq * 3.0);
+    float sway = (snoise(vec3(y * asp * 0.55 - tt * 1.7, sd, 0.3)) * 0.42
+      + snoise(vec3(y * asp * 1.3 - tt * 3.3, sd + 4.0, 1.7)) * 0.16 * k2) * y * (1.0 - 0.6 * bed);
+    float xs = vCorner.x - sway;
+    float yb = 0.2;
+    float prof = y < yb ? sqrt(max(0.0, 1.0 - pow((yb - y) / (yb + 0.05), 2.0)))
+                        : pow(max(0.0, 1.0 - (y - yb) / (1.0 - yb)), mix(0.8, 1.15, bed));
+    float en = snoise(vec3(xs * 1.5, y * asp * 1.2 - tt * 3.4, sd + 2.0)) * (0.12 + 0.45 * y)
+      + snoise(vec3(xs * 3.8, y * asp * 3.0 - tt * 6.0, sd + 9.0)) * 0.18 * y * k2;
+    float edge = prof * (0.9 + en) - abs(xs);
+    // a broad tongue forks: the upper part splits along a crease that wanders with the flow (two or three licks)
+    float fork = 1.0 - abs(snoise(vec3(xs * 1.3 / max(prof, 0.3), y * asp * 0.8 - tt * 2.2, sd + 13.0)));
+    edge -= pow(fork, 6.0) * smoothstep(0.3, 0.75, y) * prof * mix(0.9, 0.2, bed) * smoothstep(3.4, 1.9, asp);
+    // the tip tears away: a gap opens across the tongue, moving down from the tip as it dies
+    float tear = smoothstep(0.5, 0.92, age) * (1.0 - bed);
+    float gapY = mix(0.92, 0.58, tear) + 0.06 * snoise(vec3(xs * 2.0, tt * 1.5, sd));
+    edge -= tear * 0.45 * (1.0 - smoothstep(0.0, 0.07, abs(y - gapY)));
+    float aw = clamp(fwidth(edge), 0.012, 0.25);
+    float dens = smoothstep(-aw, aw, edge);
+    // heat: hottest low in the middle, cooling toward the rim and the tip and as the tongue ages
+    float inner = clamp(edge / max(prof, 0.08), 0.0, 1.0);
+    float heat = clamp(inner * 1.5 * (1.0 - 0.7 * y) + 0.12 * (1.0 - y), 0.0, 1.0) * (1.0 - 0.3 * age);
+    // streaks of hotter and cooler gas rising through it (a flat-filled tongue read as a sticker)
+    heat *= 0.8 + 0.35 * snoise(vec3(xs * 2.6, y * asp * 1.6 - tt * 4.2, sd + 21.0)) * k2 + 0.1;
+    heat = clamp(heat, 0.0, 1.0);
+    vec3 c = mix(vec3(0.6, 0.045, 0.005), vec3(1.0, 0.27, 0.025), smoothstep(0.0, 0.45, heat));
+    c = mix(c, vec3(1.0, 0.55, 0.1), smoothstep(0.55, 1.0, heat));
+    // display-referred (FX_EXPOSURE): a flame lands at about the same brightness on screen by day and by night — a
+    // bright, saturated orange with a yellow core. The tongues are nearly opaque (alpha below), so a crowd of them
+    // stays a fire's own colour instead of summing to a white-cream haystack
     float ex = uHasExposure > 0.5 ? max(texture(tExposure, vec2(0.5)).r, 0.02) : 1.0;
-    // (by day, at exposure^-0.65, a fire's overlapping sheets summed past AgX's saturated range into cream haystacks)
-    float I = (0.06 + 0.55 * heat * heat) * vColor.y * pow(ex, -0.5) * 0.42;
-    // seen from straight above a sheet turned to the camera is a flat stain of flame: dimmer, its light is the pool
-    I *= mix(1.0, 0.3, vGlow.y);
+    float level = mix(0.34, 1.05, heat * heat) * mix(0.6, 1.0, vColor.y);
+    float I = level / ex;
+    // seen from straight above a tongue is a stain of flame on the roof: dimmer, its light is the pool round it
+    I *= mix(1.0, 0.55, vGlow.y);
     float a = vColor.a * dens * fade;
-    // pure emission (a flame never darkens what is behind it: with an occluding alpha, flames by day turned into
-    // brown haystacks); the overlap of sheets is kept from summing to white by the display-referred level above
-    gl_FragColor = vec4(c * I * a, 0.0);
+    // luminous gas, not a cut-out: a faint glow just outside the outline (added light, no cover)
+    float halo = (1.0 - dens) * smoothstep(-0.22 * prof - aw, 0.0, edge) * 0.35 * vColor.a * fade;
+    gl_FragColor = vec4((c * a + vec3(1.0, 0.3, 0.04) * halo * 0.6) * I, a * mix(0.6, 0.92, smoothstep(0.0, 0.5, inner)));
   } else if (uPass < 0.5) {
     // embers and sparks: hot streaks, brightest at the head
     float core = pow(1.0 - r, 1.6) * (0.6 + 0.4 * smoothstep(-1.0, 1.0, vCorner.y));

@@ -535,6 +535,7 @@ export class Renderer {
   private cullMargin = 50;
   private readonly cullView = new Vector3();
   private readonly hiddenSmall: { visible: boolean }[] = [];
+  private readonly cascadeF = new Frustum();
   private shadowCull(vis: PlanetVisual, sunEl: number): void {
     this.cullVis = vis;
     // terrain throws its shadows over about (relief ÷ tan elevation) — for ~40 m of relief, ~50 m at mid-morning, a few
@@ -551,7 +552,7 @@ export class Renderer {
     if (!vis) return;
     const sh = this.shadows;
     const near = k >= 1 ? sh.splits[k - 1] - this.cullMargin : 0;
-    vis.lod.shadowCascade(k, vis.camBody, this.cullView, near);
+    vis.lod.shadowCascade(k, vis.camBody, this.cullView, near, k >= 0 ? sh.cascadeFrustum(k, this.cascadeF) : undefined, vis.group.matrixWorld);
     if (k === 2 || (k < 0 && this.hiddenSmall.length)) {
       if (k === 2) {
         for (const name of ['crowds', 'animals']) {

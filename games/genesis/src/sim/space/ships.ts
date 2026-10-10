@@ -136,6 +136,36 @@ export function chainGaps(x: PCtx, st: Settlement, def: ShipKindDef, stage: 'pro
   return gaps;
 }
 
+/**
+ * Could this town really build a ship of this kind, beyond knowing how (a people weighs it before it lays one down; the
+ * god's push does not ask): the hull's workplace stands (a factory for an airship's gas bag — a pad of its own is
+ * raised by the program), every part of the hull is in its store or something it knows how to make, and its pad stands,
+ * is rising, or can be raised from what it has or makes. A young town split from a city laid down airship after
+ * airship with no factory and no cloth, and gave each up twelve days later.
+ */
+export function buildable(x: PCtx, st: Settlement, def: ShipKindDef): boolean {
+  const own = x.ps.of(st.id);
+  const makes = (it: number) => (x.rt.producers[it] ?? []).some((k) => st.library.includes(k));
+  if (def.hull) {
+    const k = hullRecipe(x, st, def);
+    if (k < 0) return false;
+    const r = x.rt.list[k];
+    const padGives = x.c.buildings.find(def.pad)?.provides ?? [];
+    for (const need of r.needs) {
+      if (padGives.includes(need)) continue;
+      if (!own.some((b) => b.progress >= 1 && !(b.flags & 2) && x.c.buildings.list[b.type].provides.includes(need))) return false;
+    }
+    for (const io of r.inputs) if (storeAny(st, io.items) < io.qty * 0.25 && !io.items.some(makes)) return false;
+  }
+  const t = x.c.buildings.idx(def.pad);
+  if (t < 0) return false;
+  if (own.some((b) => b.type === t && !(b.flags & 2))) return true;
+  return x.c.buildings.list[t].materials.some((mid) => {
+    const m = x.c.materials.find(mid);
+    return !!m && m.items.every((io) => { const it = io.item ? x.c.items.idx(io.item) : -1; return it >= 0 && (storeHas(st, it) >= io.qty || makes(it)); });
+  });
+}
+
 // ───────────────────────────── the goods set aside ─────────────────────────────
 
 /** "a" or "an" before a noun */
@@ -427,7 +457,8 @@ export function habitability(u: Universe, q: Planet, species: number): { score: 
   const tempFit = n ? fit / n : 0;
   const water = Math.min(1, (wet / Math.max(1, wet + n)) * 3);
   const green = Math.min(1, q.vegTotal / Math.max(1, q.count * 0.3));
-  const base = 0.5 * tempFit + 0.25 * water + 0.25 * (sp.forage.includes('air') ? 1 : green);
+  // (a world none of whose land is within what their bodies bear is no home, whatever its water and green)
+  const base = (0.5 * tempFit + 0.25 * water + 0.25 * (sp.forage.includes('air') ? 1 : green)) * Math.min(1, tempFit / 0.2);
   // sealed in suits, a people still drinks: a world without water they can drink is no home at all
   return { score: r3((breathe ? 1 : drinkable(u, q, species) ? 0.12 : 0.01) * base), breathe };
 }
@@ -649,6 +680,8 @@ export function spaceDaily(u: Universe, p: Planet): void {
     if (!order && hashFloat(st.id, Math.floor(u.tick / x.day), 0x5ace, p.id) >= (strength - 0.3) * 1.4 * drive) continue;
     const def = chooseKind(u, x, st, purpose, order?.kind || undefined);
     if (!def) { if (order) refuseOrder(u, x, st, order, 'they know no ship that could do it'); continue; }
+    // (of their own accord they lay down only a ship they could finish; the god's push does not ask)
+    if (!order && !buildable(x, st, def)) continue;
     const to = order && order.to >= 0 ? order.to : chooseTarget(u, x, st, def.class === 'orbit' ? 'survey' : purpose, def.class);
     if (def.class !== 'orbit' && to < 0) { if (order) refuseOrder(u, x, st, order, 'they have seen no world to go to'); continue; }
     if (order) u.space.orders = u.space.orders.filter((o) => o !== order);
@@ -1057,7 +1090,8 @@ export function programHour(u: Universe, sh: ShipState, def: ShipKindDef): void 
       sh.phase = 'pad';
       sh.t0 = u.tick;
       sh.t1 = u.tick + 30;
-      sh.log.push(`${there} at the pad; the countdown begins.`);
+      // (who is still on the way may reach the pad before the countdown ends: the launch log says who went)
+      sh.log.push(`${there < sh.crewIds.length ? `${there} of ${sh.crewIds.length}` : there} at the pad; the countdown begins.`);
       u.emit({ t: 'ship.countdown', planet: p.id, pos: [...sh.padPos] as V3, ref: { kind: 'ship', id: sh.id, planet: p.id }, text: sh.name });
     } else if (waited > 4 * BOARD_HOURS * 60 && there < min) abandonProgram(u, x, st, sh, 'nobody would go');
   }

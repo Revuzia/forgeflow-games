@@ -682,9 +682,12 @@ function planJobs(x: PCtx, st: Settlement): void {
   // tools for the workers
   if (count('tool') < adults * 0.8) for (const k of producersOf('tool')) add(k, Math.ceil(adults * 0.8 - count('tool')));
   if (count('hunt') < Math.max(1, (st.quota[ROLE.hunter] ?? 0))) for (const k of producersOf('hunt')) add(k, 1);
-  // clothes when it is cold
+  // clothes when it is cold — or before the winter comes (a town whose winter nights kill made none in summer and froze
+  // in its houses at the first frost); never pressure suits for the cold (they are for air that kills: ships.ts)
   const sp = x.info[st.species].def;
-  if (x.p.s.tempMean[st.cell] < sp.temp[1] + 4 && count('clothing') < members.length) for (const k of producersOf('clothing')) add(k, members.length - count('clothing'));
+  if (Math.min(x.p.s.tempMean[st.cell], seasonTemps(x, st.cell).winter) < sp.temp[1] + 4 && count('clothing') - count('suit') < members.length) {
+    for (const k of producersOf('clothing')) if (!x.rt.list[k].outItems.some(([it]) => x.c.items.list[it]?.tags.includes('suit'))) add(k, members.length - count('clothing') + count('suit'));
+  }
   // containers
   if (count('container') < Math.max(2, st.households.length)) for (const k of producersOf('container')) add(k, 2);
   // the material the current construction needs
@@ -1197,7 +1200,7 @@ function abandonCheck(x: PCtx, st: Settlement): boolean {
   const tooCold = season.now < (lo + hi) / 2;
   const kinder = tooCold ? season.ahead >= lo : season.ahead <= hi;
   const dead = (st.recent.thermalDead ?? 0) >= 3 && x.tick - (st.recent.thermalAt ?? -1e9) < 3 * x.day;
-  const harsh = (suffering > members.length * 0.4 || dead) && !kinder;
+  const harsh = (suffering > members.length * 0.4 || dead) && !kinder && !enduresSeason(x, st);
   if (harsh) st.recent.harsh = st.recent.harsh ?? x.tick; else delete st.recent.harsh;
   if (!dead && st.recent.thermalAt !== undefined && x.tick - st.recent.thermalAt >= 3 * x.day) { delete st.recent.thermalDead; delete st.recent.thermalAt; }
   const cause = st.recent.flood !== undefined && x.tick - st.recent.flood > 0.5 * x.day ? 'flood'
@@ -1208,6 +1211,24 @@ function abandonCheck(x: PCtx, st: Settlement): boolean {
   if (!cause) return false;
   abandon(x, st, cause);
   return true;
+}
+
+/**
+ * Does a town sit out the cold or heat of a season rather than leave (abandonCheck)? A town with roofs for most of its
+ * people does not walk out into the season that hurts it — a band in the open dies of what a town lives through (a city
+ * of 75 houses left after a late frost and froze to the last on a bare riverbank the next winter). It leaves only a
+ * place whose year itself is past bearing (the world moved, an ice age): the rule a people choosing a site judges by
+ * (siteScore).
+ */
+export function enduresSeason(x: PCtx, st: Settlement): boolean {
+  if (st.band) return false;
+  const [tMin, lo, hi, tMax] = x.info[st.species].def.temp;
+  const season = seasonTemps(x, st.cell);
+  if (season.year < tMin + (lo - tMin) * 0.5 || season.year > tMax - (tMax - hi) * 0.5) return false;
+  if (season.winter < tMin + (lo - tMin) * 0.25 || season.summer > tMax - (tMax - hi) * 0.25) return false;
+  let beds = 0;
+  for (const b of x.ps.of(st.id)) if (b.progress >= 1 && !(b.flags & BuildingFlag.ruined)) beds += x.c.buildings.list[b.type].capacity;
+  return beds >= (x.ps.members.get(st.id)?.length ?? 0) * 0.6;
 }
 
 export function abandon(x: PCtx, st: Settlement, cause: string): Settlement {

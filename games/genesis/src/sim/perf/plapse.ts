@@ -30,7 +30,8 @@
 //     missions, boats, the possessed and the god's disciples are never stretched.
 //   * BATCHED WALKS. A walk's segment runs on through several waypoints (straight between them, as the renderer's
 //     snapshots 1-2 game hours apart draw it anyway) up to a longer leg (tasks.ts MAX_LEG × LEG[level]): a couple of
-//     wake-ups per walk instead of one per cell. Every cell passed is still worn.
+//     wake-ups per walk instead of one per cell. Every cell passed is still worn. (Round 2: a flight from fire is
+//     walked as at 1x — plain legs, woken on arrival: see mergeArrival.)
 //   * COARSE SETTLEMENT STEP. settlement.ts settlementStep runs every SETTLE_HOURS[level] = 2 / 4 hours (staggered
 //     by id) and integrates the hours it stands for: the hearths burn the elapsed time, births, old age and the
 //     accidents of daily life take the window's probability, sickness and the cohort step run hour by hour at the
@@ -44,7 +45,9 @@
 //     what they are for once per change of its building list (`ctxOf`), with each building's state read live — so the
 //     answer is always the plain one, and a save / load at any tick continues bit for bit.
 //   * IN PASSING (`inPassing`): water at hand and food in the hand are taken when the agent decides — what a 1x agent
-//     takes where it stands (no walk is skipped; meals from the store keep their walk home).
+//     takes where it stands (no walk is skipped; meals from the store keep their walk home). Round 2: a drink takes
+//     its time (DRINK_TICKS: the task decided with it starts that much later) — a free drink gave the day's drinking
+//     time to work and food in store ran 10-25 % high from the third game year.
 //   * A world the camera is not on (lapse.ts planetLevel 3) takes the 4th column of each table: 4 sessions, legs ×4,
 //     a settlement step every 6 hours.
 //
@@ -173,10 +176,11 @@ export function goalCellOf(x: PCtx, goal: number[], cell: number): number {
   return cell >= 0 && level(x) > 0 ? cell : x.p.cellAt(goal);
 }
 
-/** the longest leg (ticks) agent s walks without waking, from the plain `maxLeg` */
-export function legOf(x: PCtx, maxLeg: number): number {
+/** the longest leg (ticks) agent s walks without waking, from the plain `maxLeg` (`kind`: its task. Push 3 round 2: a
+ * flight from fire walks as at 1x — see mergeArrival) */
+export function legOf(x: PCtx, maxLeg: number, kind = -1): number {
   const lv = level(x);
-  return lv === 0 ? maxLeg : maxLeg * LEG[lv];
+  return lv === 0 || kind === TASK.flee ? maxLeg : maxLeg * LEG[lv];
 }
 
 /** the batched segment found by batchHops: its last waypoint cell, its duration (ticks), and whether it ends at the
@@ -228,10 +232,14 @@ export function batchHops(x: PCtx, s: number, to: number, goal: number[], dur: n
 /**
  * At 1000x a walk that ends at the task's goal point goes straight on into the work (tasks.ts nextSegment →
  * beginWork at the segment's end): the agent is not woken on arrival — one turn less per errand. (At 100x the
- * renderer still draws the walk, so the arrival keeps its own turn.)
+ * renderer still draws the walk, so the arrival keeps its own turn.) Never for a flight from fire (push 3 round 2): a
+ * walker counts as standing in the cell it walks to (tasks.ts nextSegment) and a fleeing agent is not interrupted by
+ * the fire (people.ts fireCheck), so a long merged leg toward a cell the fire then reached burnt it all the way there —
+ * 1x wakes it on arrival and it flees on. Fire deaths at 1000x ran far above 1x (seed 3: 137 of 400 in two fires died
+ * fleeing on such legs; 5 of 127 at 1x).
  */
-export function mergeArrival(x: PCtx): boolean {
-  return level(x) >= 2;
+export function mergeArrival(x: PCtx, kind = -1): boolean {
+  return kind !== TASK.flee && level(x) >= 2;
 }
 
 /**

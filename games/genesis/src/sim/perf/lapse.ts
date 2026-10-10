@@ -29,6 +29,13 @@
 // What the player sees at 100x / 1000x is snapshots ~100 ms apart = 170 / 1 700 game minutes: the coarser cadences
 // stay below that.
 //
+// Level 3 (SIM perf push 3) — a living world the camera is not on, while time-lapse is on (planetLevel): climate 12 h
+// (6 h while it has lava vents — round 2), vegetation 12 h, weather / rain / sand and ash 60 ticks, hydrology 16 while
+// its sea is calm, sheets 48, lava and talus 30 while no vent feeds lava and no lava moves (else 10, as at 1x — round
+// 2), biomes 2 days. Round 2 also made the multi-hour passes live their hours: the air's humidity relaxes hour by hour
+// (climate.ts humidityHours), plants grow logistically over the pass (vegetation.ts). What happens there is a
+// time-lapse approximation, measured against 1x in CONTRACT §5.
+//
 // Exactness across a change of level: each scheduled system keeps the tick it last ran (settings.lapse.run, per planet
 // and system) while time-lapse is or was active, and integrates exactly the ticks since then — a step after a switch is
 // as long as the time that really passed, nothing is integrated twice or skipped. Back at level 0 each record is
@@ -68,13 +75,20 @@ export interface LapseSys {
    * planet's state, asked on the ticks the coarse schedule is due (exact and deterministic: lapseDue keeps the records
    * across a flip) */
   coarseIf?: (p: Planet) => boolean;
+  /** (a world the camera is not on only) a finer multiplier while `test` holds — a pure function of the planet's state
+   * asked whenever the schedule is (a change of cadence integrates exactly the time since the last run, as a change of
+   * level does). Push 3 round 2: the climate of a world with lava vents */
+  hot?: { mult: number; test: (p: Planet) => boolean };
 }
 
 /** a dead world's slow passes (climate, vegetation) run this many times less often (see `dormant` below) */
 export const DORMANT_MULT = 6;
 
+/** (push 3 round 2: a world the camera is not on with lava vents keeps the 6-hour pass of 1000x — at 12 hours lava that
+ * spread since the last pass read cold for hours and the volcanic world ran 0.5-0.9 °C cool; 0.05-0.4 at 6) */
 export const LAPSE_CLIMATE: LapseSys = {
   key: 'clim', base: 60, mult: [1, 2, 6, 12], window: [1, 1, 1, 1], step: 1, dormant: DORMANT_MULT,
+  hot: { mult: 6, test: (p) => p.vents.length > 0 },
 };
 /** (push 3 round 2: 12 h on a world the camera is not on — at 24 h its plants fell 2-4 % behind 1x within 12 days,
  * ~1 % at 12 h; vegetation.ts also solves the logistic growth of a multi-hour pass exactly now) */
@@ -180,6 +194,7 @@ export function lapseDue(u: Universe, p: Planet, sys: LapseSys, ts: number, phas
   if (!la && dm === 1) return onBase ? sys.base : 0;
   const lv = planetLevel(u, p);
   let mult = sys.mult[lv] > dm ? sys.mult[lv] : dm;
+  if (lv === 3 && sys.hot !== undefined && sys.hot.test(p)) mult = sys.hot.mult;
   const key = runKey(p.id, sys);
   // a state-dependent coarse cadence (hydrology at 1000x: only while the sea is calm). The state is asked on the ticks
   // the coarse schedule is due; the block it decides lasts to the next of them: a coarse run leaves a record, a fine

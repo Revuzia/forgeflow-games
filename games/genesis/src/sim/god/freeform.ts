@@ -58,6 +58,7 @@ import { meanAnomaly, AU } from '../world/orbits.ts';
 import { slug } from './runtime.ts';
 import { bearingDir, cellPos3, dot, moveBy, nearestSettlement, norm, placeName } from './util.ts';
 import { peopleQuery } from '../people/query.ts';
+import { habitability } from '../space/ships.ts';
 
 export interface ParseOut extends CommandResult {
   resolved?: Command[];
@@ -517,11 +518,16 @@ function lift(u: Universe, p: Planet | undefined, L: Lex, live: Live[], clause: 
       s = remove(s, l.name).replace(/\b(over|on|at|near|around|in|to|upon|onto|into|above|by|beside|outside|inside|under|beneath)\s*$/, '').replace(/\b(over|on|at|near|around|upon|above|by|beside|outside|inside|under|beneath) (?=(and|for|with|then|by)\b|$)/g, '').trim();
     }
   }
-  const pl = findLive(s, live, ['planet']);
-  if (pl && /\b(on|to|at|of|onto|over)\b/.test(s)) {
+  // a world named is where the act lands ("teach Rust rockets", "make Rust warmer"); of two, the one the act goes to
+  // ("send the plains folk of Gaia to Rust" sets them down on Rust)
+  const pls = allLive(s, live, ['planet']);
+  if (pls.length) {
+    const dest = pls.find((q) => new RegExp(`\\b(?:to|onto|into|upon|on|over|at)\\s+(?:the\\s+)?(?:(?:world|planet|moon)\\s+(?:of\\s+)?)?${esc(q.name)}\\b`).test(s));
+    const pl = dest ?? pls[0];
     if (!mods.place) mods.place = { planet: pl.id, label: pl.name };
     else mods.place.planet ??= pl.id;
-    s = remove(s, pl.name);
+    // (the preposition that led to it goes with it: "rain on Rust" is rain, not a rain of "on")
+    s = remove(s, pl.name).replace(/\b(?:over|on|at|to|onto|into|upon|across|of)\s*$/, '').replace(/\b(?:over|on|at|onto|into|upon|across) (?=(?:and|for|with|then|by)\b)/g, '').trim();
   }
   // place kinds: "in the desert", "by the sea", "at the north pole" (not "to the sea" of a river: the river handler reads it)
   if (p && (!mods.place || mods.place.here) && !/\briver\b/.test(s)) {
@@ -619,7 +625,8 @@ function put(c: Command, mods: Mods, schema: CommandSchema | undefined, o: { pla
     // forever: -1 where the command takes it, else the longest it allows
     c.duration = mods.duration < 0 ? ((sp.duration.min ?? 0) <= -1 ? -1 : sp.duration.max ?? 1e6) : clampTo(mods.duration, sp.duration);
   }
-  const qty = mods.qty ?? (mods.one ? 1 : undefined);
+  // ("a people" is a band of them, not one person)
+  const qty = mods.qty ?? (mods.one && c.k !== 'life.spawn-people' ? 1 : undefined);
   if (qty !== undefined) {
     if ('count' in sp && c.count === undefined) c.count = Math.max(sp.count.min ?? 1, Math.round(clampTo(qty, sp.count)));
     else if ('qty' in sp && c.qty === undefined) c.qty = Math.max(1, Math.round(clampTo(qty, sp.qty)));
@@ -898,6 +905,27 @@ function focusPos(cx: PCtx2): V3 | undefined {
   return cx.u.focus && cx.p && cx.u.focus.planet === cx.p.id ? [...cx.u.focus.pos] as V3 : undefined;
 }
 
+/** a place to act on a world named without one: the camera's spot there, its biggest town, else land near its equator */
+function worldSpot(u: Universe, planet: number): V3 | undefined {
+  const w = u.planet(planet);
+  if (!w || !w.alive) return undefined;
+  if (u.focus && u.focus.planet === w.id) return [...u.focus.pos] as V3;
+  let best: { pos: ArrayLike<number> } | undefined, bn = 0;
+  for (const st of w.people?.settlements ?? []) {
+    if (st.fallen >= 0) continue;
+    const n = (w.people.members.get(st.id)?.length ?? 0) + 1;
+    if (n > bn) { bn = n; best = st; }
+  }
+  if (best) return [best.pos[0], best.pos[1], best.pos[2]];
+  const P = w.grid.pos;
+  let c0 = 0, bs = -Infinity;
+  for (let c = 0; c < w.count; c += 5) {
+    const v = (w.f.water[c] < 0.1 ? 2 : 0) - Math.abs(P[c * 3 + 1]);
+    if (v > bs) { bs = v; c0 = c; }
+  }
+  return [P[c0 * 3], P[c0 * 3 + 1], P[c0 * 3 + 2]];
+}
+
 /** where a clause acts: its place, else the focus */
 function placePos(c: Clause): V3 | undefined {
   return c.mods.place?.pos ?? focusPos(c.cx);
@@ -911,6 +939,12 @@ function resolveClause(cx: PCtx2, core: string, mods: Mods, full: string): Comma
       const sc = cx.reg.schema(cmd.k);
       if (mods.place?.everywhere && cmd.pos === undefined && sc?.params.everywhere) cmd.everywhere = true;
       put(cmd, mods, sc);
+      // a world named with no place on it ("rain on Rust", "send wolves to Rime"): where its people live, else where
+      // the god last looked at it, else the middle of its land
+      if (sc?.params.pos?.required && cmd.pos === undefined && mods.place && !mods.place.pos && !mods.place.everywhere && typeof cmd.planet === 'number') {
+        const at = worldSpot(cx.u, cmd.planet);
+        if (at) cmd.pos = at;
+      }
       if (!mods.place && !cx.u.focus && sc?.params.pos?.required && cmd.pos === undefined) cmd.pos = [0, 0, 1];
       out.push(cmd);
       cx.why.push(`→ ${describe(cx, cmd, label ?? powerName(cx.u.content, cmd))}${placeLabel(mods)}`);
@@ -1612,6 +1646,12 @@ function intentPlanetLaws(c: Clause): boolean {
   if (/\b(second|another|twin|two|extra) suns?\b|\bbinary\b|\btwo stars\b/.test(s)) { c.add({ k: 'star.set', kind: 'binary' }, 'a second sun: a binary pair'); return true; }
   const starN = findNoun(u.content, p, s, ['star']);
   if (starN && (has(s, 'star', 'sun', 'becomes', 'become', 'turn', 'into', 'make') || s.trim() === starN.text)) { c.add({ k: 'star.set', kind: starN.id }, `the star becomes a ${starN.text}`); return true; }
+  // the star by its colour: "turn the star red", "make the sun blue", "a white sun"
+  const hue = s.match(/\b(blue-white|yellow-white|red|orange|yellow|white|blue)\b/);
+  if (hue && /\b(sun|star)\b/.test(s) && /\b(turn|turns|make|become|becomes|paint|change|shine|shines|burn|burns|glow|glows|into|a|an|is|be)\b/.test(s) && !/\b(sky|skies|rain|moon|light on)\b/.test(s)) {
+    const kind = ({ red: 'M', orange: 'K', yellow: 'G', 'yellow-white': 'F', white: 'A', 'blue-white': 'B', blue: 'B' } as Record<string, string>)[hue[1]];
+    if (u.content.stars.has(kind)) { c.add({ k: 'star.set', kind }, `the star burns ${hue[1]}: ${u.content.stars.get(kind).name.toLowerCase()}`); return true; }
+  }
   if (/\b(sun|star)\b/.test(s) && /\b(brighter|brighten|hotter|stronger|more light|blaze|burn brighter)\b/.test(s)) { c.add({ k: 'star.set', luminosity: Math.min(10000, u.star.luminosity * (mods.nums[0] ?? (/\b(much|far|twice|double)\b/.test(s) ? 2 : 1.3))) }, 'brighten the star'); return true; }
   if (/\b(sun|star)\b/.test(s) && /\b(dimmer|dim|darker|weaker|cooler|colder|less light|fade)\b/.test(s)) { c.add({ k: 'star.set', luminosity: u.star.luminosity / (mods.nums[0] ?? (/\b(much|far|twice|half)\b/.test(s) ? 2 : 1.3)) }, 'dim the star'); return true; }
   if (/\b(brighter|brighten|more light)\b/.test(s) && !/\b(sky|fire|lamp)\b/.test(s)) { c.add({ k: 'star.set', luminosity: Math.min(10000, u.star.luminosity * (mods.nums[0] ?? 1.5)) }, 'brighten the star'); return true; }
@@ -1636,11 +1676,14 @@ function intentPlanetLaws(c: Clause): boolean {
   // the warmth of the whole world ("make the world warmer", "global warming", "an ice age" is a disaster)
   const warm = /\b(hotter|warmer|heat up|warm up|warming|warm|hot|twice as (hot|warm)|much (hotter|warmer))\b/.test(s);
   const cool = /\b(colder|cooler|cool down|chill|chilly|freezing|cold|twice as cold|much (colder|cooler)|cooling)\b/.test(s);
-  const worldwide = /\b(world|planet|globe|global|globally|earth|climate|everywhere)\b/.test(full) || !!mods.place?.everywhere || /\btwice as\b|\bdegrees\b/.test(s);
+  // (a whole world named counts: "make Rust warmer")
+  const worldwide = /\b(world|planet|globe|global|globally|earth|climate|everywhere)\b/.test(full) || !!mods.place?.everywhere || /\btwice as\b|\bdegrees\b/.test(s)
+    || (!!mods.place && mods.place.planet !== undefined && !mods.place.pos && mods.place.settlement === undefined);
   if ((warm || cool) && worldwide && !/\b(rain|snow|storm|weather|wind|sun|star|air|sea|ocean|water|people|folk)\b/.test(s)) {
     const n = s.match(/(-?\d+(?:\.\d+)?)\s*(degrees?|°c?|c\b)?/);
     const step = n ? Math.abs(parseFloat(n[1])) : /\b(twice|much|far|a lot|very)\b/.test(s) ? 10 : 5;
-    const cur = p?.st.climateOffset ?? 0;
+    const wp = mods.place?.planet !== undefined ? u.planet(mods.place.planet) ?? p : p;
+    const cur = wp?.st.climateOffset ?? 0;
     const v = Math.round((cur + (warm && !cool ? step : -step)) * 10) / 10;
     c.add({ k: 'set', path: 'climate.offset', value: Math.max(-150, Math.min(150, v)) }, `${warm && !cool ? 'warmer' : 'colder'} by ${step} °C`);
     return true;
@@ -2590,7 +2633,27 @@ function intentWorldNamed(c: Clause): boolean {
     return true;
   }
   const ws = planetsIn(c);
-  if (!ws.length) return false;
+  if (!ws.length) {
+    // the first letters of a world's name after a verb of unmaking or breaking ("unmake Verd"): that world, if only one
+    // living world's name begins so (the whole name is a live name already, read above)
+    const pm = full.match(/\b(?:erase|unmake|annihilate|obliterate|delete|destroy|uncreate|wipe out|crack|shatter|sunder|split)\s+(?:the\s+)?(?:(?:whole\s+)?(?:world|planet|moon)\s+(?:of\s+)?)?([a-z][a-z'-]{2,})\b/);
+    const cands = pm ? u.planets.filter((q) => q.alive && q.name.toLowerCase().startsWith(pm[1]) && q.name.length > pm[1].length) : [];
+    if (cands.length !== 1) return false;
+    ws.push({ name: pm![1], kind: 'planet', id: cands[0].id, planet: cands[0].id, at: full.indexOf(pm![1]) });
+  }
+  // a moon named and let fall: "drop Selene", "let Selene fall on Gaia", "crash Selene into Gaia"
+  const moonW = ws.find((q) => (u.planet(q.id)?.st.orbit.parent ?? -1) >= 0);
+  if (moonW && (/\b(drop|crash|fall|falls|falling|plunge|hurl|bring down|pull down|send down|call down)\b/.test(full) || (/\bsmash\b/.test(full) && /\b(into|onto|on)\b/.test(full)))
+    && !/\b(erase|unmake|annihilate|obliterate|delete|uncreate|crack|shatter|sunder)\b/.test(full)) {
+    const m = u.planet(moonW.id)!;
+    const host = u.planet(m.st.orbit.parent);
+    if (host && host.alive) {
+      if (mods.place && !mods.place.settlement && (mods.place.planet === m.id || mods.place.planet === host.id)) mods.place = null;
+      mods.qty = undefined; mods.one = undefined;
+      c.add({ k: 'world.moon-fall', world: host.id, moon: m.id }, `drop the moon · ${m.name} onto ${host.name}`);
+      return true;
+    }
+  }
   const w = ws[0];
   const name = u.planet(w.id)?.name ?? w.name;
   const isMoon = (u.planet(w.id)?.st.orbit.parent ?? -1) >= 0;
@@ -2618,7 +2681,9 @@ function intentWorldNamed(c: Clause): boolean {
     return true;
   }
   const au = full.match(/(\d+(?:\.\d+)?)\s*au\b/);
-  if (/\b(move|push|pull|shift|drag|carry)\b/.test(full) && (au || /\b(closer|nearer|farther|further|away|out|in)\b/.test(full))) {
+  // (put / set / bring a world somewhere only with words of distance: "put Rust closer to the sun", "set Rime at 3 au")
+  const towardOut = /\b(closer|nearer|farther|further|away)\b/.test(full);
+  if ((/\b(move|push|pull|shift|drag|carry)\b/.test(full) && (au || towardOut || /\b(out|in)\b/.test(full))) || (/\b(put|place|set|bring|send|nudge|draw)\b/.test(full) && (au || towardOut))) {
     const cur = (u.planet(w.id)?.st.orbit.a ?? AU) / AU;
     const d = au ? parseFloat(au[1]) : /\b(closer|nearer|in)\b/.test(full) ? cur * 0.8 : cur * 1.25;
     return bind({ k: 'world.move', world: w.id, distance: Math.round(d * 1000) / 1000 }, 'move the world');
@@ -2886,11 +2951,14 @@ function intentDeath(c: Clause): boolean {
     if (/\b(animals|beasts|herds|wildlife)\b/.test(s)) { c.add({ k: 'life.cull', ...(st !== undefined ? { settlement: st } : { radius: Math.round(600 * (mods.size ?? 1)) }) }, 'cull the beasts'); return true; }
     if (/\b(plants|trees|forests?|grass|crops|green)\b/.test(s)) { c.add({ k: 'life.kill', what: 'plants', radius: Math.round(300 * (mods.size ?? 1)) }, 'wither every green thing'); return true; }
     if (st !== undefined && (everyone || /^(kill|slay|smite|murder|massacre|slaughter|strike down)$/.test(s.trim()))) { c.add({ k: 'life.kill', settlement: st, what: everyone && /\b(everything|all life)\b/.test(s) ? 'all' : 'people' }, `death over ${mods.place!.label}`); return true; }
-    if (everyone && (mods.place?.pos && !mods.place.here || mods.place?.everywhere)) {
-      if (mods.place?.everywhere) {
-        const kinds = new Set((p?.people?.settlements ?? []).filter((x) => x.fallen < 0).map((x) => u.content.species.list[x.species].id));
-        for (const k of kinds) c.add({ k: 'life.kill', species: k }, `death to every ${k}`);
-        return c.out.length > 0 || c.ask(`There is no one on ${p?.name ?? 'this world'} to kill.`);
+    // a whole world named ("kill everyone on Rust"): every people of that world, wherever they are on it
+    const wholeWorld = everyone && mods.place && !mods.place.pos && !mods.place.everywhere && mods.place.planet !== undefined && mods.place.settlement === undefined;
+    if (everyone && (mods.place?.pos && !mods.place.here || mods.place?.everywhere || wholeWorld)) {
+      if (mods.place?.everywhere || wholeWorld) {
+        const w = wholeWorld ? u.planet(mods.place!.planet!) : p;
+        const kinds = new Set((w?.people?.settlements ?? []).filter((x) => x.fallen < 0).map((x) => u.content.species.list[x.species].id));
+        for (const k of kinds) c.add({ k: 'life.kill', species: k, ...(w ? { planet: w.id } : {}) }, `death to every ${k}${w ? ` on ${w.name}` : ''}`);
+        return c.out.length > 0 || c.ask(`There is no one on ${w?.name ?? 'this world'} to kill.`);
       }
       c.add({ k: 'life.kill', what: /\b(everything|all life)\b/.test(s) ? 'all' : 'people', radius: Math.round(150 * (mods.size ?? 1)) }, 'death');
       return true;
@@ -2976,6 +3044,17 @@ function lawOn(c: Clause, spId: string, law: string): boolean {
 function intentNoun(c: Clause): boolean {
   const { s, cx, mods } = c;
   const { u, p, L } = cx;
+  // people of no kind named, set somewhere ("put people on Cinder"): the people that would fare best on that world
+  // (the verb leads and little else is said: "make people love me" is not a people set down)
+  if (/^(put|place|set|set down|drop|send|add|spawn|seed|summon|settle)\b/.test(s) && s.split(' ').length <= 5 && /\b(people|peoples|folk|humans?|settlers|colonists|tribes?|mortals|men and women)\b/.test(s) && !findNoun(u.content, p, s, ['species'])) {
+    const wid = mods.place?.planet ?? p?.id;
+    const w = wid !== undefined ? u.planet(wid) : undefined;
+    let sp = '', bs = -1;
+    if (w && w.alive) for (let i = 0; i < u.content.species.size; i++) { const h = habitability(u, w, i).score; if (h > bs) { bs = h; sp = u.content.species.list[i].id; } }
+    if (bs < 0.05) sp = ''; // (nobody could live there: the handler says so of whoever is set down)
+    c.add({ k: 'life.spawn-people', ...(sp ? { species: sp } : {}) }, `set down ${sp ? u.content.species.get(sp).plural.replace(/^the /, '') : 'a people'}${w ? ` on ${w.name}` : ''}`);
+    return true;
+  }
   const createV = verb(cx, s, 'create');
   const noun = findNoun(u.content, p, s, ['disaster', 'weather', 'animal', 'species', 'plant', 'creature', 'miracle', 'biome', 'material', 'star', 'item', 'building']);
   if (noun) {
@@ -3170,6 +3249,9 @@ function synonymOverride(c: Clause): Command[] {
   const byFull = idx.get(phraseKey(c.full));
   const pws = byFull ?? idx.get(phraseKey(c.s));
   if (!pws || !pws.length) return c.out;
+  // (a world or a ship named in the clause made its own command: "drop Selene" is the moon let fall, not the hand's drop
+  // that the words left once the world's name was lifted out)
+  if (!byFull && c.out.some((cmd) => cmd.k.startsWith('world.') || cmd.k.startsWith('ship.'))) return c.out;
   if (c.out.length && c.out.some((cmd) => pws.some((pw) => powerEquivalent(c.cx.reg, cmd, pw)))) return c.out;
   const pw = pws[0];
   const cmd: Command = { k: pw.command, ...JSON.parse(JSON.stringify(pw.params ?? {})) };

@@ -22,7 +22,7 @@ import { markInitialFirsts, milestonesCheck } from '../chronicle.ts';
 import { makeCtx } from '../people/ctx.ts';
 import { initHerds } from '../life/herds.ts';
 import { spawnPeople } from '../people/spawn.ts';
-import { siteScore } from '../people/settlement.ts';
+import { siteScore, seasonTemps } from '../people/settlement.ts';
 import { ERAS } from '../content.ts';
 import type { Settlement } from '../people/state.ts';
 import { learn, refreshLibrary } from '../people/knowledge.ts';
@@ -127,9 +127,10 @@ export function buildScenario(content: Content, scenarioId: string, seed: number
     sizes.forEach((sz, i) => {
       // several settlements of one people stand at different eras: the last at the scenario's era
       const e = Math.max(0, era - (sizes.length - 1 - i));
+      const cell = scenarioSite(u, p, raw.species);
       last = spawnPeople(u, p, {
         species: raw.species, count: Math.max(4, Math.round((raw.count * weight(sz)) / total)), era: ERAS[e],
-        settled: true, size: sz ?? undefined,
+        settled: true, size: sz ?? undefined, ...(cell >= 0 ? { cell } : {}),
       }) ?? last;
     });
     if (last && (raw.knowledge?.length || raw.store || raw.buildings?.length)) advance(u, p, last, raw);
@@ -154,6 +155,35 @@ export function buildScenario(content: Content, scenarioId: string, seed: number
     u.focus = { planet: fp.id, pos: [P[best * 3], P[best * 3 + 1], P[best * 3 + 2]] };
   }
   return u;
+}
+
+/**
+ * Where a scenario sets a people down: the best site on the world for them (people/spawn.ts bestSiteOnPlanet, the
+ * same scan and draw) — unless its coldest or hottest hours of the year are past what their bodies bear, and a site
+ * whose whole year is within it scores well enough. A city of the electric age was set at 53° south, where winter nights
+ * fell below the plains folk's limit: it froze in its third winter. -1: let spawnPeople choose (no species, no sites).
+ */
+function scenarioSite(u: Universe, p: Planet, species: string): number {
+  const x = makeCtx(u, p);
+  const sp = x.c.species.idx(species);
+  if (sp < 0) return -1;
+  const [tMin, , , tMax] = x.c.species.list[sp].temp;
+  const salt = p.people.settlements.length + 1;
+  const step = Math.max(1, Math.floor(p.count / 2500));
+  let best = -1, bs = -Infinity, good = -1, gs = -Infinity;
+  for (let c = salt % step; c < p.count; c += step) {
+    const s0 = siteScore(x, sp, c);
+    const v = s0 + hashFloat(c, salt, 0x5173) * 0.6;
+    if (v > bs) { bs = v; best = c; }
+    if (s0 <= 0) continue;
+    const t = seasonTemps(x, c);
+    if (t.cold >= tMin && t.hot <= tMax && v > gs) { gs = v; good = c; }
+  }
+  if (best < 0) return -1;
+  const t = seasonTemps(x, best);
+  if (t.cold >= tMin && t.hot <= tMax) return best;
+  // (a livable site a little poorer in water or game is a better home than one whose winter kills)
+  return good >= 0 && gs >= Math.min(bs * 0.6, bs - 2.5) ? good : best;
 }
 
 /**

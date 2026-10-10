@@ -132,7 +132,9 @@ test('peoples time-lapse: at 1000x tasks are stretched, and back at 1x every str
   const sim = play(SPEEDS.filter(([t]) => t < 400), 400, 50);
   const A = sim.u.planets[0].people.agents;
   const who = new Set<number>();
-  for (let i = 0; i < 80; i++) { sim.step(10); for (let s = 0; s < A.hi; s++) if (A.alive[s] && A.dmg[s] > 1) who.add(A.id[s]); }
+  // (round 2: a task is stretched only while no rival activity is within the decision jitter's reach — decide.ts
+  // noteRivals — so over this world's first night hardly any is: watch a whole day)
+  for (let i = 0; i < 160; i++) { sim.step(10); for (let s = 0; s < A.hi; s++) if (A.alive[s] && A.dmg[s] > 1) who.add(A.id[s]); }
   assert.ok(who.size >= 5, `${who.size} agents worked stretched tasks at 1000x`);
   assert.ok(sim.applyNow({ k: 'time.scale', scale: 1 }).ok);
   sim.step(2000);
@@ -276,43 +278,60 @@ test('unfocused worlds: at 1000x water is conserved on a world the camera is not
   assert.ok(awake < Math.max(64, far.hydro.oceanCells >> 6), `two days on the sea has calmed: ${awake} of ${far.hydro.oceanCells} cells awake (${awake0} after the wave)`);
 });
 
-/** run means (6-hourly samples) of humidity, temperature and plant cover on every living world but the home one */
-function unwatchedMeans(scale: number, days: number): { name: string; H: number; T: number; veg: number }[] {
+/** run means (6-hourly samples) of humidity, temperature, soil moisture and plant cover on every living world but the
+ * home one, and each sample's biome histogram */
+interface Unwatched { name: string; H: number; T: number; M: number; veg: number; count: number; bio: number[][] }
+function unwatchedMeans(scale: number, days: number): Unwatched[] {
   const sim = new Sim({ seed: 3, scenario: 'system', overrides: { n: 24 } });
   assert.ok(sim.applyNow({ k: 'set', path: 'disasters.natural', value: 0 }).ok);
   if (scale > 1) assert.ok(sim.applyNow({ k: 'time.scale', scale }).ok);
   const foc = sim.u.focus?.planet;
   const ps = sim.u.planets.filter((p) => p.airy && p.id !== foc);
   if (scale > 1) assert.ok(ps.every((p) => planetLevel(sim.u, p) === 3), 'the other worlds are unwatched');
-  const m = ps.map((p) => ({ name: p.name, H: 0, T: 0, veg: 0 }));
+  const m: Unwatched[] = ps.map((p) => ({ name: p.name, H: 0, T: 0, M: 0, veg: 0, count: p.count, bio: [] }));
   const n = days * 4;
   for (let i = 0; i < n; i++) {
     sim.step(360);
     ps.forEach((p, j) => {
-      let H = 0, T = 0;
-      for (let c = 0; c < p.count; c++) { H += p.f.humidity[c]; T += p.f.temperature[c]; }
-      m[j].H += H / p.count / n; m[j].T += T / p.count / n; m[j].veg += p.vegTotal / n;
+      let H = 0, T = 0, M = 0;
+      const h = new Array<number>(64).fill(0);
+      for (let c = 0; c < p.count; c++) { H += p.f.humidity[c]; T += p.f.temperature[c]; M += p.f.moisture[c]; h[p.f.biome[c]]++; }
+      m[j].H += H / p.count / n; m[j].T += T / p.count / n; m[j].M += M / p.count / n; m[j].veg += p.vegTotal / n;
+      m[j].bio.push(h);
     });
   }
   return m;
 }
 
-test('unwatched worlds: their air, temperatures and plants stay with 1x (a time-lapse approximation, within tolerances)', { timeout: 600_000 }, () => {
+test('unwatched worlds: their air, temperatures, soils, plants and biomes stay with 1x (a time-lapse approximation, within tolerances)', { timeout: 600_000 }, () => {
   // push 3 round 2: the air of a world nobody watched relaxed 12x slower (one hourly humidity update per 12-hour pass —
   // the dry and cold worlds kept their starting humidity: +23 % / +34 % on the small grid, +64 / +81 % at full size),
   // and lava stepped every 30 ticks ran the volcanic world 5 °C warm. The tolerances are the measured approximation
-  // (CONTRACT §5): the lava world runs a little cool (its 12-hour passes see newly spread lava late)
+  // (CONTRACT §5; this grid, seeds 3 and 11, against a 1x twin perturbed once): humidity within 3 % (twin 0.1 %), the
+  // lava world 1.2-1.6 °C cool (its passes see newly spread lava late; 0.05-0.4 °C at full size), the others within
+  // 0.25 °C, soil moisture up to +8 % on the desert world (twin 0.2 %), plants within 1 %, and 2-3 % of the cells in
+  // another biome on the 6-hourly average (twin ≤ 0.4 %: a soil a little wetter tips cells over the wetland line)
   const ref = unwatchedMeans(1, 6), lap = unwatchedMeans(1000, 6);
   for (let j = 0; j < ref.length; j++) {
     const a = ref[j], b = lap[j];
     const dH = (b.H - a.H) / Math.max(0.02, a.H);
-    assert.ok(Math.abs(dH) < 0.07, `${a.name}: humidity ${b.H.toFixed(4)} vs ${a.H.toFixed(4)} at 1x (${(100 * dH).toFixed(1)} %)`);
-    const tolT = a.T > 100 ? 3.5 : 0.6;
+    assert.ok(Math.abs(dH) < 0.05, `${a.name}: humidity ${b.H.toFixed(4)} vs ${a.H.toFixed(4)} at 1x (${(100 * dH).toFixed(1)} %)`);
+    const tolT = a.T > 100 ? 2.5 : 0.6;
     assert.ok(Math.abs(b.T - a.T) < tolT, `${a.name}: temperature ${b.T.toFixed(2)} vs ${a.T.toFixed(2)} °C at 1x`);
+    const dM = (b.M - a.M) / Math.max(0.02, a.M);
+    assert.ok(Math.abs(dM) < 0.12, `${a.name}: soil moisture ${b.M.toFixed(4)} vs ${a.M.toFixed(4)} at 1x (${(100 * dM).toFixed(1)} %)`);
     if (a.veg > 50) {
       const dV = (b.veg - a.veg) / a.veg;
       assert.ok(Math.abs(dV) < 0.03, `${a.name}: plant cover ${b.veg.toFixed(0)} vs ${a.veg.toFixed(0)} at 1x (${(100 * dV).toFixed(1)} %)`);
     }
+    // the share of cells in another biome: half the L1 distance of the biome histograms, averaged over the samples
+    let bs = 0;
+    for (let i = 0; i < a.bio.length; i++) {
+      let d = 0;
+      for (let k = 0; k < a.bio[i].length; k++) d += Math.abs(a.bio[i][k] - b.bio[i][k]);
+      bs += d / 2 / a.count / a.bio.length;
+    }
+    assert.ok(bs < 0.05, `${a.name}: ${(100 * bs).toFixed(2)} % of the cells in another biome than at 1x`);
   }
 });
 

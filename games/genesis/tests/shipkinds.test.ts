@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { late, must, town, ctx, until, ship, told, shipsLine, DAY } from './helpers/space.ts';
 import { storeAdd } from '../src/sim/people/store.ts';
-import { sightLevel } from '../src/sim/space/ships.ts';
+import { sightLevel, buildable } from '../src/sim/space/ships.ts';
 import { distM } from '../src/sim/people/world.ts';
 import { relationOf } from '../src/sim/people/war.ts';
 import type { Sim } from '../src/sim/sim.ts';
@@ -136,4 +136,25 @@ test('a generation ship takes whole households — nobody leaves a partner behin
   const st = u.planet(haven)!.people.settlement(col.settlement)!;
   assert.ok((u.planet(haven)!.people.members.get(st.id)?.length ?? 0) >= 12);
   assert.match(told(sim).join('\n'), /founded .* on Haven|came down from the sky of Haven and founded/);
+});
+
+test('a people lays down of its own accord only a ship it could finish: no factory, no airship (the god\'s push still may)', () => {
+  const sim = late();
+  const u = sim.u;
+  const gaia = u.planets.find((p) => p.name === 'Gaia')!;
+  const home = town(sim, gaia.id);
+  const x = ctx(sim, gaia.id);
+  const air = u.content.ships.get('airship'), rocket = u.content.ships.get('rocket');
+  give(sim, gaia.id, home.id, { cloth: 30, rope: 12, coal: 30 });
+  assert.ok(buildable(x, home, rocket), 'the rocket city can build its rocket');
+  assert.ok(buildable(x, home, air), 'and an airship, with its factory and cloth');
+  // its factories in ruins: the gas bag has nowhere to be sewn
+  const factories = gaia.people.buildings.filter((b) => b.settlement === home.id && u.content.buildings.list[b.type].provides.includes('factory'));
+  assert.ok(factories.length > 0);
+  for (const b of factories) b.flags |= 2;
+  assert.equal(buildable(x, home, air), false);
+  // the god's push does not ask: the program starts, and waits on what it lacks
+  must(sim, { k: 'set', path: 'space.drive', value: 0 });
+  const r = must(sim, { k: 'ship.launch', planet: gaia.id, settlement: home.id, kind: 'airship', purpose: 'colony' });
+  assert.equal(ship(sim, r.created![0].id).phase, 'building');
 });

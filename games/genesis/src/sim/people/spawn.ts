@@ -11,7 +11,7 @@ import { AgentFlag } from '../types.ts';
 import { hashFloat } from '../core/rng.ts';
 import { makeCtx, type PCtx } from './ctx.ts';
 import { eraKnowledge } from '../recipes/recipes.ts';
-import { createBand, found, reachable, searchSite, siteScore, assignRoles, chooseCrop } from './settlement.ts';
+import { createBand, found, reachable, searchSite, siteScore, assignRoles, chooseCrop, seasonTemps } from './settlement.ts';
 import { planBuilding, canBuild } from './buildings.ts';
 import { learn, refreshLibrary } from './knowledge.ts';
 import { storeAdd } from './store.ts';
@@ -223,4 +223,18 @@ function establish(x: PCtx, st: Settlement, cell: number, era: number, size: str
   assignRoles(x, st);
   // everyone has a home
   for (const hh of st.households) hh.home = -1;
+  // a people of the bronze age and after goes clothed: woven in the later ages, hides before; furs where the winter
+  // bites (a city of the electric age began naked at 53° south and froze in its houses in its third winter)
+  // (bodies that wear clothes: the two-legged peoples; a hive's castes and the drifters go as they are)
+  if (era >= 3 && x.info[st.species].def.body === 'biped') {
+    const [, lo] = x.info[st.species].def.temp;
+    const winter = seasonTemps(x, cell).winter;
+    const wear = itemIdx(x, winter < lo - 4 ? 'fur-clothes' : era >= 5 ? 'cloth-clothes' : 'hide-clothes');
+    if (wear >= 0) {
+      const A = x.A;
+      for (const m of members) if (A.gear[m] < 0) A.gear[m] = wear;
+      // and some to spare for the children who grow into them
+      storeAdd(x, st, wear, Math.ceil(pop * 0.15));
+    }
+  }
 }

@@ -367,7 +367,9 @@ void main() {
     c = mix(c, c * tone, max(uGolden, uGrade));
     c = mix(c, c * vec3(0.84, 0.95, 1.18), uNight * (1.0 - smoothstep(0.08, 0.45, lum)));
     lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
-    c = max(mix(vec3(lum), c, 1.0 + 0.28 * uGolden - 0.2 * uNight), 0.0);
+    // (night takes colour out of the moonlit dark only: lights — fire, hearths, windows, lamps — keep theirs; desaturated
+    // whole, a burning village at night turned salmon-cream and the lit windows beige)
+    c = max(mix(vec3(lum), c, 1.0 + 0.28 * uGolden - 0.2 * uNight * (1.0 - smoothstep(0.1, 0.4, lum))), 0.0);
   }
   vec2 vc = vUv - 0.5;
   float vig = 1.0 - uVignette * smoothstep(0.25, 0.95, dot(vc * vec2(uAspect, 1.0), vc * vec2(uAspect, 1.0)) * 1.4);

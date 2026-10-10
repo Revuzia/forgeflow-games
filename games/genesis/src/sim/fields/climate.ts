@@ -496,10 +496,15 @@ interface HumScratch { upA: Int32Array; upB: Int32Array; k: Float32Array; Q: Flo
 const humByN = new Map<number, HumScratch>();
 /** longest step (hours) of the air's semi-Lagrangian walk in humidityHours */
 const HUM_STEP = 4;
+/** the hours right before the kernel's are stepped one by one (push 3 round 2, resumed): a compounded step wrings the
+ * air down to its rain-out threshold (1 − 0.4^g of the excess in one go), so the kernel's hour began from air drier
+ * than the hourly balance leaves it and rained ~⅓ less where it rains — the focused home world's precipitation ran
+ * 14-22 % short at 1000x. Three hourly steps restore the hourly excess to within ~2 % */
+const HUM_TAIL = 3;
 
 /**
  * Time-lapse (SIM perf push 3, round 2): the `n` hours of a multi-hour climate pass before its last, for the air's
- * humidity alone, in semi-Lagrangian steps of up to HUM_STEP hours, under the wind, the drifting disturbances and the
+ * humidity alone, in semi-Lagrangian steps of up to HUM_STEP hours (the last HUM_TAIL hourly), under the wind, the drifting disturbances and the
  * temperatures at the start of the pass (the column kernel then runs the last hour as before: its rain rate and
  * clouds). Each step takes the air from where it was g hours before — the kernel's hour-upwind walk followed g times,
  * each hour under the wind where the air was; the neighbourhood blend there — and applies g hours of the kernel's
@@ -526,8 +531,10 @@ function humidityHours(u: Universe, p: Planet, sc: ClimateScratch, n: number): v
   const surface = f.surface, freeze = st.liquid.freeze, cloudiness = st.cloudiness;
   const globalKind = st.globalWeather != null ? u.content.weather.find(st.globalWeather) : undefined;
   const gH = (globalKind ? globalKind.humidityDelta : 0) * 0.2;
-  // the steps: m of them, the first `ext` of gA = gB + 1 hours, the rest of gB
-  const m = Math.ceil(n / HUM_STEP), gB = Math.floor(n / m), ext = n - gB * m, gA = gB + 1;
+  // the steps: the last `tail` hours one by one (HUM_TAIL), before them m steps, the first `ext` of gA = gB + 1 hours,
+  // the rest of gB
+  const tail = n < HUM_TAIL ? n : HUM_TAIL, head = n - tail;
+  const m = head > 0 ? Math.ceil(head / HUM_STEP) : 0, gB = m > 0 ? Math.floor(head / m) : 0, ext = head - gB * m, gA = gB + 1;
   // per cell, what holds for the whole pass (the kernel's expressions): the cell an hour upwind (the kernel's walk),
   // the source's hourly pull and target, the rain-out threshold (orographic lift from the hour-upwind cell) without
   // the convective term
@@ -556,18 +563,20 @@ function humidityHours(u: Universe, p: Planet, sc: ClimateScratch, n: number): v
     conv[c] = T > 24 ? 1 : 0;
   }
   // the gB- and gA-hour trajectories: the hour-upwind cell followed hour by hour
-  for (let c = 0; c < N; c++) {
-    let up = c;
-    for (let j = 0; j < gB; j++) up = W1[up];
-    upB[c] = up;
-    upA[c] = W1[up];
+  if (m > 0) {
+    for (let c = 0; c < N; c++) {
+      let up = c;
+      for (let j = 0; j < gB; j++) up = W1[up];
+      upB[c] = up;
+      upA[c] = W1[up];
+    }
   }
   const nbrStart = g.nbrStart, nbr = g.nbr;
   // each step reads the last step's air (src) and writes the next (dst); the neighbourhood blend is taken where it is
   // read, at the cell the air came from
   let src = q, dst = sc.q2;
-  for (let i = 0; i < m; i++) {
-    const gh = i < ext ? gA : gB, upW = i < ext ? upA : upB;
+  for (let i = 0; i < m + tail; i++) {
+    const gh = i >= m ? 1 : i < ext ? gA : gB, upW = i >= m ? W1 : i < ext ? upA : upB;
     const sub = 0.99 ** gh, wring = 1 - 0.4 ** gh, gHh = gH * gh;
     for (let c = 0; c < N; c++) {
       const up = upW[c];

@@ -101,3 +101,42 @@ test('a pack\'s disaster by its own name: "salt wind" is the salt wind, not the 
   assert.match(sim.parse('wind').msg ?? '', /Blow from where/);
   assert.ok(sim.u.god.disasters.filter((d) => d.kind === 'salt-wind').length >= 4);
 });
+
+test('worlds named in the words of any act: the act lands there (a place on it when one is needed), a moon let fall by name, the star by its colour', () => {
+  const sim = new Sim({ seed: 1, scenario: 'twoworlds-late', overrides: { n: 12 } });
+  const u = sim.u;
+  const gaia = u.planets.find((p) => p.name === 'Gaia')!, rust = u.planets.find((p) => p.name === 'Rust')!, selene = u.planets.find((p) => p.name === 'Selene')!;
+  // a world by the first letters of its name, after a verb of unmaking
+  assert.deepEqual(one(sim, 'unmake Rus'), { k: 'world.erase', world: rust.id });
+  assert.deepEqual(one(sim, 'crack Sele'), { k: 'world.crack', world: selene.id });
+  // a moon by name, let fall on its world
+  for (const t of ['drop Selene', 'let Selene fall on Gaia', 'crash Selene into Gaia']) assert.deepEqual(one(sim, t), { k: 'world.moon-fall', world: gaia.id, moon: selene.id }, t);
+  // a world put nearer its star
+  assert.equal(one(sim, 'put Rust closer to the sun').world, rust.id);
+  // acts on a world named without a place: on that world, at a place on it
+  const rain = one(sim, 'rain on Rust');
+  assert.equal(rain.k, 'water.rain');
+  assert.equal(rain.planet, rust.id);
+  assert.ok(Array.isArray(rain.pos), 'a place on Rust to rain on');
+  assert.equal(one(sim, 'teach Rust rockets').planet, rust.id);
+  const warm = one(sim, 'make Rust warmer');
+  assert.deepEqual([warm.k, warm.path, warm.planet, warm.value], ['set', 'climate.offset', rust.id, rust.st.climateOffset + 5]);
+  assert.deepEqual(one(sim, 'kill everyone on Rust'), { k: 'life.kill', species: 'hive', planet: rust.id });
+  // a people sent to a world is set down there (not where they came from), a band of them, not one
+  const sent = one(sim, 'send the plains folk of Gaia to Rust');
+  assert.deepEqual([sent.k, sent.species, sent.planet], ['life.spawn-people', 'plains-folk', rust.id]);
+  const band = one(sim, 'set down a people on Rust');
+  assert.equal(band.k, 'life.spawn-people');
+  assert.equal(band.count, undefined, 'a people is a band (the command\'s own count), not one person');
+  assert.equal(band.species, 'hive', 'the people that would fare best there');
+  // the star by its colour
+  assert.deepEqual(one(sim, 'turn the star red'), { k: 'star.set', kind: 'M' });
+  assert.deepEqual(one(sim, 'make the sun blue'), { k: 'star.set', kind: 'B' });
+  assert.equal(one(sim, 'make the sky red').k, 'planet.atmosphere', 'a red sky is not a red star');
+  // and they do it, on the world named
+  const r = sim.applyNow({ k: 'freeform', text: 'drop Selene' });
+  assert.ok(r.ok, r.msg);
+  assert.ok(u.god.disasters.some((d) => d.kind === 'moon-fall' && d.planet === gaia.id));
+  const k = sim.applyNow({ k: 'freeform', text: 'rain on Rust' });
+  assert.ok(k.ok, k.msg);
+});

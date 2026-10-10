@@ -10,7 +10,7 @@
 
 import {
   DepthTexture, FloatType, LessEqualCompare, LinearFilter, Matrix4, OrthographicCamera, PerspectiveCamera, RedFormat,
-  UnsignedByteType, Vector3, Vector4, WebGLRenderTarget, type IUniform, type Object3D, type WebGLRenderer,
+  UnsignedByteType, Vector3, Vector4, WebGLRenderTarget, type Frustum, type IUniform, type Object3D, type WebGLRenderer,
 } from 'three';
 
 export const SHADOW_GLSL = /* glsl */ `
@@ -193,6 +193,14 @@ export class SunShadows {
       // normal-offset bias ≈ 1.5 texels of this cascade
       (['x', 'y', 'z', 'w'] as const).forEach((key, i) => { if (i === k) u.uShadowBias.value[key] = texel * 1.5; });
     }
+  }
+
+  /** the light box of cascade k as a frustum (world space) — for leaving out casters it cannot see (batched terrain is
+   * one object, so three's per-object culling no longer does it) */
+  cascadeFrustum(k: number, out: Frustum): Frustum {
+    const c = this.cams[k];
+    _m.multiplyMatrices(c.projectionMatrix, c.matrixWorldInverse);
+    return out.setFromProjectionMatrix(_m);
   }
 
   /**
