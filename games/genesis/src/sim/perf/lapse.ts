@@ -21,7 +21,8 @@
 //                                        tick. Round 2: only while the sea is calm — `coarseIf`, a pure function of
 //                                        state — since free waves then lost a quarter of the 1x friction per game tick
 //                                        and the whole sea stayed awake for days after a quake or a tsunami)
-//   sheet flow    2 →    4 /  12         (hydrology.ts: thin overland films, zero inertia: flux ∝ the step)
+//   sheet flow    2 →    4 /   8         (hydrology.ts: thin overland films, zero inertia: flux ∝ the step; 12 at 1000x
+//                                        until push 3 round 2 — see LAPSE_SHEETS)
 //   soil hour     — every hour the climate pass skips (climate.ts soilHour: evaporation and infiltration of the
 //                  land stay hourly at every level, so rain that runs off between passes still soaks in)
 //   keyframes  2880 → 2880 / 5760       (rewind spacing; not state)
@@ -31,10 +32,12 @@
 //
 // Level 3 (SIM perf push 3) — a living world the camera is not on, while time-lapse is on (planetLevel): climate 12 h
 // (6 h while it has lava vents — round 2), vegetation 12 h, weather / rain / sand and ash 60 ticks, hydrology 16 while
-// its sea is calm, sheets 48, lava and talus 30 while no vent feeds lava and no lava moves (else 10, as at 1x — round
-// 2), biomes 2 days. Round 2 also made the multi-hour passes live their hours: the air's humidity relaxes hour by hour
-// (climate.ts humidityHours), plants grow logistically over the pass (vegetation.ts). What happens there is a
-// time-lapse approximation, measured against 1x in CONTRACT §5.
+// its sea is calm, sheets every hydrology step (16 ticks; round 2 — at 48 its films stood on the land between steps and
+// soaked in: soils ran 1-2 % wet, wetlands spread over 5-6 % of a wet world's cells, a desert world's ground 12-22 %
+// wetter), lava and talus 30 while no vent feeds lava and no lava moves (else 10, as at 1x — round 2), biomes 2 days.
+// Round 2 also made the multi-hour passes live their hours: the air's humidity relaxes hour by hour (climate.ts
+// humidityHours), plants grow logistically over the pass (vegetation.ts). What happens there is a time-lapse
+// approximation, measured against 1x in CONTRACT §5.
 //
 // Exactness across a change of level: each scheduled system keeps the tick it last ran (settings.lapse.run, per planet
 // and system) while time-lapse is or was active, and integrates exactly the ticks since then — a step after a switch is
@@ -116,8 +119,13 @@ export const LAPSE_SAND: LapseSys = { key: 'sand', base: 10, mult: [1, 2, 3, 6],
  * worth at once and the volcanic world nobody watched ran > 4 °C warm with up to 10 % more lava within days; with lava
  * about, the step is the 1x one. What stays coarse there is talus settling, which ends in the same rest state) */
 export const LAPSE_TERRAIN: LapseSys = { key: 'terr', base: 10, mult: [1, 1, 1, 3], window: [1, 1, 1, 1], step: 1, dormant: 1, coarseIf: noLava };
-/** thin overland sheets: every hydrology step, every 2nd (100x), every 3rd 4-tick step (1000x) */
-export const LAPSE_SHEETS: LapseSys = { key: 'sheet', base: 2, mult: [1, 2, 6, 24], window: [1, 1, 1, 1], step: 2, dormant: 1 };
+/** thin overland sheets: every hydrology step, every 2nd (100x), every 2nd 4-tick step (1000x), every 16-tick step on a
+ * world the camera is not on. (Push 3 round 2: films the sheets do not move stand on the land and soak in at the hourly
+ * soil exchange. On a world nobody watched, every 3rd step — 48 ticks — drifted its wetlands and soils 2-4x further
+ * from 1x than every step does (~2-5 % of the 'system' rate). At 1000x every 3rd step — 12 ticks, push 2 — left the
+ * home world's soils 0.010 wet over 12 days once the air's hours were lived (climate.ts humidityHours) and its rain
+ * came back toward 1x; every 2nd: +0.005, wetlands −4 % (tests/perf-fidelity), ~2-4 % of the 1000x rate) */
+export const LAPSE_SHEETS: LapseSys = { key: 'sheet', base: 2, mult: [1, 2, 4, 8], window: [1, 1, 1, 1], step: 2, dormant: 1 };
 /** systems whose last run is recorded when time-lapse starts (all scheduled systems; phases as sim.ts runPlanet) */
 const SYSTEMS: { sys: LapseSys; phase: number; stagger: boolean }[] = [
   { sys: LAPSE_CLIMATE, phase: 0, stagger: true },

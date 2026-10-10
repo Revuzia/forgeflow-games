@@ -170,7 +170,8 @@ ground(p) = radius + grid.sample(surface, p) + detailNoise(p) * rough(p)
   the worker issues `time.scale` when the preset changes level (1x/10x → level 0, 100x → 1, 1000x → 2); it is in the
   command log, saved (`settings.lapse`) and replayed by rewind. Level 0 is the plain sim. Levels 1 / 2
   run slow systems on coarser fixed cadences with proportionally larger steps: climate 2 h / 6 h, vegetation 2 h / 8 h,
-  weather + rain batches 20 / 30 ticks, overland sheet flow 4 / 12 ticks, hydrology 2 / 4 ticks (half per-step
+  weather + rain batches 20 / 30 ticks, overland sheet flow 4 / 8 ticks (12 at 1000x until push 3 round 2: films left
+  standing soaked the soils), hydrology 2 / 4 ticks (half per-step
   friction at 4: same steady discharge, waves at half speed in game time), sand 20 / 30, biomes 12 h / 24 h,
   settlement re-planning ×2 / ×3, keyframes 2 / 4 days. A step after a level change integrates exactly the elapsed
   time. Same seed + same command log (speed changes included) ⇒ same hash. A dead world (no air, water, life,
@@ -191,16 +192,39 @@ ground(p) = radius + grid.sample(surface, p) + detailNoise(p) * rough(p)
   worn); water at hand and food in the hand are taken in passing (store meals are not: the walk home to eat stays);
   the settlement step runs every 2 / 4 hours and integrates the hours (births, old age, accidents with the window's
   probability; sickness hour by hour at each hour's tick); decisions read their settlement's buildings through a
-  per-settlement cache (each building's state read live). Level 0 (1x, 10x) is untouched: the same hashes as without
-  this note. Measured over two game years
-  at 1000x against 1x (6 seeds): population, food in store, ideas, discoveries, buildings and births deviate by
-  −0.6 … +3.2 % on their means over the run, as a 1x twin perturbed once does (−1.2 … +2.5 %); deaths are dominated
-  by wars and fires, which are chaotic. Keyframes are 8 days apart at 1000x.
+  per-settlement cache (each building's state read live). *(Round 2.)* A drink taken in passing takes its time (the
+  next task starts that much later); an interrupted stretched task yields the whole sessions already worked; a flight
+  from fire walks as at 1x; a stretch ends where another activity could win a decision. Level 0 (1x, 10x) is
+  untouched: the same hashes as without this note. Keyframes are 4 days apart at 1000x (as in push 2: the worst rewind
+  replays ~5 800 ticks, 3–4.5 s of CPU with 1 500 agents).
+  *Measured* at 1000x against the 1x run of the same seed over **five game years** (sandbox, 1 500 agents, natural
+  disasters off; 12 seeds — 6 of them with agent / settlement ids offset by the seed, so initial ages and old-age rolls
+  differ; run-mean deviation per game year, mean ± sd over seeds; a 1x twin perturbed once is the noise yardstick, in
+  brackets): population y1–y5 +0.2±0.9, −0.4±2.4, −3.1±4.7, −2.9±8.5, −1.4±10.7 % (twin 0.0±0.2, +0.1±0.7, +0.4±3.2,
+  −0.7±6.6, −1.3±8.9); **food in store** y1–y5 +0.4±2.1, −3.3±5.9, −1.4±10.0, +1.5±16.6, +1.9±19.5 % (twin +0.3±1.1,
+  0.0±5.6, −1.7±7.4, −0.1±13.6, +1.4±13.7); over years 3–5 ideas +0.3±6.1 (+0.2±3.5), era −0.2±3.5 (+1.1±2.7),
+  discoveries 0.0±5.1 (−1.6±3.7), settlements +0.5±5.4 (+0.6±3.4), and a little low: buildings −2.6±3.5 (−0.2±2.3),
+  births −2.9±4.3 % (0.0±2.2). **Deaths by cause** after two years, summed over the 12 salted seeds, 1x / twin / 1000x:
+  old age 554 / 554 / 569, sickness 449 / 485 / 531, war 536 / 502 / 511, fire 397 / 302 / 635, starvation 32 / 34 /
+  56, cold 31 / 38 / 39; after five years (the 6 salted seeds of five years): old age 700 / 696 / 721, sickness 713 /
+  725 / 760, war 644 / 797 / 778, fire 1 765 / 2 278 / 1 475. Sickness and fire are epidemics and town fires — chaotic
+  (the six unsalted worlds gave sickness 256 / 286 / 210 after two years). Fires lit over 60 run-years: by lightning
+  6 / 4 / 1, at hearths 17 / 14 / 13, by war bands 18 / 24 / 38 (cause not isolated; a candidate: a stretched task keeps
+  its worker away from home longer, and a town's defenders are those at home when a war band arrives). At 100x (3 seeds, years 3–5):
+  population −5.7±4.3 (+3.6±6.4), food −2.3±8.0 % (+2.1±16.9). (`_harness/scratch/perf3/r2/curves.ts`, `cmp12.ts`.)
   **Worlds the camera is not on** (the logged `focus` names another planet) run coarser still while time-lapse is on
-  (level 3: climate 12 h, vegetation 24 h, weather + rain 60 ticks, hydrology 16 ticks while their sea is calm — the
-  round-2 rule —, sheets 48, sand 60, lava / talus / ash 30, biomes 2 days, settlement step 6 h, tasks and walks as
-  at 1000x). What happens on a world nobody watches at 100x / 1000x is therefore a **time-lapse approximation** —
-  same totals, coarser in time — and still deterministic (the focus is logged); water stays conserved and seas settle.
+  (level 3: climate 12 h — 6 h while the world has lava vents; within a pass the air's humidity relaxes hour by hour —,
+  vegetation 12 h (logistic growth solved over the pass), weather + rain + sand and ash 60 ticks, hydrology 16 ticks
+  while their sea is calm — the round-2 rule — with the overland sheets on every step, lava and talus 30 ticks while no
+  vent feeds lava and no lava moves (10 otherwise), biomes 2 days, settlement step 6 h, tasks and walks as at 1000x).
+  What happens on a world nobody watches at 100x / 1000x is therefore a **time-lapse approximation, not the same
+  totals**, still deterministic (the focus is logged); water stays conserved (|drift| ≤ 5e-15) and seas settle (the
+  calm-sea rule). Measured on the `system` scenario, camera on the home world, 12 game days, two seeds, run means vs
+  1x (twin in brackets): temperatures −0.5 … +0.4 °C (±0.04), humidity −3.8 … +0.9 % (≤ 0.9), plant cover −2.7 …
+  +0.3 % (≤ 0.4), lava on the volcanic world −1 / +6 % (0.3), soil moisture −2.2 … +4.6 % (≤ 1.4) and surface wetness
+  of the desert world +4 / +13 % (≤ 1.3), standing land water −0.6 … −4.9 % (≤ 0.5), up to 4.2 % of the cells in another
+  biome at the end (≤ 0.9) — `_harness/scratch/perf3/r2/sysdrift.ts` + `syscmp.ts`; `tests/perf-lapse3.test.ts` holds
+  a small-grid version of these tolerances.
 
 ---
 

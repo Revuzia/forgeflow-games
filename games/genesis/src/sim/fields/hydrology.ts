@@ -33,7 +33,9 @@
 //     and outflow alike (sheets and the rivers they feed: a monsoon carves as the pure pipes did) and a sheet that
 //     deepens into the pipes starts with its flow as momentum.
 //   * TIME-LAPSE (perf/lapse.ts, the logged speed level): at 100x the sheets step every 2nd step and rain batches come
-//     every 20 ticks; at 1000x the sheets every 12 ticks, the rain every 30, and the hydrology every 4 ticks while the
+//     every 20 ticks; at 1000x the sheets every 8 ticks (12 until SIM perf push 3 round 2: films left standing soaked
+//     the soils; on a world the camera is not on they run on every 16-tick step — perf/lapse.ts LAPSE_SHEETS), the
+//     rain every 30, and the hydrology every 4 ticks while the
 //     sea is calm (same per-step gain — the CFL bound — and half the per-step friction, so a steady flow carries the
 //     same discharge per tick) — with waves on the sea every 2, as at 1x (round 2: the 4-tick friction kept a quake's
 //     seiche alive for days). Level 0 (1x, 10x) is the plain model above.

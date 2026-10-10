@@ -157,6 +157,11 @@ varying float vSalt;
 varying vec3 vWind;
 float gSea = 1.0;
 vec3 gWindT = vec3(0.0);
+// the pixel's footprint ALONG a wave's direction d: at a grazing view the footprint is metres long toward the horizon
+// but centimetres across it, so waves running across the line of sight stay drawn there (an isotropic footprint faded
+// every wave near the horizon and left the sea beyond ~50 m a flat, glassy gel)
+vec3 gdPx = vec3(0.0), gdPy = vec3(0.0);
+float fwAlong(vec3 d) { return abs(dot(gdPx, d)) + abs(dot(gdPy, d)); }
 
 float cloudShadowW(vec3 P, vec3 sunB) {
   if (uCloudOn < 0.5) return 1.0;
@@ -186,7 +191,7 @@ vec3 ripples(vec3 P, vec3 up, float fw, vec3 offset, float t) {
     float k = 6.2831853 / L;
     // capillaries depend most on the wind (a calm sea is glassy, a breeze roughens it at once)
     float amp = L * 0.012 * uWind * mix(gSea, gSea * gSea, smoothstep(2.0, 0.3, L));
-    float aa = 1.0 - smoothstep(0.15, 0.6, fw / L);
+    float aa = 1.0 - smoothstep(0.15, 0.6, fwAlong(d) / L);
     gUnresolved += (amp * k) * (amp * k) * 0.5 * (1.0 - aa);
     if (aa <= 0.0) continue;
     float w = sqrt(9.8 * k);
@@ -207,7 +212,9 @@ vec4 ssr(vec3 posV, vec3 rV, vec3 nV) {
   // rays turning back toward the camera cannot be found on screen: fade them out (no hard cut line on the sea)
   float facing = 1.0 - smoothstep(0.05, 0.3, rV.z);
   if (facing <= 0.0) return vec4(0.0);
-  float t = (2.0 + 0.01 * length(posV)) * (1.0 + 0.35 * ign(gl_FragCoord.xy + vec2(uFrame * 7.0, uFrame * 3.0)));
+  // (a half-step jitter: a full step's made every ray that grazes a thin object — a treeline, a mast — hit in one pixel
+  // and miss in the next, a stipple of dark specks over the mirrored sky)
+  float t = (2.0 + 0.01 * length(posV)) * (1.0 + 0.16 * ign(gl_FragCoord.xy + vec2(uFrame * 7.0, uFrame * 3.0)));
   float prz = -posV.z;
   for (int i = 0; i < 28; i++) {
     vec3 q = posV + rV * t;
@@ -255,6 +262,8 @@ void main() {
   vec3 P = vBodyPos;
   vec3 up = normalize(P);
   float fw = length(fwidth(P));
+  gdPx = dFdx(P);
+  gdPy = dFdy(P);
   // ── surface normal: Gerstner (analytic) + ripples (flow-mapped on rivers) ──
   vec3 grad = vec3(0.0);
   float calm = smoothstep(0.3, 4.0, vDepth) * (1.0 - smoothstep(0.05, 0.4, vIce));
@@ -269,10 +278,10 @@ void main() {
     float L = GW_D[i].w;
     // (the NORMAL fades only by footprint: the vertex shader fades the displacement by distance because a patch
     // cannot carry it, but faded here too it left the sea beyond ~60–200 m a flat glassy gel)
-    float fade = 1.0 - smoothstep(0.2, 0.7, fw / L);
+    vec3 d = gwDir(i, up, gWindT);
+    float fade = 1.0 - smoothstep(0.2, 0.7, fwAlong(d) / L);
     float amp = GW_A[i] * sea * calm * fade;
     gUnresolved += pow(GW_A[i] * sea * calm * 6.2831853 / L, 2.0) * 0.5 * (1.0 - fade);
-    vec3 d = gwDir(i, up, gWindT);
     float k = 6.2831853 / L;
     float ph = k * dot(P, d) - sqrt(9.8 * k) * uTime;
     grad += d * (amp * k * cos(ph));
@@ -287,7 +296,8 @@ void main() {
     d = normalize(normalize(d + 1e-5) + gWindT * 2.0 + 1e-5);
     d = normalize(d - up * dot(d, up) + 1e-5);
     float k = 6.2831853 / L;
-    float amp = L * 0.011 * sea * calm * (1.0 - smoothstep(0.2, 0.7, fw / L)) * smoothstep(3.0, 20.0, vDepth);
+    // (a shelf a few metres deep still carries the swell: only the shallows calm it)
+    float amp = L * 0.011 * sea * calm * (1.0 - smoothstep(0.2, 0.7, fwAlong(d) / L)) * smoothstep(1.5, 8.0, vDepth);
     grad += d * (amp * k * cos(k * dot(P, d) - sqrt(9.8 * k) * uTime + fi * 2.1));
   }
   float flowSpd = length(vFlow);
@@ -481,10 +491,16 @@ void main() {
   whitecap = max(whitecap, smoothstep(0.75, 0.95, snoise(vec3(Pw.x * 0.06, Pw.y * 1.4, 3.1)) * 0.5 + 0.5) * smoothstep(9.0, 16.0, windSpd * uWind) * 0.5 * calm * smoothstep(0.3, 0.8, vSalt));
   float foamAmt = clamp(max(max(max(shore, crest * 0.8), rapids * 0.85), whitecap * 0.7), 0.0, 1.0);
   if (foamAmt > 0.01) {
-    vec3 fp = P * 1.4 - vFlow * uTime * 0.8;
-    vec3 fv = voronoi3(fp);
-    float bubbles = smoothstep(0.15, 0.55, fv.y - fv.x) * (1.0 - smoothstep(0.2, 1.2, fw));
-    float pat = mix(0.65, bubbles, 1.0 - smoothstep(0.1, 1.0, fw));
+    // foam is LACE: a web of bright bubble filaments round dark holes (ridged noise at two scales, drifting with the
+    // flow and slowly re-forming), thinning out in larger patches — the cells of a Voronoi read as white fish scales
+    // dotted along every shore
+    vec3 fp = P * 0.8 - vFlow * uTime * 0.8;
+    float l1 = 1.0 - abs(snoise(fp + vec3(0.0, uTime * 0.07, 0.0)));
+    float l2 = 1.0 - abs(snoise(fp * 2.6 + vec3(7.1, -uTime * 0.11, 2.3)));
+    float kL = 1.0 - smoothstep(0.15, 0.9, fw * 2.6);
+    float lace = l1 * l1 * l1 * 0.75 + l2 * l2 * l2 * l2 * 0.45 * kL;
+    float thinP = smoothstep(0.25, 0.75, snoise(P * 0.33 + 3.3) * 0.5 + 0.5);
+    float pat = mix(0.6, clamp(lace * (0.55 + 0.6 * thinP), 0.0, 1.0), 1.0 - smoothstep(0.15, 1.2, fw));
     // falls: white water with faint streaks running down the slope with it
     if (lean > 0.06 && flowSpd > 1.0) {
       vec3 fd = normalize(vFlow + 1e-5);

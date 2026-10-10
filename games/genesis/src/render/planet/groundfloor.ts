@@ -391,6 +391,31 @@ float ff_canopy(vec3 P, vec3 up, vec3 Nb, float muS) {
   return clamp((1.0 - s * 0.2) * 1.25, 0.0, 1.0) * smoothstep(0.15, 0.3, muS);
 }
 
+// bare earth at 1 cm–2 m (soil, a trodden street, the ground between crops): clods with shaded cracks between them
+// (~0.12 m and ~0.45 m), damp and dry patches (~1.5 m) and scattered pebbles (2–4 cm) — x = albedo factor
+// (mean-preserving), y = bump (m), z = pebble cover; every term fades to its mean by the footprint. (Plain noise at
+// ±6 % left streets and fields a smooth, out-of-focus smear at eye level.)
+vec3 soilDetail(vec3 P, float fw) {
+  vec3 fp; float f1, id;
+  float alb = 1.0, bump = 0.0;
+  ff_cells(P * 8.0, fp, f1, id);
+  float k1 = ff_aa(fw, 0.12);
+  float c1 = smoothstep(0.55, 0.15, f1) - 0.45;
+  alb += (0.24 * c1 + 0.1 * (id - 0.5)) * k1;
+  bump += c1 * 0.012 * k1;
+  ff_cells(P * 2.2 + 3.0, fp, f1, id);
+  float k2 = ff_aa(fw, 0.45);
+  float c2 = smoothstep(0.6, 0.2, f1) - 0.42;
+  alb += (0.16 * c2 + 0.08 * (id - 0.5)) * k2;
+  bump += c2 * 0.03 * k2;
+  alb *= 1.0 + 0.1 * snoise(P * 0.65 + 9.0) * ff_aa(fw, 1.5);
+  ff_cells(P * 14.0 + 7.0, fp, f1, id);
+  float pr = 0.2 + 0.12 * fract(id * 13.7);
+  float peb = step(0.8, id) * (1.0 - smoothstep(pr * 0.75, pr, f1)) * ff_aa(fw, 0.07);
+  bump += peb * 0.015;
+  return vec3(alb, bump, peb);
+}
+
 // sand micro relief, independent of the sand's depth: wind ripples (~0.6 m, gentle stoss / steep lee) with a finer
 // ~0.13 m set across them, and streaks along the wind; x = albedo factor, y = bump (m), z = glint id (rare sun facets)
 vec3 sandDetail(vec3 P, vec3 up, float fw) {
@@ -418,7 +443,7 @@ vec3 meadowTint(vec3 g, vec3 P, float fw, float moist, float autumn, float winte
   float pB = snoise(P * 0.11 + warpV * 0.4 + 7.7);
   float dryness = clamp(0.5 + 0.6 * pA + 0.22 * pB - (moist - 0.45) * 0.9, 0.0, 1.0);
   vec3 dryC = g * vec3(1.42, 1.24, 0.76) + vec3(0.014, 0.01, 0.0);
-  vec3 lushC = g * vec3(0.84, 1.06, 0.82);
+  vec3 lushC = g * vec3(0.8, 1.08, 0.7);
   // (softer than before: strong 10–50 m swings between straw and deep green read as blurry blotches from 60 m up)
   g = mix(g, mix(lushC, dryC, smoothstep(0.32, 0.82, dryness)), 0.45);
   // what gives the sward its focus at 3–100 m: tussocks and their shaded gaps (~0.7 m and ~2.2 m), trampled and
@@ -427,6 +452,18 @@ vec3 meadowTint(vec3 g, vec3 P, float fw, float moist, float autumn, float winte
   float thin = smoothstep(0.35, 0.85, snoise(P * 0.16 + warpV * 0.5 + 71.0) * 0.5 + 0.5) * ff_aa(fw, 6.0);
   g *= 0.84 + 0.32 * smoothstep(-0.8, 0.8, tus);
   g = mix(g, g * vec3(1.2, 1.12, 0.86) + vec3(0.012, 0.008, 0.002), thin * 0.45);
+  // the sward's own grain: clumps (~0.35 m) and tussocks (~1.1 m), each a lit crown with a shaded gap round it —
+  // rounded and anti-aliased by the footprint, mean-preserving. Soft noise alone left the turf out of focus at 10–80 m
+  // next to crisp houses and trees (a smeared, low-resolution look)
+  if (fw < 0.5) {
+    vec3 fp; float f1, id;
+    ff_cells(P * 2.8 + warpV * 0.3 + 5.0, fp, f1, id);
+    float c1 = smoothstep(0.62, 0.18, f1) - 0.42;
+    g *= 1.0 + (0.34 * c1 + 0.08 * (id - 0.5)) * ff_aa(fw, 0.36);
+    ff_cells(P * 0.9 + warpV * 0.2 + 17.0, fp, f1, id);
+    float c2 = smoothstep(0.66, 0.2, f1) - 0.42;
+    g *= 1.0 + (0.22 * c2 + 0.1 * (id - 0.5)) * ff_aa(fw, 1.1);
+  }
   float season = (1.0 - autumn) * (1.0 - winter) * (1.0 - cold);
   float patchF = smoothstep(0.55, 0.8, snoise(P * 0.19 + warpV + 21.0) * 0.5 + 0.5) * season * smoothstep(0.3, 0.55, moist) * (1.0 - dryness * 0.5);
   if (patchF > 0.01) {

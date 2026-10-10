@@ -308,18 +308,19 @@ test('unwatched worlds: their air, temperatures, soils, plants and biomes stay w
   // the dry and cold worlds kept their starting humidity: +23 % / +34 % on the small grid, +64 / +81 % at full size),
   // and lava stepped every 30 ticks ran the volcanic world 5 °C warm. The tolerances are the measured approximation
   // (CONTRACT §5; this grid, seeds 3 and 11, against a 1x twin perturbed once): humidity within 3 % (twin 0.1 %), the
-  // lava world 1.2-1.6 °C cool (its passes see newly spread lava late; 0.05-0.4 °C at full size), the others within
-  // 0.25 °C, soil moisture up to +8 % on the desert world (twin 0.2 %), plants within 1 %, and 2-3 % of the cells in
-  // another biome on the 6-hourly average (twin ≤ 0.4 %: a soil a little wetter tips cells over the wetland line)
+  // lava world 1.2-1.6 °C cool (its passes see newly spread lava late; 0.05-0.5 °C at full size), the others within
+  // 0.25 °C, soil moisture up to +3 / +6 % on the desert world (twin 0.2 %; +5 / +8 % while the sheets ran every 48
+  // ticks there — lapse.ts LAPSE_SHEETS, resumed round 2), plants within 1 %, and 2-3 % of the cells in another biome
+  // on the 6-hourly average (twin ≤ 0.4 %: a soil a little wetter tips cells over the wetland line)
   const ref = unwatchedMeans(1, 6), lap = unwatchedMeans(1000, 6);
   for (let j = 0; j < ref.length; j++) {
     const a = ref[j], b = lap[j];
     const dH = (b.H - a.H) / Math.max(0.02, a.H);
-    assert.ok(Math.abs(dH) < 0.05, `${a.name}: humidity ${b.H.toFixed(4)} vs ${a.H.toFixed(4)} at 1x (${(100 * dH).toFixed(1)} %)`);
+    assert.ok(Math.abs(dH) < 0.045, `${a.name}: humidity ${b.H.toFixed(4)} vs ${a.H.toFixed(4)} at 1x (${(100 * dH).toFixed(1)} %)`);
     const tolT = a.T > 100 ? 2.5 : 0.6;
     assert.ok(Math.abs(b.T - a.T) < tolT, `${a.name}: temperature ${b.T.toFixed(2)} vs ${a.T.toFixed(2)} °C at 1x`);
     const dM = (b.M - a.M) / Math.max(0.02, a.M);
-    assert.ok(Math.abs(dM) < 0.12, `${a.name}: soil moisture ${b.M.toFixed(4)} vs ${a.M.toFixed(4)} at 1x (${(100 * dM).toFixed(1)} %)`);
+    assert.ok(Math.abs(dM) < 0.08, `${a.name}: soil moisture ${b.M.toFixed(4)} vs ${a.M.toFixed(4)} at 1x (${(100 * dM).toFixed(1)} %)`);
     if (a.veg > 50) {
       const dV = (b.veg - a.veg) / a.veg;
       assert.ok(Math.abs(dV) < 0.03, `${a.name}: plant cover ${b.veg.toFixed(0)} vs ${a.veg.toFixed(0)} at 1x (${(100 * dV).toFixed(1)} %)`);
@@ -331,7 +332,7 @@ test('unwatched worlds: their air, temperatures, soils, plants and biomes stay w
       for (let k = 0; k < a.bio[i].length; k++) d += Math.abs(a.bio[i][k] - b.bio[i][k]);
       bs += d / 2 / a.count / a.bio.length;
     }
-    assert.ok(bs < 0.05, `${a.name}: ${(100 * bs).toFixed(2)} % of the cells in another biome than at 1x`);
+    assert.ok(bs < 0.04, `${a.name}: ${(100 * bs).toFixed(2)} % of the cells in another biome than at 1x`);
   }
 });
 

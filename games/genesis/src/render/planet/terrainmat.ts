@@ -247,6 +247,13 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       float clod = fine ? snoise(P * 1.7) * aaF(fw, 0.6) : 0.0;
       sc *= 0.92 + 0.12 * clod;
       sb = clod * 0.05;
+      // clods, cracks, damp patches and pebbles at 1 cm–2 m (groundfloor.ts soilDetail)
+      if (fw < 0.12 && soilW > 0.05) {
+        vec3 sd = soilDetail(P, fw);
+        sc *= sd.x;
+        sc = mix(sc, vec3(0.3, 0.27, 0.23) * (0.75 + 0.5 * fract(sd.z * 37.0 + m2)), sd.z);
+        sb += sd.y;
+      }
     }
     col = mix(col, sc, soilW);
     bump = mix(bump, sb, soilW);
@@ -370,6 +377,13 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       vec3 youngField = mix(tilled, young, clamp(mix(rowMask * 0.85, 1.0, cover * cover) * smoothstep(0.02, 0.1, crop), 0.0, 1.0));
       cc = mix(youngField, cc, smoothstep(0.35, 0.6, crop));
       cc *= 0.9 + 0.1 * rows + 0.12 * m2;
+      // close up, the standing crop (render/life instanced stalks) is the field's colour: the ground between the stalks
+      // is shaded soil with straw litter, not the field's gold painted on as a sheet (a sandy dune under the wheat)
+      if (k < 3.5) {
+        float under = (1.0 - smoothstep(14.0, 45.0, camDist)) * smoothstep(0.35, 0.6, crop);
+        float straw = smoothstep(0.35, 0.85, snoise(P * 3.1 + 2.0) * 0.5 + 0.5 + 0.25 * snoise(P * 9.0)) * aaF(fw, 0.25);
+        cc = mix(cc, mix(vec3(0.07, 0.05, 0.032), vec3(0.19, 0.15, 0.075), straw), under * 0.8);
+      }
       // hedgerows grow round old farmland: a first season's plots are bare strips with grass between them
       float mature = smoothstep(0.25, 0.5, crop);
       float hedge = (1.0 - smoothstep(0.0, 0.035 + fw * 0.004, fv.y - fv.x)) * aaF(fw, 20.0) * mature;
@@ -603,7 +617,10 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // a smooth burning field with coals — orange flecks everywhere, even by day)
     float smoulder = smoothstep(0.3, 1.5, dB) * (1.0 - smoothstep(3.0, 7.0 + 3.0 * fl, dB));
     // (fine-grained: 1–2 m blotches of coal glow read as orange petals scattered over the grass by day)
-    float coals = smoothstep(0.78, 0.95, snoise(P * 1.1 + 4.0) * 0.5 + 0.5 + 0.2 * snoise(P * 3.7)) * 0.3 * aaF(fw, 0.9);
+    // (and at 0.5–1 m, evenly sown, they read as glowing confetti at night: small coals, clustered in a few patches
+    // where a log or a tussock burned down, most of the margin dark char)
+    float coals = smoothstep(0.84, 0.97, snoise(P * 2.3 + 4.0) * 0.5 + 0.5 + 0.15 * snoise(P * 6.1))
+      * smoothstep(0.5, 0.8, snoise(P * 0.25 + 11.0) * 0.5 + 0.5) * 0.35 * aaF(fw, 0.4);
     // sparse embers in the smoulder, round specks off-centre in their cells, faded before they shrink under a pixel
     vec3 cellE = floor(P * 2.2);
     float eh = fract(sin(dot(cellE, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
@@ -613,9 +630,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     // the night shows — the exposure, not the fire, changes, but the eye reads the sunlit ground first)
     // (by day the coals all but vanish under the sun; a smooth bright front line read as a lava worm: it is broken
     // into burning stretches with dim gaps, and kept low — the flames standing on it are the fire)
-    float dayFire = mix(1.0, 0.45, smoothstep(-0.05, 0.25, dot(up, uSunDirBody)));
+    float dayFire = mix(1.0, 0.3, smoothstep(-0.05, 0.25, dot(up, uSunDirBody)));
     float dayCoal = mix(1.0, 0.15, smoothstep(-0.05, 0.25, dot(up, uSunDirBody)));
-    float broken = 0.25 + 0.75 * smoothstep(0.35, 0.75, lick * 0.6 + 0.4 * (snoise(P * 0.18 + vec3(0.0, uTime * 0.2, 0.0)) * 0.5 + 0.5));
+    float broken = 0.06 + 0.94 * smoothstep(0.35, 0.75, lick * 0.6 + 0.4 * (snoise(P * 0.18 + vec3(0.0, uTime * 0.2, 0.0)) * 0.5 + 0.5));
     emis += vec3(2.4, 0.55, 0.07) * (band * broken * (0.5 + 0.9 * lick) * fl * 1.1 * dayFire + (smoulder * (coals + 0.004) * fl + ember * smoulder * 1.2) * dayCoal);
     // the ground: scorched brown just ahead of the front (heat), charred black right behind it, grey ash further back
     float ahead = smoothstep(0.1, 0.24, level) * (1.0 - step(0.0, dB));
@@ -810,13 +827,18 @@ const FRAG_EMISSIVE = /* glsl */ `
       float wornWay = smoothstep(0.06, 0.45, vF3.z + wn * 0.08);
       float dens = clamp(cityL * (0.75 + 0.5 * wn) + wornWay * 0.35 * smoothstep(0.0, 0.08, cityL), 0.0, 2.5);
       vec3 upC = normalize(Pc);
-      vec3 wq = vec3(snoise(Pc * 0.006 + 1.0), snoise(Pc * 0.006 + 5.2), snoise(Pc * 0.006 + 9.7)) * 40.0;
+      // (a gentle warp: streets wander a little; at 40 m of warp every street curled into a worm — lit vermicelli)
+      vec3 wq = vec3(snoise(Pc * 0.004 + 1.0), snoise(Pc * 0.004 + 5.2), snoise(Pc * 0.004 + 9.7)) * 20.0;
       float pxM = max(tFw, 0.25);
       float avenue = cl_street(Pc + wq, 0.0075, 3.5, pxM, upC);
       float lane = cl_street(Pc + wq * 0.6 + 31.0, 0.016, 2.0, pxM, upC);
       float lamps = 0.6 + 0.8 * smoothstep(0.25, 0.85, snoise(Pc * 0.08 + 4.0) * 0.5 + 0.5);
-      float streets = (avenue * smoothstep(0.0, 0.25, dens) + lane * 0.75 * smoothstep(0.2, 0.9, dens)) * lamps;
-      float glow = 0.03 * dens * (0.6 + 0.4 * smoothstep(-0.3, 0.5, wn));
+      // the outskirts break up into scattered lit strands and lone lights: a street is lit only where the density beats
+      // a noise threshold (ragged, never an outline), the lanes only in the dense quarters — a bright core, dim edges
+      float rag = snoise(Pc * 0.03 + 17.0) * 0.5 + 0.5;
+      float edgeK = smoothstep(rag * 0.45, rag * 0.45 + 0.3, dens);
+      float streets = (avenue + lane * 0.75 * smoothstep(0.35, 1.2, dens)) * edgeK * lamps;
+      float glow = 0.03 * dens * dens / (0.4 + dens) * (0.6 + 0.4 * smoothstep(-0.3, 0.5, wn));
       // bright points: one per ~25 m cell at most, more in the dense quarters, each its own brightness; sub-pixel they
       // stay a pixel-sized spark dimmed linearly (the bloom carries it)
       float pts = 0.0;
@@ -836,7 +858,8 @@ const FRAG_EMISSIVE = /* glsl */ `
       // (warm, saturated lamp and hearth light: the paler city tint went cream-white under AgX)
       vec3 lc = mix(vec3(1.0, 0.46, 0.14), vec3(1.0, 0.6, 0.26), smoothstep(1.5, 3.5, cityL));
       // (a city's core compressed against its outskirts: linear in the light it saturated to a white disc)
-      totalEmissiveRadiance += lc * pow(cityL, 0.65) * pattern * night * uCityLights * 1.4 * nearK;
+      // (at 1.4 the night exposure took the lit streets into AgX's cream: lamplight stays orange at about half)
+      totalEmissiveRadiance += lc * pow(cityL, 0.65) * pattern * night * uCityLights * 0.8 * nearK;
       float spillL = cityL / (1.0 + 0.6 * cityL);
       // the spill is a whisper (about the moonlight's level at a town's heart): at 0.035 it was ~6× the moonlight and
       // floodlit the whole village ground orange-brown at night (the road ribbons, which do not take it, then read as

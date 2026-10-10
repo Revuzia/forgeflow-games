@@ -54,7 +54,7 @@
 // What this costs in fidelity is measured against 1x over FIVE game years (round 2; population, food in store by
 // year, ideas, era, discoveries, buildings, births, deaths by cause; 6 seeds, against a 1x twin perturbed once as the
 // noise yardstick; deaths by cause over 12 seeds whose agent ids — and so initial ages and old-age rolls — differ):
-// _harness/scratch/perf3/r2/curves.ts + cmp.ts; the numbers are in the sim.ts header and CONTRACT §5.
+// _harness/scratch/perf3/r2/curves.ts + cmp12.ts (by year; deaths by cause); the numbers are in CONTRACT §5.
 
 import type { PCtx } from '../people/ctx.ts';
 import type { Settlement, Building } from '../people/state.ts';

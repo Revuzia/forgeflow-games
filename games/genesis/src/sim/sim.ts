@@ -18,7 +18,8 @@
 // Level 1 (100x) / 2 (1000x): climate every 120 / 360 ticks and vegetation every 120 / 480 (each pass integrates the
 // hours it stands for; the climate steps its energy balance hour by hour under each hour's sun), weather systems and
 // rain batches every 20 / 30, hydrology every 2 / 4 — 4 only while the sea is calm (same per-step gain, half the
-// per-step friction: same steady discharge; with waves on the sea, 2 as at 1x), thin overland sheet flow every 4 / 12,
+// per-step friction: same steady discharge; with waves on the sea, 2 as at 1x), thin overland sheet flow every 4 / 8
+// (12 at 1000x until push 3 round 2),
 // sand 20 / 30, biomes 720 / 1440, settlement re-planning ×2 / ×3, keyframes every 2880 / 5760; evaporation and
 // infiltration of the land stay hourly (the soil hour below runs on the hours the climate pass skips). A step after a
 // level change integrates exactly the time since that system last ran. Same seed + same log (speed changes included)
@@ -30,12 +31,13 @@
 // to 2 / 4 sessions back to back (as many as needs and daylight leave; effects at the sessions' own ticks), walks run
 // in legs ×2 / ×4, water at hand and food in the hand are taken in passing, the settlement step runs every 2 / 4 hours
 // integrating the hours, decisions read buildings through a per-settlement cache (state read live) — ~3x fewer turns at
-// 1000x. (2) WORLDS THE CAMERA IS NOT ON (perf/lapse.ts planetLevel 3, while time-lapse is on): climate 12 h,
-// vegetation 24 h, weather / rain 60 ticks, hydrology 16 (calm sea), sheets 48, sand 60, terrain (lava, talus, ash)
-// 30 below, biomes 2 days, settlement step 6 h — a time-lapse approximation of what nobody watches, deterministic
-// (the focus is logged). Keyframes every 11 520 ticks at 1000x. Level 0 unchanged (same hashes). Fidelity at 1000x
-// vs 1x over two game years, 6 seeds (_harness/scratch/perf3/curves.ts): population, food in store, ideas,
-// discoveries, buildings, births deviate −0.6 … +3.2 % on their run means (a once-perturbed 1x twin: −1.2 … +2.5 %).
+// 1000x. (2) WORLDS THE CAMERA IS NOT ON (perf/lapse.ts planetLevel 3, while time-lapse is on): climate 12 h (6 h
+// with lava vents; the air's humidity relaxes hour by hour within a pass), vegetation 12 h, weather / rain / sand 60
+// ticks, hydrology 16 (calm sea) with the sheets on every step, lava and talus 30 while no lava moves (10 otherwise),
+// biomes 2 days, settlement step 6 h — a time-lapse APPROXIMATION of what nobody watches (not the same totals: its
+// measured drift is in CONTRACT §5), deterministic (the focus is logged). Keyframes every 5 760 ticks at 1000x. Level 0
+// unchanged (same hashes). Fidelity at 1000x vs 1x over five game years, by year and deaths by cause: CONTRACT §5
+// (push 3 round 2; _harness/scratch/perf3/r2/curves.ts + cmp12.ts, 1x twin perturbed once as the noise yardstick).
 
 import type { Command, CommandResult, FieldName, PlanetSnap, SimEvent, Snapshot } from './types.ts';
 import { BASE_PACK } from '../data/index.ts';

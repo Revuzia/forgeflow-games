@@ -73,15 +73,22 @@ varying vec3 vLight;
 varying float vKind;
 varying vec2 vSunS;      // the sun's direction on screen (smoke shading), and the fire glow share of the light
 varying vec3 vGlow;
+varying vec3 vPosV;     // fire light: this fragment's point on the screen quad (view space)
+varying vec3 vCenterV;  // fire light: the light's position (view space)
 
 float h1(float a, float b) { return fract(sin(a * 127.1 + b * 311.7) * 43758.5453); }
 
 void main() {
   float sys = iParam.x, size = iParam.y, power = iParam.z, seed = iParam.w;
-  bool smokeSys = sys > 1.5 && sys < 2.5 || sys > 3.5 && sys < 4.5 || sys > 5.5;
+  // every fourth particle of a blaze / wildfire emitter (from the second) is smoke torn off the tongues' tips: dense,
+  // dark and low over the flames — flames without their own smoke read as flame stickers by day
+  float i4 = mod(iIdx.x, 4.0);
+  bool tipSmoke = sys > 4.5 && sys < 5.5 && i4 > 0.5 && i4 < 1.5;
+  bool smokeSys = sys > 1.5 && sys < 2.5 || sys > 3.5 && sys < 4.5 || sys > 5.5 || tipSmoke;
   // each pass draws its own systems; the other's quads collapse
   if ((uPass > 0.5) != smokeSys) { gl_Position = vec4(0.0, 0.0, -2.0, 1.0); return; }
   float life = sys < 0.5 ? 0.9 : sys < 1.5 ? 3.2 : sys < 2.5 ? 9.0 : sys < 3.5 ? 0.9 : sys < 4.5 ? 16.0 : sys < 5.5 ? 1.3 : 20.0;
+  if (tipSmoke) life = 5.0;
   life *= 0.85 + 0.3 * h1(seed, 3.0);
   float u = (uTime + seed * 97.0) / life + iIdx.x / max(1.0, iIdx.y);
   float cycle = floor(u);
@@ -100,28 +107,58 @@ void main() {
   vKind = 0.0;
   vLight = vec3(0.0);
   vGlow = vec3(0.0);
-  if (sys < 0.5 || sys > 4.5 && sys < 5.5) {
+  vPosV = vec3(0.0);
+  vCenterV = vec3(0.0);
+  if (sys > 4.5 && sys < 5.5 && iIdx.x < 0.5) {
+    // the first particle of every blaze / wildfire emitter is not a tongue but the fire's LIGHT on what stands round
+    // it — ground, walls, trunks, people — as a deferred point light over the opaque scene (fragment shader): every
+    // fire lights its surroundings, not only the few nearest the light budget gives a three.js PointLight
+    p = iOrigin + up * size * 0.8;
+    float fl = 0.78 + 0.22 * sin(uTime * 9.1 + seed * 40.0) * sin(uTime * 3.7 + seed * 17.0);
+    col = vec4(power * fl, 0.0, 0.0, 1.0);
+    vKind = 4.0;
+  } else if (tipSmoke) {
+    // tip smoke: born at the tongues' tips across the fire, rising and billowing out, leaning with the wind; black-brown
+    // and nearly opaque young, greying and thinning as it spreads; its underside lit by the flames while it is low
+    float st = h1(seed, 29.0);
+    float vigour = st < 0.25 ? 0.5 : st < 0.8 ? 1.0 : 1.5;
+    p += side * size * 0.75 * sqrt(r2) + up * size * (0.9 + 0.6 * r3) * vigour;
+    p += up * (1.4 * tSec + 0.25 * tSec * tSec) * (0.8 + 0.4 * r1);
+    p += iWind * tSec * 0.55;
+    p += (e1 * sin(tSec * 0.9 + r1 * 10.0) + e2 * cos(tSec * 0.7 + r3 * 10.0)) * 0.4 * age * size;
+    sz = size * (0.45 + 1.1 * age) * (0.8 + 0.4 * r1) * mix(0.7, 1.0, step(0.75, vigour));
+    float a = smoothstep(0.0, 0.12, age) * (1.0 - smoothstep(0.45, 1.0, age));
+    vec3 sc = mix(vec3(0.04, 0.036, 0.032), vec3(0.12, 0.112, 0.104), smoothstep(0.2, 1.0, age));
+    col = vec4(sc, a * 0.8 * (0.6 + 0.4 * power));
+    soft = 0.6 * sz;
+    vKind = 2.0;
+    vGlow = vec3(1.0, 0.36, 0.07) * 3.2 * (1.0 - smoothstep(0.0, 0.35, age)) * power;
+  } else if (sys < 0.5 || sys > 4.5 && sys < 5.5) {
     // flames: TONGUES. Each particle is one tongue of burning gas standing on the fuel, swaying, its edges licked by
     // turbulence, its tip tearing away late in its short life; a fire is a crown of such tongues of very different
     // heights over a bed of low, broad flames (every third particle). (Broad sheets, all of a size and stacked on each
     // other, merged into cream haystacks; equal tongues side by side read as a picket fence of candles.)
     float wild = sys > 4.5 ? 1.0 : 0.0;
     float bed = step(0.6, fract(iIdx.x / 3.0 + 0.01));
-    float base = size * mix(0.45, 0.7, wild) * sqrt(r2);
+    // fires differ: each wild emitter (a patch of burning ground, a torching tree, a stretch of roof) is dying back to a
+    // low bed, burning, or roaring — a burning field of identical crowns read as a parade of campfires
+    float st = h1(seed, 29.0);
+    float vigour = wild > 0.5 ? (st < 0.25 ? 0.5 : st < 0.8 ? 1.0 : 1.5) : 1.0;
+    float base = size * mix(0.45, 0.85, wild) * sqrt(r2) * mix(1.0, 1.2, step(1.2, vigour));
     p += side * base;
     // (a tongue stays on its fuel — a gentle lift only; rising the whole life stacked them into streaky columns)
     p += up * size * (0.04 + 0.22 * age * age) * (1.0 - bed);
     p += (e1 * sin(uTime * 2.1 + r1 * 30.0) + e2 * cos(uTime * 1.7 + r2 * 20.0)) * 0.05 * size;
     // flames lean and are torn downwind
     p += iWind * tSec * 0.22;
-    float hT = size * mix(mix(0.9, 2.4, r3 * r3) * mix(1.0, 0.8, wild), mix(0.5, 0.8, r3), bed) * (0.75 + 0.25 * power);
+    float hT = size * mix(mix(0.9, 2.4, r3 * r3) * mix(1.0, 0.8, wild), mix(0.5, 0.8, r3), bed) * (0.75 + 0.25 * power) * vigour;
     // it shoots up in the first fifth of its life
     hT *= 0.45 + 0.55 * smoothstep(0.0, 0.2, age);
     float wT = hT * mix(mix(0.26, 0.62, r1 * r1), 0.9, bed);
     sz = hT;
     float a = smoothstep(0.0, 0.08, age) * (1.0 - smoothstep(0.72, 1.0, age));
     // the fragment shader shapes the tongue and colours it by heat: pass age, power and a seed; aspect and bed below
-    col = vec4(age, power, r1, a);
+    col = vec4(age, power * mix(0.8, 1.0, step(0.75, vigour)), r1, a);
     soft = 0.35 * size;
     vKind = 1.0;
     vGlow = vec3(hT / max(wT, 1e-3), 0.0, bed);
@@ -135,6 +172,9 @@ void main() {
     p += iWind * tSec * 0.7;
     sz = (spark ? 0.035 : 0.06) * (0.6 + 0.8 * r3);
     float a = (1.0 - smoothstep(0.5, 1.0, age)) * step(0.15, r1);
+    // a hearth's few embers die within a couple of metres of the fire (rising for their whole life they hung over a
+    // night street as a field of orange stars); a blaze's fly high
+    if (!spark && size < 0.95) a *= (1.0 - smoothstep(0.15, 0.4, age)) * step(0.5, r2);
     float tw = 0.6 + 0.4 * sin(uTime * 23.0 + r2 * 40.0);
     // (glowing specks read at night; in daylight they are barely visible)
     float dayK = smoothstep(-0.1, 0.15, dot(up, uSunDirBody));
@@ -206,6 +246,22 @@ void main() {
     vGlow = vec3(hT / wT, face, vGlow.z);
     // the quad: its foot a little below the particle (in the fuel), the tongue rising from it
     mv.xy += rt * corner.x * wT * 0.5 + ax * (corner.y * 0.5 + 0.45) * hT;
+  } else if (vKind > 3.5) {
+    // a screen quad over the light's reach, pulled toward the camera so it also covers what stands in front of the
+    // fire (and over the whole view once the camera is inside the reach)
+    float reach = clamp(8.0 + 4.0 * sz, 14.0, 28.0);
+    float z = -mv.z;
+    vCenterV = mv.xyz;
+    if (z - reach < 1.0) {
+      mv = vec4(0.0, 0.0, -1.0, 1.0);
+      mv.xy += corner * 4.0;
+    } else {
+      float zq = z - reach;
+      mv.xyz *= zq / z;
+      mv.xy += corner * reach * 1.25;
+    }
+    vPosV = mv.xyz;
+    vGlow = vec3(reach, 0.0, 0.0);
   } else if (vKind > 2.5) {
     // embers: a short streak along the flight on screen
     vec2 dir = vGlow.xy;
@@ -232,6 +288,7 @@ ${NOISE_GLSL}
 uniform sampler2D tSceneDepth;
 uniform sampler2D tExposure;
 uniform float uHasExposure;
+uniform float uFireLight;
 uniform vec2 uResolution;
 uniform float uPass;
 uniform float uTime;
@@ -243,11 +300,40 @@ varying vec3 vLight;
 varying float vKind;
 varying vec2 vSunS;
 varying vec3 vGlow;
+varying vec3 vPosV;     // fire light: this fragment's point on the screen quad (view space)
+varying vec3 vCenterV;  // fire light: the light's position (view space)
 void main() {
 #include <logdepthbuf_fragment>
+  float sceneZ = texture(tSceneDepth, gl_FragCoord.xy / uResolution).r;
+  if (vKind > 3.5) {
+    // the fire's light on the opaque surface seen through this pixel: its view position from the linear depth along
+    // this pixel's ray, its normal from the screen derivatives of that position (facing the camera), Lambert, the
+    // inverse square of ~0.7 of render/life nightlights' burning roof (55 cd per tongue cluster; the nearest fires get those
+    // point lights too) faded out over the reach, and
+    // a typical albedo (0.2) — physical units, so the night's exposure makes it the light of the scene and the day's
+    // sun drowns it, as it should
+    if (sceneZ > 1e6) discard;
+    vec3 S = vPosV * (sceneZ / max(-vPosV.z, 1e-4));
+    vec3 Lv = vCenterV - S;
+    float d = length(Lv);
+    float reach = vGlow.x;
+    if (d > reach) discard;
+    vec3 N = cross(dFdx(S), dFdy(S));
+    float nl = length(N);
+    N = nl > 1e-12 ? N / nl : vec3(0.0, 0.0, 1.0);
+    if (dot(N, S) > 0.0) N = -N;
+    // (a little wrap: derivative normals are noisy along silhouettes)
+    float lam = 0.12 + 0.88 * clamp(dot(N, Lv / max(d, 1e-3)), 0.0, 1.0);
+    // (windowed to zero with zero slope at the reach: a cut-off ring drew every pool as a spotlight ellipse)
+    float win = 1.0 - (d * d) / (reach * reach);
+    // (not on the burning thing itself — its charred roof and walls, a few metres from the flames: with an assumed
+    // albedo they came out cream-lit; they have their own embers, and the budgeted point lights see their true colour)
+    float E = 38.0 * vColor.x / (d * d + 1.5) * win * win * smoothstep(2.0, 6.0, d);
+    gl_FragColor = vec4(vec3(1.0, 0.42, 0.1) * E * lam * (0.2 / 3.14159) * uFireLight, 0.0);
+    return;
+  }
   float r = length(vCorner);
   if (r > 1.0 && (vKind < 0.5 || vKind > 1.5)) discard;
-  float sceneZ = texture(tSceneDepth, gl_FragCoord.xy / uResolution).r;
   if (vViewZ > sceneZ + 0.05) discard;
   float fade = clamp((sceneZ - vViewZ) / max(0.05, vSoft), 0.0, 1.0);
   // fade near the camera so a puff never fills the screen with a flat card
@@ -283,7 +369,11 @@ void main() {
     float gapY = mix(0.92, 0.58, tear) + 0.06 * snoise(vec3(xs * 2.0, tt * 1.5, sd));
     edge -= tear * 0.45 * (1.0 - smoothstep(0.0, 0.07, abs(y - gapY)));
     float aw = clamp(fwidth(edge), 0.012, 0.25);
-    float dens = smoothstep(-aw, aw, edge);
+    // burning gas has no hard skin: the outline is soft — a pixel at the foot, ~a tenth of the tongue's width at the
+    // tip where the gas thins and tears (one-pixel outlines all the way up drew flat, cartoon flame stickers)
+    float dens = smoothstep(-aw, aw + prof * (0.04 + 0.22 * y * y), edge);
+    // the upper part is thin, translucent gas
+    dens *= 1.0 - 0.45 * smoothstep(0.45, 1.0, y) * (1.0 - bed);
     // heat: hottest low in the middle, cooling toward the rim and the tip and as the tongue ages
     float inner = clamp(edge / max(prof, 0.08), 0.0, 1.0);
     float heat = clamp(inner * 1.5 * (1.0 - 0.7 * y) + 0.12 * (1.0 - y), 0.0, 1.0) * (1.0 - 0.3 * age);
@@ -348,7 +438,7 @@ export class Particles {
     this.geo.setIndex([0, 1, 2, 0, 2, 3]);
     this.uniforms = {
       uTime: { value: 0 }, tSceneDepth: { value: null }, uResolution: { value: new Vector2(1, 1) }, uPass: { value: 0 },
-      tExposure: FX_EXPOSURE, uHasExposure: { value: 0 },
+      tExposure: FX_EXPOSURE, uHasExposure: { value: 0 }, uFireLight: { value: 1 },
     };
     const mk = (pass: number) => {
       const u: Record<string, IUniform> = { ...this.uniforms, uPass: { value: pass } };
