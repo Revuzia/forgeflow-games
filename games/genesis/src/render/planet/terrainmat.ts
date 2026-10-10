@@ -90,6 +90,10 @@ uniform float uCloudOn;
 uniform vec4 uBrush;
 uniform vec3 uBrushColor;
 uniform float uBrushOn;
+// map overlay (UI lane, src/render/planet/overlaytex.ts): equirectangular RGBA per-cell colours; x = on, y = albedo
+// mix, z = glow
+uniform sampler2D uOverlay;
+uniform vec3 uOverlayK;
 uniform vec2 uVegFade;  // instanced-tree hand-over band (m from the camera): canopy shading only beyond it
 uniform float uDebug;   // 0 off, 1 body normal, 2 albedo, 3 no bump, 4 macro normal only
 ${GROUND_FRAG_PARS}
@@ -358,8 +362,9 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
       vec3 fv = voronoi3(P * 0.019 + vec3(3.7));
       float fid = fv.z;
       vec3 rnd = normalize(gn_hash33(vec3(fid * 91.7, 7.3, 3.1)) - 0.5);
-      vec3 rd = normalize(cross(up, rnd));
-      float rows = sin(dot(P, rd) * 6.2831853 / 1.5) * aaF(fw, 1.5);
+      // rows run across a FIXED direction per field (P·rnd: a direction tangent at P itself gives P·d ≡ 0 — every field
+      // was a flat sheet with no rows at all)
+      float rows = sin(dot(P, rnd) * 6.2831853 / 1.5) * aaF(fw, 1.5);
       // crop by field & season: tilled → green → ripe/canola → stubble
       float k = floor(fid * 5.0);
       vec3 tilled = vec3(0.13, 0.085, 0.05);
@@ -400,7 +405,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
     float vegW = max(smoothstep(0.1, 0.42, vegTotal + vegN) * (1.0 - steep * 0.8), fieldW);
     col = mix(col, vcol, vegW);
     bump = mix(bump, vb, vegW);
-    mk = mix(mk, 0.45, vegW);
+    // (turf is a mat of blades, not a dimpled skin: at 0.45 a low sun drew a hammered-metal egg-crate over every meadow)
+    mk = mix(mk, 0.16, vegW);
     rough = mix(rough, 0.88, vegW);
     ao = mix(ao, vao, vegW);
     spec = mix(spec, 0.35, vegW);
@@ -646,6 +652,8 @@ TSurf evalTerrain(vec3 P, vec3 Nb, float fw, float camDist) {
   // macro relief in the shading only (gullies and swells at 10–60 m): reads at a distance, leaves the ground
   // height — the contract's groundHeight — untouched
   float macro = (fbm3(P * 0.017) * 1.4 + fbm3(P * 0.047 + 5.0) * 0.45) * (1.0 - smoothstep(0.5, 6.0, ash + snow * 4.0));
+  // (halved under turf on gentle ground: with the mesh's own 12 m relief, a low sun raked meadows into hummocks)
+  macro *= 1.0 - 0.5 * smoothstep(0.2, 0.6, vegTotal) * (1.0 - steep);
   // close-up micro relief (0.3 m and 1.1 m octaves) from ANALYTIC noise gradients: smooth per pixel at any mesh
   // density (screen-space derivatives of the bump facet per triangle), with a matching albedo grain
   s.microG = vec3(0.0);
@@ -699,7 +707,8 @@ ${TERRAIN_VERT_CORE}
   {
     float rockK = smoothstep(0.55, 0.9, tA.y);
     float flatK = max(smoothstep(0.04, 0.3, vF2.w), smoothstep(0.1, 0.45, vF3.z)) * (1.0 - rockK);
-    float reliefK = mix(mix(0.3, 1.0, rockK), 0.06, flatK);
+    // (soil and turf at 0.12: a low sun still raked every 12 m hump of the full-detail mesh into a hummocky field)
+    float reliefK = mix(mix(0.12, 1.0, rockK), 0.05, flatK);
     // (the detail gradient taken back out follows the geomorph — toward the coarse level's gradient, aGradM — so the
     // two sides of an LOD border shade alike: with the own level's gradient faded by the morph, every patch border
     // drew a straight seam across the meadow)
@@ -875,6 +884,15 @@ const FRAG_EMISSIVE = /* glsl */ `
       float fill = (1.0 - smoothstep(uBrush.w - w, uBrush.w, ang)) * 0.06;
       totalEmissiveRadiance += uBrushColor * (ring * 1.2 + fill);
     }
+    // map overlay (temperature, belief, territory, ... — the UI's O key): the ground takes the map's colour in its
+    // albedo (relief and light still read through it) and a little of it glows, so the map stays legible at night
+    if (uOverlayK.x > 0.5) {
+      vec3 od = normalize(vBodyPos);
+      vec2 ouv = vec2(atan(od.x, od.z) * 0.15915494 + 0.5, asin(clamp(od.y, -1.0, 1.0)) * 0.31830989 + 0.5);
+      vec4 ov = textureLod(uOverlay, ouv, 0.0);
+      diffuseColor.rgb = mix(diffuseColor.rgb, ov.rgb * 0.6, ov.a * uOverlayK.y);
+      totalEmissiveRadiance += ov.rgb * ov.a * uOverlayK.z;
+    }
   }
 `;
 
@@ -897,6 +915,8 @@ export function makePlanetUniforms(): PlanetShaderUniforms {
     uMoonE: { value: new Vector3() }, uMoonDirBody: { value: new Vector3(0, 1, 0) }, uMoonDirView: { value: new Vector3(0, 1, 0) },
     uCloudCov: { value: null }, uCloudShell: { value: new Vector2(3180, 3420) }, uCloudOn: { value: 0 },
     uBrush: { value: new Vector4(0, 1, 0, 0.02) }, uBrushColor: { value: new Vector3(1.2, 0.95, 0.55) }, uBrushOn: { value: 0 },
+    // map overlay (UI lane: planet/overlaytex.ts applyOverlay); off by default
+    uOverlay: { value: null }, uOverlayK: { value: new Vector3(0, 0.8, 0.3) },
     uDebug: { value: 0 }, uVegFade: { value: new Vector2(1e9, 1e9 + 1) }, uWindDir: { value: new Vector3(1, 0, 0.3).normalize() },
     // this frame's view space → last frame's clip space through the planet body frame (water SSR reprojection)
     uViewToPrevClip: { value: new Matrix4() },

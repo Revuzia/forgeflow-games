@@ -88,7 +88,7 @@ void main() {
   // each pass draws its own systems; the other's quads collapse
   if ((uPass > 0.5) != smokeSys) { gl_Position = vec4(0.0, 0.0, -2.0, 1.0); return; }
   float life = sys < 0.5 ? 0.9 : sys < 1.5 ? 3.2 : sys < 2.5 ? 9.0 : sys < 3.5 ? 0.9 : sys < 4.5 ? 16.0 : sys < 5.5 ? 1.3 : 20.0;
-  if (tipSmoke) life = 5.0;
+  if (tipSmoke) life = 3.4;
   life *= 0.85 + 0.3 * h1(seed, 3.0);
   float u = (uTime + seed * 97.0) / life + iIdx.x / max(1.0, iIdx.y);
   float cycle = floor(u);
@@ -123,11 +123,13 @@ void main() {
     float st = h1(seed, 29.0);
     float vigour = st < 0.25 ? 0.5 : st < 0.8 ? 1.0 : 1.5;
     p += side * size * 0.75 * sqrt(r2) + up * size * (0.9 + 0.6 * r3) * vigour;
-    p += up * (1.4 * tSec + 0.25 * tSec * tSec) * (0.8 + 0.4 * r1);
+    p += up * (1.2 * tSec + 0.2 * tSec * tSec) * (0.8 + 0.4 * r1);
     p += iWind * tSec * 0.55;
     p += (e1 * sin(tSec * 0.9 + r1 * 10.0) + e2 * cos(tSec * 0.7 + r3 * 10.0)) * 0.4 * age * size;
     sz = size * (0.45 + 1.1 * age) * (0.8 + 0.4 * r1) * mix(0.7, 1.0, step(0.75, vigour));
-    float a = smoothstep(0.0, 0.12, age) * (1.0 - smoothstep(0.45, 1.0, age));
+    // (short-lived: a dense cap over the flames that thins out into the column — long-lived, the few puffs per fire
+    // drifted off as lone dark balls)
+    float a = smoothstep(0.0, 0.12, age) * (1.0 - smoothstep(0.3, 0.9, age));
     vec3 sc = mix(vec3(0.04, 0.036, 0.032), vec3(0.12, 0.112, 0.104), smoothstep(0.2, 1.0, age));
     col = vec4(sc, a * 0.8 * (0.6 + 0.4 * power));
     soft = 0.6 * sz;
@@ -243,6 +245,8 @@ void main() {
     vec2 ax = normalize(mix(ax0, vec2(0.0, 1.0), face) + vec2(1e-4, 0.0));
     vec2 rt = vec2(ax.y, -ax.x);
     float hT = sz * mix(1.0, 0.6, face), wT = sz / vGlow.x;
+    // daylight on the fire (the fragment shader makes a sunlit flame paler and more see-through)
+    vSunS = vec2(smoothstep(-0.1, 0.2, dot(up, uSunDirBody)), 0.0);
     vGlow = vec3(hT / wT, face, vGlow.z);
     // the quad: its foot a little below the particle (in the fuel), the tongue rising from it
     mv.xy += rt * corner.x * wT * 0.5 + ax * (corner.y * 0.5 + 0.45) * hT;
@@ -308,10 +312,9 @@ void main() {
   if (vKind > 3.5) {
     // the fire's light on the opaque surface seen through this pixel: its view position from the linear depth along
     // this pixel's ray, its normal from the screen derivatives of that position (facing the camera), Lambert, the
-    // inverse square of ~0.7 of render/life nightlights' burning roof (55 cd per tongue cluster; the nearest fires get those
-    // point lights too) faded out over the reach, and
-    // a typical albedo (0.2) — physical units, so the night's exposure makes it the light of the scene and the day's
-    // sun drowns it, as it should
+    // inverse square of ~0.45 of render/life nightlights' burning roof (55 cd; the nearest fires get those point lights
+    // too) faded out over the reach, and a typical albedo (0.2) — physical units, so the night's exposure makes it the
+    // light of the scene and the day's sun drowns it, as it should
     if (sceneZ > 1e6) discard;
     vec3 S = vPosV * (sceneZ / max(-vPosV.z, 1e-4));
     vec3 Lv = vCenterV - S;
@@ -328,8 +331,8 @@ void main() {
     float win = 1.0 - (d * d) / (reach * reach);
     // (not on the burning thing itself — its charred roof and walls, a few metres from the flames: with an assumed
     // albedo they came out cream-lit; they have their own embers, and the budgeted point lights see their true colour)
-    float E = 38.0 * vColor.x / (d * d + 1.5) * win * win * smoothstep(2.0, 6.0, d);
-    gl_FragColor = vec4(vec3(1.0, 0.42, 0.1) * E * lam * (0.2 / 3.14159) * uFireLight, 0.0);
+    float E = 24.0 * vColor.x / (d * d + 1.5) * win * win * smoothstep(2.0, 6.0, d);
+    gl_FragColor = vec4(vec3(1.0, 0.36, 0.07) * E * lam * (0.2 / 3.14159) * uFireLight, 0.0);
     return;
   }
   float r = length(vCorner);
@@ -382,6 +385,10 @@ void main() {
     heat = clamp(heat, 0.0, 1.0);
     vec3 c = mix(vec3(0.6, 0.045, 0.005), vec3(1.0, 0.27, 0.025), smoothstep(0.0, 0.45, heat));
     c = mix(c, vec3(1.0, 0.55, 0.1), smoothstep(0.55, 1.0, heat));
+    // by day a flame is pale, yellow-white at its hot core and see-through at its thin edges: the night's opaque
+    // saturated orange read as cut-out flame stickers against the sunlit ground
+    float dayF = vSunS.x;
+    c = mix(c, mix(c, vec3(1.0, 0.72, 0.32), smoothstep(0.35, 1.0, heat)), dayF * 0.75);
     // display-referred (FX_EXPOSURE): a flame lands at about the same brightness on screen by day and by night — a
     // bright, saturated orange with a yellow core. The tongues are nearly opaque (alpha below), so a crowd of them
     // stays a fire's own colour instead of summing to a white-cream haystack
@@ -393,7 +400,8 @@ void main() {
     float a = vColor.a * dens * fade;
     // luminous gas, not a cut-out: a faint glow just outside the outline (added light, no cover)
     float halo = (1.0 - dens) * smoothstep(-0.22 * prof - aw, 0.0, edge) * 0.35 * vColor.a * fade;
-    gl_FragColor = vec4((c * a + vec3(1.0, 0.3, 0.04) * halo * 0.6) * I, a * mix(0.6, 0.92, smoothstep(0.0, 0.5, inner)));
+    float cover = mix(mix(0.6, 0.92, smoothstep(0.0, 0.5, inner)), mix(0.25, 0.8, smoothstep(0.0, 0.6, inner)), dayF);
+    gl_FragColor = vec4((c * a + vec3(1.0, 0.3, 0.04) * halo * 0.6) * I, a * cover);
   } else if (uPass < 0.5) {
     // embers and sparks: hot streaks, brightest at the head
     float core = pow(1.0 - r, 1.6) * (0.6 + 0.4 * smoothstep(-1.0, 1.0, vCorner.y));

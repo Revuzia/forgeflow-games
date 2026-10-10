@@ -241,8 +241,10 @@ FFloor forestFloor(vec3 P, vec3 up, float fw, float cover, float shrub, float mo
     float a = id * 6.2831853;
     vec3 dir = t1 * cos(a) + t2 * sin(a);
     vec3 side = cross(up, dir);
-    float st = snoise(vec3(dot(P, side) * 70.0, dot(P, dir) * 6.0, id * 13.0));
-    float st2 = snoise(vec3(dot(P, side) * 120.0 + 3.0, dot(P, dir) * 9.0, id * 7.0));
+    // (measured from the mat's own centre: P·dir with dir tangent at P is identically zero)
+    vec3 q = P - fp * 0.25;
+    float st = snoise(vec3(dot(q, side) * 70.0, dot(q, dir) * 6.0, id * 13.0));
+    float st2 = snoise(vec3(dot(q, side) * 120.0 + 3.0, dot(q, dir) * 9.0, id * 7.0));
     float streak = clamp(0.5 + 0.5 * st + 0.25 * st2, 0.0, 1.0);
     vec3 nc = mix(duff * 0.55, duff * 1.35 + vec3(0.02, 0.008, 0.0), streak);
     float matV = 0.85 + 0.3 * id;
@@ -419,8 +421,14 @@ vec3 soilDetail(vec3 P, float fw) {
 // sand micro relief, independent of the sand's depth: wind ripples (~0.6 m, gentle stoss / steep lee) with a finer
 // ~0.13 m set across them, and streaks along the wind; x = albedo factor, y = bump (m), z = glint id (rare sun facets)
 vec3 sandDetail(vec3 P, vec3 up, float fw) {
-  vec3 wind = normalize(cross(up, vec3(0.0, 1.0, 0.0)) + 1e-4);
-  vec3 side = cross(up, wind);
+  // ripple coordinates along FIXED directions (P·D; measured along the local tangent wind itself, P·wind ≡ 0 and the
+  // sand had no ripples at all — only the warp noise): crests run across D's tangent projection, and a second direction
+  // takes over where the first stands near the vertical
+  vec3 D1 = normalize(vec3(0.83, 0.12, 0.55));
+  vec3 Dw = length(D1 - up * dot(D1, up)) > 0.45 ? D1 : normalize(vec3(-0.21, 0.9, 0.38));
+  vec3 Ds = normalize(cross(Dw, vec3(0.37, -0.29, 0.88)));
+  vec3 wind = Dw;
+  vec3 side = Ds;
   float warp = snoise(P * 0.35) * 3.0;
   float ph1 = fract(dot(P, wind) / 0.6 + warp * 0.16);
   float r1 = (smoothstep(0.0, 0.8, ph1) - smoothstep(0.8, 1.0, ph1)) * 2.0 - 1.0;

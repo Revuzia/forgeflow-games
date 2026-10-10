@@ -1350,6 +1350,8 @@ export class CloudPass {
     const S = this.shared.uStorms.value, K = this.shared.uStormK.value;
     let key = `${coverage.uuid}:${coverage.version}|${this.shared.uStormN.value}|${this.shared.uGlobalBands.value}|${innerR.toFixed(1)}|${outerR.toFixed(1)}|${this.wxSize}`;
     for (let i = 0; i < this.shared.uStormN.value; i++) key += `|${S[i].x.toFixed(4)},${S[i].y.toFixed(4)},${S[i].z.toFixed(4)},${S[i].w.toFixed(4)},${K[i].x.toFixed(3)},${K[i].z}`;
+    // (UI lane, additive) the coverage bias (uCloudScale.w — the map overlays thin the clouds with it) re-bakes too
+    key += `|cb${this.shared.uCloudScale.value.w.toFixed(2)}`;
     this.wxAge++;
     if (key === this.wxKey) return false;
     if (!force && this.wxKey !== '' && this.wxAge < minFrames) return false;

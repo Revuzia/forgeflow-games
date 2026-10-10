@@ -14,6 +14,8 @@
     "check": "npm run detban && npm run typecheck && npm test"
   },
   "dependencies": {
+    "@fontsource/cormorant-garamond": "5.3.0",
+    "@fontsource/inter": "5.3.0",
     "three": "0.186.0"
   },
   "devDependencies": {

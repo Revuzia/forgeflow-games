@@ -306,6 +306,8 @@ export class ChunkLOD {
   private live = new Set<Patch>();
   private built = 0;
   private builtThisFrame = 0;
+  /** the frame select() is running for (a patch built or visited in it is in use, never evicted at its end) */
+  private curFrame = 0;
   /** per LOD level: the terrain batch and the water batch (created on first use) */
   private tBatch: (PatchBatch | null)[] = [];
   private wBatch: (PatchBatch | null)[] = [];
@@ -621,6 +623,7 @@ export class ChunkLOD {
     // now that the vertex cells are known, the exact water test (bounds were derived before the build)
     if (p.hasWater && p.vcells) p.hasWater = this.vertexWater(p.vcells, this.fields.surface, this.fields.waterLevel, this.fields.waterDepth);
     this.builtThisFrame++;
+    p.lastUsed = this.curFrame;
     this.built++;
     this.stats.builtTotal++;
     const tb = this.batch(p.level, false);
@@ -694,6 +697,7 @@ export class ChunkLOD {
 
   select(ctx: ChunkSelectContext): Patch[] {
     this.builtThisFrame = 0;
+    this.curFrame = ctx.frame;
     this.buildBudgetNow = ctx.buildBudget;
     this.stats.horizonCulled = 0;
     const out: Patch[] = [];
@@ -714,6 +718,11 @@ export class ChunkLOD {
     const visit = (p: Patch): void => {
       this.updateBounds(p);
       if (!this.aboveHorizon(p, cam, rc, rOcc)) { p.split = false; return; }
+      // in use: the split ancestors of what is drawn too (only drawn leaves were stamped, so once the cache was full
+      // every interior patch — and every child built for a split that had to wait a frame — was evicted at the end of
+      // the frame it was built in and rebuilt the next: the whole build budget went to that churn, and after a dozen
+      // camera jumps the terrain stayed stuck at its coarse levels, ~40 patches for a view needing ~700)
+      p.lastUsed = ctx.frame;
       {
         const cosT = Math.min(1, Math.max(-1, cam.dot(p.centerDir) / rc));
         const rLoc = this.occluderWithin(Math.acos(cosT) + p.angRadius);

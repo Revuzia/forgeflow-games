@@ -35,14 +35,18 @@ import { TERRAIN_VERT_CORE, TERRAIN_VERT_PARS } from './terrainvert.glsl.ts';
 const WAVES_GLSL = /* glsl */ `
 // four Gerstner waves: (dir seed xyz, wavelength m), amplitude factor, steepness
 const vec4 GW_D[4] = vec4[4](vec4(0.82, 0.11, 0.56, 21.0), vec4(-0.31, 0.27, 0.91, 13.0), vec4(0.55, -0.48, -0.68, 8.5), vec4(-0.77, 0.6, 0.2, 5.3));
-const float GW_A[4] = float[4](0.34, 0.21, 0.12, 0.07);
-// wave direction: the seed direction pulled toward the wind (the long swell runs with it, the short waves spread);
-// windT is the tangent wind direction scaled by how settled it is (0 in a calm)
-vec3 gwDir(int i, vec3 up, vec3 windT) {
-  vec3 d = GW_D[i].xyz;
-  d = d - up * dot(d, up);
-  d = normalize(d + 1e-5) + windT * (i < 2 ? 1.6 : 0.8);
-  return normalize(d - up * dot(d, up) + 1e-5);
+const float GW_A[4] = float[4](0.27, 0.2, 0.14, 0.09);
+// A wave over the sphere has a FIXED 3D direction D: its phase is k·(P·D) and its local direction of travel the
+// tangent projection D_t = D − up (D·up) (|D_t| ≤ 1: near the two points where D is vertical the wave flattens out).
+// (Each pixel projecting its own direction onto its own tangent plane made P·d ≡ 0 — no wave anywhere, only a uniform
+// tilt rocking in time: the glassy gel.) The wind cannot turn a fixed direction, so it FEEDS the waves instead: those
+// running with it carry more, those against it less (windT: the tangent wind direction scaled by how settled it is)
+vec3 waveTan(vec3 D, vec3 up) { return D - up * dot(D, up); }
+float windFeed(vec3 dT, vec3 windT, float k) {
+  float ws = length(windT);
+  if (ws < 1e-3) return 1.0;
+  float al = dot(dT, windT / ws) / max(length(dT), 1e-4);
+  return mix(1.0, 0.72 + 0.85 * max(al, 0.0) * max(al, 0.0), ws * k);
 }
 // sea state from the local wind (m/s): 1 at a 7 m/s breeze, calm ~0.3, a gale ~2.2
 float seaState(vec3 wind) { return clamp(length(wind) / 7.0, 0.3, 2.2); }
@@ -98,10 +102,12 @@ ${TERRAIN_VERT_CORE}
     // fade by camera distance (not by LOD level): both sides of a patch edge displace identically, no cracks
     float amp = GW_A[i] * sea * calm * (1.0 - smoothstep(L * 5.0, L * 11.0, distance(tPos, uCamBody)));
     if (amp <= 0.0) continue;
-    vec3 d = gwDir(i, up, wT);
+    vec3 D = normalize(GW_D[i].xyz);
+    vec3 d = waveTan(D, up);
+    amp *= windFeed(d, wT, i < 2 ? 1.0 : 0.5) * smoothstep(0.15, 0.45, length(d));
     float k = 6.2831853 / L;
     float c = sqrt(9.8 / k);
-    float ph = k * dot(tPos, d) - c * k * uTime;
+    float ph = k * dot(tPos, D) - c * k * uTime;
     float Q = 0.55;
     disp += d * (Q * amp * cos(ph)) + up * (amp * sin(ph));
     crest += amp * max(sin(ph), 0.0);
@@ -146,6 +152,8 @@ uniform float uFrame;
 uniform mat4 uViewToPrevClip;
 uniform vec3 uMoonE;
 uniform vec3 uMoonDirBody;
+uniform sampler2D uOverlay;  // (UI lane, additive) the map overlay, shared with the terrain (planet uniforms)
+uniform vec3 uOverlayK;
 varying vec3 vBodyPos;
 varying vec3 vViewPos;
 varying float vDepth;
@@ -180,22 +188,30 @@ float cloudShadowW(vec3 P, vec3 sunB) {
 float gUnresolved = 0.0;
 vec3 ripples(vec3 P, vec3 up, float fw, vec3 offset, float t) {
   vec3 g = vec3(0.0);
+  // the crests wander: a slow, broad warp of every wavelet's phase (each by its own share) — pure sinusoids summed into
+  // long straight crest lines that crossed in a regular plaid, woven linen in the mirrored sky
+  float warp = snoise(P * 0.045 + vec3(0.0, t * 0.02, 0.0)) * 2.4 + snoise(P * 0.13 + 7.0) * 0.9;
+  // ... and come in groups: each wavelet's amplitude swells and fades in patches (gusts, cat's paws), its own mix of two
+  // drifting noises — equal amplitude everywhere, the crossing families read as a regular woven plaid
+  float gA = snoise(P * 0.09 + vec3(t * 0.05, 0.0, -t * 0.03)), gB = snoise(P * 0.23 + vec3(3.0, t * 0.07, 1.0));
   for (int i = 0; i < 14; i++) {
     float fi = float(i);
     vec3 seed = vec3(sin(fi * 12.9898), cos(fi * 78.233), sin(fi * 37.719 + 1.3));
     float L = 0.17 * pow(1.42, fi);           // 0.17 m .. ~16 m
     // the longer wavelets run with the wind, capillaries go every way
-    vec3 d = seed - up * dot(seed, up);
-    d = normalize(d + 1e-5) + gWindT * smoothstep(0.5, 6.0, L) * 1.2;
-    d = normalize(d - up * dot(d, up) + 1e-5);
+    vec3 D = normalize(seed);
+    vec3 d = waveTan(D, up);
     float k = 6.2831853 / L;
     // capillaries depend most on the wind (a calm sea is glassy, a breeze roughens it at once)
-    float amp = L * 0.012 * uWind * mix(gSea, gSea * gSea, smoothstep(2.0, 0.3, L));
-    float aa = 1.0 - smoothstep(0.15, 0.6, fwAlong(d) / L);
+    float grp = clamp(0.55 + 0.75 * (gA * cos(fi * 1.9) + gB * sin(fi * 1.9)), 0.08, 1.35);
+    float amp = L * 0.012 * uWind * mix(gSea, gSea * gSea, smoothstep(2.0, 0.3, L)) * windFeed(d, gWindT, smoothstep(0.5, 6.0, L)) * grp;
+    // (gone by ~3 pixels per wavelength: drawn down to 2 px, the crossing ripple families wove a linen moiré into the
+    // mirrored sky and treeline)
+    float aa = 1.0 - smoothstep(0.1, 0.33, fwAlong(D) / L);
     gUnresolved += (amp * k) * (amp * k) * 0.5 * (1.0 - aa);
     if (aa <= 0.0) continue;
     float w = sqrt(9.8 * k);
-    float ph = k * dot(P - offset, d) - w * t + fi * 1.7;
+    float ph = k * dot(P - offset, D) - w * t + fi * 1.7 + warp * (0.6 + 0.4 * fract(fi * 0.618)) * min(1.0, k * 0.8);
     g += d * (amp * k * cos(ph) * aa);
   }
   return g;
@@ -278,12 +294,14 @@ void main() {
     float L = GW_D[i].w;
     // (the NORMAL fades only by footprint: the vertex shader fades the displacement by distance because a patch
     // cannot carry it, but faded here too it left the sea beyond ~60–200 m a flat glassy gel)
-    vec3 d = gwDir(i, up, gWindT);
-    float fade = 1.0 - smoothstep(0.2, 0.7, fwAlong(d) / L);
-    float amp = GW_A[i] * sea * calm * fade;
-    gUnresolved += pow(GW_A[i] * sea * calm * 6.2831853 / L, 2.0) * 0.5 * (1.0 - fade);
+    vec3 D = normalize(GW_D[i].xyz);
+    vec3 d = waveTan(D, up);
+    float feed = windFeed(d, gWindT, i < 2 ? 1.0 : 0.5) * smoothstep(0.15, 0.45, length(d));
+    float fade = 1.0 - smoothstep(0.1, 0.33, fwAlong(D) / L);
+    float amp = GW_A[i] * sea * calm * fade * feed;
+    gUnresolved += pow(GW_A[i] * sea * calm * feed * 6.2831853 / L, 2.0) * 0.5 * (1.0 - fade);
     float k = 6.2831853 / L;
-    float ph = k * dot(P, d) - sqrt(9.8 * k) * uTime;
+    float ph = k * dot(P, D) - sqrt(9.8 * k) * uTime;
     grad += d * (amp * k * cos(ph));
   }
   // the long swell (34–90 m, normal only — the geometry cannot carry it everywhere): broad undulations in the reflection
@@ -291,15 +309,17 @@ void main() {
   for (int i = 0; i < 3; i++) {
     float fi = float(i);
     float L = 34.0 * pow(1.6, fi);
-    vec3 seed = vec3(cos(fi * 2.4 + 0.7), sin(fi * 1.7), sin(fi * 2.4 + 0.7));
-    vec3 d = seed - up * dot(seed, up);
-    d = normalize(normalize(d + 1e-5) + gWindT * 2.0 + 1e-5);
-    d = normalize(d - up * dot(d, up) + 1e-5);
+    vec3 D = normalize(vec3(cos(fi * 2.4 + 0.7), sin(fi * 1.7), sin(fi * 2.4 + 0.7)));
+    vec3 d = waveTan(D, up);
     float k = 6.2831853 / L;
     // (a shelf a few metres deep still carries the swell: only the shallows calm it)
-    float amp = L * 0.011 * sea * calm * (1.0 - smoothstep(0.2, 0.7, fwAlong(d) / L)) * smoothstep(1.5, 8.0, vDepth);
-    grad += d * (amp * k * cos(k * dot(P, d) - sqrt(9.8 * k) * uTime + fi * 2.1));
+    float amp = L * 0.011 * sea * calm * (1.0 - smoothstep(0.1, 0.33, fwAlong(D) / L)) * smoothstep(1.5, 8.0, vDepth)
+      * windFeed(d, gWindT, 1.0) * smoothstep(0.15, 0.45, length(d));
+    grad += d * (amp * k * cos(k * dot(P, D) - sqrt(9.8 * k) * uTime + fi * 2.1));
   }
+  // the long waves only: the mirrored cloud deck is looked up along this (a ripple's tilt, carried out kilometres to the
+  // cloud layer, jumps the lookup by tens of metres from pixel to pixel — an aliased weave of stripes in the reflection)
+  vec3 gradLong = grad;
   float flowSpd = length(vFlow);
   vec3 g1, g2;
   float mixF = 0.0;
@@ -335,7 +355,8 @@ void main() {
   float fragZ = -vViewPos.z;
   float sceneZ0 = texture(tSceneDepth, suv).r;
   float thick0 = max(sceneZ0 - fragZ, 0.0);
-  vec2 ruv = suv + nV.xy * 0.035 * clamp(thick0 * 0.25, 0.0, 1.0) / max(fragZ * 0.02, 1.0);
+  // (gentle: with the waves really drawn, a 3.5 % screen offset shattered the shallow floor into a blocky mosaic)
+  vec2 ruv = suv + nV.xy * 0.016 * clamp(thick0 * 0.25, 0.0, 1.0) / max(fragZ * 0.02, 1.0);
   float sceneZ = texture(tSceneDepth, ruv).r;
   if (sceneZ < fragZ) { ruv = suv; sceneZ = sceneZ0; }
   float cosV = max(abs(normalize(vViewPos).z), 0.05);
@@ -381,10 +402,14 @@ void main() {
     float mid = 0.5 * (uCloudShell.x + uCloudShell.y);
     vec2 hit = raySphere(P, rB, mid);
     if (hit.y > 0.0) {
-      // the waves' tilt, carried out to the cloud's distance, shatters the mirrored deck into rippled shards (sampled
-      // at the exact mirror point the reflection was a crisp white blob painted on the sea)
-      vec3 tilt = nB - up * dot(nB, up);
-      vec3 q = P + rB * hit.y + tilt * hit.y * 1.6;
+      // the mirror point of the long waves (gradLong above): they break the mirrored deck into broad rippled shards.
+      // (An extra tilt × distance — a stand-in from when the wave phases were broken and the sea was a flat mirror —
+      // threw the sample hundreds of metres between neighbouring pixels: a blocky mosaic of cloud shards.)
+      vec3 nL = normalize(up - gradLong);
+      vec3 rL = reflect(-vB, nL);
+      rL = normalize(rL + up * max(0.0, -dot(rL, up)) * 1.02);
+      vec2 hitL = raySphere(P, rL, mid);
+      vec3 q = P + rL * max(hitL.y, 0.0);
       vec2 cs = texture(uCloudCov, normalize(q)).rg;
       float dens = cloudDensityAt(q, 0.5, cs.x, cs.y, false);
       float alpha = 1.0 - exp(-dens * (uCloudShell.y - uCloudShell.x) * 0.5);
@@ -427,7 +452,8 @@ void main() {
   vec3 gd = P - gp;
   gd -= up * dot(gd, up);
   float dotK = exp(-dot(gd, gd) / (cellM * cellM * 0.06));
-  glint *= mix(1.0, 0.45 + 6.0 * step(0.9, spark) * dotK, smoothstep(0.06, 0.2, a) * smoothstep(0.12, 0.5, fw));
+  // (the open sea only: a sheltered pond's few ripples give a soft sheen, not a sparkling field of white specks)
+  glint *= mix(1.0, 0.45 + 6.0 * step(0.9, spark) * dotK, smoothstep(0.06, 0.2, a) * smoothstep(0.12, 0.5, fw) * smoothstep(0.3, 0.8, vSalt));
 
   // moonlight (renderer.ts: the brightest moon, art-directed): the moonlit sky in the reflection and a glitter path
   // of moon glints on the swell — the night sea's one bright thing
@@ -480,15 +506,15 @@ void main() {
   // Coverage by wind speed (Monahan's U^3.4, art-directed up so a breeze reads): none under ~4 m/s, a few percent at a
   // fresh breeze (8 m/s), ~10 % at 12 m/s; patches born on the crests (Gerstner phase), drawn out along the wind into
   // streaks, drifting
-  vec3 wA = gWindT + (dot(gWindT, gWindT) < 1e-4 ? normalize(cross(up, vec3(0.0, 1.0, 0.0)) + 1e-4) : vec3(0.0));
-  wA = normalize(wA - up * dot(wA, up) + 1e-5);
-  vec3 wS = cross(up, wA);
-  vec3 Pw = vec3(dot(P, wA) * 0.35 - uTime * 0.4, dot(P, wS), dot(P, up));
-  float wcN = snoise(vec3(Pw.x * 0.09, Pw.y * 0.16, uTime * 0.05)) * 0.55 + snoise(vec3(Pw.x * 0.5, Pw.y * 0.9, uTime * 0.21)) * 0.3 + (vCrest - 0.6) * 0.35;
+  // (measured along the pixel's own tangent wind, P·wA ≡ 0: the whitecap noise was one value over the whole sea, so the
+  // sea was either all white or not at all.) Body-frame noise instead, drawn out east–west (the zonal winds: trades and
+  // westerlies) by an anisotropic scale, drifting and re-forming
+  vec3 Pw = vec3(P.x * 0.38, P.y, P.z * 0.38);
+  float wcN = snoise(Pw * 0.16 + vec3(-uTime * 0.03, 0.0, uTime * 0.02)) * 0.55 + snoise(Pw * 0.9 + vec3(uTime * 0.09, uTime * 0.05, -uTime * 0.07)) * 0.3 + (vCrest - 0.6) * 0.35;
   float cover = clamp(0.0012 * pow(max(windSpd * uWind - 3.5, 0.0), 2.2), 0.0, 0.35);
   float whitecap = smoothstep(1.0 - cover * 4.0, 1.0 - cover * 2.0 + 0.02, wcN * 0.5 + 0.5) * step(0.001, cover) * smoothstep(0.3, 0.8, vSalt) * calm * smoothstep(2.0, 8.0, vDepth);
   // the streaks of foam a gale leaves behind (thin, long, along the wind)
-  whitecap = max(whitecap, smoothstep(0.75, 0.95, snoise(vec3(Pw.x * 0.06, Pw.y * 1.4, 3.1)) * 0.5 + 0.5) * smoothstep(9.0, 16.0, windSpd * uWind) * 0.5 * calm * smoothstep(0.3, 0.8, vSalt));
+  whitecap = max(whitecap, smoothstep(0.75, 0.95, snoise(vec3(P.x * 0.03, P.y * 1.4, P.z * 0.03) + 3.1) * 0.5 + 0.5) * smoothstep(9.0, 16.0, windSpd * uWind) * 0.5 * calm * smoothstep(0.3, 0.8, vSalt));
   float foamAmt = clamp(max(max(max(shore, crest * 0.8), rapids * 0.85), whitecap * 0.7), 0.0, 1.0);
   if (foamAmt > 0.01) {
     // foam is LACE: a web of bright bubble filaments round dark holes (ridged noise at two scales, drifting with the
@@ -505,7 +531,7 @@ void main() {
     if (lean > 0.06 && flowSpd > 1.0) {
       vec3 fd = normalize(vFlow + 1e-5);
       vec3 side = normalize(cross(fd, up) + 1e-5);
-      float streak = smoothstep(0.1, 0.7, snoise(vec3(dot(P, side) * 2.2, dot(P, fd) * 0.25 - uTime * 2.5, 0.0)) * 0.5 + 0.5);
+      float streak = smoothstep(0.1, 0.7, snoise(P * 1.2 - vFlow * uTime * 0.9) * 0.5 + 0.5);
       pat = mix(pat, 0.75 + 0.25 * streak, smoothstep(0.06, 0.2, lean));
     }
     // soft coverage, never saturated white
@@ -537,7 +563,9 @@ void main() {
     // a 10–20 m noise on the thickness bites the waterline into an irregular, natural shore (it only ever takes
     // water away near the edge, never adds any)
     float edgeN = snoise(P * 0.07) * 0.3 + snoise(P * 0.45) * 0.08 + snoise(P * 1.9) * 0.03;
-    float edge = smoothstep(0.015, 0.4, vertThick + min(edgeN, 0.12) * smoothstep(1.6, 0.2, vertThick));
+    // (over the first ~0.18 m of depth: fading out over 0.4 m spread every gently shelving lake into a 10–20 m halo of
+    // milky haze from 60 m up, a fog patch rather than water)
+    float edge = smoothstep(0.012, 0.18, vertThick + min(edgeN, 0.12) * smoothstep(1.6, 0.2, vertThick));
     // at zero thickness exactly the ground behind: a sheet within depth precision of the ground (dry shore cells hold
     // their level a few cm under it) can never z-fight into speckles
     // (a film a few centimetres thick is the wet ground the terrain already darkens along its waterline band: darkened
@@ -545,6 +573,14 @@ void main() {
     float film = smoothstep(0.03, 0.3, vertThick);
     vec3 wetGround = mix(refr, refr * 0.8 + skyR * F * 0.3, film);
     col = mix(wetGround, col, edge * (1.0 - paper));
+  }
+  // (UI lane, additive) a map overlay (the UI's O key, overlaytex.ts) tints the sea with its colour too, at the
+  // water's own brightness, so the map reads across the water instead of stopping at the shore
+  if (uOverlayK.x > 0.5) {
+    vec3 od = normalize(vBodyPos);
+    vec4 ov = textureLod(uOverlay, vec2(atan(od.x, od.z) * 0.15915494 + 0.5, asin(clamp(od.y, -1.0, 1.0)) * 0.31830989 + 0.5), 0.0);
+    float lum = max(dot(col, vec3(0.2126, 0.7152, 0.0722)), 1e-4);
+    col = mix(col, ov.rgb * (lum * 2.2 + uOverlayK.z * 0.6), ov.a * 0.8);
   }
   gl_FragColor = vec4(col, 1.0);
 }

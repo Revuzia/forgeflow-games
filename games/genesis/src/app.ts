@@ -1,25 +1,37 @@
-// GENESIS — the App (CONTRACT.md §3): owns the SimClient, the Renderer, the camera rig, the HUD and input, and runs
-// the frame loop. The sim runs at a fixed tick rate in its worker (or the lookdev generator); this loop is variable
-// rate: per animation frame it advances the interpolated render clock, updates the camera, renders, then asks the sim
-// for the next snapshot (≤ 30 Hz). Errors inside a frame are counted; persistent failure raises the fatal card.
-// Clicking the world picks what is drawn there (a person, a herd, a building — the life layer's own geometry), selects
-// it and opens the inspector (src/ui/inspector.ts); a marker floats over the selection, and the camera can follow it.
-// The sim's events and chronicle become toasts (src/ui/toasts.ts).
+// GENESIS — the App (CONTRACT.md §3): owns the SimClient, the Renderer, the camera rig, the UI shell, the audio and
+// input, and runs the frame loop. The sim runs at a fixed tick rate in its worker (or the lookdev generator); this loop
+// is variable rate: per animation frame the UI turns held keys and the gamepad into camera input, the render clock
+// advances, the camera moves, the world renders, the sim is asked for the next snapshot (≤ 30 Hz), and the UI follows
+// the world on screen. Errors inside a frame are counted; persistent failure raises the fatal card.
+//
+// The App is the UI's host (src/ui/host.ts): every UI action is a Command to the sim or a camera action here. Pointer
+// and keyboard input go to the shell (src/ui/shell.ts), which decides between a gesture, the armed tool, the hand and
+// the camera; a plain click comes back here to select what is drawn there (src/ui/inspector.ts), and a marker floats
+// over the selection. The sim's events and chronicle become toasts (src/ui/toasts.ts) and sound (src/audio/**).
 
-import { Vector2 } from 'three';
+import { setPanelSound } from './ui/panel.ts';
+import { Vector2, type IUniform } from 'three';
 import type { Command, CommandResult, EntityRef, UnitVec } from './sim/types.ts';
 import { AgentFlag } from './sim/types.ts';
 import { SimClient } from './client/simclient.ts';
 import { findPoi, type Poi } from './client/poi.ts';
 import type { PlanetView } from './client/worldview.ts';
 import { qRotate, qRotateInv } from './client/orbits.ts';
+import { tangentBasis } from './sim/core/vec3.ts';
 import { Renderer } from './render/renderer.ts';
 import { CameraRig } from './render/camera/rig.ts';
 import { newInput, type InputState } from './render/camera/common.ts';
-import { detectQuality, isQualityName, type QualityName } from './render/quality.ts';
+import { detectQuality, isQualityName, QUALITY, type QualityName } from './render/quality.ts';
 import { pick, rayDirection, type PickHit } from './render/picking.ts';
-import { Hud } from './ui/hud.ts';
-import { Inspector } from './ui/inspector.ts';
+import type { GenesisAudio } from './audio/engine.ts';
+import { Shell } from './ui/shell.ts';
+import type { GroundHit, InspectRef, UiHost } from './ui/host.ts';
+import { PowerBook } from './ui/powers.ts';
+import { Keybinds } from './ui/keybinds.ts';
+import { PrefsStore } from './ui/prefs.ts';
+import type { ToastSpec, ToastAction } from './ui/toasts.ts';
+import { store } from './ui/dom.ts';
+import { humanize, tollOf } from './ui/words.ts';
 
 export interface AppOptions {
   scenario: string;
@@ -41,7 +53,9 @@ export function parseParams(search: string): AppOptions {
   const src = p.get('source');
   const num = (k: string, d: number) => { const v = Number(p.get(k)); return p.has(k) && Number.isFinite(v) ? v : d; };
   return {
-    scenario: p.get('scenario') ?? 'lookdev',
+    // a new player begins on the barren world with the opening (CONTRACT §16.1); the lookdev world is the render
+    // lane's test scene: chosen by name, by ?source=lookdev, or by a harness that skips the opening (?intro=0)
+    scenario: p.get('scenario') ?? (src === 'lookdev' || p.get('intro') === '0' ? 'lookdev' : 'barren'),
     seed: Math.floor(num('seed', 20260)),
     // the real sim in its worker is the default; ?source=lookdev is the render-dev generator, ?source=auto tries the
     // worker and falls back to lookdev (never silently: the HUD says so)
@@ -85,7 +99,7 @@ export interface CameraSpec {
 }
 
 /** a thing in the world the camera can frame / follow and the inspector can show (`target` of a CameraSpec) */
-export interface TargetRef { kind: 'agent' | 'building' | 'settlement' | 'animal'; id: number; planet?: number }
+export interface TargetRef { kind: 'agent' | 'building' | 'settlement' | 'animal' | 'creature' | 'disaster' | 'ship' | 'weather'; id: number; planet?: number }
 
 function hasBuildings(pv: PlanetView, settlement: number): boolean {
   const B = pv.buildings;
@@ -95,26 +109,39 @@ function hasBuildings(pv: PlanetView, settlement: number): boolean {
 
 function isTargetRef(v: unknown): v is TargetRef {
   const o = v as TargetRef | null;
-  return !!o && typeof o === 'object' && typeof o.id === 'number' && ['agent', 'building', 'settlement', 'animal'].includes(o.kind);
+  return !!o && typeof o === 'object' && typeof o.id === 'number' && ['agent', 'building', 'settlement', 'animal', 'creature', 'disaster', 'ship', 'weather'].includes(o.kind);
 }
 
-export class App {
+/** acts whose harm comes after the cast (an Undo is offered on their toast whatever the first toll) */
+const DESTRUCTIVE = /^(disaster\.spawn|miracle\.(lightning|fireball|meteor|fire)|fire\.(ignite|firestorm)|settlement\.(raze|start-war)|agent\.kill|life\.(cull|kill|extinct|curse)|world\.(erase|crack|moon-fall)|water\.(flood|tsunami)|terrain\.crater)$/;
+
+/** the audio module (src/audio/**, its own lane), loaded lazily so a world without sound still runs */
+const AUDIO_MODULE = import.meta.glob<{ createAudio: (o?: Record<string, unknown>) => GenesisAudio }>('./audio/engine.ts');
+
+export class App implements UiHost {
   readonly canvas: HTMLCanvasElement;
   readonly opts: AppOptions;
   readonly sim = new SimClient();
   renderer!: Renderer;
   readonly rig = new CameraRig();
-  hud!: Hud;
-  inspector!: Inspector;
+  ui!: Shell;
   readonly input: InputState = newInput();
+  readonly powers = new PowerBook();
+  readonly keybinds = new Keybinds(store);
+  readonly prefs = new PrefsStore();
+  audio: GenesisAudio | null = null;
+  private audioCues = new Set<string>();
   /** the selected thing (inspector + marker) and the thing the camera follows */
-  selected: EntityRef | null = null;
+  private sel: InspectRef | null = null;
   following: EntityRef | null = null;
   private selEl: HTMLDivElement | null = null;
   private selName = '';
   onFatal: ((title: string, err: unknown) => void) | null = null;
   quality: QualityName = 'high';
+  private autoQuality: QualityName = 'high';
   fps = 60;
+  /** the last frame's real duration (s), unclamped: the frame rate shown is the true one */
+  frameSec = 1 / 60;
   frames = 0;
   private last = 0;
   private startAt = 0;
@@ -124,28 +151,37 @@ export class App {
   private captureWaiters: ((url: string) => void)[] = [];
   private frameWaiters: { n: number; ok: () => void }[] = [];
   private hover: PickHit | null = null;
-  private pointer = new Vector2(-1, -1);
-  private pointerDirty = false;
-  brushRadius = 60;
+  private hoverAt: [number, number] = [-1, -1];
   private uiVisible = true;
   /** last `focus` command sent (CONTRACT §8.7: the camera's dwelling point, the sim's default "here") */
   private focusSentAt = -1e9;
   private focusSent: [number, number, number] | null = null;
   private focusPlanet = -1;
   private v2 = new Vector2();
+  private powersAt = -1e9;
+  /** a ring over what the hand would take (until the render lane draws a hover outline) */
+  private hoverEl: HTMLDivElement | null = null;
+  /** the cloud march's own density scale, kept while an overlay thins it */
+  private cloudZ: number | null = null;
 
   constructor(canvas: HTMLCanvasElement, opts: AppOptions) {
     this.canvas = canvas;
     this.opts = opts;
   }
 
+  get view() { return this.sim.view; }
+  get source(): string { return this.sim.source; }
+  get selected_(): InspectRef | null { return this.sel; }
+
   async start(progress: (msg: string, frac: number) => void): Promise<void> {
     progress('Lighting the star…', 0.08);
     this.renderer = new Renderer(this.canvas);
     const gl = this.renderer.three.getContext() as WebGL2RenderingContext;
-    this.quality = this.opts.quality === 'auto' ? detectQuality(gl) : this.opts.quality;
+    this.autoQuality = detectQuality(gl);
+    this.quality = this.opts.quality === 'auto' ? (this.prefs.value.quality === 'auto' ? this.autoQuality : this.prefs.value.quality) : this.opts.quality;
     this.renderer.setQuality(this.quality);
     this.renderer.settings.exposureBias = this.opts.exposure;
+    this.applyGraphics();
     this.resize();
     window.addEventListener('resize', () => this.resize());
     progress('Forming the worlds…', 0.22);
@@ -153,37 +189,62 @@ export class App {
     await this.sim.start({ source: this.opts.source, scenario: this.opts.scenario, seed: this.opts.seed });
     progress('Gathering the air…', 0.62);
     this.sim.setSpeed(this.opts.speed);
-    this.hud = new Hud(document.getElementById('ui') ?? document.body, {
-      setSpeed: (x) => this.setSpeed(x),
-      step: (t) => { void this.step(t); },
-      flyTo: (id) => this.flyTo(id),
-      lookAt: (planet, pos) => this.lookAt(planet, pos),
-      selectSettlement: (planet, id) => this.select({ kind: 'settlement', id, planet }),
-    }, this.opts.dev);
-    this.inspector = new Inspector(this.hud.root, {
-      // the lookdev world is fabricated: nobody in it has a story to ask for
-      query: (q, args) => (this.sim.source === 'lookdev' ? Promise.resolve({ lookdev: true }) : this.sim.query(q, args)),
-      date: (planet, tick) => {
-        const pv = this.sim.view.planet(planet);
-        if (!pv) return '';
-        const c = this.sim.view.calendar(pv, tick);
-        return `Y${c.year} · d${c.day}`;
+    void this.loadPowers();
+    const uiRoot = document.getElementById('ui') ?? document.body;
+    this.ui = new Shell(uiRoot, {
+      host: this,
+      input: this.input,
+      cameraMode: () => this.rig.mode,
+      camera: {
+        system: () => { if (this.rig.mode === 'system') this.flyTo(this.renderer.primaryId >= 0 ? this.renderer.primaryId : 0); else this.systemView(); },
+        fly: () => this.toggleFly(),
+        home: () => this.flyTo(this.renderer.primaryId >= 0 ? this.renderer.primaryId : 0),
+        follow: () => { const s = this.sel; if (s && s.kind !== 'species' && s.kind !== 'cell' && s.kind !== 'planet') this.follow(this.isFollowing(s as EntityRef) ? null : s as EntityRef); },
+        look: () => { const s = this.sel; if (s && s.kind !== 'species') this.lookAtEntity(s as EntityRef); },
       },
-      select: (ref) => this.select(ref),
-      lookAt: (ref) => this.lookAtEntity(ref),
-      follow: (ref) => this.follow(ref),
-      isFollowing: (ref) => !!this.following && this.following.kind === ref.kind && this.following.id === ref.id,
+      click: (x, y) => this.onClick(x, y),
+      setUi: (v) => this.setUi(v),
+      uiVisible: () => this.uiVisible,
+      setBrush: (b) => this.renderer.setBrush(b),
+      uniformsOf: (id) => (this.renderer.planets.get(id)?.uniforms as unknown as Record<string, IUniform>) ?? null,
+      save: () => this.saveBytes(),
+      load: (b) => this.loadBytes(b),
+      thumb: () => this.thumb(),
+      scenario: this.opts.scenario,
+      seed: this.opts.seed,
+      audioReady: () => !!this.audio,
+      dev: this.opts.dev,
+      hudFrame: () => this.hudFrame(),
+      openingCamera: (shot) => this.openingCamera(shot),
+      cloudFade: (k) => {
+        // a map overlay thins the clouds away: their density (uCloudScale.z, read live by the cloud march — a
+        // planet-wide storm's bands too) and their coverage bias (uCloudScale.w: the weather bake and the shadows)
+        const u = this.renderer.clouds.shared.uCloudScale.value;
+        const f = Math.max(0, Math.min(1, k));
+        this.cloudZ ??= u.z;
+        // (a planet-wide storm's coverage runs past 1: the bias takes it away too)
+        u.z = this.cloudZ * (1 - 0.985 * f);
+        u.w = -1.6 * f;
+      },
     });
+    this.hoverEl = document.createElement('div');
+    this.hoverEl.className = 'gn-hoverring';
+    this.hoverEl.hidden = true;
+    this.ui.hud.world.appendChild(this.hoverEl);
     this.selEl = document.createElement('div');
     this.selEl.className = 'gn-sel';
     this.selEl.hidden = true;
     this.selEl.innerHTML = '<div class="gn-sel-name"></div><div class="gn-sel-pin"></div>';
-    this.hud.root.appendChild(this.selEl);
+    this.ui.hud.world.appendChild(this.selEl);
+    this.prefs.onChange((_p, what) => {
+      if (what === '*' || what === 'quality' || what.startsWith('gfx')) this.applyGraphics();
+      if (what === '*' || what.startsWith('audio')) this.applyAudio();
+    });
     // the scenario's setup (its founding, its first sea) is history, not news: no toasts until the first frames are up
-    this.hud.toasts.enabled = false;
-    this.hud.setVisible(this.opts.ui);
-    this.uiVisible = this.opts.ui;
+    this.ui.hud.toasts.enabled = false;
+    this.setUi(this.opts.ui);
     this.installInput();
+    void this.startAudio();
     // initial camera: the home world from orbit, or a URL preset
     const view = this.sim.view;
     view.update(performance.now());
@@ -209,10 +270,36 @@ export class App {
       this.frame(t);
     };
     this.raf = requestAnimationFrame(loop);
-    if (this.sim.source === 'lookdev') this.hud.toast('Lookdev world: the simulation is not running here — a fabricated world for the look.', 6000);
+    if (this.sim.source === 'lookdev') this.toast({ text: 'Lookdev world: the simulation is not running here — a fabricated world for the look.', ms: 6000 });
     this.sim.view.pendingEvents.length = 0;
-    this.hud.toasts.pump(this.sim.view, performance.now());
-    this.hud.toasts.enabled = true;
+    this.ui.hud.toasts.pump(this.sim.view, performance.now());
+    this.ui.hud.toasts.enabled = true;
+    // a new game on the barren world begins with the opening (§16.1); ?intro=0 skips it
+    if (this.opts.intro && this.opts.scenario === 'barren' && this.sim.source === 'worker' && !this.opts.cam) this.ui.opening.start();
+  }
+
+  /** the opening's camera: the system from the dark, then the home world turning into view */
+  private openingCamera(shot: 'star' | 'world'): void {
+    const view = this.sim.view;
+    const home = view.planets.find((p) => p.params.orbit.parent < 0) ?? view.planets[0];
+    if (!home) return;
+    if (shot === 'star') {
+      this.rig.system.frame(view);
+      this.rig.use(this.rig.system, 0);
+      this.renderer.cut();
+    } else {
+      this.rig.orbit.setFromLatLon(home.id, 18, -35, home.params.radius * 2.6);
+      this.rig.use(this.rig.orbit, 5.5);
+    }
+  }
+
+  /** the live power catalogue (base + mods + inventions) from the sim */
+  private async loadPowers(): Promise<void> {
+    this.powersAt = performance.now();
+    if (this.sim.source !== 'worker') return;
+    const [d, cmds] = await Promise.all([this.sim.query('powers').catch(() => null), this.sim.query('commands').catch(() => null)]);
+    this.powers.setFromSim(d);
+    this.powers.setCommands(cmds);
   }
 
   private resize(): void {
@@ -221,18 +308,81 @@ export class App {
     this.input.viewH = h;
   }
 
-  /** one frame: clock → camera → render → snapshot request → HUD */
+  /** the graphics preset and the settings' toggles on top of it (quality never changes the sim: CONTRACT §15.9) */
+  private applyGraphics(): void {
+    if (!this.renderer) return;
+    const P = this.prefs.value;
+    const name: QualityName = this.opts.quality !== 'auto' ? this.opts.quality : P.quality === 'auto' ? this.autoQuality : P.quality;
+    if (name !== this.quality || this.renderer.quality.name !== name) { this.quality = name; this.renderer.setQuality(name); }
+    const base = QUALITY[name];
+    const g = P.gfx;
+    const q = { ...base };
+    q.renderScale = base.renderScale * g.renderScale;
+    if (!g.shadows) q.shadowCascades = 0;
+    if (!g.ssao) q.ssao = false;
+    q.godRays = base.godRays && g.godRays;
+    q.vegetationDensity = base.vegetationDensity * g.vegetation;
+    q.vegetationRange = base.vegetationRange * Math.sqrt(g.vegetation);
+    q.grass = base.grass && g.grass;
+    this.renderer.quality = q;
+    const s = this.renderer.settings;
+    s.bloom = base.bloom * g.bloom;
+    s.godRays = q.godRays;
+    s.flare = g.flare ? base.flare : 0;
+    s.fxaa = base.fxaa && g.fxaa;
+    s.grain = g.grain ? base.grain : 0;
+    s.vignette = g.vignette ? 0.22 : 0;
+    s.exposureBias = this.opts.exposure + g.exposure;
+    this.renderer.showOrbits = g.orbits;
+    this.resize();
+  }
+
+  // ── audio (src/audio/**, the audio lane's module; wired only through its published API) ──
+
+  private async startAudio(): Promise<void> {
+    const load = AUDIO_MODULE['./audio/engine.ts'];
+    if (!load) return;
+    try {
+      const mod = await load();
+      const a = this.prefs.value.audio;
+      this.audio = mod.createAudio({ volumes: { master: a.master, music: a.music, sfx: a.sfx, ambience: a.ambience }, muted: a.muted, quality: this.quality === 'low' ? 'low' : 'high' });
+      for (const c of this.audio.cues()) this.audioCues.add(c);
+      // the portal's Mute button and the game's are one switch: mirror a portal mute into the Settings toggle
+      this.audio.onMuteChange((m) => { if (this.prefs.value.audio.muted !== m) this.prefs.set('audio.muted', m); });
+      setPanelSound((cue) => this.sound(cue));
+      void this.audio.start();
+    } catch (e) {
+      console.warn('[genesis] audio unavailable:', e instanceof Error ? e.message : e);
+      this.audio = null;
+    }
+  }
+
+  private applyAudio(): void {
+    const a = this.prefs.value.audio;
+    if (!this.audio) return;
+    this.audio.setVolumes({ master: a.master, music: a.music, sfx: a.sfx, ambience: a.ambience });
+    this.audio.mute(a.muted);
+  }
+
+  sound(cue: string): void {
+    if (this.audio && this.audioCues.has(cue)) { try { this.audio.cue(cue); } catch { /* a cue that fails is silence */ } }
+  }
+
+  /** one frame: input → clock → camera → render → snapshot request → UI */
   frame(now: number): void {
-    const dt = Math.min(0.1, Math.max(0, (now - this.last) / 1000));
+    const raw = Math.max(0, (now - this.last) / 1000);
+    const dt = Math.min(0.1, raw);
     this.last = now;
+    // the frame rate shown is the true one (dt is clamped for the camera and the clock, the rate is not)
+    if (raw > 0) { this.frameSec = raw; this.fps = this.fps * 0.85 + (1 / raw) * 0.15; if (1 / raw < this.fps * 0.5) this.fps = 1 / raw; }
     try {
       const view = this.sim.view;
       view.update(now);
+      this.ui.preFrame(dt);
       if (this.following) this.updateFollow(dt);
       const pose = this.rig.update(dt, view, this.input);
       if (this.rig.cut) { this.renderer.cut(); this.rig.cut = false; }
-      if (this.pointerDirty && this.frames % 2 === 0) this.updateHover();
-      this.renderer.setBrush(this.hover ? { planet: this.hover.planet, dir: this.hover.dir, radius: this.brushRadius } : null);
+      this.updateHover();
       this.renderer.render(view, pose, dt, (now - this.startAt) / 1000);
       if (this.captureWaiters.length) {
         const url = this.renderer.snapshotDataURL();
@@ -240,23 +390,15 @@ export class App {
       }
       this.sim.pump(now);
       this.sendFocus(now);
-      this.fps = this.fps * 0.92 + (dt > 0 ? 1 / dt : 60) * 0.08;
-      const life = this.renderer.planets.get(this.renderer.primaryId)?.life;
-      this.hud.update({
-        view, pose, stats: this.renderer.stats, fps: this.fps, primary: this.renderer.primaryId,
-        systemView: this.rig.mode === 'system' || this.renderer.stats.altitude > 3e5,
-        project: (s, out) => this.renderer.projectToScreen(s, pose, out), source: this.sim.source, snapshotHz: this.sim.snapshotHz,
-        altitude: this.renderer.stats.altitude, selected: this.selected,
-        groundRadius: (planet, u) => { const p = view.planet(planet); return p ? view.groundRadius(p, u[0], u[1], u[2]) : 0; },
-        life: life && this.opts.dev ? {
-          people: life.crowds.stats.agents, ambient: life.crowds.stats.ambient, animals: life.animals.stats.drawn,
-          buildings: life.buildings.stats.instances, variants: life.buildings.stats.variants, pending: life.buildings.stats.pendingVariants,
-          roads: life.roads.stats.chains,
-        } : null,
-      });
-      this.hud.toasts.pump(view, now, this.renderer.primaryId);
-      this.inspector.tick(now);
+      if (this.audio) {
+        // before the toasts drain the events: the audio hears them first (it does not consume them)
+        try { this.audio.setListener(pose, this.renderer.primaryId, this.renderer.stats.altitude); this.audio.update(view, dt); } catch (e) { console.warn('[genesis] audio frame failed', e); this.audio = null; }
+      }
+      this.ui.postFrame(dt);
+      this.pruneUndone();
       this.updateMarker();
+      this.updateHoverRing();
+      if (now - this.powersAt > 60000) void this.loadPowers();
       this.frameErrors = 0;
     } catch (e) {
       this.frameErrors++;
@@ -274,78 +416,94 @@ export class App {
     }
   }
 
-  // ── input ──
+  private hudFrame() {
+    const life = this.renderer.planets.get(this.renderer.primaryId)?.life;
+    const view = this.sim.view;
+    const pose = this.rig.pose;
+    return {
+      view, pose, stats: this.renderer.stats, fps: this.fps, primary: this.renderer.primaryId,
+      systemView: this.rig.mode === 'system' || this.renderer.stats.altitude > 3e5,
+      project: (s: ArrayLike<number>, out: Vector2) => this.renderer.projectToScreen(s, pose, out), source: this.sim.source, snapshotHz: this.sim.snapshotHz,
+      altitude: this.renderer.stats.altitude, selected: this.sel as { kind: string; id: number; planet?: number } | null,
+      groundRadius: (planet: number, u: ArrayLike<number>) => { const p = view.planet(planet); return p ? view.groundRadius(p, u[0], u[1], u[2]) : 0; },
+      life: life && this.opts.dev ? {
+        people: life.crowds.stats.agents, ambient: life.crowds.stats.ambient, animals: life.animals.stats.drawn,
+        buildings: life.buildings.stats.instances, variants: life.buildings.stats.variants, pending: life.buildings.stats.pendingVariants,
+        roads: life.roads.stats.chains,
+      } : null,
+    };
+  }
+
+  // ── input: everything goes to the UI shell ──
 
   private installInput(): void {
     const c = this.canvas;
-    let buttons = 0;
-    let downX = 0, downY = 0, lastX = 0, lastY = 0;
+    let lastX = 0, lastY = 0;
     c.addEventListener('contextmenu', (e) => e.preventDefault());
-    c.addEventListener('pointerdown', (e) => {
-      c.setPointerCapture(e.pointerId);
-      buttons = e.buttons;
-      downX = lastX = e.clientX; downY = lastY = e.clientY;
+    const down = (e: PointerEvent, label: { planet: number; id: number } | null) => {
+      // (a pointer the browser no longer tracks, or a synthetic one, cannot be captured: the press still counts)
+      try { c.setPointerCapture(e.pointerId); } catch { /* not capturable */ }
+      lastX = e.clientX; lastY = e.clientY;
       c.focus();
+      if (e.button === 1) e.preventDefault();
+      this.ui.pointerDown(e.clientX, e.clientY, e.button, e, e.timeStamp, label);
+    };
+    c.addEventListener('pointerdown', (e) => down(e, null));
+    // a settlement's name or a creature over the world does not swallow a press: it goes to the world's own pointer
+    // handling (a drag still turns the world, a tool still works, the hand still grabs), and a plain click on a name
+    // selects that settlement
+    this.ui.hud.world.addEventListener('pointerdown', (e) => {
+      const t = e.target as HTMLElement | null;
+      const nm = t?.closest<HTMLElement>('.gn-slabel-name');
+      const cr = t?.closest<HTMLElement>('.gn-crea');
+      if (!nm && !cr) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (nm) down(e, { planet: Number(nm.dataset.planet), id: Number(nm.dataset.sid) });
+      else if (cr) {
+        // the creature under the hand: a click selects it, a drag or a hold takes it
+        const id = Number(cr.dataset.cid), planet = Number(cr.dataset.planet);
+        this.forcedEntity = { kind: 'creature', id, planet };
+        down(e, null);
+      }
     });
     c.addEventListener('pointermove', (e) => {
       const dx = e.clientX - lastX, dy = e.clientY - lastY;
       lastX = e.clientX; lastY = e.clientY;
-      this.pointer.set(e.clientX, e.clientY);
-      this.pointerDirty = true;
-      if (!e.buttons) return;
-      if (e.buttons & 1) { this.input.dragL[0] += dx; this.input.dragL[1] += dy; }
-      if (e.buttons & 2) { this.input.dragR[0] += dx; this.input.dragR[1] += dy; }
-      if (e.buttons & 4) { this.input.dragM[0] += dx; this.input.dragM[1] += dy; }
+      // every sample since the last event, with its own time (a flick's speed and a rub's rhythm survive a slow frame)
+      const co = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [];
+      const pts = co.length > 1 ? co.map((q) => ({ x: q.clientX, y: q.clientY, t: q.timeStamp })) : null;
+      this.ui.pointerMove(e.clientX, e.clientY, dx, dy, e.buttons, e.timeStamp, pts);
     });
-    c.addEventListener('pointerup', (e) => {
-      if (Math.hypot(e.clientX - downX, e.clientY - downY) < 4 && (buttons & 1)) this.onClick(e.clientX, e.clientY);
-      buttons = 0;
-    });
-    c.addEventListener('pointerleave', () => { this.hover = null; this.pointerDirty = false; });
+    c.addEventListener('pointerup', (e) => { this.ui.pointerUp(e.clientX, e.clientY, e.button, e.timeStamp); this.forcedEntity = null; });
+    c.addEventListener('pointercancel', () => this.ui.blur());
+    c.addEventListener('pointerleave', (e) => { if (!e.buttons) { this.ui.pointerLeave(); this.hover = null; } });
     c.addEventListener('wheel', (e) => {
       e.preventDefault();
       const scale = e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1;
-      this.input.wheel += e.deltaY * scale;
+      this.ui.wheel(e.deltaY * scale, e);
     }, { passive: false });
-    const typing = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      return !!t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
-    };
-    window.addEventListener('keydown', (e) => {
-      if (typing(e)) return;
-      this.input.keys.add(e.code);
-      this.input.shift = e.shiftKey;
-      this.onKey(e);
-    });
-    window.addEventListener('keyup', (e) => { this.input.keys.delete(e.code); this.input.shift = e.shiftKey; });
-    window.addEventListener('blur', () => this.input.keys.clear());
+    // middle-click autoscroll must not start over the world
+    c.addEventListener('mousedown', (e) => { if (e.button === 1) e.preventDefault(); });
+    window.addEventListener('keydown', (e) => this.ui.keyDown(e));
+    window.addEventListener('keyup', (e) => this.ui.keyUp(e));
+    window.addEventListener('blur', () => this.ui.blur());
   }
 
-  private onKey(e: KeyboardEvent): void {
-    switch (e.code) {
-      case 'KeyP': this.setSpeed(this.sim.view.speed === 0 ? 1 : 0); break;
-      case 'KeyG': if (this.rig.mode === 'system') this.flyTo(this.renderer.primaryId); else this.systemView(); break;
-      case 'KeyV': this.toggleFly(); break;
-      case 'Escape':
-        if (this.selected) { this.select(null); break; }
-        if (this.rig.mode !== 'orbit') this.flyTo(this.renderer.primaryId >= 0 ? this.renderer.primaryId : 0);
-        break;
-      case 'BracketLeft': this.brushRadius = Math.max(5, this.brushRadius / 1.25); break;
-      case 'BracketRight': this.brushRadius = Math.min(2000, this.brushRadius * 1.25); break;
-      case 'Comma': this.stepSpeed(-1); break;
-      case 'Period': this.stepSpeed(1); break;
-      case 'KeyH': this.setUi(!this.uiVisible); break;
-      default: return;
-    }
-  }
-
+  /** the ground under the UI's cursor (mouse or gamepad), refreshed when it moved or the world turned */
   private updateHover(): void {
-    this.pointerDirty = false;
-    if (this.pointer.x < 0) { this.hover = null; return; }
-    const ndcX = (this.pointer.x / window.innerWidth) * 2 - 1;
-    const ndcY = 1 - (this.pointer.y / window.innerHeight) * 2;
+    const c = this.ui.cursor();
+    if (!c) { this.hover = null; return; }
+    if (this.frames % 2 === 1 && c[0] === this.hoverAt[0] && c[1] === this.hoverAt[1]) return;
+    this.hoverAt = [c[0], c[1]];
+    this.hover = this.pickGround(c[0], c[1]);
+  }
+
+  private pickGround(x: number, y: number): PickHit | null {
+    const ndcX = (x / window.innerWidth) * 2 - 1;
+    const ndcY = 1 - (y / window.innerHeight) * 2;
     const dir = rayDirection(this.renderer.camera, ndcX, ndcY, [0, 0, 0]);
-    this.hover = pick(this.sim.view, this.rig.pose, dir);
+    return pick(this.sim.view, this.rig.pose, dir);
   }
 
   /**
@@ -368,6 +526,25 @@ export class App {
     const slack = ((this.rig.pose.fov * Math.PI) / 180 / Math.max(200, window.innerHeight)) * 7;
     const hit = life.pick(o, d, maxT, slack);
     return hit ? { kind: hit.kind, id: hit.id, planet: pv.id, dist: hit.t } : null;
+  }
+
+  /** a creature, disaster or ship drawn near a screen point (by its projected position, within ~30 px) */
+  private pickNear(x: number, y: number): EntityRef | null {
+    const v = this.sim.view;
+    let best: EntityRef | null = null, bd = 30;
+    const consider = (planet: number, u: ArrayLike<number>, lift: number, ref: EntityRef, grace = 0) => {
+      const s = this.screenOf(planet, u, lift);
+      if (!s) return;
+      const d = Math.hypot(s[0] - x, s[1] - y) - grace;
+      if (d < bd) { bd = d; best = ref; }
+    };
+    for (const c of v.creatures) consider(c.planet, c.pos, c.height * 0.6, { kind: 'creature', id: c.id, planet: c.planet }, 6);
+    for (const pv of v.planets) {
+      if (pv.id !== this.renderer.primaryId) continue;
+      for (const d of pv.disasters) consider(pv.id, d.pos, Math.max(4, d.params.alt ?? 0), { kind: 'disaster', id: d.id, planet: pv.id });
+    }
+    for (const s of v.ships) if (s.planet >= 0 && s.planet === this.renderer.primaryId) consider(s.planet, s.pos, s.alt, { kind: 'ship', id: s.id, planet: s.planet });
+    return best;
   }
 
   /** a left click at a screen point (test surface) */
@@ -399,12 +576,12 @@ export class App {
   }
 
   private onClick(x: number, y: number): void {
+    if (this.forcedEntity) { this.select(this.forcedEntity); return; }
+    const near = this.pickNear(x, y);
     const ent = this.pickEntity(x, y);
+    if (near && (!ent || near.kind === 'creature')) { this.select(near); return; }
     if (ent) { this.select({ kind: ent.kind, id: ent.id, planet: ent.planet }); return; }
-    const ndcX = (x / window.innerWidth) * 2 - 1;
-    const ndcY = 1 - (y / window.innerHeight) * 2;
-    const dir = rayDirection(this.renderer.camera, ndcX, ndcY, [0, 0, 0]);
-    const hit = pick(this.sim.view, this.rig.pose, dir);
+    const hit = this.pickGround(x, y);
     if (!hit) {
       // far away a world is a few pixels: take the nearest projected planet within 28 px
       let best = -1, bestD = 28;
@@ -418,12 +595,12 @@ export class App {
       return;
     }
     if (this.rig.mode === 'system' || hit.planet !== this.renderer.primaryId) { this.flyTo(hit.planet); return; }
-    // clicking a settlement's ground selects the settlement; elsewhere it recentres the orbit (powers arrive with the
-    // god layer) and lets go of the selection
+    // clicking a settlement's ground selects the settlement; elsewhere it recentres the orbit and lets go of the
+    // selection (the cell itself is inspected with I, or by the inspector's place link)
     const pv = this.sim.view.planet(hit.planet);
-    const st = pv ? this.settlementAt(pv, hit.dir) : null;
-    if (st) { this.select({ kind: 'settlement', id: st, planet: hit.planet }); return; }
-    if (this.selected) this.select(null);
+    const st = pv ? this.settlementAt(pv.id, hit.dir) : null;
+    if (st !== null) { this.select({ kind: 'settlement', id: st, planet: hit.planet }); return; }
+    if (this.sel) this.select(null);
     if (this.rig.mode === 'orbit') {
       const o = this.rig.orbit;
       o.focus = [hit.dir[0], hit.dir[1], hit.dir[2]];
@@ -431,29 +608,180 @@ export class App {
   }
 
   /** the settlement whose territory (or, for a band, whose camp) covers a point, or null */
-  private settlementAt(pv: PlanetView, dir: ArrayLike<number>): number | null {
+  settlementAt(planet: number, dir: ArrayLike<number>): number | null {
+    const pv = this.sim.view.planet(planet);
+    if (!pv) return null;
     const terr = pv.fields.get('territory');
     if (terr) {
       const c = pv.grid.nearestCell(dir[0], dir[1], dir[2]);
       const id = Math.round(terr[c]);
-      if (id >= 0 && pv.settlements.some((s) => s.id === id)) return id;
+      if (id >= 0 && pv.settlements.some((s) => s.id === id && !(s.flags & 2))) return id;
     }
     const R = pv.params.radius;
     for (const s of pv.settlements) {
+      if (s.flags & 2) continue;
       const d = Math.acos(Math.min(1, s.pos[0] * dir[0] + s.pos[1] * dir[1] + s.pos[2] * dir[2])) * R;
       if (d < 35) return s.id;
     }
     return null;
   }
 
+  // ── UiHost ──
+
+  async cmd(c: Command, opts: { quiet?: boolean } = {}): Promise<CommandResult> {
+    if (this.sim.source !== 'worker' && c.k !== 'focus' && !c.k.startsWith('hand.move')) {
+      const r = { ok: false, msg: 'This is the lookdev world: nothing here listens. Run the living simulation (source=worker) to be obeyed.' };
+      if (!opts.quiet) this.toast({ text: r.msg, kind: 'warn' });
+      return r;
+    }
+    const r = await this.sim.cmd(c);
+    if (c.k !== 'focus') this.freshAfter = performance.now();
+    const ctl = r.control;
+    if (ctl) {
+      if (ctl.rewind !== undefined || ctl.edit !== undefined) this.sim.requestFull();
+      if (ctl.save || ctl.load) void this.ui.saves.control(ctl);
+      if (typeof ctl.speed === 'number') this.sim.view.speedChanged(ctl.speed);
+    }
+    if (!opts.quiet && c.k !== 'focus' && !c.k.startsWith('hand.move')) {
+      const quietOk = c.k.startsWith('time.') && c.k !== 'time.rewind' && c.k !== 'time.edit-past';
+      if (r.msg && r.msg !== 'queued for the next tick' && !(r.ok && quietOk)) {
+        const planet = typeof c.planet === 'number' ? c.planet : this.primary();
+        this.toast({ text: this.wordsFor(c, r.msg), ms: r.ok ? 5200 : 6500, kind: r.ok ? 'god' : 'warn', planet, action: r.ok ? this.undoAction(r, this.powers.powerOf(c)?.name, c.k) : null });
+      }
+      this.sound(r.ok ? 'ui.confirm' : 'ui.error');
+    }
+    return r;
+  }
+
+  /** a result line for people: places for coordinates, hours for minutes, names for "the agent" */
+  private wordsFor(c: Command, msg: string): string {
+    const planet = typeof c.planet === 'number' ? c.planet : this.primary();
+    const t = c.target as { kind?: string; id?: number } | undefined;
+    const held = this.sim.view.hand?.held ?? null;
+    const ref = t && typeof t.id === 'number' ? { kind: String(t.kind ?? 'agent'), id: t.id, planet } : c.k.startsWith('hand.') && held ? { ...held, planet } : null;
+    // the grab says the name ("You lift Shudak into the air."): kept for the throw that follows
+    if (c.k === 'hand.grab') { const m = /^You (?:lift|pick up) (.+?)(?: into the air| off its foundations)?\.$/.exec(msg); this.lastHeldName = m && !/^(a|an|the) /.test(m[1]) ? m[1] : ref ? this.ui.catalog.nameOf(ref) : null; }
+    const name = ref ? this.ui.catalog.nameOf(ref) ?? this.lastHeldName : c.k.startsWith('hand.') ? this.lastHeldName : null;
+    return humanize(this.sim.view, planet, msg, { name, dayHours: this.sim.view.planet(planet)?.params.dayHours });
+  }
+  private lastHeldName: string | null = null;
+  /** after an undo, for this many frames: a selected disaster / weather the rewind took away is let go */
+  private pruneFrames = 0;
+
+  private pruneUndone(): void {
+    if (this.pruneFrames <= 0) return;
+    this.pruneFrames--;
+    const sel = this.sel;
+    if (!sel || (sel.kind !== 'disaster' && sel.kind !== 'weather')) { this.pruneFrames = 0; return; }
+    const pv = this.sim.view.planet(sel.planet ?? -1);
+    const gone = !pv || (sel.kind === 'disaster' ? !pv.disasters.some((d) => d.id === sel.id) : !pv.weather.some((w) => w.id === sel.id));
+    if (gone) { this.select(null); this.pruneFrames = 0; }
+  }
+
+  /**
+   * "Undo" on a toast for an act that killed or ruined many — or that will (a disaster, a smiting miracle, a razing:
+   * their dead come after the cast) — back to the minute before it (the world's rewind)
+   */
+  undoAction(r: CommandResult, what?: string, k?: string): ToastAction | null {
+    if (!r.ok || typeof r.tick !== 'number' || this.sim.source !== 'worker') return null;
+    const toll = tollOf(r.msg ?? '');
+    const harmful = !!k && DESTRUCTIVE.test(k);
+    if (toll.dead < 3 && toll.ruined < 2 && !harmful) return null;
+    const tick = Math.max(0, r.tick - 1);
+    return {
+      label: 'Undo', title: 'Rewind the world to the minute before it',
+      run: () => {
+        void this.cmd({ k: 'time.rewind', tick, planet: this.primary() }, { quiet: true }).then((u) => {
+          // the news of the undone minutes is taken back; a card on the undone thing closes once the world has turned back
+          if (u.ok) { this.ui.hud.toasts.forget(tick); this.pruneFrames = 240; }
+          this.toast({ text: u.ok ? `Undone: the world is back to the minute before ${what ? `the ${what.toLowerCase()}` : 'it'}.` : u.msg ?? 'That moment cannot be returned to.', kind: u.ok ? 'god' : 'warn' });
+        });
+      },
+    };
+  }
+
+  parse(text: string): Promise<CommandResult> { return this.sim.parse(text); }
+
+  query(q: string, args?: Record<string, unknown>): Promise<unknown> {
+    // the lookdev world is fabricated: nobody in it has a story to ask for
+    return this.sim.source === 'lookdev' ? Promise.resolve({ lookdev: true }) : this.sim.query(q, args ?? {});
+  }
+
+  primary(): number { return this.renderer.primaryId >= 0 ? this.renderer.primaryId : this.sim.view.planets[0]?.id ?? 0; }
+
+  cursorGround(): GroundHit | null {
+    const h = this.hover;
+    return h ? { planet: h.planet, dir: [h.dir[0], h.dir[1], h.dir[2]] as UnitVec, cell: h.cell } : null;
+  }
+
+  focusGround(): GroundHit | null {
+    const pv = this.sim.view.planet(this.primary());
+    if (!pv) return null;
+    let d: [number, number, number];
+    if (this.rig.mode === 'orbit' && this.rig.orbit.planet === pv.id) d = [...this.rig.orbit.focus] as [number, number, number];
+    else {
+      const p = this.rig.pose.pos;
+      d = qRotateInv(pv.quat, [p[0] - pv.center[0], p[1] - pv.center[1], p[2] - pv.center[2]]);
+      const l = Math.hypot(d[0], d[1], d[2]) || 1;
+      d = [d[0] / l, d[1] / l, d[2] / l];
+    }
+    return { planet: pv.id, dir: d, cell: pv.grid.nearestCell(d[0], d[1], d[2]) };
+  }
+
+  screenOf(planet: number, dir: ArrayLike<number>, lift = 0): [number, number] | null {
+    const pv = this.sim.view.planet(planet);
+    if (!pv || this.rig.mode === 'system') return null;
+    const l = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+    const r = this.sim.view.groundRadius(pv, dir[0] / l, dir[1] / l, dir[2] / l) + lift;
+    const b: [number, number, number] = [(dir[0] / l) * r, (dir[1] / l) * r, (dir[2] / l) * r];
+    // behind the planet from here: hidden
+    const cam = this.rig.pose.pos;
+    const cb = qRotateInv(pv.quat, [cam[0] - pv.center[0], cam[1] - pv.center[1], cam[2] - pv.center[2]]);
+    const toCam = [cb[0] - b[0], cb[1] - b[1], cb[2] - b[2]];
+    if ((toCam[0] * b[0] + toCam[1] * b[1] + toCam[2] * b[2]) / r < -0.2 * Math.hypot(toCam[0], toCam[1], toCam[2])) return null;
+    const s = qRotate(pv.quat, b);
+    const p = this.renderer.projectToScreen([pv.center[0] + s[0], pv.center[1] + s[1], pv.center[2] + s[2]], this.rig.pose, this.v2);
+    return p ? [p.x, p.y] : null;
+  }
+
+  groundAt(x: number, y: number): GroundHit | null {
+    const h = this.pickGround(x, y);
+    return h ? { planet: h.planet, dir: [h.dir[0], h.dir[1], h.dir[2]] as UnitVec, cell: h.cell } : null;
+  }
+
+  /** a press that began on a creature's silhouette: the hand takes that creature */
+  private forcedEntity: EntityRef | null = null;
+
+  entityAt(x: number, y: number): EntityRef | null {
+    if (this.forcedEntity) return this.forcedEntity;
+    const near = this.pickNear(x, y);
+    const e = this.pickEntity(x, y);
+    if (near && (!e || near.kind === 'creature')) return near;
+    return e ? { kind: e.kind, id: e.id, planet: e.planet } : near;
+  }
+
+  date(planet: number, tick: number): string {
+    const pv = this.sim.view.planet(planet);
+    if (!pv) return '';
+    const c = this.sim.view.calendar(pv, tick);
+    return `Y${c.year} · d${c.day}`;
+  }
+
+  toast(spec: ToastSpec): void { this.ui?.hud.toasts.show(spec); }
+
+  action(id: string): void { this.ui.action(id); }
+
+  selected(): InspectRef | null { return this.sel; }
+
   // ── selection, follow, look ──
 
   /** select a thing (opens the inspector and the marker), or null to let go */
-  select(ref: EntityRef | null): void {
-    this.selected = ref ? { kind: ref.kind, id: ref.id, planet: ref.planet ?? this.renderer.primaryId } : null;
+  select(ref: InspectRef | null): void {
+    this.sel = ref ? { ...ref, planet: ref.planet ?? this.renderer.primaryId } as InspectRef : null;
     if (this.following && (!ref || this.following.kind !== ref.kind || this.following.id !== ref.id)) this.following = null;
-    this.inspector.open(this.selected);
+    this.ui.selected(this.sel);
     this.selName = '';
+    if (ref) this.sound('ui.open');
   }
 
   /** keep the camera on a thing (null stops); an orbit camera is used, at its current distance */
@@ -473,6 +801,10 @@ export class App {
     }
   }
 
+  isFollowing(ref: EntityRef): boolean {
+    return !!this.following && this.following.kind === ref.kind && this.following.id === ref.id;
+  }
+
   private updateFollow(dt: number): void {
     const f = this.following!;
     const pv = this.sim.view.planet(f.planet ?? -1);
@@ -489,14 +821,15 @@ export class App {
 
   /**
    * Body-frame position (m) of a thing on a planet: where the life layer drew it this frame when it did, else from
-   * the snapshot blocks (on the ground).
+   * the snapshot (people, herds, buildings, settlements, creatures, disasters, weather, ships, a cell).
    */
-  entityBodyPos(pv: PlanetView, ref: EntityRef): [number, number, number] | null {
+  entityBodyPos(pv: PlanetView, ref: { kind: string; id: number }): [number, number, number] | null {
     const life = this.renderer.planets.get(pv.id)?.life;
-    const drawn = life?.positionOf(ref.kind, ref.id);
+    const drawn = ref.kind === 'agent' || ref.kind === 'animal' || ref.kind === 'building' ? life?.positionOf(ref.kind, ref.id) : null;
     if (drawn) return drawn;
     let u: ArrayLike<number> | null = null;
     let lift = 0;
+    const v = this.sim.view;
     if (ref.kind === 'settlement') {
       const s = pv.settlements.find((q) => q.id === ref.id);
       if (s) u = s.pos;
@@ -510,8 +843,7 @@ export class App {
         if (n) u = [x, y, z];
         lift = 2;
       }
-    }
-    else if (ref.kind === 'agent' || ref.kind === 'animal') {
+    } else if (ref.kind === 'agent' || ref.kind === 'animal') {
       const M = ref.kind === 'agent' ? pv.agents : pv.animals;
       if (M) for (let i = 0; i < M.count; i++) {
         if ((ref.kind === 'agent' ? M.id[i] : M.group[i]) !== ref.id) continue;
@@ -524,6 +856,21 @@ export class App {
     } else if (ref.kind === 'building') {
       const B = pv.buildings;
       if (B) for (let i = 0; i < B.count; i++) if (B.id[i] === ref.id) { u = [B.pos[i * 3], B.pos[i * 3 + 1], B.pos[i * 3 + 2]]; lift = 5; break; }
+    } else if (ref.kind === 'creature') {
+      const c = v.creatures.find((q) => q.id === ref.id && q.planet === pv.id);
+      if (c) { u = c.pos; lift = c.height * 0.6; }
+    } else if (ref.kind === 'disaster') {
+      const d = pv.disasters.find((q) => q.id === ref.id);
+      if (d) { u = d.pos; lift = 8 + Math.min(400, d.params.alt ?? 0); }
+    } else if (ref.kind === 'weather') {
+      const w = pv.weather.find((q) => q.id === ref.id);
+      if (w) { u = w.pos; lift = 260; }
+    } else if (ref.kind === 'ship') {
+      const s = v.ships.find((q) => q.id === ref.id && q.planet === pv.id);
+      if (s) { u = s.pos; lift = 4 + s.alt; }
+    } else if (ref.kind === 'cell') {
+      const P = pv.grid.pos;
+      if (ref.id >= 0 && ref.id < pv.grid.count) { u = [P[ref.id * 3], P[ref.id * 3 + 1], P[ref.id * 3 + 2]]; lift = 2; }
     }
     if (!u) return null;
     const l = Math.hypot(u[0], u[1], u[2]) || 1;
@@ -546,18 +893,65 @@ export class App {
   }
 
   lookAtEntity(ref: EntityRef): void {
+    if (ref.kind === 'planet') { this.flyTo(ref.id); return; }
     const pv = this.sim.view.planet(ref.planet ?? this.renderer.primaryId);
     const b = pv ? this.entityBodyPos(pv, ref) : null;
     if (!pv || !b) return;
-    this.lookAt(pv.id, b, ref.kind === 'settlement' ? 240 : ref.kind === 'building' ? 70 : 28);
+    const d = ref.kind === 'settlement' ? 240 : ref.kind === 'building' ? 70 : ref.kind === 'disaster' || ref.kind === 'weather' ? 900 : ref.kind === 'creature' ? 60 : 28;
+    this.lookAt(pv.id, b, d);
+    this.frameBesideInspector(pv, d);
+  }
+
+  /**
+   * With the inspector open on the right, the thing looked at belongs in the middle of what is left of the screen:
+   * move the orbit's focus to the right (along the camera's own right at the end of the move) by half the card's
+   * width in metres at that distance, so the thing sits left of centre, in the open.
+   */
+  private frameBesideInspector(pv: PlanetView, dist: number): void {
+    const insp = this.ui.inspector;
+    if (!insp.isOpen) return;
+    const r = insp.root.getBoundingClientRect();
+    const W = window.innerWidth, H = window.innerHeight;
+    if (r.width < 40 || r.left > W) return;
+    const shiftPx = (W - r.left + 18) / 2;
+    const o = this.rig.orbit;
+    const f = o.focus;
+    // the camera's right at the focus, as the orbit camera builds it (east · cos h − north · sin h)
+    const fl = Math.hypot(f[0], f[1], f[2]) || 1;
+    const up: [number, number, number] = [f[0] / fl, f[1] / fl, f[2] / fl];
+    const east: [number, number, number] = [0, 0, 0], north: [number, number, number] = [0, 0, 0];
+    tangentBasis(east, north, up);
+    const hd = o.heading ?? 0;
+    const right = [east[0] * Math.cos(hd) - north[0] * Math.sin(hd), east[1] * Math.cos(hd) - north[1] * Math.sin(hd), east[2] * Math.cos(hd) - north[2] * Math.sin(hd)];
+    const fov = (this.rig.pose.fov * Math.PI) / 180;
+    const metres = (shiftPx / (H / 2)) * Math.tan(fov / 2) * dist;
+    const ang = metres / pv.params.radius;
+    const nf = [up[0] + right[0] * ang, up[1] + right[1] * ang, up[2] + right[2] * ang];
+    const nl = Math.hypot(nf[0], nf[1], nf[2]) || 1;
+    o.focus = [nf[0] / nl, nf[1] / nl, nf[2] / nl];
+  }
+
+  /** the hand's hover: a ring over the person (or herd, building, creature) it would take */
+  private updateHoverRing(): void {
+    const el = this.hoverEl;
+    if (!el) return;
+    const ref = this.ui.hand.hoverRef;
+    const pv = ref ? this.sim.view.planet(ref.planet ?? this.renderer.primaryId) : undefined;
+    const b = ref && pv && this.rig.mode !== 'system' && !(this.sel && this.sel.kind === ref.kind && this.sel.id === ref.id) ? this.entityBodyPos(pv, ref) : null;
+    if (!ref || !pv || !b) { el.hidden = true; return; }
+    const s = qRotate(pv.quat, b);
+    const p = this.renderer.projectToScreen([pv.center[0] + s[0], pv.center[1] + s[1], pv.center[2] + s[2]], this.rig.pose, this.v2);
+    if (!p) { el.hidden = true; return; }
+    el.hidden = false;
+    el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -50%)`;
   }
 
   /** the marker over the selected thing: projected every frame; hidden when off screen or not placeable */
   private updateMarker(): void {
     const el = this.selEl;
     if (!el) return;
-    const ref = this.selected;
-    const pv = ref ? this.sim.view.planet(ref.planet ?? -1) : undefined;
+    const ref = this.sel;
+    const pv = ref && ref.kind !== 'species' && ref.kind !== 'planet' ? this.sim.view.planet(ref.planet ?? -1) : undefined;
     const b = ref && pv && this.rig.mode !== 'system' ? this.entityBodyPos(pv, ref) : null;
     if (!ref || !pv || !b) { el.hidden = true; return; }
     const s = qRotate(pv.quat, b);
@@ -565,7 +959,7 @@ export class App {
     if (!p || p.x < -40 || p.y < -40 || p.x > window.innerWidth + 40 || p.y > window.innerHeight + 40) { el.hidden = true; return; }
     el.hidden = false;
     el.style.transform = `translate(${p.x.toFixed(1)}px, ${(p.y - 6).toFixed(1)}px) translate(-50%, -100%)`;
-    const nameEl = this.inspector.root.querySelector('.gn-insp-name');
+    const nameEl = this.ui.inspector.root.querySelector('.gn-insp-name');
     const name = nameEl?.textContent && nameEl.textContent !== '…' ? nameEl.textContent : '';
     if (name !== this.selName) { this.selName = name; (el.firstElementChild as HTMLElement).textContent = name; }
   }
@@ -573,40 +967,27 @@ export class App {
   /**
    * Tell the sim where the camera dwells (a logged `focus` command, so determinism holds): it is the default place for
    * commands given without one ("rain here") and, later, where cohorts are promoted to individuals. At most every
-   * 2.5 s, and only when the point moved more than ~1° or the world changed.
+   * 2.5 s, and only when the point moved more than ~1° or the world changed. While the "do this" field is open its
+   * "here" (the cursor point) is the focus instead.
    */
   private sendFocus(now: number): void {
-    if (now - this.focusSentAt < 2500 || !this.sim.backend) return;
+    if (now - this.focusSentAt < 2500 || !this.sim.backend || this.ui.freeform.isOpen) return;
     const mode = this.rig.mode;
     if (mode === 'system') return;
-    const pv = this.sim.view.planet(this.rig.pose.planet >= 0 ? this.rig.pose.planet : this.renderer.primaryId);
-    if (!pv) return;
-    let d: [number, number, number];
-    if (mode === 'orbit' && this.rig.orbit.planet === pv.id) {
-      const f = this.rig.orbit.focus;
-      d = [f[0], f[1], f[2]];
-    } else {
-      const p = this.rig.pose.pos;
-      d = rotate([-pv.quat[0], -pv.quat[1], -pv.quat[2], pv.quat[3]], [p[0] - pv.center[0], p[1] - pv.center[1], p[2] - pv.center[2]]);
-      const l = Math.hypot(d[0], d[1], d[2]) || 1;
-      d = [d[0] / l, d[1] / l, d[2] / l];
-    }
+    const g = this.focusGround();
+    if (!g) return;
+    const d = g.dir;
     const last = this.focusSent;
-    if (last && this.focusPlanet === pv.id && last[0] * d[0] + last[1] * d[1] + last[2] * d[2] > Math.cos(0.0175)) return;
+    if (last && this.focusPlanet === g.planet && last[0] * d[0] + last[1] * d[1] + last[2] * d[2] > Math.cos(0.0175)) return;
     this.focusSentAt = now;
-    this.focusSent = d;
-    this.focusPlanet = pv.id;
-    void this.sim.cmd({ k: 'focus', planet: pv.id, pos: d });
+    this.focusSent = [d[0], d[1], d[2]];
+    this.focusPlanet = g.planet;
+    void this.sim.cmd({ k: 'focus', planet: g.planet, pos: d });
   }
 
   // ── actions (HUD, keys, test surface) ──
 
   setSpeed(x: number): void { this.sim.setSpeed(Math.max(0, x)); }
-  private stepSpeed(d: number): void {
-    const presets = [0, 1, 10, 100, 1000];
-    const i = presets.indexOf(this.sim.view.speed);
-    this.setSpeed(presets[Math.max(0, Math.min(presets.length - 1, (i < 0 ? 1 : i) + d))]);
-  }
   async step(ticks: number): Promise<number> {
     const t = await this.sim.step(ticks);
     this.freshAfter = performance.now();
@@ -621,13 +1002,6 @@ export class App {
     if (this.sim.view.snapAt > this.freshAfter) return;
     // ask now and wait for that answer (not for frames: a software-rendered frame can take longer than the timeout)
     await Promise.race([this.sim.fresh(), new Promise<void>((ok) => setTimeout(ok, timeoutMs))]);
-  }
-  /** run a command; what it did (or why not) is a toast, except for the camera's own bookkeeping */
-  async cmd(c: Command): Promise<CommandResult> {
-    const r = await this.sim.cmd(c);
-    if (c.k !== 'focus') this.freshAfter = performance.now();
-    if (c.k !== 'focus' && !c.k.startsWith('time.') && r.msg && r.msg !== 'queued for the next tick') this.hud.toast(r.msg, r.ok ? 5200 : 6500, r.ok ? 'info' : 'warn');
-    return r;
   }
 
   flyTo(planet: number): void {
@@ -668,14 +1042,50 @@ export class App {
 
   setUi(v: boolean): void {
     this.uiVisible = v;
-    this.hud.setVisible(v);
+    this.ui?.hud.setVisible(v);
     // clean frames (trailer stills, photo mode, __GENESIS__.ui(false)) hide the ForgeFlow portal bar too (styles.css)
     document.body.classList.toggle('genesis-clean', !v);
   }
 
   setQuality(name: QualityName): void {
-    this.quality = name;
-    this.renderer.setQuality(name);
+    this.opts.quality = name;
+    this.applyGraphics();
+  }
+
+  // ── saves (the worker's save / load) ──
+
+  private async saveBytes(): Promise<ArrayBuffer | null> {
+    if (this.sim.source !== 'worker') return null;
+    return this.sim.save();
+  }
+
+  private async loadBytes(bytes: ArrayBuffer): Promise<{ ok: boolean; msg?: string }> {
+    if (this.sim.source !== 'worker') return { ok: false, msg: 'the lookdev world cannot load a save' };
+    const r = await this.sim.load(bytes);
+    if (r.ok) {
+      this.sim.requestFull();
+      this.select(null);
+      this.following = null;
+      void this.loadPowers();
+    }
+    return r;
+  }
+
+  /** a small picture of the view for a save slot */
+  private async thumb(): Promise<string | null> {
+    const url = await Promise.race([this.capture(), new Promise<string>((ok) => setTimeout(() => ok(''), 8000))]);
+    if (!url) return null;
+    return new Promise((ok) => {
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = 256; c.height = Math.round(256 * img.height / Math.max(1, img.width));
+        c.getContext('2d')?.drawImage(img, 0, 0, c.width, c.height);
+        ok(c.toDataURL('image/jpeg', 0.8));
+      };
+      img.onerror = () => ok(null);
+      img.src = url;
+    });
   }
 
   /** resolve when `n` more frames have been rendered */
@@ -867,7 +1277,9 @@ export class App {
         era: p.settlements[0]?.era ?? null, calendar: v.calendar(p),
       })),
       hover: this.hover,
-      selected: this.selected, following: this.following,
+      selected: this.sel, following: this.following,
+      ui: this.ui?.state() ?? null,
+      audio: this.audio ? (() => { try { const s = this.audio!.state(); return { running: s.running, voices: s.voices }; } catch { return null; } })() : null,
       life: (() => {
         const l = this.renderer.planets.get(this.renderer.primaryId)?.life;
         return l ? { people: l.crowds.stats.agents, ambient: l.crowds.stats.ambient, animals: l.animals.stats.drawn, buildings: l.buildings.stats.instances, pendingVariants: l.buildings.stats.pendingVariants, roads: l.roads.stats.chains } : null;
@@ -894,6 +1306,7 @@ export class App {
   stop(): void {
     this.running = false;
     cancelAnimationFrame(this.raf);
+    this.audio?.dispose();
   }
 }
 

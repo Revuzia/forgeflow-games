@@ -11,10 +11,14 @@
 //     same thing; chronicle entries that no event claimed are shown when they matter (weight ≥ 2, or a first
 //     building / first child: the milestones of a young settlement).
 // A toast with a place is a button: clicking it flies the camera there. At most five are shown; a flood (1000×)
-// collapses into a "+N more" line rather than scrolling the screen. Plain DOM; styles in styles.css (.gn-toast*).
+// collapses into a "+N more" line rather than scrolling the screen. A toast may carry one action (the "Undo" offered
+// after a cast that killed many). Words for people: coordinates become the nearest town ("near Aru"), minutes become
+// hours, and a line that starts "Year 4." loses it when the header already dates it — and the header's date is the
+// chronicle entry's own. Plain DOM; styles in styles.css (.gn-toast*).
 
-import type { ChronicleEntry, SimEvent, UnitVec } from '../sim/types.ts';
+import type { ChronicleEntry, EntityRef, SimEvent, UnitVec } from '../sim/types.ts';
 import type { WorldView } from '../client/worldview.ts';
+import { stripYear } from './words.ts';
 
 export type ToastKind = 'discovery' | 'birth' | 'death' | 'founding' | 'refusal' | 'loss' | 'fall' | 'plague' | 'god' | 'nature' | 'war' | 'peace' | 'info' | 'warn';
 
@@ -25,13 +29,25 @@ export interface ToastSpec {
   text: string;
   /** a place to fly to when the toast is clicked */
   at?: { planet: number; pos: UnitVec } | null;
+  /** a thing to select (inspect) when the toast is clicked: a disaster, a creature, a ship */
+  select?: EntityRef | null;
   /** date line ("Year 2 · day 7") */
   date?: string;
   ms?: number;
+  /** one action button on the toast ("Undo") */
+  action?: ToastAction | null;
+  /** the sim tick the news is from (a rewind past it takes the toast back); news from the sim is stamped by itself */
+  tick?: number;
+  /** the world the news is about (coordinates in the text are named by its towns) */
+  planet?: number;
 }
+
+export interface ToastAction { label: string; title?: string; run(): void }
 
 export interface ToastActions {
   lookAt(planet: number, pos: UnitVec): void;
+  /** select (inspect) a thing a toast names */
+  select?(ref: EntityRef): void;
 }
 
 const ICONS: Record<ToastKind, string> = {
@@ -54,7 +70,8 @@ const ICONS: Record<ToastKind, string> = {
 const BURST_MS = 3200;
 /** what stays on screen when too much happens at once: losses and refusals over discoveries over births and weather */
 const PRIORITY: Partial<Record<ToastKind, number>> = {
-  loss: 3, fall: 3, war: 3, refusal: 3, plague: 3, warn: 3, discovery: 2, founding: 2, peace: 2, god: 2, birth: 1, death: 1, info: 1, nature: 0,
+  // the answer to what the player just did (god, warn) outranks any news
+  god: 4, warn: 4, loss: 3, fall: 3, war: 3, refusal: 3, plague: 3, discovery: 2, founding: 2, peace: 2, birth: 1, death: 1, info: 1, nature: 0,
 };
 const MAX_SHOWN = 4;
 
@@ -93,18 +110,27 @@ function lower(s: string): string {
 
 export class Toasts {
   readonly root: HTMLDivElement;
-  private actions: ToastActions;
+  readonly actions: ToastActions;
   private chronicleSeen = 0;
   /** chronicle entries not yet shown or claimed, kept for a moment so an event of the same tick can claim them */
   private pendingChron: { e: ChronicleEntry; at: number }[] = [];
+  /** the tick of the event or entry being shown from pump() (stamps its toast) */
+  private curTick: number | null = null;
+  /** after an undo: news from past this tick that was already on its way is dropped until the rewind arrives */
+  private forgetTick = -1;
+  private forgetUntil = 0;
   private bursts = new Map<string, Burst>();
   private recent: number[] = [];
+  /** toasts on screen by their words (repeats count up instead of stacking) */
+  private showing = new Map<string, { box: HTMLElement; n: number; countEl: HTMLElement; ms: number; timer: ReturnType<typeof setTimeout> }>();
   private overflow = 0;
   private overflowEl: HTMLDivElement | null = null;
   /** muted while the boot / a load replays history */
   enabled = true;
   /** lifetime of news toasts (ms); screenshots of a software-rendered page raise it (__GENESIS__.toastLife) */
   life = 7800;
+  /** words for people (the shell's: coordinates → places, minutes → hours) */
+  words: ((text: string, planet: number | undefined) => string) | null = null;
 
   constructor(parent: HTMLElement, actions: ToastActions) {
     this.actions = actions;
@@ -117,17 +143,41 @@ export class Toasts {
   /** show one toast now */
   show(t: ToastSpec): void {
     const now = performance.now();
-    // a flood: more than 6 in 2 s → count the rest into one line
-    this.recent = this.recent.filter((x) => now - x < 2000);
-    if (this.recent.length >= 6) { this.bumpOverflow(); return; }
-    this.recent.push(now);
+    const planet = t.planet ?? t.at?.planet ?? t.select?.planet;
+    let words = this.words ? this.words(t.text, planet) : t.text;
+    if (t.date) words = stripYear(words);
+    t = { ...t, text: words };
+    // the same words again while the first is still up (a brush stroke's dabs, a held key): one toast that counts
+    const key = `${t.kind ?? 'info'}|${t.title ?? ''}|${t.text}`;
+    const same = this.showing.get(key);
+    if (same && same.box.isConnected && !same.box.classList.contains('gn-out')) {
+      same.n++;
+      same.countEl.textContent = `×${same.n}`;
+      same.countEl.hidden = false;
+      clearTimeout(same.timer);
+      same.timer = this.expire(same.box, same.ms, key);
+      return;
+    }
     const kind = t.kind ?? 'info';
-    const box = el(t.at ? 'button' : 'div', `gn-panel gn-toast gn-t-${kind}`) as HTMLElement;
-    if (t.at) {
-      (box as HTMLButtonElement).type = 'button';
-      box.title = 'Look there';
-      const at = t.at;
-      box.addEventListener('click', () => this.actions.lookAt(at.planet, at.pos));
+    // a flood of news: more than 6 in 2 s → count the rest into one line (the answer to the player's own act always shows)
+    const own = kind === 'god' || kind === 'warn' || kind === 'info';
+    this.recent = this.recent.filter((x) => now - x < 2000);
+    if (!own && this.recent.length >= 6) { this.bumpOverflow(); return; }
+    if (!own) this.recent.push(now);
+    const clickable = !!t.at || (!!t.select && !!this.actions.select);
+    // a clickable toast is a div with a button's role (it may hold its own action button: buttons do not nest)
+    const box = el('div', `gn-panel gn-toast gn-t-${kind}${clickable ? ' gn-toast-go' : ''}`) as HTMLElement;
+    if (clickable) {
+      box.setAttribute('role', 'button');
+      box.tabIndex = 0;
+      box.title = t.select ? 'Inspect' : 'Look there';
+      const at = t.at, sel = t.select;
+      const go = () => {
+        if (sel && this.actions.select) this.actions.select(sel);
+        if (at) this.actions.lookAt(at.planet, at.pos);
+      };
+      box.addEventListener('click', go);
+      box.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
     }
     const icon = el('span', 'gn-t-icon');
     icon.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true">${ICONS[kind]}</svg>`;
@@ -142,13 +192,37 @@ export class Toasts {
     }
     const tx = el('div', 'gn-t-text');
     tx.textContent = t.text;
+    const countEl = el('span', 'gn-t-count');
+    countEl.hidden = true;
+    tx.appendChild(countEl);
     body.appendChild(tx);
+    if (t.action) {
+      const a = t.action;
+      const b = el('button', 'gn-btn gn-t-act');
+      b.type = 'button';
+      b.textContent = a.label;
+      if (a.title) b.title = a.title;
+      b.addEventListener('click', (e) => { e.stopPropagation(); b.disabled = true; a.run(); box.classList.add('gn-out'); setTimeout(() => box.remove(), 520); });
+      body.appendChild(b);
+    }
     box.append(icon, body);
     box.dataset.pri = String(PRIORITY[kind] ?? 1);
+    const tk = t.tick ?? this.curTick;
+    if (tk !== null && tk !== undefined) box.dataset.tick = String(tk);
     this.root.appendChild(box);
     this.trim();
-    const ms = Math.max(t.ms ?? (kind === 'info' || kind === 'warn' ? 5200 : this.life), this.life > 7800 ? this.life : 0);
-    setTimeout(() => { box.classList.add('gn-out'); setTimeout(() => box.remove(), 520); }, ms);
+    // an action needs time to be taken
+    const ms = Math.max(t.ms ?? (kind === 'info' || kind === 'warn' ? 5200 : this.life), this.life > 7800 ? this.life : 0, t.action ? 12000 : 0);
+    this.showing.set(key, { box, n: 1, countEl, ms, timer: this.expire(box, ms, key) });
+  }
+
+  /** fade a toast out after ms */
+  private expire(box: HTMLElement, ms: number, key: string): ReturnType<typeof setTimeout> {
+    return setTimeout(() => {
+      box.classList.add('gn-out');
+      setTimeout(() => box.remove(), 520);
+      if (this.showing.get(key)?.box === box) this.showing.delete(key);
+    }, ms);
   }
 
   private bumpOverflow(): void {
@@ -188,7 +262,14 @@ export class Toasts {
     for (let i = this.chronicleSeen; i < view.chronicle.length; i++) this.pendingChron.push({ e: view.chronicle[i], at: now });
     this.chronicleSeen = view.chronicle.length;
     if (!this.enabled) { this.pendingChron.length = 0; this.bursts.clear(); return; }
-    for (const e of evs) this.onEvent(view, e, now);
+    if (this.forgetTick >= 0 && now > this.forgetUntil) this.forgetTick = -1;
+    for (const e of evs) {
+      // the world ran back: what was told of the undone time is taken back (its toasts, its news still waiting)
+      if (e.t === 'rewind') { this.dropAfter(typeof e.a === 'number' ? e.a : e.tick); this.forgetTick = -1; }
+      else if (this.forgetTick >= 0 && e.tick > this.forgetTick) continue;
+      this.curTick = e.tick;
+      try { this.onEvent(view, e, now); } finally { this.curTick = null; }
+    }
     // bursts whose window closed
     for (const [k, b] of this.bursts) if (now - b.at > BURST_MS) { this.bursts.delete(k); this.flushBurst(view, b); }
     // chronicle entries nobody claimed within ~half a second: the milestones are toasts of their own
@@ -199,8 +280,30 @@ export class Toasts {
       const e = c.e;
       const milestone = e.weight >= 2 || (e.kind === 'founding' && e.weight >= 1);
       if (!milestone || e.kind === 'death') continue;
-      this.show({ kind: kindOfChronicle(e.kind), title: titleOfChronicle(e.kind, view, e.planet), text: e.text, date: `Year ${e.year} · day ${e.day}`, at: this.placeOf(view, e) });
+      if (this.forgetTick >= 0 && e.tick > this.forgetTick) continue;
+      this.show({ tick: e.tick, kind: kindOfChronicle(e.kind), title: titleOfChronicle(e.kind, view, e.planet), text: e.text, date: `Year ${e.year} · day ${e.day}`, at: this.placeOf(view, e), planet: e.planet });
     }
+  }
+
+  /**
+   * An undo: the world goes back to `tick`. The news of the time after it is taken back — the toasts on screen from
+   * it, and what is still on its way (until the rewind itself arrives, or a few seconds).
+   */
+  forget(tick: number): void {
+    this.forgetTick = tick;
+    this.forgetUntil = performance.now() + 4000;
+    this.dropAfter(tick);
+  }
+
+  private dropAfter(tick: number): void {
+    this.pendingChron = this.pendingChron.filter((c) => c.e.tick <= tick);
+    for (const c of Array.from(this.root.children) as HTMLElement[]) {
+      const tk = c.dataset.tick;
+      if (tk === undefined || Number(tk) <= tick || c.classList.contains('gn-out')) continue;
+      c.classList.add('gn-out');
+      setTimeout(() => c.remove(), 520);
+    }
+    for (const [k, v] of this.showing) if (!v.box.isConnected || v.box.classList.contains('gn-out')) this.showing.delete(k);
   }
 
   /** the chronicle entry written at this tick about this thing (removed from the pending list) */
@@ -276,22 +379,22 @@ export class Toasts {
         const last = this.lastDiscovery.get(`${planet}:${sid}`) ?? -1e9;
         if (now - last < BURST_MS) { this.burst(planet, sid, e, now).discoveries.push(what); return; }
         this.lastDiscovery.set(`${planet}:${sid}`, now);
-        this.show({ kind: 'discovery', title: `Discovery · ${place}`, text: c ? c.text : `${where} learned ${what}${HOW[String(data.how)] ?? ''}.`, date, at });
+        this.show({ kind: 'discovery', title: `Discovery · ${place}`, text: c ? c.text : `${where} learned ${what}${HOW[String(data.how)] ?? ''}.`, date: dateFrom(c, date), at });
         return;
       }
       case 'settlement.founded': {
         const c = this.claim(e.tick, (q) => (q.kind === 'founding' || q.kind === 'diaspora') && mentions(q.text, e.text ?? where));
-        this.show({ kind: 'founding', title: `Founded · ${e.text ?? where}`, text: c ? c.text : `${e.text ?? 'A new settlement'} was founded.`, date, at });
+        this.show({ kind: 'founding', title: `Founded · ${e.text ?? where}`, text: c ? c.text : `${e.text ?? 'A new settlement'} was founded.`, date: dateFrom(c, date), at });
         return;
       }
       case 'settlement.split': {
         const c = this.claim(e.tick, (q) => (q.kind === 'diaspora' || q.kind === 'founding' || q.kind === 'split') && mentions(q.text, where));
-        this.show({ kind: 'founding', title: `Split · ${place}`, text: c ? c.text : `${e.a ?? 'Some'} people left ${where} to found a new home.`, date, at });
+        this.show({ kind: 'founding', title: `Split · ${place}`, text: c ? c.text : `${e.a ?? 'Some'} people left ${where} to found a new home.`, date: dateFrom(c, date), at });
         return;
       }
       case 'settlement.fallen': {
         const c = this.claim(e.tick, (q) => (q.kind === 'fall' || q.kind === 'diaspora') && mentions(q.text, e.text ?? where));
-        this.show({ kind: 'fall', title: `Fallen · ${e.text ?? where}`, text: c ? c.text : `${e.text ?? where} has fallen${data.cause ? ` (${String(data.cause)})` : ''}.`, date, at });
+        this.show({ kind: 'fall', title: `Fallen · ${e.text ?? where}`, text: c ? c.text : `${e.text ?? where} has fallen${data.cause ? ` (${String(data.cause)})` : ''}.`, date: dateFrom(c, date), at });
         return;
       }
       case 'refusal': {
@@ -301,17 +404,45 @@ export class Toasts {
         const rk = `${planet}:${what}:${String(data.reason ?? '')}`;
         if (now - (this.lastRefusal.get(rk) ?? -1e9) < BURST_MS) return;
         this.lastRefusal.set(rk, now);
-        this.show({ kind: 'refusal', title: `Refused · ${where === 'a band' ? 'the god\'s gift' : place}`, text: c ? c.text : `They refused ${what}: ${String(data.reason ?? e.text ?? 'they would not')}.`, date, at });
+        this.show({ kind: 'refusal', title: `Refused · ${where === 'a band' ? 'the god\'s gift' : place}`, text: c ? c.text : `They refused ${what}: ${String(data.reason ?? e.text ?? 'they would not')}.`, date: dateFrom(c, date), at });
         return;
       }
       case 'loss': {
         const c = this.claim(e.tick, (q) => (q.kind === 'loss' || q.kind === 'god') && mentions(q.text, lower(e.text ?? '')));
-        this.show({ kind: 'loss', title: `Lost · ${place}`, text: c ? c.text : `${where} lost ${lower(e.text ?? 'something')}.`, date, at });
+        this.show({ kind: 'loss', title: `Lost · ${place}`, text: c ? c.text : `${where} lost ${lower(e.text ?? 'something')}.`, date: dateFrom(c, date), at });
         return;
       }
       case 'plague': {
         const c = this.claim(e.tick, (q) => q.kind === 'plague' && mentions(q.text, lower(e.text ?? '')));
-        this.show({ kind: 'plague', title: `Plague · ${place}`, text: c ? c.text : `${e.text ?? 'A sickness'} broke out in ${where}.`, date, at });
+        this.show({ kind: 'plague', title: `Plague · ${place}`, text: c ? c.text : `${e.text ?? 'A sickness'} broke out in ${where}.`, date: dateFrom(c, date), at });
+        return;
+      }
+      case 'milestone': {
+        // the worlds' firsts (air, the first rain, the first sea, green, people, fire, night): the god's own news
+        const c = this.claim(e.tick, (q) => q.kind === 'god' || q.kind === 'world' || q.kind === 'milestone');
+        this.show({ kind: 'god', title: `${titleOfChronicle('world', view, planet).replace('The worlds', 'A first')}`, text: c ? c.text : e.text ?? 'Something new under the sun.', date: dateFrom(c, date), at, planet });
+        return;
+      }
+      case 'disaster': {
+        // nature's (or a rival's) disasters announce themselves; the god's own are answered by the command's toast
+        const god = typeof data.god === 'number' ? data.god : -1;
+        if (god === 0) return;
+        const ref = e.ref ? { ...e.ref, planet } : null;
+        const c = this.claim(e.tick, (q) => q.kind === 'disaster');
+        this.show({ kind: 'warn', title: `${god > 0 ? 'A rival\'s wrath' : 'Nature'} · ${view.planet(planet)?.name ?? ''}`, text: c ? c.text : `${e.text ?? 'A disaster'} has begun${god > 0 ? ', sent by a rival god' : ''}. Click to see it.`, date: dateFrom(c, date), at, select: ref, planet });
+        return;
+      }
+      case 'creature.learned': {
+        const ref = e.ref ? { ...e.ref, planet } : null;
+        this.show({ kind: 'god', title: 'The creature learns', text: `It watched your hand and learned the ${String(data.miracle ?? e.text ?? 'miracle')} miracle.`, date, at, select: ref });
+        return;
+      }
+      case 'rival.act': {
+        const name = typeof data.name === 'string' ? data.name : 'A rival god';
+        const rk = `rival:${name}:${String(data.k ?? '')}`;
+        if (now - (this.lastRefusal.get(rk) ?? -1e9) < BURST_MS * 4) return;
+        this.lastRefusal.set(rk, now);
+        this.show({ kind: 'god', title: `${name} acts`, text: e.text ?? `${name} worked a wonder for their faithful.`, date, at });
         return;
       }
       default:
@@ -368,6 +499,11 @@ const HOW: Record<string, string> = {
   god: ', a gift of the god', experiment: ' by trying', accident: ' by chance', observation: ' by watching others', taught: ', taught by a master',
   artifact: ' from a strange thing they found',
 };
+
+/** a toast's date: the chronicle entry's own when one tells the story (its world's calendar), else the event's */
+function dateFrom(c: ChronicleEntry | null, fallback: string | undefined): string | undefined {
+  return c ? `Year ${c.year} · day ${c.day}` : fallback;
+}
 
 function dateOf(view: WorldView, planet: number, tick: number): string | undefined {
   const pv = view.planet(planet);

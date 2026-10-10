@@ -106,6 +106,8 @@ class WorkerBackend implements SimBackend {
   parse(text: string): Promise<CommandResult> { return this.call<CommandResult>((id) => ({ type: 'parse', id, text })); }
   query(q: string, args?: Record<string, unknown>): Promise<unknown> { return this.call<unknown>((id) => ({ type: 'query', id, q, args })); }
   save(): Promise<ArrayBuffer> { return this.call<ArrayBuffer>((id) => ({ type: 'save', id })); }
+  // additive (UI lane, saves panel): restore a saved world in this worker; the ArrayBuffer is transferred
+  load(data: ArrayBuffer): Promise<{ ok: boolean; msg?: string }> { return this.call<{ ok: boolean; msg?: string }>((id) => ({ type: 'load', id, data }), [data]); }
   dispose(): void {
     for (const p of this.pending.values()) p.fail(new Error('sim worker terminated'));
     this.pending.clear();
@@ -247,6 +249,18 @@ export class SimClient {
   }
   query(q: string, args?: Record<string, unknown>): Promise<unknown> {
     return this.backend ? this.backend.query(q, args) : Promise.resolve(null);
+  }
+  // additive (UI lane, saves panel): the world's save bytes, and a saved world restored (worker backend only)
+  save(): Promise<ArrayBuffer | null> {
+    const b = this.backend;
+    return b instanceof WorkerBackend ? b.save() : Promise.resolve(null);
+  }
+  async load(data: ArrayBuffer): Promise<{ ok: boolean; msg?: string }> {
+    const b = this.backend;
+    if (!(b instanceof WorkerBackend)) return { ok: false, msg: 'only the living simulation can load a save' };
+    const r = await b.load(data);
+    if (r.ok) { this.requestFull(); this.inFlight = false; this.lastRequest = -1e9; }
+    return r;
   }
   dispose(): void { this.backend?.dispose(); this.backend = null; }
 }

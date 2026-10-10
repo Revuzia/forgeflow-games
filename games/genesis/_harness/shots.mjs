@@ -22,6 +22,8 @@
 // one page, so a sequence of shots follows one world through time.
 // chronicle?: true | N — after the shot, print the world's chronicle (all, or the last N entries) and save it as
 // _shots/<name>.chronicle.txt.
+// script?: string | string[] — JS run in the page (async; G = __GENESIS__, vars) after camera / select / click, e.g.
+// "await G.ui_.open('palette', { query: 'rain' })" — drives the UI for a shot; its return value is printed.
 // pick?: "agent:settlement:<id>" — before the camera, keep a living member of that settlement (the first the sim lists)
 // as "$agent", e.g. camera { target: { kind: "agent", id: "$agent" } } and select { kind: "agent", id: "$agent" }.
 // Starts `vite` on port 5190 (GENESIS_FROZEN=1: no HMR, so edits elsewhere never reload a page mid-shot) unless one
@@ -37,7 +39,9 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SHOTS = resolve(ROOT, '_shots');
-const PORT = 5190;
+// port: --port=N (or GENESIS_PORT); 5190 by default. Lanes working in parallel each use their own (UI 5193, audio 5194,
+// visual fixes 5196–5198), so their dev servers and captures never share a page.
+const PORT = Number((process.argv.find((a) => a.startsWith('--port=')) ?? '').slice(7) || process.env.GENESIS_PORT || 5190);
 const BASE = `http://localhost:${PORT}/`;
 
 function loadPlaywright() {
@@ -245,6 +249,13 @@ async function main() {
           if (!xy) { const l = String(spec.click).startsWith('building') ? G.buildings(1) : G.agents(1); xy = l[0]?.screen ?? null; }
           if (xy) { G.click(xy[0], xy[1]); clicked = { at: xy, selected: G.state().selected }; }
         }
+        // script?: a string of JS run in the page as an async function (G = window.__GENESIS__, vars) after the camera,
+        // select and click: drives the UI for a shot (open the palette, type, arm a tool, open a panel...)
+        let scripted = null;
+        if (spec.script) {
+          const AsyncFunction = Object.getPrototypeOf(async function () { /* */ }).constructor;
+          scripted = await new AsyncFunction('G', 'vars', Array.isArray(spec.script) ? spec.script.join('\n') : spec.script)(G, vars);
+        }
         const t = performance.now();
         await G.frames(spec.frames ?? 6);
         const ms = (performance.now() - t) / Math.max(1, spec.frames ?? 6);
@@ -256,7 +267,7 @@ async function main() {
           const all = (await G.query('chronicle', {})) ?? [];
           chronicle = (typeof spec.chronicle === 'number' ? all.slice(-spec.chronicle) : all).map((e) => `[${e.kind}] Year ${e.year}, day ${e.day}: ${e.text}`);
         }
-        return { path, msPerFrame: ms, results, ran, clicked, chronicle, state: { tick: st.tick, camera: st.camera, render: st.render, source: st.source, life: st.life, selected: st.selected, planets: st.planets } };
+        return { path, msPerFrame: ms, results, ran, clicked, chronicle, scripted, state: { tick: st.tick, camera: st.camera, render: st.render, source: st.source, life: st.life, selected: st.selected, planets: st.planets } };
       }, s);
       let file = result.path;
       if (!s.canvasOnly) {
@@ -267,6 +278,7 @@ async function main() {
       report.shots.push({ name: s.name, file, url, ms: Date.now() - t0, msPerFrame: Math.round(result.msPerFrame), tick: result.state.tick, commands: result.results, render: result.state.render, camera: result.state.camera, life: result.state.life, selected: result.state.selected, planets: result.state.planets, errors: newErrors });
       if (result.state.life) console.log(`  life: ${JSON.stringify(result.state.life)}${result.state.selected ? ` · selected ${JSON.stringify(result.state.selected)}` : ''}`);
       if (result.clicked) console.log(`  clicked ${JSON.stringify(result.clicked.at.map((v) => Math.round(v)))} → selected ${JSON.stringify(result.clicked.selected)}`);
+      if (result.scripted != null) console.log(`  script → ${JSON.stringify(result.scripted).slice(0, 400)}`);
       if (result.ran) console.log(`  ran ${result.ran.seconds} s at ${result.ran.speed}×: ${result.ran.ticks} ticks, achieved ×${Number(result.ran.achievedSpeed).toFixed(1)}`);
       report.shots[report.shots.length - 1].ran = result.ran;
       for (const r of result.results) console.log(`  cmd ${r.k}: ${r.ok ? 'ok' : 'REFUSED'} — ${r.msg ?? ''}`);
