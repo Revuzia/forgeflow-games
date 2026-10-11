@@ -39,6 +39,7 @@ import { politicsDaily } from './war.ts';
 import { contactsDaily, flushReadings } from './culture.ts';
 import { finishTask } from './work.ts';
 import { creditStretched } from '../perf/plapse.ts';
+import { FIRE_HERE, FIRE_NEAR } from './danger.ts';
 
 export const FIRE_CHECK = 5;
 
@@ -118,17 +119,31 @@ function fireCheck(x: PCtx): void {
   burnBuildings(x);
   const A = x.A;
   const list = _list.buf;
+  const g = p.grid;
   for (let i = 0; i < n; i++) {
     const c = list[i];
     const fi = p.f.fire[c];
-    if (fi <= 0.1 || !x.ps.buckets.any(c)) continue;
-    x.ps.agentsIn(c, _cell);
-    for (const s of _cell) {
-      if (!A.alive[s]) continue;
-      A.health[s] -= fi * 0.08;
-      A.flags[s] |= AgentFlag.onFire;
-      if (A.health[s] <= 0) { die(x, s, DEATH.fire); continue; }
-      if (A.task[s] !== TASK.flee) interrupt(x, s);
+    if (fi <= FIRE_HERE) continue;
+    // in the flames: burned (from 0.1), and turned to flight mid-task at the same threshold decide() flees at
+    if (x.ps.buckets.any(c)) {
+      x.ps.agentsIn(c, _cell);
+      for (const s of _cell) {
+        if (!A.alive[s]) continue;
+        if (fi > 0.1) {
+          A.health[s] -= fi * 0.08;
+          A.flags[s] |= AgentFlag.onFire;
+          if (A.health[s] <= 0) { die(x, s, DEATH.fire); continue; }
+        }
+        if (A.task[s] !== TASK.flee) interrupt(x, s);
+      }
+    }
+    // beside a cell burning hard: move away before it spreads (decide() gives flight 8+ there)
+    if (fi <= FIRE_NEAR) continue;
+    for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1]; e++) {
+      const o = g.nbr[e];
+      if (p.f.fire[o] > FIRE_HERE || !x.ps.buckets.any(o)) continue;
+      x.ps.agentsIn(o, _cell);
+      for (const s of _cell) if (A.alive[s] && A.task[s] !== TASK.flee && !(A.flags[s] & AgentFlag.possessed)) interrupt(x, s);
     }
   }
 }

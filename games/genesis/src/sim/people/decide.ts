@@ -26,6 +26,7 @@ import { boatSwim, missionOf, planMission } from './missions.ts';
 import { sacredAnimal } from './culture.ts';
 import { offsetPoint } from './world.ts';
 import { godHooks } from './hooks.ts';
+import { FIRE_HERE, fireDanger, fleeTarget } from './danger.ts';
 // SIM perf push 3 — the peoples' time-lapse (stretched tasks, per-settlement context caches: perf/plapse.ts)
 import { ctxOf, finishStretched, inPassing, litOf, lowHearthOf, penIn, rival, templeIn } from '../perf/plapse.ts';
 
@@ -67,6 +68,8 @@ function urgent(x: PCtx, s: number): boolean {
   const A = x.A;
   if (A.mission[s]) return false;
   const k = A.task[s];
+  // walking into (or through) fire: decide again (flee)
+  if (k !== TASK.flee && fireDanger(x.p, A.cell[s]) >= 1) return true;
   const N = A.needs, nb = s * NEED_N;
   const sp = x.info[A.species[s]];
   if (sp.needW[WATER] > 0 && N[nb + WATER] < 0.12 && k !== TASK.drink && A.boat[s] < 0) return true;
@@ -134,7 +137,9 @@ export function decide(x: PCtx, s: number): void {
   const st = away ? undefined : home;
   // (SIM perf push 3: at 100x / 1000x water and food at hand are taken in passing — perf/plapse.ts; nothing at 1x.
   // Round 2: a drink takes its time — the task decided below starts that many ticks later)
-  const sip = inPassing(x, s, st, waterHere, eat);
+  // danger before needs (people/danger.ts): in the flames, flight is the only candidate; beside them it outranks all
+  const danger = fireDanger(x.p, A.cell[s]);
+  const sip = danger >= 1 ? 0 : inPassing(x, s, st, waterHere, eat);
   const nb = s * NEED_N;
   const N = A.needs;
   const sp = x.info[A.species[s]];
@@ -145,8 +150,16 @@ export function decide(x: PCtx, s: number): void {
   const night = isNight(x, s);
   const U = _u;
   U.fill(0);
-  // danger first: fire underfoot
-  if (x.p.f.fire[A.cell[s]] > 0.15 || x.p.f.lava[A.cell[s]] > 0.01) U[C.flee] = 4;
+  // danger first. (Was: flee = 4 for fire > 0.15 underfoot — below a parched body's drink utility of up to ~7.4, and
+  // above the 0.1 at which the fire step already hurt and interrupted them: thirsty villagers drank in their burning village.)
+  if (danger >= 1) {
+    const t = planFlee(x, s);
+    if (t) { startTask(x, s, t); return; }
+    // nowhere better within reach: the least-burning neighbour is no better either — stand, and decide again at once
+    idle(x, s, 2);
+    return;
+  }
+  if (danger > 0) U[C.flee] = 8 + danger * 2;
   if (sp.needW[WATER] > 0) {
     const w = N[nb + WATER];
     U[C.drink] = sq(1 - w) * 3.2 * sp.needW[WATER] + (w < 0.4 ? 1 : 0);
@@ -349,14 +362,14 @@ function planDrink(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
     let bd = Infinity;
     A.posAt(s, x.tick, _p);
     for (const w of st.res.water) {
-      if (!waterAtCell(x, s, w)) continue;
+      if (!waterAtCell(x, s, w) || p.f.fire[w] > FIRE_HERE) continue;
       const d = distM(p, _p, cellPos(p, w, _q));
       if (d < bd) { bd = d; c = w; }
     }
   }
   // nothing known: search around, farther the thirstier
   const melt = x.info[A.species[s]].def.habitat.includes('cold');
-  if (c < 0) c = nearestCell(x, c0, A.needs[s * NEED_N + WATER] < 0.3 ? 7 : 4, (o) => p.f.water[o] < 0.6 && (drinkable(p, o) || nbrFresh(x, o) || (melt && snowWater(p, o))));
+  if (c < 0) c = nearestCell(x, c0, A.needs[s * NEED_N + WATER] < 0.3 ? 7 : 4, (o) => p.f.water[o] < 0.6 && p.f.fire[o] <= FIRE_HERE && (drinkable(p, o) || nbrFresh(x, o) || (melt && snowWater(p, o))));
   if (c < 0) return null;
   return { kind: TASK.drink, goal: spot(x, s, c, 3), goalCell: c, work: 15 };
 }
@@ -396,7 +409,7 @@ function waterAtCell(x: PCtx, s: number, c: number): boolean {
 export function planDrinkNear(x: PCtx, s: number, not: number): TaskSpec | null {
   const p = x.p, A = x.A;
   const melt = x.info[A.species[s]].def.habitat.includes('cold');
-  const c = nearestCell(x, A.cell[s], 4, (o) => o !== not && p.f.water[o] < 0.6 && (drinkable(p, o) || nbrFresh(x, o) || (melt && snowWater(p, o))));
+  const c = nearestCell(x, A.cell[s], 4, (o) => o !== not && p.f.water[o] < 0.6 && p.f.fire[o] <= FIRE_HERE && (drinkable(p, o) || nbrFresh(x, o) || (melt && snowWater(p, o))));
   if (c < 0) return null;
   return { kind: TASK.drink, goal: spot(x, s, c, 5), goalCell: c, work: 15, data: 1 };
 }
@@ -528,8 +541,8 @@ function planBathe(x: PCtx, s: number, st: Settlement | undefined): TaskSpec | n
 }
 
 function planFlee(x: PCtx, s: number): TaskSpec | null {
-  const p = x.p;
-  const c = nearestCell(x, x.A.cell[s], 3, (o) => p.f.fire[o] <= 0.02 && p.f.lava[o] <= 0 && isLand(p, o));
+  // away from the flames, to the nearest clear ground (people/danger.ts fleeTarget)
+  const c = fleeTarget(x.p, x.A.cell[s]);
   if (c < 0 || c === x.A.cell[s]) return null;
   return { kind: TASK.flee, goal: spot(x, s, c, 17), goalCell: c, work: 20 };
 }
