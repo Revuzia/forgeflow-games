@@ -5,7 +5,7 @@
 //                base (the tuft's own occlusion); `aWind` rises with height so the tips sway, the base stays put
 //   stone      — a jittered, flattened icosahedron with smooth normals: pebbles and fist-sized rocks
 // The attribute layout matches the vegetation material (render/life/vegetation.ts): position, normal, color, aWind,
-// aLeafUv (unused here), aCard (0.5 = solid foliage, 0 = bark / stone) and aCrown (crown depth: 1 = fully exposed).
+// aLeafUv (unused here), aCard (0.5 = solid foliage, 0 = bark, 0.1 = stone) and aCrown (crown depth: 1 = fully exposed).
 
 import { BufferGeometry, Float32BufferAttribute } from 'three';
 import { Rng } from '../../sim/core/rng.ts';
@@ -131,7 +131,9 @@ export function stone(variant: number): BufferGeometry {
     const r = jit[i];
     // flattened, stretched, sunk a little: the lower part sits in the ground
     const x = v[0] * r * stretch, y = v[1] * r * flat + 0.15 * flat, z = v[2] * r;
-    b.vert(x, y, z, v[0] / stretch, v[1] / flat, v[2], 0.85 + 0.15 * v[1], 0, 0);
+    // (aCard 0.1: a stone to the vegetation shader — not bark, whose furrows, clamp and desaturated tint made the
+    // meadow stones black and navy salt-and-pepper lumps)
+    b.vert(x, y, z, v[0] / stretch, v[1] / flat, v[2], 0.85 + 0.15 * v[1], 0, 0.1);
   }
   // (the icosahedron's faces wind counter-clockwise seen from outside, and the subdivision keeps that)
   for (const tri of tris) b.idx.push(tri[0], tri[1], tri[2]);

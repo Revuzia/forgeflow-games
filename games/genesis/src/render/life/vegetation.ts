@@ -102,6 +102,8 @@ uniform vec4 uLodBand;        // LOD cross-fade bands (m from the camera): bound
 varying vec4 vExtra;
 varying vec2 vLod;            // visibility 0..1 in the LOD cross-fade, +1 fading out / −1 fading in
 varying vec3 vLocalP;
+varying float vCrownIn;       // 1 when the camera is inside this tree's crown (its foliage fades away)
+varying vec2 vNearFade;       // foliage nearer the camera than x is gone, fading out to y (m): further up in the trees
 uniform float uTime;
 uniform vec3 uWindDir;
 uniform vec3 uCamBody;
@@ -192,6 +194,15 @@ const VEG_WIND = /* glsl */ `
     transformed += (wl * (sway + 0.6 * (uWindK - 0.5)) * 0.035 * uWindK + vec3(sin(uTime * 4.1 + ph * 3.0 + position.y * 9.0), 0.0, cos(uTime * 3.7 + ph * 2.0)) * 0.006 * uWindK) * aWind * aWind;
     vExtra = iExtra;
     vLocalP = position;
+    // the camera inside (or brushing) a tree's crown: its foliage fades out, rather than filling half the frame with
+    // giant leaf cards (trees only: ground cover shares this material)
+    float th = length(vec3(instanceMatrix[1][0], instanceMatrix[1][1], instanceMatrix[1][2]));
+    vec3 cc = ip + normalize(ip) * th * 0.62;
+    vCrownIn = th > 3.5 ? 1.0 - smoothstep(th * 0.42, th * 0.62, distance(uCamBody, cc)) : -1.0;
+    // a camera up among the crowns (an orbit view over a wooded village) is never looking at the leaves beside it:
+    // the near fade reaches further the higher the camera stands above this tree's foot (street level: 2.5–6.5 m)
+    float hCam = clamp(dot(uCamBody - ip, normalize(ip)) - 2.0, 0.0, 40.0);
+    vNearFade = vec2(2.5 + hCam * 0.3, 6.5 + hCam * 0.45);
   }
 `;
 
@@ -219,6 +230,9 @@ varying vec4 vExtra;
 varying vec2 vLod;
 varying vec3 vLocalP;
 varying float vCloudSh;
+varying float vCrownIn;
+varying vec2 vNearFade;
+uniform vec3 uCamBody;
 float vegCloudShadow(vec3 P, vec3 sunB) {
   if (uCloudOn < 0.5) return 1.0;
   float mid = 0.5 * (uCloudShell.x + uCloudShell.y);
@@ -279,12 +293,13 @@ export function makeVegMaterial(shared: Record<string, IUniform>, fade: IUniform
       .replace('#include <clipping_planes_pars_vertex>', `#include <clipping_planes_pars_vertex>\n${VEG_VERT_PARS}\n${VEG_VERT_CLOUD}`)
       .replace('#include <begin_vertex>', VEG_WIND)
       .replace('#include <color_vertex>', `
-  // aCard: 0 bark, 0.5 solid foliage (conifer core), 1 alpha-tested spray. The instance colour is the FOLIAGE tint
-  // (species, season, per-tree shift): bark only takes its brightness, so autumn never paints the trunks orange.
+  // aCard: 0 bark, 0.1 field stone (ground cover), 0.5 solid foliage (conifer core), 1 alpha-tested spray. The
+  // instance colour is the FOLIAGE tint (species, season, per-tree shift): bark only takes its brightness, so autumn
+  // never paints the trunks orange; a stone keeps its own warm or lichened tint
   vColor = vec4(1.0);
   vColor.xyz *= color.xyz;
 #ifdef USE_INSTANCING_COLOR
-  float leafy = step(0.25, aCard);
+  float leafy = max(step(0.25, aCard), step(0.05, aCard) * step(aCard, 0.2));
   vColor.xyz *= mix(vec3(dot(instanceColor.xyz, vec3(0.3, 0.55, 0.15))), instanceColor.xyz, leafy);
 #endif`)
       .replace('#include <project_vertex>', `#include <project_vertex>\n  vBodyPos = (instanceMatrix * vec4(transformed, 1.0)).xyz;\n  vCloudSh = vegCloudShadowV(vBodyPos, uSunDirBody);\n  vLeaf = step(0.25, aCard);\n  vLeafUv = aLeafUv;\n  vCard = aCard;\n  vLocalY = position.y;\n  vCrown = aCrown;`);
@@ -292,6 +307,15 @@ export function makeVegMaterial(shared: Record<string, IUniform>, fade: IUniform
       .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\n${VEG_FRAG_PARS}`)
       .replace('#include <color_fragment>', `#include <color_fragment>
 ${LEAF_ALPHA}
+  // foliage right by the camera (within ~5 m), and all of a tree's foliage when the camera is inside its crown, fades
+  // out in object-space chunks (~25 cm: whole sprays, no pixel dither); bark stays
+  // (trees only: vCrownIn < 0 marks ground cover and small shrubs, whose tufts at the camera's feet stay)
+  // (a camera up among the crowns — vNearFade.x > 4: some 5 m above this tree's foot — loses the bare branches beside
+  // it too, which crossed an orbit view as sticks once their leaves were gone)
+  if ((vLeaf > 0.5 || vNearFade.x > 4.0) && vCrownIn > -0.5) {
+    float nearK = max(vCrownIn, 1.0 - smoothstep(vNearFade.x, vNearFade.y, distance(vBodyPos, uCamBody)));
+    if (nearK > 0.0 && fract(sin(dot(floor(vLocalP * 4.0 + 0.21), vec3(12.9898, 78.233, 37.719))) * 43758.5453) < nearK) discard;
+  }
   if (vCard > 0.5) diffuseColor.rgb *= texture(uLeafTex, vLeafUv).rgb * 1.7;
   // leaf clusters: cellular light / dark speckle on foliage (fading with distance), bark furrows on trunks
   float vegFw = length(fwidth(vBodyPos));
@@ -303,18 +327,31 @@ ${LEAF_ALPHA}
   float barkAA = 1.0 - smoothstep(0.02, 0.12, vegFw);
   float barkH = abs(snoise(vec3(vLocalP.x * 55.0, vLocalP.y * 5.0, vLocalP.z * 55.0)));
   float barkTex = mix(0.92, 0.7 + 0.42 * barkH, barkAA);
-  diffuseColor.rgb *= vCard > 0.5 ? 1.0 : mix(barkTex, leafTex, vLeaf);
+  // ground-cover stones (aCard 0.1) are not bark: no furrows, no bark clamp, no trunk-base soil
+  bool isStone = vCard > 0.05 && vCard < 0.2;
+  diffuseColor.rgb *= vCard > 0.5 || isStone ? 1.0 : mix(barkTex, leafTex, vLeaf);
   // no bark is paler than weathered grey wood (bright trunks read as white posts in the sun)
-  if (vLeaf < 0.5) diffuseColor.rgb = min(diffuseColor.rgb, vec3(0.24, 0.22, 0.2));
+  if (vLeaf < 0.5 && !isStone) diffuseColor.rgb = min(diffuseColor.rgb, vec3(0.24, 0.22, 0.2));
   // trunk bases sink into the ground: soil, moss and shade creep up the lowest metre instead of a clean cut
-  if (vLeaf < 0.5) {
+  if (vLeaf < 0.5 && !isStone) {
     float baseW = 1.0 - smoothstep(-0.01, 0.045, vLocalY);
     vec3 soilC = mix(vec3(0.055, 0.045, 0.032), vec3(0.04, 0.055, 0.025), smoothstep(0.3, 0.7, snoise(vBodyPos * 1.7) * 0.5 + 0.5));
     diffuseColor.rgb = mix(diffuseColor.rgb, soilC, baseW * 0.8);
   }
   float vegBump = mix(barkH * 0.035 * barkAA, (1.0 - lv.x) * 0.25 * leafAA, vLeaf);
+  if (isStone) {
+    // field stone: soft blotches of lichen (2–3 cm, low contrast) and moss, a darker damp band where it sits in the
+    // soil (the instance sinks it by a third: the soil line is at ~0.35 of its unit height)
+    float sAA = 1.0 - smoothstep(0.01, 0.04, vegFw);
+    float lich = smoothstep(0.56, 0.8, vnoise(vBodyPos * 36.0)) * sAA;
+    float moss = smoothstep(0.58, 0.85, vnoise(vBodyPos * 12.0 + 5.0));
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.2, 0.2, 0.14), lich * 0.3);
+    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.055, 0.075, 0.03), moss * 0.35);
+    diffuseColor.rgb *= mix(0.55, 1.0, smoothstep(0.26, 0.5, vLocalY));
+    vegBump = (vnoise(vBodyPos * 28.0) - 0.5) * 0.03 * sAA;
+  }
   // charred bark (fire scars), snow lying on the upward faces of branches and foliage
-  if (vLeaf < 0.5) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.02, 0.018, 0.016), vExtra.y);
+  if (vLeaf < 0.5 && !isStone) diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.02, 0.018, 0.016), vExtra.y);
   if (vExtra.x > 0.0) {
     vec3 upS = normalize(vBodyPos);
     vec3 nS = normalize(transpose(uBodyToView) * normalize(vNormal));
@@ -336,7 +373,7 @@ ${LEAF_ALPHA}
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${VEG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${VEG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => 'genesis-veg-v7';
+  mat.customProgramCacheKey = () => 'genesis-veg-v11';
   return mat;
 }
 

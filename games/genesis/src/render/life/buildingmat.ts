@@ -25,12 +25,41 @@ import { CLOUD_DENSITY_GLSL } from '../sky/clouds.ts';
 import { SHADOW_GLSL } from '../planet/lights.ts';
 import { MOON_PARS, moonDirect } from '../shaders/moon.glsl.ts';
 
+/** instances per row of a batch's instance-data texture (render/life/bldbatch.ts): 3 texels each */
+export const BLD_INST_PER_ROW = 128;
+
+/**
+ * Per-instance state: instanced attributes (InstancedMesh: the street-lamp posts) or, in a BatchedMesh (the buildings,
+ * render/life/bldbatch.ts), three texels of the batch's instance-data texture read by the instance's batch id.
+ *   iState: progress, damage, flags, light (kind*256 + level*255) · iInfo: height, half x, half z, seed
+ *   iFade:  x: 1 − the LOD cross-fade f (f ≥ 0 keeps the pixels whose dither < f, f < 0 those whose dither ≥ 1 + f;
+ *           a mesh without the attribute reads 0: whole); yz: ground slope
+ */
+const INST_PARS = /* glsl */ `
+#ifdef USE_BATCHING
+uniform highp sampler2D uBldInst;
+vec4 bldInst(int k) {
+  int id = int(getIndirectIndex(gl_DrawID) + 0.5);
+  return texelFetch(uBldInst, ivec2(3 * (id % ${BLD_INST_PER_ROW}) + k, id / ${BLD_INST_PER_ROW}), 0);
+}
+#define I_STATE bldInst(0)
+#define I_INFO bldInst(1)
+#define I_FADE (bldInst(2).xyz)
+#define I_MATRIX batchingMatrix
+#else
+attribute vec4 iState;
+attribute vec4 iInfo;
+attribute vec3 iFade;
+#define I_STATE iState
+#define I_INFO iInfo
+#define I_FADE iFade
+#define I_MATRIX instanceMatrix
+#endif
+`;
+
 const VERT_PARS = /* glsl */ `
 attribute vec4 aKit;
-attribute vec4 iState;   // progress, damage, flags, light (kind*256 + level*255)
-attribute vec4 iInfo;    // height, half x, half z, seed
-attribute vec3 iFade;    // x: 1 − the LOD cross-fade f (f ≥ 0 keeps the pixels whose dither < f, f < 0 those whose dither ≥ 1 + f;
-                         //    a mesh without the attribute reads 0: whole); yz: ground slope
+${INST_PARS}
 uniform float uTime;
 varying float vFade;
 varying vec3 vBodyPos;
@@ -44,10 +73,12 @@ varying vec4 vInfo;
 /** windmill sails turn about the local Z axis through (0, uv.x); everything else is static */
 const VERT_BEGIN = /* glsl */ `
   vec3 transformed = vec3(position);
+  vec4 bInfo = I_INFO;
+  vec3 bFade = I_FADE;
   // open works follow the ground's slope: a shear (verticals stay plumb)
-  transformed.y += iFade.y * transformed.x + iFade.z * transformed.z;
+  transformed.y += bFade.y * transformed.x + bFade.z * transformed.z;
   if (abs(aKit.y - 9.0) < 0.5) {
-    float a = uTime * 0.7 + iInfo.w * 6.28;
+    float a = uTime * 0.7 + bInfo.w * 6.28;
     float ca = cos(a), sa = sin(a);
     vec2 r = vec2(transformed.x, transformed.y - uv.x);
     transformed.xy = vec2(ca * r.x - sa * r.y, sa * r.x + ca * r.y + uv.x);
@@ -60,7 +91,18 @@ const VERT_BEGIN = /* glsl */ `
  * broken walls were speckled with self-shadowing, and a rising house cast the shadow of the finished one.
  */
 const CUT_GLSL = /* glsl */ `
-bool bldCut(vec3 cp, float cprt, float cprog, float cdmg, bool cruin, float cH, vec2 cinf, float cseed, float croof) {
+// a ruined wall's broken height along it: two octaves of noise (no regular teeth: a row of near-identical triangles
+// read as a paper crown), one or two deep breaches, one wall in five keeping its gable
+float ruinProfile(float along, float wallId, float halfL, float wh, float small, float cseed, bool gable, float cH) {
+  float jag = (vnoise(vec3(along * 0.55, wallId * 3.1, cseed * 5.0)) - 0.5) * 0.95 + (vnoise(vec3(along * 2.2, wallId * 1.7 + 4.0, cseed * 3.0)) - 0.5) * 0.4;
+  float nb = gn_hash12(vec2(wallId + 11.0, cseed * 3.0));
+  float breach = 1.0 - smoothstep(0.35, 1.1 + 0.6 * nb, abs(along - (nb - 0.5) * 1.5 * halfL));
+  if (nb > 0.55) breach = max(breach, 1.0 - smoothstep(0.3, 0.8, abs(along + (nb - 0.5) * 1.1 * halfL - 0.35 * halfL)));
+  float h = (mix(0.3, 1.5, wh) + jag) * small - breach * 0.85 * small;
+  if (gable) h = max(h, cH * 0.78 - abs(along) * 0.95 + jag);
+  return h;
+}
+bool bldCut(vec3 cp, float cprt, float cprog, float cdmg, bool cruin, float cH, vec2 cinf, float cseed, float croof, float csurf) {
   // construction: the walls rise course by course; the roof comes last
   if (cprog < 0.999) {
     // a ragged top: courses laid unevenly along each wall, not a cut by a plane
@@ -80,12 +122,18 @@ bool bldCut(vec3 cp, float cprt, float cprog, float cdmg, bool cruin, float cH, 
     bool xSide = abs(q.x) > abs(q.y);
     float wallId = xSide ? (q.x > 0.0 ? 0.0 : 1.0) : (q.y > 0.0 ? 2.0 : 3.0);
     float along = xSide ? cp.z : cp.x;
+    float halfL = xSide ? hxz.y : hxz.x;
     float wh = gn_hash12(vec2(wallId + 1.0, cseed * 7.0));
     float small = cH < 4.2 ? 0.45 : 1.0;
-    float jag = abs(fract(along * 0.9 + wh * 3.7) - 0.5) * 0.7 + 0.45 * vnoise(vec3(along * 2.3, wallId * 3.1, cseed * 5.0)) - 0.25;
-    float ruinH = (mix(0.3, 1.5, wh) + jag) * small;
-    // a gable left standing: a ragged triangle on its wall
-    if (wh > 0.8 && !xSide && small > 0.5) ruinH = max(ruinH, cH * 0.78 - abs(along) * 0.95 + jag);
+    bool gable = wh > 0.8 && !xSide && small > 0.5;
+    // one broken top for every face of a wall (the inner face of a plank or stone wall is plaster: broken by its own
+    // surface it stood above or below the outer face's boards and blocks — a fence of teeth along the top; and blocks
+    // stepped course by course read as battlements): the wall's profile, a ragged run along it, and short pieces of
+    // uneven length (~0.3–0.6 m) standing a little proud or short
+    float seg = floor(along / 0.45 + 0.6 * vnoise(vec3(along * 0.7, wallId * 1.3, cseed * 11.0)));
+    float ruinH = ruinProfile(along, wallId, halfL, wh, small, cseed, gable, cH)
+      + (vnoise(vec3(along * 1.1, wallId * 2.3, cseed * 17.0)) - 0.5) * 0.4 * small
+      + (gn_hash12(vec2(seg, wallId + cseed * 5.0)) - 0.5) * 0.16 * small;
     ruinH = mix(cH * 1.2, ruinH, broken);
     bool structural = cprt < 0.5 || abs(cprt - 4.0) < 0.5 || abs(cprt - 3.0) < 0.5;
     float outside = max(abs(q.x), abs(q.y));
@@ -167,11 +215,13 @@ BSurf surfaceOf(int s, vec2 uv, vec3 base, float seed, float fw, float isRoof) {
     o.h = snoise(vec3(uv * 6.0, seed)) * 0.02 * aaK(fw, 0.15);
     o.rough = 0.9;
   } else if (s == 1) {
-    // ashlar: dressed blocks
+    // ashlar: dressed blocks, their arrises (the edges by the joints) worn round and weathered paler
     float la;
     float m = courses(uv, vec2(0.62, 0.34), 0.014, 0.5, seed, fw, id, f, la);
     float k = aaK(fw, 0.12);
-    o.col *= mix(1.0, (0.86 + 0.24 * id) * mix(0.62, 1.0, m), k);
+    vec2 eb = min(f, 1.0 - f) * vec2(0.62, 0.34);
+    float arris = (1.0 - smoothstep(0.014, 0.045, min(eb.x, eb.y))) * m * aaL(fw, 0.06);
+    o.col *= mix(1.0, (0.86 + 0.24 * id) * mix(0.62, 1.0, m) * (1.0 + 0.3 * arris), k);
     o.h = (m * 0.8 * la + snoise(vec3(uv * 4.0, seed)) * 0.06) * k;
     o.rough = 0.8;
   } else if (s == 2) {
@@ -344,14 +394,34 @@ BSurf surfaceOf(int s, vec2 uv, vec3 base, float seed, float fw, float isRoof) {
     o.h = fur * 0.6 * aaK(fw, 0.04);
     o.rough = 0.9;
   } else if (s == 22) {
-    // shingles
+    // shingles / split shakes: boards in courses with a dark shadow under each course's butt, each board its own tone,
+    // and each course its own weathering — a banding that still reads from afar, where the boards themselves blur
     float la;
-    float m = courses(uv, vec2(0.16, 0.24), 0.008, 0.5, seed, fw, id, f, la);
-    float over = overlapAA(f.y, 0.2, 0.24, fw);
+    float m = courses(uv, vec2(0.19, 0.3), 0.009, 0.5, seed, fw, id, f, la);
+    float over = overlapAA(f.y, 0.22, 0.3, fw);
     float k = aaK(fw, 0.04);
-    o.col *= mix(1.0, (0.7 + 0.5 * id) * mix(0.45, 1.0, over * m), k);
-    o.h = over * m * 0.5 * k * aaL(fw, 0.048);
+    float rowT = gn_hash12(vec2(floor(uv.y / 0.3), seed * 3.0 + 1.0));
+    float split = snoise(vec3(uv.x * 26.0, uv.y * 1.6, seed)) * aaK(fw, 0.025);
+    o.col *= mix(1.0, (0.7 + 0.5 * id) * mix(0.45, 1.0, over * m) * (0.94 + 0.08 * split), k);
+    o.col *= mix(1.0, 0.8 + 0.36 * rowT, aaK(fw, 0.3)) * mix(1.0, 0.82, (1.0 - k) * aaK(fw, 0.3));
+    o.h = (over * m * 0.5 * aaL(fw, 0.066) + split * 0.08) * k;
     o.rough = 0.85;
+  } else if (s == 25) {
+    // lacquered timber: smooth and glossy, a faint grain under the gloss
+    float grain = snoise(vec3(uv * vec2(2.0, 14.0), seed)) * aaK(fw, 0.04);
+    o.col *= 0.93 + 0.08 * grain + 0.04 * n1;
+    o.h = grain * 0.03;
+    o.rough = 0.3;
+  } else if (s == 26) {
+    // foliage of a clipped hedge or a garden shrub: clusters of leaves, darker in the hollows between them
+    vec3 v = voronoi3(vec3(uv * 5.0, seed * 3.0));
+    vec3 v2 = voronoi3(vec3(uv * 13.0, seed * 5.0 + 2.0));
+    float k = aaK(fw, 0.1), k2 = aaK(fw, 0.04);
+    float cl = (1.0 - smoothstep(0.1, 0.65, v.x));
+    o.col *= mix(0.85, (0.5 + 0.7 * cl) * (0.82 + 0.36 * v.z), k) * mix(1.0, 0.85 + 0.3 * (1.0 - v2.x), k2);
+    o.col = mix(o.col, o.col * vec3(1.15, 1.1, 0.7), 0.25 * v.z * k);
+    o.h = (cl * 0.7 + (1.0 - v2.x) * 0.3 * k2) * k;
+    o.rough = 0.75;
   } else if (s == 24) {
     o.col *= 0.9 + 0.15 * n1;
     o.rough = 0.5;
@@ -382,8 +452,10 @@ const FRAG_SURFACE = /* glsl */ `
   float progress = vState.x, damage = vState.y, flags = floor(vState.z + 0.5);
   bool burning = mod(flags, 2.0) > 0.5;
   bool ruined = mod(floor(flags / 2.0), 2.0) > 0.5;
-  // a ruin carries its age in the light slot (2000 + 0..999: fresh char -> weathered over ~6 days); others their light
-  float weather = vState.w >= 1999.5 ? clamp((vState.w - 2000.0) / 999.0, 0.0, 1.0) : 0.0;
+  // a ruin carries its age in the light slot (2000 + 0..999 a burnt ruin: fresh char -> weathered over ~6 days; 3000 +
+  // 0..999 one fallen from neglect, flood or abandonment: no soot); others their light
+  float weather = vState.w >= 1999.5 ? clamp(mod(vState.w - 2000.0, 1000.0) / 999.0, 0.0, 1.0) : 0.0;
+  bool burntRuin = vState.w >= 1999.5 && vState.w < 2999.5;
   float lightPacked = vState.w >= 1999.5 ? 0.0 : floor(vState.w + 0.5);
   float lightKind = floor(lightPacked / 256.0 + 0.001);
   float lightLevel = mod(lightPacked, 256.0) / 255.0;
@@ -392,7 +464,10 @@ const FRAG_SURFACE = /* glsl */ `
   float isRoof = abs(part - 1.0) < 0.5 ? 1.0 : 0.0;
   float H = max(vInfo.x, 0.5);
   // construction and ruin cut-aways (CUT_GLSL: the shadow pass cuts the same, so a ruin casts no shadow of its roof)
-  if (bldCut(vLocal, part, progress, damage, ruined, H, vInfo.yz, seed, isRoof)) discard;
+  // (a ruin's rubble heap carries a negative height: it is the collapse, never cut itself)
+  if (vInfo.x > -0.5 && bldCut(vLocal, part, progress, damage, ruined, H, vInfo.yz, seed, isRoof, surfId)) discard;
+  // weeds and grass on an old ruin's heap (rubbleMesh PART growth): each tuft comes up on its own day
+  if (abs(part - 13.0) < 0.5 && (!ruined || weather < 0.22 + 0.7 * fract(vKit.z * 13.7))) discard;
   float fwUv = length(fwidth(vKUv));
   BSurf bs = surfaceOf(int(surfId + 0.5), vKUv, vColor.rgb, seed, fwUv, isRoof);
   vec3 alb = bs.col;
@@ -414,8 +489,12 @@ const FRAG_SURFACE = /* glsl */ `
   if (progress < 0.999) alb = mix(alb, alb * 1.25 + 0.03, smoothstep(0.6, 0.0, abs(vLocal.y - H * progress / 0.9)) * 0.5);
   // a wall still rising has no roof: its inner faces are daylit raw wall (rough core, unplastered), not the dark of a
   // closed room (the open top read as a black hole); the kit's inner faces are dark plaster
-  if (progress < 0.999 && part < 0.5 && (int(surfId + 0.5) == 0 || int(surfId + 0.5) == 5) && dot(vColor.rgb, vec3(1.0)) < 0.16) {
+  // (and a ruin, roofless, the same: its inner faces and floor lie open to the sky — the floor is trodden earth and
+  // fallen debris, ash where it burnt, never the dark room's planks that read as a navy panel from above)
+  bool ruinFloor = false;
+  if ((progress < 0.999 || ruined) && part < 0.5 && (int(surfId + 0.5) == 0 || int(surfId + 0.5) == 5) && dot(vColor.rgb, vec3(1.0)) < 0.16) {
     alb = (int(surfId + 0.5) == 5 ? vec3(0.2, 0.15, 0.1) : vec3(0.3, 0.28, 0.25)) * (0.78 + 0.3 * vnoise(vec3(vLocal * 3.0 + seed)));
+    ruinFloor = ruined && int(surfId + 0.5) == 5 && abs(normalize(cross(dFdx(vLocal), dFdy(vLocal))).y) > 0.7;
   }
   // broken wall cores (seen through the cut) read as rubble: the wall's own stuff, darker and broken up
   // (a wall still rising shows its fresh core in its own material; only a ruin's broken core is dark)
@@ -426,36 +505,64 @@ const FRAG_SURFACE = /* glsl */ `
   float burnB = burning ? clamp(damage * 1.35 + 0.12, 0.0, 1.0) : 0.0;
   float eave = H * 0.58;
   float fnoise = vnoise(vec3(vLocal.xz * 0.7, vLocal.y * 0.5 + seed * 3.0)) * 1.1 + 0.4 * vnoise(vec3(vLocal * 2.3));
-  // distance from the eave line, where a roof fire starts: up the roof and down the walls as the burn goes on
-  float fd = abs(vLocal.y - eave) + fnoise * 0.8;
-  float reach = burnB * (H * 0.75 + 1.0);
+  // distance from where the fire took hold — a point on the eave line along the building's length (buildings.ts puts
+  // its biggest blaze there): up the roof, down the walls and along the house as the burn goes on
+  bool longX = vInfo.y >= vInfo.z;
+  float fAlong = longX ? vLocal.x : vLocal.z;
+  float fOrigin = (fract(vInfo.w * 7.31) - 0.5) * 1.4 * (longX ? vInfo.y : vInfo.z);
+  float fd = abs(vLocal.y - eave) + fnoise * 0.8 + abs(fAlong - fOrigin) * 0.38;
+  float reach = burnB * (H * 0.75 + 1.0 + 0.38 * (longX ? vInfo.y : vInfo.z) * 1.7);
   float burnt = burning ? 1.0 - smoothstep(reach - 0.35, reach + 0.05, fd) : 0.0;
-  float front = burning ? smoothstep(reach - 0.65, reach - 0.25, fd) * (1.0 - smoothstep(reach - 0.05, reach + 0.3, fd)) : 0.0;
-  // late in the burn the thatch and boards fall in: holes open behind the front
-  if (burning && isRoof > 0.5 && burnB > 0.55 && burnt > 0.9 && vnoise(vec3(vLocal * 0.9 + seed)) > 1.35 - burnB * 0.85) discard;
-  float charOld = ruined ? 1.0 : smoothstep(0.35, 0.8, fbm3(vLocal * 0.35 + seed) * 0.5 + 0.5 + damage * 0.9 - 0.55) * damage * 1.4;
+  // the front: glowing patches and tongues, not a constant band — its width (0.2–0.8 m) and its heat wander along it,
+  // and here and there it is only dark char
+  float fn1 = vnoise(vec3(vLocal.xz * 0.9 + vec2(0.0, uTime * 0.05), vLocal.y * 0.6 + seed * 5.0));
+  float fn2 = vnoise(vec3(vLocal * 2.6 + vec3(0.0, -uTime * 0.3, 0.0)));
+  float frontW = mix(0.2, 0.8, fn1);
+  float front = burning ? smoothstep(reach - frontW - 0.05, reach - frontW * 0.35, fd) * (1.0 - smoothstep(reach - 0.05, reach + 0.25, fd)) : 0.0;
+  float heat = smoothstep(0.25, 0.75, fn1 * 0.6 + fn2 * 0.6);
+  front *= heat;
+  // late in the burn the thatch and boards fall in: holes open behind the front, their edges smouldering
+  float holeN = vnoise(vec3(vLocal * 0.9 + seed)), holeT = 1.35 - burnB * 0.85;
+  bool holes = burning && isRoof > 0.5 && burnB > 0.55 && burnt > 0.9;
+  if (holes && holeN > holeT) discard;
+  float holeEdge = holes ? smoothstep(holeT - 0.09, holeT, holeN) : 0.0;
+  // char: a burnt ruin is black (weathering to grey-brown); one fallen from neglect keeps its own wall, darkened and
+  // streaked by rain
+  float charOld = ruined ? (burntRuin ? 1.0 : 0.0) : smoothstep(0.35, 0.8, fbm3(vLocal * 0.35 + seed) * 0.5 + 0.5 + damage * 0.9 - 0.55) * damage * 1.4;
   float charK = clamp(max(charOld, burnt), 0.0, 1.0) * (ruined ? 0.92 : 1.0);
   float ash = smoothstep(0.35, 0.85, snoise(vLocal * 1.7 + seed * 2.0) * 0.5 + 0.5);
   vec3 charCol = mix(vec3(0.055, 0.05, 0.045), vec3(0.17, 0.165, 0.155), ash * 0.6);
   // weathered: rain washes the soot to grey-brown, the stuff of the wall shows again in places
   charCol = mix(charCol, mix(vec3(0.2, 0.18, 0.15), bs.col * 0.75, 0.4) * (0.85 + 0.3 * ash), weather);
   alb = mix(alb, charCol, charK);
-  // and a ruin greens over: moss and grass creep up the stumps and over the heap
+  if (ruinFloor) {
+    float fn = vnoise(vec3(vLocal.xz * 1.9, seed * 4.0)), fd2 = vnoise(vec3(vLocal.xz * 6.0, seed));
+    vec3 dirt = mix(vec3(0.15, 0.125, 0.095), vec3(0.23, 0.2, 0.16), fn);
+    if (burntRuin) dirt = mix(mix(vec3(0.07, 0.065, 0.06), vec3(0.25, 0.24, 0.225), smoothstep(0.3, 0.7, fd2)), dirt, weather * 0.8);
+    alb = dirt * (0.85 + 0.3 * fd2);
+  }
+  float bAoK = ruinFloor ? 2.0 : 1.0;
+  if (ruined && !burntRuin) {
+    float streak = smoothstep(0.1, 0.8, snoise(vec3(vKUv.x * 3.1, vKUv.y * 0.35, seed * 9.0)) * 0.5 + 0.5);
+    alb *= mix(0.78, 0.6, streak * (1.0 - smoothstep(0.0, 1.8, vLocal.y) * 0.4)) * (0.92 + 0.12 * ash);
+  }
+  // and a ruin greens over: moss, grass and soil creep over the stumps' tops and the heap, and up the foot of its walls
   if (ruined && weather > 0.05) {
     vec3 ln = normalize(cross(dFdx(vLocal), dFdy(vLocal)));
-    float upward = smoothstep(0.35, 0.85, abs(ln.y)) * (1.0 - smoothstep(0.2, 1.6, vLocal.y));
+    float up = smoothstep(0.35, 0.85, abs(ln.y));
+    float upward = mix(0.55 * (1.0 - smoothstep(0.0, 0.9, vLocal.y)), 1.0, up) * (1.0 - smoothstep(0.4, 2.2, vLocal.y));
     // (patchy and earthy: moss, dead grass and soil, broken up at a hand's scale — not a green coat of paint)
-    float creep = smoothstep(0.5, 0.85, vnoise(vec3(vLocal.xz * 1.3, seed)) * 0.75 + weather * 0.45);
+    float creep = smoothstep(0.42, 0.8, vnoise(vec3(vLocal.xz * 1.3, seed)) * 0.75 + weather * 0.5);
     float fine = vnoise(vec3(vLocal * 7.0 + seed));
-    vec3 growth = mix(vec3(0.045, 0.06, 0.028), vec3(0.075, 0.065, 0.04), smoothstep(0.3, 0.7, fine)) * (0.8 + 0.4 * ash);
-    alb = mix(alb, growth, creep * upward * weather * smoothstep(0.2, 0.55, fine + 0.25) * 0.8);
+    vec3 growth = mix(vec3(0.07, 0.095, 0.035), vec3(0.15, 0.13, 0.065), smoothstep(0.35, 0.75, fine)) * (0.85 + 0.3 * ash);
+    alb = mix(alb, growth, clamp(creep * upward * weather * smoothstep(0.15, 0.5, fine + 0.25) * 1.2, 0.0, 0.92));
   }
   float bRough = mix(bs.rough, 0.95, charK);
   float bMetal = bs.metal * (1.0 - charK);
   // glass by day: dark, smooth, reflective
   if (abs(part - 2.0) < 0.5) { alb = vec3(0.02, 0.025, 0.03); bRough = 0.06; bMetal = 0.0; }
-  // street-lamp glass: frosted, faintly warm by day
-  if (abs(part - 12.0) < 0.5) { alb = vec3(0.5, 0.45, 0.36); bRough = 0.3; bMetal = 0.0; }
+  // street-lamp glass: frosted, faintly warm by day (a paper lantern's shade keeps its paper)
+  if (abs(part - 12.0) < 0.5) { if (int(surfId + 0.5) != 0) { alb = vec3(0.5, 0.45, 0.36); bRough = 0.3; } else bRough = 0.9; bMetal = 0.0; }
   diffuseColor.rgb = alb;
 `;
 
@@ -481,7 +588,7 @@ const FRAG_AMBIENT = /* glsl */ `
     vec3 nB = normalize(viewToBody * normal);
     vec3 vB = normalize(viewToBody * geometryViewDir);
     // ambient occlusion: the kit's baked AO, darker low on the walls and inside openings
-    float ao = vKit.w * mix(0.65, 1.0, smoothstep(-0.3, 1.2, vLocal.y));
+    float ao = min(1.0, vKit.w * bAoK) * mix(0.65, 1.0, smoothstep(-0.3, 1.2, vLocal.y));
     iblIrradiance += (skyIrradiance(upB, nB, uSunDirBody) + uNightAmbient) * ao;
     vec3 rB = reflect(-vB, nB);
     float horizonK = smoothstep(-0.05, 0.3, dot(rB, upB));
@@ -526,12 +633,16 @@ const FRAG_EMISSIVE = /* glsl */ `
     if (abs(part - 12.0) < 0.5 && lit) em += lightTint(lightKind) * (lightKind > 3.5 ? 16.0 : 9.0) * smoothstep(0.0, 0.6, night);
     // mast lights: blinking red
     if (abs(part - 8.0) < 0.5) em += vec3(5.0, 0.25, 0.1) * step(0.5, fract(uTime * 0.6 + seed)) * (0.2 + 0.8 * night) * 2.0;
-    // burning: the front glows (a band of embers, flickering, hottest at its leading edge) and behind it a few embers
-    // still speckle the char (a sparse ~5 % — not a glowing crack net over the whole building)
+    // burning: the front glows in patches and tongues (deep red where it smoulders, orange where it is hottest —
+    // never white: a white-hot line along every eave read as neon tubing), the holes' edges smoulder, and behind the
+    // front a few embers still speckle the char (a sparse ~5 % — not a glowing crack net over the whole building)
     if (burning) {
       float fl = 0.65 + 0.35 * sin(uTime * 7.0 + vLocal.x * 3.0 + seed * 20.0) * sin(uTime * 3.1 + vLocal.z * 2.0);
       float lick = 0.7 + 0.3 * vnoise(vec3(vLocal * 3.0 + vec3(0.0, -uTime * 1.2, 0.0)));
-      em += vec3(4.2, 1.15, 0.18) * front * fl * lick * 2.4;
+      float t = clamp(front * heat * fl, 0.0, 1.0);
+      vec3 fireC = mix(vec3(0.5, 0.08, 0.02), vec3(1.0, 0.35, 0.08), t);
+      em += fireC * front * lick * (1.2 + 2.3 * t);
+      em += vec3(0.6, 0.12, 0.03) * holeEdge * (0.6 + 0.4 * fl) * 1.8;
       float speck = step(0.95, gn_hash12(floor(vLocal.xz * 7.0 + vLocal.y * 3.0) + floor(uTime * 0.7 + seed)));
       em += vec3(3.0, 0.75, 0.1) * speck * burnt * (1.0 - front) * (0.5 + 0.5 * sin(uTime * 4.0 + vLocal.y * 9.0));
     }
@@ -541,26 +652,30 @@ const FRAG_EMISSIVE = /* glsl */ `
 
 /** the instanced building material (one shared by every variant mesh of a planet) */
 /** doubleSided: for buildings cut open (construction, ruin, fire) — their back faces read as broken wall cores */
-export function makeBuildingMaterial(shared: Record<string, IUniform>, doubleSided = false): MeshStandardMaterial {
+export function makeBuildingMaterial(shared: Record<string, IUniform>, doubleSided = false, instData?: IUniform): MeshStandardMaterial {
   const mat = new MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, side: doubleSided ? DoubleSide : FrontSide });
   const debug: IUniform<number> = { value: 0 };
   mat.userData.debug = debug;
   mat.onBeforeCompile = (shader) => {
     for (const k of Object.keys(shared)) shader.uniforms[k] = shared[k];
     shader.uniforms.uBldDebug = debug;
+    if (instData) shader.uniforms.uBldInst = instData;
     shader.vertexShader = shader.vertexShader
       .replace('#include <clipping_planes_pars_vertex>', `#include <clipping_planes_pars_vertex>\n${VERT_PARS}`)
-      .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n  {\n    vec3 nRot = objectNormal;\n    if (abs(aKit.y - 9.0) < 0.5) { float a = uTime * 0.7 + iInfo.w * 6.28; nRot.xy = vec2(cos(a) * nRot.x - sin(a) * nRot.y, sin(a) * nRot.x + cos(a) * nRot.y); }\n    objectNormal = nRot;\n  }')
+      .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n  {\n    vec3 nRot = objectNormal;\n    if (abs(aKit.y - 9.0) < 0.5) { float a = uTime * 0.7 + I_INFO.w * 6.28; nRot.xy = vec2(cos(a) * nRot.x - sin(a) * nRot.y, sin(a) * nRot.x + cos(a) * nRot.y); }\n    objectNormal = nRot;\n  }')
       .replace('#include <begin_vertex>', VERT_BEGIN)
       .replace('#include <project_vertex>', `#include <project_vertex>
   // the building meshes sit at the identity inside the planet's body-frame group: instance space IS the body frame
-  vBodyPos = (instanceMatrix * vec4(transformed, 1.0)).xyz;
+  vBodyPos = (I_MATRIX * vec4(transformed, 1.0)).xyz;
   vLocal = transformed;
   vKUv = uv;
   vKit = aKit;
-  vState = iState;
-  vInfo = iInfo;
-  vFade = 1.0 - iFade.x;`);
+  vState = I_STATE;
+  vInfo = bInfo;
+  vFade = 1.0 - bFade.x;
+  // a draped paving (a market square) is drawn a hair toward the camera (0.1 % of the distance, like the road
+  // ribbons): the terrain mesh's chords over a hollow can stand a few cm above the ground it is draped on
+  if (abs(aKit.y - 14.0) < 0.5) { mvPosition.xyz *= 0.999; gl_Position = projectionMatrix * mvPosition; }`);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\n${FRAG_PARS}`)
       .replace('#include <color_fragment>', `#include <color_fragment>\n${FRAG_SURFACE}`)
@@ -582,16 +697,15 @@ export function makeBuildingMaterial(shared: Record<string, IUniform>, doubleSid
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${FRAG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${FRAG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => 'genesis-building-v2';
+  mat.customProgramCacheKey = () => 'genesis-building-v6';
   return mat;
 }
 
 const DEPTH_VERT = /* glsl */ `
 #include <common>
+#include <batching_pars_vertex>
 attribute vec4 aKit;
-attribute vec4 iInfo;
-attribute vec4 iState;
-attribute vec3 iFade;
+${INST_PARS}
 uniform float uTime;
 varying vec3 vLocal;
 varying vec4 vKit;
@@ -599,15 +713,18 @@ varying vec4 vState;
 varying vec4 vInfo;
 #include <logdepthbuf_pars_vertex>
 void main() {
+#include <batching_vertex>
   vec3 transformed = position;
-  transformed.y += iFade.y * transformed.x + iFade.z * transformed.z;
-  vLocal = transformed; vKit = aKit; vState = iState; vInfo = iInfo;
+  vec4 bInfo = I_INFO;
+  vec3 bFade = I_FADE;
+  transformed.y += bFade.y * transformed.x + bFade.z * transformed.z;
+  vLocal = transformed; vKit = aKit; vState = I_STATE; vInfo = bInfo;
   if (abs(aKit.y - 9.0) < 0.5) {
-    float a = uTime * 0.7 + iInfo.w * 6.28;
+    float a = uTime * 0.7 + bInfo.w * 6.28;
     vec2 r = vec2(transformed.x, transformed.y - uv.x);
     transformed.xy = vec2(cos(a) * r.x - sin(a) * r.y, sin(a) * r.x + cos(a) * r.y + uv.x);
   }
-  vec4 mv = modelViewMatrix * instanceMatrix * vec4(transformed, 1.0);
+  vec4 mv = modelViewMatrix * I_MATRIX * vec4(transformed, 1.0);
   gl_Position = projectionMatrix * mv;
 #include <logdepthbuf_vertex>
 }
@@ -625,7 +742,11 @@ void main() {
   float flags = floor(vState.z + 0.5);
   bool ruined = mod(floor(flags / 2.0), 2.0) > 0.5;
   float part = vKit.y;
-  if (bldCut(vLocal, part, vState.x, vState.y, ruined, max(vInfo.x, 0.5), vInfo.yz, vKit.z + vInfo.w * 7.13, abs(part - 1.0) < 0.5 ? 1.0 : 0.0)) discard;
+  if (vInfo.x > -0.5 && bldCut(vLocal, part, vState.x, vState.y, ruined, max(vInfo.x, 0.5), vInfo.yz, vKit.z + vInfo.w * 7.13, abs(part - 1.0) < 0.5 ? 1.0 : 0.0, vKit.x)) discard;
+  if (abs(part - 13.0) < 0.5) {
+    float w = vState.w >= 1999.5 ? clamp((mod(vState.w - 2000.0, 1000.0)) / 999.0, 0.0, 1.0) : 0.0;
+    if (!ruined || w < 0.22 + 0.7 * fract(vKit.z * 13.7)) discard;
+  }
   gl_FragColor = vec4(1.0);
 }
 `;
@@ -635,6 +756,8 @@ void main() {
  * shells (outer face, inner face, slab undersides), so only their BACK faces cast: a sunlit wall then compares
  * against its own inner face 0.3–0.6 m behind it instead of itself (no acne on lit facades and roofs).
  */
-export function makeBuildingDepthMaterial(shared: Record<string, IUniform>): ShaderMaterial {
-  return new ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, uniforms: { uTime: shared.uTime }, colorWrite: false, side: BackSide });
+export function makeBuildingDepthMaterial(shared: Record<string, IUniform>, instData?: IUniform): ShaderMaterial {
+  const uniforms: Record<string, IUniform> = { uTime: shared.uTime };
+  if (instData) uniforms.uBldInst = instData;
+  return new ShaderMaterial({ vertexShader: DEPTH_VERT, fragmentShader: DEPTH_FRAG, uniforms, colorWrite: false, side: BackSide });
 }

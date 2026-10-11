@@ -143,20 +143,35 @@ const FRAG_SURFACE = /* glsl */ `
     rgh = 0.7;
   } else {
     if (tier < 3.5) {
-      // flagstones: large rectangular slabs, worn and stained
-      vec2 f = ruv / vec2(0.9, 0.6);
-      float row = floor(f.y);
-      f.x += fract(row * 0.37);
-      vec2 cell = floor(f), ff = fract(f);
-      float id = gn_hash12(cell);
-      vec2 e = min(ff, 1.0 - ff) * vec2(0.9, 0.6);
-      float joint = smoothstep(0.0, 0.015, min(e.x, e.y));
+      // flagstones: slabs of uneven size (rows 0.45–0.8 m across the street, slabs 0.6–1.2 m along it), each its own
+      // tone (±15 %), grime packed into the joints (wider where the street is busiest), the middle lanes worn smooth
+      // and a little polished, dirt and mud toward the kerbs — not a clean tiled floor
+      float ry = ruv.y / 0.62;
+      float r0 = floor(ry);
+      // (row boundaries jittered ±0.25 of a row: the row is one of r0 − 1, r0, r0 + 1)
+      float b0 = r0 + (gn_hash12(vec2(r0, 7.1)) - 0.5) * 0.5, b1 = r0 + 1.0 + (gn_hash12(vec2(r0 + 1.0, 7.1)) - 0.5) * 0.5;
+      float row = ry < b0 ? r0 - 1.0 : (ry >= b1 ? r0 + 1.0 : r0);
+      float rLo = row + (gn_hash12(vec2(row, 7.1)) - 0.5) * 0.5, rHi = row + 1.0 + (gn_hash12(vec2(row + 1.0, 7.1)) - 0.5) * 0.5;
+      float ax = ruv.x / 0.9 + gn_hash12(vec2(row, 3.3)) * 3.0;
+      float c0 = floor(ax);
+      float cLo = c0 + (gn_hash12(vec2(c0, row * 1.37)) - 0.5) * 0.6, cHi = c0 + 1.0 + (gn_hash12(vec2(c0 + 1.0, row * 1.37)) - 0.5) * 0.6;
+      float col = ax < cLo ? c0 - 1.0 : ax > cHi ? c0 + 1.0 : c0;
+      cLo = col + (gn_hash12(vec2(col, row * 1.37)) - 0.5) * 0.6; cHi = col + 1.0 + (gn_hash12(vec2(col + 1.0, row * 1.37)) - 0.5) * 0.6;
+      float id = gn_hash12(vec2(col, row) + 17.0);
+      float ex2 = min(ax - cLo, cHi - ax) * 0.9, ey2 = min(ry - rLo, rHi - ry) * 0.62;
+      float jw = 0.008 + 0.02 * smoothstep(0.55, 1.0, wear);
+      float joint = smoothstep(0.0, jw, min(ex2, ey2));
       float k = rAA(fw, 0.08);
-      alb = vec3(0.165, 0.155, 0.14) * (0.8 + 0.3 * id) * mix(1.0, mix(0.45, 1.0, joint), k) * (0.9 + 0.12 * n1);
-      // grime gathers along the kerbs and in the low spots
-      alb *= mix(1.0, 0.7, smoothstep(0.55, 0.9, edge) * (0.6 + 0.4 * n1));
+      float lane = 1.0 - smoothstep(0.15, 0.6, edge);
+      vec3 slab = vec3(0.13, 0.124, 0.113) * (0.85 + 0.3 * id) * (0.9 + 0.12 * n1);
+      slab *= 1.0 + 0.06 * lane * smoothstep(0.6, 1.0, wear);
+      // the joints: dark grime; seen from afar their mean darkening
+      alb = slab * mix(mix(0.78, 1.0, smoothstep(0.0, 0.25, fw)), mix(0.32, 1.0, joint), k);
+      // dirt and mud toward the kerbs and in the low spots
+      float dirt = smoothstep(0.5, 0.9, edge + 0.25 * snoise(vec3(ruv * 0.7, 21.0))) * (0.6 + 0.4 * n1);
+      alb = mix(alb, vec3(0.085, 0.07, 0.052), dirt * 0.65);
       h = joint * 0.4 * k;
-      rgh = 0.75;
+      rgh = mix(0.8, 0.55, lane * smoothstep(0.6, 1.0, wear));
     } else {
       // macadam: dark fine grain, oil stains, a painted centre line
       float grain = snoise(vec3(ruv * 9.0, 1.0)) * rAA(fw, 0.05);
@@ -256,9 +271,12 @@ function makeRoadMaterial(shared: Record<string, IUniform>, transparent: boolean
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${FRAG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${FRAG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => `genesis-road-v4-${transparent ? 't' : 'o'}`;
+  mat.customProgramCacheKey = () => `genesis-road-v5-${transparent ? 't' : 'o'}`;
   return mat;
 }
+
+/** lamp posts cast sun shadows within this distance of the camera (m) */
+const SHADOW_POST_M = 70;
 
 export class Roads {
   readonly group = new Group();
@@ -276,6 +294,14 @@ export class Roads {
   private lampDepth: ShaderMaterial;
   /** lamp posts per light kind (index kind − 2) */
   private posts: { mesh: InstancedMesh; state: InstancedBufferAttribute; info: InstancedBufferAttribute; cap: number; geo: BufferGeometry; head: [number, number, number] }[] = [];
+  /**
+   * the posts' shadow casters: the far mesh of the posts within SHADOW_POST_M of the camera only (every post of a city
+   * in every cascade at full detail was ~70 k triangles a frame for shadows a few pixels wide); the posts drawn in
+   * colour never cast
+   */
+  private shadowPosts: Roads['posts'] = [];
+  private lampsAll: { kind: number; m: number[]; seed: number }[] = [];
+  private shadowCam: [number, number, number] = [1e9, 1e9, 1e9];
   private castShadows = false;
   /** hysteresis: the cells the drawn ways ran through last time, and the road field as the extraction sees it */
   private wasRoad = new Set<number>();
@@ -293,10 +319,12 @@ export class Roads {
     for (let kind = 2; kind <= 4; kind++) {
       const { geo, head } = lampPostMesh(kind, 0);
       this.posts.push(this.makePosts(geo, 64, head));
+      const far = lampPostMesh(kind, 1);
+      this.shadowPosts.push(this.makePosts(far.geo, 32, far.head, true));
     }
   }
 
-  private makePosts(geo: BufferGeometry, cap: number, head: [number, number, number]): Roads['posts'][number] {
+  private makePosts(geo: BufferGeometry, cap: number, head: [number, number, number], shadowOnly = false): Roads['posts'][number] {
     const state = new InstancedBufferAttribute(new Float32Array(cap * 4), 4);
     const info = new InstancedBufferAttribute(new Float32Array(cap * 4), 4);
     state.setUsage(DynamicDrawUsage);
@@ -308,7 +336,7 @@ export class Roads {
     mesh.frustumCulled = false;
     mesh.matrixAutoUpdate = false;
     mesh.visible = false;
-    if (this.castShadows) mesh.layers.enable(1);
+    if (shadowOnly) { if (this.castShadows) mesh.layers.set(1); else mesh.layers.disableAll(); }
     this.group.add(mesh);
     return { mesh, state, info, cap, geo, head };
   }
@@ -316,12 +344,13 @@ export class Roads {
   setShadowCasting(on: boolean): void {
     if (on === this.castShadows) return;
     this.castShadows = on;
-    for (const p of this.posts) { if (on) p.mesh.layers.enable(1); else p.mesh.layers.disable(1); }
+    for (const p of this.shadowPosts) { if (on) p.mesh.layers.set(1); else p.mesh.layers.disableAll(); }
   }
 
   /** the shadow pass draws the posts with the building depth material */
   swapDepth(depth: boolean): void {
     for (const p of this.posts) p.mesh.material = depth ? this.lampDepth : this.lampMat;
+    for (const p of this.shadowPosts) p.mesh.material = depth ? this.lampDepth : this.lampMat;
   }
 
   update(pv: PlanetView, camX: number, camY: number, camZ: number, buildings: Buildings): void {
@@ -334,6 +363,8 @@ export class Roads {
     // out of range (or no roads): nothing drawn, and the next approach rebuilds
     const off = !road || alt > RANGE * 1.4;
     for (const p of this.posts) if (off) p.mesh.visible = false; else p.mesh.visible = p.mesh.count > 0;
+    if (off) { for (const p of this.shadowPosts) p.mesh.visible = false; }
+    else if (Math.hypot(camX - this.shadowCam[0], camY - this.shadowCam[1], camZ - this.shadowCam[2]) > 8) this.placeShadowPosts(camX, camY, camZ);
     if (off || !road) { this.dirt.visible = this.paved.visible = false; this.stamp = ''; if (this.lampLights.length) { this.lampLights = []; this.lampVersion++; } return; }
     this.dirt.visible = this.dirt.geometry.index !== null;
     this.paved.visible = this.paved.geometry.index !== null;
@@ -601,7 +632,43 @@ export class Roads {
     this.stats.verts = (geo.dirt.p.length + geo.paved.p.length) / 3;
   }
 
+  /** the shadow casters: the posts near the camera */
+  private placeShadowPosts(camX: number, camY: number, camZ: number): void {
+    this.shadowCam = [camX, camY, camZ];
+    const counts = [0, 0, 0];
+    const near = this.lampsAll.filter((l) => Math.hypot(l.m[9] - camX, l.m[10] - camY, l.m[11] - camZ) < SHADOW_POST_M);
+    for (const l of near) counts[l.kind - 2]++;
+    for (let k = 0; k < 3; k++) {
+      let p = this.shadowPosts[k];
+      if (counts[k] > p.cap) {
+        let cap = p.cap;
+        while (cap < counts[k]) cap *= 2;
+        this.group.remove(p.mesh);
+        p.mesh.dispose();
+        p = this.shadowPosts[k] = this.makePosts(p.geo, cap, p.head, true);
+      }
+      p.mesh.count = 0;
+    }
+    for (const l of near) {
+      const p = this.shadowPosts[l.kind - 2];
+      const i = p.mesh.count++;
+      const m = l.m;
+      _mat.set(m[0], m[3], m[6], m[9], m[1], m[4], m[7], m[10], m[2], m[5], m[8], m[11], 0, 0, 0, 1);
+      p.mesh.setMatrixAt(i, _mat);
+      p.state.setXYZW(i, 1, 0, 128, l.kind * 256 + 255);
+      p.info.setXYZW(i, 7, 0.3, 0.3, l.seed);
+    }
+    for (const p of this.shadowPosts) {
+      p.mesh.visible = p.mesh.count > 0;
+      p.mesh.instanceMatrix.needsUpdate = true;
+      p.state.needsUpdate = true;
+      p.info.needsUpdate = true;
+    }
+  }
+
   private placeLamps(lamps: { kind: number; m: number[]; seed: number }[]): void {
+    this.lampsAll = lamps;
+    this.shadowCam = [1e9, 1e9, 1e9];
     const counts = [0, 0, 0];
     for (const l of lamps) counts[l.kind - 2]++;
     for (let k = 0; k < 3; k++) {
@@ -640,7 +707,7 @@ export class Roads {
 
   dispose(): void {
     for (const m of [this.dirt, this.paved]) { m.geometry.dispose(); (m.material as MeshStandardMaterial).dispose(); }
-    for (const p of this.posts) { p.geo.dispose(); p.mesh.dispose(); }
+    for (const p of [...this.posts, ...this.shadowPosts]) { p.geo.dispose(); p.mesh.dispose(); }
     this.lampMat.dispose();
     this.lampDepth.dispose();
   }

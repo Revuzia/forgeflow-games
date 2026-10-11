@@ -575,6 +575,8 @@ varying float vAO;
 varying vec3 vLocal;
 varying float vStyle;
 varying float vFade;
+// a tailored coat: the clothing colour as heavier wool, a little darker (at × 0.55 a steam-age crowd went black)
+vec3 coatOf(vec3 c) { return c * 0.8 + 0.006; }
 float bodyCloudShadow(vec3 P, vec3 sunB) {
   if (uCloudOn < 0.5) return 1.0;
   float mid = 0.5 * (uCloudShell.x + uCloudShell.y);
@@ -600,11 +602,13 @@ const FRAG_SURFACE = /* glsl */ `
   float bRough = 0.8, bMetal = 0.0;
   vec3 bEmit = vec3(0.0);
   float skinK = 0.0;
+  // woven cloth and wool: a soft sheen at grazing angles (dark coats keep their form under the sun)
+  float clothK = 0.0;
   if (part == 0) {
     // skin: a little less saturated than the palette (with the grade's saturation it read as flat orange plasticine),
     // matte with a soft sheen, and alive — blood under the cheeks, nose, ears, knuckles and knees, paler palms
     float sl = dot(vColB, vec3(0.2126, 0.7152, 0.0722));
-    alb = mix(vec3(sl), vColB, 0.8) * (0.95 + 0.08 * fbm3(vLocal * 45.0) * detail);
+    alb = mix(vec3(sl), vColB, 0.72) * (0.95 + 0.08 * fbm3(vLocal * 45.0) * detail);
 #if PLAN == 0
     float face = smoothstep(0.07, 0.0, abs(vLocal.y - 1.6)) * smoothstep(0.03, 0.065, abs(vLocal.x)) * smoothstep(0.04, 0.08, vLocal.z);
     float nose = smoothstep(0.03, 0.0, length(vLocal - vec3(0.0, 1.6, 0.115)));
@@ -613,6 +617,13 @@ const FRAG_SURFACE = /* glsl */ `
     float knee = smoothstep(0.06, 0.0, length(vec3(abs(vLocal.x) - 0.1, vLocal.y - 0.5, vLocal.z - 0.05)));
     float flush = max(max(face * 0.8, nose), max(ear, max(hand * 0.6, knee * 0.5)));
     alb *= mix(vec3(1.0), vec3(1.1, 0.88, 0.84), flush);
+    // weathered extremities: hands, forearms and feet darker and ruddier, the face and neck a little sun-browned, the
+    // body paler where it is clothed most of the time; a faint blotchy mottle (skin is never one flat colour)
+    float ext = max(smoothstep(0.98, 0.84, vLocal.y) * smoothstep(0.16, 0.21, abs(vLocal.x)), smoothstep(0.14, 0.06, vLocal.y));
+    alb *= mix(vec3(1.0), vec3(0.86, 0.8, 0.78), ext * 0.8);
+    alb *= mix(vec3(1.0), vec3(0.94, 0.91, 0.88), smoothstep(1.4, 1.5, vLocal.y) * (1.0 - face * 0.5));
+    alb *= mix(vec3(1.0), vec3(1.05, 1.03, 1.02), smoothstep(1.0, 1.15, vLocal.y) * smoothstep(1.42, 1.3, vLocal.y) * smoothstep(0.17, 0.12, abs(vLocal.x)));
+    alb *= 0.94 + 0.12 * fbm3(vLocal * 11.0 + 3.0);
     // palms (the inner side of the hand) paler
     alb = mix(alb, alb * vec3(1.12, 1.05, 1.0), hand * smoothstep(0.0, -0.01, sign(vLocal.x) * (vLocal.x - sign(vLocal.x) * 0.233)) * 0.6);
 #endif
@@ -621,14 +632,14 @@ const FRAG_SURFACE = /* glsl */ `
   else if (part == 1 || part == 13) {
     // cloth: hides are mottled, woven cloth has a weave, tailored coats are darker wool
 #if PLAN == 0
-    vec3 base = part == 13 ? vColA * 0.55 : vColA;
+    vec3 base = part == 13 ? coatOf(vColA) : vColA;
 #else
     vec3 base = part == 13 ? vColB : vColA;
 #endif
     float weave = sin(vLocal.x * 900.0) * sin(vLocal.y * 900.0 + vLocal.z * 600.0);
     float mott = fbm3(vLocal * 22.0);
     alb = base * (0.9 + 0.08 * weave * detail + 0.12 * mott);
-    bRough = 0.9;
+    bRough = 0.9; clothK = 1.0;
 #if PLAN == 0
     if ((st & 4) != 0 && (st & (8 | 16 | 32)) == 0) alb = vec3(0.3, 0.2, 0.12) * (0.75 + 0.4 * mott);
 #endif
@@ -637,7 +648,7 @@ const FRAG_SURFACE = /* glsl */ `
     // the dyed trim / trousers: a darker, less saturated companion of the main colour
     float l = dot(vColA, vec3(0.3, 0.55, 0.15));
     alb = mix(vColA * 0.45, vec3(l) * 0.5, 0.45) * (0.92 + 0.1 * fbm3(vLocal * 30.0));
-    bRough = 0.9;
+    bRough = 0.9; clothK = 1.0;
   }
   else if (part == 3) { alb = vColC * (0.85 + 0.3 * abs(snoise(vec3(vLocal.x * 120.0, vLocal.y * 30.0, vLocal.z * 120.0))) * detail); bRough = 0.6; }
   else if (part == 4) { alb = vec3(0.012, 0.01, 0.01); bRough = 0.3; }
@@ -662,9 +673,40 @@ const FRAG_SURFACE = /* glsl */ `
   else if (part == 16) { bEmit = mix(vColA, vec3(1.0, 0.8, 0.9), 0.4) * (1.6 + 0.6 * sin(uTime * 1.3)); alb = vColA * 0.2; }
   else if (part == 18) { alb = vec3(0.42, 0.19, 0.08) * (0.9 + 0.1 * snoise(vLocal * 40.0)); bRough = 0.7; }
   else if (part == 19) { alb = vec3(0.3, 0.29, 0.27) * (0.85 + 0.2 * snoise(vLocal * 30.0)); bRough = 0.85; }
+#if PLAN == 0
+  else if (part >= 20 && part <= 24) {
+    // the mid / far bipeds (bodygen.ts bipedLow): one mesh for every clothing tier, each piece coloured by the
+    // instance's tier — garment (hide / tunic / coat), legwear (bare / trousers), sleeves, forearms, a hair cap
+    bool t0 = (st & 4) != 0, t2 = (st & 16) != 0, t3 = (st & 32) != 0;
+    float sl = dot(vColB, vec3(0.2126, 0.7152, 0.0722));
+    vec3 skinC = mix(vec3(sl), vColB, 0.8);
+    float cl = dot(vColA, vec3(0.3, 0.55, 0.15));
+    vec3 trouserC = mix(vColA * 0.45, vec3(cl) * 0.5, 0.45);
+    vec3 coatC = coatOf(vColA);
+    if (part == 20) alb = t0 ? vec3(0.3, 0.2, 0.12) : t3 ? coatC : vColA;
+    else if (part == 21) alb = (t2 || t3) ? trouserC : skinC;
+    else if (part == 22) alb = t0 ? skinC : t3 ? coatC : vColA;
+    else if (part == 23) alb = t3 ? coatC : skinC;
+    else if (part == 24) alb = (st & 3) != 0 ? vColC : skinC;
+    else alb = vec3(0.58, 0.55, 0.48);
+    bRough = 0.88;
+    clothK = part == 24 || (part == 21 && !(t2 || t3)) || (part == 23 && !t3) ? 0.0 : 1.0;
+  }
+  else if (part == 25) {
+    // linen: an apron, a shirt front — off-white, a little greyed and creased
+    alb = vec3(0.6, 0.57, 0.5) * (0.88 + 0.14 * fbm3(vLocal * 30.0));
+    bRough = 0.85; clothK = 1.0;
+  }
+#endif
 #if PLAN == 3 || PLAN == 4 || PLAN == 5 || PLAN == 6 || PLAN == 7
   // animals: the coat is the base colour, with a darker back stripe and lighter flanks
-  if (part == 13 || part == 1) { alb = vColB * (0.82 + 0.25 * fbm3(vLocal * 9.0)); bRough = 0.85; }
+  if (part == 13 || part == 1) {
+    float cm = fbm3(vLocal * 9.0);
+    alb = vColB * (0.82 + 0.25 * cm); bRough = 0.85;
+    // the countershaded belly, blended in by the body's part code (bodygen quadMesh: 13 + 0.4 w), mottled at its edge
+    float bw = clamp((vPart - 13.0) / 0.4 + (cm - 0.5) * 0.35, 0.0, 1.0);
+    alb = mix(alb, vColC * (0.9 + 0.15 * cm), smoothstep(0.2, 0.85, bw));
+  }
   if (part == 9) { alb = mix(vColB, vec3(0.75, 0.72, 0.66), 0.55) * (0.75 + 0.35 * fbm3(vLocal * 30.0)); }
   if (part == 3) alb = vColB * 0.45;
 #endif
@@ -684,6 +726,11 @@ const FRAG_LIGHT = /* glsl */ `
     sunL.visible = true;
     RE_Direct(sunL, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight);
     ${moonDirect('vBodyPos', '1.0')}
+    // cloth sheen: light caught by the nap of wool and the weave at grazing angles
+    if (clothK > 0.5) {
+      float nv = max(dot(geometryNormal, geometryViewDir), 0.0), nl = max(dot(geometryNormal, uSunDirView), 0.0);
+      reflectedLight.directDiffuse += sunCol * (diffuseColor.rgb * 0.6 + 0.025) * pow(1.0 - nv, 3.0) * (0.35 + 0.65 * nl) * 0.7;
+    }
     // skin lets light in: a warm wrap term (subsurface approximation) on the terminator
     if (skinK > 0.5) {
       float wrap = max(0.0, dot(geometryNormal, uSunDirView) * 0.5 + 0.5) - max(0.0, dot(geometryNormal, uSunDirView));
@@ -742,7 +789,7 @@ export function makeBodyMaterial(shared: Record<string, IUniform>, animTime: IUn
       .replace('#include <lights_fragment_begin>', `#include <lights_fragment_begin>\n${FRAG_LIGHT}`)
       .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>\n${FRAG_AMBIENT}`);
   };
-  mat.customProgramCacheKey = () => `genesis-body-v1-${opts.plan}`;
+  mat.customProgramCacheKey = () => `genesis-body-v3-${opts.plan}`;
   return mat;
 }
 

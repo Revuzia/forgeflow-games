@@ -72,7 +72,7 @@ export function paveTier(era: number): number { return era <= 1 ? 0 : era <= 4 ?
 export const SURF = {
   plaster: 0, ashlar: 1, rubble: 2, brick: 3, mudbrick: 4, planks: 5, logs: 6, daub: 7, thatch: 8, tiles: 9, slate: 10,
   hide: 11, cloth: 12, metal: 13, concrete: 14, glass: 15, beam: 16, earth: 17, chitin: 18, ice: 19, ember: 20, bark: 21,
-  shingle: 22, rope: 23, iron: 24,
+  shingle: 22, rope: 23, iron: 24, lacquer: 25, leaves: 26,
 } as const;
 
 export interface MaterialLook {

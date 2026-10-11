@@ -1163,12 +1163,17 @@ function workshop(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng, em: Emit
 // a benevolent one leaves it open, whitewashed or of warm stone, with gardens, a paved approach lined with lanterns and
 // an altar heaped with offerings.
 
-const BASALT: RGB = [0.05, 0.048, 0.05];
+// (fearful stone is dark basalt, ~0.08: at 0.05 with a blue cast every fearful temple read as a black void)
+const BASALT: RGB = [0.1, 0.092, 0.082];
 const BONE: RGB = [0.6, 0.56, 0.46];
 const BLOOD: RGB = [0.13, 0.012, 0.01];
 const LEAF: RGB = [0.04, 0.075, 0.028];
-const LACQUER: RGB = [0.34, 0.05, 0.03];
-const WHITEWASH: RGB = [0.8, 0.77, 0.7];
+// oxblood lacquer (benevolent posts), black lacquer (fearful timber), ochre plaster, a whitewash for trims and walls
+const LACQUER: RGB = [0.25, 0.04, 0.03];
+const BLACK_LACQUER: RGB = [0.095, 0.08, 0.066];
+const OCHRE: RGB = [0.5, 0.34, 0.15];
+const WHITEWASH: RGB = [0.7, 0.67, 0.6];
+const BRONZE: RGB = [0.24, 0.15, 0.06];
 const FLOWERS: RGB[] = [[0.6, 0.08, 0.06], [0.7, 0.55, 0.08], [0.75, 0.72, 0.66], [0.32, 0.12, 0.45], [0.75, 0.3, 0.05]];
 
 export type TempleForm = 'henge' | 'ziggurat' | 'columns' | 'hall' | 'pagoda' | 'dome' | 'cathedral';
@@ -1194,8 +1199,10 @@ interface TempleLook {
   earth: RGB;
   metal: RGB;
   cloth: RGB;
-  /** posts and carved timber: tarred black, red lacquer, dark wood */
+  /** posts and carved timber: black lacquer, oxblood lacquer, dark wood */
   timber: RGB;
+  /** their surface: lacquered (a sheen) or plain beams */
+  timberSurf: number;
 }
 
 function templeLook(spec: BuildingSpec, L: Look): TempleLook {
@@ -1207,9 +1214,11 @@ function templeLook(spec: BuildingSpec, L: Look): TempleLook {
     fear, kind,
     stone: fear ? BASALT : kind ? mixc(plain, [0.6, 0.52, 0.4], 0.3) : plain,
     earth: fear ? mixc(earth0, BASALT, 0.72) : kind ? mixc(earth0, WHITEWASH, 0.6) : earth0,
-    metal: fear ? IRON : GOLD,
-    cloth: fear ? (spec.style & 1 ? [0.02, 0.018, 0.018] : [0.3, 0.02, 0.015]) : CLOTH[(spec.style + (kind ? 2 : 0)) % CLOTH.length],
-    timber: fear ? [0.025, 0.02, 0.018] : kind ? LACQUER : WOOD_DARK,
+    // (fearful accents in dark bronze and dried-blood red)
+    metal: fear ? BRONZE : GOLD,
+    cloth: fear ? (spec.style & 1 ? [0.045, 0.04, 0.036] : [0.22, 0.03, 0.02]) : CLOTH[(spec.style + (kind ? 2 : 0)) % CLOTH.length],
+    timber: fear ? BLACK_LACQUER : kind ? LACQUER : WOOD_DARK,
+    timberSurf: fear || kind ? SURF.lacquer : SURF.beam,
   };
 }
 
@@ -1273,10 +1282,10 @@ function skullTotem(k: KitBuilder, x: number, z: number, h: number, T: TempleLoo
 
 /** a banner on a pole: a cloth hanging from a crossbar, both faces, with a forked tail */
 function bannerPole(k: KitBuilder, x: number, z: number, h: number, col: RGB, T: TempleLook, lod: number): void {
-  k.cylinder(x, z, -0.4, h + 0.25, 0.07, 0.05, 5, SURF.beam, PART.prop, T.timber, { top: true });
+  k.cylinder(x, z, -0.4, h + 0.25, 0.07, 0.05, 5, T.timberSurf, PART.prop, T.timber, { top: true });
   if (!T.fear && lod === 0) k.lathe(x, z, [[0.09, h + 0.25], [0.12, h + 0.38], [0.02, h + 0.62]], 6, SURF.metal, PART.prop, T.metal, 1, 1);
   if (T.fear) k.cylinder(x, z, h + 0.25, h + 0.85, 0.05, 0.0, 4, SURF.iron, PART.prop, IRON);
-  k.beam([x - 0.62, h, z + 0.08], [x + 0.62, h, z + 0.08], 0.06, 0.06, SURF.beam, PART.prop, T.timber);
+  k.beam([x - 0.62, h, z + 0.08], [x + 0.62, h, z + 0.08], 0.06, 0.06, T.timberSurf, PART.prop, T.timber);
   const y0 = h - 0.05, y1 = h - 2.3, zf = z + 0.1;
   const tail = (zz: number, back: boolean) => {
     // a swallowtail: two points hanging below the cloth, a notch between them
@@ -1297,17 +1306,48 @@ function bannerPole(k: KitBuilder, x: number, z: number, h: number, col: RGB, T:
   }
 }
 
-/** a lantern on a post (benevolent grounds): glows at night */
-function lanternPost(k: KitBuilder, x: number, z: number, h: number, T: TempleLook): void {
-  k.cylinder(x, z, -0.3, h, 0.07, 0.055, 5, SURF.beam, PART.prop, T.timber);
-  k.box(x - 0.17, h, z - 0.17, x + 0.17, h + 0.36, z + 0.17, SURF.plaster, PART.lantern, [0.5, 0.45, 0.36]);
-  k.box(x - 0.24, h + 0.36, z - 0.24, x + 0.24, h + 0.43, z + 0.24, SURF.beam, PART.prop, T.timber);
-  k.cylinder(x, z, h + 0.43, h + 0.62, 0.17, 0.0, 4, SURF.beam, PART.prop, T.timber);
+/**
+ * A framed paper lantern, its shade's foot at (x, y, z): a ribbed, bellied paper shade (PART.lantern: it glows at
+ * night) between lacquered wooden rings, a little hood and a hook — not a white box.
+ */
+function paperLantern(k: KitBuilder, x: number, y: number, z: number, s: number, T: TempleLook, lod: number): void {
+  const r = 0.17 * s, h = 0.44 * s;
+  const paper: RGB = [0.6, 0.44, 0.24];
+  k.cylinder(x, z, y - 0.04 * s, y + 0.01 * s, r * 0.74, r * 0.74, 8, T.timberSurf, PART.prop, T.timber, { bottom: true });
+  k.lathe(x, z, [[r * 0.72, y], [r * 0.96, y + h * 0.2], [r, y + h * 0.5], [r * 0.94, y + h * 0.8], [r * 0.7, y + h]], lod === 0 ? 10 : 6, SURF.plaster, PART.lantern, paper, 0.95, 1);
+  if (lod === 0) for (let i = 0; i < 6; i++) {
+    // the ribs of the frame through the paper
+    const a = (i / 6) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
+    k.beam([x + ca * r * 0.74, y + 0.01, z + sa * r * 0.74], [x + ca * r * 1.005, y + h * 0.5, z + sa * r * 1.005], 0.012 * s, 0.012 * s, T.timberSurf, PART.prop, T.timber, 0.9);
+    k.beam([x + ca * r * 1.005, y + h * 0.5, z + sa * r * 1.005], [x + ca * r * 0.72, y + h - 0.01, z + sa * r * 0.72], 0.012 * s, 0.012 * s, T.timberSurf, PART.prop, T.timber, 0.9);
+  }
+  k.cylinder(x, z, y + h - 0.01, y + h + 0.05 * s, r * 0.72, r * 0.72, 8, T.timberSurf, PART.prop, T.timber, {});
+  k.cylinder(x, z, y + h + 0.05 * s, y + h + 0.16 * s, r * 0.95, 0.02, 8, T.timberSurf, PART.prop, T.timber, {});
 }
 
-/** a clipped shrub (garden) */
+/** a lantern on a post (benevolent grounds): a paper lantern hung from a bracket; glows at night */
+function lanternPost(k: KitBuilder, x: number, z: number, h: number, T: TempleLook, lod: number): void {
+  k.cylinder(x, z, -0.3, h + 0.55, 0.07, 0.055, 6, T.timberSurf, PART.prop, T.timber, { top: true });
+  k.beam([x, h + 0.5, z], [x + 0.42, h + 0.5, z], 0.06, 0.07, T.timberSurf, PART.prop, T.timber, 0.9);
+  k.beam([x + 0.38, h + 0.47, z], [x + 0.38, h + 0.3, z], 0.015, 0.015, SURF.rope, PART.prop, [0.08, 0.06, 0.04]);
+  paperLantern(k, x + 0.38, h - 0.22, z, 1, T, lod);
+}
+
+/** a shrub (garden): a lumpy mound of leaf clusters, never a turned cone */
 function shrub(k: KitBuilder, x: number, z: number, r: number, h: number, col: RGB, lod: number): void {
-  k.lathe(x, z, [[r * 0.5, -0.05], [r, h * 0.35], [r * 0.85, h * 0.75], [r * 0.32, h * 0.97], [0.02, h]], lod === 0 ? 7 : 5, SURF.thatch, PART.prop, col, 0.55, 1);
+  const from = k.vertexCount;
+  const ph = x * 3.1 + z * 1.7;
+  k.lathe(x, z, [[r * 0.55, -0.05], [r * 0.95, h * 0.25], [r, h * 0.5], [r * 0.85, h * 0.75], [r * 0.5, h * 0.93], [0.03, h]], lod === 0 ? 9 : 6, SURF.leaves, PART.prop, col, 0.55, 1);
+  k.jitterRadial(from, x, z, (a, y) => r * (0.13 * Math.sin(3 * a + ph) + 0.09 * Math.sin(5 * a + ph * 2 + y * 4) + 0.06 * Math.sin(8 * a + y * 9 + ph)) * Math.min(1, y / (0.3 * h) + 0.2));
+}
+
+/** a clipped hedge along x = xc from z0 to z1: a row of overlapping lumpy mounds of leaf clusters */
+function hedge(k: KitBuilder, xc: number, z0: number, z1: number, w: number, h: number, col: RGB, rng: Rng, lod: number): void {
+  const n = Math.max(2, Math.round((z1 - z0) / (lod === 0 ? 0.75 : 1.4)));
+  for (let i = 0; i <= n; i++) {
+    const z = z0 + ((z1 - z0) * i) / n;
+    shrub(k, xc + (rng.float() - 0.5) * 0.08, z, w * (0.95 + 0.15 * rng.float()), h * (0.92 + 0.14 * rng.float()), mulc(col, 0.9 + 0.2 * rng.float()), lod);
+  }
 }
 
 /** a kerbed flower bed from (x0, z0) to (x1, z1) */
@@ -1335,10 +1375,29 @@ function altarStone(k: KitBuilder, x: number, z: number, hw: number, hd: number,
     }
     hornedSkull(k, x, 1.0, z, 1.1, lod);
   } else {
-    const gifts: RGB[] = [[0.5, 0.36, 0.14], [0.55, 0.12, 0.05], [0.62, 0.5, 0.12], [0.15, 0.3, 0.08], [0.7, 0.6, 0.45]];
-    for (let i = 0; i < (T.kind ? 6 : 3); i++) {
-      const gx = x - hw * 0.75 + (i % 3) * hw * 0.75, gz = z + (i < 3 ? -0.5 : 0.5) * hd;
-      k.lathe(gx, gz, [[0.03, 1.0], [0.17, 1.04], [0.2, 1.12], [0.14, 1.16], [0.02, 1.18]], 7, SURF.plaster, PART.prop, gifts[i % gifts.length], 0.8, 1);
+    // offerings: little clay bowls of fruit and grain, flowers laid between them, a lamp (small: 8–15 cm, muted)
+    const fruit: RGB[] = [[0.3, 0.07, 0.035], [0.4, 0.26, 0.07], [0.14, 0.2, 0.05], [0.36, 0.15, 0.05], [0.42, 0.34, 0.18]];
+    const clay: RGB = [0.3, 0.17, 0.09];
+    const n = T.kind ? 9 : 4;
+    for (let i = 0; i < n; i++) {
+      const gx = x + (rng.float() - 0.5) * hw * 1.6, gz = z + (rng.float() - 0.5) * hd * 1.5;
+      const br = 0.06 + rng.float() * 0.03;
+      k.lathe(gx, gz, [[br * 0.45, 1.0], [br * 0.95, 1.02], [br, 1.05], [br * 0.88, 1.055]], 7, SURF.plaster, PART.prop, mulc(clay, 0.85 + 0.3 * rng.float()), 0.75, 1);
+      // its heap: two or three fruits or a mound of grain
+      const fc = fruit[Math.floor(rng.float() * fruit.length)];
+      for (let j = 0; j < 2 + Math.floor(rng.float() * 2); j++) {
+        const fr = 0.022 + rng.float() * 0.014, fx = gx + (rng.float() - 0.5) * br, fz = gz + (rng.float() - 0.5) * br, fy = 1.03 + j * 0.012;
+        k.lathe(fx, fz, [[0.002, fy], [fr * 0.8, fy + fr * 0.3], [fr, fy + fr], [fr * 0.75, fy + fr * 1.7], [0.002, fy + fr * 2]], 6, SURF.plaster, PART.prop, mulc(fc, 0.85 + 0.3 * rng.float()), 0.8, 1);
+      }
+    }
+    // flowers strewn on the slab: little rosettes of petals
+    for (let i = 0; i < (T.kind ? 10 : 4); i++) {
+      const fx = x + (rng.float() - 0.5) * hw * 1.8, fz = z + (rng.float() - 0.5) * hd * 1.8;
+      const c = mulc(FLOWERS[Math.floor(rng.float() * FLOWERS.length)], 0.7);
+      for (let p = 0; p < 5; p++) {
+        const a = (p / 5) * Math.PI * 2 + rng.float() * 0.4;
+        k.triangle([fx, 1.006, fz], [fx + Math.cos(a - 0.4) * 0.04, 1.012, fz + Math.sin(a - 0.4) * 0.04], [fx + Math.cos(a + 0.4) * 0.04, 1.012, fz + Math.sin(a + 0.4) * 0.04], SURF.cloth, PART.prop, c, 0.9);
+      }
     }
   }
 }
@@ -1415,15 +1474,15 @@ function templeGrounds(k: KitBuilder, spec: BuildingSpec, T: TempleLook, f: Temp
   // benevolent: lanterns line the walk, gardens flank the temple, banners of the people's colour at the steps
   for (let i = 0; i < 3; i++) {
     const z = f.front + 0.9 + i * ((zEnd - f.front - 1.2) / 2);
-    lanternPost(k, -1.9, z, 1.6, T);
-    lanternPost(k, 1.9, z, 1.6, T);
+    lanternPost(k, -1.9, z, 1.6, T, lod);
+    lanternPost(k, 1.9, z, 1.6, T, lod);
   }
   const kerb = mulc(T.stone, 0.85);
   for (const sx of [-1, 1]) {
     flowerBed(k, sx > 0 ? 2.6 : -5.2, f.front + 0.6, sx > 0 ? 5.2 : -2.6, zEnd - 0.4, kerb, rng, lod);
     // a hedge along the temple's flank and shrubs at its corners
     const xh = sx * (f.hw + 1.2);
-    k.box(xh - 0.45, -0.2, f.back + 0.5, xh + 0.45, 0.85, f.front - 0.6, SURF.thatch, PART.prop, mulc(LEAF, 0.9), { skip: ['bottom'], aoLow: 0.5 });
+    hedge(k, xh, f.back + 0.5, f.front - 0.6, 0.5, 1.0, mulc(LEAF, 0.9), rng, lod);
     shrub(k, xh, f.front + 0.4, 0.9, 1.6, mulc(LEAF, 1.1), lod);
     shrub(k, xh, f.back - 0.2, 0.8, 1.4, LEAF, lod);
     if (lod === 0) bannerPole(k, sx * 2.6, f.front + 0.2, 4.0, T.cloth, T, lod);
@@ -1503,7 +1562,7 @@ function ziggurat(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng
   const hs = tTop - 0.75;
   const sl: WallLook = {
     ...L.wall, surf: SURF.plaster, col: T.fear ? mixc(BASALT, [0.22, 0.04, 0.03], 0.25) : T.kind ? WHITEWASH : mixc(col, WHITEWASH, 0.35),
-    shutters: null, mullions: false, frameCol: T.timber, doorCol: T.fear ? [0.02, 0.015, 0.012] : T.timber, lod,
+    shutters: null, mullions: false, frameCol: T.timber, doorCol: T.fear ? [0.045, 0.034, 0.026] : T.timber, lod,
   };
   const sd = hs * 1.5;
   k.push(0, 0, -0.4);
@@ -1519,7 +1578,7 @@ function ziggurat(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng
     k.box(x1 - w, ya, z0 + w, x1, yb, z1 - w, sl.surf, PART.roof, sl.col, o);
   }
   k.quad([-hs, yr + 0.3, sd / 2 + 1.35], [hs, yr + 0.3, sd / 2 + 1.35], [hs, yr + 0.3, -sd / 2], [-hs, yr + 0.3, -sd / 2], SURF.earth, PART.roof, mulc(sl.col, 0.5), 0.6);
-  for (const sx of [-1, 1]) k.cylinder(sx * (hs - 0.2), sd / 2 + 1.35, yTop, yr, 0.2, 0.17, 8, SURF.beam, PART.wall, T.timber, {});
+  for (const sx of [-1, 1]) k.cylinder(sx * (hs - 0.2), sd / 2 + 1.35, yTop, yr, 0.2, 0.17, 8, T.timberSurf, PART.wall, T.timber, {});
   // horns of consecration (kind / neutral) or iron spikes (fearful) on the parapet's corners
   if (lod === 0) for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
     const x = sx * (hs + 0.05), z = sz > 0 ? sd / 2 + 1.4 : -sd / 2 - 0.05;
@@ -1581,16 +1640,17 @@ function pagoda(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: 
   k.box(-P / 2 + 0.9, 0.55, -P / 2 + 0.9, P / 2 - 0.9, 1.0, P / 2 - 0.9, SURF.ashlar, PART.plinth, T.stone, { skip: ['bottom'] });
   for (let i = 0; i < 3; i++) k.box(-1.7, -1, P / 2 - 0.2, 1.7, 0.34 * (i + 1), P / 2 + 0.42 * (3 - i), SURF.ashlar, PART.plinth, mulc(T.stone, 0.96), { skip: ['bottom'], aoLow: 0.7 });
   const tiers = spec.style & 2 ? 5 : 3;
-  const wallCol: RGB = T.fear ? [0.04, 0.032, 0.028] : T.kind ? WHITEWASH : [0.58, 0.52, 0.42];
+  // (benevolent: ochre plaster, white only on the lattice trims; fearful: soot-dark plaster, not a black void)
+  const wallCol: RGB = T.fear ? [0.17, 0.145, 0.12] : T.kind ? OCHRE : [0.58, 0.52, 0.42];
   const shingle = (spec.style & 1) === 1;
-  const roofCol: RGB = T.fear ? [0.028, 0.028, 0.032] : shingle ? [0.11, 0.08, 0.055] : [0.07, 0.075, 0.08];
+  const roofCol: RGB = T.fear ? [0.1, 0.094, 0.086] : shingle ? [0.11, 0.08, 0.055] : [0.07, 0.075, 0.08];
   const roofSurf = shingle ? SURF.shingle : SURF.tiles;
-  const under: RGB = T.fear ? [0.03, 0.022, 0.02] : T.kind ? mulc(LACQUER, 0.8) : mulc(WOOD, 0.8);
+  const under: RGB = T.fear ? [0.075, 0.062, 0.052] : T.kind ? mulc(LACQUER, 0.8) : mulc(WOOD, 0.8);
   const nu = lod === 0 ? 6 : 3, nv = lod === 0 ? 4 : 2;
   let y = 1.0, s = S;
   for (let i = 0; i < tiers; i++) {
     const h = i === 0 ? 3.4 : 2.3;
-    const look: WallLook = { ...L.wall, surf: SURF.plaster, col: wallCol, shutters: null, frameCol: T.timber, doorCol: T.timber, mullions: true, lod };
+    const look: WallLook = { ...L.wall, surf: SURF.plaster, col: wallCol, shutters: null, frameCol: T.kind ? WHITEWASH : T.timber, doorCol: T.timber, mullions: true, lod };
     const lattice = (len: number) => windowRow(len, i === 0 ? 0.9 : 0.55, [0.85, i === 0 ? 1.4 : 1.1], 2.3, 0.8, null);
     // the ground storey has windows all round; the upper ones look out front and back only
     boxWalls(k, {
@@ -1605,16 +1665,16 @@ function pagoda(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: 
       for (let j = 0; j < posts - 1; j++) {
         // (each corner post once: the next side's first post)
         const x = -s / 2 + (j * s) / (posts - 1);
-        k.box(x - 0.16, y - 0.05, s / 2 - 0.12, x + 0.16, y + h, s / 2 + 0.12, SURF.beam, PART.frame, T.timber, { skip: ['bottom'] });
+        k.box(x - 0.16, y - 0.05, s / 2 - 0.12, x + 0.16, y + h, s / 2 + 0.12, T.timberSurf, PART.frame, T.timber, { skip: ['bottom'] });
       }
-      k.box(-s / 2 - 0.12, y + h - 0.3, s / 2 - 0.05, s / 2 + 0.12, y + h, s / 2 + 0.16, SURF.beam, PART.frame, T.timber, {});
+      k.box(-s / 2 - 0.12, y + h - 0.3, s / 2 - 0.05, s / 2 + 0.12, y + h, s / 2 + 0.16, T.timberSurf, PART.frame, T.timber, {});
       // bracket sets: stepped blocks carrying the eave out from the wall
       if (lod === 0) {
         const nb = Math.max(2, Math.round(s / 1.8));
         for (let j = 1; j < nb; j++) {
           const x = -s / 2 + (j * s) / nb;
-          k.box(x - 0.13, y + h - 0.02, s / 2 + 0.1, x + 0.13, y + h + 0.18, s / 2 + 0.4, SURF.beam, PART.trim, T.timber, { skip: ['nz'] });
-          k.box(x - 0.22, y + h + 0.18, s / 2 + 0.1, x + 0.22, y + h + 0.36, s / 2 + 0.74, SURF.beam, PART.trim, mulc(T.timber, 1.15), { skip: ['nz', 'top'] });
+          k.box(x - 0.13, y + h - 0.02, s / 2 + 0.1, x + 0.13, y + h + 0.18, s / 2 + 0.4, T.timberSurf, PART.trim, T.timber, { skip: ['nz'] });
+          k.box(x - 0.22, y + h + 0.18, s / 2 + 0.1, x + 0.22, y + h + 0.36, s / 2 + 0.74, T.timberSurf, PART.trim, mulc(T.timber, 1.15), { skip: ['nz', 'top'] });
         }
       }
       k.pop();
@@ -1635,8 +1695,8 @@ function pagoda(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: 
     if (T.kind && lod === 0) for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
       // bells / lanterns hang from the eave corners
       const x = sx * (e - 0.15), z = sz * (e - 0.15);
-      k.beam([x, ey + 0.55, z], [x, ey - 0.25, z], 0.03, 0.03, SURF.rope, PART.prop, [0.1, 0.08, 0.05]);
-      k.box(x - 0.13, ey - 0.6, z - 0.13, x + 0.13, ey - 0.25, z + 0.13, SURF.plaster, PART.lantern, [0.5, 0.45, 0.36]);
+      k.beam([x, ey + 0.55, z], [x, ey - 0.2, z], 0.03, 0.03, SURF.rope, PART.prop, [0.1, 0.08, 0.05]);
+      paperLantern(k, x, ey - 0.62, z, 0.9, T, lod);
     }
     s = sNext;
     y = ty - 0.06;
@@ -1663,8 +1723,8 @@ function templeHall(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, r
   k.box(-W / 2 - 1.1, -3, -D / 2 - 1.1, W / 2 + 1.1, ph, D / 2 + 1.1, SURF.rubble, PART.plinth, mulc(T.stone, 0.5), { skip: ['bottom'], aoLow: 0.6 });
   for (let i = 0; i < 3; i++) k.box(-1.8, -1, D / 2 + 1.0, 1.8, (ph / 3) * (i + 1), D / 2 + 1.1 + 0.45 * (3 - i), SURF.rubble, PART.plinth, mulc(T.stone, 0.54), { skip: ['bottom'], aoLow: 0.7 });
   const cw = W - 3.0, cd = D - 3.4, H = 4.2;
-  const wood: RGB = T.fear ? [0.04, 0.032, 0.028] : T.kind ? mixc(WOOD, [0.5, 0.34, 0.18], 0.35) : WOOD;
-  const look: WallLook = { ...L.wall, surf: SURF.logs, col: wood, shutters: null, mullions: false, frameCol: T.timber, doorCol: T.fear ? [0.02, 0.016, 0.014] : T.timber, lod };
+  const wood: RGB = T.fear ? [0.075, 0.062, 0.05] : T.kind ? mixc(WOOD, [0.5, 0.34, 0.18], 0.35) : WOOD;
+  const look: WallLook = { ...L.wall, surf: SURF.logs, col: wood, shutters: null, mullions: false, frameCol: T.timber, doorCol: T.fear ? [0.045, 0.034, 0.026] : T.timber, lod };
   boxWalls(k, {
     W: cw, D: cd, H, T: 0.3, y0: ph,
     front: [{ x0: cw / 2 - 1.1, x1: cw / 2 + 1.1, y0: 0, y1: 3.1, kind: 'door' }],
@@ -1675,17 +1735,18 @@ function templeHall(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, r
   const nx = lod === 0 ? 5 : 3, nz = lod === 0 ? 7 : 4;
   const post = (x: number, z: number) => {
     k.cylinder(x, z, ph - 0.05, ph + 0.25, 0.32, 0.3, 8, SURF.ashlar, PART.trim, mulc(T.stone, 1.05), { top: true });
-    k.cylinder(x, z, ph + 0.25, yP, 0.2, 0.18, lod === 0 ? 8 : 6, SURF.beam, PART.wall, T.timber, {});
+    k.cylinder(x, z, ph + 0.25, yP, 0.2, 0.18, lod === 0 ? 8 : 6, T.timberSurf, PART.wall, T.timber, {});
   };
   const px = W / 2 - 0.3, pz = D / 2 - 0.3;
   for (let i = 0; i < nx; i++) { const x = -px + (i * 2 * px) / (nx - 1); post(x, pz); post(x, -pz); }
   for (let j = 1; j < nz - 1; j++) { const z = -pz + (j * 2 * pz) / (nz - 1); post(-px, z); post(px, z); }
-  k.box(-px - 0.2, yP, -pz - 0.2, px + 0.2, yP + 0.35, pz + 0.2, SURF.beam, PART.trim, T.timber, { skip: ['bottom'] });
+  k.box(-px - 0.2, yP, -pz - 0.2, px + 0.2, yP + 0.35, pz + 0.2, T.timberSurf, PART.trim, T.timber, { skip: ['bottom'] });
   // the steep roof along the hall
   const thatch = L.roofKind === 'thatch';
   const rf: RoofLook = {
-    ...L.roof, surf: thatch ? SURF.thatch : SURF.shingle, col: T.fear ? [0.035, 0.03, 0.028] : thatch ? L.roof.col : SHINGLE,
-    thick: thatch ? 0.42 : 0.16, under: WOOD_DARK, underSurf: SURF.planks, cap: thatch ? mulc(THATCH, 0.65) : mulc(SHINGLE, 0.8), capSurf: thatch ? SURF.thatch : SURF.shingle,
+    // (a shingle roof of thick split shakes in visible courses: thick enough to read from afar)
+    ...L.roof, surf: thatch ? SURF.thatch : SURF.shingle, col: T.fear ? [0.062, 0.054, 0.046] : thatch ? L.roof.col : SHINGLE,
+    thick: thatch ? 0.42 : 0.32, under: WOOD_DARK, underSurf: SURF.planks, cap: thatch ? mulc(THATCH, 0.65) : mulc(SHINGLE, 0.8), capSurf: thatch ? SURF.thatch : SURF.shingle,
   };
   const pitch = 0.92;
   k.push(0, 0, 0, Math.PI / 2);
@@ -1697,7 +1758,7 @@ function templeHall(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, r
     const zg = sz * (D / 2 + 0.55);
     for (const sx of [-1, 1]) {
       const a: V3 = [-sx * W * 0.22, yR - W * 0.22 * slope, zg], b: V3 = [sx * 1.25, yR + 1.25 * slope, zg];
-      k.beam(a, b, 0.2, 0.32, SURF.beam, PART.roof, T.timber, 0.9);
+      k.beam(a, b, 0.2, 0.32, T.timberSurf, PART.roof, T.timber, 0.9);
     }
     if (T.fear) hornedSkull(k, 0, yR + 0.1, zg + sz * 0.2, 1.3, lod);
     else if (lod === 0) k.lathe(0, zg, [[0.12, yR + 0.1], [0.2, yR + 0.35], [0.03, yR + 0.8]], 6, SURF.metal, PART.roof, T.metal, 1, 1);
@@ -1719,7 +1780,7 @@ function colonnade(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rn
   for (let i = 0; i < 4; i++) k.box(-2.4, -1, D / 2 + 0.85, 2.4, (podium / 4) * (i + 1), D / 2 + 0.9 + 0.42 * (4 - i), SURF.ashlar, PART.plinth, mulc(sc, 0.97), { skip: ['bottom'], aoLow: 0.7 });
   // cella walls inside the colonnade
   const cw = W - 3.2, cd = D - 4.5;
-  const cellaLook: WallLook = { ...L.wall, surf: SURF.ashlar, col: mulc(sc, 0.95), doorCol: T.fear ? [0.02, 0.016, 0.014] : L.wall.doorCol };
+  const cellaLook: WallLook = { ...L.wall, surf: SURF.ashlar, col: mulc(sc, 0.95), doorCol: T.fear ? [0.045, 0.034, 0.026] : L.wall.doorCol };
   boxWalls(k, { W: cw, D: cd, H: colH, T: 0.6, y0: podium, front: [{ x0: cw / 2 - 1.1, x1: cw / 2 + 1.1, y0: 0, y1: 4.2, kind: 'door' }], back: [], left: [], right: [] }, cellaLook, rng);
   // columns all round (shafts with entasis at LOD 0)
   const nx = spec.lod === 0 ? 6 : 4, nz = spec.lod === 0 ? 8 : 5;
@@ -1758,7 +1819,7 @@ function domed(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: R
   plinth(k, S + 0.4, S + 0.4, 0.6, SURF.ashlar, mulc(sc, 0.85));
   const H = 7;
   const wallCol: RGB = T.fear ? mulc(BASALT, 1.3) : T.kind ? WHITEWASH : [0.66, 0.62, 0.55];
-  const look: WallLook = { ...L.wall, surf: T.fear ? SURF.ashlar : SURF.plaster, col: wallCol, shutters: null, mullions: false, frameCol: mulc(sc, 0.7), sillSurf: SURF.ashlar, sillCol: mulc(sc, 1.05), doorCol: T.fear ? [0.02, 0.016, 0.014] : [0.16, 0.08, 0.035], lod };
+  const look: WallLook = { ...L.wall, surf: T.fear ? SURF.ashlar : SURF.plaster, col: wallCol, shutters: null, mullions: false, frameCol: mulc(sc, 0.7), sillSurf: SURF.ashlar, sillCol: mulc(sc, 1.05), doorCol: T.fear ? [0.045, 0.034, 0.026] : [0.16, 0.08, 0.035], lod };
   const arches = (len: number, avoid: [number, number] | null): Opening[] => windowRow(len, 1.6, [1.1, 3.4], 2.6, 1.1, avoid).map((o) => ({ ...o, head: 'round' as const }));
   const pw = Math.min(3.4, S * 0.26);
   boxWalls(k, {
@@ -1806,7 +1867,7 @@ function domed(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rng: R
   }
   k.box(-R - 0.15, y0 + 0.4 + drumH - 0.05, -R - 0.15, R + 0.15, y0 + 0.4 + drumH + 0.2, R + 0.15, SURF.ashlar, PART.trim, mulc(sc, 1.08), {});
   const onion = (spec.style & 2) !== 0;
-  const domeCol: RGB = T.fear ? [0.05, 0.05, 0.06] : spec.style & 1 ? [0.1, 0.27, 0.3] : T.kind ? WHITEWASH : GOLD;
+  const domeCol: RGB = T.fear ? [0.075, 0.068, 0.062] : spec.style & 1 ? [0.1, 0.27, 0.3] : T.kind ? WHITEWASH : GOLD;
   const db = y0 + 0.6 + drumH;
   const prof: [number, number][] = [];
   for (let i = 0; i <= 12; i++) {
@@ -1957,9 +2018,9 @@ function cathedral(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rn
   const sc = T.fear ? mulc(BASALT, 1.6) : T.stone;
   const look: WallLook = {
     ...L.wall, surf: SURF.ashlar, col: sc, inner: INTERIOR, shutters: null, mullions: true, frameCol: mulc(sc, 0.75),
-    sillSurf: SURF.ashlar, sillCol: mulc(sc, 1.05), doorCol: T.fear ? [0.02, 0.016, 0.014] : WOOD_DARK, lod,
+    sillSurf: SURF.ashlar, sillCol: mulc(sc, 1.05), doorCol: T.fear ? [0.045, 0.034, 0.026] : WOOD_DARK, lod,
   };
-  const roofCol: RGB = T.fear ? [0.022, 0.022, 0.026] : spec.style & 1 ? [0.16, 0.24, 0.2] : SLATE;
+  const roofCol: RGB = T.fear ? [0.058, 0.054, 0.05] : spec.style & 1 ? [0.16, 0.24, 0.2] : SLATE;
   const roofSurf = spec.style & 1 && !T.fear ? SURF.metal : SURF.slate;
   const rf: RoofLook = { ...L.roof, surf: roofSurf, col: roofCol, cap: mulc(roofCol, 0.85), capSurf: roofSurf, thick: 0.25, under: WOOD_DARK, underSurf: SURF.planks };
   const zW = D / 2, zE = -D / 2;
@@ -2094,7 +2155,7 @@ function cathedral(k: KitBuilder, spec: BuildingSpec, T: TempleLook, L: Look, rn
     k.box(-tw / 2 - 0.1, ph + tH, -tw / 2 - 0.1, tw / 2 + 0.1, ph + tH + 0.25, tw / 2 + 0.1, SURF.ashlar, PART.trim, mulc(sc, 1.06), {});
     if (spires) {
       k.push(0, 0, 0, Math.PI / 8);
-      k.cylinder(0, 0, ph + tH + 0.25, ph + tH + 14, tw * 0.46, 0.04, 8, rf.surf, PART.roof, T.fear ? [0.02, 0.02, 0.024] : mulc(sc, 0.9), {});
+      k.cylinder(0, 0, ph + tH + 0.25, ph + tH + 14, tw * 0.46, 0.04, 8, rf.surf, PART.roof, T.fear ? [0.055, 0.05, 0.046] : mulc(sc, 0.9), {});
       k.pop();
       if (lod === 0) {
         if (T.fear) k.cylinder(0, 0, ph + tH + 13.8, ph + tH + 15.6, 0.07, 0.0, 4, SURF.iron, PART.roof, IRON, {});
@@ -2158,23 +2219,43 @@ function library(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng): number {
 }
 
 /** market: stalls with striped awnings and goods, around a well; a covered hall in later eras */
+/** the hall roof's height on a market of `era` (buildings.ts drapes the square on its ground and keeps the roof level) */
+export function marketHallH(era: number): number { return era >= 7 ? 4.2 : 0; }
+
 function market(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng): number {
   const W = spec.w, D = spec.d;
-  // the square's floor at ground level (paving set into the ground with a low kerb, or trodden earth), not a raised slab
+  // the square's floor at ground level (paving with a low kerb, or trodden earth), not a raised slab: a 1 m grid of
+  // flags that buildings.ts drapes on the ground under each market (a level slab, or one sheared to the slope, could
+  // not follow the ground's ~12 m humps: they broke through the paving, or its downhill edge stood out as a wall)
   const paved = spec.era >= 5;
-  const floorCol: RGB = paved ? mulc(STONE, 0.72) : [0.16, 0.12, 0.085];
-  k.box(-W / 2, -0.6, -D / 2, W / 2, 0.02, D / 2, paved ? SURF.ashlar : SURF.earth, PART.plinth, floorCol, { skip: ['bottom'], aoLow: 0.7 });
+  // (the flags as dark as the town's street paving, roads.ts: at 0.72 × STONE the square read as a pale slab)
+  const floorCol: RGB = paved ? mulc(STONE, 0.5) : [0.16, 0.12, 0.085];
+  const nx = Math.max(2, Math.round(W)), nz = Math.max(2, Math.round(D));
+  for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+    const x0 = -W / 2 + (i * W) / nx, x1 = -W / 2 + ((i + 1) * W) / nx, z0 = -D / 2 + (j * D) / nz, z1 = -D / 2 + ((j + 1) * D) / nz;
+    k.quad([x0, 0.02, z1], [x1, 0.02, z1], [x1, 0.02, z0], [x0, 0.02, z0], paved ? SURF.ashlar : SURF.earth, PART.paving, paved ? mulc(floorCol, 0.88 + 0.24 * rng.float()) : floorCol, 0.92);
+  }
   if (paved) {
-    const kc = mulc(STONE, 0.62), kw = 0.28, kh = 0.1;
+    // the kerb in 1 m stones (each follows the ground under it, and runs 0.7 m down: buildings.ts raises the paving
+    // over the ground's dimples)
+    const kc = mulc(STONE, 0.46), kw = 0.28, kh = 0.1;
     const o = { skip: ['bottom'], aoLow: 0.75 };
-    k.box(-W / 2, -0.3, -D / 2, W / 2, kh, -D / 2 + kw, SURF.ashlar, PART.trim, kc, o);
-    k.box(-W / 2, -0.3, D / 2 - kw, W / 2, kh, D / 2, SURF.ashlar, PART.trim, kc, o);
-    k.box(-W / 2, -0.3, -D / 2 + kw, -W / 2 + kw, kh, D / 2 - kw, SURF.ashlar, PART.trim, kc, o);
-    k.box(W / 2 - kw, -0.3, -D / 2 + kw, W / 2, kh, D / 2 - kw, SURF.ashlar, PART.trim, kc, o);
+    const run = (x0: number, z0: number, x1: number, z1: number) => {
+      const L2 = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(L2));
+      for (let i = 0; i < n; i++) {
+        const a = i / n, b = (i + 1) / n;
+        const xa = x0 + (x1 - x0) * a, za = z0 + (z1 - z0) * a, xb = x0 + (x1 - x0) * b, zb = z0 + (z1 - z0) * b;
+        k.box(Math.min(xa, xb) - (x0 === x1 ? kw / 2 : 0), -0.7, Math.min(za, zb) - (z0 === z1 ? kw / 2 : 0), Math.max(xa, xb) + (x0 === x1 ? kw / 2 : 0), kh, Math.max(za, zb) + (z0 === z1 ? kw / 2 : 0), SURF.ashlar, PART.paving, mulc(kc, 0.92 + 0.16 * rng.float()), o);
+      }
+    };
+    run(-W / 2, -D / 2 + kw / 2, W / 2, -D / 2 + kw / 2);
+    run(-W / 2, D / 2 - kw / 2, W / 2, D / 2 - kw / 2);
+    run(-W / 2 + kw / 2, -D / 2 + kw, -W / 2 + kw / 2, D / 2 - kw);
+    run(W / 2 - kw / 2, -D / 2 + kw, W / 2 - kw / 2, D / 2 - kw);
   }
   if (spec.era >= 7) {
     // market hall: arcade of posts under a long roof
-    const H = 4.2;
+    const H = marketHallH(spec.era);
     // columns: a plinth block, a slim shaft, a capital; tie beams carry the roof
     const colC: RGB = L.wall.surf === SURF.brick ? mulc(STONE, 1.15) : L.wall.col;
     const sides = spec.lod === 0 ? 10 : 6;
@@ -2631,8 +2712,9 @@ function lighthouse(k: KitBuilder, spec: BuildingSpec, L: Look, rng: Rng, em: Em
   k.cylinder(0, 0, H + 0.3, H + 3.0, rt * 0.75, rt * 0.75, 10, SURF.glass, PART.beacon, [0.6, 0.55, 0.4], {});
   k.lathe(0, 0, [[rt * 0.85, H + 3.0], [rt * 0.6, H + 3.7], [0.05, H + 4.4]], 10, SURF.metal, PART.roof, [0.05, 0.08, 0.07], 0.9, 1);
   em.push({ p: [0, H + 1.6, 0], kind: EMIT.beacon, size: rt });
-  // keeper's cottage
-  if (spec.lod === 0) {
+  // keeper's cottage (at every LOD: it popped in and out with the tower's detail, and the far mesh casts the near
+  // building's shadow)
+  {
     k.push(0, 0, -R - 3.2);
     const cs: BuildingSpec = { ...spec, w: 5, d: 4 };
     house(k, cs, L, { floors: 1, floorH: 2.6, T: 0.4, pitch: 0.7, over: 0.3, roof: 'gable', winW: 0.8, winH: 1.0, spacing: 1.8, chimneys: 1, corners: false, frame: false, porch: false, jetty: 0, parapet: false, vigas: false, plinthH: 0.25, doorW: 0.9, doorH: 1.95, cornice: false, dormers: false }, rng, []);
@@ -3407,6 +3489,21 @@ export function rubbleMesh(seed: number, stone: boolean): BufferGeometry {
     const r0 = 0.05 + rng.float() * 0.3, r1 = 0.8 + rng.float() * 0.4;
     const t = 0.026 + rng.float() * 0.018;
     k.beam([Math.cos(a) * r0, height(r0, a) + t * 0.6, Math.sin(a) * r0], [Math.cos(b) * r1, -0.01, Math.sin(b) * r1], t, t * 0.85, SURF.beam, PART.prop, [0.045, 0.032, 0.022], 0.75);
+  }
+  // weeds and grass come up through the heap as the ruin ages (PART growth: the shader shows each tuft from its own
+  // day on), thicker round its foot
+  for (let i = 0; i < 30; i++) {
+    const a = rng.float() * Math.PI * 2, d = Math.pow(rng.float(), 0.6) * 1.1;
+    const cx = Math.cos(a) * d, cz = Math.sin(a) * d, y0 = Math.max(-0.03, height(Math.min(1, d), a)) - 0.005;
+    const sd = rng.float();
+    const col = mixc([0.07, 0.1, 0.035], [0.17, 0.15, 0.07], rng.float() * rng.float());
+    const blades = 4 + Math.floor(rng.float() * 3);
+    for (let j = 0; j < blades; j++) {
+      const ba = rng.float() * Math.PI * 2, lean = 0.2 + rng.float() * 0.6;
+      const h = 0.045 + rng.float() * 0.06, w = 0.007 + rng.float() * 0.006;
+      const ox = Math.cos(ba), oz = Math.sin(ba), px = -oz * w, pz = ox * w;
+      k.triangle([cx - px, y0, cz - pz], [cx + px, y0, cz + pz], [cx + ox * lean * h, y0 + h, cz + oz * lean * h], SURF.earth, PART.growth, mulc(col, 0.85 + 0.3 * rng.float()), 0.8, sd);
+    }
   }
   return k.build();
 }

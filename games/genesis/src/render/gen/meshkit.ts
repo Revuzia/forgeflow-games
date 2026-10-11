@@ -14,8 +14,9 @@
 
 import { BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, Uint32BufferAttribute } from 'three';
 
-/** what a face is, for the shaders: roofs hide during construction, glass glows at night, hot mouths emit */
-export const PART = { wall: 0, roof: 1, glass: 2, door: 3, plinth: 4, hot: 5, trim: 6, frame: 7, lamp: 8, sail: 9, beacon: 10, prop: 11, lantern: 12 } as const;
+/** what a face is, for the shaders: roofs hide during construction, glass glows at night, hot mouths emit; growth
+ *  (weeds on a ruin's heap) comes up as the ruin ages; paving (a draped market square) is drawn a hair toward the camera */
+export const PART = { wall: 0, roof: 1, glass: 2, door: 3, plinth: 4, hot: 5, trim: 6, frame: 7, lamp: 8, sail: 9, beacon: 10, prop: 11, lantern: 12, growth: 13, paving: 14 } as const;
 
 export type V3 = [number, number, number];
 type RGB = [number, number, number];

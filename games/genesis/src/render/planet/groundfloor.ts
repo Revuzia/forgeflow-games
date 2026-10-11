@@ -400,20 +400,25 @@ float ff_canopy(vec3 P, vec3 up, vec3 Nb, float muS) {
 vec3 soilDetail(vec3 P, float fw) {
   vec3 fp; float f1, id;
   float alb = 1.0, bump = 0.0;
-  ff_cells(P * 8.0, fp, f1, id);
+  // the cell lookups are domain-warped (a 0.5–2 m wander), so the clods lose the blotchy repeat of a cell grid; the
+  // albedo swings stay small (±5 %, value only: at ±12–24 % with a flat per-cell shift the bare ground read as a desert
+  // camouflage print of pale and dark blotches at 15 m) — the clods read by their shading (bump), not their paint
+  vec3 wq = vec3(snoise(P * 0.55 + 2.0), snoise(P * 0.55 + 6.1), snoise(P * 0.55 + 9.4)) * 0.35;
+  ff_cells((P + wq * 0.4) * 8.0, fp, f1, id);
   float k1 = ff_aa(fw, 0.12);
   float c1 = smoothstep(0.55, 0.15, f1) - 0.45;
-  alb += (0.24 * c1 + 0.1 * (id - 0.5)) * k1;
+  alb += (0.1 * c1 + 0.03 * (id - 0.5)) * k1;
   bump += c1 * 0.012 * k1;
-  ff_cells(P * 2.2 + 3.0, fp, f1, id);
+  ff_cells((P + wq) * 2.2 + 3.0, fp, f1, id);
   float k2 = ff_aa(fw, 0.45);
   float c2 = smoothstep(0.6, 0.2, f1) - 0.42;
-  alb += (0.16 * c2 + 0.08 * (id - 0.5)) * k2;
+  alb += (0.08 * c2 + 0.03 * (id - 0.5)) * k2;
   bump += c2 * 0.03 * k2;
-  alb *= 1.0 + 0.1 * snoise(P * 0.65 + 9.0) * ff_aa(fw, 1.5);
-  ff_cells(P * 14.0 + 7.0, fp, f1, id);
+  alb *= 1.0 + 0.06 * snoise(P * 0.65 + 9.0) * ff_aa(fw, 1.5);
+  ff_cells((P + wq * 0.15) * 14.0 + 7.0, fp, f1, id);
   float pr = 0.2 + 0.12 * fract(id * 13.7);
-  float peb = step(0.8, id) * (1.0 - smoothstep(pr * 0.75, pr, f1)) * ff_aa(fw, 0.07);
+  // (half as many pebbles as before: a stone every few hand-widths, not a gravel sheet)
+  float peb = step(0.9, id) * (1.0 - smoothstep(pr * 0.75, pr, f1)) * ff_aa(fw, 0.07);
   bump += peb * 0.015;
   return vec3(alb, bump, peb);
 }
@@ -450,7 +455,12 @@ vec3 meadowTint(vec3 g, vec3 P, float fw, float moist, float autumn, float winte
   float pA = fbm3(P * 0.045 + warpV * 0.6 + 3.1);
   float pB = snoise(P * 0.11 + warpV * 0.4 + 7.7);
   float dryness = clamp(0.5 + 0.6 * pA + 0.22 * pB - (moist - 0.45) * 0.9, 0.0, 1.0);
-  vec3 dryC = g * vec3(1.42, 1.24, 0.76) + vec3(0.014, 0.01, 0.0);
+  // a temperate sward keeps some green whatever its moisture (at least ~30 %): only roads, yards and true steppe go
+  // brown — a dry meadow on its own read as bare red-brown dirt, every town standing on a board of earth
+  g = mix(g, vec3(0.075, 0.12, 0.04), 0.3 * (1.0 - cold) * (1.0 - winter * 0.6) * (1.0 - autumn * 0.5));
+  // dry grass is STRAW (pale, yellow-grey), not rust: g × (1.42, 1.24, 0.76) on an already dry base gave (0.34, 0.26,
+  // 0.09) — the orange-brown carpet under the iron town
+  vec3 dryC = mix(g, vec3(0.30, 0.27, 0.15), 0.6);
   vec3 lushC = g * vec3(0.8, 1.08, 0.7);
   // (softer than before: strong 10–50 m swings between straw and deep green read as blurry blotches from 60 m up)
   g = mix(g, mix(lushC, dryC, smoothstep(0.32, 0.82, dryness)), 0.45);

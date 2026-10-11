@@ -67,6 +67,12 @@ function gnHash33(x: number, y: number, z: number): [number, number, number] {
   _h3[0] = fr(f32((x + y) * z)); _h3[1] = fr(f32((x + x) * y)); _h3[2] = fr(f32((y + x) * x));
   return _h3;
 }
+/** the direction a field's rows run across (terrainmat: rnd = normalize(gn_hash33(vec3(fid · 91.7, 7.3, 3.1)) − 0.5)) */
+export function fieldRowDir(fid: number): [number, number, number] {
+  const h = gnHash33(f32(fid * 91.7), 7.3, 3.1);
+  const x = h[0] - 0.5, y = h[1] - 0.5, z = h[2] - 0.5, l = Math.hypot(x, y, z) || 1;
+  return [x / l, y / l, z / l];
+}
 /** the terrain's farm-field id (0..1) at a body-frame point (m) */
 function fieldId(px: number, py: number, pz: number): number {
   const x = f32(px * 0.019 + 3.7), y = f32(py * 0.019 + 3.7), z = f32(pz * 0.019 + 3.7);
@@ -86,8 +92,10 @@ const CROP_RANGE = 26;
 /** metres: beyond CROP_RANGE, fields carry sparser, wider clumps in their rows out to here (a god camera at 60–150 m
  *  saw only yellow-green smears where fourteen maize fields stood) */
 const FAR_CROP_RANGE = 150;
-/** far-crop lattice: rows 1.2 m apart (as the near crop rows), clumps every 1.5 m along them */
-const FAR_ROW = 1.2, FAR_ALONG = 1.5;
+/** far-crop candidates: a jittered grid this fine (m), each kept only near a row of its field and snapped onto it */
+const FAR_STEP = 0.7;
+/** the terrain's crop rows: period (m) and the phase of their green crests (terrainmat: sin(P·d · 2π / 1.5)) */
+const ROW_P = 1.5;
 /** lattice step (m) of candidate points */
 const STEP = 0.6;
 /** fields the scatter reads (placement and kind; tint follows moisture / temperature but only re-tints on rebuild) */
@@ -280,8 +288,13 @@ export class GroundCover {
             const patch = hashFloat(Math.floor(u / 7) + 977 * c, Math.floor(v / 7), 41);
             kind = gr > 0.35 && tr < 0.3 && crG < 0.2 && patch < 0.35 && r3 < 0.18 ? GK.flower : GK.grass;
           }
-          // stones where the soil is thin: bare rock, scree, stony ground (beaches keep a few)
-          else if (r2 < 0.06 + 0.22 * Math.max(0, 1 - so / 0.25) * (1 - Math.min(1, sa / 0.8)) + 0.03 * Math.min(1, sa)) kind = GK.stone;
+          // stones where the soil is thin: bare rock, scree, stony ground (beaches keep a few) — in clusters (a hash per
+          // ~3 m patch: a few patches hold most of them), not an even sprinkle over every meadow
+          else {
+            const patch = hashFloat(Math.floor(u / 3) + 613 * c, Math.floor(v / 3), 0x57);
+            const clump = patch < 0.3 ? 2.6 : patch < 0.45 ? 0.6 : 0.08;
+            if (r2 < (0.05 + 0.22 * Math.max(0, 1 - so / 0.25) * (1 - Math.min(1, sa / 0.8)) + 0.03 * Math.min(1, sa)) * clump) kind = GK.stone;
+          }
         }
         if (kind < 0) continue;
         const gh = groundHeight(pv.ground, dx, dy, dz);
@@ -313,7 +326,8 @@ export class GroundCover {
           // weathered field stone: warm grey-brown, some with lichen (pale coins of grey read as litter on the grass)
           const tone = 0.75 + 0.5 * hashFloat(c, k, 12);
           const lichen = hashFloat(c, k, 13) < 0.35 ? 0.5 : 0;
-          out.push(dx, dy, dz, gh, yaw, s, 1, variant, (0.15 + (0.14 - 0.15) * lichen) * tone, (0.135 + (0.145 - 0.135) * lichen) * tone, (0.115 + (0.085 - 0.115) * lichen) * tone);
+          // (warm: the sky light is blue, and a neutral grey stone read blue-grey on the grass)
+          out.push(dx, dy, dz, gh, yaw, s, 1, variant, (0.2 + (0.17 - 0.2) * lichen) * tone, (0.166 + (0.165 - 0.166) * lichen) * tone, (0.118 + (0.09 - 0.118) * lichen) * tone);
         }
       }
     }
@@ -447,9 +461,9 @@ export class GroundCover {
   }
 
   /**
-   * Far crop rows (CROP_RANGE … FAR_CROP_RANGE): only the sown fields, on a coarse lattice of the near rows' own
-   * spacing and orientation, each clump widened along its row so the rows read as rows; same field ids and stages as
-   * the terrain and the near crops. Rebuilt when the camera moves ~10 m.
+   * Far crop rows (CROP_RANGE … FAR_CROP_RANGE): only the sown fields, in the terrain's own rows (farCellItems), each
+   * clump widened along its row so the rows read as rows; same field ids and stages as the terrain and the near
+   * crops. Rebuilt when the camera moves ~10 m.
    */
   private updateFar(pv: PlanetView, camBody: Vector3, frame: number, alt: number): void {
     const on = this.enabled && alt < FAR_CROP_RANGE * 1.4;
@@ -534,28 +548,55 @@ export class GroundCover {
     ex /= el; ez /= el;
     const nx = cy * ez, ny = cz * ex - cx * ez, nz = -cy * ex;
     const spacing = Math.sqrt(g.area[c] * R * R);
-    const hu = Math.ceil((spacing * 0.8) / FAR_ALONG), hv = Math.ceil((spacing * 0.8) / FAR_ROW);
-    for (let j = -hv; j <= hv; j++) {
+    const hu = Math.ceil((spacing * 0.8) / FAR_STEP);
+    // candidates on a jittered grid, each kept only when it lies near one of its field's rows and snapped onto it: the
+    // far clumps stand IN the terrain's own rows (one stripe pattern, at the field's own angle and spacing), irregular
+    // along them — a second lattice of rows at a similar spacing beat against the terrain's rows in moiré
+    for (let j = -hu; j <= hu; j++) {
       for (let i = -hu; i <= hu; i++) {
-        const k = (j + hv) * (2 * hu + 1) + (i + hu);
-        const u = (i + (hashFloat(c, k, 21) - 0.5) * 0.3) * FAR_ALONG;
-        const v = j * FAR_ROW;
+        const k = (j + hu) * (2 * hu + 1) + (i + hu);
+        const u = (i + (hashFloat(c, k, 21) - 0.5) * 0.9) * FAR_STEP;
+        const v = (j + (hashFloat(c, k, 25) - 0.5) * 0.9) * FAR_STEP;
         let dx = cx + (ex * u + nx * v) / R, dy = cy + (ny * v) / R, dz = cz + (ez * u + nz * v) / R;
-        const l = Math.hypot(dx, dy, dz);
+        let l = Math.hypot(dx, dy, dz);
         dx /= l; dy /= l; dz /= l;
+        let gh = groundHeight(pv.ground, dx, dy, dz);
+        const fid = fieldId(dx * gh, dy * gh, dz * gh);
+        if (Math.floor(fid * 5) >= 4) continue;
+        // across its field's rows: the nearest green crest (P·d = 1.5 (k + ¼))
+        const rd = fieldRowDir(fid);
+        const ud = rd[0] * dx + rd[1] * dy + rd[2] * dz;
+        const tx = rd[0] - dx * ud, ty = rd[1] - dy * ud, tz = rd[2] - dz * ud;
+        const t2 = tx * tx + ty * ty + tz * tz;
+        let yaw = (hashFloat(c, k, 23) - 0.5) * 0.15;
+        if (t2 > 0.04) {
+          const sP = (dx * rd[0] + dy * rd[1] + dz * rd[2]) * gh;
+          const target = ROW_P * (Math.round(sP / ROW_P - 0.25) + 0.25);
+          const off = target - sP;
+          if (Math.abs(off) > 0.3) continue;
+          dx += (tx * off) / t2 / gh; dy += (ty * off) / t2 / gh; dz += (tz * off) / t2 / gh;
+          l = Math.hypot(dx, dy, dz);
+          dx /= l; dy /= l; dz /= l;
+          gh = groundHeight(pv.ground, dx, dy, dz);
+          // the clump lies along the row: perpendicular to the across direction, in the east / north frame
+          const tl = Math.sqrt(t2);
+          const ax = tx / tl, ay = ty / tl, az = tz / tl;
+          const rx = dy * az - dz * ay, ry = dz * ax - dx * az, rz = dx * ay - dy * ax;
+          let e1x = dz, e1z = -dx;
+          const e1l = Math.hypot(e1x, e1z) || 1;
+          e1x /= e1l; e1z /= e1l;
+          const n1x = dy * e1z, n1y = dz * e1x - dx * e1z, n1z = -dy * e1x;
+          yaw = Math.atan2(rx * n1x + ry * n1y + rz * n1z, rx * e1x + rz * e1z) + (hashFloat(c, k, 23) - 0.5) * 0.12;
+        } else if (hashFloat(c, k, 26) > 0.45) continue;
         const h = g.locate(dx, dy, dz, _hit);
         const owner = h.wa >= h.wb && h.wa >= h.wc ? h.a : h.wb >= h.wc ? h.b : h.c;
         if (owner !== c) continue;
         const at = (f: Float32Array | undefined) => (f ? f[h.a] * h.wa + f[h.b] * h.wb + f[h.c] * h.wc : 0);
         const cr = at(crop);
         if (cr < 0.4 || at(road) > 0.5 || hashFloat(c, k, 22) > Math.min(1, cr * 1.15)) continue;
-        const gh = groundHeight(pv.ground, dx, dy, dz);
-        const fid = fieldId(dx * gh, dy * gh, dz * gh);
-        if (Math.floor(fid * 5) >= 4) continue;
         const sp = cropSp ? Math.round(cropSp[owner]) : -1;
         const type = sp >= 0 && sp < CROP_OF.length ? CROP_OF[sp] : 0;
-        // along the row: the lattice's own u axis (yaw 0), the row orientation of the near crops' lattice
-        out.push(dx, dy, dz, gh, (hashFloat(c, k, 23) - 0.5) * 0.15, fid, type * 2 + (hashFloat(c, k, 24) < 0.5 ? 0 : 1));
+        out.push(dx, dy, dz, gh, yaw, fid, type * 2 + (hashFloat(c, k, 24) < 0.5 ? 0 : 1));
       }
     }
     return Float32Array.from(out);

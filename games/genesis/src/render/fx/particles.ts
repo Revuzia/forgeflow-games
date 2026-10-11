@@ -331,7 +331,10 @@ void main() {
     float win = 1.0 - (d * d) / (reach * reach);
     // (not on the burning thing itself — its charred roof and walls, a few metres from the flames: with an assumed
     // albedo they came out cream-lit; they have their own embers, and the budgeted point lights see their true colour)
-    float E = 24.0 * vColor.x / (d * d + 1.5) * win * win * smoothstep(2.0, 6.0, d);
+    // (the light is a VOLUME of flame a few metres across: its irradiance flattens out inside it — 1/(d² + 9), a pool
+    // brightest at the fire — and the burning thing itself keeps a third of it. A point source cut out within 2–6 m drew
+    // a glowing ring about a dark hole round every lone fire: a portal)
+    float E = 24.0 * vColor.x / (d * d + 9.0) * win * win * mix(0.35, 1.0, smoothstep(1.0, 5.0, d)) * 1.2;
     gl_FragColor = vec4(vec3(1.0, 0.36, 0.07) * E * lam * (0.2 / 3.14159) * uFireLight, 0.0);
     return;
   }

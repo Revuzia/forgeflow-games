@@ -25,6 +25,7 @@ import { DataTexture, FloatType, NearestFilter, RGBAFormat, ClampToEdgeWrapping 
 import type { FieldName } from '../../sim/types.ts';
 import type { PlanetView } from '../../client/worldview.ts';
 import { duneAmpOf, roughOf, surfaceGradients } from '../../sim/grid/surface.ts';
+import { CityLights } from './citylights.ts';
 
 export const FIELD_ROW = 256;
 const WET = 0.02;
@@ -55,6 +56,11 @@ export class FieldTextures {
   private lightVersion = 0;
   /** bumped whenever A (heights / water) changes: the chunk system re-derives bounds */
   geomVersion = 0;
+  /**
+   * night lights seen from afar, splatted from the lit buildings and the roads (citylights.ts); built once the life
+   * layer supplies a light field, bound to the terrain's uCityTex by the renderer
+   */
+  cityLights: CityLights | null = null;
   private normalsStamp = -1;
   private pv: PlanetView;
 
@@ -105,6 +111,10 @@ export class FieldTextures {
       this.fill(name);
       this.tex[name].needsUpdate = true;
       if (name === 'A') { geom = true; this.geomVersion++; }
+    }
+    if (this.light) {
+      this.cityLights ??= new CityLights(this.pv.params.radius);
+      this.cityLights.update(this.pv, this.light, this.lightVersion);
     }
     return geom;
   }
@@ -223,7 +233,23 @@ export class FieldTextures {
       // vegetation and moisture vary cell to cell (a wood here, dry sward there): two passes, or the canopy / meadow
       // contrast reads as a 50 m camouflage pattern on every hill
       case 'V': this.pack4('V', ['grass', 'shrub', 'tree', 'crop'], [2, 2, 2, false]); break;
-      case 'C': this.pack4('C', ['temperature', 'moisture', 'road', 'fire'], [true, 2, false, false]); break;
+      case 'C': {
+        this.pack4('C', ['temperature', 'moisture', 'road', 'fire'], [true, 2, false, false]);
+        // a LONE burning cell (no neighbour carrying the front level 0.25) is packed NEGATIVE: the terrain then draws
+        // scattered coals and char round it instead of the front contour, which around a single peak of the field is
+        // a perfect glowing circle about a black disc (a portal, not a fire). Only the terrain reads this channel.
+        const fire = this.field('fire');
+        if (fire) {
+          const d = this.tex.C.image.data as Float32Array;
+          for (let c = 0; c < n; c++) {
+            if (fire[c] < 0.25) continue;
+            let lone = true;
+            for (let e = g.nbrStart[c]; e < g.nbrStart[c + 1] && lone; e++) if (fire[g.nbr[e]] >= 0.25) lone = false;
+            if (lone) d[c * 4 + 3] = -1;
+          }
+        }
+        break;
+      }
       case 'F': {
         this.pack4('F', ['flowX', 'flowY', 'flowZ', 'salinity']);
         const d = this.tex.F.image.data as Float32Array;
@@ -291,5 +317,6 @@ export class FieldTextures {
 
   dispose(): void {
     for (const t of Object.values(this.tex)) t.dispose();
+    this.cityLights?.dispose();
   }
 }

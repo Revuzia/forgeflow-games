@@ -2,8 +2,9 @@
 // around the buildings of settlements whose members are aggregated (§8.7), drawn as instanced, GPU-animated bodies.
 //
 //   * Body per species plan (bipeds for the plains / coastal / cold folk, hexapods for the hive, floating bells for
-//     the drifters), three LODs by distance (faces, hands and hair up close; simplified; far silhouettes), hidden past
-//     the silhouettes' range. Near LODs cast shadows.
+//     the drifters), four LODs by distance (faces, hands and hair up close; simplified to ~42 m; a ~160-triangle mid
+//     body; a ~100-triangle far silhouette), hidden past the silhouettes' range. Only the nearest LOD (< ~30 m) casts
+//     shadows: the 1 100-triangle LOD 1 bodies in two cascades were half the shadow pass of a city view.
 //   * Positions are the snapshot's unit vectors extrapolated by their velocity to the render tick, on the curved ground
 //     (sim/grid/surface.ts groundHeight — cached per person until they move), plus their altitude (drifters float,
 //     swimmers sit in the water).
@@ -25,9 +26,11 @@ import { BodyBuckets, bodyMatrix, unpackLinear } from './bodies.ts';
 import type { Buildings } from './buildings.ts';
 import { Boats, vesselOf } from './boats.ts';
 
-const LOD_D = [30, 95, 650];
+// (the far LOD from 60 m, ~22 px tall at 720 p: the mid LOD to 115 m was most of a city view's crowd triangles)
+const LOD_D = [30, 42, 60, 650];
 /** half-widths (m) of the cross-fade bands at the LOD switches (and the fade-out at the far edge) */
-const LOD_BAND = [2.5, 6, 40];
+const LOD_BAND = [2.5, 4, 8, 40];
+const LODS = LOD_D.length;
 const _lf: [number, number][] = [[0, 1], [0, 1]];
 
 /**
@@ -36,13 +39,13 @@ const _lf: [number, number][] = [[0, 1], [0, 1]];
  * of `_lf` it filled ([lod, fade]).
  */
 function lodFades(d: number): number {
-  for (let l = 0; l < 3; l++) {
+  for (let l = 0; l < LODS; l++) {
     const e = LOD_D[l], h = LOD_BAND[l];
     if (d < e - h) { _lf[0][0] = l; _lf[0][1] = 1; return 1; }
     if (d < e + h) {
       const f = (e + h - d) / (2 * h), near = f * f * (3 - 2 * f);
       _lf[0][0] = l; _lf[0][1] = near;
-      if (l === 2) return 1;
+      if (l === LODS - 1) return 1;
       _lf[1][0] = l + 1; _lf[1][1] = -(1 - near);
       return 2;
     }
@@ -106,6 +109,8 @@ export class Crowds {
     const sp = speciesAt(species);
     const plan = sp.plan === 'hexapod' ? PLAN.hex : sp.plan === 'flyer' ? PLAN.jelly : PLAN.biped;
     const tier = plan === PLAN.biped && lod <= 1 ? clothTier(era) : -1;
+    // (the hive and the drifters have one far body: their mid and far LODs share it)
+    if (plan !== PLAN.biped && lod > 2) lod = 2;
     const key = `p${plan}|${sp.furred ? 1 : 0}${sp.webbed ? 1 : 0}|${lod}|t${tier}`;
     return this.bodies.get(key, () => {
       let body: BodyMesh;
@@ -113,7 +118,7 @@ export class Crowds {
       else if (plan === PLAN.jelly) body = jellyMesh(lod);
       else body = bipedMesh(lod, { furred: sp.furred, webbed: sp.webbed, tier: tier >= 0 ? tier : undefined });
       const rig = plan === PLAN.hex ? HEX_RIG : plan === PLAN.jelly ? JELLY_RIG : BIPED_RIG;
-      return { body, opts: { plan, rig }, shadows: lod <= 1 };
+      return { body, opts: { plan, rig }, shadows: lod === 0 };
     });
   }
 
@@ -147,6 +152,11 @@ export class Crowds {
       if (!child && hashFloat(id, 23) < (elder ? 0.7 : 0.35)) s |= STYLE.beard;
     }
     if (!child && ((tier === 3 && hashFloat(id, 29) < 0.55) || (tier === 2 && hashFloat(id, 31) < 0.12))) s |= STYLE.hat;
+    // light linen: aprons over dresses, shirt fronts in open coats (a dark-clothed town still shows its white)
+    if (!child && tier >= 2) {
+      if ((s & STYLE.dress) && hashFloat(id, 33) < (tier === 3 ? 0.6 : 0.45)) s |= STYLE.apron;
+      if (!female && tier === 3 && hashFloat(id, 35) < 0.75) s |= STYLE.shirt;
+    }
     return s;
   }
 
@@ -216,7 +226,7 @@ export class Crowds {
     this.lastReal = realTime;
     const decay = Math.exp(-dtR / SMOOTH_S);
     // the cull radius, padded for the extrapolated step and the ground height above the datum
-    const cullSq = (LOD_D[2] + 260) * (LOD_D[2] + 260);
+    const cullSq = (LOD_D[LODS - 1] + 260) * (LOD_D[LODS - 1] + 260);
     this.pickN = 0;
     let agents = 0;
     if (A && A.count) {
@@ -247,6 +257,8 @@ export class Crowds {
         // ground, re-sampled only when the person has moved ~0.25 m
         if (Math.abs(ux - tr.gx) + Math.abs(uy - tr.gy) + Math.abs(uz - tr.gz) > 0.25 / R || tr.ground === 0) {
           tr.ground = groundHeight(pv.ground, ux, uy, uz); tr.gx = ux; tr.gy = uy; tr.gz = uz;
+          // (on a market square: its paving, raised over the ground's dimples)
+          tr.ground += buildings.surfaceLift(ux, uy, uz, tr.ground);
         }
         const flags = A.flags[i];
         const afloat = (flags & AgentFlag.boat) !== 0;
@@ -314,7 +326,7 @@ export class Crowds {
         if (!fwd) heading += Math.PI;
       }
       const dq = Math.hypot(ux * R - cx, uy * R - cy, uz * R - cz);
-      if (dq > LOD_D[2] + LOD_BAND[2]) continue;
+      if (dq > LOD_D[LODS - 1] + LOD_BAND[LODS - 1]) continue;
       const g = groundHeight(pv.ground, ux, uy, uz);
       const d = Math.hypot(ux * g - cx, uy * g - cy, uz * g - cz);
       const nl = lodFades(d);
@@ -387,6 +399,9 @@ export class Crowds {
     unpackLinear(tint || CLOTH_FALLBACK[id % CLOTH_FALLBACK.length], _a);
     // early peoples' clothes are undyed whatever the tint says
     if (era <= 1) { const l = 0.3 * _a[0] + 0.55 * _a[1] + 0.15 * _a[2]; _a[0] = l * 1.15; _a[1] = l * 0.95; _a[2] = l * 0.7; }
+    // no cloth is black: the darkest wool is charcoal (~0.045), so a coat still shows its form in the sun
+    const cl = 0.2126 * _a[0] + 0.7152 * _a[1] + 0.0722 * _a[2];
+    if (cl < 0.045) { const k = 0.045 / Math.max(1e-3, cl); _a[0] = Math.min(1, _a[0] * k + 0.004); _a[1] = Math.min(1, _a[1] * k + 0.004); _a[2] = Math.min(1, _a[2] * k + 0.004); }
     const skin = sp.skins[Math.floor(hashFloat(id, 51) * sp.skins.length)] ?? sp.skin;
     const k = 0.92 + 0.16 * hashFloat(id, 53);
     _b[0] = skin[0] * k; _b[1] = skin[1] * k; _b[2] = skin[2] * k;

@@ -265,6 +265,8 @@ export class Renderer {
       if (isPrimary) primaryVis = vis;
       // clouds (and their shadows) are drawn for the primary planet only: the others cast none either
       else vis.uniforms.uCloudOn.value = 0;
+      // night lights from afar (planet/citylights.ts, built by the field textures once the life layer lights anything)
+      if (vis.uniforms.uCityTex) vis.uniforms.uCityTex.value = vis.fields.cityLights ? vis.fields.cityLights.texture : null;
       vis.frameUpdate({
         camWorldInverse, frustum: this.frustum, camRel: _rel, sunDirWorld: _sun,
         sunE: _sunE.set(starCol[0] * E, starCol[1] * E, starCol[2] * E), time, K, frame: this.frameNo,
@@ -498,7 +500,8 @@ export class Renderer {
       if (primaryVis && primaryVis.atmo.has && primaryVis.altitude >= primaryVis.atmo.thickness * 1.5) {
         const sub = _up.copy(primaryVis.camBody).normalize().dot(primaryVis.uniforms.uSunDirBody.value as Vector3);
         const orbitNight = (1 - smoothstepN(-0.35, 0.05, sub)) * smoothstepN(primaryVis.atmo.thickness * 1.5, primaryVis.atmo.thickness * 3, primaryVis.altitude);
-        key += (0.05 - key) * orbitNight;
+        // (0.05 still metered a lamp-lit city up into AgX's cream: its streets and houses read white, not lamplight)
+        key += (0.022 - key) * orbitNight;
       }
       post.setKey(key);
       post.setMetering(0.02, Math.exp(Math.log(6) + (Math.log(5) - Math.log(6)) * night), Math.exp(Math.log(0.004) + (Math.log(0.0002) - Math.log(0.004)) * night));

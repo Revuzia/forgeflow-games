@@ -17,7 +17,8 @@
 // eyes, mandibles and antennae, two arms and four legs), drifter (a floating bell with trailing tentacles), quadruped
 // (deer, horse, cattle, bison, bear, wolf, boar, goat, sheep, hare, lizard — proportions, antlers / horns / tusks,
 // mane, wool, hump, ears, tails), bird (wings in two segments, tail fan, beak), fish (and whale), insect (locust), ray.
-// Each comes in three LODs: full detail, simplified, and a far silhouette.
+// Each comes in three LODs: full detail, simplified, and a far silhouette (bipeds four: a ~160-triangle mid LOD from
+// ~42 m and a ~100-triangle far one, both one mesh for every clothing tier, coloured by the instance's tier).
 
 import { BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute, Uint32BufferAttribute } from 'three';
 import { HELD, type AnimalForm } from '../life/catalog.ts';
@@ -28,10 +29,16 @@ export const PLAN = { biped: 0, hex: 1, jelly: 2, quad: 3, bird: 4, fish: 5, ins
 export const BPART = {
   skin: 0, cloth: 1, cloth2: 2, hair: 3, dark: 4, wood: 5, metal: 6, item: 7, leather: 8, fur: 9, shell: 10, white: 11,
   flame: 12, coat: 13, belly: 14, horn: 15, glow: 16, straw: 17, clay: 18, stone: 19,
+  // the far bipeds (one mesh for every clothing tier) colour these by the instance's tier in the shader: the main
+  // garment (hide / tunic / coat), legwear (bare legs / trousers), sleeves, forearms (skin / coat), and a hair cap
+  // that is skin on the bald; linen: shirt fronts, aprons, bonnets
+  garment: 20, legwear: 21, sleeve: 22, forearm: 23, haircap: 24, linen: 25,
 } as const;
 /** instance style bits (render/life/crowds.ts sets them per person) */
 export const STYLE = {
   hairShort: 1, hairLong: 2, tier0: 4, tier1: 8, tier2: 16, tier3: 32, dress: 64, hat: 128, beard: 256, child: 512, bald: 1024,
+  // light linen pieces: an apron over a dress, a shirt front in an open coat
+  apron: 2048, shirt: 4096,
 } as const;
 
 export interface Rig { plan: number; pivots: V3[]; parents: number[] }
@@ -109,7 +116,7 @@ class RigBuilder {
    * A tapered tube along a polyline with elliptical sections (rx, rz in the plane ⟂ the axis, "x" toward the
    * builder's side axis). Bone weights per ring come from `bone(t)`. Caps both ends (cap0 / cap1).
    */
-  tube(pts: V3[], rad: [number, number][], sides: number, bone: (t: number) => [number, number, number], part: number, o: VOpt = {}, cap0 = true, cap1 = true, side: V3 = [1, 0, 0]): void {
+  tube(pts: V3[], rad: [number, number][], sides: number, bone: (t: number) => [number, number, number], part: number, o: VOpt = {}, cap0 = true, cap1 = true, side: V3 = [1, 0, 0], axes?: V3[]): void {
     if (this.skip(o)) return;
     const n = pts.length;
     const rings: number[][] = [];
@@ -117,6 +124,7 @@ class RigBuilder {
       const p = pts[i];
       const q = pts[Math.min(n - 1, i + 1)], r = pts[Math.max(0, i - 1)];
       let ax = q[0] - r[0], ay = q[1] - r[1], az = q[2] - r[2];
+      if (axes) { ax = axes[i][0]; ay = axes[i][1]; az = axes[i][2]; }
       const al = Math.hypot(ax, ay, az) || 1;
       ax /= al; ay /= al; az /= al;
       // u = side ⟂ axis, w = axis × u
@@ -239,11 +247,12 @@ export interface BipedOpts { furred: boolean; webbed: boolean; tier?: number }
 const TIER_BITS = [STYLE.tier0, STYLE.tier1, STYLE.tier2, STYLE.tier3];
 
 export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
+  if (lod >= 2) return bipedLow(lod, o.furred);
   const b = new RigBuilder();
   if (o.tier !== undefined) {
     const tb = TIER_BITS[Math.max(0, Math.min(3, o.tier))];
     b.always = tb;
-    b.possible = tb | STYLE.hairShort | STYLE.hairLong | STYLE.dress | STYLE.hat | STYLE.beard | STYLE.child | STYLE.bald;
+    b.possible = tb | STYLE.hairShort | STYLE.hairLong | STYLE.dress | STYLE.hat | STYLE.beard | STYLE.child | STYLE.bald | STYLE.apron | STYLE.shirt;
   }
   const S = lod === 0 ? 1 : lod === 1 ? 0.42 : 0.3;
   const seg = (n: number) => Math.max(3, Math.round(n * S));
@@ -263,8 +272,13 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
     // the skin of the belly and back is left out under a tunic, coat or dress (it poked through the clothes as the
     // body twisted); the chest above it stays, under the neckline
     const cut = torso.findIndex((q) => q[0] >= 1.17);
-    b.tube(tPts.slice(0, cut + 1), tRad.slice(0, cut + 1), seg(12), (t) => torsoBone(t * (tPts[cut][1] - 0.86) / 0.59), BPART.skin, { forbid: STYLE.tier1 | STYLE.tier2 | STYLE.tier3 | STYLE.dress }, true, false);
-    b.tube(tPts.slice(cut), tRad.slice(cut), seg(12), (t) => torsoBone((tPts[cut][1] - 0.86 + t * (tPts[tPts.length - 1][1] - tPts[cut][1])) / 0.59), BPART.skin, {}, false, true);
+    // (the two pieces share their seam ring exactly — the whole torso's axis there, the same bone blend — or the
+    // bare chest of a hide-clad man showed a dashed seam where they met)
+    const tAx: V3[] = tPts.map((_, i) => { const q = tPts[Math.min(tPts.length - 1, i + 1)], r = tPts[Math.max(0, i - 1)]; return [q[0] - r[0], q[1] - r[1], q[2] - r[2]]; });
+    const tB = (y: number): [number, number, number] => torsoBone((y - 0.86) / 0.59);
+    const lowY = tPts.slice(0, cut + 1).map((p) => p[1]), upY = tPts.slice(cut).map((p) => p[1]);
+    b.tube(tPts.slice(0, cut + 1), tRad.slice(0, cut + 1), seg(12), (t) => tB(lowY[Math.round(t * (lowY.length - 1))]), BPART.skin, { forbid: STYLE.tier1 | STYLE.tier2 | STYLE.tier3 | STYLE.dress }, true, false, [1, 0, 0], tAx.slice(0, cut + 1));
+    b.tube(tPts.slice(cut), tRad.slice(cut), seg(12), (t) => tB(upY[Math.round(t * (upY.length - 1))]), BPART.skin, {}, false, true, [1, 0, 0], tAx.slice(cut));
   }
   // ── neck and head
   // (rounder neck and shoulders up close: at 8 sides they read faceted)
@@ -331,8 +345,11 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
     const wr: V3 = [sx * 0.228, 0.855, 0.012];
     // (the arm's skin is left out inside a coat's sleeves)
     const armSel = far ? {} : { forbid: STYLE.tier3 };
-    b.tube([[sh[0] - sx * 0.02, sh[1] + 0.02, sh[2]], [sh[0], sh[1] - 0.06, 0], [el[0], el[1] + 0.02, el[2]]], [[0.055, 0.055], [0.05, 0.048], [0.04, 0.038]], seg(lod === 0 ? 14 : 8), limbW(up, 1), far ? BPART.cloth : BPART.skin, armSel, true, false);
-    b.tube([[el[0], el[1] + 0.03, el[2]], [lerp3(el, wr, 0.5)[0], lerp3(el, wr, 0.5)[1], 0.0], wr], [[0.039, 0.037], [0.034, 0.03], [0.026, 0.021]], seg(8), limbW(fo, up), BPART.skin, armSel, false, true);
+    // (one tube from the shoulder to the wrist, the elbow ring blended between the two bones: two overlapping tubes
+    // showed a line round every elbow and knee as they bent)
+    const armB: [number, number, number][] = [[up, 1, 0.5], [up, up, 1], [fo, up, 0.5], [fo, fo, 1], [fo, fo, 1]];
+    b.tube([[sh[0] - sx * 0.02, sh[1] + 0.02, sh[2]], [sh[0], sh[1] - 0.06, 0], [el[0], el[1] + 0.01, el[2]], [lerp3(el, wr, 0.5)[0], lerp3(el, wr, 0.5)[1], 0.0], wr],
+      [[0.055, 0.055], [0.05, 0.048], [0.04, 0.038], [0.034, 0.03], [0.026, 0.021]], seg(lod === 0 ? 14 : 8), (t) => armB[Math.round(t * 4)], far ? BPART.cloth : BPART.skin, armSel, true, true);
     // hand
     const hp: V3 = [sx * 0.233, 0.79, 0.022];
     if (lod <= 1) {
@@ -356,9 +373,9 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
     // bare legs only where they show: hides (tier 0) and the short tunic (tier 1) without a dress — inside trousers or
     // a long dress the skin was left out (knees and shins poked through the cloth in stride)
     const legSels: VOpt[] = far ? [{}] : [{ req: STYLE.tier0 }, { req: STYLE.tier1, forbid: STYLE.dress }];
+    const legB: [number, number, number][] = [[th, 0, 0.5], [th, th, 1], [sh, th, 0.5], [sh, sh, 1], [sh, sh, 1]];
     for (const sel of legSels) {
-      b.tube([[hip[0], hip[1] + 0.03, hip[2]], lerp3(hip, kn, 0.5), [kn[0], kn[1] + 0.02, kn[2]]], [[0.085, 0.085], [0.07, 0.068], [0.054, 0.052]], seg(8), limbW(th, 0), far ? BPART.cloth2 : BPART.skin, sel, true, false);
-      b.tube([[kn[0], kn[1] + 0.03, kn[2]], [sx * 0.1, 0.3, -0.012], an], [[0.053, 0.052], [0.046, 0.044], [0.032, 0.031]], seg(8), limbW(sh, th), far ? BPART.cloth2 : BPART.skin, sel, false, false);
+      b.tube([[hip[0], hip[1] + 0.03, hip[2]], lerp3(hip, kn, 0.5), [kn[0], kn[1] + 0.015, kn[2]], [sx * 0.1, 0.3, -0.012], an], [[0.085, 0.085], [0.07, 0.068], [0.054, 0.052], [0.046, 0.044], [0.032, 0.031]], seg(8), (t) => legB[Math.round(t * 4)], far ? BPART.cloth2 : BPART.skin, sel, true, false);
     }
     // under a long dress only the ankles show above the feet
     if (!far) b.tube([[sx * 0.1, 0.2, -0.01], an], [[0.04, 0.039], [0.032, 0.031]], seg(8), rigid(sh), BPART.skin, { req: STYLE.dress, forbid: STYLE.tier2 | STYLE.tier3 }, false, false);
@@ -416,7 +433,7 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
     skirt(0.915, 0.12, 0.184, 0.33, BPART.cloth, STYLE.dress, 0, 0.6);
     // hide wrap and a fur cape (the first clothes: no tunic under the wrap, so it starts at the waist)
     skirt(0.99, 0.66, 0.172, 0.215, BPART.fur, STYLE.tier0, STYLE.dress, 0.4);
-    b.lathe(0, 0, [[0.27, 1.22], [0.25, 1.31], [0.2, 1.4], [0.13, 1.46], [0.09, 1.49]], seg(14), 1, BPART.fur, { req: STYLE.tier0 });
+    furCape(b, lod);
     // trim, belt, neckline for the dyed tiers
     // the belt sits low on the hips, where the body is the pelvis alone (at the waist the torso bends between pelvis
     // and chest, and a ring rigid to the pelvis floated free of it)
@@ -432,6 +449,7 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
       for (let i = 0; i < 4; i++) b.box([0, 1.08 + i * 0.075, 0.142], [0.008, 0.008, 0.005], 1, BPART.metal, { req: STYLE.tier3 });
     }
   }
+  if (lod <= 1) linenPieces(b, lod === 0 ? 3 : 2);
   // (far silhouette: the clothes are the body's own surface colour, see `far` above)
   // cold folk: a shaggy fur coat over everything (their own fur)
   if (o.furred && lod <= 1) {
@@ -441,6 +459,156 @@ export function bipedMesh(lod: number, o: BipedOpts): BodyMesh {
   // ── held tools and carried things (bone 6 = right forearm / hand; carried loads on the chest, shoulder, head, back)
   if (lod <= 1) tools(b, lod);
   return b.build(BIPED_RIG, 1.75);
+}
+
+/**
+ * Light linen pieces over the clothes (the steam age's crowds read as black ants without them): a shirt front in an
+ * open tailored coat (tier 3, STYLE.shirt) and an apron over a dress (STYLE.apron), on the chest / skirt surfaces.
+ */
+function linenPieces(b: RigBuilder, rows: number): void {
+  // shirt front: a narrowing strip down the coat's chest (the coat shell's front, +4 mm), rigid with the chest
+  const sy = [1.43, 1.39, 1.31, 1.2], sz = [0.104, 0.137, 0.164, 0.15], sw = [0.055, 0.062, 0.042, 0.012];
+  const ids: number[][] = [];
+  for (let j = 0; j < sy.length; j++) {
+    const row: number[] = [];
+    for (const u of [-1, 0, 1]) row.push(b.vert([u * sw[j], sy[j], sz[j] - Math.abs(u) * 0.012], [u * 0.25, 0.1, 1], 1, 1, 1, BPART.linen, { req: STYLE.shirt }));
+    ids.push(row);
+  }
+  for (let j = 0; j < sy.length - 1; j++) for (let i = 0; i < 2; i++) { const a = ids[j][i], c = ids[j][i + 1], d = ids[j + 1][i], e = ids[j + 1][i + 1]; b.tri(a, d, e); b.tri(a, e, c); }
+  // apron: over the dress's skirt from the waist to below the knee, across its front (+1 cm), following the thighs
+  const y0 = 0.915, y1 = 0.12, r0 = 0.184, r1 = 0.33, vEnd = 0.68;
+  const aIds: number[][] = [];
+  for (let j = 0; j <= rows; j++) {
+    const v = (j / rows) * vEnd, y = y0 + (y1 - y0) * v, r = r0 + (r1 - r0) * Math.pow(v, 0.8) + 0.012;
+    const row: number[] = [];
+    for (let i = 0; i <= 3; i++) {
+      const a = -0.62 + (i / 3) * 1.24;
+      const p: V3 = [Math.sin(a) * r, y, Math.cos(a) * r * (0.7 + 0.18 * v) + 0.006];
+      const th = p[0] >= 0 ? 7 : 9;
+      row.push(b.vert(p, [Math.sin(a), 0.15, Math.cos(a)], 0, th, 1 - 0.6 * v * v * Math.min(1, Math.abs(p[0]) / 0.12), BPART.linen, { req: STYLE.apron }));
+    }
+    aIds.push(row);
+  }
+  for (let j = 0; j < rows; j++) for (let i = 0; i < 3; i++) { const a = aIds[j][i], c = aIds[j][i + 1], d = aIds[j + 1][i], e = aIds[j + 1][i + 1]; b.tri(a, d, e); b.tri(a, e, c); }
+}
+
+/**
+ * The crowd's mid (lod 2, ~160 triangles, 42–115 m) and far (lod 3, ~100, beyond) bipeds: one mesh for every
+ * clothing tier, its garment, legwear, sleeves and hair coloured by the instance's style in the shader (BPART garment
+ * …), with the silhouettes that read at a few dozen pixels — a head with its hair cap, a torso, a skirt or a coat's
+ * tails (a long dress to the ankles), arms that swing on the same rig, legs, a hat; no hands, faces or tools.
+ */
+function bipedLow(lod: number, furred: boolean): BodyMesh {
+  const b = new RigBuilder();
+  const mid = lod === 2;
+  // (the cold folk wear their own shaggy pelt over everything: a bulkier torso in fur)
+  const fk = furred ? 1.12 : 1;
+  // (four sides even at mid range: the mid LOD is ~160 triangles, the city view's crowd from 42 m)
+  const ts = 4, ls = 3;
+  const P = BIPED_RIG.pivots;
+  // torso: hips → waist → chest → shoulders, the garment colour (hide, tunic or coat by tier)
+  const prof: [number, number, number, number][] = mid
+    ? [[0.86, 0.165, 0.11, 0.0], [1.12, 0.155, 0.1, 0.008], [1.32, 0.2, 0.125, 0.01], [1.46, 0.125, 0.085, -0.005]]
+    : [[0.86, 0.165, 0.11, 0.0], [1.3, 0.2, 0.125, 0.01], [1.46, 0.125, 0.085, -0.005]];
+  const ys = prof.map((q) => q[0]);
+  const boneAtY = (y: number): [number, number, number] => [1, 0, Math.min(1, Math.max(0, (y - 0.98) / 0.16))];
+  b.tube(prof.map(([y, , , z]) => [0, y, z] as V3), prof.map(([, rx, rz]) => [rx * fk, rz * fk] as [number, number]), ts,
+    (t) => boneAtY(ys[Math.round(t * (ys.length - 1))]), furred ? BPART.fur : BPART.garment, {}, false, true);
+  // head: the face (skin) and a cap of hair over the crown and the back of the skull (skin when bald)
+  const hc: V3 = [0, 1.62, 0.008];
+  const capKeep = (p: V3) => { const ly = p[1] - hc[1], lz = p[2] - hc[2]; return ly > 0.03 || (lz < -0.02 && ly > -0.07); };
+  b.ellipsoid(hc, [0.09, 0.115, 0.1], mid ? 5 : 4, mid ? 3 : 2, rigid(2), BPART.skin, {}, (p) => !capKeep(p));
+  b.ellipsoid(hc, [0.09, 0.115, 0.1], mid ? 5 : 4, mid ? 3 : 2, rigid(2), BPART.haircap, {}, capKeep);
+  if (mid) {
+    // long hair down the back, a hat or bonnet
+    b.tube([[0, 1.66, -0.08], [0, 1.37, -0.105]], [[0.072, 0.04], [0.055, 0.028]], 3, (t) => (t < 0.4 ? [2, 2, 1] : [1, 2, 0.6]), BPART.hair, { req: STYLE.hairLong }, false, true, [1, 0, 0]);
+    b.lathe(0, 0.005, [[0.125, 1.705], [0.001, 1.79]], 4, 2, BPART.cloth2, { req: STYLE.hat });
+  }
+  // skirts: a dress to the ankles, or the garment's skirt (hide wrap, tunic, coat tails) to the knee
+  const skirt = (y0: number, y1: number, r0: number, r1: number, part: number, sel: VOpt, follow: number) => {
+    b.surface(ts, 1, (u, w) => {
+      const v = 1 - w, a = u * Math.PI * 2;
+      const y = y0 + (y1 - y0) * v, r = r0 + (r1 - r0) * Math.pow(v, 0.8);
+      return [[Math.sin(a) * r, y, Math.cos(a) * r * (0.7 + 0.18 * v)], [Math.sin(a), 0.15, Math.cos(a)]];
+    }, (p, w) => { const v = 1 - w; const th = p[0] >= 0 ? 7 : 9; return [0, th, 1 - follow * v * v * Math.min(1, Math.abs(p[0]) / 0.12)]; }, part, sel);
+  };
+  skirt(0.93, 0.14, 0.18, 0.3, BPART.cloth, { req: STYLE.dress }, 0.6);
+  skirt(0.93, 0.58, 0.18, 0.24, BPART.garment, { forbid: STYLE.dress }, 0.45);
+  if (mid) linenPieces(b, 1);
+  // arms: the sleeve (or bare arm) to the elbow, the forearm (skin, or a coat's sleeve) to the wrist; the elbow ring is
+  // shared exactly (same place, same blend of the two bones) so the two pieces bend as one
+  // (far, ~15 px tall: one tube each from shoulder to wrist and hip to ankle — the elbow and knee bends are below a
+  // pixel there, and the city view's crowd is mostly this LOD)
+  for (const [sx, up, fo] of [[1, 3, 4], [-1, 5, 6]] as [number, number, number][]) {
+    const sh: V3 = [P[up][0] - sx * 0.015, P[up][1] + 0.015, 0], el: V3 = [P[fo][0], P[fo][1] + 0.02, P[fo][2]], wr: V3 = [sx * 0.23, 0.83, 0.015];
+    if (!mid) { b.tube([sh, wr], [[0.058, 0.055], [0.034, 0.03]], ls, (t) => (t < 0.5 ? [up, 1, 0.55] : [fo, fo, 1]), BPART.sleeve, {}, false, true); continue; }
+    b.tube([sh, el], [[0.058, 0.055], [0.044, 0.042]], ls, (t) => (t < 0.5 ? [up, 1, 0.55] : [fo, up, 0.5]), BPART.sleeve, {}, false, false);
+    b.tube([el, wr], [[0.044, 0.042], [0.03, 0.027]], ls, (t) => (t < 0.5 ? [fo, up, 0.5] : [fo, fo, 1]), BPART.forearm, {}, false, true);
+  }
+  // legs: thigh and shin (bare, or trousers), a foot
+  for (const [sx, th, sn] of [[1, 7, 8], [-1, 9, 10]] as [number, number, number][]) {
+    const hip: V3 = [P[th][0], P[th][1] + 0.03, 0], kn: V3 = [P[sn][0], P[sn][1] + 0.02, P[sn][2]], an: V3 = [sx * 0.1, 0.07, -0.01];
+    if (!mid) { b.tube([hip, an], [[0.088, 0.085], [0.04, 0.038]], ls, (t) => (t < 0.5 ? [th, 0, 0.55] : [sn, sn, 1]), BPART.legwear, {}, false, false); continue; }
+    b.tube([hip, kn], [[0.088, 0.085], [0.058, 0.056]], ls, (t) => (t < 0.5 ? [th, 0, 0.55] : [sn, th, 0.5]), BPART.legwear, {}, false, false);
+    b.tube([kn, an], [[0.058, 0.056], [0.038, 0.036]], ls, (t) => (t < 0.5 ? [sn, th, 0.5] : [sn, sn, 1]), BPART.legwear, {}, false, false);
+  }
+  return b.build(BIPED_RIG, 1.75);
+}
+
+/**
+ * The first people's fur cape: a pelt draped over the shoulders and the shoulder caps (an elliptical shell following
+ * the chest and back, not a turned cone), with its thickness, a ragged hem of uneven length and a fringe of fur tufts.
+ */
+function furCape(b: RigBuilder, lod: number): void {
+  const o: VOpt = { req: STYLE.tier0 };
+  const nu = lod === 0 ? 16 : 9;
+  // rows from the collar down: [y, half-width across (x), half-depth (z), z centre]
+  const rows: [number, number, number, number][] = [[1.495, 0.075, 0.065, 0.0], [1.455, 0.16, 0.1, -0.005], [1.41, 0.262, 0.145, -0.008], [1.34, 0.282, 0.162, -0.006], [1.255, 0.285, 0.172, 0.0]];
+  // (a ragged hem, always below the last row: shorter at the chest, longer down the back)
+  const hemY = (a: number) => Math.min(1.235, 1.17 + 0.035 * Math.sin(a * 3 + 1.3) + 0.022 * Math.sin(a * 7 + 0.4) + 0.035 * Math.max(0, Math.cos(a)));
+  const P = (j: number, a: number, inset: number): V3 => {
+    const ca = Math.sin(a), sa = Math.cos(a);
+    if (j < rows.length) {
+      const [y, rx, rz, zc] = rows[j];
+      return [ca * (rx - inset), y, zc + sa * (rz - inset)];
+    }
+    const [, rx, rz, zc] = rows[rows.length - 1];
+    return [ca * (rx + 0.01 - inset), hemY(a), zc + sa * (rz + 0.008 - inset)];
+  };
+  const nv = rows.length + 1;
+  const outer: number[][] = [], inner: number[][] = [];
+  for (let j = 0; j < nv; j++) {
+    const ro: number[] = [], ri: number[] = [];
+    for (let i = 0; i <= nu; i++) {
+      const a = (i / nu) * Math.PI * 2;
+      const p = P(j, a, 0), q = P(j, a, 0.018);
+      const n: V3 = [Math.sin(a), j < 2 ? 0.8 : 0.25, Math.cos(a)];
+      ro.push(b.vert(p, n, 1, 1, 1, BPART.fur, o));
+      ri.push(b.vert(q, [-n[0], -n[1], -n[2]], 1, 1, 1, BPART.fur, { ...o, ao: 0.55 }));
+    }
+    outer.push(ro); inner.push(ri);
+  }
+  for (let j = 0; j < nv - 1; j++) for (let i = 0; i < nu; i++) {
+    const a = outer[j][i], c = outer[j][i + 1], d = outer[j + 1][i], e = outer[j + 1][i + 1];
+    b.tri(a, d, e); b.tri(a, e, c);
+    const a2 = inner[j][i], c2 = inner[j][i + 1], d2 = inner[j + 1][i], e2 = inner[j + 1][i + 1];
+    b.tri(a2, e2, d2); b.tri(a2, c2, e2);
+  }
+  // the hem's edge (its thickness) and a fringe of fur tufts hanging from it
+  const last = nv - 1;
+  for (let i = 0; i < nu; i++) {
+    const a0 = (i / nu) * Math.PI * 2, a1 = ((i + 1) / nu) * Math.PI * 2;
+    const dn: V3 = [0, -1, 0];
+    const a = b.vert(P(last, a0, 0), dn, 1, 1, 1, BPART.fur, o), c = b.vert(P(last, a1, 0), dn, 1, 1, 1, BPART.fur, o);
+    const d = b.vert(P(last, a0, 0.018), dn, 1, 1, 1, BPART.fur, o), e = b.vert(P(last, a1, 0.018), dn, 1, 1, 1, BPART.fur, o);
+    b.tri(a, d, e); b.tri(a, e, c);
+  }
+  if (lod === 0) for (let i = 0; i < nu * 2; i++) {
+    const a = ((i + 0.5) / (nu * 2)) * Math.PI * 2;
+    const p = P(last, a, 0.004), l = 0.035 + 0.03 * Math.abs(Math.sin(i * 2.7));
+    const tx = Math.cos(a) * 0.022, tz = -Math.sin(a) * 0.022;
+    b.card([p[0] - tx, p[1] + 0.005, p[2] - tz], [p[0] + tx, p[1] + 0.005, p[2] + tz], [p[0] + tx * 0.2 + Math.sin(a) * 0.012, p[1] - l, p[2] + tz * 0.2 + Math.cos(a) * 0.012], [p[0] - tx * 0.2 + Math.sin(a) * 0.012, p[1] - l, p[2] - tz * 0.2 + Math.cos(a) * 0.012], () => [1, 1, 1], BPART.fur, o);
+  }
 }
 
 /** tools in the right hand (they hang along the forearm at rest: raised arms raise them) and carried loads */
@@ -558,20 +726,22 @@ interface QuadSpec {
   len: number; depth: number; width: number; legR: number; neckLen: number; neckAng: number; headLen: number; headR: number;
   tail: number; tailR: number; ears: number; earUp: number; horns: 'none' | 'antlers' | 'curl' | 'up' | 'short' | 'tusks'; mane: boolean; wool: boolean;
   hump: number; snout: number; legLen: number; sprawl: number; hairyTail: boolean;
+  /** the back's dip behind the withers (× depth), how far the hip bones stand out, hooves (else paws) */
+  dip: number; hips: number; hoof: boolean;
 }
 
 const QUADS: Record<string, QuadSpec> = {
-  deer: { len: 1.15, depth: 0.42, width: 0.3, legR: 0.04, neckLen: 0.5, neckAng: 0.95, headLen: 0.3, headR: 0.09, tail: 0.12, tailR: 0.03, ears: 0.12, earUp: 0.6, horns: 'antlers', mane: false, wool: false, hump: 0, snout: 0.6, legLen: 1, sprawl: 0, hairyTail: false },
-  horse: { len: 1.4, depth: 0.52, width: 0.38, legR: 0.055, neckLen: 0.7, neckAng: 0.8, headLen: 0.52, headR: 0.11, tail: 0.75, tailR: 0.05, ears: 0.1, earUp: 0.9, horns: 'none', mane: true, wool: false, hump: 0, snout: 0.7, legLen: 1, sprawl: 0, hairyTail: true },
-  cattle: { len: 1.45, depth: 0.66, width: 0.5, legR: 0.065, neckLen: 0.32, neckAng: 0.3, headLen: 0.36, headR: 0.13, tail: 0.75, tailR: 0.025, ears: 0.1, earUp: 0.1, horns: 'short', mane: false, wool: false, hump: 0.06, snout: 0.15, legLen: 0.88, sprawl: 0, hairyTail: false },
-  bison: { len: 1.5, depth: 0.78, width: 0.58, legR: 0.07, neckLen: 0.3, neckAng: -0.1, headLen: 0.42, headR: 0.17, tail: 0.4, tailR: 0.03, ears: 0.07, earUp: 0.1, horns: 'short', mane: true, wool: false, hump: 0.28, snout: 0.35, legLen: 0.75, sprawl: 0, hairyTail: false },
-  bear: { len: 1.35, depth: 0.7, width: 0.58, legR: 0.1, neckLen: 0.25, neckAng: 0.2, headLen: 0.36, headR: 0.16, tail: 0.08, tailR: 0.05, ears: 0.06, earUp: 0.8, horns: 'none', mane: false, wool: false, hump: 0.1, snout: 0.5, legLen: 0.8, sprawl: 0, hairyTail: false },
-  wolf: { len: 1.05, depth: 0.38, width: 0.26, legR: 0.04, neckLen: 0.32, neckAng: 0.55, headLen: 0.34, headR: 0.09, tail: 0.5, tailR: 0.06, ears: 0.1, earUp: 1, horns: 'none', mane: false, wool: false, hump: 0, snout: 0.8, legLen: 1, sprawl: 0, hairyTail: true },
-  boar: { len: 1.15, depth: 0.62, width: 0.42, legR: 0.05, neckLen: 0.16, neckAng: 0.1, headLen: 0.45, headR: 0.14, tail: 0.18, tailR: 0.015, ears: 0.09, earUp: 0.6, horns: 'tusks', mane: true, wool: false, hump: 0.08, snout: 0.9, legLen: 0.62, sprawl: 0, hairyTail: false },
-  goat: { len: 1.0, depth: 0.46, width: 0.3, legR: 0.042, neckLen: 0.4, neckAng: 0.9, headLen: 0.3, headR: 0.09, tail: 0.1, tailR: 0.025, ears: 0.1, earUp: 0.2, horns: 'curl', mane: false, wool: false, hump: 0, snout: 0.6, legLen: 0.95, sprawl: 0, hairyTail: false },
-  sheep: { len: 1.05, depth: 0.6, width: 0.48, legR: 0.035, neckLen: 0.28, neckAng: 0.5, headLen: 0.28, headR: 0.08, tail: 0.12, tailR: 0.04, ears: 0.09, earUp: 0.0, horns: 'none', mane: false, wool: true, hump: 0, snout: 0.5, legLen: 0.78, sprawl: 0, hairyTail: false },
-  hare: { len: 1.3, depth: 0.55, width: 0.4, legR: 0.05, neckLen: 0.15, neckAng: 0.7, headLen: 0.38, headR: 0.17, tail: 0.1, tailR: 0.09, ears: 0.55, earUp: 1.2, horns: 'none', mane: false, wool: false, hump: 0.1, snout: 0.4, legLen: 0.6, sprawl: 0, hairyTail: true },
-  lizard: { len: 2.2, depth: 0.42, width: 0.5, legR: 0.07, neckLen: 0.25, neckAng: 0.1, headLen: 0.45, headR: 0.16, tail: 1.8, tailR: 0.13, ears: 0, earUp: 0, horns: 'none', mane: false, wool: false, hump: 0, snout: 0.6, legLen: 0.6, sprawl: 0.6, hairyTail: false },
+  deer: { len: 1.15, depth: 0.42, width: 0.3, legR: 0.04, neckLen: 0.5, neckAng: 0.95, headLen: 0.3, headR: 0.09, tail: 0.12, tailR: 0.03, ears: 0.12, earUp: 0.6, horns: 'antlers', mane: false, wool: false, hump: 0, snout: 0.6, legLen: 1, sprawl: 0, hairyTail: false, dip: 0.03, hips: 0.03, hoof: true },
+  horse: { len: 1.4, depth: 0.52, width: 0.38, legR: 0.055, neckLen: 0.7, neckAng: 0.8, headLen: 0.52, headR: 0.11, tail: 0.75, tailR: 0.05, ears: 0.1, earUp: 0.9, horns: 'none', mane: true, wool: false, hump: 0, snout: 0.7, legLen: 1, sprawl: 0, hairyTail: true, dip: 0.05, hips: 0.04, hoof: true },
+  cattle: { len: 1.45, depth: 0.66, width: 0.5, legR: 0.065, neckLen: 0.32, neckAng: 0.3, headLen: 0.36, headR: 0.13, tail: 0.75, tailR: 0.025, ears: 0.1, earUp: 0.1, horns: 'short', mane: false, wool: false, hump: 0.06, snout: 0.15, legLen: 0.88, sprawl: 0, hairyTail: false, dip: 0.07, hips: 0.09, hoof: true },
+  bison: { len: 1.5, depth: 0.78, width: 0.58, legR: 0.07, neckLen: 0.3, neckAng: -0.1, headLen: 0.42, headR: 0.17, tail: 0.4, tailR: 0.03, ears: 0.07, earUp: 0.1, horns: 'short', mane: true, wool: false, hump: 0.28, snout: 0.35, legLen: 0.75, sprawl: 0, hairyTail: false, dip: 0.03, hips: 0.05, hoof: true },
+  bear: { len: 1.35, depth: 0.7, width: 0.58, legR: 0.1, neckLen: 0.25, neckAng: 0.2, headLen: 0.36, headR: 0.16, tail: 0.08, tailR: 0.05, ears: 0.06, earUp: 0.8, horns: 'none', mane: false, wool: false, hump: 0.1, snout: 0.5, legLen: 0.8, sprawl: 0, hairyTail: false, dip: 0.0, hips: 0.02, hoof: false },
+  wolf: { len: 1.05, depth: 0.38, width: 0.26, legR: 0.04, neckLen: 0.32, neckAng: 0.55, headLen: 0.34, headR: 0.09, tail: 0.5, tailR: 0.06, ears: 0.1, earUp: 1, horns: 'none', mane: false, wool: false, hump: 0, snout: 0.8, legLen: 1, sprawl: 0, hairyTail: true, dip: 0.02, hips: 0.02, hoof: false },
+  boar: { len: 1.15, depth: 0.62, width: 0.42, legR: 0.05, neckLen: 0.16, neckAng: 0.1, headLen: 0.45, headR: 0.14, tail: 0.18, tailR: 0.015, ears: 0.09, earUp: 0.6, horns: 'tusks', mane: true, wool: false, hump: 0.08, snout: 0.9, legLen: 0.62, sprawl: 0, hairyTail: false, dip: 0.02, hips: 0.03, hoof: true },
+  goat: { len: 1.0, depth: 0.46, width: 0.3, legR: 0.042, neckLen: 0.4, neckAng: 0.9, headLen: 0.3, headR: 0.09, tail: 0.1, tailR: 0.025, ears: 0.1, earUp: 0.2, horns: 'curl', mane: false, wool: false, hump: 0, snout: 0.6, legLen: 0.95, sprawl: 0, hairyTail: false, dip: 0.04, hips: 0.05, hoof: true },
+  sheep: { len: 1.05, depth: 0.6, width: 0.48, legR: 0.035, neckLen: 0.28, neckAng: 0.5, headLen: 0.28, headR: 0.08, tail: 0.12, tailR: 0.04, ears: 0.09, earUp: 0.0, horns: 'none', mane: false, wool: true, hump: 0, snout: 0.5, legLen: 0.78, sprawl: 0, hairyTail: false, dip: 0.02, hips: 0.03, hoof: true },
+  hare: { len: 1.3, depth: 0.55, width: 0.4, legR: 0.05, neckLen: 0.15, neckAng: 0.7, headLen: 0.38, headR: 0.17, tail: 0.1, tailR: 0.09, ears: 0.55, earUp: 1.2, horns: 'none', mane: false, wool: false, hump: 0.1, snout: 0.4, legLen: 0.6, sprawl: 0, hairyTail: true, dip: 0.0, hips: 0.0, hoof: false },
+  lizard: { len: 2.2, depth: 0.42, width: 0.5, legR: 0.07, neckLen: 0.25, neckAng: 0.1, headLen: 0.45, headR: 0.16, tail: 1.8, tailR: 0.13, ears: 0, earUp: 0, horns: 'none', mane: false, wool: false, hump: 0, snout: 0.6, legLen: 0.6, sprawl: 0.6, hairyTail: false, dip: 0.0, hips: 0.0, hoof: false },
 };
 
 export function quadSpecFor(form: AnimalForm): QuadSpec {
@@ -618,18 +788,51 @@ export function quadMesh(form: AnimalForm, lod: number): BodyMesh {
     [-0.53, 0.42, 0.5, 0.02], [-0.45, 0.84, 0.86, 0.0], [-0.3, 0.98, 0.95, 0.0], [-0.1, 0.84, 0.82, -0.06],
     [0.12, 1.02, 1.08, 0.06], [0.32, 1.07, 1.08, 0.04], [0.46, 0.86, 0.9, 0.0], [0.54, 0.5, 0.62, -0.02],
   ];
-  const pr = lod === 2 ? [prof[0], prof[2], prof[3], prof[4], prof[6], prof[7]] : lod === 1 ? [prof[0], prof[1], prof[2], prof[3], prof[4], prof[5], prof[7]] : prof;
+  // (full detail: twice the rings, interpolated, so the back line, the hips and the barrel read as curves, not a box)
+  let pr = lod === 2 ? [prof[0], prof[2], prof[3], prof[4], prof[6], prof[7]] : lod === 1 ? [prof[0], prof[1], prof[2], prof[3], prof[4], prof[5], prof[7]] : prof;
+  if (lod === 0) {
+    const fine: [number, number, number, number][] = [];
+    for (let i = 0; i < pr.length; i++) {
+      fine.push(pr[i]);
+      if (i + 1 < pr.length) fine.push(pr[i].map((v, k) => (v + pr[i + 1][k]) / 2) as [number, number, number, number]);
+    }
+    pr = fine;
+  }
   for (const [t, kx, ky, drop] of pr) {
     const hump = q.hump * Math.max(0, 1 - Math.abs(t - 0.32) / 0.3);
     bodyPts.push([0, bodyY + hump * 0.5 - drop * q.depth * 0.5, t * L]);
     bodyRad.push([q.width * 0.5 * kx, (q.depth * 0.5 + hump * 0.4) * ky]);
   }
   const bodyPart = q.wool ? BPART.fur : BPART.coat;
+  const v0 = b.pos.length / 3;
   b.tube(bodyPts, bodyRad, seg(16), rigid(0), bodyPart, {}, true, true, [1, 0, 0]);
-  if (!q.wool && lod <= 1) {
-    // belly: a slightly smaller shell showing below the flank line (two-tone coats)
-    // (only under the barrel: at the rump and the chest, where the body narrows fast, a full-length shell poked out)
-    b.tube(bodyPts.slice(1, -1).map((p) => [p[0], p[1] - q.depth * 0.05, p[2]] as V3), bodyRad.slice(1, -1).map(([x, y]) => [x * 0.955, y * 0.96] as [number, number]), seg(12), rigid(0), BPART.belly, {}, false, false);
+  {
+    // the back dips behind the withers, the hip bones stand out at the top of the rump, and the belly is the coat's
+    // own countershade blended in softly (the part code carries the blend: 13 + 0.4 w — a separate belly shell drew
+    // a hard, sticker-like edge where it met the flank)
+    const dip = q.dip * q.depth, hips = q.hips;
+    const at = (z: number): [number, number] => {
+      const t = z / L;
+      let i = 0;
+      while (i < pr.length - 2 && pr[i + 1][0] < t) i++;
+      const u = Math.max(0, Math.min(1, (t - pr[i][0]) / Math.max(1e-6, pr[i + 1][0] - pr[i][0])));
+      return [bodyPts[i][1] + (bodyPts[i + 1][1] - bodyPts[i][1]) * u, bodyRad[i][1] + (bodyRad[i + 1][1] - bodyRad[i][1]) * u];
+    };
+    for (let v = v0; v < b.pos.length / 3; v++) {
+      const x = b.pos[v * 3], z = b.pos[v * 3 + 2];
+      let y = b.pos[v * 3 + 1];
+      const [cy, ry] = at(z);
+      const t = z / L, up = Math.max(0, (y - cy) / Math.max(1e-3, ry));
+      y -= dip * Math.exp(-Math.pow((t + 0.06) / 0.2, 2)) * up * up;
+      const hb = Math.exp(-Math.pow((t + 0.36) / 0.08, 2)) * Math.exp(-Math.pow((up - 0.72) / 0.25, 2));
+      b.pos[v * 3] = x * (1 + hips * hb);
+      b.pos[v * 3 + 1] = y + hips * hb * ry * 0.35;
+      if (!q.wool) {
+        const below = (cy - y) / Math.max(1e-3, ry);
+        const w = Math.min(1, Math.max(0, (below - 0.15) / 0.5));
+        b.rig[v * 4 + 3] = BPART.coat + 0.4 * w * w * (3 - 2 * w);
+      }
+    }
   }
   // neck (thick at its base, into the shoulders) and head (a little larger than the old toy heads)
   const nb = P[1], hd = P[2];
@@ -639,13 +842,16 @@ export function quadMesh(form: AnimalForm, lod: number): BodyMesh {
   const headDir: V3 = [0, -Math.sin(0.5 - q.neckAng * 0.3), Math.cos(0.5 - q.neckAng * 0.3)];
   const snoutEnd: V3 = [0, hd[1] + headDir[1] * q.headLen, hd[2] + headDir[2] * q.headLen];
   b.tube([[hd[0], hd[1] + hR * 0.1, hd[2] - hR * 0.4], hd, lerp3(hd, snoutEnd, 0.6), snoutEnd], [[hR * 0.9, hR], [hR, hR * 1.05], [hR * (0.5 + 0.3 * (1 - q.snout)), hR * 0.7], [hR * (0.35 + 0.2 * (1 - q.snout)), hR * 0.45]], seg(8), rigid(2), BPART.coat, {}, true, true, [1, 0, 0]);
-  b.ellipsoid(snoutEnd, [hR * 0.32, hR * 0.3, hR * 0.2], seg(6), seg(4), rigid(2), BPART.dark);
+  // (far — a few pixels — the head is the jaw and the taper alone: the nose, muzzle and hooves below were most of
+  // the far LOD's triangles)
+  if (lod <= 1) b.ellipsoid(snoutEnd, [hR * 0.32, hR * 0.3, hR * 0.2], seg(6), seg(4), rigid(2), BPART.dark);
   // the jaw: a broad cheek and jowl behind the mouth (a straight taper read as a cone), and a fuller muzzle
   b.ellipsoid([0, hd[1] - hR * 0.35, hd[2] + q.headLen * 0.12], [hR * 0.95, hR * 0.75, hR * 1.05], seg(8), seg(6), rigid(2), BPART.coat);
-  b.ellipsoid(lerp3(hd, snoutEnd, 0.86), [hR * (0.42 + 0.25 * (1 - q.snout)), hR * 0.5, hR * 0.42], seg(7), seg(5), rigid(2), BPART.coat);
+  if (lod <= 1) b.ellipsoid(lerp3(hd, snoutEnd, 0.86), [hR * (0.42 + 0.25 * (1 - q.snout)), hR * 0.5, hR * 0.42], seg(7), seg(5), rigid(2), BPART.coat);
   if (lod <= 1) {
     for (const sx of [1, -1]) {
-      b.ellipsoid([sx * hR * 0.7, hd[1] + hR * 0.35, hd[2] + q.headLen * 0.12], [hR * 0.14, hR * 0.14, hR * 0.14], 6, 4, rigid(2), BPART.dark);
+      // (eyes from the nearest LOD only: at 45 m and beyond they are under a pixel)
+      if (lod === 0) b.ellipsoid([sx * hR * 0.7, hd[1] + hR * 0.35, hd[2] + q.headLen * 0.12], [hR * 0.14, hR * 0.14, hR * 0.14], 6, 4, rigid(2), BPART.dark);
       if (q.ears > 0) b.card([sx * hR * 0.6, hd[1] + hR * 0.7, hd[2] - hR * 0.2], [sx * hR * 0.6, hd[1] + hR * 0.7, hd[2] + hR * 0.15], [sx * (hR * 0.6 + q.ears * Math.cos(q.earUp)), hd[1] + hR * 0.7 + q.ears * Math.sin(q.earUp), hd[2]], [sx * (hR * 0.6 + q.ears * Math.cos(q.earUp)), hd[1] + hR * 0.7 + q.ears * Math.sin(q.earUp), hd[2] - hR * 0.15], rigid(2), BPART.coat);
       // horns / antlers / tusks
       const base: V3 = [sx * hR * 0.45, hd[1] + hR * 0.8, hd[2] - hR * 0.05];
@@ -679,8 +885,19 @@ export function quadMesh(form: AnimalForm, lod: number): BodyMesh {
     b.tube([[a[0] * 0.85, a[1] + q.depth * 0.22, a[2] + (front ? 0.02 : -0.03) * L], a, k], [[thick * 1.5, thick * 3.1], [thick * 1.3, thick * 2.0], [thick, thick * 1.1]], seg(8), limbW(up, 0), q.wool ? BPART.dark : BPART.coat, {}, false, false);
     // below it a slender cannon: the hind leg bends back at the hock, the foreleg runs straight down from the knee
     const mid: V3 = front ? [k[0], k[1] * 0.42, k[2] + 0.01 * L] : [k[0], k[1] * 0.45, k[2] - 0.08 * L];
-    b.tube([k, mid, lerp3(mid, foot, 0.6), foot], [[thick * 0.95, thick], [thick * 0.72, thick * 0.78], [thick * 0.62, thick * 0.66], [thick * 0.8, thick * 0.85]], seg(6), limbW(lo, up), q.wool ? BPART.dark : BPART.coat, {}, false, true);
-    b.ellipsoid([foot[0], 0.03, foot[2] + 0.01], [thick * 1.0, 0.035, thick * 1.3], 6, 3, rigid(lo), BPART.horn);
+    if (q.hoof && lod <= 1) {
+      // the cannon to the knobbly fetlock joint, the sloping pastern, and a hoof (not a post standing on a pebble)
+      // (a hind cannon runs down and forward from the hock: its fetlock lower and part way to the hoof)
+      const fy = Math.min(0.15, mid[1] * (front ? 0.72 : 0.5)), py = Math.min(0.065, fy * 0.55);
+      const fet: V3 = [foot[0], fy, front ? foot[2] - 0.005 : mid[2] + (foot[2] - mid[2]) * 0.55], pas: V3 = [foot[0], py, foot[2] + (front ? 0.028 : 0.02)];
+      b.tube([k, mid, fet, pas], [[thick * 0.95, thick], [thick * 0.66, thick * 0.74], [thick * 0.82, thick * 0.92], [thick * 0.6, thick * 0.66]], seg(6), limbW(lo, up), q.wool ? BPART.dark : BPART.coat, {}, false, false);
+      b.tube([[pas[0], py + 0.012, pas[2] - 0.004], [pas[0], 0.0, pas[2] + 0.03]], [[thick * 0.72, thick * 0.74], [thick * 0.98, thick * 1.08]], seg(6), rigid(lo), BPART.horn, {}, false, true);
+    } else if (lod >= 2) {
+      b.tube([k, foot], [[thick * 0.95, thick], [thick * 0.7, thick * 0.75]], seg(6), limbW(lo, up), q.wool ? BPART.dark : BPART.coat, {}, false, false);
+    } else {
+      b.tube([k, mid, lerp3(mid, foot, 0.6), foot], [[thick * 0.95, thick], [thick * 0.72, thick * 0.78], [thick * 0.62, thick * 0.66], [thick * 0.8, thick * 0.85]], seg(6), limbW(lo, up), q.wool ? BPART.dark : BPART.coat, {}, false, true);
+      if (lod <= 1) b.ellipsoid([foot[0], 0.03, foot[2] + 0.01], [thick * 1.0, 0.035, thick * 1.3], seg(6), 3, rigid(lo), BPART.horn);
+    }
   }
   return b.build(rig, 1);
 }
@@ -696,18 +913,21 @@ export const BIRD_RIG: Rig = {
 
 export function birdMesh(lod: number, gull: boolean): BodyMesh {
   const b = new RigBuilder();
-  const seg = (n: number) => Math.max(3, Math.round(n * (lod === 0 ? 1 : 0.5)));
+  const seg = (n: number) => Math.max(3, Math.round(n * (lod === 0 ? 1 : lod === 1 ? 0.5 : 0.35)));
+  // (beyond the nearest LOD — a few pixels against the sky — a bird is its body, head, wings and tail: no belly shell or
+  // legs, and far off no beak)
+  const far = lod >= 2;
   b.ellipsoid([0, 0.5, 0], [0.11, 0.1, 0.3], seg(10), seg(7), rigid(0), BPART.coat);
-  b.ellipsoid([0, 0.47, 0.02], [0.095, 0.085, 0.24], seg(10), seg(6), rigid(0), BPART.belly, {}, (p) => p[1] < 0.47);
+  if (lod === 0) b.ellipsoid([0, 0.47, 0.02], [0.095, 0.085, 0.24], seg(10), seg(6), rigid(0), BPART.belly, {}, (p) => p[1] < 0.47);
   b.ellipsoid([0, 0.57, 0.3], [0.07, 0.07, 0.08], seg(8), seg(6), rigid(1), BPART.coat);
-  b.tube([[0, 0.565, 0.36], [0, 0.555, gull ? 0.48 : 0.43]], [[0.022, 0.018], [0.002, 0.002]], 4, rigid(1), BPART.horn);
+  if (!far) b.tube([[0, 0.565, 0.36], [0, 0.555, gull ? 0.48 : 0.43]], [[0.022, 0.018], [0.002, 0.002]], 4, rigid(1), BPART.horn);
   if (lod === 0) for (const sx of [1, -1]) b.ellipsoid([sx * 0.045, 0.585, 0.33], [0.012, 0.012, 0.012], 4, 3, rigid(1), BPART.dark);
   for (const [sx, inn, out] of [[1, 2, 3], [-1, 4, 5]] as [number, number, number][]) {
     b.card([sx * 0.05, 0.55, 0.1], [sx * 0.45, 0.55, 0.06], [sx * 0.45, 0.55, -0.12], [sx * 0.05, 0.55, -0.1], rigid(inn), BPART.coat);
     b.card([sx * 0.45, 0.55, 0.06], [sx * (gull ? 0.95 : 0.8), 0.55, -0.02], [sx * (gull ? 0.92 : 0.76), 0.55, -0.12], [sx * 0.45, 0.55, -0.12], rigid(out), gull ? BPART.dark : BPART.coat);
   }
   b.card([0.0, 0.52, -0.25], [0.1, 0.52, -0.52], [-0.1, 0.52, -0.52], [-0.0, 0.52, -0.25], rigid(6), BPART.coat);
-  for (const sx of [1, -1]) b.tube([[sx * 0.04, 0.42, 0.02], [sx * 0.045, 0.22, 0.04], [sx * 0.045, 0.02, 0.06]], [[0.012, 0.012], [0.008, 0.008], [0.006, 0.006]], 3, rigid(0), BPART.horn);
+  if (lod === 0) for (const sx of [1, -1]) b.tube([[sx * 0.04, 0.42, 0.02], [sx * 0.045, 0.22, 0.04], [sx * 0.045, 0.02, 0.06]], [[0.012, 0.012], [0.008, 0.008], [0.006, 0.006]], 3, rigid(0), BPART.horn);
   return b.build(BIRD_RIG, 1);
 }
 

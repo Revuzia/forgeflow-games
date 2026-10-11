@@ -38,10 +38,12 @@ function bodyFor(look: AnimalLook, lod: number): { body: BodyMesh; opts: BodyMat
     case 'whale': return { body: fishMesh(lod, true), opts: { plan: PLAN.fish, rig: FISH_RIG, pitchSwim: true, freqK: 0.25 }, shadows: false };
     case 'locust': return { body: insectMesh(), opts: { plan: PLAN.insect, rig: INSECT_RIG }, shadows: false };
     case 'ray': return { body: rayMesh(), opts: { plan: PLAN.ray, rig: RAY_RIG, freqK: 0.6 }, shadows: lod === 0 };
-    case 'crawler': return { body: hexMesh(lod), opts: { plan: PLAN.hex, rig: HEX_RIG }, shadows: lod <= 1 };
+    // (beasts cast sun shadows from their nearest LOD only, within ~45 m, like the people: a herd at 150 m in every
+    // cascade cost ~50 k shadow triangles a frame in a city view)
+    case 'crawler': return { body: hexMesh(lod), opts: { plan: PLAN.hex, rig: HEX_RIG }, shadows: lod === 0 };
     default: {
       const rig: Rig = quadRig(quadSpecFor(look.form));
-      return { body: quadMesh(look.form, lod), opts: { plan: PLAN.quad, rig }, shadows: lod <= 1 };
+      return { body: quadMesh(look.form, lod), opts: { plan: PLAN.quad, rig }, shadows: lod === 0 };
     }
   }
 }
@@ -101,7 +103,7 @@ export class Animals {
     _a[0] = _b[0]; _a[1] = _b[1]; _a[2] = _b[2];
   }
 
-  update(pv: PlanetView, camBody: Vector3, ticksSinceSnap: number, animTime: number, realTime: number): void {
+  update(pv: PlanetView, camBody: Vector3, ticksSinceSnap: number, animTime: number, realTime: number, perches?: (x: number, y: number, z: number, r: number, max: number) => number[]): void {
     this.bodies.group.visible = this.enabled;
     if (!this.enabled) return;
     this.bodies.animTime.value = animTime;
@@ -152,7 +154,8 @@ export class Animals {
         if (look.form === 'whale') r = tr.ground + tr.water - 0.6;
         const d = Math.hypot(ux * r - cx, uy * r - cy, uz * r - cz);
         if (d > range) continue;
-        const lod = d < 45 ? 0 : d < 170 ? 1 : 2;
+        // (the far LOD from 85 m: a beast is ~14 px long there)
+        const lod = d < 45 ? 0 : d < 85 ? 1 : 2;
         const size = (look.size / unitSize(look)) * (M.scale[i] || 1);
         const cadence = Math.max(0.35, Math.min(2.5, Math.pow(1.0 / Math.max(0.05, look.size), 0.45))) * (0.9 + 0.2 * hashFloat(id, 7));
         const blend = Math.min(1, (realTime - tr.at) / 0.35);
@@ -221,63 +224,98 @@ export class Animals {
       }
     }
     this.stats.flocks = 0; this.stats.birds = 0; this.flockAt = null;
-    if (this.ambientBirds) this.birdFlocks(pv, cx, cy, cz, R, animTime);
+    if (this.ambientBirds) this.birdFlocks(pv, cx, cy, cz, R, animTime, perches);
     this.stats.drawn = this.bodies.end();
   }
 
   /**
    * Ambient flocks near the camera (client-side, like the cohort crowds: the sim's fauna has few fliers): songbirds
-   * wheeling over woods and fields, gulls along the shores; each flock circles, drifts, and now and then comes down to
-   * the ground to feed. Placed by a hash of the cells in view, so a flock is where it was when the camera comes back.
+   * over the edges of woods, over towns (sparrows, pigeons) and fields, gulls along the shores — 10 to 40 birds each,
+   * wheeling round, drifting, and now and then coming down: onto the roofs of houses near them (perching on the
+   * ridges), else to the ground to feed. Placed by a hash of the cells near the camera, so a flock is where it was when
+   * the camera comes back.
    */
-  private birdFlocks(pv: PlanetView, cx: number, cy: number, cz: number, R: number, animTime: number): void {
+  private birdFlocks(pv: PlanetView, cx: number, cy: number, cz: number, R: number, animTime: number, perches?: (x: number, y: number, z: number, r: number, max: number) => number[]): void {
     const rc = Math.hypot(cx, cy, cz) || 1;
     const dx = cx / rc, dy = cy / rc, dz = cz / rc;
     const alt = rc - groundHeight(pv.ground, dx, dy, dz);
     if (alt > 450) return;
     const tree = pv.fields.get('tree'), water = pv.fields.get('water'), grass = pv.fields.get('grass');
     if (!tree || !water) return;
-    const cells = pv.grid.cellsWithin(dx, dy, dz, 380 / R);
+    const reach = Math.min(300, 200 + alt * 0.4);
     const P = pv.grid.pos;
+    // nearest cells first: the flocks the camera can see are the ones drawn
+    const cells = pv.grid.cellsWithin(dx, dy, dz, reach / R).slice().sort((a, b) => (P[b * 3] * dx + P[b * 3 + 1] * dy + P[b * 3 + 2] * dz) - (P[a * 3] * dx + P[a * 3 + 1] * dy + P[a * 3 + 2] * dz));
+    // settlements near: their houses draw sparrows and pigeons
+    const towns: number[] = [];
+    for (const st of pv.settlements) {
+      const sx = st.pos[0] * R, sy = st.pos[1] * R, sz = st.pos[2] * R;
+      if (Math.hypot(sx - cx, sy - cy, sz - cz) < reach + 250) towns.push(st.pos[0], st.pos[1], st.pos[2]);
+    }
     let flocks = 0;
     for (const c of cells) {
-      if (flocks >= 6) break;
+      if (flocks >= 8) break;
       const h0 = hashFloat(c, 0xb1d);
       if (water[c] > 0.3) continue;
-      // the shore: dry land beside water; woods; open grass
-      let shore = false;
-      for (let e = pv.grid.nbrStart[c]; e < pv.grid.nbrStart[c + 1]; e++) if (water[pv.grid.nbr[e]] > 0.6) { shore = true; break; }
-      const odds = shore ? 0.3 : tree[c] > 0.35 ? 0.16 : (grass?.[c] ?? 0) > 0.4 ? 0.07 : 0;
-      if (h0 >= odds) continue;
-      flocks++;
-      const look = shore ? GULL : SONGBIRD;
       const ux = P[c * 3], uy = P[c * 3 + 1], uz = P[c * 3 + 2];
+      // the shore (dry land beside water); a wood's edge (trees beside open ground); a town; open grass
+      let shore = false, edge = false;
+      for (let e = pv.grid.nbrStart[c]; e < pv.grid.nbrStart[c + 1]; e++) {
+        const nb = pv.grid.nbr[e];
+        if (water[nb] > 0.6) shore = true;
+        if ((tree[c] > 0.3) !== (tree[nb] > 0.3)) edge = true;
+      }
+      let town = false;
+      for (let k = 0; k < towns.length; k += 3) if (Math.acos(Math.min(1, ux * towns[k] + uy * towns[k + 1] + uz * towns[k + 2])) * R < 160) { town = true; break; }
+      const odds = shore ? 0.32 : town ? 0.3 : edge ? 0.24 : tree[c] > 0.35 ? 0.1 : (grass?.[c] ?? 0) > 0.4 ? 0.07 : 0;
+      if (h0 >= odds) continue;
+      const look = shore ? GULL : SONGBIRD;
       const g = groundHeight(pv.ground, ux, uy, uz);
-      if (Math.hypot(ux * g - cx, uy * g - cy, uz * g - cz) > 420) continue;
-      const n = 10 + Math.floor(hashFloat(c, 0xb1e) * (shore ? 14 : 26));
-      // a cycle of wheeling (most of it) and feeding on the ground
+      const dist = Math.hypot(ux * g - cx, uy * g - cy, uz * g - cz);
+      if (dist > reach + 40) continue;
+      flocks++;
+      const n = 10 + Math.floor(hashFloat(c, 0xb1e) * (shore ? 22 : 30));
+      // a cycle of wheeling (most of it) and coming down: to perch on the roofs if there are houses under the flock,
+      // else to feed on the ground
       const period = 70 + 40 * hashFloat(c, 0xb1f);
       const ph = (animTime / period + hashFloat(c, 0xb20)) % 1;
-      const down = ph > 0.78;
-      const radius = (shore ? 22 : 14) + 10 * hashFloat(c, 0xb21);
+      const down = ph > 0.72;
+      const radius = (shore ? 22 : town ? 16 : 14) + 10 * hashFloat(c, 0xb21);
       const drift = animTime * 0.02 + hashFloat(c, 0xb22) * 6.28;
       const ce = Math.cos(drift) * 25, cn = Math.sin(drift) * 25;
       const size = look.size / unitSize(look);
-      const dist = Math.hypot(ux * g - cx, uy * g - cy, uz * g - cz);
       const b = this.bucket(look, dist < 60 ? 0 : 1);
       this.colours(look, c);
       this.stats.flocks++;
       this.stats.birds += n;
-      if (!this.flockAt) { this.place(ux, uy, uz, ce, cn, R); this.flockAt = [_pu[0] * (g + 15), _pu[1] * (g + 15), _pu[2] * (g + 15)]; }
+      this.place(ux, uy, uz, ce, cn, R);
+      const fx = _pu[0], fy = _pu[1], fz = _pu[2];
+      if (!this.flockAt) this.flockAt = [fx * (g + 15), fy * (g + 15), fz * (g + 15)];
+      const roost = down && perches ? perches(fx * g, fy * g, fz * g, 40, 4) : null;
       for (let k = 0; k < n; k++) {
         const h1 = hashFloat(c, k, 0xb23), h2 = hashFloat(c, k, 0xb24), h3 = hashFloat(c, k, 0xb25);
         let e: number, nn: number, y: number, hd: number, anim: number;
+        if (roost && roost.length) {
+          // on a roof ridge, spaced along it, facing either way
+          const q = Math.floor(h1 * (roost.length / 3)) * 3;
+          const px = roost[q], py = roost[q + 1], pz = roost[q + 2];
+          const pl = Math.hypot(px, py, pz);
+          let ex = pz / pl, ez = -px / pl;
+          const el = Math.hypot(ex, ez) || 1;
+          ex /= el; ez /= el;
+          const off = (h2 - 0.5) * 3.2;
+          bodyMatrix(_mat, px / pl + (ex * off) / R, py / pl, pz / pl + (ez * off) / R, pl + 0.02, h3 > 0.5 ? 0 : Math.PI, size * (0.85 + 0.3 * h3), 0);
+          const j = this.bodies.push(b);
+          this.bodies.set(b, j, _mat, [AnimState.idle, AnimState.idle, 1, h1], _a, _b, _c, [0, 0, 1.1 + 0.3 * h2, 0]);
+          continue;
+        }
         if (!down) {
           const a = animTime * (0.32 + 0.06 * h1) + (k / n) * 1.4 + h2 * 0.9;
           const rr = radius * (0.75 + 0.5 * h1);
           e = ce + Math.cos(a) * rr + Math.sin(animTime * 0.7 + h3 * 9) * 2;
           nn = cn + Math.sin(a) * rr + Math.cos(animTime * 0.6 + h2 * 9) * 2;
-          y = (shore ? 9 : 12) + 10 * h2 + Math.sin(animTime * 0.9 + h1 * 7) * 1.5;
+          // (above the canopy over woods: under the trees a flock at 15 m was hidden in the crowns)
+          y = (shore ? 9 : 12) + 10 * h2 + Math.sin(animTime * 0.9 + h1 * 7) * 1.5 + (tree[c] > 0.3 ? 16 + 10 * tree[c] : 0);
           // heading along the circle (tangent): east/north frame, 0 = north, + toward east
           hd = Math.atan2(-Math.sin(a), Math.cos(a));
           anim = AnimState.fly;
