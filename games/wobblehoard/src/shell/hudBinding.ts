@@ -338,6 +338,13 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
       if (r.height > 0) bottomTop = Math.min(bottomTop, r.top);
     }
     if (!trayOnTop && tray.height > 0) bottomTop = Math.min(bottomTop, tray.top);
+    // ... except the CUT bar: it floats above the tray (UI.md 4.2) over the lowest 80 to 100 px of the frame, where the pieces of a cut squishy lie (two tips of a star and the foot of a pile were under it at 960x600,
+    // CUT_C_VERIFY M2; "every piece stays in frame between the safe insets", CUT3.md 3). Only while the Cut tool is in hand and its bar stands above the tray; the capsule's spot moves with the tool then, which is the point.
+    if (!trayOnTop && g.tool === 'cut' && tb.attached && tb.el.dataset.attach === 'above') {
+      const att = tb.el.querySelector<HTMLElement>('.dock-attach');
+      const ar = att && !att.hidden ? att.getBoundingClientRect() : null;
+      if (ar && ar.height > 0) bottomTop = Math.min(bottomTop, ar.top);
+    }
     let top = topBar && topBar.height > 0 ? Math.round(topBar.bottom) : 0;
     if (trayOnTop && tray.height > 0) top = Math.max(top, Math.round(tray.bottom));
     const bottom = Math.round(Math.max(0, ih - bottomTop));
@@ -350,6 +357,16 @@ export function bindUi(root: HTMLElement, canvas: HTMLCanvasElement, g: Game, en
   refreshSwitch();
   window.addEventListener('resize', reportInsets);
   off.push(() => window.removeEventListener('resize', reportInsets), layout.onChange(() => requestAnimationFrame(reportInsets)));
+  {
+    // the Cut bar's own height changes (a longer line, a wrapped row, the bar fitted to a narrow screen): the inset follows it
+    const att = tb.el.querySelector<HTMLElement>('.dock-attach');
+    let raf = 0;
+    const soon = (): void => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; reportInsets(); }); };
+    // (and when the dock has finished moving: the bar slides in, so its box is a few pixels off for a moment after the tool is picked, and the box can move without changing its size)
+    tb.el.addEventListener('transitionend', soon); tb.el.addEventListener('animationend', soon);
+    off.push(() => { tb.el.removeEventListener('transitionend', soon); tb.el.removeEventListener('animationend', soon); });
+    if (att && typeof ResizeObserver === 'function') { const ro = new ResizeObserver(soon); ro.observe(att); off.push(() => ro.disconnect()); }
+  }
   off.push(g.on('identity', () => refreshSwitch()), g.hoard.onChange(() => refreshSwitch()), () => qs.destroy());
 
   // ---- offline (COLLECTION 9.9, signed in): the sticky offline toast (`.net-banner`) while the connection is gone, the ring keeps previewing; "Reconnected" once

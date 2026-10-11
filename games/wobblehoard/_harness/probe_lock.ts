@@ -317,12 +317,20 @@ if (want('rules')) {
     b.grab(0, L[2].v, pl);
     let lifted = false;
     for (let i = 1; i <= 80; i++) { const d = 1.9 * maxD * Math.min(1, i / 30); b.grabMove(0, v3(pl.x + L[2].dir.x * d, pl.y + 0.8 * d, pl.z + L[2].dir.z * d)); b.step(DT); tick(); lifted = lifted || !!b.metrics.carried; }
-    const lockWhileCarried = lk(b).lockGrab(0), lockedWhileCarried = b.metrics.locked;
-    b.grabRelease(0); run(b, 4, tick);
+    // RE-SPECIFIED (written reason: the owner repeated request 1 on 2026-10-09, "Shift after a full hold still does not lock", and the verifiers found the squishy lifted past 1.15 x maxPull with Shift dead; LOCK_GATE decision A):
+    // a lock on a body that was picked up by a LONE hand puts the lift back and locks the stretch it had (was: "a lock while carried is refused"). Two hands on a carried body still refuse.
+    const carriedBefore = !!b.metrics.carried;
+    const p3 = v3(P[L[3].v * 3], P[L[3].v * 3 + 1], P[L[3].v * 3 + 2]);
+    b.grab(1, L[3].v, p3);   // a second hand while carried
+    const lockTwoHands = lk(b).lockGrab(0), carriedTwoHands = !!b.metrics.carried;
+    b.grabRelease(1); b.step(DT); tick();
+    const lockWhileCarried = lk(b).lockGrab(0), lockedWhileCarried = b.metrics.locked, carriedAfterLock = !!b.metrics.carried;
+    run(b, 1, tick);
+    lk(b).releaseLock('all'); run(b, 4, tick);
     add(`LOCK rules ${id}: refusals (no grab, bad slots -1 / 1.5 / 5 / NaN / Infinity / undefined, a half pull) change nothing and never throw`, `no grab: ${r1.join(',')}; half pull (${f(halfPull, 2)}) ${half}, still grabbed ${stillGrabbed}, locked ${b.metrics.locked === undefined ? '?' : 'see below'}`, 'all false, grab kept', r1.every((x) => x === false) && half === false && stillGrabbed === true);
     add(`LOCK rules ${id}: a full pull locks and frees the slot; a second grab asked to 1.9 x maxPull beside the lock never picks the body up (the lock is a hand: twoHanded), the lowest particle stays under 10 mm; the lock survives it`, `locked ${locked0}, grabbed after lock ${grabbedAfterLock}, metrics.locked with the second grab ${lockedWithGrab}, carried ${carried}, twoHanded ${hands2}, lowest-particle max ${f(hiY * 1000, 1)} mm, locked after ${stillLocked}`, 'locked true, grabbed false, locked 1, carried false, twoHanded true, <= 10 mm, locked 1', locked0 === true && grabbedAfterLock === false && lockedWithGrab === 1 && carried === false && hands2 === true && hiY <= 0.01 && stillLocked === 1);
     add(`LOCK rules ${id}: lockAt returns the lock under a point on its tip (and 0.1 R beside it), -1 far away / NaN / null; releaseLock(0) fires one snap, a second release or a bad index does nothing; lockAt is -1 after`, `at tip ${at[0]}, beside ${at[1]}, far ${at[2]}, NaN ${at[3]}, null ${at[4]}; snaps ${snaps}, then ${snapsAgain - snaps} more; locked after ${after}, lockAt after ${atAfter}`, '0, 0, -1, -1, -1; 1 snap, 0 more; 0; -1', at[0] === 0 && at[1] === 0 && at[2] === -1 && at[3] === -1 && at[4] === -1 && snaps === 1 && snapsAgain === snaps && after === 0 && atAfter === -1);
-    add(`LOCK rules ${id}: with every lock and finger up the latch ends: a lone pull asked to 1.9 x maxPull lifts the body again; a lock while carried is refused; fold, volume, no NaN throughout`, `lifted ${lifted}, lockGrab while carried ${lockWhileCarried}, locked ${lockedWhileCarried}, fold ${f(w.fold, 0)} deg, volume ${f(w.vMin, 2)} .. ${f(w.vMax, 2)}, NaN ${!w.finite}`, 'lifted true, refused, locked 0, fold <= 120, volume 0.85 .. 1.15', lifted === true && lockWhileCarried === false && lockedWhileCarried === 0 && w.fold <= 120 && w.vMin >= 0.85 && w.vMax <= 1.15 && w.finite);
+    add(`LOCK rules ${id}: with every lock and finger up the latch ends: a lone pull asked to 1.9 x maxPull lifts the body again; a lock on the carried body puts it back and locks (a second hand: refused); fold, volume, no NaN throughout`, `lifted ${lifted}, carried before ${carriedBefore}, lockGrab with a second hand ${lockTwoHands} (carried ${carriedTwoHands}), alone ${lockWhileCarried}, locked ${lockedWhileCarried}, carried after ${carriedAfterLock}, fold ${f(w.fold, 0)} deg, volume ${f(w.vMin, 2)} .. ${f(w.vMax, 2)}, NaN ${!w.finite}`, 'lifted true, carried before true; with a second hand refused (still carried); alone: locks, locked 1, no longer carried; fold <= 120, volume 0.85 .. 1.15', lifted === true && carriedBefore && lockTwoHands === false && carriedTwoHands && lockWhileCarried === true && lockedWhileCarried === 1 && !carriedAfterLock && w.fold <= 120 && w.vMin >= 0.85 && w.vMax <= 1.15 && w.finite);
   }
   console.log(`lock rules: ${((performance.now() - t0) / 1000).toFixed(1)} s`);
 }

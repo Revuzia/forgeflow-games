@@ -60,7 +60,7 @@ export const ASPECT_MIN = 0.02;
 export const NECK_S: Readonly<Record<string, number>> = { firmsilicone: 0.4, popdome: 0.4, putty: 0.34, mochidough: 0.34, slowrise: 0.3, marshmallow: 0.3, stickystretch: 0.3, slimegoo: 0.3 };
 export const NECK_DEFAULT_S = 0.25;
 /** How deep the pinch goes by family (CUT2.md 11; starting values, P4 fits them): the swap replaces a rounded, swollen, necked body by flat-faced halves, so a shallow pinch jumps less. */
-export const NECK_DEPTH: Readonly<Record<string, number>> = { jellygel: 0.35, gummy: 0.35, waterfill: 0.35, stickystretch: 0.9, slimegoo: 0.9, putty: 0.2, mochidough: 0.45, slowrise: 0.2, marshmallow: 0.5, firmsilicone: 0.35, popdome: 0.35, beadsqueeze: 0.35 };
+export const NECK_DEPTH: Readonly<Record<string, number>> = { jellygel: 0.35, gummy: 0.35, waterfill: 0.35, stickystretch: 0.9, slimegoo: 0.8, putty: 0.2, mochidough: 0.45, slowrise: 0.2, marshmallow: 0.5, firmsilicone: 0.35, popdome: 0.35, beadsqueeze: 0.35 };
 export const NECK_DEPTH_DEFAULT = 0.35;
 /** Held at t = 1 before the swap (physics checkpoint 47: swap within about 0.1 s of t = 1; held a second, 12 of 100 bodies crease). */
 export const NECK_HOLD_S = 0.08;
@@ -121,6 +121,19 @@ export const SPLIT_TRIES = 3;
  *  metres (at a squishy of radius 0.5; the same open-loop script as the parting, 6.5) even when the cut is near-level, so a tip taken off the top of a star slides off the stump and falls instead of sitting on it */
 export const TIP_SIDE_SHARE = 0.12;
 export const TIP_PUSH = 0.12;
+/** ... and it goes far enough to drop CLEAR of the body: the gap between the light side's rear edge and the heavy side's front edge along the way it goes is at least TOSS_CLEAR (m at a squishy of radius 0.5), at most
+ *  TOSS_MAX_K radii. A tip cut off the top of a star is above the body's middle: without it the tip landed on its own stump and slid down the star's flank for 6 to 8 s (CUT_C_VERIFY m1). When the light side is
+ *  closer than TOSS_DIR_MIN radii to the heavy side's centre (straight above it) the way is sideways across the screen, a little toward the camera. */
+export const TOSS_CLEAR = 0.20;
+export const TOSS_CLEAR_OUT = 0.04;
+export const TOSS_MAX_K = 2.0;
+export const TOSS_DIR_MIN = 0.15;
+/** A light side whose rear edge is more than TOSS_HOLD_MIN (m at radius 0.5) inside the heavy side's front edge is carried at its birth height while it slides clear (at about TOSS_SPEED m/s, the script lasting at most
+ *  TOSS_MAX_S), then dropped; a side tip that already stands outside the body just falls. */
+export const TOSS_HOLD_MIN = 0.06;
+export const TOSS_AIR = 0.03;
+export const TOSS_SPEED = 1.2;
+export const TOSS_MAX_S = 0.8;
 
 /** 'limit' is the safety ceiling (PIECE_CEILING; a cut counts the pieces it MAKES); 'thin' is the physics refusing a cut it cannot make into a valid piece; 'loose' (a side of two separate parts) is
  *  answered only by a physics that reports no `parts` (an older one or a mock): the real physics makes a piece of each part, so it goes away
@@ -184,7 +197,8 @@ type Anim =
   | { kind: 'home'; face: Piece; others: Piece[]; t0: number };
 /** the scripted parting of a fresh cut (CUT2.md 6.5): every new piece opens from its flush place along s by its share of the gap g: the LIGHTER side moves more (k = the other side's share of the pair, so
  *  a tip that falls off slides away while the big body stays; 0.5 each for two halves) */
-interface PartingMember { p: Piece; x: number; y: number; z: number; k: number }
+/** `hold`: a tossed piece that must slide clear of the body is kept at its birth height while it slides (it drops when the script ends), else it would fall onto the body it is leaving */
+interface PartingMember { p: Piece; x: number; y: number; z: number; k: number; hold?: boolean }
 interface Parting { members: PartingMember[]; s: V3; G: number; dur: number; t0: number; mode: 'slide' | 'float' }
 
 export interface Cutter {
@@ -224,7 +238,7 @@ export interface Cutter {
   /** the live pieces (tests and the dev hook): share, the cell's plane ids, whether it is the anchor, the centre, and `part` = the piece's position among the separate parts one side of a cut made (-1: a piece that is alone on its side) */
   regions(): Array<{ frac: number; cells: number[]; anchor: boolean; x: number; y: number; z: number; part: number }>;
   /** for the harness (the owner is told, nothing is hidden): the safety ceiling and how many times its kind line was said, how many pieces the last cut made, and the last result a swipe or Split in two answered */
-  readonly info: { ceiling: number; ceilingHits: number; lastParts: number; lastResult: CutResult | null };
+  readonly info: { ceiling: number; ceilingHits: number; lastParts: number; lastResult: CutResult | null; buildRefusals: number };
   /** tests and the dev hook only: lower (or restore, with null) the safety ceiling, so a browser row can reach the kind line without 63 cuts */
   setCeilingForTest(n: number | null): void;
   dispose(): void;
@@ -242,6 +256,7 @@ const rotate = (q: { x: number; y: number; z: number; w: number }, v: V3): V3 =>
   return { x: v.x + 2 * (q.y * tz - q.z * ty), y: v.y + 2 * (q.z * tx - q.x * tz), z: v.z + 2 * (q.x * ty - q.y * tx) };
 };
 const newPlan = (): CutPlan => ({
+  acceptParts: true,   // CUT3.md 2.3: a side of several separate parts becomes several bodies (the physics refuses it as 'loose' unless the caller says it takes a `partList`; this shell does, see partsOf)
   rest: { n: { x: 0, y: 0, z: 0 }, d: 0 }, fa: 0, offA: { x: 0, y: 0, z: 0 }, offB: { x: 0, y: 0, z: 0 }, velA: { x: 0, y: 0, z: 0 }, velB: { x: 0, y: 0, z: 0 },
   aspectA: 0, aspectB: 0, sound: false, soundPending: false, built: false,
 });
@@ -259,6 +274,9 @@ function partsOf(pl: CutPlan): PartPlan[] {
 }
 /** the physics reports parts (so an unsound plan means a part it cannot build, not "two separate parts on a side") */
 const hasParts = (pl: CutPlan): boolean => typeof pl.parts === 'number';
+/** The physics saying "this piece cannot be built" (a sliver thinner than the mesh can hold) or the share guard of `builtAt` is an ANSWER (CUT3.md 2.3: the plain 'thin' line), not a fault: it is counted
+ *  (`info.buildRefusals`) and never reported as an error (the verifier saw it as a console Error on a swipe the builder had to refuse) */
+const isBuildRefusal = (e: unknown): boolean => /cannot be built|the physics built a piece of share/.test(String((e as { message?: unknown } | null)?.message ?? ''));
 /** the body's mean velocity from the plan's parts (the weights cancel in the neck's difference v1 - v0) */
 function meanVelOf(parts: readonly PartPlan[]): V3 {
   let x = 0, y = 0, z = 0, w = 0;
@@ -344,7 +362,9 @@ export function createCutter(d: CutDeps): Cutter {
   let wobbleUntil = -1, wobbling: SoftBodyLike | null = null;
   let style: CutStyle = 'clean';
   /** for the harness (the owner is told, nothing is hidden): how many times the kind line of the safety ceiling was said, how many pieces the last cut made, and what the last cut did */
-  let ceilingHits = 0, lastParts = 0, lastResult: CutResult | null = null;
+  let ceilingHits = 0, lastParts = 0, lastResult: CutResult | null = null, buildRefusals = 0;
+  /** a throw while BUILDING pieces: the builder's own refusal is counted and answered with the plain line by the caller; anything else is a fault and goes to the reporter */
+  const reportBuild = (e: unknown): void => { if (isBuildRefusal(e)) buildRefusals++; else d.report(e); };
   /** Split in two cuts the builder refused, per body (a refused plane is not tried again at once: see SPLIT_TRIES) */
   let splitRefused = new WeakMap<SoftBodyLike, number>();
   /** the engine of the squishy as it is cut now ('true' = planCut / placeAt pieces, 'mini' = scaled copies), fixed at the first cut until it is whole again */
@@ -422,7 +442,7 @@ export function createCutter(d: CutDeps): Cutter {
     try {
       for (const m of x.members) {
         const h = g * m.k;
-        if (x.mode === 'slide') { tmpA.x = m.x + h * x.s.x; tmpA.y = m.p.body.center.y; tmpA.z = m.z + h * x.s.z; }
+        if (x.mode === 'slide') { tmpA.x = m.x + h * x.s.x; tmpA.y = m.hold ? m.y : m.p.body.center.y; tmpA.z = m.z + h * x.s.z; }
         else { tmpA.x = m.x + h * x.s.x; tmpA.y = m.y + h * x.s.y; tmpA.z = m.z + h * x.s.z; }
         m.p.body.moveTo?.(tmpA, 3);
       }
@@ -659,7 +679,7 @@ export function createCutter(d: CutDeps): Cutter {
       for (let i = 0; i < a.leaves.length; i++) bodies.push(a.pre[i] ?? buildKid(a, i));
     } catch (e) {
       // the physics could not build a piece: nothing was replaced, the squishy stays as it was
-      d.report(e);
+      reportBuild(e);
       abandon(a, T.thin);
       return;
     }
@@ -684,11 +704,60 @@ export function createCutter(d: CutDeps): Cutter {
     const sideFrac = [0, 0], sideY = [0, 0], sideC = [{ x: 0, z: 0 }, { x: 0, z: 0 }];
     parts.forEach((pt, i) => { sideFrac[pt.side] += pt.frac; sideY[pt.side] += pt.frac * pls[i].at.y; sideC[pt.side].x += pt.frac * pls[i].at.x; sideC[pt.side].z += pt.frac * pls[i].at.z; });
     // a TOSS (a tip or a crumb taken off): the light side is pushed away along the table, from the heavy side's centre toward its own, even on a near-level cut
-    let tossDir: V3 | null = null;
+    let tossDir: V3 | null = null, tossLight = -1, tossDur = 0;
     if (gravityOn && Math.min(sideFrac[0], sideFrac[1]) <= TIP_SIDE_SHARE * (sideFrac[0] + sideFrac[1])) {
-      G += TIP_PUSH * (wholeR / 0.5) * (d.calm() ? 0.6 : 1);
+      const sc = wholeR / 0.5;
+      G += TIP_PUSH * sc * (d.calm() ? 0.6 : 1);
       const hx = sideC[0].x / Math.max(1e-12, sideFrac[0]) - sideC[1].x / Math.max(1e-12, sideFrac[1]), hz = sideC[0].z / Math.max(1e-12, sideFrac[0]) - sideC[1].z / Math.max(1e-12, sideFrac[1]);   // side A's centre minus side B's
-      tossDir = unit({ x: hx, y: 0, z: hz }) ?? unit({ x: n.x, y: 0, z: n.z }) ?? { x: 1, y: 0, z: 0 };
+      const lightSide = sideFrac[0] <= sideFrac[1] ? 0 : 1;
+      // the way the light side goes: away from the heavy side's centre. A tip cut off the TOP is right above that centre (the direction is noise, and it was tossed behind the star where nobody sees it): then it goes
+      // sideways across the screen, a little toward the camera, so it drops clear of the body and in view
+      let away = unit({ x: lightSide === 0 ? hx : -hx, y: 0, z: lightSide === 0 ? hz : -hz });
+      if (!away || Math.hypot(hx, hz) < TOSS_DIR_MIN * wholeR) {
+        let toCam: V3 | null = null;
+        const hcx = sideC[1 - lightSide].x / Math.max(1e-12, sideFrac[1 - lightSide]), hcz = sideC[1 - lightSide].z / Math.max(1e-12, sideFrac[1 - lightSide]);
+        try {
+          const cam = d.stage.camera as unknown as CameraLike, eye = cameraPosition(cam);
+          toCam = unit({ x: eye.x - hcx, y: 0, z: eye.z - hcz });
+        } catch { /* a mock camera: the swipe plane's own horizontal direction */ }
+        if (toCam) {
+          // 9 ways in front of the body or across it (never behind it: nobody sees a tip there), the one that lands farthest from every other piece wins (tips tossed the same way piled on each other: pieces
+          // resting on pieces hang up and slide for seconds); ties go to the way closest to the camera
+          const others = pieces.filter((q) => q !== p).map((q) => q.body.center);
+          let bestScore = -Infinity;
+          for (const k of [0, 1, -1, 2, -2, 3, -3, 4, -4]) {
+            const th = k * (Math.PI / 6), cs = Math.cos(th), sn = Math.sin(th);
+            const dir = { x: toCam.x * cs - toCam.z * sn, y: 0, z: toCam.x * sn + toCam.z * cs };
+            const lx = hcx + dir.x * 1.3 * wholeR, lz = hcz + dir.z * 1.3 * wholeR;
+            let free = Infinity;
+            for (const c of others) free = Math.min(free, Math.hypot(c.x - lx, c.z - lz));
+            const score = Math.min(free, 1.5 * wholeR) - 0.02 * Math.abs(k);
+            if (score > bestScore + 1e-9) { bestScore = score; away = dir; }
+          }
+        } else away = away ?? unit({ x: n.x, y: 0, z: n.z }) ?? { x: 1, y: 0, z: 0 };
+      }
+      if (away) {
+        // ... and far enough to drop CLEAR of the heavy side: the light side's rear edge must pass the heavy side's front edge along that way (the star's whole width, whatever height the tip comes from), else a tip
+        // taken off the top slides down the star's flank for seconds instead of falling (verifier m1). A side tip already stands outside and asks for nothing.
+        let front = -Infinity, rear = Infinity, airborne = Infinity;
+        try {
+          bodies.forEach((b, i) => {
+            if (parts[i].side === lightSide) airborne = Math.min(airborne, lowestY(b));
+            const c = b.center, along = c.x * away!.x + c.z * away!.z;
+            if (parts[i].side === lightSide) rear = Math.min(rear, along - supportAlong(b, { x: -away!.x, y: 0, z: -away!.z }));
+            else front = Math.max(front, along + supportAlong(b, { x: away!.x, y: 0, z: away!.z }));
+          });
+        } catch (e) { d.report(e); }
+        if ((globalThis as { __WH_TOSS_DBG?: boolean }).__WH_TOSS_DBG) console.log('TOSSDBG', JSON.stringify({ away, front, rear, G, wholeR, lightSide, hx, hz, sideFrac, bodies: bodies.map((b, i) => ({ side: parts[i].side, c: b.center, fr: b.frac })) }));
+        // (only a light side that is in the AIR is carried clear: one that stands on the table slides with the ordinary script, whatever the body's width elsewhere)
+        if (Number.isFinite(front) && Number.isFinite(rear) && airborne > TOSS_AIR * sc) {
+          const over = front - rear > TOSS_HOLD_MIN * sc;   // the light side is over the body (a tip off the top): carried clear at its birth height, then dropped. A tip that stands outside already asks for a hair of room only
+          G = Math.max(G, Math.min(front - rear + (over ? TOSS_CLEAR : TOSS_CLEAR_OUT) * sc, TOSS_MAX_K * wholeR));
+          if (over) { tossLight = lightSide; tossDur = Math.min(TOSS_MAX_S, G / TOSS_SPEED); }
+        }
+        tossDir = lightSide === 0 ? away : { x: -away.x, y: 0, z: -away.z };
+      }
+      if (!tossDir) tossDir = unit({ x: hx, y: 0, z: hz }) ?? unit({ x: n.x, y: 0, z: n.z }) ?? { x: 1, y: 0, z: 0 };
       if (mode === 'plop') mode = 'slide';
     }
     if (mode === 'plop') {
@@ -712,8 +781,8 @@ export function createCutter(d: CutDeps): Cutter {
       const s = mode === 'slide' ? (tossDir ?? unit({ x: n.x, y: 0, z: n.z }) ?? { x: 1, y: 0, z: 0 }) : n;
       const wA = sideFrac[0] / Math.max(1e-12, sideFrac[0] + sideFrac[1]);   // side A's share of the pair: the lighter side moves more (0.5 each for two halves)
       parting = {
-        members: news.map((pc, i) => ({ p: pc, x: pls[i].at.x, y: pls[i].at.y, z: pls[i].at.z, k: parts[i].side === 0 ? 1 - wA : -wA })),
-        s, G, dur: PART_S[fam] ?? PART_S_DEFAULT, t0: d.simTime(), mode,
+        members: news.map((pc, i) => ({ p: pc, x: pls[i].at.x, y: pls[i].at.y, z: pls[i].at.z, k: parts[i].side === 0 ? 1 - wA : -wA, hold: parts[i].side === tossLight })),
+        s, G, dur: Math.max(PART_S[fam] ?? PART_S_DEFAULT, tossDur), t0: d.simTime(), mode,
       };
       stepParting(parting, d.simTime());
     }
@@ -734,7 +803,7 @@ export function createCutter(d: CutDeps): Cutter {
       pb = builtAt(d.createBody(g, { piece: { frac: fB, chunk: false, at: lc.b, vel: { x: -n.x * push, y: 0, z: -n.z * push } } }), fB);
     } catch (e) {
       // the physics could not build a piece at its share: nothing was replaced, the squishy stays as it was, and the plain line says so
-      d.report(e);
+      reportBuild(e);
       if (a.first) { pieces = []; locked = null; }
       wobble(B); d.say(T.thin);
       return;
@@ -878,7 +947,7 @@ export function createCutter(d: CutDeps): Cutter {
       const body = builtAt(d.createBody(genome(), { piece: { frac, region: reg } }), frac);
       try { body.gravity = d.gravity(); } catch { /* optional */ }
       return { body, node, frac };
-    } catch (e) { d.report(e); return null; }
+    } catch (e) { reportBuild(e); return null; }
   }
   /** a gesture join (touch-to-join) of the clean style: every piece under the lowest common ancestor meets the largest MATED, then they are replaced by one piece (or by the whole) */
   function startGroupJoin(a: Piece, b: Piece): void {
@@ -1063,7 +1132,7 @@ export function createCutter(d: CutDeps): Cutter {
       const region: PieceRegion = { planes: [{ id: 1, n: { x: pl.rest.n.x, y: pl.rest.n.y, z: pl.rest.n.z }, d: pl.rest.d }], cells: [[side === 0 ? 1 : -1]] };
       if (first.part !== null) region.part = first.part;
       d.createBody(genome(), { piece: { frac: base * first.frac, region } });
-    } catch (e) { d.report(e); warm = null; return; }
+    } catch (e) { reportBuild(e); warm = null; return; }
     if (++w.ctor >= 2) warm = null;
   }
 
@@ -1235,7 +1304,7 @@ export function createCutter(d: CutDeps): Cutter {
         }
         if (a.plan && a.ready && a.pre.length < a.leaves.length) {
           // the meshes are cached: construct the pieces one per step (a constructor costs several ms), so the swap frame only places them
-          try { a.pre.push(buildKid(a, a.pre.length)); } catch (e) { d.report(e); anim = null; abandon(a, T.thin); return; }
+          try { a.pre.push(buildKid(a, a.pre.length)); } catch (e) { reportBuild(e); anim = null; abandon(a, T.thin); return; }
         }
         if (a.plan) restPlaneToWorld(a.p.body, a.plan.rest, a.plane);
         try { a.p.body.setNeck!(a.plane, k, a.depth); } catch (e) { d.report(e); }
@@ -1286,7 +1355,8 @@ export function createCutter(d: CutDeps): Cutter {
       if (pieces.length < 2) { contact = null; return; }
       const touching = d.touching();
       const act = d.activeBody();
-      const P = pieces.find((p) => p.body === act) ?? null;
+      let P: Piece | null = null;
+      for (const p of pieces) if (p.body === act) { P = p; break; }   // (no closure: this runs every frame, CUT3 X22 no per-step allocation)
       if (touching && P) {
         let Q: Piece | null = null, bestD = Infinity;
         for (const q of pieces) {
@@ -1314,7 +1384,7 @@ export function createCutter(d: CutDeps): Cutter {
     regions() {
       return list().map((p, i) => ({ frac: fracOf(p), cells: p.leaf ? p.leaf.lits.slice() : [], anchor: i === 0, x: p.body.center.x, y: p.body.center.y, z: p.body.center.z, part: p.leaf ? p.leaf.partIndex : -1 }));
     },
-    get info() { return { ceiling: maxN(), ceilingHits, lastParts, lastResult }; },
+    get info() { return { ceiling: maxN(), ceilingHits, lastParts, lastResult, buildRefusals }; },
     setCeilingForTest(n) { ceilingOverride = n !== null && Number.isFinite(n) && n >= 1 ? Math.floor(n) : null; },
     dispose() { abortAnim(); pieces = []; locked = null; contact = null; },
   };

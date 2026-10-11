@@ -119,9 +119,9 @@ export class ContactPlanner {
       const k = cnt[i], base = i * stride;
       for (let x = 1; x < k; x++) { const v = nb[base + x]; let y = x - 1; while (y >= 0 && nb[base + y] > v) { nb[base + y + 1] = nb[base + y]; y--; } nb[base + y + 1] = v; }
       const list = this.lists[i];
-      list.length = 0;
-      for (let x = 0; x < k; x++) list.push(bodies[nb[base + x]]);
-      b.collide!(list);
+      for (let x = 0; x < k; x++) list[x] = bodies[nb[base + x]];
+      for (let x = k; x < list.length; x++) list[x] = undefined as unknown as SoftBodyLike;   // (a stale entry would keep a removed body alive; the list itself keeps its store: `length = 0` freed it every frame)
+      (b as SoftBody).collide(list, k);
     }
     st.bodies = n; st.awake = awake; st.awakeParticles = awakeP; st.allParticles = allP; st.pairs = pairs; st.skippedAsleep = skipped; st.naivePairs = (n * (n - 1)) / 2; st.tests = tests;
   }

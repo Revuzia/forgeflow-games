@@ -9,6 +9,19 @@ import { cameraPosition, cameraRay, projectToNdc, pxToNdc } from '../input/camer
 
 export interface ScreenSwipe { x0: number; y0: number; x1: number; y1: number }
 
+/** The longest run of a swipe line (sampled every ~8 px) on which `ok(x, y)` holds (the canvas is what a finger would touch there: not the wordmark, not the Cut bar), as a segment of the SAME line; null when under 40 px of it is drawable. */
+export function drawableRun(s: ScreenSwipe, ok: (x: number, y: number) => boolean): ScreenSwipe | null {
+  const len = Math.hypot(s.x1 - s.x0, s.y1 - s.y0), K = Math.max(2, Math.ceil(len / 8));
+  let best0 = -1, best1 = -1, run0 = -1;
+  for (let k = 0; k <= K; k++) {
+    const f = k / K, good = ok(s.x0 + (s.x1 - s.x0) * f, s.y0 + (s.y1 - s.y0) * f);
+    if (good) { if (run0 < 0) run0 = k; if (best0 < 0 || k - run0 > best1 - best0) { best0 = run0; best1 = k; } } else run0 = -1;
+  }
+  if (best0 < 0) return null;
+  const a = best0 / K, b = best1 / K, out = { x0: s.x0 + (s.x1 - s.x0) * a, y0: s.y0 + (s.y1 - s.y0) * a, x1: s.x0 + (s.x1 - s.x0) * b, y1: s.y0 + (s.y1 - s.y0) * b };
+  return Math.hypot(out.x1 - out.x0, out.y1 - out.y0) >= 40 ? out : null;
+}
+
 /** The part of a swipe line that lies inside the viewport (a margin of `m` px): the SAME line, so the same plane; a player cannot press outside the screen. null when under 40 px of it is left (Liang-Barsky). */
 export function clipToViewport(s: ScreenSwipe, vp: Viewport, m = 6): ScreenSwipe | null {
   let t0 = 0, t1 = 1;
@@ -90,7 +103,7 @@ export function partsOfSwipe(body: SoftBodyLike, cam: CameraLike, vp: Viewport, 
 
 /** The screen line (through the body on the screen) whose plane leaves the MOST separate parts of at least 5 vertices on its two sides, the biggest part still holding 40 % of the mesh (the tips are the small ones).
  *  null when no line leaves three parts or more. */
-export function bestMultiSwipe(body: SoftBodyLike, cam: CameraLike, vp: Viewport): (ScreenSwipe & { parts: number }) | null {
+export function bestMultiSwipe(body: SoftBodyLike, cam: CameraLike, vp: Viewport, ok?: (x: number, y: number) => boolean): (ScreenSwipe & { parts: number }) | null {
   const c = toPx(cam, vp, body.center), e = toPx(cam, vp, { x: body.center.x + body.restRadius, y: body.center.y, z: body.center.z });
   if (!c || !e) return null;
   const pr = Math.abs(e.x - c.x);
@@ -99,7 +112,8 @@ export function bestMultiSwipe(body: SoftBodyLike, cam: CameraLike, vp: Viewport
     const th = (a * Math.PI) / 36, dx = Math.cos(th), dy = Math.sin(th);
     for (let k = -14; k <= 14; k++) {
       const o = (k / 10) * pr, qx = c.x - dy * o, qy = c.y + dx * o;
-      const s = clipToViewport({ x0: qx - 2.4 * pr * dx, y0: qy - 2.4 * pr * dy, x1: qx + 2.4 * pr * dx, y1: qy + 2.4 * pr * dy }, vp);   // (the part of the line a finger can draw on the screen: the same plane)
+      const s0 = clipToViewport({ x0: qx - 2.4 * pr * dx, y0: qy - 2.4 * pr * dy, x1: qx + 2.4 * pr * dx, y1: qy + 2.4 * pr * dy }, vp);   // (the part of the line a finger can draw on the screen: the same plane)
+      const s = s0 && ok ? drawableRun(s0, ok) : s0;   // (and where the canvas is what it touches: a line that starts on the wordmark or crosses the Cut bar is not a swipe a player can make)
       if (!s) continue;
       const pl = swipePlane(cam, vp, s);
       if (!pl) continue;

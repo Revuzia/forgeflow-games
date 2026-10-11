@@ -381,7 +381,9 @@ export function createDebugTools(game: Game, o: DebugOptions = {}): { debug: She
     multiSwipe() {
       const b = largestPiece(); const cam = game.stage.camera;
       try { cam.updateMatrixWorld(); } catch { /* ignore */ }
-      return bestMultiSwipe(b, cam as never, vp());
+      // only lines a finger can draw: every sampled point is over the stage canvas (not the wordmark, the HUD or the Cut bar)
+      const ok = (x: number, y: number): boolean => { try { const el = document.elementFromPoint(x, y); return !!el && el.tagName === 'CANVAS'; } catch { return true; } };
+      return bestMultiSwipe(b, cam as never, vp(), ok);
     },
     cutInfo() {
       const all = [game.bodies.body, ...game.bodies.extras.filter((x) => x.piece).map((x) => x.body)] as Array<typeof game.bodies.body & { sleeping?: boolean; awakeParticles?: number }>;
