@@ -38,7 +38,10 @@ export const toolPicked = (undo: boolean): string => (undo
 /** the Cut bar's hint line: whole, 2+ pieces, the safety ceiling. There is no piece limit and no minimum size any more (CUT3.md 2, 2026-10-09): the only "too many" line is the kind one at
  *  the safety ceiling of 64 live pieces, and the Cut tool works again after a join. */
 export const barWhole = 'Swipe across a squishy to cut it.';
-export const barCut = 'Swipe to cut again. With the Hand, drag a piece onto another and hold to join them.';
+// (2026-10-10, publish blockers: the hint used to promise "With the Hand, drag a piece onto another and hold to join them". Measured with a real mouse on two true halves: that drag joins them only when the press is on
+//  the half's shoulder that FACES the other half (gestures.ts commits a press to a pull only when the first 14 px go OUTWARD from the grabbed body's centre); a press on the far side or on the middle, pulled toward the
+//  other half, is a rub and joins nothing. A hint must not promise what most first tries do not do, so both lines now name the button that always works: Reconnect all.)
+export const barCut = 'Swipe to cut again. Reconnect all puts the pieces back together.';
 export const lotOfPieces = "That's a lot of pieces! Reconnect some to keep cutting.";
 /** `canSplit` and `undo` are no longer read (nothing is "too small to cut"); the UI kit page still passes them */
 export function barText(n: number, max: number, _canSplit?: boolean, _undo?: boolean): string {
@@ -46,7 +49,7 @@ export function barText(n: number, max: number, _canSplit?: boolean, _undo?: boo
 }
 
 /** back to the Hand with two or more pieces (a toast and a polite line, once each time the squishy goes from whole to cut) */
-export const handHint = 'Drag a piece onto another and hold to join them.';
+export const handHint = 'Reconnect all, in the Cut tool, puts the pieces back together.';
 
 /** a join is armed (once per arm): K = the group's size ("Joining 2 pieces." for twins) */
 export const joining = (k: number): string => `Joining ${k} pieces.`;

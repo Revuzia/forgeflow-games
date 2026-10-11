@@ -104,6 +104,14 @@ export function observeCollection(c: Collection, w: Watch): Collection {
       if (!f) { f = (v as (...a: unknown[]) => unknown).bind(target); bound.set(v, f); }
       return f;
     },
+    // A member the wrapper HOOKS is replaced in the hooks table, never on the target. The hook calls the target's own member, and a read through the
+    // wrapper returns the HOOK: a test that does `const orig = c.merge; c.merge = fake; ...; c.merge = orig` (the dev hook's failNextMerge) would otherwise
+    // put the hook itself back on the target, and the hook would then call itself until the stack overflowed (found 2026-10-10: the next real hold on the
+    // merge pad answered "Something went wrong"). Every other member is written to the target as before.
+    set(target, prop, value) {
+      if (typeof prop === 'string' && Object.prototype.hasOwnProperty.call(hooks, prop)) { hooks[prop] = value; return true; }
+      return Reflect.set(target, prop, value, target);
+    },
   });
 }
 

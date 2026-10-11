@@ -636,5 +636,21 @@ check('T11', 'the pure core (achievements.ts, achStore.ts) touches no DOM, clock
   check('T12', 'the observing wrapper follows a member replaced after its first read (the dev hook\'s forceOffline) and back again, and a member keeps one identity while it is not replaced', stable && first === 'orig' && second === 'forced' && third === 'orig' && p.n === 5, [first, second, third].join(' -> '));
 }
 
+{
+  // T13 (found 2026-10-10 by the hoard-loop merge row): the same replace-and-restore, but on a member the wrapper HOOKS (merge). The dev hook's failNextMerge reads `orig` through the wrapper (the
+  // HOOK), assigns a one-shot fake, and the fake puts `orig` back. Written to the raw target, that put the hook ON the target and the hook then called itself (stack overflow: "Something went
+  // wrong. Reload and try again." on the next real hold). The fake must answer once; the next call must reach the real member and be watched.
+  let reached = 0, watched = 0;
+  const target = { merge: (): Promise<MergeResult> => { reached++; return Promise.resolve({ ok: false, ledger: 'practice', error: 'wrong_count' } as unknown as MergeResult); } };
+  const w = { touch() {}, opened() {}, merged() { watched++; }, task() {}, itemsChanged() {} };
+  const p = observeCollection(target as unknown as Collection, w) as unknown as { merge: (ids: string[], d: string) => Promise<{ ok: boolean; error?: string }> };
+  const orig = p.merge;
+  p.merge = () => { p.merge = orig; return Promise.resolve({ ok: false, error: 'odds_changed' }); };
+  const a = await p.merge([], '');
+  let b: { ok: boolean; error?: string } | null = null, threw = '';
+  try { b = await p.merge([], ''); } catch (e) { threw = String(e instanceof Error ? e.message : e); }
+  check('T13', 'a hooked member (merge) replaced by a one-shot fake and put back (the dev hook\'s failNextMerge) answers the fake once, then the REAL member again (no self-call), without touching the target while faked', a.error === 'odds_changed' && b?.error === 'wrong_count' && reached === 1 && !threw && watched === 0, `${a.error} -> ${b?.error ?? threw}, real member reached ${reached}x`);
+}
+
 console.log(`\n${total - bad}/${total} checks passed`);
 process.exit(bad ? 1 : 0);

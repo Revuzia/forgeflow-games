@@ -22,6 +22,7 @@ import { createServer } from 'node:http';
 import { gzipSync } from 'node:zlib';
 import { extname, resolve } from 'node:path';
 import { ROOT, launch, startVite } from './pw.mjs';
+import { HINT_LOCK, HINT_TEXT, HINT_TOOLS } from '../src/ui/hint.ts';   // the pill's wordings: the desktop hint row reads the Shift wording from the source
 import { PIECE_CEILING } from '../src/shell/cut.ts';   // CUT3 (2026-10-09): no piece limit; the safety ceiling is 64 (reached on mock bodies in shellview/cut_mock_checks.ts, not with the real physics)
 const NEST_N = 4;   // the pieces the cut rows make by presses and swipes: four, the most the real physics builds while it still clamps a share at its 1/8 floor (PHYS lifts it in CUT3); the rows no longer assert any limit
 
@@ -562,7 +563,12 @@ async function main() {
       // the hint: the pointer wording names the Shift pull, on ONE line at full size, and a held Shift key is not "a key used" (no keyboard wording)
       const L0 = await layoutOf(page);
       const hint0 = await page.evaluate(() => document.querySelector('.hint').textContent);
-      check('desktop hint: pointer wording plus "Shift + drag pulls both sides", on one line, readable, not clipped', /^Click to poke/.test(hint0) && /Shift \+ drag pulls both sides/.test(hint0) && L0.hintLines <= 1 && L0.hintFont >= 12 && !L0.hintClipped && L0.hint.x >= 0 && L0.hint.r <= L0.iw, `${hint0} (font ${L0.hintFont}px, lines ${L0.hintLines})`);
+      // RE-SPECIFIED 2026-10-10 (UI.md 4.1, R10; reason: this page has been played (mouse-gestures ran on it) and no tool was tried, so the pill that came back after the idle gap is the FIRST-RUN TOOL LINE
+      // ("Click a tool to try it."), as src/ui/hint.ts line() is built to say: the gesture help only until the first interaction, and again once a tool was tried. A fresh page's first line is still the gesture
+      // line (rows "HUD hint" and, at 320 x 568 with a mouse, "the hint is the pointer line with the Shift mention"). So the WORDING (the pointer line names the Shift pull) is read from the source constant, and the
+      // pill on screen must be one of the three pointer lines (gesture, first-run tool, lock), on ONE line, readable, not clipped; the gesture line's layout at 320 and 568 wide is the shift-hint-reflow section.
+      const ptrLines = [HINT_TEXT.pointer, HINT_TOOLS.pointer, HINT_LOCK.pointer];
+      check('desktop hint: the pointer wording names "Shift + drag pulls both sides"; the pill is a pointer line (the first-run tool line on a played page), on one line, readable, not clipped', /^Click to poke/.test(HINT_TEXT.pointer) && /Shift \+ drag pulls both sides/.test(HINT_TEXT.pointer) && ptrLines.includes(hint0) && L0.hintLines <= 1 && L0.hintFont >= 12 && !L0.hintClipped && L0.hint.x >= 0 && L0.hint.r <= L0.iw, `${hint0} (font ${L0.hintFont}px, lines ${L0.hintLines})`);
       await page.keyboard.down('Shift'); await sleep(150); await page.keyboard.up('Shift'); await sleep(150);
       const hint1 = await page.evaluate(() => ({ text: document.querySelector('.hint').textContent, kbd: document.body.dataset.kbd ?? null }));
       check('pressing the Shift key alone does not switch the hint to the keyboard wording (it stays the pointer line)', hint1.text === hint0 && hint1.kbd === null, JSON.stringify(hint1));
@@ -1244,8 +1250,10 @@ async function main() {
       const s0 = await hstate(page);
       check('practice loop: ten capsules earned through the meter and opened; every one is on the practice shelf', s0.items.length >= 11 && s0.credits === 0, `${s0.items.length} items, ${s0.owned} species, credits ${s0.credits}`);
       // the HUD entry
-      const hb = await page.evaluate(() => { const b = document.querySelector('.hoard-btn'); return { label: b.getAttribute('aria-label'), text: b.textContent, inSlot: !!b.closest('.hud-slot') }; });
-      check('HUD: a "Hoard" button in the bottom-centre slot with the collection count ("N of 50") in text and in its name', hb.inSlot && /Hoard/.test(hb.text) && new RegExp(`${s0.owned} of 50`).test(hb.text) && /Hoard, \d+ of 50 species/.test(hb.label), JSON.stringify(hb));
+      const hb = await page.evaluate(() => { const b = document.querySelector('.hoard-btn'); return { label: b.getAttribute('aria-label'), text: b.textContent, inDock: !!b.closest('#wh-dock .dock-bar') }; });
+      // RE-SPECIFIED 2026-10-10 (the owner moved Hoard / brand / tools into the toolbar, UI.md 4.2): at this size (1280 x 800, the wide layout) the Hoard button is the first button of the dock's tray; it keeps the
+      // bottom-centre HUD slot only in the strip layout (844 x 390, 568 x 320: rows toolbar-grid and fix2-tray). The count in text and in its name is unchanged.
+      check('HUD: a "Hoard" button in the dock with the collection count ("N of 50") in text and in its name', hb.inDock && /Hoard/.test(hb.text) && new RegExp(`${s0.owned} of 50`).test(hb.text) && /Hoard, \d+ of 50 species/.test(hb.label), JSON.stringify(hb));
       // U08: opening the Hoard builds the whole shelf synchronously (icons were warmed in idle time after boot): time it in the page
       const openMs = await page.evaluate(() => { const t = performance.now(); document.querySelector('.hoard-btn').click(); return performance.now() - t; });
       await page.waitForFunction(() => !document.querySelector('.hoard').hidden, null, { timeout: 20000 });
@@ -1775,10 +1783,12 @@ async function main() {
       await page.evaluate(() => window.__WH__.resume());
       // Snap with the mat out
       await pickTool(page, 'snap'); await settle(page);
-      const s1 = await page.evaluate(() => ({ tool: window.__WH__.shell.tools().tool, hud: ['.nametag', '.meter-cluster', '.hint', '.hud-top .wordmark'].map((q) => getComputedStyle(document.querySelector(q)).visibility).join(), dock: getComputedStyle(document.getElementById('wh-dock')).visibility, bar: !document.querySelector('.snapbar').hidden, tints: [...document.querySelectorAll('.snap-tint-btn')].map((b) => b.dataset.tint), checked: document.querySelector('.snap-tint-btn[aria-checked="true"]')?.dataset.tint, mat: window.__WH__.shell.matInfo().count }));
+      const s1 = await page.evaluate(() => ({ tool: window.__WH__.shell.tools().tool, hud: ['.nametag', '.meter-cluster', '.hint', '.hud-top .wordmark'].map((q) => { const cs = getComputedStyle(document.querySelector(q)); const m = /^inset\(\s*([\d.]+)%\s*\)$/.exec(cs.clipPath); return m && parseFloat(m[1]) >= 50 ? 'clipped' : cs.visibility; }).join(), dock: getComputedStyle(document.getElementById('wh-dock')).visibility, bar: !document.querySelector('.snapbar').hidden, tints: [...document.querySelectorAll('.snap-tint-btn')].map((b) => b.dataset.tint), checked: document.querySelector('.snap-tint-btn[aria-checked="true"]')?.dataset.tint, mat: window.__WH__.shell.matInfo().count }));
       // RE-SPECIFIED (the owner changed the design on 2026-10-08, UI.md 4.1): Snap hides the brand, the name plate, the ring and the hint; the dock and its Snap bar stay (the old row wanted the whole HUD hidden)
+      // RE-SPECIFIED 2026-10-10 (UI-5, K14, hud.css): the 4th entry is the BRAND, not the hint (the hint is 'hidden' here, as designed). Where the brand does not show, its h1 is no longer visibility:hidden: it is clipped to
+      // nothing (clip-path: inset(50%), out of the flow) so exactly one h1 stays in the accessibility tree. 'clipped' is the brand stepping aside; the name plate, ring and hint stay visibility:hidden.
       check('Snap: the brand, name plate, ring and hint step aside (the dock stays); the Snap bar offers the backdrop tints (Night, Lagoon, Dusk, Ember; Night first) and Save; the mat stays out',
-        s1.tool === 'snap' && s1.hud === 'hidden,hidden,hidden,hidden' && s1.dock === 'visible' && s1.bar && JSON.stringify(s1.tints) === JSON.stringify(['night', 'lagoon', 'dusk', 'ember']) && s1.checked === 'night' && s1.mat === 3, JSON.stringify(s1));
+        s1.tool === 'snap' && s1.hud === 'hidden,hidden,hidden,clipped' && s1.dock === 'visible' && s1.bar && JSON.stringify(s1.tints) === JSON.stringify(['night', 'lagoon', 'dusk', 'ember']) && s1.checked === 'night' && s1.mat === 3, JSON.stringify(s1));
       await hclick(page, '.snap-tint-btn[data-tint="lagoon"]'); await sleep(300);
       const tint = await page.evaluate(() => ({ checked: document.querySelector('.snap-tint-btn[aria-checked="true"]')?.dataset.tint, overlay: getComputedStyle(document.querySelector('.snap-tint')).backgroundImage.slice(0, 40), blend: getComputedStyle(document.querySelector('.snap-tint')).mixBlendMode }));
       check('Snap: a tint lays a soft-light backdrop over the scene', tint.checked === 'lagoon' && /gradient/.test(tint.overlay) && tint.blend === 'soft-light', JSON.stringify(tint));
@@ -2046,7 +2056,11 @@ async function main() {
       const rect = (e) => { const b = e.getBoundingClientRect(); return { x: b.left, y: b.top, r: b.right, b: b.bottom }; };
       const pieces = { brand: '.hud-top .wordmark', mute: '.hud-actions button[aria-label="Mute sound"]', menu: '.hud-actions button[aria-label="Menu"]', fs: '.hud-actions button[aria-label="Full screen"]', hint: '.hint', switcher: '.qswitch', plate: '.nametag', ring: '.meter-cluster', chip: '.mat-chip', tray: '.dock-bar', bar: '.dock-attach-body', caption: '.dock-caption' };
       const R = {};
-      for (const [k, q] of Object.entries(pieces)) { const e = document.querySelector(q); if (shown(e)) R[k] = rect(e); }
+      // A piece that is clipped to nothing (clip-path: inset(50%): the brand h1 where the brand does not show, kept in the accessibility tree and out of the visual one, K14 / UI-5) has a bounding box but no
+      // visible rect: it is not on screen and cannot overlap anything the player sees (it is not a hit target either). Re-specified 2026-10-10 on REAL screenshots at 390x844, 320x568, 844x390, 568x320 and 358x201
+      // in Hand and Cut, where the wordmark is not drawn at all; no 44 px or cover rule is touched.
+      const clipped = (e) => { for (let a = e; a; a = a.parentElement) { const m = /^inset\(\s*([\d.]+)%\s*\)$/.exec(getComputedStyle(a).clipPath); if (m && parseFloat(m[1]) >= 50) return true; } return false; };
+      for (const [k, q] of Object.entries(pieces)) { const e = document.querySelector(q); if (shown(e) && !clipped(e)) R[k] = rect(e); }
       const clash = [];
       const keys = Object.keys(R);
       for (let i = 0; i < keys.length; i++) for (let j = i + 1; j < keys.length; j++) { const a = R[keys[i]], b = R[keys[j]]; if (!(a.r <= b.x + 0.5 || b.r <= a.x + 0.5 || a.b <= b.y + 0.5 || b.b <= a.y + 0.5)) clash.push(`${keys[i]} x ${keys[j]}`); }
@@ -2610,8 +2624,14 @@ async function main() {
       await stepSim(page, 4);
       const tapPay = await tapOn(1);
       await stepSim(page, 4);
+      // RE-SPECIFIED 2026-10-10 (reason: the meter pays by FRESHNESS, core/meter.ts: pay x clamp((seconds since your last touch of the same kind / 2.4)^2, 0.03, 1), on the collection's WALL clock, which the stepped sim does not
+      // advance. The second squeeze of this row came about a second after the first and paid 0.0084 against 0.0500: the anti-mash rule, not a difference in what a piece pays. The product rule is that a squeeze on a piece pays
+      // EXACTLY like one on a whole squishy, so each squeeze is measured on a FRESH meter: the epoch clock moves a day ahead before it (shell.nextDay), so neither freshness nor the daily rate remembers the one before.)
+      const freshMeter = () => page.evaluate(() => window.__WH__.shell.nextDay());
+      await freshMeter();
       const sqTwin = await squeezeOn(1);
       await stepSim(page, 5);
+      await freshMeter();
       const sqAnchor = await squeezeOn(0);
       check('X06 real: a tap on a piece pays nothing; a squeeze held 1.2 s on a piece pays through the meter like the same squeeze on the play body (within 25 %)', rC === 'cut' && tapPay === 0 && sqTwin > 0 && sqAnchor > 0 && Math.abs(sqTwin - sqAnchor) <= 0.25 * Math.max(sqTwin, sqAnchor), `tap ${tapPay}, squeeze on the other piece ${sqTwin.toFixed(4)}, on the face ${sqAnchor.toFixed(4)} of the ring, cut ${rC}, pieces ${(await tools(page)).pieces}`);
       await toolOn('cut');
@@ -2787,9 +2807,24 @@ async function main() {
       const allKept = trials.every((t) => t.pieces === 2 && t.busyAt === null && !t.busyAfterUp && t.rejoins === 0);
       check('A-F2 real: a tap, a 300 ms press, a 1.2 s squeeze, a rub and a pull AWAY on a piece resting against its twin never reconnect them (each trial ends with 2 pieces, no join started, no rejoin voice; the skins were within 6 cm)',
         allKept && trials.every((t) => t.gap !== null && t.gap < 0.06), JSON.stringify(trials));
-      // the deliberate gesture: press the INNER shoulder (the side facing the twin) and pull it into the twin, hold there; the join starts by itself 0.4 s after the skins touch, finger still down
+      // the deliberate gesture: press the shoulder of a piece that faces the twin and pull it into the twin, hold there; the join starts by itself 0.4 s after the skins touch, finger still down.
+      // RE-SPECIFIED 2026-10-10 (reason: the pieces are TRUE halves since 2026-10-08 and rest flush, so the inner side is the flat CUT FACE and the neighbour covers it: a press 0.55 radii toward the twin lands on the
+      // OTHER body (_harness/_reports/cut_browser_grab.json: inner press = [1, 0], the anchor), and gestures.ts commits a press to a pull only when the first 14 px go OUTWARD from the grabbed body's centre, so a press on the
+      // far (outer) side pulled toward the twin is a rub and never joins). A player presses the half near the seam on its OWN side and pulls it across: the press point is the first of 0.1 .. 0.5 radii toward the twin that
+      // grabs THIS piece (the same rule as cut_browser.mjs 'join'); measured with a real mouse on 2026-10-10 that gesture joins (Whole again) with the finger still down.
+      const seamPress = async (f) => {
+        for (const k of [0.1, 0.2, 0.3, 0.4, 0.5]) {
+          const p = { x: f.twin.x - f.dir * k * f.twin.r, y: f.twin.y - 0.1 * f.twin.r };
+          await page.mouse.move(p.x, p.y); await page.mouse.down(); await stepSim(page, 8 / 60);
+          const fing = await page.evaluate(() => window.__WH__.shell.matInfo().bodies.map((b) => b.fingers));
+          await page.mouse.up(); await stepSim(page, 0.8);
+          if (fing[1] > 0 && fing[0] === 0) return { k, p };
+        }
+        return null;
+      };
       const f2 = await freshPair();
-      const press2 = { x: f2.twin.x - f2.dir * 0.55 * f2.twin.r, y: f2.twin.y - 0.1 * f2.twin.r };
+      const sp2 = await seamPress(f2);
+      const press2 = sp2 ? sp2.p : { x: f2.twin.x - f2.dir * 0.3 * f2.twin.r, y: f2.twin.y - 0.1 * f2.twin.r };
       const target2 = { x: f2.anchor.x + f2.dir * 0.1 * f2.anchor.r, y: f2.twin.y - 0.1 * f2.twin.r };
       await page.mouse.move(press2.x, press2.y); await page.mouse.down();
       let join0 = -1, time = 0, minGap = 9, carried = false;
@@ -2808,13 +2843,15 @@ async function main() {
         heldDown && end.pieces === 1 && end.extras === 0, JSON.stringify({ joinStartedAt: join0, fingerStillDown: heldDown, minGap: +minGap.toFixed(3), carried, pieces: end.pieces, gapBeforeDrag: f2.gap === null ? null : +f2.gap.toFixed(3) }));
       // let go while they touch: drag the piece in and let go straight away (under the 0.4 s hold)
       const f3 = await freshPair();
-      const press3 = { x: f3.twin.x - f3.dir * 0.55 * f3.twin.r, y: f3.twin.y - 0.1 * f3.twin.r };
+      const sp3 = await seamPress(f3);   // (the same seam-side press as above)
+      const press3 = sp3 ? sp3.p : { x: f3.twin.x - f3.dir * 0.3 * f3.twin.r, y: f3.twin.y - 0.1 * f3.twin.r };
       const target3 = { x: f3.anchor.x + f3.dir * 0.1 * f3.anchor.r, y: f3.twin.y - 0.1 * f3.twin.r };
       await page.mouse.move(press3.x, press3.y); await page.mouse.down();
       // (the pieces rest 0.029 m apart, i.e. they already touch before the finger moves: the drag runs a third of a second, well under the 0.4 s hold, and the finger lets go while they touch)
       let early = false, tm = 0, minGap3 = 9;
+      // (the finger travels about 0.4 radii toward the twin in the 0.33 s: more than the 0.25 radii a drag needs to count, so the contact is armed when the finger lets go)
       for (let i = 1; i <= 10; i++) {
-        const k = i / 40;
+        const k = i / 16;
         await page.mouse.move(press3.x + (target3.x - press3.x) * k, press3.y + (target3.y - press3.y) * k);
         await stepSim(page, 2 / 60); tm += 2 / 60;
         if ((await tools(page)).busy) early = true;
@@ -3059,7 +3096,10 @@ async function main() {
       const hit = [];
       for (const [k, q] of Object.entries(chrome)) {
         const e = document.querySelector(q);
-        if (!vis(e) || e === el || e.contains(el) || el.contains(e)) continue;   // (the probed element is not its own neighbour, nor are its children: the dock's tray holds the Hoard button)
+        // (a piece clipped to nothing by clip-path: inset(50%), the brand h1 where the brand does not show, has a box but no visible rect: it is not chrome the strip can overlap. Re-specified 2026-10-10 on real
+        //  screenshots at 844x390 and 568x320 where the wordmark is not drawn; the cover, fit and 44 px rules are untouched)
+        const clipped = (() => { for (let a = e; a; a = a.parentElement) { const m = /^inset\(\s*([\d.]+)%\s*\)$/.exec(getComputedStyle(a).clipPath); if (m && parseFloat(m[1]) >= 50) return true; } return false; })();
+        if (!vis(e) || clipped || e === el || e.contains(el) || el.contains(e)) continue;   // (the probed element is not its own neighbour, nor are its children: the dock's tray holds the Hoard button)
         const r = e.getBoundingClientRect();
         if (!(r.right <= R.left + 0.5 || R.right <= r.left + 0.5 || r.bottom <= R.top + 0.5 || R.bottom <= r.top + 0.5)) hit.push(`${k} by ${Math.round(Math.min(r.right, R.right) - Math.max(r.left, R.left))}x${Math.round(Math.min(r.bottom, R.bottom) - Math.max(r.top, R.top))}px`);
       }
@@ -3346,16 +3386,20 @@ async function main() {
       const mq = await page.evaluate(() => window.__WH__.shell.matInfo());
       const anchor = mq.bodies[0], twin = mq.bodies[1];
       const dirq = Math.sign(anchor.x - twin.x) || 1;
-      const bumpPiece = await page.evaluate(([f, t, vw, vh]) => {
+      const bumpPiece = await page.evaluate(([f, t, vw, vh, rr]) => {
         const wh = window.__WH__; wh.pause(); wh.shell.spyReset(); window.__vib.length = 0;
         wh.pointerDown(f.x / vw, f.y / vh, 0); wh.step(1 / 60, 8);
         let carried = false;
-        const ux = f.x + Math.sign(t.x - f.x) * 40, uy = Math.max(8, f.y - 380);
-        for (let i = 1; i <= 24; i++) { const k = i / 24; wh.pointerMove((f.x + (ux - f.x) * k) / vw, (f.y + (uy - f.y) * k) / vh, 0); wh.step(1 / 60, 2); if (wh.shell.matInfo().bodies.some((x) => x.carried)) carried = true; }
-        for (let i = 1; i <= 24; i++) { const k = i / 24; wh.pointerMove((ux + (t.x - ux) * k) / vw, (uy + (t.y - uy) * k) / vh, 0); wh.step(1 / 60, 2); if (wh.shell.matInfo().bodies.some((x) => x.carried)) carried = true; }
-        for (let i = 0; i < 4; i++) wh.step(1 / 60, 4);
+        // RE-SPECIFIED 2026-10-10 (reason: the first leg of this row went toward the neighbour, i.e. INWARD from the outer shoulder it pressed, and gestures.ts commits a press to a pull only when the first 14 px of movement go
+        // OUTWARD (cos > 0.2 against the direction from the body's centre to the press): that is a RUB, which never lifts, so nothing was carried (carried false). A player lifts a half by its outer shoulder and takes it out and
+        // up first: the same path as the mat-body row above (outward and 30 degrees up for 1.2 radii, then across to the other half; 3 radii or more in all = past the 1.15 lift limit)).
+        const away = Math.sign(f.x - t.x) || 1, L1 = 1.2 * rr;
+        const ux = Math.max(8, Math.min(vw - 8, f.x + away * L1 * Math.cos(Math.PI / 6))), uy = Math.max(0.04 * vh, f.y - L1 * Math.sin(Math.PI / 6));
+        for (let i = 1; i <= 12; i++) { const k = i / 12; wh.pointerMove((f.x + (ux - f.x) * k) / vw, (f.y + (uy - f.y) * k) / vh, 0); wh.step(1 / 60, 2); if (wh.shell.matInfo().bodies.some((x) => x.carried)) carried = true; }
+        for (let i = 1; i <= 36; i++) { const k = i / 36; wh.pointerMove((ux + (t.x - ux) * k) / vw, (uy + (t.y - uy) * k) / vh, 0); wh.step(1 / 60, 2); if (wh.shell.matInfo().bodies.some((x) => x.carried)) carried = true; }
+        for (let i = 0; i < 6; i++) wh.step(1 / 60, 6);
         return { carried, spy: wh.shell.spyCalls(), vib: window.__vib.slice() };
-      }, [{ x: twin.x + dirq * -0.62 * twin.r, y: twin.y - 0.1 * twin.r }, { x: anchor.x - dirq * 0.1 * anchor.r, y: anchor.y - 0.7 * anchor.r }, vp.width, vp.height]);
+      }, [{ x: twin.x + dirq * -0.62 * twin.r, y: twin.y - 0.1 * twin.r }, { x: anchor.x - dirq * 0.1 * anchor.r, y: anchor.y - 0.7 * anchor.r }, vp.width, vp.height, twin.r]);
       await page.evaluate(() => window.__WH__.pointerUp(0));
       check('cut piece, REAL physics: a piece carried into the play body -> the physics\' bump events -> audio.bump and a light tick', bumpPiece.carried && !!bumpPiece.spy.audio.bump && bumpPiece.spy.audio.bump.n >= 1 && (bumpPiece.spy.haptics.pop ?? 0) >= 1, summary({ ...bumpPiece, kinds: [] }));
       await page.evaluate(() => window.__WH__.resume());
