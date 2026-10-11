@@ -293,6 +293,8 @@ void main() {
   vec3 view = normalize(uCamB - p);
   vec3 sideV = normalize(cross(uAxis, view));
   float w = uW * mix(1.0, 3.5, pow(aT, 0.7)) * (1.0 - smoothstep(0.7, 1.0, aT) * 0.5);
+  // never thinner than a couple of pixels' worth of the view: a streak across the sky reads from far away
+  w = max(w, length(uCamB - p) * 0.0035 * mix(1.0, 2.4, aT));
   p += sideV * aSide * w;
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vZ = -mv.z;
@@ -318,14 +320,50 @@ void main() {
 }
 `;
 
+/** the glow round the head: a camera-facing disc of light (the coma of hot air and vapour) */
+const HALO_VERT = /* glsl */ `
+attribute vec2 corner;
+uniform vec3 uHead;
+uniform vec3 uCamB;
+uniform float uHaloR;
+varying vec2 vC;
+varying float vZ;
+void main() {
+  vC = corner;
+  vec3 view = normalize(uCamB - uHead);
+  vec3 sx = normalize(cross(view, abs(view.y) < 0.95 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+  vec3 sy = cross(sx, view);
+  vec3 p = uHead + (sx * corner.x + sy * corner.y) * uHaloR + view * uHaloR * 0.5;
+  vec4 mv = modelViewMatrix * vec4(p, 1.0);
+  vZ = -mv.z;
+  gl_Position = projectionMatrix * mv;
+}
+`;
+const HALO_FRAG = /* glsl */ `
+${FX_DEPTH_GLSL}
+uniform float uK;
+uniform vec3 uCol;
+varying vec2 vC;
+varying float vZ;
+void main() {
+  float vis = fxSoft(vZ, 4.0);
+  float r = length(vC);
+  float k = exp(-r * r * 30.0) * 14.0 + exp(-r * r * 6.0) * 2.0 + exp(-r * 3.5) * 0.7;
+  k *= 1.0 - smoothstep(0.85, 1.0, r);
+  vec3 c = mix(uCol, vec3(1.0, 0.92, 0.8), exp(-r * 6.0));
+  gl_FragColor = vec4(c * k * uK * vis * fxDisplay(0.45), 0.0);
+}
+`;
+
 export class Bolide {
   readonly group = new Group();
   readonly head: Mesh;
   readonly sheath: Mesh;
   readonly trail: Mesh;
+  readonly halo: Mesh;
   readonly u = {
     uK: { value: 0 }, uCol: { value: new Vector3(1.0, 0.55, 0.22) }, uHead: { value: new Vector3() }, uAxis: { value: new Vector3(0, -1, 0) },
-    uLen: { value: 800 }, uW: { value: 6 }, uCamB: { value: new Vector3() },
+    uLen: { value: 800 }, uW: { value: 6 }, uCamB: { value: new Vector3() }, uHaloR: { value: 60 },
   };
   constructor(fx: Record<string, IUniform>) {
     this.group.matrixAutoUpdate = false;
@@ -342,7 +380,12 @@ export class Bolide {
     g.setAttribute('aSide', new BufferAttribute(side, 1));
     g.setIndex(idx);
     this.trail = new Mesh(g, fxMaterial(TRAIL_VERT, TRAIL_FRAG, this.u, true, fx));
-    for (const m of [this.head, this.sheath, this.trail]) { m.frustumCulled = false; m.matrixAutoUpdate = false; m.layers.set(FX_LAYER); m.renderOrder = 9; this.group.add(m); }
+    const hg = new BufferGeometry();
+    hg.setAttribute('corner', new BufferAttribute(new Float32Array([-1, -1, 1, -1, 1, 1, -1, 1]), 2));
+    hg.setAttribute('position', new BufferAttribute(new Float32Array(12), 3));
+    hg.setIndex([0, 1, 2, 0, 2, 3]);
+    this.halo = new Mesh(hg, fxMaterial(HALO_VERT, HALO_FRAG, this.u, true, fx));
+    for (const m of [this.head, this.sheath, this.trail, this.halo]) { m.frustumCulled = false; m.matrixAutoUpdate = false; m.layers.set(FX_LAYER); m.renderOrder = 9; this.group.add(m); }
   }
   /** head at p (body frame), flying along unit `axis`, radius r */
   place(p: Vector3, axis: Vector3, r: number, camB: Vector3): void {
@@ -358,9 +401,11 @@ export class Bolide {
     (this.u.uHead.value as Vector3).copy(p);
     (this.u.uAxis.value as Vector3).copy(axis);
     (this.u.uCamB.value as Vector3).copy(camB);
-    for (const m of [this.head, this.sheath, this.trail]) m.matrixWorldNeedsUpdate = true;
+    // the coma: some ten head radii, and never less than ~1.5 % of the distance (a bright star in the sky from afar)
+    this.u.uHaloR.value = Math.max(r * 12, p.distanceTo(camB) * 0.03);
+    for (const m of [this.head, this.sheath, this.trail, this.halo]) m.matrixWorldNeedsUpdate = true;
   }
-  dispose(): void { for (const m of [this.head, this.sheath, this.trail]) { m.geometry.dispose(); (m.material as ShaderMaterial).dispose(); } }
+  dispose(): void { for (const m of [this.head, this.sheath, this.trail, this.halo]) { m.geometry.dispose(); (m.material as ShaderMaterial).dispose(); } }
 }
 
 const _v1 = new Vector3(), _v2 = new Vector3(), _v3 = new Vector3(), _v4 = new Vector3();

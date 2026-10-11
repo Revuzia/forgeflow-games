@@ -22,7 +22,7 @@
 // moves it on exactly.
 
 import {
-  AdditiveBlending, CustomBlending, CylinderGeometry, DoubleSide, DynamicDrawUsage, Float32BufferAttribute, Group, InstancedBufferAttribute,
+  CustomBlending, CylinderGeometry, DoubleSide, DynamicDrawUsage, Float32BufferAttribute, Group, InstancedBufferAttribute,
   InstancedBufferGeometry, Matrix4, Mesh, OneFactor, OneMinusSrcAlphaFactor, Quaternion, ShaderMaterial, Vector2, Vector3,
   Vector4, type Camera, type IUniform, type Scene, type Texture, type WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
@@ -531,7 +531,8 @@ class LightQuads {
     this.geo.setAttribute('iC', this.iC);
     this.geo.instanceCount = 0;
     this.uniforms = { tSceneDepth: { value: null }, uResolution: { value: new Vector2(1, 1) } };
-    const mat = new ShaderMaterial({ vertexShader: LIGHT_VERT, fragmentShader: LIGHT_FRAG, uniforms: this.uniforms, transparent: true, depthWrite: false, depthTest: false, blending: AdditiveBlending });
+    // (one-one additive: three's AdditiveBlending weights the source by its alpha, and light carries none)
+    const mat = new ShaderMaterial({ vertexShader: LIGHT_VERT, fragmentShader: LIGHT_FRAG, uniforms: this.uniforms, transparent: true, depthWrite: false, depthTest: false, blending: CustomBlending, blendSrc: OneFactor, blendDst: OneFactor });
     this.mesh = new Mesh(this.geo, mat);
     this.mesh.frustumCulled = false;
     this.mesh.matrixAutoUpdate = false;
@@ -597,6 +598,9 @@ export interface LaunchPlanetCtx {
   hasAir: boolean;
 }
 
+/** the live launch FX (the renderer's ship layer's): for the test surface and the shot harness's scripts */
+export const LAUNCH_FX: { last: LaunchFx | null } = { last: null };
+
 export class LaunchFx {
   /** deep-space FX (the system frame; positioned each frame relative to the camera) */
   readonly spaceGroup = new Group();
@@ -618,6 +622,7 @@ export class LaunchFx {
   constructor() {
     this.spaceGroup.name = 'launch-space';
     this.spaceGroup.matrixAutoUpdate = true;
+    LAUNCH_FX.last = this;
   }
 
   /** fx seconds now (the render tick at 1× seconds), relative to the epoch */
@@ -681,25 +686,31 @@ export class LaunchFx {
     if (t1 <= t0) return;
     const space = !ctx || !ctx.hasAir || e.alt > ctx.airTop * 1.05;
     const scale = Math.max(0.6, e.radius * Math.sqrt(e.count));
-    // smoke rate (puffs per fx second): thick at the pad, thinning with height, none in vacuum
-    const airK = ctx ? 1 - Math.min(1, Math.max(0, (e.alt - ctx.airTop * 0.25) / (ctx.airTop * 0.8))) : 0;
     const low = Math.max(0, 1 - e.alt / 140);
-    const rate = space ? 0 : (e.trail ? 70 : 22) * e.thrust * (0.35 + 0.65 * airK) * Math.min(2.5, scale);
+    // smoke rate (puffs per fx second): thick at the pad, thinning with height, none above the air. Each birth is
+    // judged at its OWN height on the path — a rocket already above the air still leaves the column it laid below
+    // (the births backfilled from ignition), and a stepped capture shows the whole column
+    const airAt = (alt: number): number => (ctx ? 1 - Math.min(1, Math.max(0, (alt - ctx.airTop * 0.25) / (ctx.airTop * 0.8))) : 0);
+    const rateMax = (!ctx || !ctx.hasAir) ? 0 : (e.trail ? 70 : 22) * e.thrust * Math.min(2.5, scale);
     const dt = t1 - t0;
-    const n = Math.min(Math.round(rate * dt), 2400);
+    const n = Math.min(Math.round(rateMax * dt), 2400);
     const tickPerSec = 1 / SEC_PER_TICK;
     for (let i = 0; i < n; i++) {
       const f = (i + hashFloat(i, Math.floor(t1 * 7))) / Math.max(1, n);
       const tb = t0 + (t1 - t0) * f;
       if (e.path) e.path((tb + this.epoch) * tickPerSec, _a);
       else _a.set(last ? last.x + (e.pos.x - last.x) * f : e.pos.x, last ? last.y + (e.pos.y - last.y) * f : e.pos.y, last ? last.z + (e.pos.z - last.z) * f : e.pos.z);
+      const altI = e.path && ctx ? _a.length() - ctx.radius : e.alt;
+      if (!ctx || altI > ctx.airTop * 1.05) continue;
+      const airK = airAt(altI);
+      if (hashFloat(i, Math.floor(t1 * 11), 9) > 0.35 + 0.65 * airK) continue;
       const s = hashFloat(i, t1 * 13, 3);
       // the smoke leaves the plume's tail: a few nozzle-lengths down the exhaust
       const back = scale * (6 + 10 * hashFloat(i, t1, 4));
       _b.copy(e.dir).multiplyScalar(back);
       const spread = 3 + 5 * scale;
       const jx = (hashFloat(i, t1, 5) - 0.5) * spread, jy = (hashFloat(i, t1, 6) - 0.5) * spread, jz = (hashFloat(i, t1, 7) - 0.5) * spread;
-      const kind = e.alt > (ctx ? ctx.airTop * 0.45 : 300) ? PUFF.trail : PUFF.smoke;
+      const kind = altI > ctx.airTop * 0.45 ? PUFF.trail : PUFF.smoke;
       const life = kind === PUFF.trail ? 45 + 30 * s : 22 + 18 * s;
       const sz0 = (kind === PUFF.trail ? 2.5 : 3.5) * scale;
       const sz1 = (kind === PUFF.trail ? 16 : 26 + 22 * s) * scale * (0.7 + 0.3 * airK);
@@ -707,7 +718,7 @@ export class LaunchFx {
         e.dir.x * 8 + jx * 0.6, e.dir.y * 8 + jy * 0.6, e.dir.z * 8 + jz * 0.6, kind, sz0, sz1, life, s);
     }
     // the pad's ground cloud: steam and smoke shot out sideways along the flame trench and rolling over the ground
-    if ((low > 0.02 || (e.path && (!last || last.t <= t0) && t0 < t1 - 0.06)) && !space && ctx) {
+    if ((low > 0.02 || (e.path && (!last || last.t <= t0) && t0 < t1 - 0.06)) && ctx && ctx.hasAir && (low > 0.02 || !space || e.path)) {
       // (backfilled from ignition: the cloud was poured while the engine was low, at the pad — where the path began)
       const padAt = _v.copy(e.pos);
       if (e.path && e.since !== undefined) e.path(e.since, padAt);
@@ -829,7 +840,7 @@ export class LaunchFx {
       const jx = (hashFloat(i, t1, 78) - 0.5) * 6 * scale, jz = (hashFloat(i, t1, 79) - 0.5) * 6 * scale;
       P.puffs.spawn(pos.x + jx, pos.y, pos.z + jz, tb, up.x * 3, up.y * 3, up.z * 3, i % 4 === 0 ? PUFF.fireball : PUFF.smoke, 2 * scale, (14 + 10 * s) * scale, 10 + 8 * s, s);
     }
-    this.lightList.push({ planet, x: pos.x, y: pos.y, z: pos.z, reach: 40 * scale, r: 4e4 * k * scale, g: 1.8e4 * k * scale, b: 5e3 * k * scale });
+    this.lightList.push({ planet, x: pos.x, y: pos.y, z: pos.z, reach: 40 * scale, r: 1500 * k * scale, g: 700 * k * scale, b: 200 * k * scale });
   }
 
   /** a light for this frame only (the god's body, a beacon): body-frame position of `planet` */
@@ -850,7 +861,7 @@ export class LaunchFx {
     for (const s of this.plumes) if (!s.used) { s.used = true; return s; }
     const geo = new CylinderGeometry(0.5, 0.5, 1, 20, 28, true);
     const mk = (core: boolean) => new ShaderMaterial({
-      vertexShader: PLUME_VERT, fragmentShader: PLUME_FRAG, transparent: true, depthWrite: false, depthTest: false, blending: AdditiveBlending, side: DoubleSide,
+      vertexShader: PLUME_VERT, fragmentShader: PLUME_FRAG, transparent: true, depthWrite: false, depthTest: false, blending: CustomBlending, blendSrc: OneFactor, blendDst: OneFactor, side: DoubleSide,
       uniforms: {
         uLen: { value: 30 }, uR0: { value: 1 }, uExp: { value: 1 }, uThrust: { value: 1 }, uTime: { value: 0 }, uCore: { value: core ? 1 : 0 },
         uDiamonds: { value: 1 }, uHot: { value: new Vector3(1, 0.9, 0.7) }, uCool: { value: new Vector3(1, 0.45, 0.1) }, uSeed: { value: 0 },
@@ -911,7 +922,9 @@ export class LaunchFx {
       const lp = _a.copy(e.dir).multiplyScalar(len * 0.12).add(e.pos);
       const I = e.thrust * Math.min(3, cluster) * (e.fuel === 'powder' ? 0.2 : 1);
       if (!space) {
-        this.lightList.push({ planet: e.planet, x: lp.x, y: lp.y, z: lp.z, reach: Math.min(420, 90 + 70 * cluster) * (0.6 + 0.4 * airK), r: 2.6e5 * I, g: 1.7e5 * I, b: 0.9e5 * I });
+        // (the deferred light adds albedo-0.2 radiance vC·E/π·0.2 with E = 1/(d² + 36): ~1 — a few times sunlit ground —
+        // on the pad 20 m off a big first stage, blinding beside the flame)
+        this.lightList.push({ planet: e.planet, x: lp.x, y: lp.y, z: lp.z, reach: Math.min(420, 90 + 70 * cluster) * (0.6 + 0.4 * airK), r: 5200 * I, g: 3400 * I, b: 1700 * I });
         let gl = this.glowList.get(e.planet);
         if (!gl) { gl = []; this.glowList.set(e.planet, gl); }
         gl.push({ x: lp.x, y: lp.y, z: lp.z, w: I, c: hot });
@@ -927,7 +940,7 @@ export class LaunchFx {
     this.flashes = this.flashes.filter((f) => now - f.t < 1.6 && now >= f.t - 0.1);
     for (const f of this.flashes) {
       const k = Math.max(0, 1 - (now - f.t) / 1.6);
-      const I = k * k * 8e5 * f.scale;
+      const I = k * k * 4e4 * f.scale;
       if (f.planet >= 0) this.lightList.push({ planet: f.planet, x: f.x, y: f.y, z: f.z, reach: 260 * Math.min(2, f.scale), r: I, g: I * 0.55, b: I * 0.22 });
     }
     // lights, glow on the smoke, wind
@@ -990,6 +1003,20 @@ export class LaunchFx {
 
   stats(): { planets: number; plumes: number } {
     return { planets: this.planets.size, plumes: this.plumes.filter((p) => p.group.visible).length };
+  }
+
+  /** what is burning and smoking (shot scripts, debugging) */
+  detail(): Record<string, unknown> {
+    const v = new Vector3();
+    return {
+      plumes: this.plumes.filter((p) => p.group.visible).map((p) => {
+        p.group.getWorldPosition(v);
+        const u = p.mats[0].uniforms;
+        return { cam: [Math.round(v.x), Math.round(v.y), Math.round(v.z)], len: +u.uLen.value.toFixed(1), r0: +u.uR0.value.toFixed(2), exp: +u.uExp.value.toFixed(2), thrust: +u.uThrust.value.toFixed(2), parent: p.group.parent?.parent?.name ?? '?' };
+      }),
+      puffs: [...this.planets.values()].map((P) => ({ planet: P.planet, lastBirth: +P.puffs.lastBirth.toFixed(2), now: +this.now.toFixed(2), visible: P.puffs.group.visible })),
+      exposure: FX_EXPOSURE.value ? 'tex' : 'none',
+    };
   }
 
   dispose(): void {

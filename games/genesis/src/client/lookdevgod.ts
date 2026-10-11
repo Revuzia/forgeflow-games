@@ -3,7 +3,8 @@
 // the sim. It answers the sim's own command names where it can (hand.move / hand.pose / hand.grab / hand.release,
 // creature.adopt, disaster.spawn / cancel, weather.paint / clear, miracle.<kind>) so a shot spec reads the same on
 // both backends, plus lookdev.* commands that pin a state exactly (a meteor at 40 % of its fall, a creature mid-stride,
-// a field painted with lava). Disasters age with the lookdev tick and act on the fabricated fields: a meteor carves a
+// a field painted with lava). The UI host only lets 'lookdev.*' through on this backend, so every god command is also
+// reachable as 'lookdev.<command>' (lookdev.hand.grab, lookdev.disaster.cancel, lookdev.miracle.heal). Disasters age with the lookdev tick and act on the fabricated fields: a meteor carves a
 // crater and lights its rim when it lands, a volcano pours lava, a tsunami's wall of water runs at the coast, a
 // wildfire burns, a weather system paints cloud and precipitation. It is not the sim: nothing here is deterministic
 // or conserved — it only has to look like the god at work.
@@ -101,6 +102,9 @@ export class LookdevGod {
 
   /** handle a command; null when it is not one of the god layer's */
   cmd(c: Command, lp: GodPlanet, tick: number): CommandResult | null {
+    // the lookdev world only hears 'lookdev.*' (and hand.move) from the UI host: 'lookdev.<god command>' reaches the
+    // god command of that name here (lookdev.hand.grab, lookdev.disaster.cancel, lookdev.miracle.heal, ...)
+    if (c.k.startsWith('lookdev.') && /^(hand|creature|disaster|weather|planet|miracle)\./.test(c.k.slice(8))) c = { ...c, k: c.k.slice(8) };
     const R = lp.snap.params.radius;
     switch (c.k) {
       case 'hand.move': case 'lookdev.hand': {
@@ -154,7 +158,7 @@ export class LookdevGod {
         const ex = this.creatures.find((q) => q.view.id === id);
         const align = typeof c.alignment === 'number' ? c.alignment : 0;
         const morph: [number, number, number, number] = Array.isArray(c.morph) ? (c.morph as [number, number, number, number]) : [
-          Math.max(0, Math.min(1, 0.45 + Math.max(0, align) * 0.25)), Math.min(1, 0.5), Math.max(0, -align), Math.max(0, align),
+          Math.max(0, Math.min(1, 0.45 + align * 0.3)), Math.min(1, 0.5), Math.max(0, -align), Math.max(0, align),
         ];
         const anim = typeof c.anim === 'string' ? (AnimState as Record<string, number>)[c.anim] ?? AnimState.idle : typeof c.anim === 'number' ? c.anim : AnimState.idle;
         const view: CreatureView = {

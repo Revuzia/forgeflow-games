@@ -261,6 +261,7 @@ export class Hud {
     door('overlay', 'overlay', 'Overlay', 'ui.overlayNext');
     door('chronicle', 'chronicle', 'Chronicle', 'ui.chronicle');
     door('laws', 'law', 'Laws', 'ui.laws');
+    door('camera', 'camera', 'Camera', 'cam.menu');
     this.dock.append(el('span', 'gn-dock-sep'));
     door('saves', 'save', 'Saves', 'ui.saves');
     door('settings', 'settings', 'Settings', 'ui.settings');

@@ -89,6 +89,9 @@ export class Panel {
 
   close(): void {
     if (!this.isOpen) return;
+    // a field left focused in a closed window would keep taking the keys
+    const a = document.activeElement as HTMLElement | null;
+    if (a && this.root.contains(a)) a.blur();
     panelSound?.('ui.close');
     this.root.hidden = true;
     if (this.veil) this.veil.hidden = true;

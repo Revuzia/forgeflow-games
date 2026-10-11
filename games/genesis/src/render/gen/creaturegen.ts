@@ -208,13 +208,17 @@ function finish(body: CreatureBody, prims: Prim[], bones: RigBone[], idx: Creatu
   }
   const mark = new Float32Array(n * 4);
   const zMin = bmin[2], zMax = bmax[2];
+  // hard parts (horn, hoof and claw 3, shell 4, spines 5) mark the surface they make, whatever bone is nearest
+  const hard = prims.filter((p) => !p.sub && p.region >= 3);
   for (let v = 0; v < n; v++) {
     const x = m.pos[v * 3], y = m.pos[v * 3 + 1], z = m.pos[v * 3 + 2];
     let eye = 0;
     for (const e of eyes) { const d = Math.hypot(x - e[0], y - e[1], z - e[2]); eye = Math.max(eye, Math.max(0, Math.min(1, (0.038 - d) / 0.012))); }
     let nearest = 0, bd = Infinity;
     for (let b = 0; b < NB; b++) { const d = segDist(x, y, z, bones[b].head, bones[b].tail) / bones[b].r; if (d < bd) { bd = d; nearest = b; } }
-    const region = regionAt(x, y, z, nearest);
+    let region = regionAt(x, y, z, nearest);
+    let hd = h * 1.2;
+    for (const p of hard) { const d = primDist(p, x, y, z); if (d < hd) { hd = d; region = p.region; } }
     mark[v * 4] = eye;
     mark[v * 4 + 1] = region;
     mark[v * 4 + 2] = furAt(x, y, z, region) * (eye > 0.1 ? 0 : 1);
@@ -394,9 +398,9 @@ function buildQuad(body: CreatureBody, S: QuadSpec, m: Morph): CreatureMesh {
       const t = i / (n - 1);
       const base = lerp3(add(hip, [0, S.hipR[1] * 0.75, -0.05]), add(sho, [0, S.chestR[1] * 0.75 + S.hump, 0.05]), t);
       const hgt = (0.06 + 0.09 * Math.sin(t * Math.PI)) * gaunt;
-      P.push(cone(base, add(base, [0, hgt, -hgt * 0.45]), 0.022, 0.002, 0.012, 5));
+      P.push(cone(base, add(base, [0, hgt, -hgt * 0.45]), 0.034, 0.003, 0.014, 5));
     }
-    for (const L of [LF, RF]) P.push(cone(L[1], add(L[1], [0, 0.02, -0.1 * gaunt]), 0.02, 0.002, 0.01, 5));
+    for (const L of [LF, RF]) P.push(cone(L[1], add(L[1], [0, 0.02, -0.1 * gaunt]), 0.03, 0.003, 0.012, 5));
   }
   const feet = [LF[3], RF[3], LH[3], RH[3]];
   const zMin = Math.min(t3[2], tailRoot[2]) - 0.15, zMax = snoutTip[2] + 0.12;
@@ -415,7 +419,7 @@ function buildQuad(body: CreatureBody, S: QuadSpec, m: Morph): CreatureMesh {
       const lowBelly = (name === 'spine' || name === 'pelvis' || name === 'chest') && y < hip[1] - S.bellyR[1] * 0.25;
       return lowBelly ? 1 : 0;
     },
-    (_x, y, _z, region) => (region === 3 ? 0 : region === 2 ? 0.2 : region === 1 ? 0.7 : y < 0.12 ? 0.5 : 1),
+    (_x, y, _z, region) => (region === 3 || region === 5 ? 0 : region === 2 ? 0.2 : region === 1 ? 0.7 : y < 0.12 ? 0.5 : 1),
   );
 }
 
@@ -498,7 +502,7 @@ function buildApe(m: Morph): CreatureMesh {
       const t = i / 6;
       const base = lerp3(add(hip, [0, 0.12, -0.04]), add(sho, [0, 0.2, -0.1]), t);
       const hgt = (0.05 + 0.08 * Math.sin(t * Math.PI)) * gaunt;
-      P.push(cone(base, add(base, [0, hgt, -hgt * 0.5]), 0.022, 0.002, 0.012, 5));
+      P.push(cone(base, add(base, [0, hgt, -hgt * 0.5]), 0.034, 0.003, 0.014, 5));
     }
   }
   const feet = [LA[3], RA[3], LL[3], RL[3]];
@@ -512,7 +516,7 @@ function buildApe(m: Morph): CreatureMesh {
       void x;
       return 0;
     },
-    (_x, _y, _z, region) => (region === 2 ? 0.1 : 1),
+    (_x, _y, _z, region) => (region === 5 ? 0 : region === 2 ? 0.1 : 1),
   );
 }
 

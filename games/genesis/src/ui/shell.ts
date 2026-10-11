@@ -535,7 +535,12 @@ export class Shell {
   // ───────────────────────────── keyboard ─────────────────────────────
 
   keyDown(e: KeyboardEvent): void {
-    if (isTyping(e)) return;
+    if (isTyping(e)) {
+      // Esc in a window's field leaves the field and closes the window (the "do this" field and the palette handle
+      // their own Esc)
+      if (e.code === 'Escape' && (e.target as HTMLElement).closest('.gn-win')) { e.preventDefault(); (e.target as HTMLElement).blur(); this.cancel(); }
+      return;
+    }
     const kb = this.host.keybinds;
     // the camera modes menu takes the arrows, Enter and Esc while it is up
     if (this.cam.menuOpen) {
@@ -631,6 +636,8 @@ export class Shell {
     if (button !== 0) return;
     // photo mode: a drag looks, a click focuses (the hand and the powers wait)
     if (this.photo.isActive) { this.press = 'photo'; return; }
+    // the cinematic: a press takes the camera back (it does not grab what is under it)
+    if (this.host.cam?.mode() === 'dolly') { this.host.cam.dolly(null); this.press = 'camera'; return; }
     if (this.gestures.armed) { this.press = 'gesture'; this.gestures.begin(x, y); return; }
     if (this.gestures.active) { this.press = 'gesture'; this.gestures.point(x, y); return; }
     if (this.tools.isArmed && this.tools.down(x, y)) { this.press = 'tool'; return; }

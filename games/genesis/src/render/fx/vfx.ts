@@ -82,6 +82,8 @@ varying float vKind;
 varying vec2 vDir;
 varying vec3 vGlow;
 varying float vSeed;
+varying vec3 vAirT;
+varying vec3 vAirIn;
 
 float h1(float a, float b) { return fract(sin(a * 127.1 + b * 311.7) * 43758.5453); }
 vec4 emit(float row, float k) { return texelFetch(tEmit, ivec2(int(k), int(row)), 0); }
@@ -429,6 +431,20 @@ void main() {
     vec3 sky = skyIrradiance(upP, upP, uSunDirBody);
     vLight = sun * 0.24 + sky * 0.3 + vec3(0.002, 0.003, 0.005) + uMoonE * 0.15;
   }
+  // ── aerial perspective: the air between the camera and the particle dims it and veils it in the sky's colour
+  // (density averaged along the path between the two heights; the veil is the sky's radiance that way) ──
+  vAirT = vec3(1.0);
+  vAirIn = vec3(0.0);
+  if (uHasAtmo > 0.5) {
+    vec3 dv = p - uCamBody;
+    float L = length(dv);
+    float hc = max(length(uCamBody) - uRg, 0.0), hp = max(length(p) - uRg, 0.0);
+    float dh = hp - hc;
+    float dR = abs(dh) > 1.0 ? uHR * (exp(-hc / uHR) - exp(-hp / uHR)) / dh : exp(-hc / uHR);
+    float dM = abs(dh) > 1.0 ? uHM * (exp(-hc / uHM) - exp(-hp / uHM)) / dh : exp(-hc / uHM);
+    vAirT = exp(-(uBetaR * dR + uBetaMe * dM) * L);
+    vAirIn = skyRadiance(normalize(uCamBody), dv / max(L, 1e-3), uSunDirBody) * (1.0 - vAirT);
+  }
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   vDir = vec2(0.0, 1.0);
   if (kind > 0.5 && kind < 1.5 || kind > 4.5 && kind < 5.5) {
@@ -473,6 +489,8 @@ varying float vKind;
 varying vec2 vDir;
 varying vec3 vGlow;
 varying float vSeed;
+varying vec3 vAirT;
+varying vec3 vAirIn;
 void main() {
 #include <logdepthbuf_fragment>
   if (vColor.a <= 0.0) discard;
@@ -492,6 +510,7 @@ void main() {
     float under = smoothstep(0.4, -0.8, nrm.y);
     float a = vColor.a * puff * fade;
     vec3 c = vColor.rgb * (vLight * lit + vGlow * (0.35 + 0.65 * under));
+    c = c * vAirT + vAirIn;
     gl_FragColor = vec4(c * a, a);
   } else if (vKind > 3.5 && vKind < 4.5) {
     // a swarm's speck: a dark body with a flicker of wings
@@ -499,45 +518,47 @@ void main() {
     float body = smoothstep(1.0, 0.4, r);
     float wing = 0.5 + 0.5 * sin(uFxTime * 60.0 + vSeed);
     float a = vColor.a * body * fade * (0.7 + 0.3 * wing);
-    gl_FragColor = vec4(vColor.rgb * vLight * 0.6 * a, a);
+    gl_FragColor = vec4((vColor.rgb * vLight * 0.6 * vAirT + vAirIn) * a, a);
   } else if (vKind > 4.5 && vKind < 5.5) {
     // a rain streak: thin, brightest in the middle, lit by the sky
     float k = (1.0 - smoothstep(0.0, 1.0, abs(vCorner.x))) * (1.0 - smoothstep(0.6, 1.0, abs(vCorner.y)));
     float a = vColor.a * k * fade * 0.55;
-    gl_FragColor = vec4(vColor.rgb * (vLight * 1.6 + 0.01) * a, a);
+    gl_FragColor = vec4((vColor.rgb * (vLight * 1.6 + 0.01) * vAirT + vAirIn) * a, a);
   } else if (vKind > 5.5 && vKind < 6.5) {
     // a leaf: a little lit ellipse turning in the air
     vec2 q = vCorner * vec2(1.0, 0.55);
     if (length(q) > 0.6) discard;
     float a = vColor.a * fade;
-    gl_FragColor = vec4(vColor.rgb * vLight * 1.4 * a, a);
+    gl_FragColor = vec4((vColor.rgb * vLight * 1.4 * vAirT + vAirIn) * a, a);
   } else if (vKind > 6.5 && vKind < 7.5) {
     // a lit blob (fruit, a snowflake, a hailstone)
     if (r > 1.0) discard;
     float sh = 0.6 + 0.4 * (1.0 - r) + 0.25 * max(0.0, -vCorner.y);
     float a = vColor.a * smoothstep(1.0, 0.75, r) * fade;
-    gl_FragColor = vec4(vColor.rgb * vLight * 1.6 * sh * a, a);
+    gl_FragColor = vec4((vColor.rgb * vLight * 1.6 * sh * vAirT + vAirIn) * a, a);
   } else if (vKind > 7.5) {
     // a splash crown
     float k = (1.0 - smoothstep(0.7, 1.0, abs(vCorner.x))) * smoothstep(-1.0, -0.6, vCorner.y) * (1.0 - smoothstep(0.2, 1.0, vCorner.y));
     float ring = smoothstep(0.35, 0.85, abs(vCorner.x));
     float a = vColor.a * k * (0.4 + 0.6 * ring) * 0.6;
-    gl_FragColor = vec4(vColor.rgb * vLight * 1.8 * a, a);
+    gl_FragColor = vec4((vColor.rgb * vLight * 1.8 * vAirT + vAirIn) * a, a);
   } else if (vKind > 0.5 && vKind < 1.5) {
     // an emissive streak: hottest at its head
     float core = (1.0 - smoothstep(0.0, 1.0, abs(vCorner.x))) * smoothstep(-1.0, 0.6, vCorner.y) * (1.0 - smoothstep(0.85, 1.0, vCorner.y));
     float a = vColor.a * core * fade;
-    gl_FragColor = vec4(vColor.rgb * a * fxDisplay(0.35), 0.0);
+    gl_FragColor = vec4(vColor.rgb * vAirT * a * fxDisplay(0.35), 0.0);
   } else if (vKind > 1.5 && vKind < 2.5) {
     // an emissive blob
     if (r > 1.0) discard;
     float k = pow(1.0 - r, 1.8);
     float a = vColor.a * k * fade;
-    gl_FragColor = vec4(vColor.rgb * a * fxDisplay(0.35), 0.0);
+    gl_FragColor = vec4(vColor.rgb * vAirT * a * fxDisplay(0.35), 0.0);
   } else {
-    // a flash: a soft sphere of light falling off like a glow
-    float k = exp(-r * r * 4.0) + 0.25 * exp(-r * r * 0.8);
-    gl_FragColor = vec4(vColor.rgb * k * vColor.a * fade * fxDisplay(0.2), 0.0);
+    // a flash: a soft sphere of light falling off like a glow, windowed to nothing at the sprite's edge
+    if (r > 1.0) discard;
+    float win = (1.0 - r * r) * (1.0 - r * r);
+    float k = (exp(-r * r * 9.0) * 1.6 + 0.3 * exp(-r * r * 2.5)) * win;
+    gl_FragColor = vec4(vColor.rgb * vAirT * k * vColor.a * fade * fxDisplay(0.2), 0.0);
   }
 }
 `;

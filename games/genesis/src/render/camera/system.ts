@@ -1,5 +1,7 @@
 // GENESIS — the system camera (CONTRACT.md §15.8): the whole system around the star. Left-drag orbits, right-drag
-// tilts, the wheel zooms (log scale). Clicking a planet marker is handled by the app (rig.flyTo → orbit mode).
+// tilts, the wheel zooms (log scale). Clicking a planet marker is handled by the app (rig.flyTo → orbit mode); clicking a
+// ship's glint rides along with it (the follow camera). Ships between the worlds are drawn with their transfer paths
+// (flown and ahead) and labelled (render/life/ships.ts overlay); the planets' names are the HUD's markers.
 
 import type { WorldView } from '../../client/worldview.ts';
 import type { D3 } from '../../client/orbits.ts';
@@ -16,10 +18,11 @@ export class SystemCamera implements CameraController {
   /** system-frame point the camera circles (the star by default) */
   center: D3 = [0, 0, 0];
 
-  /** frame the whole system: distance from the widest orbit */
+  /** frame the whole system: distance from the widest orbit (and any ship out beyond it, drifting or crossing) */
   frame(view: WorldView): void {
     let maxA = 0;
     for (const p of view.planets) if (p.params.orbit.parent < 0) maxA = Math.max(maxA, p.params.orbit.a * (1 + p.params.orbit.e));
+    for (const s of view.ships) if (s.planet < 0) maxA = Math.max(maxA, Math.min(maxA * 1.6 + 1, Math.hypot(s.sysPos[0], s.sysPos[1], s.sysPos[2])));
     this.dist = Math.max(2e5, maxA * 2.3);
   }
 

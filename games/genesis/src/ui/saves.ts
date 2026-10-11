@@ -60,7 +60,7 @@ export interface SaveHeader {
   content: string[];
   packs: PackRef[];
   worlds: string[];
-  /** "Year 3 · day 7" from the first world's own calendar */
+  /** how long the world had been living ("day 12 of this world"); a bundle carries the world's own calendar */
   calendar: string;
   version: string;
 }
@@ -84,17 +84,15 @@ export function readSaveHeader(buf: ArrayBuffer): SaveHeader {
   const planets = (j.planets as { name?: string; st?: { dayHours?: number; orbit?: { parent?: number; period?: number } } }[] | undefined) ?? [];
   const tick = Number(j.tick) || 0;
   let calendar = '';
+  // (the world's own calendar starts wherever its orbit put it: the header says only how long it has lived)
   const home = planets.find((p) => (p.st?.orbit?.parent ?? -1) < 0) ?? planets[0];
-  if (home?.st?.dayHours) {
-    const day = home.st.dayHours * 60;
-    const year = Math.max(day, home.st.orbit?.period ?? day * 12);
-    calendar = `Year ${Math.floor(tick / year) + 1} · day ${Math.floor((tick % year) / day) + 1}`;
-  }
+  if (home?.st?.dayHours) calendar = `day ${Math.floor(tick / (home.st.dayHours * 60)) + 1} of this world`;
   return {
     scenario: String(j.scenario ?? '?'), seed: Number(j.seed) || 0, tick,
     content: Array.isArray(j.content) ? (j.content as string[]) : ['base'],
     packs: Array.isArray(j.packs) ? (j.packs as PackRef[]) : [],
-    worlds: planets.map((p) => p.name ?? '?'),
+    // (the worlds, not their moons)
+    worlds: planets.filter((p) => (p.st?.orbit?.parent ?? -1) < 0).map((p) => p.name ?? '?'),
     calendar, version: `${major}.${minor}`,
   };
 }
@@ -106,9 +104,15 @@ export function neededPacks(h: SaveHeader): string[] {
 
 const BUNDLE_MAGIC = 'GNPK';
 
-/** a save with the packs it needs: 'GNPK', u32 JSON length, JSON { format, packs }, padding to 8, then the GNSS bytes */
-export function bundle(save: ArrayBuffer, packs: ContentPack[], name: string): ArrayBuffer {
-  const json = new TextEncoder().encode(JSON.stringify({ format: 'genesis-bundle', v: 1, name, packs }));
+/** what a bundle carries besides the save and its packs: its picture and the words of its slot */
+export interface BundleMeta { name: string; thumb?: string | null; calendar?: string; summary?: string; world?: string }
+
+/**
+ * a save with the packs it needs: 'GNPK', u32 JSON length, JSON { format, packs, name, thumb, calendar … }, padding to 8,
+ * then the GNSS bytes
+ */
+export function bundle(save: ArrayBuffer, packs: ContentPack[], meta: BundleMeta): ArrayBuffer {
+  const json = new TextEncoder().encode(JSON.stringify({ format: 'genesis-bundle', v: 1, ...meta, packs }));
   const start = (8 + json.length + 7) & ~7;
   const out = new Uint8Array(start + save.byteLength);
   out.set([71, 78, 80, 75], 0);
@@ -118,16 +122,17 @@ export function bundle(save: ArrayBuffer, packs: ContentPack[], name: string): A
   return out.buffer;
 }
 
-export function unbundle(buf: ArrayBuffer): { save: ArrayBuffer; packs: ContentPack[]; name: string } {
+export function unbundle(buf: ArrayBuffer): { save: ArrayBuffer; packs: ContentPack[]; meta: BundleMeta } {
   const b = new Uint8Array(buf);
   const magic = String.fromCharCode(b[0], b[1], b[2], b[3]);
-  if (magic !== BUNDLE_MAGIC) return { save: buf, packs: [], name: '' };
+  if (magic !== BUNDLE_MAGIC) return { save: buf, packs: [], meta: { name: '' } };
   const len = new DataView(buf).getUint32(4, true);
   if (8 + len > b.length) throw new Error('The saved world is cut short (its packs are incomplete): the file was not copied whole.');
-  let j: { packs?: ContentPack[]; name?: string };
+  let j: BundleMeta & { packs?: ContentPack[] };
   try { j = JSON.parse(new TextDecoder().decode(b.subarray(8, 8 + len))) as typeof j; } catch { throw new Error('The saved world is damaged: the packs it carries cannot be read.'); }
   const start = (8 + len + 7) & ~7;
-  return { save: buf.slice(start), packs: Array.isArray(j.packs) ? j.packs : [], name: j.name ?? '' };
+  const str = (v: unknown) => (typeof v === 'string' ? v : undefined);
+  return { save: buf.slice(start), packs: Array.isArray(j.packs) ? j.packs : [], meta: { name: str(j.name) ?? '', thumb: str(j.thumb) ?? null, calendar: str(j.calendar), summary: str(j.summary), world: str(j.world) } };
 }
 
 /** a storage failure in words */
@@ -235,7 +240,7 @@ export class Saves {
     this.host = deps.host;
     this.panel = new Panel(parent, { name: 'saves', title: 'Saves', subtitle: 'keep this moment, or return to one', icon: 'save', place: 'center', veil: true });
     this.nameIn = h('input', { class: 'gn-text', type: 'text', placeholder: 'Name this moment…', spellcheck: 'false', maxlength: '80', aria: { label: 'Name of the save' } }) as HTMLInputElement;
-    this.nameIn.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') void this.saveNew(); });
+    this.nameIn.addEventListener('keydown', (e) => { if (e.key !== 'Escape') e.stopPropagation(); if (e.key === 'Enter') void this.saveNew(); });
     const saveBtn = h('button', { class: 'gn-btn gn-btn-gold', on: { click: () => void this.saveNew() } }, h('span', { html: icon('save') }), 'Save');
     const file = h('input', { type: 'file', accept: '.gnss,.genesis,application/octet-stream', style: 'display:none', aria: { label: 'Import a saved world' } }) as HTMLInputElement;
     file.addEventListener('change', () => { const f = file.files?.[0]; if (f) void this.importFile(f); file.value = ''; });
@@ -431,7 +436,8 @@ export class Saves {
     const r = await this.store.get(id).catch(() => undefined);
     if (!r) { this.alert('bad', 'That save is gone.'); return; }
     const packs = r.packJson ?? [];
-    if (packs.length) download(this.fileName(r, 'genesis'), bundle(r.bytes, packs, r.name), 'application/octet-stream');
+    // a world with packs goes out as a bundle (it carries them, and its picture and date); one without as a plain save
+    if (packs.length) download(this.fileName(r, 'genesis'), bundle(r.bytes, packs, { name: r.name, thumb: r.thumb, calendar: r.calendar, summary: r.summary, world: r.world }), 'application/octet-stream');
     else download(this.fileName(r, 'gnss'), r.bytes, 'application/octet-stream');
     this.alert('ok', `Exported ${r.name}${packs.length ? ` with the pack${packs.length > 1 ? 's' : ''} it needs` : ''}.`);
   }
@@ -444,7 +450,7 @@ export class Saves {
     const need = new Set(neededPacks(hdr));
     const packs = this.deps.packs().filter((p) => need.has(p.id));
     const d = this.describe();
-    if (packs.length) download(this.fileName({ name: d.calendar, world: d.world }, 'genesis'), bundle(bytes, packs, d.calendar), 'application/octet-stream');
+    if (packs.length) download(this.fileName({ name: d.calendar, world: d.world }, 'genesis'), bundle(bytes, packs, { name: d.calendar, calendar: d.calendar, summary: d.summary, world: d.world }), 'application/octet-stream');
     else download(this.fileName({ name: d.calendar, world: d.world }, 'gnss'), bytes, 'application/octet-stream');
   }
 
@@ -452,16 +458,17 @@ export class Saves {
   async importFile(f: File): Promise<boolean> {
     let buf: ArrayBuffer;
     try { buf = await f.arrayBuffer(); } catch (e) { this.fail(`The file could not be read: ${e instanceof Error ? e.message : String(e)}`); return false; }
-    let parts: { save: ArrayBuffer; packs: ContentPack[]; name: string };
+    let parts: { save: ArrayBuffer; packs: ContentPack[]; meta: BundleMeta };
     let hdr: SaveHeader;
     try { parts = unbundle(buf); hdr = readSaveHeader(parts.save); } catch (e) { this.fail(`${f.name}: ${e instanceof Error ? e.message : String(e)}`); return false; }
     // the packs it carries join the library (a later save of this world finds them there too)
     for (const p of parts.packs) await this.deps.library.keep(p, 'save').catch(() => null);
     const need = new Set(neededPacks(hdr));
-    const name = parts.name || f.name.replace(/\.(gnss|genesis)$/i, '');
+    const m = parts.meta;
+    const name = m.name || f.name.replace(/\.(gnss|genesis)$/i, '');
     const rec: SaveRecord = {
       id: `s${Date.now().toString(36)}`, name, scenario: hdr.scenario, seed: hdr.seed, tick: hdr.tick, date: Date.now(),
-      world: hdr.worlds[0] ?? '', worlds: hdr.worlds, calendar: hdr.calendar, summary: 'imported', thumb: null, size: parts.save.byteLength,
+      world: m.world ?? hdr.worlds[0] ?? '', worlds: hdr.worlds, calendar: m.calendar ?? hdr.calendar, summary: m.summary ? `${m.summary} · imported` : 'imported', thumb: m.thumb ?? null, size: parts.save.byteLength,
       packs: hdr.packs.filter((p) => need.has(p.id)), packJson: parts.packs.filter((p) => need.has(p.id)), bytes: parts.save,
     };
     // kept before it is opened, so a fresh world can be made for it if this one cannot take it

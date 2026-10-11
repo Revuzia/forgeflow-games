@@ -212,6 +212,11 @@ ground(p) = radius + grid.sample(surface, p) + detailNoise(p) * rough(p)
   6 / 4 / 1, at hearths 17 / 14 / 13, by war bands 18 / 24 / 38 (cause not isolated; a candidate: a stretched task keeps
   its worker away from home longer, and a town's defenders are those at home when a war band arrives). At 100x (3 seeds, years 3–5):
   population −5.7±4.3 (+3.6±6.4), food −2.3±8.0 % (+2.1±16.9). (`_harness/scratch/perf3/r2/curves.ts`, `cmp12.ts`.)
+  *(These runs predate the seed salt of the peoples' dice — `people/lifecycle.ts` `worldSalt`: ids are handed out
+  alike in every world, so a plain seed then drew the same founding band, the same initial ages and the same old-age
+  rolls as any other, and the "salted" seeds above had their ids offset by the seed (the harness's `SALT=1`, now
+  redundant). Every seed now draws its own, and a founding band has the same shape on every seed — 22 % children,
+  10 % elders, each age band half women — by count (`settlement.ts` `createBand`). Not re-measured since.)*
   **Worlds the camera is not on** (the logged `focus` names another planet) run coarser still while time-lapse is on
   (level 3: climate 12 h — 6 h while the world has lava vents; within a pass the air's humidity relaxes hour by hour —,
   vegetation 12 h (logistic growth solved over the pass), weather + rain + sand and ash 60 ticks, hydrology 16 ticks

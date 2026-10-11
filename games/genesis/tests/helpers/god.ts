@@ -12,12 +12,16 @@ export interface Town {
   st: Settlement;
 }
 
-let cache: { bytes: Uint8Array; sid: number } | null = null;
+const caches = new Map<number, { bytes: Uint8Array; sid: number }>();
 
-/** a town of ~30 bronze-age plains folk on a small sandbox world (vegetation grown), an hour after it was set down */
-export function town(): Town {
+/**
+ * a town of ~30 bronze-age plains folk on a small sandbox world (vegetation grown), an hour after it was set down
+ * (on the world of `seed`: the default one unless a test says otherwise)
+ */
+export function town(seed = 20261008): Town {
+  let cache = caches.get(seed);
   if (!cache) {
-    const sim = new Sim({ seed: 20261008, scenario: 'sandbox', overrides: { n: 20, vegetation: 1 } });
+    const sim = new Sim({ seed, scenario: 'sandbox', overrides: { n: 20, vegetation: 1 } });
     // a quiet world: natural disasters off unless a test turns them on
     must(sim, { k: 'set', path: 'disasters.natural', value: 0 });
     const r = must(sim, { k: 'life.spawn-people', species: 'plains-folk', count: 30, era: 'bronze', settled: true });
@@ -25,6 +29,7 @@ export function town(): Town {
     must(sim, { k: 'settlement.rename', settlement: sid, name: 'Aru' });
     sim.step(60);
     cache = { bytes: sim.save(), sid };
+    caches.set(seed, cache);
   }
   const sim = Sim.load(cache.bytes);
   const st = sim.u.planets[0].people.settlement(cache.sid)!;

@@ -129,6 +129,9 @@ export function newWorldUrl(o: { scenario: string; seed: number; custom?: Custom
   return `?${p.toString()}`;
 }
 
+/** "an ice world", "a desert world" */
+function an(noun: string): string { return `${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}`; }
+
 export function randomSeed(): number {
   const a = new Uint32Array(1);
   try { crypto.getRandomValues(a); } catch { a[0] = Math.floor(Math.random() * 4294967295); }
@@ -180,7 +183,7 @@ export class NewWorld {
     this.panel = new Panel(parent, { name: 'newworld', title: 'Begin a world', subtitle: 'which world will you make?', icon: 'new-world', place: 'wide', veil: true });
     this.cardsEl = h('div', { class: 'gn-nw-cards', role: 'listbox', aria: { label: 'Worlds' } });
     this.seedIn = h('input', { class: 'gn-text gn-seed', type: 'text', inputmode: 'numeric', spellcheck: 'false', aria: { label: 'Seed' } }) as HTMLInputElement;
-    this.seedIn.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') void this.begin(); });
+    this.seedIn.addEventListener('keydown', (e) => { if (e.key !== 'Escape') e.stopPropagation(); if (e.key === 'Enter') void this.begin(); });
     const dice = h('button', { class: 'gn-btn gn-nw-dice', title: 'Another random seed', aria: { label: 'Another random seed' }, html: icon('dice'), on: { click: () => { this.seedIn.value = String(randomSeed()); deps.host.sound('ui.tick'); } } });
     this.customEl = h('div', { class: 'gn-nw-custom' });
     this.modsEl = h('div', { class: 'gn-nw-mods' });
@@ -232,6 +235,8 @@ export class NewWorld {
   private render(): void {
     const host = this.deps.host;
     clear(this.cardsEl);
+    // with your own system open, the cards step back to a row of names (its worlds need the room)
+    this.cardsEl.classList.toggle('gn-compact', this.choice === 'custom');
     const here = this.deps.world().scenario;
     for (const c of this.cards()) {
       const stay = this.fromOpening && c.id === here;
@@ -291,8 +296,8 @@ export class NewWorld {
       const fit = w.species ? homeKinds(o.species.find((s) => s.id === w.species)) : null;
       const warn = fit && !fit.includes(w.kind)
         ? h('div', { class: 'gn-nw-warn' }, h('span', { html: icon('help') }),
-          `${o.species.find((s) => s.id === w.species)?.name ?? w.species} would not live long on a ${(o.kinds.find((k) => k.id === w.kind)?.name ?? w.kind).toLowerCase()}. `,
-          h('button', { class: 'gn-linkbtn', text: `Make it a ${(o.kinds.find((k) => k.id === fit[0])?.name ?? fit[0]).toLowerCase()}`, on: { click: () => { w.kind = fit[0]; this.render(); } } }))
+          `${o.species.find((s) => s.id === w.species)?.name ?? w.species} would not live long on ${an((o.kinds.find((k) => k.id === w.kind)?.name ?? w.kind).toLowerCase())}. `,
+          h('button', { class: 'gn-linkbtn', text: `Make it ${an((o.kinds.find((k) => k.id === fit[0])?.name ?? fit[0]).toLowerCase())}`, on: { click: () => { w.kind = fit[0]; this.render(); } } }))
         : null;
       const p = planets[i];
       this.customEl.append(h('div', { class: 'gn-nw-world' },

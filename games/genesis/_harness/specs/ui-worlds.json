@@ -1,0 +1,22 @@
+{
+  "$comment": "UI lane, phase 4: the new-world menu (your own system), mods, saves, the controls card, and the camera modes (cinematic, walk, follow, photo). Run: node _harness/shots.mjs _harness/specs/ui-worlds.json --port=5193 --quality=low. Each shot opens its own world (?intro=0 by the harness).",
+  "shots": [
+    { "name": "ui4-newworld-custom", "params": "scenario=sandbox&seed=7", "ui": true, "frames": 2,
+      "script": "await G.ui_.open('newworld', 'custom'); G.worlds_.newWorld.spec({ star: 'K', worlds: [{ kind: 'terran', species: 'plains-folk', era: 'stone' }, { kind: 'desert', species: 'hive', era: 'bronze' }, { kind: 'ice', species: 'cold-folk', era: 'stone' }] }); return G.worlds_.newWorld.url();" },
+    { "name": "ui4-custom-system", "params": "scenario=custom&seed=4242&star=M&worlds=terran:plains-folk:stone,desert:hive:stone,methane:methane-drifters:stone", "ui": true, "frames": 3,
+      "camera": { "mode": "system" }, "script": "return G.state().planets.map((p) => `${p.name} ${p.kind} ${p.pop}`);" },
+    { "name": "ui4-mods", "params": "scenario=sandbox&seed=9&mod=/mods/example-highland-flora.json", "ui": true, "frames": 2,
+      "script": "const t = await (await fetch('/mods/species-stone-singers.json')).text(); await G.ui_.open('mods'); await G.worlds_.mods.take(t, 'stone-singers.json'); return G.worlds_.mods.last();" },
+    { "name": "ui4-saves", "params": "scenario=twoworlds&seed=11", "ui": true, "frames": 2,
+      "script": "await G.worlds_.saves.save('Two worlds, day one'); await G.ui_.open('saves'); return (await G.worlds_.saves.list()).length;" },
+    { "name": "ui4-controls", "params": "scenario=sandbox&seed=7", "ui": true, "frames": 2, "script": "await G.ui_.open('help');" },
+    { "name": "ui4-cinematic", "params": "scenario=lookdev&seed=20260", "ui": true, "frames": 30,
+      "camera": { "mode": "orbit", "poi": "town", "dist": 500, "tilt": 55, "hour": 10.5 },
+      "script": "const s = (await G.query('settlements', { planet: 0 })).sort((a, b) => b.population - a.population)[0]; G.cam_.dolly({ kind: 'settlement', id: s.id, planet: 0 }); return G.cam_.mode();" },
+    { "name": "ui4-walk", "params": "scenario=lookdev&seed=20260", "ui": true, "frames": 26,
+      "script": "const s = (await G.query('settlements', { planet: 0 })).sort((a, b) => b.population - a.population)[0]; G.cam_.walk({ kind: 'settlement', id: s.id, planet: 0 }); return G.cam_.mode();" },
+    { "name": "ui4-photo", "params": "scenario=lookdev&seed=20260", "ui": true, "frames": 4,
+      "camera": { "mode": "orbit", "poi": "town", "dist": 260, "tilt": 68, "hour": 16.5 },
+      "script": "G.cam_.photo(true); G.cam_.setLens({ frame: '2.39:1', filter: 'warm', blur: 0.6 }); G.cam_.focusAt(innerWidth * 0.45, innerHeight * 0.6); return G.cam_.lens();" }
+  ]
+}

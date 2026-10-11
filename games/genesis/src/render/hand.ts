@@ -178,7 +178,7 @@ const SKIN_SURFACE = /* glsl */ `
   float good = hsat(uAlign), cruel = hsat(-uAlign);
   float fine = 1.0 - smoothstep(0.0008, 0.004, fwRest);
   // albedo: warm, alive skin; ashen and cold for a cruel god
-  vec3 skin = mix(vec3(0.58, 0.40, 0.31), vec3(0.66, 0.47, 0.33), good);
+  vec3 skin = mix(vec3(0.47, 0.31, 0.23), vec3(0.53, 0.35, 0.24), good);
   skin = mix(skin, vec3(0.2, 0.2, 0.235), cruel * 0.85);
   float palmar = hsat(-vMark.y * 1.5);
   skin = mix(skin, skin * vec3(1.12, 1.04, 1.0), palmar * 0.7);
@@ -222,7 +222,7 @@ const SKIN_LIGHT = /* glsl */ `
     vec3 sssCol = mix(vec3(1.0, 0.38, 0.22), vec3(0.45, 0.4, 0.9), hsat(-uAlign));
     float ndl = dot(geometryNormal, uSunDirView);
     float wrap = max(0.0, (ndl + 0.55) / 1.55) - max(0.0, ndl);
-    reflectedLight.directDiffuse += sunCol * diffuseColor.rgb * sssCol * wrap * 0.5;
+    reflectedLight.directDiffuse += sunCol * diffuseColor.rgb * sssCol * wrap * 0.35;
     // light through the thin parts (fingers, the webs) when the sun is behind them
     float thin = vMark.w;
     float tr = pow(hsat(dot(geometryViewDir, -normalize(uSunDirView + geometryNormal * 0.35))), 3.0) * thin;
@@ -744,11 +744,11 @@ export class HandVisual {
       const surf = pv.fields.get('surface');
       if (surf) g = Math.max(g, pv.params.radius + pv.grid.sample(surf, u[0], u[1], u[2]) + pv.grid.sample(water, u[0], u[1], u[2]));
     }
-    // size: ~19 % of the view height at the hand's distance, bounded by the camera's altitude (a cursor near the
+    // size: ~22 % of the view height at the hand's distance, bounded by the camera's altitude (a cursor near the
     // horizon would otherwise make it a mountain)
     const cx = f.camBody.x - u[0] * g, cy = f.camBody.y - u[1] * g, cz = f.camBody.z - u[2] * g;
     const camD = Math.min(Math.sqrt(cx * cx + cy * cy + cz * cz), altCam * 3.5 + 40);
-    const Lw = Math.max(2.2, Math.min(6000, camD * 0.19));
+    const Lw = Math.max(2.2, Math.min(6000, camD * 0.25));
     this.scale = this.placed ? this.scale + (Lw - this.scale) * Math.min(1, dt * 4) : Lw;
     const L = this.scale;
     // how high it hovers

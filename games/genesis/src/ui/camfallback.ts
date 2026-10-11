@@ -136,7 +136,7 @@ export class DollyDriver {
     this.center = [center[0] / l, center[1] / l, center[2] / l];
     this.planet = planet;
     this.radius = Math.max(25, radius);
-    this.base = Math.max(150, Math.min(900, this.radius * 2.4 + 110));
+    this.base = Math.max(130, Math.min(800, this.radius * 1.9 + 80));
     this.t = 0;
     this.h0 = orbit.planet === planet ? orbit.heading : 0;
     this.active = true;

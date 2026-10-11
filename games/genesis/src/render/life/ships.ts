@@ -865,10 +865,12 @@ export class ShipLayer {
     a.pose(time, ref.uniforms.uSunDirView ? (ref.uniforms.uSunDirView.value as Vector3) : null);
     // its light on the ground and the people (kind: gold; feared: ember red)
     const good = Math.max(0, Math.min(1, s.alignment * 0.5 + 0.5));
-    const I = 2.2e4;
+    // (about the sun's own light on the ground at its feet, falling off over some twenty metres: a pool of light by
+    // day, a lantern among the houses by night)
+    const I = 300;
     const c = good > 0.5 ? [1, 0.82 + 0.1 * (1 - good), 0.55 + 0.25 * (1 - good)] : [1, 0.25 + 0.5 * good, 0.12 + 0.6 * good];
     _v3.copy(s.up).multiplyScalar(1.4).add(s.pos);
-    this.fx.light(s.planet, this.ctx(ref), _v3.x, _v3.y, _v3.z, 26, c[0] * I, c[1] * I, c[2] * I);
+    this.fx.light(s.planet, this.ctx(ref), _v3.x, _v3.y, _v3.z, 22, c[0] * I, c[1] * I, c[2] * I);
   }
 
   /** wind for the smoke (the sim's wind field near the pad, or a light easterly) */

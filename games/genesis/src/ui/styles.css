@@ -363,8 +363,10 @@ body[data-cvd='monochrome'] .gn-toast { --gn-tc: var(--gn-ivory-dim) !important;
 }
 .gn-insp.gn-insp-wide { width: 420px; }
 @keyframes gnInspIn { from { opacity: 0; translate: 10px 0; } to { opacity: 1; translate: 0 0; } }
-.gn-insp-bar { display: flex; gap: 10px; align-items: flex-start; padding: 13px 14px 11px 16px; border-bottom: 1px solid var(--gn-line); }
-.gn-insp-head { flex: 1; min-width: 0; }
+.gn-insp-bar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: flex-start; padding: 13px 48px 11px 16px; border-bottom: 1px solid var(--gn-line); position: relative; }
+.gn-insp-head { flex: 1 1 190px; min-width: 0; }
+/* (the camera's doors — look, follow, cinematic, walk — go under the name when they would squeeze it) */
+.gn-insp-bar .gn-insp-close { position: absolute; top: 12px; right: 12px; }
 .gn-insp-kind { font: 600 11px var(--gn-sans); letter-spacing: .26em; text-transform: uppercase; color: var(--gn-gold); }
 .gn-insp-name { font-family: var(--gn-serif); font-size: 26px; line-height: 1.1; font-weight: 600; color: var(--gn-gold-hi); margin-top: 3px; overflow-wrap: anywhere; }
 .gn-insp-sub { font-size: 13px; color: var(--gn-ivory-dim); margin-top: 3px; letter-spacing: .03em; }
@@ -531,7 +533,8 @@ button.gn-chron-e:hover { background: rgba(255, 255, 255, .04); }
 .gn-saves-list { display: flex; flex-direction: column; gap: 6px; }
 .gn-save { display: grid; grid-template-columns: 96px 1fr auto; gap: 12px; align-items: center; padding: 6px; border: 1px solid var(--gn-line); border-radius: 10px; background: rgba(255, 255, 255, .02); }
 .gn-save-img { width: 96px; height: 54px; object-fit: cover; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--gn-line); }
-.gn-save-noimg { display: grid; place-items: center; background: rgba(0, 0, 0, .3); color: var(--gn-ivory-faint); padding: 14px; box-sizing: border-box; }
+.gn-save-noimg { display: grid; place-items: center; background: rgba(0, 0, 0, .3); color: var(--gn-ivory-faint); padding: 0; box-sizing: border-box; }
+.gn-save-noimg svg { width: 24px; height: 24px; }
 .gn-save-name { font: 600 16px var(--gn-serif); color: var(--gn-gold-hi); }
 .gn-save-sub { font: 500 13px var(--gn-sans); color: var(--gn-ivory-dim); }
 .gn-save-acts { display: flex; gap: 4px; }
@@ -699,6 +702,7 @@ body[data-hand='aim'] #game { cursor: crosshair; }
 .gn-open-title { font: 500 clamp(44px, 7vw, 120px) var(--gn-serif); letter-spacing: .42em; padding-left: .42em; color: var(--gn-gold-hi); opacity: .92; animation: gnOpenIn 2.4s ease both;
   transition: text-shadow 1.2s ease, letter-spacing 2s ease; }
 .gn-open-sub { font: italic 500 clamp(16px, 1.4vw, 24px) var(--gn-serif); color: var(--gn-ivory); opacity: 0; animation: gnOpenIn 2.4s ease .9s both; }
+.gn-open-veil[hidden] { display: none; }
 .gn-open-veil.gn-lit { background: rgba(0, 0, 0, .55); }
 .gn-open-veil.gn-lit .gn-open-title { text-shadow: 0 0 60px rgba(255, 236, 190, .65), 0 0 12px rgba(255, 244, 220, .5); letter-spacing: .5em; }
 .gn-open-touch { position: absolute; bottom: 12vh; font: 600 11px var(--gn-sans); letter-spacing: .34em; text-transform: uppercase; color: var(--gn-ivory-faint); opacity: 0; transition: opacity 1.4s ease; }
@@ -739,6 +743,11 @@ body.gn-reduce-motion .gn-whisper, body.gn-reduce-motion .gn-open-title, body.gn
 .gn-nw-name { font: 600 20px/1.1 var(--gn-serif); color: var(--gn-gold-hi); letter-spacing: .02em; }
 .gn-nw-ct small { font: 500 13px/1.4 var(--gn-sans); color: var(--gn-ivory-dim); }
 .gn-nw-load { border-style: dashed; }
+.gn-nw-cards.gn-compact { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 6px; }
+.gn-nw-cards.gn-compact .gn-nw-card { padding: 8px 10px; grid-template-columns: 22px 1fr; gap: 8px; align-items: center; }
+.gn-nw-cards.gn-compact .gn-nw-ic { width: 20px; height: 20px; margin: 0; }
+.gn-nw-cards.gn-compact .gn-nw-name { font-size: 16px; }
+.gn-nw-cards.gn-compact small { display: none; }
 .gn-nw-custom { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--gn-line-gold); border-radius: 12px; background: rgba(217, 184, 120, .04); display: flex; flex-direction: column; gap: 8px; }
 .gn-nw-custom[hidden] { display: none; }
 .gn-nw-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

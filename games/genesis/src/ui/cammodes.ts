@@ -55,7 +55,11 @@ export class CameraUi {
     this.menu.addEventListener('keydown', (e) => this.menuKey(e));
     this.layer.append(...this.bars, this.title, this.chip, this.cross, this.menu);
     parent.appendChild(this.layer);
-    document.addEventListener('pointerdown', (e) => { if (!this.menu.hidden && !this.menu.contains(e.target as Node)) this.closeMenu(); }, true);
+    // a press elsewhere closes the menu (the dock's own Camera door toggles it instead)
+    document.addEventListener('pointerdown', (e) => {
+      const t = e.target as Element | null;
+      if (!this.menu.hidden && !this.menu.contains(t) && !t?.closest?.('.gn-dock-b[aria-label="Camera"]')) this.closeMenu();
+    }, true);
   }
 
   get menuOpen(): boolean { return !this.menu.hidden; }

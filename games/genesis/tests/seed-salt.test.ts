@@ -1,7 +1,12 @@
 // GENESIS — the seed reaches the peoples (CONTRACT.md §6.1, §8): ids are handed out alike in every world (the first
 // band is settlement 1, its people agents 1..n, whatever the seed), so a roll keyed on ids and ticks alone repeats
 // the same people in every world — the same ages, sexes, traits and skills, the same deaths of old age on the same
-// days. Every such roll is salted with the planet seed: two seeds give two peoples, one seed gives the same one again.
+// days. The rolls that make a people and end its lives of age are salted with the planet seed (lifecycle.ts worldSalt:
+// a founding band, a newborn, a promoted cohort member — age, sex, caste, traits, skills, knowledge — births, old age,
+// sickness): two seeds give two peoples, one seed gives the same one again. (Not every roll keyed on ids and ticks is:
+// buildings, culture, war, crafting and the space code's births and landings aboard still repeat from world to world.)
+// What the dice draw is who is who, not the band's shape: a founding band has as many children, elders and grown women
+// and men on every seed (settlement.ts createBand).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Sim } from '../src/sim/sim.ts';
@@ -10,6 +15,8 @@ import { AgentFlag } from '../src/sim/types.ts';
 import * as settlement from '../src/sim/people/settlement.ts';
 import { cellPos, distM } from '../src/sim/people/world.ts';
 import { NS, NT } from '../src/sim/people/defs.ts';
+import { worldSalt } from '../src/sim/people/lifecycle.ts';
+import { hashFloat } from '../src/sim/core/rng.ts';
 import type { Settlement } from '../src/sim/people/state.ts';
 import { world, people, ctx, membersOf, must } from './helpers/peoples.ts';
 
@@ -75,22 +82,43 @@ test('a founding band differs by seed: ages, sexes, traits, skills and where eac
   assert.ok(moved >= n * 0.75, `${moved} of ${n} stand at another distance from the centre`);
 });
 
-test('a band beyond the cap: its cohort\'s make-up differs by seed, and keeps a living band\'s shape', () => {
+test('a founding band has a living band\'s shape on every seed: the seed draws who is who, not how many of each', () => {
+  // (rolled member by member, seed 14's band of 24 came with 2 grown women and 6 elders, seed 4's with 11 women and 1
+  // elder: a world's first days were a lottery on its band)
+  const shape = (sim: Sim, st: Settlement) => {
+    const A = ctx(sim).A, ms = membersOf(sim, st);
+    const n = [0, 0, 0, 0]; // children, grown women, grown men, elders
+    for (const s of ms) n[A.flags[s] & AgentFlag.child ? 0 : A.flags[s] & AgentFlag.elder ? 3 : A.flags[s] & AgentFlag.female ? 1 : 2]++;
+    const couples = ms.filter((s) => A.flags[s] & AgentFlag.female && A.partner[s]).length;
+    const kids = ms.filter((s) => A.flags[s] & AgentFlag.child).map((s) => A.id[s]);
+    return { n, couples, kids };
+  };
+  const who = new Set<string>();
+  for (const seed of [SEED_A, SEED_B, 4, 14]) {
+    const sim = fresh(seed);
+    const { n, couples, kids } = shape(sim, people(sim, 'plains-folk', 24));
+    // 24: 5 children (22 %), 2 elders (10 %), 17 grown, 8 or 9 of them women; 6 couples (40 % of the grown)
+    assert.equal(n[0], 5, `seed ${seed}: ${n[0]} children`);
+    assert.equal(n[3], 2, `seed ${seed}: ${n[3]} elders`);
+    assert.ok(n[1] + n[2] === 17 && Math.abs(n[1] - n[2]) === 1, `seed ${seed}: ${n[1]} grown women, ${n[2]} grown men`);
+    assert.equal(couples, 6, `seed ${seed}: ${couples} couples`);
+    who.add(kids.join());
+  }
+  assert.ok(who.size >= 3, `the children are other members on each seed: ${[...who].join(' | ')}`);
+  // beyond the cap the cohort holds the rest of the same shape (who stands as an individual is the seed's draw)
   const split = (seed: number) => {
     const sim = fresh(seed);
     sim.u.settings.maxAgents = 4;
-    return people(sim, 'plains-folk', 200).cohort.n.slice();
+    const st = people(sim, 'plains-folk', 200);
+    const { n } = shape(sim, st), c = st.cohort.n;
+    assert.equal(n[0] + n[1] + n[2] + n[3], 4, 'four individuals');
+    return { all: [c[0] + n[0], c[1] + n[1] + n[2], c[2] + n[3]], cohort: c.slice() };
   };
   const a = split(SEED_A), b = split(SEED_B);
-  assert.deepEqual(split(SEED_A), a);
-  assert.equal(a[0] + a[1] + a[2], b[0] + b[1] + b[2]);
-  assert.notDeepEqual(a, b, `children / adults / elders ${a} vs ${b}`);
-  // the salt changes the draw, not its law: ~22 % children, ~68 % adults, ~10 % elders (196 draws a seed; ±3.3 sd)
-  for (const n of [a, b]) {
-    const all = n[0] + n[1] + n[2];
-    assert.ok(n[0] / all > 0.12 && n[0] / all < 0.32, `children ${n[0]} of ${all}`);
-    assert.ok(n[2] / all > 0.03 && n[2] / all < 0.18, `elders ${n[2]} of ${all}`);
-  }
+  assert.deepEqual(split(SEED_A), a, 'one seed, one band');
+  // 200: 44 children, 20 elders, 136 grown — on every seed
+  assert.deepEqual(a.all, [44, 136, 20]);
+  assert.deepEqual(b.all, [44, 136, 20]);
 });
 
 test('old age: who dies of it and when differs by seed; one seed repeats it', () => {
@@ -125,26 +153,30 @@ test('old age: who dies of it and when differs by seed; one seed repeats it', ()
   assert.ok(n >= 6 && n <= 30, `deaths of old age over two seeds: ${n}`);
 });
 
-test('ages and old-age rolls do not share a salt: dying of age says nothing of how old one came into the world', () => {
+test('ages and old-age rolls do not share a salt: dying of age says nothing of the age one rolled coming into the world', () => {
   // 24 bands of one: band k is settlement k and its member is agent k. Under one shared salt the old-age roll of agent
-  // k at tick i WAS the age roll of member i of band k — at tick 0 each agent died of age exactly when it had come into
-  // the world a child (both read the same roll below 0.22).
+  // k at tick i WAS the age roll of member i of band k (settlement.ts createBand: hashFloat(band, member, its age dice))
+  // — at tick 0 each agent died of age exactly when its age roll had come out below 0.22, a child's roll.
   const sim = fresh(SEED_A);
   const x = ctx(sim), A = x.A;
   const sts: Settlement[] = [];
   for (let k = 0; k < 24; k++) sts.push(people(sim, 'plains-folk', 1));
+  const def = x.info[sts[0].species].def;
+  const ageDice = worldSalt(x, 0xa6e);
   const kids = new Set<number>();
   for (const st of sts) {
     const [s] = membersOf(sim, st);
     assert.equal(A.id[s], st.id, 'agent k leads band k');
-    if (A.flags[s] & AgentFlag.child) kids.add(A.id[s]);
+    // (a band of one is a grown one, whatever it rolled: the shape goes by count)
+    assert.ok(!(A.flags[s] & (AgentFlag.child | AgentFlag.elder)), 'a band of one is a grown one');
+    if (hashFloat(st.id, 0, ageDice) < 0.22) kids.add(A.id[s]);
   }
-  assert.ok(kids.size >= 1 && kids.size <= 23, `${kids.size} born children`);
+  assert.ok(kids.size >= 1 && kids.size <= 23, `${kids.size} rolled a child's age`);
   // all of them far past their span (hazard 1 a year) and a window of 0.22 of a year: each dies with chance 0.22
   assert.equal(x.tick, 0);
   const oldAge = settlement.oldAge;
   assert.equal(typeof oldAge, 'function', 'settlement.ts exports oldAge');
-  const span = x.info[sts[0].species].def.lifespan;
+  const span = def.lifespan;
   const dead = new Set<number>();
   for (const st of sts) {
     const [s] = membersOf(sim, st);
@@ -154,7 +186,29 @@ test('ages and old-age rolls do not share a salt: dying of age says nothing of h
     if (A.slotOf(id) < 0) dead.add(id);
   }
   assert.ok(dead.size >= 1, 'some die');
-  assert.notDeepEqual([...dead].sort((p, q) => p - q), [...kids].sort((p, q) => p - q), 'the dead are not exactly those born young');
+  assert.notDeepEqual([...dead].sort((p, q) => p - q), [...kids].sort((p, q) => p - q), 'the dead are not exactly those who rolled young');
+});
+
+test('a wandering band grows old too: old age comes for its people before they settle', () => {
+  // (a band's hourly step used to end with its walk: a band wandering for weeks lost no one to age, whatever the dice)
+  let asBand = 0, died = 0;
+  for (const seed of [1, 2]) {
+    const sim = world(16, seed);
+    const st = people(sim, 'plains-folk', 24);
+    const x = ctx(sim), A = x.A;
+    const span = x.info[st.species].def.lifespan;
+    for (const s of membersOf(sim, st)) A.birth[s] = x.tick - Math.round(3 * span * x.year);
+    sim.drainEvents();
+    for (let h = 0; h < 48 && st.band; h++) {
+      sim.step(60);
+      asBand++;
+      for (const e of sim.drainEvents()) if (e.t === 'death' && e.data?.cause === 'old age') died++;
+    }
+  }
+  // (on these two worlds the band finds no site to its liking in two days)
+  assert.ok(asBand >= 72, `${asBand} hours as a band over two seeds`);
+  // everyone at the hazard's cap (1 a year): 24 × (1 − (1 − 60 / year)^48) ≈ 3.7 deaths a seed while wandering
+  assert.ok(died >= 3, `${died} deaths of old age while wandering, over ${asBand} band-hours`);
 });
 
 test('an established people: who knows which craft differs by seed; promoted cohort members differ by seed', () => {

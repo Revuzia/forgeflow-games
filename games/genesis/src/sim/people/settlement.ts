@@ -321,17 +321,30 @@ export function createBand(x: PCtx, species: number, cell: number, n: number, op
   // beyond the planet's individual cap the rest live as the settlement's cohort (a core of four is always individual)
   const room = Math.max(0, x.u.settings.maxAgents - x.A.count);
   const individuals = Math.min(n, Math.max(room, Math.min(n, 4)));
-  // the ages (and the cohort's age bands) and where each stands are the world seed's draw: band ids repeat from world
-  // to world
-  const ageDice = worldSalt(x, 0xa6e), angleDice = worldSalt(x, 0xa6f), distDice = worldSalt(x, 0xa70);
+  // a living band has a living band's shape, by count: 22 % children, 10 % elders, the rest grown, each age band half
+  // women. The world seed draws who is which, how old and where each stands (band ids repeat from world to world —
+  // lifecycle.ts worldSalt), not the shape: rolled member by member, a band of 24 came with anything from 2 grown women
+  // and 6 elders to 11 women and 1 elder, and a world's first days were a lottery on it. Who is a child or an elder goes
+  // by the rank of each member's age roll (the lowest are the children, the highest the elders), so a member keeps the
+  // age it rolled unless the count moved it into the next age band; there it takes a fresh age.
+  const ageDice = worldSalt(x, 0xa6e), angleDice = worldSalt(x, 0xa6f), distDice = worldSalt(x, 0xa70), movedDice = worldSalt(x, 0xa71);
+  const roll: number[] = [];
+  for (let i = 0; i < n; i++) roll.push(hashFloat(st.id, i, ageDice));
+  const nKids = Math.round(0.22 * n), nElders = Math.min(n - nKids, Math.round(0.1 * n));
+  const ageBand = new Array<number>(n);
+  Array.from({ length: n }, (_, i) => i).sort((p, q) => roll[p] - roll[q] || p - q)
+    .forEach((i, rank) => { ageBand[i] = rank < nKids ? 0 : rank >= n - nElders ? 2 : 1; });
   for (let i = 0; i < n; i++) {
-    const r = hashFloat(st.id, i, ageDice);
-    // a living band: mostly young adults, some children and elders
+    const b = ageBand[i];
     if (i >= individuals) {
-      st.cohort.n[r < 0.22 ? 0 : r < 0.9 ? 1 : 2] += 1;
+      st.cohort.n[b] += 1;
       continue;
     }
-    const age = r < 0.22 ? r / 0.22 * def.maturity * 0.95 : r < 0.9 ? def.maturity + (r - 0.22) / 0.68 * (def.elder - def.maturity) : def.elder + (r - 0.9) * 10 * Math.max(1, def.lifespan - def.elder) * 0.5;
+    const r = roll[i];
+    const u = hashFloat(st.id, i, movedDice);
+    const age = (r < 0.22 ? 0 : r < 0.9 ? 1 : 2) === b
+      ? (r < 0.22 ? r / 0.22 * def.maturity * 0.95 : r < 0.9 ? def.maturity + (r - 0.22) / 0.68 * (def.elder - def.maturity) : def.elder + (r - 0.9) * 10 * Math.max(1, def.lifespan - def.elder) * 0.5)
+      : b === 0 ? u * def.maturity * 0.95 : b === 1 ? def.maturity + u * (def.elder - def.maturity) : def.elder + u * Math.max(1, def.lifespan - def.elder) * 0.5;
     const a = hashFloat(st.id, i, angleDice) * Math.PI * 2;
     const d = 3 + 18 * Math.sqrt(hashFloat(st.id, i, distDice));
     const pos = [0, 0, 0];
@@ -350,9 +363,21 @@ export function createBand(x: PCtx, species: number, cell: number, n: number, op
     const hiveQueen = def.hive && i === 0 ? def.hive.castes.indexOf(def.hive.queen) : undefined;
     spawnAgent(x, st, { ageYears: age, pos, knowledge: opts.knowledge, skill: opts.skill ?? 0.3, caste: hiveQueen });
   }
-  // couples among the adults
+  // half of each age band are women (the hive's castes are its sexes): those whose sex roll (lifecycle.ts spawnAgent)
+  // came out lowest, so only the members nearest the even line change
   const A = x.A;
   const members = (x.ps.members.get(st.id) ?? []).slice();
+  if (!def.hive) {
+    const sexDice = worldSalt(x, 0x5e8), oddDice = worldSalt(x, 0x5e9);
+    for (let b = 0; b < 3; b++) {
+      const flag = b === 0 ? AgentFlag.child : b === 2 ? AgentFlag.elder : 0;
+      const of = members.filter((m) => (A.flags[m] & (AgentFlag.child | AgentFlag.elder)) === flag)
+        .sort((p, q) => hashFloat(A.id[p], sexDice) - hashFloat(A.id[q], sexDice) || A.id[p] - A.id[q]);
+      const women = (of.length >> 1) + (of.length & 1 && hashFloat(st.id, b, oddDice) < 0.5 ? 1 : 0);
+      of.forEach((m, j) => { A.flags[m] = j < women ? A.flags[m] | AgentFlag.female : A.flags[m] & ~AgentFlag.female; });
+    }
+  }
+  // couples among the adults
   if (!def.hive) {
     const adults = members.filter((m) => !(A.flags[m] & (AgentFlag.child | AgentFlag.elder)));
     const women = adults.filter((m) => A.flags[m] & AgentFlag.female), men = adults.filter((m) => !(A.flags[m] & AgentFlag.female));
@@ -386,7 +411,9 @@ export function settlementStep(x: PCtx, st: Settlement): void {
   if (pop <= 0.5) { fall(x, st, st.stats.starved > st.stats.deaths * 0.4 ? 'starvation' : 'emptied'); return; }
   st.stats.peak = Math.max(st.stats.peak, Math.round(pop));
   const hour = Math.floor(x.tick / 60);
-  if (st.band) { bandStep(x, st, hour); return; }
+  // a wandering band grows old as it walks (every hour, a settlement or a band, rolls old age once); births and
+  // sickness wait for a home (their rules read the settlement's store, beds, hearths and land)
+  if (st.band) { bandStep(x, st, hour); oldAge(x, st, H); return; }
   // SIM perf push 2 — time-lapse (perf/lapse.ts): at 100x / 1000x the re-planning below (caches, roles, work lists) runs
   // 2 / 3 times less often; everything that integrates time (hearths, births, age, sickness, cohorts) covers its hours.
   // (push 3: a periodic task runs when its hour falls inside the H hours this step stands for — dueIn; at H = 1 the

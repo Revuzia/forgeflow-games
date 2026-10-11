@@ -236,7 +236,7 @@ export class GodFx {
       sunTint: this.sunWant, aurora: this.auroraBoost, q: 1, thunder: (p, k) => this.thunder(p, k), sunDirBody: new Vector3(), sunE: new Vector3(),
       landed: (e) => M.disasters.onEvent(e, this.ctx!),
     });
-    ctx.pv = pv; ctx.now = this.clock; ctx.dt = Math.max(fxDt, 1e-4); ctx.camBody = vis.camBody; ctx.q = qk;
+    ctx.pv = pv; ctx.now = this.clock; ctx.dt = Math.max(fxDt, 1e-4); ctx.camBody = vis.camBody; ctx.q = qk; ctx.camFwd = this.camFwd;
     ctx.sunDirBody.copy(vis.uniforms.uSunDirBody.value as Vector3);
     ctx.sunE.copy((vis.atmo.uniforms as unknown as { uSunE: { value: Vector3 } }).uSunE.value);
     M.debris.gU.value = pv.params.gravity || 9.8;
@@ -285,7 +285,7 @@ export class GodFx {
     M.aurora.update(pv.params.radius, vis.atmo.thickness, pv.params.magnetism ?? 0, view.star.activity ?? 0, this.auroraBoost.boost + wAur * 2.5, vis.atmo.has, ctx.dt);
     // ── the eclipse darkens the land; the sun's tint eases ──
     if (S.eclipse > 0) this.sunWant.multiplyScalar(1 - 0.94 * Math.pow(S.eclipse, 1.6));
-    this.sunTint.lerp(this.sunWant, Math.min(1, dt * 2 + 0.02));
+    this.sunTint.lerp(this.sunWant, Math.min(1, ctx.dt * 2 + 0.02));
     // ── the brush ──
     this.brushDecal(pv);
     M.vfx.update(this.clock, viewToBody(vis), cam.projectionMatrixInverse, vis.uniforms.uSunDirView.value as Vector3);
@@ -383,7 +383,7 @@ export class GodFx {
     const S = this.screenState;
     if (S.eclipse > 0 && this.view) {
       const pv = vis.pv;
-      const sd = _v.set(pv.sunDir[0], pv.sunDir[1], pv.sunDir[2]).applyMatrix4(cam.matrixWorldInverse);
+      const sd = _v.set(pv.sunDir[0], pv.sunDir[1], pv.sunDir[2]).transformDirection(cam.matrixWorldInverse);
       if (sd.z < 0) {
         sd.applyMatrix4(cam.projectionMatrix);
         S.sunUV.set(sd.x * 0.5 + 0.5, sd.y * 0.5 + 0.5);

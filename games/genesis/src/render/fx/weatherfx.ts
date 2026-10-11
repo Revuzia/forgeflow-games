@@ -9,6 +9,7 @@
 //   fog            height fog by the weather's fog (a fog bank, a blizzard's white-out, a sandstorm, ash)
 //   tints          the weather's sky tint over the sky (a blood-red sky, a sandstorm's ochre, a no-air black)
 //   lightning      strikes inside thunderstorm cells near the camera, with their thunder for the audio
+//   lens           rain beading and running on the lens near the ground (ScreenFx draws it)
 // Up high (the camera above the cloud deck) nothing falls on the lens: precipitation fades out above ~700 m.
 
 import { Vector3 } from 'three';
@@ -32,9 +33,9 @@ const DEFS = new Map<string, WDef>(
 /** what falls, by the sim's precipType: 0 none, 1 rain, 2 snow, 3 hail, 4 ash, 5 acid, 6 blood, 7 sand */
 const FALL: Record<number, { sys: number; speed: number; size: number; col: [number, number, number]; splash: boolean }> = {
   1: { sys: SYS.precip, speed: 9.5, size: 0.012, col: [0.7, 0.74, 0.8], splash: true },
-  2: { sys: SYS.snowfall, speed: 1.2, size: 0.035, col: [0.95, 0.96, 1.0], splash: false },
+  2: { sys: SYS.snowfall, speed: 1.2, size: 0.06, col: [0.95, 0.96, 1.0], splash: false },
   3: { sys: SYS.snowfall, speed: 13, size: 0.03, col: [0.9, 0.92, 0.95], splash: true },
-  4: { sys: SYS.snowfall, speed: 0.9, size: 0.04, col: [0.32, 0.31, 0.3], splash: false },
+  4: { sys: SYS.snowfall, speed: 0.9, size: 0.06, col: [0.32, 0.31, 0.3], splash: false },
   5: { sys: SYS.precip, speed: 9, size: 0.012, col: [0.62, 0.78, 0.32], splash: true },
   6: { sys: SYS.precip, speed: 9, size: 0.013, col: [0.62, 0.08, 0.05], splash: true },
   7: { sys: SYS.precip, speed: 1.5, size: 0.02, col: [0.62, 0.48, 0.32], splash: false },
@@ -50,6 +51,8 @@ export class WeatherFx {
   /** the local weather's strengths, eased */
   private fogK = 0;
   private tint = new Vector3(1, 1, 1);
+  /** rain on the lens, eased */
+  private lens = 0;
   local = { precip: 0, type: 0, fog: 0, lightning: 0 };
 
   update(ctx: FxCtx): void {
@@ -64,7 +67,7 @@ export class WeatherFx {
     let precip = pf ? Math.max(0, pv.grid.sample(pf, u.x, u.y, u.z)) : 0;
     let type = pt ? Math.round(pt[pv.grid.nearestCell(u.x, u.y, u.z)]) : 0;
     // ── the weather systems near the camera (and the planet-wide one) ──
-    let fog = 0, light = 0, wsum = 0;
+    let fog = 0, light = 0, wsum = 0, gust = 0;
     const tint = _w.set(0, 0, 0);
     let tintW = 0;
     const consider = (kind: string, w: number) => {
@@ -72,6 +75,7 @@ export class WeatherFx {
       if (!d || w <= 0) return;
       fog = Math.max(fog, d.fog * w);
       light = Math.max(light, d.lightning * w);
+      gust = Math.max(gust, d.wind * w);
       if (d.tint) { tint.x += d.tint[0] * w; tint.y += d.tint[1] * w; tint.z += d.tint[2] * w; tintW += w; }
       if (d.airless) { tint.set(0.03, 0.03, 0.04).multiplyScalar(w); tintW = w; }
       wsum += w;
@@ -94,15 +98,25 @@ export class WeatherFx {
     const f = FALL[type];
     const rate = f ? clamp01(precip / (type === 2 ? 4 : type === 4 ? 3 : 8)) * low : 0;
     if (f && rate > 0.01 && pv.params.atmosphere.pressure > 0.02) {
-      if (this.kind !== type) { this.stop(ctx); this.kind = type; }
+      // a driven snow (a blizzard) streaks along the wind; a quiet one tumbles (a different system: its own emitter)
+      const driven = type === 2 && gust > 0.6;
+      const key = driven ? -2 : type;
+      if (this.kind !== key) { this.stop(ctx); this.kind = key; }
       const wx = pv.fields.get('windX'), wy = pv.fields.get('windY'), wz = pv.fields.get('windZ');
       const wind = wx && wy && wz ? _p.set(pv.grid.sample(wx, u.x, u.y, u.z), pv.grid.sample(wy, u.x, u.y, u.z), pv.grid.sample(wz, u.x, u.y, u.z)) : _p.set(0, 0, 0);
+      // a gale the fields do not carry (a painted blizzard, a sandstorm): the system's own wind, along the field's
+      // direction if it has one, else from the west
+      const galeV = gust * 10;
+      if (wind.length() < galeV) {
+        if (wind.lengthSq() < 1e-6) { const ex = u.z, ez = -u.x, el = Math.hypot(ex, ez) || 1; wind.set(ex / el, 0, ez / el); }
+        wind.normalize().multiplyScalar(galeV);
+      }
       const windK = type === 7 ? 3.5 : type === 2 ? 1.2 : 0.6;
-      const B = type === 2 || type === 4 ? 22 : 30;
-      const count = Math.round((type === 2 ? 2600 : type === 7 ? 2000 : 2200) * ctx.q * (0.35 + 0.65 * rate));
+      const B = type === 2 || type === 4 ? 13 : 30;
+      const count = Math.round((type === 2 ? 4200 : type === 4 ? 3000 : type === 7 ? 2600 : 2200) * ctx.q * (0.35 + 0.65 * rate));
       const def = {
-        sys: f.sys, x: cam.x, y: cam.y, z: cam.z, ax: wind.x * windK, ay: wind.y * windK, az: wind.z * windK,
-        size: f.size * (type === 1 && precip > 15 ? 1.5 : 1), life: 10, count, p0: B, p1: f.speed * (type === 1 ? 0.8 + 0.4 * rate : 1),
+        sys: driven ? SYS.precip : f.sys, x: cam.x, y: cam.y, z: cam.z, ax: wind.x * windK, ay: wind.y * windK, az: wind.z * windK,
+        size: driven ? 0.03 : f.size * (type === 1 && precip > 15 ? 1.5 : 1), life: 10, count, p0: B, p1: driven ? 2.2 : f.speed * (type === 1 ? 0.8 + 0.4 * rate : 1),
         r: f.col[0], g: f.col[1], b: f.col[2], power: Math.min(1, 0.25 + rate),
       };
       if (!this.fall || !ctx.vfx.alive(this.fall)) this.fall = ctx.vfx.emit(def, ctx.now);
@@ -113,6 +127,12 @@ export class WeatherFx {
         else ctx.vfx.set(this.splash, sd);
       } else if (this.splash) { ctx.vfx.stop(this.splash, ctx.now); this.splash = 0; }
     } else this.stop(ctx);
+    // ── rain on the lens: near the ground, more when looking up into it; it dries slowly when the rain stops ──
+    const rainy = type === 1 || type === 5 || type === 6 ? rate : 0;
+    const facing = ctx.camFwd ? clamp01(0.45 + ctx.camFwd.dot(u) * 1.4) : 0.5;
+    const wantLens = rainy * (1 - smooth(25, 110, alt)) * facing;
+    this.lens += (wantLens - this.lens) * Math.min(1, ctx.dt * (wantLens > this.lens ? 0.3 : 0.1));
+    ctx.screen.lens = this.lens;
     // ── fog and tint (eased) ──
     const wantFog = Math.max(fog, type === 7 ? 0.6 * clamp01(precip / 6) : 0, type === 2 && precip > 6 ? 0.5 : 0) * low;
     this.fogK += (wantFog - this.fogK) * Math.min(1, ctx.dt * 0.8 + 0.02);
@@ -122,7 +142,7 @@ export class WeatherFx {
       const base = type === 7 ? [0.62, 0.5, 0.36] : type === 4 ? [0.4, 0.38, 0.36] : [0.62, 0.66, 0.72];
       const lum = (ctx.sunE.y / 8) * (0.55 * day) + 0.004;
       ctx.screen.fogCol.set(base[0] * lum, base[1] * lum, base[2] * lum);
-      ctx.screen.fogDensity = Math.max(ctx.screen.fogDensity, this.fogK * 0.011);
+      ctx.screen.fogDensity = Math.max(ctx.screen.fogDensity, this.fogK * 0.011 * (1 + gust * 1.2));
       ctx.screen.fogScale = 140;
     }
     const tw = Math.min(1, tintW) * low * 0.85;

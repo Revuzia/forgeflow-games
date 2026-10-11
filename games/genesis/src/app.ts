@@ -1558,15 +1558,20 @@ export class App implements UiHost {
     try { hdr = readSaveHeader(bytes); } catch (e) { return { ok: false, msg: e instanceof Error ? e.message : String(e) }; }
     const have = new Map(this.packs.map((p) => [p.id, p]));
     const missing: PackRef[] = [];
+    // every pack it needs is found first (nothing is sent to the world when one is missing)
+    const send: ContentPack[] = [];
     for (const id of neededPacks(hdr)) {
       if (have.has(id)) continue;
       const pk = carried.find((p) => p.id === id) ?? (await this.library.get(id).catch(() => undefined))?.json;
-      if (!pk) { missing.push(hdr.packs.find((p) => p.id === id) ?? { id, name: id, version: '' }); continue; }
-      const r = await this.sim.mod(pk);
-      if (!r.ok && !r.deferred) return { ok: false, msg: `the content pack '${pk.name ?? id}' it needs was refused: ${r.msg ?? ''}` };
-      have.set(id, pk);
+      if (!pk) missing.push(hdr.packs.find((p) => p.id === id) ?? { id, name: id, version: '' });
+      else send.push(pk);
     }
     if (missing.length) return { ok: false, missing };
+    for (const pk of send) {
+      const r = await this.sim.mod(pk);
+      if (!r.ok && !r.deferred) return { ok: false, msg: `the content pack '${pk.name ?? pk.id}' it needs was refused: ${r.msg ?? ''}` };
+      have.set(pk.id, pk);
+    }
     const r = await this.sim.load(bytes);
     if (!r.ok) return { ok: false, msg: r.msg, reload: /made without the pack/i.test(r.msg ?? '') };
     // the world is the save's now
@@ -1793,17 +1798,54 @@ export class App implements UiHost {
     }
     const extra = spec as unknown as Record<string, unknown>;
     const num = (k: string): number | undefined => (typeof extra[k] === 'number' ? extra[k] as number : undefined);
+    let pitch = spec.pitch;
+    let hourDone = false;
+    // photo of another body in the sky: `lookPlanet` (a moon, a neighbour world) seen from `standOff` metres off the
+    // target place (bearing `yaw`), aimed at it — a falling moon filling the sky over the sea it heaps up
+    const lookPlanet = num('lookPlanet');
+    if (mode === 'photo' && lookPlanet !== undefined && pv) {
+      if (spec.hour != null) {
+        // the hour first: it turns the world under the sky, and the place under the body moves with it
+        await this.setLocalHour(spec.hour, lon);
+        hourDone = true;
+        await this.waitFrames(3);
+        if (ref && ref.kind !== 'ship') {
+          const b = this.entityBodyPos(this.sim.view.planet(planet) ?? pv, ref);
+          if (b) { const l = Math.hypot(b[0], b[1], b[2]); lat = (Math.asin(Math.max(-1, Math.min(1, b[1] / l))) * 180) / Math.PI; lon = (Math.atan2(b[0], b[2]) * 180) / Math.PI; }
+        }
+      }
+      const host = this.sim.view.planet(planet) ?? pv, body = this.sim.view.planet(lookPlanet);
+      if (body) {
+        const la = (lat * Math.PI) / 180, lo = (lon * Math.PI) / 180;
+        const d0: [number, number, number] = [Math.cos(la) * Math.sin(lo), Math.sin(la), Math.cos(la) * Math.cos(lo)];
+        const e: [number, number, number] = [0, 0, 0], n: [number, number, number] = [0, 0, 0];
+        tangentBasis(e, n, d0);
+        const R = host.params.radius, off = (num('standOff') ?? 0) / R, br = ((spec.yaw ?? 0) * Math.PI) / 180;
+        const st = [0, 1, 2].map((i) => d0[i] * Math.cos(off) + (n[i] * Math.cos(br) + e[i] * Math.sin(br)) * Math.sin(off));
+        const sl = Math.hypot(st[0], st[1], st[2]);
+        const up: [number, number, number] = [st[0] / sl, st[1] / sl, st[2] / sl];
+        lat = (Math.asin(up[1]) * 180) / Math.PI;
+        lon = (Math.atan2(up[0], up[2]) * 180) / Math.PI;
+        const rc = R + (spec.alt ?? 30) + Math.max(0, this.sim.view.groundRadius(host, up[0], up[1], up[2]) - R);
+        const mb = qRotateInv(host.quat, [body.center[0] - host.center[0], body.center[1] - host.center[1], body.center[2] - host.center[2]]);
+        const dv = [mb[0] - up[0] * rc, mb[1] - up[1] * rc, mb[2] - up[2] * rc];
+        const dl = Math.hypot(dv[0], dv[1], dv[2]) || 1;
+        tangentBasis(e, n, up);
+        heading = (Math.atan2(dv[0] * e[0] + dv[1] * e[1] + dv[2] * e[2], dv[0] * n[0] + dv[1] * n[1] + dv[2] * n[2]) * 180) / Math.PI;
+        pitch = (Math.asin(Math.max(-1, Math.min(1, (dv[0] * up[0] + dv[1] * up[1] + dv[2] * up[2]) / dl))) * 180) / Math.PI + (num('pitchBias') ?? 0);
+      }
+    }
     this.leaveModes(null);
     this.following = null;
     this.rig.modes.applySpec({
-      mode, planet, lat, lon, yaw: heading, pitch: spec.pitch, alt: spec.alt, dist: spec.dist, fov: spec.fov, target: ref, blend: spec.blend,
+      mode, planet, lat, lon, yaw: heading, pitch, alt: spec.alt, dist: spec.dist, fov: spec.fov, target: ref, blend: spec.blend,
       t: num('t'), radius: num('radius'), duration: num('duration'), focus: num('focus'), blur: num('blur'), exposure: num('exposure'), roll: num('roll'), alignment: num('alignment'),
     }, view);
     if (mode === 'photo') this.setUi(false);
     if ((spec.blend ?? 0) === 0) { this.rig.update(0, view, newInput()); this.renderer.cut(); }
     // (a frame or two so the renderer's primary world is the one framed: the hour is set there — a ship on another
     // world, a ship launched this tick that the follow camera finds on its first drawn frame)
-    if (spec.hour != null) {
+    if (spec.hour != null && !hourDone) {
       for (let i = 0; i < 3 && this.renderer.primaryId !== planet; i++) await this.waitFrames(1);
       await this.setLocalHour(spec.hour, lon);
     }

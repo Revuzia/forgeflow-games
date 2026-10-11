@@ -2,6 +2,114 @@
  "$comment": "GENESIS ships, launches, world events and cameras (render lane, phase 4b) on the lookdev world's fabricated missions and world events (src/client/lookdevspace.ts). Each params string is its own page (its own world). Run: node _harness/shots.mjs _harness/specs/ships.json --port=5199",
  "shots": [
   {
+   "name": "moon-falling",
+   "params": "source=lookdev&page=moon",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "commands": [
+    {
+     "k": "world.moon-fall",
+     "world": 0,
+     "progress": 0.97
+    }
+   ],
+   "wait": 2,
+   "camera": {
+    "mode": "orbit",
+    "target": {
+     "kind": "disaster",
+     "id": 7001
+    },
+    "dist": 14000,
+    "tilt": 45,
+    "hour": 12
+   },
+   "frames": 4,
+   "script": "const m = await import('/src/render/fx/worlds.ts'); return JSON.stringify(m.WORLD_FX.last.detail());"
+  },
+  {
+   "name": "moon-sky",
+   "params": "source=lookdev&page=moon",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "camera": {
+    "mode": "photo",
+    "target": {
+     "kind": "disaster",
+     "id": 7001
+    },
+    "lookPlanet": 1,
+    "standOff": 2600,
+    "yaw": 0,
+    "alt": 25,
+    "fov": 75,
+    "pitchBias": -14,
+    "hour": 13
+   },
+   "frames": 3
+  },
+  {
+   "name": "launch-t2",
+   "params": "source=lookdev&page=launch",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "commands": [
+    {
+     "k": "ship.launch",
+     "kind": "rocket",
+     "start": "pad",
+     "progress": 0.86,
+     "id": 1002
+    }
+   ],
+   "wait": 24,
+   "camera": {
+    "mode": "follow",
+    "target": {
+     "kind": "ship",
+     "id": 1002
+    },
+    "dist": 260,
+    "pitch": 6,
+    "yaw": 30,
+    "hour": 16.8
+   },
+   "frames": 4,
+   "script": "const m = await import('/src/render/fx/launch.ts'); return JSON.stringify(m.LAUNCH_FX.last.detail());"
+  },
+  {
+   "name": "launch-t8",
+   "params": "source=lookdev&page=launch",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "wait": 30,
+   "camera": {
+    "mode": "follow",
+    "target": {
+     "kind": "ship",
+     "id": 1002
+    },
+    "dist": 380,
+    "pitch": 32,
+    "yaw": 160,
+    "hour": 16.8
+   },
+   "frames": 4,
+   "script": "const m = await import('/src/render/fx/launch.ts'); return JSON.stringify(m.LAUNCH_FX.last.detail());"
+  },
+  {
    "name": "sailship-sea",
    "params": "source=lookdev",
    "size": [
@@ -61,59 +169,6 @@
    "frames": 4
   },
   {
-   "name": "launch-t2",
-   "params": "source=lookdev&page=launch",
-   "size": [
-    960,
-    540
-   ],
-   "canvasOnly": true,
-   "commands": [
-    {
-     "k": "ship.launch",
-     "kind": "rocket",
-     "start": "pad",
-     "progress": 0.86,
-     "id": 1002
-    }
-   ],
-   "wait": 24,
-   "camera": {
-    "mode": "follow",
-    "target": {
-     "kind": "ship",
-     "id": 1002
-    },
-    "dist": 260,
-    "pitch": 6,
-    "yaw": 30,
-    "hour": 16.8
-   },
-   "frames": 4
-  },
-  {
-   "name": "launch-t8",
-   "params": "source=lookdev&page=launch",
-   "size": [
-    960,
-    540
-   ],
-   "canvasOnly": true,
-   "wait": 30,
-   "camera": {
-    "mode": "follow",
-    "target": {
-     "kind": "ship",
-     "id": 1002
-    },
-    "dist": 380,
-    "pitch": 32,
-    "yaw": 160,
-    "hour": 16.8
-   },
-   "frames": 4
-  },
-  {
    "name": "orbit-insertion",
    "params": "source=lookdev&page=space",
    "size": [
@@ -139,31 +194,6 @@
     "dist": 90,
     "pitch": 10,
     "yaw": 150
-   },
-   "frames": 4
-  },
-  {
-   "name": "transfer-system",
-   "params": "source=lookdev&page=space",
-   "size": [
-    960,
-    540
-   ],
-   "canvasOnly": true,
-   "commands": [
-    {
-     "k": "ship.launch",
-     "kind": "rocket",
-     "start": "transfer",
-     "progress": 0.45,
-     "id": 1004,
-     "to": 2
-    }
-   ],
-   "camera": {
-    "mode": "system",
-    "pitch": 50,
-    "yaw": 20
    },
    "frames": 4
   },
@@ -199,39 +229,27 @@
    "frames": 4
   },
   {
-   "name": "walk-villagers",
-   "params": "source=lookdev&page=walk",
+   "name": "transfer-system",
+   "params": "source=lookdev&page=space",
    "size": [
     960,
     540
    ],
    "canvasOnly": true,
-   "camera": {
-    "mode": "walk",
-    "poi": "town",
-    "dist": 6,
-    "pitch": -10,
-    "hour": 10.5,
-    "alignment": 0.7
-   },
-   "frames": 4
-  },
-  {
-   "name": "photo-dof",
-   "params": "source=lookdev&page=walk",
-   "size": [
-    960,
-    540
+   "commands": [
+    {
+     "k": "ship.launch",
+     "kind": "rocket",
+     "start": "transfer",
+     "progress": 0.45,
+     "id": 1004,
+     "to": 2
+    }
    ],
-   "canvasOnly": true,
    "camera": {
-    "mode": "photo",
-    "poi": "town",
-    "alt": 3,
-    "pitch": -4,
-    "focus": 28,
-    "blur": 1,
-    "hour": 16.6
+    "mode": "system",
+    "pitch": 50,
+    "yaw": 20
    },
    "frames": 4
   },
@@ -258,34 +276,6 @@
     "dist": 15000,
     "tilt": 55,
     "hour": 10.5
-   },
-   "frames": 4
-  },
-  {
-   "name": "moon-falling",
-   "params": "source=lookdev&page=moon",
-   "size": [
-    960,
-    540
-   ],
-   "canvasOnly": true,
-   "commands": [
-    {
-     "k": "world.moon-fall",
-     "world": 0,
-     "progress": 0.97
-    }
-   ],
-   "wait": 2,
-   "camera": {
-    "mode": "orbit",
-    "target": {
-     "kind": "disaster",
-     "id": 7001
-    },
-    "dist": 14000,
-    "tilt": 45,
-    "hour": 12
    },
    "frames": 4
   },
@@ -334,6 +324,60 @@
     "await G.camera({ mode: 'orbit', planet: r.created[0].id, lat: 15, lon: 0, dist: 9000, tilt: 40 });",
     "await G.step(30);"
    ],
+   "frames": 3
+  },
+  {
+   "name": "walk-villagers",
+   "params": "source=lookdev&page=walk",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "camera": {
+    "mode": "walk",
+    "poi": "town",
+    "dist": 6,
+    "pitch": -10,
+    "hour": 10.5,
+    "alignment": 0.7
+   },
+   "frames": 4
+  },
+  {
+   "name": "photo-dof",
+   "params": "source=lookdev&page=walk",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "camera": {
+    "mode": "photo",
+    "poi": "town",
+    "alt": 3,
+    "pitch": -4,
+    "focus": 28,
+    "blur": 0.7,
+    "hour": 16.6
+   },
+   "frames": 4
+  },
+  {
+   "name": "dolly-town",
+   "params": "source=lookdev&page=walk",
+   "size": [
+    960,
+    540
+   ],
+   "canvasOnly": true,
+   "camera": {
+    "mode": "dolly",
+    "poi": "town",
+    "t": 0.35,
+    "radius": 130,
+    "hour": 17.2
+   },
    "frames": 3
   }
  ]

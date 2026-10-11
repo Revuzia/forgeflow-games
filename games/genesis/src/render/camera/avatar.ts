@@ -7,7 +7,7 @@
 // turns; floating (a held jump) the legs hang and the robe streams.
 
 import {
-  AdditiveBlending, CircleGeometry, DoubleSide, Group, Mesh, ShaderMaterial, Vector3, type IUniform,
+  DoubleSide, Group, Mesh, ShaderMaterial, Vector3, type IUniform,
 } from 'three';
 import { KitBuilder, type V3 } from '../gen/meshkit.ts';
 import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
@@ -25,7 +25,7 @@ export const AVATAR_STATE = {
   stride: 0,
   moving: 0,
   float: 0,
-  /** metres the feet are off the ground (a jump, floating): the glow stays on the ground */
+  /** metres the feet are off the ground (a jump, floating): its light stays centred on the body */
   lift: 0,
   visible: true,
   /** −1 cruel .. +1 kind */
@@ -101,35 +101,7 @@ void main() {
   vec3 c = col * (body * robe * form + rim + veins + halo);
   // display-referred like the fire: a bright figure by day, not a white blob by night
   float ex = uHasExposure > 0.5 ? max(texture(tExposure, vec2(0.5)).r, 0.02) : 1.0;
-  gl_FragColor = vec4(c * 2.4 * mix(1.0, 1.0 / ex, 0.6), 1.0);
-}
-`;
-
-const GLOW_VERT = /* glsl */ `
-#include <common>
-#include <logdepthbuf_pars_vertex>
-varying vec2 vUv;
-void main() {
-  vUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-#include <logdepthbuf_vertex>
-}
-`;
-const GLOW_FRAG = /* glsl */ `
-#include <logdepthbuf_pars_fragment>
-uniform float uAlign;
-uniform float uK;
-uniform sampler2D tExposure;
-uniform float uHasExposure;
-varying vec2 vUv;
-void main() {
-#include <logdepthbuf_fragment>
-  float r = length(vUv - 0.5) * 2.0;
-  float g = exp(-r * r * 4.0) * (1.0 - smoothstep(0.85, 1.0, r));
-  float good = clamp(uAlign * 0.5 + 0.5, 0.0, 1.0);
-  vec3 col = good > 0.5 ? mix(vec3(0.72, 0.84, 1.0), vec3(1.0, 0.82, 0.5), (good - 0.5) * 2.0) : mix(vec3(0.9, 0.12, 0.04), vec3(0.72, 0.84, 1.0), good * 2.0);
-  float ex = uHasExposure > 0.5 ? max(texture(tExposure, vec2(0.5)).r, 0.02) : 1.0;
-  gl_FragColor = vec4(col * g * uK * 0.7 * mix(1.0, 1.0 / ex, 0.6), 1.0);
+  gl_FragColor = vec4(c * 1.35 * mix(1.0, 1.0 / ex, 0.6), 1.0);
 }
 `;
 
@@ -140,12 +112,10 @@ interface Limb { pivot: Group; mesh: Mesh }
 export class Avatar {
   readonly group = new Group();
   private material: ShaderMaterial;
-  private glowMat: ShaderMaterial;
   private uniforms: Record<string, IUniform>;
   private legs: Limb[] = [];
   private arms: Limb[] = [];
   private halo: Mesh;
-  private glow: Mesh;
 
   constructor() {
     this.group.name = 'god-avatar';
@@ -199,16 +169,6 @@ export class Avatar {
     this.halo.position.set(0, 2.1, -0.05);
     this.halo.rotation.x = -0.35;
     this.group.add(this.halo);
-    // a glow on the ground under it
-    this.glowMat = new ShaderMaterial({
-      vertexShader: GLOW_VERT, fragmentShader: GLOW_FRAG, uniforms: { uAlign: this.uniforms.uAlign, uK: { value: 1 }, tExposure: FX_EXPOSURE, uHasExposure: this.uniforms.uHasExposure },
-      transparent: true, depthWrite: false, blending: AdditiveBlending,
-    });
-    this.glow = new Mesh(new CircleGeometry(3.2, 40), this.glowMat);
-    this.glow.rotation.x = -Math.PI / 2;
-    this.glow.position.y = 0.06;
-    this.glow.renderOrder = 4;
-    this.group.add(this.glow);
     for (const o of this.group.children) o.traverse((c) => { (c as Mesh).frustumCulled = false; });
   }
 
@@ -232,14 +192,11 @@ export class Avatar {
     this.arms[0].pivot.rotation.z = -0.08 - s.float * 0.45;
     this.arms[1].pivot.rotation.z = 0.08 + s.float * 0.45;
     this.halo.rotation.y = time * 0.4;
-    (this.glowMat.uniforms.uK as IUniform<number>).value = 1 - 0.6 * s.float;
-    this.glow.position.y = 0.06 - s.lift;
     this.group.visible = s.active && s.visible;
   }
 
   dispose(): void {
     this.group.traverse((o) => { const m = o as Mesh; if (m.geometry) m.geometry.dispose(); });
     this.material.dispose();
-    this.glowMat.dispose();
   }
 }

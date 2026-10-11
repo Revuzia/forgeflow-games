@@ -16,7 +16,7 @@
 // flashes, swirls and molten shells are drawn after the atmosphere (WORLD_LAYER), soft against the linear depth.
 
 import {
-  AdditiveBlending, BufferAttribute, BufferGeometry, CustomBlending, DoubleSide, Group, IcosahedronGeometry,
+  BufferAttribute, BufferGeometry, CustomBlending, DoubleSide, Group, IcosahedronGeometry,
   InstancedBufferAttribute, InstancedMesh, Mesh, OneFactor, OneMinusSrcAlphaFactor, PlaneGeometry, Quaternion, RingGeometry,
   ShaderMaterial, SphereGeometry, Vector2, Vector3, Vector4, type Camera, type IUniform, type Scene, type Texture,
   type WebGLRenderer, type WebGLRenderTarget,
@@ -134,9 +134,10 @@ void main() {
   float r = length(vRingPos.xz);
   float x = (r - uInner) / (uOuter - uInner);
   if (x < 0.0 || x > 1.0) discard;
-  // bands and gaps: ringlets at many scales, thinning at both edges
-  float bands = 0.55 + 0.45 * sin(x * 61.0 + snoise(vec3(x * 9.0, 0.0, 1.0)) * 2.0);
-  bands *= 0.6 + 0.4 * (snoise(vec3(x * 23.0, 3.0, 0.0)) * 0.5 + 0.5);
+  // bands and gaps: broad soft ringlets with finer structure in them (no groove-like regularity), thinning at both edges
+  float bands = 0.62 + 0.38 * (snoise(vec3(x * 7.0, 0.0, 1.0)) * 0.5 + 0.5);
+  bands *= 0.82 + 0.18 * sin(x * 37.0 + snoise(vec3(x * 5.0, 2.0, 0.0)) * 3.0);
+  bands *= 0.85 + 0.15 * (snoise(vec3(x * 60.0, 3.0, 0.0)) * 0.5 + 0.5);
   float gap = smoothstep(0.02, 0.06, abs(x - 0.38)) * smoothstep(0.01, 0.03, abs(x - 0.71));
   float edge = smoothstep(0.0, 0.08, x) * (1.0 - smoothstep(0.85, 1.0, x));
   // clumps orbiting (a slow shear pattern around the ring)
@@ -267,18 +268,27 @@ void main() {
   // wall) — the terrain's coarse far LODs may lie a little above the true ground the ribbon is draped on
   float sceneZ = texture(tSceneDepth, gl_FragCoord.xy / uResolution).r;
   if (vViewZ > sceneZ * 1.004 + 4.0) discard;
-  float u = vRib.x, v = vRib.y;
+  // the ribbon is three rift half-widths each side: the chasm in the middle third, its glow on the ground beyond
+  float u = vRib.x * 3.0, v = vRib.y;
   // a ragged rift: its width wanders along it, its lips break up
-  float wv = 0.7 + 0.3 * snoise(vec3(v * 0.02, 1.0, 0.0)) + 0.15 * snoise(vec3(v * 0.11, 2.0, 0.0));
-  float lip = abs(u) / wv + 0.12 * snoise(vec3(v * 0.3, u * 2.0, 5.0));
-  if (lip > 1.0) discard;
+  float wv = 0.7 + 0.3 * snoise(vec3(v * 0.006, 1.0, 0.0)) + 0.15 * snoise(vec3(v * 0.03, 2.0, 0.0));
+  float lip = abs(u) / wv + 0.14 * snoise(vec3(v * 0.08, u * 0.7, 5.0));
+  if (lip > 3.0) discard;
+  float ex = uHasExposure > 0.5 ? max(texture(tExposure, vec2(0.5)).r, 0.02) : 1.0;
+  float K = mix(1.0, 1.0 / ex, 0.6) * 3.0;
+  float flow = snoise(vec3(v * 0.03 - uTime * 0.15, u * 0.6, 3.0)) * 0.5 + 0.5;
+  if (lip > 1.0) {
+    // the glow of the fire on the ground either side (additive), and the scorched lips
+    float g = exp(-(lip - 1.0) * 2.2) * uHeat;
+    float sc = (1.0 - smoothstep(1.0, 1.6, lip)) * 0.6;
+    gl_FragColor = vec4(vec3(1.0, 0.32, 0.07) * g * 0.35 * K + vec3(0.02, 0.017, 0.014) * sc, sc);
+    return;
+  }
   float core = 1.0 - smoothstep(0.0, 0.55, lip);
   float crust = smoothstep(0.35, 0.95, lip);
-  float flow = snoise(vec3(v * 0.08 - uTime * 0.15, u * 1.5, 3.0)) * 0.5 + 0.5;
   vec3 hot = mix(vec3(0.9, 0.12, 0.02), vec3(1.0, 0.55, 0.12), core * (0.6 + 0.4 * flow));
   hot = mix(hot, vec3(1.0, 0.85, 0.5), pow(core, 4.0) * uHeat);
-  float ex = uHasExposure > 0.5 ? max(texture(tExposure, vec2(0.5)).r, 0.02) : 1.0;
-  float I = (0.5 + 2.6 * core) * uHeat * (0.75 + 0.25 * flow) * mix(1.0, 1.0 / ex, 0.6) * 3.0;
+  float I = (0.5 + 2.6 * core) * uHeat * (0.75 + 0.25 * flow) * K;
   // (premultiplied: the dark lips cover the ground, the fire adds its light)
   float a = crust * 0.85;
   vec3 col = hot * I * (1.0 - crust) + vec3(0.02, 0.017, 0.014) * a;
@@ -306,7 +316,8 @@ function buildCracks(pv: PlanetView, seed: number): BufferGeometry {
     const e: D3 = [0, 0, 0], no: D3 = [0, 0, 0];
     tangentBasis(e, no, p);
     let h = main ? Math.PI + (rng.float() - 0.5) * 0.6 : rng.float() * Math.PI * 2;
-    const width = main ? 16 : 7 + rng.float() * 6;
+    // (rift half-widths: the ribbon is three times as wide, for the glow on the ground either side)
+    const width = (main ? 36 : 12 + rng.float() * 12) * 3;
     let along = 0;
     let prev = -1;
     for (let i = 0; i <= n; i++) {
@@ -401,11 +412,16 @@ void main() {
     float n = snoise(vec3(vUv * 5.0, uTime * 2.0)) * 0.5 + 0.5;
     c = uColor * (shell * (0.6 + 0.8 * n) + exp(-r * r * 2.0) * 0.15) * uK * 2.5;
   } else {
-    // a tail of plasma: along +y of the quad
+    // a tail of plasma along +y of the quad: as wide as the body at its head, streaming back in torn ribbons, white-hot
+    // at the root through orange to a dull red as it trails off
     float x = vUv.x, y = vUv.y * 0.5 + 0.5;
-    float w = 0.25 * (1.0 - y) + 0.03;
-    float body = exp(-pow(x / w, 2.0)) * (1.0 - y) * (0.7 + 0.3 * snoise(vec3(x * 4.0, y * 6.0 - uTime * 3.0, 1.0)));
-    c = uColor * body * uK * 2.0;
+    float w = 0.22 * (1.0 - y) * (1.0 - y) + 0.04 + 0.04 * y;
+    float streak = 0.55 + 0.45 * (snoise(vec3(x * 9.0 / max(w, 0.05), y * 3.0 - uTime * 2.4, 1.0)) * 0.5 + 0.5);
+    float torn = smoothstep(0.15, 0.6, snoise(vec3(x * 3.0, y * 5.0 - uTime * 1.7, 4.0)) * 0.5 + 0.5 + (1.0 - y) * 0.5);
+    // (the root rises from behind the body: no edge where the quad begins)
+    float body = exp(-pow(x / w, 2.0)) * exp(-y * 3.2) * streak * torn * smoothstep(0.0, 0.12, y);
+    vec3 heat = mix(vec3(0.9, 0.18, 0.05), mix(vec3(1.0, 0.55, 0.15), vec3(1.0, 0.9, 0.75), smoothstep(0.75, 0.95, 1.0 - y)), smoothstep(0.3, 0.9, 1.0 - y));
+    c = heat * body * uK * 3.0;
   }
   gl_FragColor = vec4(c, 0.0);
 }
@@ -525,6 +541,9 @@ const _o1: D3 = [0, 0, 0];
 
 export interface WorldPlanetRef { group: Group; uniforms: Record<string, IUniform>; pv: PlanetView }
 
+/** the live world-event layer (the renderer's): for the test surface and the shot harness's scripts */
+export const WORLD_FX: { last: WorldFx | null } = { last: null };
+
 export class WorldFx {
   /** overlays in the system frame (erase, birth, the falling moon's fire), placed relative to the camera */
   readonly spaceGroup = new Group();
@@ -548,11 +567,12 @@ export class WorldFx {
 
   constructor() {
     this.spaceGroup.name = 'world-fx';
+    WORLD_FX.last = this;
   }
 
   private glowMat(kind: number, color: [number, number, number], depthTest: boolean): ShaderMaterial {
     return new ShaderMaterial({
-      vertexShader: GLOW_VERT, fragmentShader: GLOW_FRAG, transparent: true, depthWrite: false, depthTest: false, blending: AdditiveBlending,
+      vertexShader: GLOW_VERT, fragmentShader: GLOW_FRAG, transparent: true, depthWrite: false, depthTest: false, blending: CustomBlending, blendSrc: OneFactor, blendDst: OneFactor,
       uniforms: {
         uColor: { value: new Vector3(...color) }, uKind: { value: kind }, uDir: { value: new Vector2(0, 1) }, uOffset: { value: 0 }, uK: { value: 0 }, uTime: { value: 0 }, uDepthTest: { value: depthTest ? 1 : 0 },
         tSceneDepth: this.uniformsShared.tSceneDepth, uResolution: this.uniformsShared.uResolution,
@@ -742,7 +762,7 @@ export class WorldFx {
         const sl = Math.hypot(_v.x, _v.y) || 1;
         const tu = (mg.tail.material as ShaderMaterial).uniforms;
         (tu.uDir.value as Vector2).set(_v.x / sl, _v.y / sl);
-        tu.uOffset.value = 0.9;
+        tu.uOffset.value = 0.85;
       }
     }
     this.fellLast = new Map(this.falling);
@@ -901,6 +921,16 @@ export class WorldFx {
   /** active effects (tests, the dev HUD) */
   stats(): { rings: number; cracks: number; bursts: number; moons: number } {
     return { rings: this.rings.size, cracks: this.cracks.size, bursts: this.bursts.length, moons: this.moonGlows.size };
+  }
+
+  /** what each effect is doing (shot scripts, debugging) */
+  detail(): Record<string, unknown> {
+    const glow = (m: Mesh) => ({ visible: m.visible, k: +(m.material as ShaderMaterial).uniforms.uK.value.toFixed(3), scale: Math.round(m.scale.x), dist: Math.round(m.position.length()) });
+    return {
+      moons: [...this.moonGlows].map(([id, g]) => ({ id, shell: glow(g.shell), tail: glow(g.tail) })),
+      bursts: this.bursts.map((b) => ({ kind: b.kind, planet: b.planet, R: Math.round(b.R), tick0: Math.round(b.tick0) })),
+      rings: [...this.rings.keys()], cracks: [...this.cracks.keys()],
+    };
   }
 
   dispose(): void {

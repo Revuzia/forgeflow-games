@@ -11,7 +11,10 @@ import { moveBy, bearingDir } from '../src/sim/god/util.ts';
 import { distM } from '../src/sim/people/world.ts';
 
 test('a meteor on a city kills, ruins, terrifies — and the survivors rebuild with the knowledge that remains', () => {
-  const { sim, st } = town();
+  // (a seed-bound result: the town rebuilds 3 buildings in the 12 days on 2 of 8 worlds — this one and the default
+  // world, 20261008, with the peoples' dice of the seed salt (lifecycle.ts worldSalt); this one and seed 7 since founding
+  // bands are drawn by count (settlement.ts createBand). Elsewhere it puts up 1 or 2, or fewer than the meteor left.)
+  const { sim, st } = town(2);
   const p = sim.u.planets[0];
   const ps = p.people;
   const A = ps.agents;

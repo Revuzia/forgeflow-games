@@ -96,6 +96,8 @@ uniform float uSpiky;
 uniform float uPattern;
 uniform float uTime;
 uniform float uScaleM;
+uniform vec3 uEyeA;
+uniform vec3 uEyeB;
 uniform sampler2D tExposure;
 uniform float uHasExposure;
 varying vec3 vRest;
@@ -154,14 +156,21 @@ const FRAG_SURFACE = /* glsl */ `
     rough = 0.5;
   } else if (region == 5) { alb = mix(vec3(0.12, 0.1, 0.09), vec3(0.25, 0.04, 0.03), cruel); rough = 0.4; }
   // the morph's colour: a good creature brighter and warmer, a cruel one dark and drained
-  alb = mix(alb, alb * vec3(1.18, 1.1, 0.95) + vec3(0.03, 0.025, 0.0), good * 0.6);
+  alb = mix(alb, alb * vec3(1.4, 1.22, 0.95) + vec3(0.075, 0.052, 0.016), good * 0.75);
   float l = dot(alb, vec3(0.3, 0.55, 0.15));
-  alb = mix(alb, vec3(l) * vec3(0.7, 0.62, 0.62), cruel * 0.7);
+  alb = mix(alb, vec3(l * 0.8 + 0.022) * vec3(0.8, 0.7, 0.7), cruel * 0.7);
   // scars on a cruel hide
   float scar = cruel * smoothstep(0.985, 1.0, 1.0 - abs(snoise(vec3(R.x * 6.0, R.y * 2.0, R.z * 9.0))));
   alb = mix(alb, vec3(0.32, 0.12, 0.1), scar * 0.8);
-  // eyes: dark and glossy; a good creature's catch a warm light, a cruel one's burn red
+  // eyes: dark and glossy; the iris (the front cap of the eyeball, looking forward and a little out) amber for a good
+  // creature, a burning red for a cruel one (FRAG_EMISSIVE)
+  vec3 eA = R - uEyeA, eB = R - uEyeB;
+  bool nearA = dot(eA, eA) < dot(eB, eB);
+  vec3 eD = nearA ? eA : eB;
+  float eSide = sign(nearA ? uEyeA.x : uEyeB.x);
+  float iris = smoothstep(0.8, 0.93, dot(normalize(eD + 1e-6), normalize(vec3(eSide * 0.42, 0.06, 1.0)))) * (1.0 - smoothstep(0.03, 0.036, length(eD)));
   alb = mix(alb, vec3(0.02, 0.015, 0.01), csat(eye * 2.0));
+  alb = mix(alb, mix(vec3(0.42, 0.24, 0.06), vec3(0.3, 0.02, 0.01), cruel), iris * 0.9);
   rough = mix(rough, 0.08, csat(eye * 2.0));
 #ifdef FUR
   // strands: a hashed cell pattern thinning toward the tips; roots in shadow, tips lighter
@@ -170,7 +179,8 @@ const FRAG_SURFACE = /* glsl */ `
   vec3 qf = fract(q) - 0.5 + (gn_hash33(qi) - 0.5) * 0.6;
   float strand = 1.0 - length(qf.xz) * 1.6 - length(qf.xy) * 0.5;
   float thr = vShell * (0.85 + 0.3 * gn_hash13(qi + 7.0));
-  if (vShell > 0.02 && strand < thr) discard;
+  // (no shells over bare skin, horn, the eyes or the spines)
+  if (vShell > 0.02 && (strand < thr || vMark.z < 0.05)) discard;
   alb *= mix(0.55, 1.15, vShell);
 #endif
   diffuseColor.rgb = alb;
@@ -210,12 +220,13 @@ const FRAG_EMISSIVE = /* glsl */ `
     vec3 em = vec3(0.0);
     // glowing markings (a good creature): flowing contour lines over the coat, pulsing slowly
     float n = fbm3(vRest * 3.2 + vec3(0.0, uTime * 0.03, 0.0));
-    float line = 1.0 - smoothstep(0.0, 0.06, abs(fract(n * 3.5) - 0.5) * 2.0 - 0.0);
-    line *= smoothstep(0.45, 0.75, vRest.y) * step(float(region), 1.5);
-    em += vec3(1.0, 0.72, 0.32) * line * uGlow * (0.6 + 0.4 * sin(uTime * 1.3 + n * 9.0)) * 0.9 / ex;
-    // eyes
-    float e = csat(vMark.x * 2.0);
-    em += mix(vec3(1.0, 0.7, 0.3) * 0.25 * (0.3 + good), vec3(1.0, 0.08, 0.02) * 3.0, cruel) * e / ex * mix(0.4, 1.0, cruel);
+    float band = abs(fract(n * 3.5) - 0.5) * 2.0;
+    float line = (1.0 - smoothstep(0.03, 0.1, band)) + 0.12 * (1.0 - smoothstep(0.1, 0.3, band));
+    // over the shoulders, back and flanks (not the legs and belly), fading in where the coat is thickest
+    line *= smoothstep(0.4, 0.68, vRest.y) * step(float(region), 0.5);
+    em += vec3(1.0, 0.76, 0.36) * line * uGlow * (0.65 + 0.35 * sin(uTime * 1.3 + n * 9.0)) * 0.7 / ex;
+    // eyes: the iris (FRAG_SURFACE) glows: warm and soft for a good creature, a red ember for a cruel one
+    em += mix(vec3(1.0, 0.66, 0.25) * 0.35 * good, vec3(1.0, 0.07, 0.02) * 1.6, cruel) * iris / ex;
     // a good creature's warm rim
     float nv = abs(dot(normal, normalize(vViewPosition)));
     em += vec3(1.0, 0.78, 0.45) * pow(1.0 - nv, 3.0) * uGlow * 0.35 / ex;
@@ -298,6 +309,7 @@ class CreatureVisual {
     uCoat: { value: new Vector3() }, uDark: { value: new Vector3() }, uLight: { value: new Vector3() }, uSkin: { value: new Vector3() },
     uAlign: { value: 0 }, uGlow: { value: 0 }, uSpiky: { value: 0 }, uPattern: { value: 0 }, uTime: { value: 0 }, uScaleM: { value: 10 },
     uFurLen: { value: 0.02 }, uComb: { value: new Vector3(0, -1, -0.5) },
+    uEyeA: { value: new Vector3(9, 9, 9) }, uEyeB: { value: new Vector3(9, 9, 9) },
   };
   private morphKey = '';
   /** smoothed body-frame position (m), heading, measured speed, gait phase */
@@ -360,6 +372,8 @@ class CreatureVisual {
     const keepRot = this.rig ? this.rig.rot.slice() : null;
     this.cm = cm;
     this.rig = creatureRig(cm);
+    const eA = cm.eyes[0], eB = cm.eyes[1] ?? cm.eyes[0];
+    if (eA) { this.u.uEyeA.value.set(eA[0], eA[1], eA[2]); this.u.uEyeB.value.set(eB[0], eB[1], eB[2]); }
     if (keepRot && keepRot.length === this.rig.rot.length) this.rig.rot.set(keepRot);
     this.body = cm.body;
     if (this.skin) { this.group.remove(this.skin); }
@@ -403,7 +417,7 @@ class CreatureVisual {
     const g = groundHeight(pv.ground, ux, uy, uz);
     const tx = ux * g, ty = uy * g, tz = uz * g;
     if (!this.placed || Math.hypot(tx - this.pos.x, ty - this.pos.y, tz - this.pos.z) > H * 8) {
-      this.pos.set(tx, ty, tz); this.placed = true; this.speed = 0;
+      this.pos.set(tx, ty, tz); this.placed = true; this.speed = 0; this.heading = v.heading;
     } else if (dt > 0) {
       const k = 1 - Math.exp(-dt * 6);
       const ox = this.pos.x, oy = this.pos.y, oz = this.pos.z;

@@ -59,6 +59,8 @@ export interface FxCtx {
   sunE: Vector3;
   /** play a landing (dust, a splash) now — flights hold the sim's landing until their own flight comes down */
   landed?: (e: SimEvent) => void;
+  /** the camera's forward axis in the body frame */
+  camFwd?: Vector3;
 }
 
 interface DState {

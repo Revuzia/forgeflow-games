@@ -63,7 +63,8 @@ export function parsePack(text: string, origin = 'the file'): { pack: ContentPac
     // "Unexpected token } in JSON at position 812" → line and column
     const pos = /position (\d+)/.exec(m);
     let where = '';
-    if (pos) {
+    // (an engine that already says the line and column is not repeated)
+    if (pos && !/line \d+/i.test(m)) {
       const at = Number(pos[1]);
       const before = text.slice(0, at);
       const line = before.split('\n').length;
@@ -82,6 +83,9 @@ export function parsePack(text: string, origin = 'the file'): { pack: ContentPac
 }
 
 function cap1(s: string): string { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
+
+/** a pack's version as people read it ("v1.0.0") */
+export function ver(v: string): string { return /^\d/.test(v) ? `v${v}` : v; }
 
 /** check packs on top of the base content the way the sim will: null when they load, else every problem in words */
 export function validatePacks(packs: ContentPack[]): { msg: string; problems: string[] } | null {
@@ -238,7 +242,7 @@ export class Mods {
     this.file = h('input', { type: 'file', accept: '.json,application/json', multiple: true, style: 'display:none' }) as HTMLInputElement;
     this.file.addEventListener('change', () => { const fs = Array.from(this.file.files ?? []); this.file.value = ''; void this.fromFiles(fs); });
     this.urlIn = h('input', { class: 'gn-text gn-mods-url', type: 'url', placeholder: 'https://… a pack\'s address (.json)', spellcheck: 'false' }) as HTMLInputElement;
-    this.urlIn.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') void this.fromUrl(); });
+    this.urlIn.addEventListener('keydown', (e) => { if (e.key !== 'Escape') e.stopPropagation(); if (e.key === 'Enter') void this.fromUrl(); });
     const fileBtn = h('button', { class: 'gn-btn gn-btn-gold', on: { click: () => this.file.click() } }, h('span', { html: icon('upload') }), 'Choose a file');
     const urlBtn = h('button', { class: 'gn-btn', text: 'Load', on: { click: () => void this.fromUrl() } });
     this.status = h('div', { class: 'gn-mods-status', role: 'status', aria: { live: 'polite' } });
@@ -352,14 +356,15 @@ export class Mods {
   private async refresh(): Promise<void> {
     // in this world
     clear(this.worldEl);
-    const ids = this.host.view.content.filter((id) => id !== 'base' && id !== RUNTIME_PACK && !id.startsWith(`${RUNTIME_PACK}@`));
+    // (the world's own list, and what it took a moment ago that the next snapshot has not told yet)
+    const ids = [...new Set([...this.host.view.content, ...this.deps.packs().map((p) => p.id)])].filter((id) => id !== 'base' && id !== RUNTIME_PACK && !id.startsWith(`${RUNTIME_PACK}@`));
     const known = new Map(this.deps.packs().map((p) => [p.id, p]));
     if (!ids.length) this.worldEl.append(h('div', { class: 'gn-set-note', text: 'This world is made of the base content only.' }));
     for (const id of ids) {
       const p = known.get(id);
       this.worldEl.append(h('div', { class: 'gn-mod' },
         h('span', { class: 'gn-mod-i', html: icon('mods') }),
-        h('div', { class: 'gn-mod-t' }, h('div', { class: 'gn-mod-name', text: p?.name ?? id }), h('div', { class: 'gn-mod-sub', text: `${id}${p?.version ? ` · ${p.version}` : ''}${p ? ` · ${packSummary(p)}` : ''}` }))));
+        h('div', { class: 'gn-mod-t' }, h('div', { class: 'gn-mod-name', text: p?.name ?? id }), h('div', { class: 'gn-mod-sub', text: `${id}${p?.version ? ` · ${ver(p.version)}` : ''}${p ? ` · ${packSummary(p)}` : ''}` }))));
     }
     for (const b of this.deps.bootProblems()) {
       this.worldEl.append(h('div', { class: 'gn-mod gn-mod-bad' },
@@ -376,7 +381,7 @@ export class Mods {
       const row = h('div', { class: 'gn-mod' },
         h('span', { class: 'gn-mod-i', html: icon('mods') }),
         h('div', { class: 'gn-mod-t' }, h('div', { class: 'gn-mod-name', text: e.name }),
-          h('div', { class: 'gn-mod-sub', text: `${e.id}${e.version ? ` · ${e.version}` : ''} · ${e.summary}${e.source === 'url' && e.url ? ` · from ${e.url}` : e.source === 'example' ? ' · an example' : e.source === 'save' ? ' · came with a save' : ''}` })),
+          h('div', { class: 'gn-mod-sub', text: `${e.id}${e.version ? ` · ${ver(e.version)}` : ''} · ${e.summary}${e.source === 'url' && e.url ? ` · from ${e.url}` : e.source === 'example' ? ' · an example' : e.source === 'save' ? ' · came with a save' : ''}` })),
         h('div', { class: 'gn-mod-acts' },
           h('div', { class: 'gn-mod-inc', title: 'Ticked in the New world menu' }, toggle(e.include, (on) => { e.include = on; void this.deps.library.put(e); }, `Include ${e.name} in new worlds`), h('span', { text: 'new worlds' })),
           inWorld ? h('span', { class: 'gn-mod-in', text: 'in this world' }) : h('button', { class: 'gn-btn', text: 'Add to this world', on: { click: () => void this.add(e.json, e.source) } }),
