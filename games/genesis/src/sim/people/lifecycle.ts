@@ -27,6 +27,16 @@ export function hgauss(a: number, b: number, c: number): number {
   return (hashFloat(a, b, c, 1) + hashFloat(a, b, c, 2) + hashFloat(a, b, c, 3) + hashFloat(a, b, c, 4) - 2) * 1.732;
 }
 
+/**
+ * `salt` folded with this world's seed (the planet's, itself drawn from the world seed), for dice that would otherwise
+ * be keyed by ids and ticks alone. Ids count 1, 2, 3… per kind in every world, so such dice came out the same on every
+ * seed: the first band of any world had the same ages and the same people died of old age at the same ticks. Keyed by
+ * this, each seed is an independent draw and the same seed replays exactly (the seed is saved with the planet).
+ */
+export function worldSalt(x: PCtx, salt: number): number {
+  return hash32(x.p.seed, salt);
+}
+
 export interface SpawnOpts {
   ageYears: number;
   female?: boolean;

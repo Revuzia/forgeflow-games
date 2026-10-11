@@ -12,7 +12,7 @@ import { AgentFlag, BuildingFlag } from '../types.ts';
 import { hash32, hashFloat } from '../core/rng.ts';
 import { ERAS } from '../content.ts';
 import { DEATH, NS, NT, ROLE, SKILL, TRAIT } from './defs.ts';
-import { birth, die, ageHazard, spawnAgent, insertSorted } from './lifecycle.ts';
+import { birth, die, ageHazard, spawnAgent, insertSorted, worldSalt } from './lifecycle.ts';
 import { accident, computeEra, hiveShare, learn, libHas, refreshLibrary } from './knowledge.ts';
 import { planBuilding, canBuild, decayBuildings, hearthAccidents, reviseSite, styleOf } from './buildings.ts';
 import { updateFlow, updateResources, availability, itemIdx, gatherable, territoryRings } from './resources.ts';
@@ -321,8 +321,10 @@ export function createBand(x: PCtx, species: number, cell: number, n: number, op
   // beyond the planet's individual cap the rest live as the settlement's cohort (a core of four is always individual)
   const room = Math.max(0, x.u.settings.maxAgents - x.A.count);
   const individuals = Math.min(n, Math.max(room, Math.min(n, 4)));
+  // the ages (and the cohort's age bands) are the world seed's draw: band ids repeat from world to world
+  const ageDice = worldSalt(x, 0xa6e);
   for (let i = 0; i < n; i++) {
-    const r = hashFloat(st.id, i, 0xa6e);
+    const r = hashFloat(st.id, i, ageDice);
     // a living band: mostly young adults, some children and elders
     if (i >= individuals) {
       st.cohort.n[r < 0.22 ? 0 : r < 0.9 ? 1 : 2] += 1;
@@ -927,10 +929,12 @@ function oldAge(x: PCtx, st: Settlement, hours = 1): void {
   const A = x.A;
   const members = (x.ps.members.get(st.id) ?? []).slice();
   const perHour = (60 / x.year) * hours;
+  // the world seed's dice (agent ids and ticks repeat from world to world), not the band's age dice
+  const dice = worldSalt(x, 0x01da6e);
   for (const m of members) {
     if (!A.alive[m]) continue;
     const h = ageHazard(x, m) * perHour;
-    if (hashFloat(A.id[m], x.tick, 0xa6e) < h) die(x, m, DEATH.age);
+    if (hashFloat(A.id[m], x.tick, dice) < h) die(x, m, DEATH.age);
   }
 }
 
