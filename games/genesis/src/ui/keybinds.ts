@@ -12,7 +12,7 @@ export type Context = 'world' | 'always';
 export interface ActionDef {
   id: string;
   label: string;
-  group: 'Camera' | 'Time' | 'Powers' | 'Hand' | 'Windows';
+  group: 'Camera' | 'Time' | 'Powers' | 'Hand' | 'Windows' | 'Photo mode' | 'Walking';
   keys: string[];
   pad?: string[];
   /** held (true while down) rather than a single press */
@@ -20,6 +20,8 @@ export interface ActionDef {
   /** a modifier that changes a mouse click (slap = modifier + click) */
   modifier?: boolean;
   desc?: string;
+  /** live only in this camera mode, where it shadows the world's binding of the same key */
+  context?: Context;
 }
 
 /** gamepad buttons of the standard mapping, by index */
@@ -42,8 +44,12 @@ export const ACTIONS: ActionDef[] = [
   { id: 'cam.home', label: 'Back to orbit of this world', group: 'Camera', keys: ['Home'] },
   { id: 'cam.follow', label: 'Follow the selection', group: 'Camera', keys: ['KeyL'] },
   { id: 'cam.look', label: 'Look at the selection', group: 'Camera', keys: ['Backslash'] },
+  { id: 'cam.dolly', label: 'Cinematic: circle the selected settlement', group: 'Camera', keys: ['KeyJ'] },
+  { id: 'cam.walk', label: 'Walk among them (at the selection or the cursor)', group: 'Camera', keys: ['KeyK'] },
+  { id: 'cam.photo', label: 'Photo mode', group: 'Camera', keys: ['KeyP'] },
+  { id: 'cam.menu', label: 'Camera modes', group: 'Camera', keys: ['Backquote'], pad: ['Back'] },
   // time
-  { id: 'time.pause', label: 'Pause / resume', group: 'Time', keys: ['Space', 'KeyP'], pad: ['Back'] },
+  { id: 'time.pause', label: 'Pause / resume', group: 'Time', keys: ['Space'] },
   { id: 'time.speed1', label: 'Speed 1×', group: 'Time', keys: ['Digit1'] },
   { id: 'time.speed10', label: 'Speed 10×', group: 'Time', keys: ['Digit2'] },
   { id: 'time.speed100', label: 'Speed 100×', group: 'Time', keys: ['Digit3'] },
@@ -81,12 +87,31 @@ export const ACTIONS: ActionDef[] = [
   { id: 'ui.inspect', label: 'Inspect what is under the cursor', group: 'Windows', keys: ['KeyI'] },
   { id: 'ui.laws', label: 'Laws of this world', group: 'Windows', keys: ['KeyU'] },
   { id: 'ui.settings', label: 'Settings', group: 'Windows', keys: ['F10', 'Ctrl+Comma'] },
-  { id: 'ui.saves', label: 'Saves and worlds', group: 'Windows', keys: ['F6', 'Ctrl+KeyS'] },
+  { id: 'ui.saves', label: 'Saves', group: 'Windows', keys: ['F6', 'Ctrl+KeyS'] },
+  { id: 'ui.newWorld', label: 'New world', group: 'Windows', keys: ['F3'] },
+  { id: 'ui.mods', label: 'Mods', group: 'Windows', keys: ['F8'] },
   { id: 'ui.quicksave', label: 'Quicksave', group: 'Windows', keys: ['F5'] },
   { id: 'ui.quickload', label: 'Quickload', group: 'Windows', keys: ['F9'] },
   { id: 'ui.help', label: 'Controls card', group: 'Windows', keys: ['F1', 'Shift+Slash'] },
   { id: 'ui.menu', label: 'Game menu', group: 'Windows', keys: ['F2'], pad: ['Start'] },
   { id: 'ui.hide', label: 'Hide the interface', group: 'Windows', keys: ['KeyH'] },
+  // photo mode (its own layer: the camera flies free, the interface is hidden, time stands still unless let run)
+  { id: 'photo.capture', label: 'Take the picture', group: 'Photo mode', keys: ['Space', 'Enter'], pad: ['A'], context: 'photo' },
+  { id: 'photo.exit', label: 'Leave photo mode', group: 'Photo mode', keys: ['KeyP'], pad: ['B'], context: 'photo' },
+  { id: 'photo.focusNear', label: 'Focus nearer', group: 'Photo mode', keys: ['BracketLeft'], pad: ['Down'], context: 'photo' },
+  { id: 'photo.focusFar', label: 'Focus farther', group: 'Photo mode', keys: ['BracketRight'], pad: ['Up'], context: 'photo' },
+  { id: 'photo.blurLess', label: 'Less depth blur', group: 'Photo mode', keys: ['Shift+BracketLeft'], context: 'photo' },
+  { id: 'photo.blurMore', label: 'More depth blur', group: 'Photo mode', keys: ['Shift+BracketRight'], context: 'photo' },
+  { id: 'photo.exposureDown', label: 'Darker', group: 'Photo mode', keys: ['Comma'], pad: ['Left'], context: 'photo' },
+  { id: 'photo.exposureUp', label: 'Brighter', group: 'Photo mode', keys: ['Period'], pad: ['Right'], context: 'photo' },
+  { id: 'photo.zoomIn', label: 'Longer lens (zoom in)', group: 'Photo mode', keys: ['Equal', 'NumpadAdd'], context: 'photo' },
+  { id: 'photo.zoomOut', label: 'Wider lens (zoom out)', group: 'Photo mode', keys: ['Minus', 'NumpadSubtract'], context: 'photo' },
+  { id: 'photo.filter', label: 'Next filter', group: 'Photo mode', keys: ['KeyT'], pad: ['X'], context: 'photo' },
+  { id: 'photo.frame', label: 'Next frame', group: 'Photo mode', keys: ['KeyG'], pad: ['Y'], context: 'photo' },
+  { id: 'photo.panel', label: 'Show / hide the photo panel', group: 'Photo mode', keys: ['KeyH'], pad: ['Start'], context: 'photo' },
+  { id: 'photo.time', label: 'Freeze time / let it run', group: 'Photo mode', keys: ['KeyY'], context: 'photo' },
+  // walking among them (the world's keys still work: powers, the hand, time)
+  { id: 'walk.exit', label: 'Rise from the ground (leave walking)', group: 'Walking', keys: ['KeyK'], pad: ['B'], context: 'walk' },
 ];
 
 export const ACTION_BY_ID = new Map(ACTIONS.map((a) => [a.id, a]));
@@ -205,12 +230,15 @@ export class Keybinds {
     if (save) this.save();
   }
 
-  /** press actions whose combo is exactly this event's (in list order: the first wins a conflict) */
-  pressActions(e: KeyLike): string[] {
+  /**
+   * press actions whose combo is exactly this event's (in list order: the first wins a conflict). With a `context`
+   * (a camera mode's layer) only that layer's actions are returned; without one, only the world's.
+   */
+  pressActions(e: KeyLike, context?: Context): string[] {
     const c = comboOf(e);
     const out: string[] = [];
     for (const a of ACTIONS) {
-      if (a.hold || a.modifier) continue;
+      if (a.hold || a.modifier || a.context !== context) continue;
       if (this.keysOf(a.id).includes(c)) out.push(a.id);
     }
     return out;
@@ -247,10 +275,10 @@ export class Keybinds {
     return false;
   }
 
-  /** actions bound to a gamepad button */
-  padActions(button: string): string[] {
+  /** actions bound to a gamepad button (the world's, or with `context` that layer's only) */
+  padActions(button: string, context?: Context): string[] {
     const out: string[] = [];
-    for (const a of ACTIONS) if (this.padOf(a.id).includes(button)) out.push(a.id);
+    for (const a of ACTIONS) if (a.context === context && this.padOf(a.id).includes(button)) out.push(a.id);
     return out;
   }
 
@@ -261,7 +289,8 @@ export class Keybinds {
   conflicts(): { combo: string; actions: string[]; pad: boolean }[] {
     const by = new Map<string, string[]>();
     for (const a of ACTIONS) for (const k of this.keysOf(a.id)) {
-      const key = a.hold ? `hold:${splitCombo(k).code}` : a.modifier ? `mod:${k}` : `press:${k}`;
+      // a camera mode's layer is its own namespace (it shadows the world's keys on purpose)
+      const key = a.context ? `${a.context}:${k}` : a.hold ? `hold:${splitCombo(k).code}` : a.modifier ? `mod:${k}` : `press:${k}`;
       const l = by.get(key) ?? [];
       l.push(a.id);
       by.set(key, l);
@@ -279,8 +308,8 @@ export class Keybinds {
       if (uniq.length > 1) out.push({ combo: key.slice(key.indexOf(':') + 1), actions: uniq, pad: false });
     }
     const pb = new Map<string, string[]>();
-    for (const a of ACTIONS) for (const b of this.padOf(a.id)) { const l = pb.get(b) ?? []; l.push(a.id); pb.set(b, l); }
-    for (const [b, ids] of pb) if (ids.length > 1) out.push({ combo: b, actions: ids, pad: true });
+    for (const a of ACTIONS) for (const b of this.padOf(a.id)) { const k = a.context ? `${a.context}:${b}` : b; const l = pb.get(k) ?? []; l.push(a.id); pb.set(k, l); }
+    for (const [b, ids] of pb) if (ids.length > 1) out.push({ combo: b.slice(b.indexOf(':') + 1), actions: ids, pad: true });
     return out;
   }
 

@@ -108,6 +108,8 @@ class WorkerBackend implements SimBackend {
   save(): Promise<ArrayBuffer> { return this.call<ArrayBuffer>((id) => ({ type: 'save', id })); }
   // additive (UI lane, saves panel): restore a saved world in this worker; the ArrayBuffer is transferred
   load(data: ArrayBuffer): Promise<{ ok: boolean; msg?: string }> { return this.call<{ ok: boolean; msg?: string }>((id) => ({ type: 'load', id, data }), [data]); }
+  // additive (UI lane, mods panel): a content pack for the running world (validated there; refused in words)
+  mod(pack: unknown): Promise<CommandResult> { return this.call<CommandResult>((id) => ({ type: 'mod', id, pack })); }
   dispose(): void {
     for (const p of this.pending.values()) p.fail(new Error('sim worker terminated'));
     this.pending.clear();
@@ -254,6 +256,12 @@ export class SimClient {
   save(): Promise<ArrayBuffer | null> {
     const b = this.backend;
     return b instanceof WorkerBackend ? b.save() : Promise.resolve(null);
+  }
+  // additive (UI lane, mods panel): a content pack sent to the living sim (CommandResult: added now, `deferred` to the
+  // next world, or refused with the reasons)
+  mod(pack: unknown): Promise<CommandResult> {
+    const b = this.backend;
+    return b instanceof WorkerBackend ? b.mod(pack) : Promise.resolve({ ok: false, msg: 'Only the living simulation takes mods (this is the lookdev world).' });
   }
   async load(data: ArrayBuffer): Promise<{ ok: boolean; msg?: string }> {
     const b = this.backend;
