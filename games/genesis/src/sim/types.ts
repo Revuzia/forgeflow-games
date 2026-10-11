@@ -410,6 +410,11 @@ export interface ShipView {
   from: number;
   to: number;
   progress: number;
+  /**
+   * additive (render lane, phase 4b): the builders' era ('steam', 'electric', 'space', ...) — the look of the hull
+   * (riveted and finned, white multi-stage, stainless). Absent: the renderer reads the owner settlement's era.
+   */
+  era?: string;
 }
 
 /**

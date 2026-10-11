@@ -29,6 +29,9 @@ import { FX_EXPOSURE } from './fx/particles.ts';
 import { QUALITY, type Quality, type QualityName } from './quality.ts';
 import { nearestPlanet, sunIlluminance, type CameraPose } from './frame.ts';
 import { blackbody } from '../client/orbits.ts';
+import { GodFx } from './fx/godfx.ts';
+import { ShipLayer, type ShipPlanetRef } from './life/ships.ts';
+import { applyLaunchShake } from './fx/launch.ts';
 
 export interface RenderStats {
   drawCalls: number;
@@ -49,7 +52,11 @@ export interface RenderStats {
   renderH: number;
 }
 
-export interface BrushPreview { planet: number; dir: [number, number, number]; radius: number; color?: [number, number, number] }
+export interface BrushPreview {
+  planet: number; dir: [number, number, number]; radius: number; color?: [number, number, number];
+  /** additive (god layer): the power's category / command, falloff 0..1, strength 0..1 and tool mode shape the decal */
+  category?: string; command?: string; falloff?: number; strength?: number; mode?: string;
+}
 
 const _sun = new Vector3();
 const _rel = new Vector3();
@@ -115,6 +122,11 @@ export class Renderer {
   readonly star = new StarVisual();
   readonly starfield = new Starfield();
   readonly orbits = new OrbitLines();
+  /** the god layer's visuals: hand, creatures, disasters, weather, miracles, previews (render/fx/godfx.ts) */
+  readonly godfx = new GodFx();
+  /** ships in every phase, their launch VFX and the system view's ship glints and trails (render/life/ships.ts) */
+  readonly ships = new ShipLayer();
+  private readonly shipRefs = new Map<number, ShipPlanetRef>();
   readonly planets = new Map<number, PlanetVisual>();
   readonly waterScene: Record<string, IUniform> = makeWaterSceneUniforms();
   readonly settings: PostSettings = { bloom: 0.045, godRays: true, fxaa: true, grain: 0.02, vignette: 0.22, flare: 1, exposureBias: 0, manualExposure: 0 };
@@ -167,6 +179,7 @@ export class Renderer {
     this.shadows.setSize(this.quality.shadowMapSize);
     this.shadows.init(this.three);
     this.clouds.setWeatherRes(WX_RES(this.quality.cloudSteps));
+    this.ships.fx.setBudget(this.quality.particleBudget);
     this.resize(this.cssW, this.cssH, this.dpr);
   }
 
@@ -182,6 +195,7 @@ export class Renderer {
     this.post.setSize(w, h, this.quality.msaa);
     this.clouds.setSize(w, h, this.quality.cloudScale);
     this.orbits.setResolution(w, h);
+    this.ships.setResolution(w, h, pr * this.quality.renderScale);
     this.starfield.setPixelRatio(pr * this.quality.renderScale);
     this.camera.aspect = this.cssW / this.cssH;
     this.camera.updateProjectionMatrix();
@@ -241,6 +255,10 @@ export class Renderer {
     cam.position.set(0, 0, 0);
     cam.quaternion.set(pose.quat[0], pose.quat[1], pose.quat[2], pose.quat[3]);
     if (Math.abs(cam.fov - pose.fov) > 1e-6) { cam.fov = pose.fov; cam.updateProjectionMatrix(); }
+    // quakes and impacts shake the view (god layer)
+    this.godfx.shakeCamera(cam, dt);
+    // a launch or a ship's failure near the camera shakes it too (render/fx/launch.ts SHAKE)
+    applyLaunchShake(cam, time);
     // near 0.05 m / far 2·10⁷ m for every view: the logarithmic depth buffer keeps precision across the whole range
     cam.updateMatrixWorld(true);
     _proj.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
@@ -269,25 +287,31 @@ export class Renderer {
       if (vis.uniforms.uCityTex) vis.uniforms.uCityTex.value = vis.fields.cityLights ? vis.fields.cityLights.texture : null;
       vis.frameUpdate({
         camWorldInverse, frustum: this.frustum, camRel: _rel, sunDirWorld: _sun,
-        sunE: _sunE.set(starCol[0] * E, starCol[1] * E, starCol[2] * E), time, K, frame: this.frameNo,
+        sunE: this.godfx.tintSun(_sunE.set(starCol[0] * E, starCol[1] * E, starCol[2] * E), isPrimary), time, K, frame: this.frameNo,
         budget: this.cutFrames > 0 ? Math.max(q.patchBudget, 320) : q.patchBudget, primary: isPrimary, shadows: q.shadowCascades > 0, yearFrac: view.calendar(pv).yearFrac,
         vegRange: 380 * q.vegetationRange, vegDensity: q.vegetationDensity, proj: cam.projectionMatrix, grass: q.grass,
         lightBudget: q.lightBudget, particleBudget: q.particleBudget,
       });
-      // brush preview
+      // brush preview: a ground decal of the god layer (fx/decals.ts), not the terrain's own ring
       const u = vis.uniforms;
       u.uDebug.value = this.debugView;
-      if (this.brush && this.brush.planet === pv.id) {
-        u.uBrushOn.value = 1;
-        u.uBrush.value.set(this.brush.dir[0], this.brush.dir[1], this.brush.dir[2], this.brush.radius / pv.params.radius);
-        if (this.brush.color) u.uBrushColor.value.set(...this.brush.color);
-      } else u.uBrushOn.value = 0;
+      u.uBrushOn.value = 0;
       vis.atmo.update(r, this.fsq);
     }
     // ── the sun's elevation at the camera (exposure, grade, AO) and the moon over the primary planet ──
     const camSunEl = this.camSunElevation(primaryVis);
     this.forestAtCamera(view, primaryVis);
     const moonOn = primaryVis ? this.moonLight(view, primaryVis, starCol) : false;
+    // ── the god layer: hand, creatures, disasters, weather, miracles (placed before the shadows and the scene) ──
+    this.godfx.brush = this.brush;
+    this.godfx.update(view, primaryVis, cam, dt, time, q);
+    // ── ships: placed, animated and their engines reported before the shadows and the scene ──
+    this.shipRefs.clear();
+    for (const v of this.planets.values()) {
+      if (!v.group.visible) continue;
+      this.shipRefs.set(v.id, { group: v.group, uniforms: v.uniforms as unknown as Record<string, IUniform>, camBody: v.camBody, pv: v.pv, hasAir: v.atmo.has, airTop: v.atmo.thickness, shadows: v === primaryVis });
+    }
+    this.ships.update(view, pose, this.shipRefs, this.scene, time, dt, this.primaryId, q.shadowCascades > 0);
     // ── cloud weather of the primary planet: organised and baked (weather + shadow cubes) BEFORE the scene, whose
     // materials read the cloud-shadow cube ──
     const cloudVis = primaryVis && primaryVis.atmo.has && primaryVis.hasClouds && primaryVis.cloudCube ? primaryVis : null;
@@ -326,6 +350,7 @@ export class Renderer {
     // (orbit lines vanish near the star: they would cross its disc as stray lines)
     const orbitVis = (this.showOrbits ? Math.min(1, Math.max(0, (minAlt - 8) / 30)) : 0) * smoothstepN(20 * starR, 30 * starR, starDist);
     this.orbits.update(view, pose, orbitVis);
+    this.ships.overlayVis = orbitVis;
 
     // ── shadows near the surface of the primary planet ──
     const alt = primaryVis ? primaryVis.altitude : 1e9;
@@ -342,7 +367,7 @@ export class Renderer {
       this.shadows.fit(cam, _sun, q.shadowCascades, near, far, Math.min(4000, pv.params.radius));
       const vis = primaryVis;
       this.shadowCull(vis, camSunEl);
-      this.shadows.render(r, this.scene, (depth) => vis.swapDepth(depth), this.perCascade);
+      this.shadows.render(r, this.scene, (depth) => { vis.swapDepth(depth); this.godfx.swapDepth(depth); this.ships.swapDepth(depth); }, this.perCascade);
     } else {
       this.shadows.uniforms.uShadowOn.value = 0;
     }
@@ -370,6 +395,8 @@ export class Renderer {
     }
     // ── water (reads copies of colour and linear depth) ──
     post.copyForWater(r, this.fsq, cam.far);
+    // ground decals and FX lights (brush, reticles, the hand's shadow, crater glow, cracks…) under the water and haze
+    this.godfx.renderDecals(r, this.scene, cam, post);
     this.waterScene.tSceneColor.value = post.sceneCopy.texture;
     this.waterScene.tSceneDepth.value = post.linDepth.texture;
     (this.waterScene.uResolution.value as Vector2).set(post.w, post.h);
@@ -477,6 +504,10 @@ export class Renderer {
     // atmosphere, so smoke against the sky is never taken for stars, with soft depth from the linear depth copy ──
     FX_EXPOSURE.value = post.exposureTexture();
     if (primaryVis) primaryVis.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
+    // the god layer's FX over the composited image (plumes, funnels, bolts, domes, auroras, the hand's glow…)
+    this.godfx.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post);
+    // launch plumes, exhaust smoke, pad clouds, landing dust, explosions and the exhaust's light (render/fx/launch.ts)
+    this.ships.fx.render(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
 
     // ── white balance: like a camera set to "daylight here", neutralise the sun's colour at ~50° elevation on the
     // world we are at, so noon light reads white while sunsets (much redder than that) stay warm
@@ -730,6 +761,8 @@ export class Renderer {
   }
 
   dispose(): void {
+    this.godfx.dispose();
+    this.ships.dispose();
     for (const v of this.planets.values()) v.dispose();
     this.planets.clear();
     this.post.dispose();

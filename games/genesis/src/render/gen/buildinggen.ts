@@ -2866,6 +2866,168 @@ function launchpad(k: KitBuilder, spec: BuildingSpec, rng: Rng, em: Emitter[]): 
   return H + 1;
 }
 
+// ── additive (render lane, phase 4b: ships): the airship mast, the habitat dome and the star gate (buildings.json) ──
+
+/** a lattice tower of four tapering legs with X bracing between y0 and y1 (half-widths w0 at the foot, w1 at the head) */
+function latticeTower(k: KitBuilder, y0: number, y1: number, w0: number, w1: number, step: number, leg: number, brace: number, col: RGB): void {
+  const at = (y: number) => w0 + (w1 - w0) * ((y - y0) / Math.max(1e-6, y1 - y0));
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.beam([sx * w0, y0, sz * w0], [sx * w1, y1, sz * w1], leg, leg, SURF.iron, PART.frame, col, 0.9);
+  for (let y = y0; y < y1 - 1e-3; y += step) {
+    const ya = y, yb = Math.min(y1, y + step);
+    const a = at(ya), b = at(yb);
+    const faces: [V3, V3, V3, V3][] = [
+      [[-a, ya, a], [a, ya, a], [-b, yb, b], [b, yb, b]], [[a, ya, a], [a, ya, -a], [b, yb, b], [b, yb, -b]],
+      [[a, ya, -a], [-a, ya, -a], [b, yb, -b], [-b, yb, -b]], [[-a, ya, -a], [-a, ya, a], [-b, yb, -b], [-b, yb, b]],
+    ];
+    for (const [p0, p1, q0, q1] of faces) {
+      k.beam(p0, q1, brace, brace, SURF.iron, PART.frame, col, 0.9);
+      k.beam(p1, q0, brace, brace, SURF.iron, PART.frame, col, 0.9);
+      k.beam(q0, q1, brace, brace, SURF.iron, PART.frame, col, 0.9);
+    }
+  }
+}
+
+/**
+ * airship mast: a 30 m steel lattice tower on a concrete footing, a winch house and a stair at its foot, a railed
+ * platform and the mooring cone at its head (the airship's nose rides it: render/life/ships.ts moors at 30.5 m), a red
+ * beacon on top and guy cables to anchor blocks
+ */
+function airshipMast(k: KitBuilder, spec: BuildingSpec, rng: Rng, em: Emitter[]): number {
+  const H = 29.6;
+  const steel: RGB = [0.24, 0.25, 0.26];
+  k.box(-3.4, -1.2, -3.4, 3.4, 0.4, 3.4, SURF.concrete, PART.plinth, CONCRETE, { skip: ['bottom'] });
+  latticeTower(k, 0.4, H, 2.6, 0.9, spec.lod === 0 ? 2.6 : 7, 0.3, 0.1, steel);
+  // the head: a railed platform and the mooring cone with its swivel
+  k.box(-1.8, H, -1.8, 1.8, H + 0.25, 1.8, SURF.iron, PART.frame, steel, {});
+  if (spec.lod === 0) for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    const c = Math.cos(a), s2 = Math.sin(a);
+    k.beam([c * 1.8 - s2 * 1.8, H + 1.1, s2 * 1.8 + c * 1.8], [c * 1.8 + s2 * 1.8, H + 1.1, s2 * 1.8 - c * 1.8], 0.06, 0.06, SURF.iron, PART.frame, steel, 0.9);
+  }
+  k.cylinder(0, 0, H + 0.25, H + 0.75, 0.55, 0.45, 12, SURF.metal, PART.trim, [0.5, 0.38, 0.16], { top: false });
+  k.lathe(0, 0, [[0.45, H + 0.75], [0.3, H + 1.0], [0.06, H + 1.25]], 12, SURF.metal, PART.trim, [0.55, 0.42, 0.18], 1, 1);
+  // a zig-zag stair up the first flights and a winch house at the foot
+  if (spec.lod === 0) for (let i = 0; i < 4; i++) {
+    const y = 0.4 + i * 3.2;
+    k.beam([2.9, y, -2.0 + (i % 2) * 4.0], [2.9, y + 3.2, 2.0 - (i % 2) * 4.0], 0.9, 0.08, SURF.iron, PART.frame, steel, 0.9);
+  }
+  k.box(-6.2, 0.0, -2.0, -3.6, 2.6, 2.0, SURF.metal, PART.wall, [0.3, 0.32, 0.3], { skip: ['bottom'] });
+  k.box(-6.35, 2.6, -2.15, -3.45, 2.8, 2.15, SURF.metal, PART.roof, [0.2, 0.21, 0.2], {});
+  // guy cables to anchor blocks
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2 + Math.PI / 4;
+    const x = Math.cos(a) * 11, z = Math.sin(a) * 11;
+    k.box(x - 0.6, -0.4, z - 0.6, x + 0.6, 0.5, z + 0.6, SURF.concrete, PART.plinth, CONCRETE, {});
+    k.beam([x, 0.5, z], [Math.cos(a) * 1.2, H * 0.72, Math.sin(a) * 1.2], 0.04, 0.04, SURF.rope, PART.frame, [0.05, 0.05, 0.05], 0.9);
+  }
+  em.push({ p: [0, H + 1.4, 0], kind: EMIT.blink, size: 0.35 });
+  void rng;
+  return H + 1.3;
+}
+
+/**
+ * habitat dome: a glazed geodesic dome (glass panes on a lattice of struts) on a concrete ring wall, an airlock tunnel
+ * with a hatch, solar panels and a radiator beside it; gardens and cabins inside (seen through the glass), lit at night
+ */
+function habitatDome(k: KitBuilder, spec: BuildingSpec, rng: Rng, em: Emitter[]): number {
+  const R = Math.max(5, Math.min(spec.w, spec.d) * 0.45), H = R * 0.82;
+  const steel: RGB = [0.62, 0.63, 0.62];
+  const lod0 = spec.lod === 0;
+  k.cylinder(0, 0, -0.6, 0.9, R + 0.35, R + 0.25, 32, SURF.concrete, PART.plinth, CONCRETE, { top: true, topCol: [0.3, 0.29, 0.27] });
+  // the glazing: a lathe of glass a hair inside the struts
+  const prof: [number, number][] = [];
+  const rows = lod0 ? 8 : 4;
+  for (let i = 0; i <= rows; i++) {
+    const a = (i / rows) * (Math.PI / 2);
+    prof.push([Math.max(0.05, R * Math.cos(a)), 0.9 + H * Math.sin(a)]);
+  }
+  k.lathe(0, 0, prof, lod0 ? 32 : 16, SURF.glass, PART.glass, GLASS, 1, 1);
+  // geodesic struts: rings, meridians and diagonals
+  const n = lod0 ? 16 : 8;
+  const P = (i: number, j: number): V3 => {
+    const a = (i / rows) * (Math.PI / 2), b = (j / n) * Math.PI * 2 + (i % 2) * (Math.PI / n);
+    const r = R * Math.cos(a) + 0.04, y = 0.9 + H * Math.sin(a) + 0.03;
+    return [Math.cos(b) * r, y, Math.sin(b) * r];
+  };
+  for (let i = 0; i < rows; i++) for (let j = 0; j < n; j++) {
+    k.beam(P(i, j), P(i, j + 1), 0.09, 0.09, SURF.metal, PART.frame, steel, 0.95);
+    k.beam(P(i, j), P(i + 1, j), 0.09, 0.09, SURF.metal, PART.frame, steel, 0.95);
+    if (lod0) k.beam(P(i, j), P(i + 1, j + 1), 0.07, 0.07, SURF.metal, PART.frame, steel, 0.95);
+  }
+  // inside: garden beds and two cabins
+  if (lod0) {
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + rng.float();
+      const r = R * 0.55;
+      k.box(Math.cos(a) * r - 0.9, 0.9, Math.sin(a) * r - 0.5, Math.cos(a) * r + 0.9, 1.4, Math.sin(a) * r + 0.5, SURF.earth, PART.prop, [0.07, 0.12, 0.04], {});
+    }
+    k.box(-1.6, 0.9, -1.2, 1.6, 3.4, 1.2, SURF.plaster, PART.wall, [0.62, 0.6, 0.55], { skip: ['bottom'] });
+  }
+  // the airlock: a tunnel with a hatch on its end
+  k.push(0, 0, R + 1.6, 0);
+  k.box(-1.1, 0.0, -1.8, 1.1, 2.6, 1.6, SURF.metal, PART.wall, [0.55, 0.56, 0.55], { skip: ['bottom'] });
+  k.box(-0.55, 0.1, 1.61, 0.55, 2.2, 1.66, SURF.metal, PART.door, [0.25, 0.27, 0.3], {});
+  k.box(-0.3, 1.6, 1.62, 0.3, 2.0, 1.68, SURF.glass, PART.glass, GLASS, {});
+  k.pop();
+  // solar panels on a rack and a radiator
+  if (lod0) for (let i = 0; i < 3; i++) {
+    const x = -R - 3.2, z = -3.0 + i * 3.0;
+    k.beam([x, 0.0, z], [x, 1.1, z], 0.1, 0.1, SURF.metal, PART.frame, steel, 0.9);
+    k.slab([x - 1.2, 1.5, z + 1.0], [x + 1.2, 1.0, z + 1.0], [x + 1.2, 1.0, z - 1.0], [x - 1.2, 1.5, z - 1.0], 0.05, SURF.glass, PART.prop, [0.02, 0.04, 0.12], SURF.metal, steel, 1);
+  }
+  em.push({ p: [0, 0.9 + H + 0.4, 0], kind: EMIT.blink, size: 0.18 });
+  return 0.9 + H;
+}
+
+/**
+ * star gate: a ring of dark metal and glowing chevrons standing on a stepped ramp, braced by two pylons, cables to a
+ * power house. The ring's plane is local XY (facing ±Z), centre at GATE_CENTRE_Y = 14.2 m with radius 10.6 m (the event
+ * horizon of render/gen/shipgen.ts fills it).
+ */
+function starGate(k: KitBuilder, spec: BuildingSpec, rng: Rng, em: Emitter[]): number {
+  const C = 14.2, Rr = 10.6;
+  const lod0 = spec.lod === 0;
+  const dark: RGB = [0.07, 0.07, 0.08];
+  // the ramp: a stepped platform up to the ring's foot, from both sides
+  k.box(-7, -1.0, -9, 7, 2.6, 9, SURF.concrete, PART.plinth, CONCRETE, { skip: ['bottom'] });
+  for (let i = 0; i < 6; i++) {
+    const y = 2.6 - i * 0.45;
+    k.box(-5, -1.0, 9 + i * 0.9, 5, y, 9.9 + i * 0.9, SURF.concrete, PART.plinth, mulc(CONCRETE, 0.95), { skip: ['bottom'] });
+    k.box(-5, -1.0, -9.9 - i * 0.9, 5, y, -9 - i * 0.9, SURF.concrete, PART.plinth, mulc(CONCRETE, 0.95), { skip: ['bottom'] });
+  }
+  // the ring: an outer band, an inner track, chevrons
+  const ring = (r: number): V3[] => Array.from({ length: (lod0 ? 72 : 36) + 1 }, (_, i) => { const a = (i / (lod0 ? 72 : 36)) * Math.PI * 2; return [Math.cos(a) * r, C + Math.sin(a) * r, 0] as V3; });
+  k.tube(ring(Rr + 0.95), new Array((lod0 ? 72 : 36) + 1).fill(0.95), lod0 ? 12 : 6, SURF.metal, PART.wall, dark, {});
+  k.tube(ring(Rr + 0.15), new Array((lod0 ? 72 : 36) + 1).fill(0.32), lod0 ? 8 : 4, SURF.metal, PART.trim, [0.25, 0.24, 0.22], {});
+  for (let i = 0; i < 9; i++) {
+    const a = Math.PI / 2 + (i / 9) * Math.PI * 2;
+    const c = Math.cos(a), s2 = Math.sin(a);
+    const cx = c * (Rr + 1.6), cy = C + s2 * (Rr + 1.6);
+    // a chevron: a wedge on the ring with a lamp (glows: beacon part)
+    k.push(0, 0, 0, 0);
+    const t: V3 = [-s2, c, 0];
+    const p0: V3 = [cx - t[0] * 1.0, cy - t[1] * 1.0, -1.4], p1: V3 = [cx + t[0] * 1.0, cy + t[1] * 1.0, -1.4];
+    const p2: V3 = [cx + t[0] * 1.0, cy + t[1] * 1.0, 1.4], p3: V3 = [cx - t[0] * 1.0, cy - t[1] * 1.0, 1.4];
+    k.slab(p3, p2, p1, p0, 0.5, SURF.metal, PART.trim, [0.32, 0.27, 0.18], SURF.metal, dark, 1);
+    k.box(cx - 0.3, cy - 0.3, 1.45, cx + 0.3, cy + 0.3, 1.6, SURF.glass, PART.beacon, [0.6, 0.3, 0.1], {});
+    k.box(cx - 0.3, cy - 0.3, -1.6, cx + 0.3, cy + 0.3, -1.45, SURF.glass, PART.beacon, [0.6, 0.3, 0.1], {});
+    k.pop();
+  }
+  // pylons bracing the ring
+  for (const sx of [-1, 1]) {
+    k.box(sx * 8.4 - 1.0, 2.6, -1.2, sx * 8.4 + 1.0, C - 4, 1.2, SURF.concrete, PART.wall, mulc(CONCRETE, 0.85), {});
+    k.beam([sx * 8.4, C - 4, 0], [sx * (Rr + 0.9) * 0.8, C - (Rr + 0.9) * 0.6, 0], 1.2, 1.2, SURF.metal, PART.frame, dark, 0.9);
+  }
+  // the power house and its cables
+  if (lod0) {
+    k.box(10, 0, -4, 16, 4.2, 4, SURF.concrete, PART.wall, [0.4, 0.4, 0.38], { skip: ['bottom'] });
+    for (const z of [-1.2, 0, 1.2]) k.tube([[10, 0.6, z], [8, 0.2, z], [6.5, 1.8, z * 0.5], [5.2, 2.7, z * 0.3]], [0.18, 0.18, 0.18, 0.18], 6, SURF.rope, PART.frame, [0.04, 0.04, 0.04], {});
+  }
+  em.push({ p: [0, C + Rr + 2.2, 0], kind: EMIT.blink, size: 0.35 });
+  void rng;
+  return C + Rr + 2;
+}
+
 /** livestock pen: rail fence with a gate gap, a trough and a lean shelter */
 function pen(k: KitBuilder, spec: BuildingSpec, rng: Rng): number {
   const W = spec.w, D = spec.d;
@@ -3185,6 +3347,9 @@ export function buildingMesh(spec: BuildingSpec): BuildingMesh {
     case 'factory': h = factory(k, spec, L, rng, em); break;
     case 'radio': h = radio(k, spec, L, rng, em); break;
     case 'launchpad': h = launchpad(k, spec, rng, em); break;
+    case 'airship-mast': h = airshipMast(k, spec, rng, em); break;
+    case 'habitat-dome': h = habitatDome(k, spec, rng, em); break;
+    case 'star-gate': h = starGate(k, spec, rng, em); break;
     case 'pen': h = pen(k, spec, rng); break;
     case 'well': h = well(k, spec, rng); break;
     case 'hive-mound': h = hiveMound(k, spec, L, rng); break;

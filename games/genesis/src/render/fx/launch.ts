@@ -22,7 +22,7 @@
 // moves it on exactly.
 
 import {
-  AdditiveBlending, CustomBlending, CylinderGeometry, DynamicDrawUsage, Float32BufferAttribute, Group, InstancedBufferAttribute,
+  AdditiveBlending, CustomBlending, CylinderGeometry, DoubleSide, DynamicDrawUsage, Float32BufferAttribute, Group, InstancedBufferAttribute,
   InstancedBufferGeometry, Matrix4, Mesh, OneFactor, OneMinusSrcAlphaFactor, Quaternion, ShaderMaterial, Vector2, Vector3,
   Vector4, type Camera, type IUniform, type Scene, type Texture, type WebGLRenderer, type WebGLRenderTarget,
 } from 'three';
@@ -31,8 +31,21 @@ import { NOISE_GLSL } from '../shaders/noise.glsl.ts';
 import { FX_EXPOSURE } from './particles.ts';
 import { hashFloat } from '../../sim/core/rng.ts';
 
-/** the camera's tremble (0..1), set every frame from the engines and explosions near the camera (camera/rig.ts) */
+/** the camera's tremble (0..1), set every frame from the engines and explosions near the camera */
 export const SHAKE = { amp: 0 };
+
+/**
+ * Shake the three.js camera (not the pose: picking and the sim's focus stay steady) by SHAKE.amp: a rumble of a few
+ * tenths of a degree at full amplitude, layered frequencies so it reads as a roar, not a wobble.
+ */
+export function applyLaunchShake(cam: { rotateX(a: number): unknown; rotateY(a: number): unknown; rotateZ(a: number): unknown }, time: number): void {
+  const a = SHAKE.amp;
+  if (a < 0.002) return;
+  const k = a * a * 0.006;
+  cam.rotateX(k * (Math.sin(time * 31.0) * 0.6 + Math.sin(time * 57.3 + 1.3) * 0.4));
+  cam.rotateY(k * (Math.sin(time * 27.1 + 2.1) * 0.6 + Math.sin(time * 61.7 + 0.4) * 0.4));
+  cam.rotateZ(k * 0.5 * Math.sin(time * 19.3 + 0.7));
+}
 
 /** render layer of the launch / world FX (drawn after the atmosphere composite, never in the opaque pass) */
 export const FX_LAYER = 5;
@@ -785,6 +798,26 @@ export class LaunchFx {
   }
   private flashes: { planet: number; x: number; y: number; z: number; t: number; scale: number }[] = [];
 
+  /** a burning wreck: dark smoke and a few flames rising for a while after a failure on the ground */
+  smolder(planet: number, ctx: LaunchPlanetCtx, pos: Vector3, k: number, scale: number): void {
+    const P = this.planetFx(planet, ctx);
+    if (!P || k <= 0) return;
+    const t1 = this.now;
+    const key = `smolder:${planet}:${pos.x.toFixed(0)}`;
+    const last = this.lastPos.get(key);
+    const t0 = last && t1 - last.t < 5 && t1 >= last.t ? last.t : t1 - 0.05;
+    this.lastPos.set(key, { x: pos.x, y: pos.y, z: pos.z, t: t1 });
+    const up = _w.copy(pos).normalize();
+    const n = Math.min(Math.round(9 * k * (t1 - t0) * scale), 60);
+    for (let i = 0; i < n; i++) {
+      const s = hashFloat(i, t1 * 29, 77);
+      const tb = t0 + (t1 - t0) * ((i + 0.5) / Math.max(1, n));
+      const jx = (hashFloat(i, t1, 78) - 0.5) * 6 * scale, jz = (hashFloat(i, t1, 79) - 0.5) * 6 * scale;
+      P.puffs.spawn(pos.x + jx, pos.y, pos.z + jz, tb, up.x * 3, up.y * 3, up.z * 3, i % 4 === 0 ? PUFF.fireball : PUFF.smoke, 2 * scale, (14 + 10 * s) * scale, 10 + 8 * s, s);
+    }
+    this.lightList.push({ planet, x: pos.x, y: pos.y, z: pos.z, reach: 40 * scale, r: 4e4 * k * scale, g: 1.8e4 * k * scale, b: 5e3 * k * scale });
+  }
+
   /** an ignition flash at the base of a launcher (once, as the engines light) */
   ignite(planet: number, ctx: LaunchPlanetCtx, pos: Vector3, scale: number): void {
     const P = this.planetFx(planet, ctx);
@@ -797,7 +830,7 @@ export class LaunchFx {
     for (const s of this.plumes) if (!s.used) { s.used = true; return s; }
     const geo = new CylinderGeometry(0.5, 0.5, 1, 20, 28, true);
     const mk = (core: boolean) => new ShaderMaterial({
-      vertexShader: PLUME_VERT, fragmentShader: PLUME_FRAG, transparent: true, depthWrite: false, depthTest: false, blending: AdditiveBlending, side: 2,
+      vertexShader: PLUME_VERT, fragmentShader: PLUME_FRAG, transparent: true, depthWrite: false, depthTest: false, blending: AdditiveBlending, side: DoubleSide,
       uniforms: {
         uLen: { value: 30 }, uR0: { value: 1 }, uExp: { value: 1 }, uThrust: { value: 1 }, uTime: { value: 0 }, uCore: { value: core ? 1 : 0 },
         uDiamonds: { value: 1 }, uHot: { value: new Vector3(1, 0.9, 0.7) }, uCool: { value: new Vector3(1, 0.45, 0.1) }, uSeed: { value: 0 },

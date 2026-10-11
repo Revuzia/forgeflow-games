@@ -14,6 +14,7 @@ import { eraKnowledge } from '../recipes/recipes.ts';
 import { createBand, found, reachable, searchSite, siteScore, assignRoles, chooseCrop, seasonTemps } from './settlement.ts';
 import { planBuilding, canBuild } from './buildings.ts';
 import { learn, refreshLibrary } from './knowledge.ts';
+import { worldSalt } from './lifecycle.ts';
 import { storeAdd } from './store.ts';
 import { updateResources, itemIdx } from './resources.ts';
 import { cellPos, isLand } from './world.ts';
@@ -58,8 +59,10 @@ export function bestSiteOnPlanet(x: PCtx, species: number, salt: number): number
   let best = -1, bs = -Infinity;
   const step = Math.max(1, Math.floor(x.p.count / 2500));
   const off = salt % step;
+  // (the jitter is the world seed's: cell indices are the same on every world of a size)
+  const dice = worldSalt(x, 0x5173);
   for (let c = off; c < x.p.count; c += step) {
-    const v = siteScore(x, species, c) + hashFloat(c, salt, 0x5173) * 0.6;
+    const v = siteScore(x, species, c) + hashFloat(c, salt, dice) * 0.6;
     if (v > bs) { bs = v; best = c; }
   }
   return best;
@@ -111,12 +114,14 @@ function distributeKnowledge(x: PCtx, st: Settlement, all: number[]): void {
   const A = x.A;
   const members = x.ps.members.get(st.id) ?? [];
   const adults = members.filter((m) => !(A.flags[m] & AgentFlag.child));
+  // who knows what, and who masters it, is the world seed's draw (agent ids repeat from world to world)
+  const knowDice = worldSalt(x, 0xd157), masterDice = worldSalt(x, 0x3a5);
   for (const k of all) {
     const r = x.rt.list[k];
     const share = r.teach <= 0.2 ? 1 : r.teach <= 0.35 ? 0.6 : 0.3;
     let knowers = 0;
     for (const m of adults) {
-      if (share >= 1 || hashFloat(A.id[m], k, 0xd157) < share) {
+      if (share >= 1 || hashFloat(A.id[m], k, knowDice) < share) {
         A.setKnows(m, k, true);
         for (const g of r.grants) A.setKnows(m, g, true);
         knowers++;
@@ -130,7 +135,7 @@ function distributeKnowledge(x: PCtx, st: Settlement, all: number[]): void {
     let masters = 0;
     for (const m of adults) {
       if (!A.knows(m, k) || masters >= 2) continue;
-      A.skills[m * NS + r.skill] = Math.max(A.skills[m * NS + r.skill], 0.72 + 0.2 * hashFloat(A.id[m], k, 0x3a5));
+      A.skills[m * NS + r.skill] = Math.max(A.skills[m * NS + r.skill], 0.72 + 0.2 * hashFloat(A.id[m], k, masterDice));
       masters++;
     }
   }
@@ -204,7 +209,7 @@ function establish(x: PCtx, st: Settlement, cell: number, era: number, size: str
     const f = x.p.f;
     for (const c of (st.res?.fertile ?? []).slice(0, Math.min(10, 2 + Math.floor(pop / 5)))) {
       f.cropSpecies[c] = st.crop;
-      f.crop[c] = 0.25 + 0.4 * hashFloat(c, st.id, 0xf1e1);
+      f.crop[c] = 0.25 + 0.4 * hashFloat(c, st.id, worldSalt(x, 0xf1e1));
       f.tree[c] = 0; f.shrub[c] = 0; f.grass[c] *= 0.3;
       st.fields.push(c);
     }

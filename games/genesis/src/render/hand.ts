@@ -439,6 +439,10 @@ export class HandVisual {
   readonly pinch = new Vector3();
   /** the palm's grip point (body frame) for boulders and trees */
   readonly grip = new Vector3();
+  /** a held thing's swing (rad): a pendulum driven by the hand's acceleration */
+  swing = 0;
+  private swingV = 0;
+  private lastVf = 0;
   private pose: HandPose = 'open';
   private poseAt = 0;
   private slapAt = -1e9;
@@ -652,6 +656,15 @@ export class HandVisual {
     this.pinch.set((tTip[0] + iTip[0]) * 0.5, (tTip[1] + iTip[1]) * 0.5, (tTip[2] + iTip[2]) * 0.5).applyMatrix4(m);
     const gp = rig.carry(hm.idx.meta[2], [0.03, -0.11, 0.42], [0, 0, 0]);
     this.grip.set(gp[0], gp[1], gp[2]).applyMatrix4(m);
+    // the pendulum under the hand: pushed by its forward acceleration, damped
+    {
+      const vf = this.vel.dot(this.fwd);
+      const acc = dt > 0 ? (vf - this.lastVf) / dt : 0;
+      this.lastVf = vf;
+      const w0 = 3.2;
+      this.swingV += (-w0 * w0 * this.swing - 1.4 * this.swingV - acc * 0.12) * dt;
+      this.swing = Math.max(-0.9, Math.min(0.9, this.swing + this.swingV * dt));
+    }
     // ── look ──
     const align = hv?.alignment ?? 0;
     this.u.uAlign.value = align;

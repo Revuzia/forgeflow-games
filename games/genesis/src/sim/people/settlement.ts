@@ -68,7 +68,7 @@ export function newSettlement(x: PCtx, species: number, cell: number, band: bool
   const palette = sp.style.palette ?? ['#c8a060'];
   const st: Settlement = {
     id, name: '', species, cell, pos, founded: band ? -1 : x.tick, band, leader: 0, parent: parent ? parent.id : -1, feature: 'plain',
-    language: lang >>> 0, langSeed: lang >>> 0, color: packColor(palette[hash32(id, 0xc01) % palette.length]), polity: parent ? parent.polity : id, fallen: -1,
+    language: lang >>> 0, langSeed: lang >>> 0, color: packColor(palette[hash32(id, worldSalt(x, 0xc01)) % palette.length]), polity: parent ? parent.polity : id, fallen: -1,
     store: new Array<number>(x.c.items.size).fill(0), households: [],
     culture: {
       alignment: 0, taboos: parent ? parent.culture.taboos.slice() : x.info[species].taboos.slice(), stories: [],
@@ -321,8 +321,9 @@ export function createBand(x: PCtx, species: number, cell: number, n: number, op
   // beyond the planet's individual cap the rest live as the settlement's cohort (a core of four is always individual)
   const room = Math.max(0, x.u.settings.maxAgents - x.A.count);
   const individuals = Math.min(n, Math.max(room, Math.min(n, 4)));
-  // the ages (and the cohort's age bands) are the world seed's draw: band ids repeat from world to world
-  const ageDice = worldSalt(x, 0xa6e);
+  // the ages (and the cohort's age bands) and where each stands are the world seed's draw: band ids repeat from world
+  // to world
+  const ageDice = worldSalt(x, 0xa6e), angleDice = worldSalt(x, 0xa6f), distDice = worldSalt(x, 0xa70);
   for (let i = 0; i < n; i++) {
     const r = hashFloat(st.id, i, ageDice);
     // a living band: mostly young adults, some children and elders
@@ -331,8 +332,8 @@ export function createBand(x: PCtx, species: number, cell: number, n: number, op
       continue;
     }
     const age = r < 0.22 ? r / 0.22 * def.maturity * 0.95 : r < 0.9 ? def.maturity + (r - 0.22) / 0.68 * (def.elder - def.maturity) : def.elder + (r - 0.9) * 10 * Math.max(1, def.lifespan - def.elder) * 0.5;
-    const a = hashFloat(st.id, i, 0xa6f) * Math.PI * 2;
-    const d = 3 + 18 * Math.sqrt(hashFloat(st.id, i, 0xa70));
+    const a = hashFloat(st.id, i, angleDice) * Math.PI * 2;
+    const d = 3 + 18 * Math.sqrt(hashFloat(st.id, i, distDice));
     const pos = [0, 0, 0];
     const ctr = [P[cell * 3], P[cell * 3 + 1], P[cell * 3 + 2]];
     // place around the cell centre
@@ -449,7 +450,7 @@ function bandStep(x: PCtx, st: Settlement, hour: number): void {
       // nothing good anywhere near: walk on ~8 cells toward the greenest, wettest, flattest land in view, holding a
       // bearing for two days (short random legs went nowhere: a band set down in dry savanna circled for weeks
       // 600 m from good land)
-      const base = hashFloat(st.id, Math.floor(x.tick / (2 * x.day)), 0xd1e) * Math.PI * 2;
+      const base = hashFloat(st.id, Math.floor(x.tick / (2 * x.day)), worldSalt(x, 0xd1e)) * Math.PI * 2;
       const out = [0, 0, 0];
       const f = x.p.f, g = x.p.grid;
       let c = here, bestP = -Infinity;
@@ -707,7 +708,8 @@ function planJobs(x: PCtx, st: Settlement): void {
   for (const k of st.library) if (x.rt.list[k].writes && st.written.length < st.library.length) add(k, 1);
   // everything else they know, now and then (practice keeps skills alive)
   const hour = Math.floor(x.tick / 60);
-  for (const k of st.library) if (x.rt.list[k].kind === 'craft' && hashFloat(st.id, k, hour, 0x10b) < 0.08) add(k, 1);
+  const practice = worldSalt(x, 0x10b);
+  for (const k of st.library) if (x.rt.list[k].kind === 'craft' && hashFloat(st.id, k, hour, practice) < 0.08) add(k, 1);
   st.jobs = jobs.slice(0, 12);
 }
 
@@ -897,20 +899,22 @@ function births(x: PCtx, st: Settlement, hours = 1): void {
   const atCap = A.count >= x.u.settings.maxAgents;
   const beds = x.ps.of(st.id).filter((b) => b.progress >= 1 && !(b.flags & BuildingFlag.ruined)).reduce((a, b) => a + x.c.buildings.list[b.type].capacity, 0);
   const crowd = members.length > beds + 4 ? 0.5 : 1;
+  // (the world seed's dice: agent and settlement ids and ticks repeat from world to world — lifecycle.ts worldSalt)
   if (def.hive) {
     const queen = members.find((m) => def.hive!.castes[A.caste[m]] === def.hive!.queen);
     if (queen === undefined) {
       // the hive raises a new queen from a worker
       const w = members.find((m) => !(A.flags[m] & AgentFlag.child) && def.hive!.castes[A.caste[m]] === 'worker');
-      if (w !== undefined && hashFloat(st.id, x.tick, 0x9ee) < chanceIn(0.05, hours)) A.caste[w] = def.hive.castes.indexOf(def.hive.queen);
+      if (w !== undefined && hashFloat(st.id, x.tick, worldSalt(x, 0x9ee)) < chanceIn(0.05, hours)) A.caste[w] = def.hive.castes.indexOf(def.hive.queen);
       return;
     }
     const p = def.fertility * 8 * perHour * plenty * crowd;
-    if (hashFloat(A.id[queen], x.tick, 0xb1b) < p) {
+    if (hashFloat(A.id[queen], x.tick, worldSalt(x, 0xb1b)) < p) {
       if (atCap) st.cohort.n[0] += 1; else birth(x, st, queen, -1);
     }
     return;
   }
+  const dice = worldSalt(x, 0xb1c);
   for (const m of members) {
     if (!(A.flags[m] & AgentFlag.female) || A.flags[m] & (AgentFlag.child | AgentFlag.elder) || !A.partner[m]) continue;
     const f = A.slotOf(A.partner[m]);
@@ -918,14 +922,14 @@ function births(x: PCtx, st: Settlement, hours = 1): void {
     const age = (x.tick - A.birth[m]) / x.year;
     if (age > def.elder - 5) continue;
     const p = def.fertility * perHour * plenty * crowd * (0.5 + A.mood[m]);
-    if (hashFloat(A.id[m], x.tick, 0xb1c) < p) {
+    if (hashFloat(A.id[m], x.tick, dice) < p) {
       if (atCap) st.cohort.n[0] += 1; else birth(x, st, m, f);
     }
   }
 }
 
-/** deaths of old age over the last `hours` hours (perf/plapse.ts; 1 = the plain hourly roll) */
-function oldAge(x: PCtx, st: Settlement, hours = 1): void {
+/** deaths of old age over the last `hours` hours (perf/plapse.ts; 1 = the plain hourly roll; exported for tests) */
+export function oldAge(x: PCtx, st: Settlement, hours = 1): void {
   const A = x.A;
   const members = (x.ps.members.get(st.id) ?? []).slice();
   const perHour = (60 / x.year) * hours;
@@ -944,7 +948,9 @@ function oldAge(x: PCtx, st: Settlement, hours = 1): void {
 function sicknessAndAccidents(x: PCtx, st: Settlement, hours = 1): void {
   const ctx = st.res?.contexts ?? [];
   const has = (k: string) => ctx.includes(k);
-  const roll = (salt: number, p: number) => hashFloat(st.id, x.tick, salt, 0xacc) < chanceIn(p, hours);
+  // (the world seed's dice: settlement ids and ticks repeat from world to world)
+  const dice = worldSalt(x, 0xacc);
+  const roll = (salt: number, p: number) => hashFloat(st.id, x.tick, salt, dice) < chanceIn(p, hours);
   const lit = x.ps.of(st.id).some((b) => b.fuel > 0);
   const f = x.p.f;
   // a fire burning in the territory: someone may carry it home (fire-keeping)
@@ -1068,7 +1074,7 @@ function splitCheck(x: PCtx, st: Settlement): void {
   const limit = 70 + 18 * st.era;
   if (pop < limit) return;
   const crowded = foodDays(x, st) < pop * 2 || (st.res?.fertile.length ?? 0) < 2;
-  if (!crowded && hashFloat(st.id, x.tick, 0x5b1) > 0.08) return;
+  if (!crowded && hashFloat(st.id, x.tick, worldSalt(x, 0x5b1)) > 0.08) return;
   // a third of the households leave, with what they know
   const leaving = st.households.filter((h, i) => i % 3 === 2 && h.members.length > 0);
   if (!leaving.length) return;

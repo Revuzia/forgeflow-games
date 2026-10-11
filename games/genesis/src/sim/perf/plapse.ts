@@ -53,8 +53,11 @@
 //
 // What this costs in fidelity is measured against 1x over FIVE game years (round 2; population, food in store by
 // year, ideas, era, discoveries, buildings, births, deaths by cause; 6 seeds, against a 1x twin perturbed once as the
-// noise yardstick; deaths by cause over 12 seeds whose agent ids — and so initial ages and old-age rolls — differ):
-// _harness/scratch/perf3/r2/curves.ts + cmp12.ts (by year; deaths by cause); the numbers are in CONTRACT §5.
+// noise yardstick; deaths by cause over 12 seeds): _harness/scratch/perf3/r2/curves.ts + cmp12.ts (by year; deaths by
+// cause); the numbers are in CONTRACT §5. (Those runs predate the seed salt of the peoples' dice — lifecycle.ts
+// worldSalt: agent ids repeat from world to world, so plain runs of any seed drew the same initial ages and old-age
+// rolls; the harness's SALT=1 runs — all 12 deaths-by-cause seeds, 6 of the 12 curve seeds — offset the ids per seed.)
+// Nothing here draws those dice: settlement.ts rolls births, old age and accidents with the window's chance itself.
 
 import type { PCtx } from '../people/ctx.ts';
 import type { Settlement, Building } from '../people/state.ts';

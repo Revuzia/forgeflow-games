@@ -101,8 +101,9 @@ export function promote(x: PCtx, st: Settlement, n: number): number {
   const co = st.cohort;
   let made = 0;
   const sp = x.info[st.species].def;
-  // their ages are the world seed's draw (settlement ids and ticks repeat from world to world; lifecycle.ts worldSalt)
-  const ageDice = worldSalt(x, 0xc040);
+  // their ages and what they know are the world seed's draw (settlement ids and ticks repeat from world to world;
+  // lifecycle.ts worldSalt)
+  const ageDice = worldSalt(x, 0xc040), knowDice = worldSalt(x, 0xc041);
   for (let i = 0; i < n; i++) {
     const band: number = co.n[1] >= 1 ? 1 : co.n[0] >= 1 ? 0 : co.n[2] >= 1 ? 2 : -1;
     if (band < 0) break;
@@ -110,7 +111,7 @@ export function promote(x: PCtx, st: Settlement, n: number): number {
     const r = hashFloat(st.id, x.tick, i, ageDice);
     const age = band === 0 ? r * sp.maturity : band === 1 ? sp.maturity + r * (sp.elder - sp.maturity) : sp.elder + r * Math.max(1, sp.lifespan - sp.elder);
     const knowledge: number[] = [];
-    if (band > 0) for (const [key, f] of Object.entries(co.know)) if (hashFloat(st.id, Number(key), x.tick + i, 0xc041) < f) knowledge.push(Number(key));
+    if (band > 0) for (const [key, f] of Object.entries(co.know)) if (hashFloat(st.id, Number(key), x.tick + i, knowDice) < f) knowledge.push(Number(key));
     knowledge.sort((a, b) => a - b);
     const s = spawnAgent(x, st, { ageYears: age, knowledge, skill: co.skill + 0.1 });
     x.A.needs[s * NEED_N + FOOD] = 0.7;

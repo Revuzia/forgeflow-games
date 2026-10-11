@@ -127,6 +127,8 @@ export class Toasts {
   private overflowEl: HTMLDivElement | null = null;
   /** muted while the boot / a load replays history */
   enabled = true;
+  /** the opening is on: the worlds' firsts are its whispers, not toasts */
+  muteMilestones = false;
   /** lifetime of news toasts (ms); screenshots of a software-rendered page raise it (__GENESIS__.toastLife) */
   life = 7800;
   /** words for people (the shell's: coordinates → places, minutes → hours) */
@@ -280,6 +282,8 @@ export class Toasts {
       const e = c.e;
       const milestone = e.weight >= 2 || (e.kind === 'founding' && e.weight >= 1);
       if (!milestone || e.kind === 'death') continue;
+      // (during the opening the world's firsts — air, the first sea, green — are whispered, not toasted)
+      if (this.muteMilestones && (e.kind === 'nature' || e.kind === 'world' || e.kind === 'milestone')) continue;
       if (this.forgetTick >= 0 && e.tick > this.forgetTick) continue;
       this.show({ tick: e.tick, kind: kindOfChronicle(e.kind), title: titleOfChronicle(e.kind, view, e.planet), text: e.text, date: `Year ${e.year} · day ${e.day}`, at: this.placeOf(view, e), planet: e.planet });
     }
@@ -418,6 +422,8 @@ export class Toasts {
         return;
       }
       case 'milestone': {
+        // the opening says the worlds' firsts itself, in its whispers
+        if (this.muteMilestones) return;
         // the worlds' firsts (air, the first rain, the first sea, green, people, fire, night): the god's own news
         const c = this.claim(e.tick, (q) => q.kind === 'god' || q.kind === 'world' || q.kind === 'milestone');
         this.show({ kind: 'god', title: `${titleOfChronicle('world', view, planet).replace('The worlds', 'A first')}`, text: c ? c.text : e.text ?? 'Something new under the sun.', date: dateFrom(c, date), at, planet });

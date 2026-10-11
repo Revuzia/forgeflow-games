@@ -35,6 +35,9 @@ export interface InspectorDeps {
   lookAt(ref: EntityRef): void;
   follow(ref: EntityRef | null): void;
   isFollowing(ref: EntityRef): boolean;
+  /** the cinematic around a place, walking among them (src/ui/host.ts CameraHost) */
+  dolly?(ref: EntityRef): void;
+  walk?(ref: EntityRef): void;
   powers: PowerBook;
   /** arm a power with the selection (and preset values) */
   arm(p: Power, preset?: Record<string, unknown>): void;
@@ -94,6 +97,8 @@ export class Inspector {
   private gen = 0;
   private followBtn: HTMLButtonElement;
   private lookBtn: HTMLButtonElement;
+  private cineBtn: HTMLButtonElement;
+  private walkBtn: HTMLButtonElement;
   /** laws card: the path to scroll to, and edits in flight (the card does not re-render under the slider) */
   private lawFocus: string | null = null;
   private editing = 0;
@@ -123,13 +128,21 @@ export class Inspector {
       this.deps.follow(this.deps.isFollowing(r) ? null : r);
       this.syncFollow();
     });
+    this.cineBtn = el('button', 'gn-btn gn-insp-tool', 'Cinematic');
+    this.cineBtn.type = 'button';
+    this.cineBtn.addEventListener('mouseenter', () => { const k = this.deps.hint?.('cam.dolly'); this.cineBtn.title = `Circle this place like a film${k ? ` (${k})` : ''}`; });
+    this.cineBtn.addEventListener('click', () => { const r = this.entity(); if (r) this.deps.dolly?.(r); });
+    this.walkBtn = el('button', 'gn-btn gn-insp-tool', 'Walk');
+    this.walkBtn.type = 'button';
+    this.walkBtn.addEventListener('mouseenter', () => { const k = this.deps.hint?.('cam.walk'); this.walkBtn.title = `Walk among them, on foot${k ? ` (${k})` : ''}`; });
+    this.walkBtn.addEventListener('click', () => { const r = this.entity(); if (r) this.deps.walk?.(r); });
     const close = el('button', 'gn-btn gn-insp-close');
     close.type = 'button';
     close.addEventListener('mouseenter', () => { const k = this.deps.hint?.('tool.cancel'); close.title = `Close${k ? ` (${k})` : ''}`; });
     close.setAttribute('aria-label', 'Close the inspector');
     close.innerHTML = icon('close');
     close.addEventListener('click', () => this.deps.select(null));
-    tools.append(this.lookBtn, this.followBtn, close);
+    tools.append(this.lookBtn, this.followBtn, this.cineBtn, this.walkBtn, close);
     bar.append(this.head, tools);
     this.body = el('div', 'gn-insp-body');
     this.root.append(bar, this.body);
@@ -169,6 +182,8 @@ export class Inspector {
     const followable = ref.kind === 'agent' || ref.kind === 'animal' || ref.kind === 'creature' || ref.kind === 'disaster' || ref.kind === 'ship' || ref.kind === 'weather';
     this.followBtn.hidden = !followable;
     this.lookBtn.hidden = ref.kind === 'species';
+    this.cineBtn.hidden = !this.deps.dolly || ref.kind !== 'settlement';
+    this.walkBtn.hidden = !this.deps.walk || !['settlement', 'agent', 'building', 'cell', 'animal', 'creature'].includes(ref.kind);
     this.syncFollow();
     this.lastAsk = -1e9;
     this.tick(performance.now());

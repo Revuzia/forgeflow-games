@@ -1,6 +1,7 @@
-// GENESIS — the controls card (F1 or ?): the hand and the mouse, every keyboard action with its current key (from the
-// keybind registry, so a rebinding shows here at once), the gamepad, and the gesture shapes with the miracles they
-// cast. Generated, never a picture that can go stale.
+// GENESIS — the controls card (F1 or ?): the hand and the mouse, the camera's modes (follow, cinematic, walking,
+// photo) with the mouse in each, every keyboard action with its current key (from the keybind registry, so a rebinding
+// shows here at once — the photo and walking layers included), the gamepad (its camera-mode buttons too), worlds, saves
+// and mods, and the gesture shapes with the miracles they cast. Generated, never a picture that can go stale.
 
 import type { UiHost } from './host.ts';
 import { ACTIONS, comboLabel } from './keybinds.ts';
@@ -32,10 +33,34 @@ function mouseRows(hint: (id: string) => string, slap: string): [string, string]
 
 /** the sticks and menu navigation (not rebindable); the buttons come from the keybind registry */
 const PAD_FIXED: [string, string][] = [
-  ['left stick', 'the cursor (push to the edge to pan)'],
-  ['right stick', 'turn and tilt the view · points in the radial'],
+  ['left stick', 'the cursor (push to the edge to pan) · walking: walk · photo: move'],
+  ['right stick', 'turn and tilt the view · points in the radial · walking and photo: look'],
   ['D-pad / A / B', 'in a menu or panel: move, press, back'],
 ];
+
+/** the camera's modes: where each comes from, what the mouse does there, how to leave (keys are the bound ones) */
+function cameraRows(hint: (id: string) => string): [string, string][] {
+  const k = (id: string, d: string) => hint(id) || d;
+  return [
+    [k('cam.menu', '`'), 'every camera mode in one list (gamepad: View)'],
+    [k('cam.follow', 'L'), 'follow the selection (the inspector\'s Follow) · Esc stops'],
+    [k('cam.dolly', 'J'), 'cinematic: circle the selected settlement (the inspector\'s Cinematic) · drag or Esc ends it'],
+    [k('cam.walk', 'K'), 'walk among them, at the selection or the cursor (the inspector\'s Walk) · drag to look, ⇧ runs · Esc rises'],
+    [k('cam.photo', 'P'), 'photo mode: the interface goes, time stands still · drag looks, wheel zooms, click focuses'],
+    [k('cam.fly', 'V'), 'free flight · ' + k('cam.system', 'M') + ' the whole system · ' + k('cam.home', 'Home') + ' back to orbit'],
+  ];
+}
+
+/** worlds, saves and mods */
+function worldRows(hint: (id: string) => string): [string, string][] {
+  const k = (id: string, d: string) => hint(id) || d;
+  return [
+    [k('ui.newWorld', 'F3'), 'a new world: the barren world, two worlds, a living system, the sandbox, your own system — with a seed'],
+    [k('ui.saves', 'F6'), 'saves: slots with a picture and the date, export to a file, import one, autosave'],
+    [`${k('ui.quicksave', 'F5')} · ${k('ui.quickload', 'F9')}`, 'quicksave · quickload'],
+    [k('ui.mods', 'F8'), 'mods: load a content pack (JSON) from a file or an address; ?mod=<address> at start'],
+  ];
+}
 
 export class Help {
   readonly panel: Panel;
@@ -60,6 +85,8 @@ export class Help {
     const row = (k: string, v: string) => h('div', { class: 'gn-help-r' }, h('kbd', { text: k }), h('span', { text: v }));
     const slap = comboLabel(kb.keysOf('hand.slapMod')[0] ?? 'Alt');
     const mouse = col('The hand', 'open-hand', ...mouseRows((id) => kb.hint(id), slap).map(([k, v]) => row(k, v)));
+    const cams = col('Camera modes', 'camera', ...cameraRows((id) => kb.hint(id)).map(([k, v]) => row(k, v)));
+    const worlds = col('Worlds, saves, mods', 'save', ...worldRows((id) => kb.hint(id)).map(([k, v]) => row(k, v)));
     const groups = new Map<string, HTMLElement[]>();
     for (const a of ACTIONS) {
       const keys = kb.keysOf(a.id).map(comboLabel);
@@ -67,11 +94,13 @@ export class Help {
       l.push(row(keys.length ? keys.join(' · ') : a.id === 'hand.primary' ? 'left button' : '—', a.label));
       groups.set(a.group, l);
     }
-    const keyCols = [...groups.entries()].map(([g, rows]) => col(g, g === 'Camera' ? 'eye' : g === 'Time' ? 'hourglass' : g === 'Powers' ? 'radial' : g === 'Hand' ? 'open-hand' : 'menu', ...rows));
+    const GROUP_ICON: Record<string, string> = { Camera: 'eye', Time: 'hourglass', Powers: 'radial', Hand: 'open-hand', 'Photo mode': 'camera', Walking: 'walk' };
+    const keyCols = [...groups.entries()].map(([g, rows]) => col(g, GROUP_ICON[g] ?? 'menu', ...rows));
     const padRows = PAD_FIXED.map(([k, v]) => row(k, v));
     for (const a of ACTIONS) {
       const pads = kb.padOf(a.id);
-      if (pads.length) padRows.push(row(pads.map((p) => (a.hold && !/hold/i.test(a.label) ? `${p} (hold)` : p)).join(' · '), a.label));
+      const where = a.context === 'photo' ? ' (photo mode)' : a.context === 'walk' ? ' (walking)' : '';
+      if (pads.length) padRows.push(row(pads.map((p) => (a.hold && !/hold/i.test(a.label) ? `${p} (hold)` : p)).join(' · '), `${a.label}${where}`));
     }
     const pad = col('Gamepad', 'gamepad', ...padRows);
     const gest = h('div', { class: 'gn-help-col gn-help-gest' }, h('div', { class: 'gn-help-h' }, h('span', { html: icon('gesture') }), `Gestures (hold ${kb.hint('ui.gesture') || 'G'} or the middle button, draw)`));
@@ -86,6 +115,6 @@ export class Help {
     const words = h('div', { class: 'gn-help-words' },
       h('div', { class: 'gn-help-quote', text: '“Make it rain blood over Aru for three days.” “Introduce chocolate.” “Set gravity to 3.” “Teach them writing.”' }),
       h('div', { text: `Press ${kb.hint('ui.freeform') || 'Enter'} and say it: anything not in a list, the world will try — and tell you what it can do instead. ${kb.hint('ui.palette') || '/'} searches every power, law, place and person.` }));
-    b.append(h('div', { class: 'gn-help-grid' }, mouse, ...keyCols, pad), gest, words);
+    b.append(h('div', { class: 'gn-help-grid' }, mouse, cams, worlds, ...keyCols, pad), gest, words);
   }
 }

@@ -79,6 +79,7 @@ export class Photo {
   private bandAt = 0;
   private bandFocus = -1;
   private pinUntil = 0;
+  private lensKey = '';
   private hintUntil = 0;
   private sliders = new Map<string, HTMLDivElement & { setValue?: (v: number) => void }>();
   private busy = false;
@@ -279,6 +280,9 @@ export class Photo {
   frame(): void {
     if (!this.active) return;
     const L = this.lens();
+    // the lens changed elsewhere (the wheel, the pad): the panel follows
+    const lk = `${L.fov.toFixed(2)}|${L.focus.toFixed(2)}|${L.blur}|${L.exposure}|${L.bloom}|${L.vignette}|${L.grain}|${L.roll}|${L.filter}|${L.frame}|${L.guides}`;
+    if (lk !== this.lensKey) { this.lensKey = lk; this.sync(); }
     const W = window.innerWidth, H = window.innerHeight;
     const f = this.frameRect(W, H);
     // the frame: dim bars outside it

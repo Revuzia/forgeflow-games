@@ -19,6 +19,8 @@ import { Rng, hashFloat } from '../sim/core/rng.ts';
 import { blackbody, orbitOffset, orbitPlaneQuat, qAxis, qMul, qRotateInv, type D3, type DQ } from './orbits.ts';
 import type { SimBackend, SnapshotSink } from './simclient.ts';
 import { LookdevLife } from './lookdevlife.ts';
+import { LookdevGod, type GodPlanet } from './lookdevgod.ts';
+import { LookdevSpace } from './lookdevspace.ts';
 
 type Fields = Partial<Record<FieldName, Float32Array>>;
 
@@ -544,6 +546,22 @@ export class LookdevBackend implements SimBackend {
   private sink: SnapshotSink | null = null;
   private scenario = 'lookdev';
   private seed = 1;
+  /** the fabricated god layer: hand, creatures, disasters, weather, projectiles, events (client/lookdevgod.ts) */
+  private god = new LookdevGod();
+  private godPlanet(lp: LookPlanet): GodPlanet { return { snap: lp.snap, fields: lp.fields, dirty: lp.dirty, grid: getGrid(lp.snap.gridN) }; }
+  /** fabricated ships on their missions and world events: crack, erase, moon-fall, birth (client/lookdevspace.ts) */
+  private space = new LookdevSpace({
+    planets: () => this.planets,
+    addPlanet: (kind, id, name, seed, n, radius, orbit) => {
+      const lp = kind === 'terran' ? genTerran(id, name, seed, n, radius, orbit) : kind === 'desert' ? genDesert(id, name, seed, n, radius, orbit)
+        : genBarren(id, name, seed, n, radius, orbit, kind === 'moon' ? 'moon' : 'barren', kind === 'moon');
+      this.setHour(lp, 11);
+      this.planets.push(lp);
+      this.planets.sort((a, b) => a.snap.id - b.snap.id);
+    },
+    removePlanet: (id) => { this.planets = this.planets.filter((q) => q.snap.id !== id); },
+    baseBuildings: (id) => this.planets.find((q) => q.snap.id === id)?.life?.buildings ?? null,
+  });
 
   async init(scenario: string, seed: number, _options: Record<string, unknown>, sink: SnapshotSink): Promise<string[]> {
     this.sink = sink;
@@ -651,6 +669,8 @@ export class LookdevBackend implements SimBackend {
         snap.population = [lp.life.settlements.reduce((a, s) => a + s.population, 0)];
         lp.lifeSent = true;
       }
+      // the god layer acts on the fields first (a crater, lava, a wave) so its edits ship with this snapshot
+      this.god.planetSnap(this.godPlanet(lp), tick, snap);
       if (lp.dirty.size) {
         snap.fields = {};
         // copies: the client adopts the arrays (as it would transferred buffers) and we keep evolving ours
@@ -661,9 +681,12 @@ export class LookdevBackend implements SimBackend {
       }
       planets.push(snap);
     }
+    const god = this.god.global(tick, this.planets[0]?.snap.params.radius ?? 3000);
+    const space = this.space.snapshot(tick, planets);
+    const star = this.god.activity != null ? { ...this.star, activity: this.god.activity } : this.star;
     return {
-      tick, speed: this.speed, achievedSpeed: this.speed, star: this.star, planets, ships: [], creatures: [], hand: null,
-      events: [], chronicle: [], content: ['lookdev'], msPerTick: 0, restraint: false, worship: [0],
+      tick, speed: this.speed, achievedSpeed: this.speed, star, planets, ships: space.ships, creatures: god.creatures, hand: god.hand,
+      events: [...god.events, ...space.events], chronicle: [], content: ['lookdev'], msPerTick: 0, restraint: false, worship: [0],
     };
   }
 
@@ -713,8 +736,15 @@ export class LookdevBackend implements SimBackend {
       }
       case 'focus':
         return { ok: true };
-      default:
+      default: {
+        // ships and world events (ship.launch, lookdev.ship, world.crack / erase / moon-fall / birth)
+        const sr = this.space.cmd(c, this.tick);
+        if (sr) return sr;
+        // the god layer's commands (hand, creatures, disasters, weather, miracles, lookdev.*)
+        const gr = this.god.cmd(c, this.godPlanet(lp), this.tick);
+        if (gr) return gr;
         return { ok: false, msg: `lookdev has no sim: '${c.k}' is not simulated here (run without ?source=lookdev).` };
+      }
     }
   }
 

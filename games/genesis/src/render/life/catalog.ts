@@ -161,6 +161,8 @@ export const BUILDING_KINDS = [
   'hearth', 'kiln', 'furnace', 'forge', 'granary', 'workshop', 'temple', 'library', 'market', 'mill', 'aqueduct', 'wall',
   'gate', 'tower', 'dock', 'shipyard', 'lighthouse', 'observatory', 'factory', 'radio', 'launchpad', 'pen', 'well',
   'hive-mound', 'longhouse', 'barn', 'tenement', 'igloo', 'store-pit', 'oven', 'shrine', 'mine', 'powerplant', 'refinery', 'lab',
+  // additive (render lane, phase 4b: ships and space)
+  'airship-mast', 'habitat-dome', 'star-gate',
 ] as const;
 export type BuildingKind = (typeof BUILDING_KINDS)[number];
 
@@ -222,6 +224,9 @@ const DEFAULT_BUILDINGS: BuildingLook[] = [
   B('powerplant', 'powerplant', 22, 18, ['brick', 'concrete'], false, 1),
   B('refinery', 'refinery', 24, 24, ['steel', 'concrete'], false, 1),
   B('lab', 'lab', 13, 10, ['brick', 'concrete', 'glass']),
+  B('airship-mast', 'airship-mast', 13.6, 13.6, ['steel', 'timber']),
+  B('habitat-dome', 'habitat-dome', 15.3, 15.3, ['glass', 'concrete', 'steel']),
+  B('star-gate', 'star-gate', 27, 27, ['steel', 'concrete']),
 ];
 
 function kindFromDef(d: Def): BuildingKind {

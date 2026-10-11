@@ -1,6 +1,6 @@
 // GENESIS — the game menu (Esc when nothing else is open, F2, the gamepad's Start, the portal bar's pause button): the
-// doors to everything else — resume or pause, the chronicle, saves and new worlds, settings, controls, the laws of the
-// world. The world keeps living behind it unless it is paused.
+// doors to everything else — resume or pause, the chronicle, saves, a new world, mods, photo mode, the laws of the
+// world, powers, settings, controls. The world keeps living behind it unless it is paused.
 
 import type { UiHost } from './host.ts';
 import { Panel } from './panel.ts';
@@ -36,7 +36,10 @@ export class Menu {
       item(paused ? 'Let time run' : 'Pause the worlds', paused ? 'play' : 'pause', kb.hint('time.pause'), () => this.host.action('time.pause')),
       item('Back to the world', 'world', kb.hint('tool.cancel') || 'Esc', () => { /* closing is enough */ }),
       item('Chronicle', 'chronicle', kb.hint('ui.chronicle'), () => this.host.action('ui.chronicle')),
-      item('Saves and worlds', 'save', kb.hint('ui.saves'), () => this.host.action('ui.saves')),
+      item('Saves', 'save', kb.hint('ui.saves'), () => this.host.action('ui.saves')),
+      item('A new world', 'new-world', kb.hint('ui.newWorld'), () => this.host.action('ui.newWorld')),
+      item('Mods', 'mods', kb.hint('ui.mods'), () => this.host.action('ui.mods')),
+      item('Photo mode', 'camera', kb.hint('cam.photo'), () => this.host.action('cam.photo')),
       item('Laws of this world', 'law', kb.hint('ui.laws'), () => this.host.action('ui.laws')),
       item('Powers', 'palette', kb.hint('ui.palette'), () => this.host.action('ui.palette')),
       item('Settings', 'settings', kb.hint('ui.settings'), () => this.host.action('ui.settings')),

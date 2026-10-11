@@ -19,7 +19,8 @@
 
 import type { IUniform } from 'three';
 import type { InputState } from '../render/camera/common.ts';
-import type { EntityRef } from '../sim/types.ts';
+import type { CommandResult, EntityRef } from '../sim/types.ts';
+import type { ContentPack } from '../sim/content.ts';
 import type { UiHost, InspectRef, GroundHit } from './host.ts';
 import type { Power } from './powers.ts';
 import { Hud } from './hud.ts';
@@ -40,7 +41,12 @@ import { Gamepad } from './gamepad.ts';
 import { Catalog } from './catalog.ts';
 import { CreatureMarks } from './creatures.ts';
 import { Opening } from './opening.ts';
-import { ACTION_BY_ID, comboLabel, splitCombo } from './keybinds.ts';
+import { NewWorld } from './newworld.ts';
+import { Mods, type ModLibrary, type BootProblem } from './mods.ts';
+import { Photo } from './photo.ts';
+import { CameraUi } from './cammodes.ts';
+import type { LoadOutcome } from './saves.ts';
+import { ACTION_BY_ID, comboLabel, splitCombo, type Context } from './keybinds.ts';
 import { isTyping } from './dom.ts';
 import { humanize } from './words.ts';
 
@@ -58,13 +64,32 @@ export interface ShellDeps {
   uniformsOf(planet: number): Record<string, IUniform> | null;
   /** thin the cloud shell while a map overlay is on (0 = as the weather has it, 1 = gone) */
   cloudFade(k: number): void;
-  /** the opening's camera: 'star' (the system from the dark), 'world' (the home world turning into view) */
-  openingCamera?(shot: 'star' | 'world'): void;
+  /** the opening's camera: 'star' (the star from close, in the dark), 'world' (fall to the home world), 'turn' (the
+   * world turning under the camera), 'done' */
+  openingCamera?(shot: 'star' | 'world' | 'turn' | 'done'): void;
+  /** the opening's light: exposure (stops, added) and a bloom multiplier */
+  openingLight?(ev: number, bloom: number): void;
+  /** may the page play sound yet */
+  audioRunning?(): boolean;
   save(): Promise<ArrayBuffer | null>;
-  load(bytes: ArrayBuffer): Promise<{ ok: boolean; msg?: string }>;
+  /** open a save here, the packs it needs sent first */
+  load(bytes: ArrayBuffer, packs: ContentPack[]): Promise<LoadOutcome>;
   thumb(): Promise<string | null>;
-  scenario: string;
-  seed: number;
+  /** the world now (a loaded save changes it) */
+  world(): { scenario: string; seed: number };
+  /** the content packs this world has beyond the base, the library they are kept in, and sending one to the world */
+  packs(): ContentPack[];
+  library: ModLibrary;
+  addPack(pack: ContentPack): Promise<CommandResult>;
+  bootProblems(): BootProblem[];
+  /** reload into a saved slot (a fresh simulation with exactly its packs) / into a new world (an address) */
+  reloadInto(slotId: string): void;
+  leaveFor(url: string): Promise<void>;
+  /** the game's canvas (photo mode previews its filter there) */
+  canvas: HTMLCanvasElement;
+  /** the sun's hour at the camera and setting it (photo mode) */
+  localHour(): number;
+  setLocalHour(h: number): void;
   audioReady(): boolean;
   /** the dev overlay */
   dev: boolean;
@@ -79,10 +104,13 @@ const CAM_KEYS: Record<string, [string, string]> = {
 };
 
 /** what still works while a veiled window (settings, saves, the controls card, the menu) is open */
-const MODAL_OK = new Set(['ui.settings', 'ui.saves', 'ui.help', 'ui.menu', 'ui.quicksave', 'ui.quickload', 'ui.chronicle', 'ui.hide', 'tool.cancel',
+const MODAL_OK = new Set(['ui.settings', 'ui.saves', 'ui.help', 'ui.menu', 'ui.newWorld', 'ui.mods', 'ui.quicksave', 'ui.quickload', 'ui.chronicle', 'ui.hide', 'tool.cancel',
   'time.pause', 'time.speed1', 'time.speed10', 'time.speed100', 'time.speed1000', 'time.faster', 'time.slower', 'time.stepTick', 'time.stepHour', 'time.stepDay']);
 
-type PressKind = 'none' | 'tool' | 'hand' | 'camera' | 'gesture' | 'right';
+type PressKind = 'none' | 'tool' | 'hand' | 'camera' | 'gesture' | 'right' | 'photo';
+
+/** what still works in photo mode besides its own layer: time, the windows that explain it, cancel */
+const PHOTO_OK = new Set(['tool.cancel', 'ui.help', 'cam.photo', 'time.pause', 'time.speed1', 'time.speed10', 'time.speed100', 'time.speed1000', 'time.faster', 'time.slower', 'time.stepTick', 'time.stepHour', 'time.stepDay']);
 
 export class Shell {
   readonly hud: Hud;
@@ -103,6 +131,10 @@ export class Shell {
   readonly catalog: Catalog;
   readonly creatures: CreatureMarks;
   readonly opening: Opening;
+  readonly newWorld: NewWorld;
+  readonly mods: Mods;
+  readonly photo: Photo;
+  readonly cam: CameraUi;
   private deps: ShellDeps;
   private host: UiHost;
   /** the mouse's last position (CSS px), null when it left the canvas */
@@ -159,6 +191,8 @@ export class Shell {
       lookAt: (ref) => host.lookAtEntity(ref),
       follow: (ref) => host.follow(ref),
       isFollowing: (ref) => host.isFollowing(ref),
+      dolly: (ref) => host.cam?.dolly(ref),
+      walk: (ref) => host.cam?.walk(ref),
       powers: host.powers,
       arm: (p, preset) => this.arm(p, preset),
       live: (ref) => this.live(ref),
@@ -193,19 +227,42 @@ export class Shell {
     this.chronicle = new Chronicle(root, host);
     this.pad = new Gamepad(world);
     this.settings = new Settings(root, { host, nextPadButton: (s) => this.pad.nextButton(s), audioReady: () => deps.audioReady() });
-    this.saves = new Saves(root, { host, save: () => deps.save(), load: (b) => deps.load(b), thumb: () => deps.thumb(), scenario: deps.scenario, seed: deps.seed, dev: deps.dev });
+    this.saves = new Saves(root, {
+      host, library: deps.library, save: () => deps.save(), load: (b, packs) => deps.load(b, packs), thumb: () => deps.thumb(), world: () => deps.world(),
+      packs: () => deps.packs(), reloadInto: (id) => deps.reloadInto(id), openMods: () => this.openWindow('mods'), openNewWorld: () => this.openWindow('newWorld'),
+      loaded: () => { this.opening.end(); this.newWorld.close(); },
+    });
+    this.newWorld = new NewWorld(root, {
+      host, library: deps.library, dev: deps.dev, world: () => deps.world(),
+      openSaves: () => this.openWindow('saves'),
+      begin: async (url) => {
+        // the world being left is kept as the autosave first (when autosave is on and there is a living world)
+        if (host.source === 'worker' && host.prefs.value.game.autosaveMinutes > 0 && !this.opening.isActive) await this.saves.autosave().catch(() => false);
+        await deps.leaveFor(url);
+      },
+    });
+    this.mods = new Mods(root, {
+      host, library: deps.library, packs: () => deps.packs(), addToWorld: (p) => deps.addPack(p), bootProblems: () => deps.bootProblems(),
+      openNewWorld: () => this.openWindow('newWorld'),
+    });
     this.help = new Help(root, host);
     this.menu = new Menu(root, host);
     this.creatures = new CreatureMarks(world, host);
-    this.opening = new Opening(root, world, {
+    // photo mode and the camera's chip live beside the panels, not in them: they stay while the interface is hidden
+    this.photo = new Photo(parent, { host, canvas: deps.canvas, hour: () => deps.localHour(), dayHours: () => host.view.planet(host.primary())?.params.dayHours ?? 24, setHour: (hh) => deps.setLocalHour(hh) });
+    this.cam = new CameraUi(parent, { host, nameOf: (ref) => this.catalog.nameOf(ref as EntityRef), uiVisible: () => deps.uiVisible(), action: (id) => this.action(id) });
+    // (the opening's dark covers everything, the interface's own hiding included: it hangs from the page's UI root)
+    this.opening = new Opening(root, parent, {
       host,
-      action: (id) => this.action(id),
       openFreeform: (text) => this.openFreeform(text),
       openPalette: (q) => this.openPalette(q),
-      openRadialAt: (cat) => this.radial.openCategory(cat),
-      newWorld: (scenario) => this.saves.newWorld(scenario, deps.seed),
-      openSaves: () => this.openWindow('saves'),
+      openMenu: () => { this.newWorld.open({ fromOpening: true }); },
+      menuOpen: () => this.modal(),
       camera: (shot) => deps.openingCamera?.(shot),
+      light: (ev, bloom) => deps.openingLight?.(ev, bloom),
+      audioRunning: () => deps.audioRunning?.() ?? false,
+      setUi: (v) => deps.setUi(v),
+      arm: (p, preset) => this.arm(p, preset),
     });
     this.pad.onButton = (name, down) => this.padButton(name, down);
     // preferences that are the interface's own
@@ -280,8 +337,11 @@ export class Shell {
   }
 
   /** open a veiled window: the game menu gives way to it, the transient pickers close, it draws on top */
-  openWindow(which: 'settings' | 'saves' | 'help' | 'menu'): void {
-    const p = which === 'settings' ? this.settings : which === 'saves' ? this.saves : which === 'help' ? this.help : this.menu;
+  openWindow(which: 'settings' | 'saves' | 'help' | 'menu' | 'newWorld' | 'mods'): void {
+    const p = which === 'settings' ? this.settings : which === 'saves' ? this.saves : which === 'help' ? this.help : which === 'newWorld' ? this.newWorld : which === 'mods' ? this.mods : this.menu;
+    // (photo mode is left first: its panel and the hidden interface are not for windows)
+    if (this.photo.isActive && which !== 'help') this.host.cam?.photo(false);
+    this.cam.closeMenu();
     if (which !== 'menu' && this.menu.isOpen) this.menu.close();
     this.palette.close(); this.radial.close(); this.freeform.close();
     if (this.gestures.active || this.gestures.armed) this.gestures.cancel();
@@ -312,13 +372,30 @@ export class Shell {
     const cur = this.cursor();
     // a veiled window is up: the world waits (time and the window keys still work)
     if (this.modal() && !MODAL_OK.has(id)) { host.sound('ui.error'); return; }
+    // photo mode: its own keys, time, and the way out
+    if (id.startsWith('photo.')) { this.photo.action(id); return; }
+    if (this.photo.isActive && !PHOTO_OK.has(id)) return;
     if (id.startsWith('ui.radial@')) { const [x, y] = id.slice(10).split(',').map(Number); this.radial.open(x, Math.max(300, y), 'click'); return; }
     switch (id) {
       case 'cam.system': this.deps.camera.system(); return;
       case 'cam.fly': this.deps.camera.fly(); return;
       case 'cam.home': this.deps.camera.home(); return;
-      case 'cam.follow': this.deps.camera.follow(); return;
+      case 'cam.follow': if (host.cam?.mode() === 'follow' && !host.selected()) host.follow(null); else this.deps.camera.follow(); return;
       case 'cam.look': this.deps.camera.look(); return;
+      case 'cam.dolly': this.cinematic(); return;
+      case 'cam.walk': case 'walk.exit': {
+        const cam = host.cam;
+        if (!cam) return;
+        if (cam.mode() === 'walk') { cam.walk(null, true); return; }
+        if (id === 'walk.exit') return;
+        const s = host.selected();
+        cam.walk(s && s.kind !== 'species' && s.kind !== 'planet' ? s as EntityRef : null);
+        return;
+      }
+      case 'cam.photo': host.cam?.photo(!this.photo.isActive); return;
+      case 'cam.menu': this.cam.toggleMenu(); return;
+      case 'ui.newWorld': if (this.newWorld.isOpen) this.newWorld.close(); else { this.openWindow('newWorld'); } return;
+      case 'ui.mods': if (this.mods.isOpen) this.mods.close(); else this.openWindow('mods'); return;
       case 'time.pause': host.setSpeed(host.view.speed === 0 ? (this.lastSpeed || 1) : (this.lastSpeed = host.view.speed, 0)); return;
       case 'time.speed1': host.setSpeed(1); return;
       case 'time.speed10': host.setSpeed(10); return;
@@ -393,7 +470,9 @@ export class Shell {
   cancel(): void {
     if (this.settings.isOpen && this.settingsCapturing()) return;
     const done = (): void => { this.noteDismiss(); };
-    if (this.opening.cancel()) return done();
+    if (this.cam.menuOpen) { this.cam.closeMenu(); return done(); }
+    if (this.photo.isActive) { this.host.cam?.photo(false); return done(); }
+    if (!this.modal() && this.opening.cancel()) return done();
     if (this.hud.closePopovers()) return done();
     if (this.hand.isAiming) { this.hand.cancelAim(); return done(); }
     if (this.radial.isOpen) { this.radial.back(); return done(); }
@@ -401,12 +480,17 @@ export class Shell {
     if (this.palette.isOpen) { this.palette.close(); return done(); }
     if (this.freeform.isOpen) { this.freeform.close(); return done(); }
     // the newest open window first
-    const wins = [this.settings, this.saves, this.help, this.menu, this.chronicle].filter((p) => p.isOpen)
+    const wins = [this.settings, this.saves, this.help, this.menu, this.chronicle, this.newWorld, this.mods].filter((p) => p.isOpen)
       .sort((a, b) => Number(b.panel.root.style.zIndex || 0) - Number(a.panel.root.style.zIndex || 0));
     if (wins.length) { wins[0].close(); return done(); }
     if (this.tools.cancelStep()) return done();
     if (this.tools.isArmed) { this.tools.disarm(); return done(); }
     if (this.host.selected()) { this.host.select(null); return done(); }
+    // the camera's modes: walking rises, the cinematic and following stop
+    const cm = this.host.cam?.mode();
+    if (cm === 'walk') { this.host.cam!.walk(null, true); return done(); }
+    if (cm === 'dolly') { this.host.cam!.dolly(null); return done(); }
+    if (cm === 'follow') { this.host.follow(null); return done(); }
     if (!this.deps.uiVisible()) { this.deps.setUi(true); return done(); }
     if (performance.now() - this.dismissedAt < 400) return;
     this.openWindow('menu');
@@ -418,7 +502,33 @@ export class Shell {
 
   /** a modal window (veiled) is open: world input pauses */
   modal(): boolean {
-    return this.settings.isOpen || this.saves.isOpen || this.help.isOpen || this.menu.isOpen || this.opening.modal;
+    return this.settings.isOpen || this.saves.isOpen || this.help.isOpen || this.menu.isOpen || this.newWorld.isOpen || this.mods.isOpen || this.opening.modal;
+  }
+
+  /** the camera mode's key layer, if one is live */
+  private layer(): Context | undefined {
+    const m = this.host.cam?.mode();
+    return m === 'photo' ? 'photo' : m === 'walk' ? 'walk' : undefined;
+  }
+
+  /** the cinematic: around the selected settlement, else the one nearest the camera's point, else the selection */
+  private cinematic(): void {
+    const host = this.host;
+    const cam = host.cam;
+    if (!cam) return;
+    if (cam.mode() === 'dolly') { cam.dolly(null); return; }
+    const sel = host.selected();
+    if (sel && (sel.kind === 'settlement' || sel.kind === 'building' || sel.kind === 'agent' || sel.kind === 'creature')) { cam.dolly(sel as EntityRef); return; }
+    const pv = host.view.planet(host.primary());
+    const f = host.focusGround();
+    let best: number | null = null, bd = Infinity;
+    if (pv && f) for (const st of pv.settlements) {
+      if (st.flags & 2) continue;
+      const d = 1 - (st.pos[0] * f.dir[0] + st.pos[1] * f.dir[1] + st.pos[2] * f.dir[2]);
+      if (d < bd) { bd = d; best = st.id; }
+    }
+    if (best === null || !pv) { host.toast({ text: 'There is no settlement on this world yet for a cinematic: select something to circle.', kind: 'info' }); return; }
+    cam.dolly({ kind: 'settlement', id: best, planet: pv.id });
   }
 
   // ───────────────────────────── keyboard ─────────────────────────────
@@ -426,6 +536,18 @@ export class Shell {
   keyDown(e: KeyboardEvent): void {
     if (isTyping(e)) return;
     const kb = this.host.keybinds;
+    // the camera modes menu takes the arrows, Enter and Esc while it is up
+    if (this.cam.menuOpen) {
+      if (e.code === 'ArrowDown' || e.code === 'ArrowUp') { e.preventDefault(); this.cam.move(e.code === 'ArrowDown' ? 1 : -1); return; }
+      if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') { e.preventDefault(); if (!e.repeat) this.cam.accept(); return; }
+      if (e.code === 'Escape') { e.preventDefault(); this.cam.closeMenu(); this.noteDismiss(); return; }
+    }
+    // a camera mode's own keys come first (photo: Space takes the picture; walking: the rise key)
+    const layer = this.layer();
+    if (layer && !this.modal()) {
+      const own = kb.pressActions(e, layer);
+      if (own.length) { e.preventDefault(); if (!e.repeat) this.action(own[0]); return; }
+    }
     if (this.radial.isOpen) {
       const was = this.radial.isOpen;
       if (this.radial.key(e)) { if (was && !this.radial.isOpen) this.noteDismiss(); return; }
@@ -506,6 +628,8 @@ export class Shell {
     }
     if (button === 2) { this.press = 'right'; this.rightDownAt = t; this.rightMoved = 0; return; }
     if (button !== 0) return;
+    // photo mode: a drag looks, a click focuses (the hand and the powers wait)
+    if (this.photo.isActive) { this.press = 'photo'; return; }
     if (this.gestures.armed) { this.press = 'gesture'; this.gestures.begin(x, y); return; }
     if (this.gestures.active) { this.press = 'gesture'; this.gestures.point(x, y); return; }
     if (this.tools.isArmed && this.tools.down(x, y)) { this.press = 'tool'; return; }
@@ -525,7 +649,9 @@ export class Shell {
       case 'hand': this.hand.move(x, y, t, pts); break;
       case 'camera': this.hand.move(x, y, t, pts); input.dragL[0] += dx; input.dragL[1] += dy; break;
       case 'right': this.rightMoved += Math.abs(dx) + Math.abs(dy); break;
+      case 'photo': input.dragL[0] += dx; input.dragL[1] += dy; break;
     }
+    this.cam.pointerMoved();
     if (buttons & 2) { input.dragR[0] += dx; input.dragR[1] += dy; }
   }
 
@@ -546,6 +672,7 @@ export class Shell {
       return;
     }
     if (kind === 'tool') { this.tools.up(x, y); return; }
+    if (kind === 'photo') { if (Math.hypot(x - this.downX, y - this.downY) < 6) this.photo.focusAt(x, y); return; }
     if (kind === 'hand' || kind === 'camera') {
       const r = this.hand.up(x, y, t);
       if (r === 'click') {
@@ -569,8 +696,21 @@ export class Shell {
 
   private padButton(name: string, down: boolean): void {
     const kb = this.host.keybinds;
-    const ids = kb.padActions(name);
     const p = this.pad.pointer() ?? [this.pad.x, this.pad.y];
+    // the camera modes menu: the D-pad moves, A picks, B (or View again) closes
+    if (down && this.cam.menuOpen) {
+      if (name === 'Down' || name === 'Right') { this.cam.move(1); return; }
+      if (name === 'Up' || name === 'Left') { this.cam.move(-1); return; }
+      if (name === 'A') { this.cam.accept(); return; }
+      if (name === 'B') { this.cam.closeMenu(); this.noteDismiss(); return; }
+    }
+    // a camera mode's own buttons come first (photo: A takes the picture, B leaves; walking: B rises)
+    const layer = this.layer();
+    if (layer && !this.modal()) {
+      const own = kb.padActions(name, layer);
+      if (own.length) { if (down) this.action(own[0]); return; }
+    }
+    const ids = kb.padActions(name);
     // menus first: the radial, the palette, panels
     if (down && this.radial.isOpen) {
       if (name === 'A' || name === 'RS') { this.radial.confirm(); return; }
@@ -644,7 +784,7 @@ export class Shell {
 
   /** D-pad / A / B inside panels: move focus between controls, press the focused one, set a focused slider or list */
   private panelNav(name: string, focused: HTMLElement | null = null): boolean {
-    const open = [this.settings, this.saves, this.help, this.menu, this.chronicle].filter((x) => x.isOpen)
+    const open = [this.settings, this.saves, this.help, this.menu, this.chronicle, this.newWorld, this.mods].filter((x) => x.isOpen)
       .sort((a, b) => Number(b.panel.root.style.zIndex || 0) - Number(a.panel.root.style.zIndex || 0));
     const panel = (this.opening.modal ? this.opening.root : null) ?? open[0]?.panel.root ?? (this.freeform.isOpen ? this.freeform.root : null) ?? focused;
     if (!panel) return false;
@@ -698,6 +838,16 @@ export class Shell {
     for (const [id, codes] of Object.entries(CAM_KEYS)) if (held(id)) input.keys.add(fly ? codes[1] : codes[0]);
     if (held('cam.zoomIn')) input.wheel -= dt * 600;
     if (held('cam.zoomOut')) input.wheel += dt * 600;
+    // walking and photo mode: the left stick moves the body / the camera, not the cursor (it stays in the middle)
+    const layer = this.layer();
+    this.pad.locked = !!layer && !this.modal() && !this.radial.isOpen && !this.palette.isOpen;
+    this.host.cam?.stick(layer === 'walk' && this.pad.locked ? pf.lx : 0, layer === 'walk' && this.pad.locked ? pf.ly : 0);
+    if (layer === 'photo' && this.pad.locked) {
+      if (pf.ly < -0.3) input.keys.add('KeyW');
+      if (pf.ly > 0.3) input.keys.add('KeyS');
+      if (pf.lx < -0.3) input.keys.add('KeyA');
+      if (pf.lx > 0.3) input.keys.add('KeyD');
+    }
     if (pf.connected) {
       const look = this.host.prefs.value.pad.lookSpeed;
       const inv = this.host.prefs.value.pad.invertY ? -1 : 1;
@@ -733,8 +883,9 @@ export class Shell {
     const host = this.host;
     this.tools.frame(this.tools.isArmed ? host.cursorGround() : null, c);
     if (!this.tools.isArmed) this.deps.setBrush(null);
-    const pointerOwned = this.tools.isArmed || this.gestures.armed || this.gestures.active || this.press === 'tool' || this.press === 'gesture';
-    this.hand.frame(this.press === 'none' || this.press === 'hand' || this.press === 'camera' ? c : null, pointerOwned);
+    const photo = this.photo.isActive;
+    const pointerOwned = photo || this.tools.isArmed || this.gestures.armed || this.gestures.active || this.press === 'tool' || this.press === 'gesture';
+    this.hand.frame(!photo && (this.press === 'none' || this.press === 'hand' || this.press === 'camera') ? c : null, pointerOwned);
     this.gestures.frame();
     this.overlays.frame();
     this.chronicle.frame();
@@ -747,7 +898,12 @@ export class Shell {
     const hush = this.radial.isOpen || this.palette.isOpen || this.gestures.active || this.gestures.armed || this.opening.hush;
     this.hud.setWorldMode(busy, hush);
     this.creatures.frame(hush);
-    this.opening.frame(dt);
+    // (before the toasts drain the events: the opening reads the sim's milestones)
+    this.opening.frame();
+    this.hud.toasts.muteMilestones = this.opening.isActive;
+    this.cam.frame(this.pad.active);
+    this.photo.frame();
+    void dt;
     const f = this.deps.hudFrame();
     this.hud.update({
       ...f,
@@ -808,6 +964,8 @@ export class Shell {
       overlay: this.overlays.state(), chronicle: this.chronicle.state(), settings: this.settings.isOpen, saves: this.saves.isOpen,
       help: this.help.isOpen, menu: this.menu.isOpen, inspector: this.inspector.selected, pad: this.pad.active, modal: this.modal(),
       opening: this.opening.state(), uiScale: this.uiScale(),
+      newWorld: this.newWorld.isOpen ? this.newWorld.state() : null, mods: this.mods.isOpen, modsLast: this.mods.last,
+      photo: this.photo.state(), cam: this.cam.state(), saveLast: this.saves.last,
     };
   }
 }

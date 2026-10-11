@@ -23,8 +23,17 @@
 //   ui_                        the interface (src/ui/shell.ts): open(panel, arg) / closeAll() / action(id) / arm(power,
 //                              values) / cast(power, values, [x, y]) / pointer(x, y) / key(code, mods) / gesture(name |
 //                              points, [x, y], size) / overlay(mode) / state() / pref(path, value)
+//   cam_                       the camera's modes: mode() / follow(ref) / dolly(ref) / walk(ref | null, leave) /
+//                              photo(on) / lens() / setLens(p) / capture() → the picture's { name, w, h, bytes } /
+//                              focusAt(x, y)
+//   worlds_                    opening: state() / touch(); new world: state() / choose(id) / spec(s) / url();
+//                              saves: list() / save(name) / load(id) / importFile(bytes, name) / last();
+//                              mods: take(text, origin) / last() / packs() / library()
 
 import type { App, CameraSpec } from './app.ts';
+import type { PhotoLens } from './ui/host.ts';
+import type { CustomSpec } from './ui/newworld.ts';
+import { newWorldUrl } from './ui/newworld.ts';
 import type { Command, CommandResult, EntityRef, UnitVec } from './sim/types.ts';
 import type { InspectRef } from './ui/host.ts';
 import { isQualityName } from './render/quality.ts';
@@ -44,6 +53,25 @@ export interface UiSurface {
   palette(): { kind: string; title: string; sub: string }[];
   /** set a preference ('ui.scale', 'ui.palette', 'audio.master', 'gfx.bloom' …) as the settings panel does */
   pref(path: string, value: unknown): void;
+}
+
+export interface CamSurface {
+  mode(): string;
+  follow(ref: EntityRef | null): void;
+  dolly(ref: EntityRef | null): void;
+  walk(ref: EntityRef | null, leave?: boolean): void;
+  photo(on: boolean): void;
+  lens(): PhotoLens;
+  setLens(p: Partial<PhotoLens>): void;
+  capture(): Promise<{ name: string; w: number; h: number; bytes: number } | null>;
+  focusAt(x: number, y: number): void;
+}
+
+export interface WorldsSurface {
+  opening: { state(): Record<string, unknown>; touch(): void; hold(): { step(ms: number): void }; release(): void };
+  newWorld: { state(): Record<string, unknown> | null; choose(id: string): void; spec(s: Partial<CustomSpec>): void; url(): string };
+  saves: { list(): Promise<unknown[]>; save(name: string): Promise<boolean>; load(id: string): Promise<boolean>; importFile(bytes: ArrayBuffer | number[], name: string): Promise<boolean>; last(): unknown };
+  mods: { take(text: string, origin?: string): Promise<boolean>; last(): unknown; packs(): string[]; library(): Promise<string[]> };
 }
 
 export interface GenesisTestSurface {
@@ -70,6 +98,8 @@ export interface GenesisTestSurface {
   buildings(n?: number): { id: number; dist: number; screen: [number, number] | null }[];
   toastLife(ms: number): void;
   ui_: UiSurface;
+  cam_: CamSurface;
+  worlds_: WorldsSurface;
 }
 
 declare global {
@@ -95,6 +125,9 @@ export function installTestSurface(getApp: () => App | null, ready: Promise<void
         case 'help': s.help.open(); break;
         case 'menu': s.menu.open(); break;
         case 'laws': s.openLaws(typeof arg === 'string' ? arg : undefined); break;
+        case 'newworld': s.openWindow('newWorld'); if (typeof arg === 'string') s.newWorld.choose(arg); break;
+        case 'mods': s.openWindow('mods'); break;
+        case 'cammenu': s.cam.openMenu(); break;
         case 'overlay': s.overlays.set(typeof arg === 'string' ? arg : 'temperature'); break;
         case 'gesture': s.gestures.begin(window.innerWidth / 2, window.innerHeight / 2); break;
         default: throw new Error(`unknown panel '${panel}'`);
@@ -104,7 +137,8 @@ export function installTestSurface(getApp: () => App | null, ready: Promise<void
     closeAll() {
       const s = need().ui;
       s.palette.close(); s.radial.close(); s.freeform.close(); s.gestures.cancel();
-      for (const p of [s.chronicle, s.settings, s.saves, s.help, s.menu]) p.close();
+      for (const p of [s.chronicle, s.settings, s.saves, s.help, s.menu, s.newWorld, s.mods]) p.close();
+      s.cam.closeMenu();
       s.tools.disarm();
     },
     action: (id) => need().ui.action(id),
@@ -178,6 +212,44 @@ export function installTestSurface(getApp: () => App | null, ready: Promise<void
     buildings: (n) => need().drawnAgents(n ?? 20, 'building'),
     toastLife: (ms) => { need().ui.hud.toasts.life = Math.max(1000, ms); },
     ui_: ui,
+    cam_: {
+      mode: () => need().cam.mode(),
+      follow: (ref) => need().follow(ref),
+      dolly: (ref) => need().cam.dolly(ref),
+      walk: (ref, leave) => need().cam.walk(ref, leave),
+      photo: (on) => need().cam.photo(on),
+      lens: () => ({ ...need().cam.lens() }),
+      setLens: (p) => need().cam.setLens(p),
+      async capture() { const a = need(); const n = await a.ui.photo.capture(); return n ? a.ui.photo.last : null; },
+      focusAt: (x, y) => need().ui.photo.focusAt(x, y),
+    },
+    worlds_: {
+      opening: {
+        state: () => need().ui.opening.state(), touch: () => need().ui.opening.touchDark(),
+        // a held clock the test steps (a software-rendered frame takes seconds: the cinematic would skip its stages)
+        hold: () => { const o = need().ui.opening; let t = performance.now(); o.now = () => t; return { step: (ms: number) => { t += ms; } }; },
+        release: () => { need().ui.opening.now = () => performance.now(); },
+      },
+      newWorld: {
+        state: () => need().ui.newWorld.state(),
+        choose: (id) => need().ui.newWorld.choose(id),
+        spec: (sp) => need().ui.newWorld.setSpec(sp),
+        url: () => { const st = need().ui.newWorld.state(); return newWorldUrl({ scenario: st.choice, seed: Number(st.seed), custom: st.custom, mods: st.ticked }); },
+      },
+      saves: {
+        list: () => need().ui.saves.list(),
+        save: (name) => need().ui.saves.saveSlot(`s${Date.now().toString(36)}`, name),
+        load: (id) => need().ui.saves.loadSlot(id),
+        importFile: (bytes, name) => { const b = bytes instanceof ArrayBuffer ? bytes : new Uint8Array(bytes).buffer; return need().ui.saves.importFile(new File([b], name)); },
+        last: () => need().ui.saves.last,
+      },
+      mods: {
+        take: (text, origin) => need().ui.mods.take(text, origin ?? 'a test', 'file'),
+        last: () => need().ui.mods.last,
+        packs: () => need().packs.map((p) => p.id),
+        library: async () => (await need().library.list()).map((e) => e.id),
+      },
+    },
   };
   window.__GENESIS__ = surface;
   return surface;

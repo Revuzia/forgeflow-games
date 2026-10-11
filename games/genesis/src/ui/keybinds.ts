@@ -6,8 +6,13 @@
 // a gesture) match their key whatever Shift does (Shift runs the camera faster) but not with Ctrl/Alt/Meta; PRESS
 // actions match their exact combo. Gamepad buttons use the W3C standard mapping names below. Two actions sharing a
 // combo is a conflict: the settings panel shows it, and the first action in this list wins at runtime.
+//
+// Key LAYERS: an action with a `context` ('photo', 'walk') is live only in that camera mode, and there it comes first:
+// its key shadows whatever the world layer binds to the same key (in photo mode Space takes the picture instead of
+// pausing, P leaves instead of entering). Conflicts are checked within a layer, never across layers.
 
-export type Context = 'world' | 'always';
+/** a modal key layer (a camera mode); actions without one are the world's */
+export type Context = 'photo' | 'walk';
 
 export interface ActionDef {
   id: string;

@@ -8,7 +8,7 @@
 
 import type {
   BuildingBlock, ChronicleEntry, CreatureView, DisasterView, FieldName, HandView, MoverBlock, PlanetParams, PlanetSnap,
-  SettlementView, ShipView, SimEvent, Snapshot, StarView, WeatherView,
+  ProjectileView, SettlementView, ShipView, SimEvent, Snapshot, StarView, WeatherView,
 } from '../sim/types.ts';
 import { TICKS_PER_SECOND_1X } from '../sim/types.ts';
 import { getGrid, type IcoGrid } from '../sim/grid/icogrid.ts';
@@ -44,6 +44,8 @@ export interface PlanetView {
   settlements: SettlementView[];
   weather: WeatherView[];
   disasters: DisasterView[];
+  /** additive (god layer): things in flight now (PlanetSnap.projectiles; empty when the snapshot carries none) */
+  projectiles: ProjectileView[];
   population: number[];
   /** derived each frame by WorldView.update(): system-frame centre (m) and body orientation */
   center: D3;
@@ -176,7 +178,7 @@ export class WorldView {
       id: ps.id, name: ps.name, gridN: ps.gridN, seed: ps.seed, grid, noise, params: ps.params, paramsTick: 0,
       alive: ps.alive, fields: new Map(), fieldVersion: new Map(), anyFieldVersion: 0,
       ground: { grid, radius: ps.params.radius, noise, surface: z, soil: z, sand: z, snow: z, grad: null },
-      minSurface: 0, maxSurface: 0, maxGrad: 0, settlements: [], weather: [], disasters: [], population: [],
+      minSurface: 0, maxSurface: 0, maxGrad: 0, settlements: [], weather: [], disasters: [], projectiles: [], population: [],
       center: [0, 0, 0], quat: [0, 0, 0, 1], spin: ps.params.spin, sunDir: [0, 1, 0],
     };
   }
@@ -225,6 +227,8 @@ export class WorldView {
     if (ps.settlements) pv.settlements = ps.settlements;
     if (ps.weather) pv.weather = ps.weather;
     if (ps.disasters) pv.disasters = ps.disasters;
+    // things in flight are sent only while something flies: absent means none
+    pv.projectiles = ps.projectiles ?? [];
     if (ps.population) pv.population = ps.population;
   }
 

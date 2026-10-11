@@ -27,6 +27,11 @@ export class Gamepad {
   deadzone = 0.18;
   speed = 900;
   enabled = true;
+  /**
+   * the left stick drives a camera mode (walking, photo) instead of the cursor: the cursor stays in the middle of the
+   * screen (powers and the hand work where the eye looks) and hides
+   */
+  locked = false;
   /** button edges: (name, pressed) */
   onButton: ((name: string, down: boolean) => void) | null = null;
   /** a one-shot listener for rebinding (the next button pressed) */
@@ -62,8 +67,9 @@ export class Gamepad {
     f.lt = pad.buttons[6]?.value ?? 0; f.rt = pad.buttons[7]?.value ?? 0;
     const now = performance.now();
     if (f.lx || f.ly || f.rx || f.ry) this.touch(now);
-    // the cursor
-    if (f.lx || f.ly) {
+    // the cursor (held in the middle while a camera mode has the stick)
+    if (this.locked) { this.x = window.innerWidth / 2; this.y = window.innerHeight / 2; }
+    else if (f.lx || f.ly) {
       const W = window.innerWidth, H = window.innerHeight;
       this.x = Math.min(W - 2, Math.max(2, this.x + f.lx * this.speed * dt));
       this.y = Math.min(H - 2, Math.max(2, this.y + f.ly * this.speed * dt));
@@ -81,7 +87,7 @@ export class Gamepad {
       }
     }
     if (this.active) {
-      this.cursorEl.hidden = false;
+      this.cursorEl.hidden = this.locked;
       this.cursorEl.style.transform = `translate(${this.x.toFixed(1)}px, ${this.y.toFixed(1)}px)`;
     }
     if (now - this.lastUse > 6000 && this.active) { this.active = false; this.cursorEl.hidden = true; }

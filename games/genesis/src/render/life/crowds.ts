@@ -80,6 +80,12 @@ const CLOTH_FALLBACK = [0x8a6a4a, 0xa0784e, 0x6e5236, 0xb8a888, 0x7a2a22, 0x2a4a
 
 export class Crowds {
   readonly bodies: BodyBuckets;
+  /**
+   * additive (god layer, render/hand.ts and fx/projectiles.ts): people drawn where the god layer says instead of at
+   * their snapshot place — dangling between the hand's fingers, or flying the arc of a throw. id → body-frame point
+   * (m) the TOP of the body hangs from, a tumble angle (rad, about the body's left axis) and the pose (AnimState).
+   */
+  readonly pinned = new Map<number, { x: number; y: number; z: number; tumble: number; anim: number }>();
   private tracks = new Map<number, Track>();
   private lastAgents: MoverBlock | null = null;
   private ambient: Ambient[] = [];
@@ -263,6 +269,15 @@ export class Crowds {
         const flags = A.flags[i];
         const afloat = (flags & AgentFlag.boat) !== 0;
         let r = tr.ground + A.alt[i];
+        const pin = this.pinned.size ? this.pinned.get(id) : undefined;
+        if (pin) {
+          // held or flying: the top of the body at the pinned point (the body hangs below it)
+          const pl = Math.hypot(pin.x, pin.y, pin.z) || 1;
+          ux = pin.x / pl; uy = pin.y / pl; uz = pin.z / pl;
+          const spP = speciesAt(A.species[i]);
+          r = pl - spP.height * (A.scale[i] || 1) * 0.92;
+          tr.sx = ux; tr.sy = uy; tr.sz = uz; tr.ox = tr.oy = tr.oz = 0;
+        }
         // afloat: on the water surface, in their boat (the sim's altitude is for swimmers) — the LINEAR level the water
         // mesh draws (surface + depth interpolated over the sim triangle). Curved ground plus a linear depth stood boats
         // metres above the sea off steep quays and coasts, where the curved ground bulges above the linear one.
@@ -288,7 +303,10 @@ export class Crowds {
           anim = prevAnim = kind === 'sail' ? AnimState.idle : AnimState.sit;
           r += kind === 'raft' ? 0.2 : kind === 'boat' ? 0.05 : 0.3;
         }
-        bodyMatrix(_mat, ux, uy, uz, r, tr.hd, scale);
+        if (pin) {
+          anim = prevAnim = pin.anim;
+          bodyMatrix(_mat, ux, uy, uz, r, tr.hd, scale, pin.tumble);
+        } else bodyMatrix(_mat, ux, uy, uz, r, tr.hd, scale);
         const blend = Math.min(1, (realTime - tr.at) / BLEND_S);
         this.colours(id, sp, A.tint[i], flags, era, A.species[i]);
         const tool = this.toolFor(tr.anim, A.carry[i], era, flags, id);

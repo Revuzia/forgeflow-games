@@ -52,9 +52,11 @@ test('a founding band differs by seed: ages, sexes, traits, skills and where eac
     const at = [0, 0, 0];
     // (each member stands 3-21 m from the band's cell centre, at an angle: the distance is the roll, whatever the cell)
     const off = membersOf(sim, st).sort((a, b) => A.id[a] - A.id[b]).map((s) => { A.posAt(s, x.tick, at); return Math.round(distM(x.p, at, centre) * 100) / 100; });
-    return { st, members: born(sim, st), off, cohort: st.cohort.n.slice() };
+    return { st, members: born(sim, st), off, cohort: st.cohort.n.slice(), span: x.info[st.species].def.lifespan };
   };
   const a = band(fresh(SEED_A)), again = band(world(24, SEED_A)), b = band(fresh(SEED_B));
+  // (ages stay those of a living band, whatever the seed: settlement.ts createBand draws up to 1.5 lifespans)
+  for (const m of [...a.members, ...b.members]) assert.ok(m.age >= 0 && m.age < a.span * 1.5, `age ${m.age}`);
   // the same ids in both worlds: what differs is the people, not the numbering
   assert.equal(a.st.id, b.st.id);
   assert.deepEqual(a.members.map((m) => m.id), b.members.map((m) => m.id), 'ids are handed out alike in every world');
@@ -73,7 +75,7 @@ test('a founding band differs by seed: ages, sexes, traits, skills and where eac
   assert.ok(moved >= n * 0.75, `${moved} of ${n} stand at another distance from the centre`);
 });
 
-test('a band beyond the cap: its cohort\'s make-up differs by seed', () => {
+test('a band beyond the cap: its cohort\'s make-up differs by seed, and keeps a living band\'s shape', () => {
   const split = (seed: number) => {
     const sim = fresh(seed);
     sim.u.settings.maxAgents = 4;
@@ -83,6 +85,12 @@ test('a band beyond the cap: its cohort\'s make-up differs by seed', () => {
   assert.deepEqual(split(SEED_A), a);
   assert.equal(a[0] + a[1] + a[2], b[0] + b[1] + b[2]);
   assert.notDeepEqual(a, b, `children / adults / elders ${a} vs ${b}`);
+  // the salt changes the draw, not its law: ~22 % children, ~68 % adults, ~10 % elders (196 draws a seed; ±3.3 sd)
+  for (const n of [a, b]) {
+    const all = n[0] + n[1] + n[2];
+    assert.ok(n[0] / all > 0.12 && n[0] / all < 0.32, `children ${n[0]} of ${all}`);
+    assert.ok(n[2] / all > 0.03 && n[2] / all < 0.18, `elders ${n[2]} of ${all}`);
+  }
 });
 
 test('old age: who dies of it and when differs by seed; one seed repeats it', () => {
@@ -109,6 +117,12 @@ test('old age: who dies of it and when differs by seed; one seed repeats it', ()
   assert.notDeepEqual(b.deaths, a.deaths, `seed ${SEED_A}: ${a.deaths.join(' ')}; seed ${SEED_B}: ${b.deaths.join(' ')}`);
   const whoA = new Set(a.deaths.map((d) => d.split('@')[0])), whoB = new Set(b.deaths.map((d) => d.split('@')[0]));
   assert.notDeepEqual([...whoB].sort(), [...whoA].sort(), 'not the same people die of old age');
+  // independent draws: a death of the same agent on the same tick in both worlds is a rare coincidence (≈ 0.03 expected)
+  const shared = b.deaths.filter((d) => a.deaths.includes(d)).length;
+  assert.ok(shared <= 1, `${shared} identical (agent, tick) deaths of old age on both seeds`);
+  // the salt changes who and when, not how many: 2 × 24 × (1 − (1 − 60 / year)^120) ≈ 16.4 expected
+  const n = a.deaths.length + b.deaths.length;
+  assert.ok(n >= 6 && n <= 30, `deaths of old age over two seeds: ${n}`);
 });
 
 test('ages and old-age rolls do not share a salt: dying of age says nothing of how old one came into the world', () => {
@@ -149,11 +163,14 @@ test('an established people: who knows which craft differs by seed; promoted coh
     sim.u.settings.maxAgents = 40;
     const st = people(sim, 'plains-folk', 120, { era: 'clay', settled: true });
     const first = born(sim, st);
+    // (promote takes the cohort's adults first: the first `adults` promoted, in id order, are adults)
+    const adults = st.cohort.n[1];
     sim.u.settings.maxAgents = 100;
     must(sim, { k: 'focus', pos: st.pos } as unknown as Command);
     const ids = new Set(first.map((m) => m.id));
     const promoted = born(sim, st).filter((m) => !ids.has(m.id));
-    return { first, promoted };
+    const def = ctx(sim).info[st.species].def;
+    return { first, promoted, adults, maturity: def.maturity, elder: def.elder };
   };
   const a = run(SEED_A), again = run(SEED_A), b = run(SEED_B);
   assert.deepEqual(again, a, 'the same seed: the same people, the same promotions');
@@ -164,4 +181,10 @@ test('an established people: who knows which craft differs by seed; promoted coh
   assert.ok(differing(a.first, b.first, (q) => q.know) >= n * 0.5, `knowledge: ${differing(a.first, b.first, (q) => q.know)} of ${n} differ between seeds`);
   assert.ok(differing(a.promoted, b.promoted, (q) => q.age) >= m * 0.75, `promoted ages: ${differing(a.promoted, b.promoted, (q) => q.age)} of ${m} differ`);
   assert.ok(differing(a.promoted, b.promoted, (q) => q.know) >= m * 0.5, `promoted knowledge: ${differing(a.promoted, b.promoted, (q) => q.know)} of ${m} differ`);
+  // other ages, the same law: the adults of the cohort come out adults (cohorts.ts promote) on every seed
+  for (const r of [a, b]) {
+    const grown = r.promoted.slice(0, Math.min(r.adults, r.promoted.length));
+    assert.ok(grown.length >= 10, `${grown.length} adults promoted`);
+    for (const q of grown) assert.ok(q.age >= r.maturity - 1e-3 && q.age <= r.elder + 1e-3, `promoted adult aged ${q.age}`);
+  }
 });

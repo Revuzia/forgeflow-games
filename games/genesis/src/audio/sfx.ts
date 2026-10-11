@@ -766,6 +766,27 @@ export const SFX: Record<string, Recipe> = {
     s.nz('white', 0, 0.3, 0.5, 1.2, 0.04, ['bandpass', 3200, 2]);
     s.wet(0.7);
   },
+  // ── the camera's modes, photo mode, saves (UI lane, phase 4) ──
+  // a cinematic begins: a low swell under two open fifths, like a film's first chord
+  'cam.cinematic': (s) => { s.pad(0, chord(43, [0, 7, 12, 19]), 1.2, 1.4, 2.6, 0.16, ['lowpass', 2400]); s.arp('glass', 0.5, [79, 86], 0.35, 0.08); s.wet(0.65); },
+  // stepping down onto the ground: air rushing past, then a soft footfall on earth
+  'cam.walk': (s) => { whoosh(s, 0, 1.2, 0.12, 1800, 300); s.nz('brown', 1.05, 0.005, 0.02, 0.18, 0.22, ['lowpass', 420]); s.tn('sine', 1.05, 80, 52, 0.12, 0.004, 0.02, 0.16, 0.18); s.wet(0.25); },
+  // rising from the ground: the air the other way, opening upward
+  'cam.rise': (s) => { whoosh(s, 0, 1.0, 0.11, 300, 2200); s.arp('glass', 0.35, [86, 91], 0.12, 0.05); s.wet(0.35); },
+  // following someone: a small locking-on figure
+  'cam.follow': (s) => { s.bell('chime', 0, midiHz(88), 0.07); s.bell('chime', 0.07, midiHz(95), 0.05); s.wet(0.2); },
+  // photo mode: a hush (the world holds its breath) and a click of the lens cap
+  'cam.photo': (s) => { s.nz('pink', 0, 0.25, 0.1, 0.6, 0.06, ['lowpass', 1600, 0.7, 500, 0.8]); s.tn('square', 0.05, 2400, 2400, 0, 0.001, 0.004, 0.02, 0.05, ['bandpass', 2600, 3]); },
+  // the shutter: two quick mechanical clicks (the blades opening and closing) over a breath of air
+  'photo.shutter': (s) => {
+    s.nz('white', 0, 0.001, 0.008, 0.03, 0.32, ['bandpass', 3800, 1.6]);
+    s.tn('square', 0, 1900, 1200, 0.02, 0.001, 0.006, 0.025, 0.07, ['bandpass', 2200, 2]);
+    s.nz('white', 0.075, 0.001, 0.01, 0.045, 0.26, ['bandpass', 2900, 1.4]);
+    s.tn('square', 0.075, 1500, 900, 0.03, 0.001, 0.006, 0.03, 0.06, ['bandpass', 1800, 2]);
+    s.nz('pink', 0, 0.02, 0.04, 0.2, 0.04, ['highpass', 1200]);
+  },
+  // a world kept: a low wooden knock under a rising pair of chimes
+  'save.kept': (s) => { s.bell('wood', 0, midiHz(67), 0.12); s.arp('chime', 0.05, [79, 84, 91], 0.07, 0.12); s.wet(0.35); },
   ignition: (s) => {
     // the opening: a black universe, then a star ignites — low roar building under a rising cluster, a bright
     // crack at the moment of ignition, and a lydian chord that blooms and settles into the hum of space

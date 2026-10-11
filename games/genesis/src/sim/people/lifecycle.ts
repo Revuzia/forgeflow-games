@@ -69,13 +69,13 @@ export function spawnAgent(x: PCtx, st: Settlement, o: SpawnOpts): number {
   A.mother[s] = o.mother ?? 0;
   A.father[s] = o.father ?? 0;
   A.partner[s] = 0;
-  // sex / caste
-  let female = o.female ?? hashFloat(id, 0x5e8) < 0.5;
+  // sex / caste (who they are is the world seed's draw: agent ids repeat from world to world — worldSalt)
+  let female = o.female ?? hashFloat(id, worldSalt(x, 0x5e8)) < 0.5;
   if (def.hive) {
     let caste = o.caste ?? -1;
     if (caste < 0) {
       const shares = def.hive.shares;
-      let roll = hashFloat(id, 0xca57);
+      let roll = hashFloat(id, worldSalt(x, 0xca57));
       caste = shares.length - 1;
       for (let k = 0; k < shares.length; k++) { roll -= shares[k]; if (roll <= 0) { caste = k; break; } }
     }
@@ -84,13 +84,15 @@ export function spawnAgent(x: PCtx, st: Settlement, o: SpawnOpts): number {
   }
   A.flags[s] = female ? AgentFlag.female : 0;
   // traits around the species means
+  const traitDice = worldSalt(x, 0x7a17);
   TRAITS.forEach((t, i) => {
-    const v = (def.traits[t] ?? 0.5) + 0.16 * hgauss(id, i, 0x7a17);
+    const v = (def.traits[t] ?? 0.5) + 0.16 * hgauss(id, i, traitDice);
     A.traits[s * NT + i] = Math.max(0, Math.min(1, v));
   });
   // skills: adults have practised what their people do
   const sk = o.skill ?? 0.25;
-  for (let k = 0; k < NS; k++) A.skills[s * NS + k] = o.ageYears < def.maturity ? 0.02 : Math.max(0, Math.min(0.95, sk * (0.6 + 0.8 * hashFloat(id, k, 0x5c11))));
+  const skillDice = worldSalt(x, 0x5c11);
+  for (let k = 0; k < NS; k++) A.skills[s * NS + k] = o.ageYears < def.maturity ? 0.02 : Math.max(0, Math.min(0.95, sk * (0.6 + 0.8 * hashFloat(id, k, skillDice))));
   initNeeds(x, s, 0.8);
   // belief: a newborn people does not know the god yet
   A.love[s * 4] = 0.08 * def.god.awe;
@@ -111,7 +113,7 @@ export function spawnAgent(x: PCtx, st: Settlement, o: SpawnOpts): number {
   A.remember(s, MEMK.born, x.tick, st.id);
   x.ps.buckets.move(s, cell);
   x.ps.addMember(st.id, s);
-  schedule(x, s, x.tick + (o.delay ?? 1 + (hash32(id, 0xde1a) % 20)));
+  schedule(x, s, x.tick + (o.delay ?? 1 + (hash32(id, worldSalt(x, 0xde1a)) % 20)));
   return s;
 }
 
@@ -149,7 +151,7 @@ export function birth(x: PCtx, st: Settlement, mother: number, father: number): 
   if (def.hive) {
     // the queen lays workers, soldiers, drones; a new queen only when the hive has none (handled by the settlement)
     const shares = def.hive.shares;
-    let roll = hashFloat(A.id[mother], x.tick, 0xe66);
+    let roll = hashFloat(A.id[mother], x.tick, worldSalt(x, 0xe66));
     caste = shares.length - 1;
     const total = shares.reduce((a, b) => a + b, 0) - (shares[def.hive.castes.indexOf(def.hive.queen)] ?? 0);
     for (let k = 0; k < shares.length; k++) {
