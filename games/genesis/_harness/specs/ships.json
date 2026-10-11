@@ -1,8 +1,14 @@
 {
-  "$comment": "GENESIS ships, launches and cameras (render lane phase 4b) on the lookdev world's fabricated missions (src/client/lookdevspace.ts). Run: node _harness/shots.mjs _harness/specs/ships.json --port=5199",
+  "$comment": "GENESIS ships, launches and cameras (render lane, phase 4b) on the lookdev world's fabricated missions (src/client/lookdevspace.ts). Run: node _harness/shots.mjs _harness/specs/ships.json --port=5199",
   "shots": [
-    {"name": "ship-pad-dusk", "params": "source=lookdev", "size": [960, 540],
-     "commands": [{"k": "ship.launch", "kind": "rocket", "start": "pad", "progress": 0.5}],
-     "camera": {"mode": "orbit", "target": {"kind": "ship", "id": "$created"}, "dist": 120, "tilt": 74, "hour": 17.7}, "frames": 6, "canvasOnly": true}
+    {"name": "ship-pad-dusk", "params": "source=lookdev", "size": [960, 540], "canvasOnly": true,
+     "commands": [{"k": "ship.launch", "kind": "rocket", "start": "pad", "progress": 0.5, "id": 1001}],
+     "camera": {"mode": "orbit", "target": {"kind": "ship", "id": 1001}, "dist": 95, "tilt": 76, "hour": 17.9}, "frames": 5},
+    {"name": "launch-t2", "params": "source=lookdev", "size": [960, 540], "canvasOnly": true,
+     "commands": [{"k": "ship.launch", "kind": "rocket", "start": "pad", "progress": 0.86, "id": 1002}], "wait": 20,
+     "camera": {"mode": "follow", "target": {"kind": "ship", "id": 1002}, "dist": 520, "pitch": 4, "hour": 17.4}, "frames": 5},
+    {"name": "sailship-sea", "params": "source=lookdev", "size": [960, 540], "canvasOnly": true,
+     "commands": [{"k": "ship.launch", "kind": "sailship", "era": "gunpowder", "id": 1101, "heading": 1.0}],
+     "camera": {"mode": "follow", "target": {"kind": "ship", "id": 1101}, "dist": 70, "pitch": 14, "yaw": 50, "hour": 15.5}, "frames": 5}
   ]
 }

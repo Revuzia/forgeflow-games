@@ -32,6 +32,7 @@ import { blackbody } from '../client/orbits.ts';
 import { GodFx } from './fx/godfx.ts';
 import { ShipLayer, type ShipPlanetRef } from './life/ships.ts';
 import { applyLaunchShake } from './fx/launch.ts';
+import { PhotoPost } from './camera/photo.ts';
 
 export interface RenderStats {
   drawCalls: number;
@@ -127,6 +128,9 @@ export class Renderer {
   /** ships in every phase, their launch VFX and the system view's ship glints and trails (render/life/ships.ts) */
   readonly ships = new ShipLayer();
   private readonly shipRefs = new Map<number, ShipPlanetRef>();
+  /** photo mode's depth of field and lens settings (render/camera/photo.ts) */
+  readonly photoPost = new PhotoPost();
+  private readonly photoSettings: PostSettings = { bloom: 0, godRays: true, fxaa: true, grain: 0, vignette: 0, flare: 1, exposureBias: 0, manualExposure: 0 };
   readonly planets = new Map<number, PlanetVisual>();
   readonly waterScene: Record<string, IUniform> = makeWaterSceneUniforms();
   readonly settings: PostSettings = { bloom: 0.045, godRays: true, fxaa: true, grain: 0.02, vignette: 0.22, flare: 1, exposureBias: 0, manualExposure: 0 };
@@ -553,7 +557,9 @@ export class Renderer {
     // after a cut the exposure snaps to its target on every frame of the cut window (terrain patches and the clouds'
     // history are still converging on the first frame: one snap left the view wrongly exposed for a second)
     if (this.cutFrames > 0) post.cutExposure();
-    post.finish(r, this.fsq, input, this.settings, sun, dt, time, null);
+    // photo mode: the lens's depth of field on the composited image, its exposure / bloom / vignette / grain
+    const finishIn = this.photoPost.apply(r, this.fsq, input, post.linDepth.texture, post.w, post.h);
+    post.finish(r, this.fsq, finishIn, this.photoPost.settings(this.settings, this.photoSettings), sun, dt, time, null);
     if (this.cutFrames > 0) this.cutFrames--;
     this.updateStats();
     this.stats.frameMs = performance.now() - t0;
@@ -763,6 +769,7 @@ export class Renderer {
   dispose(): void {
     this.godfx.dispose();
     this.ships.dispose();
+    this.photoPost.dispose();
     for (const v of this.planets.values()) v.dispose();
     this.planets.clear();
     this.post.dispose();

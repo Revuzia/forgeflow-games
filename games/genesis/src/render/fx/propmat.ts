@@ -56,6 +56,8 @@ export interface PropMatOpts {
   surface?: string;
   /** extra vertex GLSL (the instanced debris uses its own) */
   vertexPars?: string;
+  /** replaces three's beginnormal chunk (must declare objectNormal) and begin chunk (must declare transformed) */
+  vertexNormal?: string;
   vertexBegin?: string;
   key: string;
   extraUniforms?: Record<string, IUniform>;
@@ -69,6 +71,7 @@ export function makePropMaterial(shared: Record<string, IUniform>, o: PropMatOpt
     if (o.extraUniforms) for (const [k, v] of Object.entries(o.extraUniforms)) shader.uniforms[k] = v;
     if (!shader.uniforms.uPropGlow) shader.uniforms.uPropGlow = { value: 0 };
     if (o.vertexPars) shader.vertexShader = shader.vertexShader.replace('#include <clipping_planes_pars_vertex>', `#include <clipping_planes_pars_vertex>\n${o.vertexPars}`);
+    if (o.vertexNormal) shader.vertexShader = shader.vertexShader.replace('#include <beginnormal_vertex>', o.vertexNormal);
     if (o.vertexBegin) shader.vertexShader = shader.vertexShader.replace('#include <begin_vertex>', o.vertexBegin);
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <clipping_planes_pars_fragment>', `#include <clipping_planes_pars_fragment>\n${PARS}`)

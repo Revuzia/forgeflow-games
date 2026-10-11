@@ -320,6 +320,10 @@ export class App implements UiHost {
     this.setUi(this.opts.ui);
     this.installInput();
     void this.startAudio();
+    // the render lane's camera modes (render/camera/modes.ts: follow, dolly, walk in the god's body, photo with real
+    // depth of field) bound to the interface's camera host; walking among the people tells the sim they saw the god
+    this.modeApi = this.rig.modes;
+    this.rig.modes.onSeen = (e) => { void this.cmd({ k: 'god.seen', planet: e.planet, pos: e.pos, radius: e.radius }, { quiet: true }); };
     // initial camera: the home world from orbit, or a URL preset
     const view = this.sim.view;
     view.update(performance.now());
@@ -1612,6 +1616,9 @@ export class App implements UiHost {
     const view = this.sim.view;
     view.update(performance.now());
     const mode = spec.mode ?? 'orbit';
+    // the render lane's modes take their whole spec when bound (render/camera/modes.ts applySpec: the lens, the dolly's
+    // phase, the follow distance, the walking body's alignment)
+    if ((mode === 'follow' || mode === 'dolly' || mode === 'walk' || mode === 'photo') && this.modeApi === this.rig.modes) { await this.renderModeSpec(spec, mode); return; }
     // a camera mode that takes a thing: follow it, circle it, walk beside it (CONTRACT §18 camera(spec))
     if ((mode === 'follow' || mode === 'dolly' || mode === 'walk') && isTargetRef(spec.target)) {
       const ref: EntityRef = { kind: spec.target.kind, id: spec.target.id, planet: spec.target.planet ?? spec.planet ?? this.primary() };
@@ -1716,6 +1723,48 @@ export class App implements UiHost {
       }
     }
     if (mode === 'photo' && this.camMode !== 'photo') { this.rig.update(0, this.sim.view, newInput()); this.photo(true); }
+  }
+
+  /** camera(spec) for the render lane's follow / dolly / walk / photo (the place from a POI, a target or lat / lon) */
+  private async renderModeSpec(spec: CameraSpec, mode: 'follow' | 'dolly' | 'walk' | 'photo'): Promise<void> {
+    const view = this.sim.view;
+    let planet = spec.planet ?? (this.renderer.primaryId >= 0 ? this.renderer.primaryId : view.planets[0]?.id ?? 0);
+    let lat = spec.lat ?? 20, lon = spec.lon ?? 0, heading = spec.yaw ?? 0;
+    let ref: EntityRef | null = null;
+    if (isTargetRef(spec.target)) {
+      ref = { kind: spec.target.kind, id: spec.target.id, planet: spec.target.planet ?? planet };
+      if (ref.kind === 'ship') {
+        // a ship can be anywhere: its own world, or between the worlds
+        for (let i = 0; i < 60 && !view.ships.some((s) => s.id === ref!.id); i++) await this.waitFrames(1);
+        const sv = view.ships.find((s) => s.id === ref!.id);
+        if (sv && sv.planet >= 0) { planet = sv.planet; ref.planet = sv.planet; }
+      } else {
+        const pv0 = view.planet(planet);
+        let b = pv0 ? this.entityBodyPos(pv0, ref) : null;
+        for (let i = 0; i < 60 && !b; i++) { await this.waitFrames(1); const pv1 = this.sim.view.planet(planet); b = pv1 ? this.entityBodyPos(pv1, ref) : null; }
+        if (b) {
+          const l = Math.hypot(b[0], b[1], b[2]);
+          lat = (Math.asin(Math.max(-1, Math.min(1, b[1] / l))) * 180) / Math.PI;
+          lon = (Math.atan2(b[0], b[2]) * 180) / Math.PI;
+        }
+      }
+    }
+    const pv = view.planet(planet);
+    if (spec.poi && pv) {
+      const poi = findPoi(pv, spec.poi);
+      if (poi) { lat = poi.lat; lon = poi.lon; heading = poi.heading + (spec.turn ?? 0) + (spec.yaw ?? 0); }
+    }
+    const extra = spec as unknown as Record<string, unknown>;
+    const num = (k: string): number | undefined => (typeof extra[k] === 'number' ? extra[k] as number : undefined);
+    this.leaveModes(null);
+    this.following = null;
+    this.rig.modes.applySpec({
+      mode, planet, lat, lon, yaw: heading, pitch: spec.pitch, alt: spec.alt, dist: spec.dist, fov: spec.fov, target: ref, blend: spec.blend,
+      t: num('t'), radius: num('radius'), duration: num('duration'), focus: num('focus'), blur: num('blur'), exposure: num('exposure'), roll: num('roll'), alignment: num('alignment'),
+    }, view);
+    if (mode === 'photo') this.setUi(false);
+    if ((spec.blend ?? 0) === 0) { this.rig.update(0, view, newInput()); this.renderer.cut(); }
+    if (spec.hour != null) await this.setLocalHour(spec.hour, lon);
   }
 
   /**

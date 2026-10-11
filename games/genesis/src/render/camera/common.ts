@@ -6,7 +6,7 @@ import type { CameraPose } from '../frame.ts';
 import type { D3, DQ } from '../../client/orbits.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
 
-export type CameraMode = 'orbit' | 'surface' | 'system' | 'fly';
+export type CameraMode = 'orbit' | 'surface' | 'system' | 'fly' | 'follow' | 'dolly' | 'walk' | 'photo';
 
 export interface InputState {
   /** pixels moved this frame with each button held */

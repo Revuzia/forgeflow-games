@@ -52,6 +52,7 @@ import { groundHeight as groundHeightOf } from '../../sim/grid/surface.ts';
 import { buildingAt } from './catalog.ts';
 import { LaunchFx, type LaunchPlanetCtx, type Propellant } from '../fx/launch.ts';
 import type { CameraPose } from '../frame.ts';
+import { Avatar, AVATAR_STATE } from '../camera/avatar.ts';
 import { sunIlluminance } from '../frame.ts';
 import { blackbody } from '../../client/orbits.ts';
 
@@ -604,6 +605,8 @@ export class ShipLayer {
   overlayVis = 0;
   /** drawn this frame */
   stats = { ships: 0, parts: 0 };
+  /** the god's body while walking (render/camera/avatar.ts, posed by camera/walk.ts) */
+  private avatar: Avatar | null = null;
 
   constructor() {
     this.spaceGroup.name = 'ships-space';
@@ -797,9 +800,29 @@ export class ShipLayer {
       if (!r) return null;
       return { group: r.group, uniforms: r.uniforms, camBody: r.camBody, wind: this.windAt(r.pv), airTop: r.airTop, radius: r.pv.params.radius, hasAir: r.hasAir };
     };
+    this.placeAvatar(planets, time);
     this.fx.update(ctxOf, pose.pos, primary, time, dt);
     this.updateOverlay(view, pose);
     this.spaceGroup.position.set(0, 0, 0);
+  }
+
+  /** the god's body: on its world's group, standing on the ground, its light on what is around it */
+  private placeAvatar(planets: Map<number, ShipPlanetRef>, time: number): void {
+    const s = AVATAR_STATE;
+    const ref = s.active ? planets.get(s.planet) : undefined;
+    if (!ref) { if (this.avatar) this.avatar.group.visible = false; return; }
+    if (!this.avatar) this.avatar = new Avatar();
+    const a = this.avatar;
+    if (a.group.parent !== ref.group) ref.group.add(a.group);
+    a.group.position.copy(s.pos);
+    basisQ(s.up, s.fwd, a.group.quaternion);
+    a.pose(time, ref.uniforms.uSunDirView ? (ref.uniforms.uSunDirView.value as Vector3) : null);
+    // its light on the ground and the people (kind: gold; feared: ember red)
+    const good = Math.max(0, Math.min(1, s.alignment * 0.5 + 0.5));
+    const I = 2.2e4;
+    const c = good > 0.5 ? [1, 0.82 + 0.1 * (1 - good), 0.55 + 0.25 * (1 - good)] : [1, 0.25 + 0.5 * good, 0.12 + 0.6 * good];
+    _v3.copy(s.up).multiplyScalar(1.4).add(s.pos);
+    this.fx.light(s.planet, this.ctx(ref), _v3.x, _v3.y, _v3.z, 26, c[0] * I, c[1] * I, c[2] * I);
   }
 
   /** wind for the smoke (the sim's wind field near the pad, or a light easterly) */
@@ -1225,10 +1248,11 @@ export class ShipLayer {
       const world = local.applyQuaternion(_q).add(pos);
       const dir = _x.copy(up).negate();
       const space = planet < 0;
+      const since = phase === 'ascent' ? (g.st === 1 ? t.phaseT0 + this.sepAt(t).stage1 * t.phaseLen : t.phaseT0 - 0.14 * PAD_TICKS) : undefined;
       this.fx.engine({
         key: `${t.id}:${key}`, planet: space ? -1 : planet, pos: world.clone(), dir: dir.clone(), radius: g.r, count: g.n, thrust: firing.thrust,
         vacuum: g.vac, fuel: propellant(t.model, g.st), alt: space ? 1e9 : alt, trail: trail && key !== 'b' ? true : trail,
-        path: path ? (tk: number, out: Vector3) => { path(tk, out); return; } : undefined,
+        path: path ? (tk: number, out: Vector3) => { path(tk, out); return; } : undefined, since,
       });
     }
     void phase;

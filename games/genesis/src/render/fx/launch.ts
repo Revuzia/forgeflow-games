@@ -47,8 +47,12 @@ export function applyLaunchShake(cam: { rotateX(a: number): unknown; rotateY(a: 
   cam.rotateZ(k * 0.5 * Math.sin(time * 19.3 + 0.7));
 }
 
-/** render layer of the launch / world FX (drawn after the atmosphere composite, never in the opaque pass) */
-export const FX_LAYER = 5;
+/**
+ * render layer of the launch FX (drawn after the atmosphere composite, never in the opaque pass). Layers in use: 0 the
+ * opaque scene, 1 shadow casters, 2 water, 3 fire particles, 4 the god layer's FX, 5 its ground decals, 7 world-event
+ * overlays (fx/worlds.ts).
+ */
+export const FX_LAYER = 6;
 
 export type Propellant = 'kerolox' | 'hydrolox' | 'methalox' | 'powder';
 
@@ -71,6 +75,11 @@ export interface EngineFire {
   path?: (tick: number, out: Vector3) => void;
   /** the ship is in the air and leaves a smoke trail (a launcher climbing; not a lander hovering) */
   trail: boolean;
+  /**
+   * the tick the engine lit: a cluster seen for the first time (a camera cut, a stepped or paused capture) emits its
+   * smoke back to then along `path`, so the column and the trail are whole however few frames were drawn
+   */
+  since?: number;
 }
 
 /** particle kinds (vertex shader branches) */
@@ -666,7 +675,8 @@ export class LaunchFx {
   private emitEngine(e: EngineFire, P: PlanetFx, ctx: LaunchPlanetCtx | null, tickNow: number): void {
     const t1 = this.now;
     const last = this.lastPos.get(e.key);
-    const t0 = last && t1 - last.t < 30 && t1 >= last.t ? last.t : t1 - 0.05;
+    const back = e.since !== undefined && e.path ? Math.max(this.tSec(e.since), t1 - 70) : t1 - 0.05;
+    const t0 = last && t1 - last.t < 30 && t1 >= last.t ? last.t : Math.min(t1 - 0.05, back);
     this.lastPos.set(e.key, { x: e.pos.x, y: e.pos.y, z: e.pos.z, t: t1 });
     if (t1 <= t0) return;
     const space = !ctx || !ctx.hasAir || e.alt > ctx.airTop * 1.05;
@@ -676,7 +686,7 @@ export class LaunchFx {
     const low = Math.max(0, 1 - e.alt / 140);
     const rate = space ? 0 : (e.trail ? 70 : 22) * e.thrust * (0.35 + 0.65 * airK) * Math.min(2.5, scale);
     const dt = t1 - t0;
-    const n = Math.min(Math.round(rate * dt), 900);
+    const n = Math.min(Math.round(rate * dt), 2400);
     const tickPerSec = 1 / SEC_PER_TICK;
     for (let i = 0; i < n; i++) {
       const f = (i + hashFloat(i, Math.floor(t1 * 7))) / Math.max(1, n);
@@ -697,12 +707,16 @@ export class LaunchFx {
         e.dir.x * 8 + jx * 0.6, e.dir.y * 8 + jy * 0.6, e.dir.z * 8 + jz * 0.6, kind, sz0, sz1, life, s);
     }
     // the pad's ground cloud: steam and smoke shot out sideways along the flame trench and rolling over the ground
-    if (low > 0.02 && !space && ctx) {
-      const up = _w.copy(e.pos).normalize();
-      const nc = Math.min(Math.round(55 * low * e.thrust * dt * Math.min(2.5, scale)), 400);
-      const ground = e.pos.length() - e.alt;
+    if ((low > 0.02 || (e.path && (!last || last.t <= t0) && t0 < t1 - 0.06)) && !space && ctx) {
+      // (backfilled from ignition: the cloud was poured while the engine was low, at the pad — where the path began)
+      const padAt = _v.copy(e.pos);
+      if (e.path && e.since !== undefined) e.path(e.since, padAt);
+      const up = _w.copy(padAt).normalize();
+      const lowFor = e.path ? Math.min(t1 - t0, 4 + 0.4 * Math.sqrt(Math.max(0, scale))) : t1 - t0;
+      const nc = Math.min(Math.round(55 * e.thrust * lowFor * Math.min(2.5, scale) * (e.path ? 1 : low)), 600);
+      const ground = e.path && e.since !== undefined ? padAt.length() - 3 : e.pos.length() - e.alt;
       for (let i = 0; i < nc; i++) {
-        const tb = t0 + (t1 - t0) * ((i + 0.5) / Math.max(1, nc));
+        const tb = t0 + lowFor * ((i + 0.5) / Math.max(1, nc));
         const s = hashFloat(i, t1 * 17, 11);
         // radial direction in the tangent plane (biased to two trench exits)
         const ang = hashFloat(i, t1, 12) < 0.6 ? (hashFloat(i, t1, 13) < 0.5 ? 0 : Math.PI) + (hashFloat(i, t1, 14) - 0.5) * 0.9 : hashFloat(i, t1, 15) * Math.PI * 2;
@@ -816,6 +830,12 @@ export class LaunchFx {
       P.puffs.spawn(pos.x + jx, pos.y, pos.z + jz, tb, up.x * 3, up.y * 3, up.z * 3, i % 4 === 0 ? PUFF.fireball : PUFF.smoke, 2 * scale, (14 + 10 * s) * scale, 10 + 8 * s, s);
     }
     this.lightList.push({ planet, x: pos.x, y: pos.y, z: pos.z, reach: 40 * scale, r: 4e4 * k * scale, g: 1.8e4 * k * scale, b: 5e3 * k * scale });
+  }
+
+  /** a light for this frame only (the god's body, a beacon): body-frame position of `planet` */
+  light(planet: number, ctx: LaunchPlanetCtx, x: number, y: number, z: number, reach: number, r: number, g: number, b: number): void {
+    if (!this.planetFx(planet, ctx)) return;
+    this.lightList.push({ planet, x, y, z, reach, r, g, b });
   }
 
   /** an ignition flash at the base of a launcher (once, as the engines light) */

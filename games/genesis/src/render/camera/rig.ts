@@ -1,4 +1,6 @@
-// GENESIS — the camera rig (CONTRACT.md §15.8): owns the controllers and blends between them.
+// GENESIS — the camera rig (CONTRACT.md §15.8): owns the controllers and blends between them — orbit, system, free-fly,
+// follow (camera/follow.ts), the cinematic dolly (dolly.ts), walking in the god's body (walk.ts) and photo mode
+// (photo.ts); `modes` (modes.ts) is the interface's door to the last four (src/ui/host.ts RenderCameraModes).
 //
 // Switching mode or flying to a planet starts a blend from the last rendered pose to the new controller's live pose.
 // Both are expressed relative to a reference point that moves with the world (the target planet's centre, or the star
@@ -13,11 +15,23 @@ import { qSlerp, type CameraController, type CameraMode, type InputState } from 
 import { OrbitCamera } from './orbit.ts';
 import { FlyCamera } from './fly.ts';
 import { SystemCamera } from './system.ts';
+import { FollowCamera } from './follow.ts';
+import { DollyCamera } from './dolly.ts';
+import { WalkCamera } from './walk.ts';
+import { PhotoCamera } from './photo.ts';
+import { CameraModes } from './modes.ts';
 
 export class CameraRig {
   readonly orbit = new OrbitCamera();
   readonly fly = new FlyCamera();
   readonly system = new SystemCamera();
+  readonly followCam = new FollowCamera();
+  readonly dollyCam = new DollyCamera();
+  readonly walk = new WalkCamera();
+  readonly photoCam = new PhotoCamera();
+  /** follow / dolly / walk / photo as the interface and the test surface drive them */
+  readonly modes = new CameraModes(this);
+  private lostFor = 0;
   active: CameraController = this.orbit;
   readonly pose: CameraPose = newPose();
   private desired: CameraPose = newPose();
@@ -73,6 +87,14 @@ export class CameraRig {
   }
 
   update(dt: number, view: WorldView, input: InputState): CameraPose {
+    this.modes.frame(view);
+    // a followed thing that is gone (died, burned out) for a while, a cinematic the player took over: back to orbit
+    if (this.active === this.followCam && this.followCam.lost) {
+      this.lostFor += dt;
+      if (this.lostFor > 2.5) { this.lostFor = 0; this.modes.backToOrbit(); }
+    } else this.lostFor = 0;
+    if (this.active === this.dollyCam && this.dollyCam.released) { this.dollyCam.released = false; this.modes.backToOrbit(); }
+    if (this.active !== this.walk) this.walk.leave();
     this.active.update(dt, view, input, this.desired);
     if (this.blendT >= 1) {
       copyPose(this.pose, this.desired);
