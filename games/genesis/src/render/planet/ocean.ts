@@ -73,6 +73,7 @@ uniform highp sampler2D uFieldM1;
 uniform highp sampler2D uFieldC;
 uniform float uTime;
 uniform float uWind;
+uniform vec4 uTide;
 ${NOISE_GLSL}
 ${WAVES_GLSL}
 varying vec3 vBodyPos;
@@ -99,7 +100,8 @@ ${TERRAIN_VERT_CORE}
   vIce = M1.z;
   vTemp = C.x;
   vWind = tfInterp(uFieldD, aCells, aMisc.x).yzw;
-  float sea = uWind * seaState(vWind);
+  // (a falling moon heaps the tides into the sea: rougher water as it nears — render/fx/worlds.ts uTide)
+  float sea = uWind * seaState(vWind) * (1.0 + 0.12 * uTide.w);
   vec3 wT = windTan(vWind, up);
   // Gerstner displacement: calm in shallows, rivers and ice; faded where the LOD spacing cannot carry the wave
   float flowSpd = length(F.xyz);
@@ -125,6 +127,12 @@ ${TERRAIN_VERT_CORE}
   }
   vCrest = crest / max(sea * 0.7, 0.05);
   tPos += disp;
+  // the tidal bulge under (and opposite) a near moon: the equilibrium tide's shape (3cos²θ − 1) / 2, held off the
+  // shores so the water's edge stays on the ground (render/fx/worlds.ts sets uTide while a moon falls)
+  if (uTide.w > 0.0) {
+    float ct = dot(up, uTide.xyz);
+    tPos += up * uTide.w * (1.5 * ct * ct - 0.5) * smoothstep(0.5, 8.0, depth);
+  }
   vDepth = depth + disp.y * 0.0;
   vBodyPos = tPos;
   vec4 mv = modelViewMatrix * vec4(tPos, 1.0);

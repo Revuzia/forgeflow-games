@@ -95,6 +95,15 @@ export class CameraRig {
     } else this.lostFor = 0;
     if (this.active === this.dollyCam && this.dollyCam.released) { this.dollyCam.released = false; this.modes.backToOrbit(); }
     if (this.active !== this.walk) this.walk.leave();
+    // the world under the camera was unmade (world.erase, a moon that struck): hold where the eye was — the collapse,
+    // the flash and the debris play in front of it (render/fx/worlds.ts) — then rise over the nearest world left
+    const dp = this.desired.planet;
+    if (dp >= 0 && view.snapshots > 0 && !view.planet(dp) && view.planets.length) {
+      this.goneFor += dt;
+      if (this.goneFor < 7) { if (this.blendT >= 1) copyPose(this.pose, this.desired); return this.pose; }
+      this.goneFor = 0;
+      this.modes.backToOrbit();
+    } else this.goneFor = 0;
     this.active.update(dt, view, input, this.desired);
     if (this.blendT >= 1) {
       copyPose(this.pose, this.desired);
@@ -124,6 +133,9 @@ export class CameraRig {
     this.pose.planet = this.desired.planet;
     return this.pose;
   }
+
+  /** seconds the camera has held over a world that is gone */
+  private goneFor = 0;
 
   blending(): boolean { return this.blendT < 1; }
 }

@@ -1,0 +1,95 @@
+{
+  "_doc": "God layer stills (CONTRACT §15.6–15.8): the hand, creatures, disasters, weather, aurora, eclipse. Each scene is staged by its script (lookdev god commands + window.__GENESIS_FX__.advance(s) to move the FX clock, which otherwise only runs with sim time). Run: node _harness/shots.mjs _harness/specs/god.json",
+  "shots": [
+    { "name": "god-hand-village", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true,
+      "commands": [ { "k": "lookdev.hand", "pos": "$poi:town", "alt": 6, "alignment": 0.6, "pose": "open" } ],
+      "camera": { "mode": "orbit", "poi": "town", "dist": 26, "tilt": 58, "hour": 15.5 },
+      "script": [
+        "G.ui_.closeAll(); document.getElementById('boot')?.remove(); const F = window.__GENESIS_FX__; F.fx.hand.force = true;",
+        "await G.frames(1); const a = G.agents(6).map((x) => x.id); const r = await G.cmd({ k: 'hand.grab', target: { kind: 'agent', id: a[0] } }); await G.step(1); await G.frames(2);",
+        "return { held: [F.fx.hand.heldKind, F.fx.hand.heldId], r };"
+      ],
+      "frames": 2 },
+    { "name": "god-creatures", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true,
+      "commands": [ { "k": "lookdev.clear" },
+        { "k": "lookdev.creature", "id": 7, "template": "ape", "pos": "$poi:valley", "offset": [-7, 0], "height": 9, "alignment": 0.95, "anim": "idle", "heading": 2.6 },
+        { "k": "lookdev.creature", "id": 8, "template": "ape", "pos": "$poi:valley", "offset": [7, 0], "height": 9, "alignment": -0.95, "anim": "idle", "heading": 2.6 } ],
+      "wait": 1,
+      "camera": { "mode": "orbit", "poi": "valley", "dist": 34, "tilt": 70, "hour": 10.5 },
+      "script": "window.__GENESIS_FX__.fx.hand.force = false; window.__GENESIS_FX__.advance(2); await G.frames(1); return window.__GENESIS_FX__.fx.creatures.count;",
+      "frames": 2 },
+    { "name": "god-meteor-1-before", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true,
+      "script": [
+        "const F = window.__GENESIS_FX__; F.fx.hand.force = false; const p = G.poi('farm');",
+        "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.disaster', kind: 'meteor', pos: p.pos, offset: [0, -2600], progress: 0.94, bearing: 90, radius: 120 });",
+        "await G.step(1); await G.camera({ mode: 'surface', lat: p.lat, lon: p.lon, alt: 60, yaw: 180, pitch: 14, hour: 17.3 });",
+        "F.advance(0.6); await G.frames(2); return [p.lat, p.lon];"
+      ],
+      "frames": 1 },
+    { "name": "god-meteor-2-impact", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true,
+      "script": [
+        "const F = window.__GENESIS_FX__; const p = G.poi('farm');",
+        "await G.cmd({ k: 'disaster.cancel', all: true }); await G.cmd({ k: 'lookdev.disaster', kind: 'meteor', pos: p.pos, offset: [0, -2600], progress: 1, bearing: 90, radius: 120 });",
+        "await G.step(1); await G.frames(1); F.advance(0.45); await G.frames(1);"
+      ],
+      "frames": 1 },
+    { "name": "god-meteor-3-after", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true,
+      "script": "window.__GENESIS_FX__.advance(9); await G.frames(1);",
+      "frames": 1 },
+    { "name": "god-volcano-night", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true,
+      "script": [
+        "const F = window.__GENESIS_FX__; const p = G.poi('peak');",
+        "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'lookdev.disaster', kind: 'volcano', pos: p.pos, progress: 0.5, intensity: 1.3 });",
+        "await G.step(1); await G.camera({ mode: 'orbit', poi: 'peak', dist: 3600, tilt: 74, hour: 23.5 });",
+        "F.advance(20); await G.frames(1); F.advance(4); await G.frames(1);"
+      ],
+      "frames": 1 },
+    { "name": "god-tornado", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true,
+      "script": [
+        "const F = window.__GENESIS_FX__; const p = G.poi('farm');",
+        "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'weather.clear' });",
+        "await G.cmd({ k: 'lookdev.weather', kind: 'storm', pos: p.pos, offset: [0, 1600], radius: 1800, intensity: 0.8 });",
+        "await G.cmd({ k: 'lookdev.disaster', kind: 'tornado', pos: p.pos, offset: [0, 1300], progress: 0.5, intensity: 1.2 });",
+        "await G.step(1); await G.camera({ mode: 'surface', lat: p.lat, lon: p.lon, alt: 30, yaw: 0, pitch: 13, hour: 16.5 });",
+        "F.advance(12); await G.frames(2);"
+      ],
+      "frames": 1 },
+    { "name": "god-tsunami", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true,
+      "script": [
+        "const F = window.__GENESIS_FX__; const p = G.poi('coast'); const h = p.heading * Math.PI / 180;",
+        "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'weather.clear' });",
+        "await G.cmd({ k: 'lookdev.disaster', kind: 'tsunami', pos: p.pos, offset: [Math.sin(h) * 950, Math.cos(h) * 950], progress: 0.66, radius: 420, intensity: 1.5 });",
+        "await G.step(1); await G.camera({ mode: 'surface', poi: 'coast', alt: 28, pitch: 1, hour: 10.5, turn: -25 });",
+        "F.advance(6); await G.frames(2); return p.heading;"
+      ],
+      "frames": 1 },
+    { "name": "god-blizzard-street", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true,
+      "script": [
+        "const F = window.__GENESIS_FX__; const p = G.poi('town');",
+        "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'weather.clear' });",
+        "await G.cmd({ k: 'lookdev.weather', kind: 'blizzard', pos: p.pos, radius: 2500, intensity: 1 });",
+        "await G.cmd({ k: 'lookdev.field', field: 'snow', pos: p.pos, radius: 2500, value: 1 });",
+        "await G.step(1); await G.camera({ mode: 'surface', poi: 'town', alt: 2.2, pitch: 3, hour: 11 });",
+        "F.advance(8); await G.frames(2); return F.fx.m && F.fx.m.weather.local;"
+      ],
+      "frames": 1 },
+    { "name": "god-eclipse", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true,
+      "script": [
+        "const F = window.__GENESIS_FX__; const p = G.poi('valley');",
+        "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'weather.clear' });",
+        "await G.cmd({ k: 'lookdev.disaster', kind: 'eclipse', pos: p.pos, progress: 0.5, params: { coverage: 0.995 } });",
+        "await G.step(1); await G.camera({ mode: 'surface', poi: 'valley', alt: 40, pitch: 16, sunElevation: 22, faceSun: true });",
+        "F.advance(4); await G.frames(2); return F.fx.screenState.eclipse;"
+      ],
+      "frames": 1 },
+    { "name": "god-aurora-orbit", "params": "source=lookdev", "size": [960, 540], "quality": "medium", "canvasOnly": true,
+      "script": [
+        "const F = window.__GENESIS_FX__; const p = G.poi('peak');",
+        "await G.cmd({ k: 'lookdev.clear' }); await G.cmd({ k: 'weather.clear' }); await G.cmd({ k: 'lookdev.star', activity: 1 }); await G.cmd({ k: 'planet.set', magnetism: 1.2 });",
+        "await G.cmd({ k: 'lookdev.disaster', kind: 'magnetic-storm', pos: p.pos, progress: 0.5 });",
+        "await G.step(1); await G.camera({ mode: 'orbit', lat: 58, lon: 30, dist: 4200, tilt: 38, hour: 0.5 });",
+        "F.advance(30); await G.frames(2); return F.fx.m && F.fx.m.aurora.level;"
+      ],
+      "frames": 1 }
+  ]
+}

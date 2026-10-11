@@ -172,10 +172,11 @@ const SKIN_SURFACE = /* glsl */ `
   float dn = fbm3(vRest * 9.0 + vec3(0.0, uHandTime * 0.25, 0.0)) * 0.5 + 0.5;
   float arm = smoothstep(-0.56, -0.2, vRest.z);
   float keep = arm * uPresence;
+  float fwRest = length(fwidth(vRest));
   if (dn > keep * 1.05) discard;
   float edge = 1.0 - smoothstep(0.0, 0.09, keep * 1.05 - dn);
   float good = hsat(uAlign), cruel = hsat(-uAlign);
-  float fine = 1.0 - smoothstep(0.0008, 0.004, length(fwidth(vRest)));
+  float fine = 1.0 - smoothstep(0.0008, 0.004, fwRest);
   // albedo: warm, alive skin; ashen and cold for a cruel god
   vec3 skin = mix(vec3(0.58, 0.40, 0.31), vec3(0.66, 0.47, 0.33), good);
   skin = mix(skin, vec3(0.2, 0.2, 0.235), cruel * 0.85);
@@ -221,7 +222,7 @@ const SKIN_LIGHT = /* glsl */ `
     vec3 sssCol = mix(vec3(1.0, 0.38, 0.22), vec3(0.45, 0.4, 0.9), hsat(-uAlign));
     float ndl = dot(geometryNormal, uSunDirView);
     float wrap = max(0.0, (ndl + 0.55) / 1.55) - max(0.0, ndl);
-    reflectedLight.directDiffuse += sunCol * diffuseColor.rgb * sssCol * wrap * 0.75;
+    reflectedLight.directDiffuse += sunCol * diffuseColor.rgb * sssCol * wrap * 0.5;
     // light through the thin parts (fingers, the webs) when the sun is behind them
     float thin = vMark.w;
     float tr = pow(hsat(dot(geometryViewDir, -normalize(uSunDirView + geometryNormal * 0.35))), 3.0) * thin;
@@ -243,7 +244,7 @@ const SKIN_EMISSIVE = /* glsl */ `
     float ex = uHasExposure > 0.5 ? max(texture(tExposure, vec2(0.5)).r, 1e-4) : 1.0;
     float nv = abs(dot(normal, normalize(vViewPosition)));
     float rim = pow(1.0 - nv, 2.6);
-    vec3 g = uGlowCol * (rim * 0.75 + 0.035 + edge * 2.5) * uGlowK / ex;
+    vec3 g = uGlowCol * (rim * 0.28 + 0.012 + edge * 2.5) * uGlowK / ex;
     // a cruel god's veins smoulder
     g += uGlowCol * vein * hsat(-uAlign) * 0.35 * uGlowK / ex;
     totalEmissiveRadiance = g;
@@ -313,7 +314,7 @@ void main() {
   if (vZ > sz + 0.02 * vZ) discard;
   float nv = abs(dot(normalize(vN), normalize(vV)));
   float k = pow(1.0 - nv, 3.0) * smoothstep(-0.5, -0.1, vRest.z) * uPresence;
-  gl_FragColor = vec4(uGlowCol * k * uGlowK * 0.45 * fxDisplay(0.85), 0.0);
+  gl_FragColor = vec4(uGlowCol * k * uGlowK * 0.2 * fxDisplay(0.85), 0.0);
 }
 `;
 
@@ -669,7 +670,7 @@ export class HandVisual {
     const align = hv?.alignment ?? 0;
     this.u.uAlign.value = align;
     const gc = this.u.uGlowCol.value as Color;
-    if (align >= 0) gc.setRGB(1.0, 0.74 - 0.04 * align, 0.38 - 0.08 * align);
+    if (align >= 0) gc.setRGB(1.0, 0.84 - 0.06 * align, 0.6 - 0.14 * align);
     else gc.setRGB(0.55 - 0.15 * Math.min(1, -align), 0.48 - 0.2 * Math.min(1, -align), 1.0);
     const castK = pose === 'cast' ? 1 + 1.6 * (0.6 + 0.4 * Math.sin(t * 9)) : 1;
     this.u.uGlowK.value = (0.55 + 0.45 * Math.abs(align)) * castK;
@@ -743,11 +744,11 @@ export class HandVisual {
       const surf = pv.fields.get('surface');
       if (surf) g = Math.max(g, pv.params.radius + pv.grid.sample(surf, u[0], u[1], u[2]) + pv.grid.sample(water, u[0], u[1], u[2]));
     }
-    // size: ~13 % of the view height at the hand's distance, bounded by the camera's altitude (a cursor near the
+    // size: ~19 % of the view height at the hand's distance, bounded by the camera's altitude (a cursor near the
     // horizon would otherwise make it a mountain)
     const cx = f.camBody.x - u[0] * g, cy = f.camBody.y - u[1] * g, cz = f.camBody.z - u[2] * g;
     const camD = Math.min(Math.sqrt(cx * cx + cy * cy + cz * cz), altCam * 3.5 + 40);
-    const Lw = Math.max(2.6, Math.min(6000, camD * 0.135));
+    const Lw = Math.max(2.2, Math.min(6000, camD * 0.19));
     this.scale = this.placed ? this.scale + (Lw - this.scale) * Math.min(1, dt * 4) : Lw;
     const L = this.scale;
     // how high it hovers

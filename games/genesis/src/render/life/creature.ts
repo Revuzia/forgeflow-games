@@ -686,8 +686,8 @@ export class CreatureLayer {
     this.group.matrixAutoUpdate = false;
   }
 
-  /** creatures on this world; `heldId` / `grip` when the hand holds one */
-  update(list: CreatureView[], pv: PlanetView, dt: number, t: number, heldId: number, grip: Vector3 | null): void {
+  /** creatures on this world; `heldId` / `grip` when the hand holds one; `pins`: creatures flying a throw */
+  update(list: CreatureView[], pv: PlanetView, dt: number, t: number, heldId: number, grip: Vector3 | null, pins?: Map<number, Vector3>): void {
     CREATURE_EXPOSURE_ON.value = FX_EXPOSURE.value ? 1 : 0;
     this.falls.length = 0;
     for (const v of this.visuals.values()) v.seen = false;
@@ -696,7 +696,8 @@ export class CreatureLayer {
       let vis = this.visuals.get(c.id);
       if (!vis) { vis = new CreatureVisual(c.id, this.shared); this.visuals.set(c.id, vis); this.group.add(vis.group); }
       vis.seen = true;
-      vis.update(c, pv, dt, t, heldId === c.id && grip ? grip : null, this.falls);
+      const pin = pins?.get(c.id);
+      vis.update(c, pv, dt, t, heldId === c.id && grip ? grip : pin ?? null, this.falls);
     }
     for (const [id, v] of this.visuals) if (!v.seen) { this.group.remove(v.group); v.dispose(); this.visuals.delete(id); }
   }

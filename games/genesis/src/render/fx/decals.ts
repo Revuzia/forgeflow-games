@@ -125,10 +125,12 @@ float crackField(vec2 p, float seed) {
 void main() {
   vec2 uv = gl_FragCoord.xy / uResolution;
   float sz = texture(tSceneDepth, uv).r;
-  if (sz > 1e6) discard;
-  vec4 rd4 = uInvProj * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
+  bool skyPx = sz > 1e6;
+  vec4 rd4 = uInvProj * vec4(uv * 2.0 - 1.0, -1.0, 1.0);
   vec3 rd = rd4.xyz / rd4.w;
-  vec3 S = rd * (sz / max(-rd.z, 1e-6));
+  vec3 S = rd * (min(sz, 1e6) / max(-rd.z, 1e-6));
+  // screen derivatives before any discard (they are undefined once neighbours have left the quad)
+  vec3 dSx = dFdx(S), dSy = dFdy(S);
   vec3 P = uViewToBody * S + uCamBody;
   vec3 up = normalize(vC);
   vec3 d = P - vC;
@@ -139,6 +141,8 @@ void main() {
   vec3 bx = cross(ax, up);
   vec2 q = vec2(dot(lat, bx), dot(lat, ax));
   float r = length(q);
+  float fwR = fwidth(r);
+  if (skyPx) discard;
   int t = int(vType + 0.5);
   float slab = vQ.x > 0.0 ? vQ.x : vR * 0.35;
   float hf = 1.0 - smoothstep(slab * 0.6, slab, abs(hgt));
@@ -157,7 +161,7 @@ void main() {
     // brush: a crisp ring at the radius with tick marks, the falloff as a soft fill, the strength as its density,
     // a slow sweep so it reads as live
     float R = vP.x;
-    float px = max(fwidth(r), R * 0.004);
+    float px = max(fwR, R * 0.004);
     float ring = 1.0 - smoothstep(px * 0.8, px * 2.2, abs(r - R));
     float inner = 1.0 - smoothstep(px * 0.5, px * 1.6, abs(r - R * mix(0.98, 0.5, vP.y)));
     float ang = atan(q.x, q.y);
@@ -170,7 +174,7 @@ void main() {
   } else if (t == 2) {
     // target reticle: converging rings (p1 = time to impact 1 → 0), a rotating segmented outer ring, crosshair gaps
     float R = vP.x;
-    float px = max(fwidth(r), R * 0.003);
+    float px = max(fwR, R * 0.003);
     float ang = atan(q.x, q.y);
     float spin = uTime * vP.z;
     float outer = (1.0 - smoothstep(px, px * 2.5, abs(r - R))) * step(0.35, fract((ang + spin) * 6.0 / 6.2831853));
@@ -242,7 +246,7 @@ void main() {
   } else if (t == 9) {
     // region paint preview: a soft fill with drifting hatching and a bright rim
     float R = vP.x;
-    float px = max(fwidth(r), R * 0.004);
+    float px = max(fwR, R * 0.004);
     float rim = 1.0 - smoothstep(px, px * 3.0, abs(r - R));
     float hatch = step(0.7, fract((q.x + q.y) / (R * 0.06) - uTime * 0.6));
     float fill = (1.0 - smoothstep(R * 0.9, R, r)) * (0.1 + 0.15 * hatch) * vP.y;
@@ -255,7 +259,7 @@ void main() {
     float dl = length(L);
     float reach = vP.x;
     if (dl > reach) discard;
-    vec3 N = cross(dFdx(S), dFdy(S));
+    vec3 N = cross(dSx, dSy);
     float nl = length(N);
     N = nl > 1e-12 ? N / nl : -normalize(S);
     if (dot(N, S) > 0.0) N = -N;
@@ -285,7 +289,7 @@ void main() {
   } else if (t == 13) {
     // the line where a shield dome meets the ground
     float R = vP.x;
-    float px = max(fwidth(r), R * 0.003);
+    float px = max(fwR, R * 0.003);
     float k = (1.0 - smoothstep(px, px * 4.0, abs(r - R))) + 0.25 * exp(-abs(r - R) / (R * 0.05));
     float sh = 0.75 + 0.25 * sin(atan(q.x, q.y) * 12.0 - uTime * 2.0);
     o = vec4(vCol.rgb * vP.y * k * sh * hf * mix(1.0, disp, 0.6), 0.0);
@@ -350,6 +354,10 @@ export class DecalPass {
   private groups: DecalGroup[];
   private list: Decal[] = [];
   private readonly viewToBody = new Matrix3();
+  /** debugging: decal types to skip; `capture` keeps a copy of the last frame's list in `captured` */
+  skip = new Set<number>();
+  capture = false;
+  captured: Decal[] = [];
 
   constructor() {
     this.group.name = 'decals';
@@ -383,8 +391,10 @@ export class DecalPass {
    */
   draw(r: WebGLRenderer, scene: Scene, camera: Camera & { projectionMatrixInverse: Matrix4 }, target: WebGLRenderTarget | null, depth: Texture, w: number, h: number, bodyToView: Matrix3, camBody: Vector3, time: number): void {
     const [over, mul, add] = this.groups;
+    if (this.capture) this.captured = this.list.slice();
     over.begin(); mul.begin(); add.begin();
     for (const d of this.list) {
+      if (this.skip.size && this.skip.has(d.type)) continue;
       const g = GROUP_OF[d.type] ?? 0;
       (g === 0 ? over : g === 1 ? add : mul).push(d);
     }

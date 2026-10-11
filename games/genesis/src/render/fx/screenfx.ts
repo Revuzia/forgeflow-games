@@ -21,7 +21,7 @@ uniform mat3 uViewToBody;
 uniform vec3 uCamBody;
 uniform float uGroundR;
 varying vec2 vUv;
-vec3 viewRay(vec2 uv) { vec4 r = uInvProj * vec4(uv * 2.0 - 1.0, 1.0, 1.0); return r.xyz / r.w; }
+vec3 viewRay(vec2 uv) { vec4 r = uInvProj * vec4(uv * 2.0 - 1.0, -1.0, 1.0); return r.xyz / r.w; }
 `;
 
 const OVER = /* glsl */ `

@@ -40,11 +40,12 @@ export interface OpeningDeps {
   audioRunning?(): boolean;
   /** the interface: hidden in the dark, faded in as the world turns into view */
   setUi(v: boolean): void;
-  /** arm a power as the tool (the people's drop) */
+  /** arm a power as the tool (the people's drop), and put it away once they stand there */
   arm(p: Power, preset?: Record<string, unknown>): void;
+  disarm?(): void;
 }
 
-type Beat = 'air' | 'water' | 'green' | 'people' | 'wait' | 'night' | 'fire' | 'rest';
+type Beat = 'air' | 'water' | 'green' | 'people' | 'gone' | 'wait' | 'night' | 'fire' | 'rest';
 type Stage = 'off' | 'dark' | 'ignite' | 'fall' | 'whisper';
 
 interface Whisper {
@@ -166,6 +167,7 @@ export class Opening {
     this.soundPending = true;
   }
   private soundPending = false;
+  private armedPeople = false;
 
   /** Esc: the scenario menu; true when the opening took the key */
   cancel(): boolean {
@@ -283,6 +285,8 @@ export class Opening {
 
   private note(kind: string): void {
     if (this.met.has(kind)) return;
+    // the band the whisper put in the hand is down: the hand is empty again
+    if (kind === 'first-people' && this.armedPeople) { this.armedPeople = false; this.deps.disarm?.(); }
     this.met.add(kind);
     this.order.push(kind);
     this.pendingAck = this.ackFor(kind);
@@ -331,6 +335,7 @@ export class Opening {
     const night = live.length > 0 && isNight(pv, live[0].pos);
     const sid = live[0]?.id ?? -1;
     const now = this.now();
+    if (this.armedPeople && live.length) { this.armedPeople = false; this.deps.disarm?.(); }
     const cur = this.cur?.beat ?? null;
     // the order a dead rock meets them in; what the player did out of order is answered (ackFor) before the next
     let next: Beat;
@@ -338,6 +343,8 @@ export class Opening {
     else if (!has('first-rain') && !has('first-sea')) next = 'water';
     else if (!has('first-green')) next = 'green';
     else if (!has('first-people') && !live.length) next = 'people';
+    // they died (the cold, thirst, hunger on a world still too young): it is said, and someone may be set down again
+    else if (!live.length && !pv.population.some((n) => n > 0)) next = 'gone';
     else if (!this.nightSaid && !this.fireSaid) {
       // their first night: with fire the hearths glow; without it they are cold in the dark
       if (night) next = fire ? 'fire' : 'night';
@@ -348,6 +355,7 @@ export class Opening {
     else if (cur === 'fire' && now - this.curAt < 9000) next = 'fire';
     else next = 'rest';
     if (!force && cur === next && !this.pendingAck) return;
+    if (next === 'gone') { this.nightSaid = this.fireSaid = this.coldNight = false; }
     if (next === 'night') { this.nightSaid = true; this.coldNight = true; }
     if (next === 'fire') this.fireSaid = true;
     this.cur = this.whisper(next, pv, sid, night);
@@ -403,6 +411,11 @@ export class Opening {
       case 'fire': return {
         beat, line: night ? 'Night. Their fire glows.' : 'When night comes, their fire will glow.',
       };
+      case 'gone': return {
+        beat, ack: 'They are gone. The world was too hard for them.', line: 'Someone to see it, again?',
+        act: { label: 'set them down', run: () => this.dropPeople(planet) },
+        later: 'Set them where it is green and warm, near water — and give them fire before the night.',
+      };
       case 'wait': return {
         beat, line: 'Watch them. Their first night is coming.',
         act: { label: 'let the day pass', run: () => this.host.setSpeed(10) },
@@ -418,7 +431,7 @@ export class Opening {
   /** the people's whisper: the hand holds a band of plains folk — the next click on the ground sets them down */
   private dropPeople(planet: number): void {
     const p = this.host.powers.get('people');
-    if (p) { this.deps.arm(p, { species: 'plains-folk', count: 30 }); return; }
+    if (p) { this.deps.arm(p, { species: 'plains-folk', count: 30 }); this.armedPeople = true; return; }
     const poi = this.host.poi?.('homestead');
     const pos = poi?.pos ?? this.host.focusGround()?.dir;
     void this.host.cmd({ k: 'life.spawn-people', planet, species: 'plains-folk', count: 30, ...(pos ? { pos } : {}) }).then((r) => {

@@ -14,7 +14,7 @@
 //                picture, the internal resolution scaled by the supersample factor, a few frames rendered (the clouds'
 //                and reflections' history refill), the canvas read, everything put back.
 
-import { HalfFloatType, LinearFilter, RGBAFormat, Vector2, WebGLRenderTarget, type Texture, type WebGLRenderer } from 'three';
+import { HalfFloatType, LinearFilter, RGBAFormat, Vector2, WebGLRenderTarget, type ShaderMaterial, type Texture, type WebGLRenderer } from 'three';
 import type { WorldView } from '../../client/worldview.ts';
 import { qMul, qRotate, qRotateInv, type D3, type DQ } from '../../client/orbits.ts';
 import { tangentBasis } from '../../sim/core/vec3.ts';
@@ -146,7 +146,7 @@ export class PhotoCamera implements CameraController {
 
 // ───────────────────────────── depth of field ─────────────────────────────
 
-const DOF_FRAG = /* glsl */ `
+const dofFrag = (taps: number): string => /* glsl */ `
 varying vec2 vUv;
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
@@ -154,7 +154,7 @@ uniform vec2 uRes;
 uniform float uFocus;
 uniform float uMaxPx;
 uniform float uNearK;
-const int TAPS = 48;
+const int TAPS = ${taps};
 float cocPx(float z) {
   z = min(z, 1e7);
   // thin lens: the blur circle grows with |z - focus| / z (an infinitely far background takes the full circle)
@@ -192,11 +192,16 @@ void main() {
 }
 `;
 
+const dofMaterial = (taps: number): ShaderMaterial => passMaterial(dofFrag(taps), {
+  tColor: { value: null }, tDepth: { value: null }, uRes: { value: new Vector2(1, 1) }, uFocus: { value: 200 }, uMaxPx: { value: 8 }, uNearK: { value: 1.2 },
+});
+
 export class PhotoPost {
   private target: WebGLRenderTarget | null = null;
-  private mat = passMaterial(DOF_FRAG, {
-    tColor: { value: null }, tDepth: { value: null }, uRes: { value: new Vector2(1, 1) }, uFocus: { value: 200 }, uMaxPx: { value: 8 }, uNearK: { value: 1.2 },
-  });
+  private mat48 = dofMaterial(48);
+  private mat128: ShaderMaterial | null = null;
+  /** the Cinematic preset's lens (Quality.dof): 128 taps for smooth discs instead of 48 */
+  hq = false;
 
   /** depth of field on the composited HDR image when photo mode wants it; returns the texture to tone map */
   apply(r: WebGLRenderer, fsq: FullscreenQuad, input: Texture, linDepth: Texture, w: number, h: number): Texture {
@@ -206,14 +211,15 @@ export class PhotoPost {
       this.target?.dispose();
       this.target = new WebGLRenderTarget(w, h, { type: HalfFloatType, format: RGBAFormat, minFilter: LinearFilter, magFilter: LinearFilter, depthBuffer: false });
     }
-    const u = this.mat.uniforms;
+    const mat = this.hq ? (this.mat128 ??= dofMaterial(128)) : this.mat48;
+    const u = mat.uniforms;
     u.tColor.value = input;
     u.tDepth.value = linDepth;
     (u.uRes.value as Vector2).set(w, h);
     u.uFocus.value = Math.max(0.3, L.focus);
     // a wide-open lens blurs up to ~2.2 % of the frame's height
     u.uMaxPx.value = L.blur * 0.022 * h;
-    fsq.render(r, this.mat, this.target);
+    fsq.render(r, mat, this.target);
     return this.target.texture;
   }
 
@@ -229,7 +235,7 @@ export class PhotoPost {
     return scratch;
   }
 
-  dispose(): void { this.target?.dispose(); this.mat.dispose(); }
+  dispose(): void { this.target?.dispose(); this.mat48.dispose(); this.mat128?.dispose(); }
 }
 
 // ───────────────────────────── the picture ─────────────────────────────

@@ -263,6 +263,7 @@ export class Shell {
       audioRunning: () => deps.audioRunning?.() ?? false,
       setUi: (v) => deps.setUi(v),
       arm: (p, preset) => this.arm(p, preset),
+      disarm: () => { if (this.tools.state().armed === 'people') this.tools.disarm(); },
     });
     this.pad.onButton = (name, down) => this.padButton(name, down);
     // preferences that are the interface's own
@@ -339,8 +340,8 @@ export class Shell {
   /** open a veiled window: the game menu gives way to it, the transient pickers close, it draws on top */
   openWindow(which: 'settings' | 'saves' | 'help' | 'menu' | 'newWorld' | 'mods'): void {
     const p = which === 'settings' ? this.settings : which === 'saves' ? this.saves : which === 'help' ? this.help : which === 'newWorld' ? this.newWorld : which === 'mods' ? this.mods : this.menu;
-    // (photo mode is left first: its panel and the hidden interface are not for windows)
-    if (this.photo.isActive && which !== 'help') this.host.cam?.photo(false);
+    // (photo mode is left first: the interface it hides is where windows live)
+    if (this.photo.isActive) this.host.cam?.photo(false);
     this.cam.closeMenu();
     if (which !== 'menu' && this.menu.isOpen) this.menu.close();
     this.palette.close(); this.radial.close(); this.freeform.close();

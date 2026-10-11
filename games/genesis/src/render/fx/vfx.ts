@@ -27,7 +27,7 @@ import { FX_DEPTH_GLSL, FX_LAYER } from './fxcommon.ts';
 /** particle systems (vertex shader branches). < 20: the lit pass; ≥ 20: the emissive pass */
 export const SYS = {
   dust: 0, plume: 1, ash: 2, pyro: 3, steam: 4, spray: 5, skirt: 6, miasma: 7, smoke: 8, sand: 9, fog: 10, swarm: 11,
-  rainCol: 12, cloud: 13, leaves: 14, bounty: 15, precip: 16, splash: 17, debrisDust: 18, snowfall: 19,
+  rainCol: 12, cloud: 13, leaves: 14, bounty: 15, precip: 16, splash: 17, trail: 18, snowfall: 19,
   embers: 20, lava: 21, sparks: 22, plasma: 23, motes: 24, shower: 25, flash: 26, sparkle: 27, glints: 28,
 } as const;
 
@@ -140,8 +140,22 @@ void main() {
   vec3 c = col;
   float lift = 0.0;
   int S = int(sys + 0.5);
-  if (S == 0 || S == 18) {
-    // dust: thrown out low and wide, billowing up a little, settling; debris dust trails stay where they were shed
+  if (S == 18) {
+    // a smoke trail left along a known path (a meteor's): from the head (p0 along the axis from O) back up to where
+    // it began (p1); the puff at path coordinate s was shed (s − p0) / speed seconds ago (p2 = speed, m/s)
+    float rs = h1(seed + idx * 1.37, 0.0), rt = h1(seed * 3.3 + idx * 0.71, 0.0);
+    float s = mix(p0, p1, rs * rs);
+    float since = (s - p0) / max(p2, 1.0);
+    float at = since / life;
+    if (at > 1.0) { hideMe(); return; }
+    vec3 sd = e1 * cos(rt * 6.2831853) + e2 * sin(rt * 6.2831853);
+    p = O + axis * s + sd * size * (0.2 + 2.2 * sqrt(at)) * h1(seed + idx, 4.4) + up * at * size * 0.6;
+    sz = size * (0.35 + 2.2 * sqrt(at)) * (0.7 + 0.6 * h1(seed + idx, 5.5));
+    a = (1.0 - smoothstep(0.35, 1.0, at)) * smoothstep(0.0, 0.03, since) * 0.75;
+    soft = 0.6 * sz;
+    glow = vec3(1.0, 0.45, 0.15) * 6.0 * (1.0 - smoothstep(0.0, 0.02, since / max(life, 1e-3)));
+  } else if (S == 0) {
+    // dust: thrown out low and wide, billowing up a little, settling
     float out_ = (1.0 - exp(-tS * 2.2)) / 2.2;
     p += side * (sqrt(r2) * p0 * 0.3 + out_ * (p1 + 0.5) * (0.5 + r3)) + up * (out_ * (0.6 + r4) * p1 * 0.4 + size * 0.3);
     p += axis * tS * 0.6;
@@ -290,6 +304,8 @@ void main() {
     a = smoothstep(0.0, 0.05, age) * (1.0 - smoothstep(0.92, 1.0, age));
     kind = 7.0;
     c = r4 < 0.3 ? vec3(0.55, 0.06, 0.03) : r4 < 0.55 ? vec3(0.6, 0.32, 0.03) : r4 < 0.8 ? vec3(0.5, 0.33, 0.13) : vec3(0.16, 0.32, 0.05);
+    // (p2: one kind of thing, in the emitter's colour — logs for the wood miracle)
+    if (p2 > 0.5) c = col * (0.75 + 0.5 * r4);
   } else if (S == 16 || S == 19) {
     // precipitation round the camera: a box (half size p0) that wraps as the camera moves; rain streaks, snowflakes
     // (S 19: tumbling, drifting), hail, ash, sand, blood or acid by colour; it falls along -up plus the wind (axis)
@@ -318,7 +334,7 @@ void main() {
     vec2 suv = vec2(r1, r2);
     float sz0 = textureLod(tSceneDepth, suv, 0.0).r;
     if (sz0 > p0 || sz0 > 1e6) { hideMe(); return; }
-    vec4 rd4 = uInvProj * vec4(suv * 2.0 - 1.0, 1.0, 1.0);
+    vec4 rd4 = uInvProj * vec4(suv * 2.0 - 1.0, -1.0, 1.0);
     vec3 rd = rd4.xyz / rd4.w;
     vec3 Sv = rd * (sz0 / max(-rd.z, 1e-6));
     p = uViewToBody * Sv + uCamBody;

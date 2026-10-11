@@ -28,6 +28,9 @@ export class FollowCamera implements CameraController {
   pitch = 0.3;
   /** distance multiplier on the subject's natural framing distance */
   zoom = 1;
+  /** a framing distance asked for (m) before the subject could be measured (a ship not drawn yet): turned into the
+   * zoom on the first frame it resolves */
+  wantDist: number | null = null;
   fov = 50;
   /** seconds since the player last turned the view (the view drifts back behind the subject after a while) */
   private idle = 99;
@@ -42,7 +45,7 @@ export class FollowCamera implements CameraController {
   set(ref: EntityRef | null): void {
     const same = ref && this.ref && ref.kind === this.ref.kind && ref.id === this.ref.id;
     this.ref = ref;
-    if (!same) { this.off = null; this.yaw = 0; this.pitch = ref?.kind === 'ship' ? 0.1 : 0.32; this.zoom = 1; this.idle = 99; this.lift = 0; }
+    if (!same) { this.off = null; this.yaw = 0; this.pitch = ref?.kind === 'ship' ? 0.1 : 0.32; this.zoom = 1; this.wantDist = null; this.idle = 99; this.lift = 0; }
     this.lost = false;
   }
 
@@ -55,6 +58,7 @@ export class FollowCamera implements CameraController {
     if (!s) { this.lost = true; return; }
     this.state = s;
     this.lost = false;
+    if (this.wantDist != null) { this.zoom = Math.max(0.15, Math.min(40, this.wantDist / (s.size * (this.ref.kind === 'ship' ? 2.4 : 3.4) + 4))); this.wantDist = null; this.off = null; }
     // ── input: orbit around the subject ──
     const dx = input.dragL[0] + input.dragR[0], dy = input.dragL[1] + input.dragR[1];
     if (dx || dy) { this.yaw -= dx * 0.005; this.pitch = Math.max(-0.6, Math.min(1.45, this.pitch + dy * 0.004)); this.idle = 0; }
@@ -85,7 +89,10 @@ export class FollowCamera implements CameraController {
       // a ship: a climbing rocket from below and to the side, looking up along its plume (the player's turn swings the
       // eye around its axis); one standing, circling or coming down from behind and above
       const axis = norm3([s.up[0], s.up[1], s.up[2]]);
-      const climbing = dot(axis, radial) > 0.3 && s.speed > 0;
+      // (only a rocket going up: a ship at sea, an airship cruising or a gate stand upright too, and one coming down is
+      // framed from the side and a little above — the ground it is landing on, the dust its burn raises)
+      const sv = view.ships.find((q) => q.id === this.ref!.id);
+      const climbing = !!sv && sv.phase === 'ascent' && sv.kind !== 'airship' && dot(axis, radial) > 0.3;
       if (climbing) {
         let across = cross(axis, fwd);
         if (Math.hypot(across[0], across[1], across[2]) < 1e-3) across = [...side] as D3;

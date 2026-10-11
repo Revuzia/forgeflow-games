@@ -60,11 +60,19 @@ function latlon(lat: number, lon: number): UnitVec {
   const la = (lat * Math.PI) / 180, lo = (lon * Math.PI) / 180;
   return [Math.cos(la) * Math.sin(lo), Math.sin(la), Math.cos(la) * Math.cos(lo)];
 }
-function posOf(c: Command, key = 'pos'): UnitVec | null {
+function posOf(c: Command, key = 'pos', R = 0): UnitVec | null {
   const p = c[key];
-  if (Array.isArray(p) && p.length >= 3) return unit(p as number[]);
-  if (typeof c.lat === 'number' && typeof c.lon === 'number' && key === 'pos') return latlon(c.lat, c.lon);
-  return null;
+  let u: UnitVec | null = null;
+  if (Array.isArray(p) && p.length >= 3) u = unit(p as number[]);
+  else if (typeof c.lat === 'number' && typeof c.lon === 'number' && key === 'pos') u = latlon(c.lat, c.lon);
+  // "offset": [east m, north m] from that point (lookdev framing: two creatures side by side, a storm off the coast)
+  const o = c.offset;
+  if (u && key === 'pos' && R > 0 && Array.isArray(o) && o.length >= 2) {
+    const e = bearingDir(u, Math.PI / 2), n = bearingDir(u, 0);
+    const ox = Number(o[0]) || 0, oy = Number(o[1]) || 0;
+    u = unit([u[0] + (e[0] * ox + n[0] * oy) / R, u[1] + (e[1] * ox + n[1] * oy) / R, u[2] + (e[2] * ox + n[2] * oy) / R]);
+  }
+  return u;
 }
 /** a unit tangent at u pointing along `bearing` (rad, 0 north, + east) */
 function bearingDir(u: UnitVec, bearing: number): UnitVec {
@@ -96,7 +104,7 @@ export class LookdevGod {
     const R = lp.snap.params.radius;
     switch (c.k) {
       case 'hand.move': case 'lookdev.hand': {
-        const p = posOf(c) ?? this.hand?.pos ?? [0, 1, 0];
+        const p = posOf(c, 'pos', R) ?? this.hand?.pos ?? [0, 1, 0];
         this.hand = { planet: lp.snap.id, pos: p, alt: typeof c.alt === 'number' ? c.alt : this.hand?.alt ?? 8, held: this.hand?.held ?? null, pose: typeof c.pose === 'string' ? c.pose : this.hand?.pose ?? 'open', alignment: typeof c.alignment === 'number' ? c.alignment : this.hand?.alignment ?? 0 };
         if (c.k === 'lookdev.hand' && c.held && typeof c.held === 'object') this.hand.held = { kind: String((c.held as { kind: string }).kind) as EntityRef['kind'], id: Number((c.held as { id: number }).id) };
         if (c.k === 'lookdev.hand' && c.held === null) this.hand.held = null;
@@ -142,7 +150,7 @@ export class LookdevGod {
         const tplId = String(c.template ?? c.body ?? 'ape');
         const tpl = CREATURES.get(tplId) ?? [...CREATURES.values()].find((q) => q.body === tplId) ?? { body: tplId, size: [4, 16] as [number, number], name: tplId, speed: 1.5 };
         const id = typeof c.id === 'number' ? c.id : this.nextId++;
-        const p = posOf(c) ?? [0, 1, 0];
+        const p = posOf(c, 'pos', R) ?? [0, 1, 0];
         const ex = this.creatures.find((q) => q.view.id === id);
         const align = typeof c.alignment === 'number' ? c.alignment : 0;
         const morph: [number, number, number, number] = Array.isArray(c.morph) ? (c.morph as [number, number, number, number]) : [
@@ -163,7 +171,7 @@ export class LookdevGod {
         const kind = String(c.kind ?? 'meteor');
         const def = DIS.get(kind);
         if (!def) return { ok: false, msg: `no disaster '${kind}'` };
-        const p = posOf(c) ?? this.hand?.pos ?? [0, 1, 0];
+        const p = posOf(c, 'pos', R) ?? this.hand?.pos ?? [0, 1, 0];
         const id = this.nextId++;
         const radius = typeof c.radius === 'number' ? c.radius : def.radius;
         const intensity = typeof c.intensity === 'number' ? c.intensity : def.intensity;
@@ -200,7 +208,7 @@ export class LookdevGod {
       case 'weather.paint': case 'lookdev.weather': {
         const kind = String(c.kind ?? 'rain');
         const wdef = ((BASE_PACK as unknown as { weather?: { id: string; render?: { lightning?: number } }[] }).weather ?? []).find((w) => w.id === kind);
-        const p = posOf(c) ?? [0, 1, 0];
+        const p = posOf(c, 'pos', R) ?? [0, 1, 0];
         const w = { id: this.nextId++, kind, planet: lp.snap.id, pos: p, radius: typeof c.radius === 'number' ? c.radius : 900, intensity: typeof c.intensity === 'number' ? c.intensity : 1, pinned: true, vel: [0, 0, 0] as UnitVec, lightning: Number(wdef?.render?.lightning ?? 0) };
         const list = this.weather.get(lp.snap.id) ?? [];
         list.push(w);
@@ -219,12 +227,12 @@ export class LookdevGod {
         return { ok: true };
       }
       case 'lookdev.event': {
-        const p = posOf(c);
+        const p = posOf(c, 'pos', R);
         this.events.push({ t: String(c.t ?? 'impact'), tick, planet: lp.snap.id, pos: p ?? undefined, a: Number(c.a ?? 0), b: Number(c.b ?? 0), text: typeof c.text === 'string' ? c.text : undefined, data: (c.data as Record<string, unknown>) ?? {} });
         return { ok: true };
       }
       case 'lookdev.projectile': {
-        const p = posOf(c) ?? [0, 1, 0];
+        const p = posOf(c, 'pos', R) ?? [0, 1, 0];
         const v = Array.isArray(c.vel) ? (c.vel as number[]) : [0, 0, 0];
         const vel: [number, number, number] = [v[0], v[1], v[2]];
         this.projectiles.push({ view: { id: this.nextId++, planet: lp.snap.id, kind: String(c.kind ?? 'rock'), what: Number(c.what ?? 600), content: String(c.content ?? ''), pos: p, alt: Number(c.alt ?? 30), vel }, t0: tick, pos0: [...p], alt0: Number(c.alt ?? 30), vel0: vel });
@@ -233,7 +241,7 @@ export class LookdevGod {
       case 'lookdev.field': {
         const name = String(c.field) as FieldName;
         const f = lp.fields[name];
-        const p = posOf(c);
+        const p = posOf(c, 'pos', R);
         if (!f || !p) return { ok: false, msg: 'lookdev.field needs a field and a pos' };
         const r = Number(c.radius ?? 100), v = Number(c.value ?? 1), add = !!c.add;
         const P = lp.grid.pos;
@@ -261,7 +269,7 @@ export class LookdevGod {
     }
     if (c.k.startsWith('miracle.')) {
       const kind = c.k === 'miracle.cast' ? String(c.kind ?? 'heal') : c.k.slice(8);
-      const p = posOf(c) ?? this.hand?.pos ?? [0, 1, 0];
+      const p = posOf(c, 'pos', R) ?? this.hand?.pos ?? [0, 1, 0];
       const RAD: Record<string, number> = { water: 180, food: 300, heal: 160, forest: 220, storm: 450, fire: 80, fireball: 60, shield: 220, lightning: 30, wood: 300, fertility: 300, calm: 500, teach: 400, meteor: 90 };
       const r = typeof c.radius === 'number' ? c.radius : RAD[kind] ?? 150;
       if (kind === 'lightning') this.events.push({ t: 'lightning', tick, planet: lp.snap.id, pos: [...p], a: 1.5, data: { god: 0 } });

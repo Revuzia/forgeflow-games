@@ -20,6 +20,7 @@ import type { PlanetView } from './client/worldview.ts';
 import { qMul, qRotate, qRotateInv } from './client/orbits.ts';
 import { tangentBasis } from './sim/core/vec3.ts';
 import { Renderer } from './render/renderer.ts';
+import { capturePhoto } from './render/camera/photo.ts';
 import { CameraRig } from './render/camera/rig.ts';
 import { newInput, type InputState } from './render/camera/common.ts';
 import { detectQuality, isQualityName, QUALITY, type QualityName } from './render/quality.ts';
@@ -222,7 +223,7 @@ export class App implements UiHost {
     setLens: (p) => this.setLens(p),
     realDof: () => !!this.modeApi.dof,
     depthAt: (x, y) => this.pickGround(x, y)?.dist ?? null,
-    grab: () => this.capture(),
+    grab: () => this.photoGrab(),
     frozen: () => this.photoFrozen,
     freeze: (on) => this.freeze(on),
     stick: (x, y) => { this.walkCam.stickX = x; this.walkCam.stickY = y; },
@@ -592,8 +593,9 @@ export class App implements UiHost {
       if (this.following) this.updateFollow(dt);
       this.cameraModesFrame(dt);
       const pose = this.rig.update(dt, view, this.input);
-      // photo mode's roll: about the view axis, after the camera has placed itself
-      if (this.camMode === 'photo' && this.lensState.roll) {
+      // photo mode's roll: about the view axis, after the camera has placed itself (the render lane's photo camera
+      // rolls itself from the lens: render/camera/photo.ts)
+      if (this.camMode === 'photo' && this.rig.mode !== 'photo' && this.lensState.roll) {
         const a = (this.lensState.roll * Math.PI) / 360;
         const r = qMul(pose.quat as [number, number, number, number], [0, 0, Math.sin(a), Math.cos(a)]);
         pose.quat[0] = r[0]; pose.quat[1] = r[1]; pose.quat[2] = r[2]; pose.quat[3] = r[3];
@@ -797,6 +799,18 @@ export class App implements UiHost {
 
   private onClick(x: number, y: number): void {
     if (this.forcedEntity) { this.select(this.forcedEntity); return; }
+    // (render lane, additive) a ship's glint in the system view, or a ship seen from afar: select it and ride along
+    // with the follow camera (render/camera/follow.ts)
+    if (this.rig.mode === 'system' || this.renderer.stats.altitude > 3e5) {
+      const sid = this.renderer.ships.pickScreen(x, y, (s) => { const p = this.renderer.projectToScreen(s, this.rig.pose, this.v2); return p ? [p.x, p.y] : null; });
+      const sv = sid !== null ? this.sim.view.ships.find((s) => s.id === sid) : undefined;
+      if (sv) {
+        const ref: EntityRef = { kind: 'ship', id: sv.id, planet: sv.planet >= 0 ? sv.planet : sv.from };
+        this.select(ref);
+        this.rig.modes.follow(ref);
+        return;
+      }
+    }
     const near = this.pickNear(x, y);
     const ent = this.pickEntity(x, y);
     if (near && (!ent || near.kind === 'creature')) { this.select(near); return; }
@@ -1594,6 +1608,23 @@ export class App implements UiHost {
     return new Promise((ok) => this.captureWaiters.push(ok));
   }
 
+  /**
+   * (render lane, additive) the photo mode's picture: in the render lane's photo camera the frame is rendered again
+   * at up to 4K (the window's aspect) with 1.5× supersampling inside (render/camera/photo.ts capturePhoto); any other
+   * camera, or a GPU that cannot, takes the next frame as it is drawn.
+   */
+  photoGrab(): Promise<string> {
+    if (this.rig.mode !== 'photo') return this.capture();
+    const W = Math.max(1, window.innerWidth), H = Math.max(1, window.innerHeight);
+    const k = Math.min(3840 / W, 2160 / H);
+    try {
+      const url = capturePhoto(this.renderer, this.sim.view, this.rig.pose, (performance.now() - this.startAt) / 1000, { width: Math.round(W * k), height: Math.round(H * k), supersample: 1.5, frames: 3 });
+      return url ? Promise.resolve(url) : this.capture();
+    } catch {
+      return this.capture();
+    }
+  }
+
   /** set the planet's clock so the local solar hour at the camera (or a longitude) is `hour` */
   async setLocalHour(hour: number, lonDeg?: number): Promise<void> {
     const pv = this.sim.view.planet(this.renderer?.primaryId ?? 0) ?? this.sim.view.planets[0];
@@ -1737,7 +1768,13 @@ export class App implements UiHost {
         // a ship can be anywhere: its own world, or between the worlds
         for (let i = 0; i < 60 && !view.ships.some((s) => s.id === ref!.id); i++) await this.waitFrames(1);
         const sv = view.ships.find((s) => s.id === ref!.id);
-        if (sv && sv.planet >= 0) { planet = sv.planet; ref.planet = sv.planet; }
+        if (sv && sv.planet >= 0) {
+          planet = sv.planet; ref.planet = sv.planet;
+          // (its place: the local hour is set there)
+          const l = Math.hypot(sv.pos[0], sv.pos[1], sv.pos[2]) || 1;
+          lat = (Math.asin(Math.max(-1, Math.min(1, sv.pos[1] / l))) * 180) / Math.PI;
+          lon = (Math.atan2(sv.pos[0], sv.pos[2]) * 180) / Math.PI;
+        }
       } else {
         const pv0 = view.planet(planet);
         let b = pv0 ? this.entityBodyPos(pv0, ref) : null;
@@ -1764,7 +1801,12 @@ export class App implements UiHost {
     }, view);
     if (mode === 'photo') this.setUi(false);
     if ((spec.blend ?? 0) === 0) { this.rig.update(0, view, newInput()); this.renderer.cut(); }
-    if (spec.hour != null) await this.setLocalHour(spec.hour, lon);
+    // (a frame or two so the renderer's primary world is the one framed: the hour is set there — a ship on another
+    // world, a ship launched this tick that the follow camera finds on its first drawn frame)
+    if (spec.hour != null) {
+      for (let i = 0; i < 3 && this.renderer.primaryId !== planet; i++) await this.waitFrames(1);
+      await this.setLocalHour(spec.hour, lon);
+    }
   }
 
   /**

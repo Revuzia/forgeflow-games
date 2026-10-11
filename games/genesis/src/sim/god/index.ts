@@ -25,6 +25,7 @@ import { registerInventionCommands, rainsHourly } from './inventions.ts';
 import { registerCivicCommands } from './civic.ts';
 import { registerShapingCommands, windStep } from './shaping.ts';
 import { registerSpaceCommands } from '../space/index.ts';
+import { registerSeenCommands } from './seen.ts';
 import { disastersStep, disastersHourly, disasterViews, naturalDisasters } from './disasters.ts';
 import { projectilesStep, projectileViews } from './projectiles.ts';
 import { installPowerHooks, powersQuery, gesturePowers } from './powers.ts';
@@ -50,6 +51,7 @@ export function registerGodCommands(r: CommandRegistry): void {
   registerCivicCommands(r);
   registerShapingCommands(r);
   registerSpaceCommands(r); // worlds and space (phase 4): ship.launch / cancel / destroy, star.flare (space/index.ts)
+  registerSeenCommands(r); // (render lane, additive) god.seen: the people near the walking body see the god (god/seen.ts)
   installPowerHooks(r);
 }
 

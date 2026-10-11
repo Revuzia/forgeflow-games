@@ -33,6 +33,7 @@ import { GodFx } from './fx/godfx.ts';
 import { ShipLayer, type ShipPlanetRef } from './life/ships.ts';
 import { applyLaunchShake } from './fx/launch.ts';
 import { PhotoPost } from './camera/photo.ts';
+import { WorldFx, type WorldPlanetRef } from './fx/worlds.ts';
 
 export interface RenderStats {
   drawCalls: number;
@@ -130,6 +131,10 @@ export class Renderer {
   private readonly shipRefs = new Map<number, ShipPlanetRef>();
   /** photo mode's depth of field and lens settings (render/camera/photo.ts) */
   readonly photoPost = new PhotoPost();
+  /** world events drawn: a cracked world's fissures and debris ring, erasure, a falling moon's tides and fire, a world's birth (render/fx/worlds.ts) */
+  readonly worlds = new WorldFx();
+  private readonly worldRefs = new Map<number, WorldPlanetRef>();
+  private readonly camQInv = new Quaternion();
   private readonly photoSettings: PostSettings = { bloom: 0, godRays: true, fxaa: true, grain: 0, vignette: 0, flare: 1, exposureBias: 0, manualExposure: 0 };
   readonly planets = new Map<number, PlanetVisual>();
   readonly waterScene: Record<string, IUniform> = makeWaterSceneUniforms();
@@ -184,6 +189,8 @@ export class Renderer {
     this.shadows.init(this.three);
     this.clouds.setWeatherRes(WX_RES(this.quality.cloudSteps));
     this.ships.fx.setBudget(this.quality.particleBudget);
+    this.photoPost.hq = this.quality.dof;
+    this.worlds.rockBudget = Math.round(1200 + 1800 * Math.min(2, this.quality.particleBudget / Math.max(1, QUALITY.high.particleBudget)));
     this.resize(this.cssW, this.cssH, this.dpr);
   }
 
@@ -316,6 +323,10 @@ export class Renderer {
       this.shipRefs.set(v.id, { group: v.group, uniforms: v.uniforms as unknown as Record<string, IUniform>, camBody: v.camBody, pv: v.pv, hasAir: v.atmo.has, airTop: v.atmo.thickness, shadows: v === primaryVis });
     }
     this.ships.update(view, pose, this.shipRefs, this.scene, time, dt, this.primaryId, q.shadowCascades > 0);
+    // ── world events: rings, fissures, tides, erasures, births (render/fx/worlds.ts) ──
+    this.worldRefs.clear();
+    for (const v of this.planets.values()) this.worldRefs.set(v.id, { group: v.group, uniforms: v.uniforms as unknown as Record<string, IUniform>, pv: v.pv });
+    this.worlds.update(view, pose, this.worldRefs, this.scene, time, this.camQInv.copy(cam.quaternion).invert());
     // ── cloud weather of the primary planet: organised and baked (weather + shadow cubes) BEFORE the scene, whose
     // materials read the cloud-shadow cube ──
     const cloudVis = primaryVis && primaryVis.atmo.has && primaryVis.hasClouds && primaryVis.cloudCube ? primaryVis : null;
@@ -509,9 +520,11 @@ export class Renderer {
     FX_EXPOSURE.value = post.exposureTexture();
     if (primaryVis) primaryVis.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
     // the god layer's FX over the composited image (plumes, funnels, bolts, domes, auroras, the hand's glow…)
-    this.godfx.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post);
+    this.godfx.renderFx(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post, this.fsq);
     // launch plumes, exhaust smoke, pad clouds, landing dust, explosions and the exhaust's light (render/fx/launch.ts)
     this.ships.fx.render(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
+    // the dust of debris rings, erasure flashes, birth swirls and molten shells, a falling moon's fire
+    this.worlds.render(r, this.scene, cam, atmoVis.length ? (outIdx === 1 ? post.atmoA : post.atmoB) : post.hdr, post.linDepth.texture, post.w, post.h);
 
     // ── white balance: like a camera set to "daylight here", neutralise the sun's colour at ~50° elevation on the
     // world we are at, so noon light reads white while sunsets (much redder than that) stay warm
@@ -770,6 +783,7 @@ export class Renderer {
     this.godfx.dispose();
     this.ships.dispose();
     this.photoPost.dispose();
+    this.worlds.dispose();
     for (const v of this.planets.values()) v.dispose();
     this.planets.clear();
     this.post.dispose();

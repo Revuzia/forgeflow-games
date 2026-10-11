@@ -8,27 +8,38 @@
 //                  lightning, miracles, throws, landings…), turns disasters / weather / projectiles into FX, and
 //                  collects this frame's decals and lights
 //   renderDecals — into the HDR scene after the opaque pass (ground decals and FX lights, under the haze and water)
-//   renderFx     — over the composited image after the atmosphere: particles, funnels, plumes, bolts, domes, curtains,
-//                  glows, fog and sky tints, soft-tested against the scene's linear depth
+//   renderFx     — over the composited image after the atmosphere: fog, tints, the eclipse, then particles, funnels,
+//                  plumes, bolts, domes, curtains and glows, soft-tested against the scene's linear depth
 // Everything lives in the PRIMARY planet's body frame: the group is re-parented to that planet's group. Planet uniforms
 // (sun, sky LUTs, shadows, moon) are proxied, so materials compiled once keep working when the primary world changes.
 //
 // The FX clock runs with the sim (it stops while the sim is paused, never runs faster than real time, like the life
 // layer's animation clock): an explosion photographed while paused stays frozen mid-burst. `advance(s)` moves it for
-// scripted captures.
+// scripted captures (window.__GENESIS_FX__.advance). The hand animates in real time (it is the player's, paused or not).
 
-import { Group, Quaternion, Vector2, Vector3, type IUniform, type PerspectiveCamera, type Scene, type WebGLRenderer, type WebGLRenderTarget } from 'three';
+import { Group, Matrix3, Quaternion, Vector2, Vector3, type IUniform, type PerspectiveCamera, type Scene, type WebGLRenderer, type WebGLRenderTarget } from 'three';
 import type { PlanetView, WorldView } from '../../client/worldview.ts';
 import { groundHeight } from '../../sim/grid/surface.ts';
 import type { PlanetVisual } from '../planet/planetview.ts';
 import type { PostPipeline } from '../post/pipeline.ts';
+import type { FullscreenQuad } from '../post/fsquad.ts';
 import type { Quality } from '../quality.ts';
 import type { SimEvent } from '../../sim/types.ts';
 import { AnimState } from '../../sim/types.ts';
+import { BASE_PACK } from '../../data/index.ts';
 import { HandVisual, type HandCursor, type UiHandPose } from '../hand.ts';
 import { CreatureLayer } from '../life/creature.ts';
+import { Aurora } from '../sky/aurora.ts';
 import { DECAL, DecalPass, decal } from './decals.ts';
-import { FX_EXPOSURE, FX_LAYER, clamp01 } from './fxcommon.ts';
+import { FX_EXPOSURE, FX_LAYER, clamp01, smooth } from './fxcommon.ts';
+import { SYS, Vfx } from './vfx.ts';
+import { Debris } from './meshfx.ts';
+import { Lightning } from './lightning.ts';
+import { DisasterFx, type FxCtx } from './disasters.ts';
+import { WeatherFx } from './weatherfx.ts';
+import { MiracleFx } from './miracles.ts';
+import { Flights } from './flights.ts';
+import { ScreenFx, newScreenState } from './screenfx.ts';
 
 export interface BrushIn {
   planet: number;
@@ -43,14 +54,31 @@ export interface BrushIn {
   mode?: string;
 }
 
-/** the categories' brush colours (src/ui/tools.ts CAT_COLOR) — a reticle for the destructive ones */
+/** the categories' brush colours (src/ui/tools.ts CAT_COLOR) — a reticle for the destructive ones, a painted region for the sky */
 const DISASTER_TINT: [number, number, number] = [1.5, 0.35, 0.25];
+const SKY_TINT: [number, number, number] = [0.75, 0.9, 1.3];
+
+/** weather kinds that light up the aurora (weather.json render.aurora) */
+const AURORA_WEATHER = new Map<string, number>(
+  ((BASE_PACK as unknown as { weather?: { id: string; render?: { aurora?: number } }[] }).weather ?? []).filter((w) => w.render?.aurora).map((w) => [w.id, Number(w.render!.aurora)]),
+);
 
 const _q = new Quaternion();
 const _qe = new Quaternion();
 const _ax = new Vector3();
-const _fwd = new Vector3();
-const _up = new Vector3();
+const _v = new Vector3();
+const _w = new Vector3();
+
+interface Modules {
+  vfx: Vfx;
+  debris: Debris;
+  bolts: Lightning;
+  disasters: DisasterFx;
+  weather: WeatherFx;
+  miracles: MiracleFx;
+  flights: Flights;
+  aurora: Aurora;
+}
 
 export class GodFx {
   readonly group = new Group();
@@ -67,7 +95,12 @@ export class GodFx {
   readonly sunTint = new Vector3(1, 1, 1);
   brush: BrushIn | null = null;
   quality: Quality | null = null;
+  /** the modules that need the planet's uniforms are made on the first frame with a planet */
+  m: Modules | null = null;
+  readonly screenState = newScreenState();
+  private screen = new ScreenFx();
   private vis: PlanetVisual | null = null;
+  private view: WorldView | null = null;
   private seen = new WeakSet<SimEvent>();
   private shake = 0;
   private shakeT = 0;
@@ -79,6 +112,10 @@ export class GodFx {
   private readonly camFwd = new Vector3();
   private readonly camUp = new Vector3();
   private extraDt = 0;
+  private ctx: FxCtx | null = null;
+  private readonly sunWant = new Vector3(1, 1, 1);
+  private readonly auroraBoost = { boost: 0 };
+  private flashDecay = new Vector3();
 
   constructor() {
     this.group.name = 'godfx';
@@ -89,9 +126,8 @@ export class GodFx {
     };
     this.hand.bindFx(this.fx);
     this.creatures = new CreatureLayer(this.shared);
-    this.group.add(this.hand.group, this.creatures.group);
-    this.group.add(this.decals.group);
-    // scripted captures: move the FX clock (window.__GENESIS_FX__.advance(2.5))
+    this.group.add(this.hand.group, this.creatures.group, this.decals.group);
+    // scripted captures: move the FX clock (window.__GENESIS_FX__.advance(2.5)); reach the layer from a probe
     if (typeof window !== 'undefined') (window as unknown as { __GENESIS_FX__?: unknown }).__GENESIS_FX__ = { advance: (s: number) => { this.extraDt += Math.max(0, s); }, fx: this };
   }
 
@@ -124,6 +160,17 @@ export class GodFx {
       } as IUniform;
     }
     if (this.group.parent !== vis.group) { this.group.removeFromParent(); vis.group.add(this.group); }
+    if (!this.m) {
+      const vfx = new Vfx(this.shared, this.fx, 98304);
+      const debris = new Debris(this.shared, this.fx);
+      const bolts = new Lightning(this.fx);
+      const disasters = new DisasterFx(this.fx, this.shared);
+      const miracles = new MiracleFx(this.fx);
+      const flights = new Flights(this.shared);
+      const aurora = new Aurora(this.fx, this.shared);
+      this.m = { vfx, debris, bolts, disasters, weather: new WeatherFx(), miracles, flights, aurora };
+      this.group.add(vfx.group, debris.mesh, bolts.mesh, disasters.group, miracles.group, flights.group, aurora.group);
+    }
   }
 
   /** a little shake of the view (quakes, impacts): applied to the camera before its frustum is taken */
@@ -152,8 +199,10 @@ export class GodFx {
 
   update(view: WorldView, vis: PlanetVisual | null, cam: PerspectiveCamera, dt: number, time: number, q: Quality): void {
     this.quality = q;
+    this.view = view;
     if (!vis) { this.group.visible = false; return; }
     this.bindPrimary(vis);
+    const M = this.m!;
     this.group.visible = true;
     const pv = vis.pv;
     // ── the FX clock: with the sim, never faster than real time ──
@@ -174,62 +223,131 @@ export class GodFx {
     _q.copy(vis.group.quaternion).invert();
     this.camFwd.set(0, 0, -1).applyQuaternion(cam.quaternion).applyQuaternion(_q);
     this.camUp.set(0, 1, 0).applyQuaternion(cam.quaternion).applyQuaternion(_q);
+    // ── this frame's context ──
+    const S = this.screenState;
+    S.tintSky.set(1, 1, 1); S.tintGround.set(1, 1, 1); S.fogDensity = 0; S.eclipse = 0;
+    this.flashDecay.multiplyScalar(Math.exp(-dt * 10));
+    S.flash.copy(this.flashDecay);
+    this.sunWant.set(1, 1, 1);
+    this.auroraBoost.boost = 0;
+    const qk = Math.max(0.25, Math.min(2, (q.particleBudget || 20000) / 20000));
+    const ctx: FxCtx = this.ctx ?? (this.ctx = {
+      pv, now: 0, dt: 0, camBody: vis.camBody, vfx: M.vfx, decals: this.decals, debris: M.debris, bolts: M.bolts, screen: S,
+      sunTint: this.sunWant, aurora: this.auroraBoost, q: 1, thunder: (p, k) => this.thunder(p, k), sunDirBody: new Vector3(), sunE: new Vector3(),
+      landed: (e) => M.disasters.onEvent(e, this.ctx!),
+    });
+    ctx.pv = pv; ctx.now = this.clock; ctx.dt = Math.max(fxDt, 1e-4); ctx.camBody = vis.camBody; ctx.q = qk;
+    ctx.sunDirBody.copy(vis.uniforms.uSunDirBody.value as Vector3);
+    ctx.sunE.copy((vis.atmo.uniforms as unknown as { uSunE: { value: Vector3 } }).uSunE.value);
+    M.debris.gU.value = pv.params.gravity || 9.8;
     // ── events ──
     for (const e of view.pendingEvents) {
       if (this.seen.has(e)) continue;
       this.seen.add(e);
       if (e.planet !== undefined && e.planet !== pv.id) continue;
-      this.onEvent(e, view);
+      this.onEvent(e, ctx);
     }
-    // ── the hand ──
+    // ── the hand (real time) ──
     this.hand.update({
       pv, hand: view.hand, camBody: vis.camBody, camFwd: this.camFwd, camUp: this.camUp, dt, fxTime: time, fxDt,
       cursor: this.cursor, uiPose: this.uiPose, aiming: this.aiming, decals: this.decals, shared: this.shared,
     });
-    // ── the creatures (a creature in the hand dangles from its grip) ──
-    this.creatures.update(view.creatures, pv, dt, this.clock, this.hand.visible && this.hand.heldKind === 'creature' ? this.hand.heldId : -1, this.hand.grip);
-    // a person in the hand hangs between thumb and forefinger, swinging as the hand moves
+    // ── things in flight, creatures, disasters, weather, miracles ──
+    M.flights.update(ctx, pv.projectiles ?? []);
+    const pins = M.flights.creaturePins;
+    this.creatures.update(view.creatures, pv, dt, this.clock, this.hand.visible && this.hand.heldKind === 'creature' ? this.hand.heldId : -1, this.hand.grip, pins);
+    for (const f of this.creatures.falls) {
+      M.vfx.emit({ sys: SYS.dust, x: f.x, y: f.y, z: f.z, size: f.size * 0.7, life: 2.6, count: 24, p0: f.size, p1: f.size * 0.7, burst: true, r: 0.44, g: 0.38, b: 0.3, power: 0.8 }, this.clock);
+    }
+    M.disasters.update(pv.disasters, ctx);
+    M.weather.update(ctx);
+    M.miracles.update(ctx);
+    // people in the hand and in the air are drawn where the god layer says
     const crowds = vis.life.crowds;
     crowds.pinned.clear();
     if (this.hand.visible && this.hand.heldKind === 'agent' && this.hand.heldId >= 0) {
-      const sw = this.hand.swing;
-      crowds.pinned.set(this.hand.heldId, { x: this.hand.pinch.x, y: this.hand.pinch.y, z: this.hand.pinch.z, tumble: sw, anim: AnimState.held });
+      crowds.pinned.set(this.hand.heldId, { x: this.hand.pinch.x, y: this.hand.pinch.y, z: this.hand.pinch.z, tumble: this.hand.swing, anim: AnimState.held });
     }
+    for (const [id, p] of M.flights.agentPins) crowds.pinned.set(id, p);
+    // ── lightning: ribbons, the light they throw on the ground ──
+    M.bolts.update(this.clock, vis.camBody);
+    M.bolts.forEachLive(this.clock, (gp, top, k, power) => {
+      const d = decal(DECAL.light, [gp.x, gp.y, gp.z], 900);
+      d.cr = 0.75; d.cg = 0.8; d.cb = 1; d.p0 = 900; d.p1 = 6e5 * k * power; d.p2 = Math.min(200, top.distanceTo(gp) * 0.4); d.p3 = 40;
+      this.decals.add(d);
+      const near = 1 - smooth(200, 2500, gp.distanceTo(vis.camBody));
+      this.flashDecay.addScalar(0.002 * k * near);
+    });
+    // ── the aurora ──
+    let wAur = 0;
+    for (const w of pv.weather) { const a = AURORA_WEATHER.get(w.kind); if (a) wAur = Math.max(wAur, a * w.intensity); }
+    if (pv.params.globalWeather && AURORA_WEATHER.has(pv.params.globalWeather)) wAur = Math.max(wAur, AURORA_WEATHER.get(pv.params.globalWeather)!);
+    M.aurora.update(pv.params.radius, vis.atmo.thickness, pv.params.magnetism ?? 0, view.star.activity ?? 0, this.auroraBoost.boost + wAur * 2.5, vis.atmo.has, ctx.dt);
+    // ── the eclipse darkens the land; the sun's tint eases ──
+    if (S.eclipse > 0) this.sunWant.multiplyScalar(1 - 0.94 * Math.pow(S.eclipse, 1.6));
+    this.sunTint.lerp(this.sunWant, Math.min(1, dt * 2 + 0.02));
     // ── the brush ──
-    this.brushDecal(pv.id, pv.params.radius);
-    // nothing tints the sun yet this frame
-    this.sunTint.set(1, 1, 1);
+    this.brushDecal(pv);
+    M.vfx.update(this.clock, viewToBody(vis), cam.projectionMatrixInverse, vis.uniforms.uSunDirView.value as Vector3);
   }
 
-  private onEvent(e: SimEvent, _view: WorldView): void {
-    const vis = this.vis!;
-    const R = vis.pv.params.radius;
+  private thunder(p: Vector3, k: number): void {
+    const view = this.view, vis = this.vis;
+    if (!view || !vis) return;
+    const l = p.length() || 1;
+    const e: SimEvent = { t: 'lightning', tick: Math.floor(vis.pv.renderTick ?? vis.pv.paramsTick), planet: vis.pv.id, pos: [p.x / l, p.y / l, p.z / l], a: k, data: { ambient: true } };
+    this.seen.add(e);
+    view.pendingEvents.push(e);
+  }
+
+  private onEvent(e: SimEvent, ctx: FxCtx): void {
+    const vis = this.vis!, M = this.m!;
+    const pv = vis.pv;
+    const R = pv.params.radius;
     const p = e.pos ? new Vector3(e.pos[0], e.pos[1], e.pos[2]).normalize().multiplyScalar(R) : null;
     switch (e.t) {
       case 'quake': this.addShake(p, Math.min(1.4, 0.15 * Math.max(0, (e.a ?? 5) - 3)), (e.b ?? 400) * 6 + 1500); break;
-      case 'impact': this.addShake(p, Math.min(1.5, 0.004 * (e.a ?? 50)), (e.a ?? 50) * 30 + 1200); break;
-      case 'eruption': this.addShake(p, 0.5, 4000); break;
-      case 'miracle': {
-        // the hand casts it when it is near
-        const hp = this.hand.pos;
-        if (p && this.hand.visible && hp.distanceTo(p) < Math.max(200, (e.a ?? 100) * 2)) this.hand.pulse('cast', this.lastReal);
+      case 'impact':
+        this.addShake(p, Math.min(1.5, 0.004 * (e.a ?? 50)), (e.a ?? 50) * 30 + 1200);
+        M.disasters.onEvent(e, ctx);
+        if (p) M.miracles.hitShield(p);
+        break;
+      case 'eruption': this.addShake(p, 0.5, 4000); M.disasters.onEvent(e, ctx); break;
+      case 'collapsed': case 'landslide': case 'steam': case 'fireball': M.disasters.onEvent(e, ctx); break;
+      case 'thrown': case 'landed': case 'splash':
+        if (!M.flights.onEvent(e, ctx)) M.disasters.onEvent(e, ctx);
+        break;
+      case 'lightning': {
+        if ((e.data as { ambient?: boolean } | undefined)?.ambient || !e.pos) break;
+        const u = _v.set(e.pos[0], e.pos[1], e.pos[2]).normalize();
+        const g = u.clone().multiplyScalar(groundHeight(pv.ground, u.x, u.y, u.z));
+        const top = u.clone().multiplyScalar(vis.hasClouds ? vis.cloudInner : R + 260).addScaledVector(_w.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5), 60);
+        M.bolts.strike(top, g, this.clock, Math.min(1.5, Math.max(0.6, e.a ?? 1)), 7);
+        M.vfx.emit({ sys: SYS.flash, x: top.x, y: top.y, z: top.z, size: 160, life: 0.5, count: 1, p1: 40, burst: true, r: 0.8, g: 0.85, b: 1 }, this.clock);
+        this.decals.add(Object.assign(decal(DECAL.scorch, [g.x, g.y, g.z], 6), { p0: 4, p1: 0.6, p2: 2 }));
         break;
       }
+      case 'miracle': {
+        M.miracles.onEvent(e, ctx);
+        // the hand casts it when it is near
+        if (p && this.hand.visible && this.hand.pos.distanceTo(p) < Math.max(250, (e.a ?? 100) * 2.5)) this.hand.pulse('cast', this.lastReal);
+        break;
+      }
+      case 'shield': M.miracles.onEvent(e, ctx); break;
     }
   }
 
-  private brushDecal(planet: number, _R: number): void {
+  private brushDecal(pv: PlanetView): void {
     const b = this.brush;
-    if (!b || b.planet !== planet) return;
-    const vis = this.vis!;
-    const pv = vis.pv;
+    if (!b || b.planet !== pv.id) return;
     const u = b.dir;
     const l = Math.hypot(u[0], u[1], u[2]) || 1;
-    const g = vis.pv.ground ? pvGround(pv, u[0] / l, u[1] / l, u[2] / l) : pv.params.radius;
+    const g = groundHeight(pv.ground, u[0] / l, u[1] / l, u[2] / l);
     const c: [number, number, number] = [(u[0] / l) * g, (u[1] / l) * g, (u[2] / l) * g];
     const col = b.color ?? [1.2, 0.95, 0.55];
-    const destructive = b.category === 'Disasters' || (Math.abs(col[0] - DISASTER_TINT[0]) < 0.05 && Math.abs(col[1] - DISASTER_TINT[1]) < 0.05);
-    const weather = b.category === 'Sky' || b.mode === 'front';
+    const near = (t: [number, number, number]) => Math.abs(col[0] - t[0]) < 0.05 && Math.abs(col[1] - t[1]) < 0.05 && Math.abs(col[2] - t[2]) < 0.05;
+    const destructive = b.category === 'Disasters' || near(DISASTER_TINT);
+    const weather = b.category === 'Sky' || b.mode === 'front' || near(SKY_TINT);
     const d = decal(destructive ? DECAL.reticle : weather ? DECAL.paint : DECAL.brush, c, b.radius * 1.15 + 2);
     d.cr = col[0]; d.cg = col[1]; d.cb = col[2]; d.ca = 1;
     d.p0 = b.radius;
@@ -238,10 +356,8 @@ export class GodFx {
     else { d.p1 = b.falloff ?? 0.5; d.p2 = b.strength ?? 0.5; }
     d.q0 = Math.max(4, b.radius * 0.5);
     // the brush's axis: toward the camera, so tick marks and hatching keep still on screen
-    _fwd.copy(this.camFwd);
-    d.ax = _fwd.x; d.ay = _fwd.y; d.az = _fwd.z;
+    d.ax = this.camFwd.x; d.ay = this.camFwd.y; d.az = this.camFwd.z;
     this.decals.add(d);
-    void _up;
   }
 
   swapDepth(depth: boolean): void {
@@ -256,12 +372,31 @@ export class GodFx {
     this.decals.draw(r, scene, cam, post.hdr, post.linDepth.texture, post.w, post.h, vis.uniforms.uBodyToView.value as never, vis.camBody, this.lastReal);
   }
 
-  /** the FX over the composited image (after the atmosphere) */
-  renderFx(r: WebGLRenderer, scene: Scene, cam: PerspectiveCamera, target: WebGLRenderTarget | null, post: PostPipeline): void {
-    if (!this.vis || !this.group.visible) return;
+  /** the FX over the composited image (after the atmosphere): fog, tints, the eclipse, then the FX layer */
+  renderFx(r: WebGLRenderer, scene: Scene, cam: PerspectiveCamera, target: WebGLRenderTarget | null, post: PostPipeline, fsq?: FullscreenQuad): void {
+    const vis = this.vis;
+    if (!vis || !this.group.visible) return;
     this.fx.tSceneDepth.value = post.linDepth.texture;
     (this.fx.uResolution.value as Vector2).set(post.w, post.h);
     this.fx.uHasExposure.value = FX_EXPOSURE.value ? 1 : 0;
+    // the eclipse: where the star is on screen and how big
+    const S = this.screenState;
+    if (S.eclipse > 0 && this.view) {
+      const pv = vis.pv;
+      const sd = _v.set(pv.sunDir[0], pv.sunDir[1], pv.sunDir[2]).applyMatrix4(cam.matrixWorldInverse);
+      if (sd.z < 0) {
+        sd.applyMatrix4(cam.projectionMatrix);
+        S.sunUV.set(sd.x * 0.5 + 0.5, sd.y * 0.5 + 0.5);
+        const dist = Math.hypot(pv.center[0], pv.center[1], pv.center[2]) || 1;
+        const ang = Math.asin(Math.min(1, Math.max(100, this.view.star.radius) / dist));
+        S.sunR = Math.tan(ang) / (2 * Math.tan((cam.fov * Math.PI) / 360));
+      } else S.sunUV.set(-10, -10);
+    }
+    if (fsq) {
+      const c = vis.camBody;
+      const l = c.length() || 1;
+      this.screen.render(r, fsq, target, S, post.linDepth.texture, post.w, post.h, cam.projectionMatrixInverse, viewToBody(vis), c, groundHeight(vis.pv.ground, c.x / l, c.y / l, c.z / l), this.clock);
+    }
     const prevAuto = r.autoClear;
     const prevMask = cam.layers.mask;
     r.autoClear = false;
@@ -276,7 +411,16 @@ export class GodFx {
     this.hand.dispose();
     this.creatures.dispose();
     this.decals.dispose();
+    this.screen.dispose();
+    if (this.m) {
+      this.m.vfx.dispose(); this.m.debris.dispose(); this.m.bolts.dispose(); this.m.disasters.dispose(); this.m.miracles.dispose();
+      this.m.flights.dispose(); this.m.aurora.dispose();
+    }
   }
 }
 
-function pvGround(pv: PlanetView, x: number, y: number, z: number): number { return groundHeight(pv.ground, x, y, z); }
+/** the view → body rotation of the primary planet (one shared matrix, recomputed when asked) */
+const _m3 = new Matrix3();
+function viewToBody(vis: PlanetVisual): Matrix3 {
+  return _m3.copy(vis.uniforms.uBodyToView.value as Matrix3).transpose();
+}

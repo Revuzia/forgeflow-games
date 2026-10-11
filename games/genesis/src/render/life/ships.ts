@@ -28,8 +28,8 @@
 // a roll pattern, riveted plates, doped airship fabric, canvas, planks and rope.
 
 import {
-  AdditiveBlending, BufferAttribute, BufferGeometry, DoubleSide, Group, Matrix3, Matrix4, Mesh, MeshStandardMaterial, Points,
-  Quaternion, ShaderMaterial, Vector2, Vector3, Vector4, type IUniform, type Object3D, type Scene,
+  AdditiveBlending, BufferAttribute, BufferGeometry, CanvasTexture, DoubleSide, Group, LinearFilter, Matrix3, Matrix4, Mesh, MeshStandardMaterial, Points,
+  Quaternion, ShaderMaterial, Sprite, SpriteMaterial, SRGBColorSpace, Vector2, Vector3, Vector4, type IUniform, type Object3D, type Scene,
 } from 'three';
 import { Line2 } from 'three/examples/jsm/lines/Line2.js';
 import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
@@ -238,8 +238,8 @@ const FRAG_SURFACE = /* glsl */ `
     float seamC = abs(fract(uvv.x * 7.0) - 0.5);
     float m = smoothstep(0.0, 0.06, seamC);
     alb *= mix(0.8, 1.0, m) * (0.92 + 0.1 * vnoise(vec3(uvv * vec2(30.0, 40.0), seed))) * mix(1.0, 0.8, smoothstep(0.6, 1.0, uvv.y));
-    float patch = step(0.86, sh12(floor(vec2(uvv.x * 4.0, uvv.y * 5.0)) + seed * 11.0));
-    alb *= mix(1.0, 0.82, patch);
+    float patched = step(0.86, sh12(floor(vec2(uvv.x * 4.0, uvv.y * 5.0)) + seed * 11.0));
+    alb *= mix(1.0, 0.82, patched);
     sRough = 0.85;
   } else if (code == 57) {
     // stainless steel: bright, faint weld lines, streaks of soot
@@ -438,6 +438,48 @@ function makeShipDepth(own: Record<string, IUniform>, variant: ShipVariant): Sha
 interface KindInfo { cls: string; altitude: number; orbitHours: number; days: [number, number] }
 const KINDS = new Map<string, KindInfo>(((BASE_PACK as unknown as { ships?: { id: string; class: string; altitude: number; orbitHours: number; days: [number, number] }[] }).ships ?? [])
   .map((s) => [s.id, { cls: s.class, altitude: s.altitude, orbitHours: s.orbitHours, days: s.days }]));
+/** display names of the ship kinds (ships.json) for the system view's labels */
+const KIND_NAMES = new Map<string, string>(((BASE_PACK as unknown as { ships?: { id: string; name: string }[] }).ships ?? []).map((s) => [s.id, s.name]));
+
+/** a text label for the system view: a canvas texture on a screen-sized sprite (drawn into the frame, so it is in a
+ * capture too); the left edge sits just right of the ship's glint */
+function makeLabel(): Sprite {
+  const cv = document.createElement('canvas');
+  cv.width = 512; cv.height = 64;
+  const tex = new CanvasTexture(cv);
+  tex.colorSpace = SRGBColorSpace;
+  tex.minFilter = LinearFilter;
+  tex.generateMipmaps = false;
+  const m = new SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false, sizeAttenuation: false });
+  const sp = new Sprite(m);
+  sp.center.set(-0.035, 0.5);
+  sp.frustumCulled = false;
+  sp.renderOrder = 22;
+  sp.userData.text = '';
+  return sp;
+}
+
+function drawLabel(sp: Sprite, text: string, sub: string): void {
+  const key = `${text}|${sub}`;
+  if (sp.userData.text === key) return;
+  sp.userData.text = key;
+  const m = sp.material as SpriteMaterial;
+  const tex = m.map as CanvasTexture;
+  const cv = tex.image as HTMLCanvasElement;
+  const g = cv.getContext('2d');
+  if (!g) return;
+  g.clearRect(0, 0, cv.width, cv.height);
+  g.font = '600 26px system-ui, -apple-system, "Segoe UI", sans-serif';
+  g.textBaseline = 'middle';
+  g.shadowColor = 'rgba(0,0,0,0.85)';
+  g.shadowBlur = 6;
+  g.fillStyle = '#ffe9c4';
+  g.fillText(text, 4, 22);
+  g.font = '500 19px system-ui, -apple-system, "Segoe UI", sans-serif';
+  g.fillStyle = '#c9d3e6';
+  g.fillText(sub, 4, 48);
+  tex.needsUpdate = true;
+}
 function kindInfo(kind: string): KindInfo {
   return KINDS.get(kind) ?? (kind === 'raft' || kind === 'boat' || kind === 'sailship' ? { cls: 'sea', altitude: 0, orbitHours: 0, days: [1, 3] } : { cls: 'interplanetary', altitude: 1500, orbitHours: 2, days: [2.5, 6] });
 }
@@ -521,6 +563,8 @@ interface Track {
   trail: Line2 | null;
   trailAhead: Line2 | null;
   trailKey: string;
+  /** system-view label */
+  label: Sprite | null;
   /** interpolated pose this frame */
   pose: ShipPose;
   ignited: boolean;
@@ -600,6 +644,7 @@ export class ShipLayer {
   private glintCol = new Float32Array(3 * 64);
   private glintIds: number[] = [];
   private resolution = new Vector2(1280, 720);
+  private pixelRatio = 1;
   private lastTick = -1;
   /** 0..1: how much of the system view's overlay is shown (the orbit lines' visibility) */
   overlayVis = 0;
@@ -641,6 +686,7 @@ export class ShipLayer {
 
   setResolution(w: number, h: number, pixelRatio: number): void {
     this.resolution.set(w, h);
+    this.pixelRatio = pixelRatio;
     this.glintMat.uniforms.uPixelRatio.value = pixelRatio;
     for (const t of this.tracks.values()) for (const l of [t.trail, t.trailAhead]) if (l) (l.material as LineMaterial).resolution.set(w, h);
   }
@@ -698,7 +744,7 @@ export class ShipLayer {
       id: s.id, view: s, kind: s.kind, info, era, form: 'launch', model: shipModel(s.kind, era, 'launch', s.id), root, nodes: [], own,
       hullMat: null, sailMat: null, hullDepth: makeShipDepth(own, 'hull'), sailDepth: makeShipDepth(own, 'sail'), matPlanet: -99,
       samples: [], phase: s.phase, phaseT0: 0, phaseLen: 1, padDir: null, padYaw: 0, padGround: 0, deck: 0, rig: null, fired: new Set(),
-      lastLost: s.phase === 'lost', seenAt: 0, trail: null, trailAhead: null, trailKey: '', ignited: s.phase !== 'building' && s.phase !== 'fuelling' && s.phase !== 'boarding' && s.phase !== 'pad',
+      lastLost: s.phase === 'lost', seenAt: 0, trail: null, trailAhead: null, trailKey: '', label: null, ignited: s.phase !== 'building' && s.phase !== 'fuelling' && s.phase !== 'boarding' && s.phase !== 'pad',
       phaseSeen: view.renderTick, lostAt: -1e9, padKey: '',
       pose: { id: s.id, kind: s.kind, phase: s.phase, planet: s.planet, body: new Vector3(), sys: [0, 0, 0], up: new Vector3(0, 1, 0), fwd: new Vector3(0, 0, 1), size: 10, visible: false },
     };
@@ -1210,8 +1256,10 @@ export class ShipLayer {
     const shape = t.model.shape;
     if (shape === 'generation-ship') return { stage1: 0.55, boosters: 0.28, tower: 2, fairing: 0.68 };
     if (shape === 'orbiter') return { stage1: 0.45, boosters: 2, tower: 2, fairing: 0.62 };
-    if (shape === 'rocket' && eraRank(t.era) < ERA.space) return { stage1: eraRank(t.era) < ERA.electric ? 2 : 0.5, boosters: 2, tower: 2, fairing: 2 };
-    return { stage1: 0.42, boosters: 2, tower: 0.5, fairing: 2 };
+    // (the sim's climb is short — 40 ticks, four seconds at 1× — so the first stage burns most of it: the big plume and
+    // the smoke column are the launch; the upper stage takes it on into orbit)
+    if (shape === 'rocket' && eraRank(t.era) < ERA.space) return { stage1: eraRank(t.era) < ERA.electric ? 2 : 0.62, boosters: 2, tower: 2, fairing: 2 };
+    return { stage1: 0.64, boosters: 2, tower: 0.5, fairing: 2 };
   }
 
   /** engines burning at ascent fraction f */
@@ -1401,6 +1449,26 @@ export class ShipLayer {
         this.glintIds.push(t.id);
         n++;
       }
+      // its name and where it goes, beside the glint (ships in flight between or around the worlds)
+      const labelled = vis > 0.01 && flying && s.phase !== 'ascent' && s.phase !== 'descent' && t.info.cls !== 'air';
+      if (labelled) {
+        if (!t.label) { t.label = makeLabel(); this.overlay.add(t.label); }
+        const name = KIND_NAMES.get(t.kind) ?? t.kind;
+        const from = view.planet(s.from)?.name ?? '', to = view.planet(s.to)?.name ?? '';
+        const sub = s.phase === 'transfer' ? `${from} → ${to} · ${Math.round(s.progress * 100)} %` : s.phase === 'orbit' ? `in orbit of ${view.planet(s.planet)?.name ?? from}` : s.phase === 'stranded' ? 'adrift, nowhere to land' : '';
+        drawLabel(t.label, name, sub);
+        const L = t.label;
+        L.position.set(P.sys[0] - pose.pos[0], P.sys[1] - pose.pos[1], P.sys[2] - pose.pos[2]);
+        // 34 CSS px tall whatever the distance (sizeAttenuation off: the scale is the view's height at 1 m)
+        const hView = 2 * Math.tan((pose.fov * Math.PI) / 360);
+        const hK = (34 / Math.max(200, this.resolution.y / Math.max(1, this.pixelRatio))) * hView;
+        L.scale.set(hK * 8, hK, 1);
+        const lm = L.material as SpriteMaterial;
+        lm.opacity = vis;
+        // (HDR frame: lifted above the exposure like the glints)
+        lm.color.setScalar(2.4);
+        L.visible = true;
+      } else if (t.label) t.label.visible = false;
       // the transfer's path: flown (bright) and ahead (dim)
       const showTrail = vis > 0.01 && s.phase === 'transfer' && t.info.cls !== 'air';
       if (!showTrail) { if (t.trail) t.trail.visible = false; if (t.trailAhead) t.trailAhead.visible = false; continue; }
@@ -1494,6 +1562,7 @@ export class ShipLayer {
     t.hullMat?.dispose(); t.sailMat?.dispose(); t.hullDepth.dispose(); t.sailDepth.dispose();
     if (t.rig) { t.rig.parent?.remove(t.rig); for (const c of t.rig.children) (c as Mesh).geometry?.dispose(); }
     for (const l of [t.trail, t.trailAhead]) if (l) { l.parent?.remove(l); l.geometry.dispose(); (l.material as LineMaterial).dispose(); }
+    if (t.label) { t.label.parent?.remove(t.label); const m = t.label.material as SpriteMaterial; m.map?.dispose(); m.dispose(); }
   }
 
   /** ships the layer draws (tests, the HUD) */

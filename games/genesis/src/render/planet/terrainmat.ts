@@ -966,6 +966,9 @@ export function makePlanetUniforms(): PlanetShaderUniforms {
     uDebug: { value: 0 }, uVegFade: { value: new Vector2(1e9, 1e9 + 1) }, uWindDir: { value: new Vector3(1, 0, 0.3).normalize() },
     // this frame's view space → last frame's clip space through the planet body frame (water SSR reprojection)
     uViewToPrevClip: { value: new Matrix4() },
+    // additive (render lane, phase 4b: a falling moon): the tidal bulge on the water — body-frame direction to the moon
+    // (xyz) and the bulge's height in metres (w); render/fx/worlds.ts sets it, planet/ocean.ts raises the sea by it
+    uTide: { value: new Vector4(0, 1, 0, 0) },
   };
 }
 

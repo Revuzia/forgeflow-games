@@ -388,7 +388,7 @@ export class LookdevSpace {
       case 'lookdev.ship.clear': this.missions = []; return { ok: true, msg: 'Every fabricated ship is gone.' };
       case 'world.crack': return this.crack(Number(c.world ?? c.planet ?? 0), tick);
       case 'world.erase': return this.erase(Number(c.world ?? c.planet ?? 0), tick);
-      case 'world.moon-fall': return this.moonFall(Number(c.world ?? c.planet ?? 0), typeof c.moon === 'number' ? c.moon : -1, Number(c.ticks ?? 4320), tick);
+      case 'world.moon-fall': return this.moonFall(Number(c.world ?? c.planet ?? 0), typeof c.moon === 'number' ? c.moon : -1, Number(c.ticks ?? 4320), Math.max(0, Math.min(0.999, Number(c.progress ?? 0))), tick);
       case 'world.birth': return this.birth(String(c.kind ?? 'terran'), Number(c.distance ?? 1.9), typeof c.name === 'string' ? c.name : '', tick);
     }
     return null;
@@ -482,12 +482,14 @@ export class LookdevSpace {
     return { ok: true, msg: `${p.snap.name} is gone (lookdev).`, tick };
   }
 
-  private moonFall(host: number, moonId: number, life: number, tick: number): CommandResult {
+  private moonFall(host: number, moonId: number, life: number, progress: number, tick: number): CommandResult {
     const h = this.planet(host);
     const moon = moonId >= 0 ? this.planet(moonId) : this.host.planets().find((q) => q.snap.params.orbit.parent === host);
     if (!h || !moon) return { ok: false, msg: 'No moon to drop.' };
     const o = moon.snap.params.orbit;
-    this.falls.push({ moon: moon.snap.id, host, t0: tick, life: Math.max(60, life), a0: o.a, T0: o.period, id: 7000 + moon.snap.id });
+    // (progress: a fall already under way, for looking at its late stages)
+    const L = Math.max(60, life);
+    this.falls.push({ moon: moon.snap.id, host, t0: tick - Math.round(progress * L), life: L, a0: o.a, T0: o.period, id: 7000 + moon.snap.id });
     return { ok: true, msg: `${moon.snap.name} begins to fall toward ${h.snap.name} (lookdev).`, created: [{ kind: 'disaster', id: 7000 + moon.snap.id, planet: host }], tick };
   }
 
@@ -531,7 +533,8 @@ export class LookdevSpace {
       if (prog >= 1) {
         this.events.push({ t: 'impact', tick, planet: f.host, pos: b, a: 900, b: 1, data: { kind: 'moon-fall' } });
         this.falls = this.falls.filter((q) => q !== f);
-        this.host.removePlanet(f.moon);
+        // gone when it strikes: one snapshot with alive = false (the view drops it), then removed
+        this.erasing.set(f.moon, 0);
         if (hs) hs.disasters = (hs.disasters ?? []).filter((d) => d.id !== f.id);
       }
     }

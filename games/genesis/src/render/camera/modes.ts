@@ -174,8 +174,9 @@ export class CameraModes {
         if (s.fov) r.followCam.fov = s.fov;
         if (s.dist) {
           const st = resolveTarget(view, s.target);
-          const natural = st ? st.size * (s.target.kind === 'ship' ? 2.4 : 3.4) + 4 : 20;
-          r.followCam.zoom = s.dist / Math.max(1, natural);
+          if (st) r.followCam.zoom = s.dist / Math.max(1, st.size * (s.target.kind === 'ship' ? 2.4 : 3.4) + 4);
+          // (not drawn yet — a ship launched this very tick: measured on its first frame)
+          else r.followCam.wantDist = s.dist;
         }
         r.use(r.followCam, blend);
         break;
