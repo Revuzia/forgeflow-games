@@ -16,7 +16,7 @@ const queryClient = new QueryClient({
 export default function Layout({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <div className="min-h-screen flex flex-col bg-surface-900">
+      <div className="min-h-screen flex flex-col">
         <Header />
         <main className="flex-1">{children}</main>
         <Footer />

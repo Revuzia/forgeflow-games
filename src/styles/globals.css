@@ -7,6 +7,12 @@
 @layer base {
   body {
     @apply bg-surface-900 text-gray-100 font-body antialiased;
+    /* Soft colour wash behind every page (orange top-left, cyan top-right, violet low) */
+    background-image:
+      radial-gradient(900px 520px at 6% -4%, rgba(255, 136, 0, 0.11), transparent 62%),
+      radial-gradient(820px 520px at 96% 0%, rgba(0, 212, 255, 0.09), transparent 62%),
+      radial-gradient(900px 600px at 50% 105%, rgba(168, 85, 247, 0.07), transparent 65%);
+    background-attachment: fixed;
   }
 
   ::selection {
@@ -32,9 +38,9 @@
   }
   .game-card:hover,
   .game-card:focus-visible {
-    @apply -translate-y-1;
-    border-color: rgba(255, 136, 0, 0.55);
-    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 136, 0, 0.15);
+    @apply -translate-y-1.5;
+    border-color: color-mix(in srgb, var(--accent, #ff8800) 75%, transparent);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55), 0 0 30px color-mix(in srgb, var(--accent, #ff8800) 28%, transparent);
   }
 
   .section-title {
