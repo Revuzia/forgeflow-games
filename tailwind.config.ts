@@ -22,7 +22,7 @@ export default {
           800: "#111827",    // card bg
           700: "#1e293b",    // elevated card
           600: "#334155",    // borders
-          500: "#475569",    // muted text
+          500: "#94a3b8",    // muted text (was #475569, only 2.6:1 on the card bg; this is ~7:1)
         },
       },
       fontFamily: {
@@ -36,8 +36,8 @@ export default {
       },
       keyframes: {
         "glow-pulse": {
-          "0%, 100%": { boxShadow: "0 0 20px rgba(0, 212, 255, 0.3)" },
-          "50%": { boxShadow: "0 0 40px rgba(0, 212, 255, 0.6)" },
+          "0%, 100%": { boxShadow: "0 0 20px rgba(255, 136, 0, 0.35)" },
+          "50%": { boxShadow: "0 0 40px rgba(255, 136, 0, 0.65)" },
         },
         "slide-up": {
           "0%": { transform: "translateY(10px)", opacity: "0" },

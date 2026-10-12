@@ -1,10 +1,13 @@
 import { useState } from "react";
+import { usePageContext } from "vike-react/usePageContext";
 import { CATEGORIES } from "../../lib/supabase";
 import UserMenu from "../auth/UserMenu";
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const { urlPathname } = usePageContext();
+  const here = (urlPathname || "/").replace(/\/+$/, "") || "/";
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -14,7 +17,7 @@ export default function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-surface-900 border-b border-surface-600/40">
+    <header className="sticky top-0 z-50 bg-surface-900/90 backdrop-blur-md border-b border-surface-600/40">
       <div className="w-full px-4 sm:px-6 lg:px-8">
         <div className="flex items-center h-[72px] gap-3">
 
@@ -27,22 +30,25 @@ export default function Header() {
             />
           </a>
 
-          {/* Category nav — fills middle space */}
-          <nav className="hidden lg:flex items-center gap-1.5 flex-1 justify-center">
-            <a href="/games" className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-surface-700 hover:bg-surface-600 transition-all whitespace-nowrap">
+          {/* Category nav: one calm style (a colour dot per genre) instead of nine
+              competing rainbow chips. Every link is still here for visitors and crawlers. */}
+          <nav aria-label="Game categories" className="hidden lg:flex items-center gap-0.5 flex-1 justify-center">
+            <a
+              href="/games"
+              aria-current={here === "/games" ? "page" : undefined}
+              className="nav-link font-semibold text-white"
+            >
               All Games
             </a>
             {CATEGORIES.map((cat) => (
               <a
                 key={cat.slug}
                 href={`/category/${cat.slug}`}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:scale-105 whitespace-nowrap"
-                style={{
-                  color: cat.color,
-                  backgroundColor: cat.color + "12",
-                  border: `1px solid ${cat.color}25`,
-                }}
+                aria-current={here === `/category/${cat.slug}` ? "page" : undefined}
+                className="nav-link inline-flex items-center gap-1.5"
+                style={{ ["--nav-accent" as string]: cat.color }}
               >
+                <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ backgroundColor: cat.color }} />
                 {cat.label}
               </a>
             ))}
@@ -74,6 +80,9 @@ export default function Header() {
 
             {/* Mobile menu button */}
             <button
+              type="button"
+              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileMenuOpen}
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="lg:hidden p-2 rounded-lg text-gray-300 hover:text-white hover:bg-surface-700"
             >
@@ -103,14 +112,14 @@ export default function Header() {
               />
             </form>
             <div className="flex flex-wrap gap-2 mb-3">
-              <a href="/games" className="px-4 py-2 rounded-lg text-sm font-semibold text-white bg-surface-700">All Games</a>
+              <a href="/games" className="px-4 py-2.5 rounded-lg text-sm font-semibold text-white bg-surface-700 border border-surface-600/50">All Games</a>
               {CATEGORIES.map((cat) => (
                 <a
                   key={cat.slug}
                   href={`/category/${cat.slug}`}
-                  className="px-4 py-2 rounded-lg text-sm font-semibold"
-                  style={{ color: cat.color, backgroundColor: cat.color + "15" }}
+                  className="px-4 py-2.5 rounded-lg text-sm font-medium text-gray-100 bg-surface-800 border border-surface-600/50 inline-flex items-center gap-2"
                 >
+                  <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
                   {cat.label}
                 </a>
               ))}

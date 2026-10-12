@@ -153,36 +153,33 @@ export default function GamePlayer({ game }: Props) {
     <div ref={containerRef} className={playingClasses}>
       {/* Pre-roll: game cover image (or ad placeholder fallback) + Play button */}
       {showPreroll && (
-        <div className="absolute inset-0 z-20 bg-surface-900 flex flex-col items-center justify-center">
-          {/* 2026-05-05 — Hero/cover image takes the slot that used to be a
-              house-ad placeholder. If a thumbnail/hero is set, render it; if
-              neither exists, fall back to the ad-shaped placeholder so the
-              layout doesn't collapse. */}
-          {/* 2026-05-11 — Cover-art slot. If the game has a hero image
-              or thumbnail, render it. If not, render nothing (was: fake
-              "Advertisement" placeholder, removed per user feedback —
-              real ads live in viewport-edge whitespace, not as content
-              boxes). */}
+        <div className="absolute inset-0 z-20 bg-surface-900 flex flex-col items-center justify-center overflow-hidden">
+          {/* Cover art fills the whole player frame (it used to be a small
+              thumbnail floating in an empty box). A dark gradient keeps the Play
+              button readable on any artwork. No cover art: plain dark frame. */}
           {(game.hero_image_url || game.thumbnail_url) && (
-            <div className="w-full max-w-lg mx-auto mb-8 px-4">
+            <>
               <img
-                src={game.hero_image_url || game.thumbnail_url}
+                src={game.hero_image_url || game.thumbnail_url || undefined}
                 alt={`${game.title} cover art`}
-                className="aspect-video w-full rounded-lg object-cover border border-surface-600/30 shadow-lg"
+                className="absolute inset-0 w-full h-full object-cover"
                 loading="eager"
               />
-            </div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/25" />
+            </>
           )}
-          <button
-            onClick={startGame}
-            className="group flex items-center gap-3 px-8 py-4 bg-brand-blue text-surface-900 rounded-xl font-display font-bold text-xl hover:bg-brand-blue/90 transition-all active:scale-95 animate-glow-pulse"
-          >
-            <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-            Play {game.title}
-          </button>
-          <p className="text-xs text-surface-500 mt-4">Free to play. No downloads required.</p>
+          <div className="relative z-10 flex flex-col items-center text-center px-4">
+            <button
+              onClick={startGame}
+              className="group flex items-center gap-3 px-6 sm:px-9 py-3.5 sm:py-4 bg-brand-orange text-white rounded-2xl font-display font-bold text-lg sm:text-2xl hover:brightness-110 transition-all active:scale-95 animate-glow-pulse"
+            >
+              <svg className="w-7 h-7 sm:w-8 sm:h-8 shrink-0" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+              Play {game.title}
+            </button>
+            <p className="text-sm text-gray-200 mt-4 drop-shadow">Free to play. No downloads required.</p>
+          </div>
         </div>
       )}
 

@@ -27,14 +27,36 @@
 
 @layer components {
   .game-card {
-    @apply relative rounded-xl overflow-hidden bg-surface-800 border border-surface-600/30
+    @apply relative rounded-2xl overflow-hidden bg-surface-800 border border-surface-600/40
            transition-all duration-300 cursor-pointer;
   }
-  .game-card:hover {
+  .game-card:hover,
+  .game-card:focus-visible {
     @apply -translate-y-1;
-    border-color: rgba(255, 136, 0, 0.4);
-    box-shadow: 0 8px 30px rgba(255, 136, 0, 0.12);
+    border-color: rgba(255, 136, 0, 0.55);
+    box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 136, 0, 0.15);
   }
+
+  .section-title {
+    @apply font-display font-bold text-xl sm:text-2xl text-gray-100 tracking-tight;
+  }
+
+  .surface-panel {
+    @apply rounded-2xl border border-surface-600/40 bg-surface-800/80;
+  }
+
+  .nav-link {
+    @apply relative px-3 py-2 text-sm font-medium text-gray-300 whitespace-nowrap transition-colors;
+  }
+  .nav-link:hover { @apply text-white; }
+  .nav-link::after {
+    content: "";
+    position: absolute; left: 0.75rem; right: 0.75rem; bottom: 2px; height: 2px; border-radius: 2px;
+    background: var(--nav-accent, #ff8800);
+    transform: scaleX(0); transform-origin: left; transition: transform 0.2s ease;
+  }
+  .nav-link:hover::after,
+  .nav-link[aria-current="page"]::after { transform: scaleX(1); }
 
   .btn-primary {
     @apply px-6 py-3 font-display font-bold rounded-xl
@@ -70,6 +92,21 @@
     color: #ff8800;
     border-color: rgba(255, 136, 0, 0.4);
   }
+}
+
+/* Carousels hide their scrollbar (the arrow buttons and touch scrolling drive them). */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+/* Keyboard users get a visible focus ring everywhere. */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid #ff8800;
+  outline-offset: 2px;
+}
+
+/* Respect "reduce motion": the pulsing glow and lift/zoom effects stop. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: 0.01ms !important; }
+  .game-card:hover { transform: none; }
 }
 
 /* Ad rails (see src/components/ads/AdRails.tsx). Hidden unless the viewport is

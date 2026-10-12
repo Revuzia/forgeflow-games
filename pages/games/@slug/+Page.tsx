@@ -133,7 +133,7 @@ export default function GamePage() {
       </Head>
       <AdRails />
       {/* Breadcrumb */}
-      <nav className="text-sm text-surface-500 mb-4 flex items-center gap-2">
+      <nav className="text-sm text-gray-400 mb-4 flex flex-wrap items-center gap-2">
         <a href="/" className="hover:text-brand-blue transition-colors">Home</a>
         <span>/</span>
         <a href="/games" className="hover:text-brand-blue transition-colors">Games</a>
@@ -150,37 +150,16 @@ export default function GamePage() {
           this max-w-7xl wrapper (handled by the layout shell, not this
           page). All in-page "Advertisement" placeholder boxes have been
           removed below — they were noise. */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-8">
         {/* Game player */}
         <div>
           <GamePlayer game={game} />
 
           {/* Game info below player */}
           <div className="mt-4">
-            <h1 className="font-display font-bold text-2xl sm:text-3xl text-gray-100 mb-2">
+            <h1 className="font-display font-bold text-3xl sm:text-4xl text-white tracking-tight mb-3">
               {game.title}
             </h1>
-
-            {/* Stats row */}
-            <div className="flex flex-wrap items-center gap-4 text-sm mb-4">
-              <span className="px-2 py-0.5 rounded text-xs font-bold" style={{ color: diff.color, backgroundColor: diff.color + "15" }}>
-                {diff.label}
-              </span>
-              {mobileBadge ? (
-                <span
-                  className="px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1"
-                  style={{ color: mobileBadge.color, backgroundColor: mobileBadge.color + "15" }}
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
-                  {mobileBadge.long}
-                </span>
-              ) : (
-                <span className="px-2 py-0.5 rounded text-xs font-bold text-surface-500 bg-surface-800 border border-surface-600/30 flex items-center gap-1">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                  Desktop only
-                </span>
-              )}
-            </div>
 
             {/* Touch visitor + keyboard-only game: say so plainly instead of
                 letting them tap Play and find dead controls. */}
@@ -194,44 +173,7 @@ export default function GamePage() {
                 description are honoured now (text-only, never raw HTML).
                 Previously the whole string landed in one <p> as a run-on wall. */}
             {game.description && (
-              <GameDescription text={game.description} className="text-gray-300 leading-relaxed mb-6" />
-            )}
-
-            {/* Controls */}
-            {(game.controls_keyboard || game.controls_gamepad || touchControlsNote) && (
-              <div className="bg-surface-800 rounded-lg p-4 border border-surface-600/30 mb-6">
-                <h3 className="font-display font-semibold text-sm text-gray-200 mb-2">Controls</h3>
-                {game.controls_keyboard && (
-                  <p className="text-sm text-surface-500 mb-1">
-                    <span className="text-gray-400">Keyboard:</span> {game.controls_keyboard}
-                  </p>
-                )}
-                {game.controls_gamepad && (
-                  <p className="text-sm text-surface-500 mb-1">
-                    <span className="text-gray-400">Gamepad:</span> {game.controls_gamepad}
-                  </p>
-                )}
-                {touchControlsNote ? (
-                  <p className="text-sm text-surface-500">
-                    <span className="text-gray-400">Touch:</span> {touchControlsNote}
-                  </p>
-                ) : (
-                  <p className="text-sm text-surface-500">
-                    <span className="text-gray-400">Touch:</span> Not supported — desktop only.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Tags */}
-            {game.tags && game.tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-6">
-                {game.tags.map((tag) => (
-                  <span key={tag} className="px-3 py-1 rounded-full text-xs bg-surface-800 text-surface-500 border border-surface-600/30">
-                    {tag}
-                  </span>
-                ))}
-              </div>
+              <GameDescription text={game.description} className="text-gray-200 text-[17px] leading-relaxed mb-6" />
             )}
 
             {/* 2026-10-01 — per-game RECORDS & LEADERBOARDS, only for slugs
@@ -251,6 +193,81 @@ export default function GamePage() {
 
         {/* Sidebar */}
         <aside className="space-y-6">
+          {/* Game info: difficulty, platform, rating, controls and tags in one panel
+              (they used to be stacked under the description, leaving this whole
+              column empty on games without screenshots). */}
+          <div className="surface-panel p-5">
+            <h2 className="font-display font-bold text-lg text-white mb-4">Game info</h2>
+            <dl className="space-y-3 text-sm">
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-gray-400">Genre</dt>
+                <dd>
+                  <a href={categoryHref(game.genre)} className="font-medium text-gray-100 hover:text-brand-orange transition-colors">
+                    {genreLabel(game.genre)}
+                  </a>
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-gray-400">Difficulty</dt>
+                <dd>
+                  <span className="px-2 py-0.5 rounded text-xs font-bold" style={{ color: diff.color, backgroundColor: diff.color + "20" }}>
+                    {diff.label}
+                  </span>
+                </dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-gray-400">Plays on</dt>
+                <dd>
+                  {mobileBadge ? (
+                    <span className="px-2 py-0.5 rounded text-xs font-bold inline-flex items-center gap-1" style={{ color: mobileBadge.color, backgroundColor: mobileBadge.color + "20" }}>
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                      {mobileBadge.long}
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-xs font-bold text-gray-200 bg-surface-700 inline-flex items-center gap-1">
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                      Desktop only
+                    </span>
+                  )}
+                </dd>
+              </div>
+              {rating && (
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-gray-400">Rating</dt>
+                  <dd className="font-medium text-gray-100">{rating} / 5 <span className="text-gray-400">({game.rating_count})</span></dd>
+                </div>
+              )}
+            </dl>
+
+            {(game.controls_keyboard || game.controls_gamepad || touchControlsNote || mobile === "none") && (
+              <div className="mt-5 pt-5 border-t border-surface-600/40">
+                <h3 className="font-display font-semibold text-sm text-white mb-2">Controls</h3>
+                <div className="space-y-1.5 text-sm text-gray-300">
+                  {game.controls_keyboard && (
+                    <p><span className="text-gray-400">Keyboard:</span> {game.controls_keyboard}</p>
+                  )}
+                  {game.controls_gamepad && (
+                    <p><span className="text-gray-400">Gamepad:</span> {game.controls_gamepad}</p>
+                  )}
+                  <p>
+                    <span className="text-gray-400">Touch:</span>{" "}
+                    {touchControlsNote ? touchControlsNote : "Not supported (desktop only)."}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {game.tags && game.tags.length > 0 && (
+              <div className="mt-5 pt-5 border-t border-surface-600/40 flex flex-wrap gap-2">
+                {game.tags.map((tag) => (
+                  <span key={tag} className="px-3 py-1 rounded-full text-xs text-gray-300 bg-surface-700/70 border border-surface-600/40">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* 2026-05-11 — Removed fake sidebar Advertisement placeholder; same
               reason as above. Screenshots remain — those are real content. */}
 
