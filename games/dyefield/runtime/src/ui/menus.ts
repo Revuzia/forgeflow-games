@@ -406,14 +406,14 @@ export class Menus {
     const stack = el('nav', 'dfm-stack');
     stack.setAttribute('aria-label', 'Main menu');
     // CONTRACT_ONLINE §O4.1: the PLAY ONLINE tile ("PLAY" over "ONLINE"; .lbl reads "PLAY ONLINE") + its why-not note
-    this.onlineTile = btn('dfm-item dfm-item-online', '');
+    // PLAY ONLINE is the FIRST main-menu button, the same size and shape as PLAY (owner, 2026-10-12): it carries
+    // .dfm-item-play (size, type) plus .dfm-item-online (the sea-blue colour). It used to be a small tile beside PLAY.
+    this.onlineTile = btn('dfm-item dfm-item-play dfm-item-online', '');
     this.onlineTile.id = 'dfm-play-online';
     this.onlineTile.dataset.group = 'stack';
     const olbl = el('span', 'lbl');
-    const l1 = el('span', 'l1');
-    l1.append(svgEl(ONLINE_ICON, 'oico'), document.createTextNode('PLAY '));
-    olbl.append(l1, el('span', 'l2', 'ONLINE'));
-    this.onlineTile.append(olbl);
+    olbl.append(svgEl(ONLINE_ICON, 'oico'), document.createTextNode('PLAY ONLINE'));
+    this.onlineTile.append(el('span', 'chev', '▶'), olbl);
     this.onlineWhy = el('span', 'dfm-online-why');
     this.onlineWhy.id = 'dfm-online-why';
     this.onlineWhy.setAttribute('role', 'status');
@@ -424,6 +424,10 @@ export class Menus {
       this.sound('click');
       this.hooks.online?.();
     });
+    // the wrapper only anchors the why-not note beside the button
+    const onlineRow = el('div', 'dfm-playrow');
+    onlineRow.append(this.onlineTile, this.onlineWhy);
+    stack.append(onlineRow);
     const items: Array<[string, () => void]> = [
       ['PLAY', () => this.open('play')],
       ['LOADOUT', () => this.open('loadout')],
@@ -438,12 +442,7 @@ export class Menus {
       if (i === 0) b.dataset.default = '';
       b.append(el('span', 'chev', '▶'), el('span', 'lbl', label));
       b.addEventListener('click', () => { this.sound('click'); fn(); });
-      if (i === 0) {
-        // CONTRACT_ONLINE §O4.1: PLAY ONLINE beside PLAY (the header comment says why beside, not below)
-        const row = el('div', 'dfm-playrow');
-        row.append(b, this.onlineTile, this.onlineWhy);
-        stack.append(row);
-      } else stack.append(b);
+      stack.append(b);
     });
     // profile card + FULLSCREEN toggle (top right). CONTRACT_MOBILE M6: they share one flex row with the brand
     // (.dfm-titlebar), so at any width the corner wraps below the wordmark instead of covering it (the 1.1.0 / 1.2.0

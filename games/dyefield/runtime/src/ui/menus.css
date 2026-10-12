@@ -57,28 +57,21 @@
 :where(html:not(.df-touch)) .dfm[data-crew="gulf"] .dfm-item-play:focus { background: linear-gradient(180deg, #d4ceff, #9d90ff); }
 @media (hover: hover) { :where(html:not(.df-touch)) .dfm[data-crew="gulf"] .dfm-item-play:hover { background: linear-gradient(180deg, #d4ceff, #9d90ff); } }
 .dfm-item.small { height: 48px; font-size: 22px; box-shadow: 0 5px 0 var(--ink); }
-/* CONTRACT_ONLINE §O4.1: PLAY + PLAY ONLINE share the stack's first row (PLAY keeps its size and look; the tile is the
-   sea-blue "PLAY / ONLINE" beside it). The gap is wider than PLAY's focus nudge (12 px + the 1° tilt), so the two never
-   touch; the tile's own focus lifts it instead of sliding it. The tile stays under a third of the stack (two stacked
-   lines, no side icon): PLAY's centre then stays nearer LOADOUT's than the tile's does, so ↑ from LOADOUT returns to PLAY
-   (the menus' spatial scoring; menus.py asserts ↓ ↑ = LOADOUT → PLAY). */
-.dfm-playrow { position: relative; display: flex; align-items: stretch; gap: 18px; margin-bottom: 4px; }
-.dfm-playrow > .dfm-item-play { flex: 1 1 auto; min-width: 0; margin-bottom: 0; white-space: nowrap; }
-.dfm-item-online { flex: 0 0 clamp(100px, 32%, 136px); height: auto; min-height: 44px; padding: 0 8px; justify-content: center; gap: 0; white-space: nowrap;
-  background: linear-gradient(180deg, #a6eef6, var(--sea)); color: #04313f; font-size: clamp(22px, 2.05vw, 30px); }
-.dfm-item-online .oico { flex: none; width: 1.15em; height: 1.15em; }
+/* PLAY ONLINE is the first main-menu button, the same size as PLAY (owner, 2026-10-12). The button carries
+   .dfm-item-play (size, type, spacing) and .dfm-item-online (the sea-blue colour); the wrapper only anchors the
+   why-not note. (It used to be a small tile beside PLAY.) */
+.dfm-playrow { position: relative; display: block; margin-bottom: 4px; }
+.dfm-playrow > .dfm-item-online { width: 100%; margin-bottom: 0; white-space: nowrap; }
+.dfm-item-online, .dfm[data-crew="gulf"] .dfm-item-online { background: linear-gradient(180deg, #a6eef6, var(--sea)); color: #04313f; }
+.dfm-item-online .lbl { display: inline-flex; align-items: center; gap: .3em; font-size: .86em; letter-spacing: 0; }
+.dfm-item-online .oico { flex: none; width: .85em; height: .85em; }
 .dfm-item-online .oico svg { display: block; width: 100%; height: 100%; }
-.dfm-item-online .lbl { display: flex; flex-direction: column; align-items: center; }
-.dfm-item-online .l1 { display: inline-flex; align-items: center; gap: .3em; font-size: .52em; line-height: 1.1; letter-spacing: .16em; }
-.dfm-item-online .l2 { font-size: .8em; line-height: .95; letter-spacing: .04em; }
-:where(html:not(.df-touch)) .dfm-item-online:focus { background: linear-gradient(180deg, #d2f8fc, #5fd5e3); transform: translateY(-4px) rotate(1deg);
-  box-shadow: 0 9px 0 var(--ink), 0 0 0 4px var(--cream); }
-@media (hover: hover) { :where(html:not(.df-touch)) .dfm-item-online:hover { background: linear-gradient(180deg, #d2f8fc, #5fd5e3); transform: translateY(-4px) rotate(1deg);
-  box-shadow: 0 9px 0 var(--ink), 0 0 0 4px var(--cream); } }
-.dfm-item-online:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--ink); }
+:where(html:not(.df-touch)) .dfm-item-online:focus,
+:where(html:not(.df-touch)) .dfm[data-crew="gulf"] .dfm-item-online:focus { background: linear-gradient(180deg, #d2f8fc, #5fd5e3); box-shadow: 0 8px 0 var(--ink), 0 0 0 4px var(--cream); }
+@media (hover: hover) { :where(html:not(.df-touch)) .dfm-item-online:hover,
+  :where(html:not(.df-touch)) .dfm[data-crew="gulf"] .dfm-item-online:hover { background: linear-gradient(180deg, #d2f8fc, #5fd5e3); box-shadow: 0 8px 0 var(--ink), 0 0 0 4px var(--cream); } }
 .dfm-item-online.off { background: linear-gradient(180deg, #e6e9ef, #b9c1d0); color: #5d667a; cursor: not-allowed; }
 :where(html:not(.df-touch)) .dfm-item-online.off:focus { background: linear-gradient(180deg, #eef0f4, #c9cfdb); }
-html.df-touch .dfm-item-online .l1 { font-size: 12px; }
 .dfm-online-why { position: absolute; left: calc(100% + 14px); top: 50%; transform: translateY(-50%); width: max-content; max-width: min(280px, 34vw); padding: 8px 14px;
   border-radius: 16px; background: var(--ink); color: var(--cream); font: 800 14px/1.3 var(--body); box-shadow: 0 4px 0 rgba(10,20,44,.45); pointer-events: none; }
 

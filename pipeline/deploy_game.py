@@ -788,6 +788,43 @@ def _entry_page_problem(game_dir):
     return None
 
 
+# ── embedded Supabase key guard (2026-10-12) ─────────────────────────────────────────────────────────
+# edge-keeper's online play never worked: its edgenet.js carried the shared anon key with ONE mistyped character
+# (payload iss "supabese"), so Supabase Realtime refused every socket (HTTP 401) and "FIND MATCH" waited alone forever.
+# Every online game embeds this public anon key by hand, so verify it. FFG_ANON_KEY_SHA256 is the SHA-256 of the one
+# valid key; rotate it here if the project's anon key is ever rotated.
+FFG_PROJECT_REF = "wugoxdewcdxzfppgzohy"
+FFG_ANON_KEY_SHA256 = "a1fac6493b025a0059b0b4d81cadc6e1e7b740182272aa026ea72e708b9118e8"
+_JWT_RX = re.compile(r"eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}")
+
+
+def _embedded_key_problem(game_dir):
+    """Why this game must NOT be uploaded, or None: a JWT naming the FFG Supabase project that is not the valid anon key."""
+    import base64, hashlib
+    for fp in Path(game_dir).rglob("*"):
+        if fp.suffix.lower() not in (".js", ".mjs", ".html", ".json") or "node_modules" in fp.parts:
+            continue
+        try:
+            if fp.stat().st_size > 3_000_000:
+                continue
+            text = fp.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        for jwt in set(_JWT_RX.findall(text)):
+            try:
+                body = jwt.split(".")[1]
+                claims = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+            except Exception:
+                # unreadable payload but it sits next to the project's header: a corrupted copy of the key
+                if "wugox" in text:
+                    return f"{fp} holds a JWT whose payload cannot be decoded (a corrupted Supabase key?)"
+                continue
+            if claims.get("ref") == FFG_PROJECT_REF or claims.get("iss") == "supabese":
+                if hashlib.sha256(jwt.encode()).hexdigest() != FFG_ANON_KEY_SHA256:
+                    return f"{fp} holds a Supabase key for the FFG project that is NOT the valid anon key (iss={claims.get('iss')!r}); online play would be rejected (401)"
+    return None
+
+
 def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, refresh_portal=True,
                status=None):
     """Deploy a single game: optional cover-gen, R2 upload, Supabase upsert,
@@ -830,6 +867,13 @@ def deploy_one(game_dir, slug, metadata_path=None, dry_run=False, force=False, r
         _safe_print("  Restore the full page (git show HEAD:<path>) and re-apply the real edits, then deploy again.")
         _safe_print("  Intentional override (the page really has no closing tag): set ALLOW_UNTERMINATED_ENTRY=1.")
         return {"ok": False, "uploaded": 0, "total": 0, "url": None, "reason": "truncated entry page"}
+
+    # ── embedded Supabase key guard (2026-10-12): a mistyped anon key silently kills online play ─────────
+    _kp = _embedded_key_problem(game_dir)
+    if _kp and not os.environ.get("ALLOW_BAD_SUPABASE_KEY"):
+        _safe_print(f"ABORT: {_kp}")
+        _safe_print("  Copy the key from a working game (e.g. games/warboard-chess/runtime/net/ffg_netplay.js), do not retype it.")
+        return {"ok": False, "uploaded": 0, "total": 0, "url": None, "reason": "bad embedded supabase key"}
 
     metadata = {}
     if metadata_path:

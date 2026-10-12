@@ -147,6 +147,8 @@ export class NetApi implements OnlineApi {
   private reconnects = 0;
   private reconnectTimer = 0;
   private leaving = false;
+  /** bumped by reset(): lets an async step (the stale-build check) notice LEAVE / a new request meanwhile */
+  private seq = 0;
   // match
   private assign: Extract<TextMsg, { t: 'assign' }> | null = null;
   private load: OnlineMatchLoad | null = null;
@@ -290,7 +292,38 @@ export class NetApi implements OnlineApi {
     this.profile = { ...p };
     this.qm = { mode, rule };
     this.set({ kind: 'connecting' });
-    this.open('lobby', `/qm?mode=${mode}&rule=${rule}&build=${encodeURIComponent(this.build)}`);
+    // The matchmaking queue is per BUILD (only identical builds can share a match). A tab that has been open since
+    // before a release is on an older build, and would sit in a queue nobody else is in: "1 waiting (you)" forever.
+    // Check the live build first; if this tab is behind, reload it once (then say so).
+    const req = this.seq;
+    void this.isStaleBuild().then((stale) => {
+      if (req !== this.seq) return; // LEAVE / another request happened meanwhile
+      if (stale) { this.handleStaleBuild(); return; }
+      this.open('lobby', `/qm?mode=${mode}&rule=${rule}&build=${encodeURIComponent(this.build)}`);
+    });
+  }
+
+  /** true when the deployed index.html points at a newer entry chunk than the one this tab is running */
+  private async isStaleBuild(): Promise<boolean> {
+    if (this.build.endsWith(':dev')) return false; // dev server: no hashed entry
+    try {
+      const r = await fetch(new URL('index.html', location.href).href + '?_=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) return false;
+      const m = /index-([A-Za-z0-9_-]{6,})\.js/.exec(await r.text());
+      if (!m) return false;
+      return !this.build.endsWith(':' + m[1].slice(0, 8).toLowerCase());
+    } catch { return false; } // offline / blocked: let the relay decide
+  }
+
+  private handleStaleBuild(): void {
+    try {
+      if (!sessionStorage.getItem('dyefield-stale-reload')) {
+        sessionStorage.setItem('dyefield-stale-reload', '1');
+        location.reload();
+        return;
+      }
+    } catch { /* sessionStorage blocked: fall through to the message */ }
+    this.set({ kind: 'error', code: 'build', msg: 'Update DYEFIELD: reload the page' });
   }
 
   createRoom(mode: OnlineMode, rule: OnlineRule, p: OnlineProfile): void {
@@ -346,6 +379,7 @@ export class NetApi implements OnlineApi {
   }
 
   private reset(): void {
+    this.seq++;
     clearTimeout(this.reconnectTimer);
     this.closeSock();
     this.room = null; this.members = []; this.mySlot = -1; this.code = ''; this.ticket = ''; this.reconnects = 0;
