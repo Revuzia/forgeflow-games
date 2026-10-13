@@ -29,8 +29,23 @@ body {
   margin: 0; padding-inline: 16px; box-sizing: border-box; overflow: hidden;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
 }
-#stage { position: relative; width: 100%; max-width: calc((100vh - 40px) * 16 / 9); aspect-ratio: 16 / 9; background: #07040f; border-radius: 6px; overflow: hidden; box-shadow: 0 0 0 1px #2a1f4d, 0 20px 60px -20px #000; }
-body.touch #stage { max-width: calc((100vh - 150px) * 16 / 9); }
+#stage { position: relative; width: 100%; max-width: calc((100vh - 40px) * 16 / 9); max-width: calc((100dvh - 40px) * 16 / 9); aspect-ratio: 16 / 9; background: #07040f; border-radius: 6px; overflow: hidden; box-shadow: 0 0 0 1px #2a1f4d, 0 20px 60px -20px #000; }
+/* phones / tablets (html.ffg-touch is set by game_controls.js): the game fills the screen edge to edge */
+html.ffg-touch body { padding-inline: 0; gap: 0; }
+html.ffg-touch #stage { max-width: calc(100vh * 16 / 9); max-width: calc(100dvh * 16 / 9); border-radius: 0; box-shadow: none; }
+html.lobby-open #__ffg_touch__ { display: none; }
+/* portrait phone: ask for landscape (dismissable) */
+#rotate { display: none; }
+html.ffg-touch.ffg-portrait #rotate:not(.dismissed) { display: grid; position: fixed; inset: 0; z-index: 2147483000; place-items: center; padding: 24px; background: rgba(11, 7, 22, 0.92); text-align: center; }
+#rotate .rt-card { display: grid; gap: 14px; justify-items: center; max-width: 320px; }
+#rotate .rt-icon { width: 64px; height: 104px; border: 4px solid var(--cyan); border-radius: 14px; animation: rt-turn 2.4s ease-in-out infinite; }
+@keyframes rt-turn { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+@media (prefers-reduced-motion: reduce) { #rotate .rt-icon { animation: none; transform: rotate(-90deg); } }
+#rotate h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: 22px; color: var(--fg); }
+#rotate p { margin: 0; color: var(--muted); font-size: 15px; }
+#rotate button { font-family: var(--display); font-size: 14px; color: var(--muted); background: transparent; border: 2px solid #3a2c6b; border-radius: 10px; padding: 10px 16px; }
+.lb-invite { display: grid; gap: 6px; }
+.lb-invite code { font-size: 12px; color: var(--muted); word-break: break-all; user-select: all; -webkit-user-select: all; }
 #stage canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; outline: none; touch-action: none; }
 #hud:focus-visible { box-shadow: inset 0 0 0 2px var(--cyan); }
 #boot { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); color: var(--muted); font-size: clamp(14px, 2.4vw, 22px); text-align: center; padding: 16px; }
@@ -51,15 +66,7 @@ body.touch #stage { max-width: calc((100vh - 150px) * 16 / 9); }
 .lb-status { margin: 0; min-height: 2.8em; font-size: 14px; color: var(--fg); }
 .lb-status.err { color: #ff8a9a; }
 .lb-card .lb-back { background: transparent; border-color: transparent; color: var(--muted); }
-#touch { display: none; width: 100%; max-width: 640px; gap: 12px; justify-content: space-between; user-select: none; -webkit-user-select: none; }
-body.touch #touch { display: flex; }
-#touch .pad { display: flex; gap: 12px; }
-#touch button {
-  font-family: var(--display); font-size: 20px; color: var(--fg); background: var(--panel);
-  border: 2px solid #3a2c6b; border-radius: 14px; width: 76px; height: 76px; touch-action: none;
-}
-#touch button.fire { width: 120px; border-color: var(--accent); color: var(--accent); }
-#touch button.on { background: #2a1f4d; }
+
 </style>
 </head>
 <body>
@@ -75,14 +82,29 @@ body.touch #touch { display: flex; }
     <div class="lb-row"><button id="lbQuick" class="primary" type="button">QUICK MATCH</button><button id="lbCreate" type="button">CREATE ROOM</button></div>
     <form id="lbJoin" class="lb-row"><input id="lbCode" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false" aria-label="Room code"><button id="lbJoinBtn" type="submit">JOIN</button></form>
     <div id="lbRoom" class="lb-room" hidden></div>
+    <div id="lbInvite" class="lb-invite" hidden><button id="lbCopy" type="button">COPY INVITE LINK</button><code id="lbLink"></code></div>
     <p id="lbStatus" class="lb-status" role="status" aria-live="polite"></p>
     <button id="lbBack" class="lb-back" type="button">BACK</button>
   </div>
 </div>
-<div id="touch" aria-hidden="true">
-  <div class="pad"><button id="tLeft">◀</button><button id="tRight">▶</button></div>
-  <button id="tFire" class="fire">FIRE</button>
+<div id="rotate" role="dialog" aria-labelledby="rtTitle">
+  <div class="rt-card">
+    <div class="rt-icon" aria-hidden="true"></div>
+    <h2 id="rtTitle">TURN YOUR PHONE SIDEWAYS</h2>
+    <p>Harpoon Pop plays best in landscape.</p>
+    <button id="rtDismiss" type="button">PLAY ANYWAY</button>
+  </div>
 </div>
+<!-- Shared ForgeFlow control layer (pipeline/templates/shared/game_controls.js): device classes, the touch
+     thumbstick + FIRE button (they send the same keys a keyboard does), and the fullscreen / mute / pause bar. -->
+<script>
+  window.GAME_CONFIG = {
+    slug: 'harpoon-pop',
+    mute_hotkey: false, // M is the game's own sound toggle
+    touch: { stick: 'arrows', stickAxis: 'x', buttons: [{ label: 'FIRE', key: 'Space', side: 'right' }] },
+  };
+</script>
+<script src="game_controls.js"></script>
 
 <script type="importmap">
 { "imports": {
@@ -486,6 +508,8 @@ const Sound = (() => {
     setMuffle(k) { if (!ctx || Math.abs(k - muffle) < 0.02) return; muffle = k; musFilter.frequency.setTargetAtTime(350 + 19650 * k * k * k, ctx.currentTime, 0.05); },
     toggleMute() { muted = !muted; if (master) master.gain.value = muted ? 0 : 0.85; return muted; },
     toggleMusic() { musicOn = !musicOn; if (ctx) applyMusicGain(); return musicOn; },
+    suspend() { if (ctx && ctx.state === 'running') ctx.suspend().catch(() => {}); },
+    resume() { if (ctx && ctx.state === 'suspended') ctx.resume().catch(() => {}); },
     // RMS output level 0..1 (used by the test harness to prove sound is audible)
     level() { if (!analyser) return 0; const a = new Float32Array(analyser.fftSize); analyser.getFloatTimeDomainData(a); let s = 0; for (const v of a) s += v * v; return Math.sqrt(s / a.length); },
     get state() { return { ctx: ctx ? ctx.state : 'none', track: songName, playing: !!song, songs: Object.keys(SONGS) }; },
@@ -554,7 +578,7 @@ function onPress(code) {
   else if (P1_FIRE.includes(code) || code === 'KeyW') input.pressed = true;
   if (CONFIRM_KEYS.includes(code)) confirmAction();
 }
-const isTouch = () => document.body.classList.contains('touch');
+const isTouch = () => !!(window.FFG_DEVICE ? window.FFG_DEVICE.touch : matchMedia('(pointer: coarse)').matches);
 const titleModes = () => (isTouch() ? [1, 2] : [1, 2, 3]);
 const MODE_LABELS = { 1: '1 PLAYER', 2: 'ONLINE CO-OP', 3: 'LOCAL 2P' };
 function confirmAction(fromPeer) {
@@ -571,17 +595,21 @@ function confirmAction(fromPeer) {
   else if (s === 'gameover') { if (game.contT > 0 && game.stateT > 0.6) continueGame(); else if (game.contT <= 0 && game.stateT > 1.2) { sfx.select(); toTitle(); } }
 }
 
-// Touch controls (shown automatically on touch devices)
-function bindHold(id, prop, onDown) {
-  const el = document.getElementById(id);
-  const down = (e) => { e.preventDefault(); touch[prop] = true; el.classList.add('on'); if (onDown) onDown(); };
-  const up = (e) => { e.preventDefault(); touch[prop] = false; el.classList.remove('on'); };
-  el.addEventListener('pointerdown', down); ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => el.addEventListener(ev, up));
-}
-bindHold('tLeft', 'left'); bindHold('tRight', 'right');
-bindHold('tFire', 'fire', () => { Sound.init(); if (Net.role === 'guest' && Net.started) guestFire(); else input.pressed = true; confirmAction(); });
-if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch');
-addEventListener('touchstart', () => document.body.classList.add('touch'), { once: true, passive: true });
+// Touch play: the shared control layer (game_controls.js) draws a thumbstick + FIRE button that send
+// ArrowLeft / ArrowRight / Space, so touch rides the same input path as the keyboard.
+// Its bar's pause button calls window.__PAUSE__ (online games have no pause).
+window.__PAUSE__ = {
+  toggle() { if (!Net.started && ['play', 'paused', 'intro'].includes(game.state)) togglePause(); },
+  pause() { if (!Net.started && (game.state === 'play' || game.state === 'intro')) togglePause(); },
+};
+// leaving the tab / app: pause an offline game and silence audio until the player is back
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { for (const k in keys) keys[k] = false; window.__PAUSE__.pause(); Sound.suspend(); }
+  else Sound.resume();
+});
+document.getElementById('rtDismiss').addEventListener('click', () => document.getElementById('rotate').classList.add('dismissed'));
+// short haptic pulse on phones that support it (Android); silently does nothing elsewhere
+function buzz(ms) { if (isTouch() && navigator.vibrate) { try { navigator.vibrate(ms); } catch (e) { /* not allowed */ } } }
 
 /* ============================ §4 GAME STATE ============================ */
 const game = {
@@ -1090,7 +1118,7 @@ function updateDynamite(dt) {
 }
 
 /* ============================ §9 JUICE ============================ */
-function spawn(o) { if (game.particles.length < 900) game.particles.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, life: 0.5, t: 0, size: 3, color: '#fff', type: 'dot', g: 0, drag: 0, rot: 0, z: 0, vz: 0 }, o)); }
+function spawn(o) { if (game.particles.length < QUALITY.particleCap) game.particles.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, life: 0.5, t: 0, size: 3, color: '#fff', type: 'dot', g: 0, drag: 0, rot: 0, z: 0, vz: 0 }, o)); }
 function popup(x, y, text, color, size) {
   netEmit(['p', rn(x), rn(y), text, color, size]); if (guestMuted()) return;
   // stack on top of any fresh popup nearby so bursts of score stay readable
@@ -1107,8 +1135,9 @@ function addScore(n, credit = game.credit) { game.score += n; const p = game.pla
 // Composite visual effects. Gameplay calls them through fx(name, ...) so the host can send them to an
 // online guest, who replays the same burst locally (particles themselves never cross the network).
 const FX = {
-  pop(x, y, r, size, hx, hy) { popBurst({ x, y, r, size }, hx, hy); },
+  pop(x, y, r, size, hx, hy) { popBurst({ x, y, r, size }, hx, hy); if (size >= 3) buzz(14); },
   explode(x, y, radius) {
+    buzz(40);
     spawn({ x, y, type: 'light', size: 7, life: 0.45, color: '#ff8a3d' });
     spawn({ x, y, type: 'ring', size: 10, r2: radius, life: 0.4, color: '#ff8a3d', width: 10 });
     spawn({ x, y, type: 'ring', size: 4, r2: radius * 0.7, life: 0.3, color: '#ffe0a8', width: 4 });
@@ -1121,6 +1150,7 @@ const FX = {
     for (let i = 0; i < 24; i++) { const a = rand(0, Math.PI * 2), sp = rand(120, 420); spawn({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.3, 0.6), size: rand(2, 4), color: i % 2 ? '#ffd23f' : '#ff8a3d', type: 'spark', drag: 2 }); }
   },
   playerDie(x) {
+    buzz([60, 40, 90]);
     spawn({ x, y: ARENA.b - 24, type: 'ring', size: 20, r2: 160, life: 0.5, color: '#ff3d5a', width: 8 });
     spawn({ x, y: ARENA.b - 24, type: 'light', size: 6, life: 0.5, color: '#ff3d5a' });
     for (let i = 0; i < 24; i++) { const a = rand(0, Math.PI * 2), s = rand(100, 380); spawn({ x, y: ARENA.b - 24, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.3, 0.7), size: rand(2, 4), color: i % 2 ? '#ff3d5a' : '#ffffff', type: 'spark', drag: 2 }); }
@@ -1131,6 +1161,7 @@ const FX = {
   },
   near(x) { spawn({ x, y: ARENA.b - 22, type: 'ring', size: 20, r2: 70, life: 0.35, color: '#9d86ff', width: 3 }); },
   pickup(px, ix, iy, color) {
+    buzz(18);
     for (let i = 0; i < 18; i++) spawn({ x: px + rand(-14, 14), y: ARENA.b - rand(0, 40), vx: rand(-20, 20), vy: rand(-420, -160), life: rand(0.4, 0.7), size: rand(2, 3.5), color, type: 'spark', drag: 1.5 });
     spawn({ x: ix, y: iy, type: 'ring', size: 10, r2: 60, life: 0.35, color, width: 4 });
   },
@@ -1311,7 +1342,7 @@ function drawHUDTail() {
     ctx.fillStyle = '#ff3d8b'; ctx.fillRect(ARENA.l + 10, ARENA.t + 54, 110 * a, 3);
     ctx.globalAlpha = 1;
   }
-  if (game.state !== 'title') { ctx.textAlign = 'left'; ctx.font = '700 11px "Chakra Petch", sans-serif'; ctx.fillStyle = '#6f6596'; ctx.fillText(Net.started ? `ONLINE · ${Net.mode === 'p2p' ? 'DIRECT' : 'RELAY'} · M SOUND · N MUSIC` : 'P PAUSE · M SOUND · N MUSIC', ARENA.l + 4, ARENA.b + 32); }
+  if (game.state !== 'title' && (Net.started || !isTouch())) { ctx.textAlign = 'left'; ctx.font = '700 11px "Chakra Petch", sans-serif'; ctx.fillStyle = '#6f6596'; ctx.fillText(Net.started ? `ONLINE · ${Net.mode === 'p2p' ? 'DIRECT' : 'RELAY'} · M SOUND · N MUSIC` : 'P PAUSE · M SOUND · N MUSIC', ARENA.l + 4, ARENA.b + 32); }
 }
 
 // Co-op HUD: one compact row per player (tag, hearts, weapon + shield), shared slow-mo chip on the left
@@ -1387,7 +1418,9 @@ function drawTitle() {
   roundRect(ctx, 100, 350, 410, 98, 12); ctx.fill(); roundRect(ctx, 540, 344, 250, 128, 12); ctx.fill(); roundRect(ctx, 100, 464, 690, 32, 12); ctx.fill();
   // controls card
   ctx.textAlign = 'left'; ctx.font = '700 14px "Chakra Petch", sans-serif';
-  const rows = [['← →', 'move'], ['SPACE  /  ↑  /  Z', 'fire harpoon'], ['A D  +  W', 'local 2P: player 2'], ['P  ·  M  ·  N', 'pause · sound · music']];
+  const rows = isTouch()
+    ? [['STICK  ◀ ▶', 'move'], ['FIRE', 'fire harpoon'], ['TAP A MODE', 'start / continue'], ['BAR  ⏸ 🔊 ⛶', 'pause · sound · fullscreen']]
+    : [['← →', 'move'], ['SPACE  /  ↑  /  Z', 'fire harpoon'], ['A D  +  W', 'local 2P: player 2'], ['P  ·  M  ·  N', 'pause · sound · music']];
   rows.forEach(([k, v], i) => { ctx.fillStyle = '#ffd23f'; ctx.fillText(k, 120, 372 + i * 22); ctx.fillStyle = '#c8bfe8'; ctx.fillText(v, 290, 372 + i * 22); });
   // item legend
   const types = Object.keys(ITEMS);
@@ -1419,7 +1452,11 @@ const CAM_D = (H / 2) / Math.tan(THREE.MathUtils.degToRad(FOV / 2)); // camera d
 
 const view = document.getElementById('view');
 const renderer = new THREE.WebGLRenderer({ canvas: view, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+// Quality tier. Phones start lighter (pixel ratio, shadow map, bloom resolution, particle budget);
+// any device steps down further if the frame rate sags (see adaptQuality in §12). Never steps back up.
+const MOBILE = !!(window.FFG_DEVICE && window.FFG_DEVICE.mobile);
+const QUALITY = { level: 0, dprCap: MOBILE ? 1.5 : 2, bloomScale: MOBILE ? 0.5 : 1, particleCap: MOBILE ? 450 : 900, log: [] };
+renderer.setPixelRatio(Math.min(QUALITY.dprCap, window.devicePixelRatio || 1));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -1437,7 +1474,7 @@ camera.position.set(0, 0, CAM_D);
 const hemi = new THREE.HemisphereLight(0xcfd8ff, 0x2a1840, 0.7); scene.add(hemi);
 const key = new THREE.DirectionalLight(0xffffff, 1.3);
 key.position.set(-260, 620, 520); key.castShadow = true;
-key.shadow.mapSize.set(2048, 1024);
+key.shadow.mapSize.set(MOBILE ? 1024 : 2048, MOBILE ? 512 : 1024);
 Object.assign(key.shadow.camera, { left: -540, right: 540, top: 340, bottom: -340, near: 10, far: 2200 });
 key.shadow.bias = -0.0004; key.shadow.normalBias = 0.6;
 key.target.position.set(0, -120, 0); scene.add(key, key.target);
@@ -2019,7 +2056,7 @@ const glowCloud = makeCloud(true, 2.2), softCloud = makeCloud(false, 1.0);
 const ringGeo = new THREE.RingGeometry(0.86, 1, 64);
 const ringPool = Array.from({ length: 40 }, () => { const m = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide })); m.visible = false; m.renderOrder = 4; scene.add(m); return m; });
 // Ambient dust motes drifting through the arena depth
-const dust = Array.from({ length: 140 }, () => ({ x: rand(0, W), y: rand(ARENA.t, ARENA.b), z: rand(-500, 120), s: rand(0.8, 2.2), v: rand(6, 18), ph: rand(0, 6) }));
+const dust = Array.from({ length: MOBILE ? 60 : 140 }, () => ({ x: rand(0, W), y: rand(ARENA.t, ARENA.b), z: rand(-500, 120), s: rand(0.8, 2.2), v: rand(6, 18), ph: rand(0, 6) }));
 function syncParticles(dt) {
   glowCloud.reset(); softCloud.reset();
   let ri = 0;
@@ -2407,16 +2444,31 @@ const lb = (id) => document.getElementById(id);
 function lobbyStatus(msg, err) { const s = lb('lbStatus'); s.textContent = msg; s.classList.toggle('err', !!err); lobbyBusy(false); if (!err) lobbyBusy(true); }
 function lobbyBusy(on) { for (const id of ['lbQuick', 'lbCreate', 'lbJoinBtn', 'lbCode']) lb(id).disabled = on; }
 function openLobby() {
-  Sound.init(); lobbyEl.hidden = false; lb('lbRoom').hidden = true; lb('lbStatus').textContent = 'Quick Match pairs you with anyone who is searching. Create a room to play with a friend.';
+  Sound.init(); lobbyEl.hidden = false; document.documentElement.classList.add('lobby-open'); lb('lbRoom').hidden = true; lb('lbInvite').hidden = true; lb('lbStatus').textContent = 'Quick Match pairs you with anyone who is searching. Create a room to play with a friend.';
   lb('lbStatus').classList.remove('err'); lobbyBusy(false); lb('lbQuick').focus();
 }
-function closeLobby(keepNet) { lobbyEl.hidden = true; if (!keepNet) netShutdown(); hud.focus(); }
+function closeLobby(keepNet) { lobbyEl.hidden = true; document.documentElement.classList.remove('lobby-open'); if (!keepNet) netShutdown(); hud.focus(); }
+// A friend who opens this link lands on the game page and joins the room automatically (the portal passes ?room= to the game).
+const inviteLink = (code) => `https://forgeflowgames.com/games/${GAME_ID}?room=${code}`;
+lb('lbCopy').addEventListener('click', async () => {
+  const link = lb('lbLink').textContent;
+  try { await navigator.clipboard.writeText(link); lb('lbCopy').textContent = 'LINK COPIED'; }
+  catch (e) { const r = document.createRange(); r.selectNodeContents(lb('lbLink')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); lb('lbCopy').textContent = 'LINK SELECTED · COPY IT'; }
+  setTimeout(() => { lb('lbCopy').textContent = 'COPY INVITE LINK'; }, 2500);
+});
+// ?room=CODE (from an invite link): open the lobby and join that room straight away
+function joinFromLink() {
+  const code = (new URLSearchParams(location.search).get('room') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (code.length !== 4) return;
+  game.modeSel = 2; openLobby(); lb('lbCode').value = code; goOnline('join', code);
+}
 const makeCode = () => Array.from({ length: 4 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[(Math.random() * 31) | 0]).join('');
 async function goOnline(kind, code) {
-  netShutdown(); lobbyBusy(true); lb('lbRoom').hidden = true;
+  netShutdown(); lobbyBusy(true); lb('lbRoom').hidden = true; lb('lbInvite').hidden = true;
   const np = new NetPlay(SUPABASE_URL, SUPABASE_ANON_KEY, GAME_ID); Net.np = np;
   np.on('msg', ({ t, d }) => onNetMsg(t, d));
-  np.on('error', () => lobbyStatus('Could not reach the online service. Check your connection and try again.', true));
+  // a room that can't be joined (service down, network blocked) must say so, never leave the player waiting
+  np.on('error', () => { np.failed = true; netShutdown(); lobbyStatus("The online service isn't responding right now (it may be busy). Please try again in a few minutes.", true); });
   np.on('peer', ({ present, count, ids }) => {
     if (count > 2 && ids.sort().indexOf(np.id) > 1) { netShutdown(); lobbyStatus('That room is full. Ask your friend for a new code.', true); return; }
     if (present && !Net.peerSeen) { Net.peerSeen = true; lobbyStatus('Partner found! Connecting…'); if (!np.isHost()) guestHello(); }
@@ -2427,14 +2479,17 @@ async function goOnline(kind, code) {
   if (kind === 'quick') {
     lobbyStatus('Looking for a partner…');
     const r = await np.quickMatch(90000);
-    if (Net.np !== np) return;
+    if (np.failed || Net.np !== np) return;
     if (!r) { netShutdown(); lobbyStatus('Nobody is searching right now. Try again, or create a room and share the code.', true); return; }
   } else if (kind === 'create') {
     const c = makeCode(); await np.joinRoom(c, true);
+    if (np.failed || Net.np !== np) return;
     lb('lbRoom').textContent = c; lb('lbRoom').hidden = false;
+    lb('lbLink').textContent = inviteLink(c); lb('lbInvite').hidden = false;
     lobbyStatus(`Room ${c} is open. Share the code with your friend. Waiting for them to join…`);
   } else {
     await np.joinRoom(code, false);
+    if (np.failed || Net.np !== np) return;
     lobbyStatus(`Joining room ${code}…`);
     setTimeout(() => { if (Net.np === np && !Net.peerSeen) { netShutdown(); lobbyStatus(`Nobody is in room ${code}. Check the code with your friend.`, true); } }, 9000);
   }
@@ -2462,8 +2517,9 @@ const hud = document.getElementById('hud');
 const ctx = hud.getContext('2d');
 let scale = 1;
 function resize() {
-  const w = Math.max(1, stageEl.clientWidth), h = Math.max(1, stageEl.clientHeight), dpr = Math.min(2, window.devicePixelRatio || 1);
-  renderer.setSize(w, h, false); composer.setSize(w, h); bloom.setSize(w * dpr, h * dpr);
+  const w = Math.max(1, stageEl.clientWidth), h = Math.max(1, stageEl.clientHeight), dpr = Math.min(QUALITY.dprCap, window.devicePixelRatio || 1);
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(w, h, false); composer.setPixelRatio(dpr); composer.setSize(w, h); bloom.setSize(w * dpr * QUALITY.bloomScale, h * dpr * QUALITY.bloomScale);
   hud.width = Math.round(w * dpr); hud.height = Math.round(h * dpr); scale = hud.width / W;
   const ps = (h * renderer.getPixelRatio()) / H; glowCloud.mat.uniforms.uScale.value = ps; softCloud.mat.uniforms.uScale.value = ps;
 }
@@ -2597,9 +2653,29 @@ function tick(dt) {
   if (n >= 12) acc = 0;
   if (n > 0) { input.pressed = false; input.pressed2 = false; }
 }
+// Adaptive quality: average frame time over ~2 s of play; if it is under ~45 fps, take one step down.
+const STEPS = [
+  ['pixel ratio 1', () => { QUALITY.dprCap = 1; resize(); }],
+  ['bloom off', () => { bloom.enabled = false; }],
+  ['shadows off', () => { key.castShadow = false; }],
+  ['pixel ratio 0.75', () => { QUALITY.dprCap = 0.75; resize(); }],
+];
+let qT = 0, qN = 0, qSum = 0;
+function adaptQuality(rawDt) {
+  if (game.state !== 'play' || document.hidden || QUALITY.level >= STEPS.length) { qT = qN = qSum = 0; return; }
+  qT += rawDt; qN++; qSum += rawDt;
+  if (qT < 2) return;
+  const fps = qN / qSum; qT = qN = qSum = 0;
+  if (fps >= 45) return;
+  while (QUALITY.level < STEPS.length && STEPS[QUALITY.level][0] === 'pixel ratio 1' && QUALITY.dprCap <= 1) QUALITY.level++; // already there
+  if (QUALITY.level >= STEPS.length) return;
+  const [name, apply] = STEPS[QUALITY.level++]; apply();
+  QUALITY.log.push(`${name} @ ${fps.toFixed(0)} fps`);
+}
 function frame(now) {
-  const dt = Math.min(0.05, (now - lastT) / 1000); lastT = now;
+  const raw = (now - lastT) / 1000, dt = Math.min(0.05, raw); lastT = now;
   if (manualClock) { requestAnimationFrame(frame); return; }
+  if (raw < 0.5) adaptQuality(raw);
   tick(dt);
   render3D(dt);
   render2D();
@@ -2611,9 +2687,10 @@ function start() {
   resize(); seedTitle(); Sound.playTrack('menu');
   requestAnimationFrame(frame);
   hud.focus();
+  joinFromLink();
 }
 // Debug handle for console tinkering (e.g. __hp.loadLevel(9)).
-window.__hp = { game, keys, input, newGame, Net, openLobby, goOnline, buildSnap, loadLevel, applyItem, confirmAction, killEnemy, ARENA, ITEMS, Sound, hero, camera,
+window.__hp = { game, keys, input, newGame, Net, QUALITY, MOBILE, openLobby, goOnline, buildSnap, loadLevel, applyItem, confirmAction, killEnemy, ARENA, ITEMS, Sound, hero, camera,
   gpu: () => ({ ...renderer.info.memory, programs: renderer.info.programs.length }),
   // step the game deterministically (used by the headless test harness); draw=false skips per-step rendering
   setManualClock(on) { manualClock = on; },

@@ -236,8 +236,8 @@ with sync_playwright() as pw:
 
 srv.shutdown()
 # Everything is generated in code: the only network traffic allowed is the page itself,
-# three.js from jsDelivr and the two Google Fonts.
-foreign = [u for u in requests if not (u.startswith(URL.rsplit('/', 1)[0]) and u.endswith(('/index.html', '/', '/favicon.ico'))) and 'cdn.jsdelivr.net/npm/three@' not in u and 'fonts.googleapis.com' not in u and 'fonts.gstatic.com' not in u]
+# three.js from jsDelivr, the two Google Fonts and the shared game_controls.js layer.
+foreign = [u for u in requests if not (u.startswith(URL.rsplit('/', 1)[0]) and u.endswith(('/index.html', '/', '/favicon.ico', '/game_controls.js'))) and 'cdn.jsdelivr.net/npm/three@' not in u and 'fonts.googleapis.com' not in u and 'fonts.gstatic.com' not in u]
 check('no asset files fetched (all art/audio generated in code)', not foreign, foreign[:10])
 real_errors = [e for e in errors if 'GPU stall' not in e and 'GL Driver Message' not in e and 'WebGL' not in e]
 check('no console errors / page errors / failed requests', not real_errors, real_errors[:12])
