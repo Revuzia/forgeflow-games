@@ -1085,6 +1085,10 @@ function unstickFight(W, b) {
     }
   } else {
     bb.hdBadX = bb.hdX; bb.hdBadZ = bb.hdZ; bb.hdBadUntil = W.t + 1.5;
+    // Pinned again within 8 s: banning one heading did not free it (isla_viva seed 7: a healer tucked beside the tower stair
+    // re-picked a blocked retreat for 11.7 s, three heal cycles on the same spot). Walk out the way the hard breaker does;
+    // it heals again from the open once the exit is reached.
+    if (again) { breakOut(W, b); b.state = "WANDER"; b.nextThink = W.t + 2; }
   }
 }
 /** (T-tick-actors B4) findExit stops at the FIRST open-sky cell past the door, and
