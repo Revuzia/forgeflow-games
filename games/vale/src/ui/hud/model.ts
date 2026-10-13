@@ -19,7 +19,7 @@ export interface Banner { id: number; title: string; sub: string; major: boolean
 export interface FeedLine { id: number; at: number; text: string; tone: 'info' | 'warn' | 'ally' | 'hint' }
 export interface PingMark { id: number; at: number; kind: PingKind; x: number; y: number; target?: EntityId; player: PlayerId; self: boolean; fromX: number; fromY: number }
 export interface Recap { at: number; open: boolean; killer: EntityId | -1; killerName: string; killerDef: string; log: readonly DamageLogEntry[]; structure: boolean }
-export interface Vote { yes: number; no: number; needed: number; by: PlayerId; at: number; voted: boolean }
+export interface Vote { yes: number; no: number; needed: number; by: PlayerId; at: number; voted: boolean; mine?: boolean }
 export interface NumberPop { kind: 'damage' | 'heal' | 'gold'; dtype?: 'phys' | 'magic' | 'true'; amount: number; crit: boolean; dst: EntityId; x: number; y: number }
 
 const KILLFEED_MS = 6000, FEED_MS = 6000, PING_MS = 4000;
@@ -351,7 +351,8 @@ export class HudModel {
         if (ev.team !== this.myTeam) break;
         const prev = this.vote.peek();
         const voted = (prev?.voted ?? false) || ev.player === this.you;
-        this.vote.value = { yes: Number(p.yes) || 0, no: Number(p.no) || 0, needed: Number(p.needed) || 1, by: prev?.by ?? (ev.player ?? -1), at: prev?.at ?? performance.now(), voted };
+        const mine = prev?.mine ?? (ev.player === this.you && !prev ? true : undefined);
+        this.vote.value = { yes: Number(p.yes) || 0, no: Number(p.no) || 0, needed: Number(p.needed) || 1, by: prev?.by ?? (ev.player ?? -1), at: prev?.at ?? performance.now(), voted, ...(mine !== undefined ? { mine } : {}) };
         if (!prev) this.say(this.cv.t('hud.surrender.vote', '{name} proposes to surrender.', { name }), 'warn');
         break;
       }

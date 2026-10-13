@@ -118,8 +118,64 @@ def sheet(tiles: list[Image.Image], title: str, cols: int = 4, pad: int = 8) -> 
     im = Image.new('RGB', (W, H), INK)
     d = ImageDraw.Draw(im)
     d.text((pad, 10), title, fill=CHALK, font=font(18))
-    d.text((W - 330, 14), 'spectrogram 30 Hz–20 kHz log · −96…0 dBFS', fill=TEXT2, font=font(11))
+    d.text((W - 330, 14), 'spectrogram 30 Hz-20 kHz log, -96..0 dBFS', fill=TEXT2, font=font(11))
     for i, t in enumerate(tiles):
         r, c = divmod(i, cols)
         im.paste(t, (pad + c * (tw + pad), 40 + pad + r * (th + pad)))
     return im
+
+
+# ── chromagram (mode adherence) ─────────────────────────────────────────────────────────────────
+PC_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+
+
+def chroma(x: np.ndarray, hop_s: float = 0.5, fmin: float = 55.0, fmax: float = 2000.0) -> np.ndarray:
+    """12 x frames pitch-class energy (linear power, summed over bins within +-35 cents of a semitone)."""
+    m = stereo(x).mean(axis=0)
+    frame = 16384
+    hop = int(hop_s * SR)
+    n = m.size
+    nfr = max(1, (n - 1) // hop + 1)
+    pad = np.pad(m, (frame // 2, frame // 2 + hop))
+    win = np.hanning(frame)
+    freqs = np.fft.rfftfreq(frame, 1 / SR)
+    sel = (freqs >= fmin) & (freqs <= fmax)
+    midi_f = 69 + 12 * np.log2(np.maximum(freqs[sel], 1e-3) / 440.0)
+    nearest = np.round(midi_f)
+    ok = np.abs(midi_f - nearest) < 0.35
+    pcs_ = (nearest.astype(int) % 12)
+    out = np.zeros((12, nfr))
+    for i in range(nfr):
+        seg = pad[i * hop: i * hop + frame]
+        if seg.size < frame:
+            seg = np.pad(seg, (0, frame - seg.size))
+        S = np.abs(np.fft.rfft(seg * win)) ** 2
+        s = S[sel]
+        for p in range(12):
+            out[p, i] = s[ok & (pcs_ == p)].sum()
+    return out
+
+
+def chroma_image(x: np.ndarray, width: int = 1200, row_h: int = 14, allowed=(0, 2, 4, 5, 7, 9, 11, 8)) -> Image.Image:
+    """Pitch-class strip: rows = pitch classes (D Dorian + G# marked), colour = dB re the loudest cell."""
+    c = chroma(x, hop_s=max(0.25, (x.shape[-1] / SR) / width * 2))
+    dbv = 10 * np.log10(c + 1e-12)
+    top = dbv.max()
+    v = np.clip((dbv - (top - 48)) / 48, 0, 1)
+    img = np.zeros((12 * row_h, c.shape[1], 3), np.uint8)
+    order = [2, 4, 5, 6, 7, 8, 9, 10, 11, 0, 1, 3]       # D E F F# G G# A A# B C C# D#
+    for r, p in enumerate(order):
+        col = CMAP[(v[p] * 255).astype(int)]
+        img[r * row_h:(r + 1) * row_h] = col[None, :, :]
+    im = Image.fromarray(img).resize((width, 12 * row_h), Image.NEAREST)
+    d = ImageDraw.Draw(im)
+    for r, p in enumerate(order):
+        d.text((3, r * row_h), PC_NAMES[p] + ('' if p in allowed else '  (out of mode)'), fill=CHALK if p in allowed else HARM, font=font(10))
+    return im
+
+
+def mode_energy_ratio(x: np.ndarray, allowed=(0, 2, 4, 5, 7, 9, 11, 8)) -> float:
+    """Fraction of pitch-class energy that lies inside the allowed set (1.0 = fully in mode)."""
+    c = chroma(x, hop_s=1.0).sum(axis=1)
+    tot = c.sum() + 1e-20
+    return float(sum(c[p] for p in allowed) / tot)
