@@ -18,16 +18,95 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 
-// Shared once per module: character bases are Draco-compressed (mesh only;
-// textures stay 512 JPEG). Without this, GLTFLoader throws
-// "No DRACOLoader instance provided" and every skin fails to load.
-const _lcDraco = new DRACOLoader();
-_lcDraco.setDecoderPath("assets/vendor/three/examples/jsm/libs/draco/");
-_lcDraco.setDecoderConfig({ type: "js" });
 
 // This module's own ?v= build tag: sibling runtime modules are imported WITH it,
 // or a deploy would serve the new kernel against a CDN-cached stale sibling.
 const _V = (() => { try { return new URL(import.meta.url).search; } catch (e) { return ""; } })();
+
+// Shared once per module: character bases are Draco-compressed (mesh only;
+// textures stay 512 JPEG). Without this, GLTFLoader throws
+// "No DRACOLoader instance provided" and every skin fails to load.
+//
+// DECODER CHOICE (plan P2.0). The loader used to be FORCED to the 719,410 B pure-JS
+// decoder. The WebAssembly decoder (draco_wasm_wrapper.js 58,763 B + draco_decoder.wasm
+// 285,747 B = 344,510 B) is 375 KB smaller on the wire and decodes faster, and both come
+// from the same Draco release, so the geometry is identical. The JS decoder stays as the
+// FALLBACK, chosen at runtime, never by editing this file:
+//   * no WebAssembly, or the page's CSP refuses to compile a module (checked by really
+//     compiling the 8-byte empty module - `typeof WebAssembly` alone does not see a CSP
+//     'wasm-unsafe-eval' refusal) -> JS decoder;
+//   * the wasm files do not load (404, network, a half-finished deploy) -> the first
+//     decode retries with the JS decoder instead of failing every character load.
+// `_initDecoder` is DRACOLoader's own lazy initialiser (three r172, vendored byte-identical,
+// so this internal cannot drift); every GLB that carries Draco goes through it, whoever
+// called the GLTFLoader, which is why the choice is made here and not in loadGLTF.
+const _DRACO_PATH = "assets/vendor/three/examples/jsm/libs/draco/";
+function _wasmUsable() {
+  try {
+    return typeof WebAssembly === "object" && typeof WebAssembly.Module === "function" &&
+      new WebAssembly.Module(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0])) instanceof WebAssembly.Module;
+  } catch (e) { return false; }
+}
+class LCDracoLoader extends DRACOLoader {
+  constructor(manager) { super(manager); this.decoderMode = "pending"; this.decoderFallbackReason = null; }
+  _initDecoder() {
+    if (this.decoderPending) return this.decoderPending;
+    const wasm = _wasmUsable();
+    this.setDecoderConfig(wasm ? {} : { type: "js" });   // type unset = DRACOLoader picks wasm
+    this.decoderMode = wasm ? "wasm" : "js";
+    if (!wasm) this.decoderFallbackReason = "no usable WebAssembly";
+    const first = super._initDecoder();
+    if (!wasm) return first;
+    this.decoderPending = first.catch((e) => {
+      console.warn("[FFG3D] Draco wasm decoder did not load, using the JS decoder:", e && e.message ? e.message : e);
+      this.decoderFallbackReason = String(e && e.message ? e.message : e).slice(0, 200);
+      this.decoderPending = null;
+      this.setDecoderConfig({ type: "js" });
+      this.decoderMode = "js";
+      return super._initDecoder();
+    });
+    return this.decoderPending;
+  }
+}
+const _lcDraco = new LCDracoLoader();
+_lcDraco.setDecoderPath(_DRACO_PATH);
+
+// MESHOPT (plan P2.0). Registered on every GLTFLoader so later meshopt-compressed kit files
+// (EXT_meshopt_compression) load without another kernel change. LAZY: the decoder module
+// (three r172 examples/jsm/libs/meshopt_decoder.module.js, MIT, ~25 KB with its wasm inlined)
+// is imported the first time a file actually asks for it, so a game that ships no meshopt
+// file never requests it, and a tree where the file has not landed yet boots with 0 failed
+// requests. The specifier is assembled at runtime on purpose: the boot guard's static import
+// scan (ffg_boot3d.js specifiers()) must not list a file that may not exist yet.
+const _MESHOPT_SPEC = "three/addons/libs/" + "meshopt_decoder.module.js";
+let _meshoptP = null;
+const _lcMeshopt = {
+  supported: typeof WebAssembly === "object",
+  loaded: false,
+  _load() {
+    if (!_meshoptP) {
+      _meshoptP = import(_MESHOPT_SPEC).then((m) => { _lcMeshopt.loaded = true; return m.MeshoptDecoder; });
+      _meshoptP.catch(() => { _meshoptP = null; });   // a failed fetch must be retryable, not cached forever
+    }
+    return _meshoptP;
+  },
+  async decodeGltfBufferAsync(count, stride, source, mode, filter) {
+    const d = await this._load();
+    await d.ready;
+    if (typeof d.decodeGltfBufferAsync === "function") return d.decodeGltfBufferAsync(count, stride, source, mode, filter);
+    const out = new Uint8Array(count * stride);
+    d.decodeGltfBuffer(out, count, stride, source, mode, filter);
+    return out;
+  },
+};
+
+// STORM GRADE OUTPUT PASS (plan P1.2e): a custom copy of three's OutputPass with one extra
+// uniform (lc_output_pass.js). Imported with this module's own ?v= tag like every sibling.
+// If it cannot load the kernel falls back to the stock OutputPass (no storm grade, nothing
+// else changes), so the file is an enhancement, never a boot dependency.
+let _LCOutputPass = null;
+try { _LCOutputPass = (await import("./lc_output_pass.js" + _V)).LCOutputPass; }
+catch (e) { console.warn("[FFG3D] lc_output_pass.js did not load; the stock OutputPass is used (no storm grade):", e && e.message ? e.message : e); }
 
 /** Frame budgets (contract C3; BLOCKTOOTH config.ts BUDGET). dprMax is ENFORCED
  * by setDpr; drawCallsMax / p99Ms are reported by the profiler as information. */
@@ -176,6 +255,9 @@ export class Kernel3D {
     this.loadingManager = mgr;
     this.loader = new GLTFLoader(mgr);
     this.loader.setDRACOLoader(_lcDraco);
+    this.loader.setMeshoptDecoder(_lcMeshopt);
+    this.dracoLoader = _lcDraco;      // read-back for gates: .decoderMode 'wasm' | 'js' (+ .decoderFallbackReason)
+    this.meshoptDecoder = _lcMeshopt;
     this._gltfCache = {};
     this._charCache = {};
     // Parked PROMISES for URLs still loading — see loadGLTF for why the result
@@ -420,10 +502,21 @@ export class Kernel3D {
       opts.radius != null ? opts.radius : 0.5,
       opts.threshold != null ? opts.threshold : 0.85);
     composer.addPass(bloom);
-    composer.addPass(new OutputPass());
+    // The storm-grade copy of OutputPass when it loaded (see _LCOutputPass above); neutral
+    // (stormAmt 0) it is bit-identical to the stock pass.
+    const out = _LCOutputPass ? new _LCOutputPass() : new OutputPass();
+    composer.addPass(out);
+    this.outputPass = out;
     this.composer = composer;
     this.bloom = bloom;
     return composer;
+  }
+
+  /** Storm grade (desaturate + lavender tint) on the final output pass, 0 = neutral .. 1 = full.
+   *  A no-op returning 0 when the stock OutputPass is in use or the composer is not up. */
+  setGrade(amt) {
+    const p = this.outputPass;
+    return p && typeof p.setStormGrade === "function" ? p.setStormGrade(amt) : 0;
   }
 
   hud(html) { if (this.hudEl) this.hudEl.innerHTML = html; }
@@ -894,5 +987,5 @@ if (typeof window !== "undefined") {
   window.FFG = window.FFG || {};
   window.FFG.genres3d = genres3d;
   window.FFG.boot3d = boot3d;
-  window.FFG.VERSION3D = "2.2.0";   // 2.2: rAF-first loop + onError, ResizeObserver view size, per-frame camera fit, honest counters, ?prof=1, mixer policy, DPR cap, load timeouts, warmup
+  window.FFG.VERSION3D = "2.3.0";   // 2.3: wasm Draco (JS fallback) + lazy meshopt + storm-grade output pass. 2.2: rAF-first loop + onError, ResizeObserver view size, per-frame camera fit, honest counters, ?prof=1, mixer policy, DPR cap, load timeouts, warmup
 }

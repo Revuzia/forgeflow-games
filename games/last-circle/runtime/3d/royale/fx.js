@@ -1,28 +1,64 @@
 /**
  * royale/fx.js — particles, tracers, damage numbers, camera shake.
  *
- * One InstancedMesh pool of chunky low-poly cubes (single draw call) drives
- * every burst: muzzle flash, impacts, explosions, build debris, harvest chips,
- * storm sparkles. Tracers are elongated instances of the same pool. Damage
- * numbers are DOM elements projected from world space (crisp text, no canvas
- * blur — the shroud-font lesson).
+ * ONE InstancedMesh pool of camera-facing soft quads (single draw call, 1,024 slots)
+ * drives every burst: muzzle flash, impacts, explosions, harvest chips, storm sparkles,
+ * dust. Tracers are the same pool: a thin quad stretched along the round's flight
+ * direction and billboarded around that axis. Damage numbers are DOM elements
+ * projected from world space (crisp text, no canvas blur — the shroud-font lesson).
+ *
+ * WAVE 4 (plan P1.4): the pool used to be 1,024 flat unlit CUBES — a hit drew a
+ * coloured box and a tracer a flat yellow stick, which broke the "no primitives as
+ * final art" rule. Now: a 2x2 texture atlas (spark star / soft puff / round glow /
+ * tracer streak) from assets/fx/*.png (contract C-ART-FX, Kenney Light Masks, CC0), with
+ * a procedural canvas fallback for any missing file so there are STILL no cubes; a
+ * premultiplied-alpha ShaderMaterial where each instance carries an "additive"
+ * fraction (alpha 0 = pure additive, 1 = normal blend), so sparks glow and smoke
+ * still darkens in the same single draw. renderOrder 7: above the storm wall (5) and
+ * the loot beams / rings (>= 6, contract C-LOOT-RENDER).
  */
 import * as THREE from "three";
 
 const N = 1024;
-const parts = [];         // {alive, pos, vel, life, life0, size, gravity, drag, stretch(dir)}
+const parts = [];         // {alive, pos, vel, life, life0, size, gravity, drag, dir, dirV, stretch, st, spin, spinV, a0, idx}
 let inst = null;
-const dummy = new THREE.Object3D();
-const noRot = new THREE.Quaternion();
-// tracer stretch axis — hoisted because the update loop used to build a fresh
-// Vector3(0,0,1) for EVERY live tracer EVERY frame, straight into the GC
-const _Z = new THREE.Vector3(0, 0, 1);
+let iAttr = null;         // per-instance vec4: x atlas cell (0 spark, 1 puff, 2 glow, 3 tracer), y alpha, z additive 0..1, w spin (rad)
+let atlas = null, atlasCv = null, atlasCtx = null;
+const atlasSrc = { spark: "procedural", puff: "procedural", glow: "procedural", tracer: "procedural" };
 // Scratch colour for spawn(). This used to be `new THREE.Color(...)` on EVERY
 // particle — 49 bots fire through the same global shotFired event, so a busy
 // firefight fed the GC a Color per muzzle cube (feel-juice-ui G15).
 const _col = new THREE.Color();
 const _tdir = new THREE.Vector3();
 let dmgLayer = null;
+
+// ── particle styles ──────────────────────────────────────────────────────────
+// qs = quad size / "size" (a soft sprite reads smaller than a cube of the same edge, so the
+// quad is larger); s1 = size multiplier at the end of life (<1 shrinks, >1 grows);
+// add = additive fraction (1 = light, 0 = ordinary alpha, so smoke and dust can DARKEN);
+// gain = colour multiplier (HDR; the glare bar: emissives ~3-8x the surface, START LOW).
+const ST_FLASH = 0, ST_HALO = 1, ST_SPARK = 2, ST_HOT = 3, ST_CHIP = 4, ST_DUST = 5, ST_SMOKE = 6, ST_TRACER = 7, ST_BRASS = 8, ST_SPLASH = 9, ST_BLOOD = 10, ST_FSPARK = 11;
+//                         cell add   a0   s1   gain qs   fadeIn spin
+const STYLE_TAB = [
+  // FLASH / HALO gains were 1.00 / 0.85: measured 9.47x the surface behind (peak lum 1.95 over 0.13, stormfx_fx run a2-1),
+  // over the glare bar's 8x. Halved: the core + halo now add ~0.5 scene-linear luminance at the hottest pixel.
+  /* FLASH  */ [0, 1.00, 1.00, 1.50, 0.26, 3.4, 0, 0],   // star 0.48 -> 0.26. The glare check reads the brightest flash pixel against the surface under it. Measured by switching each piece off (peak additive lum ~1.3): 3 sparks ~0.5, star ~0.25, halo ~0.2
+  /* HALO   */ [2, 1.00, 0.55, 1.80, 0.34, 3.2, 0, 0],
+  /* SPARK  */ [0, 1.00, 1.00, 0.25, 1.00, 2.6, 0, 3],
+  /* HOT    */ [2, 1.00, 1.00, 0.30, 1.00, 2.3, 0, 0],
+  /* CHIP   */ [2, 0.25, 0.95, 0.35, 1.00, 2.1, 0, 0],
+  /* DUST   */ [1, 0.00, 0.42, 2.30, 1.00, 3.4, 1, 1.2],
+  /* SMOKE  */ [1, 0.00, 0.60, 2.50, 1.00, 3.2, 1, 0.8],
+  /* TRACER */ [3, 1.00, 1.00, 1.00, 1.15, 1.0, 0, 0],
+  /* BRASS  */ [2, 0.00, 1.00, 0.60, 1.00, 2.4, 0, 0],
+  /* SPLASH */ [2, 0.35, 0.85, 0.50, 1.00, 2.3, 0, 0],
+  /* BLOOD  */ [2, 0.00, 0.90, 0.40, 1.00, 2.2, 0, 0],
+  /* FSPARK */ [0, 1.00, 1.00, 0.25, 0.30, 2.6, 0, 3],   // the 3 MUZZLE sparks only (same look as SPARK, dimmer): they spawn stacked at the barrel and made up ~0.5 of the flash's ~1.3 peak
+];
+const sCell = new Float32Array(STYLE_TAB.length), sAdd = new Float32Array(STYLE_TAB.length), sA0 = new Float32Array(STYLE_TAB.length),
+  sS1 = new Float32Array(STYLE_TAB.length), sGain = new Float32Array(STYLE_TAB.length), sQs = new Float32Array(STYLE_TAB.length),
+  sFadeIn = new Float32Array(STYLE_TAB.length), sSpin = new Float32Array(STYLE_TAB.length);
+STYLE_TAB.forEach((r, i) => { sCell[i] = r[0]; sAdd[i] = r[1]; sA0[i] = r[2]; sS1[i] = r[3]; sGain[i] = r[4]; sQs[i] = r[5]; sFadeIn[i] = r[6]; sSpin[i] = r[7]; });
 
 // ── view size (contract C1) ──────────────────────────────────────────────────
 // kernel.viewW/viewH are the ResizeObserver-cached CSS size (L3). Until that
@@ -47,20 +83,174 @@ function viewSize(W) {
   if (_vro === true) { const el = k.renderer.domElement; _vw = el.clientWidth; _vh = el.clientHeight; }
 }
 
+// ── the atlas: 2 x 2 cells of 128 px, alpha only (RGB white, tinted per instance) ────────────
+// Cell c sits at u offset (c % 2) / 2 and v offset floor(c / 2) / 2 (v up). The canvas is uploaded with
+// flipY, so texture v = 0 is the BOTTOM canvas row: cell c's canvas rect is x = (c % 2) * CELL,
+// y = (1 - floor(c / 2)) * CELL (top edge, canvas y runs down).
+const CELL = 128;
+const CELL_NAME = ["spark", "puff", "glow", "tracer"];
+const cellX = (c) => (c % 2) * CELL;
+const cellY = (c) => (1 - Math.floor(c / 2)) * CELL;
+function smooth(t) { return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t); }
+
+/** The procedural alpha mask of one cell: the fallback for a missing / blocked PNG, and the picture before the PNGs arrive. */
+function makeMask(c) {
+  const id = atlasCtx.createImageData(CELL, CELL);
+  const d = id.data;
+  let sd = 0x1234abcd + c * 7919;
+  const rnd = () => { sd = (sd * 1664525 + 1013904223) >>> 0; return sd / 4294967296; };
+  const blobs = [];
+  if (c === 1) for (let i = 0; i < 7; i++) { const a = rnd() * 6.2832, r = Math.sqrt(rnd()) * 0.38; blobs.push([Math.cos(a) * r, Math.sin(a) * r, 0.20 + rnd() * 0.16]); }
+  for (let y = 0; y < CELL; y++) {
+    for (let x = 0; x < CELL; x++) {
+      // canvas row y runs DOWN; the texture's v runs UP, so the picture's own "up" is -y
+      const u = (x + 0.5 - CELL / 2) / (CELL / 2), v = -(y + 0.5 - CELL / 2) / (CELL / 2);   // -1..1
+      const r = Math.hypot(u, v);
+      let a = 0;
+      if (c === 0) {            // 4-point star: hot core + two thin arms
+        const core = Math.exp(-r * r * 16);
+        const arm = Math.max(Math.exp(-Math.abs(v) * 20) * Math.pow(Math.max(0, 1 - Math.abs(u)), 2.2), Math.exp(-Math.abs(u) * 20) * Math.pow(Math.max(0, 1 - Math.abs(v)), 2.2));
+        a = Math.min(1, core + 0.75 * arm) * (1 - smooth((r - 0.8) / 0.2));
+      } else if (c === 1) {     // mottled soft puff
+        let sm = 0;
+        for (const b of blobs) { const dd = Math.hypot(u - b[0], v - b[1]); sm += Math.exp(-(dd * dd) / (b[2] * b[2])); }
+        a = Math.min(1, sm * 0.55) * 0.75 * (1 - smooth((r - 0.62) / 0.38));
+      } else if (c === 2) {     // round soft glow
+        a = Math.pow(Math.max(0, 1 - r), 2.2);
+      } else {                  // tracer: u along the streak (tail 0 -> head at 0.86 -> cut), v across
+        const ux = (x + 0.5) / CELL;
+        const along = ux < 0.86 ? Math.pow(ux / 0.86, 1.6) : Math.pow(Math.max(0, 1 - (ux - 0.86) / 0.14), 1.5);
+        a = along * Math.exp(-v * v * 9) * (1 - smooth((Math.abs(v) - 0.85) / 0.15));
+        if (x < 2 || x > CELL - 3) a = 0;
+      }
+      const i = (y * CELL + x) * 4;
+      d[i] = d[i + 1] = d[i + 2] = 255;
+      d[i + 3] = Math.max(0, Math.min(255, Math.round(a * 255)));
+    }
+  }
+  return id;
+}
+
+function buildAtlas() {
+  atlasCv = document.createElement("canvas"); atlasCv.width = atlasCv.height = CELL * 2;
+  atlasCtx = atlasCv.getContext("2d", { willReadFrequently: false });
+  for (let c = 0; c < 4; c++) atlasCtx.putImageData(makeMask(c), cellX(c), cellY(c));
+  atlas = new THREE.CanvasTexture(atlasCv);
+  atlas.colorSpace = THREE.NoColorSpace;          // alpha-only data
+  atlas.premultiplyAlpha = false;
+  atlas.minFilter = THREE.LinearMipmapLinearFilter; atlas.magFilter = THREE.LinearFilter;
+  atlas.generateMipmaps = true;
+  atlas.needsUpdate = true;
+}
+
+/** Replace a cell with its shipped PNG when it loads (contract C-ART-FX). Any failure leaves the procedural mask in place. */
+function loadAtlasPngs(W) {
+  if (typeof Image === "undefined") return;
+  const base = (W && W.assetBase) || "";
+  CELL_NAME.forEach((name, c) => {
+    try {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        try {
+          const x = cellX(c), y = cellY(c);
+          atlasCtx.clearRect(x, y, CELL, CELL);
+          atlasCtx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, x + 2, y + 2, CELL - 4, CELL - 4);   // 2 px gutter of alpha 0: filtering never reads the neighbour cell
+          atlas.needsUpdate = true;
+          atlasSrc[name] = "assets/fx/" + name + ".png";
+        } catch (e) { /* a tainted or odd image: the procedural cell stays */ }
+      };
+      img.onerror = () => { /* absent: the procedural cell stays */ };
+      img.src = base + "assets/fx/" + name + ".png";
+    } catch (e) { /* procedural */ }
+  });
+}
+
+const FX_VS = /* glsl */`
+attribute vec4 iA;        // x cell, y alpha, z additive fraction, w spin
+varying vec2 vUv;
+varying vec3 vCol;
+varying float vA;
+varying float vAdd;
+varying float vCell;
+void main() {
+  vec3 c = instanceMatrix[3].xyz;
+  float size = length( instanceMatrix[0].xyz );
+  vec3 wp;
+  vec2 uv2 = uv;
+  if ( iA.x > 2.5 ) {
+    // tracer: a streak along the flight axis (column 2 = direction * length), billboarded AROUND that axis
+    vec3 ax = instanceMatrix[2].xyz;
+    float len = max( length( ax ), 1e-5 );
+    vec3 dir = ax / len;
+    vec3 toCam = cameraPosition - c;
+    vec3 side = cross( dir, toCam );
+    float sl = length( side );
+    side = sl > 1e-5 ? side / sl : normalize( cross( dir, vec3( 0.0, 1.0, 0.01 ) ) );
+    wp = c + side * ( position.x * size ) + dir * ( position.y * len );
+    uv2 = vec2( position.y + 0.5, position.x + 0.5 );          // u runs ALONG the streak: tail 0 -> bright head ~0.86
+  } else {
+    float cs = cos( iA.w ), sn = sin( iA.w );
+    vec2 q = vec2( cs * position.x - sn * position.y, sn * position.x + cs * position.y );
+    vec3 right = vec3( viewMatrix[0][0], viewMatrix[1][0], viewMatrix[2][0] );
+    vec3 up = vec3( viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1] );
+    wp = c + ( right * q.x + up * q.y ) * size;
+  }
+  vUv = uv2;
+  vCol = instanceColor;
+  vA = iA.y;
+  vAdd = iA.z;
+  vCell = iA.x;
+  gl_Position = projectionMatrix * viewMatrix * vec4( wp, 1.0 );
+}`;
+
+const FX_FS = /* glsl */`
+uniform sampler2D map;
+varying vec2 vUv;
+varying vec3 vCol;
+varying float vA;
+varying float vAdd;
+varying float vCell;
+void main() {
+  float cell = floor( vCell + 0.5 );
+  vec2 off = vec2( mod( cell, 2.0 ), floor( cell * 0.5 ) ) * 0.5;
+  vec2 uv = off + ( vec2( 0.012 ) + vUv * 0.976 ) * 0.5;       // tiny inset: linear filtering never reads the neighbour cell
+  float t = texture2D( map, uv ).a;
+  float a = t * vA;
+  gl_FragColor = vec4( vCol * a, a * ( 1.0 - vAdd ) );          // premultiplied: alpha 0 = pure additive light, alpha = a = ordinary blend
+  #include <tonemapping_fragment>
+  #include <colorspace_fragment>
+}`;
+
 export function init(W) {
-  const geo = new THREE.BoxGeometry(1, 1, 1);
-  const mat = new THREE.MeshBasicMaterial({ toneMapped: false });
+  buildAtlas();
+  loadAtlasPngs(W);
+  const geo = new THREE.PlaneGeometry(1, 1);
+  iAttr = new THREE.InstancedBufferAttribute(new Float32Array(N * 4), 4);
+  iAttr.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("iA", iAttr);
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { map: { value: atlas } },
+    vertexShader: FX_VS, fragmentShader: FX_FS,
+    transparent: true, premultipliedAlpha: true, blending: THREE.NormalBlending,
+    depthWrite: false, depthTest: true, side: THREE.DoubleSide, fog: false,
+  });
+  mat.name = "FxQuads";
   inst = new THREE.InstancedMesh(geo, mat, N);
   inst.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   inst.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(N * 3), 3);
+  inst.instanceColor.setUsage(THREE.DynamicDrawUsage);
   inst.count = N;
   inst.frustumCulled = false;
+  inst.renderOrder = 7;                           // above the storm wall (5) and the loot beams / rings (>= 6)
+  inst.name = "fx-quads";
+  const m = inst.instanceMatrix.array;
   for (let i = 0; i < N; i++) {
     // dirV is the slot's OWN stretch axis: tracers used to hand in a fresh
     // Vector3 per round (fx.js:247); now the handler copies into this one.
-    parts.push({ alive: false, pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 0, life0: 1, size: 0.1, gravity: 0, drag: 0, dir: null, dirV: new THREE.Vector3(), stretch: 0, idx: i });
-    dummy.position.set(0, -9999, 0); dummy.scale.setScalar(0.0001); dummy.updateMatrix();
-    inst.setMatrixAt(i, dummy.matrix);
+    parts.push({ alive: false, pos: new THREE.Vector3(), vel: new THREE.Vector3(), life: 0, life0: 1, size: 0.1, gravity: 0, drag: 0, dir: null, dirV: new THREE.Vector3(), stretch: 0, idx: i,
+                 st: ST_SPARK, spin: 0, spinV: 0, a0: 1 });
+    parkSlot(m, i);
   }
   W.group("fx").add(inst);
   W.camShake = 0;
@@ -74,10 +264,19 @@ export function init(W) {
   wireEvents(W);
 }
 
+/** A dead slot: zero-size matrix at the origin and alpha 0 (a degenerate quad rasterises nothing). */
+function parkSlot(m, i) {
+  const o = i * 16;
+  for (let j = 0; j < 16; j++) m[o + j] = 0;
+  m[o + 15] = 1;
+  const a = iAttr.array, q = i * 4;
+  a[q] = 0; a[q + 1] = 0; a[q + 2] = 1; a[q + 3] = 0;
+}
+
 let cursor = 0;
 /** Positional spawn — no option object, no allocation. `dir` (optional) is
- *  COPIED into the slot's own vector. */
-function spawnRaw(x, y, z, vx, vy, vz, color, size, life, gravity, drag, dir, stretch) {
+ *  COPIED into the slot's own vector. `st` is a particle style (ST_*). */
+function spawnRaw(x, y, z, vx, vy, vz, color, size, life, gravity, drag, dir, stretch, st) {
   // The slot index IS the pre-bump cursor. This used to be `parts.indexOf(p)`,
   // a 1024-entry linear scan to recover an index we were already holding — a
   // 26-particle explosion paid 26 of them. Capture BEFORE the bump: reading
@@ -85,6 +284,7 @@ function spawnRaw(x, y, z, vx, vy, vz, color, size, life, gravity, drag, dir, st
   const i = cursor;
   const p = parts[cursor];
   cursor = (cursor + 1) % N;
+  if (st === undefined) st = ST_SPARK;
   p.alive = true;
   p.pos.set(x, y, z);
   p.vel.set(vx, vy, vz);
@@ -95,12 +295,19 @@ function spawnRaw(x, y, z, vx, vy, vz, color, size, life, gravity, drag, dir, st
   if (dir) { p.dirV.copy(dir); p.dir = p.dirV; } else p.dir = null;   // stretch along dir (tracers)
   p.stretch = stretch || 0;
   p.idx = i;
+  p.st = st;
+  p.a0 = sA0[st];
+  p.spin = Math.random() * 6.2832;
+  p.spinV = sSpin[st] * (Math.random() < 0.5 ? -1 : 1);
   _col.set(color != null ? color : 0xffcc66);
-  inst.instanceColor.setXYZ(i, _col.r, _col.g, _col.b);
+  const g = sGain[st], ca = inst.instanceColor.array, q = i * 3;
+  ca[q] = _col.r * g; ca[q + 1] = _col.g * g; ca[q + 2] = _col.b * g;
   inst.instanceColor.needsUpdate = true;
+  const ia = iAttr.array, w = i * 4;
+  ia[w] = sCell[st]; ia[w + 1] = p.a0; ia[w + 2] = sAdd[st]; ia[w + 3] = p.spin;
 }
 function spawn(o) {
-  spawnRaw(o.x, o.y, o.z, o.vx || 0, o.vy || 0, o.vz || 0, o.color, o.size, o.life, o.gravity, o.drag, o.dir || null, o.stretch);
+  spawnRaw(o.x, o.y, o.z, o.vx || 0, o.vy || 0, o.vz || 0, o.color, o.size, o.life, o.gravity, o.drag, o.dir || null, o.stretch, o.st);
 }
 
 function burst(o) {
@@ -114,7 +321,7 @@ function burst(o) {
       multi ? o.color[i % o.color.length] : o.color,
       (o.size || 0.12) * (0.6 + Math.random() * 0.9),
       (o.life || 0.7) * (0.6 + Math.random() * 0.8),
-      o.gravity, o.drag, null, 0);
+      o.gravity, o.drag, null, 0, o.st);
   }
 }
 
@@ -126,6 +333,19 @@ function burst(o) {
 // keeps every one of them SHORTER than that weapon's own fire interval (smg 25 ms
 // vs 83 ms, ar 39 ms vs 182 ms, sniper 144 ms vs 1714 ms), so sustained fire
 // punches instead of accumulating into a permanent wobble.
+// MUZZLE FLASH: a soft 4-point star + a round halo at the barrel (billboards, no cubes) and three tiny forward
+// sparks. Start-low brightness (gain 0.48 / 0.42, see STYLE_TAB) and a 55-70 ms life: it must read as a flash, not a lamp.
+const FLASH_K = { pistol: 0.8, smg: 0.85, ar: 1.0, shotgun: 1.5, sniper: 1.3, glauncher: 1.4 };
+function muzzleFlash(x, y, z, dir, weaponId) {
+  const k = FLASH_K[weaponId] || 1;
+  spawnRaw(x, y, z, 0, 0, 0, 0xffe9a8, 0.14 * k, 0.055, 0, 0, null, 0, ST_FLASH);
+  spawnRaw(x + dir.x * 0.06, y + dir.y * 0.06, z + dir.z * 0.06, 0, 0, 0, 0xffb85c, 0.12 * k, 0.07, 0, 0, null, 0, ST_HALO);
+  for (let i = 0; i < 3; i++) {
+    spawnRaw(x, y, z, dir.x * 7 + (Math.random() - 0.5) * 3, dir.y * 7 + (Math.random() - 0.3) * 3, dir.z * 7 + (Math.random() - 0.5) * 3,
+      i ? 0xfff2b0 : 0xffb84d, 0.035, 0.09, 0, 4, null, 0, ST_FSPARK);
+  }
+}
+
 const SHOT_SHAKE = { pistol: 0.06, smg: 0.045, ar: 0.07, shotgun: 0.20, sniper: 0.26, glauncher: 0.18 };
 const SHOT_FOV   = { pistol: 2, smg: 2, ar: 2.5, shotgun: 5, sniper: 5, glauncher: 4.5 };
 
@@ -196,6 +416,7 @@ function ensureBlasts(W) {
     const ring = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0xffb060, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false, toneMapped: false }));
     ring.rotation.x = -Math.PI / 2;
     sp.visible = false; ring.visible = false;
+    sp.renderOrder = 8; ring.renderOrder = 7;     // above the storm wall (5) and the loot beams / rings (>= 6)
     blasts.push({ sp, ring, t: 99, R: 3.5 });
   }
 }
@@ -238,7 +459,7 @@ function wireEvents(W) {
     // muzzle flash at the BARREL (weapons.js now passes the weapon muzzle world
     // position, not the eye) — bright and chunky enough to register at gameplay FOV
     const mx = muzzle.x + dir.x * 0.12, my = muzzle.y + dir.y * 0.12, mz = muzzle.z + dir.z * 0.12;
-    burst({ x: mx, y: my, z: mz, n: 6, color: [0xffffff, 0xfff2b0, 0xffb84d], speed: 3, up: 0.5, size: 0.17, life: 0.1, gravity: 0, drag: 5 });
+    muzzleFlash(mx, my, mz, dir, weaponId);
     // Gating on `a === W.player` is mandatory: shotFired is the GLOBAL event and
     // all 49 bots fire through it (audio.js gates its own gunshot the same way), so an
     // ungated kick would shake the camera on every gunshot on the island.
@@ -255,7 +476,7 @@ function wireEvents(W) {
       spawn({
         x: mx, y: my - 0.05, z: mz,
         vx: -dir.z * 1.6 - dir.x * 0.8, vy: 1.7, vz: dir.x * 1.6 - dir.z * 0.8,
-        color: 0xc9a227, size: 0.045, life: 1.5, gravity: -9, drag: 0.2,
+        color: 0xc9a227, size: 0.045, life: 1.5, gravity: -9, drag: 0.2, st: ST_BRASS,
       });
     }
   });
@@ -278,7 +499,7 @@ function wireEvents(W) {
     spawnRaw(pr.x + dx * 1.4, pr.y + dy * 1.4, pr.z + dz * 1.4,
       dx * vs, dy * vs, dz * vs,
       TRACER_COLOR[pr.weaponId] || 0xffd24a,
-      0.13, 0.22, 0, 0, _tdir, len);
+      0.12, 0.22, 0, 0, _tdir, len, ST_TRACER);
   });
 
   // weapons.js emits exactly four surfaces: flesh, wood, stone, dirt. The old
@@ -289,7 +510,7 @@ function wireEvents(W) {
   const IMPACT_COLOR = { flesh: 0xc23b3b, wood: 0xd7c08a, stone: 0xa9a9a9, dirt: 0x9a7f4f };
   W.events.on("impact", (pos, surface) => {
     const c = IMPACT_COLOR[surface] || 0x9a7f4f;
-    burst({ x: pos.x, y: pos.y, z: pos.z, n: 5, color: c, speed: 3.5, size: 0.08, life: 0.4 });
+    burst({ x: pos.x, y: pos.y, z: pos.z, n: 5, color: c, speed: 3.5, size: 0.08, life: 0.4, st: surface === "stone" ? ST_HOT : surface === "flesh" ? ST_BLOOD : ST_CHIP });
     // PERMANENCE: a bullet hole where the round actually landed. Before this,
     // the world was bit-identical after a firefight — the roadmap's cited tell.
     // Wood/stone only (weapons.js sends the entry-face normal for those; dirt
@@ -313,8 +534,8 @@ function wireEvents(W) {
   });
 
   W.events.on("explosion", (pos, R) => {
-    burst({ x: pos.x, y: pos.y, z: pos.z, n: 26, color: [0xffd28a, 0xff8a3c, 0xff5522], speed: 11, up: 5, size: 0.28, life: 0.8, drag: 1.5 });
-    burst({ x: pos.x, y: pos.y + 0.5, z: pos.z, n: 14, color: [0x555555, 0x333333], speed: 4, up: 4, size: 0.4, life: 1.4, gravity: -1.5, drag: 1.2 });
+    burst({ x: pos.x, y: pos.y, z: pos.z, n: 26, color: [0xffd28a, 0xff8a3c, 0xff5522], speed: 11, up: 5, size: 0.28, life: 0.8, drag: 1.5, st: ST_HOT });
+    burst({ x: pos.x, y: pos.y + 0.5, z: pos.z, n: 14, color: [0x555555, 0x333333], speed: 4, up: 4, size: 0.4, life: 1.4, gravity: -1.5, drag: 1.2, st: ST_SMOKE });
     ensureBlasts(W);
     const b = blasts[(blastCursor++) % blasts.length];
     b.t = 0; b.R = R || 3.5;
@@ -331,14 +552,14 @@ function wireEvents(W) {
 
   W.events.on("swimState", (a, swimming) => {
     if (!swimming) return;
-    burst({ x: a.pos.x, y: W.map.waterY + 0.1, z: a.pos.z, n: 8, color: [0xbfe8f5, 0x7fc9e0], speed: 3, up: 2.5, size: 0.1, life: 0.6, gravity: -6 });
+    burst({ x: a.pos.x, y: W.map.waterY + 0.1, z: a.pos.z, n: 8, color: [0xbfe8f5, 0x7fc9e0], speed: 3, up: 2.5, size: 0.1, life: 0.6, gravity: -6, st: ST_SPLASH });
   });
   W.events.on("swimStroke", (a) => {
-    burst({ x: a.pos.x, y: W.map.waterY + 0.05, z: a.pos.z, n: 4, color: 0xbfe8f5, speed: 2, up: 1.5, size: 0.08, life: 0.4, gravity: -5 });
+    burst({ x: a.pos.x, y: W.map.waterY + 0.05, z: a.pos.z, n: 4, color: 0xbfe8f5, speed: 2, up: 1.5, size: 0.08, life: 0.4, gravity: -5, st: ST_SPLASH });
   });
 
   W.events.on("actorHurt", (victim, info) => {
-    burst({ x: victim.pos.x, y: victim.pos.y + 1.2, z: victim.pos.z, n: 4, color: info.toShield > 0 ? 0x4aa8ff : 0xc23b3b, speed: 2.4, size: 0.08, life: 0.35 });
+    burst({ x: victim.pos.x, y: victim.pos.y + 1.2, z: victim.pos.z, n: 4, color: info.toShield > 0 ? 0x4aa8ff : 0xc23b3b, speed: 2.4, size: 0.08, life: 0.35, st: info.toShield > 0 ? ST_HOT : ST_BLOOD });
     flashActor(victim, info.toShield > 0);
     // SHIELD BREAK — the one hit that changes the fight had no visual beat at
     // all: `info.broke` was read only by audio.js (feel-juice-ui G8), and the
@@ -349,7 +570,7 @@ function wireEvents(W) {
     if (info.broke) {
       const mine = W.player && (info.attackerId === W.player.id || victim === W.player);
       if (mine || nearCam(victim.pos.x, victim.pos.z, 80)) {
-        burst({ x: victim.pos.x, y: victim.pos.y + 1.25, z: victim.pos.z, n: 18, color: SHARD_COLORS, speed: 6.5, up: 2.2, size: 0.13, life: 0.6, gravity: -7, drag: 1.4 });
+        burst({ x: victim.pos.x, y: victim.pos.y + 1.25, z: victim.pos.z, n: 18, color: SHARD_COLORS, speed: 6.5, up: 2.2, size: 0.13, life: 0.6, gravity: -7, drag: 1.4, st: ST_HOT });
         shieldBreaks++;
         lastBreak = { id: victim.id, t: W.t };
       }
@@ -367,7 +588,7 @@ function wireEvents(W) {
   // player.js emits actorDied as (victim, killerId, weaponId); this listener only ever
   // declared (victim), so the kill's owner was thrown away here.
   W.events.on("actorDied", (victim, killerId) => {
-    burst({ x: victim.pos.x, y: victim.pos.y + 1, z: victim.pos.z, n: 12, color: [0xffffff, 0x9fd7ff], speed: 5, up: 4, size: 0.14, life: 0.8 });
+    burst({ x: victim.pos.x, y: victim.pos.y + 1, z: victim.pos.z, n: 12, color: [0xffffff, 0x9fd7ff], speed: 5, up: 4, size: 0.14, life: 0.8, st: ST_HOT });
     // your own kill gets the longest beat — 50 ms at 0.12x is ~6 ms of world time
     if (W.player && killerId === W.player.id && victim !== W.player) {
       W.hitstopT = Math.max(W.hitstopT || 0, 0.05);
@@ -383,7 +604,7 @@ function wireEvents(W) {
   const nearCam = (x, z, max) => !W.player || Math.hypot(W.player.pos.x - x, W.player.pos.z - z) < max;
   W.events.on("propBreak", (p2) => {
     if (!nearCam(p2.x, p2.z, 120)) return;
-    burst({ x: p2.x, y: p2.y + 1.4, z: p2.z, n: 14, color: [0x9a7f4f, 0x6b5335, 0x4e7a3a], speed: 4.5, up: 3, size: 0.18, life: 1.1, drag: 1.2 });
+    burst({ x: p2.x, y: p2.y + 1.4, z: p2.z, n: 14, color: [0x9a7f4f, 0x6b5335, 0x4e7a3a], speed: 4.5, up: 3, size: 0.18, life: 1.1, drag: 1.2, st: ST_CHIP });
   });
   // hardLand and landed (both emitted from player.js) already had audio
   // and no visual at all. Distance-gated because "landed" fires once for every
@@ -394,7 +615,7 @@ function wireEvents(W) {
     // from behind the eyes. Player-only: a bot's landing must not shake your view.
     if (a === W.player) W.camShake = Math.max(W.camShake, Math.min(0.22, 0.05 + speed * 0.006));
     if (!nearCam(a.pos.x, a.pos.z, 60)) return;
-    burst({ x: a.pos.x, y: a.pos.y + 0.06, z: a.pos.z, n: Math.min(12, 4 + Math.round(speed * 0.3)), color: [0xa08b63, 0x8a7550], speed: 2.2, up: 0.8, size: 0.1, life: 0.5, gravity: -5, drag: 2 });
+    burst({ x: a.pos.x, y: a.pos.y + 0.06, z: a.pos.z, n: Math.min(12, 4 + Math.round(speed * 0.3)), color: [0xa08b63, 0x8a7550], speed: 2.2, up: 0.8, size: 0.1, life: 0.5, gravity: -5, drag: 2, st: ST_DUST });
   });
   // ordinary touchdown — every jump, every step off a roof. Scales with impact so
   // a hop kicks up almost nothing and a two-storey drop actually puffs.
@@ -402,25 +623,25 @@ function wireEvents(W) {
     if (!nearCam(a.pos.x, a.pos.z, 40)) return;
     const k = Math.min(1, speed / 14);
     burst({ x: a.pos.x, y: a.pos.y + 0.05, z: a.pos.z, n: 2 + Math.round(k * 5), color: [0x9a8562, 0xb0a184],
-            speed: 1.1 + k * 1.2, up: 0.35 + k * 0.5, size: 0.07 + k * 0.03, life: 0.3 + k * 0.2, gravity: -5, drag: 2.6 });
+            speed: 1.1 + k * 1.2, up: 0.35 + k * 0.5, size: 0.07 + k * 0.03, life: 0.3 + k * 0.2, gravity: -5, drag: 2.6, st: ST_DUST });
   });
   // takeoff — nothing was drawn here at all
   W.events.on("mantle", (a) => {
     // a puff of scuff dust at the hands as the pull-up starts (sweep finding:
     // the emit had no FX listener)
-    burst({ x: a.pos.x, y: a.pos.y + 1.4, z: a.pos.z, n: 5, color: 0xbfae8f, speed: 1.8, up: 1.2, size: 0.07, life: 0.5, gravity: -3 });
+    burst({ x: a.pos.x, y: a.pos.y + 1.4, z: a.pos.z, n: 5, color: 0xbfae8f, speed: 1.8, up: 1.2, size: 0.07, life: 0.5, gravity: -3, st: ST_DUST });
   });
   W.events.on("jump", (a) => {
     if (!nearCam(a.pos.x, a.pos.z, 34)) return;
-    burst({ x: a.pos.x, y: a.pos.y + 0.04, z: a.pos.z, n: 3, color: 0x9a8562, speed: 1.0, up: 0.5, size: 0.06, life: 0.26, gravity: -5, drag: 3 });
+    burst({ x: a.pos.x, y: a.pos.y + 0.04, z: a.pos.z, n: 3, color: 0x9a8562, speed: 1.0, up: 0.5, size: 0.06, life: 0.26, gravity: -5, drag: 3, st: ST_DUST });
   });
   W.events.on("landed", (a) => {
     if (!nearCam(a.pos.x, a.pos.z, 45)) return;
-    burst({ x: a.pos.x, y: a.pos.y + 0.05, z: a.pos.z, n: 6, color: 0x9a8562, speed: 1.6, up: 0.6, size: 0.09, life: 0.45, gravity: -5, drag: 2.5 });
+    burst({ x: a.pos.x, y: a.pos.y + 0.05, z: a.pos.z, n: 6, color: 0x9a8562, speed: 1.6, up: 0.6, size: 0.09, life: 0.45, gravity: -5, drag: 2.5, st: ST_DUST });
   });
 
   W.events.on("chestOpened", (a, c) => {
-    burst({ x: c.pos.x, y: c.pos.y + 0.8, z: c.pos.z, n: 12, color: [0xffd700, 0xfff2b0], speed: 3.5, up: 4, size: 0.1, life: 0.9, gravity: -3 });
+    burst({ x: c.pos.x, y: c.pos.y + 0.8, z: c.pos.z, n: 12, color: [0xffd700, 0xfff2b0], speed: 3.5, up: 4, size: 0.1, life: 0.9, gravity: -3, st: ST_HOT });
   });
 }
 
@@ -574,7 +795,7 @@ export function prewarm(W) {
 }
 
 export function fireworks(W, x, y, z) {
-  burst({ x, y, z, n: 30, color: FW_COLORS[(fwCursor++) % FW_COLORS.length], speed: 9, up: 1.5, size: 0.16, life: 1.6, gravity: -4, drag: 0.6 });
+  burst({ x, y, z, n: 30, color: FW_COLORS[(fwCursor++) % FW_COLORS.length], speed: 9, up: 1.5, size: 0.16, life: 1.6, gravity: -4, drag: 0.6, st: ST_HOT });
 }
 
 /** Park every damage number still floating when a match ends — the pool nodes
@@ -596,14 +817,16 @@ export function reset() {
  *  and live particles/decals drawn in the old map. */
 export function disposeMatch(W) {
   reset();
-  for (let i = 0; i < N && parts.length; i++) {
-    const p = parts[i];
-    if (!p.alive) continue;
-    p.alive = false;
-    dummy.position.set(0, -9999, 0); dummy.scale.setScalar(0.0001); dummy.updateMatrix();
-    inst.setMatrixAt(i, dummy.matrix);
+  if (inst) {
+    const m = inst.instanceMatrix.array;
+    for (let i = 0; i < N && parts.length; i++) {
+      const p = parts[i];
+      if (!p.alive) continue;
+      p.alive = false;
+      parkSlot(m, i);
+    }
+    inst.count = 0; inst.instanceMatrix.needsUpdate = true; iAttr.needsUpdate = true;
   }
-  if (inst) { inst.count = 0; inst.instanceMatrix.needsUpdate = true; }
   if (decalMesh) {
     _dM.makeScale(0, 0, 0);
     for (let i = 0; i < DECAL_N; i++) decalMesh.setMatrixAt(i, _dM);
@@ -628,6 +851,7 @@ function uploadTextures(W) {
     if (flashTex) r.initTexture(flashTex);
     const dm = decalMesh && decalMesh.material && decalMesh.material.map;
     if (dm) r.initTexture(dm);
+    if (atlas) r.initTexture(atlas);
   } catch (e) { /* an optimization — never block a match on it */ }
 }
 
@@ -672,7 +896,8 @@ export function readback(W) {
     dmg: { live, maxPerVictim: maxPer, perVictim: per, numbers: nums, pool: dmgPool.length,
            nodesCreated: dmgCreated, spawned: dmgSpawned, pops: dmgPops, windowMs: DMG_WINDOW * 1000 },
     shieldBreaks, lastShieldBreak: lastBreak,
-    particles: { live: pLive, cap: N },
+    particles: { live: pLive, cap: N, geometry: inst ? inst.geometry.type : null, verts: inst ? inst.geometry.attributes.position.count : 0,
+                 material: inst ? inst.material.type : null, renderOrder: inst ? inst.renderOrder : null, atlas: atlasSrc },
     camShake: W ? +(W.camShake || 0).toFixed(3) : 0,
   };
 }
@@ -726,16 +951,19 @@ export function update(W, dt) {
   // particle (muzzle flash / tracer / impact / explosion) ever renders
   // in a match (root cause of "when shooting i dont see bullets")
   if (inst && !inst.parent) W.group("fx").add(inst);
-  // particles
+  // particles. Matrices are written straight into the instance array (no Object3D, no quaternion, no
+  // allocation): a billboard needs only a position and a size (the vertex shader faces the camera), a
+  // tracer a size (width), a position and its axis (direction * length) in column 2.
   let nLive = 0;
+  const m = inst.instanceMatrix.array, ia = iAttr.array;
   for (let i = 0; i < N; i++) {
     const p = parts[i];
     if (!p.alive) continue;
     p.life -= dt;
+    const o = i * 16, q = i * 4;
     if (p.life <= 0) {
       p.alive = false;
-      dummy.position.set(0, -9999, 0); dummy.scale.setScalar(0.0001); dummy.updateMatrix();
-      inst.setMatrixAt(i, dummy.matrix);
+      parkSlot(m, i);
       continue;
     }
     nLive++;
@@ -743,17 +971,25 @@ export function update(W, dt) {
     p.vel.multiplyScalar(Math.max(0, 1 - p.drag * dt));
     p.pos.addScaledVector(p.vel, dt);
     const k = p.life / p.life0;
-    dummy.position.copy(p.pos);
+    const st = p.st;
+    m[o + 12] = p.pos.x; m[o + 13] = p.pos.y; m[o + 14] = p.pos.z; m[o + 15] = 1;
     if (p.dir) {
-      dummy.quaternion.setFromUnitVectors(_Z, p.dir);
-      dummy.scale.set(p.size, p.size, p.stretch);
+      // tracer: width in column 0, flight axis * length in column 2; holds full strength, then a quick fade
+      const len = p.stretch;
+      m[o] = p.size; m[o + 1] = 0; m[o + 2] = 0; m[o + 3] = 0;
+      m[o + 4] = 0; m[o + 5] = 0; m[o + 6] = 0; m[o + 7] = 0;
+      m[o + 8] = p.dir.x * len; m[o + 9] = p.dir.y * len; m[o + 10] = p.dir.z * len; m[o + 11] = 0;
+      ia[q + 1] = p.a0 * (k > 0.25 ? 1 : k * 4);
     } else {
-      dummy.quaternion.copy(noRot);
-      dummy.rotation.set(p.pos.x * 3 + p.life * 5, p.pos.y * 2, p.life * 7);
-      dummy.scale.setScalar(p.size * (0.3 + 0.7 * k));
+      const sz = p.size * sQs[st] * (sS1[st] + (1 - sS1[st]) * k);
+      m[o] = sz; m[o + 1] = 0; m[o + 2] = 0; m[o + 3] = 0;
+      m[o + 4] = 0; m[o + 5] = sz; m[o + 6] = 0; m[o + 7] = 0;
+      m[o + 8] = 0; m[o + 9] = 0; m[o + 10] = sz; m[o + 11] = 0;
+      // dust / smoke fade IN quickly then out; sparks and chips just fade out
+      ia[q + 1] = p.a0 * (sFadeIn[st] ? Math.min(1, (1 - k) * 12) * k : (k < 0.6 ? k / 0.6 : 1));
+      p.spin += p.spinV * dt;
+      ia[q + 3] = p.spin;
     }
-    dummy.updateMatrix();
-    inst.setMatrixAt(i, dummy.matrix);
   }
   // The pool used to submit all 1024 boxes (12,288 tris) and re-upload the full
   // 64 KB instance matrix EVERY frame — ~3.9 MB/s at 60 fps sitting on the menu
@@ -768,6 +1004,7 @@ export function update(W, dt) {
   } else {
     inst.count = N;
     inst.instanceMatrix.needsUpdate = true;
+    iAttr.needsUpdate = true;
   }
 
   // explosion flash + ground shockwave (pooled, 4 concurrent)
