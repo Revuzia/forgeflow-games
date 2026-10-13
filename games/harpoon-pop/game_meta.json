@@ -1,12 +1,21 @@
 {
   "title": "Harpoon Pop",
-  "short_description": "A Pang / Bubble Trouble style arcade game in 3D: fire a vertical harpoon to split bouncing bubbles down to nothing, dodge stinger drones, and chain combos across a 12-stage world tour.",
+  "short_description": "A Pang / Bubble Trouble style arcade game in 3D: Pip the harpoon diver splits bouncing bubbles down to nothing, dodges stinger drones, and chains combos across a 12-stage world tour.",
   "description": "Harpoon Pop rebuilds the classic harpoon-and-bubbles arcade formula with modern game feel. Bubbles bounce at fixed heights per size and split in two when your wire hits them; clear every bubble before the clock runs out without getting touched. Chain pops for up to an x8 multiplier, hit bubbles at the top of their arc for APEX bonuses, juggle fresh splits, and graze bubbles for near-miss bullet-time. Power-ups drop from popped bubbles: double/triple wire, power wire, rapid fire, slow-mo, force field, dynamite and extra lives. Bomb bubbles set off chain reactions, glass shelves shatter, and from stage 3 stinger drones telegraph and fire back. 12 hand-built stages from Mt. Fuji to Giza, then an endless generated world tour, with an arcade CONTINUE and local best runs.",
   "genre": "arcade",
   "sub_genre": "bubble-shooter",
   "difficulty": "medium",
   "status": "unpublished",
   "controls_keyboard": "Arrow keys / A D move · Space / Up / Z fire harpoon · P pause · M sound · N music",
-  "tags": ["arcade", "pang", "bubble-trouble", "3d", "three.js", "action", "single-player", "touch"],
-  "credits": "Hero (Ranger) and Stinger (Armabee) models by Quaternius, CC0. Sound effects by Kenney, CC0. Music from OpenGameArt.org, CC0. Synth SFX and code original."
+  "tags": [
+    "arcade",
+    "pang",
+    "bubble-trouble",
+    "3d",
+    "three.js",
+    "action",
+    "single-player",
+    "touch"
+  ],
+  "credits": "All original: hero (Pip the harpoon diver) and stinger drone modelled and animated in Three.js code, procedural backdrops, synthesized SFX and original music compositions played by an in-code Web Audio synth band. No third-party art, models, samples or music."
 }

@@ -36,24 +36,22 @@ with sync_playwright() as pw:
     page.on('crash', lambda: errors.append('PAGE CRASHED'))
     page.on('requestfailed', lambda r: errors.append(f'requestfailed: {r.url} {r.failure}'))
     page.on('response', lambda r: errors.append(f'http {r.status}: {r.url}') if r.status >= 400 else None)
+    requests = []
+    page.on('request', lambda r: requests.append(r.url))
     page.goto(URL)
     page.wait_for_function('window.__hp && window.__hp.game', timeout=30000)
-    page.wait_for_function("__hp.assetStatus.hero !== 'loading' && __hp.assetStatus.bee !== 'loading'", timeout=30000)
     page.evaluate('__hp.setManualClock(true)')
-    st = page.evaluate('__hp.assetStatus')
-    check('hero.glb loads (rigged character)', st['hero'] == 'ok', st['hero'])
-    check('bee.glb loads (enemy)', st['bee'] == 'ok', st['bee'])
+    check('hero is the procedural in-code model', page.evaluate('__hp.hero.ready === true && __hp.hero.root.children.length > 0'))
     shot = lambda n: page.screenshot(path=os.path.join(OUT, n + '.png'), clip=page.evaluate("(() => { const r = document.getElementById('stage').getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height }; })()"), timeout=60000)
     page.evaluate('__hp.advance(0.5)'); shot('01_title')
 
     # --- Start via real keyboard input (also unlocks audio)
     page.focus('#hud'); page.keyboard.press('Space'); time.sleep(0.3)
     check('Space starts the game', page.evaluate('__hp.game.state') == 'intro', page.evaluate('__hp.game.state'))
-    page.wait_for_function("__hp.Sound.state.samples >= 11", timeout=15000)
     page.wait_for_function("__hp.Sound.state.playing", timeout=20000)
     s = page.evaluate('__hp.Sound.state')
     check('audio context running', s['ctx'] == 'running', s)
-    check('all 11 CC0 sample layers decoded', s['samples'] == 11, s['samples'])
+    check('original music engine loaded (5 compositions)', len(s['songs']) == 5, s['songs'])
     check('stage music track playing', s['playing'] and s['track'] == 'stage1', s)
     lvl = 0
     for _ in range(25): time.sleep(0.1); lvl = max(lvl, page.evaluate('__hp.Sound.level()'))
@@ -165,6 +163,10 @@ with sync_playwright() as pw:
     b.close()
 
 srv.shutdown()
+# Everything is generated in code: the only network traffic allowed is the page itself,
+# three.js from jsDelivr and the two Google Fonts.
+foreign = [u for u in requests if not (u.startswith(URL.rsplit('/', 1)[0]) and u.endswith(('/index.html', '/', '/favicon.ico'))) and 'cdn.jsdelivr.net/npm/three@' not in u and 'fonts.googleapis.com' not in u and 'fonts.gstatic.com' not in u]
+check('no asset files fetched (all art/audio generated in code)', not foreign, foreign[:10])
 real_errors = [e for e in errors if 'GPU stall' not in e and 'GL Driver Message' not in e and 'WebGL' not in e]
 check('no console errors / page errors / failed requests', not real_errors, real_errors[:12])
 json.dump({'results': results, 'errors': errors}, open(os.path.join(OUT, 'report.json'), 'w'), indent=1)

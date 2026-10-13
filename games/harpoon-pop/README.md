@@ -1,7 +1,7 @@
 # Harpoon Pop
 
 A Pang / Buster Bros. / Bubble Trouble style arcade game in Three.js (r160, loaded from jsDelivr).
-One `index.html`, no build step. Open it through any static server (GLB/OGG assets load with `fetch`).
+One `index.html`, no build step, no asset files. Open it directly or from any static server.
 
 ## Play
 - **Move:** ← → or A / D. **Fire:** Space, ↑ or Z. **Pause:** P. **Sound / music:** M / N.
@@ -22,8 +22,9 @@ Gameplay runs in a 960×540 2D space; the renderer only reads `game` state, so l
 ## Tests
 `python tests/playtest.py <this folder> <out dir>` drives the real game in headless Chromium on the GPU. It checks input, every power-up, enemies, continue/game-over, audio output level and all stages, and writes screenshots. Set `HP_GL=swiftshader` to force software GL (it can't handle very long sessions). Add `--quick` to run 3 stages instead of 15.
 
-## Credits (all CC0)
-- Hero "Ranger" and enemy "Armabee": Quaternius
-- Sound effects: Kenney (Impact Sounds, Interface Sounds)
-- Music: OpenGameArt.org (see `pipeline/assets/music/manifest.json`)
-- Synth SFX, code and procedural backdrops: original
+## Originality
+Everything is original and generated in code. The page loads no asset files: only three.js from jsDelivr and two Google Fonts. The test harness fails if anything else is fetched.
+- **Pip the harpoon diver:** built from Three.js geometry (lathe-turned suit, brass helmet with a glowing porthole and expressive eyes, air tanks, hose and launcher), with an ink outline and a hand-animated procedural rig (run, idle blinks and glances, aim and recoil, victory hop, knock-out tumble).
+- **Stinger drone:** a procedural mechanical wasp with a curling stinger abdomen, iridescent wings and a red eye that heats up while charging.
+- **Music:** five original compositions ("Bubble Skyline", "Harpoon Hustle", "Pop Goes the World", "Stinger Swarm", "Last Bubble"), sequenced in `Sound` and played by a Web Audio synth band.
+- **SFX:** all synthesized (oscillators, filtered noise, FM).

@@ -3,11 +3,10 @@
   "slug": "harpoon-pop",
   "genre": "arcade",
   "tagline": "Split every bubble. Don't get touched. Beat the clock.",
-  "view": { "width": 960, "height": 540, "background": "#0b0716" },
-  "assets": {
-    "hero": "assets/hero.glb",
-    "enemy": "assets/bee.glb",
-    "music": "assets/music/",
-    "sfx": "assets/sfx/"
-  }
+  "view": {
+    "width": 960,
+    "height": 540,
+    "background": "#0b0716"
+  },
+  "assets": {}
 }

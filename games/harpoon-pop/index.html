@@ -81,12 +81,13 @@ body.touch #touch { display: flex; }
      §8  Power-ups
      §9  Juice: particles, popups, shake, hitstop, slow-mo
      §10 2D layer: backdrop painter, HUD, text, menus
-     §11 3D layer: Three.js scene, rigged GLB hero/enemy, particles, post-processing
+     §11 3D layer: Three.js scene, procedural hero + drone rigs, particles, post-processing
      §12 Main loop & boot
    Coordinates: all gameplay runs in a 960×540 "game space" (y down).
    The 3D world maps 1 game px = 1 world unit on the z=0 plane.
-   Assets (all CC0): assets/hero.glb, assets/bee.glb (Quaternius), assets/sfx (Kenney),
-   assets/music (OpenGameArt). Everything degrades gracefully if an asset fails to load.
+   Everything is original and generated in code: the hero and drone are modelled from Three.js
+   geometry, backdrops are painted procedurally, and all music and SFX are synthesised live.
+   The page loads no asset files at all (only three.js from jsDelivr and two Google Fonts).
    ===================================================================== */
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -95,8 +96,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 /* ============================ §0 CONFIG ============================ */
 const W = 960, H = 540;                       // logical resolution
 const ARENA = { l: 20, r: 940, t: 52, b: 492 }; // play-field walls / ceiling / floor
@@ -181,42 +181,48 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 function store(key, val) { try { if (val === undefined) return JSON.parse(localStorage.getItem(key)); localStorage.setItem(key, JSON.stringify(val)); } catch (e) { return null; } }
 
 /* ============================ §2 AUDIO ============================ */
-/* Audio = three layers, all through one compressor:
-   1. Synthesised SFX (always available, zero download) — the core "pop" sound design.
-   2. CC0 sample layers from Kenney (assets/sfx) for glass, impacts, footsteps, UI.
-   3. CC0 music tracks from OpenGameArt (assets/music), crossfaded per screen,
-      low-passed during bullet-time. If a track can't load/decode, a built-in
-      step sequencer plays instead, so there is always music. */
+/* Audio: 100% original and generated at runtime — no sample or music files.
+   • SFX are synthesised (oscillators, filtered noise, FM).
+   • Music is original compositions (SONGS below) played by a small synth band: drums, bass,
+     detuned-saw pads, plucked arps, a vibrato lead and an FM bell, through a generated
+     convolution reverb and a tempo-synced delay. Bullet-time low-passes the music bus. */
 const Sound = (() => {
-  let ctx = null, master, sfxBus, musBus, seqBus, musFilter, analyser, noiseBuf, muted = false, musicOn = true;
-  const last = {}, samples = {}, tracks = {};
-  const SAMPLE_FILES = ['glass', 'hurt', 'clink', 'thud', 'pickup', 'select', 'bell', 'step0', 'step1', 'step2', 'step3'];
-  const TRACK_FILES = { menu: 'menu_theme', stage1: 'level_theme_1', stage2: 'level_theme_3', boss: 'boss_theme', over: 'game_over' };
-  const MUSIC_VOL = 0.42;
-  let curTrack = null, curSrc = null, curGain = null, wantTrack = null, seqOn = false, ducked = false, muffle = 1;
+  let ctx = null, master, sfxBus, musBus, musFilter, analyser, noiseBuf, revIn, delIn, delNode, muted = false, musicOn = true;
+  const MUSIC_VOL = 0.16; // music sits under the SFX (measured: music RMS ≈ pops RMS or lower)
+  let ducked = false, muffle = 1, trans = 0, tempoMul = 1, wantTrack = null;
+  const last = {};
 
-  async function loadBuf(url) {
-    const r = await fetch(url); if (!r.ok) throw new Error(url + ' ' + r.status);
-    return await ctx.decodeAudioData(await r.arrayBuffer());
-  }
   function init() {
     if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
     ctx = new AC();
-    const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 4;
+    const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -12; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
     master = ctx.createGain(); master.gain.value = muted ? 0 : 0.85;
     sfxBus = ctx.createGain();
     musBus = ctx.createGain(); musBus.gain.value = musicOn ? MUSIC_VOL : 0;
-    seqBus = ctx.createGain(); seqBus.gain.value = 0.4; seqBus.connect(musBus);
     musFilter = ctx.createBiquadFilter(); musFilter.type = 'lowpass'; musFilter.frequency.value = 20000; musFilter.Q.value = 0.8;
     analyser = ctx.createAnalyser(); analyser.fftSize = 1024;
+    // shared space for the band: generated-impulse reverb + dotted-eighth feedback delay
+    const rev = ctx.createConvolver(); rev.buffer = impulse(2.6, 3.2);
+    revIn = ctx.createGain(); const revOut = ctx.createGain(); revOut.gain.value = 0.8;
+    revIn.connect(rev); rev.connect(revOut); revOut.connect(musBus);
+    delIn = ctx.createGain(); delNode = ctx.createDelay(1.5); delNode.delayTime.value = 0.33;
+    const fb = ctx.createGain(); fb.gain.value = 0.32; const dlp = ctx.createBiquadFilter(); dlp.type = 'lowpass'; dlp.frequency.value = 2600;
+    const delOut = ctx.createGain(); delOut.gain.value = 0.4;
+    delIn.connect(delNode); delNode.connect(dlp); dlp.connect(fb); fb.connect(delNode); dlp.connect(delOut); delOut.connect(musBus);
     sfxBus.connect(master); musBus.connect(musFilter); musFilter.connect(master); master.connect(comp); comp.connect(ctx.destination); comp.connect(analyser);
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
-    for (const n of SAMPLE_FILES) loadBuf(`assets/sfx/${n}.ogg`).then((b) => { samples[n] = b; }).catch(() => {});
-    setInterval(scheduleMusic, 25);
+    setInterval(schedule, 25);
     if (wantTrack) { const w = wantTrack; wantTrack = null; playTrack(w); }
   }
+  function impulse(sec, decay) {
+    const n = Math.floor(ctx.sampleRate * sec), b = ctx.createBuffer(2, n, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, decay); }
+    return b;
+  }
+
+  /* ---------- SFX primitives ---------- */
   function env(g, t, a, d, peak) { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0002), t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + d); }
   function tone({ f = 440, f2 = null, type = 'sine', dur = 0.15, vol = 0.3, delay = 0, attack = 0.004, bus }) {
     if (!ctx) return; const t = ctx.currentTime + Math.max(0, delay);
@@ -232,11 +238,14 @@ const Sound = (() => {
     const g = ctx.createGain(); env(g, t, 0.003, dur, vol);
     s.connect(f); f.connect(g); g.connect(bus || sfxBus); s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
   }
-  // Play a loaded sample; returns false if it isn't loaded yet (callers then rely on the synth layer).
-  function sample(name, vol = 0.5, rate = 1, delay = 0) {
-    const b = samples[name]; if (!ctx || !b) return false;
-    const s = ctx.createBufferSource(); s.buffer = b; s.playbackRate.value = rate;
-    const g = ctx.createGain(); g.gain.value = vol; s.connect(g); g.connect(sfxBus); s.start(ctx.currentTime + delay); return true;
+  // FM bell: carrier + inharmonic modulator whose index decays — bright attack, glassy tail
+  function fm({ f = 880, ratio = 3.5, index = 2, dur = 0.8, vol = 0.15, delay = 0, bus }) {
+    if (!ctx) return; const t = ctx.currentTime + Math.max(0, delay);
+    const c = ctx.createOscillator(), m = ctx.createOscillator(), mg = ctx.createGain(), g = ctx.createGain();
+    c.frequency.value = f; m.frequency.value = f * ratio;
+    mg.gain.setValueAtTime(f * index, t); mg.gain.exponentialRampToValueAtTime(1, t + dur);
+    m.connect(mg); mg.connect(c.frequency); env(g, t, 0.002, dur, vol); c.connect(g); g.connect(bus || sfxBus);
+    c.start(t); m.start(t); c.stop(t + dur + 0.05); m.stop(t + dur + 0.05);
   }
   // Throttle so dynamite / chain reactions don't stack 40 identical sounds in one frame
   function ok(name, gap) { if (!ctx) return false; const n = ctx.currentTime; if (last[name] && n - last[name] < gap) return false; last[name] = n; return true; }
@@ -250,73 +259,198 @@ const Sound = (() => {
       tone({ f: base, f2: base * 0.45, type: 'sine', dur: 0.12 + size * 0.03, vol: 0.24 });
       tone({ f: base * 1.5, f2: base * 2.3, type: 'triangle', dur: 0.05, vol: 0.08 });
       noise({ dur: 0.08 + size * 0.04, vol: 0.16 + size * 0.04, freq: 2600 - size * 380, q: 0.8 });
-      if (size >= 3) { tone({ f: 140, f2: 42, type: 'sine', dur: 0.28, vol: 0.38 }); sample('thud', 0.35, 1.2); }
+      if (size >= 3) { tone({ f: 140, f2: 42, type: 'sine', dur: 0.28, vol: 0.38 }); noise({ dur: 0.12, vol: 0.12, freq: 300, type: 'lowpass' }); }
     },
     combo(n) { if (!ok('combo', 0.03)) return; const sc = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24]; const f = semi(523.25, sc[Math.min(n - 2, 10)]); tone({ f, type: 'triangle', dur: 0.12, vol: 0.09, delay: 0.02 }); tone({ f: f * 2, dur: 0.09, vol: 0.04, delay: 0.05 }); },
-    apex() { tone({ f: 1760, f2: 2640, dur: 0.16, vol: 0.09 }); tone({ f: 2640, dur: 0.12, vol: 0.05, delay: 0.06 }); sample('bell', 0.18, 1.6); },
-    death() { sample('hurt', 0.9, 0.85); tone({ f: 520, f2: 60, type: 'sawtooth', dur: 0.7, vol: 0.14 }); noise({ dur: 0.5, vol: 0.22, freq: 900, type: 'lowpass' }); tone({ f: 90, f2: 30, dur: 0.5, vol: 0.4 }); },
-    item() { sample('pickup', 0.55); [0, 4, 7, 12].forEach((s, i) => tone({ f: semi(660, s), type: 'square', dur: 0.07, vol: 0.04, delay: i * 0.055 })); },
-    life() { sample('bell', 0.45, 1.2); [0, 4, 7, 12, 16, 19].forEach((s, i) => tone({ f: semi(523, s), type: 'triangle', dur: 0.1, vol: 0.09, delay: i * 0.06 })); },
-    shieldBreak() { sample('glass', 0.5, 1.5); noise({ dur: 0.3, vol: 0.2, freq: 3000 }); tone({ f: 1200, f2: 200, type: 'triangle', dur: 0.3, vol: 0.15 }); },
+    apex() { tone({ f: 1760, f2: 2640, dur: 0.16, vol: 0.09 }); fm({ f: 2093, ratio: 2.76, index: 1.5, dur: 0.5, vol: 0.06, delay: 0.04 }); },
+    death() { tone({ f: 110, f2: 38, dur: 0.35, vol: 0.5 }); noise({ dur: 0.2, vol: 0.3, freq: 600, type: 'lowpass' }); tone({ f: 520, f2: 60, type: 'sawtooth', dur: 0.7, vol: 0.14 }); noise({ dur: 0.5, vol: 0.2, freq: 900, type: 'lowpass', delay: 0.05 }); },
+    item() { [0, 4, 7, 12].forEach((s, i) => fm({ f: semi(880, s), ratio: 2, index: 0.8, dur: 0.25, vol: 0.06, delay: i * 0.05 })); tone({ f: 1320, f2: 2640, type: 'triangle', dur: 0.18, vol: 0.04, delay: 0.2 }); },
+    life() { [0, 4, 7, 12, 16, 19].forEach((s, i) => fm({ f: semi(523, s), ratio: 3.01, index: 1.2, dur: 0.5, vol: 0.08, delay: i * 0.06 })); },
+    shieldBreak() { this.glass(); tone({ f: 1200, f2: 200, type: 'triangle', dur: 0.3, vol: 0.15 }); },
     near() { noise({ dur: 0.4, vol: 0.2, freq: 500, f2: 4500, q: 3 }); tone({ f: 220, f2: 80, dur: 0.45, vol: 0.12 }); },
     tick(urgent) { tone({ f: urgent ? 1400 : 1000, type: 'square', dur: 0.03, vol: 0.05 }); },
-    clear() { [0, 4, 7, 12, 7, 12, 16, 19, 24].forEach((s, i) => tone({ f: semi(392, s), type: i % 2 ? 'triangle' : 'square', dur: 0.12, vol: 0.07, delay: i * 0.085 })); sample('bell', 0.4, 1, 0.75); },
-    glass() { if (!ok('glass', 0.03)) return; if (!sample('glass', 0.55, rand(0.9, 1.15))) noise({ dur: 0.18, vol: 0.2, freq: 6000, type: 'highpass' }); [2400, 3100, 3700].forEach((f, i) => tone({ f, type: 'triangle', dur: 0.12, vol: 0.035, delay: i * 0.03 })); },
-    boom() { if (!ok('boom', 0.05)) return; sample('thud', 1, 0.55); noise({ dur: 0.6, vol: 0.4, freq: 500, f2: 70, type: 'lowpass' }); tone({ f: 120, f2: 35, dur: 0.6, vol: 0.5 }); },
-    bounce(size) { if (!ok('bounce', 0.06)) return; if (!sample('thud', 0.1 + 0.07 * size, 1.4 - size * 0.12)) tone({ f: 120 - size * 12, f2: 55, dur: 0.1, vol: 0.05 + 0.025 * size }); },
-    clink() { if (!sample('clink', 0.22, rand(1.2, 1.5))) tone({ f: 1800, f2: 1200, type: 'triangle', dur: 0.04, vol: 0.03 }); },
-    step() { if (ok('step', 0.12)) sample('step' + ((Math.random() * 4) | 0), 0.12, rand(1.1, 1.3)); },
-    select() { if (!sample('select', 0.5)) { tone({ f: 880, type: 'square', dur: 0.06, vol: 0.06 }); tone({ f: 1320, type: 'square', dur: 0.08, vol: 0.06, delay: 0.07 }); } },
+    clear() { [0, 4, 7, 12, 7, 12, 16, 19, 24].forEach((s, i) => tone({ f: semi(392, s), type: i % 2 ? 'triangle' : 'square', dur: 0.12, vol: 0.07, delay: i * 0.085 })); fm({ f: semi(392, 24), ratio: 3.5, index: 2, dur: 1.6, vol: 0.1, delay: 0.78 }); },
+    // shatter: a burst of bright noise plus a spray of short, randomly tuned glassy pings
+    glass() { if (!ok('glass', 0.03)) return; noise({ dur: 0.22, vol: 0.22, freq: 5500, type: 'highpass' }); noise({ dur: 0.08, vol: 0.18, freq: 2500, q: 2 }); for (let i = 0; i < 6; i++) tone({ f: 2400 + Math.random() * 3200, type: 'triangle', dur: 0.06 + Math.random() * 0.2, vol: 0.035, delay: Math.random() * 0.12 }); },
+    boom() { if (!ok('boom', 0.05)) return; noise({ dur: 0.6, vol: 0.4, freq: 500, f2: 70, type: 'lowpass' }); tone({ f: 120, f2: 35, dur: 0.6, vol: 0.5 }); noise({ dur: 0.05, vol: 0.2, freq: 3000, type: 'highpass' }); },
+    bounce(size) { if (!ok('bounce', 0.06)) return; tone({ f: 120 - size * 12, f2: 48, dur: 0.12, vol: 0.06 + 0.03 * size }); noise({ dur: 0.05, vol: 0.03 * size, freq: 250, type: 'lowpass' }); },
+    clink() { tone({ f: 1850, type: 'sine', dur: 0.1, vol: 0.05 }); tone({ f: 2931, type: 'sine', dur: 0.07, vol: 0.035 }); noise({ dur: 0.02, vol: 0.03, freq: 6000, type: 'highpass' }); },
+    step() { if (!ok('step', 0.12)) return; noise({ dur: 0.05, vol: 0.06, freq: 380, type: 'lowpass' }); tone({ f: 95, f2: 60, dur: 0.04, vol: 0.05 }); },
+    select() { tone({ f: 880, type: 'square', dur: 0.06, vol: 0.06 }); tone({ f: 1320, type: 'square', dur: 0.08, vol: 0.06, delay: 0.07 }); },
     ready() { tone({ f: 660, type: 'square', dur: 0.08, vol: 0.06 }); },
     go() { tone({ f: 990, type: 'square', dur: 0.2, vol: 0.08 }); tone({ f: 1485, type: 'triangle', dur: 0.2, vol: 0.05 }); },
-    gameover() { [7, 4, 0, -5].forEach((s, i) => tone({ f: semi(330, s), type: 'triangle', dur: 0.32, vol: 0.12, delay: i * 0.24 })); },
+    gameover() { [7, 4, 0, -5].forEach((s, i) => tone({ f: semi(330, s), type: 'triangle', dur: 0.32, vol: 0.1, delay: i * 0.24 })); },
     timeout() { [0, -1, -2].forEach((s, i) => tone({ f: semi(440, s), type: 'square', dur: 0.2, vol: 0.07, delay: i * 0.18 })); },
     enemyIn() { tone({ f: 300, f2: 520, type: 'sawtooth', dur: 0.35, vol: 0.05 }); noise({ dur: 0.4, vol: 0.06, freq: 900, f2: 2400, q: 6 }); },
     enemyCharge() { tone({ f: 260, f2: 1100, type: 'sawtooth', dur: 0.4, vol: 0.06 }); },
     enemyShot() { tone({ f: 1400, f2: 300, type: 'square', dur: 0.14, vol: 0.06 }); noise({ dur: 0.1, vol: 0.08, freq: 3000 }); },
-    enemyDie() { sample('hurt', 0.5, 1.6); tone({ f: 700, f2: 120, type: 'sawtooth', dur: 0.35, vol: 0.1 }); noise({ dur: 0.25, vol: 0.18, freq: 1600 }); },
-    block() { sample('clink', 0.45, 0.9); tone({ f: 2200, f2: 1600, type: 'triangle', dur: 0.08, vol: 0.06 }); },
-    firework(i) { if (!ok('fw', 0.05)) return; noise({ dur: 0.35, vol: 0.12, freq: 1800, f2: 400 }); tone({ f: semi(784, [0, 4, 7, 12, 16][i % 5]), type: 'triangle', dur: 0.25, vol: 0.06 }); },
+    enemyDie() { tone({ f: 700, f2: 120, type: 'sawtooth', dur: 0.35, vol: 0.1 }); noise({ dur: 0.25, vol: 0.18, freq: 1600 }); tone({ f: 160, f2: 50, dur: 0.2, vol: 0.25 }); },
+    block() { this.clink(); tone({ f: 2200, f2: 1600, type: 'triangle', dur: 0.08, vol: 0.06 }); },
+    firework(i) { if (!ok('fw', 0.05)) return; noise({ dur: 0.35, vol: 0.12, freq: 1800, f2: 400 }); fm({ f: semi(784, [0, 4, 7, 12, 16][i % 5]), ratio: 3.5, index: 1.5, dur: 0.6, vol: 0.06 }); },
   };
 
-  /* --- Fallback music: tiny step sequencer (bass + kick + hats + pentatonic lead) --- */
-  let nextT = 0, step = 0, root = 110;
-  const BASS = [0, null, 0, 12, null, 0, 7, null, 0, null, 0, 12, null, 10, 7, 5];
-  const PROG = [0, 0, -4, -2], PENTA = [0, 3, 5, 7, 10, 12, 15];
-  const SPS = 60 / 132 / 4;
-  function scheduleMusic() {
-    if (!ctx || !seqOn || ducked || !musicOn) { if (ctx) nextT = ctx.currentTime + 0.05; return; }
-    while (nextT < ctx.currentTime + 0.12) {
-      const s = step % 16, bar = Math.floor(step / 16) % 4, d = nextT - ctx.currentTime, r = semi(root, PROG[bar]);
-      if (BASS[s] !== null) tone({ f: semi(r, BASS[s]), type: 'sawtooth', dur: SPS * 0.9, vol: 0.12, delay: d, bus: seqBus });
-      if (s % 4 === 0) tone({ f: 150, f2: 45, dur: 0.12, vol: 0.5, delay: d, bus: seqBus });
-      if (s === 4 || s === 12) noise({ dur: 0.1, vol: 0.18, freq: 1800, delay: d, bus: seqBus });
-      if (s % 2 === 1) noise({ dur: 0.03, vol: 0.08, freq: 8000, type: 'highpass', delay: d, bus: seqBus });
-      if ([0, 3, 6, 10, 14].includes(s) && (step * 7) % 5 < 3) tone({ f: semi(r * 4, PENTA[(step * 5 + bar) % PENTA.length]), type: 'triangle', dur: SPS * 1.6, vol: 0.07, delay: d, bus: seqBus });
-      nextT += SPS; step++;
-    }
+  /* ---------- The band ---------- */
+  const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  function vca(t, a, h, r, peak, dest) {
+    const g = ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(peak, t + a);
+    g.gain.setValueAtTime(peak, t + a + h); g.gain.exponentialRampToValueAtTime(0.0001, t + a + h + r); g.connect(dest); return g;
+  }
+  function osc(type, f, t, end, dest, detune = 0) { const o = ctx.createOscillator(); o.type = type; o.frequency.value = f; o.detune.value = detune; o.connect(dest); o.start(t); o.stop(end); return o; }
+  function lp(f, q, dest) { const b = ctx.createBiquadFilter(); b.type = 'lowpass'; b.frequency.value = f; b.Q.value = q; b.connect(dest); return b; }
+  function hit(dest, t, dur, v, freq, type, q = 1) { const s = ctx.createBufferSource(); s.buffer = noiseBuf; const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q; s.connect(f); f.connect(vca(t, 0.001, 0, dur, v, dest)); s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05); }
+  const I = {
+    kick(o, t, v) { const g = vca(t, 0.002, 0.02, 0.28, v, o.out); const k = osc('sine', 150, t, t + 0.34, g); k.frequency.setValueAtTime(150, t); k.frequency.exponentialRampToValueAtTime(42, t + 0.12); hit(o.out, t, 0.012, v * 0.25, 4000, 'highpass'); },
+    snare(o, t, v) { hit(o.out, t, 0.17, v * 0.7, 1900, 'bandpass', 0.8); hit(o.rev, t, 0.1, v * 0.3, 2500, 'bandpass', 0.6); const s = osc('triangle', 195, t, t + 0.14, vca(t, 0.001, 0.01, 0.1, v * 0.35, o.out)); s.frequency.exponentialRampToValueAtTime(150, t + 0.1); },
+    hat(o, t, v, open) { hit(o.out, t, open ? 0.22 : 0.035, v, 8200, 'highpass'); },
+    bass(o, t, m, d, v) {
+      const g = vca(t, 0.004, d * 0.55, 0.08, v, o.out), f = lp(1500, 7, g);
+      f.frequency.setValueAtTime(1500, t); f.frequency.exponentialRampToValueAtTime(220, t + Math.max(0.08, d));
+      osc('sawtooth', mtof(m), t, t + d + 0.12, f); osc('square', mtof(m - 12), t, t + d + 0.12, f, 4);
+    },
+    pad(o, t, notes, d, v) {
+      const g = vca(t, 0.4, Math.max(0.1, d - 0.6), 0.7, v, o.out); g.connect(o.rev);
+      const f = lp(1300, 0.6, g);
+      for (const m of notes) for (const dt of [-9, 9]) osc('sawtooth', mtof(m), t, t + d + 0.8, f, dt);
+    },
+    pluck(o, t, m, d, v) {
+      const g = vca(t, 0.002, 0.02, 0.22, v, o.out); g.connect(o.del);
+      const f = lp(4200, 3, g); f.frequency.setValueAtTime(4200, t); f.frequency.exponentialRampToValueAtTime(450, t + 0.2);
+      osc('sawtooth', mtof(m), t, t + 0.3, f); osc('square', mtof(m), t, t + 0.3, f, 6);
+    },
+    lead(o, t, m, d, v) {
+      const g = vca(t, 0.012, d * 0.8, 0.14, v, o.out); g.connect(o.del); g.connect(o.rev);
+      const f = lp(3200, 1, g), a = osc('square', mtof(m), t, t + d + 0.25, f), b = osc('triangle', mtof(m + 12), t, t + d + 0.25, f, 5);
+      const lfo = ctx.createOscillator(), lg = ctx.createGain(); lfo.frequency.value = 5.6;
+      lg.gain.setValueAtTime(0, t); lg.gain.linearRampToValueAtTime(14, t + Math.min(0.35, d));
+      lfo.connect(lg); lg.connect(a.detune); lg.connect(b.detune); lfo.start(t); lfo.stop(t + d + 0.25);
+    },
+    bell(o, t, m, d, v) {
+      const f = mtof(m), c = ctx.createOscillator(), mo = ctx.createOscillator(), mg = ctx.createGain();
+      c.frequency.value = f; mo.frequency.value = f * 3.5; mg.gain.setValueAtTime(f * 2.2, t); mg.gain.exponentialRampToValueAtTime(f * 0.05, t + 1.2);
+      mo.connect(mg); mg.connect(c.frequency);
+      const g = vca(t, 0.002, 0.05, Math.max(0.9, d * 1.5), v, o.out); g.connect(o.rev); c.connect(g);
+      c.start(t); mo.start(t); c.stop(t + d * 1.5 + 1.2); mo.stop(t + d * 1.5 + 1.2);
+    },
+  };
+
+  /* ---------- Original compositions ----------
+     chords: pad voicings per bar · roots: bass root per bar · bass: 16-step offsets from the root
+     drums: 16-char rows (x hit, g ghost, o open hat) · arp: indices into the bar's chord
+     mel: one string per bar, "NOTE:step:length" in 16th notes. Odd loops drop the lead for an arp breakdown. */
+  const NOTE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const nn = (s) => { const m = /^([A-G])(#|b)?(-?\d)$/.exec(s); return 12 * (+m[3] + 1) + NOTE[m[1]] + (m[2] === '#' ? 1 : m[2] === 'b' ? -1 : 0); };
+  const chords = (...bars) => bars.map((b) => b.split(' ').map(nn));
+  const SONGS = {
+    // "Bubble Skyline" — title theme. F major, unhurried, FM bells over warm pads.
+    menu: {
+      bpm: 94, bars: 8, leadInst: 'bell', leadAlways: true, arpAlways: true,
+      chords: chords('F3 A3 C4 E4', 'A3 C4 E4 G4', 'Bb3 D4 F4 A4', 'C4 E4 G4 Bb4'),
+      roots: ['F2', 'A2', 'Bb2', 'C3'].map(nn),
+      bass: [0, null, null, null, null, null, 12, null, 0, null, null, 7, null, null, null, null],
+      drums: { k: 'x.......x.x.....', s: '....x.......x...', h: '..x...x...x...x.' },
+      arp: [0, null, 2, null, 1, null, 3, null, 0, null, 2, null, 1, null, 3, null], arpOct: 12,
+      mel: ['C5:0:4 A4:4:2 C5:6:2 F5:8:6 E5:14:2', 'E5:0:4 C5:4:4 A4:8:6 G4:14:2', 'F4:0:2 A4:2:2 D5:4:4 C5:8:4 Bb4:12:4', 'A4:0:4 G4:4:4 E4:8:4 G4:12:4',
+            'C5:0:4 A4:4:2 C5:6:2 F5:8:4 G5:12:4', 'A5:0:6 G5:6:2 E5:8:8', 'D5:0:4 F5:4:4 D5:8:4 Bb4:12:4', 'C5:0:6 Bb4:6:2 G4:8:8'],
+      mix: { drums: 0.5, bass: 0.8, pad: 1, arp: 0.7, lead: 1.2 },
+    },
+    // "Harpoon Hustle" — stage theme A. E minor, driving four-on-the-floor.
+    stage1: {
+      bpm: 140, bars: 8,
+      chords: chords('G3 B3 E4', 'G3 C4 E4', 'G3 B3 D4', 'F#3 A3 D4'),
+      roots: ['E2', 'C2', 'G2', 'D2'].map(nn),
+      bass: [0, null, 0, 12, null, 0, 12, 0, 0, null, 0, 12, null, 12, 7, 5],
+      drums: { k: 'x...x...x...x...', s: '....x.......x...', h: '.x.x.x.xox.x.x.x', fill: { k: 'x...x...x.x.x.x.', s: '....x...x.xxxxxx' } },
+      arp: [0, 1, 2, 1, 0, 1, 2, 3, 0, 1, 2, 1, 0, 2, 1, 3], arpOct: 12,
+      mel: ['B4:0:3 G4:3:1 A4:4:2 B4:6:2 E5:8:4 D5:12:2 B4:14:2', 'C5:0:4 B4:4:2 A4:6:2 G4:8:6 E4:14:2', 'D5:0:3 B4:3:1 C5:4:2 D5:6:2 G5:8:4 F#5:12:2 D5:14:2', 'E5:0:4 D5:4:2 C5:6:2 A4:8:4 F#4:12:4',
+            'B4:0:2 E5:2:2 G5:4:4 F#5:8:2 E5:10:2 D5:12:2 B4:14:2', 'C5:0:2 E5:2:2 G5:4:4 A5:8:4 G5:12:4', 'B5:0:4 A5:4:2 G5:6:2 F#5:8:2 G5:10:2 A5:12:4', 'F#5:0:8 D5:8:8'],
+      mix: { drums: 1, bass: 1, pad: 0.8, arp: 0.9, lead: 1 },
+    },
+    // "Pop Goes the World" — stage theme B. A minor, syncopated funk.
+    stage2: {
+      bpm: 124, bars: 8,
+      chords: chords('A3 C4 E4 G4', 'A3 C4 D4 F4', 'G3 B3 D4 F4', 'G3 B3 C4 E4', 'A3 C4 E4 F4', 'A3 C4 D4 F4', 'G#3 B3 D4 E4', 'G#3 B3 D4 E4'),
+      roots: ['A2', 'D2', 'G2', 'C3', 'F2', 'D2', 'E2', 'E2'].map(nn),
+      bass: [0, null, null, 0, null, null, 12, null, 0, null, 7, null, 10, null, 12, null],
+      drums: { k: 'x.....x...x.....', s: '....x..g....x..g', h: 'x.xxx.x.x.xxo.x.', fill: { k: 'x.....x...x.x...', s: '....x..g..x.xxxx' } },
+      arp: [0, null, 1, 2, null, 3, null, 2, 0, null, 1, 2, null, 3, 2, 1], arpOct: 12,
+      mel: ['A4:0:2 C5:2:2 D5:4:1 E5:6:4 G5:12:2 E5:14:2', 'D5:0:4 C5:4:2 A4:6:6', 'B4:0:2 D5:2:2 F5:4:2 G5:6:4 F5:10:2 D5:12:4', 'E5:0:8 C5:8:4 B4:12:4',
+            'A5:0:2 G5:2:2 E5:4:2 C5:6:2 A4:8:4 C5:12:4', 'D5:0:2 F5:2:2 A5:4:4 G5:8:2 F5:10:2 E5:12:4', 'G#4:0:2 B4:2:2 D5:4:2 E5:6:4 D5:10:2 B4:12:4', 'E5:0:4 D5:4:2 B4:6:2 G#4:8:8'],
+      mix: { drums: 1, bass: 1.1, pad: 0.7, arp: 0.8, lead: 1 },
+    },
+    // "Stinger Swarm" — boss theme. D harmonic minor, 16th-note pressure.
+    boss: {
+      bpm: 152, bars: 8, arpAlways: true,
+      chords: chords('A3 D4 F4', 'Bb3 D4 F4', 'G3 Bb3 D4', 'A3 C#4 E4'),
+      roots: ['D2', 'Bb2', 'G2', 'A2'].map(nn),
+      bass: [0, 0, 12, 0, 0, 0, 12, 0, 0, 0, 12, 0, 0, 12, 0, 12],
+      drums: { k: 'x...x...x...x.x.', s: '....x.......x...', h: 'xxxxxxxxxxxxxxxx', fill: { k: 'x.x.x.x.x.x.x.x.', s: '....x...xxxxxxxx' } },
+      arp: [0, 1, 2, 1, 0, 1, 2, 3, 2, 1, 0, 1, 2, 3, 4, 3], arpOct: 0,
+      mel: ['D5:0:2 F5:2:2 A5:4:4 G5:8:2 F5:10:2 E5:12:2 F5:14:2', 'D5:0:6 Bb4:6:2 F5:8:8', 'G5:0:2 F5:2:2 D5:4:2 Bb4:6:2 G4:8:4 Bb4:12:4', 'C#5:0:4 E5:4:4 A5:8:6 G5:14:2',
+            'F5:0:2 E5:2:2 D5:4:2 A4:6:2 D5:8:2 F5:10:2 A5:12:4', 'Bb5:0:8 A5:8:4 F5:12:4', 'G5:0:4 D5:4:4 Bb5:8:4 G5:12:4', 'A5:0:8 E5:8:4 C#5:12:4'],
+      mix: { drums: 1.1, bass: 1, pad: 0.7, arp: 0.6, lead: 1.1 },
+    },
+    // "Last Bubble" — game over. Plays once.
+    over: {
+      bpm: 76, bars: 3, once: true, leadInst: 'bell', leadAlways: true,
+      chords: chords('A3 D4 F4', 'A3 C#4 E4', 'A3 D4 F4'),
+      roots: ['D2', 'A2', 'D2'].map(nn),
+      bass: [0, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null],
+      drums: { k: '................', s: '................', h: '................' },
+      mel: ['A4:0:4 F4:4:4 D4:8:8', 'E4:0:4 C#4:4:4 A3:8:8', 'D4:0:16'],
+      mix: { drums: 0, bass: 0.7, pad: 1, arp: 0, lead: 1.3 },
+    },
+  };
+  for (const S of Object.values(SONGS)) { // melody strings -> step map
+    S.melMap = {};
+    S.mel.forEach((bar, bi) => bar.split(' ').forEach((tok) => { const [n, st, len] = tok.split(':'); S.melMap[bi * 16 + +st] = [nn(n), +len]; }));
   }
 
-  /* --- Music tracks: crossfade between looping CC0 tracks --- */
-  async function playTrack(name) {
+  let song = null, songName = null, songNodes = null, stepT = 0, stepI = 0;
+  function startSong(name) {
+    if (songNodes) { const old = songNodes; for (const g of [old.out, old.rev, old.del]) g.gain.setTargetAtTime(0, ctx.currentTime, 0.25); setTimeout(() => { for (const g of [old.out, old.rev, old.del]) g.disconnect(); }, 3000); }
+    songName = name; song = SONGS[name] || null; songNodes = null;
+    if (!song) return;
+    const mk = (dest, v) => { const g = ctx.createGain(); g.gain.setValueAtTime(0, ctx.currentTime); g.gain.setTargetAtTime(v, ctx.currentTime, 0.15); g.connect(dest); return g; };
+    songNodes = { out: mk(musBus, 1), rev: mk(revIn, 0.35), del: mk(delIn, 0.3) };
+    delNode.delayTime.setValueAtTime((60 / (song.bpm * tempoMul)) * 0.75, ctx.currentTime); // dotted eighth
+    stepT = ctx.currentTime + 0.06; stepI = 0;
+  }
+  function schedule() {
+    if (!ctx || !song) return;
+    const spb = 60 / (song.bpm * tempoMul) / 4;
+    while (stepT < ctx.currentTime + 0.15) {
+      playStep(stepI, stepT, spb); stepT += spb; stepI++;
+      if (song.once && stepI >= song.bars * 16) { song = null; break; }
+    }
+  }
+  function playStep(i, t, spb) {
+    const S = song, o = songNodes, L = S.bars * 16, s = i % L, loop = Math.floor(i / L), bar = Math.floor(s / 16), st = s % 16;
+    const tr = S === SONGS.menu || S === SONGS.over ? 0 : trans;
+    const ch = S.chords[bar % S.chords.length].map((n) => n + tr), root = S.roots[bar % S.roots.length] + tr, mx = S.mix;
+    const D = S.drums, fill = D.fill && bar === S.bars - 1 && loop % 2 === 1;
+    const at = (row) => (row && row[st] !== '.' ? row[st] : null);
+    if (at(fill ? D.fill.k : D.k)) I.kick(o, t, 0.9 * mx.drums);
+    const sn = at(fill ? D.fill.s : D.s); if (sn) I.snare(o, t, (sn === 'g' ? 0.2 : 0.55) * mx.drums);
+    const hh = at(D.h); if (hh) I.hat(o, t, (hh === 'o' ? 0.11 : 0.06) * mx.drums, hh === 'o');
+    const b = S.bass && S.bass[st]; if (b != null) I.bass(o, t, root + b, spb * 0.85, 0.3 * mx.bass);
+    if (st === 0) I.pad(o, t, ch, spb * 16, 0.045 * mx.pad);
+    const a = S.arp && (S.arpAlways || loop % 2 === 1) ? S.arp[st] : null;
+    if (a != null) I.pluck(o, t, ch[a % ch.length] + 12 * Math.floor(a / ch.length) + (S.arpOct ?? 12), spb, 0.07 * mx.arp);
+    const m = S.melMap[s];
+    if (m && (S.leadAlways || loop % 2 === 0)) (S.leadInst === 'bell' ? I.bell : I.lead)(o, t, m[0] + tr, m[1] * spb, 0.1 * mx.lead);
+  }
+  function playTrack(name) {
     if (!ctx) { wantTrack = name; return; }
-    if (curTrack === name) return;
-    curTrack = name;
-    if (curGain) { const g = curGain, s = curSrc; g.gain.setTargetAtTime(0, ctx.currentTime, 0.25); setTimeout(() => { try { s.stop(); } catch (e) { /* already stopped */ } }, 1500); curGain = curSrc = null; }
-    seqOn = false;
-    if (!name) return;
-    try { if (!tracks[name]) tracks[name] = await loadBuf(`assets/music/${TRACK_FILES[name]}.ogg`); }
-    catch (e) { if (curTrack === name) seqOn = name !== 'over'; return; } // no track available → synth sequencer
-    if (curTrack !== name) return; // screen changed while loading
-    const s = ctx.createBufferSource(); s.buffer = tracks[name]; s.loop = name !== 'over';
-    const g = ctx.createGain(); g.gain.setValueAtTime(0, ctx.currentTime); g.gain.setTargetAtTime(1, ctx.currentTime, 0.35);
-    s.connect(g); g.connect(musBus); s.start(); curSrc = s; curGain = g;
+    if (songName === name && song) return;
+    startSong(name);
   }
   function applyMusicGain() { if (musBus) musBus.gain.setTargetAtTime(musicOn ? MUSIC_VOL * (ducked ? 0.3 : 1) : 0, ctx.currentTime, 0.12); }
 
   return {
     init, sfx, playTrack,
-    setRoot(semis) { root = semi(110, semis); },
+    // per-stage key change (kept within ±5 semitones) and tempo push
+    setRoot(semis) { trans = (((semis % 12) + 18) % 12) - 6; },
+    setTempo(mul) { tempoMul = mul; },
     duck(on) { ducked = on; if (ctx) applyMusicGain(); },
     playMusic(on) { this.duck(!on); },
     // 1 = clear, 0 = fully muffled (bullet-time)
@@ -325,7 +459,7 @@ const Sound = (() => {
     toggleMusic() { musicOn = !musicOn; if (ctx) applyMusicGain(); return musicOn; },
     // RMS output level 0..1 (used by the test harness to prove sound is audible)
     level() { if (!analyser) return 0; const a = new Float32Array(analyser.fftSize); analyser.getFloatTimeDomainData(a); let s = 0; for (const v of a) s += v * v; return Math.sqrt(s / a.length); },
-    get state() { return { ctx: ctx ? ctx.state : 'none', track: curTrack, playing: !!curSrc, sequencer: seqOn, samples: Object.keys(samples).length, tracks: Object.keys(tracks) }; },
+    get state() { return { ctx: ctx ? ctx.state : 'none', track: songName, playing: !!song, songs: Object.keys(SONGS) }; },
     get muted() { return muted; }, get musicOn() { return musicOn; },
   };
 })();
@@ -422,7 +556,7 @@ function newGame() {
 function loadLevel(n) {
   game.level = n; game.def = getLevelDef(n);
   game.backdrop = buildBackdrop(game.def);
-  Sound.setRoot([0, 3, -2, 5, 2, -4, 7][n % 7]);
+  Sound.setRoot([0, 3, -2, 5, 2, -4, 7][n % 7]); Sound.setTempo(1 + Math.min(0.08, (n - 1) * 0.006));
   resetStage();
 }
 // (Re)builds the stage from its definition — used on load and after losing a life (classic Pang restarts the stage).
@@ -1052,7 +1186,7 @@ function drawTitle() {
   if (Math.floor(t * 2) % 2 === 0) { ctx.font = '22px Bungee, Impact, sans-serif'; ctx.fillStyle = '#3fe0ff'; ctx.fillText(document.body.classList.contains('touch') ? 'TAP FIRE TO START' : 'PRESS SPACE TO START', W / 2, 314); }
   // readable backing panels for the info blocks (bubbles bounce behind them)
   ctx.fillStyle = 'rgba(11,7,22,0.78)';
-  roundRect(ctx, 100, 350, 440, 98, 12); ctx.fill(); roundRect(ctx, 580, 344, 290, 128, 12); ctx.fill(); roundRect(ctx, 100, 464, 760, 32, 12); ctx.fill();
+  roundRect(ctx, 100, 350, 410, 98, 12); ctx.fill(); roundRect(ctx, 540, 344, 250, 128, 12); ctx.fill(); roundRect(ctx, 100, 464, 690, 32, 12); ctx.fill();
   // controls card
   ctx.textAlign = 'left'; ctx.font = '700 14px "Chakra Petch", sans-serif';
   const rows = [['← →  /  A D', 'move'], ['SPACE  /  ↑  /  Z', 'fire harpoon'], ['P', 'pause'], ['M  /  N', 'sound / music']];
@@ -1060,20 +1194,22 @@ function drawTitle() {
   // item legend
   const types = Object.keys(ITEMS);
   // high scores
-  ctx.fillStyle = '#9a8fc0'; ctx.font = '700 12px "Chakra Petch", sans-serif'; ctx.fillText('BEST RUNS', 600, 360);
+  ctx.fillStyle = '#9a8fc0'; ctx.font = '700 12px "Chakra Petch", sans-serif'; ctx.fillText('BEST RUNS', 560, 360);
   const sc = game.scores.length ? game.scores : [];
-  if (!sc.length) { ctx.fillStyle = '#6f6596'; ctx.font = '700 14px "Chakra Petch", sans-serif'; ctx.fillText('No runs yet. Set the first one.', 600, 386); }
+  if (!sc.length) { ctx.fillStyle = '#6f6596'; ctx.font = '700 14px "Chakra Petch", sans-serif'; ctx.fillText('No runs yet. Set the first one.', 560, 386); }
   sc.forEach((s, i) => {
     ctx.font = '15px Bungee, Impact, sans-serif'; ctx.fillStyle = i === 0 ? '#ffd23f' : '#efe9ff';
-    ctx.fillText(`${i + 1}.`, 600, 388 + i * 22); ctx.textAlign = 'right'; ctx.fillText(String(s.score).padStart(7, '0'), 760, 388 + i * 22);
-    ctx.font = '700 12px "Chakra Petch", sans-serif'; ctx.fillStyle = '#9a8fc0'; ctx.fillText(`STAGE ${s.stage}`, 840, 388 + i * 22); ctx.textAlign = 'left';
+    ctx.fillText(`${i + 1}.`, 560, 388 + i * 22); ctx.textAlign = 'right'; ctx.fillText(String(s.score).padStart(7, '0'), 692, 388 + i * 22);
+    ctx.font = '700 12px "Chakra Petch", sans-serif'; ctx.fillStyle = '#9a8fc0'; ctx.fillText(`STAGE ${s.stage}`, 772, 388 + i * 22); ctx.textAlign = 'left';
   });
   // power-up legend strip
   ctx.font = '700 11px "Chakra Petch", sans-serif';
-  types.forEach((k, i) => {
-    const x = 120 + i * 106, y = 480;
-    ctx.fillStyle = ITEMS[k].color; ctx.beginPath(); ctx.arc(x, y, 11, 0, 7); ctx.fill(); drawItemIcon(ctx, k, x, y, 0.75);
-    ctx.fillStyle = '#c8bfe8'; ctx.fillText(ITEMS[k].label, x + 16, y + 4);
+  let lx = 118; // laid out by measured label width so nothing overlaps
+  types.forEach((k) => {
+    const y = 480;
+    ctx.fillStyle = ITEMS[k].color; ctx.beginPath(); ctx.arc(lx, y, 11, 0, 7); ctx.fill(); drawItemIcon(ctx, k, lx, y, 0.75);
+    ctx.fillStyle = '#c8bfe8'; ctx.fillText(ITEMS[k].label, lx + 16, y + 4);
+    lx += 16 + ctx.measureText(ITEMS[k].label).width + 20;
   });
 }
 
@@ -1219,190 +1355,306 @@ function syncBubbles(dt) {
   for (const [b, m] of bubbleMeshes) { if (!m.userData.seen) { scene.remove(m); bubbleMeshes.delete(b); } m.userData.seen = false; }
 }
 
-/* --- Player: a little harpoon-diver built from primitives, rigged for run / shoot / tumble --- */
-const player3d = (() => {
-  const mat = (c, o = {}) => new THREE.MeshStandardMaterial(Object.assign({ color: c, roughness: 0.55, metalness: 0.05 }, o));
-  const suit = mat('#19c3b0'), suitDark = mat('#0f8a7d'), skin = mat('#ffd6b0', { roughness: 0.7 }), pink = mat('#ff3d8b'), dark = mat('#1b1238', { roughness: 0.3, metalness: 0.4 }), gold = mat('#ffd23f', { metalness: 0.6, roughness: 0.3 }), boot = mat('#ff3d8b', { roughness: 0.4 });
-  const lens = neon('#7ff6ff', 1.8);
-  const root = new THREE.Group(), spin = new THREE.Group(), rig = new THREE.Group();
-  root.add(spin); spin.position.y = 24; spin.add(rig); rig.position.y = -24;
-  const add = (geo, m, x, y, z, parent = rig) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = true; parent.add(o); return o; };
-  const limb = (r, len, m) => { const g = new THREE.CapsuleGeometry(r, len, 4, 10); g.translate(0, -len / 2 - r * 0.5, 0); return new THREE.Mesh(g, m); };
-  const legs = [-4.5, 4.5].map((x) => { const l = limb(3.2, 9, dark); l.position.set(x, 17, 0); l.castShadow = true; rig.add(l); add(new THREE.BoxGeometry(7, 4, 11), boot, 0, -15, 2, l); return l; });
-  add(new THREE.CapsuleGeometry(10, 8, 6, 16), suit, 0, 27, 0);
-  add(new THREE.CylinderGeometry(10.4, 10.4, 3.5, 20), suitDark, 0, 20, 0);
-  add(new THREE.BoxGeometry(6, 6, 2), gold, 0, 29, 10);
-  const tank = add(new THREE.CapsuleGeometry(4, 10, 4, 10), gold, 0, 29, -11);
-  const arms = [-12, 12].map((x) => { const a = limb(2.6, 10, suit); a.position.set(x, 34, 0); a.castShadow = true; rig.add(a); return a; });
-  const head = new THREE.Group(); head.position.set(0, 46, 0); rig.add(head);
-  add(new THREE.SphereGeometry(9, 24, 16), skin, 0, 0, 0, head);
-  add(new THREE.SphereGeometry(9.6, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2), pink, 0, 0.5, 0, head);
-  add(new THREE.BoxGeometry(10, 2, 9), pink, 0, 1, 9, head);
-  add(new THREE.BoxGeometry(15, 5, 4), dark, 0, -1.5, 7.5, head);
-  [-3.5, 3.5].forEach((x) => add(new THREE.BoxGeometry(4.5, 3, 1), lens, x, -1.5, 9.6, head));
-  const gun = add(new THREE.CylinderGeometry(2.5, 3, 12, 10), dark, 0, 62, 4);
-  const shield = new THREE.Mesh(new THREE.SphereGeometry(32, 32, 20), new THREE.MeshBasicMaterial({ color: new THREE.Color('#7cff6b').multiplyScalar(1.3), transparent: true, opacity: 0.18, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-  shield.position.y = 26; root.add(shield);
-  const shieldRing = new THREE.Mesh(new THREE.TorusGeometry(32, 1.2, 8, 64), neon('#7cff6b', 2)); shieldRing.position.y = 26; root.add(shieldRing);
-  root.scale.setScalar(1.12); scene.add(root);
-  let face = 0.75;
-  return {
-    sync(dt) {
-      if (hero.ready) { root.visible = false; return; } // rigged GLB hero has taken over
-      const p = game.player;
-      root.visible = !!p && game.state !== 'title';
-      if (!root.visible) return;
-      const dead = p.dead;
-      if (!dead && game.invuln > 0 && Math.floor(game.realT * 20) % 2) { root.visible = false; return; }
-      root.position.set(X(dead ? p.dx : p.x), Y(dead ? p.dy : ARENA.b), 0);
-      face += (p.face * 0.8 - face) * Math.min(1, dt * 14);
-      rig.rotation.y = face;
-      const moving = Math.abs(p.vx) > 20, sw = moving ? Math.sin(p.run * 2.2) : 0;
-      legs[0].rotation.x = sw * 0.8; legs[1].rotation.x = -sw * 0.8;
-      const shooting = p.shootT > 0 || dead;
-      arms.forEach((a, i) => { a.rotation.x = shooting ? -Math.PI * 0.92 : (i ? sw : -sw) * 0.7; a.rotation.z = shooting ? (i ? -0.25 : 0.25) : (i ? -0.15 : 0.15); });
-      gun.visible = p.shootT > 0 && !dead;
-      rig.position.y = -24 + (moving ? Math.abs(Math.sin(p.run * 2.2)) * 2.5 : Math.sin(game.realT * 3) * 0.6);
-      spin.rotation.z = dead ? p.rot : -clamp(p.vx / PLAYER_SPEED, -1, 1) * 0.1;
-      head.rotation.x = dead ? 0.4 : (p.shootT > 0 ? -0.35 : 0);
-      tank.rotation.z = Math.sin(game.realT * 4) * 0.05;
-      shield.visible = shieldRing.visible = game.shield && !dead;
-      if (shield.visible) { const s = 1 + Math.sin(game.realT * 6) * 0.05; shield.scale.setScalar(s); shieldRing.scale.setScalar(s); shieldRing.rotation.x = game.realT * 2; shieldRing.rotation.y = game.realT * 1.3; }
-    },
-  };
-})();
-
-/* --- Hero: rigged CC0 Quaternius "Ranger" (assets/hero.glb), animation state machine.
-       Until it loads (or if it fails) the primitive diver above is shown instead. --- */
-const gltfLoader = new GLTFLoader();
-// Load assets/<name>.glb. Hosts that refuse to serve .glb can ship the same bytes as base64 in <name>.glb.json.
-async function loadGLB(name) {
-  let buf = null;
-  const r = await fetch(`assets/${name}.glb`).catch(() => null);
-  if (r && r.ok) buf = await r.arrayBuffer();
-  else { const j = await (await fetch(`assets/${name}.glb.json`)).json(); buf = Uint8Array.from(atob(j.base64), (c) => c.charCodeAt(0)).buffer; }
-  return gltfLoader.parseAsync(buf, '');
+/* --- Ink outline (inverted hull): every character part gets a back-face shell pushed out along
+       its normals, so the hero and drone read crisply against any backdrop --- */
+const outlineMat = new THREE.ShaderMaterial({
+  uniforms: { uT: { value: 0.75 }, uC: { value: new THREE.Color(0x0e0820) } },
+  vertexShader: `uniform float uT; void main(){ gl_Position = projectionMatrix * modelViewMatrix * vec4(position + normal * uT, 1.0); }`,
+  fragmentShader: `uniform vec3 uC; void main(){ gl_FragColor = vec4(uC, 1.0); }`,
+  side: THREE.BackSide,
+});
+// Add a mesh (plus its outline shell) to a parent. Geometry is built at final size so outlines stay even.
+function part(parent, geo, mat, x = 0, y = 0, z = 0, opts = {}) {
+  const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = opts.shadow !== false;
+  if (opts.rx) m.rotation.x = opts.rx; if (opts.ry) m.rotation.y = opts.ry; if (opts.rz) m.rotation.z = opts.rz;
+  if (opts.outline !== false) { const o = new THREE.Mesh(geo, outlineMat); o.castShadow = false; m.add(o); }
+  parent.add(m); return m;
 }
-const assetStatus = { hero: 'loading', bee: 'loading' };
-const clipName = (c) => c.name.split('|').pop();
+// A limb hanging down from its joint: capsule whose top sits at the pivot, next joint at y = -len
+function limbGeo(r, len) { const g = new THREE.CapsuleGeometry(r, len, 6, 14); g.translate(0, -len / 2, 0); return g; }
+function canvasTex(w, h, draw, repeat) {
+  const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+  if (repeat) { t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
+  return t;
+}
+
+/* --- Hero: "Pip", an original deep-sea harpoon diver, modelled and animated entirely in code.
+       Brass helmet with a glowing porthole and expressive eyes behind the glass, canvas suit with a
+       bubble emblem, twin air tanks + hose, and a harpoon launcher. Procedural rig: run cycle,
+       idle breathing/blinks/glances, aim-and-recoil, victory hop, knock-out tumble. --- */
 const hero = (() => {
+  // --- materials
+  const weave = canvasTex(64, 64, (g, w, h) => {
+    g.fillStyle = '#f3e6c8'; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 64; i += 2) { g.fillStyle = i % 4 ? 'rgba(120,90,50,0.10)' : 'rgba(255,255,255,0.10)'; g.fillRect(0, i, w, 1); g.fillRect(i, 0, 1, h); }
+  }, [3, 3]);
+  const M = {
+    suit: new THREE.MeshStandardMaterial({ map: weave, color: 0xd8ccb4, roughness: 0.9 }),
+    brass: new THREE.MeshPhysicalMaterial({ color: 0xc58a34, metalness: 1, roughness: 0.32, clearcoat: 0.4, clearcoatRoughness: 0.2, envMapIntensity: 0.85 }),
+    brassDark: new THREE.MeshStandardMaterial({ color: 0x9a6420, metalness: 1, roughness: 0.38 }),
+    rubber: new THREE.MeshStandardMaterial({ color: 0x2b2340, roughness: 0.55 }),
+    leather: new THREE.MeshStandardMaterial({ color: 0x8a4a26, roughness: 0.7 }),
+    tank: new THREE.MeshPhysicalMaterial({ color: 0x18c4b2, roughness: 0.3, metalness: 0.2, clearcoat: 1 }),
+    gun: new THREE.MeshStandardMaterial({ color: 0x3a3352, roughness: 0.35, metalness: 0.6 }),
+    rope: new THREE.MeshStandardMaterial({ color: 0xff3d5a, roughness: 0.8 }),
+    visorBack: new THREE.MeshBasicMaterial({ color: 0x0a2236 }),
+    glass: new THREE.MeshPhysicalMaterial({ color: 0x9ff4ff, transparent: true, opacity: 0.3, roughness: 0.02, clearcoat: 1, emissive: 0x18a8c8, emissiveIntensity: 0.35, depthWrite: false }),
+    eye: new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xdff8ff, emissiveIntensity: 0.55, roughness: 0.3 }),
+    pupil: new THREE.MeshBasicMaterial({ color: 0x120a22 }),
+    glint: new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffffff).multiplyScalar(1.6), toneMapped: false }),
+    portGlow: neon('#5ff2ff', 1.4),
+  };
+  const emblem = canvasTex(128, 128, (g) => {
+    g.fillStyle = '#ff3d5a'; g.beginPath(); g.arc(64, 64, 60, 0, 7); g.fill();
+    g.strokeStyle = '#140b26'; g.lineWidth = 6; g.stroke();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(56, 70, 26, 0, 7); g.fill();
+    g.fillStyle = '#ff3d5a'; g.beginPath(); g.arc(56, 70, 18, 0, 7); g.fill();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(48, 62, 6, 0, 7); g.fill();
+    g.strokeStyle = '#fff'; g.lineWidth = 7; g.beginPath(); g.moveTo(92, 108); g.lineTo(92, 26); g.stroke();
+    g.beginPath(); g.moveTo(80, 40); g.lineTo(92, 18); g.lineTo(104, 40); g.closePath(); g.fillStyle = '#fff'; g.fill();
+  });
+
+  // --- skeleton (all groups; character faces +z, feet at y = 0)
   const root = new THREE.Group(); root.visible = false; scene.add(root);
-  const shield = new THREE.Mesh(new THREE.SphereGeometry(36, 32, 20), new THREE.MeshBasicMaterial({ color: new THREE.Color('#7cff6b').multiplyScalar(1.3), transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
-  const shieldRing = new THREE.Mesh(new THREE.TorusGeometry(36, 1.3, 8, 64), neon('#7cff6b', 2));
-  shield.position.y = shieldRing.position.y = 34; shield.scale.setScalar(1.1); root.add(shield, shieldRing);
-  // readability: a soft key light that follows the hero + a glow disc at the feet
-  const heroLight = new THREE.PointLight(0xfff1dc, 1.6, 240, 0); heroLight.position.set(30, 70, 90); root.add(heroLight);
+  const spin = new THREE.Group(); spin.position.y = 30; root.add(spin);          // tumble pivot at the belly
+  const rig = new THREE.Group(); rig.position.y = -30; spin.add(rig);           // facing
+  const hips = new THREE.Group(); hips.position.y = 21; rig.add(hips);
+  const torso = new THREE.Group(); torso.position.y = 1; hips.add(torso);
+  const head = new THREE.Group(); head.position.y = 17; torso.add(head);
+
+  // legs: thigh → knee → shin → boot
+  const legs = [-1, 1].map((sd) => {
+    const thigh = new THREE.Group(); thigh.position.set(sd * 4.6, 0, 0); hips.add(thigh);
+    part(thigh, limbGeo(3.7, 7), M.suit);
+    const knee = new THREE.Group(); knee.position.y = -7; thigh.add(knee);
+    part(knee, limbGeo(3.5, 7), M.suit);
+    part(knee, new THREE.CylinderGeometry(3.9, 4.1, 3, 16), M.rubber, 0, -5.5, 0, { outline: false });
+    part(knee, new RoundedBoxGeometry(8, 5.5, 12, 3, 2.2), M.rubber, 0, -9.6, 1.8);
+    part(knee, new THREE.SphereGeometry(3.4, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), M.brass, 0, -10.6, 6.2, { rx: Math.PI / 2, outline: false });
+    return { thigh, knee };
+  });
+  // belt + buckle
+  part(hips, new THREE.CylinderGeometry(9.6, 9.2, 4, 28), M.leather, 0, 0.5, 0);
+  part(hips, new RoundedBoxGeometry(5, 4.4, 2, 2, 0.8), M.brass, 0, 0.5, 9.4);
+  // torso: lathe-turned barrel suit
+  const tp = [[0, 9.2], [3, 10.2], [7, 10.6], [11, 10.0], [14, 8.4], [16, 6.0]].map(([y, r]) => new THREE.Vector2(r, y));
+  part(torso, new THREE.LatheGeometry(tp, 32), M.suit);
+  const em = part(torso, new THREE.CircleGeometry(3.8, 32), new THREE.MeshStandardMaterial({ map: emblem, roughness: 0.6 }), 0, 7.5, 10.62, { outline: false });
+  em.rotation.x = -0.05;
+  // brass corselet (shoulder plate) with rivets
+  const cp = [[0, 11.4], [1.5, 11.0], [3.5, 9.0], [4.8, 6.6]].map(([y, r]) => new THREE.Vector2(r, y));
+  part(torso, new THREE.LatheGeometry(cp, 32), M.brass, 0, 12.4, 0);
+  for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; part(torso, new THREE.SphereGeometry(0.75, 8, 6), M.brassDark, Math.sin(a) * 10.6, 13.6, Math.cos(a) * 10.6, { outline: false }); }
+  // twin air tanks + hose to the helmet
+  for (const sd of [-1, 1]) {
+    part(torso, new THREE.CapsuleGeometry(3.5, 11, 6, 16), M.tank, sd * 3.9, 8.5, -11.5);
+    part(torso, new THREE.CylinderGeometry(1.6, 2.2, 2.4, 12), M.brass, sd * 3.9, 16.4, -11.5, { outline: false });
+  }
+  part(torso, new THREE.TorusGeometry(10.4, 1.1, 8, 32), M.leather, 0, 9, 0, { rx: Math.PI / 2, outline: false });
+  const hoseCurve = new THREE.CatmullRomCurve3([new THREE.Vector3(3.9, 17.5, -11.5), new THREE.Vector3(9, 23, -12), new THREE.Vector3(14.5, 26, -5), new THREE.Vector3(12.5, 27, 1)]);
+  part(torso, new THREE.TubeGeometry(hoseCurve, 24, 1.35, 10, false), M.rubber);
+
+  // arms: shoulder → elbow → glove
+  const arms = [-1, 1].map((sd) => {
+    const sh = new THREE.Group(); sh.position.set(sd * 10.4, 12.5, 0); torso.add(sh);
+    part(sh, new THREE.SphereGeometry(3.6, 16, 12), M.brass, 0, 0, 0);
+    part(sh, limbGeo(2.9, 5.5), M.suit, 0, -1, 0);
+    const el = new THREE.Group(); el.position.y = -6.5; sh.add(el);
+    part(el, limbGeo(2.7, 5.5), M.suit);
+    part(el, new THREE.SphereGeometry(3.4, 16, 12), M.leather, 0, -6.6, 0.4);
+    return { sh, el };
+  });
+
+  // helmet: brass dome, collar bolts, front porthole with eyes behind glass, side ports, valve
+  const HR = 13.5, HY = 12;
+  part(head, new THREE.TorusGeometry(8.2, 1.9, 12, 32), M.brassDark, 0, 1.4, 0, { rx: Math.PI / 2 });
+  for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2 + 0.5; part(head, new THREE.SphereGeometry(1.1, 10, 8), M.brass, Math.sin(a) * 9.4, 1.6, Math.cos(a) * 9.4, { outline: false }); }
+  part(head, new THREE.SphereGeometry(HR, 40, 28), M.brass, 0, HY, 0);
+  const face = new THREE.Group(); face.position.set(0, HY + 0.5, HR - 0.4); head.add(face);
+  part(face, new THREE.CircleGeometry(6.6, 36), M.visorBack, 0, 0, 0.5, { outline: false, shadow: false });
+  const eyes = [-1, 1].map((sd) => {
+    const e = new THREE.Group(); e.position.set(sd * 2.75, 0.2, 0.9); face.add(e);
+    const white = part(e, new THREE.SphereGeometry(2.45, 20, 14), M.eye, 0, 0, 0, { outline: false, shadow: false }); white.scale.set(1, 1.3, 0.45);
+    const pupil = part(e, new THREE.SphereGeometry(1.45, 16, 12), M.pupil, 0, 0, 0.95, { outline: false, shadow: false }); pupil.scale.set(1, 1.2, 0.4);
+    const gl = part(pupil, new THREE.SphereGeometry(0.35, 8, 6), M.glint, 0.35, 0.45, 0.6, { outline: false, shadow: false });
+    return { e, white, pupil, gl };
+  });
+  part(face, new THREE.CircleGeometry(6.6, 36), M.glass, 0, 0, 1.6, { outline: false, shadow: false });
+  part(face, new THREE.PlaneGeometry(1.4, 6), M.glint, -2.8, 1.6, 1.7, { rz: -0.6, outline: false, shadow: false }).material = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, toneMapped: false });
+  part(face, new THREE.TorusGeometry(6.9, 1.55, 14, 40), M.brass, 0, 0, 1.4);
+  for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; part(face, new THREE.SphereGeometry(0.6, 8, 6), M.brassDark, Math.cos(a) * 6.9, Math.sin(a) * 6.9, 2.6, { outline: false }); }
+  for (const sd of [-1, 1]) { // side ports
+    const p = new THREE.Group(); p.position.set(sd * (HR - 0.3), HY + 1, -0.5); p.rotation.y = sd * Math.PI / 2; head.add(p);
+    part(p, new THREE.CircleGeometry(3.4, 24), M.portGlow, 0, 0, 0.4, { outline: false, shadow: false });
+    part(p, new THREE.TorusGeometry(3.6, 1.0, 10, 24), M.brass, 0, 0, 0.4);
+  }
+  part(head, new THREE.CylinderGeometry(1.6, 2.2, 3.2, 12), M.brassDark, 0, HY + HR + 0.6, 0);
+  part(head, new THREE.SphereGeometry(1.9, 12, 10), M.brass, 0, HY + HR + 2.6, 0);
+
+  // harpoon launcher (carried across the chest, swung straight up to fire)
+  const gun = new THREE.Group(); torso.add(gun);
+  part(gun, new THREE.CylinderGeometry(2.4, 2.8, 15, 16), M.gun, 0, 0, 0);
+  part(gun, new THREE.CylinderGeometry(2.9, 2.9, 1.6, 16), M.brass, 0, -4.5, 0, { outline: false });
+  part(gun, new THREE.CylinderGeometry(2.6, 2.6, 1.2, 16), M.brass, 0, 4, 0, { outline: false });
+  part(gun, new THREE.CylinderGeometry(0.9, 0.9, 6, 10), M.brassDark, 0, 10, 0);
+  part(gun, new THREE.ConeGeometry(2.1, 5.5, 4), M.brass, 0, 15.5, 0);
+  part(gun, new THREE.TorusGeometry(3.2, 1.4, 10, 20), M.rope, 3.4, -1.5, 0, { ry: Math.PI / 2 });
+  part(gun, new RoundedBoxGeometry(2.4, 5, 3, 2, 0.8), M.leather, 0, -6.5, -2.6);
+
+  // shield bubble, follow light and foot glow
+  const shield = new THREE.Mesh(new THREE.SphereGeometry(38, 32, 20), new THREE.MeshBasicMaterial({ color: new THREE.Color('#7cff6b').multiplyScalar(1.3), transparent: true, opacity: 0.16, depthWrite: false, blending: THREE.AdditiveBlending, toneMapped: false }));
+  const shieldRing = new THREE.Mesh(new THREE.TorusGeometry(38, 1.3, 8, 64), neon('#7cff6b', 2));
+  shield.position.y = shieldRing.position.y = 34; root.add(shield, shieldRing);
+  const heroLight = new THREE.PointLight(0xfff1dc, 0.8, 240, 0); heroLight.position.set(30, 70, 90); root.add(heroLight);
   const footGlow = new THREE.Mesh(new THREE.CircleGeometry(26, 32), new THREE.MeshBasicMaterial({ color: new THREE.Color('#3fe0ff').multiplyScalar(0.8), transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
   footGlow.rotation.x = -Math.PI / 2; footGlow.position.y = 1; root.add(footGlow);
-  let model = null, mixer = null, current = null, lastShot = 0, lastDead = false, shootHold = 0, stepT = 0, face = Math.PI / 2;
-  const actions = {};
-  loadGLB('hero').then((g) => {
-    model = g.scene;
-    model.traverse((o) => {
-      if (!o.isMesh) return;
-      o.castShadow = true; o.frustumCulled = false;
-      // The pack ships unlit materials; swap to PBR so the hero is lit like the rest of the scene,
-      // with a little self-illumination from its own texture so it never goes muddy.
-      const m = o.material;
-      o.material = new THREE.MeshStandardMaterial({ map: m.map, color: m.color, roughness: 0.65, metalness: 0.05, emissive: 0xffffff, emissiveMap: m.map, emissiveIntensity: 0.22, envMapIntensity: 0.8 });
-    });
-    model.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(model, true), h = box.max.y - box.min.y, s = 76 / h;
-    model.scale.setScalar(s); model.position.y = -box.min.y * s;
-    root.add(model);
-    mixer = new THREE.AnimationMixer(model);
-    for (const c of g.animations) actions[clipName(c)] = mixer.clipAction(c);
-    play('Idle', 0);
-    assetStatus.hero = 'ok';
-  }).catch((e) => { assetStatus.hero = 'failed: ' + e.message; console.warn('hero.glb failed to load, using fallback model', e); });
+  rig.scale.setScalar(1.08);
 
-  function play(name, fade = 0.12, ts = 1, once = false, restart = false) {
-    const a = actions[name]; if (!a) return;
-    if (current === a && !restart) return;
-    a.reset(); a.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); a.clampWhenFinished = once;
-    a.setEffectiveTimeScale(ts); a.setEffectiveWeight(1);
-    if (current && current !== a) a.crossFadeFrom(current, fade, false); else a.fadeIn(fade);
-    a.play(); current = a;
-  }
+  // --- animation state
+  let phase = 0, facing = 0.95, lastShot = 0, shootK = 0, blinkT = 2.5, blink = 0, glanceT = 1.5, glance = 0, glanceTo = 0, lastStep = 0, speedS = 0;
+  const lerp = (a, b, k) => a + (b - a) * k;
   return {
-    get ready() { return !!model; },
+    root, ready: true,
+    // pose(p, dt, mode): mode 'game' follows the player; 'show' is the title-screen showcase
     sync(dt) {
       const p = game.player;
-      root.visible = !!model && !!p && game.state !== 'title';
+      const show = game.state === 'title';
+      root.visible = show || (!!p);
       if (!root.visible) return;
-      const dead = p.dead;
-      mixer.update(game.hitstop > 0 ? 0 : dt * Math.max(game.timeScale, 0.7));
-      model.visible = !(!dead && game.invuln > 0 && Math.floor(game.realT * 20) % 2);
-      root.position.set(X(dead ? p.dx : p.x), Y(dead ? Math.min(p.dy, ARENA.b) : ARENA.b), 0);
-      const target = p.face * (Math.PI / 2 - 0.6); // three-quarter view toward the camera
-      face += (target - face) * Math.min(1, dt * 16);
-      model.rotation.y = face;
-      model.rotation.z = dead ? 0 : -clamp(p.vx / PLAYER_SPEED, -1, 1) * 0.07;
-      // Animation state machine: Death > shoot (short one-shot) > Run > Idle
-      if (game.shotId !== lastShot) { lastShot = game.shotId; if (shootHold <= 0.06) play('Bow_Shoot', 0.05, 3.4, true, true); shootHold = 0.22; }
-      if (dead) { if (!lastDead) play('Death', 0.08, 1.3, true); }
-      else if (shootHold > 0) shootHold -= dt;
-      else if (Math.abs(p.vx) > 30) {
-        play('Run', 0.1);
-        current.setEffectiveTimeScale(0.7 + (Math.abs(p.vx) / PLAYER_SPEED) * 0.8);
-        if ((stepT -= dt) <= 0 && (game.state === 'play' || game.state === 'intro')) { sfx.step(); stepT = 0.27; }
-      } else play('Idle', 0.18);
-      lastDead = dead;
-      shield.visible = shieldRing.visible = game.shield && !dead;
-      if (shield.visible) { const k = 1 + Math.sin(game.realT * 6) * 0.05; shield.scale.setScalar(k); shieldRing.scale.setScalar(k); shieldRing.rotation.x = game.realT * 2; shieldRing.rotation.y = game.realT * 1.3; }
+      const t = game.realT, dead = !show && p.dead;
+      const vx = show ? 0 : p.vx, faceDir = show ? 1 : p.face;
+      if (show) root.position.set(X(862), Y(ARENA.b), 30); // title showcase: on the open floor right of the info panels
+      else root.position.set(X(dead ? p.dx : p.x), Y(dead ? Math.min(p.dy, ARENA.b) : ARENA.b), 0);
+      rig.visible = !(!dead && !show && game.invuln > 0 && Math.floor(t * 20) % 2);
+      // facing: three-quarter view toward the camera; the title showcase slowly turns
+      const target = show ? -0.35 + Math.sin(t * 0.8) * 0.5 : faceDir * (Math.PI / 2 - 0.95);
+      facing += (target - facing) * Math.min(1, dt * 14);
+      rig.rotation.y = facing;
+      const speed = Math.min(1, Math.abs(vx) / PLAYER_SPEED);
+      speedS += (speed - speedS) * Math.min(1, dt * 12);
+      const moving = speedS > 0.08;
+      phase += dt * (7 + 9 * speedS) * (moving ? 1 : 0);
+      if (!show && game.shotId !== lastShot) { lastShot = game.shotId; shootK = 1; }
+      shootK = Math.max(0, shootK - dt * 4);
+      const cheering = game.state === 'clear';
+      const aim = Math.max(Math.min(1, shootK * 2.5), cheering ? 1 : 0);
+      const s = Math.sin(phase), c = Math.cos(phase);
+      // legs: stride + knee lift (knee bends back only)
+      legs[0].thigh.rotation.x = -s * 0.85 * speedS; legs[1].thigh.rotation.x = s * 0.85 * speedS;
+      legs[0].knee.rotation.x = 0.05 + Math.max(0, c) * 1.15 * speedS; legs[1].knee.rotation.x = 0.05 + Math.max(0, -c) * 1.15 * speedS;
+      // body: bob, lean into the run, breathing, recoil squash, victory hop
+      const hop = cheering ? Math.abs(Math.sin(t * 7)) * 5 : 0;
+      hips.position.y = 21 + Math.abs(s) * 2.2 * speedS - shootK * shootK * 2.2 + hop;
+      torso.rotation.x = 0.16 * speedS - shootK * 0.12;
+      torso.rotation.y = s * 0.14 * speedS;
+      torso.scale.set(1 + shootK * 0.05, 1 + Math.sin(t * 2.6) * 0.015 - shootK * 0.06, 1 + shootK * 0.05);
+      // arms + launcher: carried across the chest, snapped vertical to fire
+      arms.forEach(({ sh, el }, i) => {
+        const sd = i ? 1 : -1;
+        sh.rotation.x = lerp(-0.95, -2.75, aim) + (moving ? (i ? s : -s) * 0.18 * speedS : Math.sin(t * 2.6) * 0.03);
+        sh.rotation.z = sd * lerp(0.42, 0.12, aim);
+        el.rotation.x = lerp(-1.05, -0.25, aim);
+      });
+      gun.position.set(lerp(1, 15.5, aim), lerp(7.5, 22 + hop * 0.2, aim) - shootK * shootK * 3, lerp(12.5, 3, aim)); // raised beside the helmet, not through it
+      gun.rotation.x = lerp(0.95, 0.02, aim); gun.rotation.z = lerp(-0.6, 0, aim);
+      // helmet: counter-sway, looks up when firing, nods in the hop
+      head.rotation.x = -aim * 0.32 + (moving ? Math.abs(s) * 0.05 : 0);
+      head.rotation.z = -s * 0.06 * speedS;
+      // eyes: blinks, idle glances, look up when aiming, squint when cheering, shut when knocked out
+      if ((blinkT -= dt) <= 0) { blink = 0.14; blinkT = 2 + Math.random() * 3; }
+      blink = Math.max(0, blink - dt);
+      if ((glanceT -= dt) <= 0) { glanceTo = (Math.random() - 0.5) * 1.6; glanceT = 1.2 + Math.random() * 2.5; }
+      glance += (glanceTo - glance) * Math.min(1, dt * 10);
+      const open = dead ? 0.12 : cheering ? 0.45 : blink > 0 ? 0.1 : 1;
+      const lookX = moving ? 0.55 : glance * 0.5, lookY = aim > 0.3 ? 0.55 : 0;
+      eyes.forEach(({ white, pupil }) => { white.scale.y = 1.3 * open; pupil.visible = open > 0.3; pupil.position.set(lookX, lookY, 0.95); });
+      // knock-out tumble (physics lives in updateDying)
+      spin.rotation.z = dead ? p.rot : -clamp(vx / PLAYER_SPEED, -1, 1) * 0.08;
+      // footsteps on each foot plant
+      const stepIdx = Math.floor(phase / Math.PI);
+      if (moving && stepIdx !== lastStep && game.state === 'play') sfx.step();
+      lastStep = stepIdx;
+      shield.visible = shieldRing.visible = !show && game.shield && !dead;
+      if (shield.visible) { const k = 1 + Math.sin(t * 6) * 0.05; shield.scale.setScalar(k); shieldRing.scale.setScalar(k); shieldRing.rotation.x = t * 2; shieldRing.rotation.y = t * 1.3; }
+      footGlow.visible = !dead;
     },
   };
 })();
 
-/* --- Stinger enemy: CC0 Quaternius "Armabee" (assets/bee.glb), cloned per enemy with its own mixer --- */
-let beeProto = null, beeClips = [], beeScale = 1, beeOffsetY = 0;
-loadGLB('bee').then((g) => {
-  beeProto = g.scene; beeClips = g.animations;
-  beeProto.updateMatrixWorld(true); // skinned rig is scaled ×100 in the file: measure posed vertices, not raw geometry
-  const box = new THREE.Box3().setFromObject(beeProto, true), h = box.max.y - box.min.y;
-  beeScale = 56 / h; beeOffsetY = -((box.min.y + box.max.y) / 2) * beeScale;
-  beeProto.traverse((o) => { if (o.isMesh) { const m = o.material; m.metalness = 0.15; m.roughness = 0.45; m.emissive = m.color.clone().multiplyScalar(0.6); m.emissiveIntensity = 0.5; } });
-  assetStatus.bee = 'ok';
-}).catch((e) => { assetStatus.bee = 'failed: ' + e.message; console.warn('bee.glb failed to load, using fallback model', e); });
-const telegraphMatProto = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff3a22').multiplyScalar(2), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
-const enemyMeshes = new Map();
-function makeEnemyMesh() {
-  const group = new THREE.Group(), ud = group.userData;
-  if (beeProto) {
-    const m = SkeletonUtils.clone(beeProto); m.scale.setScalar(beeScale); m.position.y = beeOffsetY;
-    m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; o.material = o.material.clone(); } });
-    const spin = new THREE.Group(); spin.add(m); group.add(spin);
-    ud.mixer = new THREE.AnimationMixer(m); ud.acts = {};
-    for (const c of beeClips) ud.acts[clipName(c)] = ud.mixer.clipAction(c);
-    ud.spin = spin;
-  } else { // fallback: striped orb with wings
-    const spin = new THREE.Group();
-    spin.add(new THREE.Mesh(sphereGeo, new THREE.MeshStandardMaterial({ color: 0xffc23f, roughness: 0.4 })));
-    spin.children[0].scale.setScalar(16);
-    const wing = new THREE.Mesh(new THREE.CircleGeometry(12, 16), new THREE.MeshBasicMaterial({ color: 0xdff6ff, transparent: true, opacity: 0.6, side: THREE.DoubleSide }));
-    wing.position.set(0, 16, 0); spin.add(wing); group.add(spin); ud.spin = spin; ud.wing = wing;
+/* --- Stinger drone: original mechanical wasp. Gunmetal thorax, banded abdomen that curls forward to
+       aim the stinger, a single red eye that heats up while it charges, iridescent wings beating fast. --- */
+const droneMats = (() => {
+  const bands = canvasTex(64, 128, (g, w, h) => {
+    for (let y = 0; y < h; y += 16) { g.fillStyle = (y / 16) % 2 ? '#1c1630' : '#ffc21a'; g.fillRect(0, y, w, 16); }
+    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(0, 0, w, 3);
+  });
+  return {
+    shell: new THREE.MeshPhysicalMaterial({ color: 0x3a3352, metalness: 0.7, roughness: 0.28, clearcoat: 1 }),
+    bands: new THREE.MeshPhysicalMaterial({ map: bands, metalness: 0.3, roughness: 0.35, clearcoat: 1 }),
+    sting: new THREE.MeshStandardMaterial({ color: 0x1a1428, metalness: 0.8, roughness: 0.3 }),
+    wing: new THREE.MeshPhysicalMaterial({ color: 0xcff6ff, transparent: true, opacity: 0.42, roughness: 0.1, iridescence: 1, iridescenceIOR: 1.4, side: THREE.DoubleSide, depthWrite: false }),
+    leg: new THREE.MeshStandardMaterial({ color: 0x1a1428, roughness: 0.5 }),
+  };
+})();
+function makeDrone() {
+  const g = new THREE.Group(), body = new THREE.Group(); g.add(body);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff3a22').multiplyScalar(1.4), toneMapped: false });
+  const thorax = part(body, new THREE.SphereGeometry(8.5, 24, 18), droneMats.shell); thorax.scale.set(1, 0.92, 1.05);
+  const abd = new THREE.Group(); abd.position.set(0, -1, -6); body.add(abd);
+  const ag = new THREE.SphereGeometry(8.4, 24, 18); ag.rotateX(Math.PI / 2); ag.scale(0.85, 0.85, 1.4);
+  part(abd, ag, droneMats.bands, 0, 0, -9.5);
+  const sg = new THREE.ConeGeometry(2, 9, 10); sg.rotateX(-Math.PI / 2);
+  part(abd, sg, droneMats.sting, 0, 0, -24);
+  const headM = part(body, new THREE.SphereGeometry(6.2, 22, 16), droneMats.shell, 0, 2.5, 9);
+  const eye = part(headM, new THREE.SphereGeometry(3.6, 20, 14), eyeMat, 0, 0.6, 4.4, { outline: false }); eye.scale.z = 0.6;
+  part(eye, new THREE.SphereGeometry(1.1, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false }), -1, 1, 2.6, { outline: false, shadow: false });
+  for (const sd of [-1, 1]) { // antennae
+    const c = new THREE.CatmullRomCurve3([new THREE.Vector3(sd * 2, 4.5, 2), new THREE.Vector3(sd * 4, 9, 4), new THREE.Vector3(sd * 6.5, 11, 8)]);
+    part(headM, new THREE.TubeGeometry(c, 10, 0.5, 6, false), droneMats.leg, 0, 0, 0, { outline: false });
+    part(headM, new THREE.SphereGeometry(1.1, 8, 6), eyeMat, sd * 6.5, 11, 8, { outline: false });
   }
-  ud.glow = new THREE.Mesh(sphereGeo, telegraphMatProto.clone()); ud.glow.scale.setScalar(34); ud.glow.position.z = -40; group.add(ud.glow);
-  scene.add(group); return group;
+  for (let i = 0; i < 3; i++) for (const sd of [-1, 1]) { // tucked legs
+    const l = part(body, limbGeo(0.8, 7), droneMats.leg, sd * 4, -6, 4 - i * 4, { outline: false });
+    l.rotation.z = sd * 0.5; l.rotation.x = 0.5;
+  }
+  const wingGeo = new THREE.CircleGeometry(1, 24); wingGeo.scale(5.5, 13, 1); wingGeo.translate(0, 12, 0);
+  const wings = [];
+  for (const sd of [-1, 1]) for (const k of [0, 1]) {
+    const hinge = new THREE.Group(); hinge.position.set(sd * 3, 6.5, 1 - k * 5); body.add(hinge);
+    const w = new THREE.Mesh(wingGeo, droneMats.wing); w.rotation.x = -0.5 - k * 0.35; w.scale.setScalar(k ? 0.8 : 1); hinge.add(w);
+    wings.push({ hinge, sd, k });
+  }
+  const glow = new THREE.Mesh(sphereGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff3a22').multiplyScalar(2), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+  glow.scale.setScalar(34); glow.position.z = -40; g.add(glow);
+  g.userData = { body, abd, wings, eye, eyeMat, glow, spin: body };
+  scene.add(g); return g;
 }
+const enemyMeshes = new Map();
 function syncEnemies(dt) {
+  const t = game.realT;
   for (const e of game.enemies) {
     let m = enemyMeshes.get(e);
-    if (!m) { m = makeEnemyMesh(); enemyMeshes.set(e, m); }
-    const ud = m.userData; ud.seen = true;
+    if (!m) { m = makeDrone(); enemyMeshes.set(e, m); }
+    const u = m.userData; u.seen = true;
     m.position.set(X(e.x), Y(e.y), 10);
-    ud.spin.rotation.y = e.dir > 0 ? Math.PI / 2 - 0.35 : -Math.PI / 2 + 0.35;
-    ud.spin.rotation.z = e.dying ? e.dying * 9 : 0;
-    if (ud.acts) {
-      const want = e.dying ? 'Death' : e.charge > 0 ? 'Punch' : 'Fast_Flying';
-      if (ud.cur !== want && ud.acts[want]) { const a = ud.acts[want]; a.reset(); a.setLoop(e.dying ? THREE.LoopOnce : THREE.LoopRepeat, Infinity); a.clampWhenFinished = true; if (ud.cur && ud.acts[ud.cur]) a.crossFadeFrom(ud.acts[ud.cur], 0.1, false); a.play(); ud.cur = want; }
-      ud.mixer.update(game.hitstop > 0 ? 0 : dt * game.timeScale);
-    } else if (ud.wing) ud.wing.scale.y = 0.4 + Math.abs(Math.sin(game.realT * 40));
-    ud.glow.material.opacity = e.charge > 0 ? 0.12 + 0.12 * Math.sin(game.realT * 45) : 0;
-    if (ud.spin && e.charge > 0) ud.spin.position.x = Math.sin(game.realT * 90) * 2; else if (ud.spin) ud.spin.position.x = 0; // shake while charging
+    u.body.rotation.y = e.dir > 0 ? Math.PI / 2 - 0.45 : -Math.PI / 2 + 0.45;
+    u.body.rotation.z = e.dying ? e.dying * 9 : Math.sin(t * 3 + e.t) * 0.06;
+    const charging = e.charge > 0 && !e.dying;
+    u.body.position.x = charging ? Math.sin(t * 90) * 1.6 : 0;
+    // abdomen curls under to point the stinger at the player while charging
+    u.abd.rotation.x += ((charging ? 1.1 : 0.15 + Math.sin(t * 4) * 0.08) - u.abd.rotation.x) * Math.min(1, dt * 12);
+    const flap = e.dying ? 0 : Math.sin(t * 70);
+    for (const w of u.wings) w.hinge.rotation.z = w.sd * (0.35 + flap * 0.55 * (w.k ? 0.8 : 1));
+    u.eyeMat.color.set('#ff3a22').multiplyScalar(charging ? 3 + Math.sin(t * 40) : 1.4);
+    u.glow.material.opacity = charging ? 0.12 + 0.12 * Math.sin(t * 45) : 0;
   }
   for (const [e, m] of enemyMeshes) {
-    if (!m.userData.seen) { scene.remove(m); enemyMeshes.delete(e); if (m.userData.mixer) m.userData.mixer.stopAllAction(); m.traverse((o) => { if (o.isSkinnedMesh) o.skeleton.dispose(); /* frees the bone texture */ if (o.isMesh && o.material !== m.userData.glow.material && o.material.dispose) o.material.dispose(); }); m.userData.glow.material.dispose(); }
+    if (!m.userData.seen) {
+      scene.remove(m); enemyMeshes.delete(e);
+      m.traverse((o) => { if (o.geometry && o.geometry !== sphereGeo) o.geometry.dispose(); }); // per-drone geometry
+      m.userData.eyeMat.dispose(); m.userData.glow.material.dispose();
+    }
     m.userData.seen = false;
   }
 }
@@ -1622,7 +1874,7 @@ function render3D(dt) {
   shakeX = rand(-s, s); shakeY = rand(-s, s);
   camera.position.set(camX + shakeX, shakeY, CAM_D);
   camera.rotation.z = rand(-1, 1) * game.shake * game.shake * 0.012;
-  syncBubbles(dt); player3d.sync(dt); hero.sync(dt); syncEnemies(dt); syncShots(); syncImpacts(); syncHarpoons(); syncBullets(); syncPlatforms(); syncItems(); syncParticles(dt);
+  syncBubbles(dt); hero.sync(dt); syncEnemies(dt); syncShots(); syncImpacts(); syncHarpoons(); syncBullets(); syncPlatforms(); syncItems(); syncParticles(dt);
   floorGlow.intensity = 0.5 + game.flash * 2;
   fxPass.uniforms.uSlow.value = clamp((1 - game.timeScale) / 0.7, 0, 1);
   fxPass.uniforms.uAberr.value = game.shake * 1.6 + game.flash * 0.6;
@@ -1767,10 +2019,12 @@ function start() {
   hud.focus();
 }
 // Debug handle for console tinkering (e.g. __hp.loadLevel(9)).
-window.__hp = { game, keys, input, loadLevel, applyItem, confirmAction, killEnemy, ARENA, ITEMS, Sound, assetStatus, hero,
+window.__hp = { game, keys, input, loadLevel, applyItem, confirmAction, killEnemy, ARENA, ITEMS, Sound, hero, camera,
   gpu: () => ({ ...renderer.info.memory, programs: renderer.info.programs.length }),
   // step the game deterministically (used by the headless test harness); draw=false skips per-step rendering
   setManualClock(on) { manualClock = on; },
+  // close-up render of a world point (character review shots); restores the game camera afterwards
+  closeup(tx, ty, dist) { const p = camera.position.clone(), r = camera.rotation.clone(); camera.position.set(tx, ty, dist); camera.lookAt(tx, ty, 0); composer.render(0); camera.position.copy(p); camera.rotation.copy(r); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, hud.width, hud.height); },
   advance(sec, draw = true) { for (let t = 0; t < sec; t += 1 / 60) { tick(1 / 60); if (draw) render3D(1 / 60); } render3D(1 / 60); render2D(); } };
 window.claude?.hot?.ready ? window.claude.hot.ready(start) : start();
 </script>
