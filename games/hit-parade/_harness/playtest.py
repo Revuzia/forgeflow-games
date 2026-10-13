@@ -18,9 +18,10 @@ Flow (every step asserted; a failed step is reported with what was seen):
      are locked); P1 picks johnny (fighter, colour, controls), the CPU cursor moves to bruno (fighter, colour)
   4. stage select: RUST THEATER; VS splash; the bout starts (phase 'bout', match phase 'fight')
   5. the bout, real keys only: walk (D/A), SIDESTEP (tap Q = STEP_IN / E = STEP_OUT) and CIRCLE-WALK (hold E: the 3D ring,
-     CONTRACT §35.2, CHANGED(AI3D) - shots pt_circle_a/b/c from three angles of the orbit), jab (J), special (I), throw (H),
-     parry (hold O into the CPU's attack), IMPACT (P), super (I+L = SIMPLE S+H) once SHOWTIME >= 1 bar; then fight to the
-     finish (walk in, ASSIST auto-combo U + J taps, throws, block by holding back when the CPU attacks, a sidestep tap
+     CONTRACT §35.2, CHANGED(AI3D) - shots pt_circle_a/b/c from three angles of the orbit), jab (J), special (;), throw (F),
+     parry (hold R into the CPU's attack), IMPACT (G), super (; + L = SIMPLE S+H) once SHOWTIME >= 1 bar; then fight to the
+     finish (walk in, ASSIST auto-combo N + J taps, throws, block by holding back when the CPU attacks, a sidestep tap
+     (CHANGED(wf8 fix) WF8G-8: the key names follow K - the verb lines print cap(...) of the key actually pressed)
      every few seconds). Distances are PLANAR (x, z) and forward = P1's facing sign, as the sim maps LEFT / RIGHT
      (CHANGED(AI3D)). HUD read-back checked during the bout: HP bars
      follow the sim, NERVE / SHOWTIME present, timer counting, round pips, combo counter, captions. Audio: unlocked,
@@ -43,10 +44,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import (SHOTS, HarnessError, Session, add_common_args, build_url, diag_problems, events_tail,  # noqa: E402
                     fighters_info, match_info, preflight_chromes, print_diagnostics, save_report, wait_match_phase, wait_warm)
 
-K = {"up": "KeyW", "down": "KeyS", "left": "KeyA", "right": "KeyD", "l": "KeyJ", "m": "KeyK", "h": "KeyL", "s": "KeyI",
-     "assist": "KeyU", "throw": "KeyH", "parry": "KeyO", "impact": "KeyP", "pause": "Escape",
+# CHANGED(input) (CONTRACT §36.5 item 4): P1's default map is the EASY one now (S on ;, ASSIST N, THROW F, PARRY R, IMPACT G;
+# U / I / O / P / H / Y = SPECIAL 1-4 / SUPER / PRIME TIME) - the bot keeps its four-button plans on those keys
+K = {"up": "KeyW", "down": "KeyS", "left": "KeyA", "right": "KeyD", "l": "KeyJ", "m": "KeyK", "h": "KeyL", "s": "Semicolon",
+     "assist": "KeyN", "throw": "KeyF", "parry": "KeyR", "impact": "KeyG", "pause": "Escape",
      # CHANGED(AI3D): the §35.2 default STEP keys (CONTRACT §35.16 item 2: P1 Q = STEP_IN, E = STEP_OUT)
      "stepin": "KeyQ", "stepout": "KeyE"}
+
+
+def cap(name):
+    """CHANGED(wf8 fix) WF8G-8: the key cap a verb line names (K's code -> 'F', ';'), so report texts follow the real presses"""
+    code = K.get(name, name)
+    return {"Semicolon": ";", "Escape": "ESC"}.get(code, code[3:] if code.startswith("Key") else code)
 
 READ_MENUS = "() => { try { return window.__HP__ && __HP__.menus ? __HP__.menus() : null; } catch (e) { return null; } }"
 READ_HUD = "() => { try { return window.__HP__ && __HP__.hud ? __HP__.hud() : null; } catch (e) { return null; } }"
@@ -688,10 +697,10 @@ def play_bout(P, S, args, verbs):
         sp = by(evs_since(n0), ("PROJ_SPAWN",), a=0) + by(evs_since(n0), ("HIT", "BLOCK", "COUNTER", "PUNISH", "PROJ_HIT"), a=0, c=(3, 6))
         if sp:
             landed = by(evs_since(n0), ("HIT", "BLOCK", "PROJ_HIT", "COUNTER", "PUNISH"), a=0, c=(3, 6))
-            mark("special", True, "I -> %s" % ", ".join("%s c=%s" % (e["typeName"], e.get("c")) for e in (landed or sp)[:3]))
+            mark("special", True, "%s -> %s" % (cap("s"), ", ".join("%s c=%s" % (e["typeName"], e.get("c")) for e in (landed or sp)[:3])))
             if landed:
                 break
-    # ---------- verb: throw (H) touching
+    # ---------- verb: throw (F) touching
     for _ in range(6):
         walk_in(2.0, 0.55)
         n0 = len(P.log)
@@ -699,11 +708,11 @@ def play_bout(P, S, args, verbs):
         P.new_events()
         th = by(evs_since(n0), ("THROW", "THROW_TECH"), a=0)
         if th:
-            mark("throw", True, "H at close range -> %s a=0" % th[0]["typeName"])
+            mark("throw", True, "%s at close range -> %s a=0" % (cap("throw"), th[0]["typeName"]))
             break
-        mark("throw", False, "H x%d: no THROW by P1 yet" % presses.get("throw", 0))
+        mark("throw", False, "%s x%d: no THROW by P1 yet" % (cap("throw"), presses.get("throw", 0)))
         time.sleep(0.3)
-    # ---------- verb: IMPACT (P)
+    # ---------- verb: IMPACT (G)
     for _ in range(4):
         walk_in(2.0, 1.2)
         n0 = len(P.log)
@@ -712,10 +721,10 @@ def play_bout(P, S, args, verbs):
         im = by(evs_since(n0), ("IMPACT_START",), a=0)
         if im:
             more = by(evs_since(n0), ("HIT", "BLOCK", "IMPACT_ARMOR", "WALL_SPLAT", "IMPACT_CLASH"))
-            mark("impact", True, "P -> IMPACT_START a=0%s" % ("; then " + ", ".join("%s a=%s c=%s" % (e["typeName"], e.get("a"), e.get("c")) for e in more[:3]) if more else ""))
+            mark("impact", True, cap("impact") + " -> IMPACT_START a=0%s" % ("; then " + ", ".join("%s a=%s c=%s" % (e["typeName"], e.get("a"), e.get("c")) for e in more[:3]) if more else ""))
             break
-        mark("impact", False, "P x%d: no IMPACT_START" % presses.get("impact", 0))
-    # ---------- verb: parry (hold O into the CPU's attack)
+        mark("impact", False, "%s x%d: no IMPACT_START" % (cap("impact"), presses.get("impact", 0)))
+    # ---------- verb: parry (hold R into the CPU's attack)
     # CHANGED(fixer): only a PARRYABLE attack counts - throws, command grabs and grab supers beat a parry (they punish it),
     # so holding O into the CPU's walk_in_h is not a parry test (measured in the fixer G6 run: the only attack L1 Bruno
     # threw in the window was his 360 grab). Grab moves come from the opponent's fighter data.
@@ -756,7 +765,7 @@ def play_bout(P, S, args, verbs):
             P.new_events()
             pe = by(evs_since(n0), ("PARRY", "PERFECT_PARRY"), b=0)
             if pe:
-                mark("parry", True, "hold O into the CPU's %s -> %s (a=%s b=0)" % (opp.get("moveName"), pe[0]["typeName"], pe[0].get("a")))
+                mark("parry", True, "hold %s into the CPU's %s -> %s (a=%s b=0)" % (cap("parry"), opp.get("moveName"), pe[0]["typeName"], pe[0].get("a")))
                 break
             mark("parry", False, "held O into the CPU's %s: no PARRY event" % opp.get("moveName"))
         else:
@@ -857,11 +866,11 @@ def play_bout(P, S, args, verbs):
             if sf:
                 super_done = True
                 sh = by(evs_since(n0), ("SUPER_HIT", "HIT", "BLOCK"), a=0)
-                mark("super", True, "SHOWTIME %d -> I+L (S+H) -> SUPER_FREEZE a=0 level %s%s%s" % (me.get("showtime"), sf[0].get("b"),
+                mark("super", True, "SHOWTIME %d -> %s+%s (S+H) -> SUPER_FREEZE a=0 level %s%s%s" % (me.get("showtime"), cap("s"), cap("h"), sf[0].get("b"),
                      "; " + ", ".join("%s c=%s" % (e["typeName"], e.get("c")) for e in sh[:3]) if sh else "; (no hit)", " [meter filled by dev.setMeter]" if meter_help else ""))
                 P.shot("super")
             else:
-                mark("super", False, "I+L with SHOWTIME %d: no SUPER_FREEZE" % me.get("showtime", 0))
+                mark("super", False, "%s+%s with SHOWTIME %d: no SUPER_FREEZE" % (cap("s"), cap("h"), me.get("showtime", 0)))
             continue
         # meter help: if SHOWTIME still < 1 bar once round 2 is under way, fill it (SAID in the report)
         if not super_done and not args.no_meter_help and meter_help is None and (m.get("round") or 1) >= 2 and me.get("showtime", 0) < 10000:
@@ -871,7 +880,7 @@ def play_bout(P, S, args, verbs):
         # block when the CPU attacks at range
         oatk = (opp.get("moveKind") or "") not in ("", "none") and opp.get("moveFrame", 99) < 10 and g < 1.8
         # CHANGED(AI3D): the parry verb, if the 25 s window above saw no parryable CPU attack, is tried on the next one here
-        # (hold O instead of back; throws / command grabs / grab supers beat a parry, so they are blocked as before)
+        # (hold R instead of back; throws / command grabs / grab supers beat a parry, so they are blocked as before)
         parryable = ((opp.get("moveKind") or "") not in ("", "none", "system", "throw", "cmdgrab") and g < 1.8 and parry_timing(opp)
                      and opp.get("moveName") not in grab_moves)
         if parryable and not (verbs.get("parry") or {}).get("ok") and me.get("moveName") in (None, "", "none") and (me.get("stun") or 0) <= 0:
@@ -883,7 +892,7 @@ def play_bout(P, S, args, verbs):
             pe = by(evs_since(n0), ("PARRY", "PERFECT_PARRY"), b=0)
             parry_tries.append({"move": opp.get("moveName"), "frame": opp.get("moveFrame"), "parried": bool(pe)})
             if pe:
-                verbs["parry"] = {"ok": True, "how": "hold O into the CPU's %s -> %s (a=%s b=0), later in the bout (try %d)" % (opp.get("moveName"), pe[0]["typeName"], pe[0].get("a"), len(parry_tries)),
+                verbs["parry"] = {"ok": True, "how": "hold %s into the CPU's %s -> %s (a=%s b=0), later in the bout (try %d)" % (cap("parry"), opp.get("moveName"), pe[0]["typeName"], pe[0].get("a"), len(parry_tries)),
                                   "t": round(time.time() - t_start, 1)}
             else:
                 v = verbs.get("parry") or {}

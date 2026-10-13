@@ -4,6 +4,7 @@
   "persona": "The Contestant Who Won't Stay Cancelled",
   "archetype": "counter",
   "difficulty": 2,
+  "plan": "Bait their attacks and play dead to counter; when they stop attacking, grab them.",
   "body": "Prisoner B Styperek",
   "heightM": 1.8,
   "hp": 10000,
@@ -75,6 +76,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "swat"},
       "desc": "Open-hand swat.",
+      "note": "Quick swat to stop their attack.",
       "boxes": [{"f": [5, 7], "x": 0.822, "y": 1.355, "w": 0.3, "h": 0.51}],
       "boxSrc": "hitVolume"
     },
@@ -106,6 +108,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "ankle_bite"},
       "desc": "Crouching bite at the ankle.",
+      "note": "Quick low bite; they must block crouching.",
       "pushExt": [[0, 0.239], [7, 0.318], [17, 0.243]]
     },
     "5M": {
@@ -137,7 +140,8 @@
       "lateralM": 0.6,
       "anim": {"clip": "lurch"},
       "sfx": [[5, "whoosh_light"]],
-      "desc": "Wild one-arm claw; homing."
+      "desc": "Wild one-arm claw; homing.",
+      "note": "Wild claw that catches opponents who sidestep."
     },
     "2M": {
       "kind": "normal",
@@ -168,6 +172,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "crawl_claw"},
       "desc": "Drops prone and claws along the floor: goes UNDER high pokes; -4 on block.",
+      "note": "Drops flat and claws low, sliding under high attacks.",
       "pushExt": [[0, 0.155], [3, 0.117], [7, 0.116], [15, 0.235], [30, 0.285]]
     },
     "5H": {
@@ -199,6 +204,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "long_reach"},
       "desc": "Double-claw lunge: his longest button (1.35 m); wall-splats at the ring edge.",
+      "note": "His longest reach; walls them near the edge. A sidestep beats it.",
       "boxes": [{"f": [13, 15], "x": 0.489, "y": 1.297, "w": 0.5, "h": 0.395}],
       "boxSrc": "hitVolume"
     },
@@ -231,6 +237,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "scream_up"},
       "desc": "Arms flung up in a scream: anti-air.",
+      "note": "Arms flung up to swat jumping opponents.",
       "pushExt": [[0, 0.0], [14, 0.0], [21, 0.214], [34, 0.262]]
     },
     "6H": {
@@ -261,7 +268,8 @@
       "track": {"until": 12, "rate": 180},
       "lateralM": 0.18,
       "anim": {"clip": "drop_headbutt"},
-      "desc": "Lunging headbutt from above: overhead."
+      "desc": "Lunging headbutt from above: overhead.",
+      "note": "Lunging headbutt that must be blocked standing."
     },
     "j.L": {
       "kind": "normal",
@@ -290,7 +298,8 @@
       "track": {"until": 1, "rate": 180},
       "lateralM": 0.15,
       "anim": {"clip": "air_swat"},
-      "desc": "Air swat."
+      "desc": "Air swat.",
+      "note": "Quick air swat for fights in the air."
     },
     "j.M": {
       "kind": "normal",
@@ -319,7 +328,8 @@
       "track": {"until": 1, "rate": 180},
       "lateralM": 0.18,
       "anim": {"clip": "air_lurch"},
-      "desc": "Air claw."
+      "desc": "Air claw.",
+      "note": "Air claw for fights in the air."
     },
     "j.H": {
       "kind": "normal",
@@ -348,7 +358,8 @@
       "track": {"until": 4, "rate": 180},
       "lateralM": 0.22,
       "anim": {"clip": "air_reach"},
-      "desc": "Double-claw pounce."
+      "desc": "Double-claw pounce.",
+      "note": "Double-claw pounce to start a combo."
     },
     "throw_f": {
       "kind": "throw",
@@ -391,7 +402,8 @@
       "role": [],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
-      "desc": "Grabs them and screams in their face."
+      "desc": "Grabs them and screams in their face.",
+      "note": "Up close: grab them and scream in their face. Beats blocking."
     },
     "throw_b": {
       "kind": "throw",
@@ -429,7 +441,8 @@
       "role": [],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
-      "desc": "Swings them past with a wild claw."
+      "desc": "Swings them past with a wild claw.",
+      "note": "Up close: swing them past him, swapping places."
     },
     "play_dead_l": {
       "kind": "special",
@@ -459,7 +472,8 @@
       "role": ["reversal"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "play_dead_fall"},
-      "desc": "Collapses like a corpse; a strike on the catch frames triggers GRAVE RISE."
+      "desc": "Collapses like a corpse; a strike on the catch frames triggers GRAVE RISE.",
+      "note": "Short catch; he gets back up the soonest."
     },
     "play_dead_m": {
       "kind": "special",
@@ -489,7 +503,8 @@
       "role": ["reversal"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "play_dead_fall"},
-      "desc": "Collapses like a corpse; a strike on the catch frames triggers GRAVE RISE."
+      "desc": "Collapses like a corpse; a strike on the catch frames triggers GRAVE RISE.",
+      "note": "Drops like a corpse: strikes get countered; grabs and projectiles win."
     },
     "play_dead_h": {
       "kind": "special",
@@ -519,7 +534,8 @@
       "role": ["reversal"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "play_dead_fall"},
-      "desc": "Collapses like a corpse; a strike on the catch frames triggers GRAVE RISE."
+      "desc": "Collapses like a corpse; a strike on the catch frames triggers GRAVE RISE.",
+      "note": "Catch that counters with a big rise for more hits."
     },
     "play_dead_ex": {
       "kind": "ex",
@@ -549,7 +565,8 @@
       "role": ["reversal"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "play_dead_fall"},
-      "desc": "Catches strikes AND projectiles from frame 1."
+      "desc": "Catches strikes AND projectiles from frame 1.",
+      "note": "Catches strikes and projectiles right away."
     },
     "grave_rise": {
       "kind": "special",
@@ -580,7 +597,8 @@
       "homing": true,
       "lateralM": 0.6,
       "anim": {"clip": "rise_claw"},
-      "desc": "Snaps up off the floor into a claw (after a PLAY DEAD catch)."
+      "desc": "Snaps up off the floor into a claw (after a PLAY DEAD catch).",
+      "note": "After a Play Dead catch: springs up into a claw that knocks down."
     },
     "grave_rise_big": {
       "kind": "special",
@@ -611,7 +629,8 @@
       "homing": true,
       "lateralM": 0.6,
       "anim": {"clip": "rise_claw"},
-      "desc": "Bigger rise: ground bounce for a juggle."
+      "desc": "Bigger rise: ground bounce for a juggle.",
+      "note": "After a heavy Play Dead catch: rises and pops them up."
     },
     "grave_crawl_l": {
       "kind": "special",
@@ -644,6 +663,7 @@
       "anim": {"clip": "crawl_run", "warp": [[0, 0.0], [16, 0.833], [41, 1.433]]},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Four-limb crawl under everything, then an ankle bite (low, knockdown).",
+      "note": "Short crawl, out the quickest of the three.",
       "pushExt": [[0, 0.291], [11, 0.281], [12, 0.186], [20, 0.26], [41, 0.18]]
     },
     "grave_crawl_m": {
@@ -677,6 +697,7 @@
       "anim": {"clip": "crawl_run", "warp": [[0, 0.0], [18, 0.833], [43, 1.433]]},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Four-limb crawl under everything, then an ankle bite (low, knockdown).",
+      "note": "Crawls in low under attacks, then bites the ankle to knock down.",
       "pushExt": [[0, 0.291], [12, 0.281], [14, 0.186], [17, 0.235], [22, 0.26], [43, 0.18]]
     },
     "grave_crawl_h": {
@@ -710,6 +731,7 @@
       "anim": {"clip": "crawl_run", "warp": [[0, 0.0], [20, 0.833], [45, 1.433]]},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Four-limb crawl under everything, then an ankle bite (low, knockdown).",
+      "note": "Longest crawl, to reach them from far away.",
       "pushExt": [[0, 0.291], [14, 0.281], [15, 0.186], [24, 0.26], [45, 0.18]]
     },
     "grave_crawl_ex": {
@@ -744,6 +766,7 @@
       "anim": {"clip": "crawl_run_ex", "warp": [[0, 0.0], [15, 0.833], [29, 1.633], [49, 2.233]]},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Projectile-invulnerable crawl, two bites, -4 on block.",
+      "note": "Crawl through projectiles with two bites; safe if blocked.",
       "pushExt": [[0, 0.291], [10, 0.281], [12, 0.191], [17, 0.26], [25, 0.18], [32, 0.26], [49, 0.18]]
     },
     "last_meal_l": {
@@ -791,7 +814,8 @@
       "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "Half-circle command grab: grabs, gnaws (comic), shoves them away."
+      "desc": "Half-circle command grab: grabs, gnaws (comic), shoves them away.",
+      "note": "Grab with the longest reach of the three, but the least damage."
     },
     "last_meal_m": {
       "kind": "cmdgrab",
@@ -838,7 +862,8 @@
       "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "Half-circle command grab: grabs, gnaws (comic), shoves them away."
+      "desc": "Half-circle command grab: grabs, gnaws (comic), shoves them away.",
+      "note": "Grab that beats blocking and sidesteps: gnaw, then shove away."
     },
     "last_meal_h": {
       "kind": "cmdgrab",
@@ -885,7 +910,8 @@
       "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "Half-circle command grab: grabs, gnaws (comic), shoves them away."
+      "desc": "Half-circle command grab: grabs, gnaws (comic), shoves them away.",
+      "note": "Shortest reach, but the most damage of the three."
     },
     "last_meal_ex": {
       "kind": "ex",
@@ -932,7 +958,8 @@
       "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "Strike-invulnerable grab, 1.10 m."
+      "desc": "Strike-invulnerable grab, 1.10 m.",
+      "note": "Grab with extra reach that can't be hit as it starts."
     },
     "arise_l": {
       "kind": "special",
@@ -964,6 +991,7 @@
       "anim": {"clip": "arise_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Leaping screaming claw anti-air.",
+      "note": "Quickest of the three leaps, the best one against jumps.",
       "pushExt": [[0, 0.0], [16, 0.0], [23, 0.109], [42, 0.156]]
     },
     "arise_m": {
@@ -996,6 +1024,7 @@
       "anim": {"clip": "arise_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Leaping screaming claw anti-air.",
+      "note": "Leaping claw that swats jumping opponents.",
       "pushExt": [[0, 0.0], [18, 0.0], [25, 0.109], [46, 0.156]]
     },
     "arise_h": {
@@ -1028,6 +1057,7 @@
       "anim": {"clip": "arise_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Leaping screaming claw anti-air.",
+      "note": "Strongest leap; the riskiest if blocked.",
       "pushExt": [[0, 0.0], [19, 0.0], [26, 0.1], [40, 0.154], [50, 0.156]]
     },
     "arise_ex": {
@@ -1060,6 +1090,7 @@
       "anim": {"clip": "arise_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Fully invulnerable leap.",
+      "note": "Leap that can't be hit as it starts: escape pressure.",
       "boxes": [{"f": [7, 12], "x": 0.425, "y": 1.162, "w": 0.5, "h": 0.924}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [16, 0.0], [22, 0.1], [36, 0.154], [45, 0.156]]
@@ -1093,7 +1124,8 @@
       "track": {"until": 30, "rate": 20},
       "homing": true,
       "anim": {"clip": "play_dead_fall"},
-      "desc": "Counter super: plays dead for 30 frames; any strike or projectile is answered with a lunge-bite."
+      "desc": "Counter super: plays dead for 30 frames; any strike or projectile is answered with a lunge-bite.",
+      "note": "Plays dead; any strike or projectile gets a huge bite back."
     },
     "dead_air_bite": {
       "kind": "special",
@@ -1140,7 +1172,8 @@
       "track": {"until": 3, "rate": 20},
       "homing": true,
       "anim": {"clip": "bite_lunge"},
-      "desc": "The Lv1 follow-up: lunges 2.5 m and bites (unblockable, 2000)."
+      "desc": "The Lv1 follow-up: lunges 2.5 m and bites (unblockable, 2000).",
+      "note": "Dead Air's answer: lunges far and bites. It can't be blocked."
     },
     "series_finale": {
       "kind": "super3",
@@ -1288,6 +1321,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "long_reach"},
       "desc": "PRIME TIME: grabs, bites, drags them into a trapdoor grave - and climbs back out alone.",
+      "note": "PRIME TIME: unstoppable grab, a bite, and a trip into the grave.",
       "boxes": [{"f": [10, 13], "x": 0.489, "y": 1.297, "w": 0.5, "h": 0.395}],
       "boxSrc": "hitVolume"
     }
@@ -1310,7 +1344,8 @@
   "unique": {
     "kind": "counter",
     "moves": ["play_dead_l", "play_dead_m", "play_dead_h", "play_dead_ex", "dead_air"],
-    "trait": "PLAY DEAD: drops to the floor and catches strikes on frames 4-20, then rises into a counter."
+    "trait": "PLAY DEAD: drops to the floor and catches strikes on frames 4-20, then rises into a counter.",
+    "note": "Play Dead: drop to the floor; strike him then and he springs up and hits back."
   },
   "intro": "intro_rise",
   "win": ["win_chew", "win_idle"],

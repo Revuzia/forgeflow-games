@@ -4,6 +4,7 @@
   "persona": "Specimen 13",
   "archetype": "boss_armor",
   "difficulty": 2,
+  "plan": "Use the huge reach and toughness: swing big, take their hits, crush them up close.",
   "body": "Mutant",
   "heightM": 2.4,
   "hp": 11500,
@@ -75,6 +76,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "claw_jab"},
       "desc": "Short claw hook.",
+      "note": "Quick claw to stop their attack.",
       "boxes": [{"f": [6, 8], "x": 0.939, "y": 1.253, "w": 0.3, "h": 0.306}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.041], [3, 0.047], [5, 0.0], [19, 0.0]]
@@ -107,6 +109,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "low_claw"},
       "desc": "Crouching claw to the shin.",
+      "note": "Quick low claw; they must block crouching.",
       "pushExt": [[0, 0.192], [3, 0.18], [4, 0.139], [5, 0.0], [18, 0.0]]
     },
     "5M": {
@@ -138,6 +141,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "wild_swing"},
       "desc": "Wild looping claw chop, downward across the body; homing.",
+      "note": "Wild claw chop that catches opponents who sidestep.",
       "boxes": [{"f": [10, 12], "x": 1.083, "y": 1.286, "w": 0.4, "h": 0.372}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.041], [3, 0.06], [7, 0.0], [30, 0.0]]
@@ -170,6 +174,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "floor_slam"},
       "desc": "Slams both claws on the floor (low).",
+      "note": "Both claws slam the floor; they must block crouching.",
       "pushExt": [[0, 0.0], [6, 0.0], [10, 0.227], [13, 0.29], [18, 0.274], [26, 0.304], [29, 0.277]]
     },
     "5H": {
@@ -200,7 +205,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "crystal_swipe"},
       "sfx": [[9, "whoosh_heavy"]],
-      "desc": "Overhead claw haymaker with 2 hits of armor."
+      "desc": "Overhead claw haymaker with 2 hits of armor.",
+      "note": "Huge claw swipe that keeps going through two hits."
     },
     "2H": {
       "kind": "normal",
@@ -231,6 +237,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "jump_claw"},
       "desc": "Hops up with both claws: anti-air.",
+      "note": "Hops up with both claws to swat jumping opponents.",
       "pushExt": [
         [0, 0.297],
         [6, 0.256],
@@ -275,6 +282,7 @@
       "anim": {"clip": "hammer_down"},
       "sfx": [[14, "whoosh_heavy"]],
       "desc": "Leaping two-claw slam: armored overhead.",
+      "note": "Leaping slam through two hits; must be blocked standing.",
       "pushExt": [[0, 0.0], [18, 0.0], [19, 0.029], [20, 0.117], [21, 0.117], [23, 0.219], [26, 0.277], [44, 0.273]]
     },
     "j.L": {
@@ -305,6 +313,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "air_claw"},
       "desc": "Air claw.",
+      "note": "Quick air claw for fights in the air.",
       "pushExt": [[0, 0.113], [3, 0.097], [5, 0.0], [16, 0.0]]
     },
     "j.M": {
@@ -334,7 +343,8 @@
       "track": {"until": 1, "rate": 180},
       "lateralM": 0.18,
       "anim": {"clip": "air_swipe"},
-      "desc": "Air swipe."
+      "desc": "Air swipe.",
+      "note": "Air swipe for fights in the air."
     },
     "j.H": {
       "kind": "normal",
@@ -364,6 +374,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "air_slam"},
       "desc": "Two-claw falling slam.",
+      "note": "Two-claw falling slam to start a combo.",
       "pushExt": [[0, 0.0], [5, 0.0], [6, 0.029], [8, 0.176], [11, 0.27], [19, 0.267]]
     },
     "throw_f": {
@@ -403,6 +414,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Crushes them in a bear hug.",
+      "note": "Up close: crush them in a hug. Beats blocking.",
       "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [24, 0.0], [31, 0.041]]
     },
     "throw_b": {
@@ -442,6 +454,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Flings them over its shoulder.",
+      "note": "Up close: fling them over his shoulder.",
       "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [24, 0.0], [31, 0.041]]
     },
     "crusher_leap_l": {
@@ -475,6 +488,7 @@
       "anim": {"clip": "crusher_leap_clip"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Leaps across the stage and slams down: armored, overhead, very punishable.",
+      "note": "Shortest leap, for closer range.",
       "pushExt": [
         [0, 0.173],
         [2, 0.238],
@@ -522,6 +536,7 @@
       "anim": {"clip": "crusher_leap_clip"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Leaps across the stage and slams down: armored, overhead, very punishable.",
+      "note": "Huge leap through two hits; must be blocked standing. Very risky.",
       "pushExt": [
         [0, 0.173],
         [2, 0.238],
@@ -569,6 +584,7 @@
       "anim": {"clip": "crusher_leap_clip"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Leaps across the stage and slams down: armored, overhead, very punishable.",
+      "note": "Longest leap, across the ring.",
       "pushExt": [
         [0, 0.173],
         [3, 0.238],
@@ -616,6 +632,7 @@
       "anim": {"clip": "crusher_leap_clip"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Faster leap, ground bounce.",
+      "note": "Faster leap through three hits; bounces them off the floor.",
       "pushExt": [
         [0, 0.173],
         [2, 0.238],
@@ -660,6 +677,7 @@
       "anim": {"clip": "claw_rush_clip"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Armored running claw swipe.",
+      "note": "Short rush; the least risky of the three if blocked.",
       "pushExt": [[0, 0.0], [4, 0.0], [7, 0.111], [9, 0.133], [10, 0.104], [11, 0.0], [38, 0.0]]
     },
     "claw_rush_m": {
@@ -692,6 +710,7 @@
       "anim": {"clip": "claw_rush_clip"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Armored running claw swipe.",
+      "note": "Running claw swipe through two hits; knocks down. Sidesteps beat it.",
       "pushExt": [[0, 0.0], [5, 0.0], [8, 0.111], [10, 0.133], [13, 0.0], [42, 0.0]]
     },
     "claw_rush_h": {
@@ -724,6 +743,7 @@
       "anim": {"clip": "claw_rush_clip"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Armored running claw swipe.",
+      "note": "Longest rush; walls them. Very risky if blocked.",
       "pushExt": [[0, 0.0], [6, 0.0], [9, 0.111], [11, 0.133], [12, 0.104], [13, 0.034], [15, 0.0], [50, 0.0]]
     },
     "claw_rush_ex": {
@@ -756,6 +776,7 @@
       "anim": {"clip": "claw_rush_clip"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Super-armored 2-hit rush, -2 on block.",
+      "note": "Two-hit rush that no hit can stop; safe if blocked.",
       "pushExt": [[0, 0.0], [4, 0.0], [7, 0.111], [9, 0.133], [10, 0.104], [11, 0.0], [42, 0.0]]
     },
     "roar_l": {
@@ -789,6 +810,7 @@
       "anim": {"clip": "roar_wave"},
       "sfx": [[20, "crowd_cheer_burst"]],
       "desc": "Shockwave roar all around it: blows opponents away, projectile-invulnerable.",
+      "note": "Smallest roar, only right around him.",
       "pushExt": [[0, 0.0], [45, 0.0], [50, 0.144]]
     },
     "roar_m": {
@@ -822,6 +844,7 @@
       "anim": {"clip": "roar_wave"},
       "sfx": [[20, "crowd_cheer_burst"]],
       "desc": "Shockwave roar all around it: blows opponents away, projectile-invulnerable.",
+      "note": "Roar all around him: blows them away, passes through projectiles.",
       "pushExt": [[0, 0.0], [45, 0.0], [50, 0.144]]
     },
     "roar_h": {
@@ -855,6 +878,7 @@
       "anim": {"clip": "roar_wave"},
       "sfx": [[20, "crowd_cheer_burst"]],
       "desc": "Shockwave roar all around it: blows opponents away, projectile-invulnerable.",
+      "note": "Biggest roar, reaching the furthest.",
       "pushExt": [[0, 0.0], [45, 0.0], [50, 0.144]]
     },
     "roar_ex": {
@@ -888,6 +912,7 @@
       "anim": {"clip": "roar_wave"},
       "sfx": [[20, "crowd_cheer_burst"]],
       "desc": "Fast super-armored roar.",
+      "note": "Fast roar that no hit can stop; catches sidesteps.",
       "pushExt": [[0, 0.0], [37, 0.0], [42, 0.144]]
     },
     "specimen_grab_l": {
@@ -935,6 +960,7 @@
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
       "desc": "360 command grab with a long reach.",
+      "note": "Grab with the longest reach of the three, but the least damage.",
       "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [44, 0.0], [49, 0.037], [58, 0.041]]
     },
     "specimen_grab_m": {
@@ -982,6 +1008,7 @@
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
       "desc": "360 command grab with a long reach.",
+      "note": "Long-reach grab that beats blocking and sidesteps.",
       "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [44, 0.0], [49, 0.037], [58, 0.041]]
     },
     "specimen_grab_h": {
@@ -1029,6 +1056,7 @@
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
       "desc": "360 command grab with a long reach.",
+      "note": "Shortest reach, but the most damage of the three.",
       "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [44, 0.0], [49, 0.037], [58, 0.041]]
     },
     "specimen_grab_ex": {
@@ -1076,6 +1104,7 @@
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
       "desc": "Strike-invulnerable 1-5, 1.08 m.",
+      "note": "Grab with the longest reach that can't be hit as it starts.",
       "pushExt": [[0, 0.049], [2, 0.047], [4, 0.0], [44, 0.0], [49, 0.037], [58, 0.041]]
     },
     "meltdown": {
@@ -1113,6 +1142,7 @@
       "anim": {"clip": "meltdown_clip", "warp": [[0, 0.0], [10, 0.533], [22, 1.033], [34, 1.7], [87, 2.767]]},
       "sfx": [[1, "crowd_cheer_burst"]],
       "desc": "Super-armored three-swipe rampage.",
+      "note": "Three-swipe rampage that no hit can stop.",
       "pushExt": [
         [0, 0.0],
         [3, 0.013],
@@ -1296,7 +1326,8 @@
       "homing": true,
       "lateralM": 0.6,
       "anim": {"clip": "crystal_swipe"},
-      "desc": "PRIME TIME: grabbed, crushed, hammered into the floor twice, roared at and hurled across the set."
+      "desc": "PRIME TIME: grabbed, crushed, hammered into the floor twice, roared at and hurled across the set.",
+      "note": "PRIME TIME: unstoppable grab, floor slams, a roar and a big throw."
     }
   },
   "simple": {
@@ -1318,7 +1349,8 @@
     "kind": "armorStep",
     "steps": [],
     "armored": ["5H", "6H", "crusher_leap_l", "crusher_leap_m", "crusher_leap_h", "crusher_leap_ex", "claw_rush_l", "claw_rush_m", "claw_rush_h", "claw_rush_ex", "roar_l", "roar_m", "roar_h", "roar_ex", "meltdown"],
-    "trait": "BOSS ARMOR: 5H, 6H and every special take 2 hits of armor; 2.40 m reach and 11,500 HP."
+    "trait": "BOSS ARMOR: 5H, 6H and every special take 2 hits of armor; 2.40 m reach and 11,500 HP.",
+    "note": "Boss toughness: his heavy swings, rushes, leaps and roars keep going through two hits."
   },
   "intro": "intro_roar",
   "win": ["win_roar", "win_idle"],

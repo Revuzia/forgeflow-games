@@ -3,8 +3,15 @@
 //   top strip   show bug + LIVE (top-left) and SCORE in a slanted yellow frame (top-right, arcade only)
 //   bars        per side: portrait, name plate (P1 / P2 / CPU LVn), slanted health bar (yellow fill, grey recoverable
 //               HP, a red damage trail that lags 0.45 s), NERVE (6 bars) with the STAGE FRIGHT state, and SHOWTIME
-//               (the RATINGS meter, 3 bars) in the bottom corner; the centre has the timer and the round pips
-//   combo       the attacker's side: hit count + style word SOLID / SPICY / BRUTAL / PRIME TIME / SYNDICATED + damage
+//               (3 bars) in the bottom corner; the centre has the timer and the round pips. CHANGED(wf8 fix) FT-06: the corner
+//               meter is labelled SHOWTIME (was RATINGS) - one name for the super meter on the HUD, HOW TO PLAY and the
+//               PRIME TIME READY strap
+//   combo       the attacker's side: hit count + style word SOLID / SPICY / BRUTAL / MUST-SEE / SYNDICATED + damage
+//               (CHANGED(wf8 fix) FT-06: tier 4 was PRIME TIME - the name of the 3-bar super - and a Lv1 super lifted every
+//               combo to it, so pressing SUPER printed "PRIME TIME")
+//   coach       CHANGED(wf8 fix) FT-01 / FT-11: a local keyboard player who gets hit by a LOW while holding a standing block
+//               sees "LOW ATTACK! BLOCK LOW: SHIFT + S", one who is grabbed sees "GRABBED! PRESS F TO BREAK FREE" (their own
+//               key caps; at most one per 2.5 s; each hint retires after the player has done it twice in the bout)
 //   callouts    COUNTER, PUNISH COUNTER, THROW ESCAPE, PERFECT PARRY, STAGE FRIGHT, WALL SPLAT, FIRST BLOOD, BACK HIT
 //               (CHANGED(fix_ui_stage): EV3D.BACK_HIT, CONTRACT 35.20 item 3 - the attacker's side, like COUNTER)
 //   broadcast   ROUND / FIGHT / K.O. / TIME OVER / PERFECT / WINS sweeps, the stage manager's straps, host captions
@@ -19,6 +26,8 @@
 // the results screen shows (MatchResult.stats) - all from the sim's own events and snapshots.
 //
 // Touch mode (html.hp-touch) re-flows the blocks out of the stick zone and the button arc (styles.css).
+// CHANGED(ui) (CONTRACT §36.2): the in-game CONTROLS BAR (ui/controlsbar.ts) lives in the HUD frame, bottom centre between
+// the RATINGS blocks: `hud.controls` (mounted / fed with the bout's snapshots here; game.ts connects it to the settings).
 
 import type { MatchCfg, MatchStats, RoundLog, SimEvent, UiFighterSnap, UiGameData, UiMatchSnap } from './types.ts';
 import { EV, EV_BACK_HIT } from './ev.ts';
@@ -28,14 +37,23 @@ import { fighterName, fillPortrait, colorsOf, fighter, onPortraits, setPortraits
 import { setStrings, t } from './strings.ts';
 import { InputDisplay, FrameReadout, BoxOverlay, type ScreenBox, type TrainingOpts } from './training.ts';
 import { blankBonus, setBoutLog, type BonusTally } from './tally.ts';
+import { ControlsBar } from './controlsbar.ts';
+import { capChip } from './keymap.ts';
 import './styles.css';
 
 export const SHOWTIME_BAR = 10000;
 export const SHOWTIME_BARS = 3;
 export const NERVE_BAR = 10000;
 export const NERVE_BARS = 6;
-/** combo style tiers: minimum hits -> strings key (a super in the combo lifts it to PRIME TIME at least) */
-export const COMBO_TIERS: ReadonlyArray<readonly [number, string]> = [[2, 'solid'], [4, 'spicy'], [6, 'brutal'], [9, 'prime'], [12, 'syndicated']];
+/** combo style tiers: minimum hits -> strings key (a super in the combo lifts it to MUST-SEE at least). CHANGED(wf8 fix)
+ *  FT-06: 'prime' -> 'mustsee' (hud.combo.prime stays PRIME TIME: the Lv3 cinematic's slate reads it) */
+export const COMBO_TIERS: ReadonlyArray<readonly [number, string]> = [[2, 'solid'], [4, 'spicy'], [6, 'brutal'], [9, 'mustsee'], [12, 'syndicated']];
+/** CHANGED(wf8 fix) FT-01 / FT-11: coach hints - shown this long, at most one per COACH_GAP, retired after COACH_LEARNED successes */
+const COACH_MS = 2400;
+const COACH_GAP = 2500;
+const COACH_LEARNED = 2;
+/** input word bits the coach reads (input.ts BIT: DOWN 2, LEFT 4, RIGHT 8, BLOCK 1 << 15) */
+const W_DOWN = 2, W_LEFT = 4, W_RIGHT = 8, W_BLOCK = 32768;
 const LOW_HP = 0.25;
 const COMBO_HOLD_MS = 1300;
 const CALL_MS = 1600;
@@ -101,6 +119,8 @@ interface Side {
 export class Hud {
   readonly root: HTMLElement;
   readonly broadcast: Broadcast;
+  /** CHANGED(ui) (CONTRACT §36.2): the in-game controls bar */
+  readonly controls: ControlsBar;
   private readonly data: UiGameData;
   private readonly frameEl: HTMLElement;
   private readonly bug: HTMLElement;
@@ -146,6 +166,13 @@ export class Hud {
   private safeDirty = true;
   /** read-back: the last 40 events handled (after dedupe) as [frame, type, a, b] */
   private readonly evLog: Array<[number, number, number, number]> = [];
+  /** CHANGED(wf8 fix) FT-01 / FT-11: the coach bubble, its timer, last time shown, per-kind successes / shows this bout */
+  private readonly coachEl: HTMLElement;
+  private coachTimer = 0;
+  private coachAt = -1e9;
+  private coachDone: Record<'low' | 'grab', number> = { low: 0, grab: 0 };
+  private coachShown: Record<'low' | 'grab', number> = { low: 0, grab: 0 };
+  private coachLast = '';
 
   constructor(root: HTMLElement, data: UiGameData) {
     this.data = data;
@@ -190,6 +217,10 @@ export class Hud {
     bars.append(s2.root);
     this.sides = [s1, s2];
     for (const s of this.sides) F.append(s.combo, s.calls);
+    this.controls = new ControlsBar(F, data);                // CHANGED(ui)
+    this.coachEl = div('hp-coach', F);                       // CHANGED(wf8 fix) FT-01 / FT-11
+    this.coachEl.id = 'hp-coach';
+    this.coachEl.hidden = true;
 
     root.append(R);
     this.broadcast = new Broadcast(root);
@@ -286,6 +317,11 @@ export class Hud {
     this.curRound = null;
     this.bonus = blankBonus();
     this.phase2 = [false, false];
+    this.coachDone = { low: 0, grab: 0 };
+    this.coachShown = { low: 0, grab: 0 };
+    this.coachAt = -1e9;
+    this.coachLast = '';
+    this.hideCoach();
     setBoutLog({ cfg, rounds: this.roundLog, bonus: this.bonus });
     this.setBoxes(null);
     this.broadcast.clear();
@@ -322,9 +358,12 @@ export class Hud {
     this.safeDirty = true;
     if (cfg.mode === 'training') this.setTraining({ inputs: true, frames: true });
     else this.setTraining(null);
+    this.controls.mount(cfg);                                // CHANGED(ui)
   }
 
   unmount(): void {
+    this.controls.unmount();                                 // CHANGED(ui)
+    this.hideCoach();                                        // CHANGED(wf8 fix)
     this.root.hidden = true;
     this.broadcast.clear();
     this.broadcast.root.hidden = true;
@@ -369,6 +408,7 @@ export class Hud {
     }
     this.lastHp = [f[0].hp, f[1].hp];
     this.frames?.frame(m, f, ev);
+    this.controls.frame(f);                                  // CHANGED(ui): SUPER / PRIME TIME lit from SHOWTIME
   }
 
   /**
@@ -442,21 +482,24 @@ export class Hud {
     this.root.classList.toggle('training', !!o);
     const wantIn = !!o && o.inputs !== false;
     const wantFr = !!o && o.frames !== false;
-    if (wantIn && !this.inputs) this.inputs = new InputDisplay(this.frameEl);
+    if (wantIn && !this.inputs) this.inputs = new InputDisplay(this.frameEl, (a) => this.controls.cap(a));   // CHANGED(ui): key caps
     if (!wantIn && this.inputs) { this.inputs.dispose(); this.inputs = null; }
     if (wantFr && !this.frames) this.frames = new FrameReadout(this.frameEl);
     if (!wantFr && this.frames) { this.frames.dispose(); this.frames = null; }
   }
   /** CHANGED(UI) P2: the training driver's per-tick frame data (exact advantage, the sim's lastDamage / comboDamage) */
-  setReadout(r: { adv: number | null; block: boolean; startup: number; damage: number; combo: number }): void { this.frames?.setExact(r); }
+  setReadout(r: { adv: number | null; block: boolean; startup: number; damage: number; combo: number; none?: boolean }): void { this.frames?.setExact(r); }
   /** feed the input display (training): the input words the sim stepped with this tick */
   pushInputs(word: number, frame: number): void { this.inputs?.push(word, frame); }
   setRecordState(s: 'off' | 'record' | 'play'): void { this.frames?.setRecord(s); }
 
-  setTouchMode(on: boolean): void { this.root.classList.toggle('touch', on); this.safeDirty = true; }
+  setTouchMode(on: boolean): void { this.root.classList.toggle('touch', on); this.safeDirty = true; this.controls?.setTouchMode(on); }
 
   /** this match's per-player numbers so far (game.ts puts them in MatchResult.stats) */
   tally(): [MatchStats, MatchStats] { return [{ ...this.stats[0] }, { ...this.stats[1] }]; }
+
+  /** CHANGED(wf8 fix): the coach hints shown / learned this bout + the last text (read-back) */
+  coachState(): Record<string, unknown> { return { shown: { ...this.coachShown }, learned: { ...this.coachDone }, last: this.coachLast, on: !this.coachEl.hidden }; }
 
   readback(): Record<string, unknown> {
     const side = (s: Side) => ({
@@ -469,12 +512,15 @@ export class Hud {
       events: this.evLog.slice(-12), broadcast: this.broadcast.readback(), touch: this.root.classList.contains('touch'),
       rounds: this.rounds(), phase2: [...this.phase2], bonus: { ...this.bonus }, boxes: this.boxes ? this.boxes.count : 0,
       training: this.frames ? { readout: this.frames.last, inputs: this.inputs ? this.inputs.count : 0 } : null,
+      controls: this.controls.readback(),                    // CHANGED(ui)
+      coach: this.coachState(),                              // CHANGED(wf8 fix)
     };
   }
 
   dispose(): void {
     for (const o of this.offs) o();
     this.offs = [];
+    this.controls.dispose();                                 // CHANGED(ui)
     this.setTraining(null);
     this.broadcast.dispose();
     this.root.remove();
@@ -594,6 +640,71 @@ export class Hud {
     window.setTimeout(() => c.remove(), CALL_MS);
   }
 
+  /**
+   * CHANGED(wf8 fix) FT-01 / FT-11: the coach hints for a local keyboard player (ControlsBar.localOn: never a CPU / dummy /
+   * remote / touch player). LOW: a HIT whose move must be blocked low (fighter data `guard: 'L'`) landed while that player
+   * held a STANDING guard (BLOCK or back, no DOWN). GRAB: a THROW connected on that player (escape = THROW at once).
+   * BLOCK lows / THROW_TECH by the player count as learned; COACH_LEARNED of them retire the hint for the bout.
+   */
+  private coachEvent(e: SimEvent, f: readonly [UiFighterSnap, UiFighterSnap]): void {
+    const cfg = this.cfg;
+    if (!cfg || cfg.mode === 'brawl' || cfg.mode === 'heckler') return;
+    const lowMove = (atk: number): boolean => {
+      if (atk !== 0 && atk !== 1) return false;
+      const mn = f[atk]?.moveName;
+      const mv = mn ? fighter(this.data, cfg.p[atk].fighter)?.moves?.[mn] : undefined;
+      return !!mv && mv.guard === 'L';
+    };
+    if (e.type === EV.BLOCK && (e.b === 0 || e.b === 1) && lowMove(e.a) && this.controls.localOn(e.b)) { this.coachDone.low++; return; }
+    if (e.type === EV.THROW_TECH && (e.b === 0 || e.b === 1) && this.controls.localOn(e.b)) { this.coachDone.grab++; return; }
+    if (e.type === EV.HIT && (e.b === 0 || e.b === 1) && this.coachDone.low < COACH_LEARNED && lowMove(e.a)) {
+      const me = this.controls.localOn(e.b);
+      if (!me) return;
+      const w = me.word;
+      const back = (f[e.b]?.facing ?? 1) > 0 ? W_LEFT : W_RIGHT;
+      if ((w & W_DOWN) !== 0 || ((w & W_BLOCK) === 0 && (w & back) === 0)) return;
+      this.coach('low', me.labels);
+      return;
+    }
+    if (e.type === EV.THROW && (e.b === 0 || e.b === 1) && this.coachDone.grab < COACH_LEARNED) {
+      const me = this.controls.localOn(e.b);
+      if (me) this.coach('grab', me.labels);
+    }
+  }
+
+  private coach(kind: 'low' | 'grab', labels: Record<string, { keys: string[] }>): void {
+    const now = performance.now();
+    if (now - this.coachAt < COACH_GAP) return;
+    const cap = (a: string): string => labels[a]?.keys?.[0] ?? '';
+    const vars: Record<string, string> = kind === 'low' ? { block: cap('blockHold'), down: cap('down') } : { throw: cap('throw') };
+    if (Object.values(vars).some((v) => !v)) return;
+    this.coachAt = now;
+    this.coachShown[kind]++;
+    const box = this.coachEl;
+    box.replaceChildren();
+    box.dataset.k = kind;
+    const parts = t(`coach.${kind}`).split(/(\{\w+\})/);
+    for (const part of parts) {
+      const m = /^\{(\w+)\}$/.exec(part);
+      if (m && vars[m[1]]) box.append(capChip(vars[m[1]], 'defend'));
+      else if (part) box.append(document.createTextNode(part));
+    }
+    this.coachLast = box.textContent ?? '';
+    box.hidden = false;
+    box.classList.remove('on');
+    void box.offsetWidth;
+    box.classList.add('on');
+    window.clearTimeout(this.coachTimer);
+    this.coachTimer = window.setTimeout(() => this.hideCoach(), COACH_MS);
+  }
+
+  private hideCoach(): void {
+    window.clearTimeout(this.coachTimer);
+    this.coachTimer = 0;
+    this.coachEl.hidden = true;
+    this.coachEl.classList.remove('on');
+  }
+
   private nameOf(i: number): string {
     if (!this.cfg) return '';
     const p = this.cfg.p[i === 1 ? 1 : 0];
@@ -710,6 +821,7 @@ export class Hud {
     const B = this.broadcast;
     this.logRound(e, m, f);
     this.tallyBonus(e);
+    this.coachEvent(e, f);                                   // CHANGED(wf8 fix) FT-01 / FT-11
     if (this.cfg && (this.cfg.mode === 'brawl' || this.cfg.mode === 'heckler')) { this.bonusEvent(e, m, this.cfg.mode); return; }
     switch (e.type) {
       case EV.ROUND_INTRO: {

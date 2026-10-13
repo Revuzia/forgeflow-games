@@ -353,4 +353,48 @@ def build():
         ending="RICKY MARQUEE wins his own show. The confetti falls, the ratings peak, and for one second the studio is "
                "silent - there is nobody left to host. He signs himself to another lifetime contract before the credits "
                "finish. Next Friday: same time, same cane. The season never ends; it only renews.")
+    # CHANGED(notes) (CONTRACT 36.4): plain-English player text; the SIMPLE / EASY-routed _m ids carry the family note
+    K.describe(
+        plan="Beam them from range, counter their attacks, then unleash the live set at half health.",
+        unique="Two phases: below half health the set goes live, with pyro and a second PRIME TIME.",
+        notes={
+            "5L": "Quick cane thrust to stop their attack.",
+            "2L": "Quick cane tap to the ankle; they must block crouching.",
+            "5M": "Diagonal cane chop at mid range.",
+            "2M": "Low cane swing that catches sidesteps.",
+            "5H": "Big cane swing that catches sidesteps; walls them near the edge.",
+            "2H": "Cane twirl that swats jumping opponents.",
+            "3H": "Sliding low cane hook that drags them down. Risky if blocked.",
+            "4M": "Stage kick with the cane in hand; a poke that is safe if blocked.",
+            "6H": "Two-hand cane smash; must be blocked standing.",
+            "j.L": "Quick air thrust for fights in the air.",
+            "j.M": "Air cane chop for fights in the air.",
+            "j.H": "Overhead cane jump-in to start a combo.",
+            "throw_f": "Up close: hold them at cane's length for three swings.",
+            "throw_b": "Up close: spin them past him with the cane.",
+            "spotlight_m": "Spotlight beam straight down the ring. Sidesteps dodge it.",
+            "spotlight_l": "Slowest beam: walk in behind it.",
+            "spotlight_h": "Fastest beam of the three, reaches them the soonest.",
+            "spotlight_ex": "Double beam aimed right at them: hard to sidestep.",
+            "commercial_break_m": "Catches a strike and answers with a sledgehammer. Grabs beat it.",
+            "commercial_break_l": "Short catch window; the least risky if nothing comes.",
+            "commercial_break_h": "Long catch window; the riskiest if nothing comes.",
+            "commercial_break_ex": "Catches strikes and projectiles right away.",
+            "commercial_hit": "After a Commercial Break catch: a sledgehammer that knocks down.",
+            "mic_drop_m": "Leaping cane swing that knocks jumpers down. Risky if blocked.",
+            "mic_drop_l": "Quickest leap, the best one against jumps.",
+            "mic_drop_h": "Strongest leap; the riskiest if blocked.",
+            "mic_drop_ex": "Leap that can't be hit as it starts: escape pressure.",
+            "the_hook_m": "Sliding low hook that drags them in and down. Sidesteps beat it.",
+            "the_hook_l": "Shortest hook, out the quickest of the three.",
+            "the_hook_h": "Longest hook, from far away.",
+            "the_hook_ex": "Two-hit hook that takes a hit; safer if blocked.",
+            "pyro_m": "Phase 2: a line of fire races along the floor right at them.",
+            "pyro_l": "Phase 2: slowest fire line; walk in behind it.",
+            "pyro_h": "Phase 2: the fastest fire line of the three.",
+            "pyro_ex": "Phase 2: a three-hit fire line.",
+            "standing_ovation": "Three cane swings that can't be hit as they start.",
+            "prime_time": "PRIME TIME: the host's unstoppable cane routine for camera one.",
+            "season_finale": "Phase 2 PRIME TIME: pyro, a falling light rig and confetti.",
+        })
     return K

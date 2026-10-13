@@ -27,6 +27,21 @@
 // the pause CONTROLS legend has a STEP row (keys, or the touch IN / OUT buttons); HOW TO PLAY (screen 'howto', from the main
 // menu's guide card) explains walking, the ring (sidestep, circle-walk, step-attacks, HOMING vs LINEAR, the wall), attacks
 // and defence with the player's own bindings (keys, pad or touch); TRAINING OPTIONS notes the SIDESTEPS / CIRCLES dummies.
+//
+// CHANGED(ui) (CONTRACT §36.3 / §36.4 + the OWNER CLARIFICATION, the EASY controls): the drawn KEYBOARD MAP (ui/keymap.ts)
+// is the main teaching surface -
+//   * SETTINGS > CONTROLS: the scheme picker EASY (recommended) / SIMPLE / CLASSIC with a one-line explanation each
+//     (`hpm-set-scheme-<2|0|1>`, SettingsStore.setScheme), the CONTROLS BAR toggle (settings.controlsBar), the selected
+//     player's keyboard map (redrawn on every remap) and every key of the scheme listed + rebindable in plain words (the
+//     EASY actions BLOCK, SPECIAL 1-4, SUPER, PRIME TIME, CONTROLS BAR included; keys a scheme does not need under ALSO
+//     WORKS). defaultControls() = input.ts's defaults (P1 EASY, P2 SIMPLE).
+//   * PAUSE: the CONTROLS column = the pausing player's keyboard map for their fighter + scheme (SIMPLE / CLASSIC: + the
+//     specials as key rows; touch: the PAD cheat sheet); a local 2P bout flips to the other player's keys; showPause({help})
+//     = the HELP layout (the controls bar's MORE / the touch "?" disc: the map leads the card). MOVE LIST -> the move list
+//     with that player's own key caps (EASY / SIMPLE / CLASSIC tabs, notes).
+//   * HOW TO PLAY: rewritten around EASY - one page: the keyboard map of P1's keys, then short tips with the player's own
+//     key caps (the 3D ring in two lines); touch: the PAD cheat sheet.
+//   * CHARACTER SELECT: the MOVES panel + three schemes (ui/charselect.ts), keys from the live settings.
 
 import type {
   Action, CardView, LadderView, MatchCfg, MatchResult, MenuIntent, MenusDeps, NetOnlineStatus, OnlineEventName, OnlineStatus, PlayerControls, Rect, Scheme,
@@ -34,7 +49,7 @@ import type {
 } from './types.ts';
 import { banterLines, bonusRules, endingPages, introLine } from './season.ts';
 import { ACTIONS } from './types.ts';
-import { btn, clamp, div, el, exposeDev, flashesReduced, ICON, pulse, setReduceFlashing, setText, svg, touchModeOn, watchTouchMode } from './dom.ts';
+import { btn, clamp, dirSvg, div, el, exposeDev, flashesReduced, ICON, pulse, setReduceFlashing, setText, svg, touchModeOn, watchTouchMode } from './dom.ts';
 import { colorsOf, fighter, fighterName, fillPortrait, stageList, isBoss, onPortraits, playableStage, setPortraits } from './data.ts';
 import { setStrings, t, tOr } from './strings.ts';
 import { buildBug } from './broadcast.ts';
@@ -42,6 +57,9 @@ import { CharSelect, type CsAct, type CsResult, type CsPick } from './charselect
 import { MoveList } from './movelist.ts';
 import { buildResults, type ResultChoice } from './results.ts';
 import { TrainingState, trainingRows } from './training.ts';
+import { defaultKeys, defaultPad } from '../input.ts';
+import { fighterKit, keysOf, labelsOf, mapActions, settingsName, type SchemeN } from './controls.ts';
+import { capChip, drawKeyboard, moveRows, touchSheet } from './keymap.ts';
 import './styles.css';
 import './menus.css';
 
@@ -50,24 +68,8 @@ type PauseChoice = 'resume' | 'settings' | 'forfeit' | 'movelist';
 
 // ─────────────────────────── controls: defaults + labels (FIGHTING_DESIGN 5a/5b on the CONTRACT 1 button model) ───────────────────────────
 export function defaultControls(p: 0 | 1): PlayerControls {
-  if (p === 0) return {
-    scheme: 0,
-    keys: {
-      up: ['KeyW', 'Space'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], l: ['KeyJ'], m: ['KeyK'], h: ['KeyL'], s: ['KeyI'],
-      assist: ['KeyU'], throw: ['KeyH'], parry: ['KeyO'], impact: ['KeyP'], taunt: ['KeyY'], pause: ['Escape'],
-      stepIn: ['KeyQ'], stepOut: ['KeyE'],
-    },
-    pad: { up: [12], down: [13], left: [14], right: [15], l: [2], m: [3], h: [5], s: [0], assist: [1], throw: [6], parry: [4], impact: [7], taunt: [8], pause: [9], stepIn: [17], stepOut: [18] },
-  };
-  return {
-    scheme: 0,
-    keys: {
-      up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], l: ['Numpad1'], m: ['Numpad2'], h: ['Numpad3'],
-      s: ['Numpad5'], assist: ['Numpad4'], throw: ['Numpad0'], parry: ['Numpad6'], impact: ['NumpadAdd'], taunt: ['NumpadMultiply'], pause: [],
-      stepIn: ['Numpad7'], stepOut: ['Numpad9'],
-    },
-    pad: { up: [12], down: [13], left: [14], right: [15], l: [2], m: [3], h: [5], s: [0], assist: [1], throw: [6], parry: [4], impact: [7], taunt: [8], pause: [9], stepIn: [17], stepOut: [18] },
-  };
+  // CHANGED(ui) (CONTRACT §36.5 item 4): input.ts's defaults are the one source (P1 the EASY map + scheme EASY, P2 SIMPLE)
+  return { scheme: p === 0 ? 2 : 0, keys: defaultKeys(p), pad: defaultPad() };
 }
 
 export function codeLabel(code: string): string {
@@ -101,8 +103,6 @@ function padSlots(gp: Gamepad): boolean[] {
   now.push(up, down, left, right);
   return now;
 }
-/** CHANGED(UI3D): the touch overlay's label for an action (HOW TO PLAY / legend in touch mode) */
-const TOUCH_LABEL: Partial<Record<Action, string>> = { l: 'touch.l', m: 'touch.m', h: 'touch.h', s: 'touch.s', assist: 'touch.assist', throw: 'touch.throw', parry: 'touch.parry', impact: 'touch.impact', stepIn: 'touch.stepin', stepOut: 'touch.stepout' };
 export function padLabel(i: number | undefined): string { return i === undefined ? t('misc.none') : (PAD_NAMES[i] ?? `B${i}`); }
 
 const VOL_DEFAULT = { master: 0.8, music: 0.5, sfx: 0.9, crowd: 0.7, voice: 0.9 };       // = SHELL settings DEFAULT_VOLUMES
@@ -166,6 +166,20 @@ export class Menus {
   private readonly onlineCode: HTMLInputElement;
   private readonly onlineName: HTMLInputElement;
   private readonly pauseLegend: HTMLElement;
+  /** CHANGED(ui): the pause card's CONTROLS column parts + what it shows (CONTRACT §36.3) */
+  private readonly pauseCard: HTMLElement;
+  private readonly pauseCap: HTMLElement;
+  private readonly pauseWho: HTMLElement;
+  private readonly pauseSwap: HTMLButtonElement;
+  private readonly pauseMoves: HTMLElement;
+  private pauseCtx: { player: 0 | 1; fighter: string; scheme: SchemeN; other: { player: 0 | 1; fighter: string; scheme: SchemeN } | null; help: boolean } =
+    { player: 0, fighter: '', scheme: 2, other: null, help: false };
+  private pauseOther = false;
+  private legendKey = '';
+  /** CHANGED(ui): SETTINGS > CONTROLS - the drawn keyboard of the selected player + the rows' (player, scheme) */
+  private readonly keyMapBox: HTMLElement;
+  private mapKey = '';
+  private bindsKey = '';
   private readonly pauseTrainingBtn: HTMLButtonElement;
   private readonly pauseForfeitBtn: HTMLButtonElement;
   /** CHANGED(wf6 fixer) VO-D2: EDIT LAYOUT on the pause card (touch mode, offline) */
@@ -182,6 +196,10 @@ export class Menus {
   private readonly touchCard: HTMLElement;
   /** CHANGED(UI3D): the HOW TO PLAY body (rebuilt on refresh: bindings / device can change) */
   private readonly howBox: HTMLElement;
+  /** CHANGED(wf8 fix) FT-13: the MORE BELOW cue at the foot of HOW TO PLAY while the page has more under the fold */
+  private howCue: HTMLElement | null = null;
+  /** CHANGED(wf8 fix) FT-15: the main-menu item last highlighted (LEFT from HOW TO PLAY goes back to it) */
+  private mainLast: HTMLElement | null = null;
   private howKey = '';
   private readonly fsBtns: HTMLButtonElement[] = [];
   private setPlayer: 0 | 1 = 0;
@@ -280,7 +298,7 @@ export class Menus {
       if (i === 0) b.dataset.default = '';
       b.append(el('span', 'n', String(i + 1).padStart(2, '0')), el('span', 'lbl', t(`main.${k}`)));
       b.addEventListener('click', () => { this.sound('select'); fn(); });
-      b.addEventListener('focus', () => { setText(this.mainDescTitle, t(`main.${k}`)); setText(this.mainDesc, t(`main.${k}.sub`)); });
+      b.addEventListener('focus', () => { this.mainLast = b; setText(this.mainDescTitle, t(`main.${k}`)); setText(this.mainDesc, t(`main.${k}.sub`)); });
       stack.append(b);
     });
 
@@ -333,6 +351,9 @@ export class Menus {
       show: (id, color, pose) => this.showcaseShow(id, color, pose),
       sound: (c) => this.sound(c),
       defaultScheme: (p) => this.controls(p).scheme,
+      // CHANGED(ui): the MOVES panel reads the live keys
+      labels: (p) => labelsOf(this.controls(p), p),
+      keys: (p) => keysOf(this.controls(p), p),
     });
 
     // ── STAGE SELECT ──────────────────────────────────
@@ -396,9 +417,20 @@ export class Menus {
     this.pauseForfeitBtn = pItem('hpm-p-forfeit', t('pause.forfeit'), () => { this.sound('select'); void this.askForfeit(); });
     this.pauseNote = el('p', 'hpm-pause-note', '');
     pl.append(this.pauseNote);
+    this.pauseCard = pc;
     const pr = div('hpm-pause-r', pc);
-    pr.append(el('h3', 'hpm-cap', t('pause.controls')));
+    // CHANGED(ui) (CONTRACT §36.3): CONTROLS = the pausing player's keyboard map (+ the specials as key rows for SIMPLE /
+    // CLASSIC; the PAD cheat sheet in touch mode); a local 2P bout can flip to the other player's keys
+    const who = div('who', pr);
+    this.pauseCap = el('h3', 'hpm-cap', t('pause.controls'));
+    this.pauseWho = el('span', 'sc', '');
+    this.pauseSwap = btn('hpm-small', '');
+    this.pauseSwap.id = 'hpm-p-keys-other';
+    this.pauseSwap.hidden = true;
+    this.pauseSwap.addEventListener('click', (e) => { e.stopPropagation(); this.sound('move'); this.pauseOther = !this.pauseOther; this.renderLegend(); });
+    who.append(this.pauseCap, this.pauseWho, this.pauseSwap);
     this.pauseLegend = div('hpm-legend', pr);
+    this.pauseMoves = div('hpk-rows hpm-pause-moves', pr);
 
     // ── SETTINGS ──────────────────────────────────────
     const set = this.mkScreen('settings');
@@ -435,24 +467,33 @@ export class Menus {
       ptabs.append(b);
       this.segMap('set.player').set(String(p), b);
     }
-    ctl.append(this.segRow('set.scheme', t('set.scheme'), [['0', t('cs.simple')], ['1', t('cs.classic')]],
-      () => String(this.controls(this.setPlayer).scheme), (v) => this.putControls(this.setPlayer, { scheme: Number(v) as Scheme })));
+    // CHANGED(ui) (CONTRACT §36.3): the scheme picker - EASY (recommended) / SIMPLE / CLASSIC, a one-line explanation each
+    ctl.append(el('h3', 'hpm-cap hpm-sub', t('set.scheme')));
+    const schemes = div('hpm-schemes', ctl);
+    schemes.setAttribute('role', 'radiogroup');
+    for (const [v, name] of [[2, 'easy'], [0, 'simple'], [1, 'classic']] as const) {
+      const b = btn('hpm-segbtn', '');
+      b.id = `hpm-set-scheme-${v}`;
+      b.setAttribute('role', 'radio');
+      b.append(el('b', '', t(`scheme.${name}`)), el('small', '', t(`scheme.${name}.sub`)));
+      if (v === 2) b.append(el('span', 'rec', t('scheme.rec')));
+      b.addEventListener('click', () => { this.sound('move'); this.setSchemeFor(this.setPlayer, v); });
+      schemes.append(b);
+      this.segMap('set.scheme').set(String(v), b);
+    }
+    this.updaters.push(() => {
+      const cur = String(this.controls(this.setPlayer).scheme);
+      for (const [v, b] of this.segMap('set.scheme')) { const on = v === cur; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
+    });
+    // CHANGED(ui) (CONTRACT §36.2): the in-game controls bar on / off (F1 in a fight does the same)
+    ctl.append(this.toggle('cbar', t('set.bar'), () => this.s().controlsBar !== false, (v) => this.put({ controlsBar: v })));
+    // CHANGED(ui) (CONTRACT §36.4 clarification): the selected player's keys drawn as a keyboard (redrawn on every remap)
+    this.keyMapBox = div('hpk-wrap', ctl);
+    this.keyMapBox.id = 'hpm-set-keymap';
+    ctl.append(el('p', 'hpm-note', t('set.mapNote')));
     const cols = div('hpm-bind head', ctl);
     cols.append(el('span', 'lbl', ''), el('span', 'col', t('set.keyCol')), el('span', 'col', t('set.altCol')), el('span', 'col', t('set.padCol')));
     this.keysBox = div('hpm-binds', ctl);
-    for (const a of ACTIONS) {
-      const row = div('hpm-bind', this.keysBox);
-      row.append(el('span', 'lbl', t(`act.${a}`)));
-      for (const slot of [0, 1, 'pad'] as const) {
-        const b = btn('hpm-key', '');
-        b.id = `hpm-key-${a}-${slot}`;
-        b.dataset.action = a;
-        b.dataset.slot = String(slot);
-        b.addEventListener('click', () => this.beginCapture(this.setPlayer, a, slot, b));
-        this.keyBtns.set(`${a}:${slot}`, b);
-        row.append(b);
-      }
-    }
     this.bindNote = div('hpm-bindnote', ctl);
     this.bindNote.setAttribute('role', 'status');
     const rk = btn('hpm-small', t('set.reset'));
@@ -525,8 +566,21 @@ export class Menus {
 
     // ── HOW TO PLAY (CHANGED(UI3D)) ───────────────────
     const hws = this.mkScreen('howto');
-    hws.append(this.header(t('how.title'), t('how.hint')));
-    this.howBox = div('hpm-card hpm-howto hpm-scroll', hws);
+    hws.append(this.header(t('how.title'), t('how2.hint')));
+    this.howBox = div('hpm-card hpm-how2 hpm-scroll', hws);         // CHANGED(ui): the one-page EASY version
+    // CHANGED(wf8 fix) FT-13 / WF8G-6: the last card (IN A FIGHT) sat under the fold at 1280 x 720 / 1600 x 900 with nothing
+    // saying the page scrolls - a MORE BELOW cue rides the bottom edge until the end is in view
+    this.howBox.addEventListener('scroll', () => this.howCueSync(), { passive: true });
+    window.addEventListener('resize', () => this.howCueSync());
+    {
+      const cue = el('div', 'hpm-morecue');
+      cue.setAttribute('aria-hidden', 'true');
+      const ar = el('i', 'ar');
+      ar.innerHTML = dirSvg(2);
+      cue.append(ar, el('span', '', t('how2.more')));
+      hws.append(cue);
+      this.howCue = cue;
+    }
 
     // ── MOVE LIST ─────────────────────────────────────
     const mls = this.mkScreen('movelist');
@@ -691,7 +745,7 @@ export class Menus {
       // CONTRACT 18.3: settings / movelist opened for the pause card; backing out calls onClose
       this.stack = [screen];
       this.subClose = typeof p.onClose === 'function' ? (p.onClose as () => void) : null;
-      if (screen === 'movelist') this.ml.render(typeof p.fighter === 'string' ? p.fighter : this.mlDefault(), (p.scheme === 1 ? 1 : p.scheme === 0 ? 0 : this.mlScheme) as Scheme);
+      if (screen === 'movelist') this.renderMoveList(p);
       this.render(screen);
       return;
     }
@@ -709,7 +763,7 @@ export class Menus {
       this.openSelect(p.mode as Flow['kind'], (p.opponent as 'human' | 'cpu' | 'dummy' | 'none') ?? 'none');
       return;
     } else if (screen === 'movelist') {
-      this.ml.render(typeof p.fighter === 'string' ? p.fighter : this.mlDefault(), (p.scheme === 1 ? 1 : p.scheme === 0 ? 0 : this.mlScheme) as Scheme);
+      this.renderMoveList(p);
       this.push('movelist');
       return;
     } else if (screen === 'online' && p.status) {
@@ -747,8 +801,22 @@ export class Menus {
     });
   }
 
-  showPause(o: { training?: boolean; online?: boolean; fighter?: string; scheme?: Scheme } = {}): Promise<PauseChoice> {
+  /**
+   * CHANGED(ui) (CONTRACT §36.3): + `player` (the key set whose map the CONTROLS column draws; default 0), `other` (a local 2P
+   * bout: the other player, the column can flip to their keys), `help` (the HELP layout: the controls bar's MORE / the touch
+   * "?" disc - the map leads the card)
+   */
+  showPause(o: { training?: boolean; online?: boolean; fighter?: string; scheme?: Scheme; help?: boolean; player?: 0 | 1;
+    other?: { player: 0 | 1; fighter: string; scheme: Scheme } | null } = {}): Promise<PauseChoice> {
     this.stack = ['pause'];
+    const sch = (v: unknown): SchemeN => (v === 0 || v === 1 || v === 2 ? v : 2);
+    this.pauseCtx = {
+      player: o.player === 1 ? 1 : 0, fighter: o.fighter ?? '', scheme: sch(o.scheme ?? this.controls(o.player === 1 ? 1 : 0).scheme),
+      other: o.other ? { player: o.other.player, fighter: o.other.fighter, scheme: sch(o.other.scheme) } : null, help: !!o.help,
+    };
+    this.pauseOther = false;
+    this.legendKey = '';
+    this.pauseCard.classList.toggle('help', !!o.help);
     this.pauseTrainingBtn.hidden = !o.training;
     this.lastPauseOnline = !!o.online;
     this.pauseEditBtn.hidden = !this.touch || !!o.online || !this.touchEditor;
@@ -879,7 +947,7 @@ export class Menus {
       if (typeof s.rttMs === 'number') vars.rtt = Math.round(s.rttMs);
       if (typeof s.room === 'string') vars.code = s.room;
       setText(this.onlineStatus, tOr(s.code, s.code, vars));
-      const failed = /error|mismatch|busy|full|no_|cheat|left|nocontest/.test(s.code);
+      const failed = /error|mismatch|busy|full|no_|cheat|left|nocontest|_down/.test(s.code);   // CHANGED(wf8 fix): + net.lobby_down
       this.onlineStatus.dataset.st = failed ? 'failed' : s.code === 'net.direct' || s.code === 'net.select' || s.code === 'net.loading' ? 'connected' : 'searching';
       // CHANGED(UI) P2: remember the session facts the payload carries (connection quality, phase, room)
       if (typeof s.phase === 'string') this.net.phase = s.phase;
@@ -1644,6 +1712,13 @@ export class Menus {
     }
     // a screen's [data-default], else its first control that is not the header BACK button
     target = target ?? scr.querySelector<HTMLElement>('[data-default]') ?? this.navItems().find((e) => !e.classList.contains('hpm-back')) ?? this.navItems()[0] ?? null;
+    // CHANGED(wf8 fix) FT-15: on a row screen (TRAINING OPTIONS ...) the first row opens on its PICKED chip (DUMMY ACTION CPU
+    // opened on STAND, so LEFT went to BACK)
+    const row0 = target?.closest<HTMLElement>('[data-row], .hpm-row');
+    if (target && row0 && !target.classList.contains('on')) {
+      const picked = [...row0.querySelectorAll<HTMLElement>('.on[data-nav]')].find((e) => this.navItems().includes(e));
+      if (picked) target = picked;
+    }
     if (target && s !== 'charselect') this.focus(target, false);
     else if (s === 'charselect' && document.activeElement instanceof HTMLElement && this.root.contains(document.activeElement)) document.activeElement.blur();
     const scroller = scr.querySelector<HTMLElement>('.hpm-scroll');
@@ -1778,7 +1853,7 @@ export class Menus {
     const c = this.s().controls?.[p];
     const d = defaultControls(p);
     if (!c) return d;
-    return { scheme: c.scheme === 1 ? 1 : 0, keys: { ...d.keys, ...c.keys }, pad: { ...d.pad, ...c.pad } };
+    return { scheme: c.scheme === 1 || c.scheme === 2 ? c.scheme : 0, keys: { ...d.keys, ...c.keys }, pad: { ...d.pad, ...c.pad } }; // CHANGED(input): EASY (2) passes through (CONTRACT 36.5)
   }
 
   private putControls(p: 0 | 1, patch: Partial<PlayerControls>): void {
@@ -1790,6 +1865,22 @@ export class Menus {
   private resetControls(p: 0 | 1): void {
     if (this.deps.settings.resetControls) { this.deps.settings.resetControls(p); this.refresh(); return; }
     this.putControls(p, defaultControls(p));
+  }
+
+  /** CHANGED(ui): the scheme picker - SettingsStore.setScheme (EASY on a pre-EASY key map installs the EASY keys) */
+  private setSchemeFor(p: 0 | 1, sc: Scheme): void {
+    this.endCapture();
+    this.conflict = null;
+    if (this.deps.settings.setScheme) { try { this.deps.settings.setScheme(p, sc); } catch (e) { console.error('[hit-parade ui] setScheme', e); } this.refresh(); return; }
+    this.putControls(p, { scheme: sc });
+  }
+
+  /** CHANGED(ui): the MOVE LIST for show() params {fighter, scheme, player} with that player's key caps (touch: the PAD) */
+  private renderMoveList(p: Record<string, unknown>): void {
+    const pl: 0 | 1 = p.player === 1 ? 1 : 0;
+    let sc = (p.scheme === 0 || p.scheme === 1 || p.scheme === 2 ? p.scheme : this.mlScheme) as Scheme;
+    if (this.touch && sc === 2) sc = 0;                          // the PAD is the SIMPLE layout: its notation, its discs
+    this.ml.render(typeof p.fighter === 'string' ? p.fighter : this.mlDefault(), sc, labelsOf(this.controls(pl), pl), this.touch);
   }
 
   refresh(): void {
@@ -1805,8 +1896,56 @@ export class Menus {
   }
 
   // ─────────────────────────── key remap ───────────────────────────
-  private renderKeys(): void {
+  /**
+   * CHANGED(ui) (CONTRACT §36.3): the remap rows for the selected player's scheme, in plain words (ui/controls.ts
+   * settingsName): the scheme's own keys first (mapActions), then ALSO WORKS (SIMPLE's SPECIAL / COMBO for an EASY player).
+   * Rebuilt only when the player or the scheme changes (focus and capture stay on their buttons otherwise).
+   */
+  private buildBinds(): void {
     const c = this.controls(this.setPlayer);
+    const sc = (c.scheme === 0 || c.scheme === 1 ? c.scheme : 2) as SchemeN;
+    const key = `${this.setPlayer}:${sc}`;
+    if (key === this.bindsKey) return;
+    const refocus = document.activeElement instanceof HTMLElement && this.keysBox.contains(document.activeElement) ? document.activeElement.id : '';
+    this.bindsKey = key;
+    this.keysBox.replaceChildren();
+    this.keyBtns.clear();
+    const main = mapActions(sc).filter((a) => (ACTIONS as readonly string[]).includes(a)) as Action[];
+    const rest = ACTIONS.filter((a) => !main.includes(a));
+    const row = (a: Action, sub: boolean): void => {
+      const r = div(`hpm-bind${sub ? ' sub' : ''}`, this.keysBox);
+      r.dataset.action = a;
+      r.append(el('span', 'lbl', settingsName(a, sc)));
+      for (const slot of [0, 1, 'pad'] as const) {
+        const b = btn('hpm-key', '');
+        b.id = `hpm-key-${a}-${slot}`;
+        b.dataset.action = a;
+        b.dataset.slot = String(slot);
+        b.addEventListener('click', () => this.beginCapture(this.setPlayer, a, slot, b));
+        this.keyBtns.set(`${a}:${slot}`, b);
+        r.append(b);
+      }
+    };
+    for (const a of main) row(a, false);
+    if (rest.length) {
+      this.keysBox.append(el('div', 'hpm-bindsec', t('set.bindsMore')));
+      for (const a of rest) row(a, true);
+    }
+    if (refocus) { const e = document.getElementById(refocus); if (e) this.focus(e, false); }
+  }
+
+  private renderKeys(): void {
+    this.buildBinds();
+    const c = this.controls(this.setPlayer);
+    // CHANGED(ui): the selected player's keyboard map (keyboard players; the touch card leads in touch mode)
+    const sc = (c.scheme === 0 || c.scheme === 1 ? c.scheme : 2) as SchemeN;
+    const mk = `${this.setPlayer}:${sc}:${this.touch}:${JSON.stringify(c.keys)}`;
+    if (mk !== this.mapKey) {
+      this.mapKey = mk;
+      this.keyMapBox.replaceChildren();
+      this.keyMapBox.hidden = this.touch;
+      if (!this.touch) drawKeyboard(this.keyMapBox, { keys: keysOf(c, this.setPlayer), scheme: sc, kit: null });
+    }
     for (const a of ACTIONS) {
       for (const slot of [0, 1, 'pad'] as const) {
         const b = this.keyBtns.get(`${a}:${slot}`);
@@ -1940,46 +2079,42 @@ export class Menus {
   // ─────────────────────────── pause legend + hints ───────────────────────────
   private renderLegend(): void {
     const box = this.pauseLegend;
+    const ctx = this.pauseCtx;
+    const cx = this.pauseOther && ctx.other ? ctx.other : ctx;
+    const fid = cx.fighter || this.mlDefault();
+    const kit = fighterKit(fighter(this.data, fid));
+    const c = this.controls(cx.player);
+    const key = `${this.touch}|${cx.player}|${fid}|${cx.scheme}|${ctx.help}|${JSON.stringify(c.keys)}`;
+    if (key === this.legendKey) return;
+    this.legendKey = key;
     box.replaceChildren();
+    this.pauseMoves.replaceChildren();
     box.classList.toggle('touch', this.touch);
+    setText(this.pauseCap, ctx.help ? t('pause.help') : t('pause.controls'));
+    const schemeName = t(`scheme.${cx.scheme === 2 ? 'easy' : cx.scheme === 0 ? 'simple' : 'classic'}`);
+    setText(this.pauseWho, this.touch ? t('sheet.title') : t('pause.keysOf', { who: t('set.player', { n: cx.player + 1 }), scheme: schemeName }));
+    this.pauseSwap.hidden = !ctx.other || this.touch;            // touch drives P1 only: one cheat sheet
+    if (ctx.other) setText(this.pauseSwap, t('set.player', { n: (this.pauseOther ? ctx.player : ctx.other.player) + 1 }));
     if (this.touch) {
-      // CHANGED(wf6 fixer) VO-D6: the STICK first (move / jump / crouch; hold away = block), as on the keyboard legend
-      const mv = div('hpm-leg', box);
-      mv.append(el('span', 'tbtn t-stick', t('how.stick')), el('span', 'lbl', t('hint.move')));
-      // CHANGED(UI3D): the STEP pair (one row: IN + OUT), then the buttons
-      const sr = div('hpm-leg', box);
-      const sk = el('span', 'keys');
-      sk.append(el('span', 'tbtn t-stepin', t('touch.stepin')), el('span', 'tbtn t-stepout', t('touch.stepout')));
-      sr.append(sk, el('span', 'lbl', t('hint.step')));
-      for (const [k, label] of [['touch.l', 'act.l'], ['touch.m', 'act.m'], ['touch.h', 'act.h'], ['touch.s', 'act.s'], ['touch.parry', 'act.parry'], ['touch.impact', 'act.impact'], ['touch.throw', 'act.throw'], ['touch.assist', 'act.assist']] as const) {
-        const r = div('hpm-leg', box);
-        r.append(el('span', `tbtn t-${k.split('.')[1]}`, t(k)), el('span', 'lbl', t(label)));
-      }
-      // CHANGED(wf6 fixer) VO-D6: the SUPER disc (it only appears at 1 SHOWTIME bar, so a new touch player never learned it)
-      const su = div('hpm-leg', box);
-      su.append(el('span', 'tbtn t-super', t('touch.super')), el('span', 'lbl', tOr('leg.touch.super', 'SUPER (AT 1+ SHOWTIME BAR)')));
+      // the touch cheat sheet: every PAD control + what it does (the fighter's specials on SP + direction)
+      touchSheet(box, kit);
       return;
     }
-    const c = this.controls(0);
-    const k = (a: Action): string => codeLabel(c.keys[a]?.[0] ?? '');
-    const rows: Array<[string[], string]> = [
-      [[k('up'), k('left'), k('down'), k('right')], t('hint.move')],
-      // CHANGED(UI3D): STEP IN / OUT (tap = sidestep, hold = circle-walk)
-      [[k('stepIn'), k('stepOut')], t('hint.step')],
-      [[k('l')], t('act.l')], [[k('m')], t('act.m')], [[k('h')], t('act.h')], [[k('s')], t('act.s')],
-      [[k('assist')], t('act.assist')], [[k('throw')], t('act.throw')], [[k('parry')], t('act.parry')], [[k('impact')], t('act.impact')],
-    ];
-    for (const [keys, label] of rows) {
-      const r = div('hpm-leg', box);
-      const ks = el('span', 'keys');
-      for (const key of keys) ks.append(el('kbd', 'hpm-kbd', key));
-      r.append(ks, el('span', 'lbl', label));
+    drawKeyboard(box, { keys: keysOf(c, cx.player), scheme: cx.scheme, kit });
+    // SIMPLE / CLASSIC: the specials need a direction - list them as key rows (EASY's are on the keys above)
+    if (kit && cx.scheme !== 2) {
+      for (const r of moveRows(kit, cx.scheme, labelsOf(c, cx.player), false)) {
+        const row = div('hpk-row', this.pauseMoves);
+        row.dataset.kind = r.kind;
+        row.append(r.keys, el('span', 'nm', r.name));
+      }
     }
   }
 
   /**
-   * CHANGED(UI3D): HOW TO PLAY - four blocks (MOVE, THE RING, ATTACK, DEFEND); every row = the player's own inputs (P1 keys,
-   * + the pad's once one was seen, or the touch buttons in touch mode) and what they do. Rebuilt only when that changes.
+   * CHANGED(ui) (CONTRACT §36.3 / §36.4 clarification): HOW TO PLAY, one page around EASY - the drawn keyboard of P1's keys
+   * (plain words on every lit key), then short tips whose key caps are the player's own (a remap shows); the 3D ring in two
+   * lines. Touch: the PAD cheat sheet + the ring in one line. A seen gamepad adds its line. Rebuilt only when that changes.
    */
   private renderHowto(): void {
     const c = this.controls(0);
@@ -1988,64 +2123,67 @@ export class Menus {
     this.howKey = key;
     const box = this.howBox;
     box.replaceChildren();
-    type Tok = Action | '+' | '/' | 'hold' | 'stick' | 'homing' | 'linear' | 'wall';
-    const tok = (a: Tok): HTMLElement => {
-      if (a === '+' || a === '/') return el('span', 'op', a);
-      if (a === 'hold') return el('span', 'op word', t('ml.hold'));
-      if (a === 'homing' || a === 'linear') return el('span', `hpm-ml-tag ${a}`, t(`ml.tag.${a}`));
-      if (a === 'wall') return el('span', 'hpm-ml-tag wall', t('how.tag.wall'));
-      if (a === 'stick') return el('span', 'tbtn', t('how.stick'));
-      if (this.touch) {
-        const tl = TOUCH_LABEL[a];
-        if (tl) return el('span', `tbtn t-${tl.split('.')[1]}`, t(tl));
-        return el('span', 'tbtn', t('how.stick'));
+    const labels = labelsOf(c, 0);
+    const NAMES: Record<string, Action> = { block: 'blockHold' };
+    /** a template with {action} slots -> text + the player's key caps */
+    const fill = (host: HTMLElement, tpl: string, pad = false): void => {
+      const parts = tpl.split(/(\{\w+\})/);
+      for (const part of parts) {
+        const m = /^\{(\w+)\}$/.exec(part);
+        if (!m) { if (part) host.append(document.createTextNode(part)); continue; }
+        const a = (NAMES[m[1]] ?? m[1]) as Action;
+        const lb = labels[a];
+        const cap = pad ? lb?.pad?.[0] : lb?.keys?.[0];
+        host.append(cap ? capChip(cap, '') : document.createTextNode(m[1].toUpperCase()));
       }
-      const w = el('span', 'k');
-      w.append(el('kbd', 'hpm-kbd', codeLabel(c.keys[a]?.[0] ?? '')));
-      const pb = c.pad[a]?.[0];
-      if (this.padSeen && typeof pb === 'number') w.append(el('kbd', 'hpm-kbd pad', padLabel(pb)));
-      return w;
     };
-    const dirs = (...a: Action[]): Tok[] => (this.touch ? ['stick'] : a);
-    const secs: Array<[string, string, Array<[Tok[], string, string]>]> = [
-      ['move', t('how.move'), [
-        [dirs('left', 'right'), t('how.walk'), t('how.walk.d')],
-        [dirs('up', 'down'), t('how.jump'), t('how.jump.d')],
-        [dirs('right', 'right'), t('how.dash'), t('how.dash.d')],
-      ]],
-      ['ring', t('how.ring'), [
-        [['stepIn', '/', 'stepOut'], t('how.sidestep'), t('how.sidestep.d')],
-        [['hold', 'stepIn', '/', 'stepOut'], t('how.circle'), t('how.circle.d')],
-        [['stepIn', '+', 'h'], t('how.stepatk'), t('how.stepatk.d')],
-        [['homing'], t('how.homing'), t('how.homing.d')],
-        [['linear'], t('how.linear'), t('how.linear.d')],
-        [['wall'], t('how.wall'), t('how.wall.d')],
-      ]],
-      ['attack', t('how.attack'), [
-        [['l', 'm', 'h'], t('how.normals'), t('how.normals.d')],
-        [['s'], t('how.special'), t('how.special.d')],
-        [['s', '+', 'h'], t('how.super'), t('how.super.d')],
-        [['assist'], t('how.assist'), t('how.assist.d')],
-      ]],
-      ['defend', t('how.defend'), [
-        [['throw'], t('how.throw'), t('how.throw.d')],
-        [['parry'], t('how.parry'), t('how.parry.d')],
-        [['impact'], t('how.impact'), t('how.impact.d')],
-      ]],
-    ];
-    for (const [id, title, rows] of secs) {
-      const sec = div(`hpm-how-sec ${id}`, box);
-      sec.dataset.sec = id;
-      sec.append(el('h3', 'hpm-cap', title));
-      for (const [toks, name, desc] of rows) {
-        const r = div('hpm-how-row', sec);
-        const ks = el('span', 'keys');
-        for (const x of toks) ks.append(tok(x));
-        const tx = el('span', 'tx');
-        tx.append(el('b', '', name), el('span', 'd', desc));
-        r.append(ks, tx);
-      }
+    const tip = (id: string, title: string, lines: string[], cls = '', pad = false): void => {
+      const tp = div(`tip ${id}${cls ? ` ${cls}` : ''}`, tips);
+      tp.dataset.sec = id;
+      tp.append(el('h3', '', title));
+      for (const l of lines) { const pe = el('p', ''); fill(pe, l, pad); tp.append(pe); }
+    };
+    let tips: HTMLElement;
+    if (this.touch) {
+      const board = div('board touch', box);
+      board.dataset.sec = 'map';
+      touchSheet(board, null);
+      tips = div('tips', box);
+      const tp = div('tip ring', tips);
+      tp.dataset.sec = 'ring';
+      tp.append(el('h3', '', t('how2.ring.t')), el('p', '', t('how2.touch.ring')));
+      this.howCueMount();
+      return;
     }
+    const lede = el('p', 'lede');
+    fill(lede, t('how2.lede'));
+    box.append(lede);
+    const board = div('board', box);
+    board.dataset.sec = 'map';
+    drawKeyboard(board, { keys: keysOf(c, 0), scheme: 2, kit: null });
+    tips = div('tips', box);
+    tip('move', t('how2.move.t'), [t('how2.move')]);
+    tip('ring', t('how2.ring.t'), [t('how2.ring'), t('how2.ring2')], 'ring');
+    tip('attack', t('how2.attack.t'), [t('how2.attack')]);
+    tip('special', t('how2.special.t'), [t('how2.special')]);
+    // CHANGED(wf8 fix) FT-04 / FT-11 / FT-12: NERVE explained, SHOWTIME carries over, the throw break (THROW at once)
+    tip('super', t('how2.super.t'), [t('how2.super'), t('how2.nerve')]);
+    tip('defend', t('how2.defend.t'), [t('how2.defend'), t('how2.defend2')]);
+    tip('fight', t('how2.fight.t'), [t('how2.fight')]);
+    if (this.padSeen) tip('pad', t('how2.pad.t'), [t('how2.pad')], '', true);
+    this.howCueMount();
+  }
+
+  /** CHANGED(wf8 fix) FT-13: re-measure the MORE BELOW cue (on the card's bottom edge, outside the text) after a rebuild */
+  private howCueMount(): void {
+    requestAnimationFrame(() => this.howCueSync());
+  }
+
+  private howCueSync(): void {
+    const b = this.howBox, c = this.howCue;
+    if (!c) return;
+    const more = b.scrollHeight - b.clientHeight > 6 && b.scrollTop + b.clientHeight < b.scrollHeight - 6;
+    c.classList.toggle('on', more);
   }
 
   private renderHints(): void {
@@ -2059,7 +2197,7 @@ export class Menus {
       h.append(p);
     };
     if (this.padSeen) { const p = el('span', 'hpm-pill pad'); p.append(svg(ICON.pad), el('span', '', 'A / B')); h.append(p); }
-    pill(this.screen === 'charselect' ? 'WASD' : 'ARROWS', t('hint.move'));
+    pill('ARROWS / WASD', t('hint.move'));                // CHANGED(wf8 fix) FT-15: both move everywhere (one answer on every screen)
     pill('ENTER', t('hint.select'));
     if (this.screen !== 'results' && this.screen !== 'ladder') pill('ESC', this.screen === 'pause' ? t('hint.resume') : t('hint.back'));
   }
@@ -2108,6 +2246,17 @@ export class Menus {
         if (target) { this.focus(target, true); return true; }
       }
       if (!next && dir === 'down') return false;           // up from the first row falls through to the header (BACK)
+    }
+    // CHANGED(wf8 fix) FT-15: LEFT from HOW TO PLAY (the guide card) returns to the main item it describes - the spatial
+    // pick landed on SETTINGS, the nearest item at that height
+    if (cur.id === 'hpm-main-howto' && dir === 'left' && this.mainLast && items.includes(this.mainLast)) { this.focus(this.mainLast, true); return true; }
+    // CHANGED(wf8 fix) FT-15: a side-by-side button group ([data-hgroup], the results choices) - UP / DOWN step through it
+    // too (DOWN did nothing, so a player who pressed DOWN then ENTER started the rematch they were trying to leave)
+    if ((dir === 'up' || dir === 'down') && cur.dataset.hgroup) {
+      const g = items.filter((e) => e.dataset.hgroup === cur.dataset.hgroup);
+      const k = g.indexOf(cur);
+      const nx = g[k + (dir === 'down' ? 1 : -1)];
+      if (nx) { this.focus(nx, true); return true; }
     }
     // left / right stay inside the row (its end is a wall, never a jump into the row above)
     const rowItems = row && (dir === 'left' || dir === 'right') ? items.filter((e) => row.contains(e)) : null;

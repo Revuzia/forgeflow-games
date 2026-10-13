@@ -14,6 +14,10 @@ import { STATE_INTS, W, PH, F, fighterBase } from '../runtime/src/core/sim/layou
 import { runSyncTest } from '../runtime/src/core/net/sync.ts';
 import { matchPort } from '../runtime/src/core/net/match_port.ts';
 import { uniqueInputs, stepInputs } from './fixtures/simkit.ts';
+// CHANGED(input) (CONTRACT §36.5): EASY-key streams (BLOCK, SPECIAL 1-4, SUPER1 / SUPER3, J mashing)
+import { devSet } from '../runtime/src/core/sim/match.ts';
+import { EV } from '../runtime/src/core/sim/events.ts';
+import { inputStream, IN as NIN } from '../runtime/src/core/net/testinputs.ts';
 
 const t = tester('probe_determinism');
 const FRAMES = 12000;
@@ -227,4 +231,80 @@ try {
   t.ok(false, `STEP stream runs crashed: ${String((e as Error).message).split(String.fromCharCode(10))[0]}`);
 }
 
-t.done(`fixture final hashes ${hashes.join(' ')}; ${realNote}; ${uniqNote}${stepNote}`);
+// CHANGED(input) (CONTRACT §36.5): random EASY-key streams (BLOCK holds, SPECIAL 1-4 with / without ASSIST, SUPER / PRIME
+// TIME taps - every other run with full SHOWTIME -, J mashing, presses while blocking, STEP mixed in) on every real 12 x 12
+// pair, P1 EASY vs EASY / SIMPLE / CLASSIC, and both bonus rounds per fighter: twin straight runs identical every frame AND
+// save / step / load / re-step every frame == the straight run. The event tally shows the new bits act (supers, blocks).
+let easyNote = '';
+try {
+  const real = loadGameData();
+  const ids = Object.keys(real.fighters).sort();
+  const EF = 900;
+  let runs = 0;
+  let twin = 0;
+  let sl = 0;
+  let supers = 0;
+  let blocks = 0;
+  let bitFrames = 0;
+  const bad: string[] = [];
+  const evs: SimEvent[] = [];
+  const runE = (mk: () => Match, a: Int32Array, b: Int32Array, label: string): void => {
+    const x = mk();
+    const y = mk();
+    const dd = mk();
+    const slot = new Int32Array(dd.s.length);
+    let tw = 0;
+    let ms = 0;
+    for (let f = 0; f < a.length; f++) {
+      if (((a[f] | b[f]) & 0x3f8000) !== 0) bitFrames++;
+      step(x, a[f], b[f]);
+      step(y, a[f], b[f]);
+      const cx = checksum(x);
+      if (cx !== checksum(y)) tw++;
+      save(dd, slot);
+      step(dd, a[f], b[f]);
+      const c1 = checksum(dd);
+      load(dd, slot);
+      step(dd, a[f], b[f]);
+      if (checksum(dd) !== c1 || c1 !== cx) ms++;
+      evs.length = 0;
+      eventsSince(x.events, x.frame(), evs);
+      for (const e of evs) {
+        if (e.type === EV.SUPER_FREEZE) supers++;
+        else if (e.type === EV.BLOCK) blocks++;
+      }
+    }
+    runs++;
+    twin += tw;
+    sl += ms;
+    if ((tw || ms) && bad.length < 3) bad.push(`${label}: twin ${tw} save/load ${ms}`);
+  };
+  const meterUp = (m: Match, on: boolean): Match => {
+    if (on) { devSet(m, 0, 'showtime', 30000); devSet(m, 1, 'showtime', 30000); }
+    return m;
+  };
+  for (const p1 of ids) {
+    for (const p2 of ids) {
+      const seed = 5 + runs;
+      const s2 = ([2, 0, 1] as const)[runs % 3];
+      const full = runs % 2 === 0;
+      runE(() => meterUp(newMatch({ data: real, p1, p2, seed, s1: 2, s2, skipIntro: true }), full),
+        inputStream(seed * 37 + 1, NIN.R, EF, true, true), inputStream(seed * 41 + 2, NIN.L, EF, runs % 2 === 1, true), `${p1}-${p2}`);
+    }
+  }
+  const pairRuns = runs;
+  for (const id of ids) {
+    for (const mode of ['brawl', 'heckler'] as const) {
+      runE(() => meterUp(newMatch({ data: real, p1: id, p2: id, mode, seed: runs, s1: 2, skipIntro: false }), true),
+        inputStream(runs * 23 + 4, NIN.R, 1200, true, true), new Int32Array(1200), `${mode} ${id}`);
+    }
+  }
+  t.eq(twin, 0, `EASY-key streams: twin runs identical every frame (${pairRuns} real pairs x ${EF} f + ${ids.length * 2} bonus runs x 1200 f; ${bitFrames} frames carry bits 15-21)${bad.length ? ' - ' + bad[0] : ''}`);
+  t.eq(sl, 0, 'EASY-key streams: save / step / load / re-step every frame == the straight run (same runs)');
+  t.ok(supers > 0 && blocks > 0, `EASY-key streams exercise the new keys: ${supers} SUPER_FREEZE and ${blocks} BLOCK events in the straight runs`);
+  easyNote = `; EASY-key streams ${runs} runs (${pairRuns} pairs + bonus), ${bitFrames} frames with bits 15-21, 0 mismatches, ${supers} supers / ${blocks} blocks`;
+} catch (e) {
+  t.ok(false, `EASY-key stream runs crashed: ${String((e as Error).message).split(String.fromCharCode(10))[0]}`);
+}
+
+t.done(`fixture final hashes ${hashes.join(' ')}; ${realNote}; ${uniqNote}${stepNote}${easyNote}`);

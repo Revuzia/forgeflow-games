@@ -10,6 +10,7 @@
 import type { SimEvent, UiFighterSnap, UiMatchSnap } from './types.ts';
 import { EV } from './ev.ts';
 import { chip, dirSvg, div, el, setText } from './dom.ts';
+import { capChip } from './keymap.ts';
 import { t } from './strings.ts';
 import type { ResetWhere, ScreenBox } from './trainopts.ts';
 
@@ -38,7 +39,9 @@ export function trainingRows(): TrainingRow[] {
 }
 
 // ─────────────────────────── input word helpers (CONTRACT 4.4) ───────────────────────────
-export const IN = { UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, L: 16, M: 32, H: 64, S: 128, ASSIST: 256, THROW: 512, PARRY: 1024, IMPACT: 2048, TAUNT: 4096, STEP_IN: 8192, STEP_OUT: 16384 } as const;
+export const IN = { UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, L: 16, M: 32, H: 64, S: 128, ASSIST: 256, THROW: 512, PARRY: 1024, IMPACT: 2048, TAUNT: 4096, STEP_IN: 8192, STEP_OUT: 16384,
+  // CHANGED(ui) (CONTRACT §36.5 item 1): the EASY bits (BLOCK hold, SPECIAL 1-4, SUPER, PRIME TIME)
+  BLOCK: 1 << 15, SP1: 1 << 16, SP2: 1 << 17, SP3: 1 << 18, SP4: 1 << 19, SUPER1: 1 << 20, SUPER3: 1 << 21 } as const;
 
 /** numpad direction of a word (screen-relative: 6 = right) */
 export function numpadDir(w: number): number {
@@ -47,10 +50,15 @@ export function numpadDir(w: number): number {
   const h = r && !l ? 1 : l && !r ? -1 : 0;
   return 5 + h + v * 3;
 }
-const BTN_BITS: ReadonlyArray<readonly [number, string]> = [
-  [IN.L, 'L'], [IN.M, 'M'], [IN.H, 'H'], [IN.S, 'S'], [IN.ASSIST, 'A'], [IN.THROW, 'T'], [IN.PARRY, 'P'], [IN.IMPACT, 'I'],
+/** CHANGED(ui): bit -> the action whose key cap the chip shows (+ the fallback letter, the chip colour family) */
+const BTN_BITS: ReadonlyArray<readonly [number, string, string, string]> = [
+  [IN.BLOCK, 'blockHold', 'BLK', 'defend'],
+  [IN.L, 'l', 'L', 'attack'], [IN.M, 'm', 'M', 'attack'], [IN.H, 'h', 'H', 'attack'], [IN.S, 's', 'S', 'special'], [IN.ASSIST, 'assist', 'A', 'special'],
+  [IN.SP1, 'sp1', 'SP1', 'special'], [IN.SP2, 'sp2', 'SP2', 'special'], [IN.SP3, 'sp3', 'SP3', 'special'], [IN.SP4, 'sp4', 'SP4', 'special'],
+  [IN.SUPER1, 'super1', 'SUP', 'super'], [IN.SUPER3, 'super3', 'PRM', 'prime'],
+  [IN.THROW, 'throw', 'T', 'defend'], [IN.PARRY, 'parry', 'P', 'defend'], [IN.IMPACT, 'impact', 'I', 'defend'],
   // CHANGED(UI3D): the STEP bits (CONTRACT §35.2) as IN / OUT chips
-  [IN.STEP_IN, 'IN'], [IN.STEP_OUT, 'OUT'],
+  [IN.STEP_IN, 'stepIn', 'IN', 'step'], [IN.STEP_OUT, 'stepOut', 'OUT', 'step'],
 ];
 
 export class InputDisplay {
@@ -58,13 +66,16 @@ export class InputDisplay {
   private readonly rowsBox: HTMLElement;
   private rows: Array<{ word: number; frames: number; el: HTMLElement; f: HTMLElement }> = [];
   private readonly max = 14;
-  constructor(host: HTMLElement) {
+  /** CHANGED(ui): the player's key cap for an action (the chips show the keys pressed, not L / M / H) */
+  private readonly capOf: ((action: string) => string | null) | null;
+  constructor(host: HTMLElement, capOf: ((action: string) => string | null) | null = null) {
+    this.capOf = capOf;
     this.root = div('hp-inputs', host);
     this.root.append(el('div', 'ttl', t('tr.inputsTitle')));
     this.rowsBox = div('rows', this.root);
   }
   push(word: number, _frame: number): void {
-    const w = word & 0x7fff;           // CHANGED(UI3D): incl. the STEP bits
+    const w = word & 0x3fffff;         // CHANGED(UI3D): incl. the STEP bits; CHANGED(ui): + the EASY bits 15-21 (display only)
     const top = this.rows[0];
     if (top && top.word === w) { top.frames++; setText(top.f, String(Math.min(99, top.frames))); return; }
     const r = el('div', 'row');
@@ -72,7 +83,11 @@ export class InputDisplay {
     const d = el('span', 'd');
     d.innerHTML = dirSvg(numpadDir(w));
     r.append(f, d);
-    for (const [bit, label] of BTN_BITS) if (w & bit) r.append(chip(label, bit >= IN.STEP_IN ? 'step' : ''));
+    for (const [bit, action, label, kind] of BTN_BITS) {
+      if (!(w & bit)) continue;
+      const cap = this.capOf?.(action);
+      r.append(cap ? capChip(cap, kind, true) : chip(label, kind === 'step' ? 'step' : ''));
+    }
     this.rowsBox.prepend(r);
     this.rows.unshift({ word: w, frames: 1, el: r, f });
     while (this.rows.length > this.max) { const x = this.rows.pop(); x?.el.remove(); }
@@ -172,8 +187,17 @@ export class FrameReadout {
   /** CHANGED(UI) P2: the training driver measures per SIM TICK (exact) and hands its numbers in; from then on the
    *  readout shows those and stops sampling at render frames (which can be a frame off when two ticks share a frame) */
   private external = false;
-  setExact(r: { adv: number | null; block: boolean; startup: number; damage: number; combo: number }): void {
+  setExact(r: { adv: number | null; block: boolean; startup: number; damage: number; combo: number; none?: boolean }): void {
     this.external = true;
+    if (r.none) {
+      // CHANGED(wf8 fix) FT-14: the last move hit nothing - every field reads "-" (not the previous hit's numbers)
+      const none = t('misc.none');
+      setText(this.advLbl, t('tr.adv'));
+      for (const e of [this.adv, this.startup, this.damage, this.combo]) setText(e, none);
+      this.adv.className = '';
+      this.last = null;
+      return;
+    }
     setText(this.advLbl, r.block ? `${t('tr.adv')} ${t('tr.onBlock')}` : `${t('tr.adv')} ${t('tr.onHit')}`);
     setText(this.startup, r.startup > 0 ? `${r.startup}F` : t('misc.none'));
     setText(this.damage, String(Math.max(0, r.damage)));

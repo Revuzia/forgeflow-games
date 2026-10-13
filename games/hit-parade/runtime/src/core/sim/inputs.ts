@@ -2,17 +2,19 @@
 //
 // Input word (§4.4): bit0 UP, bit1 DOWN, bit2 LEFT, bit3 RIGHT (screen-relative, SOCD-cleaned by
 // the input layer), bit4 L, bit5 M, bit6 H, bit7 S, bit8 ASSIST, bit9 THROW, bit10 PARRY,
-// bit11 IMPACT, bit12 TAUNT, CHANGED(SIM3D) bit13 STEP_IN, bit14 STEP_OUT (CONTRACT §35.2). The sim converts LEFT/RIGHT
+// bit11 IMPACT, bit12 TAUNT, CHANGED(SIM3D) bit13 STEP_IN, bit14 STEP_OUT (CONTRACT §35.2), CHANGED(input) (§36.5) bit15
+// BLOCK, bits 16-19 SPECIAL 1-4 (= SIMPLE 5S / 6S / 2S / 4S), bit20 SUPER1 (= S+H), bit21 SUPER3 (= 2S+H), in every scheme;
+// scheme 2 EASY = SIMPLE + the auto-combo (repeated LIGHT presses in a light chain follow the assist route). The sim converts LEFT/RIGHT
 // to back/forward with `facing` (= the screen side from the camera basis, §35.3) and stores
 // one history int per frame IN the state (motion.ts parses it). Parsing produces ONE action per
 // frame by priority (EX > super > 360 > DP > QC > HC > charge > other specials > throw / parry /
 // impact > assist route > normals > taunt > dash) and writes it into the action buffer
 // (newest press wins); fighter.ts executes the buffer when the fighter may act.
 
-import { ACT, BUF, F, FL, HIST, P, PROJ_CAP, ST, W, projBase } from './layout.ts';
+import { ACT, BUF, F, FL, HIST, MVF, P, PROJ_CAP, ST, W, projBase } from './layout.ts';
 import { H_FROZEN, dashDone, motionDone, motionSpan } from './motion.ts';
 import type { MotionWindows } from './motion.ts';
-import { K, MO, MOTION_PRIO, STK, UK } from './compile.ts';
+import { K, MO, MOTION_PRIO, STK, TPD, UK } from './compile.ts';
 import type { CFighter, CMove, CRoute, CSpecial, CTrigger } from './compile.ts';
 import { ballReady } from './projectiles.ts';
 import { canAfford, fb, isAirborne } from './state.ts';
@@ -21,10 +23,31 @@ import type { Match } from './state.ts';
 export const IN = {
   UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, L: 16, M: 32, H: 64, S: 128, ASSIST: 256, THROW: 512, PARRY: 1024, IMPACT: 2048, TAUNT: 4096,
   STEP_IN: 8192, STEP_OUT: 16384, // CHANGED(SIM3D): circle away from / toward the camera (CONTRACT §35.2)
+  // CHANGED(input) (CONTRACT §36.1 / §36.5): the EASY extra keys (every scheme): BLOCK hold, SPECIAL 1-4, SUPER Lv1 / Lv3
+  BLOCK: 32768, SP1: 65536, SP2: 131072, SP3: 262144, SP4: 524288, SUPER1: 1048576, SUPER3: 2097152,
 } as const;
-/** CHANGED(SIM3D): the 15 used bits of the input word (bits 13 / 14 = STEP_IN / STEP_OUT). */
-export const WORD_BITS = 0x7fff;
-const BTN_MASK = 0x7ff0; // history: held buttons incl. the STEP bits (bits 4..14)
+/** CHANGED(input) (CONTRACT §36.5): the 22 used bits of the input word (was 0x7fff: bits 13 / 14 = STEP, 15..21 = EASY keys). */
+export const WORD_BITS = 0x3fffff;
+// history: held buttons incl. the STEP bits (bits 4..14). CHANGED(input): the history ring keeps ONLY these (bit 15 of a
+// history entry stays motion.ts H_FROZEN); the bits 15..21 are read from F.raw / F.prevRaw, so a word stream without them
+// gives bit-identical states.
+const BTN_MASK = 0x7ff0;
+/** CHANGED(input): the four SPECIAL keys */
+export const IN_SP = IN.SP1 | IN.SP2 | IN.SP3 | IN.SP4;
+/** CHANGED(input): every new press-type key (SPECIAL 1-4 + SUPER1 / SUPER3) */
+export const IN_EXTRA = IN_SP | IN.SUPER1 | IN.SUPER3;
+/** CHANGED(input): the attack keys the hold-to-buffer freeze rule watches */
+export const IN_ATTACK = IN.L | IN.M | IN.H | IN.S | IN_EXTRA;
+
+/** CHANGED(input) (CONTRACT §36.5): is BLOCK held in this raw word? */
+export function blockHeld(raw: number): boolean {
+  return (raw & IN.BLOCK) !== 0;
+}
+
+/** CHANGED(input): the SIMPLE direction class of the lowest SPECIAL key pressed (SP1 5, SP2 6, SP3 2, SP4 4), 0 = none. */
+export function spClass(pressed: number): number {
+  return (pressed & IN.SP1) !== 0 ? 5 : (pressed & IN.SP2) !== 0 ? 6 : (pressed & IN.SP3) !== 0 ? 2 : (pressed & IN.SP4) !== 0 ? 4 : 0;
+}
 
 /** CHANGED(SIM3D): +1 = STEP_IN held, -1 = STEP_OUT held, 0 = neither or both (SOCD neutral). */
 export function stepBits(raw: number): number {
@@ -211,9 +234,9 @@ const spanBest = new Int32Array(2);
  * Tier of trigger `tr` for this frame's press (0 = no match). A T_MOTION result leaves the motion's span (motion.ts
  * motionSpan: end / start ages) in spanNew.
  */
-function triggerTier(s: Int32Array, b: number, tr: CTrigger, scheme: number, pressed: number, dir: number, mw: MotionWindows): number {
+function triggerTier(s: Int32Array, b: number, tr: CTrigger, simple: boolean, pressed: number, dir: number, mw: MotionWindows): number {
   let tier = 0;
-  if (scheme === 0) {
+  if (simple) {
     if (tr.simpleDir >= 0) {
       if ((pressed & IN.S) !== 0) tier = tr.simpleDir === dir ? T_EXACT : tr.simpleDir === simpleClass(dir) ? T_CLASS : tr.simpleDir === 5 ? T_ANY : 0;
     } else if ((pressed & trigBits(tr.simpleBtn & 7)) !== 0) tier = T_BTN;
@@ -239,9 +262,61 @@ function motionWins(prioN: number, prioB: number): boolean {
   return prioN < prioB;
 }
 
+/** CHANGED(wf8 fix) FT-07: the non-EX teleport special with exit `to` (TPD.*), -1 = none (only a teleport kit has one) */
+function teleportExit(cf: CFighter, to: number): number {
+  for (const mv of cf.moves) if (mv.teleport && !mv.isEx && mv.teleport.to === to && mv.isSpecialCat) return mv.idx;
+  return -1;
+}
+
 /** CHANGED(fix_input): does special row `sp` route to move `idx` (any button / EX)? */
 function rowHas(sp: CSpecial, idx: number): boolean {
   return sp.idx[0] === idx || sp.idx[1] === idx || sp.idx[2] === idx || sp.idx[3] === idx;
+}
+
+/**
+ * CHANGED(input): the rekka / follow-up trigger ranking of fix_input (§35.24 a) as a function, so a SPECIAL key (§36.5) can
+ * run it with the S press of its class. Returns the most specific affordable sibling of `curMv` for this press, or -1.
+ */
+function bestTrigger(m: Match, i: number, curMv: CMove, simple: boolean, pressed: number, dir: number, mw: MotionWindows): number {
+  const s = m.s;
+  const b = fb(i);
+  const cf = m.cf[i];
+  let best = -1;
+  let bestTier = 0;
+  let bestPrio = 0;
+  for (let k = 0; k < curMv.chains.length; k++) {
+    const tm = cf.moves[curMv.chains[k]];
+    const tr = tm.trigger;
+    if (!tr) continue;
+    const tier = triggerTier(s, b, tr, simple, pressed, dir, mw);
+    if (tier === 0 || tier < bestTier || !canAfford(m, i, tm)) continue;
+    const prio = tier === T_MOTION ? MOTION_PRIO[tr.motion] ?? 9 : 0;
+    if (best >= 0 && tier === bestTier && (tier !== T_MOTION || !motionWins(prio, bestPrio))) continue;
+    best = tm.idx;
+    bestTier = tier;
+    bestPrio = prio;
+    if (tier === T_MOTION) {
+      spanBest[0] = spanNew[0];
+      spanBest[1] = spanNew[1];
+    }
+  }
+  return best;
+}
+
+/**
+ * CHANGED(input) (CONTRACT §36.5, EASY auto-combo): the assist-route step `k` the running move `cur` stands on, when the
+ * route can continue with assist[k + 1]: a move of the running route (MVF.ROUTE, F.assistStep), or a grounded LIGHT normal
+ * (any direction) = the route's opener (k = 0). -1 = no continuation (not in a light chain / the route is complete).
+ */
+export function routeStep(m: Match, i: number, cur: CMove): number {
+  const s = m.s;
+  const b = fb(i);
+  const n = m.cf[i].assist.length;
+  if (n < 2) return -1;
+  const k = s[b + F.assistStep];
+  if ((s[b + F.mvFlags] & MVF.ROUTE) !== 0 && k >= 0 && k < n && m.cf[i].assist[k] === cur.idx) return k + 1 < n ? k : -1;
+  if (cur.isNormalCat && !cur.inAir && cur.inBtn === 0 && !cur.stepAtk) return 0;
+  return -1;
 }
 
 /**
@@ -261,6 +336,8 @@ export function parseAction(m: Match, i: number): void {
   const R = routeOf(m, i); // CHANGED(SIM) P2: phase-2 routing for a `phases` fighter
   const sys = m.sys.raw;
   const scheme = m.cfg.p[i].scheme;
+  // CHANGED(input) (CONTRACT §36.5): EASY (2) parses everything SIMPLE (0) does; only CLASSIC (1) is not "simple"
+  const simple = scheme !== 1;
   const raw = s[b + F.raw];
   const prev = s[b + F.prevRaw];
   const pressed = raw & ~prev;
@@ -269,7 +346,7 @@ export function parseAction(m: Match, i: number): void {
   const air = isAirborne(s, b) || st === ST.AIR;
   const down = dir === 1 || dir === 2 || dir === 3;
   const kdCtx = st === ST.KNOCKDOWN || st === ST.THROWN;
-  const baseWin = scheme === 0 ? sys.buffer.simple : sys.buffer.classic;
+  const baseWin = simple ? sys.buffer.simple : sys.buffer.classic;
   let win = kdCtx ? Math.max(baseWin, sys.buffer.wakeup) : st === ST.HITSTUN || st === ST.BLOCKSTUN ? Math.max(baseWin, sys.buffer.afterStun) : baseWin;
   // CHANGED(fix_core) D9 (CONTRACT §35.20): a press made on sidestep frame k (2 .. stepAttackF - 1) is HELD until the step's
   // action frame stepAttackF (11), where it comes out (step-attacks / follow-ups), and keeps the normal window after it; a
@@ -279,6 +356,58 @@ export function parseAction(m: Match, i: number): void {
   const w = cf.mw; // CHANGED(SIM) P2: per-fighter charge numbers (unique.chargeF / keepF)
   const curMv = s[b + F.mv] >= 0 ? cf.moves[s[b + F.mv]] : null;
 
+  // ---------------------------------------------------------------- CHANGED(input): the EASY extra keys (every scheme)
+  // CONTRACT §36.5 item 2: SUPER3 / SUPER1 = SIMPLE 2S+H / S+H (super > specials: read before anything else; unaffordable =
+  // nothing), then SPECIAL 1-4 = EXACTLY a SIMPLE S press with the direction class 5 / 6 / 2 / 4 (rekka triggers, air jS,
+  // ASSIST = EX, else the class special, x0.8). A frame without these bits never enters this block.
+  const extra = pressed & IN_EXTRA;
+  if (extra !== 0) {
+    if ((extra & IN.SUPER3) !== 0 && R.sup3 >= 0 && usable(m, i, cf.moves[R.sup3], air)) {
+      setBuf(m, i, ACT.MOVE, R.sup3, BUF.SIMPLE, win);
+      return;
+    }
+    if ((extra & IN.SUPER1) !== 0 && R.sup1 >= 0 && usable(m, i, cf.moves[R.sup1], air)) {
+      setBuf(m, i, ACT.MOVE, R.sup1, BUF.SIMPLE, win);
+      return;
+    }
+    const sc = spClass(extra);
+    if (sc !== 0) {
+      if (curMv !== null && curMv.chains.length > 0) {
+        const tg = bestTrigger(m, i, curMv, true, IN.S, sc, sys.motion);
+        if (tg >= 0) {
+          setBuf(m, i, ACT.MOVE, tg, BUF.CHAIN, win);
+          return;
+        }
+      }
+      if (air && R.sAir >= 0 && usable(m, i, cf.moves[R.sAir], true)) {
+        setBuf(m, i, ACT.MOVE, R.sAir, BUF.SIMPLE, win);
+        return;
+      }
+      if ((raw & IN.ASSIST) !== 0) {
+        const ex = sc === 6 ? R.e6 : sc === 4 ? R.e4 : sc === 2 ? R.e2 : R.e5;
+        if (ex >= 0 && usable(m, i, cf.moves[ex], air)) {
+          setBuf(m, i, ACT.MOVE, ex, BUF.SIMPLE, win);
+          return;
+        }
+      }
+      const sp = sc === 6 ? R.s6 : sc === 4 ? R.s4 : sc === 2 ? R.s2 : R.s5;
+      let spF = sp >= 0 ? sp : R.s5;
+      // CHANGED(wf8 fix) FT-07: a teleport special on a SPECIAL key takes its exit from the held direction - toward them =
+      // IN FRONT, away = HOME, none = as routed (BEHIND) - the trapdoor's three exits on one key (CLASSIC keeps 214 + L/M/H)
+      if (spF >= 0 && !air && cf.u.kind === UK.TELEPORT && cf.moves[spF].teleport) {
+        const h = dir >= 1 && dir <= 9 ? (dir - 1) % 3 : 1; // 0 back, 1 neutral, 2 forward
+        if (h !== 1) {
+          const tp = teleportExit(cf, h === 2 ? TPD.FRONT : TPD.HOME);
+          if (tp >= 0) spF = tp;
+        }
+      }
+      if (spF >= 0 && usable(m, i, cf.moves[spF], air)) {
+        setBuf(m, i, ACT.MOVE, spF, BUF.SIMPLE, win);
+        return;
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- SIMPLE S+H over follow-ups (CHANGED(fix_input))
   // CONTRACT §35.24 item 2b (orchestrator decision): in SIMPLE the S+H super chord completed on THIS frame (S with H pressed
   // this frame or one frame before, or H with S pressed one frame before - the chord window of the S+H routing below) is the
@@ -286,7 +415,7 @@ export function parseAction(m: Match, i: number): void {
   // usable. Before: the follow-up triggers read first, so S+H in Patch's CUE 1 / CUE 2 gave CUE 2 / CUE 3 and the authored
   // "super" cancels could never be used in SIMPLE. A move without a super cancel, or an unaffordable super, keeps the S press
   // as the follow-up (unchanged); CLASSIC is unchanged (a fast 236, 236 rekka already contains 236236).
-  if (scheme === 0 && curMv !== null && curMv.cSuper && curMv.chains.length > 0) {
+  if (simple && curMv !== null && curMv.cSuper && curMv.chains.length > 0) {
     const chordS = (pressed & IN.S) !== 0 && (raw & IN.H) !== 0 && s[b + F.ageH] <= chord;
     const chordH = (pressed & IN.H) !== 0 && (raw & IN.S) !== 0 && s[b + F.ageS] <= chord;
     if (chordS || chordH) {
@@ -303,25 +432,7 @@ export function parseAction(m: Match, i: number): void {
   // is buffered - an exact SIMPLE direction beats its class, a motion beats the neutral "5S" fallback, a fresh motion beats a
   // leftover one (motionWins) - instead of the first sibling that matched.
   if (curMv && curMv.chains.length > 0 && (pressed & (IN.L | IN.M | IN.H | IN.S)) !== 0) {
-    let best = -1;
-    let bestTier = 0;
-    let bestPrio = 0;
-    for (let k = 0; k < curMv.chains.length; k++) {
-      const tm = cf.moves[curMv.chains[k]];
-      const tr = tm.trigger;
-      if (!tr) continue;
-      const tier = triggerTier(s, b, tr, scheme, pressed, dir, sys.motion);
-      if (tier === 0 || tier < bestTier || !canAfford(m, i, tm)) continue;
-      const prio = tier === T_MOTION ? MOTION_PRIO[tr.motion] ?? 9 : 0;
-      if (best >= 0 && tier === bestTier && (tier !== T_MOTION || !motionWins(prio, bestPrio))) continue;
-      best = tm.idx;
-      bestTier = tier;
-      bestPrio = prio;
-      if (tier === T_MOTION) {
-        spanBest[0] = spanNew[0];
-        spanBest[1] = spanNew[1];
-      }
-    }
+    const best = bestTrigger(m, i, curMv, simple, pressed, dir, sys.motion); // CHANGED(input): the same loop as a function
     if (best >= 0) {
       setBuf(m, i, ACT.MOVE, best, BUF.CHAIN, win);
       return;
@@ -329,11 +440,11 @@ export function parseAction(m: Match, i: number): void {
   }
 
   // ---------------------------------------------------------------- SIMPLE one-button (S)
-  if (scheme === 0 && (pressed & IN.S) !== 0 && air && R.sAir >= 0 && usable(m, i, cf.moves[R.sAir], true)) {
+  if (simple && (pressed & IN.S) !== 0 && air && R.sAir >= 0 && usable(m, i, cf.moves[R.sAir], true)) {
     setBuf(m, i, ACT.MOVE, R.sAir, BUF.SIMPLE, win);
     return;
   }
-  if (scheme === 0 && (pressed & IN.S) !== 0) {
+  if (simple && (pressed & IN.S) !== 0) {
     const hChord = (raw & IN.H) !== 0 && s[b + F.ageH] <= chord;
     if (hChord) {
       const sup = down ? R.sup3 : R.sup1;
@@ -357,7 +468,7 @@ export function parseAction(m: Match, i: number): void {
     }
   }
   // SIMPLE: H pressed right after S -> super (chord either order)
-  if (scheme === 0 && (pressed & IN.H) !== 0 && (raw & IN.S) !== 0 && s[b + F.ageS] <= chord) {
+  if (simple && (pressed & IN.H) !== 0 && (raw & IN.S) !== 0 && s[b + F.ageS] <= chord) {
     const sup = down ? R.sup3 : R.sup1;
     if (sup >= 0 && usable(m, i, cf.moves[sup], air)) {
       setBuf(m, i, ACT.MOVE, sup, BUF.SIMPLE, win);
@@ -457,8 +568,16 @@ export function parseAction(m: Match, i: number): void {
   }
 
   // ---------------------------------------------------------------- assist route (SIMPLE: hold ASSIST + tap L)
-  if (scheme === 0 && (raw & IN.ASSIST) !== 0 && (pressed & IN.L) !== 0 && cf.assist.length > 0 && !air) {
+  if (simple && (raw & IN.ASSIST) !== 0 && (pressed & IN.L) !== 0 && cf.assist.length > 0 && !air) {
     setBuf(m, i, ACT.ROUTE, -1, 0, win);
+    return;
+  }
+  // CHANGED(input) (CONTRACT §36.5 item 3): EASY auto-combo - a LIGHT press alone (no M / H, no ASSIST, grounded) while the
+  // running move is a light normal (the route's opener) or a move of the running route buffers the route's next step
+  // (BUF.EASY). bufM keeps the plain light normal this press would have been: it comes out instead when the route cannot
+  // continue (fighter.ts tryAct: a whiffed opener, a late press).
+  if (scheme === 2 && (pressed & (IN.L | IN.M | IN.H)) === IN.L && (raw & IN.ASSIST) === 0 && !air && curMv !== null && routeStep(m, i, curMv) >= 0) {
+    setBuf(m, i, ACT.ROUTE, cf.gTable[dir * 3], BUF.EASY, win);
     return;
   }
 

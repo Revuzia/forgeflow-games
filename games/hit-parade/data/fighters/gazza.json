@@ -4,6 +4,7 @@
   "persona": "Goal Line",
   "archetype": "setplay",
   "difficulty": 3,
+  "plan": "Shoot the ball to keep them out, park it in the air to stop jumps, then rush in.",
   "body": "Ch08_nonPBR",
   "heightM": 1.8,
   "hp": 10000,
@@ -75,6 +76,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "jab"},
       "desc": "Pub-brawler jab.",
+      "note": "Quick jab to stop their attack.",
       "boxes": [{"f": [5, 7], "x": 0.822, "y": 1.377, "w": 0.316, "h": 0.554}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.037], [5, 0.054], [8, 0.001], [17, 0.02]]
@@ -107,6 +109,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "crouch_jab"},
       "desc": "Crouching jab.",
+      "note": "Quick low jab; they must block crouching.",
       "boxes": [{"f": [5, 7], "x": 0.882, "y": 0.931, "w": 0.437, "h": 0.25}],
       "boxSrc": "hitVolume"
     },
@@ -138,6 +141,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "snap_kick"},
       "desc": "Front snap kick.",
+      "note": "Front snap kick to keep them at arm's length.",
       "boxes": [{"f": [9, 11], "x": 0.937, "y": 1.106, "w": 0.547, "h": 0.3}],
       "boxSrc": "hitVolume"
     },
@@ -170,7 +174,8 @@
       "homing": true,
       "lateralM": 0.4,
       "anim": {"clip": "grass_cutter"},
-      "desc": "Standing low swing kick along the grass: long low, but he stays tall; homing."
+      "desc": "Standing low swing kick along the grass: long low, but he stays tall; homing.",
+      "note": "Long low kick that catches sidesteps; he stays standing tall."
     },
     "5H": {
       "kind": "normal",
@@ -201,6 +206,7 @@
       "anim": {"clip": "volley"},
       "sfx": [[8, "whoosh_heavy"]],
       "desc": "Big front volley; wall-splats at the ring edge.",
+      "note": "Big volley kick; walls them near the edge.",
       "boxes": [{"f": [12, 14], "x": 0.981, "y": 1.018, "w": 0.635, "h": 0.35}],
       "boxSrc": "hitVolume"
     },
@@ -235,6 +241,7 @@
       "anim": {"clip": "slide_tackle"},
       "sfx": [[4, "whoosh_light"]],
       "desc": "Feet-first slide tackle from range (travels 1.2 m).",
+      "note": "Slide tackle from range that knocks down. A sidestep beats it.",
       "boxes": [{"f": [12, 14], "x": 0.967, "y": 0.538, "w": 0.606, "h": 0.35}],
       "boxSrc": "hitVolume"
     },
@@ -265,7 +272,8 @@
       "track": {"until": 1, "rate": 180},
       "lateralM": 0.18,
       "anim": {"clip": "knee_trap"},
-      "desc": "Quick short knee (+2/-3)."
+      "desc": "Quick short knee (+2/-3).",
+      "note": "Quick short knee to stop their attack."
     },
     "6H": {
       "kind": "command",
@@ -296,7 +304,8 @@
       "track": {"until": 14, "rate": 180},
       "lateralM": 0.18,
       "anim": {"clip": "header"},
-      "desc": "Hopping header onto the head: overhead."
+      "desc": "Hopping header onto the head: overhead.",
+      "note": "Hopping header that must be blocked standing."
     },
     "j.L": {
       "kind": "normal",
@@ -326,6 +335,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "air_knee"},
       "desc": "Air knee.",
+      "note": "Quick air knee for fights in the air.",
       "pushExt": [[0, 0.072], [7, 0.026], [15, 0.092]]
     },
     "j.M": {
@@ -355,7 +365,8 @@
       "track": {"until": 1, "rate": 180},
       "lateralM": 0.18,
       "anim": {"clip": "flying_volley"},
-      "desc": "Air-to-air volley."
+      "desc": "Air-to-air volley.",
+      "note": "Flying volley that wins fights in the air."
     },
     "j.H": {
       "kind": "normal",
@@ -385,6 +396,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "flying_punt"},
       "desc": "Big flying punt jump-in.",
+      "note": "Big flying punt to start a combo.",
       "pushExt": [[0, 0.082], [3, 0.0], [19, 0.004]]
     },
     "throw_f": {
@@ -424,6 +436,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Drops them like a ball and punts them away.",
+      "note": "Up close: drop them like a ball and punt them away.",
       "pushExt": [[0, 0.157], [4, 0.032], [7, 0.004], [24, 0.0], [31, 0.047]]
     },
     "throw_b": {
@@ -463,6 +476,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Falls back and bicycle-kicks them over his head.",
+      "note": "Up close: bicycle-kick them over his head, behind him.",
       "pushExt": [[0, 0.157], [4, 0.032], [7, 0.004], [24, 0.0], [31, 0.047]]
     },
     "power_shot_l": {
@@ -507,6 +521,7 @@
       "anim": {"clip": "shot_kick"},
       "sfx": [[0, "ball_kick"]],
       "desc": "Shoots the ball: L low roller (hit low), M straight, H chip lob; rebounds once off the wall.",
+      "note": "Low rolling shot aimed at them: they must block it crouching.",
       "pushExt": [[0, 0.076], [5, 0.0], [48, 0.0]]
     },
     "power_shot_m": {
@@ -551,6 +566,7 @@
       "anim": {"clip": "shot_kick"},
       "sfx": [[0, "ball_kick"]],
       "desc": "Shoots the ball: L low roller (hit low), M straight, H chip lob; rebounds once off the wall.",
+      "note": "Shoots the ball straight ahead; it bounces back once off the wall.",
       "pushExt": [[0, 0.076], [5, 0.0], [48, 0.0]]
     },
     "power_shot_h": {
@@ -596,6 +612,7 @@
       "anim": {"clip": "shot_kick"},
       "sfx": [[0, "ball_kick"]],
       "desc": "Shoots the ball: L low roller (hit low), M straight, H chip lob; rebounds once off the wall.",
+      "note": "Lobbed shot aimed at them that drops from above; good vs jumpers.",
       "pushExt": [[0, 0.076], [4, 0.0], [48, 0.0]]
     },
     "power_shot_ex": {
@@ -639,6 +656,7 @@
       "anim": {"clip": "shot_kick"},
       "sfx": [[0, "ball_kick"]],
       "desc": "Curling 2-hit shot.",
+      "note": "Curling two-hit shot aimed right at them.",
       "pushExt": [[0, 0.076], [4, 0.0], [42, 0.0]]
     },
     "bicycle_l": {
@@ -670,7 +688,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "bicycle"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Overhead bicycle kick anti-air; lands on his back."
+      "desc": "Overhead bicycle kick anti-air; lands on his back.",
+      "note": "Quickest bicycle kick, the best one against jumps."
     },
     "bicycle_m": {
       "kind": "special",
@@ -701,7 +720,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "bicycle"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Overhead bicycle kick anti-air; lands on his back."
+      "desc": "Overhead bicycle kick anti-air; lands on his back.",
+      "note": "Bicycle kick that knocks jumpers down; he lands on his back."
     },
     "bicycle_h": {
       "kind": "special",
@@ -732,7 +752,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "bicycle"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Overhead bicycle kick anti-air; lands on his back."
+      "desc": "Overhead bicycle kick anti-air; lands on his back.",
+      "note": "Strongest bicycle kick; the riskiest if blocked."
     },
     "bicycle_ex": {
       "kind": "ex",
@@ -764,7 +785,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "bicycle"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Fully invulnerable bicycle."
+      "desc": "Fully invulnerable bicycle.",
+      "note": "Bicycle kick that can't be hit as it starts: escape pressure."
     },
     "keepy_l": {
       "kind": "special",
@@ -806,6 +828,7 @@
       "track": {"until": 4, "rate": 180},
       "anim": {"clip": "keepy"},
       "desc": "Juggles the ball above him (1.2 / 1.8 / 2.4 m) for 2 s: an anti-air trap; POWER SHOT then volleys it from there.",
+      "note": "Keeps the ball low, just over his head.",
       "pushExt": [[0, 0.0], [11, 0.002], [25, 0.189], [29, 0.092]]
     },
     "keepy_m": {
@@ -848,6 +871,7 @@
       "track": {"until": 4, "rate": 180},
       "anim": {"clip": "keepy"},
       "desc": "Juggles the ball above him (1.2 / 1.8 / 2.4 m) for 2 s: an anti-air trap; POWER SHOT then volleys it from there.",
+      "note": "Keeps the ball up overhead as a trap for jumpers; shoot it later.",
       "pushExt": [[0, 0.0], [11, 0.002], [25, 0.189], [29, 0.092]]
     },
     "keepy_h": {
@@ -890,6 +914,7 @@
       "track": {"until": 4, "rate": 180},
       "anim": {"clip": "keepy"},
       "desc": "Juggles the ball above him (1.2 / 1.8 / 2.4 m) for 2 s: an anti-air trap; POWER SHOT then volleys it from there.",
+      "note": "Keeps the ball high, to catch high jumps.",
       "pushExt": [[0, 0.0], [11, 0.002], [25, 0.189], [29, 0.092]]
     },
     "keepy_ex": {
@@ -932,6 +957,7 @@
       "track": {"until": 2, "rate": 180},
       "anim": {"clip": "keepy"},
       "desc": "3-second hover, 2 hits.",
+      "note": "The ball stays up longer and hits twice.",
       "pushExt": [[0, 0.0], [12, 0.025], [15, 0.095], [23, 0.189], [27, 0.092]]
     },
     "dive_l": {
@@ -963,6 +989,7 @@
       "linear": true,
       "anim": {"clip": "dive_roll"},
       "desc": "A theatrical forward dive-roll under projectiles and high attacks.",
+      "note": "Short dive-roll, to slip in from close range.",
       "pushExt": [
         [0, 0.096],
         [7, 0.0],
@@ -1007,6 +1034,7 @@
       "linear": true,
       "anim": {"clip": "dive_roll"},
       "desc": "A theatrical forward dive-roll under projectiles and high attacks.",
+      "note": "Theatrical dive-roll forward under projectiles and high attacks.",
       "pushExt": [
         [0, 0.096],
         [7, 0.0],
@@ -1051,6 +1079,7 @@
       "linear": true,
       "anim": {"clip": "dive_roll"},
       "desc": "A theatrical forward dive-roll under projectiles and high attacks.",
+      "note": "Longest dive-roll, to cross the ring.",
       "pushExt": [
         [0, 0.096],
         [7, 0.0],
@@ -1097,6 +1126,7 @@
       "linear": true,
       "anim": {"clip": "dive_roll"},
       "desc": "Strike-invulnerable dive.",
+      "note": "Dive-roll that no strike can touch.",
       "pushExt": [
         [0, 0.096],
         [6, 0.0],
@@ -1152,6 +1182,7 @@
       "anim": {"clip": "shot_kick"},
       "sfx": [[0, "crowd_cheer_burst"]],
       "desc": "Flicks up a fresh ball and smashes a 5-hit flaming shot; invulnerable startup.",
+      "note": "Fresh ball, five-hit flaming shot; can't be hit as it starts.",
       "pushExt": [[0, 0.076], [3, 0.0], [55, 0.0]]
     },
     "hat_trick": {
@@ -1321,6 +1352,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "volley"},
       "desc": "PRIME TIME: point-blank volley, a shot to the chest, a header, and the bicycle-kick finale.",
+      "note": "PRIME TIME: unstoppable volley into a header and bicycle-kick show.",
       "boxes": [{"f": [10, 13], "x": 0.981, "y": 1.018, "w": 0.635, "h": 0.35}],
       "boxSrc": "hitVolume"
     }
@@ -1347,7 +1379,8 @@
     "pickupM": 0.4,
     "hover": {"l": 1.2, "m": 1.8, "h": 2.4, "frames": 120},
     "bounces": 1,
-    "trait": "THE BALL: one ball on screen - shoot it, park it with KEEPY-UPPY, volley it later; one wall rebound."
+    "trait": "THE BALL: one ball on screen - shoot it, park it with KEEPY-UPPY, volley it later; one wall rebound.",
+    "note": "One ball: shoot it, park it in the air, volley it later. Walk over it to pick it up."
   },
   "intro": "intro_flick",
   "win": ["win_point", "win_juggle"],

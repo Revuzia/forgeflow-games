@@ -426,7 +426,7 @@ export const CF = {
 export const ACT = { NONE: 0, MOVE: 1, PARRY: 2, DASH_F: 3, DASH_B: 4, TAUNT: 5, ROUTE: 6, STEP: 7 } as const; // STEP: bufM 1 = IN, 0 = OUT (CHANGED(SIM3D))
 
 /** Buffer flags (F.bufF). */
-export const BUF = { SIMPLE: 1, CHAIN: 2, FROM_KD: 4, NEG: 8, FROZEN: 16, STANCE: 32, STEPATK: 64 } as const; // STEPATK: CHANGED(SIM3D)
+export const BUF = { SIMPLE: 1, CHAIN: 2, FROM_KD: 4, NEG: 8, FROZEN: 16, STANCE: 32, STEPATK: 64, EASY: 128 } as const; // STEPATK: CHANGED(SIM3D); EASY: CHANGED(input) the EASY auto-combo ACT.ROUTE (bufM = the plain light normal)
 
 /** Mode codes (W.mode). */
 export const MODE_CODES: readonly string[] = ['versus', 'arcade', 'training', 'online', 'brawl', 'heckler'];

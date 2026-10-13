@@ -319,4 +319,42 @@ def build():
                "contract in the other. He reads it for the first time, laughs, and feeds it to the confetti cannon. "
                "The band gets its name back on Monday. On Friday the marquee over the Rust Theater lights up one word, "
                "in every bulb that still works: RIOT.")
+    # CHANGED(notes) (CONTRACT 36.4): plain-English player text; the SIMPLE / EASY-routed _m ids carry the family note
+    K.describe(
+        plan="Throw bricks from far away, uppercut anyone who jumps, end combos with Headline Hook.",
+        unique="Fastest jab in the show: tap it again when it hits and the punches keep landing.",
+        notes={
+            "5L": "Fastest punch in the cast. Tap it again on a hit to keep punching.",
+            "2L": "Quick low jab; they must block crouching. Starts short combos.",
+            "5M": "Long straight punch: his best button at arm's length.",
+            "2M": "Low punch to the knee; follow with Headline Hook to knock them down.",
+            "5H": "Wide swinging hook that catches opponents who sidestep.",
+            "2H": "Uppercut that knocks jumping opponents out of the air.",
+            "3H": "Low hook that knocks down and catches sidesteps. Risky if blocked.",
+            "6H": "Slow overhand; must be blocked standing. Beats crouch-blockers.",
+            "j.L": "Quick air jab to win fights in the air.",
+            "j.M": "Long jump-in punch that reaches far ahead.",
+            "j.H": "Heavy jump-in hammer; land it to start a big combo.",
+            "throw_f": "Up close: grab and dig three body shots. Beats blocking.",
+            "throw_b": "Up close: grab, swap places and hook them the other way.",
+            "brickbat_m": "Throws a brick across the ring to keep them away. Sidesteps dodge it.",
+            "brickbat_l": "Slow brick: walk in behind it while they deal with it.",
+            "brickbat_h": "Fastest brick of the three, the quickest to reach them.",
+            "brickbat_ex": "Two bricks thrown right at them: much harder to sidestep.",
+            "encore_m": "Jumping uppercut that beats jump-ins. Very risky if blocked.",
+            "encore_l": "Quickest of the three; the best one for stopping jumps up close.",
+            "encore_h": "Highest, hardest uppercut; the riskiest one if blocked.",
+            "encore_ex": "Uppercut nothing can stop as it starts: escape their pressure.",
+            "hook_m": "Running hook that ends combos with a knockdown. A sidestep beats it.",
+            "hook_l": "Short run; the least risky of the three if blocked.",
+            "hook_h": "Long run that slams them into the wall. Very risky if blocked.",
+            "hook_ex": "Two hooks that run through one hit and slam them into the wall.",
+            "weave_m": "Ducks under high attacks and projectiles; press attack to counter.",
+            "weave_l": "Short duck that gets back to guard the fastest.",
+            "weave_h": "Long duck that slides forward under their attack.",
+            "weave_ex": "A duck no strike can touch; then counter with a rising hook.",
+            "weave_counter": "Press attack during a Weave: a rising hook that knocks down.",
+            "sold_out": "Four-punch rush that can't be hit as it starts; ends in a knockdown.",
+            "main_event": "PRIME TIME: an unstoppable lunging cross that starts a huge beating.",
+        })
     return K

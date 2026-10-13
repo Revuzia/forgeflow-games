@@ -4,6 +4,7 @@
   "persona": "The Walk-In",
   "archetype": "grappler",
   "difficulty": 3,
+  "plan": "Walk in, brace through their attacks, then grab them with Walk-In Freezer for huge damage.",
   "body": "Brute",
   "heightM": 2.0,
   "hp": 11000,
@@ -76,6 +77,7 @@
       "anim": {"clip": "chop"},
       "sfx": [[3, "slap"]],
       "desc": "Wrestling chop.",
+      "note": "Quick chop to stop their attack up close.",
       "boxes": [{"f": [6, 8], "x": 0.86, "y": 1.273, "w": 0.3, "h": 0.346}],
       "boxSrc": "hitVolume"
     },
@@ -106,7 +108,8 @@
       "track": {"until": 1, "rate": 180},
       "lateralM": 0.15,
       "anim": {"clip": "low_straight"},
-      "desc": "Crouching straight; the tick into WALK-IN FREEZER."
+      "desc": "Crouching straight; the tick into WALK-IN FREEZER.",
+      "note": "Quick low punch; mix it with his big grab to keep them guessing."
     },
     "5M": {
       "kind": "normal",
@@ -137,6 +140,7 @@
       "anim": {"clip": "forearm"},
       "sfx": [[5, "whoosh_light"]],
       "desc": "Heavy straight forearm.",
+      "note": "Heavy straight forearm; a solid poke at arm's length.",
       "boxes": [{"f": [9, 11], "x": 0.841, "y": 1.473, "w": 0.4, "h": 0.746}],
       "boxSrc": "hitVolume"
     },
@@ -168,6 +172,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "low_forearm"},
       "desc": "Crouching body forearm; cancel into FRIDGE DOOR.",
+      "note": "Low forearm; follow with Fridge Door to knock them down.",
       "pushExt": [[0, 0.027], [3, 0.043], [6, 0.1], [10, 0.102], [16, 0.036], [27, 0.0]]
     },
     "5H": {
@@ -200,6 +205,7 @@
       "anim": {"clip": "haymaker"},
       "sfx": [[8, "whoosh_heavy"]],
       "desc": "The reference's big haymaker; homing.",
+      "note": "Big haymaker that catches opponents who sidestep.",
       "boxes": [{"f": [13, 15], "x": 0.893, "y": 1.294, "w": 0.5, "h": 0.387}],
       "boxSrc": "hitVolume"
     },
@@ -231,7 +237,8 @@
       "track": {"until": 4, "rate": 180},
       "lateralM": 0.22,
       "anim": {"clip": "goalpost"},
-      "desc": "Both arms swing up: anti-air."
+      "desc": "Both arms swing up: anti-air.",
+      "note": "Both arms swing up to swat jumping opponents."
     },
     "6H": {
       "kind": "command",
@@ -262,6 +269,7 @@
       "anim": {"clip": "big_boot"},
       "sfx": [[9, "whoosh_heavy"]],
       "desc": "Push kick; wall-splats a cornered opponent.",
+      "note": "Big push kick; slams them into the wall near the ring edge.",
       "boxes": [{"f": [15, 17], "x": 1.039, "y": 1.277, "w": 0.5, "h": 0.353}],
       "boxSrc": "hitVolume"
     },
@@ -292,7 +300,8 @@
       "track": {"until": 1, "rate": 180},
       "lateralM": 0.15,
       "anim": {"clip": "air_chop"},
-      "desc": "Air chop."
+      "desc": "Air chop.",
+      "note": "Quick air chop for fights in the air."
     },
     "j.M": {
       "kind": "normal",
@@ -321,7 +330,8 @@
       "track": {"until": 1, "rate": 180},
       "lateralM": 0.18,
       "anim": {"clip": "air_forearm"},
-      "desc": "Air forearm."
+      "desc": "Air forearm.",
+      "note": "Jump-in forearm that reaches ahead."
     },
     "j.H": {
       "kind": "normal",
@@ -350,7 +360,8 @@
       "track": {"until": 4, "rate": 180},
       "lateralM": 0.22,
       "anim": {"clip": "air_hammer"},
-      "desc": "Double-fist jump-in."
+      "desc": "Double-fist jump-in.",
+      "note": "Heavy double-fist jump-in to start a combo."
     },
     "j.2H": {
       "kind": "command",
@@ -380,6 +391,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "fridge_drop"},
       "desc": "Body press straight down; covers the space under him.",
+      "note": "In the air: body press straight down onto whoever is below.",
       "pushExt": [[0, 0.0], [10, 0.0], [12, 0.121], [13, 0.15], [28, 0.16]]
     },
     "throw_f": {
@@ -418,7 +430,8 @@
       "role": [],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
-      "desc": "Crushes them in a bear hug."
+      "desc": "Crushes them in a bear hug.",
+      "note": "Up close: crush them in a bear hug. Beats blocking."
     },
     "throw_b": {
       "kind": "throw",
@@ -456,7 +469,8 @@
       "role": [],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
-      "desc": "Spins them round and flings them behind him."
+      "desc": "Spins them round and flings them behind him.",
+      "note": "Up close: spin them round and fling them behind him."
     },
     "walk_in_l": {
       "kind": "cmdgrab",
@@ -497,7 +511,8 @@
       "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "360 command grab; L reaches furthest, H hits hardest."
+      "desc": "360 command grab; L reaches furthest, H hits hardest.",
+      "note": "Grab with the longest reach of the three, but the least damage."
     },
     "walk_in_m": {
       "kind": "cmdgrab",
@@ -538,7 +553,8 @@
       "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "360 command grab; L reaches furthest, H hits hardest."
+      "desc": "360 command grab; L reaches furthest, H hits hardest.",
+      "note": "Huge grab that beats blocking and sidesteps; misses if they jump."
     },
     "walk_in_h": {
       "kind": "cmdgrab",
@@ -579,7 +595,8 @@
       "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "360 command grab; L reaches furthest, H hits hardest."
+      "desc": "360 command grab; L reaches furthest, H hits hardest.",
+      "note": "Shortest reach, but the most damage of the three."
     },
     "walk_in_ex": {
       "kind": "ex",
@@ -620,7 +637,8 @@
       "homing": true,
       "anim": {"clip": "throw_reach"},
       "sfx": [[1, "grab_cloth"]],
-      "desc": "Strike-invulnerable 1-5 reversal grab with the longest reach."
+      "desc": "Strike-invulnerable 1-5 reversal grab with the longest reach.",
+      "note": "Grab that can't be hit as it starts, with the longest reach."
     },
     "fridge_door_l": {
       "kind": "special",
@@ -652,6 +670,7 @@
       "anim": {"clip": "fridge_shove"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Armored running double-palm shove; wall-splats in the corner.",
+      "note": "Short, quick shove; the least risky of the three if blocked.",
       "boxes": [{"f": [16, 19], "x": 0.888, "y": 1.462, "w": 0.3, "h": 0.724}],
       "boxSrc": "hitVolume"
     },
@@ -685,6 +704,7 @@
       "anim": {"clip": "fridge_shove"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Armored running double-palm shove; wall-splats in the corner.",
+      "note": "Running shove that walks through one hit; walls them in.",
       "boxes": [{"f": [18, 21], "x": 0.888, "y": 1.474, "w": 0.4, "h": 0.749}],
       "boxSrc": "hitVolume"
     },
@@ -718,6 +738,7 @@
       "anim": {"clip": "fridge_shove"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Armored running double-palm shove; wall-splats in the corner.",
+      "note": "Longest, strongest shove; very risky if blocked.",
       "boxes": [{"f": [20, 23], "x": 0.888, "y": 1.487, "w": 0.5, "h": 0.774}],
       "boxSrc": "hitVolume"
     },
@@ -750,6 +771,7 @@
       "anim": {"clip": "fridge_shove"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Two hits of armor, -4 on block.",
+      "note": "Shove that walks through two hits and is safer if blocked.",
       "boxes": [{"f": [16, 19], "x": 0.888, "y": 1.487, "w": 0.5, "h": 0.774}],
       "boxSrc": "hitVolume"
     },
@@ -784,6 +806,7 @@
       "anim": {"clip": "lariat_spin"},
       "sfx": [[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
       "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable; homing.",
+      "note": "Quickest lariat; the best one against jumps.",
       "boxes": [
         {"f": [8, 10], "x": 0.848, "y": 1.273, "w": 0.3, "h": 0.346},
         {"f": [16, 18], "x": 0.8484, "y": 1.3215, "w": 0.3, "h": 0.25}
@@ -821,6 +844,7 @@
       "anim": {"clip": "lariat_spin"},
       "sfx": [[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
       "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable; homing.",
+      "note": "Spinning clothesline: beats jumps and passes through projectiles.",
       "boxes": [
         {"f": [9, 11], "x": 0.848, "y": 1.286, "w": 0.4, "h": 0.371},
         {"f": [17, 19], "x": 0.8484, "y": 1.3215, "w": 0.4, "h": 0.3}
@@ -858,6 +882,7 @@
       "anim": {"clip": "lariat_spin"},
       "sfx": [[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
       "desc": "Spinning clothesline: projectile-invulnerable, upper-body air-invulnerable; homing.",
+      "note": "Strongest lariat; the riskiest if blocked.",
       "boxes": [
         {"f": [10, 12], "x": 0.848, "y": 1.298, "w": 0.5, "h": 0.396},
         {"f": [18, 20], "x": 0.8484, "y": 1.3215, "w": 0.5, "h": 0.35}
@@ -899,6 +924,7 @@
       "anim": {"clip": "lariat_spin"},
       "sfx": [[2, "whoosh_heavy"], [10, "whoosh_heavy"]],
       "desc": "Fully invulnerable 3-hit lariat.",
+      "note": "Three-hit lariat that can't be hit as it starts.",
       "boxes": [
         {"f": [8, 10], "x": 0.848, "y": 1.298, "w": 0.5, "h": 0.396},
         {"f": [13, 15], "x": 0.8484, "y": 1.3215, "w": 0.5, "h": 0.35},
@@ -932,7 +958,8 @@
       "role": ["approach"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "brace_step"},
-      "desc": "Armored step forward; cancels into any special (WALK-IN FREEZER, LARIAT)."
+      "desc": "Armored step forward; cancels into any special (WALK-IN FREEZER, LARIAT).",
+      "note": "Short brace step; the quickest to get out of."
     },
     "brace_m": {
       "kind": "special",
@@ -960,7 +987,8 @@
       "role": ["approach"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "brace_step"},
-      "desc": "Armored step forward; cancels into any special (WALK-IN FREEZER, LARIAT)."
+      "desc": "Armored step forward; cancels into any special (WALK-IN FREEZER, LARIAT).",
+      "note": "Steps forward through one hit; go straight into any special."
     },
     "brace_h": {
       "kind": "special",
@@ -988,7 +1016,8 @@
       "role": ["approach"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "brace_step"},
-      "desc": "Armored step forward; cancels into any special (WALK-IN FREEZER, LARIAT)."
+      "desc": "Armored step forward; cancels into any special (WALK-IN FREEZER, LARIAT).",
+      "note": "Long brace step that covers the most ground."
     },
     "brace_ex": {
       "kind": "ex",
@@ -1016,7 +1045,8 @@
       "role": ["approach"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "brace_step"},
-      "desc": "Two hits of armor from frame 1."
+      "desc": "Two hits of armor from frame 1.",
+      "note": "Brace through two hits, ready from the very start."
     },
     "cold_storage": {
       "kind": "super1",
@@ -1056,7 +1086,8 @@
       "track": {"until": 17, "rate": 20},
       "homing": true,
       "anim": {"clip": "storage_run"},
-      "desc": "Running grab; unblockable, jump it."
+      "desc": "Running grab; unblockable, jump it.",
+      "note": "Running grab they can't block: jump over it or get carried off."
     },
     "final_delivery": {
       "kind": "super3",
@@ -1236,7 +1267,8 @@
       "track": {"until": 5, "rate": 20},
       "homing": true,
       "anim": {"clip": "delivery_reach"},
-      "desc": "PRIME TIME command grab: hugged, spun like a carousel, lifted overhead and hurled across the set."
+      "desc": "PRIME TIME command grab: hugged, spun like a carousel, lifted overhead and hurled across the set.",
+      "note": "PRIME TIME: point-blank grab that spins and hurls them across the set."
     }
   },
   "simple": {
@@ -1258,7 +1290,8 @@
     "kind": "armorStep",
     "steps": ["brace_l", "brace_m", "brace_h", "brace_ex"],
     "armored": ["brace_l", "brace_m", "brace_h", "brace_ex", "fridge_door_l", "fridge_door_m", "fridge_door_h", "fridge_door_ex"],
-    "trait": "ARMOR STEP: BRACE walks through one hit into WALK-IN FREEZER or a 2L tick; FRIDGE DOOR walls them in."
+    "trait": "ARMOR STEP: BRACE walks through one hit into WALK-IN FREEZER or a 2L tick; FRIDGE DOOR walls them in.",
+    "note": "Brace steps forward through one hit; follow with his big grab or a quick low jab."
   },
   "intro": "intro_battlecry",
   "win": ["win_flex", "win_nod"],

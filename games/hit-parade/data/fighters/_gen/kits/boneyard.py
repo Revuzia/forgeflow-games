@@ -287,4 +287,40 @@ def build():
         ending="BONEYARD hangs the host's sequined jacket in the meat locker next to Johnny Riot's marquee letters and "
                "locks the door. KNOCKOUT 13 cancels HIT PARADE and replaces it with a cooking show, and Boneyard is "
                "the only chef who stays. His signature dish is called The Sunday Roast. Nobody has ever sent it back.")
+    # CHANGED(notes) (CONTRACT 36.4): plain-English player text; the SIMPLE / EASY-routed _m ids carry the family note
+    K.describe(
+        plan="Walk forward and swing big: his heavy hits take a blow and still land. Every hit hurts.",
+        unique="Tough: his big swing, Meat Hook and Butcher's Block keep going through a hit.",
+        notes={
+            "5L": "Quick spiked jab to stop their attack.",
+            "2L": "Stomps on their toes; they must block crouching.",
+            "5M": "Front snap kick to keep them at arm's length.",
+            "2M": "Low cleaver swing that catches sidesteps; follow with Meat Hook.",
+            "5H": "Big cleaver swing that keeps going through one hit.",
+            "2H": "His only answer to jumpers: a rising backhand.",
+            "6H": "Slow cleaver chop; must be blocked standing.",
+            "j.L": "Quick air jab for fights in the air.",
+            "j.M": "Air backhand for fights in the air.",
+            "j.H": "Falling cleaver jump-in to start a combo.",
+            "throw_f": "Up close: three flat-side cleaver smacks. Beats blocking.",
+            "throw_b": "Up close: haul them over his shoulder, swapping places.",
+            "meat_hook_m": "Slow two-swing hook that takes a hit, catches sidesteps, walls them.",
+            "meat_hook_l": "Quickest of the three hooks; shrugs off one hit.",
+            "meat_hook_h": "Slowest hook; shrugs off two hits and hits hardest.",
+            "meat_hook_ex": "Faster hook through two hits; the safest one if blocked.",
+            "cleaver_drop_m": "Leaping cleaver smash: hops over lows, must be blocked standing.",
+            "cleaver_drop_l": "Shortest leap; safe even when they block it.",
+            "cleaver_drop_h": "Longest leap, from far away; knocks them down.",
+            "cleaver_drop_ex": "Leap with a shockwave that bounces them off the floor.",
+            "ham_slam_m": "Spinning low swing that pops them up for more hits. Risky if blocked.",
+            "ham_slam_l": "Quickest spin of the three; the least risky if blocked.",
+            "ham_slam_h": "Slowest spin with the most damage.",
+            "ham_slam_ex": "Two quick spins that pop them up for more hits.",
+            "butcher_block_m": "Steps forward through one hit; go straight into any special.",
+            "butcher_block_l": "Short step; the quickest to get out of.",
+            "butcher_block_h": "Long step that covers the most ground.",
+            "butcher_block_ex": "Steps through two hits, ready from the very start.",
+            "chefs_special": "Charge that shrugs off every hit: two swings that wall them.",
+            "sunday_roast": "PRIME TIME: unstoppable cleaver swing into a full butchery show.",
+        })
     return K

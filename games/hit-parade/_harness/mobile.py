@@ -28,6 +28,10 @@ CHANGED(fix_ui_stage) (verifier D12): Touch.up() sends `touchEnd` listing ONLY t
 touchEnd lists; the old call listed every OTHER finger and lifted the wrong ones). New checks: lab `release_step_keeps_stick`
 (stick + STEP, lift STEP: LEFT stays, 1 active) and `release_one_of_3` (stick + L + H, lift H: RIGHT|L stay, 2 active);
 --game `game_release_one_finger` (stick right + STEP OUT, lift STEP: the game's touch word keeps RIGHT, drops STEP_OUT).
+CHANGED(ui) (CONTRACT §36.2, "touch mode shows a ? chip that opens a touch cheat sheet"): lab `tap_help_no_word` (the "?"
+disc beside PAUSE is a >= 44 px target inside the safe area and puts no bit in the word); --game `game_help_disc` (a tap on
+it pauses into the pause card's HELP layout = the touch cheat sheet: every PAD control with johnny's special names), then a
+tap on RESUME; `game_no_bar_in_touch` (the keyboard controls bar stays hidden in touch mode).
 Screenshots: _shots/mobile_<device>_<step>.png. Report: _harness/_reports/mobile.json. Exit 0 PASS, 1 FAIL, 2 error.
 Run:  python _harness/mobile.py --headless [--devices se,p844,iphone14,pixel7,ipad]
 """
@@ -181,6 +185,16 @@ def lab_device(page, cdp, dev: str, results: list) -> None:
         T.tap(x, y, 0.02)
         w = R.word()
         R.ok(f"tap_{bid}", w & 0x7FFF == bit, f"word={names(w)}")
+    # CHANGED(ui): the "?" cheat-sheet disc is a pure UI control (no bit), >= 44 px, inside the safe area (boot_layout covers that)
+    hb = R.btn("help")
+    if hb:
+        R.word()
+        x, y = R.centre("help")
+        T.tap(x, y, 0.02)
+        w = R.word()
+        R.ok("tap_help_no_word", w & 0x7FFF == 0 and min(hb["rect"]["w"], hb["rect"]["h"]) >= 43.5, f"word={names(w)} rect={hb['rect']}")
+    else:
+        R.ok("tap_help_no_word", False, "no help disc in the touch read-back")
     sup = R.btn("super")
     if sup:
         R.word()
@@ -607,6 +621,24 @@ def game_device(page, cdp, dev: str, results: list, base: str) -> None:
         time.sleep(0.5)
     else:
         R.ok("game_step_in_circles", False, "no STEP buttons in __HP__.touch()")
+    # CHANGED(ui) (CONTRACT §36.2): no keyboard bar in touch mode; the "?" disc -> the pause card's HELP layout (cheat sheet)
+    cb = page.evaluate("(() => { try { return __HP__.hud().controls; } catch (e) { return null; } })()") or {}
+    R.ok("game_no_bar_in_touch", cb.get("shown") is False, f"bar shown={cb.get('shown')}")
+    if R.btn("help"):
+        hx, hy = R.centre("help")
+        T.tap(hx, hy, 0.06)
+        time.sleep(0.7)
+        sheet = page.evaluate("""(() => { const c = document.querySelector('#hp-menus .hpm-s-pause .hpm-pause'); const b = document.querySelector('#hp-menus .hpm-s-pause .hpk-touch');
+          return { help: !!c && c.classList.contains('help'), rows: b ? b.querySelectorAll('.hpk-trow').length : 0, text: b ? b.textContent : '' }; })()""") or {}
+        R.ok("game_help_disc", phase() == "paused" and sheet.get("help") and sheet.get("rows", 0) >= 9 and "BRICKBAT" in (sheet.get("text") or ""),
+             f"phase={phase()} help layout={sheet.get('help')} rows={sheet.get('rows')}", snap=True)
+        rect = page.evaluate("(() => { const b = document.getElementById('hpm-p-resume'); if (!b) return null; const r = b.getBoundingClientRect(); return {x: r.x + r.width / 2, y: r.y + r.height / 2}; })()")
+        if rect:
+            T.tap(rect["x"], rect["y"], 0.06)
+            time.sleep(0.6)
+        R.ok("game_help_resume", phase() == "bout", f"phase={phase()}")
+    else:
+        R.ok("game_help_disc", False, "no help disc in __HP__.touch()")
     # PAUSE button -> the pause card -> tap RESUME
     px, py = R.centre("pause")
     T.tap(px, py, 0.06)

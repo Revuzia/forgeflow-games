@@ -301,4 +301,40 @@ def build():
                "behind it. The network offers a reward for its return; nobody claims it. Weeks later a rooftop camera "
                "catches Specimen 13 watching the sunrise over Channel 13, perfectly still. For the first time in its "
                "life, nobody is filming it on purpose.")
+    # CHANGED(notes) (CONTRACT 36.4): plain-English player text; the SIMPLE / EASY-routed _m ids carry the family note
+    K.describe(
+        plan="Use the huge reach and toughness: swing big, take their hits, crush them up close.",
+        unique="Boss toughness: his heavy swings, rushes, leaps and roars keep going through two hits.",
+        notes={
+            "5L": "Quick claw to stop their attack.",
+            "2L": "Quick low claw; they must block crouching.",
+            "5M": "Wild claw chop that catches opponents who sidestep.",
+            "2M": "Both claws slam the floor; they must block crouching.",
+            "5H": "Huge claw swipe that keeps going through two hits.",
+            "2H": "Hops up with both claws to swat jumping opponents.",
+            "6H": "Leaping slam through two hits; must be blocked standing.",
+            "j.L": "Quick air claw for fights in the air.",
+            "j.M": "Air swipe for fights in the air.",
+            "j.H": "Two-claw falling slam to start a combo.",
+            "throw_f": "Up close: crush them in a hug. Beats blocking.",
+            "throw_b": "Up close: fling them over his shoulder.",
+            "claw_rush_m": "Running claw swipe through two hits; knocks down. Sidesteps beat it.",
+            "claw_rush_l": "Short rush; the least risky of the three if blocked.",
+            "claw_rush_h": "Longest rush; walls them. Very risky if blocked.",
+            "claw_rush_ex": "Two-hit rush that no hit can stop; safe if blocked.",
+            "crusher_leap_m": "Huge leap through two hits; must be blocked standing. Very risky.",
+            "crusher_leap_l": "Shortest leap, for closer range.",
+            "crusher_leap_h": "Longest leap, across the ring.",
+            "crusher_leap_ex": "Faster leap through three hits; bounces them off the floor.",
+            "roar_m": "Roar all around him: blows them away, passes through projectiles.",
+            "roar_l": "Smallest roar, only right around him.",
+            "roar_h": "Biggest roar, reaching the furthest.",
+            "roar_ex": "Fast roar that no hit can stop; catches sidesteps.",
+            "specimen_grab_m": "Long-reach grab that beats blocking and sidesteps.",
+            "specimen_grab_l": "Grab with the longest reach of the three, but the least damage.",
+            "specimen_grab_h": "Shortest reach, but the most damage of the three.",
+            "specimen_grab_ex": "Grab with the longest reach that can't be hit as it starts.",
+            "meltdown": "Three-swipe rampage that no hit can stop.",
+            "specimen_13": "PRIME TIME: unstoppable grab, floor slams, a roar and a big throw.",
+        })
     return K

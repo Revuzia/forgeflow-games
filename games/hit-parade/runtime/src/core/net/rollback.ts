@@ -444,7 +444,7 @@ export class RollbackSession {
     }
     if (this.localHead < target) {
       this.localHead++;
-      this.inLocal[this.localHead & MASK] = input & 0xffff;
+      this.inLocal[this.localHead & MASK] = input | 0; // CHANGED(input) (CONTRACT §36.5): the whole 32-bit word (was & 0xffff)
     }
     // else: delay shrank - this sample is dropped (its frame was already scheduled)
   }
@@ -572,7 +572,7 @@ export class RollbackSession {
     }
     this.sync.addRemote(p.advantage);
     if (this.tr0) this.traceRow(this.tr0.recv, [Math.round(now * 10) / 10, p.seq, last, this.frame]);
-    for (let k = 0; k < p.count; k++) this.addRemote(p.startFrame + k, p.inputs[k]);
+    for (let k = 0; k < p.count; k++) this.addRemote(p.startFrame + k, p.inputs[k] | 0); // CHANGED(input): u32 -> int32 ring
     if (p.csFrame >= 0) this.onRemoteChecksum(p.csFrame, p.checksum);
   }
 

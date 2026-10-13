@@ -326,4 +326,41 @@ def build():
         ending="SPIN wins the season and the rooftop cypher on the same night; the crowd holds up score cards all the "
                "way down the fire escape. He wires the host's microphone into a speaker and runs a free battle on the "
                "roof every Friday. The network sends lawyers. The lawyers stay for the music.")
+    # CHANGED(notes) (CONTRACT 36.4): plain-English player text; the SIMPLE / EASY-routed ids carry the family note
+    K.describe(
+        plan="Attack from above and below: dive kicks from the air, low spins and crawls on the floor.",
+        unique="Floor fighter: his low moves duck under high attacks, and he jumps the highest.",
+        notes={
+            "5L": "Quick jab to stop their attack.",
+            "2L": "Drops low and taps the shin, ducking under high attacks.",
+            "5M": "Long front kick to keep them at a distance.",
+            "2M": "Low sweep under high attacks that catches sidesteps.",
+            "5H": "Two leg swipes that catch opponents who sidestep.",
+            "2H": "Low spinning sweep that knocks down. Risky if blocked.",
+            "6M": "Jumping spin kick: hops over lows, must be blocked standing.",
+            "SS.H": "Out of a sidestep: a low spin into their side that knocks down.",
+            "j.L": "Quick air jab for fights in the air.",
+            "j.M": "Leg whip that wins fights in the air.",
+            "j.H": "Turning jump-in kick to start a combo.",
+            "throw_f": "Up close: drag them down into his footwork. Beats blocking.",
+            "throw_b": "Up close: flair and fling them behind him.",
+            "windmill_m": "Spins low through them, ducking high attacks; catches sidesteps.",
+            "windmill_l": "Short two-hit spin; the least risky of the three if blocked.",
+            "windmill_h": "Long six-hit spin; walls them near the edge.",
+            "windmill_ex": "Six-hit spin that passes through projectiles.",
+            "handspin_m": "Handspin with legs up: knocks jumpers down. Risky if blocked.",
+            "handspin_l": "Quickest handspin: the best one against jumpers.",
+            "handspin_h": "Strongest handspin; the riskiest if blocked.",
+            "handspin_ex": "Handspin that can't be hit as it starts: escape pressure.",
+            "six_step_m": "Crawls in low under attacks with two low sweeps. Sidesteps beat it.",
+            "six_step_l": "Short crawl; safe if they block it.",
+            "six_step_h": "Longest crawl, to reach them from far away.",
+            "six_step_ex": "Long crawl with three low sweeps; safe if blocked.",
+            "drop_in_m": "In the air only: a dive kick that drops on them fast.",
+            "drop_in_l": "Steep dive that lands close in front of him.",
+            "drop_in_h": "Flat dive that travels far.",
+            "drop_in_ex": "Fast, far dive that is safer if blocked.",
+            "cypher": "Six-hit spinning cyclone that can't be hit as it starts.",
+            "battle_of_the_year": "PRIME TIME: unstoppable front kick into a full battle round.",
+        })
     return K

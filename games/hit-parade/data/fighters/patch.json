@@ -4,6 +4,7 @@
   "persona": "The Floor Manager",
   "archetype": "rushdown",
   "difficulty": 2,
+  "plan": "Close in fast, then press the Cue Kick chain and keep them guessing high or low.",
   "body": "Eve By J.Gonzales",
   "heightM": 1.72,
   "hp": 9500,
@@ -76,6 +77,7 @@
       "anim": {"clip": "jab"},
       "sfx": [[3, "whoosh_light"]],
       "desc": "Jab; chains into 2L.",
+      "note": "Quick jab to stop their attack or start a short combo.",
       "boxes": [{"f": [5, 7], "x": 0.718, "y": 1.325, "w": 0.3, "h": 0.45}],
       "boxSrc": "hitVolume"
     },
@@ -107,6 +109,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "toe_kick"},
       "desc": "Crouching toe kick (low).",
+      "note": "Quick low kick; they must block crouching. Starts combos.",
       "boxes": [{"f": [5, 7], "x": 0.843, "y": 0.086, "w": 0.43, "h": 0.25}],
       "boxSrc": "hitVolume"
     },
@@ -139,6 +142,7 @@
       "anim": {"clip": "teep"},
       "sfx": [[5, "whoosh_light"]],
       "desc": "Push kick; long reach, pushes blockers out.",
+      "note": "Long push kick that keeps them at the tip of her reach.",
       "boxes": [{"f": [8, 10], "x": 0.848, "y": 1.054, "w": 0.441, "h": 0.3}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.079], [4, 0.073], [10, 0.117], [16, 0.085], [19, 0.01], [27, 0.0]]
@@ -172,6 +176,7 @@
       "lateralM": 0.4,
       "anim": {"clip": "shin_kick"},
       "desc": "Crouching low roundhouse; homing (catches a sidestep); cancel into the CUE KICK rekka.",
+      "note": "Low kick that catches sidesteps; follow with the Cue Kick chain.",
       "boxes": [{"f": [8, 10], "x": 0.895, "y": 0.264, "w": 0.533, "h": 0.3}],
       "boxSrc": "hitVolume"
     },
@@ -205,6 +210,7 @@
       "anim": {"clip": "roundhouse_hi"},
       "sfx": [[8, "whoosh_heavy"]],
       "desc": "Head-high roundhouse; homing.",
+      "note": "Big head kick that catches opponents who sidestep.",
       "boxes": [{"f": [12, 14], "x": 0.877, "y": 1.383, "w": 0.5, "h": 0.565}],
       "boxSrc": "hitVolume",
       "pushExt": [
@@ -256,6 +262,7 @@
       "anim": {"clip": "leg_kick"},
       "sfx": [[7, "whoosh_heavy"]],
       "desc": "Standing Muay Thai leg kick that knocks down; long, but she stands tall.",
+      "note": "Long low kick: knocks down and catches sidesteps. Risky if blocked.",
       "boxes": [{"f": [11, 13], "x": 0.898, "y": 0.719, "w": 0.54, "h": 0.35}],
       "boxSrc": "hitVolume"
     },
@@ -288,6 +295,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "step_knee"},
       "desc": "Stepping knee: +2 on hit, -4 on block, travels 0.5 m.",
+      "note": "Stepping knee that closes the distance fast. A sidestep beats it.",
       "pushExt": [[0, 0.102], [5, 0.157], [14, 0.161], [34, 0.023]]
     },
     "4H": {
@@ -319,6 +327,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "side_kick_back"},
       "desc": "Long spinning back kick; her furthest button (+2/-3); wall-splats at the ring edge.",
+      "note": "Her longest kick; slams them into the wall near the ring edge.",
       "boxes": [{"f": [16, 18], "x": 0.909, "y": 1.327, "w": 0.563, "h": 0.454}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.08], [1, 0.08], [2, 0.127], [12, 0.154], [18, 0.125], [20, 0.0], [27, 0.002], [34, 0.068], [39, 0.06]]
@@ -353,6 +362,7 @@
       "anim": {"clip": "spin_toss"},
       "sfx": [[7, "whoosh_heavy"]],
       "desc": "STEP + H: turning kick into the flank out of a sidestep; knocks down, wall-splats, -2 on block.",
+      "note": "Out of a sidestep: a kick into their side that knocks them down.",
       "boxes": [{"f": [13, 15], "x": 0.864, "y": 1.401, "w": 0.5, "h": 0.603}],
       "boxSrc": "hitVolume",
       "pushExt": [
@@ -400,6 +410,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "air_jab"},
       "desc": "Air jab.",
+      "note": "Quick air jab for fights in the air.",
       "pushExt": [[0, 0.034], [15, 0.043]]
     },
     "j.M": {
@@ -430,6 +441,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "flying_side"},
       "desc": "Air-to-air side kick.",
+      "note": "Flying side kick that beats opponents jumping at you.",
       "pushExt": [[0, 0.0], [1, 0.0], [3, 0.11], [6, 0.176], [7, 0.174], [9, 0.024], [10, 0.0], [16, 0.023]]
     },
     "j.H": {
@@ -460,6 +472,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "jump_kick"},
       "desc": "Big turning jump-in.",
+      "note": "Big jump-in kick; land it to start a combo.",
       "pushExt": [[0, 0.109], [2, 0.154], [6, 0.01], [7, 0.113], [9, 0.144], [10, 0.098], [11, 0.009], [19, 0.0]]
     },
     "throw_f": {
@@ -499,6 +512,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Muay Thai clinch, knee to the chest.",
+      "note": "Up close: clinch and knee them in the chest. Beats blocking.",
       "pushExt": [[0, 0.094], [4, 0.0], [31, 0.001]]
     },
     "throw_b": {
@@ -538,6 +552,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Spins and flings them behind.",
+      "note": "Up close: spin and fling them behind you, swapping places.",
       "pushExt": [[0, 0.094], [4, 0.0], [31, 0.001]]
     },
     "cue_l": {
@@ -570,6 +585,7 @@
       "anim": {"clip": "cue_kick"},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Rekka part 1: stepping front kick; 236 again for CUE 2.",
+      "note": "Shortest first kick; the least risky of the three if blocked.",
       "boxes": [{"f": [10, 12], "x": 0.845, "y": 1.27, "w": 0.433, "h": 0.341}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.083], [3, 0.082], [6, 0.03], [9, 0.069], [16, 0.034], [19, 0.087], [22, 0.064], [24, 0.0], [31, 0.0]]
@@ -604,6 +620,7 @@
       "anim": {"clip": "cue_kick"},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Rekka part 1: stepping front kick; 236 again for CUE 2.",
+      "note": "Stepping kick that starts her chain: repeat for Cue 2, then Cue 3.",
       "boxes": [{"f": [12, 14], "x": 0.87, "y": 1.283, "w": 0.483, "h": 0.366}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.083], [4, 0.082], [7, 0.03], [11, 0.069], [18, 0.034], [22, 0.087], [25, 0.064], [27, 0.0], [35, 0.0]]
@@ -638,6 +655,7 @@
       "anim": {"clip": "cue_kick"},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Rekka part 1: stepping front kick; 236 again for CUE 2.",
+      "note": "Longest first kick to reach them; the riskiest if blocked.",
       "boxes": [{"f": [14, 16], "x": 0.895, "y": 1.295, "w": 0.533, "h": 0.391}],
       "boxSrc": "hitVolume",
       "pushExt": [
@@ -682,6 +700,7 @@
       "anim": {"clip": "cue_kick"},
       "sfx": [[2, "whoosh_light"]],
       "desc": "Armored, -2 on block.",
+      "note": "First kick that powers through one hit and is safe if blocked.",
       "boxes": [{"f": [9, 11], "x": 0.895, "y": 1.295, "w": 0.533, "h": 0.391}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.083], [3, 0.082], [5, 0.03], [8, 0.069], [14, 0.034], [17, 0.087], [21, 0.0], [28, 0.0]]
@@ -718,6 +737,7 @@
       "anim": {"clip": "cue_round"},
       "sfx": [[3, "whoosh_heavy"]],
       "desc": "Rekka part 2: left head kick (+1/-7); homing; 236 = CUE 3 overhead, 214 = CUE 3 low.",
+      "note": "Chain part 2: a head kick that catches sidesteps. Then go to Cue 3.",
       "boxes": [{"f": [9, 11], "x": 0.851, "y": 1.396, "w": 0.445, "h": 0.591}],
       "boxSrc": "hitVolume",
       "pushExt": [
@@ -766,6 +786,7 @@
       "anim": {"clip": "cue_drop"},
       "sfx": [[10, "whoosh_heavy"]],
       "desc": "Rekka finisher: jumping overhead kick, knocks down, -4 on block.",
+      "note": "Chain end, high: jumping kick, blocked standing only. Knocks down.",
       "boxes": [{"f": [18, 21], "x": 0.717, "y": 1.082, "w": 0.5, "h": 0.565}],
       "boxSrc": "hitVolume",
       "pushExt": [
@@ -818,6 +839,7 @@
       "anim": {"clip": "leg_kick"},
       "sfx": [[7, "whoosh_heavy"]],
       "desc": "Rekka finisher: low leg kick, knocks down, -13 on block.",
+      "note": "Chain end, low: leg kick that knocks down. Very risky if blocked.",
       "boxes": [{"f": [12, 14], "x": 0.898, "y": 0.719, "w": 0.54, "h": 0.35}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [1, 0.051], [3, 0.091], [7, 0.108], [25, 0.08], [29, 0.0], [41, 0.0]]
@@ -853,6 +875,7 @@
       "anim": {"clip": "flying_knee"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Hopping flying knee: an overhead that hops over lows.",
+      "note": "Shortest hop; safe even when they block it.",
       "pushExt": [[0, 0.167], [4, 0.208], [20, 0.246], [37, 0.112]]
     },
     "stage_dive_m": {
@@ -886,6 +909,7 @@
       "anim": {"clip": "flying_knee"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Hopping flying knee: an overhead that hops over lows.",
+      "note": "Hopping knee that clears low attacks; must be blocked standing.",
       "pushExt": [[0, 0.167], [7, 0.217], [22, 0.246], [40, 0.112]]
     },
     "stage_dive_h": {
@@ -919,6 +943,7 @@
       "anim": {"clip": "flying_knee"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Hopping flying knee: an overhead that hops over lows.",
+      "note": "Longest hop, to reach them from far away.",
       "pushExt": [[0, 0.167], [5, 0.208], [24, 0.246], [43, 0.112]]
     },
     "stage_dive_ex": {
@@ -953,6 +978,7 @@
       "anim": {"clip": "flying_knee"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Two-hit dive, +2 on block.",
+      "note": "Two flying knees; she can keep attacking even if they block.",
       "boxes": [
         {"f": [18, 19], "x": 0.376, "y": 0.869, "w": 0.5, "h": 0.604},
         {"f": [24, 25], "x": 0.376, "y": 0.996, "w": 0.5, "h": 0.35}
@@ -990,6 +1016,7 @@
       "anim": {"clip": "flip_kick"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Rising flip kick. NOT invulnerable (trades); the EX is.",
+      "note": "Quickest flip kick, to stop a jump early.",
       "pushExt": [[0, 0.066], [2, 0.0], [5, 0.0], [6, 0.073], [7, 0.103], [16, 0.071], [24, 0.13], [35, 0.0], [43, 0.0]]
     },
     "spotlight_m": {
@@ -1022,6 +1049,7 @@
       "anim": {"clip": "flip_kick"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Rising flip kick. NOT invulnerable (trades); the EX is.",
+      "note": "Rising flip kick that knocks jumpers down. It can trade hits.",
       "pushExt": [
         [0, 0.066],
         [2, 0.0],
@@ -1065,6 +1093,7 @@
       "anim": {"clip": "flip_kick"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Rising flip kick. NOT invulnerable (trades); the EX is.",
+      "note": "Strongest flip kick; the riskiest if blocked.",
       "pushExt": [[0, 0.066], [3, 0.0], [6, 0.0], [7, 0.011], [9, 0.103], [20, 0.071], [30, 0.13], [44, 0.0], [53, 0.0]]
     },
     "spotlight_ex": {
@@ -1097,6 +1126,7 @@
       "anim": {"clip": "flip_kick"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Fully invulnerable flip kick.",
+      "note": "Flip kick nothing can hit as it starts: escape their pressure.",
       "boxes": [{"f": [7, 12], "x": 0.876, "y": 1.232, "w": 0.5, "h": 0.863}],
       "boxSrc": "hitVolume",
       "pushExt": [
@@ -1143,6 +1173,7 @@
       "anim": {"clip": "slide"},
       "sfx": [[3, "whoosh_light"]],
       "desc": "Low-profile slide under projectiles; low, knocks down.",
+      "note": "Short slide; the least risky of the three if blocked.",
       "pushExt": [[0, 0.0], [9, 0.0], [14, 0.157], [17, 0.12], [21, 0.0], [40, 0.0]]
     },
     "slide_m": {
@@ -1176,6 +1207,7 @@
       "anim": {"clip": "slide"},
       "sfx": [[3, "whoosh_light"]],
       "desc": "Low-profile slide under projectiles; low, knocks down.",
+      "note": "Low slide under projectiles that knocks down. Risky if blocked.",
       "pushExt": [[0, 0.0], [11, 0.0], [15, 0.129], [17, 0.156], [21, 0.075], [22, 0.014], [23, 0.001], [44, 0.0]]
     },
     "slide_h": {
@@ -1209,6 +1241,7 @@
       "anim": {"clip": "slide"},
       "sfx": [[3, "whoosh_light"]],
       "desc": "Low-profile slide under projectiles; low, knocks down.",
+      "note": "Longest slide, to reach them from across the ring.",
       "pushExt": [[0, 0.0], [12, 0.0], [19, 0.157], [20, 0.156], [26, 0.001], [48, 0.0]]
     },
     "slide_ex": {
@@ -1242,6 +1275,7 @@
       "anim": {"clip": "slide"},
       "sfx": [[3, "whoosh_light"]],
       "desc": "Projectile-invulnerable slide, -6 on block.",
+      "note": "Fast long slide that goes straight through projectiles.",
       "pushExt": [[0, 0.0], [7, 0.0], [8, 0.014], [11, 0.149], [12, 0.157], [13, 0.156], [17, 0.001], [34, 0.0]]
     },
     "highlight_reel": {
@@ -1285,6 +1319,7 @@
       "anim": {"clip": "reel_kicks", "warp": [[0, 0.0], [8, 0.25], [19, 0.783], [30, 1.3], [85, 1.733]]},
       "sfx": [[1, "crowd_cheer_burst"]],
       "desc": "Invulnerable three-kick flurry ending in a jump kick.",
+      "note": "Kick flurry that can't be hit as it starts; ends with a knockdown.",
       "pushExt": [
         [0, 0.097],
         [1, 0.107],
@@ -1505,6 +1540,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "teep"},
       "desc": "PRIME TIME: a teep that starts a juggle she counts down live.",
+      "note": "PRIME TIME: an unstoppable push kick that starts a live countdown.",
       "pushExt": [[0, 0.079], [6, 0.073], [11, 0.12], [28, 0.108], [42, 0.065], [46, 0.01], [72, 0.0]]
     }
   },
@@ -1525,7 +1561,8 @@
   ],
   "unique": {
     "kind": "none",
-    "trait": "RED LIGHT REKKA: CUE KICK chains into CUE 2, then CUE 3 overhead (236) or low (214). Fastest walk (2.28 m/s) and longest dash (1.43 m); lowest HP (9500), no projectile."
+    "trait": "RED LIGHT REKKA: CUE KICK chains into CUE 2, then CUE 3 overhead (236) or low (214). Fastest walk (2.28 m/s) and longest dash (1.43 m); lowest HP (9500), no projectile.",
+    "note": "Cue Kick chain: repeat it for Cue 2, then end high or low. Fastest walk and dash."
   },
   "intro": "intro_point",
   "win": ["win_dismiss", "win_high_kick"],

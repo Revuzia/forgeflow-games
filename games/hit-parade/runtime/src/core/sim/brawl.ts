@@ -23,7 +23,7 @@ import {
 import { EV, SC, SCORE_WHY, EVX } from './events.ts';
 import { K } from './compile.ts';
 import type { CBrawl, CMove } from './compile.ts';
-import { recordInput, parseAction } from './inputs.ts';
+import { IN, recordInput, parseAction } from './inputs.ts';
 import { fighterUpdate, freezeBufferRule, PROX_THREAT, setOpp, startMove } from './fighter.ts';
 import { boxCyl, clampToRing, hurtCyls, moveBoxHits, pushCircle, resolveBodies } from './boxes.ts';
 import { projectilesTick, ballPost, killProjectile, freeProjectile, PK } from './projectiles.ts';
@@ -1032,7 +1032,9 @@ function heckleTick(m: Match): void {
     const toRight = sinQ(dir) * s[W.camNZ] - cosQ(dir) * s[W.camNX] >= 0;
     const backBit = toRight ? 8 : 4;
     const guardState = st0 === ST.IDLE || st0 === ST.WALK_F || st0 === ST.WALK_B || st0 === ST.CROUCH || st0 === ST.BLOCKSTUN;
-    if (guardState && !isAirborne(s, b0) && (raw & backBit) !== 0 && (raw & (toRight ? 4 : 8)) === 0) {
+    // CHANGED(input) (CONTRACT §36.5): BLOCK held guards whatever the side (= holding back from the object)
+    const guardIn = (raw & IN.BLOCK) !== 0 || ((raw & backBit) !== 0 && (raw & (toRight ? 4 : 8)) === 0);
+    if (guardState && !isAirborne(s, b0) && guardIn) {
       setSt(m, 0, ST.BLOCKSTUN);
       s[b0 + F.stun] = hk.blockstun;
       s[b0 + F.lastStun] = hk.blockstun;

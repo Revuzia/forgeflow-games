@@ -74,14 +74,20 @@ CONSOLE_IGNORE = ("favicon.ico",)
 BIT = {"UP": 1, "DOWN": 2, "LEFT": 4, "RIGHT": 8, "L": 16, "M": 32, "H": 64, "S": 128, "ASSIST": 256,
        "THROW": 512, "PARRY": 1024, "IMPACT": 2048, "TAUNT": 4096,
        # CHANGED(integrator) 3D (CONTRACT §35.2 / §35.16 item 1): the STEP bits
-       "STEP_IN": 8192, "STEP_OUT": 16384}
-# default P1 / P2 keyboard bindings (runtime/src/input.ts DEFAULT_KEYS) as Playwright key names
+       "STEP_IN": 8192, "STEP_OUT": 16384,
+       # CHANGED(input) (CONTRACT §36.5): the EASY keys (every scheme)
+       "BLOCK": 32768, "SP1": 65536, "SP2": 131072, "SP3": 262144, "SP4": 524288, "SUPER1": 1048576, "SUPER3": 2097152}
+# default P1 / P2 keyboard bindings (runtime/src/input.ts DEFAULT_KEYS) as Playwright key names.
+# CHANGED(input) (CONTRACT §36.1 / §36.5): P1 = the EASY map (S on ;, ASSIST on N, THROW F, PARRY R, IMPACT G, TAUNT T, BLOCK
+# Shift, SPECIAL 1-4 U I O P, SUPER H, PRIME TIME Y, controls bar F1); P2 keeps the SIMPLE layout + BLOCK on NumpadDecimal
 P1_KEYS = {"up": "KeyW", "down": "KeyS", "left": "KeyA", "right": "KeyD", "l": "KeyJ", "m": "KeyK", "h": "KeyL",
-           "s": "KeyI", "assist": "KeyU", "throw": "KeyH", "parry": "KeyO", "impact": "KeyP", "taunt": "KeyY",
-           "pause": "Escape", "stepin": "KeyQ", "stepout": "KeyE"}
+           "s": "Semicolon", "assist": "KeyN", "throw": "KeyF", "parry": "KeyR", "impact": "KeyG", "taunt": "KeyT",
+           "pause": "Escape", "stepin": "KeyQ", "stepout": "KeyE",
+           "block": "ShiftLeft", "sp1": "KeyU", "sp2": "KeyI", "sp3": "KeyO", "sp4": "KeyP", "super1": "KeyH", "super3": "KeyY",
+           "controls": "F1"}
 P2_KEYS = {"up": "ArrowUp", "down": "ArrowDown", "left": "ArrowLeft", "right": "ArrowRight", "l": "Numpad1",
            "m": "Numpad2", "h": "Numpad3", "s": "Numpad5", "assist": "Numpad4", "throw": "Numpad0", "parry": "Numpad6",
-           "impact": "NumpadAdd", "taunt": "NumpadMultiply", "stepin": "Numpad7", "stepout": "Numpad9"}
+           "impact": "NumpadAdd", "taunt": "NumpadMultiply", "stepin": "Numpad7", "stepout": "Numpad9", "block": "NumpadDecimal"}
 # Standard-mapping pad button indices
 PAD = {"A": 0, "B": 1, "X": 2, "Y": 3, "LB": 4, "RB": 5, "LT": 6, "RT": 7, "SELECT": 8, "START": 9, "L3": 10, "R3": 11,
        "UP": 12, "DOWN": 13, "LEFT": 14, "RIGHT": 15, "HOME": 16}

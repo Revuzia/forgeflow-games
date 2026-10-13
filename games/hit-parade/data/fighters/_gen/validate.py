@@ -21,6 +21,10 @@ tools/research/fg_template_check.py convention, and checks:
     lateralM on every strike and only there, projectile aimed + lateralM, step-attacks (SS.<btn>, role stepatk; patch
     and spin must have one), every fighter has a reliable homing tool and an antistep move, cpu antiStep / stepAttack
     refs resolve, and _spec/ROSTER.md carries each fighter's "3D ring play" section.
+  - CHANGED(notes) player text (CONTRACT 36.3 / 36.4): every move has a plain-English `note` (15..70 chars, ASCII, one
+    line, no jargon / key / frame notation) and so does every move a player can see in a list (`listed_moves`, mirrors
+    ui/movelist.ts); top-level `plan` (30..90, right after `difficulty`), `unique.note` (20..90), difficulty 1..3, and
+    _spec/ROSTER.md carries the plan line, the unique line and the "Player notes" table.
 Writes _harness/_reports/fighters_validate.txt. Exit 0 = PASS, 1 = FAIL.
 Usage: python data/fighters/_gen/validate.py
 """
@@ -726,6 +730,106 @@ def check_text(fid, d):
         len(il), len(wq), sorted(b), ns))
 
 
+# ------------------------------------------------------------------ CHANGED(notes): CONTRACT 36.3 / 36.4 checks
+# Duplicated from kitlib on purpose (this validator never imports the kit sources): one plain-English line per move, the
+# plan line, the unique note; no keys / motions / frame numbers, no fighting-game shorthand.
+NOTE_LEN, PLAN_LEN, UNIQUE_NOTE_LEN = (15, 70), (30, 90), (20, 90)
+JARGON_RE = re.compile(
+    r"\b(frames?|advantage|dp|okizeme|oki|meaty|hit ?box(es)?|hurt ?box(es)?|hitstun|blockstun|start-?up|recovery|"
+    r"whiff\w*|otg|i-?frames?|invuln\w*|invulnerab\w*|invincib\w*|links?|linked|linking|cancel\w*|confirm\w*|"
+    r"mix-?ups?|cross-?ups?|chip|juggl\w*|reversals?|wake-?up|footsies)\b", re.I)
+NOTATION_RE = re.compile(
+    r"(\b[1-9][LMHS]\b|\bj\.[LMHS]\b|\b(236|214|623|421|41236|63214|360|236236|214214|22)\b|\[[2468]\]|[+-]\d)")
+
+
+def line_problems(text, lim):
+    if not isinstance(text, str) or not text.strip():
+        return ["missing or empty"]
+    out = []
+    if not text.isascii():
+        out.append("not ASCII")
+    if "\n" in text or text != text.strip():
+        out.append("not one trimmed line")
+    if not (lim[0] <= len(text) <= lim[1]):
+        out.append("%d chars (want %d..%d)" % (len(text), lim[0], lim[1]))
+    for rx, what in ((JARGON_RE, "jargon"), (NOTATION_RE, "key / frame notation")):
+        mt = rx.search(text)
+        if mt:
+            out.append("%s %r" % (what, mt.group(0)))
+    return out
+
+
+def listed_moves(d):
+    """Every move id a player can see in a move list or the MOVES panel (runtime/src/ui/movelist.ts buildRows +
+    uniqueCard, CONTRACT 36.1 EASY = SIMPLE routing): routed specials + their EX, supers, the assist route, every
+    special / EX / super / command normal / step-attack / throw / command grab, the homing normals, the unique
+    mechanic's moves, stance follow-ups and exits, counter follow-ups and rekka parts."""
+    moves = d["moves"]
+    out = set()
+    s = d.get("simple") or {}
+    for k, v in s.items():
+        for x in (v if isinstance(v, list) else [v]):
+            out.add(x)
+            if k in ("5S", "6S", "2S", "4S") and isinstance(x, str):
+                out.add(re.sub(r"_(l|m|h)$", "_ex", x))
+    for c in d.get("classic") or []:
+        for b in c["btn"]:
+            out.add(c["move"].replace("{s}", b.lower()))
+        if "{s}" in c["move"]:
+            out.add(c["move"].replace("{s}", "ex"))
+    for mid, o in moves.items():
+        if o["kind"] in ("special", "ex", "super1", "super3", "throw", "cmdgrab", "command"):
+            out.add(mid)
+        if o["kind"] == "normal" and o.get("homing"):
+            out.add(mid)
+        if o.get("counter") and o["counter"].get("follow"):
+            out.add(o["counter"]["follow"])
+        for tok in o["cancel"]:
+            if tok.startswith("chain:") and moves.get(tok[6:], {}).get("tc"):
+                out.add(tok[6:])
+    u = d.get("unique") or {}
+    for key in ("moves", "enter", "steps", "armored"):
+        out |= set(u.get(key) or [])
+    for key in ("followups", "exit", "simple"):
+        out |= set((u.get(key) or {}).values())
+    if isinstance(u.get("lv3"), str):
+        out.add(u["lv3"])
+    return {x for x in out if x in moves}
+
+
+def check_notes(fid, d):
+    moves = d["moves"]
+    have = 0
+    for mid, o in moves.items():
+        probs = line_problems(o.get("note"), NOTE_LEN)
+        if probs:
+            fail(fid, "%s: note %s - %r (CONTRACT 36.4)" % (mid, "; ".join(probs), o.get("note")))
+        else:
+            have += 1
+    listed = listed_moves(d)
+    listed_ok = sorted(m for m in listed if not line_problems(moves[m].get("note"), NOTE_LEN))
+    if len(listed_ok) != len(listed):
+        fail(fid, "listed moves without a valid note: %s" % sorted(set(listed) - set(listed_ok)))
+    keys = list(d)
+    if "plan" not in keys or keys.index("plan") != keys.index("difficulty") + 1:
+        fail(fid, "plan must be present right after difficulty (CONTRACT 36.4)")
+    for what, text, lim in (("plan", d.get("plan"), PLAN_LEN), ("unique.note", (d.get("unique") or {}).get("note"),
+                                                                 UNIQUE_NOTE_LEN)):
+        probs = line_problems(text, lim)
+        if probs:
+            fail(fid, "%s %s - %r (CONTRACT 36.4)" % (what, "; ".join(probs), text))
+    if not (isinstance(d.get("difficulty"), int) and 1 <= d["difficulty"] <= 3):
+        fail(fid, "difficulty %r not 1..3" % d.get("difficulty"))
+    ros = open(ROSTER_MD, encoding="utf-8").read() if os.path.exists(ROSTER_MD) else ""
+    sec = ros.split("(`%s`)" % fid, 1)[1].split("\n## ", 1)[0] if ("(`%s`)" % fid) in ros else ""
+    for tag in ("**Plan line (players see this).**", "**Unique in one line (players see this).**", "**Player notes**"):
+        if tag not in sec:
+            fail(fid, "_spec/ROSTER.md section lacks %s (re-run build.py)" % tag)
+    say("  notes: %d/%d moves, listed %d/%d covered | plan %d chars | unique.note %d chars | difficulty %s" % (
+        have, len(moves), len(listed_ok), len(listed), len(d.get("plan") or ""),
+        len((d.get("unique") or {}).get("note") or ""), d.get("difficulty")))
+
+
 def validate_fighter(fid, mix):
     say("== %s" % fid)
     d = json.load(open(os.path.join(FDIR, fid + ".json"), encoding="ascii"))
@@ -996,6 +1100,7 @@ def validate_fighter(fid, mix):
     check_text(fid, d)
     check_3d(fid, d)   # CHANGED(FIGHTERS3D)
     check_step(fid, d)   # CHANGED(fix_core) D1
+    check_notes(fid, d)   # CHANGED(notes) CONTRACT 36.4
 
 
 def main():

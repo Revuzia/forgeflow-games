@@ -274,4 +274,40 @@ def build():
                "gone. So are the season, the network logo and the contract vault. Zambini bows to an empty studio and "
                "walks out through the front door like a normal man. Nobody has seen how the trick ends; he says that "
                "is the point.")
+    # CHANGED(notes) (CONTRACT 36.4): plain-English player text; the SIMPLE / EASY-routed ids carry the family note
+    K.describe(
+        plan="Stay far away: cards and fire keep them out, and the trapdoor gets you out of trouble.",
+        unique="Vanishing Act: drop through a trapdoor and pop up behind them, in front, or at home.",
+        notes={
+            "5L": "Quick palm to stop their attack up close.",
+            "2L": "Quick low palm; they must block crouching.",
+            "5M": "His longest poke: keeps them at arm's length.",
+            "2M": "Long low poke; follow with Card Fan.",
+            "5H": "Shoves them back out to card range; walls them near the edge.",
+            "2H": "Rising palm that swats jumping opponents.",
+            "6H": "Slow two-fist hammer; must be blocked standing.",
+            "j.L": "Quick air palm for fights in the air.",
+            "j.M": "Flung-arm swipe that wins fights in the air.",
+            "j.H": "Double-palm jump-in to start a combo.",
+            "throw_f": "Up close: grab and blast them away with both palms.",
+            "throw_b": "Up close: spin and fling them behind him, swapping places.",
+            "card_fan_m": "Cards flicked right at them: hard to sidestep. Keeps them away.",
+            "card_fan_l": "Slowest cards: walk in behind them while they block.",
+            "card_fan_h": "Fastest cards of the three, out the quickest.",
+            "card_fan_ex": "A whole deck at once: three hits.",
+            "flash_paper_m": "Lobbed fire that lands mid-distance; burns jumpers as they land.",
+            "flash_paper_l": "Lands close to him, for opponents right in front.",
+            "flash_paper_h": "Lands far away, to catch them across the ring.",
+            "flash_paper_ex": "A huge lobbed fireball that hits twice.",
+            "vanish_l": "Trapdoor: pops up behind them. Slow to finish, so pick your moment.",
+            "vanish_m": "Trapdoor: pops up right in front of them for a surprise attack.",
+            "vanish_h": "Trapdoor escape back to his own wall, far from them.",
+            "vanish_ex": "Instant trapdoor behind them; can't be hit, then attack right away.",
+            "flourish_m": "Burst of flame and doves around him: stops jumps and sidesteps.",
+            "flourish_l": "Quickest burst of the three; the best one against jumps.",
+            "flourish_h": "Strongest burst; the riskiest if blocked.",
+            "flourish_ex": "Burst that can't be hit as it starts: his escape when cornered.",
+            "grand_illusion": "Giant card-saw aimed right at them; can't be hit as it starts.",
+            "the_prestige": "PRIME TIME: unstoppable palm, a sheet over them, the big reveal.",
+        })
     return K

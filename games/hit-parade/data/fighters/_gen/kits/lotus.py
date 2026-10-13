@@ -285,4 +285,41 @@ def build():
                "gourd back on her hip - Rerun coughed it up in the elevator. She sells the jacket, buys the Wheel of "
                "Pain set and turns it into a noodle bar. The gourd hangs over the door. Nobody knows what is inside it, "
                "and she still has not had a drink.")
+    # CHANGED(notes) (CONTRACT 36.4): plain-English player text; the SIMPLE / EASY-routed ids carry the family note
+    K.describe(
+        plan="Sway out of high attacks, then hit low, high, or hop from the sway to keep them guessing.",
+        unique="Sway leans out of high attacks; then light hits low, medium hits high, heavy hops.",
+        notes={
+            "5L": "Quick jab to stop their attack.",
+            "2L": "Quick low palm; they must block crouching.",
+            "5M": "Lunging palm that steps in a little.",
+            "2M": "Low kick that catches sidesteps; follow with Dragon's Breath.",
+            "5H": "Curving kick that catches opponents who sidestep.",
+            "2H": "Knee lift that swats jumping opponents.",
+            "6M": "Stumbling palm that closes in; walls them near the edge.",
+            "4H": "Leans away from high attacks, then kicks back.",
+            "j.L": "Quick air palm for fights in the air.",
+            "j.M": "Air front kick for fights in the air.",
+            "j.H": "Long flying kick to start a combo.",
+            "throw_f": "Up close: grab the collar and launch them with a palm.",
+            "throw_b": "Up close: swing them past her, swapping places.",
+            "sway_m": "Sways in place into her stance, leaning out of high attacks.",
+            "sway_l": "Sways back into her stance, out of their reach.",
+            "sway_h": "Stumbles forward into her stance to close the distance.",
+            "sway_ex": "Sway that can't be hit or grabbed as it starts.",
+            "dragon_breath_m": "A swig and a short burst of flame aimed at them; stops dashes.",
+            "dragon_breath_l": "Shortest flame, out the quickest of the three.",
+            "dragon_breath_h": "Longest flame, out the slowest.",
+            "dragon_breath_ex": "Three-hit flame that reaches much further.",
+            "rising_lotus_m": "Rising knee that beats jump-ins. Very risky if blocked.",
+            "rising_lotus_l": "Quickest knee, the best one against jumps up close.",
+            "rising_lotus_h": "Highest, hardest knee; the riskiest if blocked.",
+            "rising_lotus_ex": "Two-hit knee that can't be hit as it starts: escape pressure.",
+            "sway_low": "From the sway: low toe kick that knocks down. Risky if blocked.",
+            "sway_oh": "From the sway: axe kick that must be blocked standing.",
+            "sway_hop": "From the sway: hop over lows into a spin kick; can't be grabbed.",
+            "sway_exit": "Leave the sway stance and stand up straight.",
+            "bottoms_up": "A swig, then a three-hit rush that can't be hit as it starts.",
+            "happy_hour": "PRIME TIME: unstoppable palm into a drunken beating and fire blast.",
+        })
     return K

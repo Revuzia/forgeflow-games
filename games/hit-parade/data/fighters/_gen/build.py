@@ -227,6 +227,24 @@ def check_kit(K):
     for w in K.info["win"]:
         if w not in K.clips:
             err("%s win clip %r missing" % (fid, w))
+    check_notes(K)
+
+
+def check_notes(K):
+    """CHANGED(notes) (CONTRACT 36.4): a plain-English note on EVERY move, the plan line and the unique note."""
+    fid = K.info["id"]
+    for mid in K.order:
+        if mid not in K.notes:
+            err("%s %s: no player note (Kit.describe notes)" % (fid, mid))
+            continue
+        for p in L.note_problems(K.notes[mid], L.NOTE_LEN):
+            err("%s %s note: %s - %r" % (fid, mid, p, K.notes[mid]))
+    for mid in K.notes:
+        if mid not in K.moves:
+            err("%s: note for unknown move %r" % (fid, mid))
+    for what, text, lim in (("plan", K.plan, L.PLAN_LEN), ("unique note", K.unique_note, L.UNIQUE_NOTE_LEN)):
+        for p in L.note_problems(text, lim):
+            err("%s %s: %s - %r" % (fid, what, p, text))
 
 
 # ------------------------------------------------------------------------------------ ROSTER.md
@@ -279,6 +297,11 @@ def fighter_md(K):
     A("**Look.** %s" % d["look"])
     A("")
     A("**Game plan.** %s" % d["plan"])
+    A("")
+    # CHANGED(notes) (CONTRACT 36.4): the one-line plan + unique note players see (JSON `plan`, `unique.note`)
+    A("**Plan line (players see this).** %s" % (J.get("plan") or "-"))
+    A("")
+    A("**Unique in one line (players see this).** %s" % (J["unique"].get("note") or "-"))
     A("")
     A("**Weakness (the counter-play).** %s" % d["weakness"])
     A("")
@@ -414,6 +437,23 @@ def fighter_md(K):
                 extra.append("%s: clip `%s` - %s" % ("PENDING RE-BAKE" if pk == "PENDING" else "HIT-VOLUME DEFECT",
                                                      pc, pd))
         A("- `%s` %s: %s%s" % (mid, o["name"], o["desc"], (" (" + "; ".join(extra) + ")") if extra else ""))
+    A("")
+    # CHANGED(notes) (CONTRACT 36.4): the player-facing notes (JSON moves.<id>.note), keyed the way the move lists route them
+    routed = {}
+    for k in ("5S", "6S", "2S", "4S", "jS", "S+H", "S+H+2"):
+        if isinstance(K.simple.get(k), str):
+            routed.setdefault(K.simple[k], []).append(k)
+    for k, v in ((K.unique.get("simple") or {}).items()):
+        routed.setdefault(v, []).append("phase 2 " + k)
+    A("**Player notes** (`moves.<id>.note`, shown in every move list next to the active scheme's keys; *SIMPLE / EASY key* = "
+      "the routed version, whose note covers the whole family - EASY SPECIAL 1-4 = SIMPLE 5S / 6S / 2S / 4S, CONTRACT 36.1).")
+    A("")
+    A("| id | name | SIMPLE / EASY key | note |")
+    A("|---|---|---|---|")
+    for mid in K.order:
+        o = J["moves"][mid]
+        A("| `%s` | %s | %s | %s |" % (mid, md_escape(o["name"]), ", ".join(routed.get(mid, [])) or "-",
+                                       md_escape(o.get("note", "-"))))
     A("")
     # cinematic
     lv3 = [mid for mid in K.order if J["moves"][mid]["kind"] == "super3"]
@@ -593,6 +633,13 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
   (`SS.<button>`: the button pressed during a sidestep from its frame 2, out on frame 11, or while circle-walking; PATCH and
   SPIN). The 3D column of each frame table shows the class, the tracking end frame and the depth; per-fighter "3D ring
   play" covers the stepping game, the homing tools and the wall game (ring boundary = wall; `onHit.wallSplat` enders).
+
+- **Player notes (CONTRACT 36.3 / 36.4, lane MOVE NOTES):** owner feedback "controls are very confusing" - every move
+  carries a one-line plain-English `note` (what it does + when to use it, 15-70 characters), every fighter a `plan` line
+  (how to win, <= 90) and a `unique.note` (the mechanic in one line, <= 90). No keys or motions in the text (the UI shows
+  the active scheme's keys next to it), no frame numbers, no shorthand (frame / DP / okizeme / cancel / link / juggle ...:
+  kitlib.JARGON_RE). The id a SIMPLE / EASY key routes to carries the family note; L / H / EX say how they differ. Authored
+  in `kits/<id>.py` (`Kit.describe`); per-fighter "Player notes" tables below.
 
 ## AUTHORED motions (keyframed on X Bot, 30 fps; the only two in the roster)
 

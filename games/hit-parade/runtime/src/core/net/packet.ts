@@ -16,7 +16,8 @@
 //   16  u16  echoTs           last tsLow received from peer   } rtt = now - echoTs - echoHold
 //   18  u16  echoHold         ms between receiving echoTs and sending (0xffff = no echo yet)
 //   [20 u32 csFrame, 24 u32 checksum]  only when flags.b1
-//   then N x u16 input words (frames startFrame .. startFrame+N-1)
+//   then N x u32 input words (frames startFrame .. startFrame+N-1). CHANGED(input) (CONTRACT §36.5 item 8): u16 -> u32 (the
+//   word has 22 used bits: BLOCK, SPECIAL 1-4, SUPER Lv1 / Lv3); net/netplay.ts NET_PROTO 1 -> 2 so old and new never pair
 //
 // Control packets (reliable `ctl` channel on RTC; a binary broadcast on the relay):
 //   SYNC_PING 0x10 / SYNC_PONG 0x11: u8 type, u8 seq, u16 0, f64 t (sender clock ms)      = 12 B
@@ -50,6 +51,8 @@ export function ctlEpoch(b: Uint8Array): number { return b.length > 2 ? b[2] & 1
 
 export const MAX_INPUTS = 32;
 export const INPUT_HEADER = 20;
+/** CHANGED(input): bytes per input word on the wire (u32; was 2) */
+export const WORD_BYTES = 4;
 export const NONE_U32 = 0xffffffff;
 export const NO_ECHO = 0xffff;
 
@@ -66,19 +69,19 @@ export interface InputPacket {
   echoHold: number;
   csFrame: number;         // -1 when absent
   checksum: number;        // u32 as signed int32 (compare with | 0)
-  inputs: Uint16Array;     // length >= count; only [0, count) valid
+  inputs: Uint32Array;     // length >= count; only [0, count) valid. CHANGED(input): u32 words (store `| 0` in int32 rings)
 }
 
 export function newInputPacket(): InputPacket {
   return {
     flags: 0, seq: 0, startFrame: 0, ackFrame: -1, advantage: 0, count: 0,
-    tsLow: 0, echoTs: 0, echoHold: NO_ECHO, csFrame: -1, checksum: 0, inputs: new Uint16Array(MAX_INPUTS),
+    tsLow: 0, echoTs: 0, echoHold: NO_ECHO, csFrame: -1, checksum: 0, inputs: new Uint32Array(MAX_INPUTS),
   };
 }
 
 /** Byte length of an INPUT packet with `count` words. */
 export function inputPacketBytes(count: number, hasChecksum: boolean): number {
-  return INPUT_HEADER + (hasChecksum ? 8 : 0) + 2 * count;
+  return INPUT_HEADER + (hasChecksum ? 8 : 0) + WORD_BYTES * count;
 }
 
 /**
@@ -112,15 +115,15 @@ export function encodeInput(
     off += 8;
   }
   for (let k = 0; k < count; k++) {
-    dv.setUint16(off, words[(first + k) & mask] & 0xffff, true);
-    off += 2;
+    dv.setUint32(off, words[(first + k) & mask] >>> 0, true);
+    off += WORD_BYTES;
   }
   return buf;
 }
 
 /**
  * Decode + validate an INPUT packet into `out`. Returns false (and leaves `out` unspecified) when the
- * packet is malformed: wrong type, length != 20 + 8*b1 + 2N, N outside 1..32, or frame fields that
+ * packet is malformed: wrong type, length != 20 + 8*b1 + 4N (CHANGED(input): u32 words), N outside 1..32, or frame fields that
  * overflow int32. The frame-window check (startFrame + N - 1 <= localFrame + D + W + 32) needs session
  * state and lives in the session.
  */
@@ -158,8 +161,8 @@ export function decodeInput(b: Uint8Array, out: InputPacket): boolean {
     out.checksum = 0;
   }
   for (let k = 0; k < count; k++) {
-    out.inputs[k] = dv.getUint16(off, true);
-    off += 2;
+    out.inputs[k] = dv.getUint32(off, true);
+    off += WORD_BYTES;
   }
   return true;
 }

@@ -1,0 +1,308 @@
+/* HIT PARADE - controls teaching surfaces (lane UI; CONTRACT §36.2 / §36.3 / §36.4 clarification): the drawn keyboard
+   map (.hpk), key cap chips (.hpk-cap), plain move rows, the touch cheat sheet, the in-game CONTROLS BAR (.hp-cbar), the
+   CHARACTER SELECT MOVES panel, the scheme picker and the HOW TO PLAY page. Same loud broadcast look as the HUD / menus:
+   ink outlines, hard offset shadows, slanted plates; key families share one colour everywhere. */
+
+:root {
+  --k-move: #9fe7ff;
+  --k-step: #c9a6ff;
+  --k-attack: #ffe066;
+  --k-special: #ff3fa4;
+  --k-super: #ffae00;
+  --k-prime: #ff2b3a;
+  --k-defend: #1fe0c0;
+  --k-system: #fff5dc;
+}
+
+/* ─────────────────────────── key cap chip ─────────────────────────── */
+.hpk-cap {
+  display: inline-grid; grid-auto-flow: column; place-items: center; gap: .15em; min-width: 1.75em; height: 1.6em; padding: 0 .38em;
+  border-radius: .28em; font: 400 1em / 1 var(--f-digits); color: var(--hp-ink); background: var(--hp-paper);
+  border: max(1.5px, .1em) solid var(--hp-ink); box-shadow: .08em .1em 0 var(--hp-ink); white-space: nowrap; vertical-align: middle;
+}
+.hpk-cap.long { font-size: .82em; height: 1.95em; }
+.hpk-cap .pre { font: 400 .55em / 1 var(--f-display); opacity: .75; }
+.hpk-cap.num { gap: .08em; padding: 0 .25em; }
+.hpk-cap .ar { display: block; width: 1.05em; height: 1.05em; }
+.hpk-cap .ar svg { display: block; width: 100%; height: 100%; }
+.hpk-cap.k-move { background: var(--k-move); }
+.hpk-cap.k-step { background: var(--k-step); }
+.hpk-cap.k-attack { background: var(--k-attack); }
+.hpk-cap.k-special { background: var(--k-special); color: #fff; }
+.hpk-cap.k-super { background: var(--k-super); }
+.hpk-cap.k-prime { background: var(--k-prime); color: #fff; }
+.hpk-cap.k-defend { background: var(--k-defend); }
+.hpk-cap.k-system { background: var(--k-system); }
+.hpk-dir { display: inline-grid; place-items: center; width: 1.35em; height: 1.35em; color: var(--hp-paper); vertical-align: middle; }
+.hpk-dir svg { width: 100%; height: 100%; display: block; }
+.hpk-keys { display: inline-flex; align-items: center; flex-wrap: wrap; gap: .25em; }
+.hpk-keys .plus { font: 400 max(12px, .9em) / 1 var(--f-display); color: var(--hp-yellow); }
+
+/* ─────────────────────────── the drawn keyboard ─────────────────────────── */
+.hpk {
+  position: relative; width: 100%; max-width: calc(var(--cols) * 66px); margin: 0 auto; aspect-ratio: var(--cols) / var(--rows);
+  container-type: inline-size;
+}
+.hpk-key { --ku: calc(100cqw / var(--cols)); position: absolute; box-sizing: border-box; }
+.hpk-key > .f {
+  position: absolute; inset: calc(var(--ku) * .05); box-sizing: border-box; display: grid; grid-template-rows: auto 1fr; align-items: start; overflow: hidden;
+  padding: calc(var(--ku) * .06) calc(var(--ku) * .08);
+  border: max(1px, calc(var(--ku) * .035)) solid rgba(255, 245, 220, .22); border-radius: calc(var(--ku) * .12);
+  background: rgba(255, 245, 220, .04); color: rgba(255, 245, 220, .38);
+}
+.hpk-key .cap { font: 400 clamp(9px, calc(var(--ku) * .24), 16px) / 1 var(--f-digits); justify-self: start; }
+/* the label sits on the key's bottom edge (a two-line label may run up beside the cap letter on a flat key) */
+.hpk-key .w { position: absolute; left: calc(var(--ku) * .05); right: calc(var(--ku) * .05); bottom: calc(var(--ku) * .07); }
+.hpk-key .w { align-self: end; display: block; font: 400 min(clamp(9px, calc(var(--ku) * .26), 16px), calc(var(--ku) * var(--fit, 1))) / 1.02 var(--f-cond); letter-spacing: .02em; text-align: center; overflow-wrap: normal; word-break: keep-all; }
+.hpk-key .w .ar { display: inline-block; width: 1.05em; height: 1.05em; margin-right: .1em; vertical-align: -.15em; }
+.hpk-key .w .ar svg { width: 100%; height: 100%; display: block; }
+.hpk-key.on > .f { color: var(--hp-ink); border-color: var(--hp-ink); box-shadow: calc(var(--ku) * .05) calc(var(--ku) * .06) 0 var(--hp-ink); }
+.hpk-key.k-move > .f { background: var(--k-move); }
+.hpk-key.k-step > .f { background: var(--k-step); }
+.hpk-key.k-attack > .f { background: var(--k-attack); }
+.hpk-key.k-special > .f { background: var(--k-special); color: #fff; }
+.hpk-key.k-super > .f { background: var(--k-super); }
+.hpk-key.k-prime > .f { background: var(--k-prime); color: #fff; }
+.hpk-key.k-defend > .f { background: var(--k-defend); }
+.hpk-key.k-system > .f { background: var(--k-system); }
+/* the attack-hand map (CHARACTER SELECT): slightly flatter keys, a smaller cap letter so a two-line label clears it */
+.hpk.only { aspect-ratio: var(--cols) / calc(var(--rows) * .96); }
+.hpk.only .hpk-key .cap { font-size: clamp(9px, calc(var(--ku) * .2), 14px); }
+.hpk.only .hpk-key .w { font-size: min(clamp(9px, calc(var(--ku) * .22), 15px), calc(var(--ku) * var(--fit, 1))); }
+
+/* a key family legend under a board */
+.hpk-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: .3em .9em; margin-top: .45em; font: 400 max(12px, calc(var(--u) * .9)) / 1 var(--f-cond); letter-spacing: .08em; }
+.hpk-legend i { display: inline-block; width: .9em; height: .9em; margin-right: .3em; vertical-align: -.1em; border: max(1px, .1em) solid var(--hp-ink); }
+
+/* ─────────────────────────── plain move rows (CHARACTER SELECT, PAUSE, HOW TO PLAY) ─────────────────────────── */
+.hpk-rows { display: grid; gap: calc(var(--u) * .35); }
+.hpk-row { display: grid; grid-template-columns: minmax(calc(var(--u) * 6), auto) minmax(0, 1fr); align-items: center; gap: calc(var(--u) * .7); font-size: max(12px, calc(var(--u) * 1)); }
+.hpk-row .nm { font: 400 max(13px, calc(var(--u) * 1.1)) / 1.05 var(--f-display); color: var(--hp-paper); min-width: 0; }
+.hpk-row .nm small { display: block; margin-top: .15em; font: 400 max(12px, calc(var(--u) * .85)) / 1.2 var(--f-body); color: rgba(255, 245, 220, .72); }
+.hpk-row[data-kind="super"] .nm { color: var(--k-super); }
+.hpk-row[data-kind="prime"] .nm { color: #ff8a7a; }
+
+/* the PAD's discs (touch cheat sheet + touch move rows) */
+.hpk-touch { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 6px 14px; }
+.hpk-trow { display: grid; grid-template-columns: 104px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 34px; }
+.hpk-trow .tx { display: grid; gap: 1px; min-width: 0; }
+.hpk-trow .tx b { font: 400 14px / 1.05 var(--f-display); color: var(--hp-paper); }
+.hpk-trow .tx small { font: 400 12px / 1.2 var(--f-body); color: rgba(255, 245, 220, .78); }
+.hpk-touch .tbtn, .hpk-row .tbtn {
+  display: inline-grid; place-items: center; min-width: 2.6em; height: 2.2em; padding: 0 .4em; border-radius: 99px;
+  background: rgba(11, 11, 16, .8); color: var(--hp-paper); border: max(1.5px, calc(var(--u) * .16)) solid var(--hp-paper); font: 400 12px / 1 var(--f-display);
+}
+.hpk-touch .tbtn.t-l, .hpk-row .tbtn.t-l { background: #9fe7ff; color: var(--hp-ink); border-color: var(--hp-ink); }
+.hpk-touch .tbtn.t-m, .hpk-row .tbtn.t-m { background: #e8cf6a; color: var(--hp-ink); border-color: var(--hp-ink); }
+.hpk-touch .tbtn.t-h, .hpk-row .tbtn.t-h { background: #ff8a7a; color: var(--hp-ink); border-color: var(--hp-ink); }
+.hpk-touch .tbtn.t-s, .hpk-row .tbtn.t-s { background: var(--hp-pink); color: #fff; border-color: var(--hp-ink); }
+.hpk-touch .tbtn.t-super, .hpk-row .tbtn.t-super { background: #e3c21c; color: var(--hp-ink); border-color: var(--hp-ink); }
+.hpk-touch .tbtn.t-stepin, .hpk-touch .tbtn.t-stepout { background: #c9a6ff; color: var(--hp-ink); border-color: var(--hp-ink); }
+.hpk-touch .tbtn.t-stick { border-style: dashed; }
+.hpk-touch .hpk-keys { gap: 4px; }
+
+/* ─────────────────────────── the in-game CONTROLS BAR (§36.2) ─────────────────────────── */
+.hp-cbar {
+  --cb-band: 54px; --cb-room: 700px; --cb-left: 300px;
+  /* two rows + the panel's 2 + 2 px padding, 2 + 1.5 px borders and the 3 px row gap fit the band exactly */
+  --cb-row: min(28px, calc((var(--cb-band) - 12px) / 2));
+  position: absolute; bottom: 3px; left: var(--cb-left); width: var(--cb-room); height: var(--cb-band); max-height: var(--cb-band);
+  display: flex; align-items: flex-end; justify-content: center; gap: 6px; pointer-events: none; z-index: 2;
+  font-size: max(11px, calc(var(--cb-row) * .52));
+}
+.hp-cbar[hidden] { display: none; }
+/* a fighter's feet dipped into the band (a close camera shot): the bar steps aside until they leave */
+.hp-cbar { transition: opacity .25s ease, visibility 0s linear 0s; }
+.hp-cbar.duck { opacity: 0; visibility: hidden; transition: none; }
+/* a toe in the band's upper half: the bar folds to its attack row (the panel shrinks to the bottom half) */
+.hp-cbar.fold .hp-cbar-row.r2 { display: none; }
+.hp-cbar-sides { flex: 0 1 auto; min-width: 0; display: flex; align-items: flex-end; justify-content: center; gap: 6px; }
+.hp-cbar[data-n="2"] .hp-cbar-sides { flex: 1 1 auto; justify-content: space-between; }
+.hp-cbar-side {
+  min-width: 0; display: grid; gap: 3px; padding: 2px 7px; background: rgba(11, 11, 16, .82); border: 1.5px solid var(--hp-ink);
+  border-top: 2px solid var(--hp-yellow); box-shadow: 3px 3px 0 rgba(11, 11, 16, .85); transform: skewX(-8deg);
+}
+.hp-cbar-side.s2 { border-top-color: var(--hp-p2); }
+.hp-cbar[data-n="2"] .hp-cbar-side.s1 { border-top-color: var(--hp-p1); }
+.hp-cbar-row { display: flex; align-items: center; justify-content: center; gap: 2px 9px; min-width: 0; height: var(--cb-row); overflow: hidden; transform: skewX(8deg); }
+.hp-cbar-cell { flex: none; display: inline-flex; align-items: center; gap: .3em; color: var(--hp-paper); white-space: nowrap; }
+.hp-cbar-cell .caps { display: inline-flex; gap: .15em; }
+.hp-cbar-cell .hpk-cap { height: calc(var(--cb-row) - 2px); min-width: calc(var(--cb-row) - 2px); font-size: .95em; padding: 0 .3em; border-width: max(1.5px, .09em); }
+.hp-cbar-cell .hpk-cap.long { font-size: .8em; }
+.hp-cbar-cell .w { font: 400 1em / 1 var(--f-cond); letter-spacing: .05em; color: var(--hp-paper); text-shadow: .06em .06em 0 var(--hp-ink); }
+.hp-cbar-cell.k-special .w { color: #ffb3dc; }
+.hp-cbar-cell[data-cell="super1"], .hp-cbar-cell[data-cell="super3"] { opacity: .42; filter: grayscale(.85); transition: opacity .15s, filter .15s; }
+.hp-cbar-cell[data-cell="super1"].lit, .hp-cbar-cell[data-cell="super3"].lit { opacity: 1; filter: none; }
+.hp-cbar-cell[data-cell="super1"].lit .w { color: var(--k-super); }
+.hp-cbar-cell[data-cell="super3"].lit .w { color: #ff8a7a; }
+.hp-cbar-cell[data-cell="super3"].lit .hpk-cap { animation: hp-cbar-prime .8s ease-in-out infinite alternate; }
+@keyframes hp-cbar-prime { from { box-shadow: .08em .1em 0 var(--hp-ink); } to { box-shadow: .08em .1em 0 var(--hp-ink), 0 0 .6em .1em rgba(255, 63, 164, .9); } }
+html.hp-noflash .hp-cbar-cell[data-cell="super3"].lit .hpk-cap { animation: none; }
+/* CHANGED(wf8 fix) FT-01: BLOCK carries its low half in the same cell - SHIFT BLOCK + S LOW */
+.hp-cbar-cell .x { display: inline-flex; align-items: center; gap: .25em; }
+.hp-cbar-cell .x .pl { font: 400 1em / 1 var(--f-display); color: var(--hp-yellow); text-shadow: .06em .06em 0 var(--hp-ink); }
+/* CHANGED(wf8 fix) FT-04: EASY's N EX (hold with a special) - greyed until 2 NERVE bars, like SUPER at 1 SHOWTIME bar */
+.hp-cbar-cell[data-cell="ex"] { opacity: .42; filter: grayscale(.85); transition: opacity .15s, filter .15s; }
+.hp-cbar-cell[data-cell="ex"].lit { opacity: 1; filter: none; }
+.hp-cbar-cell.more { pointer-events: auto; cursor: pointer; padding: 0 .2em; background: none; border: 0; font: inherit; }
+.hp-cbar-cell.more .w { color: var(--hp-yellow); }
+.hp-cbar-cell.more:hover .w { text-decoration: underline; }
+.hp-cbar-q {
+  flex: none; pointer-events: auto; cursor: pointer; display: inline-flex; align-items: center; gap: .3em; height: calc(var(--cb-row) + 4px);
+  padding: 0 .45em; margin-bottom: 1px; background: var(--hp-yellow); color: var(--hp-ink); border: max(1.5px, .1em) solid var(--hp-ink);
+  box-shadow: 3px 3px 0 rgba(11, 11, 16, .85); transform: skewX(-8deg); font: inherit;
+}
+.hp-cbar-q > * { transform: skewX(8deg); }
+.hp-cbar-q .q { font: 400 1.25em / 1 var(--f-display); }
+.hp-cbar-q .hpk-cap { height: calc(var(--cb-row) - 4px); font-size: .8em; }
+.hp-cbar-q[hidden] { display: none; }
+.hp-cbar.off .hp-cbar-sides { display: none; }
+.hp-cbar.off .hp-cbar-q { background: rgba(11, 11, 16, .82); color: var(--hp-yellow); border-color: var(--hp-yellow); }
+/* tight / mini levels (fit() steps down until both rows fit the room between the RATINGS blocks) */
+.hp-cbar[data-level="1"] .hp-cbar-row { gap: 2px 6px; }
+.hp-cbar[data-level="1"] .hp-cbar-side { padding: 2px 5px; }
+.hp-cbar[data-level="2"] { font-size: max(11px, calc(var(--cb-row) * .47)); }
+.hp-cbar[data-level="2"] .hp-cbar-row { gap: 2px 4px; }
+.hp-cbar[data-level="2"] .hp-cbar-cell { gap: .2em; }
+.hp-cbar[data-level="2"] .hp-cbar-side { padding: 2px 4px; }
+.hp-cbar[data-level="2"] .hp-cbar-cell .w { letter-spacing: .01em; }
+.hp-cbar[data-level="2"] .hp-cbar-row { gap: 2px 3px; }
+.hp-cbar-cell .hpk-cap.num { padding: 0 .2em; }
+/* 2P: the "?" chip stays, MORE (= ESC, the pause card) leaves P1's row to make room */
+.hp-cbar[data-n="2"] .hp-cbar-cell.more { display: none; }
+/* a short window: one row - the attacks, then BLOCK and MORE */
+.hp-cbar.one { --cb-row: calc(var(--cb-band) - 9px); }
+.hp-cbar.one .hp-cbar-side { grid-auto-flow: column; }
+.hp-cbar.one .hp-cbar-row.r2 .hp-cbar-cell:not([data-cell="block"]):not(.more) { display: none; }
+/* narrow RATINGS blocks when the bar needs the room (fit(): 2P, small windows) */
+.hp-frame.cb-narrow .hp-show .segs i { width: calc(var(--u) * 3.6); }
+/* 2P: each player's keys on their own side (each side half the room) */
+.hp-cbar[data-n="2"] .hp-cbar-side { max-width: calc(50% - 5px); }
+/* the bar never covers the HUD's bonus panel / training overlays (they sit higher); the RATINGS labels hide on short
+   screens anyway (styles.css @media (max-height: 500px)) */
+
+/* ─────────────────────────── CHARACTER SELECT: the MOVES panel ─────────────────────────── */
+.hpm-cs-moves { display: grid; gap: calc(var(--u) * .45); min-height: 0; }
+.hpm-cs-moves[hidden] { display: none; }
+.hpm-cs-moves .plan { margin: 0; font: 400 max(12px, calc(var(--u) * .98)) / 1.2 var(--f-comic); color: var(--hp-paper); }
+.hpm-cs-moves .hd { display: flex; align-items: baseline; justify-content: space-between; gap: .6em; }
+.hpm-cs-moves .hd b { font: 400 max(12px, calc(var(--u) * .95)) / 1 var(--f-display); color: var(--hp-yellow); }
+.hpm-cs-moves .hd span { font: 400 max(12px, calc(var(--u) * .85)) / 1 var(--f-cond); letter-spacing: .08em; opacity: .8; }
+.hpm-cs-moves .uq { margin: 0; font: 400 max(12px, calc(var(--u) * .9)) / 1.2 var(--f-body); color: rgba(255, 245, 220, .85); }
+.hpm-cs-moves .uq b { font-family: var(--f-display); font-weight: 400; color: var(--k-step); margin-right: .35em; }
+.hpm-cs-moves .hpk { max-width: 100%; }
+/* a human card with the MOVES panel: the 3D showcase already shows the fighter - the card's portrait gives way to the keys */
+.hpm-cs-side:has(.hpm-cs-moves:not([hidden]) .hd) .hpm-cs-portrait { display: none; }
+/* the COLOR / CONTROLS steps need the room: the unique note (and on CONTROLS the plan + colours) step aside */
+.hpm-cs-side:is([data-step="color"], [data-step="scheme"], [data-step="ready"]) .hpm-cs-moves .uq { display: none; }
+.hpm-cs-side[data-step="scheme"] .hpm-cs-moves .plan, .hpm-cs-side[data-step="scheme"] .hpm-cs-persona { display: none; }
+/* the CONTROLS step: the colour is one BACK away (the phone layout already did this) - its row would run into the keys */
+.hpm-cs-side[data-step="scheme"]:has(.hpm-cs-moves:not([hidden])) .hpm-cs-colors { display: none; }
+/* never paint past its own box into the next row */
+.hpm-cs-moves { overflow: hidden; }
+.hpm-cs-moves .hpk-rows { gap: 3px; }
+.hpm-cs-moves .hpk-row { grid-template-columns: minmax(4.6em, auto) minmax(0, 1fr); gap: .5em; }
+.hpm-cs-moves .hpk-row .nm { font-size: max(12px, calc(var(--u) * .95)); }
+.hpm-cs-moves .hpk-row .nm .short { display: none; }
+/* CHANGED(wf8 fix) FT-08: the MOVES spotlight - one move at a time: its key, full name, plain note (two lines, fixed height
+   so the card never jumps as it steps); the move's key is ringed on the map */
+.hpm-cs-moves .spot {
+  margin: 0; min-height: 2.5em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font: 400 max(12px, calc(var(--u) * .88)) / 1.25 var(--f-body); color: rgba(255, 245, 220, .92);
+}
+.hpm-cs-moves .spot .hpk-cap { font-size: .85em; height: 1.45em; margin-right: .35em; vertical-align: .05em; }
+.hpm-cs-moves .spot b { font-family: var(--f-display); font-weight: 400; color: #ffb3dc; margin-right: .4em; }
+.hpk-key.spotlit > .f { outline: max(2px, calc(var(--ku) * .06)) solid var(--hp-yellow); outline-offset: 1px; }
+/* CHANGED(wf8 fix) FT-09: the COLOR / LOCKED IN steps also drop the plan line, so the swatches / scheme row never clip the keys */
+.hpm-cs-side:is([data-step="color"], [data-step="ready"]) .hpm-cs-moves .plan { display: none; }
+.hpm-cs-side:is([data-step="color"], [data-step="scheme"], [data-step="ready"]) .hpm-cs-moves .spot { display: none; }
+.hpm-cs-moves .uq[hidden] { display: none; }
+.hpm-cs-side[data-step="ready"] .hpm-cs-persona { display: none; }
+
+/* ─────────────────────────── scheme picker (CHARACTER SELECT + SETTINGS) ─────────────────────────── */
+.hpm-schemes, .hpm-cs-scheme.hpm-schemes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: calc(var(--u) * .5); }
+.hpm-cs-scheme.hpm-schemes[hidden] { display: none; }
+.hpm-schemes .hpm-segbtn { display: grid; align-content: center; justify-items: center; gap: .2em; padding: calc(var(--u) * .5) calc(var(--u) * .5); transform: none; text-align: center; }
+.hpm-schemes .hpm-segbtn b { font: 400 max(14px, calc(var(--u) * 1.1)) / 1 var(--f-display); }
+.hpm-schemes .hpm-segbtn small { font: 400 max(12px, calc(var(--u) * .88)) / 1.15 var(--f-body); opacity: .88; }
+.hpm-schemes .hpm-segbtn .rec { padding: .1em .4em; background: var(--hp-red); color: #fff; border: max(1px, .08em) solid var(--hp-ink); font: 400 max(12px, calc(var(--u) * .75)) / 1 var(--f-display); }
+
+/* ─────────────────────────── PAUSE: CONTROLS column + the help (expanded) layout ─────────────────────────── */
+.hpm-pause-r { display: grid; gap: calc(var(--u) * .6); align-content: start; min-width: 0; }
+.hpm-pause-r .hpm-cap { margin: 0; }
+.hpm-pause-r .who { display: flex; align-items: center; justify-content: space-between; gap: .6em; flex-wrap: wrap; }
+.hpm-pause-r .who [hidden] { display: none; }
+.hpm-pause-r .who .sc { font: 400 max(12px, calc(var(--u) * .9)) / 1 var(--f-cond); letter-spacing: .1em; color: var(--hp-paper); opacity: .85; }
+.hpm-pause-r .hpk-rows { margin-top: calc(var(--u) * .3); }
+.hpm-card.hpm-pause { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); width: min(100%, calc(var(--u) * 88)); }
+html.hp-touch .hpm-card.hpm-pause { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.hpm-card.hpm-pause.help { grid-template-columns: minmax(0, .62fr) minmax(0, 1.38fr); width: min(100%, calc(var(--u) * 96)); }
+.hpm-pause.help .hpm-pause-sub { display: none; }
+
+/* ─────────────────────────── HOW TO PLAY (§36.3: one page, EASY) ─────────────────────────── */
+.hpm-how2 { flex: 1; width: 100%; max-width: calc(var(--u) * 104); margin: 0 auto; display: grid; gap: calc(var(--u) * 1.1); align-content: start; }
+.hpm-how2 .board { padding: calc(var(--u) * .9) calc(var(--u) * 1.2); background: rgba(255, 245, 220, .04); border-left: calc(var(--u) * .35) solid var(--hp-yellow); }
+.hpm-how2 .board .hpk { max-width: min(100%, calc(var(--cols) * min(64px, 7.2vh))); }
+.hpm-how2 .tips { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--u) * 26), 1fr)); gap: calc(var(--u) * .7) calc(var(--u) * 1.2); }
+.hpm-how2 .tip { display: grid; gap: .25em; align-content: start; padding: calc(var(--u) * .6) calc(var(--u) * .9); background: rgba(255, 245, 220, .04); border-left: calc(var(--u) * .3) solid var(--hp-yellow); }
+.hpm-how2 .tip.ring { background: rgba(155, 92, 255, .14); border-left-color: var(--hp-purple); }
+.hpm-how2 .tip h3 { margin: 0; font: 400 max(14px, calc(var(--u) * 1.1)) / 1.1 var(--f-display); color: var(--hp-yellow); }
+.hpm-how2 .tip.ring h3 { color: #d9c2ff; }
+.hpm-how2 .tip p { margin: 0; font: 400 max(12px, calc(var(--u) * 1)) / 1.3 var(--f-body); color: var(--hp-paper); }
+.hpm-how2 .tip p .hpk-cap { font-size: .9em; }
+.hpm-how2 .lede { margin: 0; text-align: center; font: 400 max(13px, calc(var(--u) * 1.15)) / 1.25 var(--f-comic); color: var(--hp-yellow); }
+/* CHANGED(wf8 fix) FT-13 / WF8G-6: MORE BELOW sits on the HOW TO PLAY card's bottom edge (never over its text) while the page
+   has more under the fold; it goes once the end is in view */
+.hpm-s-howto .hpm-morecue {
+  position: absolute; left: 50%; bottom: calc(var(--u) * .45); transform: translateX(-50%) skewX(-10deg); display: none; align-items: center; gap: .35em;
+  padding: .2em .8em; background: var(--hp-yellow); color: var(--hp-ink); border: max(1.5px, calc(var(--u) * .12)) solid var(--hp-ink);
+  box-shadow: 3px 3px 0 rgba(11, 11, 16, .85); font: 400 max(12px, calc(var(--u) * .95)) / 1 var(--f-display); pointer-events: none; z-index: 2;
+}
+.hpm-s-howto .hpm-morecue.on { display: inline-flex; animation: hpm-cue-bob 1.1s ease-in-out infinite alternate; }
+.hpm-s-howto .hpm-morecue .ar { display: block; width: 1.1em; height: 1.1em; }
+.hpm-s-howto .hpm-morecue .ar svg { display: block; width: 100%; height: 100%; }
+@keyframes hpm-cue-bob { from { transform: translateX(-50%) skewX(-10deg) translateY(0); } to { transform: translateX(-50%) skewX(-10deg) translateY(-3px); } }
+html.hp-noflash .hpm-s-howto .hpm-morecue.on { animation: none; }
+
+/* ─────────────────────────── SETTINGS > CONTROLS: the map over the list ─────────────────────────── */
+.hpm-keys .hpk-wrap { margin: calc(var(--u) * .6) 0 calc(var(--u) * .4); }
+.hpm-keys .hpm-bind.sub .lbl { opacity: .75; }
+.hpm-keys .hpm-bindsec { margin: calc(var(--u) * .7) 0 calc(var(--u) * .2); font: 400 max(12px, calc(var(--u) * .9)) / 1 var(--f-display); color: var(--hp-yellow); }
+
+/* ─────────────────────────── phone landscape ─────────────────────────── */
+@media (max-height: 500px) {
+  .hpm-cs-moves { gap: 3px; }
+  .hpm-cs-moves .plan { font-size: 12px; line-height: 1.15; }
+  .hpm-cs-moves .uq { display: none; }
+  .hpm-cs-moves .spot { display: none; }
+  .hpm-cs-moves .hd { display: none; }
+  .hpm-cs-moves .hpk-row { font-size: 12px; }
+  .hpm-cs-moves .hpk-row .nm { font: 400 13px / 1.05 var(--f-cond); letter-spacing: .04em; }
+  .hpm-cs-moves .hpk-row .nm .full { display: none; }
+  .hpm-cs-moves .hpk-row .nm .short { display: inline; }
+  .hpm-cs-moves .hpk-rows { grid-template-columns: 1fr 1fr; gap: 2px 6px; }
+  .hpm-cs-moves .hpk-row { grid-template-columns: auto minmax(0, 1fr); gap: 4px; }
+  .hpm-cs-moves .hpk-row .tbtn { min-width: 2.3em; height: 1.9em; font-size: 12px; }
+  .hpm-cs-moves .hpk-dir { width: 1.1em; height: 1.1em; }
+  .hpm-cs-side:has(.hpm-cs-moves:not([hidden]) .hd) .hpm-cs-persona { display: none; }
+  .hpm-schemes .hpm-segbtn small { display: none; }
+  .hpm-schemes .hpm-segbtn { min-height: 44px; }
+  .hpm-card.hpm-pause.help { grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr); }
+  .hpm-how2 { gap: 8px; }
+  .hpm-how2 .tips { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px 10px; }
+  .hpm-how2 .tip { padding: 6px 8px; }
+  .hpm-how2 .tip h3 { font-size: 14px; }
+  .hpm-how2 .tip p { font-size: 12px; }
+  .hpk-trow { grid-template-columns: 96px minmax(0, 1fr); min-height: 30px; }
+}
+
+/* ─────────────────────────── MOVE LIST additions (EASY tab, the plan line) ─────────────────────────── */
+.hpm-ml-head { display: grid; gap: .25em; min-width: 0; flex: 1 1 18em; }
+.hpm-ml-plan { margin: 0; font: 400 max(12px, calc(var(--u) * 1)) / 1.25 var(--f-comic); color: var(--hp-paper); opacity: .9; }
+.hpm-ml-plan:empty { display: none; }
+.hpm-ml-row .in .hpk-cap { font-size: max(12px, calc(var(--u) * .95)); }
+.hpm-ml-row .alt .hpk-cap { font-size: max(11px, calc(var(--u) * .8)); }
+.hpm-pause-moves:empty { display: none; }
+.hpm-keys .hpm-cap.hpm-sub { margin: calc(var(--u) * .7) 0 calc(var(--u) * .35); font-size: max(12px, calc(var(--u) * .95)); color: var(--hp-paper); }
+.hpm-keys .hpm-schemes { margin-bottom: calc(var(--u) * .5); }
+.hpm-how2 .board.touch { border-left-color: var(--hp-pink); }

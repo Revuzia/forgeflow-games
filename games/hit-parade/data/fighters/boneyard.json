@@ -4,6 +4,7 @@
   "persona": "The Butcher of Block Street",
   "archetype": "bigbody",
   "difficulty": 1,
+  "plan": "Walk forward and swing big: his heavy hits take a blow and still land. Every hit hurts.",
   "body": "Ch05_nonPBR",
   "heightM": 1.9,
   "hp": 10500,
@@ -75,6 +76,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "gauntlet_jab"},
       "desc": "Spiked-gauntlet jab.",
+      "note": "Quick spiked jab to stop their attack.",
       "boxes": [{"f": [6, 8], "x": 0.796, "y": 1.382, "w": 0.3, "h": 0.565}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [16, 0.0], [17, 0.072], [19, 0.095]]
@@ -107,7 +109,8 @@
       "track": {"until": 1, "rate": 180},
       "lateralM": 0.15,
       "anim": {"clip": "stomp"},
-      "desc": "Stamps on the toes (low)."
+      "desc": "Stamps on the toes (low).",
+      "note": "Stomps on their toes; they must block crouching."
     },
     "5M": {
       "kind": "normal",
@@ -137,6 +140,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "snap_kick"},
       "desc": "Front snap kick.",
+      "note": "Front snap kick to keep them at arm's length.",
       "boxes": [{"f": [9, 11], "x": 1.021, "y": 1.07, "w": 0.506, "h": 0.3}],
       "boxSrc": "hitVolume"
     },
@@ -169,6 +173,7 @@
       "lateralM": 0.4,
       "anim": {"clip": "low_cleaver"},
       "desc": "Crouching cleaver swing (low); homing; cancel into MEAT HOOK.",
+      "note": "Low cleaver swing that catches sidesteps; follow with Meat Hook.",
       "pushExt": [[0, 0.0], [9, 0.0], [11, 0.027], [12, 0.072], [14, 0.085], [23, 0.001], [28, 0.0]]
     },
     "5H": {
@@ -199,7 +204,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "cleaver_swing"},
       "sfx": [[9, "whoosh_heavy"]],
-      "desc": "Armored overhand cleaver swing (1 hit of armor on frames 5-13)."
+      "desc": "Armored overhand cleaver swing (1 hit of armor on frames 5-13).",
+      "note": "Big cleaver swing that keeps going through one hit."
     },
     "2H": {
       "kind": "normal",
@@ -228,7 +234,8 @@
       "track": {"until": 4, "rate": 180},
       "lateralM": 0.22,
       "anim": {"clip": "rising_backhand"},
-      "desc": "Rising backhand anti-air (his only one)."
+      "desc": "Rising backhand anti-air (his only one).",
+      "note": "His only answer to jumpers: a rising backhand."
     },
     "6H": {
       "kind": "command",
@@ -259,6 +266,7 @@
       "anim": {"clip": "chop_down"},
       "sfx": [[12, "whoosh_heavy"]],
       "desc": "Overhead cleaver chop (+2/-4).",
+      "note": "Slow cleaver chop; must be blocked standing.",
       "pushExt": [[0, 0.0], [20, 0.0], [29, 0.072], [40, 0.009]]
     },
     "j.L": {
@@ -289,6 +297,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "air_jab"},
       "desc": "Air jab.",
+      "note": "Quick air jab for fights in the air.",
       "pushExt": [[0, 0.024], [4, 0.016], [7, 0.051], [14, 0.0], [16, 0.059]]
     },
     "j.M": {
@@ -319,6 +328,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "air_backhand"},
       "desc": "Air backhand.",
+      "note": "Air backhand for fights in the air.",
       "pushExt": [[0, 0.033], [4, 0.197], [5, 0.211], [6, 0.0], [16, 0.0]]
     },
     "j.H": {
@@ -348,7 +358,8 @@
       "track": {"until": 4, "rate": 180},
       "lateralM": 0.22,
       "anim": {"clip": "air_chop"},
-      "desc": "Overhead cleaver jump-in."
+      "desc": "Overhead cleaver jump-in.",
+      "note": "Falling cleaver jump-in to start a combo."
     },
     "throw_f": {
       "kind": "throw",
@@ -392,6 +403,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Holds them and delivers three flat-side cleaver smacks.",
+      "note": "Up close: three flat-side cleaver smacks. Beats blocking.",
       "pushExt": [[0, 0.114], [4, 0.0], [31, 0.006]]
     },
     "throw_b": {
@@ -431,6 +443,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Hauls them over his shoulder.",
+      "note": "Up close: haul them over his shoulder, swapping places.",
       "pushExt": [[0, 0.114], [4, 0.0], [31, 0.006]]
     },
     "meat_hook_l": {
@@ -463,7 +476,8 @@
       "lateralM": 0.6,
       "anim": {"clip": "meat_hook_swing"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Slow armored two-swing heavy; homing; wall-splats in the corner."
+      "desc": "Slow armored two-swing heavy; homing; wall-splats in the corner.",
+      "note": "Quickest of the three hooks; shrugs off one hit."
     },
     "meat_hook_m": {
       "kind": "special",
@@ -495,7 +509,8 @@
       "lateralM": 0.6,
       "anim": {"clip": "meat_hook_swing"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Slow armored two-swing heavy; homing; wall-splats in the corner."
+      "desc": "Slow armored two-swing heavy; homing; wall-splats in the corner.",
+      "note": "Slow two-swing hook that takes a hit, catches sidesteps, walls them."
     },
     "meat_hook_h": {
       "kind": "special",
@@ -527,7 +542,8 @@
       "lateralM": 0.6,
       "anim": {"clip": "meat_hook_swing"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Slow armored two-swing heavy; homing; wall-splats in the corner."
+      "desc": "Slow armored two-swing heavy; homing; wall-splats in the corner.",
+      "note": "Slowest hook; shrugs off two hits and hits hardest."
     },
     "meat_hook_ex": {
       "kind": "ex",
@@ -559,7 +575,8 @@
       "lateralM": 0.6,
       "anim": {"clip": "meat_hook_swing"},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Faster, 2-hit armor from frame 1, -3 on block."
+      "desc": "Faster, 2-hit armor from frame 1, -3 on block.",
+      "note": "Faster hook through two hits; the safest one if blocked."
     },
     "cleaver_drop_l": {
       "kind": "special",
@@ -592,6 +609,7 @@
       "anim": {"clip": "cleaver_leap"},
       "sfx": [[6, "whoosh_heavy"]],
       "desc": "Leaping overhead cleaver smash (hops over lows).",
+      "note": "Shortest leap; safe even when they block it.",
       "boxes": [{"f": [20, 22], "x": 0.92, "y": 0.456, "w": 0.303, "h": 0.25}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [17, 0.0], [19, 0.247], [20, 0.323], [21, 0.346], [24, 0.318], [29, 0.344], [39, 0.221]]
@@ -627,6 +645,7 @@
       "anim": {"clip": "cleaver_leap"},
       "sfx": [[6, "whoosh_heavy"]],
       "desc": "Leaping overhead cleaver smash (hops over lows).",
+      "note": "Leaping cleaver smash: hops over lows, must be blocked standing.",
       "pushExt": [[0, 0.0], [21, 0.0], [23, 0.247], [24, 0.323], [25, 0.348], [29, 0.317], [34, 0.344], [45, 0.221]]
     },
     "cleaver_drop_h": {
@@ -660,6 +679,7 @@
       "anim": {"clip": "cleaver_leap"},
       "sfx": [[6, "whoosh_heavy"]],
       "desc": "Leaping overhead cleaver smash (hops over lows).",
+      "note": "Longest leap, from far away; knocks them down.",
       "pushExt": [
         [0, 0.0],
         [24, 0.0],
@@ -705,6 +725,7 @@
       "anim": {"clip": "cleaver_leap"},
       "sfx": [[6, "whoosh_heavy"]],
       "desc": "Leap + landing shockwave, ground bounce.",
+      "note": "Leap with a shockwave that bounces them off the floor.",
       "pushExt": [[0, 0.0], [16, 0.0], [17, 0.247], [18, 0.323], [19, 0.348], [23, 0.318], [32, 0.334], [44, 0.221]]
     },
     "ham_slam_l": {
@@ -737,6 +758,7 @@
       "anim": {"clip": "ham_spin"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Spinning low cleaver swing that bounces them for a juggle.",
+      "note": "Quickest spin of the three; the least risky if blocked.",
       "pushExt": [
         [0, 0.0],
         [12, 0.002],
@@ -779,6 +801,7 @@
       "anim": {"clip": "ham_spin"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Spinning low cleaver swing that bounces them for a juggle.",
+      "note": "Spinning low swing that pops them up for more hits. Risky if blocked.",
       "pushExt": [[0, 0.0], [13, 0.0], [18, 0.215], [20, 0.249], [23, 0.231], [28, 0.091], [32, 0.023], [49, 0.0]]
     },
     "ham_slam_h": {
@@ -811,6 +834,7 @@
       "anim": {"clip": "ham_spin"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Spinning low cleaver swing that bounces them for a juggle.",
+      "note": "Slowest spin with the most damage.",
       "pushExt": [[0, 0.0], [15, 0.002], [20, 0.215], [23, 0.249], [35, 0.023], [53, 0.0]]
     },
     "ham_slam_ex": {
@@ -844,6 +868,7 @@
       "anim": {"clip": "ham_spin"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "Two spins, -11 on block.",
+      "note": "Two quick spins that pop them up for more hits.",
       "pushExt": [[0, 0.0], [10, 0.002], [11, 0.034], [12, 0.123], [14, 0.215], [17, 0.249], [29, 0.023], [47, 0.0]]
     },
     "butcher_block_l": {
@@ -872,7 +897,8 @@
       "role": ["approach"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "block_step"},
-      "desc": "Armored step with the cleaver up; cancels into any special."
+      "desc": "Armored step with the cleaver up; cancels into any special.",
+      "note": "Short step; the quickest to get out of."
     },
     "butcher_block_m": {
       "kind": "special",
@@ -900,7 +926,8 @@
       "role": ["approach"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "block_step"},
-      "desc": "Armored step with the cleaver up; cancels into any special."
+      "desc": "Armored step with the cleaver up; cancels into any special.",
+      "note": "Steps forward through one hit; go straight into any special."
     },
     "butcher_block_h": {
       "kind": "special",
@@ -928,7 +955,8 @@
       "role": ["approach"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "block_step"},
-      "desc": "Armored step with the cleaver up; cancels into any special."
+      "desc": "Armored step with the cleaver up; cancels into any special.",
+      "note": "Long step that covers the most ground."
     },
     "butcher_block_ex": {
       "kind": "ex",
@@ -956,7 +984,8 @@
       "role": ["approach"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "block_step"},
-      "desc": "2-hit armor from frame 1."
+      "desc": "2-hit armor from frame 1.",
+      "note": "Steps through two hits, ready from the very start."
     },
     "chefs_special": {
       "kind": "super1",
@@ -988,7 +1017,8 @@
       "lateralM": 0.6,
       "anim": {"clip": "chefs_combo", "warp": [[0, 0.0], [10, 0.433], [30, 1.367], [85, 3.133]]},
       "sfx": [[1, "crowd_cheer_burst"]],
-      "desc": "Super-armored charge with two cleaver swings."
+      "desc": "Super-armored charge with two cleaver swings.",
+      "note": "Charge that shrugs off every hit: two swings that wall them."
     },
     "sunday_roast": {
       "kind": "super3",
@@ -1168,7 +1198,8 @@
       "homing": true,
       "lateralM": 0.6,
       "anim": {"clip": "roast_swing"},
-      "desc": "PRIME TIME: a cleaver swing that starts the full butchery demonstration (flat-side smacks)."
+      "desc": "PRIME TIME: a cleaver swing that starts the full butchery demonstration (flat-side smacks).",
+      "note": "PRIME TIME: unstoppable cleaver swing into a full butchery show."
     }
   },
   "simple": {
@@ -1190,7 +1221,8 @@
     "kind": "armorStep",
     "steps": ["butcher_block_l", "butcher_block_m", "butcher_block_h", "butcher_block_ex"],
     "armored": ["5H", "meat_hook_l", "meat_hook_m", "meat_hook_h", "meat_hook_ex", "butcher_block_l", "butcher_block_m", "butcher_block_h", "butcher_block_ex", "chefs_special"],
-    "trait": "ARMOR: 5H, MEAT HOOK and BUTCHER'S BLOCK absorb a hit; big damage per touch, no DP."
+    "trait": "ARMOR: 5H, MEAT HOOK and BUTCHER'S BLOCK absorb a hit; big damage per touch, no DP.",
+    "note": "Tough: his big swing, Meat Hook and Butcher's Block keep going through a hit."
   },
   "intro": "intro_look",
   "win": ["win_shoulder", "win_look2"],

@@ -301,4 +301,42 @@ def build():
                "network's lawyers arrive in forty seconds; Krane has already seized thirty seasons of contracts as "
                "evidence. Internal Affairs gives him a medal and a desk. He hates the desk, so on Friday nights he "
                "still walks the Control Room, just in case.")
+    # CHANGED(notes) (CONTRACT 36.4): plain-English player text; the SIMPLE / EASY-routed _m ids carry the family note
+    K.describe(
+        plan="Hold your ground: tasers keep them out, the baton flip swats jumps, cuffs catch blockers.",
+        unique="Riot shield: blocking standing costs half the NERVE. CLASSIC specials need a held charge.",
+        notes={
+            "5L": "Quick baton jab to stop their attack.",
+            "2L": "Quick low poke; they must block crouching.",
+            "5M": "Solid baton chop at arm's length.",
+            "2M": "Low baton rap; follow with Taser Shot.",
+            "5H": "Wide baton swing that catches opponents who sidestep.",
+            "2H": "Rising baton that swats jumping opponents.",
+            "4H": "Safe shield shove that pushes them back; walls them near the edge.",
+            "6M": "Front kick that reaches further than his chop.",
+            "6H": "Hopping baton chop that must be blocked standing.",
+            "j.L": "Quick air poke for fights in the air.",
+            "j.M": "Jump-in baton chop.",
+            "j.H": "Wide jump-in swing to start a combo.",
+            "throw_f": "Up close: pin them with the shield and beat them. Beats blocking.",
+            "throw_b": "Up close: turn them round and shove them away with the shield.",
+            "taser_m": "Taser dart straight down the ring; quick and safe. Sidesteps dodge it.",
+            "taser_l": "Slowest dart: walk in behind it.",
+            "taser_h": "Fastest dart of the three, reaches them the soonest.",
+            "taser_ex": "Two darts aimed right at them: hard to sidestep.",
+            "baton_flip_m": "Rising baton flip that swats jumpers. Very risky if blocked.",
+            "baton_flip_l": "Quickest flip, to stop a jump early.",
+            "baton_flip_h": "Strongest flip; beats jumps for longest, riskiest if blocked.",
+            "baton_flip_ex": "Two-hit flip that can't be hit as it starts.",
+            "shield_rush_m": "Shield-first charge that knocks down. A sidestep beats it.",
+            "shield_rush_l": "Short charge; the least risky of the three if blocked.",
+            "shield_rush_h": "Long charge that runs through one hit. Very risky if blocked.",
+            "shield_rush_ex": "Two-hit charge that runs through two hits; safe if blocked.",
+            "cuff_m": "Short grab that cuffs a blocking opponent; catches sidesteps too.",
+            "cuff_l": "Cuff with the longest reach of the three, but the least damage.",
+            "cuff_h": "Shortest reach, but the most damage of the three.",
+            "cuff_ex": "Cuff with extra reach that can't be hit as it starts.",
+            "backup": "Shield charge that can't be hit as it starts: two bashes, a swing.",
+            "riot_act": "PRIME TIME: unstoppable shield bash into a full riot-control beating.",
+        })
     return K

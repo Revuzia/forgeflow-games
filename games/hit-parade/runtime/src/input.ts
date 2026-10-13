@@ -1,10 +1,20 @@
-// HIT PARADE - input: keyboard + gamepad (+ the touch overlay's bits) -> ONE 16-bit input word per local player
-// per sim tick (CONTRACT §4.4). Pattern: dyefield input.ts (mode detection, per-tick latches, remap suspend) +
-// blocktooth input.ts (Gamepad API polling, standard mapping).
+// HIT PARADE - input: keyboard + gamepad (+ the touch overlay's bits) -> ONE input word per local player per sim tick
+// (CONTRACT §4.4; CHANGED(input) §36.5: 22 used bits, int32 in the sim, u32 on the wire). Pattern: dyefield input.ts
+// (mode detection, per-tick latches, remap suspend) + blocktooth input.ts (Gamepad API polling, standard mapping).
 //
 // The word (CONTRACT §4.4): bit0 UP · bit1 DOWN · bit2 LEFT · bit3 RIGHT (screen-relative; the sim converts to
 // back/forward with `facing`) · bit4 L · bit5 M · bit6 H · bit7 S · bit8 ASSIST · bit9 THROW macro · bit10 PARRY
-// macro · bit11 IMPACT · bit12 TAUNT · bit13 STEP_IN · bit14 STEP_OUT (CONTRACT §35.2 / §35.13.3) · bit15 always 0.
+// macro · bit11 IMPACT · bit12 TAUNT · bit13 STEP_IN · bit14 STEP_OUT (CONTRACT §35.2 / §35.13.3) · CHANGED(input)
+// (CONTRACT §36.1 / §36.5) bit15 BLOCK (hold) · bit16-19 SPECIAL 1-4 · bit20 SUPER (Lv1) · bit21 PRIME TIME (Lv3) ·
+// bits 22-31 always 0.
+//
+//   * CHANGED(input) (CONTRACT §36.1 / §36.5): the EASY control scheme (scheme 2, the keyboard default) and its extra keys.
+//     ONE key map per player serves all three schemes (the scheme only changes how the SIM parses the word). P1 defaults:
+//     A / D move, W or Space jump, S crouch, Shift BLOCK, J / K / L light / medium / heavy, U / I / O / P SPECIAL 1-4,
+//     H SUPER, Y PRIME TIME, F THROW, R PARRY, G IMPACT, T TAUNT, Q / E STEP, Esc pause, F1 controls bar (UI action
+//     `controls`, preventDefault-ed: Chrome's help), plus `;` S(PECIAL) and N ASSIST for SIMPLE / CLASSIC players. P2 keeps
+//     the SIMPLE layout below + BLOCK on NumpadDecimal. Pads: unchanged + the new actions bindable (no default button).
+//     `bindingLabels` / `keyMap` / `schemeActions` are the UI lane's read API (key caps from the live bindings).
 //
 //   * CHANGED(UI3D) (CONTRACT §35.2, §35.16): the 3D ring's STEP controls. STEP_IN circles AWAY from the camera, STEP_OUT
 //     TOWARD it (the sim resolves both against its camera basis); a tap = SIDESTEP, a hold = SIDEWALK (circle-walk). Both
@@ -23,10 +33,10 @@
 //   * The sim does chord detection itself (L+M within 2 frames = THROW, M+H = PARRY, from its own history):
 //     this layer only sets the macro bits when a dedicated THROW / PARRY key or pad button is pressed.
 //   * Default bindings = FIGHTING_DESIGN §5a / §5b SIMPLE rows with the four-button model (CONTRACT §1):
-//       P1 keyboard: W A S D (Space = up too) · J L · K M · L H · I S(PECIAL) · U ASSIST · H THROW · O PARRY ·
-//                    P IMPACT · Y TAUNT · Q STEP IN · E STEP OUT · Esc pause
+//       P1 keyboard: CHANGED(input) the EASY map above (was: J L · K M · L H · I S · U ASSIST · H THROW · O PARRY ·
+//                    P IMPACT · Y TAUNT - ui/settings.ts migrates a save still on those keys)
 //       P2 keyboard: arrows · Num1 L · Num2 M · Num3 H · Num5 S · Num4 ASSIST · Num0 THROW · Num6 PARRY ·
-//                    Num+ IMPACT · Num* TAUNT · Num7 STEP IN · Num9 STEP OUT
+//                    Num+ IMPACT · Num* TAUNT · Num7 STEP IN · Num9 STEP OUT · CHANGED(input) Num. BLOCK
 //       Gamepad (Standard mapping): X/Square L · Y/Triangle M · RB H · A/Cross SPECIAL · B/Circle ASSIST ·
 //                    LT THROW · LB PARRY · RT IMPACT · SELECT/Back TAUNT · START pause · d-pad + left stick move
 //                    (8-way sectors of 45 deg, 30 % radial dead zone) · right stick up / down STEP IN / OUT
@@ -54,29 +64,59 @@ export const BIT = {
   ASSIST: 1 << 8, THROW: 1 << 9, PARRY: 1 << 10, IMPACT: 1 << 11, TAUNT: 1 << 12,
   // CHANGED(UI3D): CONTRACT §35.2 / §35.13.3 (core/config.ts INPUT, core/sim/inputs.ts IN)
   STEP_IN: 1 << 13, STEP_OUT: 1 << 14,
+  // CHANGED(input): CONTRACT §36.1 / §36.5 (core/config.ts INPUT, core/sim/inputs.ts IN) - work in every scheme
+  BLOCK: 1 << 15, SP1: 1 << 16, SP2: 1 << 17, SP3: 1 << 18, SP4: 1 << 19, SUPER1: 1 << 20, SUPER3: 1 << 21,
 } as const;
-/** every defined bit (CHANGED(UI3D): 0x1fff -> 0x7fff, bits 13 / 14 = STEP; bit 15 reserved, always 0) */
-export const WORD_MASK = 0x7fff;
+/** every defined bit (CHANGED(UI3D): 0x1fff -> 0x7fff; CHANGED(input): -> 0x3fffff, bits 15..21 = the EASY keys) */
+export const WORD_MASK = 0x3fffff;
 const DIRS = BIT.UP | BIT.DOWN | BIT.LEFT | BIT.RIGHT;
 const STEPS = BIT.STEP_IN | BIT.STEP_OUT;
 
-/** the sim actions (one word bit each) */
-export type SimAction = 'up' | 'down' | 'left' | 'right' | 'l' | 'm' | 'h' | 's' | 'assist' | 'throw' | 'parry' | 'impact' | 'taunt' | 'stepIn' | 'stepOut';
-/** UI actions (one-shot callbacks, never in the word) */
-export type UiAction = 'pause';
+/** the sim actions (one word bit each). CHANGED(input): + blockHold (hold), sp1..sp4 (SPECIAL 1-4), super1 / super3 */
+export type SimAction = 'up' | 'down' | 'left' | 'right' | 'l' | 'm' | 'h' | 's' | 'assist' | 'throw' | 'parry' | 'impact' | 'taunt' | 'stepIn' | 'stepOut'
+  | 'blockHold' | 'sp1' | 'sp2' | 'sp3' | 'sp4' | 'super1' | 'super3';
+/** UI actions (one-shot callbacks, never in the word). CHANGED(input): 'controls' = the in-game controls bar toggle (F1) */
+export type UiAction = 'pause' | 'controls';
 export type Action = SimAction | UiAction;
 
-export const SIM_ACTIONS: readonly SimAction[] = ['up', 'down', 'left', 'right', 'l', 'm', 'h', 's', 'assist', 'throw', 'parry', 'impact', 'taunt', 'stepIn', 'stepOut'];
+export const SIM_ACTIONS: readonly SimAction[] = ['up', 'down', 'left', 'right', 'l', 'm', 'h', 's', 'assist', 'throw', 'parry', 'impact', 'taunt', 'stepIn', 'stepOut',
+  'blockHold', 'sp1', 'sp2', 'sp3', 'sp4', 'super1', 'super3'];
+/** CHANGED(input): the UI actions */
+export const UI_ACTIONS: readonly UiAction[] = ['pause', 'controls'];
 /** CHANGED(UI3D): the 3D actions come LAST (after 'pause'), so a saved pre-3D binding keeps its key over a new default
- *  (settings.ts sanitizeKeys also lets every saved binding win over a defaulted action) */
-export const ACTIONS: readonly Action[] = ['up', 'down', 'left', 'right', 'l', 'm', 'h', 's', 'assist', 'throw', 'parry', 'impact', 'taunt', 'pause', 'stepIn', 'stepOut'];
+ *  (settings.ts sanitizeKeys also lets every saved binding win over a defaulted action). CHANGED(input): the EASY actions
+ *  follow them (CONTRACT §36.5 item 5). */
+export const ACTIONS: readonly Action[] = ['up', 'down', 'left', 'right', 'l', 'm', 'h', 's', 'assist', 'throw', 'parry', 'impact', 'taunt', 'pause', 'stepIn', 'stepOut',
+  'blockHold', 'sp1', 'sp2', 'sp3', 'sp4', 'super1', 'super3', 'controls'];
 
 export const ACTION_BIT: Readonly<Record<SimAction, number>> = {
   up: BIT.UP, down: BIT.DOWN, left: BIT.LEFT, right: BIT.RIGHT,
   l: BIT.L, m: BIT.M, h: BIT.H, s: BIT.S,
   assist: BIT.ASSIST, throw: BIT.THROW, parry: BIT.PARRY, impact: BIT.IMPACT, taunt: BIT.TAUNT,
   stepIn: BIT.STEP_IN, stepOut: BIT.STEP_OUT,
+  blockHold: BIT.BLOCK, sp1: BIT.SP1, sp2: BIT.SP2, sp3: BIT.SP3, sp4: BIT.SP4, super1: BIT.SUPER1, super3: BIT.SUPER3,
 };
+
+/** CHANGED(input): is `a` a UI action (never in the word)? */
+export function isUiAction(a: Action): a is UiAction {
+  return a === 'pause' || a === 'controls';
+}
+
+/** CHANGED(input) (CONTRACT §36.1): control scheme ids - 0 SIMPLE, 1 CLASSIC, 2 EASY (the keyboard default) */
+export type SchemeId = 0 | 1 | 2;
+export const SCHEME = { SIMPLE: 0, CLASSIC: 1, EASY: 2 } as const;
+
+/**
+ * CHANGED(input) (CONTRACT §36.5 item 5): the actions a scheme uses, in display order (SETTINGS > CONTROLS, PAUSE >
+ * CONTROLS, the controls bar / keyboard map). EASY: no S / ASSIST (SPECIAL 1-4 + SUPER keys instead); SIMPLE / CLASSIC: the
+ * four-button model + ASSIST, and the EASY keys still work there (listed after).
+ */
+export function schemeActions(scheme: number): Action[] {
+  const move: Action[] = ['left', 'right', 'up', 'down', 'blockHold'];
+  const sys: Action[] = ['throw', 'parry', 'impact', 'taunt', 'stepIn', 'stepOut', 'pause', 'controls'];
+  if (scheme === 2) return [...move, 'l', 'm', 'h', 'sp1', 'sp2', 'sp3', 'sp4', 'super1', 'super3', ...sys];
+  return [...move, 'l', 'm', 'h', 's', 'assist', ...sys, 'sp1', 'sp2', 'sp3', 'sp4', 'super1', 'super3'];
+}
 
 /** KeyboardEvent.code per action */
 export type KeyBindings = Record<Action, string[]>;
@@ -84,6 +124,30 @@ export type KeyBindings = Record<Action, string[]>;
 export type PadBindings = Record<Action, number[]>;
 
 export const DEFAULT_KEYS: readonly [Readonly<KeyBindings>, Readonly<KeyBindings>] = [
+  {
+    // CHANGED(input) (CONTRACT §36.1 / §36.5 item 4): the EASY map (one map for every scheme; ; and N serve SIMPLE / CLASSIC)
+    up: ['KeyW', 'Space'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'],
+    l: ['KeyJ'], m: ['KeyK'], h: ['KeyL'], s: ['Semicolon'],
+    assist: ['KeyN'], throw: ['KeyF'], parry: ['KeyR'], impact: ['KeyG'], taunt: ['KeyT'],
+    pause: ['Escape'], stepIn: ['KeyQ'], stepOut: ['KeyE'],
+    blockHold: ['ShiftLeft'], sp1: ['KeyU'], sp2: ['KeyI'], sp3: ['KeyO'], sp4: ['KeyP'], super1: ['KeyH'], super3: ['KeyY'],
+    controls: ['F1'],
+  },
+  {
+    up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'],
+    l: ['Numpad1'], m: ['Numpad2'], h: ['Numpad3'], s: ['Numpad5'],
+    assist: ['Numpad4'], throw: ['Numpad0'], parry: ['Numpad6'], impact: ['NumpadAdd'], taunt: ['NumpadMultiply'],
+    pause: [], stepIn: ['Numpad7'], stepOut: ['Numpad9'],
+    // CHANGED(input): P2 keeps the SIMPLE layout; BLOCK = NumpadDecimal (Num0's right-hand neighbour); the rest bindable
+    blockHold: ['NumpadDecimal'], sp1: [], sp2: [], sp3: [], sp4: [], super1: [], super3: [], controls: [],
+  },
+];
+
+/**
+ * CHANGED(input): the PRE-EASY P1 / P2 default keys (v0.4.0). ui/settings.ts migrates a save whose action still holds
+ * exactly these keys to the new defaults (CONTRACT §36.5 item 7). Never used for play.
+ */
+export const LEGACY_KEYS: readonly [Readonly<Partial<KeyBindings>>, Readonly<Partial<KeyBindings>>] = [
   {
     up: ['KeyW', 'Space'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'],
     l: ['KeyJ'], m: ['KeyK'], h: ['KeyL'], s: ['KeyI'],
@@ -114,6 +178,8 @@ export const DEFAULT_PAD: Readonly<PadBindings> = {
   l: [PAD.X], m: [PAD.Y], h: [PAD.RB], s: [PAD.A],
   assist: [PAD.B], throw: [PAD.LT], parry: [PAD.LB], impact: [PAD.RT], taunt: [PAD.SELECT],
   pause: [PAD.START], stepIn: [PAD.RS_UP], stepOut: [PAD.RS_DOWN],
+  // CHANGED(input) (CONTRACT §36.1): the pad keeps the SIMPLE layout; the EASY actions are options with no default button
+  blockHold: [], sp1: [], sp2: [], sp3: [], sp4: [], super1: [], super3: [], controls: [],
 };
 
 /** left-stick radial dead zone (FIGHTING_DESIGN §5b: 30 %) */
@@ -147,6 +213,29 @@ export function padLabel(i: number): string {
   return PAD_NAMES[i] ?? 'B' + i;
 }
 
+/** CHANGED(input) (CONTRACT §36.5 item 6): one action's bindings as key caps (+ the raw codes, same order) and pad labels */
+export interface BindingLabel { keys: string[]; codes: string[]; pad: string[] }
+
+/**
+ * CHANGED(input) (CONTRACT §36.5 item 6): every action's key caps from a player's bindings (settings controls[p].keys /
+ * .pad, or Input#bindingLabels for the live ones). An unbound action = empty arrays. Pure, DOM-free.
+ */
+export function bindingLabels(keys: Readonly<Partial<KeyBindings>>, pad?: Readonly<Partial<PadBindings>> | null): Record<Action, BindingLabel> {
+  const out = {} as Record<Action, BindingLabel>;
+  for (const a of ACTIONS) {
+    const codes = [...(keys[a] ?? [])];
+    out[a] = { keys: codes.map(codeLabel), codes, pad: pad ? (pad[a] ?? []).map(padLabel) : [] };
+  }
+  return out;
+}
+
+/** CHANGED(input) (CONTRACT §36.5 item 6): KeyboardEvent.code -> the actions bound to it (a drawn keyboard map, §36.4). */
+export function keyMap(keys: Readonly<Partial<KeyBindings>>): Record<string, Action[]> {
+  const out: Record<string, Action[]> = {};
+  for (const a of ACTIONS) for (const c of keys[a] ?? []) (out[c] ??= []).push(a);
+  return out;
+}
+
 /** a deep copy of the default bindings of player p */
 export function defaultKeys(p: 0 | 1): KeyBindings {
   const src = DEFAULT_KEYS[p];
@@ -160,7 +249,7 @@ export function defaultPad(): PadBindings {
   return out;
 }
 
-/** SOCD cleaning (CONTRACT §4.4): L+R = neutral, U+D = neutral, CHANGED(UI3D) STEP_IN+STEP_OUT = neutral (§35.2); bit 15 cleared */
+/** SOCD cleaning (CONTRACT §4.4): L+R = neutral, U+D = neutral, CHANGED(UI3D) STEP_IN+STEP_OUT = neutral (§35.2); bits 22+ cleared */
 export function socd(word: number): number {
   let w = word & WORD_MASK;
   if ((w & BIT.LEFT) && (w & BIT.RIGHT)) w &= ~(BIT.LEFT | BIT.RIGHT);
@@ -175,7 +264,9 @@ export function describeWord(word: number): string {
   const num = (u ? (l ? 7 : r ? 9 : 8) : d ? (l ? 1 : r ? 3 : 2) : l ? 4 : r ? 6 : 5);
   const btn: string[] = [];
   const names: Array<[number, string]> = [[BIT.L, 'L'], [BIT.M, 'M'], [BIT.H, 'H'], [BIT.S, 'S'], [BIT.ASSIST, 'AS'],
-    [BIT.THROW, 'THROW'], [BIT.PARRY, 'PARRY'], [BIT.IMPACT, 'IMPACT'], [BIT.TAUNT, 'TAUNT'], [BIT.STEP_IN, 'STEP-IN'], [BIT.STEP_OUT, 'STEP-OUT']];
+    [BIT.THROW, 'THROW'], [BIT.PARRY, 'PARRY'], [BIT.IMPACT, 'IMPACT'], [BIT.TAUNT, 'TAUNT'], [BIT.STEP_IN, 'STEP-IN'], [BIT.STEP_OUT, 'STEP-OUT'],
+    // CHANGED(input)
+    [BIT.BLOCK, 'BLOCK'], [BIT.SP1, 'SP1'], [BIT.SP2, 'SP2'], [BIT.SP3, 'SP3'], [BIT.SP4, 'SP4'], [BIT.SUPER1, 'SUPER'], [BIT.SUPER3, 'PRIME']];
   for (const [b, n] of names) if (word & b) btn.push(n);
   return String(num) + (btn.length ? ' ' + btn.join('+') : '');
 }
@@ -229,6 +320,12 @@ export class Input {
   live = false;
   /** the key-remap capture is listening: every key / button is ignored */
   suspended = false;
+  /**
+   * CHANGED(wf8 fix) FT-05: no human plays P2's key set this bout (vs CPU, TRAINING, bonus rounds, online): P2's KEYBOARD
+   * direction keys (the arrows by default - every menu footer says "ARROWS MOVE") also move P1. P2's pad still drives the
+   * training dummy by hand. game.ts sets it per bout.
+   */
+  soloArrows = false;
   /** §18.5 touch overlay state (player 0) */
   readonly touch: TouchState = { held: 0, latched: 0, active: 0 };
   /** ?touch=1|0: the mode never switches by itself */
@@ -321,6 +418,12 @@ export class Input {
     const b = this.pads[p][a]?.[0];
     return typeof b === 'number' ? padLabel(b) : '';
   }
+
+  /** CHANGED(input) (CONTRACT §36.5 item 6): every action's key caps / pad labels of player p's LIVE bindings */
+  bindingLabels(p: 0 | 1): Record<Action, BindingLabel> { return bindingLabels(this.keys[p], this.pads[p]); }
+
+  /** CHANGED(input): code -> actions of player p's live key bindings (a drawn keyboard map) */
+  keyMap(p: 0 | 1): Record<string, Action[]> { return keyMap(this.keys[p]); }
 
   private rebuild(): void {
     const m = new Map<string, Binding[]>();
@@ -427,8 +530,8 @@ export class Input {
         for (const i of map[a] ?? []) if (now[i]) { bits |= ACTION_BIT[a]; break; }
       }
       bits |= stickBits(pad.axes.length > 0 ? pad.axes[0] : 0, pad.axes.length > 1 ? pad.axes[1] : 0);
-      // START (or whatever 'pause' is bound to): one UI action per press edge
-      for (const i of map.pause ?? []) if (now[i] && !prev[i]) this.emitUi('pause', p, null);
+      // START (or whatever 'pause' is bound to): one UI action per press edge (CHANGED(input): + 'controls' when bound)
+      for (const ua of UI_ACTIONS) for (const i of map[ua] ?? []) if (now[i] && !prev[i]) this.emitUi(ua, p, null);
       let any = false;
       for (let i = 0; i < PAD_SLOTS; i++) { if (now[i] && !prev[i]) any = true; prev[i] = now[i]; }
       if (any || (bits & DIRS)) this.dev[p] = 'gamepad';
@@ -457,7 +560,7 @@ export class Input {
     for (const code of this.held) {
       const list = this.codeMap.get(code);
       if (!list) continue;
-      for (const b of list) if (b.p === p && b.action !== 'pause') bits |= ACTION_BIT[b.action as SimAction];
+      for (const b of list) if (b.p === p && !isUiAction(b.action)) bits |= ACTION_BIT[b.action as SimAction];
     }
     return bits;
   }
@@ -469,9 +572,16 @@ export class Input {
   sampleAll(out: [number, number] = [0, 0]): [number, number] {
     this.pollPads();
     this.samples++;
+    // CHANGED(wf8 fix) FT-05: soloArrows folds P2's keyboard directions (held + latched) into P1's word
+    const kb: [number, number] = [this.keyHeld(0), this.keyHeld(1)];
+    const kl: [number, number] = [this.latched[0], this.latched[1]];
+    if (this.soloArrows) {
+      kb[0] |= kb[1] & DIRS; kb[1] &= ~DIRS;
+      kl[0] |= kl[1] & DIRS; kl[1] &= ~DIRS;
+    }
     for (const p of [0, 1] as const) {
-      let held = this.keyHeld(p) | this.padBits[p];
-      let lat = this.latched[p];
+      let held = kb[p] | this.padBits[p];
+      let lat = kl[p];
       if (p === 0) { held |= this.touch.held; lat |= this.touch.latched; }
       // a latched direction whose opposite is held loses (no one-frame SOCD neutral on a fast roll)
       let extra = lat & ~held;
@@ -532,14 +642,15 @@ export class Input {
     if (!list) return;
     if (isTextField(e.target)) return;
     if (down && !e.repeat) this.switchMode('kbm');
-    // keep the page from scrolling (Space / arrows) while a bout runs; menus keep their own keys
-    if (this.live && code !== 'Escape') e.preventDefault();
+    // keep the page from scrolling (Space / arrows) while a bout runs; menus keep their own keys. CHANGED(input): a bound
+    // function key (F1 = the controls bar) is ALWAYS kept from the browser (Chrome opens its help page on F1)
+    if ((this.live && code !== 'Escape') || /^F\d{1,2}$/.test(code)) e.preventDefault();
     if (down) {
       if (e.repeat) return;
       this.held.add(code);
       this.keyEvents++;
       for (const b of list) {
-        if (b.action === 'pause') this.emitUi('pause', b.p, e);
+        if (isUiAction(b.action)) this.emitUi(b.action, b.p, e);
         else { this.latched[b.p] |= ACTION_BIT[b.action as SimAction]; this.dev[b.p] = 'keyboard'; }
       }
     } else {

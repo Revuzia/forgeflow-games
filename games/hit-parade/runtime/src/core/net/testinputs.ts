@@ -5,6 +5,8 @@ export const IN = {
   U: 1, D: 2, L: 4, R: 8, BL: 16, BM: 32, BH: 64, BS: 128, ASSIST: 256, THROW: 512, PARRY: 1024, IMPACT: 2048,
   // CHANGED(integrator) 3D (CONTRACT §35.2 / §35.13 item 3): the STEP bits (bit 13 STEP_IN, bit 14 STEP_OUT)
   STEP_IN: 8192, STEP_OUT: 16384,
+  // CHANGED(input) (CONTRACT §36.5): bit 15 BLOCK, 16-19 SPECIAL 1-4, 20 SUPER1, 21 SUPER3
+  BLOCK: 32768, SP1: 65536, SP2: 131072, SP3: 262144, SP4: 524288, SUPER1: 1048576, SUPER3: 2097152,
 } as const;
 
 export function rng32(seed: number): () => number {
@@ -23,9 +25,12 @@ export function rng32(seed: number): () => number {
  * CHANGED(integrator) 3D: `step` = true also mixes in the §35.2 STEP inputs (sidestep taps, circle-walk holds, a
  * step + button = a step-attack try); false (the default) = the exact pre-3D stream (probe_synctest / probe_audio
  * keep their streams).
+ * CHANGED(input) (CONTRACT §36.5): `easy` = true also mixes in the EASY keys (BLOCK holds - standing / crouching / against
+ * a walk -, SPECIAL 1-4 taps, SUPER1 / SUPER3 taps, J mashing); false (the default) = the exact stream before (every
+ * existing caller keeps its words).
  */
-export function inputStream(seed: number, fwd: number, frames: number, step = false): Int32Array {
-  const { U, D, L, R, BL, BM, BH, BS, ASSIST, THROW, PARRY, IMPACT, STEP_IN, STEP_OUT } = IN;
+export function inputStream(seed: number, fwd: number, frames: number, step = false, easy = false): Int32Array {
+  const { U, D, L, R, BL, BM, BH, BS, ASSIST, THROW, PARRY, IMPACT, STEP_IN, STEP_OUT, BLOCK, SP1, SP2, SP3, SP4, SUPER1, SUPER3 } = IN;
   const r = rng32(seed);
   const out = new Int32Array(frames);
   const back = fwd === R ? L : R;
@@ -33,6 +38,19 @@ export function inputStream(seed: number, fwd: number, frames: number, step = fa
   while (f < frames) {
     let roll = r() % 100;
     let seq: number[];
+    if (easy && roll < 25) {
+      // 25 % of the segments: an EASY key (the roll is re-drawn for the rest, so the plain mix keeps its shape)
+      const kind = r() % 6;
+      if (kind === 0) seq = new Array(4 + (r() % 40)).fill(BLOCK | [0, D, fwd, back, U][r() % 5]);   // BLOCK held (+ a direction)
+      else if (kind === 1) seq = [[SP1, SP2, SP3, SP4][r() % 4]];                                     // SPECIAL 1-4 tap
+      else if (kind === 2) seq = [[SUPER1, SUPER3][r() % 2]];                                          // SUPER tap
+      else if (kind === 3) seq = [BL, 0, BL, 0, 0, BL, 0, BL, 0, 0, 0, BL];                            // J mashing (auto-combo)
+      else if (kind === 4) seq = [BLOCK, BLOCK | [BL, BM, BH, SP1, SUPER1][r() % 5], BLOCK];          // a press while blocking
+      else seq = [[SP1, SP2, SP3, SP4][r() % 4] | (r() % 2 ? ASSIST : 0) | (r() % 3 === 0 ? D : 0)];  // SPECIAL + ASSIST (EX) / air-ish
+      for (const w of seq) if (f < frames) out[f++] = w;
+      continue;
+    }
+    if (easy) roll = r() % 100;
     if (step && roll < 12) {
       // 12 % of the segments: a STEP (the roll of the plain stream is re-drawn for the rest, so its mix keeps its shape)
       const s = r() % 2 ? STEP_IN : STEP_OUT;
@@ -74,14 +92,17 @@ export class InputGen {
   private fwd: number;
   /** CHANGED(integrator) 3D: STEP inputs in the stream (inputStream `step`) */
   private step: boolean;
-  constructor(seed: number, fwd: number, step = false) {
+  /** CHANGED(input): EASY keys in the stream (inputStream `easy`) */
+  private easy: boolean;
+  constructor(seed: number, fwd: number, step = false, easy = false) {
     this.seed = seed;
     this.fwd = fwd;
     this.step = step;
-    this.buf = inputStream(seed, fwd, 3600, step);
+    this.easy = easy;
+    this.buf = inputStream(seed, fwd, 3600, step, easy);
   }
   next(): number {
-    if (this.i >= this.buf.length) { this.seed = (this.seed * 31 + 7) | 0; this.buf = inputStream(this.seed, this.fwd, 3600, this.step); this.i = 0; }
+    if (this.i >= this.buf.length) { this.seed = (this.seed * 31 + 7) | 0; this.buf = inputStream(this.seed, this.fwd, 3600, this.step, this.easy); this.i = 0; }
     return this.buf[this.i++];
   }
 }

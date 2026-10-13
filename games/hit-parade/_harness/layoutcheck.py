@@ -18,6 +18,11 @@ Screenshots: _shots/layout_<device>_<step>.png. Report: _harness/_reports/layout
 
 Targets: --lab (default: runtime/lab/ui.html deep links ?screen= / ?hud=, UI dev server :5324 started when needed) or
 --base URL (the integrated game: steps then need the shell's deep links - integration).
+CHANGED(ui) (CONTRACT §36.2 / §36.3): the HUD steps carry the in-game CONTROLS BAR (desktop; hud_mid = local 2P, both sides)
+and a new check `cbar`: its panels / chip sit inside the bottom 7 % band (the camera keeps the fighters' feet above it) and
+never overlap a HUD block (sides, centre, RATINGS, training overlays, bonus panel). New steps: movelist_easy (the EASY tab),
+settings_p2 (P2's arrows + numpad map), charselect_scheme (EASY / SIMPLE / CLASSIC + the MOVES panel), pause_help (the HELP
+layout: the expanded keyboard map / the touch cheat sheet).
 Run:  python _harness/layoutcheck.py --headless [--devices d900,p844] [--steps title,hud_mid]
 Reuse: from layoutcheck import LAYOUT_JS, check_page, DEVICES
 """
@@ -60,15 +65,22 @@ MENU_STEPS = ["title", "main", "season", "versus", "charselect", "charselect_sea
               "ending_text", "ending_ratings", "ending_board", "results_brawl", "results_heckler", "results_online_dc",
               "online_room", "online_sync", "online_blind",
               # CHANGED(UI3D): HOW TO PLAY (the ring's STEP controls) and a move list with a step-attack + HOMING / LINEAR tags
-              "howto", "movelist_patch"]
+              "howto", "movelist_patch",
+              # CHANGED(ui): the EASY controls surfaces
+              "movelist_easy", "settings_p2", "charselect_scheme", "pause_help"]
 # CHANGED(UI3D): steps the lab has no deep link for: (lab screen to open, element to click on it)
-STEP_NAV = {"howto": ("main", "hpm-main-howto")}
+STEP_NAV = {"howto": ("main", "hpm-main-howto"), "movelist_easy": ("movelist", "hpm-ml-easy"), "settings_p2": ("settings", "hpm-set-p2")}
+# CHANGED(ui): steps driven through the lab's ?dev=1 UI handles (window.__HP_UI__.menus): (lab query, JS run after load)
+STEP_JS = {
+    "charselect_scheme": ("screen=charselect&dev=1", "(() => { const m = window.__HP_UI__.menus; m.cs.input('active', 'confirm'); m.cs.input('active', 'confirm'); })()"),
+    "pause_help": ("screen=pause&dev=1", "(() => { const m = window.__HP_UI__.menus; m.hide(); void m.showPause({ help: true, fighter: 'johnny', scheme: 2 }); })()"),
+}
 # CHANGED(UI3D): steps that are a lab screen + extra query
 STEP_QUERY = {"movelist_patch": "screen=movelist&fighter=patch"}
 HUD_STEPS = ["hud_intro", "hud_mid", "hud_fright", "hud_super", "hud_parry", "hud_ko", "hud_arcade", "hud_training"]
 ALL_STEPS = MENU_STEPS + HUD_STEPS
 # how long each step settles before it is measured / shot (sweeps and captions animate in)
-SETTLE = {"hud_intro": 0.55, "hud_mid": 0.9, "hud_fright": 0.9, "hud_super": 0.9, "hud_parry": 0.5, "hud_ko": 0.45, "hud_arcade": 0.6, "hud_training": 0.9, "stage": 1.0,
+SETTLE = {"pause_help": 0.8, "charselect_scheme": 0.9, "hud_intro": 0.55, "hud_mid": 0.9, "hud_fright": 0.9, "hud_super": 0.9, "hud_parry": 0.5, "hud_ko": 0.45, "hud_arcade": 0.6, "hud_training": 0.9, "stage": 1.0,
          "ending_text": 2.4, "ending_ratings": 4.0, "ending_board": 4.8, "online_blind": 1.2}
 
 LAYOUT_JS = r"""
@@ -232,7 +244,21 @@ LAYOUT_JS = r"""
     hudBlocks = [...hud.querySelectorAll(sel), ...D.querySelectorAll('#hp-broadcast .hpb-cap.on, #hp-broadcast .hpb-strap.on')].filter(shown).map((e) => ({ id: name(e), rect: L(e) }));
     for (const hb of hudBlocks) for (const tb of liveTouch) if (hits(tb, hb, 2)) P('zones', hb.id + ' covers ' + tb.id, [rnd(hb.rect), rnd(tb.rect)]);
   }
-  return { W, H, touch, safe, controls: ctrls.length, touchButtons: touchButtons ? touchButtons.length : 0, problems, fontInfo: fontInfo.slice(0, 20), hudBlocks: hudBlocks.length };
+  // CHANGED(ui) (CONTRACT §36.2): the controls bar - inside the bottom 7 % band, clear of every HUD block
+  const bar = D.querySelector('#hp-hud:not([hidden]) #hp-cbar:not([hidden])');
+  let barInfo = null;
+  if (bar && !menusUp) {
+    const parts = [...bar.querySelectorAll('.hp-cbar-side, .hp-cbar-q')].filter(shown).map((e) => ({ id: name(e), rect: L(e) }));
+    const blocks = [...D.querySelectorAll('#hp-hud .hp-side, #hp-hud .hp-center, #hp-hud .hp-show, #hp-hud .hp-top > *, #hp-hud .hp-inputs, #hp-hud .hp-frames, #hp-hud .hp-bonus:not([hidden])')].filter(shown).map((e) => ({ id: name(e), rect: L(e) }));
+    const fr = (D.querySelector('#hp-hud .hp-frame') || bar).getBoundingClientRect();
+    const bandTop = fr.top + fr.height * 0.93 - 1;
+    for (const pt of parts) {
+      if (pt.rect.t < bandTop) P('cbar', pt.id + ' rises above the feet band (top ' + Math.round(pt.rect.t) + ' < ' + Math.round(bandTop) + ')', rnd(pt.rect));
+      for (const b of blocks) if (overlap(pt.rect, b.rect, 1)) P('cbar', pt.id + ' x ' + b.id, [rnd(pt.rect), rnd(b.rect)]);
+    }
+    barInfo = { parts: parts.length, top: parts.length ? Math.round(Math.min(...parts.map((x) => x.rect.t))) : null, bandTop: Math.round(bandTop) };
+  }
+  return { W, H, touch, safe, controls: ctrls.length, bar: barInfo, touchButtons: touchButtons ? touchButtons.length : 0, problems, fontInfo: fontInfo.slice(0, 20), hudBlocks: hudBlocks.length };
 }
 """
 
@@ -278,7 +304,7 @@ def run(args) -> int:
                         errs.append(f"safe-area override unsupported: {e}")
                 drep: dict = {"steps": {}, "errors": errs}
                 for step in steps:
-                    q = ("hud=" + step[4:]) if step.startswith("hud_") else STEP_QUERY.get(step) or ("screen=" + STEP_NAV.get(step, (step, ""))[0])
+                    q = ("hud=" + step[4:]) if step.startswith("hud_") else STEP_JS[step][0] if step in STEP_JS else STEP_QUERY.get(step) or ("screen=" + STEP_NAV.get(step, (step, ""))[0])
                     if d["mobile"]:
                         q += "&touch=1"
                     url = args.base or lab_url(None, q)
@@ -287,6 +313,9 @@ def run(args) -> int:
                     if step in STEP_NAV:
                         page.wait_for_timeout(300)
                         page.evaluate("(id) => { const e = document.getElementById(id); if (e) e.click(); }", STEP_NAV[step][1])
+                    if step in STEP_JS:
+                        page.wait_for_timeout(300)
+                        page.evaluate(STEP_JS[step][1])
                     time.sleep(SETTLE.get(step, 0.7))
                     res = check_page(page, f"{dev}:{step}")
                     path = shot(page, f"layout_{dev}_{step}")

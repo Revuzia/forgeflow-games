@@ -37,7 +37,7 @@ import { installTestSurface } from './testsurface.ts';
 import { TouchControls } from './touch/controls.ts';
 import { PortraitQueue } from './app/portraits.ts';
 
-export const VERSION = 'hit-parade-0.4.0';   // CHANGED(integrator) 3D: the 360-degree ring (sidestep / circle-walk, orbit camera); P2: 12 fighters, 5 stages, bonus rounds, training, online. CHANGED(wf7 ship) 0.4.0: wf6/wf7 fixes (wall splat, cutaway, touch char select + tap-to-continue, online result agreement) - first CDN deploy (unpublished)
+export const VERSION = 'hit-parade-0.5.0';   // CHANGED(integrator) 3D: the 360-degree ring (sidestep / circle-walk, orbit camera); P2: 12 fighters, 5 stages, bonus rounds, training, online. CHANGED(wf7 ship) 0.4.0: wf6/wf7 fixes (wall splat, cutaway, touch char select + tap-to-continue, online result agreement) - first CDN deploy (unpublished). CHANGED(wf8 deploy) 0.5.0: CONTRACT §36 EASY controls (SHIFT block, J/K/L, U/I/O/P specials, H/Y supers, F throw), in-game controls bar (F1), keyboard maps + move notes, first-time-player fixes (§36.7); NET_PROTO 2
 
 const params = new URLSearchParams(location.search);
 export const DEEP_KEYS = ['mode', 'p1', 'p2', 'stage', 'seed', 'cpu1', 'cpu2', 'scheme1', 'scheme2', 'autostart', 'room'] as const;
@@ -58,9 +58,12 @@ const intParam = (k: string, lo: number, hi: number, d: number): number => {
   const n = Number(v);
   return Number.isFinite(n) ? Math.max(lo, Math.min(hi, Math.round(n))) : d;
 };
-const schemeParam = (k: string): 0 | 1 => {
+/** CHANGED(wf8 fix) WF8G-7: a missing ?schemeN = that player's default scheme (CONTRACT §36.5 item 4: P1 EASY, P2 SIMPLE) -
+ *  a deep link without ?scheme1 started P1 in SIMPLE, so the G4 bootcheck bout never ran the EASY keys players get */
+const schemeParam = (k: string, d: 0 | 1 | 2): 0 | 1 | 2 => {
   const v = (params.get(k) || '').toLowerCase();
-  return v === '1' || v === 'classic' ? 1 : 0;
+  if (!v) return d;
+  return v === '1' || v === 'classic' ? 1 : v === '2' || v === 'easy' ? 2 : 0; // CHANGED(input): ?schemeN=2|easy = EASY (CONTRACT 36.5)
 };
 
 function firstStage(data: GameData): string {
@@ -93,10 +96,10 @@ function paramCfg(data: GameData, mode: MatchCfg['mode']): MatchCfg {
   return {
     mode, stage, seed,
     p: [
-      { fighter: p1, color: 0, scheme: schemeParam('scheme1'), cpu: intParam('cpu1', -1, 8, -1) },
+      { fighter: p1, color: 0, scheme: schemeParam('scheme1', intParam('cpu1', -1, 8, -1) >= 0 ? 0 : 2), cpu: intParam('cpu1', -1, 8, -1) },
       // CHANGED(integrator) P2: training P2 defaults to -1 = the TrainingDriver's dummy (UI §27.1: the menus send -1 too;
       // ?cpu2=n >= 0 starts the driver in DUMMY: CPU at level n). P1: 0 = a CPU at level 0 stood in for the dummy.
-      { fighter: p2, color: p2 === p1 ? 1 : 0, scheme: schemeParam('scheme2'), cpu: intParam('cpu2', -1, 8, -1) },
+      { fighter: p2, color: p2 === p1 ? 1 : 0, scheme: schemeParam('scheme2', 0), cpu: intParam('cpu2', -1, 8, -1) },
     ],
     ...(training ? { timer: 0 } : {}),
   };

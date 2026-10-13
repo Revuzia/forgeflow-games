@@ -7,7 +7,7 @@
 //
 // MatchCfg / PlayerCfg / Scheme are the CONTRACT section 4.1 types verbatim: the menus PRODUCE them (MenuIntent).
 
-export type Scheme = 0 | 1;                       // 0 SIMPLE, 1 CLASSIC
+export type Scheme = 0 | 1 | 2;                   // 0 SIMPLE, 1 CLASSIC, 2 EASY (CHANGED(input): CONTRACT §36.5 - the type only)
 export interface PlayerCfg { fighter: string; color: number; scheme: Scheme; cpu: number /* -1 human, 0..8 */ }
 export type MatchMode = 'versus' | 'arcade' | 'training' | 'online' | 'brawl' | 'heckler';
 export interface MatchCfg {
@@ -66,6 +66,8 @@ export interface UiMoveDef {
   cost?: { showtime?: number; nerve?: number };
   /** CONTRACT 20.2 informational fields the move list shows */
   desc?: string; role?: ReadonlyArray<string>;
+  /** CHANGED(ui) (CONTRACT §36.4 lane NOTES): the plain-English one-liner the player sees (`desc` stays designer text) */
+  note?: string;
   /** CHANGED(UI3D) (CONTRACT §35.12 FIGHTERS3D): the move tracks a stepper (HOMING) / never turns after frame 1 (LINEAR) */
   homing?: boolean; linear?: boolean;
   track?: { until?: number; rate?: number };
@@ -83,11 +85,15 @@ export interface UiMoveDef {
 /** CONTRACT 5.2 fighter file, the fields the UI reads. `difficulty` (1..3) is optional (CHANGED(UI) request). */
 export interface UiFighterDef {
   id: string; name: string; persona?: string; archetype?: string; hp?: number; difficulty?: number;
+  /** CHANGED(ui) (CONTRACT §36.4): "how to win with this fighter", one line */
+  plan?: string;
   colors?: ReadonlyArray<{ name: string; tint: string | null }>;
   moves?: Readonly<Record<string, UiMoveDef>>;
   simple?: Readonly<Record<string, unknown>>;
   classic?: ReadonlyArray<{ motion: string; btn: string; move: string }>;
   unique?: { kind: string; trait?: string; thresholdPct?: number;
+    /** CHANGED(ui) (CONTRACT §36.4): the unique mechanic in plain English */
+    note?: string;
     /** CHANGED(fix_ui_stage): a stance's follow-ups by button / its exits by direction (CONTRACT 28.2 `stance`) */
     followups?: Readonly<Record<string, string>>; exit?: Readonly<Record<string, string>> };
   rival?: string; stage?: string;
@@ -126,7 +132,10 @@ export interface UiAudio { ui?(cue: string): void; music?(cue: string | null): v
 
 /** the remappable actions, in the order the SETTINGS list shows them (CHANGED(UI): SHELL's input.ts uses these ids;
  *  CHANGED(UI3D): + stepIn / stepOut = the CONTRACT §35.2 STEP controls, listed after the directions) */
-export const ACTIONS = ['up', 'down', 'left', 'right', 'stepIn', 'stepOut', 'l', 'm', 'h', 's', 'assist', 'throw', 'parry', 'impact', 'taunt', 'pause'] as const;
+export const ACTIONS = ['up', 'down', 'left', 'right', 'stepIn', 'stepOut', 'l', 'm', 'h', 's', 'assist', 'throw', 'parry', 'impact', 'taunt', 'pause',
+  // CHANGED(ui) (CONTRACT §36.1 / §36.5): the EASY actions (input.ts ids) - BLOCK (hold), SPECIAL 1-4, SUPER, PRIME TIME, the
+  // controls bar toggle (F1). The SETTINGS list orders them per scheme (ui/controls.ts mapActions).
+  'blockHold', 'sp1', 'sp2', 'sp3', 'sp4', 'super1', 'super3', 'controls'] as const;
 export type Action = typeof ACTIONS[number];
 
 /** one player's controls: KeyboardEvent.code per action (up to 2) + Standard-mapping pad button indices (up to 1) */
@@ -147,6 +156,8 @@ export interface UiSettings {
   bloom?: boolean;
   language?: 'en';
   controls?: ReadonlyArray<PlayerControls>;     // [P1, P2]
+  /** CHANGED(ui) (CONTRACT §36.2 / §36.5 item 7): the in-game controls bar is on (default true) */
+  controlsBar?: boolean;
   touchScale?: number;           // 0.8..1.3
   touchOpacity?: number;         // 0.35..1
   touchLeftHanded?: boolean;
@@ -161,6 +172,8 @@ export interface UiSettingsStore {
   set(patch: Partial<UiSettings>): void;
   on(fn: (s: UiSettings) => void): () => void;
   resetControls?(player: 0 | 1): void;
+  /** CHANGED(ui): SettingsStore.setScheme (EASY on a pre-EASY key map installs the default keys, CONTRACT §36.5 item 7) */
+  setScheme?(player: 0 | 1, scheme: Scheme): void;
 }
 
 /** SHELL SaveStore (CONTRACT 8 `hitparade.save.v1`), the fields the UI reads. */

@@ -382,7 +382,8 @@ def run_lab(args) -> int:
                "freak": sv["unlocks"]["freak"], "board": sv["board"], "clears": sv["clears"], "name": sv["onlineName"]}
         report["hostile"] = san
         C.check("hostile blob -> every field sanitised", san["gore"] == "splatter" and san["shake"] in (1, 0.4) and san["quality"] in ("high", "med")
-                and san["music"] == 1 and san["scheme"] == 0 and san["p1L"] == ["KeyJ"] and san["p1M"] == [] and san["p1padS"] == [0]
+                # CHANGED(input) (CONTRACT §36.5 item 7): an invalid stored scheme = never chosen -> P1's default, EASY (2)
+                and san["music"] == 1 and san["scheme"] == 2 and san["p1L"] == ["KeyJ"] and san["p1M"] == [] and san["p1padS"] == [0]
                 and san["freak"] is False and [r["fighter"] for r in san["board"]] == ["bruno"] and san["clears"] == {} and san["name"] == "42", san)
         errs = sess.js("() => __LAB__.errors")
         C.check("no page errors across the reloads", not errs and not sess.page_errors, (errs or []) + sess.page_errors)
@@ -623,7 +624,9 @@ def run_game(args) -> int:
                 else:
                     fatal = "could not enter the bout by Enter or click (phase %r)" % ph
         if not fatal:
-            ok, mph = wait_match_phase(sess, "fight", 20.0)
+            # CHANGED(wf8 fix) WF8G-4: 45 s (was 20): at 99 % CPU (other agents' Chromes) the intro ran at ~0.5x and run 1 failed
+            # with the match phase still 'intro'; the same build passed on rerun - a load timeout, not a product defect
+            ok, mph = wait_match_phase(sess, "fight", 45.0)
             if not ok:
                 fatal = "the round intro never reached 'fight' (match phase %r)" % mph
         if not fatal:
@@ -720,7 +723,7 @@ def run_game(args) -> int:
             for i in range(6):
                 special["tries"] += 1
                 time.sleep(0.5)
-                sess.press("KeyI", 50)
+                sess.press(P1_KEYS["sp1"], 50)   # CHANGED(input) (CONTRACT §36.5): SPECIAL 1 (U) = 5S in every scheme (I is SPECIAL 2 now)
                 time.sleep(0.6)
                 ev = events_tail(sess, 200)
                 # CHANGED(integrator): a projectile special (johnny's 5S = BRICKBAT) lands with c = 6 (projectile class,
@@ -730,7 +733,7 @@ def run_game(args) -> int:
                     special["event"] = h[-1]
                     break
             if not special["event"]:
-                problems.append("real I (SIMPLE 5S) taps x%d never landed a special-class (c = 3) HIT / BLOCK by P1" % special["tries"])
+                problems.append("real U (SPECIAL 1 = 5S) taps x%d never landed a special-class (c = 3) HIT / BLOCK by P1" % special["tries"])
             # CHANGED(integrator) 3D (CONTRACT §35.2 / §35.3 / §35.10): a REAL Q tap = SIDESTEP and a REAL held E =
             # SIDEWALK (circle-walk) in the real game; P1's yaw and the sim's camera basis camN must turn
             step3d = step_checks(sess, args, shots)

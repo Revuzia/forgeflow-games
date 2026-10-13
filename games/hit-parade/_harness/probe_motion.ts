@@ -10,15 +10,17 @@
 // fixture kit with a synthetic rekka, end to end on the REAL kits (Patch CUE 1 > 2 > 3 in SIMPLE and CLASSIC, typed in the
 // parents' hitstop and after; Johnny's WEAVE counter; every kit's trigger sets; no special restarts itself on a release;
 // the stance follow-ups).
+// CHANGED(input) (CONTRACT §36.5): the EASY scheme + the new word bits (BLOCK, SPECIAL 1-4, SUPER1 / SUPER3) on the real kits -
+// see the section at the end.
 import { readFileSync } from 'node:fs';
-import { fixtureData, newMatch, place, run, fs, I, tester, dirBits, motion, sb, ROOT, PROBE_AXIS_DEG } from './fixtures/simkit.ts';
-import { step, devSet, readFighter } from '../runtime/src/core/sim/match.ts';
+import { fixtureData, newMatch, place, run, fs, fwd, I, tester, dirBits, motion, sb, ROOT, PROBE_AXIS_DEG } from './fixtures/simkit.ts';
+import { step, devSet, readFighter, checksum } from '../runtime/src/core/sim/match.ts';
 import type { Match } from '../runtime/src/core/sim/match.ts';
 import { MO, STK, UK } from '../runtime/src/core/sim/compile.ts';
 import type { CMove } from '../runtime/src/core/sim/compile.ts';
 import { motionDone, motionSpan, dashDone, H_FROZEN } from '../runtime/src/core/sim/motion.ts';
 import { dirOf, parseAction, recordInput } from '../runtime/src/core/sim/inputs.ts';
-import { ACT, BUF, F, HIST, ST } from '../runtime/src/core/sim/layout.ts';
+import { ACT, BUF, F, FL, HIST, MVF, ST } from '../runtime/src/core/sim/layout.ts';
 import { buildGameData, loadGameData } from '../runtime/src/core/data.ts';
 import type { GameData } from '../runtime/src/core/types.ts';
 
@@ -756,6 +758,297 @@ function idleLog(m: Match, n: number, log: string[]): void {
       }
     }
     t.ok(bad.length === 0 && n > 0, `${fid}: stance follow-ups pressed through the enter move (${n} cases) never re-read the enter motion`, bad.slice(0, 4).join('; '));
+  }
+}
+
+// ================================================================== CHANGED(input) (CONTRACT §36.1 / §36.5): EASY + the new bits
+// bit 15 BLOCK, 16-19 SPECIAL 1-4, 20 SUPER1, 21 SUPER3 (every scheme) and scheme 2 EASY's auto-combo, on the REAL kits:
+// each SPECIAL key = the fighter's SIMPLE 5S / 6S / 2S / 4S (x0.8, == SIMPLE S + the class direction, also in the air, with
+// ASSIST = EX, as a rekka trigger), SUPER1 / SUPER3 = S+H / 2S+H with meter and nothing without, BLOCK guards highs / mids
+// (+ DOWN: lows) from either screen side and overrides walking / jumping / circling, mashing LIGHT in EASY follows the
+// assist route (never in SIMPLE / CLASSIC, never on a whiff).
+{
+  const NB = { BLOCK: 32768, SP: [65536, 131072, 262144, 524288], SUPER1: 1048576, SUPER3: 2097152 } as const;
+  const CLS = [5, 6, 2, 4];
+  const SCH = ['SIMPLE', 'CLASSIC', 'EASY'];
+  const FIDS = Object.keys(RD.fighters).sort();
+  const realS = (p1: string, scheme: 0 | 1 | 2, x0 = -0.6, x1 = 0.6, p2 = 'johnny', s2: 0 | 1 | 2 = 1): Match => {
+    const m = newMatch({ p1, p2, data: RD, s1: scheme, s2, timer: 0 });
+    place(m, x0, x1);
+    run(m, 2, 0, 0);
+    return m;
+  };
+  const simpleFlag = (m: Match): boolean => (m.s[sb(0) + F.mvFlags] & MVF.SIMPLE) !== 0;
+
+  // ---- SPECIAL 1-4 = the class special, every fighter, every scheme, == SIMPLE S + the class direction
+  {
+    const bad: string[] = [];
+    let n = 0;
+    for (const fid of FIDS) {
+      for (let k = 0; k < 4; k++) {
+        const ref = realS(fid, 0, -2.5, 2.5);
+        step(ref, dirBits(ref, 0, CLS[k]) | I.S, 0);
+        const R = ref.cf[0].route1;
+        const kid = [R.s5, R.s6, R.s2, R.s4][k];
+        const exp = ref.cf[0].moves[kid >= 0 ? kid : R.s5].id;
+        if (nameOf(ref) !== exp || !simpleFlag(ref)) bad.push(`${fid} SIMPLE ${CLS[k]}S -> ${nameOf(ref)} (want ${exp})`);
+        for (const sc of [0, 1, 2] as const) {
+          const m = realS(fid, sc, -2.5, 2.5);
+          step(m, NB.SP[k], 0);
+          n++;
+          if (nameOf(m) !== exp || !simpleFlag(m)) bad.push(`${fid} ${SCH[sc]} SP${k + 1} -> ${nameOf(m)} simple=${simpleFlag(m)} (want ${exp})`);
+        }
+      }
+    }
+    t.ok(bad.length === 0 && n === 144, `SPECIAL 1-4 = the fighter's 5S / 6S / 2S / 4S with the x0.8 flag, no direction held: ${n} cases (12 fighters x 4 keys x SIMPLE / CLASSIC / EASY), each == SIMPLE S + its direction`, bad.slice(0, 6).join('; '));
+  }
+  // ---- the x0.8 damage end to end (johnny SPECIAL 1 vs SIMPLE 5S vs the CLASSIC motion)
+  {
+    const dmg = (scheme: 0 | 1 | 2, how: 'sp' | 's' | 'motion'): number => {
+      const m = realS('johnny', scheme, -1.5, 1.5, 'johnny', 1);
+      const hp0 = readFighter(m, 1).hp;
+      if (how === 'sp') step(m, NB.SP[0], 0);
+      else if (how === 's') step(m, I.S, 0);
+      else motion(m, 0, '236', I.M);
+      run(m, 50, 0, 0);
+      return hp0 - readFighter(m, 1).hp;
+    };
+    const dSp = dmg(2, 'sp');
+    const dS = dmg(0, 's');
+    const dSpC = dmg(1, 'sp');
+    const dMo = dmg(1, 'motion');
+    t.ok(dSp > 0 && dSp === dS && dSpC === dS && dSp === Math.trunc((dMo * RD.system.simple.damagePct) / 100), `johnny SPECIAL 1 (EASY / CLASSIC) deals what SIMPLE 5S deals = x0.8 of the motion version: ${dSp} / ${dSpC} / ${dS} vs ${dMo}`);
+  }
+  // ---- in the air (== SIMPLE S in the air: spin's jS, the rest as their S) and ASSIST + SPECIAL k = the EX (== ASSIST + S + dir)
+  {
+    const bad: string[] = [];
+    let n = 0;
+    for (const fid of FIDS) {
+      const air = (scheme: 0 | 2, w: (m: Match) => number): string => {
+        const m = realS(fid, scheme, -2.5, 2.5);
+        step(m, I.U, 0);
+        run(m, 9, 0, 0);
+        step(m, w(m), 0);
+        return nameOf(m);
+      };
+      const want = air(0, () => I.S);
+      const got = air(2, () => NB.SP[0]);
+      n++;
+      if (got !== want) bad.push(`${fid} air SP1 -> ${got} (SIMPLE jS ${want})`);
+      for (let k = 0; k < 4; k++) {
+        const ex = (scheme: 0 | 2, w: (m: Match) => number): string => {
+          const m = realS(fid, scheme, -2.5, 2.5);
+          devSet(m, 0, 'nerve', 60000);
+          step(m, w(m), 0);
+          return nameOf(m);
+        };
+        const wantE = ex(0, (m) => dirBits(m, 0, CLS[k]) | I.S | I.A);
+        const gotE = ex(2, () => NB.SP[k] | I.A);
+        n++;
+        if (gotE !== wantE) bad.push(`${fid} ASSIST+SP${k + 1} -> ${gotE} (SIMPLE ASSIST+${CLS[k]}S ${wantE})`);
+      }
+    }
+    const spinAir = (() => {
+      const m = realS('spin', 2, -2.5, 2.5);
+      step(m, I.U, 0);
+      run(m, 9, 0, 0);
+      step(m, NB.SP[0], 0);
+      return nameOf(m);
+    })();
+    t.ok(bad.length === 0 && spinAir === 'drop_in_m', `in the air and with ASSIST the SPECIAL keys route exactly as SIMPLE S (${n} cases; spin air SPECIAL 1 = ${spinAir})`, bad.slice(0, 6).join('; '));
+  }
+  // ---- rekka follow-ups by SPECIAL keys: patch CUE 1 (SPECIAL 1) > CUE 2 > each CUE 3 by the key of its SIMPLE class
+  {
+    const pm = realS('patch', 2);
+    const cf = pm.cf[0];
+    const p1 = cf.moves[cf.route1.s5];
+    const cue2 = p1.chains.map((k) => cf.moves[k]).find((q) => q.trigger !== null);
+    const enders = cue2 ? cue2.chains.map((k) => cf.moves[k]).filter((q) => q.trigger !== null && q.trigger.simpleDir >= 0) : [];
+    const keyOf = (d: number): number => NB.SP[CLS.indexOf(d === 8 ? 5 : d === 9 ? 6 : d === 7 ? 4 : d === 1 || d === 3 ? 2 : d)];
+    const bad: string[] = [];
+    for (const q of enders) {
+      for (const sc of [2, 1] as const) {
+        const m = realS('patch', sc);
+        const log: string[] = ['-'];
+        const b = sb(0);
+        const press = (w: number): void => {
+          step(m, w, 0);
+          if (log[log.length - 1] !== nameOf(m)) log.push(nameOf(m));
+        };
+        press(NB.SP[0]);
+        let phase = 0;
+        for (let f = 0; f < 160; f++) {
+          const ready = m.s[b + F.contact] !== 0 && m.s[b + F.hitstop] > 0;
+          if (phase === 0 && cue2 && m.s[b + F.mv] === p1.idx && ready && cue2.trigger) { phase = 1; press(keyOf(cue2.trigger.simpleDir)); continue; }
+          if (phase === 1 && cue2 && nameOf(m) === cue2.id && ready && q.trigger) { phase = 2; press(keyOf(q.trigger.simpleDir)); continue; }
+          press(0);
+        }
+        const got = log.filter((x) => x !== '-').join(' > ');
+        const want = `${p1.id} > ${cue2?.id} > ${q.id}`;
+        if (got !== want) bad.push(`${SCH[sc]} ${want}: ${got}`);
+      }
+    }
+    t.ok(!!cue2 && enders.length >= 2 && bad.length === 0, `patch rekka by SPECIAL keys only (EASY + CLASSIC): ${p1.id} > ${cue2?.id} > each of ${enders.map((q) => q.id).join(' / ')} by its class key`, bad.join('; '));
+  }
+  // ---- SUPER1 / SUPER3: = S+H / 2S+H with meter (every fighter, EASY + CLASSIC); nothing without (never a special / Lv1)
+  {
+    const bad: string[] = [];
+    let n = 0;
+    for (const fid of FIDS) {
+      for (const sc of [2, 1] as const) {
+        for (const [bit, lv] of [[NB.SUPER1, 1], [NB.SUPER3, 3]] as const) {
+          const m = realS(fid, sc);
+          devSet(m, 0, 'showtime', 30000);
+          step(m, bit, 0);
+          const R = m.cf[0].route1;
+          const want = m.cf[0].moves[lv === 1 ? R.sup1 : R.sup3].id;
+          n++;
+          if (nameOf(m) !== want) bad.push(`${fid} ${SCH[sc]} SUPER${lv} 3 bars -> ${nameOf(m)} (want ${want})`);
+        }
+      }
+      const m0 = realS(fid, 2);
+      devSet(m0, 0, 'showtime', 0);
+      step(m0, NB.SUPER1, 0);
+      n++;
+      if (nameOf(m0) !== '-') bad.push(`${fid} SUPER1 without meter -> ${nameOf(m0)}`);
+      const m1 = realS(fid, 2);
+      devSet(m1, 0, 'showtime', 10000);
+      step(m1, NB.SUPER3, 0);
+      n++;
+      if (nameOf(m1) !== '-') bad.push(`${fid} SUPER3 with 1 bar -> ${nameOf(m1)}`);
+    }
+    t.ok(bad.length === 0 && n === 72, `SUPER (Lv1) / PRIME TIME (Lv3) keys: ${n} cases (12 fighters; with 3 bars in EASY + CLASSIC = the fighter's S+H / 2S+H; no meter / 1 bar for Lv3 = nothing)`, bad.slice(0, 6).join('; '));
+  }
+  // ---- BLOCK: guards a mid and an overhead standing, a low only with DOWN, from either screen side; P2 = johnny attacking
+  {
+    const P2 = (m: Match, d: number, btn: number): number => dirBits(m, 1, d) | btn;
+    const guard = (p1Right: boolean, p1Word: (m: Match) => number, d: number, btn: number): string => {
+      const m = realS('johnny', 2, p1Right ? 0.6 : -0.6, p1Right ? -0.6 : 0.6, 'johnny', 1);
+      const b = sb(0);
+      const hp0 = m.s[b + F.hp];
+      let blocked = false;
+      let hit = false;
+      for (let f = 0; f < 70; f++) {
+        step(m, p1Word(m), f === 1 ? P2(m, d, btn) : 0);
+        if (m.s[b + F.st] === ST.BLOCKSTUN) blocked = true;
+        if (m.s[b + F.st] === ST.HITSTUN || m.s[b + F.hp] < hp0) hit = true;
+      }
+      return blocked && !hit ? 'blocked' : hit ? 'hit' : 'none';
+    };
+    const rows: [string, (m: Match) => number, number, number, string][] = [
+      ['BLOCK vs 5M (mid)', () => NB.BLOCK, 5, I.M, 'blocked'],
+      ['BLOCK vs 6H (overhead)', () => NB.BLOCK, 6, I.H, 'blocked'],
+      ['BLOCK vs 2M (low)', () => NB.BLOCK, 2, I.M, 'hit'],
+      ['BLOCK + DOWN vs 2M (low)', () => NB.BLOCK | I.D, 2, I.M, 'blocked'],
+      ['BLOCK + DOWN vs 5M (mid)', () => NB.BLOCK | I.D, 5, I.M, 'blocked'],
+      ['BLOCK + DOWN vs 6H (overhead)', () => NB.BLOCK | I.D, 6, I.H, 'hit'],
+      ['BLOCK + FORWARD vs 5M (block overrides the walk)', (m) => NB.BLOCK | fwd(m, 0), 5, I.M, 'blocked'],
+      ['no input vs 5M (control)', () => 0, 5, I.M, 'hit'],
+    ];
+    const bad: string[] = [];
+    for (const side of [false, true]) {
+      for (const [label, w, d, btn, want] of rows) {
+        const got = guard(side, w, d, btn);
+        if (got !== want) bad.push(`${side ? 'P1 screen-right' : 'P1 screen-left'} ${label}: ${got} (want ${want})`);
+      }
+    }
+    // CLASSIC and SIMPLE too (the bits work in every scheme)
+    for (const sc of [0, 1] as const) {
+      const m = realS('johnny', sc, -0.6, 0.6, 'johnny', 1);
+      let blocked = false;
+      for (let f = 0; f < 70; f++) {
+        step(m, NB.BLOCK, f === 1 ? I.M : 0);
+        if (m.s[sb(0) + F.st] === ST.BLOCKSTUN) blocked = true;
+      }
+      if (!blocked) bad.push(`${SCH[sc]}: BLOCK vs 5M not blocked`);
+    }
+    t.ok(bad.length === 0, `BLOCK guards highs / mids standing and lows with DOWN, from both screen sides, in every scheme (${rows.length * 2 + 2} cases)`, bad.join('; '));
+  }
+  // ---- BLOCK overrides walking / jumping / circling; presses still act
+  {
+    const m = realS('johnny', 2, -1.5, 1.5);
+    const b = sb(0);
+    const x0 = fs(m, 0).x;
+    let jumped = false;
+    let guardPose = true;
+    for (let f = 0; f < 30; f++) {
+      step(m, NB.BLOCK | fwd(m, 0), 0);
+      if ((m.s[b + F.flags] & FL.PROX) === 0 || m.s[b + F.st] !== ST.IDLE) guardPose = false;
+    }
+    const dx = Math.abs(fs(m, 0).x - x0);
+    for (let f = 0; f < 30; f++) {
+      step(m, NB.BLOCK | I.U, 0);
+      if (m.s[b + F.st] === ST.PREJUMP || m.s[b + F.st] === ST.AIR) jumped = true;
+    }
+    run(m, 6, NB.BLOCK | I.D, 0);
+    const crouchG = m.s[b + F.st] === ST.CROUCH && (m.s[b + F.flags] & FL.PROX) !== 0;
+    step(m, NB.BLOCK | I.L, 0);
+    const jab = nameOf(m);
+    run(m, 30, 0, 0);
+    // a held STEP circles, BLOCK stops it at once (back cancels circling into block)
+    const m2 = realS('johnny', 2, -1.5, 1.5);
+    run(m2, 30, I.STEP_IN, 0);
+    const circling = m2.s[sb(0) + F.st] === ST.SIDEWALK;
+    step(m2, I.STEP_IN | NB.BLOCK, 0);
+    const left = m2.s[sb(0) + F.st] !== ST.SIDEWALK;
+    run(m2, 10, I.STEP_IN | NB.BLOCK, 0);
+    const stays = m2.s[sb(0) + F.st] === ST.IDLE && (m2.s[sb(0) + F.flags] & FL.PROX) !== 0;
+    t.ok(dx < 0.001 && guardPose && !jumped && crouchG && jab === '5L' && circling && left && stays,
+      `BLOCK held: forward does not walk (moved ${dx.toFixed(4)} m, guard pose ${guardPose}), up does not jump (${!jumped}), down = crouch guard (${crouchG}), J still comes out (${jab}); a circle-walk ends at once (${circling} -> ${left}) and stays in guard (${stays})`);
+  }
+  // ---- EASY auto-combo: mashing LIGHT follows the assist route (every fighter); SIMPLE / CLASSIC never; a whiff never
+  {
+    // every frame logged by move START (a restarted 5L is a new entry); `assist` = hold ASSIST too (the SIMPLE route)
+    const mash = (fid: string, scheme: 0 | 1 | 2, x0: number, x1: number, assist = false, held = 0): string[] => {
+      const m = realS(fid, scheme, x0, x1, 'johnny', 1);
+      const log: string[] = [];
+      const b = sb(0);
+      for (let f = 0; f < 150; f++) {
+        step(m, (f % 2 === 0 ? I.L : 0) | (assist ? I.A : 0) | held, 0);
+        if (m.s[b + F.st] === ST.ATTACK && m.s[b + F.mvF] === 1) log.push(nameOf(m));
+      }
+      return log;
+    };
+    const bad: string[] = [];
+    const seen: string[] = [];
+    let same = 0;
+    for (const fid of FIDS) {
+      const m0 = realS(fid, 2);
+      const cf = m0.cf[0];
+      const route = cf.assist.map((k) => cf.moves[k].id);
+      const tail = route.slice(1);
+      // at 1.2 m the EASY mash (DOWN held when the route opens with a crouching light, so both open with assist[0]) plays
+      // exactly what the SIMPLE ASSIST + L route plays (the route's reach is the kit's, whatever the scheme)
+      const e12 = mash(fid, 2, -0.6, 0.6, false, cf.moves[cf.assist[0]].inDir <= 3 ? I.D : 0);
+      const s12 = mash(fid, 0, -0.6, 0.6, true);
+      if (e12.slice(0, 4).join('>') !== s12.slice(0, 4).join('>')) bad.push(`${fid} 1.2 m: EASY ${e12.slice(0, 5).join(' > ')} vs SIMPLE ASSIST ${s12.slice(0, 5).join(' > ')}`);
+      else same++;
+      // close in (0.6 m), the whole route connects
+      const easy = mash(fid, 2, -0.3, 0.3);
+      // the tail of the route (assist[1..]) appears in order right after a light normal
+      const at = easy.indexOf(tail[0]);
+      const inOrder = at > 0 && tail.every((id, k) => easy[at + k] === id) && cf.moves.find((q) => q.id === easy[at - 1])?.inBtn === 0;
+      if (!inOrder) bad.push(`${fid} EASY mash: ${easy.slice(0, 8).join(' > ')} (route ${route.join(' > ')})`);
+      else seen.push(`${fid} ${easy[at - 1]}>${tail.join('>')}`);
+      for (const sc of [0, 1] as const) {
+        const other = mash(fid, sc, -0.3, 0.3);
+        if (other.some((id) => tail.includes(id))) bad.push(`${fid} ${SCH[sc]} mash reached the route: ${other.slice(0, 8).join(' > ')}`);
+      }
+      const whiff = mash(fid, 2, -3, 3);
+      if (whiff.length < 3 || whiff.some((id) => cf.moves.find((q) => q.id === id)?.inBtn !== 0)) bad.push(`${fid} EASY whiff mash: ${whiff.slice(0, 8).join(' > ')}`);
+    }
+    t.ok(bad.length === 0 && seen.length === 12 && same === 12, `EASY: mashing J (pressed every other frame, 0.6 m) = a light normal then the WHOLE assist route for all 12 fighters (${seen.slice(0, 2).join('; ')} ...); at 1.2 m it continues exactly like SIMPLE ASSIST + L (${same}/12); SIMPLE / CLASSIC mashing never reaches the route; a whiffed mash = light normals again`, bad.slice(0, 6).join('; '));
+  }
+  // ---- unused bits 22-31 are ignored (the sim masks WORD_BITS)
+  {
+    const a = realS('johnny', 2, -2.5, 2.5);
+    const c = realS('johnny', 2, -2.5, 2.5);
+    for (let f = 0; f < 40; f++) {
+      const w = f === 3 ? NB.SP[0] : f > 10 && f < 20 ? fwd(a, 0) : 0;
+      step(a, w, 0);
+      step(c, w | (f % 3 === 0 ? 0x80000000 | 0 : f % 3 === 1 ? 0x7fc00000 : 0x00400000), 0);
+    }
+    t.ok(checksum(a) === checksum(c), 'word bits 22-31 are ignored by the sim (identical checksum after 40 frames)');
   }
 }
 

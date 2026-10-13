@@ -10,7 +10,9 @@ import { F, FL, ST, W, fighterBase } from './layout.ts';
 import type { CRing } from './ring.ts';
 import { Q, alongYaw, cosQ, divRound, isqrt, sinQ } from './fx3d.ts';
 
-export type Scheme = 0 | 1; // 0 SIMPLE, 1 CLASSIC
+export type Scheme = 0 | 1 | 2; // 0 SIMPLE, 1 CLASSIC, CHANGED(input) 2 EASY (CONTRACT §36.5: SIMPLE + the auto-combo)
+/** CHANGED(input): scheme ids (CONTRACT §36.1) */
+export const SCHEME = { SIMPLE: 0, CLASSIC: 1, EASY: 2 } as const;
 export interface PlayerCfg {
   fighter: string;
   color: number;

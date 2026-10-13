@@ -80,7 +80,7 @@ function loadTraces(): Trace[] {
 }
 
 // ---- sims ---------------------------------------------------------------------------------------------
-type Make = (seed: number) => SimPort;
+type Make = (seed: number, easy?: boolean) => SimPort; // CHANGED(input): easy = both players on scheme 2 EASY
 /** CHANGED(wf7 online): a real match whose MATCH_END the game's own event reader finds (intro shifted by `introShift` frames) */
 interface EndMatch { port: SimPort; matchEnd(): { frame: number; winner: number } | null }
 type MakeEnd = (seed: number, introShift: number) => EndMatch;
@@ -132,8 +132,9 @@ async function simFactory(): Promise<{ kind: 'real' | 'toy'; make: Make; note: s
       };
     };
     // CHANGED(integrator) 3D: the port also answers which fighters are in a STEP state (SIDESTEP / SIDEWALK, §35.13 item 2)
-    return { kind: 'real', note: `real sim ${p1} vs ${p2} @ ${stage}, data=${src}`, makeEnd, make: (seed: number) => {
-      const m = Mm.createMatch({ mode: 'online', stage, seed, p: [{ fighter: p1, color: 0, scheme: 0, cpu: -1 }, { fighter: p2, color: 1, scheme: 1, cpu: -1 }] }, data);
+    return { kind: 'real', note: `real sim ${p1} vs ${p2} @ ${stage}, data=${src}`, makeEnd, make: (seed: number, easy?: boolean) => {
+      // CHANGED(input) (CONTRACT §36.5): `easy` = both peers' MatchCfg carry scheme 2 (the online reveal now allows it)
+      const m = Mm.createMatch({ mode: 'online', stage, seed, p: [{ fighter: p1, color: 0, scheme: easy ? 2 : 0, cpu: -1 }, { fighter: p2, color: 1, scheme: easy ? 2 : 1, cpu: -1 }] }, data);
       const port = Pm.matchPort(m) as SimPort & { stepStates?: () => [boolean, boolean] };
       const isStep = (i: 0 | 1): boolean => { const n = Mm.readFighter(m, i).stateName; return n === 'sidestep' || n === 'sidewalk'; };
       port.stepStates = () => [isStep(0), isStep(1)];
@@ -153,6 +154,8 @@ interface Scn {
   phase?: number;
   /** override DELAY_HIDE for this run (sweep) */
   hide?: number;
+  /** CHANGED(input): EASY schemes + input streams carrying bits 15-21 (BLOCK, SPECIAL 1-4, SUPER1 / SUPER3) */
+  easy?: boolean;
 }
 
 /**
@@ -193,6 +196,8 @@ interface Row {
   jitter: boolean; heldPct: number; holdMsAvg: number; wallSpeed: number;
   /** CHANGED(integrator) 3D: remote STEP words simulated on A / B, and remote-fighter STEP-state frames among them */
   stepWords: [number, number]; stepFrames: [number, number];
+  /** CHANGED(input): remote words carrying bits 15-21 simulated on A / B (they arrived as u32 words over rollback) */
+  easyWords: [number, number]; easy: boolean;
 }
 
 function histPct(h: Int32Array, p: number): number {
@@ -238,14 +243,16 @@ function divergent(inner: SimPort, at: number): SimPort {
  * prediction repeats a received word) - and the confirmed-or-predicted frames the remote fighter spent in SIDESTEP /
  * SIDEWALK. With the final checksums equal on both peers this proves the STEP bits travel over rollback netplay.
  */
-interface StepSpy { remoteStepWords: number; remoteStepFrames: number }
+interface StepSpy { remoteStepWords: number; remoteStepFrames: number; remoteEasyWords: number }
 function stepSpy(inner: SimPort & { stepStates?: () => [boolean, boolean] }, local: 0 | 1, spy: StepSpy): SimPort {
   const STEP = 0x6000;
+  const EASY = 0x3f8000; // CHANGED(input): bits 15-21
   return {
     stateInts: inner.stateInts,
     step(a: number, b: number): void {
       inner.step(a, b);
       const rw = local === 0 ? b : a;
+      if (rw & EASY) spy.remoteEasyWords++;
       if (rw & STEP) {
         spy.remoteStepWords++;
         if (inner.stepStates && inner.stepStates()[local === 0 ? 1 : 0]) spy.remoteStepFrames++;
@@ -271,14 +278,14 @@ function run(s: Scn, make: Make): Row {
     kind: relay ? 'relay' : 'loop' });
   const matchSeed = 1000 + s.seed;
   // CHANGED(integrator) 3D: both sims are spied for remote STEP words; both input streams carry STEP taps / holds
-  const spyA: StepSpy = { remoteStepWords: 0, remoteStepFrames: 0 }, spyB: StepSpy = { remoteStepWords: 0, remoteStepFrames: 0 };
-  const simA = stepSpy(make(matchSeed), 0, spyA);
-  const simB = s.corruptAt ? divergent(stepSpy(make(matchSeed), 1, spyB), s.corruptAt) : stepSpy(make(matchSeed), 1, spyB);
+  const spyA: StepSpy = { remoteStepWords: 0, remoteStepFrames: 0, remoteEasyWords: 0 }, spyB: StepSpy = { remoteStepWords: 0, remoteStepFrames: 0, remoteEasyWords: 0 };
+  const simA = stepSpy(make(matchSeed, s.easy), 0, spyA);
+  const simB = s.corruptAt ? divergent(stepSpy(make(matchSeed, s.easy), 1, spyB), s.corruptAt) : stepSpy(make(matchSeed, s.easy), 1, spyB);
   const events: string[] = [];
   const onEv = (side: string) => (e: NetEvent) => { if (events.length < 40) events.push(side + ':' + JSON.stringify(e)); };
   const A = new RollbackSession(simA, 0, link.a, { now: () => t, delay: D, window: W, sendEvery, startAt: 0, onEvent: onEv('A') });
   const B = new RollbackSession(simB, 1, link.b, { now: () => t, delay: D, window: W, sendEvery, startAt: 12, onEvent: onEv('B') });
-  const gA = new InputGen(s.seed * 7 + 1, IN.R, true), gB = new InputGen(s.seed * 13 + 2, IN.L, true);
+  const gA = new InputGen(s.seed * 7 + 1, IN.R, true, !!s.easy), gB = new InputGen(s.seed * 13 + 2, IN.L, true, !!s.easy);
   const periodA = FRAME_MS, periodB = FRAME_MS * (s.driftB ? 60 / s.driftB : 1);
   const cA = tickClock(s.seed * 97 + 3, 0, periodA, !!s.jitter), cB = tickClock(s.seed * 89 + 5, 12, periodB, !!s.jitter);
   const tail = 90;
@@ -319,6 +326,7 @@ function run(s: Scn, make: Make): Row {
     holdMsAvg: link.a.held + link.b.held ? Math.round(((link.a.holdMsSum + link.b.holdMsSum) / (link.a.sentInput + link.b.sentInput)) * 10) / 10 : 0,
     wallSpeed: round4(Math.min(sa.wallSpeed, sb.wallSpeed)),
     stepWords: [spyA.remoteStepWords, spyB.remoteStepWords], stepFrames: [spyA.remoteStepFrames, spyB.remoteStepFrames],
+    easyWords: [spyA.remoteEasyWords, spyB.remoteEasyWords], easy: !!s.easy,
   };
   const why = row.why;
   if (row.speed < SPEED_GATE) why.push(`speed ${(row.speed * 100).toFixed(2)}% < 96%`);
@@ -332,6 +340,9 @@ function run(s: Scn, make: Make): Row {
   // CHANGED(integrator) 3D: the STEP bits must arrive on BOTH peers (and, with the real sim, put the remote fighter in a step)
   if (!(row.stepWords[0] > 0 && row.stepWords[1] > 0)) why.push(`remote STEP words ${row.stepWords.join('/')} (STEP bits lost on the wire)`);
   if (STEP_STATES && !(row.stepFrames[0] > 0 && row.stepFrames[1] > 0)) why.push(`remote STEP-state frames ${row.stepFrames.join('/')}`);
+  // CHANGED(input): an EASY scenario's bits 15-21 must arrive on BOTH peers (u32 words); a plain one never carries them
+  if (s.easy && !(row.easyWords[0] > 0 && row.easyWords[1] > 0)) why.push(`remote EASY words ${row.easyWords.join('/')} (bits 15-21 lost on the wire)`);
+  if (!s.easy && (row.easyWords[0] > 0 || row.easyWords[1] > 0)) why.push(`remote EASY words ${row.easyWords.join('/')} in a plain scenario`);
   if (row.rejected) why.push(`rejected ${row.rejected}`);
   if (relay && (row.sentPerSecA > 10.5 || row.sentPerSecB > 10.5)) why.push(`relay rate ${row.sentPerSecA}/${row.sentPerSecB} pkt/s > 10`);
   if (sa.status === 'nocontest' || sb.status === 'nocontest') why.push('no contest');
@@ -449,19 +460,23 @@ function resultChecks(traces: Trace[], make: Make, makeEnd?: MakeEnd): EndRow[] 
 // ---- packet codec checks (NETCODE 6 N1, folded in) ----------------------------------------------------
 function codecChecks(): string[] {
   const errs: string[] = [];
-  const r = new InputGen(99, IN.R, true);   // CHANGED(integrator) 3D: the words carry STEP bits 13 / 14 too
+  const r = new InputGen(99, IN.R, true, true);   // CHANGED(integrator) 3D: the words carry STEP bits 13 / 14 too; CHANGED(input): + bits 15-21
   const ring = new Int32Array(256);
   const out = newInputPacket();
+  let wide = 0;
   for (let it = 0; it < 2000; it++) {
-    for (let i = 0; i < 256; i++) ring[i] = r.next() & 0xffff;
+    // CHANGED(input) (CONTRACT §36.5): full 32-bit words - real EASY streams, and every 4th packet raw u32 noise (bit 31 too)
+    for (let i = 0; i < 256; i++) ring[i] = it % 4 === 3 ? (Math.imul(it * 256 + i, 2654435761) ^ (i << 27)) | 0 : r.next();
+    for (let i = 0; i < 256; i++) if ((ring[i] & ~0x7fff) !== 0) wide++;
     const n = 1 + (it % 32), first = it * 7 % 256, cs = it % 3 === 0;
     const p = { flags: (cs ? FLAG.CHECKSUM : 0) | (it & 1 ? FLAG.RELAY : 0), seq: it * 13 & 0xffff, startFrame: it * 5, ackFrame: it % 5 === 0 ? -1 : it * 5 - 3,
       advantage: (it % 255) - 127, tsLow: it * 17, echoTs: it * 3, echoHold: it % 11 === 0 ? 0xffff : it % 400, csFrame: cs ? it * 15 : -1, checksum: cs ? (it * 2654435761) | 0 : 0 };
     const b = encodeInput(p, ring, first, n, 255);
+    if (b.length !== 20 + (cs ? 8 : 0) + 4 * n) { errs.push(`u32 packet length ${b.length} at ${it} (want ${20 + (cs ? 8 : 0) + 4 * n})`); break; }
     if (!decodeInput(b, out)) { errs.push('round-trip decode failed at ' + it); break; }
     if (out.count !== n || out.startFrame !== p.startFrame || out.ackFrame !== p.ackFrame || out.seq !== p.seq || out.advantage !== p.advantage ||
         out.tsLow !== (p.tsLow & 0xffff) || out.echoHold !== p.echoHold || out.csFrame !== p.csFrame || out.checksum !== p.checksum) { errs.push('field mismatch at ' + it); break; }
-    for (let k = 0; k < n; k++) if (out.inputs[k] !== ring[(first + k) & 255]) { errs.push('word mismatch at ' + it); break; }
+    for (let k = 0; k < n; k++) if ((out.inputs[k] | 0) !== ring[(first + k) & 255]) { errs.push('word mismatch at ' + it); break; }
     // malformed variants must be rejected
     const bad1 = b.slice(0, b.length - 1);
     const bad2 = b.slice(); bad2[13] = 0;
@@ -472,6 +487,10 @@ function codecChecks(): string[] {
       if (decodeInput(x, out)) { errs.push(`malformed ${nm} accepted at ${it}`); return errs; }
     }
   }
+  if (wide < 1000) errs.push(`only ${wide} words above bit 14 in the codec stream`);
+  // a v1 (u16 words) packet is rejected by the length check: 20 + 2N bytes is never 20 + 4N
+  const v1 = new Uint8Array(20 + 2 * 3); v1[0] = PKT.INPUT; v1[13] = 3;
+  if (decodeInput(v1, out)) errs.push('a u16-word (protocol 1) packet was accepted');
   const st = new Int32Array(300); for (let i = 0; i < 300; i++) st[i] = (i * 2654435761) | 0;
   const snap = decodeSnapshot(encodeSnapshot(1234, 77, st), 300);
   if (!snap || snap.frame !== 1234 || snap.checksum !== 77 || snap.state.some((v, i) => v !== st[i])) errs.push('snapshot round-trip');
@@ -512,6 +531,13 @@ async function main(): Promise<number> {
   rows.push(run({ name: 'p2p+jitter', trace: worst, tier: 'p2p', jitter: true, seed: seed++ }, sim.make));
   rows.push(run({ name: 'desync@1500', trace: worst, tier: 'p2p', corruptAt: 1500, seed: seed++ }, sim.make));
   rows.push(run({ name: 'relay desync@1500', trace: worst, tier: 'relay', corruptAt: 1500, seed: seed++ }, sim.make));
+  // CHANGED(input) (CONTRACT §36.5): EASY on both peers, input streams carrying bits 15-21 as u32 words, every trace on p2p
+  // and relay (own seeds 300+, so the scenarios above keep their streams and speeds)
+  let eSeed = 300;
+  for (const tr of traces) {
+    rows.push(run({ name: 'easy p2p', trace: tr, tier: 'p2p', easy: true, seed: eSeed++ }, sim.make));
+    rows.push(run({ name: 'easy relay', trace: tr, tier: 'relay', easy: true, jitter: true, seed: eSeed++ }, sim.make));
+  }
   const rollbacksTotal = rows.reduce((a, r) => a + r.rollbacks, 0);
   const failed = rows.filter((r) => !r.pass);
   // CHANGED(wf7 online): RESULT agreement with MATCH_END on and off checksum frames (+ real MATCH_ENDs)
@@ -546,10 +572,14 @@ async function main(): Promise<number> {
   const jitRows = rows.filter((r) => r.name === 'relay+jitter');
   const minRelayJ = Math.min(...jitRows.map((r) => r.speed));
   const heldJ = jitRows.length ? Math.max(...jitRows.map((r) => r.heldPct)) : 0;
+  const easyRows = rows.filter((r) => r.easy);
+  const minEasyP = Math.min(...easyRows.filter((r) => r.tier === 'p2p').map((r) => r.speed));
+  const minEasyR = Math.min(...easyRows.filter((r) => r.tier === 'relay').map((r) => r.speed));
   console.log(`${pass ? 'PASS' : 'FAIL'} probe_netsim sim=${sim.kind} [${sim.note}] traces=${traces.length} scenarios=${rows.length} ` +
     `min speed p2p=${(minP2P * 100).toFixed(2)}% relay=${(minRelay * 100).toFixed(2)}% relay+jitter=${(minRelayJ * 100).toFixed(2)}% (gate 96%; pacing=${PACING}, held<=${heldJ}%) rollbacks=${rollbacksTotal} ` +
     `desync-recovery=${rows.filter((r) => r.name.includes('desync')).every((r) => r.pass) ? 'ok' : 'FAIL'} codec=${codec.length ? 'FAIL' : 'ok'} ` +
     `STEP over rollback: remote step words ${rows.reduce((a, r) => a + r.stepWords[0] + r.stepWords[1], 0)}, remote step-state frames ${rows.reduce((a, r) => a + r.stepFrames[0] + r.stepFrames[1], 0)} (every scenario both peers)` +
+    ` EASY u32 words over rollback: ${easyRows.length} scenarios, min speed p2p=${(minEasyP * 100).toFixed(2)}% relay+jitter=${(minEasyR * 100).toFixed(2)}%, remote words with bits 15-21 ${rows.reduce((a, r) => a + r.easyWords[0] + r.easyWords[1], 0)} (both peers each)` +
     ` RESULT@MATCH_END ${ends.length - endFailed.length}/${ends.length} agreed on the first ask (forced E = 300..314: every residue mod 15${realEnds.length ? `; ${realEnds.length} real MATCH_ENDs, residues ${realResidues.join(',')}` : ''}; invariant checks ${ends.reduce((a, r) => a + r.invariantChecks, 0)}, misses ${ends.reduce((a, r) => a + r.invariantMisses, 0)})` +
     (failed.length ? ` failed=[${failed.map((r) => r.name + '@' + r.trace + ': ' + r.why.join(', ')).join(' | ')}]` : ''));
   return pass ? 0 : 1;

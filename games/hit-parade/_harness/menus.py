@@ -22,7 +22,14 @@ by real keys; the pad pass captures RIGHT-STICK directions into pad slots (TAUNT
 with STEP OUT); HOW TO PLAY (main menu guide card) opens by keys and lists the ring rows with the player's keys; --game also
 holds Q in a real bout (P1 circle-walks) and finds the SIDESTEPS / CIRCLES dummy options.
 
-Run:  python _harness/menus.py [--sizes 1600x900,844x390] [--no-pad] [--headed] [--base URL]
+CHANGED(ui) (CONTRACT §36.2 / §36.3, the EASY controls): --port N (the dev server, default 5324). Lab + game walks check the
+CONTROLS BAR in a bout (__HP__.hud().controls: shown, the fighter's own special names on SPECIAL 1-4, its top edge inside the
+bottom 7 % feet band), F1 and the "?" chip toggle it (settings.controlsBar), the pause card's CONTROLS keyboard map (lit keys,
+the fighter's special names), SETTINGS > CONTROLS (scheme picker EASY / SIMPLE / CLASSIC, the drawn keyboard follows a remap,
+--game: the bar follows a remap of SPECIAL 1 after RESUME), CHARACTER SELECT's MOVES panel + three schemes, the move list's
+EASY / SIMPLE / CLASSIC tabs with key caps, the new one-page HOW TO PLAY (keyboard map + tips; touch: the PAD cheat sheet),
+TRAINING keeping the bar on with the setting off.
+Run:  python _harness/menus.py [--sizes 1600x900,844x390] [--no-pad] [--headed] [--base URL] [--port 5351]
 Also: python _harness/menus.py --sync-strings   mirror data/fighters/*.json move `name`s into data/strings.json as
       move.<fighter>.<moveId> (CONTRACT 20.1) and the unique `trait` as trait.<fighter>; prints what changed.
 """
@@ -190,7 +197,8 @@ class Walk:
             if self.m().get("focus") == target_id:
                 return True
             self.key(key)
-        for _ in range(90):
+        # CHANGED(ui): SETTINGS holds ~100 controls now (24 actions x 3 slots): the Tab ring needs more than 90 presses
+        for _ in range(160):
             if self.m().get("focus") == target_id:
                 return True
             self.key("Tab", gap=0.04)
@@ -227,6 +235,12 @@ def walk_lab(page, size: str, results: list) -> None:
     w.key("ArrowRight")
     w.key("Enter")
     w.check("charselect_scheme", w.m().get("cs", {}).get("p", [{}])[0].get("step") == "scheme")
+    # CHANGED(ui): three schemes (EASY first) + the MOVES panel (keys or rows) for the picked fighter
+    cs = page.evaluate("""(() => { const b = [...document.querySelectorAll('#hp-menus .hpm-cs-side.p1 .hpm-cs-scheme .hpm-segbtn')].map((e) => e.id);
+      const mv = document.getElementById('hpm-cs-moves-p1');
+      return { schemes: b, moves: !!mv && !mv.hidden, keys: mv ? mv.querySelectorAll('.hpk-key.on, .hpk-row').length : 0, plan: mv && mv.querySelector('.plan') ? mv.querySelector('.plan').textContent : '' }; })()""")
+    w.check("charselect_moves_panel", cs.get("schemes") == ["hpm-cs-scheme-p1-2", "hpm-cs-scheme-p1-0", "hpm-cs-scheme-p1-1"] and cs.get("moves") and cs.get("keys", 0) >= 6 and len(cs.get("plan") or "") >= 30,
+            f"schemes={cs.get('schemes')} keys/rows={cs.get('keys')} plan={(cs.get('plan') or '')[:40]!r}", snap=False)
     w.key("Enter")
     w.check("ladder", w.wait_screen("ladder", 8))
     w.key("Enter")
@@ -295,6 +309,10 @@ def walk_lab(page, size: str, results: list) -> None:
     w.check("vs_versus", w.wait_screen("vs", 6), snap=False)
     time.sleep(3.0)
     w.check("hud_versus", w.page.evaluate(READ_HUD).get("mounted") is True, "scripted bout HUD")
+    cb = (w.page.evaluate(READ_HUD) or {}).get("controls") or {}
+    touch_mode = page.evaluate("document.documentElement.classList.contains('hp-touch')")
+    w.check("hud_controls_bar", (cb.get("shown") is (not touch_mode)) and (touch_mode or len(((cb.get("sides") or [{}])[0]).get("cells") or []) >= 12),
+            f"shown={cb.get('shown')} level={cb.get('level')} fits={cb.get('fits')} rect={cb.get('rect')}", snap=False)
     w.check("results_versus", w.wait_screen("results", 8))
     w.key("Enter")                                            # REMATCH (the lab returns to the main menu)
     w.wait_screen("main")
@@ -310,6 +328,9 @@ def walk_lab(page, size: str, results: list) -> None:
     w.check("hud_training", bool(hud and hud.get("mounted")), f"timer={hud.get('timer') if hud else None}")
     w.key("Escape")
     w.check("pause_training", w.wait_screen("pause"))
+    pk = page.evaluate("(() => { const b = document.querySelector('#hp-menus .hpm-s-pause .hpm-legend'); return b ? [b.querySelectorAll('.hpk-key.on').length, b.querySelectorAll('.hpk-trow').length] : null; })()")
+    touch_mode = page.evaluate("document.documentElement.classList.contains('hp-touch')")
+    w.check("pause_controls_map", bool(pk) and (pk[1] >= 9 if touch_mode else pk[0] >= 18), f"lit keys / touch rows = {pk}", snap=False)
     w.check("pause_to_training", w.focus_to("hpm-p-training"), snap=False)
     w.key("Enter")
     w.check("training", w.wait_screen("training"))
@@ -318,8 +339,11 @@ def walk_lab(page, size: str, results: list) -> None:
     w.focus_to("hpm-p-movelist", "ArrowUp")
     w.key("Enter")
     w.check("movelist", w.wait_screen("movelist"))
-    w.key("Enter")                                            # the focused tab (SIMPLE) -> CLASSIC via ArrowRight
-    w.key("ArrowRight")
+    # CHANGED(ui): tabs EASY / SIMPLE / CLASSIC - the focused first tab (EASY), then right twice -> CLASSIC
+    w.key("Enter")
+    easy = page.evaluate("(() => { const r = document.querySelector('#hp-menus .hpm-movelist'); return r ? [r.dataset.scheme, r.querySelectorAll('.hpm-ml-row .in .hpk-cap, .hpm-ml-row .in .hp-chip').length] : null; })()")
+    w.check("movelist_easy", bool(easy) and easy[0] == "2" and easy[1] >= 6, f"scheme/key caps={easy}")
+    w.key("ArrowRight", 2)
     w.key("Enter")
     w.check("movelist_classic", w.m().get("focus") == "hpm-ml-classic")
     w.key("Escape")
@@ -330,6 +354,13 @@ def walk_lab(page, size: str, results: list) -> None:
     # CHANGED(UI3D): the STEP rows (keys Q / E, pad RS-UP / RS-DOWN) before any remap
     lbl = page.evaluate("['hpm-key-stepIn-0','hpm-key-stepOut-0','hpm-key-stepIn-pad','hpm-key-stepOut-pad'].map((id) => { const e = document.getElementById(id); return e ? e.textContent.trim() : null; })")
     w.check("settings_step_rows", lbl == ["Q", "E", "RS-UP", "RS-DOWN"], f"STEP IN / OUT key, pad = {lbl}", snap=False)
+    # CHANGED(ui): the scheme picker (EASY on), the EASY rows (BLOCK, SPECIAL 1-4, SUPER, PRIME TIME, CONTROLS BAR) and the map
+    st = page.evaluate("""(() => { const on = [...document.querySelectorAll('#hp-menus .hpm-keys .hpm-schemes .hpm-segbtn.on')].map((e) => e.id);
+      const rows = ['blockHold', 'sp1', 'sp2', 'sp3', 'sp4', 'super1', 'super3', 'controls'].map((a) => (document.getElementById('hpm-key-' + a + '-0') || {}).textContent || null);
+      const map = document.querySelectorAll('#hpm-set-keymap .hpk-key.on').length; return { on, rows, map }; })()""")
+    touch_mode = page.evaluate("document.documentElement.classList.contains('hp-touch')")
+    w.check("settings_easy_rows", st.get("on") == ["hpm-set-scheme-2"] and st.get("rows") == ["SHIFT", "U", "I", "O", "P", "H", "Y", "F1"] and (touch_mode or st.get("map", 0) >= 18),
+            f"scheme={st.get('on')} rows={st.get('rows')} lit map keys={st.get('map')}", snap=False)
     # key remap: P1 LIGHT key slot -> capture -> Z (CHANGED(UI3D): Q is STEP IN now); then a conflict (W onto MEDIUM) -> SWAP
     # prompt -> cancel
     w.check("remap_focus", w.focus_to("hpm-key-l-0"), snap=False)
@@ -338,6 +369,11 @@ def walk_lab(page, size: str, results: list) -> None:
     w.key("KeyZ")
     time.sleep(0.2)
     w.check("remap_assigned", "Z" in (w.m().get("note") or ""), f"note={w.m().get('note')}")
+    # CHANGED(ui): the drawn keyboard follows the remap - Z is lit as PUNCH, J is dark
+    if not page.evaluate("document.documentElement.classList.contains('hp-touch')"):
+        mz = page.evaluate("""(() => { const k = (c) => document.querySelector('#hpm-set-keymap .hpk-key[data-code="' + c + '"]');
+          const z = k('KeyZ'), j = k('KeyJ'); return [z ? z.className + '|' + z.textContent : null, j ? j.className : null]; })()""")
+        w.check("remap_map_follows", bool(mz[0]) and "on" in mz[0] and "PUNCH" in mz[0] and (mz[1] is None or " on" not in mz[1]), f"Z={mz[0]} J={mz[1]}", snap=True)
     # CHANGED(UI3D): remap STEP IN's key: X
     w.check("remap_step_focus", w.focus_to("hpm-key-stepIn-0", "ArrowUp"), snap=False)
     w.key("Enter")
@@ -407,18 +443,24 @@ def walk_howto(w: "Walk", prefix: str) -> None:
     page = w.page
     w.check(f"{prefix}howto_focus", w.focus_to("hpm-main-howto", "ArrowRight", 3), snap=False)
     w.key("Enter")
-    info = page.evaluate("""(() => { const b = document.querySelector('#hp-menus .hpm-s-howto .hpm-howto'); if (!b) return null;
-      const secs = [...b.querySelectorAll('.hpm-how-sec')].map((e) => e.dataset.sec);
-      const ring = b.querySelector('.hpm-how-sec.ring');
-      return { secs, ringRows: ring ? ring.querySelectorAll('.hpm-how-row').length : 0, ringText: ring ? ring.textContent : '',
-        keys: ring ? [...ring.querySelectorAll('kbd, .tbtn')].map((k) => k.textContent.trim()) : [] }; })()""") or {}
-    keys = info.get("keys") or []
+    # CHANGED(ui) (CONTRACT §36.3): one page around EASY - the drawn keyboard (P1's keys, plain words) + tips with key caps
+    # (the ring in two lines); touch: the PAD cheat sheet + the ring line
+    time.sleep(0.3)
+    info = page.evaluate("""(() => { const b = document.querySelector('#hp-menus .hpm-s-howto .hpm-how2'); if (!b) return null;
+      const secs = [...b.querySelectorAll('[data-sec]')].map((e) => e.dataset.sec);
+      const ring = b.querySelector('.tip.ring');
+      const lit = [...b.querySelectorAll('.hpk-key.on')].map((k) => k.dataset.code + '=' + (k.querySelector('.w') || {}).textContent);
+      return { secs, lit, touchRows: b.querySelectorAll('.hpk-trow').length, ringText: ring ? ring.textContent : '',
+        ringKeys: ring ? [...ring.querySelectorAll('kbd')].map((k) => k.textContent.trim()) : [] }; })()""") or {}
     touch = page.evaluate("document.documentElement.classList.contains('hp-touch')")
-    want = ["IN", "OUT"] if touch else []
-    ok = (w.wait_screen("howto") and info.get("secs") == ["move", "ring", "attack", "defend"] and info.get("ringRows", 0) >= 5
-          and "SIDESTEP" in info.get("ringText", "") and "CIRCLE WALK" in info.get("ringText", "") and "STEP ATTACK" in info.get("ringText", "")
-          and all(k in keys for k in want) and len(keys) >= 4)
-    w.check(f"{prefix}howto", ok, f"secs={info.get('secs')} ring rows={info.get('ringRows')} ring keys={keys[:8]}")
+    lit = info.get("lit") or []
+    if touch:
+        ok = w.wait_screen("howto") and info.get("secs") == ["map", "ring"] and info.get("touchRows", 0) >= 9 and "sidestep" in info.get("ringText", "")
+    else:
+        ok = (w.wait_screen("howto") and info.get("secs") == ["map", "move", "ring", "attack", "special", "super", "defend", "fight"] + (["pad"] if "pad" in (info.get("secs") or []) else [])
+              and len(lit) >= 20 and all(any(x.endswith("=" + wd) for x in lit) for wd in ("BLOCK", "PUNCH", "KICK", "HEAVY", "SPECIAL 1", "SPECIAL 4", "SUPER", "STEP IN", "STEP OUT"))
+              and "sidestep" in info.get("ringText", "") and "circle" in info.get("ringText", "") and len(info.get("ringKeys") or []) == 2)
+    w.check(f"{prefix}howto", ok, f"secs={info.get('secs')} lit={len(lit)} {lit[:6]} touch rows={info.get('touchRows')} ring keys={info.get('ringKeys')}")
     w.key("Escape")
     w.check(f"{prefix}howto_back", w.wait_screen("main") and w.m().get("focus") == "hpm-main-howto", snap=False)
 
@@ -456,6 +498,14 @@ def walk_game(page, size: str, results: list) -> None:
     w.focus_to("hpm-versus-go")
     w.key("Enter")
     w.check(step("charselect_versus"), w.wait_screen("charselect"), f"cpu level {lvl}")
+    # CHANGED(ui): the MOVES panel of the highlighted fighter (johnny, the first slot): plan + his special names on the keys
+    mv = page.evaluate("""(() => { const m = document.getElementById('hpm-cs-moves-p1'); if (!m) return null;
+      return { fighter: m.dataset.fighter, text: m.textContent, keys: [...m.querySelectorAll('.hpk-key.on')].map((k) => k.dataset.code), rows: m.querySelectorAll('.hpk-row').length }; })()""") or {}
+    touch_mode = page.evaluate("document.documentElement.classList.contains('hp-touch')")
+    want_names = ["BRICKBAT", "HOOK", "ENCORE", "WEAVE"]
+    w.check(step("charselect_moves"), mv.get("fighter") == "johnny" and all(n in (mv.get("text") or "").upper() for n in want_names)
+            and (mv.get("rows", 0) >= 6 if touch_mode else all(c in (mv.get("keys") or []) for c in ["KeyU", "KeyI", "KeyO", "KeyP", "KeyH", "KeyY", "KeyJ"])),
+            f"fighter={mv.get('fighter')} keys={mv.get('keys')} rows={mv.get('rows')}")
     w.key("Enter", 3, 0.25)
     w.key("ArrowRight", 2)
     w.key("Enter", 2, 0.25)
@@ -468,6 +518,7 @@ def walk_game(page, size: str, results: list) -> None:
     time.sleep(2.5)
     hud = page.evaluate(READ_HUD) or {}
     w.check(step("bout_hud"), bool(hud.get("mounted")), f"timer={hud.get('timer')}")
+    walk_game_bar(page, w, step)
     # CHANGED(UI3D): a real Q hold in the bout = STEP IN: P1 circle-walks (the sim's sidewalk state, z leaves the line)
     if not page.evaluate("document.documentElement.classList.contains('hp-touch')"):
         rd = "(() => { const f = __HP__.fighters()[0]; return [f.stateName, f.z]; })()"
@@ -483,6 +534,15 @@ def walk_game(page, size: str, results: list) -> None:
         time.sleep(0.4)
     w.key("Escape")
     w.check(step("pause"), w.wait_screen("pause"))
+    pm = page.evaluate("""(() => { const b = document.querySelector('#hp-menus .hpm-s-pause .hpm-legend'); if (!b) return null;
+      const k = (c) => { const e = b.querySelector('.hpk-key[data-code="' + c + '"] .w'); return e ? e.textContent : null; };
+      return { lit: b.querySelectorAll('.hpk-key.on').length, U: k('KeyU'), H: k('KeyH'), SHIFT: k('ShiftLeft'), rows: b.querySelectorAll('.hpk-trow').length }; })()""") or {}
+    if page.evaluate("document.documentElement.classList.contains('hp-touch')"):
+        w.check(step("pause_controls"), pm.get("rows", 0) >= 9, f"touch cheat sheet rows={pm.get('rows')}", snap=False)
+    else:
+        w.check(step("pause_controls"), pm.get("lit", 0) >= 18 and pm.get("U") == "BRICKBAT" and pm.get("H") == "SUPER" and pm.get("SHIFT") == "BLOCK",
+                f"lit={pm.get('lit')} U={pm.get('U')} H={pm.get('H')} SHIFT={pm.get('SHIFT')}", snap=False)
+        walk_game_remap(page, w, step)
     w.focus_to("hpm-p-movelist", "ArrowDown")
     w.key("Enter")
     ok = w.wait_screen("movelist") and page.evaluate("!!document.querySelector('#hp-menus .hpm-ml-unique') && !!document.querySelector('#hp-menus .hpm-ml-row .alt')")
@@ -510,6 +570,21 @@ def walk_game(page, size: str, results: list) -> None:
     time.sleep(1.5)
     has = page.evaluate("!!document.querySelector('#hp-hud .hp-inputs') && !!document.querySelector('#hp-hud .hp-frames')")
     w.check(step("training_hud"), has, "input display + frame data")
+    # CHANGED(ui) (CONTRACT §36.2): TRAINING always shows the bar - even with settings.controlsBar off (set by the bar walk)
+    if not page.evaluate("document.documentElement.classList.contains('hp-touch')"):
+        cb = (page.evaluate(READ_HUD) or {}).get("controls") or {}
+        sb = page.evaluate("(() => { try { return __HP__.input().controlsBar; } catch (e) { return null; } })()")
+        w.check(step("training_bar_always"), cb.get("on") is True and cb.get("training") is True, f"bar on={cb.get('on')} training={cb.get('training')} setting={sb}")
+        # CHANGED(wf8 fix) FT-10: F1 hides / shows the bar in TRAINING too (session only - the saved setting stays as it was)
+        w.key("F1")
+        time.sleep(0.3)
+        off = (page.evaluate(READ_HUD) or {}).get("controls") or {}
+        w.key("F1")
+        time.sleep(0.3)
+        on = (page.evaluate(READ_HUD) or {}).get("controls") or {}
+        sb2 = page.evaluate("(() => { try { return __HP__.input().controlsBar; } catch (e) { return null; } })()")
+        w.check(step("training_bar_f1"), off.get("on") is False and on.get("on") is True and sb2 == sb, f"F1 -> on={off.get('on')}, F1 -> on={on.get('on')}, setting {sb} -> {sb2}")
+        page.evaluate("(() => { try { __HP__.input(); } catch (e) {} })()")
     w.key("Escape")
     w.wait_screen("pause")
     w.focus_to("hpm-p-training")
@@ -537,6 +612,95 @@ def walk_game(page, size: str, results: list) -> None:
     w.check(step("title_back"), w.wait_screen("title"), snap=False)
     viol = page.evaluate("window.__HP__.state().flowViolations")
     w.check(step("flow_violations"), viol == 0, f"violations={viol}", snap=False)
+
+
+def bar_state(page) -> dict:
+    return (page.evaluate(READ_HUD) or {}).get("controls") or {}
+
+
+def walk_game_bar(page, w: "Walk", step) -> None:
+    """CHANGED(ui) (CONTRACT §36.2): the CONTROLS BAR in a real bout - shown, P1's EASY keys with johnny's special names,
+    HUD-safe (its top edge inside the bottom 7 % feet band, between the RATINGS blocks), F1 toggles it (and the setting), the
+    "?" chip toggles it back (a real mouse click)."""
+    if page.evaluate("document.documentElement.classList.contains('hp-touch')"):
+        cb = bar_state(page)
+        disc = page.evaluate("(() => { try { return __HP__.touch().buttons.some((b) => b.id === 'help'); } catch (e) { return null; } })()")
+        w.check(step("bar_touch"), cb.get("shown") is False and disc is True, f"bar shown={cb.get('shown')} help disc={disc}")
+        return
+    time.sleep(0.6)
+    cb = bar_state(page)
+    cells = {c["id"]: c for c in ((cb.get("sides") or [{}])[0].get("cells") or [])}
+    vh = page.evaluate("innerHeight")
+    rect = cb.get("rect") or {}
+    shows = page.evaluate("[...document.querySelectorAll('#hp-hud .hp-show')].map((e) => { const r = e.getBoundingClientRect(); return [Math.round(r.left), Math.round(r.right), Math.round(r.top)]; })")
+    words = [cells.get(k, {}).get("word") for k in ("sp1", "sp2", "sp3", "sp4")]
+    caps = [((cells.get(k) or {}).get("caps") or [None])[0] for k in ("l", "m", "h", "sp1", "sp2", "sp3", "sp4", "super1", "super3", "block")]
+    inside = bool(rect) and rect["y"] >= vh * 0.93 - 1 and (not shows or (rect["x"] >= shows[0][1] - 1 and rect["x"] + rect["w"] <= shows[1][0] + 1))
+    w.check(step("bar_shown"), cb.get("shown") is True and cb.get("on") is True and words == ["BRICKBAT", "HOOK", "ENCORE", "WEAVE"]
+            and caps == ["J", "K", "L", "U", "I", "O", "P", "H", "Y", "SHIFT"] and inside and cb.get("fits") is True,
+            f"words={words} caps={caps} rect={rect} band top={vh * 0.93:.0f} ratings={shows} level={cb.get('level')} fits={cb.get('fits')}")
+    w.key("F1")
+    time.sleep(0.3)
+    off = bar_state(page)
+    setting = page.evaluate("(() => { try { return __HP__.input().controlsBar; } catch (e) { return null; } })()")
+    w.check(step("bar_f1_off"), off.get("on") is False and setting is False, f"on={off.get('on')} settings.controlsBar={setting}")
+    chip = page.evaluate("(() => { const b = document.getElementById('hp-cbar-toggle'); if (!b) return null; const r = b.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()")
+    if chip:
+        page.mouse.click(chip[0], chip[1])
+        time.sleep(0.3)
+    on = bar_state(page)
+    setting = page.evaluate("(() => { try { return __HP__.input().controlsBar; } catch (e) { return null; } })()")
+    w.check(step("bar_chip_on"), on.get("on") is True and setting is True, f"chip={chip} on={on.get('on')} settings.controlsBar={setting}")
+    # leave it OFF for the training check (TRAINING shows it anyway)
+    w.key("F1")
+    time.sleep(0.25)
+    w.check(step("bar_f1_off_again"), bar_state(page).get("on") is False, snap=False)
+
+
+def walk_game_remap(page, w: "Walk", step) -> None:
+    """CHANGED(ui): pause -> SETTINGS -> SPECIAL 1's key slot <- KeyZ by real keys -> back -> RESUME: the bar's SPECIAL 1 cell
+    reads Z (the bar follows a remap); then RESET CONTROLS puts U back."""
+    w.focus_to("hpm-p-settings", "ArrowDown")
+    w.key("Enter")
+    if not w.wait_screen("settings"):
+        w.check(step("remap_sp1"), False, "settings did not open")
+        return
+    w.focus_to("hpm-key-sp1-0", "ArrowDown", 40)
+    w.key("Enter")
+    w.key("KeyZ")
+    time.sleep(0.25)
+    note = w.m().get("note")
+    w.key("Escape")
+    w.wait_screen("pause")
+    w.focus_to("hpm-p-resume", "ArrowUp")
+    w.key("Enter")
+    time.sleep(0.5)
+    page.keyboard.press("F1")                                # the bar was left OFF by the bar walk: show it
+    time.sleep(0.4)
+    cb = bar_state(page)
+    cells = {c["id"]: c for c in ((cb.get("sides") or [{}])[0].get("cells") or [])}
+    sp1 = cells.get("sp1", {})
+    w.check(step("remap_bar_follows"), (sp1.get("caps") or [None])[0] == "Z" and sp1.get("word") == "BRICKBAT", f"note={note!r} SPECIAL 1 cell={sp1}")
+    # back to the defaults (pause -> SETTINGS -> RESET CONTROLS), then F1 off again for the training check
+    w.key("Escape")
+    w.wait_screen("pause")
+    w.focus_to("hpm-p-settings", "ArrowDown")
+    w.key("Enter")
+    w.wait_screen("settings")
+    w.focus_to("hpm-reset-keys", "ArrowDown", 60)
+    w.key("Enter")
+    time.sleep(0.2)
+    back = page.evaluate("(document.getElementById('hpm-key-sp1-0') || {}).textContent")
+    w.check(step("remap_reset"), (back or "").strip() == "U", f"SPECIAL 1 after RESET = {back!r}", snap=False)
+    w.key("Escape")
+    w.wait_screen("pause")
+    w.focus_to("hpm-p-resume", "ArrowUp")
+    w.key("Enter")
+    time.sleep(0.4)
+    w.key("F1")
+    time.sleep(0.3)
+    w.key("Escape")
+    w.wait_screen("pause")
 
 
 def walk_pad(page, results: list, size: str) -> None:
@@ -601,7 +765,9 @@ def run(args) -> int:
     results: list = []
     errors: list = []
     sizes = [s.strip() for s in args.sizes.split(",") if s.strip()]
-    ctx_srv = LabServer() if not args.base else None
+    global LAB_PORT
+    LAB_PORT = args.port                                          # CHANGED(ui): --port
+    ctx_srv = LabServer(args.port) if not args.base else None
     started = time.time()
     try:
         if ctx_srv:
@@ -693,6 +859,7 @@ def main() -> int:
     ap.add_argument("--headed", action="store_true")
     ap.add_argument("--headless", action="store_true", help="(default; accepted for the gate table)")
     ap.add_argument("--sync-strings", action="store_true")
+    ap.add_argument("--port", type=int, default=LAB_PORT, help="CHANGED(ui): the dev server port (default 5324)")
     args = ap.parse_args()
     if args.sync_strings:
         return sync_strings()

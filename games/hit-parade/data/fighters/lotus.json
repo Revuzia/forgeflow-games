@@ -4,6 +4,7 @@
   "persona": "The Drunken Lotus",
   "archetype": "stance",
   "difficulty": 3,
+  "plan": "Sway out of high attacks, then hit low, high, or hop from the sway to keep them guessing.",
   "body": "Kachujin G Rosales",
   "heightM": 1.7,
   "hp": 9500,
@@ -75,6 +76,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "jab5"},
       "desc": "Jab.",
+      "note": "Quick jab to stop their attack.",
       "boxes": [{"f": [5, 7], "x": 0.613, "y": 1.318, "w": 0.3, "h": 0.436}],
       "boxSrc": "hitVolume"
     },
@@ -106,6 +108,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "low_palm"},
       "desc": "Crouching palm to the shin.",
+      "note": "Quick low palm; they must block crouching.",
       "boxes": [{"f": [5, 7], "x": 0.791, "y": 0.724, "w": 0.363, "h": 0.25}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [2, 0.0], [4, 0.04], [8, 0.0], [17, 0.001]]
@@ -138,6 +141,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "lunge_palm"},
       "desc": "Lunging palm that steps in 0.25 m.",
+      "note": "Lunging palm that steps in a little.",
       "pushExt": [[0, 0.012], [10, 0.056], [17, 0.001], [27, 0.0]]
     },
     "2M": {
@@ -169,6 +173,7 @@
       "lateralM": 0.4,
       "anim": {"clip": "shin_kick"},
       "desc": "Crouching low roundhouse; homing.",
+      "note": "Low kick that catches sidesteps; follow with Dragon's Breath.",
       "boxes": [{"f": [8, 10], "x": 0.866, "y": 0.257, "w": 0.511, "h": 0.3}],
       "boxSrc": "hitVolume"
     },
@@ -201,6 +206,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "drunk_round"},
       "desc": "Curving turning kick; homing.",
+      "note": "Curving kick that catches opponents who sidestep.",
       "pushExt": [[0, 0.034], [21, 0.0], [23, 0.012], [24, 0.065], [26, 0.088], [29, 0.088], [36, 0.014]]
     },
     "2H": {
@@ -231,7 +237,8 @@
       "track": {"until": 3, "rate": 180},
       "lateralM": 0.22,
       "anim": {"clip": "knee_lift"},
-      "desc": "Knee-lift anti-air."
+      "desc": "Knee-lift anti-air.",
+      "note": "Knee lift that swats jumping opponents."
     },
     "6M": {
       "kind": "command",
@@ -262,6 +269,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "wobble_palm"},
       "desc": "Stumbling step-in palm (+2/-4); wall-splats at the ring edge.",
+      "note": "Stumbling palm that closes in; walls them near the edge.",
       "pushExt": [[0, 0.046], [9, 0.068], [34, 0.024]]
     },
     "4H": {
@@ -293,6 +301,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "lean_kick"},
       "desc": "Leans away from high attacks and kicks back (+3/-2).",
+      "note": "Leans away from high attacks, then kicks back.",
       "boxes": [{"f": [15, 17], "x": 0.881, "y": 1.034, "w": 0.542, "h": 0.35}],
       "boxSrc": "hitVolume"
     },
@@ -324,6 +333,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "air_palm"},
       "desc": "Air palm.",
+      "note": "Quick air palm for fights in the air.",
       "pushExt": [[0, 0.098], [8, 0.068], [15, 0.0]]
     },
     "j.M": {
@@ -354,6 +364,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "flying_front"},
       "desc": "Air front kick.",
+      "note": "Air front kick for fights in the air.",
       "pushExt": [[0, 0.038], [11, 0.0], [14, 0.079], [16, 0.069]]
     },
     "j.H": {
@@ -383,7 +394,8 @@
       "track": {"until": 4, "rate": 180},
       "lateralM": 0.22,
       "anim": {"clip": "flying_front_hi"},
-      "desc": "Long flying kick."
+      "desc": "Long flying kick.",
+      "note": "Long flying kick to start a combo."
     },
     "throw_f": {
       "kind": "throw",
@@ -422,6 +434,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Grabs the collar and launches them with a lunging palm.",
+      "note": "Up close: grab the collar and launch them with a palm.",
       "pushExt": [[0, 0.14], [4, 0.024], [6, 0.003], [24, 0.0], [31, 0.04]]
     },
     "throw_b": {
@@ -461,6 +474,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Swings them past with a wild hook.",
+      "note": "Up close: swing them past her, swapping places.",
       "pushExt": [[0, 0.14], [4, 0.024], [6, 0.003], [24, 0.0], [31, 0.04]]
     },
     "sway_l": {
@@ -491,7 +505,8 @@
       "role": ["lowprofile"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "sway_enter"},
-      "desc": "Sways BACK 0.3 m into SWAY."
+      "desc": "Sways BACK 0.3 m into SWAY.",
+      "note": "Sways back into her stance, out of their reach."
     },
     "sway_m": {
       "kind": "special",
@@ -521,7 +536,8 @@
       "role": ["lowprofile"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "sway_enter"},
-      "desc": "Sways in place into SWAY."
+      "desc": "Sways in place into SWAY.",
+      "note": "Sways in place into her stance, leaning out of high attacks."
     },
     "sway_h": {
       "kind": "special",
@@ -551,7 +567,8 @@
       "role": ["lowprofile", "approach"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "sway_enter"},
-      "desc": "Stumbles FORWARD 0.6 m into SWAY."
+      "desc": "Stumbles FORWARD 0.6 m into SWAY.",
+      "note": "Stumbles forward into her stance to close the distance."
     },
     "sway_ex": {
       "kind": "ex",
@@ -581,7 +598,8 @@
       "role": ["lowprofile"],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "sway_enter"},
-      "desc": "Invulnerable sway, straight into the stance."
+      "desc": "Invulnerable sway, straight into the stance.",
+      "note": "Sway that can't be hit or grabbed as it starts."
     },
     "dragon_breath_l": {
       "kind": "special",
@@ -623,6 +641,7 @@
       "anim": {"clip": "dragon_palm"},
       "sfx": [[0, "fire_whoosh"]],
       "desc": "A swig and a short jet of flame (2 hits); range 1.8 / 2.3 / 2.8 m.",
+      "note": "Shortest flame, out the quickest of the three.",
       "pushExt": [[0, 0.0], [9, 0.0], [12, 0.152], [17, 0.184], [32, 0.161], [40, 0.09]]
     },
     "dragon_breath_m": {
@@ -665,6 +684,7 @@
       "anim": {"clip": "dragon_palm"},
       "sfx": [[0, "fire_whoosh"]],
       "desc": "A swig and a short jet of flame (2 hits); range 1.8 / 2.3 / 2.8 m.",
+      "note": "A swig and a short burst of flame aimed at them; stops dashes.",
       "pushExt": [[0, 0.0], [10, 0.0], [13, 0.152], [18, 0.184], [33, 0.161], [41, 0.09]]
     },
     "dragon_breath_h": {
@@ -707,6 +727,7 @@
       "anim": {"clip": "dragon_palm"},
       "sfx": [[0, "fire_whoosh"]],
       "desc": "A swig and a short jet of flame (2 hits); range 1.8 / 2.3 / 2.8 m.",
+      "note": "Longest flame, out the slowest.",
       "pushExt": [[0, 0.0], [11, 0.0], [13, 0.121], [14, 0.152], [19, 0.184], [34, 0.161], [42, 0.09]]
     },
     "dragon_breath_ex": {
@@ -749,6 +770,7 @@
       "anim": {"clip": "dragon_palm"},
       "sfx": [[0, "fire_whoosh"]],
       "desc": "Long 3-hit flame (3.6 m).",
+      "note": "Three-hit flame that reaches much further.",
       "pushExt": [[0, 0.0], [9, 0.0], [10, 0.089], [12, 0.169], [16, 0.184], [31, 0.161], [39, 0.09]]
     },
     "rising_lotus_l": {
@@ -781,6 +803,7 @@
       "anim": {"clip": "rising_knee"},
       "sfx": [[1, "whoosh_heavy"]],
       "desc": "Rising flying knee; air-invulnerable anti-air.",
+      "note": "Quickest knee, the best one against jumps up close.",
       "pushExt": [[0, 0.0], [2, 0.009], [3, 0.059], [7, 0.0], [48, 0.05]]
     },
     "rising_lotus_m": {
@@ -813,6 +836,7 @@
       "anim": {"clip": "rising_knee"},
       "sfx": [[1, "whoosh_heavy"]],
       "desc": "Rising flying knee; air-invulnerable anti-air.",
+      "note": "Rising knee that beats jump-ins. Very risky if blocked.",
       "pushExt": [[0, 0.0], [2, 0.009], [4, 0.059], [6, 0.013], [9, 0.0], [58, 0.05]]
     },
     "rising_lotus_h": {
@@ -845,6 +869,7 @@
       "anim": {"clip": "rising_knee"},
       "sfx": [[1, "whoosh_heavy"]],
       "desc": "Rising flying knee; air-invulnerable anti-air.",
+      "note": "Highest, hardest knee; the riskiest if blocked.",
       "pushExt": [[0, 0.0], [3, 0.009], [4, 0.059], [10, 0.0], [66, 0.05]]
     },
     "rising_lotus_ex": {
@@ -878,6 +903,7 @@
       "anim": {"clip": "rising_knee"},
       "sfx": [[1, "whoosh_heavy"]],
       "desc": "Fully invulnerable 2-hit knee.",
+      "note": "Two-hit knee that can't be hit as it starts: escape pressure.",
       "pushExt": [[0, 0.0], [2, 0.009], [4, 0.059], [6, 0.013], [9, 0.0], [65, 0.05]]
     },
     "sway_low": {
@@ -911,6 +937,7 @@
       "lateralM": 0.45,
       "anim": {"clip": "gourd_sweep"},
       "desc": "SWAY follow-up (L): stumbling low toe kick, knocks down, -9 on block.",
+      "note": "From the sway: low toe kick that knocks down. Risky if blocked.",
       "boxes": [{"f": [10, 12], "x": 0.837, "y": 0.77, "w": 0.455, "h": 0.3}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [2, 0.0], [4, 0.054], [7, 0.072], [17, 0.058], [24, 0.0], [35, 0.0]]
@@ -946,6 +973,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "axe_kick"},
       "desc": "SWAY follow-up (M): crescent axe kick overhead, +2 / -4.",
+      "note": "From the sway: axe kick that must be blocked standing.",
       "boxes": [{"f": [18, 20], "x": 0.61, "y": 1.343, "w": 0.4, "h": 0.686}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.017], [3, 0.043], [8, 0.0], [24, 0.0], [27, 0.033], [29, 0.001], [39, 0.0]]
@@ -982,6 +1010,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "tornado_hop"},
       "desc": "SWAY follow-up (H): throw-invulnerable hop over lows into a tornado kick.",
+      "note": "From the sway: hop over lows into a spin kick; can't be grabbed.",
       "pushExt": [
         [0, 0.012],
         [3, 0.016],
@@ -1024,7 +1053,8 @@
       "role": [],
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "sway_exit"},
-      "desc": "Leaves SWAY (press down, or after 90 frames)."
+      "desc": "Leaves SWAY (press down, or after 90 frames).",
+      "note": "Leave the sway stance and stand up straight."
     },
     "bottoms_up": {
       "kind": "super1",
@@ -1067,6 +1097,7 @@
       "anim": {"clip": "bottoms_seq", "warp": [[0, 0.0], [8, 0.158], [22, 0.95], [36, 1.617], [91, 2.0]]},
       "sfx": [[1, "crowd_cheer_burst"]],
       "desc": "A swig, then palm, turning kick and rising knee - invulnerable startup.",
+      "note": "A swig, then a three-hit rush that can't be hit as it starts.",
       "pushExt": [
         [0, 0.012],
         [10, 0.055],
@@ -1278,6 +1309,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "lunge_palm"},
       "desc": "PRIME TIME: a lunging palm, a long swig, and a drunken beating that ends in a fire blast.",
+      "note": "PRIME TIME: unstoppable palm into a drunken beating and fire blast.",
       "pushExt": [[0, 0.012], [19, 0.056], [37, 0.001], [72, 0.0]]
     }
   },
@@ -1305,7 +1337,8 @@
     "blockExitF": 6,
     "walk": {"fwd": 1.6, "back": 1.1},
     "clips": {"idle": "sway_idle", "walk_f": "sway_walk", "walk_b": "sway_walk_b"},
-    "trait": "SWAY STANCE: leans out of high attacks; L low, M overhead, H hop over lows."
+    "trait": "SWAY STANCE: leans out of high attacks; L low, M overhead, H hop over lows.",
+    "note": "Sway leans out of high attacks; then light hits low, medium hits high, heavy hops."
   },
   "intro": "intro_sip",
   "win": ["win_sway", "win_sigh"],

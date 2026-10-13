@@ -422,3 +422,19 @@ html.hp-touch:has(#hp-touch.lh) .hp-inputs { left: auto; right: calc(env(safe-ar
 html.hp-touch .hp-bonus { top: calc(env(safe-area-inset-top, 0px) + var(--u) * .6); right: calc(env(safe-area-inset-right, 0px) + var(--u) * .8); }
 /* boss phase 2 callout */
 .hp-call[data-k="phase2"] { background: var(--hp-red-dk); color: var(--hp-yellow); font-size: max(14px, calc(var(--u) * 1.7)); }
+
+/* CHANGED(wf8 fix) FT-01 / FT-11: the coach hint (LOW ATTACK! BLOCK LOW: SHIFT + S / GRABBED! PRESS F TO BREAK FREE) - centre,
+   above the controls bar band, the player's own key caps inline; pops in, fades out (hud.ts coach()) */
+.hp-coach {
+  position: absolute; left: 50%; bottom: calc(7% + 10px); transform: translateX(-50%) skewX(-10deg); z-index: 3; pointer-events: none;
+  display: inline-flex; align-items: center; gap: .35em; padding: .25em .75em; white-space: nowrap;
+  font: 400 max(14px, calc(var(--u) * 1.5)) / 1.1 var(--f-display); color: var(--hp-ink); background: var(--hp-yellow);
+  border: var(--line) solid var(--hp-ink); box-shadow: var(--shadow);
+}
+.hp-coach[hidden] { display: none; }
+.hp-coach[data-k="grab"] { background: var(--hp-teal); }
+.hp-coach .hpk-cap { font-size: .9em; transform: skewX(10deg); }
+.hp-coach.on { animation: hp-coach-in .18s cubic-bezier(.2, 1.6, .4, 1) both, hp-coach-out .35s ease-in 2.05s forwards; }
+@keyframes hp-coach-in { from { opacity: 0; transform: translateX(-50%) skewX(-10deg) scale(1.5); } to { opacity: 1; transform: translateX(-50%) skewX(-10deg) scale(1); } }
+@keyframes hp-coach-out { to { opacity: 0; transform: translateX(-50%) skewX(-10deg) translateY(-30%); } }
+html.hp-noflash .hp-coach.on { animation: none; }

@@ -4,6 +4,7 @@
   "persona": "The B-Boy",
   "archetype": "aerial",
   "difficulty": 3,
+  "plan": "Attack from above and below: dive kicks from the air, low spins and crawls on the floor.",
   "body": "Ch06_nonPBR",
   "heightM": 1.76,
   "hp": 9500,
@@ -75,6 +76,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "jab"},
       "desc": "Jab out of the uprock.",
+      "note": "Quick jab to stop their attack.",
       "boxes": [{"f": [5, 7], "x": 0.743, "y": 1.317, "w": 0.3, "h": 0.433}],
       "boxSrc": "hitVolume"
     },
@@ -106,7 +108,8 @@
       "track": {"until": 1, "rate": 180},
       "lateralM": 0.15,
       "anim": {"clip": "floor_tap"},
-      "desc": "Drops to the floor and taps the shin; low profile."
+      "desc": "Drops to the floor and taps the shin; low profile.",
+      "note": "Drops low and taps the shin, ducking under high attacks."
     },
     "5M": {
       "kind": "normal",
@@ -136,6 +139,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "front_kick"},
       "desc": "Long front kick.",
+      "note": "Long front kick to keep them at a distance.",
       "boxes": [{"f": [9, 11], "x": 0.513, "y": 1.437, "w": 0.4, "h": 0.674}],
       "boxSrc": "hitVolume"
     },
@@ -168,7 +172,8 @@
       "homing": true,
       "lateralM": 0.4,
       "anim": {"clip": "footwork_sweep"},
-      "desc": "Floor footwork leg sweep (low, no knockdown), low profile; homing."
+      "desc": "Floor footwork leg sweep (low, no knockdown), low profile; homing.",
+      "note": "Low sweep under high attacks that catches sidesteps."
     },
     "5H": {
       "kind": "normal",
@@ -201,6 +206,7 @@
       "anim": {"clip": "swipes"},
       "sfx": [[8, "whoosh_heavy"]],
       "desc": "Two whipping leg swipes; homing.",
+      "note": "Two leg swipes that catch opponents who sidestep.",
       "pushExt": [[0, 0.13], [2, 0.212], [5, 0.0], [40, 0.0]]
     },
     "2H": {
@@ -233,6 +239,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "flare_sweep"},
       "desc": "Flair leg sweep, low profile; homing.",
+      "note": "Low spinning sweep that knocks down. Risky if blocked.",
       "pushExt": [[0, 0.267], [5, 0.198], [6, 0.158], [7, 0.03], [8, 0.0], [38, 0.0]]
     },
     "6M": {
@@ -265,6 +272,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "butterfly"},
       "desc": "Jump spin kick overhead that hops over lows; homing.",
+      "note": "Jumping spin kick: hops over lows, must be blocked standing.",
       "boxes": [{"f": [18, 20], "x": 0.814, "y": 1.129, "w": 0.4, "h": 0.658}],
       "boxSrc": "hitVolume",
       "pushExt": [
@@ -319,6 +327,7 @@
       "anim": {"clip": "flare_sweep"},
       "sfx": [[4, "whoosh_heavy"]],
       "desc": "STEP + H: low-profile flair sweep into the flank out of a sidestep; low, knocks down, -8 on block.",
+      "note": "Out of a sidestep: a low spin into their side that knocks down.",
       "pushExt": [[0, 0.387], [4, 0.335], [7, 0.15], [8, 0.016], [9, 0.0], [34, 0.0]]
     },
     "j.L": {
@@ -348,7 +357,8 @@
       "track": {"until": 1, "rate": 180},
       "lateralM": 0.15,
       "anim": {"clip": "air_jab"},
-      "desc": "Air jab."
+      "desc": "Air jab.",
+      "note": "Quick air jab for fights in the air."
     },
     "j.M": {
       "kind": "normal",
@@ -377,7 +387,8 @@
       "track": {"until": 1, "rate": 180},
       "lateralM": 0.18,
       "anim": {"clip": "air_swipe"},
-      "desc": "Leg whip air-to-air."
+      "desc": "Leg whip air-to-air.",
+      "note": "Leg whip that wins fights in the air."
     },
     "j.H": {
       "kind": "normal",
@@ -406,7 +417,8 @@
       "track": {"until": 4, "rate": 180},
       "lateralM": 0.22,
       "anim": {"clip": "jump_kick"},
-      "desc": "Turning jump-in."
+      "desc": "Turning jump-in.",
+      "note": "Turning jump-in kick to start a combo."
     },
     "throw_f": {
       "kind": "throw",
@@ -445,6 +457,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Drags them down into his footwork.",
+      "note": "Up close: drag them down into his footwork. Beats blocking.",
       "pushExt": [[0, 0.134], [4, 0.004], [5, 0.0], [31, 0.02]]
     },
     "throw_b": {
@@ -484,6 +497,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Flairs and flings them behind.",
+      "note": "Up close: flair and fling them behind him.",
       "pushExt": [[0, 0.134], [4, 0.004], [5, 0.0], [31, 0.02]]
     },
     "windmill_l": {
@@ -518,6 +532,7 @@
       "anim": {"clip": "windmill_l", "warp": [[0, 0.0], [12, 0.3], [20, 0.633], [46, 1.8]]},
       "sfx": [[4, "whoosh_light"]],
       "desc": "Flair spin through the opponent (2/4/6 hits), low profile; homing.",
+      "note": "Short two-hit spin; the least risky of the three if blocked.",
       "boxes": [
         {"f": [12, 13], "x": 0.863, "y": 0.111, "w": 0.34, "h": 0.25},
         {"f": [20, 21], "x": 0.863, "y": 0.111, "w": 0.34, "h": 0.25}
@@ -573,6 +588,7 @@
       "anim": {"clip": "windmill_m", "warp": [[0, 0.0], [13, 0.3], [24, 0.733], [37, 1.267], [45, 1.567], [73, 2.733]]},
       "sfx": [[4, "whoosh_light"]],
       "desc": "Flair spin through the opponent (2/4/6 hits), low profile; homing.",
+      "note": "Spins low through them, ducking high attacks; catches sidesteps.",
       "pushExt": [
         [0, 0.088],
         [6, 0.0],
@@ -636,6 +652,7 @@
       },
       "sfx": [[4, "whoosh_light"]],
       "desc": "Flair spin through the opponent (2/4/6 hits), low profile; homing.",
+      "note": "Long six-hit spin; walls them near the edge.",
       "pushExt": [
         [0, 0.088],
         [6, 0.0],
@@ -705,6 +722,7 @@
       },
       "sfx": [[4, "whoosh_light"]],
       "desc": "Projectile-invulnerable 6-hit windmill, -6 on block.",
+      "note": "Six-hit spin that passes through projectiles.",
       "pushExt": [
         [0, 0.088],
         [4, 0.0],
@@ -768,7 +786,8 @@
       "lateralM": 0.6,
       "anim": {"clip": "handspin_clip", "warp": [[0, 0.0], [7, 0.3], [17, 0.733], [27, 1.2], [59, 1.467]]},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "One-hand spin with the legs up: 3-hit anti-air, air-invulnerable legs-up startup."
+      "desc": "One-hand spin with the legs up: 3-hit anti-air, air-invulnerable legs-up startup.",
+      "note": "Quickest handspin: the best one against jumpers."
     },
     "handspin_m": {
       "kind": "special",
@@ -806,7 +825,8 @@
       "lateralM": 0.6,
       "anim": {"clip": "handspin_clip", "warp": [[0, 0.0], [8, 0.3], [18, 0.733], [28, 1.2], [63, 1.467]]},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "One-hand spin with the legs up: 3-hit anti-air, air-invulnerable legs-up startup."
+      "desc": "One-hand spin with the legs up: 3-hit anti-air, air-invulnerable legs-up startup.",
+      "note": "Handspin with legs up: knocks jumpers down. Risky if blocked."
     },
     "handspin_h": {
       "kind": "special",
@@ -844,7 +864,8 @@
       "lateralM": 0.6,
       "anim": {"clip": "handspin_clip", "warp": [[0, 0.0], [9, 0.3], [19, 0.733], [29, 1.2], [67, 1.467]]},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "One-hand spin with the legs up: 3-hit anti-air, air-invulnerable legs-up startup."
+      "desc": "One-hand spin with the legs up: 3-hit anti-air, air-invulnerable legs-up startup.",
+      "note": "Strongest handspin; the riskiest if blocked."
     },
     "handspin_ex": {
       "kind": "ex",
@@ -882,7 +903,8 @@
       "lateralM": 0.6,
       "anim": {"clip": "handspin_clip", "warp": [[0, 0.0], [7, 0.3], [17, 0.733], [27, 1.2], [63, 1.467]]},
       "sfx": [[2, "whoosh_heavy"]],
-      "desc": "Fully invulnerable handspin."
+      "desc": "Fully invulnerable handspin.",
+      "note": "Handspin that can't be hit as it starts: escape pressure."
     },
     "six_step_l": {
       "kind": "special",
@@ -915,7 +937,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "six_step_clip", "warp": [[0, 0.0], [12, 0.4], [20, 0.633], [40, 1.733]]},
       "sfx": [[3, "whoosh_light"]],
-      "desc": "Low-profile footwork crawl-in with two low sweeps."
+      "desc": "Low-profile footwork crawl-in with two low sweeps.",
+      "note": "Short crawl; safe if they block it."
     },
     "six_step_m": {
       "kind": "special",
@@ -948,7 +971,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "six_step_clip", "warp": [[0, 0.0], [14, 0.4], [22, 0.633], [44, 1.733]]},
       "sfx": [[3, "whoosh_light"]],
-      "desc": "Low-profile footwork crawl-in with two low sweeps."
+      "desc": "Low-profile footwork crawl-in with two low sweeps.",
+      "note": "Crawls in low under attacks with two low sweeps. Sidesteps beat it."
     },
     "six_step_h": {
       "kind": "special",
@@ -981,7 +1005,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "six_step_clip", "warp": [[0, 0.0], [16, 0.4], [24, 0.633], [48, 1.733]]},
       "sfx": [[3, "whoosh_light"]],
-      "desc": "Low-profile footwork crawl-in with two low sweeps."
+      "desc": "Low-profile footwork crawl-in with two low sweeps.",
+      "note": "Longest crawl, to reach them from far away."
     },
     "six_step_ex": {
       "kind": "ex",
@@ -1019,6 +1044,7 @@
       "anim": {"clip": "six_step_ex_clip", "warp": [[0, 0.0], [12, 0.4], [20, 0.633], [31, 1.133], [49, 1.767]]},
       "sfx": [[3, "whoosh_light"]],
       "desc": "Three lows, -2 on block.",
+      "note": "Long crawl with three low sweeps; safe if blocked.",
       "pushExt": [[0, 0.0], [44, 0.0], [49, 0.095]]
     },
     "drop_in_l": {
@@ -1052,7 +1078,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "dive_kick"},
       "sfx": [[2, "whoosh_light"]],
-      "desc": "Air-only dive kick (214 or S in the air): L steep, H flat and far."
+      "desc": "Air-only dive kick (214 or S in the air): L steep, H flat and far.",
+      "note": "Steep dive that lands close in front of him."
     },
     "drop_in_m": {
       "kind": "special",
@@ -1085,7 +1112,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "dive_kick"},
       "sfx": [[2, "whoosh_light"]],
-      "desc": "Air-only dive kick (214 or S in the air): L steep, H flat and far."
+      "desc": "Air-only dive kick (214 or S in the air): L steep, H flat and far.",
+      "note": "In the air only: a dive kick that drops on them fast."
     },
     "drop_in_h": {
       "kind": "special",
@@ -1118,7 +1146,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "dive_kick"},
       "sfx": [[2, "whoosh_light"]],
-      "desc": "Air-only dive kick (214 or S in the air): L steep, H flat and far."
+      "desc": "Air-only dive kick (214 or S in the air): L steep, H flat and far.",
+      "note": "Flat dive that travels far."
     },
     "drop_in_ex": {
       "kind": "ex",
@@ -1151,7 +1180,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "dive_kick"},
       "sfx": [[2, "whoosh_light"]],
-      "desc": "Fast, far dive, +3 more on block."
+      "desc": "Fast, far dive, +3 more on block.",
+      "note": "Fast, far dive that is safer if blocked."
     },
     "cypher": {
       "kind": "super1",
@@ -1195,6 +1225,7 @@
       },
       "sfx": [[1, "crowd_cheer_burst"]],
       "desc": "Invulnerable 6-hit flair cyclone.",
+      "note": "Six-hit spinning cyclone that can't be hit as it starts.",
       "pushExt": [
         [0, 0.088],
         [4, 0.0],
@@ -1423,6 +1454,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "front_kick"},
       "desc": "PRIME TIME: a front kick opens a full battle round the crowd scores live.",
+      "note": "PRIME TIME: unstoppable front kick into a full battle round.",
       "boxes": [{"f": [10, 13], "x": 0.513, "y": 1.449, "w": 0.5, "h": 0.699}],
       "boxSrc": "hitVolume"
     }
@@ -1455,7 +1487,8 @@
   ],
   "unique": {
     "kind": "none",
-    "trait": "LOW PROFILE + AIR: floor normals (2L/2M/2H), WINDMILL and SIX STEP shrink his hurtbox under highs and projectiles; DROP-IN is an air-only dive kick; floatiest jump (apex 1.75 m, 40 air frames)."
+    "trait": "LOW PROFILE + AIR: floor normals (2L/2M/2H), WINDMILL and SIX STEP shrink his hurtbox under highs and projectiles; DROP-IN is an air-only dive kick; floatiest jump (apex 1.75 m, 40 air frames).",
+    "note": "Floor fighter: his low moves duck under high attacks, and he jumps the highest."
   },
   "intro": "intro_uprock",
   "win": ["win_freeze", "win_ending"],

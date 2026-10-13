@@ -15,6 +15,9 @@
 //   SUPER   64, the S+H macro, shown only while SHOWTIME holds >= 1 bar (pulses at 3);
 //   ASSIST  a chip: a tap latches ASSIST for 1 s (holding a modifier while tapping is awkward on glass); held = held.
 //   PAUSE   44, top centre under the timer -> onPause handlers (game.ts routes them into the ESC pause path).
+//   HELP    CHANGED(ui) (CONTRACT §36.2: "touch mode shows a ? chip that opens a touch cheat sheet"): a 44 px "?" disc right of
+//           PAUSE -> onHelp handlers (game.ts opens the pause card in its HELP layout = the touch cheat sheet). Like PAUSE it
+//           is not part of EDIT LAYOUT and the pad's fit keeps every button clear of it.
 //   STEP    CHANGED(UI3D) (CONTRACT §35.2): two 56 px buttons ABOVE the stick's home - IN (circle away from the camera, bit 13
 //           STEP_IN) and OUT (toward it, bit 14 STEP_OUT). A tap = SIDESTEP, a hold = SIDEWALK (circle-walk round the ring);
 //           the sim tells the two apart by how long the bit is held, the overlay only holds / latches it like any button.
@@ -35,7 +38,7 @@
 
 import './touch.css';
 
-export type TouchButtonId = 'l' | 'm' | 'h' | 's' | 'parry' | 'impact' | 'throw' | 'super' | 'assist' | 'pause' | 'stepin' | 'stepout';
+export type TouchButtonId = 'l' | 'm' | 'h' | 's' | 'parry' | 'impact' | 'throw' | 'super' | 'assist' | 'pause' | 'stepin' | 'stepout' | 'help';
 export type TouchLayout = Record<string, { dx: number; dy: number; s: number }>;
 export interface TouchOptions { scale: number; opacity: number; leftHanded: boolean; haptics: boolean; layout: TouchLayout | null }
 /** CONTRACT 18.5 (input.ts owns the instance as `Input.touch`): TouchControls writes, input.ts consumes it each tick */
@@ -69,7 +72,7 @@ export const TOUCH = {
  * Old homes (dx, dy): s 62,70  h 150,44  m 156,128  l 238,86  parry 84,160  impact 160,212  throw 240,172  super 50,244
  * assist 318,40.
  */
-const CLUSTER: ReadonlyArray<{ id: Exclude<TouchButtonId, 'pause'>; dx: number; dy: number; d: number; bits: number; label: string; left?: boolean }> = [
+const CLUSTER: ReadonlyArray<{ id: Exclude<TouchButtonId, 'pause' | 'help'>; dx: number; dy: number; d: number; bits: number; label: string; left?: boolean }> = [
   { id: 's', dx: 43, dy: 42, d: 84, bits: BIT.S, label: 'SP' },
   { id: 'h', dx: 158, dy: 36, d: 72, bits: BIT.H, label: 'H' },
   { id: 'm', dx: 109, dy: 99, d: 72, bits: BIT.M, label: 'M' },
@@ -86,6 +89,8 @@ const PAUSE_D = 44;
 /** CHANGED(wf6 fixer) VO-D3: the top HUD blocks the pad must stay under (their measured bottom edge) */
 const HUD_SELECTOR = '.hp-bars, .hp-side, .hp-show';
 const PAUSE_TOP = 96;            // pause centre, px below the top safe edge (under the HUD timer + pips; >= 20 % of the height)
+/** CHANGED(ui): the "?" disc's centre sits this far right of PAUSE's (x disc scale) */
+const HELP_DX = 58;
 const STICK_HOME_PAD = 34;
 
 const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
@@ -121,6 +126,7 @@ export class TouchControls {
   private readonly btns = new Map<TouchButtonId, Btn>();
   private readonly tracks = new Map<number, Track>();
   private readonly pauseFns: Fn[] = [];
+  private readonly helpFns: Fn[] = [];
   private readonly layoutFns: Array<(l: TouchLayout) => void> = [];
   private readonly offs: Fn[] = [];
   private visible = false;
@@ -174,8 +180,8 @@ export class TouchControls {
       const lab = document.createElement('span');
       // CHANGED(UI) P2 (verifier: labels overflowed their discs on an iPhone, DPR 3): words of 4+ letters use the condensed
       // face and every label is shrunk to fit its disc (fitLabels, after each layout and once the fonts have loaded)
-      lab.className = label.length >= 4 && id !== 'pause' ? 'hpt-lbl long' : 'hpt-lbl';
-      lab.textContent = id === 'pause' ? '' : label;
+      lab.className = label.length >= 4 && id !== 'pause' && id !== 'help' ? 'hpt-lbl long' : 'hpt-lbl';
+      lab.textContent = id === 'pause' ? '' : id === 'help' ? '?' : label;
       if (id === 'pause') lab.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4.2" height="14" rx="1.2" fill="currentColor"/><rect x="13.8" y="5" width="4.2" height="14" rx="1.2" fill="currentColor"/></svg>';
       e.append(lab);
       root.append(e);
@@ -185,6 +191,7 @@ export class TouchControls {
     };
     for (const c of CLUSTER) mk(c.id, c.d, c.bits, c.label);
     mk('pause', PAUSE_D, 0, 'PAUSE');
+    mk('help', PAUSE_D, 0, 'CONTROLS');                       // CHANGED(ui): the "?" cheat-sheet disc
     this.listen(this.pad, null);
     // EDIT LAYOUT toolbar
     this.editBar = document.createElement('div');
@@ -304,6 +311,8 @@ export class TouchControls {
   }
 
   onPause(fn: () => void): () => void { this.pauseFns.push(fn); return () => { const i = this.pauseFns.indexOf(fn); if (i >= 0) this.pauseFns.splice(i, 1); }; }
+  /** CHANGED(ui) (CONTRACT §36.2): the "?" disc was tapped (game.ts: the pause card's touch cheat sheet) */
+  onHelp(fn: () => void): () => void { this.helpFns.push(fn); return () => { const i = this.helpFns.indexOf(fn); if (i >= 0) this.helpFns.splice(i, 1); }; }
   onLayout(fn: (l: TouchLayout) => void): () => void { this.layoutFns.push(fn); return () => { const i = this.layoutFns.indexOf(fn); if (i >= 0) this.layoutFns.splice(i, 1); }; }
 
   /** EDIT LAYOUT mode: buttons stop producing input; drags move them; DONE (or editLayout(false)) saves */
@@ -336,6 +345,7 @@ export class TouchControls {
     for (const f of this.offs) { try { f(); } catch { /* ignore */ } }
     this.offs.length = 0;
     this.pauseFns.length = 0;
+    this.helpFns.length = 0;
     this.layoutFns.length = 0;
     this.root.remove();
   }
@@ -391,6 +401,21 @@ export class TouchControls {
     return b;
   }
 
+  /** CHANGED(ui): the lowest bottom edge of the top-HUD blocks spanning x0..x1 (px from the overlay's top), 0 = none */
+  private hudBottomAt(x0: number, x1: number): number {
+    let b = 0;
+    try {
+      const rr = this.root.getBoundingClientRect();
+      for (const e of Array.from(document.querySelectorAll<HTMLElement>(HUD_SELECTOR))) {
+        const r = e.getBoundingClientRect();
+        if (r.width < 1 || r.height < 1 || r.top - rr.top > this.H * 0.45) continue;
+        if (r.right - rr.left < x0 || r.left - rr.left > x1) continue;
+        b = Math.max(b, r.bottom - rr.top);
+      }
+    } catch { /* no DOM */ }
+    return b;
+  }
+
   /**
    * CHANGED(wf6 fixer) VO-D3: [disc size q, spread p] for a setting `s`: the largest q <= s (>= min(1, s)) with a spread
    * p in [q / 1.12, q] at which every unmoved button clears the top HUD, PAUSE and its neighbours
@@ -404,6 +429,8 @@ export class TouchControls {
     const pts: Array<[number, number, number]> = [];
     const ok = (q: number, p: number): boolean => {
       const pr = Math.max(TOUCH.minTarget, PAUSE_D * q) / 2;
+      const hx = px + (lh ? -1 : 1) * HELP_DX * Math.max(1, q); // CHANGED(ui): the "?" disc beside PAUSE (layout() places it)
+      const hy = Math.max(py, this.hudBottomAt(hx - pr, hx + pr) + 4 + pr);
       pts.length = 0;
       for (const c of CLUSTER) {
         const o = L[c.id];
@@ -414,6 +441,7 @@ export class TouchControls {
         const cy = H - safe.b - c.dy * p;
         if (cy - r < topLimit) return false;
         if (Math.hypot(cx - px, cy - py) < r + pr + 6) return false;
+        if (Math.hypot(cx - hx, cy - hy) < r + pr + 6) return false;
         for (const [x, y, rr] of pts) if (Math.hypot(cx - x, cy - y) < r + rr + 4) return false;
         pts.push([cx, cy, r]);
       }
@@ -456,6 +484,14 @@ export class TouchControls {
     }
     const pb = this.btns.get('pause');
     if (pb) place(pb, W / 2, safe.t + Math.max(PAUSE_TOP, H * 0.2), Math.max(TOUCH.minTarget, PAUSE_D * s));
+    const hb = this.btns.get('help');                         // CHANGED(ui): mirrored to PAUSE's left when left-handed
+    if (hb) {
+      // beside PAUSE, but never under the HUD block above it (a short phone's P2 side reaches lower than the timer)
+      const hd = Math.max(TOUCH.minTarget, PAUSE_D * s);
+      const hx = W / 2 + (lh ? -1 : 1) * HELP_DX * Math.max(1, s);
+      const hy = Math.max(safe.t + Math.max(PAUSE_TOP, H * 0.2), this.hudBottomAt(hx - hd / 2, hx + hd / 2) + 4 + hd / 2);
+      place(hb, hx, hy, hd);
+    }
     this.baseR = (TOUCH.stickBase * sp) / 2;
     const knob = TOUCH.stickKnob * sp;
     this.knobEl.style.width = `${knob}px`;
@@ -549,7 +585,7 @@ export class TouchControls {
     const x = e.clientX, y = e.clientY;
     const tr: Track = { kind: 'none', id: null, el, sx: x, sy: y, ox: 0, oy: 0, moved: false };
     if (this.editing) {
-      if (btn && btn.id !== 'pause') {
+      if (btn && btn.id !== 'pause' && btn.id !== 'help') {
         tr.kind = 'edit';
         tr.id = btn.id;
         const o = this.editLayoutDraft[btn.id] ?? { dx: 0, dy: 0, s: 1 };
@@ -605,11 +641,11 @@ export class TouchControls {
     } else if (tr.kind === 'btn' && tr.id) {
       const b = this.btns.get(tr.id);
       if (b) this.release(b);
-      if (tr.id === 'pause' && !cancelled && b) {
+      if ((tr.id === 'pause' || tr.id === 'help') && !cancelled && b) {
         const r = b.el.getBoundingClientRect();
         const pad = 12;
         if (e.clientX >= r.left - pad && e.clientX <= r.right + pad && e.clientY >= r.top - pad && e.clientY <= r.bottom + pad) {
-          for (const f of [...this.pauseFns]) { try { f(); } catch (err) { console.error('[hit-parade] touch pause', err); } }
+          for (const f of [...(tr.id === 'help' ? this.helpFns : this.pauseFns)]) { try { f(); } catch (err) { console.error('[hit-parade] touch pause / help', err); } }
         }
       }
     }

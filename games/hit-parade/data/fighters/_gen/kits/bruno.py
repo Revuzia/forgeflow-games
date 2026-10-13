@@ -352,4 +352,41 @@ def build():
                'on the other. He loads both into his old moving van and drives off before the credits roll. Nobody '
                "knows where he delivered them. The network's new office has a walk-in freezer, and it is always "
                'locked.')
+    # CHANGED(notes) (CONTRACT 36.4): plain-English player text; the SIMPLE / EASY-routed _m ids carry the family note
+    K.describe(
+        plan="Walk in, brace through their attacks, then grab them with Walk-In Freezer for huge damage.",
+        unique="Brace steps forward through one hit; follow with his big grab or a quick low jab.",
+        notes={
+            "5L": "Quick chop to stop their attack up close.",
+            "2L": "Quick low punch; mix it with his big grab to keep them guessing.",
+            "5M": "Heavy straight forearm; a solid poke at arm's length.",
+            "2M": "Low forearm; follow with Fridge Door to knock them down.",
+            "5H": "Big haymaker that catches opponents who sidestep.",
+            "2H": "Both arms swing up to swat jumping opponents.",
+            "6H": "Big push kick; slams them into the wall near the ring edge.",
+            "j.L": "Quick air chop for fights in the air.",
+            "j.M": "Jump-in forearm that reaches ahead.",
+            "j.H": "Heavy double-fist jump-in to start a combo.",
+            "j.2H": "In the air: body press straight down onto whoever is below.",
+            "throw_f": "Up close: crush them in a bear hug. Beats blocking.",
+            "throw_b": "Up close: spin them round and fling them behind him.",
+            "walk_in_m": "Huge grab that beats blocking and sidesteps; misses if they jump.",
+            "walk_in_l": "Grab with the longest reach of the three, but the least damage.",
+            "walk_in_h": "Shortest reach, but the most damage of the three.",
+            "walk_in_ex": "Grab that can't be hit as it starts, with the longest reach.",
+            "fridge_door_m": "Running shove that walks through one hit; walls them in.",
+            "fridge_door_l": "Short, quick shove; the least risky of the three if blocked.",
+            "fridge_door_h": "Longest, strongest shove; very risky if blocked.",
+            "fridge_door_ex": "Shove that walks through two hits and is safer if blocked.",
+            "lariat_m": "Spinning clothesline: beats jumps and passes through projectiles.",
+            "lariat_l": "Quickest lariat; the best one against jumps.",
+            "lariat_h": "Strongest lariat; the riskiest if blocked.",
+            "lariat_ex": "Three-hit lariat that can't be hit as it starts.",
+            "brace_m": "Steps forward through one hit; go straight into any special.",
+            "brace_l": "Short brace step; the quickest to get out of.",
+            "brace_h": "Long brace step that covers the most ground.",
+            "brace_ex": "Brace through two hits, ready from the very start.",
+            "cold_storage": "Running grab they can't block: jump over it or get carried off.",
+            "final_delivery": "PRIME TIME: point-blank grab that spins and hurls them across the set.",
+        })
     return K

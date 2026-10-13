@@ -275,4 +275,41 @@ def build():
         ending="GAZZA knocks the host clean off his own set with a bicycle kick and celebrates with his hoodie over his "
                "head for eleven minutes. He spends the prize money on a pitch behind the Rust Theater with real "
                "floodlights and a real referee. He argues with that referee every Sunday. He has never been happier.")
+    # CHANGED(notes) (CONTRACT 36.4): plain-English player text; the SIMPLE / EASY-routed _m ids carry the family note
+    K.describe(
+        plan="Shoot the ball to keep them out, park it in the air to stop jumps, then rush in.",
+        unique="One ball: shoot it, park it in the air, volley it later. Walk over it to pick it up.",
+        notes={
+            "5L": "Quick jab to stop their attack.",
+            "2L": "Quick low jab; they must block crouching.",
+            "5M": "Front snap kick to keep them at arm's length.",
+            "2M": "Long low kick that catches sidesteps; he stays standing tall.",
+            "5H": "Big volley kick; walls them near the edge.",
+            "2H": "Slide tackle from range that knocks down. A sidestep beats it.",
+            "4M": "Quick short knee to stop their attack.",
+            "6H": "Hopping header that must be blocked standing.",
+            "j.L": "Quick air knee for fights in the air.",
+            "j.M": "Flying volley that wins fights in the air.",
+            "j.H": "Big flying punt to start a combo.",
+            "throw_f": "Up close: drop them like a ball and punt them away.",
+            "throw_b": "Up close: bicycle-kick them over his head, behind him.",
+            "power_shot_m": "Shoots the ball straight ahead; it bounces back once off the wall.",
+            "power_shot_l": "Low rolling shot aimed at them: they must block it crouching.",
+            "power_shot_h": "Lobbed shot aimed at them that drops from above; good vs jumpers.",
+            "power_shot_ex": "Curling two-hit shot aimed right at them.",
+            "bicycle_m": "Bicycle kick that knocks jumpers down; he lands on his back.",
+            "bicycle_l": "Quickest bicycle kick, the best one against jumps.",
+            "bicycle_h": "Strongest bicycle kick; the riskiest if blocked.",
+            "bicycle_ex": "Bicycle kick that can't be hit as it starts: escape pressure.",
+            "keepy_m": "Keeps the ball up overhead as a trap for jumpers; shoot it later.",
+            "keepy_l": "Keeps the ball low, just over his head.",
+            "keepy_h": "Keeps the ball high, to catch high jumps.",
+            "keepy_ex": "The ball stays up longer and hits twice.",
+            "dive_m": "Theatrical dive-roll forward under projectiles and high attacks.",
+            "dive_l": "Short dive-roll, to slip in from close range.",
+            "dive_h": "Longest dive-roll, to cross the ring.",
+            "dive_ex": "Dive-roll that no strike can touch.",
+            "top_bins": "Fresh ball, five-hit flaming shot; can't be hit as it starts.",
+            "hat_trick": "PRIME TIME: unstoppable volley into a header and bicycle-kick show.",
+        })
     return K

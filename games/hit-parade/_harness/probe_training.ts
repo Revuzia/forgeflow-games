@@ -307,6 +307,25 @@ for (const stage of ['rust_theater', 'butcher_block']) {
     `hurt centres ${hurtP1.map(([x, z]) => `(${x.toFixed(2)}, ${z.toFixed(2)})`).join(' ')}, boxes ${r.hud.boxes}`);
 }
 
+// CHANGED(input) (CONTRACT §36.5): P1's EASY keys pass through the driver (bits 15-21 were masked off at 0x7fff): BLOCK held
+// with forward = no walk + the guard pose, SPECIAL 1 = johnny's 5S special, SUPER (full meter) = his Lv1
+{
+  const r = rig({ guard: 'none', meter: 'full' });
+  for (let k = 0; k < 3; k++) tick(r, 0);
+  const x0 = readFighter(r.m, 0).x;
+  for (let k = 0; k < 30; k++) tick(r, (1 << 15) | B.RIGHT);
+  const held = readFighter(r.m, 0);
+  const still = Math.abs(held.x - x0) < 0.001 && held.stateName === 'idle';
+  for (let k = 0; k < 3; k++) tick(r, 0);
+  tick(r, 1 << 16);
+  const sp = readFighter(r.m, 0).moveName;
+  for (let k = 0; k < 90; k++) tick(r, 0);
+  tick(r, 1 << 20);
+  const su = readFighter(r.m, 0).moveName;
+  ok(still && sp === 'brickbat_m' && su === 'sold_out', 'P1 EASY keys pass through the driver: BLOCK + forward holds still in guard, SPECIAL 1 = 5S, SUPER = Lv1',
+    `moved ${(held.x - x0).toFixed(4)} m in ${held.stateName}, SPECIAL 1 -> ${sp}, SUPER -> ${su}`);
+}
+
 // ── METER FULL / CPU / boxes / input display
 {
   const r = rig({ meter: 'full' });

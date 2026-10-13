@@ -309,4 +309,43 @@ def build():
         ending="RERUN bites the host once, gently, on the ankle, and the network's star is back on the air every night "
                "of the week - he just can't remember his lines. Rerun takes the corner office and the late-night slot. "
                "The show never ends now. It just repeats, and the ratings have never been better.")
+    # CHANGED(notes) (CONTRACT 36.4): plain-English player text; the SIMPLE / EASY-routed _m ids carry the family note
+    K.describe(
+        plan="Bait their attacks and play dead to counter; when they stop attacking, grab them.",
+        unique="Play Dead: drop to the floor; strike him then and he springs up and hits back.",
+        notes={
+            "5L": "Quick swat to stop their attack.",
+            "2L": "Quick low bite; they must block crouching.",
+            "5M": "Wild claw that catches opponents who sidestep.",
+            "2M": "Drops flat and claws low, sliding under high attacks.",
+            "5H": "His longest reach; walls them near the edge. A sidestep beats it.",
+            "2H": "Arms flung up to swat jumping opponents.",
+            "6H": "Lunging headbutt that must be blocked standing.",
+            "j.L": "Quick air swat for fights in the air.",
+            "j.M": "Air claw for fights in the air.",
+            "j.H": "Double-claw pounce to start a combo.",
+            "throw_f": "Up close: grab them and scream in their face. Beats blocking.",
+            "throw_b": "Up close: swing them past him, swapping places.",
+            "play_dead_m": "Drops like a corpse: strikes get countered; grabs and projectiles win.",
+            "play_dead_l": "Short catch; he gets back up the soonest.",
+            "play_dead_h": "Catch that counters with a big rise for more hits.",
+            "play_dead_ex": "Catches strikes and projectiles right away.",
+            "grave_rise": "After a Play Dead catch: springs up into a claw that knocks down.",
+            "grave_rise_big": "After a heavy Play Dead catch: rises and pops them up.",
+            "grave_crawl_m": "Crawls in low under attacks, then bites the ankle to knock down.",
+            "grave_crawl_l": "Short crawl, out the quickest of the three.",
+            "grave_crawl_h": "Longest crawl, to reach them from far away.",
+            "grave_crawl_ex": "Crawl through projectiles with two bites; safe if blocked.",
+            "last_meal_m": "Grab that beats blocking and sidesteps: gnaw, then shove away.",
+            "last_meal_l": "Grab with the longest reach of the three, but the least damage.",
+            "last_meal_h": "Shortest reach, but the most damage of the three.",
+            "last_meal_ex": "Grab with extra reach that can't be hit as it starts.",
+            "arise_m": "Leaping claw that swats jumping opponents.",
+            "arise_l": "Quickest of the three leaps, the best one against jumps.",
+            "arise_h": "Strongest leap; the riskiest if blocked.",
+            "arise_ex": "Leap that can't be hit as it starts: escape pressure.",
+            "dead_air": "Plays dead; any strike or projectile gets a huge bite back.",
+            "dead_air_bite": "Dead Air's answer: lunges far and bites. It can't be blocked.",
+            "series_finale": "PRIME TIME: unstoppable grab, a bite, and a trip into the grave.",
+        })
     return K

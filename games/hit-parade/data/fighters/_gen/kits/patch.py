@@ -332,4 +332,45 @@ def build():
         ending="PATCH takes the host's headset, counts the whole studio down from three and cuts the feed herself. For "
                "one Friday the slot plays static, and it pulls the best ratings in the network's history. By Monday "
                "she runs the building. The first new rule is taped to every door: nobody fights when the cameras stop.")
+    # CHANGED(notes) (CONTRACT 36.4): plain-English player text; the SIMPLE / EASY-routed _m ids carry the family note
+    K.describe(
+        plan="Close in fast, then press the Cue Kick chain and keep them guessing high or low.",
+        unique="Cue Kick chain: repeat it for Cue 2, then end high or low. Fastest walk and dash.",
+        notes={
+            "5L": "Quick jab to stop their attack or start a short combo.",
+            "2L": "Quick low kick; they must block crouching. Starts combos.",
+            "5M": "Long push kick that keeps them at the tip of her reach.",
+            "2M": "Low kick that catches sidesteps; follow with the Cue Kick chain.",
+            "5H": "Big head kick that catches opponents who sidestep.",
+            "2H": "Long low kick: knocks down and catches sidesteps. Risky if blocked.",
+            "6M": "Stepping knee that closes the distance fast. A sidestep beats it.",
+            "4H": "Her longest kick; slams them into the wall near the ring edge.",
+            "SS.H": "Out of a sidestep: a kick into their side that knocks them down.",
+            "j.L": "Quick air jab for fights in the air.",
+            "j.M": "Flying side kick that beats opponents jumping at you.",
+            "j.H": "Big jump-in kick; land it to start a combo.",
+            "throw_f": "Up close: clinch and knee them in the chest. Beats blocking.",
+            "throw_b": "Up close: spin and fling them behind you, swapping places.",
+            "cue_m": "Stepping kick that starts her chain: repeat for Cue 2, then Cue 3.",
+            "cue_l": "Shortest first kick; the least risky of the three if blocked.",
+            "cue_h": "Longest first kick to reach them; the riskiest if blocked.",
+            "cue_ex": "First kick that powers through one hit and is safe if blocked.",
+            "cue2": "Chain part 2: a head kick that catches sidesteps. Then go to Cue 3.",
+            "cue3_oh": "Chain end, high: jumping kick, blocked standing only. Knocks down.",
+            "cue3_lo": "Chain end, low: leg kick that knocks down. Very risky if blocked.",
+            "stage_dive_m": "Hopping knee that clears low attacks; must be blocked standing.",
+            "stage_dive_l": "Shortest hop; safe even when they block it.",
+            "stage_dive_h": "Longest hop, to reach them from far away.",
+            "stage_dive_ex": "Two flying knees; she can keep attacking even if they block.",
+            "spotlight_m": "Rising flip kick that knocks jumpers down. It can trade hits.",
+            "spotlight_l": "Quickest flip kick, to stop a jump early.",
+            "spotlight_h": "Strongest flip kick; the riskiest if blocked.",
+            "spotlight_ex": "Flip kick nothing can hit as it starts: escape their pressure.",
+            "slide_m": "Low slide under projectiles that knocks down. Risky if blocked.",
+            "slide_l": "Short slide; the least risky of the three if blocked.",
+            "slide_h": "Longest slide, to reach them from across the ring.",
+            "slide_ex": "Fast long slide that goes straight through projectiles.",
+            "highlight_reel": "Kick flurry that can't be hit as it starts; ends with a knockdown.",
+            "on_air": "PRIME TIME: an unstoppable push kick that starts a live countdown.",
+        })
     return K

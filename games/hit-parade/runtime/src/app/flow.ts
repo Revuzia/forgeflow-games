@@ -123,7 +123,7 @@ export interface SeasonSlot {
 export interface SeasonInit {
   fighter: string;
   color: number;
-  scheme: 0 | 1;
+  scheme: 0 | 1 | 2; // CHANGED(input) (CONTRACT §36.5): 2 = EASY (type only)
   length: SeasonLength;
   /** difficulty shift: -2 Easy .. 0 Normal .. +2 Hard (FIGHTING_DESIGN §9b) */
   difficulty: number;

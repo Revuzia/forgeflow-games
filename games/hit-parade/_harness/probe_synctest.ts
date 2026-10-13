@@ -29,7 +29,7 @@ const DEPTH = opt('--depth', 8);
 interface Maker {
   kind: 'real' | 'toy'; fighters: string[]; make(p1: string, p2: string, seed: number): SimPort; note: string;
   // CHANGED(SIM) P2 (CONTRACT §28.6): unique-heavy streams + bonus rounds (real sim only)
-  makeCfg?(p1: string, p2: string, seed: number, mode: string, s1: 0 | 1, s2: 0 | 1, stageId?: string): SimPort;
+  makeCfg?(p1: string, p2: string, seed: number, mode: string, s1: 0 | 1 | 2, s2: 0 | 1 | 2, stageId?: string, meter?: number): SimPort;
   /** CHANGED(SIM3D): every stage id of the data (the STEP runs cycle through their rings) */
   stages?: string[];
 }
@@ -83,9 +83,11 @@ async function realMaker(): Promise<Maker | { error: string } | null> {
           { fighter: p1, color: 0, scheme: 0, cpu: -1 }, { fighter: p2, color: 1, scheme: 1, cpu: -1 }] }, data);
         return Pm.matchPort(m);
       },
-      makeCfg(p1: string, p2: string, seed: number, mode: string, s1: 0 | 1, s2: 0 | 1, stageId?: string): SimPort {
+      makeCfg(p1: string, p2: string, seed: number, mode: string, s1: 0 | 1 | 2, s2: 0 | 1 | 2, stageId?: string, meter?: number): SimPort {
         const m = Mm.createMatch({ mode, stage: stageId ?? stage, seed, p: [
           { fighter: p1, color: 0, scheme: s1, cpu: -1 }, { fighter: p2, color: 1, scheme: s2, cpu: -1 }] }, stageId ? data3d : data);
+        // CHANGED(input): optional starting SHOWTIME for both (so the SUPER / PRIME TIME keys fire inside the rollbacks)
+        if (meter) { Mm.devSet(m, 0, 'showtime', meter); Mm.devSet(m, 1, 'showtime', meter); }
         return Pm.matchPort(m);
       },
     };
@@ -197,8 +199,40 @@ async function main(): Promise<number> {
       }
     }
   }
-  checks += uChecks + bChecks + sChecks;
-  mismatches += uMis + bMis + sMis;
+  // CHANGED(input) (CONTRACT §36.5): random EASY-key streams (BLOCK holds incl. against walks / jumps, SPECIAL 1-4 taps with and
+  // without ASSIST, SUPER / PRIME TIME taps - every other run starts both players with full SHOWTIME -, J mashing = the
+  // auto-combo, presses while blocking) mixed with STEP inputs on every pair (EASY vs EASY / SIMPLE / CLASSIC) over the
+  // stage rings, and in both bonus rounds for every fighter
+  let eRuns = 0, eChecks = 0, eMis = 0, eBits = 0, eFrames = 0;
+  if (mk.kind === 'real' && mk.makeCfg) {
+    const EF = opt('--eframes', 600);
+    const sts = mk.stages ?? [];
+    for (const p1 of mk.fighters) {
+      for (const p2 of mk.fighters) {
+        const s2 = ([2, 0, 1] as const)[eRuns % 3];
+        const stId = sts.length ? sts[(eRuns * 5) % sts.length] : undefined;
+        const sim = mk.makeCfg(p1, p2, 61 + eRuns, 'versus', 2, s2, stId, eRuns % 2 === 0 ? 30000 : 0);
+        const a = inputStream(1301 + eRuns * 11, IN.R, EF, true, true);
+        const b = inputStream(1709 + eRuns * 13, IN.L, EF, eRuns % 2 === 1, true);
+        for (let f = 0; f < EF; f++) { eFrames++; if (((a[f] | b[f]) & 0x3f8000) !== 0) eBits++; }
+        const r = runSyncTest(sim, EF, (f, out) => { out[0] = a[f]; out[1] = b[f]; }, DEPTH);
+        eRuns++; eChecks += r.checks; eMis += r.mismatches;
+        if (r.mismatches && !uFirst) uFirst = { p1, p2, stage: stId, easy: true, ...r.first };
+      }
+    }
+    for (const p1 of mk.fighters) {
+      for (const mode of ['brawl', 'heckler']) {
+        const sim = mk.makeCfg(p1, p1, 81 + eRuns, mode, 2, 0, undefined, 30000);
+        const a = inputStream(2203 + eRuns * 7, IN.R, 900, true, true);
+        for (let f = 0; f < 900; f++) { eFrames++; if ((a[f] & 0x3f8000) !== 0) eBits++; }
+        const r = runSyncTest(sim, 900, (f, out) => { out[0] = a[f]; out[1] = 0; }, DEPTH);
+        eRuns++; eChecks += r.checks; eMis += r.mismatches;
+        if (r.mismatches && !uFirst) uFirst = { p1, mode, easy: true, ...r.first };
+      }
+    }
+  }
+  checks += uChecks + bChecks + sChecks + eChecks;
+  mismatches += uMis + bMis + sMis + eMis;
   if (!first && uFirst) first = uFirst;
   // negative control: hidden state must be caught
   const leak = runPair(toyMaker(true), 'toy', 'toy', 3, 1200);
@@ -206,6 +240,7 @@ async function main(): Promise<number> {
   Object.assign(report, { sim: mk.kind, note: mk.note, fighters: mk.fighters, frames, seeds, runs: pairs, checks, steps, mismatches, first,
     uniques: { runs: uRuns, checks: uChecks, mismatches: uMis }, bonus: { runs: bRuns, checks: bChecks, mismatches: bMis },
     steps3d: { runs: sRuns, bonusRuns: sbRuns, checks: sChecks, mismatches: sMis, stages: [...stageSet] },
+    easy: { runs: eRuns, checks: eChecks, mismatches: eMis, framesWithNewBits: eBits, frames: eFrames },
     stepUsAvg: steps ? Math.round((ms * 1000 / steps) * 100) / 100 : 0, control: { leakyMismatches: leak.mismatches, first: leak.first }, rows });
   write(report);
   const pass = mismatches === 0 && checks > 0 && controlOk;
@@ -214,7 +249,8 @@ async function main(): Promise<number> {
     `(${mk.fighters.length}x${mk.fighters.length} pairs x ${seeds} seeds x ${frames} f) rollback 1..${DEPTH} every frame: ` +
     `checks=${checks} mismatches=${mismatches}; leaky control mismatches=${leak.mismatches}` +
     (uRuns ? `; +uniques ${uRuns} pairs (${uChecks} checks, ${uMis} mismatches) +bonus ${bRuns} runs (${bChecks} checks, ${bMis} mismatches)` : '') +
-    (sRuns ? ` +STEP ${sRuns} pairs + ${sbRuns} bonus runs over ${stageSet.size} stages (${sChecks} checks, ${sMis} mismatches)` : '') + why);
+    (sRuns ? ` +STEP ${sRuns} pairs + ${sbRuns} bonus runs over ${stageSet.size} stages (${sChecks} checks, ${sMis} mismatches)` : '') +
+    (eRuns ? ` +EASY bits ${eRuns} runs (${eChecks} checks, ${eMis} mismatches; ${eBits}/${eFrames} frames carry bits 15-21)` : '') + why);
   return pass ? 0 : 1;
 }
 

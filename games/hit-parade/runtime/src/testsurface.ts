@@ -166,10 +166,15 @@ export function installTestSurface(h: TestHooks): HpSurface {
     input() {
       const i = h.input();
       if (!i) return null;
+      // CHANGED(input) (CONTRACT §36.5 item 6): the live bindings as key caps per action ([P1, P2]) + the settings schemes
+      const st = safe(() => h.settings()?.get() ?? null, null);
       return {
         mode: i.mode, pinned: i.pinned, live: i.live, suspended: i.suspended,
         words: [i.word(0), i.word(1)], held: i.heldCodes(), pads: i.padInfo(), samples: i.samples, keyEvents: i.keyEvents,
         devices: [i.lastDevice(0), i.lastDevice(1)], touch: { ...i.touch },
+        bindings: [i.bindingLabels(0), i.bindingLabels(1)],
+        schemes: st ? [st.controls[0].scheme, st.controls[1].scheme] : null,
+        controlsBar: st ? st.controlsBar : null,
       };
     },
     dev: {

@@ -6,7 +6,8 @@
 // storage touch is already try/catch-wrapped there (private windows / sandboxed iframes: not remembered, never a
 // crash).
 //
-//   controls       per player [P1, P2]: { scheme 0 SIMPLE (default) | 1 CLASSIC (CONTRACT §1), keys (input.ts Action
+//   controls       per player [P1, P2]: { scheme 0 SIMPLE | 1 CLASSIC (CONTRACT §1) | CHANGED(input) 2 EASY (§36.1: P1's
+//                  default; P2's default stays SIMPLE), keys (input.ts Action
 //                  -> KeyboardEvent.code[], <= 3), pad (Action -> Standard-mapping button index[], <= 3) } - the
 //                  shape lane UI's settings screen reads (ui/types.ts PlayerControls, action ids up/down/left/right/
 //                  l/m/h/s/assist/throw/parry/impact/taunt/pause + CHANGED(UI3D) stepIn/stepOut, CONTRACT §35.2). A key
@@ -15,6 +16,12 @@
 //                  takes its default keys / pad slots only where no SAVED binding already holds them, so an old remap
 //                  (e.g. Q on TAUNT) is never taken away by the new defaults. Pad slots 17..20 = the right stick
 //                  (input.ts PAD.RS_*, PAD_SLOTS 21).
+//   controlsRev    CHANGED(input) (CONTRACT §36.5 item 7): 2 = EASY-era controls. A save WITHOUT it (v0.4.0 and older)
+//                  migrates once on load: P1 scheme 0 (SIMPLE was only ever the default - nobody "chose" it) becomes EASY
+//                  and every P1 action still on its OLD default keys (input.ts LEGACY_KEYS) takes the new default (a custom
+//                  remap stays); P1 scheme 1 (an explicit CLASSIC) keeps its whole key map - new actions only get free keys
+//                  (Shift BLOCK, F1). P2 keeps its scheme and keys (+ NumpadDecimal BLOCK where free).
+//   controlsBar    CHANGED(input) (CONTRACT §36.2): the in-game controls bar is shown (default true; the UI lane toggles it)
 //   volume         master / music / sfx / voice / crowd, 0..1 (audio.setVolumes takes this object)
 //   gore           'splatter' (comic red, default) | 'sparks' | 'confetti' (owner rule: a settings toggle)
 //   screenShake    0..1 camera-shake scale (0 = off)
@@ -31,10 +38,16 @@
 //
 // `viewSettings(s)` maps onto view/bout.ts ViewSettings (§17.1) - the one place that mapping lives.
 
-import { ACTIONS, PAD_SLOTS, defaultKeys, defaultPad, type Action, type KeyBindings, type PadBindings } from '../input.ts';
+import { ACTIONS, LEGACY_KEYS, PAD_SLOTS, defaultKeys, defaultPad, type Action, type KeyBindings, type PadBindings } from '../input.ts';
 import { SaveStore } from './save.ts';
 
-export type Scheme = 0 | 1;
+export type Scheme = 0 | 1 | 2; // CHANGED(input): 2 = EASY (CONTRACT §36.1)
+/** CHANGED(input) (CONTRACT §36.5 item 7): the controls schema revision this build writes (absent in a save = 1, pre-EASY) */
+export const CONTROLS_REV = 2;
+/** CHANGED(input): each player's default scheme - P1 EASY (the keyboard default), P2 SIMPLE (keeps its SIMPLE layout) */
+export const DEFAULT_SCHEME: readonly [Scheme, Scheme] = [2, 0];
+/** CHANGED(input): the actions only EASY needs (a key map without any of them is a pre-EASY layout) */
+export const EASY_ONLY: readonly Action[] = ['sp1', 'sp2', 'sp3', 'sp4', 'super1', 'super3'];
 export type Gore = 'splatter' | 'sparks' | 'confetti';
 export type Cinematics = 'full' | 'short';
 export type Quality = 'low' | 'med' | 'high';
@@ -48,6 +61,10 @@ export interface Volumes { master: number; music: number; sfx: number; voice: nu
 
 export interface Settings {
   controls: [PlayerControls, PlayerControls];
+  /** CHANGED(input): CONTROLS_REV once this build has written the controls (migration marker, CONTRACT §36.5 item 7) */
+  controlsRev: number;
+  /** CHANGED(input) (CONTRACT §36.2): the in-game controls bar is on (default true) */
+  controlsBar: boolean;
   volume: Volumes;
   gore: Gore;
   screenShake: number;
@@ -93,12 +110,19 @@ function coarsePointer(): boolean {
 }
 
 export function defaultControls(p: 0 | 1): PlayerControls {
-  return { scheme: 0, keys: defaultKeys(p), pad: defaultPad() };
+  return { scheme: DEFAULT_SCHEME[p], keys: defaultKeys(p), pad: defaultPad() };
+}
+
+/** CHANGED(input): a stored scheme value -> 0 | 1 | 2 (`d` when it is none of them) */
+export function schemeOf(v: unknown, d: Scheme): Scheme {
+  return v === 0 || v === 1 || v === 2 ? v : d;
 }
 
 export function defaultSettings(): Settings {
   return {
     controls: [defaultControls(0), defaultControls(1)],
+    controlsRev: CONTROLS_REV,
+    controlsBar: true,
     volume: { ...DEFAULT_VOLUMES },
     gore: 'splatter',
     screenShake: osReducedMotion() ? 0.4 : 1,
@@ -127,8 +151,17 @@ const pick = <T extends string>(v: unknown, list: readonly T[], d: T): T => (typ
 /** KeyboardEvent.code values a binding may hold (no mouse buttons: a fighter is keys + pads) */
 export const CODE_RE = /^(Key[A-Z]|Digit\d|Numpad(\d|Add|Subtract|Multiply|Divide|Decimal|Enter)|F\d{1,2}|Arrow(Up|Down|Left|Right)|Shift(Left|Right)|Control(Left|Right)|Alt(Left|Right)|Space|Tab|Enter|Escape|Backquote|Minus|Equal|Bracket(Left|Right)|Backslash|Semicolon|Quote|Comma|Period|Slash|CapsLock|Backspace|Insert|Delete|Home|End|PageUp|PageDown|IntlBackslash)$/;
 
-/** both players' key bindings (raw[p] = one player's keys): valid codes, <= 3 per action, one owner per code (P1 first) */
-export function sanitizeKeys(raw: ReadonlyArray<unknown>): [KeyBindings, KeyBindings] {
+/** CHANGED(input): the same codes in the same order */
+function sameCodes(a: readonly string[], b: readonly string[] | undefined): boolean {
+  return !!b && a.length === b.length && a.every((c, k) => c === b[k]);
+}
+
+/**
+ * both players' key bindings (raw[p] = one player's keys): valid codes, <= 3 per action, one owner per code (P1 first).
+ * CHANGED(input): `legacy[p]` = migrate player p from the pre-EASY defaults - an action whose saved keys are exactly its
+ * OLD default (input.ts LEGACY_KEYS) counts as never chosen and takes the new default (CONTRACT §36.5 item 7).
+ */
+export function sanitizeKeys(raw: ReadonlyArray<unknown>, legacy: readonly [boolean, boolean] = [false, false]): [KeyBindings, KeyBindings] {
   const out: [KeyBindings, KeyBindings] = [defaultKeys(0), defaultKeys(1)];
   // CHANGED(UI3D): which actions the save names (the rest keep their defaults, but only on keys nobody saved)
   const saved: [Set<Action>, Set<Action>] = [new Set(), new Set()];
@@ -136,10 +169,27 @@ export function sanitizeKeys(raw: ReadonlyArray<unknown>): [KeyBindings, KeyBind
     const r = raw[p];
     if (!r || typeof r !== 'object') continue;
     const o = r as Record<string, unknown>;
+    const clean = (v: unknown[]): string[] => [...new Set(v.filter((c): c is string => typeof c === 'string' && CODE_RE.test(c)))].slice(0, 3);
+    // CHANGED(input): the migration reads only a well-formed old map (no code on two actions - every map this game ever wrote);
+    // a corrupt / hostile one is sanitised exactly as before (saved order wins)
+    let mig = legacy[p];
+    if (mig) {
+      const seen1 = new Set<string>();
+      for (const a of ACTIONS) {
+        const v = o[a];
+        if (!Array.isArray(v)) continue;
+        for (const c of clean(v)) {
+          if (seen1.has(c)) mig = false;
+          seen1.add(c);
+        }
+      }
+    }
     for (const a of ACTIONS) {
       const v = o[a];
       if (!Array.isArray(v)) continue;
-      out[p][a] = [...new Set(v.filter((c): c is string => typeof c === 'string' && CODE_RE.test(c)))].slice(0, 3);
+      const codes = clean(v);
+      if (mig && sameCodes(codes, LEGACY_KEYS[p][a])) continue; // CHANGED(input): still the old default
+      out[p][a] = codes;
       saved[p].add(a);
     }
   }
@@ -178,13 +228,28 @@ export function sanitizePad(raw: unknown): PadBindings {
   return out;
 }
 
-/** both players' controls ({ scheme, keys, pad } each) */
-export function sanitizeControls(raw: unknown): [PlayerControls, PlayerControls] {
+/**
+ * both players' controls ({ scheme, keys, pad } each). CHANGED(input) (CONTRACT §36.5 item 7): `rev` = the save's
+ * controlsRev (absent = 1): below CONTROLS_REV the pre-EASY migration runs - P1 SIMPLE (the old default) -> EASY with the
+ * old default keys replaced; P1 CLASSIC (an explicit choice) and P2 keep scheme + keys.
+ */
+export function sanitizeControls(raw: unknown, rev: number = CONTROLS_REV): [PlayerControls, PlayerControls] {
   const arr = Array.isArray(raw) ? raw : [];
   const obj = (p: 0 | 1): Record<string, unknown> => (arr[p] && typeof arr[p] === 'object' ? arr[p] as Record<string, unknown> : {});
-  const keys = sanitizeKeys([obj(0).keys, obj(1).keys]);
-  const one = (p: 0 | 1): PlayerControls => ({ scheme: obj(p).scheme === 1 ? 1 : 0, keys: keys[p], pad: sanitizePad(obj(p).pad) });
-  return [one(0), one(1)];
+  const old = rev < CONTROLS_REV;
+  const scheme = (p: 0 | 1): Scheme => {
+    const s = obj(p).scheme;
+    if (!old) return schemeOf(s, DEFAULT_SCHEME[p]);
+    if (s === 1) return 1; // an explicit CLASSIC stays
+    return DEFAULT_SCHEME[p]; // pre-EASY SIMPLE / missing = never chosen: P1 -> EASY, P2 -> SIMPLE
+  };
+  const s0 = scheme(0);
+  const s1 = scheme(1);
+  const keys = sanitizeKeys([obj(0).keys, obj(1).keys], [old && s0 === 2, false]);
+  return [
+    { scheme: s0, keys: keys[0], pad: sanitizePad(obj(0).pad) },
+    { scheme: s1, keys: keys[1], pad: sanitizePad(obj(1).pad) },
+  ];
 }
 
 function sanitizeTouchLayout(raw: unknown): TouchLayout | null {
@@ -205,7 +270,9 @@ export function sanitizeSettings(raw: unknown): Settings {
   const r = raw as Record<string, unknown>;
   const vol = (r.volume && typeof r.volume === 'object' ? r.volume : {}) as Record<string, unknown>;
   return {
-    controls: sanitizeControls(r.controls),
+    controls: sanitizeControls(r.controls, typeof r.controlsRev === 'number' && Number.isFinite(r.controlsRev) ? r.controlsRev : 1),
+    controlsRev: CONTROLS_REV,
+    controlsBar: bool(r.controlsBar, d.controlsBar),
     volume: {
       master: clamp(vol.master, 0, 1, d.volume.master),
       music: clamp(vol.music, 0, 1, d.volume.music),
@@ -295,9 +362,24 @@ export class SettingsStore {
     return this.set({ controls }).length > 0;
   }
 
+  /**
+   * CHANGED(input): 0 | 1 | 2. Choosing EASY on a key map with no key on any EASY-only action (sp1..sp4 / super1 / super3:
+   * a pre-EASY layout kept by an explicit CLASSIC player) installs that player's default keys, so EASY is playable at once.
+   */
   setScheme(p: 0 | 1, scheme: Scheme): void {
     const controls = clone(this.value.controls);
-    controls[p].scheme = scheme === 1 ? 1 : 0;
+    const sc = schemeOf(scheme, 0);
+    controls[p].scheme = sc;
+    if (sc === 2 && EASY_ONLY.every((a) => (controls[p].keys[a] ?? []).length === 0)) {
+      const dk = defaultKeys(p);
+      if (EASY_ONLY.some((a) => dk[a].length > 0)) {
+        // the new keys leave every other action of both players (one owner per key)
+        const mine = new Set<string>(ACTIONS.flatMap((a) => dk[a]));
+        const q = p === 0 ? 1 : 0;
+        for (const a of ACTIONS) controls[q].keys[a] = controls[q].keys[a].filter((c) => !mine.has(c));
+        controls[p].keys = dk;
+      }
+    }
     this.set({ controls });
   }
 

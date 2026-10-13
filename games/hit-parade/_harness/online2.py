@@ -30,6 +30,10 @@ Modes
                    exits to row 0; ArrowDown does nothing on it) and refuses nothing silently (the pick check fails when
                    the cursor is not the wanted fighter), bots that circle-walk / sidestep on a sim-frame cadence, a
                    mid-round LEAVE (tab closed) in quick + code, and a per-page supabase-js GoTrueClient warning check.
+                   CHANGED(wf8 gates) (CONTRACT §36.1): the bots play the EASY keys (both peers' default scheme) - U / I / O / P
+                   specials with no direction, Left Shift held = BLOCK, H = SUPER, Q / E = STEP; quick also gates EASY: scheme 2
+                   in every MatchCfg, U / I / O / P started the routed specials, each peer saw the remote specials, and the
+                   Shift player's BLOCK events on both peers' sims (report key "easy").
   --pick-test      CHANGED(wf7 online): one Chrome on port A: VERSUS -> character select -> the picker walks P1's cursor to
                    EVERY slot (both rows, RANDOM, the bosses' column) by real arrow keys; PASS = every slot reached
                    Measures per bout: transport + ICE pair, sync / session RTT, D, frames, gameSpeed (session ticks),
@@ -316,8 +320,22 @@ def print_trace_analysis(an):
 # ─────────────────────────────── --game: the REAL game in two Chromes ───────────────────────────────
 # P1 keyboard set (runtime/src/input.ts DEFAULT_KEYS; common.P1_KEYS). Online, BOTH peers play with these keys (game.ts
 # feeds word 0 = this screen's player-1 controls to the session).
-GK = {"up": "KeyW", "down": "KeyS", "left": "KeyA", "right": "KeyD", "l": "KeyJ", "m": "KeyK", "h": "KeyL", "s": "KeyI", "pause": "Escape",
-      "stepin": "KeyQ", "stepout": "KeyE"}   # CHANGED(integrator) 3D: STEP IN / STEP OUT (CONTRACT §35.2)
+# CHANGED(input) (CONTRACT §36.5 item 4): S moved to ; (I = SPECIAL 2 in the EASY default map)
+GK = {"up": "KeyW", "down": "KeyS", "left": "KeyA", "right": "KeyD", "l": "KeyJ", "m": "KeyK", "h": "KeyL", "s": "Semicolon", "pause": "Escape",
+      "stepin": "KeyQ", "stepout": "KeyE",   # CHANGED(integrator) 3D: STEP IN / STEP OUT (CONTRACT §35.2)
+      # CHANGED(wf8 gates) (CONTRACT §36.1 / §36.5 item 4): the EASY keys both online players use - BLOCK = hold Left Shift,
+      # SPECIAL 1-4 = U / I / O / P (no direction), SUPER = H. The bots press these instead of `;` + direction / hold-back.
+      "block": "ShiftLeft", "sp1": "KeyU", "sp2": "KeyI", "sp3": "KeyO", "sp4": "KeyP", "super1": "KeyH"}
+SP_CLASS = {"sp1": "5S", "sp2": "6S", "sp3": "2S", "sp4": "4S"}   # CHANGED(wf8 gates): SPECIAL k routes as SIMPLE <class>S (§36.5 item 2)
+
+
+def g_fighter_simple(fid):
+    """CHANGED(wf8 gates): data/fighters/<fid>.json `simple` table (5S / 6S / 2S / 4S -> move id) - what U / I / O / P route to"""
+    try:
+        with open(os.path.join(ROOT, "data", "fighters", "%s.json" % fid), encoding="utf-8") as fh:
+            return json.load(fh).get("simple") or {}
+    except Exception:
+        return {}
 
 
 def g_step_kind(fs):
@@ -360,10 +378,15 @@ def glog(m):
 class GSide:
     """one real Chrome process (its own browser, its own dev-server origin = its own localStorage) playing by real keys"""
 
-    def __init__(self, tag, browser, base, query, out_dir, C):
+    def __init__(self, tag, browser, base, query, out_dir, C, shim_js=None):
         self.tag, self.base, self.query, self.out, self.C = tag, base.rstrip("/"), query, out_dir, C
         self.ctx = browser.new_context(viewport={"width": 1280, "height": 720}, device_scale_factor=1)
         self.ctx.add_init_script(C.INIT_JS)
+        if shim_js:
+            # CHANGED(wf8 gates): --fake-realtime - every page of this side imports the LOCAL realtime stand-in instead of
+            # supabase-js from esm.sh (harness/fake_realtime.py); the game code is untouched
+            self.ctx.route("https://esm.sh/@supabase/supabase-js@*", lambda route: route.fulfill(
+                status=200, body=shim_js, headers={"content-type": "application/javascript; charset=utf-8", "access-control-allow-origin": "*"}))
         self.console, self.page_errors, self.held, self.notes = [], [], set(), []
         self.shots = []
         self.page = None
@@ -719,6 +742,40 @@ class Bot:
         self.circle_gap = 150
         self.local_walk_samples = 0
         self.remote_walk_samples = 0
+        # CHANGED(wf8 gates) (CONTRACT §36.1): EASY evidence. sp_press = U / I / O / P presses; sp_tracked = presses made from
+        # neutral (idle / walk) that are followed up; sp_out = of those, the local fighter started the routed move (the
+        # fighter's simple.<class>S, or any special / EX: a rekka trigger) within 45 sim frames; block_holds = Shift holds;
+        # remote_special = polls where THIS peer's sim showed the REMOTE fighter in a special / EX (its SP bits reached this
+        # peer only over the rollback session). `simple` = this player's fighter's simple table (set by the scenario).
+        self.simple = {}
+        self.sp_press = {k: 0 for k in SP_CLASS}
+        self.sp_tracked = {k: 0 for k in SP_CLASS}
+        self.sp_out = {k: 0 for k in SP_CLASS}
+        self.sp_moves = {k: [] for k in SP_CLASS}
+        self.pending = {}            # SP key -> (sim frame of the press, pressed from neutral)
+        self.block_holds = 0
+        self.guard_until = -1        # CHANGED(wf8 gates): a reactive Shift guard runs until this sim frame
+        self.guard_reacts = 0
+        self.blockstun_samples = 0   # polls where this player's own fighter was in blockstun (a hit landed on its guard)
+        self.super_presses = 0
+        self.remote_special = 0
+        self.remote_special_moves = set()
+
+    def _follow_sp(self, me, fr):
+        """CHANGED(wf8 gates): did a U / I / O / P press start its routed special? Any press counts when the fighter then starts
+        EXACTLY simple.<class>S within 45 sim frames; a press from neutral also counts any special / EX (rekka triggers)."""
+        if not self.pending or fr is None:
+            return
+        nm, kind = me.get("moveName") or "", me.get("moveKind") or ""
+        for k, (f0, neu) in list(self.pending.items()):
+            want = self.simple.get(SP_CLASS[k])
+            if nm and (nm == want or (neu and kind in ("special", "ex"))):
+                self.sp_out[k] += 1
+                if nm not in self.sp_moves[k]:
+                    self.sp_moves[k].append(nm)
+                del self.pending[k]
+            elif fr - f0 > 45:
+                del self.pending[k]
 
     def step(self, s, info):
         f, loc = info.get("f"), info.get("local")
@@ -742,13 +799,41 @@ class Bot:
             self.local_walk_samples += 1
         if g_step_kind(op) == "sidewalk":
             self.remote_walk_samples += 1
+        # CHANGED(wf8 gates): EASY evidence - the remote fighter in a special / EX on THIS peer's sim; the tracked SP press
+        if (op.get("moveKind") or "") in ("special", "ex"):
+            self.remote_special += 1
+            self.remote_special_moves.add(op.get("moveName") or "")
+        self._follow_sp(me, m.get("frame") if isinstance(m.get("frame"), (int, float)) else None)
+        if (me.get("stateName") or "") == "blockstun":
+            self.blockstun_samples += 1
+        # CHANGED(wf8 gates): the 'mixed' player guards like a person - when the opponent starts a strike in range and this
+        # fighter is free, it HOLDS SHIFT until that strike is over (<= 40 sim frames); the old random 2-5 poll holds mostly
+        # began in its own recovery and never met a strike
+        frg = m.get("frame") if isinstance(m.get("frame"), (int, float)) else None
+        if self.style == "mixed" and frg is not None:
+            if self.guard_until >= 0:
+                okind = op.get("moveKind") or ""
+                if frg < self.guard_until and (okind not in ("", "throw") or (me.get("stateName") or "") == "blockstun"):
+                    s.hold({GK["block"]})
+                    return
+                self.guard_until = -1
+                s.hold(set())
+                return
+            okind = op.get("moveKind") or ""
+            gp = math.hypot(op["x"] - me["x"], (op.get("z") or 0.0) - (me.get("z") or 0.0))
+            if okind not in ("", "throw") and gp < 2.2 and (me.get("stateName") or "") in ("idle", "walk_f", "walk_b", "crouch"):
+                self.guard_until = frg + 40
+                self.guard_reacts += 1
+                self.block_holds += 1
+                s.hold({GK["block"]})
+                return
         if self.release_next:                                   # attack keys up (a held button never re-triggers)
             self.release_next = False
             s.hold({k for k in s.held if k in (GK["right"], GK["left"], GK["down"])})
             return
         if self.block_left > 0:
             self.block_left -= 1
-            s.hold({back})
+            s.hold({GK["block"]})                               # CHANGED(wf8 gates): EASY BLOCK = hold Shift (was hold back)
             return
         reach = 1.15 if self.style == "rush" else 1.5
         # CHANGED(wf6 fixer) VO-D8: a running circle-walk holds STEP until its sim frame; a new one now and then from neutral
@@ -784,16 +869,84 @@ class Bot:
         self.i += 1
         if self.style == "mixed" and self.r.random() < 0.28:
             self.block_left = self.r.randint(2, 5)
-            s.hold({back})
+            self.block_holds += 1
+            s.hold({GK["block"]})                               # CHANGED(wf8 gates): EASY BLOCK = hold Shift (was hold back)
             return
+        # CHANGED(wf8 gates) (CONTRACT §36.1): EASY strings - J / K / L normals, U / I / O / P specials with NO direction,
+        # H = SUPER (does nothing until 1 bar is affordable); the old `;` + direction special presses are gone
         if self.style == "rush":
-            seq = [(GK["h"],), (GK["m"],), (GK["s"], fwd), (GK["l"],), (GK["h"], GK["down"]), (GK["s"],)]
+            seq = [(GK["h"],), (GK["sp1"],), (GK["m"],), (GK["sp2"],), (GK["l"],), (GK["sp3"],), (GK["h"], GK["down"]), (GK["sp4"],),
+                   (GK["super1"],)]
         else:
-            seq = [(GK["m"],), (GK["l"],), (GK["h"],), (GK["s"], fwd), (GK["m"], GK["down"])]
+            seq = [(GK["m"],), (GK["sp3"],), (GK["l"],), (GK["sp1"],), (GK["h"],), (GK["sp4"],), (GK["m"], GK["down"]), (GK["sp2"],)]
         keys = set(seq[self.i % len(seq)])
+        for k in SP_CLASS:
+            if GK[k] in keys:
+                self.sp_press[k] += 1
+                if fr is not None:
+                    self.pending[k] = (fr, neutral)
+                    self.sp_tracked[k] += 1
+        if GK["super1"] in keys:
+            self.super_presses += 1
         s.hold(keys)
         self.presses += 1
         self.release_next = True
+
+
+def g_poll_events(s):
+    """CHANGED(wf8 gates): this peer's sim events (__HP__.events), deduped by (frame, type, a, b) across polls; counts per
+    (typeName, b) on the side object (BLOCK b = the defender)"""
+    if not hasattr(s, "ev_seen"):
+        s.ev_seen, s.ev_counts = set(), {}
+    for e in s.js("() => { try { return __HP__.events(512); } catch (e) { return []; } }") or []:
+        k = (e.get("frame"), e.get("type"), e.get("a"), e.get("b"))
+        if k in s.ev_seen:
+            continue
+        s.ev_seen.add(k)
+        ck = "%s/b%s" % (e.get("typeName"), e.get("b"))
+        s.ev_counts[ck] = s.ev_counts.get(ck, 0) + 1
+
+
+def g_easy_setup(sides, bots):
+    """CHANGED(wf8 gates): each bot learns its fighter's simple table (what U / I / O / P route to) from its peer's MatchCfg"""
+    for s, b in zip(sides, bots):
+        loc = s.online().get("local")
+        p = (s.match().get("p") or [])
+        if loc in (0, 1) and len(p) > loc:
+            b.simple = g_fighter_simple(p[loc].get("fighter"))
+
+
+def g_easy_check(checks, label, rep, sides, bots, cfgs):
+    """CHANGED(wf8 gates) (CONTRACT §36.1 / §36.5): both online players fought on EASY with U / I / O / P, Shift and Q / E:
+    (1) every MatchCfg on both peers carries scheme 2 for both players; (2) each player's U / I / O / P presses started the
+    routed specials on its own sim (and all four keys did on at least one side); (3) each peer's sim showed the REMOTE
+    fighter in specials (SP bits over the rollback session); (4) the Shift player (bot 'mixed') BLOCKED on both peers' sims.
+    The agreement gates (same winner, identical final checksums, 0 desyncs) then prove both sims agreed on all of it."""
+    schemes = [[p.get("scheme") for p in (c.get("p") or [])] for c in cfgs]
+    checks.append((label + ": EASY scheme (2) for both players on both peers", all(sc == [2, 2] for sc in schemes), "cfg schemes A %s / B %s" % tuple(schemes)))
+    rep["easy"] = {"spPress": [b.sp_press for b in bots], "spTracked": [b.sp_tracked for b in bots], "spOut": [b.sp_out for b in bots],
+                   "spMoves": [b.sp_moves for b in bots], "simple": [{k: b.simple.get(SP_CLASS[k]) for k in SP_CLASS} for b in bots],
+                   "remoteSpecialSamples": [b.remote_special for b in bots], "remoteSpecialMoves": [sorted(b.remote_special_moves) for b in bots],
+                   "shiftHolds": [b.block_holds for b in bots], "guardReacts": [b.guard_reacts for b in bots],
+                   "blockstunSamples": [b.blockstun_samples for b in bots], "superPresses": [b.super_presses for b in bots],
+                   "events": [dict(sorted(getattr(s, "ev_counts", {}).items())) for s in sides]}
+    e = rep["easy"]
+    per_side = all(sum(b.sp_out.values()) > 0 for b in bots)
+    keys_all = all(any(b.sp_out[k] > 0 for b in bots) for k in SP_CLASS)
+    checks.append((label + ": U / I / O / P started the routed specials (each player; all four keys on at least one side)", per_side and keys_all,
+                   "presses %s; followed %s; started %s; moves %s" % (e["spPress"], e["spTracked"], e["spOut"], e["spMoves"])))
+    checks.append((label + ": each peer saw the REMOTE fighter's specials (SP bits over rollback)", all(b.remote_special > 0 for b in bots),
+                   "samples %s moves %s" % (e["remoteSpecialSamples"], e["remoteSpecialMoves"])))
+    mixed = [i for i, b in enumerate(bots) if b.style == "mixed"]
+    blk = []
+    for i in mixed:
+        slot = sides[i].online().get("local")
+        blk.append({"player": sides[i].tag, "slot": slot, "shiftHolds": bots[i].block_holds, "guardReacts": bots[i].guard_reacts,
+                    "blockstunSamples": bots[i].blockstun_samples,
+                    "blocksOnPeer": {s.tag: getattr(s, "ev_counts", {}).get("BLOCK/b%s" % slot, 0) for s in sides}})
+    e["shiftBlock"] = blk
+    checks.append((label + ": Shift BLOCK held by the guarding player blocked strikes (BLOCK events on both peers' sims)",
+                   bool(blk) and all(x["shiftHolds"] > 0 and all(v > 0 for v in x["blocksOnPeer"].values()) for x in blk), json.dumps(blk)))
 
 
 def g_play(sides, bots, timeout, stop_after=None):
@@ -802,6 +955,7 @@ def g_play(sides, bots, timeout, stop_after=None):
     fight_t0 = None
     timeline = []
     last = 0
+    last_ev = 0   # CHANGED(wf8 gates): event polls (BLOCK by Shift)
     while time.time() - t0 < timeout:
         infos = [s.js(READ_TICK) or {} for s in sides]
         if all(i.get("phase") == "results" for i in infos):
@@ -813,6 +967,10 @@ def g_play(sides, bots, timeout, stop_after=None):
                 b.step(s, i)
             else:
                 s.hold(set())
+        if time.time() - last_ev >= 1.0:
+            last_ev = time.time()
+            for s in sides:
+                g_poll_events(s)
         if fight_t0 is None and all(((i.get("m") or {}).get("phase") == "fight") for i in infos):
             fight_t0 = time.time()
         if stop_after is not None and fight_t0 is not None and time.time() - fight_t0 >= stop_after:
@@ -832,6 +990,7 @@ def g_play(sides, bots, timeout, stop_after=None):
             glog("bout %s" % json.dumps(row))
     for s in sides:
         s.release_all()
+        g_poll_events(s)   # CHANGED(wf8 gates): the bout's last events
     return timeline
 
 
@@ -931,6 +1090,7 @@ def scen_quick(A, B, opts, out):
                    "seed %s/%s stage %s/%s p %s/%s" % (ma.get("seed"), mb.get("seed"), ma.get("stage"), mb.get("stage"),
                                                        [p.get("fighter") for p in ma.get("p") or []], [p.get("fighter") for p in mb.get("p") or []])))
     bots = [Bot("rush", 11), Bot("mixed", 23)]
+    g_easy_setup([A, B], bots)   # CHANGED(wf8 gates): EASY U / I / O / P targets per player
     t0 = time.time()
     shots_taken = [False]
 
@@ -939,6 +1099,7 @@ def scen_quick(A, B, opts, out):
     rep["bout_s"] = round(time.time() - t0, 1)
     rep["presses"] = [bots[0].presses, bots[1].presses]
     g_step_check(checks, rep["name"], rep, bots)
+    g_easy_check(checks, rep["name"], rep, [A, B], bots, [ma, mb])   # CHANGED(wf8 gates): EASY keys online (CONTRACT §36.1)
     na, nb = A.net(), B.net()
     rep["a"], rep["b"] = g_netsum(na), g_netsum(nb)
     rep["perf"] = g_perf_delta(pf0, [A.perf(), B.perf()])
@@ -1325,6 +1486,15 @@ def run_game(opts):
     if getattr(opts, "ports", ""):
         GAME_PORTS = tuple(int(x) for x in opts.ports.split(",")[:2])
     out["ports"] = list(GAME_PORTS)
+    fake = None
+    shim = None
+    if getattr(opts, "fake_realtime", 0):
+        # CHANGED(wf8 gates): signalling through a LOCAL realtime stand-in (harness/fake_realtime.py) - NOT Supabase
+        import fake_realtime as FR
+        fake = FR.FakeRealtime(opts.fake_realtime).start()
+        shim = FR.shim_js(opts.fake_realtime)
+        out["fakeRealtime"] = {"port": opts.fake_realtime, "note": "lobby / room presence + broadcast via a local relay, NOT Supabase realtime"}
+        print("NOTE: --fake-realtime on 127.0.0.1:%d - Supabase realtime is NOT exercised by this run" % opts.fake_realtime, flush=True)
     try:
         for port in GAME_PORTS:
             servers.append(C.ensure_server("http://localhost:%d/" % port, wait_s=300))
@@ -1333,8 +1503,8 @@ def run_game(opts):
             ba = p.chromium.launch(channel="chrome", headless=not opts.headed, args=args)
             bb = p.chromium.launch(channel="chrome", headless=not opts.headed, args=args)
             out["browser"] = ba.version
-            A = GSide("a", ba, "http://localhost:%d" % GAME_PORTS[0], q, shots, C)
-            B = GSide("b", bb, "http://localhost:%d" % GAME_PORTS[1], q, shots, C)
+            A = GSide("a", ba, "http://localhost:%d" % GAME_PORTS[0], q, shots, C, shim)
+            B = GSide("b", bb, "http://localhost:%d" % GAME_PORTS[1], q, shots, C, shim)
             for name in [x.strip() for x in opts.scenarios.split(",") if x.strip()]:
                 fn = {"quick": scen_quick, "code": scen_code, "link": scen_link, "relay": scen_relay, "forfeit": scen_forfeit}.get(name)
                 if not fn:
@@ -1371,6 +1541,9 @@ def run_game(opts):
     finally:
         for h in servers:
             C.stop_server(h)
+        if fake:
+            out["fakeRealtime"]["stats"] = fake.summary()
+            fake.stop()
     errs = [e for k in ("diag_a", "diag_b") for e in ((out.get(k) or {}).get("pageErrors") or []) + ((out.get(k) or {}).get("windowErrors") or [])]
     all_checks.append(("no page errors / unhandled rejections in either Chrome", not errs, "; ".join(errs[:4])))
     # CHANGED(wf7 online) VO-D7: supabase-js warns "Multiple GoTrueClient instances detected in the same browser context" when a
@@ -1384,7 +1557,7 @@ def run_game(opts):
     out["checks"] = [{"name": n, "ok": ok, "detail": d} for (n, ok, d) in all_checks]
     failed = [c for c in out["checks"] if not c["ok"]]
     out["pass"] = not failed and bool(all_checks)
-    name = "online2_game%s.json" % ("_relay" if opts.relay else "")
+    name = "online2_game%s%s.json" % ("_relay" if opts.relay else "", "_fakert" if fake else "")
     with open(os.path.join(REPORTS, name), "w", encoding="utf-8") as fh:
         json.dump(out, fh, indent=2, default=str)
     cerr = [e for k in ("diag_a", "diag_b") for e in ((out.get(k) or {}).get("consoleErrors") or [])]
@@ -1493,6 +1666,9 @@ def main():
     ap.add_argument("--quality", default="low", help="game: ?quality= for both pages (low|med|high; '' = the saved setting)")
     ap.add_argument("--bout-timeout", dest="bout_timeout", type=float, default=420, help="game: seconds a full bout may take")
     ap.add_argument("--ports", default="", help="game: the two dev-server ports A,B (default 5325,5330)")
+    ap.add_argument("--fake-realtime", dest="fake_realtime", type=int, default=0, metavar="PORT",
+                    help="game: CHANGED(wf8 gates) signal through a LOCAL realtime stand-in on 127.0.0.1:PORT (harness/fake_realtime.py) "
+                         "instead of Supabase - for a Supabase outage only; the report names it and Supabase is NOT tested")
     # CHANGED(wf7 online) VO-D8: the defaults pick from BOTH grid rows (row 1 = lotus boneyard spin gazza rerun)
     ap.add_argument("--fa", default="boneyard", help="game quick / forfeit: A's fighter")
     ap.add_argument("--fb", default="spin", help="game quick / forfeit: B's fighter")

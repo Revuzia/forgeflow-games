@@ -60,12 +60,15 @@ export interface TrainerHud {
   /** optional: exact per-tick frame data (Hud.setReadout) */
   setReadout?(r: Readout): void;
 }
-export interface Readout { adv: number | null; block: boolean; startup: number; damage: number; combo: number }
+export interface Readout { adv: number | null; block: boolean; startup: number; damage: number; combo: number;
+  /** CHANGED(wf8 fix) FT-14: P1's last move hit nothing (WEAVE, a teleport, a whiff) - the readout shows "-" */
+  none?: boolean }
 export type Projector = (x: number, y: number, z: number) => [number, number] | null;
 
 export const BIT = { UP: 1, DOWN: 2, LEFT: 4, RIGHT: 8, STEP_IN: 1 << 13, STEP_OUT: 1 << 14 } as const;
-/** CHANGED(UI3D): every word bit incl. STEP (CONTRACT §35.13.3) */
-const WORD = 0x7fff;
+/** CHANGED(UI3D): every word bit incl. STEP (CONTRACT §35.13.3). CHANGED(input) (CONTRACT §36.5): 0x7fff -> 0x3fffff = input.ts
+ *  WORD_MASK, so BLOCK / SPECIAL 1-4 / SUPER keys reach the sim in TRAINING (and RECORD / PLAYBACK carry them) */
+const WORD = 0x3fffff;
 /** DUMMY: SIDESTEPS - ticks between taps (while free) and how long a tap holds the bit */
 const SIDESTEP_EVERY = 45;
 const SIDESTEP_TAP = 2;
@@ -138,6 +141,8 @@ export class TrainingDriver {
   private lastEvFrame = -1;
   private readonly evBuf: SimEvent[] = [];
   private watch: { atk: 0 | 1; block: boolean; t0: number; tA: number; tD: number; startup: number; damage: number } | null = null;
+  /** CHANGED(wf8 fix) FT-14: P1's running move and whether it touched the dummy (HIT / BLOCK) */
+  private p1Mv: { contact: boolean } | null = null;
   /** read-back: the last exact measurement */
   lastReadout: Readout | null = null;
   // reset
@@ -291,13 +296,21 @@ export class TrainingDriver {
     buf.length = 0;
     eventsSince(m.events, this.lastEvFrame + 1, buf);
     const f = [f0, f1] as const;
+    // CHANGED(wf8 fix) FT-14: a P1 move that ends without touching the dummy clears the readout (it kept the last hit's
+    // numbers, read as if they belonged to the WEAVE / VANISHING ACT / whiff just done)
+    if ((f0.moveId ?? -1) >= 0 && f0.moveFrame === 1) this.p1Mv = { contact: false };
     for (const e of buf) {
       if (e.frame > this.lastEvFrame) this.lastEvFrame = e.frame;
       if (e.type !== EV.HIT && e.type !== EV.BLOCK) continue;
       if ((e.a !== 0 && e.a !== 1) || e.b !== 1 - e.a) continue;
       const atk = e.a as 0 | 1;
+      if (atk === 0 && this.p1Mv) this.p1Mv.contact = true;
       this.watch = { atk, block: e.type === EV.BLOCK, t0: e.frame, tA: -1, tD: -1, startup: f[atk].moveFrame, damage: e.type === EV.BLOCK ? 0 : f[1 - atk].lastDamage };
       this.publish(null);
+    }
+    if (this.p1Mv && (f0.moveId ?? -1) < 0) {
+      if (!this.p1Mv.contact && !this.watch) { this.lastReadout = null; this.hud?.setReadout?.({ adv: null, block: false, startup: 0, damage: 0, combo: 0, none: true }); }
+      this.p1Mv = null;
     }
     const w = this.watch;
     if (!w || ms.frame <= w.t0) return;

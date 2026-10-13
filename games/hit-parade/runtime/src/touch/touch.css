@@ -60,6 +60,9 @@
 .hpt-assist { background: rgba(11, 11, 16, .72); color: #1fe0c0; border-color: #1fe0c0; }
 .hpt-assist.down { background: #1fe0c0; color: var(--hpt-ink); }
 .hpt-pause { background: rgba(11, 11, 16, .72); color: var(--hpt-paper); border-color: var(--hpt-paper); }
+/* CHANGED(ui) (CONTRACT §36.2): the "?" disc beside PAUSE opens the touch cheat sheet */
+.hpt-help { background: #ffd21a; color: var(--hpt-ink); border-color: var(--hpt-ink); }
+.hpt-help .hpt-lbl { font-size: 22px !important; }
 /* CHANGED(UI3D) (CONTRACT §35.2): the STEP pair over the stick - violet discs with an orbit arc (tap = sidestep, hold = circle);
    IN's arc bows up (away from the camera), OUT's bows down (toward it) */
 .hpt-stepin, .hpt-stepout { background: #c9a6ff; }

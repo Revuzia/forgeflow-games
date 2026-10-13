@@ -4,6 +4,7 @@
   "persona": "The Act",
   "archetype": "zoner",
   "difficulty": 2,
+  "plan": "Stay far away: cards and fire keep them out, and the trapdoor gets you out of trouble.",
   "body": "Whiteclown N Hallin",
   "heightM": 1.85,
   "hp": 9500,
@@ -75,6 +76,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "palm_flick"},
       "desc": "Quick palm.",
+      "note": "Quick palm to stop their attack up close.",
       "boxes": [{"f": [5, 7], "x": 0.845, "y": 1.278, "w": 0.389, "h": 0.356}],
       "boxSrc": "hitVolume"
     },
@@ -106,6 +108,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "low_palm"},
       "desc": "Crouching palm to the shin.",
+      "note": "Quick low palm; they must block crouching.",
       "boxes": [{"f": [5, 7], "x": 0.909, "y": 0.75, "w": 0.518, "h": 0.25}],
       "boxSrc": "hitVolume"
     },
@@ -137,6 +140,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "spear_hand"},
       "desc": "Long straight-arm spear hand: the zoner's longest poke.",
+      "note": "His longest poke: keeps them at arm's length.",
       "boxes": [{"f": [9, 11], "x": 0.973, "y": 1.265, "w": 0.646, "h": 0.33}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [7, 0.01], [8, 0.217], [10, 0.265], [18, 0.216], [29, 0.235]]
@@ -169,6 +173,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "low_spear"},
       "desc": "Long crouching spear hand (low); cancel into CARD FAN.",
+      "note": "Long low poke; follow with Card Fan.",
       "boxes": [{"f": [9, 11], "x": 0.97, "y": 1.066, "w": 0.639, "h": 0.3}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [6, 0.005], [8, 0.085], [10, 0.11], [27, 0.081]]
@@ -201,6 +206,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "double_palm"},
       "desc": "Double palm that shoves them back to his range; wall-splats at the ring edge.",
+      "note": "Shoves them back out to card range; walls them near the edge.",
       "boxes": [{"f": [12, 14], "x": 0.988, "y": 1.245, "w": 0.676, "h": 0.35}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [8, 0.001], [11, 0.282], [14, 0.308], [23, 0.257], [29, 0.105], [35, 0.006]]
@@ -232,7 +238,8 @@
       "track": {"until": 3, "rate": 180},
       "lateralM": 0.22,
       "anim": {"clip": "rising_palm"},
-      "desc": "Rising palm anti-air."
+      "desc": "Rising palm anti-air.",
+      "note": "Rising palm that swats jumping opponents."
     },
     "6H": {
       "kind": "command",
@@ -262,6 +269,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "abracadabra"},
       "desc": "Two-fist hammer onto the head: overhead.",
+      "note": "Slow two-fist hammer; must be blocked standing.",
       "pushExt": [
         [0, 0.0],
         [14, 0.0],
@@ -302,6 +310,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "air_palm"},
       "desc": "Air palm.",
+      "note": "Quick air palm for fights in the air.",
       "pushExt": [[0, 0.007], [4, 0.005], [7, 0.044], [15, 0.042]]
     },
     "j.M": {
@@ -332,6 +341,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "air_flick"},
       "desc": "Flung arm air-to-air.",
+      "note": "Flung-arm swipe that wins fights in the air.",
       "pushExt": [[0, 0.0], [2, 0.0], [4, 0.068], [16, 0.089]]
     },
     "j.H": {
@@ -362,6 +372,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "air_double"},
       "desc": "Double-palm jump-in.",
+      "note": "Double-palm jump-in to start a combo.",
       "pushExt": [[0, 0.0], [3, 0.0], [5, 0.035], [9, 0.22], [19, 0.168]]
     },
     "throw_f": {
@@ -401,6 +412,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Grabs the lapels and blasts them away with both palms.",
+      "note": "Up close: grab and blast them away with both palms.",
       "pushExt": [[0, 0.224], [4, 0.078], [10, 0.014], [22, 0.0], [31, 0.079]]
     },
     "throw_b": {
@@ -440,6 +452,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Spins and flings them behind him.",
+      "note": "Up close: spin and fling them behind him, swapping places.",
       "pushExt": [[0, 0.224], [4, 0.078], [10, 0.014], [22, 0.0], [31, 0.079]]
     },
     "card_fan_l": {
@@ -482,6 +495,7 @@
       "anim": {"clip": "card_flick"},
       "sfx": [[0, "card_throw"]],
       "desc": "Flicked playing cards; fast, aimed at the opponent on release.",
+      "note": "Slowest cards: walk in behind them while they block.",
       "pushExt": [[0, 0.0], [10, 0.0], [37, 0.087], [48, 0.025]]
     },
     "card_fan_m": {
@@ -524,6 +538,7 @@
       "anim": {"clip": "card_flick"},
       "sfx": [[0, "card_throw"]],
       "desc": "Flicked playing cards; fast, aimed at the opponent on release.",
+      "note": "Cards flicked right at them: hard to sidestep. Keeps them away.",
       "pushExt": [[0, 0.0], [9, 0.0], [36, 0.087], [48, 0.025]]
     },
     "card_fan_h": {
@@ -566,6 +581,7 @@
       "anim": {"clip": "card_flick"},
       "sfx": [[0, "card_throw"]],
       "desc": "Flicked playing cards; fast, aimed at the opponent on release.",
+      "note": "Fastest cards of the three, out the quickest.",
       "pushExt": [[0, 0.0], [36, 0.087], [48, 0.025]]
     },
     "card_fan_ex": {
@@ -608,6 +624,7 @@
       "anim": {"clip": "card_flick"},
       "sfx": [[0, "card_throw"]],
       "desc": "A full deck: 3 hits.",
+      "note": "A whole deck at once: three hits.",
       "pushExt": [[0, 0.0], [31, 0.087], [42, 0.025]]
     },
     "flash_paper_l": {
@@ -651,7 +668,8 @@
       "track": {"until": 12, "rate": 180},
       "anim": {"clip": "flash_cast"},
       "sfx": [[0, "fire_whoosh"]],
-      "desc": "Lobbed fireball that lands at 1.5 / 3.0 / 4.5 m: covers the landing of a jump."
+      "desc": "Lobbed fireball that lands at 1.5 / 3.0 / 4.5 m: covers the landing of a jump.",
+      "note": "Lands close to him, for opponents right in front."
     },
     "flash_paper_m": {
       "kind": "special",
@@ -694,7 +712,8 @@
       "track": {"until": 14, "rate": 180},
       "anim": {"clip": "flash_cast"},
       "sfx": [[0, "fire_whoosh"]],
-      "desc": "Lobbed fireball that lands at 1.5 / 3.0 / 4.5 m: covers the landing of a jump."
+      "desc": "Lobbed fireball that lands at 1.5 / 3.0 / 4.5 m: covers the landing of a jump.",
+      "note": "Lobbed fire that lands mid-distance; burns jumpers as they land."
     },
     "flash_paper_h": {
       "kind": "special",
@@ -737,7 +756,8 @@
       "track": {"until": 16, "rate": 180},
       "anim": {"clip": "flash_cast"},
       "sfx": [[0, "fire_whoosh"]],
-      "desc": "Lobbed fireball that lands at 1.5 / 3.0 / 4.5 m: covers the landing of a jump."
+      "desc": "Lobbed fireball that lands at 1.5 / 3.0 / 4.5 m: covers the landing of a jump.",
+      "note": "Lands far away, to catch them across the ring."
     },
     "flash_paper_ex": {
       "kind": "ex",
@@ -780,7 +800,8 @@
       "track": {"until": 10, "rate": 180},
       "anim": {"clip": "flash_cast"},
       "sfx": [[0, "fire_whoosh"]],
-      "desc": "A huge fireball, 2 hits."
+      "desc": "A huge fireball, 2 hits.",
+      "note": "A huge lobbed fireball that hits twice."
     },
     "vanish_l": {
       "kind": "special",
@@ -810,6 +831,7 @@
       "track": {"until": 2, "rate": 180},
       "anim": {"clip": "vanish"},
       "desc": "Trapdoor: reappears 0.8 m BEHIND the opponent (14f recovery).",
+      "note": "Trapdoor: pops up behind them. Slow to finish, so pick your moment.",
       "pushExt": [[0, 0.001], [21, 0.106], [40, 0.133]]
     },
     "vanish_m": {
@@ -840,6 +862,7 @@
       "track": {"until": 2, "rate": 180},
       "anim": {"clip": "vanish"},
       "desc": "Trapdoor: reappears 0.9 m IN FRONT of the opponent.",
+      "note": "Trapdoor: pops up right in front of them for a surprise attack.",
       "pushExt": [[0, 0.001], [21, 0.106], [40, 0.133]]
     },
     "vanish_h": {
@@ -870,6 +893,7 @@
       "track": {"until": 2, "rate": 180},
       "anim": {"clip": "vanish"},
       "desc": "Trapdoor: escapes to 1.0 m from his own wall.",
+      "note": "Trapdoor escape back to his own wall, far from them.",
       "pushExt": [[0, 0.001], [21, 0.106], [40, 0.133]]
     },
     "vanish_ex": {
@@ -900,6 +924,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "vanish"},
       "desc": "Instant: invulnerable from frame 1, reappears behind, cancelable into a special.",
+      "note": "Instant trapdoor behind them; can't be hit, then attack right away.",
       "pushExt": [[0, 0.001], [14, 0.106], [26, 0.133]]
     },
     "flourish_l": {
@@ -932,7 +957,8 @@
       "lateralM": 0.6,
       "anim": {"clip": "flourish_burst"},
       "sfx": [[0, "fire_whoosh"]],
-      "desc": "Burst of flame and doves above and around him; not invulnerable (EX is)."
+      "desc": "Burst of flame and doves above and around him; not invulnerable (EX is).",
+      "note": "Quickest burst of the three; the best one against jumps."
     },
     "flourish_m": {
       "kind": "special",
@@ -964,7 +990,8 @@
       "lateralM": 0.65,
       "anim": {"clip": "flourish_burst"},
       "sfx": [[0, "fire_whoosh"]],
-      "desc": "Burst of flame and doves above and around him; not invulnerable (EX is)."
+      "desc": "Burst of flame and doves above and around him; not invulnerable (EX is).",
+      "note": "Burst of flame and doves around him: stops jumps and sidesteps."
     },
     "flourish_h": {
       "kind": "special",
@@ -996,7 +1023,8 @@
       "lateralM": 0.7,
       "anim": {"clip": "flourish_burst"},
       "sfx": [[0, "fire_whoosh"]],
-      "desc": "Burst of flame and doves above and around him; not invulnerable (EX is)."
+      "desc": "Burst of flame and doves above and around him; not invulnerable (EX is).",
+      "note": "Strongest burst; the riskiest if blocked."
     },
     "flourish_ex": {
       "kind": "ex",
@@ -1028,7 +1056,8 @@
       "lateralM": 0.8,
       "anim": {"clip": "flourish_burst"},
       "sfx": [[0, "fire_whoosh"]],
-      "desc": "Fully invulnerable burst."
+      "desc": "Fully invulnerable burst.",
+      "note": "Burst that can't be hit as it starts: his escape when cornered."
     },
     "grand_illusion": {
       "kind": "super1",
@@ -1070,6 +1099,7 @@
       "anim": {"clip": "palm_shove"},
       "sfx": [[0, "crowd_cheer_burst"]],
       "desc": "A giant spinning card-saw: 5-hit projectile, invulnerable startup, aimed.",
+      "note": "Giant card-saw aimed right at them; can't be hit as it starts.",
       "pushExt": [[0, 0.0], [5, 0.0], [8, 0.194], [13, 0.235], [39, 0.223], [55, 0.139]]
     },
     "the_prestige": {
@@ -1241,6 +1271,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "palm_shove"},
       "desc": "PRIME TIME: a palm to the chest, a sheet over the victim, and the big reveal.",
+      "note": "PRIME TIME: unstoppable palm, a sheet over them, the big reveal.",
       "boxes": [{"f": [10, 13], "x": 0.962, "y": 1.378, "w": 0.623, "h": 0.555}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [6, 0.0], [9, 0.194], [12, 0.229], [50, 0.223], [72, 0.139]]
@@ -1264,7 +1295,8 @@
   "unique": {
     "kind": "teleport",
     "moves": ["vanish_l", "vanish_m", "vanish_h", "vanish_ex"],
-    "trait": "VANISHING ACT: trapdoor teleport behind the opponent or home to his corner; keeps you at 3-5 m."
+    "trait": "VANISHING ACT: trapdoor teleport behind the opponent or home to his corner; keeps you at 3-5 m.",
+    "note": "Vanishing Act: drop through a trapdoor and pop up behind them, in front, or at home."
   },
   "intro": "intro_tada",
   "win": ["win_flourish", "win_ack"],

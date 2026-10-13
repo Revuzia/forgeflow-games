@@ -21,9 +21,24 @@
 //     last step) + NEXT / LOCK IN (= the 'confirm' act of the step); hidden once every pick is in (and online once locked);
 //   * the header BACK steps back like Esc / pad B (Menus passes it to back()); on P1's FIGHTER step it leaves the screen.
 // done() fires only if every pick is still in after the 380 ms sting (a BACK inside it cancels the start).
+// CHANGED(ui) (CONTRACT §36.3 / §36.4 + the OWNER CLARIFICATION): the CONTROLS step offers EASY (recommended, the keyboard
+// default) / SIMPLE / CLASSIC with a one-line explanation each (`hpm-cs-scheme-p<n>-<2|0|1>`; left / right cycle EASY ->
+// SIMPLE -> CLASSIC), and every human player's card carries a MOVES panel for the highlighted fighter: the fighter's plan
+// line, then - EASY on a keyboard - the attack hand drawn as keys (J K L + U I O P + H Y, labelled with the fighter's own
+// move names), SIMPLE / CLASSIC - the specials + supers as rows of the player's keys + directions, touch - the PAD's discs;
+// the unique mechanic's plain note last. Keys come from hooks.labels / hooks.keys (the live settings).
+// CHANGED(wf8 fix) FT-08 (owner: "special moves notes ... per character ... when choosing them"): under the keys a SPOTLIGHT
+// line names one move at a time - its key, full name and plain note (`hpm-cs-spot-p<n>`, the matching key lit on the map) -
+// stepping through SPECIAL 1-4, SUPER and PRIME TIME every 2.6 s; pointing at (or tapping) a key on the map spotlights that
+// move at once. Before, the panel showed key + name only ("O KICK" for BICYCLE KICK; "uppercut" nowhere for ENCORE).
+// FT-09: on the COLOR / CONTROLS / LOCKED IN steps the plan line steps aside so the swatches / scheme row never clip the keys,
+// and the READY! stamp sits on the card's header instead of the keys.
 
 import type { Rect, Scheme, UiGameData, UiSave } from './types.ts';
-import { btn, div, el, svg, ICON, setText, pulse } from './dom.ts';
+import type { KeyBindings } from '../input.ts';
+import { btn, div, el, svg, ICON, setText, pulse, touchModeOn } from './dom.ts';
+import { fighterKit, type Labels, type SchemeN } from './controls.ts';
+import { drawKeyboard, moveRows } from './keymap.ts';
 import { archetypeLabel, colorsOf, difficulty, fighter, fighterIds, fillPortrait, hasAssets, isBoss, isUnlocked, BOSSES } from './data.ts';
 import { t } from './strings.ts';
 
@@ -33,6 +48,9 @@ export type CsAct = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back';
 type Step = 'fighter' | 'color' | 'scheme' | 'ready' | 'wait';
 
 export interface CsPick { fighter: string; color: number; scheme: Scheme }
+/** CHANGED(wf8 fix) FT-08: one spotlight entry - the action (its key on the map), the key cap, full name, plain note */
+interface SpotItem { action: string; cap: string; name: string; note: string }
+const SPOT_MS = 2600;
 export interface CsResult { p1: CsPick; p2: CsPick | null }
 
 interface Slot { id: string; col: number; row: number; span: number; el: HTMLButtonElement; locked: boolean }
@@ -42,7 +60,11 @@ interface PState {
 }
 interface SideEl {
   root: HTMLElement; tag: HTMLElement; step: HTMLElement; name: HTMLElement; persona: HTMLElement; arch: HTMLElement;
-  stars: HTMLElement; hp: HTMLElement; colors: HTMLElement; schemeBox: HTMLElement; schemeBtns: [HTMLButtonElement, HTMLButtonElement];
+  stars: HTMLElement; hp: HTMLElement; colors: HTMLElement; schemeBox: HTMLElement; schemeBtns: Map<Scheme, HTMLButtonElement>;
+  /** CHANGED(ui): the MOVES panel (plan, keys / rows, unique note) + its rebuild key */
+  moves: HTMLElement; movesKey: string;
+  /** CHANGED(wf8 fix) FT-08: the spotlight line, its moves, the one shown, hover hold-until (ms) */
+  spot: HTMLElement | null; spotItems: SpotItem[]; spotIdx: number; spotHold: number;
   portrait: HTMLElement; ready: HTMLElement;
   /** CHANGED(wf7 touch) VO-D1: swatch buttons (rebuilt only when the fighter / colour count changes), the name chip, the action row */
   swatches: HTMLButtonElement[]; swKey: string; swName: HTMLElement;
@@ -57,7 +79,13 @@ export interface CsHooks {
   sound(cue: 'move' | 'select' | 'back' | 'error' | 'start'): void;
   /** the scheme a human player last used (settings.controls[p].scheme) */
   defaultScheme(p: 0 | 1): Scheme;
+  /** CHANGED(ui): a player's live key caps / key map (the MOVES panel); absent = the panel shows names only */
+  labels?(p: 0 | 1): Labels;
+  keys?(p: 0 | 1): KeyBindings;
 }
+/** CHANGED(ui): the CONTROLS step's order (left / right cycle) */
+const SCHEMES: readonly Scheme[] = [2, 0, 1];
+const SCHEME_NAME: Readonly<Record<number, string>> = { 2: 'easy', 0: 'simple', 1: 'classic' };
 
 export class CharSelect {
   readonly root: HTMLElement;
@@ -98,9 +126,34 @@ export class CharSelect {
     this.grid.setAttribute('role', 'listbox');
     this.note = div('hpm-cs-note', this.root, '');
     this.note.setAttribute('role', 'status');
+    // CHANGED(wf8 fix) FT-08: the MOVES spotlight steps through the moves while the screen shows
+    window.setInterval(() => this.spotTick(), SPOT_MS);
   }
 
-  private blank(kind: PState['kind']): PState { return { kind, cursor: 0, step: 'fighter', fighter: null, color: 0, scheme: 0 }; }
+  /** CHANGED(wf8 fix) FT-08: next spotlight entry on every shown card (a pointed-at key holds its entry a while) */
+  private spotTick(): void {
+    if (!this.root.isConnected || this.root.offsetParent === null) return;
+    const now = performance.now();
+    for (const S of this.sides) {
+      if (!S.spot || S.spotItems.length < 2 || now < S.spotHold || S.root.hidden || S.moves.hidden) continue;
+      this.paintSpot(S, (S.spotIdx + 1) % S.spotItems.length);
+    }
+  }
+
+  private paintSpot(S: SideEl, k: number): void {
+    const box = S.spot;
+    const it = S.spotItems[k];
+    if (!box || !it) return;
+    S.spotIdx = k;
+    box.replaceChildren();
+    if (it.cap) box.append(el('kbd', 'hpk-cap k-special', it.cap));
+    box.append(el('b', '', it.name), document.createTextNode(it.note));
+    box.dataset.action = it.action;
+    for (const kk of S.moves.querySelectorAll<HTMLElement>('.hpk-key.spotlit')) kk.classList.remove('spotlit');
+    for (const kk of S.moves.querySelectorAll<HTMLElement>('.hpk-key[data-actions]')) if ((kk.dataset.actions ?? '').split(' ').includes(it.action)) kk.classList.add('spotlit');
+  }
+
+  private blank(kind: PState['kind']): PState { return { kind, cursor: 0, step: 'fighter', fighter: null, color: 0, scheme: 2 }; }
 
   private mkSide(i: 0 | 1): SideEl {
     const root = el('div', `hpm-cs-side p${i + 1}`);
@@ -116,19 +169,36 @@ export class CharSelect {
     const stars = el('span', 'stars');
     const hp = el('span', 'hp', '');
     facts.append(arch, stars, hp);
+    // CHANGED(ui) (CONTRACT §36.3): the MOVES panel for the highlighted fighter
+    const moves = div('hpm-cs-moves', root);
+    moves.id = `hpm-cs-moves-p${i + 1}`;
+    // CHANGED(wf8 fix) FT-08: pointing at a key on the map (or tapping it) spotlights its move at once, held 6 s
+    const pick = (e: Event): void => {
+      const S = this.sides?.[i];
+      const key = (e.target as HTMLElement | null)?.closest<HTMLElement>('.hpk-key[data-actions]');
+      if (!S || !key) return;
+      const acts = (key.dataset.actions ?? '').split(' ');
+      const k = S.spotItems.findIndex((x) => acts.includes(x.action));
+      if (k < 0) return;
+      S.spotHold = performance.now() + 6000;
+      if (k !== S.spotIdx) this.paintSpot(S, k);
+    };
+    moves.addEventListener('pointerover', pick);
+    moves.addEventListener('click', pick);
     const colors = div('hpm-cs-colors', root);
     const swName = el('span', 'swname', '');
-    const schemeBox = div('hpm-cs-scheme', root);
-    const mk = (s: Scheme): HTMLButtonElement => {
+    const schemeBox = div('hpm-cs-scheme hpm-schemes', root);
+    const schemeBtns = new Map<Scheme, HTMLButtonElement>();
+    for (const s of SCHEMES) {
       const b = btn('hpm-segbtn', '', false);
       b.id = `hpm-cs-scheme-p${i + 1}-${s}`;
-      b.append(el('b', '', s === 0 ? t('cs.simple') : t('cs.classic')), el('small', '', s === 0 ? t('cs.simple.sub') : t('cs.classic.sub')));
+      // CHANGED(ui): EASY / SIMPLE / CLASSIC, each with its one-line explanation (EASY first: the recommended default)
+      b.append(el('b', '', t(`cs.${SCHEME_NAME[s]}`)), el('small', '', t(`cs.${SCHEME_NAME[s]}.sub`)));
       // CHANGED(wf7 touch) VO-D1: a tap selects; a tap on the selected scheme locks in (READY was key / pad only)
       b.addEventListener('click', () => this.tapScheme(i, s));
       schemeBox.append(b);
-      return b;
-    };
-    const schemeBtns: [HTMLButtonElement, HTMLButtonElement] = [mk(0), mk(1)];
+      schemeBtns.set(s, b);
+    }
     // CHANGED(wf7 touch) VO-D1: the card's action row - BACK one step / NEXT or LOCK IN (= the step's confirm)
     const acts = div('hpm-cs-acts', root);
     const undo = btn('hpm-small hpm-cs-undo', '', false);
@@ -141,7 +211,7 @@ export class CharSelect {
     ok.addEventListener('click', () => { ok.blur(); this.tapAct(i, 'confirm'); });
     acts.append(undo, ok);
     const ready = div('hpm-cs-ready', root, t('cs.ready'));
-    return { root, tag, step, name, persona, arch, stars, hp, colors, schemeBox, schemeBtns, portrait, ready, swatches: [], swKey: '', swName, acts, undo, ok };
+    return { root, tag, step, name, persona, arch, stars, hp, colors, schemeBox, schemeBtns, moves, movesKey: '', spot: null, spotItems: [], spotIdx: 0, spotHold: 0, portrait, ready, swatches: [], swKey: '', swName, acts, undo, ok };
   }
 
   /** CHANGED(wf7 touch) VO-D1: may player i be driven by its card's buttons right now? (the active picker; both with two pads) */
@@ -284,7 +354,12 @@ export class CharSelect {
         break;
       }
       case 'scheme':
-        if (act === 'left' || act === 'right' || act === 'up' || act === 'down') { st.scheme = st.scheme === 0 ? 1 : 0; this.hooks.sound('move'); }
+        // CHANGED(ui): EASY -> SIMPLE -> CLASSIC (right / down), the other way left / up
+        if (act === 'left' || act === 'right' || act === 'up' || act === 'down') {
+          const k = SCHEMES.indexOf(st.scheme);
+          st.scheme = SCHEMES[(Math.max(0, k) + (act === 'right' || act === 'down' ? 1 : SCHEMES.length - 1)) % SCHEMES.length];
+          this.hooks.sound('move');
+        }
         else if (act === 'confirm') { st.step = 'ready'; this.hooks.sound('select'); this.onReady(i); }
         else if (act === 'back') { st.step = 'color'; this.hooks.sound('back'); }
         break;
@@ -501,6 +576,8 @@ export class CharSelect {
     setText(S.swName, col?.name ?? '');
     S.schemeBox.hidden = st.kind !== 'human' || (st.step !== 'scheme' && st.step !== 'ready');
     S.schemeBtns.forEach((b, k) => { const on = k === st.scheme; b.classList.toggle('on', on); b.setAttribute('aria-pressed', String(on)); b.disabled = st.step !== 'scheme'; });
+    this.renderMoves(i, S, st, f ? (id as string) : null);
+    this.fitMoves(S, st);                                                     // CHANGED(wf8 fix) FT-08
     S.ready.hidden = st.step !== 'ready';
     S.root.dataset.step = st.step;
     // CHANGED(wf7 touch) VO-D1: the action row on the card being picked (BACK from P2 / CPU / dummy FIGHTER = into P1's last step)
@@ -511,6 +588,85 @@ export class CharSelect {
     S.undo.hidden = !canBack;
     S.ok.hidden = !canOk;
     setText(S.ok, st.step === 'color' && st.kind === 'human' ? t('cs.next') : t('cs.lockIn'));
+  }
+
+  /**
+   * CHANGED(ui) (CONTRACT §36.3): the MOVES panel of player i's card for fighter `fid` (the cursor or the pick). Humans: the
+   * plan line, the keys (EASY keyboard: the attack hand drawn as keys; SIMPLE / CLASSIC: rows; touch: the PAD's discs) and
+   * the unique note; a CPU / dummy card: the plan line only. Rebuilt only when fighter / scheme / keys / mode change.
+   */
+  private renderMoves(i: 0 | 1, S: SideEl, st: PState, fid: string | null): void {
+    const f = fid ? fighter(this.data, fid) : null;
+    const kit = fighterKit(f);
+    const touch = touchModeOn();
+    const human = st.kind === 'human';
+    const keys = human && this.hooks.keys ? this.hooks.keys(i) : null;
+    const key = kit ? `${fid}|${st.scheme}|${human}|${touch}|${keys ? JSON.stringify(keys) : ''}` : '';
+    S.moves.hidden = !kit;
+    if (key === S.movesKey) return;
+    S.movesKey = key;
+    S.moves.replaceChildren();
+    if (!kit) return;
+    S.moves.dataset.fighter = kit.id;
+    S.moves.dataset.scheme = String(st.scheme);
+    if (kit.plan) S.moves.append(el('p', 'plan', kit.plan));
+    if (!human) return;
+    const hd = div('hd', S.moves);
+    hd.append(el('b', '', t('cs.moves')), el('span', '', touch ? t('sheet.title') : t('cs.movesKeys', { scheme: t(`cs.${SCHEME_NAME[st.scheme] ?? 'easy'}`) })));
+    // the attack hand drawn as keys when every SPECIAL key is bound (P2's numpad map has none by default: rows instead)
+    if (!touch && st.scheme === 2 && keys && (['sp1', 'sp2', 'sp3', 'sp4'] as const).every((a) => (keys[a] ?? []).length > 0)) {
+      drawKeyboard(S.moves, { keys, scheme: 2, kit, onlyActions: ['l', 'm', 'h', 'sp1', 'sp2', 'sp3', 'sp4', 'super1', 'super3'], cls: 'small' });
+    } else {
+      const rows = div('hpk-rows', S.moves);
+      for (const r of moveRows(kit, st.scheme as SchemeN, this.hooks.labels ? this.hooks.labels(i) : null, touch)) {
+        const row = div('hpk-row', rows);
+        row.dataset.kind = r.kind;
+        const nm = el('span', 'nm');
+        nm.append(el('span', 'full', r.name), el('span', 'short', r.short));
+        nm.title = r.name;
+        row.append(r.keys, nm);
+      }
+    }
+    // CHANGED(wf8 fix) FT-08: the spotlight - one move at a time: key, full name, plain note (+ how its key changes it)
+    const labels = this.hooks.labels ? this.hooks.labels(i) : null;
+    const items: SpotItem[] = [];
+    for (const km of [...kit.specials, kit.super1, kit.super3]) {
+      if (!km || !km.note || items.some((x) => x.action === km.action)) continue;
+      const cap = touch ? '' : (labels?.[km.action]?.keys?.[0] ?? '');
+      items.push({ action: km.action, cap, name: km.name, note: km.tip ? `${km.note} ${km.tip}` : km.note });
+    }
+    S.spotItems = items;
+    S.spotIdx = 0;
+    S.spot = null;
+    if (items.length) {
+      const sp = el('p', 'spot');
+      sp.id = `hpm-cs-spot-p${i + 1}`;
+      sp.setAttribute('aria-live', 'off');
+      S.moves.append(sp);
+      S.spot = sp;
+      this.paintSpot(S, 0);
+    }
+    if (kit.unique?.note) {
+      const uq = el('p', 'uq');
+      uq.append(el('b', '', kit.unique.title), document.createTextNode(kit.unique.note));
+      S.moves.append(uq);
+    }
+    this.fitMoves(S, st);
+  }
+
+  /**
+   * CHANGED(wf8 fix) FT-08: a short card (1280 x 720) cannot hold the plan, the keys, the spotlight AND the unique note: the
+   * unique note then joins the spotlight's rotation (its title + note) instead of being clipped. Re-checked on the FIGHTER
+   * step only (later steps hide both lines).
+   */
+  private fitMoves(S: SideEl, st: PState): void {
+    if (st.step !== 'fighter' || !S.spot || S.moves.hidden) return;
+    const uq = S.moves.querySelector<HTMLElement>('p.uq');
+    if (!uq || uq.hidden) return;
+    if (S.moves.scrollHeight <= S.moves.clientHeight + 1) return;
+    uq.hidden = true;
+    const b = uq.querySelector('b')?.textContent ?? '';
+    S.spotItems.push({ action: 'unique', cap: '', name: b, note: (uq.textContent ?? '').slice(b.length) });
   }
 
   /**
@@ -532,6 +688,8 @@ export class CharSelect {
     setText(S.hp, '');
     S.colors.hidden = true;
     S.schemeBox.hidden = true;
+    S.moves.hidden = true;                                                   // CHANGED(ui)
+    S.movesKey = '';
     S.acts.hidden = true;                                                    // CHANGED(wf7 touch) VO-D1
     S.ready.hidden = !this.online.locked;
     setText(S.ready, t('cs.locked'));

@@ -186,6 +186,7 @@ export function buildResults(host: HTMLElement, data: UiGameData, r: MatchResult
   resultChoices(r).forEach(([c, label], k) => {
     const b = btn(k === 0 ? 'hpm-btn hot' : 'hpm-btn', label);
     b.id = `hpm-res-${c}`;
+    b.dataset.hgroup = 'res';                       // CHANGED(wf8 fix) FT-15: UP / DOWN step through the choices too
     if (k === 0) b.dataset.default = '';
     b.addEventListener('click', () => { dispose(); pick(c); });
     acts.append(b);

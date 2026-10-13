@@ -18,7 +18,7 @@ import { ACT, BUF, CF, F, FL, MVF, ST, W } from './layout.ts';
 import { EV, CUE, EVX } from './events.ts';
 import { BACT, K, STK, TPD, UK } from './compile.ts';
 import type { CMove } from './compile.ts';
-import { IN, curDir, dirOf, prejumpCancelable, projOk, stepBits } from './inputs.ts';
+import { IN, IN_ATTACK, blockHeld, curDir, dirOf, prejumpCancelable, projOk, routeStep, stepBits } from './inputs.ts';
 import {
   addShowtime, canAfford, canNerve, clearMove, emit, fb, isAirborne, moveAlong, moveFwd, setSt, setVelAlong, spendNerve, updateFacing,
 } from './state.ts';
@@ -151,6 +151,21 @@ export function freeTick(m: Match, i: number): void {
   if (tryAct(m, i, CTX.FREE)) return;
   const dir = dirOf(s[b + F.raw], s[b + F.facing]);
   const st = s[b + F.st];
+  // CHANGED(input) (CONTRACT §36.5 item 2): BLOCK held overrides walking, jumping and a held STEP: the fighter guards in place
+  // (standing, or crouching with DOWN) in the guard pose (FL.PROX = the block_high / block_low anim); hits.ts canBlock reads
+  // BLOCK as "back relative to the attacker". Presses still act (tryAct above ran first).
+  if (blockHeld(s[b + F.raw])) {
+    if (dir <= 3) {
+      if (st !== ST.CROUCH) setSt(m, i, ST.CROUCH);
+      if (s[b + F.stF] >= sys.movement.crouchHurtFrame) s[b + F.flags] |= FL.CROUCHING;
+      s[b + F.flags] |= FL.PROX;
+      return;
+    }
+    s[b + F.flags] &= ~FL.CROUCHING;
+    if (st !== ST.IDLE) setSt(m, i, ST.IDLE);
+    s[b + F.flags] |= FL.PROX;
+    return;
+  }
   if (dir >= 7) {
     s[b + F.jumpDir] = dir === 9 ? 1 : dir === 7 ? -1 : 0;
     s[b + F.flags] &= ~FL.CROUCHING;
@@ -279,7 +294,8 @@ function sidewalkTick(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   const dir = dirOf(s[b + F.raw], s[b + F.facing]);
-  if (dir !== 5 && dir !== 6) {
+  if ((dir !== 5 && dir !== 6) || blockHeld(s[b + F.raw])) {
+    // CHANGED(input): BLOCK leaves the circle-walk like back does (back cancels circling into block)
     enterFree(m, i);
     return;
   }
@@ -355,6 +371,42 @@ function execMove(m: Match, i: number, idx: number, flags: number): void {
   startMove(m, i, idx, flags);
 }
 
+/** CHANGED(wf8 fix) FT-02: a route step aims its hitbox tip this far (U) inside the opponent's push edge */
+const ROUTE_REACH_MARGIN = 12000;
+/** CHANGED(wf8 fix) FT-02: the longest slide-in a route step gets (U) */
+const ROUTE_REACH_MAX = 60000;
+const RR = new Int32Array(3);
+
+/**
+ * CHANGED(wf8 fix) FT-02 (owner: "make the attacks much easier on the keyboard"; first-time player: mashing J from the
+ * jab's edge range dropped the auto-combo on hit 2 or 3 in 9 of 9 tries - the earlier hits' pushback carried the
+ * opponent out of the next move's reach). A route continuation (EASY: tap LIGHT again; SIMPLE: ASSIST + LIGHT; the CPU
+ * never plays routes) whose next strike would come out short slides the attacker in during that strike's startup: the
+ * gap at its first active frame = root -> the opponent's push edge now + the opponent's pending pushback - the strike's
+ * own startup travel - (its reach - ROUTE_REACH_MARGIN), capped at ROUTE_REACH_MAX. Carried by the attacker's own push
+ * slot (applyPush: ring-clamped, no transfer), so no new state; integer math only.
+ */
+function routeReach(m: Match, i: number, t: CMove): void {
+  if (!t.isStrike || t.proj || t.maxReach <= 0 || t.startup < 2) return;
+  const s = m.s;
+  const b = fb(i);
+  const bo = fb(1 - i);
+  if (isAirborne(s, b) || isAirborne(s, bo)) return;
+  pushCircle(m, 1 - i, RR);
+  const dx = RR[0] - s[b + F.x];
+  const dz = RR[1] - s[b + F.z];
+  if (dx === 0 && dz === 0) return;
+  const dist = isqrt(dx * dx + dz * dz) - RR[2];
+  const pend = s[bo + F.pushF] > 0 ? s[bo + F.pushLeft] : 0;
+  const travel = t.curve[Math.min(t.startup, t.curve.length - 1)];
+  const gap = dist + pend - travel - (t.maxReach - ROUTE_REACH_MARGIN);
+  if (gap <= 0) return;
+  s[b + F.pushLeft] = Math.min(gap, ROUTE_REACH_MAX);
+  s[b + F.pushYaw] = dirToYaw(dx, dz);
+  s[b + F.pushF] = t.startup - 1;
+  s[b + F.flags] &= ~FL.PUSHX;
+}
+
 function cancelAllowed(m: Match, i: number, cur: CMove, f: number, t: CMove, bufF: number): boolean {
   const s = m.s;
   const b = fb(i);
@@ -425,6 +477,21 @@ export function tryAct(m: Match, i: number, ctx: number): boolean {
         emit(m, EV.TAUNT, i, 0, 0, 0);
         return true;
       }
+      if (a === ACT.ROUTE && (bufF & BUF.EASY) !== 0) {
+        // CHANGED(input) (CONTRACT §36.5 item 3): an EASY auto-combo press whose route could not continue (a whiffed opener,
+        // a press after the window) = the plain light normal it would have been (bufM, -1 = none)
+        const fbM = s[b + F.bufM];
+        if (fbM < 0) {
+          clearBuf(s, b);
+          return false;
+        }
+        const t = cf.moves[fbM];
+        if (t.airOnly || t.chainOnly || t.stepAtk || !canAfford(m, i, t) || !projOk(m, i, t)) return false;
+        clearBuf(s, b);
+        autoFace(m, i);
+        execMove(m, i, t.idx, 0);
+        return true;
+      }
       if (a === ACT.ROUTE && cf.assist.length > 0) {
         clearBuf(s, b);
         s[b + F.assistStep] = 0;
@@ -445,9 +512,14 @@ export function tryAct(m: Match, i: number, ctx: number): boolean {
       const cur = cf.moves[s[b + F.mv]];
       const f = s[b + F.mvF];
       if (a === ACT.ROUTE) {
-        const k = s[b + F.assistStep];
-        if ((s[b + F.mvFlags] & MVF.ROUTE) === 0 || k + 1 >= cf.assist.length) return false;
-        if (cf.assist[k] !== cur.idx || s[b + F.contact] === 0) return false;
+        let k = s[b + F.assistStep];
+        if ((bufF & BUF.EASY) !== 0) {
+          // CHANGED(input) EASY auto-combo: the route step of the running move (a light opener = step 0, inputs.ts routeStep)
+          k = routeStep(m, i, cur);
+          if (k < 0) return false;
+        } else if ((s[b + F.mvFlags] & MVF.ROUTE) === 0 || k + 1 >= cf.assist.length) return false;
+        if (cf.assist[k] !== cur.idx && (bufF & BUF.EASY) === 0) return false;
+        if (s[b + F.contact] === 0) return false;
         if ((s[b + F.mvFlags] & MVF.NOCANCEL) !== 0) return false;
         if (f <= s[b + F.contactF] || f > cur.lastActive + m.sys.raw.cancel.graceAfterActive) return false;
         const t = cf.moves[cf.assist[k + 1]];
@@ -455,6 +527,7 @@ export function tryAct(m: Match, i: number, ctx: number): boolean {
         clearBuf(s, b);
         s[b + F.assistStep] = k + 1;
         execMove(m, i, t.idx, MVF.ROUTE);
+        routeReach(m, i, t); // CHANGED(wf8 fix) FT-02
         return true;
       }
       if (a === ACT.PARRY) {
@@ -668,11 +741,17 @@ function stanceTick(m: Match, i: number): void {
     startMove(m, i, u.stExitT, 0);
     return;
   }
-  if (dir === 4) {
+  // CHANGED(input): BLOCK held counts as the back-hold exit (no walk back: BLOCK overrides walking)
+  const blk = blockHeld(s[b + F.raw]);
+  if (dir === 4 || blk) {
     s[b + F.assistStep]++;
     if (s[b + F.assistStep] >= u.stBlockExitF) {
       s[b + F.assistStep] = 0;
       enterFree(m, i);
+      return;
+    }
+    if (blk) {
+      s[b + F.uniq + 3] = 0;
       return;
     }
     moveFwd(s, b, -u.stWalkB);
@@ -1215,7 +1294,7 @@ export function freezeBufferRule(m: Match, i: number): void {
   const s = m.s;
   const b = fb(i);
   if (s[b + F.bufA] !== ACT.MOVE || (s[b + F.bufF] & BUF.FROZEN) === 0 || (s[b + F.bufF] & BUF.NEG) !== 0) return;
-  if ((s[b + F.raw] & (IN.L | IN.M | IN.H | IN.S)) === 0) clearBuf(s, b);
+  if ((s[b + F.raw] & IN_ATTACK) === 0) clearBuf(s, b); // CHANGED(input): SPECIAL 1-4 / SUPER keys count as held attack keys
 }
 
 export { curDir };

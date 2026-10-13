@@ -4,6 +4,7 @@
   "persona": "The Host",
   "archetype": "boss_showman",
   "difficulty": 3,
+  "plan": "Beam them from range, counter their attacks, then unleash the live set at half health.",
   "body": "Ch40_nonPBR",
   "heightM": 1.9,
   "hp": 13000,
@@ -75,6 +76,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "cane_jab"},
       "desc": "Two-hand cane butt thrust.",
+      "note": "Quick cane thrust to stop their attack.",
       "boxes": [{"f": [5, 7], "x": 0.504, "y": 1.375, "w": 0.3, "h": 0.55}],
       "boxSrc": "hitVolume"
     },
@@ -105,7 +107,8 @@
       "track": {"until": 1, "rate": 180},
       "lateralM": 0.15,
       "anim": {"clip": "low_tap"},
-      "desc": "Crouching cane tap to the ankle."
+      "desc": "Crouching cane tap to the ankle.",
+      "note": "Quick cane tap to the ankle; they must block crouching."
     },
     "5M": {
       "kind": "normal",
@@ -135,6 +138,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "cane_swing"},
       "desc": "Diagonal cane chop.",
+      "note": "Diagonal cane chop at mid range.",
       "boxes": [{"f": [9, 11], "x": 0.642, "y": 1.379, "w": 0.4, "h": 0.559}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.012], [16, 0.0], [23, 0.068], [29, 0.003]]
@@ -167,7 +171,8 @@
       "homing": true,
       "lateralM": 0.4,
       "anim": {"clip": "low_cane"},
-      "desc": "Low sweeping cane swing; homing."
+      "desc": "Low sweeping cane swing; homing.",
+      "note": "Low cane swing that catches sidesteps."
     },
     "5H": {
       "kind": "normal",
@@ -199,6 +204,7 @@
       "anim": {"clip": "showstopper"},
       "sfx": [[8, "whoosh_heavy"]],
       "desc": "Big horizontal cane swing; homing; wall-splats at the ring edge.",
+      "note": "Big cane swing that catches sidesteps; walls them near the edge.",
       "pushExt": [[0, 0.0], [8, 0.0], [10, 0.065], [11, 0.156], [14, 0.217], [17, 0.158], [18, 0.067], [20, 0.0], [35, 0.0]]
     },
     "2H": {
@@ -229,7 +235,8 @@
       "track": {"until": 3, "rate": 180},
       "lateralM": 0.22,
       "anim": {"clip": "cane_twirl"},
-      "desc": "Chest-high twirl: anti-air."
+      "desc": "Chest-high twirl: anti-air.",
+      "note": "Cane twirl that swats jumping opponents."
     },
     "3H": {
       "kind": "command",
@@ -259,7 +266,8 @@
       "homing": true,
       "lateralM": 0.45,
       "anim": {"clip": "hook_slide"},
-      "desc": "Vaudeville hook: a sliding low cane swing that drags them in and down."
+      "desc": "Vaudeville hook: a sliding low cane swing that drags them in and down.",
+      "note": "Sliding low cane hook that drags them down. Risky if blocked."
     },
     "4M": {
       "kind": "command",
@@ -289,6 +297,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "stage_kick"},
       "desc": "Kick while holding the cane.",
+      "note": "Stage kick with the cane in hand; a poke that is safe if blocked.",
       "boxes": [{"f": [9, 11], "x": 1.058, "y": 1.228, "w": 0.653, "h": 0.3}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [6, 0.0], [7, 0.102], [8, 0.141], [10, 0.135], [12, 0.004], [29, 0.004]]
@@ -322,6 +331,7 @@
       "anim": {"clip": "sledgehammer"},
       "sfx": [[12, "whoosh_heavy"]],
       "desc": "Two-hand overhead cane smash.",
+      "note": "Two-hand cane smash; must be blocked standing.",
       "boxes": [{"f": [20, 22], "x": 0.59, "y": 1.351, "w": 0.4, "h": 0.503}],
       "boxSrc": "hitVolume"
     },
@@ -353,6 +363,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "air_jab"},
       "desc": "Air cane thrust.",
+      "note": "Quick air thrust for fights in the air.",
       "pushExt": [[0, 0.04], [2, 0.036], [4, 0.099], [11, 0.058], [15, 0.075]]
     },
     "j.M": {
@@ -383,6 +394,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "air_swing"},
       "desc": "Air cane chop.",
+      "note": "Air cane chop for fights in the air.",
       "pushExt": [[0, 0.037], [11, 0.033], [14, 0.098], [16, 0.1]]
     },
     "j.H": {
@@ -413,6 +425,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "air_hammer"},
       "desc": "Overhead cane jump-in.",
+      "note": "Overhead cane jump-in to start a combo.",
       "pushExt": [[0, 0.037], [5, 0.044], [9, 0.113], [19, 0.091]]
     },
     "throw_f": {
@@ -457,6 +470,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Holds them at cane's length for three swings.",
+      "note": "Up close: hold them at cane's length for three swings.",
       "pushExt": [[0, 0.057], [2, 0.0], [31, 0.0]]
     },
     "throw_b": {
@@ -496,6 +510,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Spins them past with the cane.",
+      "note": "Up close: spin them past him with the cane.",
       "pushExt": [[0, 0.057], [2, 0.0], [31, 0.0]]
     },
     "spotlight_l": {
@@ -538,7 +553,8 @@
       "linear": true,
       "anim": {"clip": "spotlight_cast"},
       "sfx": [[0, "electric_zap"]],
-      "desc": "The cane head fires a spotlight beam."
+      "desc": "The cane head fires a spotlight beam.",
+      "note": "Slowest beam: walk in behind it."
     },
     "spotlight_m": {
       "kind": "special",
@@ -580,7 +596,8 @@
       "linear": true,
       "anim": {"clip": "spotlight_cast"},
       "sfx": [[0, "electric_zap"]],
-      "desc": "The cane head fires a spotlight beam."
+      "desc": "The cane head fires a spotlight beam.",
+      "note": "Spotlight beam straight down the ring. Sidesteps dodge it."
     },
     "spotlight_h": {
       "kind": "special",
@@ -622,7 +639,8 @@
       "linear": true,
       "anim": {"clip": "spotlight_cast"},
       "sfx": [[0, "electric_zap"]],
-      "desc": "The cane head fires a spotlight beam."
+      "desc": "The cane head fires a spotlight beam.",
+      "note": "Fastest beam of the three, reaches them the soonest."
     },
     "spotlight_ex": {
       "kind": "ex",
@@ -663,7 +681,8 @@
       "track": {"until": 5, "rate": 180},
       "anim": {"clip": "spotlight_cast"},
       "sfx": [[0, "electric_zap"]],
-      "desc": "Double beam: 2 hits."
+      "desc": "Double beam: 2 hits.",
+      "note": "Double beam aimed right at them: hard to sidestep."
     },
     "commercial_break_l": {
       "kind": "special",
@@ -693,6 +712,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "catch_pose"},
       "desc": "Parry-counter: 'We'll be right back' - catches a strike and answers with the sledgehammer.",
+      "note": "Short catch window; the least risky if nothing comes.",
       "pushExt": [[0, 0.003], [17, 0.042], [39, 0.009]]
     },
     "commercial_break_m": {
@@ -723,6 +743,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "catch_pose"},
       "desc": "Parry-counter: 'We'll be right back' - catches a strike and answers with the sledgehammer.",
+      "note": "Catches a strike and answers with a sledgehammer. Grabs beat it.",
       "pushExt": [[0, 0.003], [21, 0.042], [47, 0.009]]
     },
     "commercial_break_h": {
@@ -753,6 +774,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "catch_pose"},
       "desc": "Parry-counter: 'We'll be right back' - catches a strike and answers with the sledgehammer.",
+      "note": "Long catch window; the riskiest if nothing comes.",
       "pushExt": [[0, 0.003], [24, 0.042], [55, 0.009]]
     },
     "commercial_break_ex": {
@@ -783,6 +805,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "catch_pose"},
       "desc": "Catches strikes and projectiles from frame 1.",
+      "note": "Catches strikes and projectiles right away.",
       "pushExt": [[0, 0.003], [22, 0.042], [49, 0.009]]
     },
     "commercial_hit": {
@@ -815,6 +838,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "counter_smash"},
       "desc": "The counter's sledgehammer (after a COMMERCIAL BREAK catch).",
+      "note": "After a Commercial Break catch: a sledgehammer that knocks down.",
       "boxes": [{"f": [6, 8], "x": 0.59, "y": 1.364, "w": 0.5, "h": 0.528}],
       "boxSrc": "hitVolume"
     },
@@ -848,6 +872,7 @@
       "anim": {"clip": "mic_drop_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Leaping cane swing anti-air.",
+      "note": "Quickest leap, the best one against jumps.",
       "pushExt": [[0, 0.0], [3, 0.0], [5, 0.064], [6, 0.136], [10, 0.173], [15, 0.106], [20, 0.088], [23, 0.0], [42, 0.0]]
     },
     "mic_drop_m": {
@@ -880,6 +905,7 @@
       "anim": {"clip": "mic_drop_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Leaping cane swing anti-air.",
+      "note": "Leaping cane swing that knocks jumpers down. Risky if blocked.",
       "pushExt": [
         [0, 0.0],
         [4, 0.0],
@@ -924,6 +950,7 @@
       "anim": {"clip": "mic_drop_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Leaping cane swing anti-air.",
+      "note": "Strongest leap; the riskiest if blocked.",
       "pushExt": [
         [0, 0.0],
         [5, 0.0],
@@ -968,6 +995,7 @@
       "anim": {"clip": "mic_drop_leap"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Fully invulnerable.",
+      "note": "Leap that can't be hit as it starts: escape pressure.",
       "boxes": [{"f": [6, 11], "x": 0.537, "y": 1.113, "w": 0.5, "h": 0.626}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [3, 0.0], [5, 0.064], [6, 0.136], [10, 0.173], [16, 0.106], [24, 0.067], [26, 0.0], [48, 0.0]]
@@ -1002,6 +1030,7 @@
       "anim": {"clip": "hook_slide"},
       "sfx": [[3, "whoosh_heavy"]],
       "desc": "Sliding low hook that drags them across the floor to him (low, knockdown).",
+      "note": "Shortest hook, out the quickest of the three.",
       "pushExt": [[0, 0.0], [9, 0.007], [13, 0.053], [20, 0.0], [34, 0.0], [36, 0.034], [38, 0.0], [44, 0.002]]
     },
     "the_hook_m": {
@@ -1034,6 +1063,7 @@
       "anim": {"clip": "hook_slide"},
       "sfx": [[3, "whoosh_heavy"]],
       "desc": "Sliding low hook that drags them across the floor to him (low, knockdown).",
+      "note": "Sliding low hook that drags them in and down. Sidesteps beat it.",
       "pushExt": [[0, 0.0], [10, 0.007], [15, 0.052], [22, 0.0], [36, 0.0], [38, 0.034], [40, 0.0], [46, 0.002]]
     },
     "the_hook_h": {
@@ -1066,6 +1096,7 @@
       "anim": {"clip": "hook_slide"},
       "sfx": [[3, "whoosh_heavy"]],
       "desc": "Sliding low hook that drags them across the floor to him (low, knockdown).",
+      "note": "Longest hook, from far away.",
       "pushExt": [[0, 0.0], [11, 0.007], [16, 0.053], [24, 0.0], [38, 0.0], [40, 0.034], [42, 0.0], [48, 0.002]]
     },
     "the_hook_ex": {
@@ -1098,6 +1129,7 @@
       "anim": {"clip": "hook_slide"},
       "sfx": [[3, "whoosh_heavy"]],
       "desc": "Armored 2-hit hook, -6 on block.",
+      "note": "Two-hit hook that takes a hit; safer if blocked.",
       "pushExt": [[0, 0.0], [8, 0.007], [9, 0.039], [12, 0.052], [18, 0.0], [33, 0.0], [35, 0.034], [37, 0.0], [44, 0.002]]
     },
     "pyro_l": {
@@ -1142,6 +1174,7 @@
       "anim": {"clip": "pyro_slam"},
       "sfx": [[0, "explosion"]],
       "desc": "PHASE 2: the cane slams the floor and a line of stage pyro races along it (2 hits).",
+      "note": "Phase 2: slowest fire line; walk in behind it.",
       "pushExt": [[0, 0.0], [12, 0.017], [16, 0.203], [17, 0.277], [21, 0.367], [43, 0.365], [46, 0.348], [49, 0.288]]
     },
     "pyro_m": {
@@ -1186,6 +1219,7 @@
       "anim": {"clip": "pyro_slam"},
       "sfx": [[0, "explosion"]],
       "desc": "PHASE 2: the cane slams the floor and a line of stage pyro races along it (2 hits).",
+      "note": "Phase 2: a line of fire races along the floor right at them.",
       "pushExt": [[0, 0.0], [12, 0.017], [16, 0.203], [17, 0.277], [21, 0.367], [43, 0.365], [46, 0.348], [49, 0.288]]
     },
     "pyro_h": {
@@ -1230,6 +1264,7 @@
       "anim": {"clip": "pyro_slam"},
       "sfx": [[0, "explosion"]],
       "desc": "PHASE 2: the cane slams the floor and a line of stage pyro races along it (2 hits).",
+      "note": "Phase 2: the fastest fire line of the three.",
       "pushExt": [[0, 0.0], [12, 0.017], [16, 0.203], [17, 0.277], [21, 0.367], [43, 0.365], [46, 0.348], [49, 0.288]]
     },
     "pyro_ex": {
@@ -1274,6 +1309,7 @@
       "anim": {"clip": "pyro_slam"},
       "sfx": [[0, "explosion"]],
       "desc": "Three-hit pyro line.",
+      "note": "Phase 2: a three-hit fire line.",
       "pushExt": [[0, 0.0], [9, 0.0], [14, 0.309], [17, 0.367], [39, 0.365], [42, 0.348], [45, 0.288]]
     },
     "standing_ovation": {
@@ -1311,6 +1347,7 @@
       "anim": {"clip": "three_swings", "warp": [[0, 0.0], [8, 0.367], [28, 1.467], [42, 2.167], [97, 2.667]]},
       "sfx": [[1, "crowd_cheer_burst"]],
       "desc": "Invulnerable three-swing cane routine.",
+      "note": "Three cane swings that can't be hit as they start.",
       "pushExt": [[0, 0.0], [24, 0.0], [26, 0.133], [27, 0.146], [28, 0.123], [29, 0.016], [30, 0.0], [97, 0.0]]
     },
     "prime_time": {
@@ -1474,6 +1511,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "showstopper"},
       "desc": "PRIME TIME (phase 1): the host's cane routine for camera one.",
+      "note": "PRIME TIME: the host's unstoppable cane routine for camera one.",
       "pushExt": [[0, 0.0], [7, 0.0], [10, 0.187], [14, 0.217], [21, 0.191], [31, 0.0], [72, 0.0]]
     },
     "season_finale": {
@@ -1662,6 +1700,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "finale_slam"},
       "desc": "PHASE 2 Lv3: the whole set - pyro columns, a falling lighting rig and the confetti cannon.",
+      "note": "Phase 2 PRIME TIME: pyro, a falling light rig and confetti.",
       "pushExt": [[0, 0.0], [4, 0.017], [8, 0.203], [9, 0.277], [11, 0.337], [15, 0.365], [61, 0.365], [72, 0.288]]
     }
   },
@@ -1694,7 +1733,8 @@
     "moves": ["pyro_l", "pyro_m", "pyro_h", "pyro_ex", "season_finale"],
     "lv3": "season_finale",
     "simple": {"6S": "pyro_m"},
-    "trait": "TWO PHASES: below 50% HP the set goes live - PYRO fire lines and a second Lv3, SEASON FINALE."
+    "trait": "TWO PHASES: below 50% HP the set goes live - PYRO fire lines and a second Lv3, SEASON FINALE.",
+    "note": "Two phases: below half health the set goes live, with pyro and a second PRIME TIME."
   },
   "intro": "intro_power",
   "win": ["win_bow", "win_cane"],

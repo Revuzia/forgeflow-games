@@ -4,6 +4,7 @@
   "persona": "The Headliner",
   "archetype": "shoto",
   "difficulty": 1,
+  "plan": "Throw bricks from far away, uppercut anyone who jumps, end combos with Headline Hook.",
   "body": "Ch42_nonPBR",
   "heightM": 1.8,
   "hp": 10000,
@@ -76,6 +77,7 @@
       "anim": {"clip": "jab"},
       "sfx": [[2, "whoosh_light"]],
       "desc": "4-frame jab; links into itself, chains into 2L.",
+      "note": "Fastest punch in the cast. Tap it again on a hit to keep punching.",
       "boxes": [{"f": [4, 6], "x": 0.862, "y": 1.311, "w": 0.351, "h": 0.422}],
       "boxSrc": "hitVolume"
     },
@@ -108,6 +110,7 @@
       "anim": {"clip": "crouch_jab"},
       "sfx": [[3, "whoosh_light"]],
       "desc": "Low jab to the knee; chains and cancels.",
+      "note": "Quick low jab; they must block crouching. Starts short combos.",
       "boxes": [{"f": [5, 7], "x": 0.848, "y": 0.845, "w": 0.321, "h": 0.25}],
       "boxSrc": "hitVolume"
     },
@@ -140,6 +143,7 @@
       "anim": {"clip": "cross"},
       "sfx": [[5, "whoosh_light"]],
       "desc": "Straight right; his best mid-range button.",
+      "note": "Long straight punch: his best button at arm's length.",
       "boxes": [{"f": [8, 10], "x": 0.862, "y": 1.385, "w": 0.4, "h": 0.569}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.023], [8, 0.064], [15, 0.0], [21, 0.043], [24, 0.001], [27, 0.0]]
@@ -173,6 +177,7 @@
       "anim": {"clip": "low_body"},
       "sfx": [[5, "whoosh_light"]],
       "desc": "Crouching straight to the knee; cancel into HEADLINE HOOK.",
+      "note": "Low punch to the knee; follow with Headline Hook to knock them down.",
       "pushExt": [[0, 0.045], [8, 0.09], [14, 0.056], [17, 0.005], [26, 0.0]]
     },
     "5H": {
@@ -205,6 +210,7 @@
       "anim": {"clip": "haymaker"},
       "sfx": [[8, "whoosh_heavy"]],
       "desc": "Wide rear hook; homing (catches a sidestep).",
+      "note": "Wide swinging hook that catches opponents who sidestep.",
       "boxes": [{"f": [12, 14], "x": 0.625, "y": 1.413, "w": 0.5, "h": 0.626}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.0], [10, 0.036], [22, 0.009], [28, 0.051], [35, 0.034]]
@@ -237,7 +243,8 @@
       "lateralM": 0.22,
       "anim": {"clip": "uppercut"},
       "sfx": [[6, "whoosh_heavy"]],
-      "desc": "Anti-air uppercut."
+      "desc": "Anti-air uppercut.",
+      "note": "Uppercut that knocks jumping opponents out of the air."
     },
     "3H": {
       "kind": "command",
@@ -268,7 +275,8 @@
       "lateralM": 0.45,
       "anim": {"clip": "low_blow"},
       "sfx": [[7, "whoosh_heavy"]],
-      "desc": "Crouching hook to the knee that drops them (low, knockdown)."
+      "desc": "Crouching hook to the knee that drops them (low, knockdown).",
+      "note": "Low hook that knocks down and catches sidesteps. Risky if blocked."
     },
     "6H": {
       "kind": "command",
@@ -299,6 +307,7 @@
       "anim": {"clip": "overhand"},
       "sfx": [[12, "whoosh_heavy"]],
       "desc": "Looping overhand; must be blocked standing.",
+      "note": "Slow overhand; must be blocked standing. Beats crouch-blockers.",
       "boxes": [{"f": [18, 20], "x": 0.737, "y": 1.346, "w": 0.4, "h": 0.493}],
       "boxSrc": "hitVolume"
     },
@@ -330,6 +339,7 @@
       "lateralM": 0.15,
       "anim": {"clip": "air_jab"},
       "desc": "Fast air-to-air jab.",
+      "note": "Quick air jab to win fights in the air.",
       "pushExt": [[0, 0.078], [3, 0.102], [15, 0.074]]
     },
     "j.M": {
@@ -360,6 +370,7 @@
       "lateralM": 0.18,
       "anim": {"clip": "air_cross"},
       "desc": "Long jump-in straight.",
+      "note": "Long jump-in punch that reaches far ahead.",
       "pushExt": [[0, 0.011], [5, 0.056], [10, 0.002], [16, 0.015]]
     },
     "j.H": {
@@ -390,6 +401,7 @@
       "lateralM": 0.22,
       "anim": {"clip": "air_hammer"},
       "desc": "Downward hammer fist jump-in.",
+      "note": "Heavy jump-in hammer; land it to start a big combo.",
       "pushExt": [[0, 0.157], [11, 0.114], [16, 0.007], [19, 0.003]]
     },
     "throw_f": {
@@ -434,6 +446,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Clinches and digs three body shots.",
+      "note": "Up close: grab and dig three body shots. Beats blocking.",
       "pushExt": [[0, 0.134], [4, 0.005], [5, 0.0], [26, 0.0], [31, 0.028]]
     },
     "throw_b": {
@@ -473,6 +486,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "throw_reach"},
       "desc": "Pulls them past and hooks them the other way.",
+      "note": "Up close: grab, swap places and hook them the other way.",
       "pushExt": [[0, 0.134], [4, 0.005], [5, 0.0], [26, 0.0], [31, 0.028]]
     },
     "brickbat_l": {
@@ -516,6 +530,7 @@
       "anim": {"clip": "brick_throw"},
       "sfx": [[0, "whoosh_light"]],
       "desc": "Hurls a brick. L slow, H fast.",
+      "note": "Slow brick: walk in behind it while they deal with it.",
       "pushExt": [[0, 0.009], [8, 0.0], [10, 0.045], [15, 0.088], [18, 0.156], [24, 0.199], [37, 0.068], [48, 0.122]]
     },
     "brickbat_m": {
@@ -559,6 +574,7 @@
       "anim": {"clip": "brick_throw"},
       "sfx": [[0, "whoosh_light"]],
       "desc": "Hurls a brick. L slow, H fast.",
+      "note": "Throws a brick across the ring to keep them away. Sidesteps dodge it.",
       "pushExt": [[0, 0.009], [7, 0.0], [15, 0.135], [22, 0.199], [36, 0.068], [48, 0.122]]
     },
     "brickbat_h": {
@@ -602,6 +618,7 @@
       "anim": {"clip": "brick_throw"},
       "sfx": [[0, "whoosh_light"]],
       "desc": "Hurls a brick. L slow, H fast.",
+      "note": "Fastest brick of the three, the quickest to reach them.",
       "pushExt": [[0, 0.009], [6, 0.0], [13, 0.135], [21, 0.199], [29, 0.144], [34, 0.072], [48, 0.122]]
     },
     "brickbat_ex": {
@@ -644,6 +661,7 @@
       "anim": {"clip": "brick_throw"},
       "sfx": [[0, "whoosh_light"]],
       "desc": "Two bricks at once: 2 hits, fastest startup.",
+      "note": "Two bricks thrown right at them: much harder to sidestep.",
       "pushExt": [[0, 0.009], [6, 0.011], [13, 0.156], [19, 0.199], [30, 0.072], [42, 0.122]]
     },
     "encore_l": {
@@ -676,6 +694,7 @@
       "anim": {"clip": "encore_upper"},
       "sfx": [[1, "whoosh_heavy"]],
       "desc": "Jumping uppercut; air-invulnerable anti-air.",
+      "note": "Quickest of the three; the best one for stopping jumps up close.",
       "boxes": [{"f": [5, 14], "x": 0.615, "y": 1.29, "w": 0.3, "h": 0.581}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.024], [1, 0.0], [36, 0.0], [44, 0.011], [45, 0.056], [48, 0.056]]
@@ -710,6 +729,7 @@
       "anim": {"clip": "encore_upper"},
       "sfx": [[1, "whoosh_heavy"]],
       "desc": "Jumping uppercut; air-invulnerable anti-air.",
+      "note": "Jumping uppercut that beats jump-ins. Very risky if blocked.",
       "boxes": [{"f": [6, 15], "x": 0.615, "y": 1.278, "w": 0.4, "h": 0.656}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.024], [1, 0.0], [43, 0.0], [53, 0.011], [54, 0.056], [58, 0.056]]
@@ -744,6 +764,7 @@
       "anim": {"clip": "encore_upper"},
       "sfx": [[1, "whoosh_heavy"]],
       "desc": "Jumping uppercut; air-invulnerable anti-air.",
+      "note": "Highest, hardest uppercut; the riskiest one if blocked.",
       "boxes": [{"f": [7, 16], "x": 0.615, "y": 1.265, "w": 0.5, "h": 0.731}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.024], [1, 0.0], [49, 0.0], [60, 0.011], [61, 0.056], [66, 0.056]]
@@ -779,6 +800,7 @@
       "anim": {"clip": "encore_upper"},
       "sfx": [[1, "whoosh_heavy"]],
       "desc": "Fully invulnerable 2-hit uppercut.",
+      "note": "Uppercut nothing can stop as it starts: escape their pressure.",
       "boxes": [
         {"f": [6, 7], "x": 0.615, "y": 1.265, "w": 0.5, "h": 0.731},
         {"f": [12, 15], "x": 0.6153, "y": 1.4557, "w": 0.5, "h": 0.35}
@@ -816,6 +838,7 @@
       "anim": {"clip": "run_hook"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Running hook; ends every confirm.",
+      "note": "Short run; the least risky of the three if blocked.",
       "boxes": [{"f": [10, 13], "x": 0.83, "y": 1.275, "w": 0.3, "h": 0.35}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.191], [4, 0.219], [8, 0.18], [11, 0.081], [18, 0.036], [30, 0.007], [34, 0.048]]
@@ -850,6 +873,7 @@
       "anim": {"clip": "run_hook"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Running hook; ends every confirm.",
+      "note": "Running hook that ends combos with a knockdown. A sidestep beats it.",
       "boxes": [{"f": [12, 15], "x": 0.83, "y": 1.287, "w": 0.4, "h": 0.375}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.191], [4, 0.226], [9, 0.197], [13, 0.081], [29, 0.006], [38, 0.048]]
@@ -884,6 +908,7 @@
       "anim": {"clip": "run_hook"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Running hook; ends every confirm.",
+      "note": "Long run that slams them into the wall. Very risky if blocked.",
       "boxes": [{"f": [14, 17], "x": 0.83, "y": 1.3, "w": 0.5, "h": 0.4}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.191], [5, 0.226], [9, 0.185], [11, 0.197], [15, 0.081], [25, 0.036], [40, 0.007], [46, 0.048]]
@@ -918,6 +943,7 @@
       "anim": {"clip": "run_hook"},
       "sfx": [[2, "whoosh_heavy"]],
       "desc": "Armored two-hook rush, -2 on block.",
+      "note": "Two hooks that run through one hit and slam them into the wall.",
       "boxes": [
         {"f": [10, 11], "x": 0.83, "y": 1.3, "w": 0.5, "h": 0.4},
         {"f": [16, 17], "x": 0.83, "y": 1.3, "w": 0.5, "h": 0.4}
@@ -953,6 +979,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "weave_duck"},
       "desc": "Ducks under high attacks and projectiles; any attack button counters with a rising hook.",
+      "note": "Short duck that gets back to guard the fastest.",
       "pushExt": [[0, 0.0], [6, 0.013], [7, 0.063], [8, 0.063], [9, 0.121], [15, 0.224], [20, 0.205], [23, 0.112]]
     },
     "weave_m": {
@@ -983,6 +1010,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "weave_duck"},
       "desc": "Ducks under high attacks and projectiles; any attack button counters with a rising hook.",
+      "note": "Ducks under high attacks and projectiles; press attack to counter.",
       "pushExt": [
         [0, 0.0],
         [7, 0.013],
@@ -1023,6 +1051,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "weave_duck"},
       "desc": "Ducks under high attacks and projectiles; any attack button counters with a rising hook.",
+      "note": "Long duck that slides forward under their attack.",
       "pushExt": [
         [0, 0.0],
         [9, 0.013],
@@ -1065,6 +1094,7 @@
       "track": {"until": 1, "rate": 180},
       "anim": {"clip": "weave_duck"},
       "desc": "Strike-invulnerable weave.",
+      "note": "A duck no strike can touch; then counter with a rising hook.",
       "pushExt": [
         [0, 0.0],
         [7, 0.013],
@@ -1108,6 +1138,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "weave_counter_hook"},
       "desc": "Rising hook out of a Weave; knocks down, -7 on block.",
+      "note": "Press attack during a Weave: a rising hook that knocks down.",
       "boxes": [{"f": [6, 8], "x": 0.414, "y": 1.478, "w": 0.5, "h": 0.756}],
       "boxSrc": "hitVolume"
     },
@@ -1147,6 +1178,7 @@
       "anim": {"clip": "sold_out_flurry", "warp": [[0, 0.0], [8, 0.142], [12, 0.358], [16, 0.558], [22, 0.75], [77, 1.4]]},
       "sfx": [[1, "crowd_cheer_burst"]],
       "desc": "Invulnerable jab-cross-jab-uppercut rush.",
+      "note": "Four-punch rush that can't be hit as it starts; ends in a knockdown.",
       "boxes": [
         {"f": [8, 9], "x": 0.726, "y": 1.376, "w": 0.5, "h": 0.553},
         {"f": [12, 13], "x": 0.726, "y": 1.376, "w": 0.5, "h": 0.553},
@@ -1352,6 +1384,7 @@
       "lateralM": 0.6,
       "anim": {"clip": "cross"},
       "desc": "PRIME TIME: a lunging cross that starts a 170-frame beating.",
+      "note": "PRIME TIME: an unstoppable lunging cross that starts a huge beating.",
       "boxes": [{"f": [10, 13], "x": 0.862, "y": 1.397, "w": 0.5, "h": 0.594}],
       "boxSrc": "hitVolume",
       "pushExt": [[0, 0.023], [10, 0.064], [31, 0.0], [42, 0.001], [51, 0.043], [72, 0.0]]
@@ -1374,7 +1407,8 @@
   ],
   "unique": {
     "kind": "none",
-    "trait": "HEADLINER JAB: 4-frame 5L (+4 on hit) links into itself; on a punish counter (+8) it links into 5M. The only light in the cast that links."
+    "trait": "HEADLINER JAB: 4-frame 5L (+4 on hit) links into itself; on a punish counter (+8) it links into 5M. The only light in the cast that links.",
+    "note": "Fastest jab in the show: tap it again when it hits and the punches keep landing."
   },
   "intro": "intro_shadowbox",
   "win": ["win_arms_up", "win_wave"],

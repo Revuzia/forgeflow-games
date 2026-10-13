@@ -277,7 +277,8 @@ html.hp-touch .hpm-cs-colors .sw { width: 44px; height: 44px; min-width: 44px; }
 .hpm-cs-scheme .hpm-segbtn { display: grid; align-content: center; gap: .15em; padding: calc(var(--u) * .4) calc(var(--u) * .5); transform: none; text-align: center; }
 .hpm-cs-scheme .hpm-segbtn b { font: 400 max(14px, calc(var(--u) * 1.1)) / 1 var(--f-display); }
 .hpm-cs-scheme .hpm-segbtn small { font: 400 max(12px, calc(var(--u) * .9)) / 1.1 var(--f-body); opacity: .85; }
-.hpm-cs-ready { position: absolute; right: calc(var(--u) * .6); top: 38%; padding: .1em .5em; transform: rotate(-10deg); background: var(--hp-red); color: #fff; border: var(--line) solid var(--hp-ink); box-shadow: var(--shadow); font: 400 max(16px, calc(var(--u) * 2.2)) / 1.1 var(--f-display); }
+/* CHANGED(wf8 fix) FT-09: the READY! stamp sits on the card's header (it covered the ENCORE key at top 38 %) */
+.hpm-cs-ready { position: absolute; right: calc(var(--u) * .6); top: calc(var(--u) * .35); padding: .1em .5em; transform: rotate(-10deg); background: var(--hp-red); color: #fff; border: var(--line) solid var(--hp-ink); box-shadow: var(--shadow); font: 400 max(16px, calc(var(--u) * 2.2)) / 1.1 var(--f-display); }
 .hpm-cs-ready[hidden] { display: none; }
 /* CHANGED(wf7 touch) VO-D1: the picking card's action row - BACK one step / NEXT or LOCK IN */
 .hpm-cs-acts { display: flex; align-items: stretch; gap: calc(var(--u) * .5); margin-top: auto; }

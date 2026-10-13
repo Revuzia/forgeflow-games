@@ -177,7 +177,7 @@ function triggerSteps(cm: CMove, scheme: Scheme): Step[] | null {
   // SIMPLE: the motion form works there too (§1 "motion inputs also work in SIMPLE") and is unambiguous - a sibling's
   // "5S" trigger matches S with ANY direction in core/sim/inputs.ts, so a "2S" ender could never come out (measured:
   // Patch CUE 2 -> 2S gives CUE 3 overhead); the one-button form only for triggers without a motion
-  if (scheme === 0 && tr.motion === 0) {
+  if (scheme !== 1 && tr.motion === 0) { // CHANGED(wf8 fix): EASY (2) parses SIMPLE's S routing too (CONTRACT §36.5 item 3 request)
     if (tr.simpleDir >= 0) return [{ d: tr.simpleDir, b: B.S }];
     if (tr.simpleBtn !== 0) return [{ d: 5, b: lowBtn(tr.simpleBtn) }];
   }
@@ -216,7 +216,7 @@ function candidates(cf: CFighter, scheme: Scheme): Cand[] {
   add([{ d: 5, b: B.THROW }], 'THROW');
   add([{ d: 4, b: B.THROW }], '4THROW');
   add([{ d: 5, b: B.IMPACT }], 'IMPACT');
-  if (scheme === 0) {
+  if (scheme !== 1) { // CHANGED(wf8 fix): EASY (2) = SIMPLE's S + direction too (a CPU given EASY by a deep link)
     for (const d of [5, 6, 2, 4]) {
       add([{ d, b: B.S }], `${d}S`, false, 0, true);
       add([{ d, b: B.S | B.ASSIST }], `A${d}S`, false, 0, true);

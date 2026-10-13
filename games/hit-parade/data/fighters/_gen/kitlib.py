@@ -15,6 +15,7 @@ import copy
 import json
 import math
 import os
+import re
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 GAME = os.path.normpath(os.path.join(HERE, "..", "..", ".."))
@@ -606,6 +607,20 @@ class Kit:
         self.classic = []
         self.unique = {"kind": "none"}
         self.cine = None
+        # CHANGED(notes) (CONTRACT 36.4): player-facing text, set by describe()
+        self.notes = {}
+        self.plan = None
+        self.unique_note = None
+
+    # ---- CHANGED(notes) (CONTRACT 36.3 / 36.4): plain-English player text
+    def describe(self, plan, unique, notes):
+        """plan = the fighter's one-line "how to win" (top-level `plan`); unique = the unique mechanic in plain English
+        (`unique.note`); notes = {move id: one-line note} for EVERY move (`moves.<id>.note`). The id a SIMPLE / EASY key
+        routes to (simple 5S / 6S / 2S / 4S / jS, usually the _m version) carries the family's general note; _l / _h / _ex
+        say how that version differs. build.py checks coverage, lengths and the JARGON / NOTATION rules."""
+        self.plan = plan
+        self.unique_note = unique
+        self.notes = dict(notes)
 
     # ---- clips
     def clip(self, cid, entry, note=""):
@@ -719,6 +734,8 @@ class Kit:
         if "sfx" in m:
             o["sfx"] = m["sfx"]
         o["desc"] = m.get("desc", "")
+        if mid in self.notes:
+            o["note"] = self.notes[mid]   # CHANGED(notes) (CONTRACT 36.4): what players read in every move list
         return o
 
     # ---- CHANGED(FIGHTERS) P2: cinematic v2 + grab victim timelines (CONTRACT 26)
@@ -765,8 +782,13 @@ class Kit:
         uq = dict(self.unique)
         if "trait" not in uq:
             uq["trait"] = TRAITS[i["id"]]
+        if self.unique_note:
+            uq["note"] = self.unique_note   # CHANGED(notes) (CONTRACT 36.4)
         d = {"id": i["id"], "name": i["name"], "persona": i["persona"], "archetype": i["archetype"],
-             "difficulty": int(i["doc"]["difficulty"]),
+             "difficulty": int(i["doc"]["difficulty"])}
+        if self.plan:
+            d["plan"] = self.plan   # CHANGED(notes) (CONTRACT 36.4): one-line "how to win", right after difficulty
+        d.update({
              "body": i["body"], "heightM": i["heightM"], "hp": i["hp"],
              "walk": {"fwd": i["walk"][0], "back": i["walk"][1]},
              "dash": {"fwd": i["dash"][0], "back": i["dash"][1], "fwdFrames": i["dash"][2],
@@ -780,7 +802,7 @@ class Kit:
              "moves": {mid: self.emit_move(mid) for mid in self.order},
              "simple": self.simple, "classic": self.classic, "unique": uq,
              "intro": i["intro"], "win": i["win"], "taunt": i["taunt"], "rival": i["rival"],
-             "stage": i["stage"], "cpu": i["cpu"]}
+             "stage": i["stage"], "cpu": i["cpu"]})
         # CHANGED(FIGHTERS) P2 (CONTRACT 26.3): season text, rendered by UI
         t = getattr(self, "text", None)
         if t:
@@ -826,6 +848,42 @@ class Kit:
                     e["range"] = [n0, n1]
         self.fitted = changed
         return changed
+
+
+# --------------------------------------------------------------------------------------------------
+# CHANGED(notes) (CONTRACT 36.3 / 36.4): player-facing move notes, the plan line and the unique note. Owner: "controls are
+# very confusing" - so every line is plain English (what it does + when to use it), one line, no keys (the UI shows the
+# keys of the active scheme next to it), no fighting-game shorthand. validate.py repeats these rules on the emitted JSON.
+# --------------------------------------------------------------------------------------------------
+NOTE_LEN = (15, 70)
+PLAN_LEN = (30, 90)
+UNIQUE_NOTE_LEN = (20, 90)
+JARGON_RE = re.compile(
+    r"\b(frames?|advantage|dp|okizeme|oki|meaty|hit ?box(es)?|hurt ?box(es)?|hitstun|blockstun|start-?up|recovery|"
+    r"whiff\w*|otg|i-?frames?|invuln\w*|invulnerab\w*|invincib\w*|links?|linked|linking|cancel\w*|confirm\w*|"
+    r"mix-?ups?|cross-?ups?|chip|juggl\w*|reversals?|wake-?up|footsies)\b", re.I)
+NOTATION_RE = re.compile(
+    r"(\b[1-9][LMHS]\b|\bj\.[LMHS]\b|\b(236|214|623|421|41236|63214|360|236236|214214|22)\b|\[[2468]\]|[+-]\d)")
+
+
+def note_problems(text, lim):
+    """[] when `text` is a valid player line (CONTRACT 36.4), else the reasons."""
+    out = []
+    if not isinstance(text, str) or not text.strip():
+        return ["empty"]
+    if not text.isascii():
+        out.append("not ASCII")
+    if "\n" in text or text != text.strip():
+        out.append("not one trimmed line")
+    if not (lim[0] <= len(text) <= lim[1]):
+        out.append("%d chars (want %d..%d)" % (len(text), lim[0], lim[1]))
+    j = JARGON_RE.search(text)
+    if j:
+        out.append("jargon %r" % j.group(0))
+    n = NOTATION_RE.search(text)
+    if n:
+        out.append("key / frame notation %r" % n.group(0))
+    return out
 
 
 # One-line unique traits (CONTRACT 22.5: UI mirrors unique.trait into strings.json as trait.<fighter>);

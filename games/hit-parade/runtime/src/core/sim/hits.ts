@@ -175,7 +175,8 @@ export function canBlock(m: Match, d: number, mv: CMove, fromX: number, fromZ = 
   const raw = s[bd + F.raw];
   const dx = (s[bd + F.x] - fromX) * s[W.camNZ] - (s[bd + F.z] - fromZ) * s[W.camNX];
   const awayRight = dx > 0 || (dx === 0 && s[bd + F.facing] < 0);
-  const back = awayRight ? (raw & IN.RIGHT) !== 0 && (raw & IN.LEFT) === 0 : (raw & IN.LEFT) !== 0 && (raw & IN.RIGHT) === 0;
+  // CHANGED(input) (CONTRACT §36.5 item 2): BLOCK held = back relative to the attacker, whatever the screen side
+  const back = (raw & IN.BLOCK) !== 0 || (awayRight ? (raw & IN.RIGHT) !== 0 && (raw & IN.LEFT) === 0 : (raw & IN.LEFT) !== 0 && (raw & IN.RIGHT) === 0);
   const crouchG = (raw & IN.DOWN) !== 0 && (raw & IN.UP) === 0;
   if (st === ST.BLOCKSTUN) {
     // auto-guard inside a true blockstring: mids and overheads; lows still need crouch-block

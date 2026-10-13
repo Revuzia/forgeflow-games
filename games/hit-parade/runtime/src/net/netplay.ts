@@ -17,7 +17,7 @@ export const SUPABASE_ANON_KEY =
 export const SUPABASE_JS = 'https://esm.sh/@supabase/supabase-js@2.117.2';
 export const GAME_ID = 'hit-parade';
 /** Wire protocol version (packets + flow messages). Bump on any incompatible change. */
-export const NET_PROTO = 1;
+export const NET_PROTO = 2; // CHANGED(input) (CONTRACT §36.5): 2 = u32 input words + scheme 2 EASY (an old client never pairs)
 export const LOBBY_LINGER_MS = 6000;
 
 export interface PresenceMeta { id: string; proto?: number; build?: string; name?: string; [k: string]: unknown }
@@ -79,8 +79,11 @@ function loadClient(): Promise<RealtimeClient> {
     const createClient = mod.createClient ?? mod.default?.createClient;
     if (!createClient) throw new Error('supabase-js: createClient missing');
     // NOTE: no realtime.params.eventsPerSecond - it is a no-op on the wire (NETCODE 0.3).
+    // CHANGED(wf8 fix) WF8G-3: a 20 s push / join timeout (supabase-js default 10 s): during a realtime latency incident
+    // every channel join was answered 8-20 s late, so every automatic rejoin timed out before its own reply landed
     return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'hit-parade-netplay' },
+      realtime: { timeout: 20000 },
     }) as unknown as RealtimeClient;
   })();
   sharedClient.catch(() => { sharedClient = null; });      // a failed load (offline) may be retried by the next lobby
@@ -117,6 +120,10 @@ export class NetPlay {
   private clientFn: () => Promise<RealtimeClient>;
   private channel: Channel | null = null;
   private lobby: Channel | null = null;
+  /** CHANGED(wf8 fix) WF8G-3: the last quick-match lobby join reached SUBSCRIBED (false = the matchmaking line never answered) */
+  lobbyJoined = false;
+  /** CHANGED(wf8 fix) WF8G-3: lobby channel statuses seen this search (TIMED_OUT / CHANNEL_ERROR / CLOSED ...) */
+  lobbyStatuses: string[] = [];
   private handlers = new Map<string, Handler[]>();
   private binHandlers = new Map<string, ((b: ArrayBuffer) => void)[]>();
   /** 20 burst, 12/s sustained: the relay (10 Hz) + rare control messages fit; 60 Hz never can. */
@@ -281,9 +288,18 @@ export class NetPlay {
       };
       lobby.on('presence', { event: 'sync' }, (() => { void tryPair(); }) as never);
       lobby.on('presence', { event: 'join' }, (() => { void tryPair(); }) as never);
-      lobby.subscribe((status: string) => {
+      this.lobbyJoined = false;
+      this.lobbyStatuses = [];
+      lobby.subscribe((status: string, err?: unknown) => {
+        this.lobbyStatuses.push(status);
+        if (this.lobbyStatuses.length > 20) this.lobbyStatuses.shift();
         if (status === 'SUBSCRIBED') {
+          this.lobbyJoined = true;
           lobby.track({ id: this.id, proto: this.proto, build: this.build }).then(() => { void tryPair(); }, () => { /* retry on next sync */ });
+        } else if (!done) {
+          // CHANGED(wf8 fix) WF8G-3: TIMED_OUT / CHANNEL_ERROR / CLOSED were dropped silently (SEARCHING for 60 s, then "no
+          // opponent", no log line): they reach the flow's log now (supabase-js keeps rejoining on its own)
+          this.emit('error', { status: 'LOBBY_' + status, err: err ? String(err) : undefined });
         }
       });
       if (timeoutMs > 0) {

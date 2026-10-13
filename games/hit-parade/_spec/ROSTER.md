@@ -99,6 +99,13 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
   SPIN). The 3D column of each frame table shows the class, the tracking end frame and the depth; per-fighter "3D ring
   play" covers the stepping game, the homing tools and the wall game (ring boundary = wall; `onHit.wallSplat` enders).
 
+- **Player notes (CONTRACT 36.3 / 36.4, lane MOVE NOTES):** owner feedback "controls are very confusing" - every move
+  carries a one-line plain-English `note` (what it does + when to use it, 15-70 characters), every fighter a `plan` line
+  (how to win, <= 90) and a `unique.note` (the mechanic in one line, <= 90). No keys or motions in the text (the UI shows
+  the active scheme's keys next to it), no frame numbers, no shorthand (frame / DP / okizeme / cancel / link / juggle ...:
+  kitlib.JARGON_RE). The id a SIMPLE / EASY key routes to carries the family note; L / H / EX say how they differ. Authored
+  in `kits/<id>.py` (`Kit.describe`); per-fighter "Player notes" tables below.
+
 ## AUTHORED motions (keyframed on X Bot, 30 fps; the only two in the roster)
 
 
@@ -146,6 +153,10 @@ Edit the kit source and rebuild; never hand-edit the outputs. Validator: `python
 **Look.** Ch42: shaggy dark hair, tattoo sleeves, red grunge tee, denim shorts, white sneakers.
 
 **Game plan.** All-rounder: BRICKBAT controls the mid range, ENCORE punishes jumps, HEADLINE HOOK ends every light or medium confirm. The 4-frame jab is the fastest button in the cast and the only light that links into itself.
+
+**Plan line (players see this).** Throw bricks from far away, uppercut anyone who jumps, end combos with Headline Hook.
+
+**Unique in one line (players see this).** Fastest jab in the show: tap it again when it hits and the punches keep landing.
 
 **Weakness (the counter-play).** No damage specialty: lower corner damage than Boneyard or Bruno; ENCORE is -23 to -39 on block; BRICKBAT recovery (47 total) loses to a read jump.
 
@@ -248,6 +259,43 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `sold_out` Sold Out: Invulnerable jab-cross-jab-uppercut rush. (hit volume: bottom lowered 0.20 m to the crouch line 1.10 m (clips.json `sold_out_flurry` effector LeftHand))
 - `main_event` Main Event: PRIME TIME: a lunging cross that starts a 170-frame beating. (hit volume: bottom lowered 0.24 m to the crouch line 1.10 m (clips.json `cross` effector RightHand))
 
+**Player notes** (`moves.<id>.note`, shown in every move list next to the active scheme's keys; *SIMPLE / EASY key* = the routed version, whose note covers the whole family - EASY SPECIAL 1-4 = SIMPLE 5S / 6S / 2S / 4S, CONTRACT 36.1).
+
+| id | name | SIMPLE / EASY key | note |
+|---|---|---|---|
+| `5L` | Lead Jab | - | Fastest punch in the cast. Tap it again on a hit to keep punching. |
+| `2L` | Shin Jab | - | Quick low jab; they must block crouching. Starts short combos. |
+| `5M` | Cross | - | Long straight punch: his best button at arm's length. |
+| `2M` | Knee Breaker | - | Low punch to the knee; follow with Headline Hook to knock them down. |
+| `5H` | Haymaker | - | Wide swinging hook that catches opponents who sidestep. |
+| `2H` | Rising Uppercut | - | Uppercut that knocks jumping opponents out of the air. |
+| `3H` | Low Blow | - | Low hook that knocks down and catches sidesteps. Risky if blocked. |
+| `6H` | Overhand Right | - | Slow overhand; must be blocked standing. Beats crouch-blockers. |
+| `j.L` | Air Jab | - | Quick air jab to win fights in the air. |
+| `j.M` | Air Cross | - | Long jump-in punch that reaches far ahead. |
+| `j.H` | Diving Hammer | - | Heavy jump-in hammer; land it to start a big combo. |
+| `throw_f` | Clinch Body Shots | - | Up close: grab and dig three body shots. Beats blocking. |
+| `throw_b` | Wide Hook Toss | - | Up close: grab, swap places and hook them the other way. |
+| `brickbat_l` | Brickbat | - | Slow brick: walk in behind it while they deal with it. |
+| `brickbat_m` | Brickbat | 5S | Throws a brick across the ring to keep them away. Sidesteps dodge it. |
+| `brickbat_h` | Brickbat | - | Fastest brick of the three, the quickest to reach them. |
+| `brickbat_ex` | Brickbat (EX) | - | Two bricks thrown right at them: much harder to sidestep. |
+| `encore_l` | Encore | - | Quickest of the three; the best one for stopping jumps up close. |
+| `encore_m` | Encore | 2S | Jumping uppercut that beats jump-ins. Very risky if blocked. |
+| `encore_h` | Encore | - | Highest, hardest uppercut; the riskiest one if blocked. |
+| `encore_ex` | Encore (EX) | - | Uppercut nothing can stop as it starts: escape their pressure. |
+| `hook_l` | Headline Hook | - | Short run; the least risky of the three if blocked. |
+| `hook_m` | Headline Hook | 6S | Running hook that ends combos with a knockdown. A sidestep beats it. |
+| `hook_h` | Headline Hook | - | Long run that slams them into the wall. Very risky if blocked. |
+| `hook_ex` | Headline Hook (EX) | - | Two hooks that run through one hit and slam them into the wall. |
+| `weave_l` | Weave | - | Short duck that gets back to guard the fastest. |
+| `weave_m` | Weave | 4S | Ducks under high attacks and projectiles; press attack to counter. |
+| `weave_h` | Weave | - | Long duck that slides forward under their attack. |
+| `weave_ex` | Weave (EX) | - | A duck no strike can touch; then counter with a rising hook. |
+| `weave_counter` | Counter Hook | - | Press attack during a Weave: a rising hook that knocks down. |
+| `sold_out` | Sold Out | S+H | Four-punch rush that can't be hit as it starts; ends in a knockdown. |
+| `main_event` | Main Event | S+H+2 | PRIME TIME: an unstoppable lunging cross that starts a huge beating. |
+
 **Lv3 PRIME TIME cinematic `main_event` (Main Event)** - 170 frames (<= 180), cue `johnny_main_event`, damage 400+400+500+250+250+250+900+1550 = 4500, ends KD +19 at 2.2 m.
 
 - f0 JAB (close, both): Johnny steps in behind the lunging cross; the jab snaps the head back - 400 at f7.
@@ -314,6 +362,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 **Look.** Eve: high bun, eyepatch, black leather jacket with gold piping and a red collar, belted shorts, thigh boots.
 
 **Game plan.** Pressure. The fastest walk and dash in the cast close any gap, the CUE KICK rekka turns every confirm into a three-part guess (overhead CUE 3 on 236, low CUE 3 on 214), STAGE DIVE hops over lows as a +1 overhead, and SLIDE runs under projectiles.
+
+**Plan line (players see this).** Close in fast, then press the Cue Kick chain and keep them guessing high or low.
+
+**Unique in one line (players see this).** Cue Kick chain: repeat it for Cue 2, then end high or low. Fastest walk and dash.
 
 **Weakness (the counter-play).** Lowest HP (9500), no projectile, meterless SPOTLIGHT has no invulnerability (EX only); every rekka gap can be interrupted and CUE 3 low is -13 on block.
 
@@ -422,6 +474,46 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `highlight_reel` Highlight Reel: Invulnerable three-kick flurry ending in a jump kick. (hand-set hit volume f8-9 x 0.75 y 1.42 w 0.50 h 0.65, f19-20 x 0.79 y 1.10 w 0.54 h 0.35, f30-33 x 0.72 y 1.06 w 0.50 h 0.53)
 - `on_air` On Air: PRIME TIME: a teep that starts a juggle she counts down live.
 
+**Player notes** (`moves.<id>.note`, shown in every move list next to the active scheme's keys; *SIMPLE / EASY key* = the routed version, whose note covers the whole family - EASY SPECIAL 1-4 = SIMPLE 5S / 6S / 2S / 4S, CONTRACT 36.1).
+
+| id | name | SIMPLE / EASY key | note |
+|---|---|---|---|
+| `5L` | Lead Jab | - | Quick jab to stop their attack or start a short combo. |
+| `2L` | Toe Kick | - | Quick low kick; they must block crouching. Starts combos. |
+| `5M` | Teep | - | Long push kick that keeps them at the tip of her reach. |
+| `2M` | Shin Kick | - | Low kick that catches sidesteps; follow with the Cue Kick chain. |
+| `5H` | Head Kick | - | Big head kick that catches opponents who sidestep. |
+| `2H` | Leg Kick | - | Long low kick: knocks down and catches sidesteps. Risky if blocked. |
+| `6M` | Step Knee | - | Stepping knee that closes the distance fast. A sidestep beats it. |
+| `4H` | Back Kick | - | Her longest kick; slams them into the wall near the ring edge. |
+| `SS.H` | Blindside Kick | - | Out of a sidestep: a kick into their side that knocks them down. |
+| `j.L` | Air Jab | - | Quick air jab for fights in the air. |
+| `j.M` | Flying Side Kick | - | Flying side kick that beats opponents jumping at you. |
+| `j.H` | Jump Turning Kick | - | Big jump-in kick; land it to start a combo. |
+| `throw_f` | Plum Knees | - | Up close: clinch and knee them in the chest. Beats blocking. |
+| `throw_b` | Spin Toss | - | Up close: spin and fling them behind you, swapping places. |
+| `cue_l` | Cue Kick | - | Shortest first kick; the least risky of the three if blocked. |
+| `cue_m` | Cue Kick | 5S | Stepping kick that starts her chain: repeat for Cue 2, then Cue 3. |
+| `cue_h` | Cue Kick | - | Longest first kick to reach them; the riskiest if blocked. |
+| `cue_ex` | Cue Kick (EX) | - | First kick that powers through one hit and is safe if blocked. |
+| `cue2` | Cue 2: Head Snap | - | Chain part 2: a head kick that catches sidesteps. Then go to Cue 3. |
+| `cue3_oh` | Cue 3: Curtain Drop | - | Chain end, high: jumping kick, blocked standing only. Knocks down. |
+| `cue3_lo` | Cue 3: Trapdoor | - | Chain end, low: leg kick that knocks down. Very risky if blocked. |
+| `stage_dive_l` | Stage Dive | - | Shortest hop; safe even when they block it. |
+| `stage_dive_m` | Stage Dive | 6S | Hopping knee that clears low attacks; must be blocked standing. |
+| `stage_dive_h` | Stage Dive | - | Longest hop, to reach them from far away. |
+| `stage_dive_ex` | Stage Dive (EX) | - | Two flying knees; she can keep attacking even if they block. |
+| `spotlight_l` | Spotlight | - | Quickest flip kick, to stop a jump early. |
+| `spotlight_m` | Spotlight | 2S | Rising flip kick that knocks jumpers down. It can trade hits. |
+| `spotlight_h` | Spotlight | - | Strongest flip kick; the riskiest if blocked. |
+| `spotlight_ex` | Spotlight (EX) | - | Flip kick nothing can hit as it starts: escape their pressure. |
+| `slide_l` | Floor Slide | - | Short slide; the least risky of the three if blocked. |
+| `slide_m` | Floor Slide | 4S | Low slide under projectiles that knocks down. Risky if blocked. |
+| `slide_h` | Floor Slide | - | Longest slide, to reach them from across the ring. |
+| `slide_ex` | Floor Slide (EX) | - | Fast long slide that goes straight through projectiles. |
+| `highlight_reel` | Highlight Reel | S+H | Kick flurry that can't be hit as it starts; ends with a knockdown. |
+| `on_air` | On Air | S+H+2 | PRIME TIME: an unstoppable push kick that starts a live countdown. |
+
 **Lv3 PRIME TIME cinematic `on_air` (On Air)** - 160 frames (<= 180), cue `patch_on_air`, damage 400+500+600+700+900+1400 = 4500, ends KD +19 at 2.0 m.
 
 - f0 PLUM (low front): she clinches off the teep and knees the chest - 400 at f10.
@@ -489,6 +581,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 **Look.** Brute (BattleAxe_GEO hidden - Bruno is unarmed): shirtless, handlebar moustache, earring, baggy brown trousers, tall boots.
 
 **Game plan.** Walk in, BRACE through pokes, then guess: WALK-IN FREEZER (360 grab, 2200-2900) versus a 2L tick. LARIAT beats jumps and fireballs; FRIDGE DOOR walls opponents in the corner.
+
+**Plan line (players see this).** Walk in, brace through their attacks, then grab them with Walk-In Freezer for huge damage.
+
+**Unique in one line (players see this).** Brace steps forward through one hit; follow with his big grab or a quick low jab.
 
 **Weakness (the counter-play).** Slowest walk (1.64 m/s) and shortest dash; zoners keep him out; every armored move loses to throws and multi-hits; grab whiff = 54 frames of recovery.
 
@@ -589,6 +685,42 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `cold_storage` Cold Storage: Running grab; unblockable, jump it.
 - `final_delivery` Final Delivery: PRIME TIME command grab: hugged, spun like a carousel, lifted overhead and hurled across the set.
 
+**Player notes** (`moves.<id>.note`, shown in every move list next to the active scheme's keys; *SIMPLE / EASY key* = the routed version, whose note covers the whole family - EASY SPECIAL 1-4 = SIMPLE 5S / 6S / 2S / 4S, CONTRACT 36.1).
+
+| id | name | SIMPLE / EASY key | note |
+|---|---|---|---|
+| `5L` | Knife-Edge Chop | - | Quick chop to stop their attack up close. |
+| `2L` | Low Straight | - | Quick low punch; mix it with his big grab to keep them guessing. |
+| `5M` | Forearm Smash | - | Heavy straight forearm; a solid poke at arm's length. |
+| `2M` | Low Forearm | - | Low forearm; follow with Fridge Door to knock them down. |
+| `5H` | Haymaker | - | Big haymaker that catches opponents who sidestep. |
+| `2H` | Goalpost | - | Both arms swing up to swat jumping opponents. |
+| `6H` | Big Boot | - | Big push kick; slams them into the wall near the ring edge. |
+| `j.L` | Air Chop | - | Quick air chop for fights in the air. |
+| `j.M` | Flying Forearm | - | Jump-in forearm that reaches ahead. |
+| `j.H` | Hammer Down | - | Heavy double-fist jump-in to start a combo. |
+| `j.2H` | Fridge Drop | - | In the air: body press straight down onto whoever is below. |
+| `throw_f` | Bear Hug | - | Up close: crush them in a bear hug. Beats blocking. |
+| `throw_b` | Carousel | - | Up close: spin them round and fling them behind him. |
+| `walk_in_l` | Walk-In Freezer | - | Grab with the longest reach of the three, but the least damage. |
+| `walk_in_m` | Walk-In Freezer | 5S | Huge grab that beats blocking and sidesteps; misses if they jump. |
+| `walk_in_h` | Walk-In Freezer | - | Shortest reach, but the most damage of the three. |
+| `walk_in_ex` | Walk-In Freezer (EX) | - | Grab that can't be hit as it starts, with the longest reach. |
+| `fridge_door_l` | Fridge Door | - | Short, quick shove; the least risky of the three if blocked. |
+| `fridge_door_m` | Fridge Door | 6S | Running shove that walks through one hit; walls them in. |
+| `fridge_door_h` | Fridge Door | - | Longest, strongest shove; very risky if blocked. |
+| `fridge_door_ex` | Fridge Door (EX) | - | Shove that walks through two hits and is safer if blocked. |
+| `lariat_l` | Double-Door Lariat | - | Quickest lariat; the best one against jumps. |
+| `lariat_m` | Double-Door Lariat | 2S | Spinning clothesline: beats jumps and passes through projectiles. |
+| `lariat_h` | Double-Door Lariat | - | Strongest lariat; the riskiest if blocked. |
+| `lariat_ex` | Double-Door Lariat (EX) | - | Three-hit lariat that can't be hit as it starts. |
+| `brace_l` | Brace | - | Short brace step; the quickest to get out of. |
+| `brace_m` | Brace | 4S | Steps forward through one hit; go straight into any special. |
+| `brace_h` | Brace | - | Long brace step that covers the most ground. |
+| `brace_ex` | Brace (EX) | - | Brace through two hits, ready from the very start. |
+| `cold_storage` | Cold Storage | S+H | Running grab they can't block: jump over it or get carried off. |
+| `final_delivery` | Final Delivery | S+H+2 | PRIME TIME: point-blank grab that spins and hurls them across the set. |
+
 **Lv3 PRIME TIME cinematic `final_delivery` (Final Delivery)** - 175 frames (<= 180), cue `bruno_final_delivery`, damage 500+1000+3000 = 4500, ends KD +19 at 3.0 m.
 
 - f0 BEAR HUG (low, both): Bruno scoops them up and squeezes - 500 at f24.
@@ -656,6 +788,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 **Look.** Whiteclown: bald white clown face, dark eye rings, toothy grin, black tuxedo with bow tie and pocket square, grey gloves, ragged hems, bare grey feet.
 
 **Game plan.** Keep them at 3-5 m: CARD FAN is fast and straight, FLASH PAPER lobs fire onto the landing spot of a jump, FLOURISH bursts above him when they get close, and VANISHING ACT drops through a trapdoor behind them - or back to his own corner.
+
+**Plan line (players see this).** Stay far away: cards and fire keep them out, and the trapdoor gets you out of trouble.
+
+**Unique in one line (players see this).** Vanishing Act: drop through a trapdoor and pop up behind them, in front, or at home.
 
 **Weakness (the counter-play).** Slowest walk in the cast (1.26 m/s), 9500 HP; VANISHING ACT has 14 frames of visible recovery after he reappears; up close his only escapes are EX FLOURISH and the Lv1.
 
@@ -754,6 +890,41 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `grand_illusion` Grand Illusion: A giant spinning card-saw: 5-hit projectile, invulnerable startup, aimed. (projectile 7.0 m/s, 5 hit(s), y 1.10 m)
 - `the_prestige` The Prestige: PRIME TIME: a palm to the chest, a sheet over the victim, and the big reveal. (hit volume: bottom lowered 0.21 m to the crouch line 1.10 m; near edge pulled back 0.12 m to point-blank reach 0.65 m (clips.json `palm_shove` effector RightHand))
 
+**Player notes** (`moves.<id>.note`, shown in every move list next to the active scheme's keys; *SIMPLE / EASY key* = the routed version, whose note covers the whole family - EASY SPECIAL 1-4 = SIMPLE 5S / 6S / 2S / 4S, CONTRACT 36.1).
+
+| id | name | SIMPLE / EASY key | note |
+|---|---|---|---|
+| `5L` | Palm Flick | - | Quick palm to stop their attack up close. |
+| `2L` | Low Palm | - | Quick low palm; they must block crouching. |
+| `5M` | Spear Hand | - | His longest poke: keeps them at arm's length. |
+| `2M` | Low Spear | - | Long low poke; follow with Card Fan. |
+| `5H` | Double Palm | - | Shoves them back out to card range; walls them near the edge. |
+| `2H` | Rising Palm | - | Rising palm that swats jumping opponents. |
+| `6H` | Abracadabra | - | Slow two-fist hammer; must be blocked standing. |
+| `j.L` | Air Palm | - | Quick air palm for fights in the air. |
+| `j.M` | Air Card Flick | - | Flung-arm swipe that wins fights in the air. |
+| `j.H` | Levitating Palms | - | Double-palm jump-in to start a combo. |
+| `throw_f` | Now You See Me | - | Up close: grab and blast them away with both palms. |
+| `throw_b` | Now You Don't | - | Up close: spin and fling them behind him, swapping places. |
+| `card_fan_l` | Card Fan | - | Slowest cards: walk in behind them while they block. |
+| `card_fan_m` | Card Fan | 5S | Cards flicked right at them: hard to sidestep. Keeps them away. |
+| `card_fan_h` | Card Fan | - | Fastest cards of the three, out the quickest. |
+| `card_fan_ex` | Card Fan (EX) | - | A whole deck at once: three hits. |
+| `flash_paper_l` | Flash Paper | - | Lands close to him, for opponents right in front. |
+| `flash_paper_m` | Flash Paper | 4S | Lobbed fire that lands mid-distance; burns jumpers as they land. |
+| `flash_paper_h` | Flash Paper | - | Lands far away, to catch them across the ring. |
+| `flash_paper_ex` | Flash Paper (EX) | - | A huge lobbed fireball that hits twice. |
+| `vanish_l` | Vanishing Act | 6S | Trapdoor: pops up behind them. Slow to finish, so pick your moment. |
+| `vanish_m` | Vanishing Act | - | Trapdoor: pops up right in front of them for a surprise attack. |
+| `vanish_h` | Vanishing Act | - | Trapdoor escape back to his own wall, far from them. |
+| `vanish_ex` | Vanishing Act (EX) | - | Instant trapdoor behind them; can't be hit, then attack right away. |
+| `flourish_l` | Flourish | - | Quickest burst of the three; the best one against jumps. |
+| `flourish_m` | Flourish | 2S | Burst of flame and doves around him: stops jumps and sidesteps. |
+| `flourish_h` | Flourish | - | Strongest burst; the riskiest if blocked. |
+| `flourish_ex` | Flourish (EX) | - | Burst that can't be hit as it starts: his escape when cornered. |
+| `grand_illusion` | Grand Illusion | S+H | Giant card-saw aimed right at them; can't be hit as it starts. |
+| `the_prestige` | The Prestige | S+H+2 | PRIME TIME: unstoppable palm, a sheet over them, the big reveal. |
+
 **Lv3 PRIME TIME cinematic `the_prestige` (The Prestige)** - 150 frames (<= 180), cue `zambini_prestige`, damage 800+1200+2500 = 4500, ends KD +19 at 1.5 m.
 
 - f0 TA-DA (close on Zambini, set dimmed, spotlight): the palm froze them; the victim wobbles, dizzy.
@@ -817,6 +988,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 **Look.** Swat: blue-grey uniform, black tactical vest, helmet with goggles, gloves, knee pads, face exposed; riot shield on the left forearm, baton in the right hand (props).
 
 **Game plan.** Sit in down-back: TASER SHOT (charge projectile, -3) controls the lane, BATON FLIP (charge anti-air, air-invulnerable) swats jumps, SHIELD RUSH (armored on H) and UNDER ARREST (short command grab) punish turtles. Standing block drains 50% less NERVE (riot shield).
+
+**Plan line (players see this).** Hold your ground: tasers keep them out, the baton flip swats jumps, cuffs catch blockers.
+
+**Unique in one line (players see this).** Riot shield: blocking standing costs half the NERVE. CLASSIC specials need a held charge.
 
 **Weakness (the counter-play).** Charge makes him predictable and weak when forced to walk forward; the shield passive does not cover crouch block, so lows and throws open him up.
 
@@ -919,6 +1094,43 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `backup` Backup's Here: Charge-free invulnerable shield charge: two shield hits and a baton swing.
 - `riot_act` Riot Act: PRIME TIME: a shield bash that starts a full riot-control sequence ending in a taser jolt.
 
+**Player notes** (`moves.<id>.note`, shown in every move list next to the active scheme's keys; *SIMPLE / EASY key* = the routed version, whose note covers the whole family - EASY SPECIAL 1-4 = SIMPLE 5S / 6S / 2S / 4S, CONTRACT 36.1).
+
+| id | name | SIMPLE / EASY key | note |
+|---|---|---|---|
+| `5L` | Baton Poke | - | Quick baton jab to stop their attack. |
+| `2L` | Low Poke | - | Quick low poke; they must block crouching. |
+| `5M` | Baton Chop | - | Solid baton chop at arm's length. |
+| `2M` | Knee Rap | - | Low baton rap; follow with Taser Shot. |
+| `5H` | Baton Swing | - | Wide baton swing that catches opponents who sidestep. |
+| `2H` | Rising Baton | - | Rising baton that swats jumping opponents. |
+| `4H` | Shield Bash | - | Safe shield shove that pushes them back; walls them near the edge. |
+| `6M` | Front Boot | - | Front kick that reaches further than his chop. |
+| `6H` | Nightstick Drop | - | Hopping baton chop that must be blocked standing. |
+| `j.L` | Air Poke | - | Quick air poke for fights in the air. |
+| `j.M` | Air Chop | - | Jump-in baton chop. |
+| `j.H` | Air Swing | - | Wide jump-in swing to start a combo. |
+| `throw_f` | Book 'Em | - | Up close: pin them with the shield and beat them. Beats blocking. |
+| `throw_b` | Perp Walk | - | Up close: turn them round and shove them away with the shield. |
+| `taser_l` | Taser Shot | - | Slowest dart: walk in behind it. |
+| `taser_m` | Taser Shot | 5S | Taser dart straight down the ring; quick and safe. Sidesteps dodge it. |
+| `taser_h` | Taser Shot | - | Fastest dart of the three, reaches them the soonest. |
+| `taser_ex` | Taser Shot (EX) | - | Two darts aimed right at them: hard to sidestep. |
+| `baton_flip_l` | Baton Flip | - | Quickest flip, to stop a jump early. |
+| `baton_flip_m` | Baton Flip | 2S | Rising baton flip that swats jumpers. Very risky if blocked. |
+| `baton_flip_h` | Baton Flip | - | Strongest flip; beats jumps for longest, riskiest if blocked. |
+| `baton_flip_ex` | Baton Flip (EX) | - | Two-hit flip that can't be hit as it starts. |
+| `shield_rush_l` | Shield Rush | - | Short charge; the least risky of the three if blocked. |
+| `shield_rush_m` | Shield Rush | 6S | Shield-first charge that knocks down. A sidestep beats it. |
+| `shield_rush_h` | Shield Rush | - | Long charge that runs through one hit. Very risky if blocked. |
+| `shield_rush_ex` | Shield Rush (EX) | - | Two-hit charge that runs through two hits; safe if blocked. |
+| `cuff_l` | Under Arrest | - | Cuff with the longest reach of the three, but the least damage. |
+| `cuff_m` | Under Arrest | 4S | Short grab that cuffs a blocking opponent; catches sidesteps too. |
+| `cuff_h` | Under Arrest | - | Shortest reach, but the most damage of the three. |
+| `cuff_ex` | Under Arrest (EX) | - | Cuff with extra reach that can't be hit as it starts. |
+| `backup` | Backup's Here | S+H | Shield charge that can't be hit as it starts: two bashes, a swing. |
+| `riot_act` | Riot Act | S+H+2 | PRIME TIME: unstoppable shield bash into a full riot-control beating. |
+
 **Lv3 PRIME TIME cinematic `riot_act` (Riot Act)** - 165 frames (<= 180), cue `krane_riot_act`, damage 500+600+300+300+300+2500 = 4500, ends KD +19 at 2.0 m.
 
 - f0 SHIELD BASH (close, sparks): the crowd boos the cop as the shield slams them upright.
@@ -990,6 +1202,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 **Look.** Kachujin: bun with bangs, red wrap dress with black obi, blue scarf, arm guards, grey greaves; a gourd bottle prop (bow-bone meshes hidden, CONTRACT 5.4).
 
 **Game plan.** Stance pressure: SWAY (214 / 4S) leans away from high attacks and opens three follow-ups - TIPSY TOE KICK (L, low), AXE KICK (M, overhead) and TORNADO HOP (H, throw-invulnerable hop over lows). DRAGON'S BREATH is a short flame that stops dashes; LOTUS RISING is her DP.
+
+**Plan line (players see this).** Sway out of high attacks, then hit low, high, or hop from the sway to keep them guessing.
+
+**Unique in one line (players see this).** Sway leans out of high attacks; then light hits low, medium hits high, heavy hops.
 
 **Weakness (the counter-play).** Every stance follow-up has a readable tell and is minus on block (-9 / -4 / -2); low HP (9500); the sway only dodges highs, so lows and throws beat the entry.
 
@@ -1090,6 +1306,42 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `bottoms_up` Bottoms Up: A swig, then palm, turning kick and rising knee - invulnerable startup. (hand-set hit volume f8-9 x 0.66 y 1.24 w 0.50 h 0.35, f22-23 x 0.79 y 1.09 w 0.53 h 0.35, f36-38 x 0.71 y 1.12 w 0.50 h 0.64)
 - `happy_hour` Happy Hour: PRIME TIME: a lunging palm, a long swig, and a drunken beating that ends in a fire blast.
 
+**Player notes** (`moves.<id>.note`, shown in every move list next to the active scheme's keys; *SIMPLE / EASY key* = the routed version, whose note covers the whole family - EASY SPECIAL 1-4 = SIMPLE 5S / 6S / 2S / 4S, CONTRACT 36.1).
+
+| id | name | SIMPLE / EASY key | note |
+|---|---|---|---|
+| `5L` | Tipsy Jab | - | Quick jab to stop their attack. |
+| `2L` | Low Palm | - | Quick low palm; they must block crouching. |
+| `5M` | Staggering Palm | - | Lunging palm that steps in a little. |
+| `2M` | Shin Kick | - | Low kick that catches sidesteps; follow with Dragon's Breath. |
+| `5H` | Drunken Roundhouse | - | Curving kick that catches opponents who sidestep. |
+| `2H` | Knee Lift | - | Knee lift that swats jumping opponents. |
+| `6M` | Wobble Palm | - | Stumbling palm that closes in; walls them near the edge. |
+| `4H` | Lean-Away Kick | - | Leans away from high attacks, then kicks back. |
+| `j.L` | Air Palm | - | Quick air palm for fights in the air. |
+| `j.M` | Flying Front Kick | - | Air front kick for fights in the air. |
+| `j.H` | Flying High Kick | - | Long flying kick to start a combo. |
+| `throw_f` | Palm Launch | - | Up close: grab the collar and launch them with a palm. |
+| `throw_b` | Wild Swing Toss | - | Up close: swing them past her, swapping places. |
+| `sway_l` | Drunken Sway | - | Sways back into her stance, out of their reach. |
+| `sway_m` | Drunken Sway | 4S | Sways in place into her stance, leaning out of high attacks. |
+| `sway_h` | Drunken Sway | 6S | Stumbles forward into her stance to close the distance. |
+| `sway_ex` | Drunken Sway (EX) | - | Sway that can't be hit or grabbed as it starts. |
+| `dragon_breath_l` | Dragon's Breath | - | Shortest flame, out the quickest of the three. |
+| `dragon_breath_m` | Dragon's Breath | 5S | A swig and a short burst of flame aimed at them; stops dashes. |
+| `dragon_breath_h` | Dragon's Breath | - | Longest flame, out the slowest. |
+| `dragon_breath_ex` | Dragon's Breath (EX) | - | Three-hit flame that reaches much further. |
+| `rising_lotus_l` | Lotus Rising | - | Quickest knee, the best one against jumps up close. |
+| `rising_lotus_m` | Lotus Rising | 2S | Rising knee that beats jump-ins. Very risky if blocked. |
+| `rising_lotus_h` | Lotus Rising | - | Highest, hardest knee; the riskiest if blocked. |
+| `rising_lotus_ex` | Lotus Rising (EX) | - | Two-hit knee that can't be hit as it starts: escape pressure. |
+| `sway_low` | Tipsy Toe Kick | - | From the sway: low toe kick that knocks down. Risky if blocked. |
+| `sway_oh` | Axe Kick | - | From the sway: axe kick that must be blocked standing. |
+| `sway_hop` | Tornado Hop | - | From the sway: hop over lows into a spin kick; can't be grabbed. |
+| `sway_exit` | Sober Up | - | Leave the sway stance and stand up straight. |
+| `bottoms_up` | Bottoms Up | S+H | A swig, then a three-hit rush that can't be hit as it starts. |
+| `happy_hour` | Happy Hour | S+H+2 | PRIME TIME: unstoppable palm into a drunken beating and fire blast. |
+
 **Lv3 PRIME TIME cinematic `happy_hour` (Happy Hour)** - 160 frames (<= 180), cue `lotus_happy_hour`, damage 400+600+700+900+1900 = 4500, ends KD +19 at 2.4 m.
 
 - f0 LUNGE PALM (close) - 400 at f8. f22 SWIG (close on Lotus, spotlight): she stops for a long drink while the victim wobbles, dizzy; the crowd laughs.
@@ -1160,6 +1412,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 **Look.** Ch05: bald, half the face painted white, scalp stitches, leather harness, fur pauldrons, bone-spine necklace, spiked left gauntlet; a butcher's cleaver in the right hand (prop). Cleaver hits are comic flat-side smacks - no realistic gore (owner rule).
 
 **Game plan.** Walk forward behind armored buttons: 5H and MEAT HOOK absorb a hit, BUTCHER'S BLOCK steps through pokes into any special, CLEAVER DROP leaps in as an overhead, HAM SLAM is a low ground-bounce launcher. Big damage per touch.
+
+**Plan line (players see this).** Walk forward and swing big: his heavy hits take a blow and still land. Every hit hurts.
+
+**Unique in one line (players see this).** Tough: his big swing, Meat Hook and Butcher's Block keep going through a hit.
 
 **Weakness (the counter-play).** Big hurtbox, slow buttons, weak anti-air (2H only, no DP); armor loses to throws and multi-hits; HAM SLAM is -13 to -17 on block.
 
@@ -1258,6 +1514,41 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `chefs_special` Chef's Special: Super-armored charge with two cleaver swings.
 - `sunday_roast` Sunday Roast: PRIME TIME: a cleaver swing that starts the full butchery demonstration (flat-side smacks).
 
+**Player notes** (`moves.<id>.note`, shown in every move list next to the active scheme's keys; *SIMPLE / EASY key* = the routed version, whose note covers the whole family - EASY SPECIAL 1-4 = SIMPLE 5S / 6S / 2S / 4S, CONTRACT 36.1).
+
+| id | name | SIMPLE / EASY key | note |
+|---|---|---|---|
+| `5L` | Gauntlet Jab | - | Quick spiked jab to stop their attack. |
+| `2L` | Boot Stomp | - | Stomps on their toes; they must block crouching. |
+| `5M` | Snap Kick | - | Front snap kick to keep them at arm's length. |
+| `2M` | Low Cleaver | - | Low cleaver swing that catches sidesteps; follow with Meat Hook. |
+| `5H` | Cleaver Swing | - | Big cleaver swing that keeps going through one hit. |
+| `2H` | Rising Backhand | - | His only answer to jumpers: a rising backhand. |
+| `6H` | Tenderizer | - | Slow cleaver chop; must be blocked standing. |
+| `j.L` | Air Jab | - | Quick air jab for fights in the air. |
+| `j.M` | Air Backhand | - | Air backhand for fights in the air. |
+| `j.H` | Falling Cleaver | - | Falling cleaver jump-in to start a combo. |
+| `throw_f` | Three Cuts | - | Up close: three flat-side cleaver smacks. Beats blocking. |
+| `throw_b` | Over the Shoulder | - | Up close: haul them over his shoulder, swapping places. |
+| `meat_hook_l` | Meat Hook | - | Quickest of the three hooks; shrugs off one hit. |
+| `meat_hook_m` | Meat Hook | 5S | Slow two-swing hook that takes a hit, catches sidesteps, walls them. |
+| `meat_hook_h` | Meat Hook | - | Slowest hook; shrugs off two hits and hits hardest. |
+| `meat_hook_ex` | Meat Hook (EX) | - | Faster hook through two hits; the safest one if blocked. |
+| `cleaver_drop_l` | Cleaver Drop | - | Shortest leap; safe even when they block it. |
+| `cleaver_drop_m` | Cleaver Drop | 6S | Leaping cleaver smash: hops over lows, must be blocked standing. |
+| `cleaver_drop_h` | Cleaver Drop | - | Longest leap, from far away; knocks them down. |
+| `cleaver_drop_ex` | Cleaver Drop (EX) | - | Leap with a shockwave that bounces them off the floor. |
+| `ham_slam_l` | Ham Slam | - | Quickest spin of the three; the least risky if blocked. |
+| `ham_slam_m` | Ham Slam | 2S | Spinning low swing that pops them up for more hits. Risky if blocked. |
+| `ham_slam_h` | Ham Slam | - | Slowest spin with the most damage. |
+| `ham_slam_ex` | Ham Slam (EX) | - | Two quick spins that pop them up for more hits. |
+| `butcher_block_l` | Butcher's Block | - | Short step; the quickest to get out of. |
+| `butcher_block_m` | Butcher's Block | 4S | Steps forward through one hit; go straight into any special. |
+| `butcher_block_h` | Butcher's Block | - | Long step that covers the most ground. |
+| `butcher_block_ex` | Butcher's Block (EX) | - | Steps through two hits, ready from the very start. |
+| `chefs_special` | Chef's Special | S+H | Charge that shrugs off every hit: two swings that wall them. |
+| `sunday_roast` | Sunday Roast | S+H+2 | PRIME TIME: unstoppable cleaver swing into a full butchery show. |
+
 **Lv3 PRIME TIME cinematic `sunday_roast` (Sunday Roast)** - 170 frames (<= 180), cue `boneyard_sunday_roast`, damage 500+600+600+300+300+2200 = 4500, ends KD +19 at 1.8 m.
 
 - f0 CLEAVER SWING (close, sparks) - 500 at f8.
@@ -1327,6 +1618,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 **Look.** Ch06: black hooded track top, black cap, white/red over-ear headphones, black joggers, red/white sneakers.
 
 **Game plan.** Get in from the air and from the floor: the floatiest jump (apex 1.75 m), DROP-IN dive kick (air-only), SIX STEP crawls in low under pokes and projectiles, WINDMILL spins through the opponent. His floor normals shrink his hurtbox under high attacks.
+
+**Plan line (players see this).** Attack from above and below: dive kicks from the air, low spins and crawls on the floor.
+
+**Unique in one line (players see this).** Floor fighter: his low moves duck under high attacks, and he jumps the highest.
 
 **Weakness (the counter-play).** Anti-airs get full punishes on his jumps; DROP-IN is unsafe when it hits shallow; 9500 HP; the low-profile moves are all minus on block and lose to low attacks.
 
@@ -1430,6 +1725,42 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `cypher` Cypher: Invulnerable 6-hit flair cyclone.
 - `battle_of_the_year` Battle of the Year: PRIME TIME: a front kick opens a full battle round the crowd scores live. (hit volume: bottom lowered 0.35 m to the crouch line 1.10 m (clips.json `front_kick` effector LeftFoot))
 
+**Player notes** (`moves.<id>.note`, shown in every move list next to the active scheme's keys; *SIMPLE / EASY key* = the routed version, whose note covers the whole family - EASY SPECIAL 1-4 = SIMPLE 5S / 6S / 2S / 4S, CONTRACT 36.1).
+
+| id | name | SIMPLE / EASY key | note |
+|---|---|---|---|
+| `5L` | Toprock Jab | - | Quick jab to stop their attack. |
+| `2L` | Floor Tap | - | Drops low and taps the shin, ducking under high attacks. |
+| `5M` | Front Kick | - | Long front kick to keep them at a distance. |
+| `2M` | Footwork Sweep | - | Low sweep under high attacks that catches sidesteps. |
+| `5H` | Swipes | - | Two leg swipes that catch opponents who sidestep. |
+| `2H` | Flare Sweep | - | Low spinning sweep that knocks down. Risky if blocked. |
+| `6M` | Butterfly Kick | - | Jumping spin kick: hops over lows, must be blocked standing. |
+| `SS.H` | Flank Flair | - | Out of a sidestep: a low spin into their side that knocks down. |
+| `j.L` | Air Jab | - | Quick air jab for fights in the air. |
+| `j.M` | Air Swipe | - | Leg whip that wins fights in the air. |
+| `j.H` | Jump Turning Kick | - | Turning jump-in kick to start a combo. |
+| `throw_f` | Footwork Trip | - | Up close: drag them down into his footwork. Beats blocking. |
+| `throw_b` | Flair Toss | - | Up close: flair and fling them behind him. |
+| `windmill_l` | Windmill | - | Short two-hit spin; the least risky of the three if blocked. |
+| `windmill_m` | Windmill | 5S | Spins low through them, ducking high attacks; catches sidesteps. |
+| `windmill_h` | Windmill | - | Long six-hit spin; walls them near the edge. |
+| `windmill_ex` | Windmill (EX) | - | Six-hit spin that passes through projectiles. |
+| `handspin_l` | Handspin | 4S | Quickest handspin: the best one against jumpers. |
+| `handspin_m` | Handspin | 2S | Handspin with legs up: knocks jumpers down. Risky if blocked. |
+| `handspin_h` | Handspin | - | Strongest handspin; the riskiest if blocked. |
+| `handspin_ex` | Handspin (EX) | - | Handspin that can't be hit as it starts: escape pressure. |
+| `six_step_l` | Six Step | - | Short crawl; safe if they block it. |
+| `six_step_m` | Six Step | 6S | Crawls in low under attacks with two low sweeps. Sidesteps beat it. |
+| `six_step_h` | Six Step | - | Longest crawl, to reach them from far away. |
+| `six_step_ex` | Six Step (EX) | - | Long crawl with three low sweeps; safe if blocked. |
+| `drop_in_l` | Drop-In | - | Steep dive that lands close in front of him. |
+| `drop_in_m` | Drop-In | jS | In the air only: a dive kick that drops on them fast. |
+| `drop_in_h` | Drop-In | - | Flat dive that travels far. |
+| `drop_in_ex` | Drop-In (EX) | - | Fast, far dive that is safer if blocked. |
+| `cypher` | Cypher | S+H | Six-hit spinning cyclone that can't be hit as it starts. |
+| `battle_of_the_year` | Battle of the Year | S+H+2 | PRIME TIME: unstoppable front kick into a full battle round. |
+
 **Lv3 PRIME TIME cinematic `battle_of_the_year` (Battle of the Year)** - 165 frames (<= 180), cue `spin_battle`, damage 400+300+300+600+700+900+1300 = 4500, ends KD +19 at 2.2 m.
 
 - f0 FRONT KICK (close) - 400 at f8. f22 SWIPES (low): two leg whips at 1.7x - 300 + 300 (f30 / f36).
@@ -1497,6 +1828,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 **Look.** Ch08: bearded, fade haircut, light-grey hoodie, grey sweatpants with a black side stripe, black sneakers; one football (prop / ball entity).
 
 **Game plan.** Setplay: POWER SHOT (roller low, straight mid, chip lob), then KEEPY-UPPY parks the ball in the air as an anti-air trap you can volley later; the ball rebounds once off the wall. BICYCLE KICK is his anti-air, DIVE rolls under projectiles, the slide tackle 2H sweeps from range.
+
+**Plan line (players see this).** Shoot the ball to keep them out, park it in the air to stop jumps, then rush in.
+
+**Unique in one line (players see this).** One ball: shoot it, park it in the air, volley it later. Walk over it to pick it up.
 
 **Weakness (the counter-play).** Without the ball he has no projectile (it rests on the floor until he walks over it or it respawns after 3 s); BICYCLE KICK lands him on his back (-26 to -34); no anti-air normal.
 
@@ -1597,6 +1932,42 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `top_bins` Top Bins: Flicks up a fresh ball and smashes a 5-hit flaming shot; invulnerable startup. (projectile 8.0 m/s, 5 hit(s), y 1.00 m; ball summon)
 - `hat_trick` Hat Trick: PRIME TIME: point-blank volley, a shot to the chest, a header, and the bicycle-kick finale. (ball summon; hit volume: near edge pulled back 0.13 m to point-blank reach 0.66 m (clips.json `volley` effector RightFoot))
 
+**Player notes** (`moves.<id>.note`, shown in every move list next to the active scheme's keys; *SIMPLE / EASY key* = the routed version, whose note covers the whole family - EASY SPECIAL 1-4 = SIMPLE 5S / 6S / 2S / 4S, CONTRACT 36.1).
+
+| id | name | SIMPLE / EASY key | note |
+|---|---|---|---|
+| `5L` | Jab | - | Quick jab to stop their attack. |
+| `2L` | Low Jab | - | Quick low jab; they must block crouching. |
+| `5M` | Snap Kick | - | Front snap kick to keep them at arm's length. |
+| `2M` | Grass Cutter | - | Long low kick that catches sidesteps; he stays standing tall. |
+| `5H` | Volley | - | Big volley kick; walls them near the edge. |
+| `2H` | Slide Tackle | - | Slide tackle from range that knocks down. A sidestep beats it. |
+| `4M` | Knee Trap | - | Quick short knee to stop their attack. |
+| `6H` | Diving Header | - | Hopping header that must be blocked standing. |
+| `j.L` | Air Knee | - | Quick air knee for fights in the air. |
+| `j.M` | Flying Volley | - | Flying volley that wins fights in the air. |
+| `j.H` | Flying Punt | - | Big flying punt to start a combo. |
+| `throw_f` | Drop Kick | - | Up close: drop them like a ball and punt them away. |
+| `throw_b` | Overhead Kick | - | Up close: bicycle-kick them over his head, behind him. |
+| `power_shot_l` | Power Shot | - | Low rolling shot aimed at them: they must block it crouching. |
+| `power_shot_m` | Power Shot | 5S | Shoots the ball straight ahead; it bounces back once off the wall. |
+| `power_shot_h` | Power Shot | - | Lobbed shot aimed at them that drops from above; good vs jumpers. |
+| `power_shot_ex` | Power Shot (EX) | - | Curling two-hit shot aimed right at them. |
+| `bicycle_l` | Bicycle Kick | - | Quickest bicycle kick, the best one against jumps. |
+| `bicycle_m` | Bicycle Kick | 2S | Bicycle kick that knocks jumpers down; he lands on his back. |
+| `bicycle_h` | Bicycle Kick | - | Strongest bicycle kick; the riskiest if blocked. |
+| `bicycle_ex` | Bicycle Kick (EX) | - | Bicycle kick that can't be hit as it starts: escape pressure. |
+| `keepy_l` | Keepy-Uppy | - | Keeps the ball low, just over his head. |
+| `keepy_m` | Keepy-Uppy | 4S | Keeps the ball up overhead as a trap for jumpers; shoot it later. |
+| `keepy_h` | Keepy-Uppy | - | Keeps the ball high, to catch high jumps. |
+| `keepy_ex` | Keepy-Uppy (EX) | - | The ball stays up longer and hits twice. |
+| `dive_l` | Simulation | - | Short dive-roll, to slip in from close range. |
+| `dive_m` | Simulation | 6S | Theatrical dive-roll forward under projectiles and high attacks. |
+| `dive_h` | Simulation | - | Longest dive-roll, to cross the ring. |
+| `dive_ex` | Simulation (EX) | - | Dive-roll that no strike can touch. |
+| `top_bins` | Top Bins | S+H | Fresh ball, five-hit flaming shot; can't be hit as it starts. |
+| `hat_trick` | Hat Trick | S+H+2 | PRIME TIME: unstoppable volley into a header and bicycle-kick show. |
+
 **Lv3 PRIME TIME cinematic `hat_trick` (Hat Trick)** - 165 frames (<= 180), cue `gazza_hat_trick`, damage 600+800+900+2200 = 4500, ends KD +19 at 3.0 m.
 
 - f0 VOLLEY (close): point-blank into the gut - 600 at f10.
@@ -1661,6 +2032,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 **Look.** Prisoner: zombified convict in a grey/white striped uniform and cap, barefoot; the right hand stays half-open (no finger bones in the rig) - every strike is a claw or open hand.
 
 **Game plan.** Counter and footsies: PLAY DEAD (214 / 4S) drops him to the floor and catches strikes on frames 4-20 into GRAVE RISE; the prone CRAWL CLAW (2M) slides under high pokes; LAST MEAL (63214 command grab) punishes blockers who fear the counter; GRAVE CRAWL creeps in low.
+
+**Plan line (players see this).** Bait their attacks and play dead to counter; when they stop attacking, grab them.
+
+**Unique in one line (players see this).** Play Dead: drop to the floor; strike him then and he springs up and hits back.
 
 **Weakness (the counter-play).** Counters lose to throws, projectiles and delayed attacks; PLAY DEAD has 26+ frames of whiff recovery lying on the floor; slow walk for his range.
 
@@ -1765,6 +2140,44 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `dead_air_bite` Dead Air Bite: The Lv1 follow-up: lunges 2.5 m and bites (unblockable, 2000).
 - `series_finale` Series Finale: PRIME TIME: grabs, bites, drags them into a trapdoor grave - and climbs back out alone. (hit volume: bottom lowered 0.04 m to the crouch line 1.10 m (clips.json `long_reach` effector LeftHand))
 
+**Player notes** (`moves.<id>.note`, shown in every move list next to the active scheme's keys; *SIMPLE / EASY key* = the routed version, whose note covers the whole family - EASY SPECIAL 1-4 = SIMPLE 5S / 6S / 2S / 4S, CONTRACT 36.1).
+
+| id | name | SIMPLE / EASY key | note |
+|---|---|---|---|
+| `5L` | Swat | - | Quick swat to stop their attack. |
+| `2L` | Ankle Bite | - | Quick low bite; they must block crouching. |
+| `5M` | Lurch Claw | - | Wild claw that catches opponents who sidestep. |
+| `2M` | Crawl Claw | - | Drops flat and claws low, sliding under high attacks. |
+| `5H` | Long Reach | - | His longest reach; walls them near the edge. A sidestep beats it. |
+| `2H` | Scream Claw | - | Arms flung up to swat jumping opponents. |
+| `6H` | Drop-Dead Headbutt | - | Lunging headbutt that must be blocked standing. |
+| `j.L` | Air Swat | - | Quick air swat for fights in the air. |
+| `j.M` | Air Claw | - | Air claw for fights in the air. |
+| `j.H` | Pounce | - | Double-claw pounce to start a combo. |
+| `throw_f` | In Your Face | - | Up close: grab them and scream in their face. Beats blocking. |
+| `throw_b` | Graveyard Swing | - | Up close: swing them past him, swapping places. |
+| `play_dead_l` | Play Dead | - | Short catch; he gets back up the soonest. |
+| `play_dead_m` | Play Dead | 4S | Drops like a corpse: strikes get countered; grabs and projectiles win. |
+| `play_dead_h` | Play Dead | - | Catch that counters with a big rise for more hits. |
+| `play_dead_ex` | Play Dead (EX) | - | Catches strikes and projectiles right away. |
+| `grave_rise` | Grave Rise | - | After a Play Dead catch: springs up into a claw that knocks down. |
+| `grave_rise_big` | Grave Rise (Heavy) | - | After a heavy Play Dead catch: rises and pops them up. |
+| `grave_crawl_l` | Grave Crawl | - | Short crawl, out the quickest of the three. |
+| `grave_crawl_m` | Grave Crawl | 6S | Crawls in low under attacks, then bites the ankle to knock down. |
+| `grave_crawl_h` | Grave Crawl | - | Longest crawl, to reach them from far away. |
+| `grave_crawl_ex` | Grave Crawl (EX) | - | Crawl through projectiles with two bites; safe if blocked. |
+| `last_meal_l` | Last Meal | - | Grab with the longest reach of the three, but the least damage. |
+| `last_meal_m` | Last Meal | 5S | Grab that beats blocking and sidesteps: gnaw, then shove away. |
+| `last_meal_h` | Last Meal | - | Shortest reach, but the most damage of the three. |
+| `last_meal_ex` | Last Meal (EX) | - | Grab with extra reach that can't be hit as it starts. |
+| `arise_l` | Arise | - | Quickest of the three leaps, the best one against jumps. |
+| `arise_m` | Arise | 2S | Leaping claw that swats jumping opponents. |
+| `arise_h` | Arise | - | Strongest leap; the riskiest if blocked. |
+| `arise_ex` | Arise (EX) | - | Leap that can't be hit as it starts: escape pressure. |
+| `dead_air` | Dead Air | S+H | Plays dead; any strike or projectile gets a huge bite back. |
+| `dead_air_bite` | Dead Air Bite | - | Dead Air's answer: lunges far and bites. It can't be blocked. |
+| `series_finale` | Series Finale | S+H+2 | PRIME TIME: unstoppable grab, a bite, and a trip into the grave. |
+
 **Lv3 PRIME TIME cinematic `series_finale` (Series Finale)** - 170 frames (<= 180), cue `rerun_series_finale`, damage 800+1200+1000+1500 = 4500, ends KD +19 at 1.6 m.
 
 - f0 LONG REACH (close, lights flicker): both claws catch the collar.
@@ -1832,6 +2245,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 **Look.** Mutant: hulking cracked-rock skin, bony mask with cyan crystals, crystal claw growths on both hands, torn blue jeans, bare feet, stitched chest scar; the branded chest number is repainted to the show's own specimen number (research ROSTER content flag).
 
 **Game plan.** Boss tools, not cheats (FIGHTING_DESIGN 10): 2.40 m reach and 11,500 HP, 2 hits of armor on 5H, 6H and every special, CRUSHER LEAP crosses the screen as an overhead, ROAR blows people and projectiles away, SPECIMEN GRAB reaches as far as Bruno's WALK IN but is slower and lighter.
+
+**Plan line (players see this).** Use the huge reach and toughness: swing big, take their hits, crush them up close.
+
+**Unique in one line (players see this).** Boss toughness: his heavy swings, rushes, leaps and roars keep going through two hits.
 
 **Weakness (the counter-play).** The biggest hurtbox in the game and the slowest dash; armor loses to throws, multi-hits and supers; ROAR and CRUSHER LEAP are very punishable; honest frame data (no normal below -4 except the anti-air).
 
@@ -1930,6 +2347,41 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `meltdown` Meltdown: Super-armored three-swipe rampage.
 - `specimen_13` Specimen 13: PRIME TIME: grabbed, crushed, hammered into the floor twice, roared at and hurled across the set.
 
+**Player notes** (`moves.<id>.note`, shown in every move list next to the active scheme's keys; *SIMPLE / EASY key* = the routed version, whose note covers the whole family - EASY SPECIAL 1-4 = SIMPLE 5S / 6S / 2S / 4S, CONTRACT 36.1).
+
+| id | name | SIMPLE / EASY key | note |
+|---|---|---|---|
+| `5L` | Claw Jab | - | Quick claw to stop their attack. |
+| `2L` | Low Claw | - | Quick low claw; they must block crouching. |
+| `5M` | Wild Swing | - | Wild claw chop that catches opponents who sidestep. |
+| `2M` | Floor Slam | - | Both claws slam the floor; they must block crouching. |
+| `5H` | Crystal Swipe | - | Huge claw swipe that keeps going through two hits. |
+| `2H` | Jumping Claw | - | Hops up with both claws to swat jumping opponents. |
+| `6H` | Hammer Down | - | Leaping slam through two hits; must be blocked standing. |
+| `j.L` | Air Claw | - | Quick air claw for fights in the air. |
+| `j.M` | Air Swipe | - | Air swipe for fights in the air. |
+| `j.H` | Falling Slam | - | Two-claw falling slam to start a combo. |
+| `throw_f` | Crusher Hug | - | Up close: crush them in a hug. Beats blocking. |
+| `throw_b` | Specimen Toss | - | Up close: fling them over his shoulder. |
+| `crusher_leap_l` | Crusher Leap | - | Shortest leap, for closer range. |
+| `crusher_leap_m` | Crusher Leap | 6S | Huge leap through two hits; must be blocked standing. Very risky. |
+| `crusher_leap_h` | Crusher Leap | - | Longest leap, across the ring. |
+| `crusher_leap_ex` | Crusher Leap (EX) | - | Faster leap through three hits; bounces them off the floor. |
+| `claw_rush_l` | Claw Rush | - | Short rush; the least risky of the three if blocked. |
+| `claw_rush_m` | Claw Rush | 5S | Running claw swipe through two hits; knocks down. Sidesteps beat it. |
+| `claw_rush_h` | Claw Rush | - | Longest rush; walls them. Very risky if blocked. |
+| `claw_rush_ex` | Claw Rush (EX) | - | Two-hit rush that no hit can stop; safe if blocked. |
+| `roar_l` | Roar | - | Smallest roar, only right around him. |
+| `roar_m` | Roar | 2S | Roar all around him: blows them away, passes through projectiles. |
+| `roar_h` | Roar | - | Biggest roar, reaching the furthest. |
+| `roar_ex` | Roar (EX) | - | Fast roar that no hit can stop; catches sidesteps. |
+| `specimen_grab_l` | Specimen Grab | - | Grab with the longest reach of the three, but the least damage. |
+| `specimen_grab_m` | Specimen Grab | 4S | Long-reach grab that beats blocking and sidesteps. |
+| `specimen_grab_h` | Specimen Grab | - | Shortest reach, but the most damage of the three. |
+| `specimen_grab_ex` | Specimen Grab (EX) | - | Grab with the longest reach that can't be hit as it starts. |
+| `meltdown` | Meltdown | S+H | Three-swipe rampage that no hit can stop. |
+| `specimen_13` | Specimen 13 | S+H+2 | PRIME TIME: unstoppable grab, floor slams, a roar and a big throw. |
+
 **Lv3 PRIME TIME cinematic `specimen_13` (Specimen 13)** - 175 frames (<= 180), cue `freak_specimen_13`, damage 800+900+1000+2300 = 5000, ends KD +19 at 3.5 m.
 
 - f0 CRYSTAL SWIPE (close): the claw connects.
@@ -1992,6 +2444,10 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 **Look.** Ch40 (showman mask, gold-trimmed vest, one gloved sleeve, striped trousers) retextured with a sequined jacket; the microphone-cane prop is held two-handed like the Great_Sword clips (research flag: those clips are two-handed).
 
 **Game plan.** Two phases, honest frame data (FIGHTING_DESIGN 10: tools not cheats): SPOTLIGHT beams zone, COMMERCIAL BREAK counters a predictable strike, MIC DROP anti-airs, THE HOOK (vaudeville cane) drags them in from range. Below 50% HP (once per bout) PHASE 2 adds PYRO - a floor fire line - and a second Lv3, SEASON FINALE, that uses the whole set.
+
+**Plan line (players see this).** Beam them from range, counter their attacks, then unleash the live set at half health.
+
+**Unique in one line (players see this).** Two phases: below half health the set goes live, with pyro and a second PRIME TIME.
 
 **Weakness (the counter-play).** Two readable phases; COMMERCIAL BREAK loses to throws and delays; THE HOOK is -12 on block; 13,000 HP but the same frame rules as the players.
 
@@ -2106,6 +2562,49 @@ EX = ASSIST+S+direction (SIMPLE) or motion+S (CLASSIC), 2 NERVE bars. SIMPLE one
 - `standing_ovation` Standing Ovation: Invulnerable three-swing cane routine.
 - `prime_time` Prime Time: PRIME TIME (phase 1): the host's cane routine for camera one.
 - `season_finale` Season Finale: PHASE 2 Lv3: the whole set - pyro columns, a falling lighting rig and the confetti cannon. (phase 2 only)
+
+**Player notes** (`moves.<id>.note`, shown in every move list next to the active scheme's keys; *SIMPLE / EASY key* = the routed version, whose note covers the whole family - EASY SPECIAL 1-4 = SIMPLE 5S / 6S / 2S / 4S, CONTRACT 36.1).
+
+| id | name | SIMPLE / EASY key | note |
+|---|---|---|---|
+| `5L` | Cane Jab | - | Quick cane thrust to stop their attack. |
+| `2L` | Tap Dance | - | Quick cane tap to the ankle; they must block crouching. |
+| `5M` | Cane Swing | - | Diagonal cane chop at mid range. |
+| `2M` | Low Cane | - | Low cane swing that catches sidesteps. |
+| `5H` | Showstopper | - | Big cane swing that catches sidesteps; walls them near the edge. |
+| `2H` | Cane Twirl | - | Cane twirl that swats jumping opponents. |
+| `3H` | The Hook | - | Sliding low cane hook that drags them down. Risky if blocked. |
+| `4M` | Stage Kick | - | Stage kick with the cane in hand; a poke that is safe if blocked. |
+| `6H` | Sledgehammer | - | Two-hand cane smash; must be blocked standing. |
+| `j.L` | Air Thrust | - | Quick air thrust for fights in the air. |
+| `j.M` | Air Chop | - | Air cane chop for fights in the air. |
+| `j.H` | Air Sledgehammer | - | Overhead cane jump-in to start a combo. |
+| `throw_f` | Three-Act Beating | - | Up close: hold them at cane's length for three swings. |
+| `throw_b` | Exit Stage Left | - | Up close: spin them past him with the cane. |
+| `spotlight_l` | Spotlight | - | Slowest beam: walk in behind it. |
+| `spotlight_m` | Spotlight | 5S | Spotlight beam straight down the ring. Sidesteps dodge it. |
+| `spotlight_h` | Spotlight | - | Fastest beam of the three, reaches them the soonest. |
+| `spotlight_ex` | Spotlight (EX) | - | Double beam aimed right at them: hard to sidestep. |
+| `commercial_break_l` | Commercial Break | - | Short catch window; the least risky if nothing comes. |
+| `commercial_break_m` | Commercial Break | 4S | Catches a strike and answers with a sledgehammer. Grabs beat it. |
+| `commercial_break_h` | Commercial Break | - | Long catch window; the riskiest if nothing comes. |
+| `commercial_break_ex` | Commercial Break (EX) | - | Catches strikes and projectiles right away. |
+| `commercial_hit` | Back After This | - | After a Commercial Break catch: a sledgehammer that knocks down. |
+| `mic_drop_l` | Mic Drop | - | Quickest leap, the best one against jumps. |
+| `mic_drop_m` | Mic Drop | 2S | Leaping cane swing that knocks jumpers down. Risky if blocked. |
+| `mic_drop_h` | Mic Drop | - | Strongest leap; the riskiest if blocked. |
+| `mic_drop_ex` | Mic Drop (EX) | - | Leap that can't be hit as it starts: escape pressure. |
+| `the_hook_l` | Get The Hook | - | Shortest hook, out the quickest of the three. |
+| `the_hook_m` | Get The Hook | 6S | Sliding low hook that drags them in and down. Sidesteps beat it. |
+| `the_hook_h` | Get The Hook | - | Longest hook, from far away. |
+| `the_hook_ex` | Get The Hook (EX) | - | Two-hit hook that takes a hit; safer if blocked. |
+| `pyro_l` | Pyro | - | Phase 2: slowest fire line; walk in behind it. |
+| `pyro_m` | Pyro | phase 2 6S | Phase 2: a line of fire races along the floor right at them. |
+| `pyro_h` | Pyro | - | Phase 2: the fastest fire line of the three. |
+| `pyro_ex` | Pyro (EX) | - | Phase 2: a three-hit fire line. |
+| `standing_ovation` | Standing Ovation | S+H | Three cane swings that can't be hit as they start. |
+| `prime_time` | Prime Time | S+H+2 | PRIME TIME: the host's unstoppable cane routine for camera one. |
+| `season_finale` | Season Finale | - | Phase 2 PRIME TIME: pyro, a falling light rig and confetti. |
 
 **Lv3 PRIME TIME cinematic `prime_time` (Prime Time)** - 170 frames (<= 180), cue `ricky_prime_time`, damage 700+900+1000+2400 = 5000, ends KD +19 at 2.2 m.
 

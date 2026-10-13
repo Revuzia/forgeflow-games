@@ -53,6 +53,7 @@ import { hasAssets, playableStage } from './ui/data.ts';
 import type { PortraitQueue } from './app/portraits.ts';
 // CHANGED(integrator) P2: the TRAINING driver (UI §27.1) and the fight camera's projection for its HITBOX overlay
 import { TrainingDriver } from './ui/trainer.ts';
+import { labelsOf } from './ui/controls.ts';                 // CHANGED(ui) (CONTRACT §36.2): the controls bar's live key caps
 import { Vector3 } from 'three';
 
 /** after MATCH_END the KO slow-mo + win pose play this long (real ms) before the results card */
@@ -235,6 +236,18 @@ export class Game {
     // phase, so without this the same ESC keydown reached the menus' bubble-phase handler right after showPause() had
     // rendered the card, and ESC-on-the-card = resume: the bout never stayed paused (measured: phase stayed 'bout').
     this.offs.push(d.input.onUi((a, p, e) => { if (a === 'pause' && this.onPauseKey(p)) e?.preventDefault(); }));
+    // CHANGED(ui) (CONTRACT §36.2): the in-game CONTROLS BAR - key caps from the live settings, F1 (UI action 'controls') or
+    // its "?" chip flip settings.controlsBar (TRAINING always shows it), its MORE cell and the touch overlay's "?" disc open the
+    // pause card in its HELP layout (the expanded keyboard map / the touch cheat sheet)
+    this.hud.controls.connect({
+      labels: (p) => labelsOf(d.settings.get().controls[p], p),
+      enabled: () => d.settings.get().controlsBar !== false,
+      toggle: () => { d.settings.set({ controlsBar: d.settings.get().controlsBar === false }); },
+      help: () => this.pause('help', this.bout?.local ?? 0),
+      word: (p) => d.input.word(p),                       // CHANGED(wf8 fix) FT-01: the Hud's LOW ATTACK coach reads the held keys
+    });
+    this.offs.push(d.input.onUi((a) => { if (a === 'controls' && d.flow.phase === 'bout') this.hud.controls.toggle(); }));
+    if (d.touch) this.offs.push(d.touch.onHelp(() => this.pause('help', this.bout?.local ?? 0)));
     const onHidden = (): void => { if (document.visibilityState === 'hidden') this.autoPause('hidden'); };
     const onPageHide = (): void => this.autoPause('pagehide');
     const onBlur = (): void => { if (d.input.mode === 'touch') this.autoPause('blur'); };
@@ -251,6 +264,7 @@ export class Game {
         this.bout.view.setSettings(viewSettings(s));
       }
       if (keys.includes('gore')) { try { d.audio.setSplatter(s.gore); } catch { /* audio is optional */ } }
+      if (keys.includes('controls') || keys.includes('controlsBar')) this.hud.controls.refresh();   // CHANGED(ui): remaps show on resume
     }));
   }
 
@@ -306,8 +320,13 @@ export class Game {
       if (!ctx.online && !training && typeof lv === 'number' && lv >= 0) cpus[p] = createCpu(clampLevel(lv), cfg.p[p].fighter, (cfg.seed ^ (0x9e3779b9 * (p + 1))) >>> 0);
     }
     const session = ctx.online ? ctx.online.attach(m) : null;
+    // CHANGED(wf8 fix) FT-05: unless a human plays P2's keys (offline VERSUS 2P), the arrows also move P1
+    const p2Human = !ctx.online && !training && cfg.mode !== 'brawl' && cfg.mode !== 'heckler' && !(typeof cfg.p[1].cpu === 'number' && cfg.p[1].cpu >= 0);
+    d.input.soloArrows = !p2Human;
     this.hud.mount(cfg);
     this.hud.setNames([this.nameOf(cfg.p[0].fighter), this.nameOf(cfg.p[1].fighter)]);
+    // CHANGED(ui) (CONTRACT §36.2): online the bar shows THIS screen's player: P1's keys, playing sim slot `local`
+    if (ctx.online) this.hud.controls.setPlayers([{ p: 0, side: local, fighter: cfg.p[local].fighter, scheme: cfg.p[local].scheme }]);
     d.menus.setMoveList(cfg.p[local].fighter, cfg.p[local].scheme);
     this.bout = {
       epoch: my, cfg, m, view, cpus, online: ctx.online ?? null, session, local, season: ctx.season ?? null, stats: new BoutStats(),
@@ -435,6 +454,7 @@ export class Game {
     b.view.setSafeArea(this.hud.safeTop());
     b.view.frame(snap, f, evs, dt);
     this.hud.frame(snap, f, evs);
+    if (this.hud.controls.visible) this.hud.controls.setFeet(this.liveFeet(b));   // CHANGED(ui) (§36.2): the bar ducks for feet in its band
     // CHANGED(integrator) P2 (UI §27.1): the HITBOX overlay, the sim's boxes projected with the fight camera to CSS px
     if (b.trainer) b.trainer.frame(this.projector(b));
     this.touchFrame(b, f);
@@ -443,6 +463,27 @@ export class Game {
   }
 
   private readonly projV = new Vector3();
+  /** CHANGED(ui) (CONTRACT §36.2): each fighter's lowest toe on screen (fraction of the height from the top) - the controls
+   *  bar steps aside while one is inside its band. The toes, not the framed ground point: a kick or a knockdown toward the
+   *  lens puts a foot up to 0.06 of the frame lower than BoutView.lastFeet (measured, wf8 verify_bar). */
+  private readonly footV = new Vector3();
+  private readonly feetOut: [number, number] = [0, 0];
+  private liveFeet(b: Bout): [number, number] {
+    const cam = b.view.cam.camera;
+    for (let i = 0; i < 2; i++) {
+      const fv = b.view.fighters[i];
+      let lo = 0;
+      if (fv.root.visible) {
+        for (const pair of [['LeftToeBase', 'LeftFoot'], ['RightToeBase', 'RightFoot']] as const) {
+          if (!fv.bonePos(pair[0], this.footV) && !fv.bonePos(pair[1], this.footV)) continue;
+          this.footV.project(cam);
+          if (this.footV.z <= 1) lo = Math.max(lo, (1 - this.footV.y) / 2);
+        }
+      }
+      this.feetOut[i] = lo > 0 ? lo : b.view.lastFeet[i];
+    }
+    return this.feetOut;
+  }
   /** world metres -> CSS px of the page through the bout's fight camera (null behind the camera) */
   private projector(b: Bout): (x: number, y: number, z: number) => [number, number] | null {
     const cam = b.view.cam.camera;
@@ -653,12 +694,16 @@ export class Game {
     this.pause(why, b.local);
   }
 
+  /** CHANGED(ui): the next pause card opens in its HELP layout (set by pause('help')) */
+  private pauseHelp = false;
+
   /** ESC / pad START / __PAUSE__ / page hidden: the pause card; the bout is NEVER destroyed here */
   pause(why: string, by: 0 | 1 = 0): void {
     const b = this.bout;
     const d = this.d;
     if (!b || b.finished || d.flow.phase !== 'bout') return;
     b.pausedBy = by;
+    this.pauseHelp = why === 'help';                      // CHANGED(ui): the controls bar's MORE / the touch "?" -> HELP layout
     const seq = ++b.pauseSeq;
     if (!b.online) this.loop.simEnabled = false;          // online: the session keeps ticking (NETCODE 3.8) ...
     d.input.live = false;                                 // ... with neutral words: the card's keys never move the fighter
@@ -672,8 +717,16 @@ export class Game {
     const d = this.d;
     let choice: 'resume' | 'settings' | 'forfeit' | 'movelist';
     try {
+      // CHANGED(ui) (CONTRACT §36.3): the card's CONTROLS column draws the pausing player's keys (online: this screen's P1
+      // keys) for their fighter + scheme; a local 2P bout can flip to the other player's; `help` = the HELP layout
+      const help = this.pauseHelp;
+      this.pauseHelp = false;
+      const keySet: 0 | 1 = b.online ? 0 : b.pausedBy;
+      const o = (1 - b.pausedBy) as 0 | 1;
+      const other = !b.online && b.cfg.mode !== 'training' && b.cfg.p[o].cpu < 0 && b.cfg.p[b.pausedBy].cpu < 0
+        ? { player: o, fighter: b.cfg.p[o].fighter, scheme: b.cfg.p[o].scheme } : null;
       choice = await d.menus.showPause({ training: b.cfg.mode === 'training', online: !!b.online, fighter: b.cfg.p[b.pausedBy].fighter,
-        scheme: b.cfg.p[b.pausedBy].scheme });
+        scheme: b.cfg.p[b.pausedBy].scheme, help, player: keySet, other });
     } catch (e) {
       console.error('[hit-parade] pause card', e);
       choice = 'resume';
@@ -686,7 +739,7 @@ export class Game {
     if (choice === 'forfeit') { void this.forfeit(b.pausedBy); return; }
     // settings / move list: a sub-screen of the pause card; backing out re-opens the card (CONTRACT §18.3)
     d.menus.show(choice, {
-      from: 'pause', fighter: b.cfg.p[b.pausedBy].fighter, scheme: b.cfg.p[b.pausedBy].scheme,
+      from: 'pause', fighter: b.cfg.p[b.pausedBy].fighter, scheme: b.cfg.p[b.pausedBy].scheme, player: b.online ? 0 : b.pausedBy,  // CHANGED(ui)
       onClose: () => { if (b === this.bout && seq === b.pauseSeq && d.flow.phase === 'paused') void this.pauseCard(b, ++b.pauseSeq); },
     });
   }
@@ -1097,7 +1150,7 @@ export class Game {
     const pl = (i: 0 | 1, dflt: string, cpu: number): MatchCfg['p'][0] => {
       const q = (o.p?.[i] ?? {}) as Partial<MatchCfg['p'][0]>;
       return { fighter: typeof q.fighter === 'string' ? q.fighter : dflt, color: typeof q.color === 'number' ? q.color : 0,
-        scheme: q.scheme === 1 ? 1 : 0, cpu: typeof q.cpu === 'number' ? q.cpu : cpu };
+        scheme: q.scheme === 1 || q.scheme === 2 ? q.scheme : 0, cpu: typeof q.cpu === 'number' ? q.cpu : cpu }; // CHANGED(input): EASY (2) passes (CONTRACT 36.5)
     };
     const cfg: MatchCfg = {
       mode: (o.mode as MatchCfg['mode']) ?? 'versus', stage: typeof o.stage === 'string' ? o.stage : this.firstStage(),

@@ -17,7 +17,12 @@ import { RtcTransport, type RtcSignal } from './transport_rtc.ts';
 import { RelaySlot, RelayTransport } from './transport_relay.ts';
 import { currentPlayer, reportResult } from './ratings.ts';
 
-export type Scheme = 0 | 1;
+export type Scheme = 0 | 1 | 2; // CHANGED(input) (CONTRACT §36.5): 2 = EASY travels in the reveal like 0 / 1
+/** CHANGED(input): a wire / pick value -> a scheme id (anything unknown = SIMPLE) */
+export function schemeOf(v: unknown): Scheme {
+  const n = Number(v);
+  return n === 1 ? 1 : n === 2 ? 2 : 0;
+}
 export interface OnlinePlayerCfg { fighter: string; color: number; scheme: Scheme; cpu: number }
 /** Structurally identical to core/sim/match.ts MatchCfg with mode 'online'. */
 export interface OnlineMatchCfg { mode: 'online'; stage: string; seed: number; p: [OnlinePlayerCfg, OnlinePlayerCfg]; rounds?: number; timer?: number }
@@ -36,6 +41,7 @@ export const NET_STRINGS: Record<string, string> = {
   'net.relay_busy': 'DIRECT CONNECTION FAILED AND THE BACKUP LINE IS BUSY - TRY ANOTHER MATCH',
   'net.version_mismatch': 'YOUR OPPONENT IS ON A DIFFERENT VERSION - REFRESH',
   'net.no_opponent': 'NO OPPONENT FOUND',
+  'net.lobby_down': 'THE MATCHMAKING LINE IS NOT ANSWERING - TRY AGAIN SOON',
   'net.room_full': 'THAT ROOM IS FULL',
   'net.rtt_high': 'HIGH PING ({rtt} MS)',
   'net.rtt_bad': 'VERY HIGH PING ({rtt} MS) - FIND ANOTHER OPPONENT?',
@@ -227,7 +233,8 @@ export class OnlineFlow {
     this.lookupRated(g);
     const res = await this.np.quickMatch(timeoutMs);
     if (g !== this.gen) return;
-    if (!res) { this.fail('net.no_opponent'); this.end('no-opponent'); return; }
+    // CHANGED(wf8 fix) WF8G-3: a lobby that never joined is the service, not an empty lobby - say so
+    if (!res) { this.fail(this.np.lobbyJoined ? 'net.no_opponent' : 'net.lobby_down', { lobby: this.np.lobbyStatuses.slice(-6) }); this.end('no-opponent'); return; }
     this.room = res.room;
     this.emit('paired', { room: res.room, host: res.host });
     this.setPhase('room');
@@ -548,7 +555,7 @@ export class OnlineFlow {
   pick(p: OnlinePick): void {
     if (this.phase !== 'select' || this.myReveal) return;
     const fighter = this.d.fighters.includes(p.fighter) ? p.fighter : this.d.fighters[0];
-    const r: Reveal = { fighter, color: Math.max(0, Math.min(7, p.color | 0)), scheme: p.scheme === 1 ? 1 : 0,
+    const r: Reveal = { fighter, color: Math.max(0, Math.min(7, p.color | 0)), scheme: schemeOf(p.scheme),
       stage: p.stage && this.d.stages.includes(p.stage) ? p.stage : '', seedPart: rand32(), salt: randHex(16) };
     this.myReveal = r;
     void sha256Hex(revealString(r)).then((h) => {
@@ -576,7 +583,7 @@ export class OnlineFlow {
   private async onReveal(r: Reveal): Promise<void> {
     if (!this.peerCommit || this.peerReveal) return;
     const h = await sha256Hex(revealString(r));
-    const valid = h === this.peerCommit && this.d.fighters.includes(r.fighter) && (r.scheme === 0 || r.scheme === 1) &&
+    const valid = h === this.peerCommit && this.d.fighters.includes(r.fighter) && (r.scheme === 0 || r.scheme === 1 || r.scheme === 2) &&
       Number.isInteger(r.color) && r.color >= 0 && r.color <= 7 && (r.stage === '' || this.d.stages.includes(r.stage));
     if (!valid) { this.note('bad reveal', r); this.ctl('bye', { why: 'cheat' }); this.fail('net.cheat'); this.end('cheat'); return; }
     this.peerReveal = r;
@@ -886,7 +893,7 @@ export class OnlineFlow {
       }
       case 'reveal': {
         const mi = Number(d.mi) | 0;
-        const r: Reveal = { fighter: String(d.fighter), color: Number(d.color), scheme: Number(d.scheme) === 1 ? 1 : 0, stage: String(d.stage ?? ''),
+        const r: Reveal = { fighter: String(d.fighter), color: Number(d.color), scheme: schemeOf(d.scheme), stage: String(d.stage ?? ''),
           seedPart: Number(d.seedPart) >>> 0, salt: String(d.salt) };
         if (this.phase === 'select' && mi === this.matchIndex) void this.onReveal(r);
         else if (mi >= this.matchIndex) this.earlyReveal.set(mi, r);
