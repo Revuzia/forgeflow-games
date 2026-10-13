@@ -5,7 +5,7 @@
 // 3 rows, 6 s, newest on top; your rows in the Noonwhite double frame) and the FRAY Hour Board
 // (220 × 236, top right; the kill feed docks under it).
 
-import type { JSX } from 'preact';
+import type { CSSProperties, JSX } from 'preact';
 import type { PlayerView } from '../../contracts/sim.ts';
 import { useApp } from '../app_ctx.ts';
 import { Portrait } from '../components/Portrait.tsx';
@@ -87,7 +87,7 @@ function ObjectiveChips(): JSX.Element | null {
         const frac = !o.alive && max > 0 ? Math.max(0, Math.min(1, 1 - o.respawnIn / max)) : 1;
         return (
           <span class={`objchip ${o.alive ? 'is-up' : ''}`} title={o.alive ? `${name} · ${cv.t('hud.objective_up', 'Up')}` : `${name} · ${cv.t('hud.objective_returns', 'Returns in {t}', { t: fmtClock(o.respawnIn) })}`}>
-            <span class="objchip__ring" style={{ '--f': frac.toFixed(3) } as JSX.CSSProperties} />
+            <span class="objchip__ring" style={{ '--f': frac.toFixed(3) } as CSSProperties} />
             <span class="t-caption objchip__name">{name}</span>
             <span class="num objchip__t">{o.alive ? cv.t('hud.objective_up', 'Up') : fmtClock(o.respawnIn)}</span>
           </span>
@@ -105,7 +105,7 @@ export function Announcer(): JSX.Element | null {
   if (!b || !state.settings.value.access.subtitles) return null;
   return (
     <div class={`announce announce--${b.tone} ${b.major ? 'is-major' : ''}`} key={b.id} role="status" aria-live="polite" aria-label={cv.t('a11y.announcer_region', 'Match announcements')}
-      style={{ '--life': `${b.ms}ms` } as JSX.CSSProperties}>
+      style={{ '--life': `${b.ms}ms` } as CSSProperties}>
       <span class="announce__rule" aria-hidden="true" />
       <span class="t-h1 announce__title">{b.title}</span>
       {b.sub ? <span class="t-body-s announce__sub">{b.sub}</span> : null}
@@ -165,7 +165,7 @@ function WhoChip(p: { w: Who; down?: boolean }): JSX.Element {
   const f = cv.fighter(p.w.fighter);
   const color = model.ffa && p.w.rel !== 'self' && p.w.seat ? `var(--seat-${p.w.seat})` : REL_VAR[p.w.rel];
   return (
-    <span class={`who who--${p.w.rel} ${p.down ? 'is-down' : ''}`} style={{ '--c': color } as JSX.CSSProperties}>
+    <span class={`who who--${p.w.rel} ${p.down ? 'is-down' : ''}`} style={{ '--c': color } as CSSProperties}>
       {f ? <Portrait fighter={f} skin={p.w.skin} size="fill" round class="who__face" /> : p.w.team !== undefined ? <span class="who__mark"><SideGlyph team={p.w.team} size={12} /></span> : null}
       {model.ffa && p.w.seat ? <span class="who__seat"><SeatGlyph seat={p.w.seat} size={10} color={color} /></span> : null}
       {f ? <span class="who__name t-caption">{p.w.rel === 'self' ? cv.t('killfeed.you', 'You') : p.w.name}</span> : null}
@@ -175,7 +175,7 @@ function WhoChip(p: { w: Who; down?: boolean }): JSX.Element {
 function WhoDot(p: { w: Who }): JSX.Element {
   const { cv } = useApp();
   const f = cv.fighter(p.w.fighter);
-  return <span class={`whodot who--${p.w.rel}`} style={{ '--c': REL_VAR[p.w.rel] } as JSX.CSSProperties}>{f ? <Portrait fighter={f} skin={p.w.skin} size="fill" round /> : null}</span>;
+  return <span class={`whodot who--${p.w.rel}`} style={{ '--c': REL_VAR[p.w.rel] } as CSSProperties}>{f ? <Portrait fighter={f} skin={p.w.skin} size="fill" round /> : null}</span>;
 }
 
 // ── FRAY Hour Board ──────────────────────────────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ export function HourBoard(): JSX.Element {
           const out = p.placement !== undefined;
           const color = you ? 'var(--team-self)' : colours === 'simple' ? 'var(--team-enemy)' : `var(--seat-${seat})`;
           return (
-            <li class={`hrow ${you ? 'is-you' : ''} ${out ? 'is-out' : ''}`} style={{ '--c': color } as JSX.CSSProperties}>
+            <li class={`hrow ${you ? 'is-you' : ''} ${out ? 'is-out' : ''}`} style={{ '--c': color } as CSSProperties}>
               <span class="hrow__place num">{out ? p.placement : i + 1}</span>
               <span class="hrow__seat" title={`${roman(seat)}`}><SeatGlyph seat={seat} size={colours === 'stamp' && !you ? 15 : 11} color={color} keyline={!you} /></span>
               <span class="hrow__name t-caption">{you ? cv.t('hourboard.you', 'You') : p.name}</span>

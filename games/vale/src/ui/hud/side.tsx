@@ -4,7 +4,7 @@
 // refusals, first-run hints, surrender — up to 5 lines for 6 s), the recall bar and the respawn line
 // over the Dial Bar.
 
-import type { JSX } from 'preact';
+import type { CSSProperties, JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import type { PlayerView } from '../../contracts/sim.ts';
 import { useApp } from '../app_ctx.ts';
@@ -53,7 +53,7 @@ function AllyFrame(p: { p: PlayerView }): JSX.Element {
       <span class="afr__body">
         <span class="afr__name t-caption">{role ? <span class="roledot" style={{ background: role.color }} /> : null}{p.p.name}</span>
         <span class="afr__hp"><i style={{ width: `${hp * 100}%` }} /></span>
-        {res && res.model !== 'none' ? <span class="afr__res" style={{ '--res': res.color } as JSX.CSSProperties}><i style={{ width: `${rs * 100}%` }} /></span> : <span class="afr__res afr__res--none" />}
+        {res && res.model !== 'none' ? <span class="afr__res" style={{ '--res': res.color } as CSSProperties}><i style={{ width: `${rs * 100}%` }} /></span> : <span class="afr__res afr__res--none" />}
       </span>
       <span class={`afr__ult ${ultReady ? 'is-ready' : ''}`} title={ult ? cv.t('hud.slot.ult', 'Ultimate') : ''} aria-hidden="true" />
     </button>

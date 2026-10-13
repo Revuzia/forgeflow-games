@@ -5,7 +5,7 @@
 // every one a distinct silhouette, so none depends on colour. Bible: plate = structure, ring = time
 // and state, wedge = act / facing; no gears, clock hands, gems or glowing runes.
 
-import type { JSX } from 'preact';
+import type { CSSProperties, JSX } from 'preact';
 import type { ItemDefT } from '../../contracts/catalog.ts';
 import type { PingKind } from '../../contracts/sim.ts';
 import type { AbilityCore } from '../../input/index.ts';
@@ -113,7 +113,7 @@ export function ItemGlyph(p: { item: ItemDefT | undefined; src: string | null })
   const hour = itemHour(it?.tier);
   const tag = it?.tags.find((t) => ITEM_PATHS[t]) ?? 'plain';
   return (
-    <span class={`iglyph iglyph--h${hour}`} style={{ '--hour': HOUR_COLOR[hour] } as JSX.CSSProperties} aria-hidden="true">
+    <span class={`iglyph iglyph--h${hour}`} style={{ '--hour': HOUR_COLOR[hour] } as CSSProperties} aria-hidden="true">
       {p.src ? <img src={p.src} alt="" draggable={false} /> : <svg viewBox="0 0 24 24" class="iglyph__svg">{ITEM_PATHS[tag] ?? ITEM_PATHS.plain}</svg>}
       <span class="iglyph__ticks">{Array.from({ length: hour }, () => <i />)}</span>
     </span>

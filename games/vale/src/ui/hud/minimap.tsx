@@ -9,7 +9,7 @@
 // Input: left click / drag moves the camera (it unlocks; a locked camera scouts and snaps back), right
 // click moves your fighter, Alt + click (or the ping key held) pings "Look here".
 
-import type { JSX } from 'preact';
+import type { CSSProperties, JSX } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
 import type { MapDefT } from '../../contracts/catalog.ts';
 import type { EntityView } from '../../contracts/sim.ts';
@@ -147,7 +147,7 @@ export function Minimap(): JSX.Element {
   };
 
   return (
-    <section class={`mmap mmap--${mapShape}`} style={{ '--mw': bw, '--mh': bh, '--mk': mk } as JSX.CSSProperties}
+    <section class={`mmap mmap--${mapShape}`} style={{ '--mw': bw, '--mh': bh, '--mk': mk } as CSSProperties}
       aria-label={cv.t('hud.minimap', 'Minimap')} title={cv.t('hud.minimap_hint', 'Click to move the camera. Right-click to move your fighter.')}>
       <canvas ref={canvas} class="mmap__canvas" onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onContextMenu={(e) => e.preventDefault()} />
     </section>

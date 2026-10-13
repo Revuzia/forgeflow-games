@@ -4,7 +4,7 @@
 // by damage type, a factual tip line), the end-of-match banner (held over the last frame before the
 // shadow-line wipe to the post-game), and the practice tools (practice queue only).
 
-import type { JSX } from 'preact';
+import type { CSSProperties, JSX } from 'preact';
 import type { DamageLogEntry } from '../../contracts/session.ts';
 import type { PlayerView } from '../../contracts/sim.ts';
 import { useApp } from '../app_ctx.ts';
@@ -116,7 +116,7 @@ function FrayRow(p: { p: PlayerView; place: number }): JSX.Element {
   const lives = (q ? cv.rulesOf(q) : undefined)?.end.lives ?? 0;
   const color = you ? 'var(--team-self)' : state.frayColors.value === 'simple' ? 'var(--team-enemy)' : `var(--seat-${seat})`;
   return (
-    <tr class={`${you ? 'is-you' : ''} ${p.p.placement !== undefined ? 'is-dead' : ''}`} style={{ '--c': color } as JSX.CSSProperties}>
+    <tr class={`${you ? 'is-you' : ''} ${p.p.placement !== undefined ? 'is-dead' : ''}`} style={{ '--c': color } as CSSProperties}>
       <td class="num">{p.place}</td>
       <td><span class="score__seat"><SeatGlyph seat={seat} size={14} color={color} keyline={!you} /><span class="num t-caption">{roman(seat)}</span></span></td>
       <PlayerCell p={p.p} />

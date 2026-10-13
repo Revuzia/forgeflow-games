@@ -8,7 +8,7 @@
 // cooldowns; Gleam in Mono with the shop key, and recall. Down: the bar dims to 60 % and a respawn
 // ring replaces the level ring.
 
-import type { JSX } from 'preact';
+import type { CSSProperties, JSX } from 'preact';
 import { useEffect, useLayoutEffect, useRef } from 'preact/hooks';
 import type { SlotT } from '../../contracts/catalog.ts';
 import type { AbilityView, EntityView, PlayerView } from '../../contracts/sim.ts';
@@ -166,7 +166,7 @@ function AbilitySlot(p: { slot: SlotT; me: PlayerView; body: EntityView | undefi
         onPointerDown={(e) => { if (e.button === 0) { e.preventDefault(); input.press(p.slot); } }}>
         <AbilityGlyph def={def} src={cv.asset(def?.icon)} palette={f ? [f.palette.primary, f.palette.secondary] : undefined} ult={ult} spell={spell} />
         <span class="aslot__glint" ref={glint} aria-hidden="true" />
-        {onCd ? <span class="aslot__cd" style={{ '--e': elapsed.toFixed(4) } as JSX.CSSProperties} aria-hidden="true" /> : null}
+        {onCd ? <span class="aslot__cd" style={{ '--e': elapsed.toFixed(4) } as CSSProperties} aria-hidden="true" /> : null}
         {onCd ? <span class="aslot__secs num">{cdText(cd)}</span> : null}
         {silenced ? <span class="aslot__silence" aria-label={cv.t('hud.ability.silenced', 'Silenced')} /> : null}
         {recast ? <span class="aslot__recast" title={cv.t('hud.ability.recast', 'Cast again within {t}', { t: `${fmtNum(Math.ceil(av.recastWindow ?? 0))} s` })} /> : null}
@@ -215,11 +215,11 @@ function Bars(p: { me: PlayerView; body: EntityView | undefined }): JSX.Element 
         <span class="hpbar__trail" ref={trail} />
         <span class="hpbar__fill" style={{ width: `${hpPct}%` }} />
         {shield > 0 ? <span class="hpbar__shield" style={{ left: `${hpPct}%`, width: `${shPct}%` }} /> : null}
-        {ticks ? <span class="hpbar__ticks" style={{ '--t1': `${tick100}%`, '--t2': `${tick1000}%`, '--show1': tick100 * 3.9 < 4 ? '0' : '1' } as JSX.CSSProperties} /> : null}
+        {ticks ? <span class="hpbar__ticks" style={{ '--t1': `${tick100}%`, '--t2': `${tick1000}%`, '--show1': tick100 * 3.9 < 4 ? '0' : '1' } as CSSProperties} /> : null}
         <span class="hpbar__num num">{fmtInt(hp)} <span class="quiet">/ {fmtInt(maxHp)}</span></span>
       </div>
       {showRes ? (
-        <div class={`resbar resbar--${res!.model}`} style={{ '--res': res!.color } as JSX.CSSProperties} {...resTip}>
+        <div class={`resbar resbar--${res!.model}`} style={{ '--res': res!.color } as CSSProperties} {...resTip}>
           <span class="resbar__fill" style={{ width: `${resPct}%` }} />
         </div>
       ) : <div class="resbar resbar--none" />}
@@ -252,7 +252,7 @@ function ItemSlot(p: { i: number; me: PlayerView }): JSX.Element {
       onPointerUp={(e) => { if (e.button === 0 && dragFrom >= 0 && dragFrom !== p.i) client.send({ type: 'swapItems', a: dragFrom, b: p.i }); dragFrom = -1; }}
       onContextMenu={(e) => e.preventDefault()}>
       {it ? <ItemGlyph item={it} src={cv.asset(it.icon)} /> : null}
-      {cd > 0 ? <span class="aslot__cd" style={{ '--e': Math.max(0, 1 - cd / max.current).toFixed(4) } as JSX.CSSProperties} /> : null}
+      {cd > 0 ? <span class="aslot__cd" style={{ '--e': Math.max(0, 1 - cd / max.current).toFixed(4) } as CSSProperties} /> : null}
       {cd > 0 ? <span class="islot__secs num">{cdText(cd)}</span> : null}
       <span class="islot__key">{key(slot)}</span>
     </button>
