@@ -121,3 +121,4 @@ games/vale/art/**/__pycache__/
 games/vale/audio/**/__pycache__/
 games/vale/art/_cache/
 games/vale/audio/_cache/
+games/vale/tools/imagegen/raw/
