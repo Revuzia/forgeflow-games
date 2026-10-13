@@ -435,6 +435,46 @@ function approx(a, b, eps) { return Math.abs(a - b) <= (eps == null ? 1e-6 : eps
      "bots: tier 5 is the ceiling — interpolation never runs past the table");
 }
 
+// ── Bot pacing (owner decision D8, 2026-10-05) ───────────────────────────────
+// Every bot match used to end in circle 2 of 8 (264-380 s, 9-21 of 49 dead in the first minute). The fix is a data
+// table (BOT_PACE) read by bots.js plus a deliberate x1.12 stretch of the standard storm plan. The browser gate
+// _harness/new/sim_pacing.py proves the OUTCOME (median end >= 600 s, <= 12 dead in the first 60 s); these hold the
+// table's shape and the storm rules the stretch must not break.
+{
+  const P = R.BOT_PACE;
+  ok(P && typeof P === "object", "pace: the sim exports BOT_PACE");
+  const five = (a) => Array.isArray(a) && a.length === 5 && a.every((v) => v > 0);
+  const mono = (a) => a.every((v, i) => i === 0 || v >= a[i - 1]);
+  ok(five(P.noticeM) && five(P.chaseM), "pace: one notice reach and one chase reach per tier (5 rows)");
+  ok(mono(P.noticeM) && mono(P.chaseM), "pace: a sharper tier never notices or chases LESS far than a softer one");
+  ok(P.noticeM.every((v, i) => v <= 200 && v >= P.chaseM[i]), "pace: notice reach <= the 200 m perception cap and >= the chase reach (nobody chases what it cannot see)");
+  ok(P.pushM > 0 && P.pushM <= 250 && P.pushPct > 0 && P.pushPct <= 100, "pace: gunfire is answered inside the 250 m hearing range by a share of the aggressive bots");
+  ok(P.dropSepM >= 60 && P.dropSepM <= 200, "pace: landing spots are kept 60-200 m apart");
+  ok(P.rotateEdge > 0.5 && P.rotateEdge < 0.95, "pace: rotation aims just INSIDE the next ring, not at its centre or its edge");
+  ok(P.endgamePhase >= 4 && P.endgamePhase <= R.STORM_PHASES.standard.length, "pace: the endgame hunt starts in a circle that exists, from circle 4 on");
+  ok(P.earlyChutePct > 0 && P.earlyChutePct <= 60, "pace: some bots float down under an early canopy, never most of them (70 % measured worse: 4 of 9 matches reached circle 5)");
+  // the owner's 5-tier difficulty curve is untouched by this change (measured: softer rows did not help in combination)
+  const T = R.BOT_TIERS;
+  ok(T[0].reactionMs === 700 && T[0].aimErrDeg === 7.5 && T[2].reactionMs === 380 && T[2].aimErrDeg === 2.8 && T[4].reactionMs === 210 && T[4].aimErrDeg === 0.9,
+     "pace: BOT_TIERS rows are exactly the shipped difficulty curve");
+  let tiersOrdered = true;
+  for (let i = 1; i < 5; i++) if (!(T[i].aimErrDeg < T[i - 1].aimErrDeg && T[i].reactionMs < T[i - 1].reactionMs)) tiersOrdered = false;
+  ok(tiersOrdered, "pace: every tier is faster AND more accurate than the one below it");
+
+  // The stretched plan. The deliberate changes vs the 2026-08-20 plan: every wait and shrink x1.12, so the wall is only
+  // ever slower and the hunt (endgamePhase 5) lands at ~673 s instead of 600 s.
+  const OLD_SHRINK = [140, 85, 65, 55, 45, 38, 35, 40], OLD_FRAC = [0.78, 0.58, 0.42, 0.28, 0.17, 0.09, 0.04, 0.012], OLD_DPS = [1, 1, 2, 3, 5, 7, 9, 12];
+  const ph = R.STORM_PHASES.standard;
+  ok(ph.length === 8 && ph.every((p, i) => p.shrink >= OLD_SHRINK[i]), "storm: no standard phase closes FASTER than the pre-D8 plan");
+  ok(ph.every((p, i) => p.radiusFrac === OLD_FRAC[i] && p.dps === OLD_DPS[i]), "storm: the stretch left every radius and every dps alone");
+  const sp = new R.Storm({ seed: 42, mode: "standard", half: 800 });
+  ok(sp.timeline[3].end >= 660 && sp.timeline[3].end <= 700, "storm: circle 5 begins ~673 s (" + sp.timeline[3].end + " s)");
+  ok(sp.timeline[0].end > 240 && sp.totalS <= 960, "storm: the plan really is stretched (phase 1 ends " + sp.timeline[0].end + " s) and still inside 16 min (" + sp.totalS + " s)");
+  const OLD_QUICK = [[30, 35], [24, 30], [18, 26], [14, 22], [12, 28]];
+  const qk = R.STORM_PHASES.quick;
+  ok(qk.length === 5 && qk.every((p, i) => p.wait === OLD_QUICK[i][0] && p.shrink === OLD_QUICK[i][1]), "storm: quick mode's plan is untouched by D8");
+}
+
 // ── Movement basis ───────────────────────────────────────────────────────────
 // The glide derived its strafe axis inline as (cos, +sin) against a ground basis
 // of (cos, -sin): not perpendicular, so A/D under the parachute pulled the wrong

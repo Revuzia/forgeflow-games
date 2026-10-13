@@ -20,6 +20,18 @@ const { supportAt } = await import("./player.js" + V);
 
 let K = null;
 const brains = [];
+// BOT PACING TABLE (sim/royale.js BOT_PACE, owner decision D8). A sim without it
+// plays exactly as it did before the table existed: PACE_OFF is that behaviour.
+const PACE_OFF = {
+  noticeM: [200, 200, 200, 200, 200], chaseM: [1e9, 1e9, 1e9, 1e9, 1e9], pushM: 1e9, pushPct: 100,
+  dropSepM: 0, rotateEdge: 0, rotateLeadS: -1, endgamePhase: 0, earlyChutePct: 0,
+};
+let PACE = PACE_OFF;
+const paceAt = (arr, tier) => arr[Math.max(0, Math.min(arr.length - 1, (tier | 0) - 1))];
+/** Re-read the table (init() runs once per page; a match start re-reads it, so an edited table is live). A
+ *  table with a missing key falls back to PACE_OFF for that key. QUICK mode keeps PACE_OFF: it is the short, hot
+ *  format and its 5-circle storm was never the problem. */
+function loadPace(W) { PACE = K && K.BOT_PACE && !(W && W.mode === "quick") ? Object.assign({}, PACE_OFF, K.BOT_PACE) : PACE_OFF; }
 // Math.hypot allocates in V8 (it is a rest-args builtin): 60 KB/frame of garbage
 // was measured on the brain + bullet paths. Two-argument form, no allocation.
 const hyp = (x, z) => Math.sqrt(x * x + z * z);
@@ -45,6 +57,7 @@ const ROOKIE_TIER_MIX = [18, 16, 10, 4, 1];   // eslint-disable-line no-unused-v
 
 export function init(W) {
   K = W.SIM;
+  loadPace(W);
   brains.length = 0;
   // kill taunts: a bot that just won a fight (and sees no new threat)
   // sometimes dances on the body — reads VERY human
@@ -122,6 +135,7 @@ export function debugBrains() { return brains; }
  * Reading it once here makes all three correct by construction.
  */
 export function setLobbySkill(W) {
+  loadPace(W);
   W.matchWasNet = !!W.net;          // captured BEFORE a takeover nulls W.net
   W.matchSkill = readSkill(W);
   // Quick mode is the short, hot format — nudge it up a little.
@@ -208,6 +222,12 @@ export function attachBrain(W, actor, nBots) {
       threatFor: undefined, threatT: -99, threatAt: null,
       coverState: undefined, coverPt: null, coverGiveUp: 0, coverUntil: 0, coverFailUntil: 0, coverReflexUntil: 0,
     },
+    // a stable 0-99 draw per SLOT (not the rng stream: adding a draw there would reshuffle every
+    // other decision of every bot); gates how many aggressive bots answer gunfire (BOT_PACE.pushPct)
+    pushRoll: (slot * 37 + 11) % 100,
+    // the same kind of stable per-slot draw for BOT_PACE.earlyChutePct; earlyChute is set by assignDrops
+    chuteRoll: (slot * 53 + 29) % 100,
+    earlyChute: false,
   };
   actor.brain = brain;
   brains.push(brain);
@@ -299,13 +319,53 @@ export function assignDrops(W) {
       else (byPoi[lp.poi] || (byPoi[lp.poi] = [])).push(s);
     }
   }
+  // BOT_PACE.dropSepM: a landing spot must be at least this far from every drop already assigned.
+  // Measured (killdiag, 4 storm-on matches): the first-60-s deaths are landing-zone brawls - the victim
+  // dies 1-36 s after touching down, 5-60 m from the man who kills it - so the fix is who lands beside
+  // whom, not how well they shoot. 0 = off: the claims below then draw exactly the numbers they always did.
+  const sep = PACE.dropSepM || 0, sep2 = sep * sep;
+  const placed = [];
+  const clear = (x, z) => {
+    for (let i = 0; i < placed.length; i++) { const dx = placed[i].x - x, dz = placed[i].z - z; if (dx * dx + dz * dz < sep2) return false; }
+    return true;
+  };
   const claim = (list) => {
     if (!list || !list.length) return null;
     let k = Math.floor(rng() * list.length);
     for (let n = 0; n < list.length; n++, k = (k + 1) % list.length) {
-      if (!list[k].taken) { list[k].taken = true; return list[k]; }
+      if (!list[k].taken && (!sep || clear(list[k].x, list[k].z))) { list[k].taken = true; return list[k]; }
     }
     return null;
+  };
+  const poiLists = [];
+  for (const pp of pois) if (byPoi[pp.id]) poiLists.push(byPoi[pp.id]);
+  const claimAnyPoi = () => {
+    if (!poiLists.length) return null;
+    const k0 = Math.floor(rng() * poiLists.length);
+    for (let n = 0; n < poiLists.length; n++) { const s = claim(poiLists[(k0 + n) % poiLists.length]); if (s) return s; }
+    return null;
+  };
+  // Nothing clears the separation (a small island fills up: 13 of 49 bots still landed within 50 m of another
+  // at 100 m on isla_viva): take the untaken gun spot FARTHEST from every landing already placed - best candidate,
+  // no rng draw - instead of dropping the rule altogether.
+  const nearestPlaced = (x, z) => {
+    let m = 1e18;
+    for (let i = 0; i < placed.length; i++) { const dx = placed[i].x - x, dz = placed[i].z - z, d2 = dx * dx + dz * dz; if (d2 < m) m = d2; }
+    return m;
+  };
+  const allLists = [spots.wild].concat(poiLists);
+  const claimFarthest = () => {
+    let best = null, bd = -1;
+    for (let l = 0; l < allLists.length; l++) {
+      const list = allLists[l];
+      for (let i = 0; i < list.length; i++) {
+        if (list[i].taken) continue;
+        const d = nearestPlaced(list[i].x, list[i].z);
+        if (d > bd) { bd = d; best = list[i]; }
+      }
+    }
+    if (best) best.taken = true;
+    return best;
   };
   for (const b of brains) {
     const hot = b.actor.personality === "rusher" || b.actor.personality === "rotator";
@@ -322,13 +382,29 @@ export function assignDrops(W) {
     if (idx >= 0) {
       used[idx]++;
       p = pois[idx];
-      const s = claim(byPoi[p.id]);
+      let s = claim(byPoi[p.id]);
+      if (!s && sep) s = claim(spots.wild) || claimAnyPoi() || claimFarthest();    // this POI has no spot left that clears the others: land elsewhere
       b.bb.dropTarget = s ? { x: s.x, z: s.z } : { x: p.x + (rng() - 0.5) * p.r, z: p.z + (rng() - 0.5) * p.r };
     } else {
-      const s = claim(spots.wild);
+      let s = claim(spots.wild);
+      if (!s && sep) s = claimAnyPoi() || claimFarthest();
       if (s) b.bb.dropTarget = { x: s.x, z: s.z };
-      else { const gp = W.map.randomGroundPos(rng); b.bb.dropTarget = { x: gp.x, z: gp.z }; }
+      else {
+        let gp = W.map.randomGroundPos(rng);
+        if (sep) {       // best of 24 random ground points: the one farthest from every landing placed so far
+          let bd = nearestPlaced(gp.x, gp.z);
+          for (let tries = 0; tries < 23 && bd < sep2; tries++) { const g2 = W.map.randomGroundPos(rng), d2 = nearestPlaced(g2.x, g2.z); if (d2 > bd) { bd = d2; gp = g2; } }
+        }
+        b.bb.dropTarget = { x: gp.x, z: gp.z };
+      }
     }
+    placed.push(b.bb.dropTarget);
+    // BOT_PACE.earlyChutePct: this share of the bots that are not rushers opens the canopy at the jump and floats
+    // down (~45 s at the canopy's 5.5 m/s instead of ~25 s of freefall + canopy). All 49 bots used to touch down
+    // inside the same 11 s (22-33 s), so every landing zone was live at once; a real bus drop spreads that over a
+    // minute. Measured (the same 9 storm-on matches, 0 vs 40 %): first-60-s deaths max 12 -> 9 (median 5 -> 2),
+    // median end 707 -> 701 s, circle 5 reached 7 -> 8 of 9; floating bots shot in the air: 1 of 37 first-minute deaths.
+    b.earlyChute = PACE.earlyChutePct > 0 && b.actor.personality !== "rusher" && b.chuteRoll < PACE.earlyChutePct;
     // reposition the glide start near the target (bus-jump timing): from
     // 240m up at ~9m/s fall and 13m/s glide, ~150m of drift is comfortable
     const a = b.actor;
@@ -379,7 +455,10 @@ function think(W, b) {
   const outsideNext = st && st.nextRadius != null &&
     hyp(a.pos.x - (st.nextCenter ? st.nextCenter.x : st.center.x), a.pos.z - (st.nextCenter ? st.nextCenter.z : st.center.z)) > st.nextRadius * 0.9;
   const alive = W.match.aliveCount();
-  const endgame = alive <= 10;
+  // BOT_PACE.endgamePhase: "endgame" (<= 10 alive: campers stop camping, everyone hunts, +20 to ENGAGE) only counts
+  // once the storm has reached this circle. With the first-minutes brawls gone, ten left alive happens in circle 2 and
+  // the hunt then ends the match in ~100 s, long before the storm does.
+  const endgame = alive <= 10 && (!st || st.phase >= PACE.endgamePhase);
 
   // ── IN-MATCH DIFFICULTY RAMP ─────────────────────────────────────────────
   // Survivors get sharper as the lobby thins, so the last few opponents are the
@@ -507,12 +586,16 @@ function think(W, b) {
     const needS = overM / 8 + 6;                                   // sprint ≈8m/s effective + margin
     const timeLeft = st.phaseState === "closing" ? st.tToNext * 0.5 : st.tToNext;
     rotScore = timeLeft < needS ? 95 : timeLeft < needS * 2 ? 70 : 40;
+    // BOT_PACE.rotateLeadS: the leisurely "40" rotation starts only this many seconds before the
+    // "70" one, instead of at second 0 - every bot outside the next ring used to start walking to
+    // the centre the moment it had a gun, so the whole lobby converged inside the first two minutes.
+    if (rotScore === 40 && PACE.rotateLeadS >= 0 && timeLeft > needS * 2 + PACE.rotateLeadS) rotScore = 0;
   }
   s.ROTATE = rotScore;
   s.CAMP = (a.personality === "camper" || a.personality === "sniper") && !outsideNext && !bb.target && !endgame ? 34 : 0;
   // PUSH toward gunfire — but not into it at 30 EHP: a hurt bot that pushes a
   // fight it only heard is feeding it. Healthy aggressors still go.
-  s.PUSH = bb.heard && W.t - bb.heard.t < 6 && (a.personality === "rusher" || a.personality === "rotator" || a.personality === "flanker") && !endgame && myEhp >= 90 ? 48 : 0;
+  s.PUSH = bb.heard && W.t - bb.heard.t < 6 && (a.personality === "rusher" || a.personality === "rotator" || a.personality === "flanker") && !endgame && myEhp >= 90 && b.pushRoll < PACE.pushPct && bb.heard.d < PACE.pushM ? 48 : 0;
   // a landed supply drop is worth crossing the map for, never worth dying for:
   // sits above LOOT/WANDER, below ENGAGE (80-88) and a pressing ROTATE (95).
   // The 0.12/m falloff is what stops a bot 200m out abandoning what it is doing
@@ -567,12 +650,16 @@ function perceive(W, b) {
   // scan for enemies (vision cone + LOS) — nearest wins; sticky to current
   const eye = eyePos(a, _eye_perceive);
   let best = null, bestD = 1e9;
+  const noticeM = paceAt(PACE.noticeM, a.tier || 3);
   for (const t of W.actors) {
     if (t === a || !t.alive) continue;
     if (bb.avoidId === t.id && W.t < (bb.avoidUntil || 0)) continue;   // fatigue cooldown
     const dx = t.pos.x - a.pos.x, dz = t.pos.z - a.pos.z;
     const d = hyp(dx, dz);
     if (d > 200) continue;
+    // A bot notices a stranger only inside its tier's reach (BOT_PACE.noticeM) unless it is already fighting
+    // him or he just shot it. Distance was the one thing every tier saw identically: 200 m for all.
+    if (d > noticeM && bb.target !== t.id && !(a.lastAttacker === t.id && W.t - (a.lastDamageT || -99) < 4)) continue;
     // vision: wide ~160° cone; anyone within 15m registers regardless of
     // facing (you notice someone sprinting past you); heard shooters = 360°
     const angTo = Math.atan2(dx, dz);
@@ -638,9 +725,20 @@ function onEnter(W, b, state) {
     const st = W.stormCtl.storm.stateAt(W.t);
     const cx = st.nextCenter ? st.nextCenter.x : st.center.x;
     const cz = st.nextCenter ? st.nextCenter.z : st.center.z;
-    const rr = (st.nextRadius != null ? st.nextRadius : st.radius) * (0.25 + rng() * 0.5);
+    const nr = st.nextRadius != null ? st.nextRadius : st.radius;
+    const rr = nr * (0.25 + rng() * 0.5);
     const ang = rng() * Math.PI * 2;
     bb.moveTo = { x: cx + Math.cos(ang) * rr, z: cz + Math.sin(ang) * rr };
+    // BOT_PACE.rotateEdge: play the EDGE. Aim for the nearest point just inside the next ring, on
+    // the bot's own bearing from its centre, instead of a random point in its inner 25-75 %. Every
+    // bot used to walk to the middle, so the whole lobby converged on one spot ~100 s in.
+    if (PACE.rotateEdge > 0) {
+      const dx = a.pos.x - cx, dz = a.pos.z - cz, d = hyp(dx, dz);
+      if (d > 1e-3) {
+        const f = PACE.rotateEdge + (rng() - 0.5) * 0.16;
+        bb.moveTo.x = cx + dx / d * nr * f; bb.moveTo.z = cz + dz / d * nr * f;
+      }
+    }
   } else if (state === "CAMP") {
     // camp near zone edge / high ground
     const st = W.stormCtl.storm.stateAt(W.t);
@@ -859,6 +957,12 @@ function act(W, b, dt) {
     inp.mz = 1;
     const d = hyp(t.x - a.pos.x, t.z - a.pos.z);
     inp.sprint = d < 60; // dive
+    if (b.earlyChute) {
+      // open the canopy once, at the jump (glideStep: jump toggles it, so only while it is shut and never
+      // toggled), then hold over the spot under it instead of circling past it at 8.5 m/s
+      if (!a.chute && !a.chuteToggled) inp.jump = true;
+      if (a.chute && d < 12) inp.mz = 0;
+    }
     return;
   }
 
@@ -2131,7 +2235,14 @@ function actEngage(W, b, dt) {
     steerYaw(a, Math.atan2(-(tp.x - a.pos.x), -(tp.z - a.pos.z)), dt, 10);
     return;
   }
-  if (dist > prefer * 1.5) { inp.mz = 1; inp.sprint = dist > prefer * 3; }
+  // BOT_PACE.chaseM: nobody walks 100 m across open ground at a man who has not touched him. Past the tier's
+  // chase reach an UN-PROVOKED bot holds its ground and trades fire at range (long, low-hit duels) instead of
+  // closing; once he is hit (4 s), or the lobby is nearly down, he closes as before. A short gun out of range
+  // HOLDS too and keeps watching him (the fight-fatigue breaker above lets him go after 14 s). Dropping that
+  // target for 6 s instead was tried and measured worse: the 6-s avoid made the bot blind to exactly that man,
+  // who then walked up on it - isla_viva seed 1 first-minute deaths 8 -> 15, stuck 0.1 % -> 1.7 % (SIM lane, wave 4).
+  const chaseOk = dist <= paceAt(PACE.chaseM, a.tier || 3) || W.t - a.lastDamageT < 4 || W.match.aliveCount() <= 6;
+  if (dist > prefer * 1.5 && chaseOk) { inp.mz = 1; inp.sprint = dist > prefer * 3; }
   else if (dist < prefer * 0.5) inp.mz = -0.7;
   inp.mx = bb.strafeDir * (dist < 50 ? 1 : a.personality === "flanker" ? 0.8 : 0.4);
   if (a.onGround && b.actor.tier >= 3 && b.rng() < dt * 0.35) inp.jump = true;

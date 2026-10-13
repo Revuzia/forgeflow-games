@@ -290,21 +290,28 @@
     // 120 s before the first circle is even drawn. Ours ran 60 s + 80 s — the
     // first wall started moving barely 20 s after a player finished landing.
     // Early phases are now long and gentle, late phases stay tight.
+    // STRETCHED x1.12 2026-10-05 (owner decision D8: every bot match ended in circle 2 of 8, so the late
+    // circles never played). Phase ends were 240/390/505/600/675/735/780/820 s; now 269/437/566/673/757/825/875/920 s (worst closing edge 2.5 m/s over 40 seeds; sprint is 8).
+    // Every wait and shrink grew by the same 12 %, so the wall is only ever SLOWER (never faster than a player), the
+    // radii, dps and the per-phase shape are untouched, and the total stays inside the 13-16 min the selftest holds.
+    // A table-only stretch is NOT what lengthens the match (measured: x1.25 alone moved the median end from 326 s to
+    // 417 s; the bots' own pacing, BOT_PACE below, does the rest) - what it buys is that "the hunt starts at circle 5"
+    // (BOT_PACE.endgamePhase) lands at 673 s instead of 600 s.
     standard: [
-      { wait: 100, shrink: 140, radiusFrac: 0.78,  dps: 1 },
-      { wait:  65, shrink:  85, radiusFrac: 0.58,  dps: 1 },
-      { wait:  50, shrink:  65, radiusFrac: 0.42,  dps: 2 },
-      { wait:  40, shrink:  55, radiusFrac: 0.28,  dps: 3 },
-      { wait:  30, shrink:  45, radiusFrac: 0.17,  dps: 5 },
-      { wait:  22, shrink:  38, radiusFrac: 0.09,  dps: 7 },
+      { wait: 112, shrink: 157, radiusFrac: 0.78,  dps: 1 },
+      { wait:  73, shrink:  95, radiusFrac: 0.58,  dps: 1 },
+      { wait:  56, shrink:  73, radiusFrac: 0.42,  dps: 2 },
+      { wait:  45, shrink:  62, radiusFrac: 0.28,  dps: 3 },
+      { wait:  34, shrink:  50, radiusFrac: 0.17,  dps: 5 },
+      { wait:  25, shrink:  43, radiusFrac: 0.09,  dps: 7 },
       // Late phases trade WAIT for SHRINK, same per-phase totals (60s / 65s):
       // Fortnite's circles 7-9 have zero wait — the endgame storm never stops
       // moving, which is what makes final circles frantic instead of campy.
       // Ours idled 25s then 20s at exactly the moment the genre goes continuous.
-      { wait: 10, shrink: 35, radiusFrac: 0.04,  dps: 9 },
+      { wait: 11, shrink: 39, radiusFrac: 0.04,  dps: 9 },
       // final circle HOLDS at ~10m — closing to zero storm-killed every
       // survivor simultaneously and crowned a corpse; someone must WIN the fight
-      { wait: 0, shrink: 40, radiusFrac: 0.012, dps: 12 },
+      { wait: 0, shrink: 45, radiusFrac: 0.012, dps: 12 },
     ],
     quick: [
       { wait: 30, shrink: 35, radiusFrac: 0.28, dps: 2 },
@@ -405,6 +412,36 @@
   // Back-compat: the shipped selftest asserts both of these sum to 49.
   var BOT_TIER_MIX = { standard: BOT_TIER_BANDS[2], quick: skillMix(0.65) };
   var BOT_PERSONALITIES = ["rusher", "flanker", "camper", "loot_goblin", "rotator", "sniper"];
+
+  // ── BOT PACING TABLE (owner decision D8, 2026-10-05) ───────────────────────
+  // Target: a bot match whose MEDIAN end is >= 600 s with at most 12 of 49 dead in the first 60 s, so the late circles
+  // are played. Measured before (storm on, 6 runs, isla_viva 1 and 7, ashgrid 11 and 12, deepwood 13 and 23): ends
+  // 264-380 s (median 326), 9-21 dead in the first 60 s, every match over in circle 2 of 8, and ZERO storm kills - all 49
+  // deaths were bot-vs-bot. Table-only fixes were measured and fall short: softening tiers 1-3 (aim 9/6/4.2 deg,
+  // reaction 900/700/520 ms) +12 % (367 s), a x1.25 storm +28 % (417 s). What does it:
+  //  * landing proximity (killdiag: every first-minute death is 1-36 s after touchdown, 5-60 m from the killer, mostly
+  //    by a tier-4/5 AR): dropSepM keeps assigned landing spots this far apart;
+  //  * the chase (kills sit at the 30-45 m a bot closes to, wherever it first noticed the target): chaseM, noticeM and
+  //    pushM cap how far an UN-PROVOKED bot walks at a stranger by tier - once it is shot at (4 s) it fights as before;
+  //  * convergence (everyone outside the next ring walked to its centre from second 0): rotateEdge / rotateLeadS;
+  //  * the end (<= 10 alive switches the whole lobby to HUNT ~100 s before the storm would): endgamePhase;
+  //  * the touchdown (all 49 bots landed inside the same 11 s, so every landing zone was live at once): earlyChutePct.
+  //    Measured on 9 storm-on matches (isla_viva 1/7/3, ashgrid 11/12/5, deepwood 13/23/9): median end 701 s, first-60-s
+  //    deaths max 9 (median 2), circle 5 reached in 8 of 9. A shorter notice reach just after touchdown was tried and is
+  //    WORSE (23-25 dead in the first minute on isla_viva): bots that see each other at range trade low-hit shots, bots
+  //    that first meet at 30 m kill each other.
+  // Tier rows BOT_TIERS are NOT touched here: the 5-tier difficulty curve is the owner's, and in combination the softer
+  // rows measured no better (444 s vs 477 s).  bots.js reads this table through feature detection (a sim without it
+  // plays as before; QUICK mode ignores it).  All lengths are metres, tiers index 1..5.
+  var BOT_PACE = {
+    noticeM:  [70, 90, 110, 140, 170],    // how far a bot notices a stranger who has not shot it (was 200 for every tier)
+    chaseM:   [45, 55, 65, 80, 100],      // how far it will WALK at one it has not been hit by (was unlimited)
+    pushM:    120, pushPct: 50,           // gunfire answered inside this range, by this share of the aggressive personalities (was 250 m, 100 %)
+    dropSepM: 100,                        // landing spots this far apart (was: up to a dozen bots per POI)
+    rotateEdge: 0.8, rotateLeadS: 0,      // rotate to 0.8 x the next ring's radius on the bot's own bearing (was a random point inside 25-75 %); no 40-score rotation before the 70 one
+    endgamePhase: 5,                      // "endgame" (<= 10 alive: HUNT, +20 ENGAGE, no camping) only from this circle on (was: always)
+    earlyChutePct: 40,                    // this share of the non-rushers opens the canopy at the jump: touchdowns spread 22-49 s (was all 49 inside 22-33 s)
+  };
 
   var BOT_NAMES = [
     "Zephyx", "NoScopeNate", "CrackedTina", "BushWookie7", "DriftKing", "PixelPete", "QuietStorm",
@@ -843,7 +880,7 @@
     segmentColliders: segmentColliders,
     STORM_PHASES: STORM_PHASES, MODE: MODE, LOOT_WEIGHTS: LOOT_WEIGHTS,
     BOT_TIERS: BOT_TIERS, BOT_TIER_MIX: BOT_TIER_MIX, BOT_PERSONALITIES: BOT_PERSONALITIES, BOT_NAMES: BOT_NAMES,
-    BOT_TIER_BANDS: BOT_TIER_BANDS, skillMix: skillMix, mixRating: mixRating, interpTierK: interpTierK,
+    BOT_TIER_BANDS: BOT_TIER_BANDS, skillMix: skillMix, mixRating: mixRating, interpTierK: interpTierK, BOT_PACE: BOT_PACE,
     clamp: clamp,
     Storm: Storm, Match: Match,
     hitDamage: hitDamage, applyDamage: applyDamage, splashScale: splashScale,
