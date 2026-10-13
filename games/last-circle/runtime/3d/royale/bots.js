@@ -1339,9 +1339,10 @@ const _hd = { x: 0, z: 0 };       // headingBlocked's heading (a call with doubl
  *  current feet, so a railing at a ledge edge still counts - exactly wallAhead's rule: the floor is the highest top within step
  *  reach of the feet (player.js supportIn: terrain always counts; a ramp's slab with the allowance a half-metre probe step
  *  needs on a steep one), and a wall is a box (0.3 m margin) whose span meets the band from the knee to the head there.
- *  Ramps are floor, never a wall, here and in wallAhead: the steering must not refuse a heading the planner's own (lenient)
- *  route takes under a stair the Wave-4 mover still lets a bot walk under, and it is the planner that keeps strict routes off
- *  them. Returns the blocking collider or null. Everything inline: this runs for every fighting bot every frame. */
+ *  Ramps are floor, never a wall, in THIS wall test and in wallAhead (a climb from the low edge must stay open); their sides and
+ *  underside are refused by the second half, rampLegBlocked, which asks the mover's own rule (the heal pocket fix: a heading
+ *  into a stair's side read free here while player.js blocked it). Returns the blocking collider or null. Everything inline:
+ *  this runs for every fighting bot every frame. */
 function headingBlocked(W, list, a) {
   const px = a.pos.x + _hd.x * WALL_LOOK, pz = a.pos.z + _hd.z * WALL_LOOK, y0 = a.pos.y;
   let s = W.map.heightAt(px, pz);
@@ -1356,6 +1357,57 @@ function headingBlocked(W, list, a) {
     const c = list[i];
     if (c.dead || c.kind === "ramp" || px < c.minX - 0.3 || px > c.maxX + 0.3 || pz < c.minZ - 0.3 || pz > c.maxZ + 0.3) continue;
     if (c.minY < fy + 2.0 && c.maxY > fy + 0.55) return c;
+  }
+  return rampLegBlocked(W, list, a);
+}
+
+/** (heal pocket fix) The RAMP half of headingBlocked: does walking WALL_LOOK m along _hd run into a ramp's SIDE or UNDERSIDE?
+ *  The wall test above takes every ramp as floor (right for a climb, and a ramp's slab within a metre of the feet is "floor"
+ *  there), so a heading INTO a stair's side read free while player.js blockedIn refuses it (C-RAMP: the sim's rampBlocks): a
+ *  healer tucked beside the isla_viva seed 7 tower stair re-picked that heading and ground against the plank (pocket_probe: 0
+ *  of 86 side placements got out on the Wave-5 build). This marches the leg the way the mover walks it, in RAMP_STEP m steps:
+ *  the floor under each step is player.js supportIn (terrain, or the highest top within STEP_UP of the feet so far; a ramp's
+ *  slab included, so a climb from the low edge keeps its floor on the slab and is never blocked), and each ramp is asked the
+ *  sim's own rampBlocks at that floor, with blockedIn's "already held" rule: a step that does not go deeper into a zone the
+ *  body is ALREADY in is allowed (a bot beside a stair may walk along it, or away). The same rule the standing-point probes
+ *  use, applied along the heading. Returns the blocking ramp or null. Cheap exit when no ramp is near the leg. */
+const RAMP_STEP = 0.15;                  // march step (the mover moves < 0.1 m a tick; 0.15 m reads a stair's side the same)
+function rampLegBlocked(W, list, a) {
+  const ax = a.pos.x, az = a.pos.z, ex = ax + _hd.x * WALL_LOOK, ez = az + _hd.z * WALL_LOOK;
+  const rr = K.PLAYERK.radius, hh = K.PLAYERK.height;
+  const x0 = (ax < ex ? ax : ex) - rr - 0.3, x1 = (ax < ex ? ex : ax) + rr + 0.3, z0 = (az < ez ? az : ez) - rr - 0.3, z1 = (az < ez ? ez : az) + rr + 0.3;
+  let near = false;
+  for (let i = 0; i < list.length; i++) {
+    const c = list[i];
+    if (c.kind === "ramp" && !c.dead && c.maxX >= x0 && c.minX <= x1 && c.maxZ >= z0 && c.minZ <= z1) { near = true; break; }
+  }
+  if (!near) return null;
+  const n = Math.ceil(WALL_LOOK / RAMP_STEP);
+  let y = a.pos.y, ox = ax, oz = az;
+  for (let k = 1; k <= n; k++) {
+    const x = ax + (ex - ax) * k / n, z = az + (ez - az) * k / n;
+    // the floor under this step: player.js supportIn over the held list
+    let s = W.map.heightAt(x, z);
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      if (c.dead || x < c.minX - 0.3 || x > c.maxX + 0.3 || z < c.minZ - 0.3 || z > c.maxZ + 0.3) continue;
+      const top = c.kind === "ramp" ? rampTopAt(c, x, z) : c.maxY;
+      if (top <= y + NAV_STEP_UP && top > s) s = top;
+    }
+    const yd = s > y ? s : y;
+    for (let i = 0; i < list.length; i++) {
+      const c = list[i];
+      if (c.kind !== "ramp" || c.dead) continue;
+      if (!K.rampBlocks(c, x, z, yd, hh, rr, NAV_STEP_UP)) continue;
+      if (K.rampBlocks(c, ox, oz, y, hh, rr, NAV_STEP_UP)) {
+        // already inside the zone: a step that does not go closer to the footprint is allowed (player.js blockedIn)
+        const dx1 = x - (x < c.minX ? c.minX : x > c.maxX ? c.maxX : x), dz1 = z - (z < c.minZ ? c.minZ : z > c.maxZ ? c.maxZ : z);
+        const dx0 = ox - (ox < c.minX ? c.minX : ox > c.maxX ? c.maxX : ox), dz0 = oz - (oz < c.minZ ? c.minZ : oz > c.maxZ ? c.maxZ : oz);
+        if (dx1 * dx1 + dz1 * dz1 >= dx0 * dx0 + dz0 * dz0) continue;
+      }
+      return c;
+    }
+    y = s; ox = x; oz = z;
   }
   return null;
 }
