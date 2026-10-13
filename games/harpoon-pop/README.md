@@ -5,7 +5,11 @@ One `index.html`, no build step, no asset files. Open it directly or from any st
 
 ## Play
 - **Move:** ← → or A / D. **Fire:** Space, ↑ or Z. **Pause:** P. **Sound / music:** M / N.
-- **2-player co-op:** on the title screen press ← → to pick **2 PLAYERS** (or press 2). P1 uses ← → and Space / ↑ / Z. P2 uses A / D and W. Each diver has their own lives, weapon and shield. The score is shared, with a per-player breakdown on the stage-clear screen. If one diver goes down, the stage continues and they return next stage. The stage restarts only when both are down. P2 is the silver-helmeted diver with the pink foot glow.
+- **Online co-op (two devices):** on the title screen pick **ONLINE CO-OP**. **Quick Match** pairs you with anyone who is searching. **Create Room** shows a 4-letter code for a friend to type into **Join**. The host's browser runs the game. The friend's device predicts its own diver for instant controls and mirrors everything else.
+  - Lobby, quick match and room codes use the shared FFG Realtime transport (Supabase Broadcast + Presence, channel `ffg:harpoon-pop:<CODE>`, lobby `ffg-lobby:harpoon-pop`).
+  - Gameplay data goes peer-to-peer over a WebRTC data channel (24 snapshots/s plus effect events), so it costs no shared relay quota. If a direct link can't be made within 7 s, it falls back to the Realtime relay at 10 snapshots/s. `?p2p=0` forces the relay.
+  - If a partner leaves, the host keeps playing solo. If the host leaves, the guest returns to the title. Pause is disabled online.
+- **Local 2P (one keyboard):** pick **LOCAL 2P**. P1 uses ← → and Space / ↑ / Z. P2 uses A / D and W. Each diver has their own lives, weapon and shield, and the score is shared with a per-player breakdown. If one diver goes down, the stage continues and they return next stage. The stage restarts only when both are down.
 - Touch devices get on-screen ◀ ▶ FIRE buttons.
 
 ## What's in it
@@ -17,10 +21,12 @@ One `index.html`, no build step, no asset files. Open it directly or from any st
 - Juice: hitstop, trauma screen shake, bloom, chromatic aberration, burst shells, dynamic pop lights, GPU particles, squash and stretch, fireworks, and music that is muffled during bullet-time.
 
 ## Code map (`index.html`)
-`§0` config tables (sizes, items, levels: add stages/power-ups here) · `§2` audio · `§3` input · `§4` state/levels · `§5` player + weapons · `§6` bubbles · `§6b` enemies · `§7` rules · `§8` power-ups · `§9` juice · `§10` 2D HUD/menus · `§11` 3D scene · `§12` loop.
+`§0` config tables (sizes, items, levels: add stages/power-ups here) · `§2` audio · `§3` input · `§4` state/levels · `§5` player + weapons · `§6` bubbles · `§6b` enemies · `§7` rules · `§8` power-ups · `§9` juice · `§10` 2D HUD/menus · `§11` 3D scene · `§12` loop · `§13` online co-op (lobby, P2P + relay netcode).
 Gameplay runs in a 960×540 2D space; the renderer only reads `game` state, so logic and visuals stay independent.
 
 ## Tests
+`python tests/online_test.py <this folder or the live URL> <out dir>` runs two separate browsers against the real Realtime service: create/join by code over the direct link, the relay fallback, quick match, input and state sync both ways, and disconnects.
+
 `python tests/playtest.py <this folder> <out dir>` drives the real game in headless Chromium on the GPU. It checks input, every power-up, enemies, continue/game-over, audio output level, all stages and the co-op rules, and writes screenshots. Set `HP_GL=swiftshader` to force software GL (it can't handle very long sessions). Add `--quick` to run 3 stages instead of 15.
 
 ## Originality

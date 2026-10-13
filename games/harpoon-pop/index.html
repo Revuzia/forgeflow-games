@@ -34,6 +34,23 @@ body.touch #stage { max-width: calc((100vh - 150px) * 16 / 9); }
 #stage canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; outline: none; touch-action: none; }
 #hud:focus-visible { box-shadow: inset 0 0 0 2px var(--cyan); }
 #boot { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--display); color: var(--muted); font-size: clamp(14px, 2.4vw, 22px); text-align: center; padding: 16px; }
+/* online lobby (DOM so it works with keyboard, mouse and touch) */
+#lobby { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 16px; background: rgba(11, 7, 22, 0.78); }
+.lb-card { width: min(440px, 100%); display: grid; gap: 12px; padding: 22px; text-align: center; background: var(--panel); border: 2px solid #3a2c6b; border-radius: 16px; box-shadow: 0 20px 60px -20px #000; }
+.lb-card h2 { margin: 0; font-family: var(--display); font-weight: 400; font-size: clamp(20px, 4vw, 28px); color: var(--cyan); }
+.lb-sub { margin: 0; color: var(--muted); font-size: 14px; }
+.lb-row { display: flex; gap: 10px; }
+.lb-row > * { flex: 1; min-width: 0; }
+.lb-card button { font-family: var(--display); font-size: 15px; color: var(--fg); background: #241a44; border: 2px solid #4a3a85; border-radius: 10px; padding: 12px 10px; cursor: pointer; }
+.lb-card button:hover, .lb-card button:focus-visible { border-color: var(--cyan); outline: none; }
+.lb-card button.primary { border-color: var(--accent); background: #3a1530; }
+.lb-card button:disabled, #lbCode:disabled { opacity: 0.5; cursor: default; }
+#lbCode { font-family: var(--display); font-size: 18px; letter-spacing: 0.3em; text-align: center; text-transform: uppercase; color: var(--fg); background: #0f0a20; border: 2px solid #4a3a85; border-radius: 10px; padding: 10px; }
+#lbCode:focus-visible { outline: none; border-color: var(--cyan); }
+.lb-room { font-family: var(--display); font-size: 44px; letter-spacing: 0.25em; color: var(--accent); }
+.lb-status { margin: 0; min-height: 2.8em; font-size: 14px; color: var(--fg); }
+.lb-status.err { color: #ff8a9a; }
+.lb-card .lb-back { background: transparent; border-color: transparent; color: var(--muted); }
 #touch { display: none; width: 100%; max-width: 640px; gap: 12px; justify-content: space-between; user-select: none; -webkit-user-select: none; }
 body.touch #touch { display: flex; }
 #touch .pad { display: flex; gap: 12px; }
@@ -50,6 +67,17 @@ body.touch #touch { display: flex; }
   <div id="boot">LOADING 3D ENGINE…</div>
   <canvas id="view" aria-hidden="true"></canvas>
   <canvas id="hud" tabindex="0" aria-label="Harpoon Pop game screen. Arrow keys to move, Space to fire."></canvas>
+</div>
+<div id="lobby" hidden>
+  <div class="lb-card" role="dialog" aria-labelledby="lbTitle">
+    <h2 id="lbTitle">ONLINE CO-OP</h2>
+    <p class="lb-sub">Team up with a friend on another device.</p>
+    <div class="lb-row"><button id="lbQuick" class="primary" type="button">QUICK MATCH</button><button id="lbCreate" type="button">CREATE ROOM</button></div>
+    <form id="lbJoin" class="lb-row"><input id="lbCode" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false" aria-label="Room code"><button id="lbJoinBtn" type="submit">JOIN</button></form>
+    <div id="lbRoom" class="lb-room" hidden></div>
+    <p id="lbStatus" class="lb-status" role="status" aria-live="polite"></p>
+    <button id="lbBack" class="lb-back" type="button">BACK</button>
+  </div>
 </div>
 <div id="touch" aria-hidden="true">
   <div class="pad"><button id="tLeft">◀</button><button id="tRight">▶</button></div>
@@ -81,6 +109,7 @@ body.touch #touch { display: flex; }
      §8  Power-ups
      §9  Juice: particles, popups, shake, hitstop, slow-mo
      §10 2D layer: backdrop painter, HUD, text, menus
+     §13 Online co-op: lobby, quick match, rooms, P2P + relay netcode (after §11)
      §11 3D layer: Three.js scene, procedural hero + drone rigs, particles, post-processing
      §12 Main loop & boot
    Coordinates: all gameplay runs in a 960×540 "game space" (y down).
@@ -463,7 +492,9 @@ const Sound = (() => {
     get muted() { return muted; }, get musicOn() { return musicOn; },
   };
 })();
-const sfx = Sound.sfx;
+// Every gameplay sound goes through this proxy: the host records it for the online guest, and on the
+// guest gameplay sounds only play when replayed from the host (so nothing doubles up).
+const sfx = new Proxy(Sound.sfx, { get: (t, k) => (...a) => { netEmit(['s', k, ...a]); if (!guestMuted()) return t[k](...a); } });
 
 /* ============================ §3 INPUT ============================ */
 const keys = {};
@@ -473,11 +504,16 @@ const touch = { left: false, right: false, fire: false };
 const P1_FIRE = ['Space', 'ArrowUp', 'KeyZ', 'KeyX', 'KeyJ'];
 const controls = [
   {
-    get left() { return keys.ArrowLeft || (!game.coop && keys.KeyA) || touch.left; },
-    get right() { return keys.ArrowRight || (!game.coop && keys.KeyD) || touch.right; },
-    get fire() { return P1_FIRE.some((k) => keys[k]) || (!game.coop && keys.KeyW) || touch.fire; },
+    // A / D / W stay with this player unless a LOCAL partner shares the keyboard
+    get left() { return keys.ArrowLeft || ((!game.coop || Net.role) && keys.KeyA) || touch.left; },
+    get right() { return keys.ArrowRight || ((!game.coop || Net.role) && keys.KeyD) || touch.right; },
+    get fire() { return P1_FIRE.some((k) => keys[k]) || ((!game.coop || Net.role) && keys.KeyW) || touch.fire; },
   },
-  { get left() { return !!keys.KeyA; }, get right() { return !!keys.KeyD; }, get fire() { return !!keys.KeyW; } },
+  { // P2: local keyboard, or the online partner's streamed input when hosting
+    get left() { return Net.role === 'host' ? !!Net.peerIn.l : !!keys.KeyA; },
+    get right() { return Net.role === 'host' ? !!Net.peerIn.r : !!keys.KeyD; },
+    get fire() { return Net.role === 'host' ? !!Net.peerIn.f : !!keys.KeyW; },
+  },
 ];
 const input = {
   get left() { return controls[0].left; }, get right() { return controls[0].right; }, get fire() { return controls[0].fire; },
@@ -486,31 +522,50 @@ const input = {
 };
 const CONFIRM_KEYS = ['Space', 'Enter', 'KeyZ', 'KeyX', 'KeyJ'];
 addEventListener('keydown', (e) => {
+  if (!lobbyEl.hidden) { if (e.code === 'Escape') closeLobby(); return; } // the lobby form owns the keyboard
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (!keys[e.code]) onPress(e.code);
   keys[e.code] = true;
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
-addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (game.state === 'play') togglePause(); });
+addEventListener('blur', () => { for (const k in keys) keys[k] = false; if (game.state === 'play' && !Net.started) togglePause(); });
 
 function onPress(code) {
   Sound.init();
   if (code === 'KeyM') { const m = Sound.toggleMute(); toast(m ? 'SOUND OFF' : 'SOUND ON'); return; }
   if (code === 'KeyN') { const m = Sound.toggleMusic(); toast(m ? 'MUSIC ON' : 'MUSIC OFF'); return; }
-  if (code === 'KeyP' || code === 'Escape') { if (['play', 'paused', 'intro'].includes(game.state)) togglePause(); return; }
-  if (game.state === 'title' && !isTouch()) { // 1 PLAYER / 2 PLAYERS picker
-    if (['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD'].includes(code)) { game.modeSel = game.modeSel === 1 ? 2 : 1; sfx.tick(false); return; }
-    if (code === 'Digit1' || code === 'Digit2') { game.modeSel = code === 'Digit1' ? 1 : 2; confirmAction(); return; }
+  if (code === 'KeyP' || code === 'Escape') {
+    if (Net.started) { toast('NO PAUSE ONLINE'); return; }
+    if (['play', 'paused', 'intro'].includes(game.state)) togglePause(); return;
   }
-  if (game.coop && code === 'KeyW') input.pressed2 = true;
+  if (game.state === 'title') { // mode picker: 1 PLAYER · ONLINE CO-OP · LOCAL 2P
+    const modes = titleModes();
+    if (code === 'ArrowLeft' || code === 'KeyA') { game.modeSel = modes[(modes.indexOf(game.modeSel) + modes.length - 1) % modes.length]; sfx.tick(false); return; }
+    if (code === 'ArrowRight' || code === 'KeyD') { game.modeSel = modes[(modes.indexOf(game.modeSel) + 1) % modes.length]; sfx.tick(false); return; }
+    const n = { Digit1: 1, Digit2: 2, Digit3: 3 }[code];
+    if (n && modes.includes(n)) { game.modeSel = n; confirmAction(); return; }
+  }
+  if (Net.role === 'guest' && Net.started) {
+    if (P1_FIRE.includes(code) || code === 'KeyW') guestFire();
+    if (CONFIRM_KEYS.includes(code)) confirmAction();
+    return;
+  }
+  if (game.coop && !Net.role && code === 'KeyW') input.pressed2 = true;
   else if (P1_FIRE.includes(code) || code === 'KeyW') input.pressed = true;
   if (CONFIRM_KEYS.includes(code)) confirmAction();
 }
 const isTouch = () => document.body.classList.contains('touch');
-function confirmAction() {
+const titleModes = () => (isTouch() ? [1, 2] : [1, 2, 3]);
+const MODE_LABELS = { 1: '1 PLAYER', 2: 'ONLINE CO-OP', 3: 'LOCAL 2P' };
+function confirmAction(fromPeer) {
   Sound.init();
   const s = game.state;
-  if (s === 'title') { sfx.select(); newGame(game.modeSel === 2 && !isTouch()); }
+  if (Net.role === 'guest' && Net.started) { if (s === 'clear' || s === 'gameover') sendRel('confirm', {}); return; } // the host advances the shared game
+  if (s === 'title') {
+    sfx.select();
+    if (game.modeSel === 2) openLobby();
+    else newGame(game.modeSel === 3 && !isTouch());
+  }
   else if (s === 'paused') togglePause();
   else if (s === 'clear' && game.stateT > 1.2) nextLevel();
   else if (s === 'gameover') { if (game.contT > 0 && game.stateT > 0.6) continueGame(); else if (game.contT <= 0 && game.stateT > 1.2) { sfx.select(); toTitle(); } }
@@ -524,7 +579,7 @@ function bindHold(id, prop, onDown) {
   el.addEventListener('pointerdown', down); ['pointerup', 'pointercancel', 'pointerleave'].forEach((ev) => el.addEventListener(ev, up));
 }
 bindHold('tLeft', 'left'); bindHold('tRight', 'right');
-bindHold('tFire', 'fire', () => { Sound.init(); input.pressed = true; confirmAction(); });
+bindHold('tFire', 'fire', () => { Sound.init(); if (Net.role === 'guest' && Net.started) guestFire(); else input.pressed = true; confirmAction(); });
 if (matchMedia('(pointer: coarse)').matches) document.body.classList.add('touch');
 addEventListener('touchstart', () => document.body.classList.add('touch'), { once: true, passive: true });
 
@@ -535,7 +590,7 @@ const game = {
   players: [], coop: false, modeSel: 1, credit: 0, bubbles: [], harpoons: [], bullets: [], items: [], platforms: [], pending: [],
   enemies: [], shots: [], enemyT: 0, contT: 0, fireworks: [], shotId: 0,
   particles: [], texts: [], banner: null, toastMsg: null,
-  slowT: 0, dynaOwner: 0,
+  slowT: 0, dynaOwner: 0, uid: 0, epoch: 0,
   slowmoT: 0, timeScale: 1, hitstop: 0, shake: 0, flash: 0, flashColor: '#fff',
   combo: 0, comboT: 0, nearCd: 0, timeLeft: 0, lastTick: 99, dyna: 0, dynaCd: 0,
   backdrop: null, stats: freshStats(), clearInfo: null, scores: store('harpoonpop.scores') || [],
@@ -566,7 +621,7 @@ function makeBubble(size, x, y, dir, opts = {}) {
   return {
     size, x, y, r: SIZES[size].r, vx: dir * BASE_VX * speedMul() * (opts.fast ? 1 + (4 - size) * 0.06 : 1),
     vy: opts.vy || 0, kind: opts.kind || 'normal', age: 0, fromSplit: !!opts.fromSplit,
-    squash: 0, squashAxis: 0, dead: false, nearDone: false, wob: Math.random() * 6,
+    squash: 0, squashAxis: 0, dead: false, nearDone: false, wob: Math.random() * 6, id: ++game.uid,
   };
 }
 function makePlayer(id, lives) {
@@ -592,11 +647,8 @@ function loadLevel(n) {
 function resetStage() {
   const def = game.def;
   game.bubbles = def.bubbles.map(([s, x, d, kind]) => makeBubble(s, x, ARENA.t + SIZES[s].r + 50, d, { kind }));
-  game.platforms = [];
-  for (const [x, y, w, h, kind] of def.plats) {
-    if (kind === 'glass' && w > 100) { const n = Math.ceil(w / 80), tw = w / n; for (let i = 0; i < n; i++) game.platforms.push({ x: x + i * tw, y, w: tw, h, kind }); }
-    else game.platforms.push({ x, y, w, h, kind });
-  }
+  game.platforms = buildPlatforms(def);
+  game.epoch++;
   game.harpoons = []; game.bullets = []; game.items = []; game.pending = [];
   game.enemies = []; game.shots = []; game.enemyT = rand(7, 11);
   // every player with lives left (re)spawns with fresh gear; lives and points carry over
@@ -606,10 +658,20 @@ function resetStage() {
   game.slowmoT = 0; game.timeScale = 1;
   setState('intro');
   banner(`STAGE ${game.level}`, def.name, 1.7, '#ffd23f');
-  sfx.ready(); Sound.playMusic(true); Sound.playTrack(trackFor(game.level));
+  sfx.ready(); music('playMusic', true); music('playTrack', trackFor(game.level));
+}
+// Stage ledges from a level definition; long glass is cut into breakable tiles. ids are stable per stage.
+function buildPlatforms(def) {
+  const out = [];
+  for (const [x, y, w, h, kind] of def.plats) {
+    if (kind === 'glass' && w > 100) { const n = Math.ceil(w / 80), tw = w / n; for (let i = 0; i < n; i++) out.push({ x: x + i * tw, y, w: tw, h, kind }); }
+    else out.push({ x, y, w, h, kind });
+  }
+  out.forEach((p, i) => { p.id = i; });
+  return out;
 }
 function nextLevel() { sfx.select(); loadLevel(game.level + 1); }
-function toTitle() { setState('title'); Sound.playMusic(true); Sound.playTrack('menu'); seedTitle(); }
+function toTitle() { if (Net.role) netEnd(); setState('title'); Sound.playMusic(true); Sound.playTrack('menu'); seedTitle(); }
 // Music per stage: two alternating stage themes, the boss theme every 4th stage.
 const trackFor = (n) => (n % 4 === 0 ? 'boss' : n % 2 ? 'stage1' : 'stage2');
 // Arcade-style CONTINUE: same stage, 3 fresh lives, score back to zero.
@@ -624,6 +686,16 @@ function togglePause() {
 function updatePlayers(dt) { for (const p of alivePlayers()) updatePlayer(p, dt); }
 function updatePlayer(p, dt) {
   const c = controls[p.id];
+  if (Net.role === 'host' && p.id === 1) { // online partner: follow the position their own device predicts
+    const r = Net.peerIn;
+    if (r.ep === game.epoch) { p.x += (clamp(r.x, ARENA.l + 14, ARENA.r - 14) - p.x) * Math.min(1, dt * 20); p.vx = r.vx; p.face = r.face || p.face; }
+    p.shootT = Math.max(0, p.shootT - dt);
+  } else movePlayer(p, c, dt);
+  p.gunCd -= dt; p.invuln -= dt;
+  if ((p.id ? input.pressed2 : input.pressed) || (p.weapon === 'gun' && c.fire)) tryFire(p);
+}
+// left/right movement for one diver (also used by the online guest to predict its own diver)
+function movePlayer(p, c, dt) {
   const dir = (c.right ? 1 : 0) - (c.left ? 1 : 0);
   // Snappy accel/decel: reaches top speed in ~0.06s, stops in ~0.04s
   p.vx = approach(p.vx, dir * PLAYER_SPEED, (dir ? 5200 : 7500) * dt);
@@ -636,9 +708,6 @@ function updatePlayer(p, dt) {
   p.land = Math.max(0, p.land - dt * 4);
   // dust when changing direction at speed
   if (dir && Math.sign(p.vx) !== dir && Math.abs(p.vx) > 150 && Math.random() < 0.5) spawn({ x: p.x, y: ARENA.b - 2, vx: -dir * rand(30, 90), vy: rand(-60, -20), life: 0.35, size: rand(2, 4), color: '#d9c9ff', g: 200 });
-
-  p.gunCd -= dt; p.invuln -= dt;
-  if ((p.id ? input.pressed2 : input.pressed) || (p.weapon === 'gun' && c.fire)) tryFire(p);
 }
 
 function tryFire(p) {
@@ -648,15 +717,15 @@ function tryFire(p) {
     const side = (mine % 2 ? 1 : -1) * 5;
     game.bullets.push({ x: p.x + side, y: ARENA.b - 50, dead: false, owner: p.id }); p.shotId++; game.shotId++;
     p.gunCd = 0.085; p.shootT = 0.12; sfx.gun();
-    spawn({ x: p.x + side, y: ARENA.b - 52, type: 'flash', size: 9, life: 0.06, color: '#ffd9a0' });
+    fx('muzzle', p.x + side, 1);
     return;
   }
   const max = { double: 2, triple: 3 }[p.weapon] || 1;
   if (game.harpoons.filter((h) => h.owner === p.id).length >= max) return;
-  game.harpoons.push({ x: p.x, tip: ARENA.b - 46, state: 'rise', stuckT: 0, kind: p.weapon === 'power' ? 'power' : 'wire', dead: false, owner: p.id });
+  game.harpoons.push({ id: ++game.uid, x: p.x, tip: ARENA.b - 46, state: 'rise', stuckT: 0, kind: p.weapon === 'power' ? 'power' : 'wire', dead: false, owner: p.id });
   p.shotId++; game.shotId++;
   p.shootT = 0.2; sfx.shoot();
-  for (let i = 0; i < 5; i++) spawn({ x: p.x, y: ARENA.b - 46, vx: rand(-80, 80), vy: rand(-160, -40), life: 0.25, size: 2, color: '#fff6c8', type: 'spark' });
+  fx('muzzle', p.x, 0);
 }
 
 // The lowest obstacle (platform underside or the ceiling) above x — what a wire/bullet will hit first.
@@ -679,7 +748,7 @@ function updateWeapons(dt) {
         h.tip = c.y;
         if (c.plat && c.plat.kind === 'glass') { breakPlatform(c.plat); h.dead = true; }
         else if (h.kind === 'power') { h.state = 'stuck'; h.stuckT = 3.2; sfx.clink(); }
-        else { h.dead = true; sfx.clink(); for (let i = 0; i < 4; i++) spawn({ x: h.x, y: c.y + 2, vx: rand(-120, 120), vy: rand(20, 120), life: 0.25, size: 2, color: '#fff', type: 'spark' }); }
+        else { h.dead = true; sfx.clink(); fx('ceil', h.x, c.y); }
       }
     } else {
       h.stuckT -= dt; if (h.stuckT <= 0) h.dead = true;
@@ -789,11 +858,7 @@ const comboMult = () => Math.min(8, 1 + Math.floor(Math.max(0, game.combo - 1) /
 // Bomb bubbles detonate and queue hits on everything nearby → chain reactions
 function explode(x, y, radius) {
   sfx.boom(); addShake(0.55); flash('#ff6a3d', 0.25);
-  spawn({ x, y, type: 'light', size: 7, life: 0.45, color: '#ff8a3d' });
-  spawn({ x, y, type: 'ring', size: 10, r2: radius, life: 0.4, color: '#ff8a3d', width: 10 });
-  spawn({ x, y, type: 'ring', size: 4, r2: radius * 0.7, life: 0.3, color: '#ffe0a8', width: 4 });
-  for (let i = 0; i < 26; i++) { const a = rand(0, Math.PI * 2), s = rand(150, 520); spawn({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.3, 0.6), size: rand(2, 5), color: Math.random() < 0.5 ? '#ff4b3a' : '#ffd23f', type: 'spark', drag: 2.5 }); }
-  for (let i = 0; i < 8; i++) spawn({ x: x + rand(-20, 20), y: y + rand(-20, 20), vx: rand(-40, 40), vy: rand(-80, -20), life: rand(0.6, 1.1), size: rand(14, 26), color: '#3a2140', type: 'smoke' });
+  fx('explode', x, y, radius);
   for (const o of game.bubbles) {
     if (o.dead) continue;
     const d = Math.hypot(o.x - x, o.y - y) - o.r;
@@ -814,7 +879,7 @@ function maybeSpawnEnemy(dt) {
   const maxE = game.level >= 8 ? 2 : 1;
   if (game.enemies.length >= maxE) { game.enemyT = 2; return; }
   const dir = Math.random() < 0.5 ? 1 : -1, y = rand(ARENA.t + 55, ARENA.t + 115);
-  game.enemies.push({ x: dir > 0 ? ARENA.l - 40 : ARENA.r + 40, y, baseY: y, dir, t: rand(0, 6), fireT: rand(1.0, 1.8), charge: 0, dying: 0, vy: 0, dead: false });
+  game.enemies.push({ id: ++game.uid, x: dir > 0 ? ARENA.l - 40 : ARENA.r + 40, y, baseY: y, dir, t: rand(0, 6), fireT: rand(1.0, 1.8), charge: 0, dying: 0, vy: 0, dead: false });
   game.enemyT = Math.max(7, rand(15, 22) - game.level * 0.5);
   sfx.enemyIn();
 }
@@ -836,7 +901,7 @@ function updateEnemies(dt) {
     if (Math.random() < 0.8) spawn({ x: s.x, y: s.y, vx: rand(-20, 20), vy: rand(-20, 20), life: 0.25, size: rand(1.5, 3), color: '#ff5a3a', type: 'spark' });
     if (s.y >= ARENA.b - 2 || s.x < ARENA.l || s.x > ARENA.r) {
       s.dead = true;
-      for (let i = 0; i < 8; i++) spawn({ x: s.x, y: Math.min(s.y, ARENA.b - 2), vx: rand(-160, 160), vy: rand(-200, -40), life: 0.3, size: 2, color: '#ff8a3d', type: 'spark', g: 600 });
+      fx('splash', s.x, Math.min(s.y, ARENA.b - 2));
       continue;
     }
     for (const h of game.harpoons) if (Math.abs(s.x - h.x) < 7 && s.y > h.tip) { s.dead = true; game.credit = h.owner; blockFx(s); break; }
@@ -850,20 +915,18 @@ function fireStinger(e) {
   const p = live.reduce((a, q) => (Math.abs(q.x - e.x) < Math.abs(a.x - e.x) ? q : a)), T = 1.05, dx = p.x - e.x, dy = (ARENA.b - 22) - (e.y + 16);
   game.shots.push({ x: e.x, y: e.y + 16, vx: dx / T, vy: dy / T - 150 * T, dead: false }); // lands where you stood ~1s later
   sfx.enemyShot();
-  spawn({ x: e.x, y: e.y + 16, type: 'flash', size: 16, life: 0.1, color: '#ff6a3a' });
+  fx('stingFire', e.x, e.y + 16);
 }
 function blockFx(s) {
   sfx.block(); const pts = 100 * comboMult(); addScore(pts); popup(s.x, s.y - 16, 'BLOCKED +' + pts, '#3fe0ff', 15);
-  for (let i = 0; i < 10; i++) spawn({ x: s.x, y: s.y, vx: rand(-260, 260), vy: rand(-260, 100), life: 0.3, size: 2, color: '#bfe9ff', type: 'spark', drag: 3 });
+  fx('block', s.x, s.y);
 }
 function killEnemy(e) {
   e.dying = 0.001; e.vy = -220;
   const pts = ENEMY.score * comboMult(); addScore(pts);
   popup(e.x, e.y - 24, 'STINGER DOWN +' + pts, '#ffd23f', 18);
   sfx.enemyDie(); addShake(0.3); game.hitstop = Math.max(game.hitstop, 0.06); flash('#ffd23f', 0.12);
-  spawn({ x: e.x, y: e.y, type: 'ring', size: 12, r2: 80, life: 0.35, color: '#ffd23f', width: 5 });
-  spawn({ x: e.x, y: e.y, type: 'light', size: 5, life: 0.3, color: '#ffd23f' });
-  for (let i = 0; i < 24; i++) { const a = rand(0, Math.PI * 2), sp = rand(120, 420); spawn({ x: e.x, y: e.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.3, 0.6), size: rand(2, 4), color: i % 2 ? '#ffd23f' : '#ff8a3d', type: 'spark', drag: 2 }); }
+  fx('enemyDie', e.x, e.y);
   if (Math.random() < 0.6) dropItem(e.x, e.y);
   game.stats.stingers++;
 }
@@ -881,7 +944,7 @@ function checkPlayers() {
         b.nearDone = true; game.nearCd = 1.2; game.slowmoT = 0.45; game.stats.close++;
         game.credit = p.id; const pts = 250 * comboMult(); addScore(pts);
         popup(p.x, ARENA.b - 70, 'CLOSE! +' + pts, '#9d86ff', 20); sfx.near();
-        spawn({ x: p.x, y: ARENA.b - 22, type: 'ring', size: 20, r2: 70, life: 0.35, color: '#9d86ff', width: 3 });
+        fx('near', p.x);
       }
     }
   }
@@ -889,8 +952,7 @@ function checkPlayers() {
 function playerHit(p, b) {
   if (p.shield) {
     p.shield = false; p.invuln = 1.6; sfx.shieldBreak(); addShake(0.35); game.hitstop = 0.08;
-    spawn({ x: p.x, y: ARENA.b - 22, type: 'ring', size: 26, r2: 120, life: 0.45, color: '#7cff6b', width: 6 });
-    for (let i = 0; i < 18; i++) { const a = rand(0, Math.PI * 2); spawn({ x: p.x + Math.cos(a) * 28, y: ARENA.b - 22 + Math.sin(a) * 28, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, life: 0.4, size: 3, color: '#7cff6b', type: 'shard', drag: 2 }); }
+    fx('shieldBreak', p.x);
     popup(p.x, ARENA.b - 70, 'SHIELD BROKE', '#7cff6b', 18);
     return;
   }
@@ -902,15 +964,13 @@ function killPlayer(p, dir, reason) {
   game.harpoons = game.harpoons.filter((h) => h.owner !== p.id); game.bullets = game.bullets.filter((u) => u.owner !== p.id);
   sfx.death();
   addShake(0.8); flash('#ff3d5a', 0.5); game.hitstop = 0.18; game.slowmoT = 0.5;
-  spawn({ x: p.x, y: ARENA.b - 24, type: 'ring', size: 20, r2: 160, life: 0.5, color: '#ff3d5a', width: 8 });
-  spawn({ x: p.x, y: ARENA.b - 24, type: 'light', size: 6, life: 0.5, color: '#ff3d5a' });
-  for (let i = 0; i < 24; i++) { const a = rand(0, Math.PI * 2), s = rand(100, 380); spawn({ x: p.x, y: ARENA.b - 24, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.3, 0.7), size: rand(2, 4), color: i % 2 ? '#ff3d5a' : '#ffffff', type: 'spark', drag: 2 }); }
+  fx('playerDie', p.x);
   // Co-op: while a partner is still standing the stage carries on; the downed diver returns next stage.
   if (alivePlayers().length) {
     banner(`P${p.id + 1} DOWN`, p.lives > 0 ? 'BACK NEXT STAGE' : 'OUT OF LIVES', 1.4, '#ff3d5a', true);
     return;
   }
-  Sound.playMusic(false); game.shots = [];
+  music('playMusic', false); game.shots = [];
   const left = game.coop ? game.players.some((q) => q.lives > 0) : p.lives > 0;
   banner(reason, game.coop ? (left ? 'TRY AGAIN' : 'NO LIVES LEFT') : left ? `${p.lives} ${p.lives === 1 ? 'LIFE' : 'LIVES'} LEFT` : 'NO LIVES LEFT', 1.6, '#ff3d5a');
   setState('dying');
@@ -933,11 +993,15 @@ function updateDying(dt) {
 }
 function timeOver() { sfx.timeout(); alivePlayers().forEach((p, i) => killPlayer(p, i ? -1 : 1, 'TIME OVER')); }
 function gameOver() {
-  setState('gameover'); game.contT = 9.99; sfx.gameover(); Sound.playMusic(true); Sound.playTrack('over');
-  const entry = { score: game.score, stage: game.level, date: new Date().toISOString().slice(0, 10) };
+  setState('gameover'); game.contT = 9.99; sfx.gameover(); music('playMusic', true); music('playTrack', 'over');
+  game.newHigh = saveRun(game.score, game.level);
+}
+// add a run to the local best-runs table; returns true when it is the new #1
+function saveRun(score, stage) {
+  const entry = { score, stage, date: new Date().toISOString().slice(0, 10) };
   const list = [...game.scores, entry].sort((a, b) => b.score - a.score).slice(0, 5);
-  game.newHigh = list[0] === entry && game.score > 0;
   game.scores = list; store('harpoonpop.scores', list);
+  return list[0] === entry && score > 0;
 }
 function levelClear() {
   const t = Math.ceil(Math.max(0, game.timeLeft)), timeBonus = t * 50;
@@ -947,16 +1011,14 @@ function levelClear() {
   game.shots = []; game.enemies.forEach((e) => { if (!e.dying) killEnemy(e); });
   game.fireworks = Array.from({ length: 6 }, (_, i) => ({ t: 0.35 + i * 0.32, x: rand(160, 800), y: rand(120, 260), c: Object.values(ITEMS)[i % 7].color, done: false }));
   banner('STAGE CLEAR', game.def.name, 2.2, '#7cff6b');
-  for (let i = 0; i < 60; i++) spawn({ x: rand(ARENA.l, ARENA.r), y: ARENA.t + rand(0, 40), vx: rand(-60, 60), vy: rand(0, 120), life: rand(1.2, 2.2), size: rand(3, 6), color: Object.values(ITEMS)[i % 7].color, type: 'confetti', g: 140, rot: rand(0, 6) });
+  fx('confetti');
 }
 
 // Stage-clear fireworks, fired on a schedule set by levelClear()
 function updateFireworks() {
   game.fireworks.forEach((fw, i) => {
     if (fw.done || game.stateT < fw.t) return; fw.done = true;
-    for (let k = 0; k < 40; k++) { const a = (k / 40) * Math.PI * 2, sp = rand(240, 380); spawn({ x: fw.x, y: fw.y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.6, 1.0), size: rand(2, 3.5), color: fw.c, type: 'spark', drag: 1.6, g: 160 }); }
-    spawn({ x: fw.x, y: fw.y, type: 'flash', size: 40, life: 0.12, color: '#ffffff' });
-    spawn({ x: fw.x, y: fw.y, type: 'light', size: 4, life: 0.4, color: fw.c });
+    fx('firework', fw.x, fw.y, fw.c);
     sfx.firework(i);
   });
 }
@@ -983,7 +1045,7 @@ function updatePlay(dt, pdt) {
 }
 
 /* ============================ §8 POWER-UPS ============================ */
-function dropItem(x, y) { game.items.push({ type: pickWeighted(ITEMS), x: clamp(x, ARENA.l + 16, ARENA.r - 16), y, vy: -160, t: 0, landed: false, dead: false }); }
+function dropItem(x, y) { game.items.push({ id: ++game.uid, type: pickWeighted(ITEMS), x: clamp(x, ARENA.l + 16, ARENA.r - 16), y, vy: -160, t: 0, landed: false, dead: false }); }
 function updateItems(dt) {
   const live = alivePlayers();
   for (const it of game.items) {
@@ -1011,8 +1073,7 @@ function applyItem(it, p = game.player) {
   }
   it.type === 'life' ? sfx.life() : sfx.item();
   popup(p.x, ARENA.b - 80, p.weapon === 'triple' && it.type === 'double' ? 'TRIPLE WIRE' : def.label, def.color, 20);
-  for (let i = 0; i < 18; i++) spawn({ x: p.x + rand(-14, 14), y: ARENA.b - rand(0, 40), vx: rand(-20, 20), vy: rand(-420, -160), life: rand(0.4, 0.7), size: rand(2, 3.5), color: def.color, type: 'spark', drag: 1.5 });
-  spawn({ x: it.x, y: it.y, type: 'ring', size: 10, r2: 60, life: 0.35, color: def.color, width: 4 });
+  fx('pickup', p.x, it.x, it.y, def.color);
   // Risk/reward: grabbing a power-up with a bubble right on top of you pays out
   if (game.bubbles.some((b) => Math.hypot(b.x - p.x, b.y - (ARENA.b - 20)) < b.r + 70)) { const pts = 500 * comboMult(); addScore(pts); popup(p.x, ARENA.b - 104, 'DARING! +' + pts, '#ff3d8b', 18); }
 }
@@ -1031,18 +1092,66 @@ function updateDynamite(dt) {
 /* ============================ §9 JUICE ============================ */
 function spawn(o) { if (game.particles.length < 900) game.particles.push(Object.assign({ x: 0, y: 0, vx: 0, vy: 0, life: 0.5, t: 0, size: 3, color: '#fff', type: 'dot', g: 0, drag: 0, rot: 0, z: 0, vz: 0 }, o)); }
 function popup(x, y, text, color, size) {
+  netEmit(['p', rn(x), rn(y), text, color, size]); if (guestMuted()) return;
   // stack on top of any fresh popup nearby so bursts of score stay readable
   for (let i = 0; i < 6 && game.texts.some((t) => t.t < 0.5 && Math.abs(t.x - x) < 70 && Math.abs(t.y - y) < size); i++) y -= size + 2;
   game.texts.push({ x, y, text, color, size, t: 0, life: 0.9 });
 }
-function banner(big, small, life, color, minor) { game.banner = { big, small, life, t: 0, color, minor }; }
+function banner(big, small, life, color, minor) { netEmit(['b', big, small, life, color, minor]); if (guestMuted()) return; game.banner = { big, small, life, t: 0, color, minor }; }
 function toast(msg) { game.toastMsg = { msg, t: 0 }; }
-function addShake(a) { game.shake = Math.min(1, game.shake + a * (reducedMotion ? 0.3 : 1)); }
-function flash(color, a) { game.flashColor = color; game.flash = Math.max(game.flash, a * (reducedMotion ? 0.4 : 1)); }
+function addShake(a) { netEmit(['k', rn(a)]); if (guestMuted()) return; game.shake = Math.min(1, game.shake + a * (reducedMotion ? 0.3 : 1)); }
+function flash(color, a) { netEmit(['f', color, rn(a)]); if (guestMuted()) return; game.flashColor = color; game.flash = Math.max(game.flash, a * (reducedMotion ? 0.4 : 1)); }
 // Shared team score; each player's share is tracked for the co-op breakdown (credit -1 = team only)
 function addScore(n, credit = game.credit) { game.score += n; const p = game.players[credit]; if (p) p.points += n; }
 
-function popFx(b, hx, hy) {
+// Composite visual effects. Gameplay calls them through fx(name, ...) so the host can send them to an
+// online guest, who replays the same burst locally (particles themselves never cross the network).
+const FX = {
+  pop(x, y, r, size, hx, hy) { popBurst({ x, y, r, size }, hx, hy); },
+  explode(x, y, radius) {
+    spawn({ x, y, type: 'light', size: 7, life: 0.45, color: '#ff8a3d' });
+    spawn({ x, y, type: 'ring', size: 10, r2: radius, life: 0.4, color: '#ff8a3d', width: 10 });
+    spawn({ x, y, type: 'ring', size: 4, r2: radius * 0.7, life: 0.3, color: '#ffe0a8', width: 4 });
+    for (let i = 0; i < 26; i++) { const a = rand(0, Math.PI * 2), s = rand(150, 520); spawn({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.3, 0.6), size: rand(2, 5), color: Math.random() < 0.5 ? '#ff4b3a' : '#ffd23f', type: 'spark', drag: 2.5 }); }
+    for (let i = 0; i < 8; i++) spawn({ x: x + rand(-20, 20), y: y + rand(-20, 20), vx: rand(-40, 40), vy: rand(-80, -20), life: rand(0.6, 1.1), size: rand(14, 26), color: '#3a2140', type: 'smoke' });
+  },
+  enemyDie(x, y) {
+    spawn({ x, y, type: 'ring', size: 12, r2: 80, life: 0.35, color: '#ffd23f', width: 5 });
+    spawn({ x, y, type: 'light', size: 5, life: 0.3, color: '#ffd23f' });
+    for (let i = 0; i < 24; i++) { const a = rand(0, Math.PI * 2), sp = rand(120, 420); spawn({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.3, 0.6), size: rand(2, 4), color: i % 2 ? '#ffd23f' : '#ff8a3d', type: 'spark', drag: 2 }); }
+  },
+  playerDie(x) {
+    spawn({ x, y: ARENA.b - 24, type: 'ring', size: 20, r2: 160, life: 0.5, color: '#ff3d5a', width: 8 });
+    spawn({ x, y: ARENA.b - 24, type: 'light', size: 6, life: 0.5, color: '#ff3d5a' });
+    for (let i = 0; i < 24; i++) { const a = rand(0, Math.PI * 2), s = rand(100, 380); spawn({ x, y: ARENA.b - 24, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rand(0.3, 0.7), size: rand(2, 4), color: i % 2 ? '#ff3d5a' : '#ffffff', type: 'spark', drag: 2 }); }
+  },
+  shieldBreak(x) {
+    spawn({ x, y: ARENA.b - 22, type: 'ring', size: 26, r2: 120, life: 0.45, color: '#7cff6b', width: 6 });
+    for (let i = 0; i < 18; i++) { const a = rand(0, Math.PI * 2); spawn({ x: x + Math.cos(a) * 28, y: ARENA.b - 22 + Math.sin(a) * 28, vx: Math.cos(a) * 260, vy: Math.sin(a) * 260, life: 0.4, size: 3, color: '#7cff6b', type: 'shard', drag: 2 }); }
+  },
+  near(x) { spawn({ x, y: ARENA.b - 22, type: 'ring', size: 20, r2: 70, life: 0.35, color: '#9d86ff', width: 3 }); },
+  pickup(px, ix, iy, color) {
+    for (let i = 0; i < 18; i++) spawn({ x: px + rand(-14, 14), y: ARENA.b - rand(0, 40), vx: rand(-20, 20), vy: rand(-420, -160), life: rand(0.4, 0.7), size: rand(2, 3.5), color, type: 'spark', drag: 1.5 });
+    spawn({ x: ix, y: iy, type: 'ring', size: 10, r2: 60, life: 0.35, color, width: 4 });
+  },
+  glass(x, y, w, h) { for (let i = 0; i < 16; i++) spawn({ x: x + rand(0, w), y: y + rand(0, h), vx: rand(-160, 160), vy: rand(-220, 40), life: rand(0.5, 0.9), size: rand(3, 7), color: '#bff4ff', type: 'shard', g: 900 }); },
+  muzzle(x, gun) {
+    if (gun) { spawn({ x, y: ARENA.b - 52, type: 'flash', size: 9, life: 0.06, color: '#ffd9a0' }); return; }
+    for (let i = 0; i < 5; i++) spawn({ x, y: ARENA.b - 46, vx: rand(-80, 80), vy: rand(-160, -40), life: 0.25, size: 2, color: '#fff6c8', type: 'spark' });
+  },
+  ceil(x, y) { for (let i = 0; i < 4; i++) spawn({ x, y: y + 2, vx: rand(-120, 120), vy: rand(20, 120), life: 0.25, size: 2, color: '#fff', type: 'spark' }); },
+  block(x, y) { for (let i = 0; i < 10; i++) spawn({ x, y, vx: rand(-260, 260), vy: rand(-260, 100), life: 0.3, size: 2, color: '#bfe9ff', type: 'spark', drag: 3 }); },
+  splash(x, y) { for (let i = 0; i < 8; i++) spawn({ x, y, vx: rand(-160, 160), vy: rand(-200, -40), life: 0.3, size: 2, color: '#ff8a3d', type: 'spark', g: 600 }); },
+  stingFire(x, y) { spawn({ x, y, type: 'flash', size: 16, life: 0.1, color: '#ff6a3a' }); },
+  firework(x, y, c) {
+    for (let k = 0; k < 40; k++) { const a = (k / 40) * Math.PI * 2, sp = rand(240, 380); spawn({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: rand(0.6, 1.0), size: rand(2, 3.5), color: c, type: 'spark', drag: 1.6, g: 160 }); }
+    spawn({ x, y, type: 'flash', size: 40, life: 0.12, color: '#ffffff' });
+    spawn({ x, y, type: 'light', size: 4, life: 0.4, color: c });
+  },
+  confetti() { for (let i = 0; i < 60; i++) spawn({ x: rand(ARENA.l, ARENA.r), y: ARENA.t + rand(0, 40), vx: rand(-60, 60), vy: rand(0, 120), life: rand(1.2, 2.2), size: rand(3, 6), color: Object.values(ITEMS)[i % 7].color, type: 'confetti', g: 140, rot: rand(0, 6) }); },
+};
+function popFx(b, hx, hy) { fx('pop', b.x, b.y, b.r, b.size, hx, hy); }
+function popBurst(b, hx, hy) {
   const c = SIZES[b.size].color, n = 10 + b.size * 6;
   spawn({ x: b.x, y: b.y, type: 'flash', size: b.r * 1.25, life: 0.09, color: '#ffffff' });
   spawn({ x: b.x, y: b.y, type: 'shell', size: b.r, life: 0.22, color: c });
@@ -1131,7 +1240,7 @@ function roundRect(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcT
 function breakPlatform(pl) {
   game.platforms = game.platforms.filter((p) => p !== pl);
   sfx.glass(); addShake(0.12); addScore(50); popup(pl.x + pl.w / 2, pl.y, '+50', '#bff4ff', 15);
-  for (let i = 0; i < 16; i++) spawn({ x: pl.x + rand(0, pl.w), y: pl.y + rand(0, pl.h), vx: rand(-160, 160), vy: rand(-220, 40), life: rand(0.5, 0.9), size: rand(3, 7), color: '#bff4ff', type: 'shard', g: 900 });
+  fx('glass', pl.x, pl.y, pl.w, pl.h);
   if (Math.random() < 0.25) dropItem(pl.x + pl.w / 2, pl.y);
 }
 
@@ -1202,7 +1311,7 @@ function drawHUDTail() {
     ctx.fillStyle = '#ff3d8b'; ctx.fillRect(ARENA.l + 10, ARENA.t + 54, 110 * a, 3);
     ctx.globalAlpha = 1;
   }
-  if (game.state !== 'title') { ctx.textAlign = 'left'; ctx.font = '700 11px "Chakra Petch", sans-serif'; ctx.fillStyle = '#6f6596'; ctx.fillText('P PAUSE · M SOUND · N MUSIC', ARENA.l + 4, ARENA.b + 32); }
+  if (game.state !== 'title') { ctx.textAlign = 'left'; ctx.font = '700 11px "Chakra Petch", sans-serif'; ctx.fillStyle = '#6f6596'; ctx.fillText(Net.started ? `ONLINE · ${Net.mode === 'p2p' ? 'DIRECT' : 'RELAY'} · M SOUND · N MUSIC` : 'P PAUSE · M SOUND · N MUSIC', ARENA.l + 4, ARENA.b + 32); }
 }
 
 // Co-op HUD: one compact row per player (tag, hearts, weapon + shield), shared slow-mo chip on the left
@@ -1246,6 +1355,7 @@ function drawOverlayPanel(lines, y0) {
   lines.forEach(([txt, font, col], i) => { ctx.font = font; ctx.fillStyle = col; ctx.fillText(txt, W / 2, y0 + i * 30); });
 }
 
+function titleModeSlots() { const ms = titleModes(), gap = ms.length === 3 ? 240 : 260; return ms.map((m, i) => ({ m, x: W / 2 + (i - (ms.length - 1) / 2) * gap })); }
 function drawTitle() {
   const t = game.realT;
   ctx.fillStyle = 'rgba(11,7,22,0.3)'; ctx.fillRect(0, 0, W, H);
@@ -1265,22 +1375,19 @@ function drawTitle() {
   word('POP!', 212, 84, '#ff7ab6', '#ff3d8b');
   ctx.font = '700 17px "Chakra Petch", sans-serif'; ctx.fillStyle = '#efe9ff';
   ctx.fillText('Split every bubble. Don’t get touched. Beat the clock.', W / 2, 268);
-  if (isTouch()) { if (Math.floor(t * 2) % 2 === 0) { ctx.font = '22px Bungee, Impact, sans-serif'; ctx.fillStyle = '#3fe0ff'; ctx.fillText('TAP FIRE TO START', W / 2, 314); } }
-  else {
-    // 1 PLAYER / 2 PLAYERS picker (← → or 1 / 2), then start
-    [['1 PLAYER', 1, W / 2 - 120], ['2 PLAYERS', 2, W / 2 + 120]].forEach(([label, m, x]) => {
-      const on = game.modeSel === m;
-      ctx.font = `${on ? 20 : 17}px Bungee, Impact, sans-serif`; ctx.fillStyle = on ? '#ffd23f' : '#6f6596';
-      ctx.fillText(on ? `▶ ${label} ◀` : label, x, 300);
-    });
-    if (Math.floor(t * 2) % 2 === 0) { ctx.font = '16px Bungee, Impact, sans-serif'; ctx.fillStyle = '#3fe0ff'; ctx.fillText('← → TO CHOOSE · SPACE TO START', W / 2, 330); }
-  }
+  // mode picker: ← → or 1 / 2 / 3 on keyboards, tap on touch screens
+  titleModeSlots().forEach(({ m, x }) => {
+    const on = game.modeSel === m, label = MODE_LABELS[m];
+    ctx.font = `${on ? 19 : 16}px Bungee, Impact, sans-serif`; ctx.fillStyle = on ? '#ffd23f' : '#7d72a8';
+    ctx.fillText(on ? `▶ ${label} ◀` : label, x, 300);
+  });
+  if (Math.floor(t * 2) % 2 === 0) { ctx.font = '16px Bungee, Impact, sans-serif'; ctx.fillStyle = '#3fe0ff'; ctx.fillText(isTouch() ? 'TAP A MODE TO PLAY' : '← → TO CHOOSE · SPACE TO START', W / 2, 330); }
   // readable backing panels for the info blocks (bubbles bounce behind them)
   ctx.fillStyle = 'rgba(11,7,22,0.78)';
   roundRect(ctx, 100, 350, 410, 98, 12); ctx.fill(); roundRect(ctx, 540, 344, 250, 128, 12); ctx.fill(); roundRect(ctx, 100, 464, 690, 32, 12); ctx.fill();
   // controls card
   ctx.textAlign = 'left'; ctx.font = '700 14px "Chakra Petch", sans-serif';
-  const rows = [['← →', 'move'], ['SPACE  /  ↑  /  Z', 'fire harpoon'], ['P2:  A D  +  W', 'co-op player 2'], ['P  ·  M  ·  N', 'pause · sound · music']];
+  const rows = [['← →', 'move'], ['SPACE  /  ↑  /  Z', 'fire harpoon'], ['A D  +  W', 'local 2P: player 2'], ['P  ·  M  ·  N', 'pause · sound · music']];
   rows.forEach(([k, v], i) => { ctx.fillStyle = '#ffd23f'; ctx.fillText(k, 120, 372 + i * 22); ctx.fillStyle = '#c8bfe8'; ctx.fillText(v, 290, 372 + i * 22); });
   // item legend
   const types = Object.keys(ITEMS);
@@ -1978,6 +2085,377 @@ function render3D(dt) {
   composer.render(dt);
 }
 
+/* ============================ §13 ONLINE CO-OP ============================
+   Two devices, one game.
+   • Lobby / quick match / room codes use the shared ForgeFlow NetPlay pattern: Supabase Realtime
+     Broadcast + Presence, room channel `ffg:harpoon-pop:<CODE>`, quick-match lobby
+     `ffg-lobby:harpoon-pop` (the two lowest peer ids pair into a deterministic room).
+   • Gameplay traffic goes PEER-TO-PEER over a WebRTC data channel signalled through the room, so it
+     costs no shared relay quota and adds the least lag. If the two networks can't connect directly
+     within a few seconds, it falls back to the Realtime relay at a lower snapshot rate.
+   • The HOST browser runs the real game (P1 local, P2 driven by the guest). The GUEST predicts its
+     own diver, applies host snapshots (players, bubbles, wires, items, drones, stingers, platforms,
+     HUD state), extrapolates motion between them, and replays the host's effect events (sounds,
+     popups, banners, shake, flashes, particle bursts) so both screens look and sound the same. */
+const SUPABASE_URL = 'https://wugoxdewcdxzfppgzohy.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Ind1Z294ZGV3Y2R4emZwcGd6b2h5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTM5OTU0MzEsImV4cCI6MjA2OTU3MTQzMX0.ljJYgVp0n9d_tJeL3ZG6liYfW0lQ7d_29svPMbUAves'; // public by design (Realtime only), copied from the shared FFG config
+const GAME_ID = 'harpoon-pop';
+const NET_RATES = { p2p: { snap: 1 / 24, input: 1 / 30 }, relay: { snap: 1 / 10, input: 1 / 12 } };
+const ICE_SERVERS = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+
+// Shared ForgeFlow transport (same protocol as games/*/runtime/net/ffg_netplay.js), inlined so this
+// single-file game stays self-contained. supabase-js is lazy-loaded only when a player goes online.
+class NetPlay {
+  constructor(url, anonKey, gameId) {
+    this.url = url; this.anonKey = anonKey; this.gameId = gameId;
+    this.id = Date.now().toString(36) + '_' + Math.floor(Math.random() * 1e9).toString(36); // sortable; lower id = host
+    this.handlers = {}; this.sb = null; this.channel = null; this.lobby = null;
+    this.host = null; this.room = null; this.peerPresent = false; this.peerCount = 0;
+  }
+  on(type, cb) { (this.handlers[type] = this.handlers[type] || []).push(cb); return this; }
+  _emit(type, p) { (this.handlers[type] || []).forEach((cb) => { try { cb(p || {}); } catch (e) { console.error(e); } }); }
+  async connect() {
+    if (this.sb) return this.sb;
+    let mod;
+    try { mod = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm'); }
+    catch (e) { mod = await import('https://esm.sh/@supabase/supabase-js@2.117.2'); }
+    const createClient = mod.createClient || (mod.default && mod.default.createClient);
+    this.sb = createClient(this.url, this.anonKey, { realtime: { params: { eventsPerSecond: 30 } } });
+    return this.sb;
+  }
+  async joinRoom(code, asHost) {
+    await this.connect();
+    this.room = String(code).toUpperCase();
+    if (asHost != null) this.host = !!asHost;
+    const ch = this.sb.channel('ffg:' + this.gameId + ':' + this.room, { config: { broadcast: { self: false, ack: false }, presence: { key: this.id } } });
+    this.channel = ch;
+    ch.on('broadcast', { event: 'msg' }, ({ payload }) => { if (payload && payload.from !== this.id) this._emit('msg', { from: payload.from, t: payload.t, d: payload.d }); });
+    ch.on('presence', { event: 'sync' }, () => {
+      const ids = Object.keys(ch.presenceState()), present = ids.length >= 2;
+      if (present && this.host == null) this.host = this.id === ids.slice().sort()[0];
+      if (present !== this.peerPresent || ids.length !== this.peerCount) { this.peerPresent = present; this.peerCount = ids.length; this._emit('peer', { present, count: ids.length, ids: ids.slice() }); }
+    });
+    await new Promise((res) => {
+      ch.subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') { await ch.track({ id: this.id }); this._emit('open', { room: this.room, host: this.host }); res(); }
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') { this._emit('error', { status }); res(); }
+      });
+    });
+    return this.room;
+  }
+  async quickMatch(timeoutMs) {
+    await this.connect();
+    const lobby = this.sb.channel('ffg-lobby:' + this.gameId, { config: { presence: { key: this.id } } });
+    this.lobby = lobby;
+    return new Promise((resolve) => {
+      let done = false;
+      const tryPair = async () => {
+        if (done) return;
+        const ids = Object.keys(lobby.presenceState()).sort();
+        if (ids.length >= 2 && (this.id === ids[0] || this.id === ids[1])) {
+          done = true;
+          const code = (ids[0].slice(-4) + ids[1].slice(-4)).toUpperCase();
+          this.host = this.id === ids[0];
+          await this.joinRoom(code, this.host);
+          resolve({ room: code, host: this.host });
+          // linger in the lobby so the partner also sees the same two-peer snapshot
+          setTimeout(() => { try { lobby.untrack(); this.sb.removeChannel(lobby); } catch (e) { /* gone */ } if (this.lobby === lobby) this.lobby = null; }, 4000);
+        }
+      };
+      lobby.on('presence', { event: 'sync' }, tryPair);
+      lobby.on('presence', { event: 'join' }, tryPair);
+      lobby.subscribe(async (status) => { if (status === 'SUBSCRIBED') { await lobby.track({ id: this.id }); tryPair(); } });
+      if (timeoutMs) setTimeout(() => { if (!done) { done = true; try { this.sb.removeChannel(lobby); } catch (e) { /* gone */ } resolve(null); } }, timeoutMs);
+    });
+  }
+  send(t, d) { if (!this.channel) return false; this.channel.send({ type: 'broadcast', event: 'msg', payload: { from: this.id, t, d: d || {} } }); return true; }
+  isHost() { return !!this.host; }
+  leave() {
+    try { if (this.channel) this.sb.removeChannel(this.channel); } catch (e) { /* gone */ }
+    try { if (this.lobby) this.sb.removeChannel(this.lobby); } catch (e) { /* gone */ }
+    this.channel = this.lobby = null; this.peerPresent = false;
+  }
+}
+
+const Net = {
+  role: null, mode: null, started: false, np: null, pc: null, chSnap: null, chRel: null, iceQ: [],
+  events: [], replaying: false, peerIn: { l: 0, r: 0, f: 0, p: 0, x: 600, vx: 0, face: -1, ep: -1 }, lastPress: 0,
+  pressCount: 0, snapT: 0, inT: 0, epoch: -1, allPlats: [], pending: null, linking: false, helloT: null, peerSeen: false, savedOver: false,
+  allowP2P: !/[?&]p2p=0/.test(location.search), stats: { snaps: 0, events: 0, inputs: 0 },
+};
+// record an effect on the host (sent to the guest with the next snapshot)
+function netEmit(e) { if (Net.role === 'host' && Net.started) Net.events.push(e); }
+// on the guest, gameplay-driven effects only play when replayed from the host
+const guestMuted = () => Net.role === 'guest' && Net.started && !Net.replaying;
+const rn = (v) => (typeof v === 'number' ? Math.round(v * 10) / 10 : v);
+function fx(name, ...a) { netEmit(['x', name, ...a.map(rn)]); if (!guestMuted()) FX[name](...a); }
+function music(k, a) { netEmit(['m', k, a]); if (!guestMuted()) Sound[k](a); }
+
+function sendFast(t, d) { if (Net.mode === 'p2p' && Net.chSnap && Net.chSnap.readyState === 'open') { Net.chSnap.send(JSON.stringify({ t, d })); return; } if (Net.np) Net.np.send(t, d); }
+function sendRel(t, d) { if (Net.mode === 'p2p' && Net.chRel && Net.chRel.readyState === 'open') { Net.chRel.send(JSON.stringify({ t, d })); return; } if (Net.np) Net.np.send(t, d); }
+
+/* --- host: snapshot of everything the guest needs to draw the game --- */
+function buildSnap() {
+  return {
+    s: game.state, st: rn(game.stateT), lv: game.level, ep: game.epoch, sc: game.score, tl: rn(game.timeLeft), cb: game.combo, cbt: rn(game.comboT),
+    sl: rn(game.slowT), ts: +game.timeScale.toFixed(2), ct: rn(game.contT), nh: game.newHigh ? 1 : 0,
+    ci: game.state === 'clear' ? game.clearInfo : undefined, sts: game.state === 'clear' || game.state === 'gameover' ? game.stats : undefined,
+    pl: game.players.map((p) => [rn(p.x), rn(p.vx), p.face, p.dead ? 1 : 0, p.out ? 1 : 0, rn(p.dx), rn(p.dy), +p.rot.toFixed(2), p.lives, p.weapon, p.shield ? 1 : 0, rn(p.invuln), p.shotId, p.points, rn(p.shootT)]),
+    bu: game.bubbles.filter((b) => !b.dead).map((b) => [b.id, b.size, rn(b.x), rn(b.y), rn(b.vx), rn(b.vy), b.kind === 'bomb' ? 1 : 0, +b.squash.toFixed(2), b.squashAxis]),
+    hp: game.harpoons.map((h) => [h.id, rn(h.x), rn(h.tip), h.state === 'stuck' ? 1 : 0, h.kind === 'power' ? 1 : 0, h.owner, rn(h.stuckT)]),
+    bl: game.bullets.map((u) => [rn(u.x), rn(u.y)]),
+    it: game.items.map((i) => [i.id, i.type, rn(i.x), rn(i.y), rn(i.t), i.landed ? 1 : 0, rn(i.vy)]),
+    en: game.enemies.map((e) => [e.id, rn(e.x), rn(e.y), e.dir, rn(e.charge), rn(e.dying), rn(e.t), rn(e.baseY), rn(e.vy)]),
+    sh: game.shots.map((s) => [rn(s.x), rn(s.y), rn(s.vx), rn(s.vy)]),
+    pf: game.platforms.map((p) => p.id),
+  };
+}
+function hostTick(dt) {
+  if (Net.peerIn.p > Net.lastPress) { Net.lastPress = Net.peerIn.p; input.pressed2 = true; }
+  Net.snapT -= dt;
+  if (Net.snapT > 0) return;
+  Net.snapT = NET_RATES[Net.mode].snap;
+  const snap = buildSnap(), ev = Net.events; Net.events = [];
+  Net.stats.snaps++; Net.stats.events += ev.length;
+  if (Net.mode === 'p2p') { sendFast('snap', snap); if (ev.length) sendRel('ev', ev); }
+  else { snap.ev = ev; Net.np.send('snap', snap); }
+}
+
+/* --- guest: apply the host's snapshot onto local objects (identity is kept so meshes persist) --- */
+function applySnap(S) {
+  if (S.lv !== game.level || !game.def) { game.level = S.lv; game.def = getLevelDef(S.lv); game.backdrop = buildBackdrop(game.def); }
+  if (S.ep !== Net.epoch) { Net.epoch = S.ep; Net.allPlats = buildPlatforms(game.def); Net.snapMe = true; }
+  if (S.s === 'gameover' && game.state !== 'gameover' && !Net.savedOver) { Net.savedOver = true; saveRun(S.sc, S.lv); }
+  if (S.s !== 'gameover') Net.savedOver = false;
+  Object.assign(game, { state: S.s, stateT: S.st, score: S.sc, timeLeft: S.tl, combo: S.cb, comboT: S.cbt, slowT: S.sl, timeScale: S.ts, contT: S.ct, newHigh: !!S.nh });
+  if (S.ci) game.clearInfo = S.ci;
+  if (S.sts) game.stats = S.sts;
+  game.platforms = Net.allPlats.filter((p) => S.pf.includes(p.id));
+  S.pl.forEach((a, i) => {
+    const p = game.players[i] || (game.players[i] = makePlayer(i, 3));
+    const [x, vx, face, dead, out, dx, dy, rot, lives, weapon, shield, invuln, shotId, points, shootT] = a;
+    Object.assign(p, { out: !!out, lives, weapon, shield: !!shield, invuln, points, rot });
+    if (dead) { p.tdx = dx; p.tdy = dy; if (!p.dead) { p.dx = dx; p.dy = dy; } }
+    p.dead = !!dead;
+    if (i === 1) { // me: keep my prediction unless the host respawned me
+      if (Net.snapMe || dead || out) { p.x = x; p.vx = 0; }
+      p.shotId = Math.max(p.shotId, shotId);
+    } else { // remote diver: smoothed toward the host's position
+      p.tx = x; p.vx = vx; p.face = face; p.shotId = shotId; p.shootT = shootT;
+      if (Math.abs(p.x - x) > 120 || Net.snapMe) p.x = x;
+    }
+  });
+  game.players.length = S.pl.length;
+  Net.snapMe = false;
+  const keep = (list, rows, make) => { const by = new Map(list.map((o) => [o.id, o])); return rows.map((r) => make(by.get(r[0]), r)); };
+  game.bubbles = keep(game.bubbles, S.bu, (b, [id, size, x, y, vx, vy, bomb, sq, ax]) => {
+    b = b || Object.assign(makeBubble(size, x, y, 1, { kind: bomb ? 'bomb' : 'normal' }), { id });
+    return Object.assign(b, { size, r: SIZES[size].r, x, y, vx, vy, kind: bomb ? 'bomb' : 'normal', squash: sq, squashAxis: ax, dead: false });
+  });
+  game.harpoons = keep(game.harpoons, S.hp, (h, [id, x, tip, stuck, power, owner, stuckT]) => {
+    const fresh = !h; h = h || { id, dead: false };
+    return Object.assign(h, { x, tip: fresh || stuck ? tip : Math.min(h.tip, tip + 40), state: stuck ? 'stuck' : 'rise', kind: power ? 'power' : 'wire', owner, stuckT });
+  });
+  game.bullets = S.bl.map(([x, y]) => ({ x, y, dead: false }));
+  game.items = keep(game.items, S.it, (it, [id, type, x, y, t, landed, vy]) => Object.assign(it || { id, dead: false }, { type, x, y, t, landed: !!landed, vy }));
+  game.enemies = keep(game.enemies, S.en, (e, [id, x, y, dir, charge, dying, t, baseY, vy]) => Object.assign(e || { id, dead: false }, { x, y, dir, charge, dying, t, baseY, vy }));
+  game.shots = S.sh.map(([x, y, vx, vy]) => ({ x, y, vx, vy, dead: false }));
+  if (S.ev) replayEvents(S.ev);
+}
+function replayEvents(ev) {
+  Net.replaying = true;
+  try {
+    for (const [k, ...a] of ev) {
+      if (k === 's') { if (Sound.sfx[a[0]]) Sound.sfx[a[0]](...a.slice(1)); }
+      else if (k === 'p') popup(...a);
+      else if (k === 'b') banner(...a);
+      else if (k === 'k') addShake(a[0]);
+      else if (k === 'f') flash(a[0], a[1]);
+      else if (k === 'x') { if (FX[a[0]]) FX[a[0]](...a.slice(1)); }
+      else if (k === 'm') { if (Sound[a[0]]) Sound[a[0]](a[1]); }
+    }
+  } finally { Net.replaying = false; }
+}
+// guest frame: predict my diver, extrapolate everything else between snapshots, stream my input
+function guestTick(dt) {
+  if (Net.pending) { const S = Net.pending; Net.pending = null; applySnap(S); }
+  game.stateT += dt;
+  const me = game.players[1], host = game.players[0], st = game.state;
+  if (me && !me.dead && !me.out && (st === 'play' || st === 'intro' || st === 'clear')) movePlayer(me, controls[0], dt);
+  if (me) me.shootT = Math.max(0, me.shootT - dt);
+  for (const p of game.players) if (p.dead) { p.dx += ((p.tdx ?? p.dx) - p.dx) * Math.min(1, dt * 14); p.dy += ((p.tdy ?? p.dy) - p.dy) * Math.min(1, dt * 14); }
+  if (host && !host.dead && host.tx != null) { host.tx += host.vx * dt; host.x += (host.tx - host.x) * Math.min(1, dt * 16); }
+  if (st === 'play') updateBubbles(dt * (game.slowT > 0 ? 0.4 : 1));
+  for (const h of game.harpoons) {
+    if (Math.random() < 0.5) spawn({ x: h.x + rand(-3, 3), y: rand(h.tip, ARENA.b), vx: rand(-50, 50), vy: rand(-50, 50), life: 0.22, size: rand(1, 2.2), color: h.kind === 'power' ? '#ffd23f' : '#9fdcff', type: 'spark' });
+    if (h.state === 'rise') h.tip = Math.max(ceilingAt(h.x).y, h.tip - HARPOON_SPEED * dt);
+  }
+  for (const u of game.bullets) u.y -= BULLET_SPEED * dt;
+  for (const e of game.enemies) {
+    if (e.dying) { e.vy += G * 0.7 * dt; e.y += e.vy * dt; continue; }
+    e.t += dt; e.x += e.dir * ENEMY.speed * speedMul() * (e.charge > 0 ? 0.2 : 1) * dt; e.y = e.baseY + Math.sin(e.t * 2.6) * 16;
+  }
+  for (const s of game.shots) { s.vy += 300 * dt; s.x += s.vx * dt; s.y += s.vy * dt; if (Math.random() < 0.8) spawn({ x: s.x, y: s.y, vx: rand(-20, 20), vy: rand(-20, 20), life: 0.25, size: rand(1.5, 3), color: '#ff5a3a', type: 'spark' }); }
+  for (const it of game.items) if (!it.landed) { it.vy += G * 0.55 * dt; it.y = Math.min(ARENA.b - 14, it.y + it.vy * dt); }
+  Net.inT -= dt;
+  if (Net.inT <= 0) sendInput();
+}
+function sendInput() {
+  const me = game.players[1]; if (!me) return;
+  Net.inT = NET_RATES[Net.mode].input; Net.stats.inputs++;
+  const c = controls[0];
+  sendFast('in', { l: c.left ? 1 : 0, r: c.right ? 1 : 0, f: c.fire ? 1 : 0, p: Net.pressCount, x: rn(me.x), vx: rn(me.vx), face: me.face, ep: Net.epoch });
+}
+function guestFire() { // instant feedback: count the press, start my throw animation; the host decides the hit
+  const me = game.players[1];
+  if (!me || me.dead || me.out || game.state !== 'play') return;
+  Net.pressCount++; me.shotId++; me.shootT = 0.2; sendInput();
+}
+
+/* --- message routing (same handler for relay and data-channel messages) --- */
+function onNetMsg(t, d) {
+  switch (t) {
+    case 'hello': if (Net.np && Net.np.isHost() && !Net.linking && !Net.started) beginHostLink(); break;
+    case 'sdp': onSdp(d); break;
+    case 'ice': if (Net.pc) { if (!Net.pc.remoteDescription) Net.iceQ.push(d); else Net.pc.addIceCandidate(d).catch(() => {}); } break;
+    case 'go': if (!Net.started && !(Net.np && Net.np.isHost())) startGuest(d.mode); break;
+    case 'snap': if (Net.role === 'guest') Net.pending = d; break;
+    case 'ev': if (Net.role === 'guest') replayEvents(d); break;
+    case 'in': if (Net.role === 'host') Net.peerIn = d; break;
+    case 'confirm': if (Net.role === 'host') confirmAction(true); break;
+    case 'end': if (Net.role === 'guest' || !Net.started) peerLost('The host left the game.'); break;
+  }
+}
+function setupP2P(isHost) {
+  if (!Net.allowP2P || typeof RTCPeerConnection === 'undefined') return Promise.resolve(false);
+  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  Net.pc = pc; Net.iceQ = [];
+  pc.onicecandidate = (e) => { if (e.candidate) Net.np.send('ice', e.candidate.toJSON()); };
+  return new Promise((resolve) => {
+    let opened = 0, settled = false;
+    const done = (v) => { if (!settled) { settled = true; resolve(v); } };
+    const bind = (ch) => {
+      ch.onopen = () => { if (ch.label === 'snap') Net.chSnap = ch; else Net.chRel = ch; if (++opened === 2) done(true); };
+      ch.onmessage = (m) => { try { const { t, d } = JSON.parse(m.data); onNetMsg(t, d); } catch (e) { /* malformed */ } };
+      ch.onclose = () => { if (Net.started && Net.mode === 'p2p') peerLost(Net.role === 'host' ? 'Your partner left.' : 'The host left the game.'); };
+    };
+    if (isHost) {
+      bind(pc.createDataChannel('snap', { ordered: false, maxRetransmits: 0 }));
+      bind(pc.createDataChannel('rel', { ordered: true }));
+      pc.createOffer().then((o) => pc.setLocalDescription(o)).then(() => Net.np.send('sdp', pc.localDescription.toJSON())).catch(() => done(false));
+    } else pc.ondatachannel = (e) => bind(e.channel);
+    setTimeout(() => done(false), 7000);
+  });
+}
+async function onSdp(d) {
+  const pc = Net.pc; if (!pc) return;
+  try {
+    await pc.setRemoteDescription(d);
+    for (const c of Net.iceQ) await pc.addIceCandidate(c).catch(() => {});
+    Net.iceQ = [];
+    if (d.type === 'offer') { const a = await pc.createAnswer(); await pc.setLocalDescription(a); Net.np.send('sdp', pc.localDescription.toJSON()); }
+  } catch (e) { console.warn('p2p signalling failed; the relay will be used', e); }
+}
+async function beginHostLink() {
+  if (Net.linking || Net.started) return;
+  Net.linking = true; lobbyStatus('Partner found! Connecting…');
+  const direct = await setupP2P(true);
+  const mode = direct ? 'p2p' : 'relay';
+  Net.np.send('go', { mode }); setTimeout(() => { if (Net.np) Net.np.send('go', { mode }); }, 400);
+  startHost(mode);
+}
+function startHost(mode) {
+  if (mode === 'relay' && Net.pc) { try { Net.pc.close(); } catch (e) { /* closed */ } Net.pc = null; }
+  Net.role = 'host'; Net.mode = mode; Net.started = true; Net.events = []; Net.lastPress = 0;
+  closeLobby(true); newGame(true);
+  toast(mode === 'p2p' ? 'ONLINE · DIRECT' : 'ONLINE · RELAY');
+}
+function startGuest(mode) {
+  clearInterval(Net.helloT);
+  Net.role = 'guest'; Net.mode = mode; Net.started = true; Net.epoch = -1; Net.pressCount = 0;
+  if (mode === 'relay' && Net.pc) { try { Net.pc.close(); } catch (e) { /* closed */ } Net.pc = null; }
+  closeLobby(true);
+  game.coop = true; game.players = [makePlayer(0, 3), makePlayer(1, 3)];
+  game.score = 0; game.stats = freshStats(); game.level = 0; game.def = null; game.state = 'intro'; game.stateT = 0;
+  game.bubbles = []; game.items = []; game.harpoons = []; game.bullets = []; game.enemies = []; game.shots = []; game.platforms = [];
+  Sound.playMusic(true);
+  toast(mode === 'p2p' ? 'ONLINE · DIRECT' : 'ONLINE · RELAY');
+}
+function peerLost(msg) {
+  if (!Net.np && !Net.started) return;
+  const wasHost = Net.role === 'host' && Net.started, wasGuest = Net.role === 'guest' && Net.started;
+  netShutdown();
+  if (wasHost) { // keep playing solo
+    const p = game.players[1]; if (p) { p.lives = 0; p.out = true; p.dead = false; }
+    game.coop = false;
+    banner('PARTNER LEFT', 'carry on solo', 2, '#ff3d5a', true);
+  } else if (wasGuest) { // my copy of the game was only a mirror: leave it
+    toTitle(); toast('THE HOST LEFT THE GAME');
+  } else lobbyStatus(msg || 'Your partner left the room.', true);
+}
+function netShutdown() {
+  clearInterval(Net.helloT);
+  try { if (Net.pc) Net.pc.close(); } catch (e) { /* closed */ }
+  try { if (Net.np) Net.np.leave(); } catch (e) { /* gone */ }
+  Object.assign(Net, { role: null, mode: null, started: false, np: null, pc: null, chSnap: null, chRel: null, linking: false, peerSeen: false, pending: null, events: [] });
+}
+function netEnd() { if (Net.np) sendRel('end', {}); setTimeout(netShutdown, 150); }
+
+/* --- lobby UI --- */
+const lobbyEl = document.getElementById('lobby');
+const lb = (id) => document.getElementById(id);
+function lobbyStatus(msg, err) { const s = lb('lbStatus'); s.textContent = msg; s.classList.toggle('err', !!err); lobbyBusy(false); if (!err) lobbyBusy(true); }
+function lobbyBusy(on) { for (const id of ['lbQuick', 'lbCreate', 'lbJoinBtn', 'lbCode']) lb(id).disabled = on; }
+function openLobby() {
+  Sound.init(); lobbyEl.hidden = false; lb('lbRoom').hidden = true; lb('lbStatus').textContent = 'Quick Match pairs you with anyone who is searching. Create a room to play with a friend.';
+  lb('lbStatus').classList.remove('err'); lobbyBusy(false); lb('lbQuick').focus();
+}
+function closeLobby(keepNet) { lobbyEl.hidden = true; if (!keepNet) netShutdown(); hud.focus(); }
+const makeCode = () => Array.from({ length: 4 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[(Math.random() * 31) | 0]).join('');
+async function goOnline(kind, code) {
+  netShutdown(); lobbyBusy(true); lb('lbRoom').hidden = true;
+  const np = new NetPlay(SUPABASE_URL, SUPABASE_ANON_KEY, GAME_ID); Net.np = np;
+  np.on('msg', ({ t, d }) => onNetMsg(t, d));
+  np.on('error', () => lobbyStatus('Could not reach the online service. Check your connection and try again.', true));
+  np.on('peer', ({ present, count, ids }) => {
+    if (count > 2 && ids.sort().indexOf(np.id) > 1) { netShutdown(); lobbyStatus('That room is full. Ask your friend for a new code.', true); return; }
+    if (present && !Net.peerSeen) { Net.peerSeen = true; lobbyStatus('Partner found! Connecting…'); if (!np.isHost()) guestHello(); }
+    else if (!present && Net.peerSeen) peerLost(Net.role === 'host' ? 'Your partner left.' : 'The host left the game.');
+  });
+  try { lobbyStatus('Connecting…'); await np.connect(); }
+  catch (e) { netShutdown(); lobbyStatus('Online play could not load here. Open the game from its full link to play online.', true); return; }
+  if (kind === 'quick') {
+    lobbyStatus('Looking for a partner…');
+    const r = await np.quickMatch(90000);
+    if (Net.np !== np) return;
+    if (!r) { netShutdown(); lobbyStatus('Nobody is searching right now. Try again, or create a room and share the code.', true); return; }
+  } else if (kind === 'create') {
+    const c = makeCode(); await np.joinRoom(c, true);
+    lb('lbRoom').textContent = c; lb('lbRoom').hidden = false;
+    lobbyStatus(`Room ${c} is open. Share the code with your friend. Waiting for them to join…`);
+  } else {
+    await np.joinRoom(code, false);
+    lobbyStatus(`Joining room ${code}…`);
+    setTimeout(() => { if (Net.np === np && !Net.peerSeen) { netShutdown(); lobbyStatus(`Nobody is in room ${code}. Check the code with your friend.`, true); } }, 9000);
+  }
+}
+// guest: open the direct link first, then keep saying hello until the host answers with "go"
+function guestHello() {
+  setupP2P(false);
+  clearInterval(Net.helloT);
+  Net.np.send('hello', {});
+  Net.helloT = setInterval(() => { if (Net.np && !Net.started) Net.np.send('hello', {}); else clearInterval(Net.helloT); }, 1000);
+}
+lb('lbQuick').addEventListener('click', () => goOnline('quick'));
+lb('lbCreate').addEventListener('click', () => goOnline('create'));
+lb('lbJoin').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const c = lb('lbCode').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (c.length !== 4) { lobbyStatus('Room codes are 4 letters or numbers.', true); return; }
+  goOnline('join', c);
+});
+lb('lbBack').addEventListener('click', () => closeLobby());
+
 /* ============================ §12 LOOP & BOOT ============================ */
 const stageEl = document.getElementById('stage');
 const hud = document.getElementById('hud');
@@ -1990,7 +2468,15 @@ function resize() {
   const ps = (h * renderer.getPixelRatio()) / H; glowCloud.mat.uniforms.uScale.value = ps; softCloud.mat.uniforms.uScale.value = ps;
 }
 new ResizeObserver(resize).observe(stageEl);
-hud.addEventListener('pointerdown', () => { hud.focus(); confirmAction(); });
+hud.addEventListener('pointerdown', (e) => {
+  hud.focus();
+  if (game.state === 'title') { // tap a mode label to pick (and tap it again, or tap elsewhere, to start)
+    const r = hud.getBoundingClientRect(), gx = ((e.clientX - r.left) / r.width) * W, gy = ((e.clientY - r.top) / r.height) * H;
+    const hit = gy > 280 && gy < 320 && titleModeSlots().find((s) => Math.abs(s.x - gx) < 110);
+    if (hit) { if (game.modeSel !== hit.m) { game.modeSel = hit.m; Sound.init(); sfx.tick(false); if (!isTouch()) return; } }
+  }
+  confirmAction();
+});
 
 // 2D overlay: popups (follow the camera), HUD, banners and menus
 function render2D() {
@@ -2001,7 +2487,8 @@ function render2D() {
     if (p.out || p.dead) continue;
     const x = p.x, y = ARENA.b - 100, c = HERO_LOOKS[p.id].tag;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '13px Bungee, Impact, sans-serif';
-    ctx.lineWidth = 4; ctx.strokeStyle = '#140b26'; ctx.strokeText(`P${p.id + 1}`, x, y); ctx.fillStyle = c; ctx.fillText(`P${p.id + 1}`, x, y);
+    const you = (Net.role === 'host' && p.id === 0) || (Net.role === 'guest' && p.id === 1), tag = you ? 'YOU' : `P${p.id + 1}`;
+    ctx.lineWidth = 4; ctx.strokeStyle = '#140b26'; ctx.strokeText(tag, x, y); ctx.fillStyle = c; ctx.fillText(tag, x, y);
     ctx.beginPath(); ctx.moveTo(x - 5, y + 9); ctx.lineTo(x + 5, y + 9); ctx.lineTo(x, y + 14); ctx.closePath(); ctx.fill();
   }
   ctx.restore();
@@ -2035,7 +2522,7 @@ function render2D() {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.font = '52px Bungee, Impact, sans-serif'; ctx.lineWidth = 8; ctx.strokeStyle = '#140b26'; ctx.strokeText('CONTINUE?', W / 2, 160); ctx.fillStyle = '#ffd23f'; ctx.fillText('CONTINUE?', W / 2, 160);
     ctx.save(); ctx.translate(W / 2, 265); ctx.scale(pulse, pulse); ctx.font = '110px Bungee, Impact, sans-serif'; ctx.lineWidth = 10; ctx.strokeText(n, 0, 0); ctx.fillStyle = '#ff3d8b'; ctx.fillText(n, 0, 0); ctx.restore();
-    drawOverlayPanel([[Math.floor(game.realT * 2) % 2 === 0 ? 'PRESS SPACE TO CONTINUE' : '', '20px Bungee, Impact, sans-serif', '#3fe0ff'], [`Retry ${game.def.name} with 3 lives${game.coop ? ' each' : ''}. Score resets to 0.`, '700 15px "Chakra Petch", sans-serif', '#c8bfe8']], 380);
+    drawOverlayPanel([[Math.floor(game.realT * 2) % 2 === 0 ? 'PRESS SPACE TO CONTINUE' : '', '20px Bungee, Impact, sans-serif', '#3fe0ff'], [Net.role === 'guest' ? 'Either player can press SPACE to continue.' : `Retry ${game.def.name} with 3 lives${game.coop ? ' each' : ''}. Score resets to 0.`, '700 15px "Chakra Petch", sans-serif', '#c8bfe8']], 380);
   } else if (game.state === 'gameover') {
     ctx.fillStyle = 'rgba(11,7,22,0.72)'; ctx.fillRect(0, 0, W, H);
     drawOverlayPanel([
@@ -2065,7 +2552,7 @@ function updateTitle(dt) {
   updateBubbles(dt);
   if (Math.random() < dt * 0.5 && game.bubbles.length) {
     const b = game.bubbles[(Math.random() * game.bubbles.length) | 0];
-    b.dead = true; popFx(b, b.x, b.y);
+    b.dead = true; popBurst(b, b.x, b.y);
     if (b.size > 0) for (const d of [-1, 1]) game.bubbles.push(makeBubble(b.size - 1, b.x, b.y, d, { vy: -380 }));
   }
   game.bubbles = game.bubbles.filter((b) => !b.dead);
@@ -2097,7 +2584,9 @@ function tick(dt) {
   game.realT += dt;
   updateFx(dt * (0.35 + 0.65 * game.timeScale));
   Sound.setMuffle(game.state === 'paused' ? 0.15 : clamp((game.timeScale - 0.3) / 0.7, 0, 1)); // bullet-time muffles the music
+  if (Net.role === 'guest' && Net.started) { guestTick(dt); return; } // online guest: mirror the host
   if (game.state === 'paused') return;
+  if (Net.role === 'host' && Net.started) hostTick(dt);
   if (game.hitstop > 0) { game.hitstop -= dt; return; } // freeze-frame on impacts
   const target = game.slowmoT > 0 ? 0.3 : 1;
   game.timeScale += (target - game.timeScale) * Math.min(1, dt * 12);
@@ -2124,7 +2613,7 @@ function start() {
   hud.focus();
 }
 // Debug handle for console tinkering (e.g. __hp.loadLevel(9)).
-window.__hp = { game, keys, input, newGame, loadLevel, applyItem, confirmAction, killEnemy, ARENA, ITEMS, Sound, hero, camera,
+window.__hp = { game, keys, input, newGame, Net, openLobby, goOnline, buildSnap, loadLevel, applyItem, confirmAction, killEnemy, ARENA, ITEMS, Sound, hero, camera,
   gpu: () => ({ ...renderer.info.memory, programs: renderer.info.programs.length }),
   // step the game deterministically (used by the headless test harness); draw=false skips per-step rendering
   setManualClock(on) { manualClock = on; },
